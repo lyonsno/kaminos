@@ -68,9 +68,9 @@ test('converged kernels exist and drop the legacy damping and material-weighted 
   const compact = wgslFunction('divergenceCompactAtCell');
   assert.match(compact, /compactFaceVelocity\(c, 0u\) - compactFaceVelocity\(c - vec3<i32>\(1, 0, 0\), 0u\)/, 'compact divergence is the backward face-flux difference per axis');
   const face = wgslFunction('compactFaceVelocity');
-  assert.match(face, /if \(c\[axis\] < 0\) \{\s*if \(joinedBoundary\(\)\) \{ return joinedLowerFace\(c, axis\); \}\s*if \(axis == 1u\) \{\s*return inflowFaceVelocity\(c\);\s*\}\s*return 0\.0;/, 'the ghost face below the first cell carries no flux, except the floor face inside an inflow aperture (emitter law inflow-boundary), which carries the prescribed inflow');
+  assert.match(face, /if \(c\[axis\] < 0\) \{\s*if \(joinedBoundary\(\) \|\| openWorldBoundary\(\)\) \{ return joinedLowerFace\(c, axis\); \}\s*if \(axis == 1u\) \{\s*return inflowFaceVelocity\(c\);\s*\}\s*return 0\.0;/, 'without an admitted joined/open world, the ghost face below the first cell carries no flux, except the floor face inside an inflow aperture (emitter law inflow-boundary), which carries the prescribed inflow');
   assert.match(face, /axis == 1u && pressureSolverOpenTop\(\)/, 'only the open top lets the last cell\'s upper face carry flux');
-  assert.match(project, /if \(c\.y >= i32\(GRID_Y\) - 1 && !pressureSolverOpenTop\(\)\)/, 'closed top zeroes the top-face flux of the tall domain in the corrected field');
+  assert.match(project, /if \(c\.y >= i32\(GRID_Y\) - 1 && !pressureSolverOpenTop\(\) && !openWorldBoundary\(\)\)/, 'closed top zeroes the top-face flux unless the world boundary is admitted');
   const neighbor = wgslFunction('pressureNeighborInPlace');
   assert.match(neighbor, /c\.y >= i32\(GRID_Y\)/, 'open-top boundary zeroes pressure above the top face of the tall domain');
 });
@@ -221,7 +221,9 @@ test('cockpit plumbing carries the solver selection through DOM, route, controls
   assert.match(index, /pressureSolver: document\.getElementById\('volume-pressure-solver'\)\.value/, 'controls read the solver');
   assert.match(index, /pressureSolverIterations: parseFloat\(document\.getElementById\('volume-pressure-solver-iterations'\)\.value\)/, 'controls read the sweep count');
   assert.match(index, /volume-pressure-solver-val'\)\.textContent/, 'solver label renders the effective solver');
-  assert.match(index, /'volume-pressure-solver',\s*\n\s*'volume-pressure-solver-iterations',/, 'both controls register live listeners');
+  for (const id of ['volume-pressure-solver', 'volume-pressure-solver-iterations']) {
+    assert.ok(index.includes(`    '${id}',\n`), `${id} registers a live listener independently of adjacent controls`);
+  }
   assert.match(index, /\['volume-pressure-solver', 'volume_pressure_solver'\]/, 'route params apply the solver');
 });
 
@@ -285,7 +287,7 @@ test('post-correction divergence follows the effective gain and the velocity bou
   // The bound is scheme-aware since the transport slice: legacy keeps the fixed
   // clamp inside boundVelocity; non-legacy schemes bound by backtrace cells.
   assert.match(project, /boundVelocity\(correctedVelocity\)/, 'projection output goes through the shared scheme-aware velocity bound');
-  assert.match(source, /fn boundVelocity\([^]*?vec3<f32>\(-0\.34\), vec3<f32>\(0\.52\)/, 'legacy velocity bound is retained inside boundVelocity');
+  assert.match(source, /fn boundVelocity\([^]*?vec3<f32>\(-0\.34 \* VELOCITY_UNIT_SCALE\), vec3<f32>\(0\.52 \* VELOCITY_UNIT_SCALE\)/, 'legacy velocity bound preserves physical speed when the velocity lattice changes');
   const bound = v => Math.max(-0.34, Math.min(0.52, v));
   // One closed 1-D column of two cells: the stored component of cell 0 is the
   // flux through the shared face; both outer faces are walls.

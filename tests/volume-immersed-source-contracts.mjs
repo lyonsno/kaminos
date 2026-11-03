@@ -90,7 +90,7 @@ test('the shader derives target, momentum and scalar entry from one weight and o
   assert.match(main, /let immersedEntry = clamp\(immersedTarget \* dynamicsBacktraceScale\(\), 0\.0, 1\.0\);/, 'scalar entry mirrors the floor law');
   assert.match(main, /heat = mix\(heat, immersedSourcesAtCell\.mixture\.y, immersedEntry\);/);
   assert.match(main, /fuel = mix\(fuel, immersedSourcesAtCell\.mixture\.x, immersedEntry\);/);
-  assert.match(main, /vel = mix\(vel, immersedSourcesAtCell\.velocity, stepBlend\(immersedSourcesAtCell\.relaxation\)\);/, 'momentum relaxes toward v·n through stepBlend (follows the step; velocity-dependent, so it stays local under the staggered reading)');
+  assert.match(main, /vel = mix\(vel, immersedSourcesAtCell\.velocity \* VELOCITY_UNIT_SCALE, stepBlend\(immersedSourcesAtCell\.relaxation\)\);/, 'momentum relaxes toward v·n through stepBlend (follows the step; velocity-dependent, so it stays local under the staggered reading)');
   assert.doesNotMatch(main, /centredForce = centredForce \+ [^\n]*immersed/, 'not averaged onto faces');
 });
 
@@ -180,8 +180,8 @@ test('IS-01: the momentum relaxation carries the time step once, after the fold'
   }
   assert.ok(Math.abs(core.immersedMomentumModel({ transported: 0.04, target: 0.1, weight: 1, gain: 0.5, dt: 1 }) - 0.07) < 1e-9, 'partial gain relaxes halfway');
   const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('\nfn ', source.indexOf('\nfn cs(@builtin') + 10));
-  const foldAt = main.indexOf('let forceIncrement = (vel - velTransported) * timeStep;');
-  const relaxAt = main.indexOf('vel = mix(vel, immersedSourcesAtCell.velocity, stepBlend(immersedSourcesAtCell.relaxation));');
+  const foldAt = main.search(/let forceIncrement = .*\* timeStep;/);
+  const relaxAt = main.indexOf('vel = mix(vel, immersedSourcesAtCell.velocity * VELOCITY_UNIT_SCALE, stepBlend(immersedSourcesAtCell.relaxation));');
   // The reactant candidate opens the top through materialWallFade (equal to wallFade under the authored law).
   const spongeAt = Math.max(main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, wallFade));'), main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, materialWallFade));'));
   assert.ok(foldAt > 0 && relaxAt > 0 && spongeAt > 0);
@@ -353,7 +353,7 @@ test('the wall sponge leaves the immersed slab alone, like the inflow aperture',
   const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('\nfn ', source.indexOf('\nfn cs(@builtin') + 10));
   const weightAt = main.indexOf('let immersedWeight = ');
   // The joined boundary (Sexy's exterior) turns the fade off; standalone it is unchanged.
-  const fadeAt = main.indexOf('let wallFade = select(max(1.0 - smoothstep(0.86, 1.0, wall), clamp(immersedSlabWeight, 0.0, 1.0)), 1.0, joinedBoundary());');
+  const fadeAt = main.indexOf('let wallFade = select(max(1.0 - smoothstep(0.86, 1.0, wall), clamp(immersedSlabWeight, 0.0, 1.0)), 1.0, joinedBoundary() || openWorldBoundary());');
   assert.ok(weightAt > 0 && fadeAt > weightAt, 'the fade is exempt wherever the slab has weight, after the weight is known');
   assert.ok(!main.includes('let wallFade = 1.0 - smoothstep(0.86, 1.0, wall);'), 'the unexempted fade is gone');
 });

@@ -35,7 +35,7 @@ globalThis.fieldsOnlyPorts={
         for(let j=0;j<30;j++)await route.runtime.runKernel({}, {stage:'block-modulation',schedulerInvocation:invocation,dispatch:[1]});
       }
     }
-    this.outputs={dino:{blocksExecuted:24},conditioning:tensor([1,1029,1024]),lowResolutionRows:3,highResolutionRows:4,
+    this.outputs={conditioningShapes:{sparseFlow:[1,1029,1024],lowResolutionShape:[1,1029,1024],highResolutionShape:[1,4101,1024],textureFlow:[1,4101,1024]},highResolutionDino:{blocksExecuted:24},highResolutionConditioning:tensor([1,4101,1024]),dino:{blocksExecuted:24},conditioning:tensor([1,1029,1024]),lowResolutionRows:3,highResolutionRows:4,
       geometry:{features:tensor([5,7]),coordinates:tensor([5,3],'i32'),subdivisions:levels.slice(0,4).map(l=>tensor([l.rows,8])),levels,resolution:1024},
       material:{features:tensor([5,6]),coordinates:tensor([5,3],'i32'),levels,resolution:1024},
       shapeCodes:tensor([4,32]),textureCodes:tensor([4,32]),phases:generationPhases(m).map(phase=>({phase})),
@@ -55,7 +55,7 @@ const {runGenerationWitness}=await import('data:text/javascript;base64,'+Buffer.
 const fields=await runGenerationWitness(sha,{assetMode:'retained-fields-only'});
 assert.equal(fields.status,'succeeded','explicit fields-only execution must bypass raw UV/bake after retaining complete model fields: '+fields.error?.message);
 assert.equal(assets,0);assert.equal(fields.assetMode,'retained-fields-only');assert.equal(fields.assetArtifact,undefined);
-assert.equal(Object.keys(fields.outputs).length,15);assert.ok(profileOptions.requiredStages.includes('decoder-sparse-conv'));
+assert.equal(Object.keys(fields.outputs).length,16);assert.ok(profileOptions.requiredStages.includes('decoder-sparse-conv'));
 assert.match(fields.handoff,/fields/);assert.doesNotMatch(fields.handoff,/become retained PBR GLB/);
 const ordinary=await runGenerationWitness(sha);assert.equal(ordinary.status,'failed');
 assert.equal(ordinary.error.message,'intentional raw-asset sentinel');assert.equal(assets,1);

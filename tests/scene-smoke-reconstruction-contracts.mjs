@@ -58,18 +58,39 @@ assert.throws(()=>createVolumeGather(capacityDevice,{geometry:capacityGeometry,r
 assert.equal(allocated.filter(b=>!b.destroyed).length,0,'candidate capacity failure must leave no undisposed GPU buffers');
 
 globalThis.GPUShaderStage={FRAGMENT:2};
-let groups=0;
-const device={createBindGroupLayout:value=>value,createBindGroup:value=>{groups++;return value;}};
+let groups=0;const copies=[],writes=[];
+const device={limits:{maxBufferSize:1e8,maxStorageBufferBindingSize:1e8},queue:{writeBuffer(...args){writes.push(args);},submit(){}},
+  createBuffer({size}){return {size,destroy(){}};},
+  createCommandEncoder(){return {copyBufferToBuffer(...args){copies.push(args);},finish(){return {};}};},
+  createBindGroupLayout:value=>value,createBindGroup:value=>{groups++;return value;}};
 const bindings=createDistributedSmokeBindings(device);
-const texture={createView:()=>({})},r={identity:'prepared-geometry-visible-v1',texture,masks:{},staticPreparations:1,updates:1};
+assert.equal(bindings.layout.entries.filter(e=>e.buffer?.type==='read-only-storage').length,1,
+  "three-region geometry shares one binding so guided camera plus lighting fits native capacity");
+const texture={createView:()=>({})},r={identity:'prepared-planar-support-v4',texture,masks:{size:16},planes:{size:64},staticPreparations:1,updates:1};
 const frame={texture,smokeReconstruction:r};
 bindings.update(frame);bindings.update({...frame,generation:2});assert.equal(groups,1,'live coefficient update does not rebuild static bindings');
-bindings.update({...frame,smokeReconstruction:{...r,masks:{}}});assert.equal(groups,2,'same texture with new visibility must rebind');
-bindings.update({...frame,smokeReconstruction:{...r,texture:{createView:()=>({})}}});assert.equal(groups,3);
+assert.equal(copies.length,6,'initial region masks are copied');
+const supportBuffer=copies[0][2];
+assert.equal(supportBuffer.size,240,'all three regions retain16 mask bytes plus64 plane bytes each');
+assert.ok(copies.every(c=>c[2]===supportBuffer),'mask and plane copies target one binding');
+assert.deepEqual(copies.map(c=>c[3]),[0,48,16,112,32,176],'regions and planes occupy disjoint ranges');
+assert.deepEqual(Array.from(writes.find(w=>w[1]===64)[2]),[0,4,8,12],'coverage locates every region and the plane word base');
+bindings.update({...frame,smokeReconstruction:{...r,updates:2}});assert.equal(copies.length,6,'radiance-only updates do not copy geometry masks');
+bindings.update({...frame,smokeReconstruction:{...r,masks:{size:16}}});assert.equal(copies.length,12,'new visibility must refresh packed masks');assert.equal(groups,1);
+bindings.update({...frame,smokeReconstruction:{...r,texture:{createView:()=>({})}}});assert.equal(groups,2);
 assert.throws(()=>bindings.update({...frame,smokeReconstruction:{...r,staticPreparations:0}}),/reconstruction resources/);
 assert.doesNotThrow(()=>bindings.update({...frame,smokeReconstruction:{...r,staticPreparations:2,updates:2}}),'moving solids may refresh the same reconstruction resources');
 assert.throws(()=>bindings.update({...frame,smokeReconstruction:{...r,staticPreparations:NaN}}),/reconstruction resources/);
 assert.throws(()=>bindings.update({...frame,smokeReconstruction:{...r,updates:0}}),/reconstruction resources/);
 assert.throws(()=>bindings.update({texture}),/reconstruction resources/);
 assert.throws(()=>bindings.update({...frame,smokeReconstruction:{...r,identity:'old'}}),/reconstruction resources/);
+const exterior={generation:2,frame:3,smokeReconstruction:{...r,localMin:[-3,-3,-3],localMax:[3,9,3]}};
+assert.throws(()=>bindings.update({...frame,generation:1,frame:3,exterior}),/same-generation/);
+assert.doesNotThrow(()=>bindings.update({...frame,generation:2,frame:3,smokeReconstruction:{...r,coarseDimensions:[16,32,16]},exterior}));
+const beforeMoving=copies.length;
+bindings.update({...frame,generation:2,frame:3,smokeReconstruction:{...r,staticPreparations:2,coarseDimensions:[16,32,16]},exterior});
+assert.equal(copies.length,beforeMoving+4,'same buffers with newly prepared fine/fallback geometry refresh their masks');
+const intermediate={...exterior,smokeReconstruction:{...exterior.smokeReconstruction,localMin:[-2,-2,-2],localMax:[2,6,2],coarseDimensions:[8,16,8]}};
+assert.throws(()=>bindings.update({...frame,generation:2,frame:3,smokeReconstruction:{...r,coarseDimensions:[16,32,16]},exterior:{...exterior,middle:{...intermediate,generation:1}}}),/same-generation/,'stale middle lighting must fail instead of silently presenting');
+bindings.destroy();
 console.log(`smoke reconstruction bins preserve ${segmentCount} reference segments, uncapped candidates and binding lifetime`);

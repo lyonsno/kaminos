@@ -18,6 +18,7 @@ const runtime={device:{limits:{maxStorageBufferBindingSize:134217728},queue:{asy
     return new Uint32Array([t.name.includes('hash-status')?0:t.name.includes('occupancy.count')?3:
       phase==='learned-cascade-support'&&marked?4:5]);}},route={runtime,routeId:'actual-seven-model-composition'},
   conditioning=runtime.createTensor({name:'image-encoder-owned-features',shape:[1,7,5],dtype:'f32',usage:U.storage}),
+  highConditioning=runtime.createTensor({name:'image-encoder-owned-high-features',shape:[1,11,5],dtype:'f32',usage:U.storage}),
   common={channels:24,heads:3,contextRows:7,contextChannels:5,hidden:20,frequencyDim:6,numBlocks:1,
     steps:1,guidanceStrength:1},
   arrays=shapes=>Object.fromEntries(Object.entries(shapes).map(([name,shape])=>[name,new Float32Array(shape.reduce((a,b)=>a*b,1))]));
@@ -35,7 +36,7 @@ const shapeConfig={channels:[32,4],numBlocks:[0,0]},occupancyConfig={channels:[2
     shapeDecoder:{config:shapeConfig,weights:arrays(slatDecoderWeightShapes(buildSLatDecoderPlan({...shapeConfig,tokenRows:3}))),siluTable:new Float32Array(65536)},
     textureFlow:{config:common,weights:flowWeights({...common,tokenRows:4},64,32)},
     textureDecoder:{config:shapeConfig,weights:arrays(slatDecoderWeightShapes(buildSLatDecoderPlan({...shapeConfig,tokenRows:4,mode:'texture'}))),siluTable:new Float32Array(65536)}},
-  options={route,conditioningTensor:conditioning,models,meshResolution:128,seed:42,
+  options={route,conditioningTensor:conditioning,highResolutionConditioningTensor:highConditioning,models,meshResolution:128,seed:42,
     onPhase(e){phase=e.phase;if(phase==='learned-cascade-support')marked=false;
       if(['low-resolution-shape-sampling','high-resolution-shape-sampling','learned-geometry-decoding','shape-guided-material-decoding'].includes(phase))
         assert.equal(allocated.filter(t=>t.name.startsWith('trellis.block.')&&!t.destroyed).length,0,
@@ -63,7 +64,11 @@ assert.deepEqual(observed.map(e=>e.phase),['sparse-structure-sampling','occupanc
   'learned-cascade-support','high-resolution-shape-sampling','learned-geometry-decoding',
   'shape-conditioned-texture-sampling','shape-guided-material-decoding']);
 assert.ok(runs.every(v=>v.o.schedulerInvocation===invocation));
-assert.ok(runs.filter(v=>v.o.stage==='flow-resident-conditioning-bf16').every(v=>v.k.bindings[0].resource===conditioning));
+assert.deepEqual(runs.filter(v=>v.o.stage==='flow-resident-conditioning-bf16').map(v=>v.k.bindings[0].resource),
+  [conditioning,conditioning,highConditioning,highConditioning]);
+assert.deepEqual(result.conditioningShapes,{sparseFlow:[1,7,5],lowResolutionShape:[1,7,5],highResolutionShape:[1,11,5],textureFlow:[1,11,5]});
+assert.throws(()=>create({...options,highResolutionConditioningTensor:undefined}),/separate resident/);
+assert.throws(()=>create({...options,highResolutionConditioningTensor:conditioning}),/separate resident/);
 assert.ok(!uploads.some(v=>v.t===conditioning));assert.ok(reads.every(v=>v.dtype==='u32'&&v.byteLength===4));
 await assert.rejects(a.run(invocation),/completed/);a.dispose();assert.ok(!conditioning.destroyed);
 const b=create(options),again=await b.run(invocation);
@@ -93,7 +98,7 @@ for(const mode of ['shape','texture']){
   assert.equal(broken.outputs,undefined);broken.dispose();
   assert.equal(broken.decoderFailureContext,undefined);failStage=undefined;
 }
-assert.ok(allocated.filter(t=>t!==conditioning&&t.name!=='trellis.occupancy.occupied-view').every(t=>t.destroyed));
+assert.ok(allocated.filter(t=>t!==conditioning&&t!==highConditioning&&t.name!=='trellis.occupancy.occupied-view').every(t=>t.destroyed));
 const retainedNoise=[],retention=create({...options,async onNoiseInput(input){
   retainedNoise.push(input.stage);assert.ok(input.values instanceof Float32Array);
   assert.ok(input.values.every(Number.isFinite));assert.equal(input.values.length,input.shape.reduce((a,b)=>a*b,1));

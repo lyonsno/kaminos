@@ -25,16 +25,26 @@ let compileRelease,compileCalls=0,held=false;
 const rebuild={hold(value){held=value;},compile(){compileCalls++;return new Promise(resolve=>compileRelease=resolve);}};
 const mount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,smokeRefinement:1,pointCount:2,createShadow:({filterPattern})=>{patterns.push(filterPattern);return {visibility:THREE.TSL.float(1),render(batch){batches.push(batch);},debugState:()=>({fixture:true}),dispose(){}};}});
 assert.equal(typeof mount.setSmokeShadowQuality,'function','live surface lighting must expose independent smoke transport quality');
-assert.equal(patterns[0].route,'uniform');assert.equal(patterns[0],patterns[1],'sources must share the same uniform node, not duplicate buffers');
+assert.equal(patterns[0].route,'runtime-arithmetic');assert.equal(patterns[0],patterns[1],'sources must share the same uniform node, not duplicate buffers');
 assert.equal(typeof mount.setSurfaceEnabled,'function');
 mount.setSurfaceEnabled(false);const offBatches=batches.length;
 consume(field);assert.equal(mount.canRender(),true);assert.equal(batches.length,offBatches,'off skips all surface shadow captures');
 assert.equal(mount.debugState().capturedPointCount,0);assert.equal(mount.debugState().evaluatedPointCount,0);assert.equal(mount.debugState().frame.pointRegions,null,'off skips point source reduction, not only brightness');
 assert(hostFrame,'distributed smoke remains live');assert.throws(()=>mount.readPointRegions(),/disabled/);
+const fineTexture=hostFrame.texture,fineBuilds=mount.debugState().geometryBuilds;
+field.source.exterior={status:'encoded',texture:device.createTexture(),dimensions:[8,16,8],localMin:[-3,-3,-3],localMax:[3,9,3],generation:1,frame:1};
+consume(field);
+assert(hostFrame.exterior?.smokeReconstruction,'exterior smoke must receive its own current lighting field');
+assert.equal(hostFrame.texture,fineTexture,'adding exterior must preserve fine texture and resolution');
+assert.equal(mount.debugState().geometryBuilds,fineBuilds);
+assert.deepEqual(hostFrame.exterior.smokeReconstruction.localMax,[3,9,3]);
+field.source.exterior=null;consume(field);
+assert.equal(hostFrame.exterior,null,'disabled world must remove the camera field');
 mount.setSurfaceEnabled(true);
 consume(field);assert.equal(mount.canRender(),true);assert.equal(mesh.geometry,geometry,'hybrid must not clone/build surface receivers');
+assert(Object.values(mesh.material).some(value=>value?.isNode),'injected live lighting must be visible to Three material refresh, including unchanged surfaces in the GI source pass');
 assert.equal(batches[0],batches[1]);
-assert.equal(mount.debugState().frame.pointRegions.partition,'energy');
+assert.equal(mount.debugState().frame.pointRegions.partition,'spatial');
 const twoSourceMaterialKey=mesh.material.customProgramCacheKey();
 mount.setPointCount(1);assert.equal(mount.canRender(),false,'changed source layout must await current reduction');consume(field);
 assert.notEqual(mesh.material.customProgramCacheKey(),twoSourceMaterialKey,'replacement irradiance graph must invalidate Three shader cache, not only material version');
@@ -43,7 +53,7 @@ mount.setPointCount(2);consume(field);assert.equal(mount.debugState().pointCount
 mount.setPointCount(4);consume(field);
 assert(patterns.slice(-4).every(p=>p===patterns.at(-1)),'all four sources share pattern storage');
 assert(batches.slice(-4).every(b=>b===batches.at(-1)),'all four fresh captures share current preparation');
-assert.equal(mount.debugState().frame.pointRegions.partition,'energy','four regions must partition emission, not empty geometric bands');
+assert.equal(mount.debugState().frame.pointRegions.partition,'spatial','four regions must partition emission, not empty geometric bands');
 assert.equal(mount.debugState().shadows.length,4);
 mount.setPointSampling('paired');consume(field);
 const priorQualityKey=mesh.material.customProgramCacheKey();
@@ -71,6 +81,24 @@ assert.throws(()=>mount.setQuadrature(2,'paired'),/four/);
 assert.equal(mount.debugState().pointCount,4,'rejected mode must preserve current source resources');
 mount.setPointSampling('all');assert.equal(mount.debugState().evaluatedPointCount,4);
 mount.setPointCount(2);consume(field);assert.equal(mount.debugState().pointSampling,'all');
+for(const count of [6,8]){mount.setPointCount(count);consume(field);assert.equal(mount.debugState().capturedPointCount,count);assert.equal(mount.debugState().evaluatedPointCount,count);assert.equal(mount.debugState().shadows.length,count);}
+mount.setPointCount(8);consume(field);
+const budgetKey=mesh.material.customProgramCacheKey(),budgetPipelines=pipelines.length;
+for(const budget of [2,4,6,8,0]){
+ mount.setPointEvaluationBudget(budget);consume(field);
+ assert.equal(mount.debugState().pointEvaluationBudget,budget);
+ assert.equal(mount.debugState().capturedPointCount,8,'receiver budget must retain all eight current captures');
+ assert.equal(mount.debugState().evaluatedPointCount,budget||8);
+ assert.equal(mesh.material.customProgramCacheKey(),budgetKey,'receiver budget is a live uniform edit');
+ assert.equal(pipelines.length,budgetPipelines,'receiver budget must not compile another lighting graph');
+ assert.equal(fireShadowSceneRoute(mount.debugState()).volume_light_field_hybrid_point_evaluation_budget,String(budget));
+}
+mount.setPointEvaluationBudget(6);mount.setPointCount(4);consume(field);
+assert.equal(mount.debugState().pointEvaluationBudget,6,'retain requested budget when fewer sources exist');
+assert.equal(mount.debugState().evaluatedPointCount,4,'effective receiver budget cannot exceed available sources');
+assert.throws(()=>mount.setPointEvaluationBudget(-1),/budget/);assert.equal(mount.debugState().pointEvaluationBudget,6);
+mount.setPointEvaluationBudget(0);mount.setPointCount(2);consume(field);
+
 assert.throws(()=>mount.setPointCount(0),/point count/);assert.equal(mount.canRender(),true);
 assert.equal(geometry.hasAttribute('sceneReceiverIndex'),false);assert.equal(mount.debugState().surfaceReceivers,0);assert.equal(hostFrame.volumeReceivers,16);
 const first=mount.debugState();mount.setReceiverSpacing(.8);mount.setSurfaceReconstruction(8);field.source.generation++;field.source.frame++;consume(field);
@@ -91,17 +119,17 @@ assert.throws(()=>mount.setShadowComparison({implementation:'fake'}),/implementa
 assert.throws(()=>mount.setShadowComparison({worldCellSize:0}),/cell size/);
 assert.equal(mesh.material.customProgramCacheKey(),grainKey);
 mount.setShadowComparison({implementation:'shared',grain:'world',worldCellSize:.025});consume(field);
-assert.equal(patterns.at(-1).route,'uniform');assert(batches.at(-1));
+assert.equal(patterns.at(-1).route,'runtime-arithmetic');assert(batches.at(-1));
 assert.equal(mount.debugState().shadowWorldCellSize,.025);
 mount.setShadowComparison({grain:'ordered'});consume(field);
 assert.deepEqual(first.frame.smokeReconstruction.dimensions,[2,4,2],'explicit cheap smoke reconstruction must be effective');
 assert.equal(mount.debugState().geometryBuilds,first.geometryBuilds,'surface spacing controls must not construct an unused cache');
 field.source.worldTransform={translate:[2,-1,4],scale:2};field.source.generation++;consume(field);
 assert.equal(mount.debugState().geometryBuilds,1,'source movement reuses world BVH');
-assert.equal(passes.filter(p=>p==='reproject world BVH without CPU rebuild').length,2);
-assert.equal(passes.filter(p=>p==='prepare static smoke interpolation').length,2,'source movement must invalidate dependent smoke geometry');
-assert.equal(passes.filter(p=>p==='static kiln visibility preparation').length,2,'source movement must invalidate smoke ray visibility');
-assert.equal(uploads.filter(([label])=>label==='surface and smoke receivers').length,1);
+assert.equal(passes.filter(p=>p==='reproject world BVH without CPU rebuild').length,3,'fine initial + exterior initial + moved fine');
+assert.equal(passes.filter(p=>p==='prepare static smoke interpolation').length,3,'source movement must invalidate dependent smoke geometry');
+assert.equal(passes.filter(p=>p==='static kiln visibility preparation').length,3,'source movement must invalidate smoke ray visibility');
+assert.equal(uploads.filter(([label])=>label==='surface and smoke receivers').length,2,'separate fine and exterior receivers');
 field.source.generation++;assert.equal(mount.canRender(),false,'new generation must not render stale point fields');consume(field);
 const pipelineCount=pipelines.length,preparations=passes.filter(p=>p==='static kiln visibility preparation').length;
 mount.setEditing(true);
@@ -144,16 +172,31 @@ assert.equal(mount.debugState().geometryBuilds,afterAspect,'same-domain resoluti
 mount.setSmokeShadowQuality({steps:8,resolution:4});consume(field);
 assert.equal(mount.debugState().frame.smokeShadow.generation,field.source.generation);
 assert(passes.includes('live smoke shadow prefix integration'));
+mount.setSmokeShadowQuality({mediumResolution:2});consume(field);assert.deepEqual(mount.debugState().frame.smokeShadow.medium.dimensions,[2,4,2]);assert.equal(mount.debugState().smokeShadowMediumResolution,2);assert.equal(mount.debugState().smokeShadowResolution,4);assert.equal(mount.debugState().smokeShadowSteps,8);mount.setSmokeShadowQuality({mediumResolution:0});consume(field);assert.equal(mount.debugState().frame.smokeShadow.medium.mode,'raw');
 mount.setSmokeShadowQuality({filter:true});consume(field);
 assert.equal(mount.debugState().smokeShadowFilter,true);
-assert.equal(mount.debugState().frame.smokeShadow.directionFilter,'binomial-3x3-transmission');
+assert.equal(mount.debugState().frame.smokeShadow.directionFilter,'angular-tent-transmission');
 assert(passes.includes('current smoke directional filter'));
+const heldAngle=mount.debugState().smokeShadowFilterAngle;mount.setSmokeShadowQuality({resolution:8});consume(field);assert.equal(mount.debugState().smokeShadowFilterAngle,heldAngle,'map resolution must not change angular blur');
+mount.setSmokeShadowQuality({angleDegrees:8.5,tapsPerAxis:5});consume(field);assert.equal(mount.debugState().frame.smokeShadow.angleDegrees,8.5);assert.equal(mount.debugState().frame.smokeShadow.work.filterDirectionsPerPrefix,25);
 assert.throws(()=>mount.setSmokeShadowQuality({filter:1}),/boolean/);
 mount.setSmokeShadowQuality({filter:false});const unfilteredPasses=passes.length;consume(field);
 assert.equal(mount.debugState().frame.smokeShadow.directionFilter,'off');
 assert(!passes.slice(unfilteredPasses).includes('current smoke directional filter'));
 mount.setSmokeShadowQuality({steps:0});consume(field);
 assert.equal(mount.debugState().frame.smokeShadow,null);
+mount.setLightGrid(4);consume(field);assert.equal(mount.debugState().volumeGrid,4);assert.equal(mount.debugState().frame.volumeReceivers,128);
+assert.throws(()=>mount.setLightGrid(0),/positive/);assert.throws(()=>mount.setLightGrid(99999),/capacity|texture/);assert.equal(mount.debugState().volumeGrid,4);
+const priorFrame=hostFrame,priorBuilds=mount.debugState().geometryBuilds;
+const bindingLimit=device.limits.maxStorageBufferBindingSize,dispatchLimit=device.limits.maxComputeWorkgroupsPerDimension;
+device.limits.maxStorageBufferBindingSize=40000;
+assert.throws(()=>mount.setLightGrid(8),/cached first solid distance/,'prepared storage fits but ray cache must be refused before mutation');
+assert.equal(mount.debugState().volumeGrid,4);assert.equal(hostFrame,priorFrame);assert.equal(mount.canRender(),true);assert.equal(mount.debugState().geometryBuilds,priorBuilds);
+assert.throws(()=>mount.setDirections(96),/cached first solid distance/);assert.equal(mount.debugState().directions,24);assert.equal(mount.canRender(),true);
+device.limits.maxStorageBufferBindingSize=bindingLimit;device.limits.maxComputeWorkgroupsPerDimension=4;
+assert.throws(()=>mount.setLightGrid(8),/dispatch/);assert.equal(mount.debugState().volumeGrid,4);assert.equal(mount.canRender(),true);
+device.limits.maxComputeWorkgroupsPerDimension=dispatchLimit;
+mount.setLightGrid(2);consume(field);
 mesh.material.color.setHex(0xff0000);mount.dispose();assert.equal(mesh.material.color.getHex(),0xff0000);assert.equal(mesh.geometry,geometry);assert.equal(mount.canRender(),false);assert.equal(hostFrame,null);
 const asyncMount=mountDistributedSceneRadiance({renderer,scene,prototype,device,rebuild,volumeGrid:2,smokeRefinement:1,createShadow:()=>({visibility:THREE.TSL.float(1),render(){},debugState:()=>({}),dispose(){}})});
 consume(field);
@@ -230,3 +273,41 @@ await (owner.retry?.()??owner.request());
 assert.equal(owner.state().held,false,'public retry must release the failed flame owner hold');
 consume(field);assert.equal(composed.canRender(),true,'retry must consume the current source');
 composed.dispose();
+
+// Parallel wrong-object check: a TRELLIS surfel object with a loaded GI proxy must succeed in hybrid prepare(field)
+// (including localVisibility.snapshot(scene)) and build smoke visibility from the stunt-double proxy rather than
+// throwing static-light-dynamic-caster on SurfelChunkMesh (InstancedMesh).
+const {createSurfelObject}=await import('../trellis-surfels.mjs');
+const surfelHolder=new THREE.Group();
+const surfelRoot=createSurfelObject(THREE,{
+  resolution:16,radiusVoxels:1.5,count:2,
+  cells:new Uint32Array([1|(2<<10)|(3<<20),4|(5<<10)|(6<<20)]),
+  offsets:new Int8Array(6),normals:new Int8Array([0,0,127,0,0,127]),
+  color:new Uint8Array([200,100,50,200,100,50]),metalRough:new Uint8Array([0,200,0,200]),
+},{levels:[1]});
+surfelHolder.add(surfelRoot);scene.add(surfelHolder);
+const surfelProxy=new THREE.Group(),surfelProxyMesh=new THREE.Mesh(new THREE.TetrahedronGeometry(),new THREE.MeshStandardMaterial());
+surfelProxy.add(surfelProxyMesh);
+globalThis.window={
+  kaminosGiProxies:{
+    handleFor:r=>r===surfelHolder?{
+      state:'loaded',representation:'surfels',proxyRoot:surfelProxy,
+      effective:{sha:'1'.repeat(64),faces:4,withinBudget:true},
+      error:{reference:{kind:'hero',sha256:'0'.repeat(64)},relative:{p95:0.002}},
+      placement:s=>new THREE.Matrix4().copy(s.matrixWorld).invert().multiply(surfelHolder.updateWorldMatrix(true,false)??surfelHolder.matrixWorld),
+    }:null,
+    registerConsumer(){return ()=>{};},
+  },
+};
+try{
+  const surfelMount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,smokeRefinement:1,pointCount:2,createShadow:()=>({visibility:THREE.TSL.float(1),render(){},debugState:()=>({}),dispose(){}})});
+  field.source.generation++;field.source.frame++;
+  consume(field);
+  assert.equal(surfelMount.canRender(),true,'hybrid lighting must succeed when a TRELLIS surfel object has a loaded GI proxy');
+  assert.equal(surfelMount.debugState().staticTriangles,16,'12 box triangles + 4 tetrahedron GI proxy triangles in smoke visibility');
+  surfelMount.dispose();
+}finally{
+  scene.remove(surfelHolder);
+  delete globalThis.window;
+}
+

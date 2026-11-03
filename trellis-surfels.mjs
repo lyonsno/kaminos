@@ -14,7 +14,8 @@
 
 export const SURFEL_EXTENSION='KAMINOS_trellis_surfels';
 const MESH_NODE_MATRIX=[1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1]; // as encodeTrellisGeometryGLB: (x,y,z) -> (x,z,-y)
-const MAX_RESOLUTION=512;
+export const MAX_SURFEL_RESOLUTION=512;
+const MAX_RESOLUTION=MAX_SURFEL_RESOLUTION;
 const pack=(a,b,c)=>(a|(b<<9)|(c<<18))>>>0;
 const unpack=k=>[k&511,(k>>>9)&511,(k>>>18)&511];
 const byte=v=>Math.max(0,Math.min(255,Math.round(v*255)));
@@ -82,6 +83,22 @@ export function surfelNormals(field){
   const out=new Float32Array(field.count*3);
   for(let i=0;i<field.count;i++)octDecode(field.normals[i*2],field.normals[i*2+1],out,i*3);
   return out;
+}
+
+// Replace a surfel field's normals with world-space normals sampled at each surfel's world position
+// (for example from the run's hero mesh via createHeroNormalSampler). Where sampleWorldNormal(p, n, diameter)
+// returns null, the surfel keeps its own normal; normals facing away from the surfel's side are turned back.
+export function sampleSurfelNormals(field,sampleWorldNormal){
+  const pos=surfelPositions(field),nor=surfelNormals(field),diameter=2*field.radiusVoxels/field.resolution;
+  const normals=new Uint8Array(field.count*2);let sampled=0,unsampled=0;
+  for(let i=0;i<field.count;i++){
+    const p=[pos[i*3],pos[i*3+2],-pos[i*3+1]],n=[nor[i*3],nor[i*3+2],-nor[i*3+1]];
+    let h=sampleWorldNormal(p,n,diameter);
+    const l=h&&Math.hypot(h[0],h[1],h[2]);
+    if(!(l>0)){h=n;unsampled++;}else{h=[h[0]/l,h[1]/l,h[2]/l];if(h[0]*n[0]+h[1]*n[1]+h[2]*n[2]<0)h=[-h[0],-h[1],-h[2]];sampled++;}
+    octEncode(h[0],-h[2],h[1],normals,i*2);
+  }
+  return {field:{...field,normals},sampled,unsampled,diameter};
 }
 
 // Average each k-cube of surfels into one. parent[i] is the merged surfel source surfel i belongs to.
@@ -176,12 +193,13 @@ function fieldFromViews(extension,viewBytes){
 }
 
 // one triangle per surfel with the area of a disc of radius r (side 2.45 r), turned to face the normal
-function surfelTriangles(field){
+export function surfelTriangles(field){
   const pos=surfelPositions(field),nor=surfelNormals(field),r=field.radiusVoxels/field.resolution,R=2.45*r/Math.sqrt(3);
+  const tmpl=[[0,R],[-Math.sin(Math.PI/3)*R,-.5*R],[Math.sin(Math.PI/3)*R,-.5*R]];
   const positions=new Float32Array(field.count*9),colors=new Uint8Array(field.count*12);
   for(let i=0;i<field.count;i++){
-    const [tx,ty,tz]=tangentFrame(nor[i*3],nor[i*3+1],nor[i*3+2],i);
-    for(let k=0;k<3;k++){const a=Math.PI/2+k*2*Math.PI/3,cu=Math.cos(a)*R,su=Math.sin(a)*R;
+    const [tx,ty]=tangentFrame(nor[i*3],nor[i*3+1],nor[i*3+2],i);
+    for(let k=0;k<3;k++){const [cu,su]=tmpl[k];
       for(let ax=0;ax<3;ax++)positions[i*9+k*3+ax]=pos[i*3+ax]+tx[ax]*cu+ty[ax]*su;
       colors.set([linearByte(field.color[i*3]),linearByte(field.color[i*3+1]),linearByte(field.color[i*3+2]),255],i*12+k*4);}
   }
@@ -189,12 +207,14 @@ function surfelTriangles(field){
 }
 // glTF COLOR_0 is linear; the field stores sRGB bytes.
 function linearByte(srgb){const c=srgb/255;return Math.round((c<=.04045?c/12.92:((c+.055)/1.055)**2.4)*255);}
+// Matches createSurfelObject's Quaternion.setFromUnitVectors(+Z, n).multiply(setFromAxisAngle(+Z, hashAngle(seed))).
 function tangentFrame(nx,ny,nz,seed){
-  const ref=Math.abs(nz)<.9?[0,0,1]:[1,0,0];
-  let t=[ny*ref[2]-nz*ref[1],nz*ref[0]-nx*ref[2],nx*ref[1]-ny*ref[0]];const l=Math.hypot(...t)||1;t=t.map(v=>v/l);
-  const b=[ny*t[2]-nz*t[1],nz*t[0]-nx*t[2],nx*t[1]-ny*t[0]];
+  const r=nz+1;let ex,ey;
+  if(r<Number.EPSILON){ex=[-1,0,0];ey=[0,1,0];}
+  else{const l=Math.hypot(-ny,nx,r)||1,qx=-ny/l,qy=nx/l,qw=r/l;
+    ex=[1-2*qy*qy,2*qx*qy,-2*qy*qw];ey=[2*qx*qy,1-2*qx*qx,2*qx*qw];}
   const roll=hashAngle(seed),c=Math.cos(roll),s=Math.sin(roll);
-  return [t.map((v,i)=>v*c+b[i]*s),b.map((v,i)=>v*c-t[i]*s)];
+  return [ex.map((v,i)=>v*c+ey[i]*s),ey.map((v,i)=>v*c-ex[i]*s)];
 }
 function hashAngle(i){let x=(i+1)*2654435761>>>0;x^=x>>>15;x=Math.imul(x,2246822519)>>>0;x^=x>>>13;return (x/4294967296)*Math.PI*2;}
 
@@ -213,11 +233,11 @@ export function configureSurfelRendering({viewportHeight}={}){viewportHeightSour
 const classCache=new WeakMap();
 function surfelClasses(THREE){
   let c=classCache.get(THREE);if(c)return c;
-  const inv=new THREE.Matrix4(),local=new THREE.Ray(),wp=new THREE.Vector3(),cp=new THREE.Vector3(),ws=new THREE.Vector3();
+  const inv=new THREE.Matrix4(),local=new THREE.Ray(),wp=new THREE.Vector3(),cp=new THREE.Vector3(),ws=new THREE.Vector3(),wb=new THREE.Box3();
   class SurfelRoot extends THREE.Group{
-    constructor(){super();this.isTrellisSurfelRoot=true;this.surfelField=null;this.surfelOccupancy=null;this.surfelOptions=null;this.sceneGeometry=null;}
+    constructor(){super();this.isTrellisSurfelRoot=true;this.surfelField=null;this.surfelOccupancy=null;this.surfelOptions=null;this.sceneGeometry=null;this.surfelGeometry=null;this.surfelMaterial=null;}
     copy(source,recursive){super.copy(source,recursive);this.surfelField=source.surfelField;this.surfelOccupancy=source.surfelOccupancy;
-      this.surfelOptions=source.surfelOptions;this.sceneGeometry=source.sceneGeometry;return this;}
+      this.surfelOptions=source.surfelOptions?{...source.surfelOptions,levels:[...source.surfelOptions.levels]}:null;this.sceneGeometry=source.sceneGeometry;this.surfelGeometry=source.surfelGeometry;this.surfelMaterial=source.surfelMaterial;return this;}
     raycast(raycaster,intersects){
       if(!this.surfelField)return;
       inv.copy(this.matrixWorld).invert();local.copy(raycaster.ray).applyMatrix4(inv);
@@ -228,31 +248,71 @@ function surfelClasses(THREE){
     }
   }
   class SurfelChunk extends THREE.LOD{
-    constructor(){super();this.surfelFactors=[];}
-    copy(source,recursive){super.copy(source,recursive);this.surfelFactors=source.surfelFactors.slice();return this;}
+    constructor(){super();this.surfelFactors=[];this.localBox=null;this._hasSelectedLevel=false;this._cameraLevels=new WeakMap();}
+    copy(source,recursive){super.copy(source,recursive);this.surfelFactors=source.surfelFactors.slice();this.localBox=source.localBox?source.localBox.clone():null;this._hasSelectedLevel=false;this._cameraLevels=new WeakMap();return this;}
     raycast(){}
     update(camera){
       const factors=this.surfelFactors;if(!factors.length)return;
       let root=this.parent;while(root&&!root.isTrellisSurfelRoot)root=root.parent;if(!root?.surfelField)return;
       const options=root.surfelOptions;
       this.getWorldPosition(wp);camera.getWorldPosition(cp);this.getWorldScale(ws);
+      let dist=wp.distanceTo(cp);
+      if(this.localBox&&!this.localBox.isEmpty()){wb.copy(this.localBox).applyMatrix4(this.matrixWorld);dist=Math.min(dist,wb.distanceToPoint(cp));}
+      dist=Math.max(dist,camera.near||1e-6,1e-6);
       const voxel=Math.max(ws.x,ws.y,ws.z)/root.surfelField.resolution;
       const height=viewportHeightSource?.()||root.userData.viewportHeight||options.viewportHeight;
       const pixelsPerUnit=camera.isOrthographicCamera?height*camera.zoom/(camera.top-camera.bottom):
-        height/2*camera.projectionMatrix.elements[5]/Math.max(wp.distanceTo(cp),1e-6);
-      // the coarsest level whose surfels stay within targetPixels; the finest if none do
-      let chosen=0;for(let i=factors.length-1;i>=0;i--)if(factors[i]*voxel*pixelsPerUnit<=options.targetPixels){chosen=i;break;}
-      this.levels.forEach((l,i)=>{l.object.visible=i===chosen;});this._currentLevel=chosen;
+        height/2*camera.projectionMatrix.elements[5]/dist;
+      const target=options.targetPixels??1.5,hyst=options.hysteresis??0.15;
+      // the coarsest level whose surfels stay within targetPixels (with +/-hysteresis deadband around the active level per camera)
+      let chosen=0;
+      const camLevel=camera?this._cameraLevels.get(camera):null;
+      const prev=camLevel!==undefined&&camLevel>=0&&camLevel<factors.length?camLevel:null;
+      if(prev===null){
+        for(let i=factors.length-1;i>=0;i--)if(factors[i]*voxel*pixelsPerUnit<=target){chosen=i;break;}
+      }else{
+        let coarsened=-1;
+        for(let i=factors.length-1;i>prev;i--)if(factors[i]*voxel*pixelsPerUnit<=target*(1-hyst)){coarsened=i;break;}
+        if(coarsened>=0)chosen=coarsened;
+        else if(factors[prev]*voxel*pixelsPerUnit>target*(1+hyst)){
+          chosen=0;for(let i=prev-1;i>=0;i--)if(factors[i]*voxel*pixelsPerUnit<=target){chosen=i;break;}
+        }else chosen=prev;
+      }
+      this.levels.forEach((l,i)=>{l.object.visible=i===chosen;});
+      if(camera)this._cameraLevels.set(camera,chosen);
+      this._currentLevel=chosen;this._hasSelectedLevel=true;
     }
   }
   class SurfelChunkMesh extends THREE.InstancedMesh{raycast(){}}
   c={SurfelRoot,SurfelChunk,SurfelChunkMesh};classCache.set(THREE,c);return c;
 }
 
+function buildChunkMeshesForLevel(THREE,SurfelChunkMesh,f,k,chunkVoxels,geometry,material,{heroNormals=false}={}){
+  const per=chunkVoxels/k,pos=surfelPositions(f),nor=surfelNormals(f);
+  const groups=new Map();
+  for(let i=0;i<f.count;i++){const c=unpack(f.cells[i]),key=[0,1,2].map(a=>Math.floor(c[a]/per)).join(',');
+    (groups.get(key)??groups.set(key,[]).get(key)).push(i);}
+  const m=new THREE.Matrix4(),q=new THREE.Quaternion(),s=new THREE.Vector3(),p=new THREE.Vector3(),z=new THREE.Vector3(0,0,1),n=new THREE.Vector3(),roll=new THREE.Quaternion(),col=new THREE.Color();
+  const r=f.radiusVoxels/f.resolution,out=new Map();
+  for(const [key,idx] of groups){
+    const mesh=new SurfelChunkMesh(geometry,material,idx.length);mesh.castShadow=true;mesh.receiveShadow=true;
+    if(heroNormals)mesh.userData.heroNormals=true;
+    const box=new THREE.Box3();
+    idx.forEach((i,j)=>{p.set(pos[i*3],pos[i*3+1],pos[i*3+2]);n.set(nor[i*3],nor[i*3+1],nor[i*3+2]);
+      box.expandByPoint(p);
+      q.setFromUnitVectors(z,n).multiply(roll.setFromAxisAngle(z,hashAngle(i)));s.setScalar(r);m.compose(p,q,s);mesh.setMatrixAt(j,m);
+      col.setRGB(f.color[i*3]/255,f.color[i*3+1]/255,f.color[i*3+2]/255,THREE.SRGBColorSpace);mesh.setColorAt(j,col);});
+    box.expandByScalar(r);
+    mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;mesh.computeBoundingSphere();
+    out.set(key,{mesh,box});
+  }
+  return out;
+}
+
 export function createSurfelObject(THREE,field,{levels=[1,2,4],chunkVoxels=64,viewportHeight=1080,targetPixels=1.5,proxyFactor=2}={}){
   const {SurfelRoot,SurfelChunk,SurfelChunkMesh}=surfelClasses(THREE);
   const root=new SurfelRoot();root.name='trellis-surfels';
-  root.surfelField=field;root.surfelOccupancy=occupancyOf(field);root.surfelOptions={levels,chunkVoxels,viewportHeight,targetPixels};
+  root.surfelField=field;root.surfelOccupancy=occupancyOf(field);root.surfelOptions={levels:[...levels],chunkVoxels,viewportHeight,targetPixels};
   root.userData.raycastsAsWhole=true;
   const merged=levels.map(k=>k===1?field:mergeSurfelLevel(field,k).field);
   const geometry=new THREE.BufferGeometry(),R=2.45/Math.sqrt(3);
@@ -260,22 +320,14 @@ export function createSurfelObject(THREE,field,{levels=[1,2,4],chunkVoxels=64,vi
   geometry.setAttribute('normal',new THREE.Float32BufferAttribute([0,0,1,0,0,1,0,0,1],3));
   let mr=[0,0];for(let i=0;i<field.count;i++){mr[0]+=field.metalRough[i*2];mr[1]+=field.metalRough[i*2+1];}
   const material=new THREE.MeshStandardMaterial({side:THREE.DoubleSide,metalness:mr[0]/field.count/255,roughness:mr[1]/field.count/255});
+  root.surfelGeometry=geometry;root.surfelMaterial=material;
   const chunks=new Map();
   merged.forEach((f,level)=>{
-    const k=levels[level],per=chunkVoxels/k,pos=surfelPositions(f),nor=surfelNormals(f);
-    const groups=new Map();
-    for(let i=0;i<f.count;i++){const c=unpack(f.cells[i]),key=[0,1,2].map(a=>Math.floor(c[a]/per)).join(',');
-      (groups.get(key)??groups.set(key,[]).get(key)).push(i);}
-    const m=new THREE.Matrix4(),q=new THREE.Quaternion(),s=new THREE.Vector3(),p=new THREE.Vector3(),z=new THREE.Vector3(0,0,1),n=new THREE.Vector3(),roll=new THREE.Quaternion(),col=new THREE.Color();
-    const r=f.radiusVoxels/f.resolution;
-    for(const [key,idx] of groups){
-      const mesh=new SurfelChunkMesh(geometry,material,idx.length);mesh.castShadow=true;mesh.receiveShadow=true;
-      idx.forEach((i,j)=>{p.set(pos[i*3],pos[i*3+1],pos[i*3+2]);n.set(nor[i*3],nor[i*3+1],nor[i*3+2]);
-        q.setFromUnitVectors(z,n).multiply(roll.setFromAxisAngle(z,hashAngle(i)));s.setScalar(r);m.compose(p,q,s);mesh.setMatrixAt(j,m);
-        col.setRGB(f.color[i*3]/255,f.color[i*3+1]/255,f.color[i*3+2]/255,THREE.SRGBColorSpace);mesh.setColorAt(j,col);});
-      mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;mesh.computeBoundingSphere();
+    const k=levels[level],built=buildChunkMeshesForLevel(THREE,SurfelChunkMesh,f,k,chunkVoxels,geometry,material);
+    for(const [key,{mesh,box}] of built){
       let lod=chunks.get(key);
-      if(!lod){lod=new SurfelChunk();lod.name=`surfel-chunk-${key}`;chunks.set(key,lod);root.add(lod);}
+      if(!lod){lod=new SurfelChunk();lod.name=`surfel-chunk-${key}`;lod.localBox=box.clone();chunks.set(key,lod);root.add(lod);}
+      else if(lod.localBox)lod.localBox.union(box);
       lod.addLevel(mesh,level);lod.surfelFactors.push(k);
     }
   });
@@ -283,8 +335,50 @@ export function createSurfelObject(THREE,field,{levels=[1,2,4],chunkVoxels=64,vi
   proxy.setAttribute('position',new THREE.BufferAttribute(surfelTriangles(proxyFactor>1?mergeSurfelLevel(field,proxyFactor).field:field).positions,3));
   root.sceneGeometry=proxy;
   root.userData.viewportHeight=viewportHeight;
-  root.userData.trellisSurfels={count:field.count,resolution:field.resolution,levels,chunkVoxels,chunks:chunks.size,proxyFactor};
+  root.userData.trellisSurfels={count:field.count,resolution:field.resolution,levels:[...levels],chunkVoxels,chunks:chunks.size,proxyFactor};
   return root;
+}
+
+// Attach stored hero-normal merged surfel levels (for example x4, x8, x16 from .lods.json) to a SurfelRoot's chunks.
+// Replaces any unbaked in-memory level of the same mergeFactor and adds coarser factors in ascending order.
+export function attachStoredSurfelLevels(THREE,root,storedLevels=[]){
+  if(!root?.isTrellisSurfelRoot)throw TypeError('SurfelRoot required');
+  const {SurfelChunk,SurfelChunkMesh}=surfelClasses(THREE);
+  const chunkVoxels=root.surfelOptions?.chunkVoxels??64;
+  const geometry=root.surfelGeometry,material=root.surfelMaterial;
+  const chunks=new Map();
+  for(const child of root.children)if(child.isLOD&&child.name?.startsWith('surfel-chunk-'))chunks.set(child.name.slice('surfel-chunk-'.length),child);
+  const factorSet=new Set(root.surfelOptions?.levels??[]);
+  for(const item of storedLevels){
+    const k=item?.mergeFactor;if(!Number.isSafeInteger(k)||k<1)continue;
+    const f=item.field??(item.glb?readSurfelGLBExtension(item.glb).field:null);if(!f)continue;
+    factorSet.add(k);
+    const built=buildChunkMeshesForLevel(THREE,SurfelChunkMesh,f,k,chunkVoxels,geometry,material,{heroNormals:true});
+    for(const [key,{mesh,box}] of built){
+      let lod=chunks.get(key);
+      if(!lod){lod=new SurfelChunk();lod.name=`surfel-chunk-${key}`;lod.localBox=box.clone();chunks.set(key,lod);root.add(lod);}
+      const existingIdx=lod.surfelFactors.indexOf(k);
+      if(existingIdx>=0){
+        const old=lod.levels[existingIdx]?.object;
+        if(old){lod.remove(old);old.dispose?.();}
+        lod.add(mesh);lod.levels[existingIdx].object=mesh;
+      }else{
+        lod.add(mesh);
+        const entries=lod.surfelFactors.map((fk,i)=>({k:fk,object:lod.levels[i].object}));
+        entries.push({k,object:mesh});entries.sort((a,b)=>a.k-b.k);
+        lod.surfelFactors=entries.map(e=>e.k);
+        lod.levels.length=0;
+        entries.forEach((e,i)=>lod.levels.push({distance:i,hysteresis:0,object:e.object}));
+      }
+      lod._hasSelectedLevel=false;
+      lod._cameraLevels=new WeakMap();
+      lod.levels.forEach((l,i)=>{l.object.visible=i===(lod._currentLevel??0);});
+    }
+  }
+  const levels=[...factorSet].sort((a,b)=>a-b);
+  if(root.surfelOptions)root.surfelOptions.levels=levels;
+  if(root.userData?.trellisSurfels)root.userData.trellisSurfels.levels=[...levels];
+  return {levels,chunks:chunks.size};
 }
 
 // GLTFLoader plugin: a node carrying the surfel extension becomes the surfel scene object.

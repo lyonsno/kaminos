@@ -1,21 +1,29 @@
 import {installRelativeNumberDrag} from './scene-control-history.mjs';
 
 const installed=new WeakSet();
+let errorSerial=0;
 // Preserve the input and its existing input/change handlers. Cost controls
 // commit on release; live controls keep their existing input behavior.
 export function installRenderingNumberControl(input,installNumberDrag=installRelativeNumberDrag) {
   if(installed.has(input))return;
   installed.add(input);
+  const errorHost=input.closest?.('label')??input.closest?.('.field')??input.parentElement;
+  const errorOutput=input.ownerDocument?.createElement&&errorHost?.append?input.ownerDocument.createElement('span'):null;
+  if(errorOutput){errorOutput.className='rendering-number-error';errorOutput.id=`rendering-number-error-${++errorSerial}`;errorOutput.setAttribute('role','alert');errorOutput.hidden=true;Object.assign(errorOutput.style,{color:'#efaaa0',fontSize:'12px',gridColumn:'1 / -1'});errorHost.append(errorOutput);input.setAttribute('aria-describedby',[input.getAttribute('aria-describedby'),errorOutput.id].filter(Boolean).join(' '));}
   const wasRange=input.type==='range';
   input.type='number';
   let before=input.value,lastValid=input.value,dragging=false;
   const bound=value=>value!=='' && Number.isFinite(Number(value))?Number(value):null;
-  const valid=()=>{
+  const invalidReason=()=>{
     const value=bound(input.value),min=bound(input.min),max=bound(input.max),step=Number(input.step);
-    if(value===null || (min!==null && value<min) || (max!==null && value>max))return false;
-    if(wasRange && step>0){const units=(value-(min??0))/step;if(Math.abs(units-Math.round(units))>1e-7)return false;}
-    return true;
+    if(value===null)return 'Enter a finite number.';
+    if(min!==null&&value<min)return `Enter ${min} or more.`;
+    if(max!==null&&value>max)return `Enter ${max} or less.`;
+    if(wasRange&&step>0){const units=(value-(min??0))/step;if(Math.abs(units-Math.round(units))>1e-7)return `Use increments of ${step} from ${min??0}.`;}
+    return '';
   };
+  const valid=()=>!invalidReason();
+  const feedback=message=>{if(errorOutput){errorOutput.textContent=message;errorOutput.hidden=!message;}input.setCustomValidity?.(message);if(message)input.setAttribute?.('aria-invalid','true');else input.removeAttribute?.('aria-invalid');};
   // Capture before the existing live handlers: number inputs permit incomplete
   // text and step mismatches that native ranges never emitted.
   input.addEventListener('input',event=>{
@@ -29,9 +37,9 @@ export function installRenderingNumberControl(input,installNumberDrag=installRel
       }
     }
     if(!valid()){event.stopImmediatePropagation();return;}
-    lastValid=input.value;
+    lastValid=input.value;feedback('');
   },true);
-  const finishEdit=event=>{if(!valid()){input.value=lastValid;event.stopImmediatePropagation();}};
+  const finishEdit=event=>{const reason=invalidReason();if(reason){const rejected=input.value;input.value=lastValid;feedback(`${reason} Kept ${lastValid}; rejected “${rejected}”.`);input.reportValidity?.();event.stopImmediatePropagation();}};
   input.addEventListener('change',finishEdit,true);
   input.addEventListener('blur',finishEdit,true);
   input.addEventListener('focus',()=>{before=input.value;if(valid())lastValid=input.value;});

@@ -1,7 +1,7 @@
 // kaminos-test: node — each TRELLIS-derived scene object gets a GI proxy handle: a stored low tier of its hero, loaded
 // outside the frame loop, never in the scene, placed exactly where the object draws; surfel assets also point at their
 // own coarse surfels. Pass policy is the GI renderer's; this only resolves, loads and places.
-import test from 'node:test';import assert from 'node:assert/strict';import {createHash} from 'node:crypto';
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import {createHash} from 'node:crypto';
 import * as THREE from '../lib/three.core.js';
 import {createGiProxyRegistry} from '../scene-gi-proxies.mjs';
 
@@ -53,6 +53,27 @@ test('a surfel asset resolves its hero tiers through meshSha256 and points at it
   const h=await registry.attach(root);
   assert.equal(h.representation,'surfels');assert.equal(h.assetSha,SURF);assert.equal(h.heroSha,HERO);assert.equal(h.state,'loaded');
   assert.equal(h.surfels.root,surfels);assert.deepEqual(h.surfels.levels,[1,2,4]);assert.equal(h.surfels.coarsest,4);
+});
+
+test('a surfels-only asset with raw-decode tiers registered under its own assetSha loads those tiers as its GI proxy',async()=>{
+  const {calls,loaded}=world();
+  const registry=createGiProxyRegistry({
+    THREE,
+    fetchJson:async url=>{
+      calls.push(url);const q=new URL(url,'http://k');const faces=Number(q.searchParams.get('faces'));
+      const levels=q.searchParams.get('source')===SURF?TIERS.map(t=>({...t,source:`/api/read?root=generated-meshes&path=${t.sha256}.glb`})):[];
+      const fitting=levels.filter(l=>l.faces<=faces);
+      return {schema:'kaminos.lod-set.v0',source:q.searchParams.get('source'),levels,choice:fitting[0]??levels.at(-1)??null,withinBudget:!!fitting.length};
+    },
+    fetchBytes:async url=>tierBytes(TIERS.find(t=>url.includes(t.sha256)).faces),
+    parseGlb:async bytes=>{const g=new THREE.Group();g.add(new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial()));loaded.push(g);return g;},
+  });
+  const {root}=sceneObject(`/api/read?root=generated-meshes&path=${SURF}.glb`,{representation:'trellis-surfels'});
+  const surfels=new THREE.Group();surfels.isTrellisSurfelRoot=true;surfels.surfelOptions={levels:[1,4,8,16]};root.add(surfels);
+  const h=await registry.attach(root);
+  assert.equal(h.state,'loaded');assert.equal(h.representation,'surfels');assert.equal(h.assetSha,SURF);assert.equal(h.heroSha,null);
+  assert.equal(h.effective.faces,1000);assert.equal(h.proxyRoot,loaded[0]);assert.equal(h.surfels.coarsest,16);
+  assert.match(calls[0],new RegExp(`/api/mesh-lods\\?source=${SURF}&faces=1000`));
 });
 
 test('objects with no TRELLIS tiers say why, and nothing is loaded',async()=>{
@@ -113,7 +134,7 @@ test('GI-PROXY-01: the page clears the registry when it clears a scene, and rele
   const {registry}=world(),{root}=sceneObject(heroSource);await registry.attach(root);let disposed=0;
   registry.get(root).proxyRoot.traverse(node=>node.geometry?.addEventListener('dispose',()=>disposed++));
   const h=vm.createContext({createSceneLifecycle,workingScene:createWorkingScene(),scene:{remove(){}},disposeObjectTree(){},setSceneObjectMounted(){},restoreLoadedSceneRecord(){},setSceneGroupsFromRecords(){},setSceneSelection(){},setActiveSceneObject(){},setActiveSceneGroup(){},
-    clearSceneEditingState(){},clearSceneTransient(){},projectClearedScene(){},sceneGiProxies:registry,localLiquidGeneration:0,localLiquidHost:null,sceneSpotLights:new Map()});
+    clearSceneEditingState(){},clearSceneTransient(){},projectClearedScene(){},sceneGiProxies:registry,waterFeature:{clear(){}},flameFeature:{clear:async()=>{}},setInfo(){},sceneSpotLights:new Map()});
   const extract=name=>{const a=html.indexOf('function '+name+'('),b=html.indexOf('\n}',a)+2;assert.ok(a>=0&&b>a);return html.slice(a,b);};
   vm.runInContext(extract('createPageSceneLifecycle')+'\n'+extract('clearSceneDomains'),h);
   h.sceneLifecycle=h.createPageSceneLifecycle();
@@ -141,3 +162,13 @@ test('the registry knows whether any GI pass consumes proxies, so a setting that
   release();assert.deepEqual(registry.consumers(),[]);
   assert.throws(()=>registry.registerConsumer(''),/name/);
 });
+
+test('Review N4: index.html wires window.kaminosGiProxies.prepare and importSceneMesh background tier preparation', () => {
+  const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(html, /prepare:\s*async\s*\(rootOrSha,\s*options\s*=\s*\{\}\)\s*=>/, 'window.kaminosGiProxies exposes prepare(rootOrSha, options)');
+  const importStart = html.indexOf('async function importSceneMesh(');
+  assert.ok(importStart > 0);
+  const importBody = html.slice(importStart, importStart + 2500);
+  assert.match(importBody, /window\.kaminosGiProxies\?\.prepare\?\.\(digest,\s*\{heroGLB:/, 'importSceneMesh triggers background GI proxy tier preparation on imported GLBs');
+});
+

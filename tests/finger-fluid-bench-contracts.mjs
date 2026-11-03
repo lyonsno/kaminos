@@ -1,3 +1,4 @@
+import {fingerFluidAnalyticalSupportGeometry} from '../finger-fluid-webgpu-core.js';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
@@ -279,7 +280,7 @@ assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_DEFAULT_MAX_SPEED\s*=\s*Mat
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_SPEED_REFERENCE_SCALE\s*=\s*3\.2/, 'fixed diagnostic and interface speed scale is named independently from the solver ceiling');
 assert.match(webgpuCoreSource, /restDensity:\s*24\.3/, 'calibrated packed-state rest density is exposed');
 assert.match(webgpuCoreSource, /GRID_DIMS\s*=\s*\[32, 20, 32\]/, 'linked-cell domain has 3D neighborhood resolution');
-assert.match(webgpuCoreSource, /BOUNDS_MIN\s*=\s*\[-3\.4, -1\.2, -3\.4\]/, 'fluid domain leaves room around the finite liquid body');
+assert.deepEqual(fingerFluidAnalyticalSupportGeometry().boundsMin,[-3.4,-1.2,-3.4], 'fluid domain leaves room around the finite liquid body');
 assert.match(webgpuCoreSource, /let radial = 0\.15 \* \(p\.x \* p\.x \+ p\.z \* p\.z\)/, 'smoke basin confines the calibrated volume into a deep finite body');
 assert.match(webgpuCoreSource, /fn floorNormal\(p: vec3<f32>\) -> vec3<f32>/, 'height-field collision exposes an analytic terrain normal');
 assert.match(webgpuCoreSource, /p = p \+ normal \* \(penetration \/ max\(normal\.y, 0\.15\)\)/, 'terrain penetration resolves along the support normal');
@@ -287,8 +288,8 @@ assert.match(webgpuCoreSource, /velocity = velocity - normal \* normalSpeed/, 't
 assert.match(webgpuCoreSource, /supportTangentialRetention\s*=\s*exp\(-params\.particleShift\.y \* supportContact \* params\.dt\)/, 'support friction damps only contact-weighted tangential velocity with a time-step-invariant exponential law');
 assert.match(webgpuCoreSource, /ENERGY_DIAGNOSTICS_SHADER/, 'kinetic-energy attribution owns a separate diagnostic shader instead of consuming another main solver storage binding');
 assert.match(webgpuCoreSource, /fn measure_projection_energy[\s\S]*fn measure_viscosity_energy[\s\S]*fn measure_vorticity_energy[\s\S]*fn measure_cohesion_energy/, 'energy diagnostics measure all four solver stages explicitly');
-assert.match(webgpuCoreSource, /const OBSTACLE_CENTER = \[0\.85, -0\.43, 0\.02\]/, 'obstacle center has one JavaScript source of truth');
-assert.match(webgpuCoreSource, /const OBSTACLE_RADIUS = 0\.52/, 'obstacle radius has one JavaScript source of truth');
+assert.deepEqual(fingerFluidAnalyticalSupportGeometry().obstacle.center,[.85,-.43,.02], 'solver exposes the analytical obstacle center');
+assert.equal(fingerFluidAnalyticalSupportGeometry().obstacle.radius,.52, 'solver exposes the analytical obstacle radius');
 assert.match(webgpuCoreSource, /const VORTICITY_UPDATE_INTERVAL = 3/, 'vorticity cadence is explicit rather than silently omitted under load');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_FREE_SURFACE_CONTRACT\s*=\s*'wgsl-neighbor-free-surface-cohesion-v0'/, 'free-surface classification and cohesion contract is explicit');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_REST_STATE_CONTRACT\s*=\s*'wgsl-support-aware-persistent-rest-state-v0'/, 'persistent support-aware rest-state contract is explicit');

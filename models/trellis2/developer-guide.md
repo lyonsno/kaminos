@@ -251,3 +251,32 @@ Tests live under [`tests/`](tests/). Numerical development uses the individual
 sparse, shape and decoder exporters plus their browser runners; the ordinary
 generation workflow above uses the complete model rather than those isolated
 stage tests.
+
+
+### Stage-specific image conditioning
+
+The `512` pipeline encodes its prepared 512 image once. The `1024_cascade`
+pipeline encodes two images from the same prepared foreground crop: 512 for
+sparse structure and low-resolution shape, and 1024 for high-resolution shape
+and texture flow. The resident context shapes are `[1,1029,1024]` and
+`[1,4101,1024]`. Both DINO passes run through the same cooperative route.
+
+Direct adapter callers provide `pixelValues` and, for a cascade,
+`highResolutionPixelValues`. Browser preparation accepts `highResolution:true`
+and returns the second RGB image under `highResolution`; normalize each with
+`normalizePreparedTrellisRgb`. Both resizes start from the foreground crop;
+upsampling the 512 image is not equivalent.
+
+`pack-prepared-generation.py --pipeline-type 1024_cascade` writes both pixel
+tensors. Old packages remain valid checkpoint stores, but their old 512-only
+image cannot run the corrected cascade: select the original image in Kaminos
+or prepare a new package from the original foreground. The weight files can
+be reused when their texture checkpoint matches the requested pipeline. Generation outputs and page asset provenance expose
+`conditioningShapes` for the actual stage bindings.
+
+This adds the second encoder pass and its larger context. Input and checkpoint
+selection alone do not establish numerical or generated-output parity.
+
+### Pipeline-matched texture checkpoints
+
+`pack-generation.py --pipeline-type 1024_cascade` (the default) expands the official 1024 texture flow and high-resolution shape flow. `--pipeline-type 512` expands the 512 texture flow and omits the high-resolution shape checkpoint. Prepared-image packaging reuses those weights; it cannot convert a checkpoint base from one texture profile to the other. Rebuild the base for the desired profile before preparing its images. Browser execution rejects an unidentified or mismatched texture checkpoint before fetching model tensors, while historical package validation and retained-result inspection remain available. Existing correctly identified 512 packages continue to execute.

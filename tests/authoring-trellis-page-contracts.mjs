@@ -189,13 +189,13 @@ test('scene frames are served while checkpoints load and while the mesh is clean
 // A run whose asset consumer cleans a real (tiny) raw dual-grid mesh, with readable geometry and material tensors.
 const rawFixture=()=>{const coords=[[2,2,3],[3,2,3],[2,3,3],[3,3,3],[6,6,6]];
   return {vertices:new Float32Array(coords.flatMap(c=>c.map(v=>(v+.5)/8-.5))),triangles:new Uint32Array([0,1,3,0,3,2])};};
-function surfelRun({failMaterial=false}={}){
-  const f=fixture(),res=8,coords=[[2,2,3],[3,2,3],[2,3,3],[3,3,3],[6,6,6]];
-  const {vertices,triangles}=rawFixture();
+function surfelRun({failMaterial=false,res=8,failGeometry=false,coords=[[2,2,3],[3,2,3],[2,3,3],[3,3,3],[6,6,6]],mesh=rawFixture()}={}){
+  const f=fixture();
+  const {vertices,triangles}=mesh;
   const tensors={gc:new Int32Array(coords.flat()).buffer,mc:new Int32Array(coords.flat()).buffer,
     mf:new Float32Array(coords.flatMap(()=>[1,-1,-1,-1,.8,1])).buffer};
   const outputs={geometry:{coordinates:{id:'gc'},resolution:res},material:{coordinates:{id:'mc'},features:{id:'mf'},resolution:res}};
-  const runtime={async readTensor(t){if(failMaterial&&t.id==='mf')throw Error('material readback lost');return tensors[t.id].slice(0);}};
+  const runtime={async readTensor(t){if(failMaterial&&t.id==='mf')throw Error('material readback lost');if(failGeometry&&t.id==='gc')throw Error('optional geometry readback lost');return tensors[t.id].slice(0);}};
   const host=f.deps.createTrellisSharedHost;
   f.deps.createTrellisSharedHost=async args=>{const h=await host(args);const begin=h.beginRun;h.beginRun=async o=>{const r=await begin(o);r.route={...r.route,runtime};return r;};return h;};
   f.deps.createTrellisImageGenerationAdapter=()=>({outputs,async run(){return outputs;},dispose(){}});
@@ -243,5 +243,71 @@ test('a run hands back its raw decode and material fields for GI tiers, as copie
   const {decode,materialFields}=result.levelInputs;
   assert.deepEqual([...decode.vertices.subarray(0,3)],[...rawFixture().vertices.subarray(0,3)]);
   assert.equal(decode.triangles.length,6);assert.equal(materialFields.resolution,8);
+  assert.deepEqual([...decode.coordinates],[2,2,3,3,2,3,2,3,3,3,3,3,6,6,6]);
   assert.equal(materialFields.features.length,5*6);assert.equal(materialFields.coordinates.length,5*3);
+});
+
+test('the page forwards both caller pixel arrays and preserves the actual stage shapes in its asset and return',async()=>{
+  const f=fixture(),low=new Float32Array(512*512*3),high=new Float32Array(1024*1024*3);
+  const shapes={sparseFlow:[1,1029,1024],lowResolutionShape:[1,1029,1024],highResolutionShape:[1,4101,1024],textureFlow:[1,4101,1024]};
+  f.deps.loadGenerationInputs=async(m,fetch,input)=>{assert.equal(input.pixelValues,low);assert.equal(input.highResolutionPixelValues,high);return input;};
+  f.deps.createTrellisImageGenerationAdapter=options=>{assert.equal(options.highResolutionPixelValues,high);return {async run(){return {geometry:{},material:{},conditioningShapes:shapes};},dispose(){}};};
+  f.deps.createTrellisAssetAdapter=options=>{assert.deepEqual(options.provenance.conditioningShapes,shapes);return {async run(){return {glb};},dispose(){}};};
+  const result=await call(f,{pixelValues:low,highResolutionPixelValues:high});
+  assert.deepEqual(result.conditioningShapes,shapes);
+});
+
+for(const options of [{res:1024},{failGeometry:true}])test(`raw fields survive optional surfel failure ${JSON.stringify(options)}`,async()=>{
+  const f=surfelRun(options),adapter=f.deps.createTrellisAssetAdapter;
+  f.deps.createTrellisAssetAdapter=opts=>({...adapter(opts),async run(){
+    const raw=rawFixture();await opts.postprocessMesh(raw);raw.vertices.fill(0);raw.triangles.fill(0);return {glb};
+  }});
+  const result=await call(f);
+  assert.equal(result.glb,glb);assert.equal(result.surfels.status,'failed');
+  assert.ok(result.levelInputs,'raw fields must not depend on optional surfel construction');
+  assert.deepEqual(result.levelInputs.decode.vertices,rawFixture().vertices);
+  assert.deepEqual(result.levelInputs.decode.triangles,rawFixture().triangles);
+  assert.equal(result.levelInputs.materialFields.resolution,options.res??8);
+  assert.equal(result.levelInputs.materialFields.features.length,30);
+  if(options.failGeometry)assert.equal(result.levelInputs.decode.coordinates,undefined);
+  else assert.equal(result.levelInputs.decode.coordinates.length,15);
+});
+
+
+test('a 1024 page return publishes mesh levels while reporting unsupported automatic surfel levels',async()=>{
+  const {runGenerationLevels}=await import('../generation-levels-runner.mjs');
+  const {prepareGenerationLevels}=await import('../lod-generation-levels.mjs');
+  const {encodeTrellisGeometryGLB}=await import('../models/trellis2/trellis-mesh.js');
+  const {finishTrellisMesh}=await import('../models/trellis2/trellis-material.js');
+  const {createWasmXatlasUnwrapper}=await import('../models/trellis2/wasm-xatlas.js');
+  const {NodeTrellisUVWorker}=await import('../models/trellis2/node-uv-worker.mjs');
+  const THREE=await import('three'),{MeshBVH}=await import('three-mesh-bvh');
+  const {createHash}=await import('node:crypto');
+  const mesh={vertices:new Float32Array([0,0,0,.125,0,0,0,.125,0]),triangles:new Uint32Array([0,1,2])};
+  const hero=encodeTrellisGeometryGLB(mesh),f=surfelRun({res:1024,mesh,coords:[[512,512,512],[640,512,512],[512,640,512]]});
+  f.deps.createTrellisAssetAdapter=options=>({async run(){await options.postprocessMesh(mesh);return {glb:hero};},dispose(){}});
+  const result=await call(f);
+  assert.equal(result.surfels.status,'failed');assert.match(result.surfels.error,/resolution 1..512 required/);
+  assert.deepEqual(result.levelInputs.decode.vertices,mesh.vertices);assert.equal(result.levelInputs.materialFields.resolution,1024);
+  let posts=0,terminated=false;
+  const json=x=>new Response(JSON.stringify(x),{headers:{'Content-Type':'application/json'}});
+  const fetch=async(url,init={})=>{
+    if(!init.method)return json({levels:[]});posts++;
+    if(url.startsWith('/api/ingest-mesh'))return json({sha256:createHash('sha256').update(new Uint8Array(init.body)).digest('hex')});
+    if(url.startsWith('/api/mesh-lods'))return json({...JSON.parse(init.body),retired:[]});
+    throw Error('unexpected publication '+url);
+  };
+  class LevelsWorker{
+    constructor(){this.listeners={};}addEventListener(k,fn){this.listeners[k]=fn;}terminate(){terminated=true;}
+    async postMessage(message){try{
+      const report=await prepareGenerationLevels({...message,fetch,THREE,MeshBVH,finish:finishTrellisMesh,
+        unwrapMesh:createWasmXatlasUnwrapper(),WorkerClass:NodeTrellisUVWorker,textureSizeFor:()=>8});
+      this.listeners.message({data:{kind:'done',report}});
+    }catch(error){this.listeners.error(error);}}
+  }
+  const report=await runGenerationLevels({...result.levelInputs,source:'e'.repeat(64),heroGLB:hero,targets:[200],WorkerClass:LevelsWorker});
+  assert.equal(report.phase,'done',report.error?.message);assert.equal(report.tiers.length,1);assert.equal(posts,2);
+  assert.match(report.tiers[0].sha256,/^[0-9a-f]{64}$/);assert.equal(terminated,true);
+  assert.deepEqual(report.surfels,{status:'skipped',reason:'unsupported-resolution',resolution:1024,maxResolution:512});
+  assert.deepEqual(result.levelInputs.decode.vertices,mesh.vertices);assert.equal(result.levelInputs.materialFields.features.length,18);
 });

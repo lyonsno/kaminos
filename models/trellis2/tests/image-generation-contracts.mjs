@@ -19,18 +19,21 @@ for(const [role,m]of Object.entries(smallModels)){
   if(m.weights.blocks){models[role].config={...m.config,contextRows:1029,contextChannels:1024};
     models[role].weights={...m.weights,blocks:m.weights.blocks.map(b=>({...b,'cross.kv.weight':new Float32Array(2*m.config.channels*1024)}))};}
 }
-const options={route:{runtime,routeId:'whole-image-generation'},pixelValues,prefixWeights,
+const options={route:{runtime,routeId:'whole-image-generation'},pixelValues,highResolutionPixelValues:new Float32Array(1024*1024*3),prefixWeights,
   async loadLayerWeights(){return dinoLayerWeights;},models,meshResolution:128,
   onPhase(e){phase=e.phase;if(phase==='learned-cascade-support')marked=false;}},
   a=serving.createTrellisImageGenerationAdapter(options),invocation={id:'whole-native-invocation'},out=await a.run(invocation);
 assert.equal(a.state,'completed');assert.equal(out.dino.blocksExecuted,24);
 assert.deepEqual(out.conditioning.shape,[1,1029,1024]);
-assert.ok(runs.filter(r=>r.o.stage==='flow-resident-conditioning-bf16').every(r=>r.k.bindings[0].resource===out.conditioning));
+assert.deepEqual(out.highResolutionConditioning.shape,[1,4101,1024]);
+assert.equal(out.highResolutionDino.blocksExecuted,24);
+assert.deepEqual(runs.filter(r=>r.o.stage==='flow-resident-conditioning-bf16').map(r=>r.k.bindings[0].resource),
+  [out.conditioning,out.conditioning,out.highResolutionConditioning,out.highResolutionConditioning]);
 assert.ok(runs.every(r=>r.o.schedulerInvocation===invocation));assert.ok(reads.every(t=>t.byteLength===4&&t.dtype==='u32'));
 assert.equal(out.geometry.features.shape[1],7);assert.equal(out.material.features.shape[1],6);
 assert.equal(out.featureBytesToCPUDuringServing,0);assert.equal(out.conditioning.buffer.destroyed,undefined);
 assert.equal(Object.keys(a.noiseInputs).length,4);await assert.rejects(a.run(invocation),/completed/);a.dispose();
-assert.ok(out.conditioning.buffer.destroyed);assert.ok(out.geometry.features.destroyed);assert.ok(out.material.features.destroyed);
+assert.ok(out.conditioning.buffer.destroyed);assert.ok(out.highResolutionConditioning.buffer.destroyed);assert.ok(out.geometry.features.destroyed);assert.ok(out.material.features.destroyed);
 failStage='decoder-layernorm';const failed=serving.createTrellisImageGenerationAdapter(options);
 await assert.rejects(failed.run(invocation),/injected/);assert.equal(failed.state,'failed');assert.equal(failed.outputs,undefined);
 assert.equal(failed.phase,'learned-cascade-support');assert.equal(failed.noiseInputs.sparse.values.length,32768);
@@ -61,4 +64,4 @@ const lazy=serving.createTrellisImageGenerationAdapter({...options,models:undefi
   assert.ok(lazy.conditioning?.buffer,'checkpoint loader runs after actual DINO producer output exists');
   checkpointLoadObserved=true;return models;}});
 const lazyOut=await lazy.run(invocation);assert.ok(checkpointLoadObserved);assert.deepEqual(lazyOut.geometry.features.shape,[5,7]);lazy.dispose();
-console.log('Actual DINO → seven-model generation shares one resident conditioning tensor and invocation; scalar-only serving reads, preserved noise and producer/output lifetimes. Fake runtime is not native full-model proof.');
+console.log('Actual DINO → seven-model generation routes two resident conditioning tensors by stage and invocation; scalar-only serving reads, preserved noise and producer/output lifetimes. Fake runtime is not native full-model proof.');

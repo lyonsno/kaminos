@@ -16,10 +16,10 @@ test('sampleSimGpuProfile times the sim pass and the projection over N steps wit
   assert.match(body, /identity: SIM_GPU_PROFILE_IDENTITY/);
   assert.match(body, /if \(!device\.features\?\.has\?\.\('timestamp-query'\)\) \{[^}]*timestamp-query-not-supported/, 'unsupported is a named status, not zeros');
   assert.match(body, /const steps = Math\.max\(1, Math\.min\(4096, Math\.floor\(Number\(options\.steps\) \|\| 64\)\)\);/);
-  assert.match(body, /device\.createQuerySet\(\{ type: 'timestamp', count: steps \* 4 \}\)/, 'two intervals per step: sim pass, projection');
-  assert.match(body, /encodeSim\(encoder, \{\s*timestampWrites: \{ querySet, beginningOfPassWriteIndex: step \* 4, endOfPassWriteIndex: step \* 4 \+ 1 \},\s*finalTimestampWrites: \{ querySet, beginningOfPassWriteIndex: step \* 4 \+ 2, endOfPassWriteIndex: step \* 4 \+ 3 \},\s*\}\)/);
+  assert.match(body, /device\.createQuerySet\(\{ type: 'timestamp', count: 8 \}\)/, 'four intervals reused per step: Fine sim/projection and World flow/material');
+  assert.match(body, /encodeSim\(encoder, \{\s*timestampWrites: \{ querySet, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 \},\s*finalTimestampWrites: \{ querySet, beginningOfPassWriteIndex: 2, endOfPassWriteIndex: 3 \},\s*worldTiming:\{querySet,flowStart:4,flowEnd:5,materialStart:6,materialEnd:7\},\s*\}\)/);
   assert.match(body, /updateUniforms\(/, 'each step packs its uniforms like a real step');
-  assert.match(body, /resolveQuerySet\(querySet, 0, steps \* 4, resolveBuffer, 0\)/);
+  assert.match(body, /resolveQuerySet\(querySet, 0, 8, resolveBuffer, step \* 256\)/);
   assert.match(body, /const encoder = device\.createCommandEncoder\([^)]*\);\n\s*updateUniforms\(/, 'one encoder and one submit per step, like the frame loop');
   assert.match(body, /profile\.simPass = stats\(simSamples\);/, 'order statistics (median, min, p10, p90) beside the mean');
   assert.match(body, /return \{ mean: [^}]*median: q\(0\.5\), min: sorted\[0\], p10: q\(0\.1\), p90: q\(0\.9\), count: samples\.length \};/);

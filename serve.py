@@ -2807,6 +2807,10 @@ def save_mesh_lod_level(payload):
         raise ValueError('Level faces and route required')
     if 'textureSize' in level and (type(level['textureSize']) is not int or level['textureSize'] < 1):
         raise ValueError('Level textureSize must be a positive integer')
+    if 'mergeFactor' in level and (type(level['mergeFactor']) is not int or level['mergeFactor'] < 1):
+        raise ValueError('Level mergeFactor must be a positive integer')
+    if (level.get('representation') == 'trellis-surfels' or level['route'].startswith('trellis-surfels')) and 'mergeFactor' not in level:
+        raise ValueError('Surfel level mergeFactor required')
     if level['sha256'] == source:
         raise ValueError('A mesh cannot be its own level')
     if 'error' in level:
@@ -2824,14 +2828,17 @@ def save_mesh_lod_level(payload):
         previous = next((l for l in data['levels'] if l['sha256'] == level['sha256']), None)
         if previous is not None and previous != level:
             raise ValueError('Registered level is immutable')
-        same_slot = next((l for l in data['levels'] if l['sha256'] != level['sha256']
-                          and l['faces'] == level['faces'] and l['route'] == level['route']), None)
+        if any(l['sha256'] != level['sha256'] and l['route'] == level['route'] and (('mergeFactor' in l) != ('mergeFactor' in level)) for l in data['levels']):
+            raise ValueError(f"Route {level['route']} cannot mix mergeFactor and face-count levels")
+        same_slot = next((l for l in data['levels'] if l['sha256'] != level['sha256'] and l['route'] == level['route']
+                          and (l.get('mergeFactor') == level.get('mergeFactor') if 'mergeFactor' in level else l['faces'] == level['faces'])), None)
         retired_now = []
         if any(r['sha256'] == level['sha256'] for r in data.get('retired', [])):
             raise ValueError('That level was retired from this source')
         if previous is None and same_slot is not None:
             if payload.get('supersede') is not True:
-                raise ValueError(f"A {level['faces']}-face {level['route']} level is already registered: {same_slot['sha256']}")
+                slot_desc = f"x{level['mergeFactor']}" if 'mergeFactor' in level else f"{level['faces']}-face"
+                raise ValueError(f"A {slot_desc} {level['route']} level is already registered: {same_slot['sha256']}")
             # Replace with retire: the old level leaves the choice set but its record is kept.
             data['levels'].remove(same_slot)
             data.setdefault('retired', []).append({**same_slot, 'retiredBy': level['sha256'],
@@ -2850,26 +2857,31 @@ def save_mesh_lod_level(payload):
     return {'schema': 'kaminos.lod-set.v0', 'source': source, 'level': level, 'retired': retired_now}
 
 
-def mesh_lod_choice(source, faces=None, max_error=None, stat='max'):
+def mesh_lod_choice(source, faces=None, max_error=None, stat='max', route=None):
     """All levels plus a choice: by face budget, the largest level within it (else the
     smallest, flagged); by relative geometric error, the coarsest level whose `stat`
     (max, p95 or mean) fits (else the finest measured level, flagged). Levels without a
-    measurement are never chosen by error."""
+    measurement are never chosen by error. When `route` is omitted, choice considers only
+    triangle-mesh routes so existing mesh consumers never receive a surfel GLB by default."""
     if faces is not None and max_error is not None:
         raise ValueError('Choose by faces or by maxError, not both')
     if stat not in ('max', 'p95', 'mean'):
         raise ValueError('stat must be max, p95 or mean')
     if max_error is not None and not (math.isfinite(max_error) and max_error >= 0):
         raise ValueError('maxError must be a finite, non-negative relative error')
+    if route is not None and (not isinstance(route, str) or not route):
+        raise ValueError('route must be a non-empty string')
     data = read_mesh_lod_set(source)
     levels = [{**l, 'source': '/api/read?' + urlencode({'root': 'generated-meshes', 'path': l['sha256'] + '.glb'})} for l in data['levels']]
+    candidates = ([l for l in levels if l.get('route') == route] if route is not None else
+                  [l for l in levels if l.get('representation') != 'trellis-surfels' and not str(l.get('route', '')).startswith('trellis-surfels')])
     choice, within, unmeasured = None, None, None
-    if faces is not None and levels:
-        fitting = [l for l in levels if l['faces'] <= faces]
-        choice, within = (fitting[0], True) if fitting else (levels[-1], False)
+    if faces is not None and candidates:
+        fitting = [l for l in candidates if l['faces'] <= faces]
+        choice, within = (fitting[0], True) if fitting else (candidates[-1], False)
     if max_error is not None:
-        measured = [l for l in levels if isinstance(((l.get('error') or {}).get('relative') or {}).get(stat), (int, float))]
-        unmeasured = len(levels) - len(measured)
+        measured = [l for l in candidates if isinstance(((l.get('error') or {}).get('relative') or {}).get(stat), (int, float))]
+        unmeasured = len(candidates) - len(measured)
         if measured:
             fitting = [l for l in measured if l['error']['relative'][stat] <= max_error]
             choice, within = (min(fitting, key=lambda l: l['faces']), True) if fitting else (max(measured, key=lambda l: l['faces']), False)
@@ -4089,7 +4101,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             try:
                 faces, max_error = query.get("faces", [None])[0], query.get("maxError", [None])[0]
                 self.send_json(mesh_lod_choice(query.get("source", [None])[0], int(faces) if faces is not None else None,
-                                               float(max_error) if max_error is not None else None, query.get("stat", ["max"])[0]))
+                                               float(max_error) if max_error is not None else None, query.get("stat", ["max"])[0],
+                                               query.get("route", [None])[0]))
             except MeshLodRecordError as error:
                 self.send_json({"error": str(error), "phase": "mesh-lods-record"}, 500)
             except ValueError as error:
@@ -5489,7 +5502,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
         # For images, serve directly
         ext = target.suffix.lower()
-        if ext in (".png", ".jpg", ".jpeg", ".webp", ".exr", ".glb", ".gltf", ".ply", ".spz"):
+        if ext in (".png", ".jpg", ".jpeg", ".webp", ".exr", ".glb", ".gltf", ".ply", ".spz", ".f32", ".u32"):
             body = target.read_bytes()
             self.send_response(200)
             content_types = {

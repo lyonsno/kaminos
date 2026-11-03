@@ -36,14 +36,17 @@ export function stats(values) {
 
 // Per-pixel maps are returned when `maps` is set, for drawing: depth / normal / albedo error
 // (NaN where the channel does not apply) and coverage codes (0 neither, 1 both, 2 reference only, 3 level only).
-export function compareView({reference: R, level: L, res, diagonal, sameSurface = 0.01, maps = false}) {
+// Same-surface normal error (`<= sameSurface`) is also partitioned at `closeSurface` (default 0.0025 of the
+// diagonal, ~1-2 texels at 256^2) into `normalWithinGateDegrees` (where the level closely tracks the reference
+// surface) and `normalProjectedDegrees` (where a remesh bulge bridges a gap within `sameSurface`).
+export function compareView({reference: R, level: L, res, diagonal, sameSurface = 0.01, closeSurface = 0.0025, maps = false}) {
   const n = res * res;
   if (R.g.length !== n * 4 || L.g.length !== n * 4 || R.a.length !== n * 3 || L.a.length !== n * 3) throw Error('buffer sizes do not match the resolution');
   if (!(diagonal > 0)) throw Error('diagonal must be positive');
   const out = maps ? {coverage: new Uint8Array(n), depth: new Float32Array(n).fill(NaN), normal: new Float32Array(n).fill(NaN), albedo: new Float32Array(n).fill(NaN)} : null;
   let union = 0, xor = 0, both = 0, other = 0, referenceCoverage = 0;
   const normalUndefined = {reference: 0, level: 0};
-  const depth = [], normal = [], albedo = [], meanR = [0, 0, 0], meanL = [0, 0, 0];
+  const depth = [], normal = [], normalWithinGate = [], normalProjected = [], albedo = [], meanR = [0, 0, 0], meanL = [0, 0, 0];
   for (let p = 0; p < n; p++) {
     const rc = R.g[p * 4] > 0, lc = L.g[p * 4] > 0;
     if (rc) referenceCoverage++;
@@ -60,14 +63,19 @@ export function compareView({reference: R, level: L, res, diagonal, sameSurface 
     if (!rOk) normalUndefined.reference++;
     if (!lOk) normalUndefined.level++;
     let ne = NaN;
-    if (rOk && lOk) { ne = Math.acos(Math.max(-1, Math.min(1, dot / Math.sqrt(rl * ll)))) * 180 / Math.PI; normal.push(ne); }
+    if (rOk && lOk) {
+      ne = Math.acos(Math.max(-1, Math.min(1, dot / Math.sqrt(rl * ll)))) * 180 / Math.PI;
+      normal.push(ne);
+      if (de <= closeSurface) normalWithinGate.push(ne); else normalProjected.push(ne);
+    }
     let ae = 0; for (let c = 0; c < 3; c++) { ae += Math.abs(R.a[p * 3 + c] - L.a[p * 3 + c]); meanR[c] += R.a[p * 3 + c]; meanL[c] += L.a[p * 3 + c]; }
     albedo.push(ae / 3);
     if (out) { out.normal[p] = ne; out.albedo[p] = ae / 3; }
   }
   const same = Math.max(1, albedo.length);
   const view = {referenceCoverage: referenceCoverage / n, silhouetteMismatch: union ? xor / union : 0, differentSurface: both ? other / both : 0,
-    depth: stats(depth), normalDegrees: stats(normal), normalUndefined, albedo: stats(albedo),
+    depth: stats(depth), normalDegrees: stats(normal), normalWithinGateDegrees: stats(normalWithinGate), normalProjectedDegrees: stats(normalProjected),
+    normalUndefined, albedo: stats(albedo),
     meanAlbedo: {reference: meanR.map(v => v / same), level: meanL.map(v => v / same)}};
   return out ? {view, maps: out} : {view};
 }
@@ -77,5 +85,7 @@ export function aggregate(perView) {
   const over = key => stats(perView.map(key));
   return {silhouetteMismatch: over(v => v.silhouetteMismatch), differentSurface: over(v => v.differentSurface),
     depthP95: over(v => v.depth.p95), normalP95Degrees: over(v => v.normalDegrees.p95), normalMeanDegrees: over(v => v.normalDegrees.mean),
+    normalWithinGateMeanDegrees: over(v => (v.normalWithinGateDegrees ?? v.normalDegrees).mean),
+    normalProjectedMeanDegrees: over(v => (v.normalProjectedDegrees ?? {mean: 0}).mean),
     albedoP95: over(v => v.albedo.p95)};
 }

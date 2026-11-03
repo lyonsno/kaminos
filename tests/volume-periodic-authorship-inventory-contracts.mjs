@@ -39,6 +39,9 @@ const admitted = new Map([
     // (the horizontal perpendicular to the aim); resolved once per pack, static.
     { class: 'operator-authored source aim to direction', line: /const t = \[-Math\.sin\(yaw\), 0, Math\.cos\(yaw\)\];/, calls: 2 },
   ]],
+  ['volume-world-smoke.mjs', [
+    {class:'operator-authored wind angle to direction',line:/return \[Math\.cos\(angle\)\*gain,0,Math\.sin\(angle\)\*gain,height\];/,calls:2},
+  ]],
   ['volume-inflow-aperture.mjs', [
     // Static authored geometry of the inflow aperture coverage map: jets placed
     // on the ring circle, and the porous bed's fixed directional field. Built

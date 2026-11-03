@@ -132,10 +132,14 @@ test('hero sampler looks along the level normal: a nearby strand does not stand 
   const sample = createHeroNormalSampler({hero: {vertices, faces, normals}, THREE, MeshBVH, reach: 0.02});
   const n = sample([0, 0, 0.004], [0, 0, 1]); // the strand is 3 mm away, the body 4 mm below
   assert.ok(n[2] > 0.99, `body normal expected, got ${n}`);
-  assert.equal(sample.method, 'ray along the level normal within reach (both ways, nearest hit), else closest point; interpolated shading normal');
-  // Out of reach along the normal: falls back to the closest point (here the strand).
+  assert.equal(sample.method, 'ray along the level normal within reach (both ways, nearest hit), else level normal; interpolated shading normal');
+  // Out of reach along the normal: returns null (texel keeps the level's own normal) instead of grabbing the nearby strand via closest-point.
   const far = createHeroNormalSampler({hero: {vertices, faces, normals}, THREE, MeshBVH, reach: 0.001})([0, 0, 0.004], [0, 0, 1]);
-  assert.ok(far[0] > 0.99, `closest-point fallback expected, got ${far}`);
+  assert.equal(far, null);
+  // Default 2-texel distance gate: hits within 2 * texelSize are sampled; beyond 2 * texelSize returns null.
+  const gated = createHeroNormalSampler({hero: {vertices, faces, normals}, THREE, MeshBVH});
+  assert.ok(gated([0, 0, 0.004], [0, 0, 1], 0.003)?.[2] > 0.99, 'within 2 texels (6 mm >= 4 mm)');
+  assert.equal(gated([0, 0, 0.004], [0, 0, 1], 0.0015), null, 'beyond 2 texels (3 mm < 4 mm): no cross-gap projection');
 });
 
 test('the bake tells the sampler how large a texel is on the surface', () => {
@@ -162,4 +166,30 @@ test('with a footprint the hero sampler averages detail finer than a texel inste
   // leans (6-3)/9 of the way: far less than one sample's full lean.
   assert.ok(Math.abs(unitOf(averaged)[0] - 0.243) < 0.01, `the average sees both sides in proportion: ${unitOf(averaged)}`);
   assert.match(footprint.method, /averaged over the texel footprint/);
+});
+
+// Raw-decode winding is not consistent: face geometric normals averaged over the 3x3 texel footprint
+// (turned toward the level normal before summing) neither cancel across opposite windings nor depend on face order.
+test('decode face normals + 3x3 footprint survive inconsistent winding and face order, with no per-vertex eigensolve', async () => {
+  const THREE = await import('three'), {MeshBVH} = await import('three-mesh-bvh'), mod = await import('../lod-normal-bake.mjs');
+  assert.equal(mod.windingFreeVertexNormals, undefined, 'per-vertex normal eigensolve removed');
+  const {createHeroNormalSampler} = mod;
+  const a = Math.PI / 18, vertices = new Float32Array([-1,0,0, 1,0,0, 0,1,0, 0,-Math.cos(a),Math.sin(a)]);
+  // Point near the fold at y = 0 with a texel footprint spanning both triangles across y = 0.
+  const sample = faces => createHeroNormalSampler({hero: {vertices, faces}, THREE, MeshBVH, reach: 0.1, footprint: true, faceNormals: true})([0, 0.001, 0.01], [0, 0, 1], 0.02);
+  const consistent = unit(sample(new Uint32Array([0,1,2, 1,0,3]))), reversed = unit(sample(new Uint32Array([0,1,2, 0,1,3]))), swapped = unit(sample(new Uint32Array([0,1,3, 0,1,2])));
+  assert.ok(degrees(consistent, reversed) < 1e-6, `${consistent} vs ${reversed}`);
+  assert.ok(degrees(consistent, swapped) < 1e-6, `${consistent} vs ${swapped}`);
+  // 6 of 9 footprint samples hit y >= 0 (normal [0, 0, 1]) and 3 hit y < 0 (normal [0, sin a, cos a]).
+  const expected = unit([0, 3 * Math.sin(a), 6 + 3 * Math.cos(a)]);
+  assert.ok(degrees(consistent, expected) < 0.2, `${consistent} vs ${expected}`);
+});
+
+test('decode face normals: a flat edge between oppositely wound coplanar faces never cancels', async () => {
+  const THREE = await import('three'), {MeshBVH} = await import('three-mesh-bvh'), {createHeroNormalSampler} = await import('../lod-normal-bake.mjs');
+  const vertices = new Float32Array([-1,0,0, 1,0,0, 0,1,0, 0,-1,0]), faces = new Uint32Array([0,1,2, 0,1,3]); // second face reversed
+  const sampler = createHeroNormalSampler({hero: {vertices, faces}, THREE, MeshBVH, reach: 0.1, footprint: true, faceNormals: true});
+  const n = sampler([0, 0, 0.001], [0, 0, 1], 0.02);
+  assert.ok(n && degrees(unit(n), [0, 0, 1]) < 1e-5, `${n}`);
+  assert.match(sampler.method, /face geometric normal.*averaged over the texel footprint/);
 });

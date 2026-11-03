@@ -58,6 +58,6 @@ assert.match(
   /confinement = vorticityConfinement\(cellI, 0\.034 \+ curl \* 0\.044\) \* \(0\.35 \+ smoke \* 0\.34 \+ heat \* 0\.52\);[^]*?vel = vel \+ confinement;/,
   'base vorticity confinement remains independent of the artistic switches',
 );
-assert.match(core, /vel = vel \+ detailForce;/, 'base turbulent detail remains independent of the artistic switches');
+assert.match(core, /vel = vel \+ detailForce \* VELOCITY_UNIT_SCALE;/, 'base turbulent detail remains independent of the artistic switches');
 
 console.log('volume artistic motion controls: independent live, route, preset, and simulation gates pass');

@@ -11,7 +11,8 @@ const runtime={device:{limits:{maxStorageBufferBindingSize:134217728},queue:{asy
   async readTensor(t){return new Uint32Array([t.name.includes('hash-status')?0:t.name.includes('occupancy.count')?3:
     phase==='learned-cascade-support'&&marked?4:5]);}},
   conditioning=runtime.createTensor({name:'borrowed-context',shape:[1,7,5],dtype:'f32',usage:U.storage}),
-  options={route:{runtime,routeId:'streamed-composition-contract'},conditioningTensor:conditioning,
+  highConditioning=runtime.createTensor({name:'borrowed-high-context',shape:[1,11,5],dtype:'f32',usage:U.storage}),
+  options={route:{runtime,routeId:'streamed-composition-contract'},conditioningTensor:conditioning,highResolutionConditioningTensor:highConditioning,
     models:Object.fromEntries(Object.entries(models).map(([role,model])=>[role,{config:model.config}])),meshResolution:128,
     onPhase(e){phase=e.phase;if(phase==='learned-cascade-support')marked=false;
       if(['occupancy-decoding','learned-cascade-support','learned-geometry-decoding','shape-guided-material-decoding'].includes(phase))
@@ -35,7 +36,7 @@ try{
   assert.deepEqual(requested,['sparseFlow','occupancyDecoder','lowResolutionShape','shapeDecoder','highResolutionShape','shapeDecoder','textureFlow','textureDecoder']);
 }finally{adapter.dispose();}
 assert.ok(!conditioning.destroyed);
-assert.ok(allocated.filter(t=>t!==conditioning&&t.name!=='trellis.occupancy.occupied-view').every(t=>t.destroyed));
+assert.ok(allocated.filter(t=>t!==conditioning&&t!==highConditioning&&t.name!=='trellis.occupancy.occupied-view').every(t=>t.destroyed));
 const failedDecoder=createTrellisGenerationFromConditioningAdapter({...options,async loadModel(role,selection){
   const checkpoint=await options.loadModel(role,selection);
   if(role==='shapeDecoder')checkpoint.loadWeight=async()=>{throw Error('streamed decoder fetch failed');};
@@ -43,7 +44,7 @@ const failedDecoder=createTrellisGenerationFromConditioningAdapter({...options,a
 }});
 await assert.rejects(failedDecoder.run({id:'failure-decoder-generation'}),/streamed decoder fetch failed/);
 assert.equal(failedDecoder.state,'failed');assert.equal(failedDecoder.outputs,undefined);failedDecoder.dispose();
-assert.ok(allocated.filter(t=>t!==conditioning&&t.name!=='trellis.occupancy.occupied-view').every(t=>t.destroyed));
+assert.ok(allocated.filter(t=>t!==conditioning&&t!==highConditioning&&t.name!=='trellis.occupancy.occupied-view').every(t=>t.destroyed));
 const failed=createTrellisGenerationFromConditioningAdapter({...options,async loadModel(role,selection){
   const checkpoint=await options.loadModel(role,selection);
   if(role==='lowResolutionShape')checkpoint.loadBlockWeights=async()=>{throw Error('streamed consumer fetch failed');};
@@ -51,5 +52,5 @@ const failed=createTrellisGenerationFromConditioningAdapter({...options,async lo
 }});
 await assert.rejects(failed.run({id:'failure-generation'}),/streamed consumer fetch failed/);
 assert.equal(failed.state,'failed');assert.equal(failed.outputs,undefined);failed.dispose();
-assert.ok(allocated.filter(t=>t!==conditioning&&t.name!=='trellis.occupancy.occupied-view').every(t=>t.destroyed));
+assert.ok(allocated.filter(t=>t!==conditioning&&t!==highConditioning&&t.name!=='trellis.occupancy.occupied-view').every(t=>t.destroyed));
 console.log('The actual generation consumer selects and exercises sequential flow loading through cascade/texture and preserves failure cleanup; fake kernels are not native acceptance.');

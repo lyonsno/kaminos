@@ -245,7 +245,7 @@ assert.match(indexSource, /finger_fluid_pyro_composition/, 'the composition rout
 assert.match(indexSource, /transparentCanvas:\s*fingerFluidPyroCompositionRequested\(\)/, 'composition route requests transparent Pyro output explicitly');
 assert.match(indexSource, /getLiquidFireContactDescriptor\(\)/, 'the route binds the live solver-owned sparse descriptor');
 assert.match(indexSource, /volumePrototype\.setLiquidFireContactDescriptor/, 'the route hands the descriptor to the real Pyro simulator');
-assert.match(indexSource, /volumePrototype\.setActive\(true\)/, 'the route runs the Pyro simulator for visual smoke');
+assert.match(indexSource, /flameFeature\.setActive\(true\)/, 'the route runs the Pyro simulator for visual smoke');
 const compositionActivationSource = indexSource.match(/async function activateFingerFluidPyroComposition\(\)[\s\S]*?\n}\n\nasync function sampleFingerFluidPyroComposition/)?.[0] || '';
 assert.match(compositionActivationSource, /volumeScene:\s*'tall_plume'/, 'composition requests the only currently valid Pyro fire preset');
 assert.match(compositionActivationSource, /\.\.\.VOLUME_SCENE_PRESETS\.flame/, 'composition installs the complete canonical tall-plume preset instead of retaining stale compact-plume controls');
@@ -280,7 +280,7 @@ assert.match(volumeSource, /function fluidBindGroup\(fluidIndex\s*=\s*currentFlu
 assert.match(volumeSource, /currentQuench\s*=\s*1\s*-\s*currentQuench/, 'the main simulation advances quench ownership exactly once per step');
 assert.match(volumeSource, /liquidFireContactBindGroups\[currentFluid\s*\*\s*2\s*\+\s*currentQuench\]/, 'liquid transfer writes the independently current fluid and quench destinations');
 assert.match(volumeSource, /liquidFireContactBindGroups\.length\s*!==\s*4/, 'liquid transfer requires every fluid/quench ownership combination');
-const pressureProjectionSource = volumeSource.match(/function encodePressureProjection\(encoder, options = \{\}\)[\s\S]*?\n  }\n/)?.[0] || '';
+const pressureProjectionSource = volumeSource.match(/function encodePressureProjection\(encoder, options = \{\}[^)]*\)[\s\S]*?\n  }\n/)?.[0] || '';
 assert.ok(pressureProjectionSource, 'pressure projection body is inspected');
 assert.doesNotMatch(pressureProjectionSource, /currentQuench\s*=/, 'pressure projection cannot advance or rewind quench ownership');
 assert.match(volumeSource, /gridCellCount\(gridSize\)\s*\+\s*LIQUID_FIRE_SOURCE_STATE_WORDS/, 'quench allocation reserves continuous source state without adding a storage buffer');

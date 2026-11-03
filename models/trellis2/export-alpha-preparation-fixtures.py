@@ -65,6 +65,7 @@ with tempfile.TemporaryDirectory(prefix="trellis-alpha-source-fixture-") as temp
         if source.provenance["route"] != "input-alpha" or source.provenance.get("fallback"):
             raise ValueError("fixture must exercise the real input-alpha source without fallback")
         resized = source.image.resize((512, 512), Image.Resampling.LANCZOS)
+        high = source.image.resize((1024, 1024), Image.Resampling.LANCZOS)
         p = source.provenance
         cases.append({
             "name": name, "width": width, "height": height, "variant": variant,
@@ -77,12 +78,14 @@ with tempfile.TemporaryDirectory(prefix="trellis-alpha-source-fixture-") as temp
             "croppedRgbSha256": sha(source.image.tobytes()),
             "preparedRgbSha256": sha(resized.tobytes()),
             "preparedByteLength": len(resized.tobytes()),
+            "highResolutionRgbSha256": sha(high.tobytes()),
+            "highResolutionByteLength": len(high.tobytes()),
         })
 fixture = {
     "schema": "trellis2.alpha-preparation-source.v0",
     "source": {"commit": commit, "moduleSha256": sha(module.read_bytes()),
                "pillow": PIL.__version__, "numpy": np.__version__, "modelCalls": 0,
-               "route": "preprocess_image_with_provenance(input-alpha) / PIL RGB LANCZOS512",
+               "route": "preprocess_image_with_provenance(input-alpha) / PIL RGB LANCZOS512 and LANCZOS1024 from the same crop",
                "pattern": "channel=(37*x+101*y+79*c+17*variant)%256; alpha-table and margins in generator"},
     "cases": cases,
 }

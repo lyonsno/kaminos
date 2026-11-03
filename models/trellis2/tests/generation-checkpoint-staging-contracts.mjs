@@ -6,7 +6,7 @@ assert.equal(typeof inputs.loadModel,'function',
   'Native generation must fetch the checkpoint role being consumed, not accumulate seven complete models before the first downstream kernel.');
 assert.ok(inputs.modelInputs && Object.values(inputs.modelInputs).every(v=>v.config&&v.identity&&!v.weights));
 assert.equal(inputs.loadModels,undefined,'The production input package must not select the eager all-model path.');
-assert.ok(fetched.every(k=>k.startsWith('dino.')||k==='image.pixels'));
+assert.ok(fetched.every(k=>k.startsWith('dino.')||['image.pixels','image.high-pixels'].includes(k)));
 fetched.length=0;
 const occupancy=await inputs.loadModel('occupancyDecoder');
 const first=Object.keys(m.models.occupancyDecoder.tensors)[0];

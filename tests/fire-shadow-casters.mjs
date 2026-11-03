@@ -48,4 +48,142 @@ try{
   globalThis.fetch=async()=>new Response('',{status:404});await assert.rejects(loadFireCaster('5k'),/HTTP 404/);
   globalThis.fetch=async()=>new Response(new Uint8Array([1,2,3]));await assert.rejects(loadFireCaster('5k'),/content identity mismatch/);
 }finally{globalThis.fetch=fetchBefore;}
+
+// GI proxy and procedural annular burner stunt-double integration at default 'original' level
+import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
+import {BURNER_DEFAULTS,createAnnularBurner} from '../annular-burner.mjs';
+import {createSurfelObject} from '../trellis-surfels.mjs';
+{
+  const giScene=new THREE.Scene();
+  const meshRoot=new THREE.Group(),meshHero=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshStandardMaterial({side:THREE.DoubleSide}));
+  meshHero.castShadow=true;meshRoot.add(meshHero);meshRoot.position.set(-2,1,3);meshRoot.scale.set(1.5,2,0.5);giScene.add(meshRoot);
+  // Proxy returned by GLTFLoader has castShadow=false by default; fire-shadow-casters must enable castShadow on its clone.
+  const proxy1k=new THREE.Group(),proxyMesh1k=new THREE.Mesh(new THREE.TetrahedronGeometry(),new THREE.MeshStandardMaterial());
+  proxy1k.rotation.x=-Math.PI/2;proxy1k.updateMatrix();proxy1k.matrixAutoUpdate=false;proxy1k.add(proxyMesh1k);
+  const proxy500=new THREE.Group(),proxyMesh500=new THREE.Mesh(new THREE.OctahedronGeometry(),new THREE.MeshStandardMaterial());
+  proxy500.add(proxyMesh500);
+  const handles=new Map([[meshRoot,{
+    state:'loaded',representation:'mesh',proxyRoot:proxy1k,
+    effective:{sha:'1'.repeat(64),faces:4,withinBudget:true},
+    error:{reference:{kind:'hero',sha256:'0'.repeat(64)},relative:{p95:0.0012,max:0.004,mean:0.0005}},
+    placement:s=>new THREE.Matrix4().copy(s.matrixWorld).invert().multiply(meshRoot.updateWorldMatrix(true,false)??meshRoot.matrixWorld),
+  }]]);
+  const consumers=new Set();
+  const giProxies={
+    handleFor:r=>handles.get(r)??null,
+    registerConsumer(name){consumers.add(name);return ()=>consumers.delete(name);},
+  };
+  const giCasters=createFireShadowCasters({scene:giScene,giProxies});
+  assert.deepEqual([...consumers],['fire-shadow-casters'],'registers as a GI proxy consumer while enabled');
+  giCasters.setEnabled(false);assert.deepEqual([...consumers],[],'disabling surface lighting releases GI proxy consumer');
+  giCasters.setEnabled(true);assert.deepEqual([...consumers],['fire-shadow-casters']);
+
+  renderFireShadowBatch({scene:giScene,casterScene:giCasters,shadows:[{render(p){
+    assert.equal(meshRoot.visible,false);
+    assert.equal(p.casters.length,1);
+    assert.equal(p.casters[0].geometry,proxyMesh1k.geometry);
+    assert.equal(p.casters[0].material.side,THREE.DoubleSide);
+    assert.equal(p.triangleCount,4);
+    const expected=meshRoot.matrixWorld.clone().multiply(proxy1k.matrix).multiply(proxyMesh1k.matrix);
+    assert.deepEqual(p.casters[0].matrixWorld.elements,expected.elements);
+  }}]});
+  assert.equal(meshRoot.visible,true);
+  assert.equal(proxy1k.parent,null,'registered proxyRoot never enters the scene graph');
+  assert.equal(proxyMesh1k.castShadow,false,'original proxyRoot mesh is not mutated');
+  assert.equal(giCasters.debugState().targets,1);
+  assert.equal(giCasters.debugState().originalTriangles,12);
+  assert.equal(giCasters.debugState().captureTriangles,4);
+  assert.equal(giCasters.debugState().errorMeasured,true);
+
+  // Switching the object's GI proxy tier updates the shadow caster on the next capture
+  handles.set(meshRoot,{...handles.get(meshRoot),proxyRoot:proxy500,effective:{sha:'2'.repeat(64),faces:8,withinBudget:true}});
+  renderFireShadowBatch({scene:giScene,casterScene:giCasters,shadows:[{render(p){
+    assert.equal(p.casters[0].geometry,proxyMesh500.geometry);
+    assert.equal(p.triangleCount,8);
+  }}]});
+  assert.equal(giCasters.debugState().captureTriangles,8);
+
+  // Disabling the object's GI proxy restores the detailed mesh for shadow capture
+  handles.set(meshRoot,{state:'disabled',proxyRoot:null});
+  renderFireShadowBatch({scene:giScene,casterScene:giCasters,shadows:[{render(p){
+    assert.deepEqual(p.casters,[meshHero]);
+    assert.equal(p.triangleCount,12);
+  }}]});
+  assert.equal(giCasters.debugState().targets,0);
+
+  // Surfel scene object with a loaded GI proxy casts shadows via its static mesh proxy
+  const surfelHolder=new THREE.Group();
+  const surfelRoot=createSurfelObject(THREE,{
+    resolution:16,radiusVoxels:1.5,count:2,
+    cells:new Uint32Array([1|(2<<10)|(3<<20),4|(5<<10)|(6<<20)]),
+    offsets:new Int8Array(6),normals:new Int8Array([0,0,127,0,0,127]),
+    color:new Uint8Array([200,100,50,200,100,50]),metalRough:new Uint8Array([0,200,0,200]),
+  },{levels:[1]});
+  surfelHolder.add(surfelRoot);giScene.add(surfelHolder);
+  handles.set(surfelHolder,{
+    state:'loaded',representation:'surfels',proxyRoot:proxy1k,
+    effective:{sha:'1'.repeat(64),faces:4,withinBudget:true},
+    error:{reference:{kind:'hero',sha256:'0'.repeat(64)},relative:{p95:0.002}},
+    placement:s=>new THREE.Matrix4().copy(s.matrixWorld).invert().multiply(surfelHolder.updateWorldMatrix(true,false)??surfelHolder.matrixWorld),
+  });
+  renderFireShadowBatch({scene:giScene,casterScene:giCasters,shadows:[{render(p){
+    assert.equal(surfelHolder.visible,false);
+    assert.equal(p.casters.length,2,'detailed meshHero + surfel proxy1k');
+    assert.ok(p.casters.some(c=>c.geometry===proxyMesh1k.geometry));
+  }}]});
+  assert.equal(surfelHolder.visible,true);
+  assert.equal(giCasters.debugState().targets,1);
+  assert.equal(giCasters.debugState().originalTriangles,2,'counts the 2 surfel triangles on the active surfel level');
+  assert.equal(giCasters.debugState().captureTriangles,4);
+  giScene.remove(surfelHolder);
+
+  // Procedural annular burner automatically substitutes its coarse enclosing stand-in caster
+  const burner=createAnnularBurner(THREE,mergeGeometries,BURNER_DEFAULTS);
+  burner.group.visible=true;burner.group.position.set(0,-0.76,0);giScene.add(burner.group);
+  renderFireShadowBatch({scene:giScene,casterScene:giCasters,shadows:[{render(p){
+    assert.equal(burner.group.visible,false);
+    assert.equal(p.casters.length,2,'meshHero + burner stand-in caster');
+    assert.ok(p.triangleCount<12000,`expected <12k triangles with burner stand-in, got ${p.triangleCount}`);
+  }}]});
+  assert.equal(burner.group.visible,true);
+  assert.equal(giCasters.debugState().targets,1);
+  assert.equal(giCasters.debugState().originalTriangles,125472);
+  assert.ok(giCasters.debugState().captureTriangles<12000);
+
+  // Review M2: repeated copies (kaminosRepetitionCopy) under a GI-proxy or burner root also receive reduced shadow casters at their repetition transforms
+  handles.set(meshRoot,{
+    state:'loaded',representation:'mesh',proxyRoot:proxy1k,
+    effective:{sha:'1'.repeat(64),faces:4,withinBudget:true},
+    error:{reference:{kind:'hero',sha256:'0'.repeat(64)},relative:{p95:0.0012}},
+    placement:s=>new THREE.Matrix4().copy(s.matrixWorld).invert().multiply(meshRoot.updateWorldMatrix(true,false)??meshRoot.matrixWorld),
+  });
+  const repCopy=new THREE.Mesh(meshHero.geometry,meshHero.material);
+  repCopy.castShadow=true;repCopy.userData.kaminosRepetitionCopy=true;
+  repCopy.matrixAutoUpdate=false;repCopy.matrix.makeTranslation(5,0,0);
+  meshRoot.add(repCopy);
+  giScene.remove(burner.group);
+  renderFireShadowBatch({scene:giScene,casterScene:giCasters,shadows:[{render(p){
+    assert.equal(p.casters.length,2,'primary proxy + repeated copy proxy must both cast shadows');
+    assert.equal(p.triangleCount,8,'4 triangles for primary proxy + 4 triangles for repetition copy');
+    const expectedCopyWorld=meshRoot.matrixWorld.clone().multiply(repCopy.matrix).multiply(proxy1k.matrix).multiply(proxyMesh1k.matrix);
+    assert.deepEqual(p.casters[1].matrixWorld.elements,expectedCopyWorld.elements,'repeated proxy copy placed at root * copy.matrix * proxy');
+  }}]});
+  assert.equal(giCasters.debugState().originalTriangles,24,'12 triangles on hero + 12 on repetition copy');
+  assert.equal(giCasters.debugState().captureTriangles,8);
+  meshRoot.remove(repCopy);
+
+  // Review N3: burner stand-in remains active even when level is '10k' or '5k', and SmokeVisibility capture mode leaves explicit-kiln untouched while substituting GI proxies and burners
+  giScene.add(burner.group);
+  const casterWithKiln=createFireShadowCasters({scene:giScene,giProxies,load:async()=>proxy});
+  await casterWithKiln.setLevel('10k');
+  renderFireShadowBatch({scene:giScene,casterScene:casterWithKiln,shadows:[{render(p){
+    assert.equal(burner.group.visible,false,'burner still uses coarse stand-in when level is 10k');
+    assert.ok(p.triangleCount<12000);
+  }}]});
+  casterWithKiln.dispose();
+
+  burner.dispose();
+  giCasters.dispose();
+  assert.deepEqual([...consumers],[],'dispose releases GI proxy consumer');
+}
 console.log('PASS caster-only frame, four fresh captures, restoration, invalidation and late-load ownership');

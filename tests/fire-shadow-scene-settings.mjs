@@ -18,6 +18,27 @@ assert.throws(()=>readFireShadowSceneSettings(new URLSearchParams('volume_light_
 assert.throws(()=>readFireShadowSceneSettings(new URLSearchParams('volume_light_field_hybrid_smoke_shadow_steps=-1')),/smoke shadow/);
 assert.equal(readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,surfaceEnabled:false}))).surfaceEnabled,false,'off persists through scene restore');
 assert.equal(readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,shadowGrain:'screen-animated'}))).shadowComparison.grain,'screen-animated','animated grain survives authored scene serialization');
-for(const [key,value] of [['points','3'],['filter_samples','0'],['shadow_grain','bad'],['shadow_world_cell_size','0'],['shadow_softness','NaN']])
+for(const [key,value] of [['points','0'],['filter_samples','0'],['shadow_grain','bad'],['shadow_world_cell_size','0'],['shadow_softness','NaN']])
   assert.throws(()=>readFireShadowSceneSettings(new URLSearchParams({...route,['volume_light_field_hybrid_'+key]:value})));
 console.log('PASS scene lighting settings preserve actual quality, quadrature, grain and softness');
+
+for(const pointCount of [6,8]){const restored=readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,pointCount,pointSampling:'all',shadowEdgeFilter:true})));assert.equal(restored.pointCount,pointCount);assert.equal(restored.shadowEdgeFilter,true);}
+
+const lightQuality=readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,volumeGrid:32,directions:96})));
+assert.equal(lightQuality.volumeGrid,32);assert.equal(lightQuality.directions,96);
+
+assert.equal(readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,angularPattern:'regions'}))).angularPattern,'regions');
+assert.throws(()=>readFireShadowSceneSettings(new URLSearchParams('volume_light_field_hybrid_light_pattern=typo')),/angular pattern/);
+
+const angularRoute=fireShadowSceneRoute({...state,smokeShadowFilter:true,smokeShadowFilterAngle:8.5,smokeShadowFilterTaps:5});
+const angularReload=readFireShadowSceneSettings(new URLSearchParams(angularRoute));
+assert.equal(angularReload.smokeShadowFilterAngle,8.5,'angular blur width must survive scene roundtrip');
+assert.equal(angularReload.smokeShadowFilterTaps,5,'filter work must survive scene roundtrip');
+
+const budgetRoute=new URLSearchParams({volume_light_field_hybrid_points:'8',volume_light_field_hybrid_point_evaluation_budget:'4'});
+assert.equal(readFireShadowSceneSettings(budgetRoute).pointEvaluationBudget,4,'saved receiver budget must be distinct from captured point count');
+
+assert.equal(readFireShadowSceneSettings(new URLSearchParams({volume_light_field_hybrid_smoke_shadow_medium_grid:'16'})).smokeShadowMediumResolution,16);
+assert.throws(()=>readFireShadowSceneSettings(new URLSearchParams({volume_light_field_hybrid_smoke_shadow_medium_grid:'-1'})),/resolution/);
+
+assert.equal(readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,angularPattern:"importance"}))).angularPattern,"importance");

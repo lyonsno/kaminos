@@ -125,8 +125,9 @@ test('uniforms: the slab basis, turbulence and the pattern flag ride a fifth and
   const u = core.immersedSourceUniformValues(on);
   assert.equal(u.length, 24);
   assert.deepEqual(u.slice(16, 20).map(v => Number(v.toFixed(6)) + 0), [1, 0, 0, 0.6], 'e1 and the turbulence amplitude');
-  assert.deepEqual(u.slice(20, 24), [1, 0, 0, 0], 'pattern on');
-  assert.deepEqual(core.immersedSourceUniformValues(core.resolveImmersedSourceConfig(base, shape)).slice(20, 24), [0, 0, 0, 0], 'the plain shape samples no coverage');
+  assert.deepEqual(u.slice(20, 24), [1, 1, 0, 0], 'pattern on, with one material cell per velocity cell');
+  assert.deepEqual(core.immersedSourceUniformValues(core.resolveImmersedSourceConfig(base, shape)).slice(20, 24), [0, 1, 0, 0], 'the plain shape samples no coverage and keeps the same lattice ratio');
+  assert.equal(core.immersedSourceUniformValues(on, { materialPerVelocity: 2 })[21], 2, 'a coarser velocity grid addresses the original material-resolution pattern');
   assert.equal(core.immersedSourceUniformValues(core.resolveImmersedSourceConfig({ ...base, pressureSolver: 'legacy' }, shape)).length, 24);
   assert.match(kernel, /immersed_source_e: vec4<f32>,\n  immersed_source_f: vec4<f32>,\n  grid_shape: vec4<f32>,\n  grid_shape_b: vec4<f32>,\n(?:\s*\/\/.*\n)*\s*reactant_combustion_a: vec4<f32>,/, 'the grid shape then the reactant combustion block follow the slab vec4s');
 });
@@ -135,12 +136,15 @@ test('the kernel samples the coverage map and the lattice at the slab-local cell
   const fn = kernel.slice(kernel.indexOf('fn immersedPatternedWeight('), kernel.indexOf('\n}\n', kernel.indexOf('fn immersedPatternedWeight(')));
   assert.match(fn, /let e1 = u\.immersed_source_e\.xyz;/);
   assert.match(fn, /let e2 = normalize\(cross\(e1, n\)\);/, 'the kernel normalises, as the CPU does');
-  assert.match(fn, /let slabCell = vec2<i32>\(clamp\(i32\(floor\(f32\(GRID\) \* 0\.5 \+ dot\(d, e1\)\)\), 0, i32\(GRID\) - 1\), clamp\(i32\(floor\(f32\(GRID\) \* 0\.5 \+ dot\(d, e2\)\)\), 0, i32\(GRID\) - 1\)\);/);
+  assert.match(fn, /let materialPerVelocity = max\(1e-8, u\.immersed_source_f\.y\);/);
+  assert.match(fn, /let patternWidth = i32\(round\(f32\(GRID\) \* materialPerVelocity\)\);/);
+  assert.match(fn, /let patternCentre = f32\(patternWidth\) \* 0\.5;/);
+  assert.match(fn, /let slabCell = vec2<i32>\(clamp\(i32\(floor\(patternCentre \+ dot\(d, e1\) \* materialPerVelocity\)\), 0, patternWidth - 1\), clamp\(i32\(floor\(patternCentre \+ dot\(d, e2\) \* materialPerVelocity\)\), 0, patternWidth - 1\)\);/);
   assert.match(fn, /textureLoad\(inflowCoverage, slabCell, 0\)\.x/);
   assert.match(fn, /textureLoad\(inflowPerturbation, slabCell, 0\)\.x/);
   assert.match(fn, /max\(0\.0, 1\.0 \+ u\.immersed_source_e\.w \* perturbation\)/);
   assert.match(main, /let immersedSourcesAtCell = immersedContributions\(cell\);\n\s+let immersedSlabWeight = immersedSourcesAtCell\.slab;\n\s+let immersedWeight = immersedSourcesAtCell\.weight;/);
-  assert.match(main, /let wallFade = select\(max\(1\.0 - smoothstep\(0\.86, 1\.0, wall\), clamp\(immersedSlabWeight, 0\.0, 1\.0\)\), 1\.0, joinedBoundary\(\)\);/, 'the whole disc stays exempt, gaps between jets included');
+  assert.match(main, /let wallFade = select\(max\(1\.0 - smoothstep\(0\.86, 1\.0, wall\), clamp\(immersedSlabWeight, 0\.0, 1\.0\)\), 1\.0, joinedBoundary\(\) \|\| openWorldBoundary\(\)\);/, 'the whole disc stays exempt, gaps between jets included; joined and World-coupled grids have open domain faces');
 });
 
 test('the pack builds the slab\'s coverage map when the immersed law is admitted, keyed by pattern and pose, and the receipt carries it', () => {

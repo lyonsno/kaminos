@@ -2,6 +2,7 @@ import {sceneContext} from './helpers/scene-context.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import {fireAtBoot} from '../fire-boot.mjs';
 
 // Failure paths the kiln host added to index.html must report the actual
 // failure: the light-field debug fallback names the shared-device reason, and
@@ -29,12 +30,16 @@ assert.equal(state.sharedDeviceFailureReason, 'WebGPU adapter unavailable');
 
 // Scene route restore: ordinary routes must not be blocked or blamed on a
 // composition restore that never ran.
-const restore = slice('  const startupSceneHash = ', '  // An owner enters the effective authored starting scene,');
+const restore = slice('  const startupSceneRedirect = ', 'let startupSceneAdmitted')
+  + slice('  const volumeLoaded = ', '  // An owner enters the effective authored starting scene,');
 async function runRestore(hash, environmentLoaded) {
-  const calls = { info: [], composition: [], console: [] };
+  const calls = { info: [], composition: [], console: [], fire: 0 };
   const context = sceneContext({
     Promise, URLSearchParams, location: { hash, search: '' }, document: { body: { classList: { add() {} } } },
-    environmentLoaded, volumeLoaded: Promise.resolve(), sceneSaveBlockedByFailedRestore: false,
+    environmentLoaded, window: {}, ownerVolumeReady: null, fireAtBoot,
+    initKaminosVolumeRoute() { calls.fire += 1; return Promise.resolve(); },
+    reportKaminosVolumeRouteInitFailure() {},
+    sceneSaveBlockedByFailedRestore: false,
     setActiveTab() {}, setInfo: message => calls.info.push(message),
     compositionStatus: message => calls.composition.push(message),
     console: { error: (...args) => calls.console.push(args.join(' ')) },
@@ -42,6 +47,7 @@ async function runRestore(hash, environmentLoaded) {
   });
   vm.runInContext(restore, context);
   for (let turn = 0; turn < 10; turn += 1) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(calls.fire, 0, 'neither failed admission nor an ordinary route should start fire');
   return { blocked: context.sceneDocument.state().blocked, calls };
 }
 const ordinary = await runRestore('', Promise.reject(new Error('mesh route failed')));

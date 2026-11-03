@@ -106,6 +106,8 @@ test('interpolated modules: every entry point seats first except the lattice-onl
   const exempt = new Set(['sweepEmissiveLight', 'resolveEmissiveLight']);
   const interpolated = [...moduleText('WGSL').matchAll(/\$\{([A-Z_]+_WGSL)\}/g)].map(m => m[1]);
   const texts = {
+    TRANSFER_GEOMETRY_WGSL: (await import('../volume-grid-transfer.mjs')).TRANSFER_GEOMETRY_WGSL,
+    WORLD_SMOKE_OPTICS_WGSL: (await import('../volume-world-smoke-optics.mjs')).WORLD_SMOKE_OPTICS_WGSL,
     PASSIVE_MATERIAL_WGSL: core.PASSIVE_MATERIAL_WGSL,
     FIRE_EMISSION_EXTENT_WGSL: (await import('../fire-emission-extent.mjs')).FIRE_EMISSION_EXTENT_WGSL,
     // Include helper-only modules so new entry points cannot evade this check.
@@ -121,6 +123,9 @@ test('interpolated modules: every entry point seats first except the lattice-onl
     SCENE_VOLUME_SOURCE_WGSL: (await import('../scene-volume-source.mjs')).SCENE_VOLUME_SOURCE_WGSL,
     SOOT_BURNOUT_WGSL: (await import('../volume-physics-appearance.mjs')).SOOT_BURNOUT_WGSL,
     WAVELET_TURBULENCE_WGSL: (await import('../volume-wavelet-turbulence.mjs')).WAVELET_TURBULENCE_WGSL,
+    TRANSFER_GEOMETRY_WGSL: (await import('../volume-grid-transfer.mjs')).TRANSFER_GEOMETRY_WGSL,
+    WORLD_SMOKE_OPTICS_WGSL: (await import('../volume-world-smoke-optics.mjs')).WORLD_SMOKE_OPTICS_WGSL,
+    HISTORY_ALLOCATION_WGSL: (await import('../volume-history-allocation.mjs')).HISTORY_ALLOCATION_WGSL,
     DISPLAY_RECONSTRUCTION_WGSL: (await import('../volume-display-reconstruction.mjs')).DISPLAY_RECONSTRUCTION_WGSL,
   };
   assert.deepEqual([...interpolated].sort(), Object.keys(texts).sort());

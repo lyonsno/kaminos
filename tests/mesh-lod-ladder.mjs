@@ -218,6 +218,172 @@ test('a level missing a patch of the source raises only the source-to-level chan
   assert.ok(e.sourceToLevel.max > 0.5 && e.sourceToLevel.normalDeviationDegrees.max > 89);
 });
 
+test('remeshing a curved kiln with a side pipe vs. a cracked planar beam at the same low face budget drops the kiln pipe while preserving the beam', async () => {
+  const {measureGeometricError} = await import('../mesh-lod-ladder.mjs');
+  const {effectiveRelativeGeomError} = await import('../scene-lod-budget.mjs');
+
+  // 1. Curved kiln body (subdivided octahedron sphere centered at [0.5, 0.5, 0.5], radius 0.45 -> 512 curved faces)
+  //    plus a protruding right-side pipe on +X ([0.92, 1.16] x [0.46, 0.54] x [0.46, 0.54]).
+  //    Because the curved drum competes for triangles during quadric simplification to 48 faces,
+  //    the low-area side pipe is collapsed/dropped at 48 faces.
+  let sv = [1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1];
+  let sf = [0, 2, 4, 2, 1, 4, 1, 3, 4, 3, 0, 4, 2, 0, 5, 1, 2, 5, 3, 1, 5, 0, 3, 5];
+  for (let s = 0; s < 3; s++) {
+    const mid = new Map(), next = [];
+    const m = (a, b) => {
+      const k = a < b ? `${a},${b}` : `${b},${a}`;
+      if (!mid.has(k)) {
+        const p = [0, 1, 2].map(i => (sv[a * 3 + i] + sv[b * 3 + i]) / 2), l = Math.hypot(...p);
+        sv.push(...p.map(t => t / l));
+        mid.set(k, sv.length / 3 - 1);
+      }
+      return mid.get(k);
+    };
+    for (let t = 0; t < sf.length; t += 3) {
+      const [a, b, c] = sf.slice(t, t + 3), ab = m(a, b), bc = m(b, c), ca = m(c, a);
+      next.push(a, ab, ca, ab, b, bc, ca, bc, c, ab, bc, ca);
+    }
+    sf = next;
+  }
+  const v = sv.map(coord => 0.5 + coord * 0.45);
+  const f = [...sf];
+  const pipeBase = v.length / 3;
+  const [x0, y0, z0] = [0.92, 0.46, 0.46], [x1, y1, z1] = [1.16, 0.54, 0.54];
+  for (let i = 0; i < 8; i++) v.push(i & 1 ? x1 : x0, (i >> 1) & 1 ? y1 : y0, (i >> 2) & 1 ? z1 : z0);
+  for (const [a, b, c, d] of [[0, 2, 3, 1], [4, 5, 7, 6], [0, 1, 5, 4], [2, 6, 7, 3], [0, 4, 6, 2], [1, 3, 7, 5]]) {
+    f.push(pipeBase + a, pipeBase + b, pipeBase + c, pipeBase + a, pipeBase + c, pipeBase + d);
+  }
+  const kilnWithPipe = {vertices: new Float32Array(v), faces: new Uint32Array(f)};
+
+  const closestBoxWithNormal = ([lx, ly, lz], [hx, hy, hz]) => (x, y, z) => {
+    const c = [Math.min(hx, Math.max(lx, x)), Math.min(hy, Math.max(ly, y)), Math.min(hz, Math.max(lz, z))];
+    if (c[0] !== x || c[1] !== y || c[2] !== z) {
+      const d = [x - c[0], y - c[1], z - c[2]];
+      const axis = [Math.abs(d[0]), Math.abs(d[1]), Math.abs(d[2])].indexOf(Math.max(Math.abs(d[0]), Math.abs(d[1]), Math.abs(d[2])));
+      const n = [0, 0, 0];
+      n[axis] = Math.sign(d[axis]) || 1;
+      return {point: c, normal: n};
+    }
+    const opts = [
+      [x - lx, 0, lx, -1], [hx - x, 0, hx, 1],
+      [y - ly, 1, ly, -1], [hy - y, 1, hy, 1],
+      [z - lz, 2, lz, -1], [hz - z, 2, hz, 1],
+    ].sort((a, b) => a[0] - b[0])[0];
+    c[opts[1]] = opts[2];
+    const n = [0, 0, 0];
+    n[opts[1]] = opts[3];
+    return {point: c, normal: n};
+  };
+  const closestCube = closestBoxWithNormal([0, 0, 0], [1, 1, 1]);
+  const closestPipe = closestBoxWithNormal([x0, y0, z0], [x1, y1, z1]);
+  const closestSphere = (x, y, z) => {
+    const dx = x - 0.5, dy = y - 0.5, dz = z - 0.5;
+    const l = Math.hypot(dx, dy, dz) || 1;
+    const nx = dx / l, ny = dy / l, nz = dz / l;
+    return {point: [0.5 + nx * 0.45, 0.5 + ny * 0.45, 0.5 + nz * 0.45], normal: [nx, ny, nz]};
+  };
+  const closestKilnWithPipe = (x, y, z) => {
+    const a = closestSphere(x, y, z);
+    const b = closestPipe(x, y, z);
+    const da = Math.hypot(a.point[0] - x, a.point[1] - y, a.point[2] - z);
+    const db = Math.hypot(b.point[0] - x, b.point[1] - y, b.point[2] - z);
+    return da <= db ? a : b;
+  };
+  const closestOnTriangleMesh = ({vertices: V, faces: F}) => (x, y, z) => {
+    let bestD2 = Infinity, bestPt = [0, 0, 0], bestN = [0, 0, 1];
+    for (let t = 0; t < F.length; t += 3) {
+      const ia = F[t] * 3, ib = F[t + 1] * 3, ic = F[t + 2] * 3;
+      const ax = V[ia], ay = V[ia + 1], az = V[ia + 2];
+      const bx = V[ib], by = V[ib + 1], bz = V[ib + 2];
+      const cx = V[ic], cy = V[ic + 1], cz = V[ic + 2];
+      const abx = bx - ax, aby = by - ay, abz = bz - az;
+      const acx = cx - ax, acy = cy - ay, acz = cz - az;
+      const apx = x - ax, apy = y - ay, apz = z - az;
+      const d1 = abx * apx + aby * apy + abz * apz;
+      const d2 = acx * apx + acy * apy + acz * apz;
+      let qx, qy, qz;
+      if (d1 <= 0 && d2 <= 0) { qx = ax; qy = ay; qz = az; }
+      else {
+        const bpx = x - bx, bpy = y - by, bpz = z - bz;
+        const d3 = abx * bpx + aby * bpy + abz * bpz;
+        const d4 = acx * bpx + acy * bpy + acz * bpz;
+        if (d3 >= 0 && d4 <= d3) { qx = bx; qy = by; qz = bz; }
+        else {
+          const vc = d1 * d4 - d3 * d2;
+          if (vc <= 0 && d1 >= 0 && d3 <= 0) {
+            const w = d1 / (d1 - d3);
+            qx = ax + w * abx; qy = ay + w * aby; qz = az + w * abz;
+          } else {
+            const cpx = x - cx, cpy = y - cy, cpz = z - cz;
+            const d5 = abx * cpx + aby * cpy + abz * cpz;
+            const d6 = acx * cpx + acy * cpy + acz * cpz;
+            if (d6 >= 0 && d5 <= d6) { qx = cx; qy = cy; qz = cz; }
+            else {
+              const vb = d5 * d2 - d1 * d6;
+              if (vb <= 0 && d2 >= 0 && d6 <= 0) {
+                const w = d2 / (d2 - d6);
+                qx = ax + w * acx; qy = ay + w * acy; qz = az + w * acz;
+              } else {
+                const va = d3 * d6 - d5 * d4;
+                if (va <= 0 && (d4 - d3) >= 0 && (d5 - d6) >= 0) {
+                  const w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+                  qx = bx + w * (cx - bx); qy = by + w * (cy - by); qz = bz + w * (cz - bz);
+                } else {
+                  const denom = 1 / (va + vb + vc);
+                  const vW = vb * denom, wW = vc * denom;
+                  qx = ax + abx * vW + acx * wW;
+                  qy = ay + aby * vW + acy * wW;
+                  qz = az + abz * vW + acz * wW;
+                }
+              }
+            }
+          }
+        }
+      }
+      const dist2 = (qx - x) ** 2 + (qy - y) ** 2 + (qz - z) ** 2;
+      if (dist2 < bestD2) {
+        bestD2 = dist2;
+        bestPt = [qx, qy, qz];
+        const nx = aby * acz - abz * acy, ny = abz * acx - abx * acz, nz = abx * acy - aby * acx;
+        const nl = Math.hypot(nx, ny, nz) || 1;
+        bestN = [nx / nl, ny / nl, nz / nl];
+      }
+    }
+    return {point: bestPt, normal: bestN};
+  };
+
+  // Remesh both to the same low target (40 faces):
+  const remeshedKiln = remeshLevel(kilnWithPipe, 40, {minCells: 10, closestPoint: (x, y, z) => closestKilnWithPipe(x, y, z).point});
+  const crackedBeam = cube(true);
+  const remeshedBeam = remeshLevel(crackedBeam, 40, {minCells: 10, closestPoint: cubeClosestPoint});
+
+  const kilnErr = measureGeometricError({
+    source: kilnWithPipe,
+    level: remeshedKiln,
+    closestSource: closestKilnWithPipe,
+    closestLevel: closestOnTriangleMesh(remeshedKiln),
+    samples: 8000,
+    seed: 5,
+  });
+  const beamErr = measureGeometricError({
+    source: crackedBeam,
+    level: remeshedBeam,
+    closestSource: closestOnTriangleMesh(crackedBeam),
+    closestLevel: closestOnTriangleMesh(remeshedBeam),
+    samples: 8000,
+    seed: 5,
+  });
+
+  // At 40 faces, the curved kiln + side pipe loses the pipe and facets the drum (sourceToLevel.max > 0.10),
+  // whereas the planar cracked beam seals its crack and holds its 6 flat planes (sourceToLevel.max < 0.045):
+  assert.ok(kilnErr.sourceToLevel.max > 0.10, `dropped side pipe raises kiln sourceToLevel.max (${kilnErr.sourceToLevel.max})`);
+  assert.ok(beamErr.sourceToLevel.max < 0.045, `sealed crack keeps beam sourceToLevel.max small (${beamErr.sourceToLevel.max})`);
+  assert.ok(
+    effectiveRelativeGeomError({error: kilnErr}) > 2.5 * effectiveRelativeGeomError({error: beamErr}),
+    `effectiveRelativeGeomError penalizes the pipe-dropping kiln remesh over the crack-sealing beam remesh (${effectiveRelativeGeomError({error: kilnErr})} vs ${effectiveRelativeGeomError({error: beamErr})})`,
+  );
+});
+
 test('review fixes: deterministic tier bytes, index width boundary, grid refusal, strict compaction', async () => {
   const {prepareLowTiers, dedupCorners, remeshLevel, compactTrellisGLB} = await import('../mesh-lod-ladder.mjs');
   const {finishTrellisMesh} = await import('../models/trellis2/trellis-material.js');

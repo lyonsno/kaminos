@@ -25,9 +25,9 @@ import {viewDirections} from '../lod-image-compare.mjs';
 const stat = count => ({max: count ? 0.1 : 0, p95: count ? 0.05 : 0, mean: count ? 0.01 : 0, count});
 const n = 512 * 512;
 const viewAt = d => ({direction: d.map(x => +x.toFixed(4)), referenceCoverage: 1000 / n, silhouetteMismatch: 120 / 1020, differentSurface: 50 / 900,
-  depth: stat(900), normalDegrees: stat(845), normalUndefined: {reference: 5, level: 0}, albedo: stat(850), meanAlbedo: {reference: [0.5, 0.5, 0.5], level: [0.5, 0.5, 0.5]}});
+  depth: stat(900), normalDegrees: stat(845), normalWithinGateDegrees: stat(800), normalProjectedDegrees: stat(45), normalUndefined: {reference: 5, level: 0}, albedo: stat(850), meanAlbedo: {reference: [0.5, 0.5, 0.5], level: [0.5, 0.5, 0.5]}});
 // A view where the reference covers nothing (a flat part seen edge-on): legitimate, with empty channels.
-const emptyAt = d => ({...viewAt(d), referenceCoverage: 0, silhouetteMismatch: 0, differentSurface: 0, depth: stat(0), normalDegrees: stat(0), normalUndefined: {reference: 0, level: 0}, albedo: stat(0)});
+const emptyAt = d => ({...viewAt(d), referenceCoverage: 0, silhouetteMismatch: 0, differentSurface: 0, depth: stat(0), normalDegrees: stat(0), normalWithinGateDegrees: stat(0), normalProjectedDegrees: stat(0), normalUndefined: {reference: 0, level: 0}, albedo: stat(0)});
 const views = () => viewDirections().map(viewAt);
 const goodResult = (url, overrides = {}) => { const q = new URL(url).searchParams, mapped = q.get('normalMaps') !== '0';
   return {schema: 'kaminos.lod-image-error.v1', reference: {sha256: q.get('ref')}, level: {sha256: q.get('level')}, route: {three: '171', glRenderer: 'test'},
@@ -90,6 +90,7 @@ test('a result describing another pair or other settings is refused, and nothing
       {perView: views().map(v => ({...v, silhouetteMismatch: 0, differentSurface: 0, depth: stat(0), normalDegrees: stat(0), albedo: stat(0), normalUndefined: {reference: 0, level: 0}}))},
       {perView: views().map((v, i) => i ? v : {...v, referenceCoverage: 2})}, {perView: views().map((v, i) => i ? v : {...v, depth: stat(-1)})},
       {perView: views().map((v, i) => i ? v : {...v, normalDegrees: stat(860)})}, {perView: views().map((v, i) => i ? v : {...v, differentSurface: 0.5})},
+      {perView: views().map((v, i) => i ? v : {...v, normalWithinGateDegrees: stat(800), normalProjectedDegrees: stat(40)})},
       {perView: viewDirections().map(emptyAt)}]) {
       const report = await measure(args, {browserFor: fakeBrowser(url => ({title: 'done', result: goodResult(url, bad), png: Buffer.from('png')}), [])});
       assert.equal(report.phase, 'measure', JSON.stringify(bad)); assert.match(report.error.message, /does not describe|normal map/, JSON.stringify(bad));

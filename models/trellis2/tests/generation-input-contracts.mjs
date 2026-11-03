@@ -55,7 +55,7 @@ const invalidTexture=clone();invalidTexture.models.textureDecoder.config.structu
 assert.throws(()=>serving.validateGenerationInputs(invalidTexture),/structure-only pass requires the learned shape decoder/);
 const fetched=[],loaded=await loadGenerationInputs(m,async key=>{fetched.push(key);return new Float32Array(m.tensors[key].byteLength/4);});
 assert.equal(typeof loaded.loadModel,'function');assert.equal(loaded.models,undefined);
-assert.ok(fetched.every(key=>key.startsWith('dino.')||key==='image.pixels'),
+assert.ok(fetched.every(key=>key.startsWith('dino.')||['image.pixels','image.high-pixels'].includes(key)),
   'DINO execution can settle before multi-GB downstream checkpoints are fetched. This is input loading, not model-result injection.');
 console.log('Complete source-model/config/tensor admission rejects partial weights, shadowed schedule, reused HR checkpoint and failed package; additive metadata remains compatible. Synthetic descriptors are policy fixtures, not external checkpoint evidence.');
 export {m};

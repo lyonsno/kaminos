@@ -109,7 +109,7 @@ drawing = false;
 await app.destroy();
 ```
 
-The [Klein outside example](https://github.com/lyonsno/kaminos/blob/main/models/flux2-klein/examples/external-app/app.js) and [SuperMat outside example](https://github.com/lyonsno/kaminos/blob/main/models/supermat/examples/external-app/app.js) include concrete GPU rendering and controls. The foreground service uses the model's cooperative boundaries during inference and also services idle frames. Its receipts describe submissions and request completion; they are not display-presentation timestamps.
+Run [Klein Image Studio](https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein/examples/external-app) for a complete application with a prompt form, WebGPU image view and PNG download. Its renderer uses the model's cooperative boundaries during inference and remains interactive between generations. The [SuperMat example](https://github.com/lyonsno/kaminos/blob/main/models/supermat/examples/external-app/app.js) demonstrates the same foreground API for material inference.
 
 To borrow your renderer's device, pass `{ device, load: false }`. Klein requires `shader-f16` on that device. To share a coordinated host, pass `{ session, foreground, load: false }` using the same device and queue. The host must finish its current foreground run before releasing its admission. An app destroys only the device/session/foreground objects it created; borrowed resources survive. `snapshot()` exposes that ownership, load state, active phase, control state and fatal error.
 

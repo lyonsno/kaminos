@@ -47,10 +47,10 @@ test('the shader builds the characteristic from the two-face mean when staggered
   // Both kernels build the characteristic from the centre velocity.
   const predictor = source.slice(source.indexOf('fn csTransportPredict('), source.indexOf('\n}\n', source.indexOf('fn csTransportPredict(')));
   assert.match(predictor, /let centreVelocity = centreVelocityAt\(vec3<i32>\(gid\)\);/);
-  assert.match(predictor, /let advectVelocity = vec3<f32>\(centreVelocity\.x \* 1\.0, centreVelocity\.y, centreVelocity\.z \* 1\.0\);/);
+  assert.match(predictor, /let advectVelocity = materialTransportVelocity\(cell, centreVelocity\);/);
   const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('let macCormack = u.transport_controls.x > 1.5;'));
   assert.match(main, /let centreVelocity = centreVelocityAt\(cellI\);/);
-  assert.match(main, /let advectVelocity = vec3<f32>\(centreVelocity\.x \* 1\.0, centreVelocity\.y, centreVelocity\.z \* 1\.0\);/);
+  assert.match(main, /let advectVelocity = materialTransportVelocity\(cell, centreVelocity\);/);
   // The carried velocity is sampled at the plain foot: destination face and
   // sampler offset cancel (a −½ per-component sample offset flipped the lean to +x).
   assert.doesNotMatch(source, /sampleCarriedVelocity|samplePredictVelocity/, 'no per-component sample offset');
@@ -69,7 +69,6 @@ test('cockpit: the staggering select with help, snapshot, listener, route restor
   assert.match(init, /VOLUME_ROUTE_RESTORED_CONTROL_IDS = \[[^\]]*'volume-velocity-staggering'/, 'restored from a saved route');
   const rowEnd = index.indexOf('</div>', index.indexOf('id="volume-velocity-staggering"'));
   assert.match(index.slice(rowEnd, rowEnd + 400), /^<\/div>\s*<span class="slider-help">/, 'help follows the row');
-  assert.match(index, /half a cell/, 'the help names the shift');
   assert.match(index, /id="volume-velocity-staggering-state"/, 'receipt field');
   assert.match(index, /staggered — NOT ADMITTED \(\$\{/, 'a refused request is named');
   const control = schema.controls.find(c => c.key === 'volume-velocity-staggering');
@@ -109,7 +108,7 @@ test('staggered: the main kernel separates the force increment and the face-forc
   assert.match(source, /\{ binding: 22, visibility: GPUShaderStage\.FRAGMENT \| GPUShaderStage\.COMPUTE, storageTexture: \{ access: 'read-write', format: 'r32float', viewDimension: '3d' \} \}/, 'fluid layout carries the force texture');
   assert.match(source, /const planes = waveletSidecarFull \? 9 : 3;[\s\S]*?size: \[gridSize, gridHeight, gridSize \* planes\],/, 'three components along depth');
   const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('\nfn ', source.indexOf('\nfn cs(@builtin') + 10));
-  assert.match(main, /let forceIncrement = \(vel - velTransported\) \* timeStep;/);
+  assert.match(main, /let forceIncrement = \(vel - velTransported \+ centredForce \* \(VELOCITY_UNIT_SCALE - 1\.0\)\) \* timeStep;/);
   assert.match(main, /var centredForce = vec3<f32>\(0\.0\);/);
   const pass = source.slice(source.indexOf('fn csFaceForces('), source.indexOf('\n}\n', source.indexOf('fn csFaceForces(')));
   assert.match(pass, /let here = vec3<f32>\(forceDeltaLoad\(c, 0\), forceDeltaLoad\(c, 1\), forceDeltaLoad\(c, 2\)\);/);
@@ -117,7 +116,7 @@ test('staggered: the main kernel separates the force increment and the face-forc
   assert.match(pass, /fluidDst\[base\] = vec4<f32>\(boundVelocity\(stored\.xyz \+ faceForce\), stored\.w\);/, 'the bound applies once, after the face force');
   // The pass runs after the sim pass, before the buffers flip, only when admitted.
   const step = source.slice(source.indexOf("label: 'kaminos fluid sim pass'"), source.indexOf('encodeAnalyticEmitterInjection(encoder);', source.indexOf("label: 'kaminos fluid sim pass'")));
-  assert.match(step, /if \(state\.velocityStaggering\?\.effective\?\.faceForces && faceForcesPipeline\) \{[\s\S]*label: 'kaminos face force pass'[\s\S]*\}\s*currentFluid = 1 - currentFluid;/);
+  assert.match(step, /if \(!velocityOwner && state\.velocityStaggering\?\.effective\?\.faceForces && faceForcesPipeline\) \{[\s\S]*label: 'kaminos face force pass'[\s\S]*\}\s*currentFluid = 1 - currentFluid;/);
   assert.match(capture, /velocityStaggering: s\.velocityStaggering \?\? null/);
 });
 
@@ -166,13 +165,13 @@ test('face-force fold model: bound once, centred forces averaged, velocity effec
   assert.match(main, /centredForce = centredForce \+ thermalBuoyancyForce\(/, 'buoyancy is centred');
   assert.match(main, /centredForce = centredForce \+ windDirection \* windStrength/, 'wind is centred');
   for (const term of ['confinement', 'shredForce']) assert.doesNotMatch(main, new RegExp(`centredForce = centredForce [+] ${term};`), `${term} stays local`);
-  assert.match(main, /let centredIncrement = centredForce \* timeStep;\s*forceDeltaStore\(cellI, centredIncrement\);\s*vel = velTransported \+ forceIncrement - centredIncrement;/);
-  assert.match(main, /fluidDst\[base\] = vec4<f32>\(select\(boundVelocity\(vel\), vel, faceForcesOn\(\)\), 0\.0\);/, 'the bound waits for the face pass under the staggered reading');
+  assert.match(main, /let centredIncrement = centredForce \* timeStep \* VELOCITY_UNIT_SCALE;\s*forceDeltaStore\(cellI, centredIncrement\);\s*vel = velTransported \+ forceIncrement - centredIncrement;/);
+  assert.match(main, /fluidDst\[base\] = vec4<f32>\(select\(select\(boundVelocity\(vel\), vel, faceForcesOn\(\)\),prev.xyz,MATERIAL_ONLY\), 0\.0\);/, 'the bound waits for the face pass under the staggered reading');
   assert.match(main, /if \(sceneSolidAt\(cellI\)\) \{\s*forceDeltaStore\(cellI, vec3<f32>\(0\.0\)\);/, 'solids write a zero increment');
   const pass = source.slice(source.indexOf('fn csFaceForces('), source.indexOf('\n}\n', source.indexOf('fn csFaceForces(')));
-  assert.match(pass, /let openX = sceneFaceOpen\(c, 0u\) && \(gid\.x \+ 1u < GRID \|\| joinedBoundary\(\)\);/);
-  assert.match(pass, /let openZ = sceneFaceOpen\(c, 2u\) && \(gid\.z \+ 1u < GRID \|\| joinedBoundary\(\)\);/);
+  assert.match(pass, /let openX = sceneFaceOpen\(c, 0u\) && \(gid\.x \+ 1u < GRID \|\| joinedBoundary\(\) \|\| openWorldBoundary\(\)\);/);
+  assert.match(pass, /let openZ = sceneFaceOpen\(c, 2u\) && \(gid\.z \+ 1u < GRID \|\| joinedBoundary\(\) \|\| openWorldBoundary\(\)\);/);
   assert.match(pass, /let topRow = gid\.y \+ 1u >= GRID_Y;/);
-  assert.match(pass, /let openY = select\(sceneFaceOpen\(c, 1u\), pressureSolverOpenTop\(\) \|\| joinedBoundary\(\), topRow\);/, 'the open top is the exception');
+  assert.match(pass, /let openY = sceneFaceOpen\(c, 1u\) && \(!topRow \|\| pressureSolverOpenTop\(\) \|\| joinedBoundary\(\) \|\| openWorldBoundary\(\)\);/, 'open boundaries admit force while scene solids still block the face');
   assert.match(pass, /select\(0\.0, 0\.5 \* \(here\.x \+ upX\), openX\)/, 'a closed face carries no force');
 });
