@@ -17827,16 +17827,44 @@ function recordVolumeSettingsPresetApplied() {
 async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
   const select = document.getElementById('settings-preset-select');
   try {
-    refreshVolumeSettingsPresetList.inFlight ||= (async () => {
-      const response = await fetch('/api/volume-settings-presets', { cache: 'no-store' });
-      const parsed = await response.json();
-      if (!response.ok) throw new Error(parsed.error || `preset index failed: ${response.status}`);
-      validateVolumeSettingsPresetIndex(parsed);
-      return parsed;
-    })().finally(() => {
-      refreshVolumeSettingsPresetList.inFlight = null;
-    });
-    const index = await refreshVolumeSettingsPresetList.inFlight;
+    let index;
+    while (true) {
+      const requestEpoch = refreshVolumeSettingsPresetList.epoch || 0;
+      if (!refreshVolumeSettingsPresetList.inFlight || refreshVolumeSettingsPresetList.inFlightEpoch !== requestEpoch) {
+        const promise = (async () => {
+          try {
+            const response = await fetch('/api/volume-settings-presets', { cache: 'no-store' });
+            const parsed = await response.json();
+            if (!response.ok) throw new Error(parsed.error || `preset index failed: ${response.status}`);
+            validateVolumeSettingsPresetIndex(parsed);
+            return parsed;
+          } finally {
+            if (refreshVolumeSettingsPresetList.inFlight === promise) {
+              refreshVolumeSettingsPresetList.inFlight = null;
+            }
+          }
+        })();
+        refreshVolumeSettingsPresetList.inFlight = promise;
+        refreshVolumeSettingsPresetList.inFlightEpoch = requestEpoch;
+      }
+      try {
+        index = await refreshVolumeSettingsPresetList.inFlight;
+      } catch (error) {
+        if ((refreshVolumeSettingsPresetList.epoch || 0) !== requestEpoch) {
+          if (refreshVolumeSettingsPresetList.settledEpoch === (refreshVolumeSettingsPresetList.epoch || 0)) {
+            return refreshVolumeSettingsPresetList.settledIndex;
+          }
+          continue;
+        }
+        throw error;
+      }
+      if ((refreshVolumeSettingsPresetList.epoch || 0) === requestEpoch) break;
+      if (refreshVolumeSettingsPresetList.settledEpoch === (refreshVolumeSettingsPresetList.epoch || 0)) {
+        return refreshVolumeSettingsPresetList.settledIndex;
+      }
+    }
+    refreshVolumeSettingsPresetList.settledEpoch = refreshVolumeSettingsPresetList.epoch || 0;
+    refreshVolumeSettingsPresetList.settledIndex = index;
     volumeSettingsPresetIndex = index;
     const unavailable = index.unavailableEntries || [];
     // Earlier versions of a label, and other stores' pointers for it, stay
@@ -17915,6 +17943,8 @@ async function saveVolumeSettingsPreset({ preset: suppliedPreset, label: supplie
       body: JSON.stringify({ label, preset, ...(sceneSnapshot ? {publishAlias:false} : {}) }),
     });
     const result = await response.json();
+    refreshVolumeSettingsPresetList.epoch = (refreshVolumeSettingsPresetList.epoch || 0) + 1;
+    refreshVolumeSettingsPresetList.inFlight = null;
     if (result.partial && result.sharedPublication?.published) {
       // The library took the basin but this server's store did not.
       try { await refreshVolumeSettingsPresetList(result.sharedPublication.presetId); } catch { /* the partial report stands */ }

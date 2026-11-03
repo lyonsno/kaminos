@@ -12356,18 +12356,15 @@ export function createKaminosVolumePrototype({
   // the lattice itself, so a later switch-on starts from undistorted noise.
   let waveletTextures = [];
   let waveletSidecarFull = false;
-  const waveletCoordinateCache = new Map();
-  function writeWaveletLattice(texture) {
-    const key = `${gridSize}x${gridHeight}`;
-    let texels = waveletCoordinateCache.get(key);
-    if (!texels) {
-      texels = new Float32Array(gridSize * gridHeight * gridSize * 2 * 4);
-      let i = 0;
-      for (let set = 0; set < 2; set += 1) for (let z = 0; z < gridSize; z += 1) for (let y = 0; y < gridHeight; y += 1) for (let x = 0; x < gridSize; x += 1) {
-        texels[i] = x + 0.5; texels[i + 1] = y + 0.5; texels[i + 2] = z + 0.5; i += 4;
-      }
-      waveletCoordinateCache.set(key, texels);
+  function buildWaveletLattice() {
+    const texels = new Float32Array(gridSize * gridHeight * gridSize * 2 * 4);
+    let i = 0;
+    for (let set = 0; set < 2; set += 1) for (let z = 0; z < gridSize; z += 1) for (let y = 0; y < gridHeight; y += 1) for (let x = 0; x < gridSize; x += 1) {
+      texels[i] = x + 0.5; texels[i + 1] = y + 0.5; texels[i + 2] = z + 0.5; i += 4;
     }
+    return texels;
+  }
+  function writeWaveletLattice(texture, texels = buildWaveletLattice()) {
     device.queue.writeTexture({ texture }, texels, { bytesPerRow: gridSize * 16, rowsPerImage: gridHeight }, [gridSize, gridHeight, gridSize * 2]);
   }
   function ensureWaveletCoordinates(admitted) {
@@ -12375,6 +12372,7 @@ export function createKaminosVolumePrototype({
     if (waveletTextures.length === 2 && waveletSidecarFull === admitted) return false;
     for (const texture of waveletTextures) texture.destroy();
     const size = admitted ? [gridSize, gridHeight, gridSize * 2] : [1, 1, 1];
+    const texels = admitted ? buildWaveletLattice() : null;
     waveletTextures = [0, 1].map(i => {
       const texture = device.createTexture({
         label: `kaminos ${WAVELET_TURBULENCE_IDENTITY} coordinates ${admitted ? gridShapeLabel(gridSize) : 'placeholder'} ${i}`,
@@ -12383,7 +12381,7 @@ export function createKaminosVolumePrototype({
         format: 'rgba32float',
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_DST,
       });
-      if (admitted) writeWaveletLattice(texture);
+      if (admitted) writeWaveletLattice(texture, texels);
       return texture;
     });
     waveletSidecarFull = admitted;

@@ -233,4 +233,123 @@ for (const broken of [null, {}, [null], [{ ...unavailable, error: '' }], [{ ...u
   assert.equal(schemaFetches.length, 1, 'basin switches must reuse the loaded preset schema');
   assert.deepEqual(loadedReceipts, ['kiln-hero', 'bowl-wisp'], 'each basin switch loads and validates its requested preset');
 }
+
+// Saving a preset while an earlier preset-list GET is still in flight must
+// fetch a fresh post-save index rather than reusing the stale pre-save GET.
+{
+  const saveFn = source.match(/async function saveVolumeSettingsPreset\([^]*?\n\}/)?.[0];
+  assert.ok(saveFn, 'saveVolumeSettingsPreset is present');
+  const select = {
+    options: [], value: '',
+    replaceChildren(...options) { this.options = options; },
+    add(option) { this.options.push(option); },
+  };
+  const labelInput = { value: 'Newly Saved Basin' };
+  const preSaveEntry = {
+    alias: 'kiln-hero',
+    label: 'Kiln Hero',
+    presetId: 'vsp-' + 'a'.repeat(64),
+    publishedAt: '2026-10-16T10:00:00Z',
+    source: { branch: 'main' },
+  };
+  const savedEntry = {
+    alias: 'newly-saved-basin',
+    label: 'Newly Saved Basin',
+    presetId: 'vsp-' + 'f'.repeat(64),
+    publishedAt: '2026-11-03T08:00:00Z',
+    source: { branch: 'cc/speedy-basin-loading-1103' },
+  };
+  const makeIndex = entries => ({
+    identity: 'kaminos-volume-settings-preset-index-v1',
+    schemaIdentity: 'kaminos-volume-settings-preset-schema-v2',
+    controlCount: 70,
+    rendererControlCount: 7,
+    presentationControlCount: 1,
+    storePath: '/tmp/presets',
+    entries,
+    unavailableEntries: [],
+  });
+  let getCalls = 0;
+  let resolvePreSaveGet;
+  const context = vm.createContext({
+    Option: class { constructor(text, value) { this.text = text; this.value = value; this.disabled = false; } },
+    document: {
+      getElementById: id => {
+        if (id === 'settings-preset-select') return select;
+        if (id === 'settings-preset-label') return labelInput;
+        return null;
+      },
+    },
+    fetch: async (url, init = {}) => {
+      if (init.method === 'POST') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            ok: true,
+            identity: 'kaminos-volume-settings-preset-write-receipt-v1',
+            effective: {
+              schemaIdentity: 'kaminos-volume-settings-preset-schema-v2',
+              presetId: savedEntry.presetId,
+              label: savedEntry.label,
+              alias: savedEntry.alias,
+              publishAlias: true,
+              controlCount: 70,
+              rendererControlCount: 7,
+              presentationControlCount: 1,
+              storePath: '/tmp/presets',
+            },
+          }),
+        };
+      }
+      getCalls += 1;
+      if (getCalls === 1) {
+        return await new Promise(resolve => {
+          resolvePreSaveGet = () => resolve({
+            ok: true,
+            status: 200,
+            json: async () => makeIndex([preSaveEntry]),
+          });
+        });
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => makeIndex([savedEntry, preSaveEntry]),
+      };
+    },
+    validateVolumeSettingsPresetIndex: () => {},
+    describeVolumeSettingsPresetProjection: () => ({ text: 'projected', warning: true }),
+    describeVolumeSettingsSaveOutcome: () => ({ text: 'saved', warning: false }),
+    describeVolumeSettingsPartialSave: () => 'partial',
+    volumeSettingsPresetLabelReuseBlock: () => null,
+    volumeCockpitLayoutReady: Promise.resolve(),
+    activeVolumeSettingsPresetReceipt: null,
+    activeVolumeSettingsPresetApplied: null,
+    volumeSettingsPresetIndex: null,
+    volumeSettingsPresetIndexSummary: null,
+    showVolumeSettingsPresetStatus: () => {},
+    volumeSettingsPresetStatus: () => {},
+    setInfo: () => {},
+    setTimeout,
+    resolvePreSaveGet: () => resolvePreSaveGet(),
+    console: { log: () => {} },
+  });
+  await vm.runInContext(
+    `${refresh}\n${saveFn}\n(async () => {
+      const staleRefresh = refreshVolumeSettingsPresetList();
+      const savePromise = saveVolumeSettingsPreset({
+        label: 'Newly Saved Basin',
+        preset: { controlCount: 70, rendererControlCount: 7, presentationControlCount: 1 },
+      });
+      await new Promise(resolve => setTimeout(resolve, 0));
+      resolvePreSaveGet();
+      await Promise.all([staleRefresh, savePromise]);
+    })()`,
+    context,
+  );
+  assert.equal(getCalls, 2, 'post-save refresh must issue a fresh GET instead of joining a pre-save in-flight GET');
+  assert.equal(select.value, savedEntry.presetId, 'select must point to the newly saved preset after both refreshes settle');
+  assert.equal(context.volumeSettingsPresetIndex.entries.length, 2, 'cached index must contain the post-save entry list');
+}
 console.log('volume settings index UI contracts passed');

@@ -521,7 +521,7 @@ def normalize_volume_settings_preset_payload(payload, schema=None, tolerate_fore
     does not offer fall back to the control's additive default with a receipt.
     """
     schema = _validate_settings_preset_schema(
-        schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+        _load_volume_settings_preset_schema(schema)
     )
     # On reads, a basin whose inventory differs from this schema is schema
     # skew (saved by another branch), not a damaged artifact.
@@ -766,7 +766,7 @@ def validate_volume_settings_preset_payload(payload, schema=None):
     if "sourceRadiusSpace" in payload and payload["sourceRadiusSpace"] != "simulation-v1":
         raise ValueError("Unknown preset source radius space")
     schema = _validate_settings_preset_schema(
-        schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+        _load_volume_settings_preset_schema(schema)
     )
     if payload.get("identity") != VOLUME_SETTINGS_PRESET_IDENTITY or payload.get("kind") != "settings-preset":
         raise ValueError("settings preset identity mismatch")
@@ -1003,7 +1003,7 @@ def _project_volume_cockpit_layout(layout, schema=None, *, allow_declared_retire
         raise ValueError("volume cockpit layout groups are required")
 
     schema = _validate_settings_preset_schema(
-        schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+        _load_volume_settings_preset_schema(schema)
     )
     known_control_ids = {
         descriptor["key"]
@@ -1285,7 +1285,7 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
     """
     if not isinstance(publish_alias, bool):
         raise ValueError("publishAlias must be a boolean")
-    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    schema = _load_volume_settings_preset_schema(schema)
     normalized_payload, schema_projection, content_hash = _prepare_volume_settings_preset_write(payload, schema)
     store = _volume_settings_store_path(store_path)
     effective_label = str(label or "").strip() or "Unnamed preset"
@@ -1926,7 +1926,7 @@ def _publish_volume_settings_artifact_locked(store, document, label, published_a
 
 def publish_volume_settings_preset(shared_store_path, document, label, source, schema=None, fallback_hold=None, publish_alias=True):
     """Publish one hash-verified basin artifact into the shared library."""
-    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    schema = _load_volume_settings_preset_schema(schema)
     _verify_volume_settings_artifact(document, schema)
     store = _volume_settings_store_path(shared_store_path)
     effective_label = str(label or document.get("initialLabel") or "").strip() or "Unnamed preset"
@@ -1969,7 +1969,7 @@ def write_volume_settings_preset_to_library(local_store_path, shared_store_path,
     branch cannot hold. If the library cannot be written, the local store
     decides alone and the receipt says the basin did not reach the library.
     """
-    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    schema = _load_volume_settings_preset_schema(schema)
     if not isinstance(publish_alias, bool):
         raise ValueError("publishAlias must be a boolean")
     if shared_store_path is None:
@@ -2043,7 +2043,7 @@ def _volume_settings_authority_order(layers):
 
 
 def read_volume_settings_preset_layered(layers, preset_ref, schema=None):
-    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    schema = _load_volume_settings_preset_schema(schema)
     requested = str(preset_ref or "").strip()
     order = list(layers)
     if requested and not requested.startswith("vsp-"):
@@ -2067,7 +2067,7 @@ def read_volume_settings_preset_layered(layers, preset_ref, schema=None):
 
 
 def list_volume_settings_presets_layered(layers, schema=None):
-    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    schema = _load_volume_settings_preset_schema(schema)
     listings = [(role, list_volume_settings_presets(store, schema)) for role, store in layers]
     # A label's current version is its pointer in the authority store (the
     # library, else the local store) whether or not it loads here: an
@@ -2140,7 +2140,7 @@ def import_volume_settings_stores(shared_store_path, store_paths, schema=None):
     Every artifact's content hash is verified before it is accepted; labels are
     merged through the append-only history, and a label only moves forward.
     """
-    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    schema = _load_volume_settings_preset_schema(schema)
     shared = _volume_settings_store_path(shared_store_path)
     report = {
         "identity": "kaminos-volume-settings-store-import-receipt-v1",

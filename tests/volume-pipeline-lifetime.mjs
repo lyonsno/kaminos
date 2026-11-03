@@ -265,4 +265,30 @@ test('companion GPU factories reuse shaders, layouts, and compute pipelines on t
  assert.equal(f.created.length,firstCreated*2,'a replacement device gets its own companion shaders, layouts, and pipelines');
  for(const item of thirdResources)item.destroy?.();
 });
+test('wavelet coordinate upload buffers are not retained across fine-velocity or fluid-state destruction',()=>{
+ const f=fixture();
+ const uploadedBuffers=[];
+ const dev={
+  ...f.device(),
+  queue:{
+   writeBuffer(buffer,offset,data){if(data instanceof Float32Array&&data.length>16)uploadedBuffers.push(data);},
+   writeTexture(dest,data){if(data instanceof Float32Array&&data.length>16)uploadedBuffers.push(data);},
+  },
+ };
+ const plan=fineGridPlan({materialDims:[32,32,32],velocity:16,pressure:16});
+ const fine1=createFineVelocityGrid(dev,plan);
+ assert.equal(uploadedBuffers.length,2);
+ const firstFineUpload=uploadedBuffers[0];
+ assert.ok(firstFineUpload instanceof Float32Array);
+ const originalFirstValue=firstFineUpload[0];
+ firstFineUpload[0]=-999;
+ fine1.destroy();
+ const fine2=createFineVelocityGrid(dev,plan);
+ assert.equal(uploadedBuffers.length,4);
+ assert.notEqual(uploadedBuffers[2],firstFineUpload,'fine-velocity wavelet coordinate buffer must not be retained after destroy()');
+ assert.equal(uploadedBuffers[2][0],originalFirstValue,'recreated fine-velocity grid must upload fresh unmutated coordinates');
+ fine2.destroy();
+ assert.ok(!source.includes('waveletCoordinateCache'),'volume-core must not retain wavelet coordinate Float32Arrays in a persistent cache');
+});
+
 

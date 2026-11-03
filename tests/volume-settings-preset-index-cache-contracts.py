@@ -199,6 +199,32 @@ def main():
         assert unavailable[arch_id]["error"] == expected_error, (unavailable[arch_id]["error"], expected_error)
         assert unavailable[arch_id]["reason"] == "invalid-artifact"
 
+        # Default schema=None calls through the layered HTTP entry points must
+        # populate and reuse _VOLUME_SETTINGS_DEFAULT_SCHEMA_CACHE rather than
+        # re-reading VOLUME_SETTINGS_PRESET_SCHEMA_PATH on every request.
+        serve._VOLUME_SETTINGS_DEFAULT_SCHEMA_CACHE = None
+        schema_reads = []
+        original_schema_path = serve.VOLUME_SETTINGS_PRESET_SCHEMA_PATH
+
+        class CountingSchemaPath:
+            def stat(self):
+                return original_schema_path.stat()
+
+            def read_text(self, *args, **kwargs):
+                schema_reads.append(1)
+                return original_schema_path.read_text(*args, **kwargs)
+
+        serve.VOLUME_SETTINGS_PRESET_SCHEMA_PATH = CountingSchemaPath()
+        try:
+            serve.list_volume_settings_presets_layered(layers)
+            serve.list_volume_settings_presets_layered(layers)
+            serve.read_volume_settings_preset_layered(layers, "bowl-wisp")
+            serve.read_volume_settings_preset_layered(layers, "bowl-wisp")
+        finally:
+            serve.VOLUME_SETTINGS_PRESET_SCHEMA_PATH = original_schema_path
+        assert len(schema_reads) == 1, f"default schema should be read once across layered calls, read {len(schema_reads)} times"
+        assert serve._VOLUME_SETTINGS_DEFAULT_SCHEMA_CACHE is not None
+
     print("volume settings preset index cache contracts passed")
 
 
