@@ -224,6 +224,32 @@ class MLXSwitchableDeltaController:
                     delta_mlx = delta_arr
                     if "conv1d.weight" in key and orig_arr.ndim == 3 and orig_arr.shape != delta_mlx.shape:
                         delta_mlx = mx.moveaxis(delta_mlx, 2, 1)
+                    if f"{key}.bfl" in tensors and not key.endswith(
+                        (".input_layernorm.weight", ".post_attention_layernorm.weight", "model.norm.weight", ".q_norm.weight", ".k_norm.weight")
+                    ):
+                        bfl_ref = tensors[f"{key}.bfl"]
+                        if "conv1d.weight" in key and orig_arr.ndim == 3 and orig_arr.shape != bfl_ref.shape:
+                            bfl_ref = mx.moveaxis(bfl_ref, 2, 1)
+                        delta_f32 = delta_mlx.astype(mx.float32)
+                        delta_norm = float(mx.sqrt(mx.sum(delta_f32 * delta_f32)).item())
+                        if delta_norm > 1e-4:
+                            orig_f32 = orig_arr.astype(mx.float32)
+                            bfl_f32 = bfl_ref.astype(mx.float32)
+                            qwen_f32 = bfl_f32 - delta_f32
+                            diff_q = orig_f32 - qwen_f32
+                            diff_b = orig_f32 - bfl_f32
+                            dist_qwen = float(mx.sqrt(mx.sum(diff_q * diff_q)).item())
+                            dist_bfl = float(mx.sqrt(mx.sum(diff_b * diff_b)).item())
+                            if self.base_role == "qwen" and dist_bfl + 1e-4 < dist_qwen:
+                                raise ValueError(
+                                    f"Loaded resident model parameter {key} matches BFL weights "
+                                    f"(dist_bfl={dist_bfl:.6f} < dist_qwen={dist_qwen:.6f}), contradicting base_role='qwen'"
+                                )
+                            if self.base_role == "bfl" and dist_qwen + 1e-4 < dist_bfl:
+                                raise ValueError(
+                                    f"Loaded resident model parameter {key} matches Qwen weights "
+                                    f"(dist_qwen={dist_qwen:.6f} < dist_bfl={dist_bfl:.6f}), contradicting base_role='bfl'"
+                                )
                     dt = orig_arr.dtype
                     if self.base_role == "qwen":
                         qwen_arr = orig_arr

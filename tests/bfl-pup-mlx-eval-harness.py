@@ -114,6 +114,117 @@ class TestMLXSwitchableEvalHarness(unittest.TestCase):
                     cases=[{"id": "t2i", "task": "t2i", "prompt": "test"}],
                 )
 
+            # PUP-CONF-04: valid JSON config with invalid optional max_tokens must write status='failed' report
+            bad_opt_cfg = root / "bad_opt_config.json"
+            bad_opt_report = root / "bad_opt_report.json"
+            bad_opt_cfg.write_text(
+                json.dumps(
+                    {
+                        "model_dir": str(root / "missing"),
+                        "adapter_dir": str(root / "missing"),
+                        "modes": [{"name": "off", "enabled": False, "rank": 0}],
+                        "cases": [{"id": "t2i", "task": "t2i", "prompt": "test"}],
+                        "max_tokens": "invalid",
+                    }
+                )
+            )
+            proc_opt = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "models" / "bfl-pup" / "evaluate_switchable_mlx.py"),
+                    "--config",
+                    str(bad_opt_cfg),
+                    "--report",
+                    str(bad_opt_report),
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(proc_opt.returncode, 0)
+            self.assertTrue(bad_opt_report.exists())
+            opt_data = json.loads(bad_opt_report.read_text())
+            self.assertEqual(opt_data["status"], "failed")
+            self.assertIn("invalid literal for int()", opt_data.get("error", ""))
+
+    def test_strict_completeness_requires_expected_counts_and_nonempty_modes_cases_and_provenance(self):
+        from evaluate_switchable_mlx import inspect_model_dir_provenance, run_switchable_evaluation, validate_adapter_complete
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            adapter_dir = root / "adapter_counts"
+            shards = adapter_dir / "shards"
+            shards.mkdir(parents=True)
+            empty_st = b"\x02\x00\x00\x00\x00\x00\x00\x00{}"
+            (shards / "exact_small.safetensors").write_bytes(empty_st)
+            (shards / "layers_00_03.safetensors").write_bytes(empty_st)
+
+            base_manifest = {
+                "schema": "kaminos.bfl-pup.delta-adapter.v1",
+                "complete": True,
+                "max_rank": 4,
+                "min_lora_dim": 8,
+                "expected_shard_groups": ["exact_small", "layers_00_03"],
+                "expected_exact_count": 1,
+                "expected_lowrank_count": 1,
+                "shards": {
+                    "exact_small": {
+                        "file": "shards/exact_small.safetensors",
+                        "tensor_stats": {"model.language_model.norm.weight": {"mode": "exact", "shape": [8]}},
+                    },
+                    "layers_00_03": {
+                        "file": "shards/layers_00_03.safetensors",
+                        "tensor_stats": {
+                            "model.language_model.layers.0.self_attn.q_proj.weight": {
+                                "mode": "lowrank_svd",
+                                "shape": [8, 8],
+                                "rank": 4,
+                            }
+                        },
+                    },
+                },
+            }
+
+            # PUP-CONF-02: missing expected_exact_count or expected_lowrank_count in strict mode must fail
+            for missing_key in ("expected_exact_count", "expected_lowrank_count"):
+                m_bad = dict(base_manifest)
+                del m_bad[missing_key]
+                (adapter_dir / "manifest.json").write_text(json.dumps(m_bad))
+                with self.assertRaisesRegex(RuntimeError, missing_key):
+                    validate_adapter_complete(adapter_dir, allow_partial=False)
+
+            # Restore valid manifest
+            (adapter_dir / "manifest.json").write_text(json.dumps(base_manifest))
+            valid_summary = validate_adapter_complete(adapter_dir, allow_partial=False)
+            self.assertTrue(valid_summary["complete"])
+
+            # PUP-CONF-03: empty modes or empty cases must fail before model loading
+            with self.assertRaisesRegex(ValueError, "modes must be a non-empty list"):
+                run_switchable_evaluation(
+                    model_dir=root / "nonexistent-model",
+                    adapter_dir=adapter_dir,
+                    report_path=root / "empty_modes.json",
+                    base_role="qwen",
+                    modes=[],
+                    cases=[{"id": "t2i", "task": "t2i", "prompt": "A kettle"}],
+                )
+            with self.assertRaisesRegex(ValueError, "cases must be a non-empty list"):
+                run_switchable_evaluation(
+                    model_dir=root / "nonexistent-model",
+                    adapter_dir=adapter_dir,
+                    report_path=root / "empty_cases.json",
+                    base_role="qwen",
+                    modes=[{"name": "off", "enabled": False, "rank": 0}],
+                    cases=[],
+                )
+
+            # PUP-CONF-01: BFL checkpoint provenance passed with base_role='qwen' must be rejected
+            bfl_model_dir = root / "flux-3-image-klein-pup-q4"
+            bfl_model_dir.mkdir()
+            (bfl_model_dir / "config.json").write_text(json.dumps({"model_type": "qwen3_5"}))
+            (bfl_model_dir / "README.md").write_text("base_model: black-forest-labs/flux-3-image-klein-pup\n")
+            with self.assertRaisesRegex(RuntimeError, "contradicts requested base_role='qwen'"):
+                inspect_model_dir_provenance(bfl_model_dir, base_role="qwen")
+
     def test_rejects_blank_or_non_stop_generation_as_false_closure(self):
         from evaluate_switchable_mlx import validate_generation_observation
 

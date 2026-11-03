@@ -105,11 +105,29 @@ def validate_adapter_complete(
                 f"Incomplete adapter shard inventory: present={sorted(shards.keys())}, "
                 f"expected={expected_groups}"
             )
-        if exact_count == 0 or (expected_exact is not None and exact_count != int(expected_exact)):
+        if (
+            expected_exact is None
+            or isinstance(expected_exact, bool)
+            or not isinstance(expected_exact, int)
+            or expected_exact <= 0
+        ):
+            raise RuntimeError(
+                f"Incomplete adapter manifest: missing or invalid expected_exact_count={expected_exact!r} in strict mode"
+            )
+        if (
+            expected_lowrank is None
+            or isinstance(expected_lowrank, bool)
+            or not isinstance(expected_lowrank, int)
+            or expected_lowrank <= 0
+        ):
+            raise RuntimeError(
+                f"Incomplete adapter manifest: missing or invalid expected_lowrank_count={expected_lowrank!r} in strict mode"
+            )
+        if exact_count == 0 or exact_count != int(expected_exact):
             raise RuntimeError(
                 f"Incomplete adapter exact-small coverage: exact_count={exact_count}, expected={expected_exact}"
             )
-        if expected_lowrank is not None and lowrank_count != int(expected_lowrank):
+        if lowrank_count != int(expected_lowrank):
             raise RuntimeError(
                 f"Incomplete adapter lowrank coverage: lowrank_count={lowrank_count}, expected={expected_lowrank}"
             )
@@ -122,6 +140,54 @@ def validate_adapter_complete(
         "shard_groups": sorted(shards.keys()),
         "lowrank_tensor_count": lowrank_count,
         "exact_tensor_count": exact_count,
+    }
+
+
+def inspect_model_dir_provenance(model_dir: Path, base_role: str) -> Dict[str, Any]:
+    import struct
+
+    model_dir = Path(model_dir)
+    cfg_path = model_dir / "config.json"
+    if not cfg_path.is_file():
+        raise RuntimeError(f"Missing model config.json in {model_dir}")
+    cfg_bytes = cfg_path.read_bytes()
+    cfg_sha256 = hashlib.sha256(cfg_bytes).hexdigest()
+    cfg_text = cfg_bytes.decode("utf-8", errors="replace")
+
+    readme_path = model_dir / "README.md"
+    readme_text = readme_path.read_text(errors="replace") if readme_path.is_file() else ""
+    readme_sha256 = hashlib.sha256(readme_path.read_bytes()).hexdigest() if readme_path.is_file() else None
+
+    header_digests: Dict[str, str] = {}
+    for sf in sorted(model_dir.glob("*.safetensors")):
+        with sf.open("rb") as f:
+            raw_len = f.read(8)
+            if len(raw_len) == 8:
+                hlen = struct.unpack("<Q", raw_len)[0]
+                header_digests[sf.name] = hashlib.sha256(f.read(hlen)).hexdigest()
+
+    combined_text = f"{model_dir.name}\n{cfg_text}\n{readme_text}".lower()
+    has_bfl_marker = ("flux-3-image-klein-pup" in combined_text) or ("black-forest-labs" in combined_text)
+    has_qwen_marker = ("qwen3.5-9b" in combined_text) or ("qwen3_5" in combined_text)
+
+    if base_role == "qwen" and has_bfl_marker:
+        raise RuntimeError(
+            f"Model directory {model_dir} provenance identifies BFL PUP checkpoint, "
+            f"which contradicts requested base_role='qwen'"
+        )
+    if base_role == "bfl" and not has_bfl_marker and has_qwen_marker:
+        raise RuntimeError(
+            f"Model directory {model_dir} provenance identifies Qwen checkpoint without BFL markers, "
+            f"which contradicts requested base_role='bfl'"
+        )
+
+    return {
+        "model_dir": str(model_dir),
+        "config_sha256": cfg_sha256,
+        "readme_sha256": readme_sha256,
+        "safetensors_header_digests": header_digests,
+        "detected_bfl_marker": has_bfl_marker,
+        "detected_qwen_marker": has_qwen_marker,
     }
 
 
@@ -166,8 +232,26 @@ def run_switchable_evaluation(
     _atomic_write_json(report_path, report)
 
     try:
+        report["failure_phase"] = "config-validation"
+        _atomic_write_json(report_path, report)
+        if not isinstance(modes, list) or len(modes) == 0:
+            raise ValueError("modes must be a non-empty list of mode specifications")
+        for idx, m_spec in enumerate(modes):
+            if not isinstance(m_spec, dict) or "name" not in m_spec or "enabled" not in m_spec:
+                raise ValueError(f"modes[{idx}] must be a dict containing 'name' and 'enabled'")
+        if not isinstance(cases, list) or len(cases) == 0:
+            raise ValueError("cases must be a non-empty list of prompt evaluation cases")
+        for idx, c_spec in enumerate(cases):
+            if not isinstance(c_spec, dict) or "id" not in c_spec or "task" not in c_spec or "prompt" not in c_spec:
+                raise ValueError(f"cases[{idx}] must be a dict containing 'id', 'task', and 'prompt'")
+        if isinstance(max_tokens, bool) or not isinstance(max_tokens, int) or max_tokens <= 0:
+            raise ValueError(f"max_tokens must be a positive integer, got {max_tokens!r}")
+        report["last_trustworthy_evidence"] = "config-validation"
+
         report["failure_phase"] = "role-validation"
         _atomic_write_json(report_path, report)
+        if base_role not in ("qwen", "bfl"):
+            raise ValueError(f"Unsupported base_role: {base_role!r}; expected 'qwen' or 'bfl'")
         if base_role == "bfl" and not allow_bfl_residual_approx:
             raise RuntimeError(
                 "base_role='bfl' retains the unextracted SVD tail residual E_R = Delta_W - Delta_W_R and "
@@ -185,6 +269,13 @@ def run_switchable_evaluation(
         report["last_trustworthy_evidence"] = "adapter-validation"
         _atomic_write_json(report_path, report)
 
+        report["failure_phase"] = "provenance-validation"
+        _atomic_write_json(report_path, report)
+        model_provenance = inspect_model_dir_provenance(model_dir, base_role=base_role)
+        report["model_provenance"] = model_provenance
+        report["last_trustworthy_evidence"] = "provenance-validation"
+        _atomic_write_json(report_path, report)
+
         report["failure_phase"] = "backend-validation"
         _atomic_write_json(report_path, report)
         import mlx.core as mx
@@ -194,9 +285,6 @@ def run_switchable_evaluation(
             raise RuntimeError("Metal is unavailable; no CPU fallback is permitted.")
         mx.set_default_device(mx.gpu)
         effective_backend = "mlx-metal"
-
-        if not (model_dir / "config.json").is_file():
-            raise RuntimeError(f"Missing model config.json in {model_dir}")
 
         prompts_file = Path(system_prompts_path) if system_prompts_path else (model_dir / "system_prompts.json")
         if not prompts_file.is_file():
@@ -253,7 +341,7 @@ def run_switchable_evaluation(
         sampling = dict(SAMPLING)
         sampling["max_tokens"] = int(max_tokens)
 
-        for mode_spec in (modes or []):
+        for mode_spec in modes:
             mode_name = mode_spec["name"]
             enabled = bool(mode_spec["enabled"])
             rank = int(mode_spec.get("rank", controller.max_rank))
@@ -265,7 +353,7 @@ def run_switchable_evaluation(
             sw_ms = round((time.monotonic() - sw_t0) * 1000.0, 3)
             bound_epoch = controller.state_epoch
 
-            for case in (cases or []):
+            for case in cases:
                 case_id = case["id"]
                 task = case["task"]
                 prompt = case["prompt"]
@@ -342,6 +430,11 @@ def run_switchable_evaluation(
                 report["last_trustworthy_evidence"] = f"generated:{mode_name}:{case_id}"
                 _atomic_write_json(report_path, report)
 
+        expected_obs_count = len(modes) * len(cases)
+        if len(report["observations"]) != expected_obs_count or expected_obs_count == 0:
+            raise RuntimeError(
+                f"Observation count mismatch: recorded={len(report['observations'])}, expected={expected_obs_count}"
+            )
         report["status"] = "complete"
         report["failure_phase"] = None
         report["elapsed_seconds"] = round(time.monotonic() - t0, 3)
@@ -374,10 +467,20 @@ def main() -> int:
     _atomic_write_json(args.report, early_report)
     try:
         cfg = json.loads(args.config.read_text())
+        if not isinstance(cfg, dict):
+            raise ValueError("Evaluation config root must be a JSON object")
         model_dir = Path(cfg["model_dir"])
         adapter_dir = Path(cfg["adapter_dir"])
         modes = cfg["modes"]
         cases = cfg["cases"]
+        base_role = str(cfg.get("base_role", "qwen"))
+        allow_bfl_residual_approx = bool(cfg.get("allow_bfl_residual_approx", False))
+        allow_partial_adapter = bool(cfg.get("allow_partial_adapter", False))
+        sys_prompts_path = Path(cfg["system_prompts_path"]) if cfg.get("system_prompts_path") else None
+        raw_max_tokens = cfg.get("max_tokens", 512)
+        if isinstance(raw_max_tokens, bool):
+            raise ValueError(f"Invalid boolean max_tokens: {raw_max_tokens!r}")
+        max_tokens = int(raw_max_tokens)
     except BaseException as exc:
         early_report["status"] = "failed"
         early_report["error"] = str(exc)
@@ -390,13 +493,13 @@ def main() -> int:
         model_dir=model_dir,
         adapter_dir=adapter_dir,
         report_path=args.report,
-        base_role=cfg.get("base_role", "qwen"),
-        allow_bfl_residual_approx=bool(cfg.get("allow_bfl_residual_approx", False)),
-        allow_partial_adapter=bool(cfg.get("allow_partial_adapter", False)),
+        base_role=base_role,
+        allow_bfl_residual_approx=allow_bfl_residual_approx,
+        allow_partial_adapter=allow_partial_adapter,
         modes=modes,
         cases=cases,
-        system_prompts_path=Path(cfg["system_prompts_path"]) if cfg.get("system_prompts_path") else None,
-        max_tokens=int(cfg.get("max_tokens", 512)),
+        system_prompts_path=sys_prompts_path,
+        max_tokens=max_tokens,
     )
     return 0
 

@@ -277,9 +277,21 @@ class TestMLXSwitchableAdapter(unittest.TestCase):
             max_diff_r4 = float(mx.max(mx.abs(out_on4.astype(mx.float32) - expected_r4.astype(mx.float32))).item())
             self.assertLess(max_diff_r4, 5e-2)
 
-            # Switch to rank 2
+            # Switch to rank 2 -> re-populate caches first and verify repeated cache clearing across transitions
+            kv_cache.keys = mx.ones((1, 4, 4, 16))
+            kv_cache.values = mx.ones((1, 4, 4, 16))
+            kv_cache.offset = 4
+            ssm_cache[0] = mx.ones((1, 3, 64))
+            ssm_cache[1] = mx.ones((1, 4, 16, 16))
+            model_bf16.language_model._position_ids = mx.ones((3, 1, 4))
+            model_bf16.language_model._rope_deltas = mx.ones((1, 1))
             res2 = ctrl_bf16.set_mode(enabled=True, rank=2)
             self.assertTrue(res2["reset_performed"])
+            self.assertEqual(kv_cache.offset, 0)
+            self.assertIsNone(ssm_cache[0])
+            self.assertIsNone(ssm_cache[1])
+            self.assertIsNone(model_bf16.language_model._position_ids)
+            self.assertIsNone(model_bf16.language_model._rope_deltas)
             out_on2 = model_bf16(input_ids)
             mx.eval(out_on2)
 
@@ -336,6 +348,10 @@ class TestMLXSwitchableAdapter(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "allow_bfl_residual_approx=True"):
                 MLXSwitchableDeltaController(model_bfl_res, adapter_dir, base_role="bfl")
+
+            # PUP-CONF-01: supplying a BFL-weighted model with base_role='qwen' must fail weight-provenance verification
+            with self.assertRaisesRegex(ValueError, "contradicting base_role='qwen'"):
+                MLXSwitchableDeltaController(model_bfl_res, adapter_dir, base_role="qwen")
 
             ctrl_bfl = MLXSwitchableDeltaController(
                 model_bfl_res, adapter_dir, base_role="bfl", allow_bfl_residual_approx=True
