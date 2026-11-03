@@ -1,5 +1,5 @@
 import {FIRE_DOMAIN_ID,FIRE_DOMAIN_TYPE} from './scene-fire-domain.mjs';
-import {allocateColliderLods,applyRootVertexWarpToRung,selectColliderTier,voxelSolidError} from './scene-lod-budget.mjs';
+import {allocateColliderLods,applyRootVertexWarpToRung,bakeRungMeshesToRootSpace,selectColliderTier,voxelSolidError} from './scene-lod-budget.mjs';
 import {readTrianglePrimitives} from './poly-glb-io.mjs';
 
 export function parseUntexturedColliderGlb(THREE,bytes) {
@@ -218,6 +218,7 @@ export function createSceneColliderCollection(THREE,{
     rungRoot.matrixAutoUpdate=false;
     rungRoot.matrix.identity();
     rungRoot.matrixWorld.identity();
+    bakeRungMeshesToRootSpace(THREE,rungRoot);
     if(typeof entry.warpFn==='function'){
       const warpRes=applyRootVertexWarpToRung(THREE,rungRoot,entry.warpFn,{bounds:entry.unwarpedBounds});
       if(warpRes.maxStretch>entry.geomStretch){
@@ -256,6 +257,21 @@ export function createSceneColliderCollection(THREE,{
       }
     })();
     pendingLoads.add(task);
+  }
+
+  function syncResidentRungsFromPeers(root,entry,handle,beautyCtrl) {
+    const effSha=handle?.effective?.sha??handle?.effective?.sha256;
+    if(effSha&&handle?.proxyRoot&&!entry.rungs.has(effSha)){
+      const levelObj=handle.levels?.find?.(l=>(l.sha??l.sha256)===effSha);
+      installRungRoot(entry,effSha,levelObj?.faces??handle.effective?.faces??0,handle.proxyRoot);
+    }
+    const residentBeauty=beautyCtrl?.listResidentRungs?.(root)??[];
+    for(const br of residentBeauty){
+      if(br?.sha&&br?.root&&!entry.rungs.has(br.sha)){
+        const levelObj=handle?.levels?.find?.(l=>(l.sha??l.sha256)===br.sha);
+        installRungRoot(entry,br.sha,br.faces??levelObj?.faces??0,br.root);
+      }
+    }
   }
 
   function ensureEntryForRoot(root,id) {
@@ -598,9 +614,113 @@ export function createSceneColliderCollection(THREE,{
     }
   }
 
+  async function resolveBurnableSurface(recordOrRoot,{mesh=null,bounds=null,grid=16,maxVoxelError=0.80}={}) {
+    const root=recordOrRoot?.object??recordOrRoot;
+    const id=recordOrRoot?.id??root?.userData?.kaminosSceneObject?.id??root?.uuid??'burnable';
+    if(!root?.isObject3D)return null;
+    const giReg=resolveGiProxies();
+    await giReg?.whenIdle?.();
+    const beautyCtrl=resolveBeautyLods();
+    const restoreBeauty=typeof root.userData?.kaminosBeautyLodRestore==='function'?root.userData.kaminosBeautyLodRestore():null;
+    let heroMesh=mesh,entry=null,handle=null,levels=null,localDiag=1,minPitch=0.01;
+    try{
+      root.updateWorldMatrix(true,true);
+      if(!heroMesh){
+        root.traverse(m=>{if(!heroMesh&&intrinsicHeroMesh(m,root))heroMesh=m;});
+      }
+      if(!heroMesh?.geometry)return null;
+      if(!bounds){
+        if(!heroMesh.geometry.boundingBox)heroMesh.geometry.computeBoundingBox?.();
+        bounds=heroMesh.geometry.boundingBox;
+      }
+      entry=ensureEntryForRoot(root,id);
+      if(!config.enabled)return {geometry:heroMesh.geometry,tier:'hero',faces:entry.heroFaces,heroFaces:entry.heroFaces,voxelError:0};
+      handle=giReg?.get?.(root)??giReg?.handleFor?.(root)??null;
+      levels=handle?.representation==='surfels'?null:handle?.levels;
+      if(!levels?.length)return {geometry:heroMesh.geometry,tier:'hero',faces:entry.heroFaces,heroFaces:entry.heroFaces,voxelError:0};
+      syncResidentRungsFromPeers(root,entry,handle,beautyCtrl);
+      const size=bounds.getSize(new THREE.Vector3());
+      localDiag=Math.hypot(size.x,size.y,size.z)||1;
+      minPitch=Math.max(1e-6,Math.min(size.x,size.y,size.z)/Math.max(1,Number(grid)||16));
+    }finally{
+      restoreBeauty?.();
+    }
+
+    for(let pass=0;pass<2;pass++){
+      const chosen=selectColliderTier(levels,{
+        heroFaces:entry.heroFaces,
+        worldDiag:localDiag,
+        voxelSize:minPitch,
+        maxVoxelError,
+        geomStretch:entry.geomStretch,
+        requireClosed:config.requireClosed,
+        stat:config.stat,
+        tailWeight:config.tailWeight,
+        creviceAllowance:config.creviceAllowance,
+        hysteresis:0,
+      });
+      const targetTier=chosen.tier;
+      if(targetTier==='hero'){
+        return {geometry:heroMesh.geometry,tier:'hero',faces:entry.heroFaces,heroFaces:entry.heroFaces,voxelError:0};
+      }
+      if(!entry.rungs.has(targetTier)){
+        const levelObj=levels.find(l=>(l.sha??l.sha256)===targetTier);
+        if(levelObj){
+          ensureRungLoaded(root,entry,levelObj);
+          while(pendingLoads.size)await Promise.all([...pendingLoads]);
+        }
+      }
+      const rungRecord=entry.rungs.get(targetTier);
+      if(!rungRecord){
+        return {geometry:heroMesh.geometry,tier:'hero',faces:entry.heroFaces,heroFaces:entry.heroFaces,voxelError:0};
+      }
+      // Re-verify if installRungRoot discovered a larger warp stretch
+      const recheck=selectColliderTier(levels,{
+        heroFaces:entry.heroFaces,
+        worldDiag:localDiag,
+        voxelSize:minPitch,
+        maxVoxelError,
+        geomStretch:entry.geomStretch,
+        requireClosed:config.requireClosed,
+        stat:config.stat,
+        tailWeight:config.tailWeight,
+        creviceAllowance:config.creviceAllowance,
+        hysteresis:0,
+      });
+      if(recheck.tier!==targetTier&&pass===0)continue;
+      let rungMesh=null;
+      rungRecord.root.traverse(rm=>{if(!rungMesh&&rm.isMesh&&rm.geometry)rungMesh=rm;});
+      if(!rungMesh)return {geometry:heroMesh.geometry,tier:'hero',faces:entry.heroFaces,heroFaces:entry.heroFaces,voxelError:0};
+      // If heroMesh has a non-identity local transform relative to root, map rungMesh.geometry into heroMesh's local space
+      root.updateWorldMatrix(true,true);
+      const invHero=new THREE.Matrix4().copy(heroMesh.matrixWorld).invert();
+      const rootToHero=new THREE.Matrix4().multiplyMatrices(invHero,root.matrixWorld);
+      const identity=new THREE.Matrix4();
+      let isIdentity=true;
+      for(let i=0;i<16;i++){
+        if(Math.abs(rootToHero.elements[i]-identity.elements[i])>1e-7){isIdentity=false;break;}
+      }
+      let geometry=rungMesh.geometry;
+      if(!isIdentity){
+        geometry=rungMesh.geometry.clone();
+        geometry.applyMatrix4(rootToHero);
+        geometry.computeBoundingBox?.();
+      }
+      return {
+        geometry,
+        tier:targetTier,
+        faces:chosen.faces,
+        heroFaces:entry.heroFaces,
+        voxelError:chosen.voxelError,
+      };
+    }
+    return {geometry:heroMesh.geometry,tier:'hero',faces:entry.heroFaces,heroFaces:entry.heroFaces,voxelError:0};
+  }
+
   return {
     update,
     resolveObstacle,
+    resolveBurnableSurface,
     clear,
     whenIdle:async()=>{while(pendingLoads.size)await Promise.all([...pendingLoads]);},
     async prepare(records,frameOptions={}) {

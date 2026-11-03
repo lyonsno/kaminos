@@ -781,6 +781,116 @@ function arrayBounds(pos) {
   return min[0] <= max[0] ? {min, max} : {min: [-0.5, -0.5, -0.5], max: [0.5, 0.5, 0.5]};
 }
 
+export function bakeRungMeshesToRootSpace(THREE, rungRoot) {
+  if (!rungRoot) return rungRoot;
+  rungRoot.updateMatrixWorld?.(true);
+  const invRung = new THREE.Matrix4().copy(rungRoot.matrixWorld).invert();
+  const meshToRoot = new THREE.Matrix4();
+  const identity = new THREE.Matrix4();
+  const seenGeometries = new Set();
+  const visit = node => {
+    if (!node) return;
+    if (
+      node !== rungRoot &&
+      (node.userData?.kaminosRepetitionCopy ||
+        node.userData?.kaminosBeautyLodProxy ||
+        node.userData?.kaminosEditorHelper ||
+        node.userData?.kaminosEditorOnly)
+    ) {
+      return;
+    }
+    if (node.isMesh && node.geometry && !seenGeometries.has(node.geometry)) {
+      seenGeometries.add(node.geometry);
+      meshToRoot.multiplyMatrices(invRung, node.matrixWorld);
+      let isIdentity = true;
+      for (let i = 0; i < 16; i++) {
+        if (Math.abs(meshToRoot.elements[i] - identity.elements[i]) > 1e-7) {
+          isIdentity = false;
+          break;
+        }
+      }
+      if (!isIdentity) {
+        node.geometry.applyMatrix4(meshToRoot);
+        node.geometry.computeBoundingBox?.();
+        node.geometry.computeBoundingSphere?.();
+        if (node.geometry.userData?.kaminosWarpBase) {
+          delete node.geometry.userData.kaminosWarpBase;
+          delete node.geometry.userData.kaminosWarpApplied;
+        }
+      }
+    }
+    for (const child of node.children ?? []) visit(child);
+  };
+  visit(rungRoot);
+  const resetNodes = node => {
+    if (!node) return;
+    if (
+      node !== rungRoot &&
+      (node.userData?.kaminosRepetitionCopy ||
+        node.userData?.kaminosBeautyLodProxy ||
+        node.userData?.kaminosEditorHelper ||
+        node.userData?.kaminosEditorOnly)
+    ) {
+      return;
+    }
+    if (node !== rungRoot) {
+      node.position.set(0, 0, 0);
+      node.quaternion.set(0, 0, 0, 1);
+      node.scale.set(1, 1, 1);
+      node.matrix.identity();
+      node.matrixWorld.copy(rungRoot.matrixWorld);
+    }
+    for (const child of node.children ?? []) resetNodes(child);
+  };
+  resetNodes(rungRoot);
+  return rungRoot;
+}
+
+export function formatLodBudgetReadout({objectId = null, beautyState = null, colliderBudget = null, burnFieldState = null} = {}) {
+  let beautyText = null;
+  if (beautyState) {
+    if (!beautyState.enabled) {
+      beautyText = 'Beauty LOD: off';
+    } else {
+      const obj = objectId ? beautyState.objects?.find(o => o.id === objectId) : null;
+      const sceneBudgetStr = Number.isFinite(beautyState.faceBudget)
+        ? `Scene ${(beautyState.totalFaces ?? 0).toLocaleString('en-US')} / ${beautyState.faceBudget.toLocaleString('en-US')} faces`
+        : `Scene ${(beautyState.totalFaces ?? 0).toLocaleString('en-US')} faces`;
+      if (obj) {
+        const tierLabel = obj.displayedTier === 'hero'
+          ? `hero (${(obj.faces ?? 0).toLocaleString('en-US')} faces${obj.pinned ? ', pinned' : ''})`
+          : `${(obj.faces ?? 0).toLocaleString('en-US')} faces (${Number(obj.pixelError ?? 0).toFixed(2)} px)`;
+        beautyText = `Beauty: ${tierLabel} · ${sceneBudgetStr}`;
+      } else {
+        beautyText = `Beauty: ${sceneBudgetStr}`;
+      }
+    }
+  }
+  let colliderText = null;
+  const colAlloc = objectId && colliderBudget?.allocations ? colliderBudget.allocations[objectId] : null;
+  if (colAlloc) {
+    const tierLabel = colAlloc.tier === 'hero'
+      ? `hero (${(colAlloc.faces ?? 0).toLocaleString('en-US')} faces)`
+      : `${(colAlloc.faces ?? 0).toLocaleString('en-US')} faces (${Number(colAlloc.voxelError ?? 0).toFixed(2)} vox)`;
+    colliderText = `Collider: ${tierLabel}`;
+  }
+  let burnText = null;
+  const burnLod = burnFieldState?.surfaceLod ?? null;
+  if (burnLod && Number.isFinite(burnLod.faces)) {
+    const tierLabel = burnLod.tier === 'hero'
+      ? `hero (${burnLod.faces.toLocaleString('en-US')} faces)`
+      : `${burnLod.faces.toLocaleString('en-US')} faces (${Number(burnLod.voxelError ?? 0).toFixed(2)} cell)`;
+    burnText = `Burn mask: ${tierLabel}`;
+  }
+  const parts = [beautyText, colliderText, burnText].filter(Boolean);
+  return {
+    beautyText,
+    colliderText,
+    burnText,
+    combinedText: parts.join(' · '),
+  };
+}
+
 export function applyRootVertexWarpToRung(THREE, rungRoot, warpFn, {bounds = null} = {}) {
   if (!rungRoot) return {ok: false, error: 'missing rungRoot', maxStretch: 1, texelStretch: 1};
   if (!rungRoot.userData) rungRoot.userData = {};
@@ -1170,6 +1280,7 @@ export function createSceneBeautyLodController({
         const bytes = await fetchBytes(url);
         if (await digest(bytes) !== sha) throw Error(`beauty LOD content mismatch for ${sha}`);
         rungRoot = await parseGlb(bytes);
+        bakeRungMeshesToRootSpace(THREE, rungRoot);
         rungRoot.traverse(m => {
           if (m.isMesh) {
             m.castShadow = true;

@@ -3191,7 +3191,7 @@ let collisionVoxelMesh=null,collisionVoxelRevision=undefined,collisionVoxelVisib
 const sceneColliderCollection=createSceneColliderCollection(THREE,{
   giProxies:()=>typeof sceneGiProxies!=='undefined'?sceneGiProxies:null,
   beautyLods:()=>typeof sceneBeautyLods!=='undefined'?sceneBeautyLods:null,
-  onRungReady:()=>window._kaminosDirty?.(),
+  onRungReady:()=>{if(typeof syncSceneLodReadout==='function')syncSceneLodReadout();window._kaminosDirty?.();},
 });
 function syncCollisionVoxelView() {
   if(!collisionVoxelVisible) {if(collisionVoxelMesh)collisionVoxelMesh.visible=false;return;}
@@ -3405,7 +3405,7 @@ import {configureAssetTextures} from './asset-texture-support.mjs';
 import {loadBrazierRoom} from './brazier-room.mjs';
 import { trellisSurfelsGLTFPlugin, configureSurfelRendering } from './trellis-surfels.mjs';
 import { createGiProxyRegistry } from './scene-gi-proxies.mjs';
-import { createSceneBeautyLodController, allocateSceneBeautyLods, allocateShadowCasterLods, allocateColliderLods, screenPixelError, selectFootprintTier, voxelSolidError, selectColliderTier } from './scene-lod-budget.mjs';
+import { createSceneBeautyLodController, allocateSceneBeautyLods, allocateShadowCasterLods, allocateColliderLods, screenPixelError, selectFootprintTier, voxelSolidError, selectColliderTier, bakeRungMeshesToRootSpace, formatLodBudgetReadout } from './scene-lod-budget.mjs';
 import { giProxySettingFor, checkedGiProxySetting, canHaveGiProxy, GI_PROXY_FACE_TIERS, giProxySettingFromControls } from './scene-gi-proxy-settings.mjs';
 // Every GLB this page loads understands TRELLIS surfel assets (trellis-surfels.mjs); other GLBs are unaffected.
 class GLTFLoader extends ThreeGLTFLoader { constructor(manager) { super(manager); this.register(trellisSurfelsGLTFPlugin(THREE)); configureAssetTextures(this,renderer,()=>new KTX2Loader(manager)); } }
@@ -4175,9 +4175,18 @@ const sceneGiProxies = createGiProxyRegistry({
 let sceneBeautyLods = null;
 window.kaminosSceneLodBudget = {
   read: () => sceneBeautyLods?.read() ?? null,
-  setSettings: patch => { const res = sceneBeautyLods?.setSettings(patch) ?? null; window._kaminosDirty?.(); return res; },
+  setSettings: patch => { const res = sceneBeautyLods?.setSettings(patch) ?? null; if (typeof syncSceneLodReadout === 'function') syncSceneLodReadout(); window._kaminosDirty?.(); return res; },
   state: () => sceneBeautyLods?.state() ?? null,
   colliderState: () => sceneColliderCollection.state(),
+  summary: (objectId = workingScene?.activeObjectId) => {
+    const burnState = objectId ? (sceneBurning?.read(objectId)?.state?.fields?.[0] ?? null) : null;
+    return formatLodBudgetReadout({
+      objectId,
+      beautyState: sceneBeautyLods?.state(),
+      colliderBudget: sceneColliderCollection.state()?.lodBudget,
+      burnFieldState: burnState,
+    });
+  },
   update: () => sceneBeautyLods?.update(camera, currentBeautyFrameOptions()) ?? null,
   whenIdle: () => Promise.all([sceneBeautyLods?.whenIdle() ?? Promise.resolve(), sceneColliderCollection.whenIdle()]),
   allocateBeauty: allocateSceneBeautyLods,
@@ -4187,6 +4196,8 @@ window.kaminosSceneLodBudget = {
   selectFootprintTier,
   voxelSolidError,
   selectColliderTier,
+  bakeRungMeshesToRootSpace,
+  formatLodBudgetReadout,
 };
 window.kaminosGiProxies = {
   handleFor: root => sceneGiProxies.get(root),
@@ -11428,7 +11439,7 @@ async function initScene() {
     giProxies: sceneGiProxies,
     surfaceLighting: { registerProxyRoot: root => window.__kaminosSurfaceLighting?.registerProxyRoot?.(root) ?? null },
     parseGlb: async bytes => (await new GLTFLoader().parseAsync(bytes, '')).scene,
-    onUpdate: () => window._kaminosDirty?.(),
+    onUpdate: () => { if (typeof syncSceneLodReadout === 'function') syncSceneLodReadout(); window._kaminosDirty?.(); },
   });
   const borrowViewportAndBeautyVisibility = () => {
     const restoreVis = borrowViewportVisibility(viewportVisibilityObjects(), isSceneItemVisible);
@@ -12087,6 +12098,7 @@ async function initScene() {
           matched:document.getElementById('rendering-match-flame-camera').checked,physical:volumePrototype.emissiveCameraState()});
       } else renderPipeline.render();
     })));
+    if (typeof syncSceneLodReadout === 'function') syncSceneLodReadout();
     // Copy the surface records this frame's step wrote; queue order puts the
     // copy after the step.
     if (waterProxy && proxySnapshots.wanted('water')) waterProxy.producer.tick();
@@ -25960,10 +25972,28 @@ async function importSceneMesh(file,{generation:origin=null,label=null,assetOrig
 const meshDataTargets=new Set();
 const colliderEditTargets=new Set();
 const burnableEditTargets=new Set();
+function syncSceneLodReadout(){
+  const statusEl=document.getElementById('object-lod-budget-status');
+  const enabledEl=document.getElementById('scene-beauty-lod-enabled');
+  const budgetEl=document.getElementById('scene-beauty-lod-budget');
+  const beautySettings=sceneBeautyLods?.read?.();
+  if(enabledEl&&beautySettings)enabledEl.checked=beautySettings.enabled!==false;
+  if(budgetEl&&beautySettings&&document.activeElement!==budgetEl){
+    budgetEl.value=Number.isFinite(beautySettings.faceBudget)?String(beautySettings.faceBudget):'150000';
+    budgetEl.disabled=beautySettings.enabled===false;
+  }
+  if(!statusEl)return;
+  const entry=selectedSceneObjectEntry();
+  if(!entry||!canHaveGiProxy(entry)){if(statusEl.textContent!=='')statusEl.textContent='';return;}
+  const burnState=sceneBurning?.read(entry.id)?.state?.fields?.[0]??null;
+  const readout=formatLodBudgetReadout({objectId:entry.id,beautyState:sceneBeautyLods?.state(),colliderBudget:sceneColliderCollection?.state()?.lodBudget,burnFieldState:burnState});
+  if(statusEl.textContent!==readout.combinedText)statusEl.textContent=readout.combinedText;
+}
 function syncBurnableStatus(){
   const output=document.getElementById('object-burnable-status');if(!output||document.getElementById('object-burnable')?.disabled)return;
   const state=sceneBurning?.read(workingScene.activeObjectId),text=state?.error??(state?.status==='waiting-for-fire'?'Waiting for fire':'');
   if(output.textContent!==text)output.textContent=text;
+  syncSceneLodReadout();
 }
 function writeObjectBurnable(id,value){
   const entry=workingScene.objects.find(row=>row.id===id)||workingScene.retained(id);
@@ -26067,7 +26097,8 @@ function syncSceneDataInspector() {
       document.getElementById('object-gi-proxy-status').textContent=!setting.enabled?`Off: no GI proxy is held for this object.${unused}`
         :!h||h.state==='resolving'?'Loading the GI proxy…':h.state==='loaded'?`${consumers.length?'Using':'Holding'} the ${h.effective.faces}-face tier${h.error?.relative?.p95!=null?`, p95 error ${(h.error.relative.p95*100).toFixed(2)}% of its size`:''}.${unused}`
         :h.state==='no-tiers'?(h.reason?`No GI proxy: ${h.reason}.`:'No stored tiers for this mesh.'):h.state==='not-generated'?'Only generated meshes have stored GI tiers.'
-        :h.state==='failed'?`GI proxy failed: ${h.failure}`:'';}}
+        :h.state==='failed'?`GI proxy failed: ${h.failure}`:'';
+      syncSceneLodReadout();}}
   const choice=document.getElementById('object-parent');choice.replaceChildren(...[['','None'],...workingScene.groups.map(g=>[g.id,g.label])].map(([id,label])=>{const option=document.createElement('option');option.value=id;option.textContent=label;return option;}));choice.value=entry?.groupId||'';
   if(!primitive.hidden){
     document.getElementById('geometry-kind').textContent=entry.geometry.kind;
@@ -26281,16 +26312,22 @@ function installSceneConstruction() {
     if(type==='number'){const scrub=installRelativeNumberDrag({input,grip,step});edits.subscribe(()=>{if(!edits.state().active)scrub.stop();});input.addEventListener('blur',syncSceneDataInspector);}
   }
   sceneBurning=createSceneBurning({objects:()=>workingScene.objects,retained:()=>[...workingScene.retainedObjects(),...workingScene.suspendedObjects()],runtime:()=>activeSceneComposition?volumePrototype:null,
-    createGas:createLogGasSourceGpu,createBody:entry=>createSceneBurnBody({entry,renderer,scene,document,kelvinPerHeat:()=>Number(document.getElementById('volume-physical-kelvin-per-heat').value),ground:()=>({center:[groundPlane.position.x,groundPlane.position.y,groundPlane.position.z],height:groundPlane.position.y,radius:5,visible:groundPlane.visible}),onFrame:workbenchSceneFrames.onFrame}),
+    createGas:createLogGasSourceGpu,createBody:entry=>createSceneBurnBody({entry,renderer,scene,document,kelvinPerHeat:()=>Number(document.getElementById('volume-physical-kelvin-per-heat').value),ground:()=>({center:[groundPlane.position.x,groundPlane.position.y,groundPlane.position.z],height:groundPlane.position.y,radius:5,visible:groundPlane.visible}),onFrame:workbenchSceneFrames.onFrame,beautyLods:()=>sceneBeautyLods,resolveSurfaceGeometry:(e,opts)=>sceneColliderCollection.resolveBurnableSurface(e,opts)}),
     onError:error=>{setInfo('Combustion: '+error.message);console.error('Scene combustion',error);},dirty:()=>window._kaminosDirty?.()});
   workbenchSceneFrames.onFrame(()=>void sceneBurning.sync().then(syncBurnableStatus));
-  // Render: the object's GI proxy (scene-gi-proxy-settings.mjs), on or off and which stored tier.
+  // Render: the object's GI proxy (scene-gi-proxy-settings.mjs), on or off and which stored tier, plus live stunt-double LOD readout.
   const renderPanel=document.createElement('section');renderPanel.id='selected-render-properties';renderPanel.hidden=true;
   renderPanel.innerHTML='<h3>Render</h3><label class="slider-row"><span class="slider-label">GI proxy</span><input id="object-gi-proxy" type="checkbox"></label>'
     +'<label class="slider-row"><span class="slider-label">Proxy detail</span><select id="object-gi-proxy-detail">'+GI_PROXY_FACE_TIERS.map(f=>`<option value="faces:${f}">${f} faces</option>`).join('')+'<option value="error">By error</option></select></label>'
     +'<label class="slider-row"><span class="slider-label">Max error</span><input id="object-gi-proxy-error" type="number" min="0" step="0.001" value="0.005"></label>'
-    +'<p id="object-gi-proxy-status" class="flame-scope"></p>';
+    +'<p id="object-gi-proxy-status" class="flame-scope"></p>'
+    +'<label class="slider-row"><span class="slider-label">Auto beauty LOD</span><input id="scene-beauty-lod-enabled" type="checkbox" checked></label>'
+    +'<label class="slider-row"><span class="slider-label">Scene face budget</span><input id="scene-beauty-lod-budget" class="transform-input" type="number" min="500" step="5000" value="150000"></label>'
+    +'<p id="object-lod-budget-status" class="flame-scope"></p>';
   collisionPanel.after(renderPanel);scenePlacementTools.addHistoryScope(renderPanel);
+  const beautyLodEnabledInput=document.getElementById('scene-beauty-lod-enabled'),beautyLodBudgetInput=document.getElementById('scene-beauty-lod-budget');
+  beautyLodEnabledInput?.addEventListener('change',()=>{window.kaminosSceneLodBudget?.setSettings({enabled:beautyLodEnabledInput.checked});});
+  for(const ev of ['input','change'])beautyLodBudgetInput?.addEventListener(ev,()=>{const val=Number(beautyLodBudgetInput.value);if(Number.isFinite(val)&&val>=500)window.kaminosSceneLodBudget?.setSettings({faceBudget:val});});
   const giProxyInput=document.getElementById('object-gi-proxy'),giProxyDetail=document.getElementById('object-gi-proxy-detail'),giProxyError=document.getElementById('object-gi-proxy-error');
   const giProxyControlValue=()=>giProxySettingFromControls({enabled:giProxyInput.checked,detail:giProxyDetail.value,maxError:giProxyError.value},selectedSceneObjectEntry()?.giProxy);
   // input as well as change: Enter commits a typed value before change fires (scene-control-history.mjs).

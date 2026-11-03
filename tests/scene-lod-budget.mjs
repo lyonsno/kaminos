@@ -1708,6 +1708,113 @@ test('solid collider LOD selection and budget allocation: voxelSolidError, selec
   assert.equal(allocTight.allocations.kiln.faces, 25000, 'tight budget preserves the kiln at 25,000 faces (total 28,000 <= 28,000)');
 });
 
+test('bakeRungMeshesToRootSpace aligns Z-up GLB node transforms to hero local bounds, resolveBurnableSurface selects cell-matched thermal stunt-double geometry, and formatLodBudgetReadout formats live inspector status', async () => {
+  const mod = await import('../scene-lod-budget.mjs');
+  const {createSceneColliderCollection} = await import('../scene-collider.mjs');
+  const {createLogSurfaceMask} = await import('../live-log-surface-mask.mjs');
+  const {LIVE_LOG_GRID} = await import('../live-log-heat-core.mjs');
+
+  assert.equal(typeof mod.bakeRungMeshesToRootSpace, 'function', 'scene-lod-budget exports bakeRungMeshesToRootSpace');
+  assert.equal(typeof mod.formatLodBudgetReadout, 'function', 'scene-lod-budget exports formatLodBudgetReadout');
+
+  // 1. Test bakeRungMeshesToRootSpace on a rung whose GLB node has a -90 deg X rotation (Z-up -> Y-up)
+  // Hero mesh has identity transform and Y-up bounds [-0.5, -0.125, -0.2] .. [0.5, 0.125, 0.2]
+  const heroRoot = new THREE.Group();
+  const heroMesh = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.25, 0.4, 8, 8, 8), new THREE.MeshStandardMaterial());
+  heroRoot.add(heroMesh);
+  heroMesh.geometry.computeBoundingBox();
+  const heroBounds = heroMesh.geometry.boundingBox;
+
+  // Rung mesh in Z-up before -90 deg X node rotation: size is (1.0, 0.4, 0.25) so after RotateX(-90deg) (y' = z, z' = -y) it matches (1.0, 0.25, 0.4)
+  const rungRoot = new THREE.Group();
+  const rungMesh = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.4, 0.25, 1, 1, 1), new THREE.MeshStandardMaterial());
+  rungMesh.rotation.x = -Math.PI / 2;
+  rungMesh.updateMatrix();
+  rungRoot.add(rungMesh);
+
+  mod.bakeRungMeshesToRootSpace(THREE, rungRoot);
+  rungMesh.geometry.computeBoundingBox();
+  assert.ok(Math.abs(rungMesh.rotation.x) < 1e-9, 'bakeRungMeshesToRootSpace resets node rotation to identity');
+  assert.ok(Math.abs(rungMesh.geometry.boundingBox.min.y - heroBounds.min.y) < 1e-6, 'baked rung geometry Y min matches hero bounds');
+  assert.ok(Math.abs(rungMesh.geometry.boundingBox.max.z - heroBounds.max.z) < 1e-6, 'baked rung geometry Z max matches hero bounds');
+
+  const heroMask = createLogSurfaceMask(heroMesh.geometry, heroBounds, LIVE_LOG_GRID, {filled: true});
+  const rungMask = createLogSurfaceMask(rungMesh.geometry, heroBounds, LIVE_LOG_GRID, {filled: true});
+  assert.deepEqual(Array.from(rungMask), Array.from(heroMask), 'baked 12-face rung produces 100% identical 16^3 filled thermal mask to 384-face hero');
+
+  // 2. Test sceneColliderCollection.resolveBurnableSurface on a stockroom-like beam with -90 deg X node transform in its 500-face GLB
+  const BEAM_HERO = '7be0be28'.padEnd(64, 'a');
+  const BEAM_500 = '7208b932'.padEnd(64, 'b');
+  heroRoot.userData.kaminosSceneObject = {id: 'beam', type: 'glb', source: `/api/read?root=generated-meshes&path=${BEAM_HERO}.glb`};
+  const giProxies = createGiProxyRegistry({
+    THREE,
+    fetchJson: async () => ({
+      schema: 'kaminos.lod-set.v0',
+      source: BEAM_HERO,
+      levels: [
+        {sha256: BEAM_500, faces: 500, closed: true, source: `/api/read?root=generated-meshes&path=${BEAM_500}.glb`, error: {diagonal: 1.107, relative: {p95: 0.001645, max: 0.0139}, levelToSource: {p95: 0.00164, max: 0.0146}, sourceToLevel: {p95: 0.00185, max: 0.0086}}},
+      ],
+      choice: null,
+      withinBudget: true,
+    }),
+    fetchBytes: async () => new Uint8Array([1, 2, 3]).buffer,
+    digest: async () => BEAM_500,
+    parseGlb: async () => {
+      const g = new THREE.Group();
+      const m = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.4, 0.25, 1, 1, 1), new THREE.MeshStandardMaterial());
+      m.rotation.x = -Math.PI / 2;
+      m.updateMatrix();
+      g.add(m);
+      return g;
+    },
+  });
+  await giProxies.attach(heroRoot);
+
+  const colliders = createSceneColliderCollection(THREE, {
+    giProxies,
+    fetchBytes: async () => new Uint8Array([1, 2, 3]).buffer,
+    digest: async () => BEAM_500,
+    parseGlb: async () => {
+      const g = new THREE.Group();
+      const m = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.4, 0.25, 1, 1, 1), new THREE.MeshStandardMaterial());
+      m.rotation.x = -Math.PI / 2;
+      m.updateMatrix();
+      g.add(m);
+      return g;
+    },
+  });
+  assert.equal(typeof colliders.resolveBurnableSurface, 'function', 'sceneColliderCollection exports resolveBurnableSurface');
+  const resolved = await colliders.resolveBurnableSurface({id: 'beam', object: heroRoot}, {mesh: heroMesh, bounds: heroBounds, grid: LIVE_LOG_GRID});
+  assert.equal(resolved.tier, BEAM_500, 'resolveBurnableSurface selects the 500-face closed stunt-double tier');
+  assert.equal(resolved.faces, 500);
+  const resolvedMask = createLogSurfaceMask(resolved.geometry, heroBounds, LIVE_LOG_GRID, {filled: true});
+  assert.deepEqual(Array.from(resolvedMask), Array.from(heroMask), 'resolved burnable stunt-double geometry produces 100% identical thermal mask');
+
+  // 3. Test formatLodBudgetReadout
+  const readout = mod.formatLodBudgetReadout({
+    objectId: 'beam',
+    beautyState: {
+      enabled: true,
+      totalFaces: 10500,
+      faceBudget: 150000,
+      objects: [{id: 'beam', displayedTier: BEAM_500, faces: 500, pixelError: 0.42, pinned: false}],
+    },
+    colliderBudget: {
+      totalFaces: 5500,
+      colliderFaceBudget: 50000,
+      allocations: {beam: {tier: BEAM_500, faces: 500, voxelError: 0.055}},
+    },
+    burnFieldState: {
+      surfaceLod: {tier: BEAM_500, faces: 500, heroFaces: 97670, voxelError: 0.114},
+    },
+  });
+  assert.match(readout.beautyText, /Beauty: 500 faces.*0\.42 px.*10,500 \/ 150,000/);
+  assert.match(readout.colliderText, /Collider: 500 faces.*0\.06 vox/);
+  assert.match(readout.burnText, /Burn mask: 500 faces.*0\.11 cell/);
+  assert.match(readout.combinedText, /Beauty: 500 faces.*Collider: 500 faces.*Burn mask: 500 faces/);
+});
+
+
 
 
 
