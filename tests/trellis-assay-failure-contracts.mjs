@@ -1,7 +1,16 @@
 // kaminos-test: node
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs/promises';import path from 'node:path';import os from 'node:os';import net from 'node:net';import {spawn,execFileSync}from 'node:child_process';import {createHash}from 'node:crypto';import {fileURLToPath}from 'node:url';
-const repo=process.env.TRELLIS_ASSAY_REPO_ROOT??path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const sourceRepo=process.env.TRELLIS_ASSAY_REPO_ROOT??path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const root=await fs.mkdtemp(path.join(process.env.TRELLIS_ASSAY_NEGATIVE_OUTPUT??os.tmpdir(),'trellis-assay-negative-'));
+// Other suite entries mutate their checkout while running. Execute the actual
+// admitted SHA in a clean sparse snapshot; never relax the production guard.
+const revision=execFileSync('git',['rev-parse','HEAD'],{cwd:sourceRepo,encoding:'utf8'}).trim(),repo=path.join(root,'source');
+execFileSync('git',['clone','--quiet','--shared','--no-checkout',sourceRepo,repo]);
+execFileSync('git',['sparse-checkout','init','--no-cone'],{cwd:repo});
+const files=execFileSync('git',['ls-tree','-r','--name-only',revision],{cwd:sourceRepo,encoding:'utf8'}).trim().split('\n').filter(f=>f.endsWith('.py')||['.gitignore','finger-fluid-browser-launch.mjs','tools/trellis-frame-yield-assay.mjs','models/trellis2/frame-yield-checks.js'].includes(f));
+await fs.writeFile(path.join(repo,'.git/info/sparse-checkout'),files.map(f=>'/'+f).join('\n')+'\n');
+execFileSync('git',['checkout','--quiet','--detach',revision],{cwd:repo});
+await fs.writeFile(path.join(root,'fixture-source.json'),JSON.stringify({sourceRepo,revision,repo,files},null,2));
 const sha=b=>createHash('sha256').update(b).digest('hex');const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function port(){const server=net.createServer();await new Promise(r=>server.listen(0,'127.0.0.1',r));const p=server.address().port;await new Promise(r=>server.close(r));return p;}
 async function config(name){const dir=path.join(root,name);await fs.mkdir(dir);const fixture=path.join(dir,'fixture');await fs.mkdir(fixture);await fs.writeFile(path.join(fixture,'manifest.json'),'{}');const chrome=path.join(dir,'chrome-headless-shell');await fs.writeFile(chrome,'non-executable browser launch fixture\n',{mode:0o600});const cfg={repoRoot:repo,expectedCommit:execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),output:path.join(dir,'output'),fixtureRoots:{block:fixture},fixtureManifestHashes:{block:sha('{}')},chrome,python:process.env.KAMINOS_TEST_PYTHON??'python3',port:await port(),debugPort:await port()};const file=path.join(dir,'config.json');await fs.writeFile(file,JSON.stringify(cfg));return {cfg,file,dir};}
