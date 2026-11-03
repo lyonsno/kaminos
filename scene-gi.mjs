@@ -1,5 +1,5 @@
 import { DataUtils } from 'three/webgpu';
-import { Fn, pass, mrt, output, normalView, positionViewDirection, diffuseColor, metalness, context, builtinAOContext, texture, screenUV, vec3, vec4, float, mix, uniform, convertToTexture } from 'three/tsl';
+import { Fn, pass, mrt, output, normalView, positionViewDirection, diffuseColor, metalness, roughness, context, builtinAOContext, texture, screenUV, vec2, vec3, vec4, float, mix, uniform, convertToTexture } from 'three/tsl';
 import { ssgi } from './lib/addons/tsl/display/SSGINode.js';
 import SceneGIHistory from './scene-gi-history.mjs';
 import SceneLightingFilter from './scene-lighting-filter.mjs';
@@ -47,6 +47,10 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
   let settings = resolveSceneGISettings();
   let estimator = resolveSceneGIEstimatorSettings();
   const gain = uniform(settings.gain), viewMode = uniform(0,'int');
+  const opticalFinish = { floorReflection: 0.28, glintStrength: 0, glintThreshold: 1.35 };
+  const floorContactReflection = uniform(opticalFinish.floorReflection);
+  const glintStrength = uniform(opticalFinish.glintStrength);
+  const glintThreshold = uniform(opticalFinish.glintThreshold);
   // Different scheduling graphs make Off an actual bypass. Keep compiled routes
   // alive across toggles because Three bindings can still reference their RTs.
   const routes = new Map();
@@ -97,7 +101,15 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
     // Keeping this node when an emission attachment is added preserves GI.
     const receivingOutput=Fn(([],{material})=>{
       const diffuseReceiver=diffuseColor.rgb.mul(metalness.oneMinus());
-      const received=sceneGIReceives(material)?irradianceOverPi.mul(diffuseReceiver).mul(contactBounceGuard).mul(receiveWeight(material)):vec3(0);
+      const isCycloramaFloor=Boolean(material?.userData?.kaminosCycloramaFloor);
+      const smoothness=float(1).sub(roughness).clamp(0,1);
+      const ndotv=normalView.dot(positionViewDirection).abs().clamp(0,1);
+      const fresnel=float(0.18).add(float(0.82).mul(float(1).sub(ndotv).pow(3)));
+      const contactProximity=mix(float(0.55),float(1.4),float(1).sub(rawVisibility).clamp(0,1));
+      const floorContact=isCycloramaFloor
+        ?irradianceOverPi.mul(floorContactReflection).mul(smoothness.mul(smoothness)).mul(fresnel).mul(contactProximity)
+        :vec3(0);
+      const received=sceneGIReceives(material)?irradianceOverPi.mul(diffuseReceiver).mul(contactBounceGuard).add(floorContact).mul(receiveWeight(material)):vec3(0);
       return mix(vec4(output.rgb.add(received),output.a),vec4(received.mul(output.a),1),float(viewMode.equal(2)));
     })();
     beauty.setMRT(mrt({output:receivingOutput}));
@@ -111,7 +123,21 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
     const surface=texture(depth.value,screenUV).r.lessThan(1);
     const receivedView=vec4(beauty.rgb.mul(surface),1);
     const incomingView=vec4(irradianceOverPi.mul(surface),1);
-    const displayedOutput=mix(mix(mix(beauty,aoView,float(viewMode.equal(1))),receivedView,float(viewMode.equal(2))),incomingView,float(viewMode.equal(3)));
+    const beautyTex=beauty.getTextureNode('output');
+    const highlightExcess=uv=>{
+      const sampleRgb=beautyTex.sample(uv.clamp(0.001,0.999)).rgb;
+      const peak=sampleRgb.max(vec3(0)).sub(glintThreshold).max(vec3(0));
+      return peak.div(float(1).add(peak.mul(float(0.35))));
+    };
+    const glintHalo=highlightExcess(screenUV.add(vec2(0.0022,0.0014)))
+      .add(highlightExcess(screenUV.add(vec2(-0.0022,-0.0014))))
+      .add(highlightExcess(screenUV.add(vec2(-0.0014,0.0022))))
+      .add(highlightExcess(screenUV.add(vec2(0.0014,-0.0022))))
+      .mul(float(0.25))
+      .mul(glintStrength)
+      .mul(surface);
+    const beautyWithGlint=vec4(beauty.rgb.add(glintHalo),beauty.a);
+    const displayedOutput=mix(mix(mix(beautyWithGlint,aoView,float(viewMode.equal(1))),receivedView,float(viewMode.equal(2))),incomingView,float(viewMode.equal(3)));
     const displayed=comparison?mix(displayedOutput,comparison.inputs.enabled.select(comparison.inputs.beauty,source.getTextureNode('output')),float(comparison.showSource)):displayedOutput;
     const result={beauty,output:displayed};routes.set(key,result);return result;
   }
@@ -164,6 +190,21 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
       for(const pair of filters.values())for(const {filter} of [pair.ao,pair.gi])for(const key of ['depthPhi','normalPhi','lumaPhi'])filter[key].value=next[key];
       estimator = next;
     },
+    setOpticalFinish(value = {}) {
+      if (Number.isFinite(value.floorReflection) && value.floorReflection >= 0) {
+        opticalFinish.floorReflection = value.floorReflection;
+        floorContactReflection.value = value.floorReflection;
+      }
+      if (Number.isFinite(value.glintStrength) && value.glintStrength >= 0) {
+        opticalFinish.glintStrength = value.glintStrength;
+        glintStrength.value = value.glintStrength;
+      }
+      if (Number.isFinite(value.glintThreshold) && value.glintThreshold > 0) {
+        opticalFinish.glintThreshold = value.glintThreshold;
+        glintThreshold.value = value.glintThreshold;
+      }
+      return { ...opticalFinish };
+    },
     requestHistoryFrames(){if(settings.mode==='combined'&&settings.temporal)history.requestFrames();},
     needsHistoryFrame:()=>settings.mode==='combined'&&settings.temporal&&history.needsFrame(),
     historyStatus:()=>settings.mode==='combined'&&settings.temporal&&settings.temporalRefine?history.state():null,
@@ -193,6 +234,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
       sourcePasses:1+(comparison?.read().additionalSourcePasses??0),sourceComparison:comparison?.read()??null,receivingPasses:1,sourceSamples:source.renderTarget.samples,receivingSamples:route().beauty.renderTarget.samples,
       filtering:settings.denoise>0,filterImplementation,filterFrames:filterImplementation==='shared'?{ao:filters.get(filterKey(settings.temporal))?.shared.frames??0,gi:filters.get(filterKey(settings.temporal))?.shared.frames??0}: {...filterFrames},
       surfaceLighting:surfaceLighting.state(),
+      opticalFinish:{...opticalFinish},
       standaloneGTAO:false,format:'rgba16float',gainSemantics:'artistic-relative-estimator-gain',
       viewSemantics:settings.view==='gi'?'material-weighted-added-diffuse-radiance':settings.view==='incoming'?'incoming-irradiance-over-pi':settings.view}),
   };

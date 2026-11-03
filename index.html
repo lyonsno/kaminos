@@ -257,6 +257,18 @@ canvas { display: block; }
 #env-loading { position: absolute; top: 12px; left: 12px; max-width: calc(100% - 24px); box-sizing: border-box; padding: 6px 9px; border-radius: 4px; background: #181818cc; color: #ddd; font-size: 12px; font-family: 'SF Mono', monospace; pointer-events: none; }
 
 #authoring-viewport-tools #env-loading { position: static; max-width: 100%; padding: 3px 6px; font-size: 10px; }
+#viewport-studio-look-pill { display: inline-flex; align-items: center; gap: 5px; margin-left: 4px; padding: 1px 7px; border: 1px solid #393d46; border-radius: 999px; background: #202329; font-size: 10px !important; color: #b8c0cc; line-height: 1; }
+#viewport-studio-look-pill select { background: transparent; color: #e6ebf2; border: 0; padding: 2px 1px; font-size: 10px; cursor: pointer; outline: none; }
+#loading-telemetry-pill { position: absolute; top: 74px; left: 50%; transform: translateX(-50%); z-index: 40; display: flex; flex-direction: column; gap: 4px; min-width: 240px; max-width: min(520px, calc(100% - 32px)); padding: 6px 14px; border-radius: 999px; background: rgba(18, 21, 27, 0.92); backdrop-filter: blur(8px); border: 1px solid rgba(110, 145, 195, 0.42); color: #eef3fb; font: 10.5px/1.35 'SF Mono', 'Fira Code', monospace; pointer-events: none; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.48); }
+#loading-telemetry-text { color: #eef3fb !important; font-weight: 500; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#loading-telemetry-pill[hidden] { display: none !important; }
+#loading-telemetry-pill[data-stalled="true"] { border-color: rgba(240, 168, 68, 0.85); background: rgba(38, 26, 14, 0.94); color: #ffd494; }
+#loading-telemetry-pill[data-stalled="true"] #loading-telemetry-text { color: #ffd494 !important; }
+#loading-telemetry-pill[data-failed="true"] { border-color: rgba(235, 95, 95, 0.85); background: rgba(42, 18, 18, 0.94); color: #ffb8b8; }
+#loading-telemetry-pill[data-failed="true"] #loading-telemetry-text { color: #ffb8b8 !important; }
+#loading-telemetry-track { width: 100%; height: 2px; border-radius: 2px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+#loading-telemetry-bar { width: 25%; height: 100%; background: #6ea8fe; transition: width 0.12s ease-out; }
+#loading-telemetry-pill[data-stalled="true"] #loading-telemetry-bar { background: #f0a844; }
 
 /* Exposure slider */
 .slider-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; user-select: none; -webkit-user-select: none; }
@@ -2592,6 +2604,10 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div id="volume-stage-b-producer-label"></div>
   </div>
   <div id="env-loading">Loading environment...</div>
+  <div id="loading-telemetry-pill" role="status" aria-live="polite" hidden>
+    <span id="loading-telemetry-text"></span>
+    <div id="loading-telemetry-track"><div id="loading-telemetry-bar"></div></div>
+  </div>
   <div id="hybrid-splat-overlay-host" aria-hidden="true"></div>
   <div id="hybrid-splat-viewport-controls" hidden>
     <div class="hybrid-splat-viewport-actions">
@@ -3417,7 +3433,7 @@ import {createSceneBurnBody,originalBurnMaterial} from './scene-burn-body.mjs';
 import {createLogGasSourceGpu} from './live-log-gas-source.mjs';
 import { installSceneNavigation } from './scene-navigation.mjs';
 import { frameBox, frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
-import { DEFAULT_STUDIO_LOOK_ID, STUDIO_LOOK_LIBRARY, appendArrivalPivot, arrivalObstacleBoxes, assetArrivalFramingWindow, chooseAppendAnchor, computeAssetArrivalFraming, computeAssetArrivalPlacement, inspectArrivalMaterialProfile, planArrivalStudioLights, resolveAssetArrivalMode, resolveStudioLook } from './asset-arrival.mjs';
+import { DEFAULT_STUDIO_LOOK_ID, STUDIO_LOOK_LIBRARY, appendArrivalPivot, arrivalObstacleBoxes, assetArrivalFramingWindow, chooseAppendAnchor, computeAssetArrivalFraming, computeAssetArrivalPlacement, createLoadingTelemetryTracker, inspectArrivalMaterialProfile, planArrivalStudioLights, prepareArrivedMeshMaterials, resolveAssetArrivalMode, resolveStudioLook, resolveStudioLookFromSearch } from './asset-arrival.mjs';
 import { promptForFileName, sanitizeFileStem } from './scene-file-names.mjs';
 import { exportCloneInWorld } from './scene-export.mjs';
 import { pickSavedScene } from './scene-load-picker.mjs';
@@ -3708,6 +3724,7 @@ window.kaminosViewportSettings={
 };
 
 let scenePlacementTools = null;
+let sceneGI = null;
 let polyEdit = null, viewProjection = null;
 let sceneControlHistory = null;
 const authoringControlSessions = [];
@@ -10631,9 +10648,70 @@ const environmentLoader = createEnvironmentLoader({
     el.textContent = state.pending
       ? `${label} · ${state.quality === 'preview' ? 'preview lighting · full detail loading…' : 'lighting loading…'}`
       : `${label} · ${state.quality === 'preview' ? 'preview lighting' : 'neutral fallback'} · full map unavailable; select environment to retry`;
+    if (typeof loadingTelemetry !== 'undefined') {
+      if (state.pending) {
+        loadingTelemetry.progress('environment', { label: `${label} HDR`, phase: 'environment-hdr' });
+      } else {
+        loadingTelemetry.complete('environment');
+      }
+    }
   },
 });
 window.kaminosEnvironmentLoading = {state: environmentLoader.read, whenSettled: environmentLoader.whenSettled};
+
+let loadingTelemetryHideTimer = null;
+let loadingTelemetryTickInterval = null;
+const loadingTelemetry = createLoadingTelemetryTracker({
+  stallThresholdMs: 5000,
+  onChange(state) {
+    const pill = document.getElementById('loading-telemetry-pill');
+    const textEl = document.getElementById('loading-telemetry-text');
+    const barEl = document.getElementById('loading-telemetry-bar');
+    if (!pill || !textEl || !barEl) return;
+    if (state.active) {
+      if (loadingTelemetryHideTimer) {
+        clearTimeout(loadingTelemetryHideTimer);
+        loadingTelemetryHideTimer = null;
+      }
+      pill.hidden = false;
+      pill.dataset.stalled = String(Boolean(state.stalled));
+      pill.dataset.failed = 'false';
+      textEl.textContent = state.summary;
+      const ratio = state.primary?.progressRatio;
+      barEl.style.width = ratio !== null && ratio !== undefined ? `${Math.max(6, Math.round(ratio * 100))}%` : '35%';
+      if (!loadingTelemetryTickInterval) {
+        loadingTelemetryTickInterval = setInterval(() => {
+          if (!loadingTelemetry.read().active) {
+            clearInterval(loadingTelemetryTickInterval);
+            loadingTelemetryTickInterval = null;
+            return;
+          }
+          loadingTelemetry.tick();
+        }, 250);
+      }
+    } else if (state.lastFailed) {
+      pill.hidden = false;
+      pill.dataset.stalled = 'false';
+      pill.dataset.failed = 'true';
+      textEl.textContent = state.summary;
+      barEl.style.width = '100%';
+    } else if (state.lastCompleted) {
+      pill.dataset.stalled = 'false';
+      pill.dataset.failed = 'false';
+      textEl.textContent = `✓ Loaded ${state.lastCompleted.label} (${(state.lastCompleted.durationMs / 1000).toFixed(1)}s)`;
+      barEl.style.width = '100%';
+      if (!loadingTelemetryHideTimer) {
+        loadingTelemetryHideTimer = setTimeout(() => {
+          pill.hidden = true;
+          loadingTelemetryHideTimer = null;
+        }, 900);
+      }
+    } else {
+      pill.hidden = true;
+    }
+  },
+});
+window.kaminosLoadingTelemetry = loadingTelemetry;
 
 // --- Three.js Setup ---
 let samHostContext = null;
@@ -11255,6 +11333,7 @@ async function initScene() {
   groundMat.blendSrcAlpha = THREE.OneFactor;
   groundMat.blendDstAlpha = THREE.OneMinusSrcAlphaFactor;
   groundMat.opacityNode = THREE.TSL.smoothstep(THREE.TSL.float(5.0), THREE.TSL.float(1.65), THREE.TSL.positionLocal.xy.length());
+  groundMat.userData = { ...groundMat.userData, kaminosCycloramaFloor: true };
   groundPlane = new THREE.Mesh(groundGeo, groundMat);
   groundPlane.rotation.x = -Math.PI / 2;
   groundPlane.position.y = -0.85;
@@ -11391,7 +11470,8 @@ async function initScene() {
     float(1).add(aoIntensity.sub(1).max(0).mul(float(1).sub(aoVisibility))));
   scenePass.contextNode = builtinAOContext(aoOutput);
   const lightingWorkParams=new URLSearchParams(location.search);
-  const sceneGI = createSceneGI(scene,camera,aoIntensity,{filterImplementation:lightingWorkParams.get('lighting_filter')==='separate'?'separate':'shared',surfaceReuse:lightingWorkParams.get('lighting_surface_reuse')!=='0',sourceComparison:lightingWorkParams.get('experiment')==='gi-source-study'});
+  sceneGI = createSceneGI(scene,camera,aoIntensity,{filterImplementation:lightingWorkParams.get('lighting_filter')==='separate'?'separate':'shared',surfaceReuse:lightingWorkParams.get('lighting_surface_reuse')!=='0',sourceComparison:lightingWorkParams.get('experiment')==='gi-source-study'});
+  if (typeof syncArrivalStudioLighting === 'function') syncArrivalStudioLighting();
   window.kaminosGISourceComparison=sceneGI.sourceComparison;
   window.__kaminosSurfaceLighting=sceneGI.surfaceLighting;
   sceneLightingPreparation=createLightingPreparation({
@@ -11404,6 +11484,11 @@ async function initScene() {
       node.hidden=!state.pending&&!state.error;
       node.querySelector('span').textContent=state.error?`Lighting preparation failed: ${state.error}`:(state.held?'Preparing lighting — previous frame shown':'Preparing lighting — scene remains live');
       node.querySelector('button').hidden=!state.error;
+      if (typeof loadingTelemetry !== 'undefined') {
+        if (state.error) loadingTelemetry.fail('lighting-compile', state.error);
+        else if (state.pending) loadingTelemetry.progress('lighting-compile', { label: 'WebGPU lighting', phase: 'compiling-shaders' });
+        else loadingTelemetry.complete('lighting-compile');
+      }
       if(!state.held)window._kaminosDirty?.();
     },
   });
@@ -11737,6 +11822,11 @@ async function initScene() {
     read: readBurnerControlHistoryState,
     write: restoreBurnerControlHistoryState,
     check: checkedBurnerControlHistoryState,
+  });
+  scenePlacementTools.edits.register('@studio-look-switch', {
+    read: () => captureStudioLookSwitchSnapshot(),
+    check: value => checkStudioLookSwitchSnapshot(value),
+    write: value => restoreStudioLookSwitchSnapshot(value),
   });
   setupSelectionTransforms();
   scenePlacementTools.edits.register('@local-liquid-support-display',{
@@ -12861,9 +12951,11 @@ async function showGLB(file, options = {}) {
   modelSourceUrl = isBlob ? file.name : file;
   modelSourceType = 'glb';
   const loader = new GLTFLoader();
+  loadingTelemetry.start('asset', { label: assetFileName, phase: 'downloading' });
 	return new Promise((resolve, reject) => {
 	  loader.load(url, gltf => {
 	    if (isBlob) URL.revokeObjectURL(url);
+      loadingTelemetry.progress('asset', { label: assetFileName, phase: 'preparing-materials' });
 	    glbSourceScene = gltf.scene;
 	    const model = gltf.scene;
       const stalePreviewLoad = options.register === false
@@ -12883,6 +12975,12 @@ async function showGLB(file, options = {}) {
             child.material.envMapIntensity = sceneEnvironment.read().intensity;
           }
         }
+      });
+      prepareArrivedMeshMaterials(model, {
+        maxAnisotropy: renderer?.capabilities?.getMaxAnisotropy?.() || 16,
+        materialTuning: arrivalLightingState.materialTuningEnabled,
+        materialProfile: arrivalLightingState.materialProfile,
+        baseEnvMapIntensity: scene?.environmentIntensity ?? sceneEnvironment.read().intensity,
       });
       scene.add(model);
       let registeredAsset = null;
@@ -12910,6 +13008,7 @@ async function showGLB(file, options = {}) {
       }
       if(options.activate!==false)document.getElementById('transform-bar').classList.add('visible');
       if (arrival === 'fresh' && arrivalPlacement) frameAssetArrival(model);
+      loadingTelemetry.complete('asset');
       setInfo('GLB Inspector — orbit to inspect | use toolbar to fix orientation');
       resolve(options.returnAsset ? {
         id: registeredAsset?.id ?? null,
@@ -12919,8 +13018,18 @@ async function showGLB(file, options = {}) {
         fileName: assetFileName,
         arrival,
       } : model);
-    }, undefined, (err) => {
+    }, xhr => {
+      if (xhr && (Number.isFinite(xhr.loaded) || Number.isFinite(xhr.total))) {
+        loadingTelemetry.progress('asset', {
+          label: assetFileName,
+          phase: 'downloading',
+          loadedBytes: xhr.loaded,
+          totalBytes: xhr.total,
+        });
+      }
+    }, (err) => {
       if (isBlob) URL.revokeObjectURL(url);
+      loadingTelemetry.fail('asset', err);
       setInfo('Failed to load GLB: ' + (err.message || 'unknown error'));
       reject(err);
     });
@@ -13251,10 +13360,13 @@ async function showOBJ(objFile, mtlFile, options = {}) {
 
   const objLoader = new OBJLoader();
   if (materials) objLoader.setMaterials(materials);
+  const objLabel = options.metadata?.fileName ?? glbFileName ?? 'object.obj';
+  loadingTelemetry.start('asset', { label: objLabel, phase: 'downloading' });
 
   return new Promise((resolve, reject) => {
     objLoader.load(objUrl, obj => {
       URL.revokeObjectURL(objUrl);
+      loadingTelemetry.progress('asset', { label: objLabel, phase: 'preparing-materials' });
       glbSourceScene = obj;
       obj.traverse(child => {
         if (child.isMesh) {
@@ -13274,6 +13386,12 @@ async function showOBJ(objFile, mtlFile, options = {}) {
         }
       });
       const arrivalPlacement = applyAssetArrival(obj, arrival);
+      prepareArrivedMeshMaterials(obj, {
+        maxAnisotropy: renderer?.capabilities?.getMaxAnisotropy?.() || 16,
+        materialTuning: arrivalLightingState.materialTuningEnabled,
+        materialProfile: arrivalLightingState.materialProfile,
+        baseEnvMapIntensity: scene?.environmentIntensity ?? sceneEnvironment.read().intensity,
+      });
       scene.add(obj);
       registerSceneObject(obj, {
         ...(options.metadata || {}),
@@ -13283,10 +13401,21 @@ async function showOBJ(objFile, mtlFile, options = {}) {
       });
       document.getElementById('transform-bar').classList.add('visible');
       if (arrival === 'fresh' && arrivalPlacement) frameAssetArrival(obj);
+      loadingTelemetry.complete('asset');
       setInfo('OBJ Inspector — orbit to inspect | use toolbar to fix orientation');
       resolve(obj);
-    }, undefined, (err) => {
+    }, xhr => {
+      if (xhr && (Number.isFinite(xhr.loaded) || Number.isFinite(xhr.total))) {
+        loadingTelemetry.progress('asset', {
+          label: objLabel,
+          phase: 'downloading',
+          loadedBytes: xhr.loaded,
+          totalBytes: xhr.total,
+        });
+      }
+    }, (err) => {
       URL.revokeObjectURL(objUrl);
+      loadingTelemetry.fail('asset', err);
       setInfo('Failed to load OBJ: ' + (err.message || 'unknown error'));
       reject(err);
     });
@@ -22763,8 +22892,14 @@ function syncArrivalStudioLighting({ syncPromoted = false } = {}) {
     lookId: arrivalLightingState.lookId,
   });
   arrivalLightingState.plan = plan;
+  const activeLook = resolveStudioLook(plan.lookId);
+  if (typeof sceneGI !== 'undefined' && sceneGI?.setOpticalFinish && activeLook.opticalFinish) {
+    sceneGI.setOpticalFinish(activeLook.opticalFinish);
+  }
   const lookSelect = document.getElementById('arrival-studio-look-select');
   if (lookSelect && lookSelect.value !== plan.lookId) lookSelect.value = plan.lookId;
+  const viewportLookSelect = document.getElementById('viewport-studio-look-select');
+  if (viewportLookSelect && viewportLookSelect.value !== plan.lookId) viewportLookSelect.value = plan.lookId;
   const toggleEl = document.getElementById('arrival-studio-lights-toggle');
   if (toggleEl && toggleEl.checked !== arrivalLightingState.studioLightsEnabled) toggleEl.checked = arrivalLightingState.studioLightsEnabled;
   const hasPromotedOrSavedLights = typeof sceneSpotLights !== 'undefined' && sceneSpotLights.size > 0;
@@ -22816,10 +22951,15 @@ function syncArrivalStudioLighting({ syncPromoted = false } = {}) {
     renderer.toneMappingExposure = env.exposure * delta.exposureScale;
     scene.environmentIntensity = env.intensity * delta.envIntensityScale;
     scene.environmentRotation = new THREE.Euler(0, env.rotation + delta.envRotationOffset, 0);
+    const maxAniso = renderer?.capabilities?.getMaxAnisotropy?.() || 16;
     if (typeof workingScene !== 'undefined') {
-      for (const { object } of workingScene.objects) {
-        object?.traverse?.(child => {
-          for (const material of [].concat(child.material || [])) material.envMapIntensity = scene.environmentIntensity;
+      for (const { object, type } of workingScene.objects) {
+        if (!object || type === 'light' || type === 'camera') continue;
+        prepareArrivedMeshMaterials(object, {
+          maxAnisotropy: maxAniso,
+          materialTuning: arrivalLightingState.materialTuningEnabled,
+          materialProfile: arrivalLightingState.materialProfile,
+          baseEnvMapIntensity: env.intensity,
         });
       }
     }
@@ -23024,8 +23164,186 @@ function grabArrivalStudioRig(operation = 'translate') {
   return arrivalLightingState.promotedGroupId || arrivalLightingState.promotedIds[0] || null;
 }
 
-async function applyStudioLookToCurrentScene(lookId = arrivalLightingState.lookId, { promoteRig = typeof workingScene !== 'undefined' && workingScene.objects.length > 0 } = {}) {
+function captureStudioLookSwitchSnapshot() {
+  const studioLightRecords = {};
+  if (typeof workingScene !== 'undefined') {
+    for (const id of ['@studio-key-light', '@studio-rim-light']) {
+      const entry = workingScene.objects.find(o => o.id === id && o.type === 'light');
+      if (entry) {
+        studioLightRecords[id] = structuredClone(
+          typeof serializeSceneObject === 'function'
+            ? serializeSceneObject(entry)
+            : {
+                id: entry.id,
+                type: 'light',
+                label: entry.label,
+                groupId: entry.groupId ?? null,
+                transform: entry.transform,
+                light: entry.light,
+                createdAt: entry.createdAt,
+              },
+        );
+      }
+    }
+  }
+  const rigGroupEntry =
+    typeof workingScene !== 'undefined' ? workingScene.groups?.find(g => g.id === '@studio-light-rig') : null;
+  return {
+    arrival: {
+      sceneKind: arrivalLightingState.sceneKind,
+      lookId: arrivalLightingState.lookId,
+      studioLightsEnabled: Boolean(arrivalLightingState.studioLightsEnabled),
+      materialTuningEnabled: Boolean(arrivalLightingState.materialTuningEnabled),
+      rigTransformEdited: Boolean(arrivalLightingState.rigTransformEdited),
+      promotedIds: [...arrivalLightingState.promotedIds],
+      promotedGroupId: arrivalLightingState.promotedGroupId ?? null,
+      bounds: structuredClone(arrivalLightingState.bounds),
+      materialProfile: structuredClone(arrivalLightingState.materialProfile),
+    },
+    environment: typeof sceneEnvironment !== 'undefined' ? structuredClone(sceneEnvironment.read()) : null,
+    ground: groundPlane
+      ? {
+          visible: Boolean(groundPlane.visible),
+          height: Math.round(Number(groundPlane.position.y) * 1000) / 1000,
+          color: '#' + groundPlane.material.color.getHexString(),
+          roughness: Math.round(Number(groundPlane.material.roughness) * 1000) / 1000,
+        }
+      : null,
+    gi: {
+      settings: structuredClone(sceneGISettings),
+      manuallyConfigured: Boolean(sceneGIManuallyConfigured),
+      bounceManuallyConfigured: Boolean(sceneGIBounceManuallyConfigured),
+      autoCalibrationState: structuredClone(sceneGIAutoCalibrationState),
+    },
+    rigMembership: {
+      lights: studioLightRecords,
+      rigGroup: rigGroupEntry
+        ? structuredClone({
+            id: rigGroupEntry.id,
+            label: rigGroupEntry.label,
+            type: rigGroupEntry.type,
+            source: rigGroupEntry.source,
+            transform: rigGroupEntry.transform,
+            objectIds: [...(rigGroupEntry.objectIds || [])],
+          })
+        : null,
+      selection: typeof workingScene !== 'undefined' ? structuredClone(workingScene.selection) : null,
+    },
+  };
+}
+
+function checkStudioLookSwitchSnapshot(value) {
+  if (!value || typeof value !== 'object' || !value.arrival || typeof value.arrival.lookId !== 'string') {
+    throw new Error('Invalid Studio Look history snapshot');
+  }
+  resolveStudioLook(value.arrival.lookId);
+  return structuredClone(value);
+}
+
+async function restoreStudioLookSwitchSnapshot(snapshot) {
+  const checked = checkStudioLookSwitchSnapshot(snapshot);
+  const { arrival, environment, ground, gi, rigMembership } = checked;
+  arrivalLightingState.sceneKind = arrival.sceneKind ?? 'static-asset';
+  arrivalLightingState.lookId = arrival.lookId ?? DEFAULT_STUDIO_LOOK_ID;
+  arrivalLightingState.studioLightsEnabled = Boolean(arrival.studioLightsEnabled);
+  arrivalLightingState.materialTuningEnabled = Boolean(arrival.materialTuningEnabled);
+  arrivalLightingState.rigTransformEdited = Boolean(arrival.rigTransformEdited);
+  arrivalLightingState.promotedIds = Array.isArray(arrival.promotedIds) ? [...arrival.promotedIds] : [];
+  arrivalLightingState.promotedGroupId = arrival.promotedGroupId ?? null;
+  arrivalLightingState.bounds = structuredClone(arrival.bounds ?? null);
+  if (arrival.materialProfile) arrivalLightingState.materialProfile = structuredClone(arrival.materialProfile);
+
+  if (environment && typeof sceneEnvironment !== 'undefined') {
+    sceneEnvironment.restoreDocument(environment);
+    await loadEnvironment(environment.name, { remember: true });
+  }
+  if (ground && groundPlane) {
+    groundPlane.visible = Boolean(ground.visible);
+    groundPlane.position.y = Number.isFinite(ground.height) ? ground.height : -0.85;
+    groundPlane.material.color.set(ground.color ?? '#808080');
+    groundPlane.material.roughness = Number.isFinite(ground.roughness) ? ground.roughness : 0.65;
+    const visEl = document.getElementById('composition-ground-visible');
+    if (visEl) visEl.checked = groundPlane.visible;
+    const hEl = document.getElementById('composition-ground-height');
+    if (hEl) hEl.value = String(groundPlane.position.y);
+    const cEl = document.getElementById('composition-ground-color');
+    if (cEl) cEl.value = '#' + groundPlane.material.color.getHexString();
+    const rEl = document.getElementById('composition-ground-roughness');
+    if (rEl) rEl.value = String(groundPlane.material.roughness);
+    const rvEl = document.getElementById('composition-ground-roughness-value');
+    if (rvEl) rvEl.value = String(groundPlane.material.roughness);
+  }
+  if (rigMembership && typeof workingScene !== 'undefined') {
+    syncingArrivalStudioLighting = true;
+    try {
+      for (const id of ['@studio-key-light', '@studio-rim-light']) {
+        const savedRecord = rigMembership.lights?.[id];
+        const existsNow = workingScene.objects.some(o => o.id === id && o.type === 'light');
+        if (savedRecord) {
+          mountSceneSpotLight(structuredClone(savedRecord));
+        } else if (existsNow) {
+          removeSceneObjectInternal(id, { recordHistory: false });
+        }
+      }
+      if (rigMembership.rigGroup && typeof createSceneGroupForObjects === 'function') {
+        const grpSpec = rigMembership.rigGroup;
+        createSceneGroupForObjects(
+          grpSpec.objectIds || ['@studio-key-light', '@studio-rim-light'],
+          grpSpec.label || 'Arrival Studio Rig',
+          {
+            id: grpSpec.id || '@studio-light-rig',
+            source: grpSpec.source || 'kaminos:arrival-studio-rig',
+            transform: grpSpec.transform,
+            select: false,
+          },
+        );
+        const grp = workingScene.groups.find(g => g.id === (grpSpec.id || '@studio-light-rig'));
+        if (grp && grpSpec.transform) {
+          workingScene.updateGroup(grp.id, { transform: grpSpec.transform });
+          if (typeof groupProxy === 'function') applySceneObjectTransformState(groupProxy(grp), grpSpec.transform);
+        }
+      } else if (typeof pruneSceneGroups === 'function') {
+        pruneSceneGroups();
+      }
+      if (rigMembership.selection) {
+        const validIds = new Set([
+          ...workingScene.objects.map(o => o.id),
+          ...workingScene.groups.map(g => `@group:${g.id}`),
+          ...(activeSceneComposition ? ['flame-field'] : []),
+          ...(waterFeature?.setup ? ['water-field'] : []),
+        ]);
+        const nextIds = (rigMembership.selection.ids || []).filter(id => validIds.has(id));
+        const nextActive = validIds.has(rigMembership.selection.activeId)
+          ? rigMembership.selection.activeId
+          : (nextIds.at(-1) ?? null);
+        if (nextIds.length) setSceneSelection(nextIds, nextActive);
+        else clearActiveSceneObjectSelection?.();
+      }
+    } finally {
+      syncingArrivalStudioLighting = false;
+    }
+  }
+  if (gi) {
+    sceneGIManuallyConfigured = Boolean(gi.manuallyConfigured);
+    sceneGIBounceManuallyConfigured = Boolean(gi.bounceManuallyConfigured);
+    sceneGIAutoCalibrationState = structuredClone(gi.autoCalibrationState ?? null);
+    if (gi.settings) setSceneGIControls(gi.settings, { autoCalibrated: true });
+  }
+  const tuningToggle = document.getElementById('arrival-material-tuning-toggle');
+  if (tuningToggle) tuningToggle.checked = arrivalLightingState.materialTuningEnabled;
+  syncArrivalStudioLighting({ syncPromoted: false });
+  if (typeof sceneLightingPreparation !== 'undefined') await sceneLightingPreparation?.whenIdle?.();
+  renderSceneObjectList?.();
+  updateTransformInspector?.();
+  window._kaminosDirty?.();
+}
+
+async function applyStudioLookToCurrentScene(
+  lookId = arrivalLightingState.lookId,
+  { promoteRig = typeof workingScene !== 'undefined' && workingScene.objects.length > 0, recordHistory = true } = {},
+) {
   const look = resolveStudioLook(lookId);
+  const beforeSnapshot = recordHistory && scenePlacementTools?.edits ? captureStudioLookSwitchSnapshot() : null;
   arrivalLightingState.lookId = look.id;
   arrivalLightingState.studioLightsEnabled = true;
   arrivalLightingState.rigTransformEdited = false;
@@ -23058,8 +23376,23 @@ async function applyStudioLookToCurrentScene(lookId = arrivalLightingState.lookI
   sceneGIManuallyConfigured = false;
   sceneGIBounceManuallyConfigured = false;
   autoCalibrateSceneGIFromScene();
+  if (typeof sceneLightingPreparation !== 'undefined') await sceneLightingPreparation?.whenIdle?.();
+  if (
+    beforeSnapshot &&
+    scenePlacementTools?.edits &&
+    !scenePlacementTools.edits.state().active &&
+    !scenePlacementTools.edits.state().replaying
+  ) {
+    const afterSnapshot = captureStudioLookSwitchSnapshot();
+    scenePlacementTools?.edits?.recordApplied(
+      '@studio-look-switch',
+      beforeSnapshot,
+      afterSnapshot,
+      `Apply Studio look: ${look.label}`,
+    );
+  }
   renderSceneObjectList?.();
-  setInfo(`Studio look applied: ${look.label}`);
+  setInfo(`Studio look applied: ${look.label} · Cmd/Ctrl+Z to undo`);
   return look;
 }
 
@@ -23119,7 +23452,14 @@ document.getElementById('arrival-studio-lights-toggle')?.addEventListener('chang
   renderSceneObjectList?.();
 });
 document.getElementById('arrival-studio-look-select')?.addEventListener('change', event => {
-  void applyStudioLookToCurrentScene(event.target.value);
+  const nextLook = event.target.value;
+  event.target.blur?.();
+  void applyStudioLookToCurrentScene(nextLook);
+});
+document.getElementById('viewport-studio-look-select')?.addEventListener('change', event => {
+  const nextLook = event.target.value;
+  event.target.blur?.();
+  void applyStudioLookToCurrentScene(nextLook);
 });
 document.getElementById('arrival-material-tuning-toggle')?.addEventListener('change', event => {
   arrivalLightingState.materialTuningEnabled = Boolean(event.target.checked);
@@ -23147,20 +23487,37 @@ document.getElementById('arrival-studio-lights-orbit')?.addEventListener('click'
   }
 });
 window.kaminosArrivalLighting = {
-  read: () => ({
-    sceneKind: arrivalLightingState.sceneKind,
-    lookId: arrivalLightingState.lookId,
-    studioLightsEnabled: arrivalLightingState.studioLightsEnabled,
-    materialTuningEnabled: arrivalLightingState.materialTuningEnabled,
-    bounds: structuredClone(arrivalLightingState.bounds),
-    materialProfile: structuredClone(arrivalLightingState.materialProfile),
-    plan: structuredClone(arrivalLightingState.plan),
-    promotedIds: [...arrivalLightingState.promotedIds],
-    promotedGroupId: arrivalLightingState.promotedGroupId,
-    rigTransformEdited: arrivalLightingState.rigTransformEdited,
-    stageLightsVisible: Boolean(studioKeyLight?.visible || studioRimLight?.visible),
-    autoCalibratedGI: structuredClone(sceneGIAutoCalibrationState),
-  }),
+  read: () => {
+    const textureAnisotropies = [];
+    if (typeof workingScene !== 'undefined') {
+      for (const entry of workingScene.objects) {
+        entry.object?.traverse?.(child => {
+          if (child.isMesh && child.material?.map) {
+            textureAnisotropies.push(child.material.map.anisotropy);
+          }
+        });
+      }
+    }
+    return {
+      sceneKind: arrivalLightingState.sceneKind,
+      lookId: arrivalLightingState.lookId,
+      studioLightsEnabled: arrivalLightingState.studioLightsEnabled,
+      materialTuningEnabled: arrivalLightingState.materialTuningEnabled,
+      bounds: structuredClone(arrivalLightingState.bounds),
+      materialProfile: structuredClone(arrivalLightingState.materialProfile),
+      plan: structuredClone(arrivalLightingState.plan),
+      promotedIds: [...arrivalLightingState.promotedIds],
+      promotedGroupId: arrivalLightingState.promotedGroupId,
+      rigTransformEdited: arrivalLightingState.rigTransformEdited,
+      stageLightsVisible: Boolean(studioKeyLight?.visible || studioRimLight?.visible),
+      autoCalibratedGI: structuredClone(sceneGIAutoCalibrationState),
+      rigInGroups: Boolean(typeof workingScene !== 'undefined' && workingScene.groups?.some(g => g.id === '@studio-light-rig')),
+      spotLightIds: typeof workingScene !== 'undefined' ? workingScene.objects.filter(o => o.type === 'light').map(o => o.id) : [],
+      editsState: scenePlacementTools?.edits?.state?.() ?? null,
+      environment: typeof sceneEnvironment !== 'undefined' ? structuredClone(sceneEnvironment.read()) : null,
+      textureAnisotropies,
+    };
+  },
   setStudioLights(enabled) {
     arrivalLightingState.studioLightsEnabled = Boolean(enabled);
     const toggle = document.getElementById('arrival-studio-lights-toggle');
@@ -24722,7 +25079,15 @@ async function greenroomImportSplat(url, fileName, display, options = {}) {
       },
     };
   }
-  const preview = await createSplatSceneObjectPreview({ url, fileName, display, metadata });
+  const splatLabel = display?.title || fileName || 'Splat';
+  loadingTelemetry.start('asset', { label: splatLabel, phase: 'downloading' });
+  let preview;
+  try {
+    preview = await createSplatSceneObjectPreview({ url, fileName, display, metadata });
+  } catch (err) {
+    loadingTelemetry.fail('asset', err);
+    throw err;
+  }
   const object = preview.object;
   const splat = {
     ...metadata.splat,
@@ -24761,6 +25126,7 @@ async function greenroomImportSplat(url, fileName, display, options = {}) {
     document.getElementById('transform-bar').classList.add('visible');
   }
   buildRenderHandoffV0(record);
+  loadingTelemetry.complete('asset');
   setInfo(`Greenroom splat import: ${display?.title || fileName}`);
   return object;
 }
@@ -27629,7 +27995,12 @@ sceneInitialization.then(async () => {
     applyStudioLook:(lookId,options)=>applyStudioLookToCurrentScene(lookId,options),
     capture:()=>sceneDefaultsFromDocument(buildSceneData()),
     startup:()=>({settled:preferencesStartupSettled,usesDefaults:sceneDefaultsApplied})};
+  const requestedStudioLook = resolveStudioLookFromSearch(window.location.search);
   if(startupPreferences&&startupPreferences.startupConfigured!==false&&userPreferences.state().receipt?.revision!=null){applyNavigationPreference(startupPreferences);if(startupPreferences.studioLook){arrivalLightingState.lookId=startupPreferences.studioLook;syncArrivalStudioLighting();}}
+  if (requestedStudioLook) {
+    arrivalLightingState.lookId = requestedStudioLook;
+    syncArrivalStudioLighting();
+  }
   const initialEnvironment = restoreSettings();
   const admittedEnvironment = (await startupSceneAdmission).data?.environment;
   if (admittedEnvironment) sceneEnvironment.restoreDocument(admittedEnvironment);
@@ -27693,6 +28064,9 @@ sceneInitialization.then(async () => {
     if (imageRoute) {
       await (earlyImageLoaded ?? loadKaminosImageAssetRoute(imageRoute));
       if (params.get('sam') === '1') await window.kaminosOpenImageMasks(imageRoute.effectiveUrl, { fileName: imageRoute.fileName });
+    }
+    if (requestedStudioLook) {
+      await applyStudioLookToCurrentScene(requestedStudioLook, { promoteRig: false, recordHistory: false });
     }
     if (params.get('sam') === '1' && !imageRoute) setActiveTab('masks');
   });
