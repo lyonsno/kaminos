@@ -1,17 +1,18 @@
 import {Group,Mesh,BufferGeometry,BufferAttribute,LineSegments,LineBasicMaterial,MeshStandardMaterial,Box3,Vector3} from '../lib/three.core.js';
-import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import {DEFAULT_RECIPE,validateRecipe,validateParameters,deformStock,createStockWarp} from './stock-family/model.mjs';
+import {DEFAULT_RECIPE,validateRecipe,validateParameters,validateProfile,replaceStockSource,deformStock,createStockWarp} from './stock-family/model.mjs';
+import {loadStockSource,stockDigest} from './stock-family/source.mjs';
 import {installSceneControlHistory} from '../scene-control-history.mjs';
 import {cloneStockMaterial,disposeStockMaterial,stockHistoryReferences,stockRetirementIds} from './stock-family/lifecycle.mjs';
 
 const pose=root=>({position:root.position.toArray(),rotation:[root.rotation.x,root.rotation.y,root.rotation.z],scale:root.scale.toArray()});
 const putPose=(root,p)=>{if(p){root.position.fromArray(p.position);root.rotation.set(...p.rotation);root.scale.fromArray(p.scale);}};
-const sha=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),v=>v.toString(16).padStart(2,'0')).join('');
 
 export default {id:'stock-family',title:'Stockroom - adaptable trough',async create({host,inputs={},record=()=>{}}){
-  const recipe=validateRecipe(inputs.recipe??DEFAULT_RECIPE),session=await host.scene.open();
+  let recipe=validateRecipe(inputs.recipe??DEFAULT_RECIPE);
+  const session=await host.scene.open();
   const win=host.controls.document.defaultView,edits=win.kaminosSceneEdits,items=[],seats=[],drags=[],histories=[];
-  let disposed=false,strainEnabled=false,refresh=()=>{},unsubscribe=()=>{},reference,sourceGeometry,sourceMaterial;
+  let disposed=false,strainEnabled=false,refresh=()=>{},unsubscribe=()=>{},reference,sourceGeometry,sourceMaterial,sourceRequest=0,sourceBusy=false;
+  const sourceTarget='@stock-source:'+crypto.randomUUID();
   const removals=[];
   const params=item=>({length:item.value.length,bend:item.value.bend,protect:item.value.protect});
   function assertLive(item){if(disposed||!item.asset.root.parent)throw Error('Stock removed; reopen the family');}
@@ -44,9 +45,32 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
   }
   const intact=()=>reference?.root.parent&&items.every(i=>!i.removed);
   function exported(){if(!intact())throw Error('Family members were removed; reopen the family before saving');return validateRecipe({...recipe,variants:items.map(i=>({...i.value,pose:pose(i.root)})),view:session.readView(),referencePose:pose(reference.root)});}
-  function read(){return {source:{...recipe.source},referenceId:reference?.id,variants:items.map(i=>({id:i.value.id,label:i.value.label,objectId:i.asset.id,targetId:i.target,parameters:params(i),status:i.removed?'removed':i.error?'blocked':'deformed',error:i.error,metrics:i.metrics,pose:pose(i.root),materialMaps:Object.fromEntries(['map','roughnessMap','metalnessMap','normalMap'].map(key=>[key,!!i.mesh.material[key]]))})),recipe:intact()?exported():null};}
+  function read(){return {source:structuredClone(recipe.source),sources:structuredClone(recipe.sources??[recipe.source]),sourceBusy,referenceId:reference?.id,variants:items.map(i=>({id:i.value.id,label:i.value.label,objectId:i.asset.id,targetId:i.target,parameters:params(i),status:i.removed?'removed':i.error?'blocked':'deformed',error:i.error,metrics:i.metrics,pose:pose(i.root),materialMaps:Object.fromEntries(['map','roughnessMap','metalnessMap','normalMap'].map(key=>[key,!!i.mesh.material[key]]))})),recipe:intact()?exported():null};}
   const operations={
     read,export:exported,
+    async source({source,fit=false}){
+      if(!intact())throw Error('Reopen the complete family before replacing its source');
+      const request=++sourceRequest;sourceBusy=true;refresh();let loaded;
+      try{
+        loaded=await loadStockSource(source,{fit});
+        if(disposed||request!==sourceRequest)throw Error('Source request superseded');
+        if(!intact()||edits.state().active||edits.state().replaying)throw Error('Finish the current edit before replacing its source');
+        const next=replaceStockSource(recipe,loaded.source);
+        const replacements=[reference,...items.map(i=>i.asset)].map(()=>({geometry:loaded.geometry.clone(),material:cloneStockMaterial(loaded.material)}));
+        edits.discard(entry=>stockHistoryReferences(entry,new Set([sourceTarget,...items.map(i=>i.target)])));
+        const oldGeometry=sourceGeometry,oldMaterial=sourceMaterial;
+        recipe=next;sourceGeometry=loaded.geometry;sourceMaterial=loaded.material;loaded=null;
+        for(const [index,asset]of [reference,...items.map(i=>i.asset)].entries()){
+          const mesh=index===0?reference.root.children[0]:items[index-1].mesh,oldSurface=index===0?mesh.material:items[index-1].surfaceMaterial;
+          mesh.geometry.dispose();disposeStockMaterial(oldSurface);mesh.geometry=replacements[index].geometry;
+          if(index===0)mesh.material=replacements[index].material;
+          else{items[index-1].surfaceMaterial=replacements[index].material;mesh.material=strainEnabled?items[index-1].strainMaterial:replacements[index].material;}
+        }
+        oldGeometry.dispose();disposeStockMaterial(oldMaterial);for(const item of items)update(item,params(item));
+        record({kind:'stock-family.source',phase:'applied',effective:structuredClone(recipe.source)});return read();
+      }finally{if(loaded){loaded.geometry.dispose();disposeStockMaterial(loaded.material);}if(request===sourceRequest){sourceBusy=false;refresh();}}
+    },
+    bands({locks}){const profile=validateProfile({...recipe.source.profile,locks:structuredClone(locks)});edits.apply(sourceTarget,profile,'Protect source bands');return read();},
     set({id,...change}){const item=items.find(i=>i.value.id===id);if(!item)throw Error('Unknown stock member');assertLive(item);
       const next=validateParameters({...params(item),...change});
       if(edits.state().active?.id===item.target)edits.preview(next);else edits.apply(item.target,next,'Shape '+item.value.label);
@@ -61,40 +85,65 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
   };
   try{
     if(!edits||!host.controls.mountObject)throw Error('Native object editing host required');
-    const response=await fetch(recipe.source.url,{cache:'no-store'});if(!response.ok)throw Error('Stock source HTTP '+response.status);
-    const bytes=await response.arrayBuffer();if(await sha(bytes)!==recipe.source.sha256)throw Error('Stock source digest mismatch');
-    const gltf=await new GLTFLoader().parseAsync(bytes,''),meshes=[];gltf.scene.traverse(n=>{if(n.isMesh)meshes.push(n);});
-    if(meshes.length!==1||meshes[0].isSkinnedMesh||Array.isArray(meshes[0].material))throw Error('This stock profile requires one rigid mesh/material');
-    const donor=meshes[0];donor.updateWorldMatrix(true,false);
-    if(!donor.matrixWorld.equals(new donor.matrixWorld.constructor()))throw Error('Stock profile requires baked source coordinates');
-    sourceGeometry=donor.geometry;sourceMaterial=donor.material;
-    if(!sourceGeometry.attributes.normal||!sourceGeometry.attributes.uv||sourceGeometry.attributes.position.isInterleavedBufferAttribute)throw Error('Source needs ordinary positions, normals and UVs');
-    const root=new Group();root.name='Original trough';root.add(new Mesh(sourceGeometry.clone(),cloneStockMaterial(sourceMaterial)));root.position.set(-3,.15,-1.7);putPose(root,recipe.referencePose);
-    reference=await session.attach(root,{owned:true,metadata:{label:root.name,source:recipe.source.url}});
+    const loaded=await loadStockSource(recipe.source);sourceGeometry=loaded.geometry;sourceMaterial=loaded.material;
+    const root=new Group();root.name='Source reference';root.add(new Mesh(sourceGeometry.clone(),cloneStockMaterial(sourceMaterial)));root.position.set(-3,.15,-1.7);putPose(root,recipe.referencePose);
+    reference=await session.attach(root,{owned:true,metadata:{label:root.name,source:'kaminos:stock-family'}});
     watchRemoval(reference);
     for(const [index,value] of recipe.variants.entries()){
       const root=new Group();root.name=value.label;const surfaceMaterial=cloneStockMaterial(sourceMaterial),mesh=new Mesh(sourceGeometry.clone(),surfaceMaterial);mesh.castShadow=mesh.receiveShadow=true;root.add(mesh);
       const cross=new BufferGeometry();cross.setAttribute('position',new BufferAttribute(new Float32Array([-.25,0,-.25,.25,0,.25,-.25,0,.25,.25,0,-.25]),3));
       const invalid=new LineSegments(cross,new LineBasicMaterial({color:0xe85a56}));root.add(invalid);
       const slot=index+1;root.position.set(-3+(slot%4)*2,.15,Math.floor(slot/4)*3.4-1.7);putPose(root,value.pose);
-      const asset=await session.attach(root,{owned:true,metadata:{label:value.label,source:recipe.source.url}});
+      const asset=await session.attach(root,{owned:true,metadata:{label:value.label,source:'kaminos:stock-family'}});
       const item={root,mesh,invalid,asset,surfaceMaterial,value:structuredClone(value),target:'@stock-family:'+asset.id,strainMaterial:new MeshStandardMaterial({vertexColors:true,roughness:.8,metalness:0})};items.push(item);
       edits.register(item.target,{read:()=>params(item),check:validateParameters,write:v=>update(item,v)});update(item,params(item));
       watchRemoval(asset,item);
     }
     if(recipe.view)session.setView(recipe.view);else operations.frame();
+    edits.register(sourceTarget,{read:()=>structuredClone(recipe.source.profile),check:validateProfile,write:profile=>{recipe=replaceStockSource(recipe,{...recipe.source,profile:structuredClone(profile)});for(const item of items)if(!item.removed)update(item,params(item));}});
     unsubscribe=edits.subscribe(()=>refresh());
-  }catch(e){disposed=true;removals.forEach(remove=>remove());for(const i of items){edits?.unregister(i.target);i.strainMaterial.dispose();}await session.dispose();sourceGeometry?.dispose();if(sourceMaterial)disposeStockMaterial(sourceMaterial);throw e;}
+  }catch(e){disposed=true;removals.forEach(remove=>remove());edits?.unregister(sourceTarget);for(const i of items){edits?.unregister(i.target);i.strainMaterial.dispose();}await session.dispose();sourceGeometry?.dispose();if(sourceMaterial)disposeStockMaterial(sourceMaterial);throw e;}
   return {read,operations,mount({root:panel,document,invoke}){
-    const common=document.createElement('section');common.style.cssText='display:grid;gap:8px;margin-top:12px';panel.append(common);
-    const list=document.createElement('select');list.setAttribute('aria-label','Stock member');list.className='transform-input';list.style.width='100%';
-    for(const item of items){const o=document.createElement('option');o.value=item.value.id;o.textContent=item.value.label;list.append(o);}list.onchange=()=>{list.blur();invoke('select',{id:list.value});};common.append(list);
+    document.body.classList.add('stock-family-active');
+    const style=document.createElement('link');style.rel='stylesheet';style.href='/experiments/stock-family/controls.css';document.head.append(style);removals.push(()=>{style.remove();document.body.classList.remove('stock-family-active');});
+    const common=document.createElement('section');common.className='stock-family-controls';panel.append(common);removals.push(()=>common.remove());
+    const heading=document.createElement('h3');heading.textContent='Stock family';common.append(heading);
+    const sourceSelect=document.createElement('select');sourceSelect.className='transform-input';sourceSelect.setAttribute('aria-label','Stock source');common.append(sourceSelect);
+    const sourceStatus=document.createElement('output');sourceStatus.className='stock-source-status';
+    async function chooseSource(source,fit=false){sourceStatus.textContent='Loading source...';try{await invoke('source',{source,fit});sourceStatus.textContent='';}catch(e){sourceStatus.textContent=e.message;refresh();}}
+    sourceSelect.onchange=()=>{sourceSelect.blur();chooseSource((recipe.sources??[recipe.source]).find(s=>s.sha256===sourceSelect.value));};
+    const importButton=document.createElement('button'),meshFile=document.createElement('input');importButton.className='btn';importButton.textContent='Import source GLB...';meshFile.type='file';meshFile.accept='.glb';meshFile.hidden=true;meshFile.setAttribute('aria-label','Import stock source');importButton.onclick=()=>meshFile.click();
+    meshFile.onchange=async()=>{const file=meshFile.files[0];if(!file)return;importButton.disabled=true;sourceStatus.textContent='Storing source...';try{
+      const bytes=await file.arrayBuffer(),digest=await stockDigest(bytes),response=await fetch('/api/ingest-mesh',{method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:bytes}),receipt=await response.json();
+      if(!response.ok||receipt.schema!=='kaminos.generated-mesh.v0'||receipt.sha256!==digest||receipt.bytes!==bytes.byteLength||receipt.source!==`/api/read?root=generated-meshes&path=${digest}.glb`)throw Error('Source storage identity mismatch');
+      if(disposed)return;await chooseSource({url:receipt.source,sha256:digest,label:file.name.replace(/\.glb$/i,''),fit:{axis:axis.value}},true);
+    }catch(e){sourceStatus.textContent=e.message;}finally{meshFile.value='';importButton.disabled=false;}};
+    common.append(importButton,meshFile,sourceStatus);
+    const fitting=document.createElement('details'),fittingTitle=document.createElement('summary');fittingTitle.textContent='Source fitting';fitting.append(fittingTitle);common.append(fitting);
+    const axisLabel=document.createElement('label'),axis=document.createElement('select');axisLabel.textContent='Length axis';axis.className='transform-input';axis.setAttribute('aria-label','Source length axis');
+    for(const value of ['z','x','y','-z','-x','-y']){const option=document.createElement('option');option.value=value;option.textContent=value.toUpperCase();axis.append(option);}axisLabel.append(axis);fitting.append(axisLabel);
+    axis.onchange=()=>{axis.blur();chooseSource({...recipe.source,fit:{axis:axis.value}},true);};
+    const bandTitle=document.createElement('h4');bandTitle.textContent='Protected bands (%)';const bands=document.createElement('div');bands.className='stock-source-bands';fitting.append(bandTitle,bands);
+    const addBand=document.createElement('button');addBand.className='btn';addBand.textContent='Add protected band';fitting.append(addBand);
+    const sourceIdentity=document.createElement('output');sourceIdentity.className='stock-source-identity';fitting.append(sourceIdentity);
+    addBand.onclick=()=>{const p=recipe.source.profile,points=[p.min,...p.locks.flat(),p.max],gaps=[];for(let i=0;i<points.length;i+=2)if(points[i+1]>points[i])gaps.push([points[i],points[i+1]]);gaps.sort((a,b)=>(b[1]-b[0])-(a[1]-a[0]));const gap=gaps[0];if(!gap)return;invoke('bands',{locks:[...p.locks,[gap[0],gap[0]+(gap[1]-gap[0])*.1]].sort((a,b)=>a[0]-b[0])}).catch(e=>sourceStatus.textContent=e.message);};
+    let sourceKey='',bandKey='';
+    function refreshSources(){
+      const sources=recipe.sources??[recipe.source],key=JSON.stringify(sources.map(s=>[s.sha256,s.label]));
+      if(key!==sourceKey){sourceKey=key;sourceSelect.replaceChildren();for(const s of sources){const option=document.createElement('option');option.value=s.sha256;option.textContent=s.label??(s.sha256===DEFAULT_RECIPE.source.sha256?'Steel trough':s.sha256.slice(0,12));sourceSelect.append(option);}}
+      sourceSelect.value=recipe.source.sha256;sourceSelect.disabled=sourceBusy;importButton.disabled=sourceBusy;axis.disabled=sourceBusy;axis.value=recipe.source.fit?.axis??'z';
+      sourceIdentity.textContent=recipe.source.sha256;sourceIdentity.title=recipe.source.url;
+      const profile=recipe.source.profile,nextKey=JSON.stringify(profile);if(nextKey===bandKey)return;bandKey=nextKey;bands.replaceChildren();
+      profile.locks.forEach((band,index)=>{const row=document.createElement('div');row.className='stock-band-row';
+        for(let end=0;end<2;end++){const input=document.createElement('input');input.type='number';input.step='any';input.className='transform-input';input.value=String(Number(((band[end]-profile.min)/(profile.max-profile.min)*100).toFixed(4)));input.setAttribute('aria-label',`Band ${index+1} ${end?'end':'start'} percent`);input.onchange=()=>{const locks=structuredClone(recipe.source.profile.locks);locks[index][end]=profile.min+Number(input.value)/100*(profile.max-profile.min);invoke('bands',{locks}).catch(e=>{sourceStatus.textContent=e.message;bandKey='';refresh();});};row.append(input);}
+        const remove=document.createElement('button');remove.className='btn';remove.textContent='\u00d7';remove.title=`Remove band ${index+1}`;remove.setAttribute('aria-label',remove.title);remove.onclick=()=>invoke('bands',{locks:recipe.source.profile.locks.filter((_,i)=>i!==index)});row.append(remove);bands.append(row);
+      });
+    }
     const frame=document.createElement('button');frame.className='btn';frame.textContent='Frame family';frame.onclick=()=>invoke('frame');common.append(frame);
     const strainLabel=document.createElement('label'),strain=document.createElement('input');strain.type='checkbox';strain.onchange=()=>invoke('strain',{enabled:strain.checked});strainLabel.append(strain,' Axial strain');common.append(strainLabel);
-    const summary=document.createElement('div');common.append(summary);
     const fields=[];
     for(const item of items){
-      const properties=document.createElement('section');properties.style.cssText='font-size:12px;line-height:1.5';const title=document.createElement('h4');title.textContent=item.value.label;properties.append(title);
+      const properties=document.createElement('section');properties.className='stock-shape-properties';const title=document.createElement('h4');title.textContent='Shape';properties.append(title);
       const inputs=[];const status=document.createElement('output');status.style.cssText='display:block;overflow-wrap:anywhere;margin:8px 0';
       for(const [key,label,step]of [['length','Length',.01],['bend','Bend degrees',1]]){
         const row=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');grip.textContent=label;input.type='number';input.step='any';input.className='transform-input';input.setAttribute('aria-label',item.value.label+' '+label);input.style.width='100%';row.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0';
@@ -103,7 +152,7 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
         input.addEventListener('blur',()=>refresh());drags.push(host.controls.installNumberDrag({input,grip,step}));
       }
       histories.push(installSceneControlHistory({controls:inputs,edits,id:item.target,label:'Shape '+item.value.label,onError:e=>{status.textContent=e.message;}}));
-      const label=document.createElement('label'),protect=document.createElement('input');protect.type='checkbox';protect.setAttribute('aria-label',item.value.label+' Protect feet and mouths');protect.onchange=()=>invoke('set',{id:item.value.id,protect:protect.checked});label.append(protect,' Protect feet and mouths');properties.append(label,status);
+      const label=document.createElement('label'),protect=document.createElement('input');protect.type='checkbox';protect.setAttribute('aria-label',item.value.label+' Protect source bands');protect.onchange=()=>invoke('set',{id:item.value.id,protect:protect.checked});label.append(protect,' Protect source bands');properties.append(label,status);
       item.ui={status,protect,properties};seats.push(host.controls.mountObject({asset:item.asset,properties}));
     }
     const fileStatus=document.createElement('output');fileStatus.style.display='block';
@@ -112,11 +161,11 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
       else{const url=URL.createObjectURL(new Blob([text],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='trough-family.json';a.click();URL.revokeObjectURL(url);fileStatus.textContent='Downloaded family';}
     }catch(e){if(e.name!=='AbortError')fileStatus.textContent=e.message;}};
     const open=document.createElement('button'),file=document.createElement('input');open.className='btn';open.textContent='Open family...';file.type='file';file.setAttribute('aria-label','Open stock family');file.accept='.json,application/json';file.hidden=true;open.onclick=()=>file.click();file.onchange=async()=>{try{const r=validateRecipe(JSON.parse(await file.files[0].text()));await win.kaminosWorkbenchExperiments.open('stock-family',{recipe:r});}catch(e){fileStatus.textContent=e.message;}finally{file.value='';}};common.append(save,open,file,fileStatus);
-    refresh=()=>{if(disposed)return;const selected=items.find(i=>i.asset.id===win.kaminosSelection.read().activeId);const parent=selected?.ui.properties??panel;if(common.parentNode!==parent)parent.append(common);if(selected)list.value=selected.value.id;
+    refresh=()=>{if(disposed)return;const sceneSlot=document.getElementById('experiment-scene-slot'),parent=sceneSlot&&!sceneSlot.hidden?sceneSlot:panel;if(common.parentNode!==parent)parent.prepend(common);refreshSources();
       strain.checked=strainEnabled;for(const {item,key,input}of fields){input.disabled=!!item.removed;if(document.activeElement!==input||input.readOnly)input.value=String(item.value[key]);}
-      for(const i of items){list.querySelector(`option[value="${CSS.escape(i.value.id)}"]`).disabled=!!i.removed;i.ui.protect.disabled=!!i.removed;i.ui.protect.checked=i.value.protect;i.ui.status.textContent=i.removed?'Removed':i.error?'Blocked: '+i.error:`Axial stretch ${i.metrics.minAxialStretch.toFixed(2)} to ${i.metrics.maxAxialStretch.toFixed(2)} x`;}
-      summary.textContent=!intact()?'Family members removed; reopen before saving.':items.filter(i=>i.error).map(i=>i.value.label+': '+i.error).join(' ');summary.style.cssText='font-size:12px;color:#e5b46a;overflow-wrap:anywhere;margin:10px 0';};refresh();operations.select({id:items[0].value.id});
+      for(const i of items){i.ui.protect.disabled=!!i.removed;i.ui.protect.checked=i.value.protect;i.ui.status.textContent=i.removed?'Removed':i.error?'Blocked: '+i.error:`Axial stretch ${i.metrics.minAxialStretch.toFixed(2)} to ${i.metrics.maxAxialStretch.toFixed(2)} x`;i.ui.status.dataset.blocked=String(!!i.error);}
+      save.disabled=!intact();};refresh();operations.select({id:items[0].value.id});
   },async dispose(){if(disposed)return;refresh=()=>{};unsubscribe();for(const h of histories)h.dispose();for(const d of drags)d.dispose();for(const s of seats)s.dispose();
-    const ids=stockRetirementIds([reference.id,...items.flatMap(i=>[i.target,i.asset.id])],win.kaminosSceneAuthoring.read().groups);edits.discard(e=>stockHistoryReferences(e,ids));disposed=true;removals.forEach(remove=>remove());for(const i of items)if(!i.removed){edits.unregister(i.target);i.mesh.material=i.surfaceMaterial;i.strainMaterial.dispose();}await session.dispose();sourceGeometry.dispose();disposeStockMaterial(sourceMaterial);
+    const ids=stockRetirementIds([sourceTarget,reference.id,...items.flatMap(i=>[i.target,i.asset.id])],win.kaminosSceneAuthoring.read().groups);edits.discard(e=>stockHistoryReferences(e,ids));disposed=true;sourceRequest++;edits.unregister(sourceTarget);removals.forEach(remove=>remove());for(const i of items)if(!i.removed){edits.unregister(i.target);i.mesh.material=i.surfaceMaterial;i.strainMaterial.dispose();}await session.dispose();sourceGeometry.dispose();disposeStockMaterial(sourceMaterial);
   }};
 }};
