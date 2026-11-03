@@ -278,7 +278,7 @@ test('single-query attention is explicit and only selected for one-token work', 
 });
 
 // Resource reuse is observed through the device, independently of pool internals.
-test('cached decode reuses uniforms only after the previous layer fence and retires them at token end', async () => {
+test('cached decode reuses uniforms only after the previous layer fence and retires them with state', async () => {
  const {manifest,fetchImpl}=fixture(),{device,buffers}=deviceFixture();
  const control=createWebGpuInferenceControl({queue:device.queue}), model=new Qwen35TextModel(device,manifest,{control,batchDecode:true});
  const uniforms=new Set(), writes=new Map();let epoch=0,reuses=0;
@@ -289,9 +289,9 @@ test('cached decode reuses uniforms only after the previous layer fence and reti
   await model.load('http://localhost/model/',{fetchImpl});const state=await model.createState({capacity:6});await model.prefill([1,2],state);
   const before=buffers.length;reuses=0;await model.decode(3,state);
   assert.ok(reuses>0,'cached layers must reuse uniform allocations');
-  assert.ok(buffers.slice(before).every(b=>b.destroyed),'token-local resources must be retired');
-  const previous=new Set(writes.keys());await model.decode(4,state);
-  assert.ok([...previous].every(b=>b.destroyed),'no retired buffer may be revived on the next token');
+  const workspace=buffers.slice(before);assert.ok(workspace.some(b=>!b.destroyed),'decode workspace must survive token completion');
+  const count=buffers.length;await model.decode(4,state);assert.equal(buffers.length,count,'warm decode must create no GPU buffers');
+  await model.disposeState(state);assert.ok(workspace.every(b=>b.destroyed),'state disposal retires its workspace');
  }finally{await model.destroy();await control.close();}
 });
 test('cached decode retires reused uniforms on validation, fence, and cancellation failures', async () => {
@@ -300,10 +300,38 @@ test('cached decode retires reused uniforms on validation, fence, and cancellati
   const model=new Qwen35TextModel(device,manifest,{control,batchDecode:true}),abort=new AbortController();
   try{
    await model.load('http://localhost/model/',{fetchImpl});const state=await model.createState({capacity:4});await model.prefill([1,2],state);
-   const before=buffers.length;
+   const before=buffers.length;await model.decode(3,state);
    model.onLayer=async({index})=>{if(index===0){if(failure==='validation')device.popErrorScope=async()=>({message:'bad reused binding'});else if(failure==='fence')device.queue.onSubmittedWorkDone=async()=>{throw Error('lost queue');};else abort.abort('stop decode');}};
-   await assert.rejects(model.decode(3,state,{signal:abort.signal}),/binding|queue|stop decode/);
+   await assert.rejects(model.decode(4,state,{signal:abort.signal}),/binding|queue|stop decode/);
    assert.equal(state.failed,true);assert.ok(buffers.slice(before).every(b=>b.destroyed));
   }finally{device.queue.onSubmittedWorkDone=async()=>{};await model.destroy();await control.close();}
  }
+});
+
+test('decode workspace survives intervening prefill without retaining its larger allocations and stays state-local', async () => {
+ const {manifest,fetchImpl}=fixture(),{device,buffers}=deviceFixture(),control=createWebGpuInferenceControl({queue:device.queue});
+ const model=new Qwen35TextModel(device,manifest,{control,batchDecode:true});
+ try{
+  await model.load('http://localhost/model/',{fetchImpl});const a=await model.createState({capacity:20}),b=await model.createState({capacity:8});
+  await model.prefill([1,2],a);const start=buffers.length;await model.decode(3,a);const aw=buffers.slice(start);
+  const prefillStart=buffers.length;await model.append([4,5,6,7],a);assert.ok(buffers.slice(prefillStart).every(x=>x.destroyed),'multi-token scratch is temporary');
+  const warm=buffers.length;await model.decode(8,a);assert.equal(buffers.length,warm,'prefill must not displace decode workspace');
+  await model.prefill([9,10],b);const bs=buffers.length;await model.decode(11,b);const bw=buffers.slice(bs);
+  assert.ok(bw.some(x=>!x.destroyed));assert.ok(aw.some(x=>!x.destroyed));
+  await model.disposeState(a);assert.ok(aw.every(x=>x.destroyed));assert.ok(bw.every(x=>!x.destroyed));
+  const before=buffers.length;await model.decode(12,b);assert.equal(buffers.length,before);await model.disposeState(b);assert.ok(bw.every(x=>x.destroyed));
+ }finally{await model.destroy();await control.close();}
+});
+test('workspace retirement waits for an in-flight logits readback and rejects overlapping decode', async () => {
+ const {manifest,fetchImpl}=fixture(),{device,buffers}=deviceFixture(),control=createWebGpuInferenceControl({queue:device.queue});
+ const model=new Qwen35TextModel(device,manifest,{control,batchDecode:true});
+ try{
+  await model.load('http://localhost/model/',{fetchImpl});const state=await model.createState({capacity:8});await model.prefill([1,2],state);
+  let release,entered;const mapped=new Promise(r=>entered=r),pending=new Promise(r=>release=r);const before=buffers.length,create=device.createBuffer.bind(device);
+  device.createBuffer=o=>{const b=create(o);if(o.usage & GPUBufferUsage.MAP_READ)b.mapAsync=()=>{entered();return pending;};return b;};
+  const work=model.decode(3,state);await mapped;const owned=buffers.slice(before).filter(x=>!x.destroyed);
+  await assert.rejects(model.decode(4,state),/concurrent/);let disposed=false;const disposal=model.disposeState(state).then(()=>{disposed=true;});
+  await new Promise(setImmediate);assert.equal(disposed,false);assert.ok(owned.every(x=>!x.destroyed));
+  release();await assert.rejects(work,/disposed/);await disposal;assert.ok(owned.every(x=>x.destroyed));
+ }finally{await model.destroy();await control.close();}
 });

@@ -118,7 +118,9 @@ export class Qwen35TextModel {
       return;
     }
     await admit(ctx.control, ctx.signal, async () => {
-      const uniform = this.buffer(params.byteLength, new Set(), GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
+      const size = Math.max(16, Math.ceil(params.byteLength / 4) * 4);
+      const uniform = ctx.uniformPool?.available.get(size)?.pop()
+        ?? this.buffer(size, ctx.uniformPool?.owned ?? new Set(), GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
       try {
         this.device.queue.writeBuffer(uniform, 0, params);
         this.device.pushErrorScope('validation');
@@ -130,7 +132,11 @@ export class Qwen35TextModel {
         } finally { validation = this.device.popErrorScope(); }
         const error = await validation; await this.device.queue.onSubmittedWorkDone();
         if (error) throw new Error(`${name}: ${error.message}`);
-      } finally { uniform.destroy(); }
+        if (ctx.uniformPool) {
+          const available = ctx.uniformPool.available.get(uniform.size) ?? [];
+          available.push(uniform); ctx.uniformPool.available.set(uniform.size, available);
+        }
+      } finally { if (!ctx.uniformPool) uniform.destroy(); }
     });
   }
   async layerBatch(ctx, work) {
@@ -150,7 +156,7 @@ export class Qwen35TextModel {
         try { await this.device.queue.onSubmittedWorkDone(); } catch (error) { errors.push(error instanceof Error ? error : new Error(String(error))); }
         if (errors.length) throw errors.length === 1 ? errors[0] : new AggregateError(errors, 'layer batch failed: ' + errors.map(error => error.message).join('; '));
         // A later layer may overwrite parameters only after this layer's fence.
-        // Pool ownership ends with forward(), including cancellation/failure.
+        // The owning decode workspace retires on failure or state disposal.
         if (ctx.uniformPool) for (const buffer of batch.uniforms) {
           const available = ctx.uniformPool.available.get(buffer.size) ?? [];
           available.push(buffer); ctx.uniformPool.available.set(buffer.size, available);
@@ -163,12 +169,12 @@ export class Qwen35TextModel {
   }
   async read(buffer, elements, offset = 0, ctx = { control: this.control }) {
     return admit(ctx.control, ctx.signal, async () => {
-      const target = this.buffer(elements * 4, new Set(), GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
+      const target = ctx.readback ?? this.buffer(elements * 4, new Set(), GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
       try {
         const encoder = this.device.createCommandEncoder(); encoder.copyBufferToBuffer(buffer, offset, target, 0, elements * 4); this.device.queue.submit([encoder.finish()]);
         await target.mapAsync(GPUMapMode.READ);
         const data = new Float32Array(target.getMappedRange().slice(0)); target.unmap(); return data;
-      } finally { target.destroy(); }
+      } finally { if (!ctx.readback) target.destroy(); }
     });
   }
   async load(baseUrl, { signal = null, fetchImpl = fetch, onProgress = null } = {}) {
@@ -264,19 +270,33 @@ export class Qwen35TextModel {
       }
       return logits;
     })(); this.active = work; this.activeState = state;
-    try { return await work; } catch (error) { state.failed = true; throw error; } finally { this.active = null; this.activeState = null; }
+    try { return await work; } catch (error) { state.failed = true; this.releaseDecodeWorkspace(state); throw error; } finally { this.active = null; this.activeState = null; }
   }
   async forward(ids, state, ctx, predict = true) {
-    const c = this.config, tokens = ids.length, scratch = new Set(), f = n => this.buffer(n * 4, scratch);
-    // Uniforms are shape-dependent, so acquire lazily rather than reserve a
-    // fixed arena. Never retain prefill-sized storage or cross-request state.
-    if (ctx.batchDecode) ctx = { ...ctx, uniformPool: { available: new Map(), owned: scratch } };
+    const c = this.config, tokens = ids.length;
+    // Only logical, batched one-token decode retains workspace. Multi-token
+    // prefill (including its tail) never grows or displaces these allocations.
+    const workspace = ctx.batchDecode && tokens === 1 && state.length > 0
+      ? (state.decodeWorkspace ??= { buffers: new Set(), slots: [], uniforms: new Map() }) : null;
+    const scratch = workspace?.buffers ?? new Set(); let cursor = 0, completed = false;
+    const allocate = (bytes, usage = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC) => {
+      if (!workspace) return this.buffer(bytes, scratch, usage);
+      const index = cursor++, entry = workspace.slots[index];
+      if (entry) {
+        if (entry.bytes !== bytes || entry.usage !== usage) throw new Error('decode workspace geometry changed');
+        return entry.buffer;
+      }
+      const buffer = this.buffer(bytes, scratch, usage);
+      workspace.slots[index] = { buffer, bytes, usage }; return buffer;
+    };
+    const f = n => allocate(n * 4);
+    if (workspace) ctx = { ...ctx, uniformPool: { available: workspace.uniforms, owned: scratch } };
     const norm = (input, weight, output, width = c.hiddenSize, context = ctx) => this.dispatch('rms', () => rmsNormShader({ weightType: 'f32' }), [input, this.vectors.get(weight), output], new Uint32Array([tokens, width, 0, bits(this.layout.epsilon)]), [tokens, 1, 1], context);
     const add = (hidden, update, context = ctx) => this.dispatch('axpy', axpyShader, [hidden, update], new Uint32Array([tokens * c.hiddenSize, bits(1), 0, 0]), [Math.ceil(tokens * c.hiddenSize / 256), 1, 1], context);
     try {
       checkAbort(ctx.signal);
       const input = await admit(ctx.control, ctx.signal, async () => {
-        const buffer = this.upload(new Uint32Array(ids), scratch); await this.device.queue.onSubmittedWorkDone(); return buffer;
+        const data = new Uint32Array(ids), buffer = allocate(data.byteLength); this.device.queue.writeBuffer(buffer, 0, data); await this.device.queue.onSubmittedWorkDone(); return buffer;
       });
       const hidden = f(tokens * c.hiddenSize), normalized = f(tokens * c.hiddenSize), update = f(tokens * c.hiddenSize);
       const gateUp = f(tokens * 2 * c.intermediateSize), activation = f(tokens * c.intermediateSize);
@@ -324,8 +344,20 @@ export class Qwen35TextModel {
       await norm(hidden, 'model.norm.weight', normalized);
       if (this.onNorm) await this.onNorm({ buffer: normalized, tokens, context: ctx });
       const logits = f(c.vocabSize); await this.linear('lm_head', normalized, logits, 1, ctx, { inputOffset: (tokens - 1) * c.hiddenSize });
-      const result = await this.read(logits, c.vocabSize, 0, ctx); state.length += tokens; return result;
-    } finally { await this.device.queue.onSubmittedWorkDone().catch(() => {}); for (const buffer of scratch) buffer.destroy(); }
+      const readContext = workspace ? { ...ctx, readback: allocate(c.vocabSize * 4, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST) } : ctx;
+      const result = await this.read(logits, c.vocabSize, 0, readContext); state.length += tokens; completed = true; return result;
+    } finally {
+      let fenceError;
+      try { await this.device.queue.onSubmittedWorkDone(); } catch (error) { fenceError = error; }
+      if (!workspace) for (const buffer of scratch) buffer.destroy();
+      else if (!completed || fenceError) this.releaseDecodeWorkspace(state);
+      if (workspace && fenceError) throw fenceError;
+    }
+  }
+  releaseDecodeWorkspace(state) {
+    if (!state.decodeWorkspace) return;
+    for (const buffer of state.decodeWorkspace.buffers) buffer.destroy();
+    state.decodeWorkspace = null;
   }
   async disposeState(state) {
     if (state?.owner !== this) throw new Error('foreign generation state');
@@ -333,7 +365,7 @@ export class Qwen35TextModel {
       state.closed = true; state.abort.abort('generation state disposed');
       if (this.activeState === state) await this.active.catch(() => {});
       try { await this.device.queue.onSubmittedWorkDone(); }
-      finally { for (const b of state.buffers) b.destroy(); state.buffers.clear(); this.states.delete(state); }
+      finally { this.releaseDecodeWorkspace(state); for (const b of state.buffers) b.destroy(); state.buffers.clear(); this.states.delete(state); }
     })();
     return state.disposal;
   }
