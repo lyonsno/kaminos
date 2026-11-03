@@ -1,0 +1,25 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import {checkedFlameAttachment,compileFlameAttachment,attachmentSupport} from '../flame-attachment.mjs';
+const pose={position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]};
+const attachment={schema:'kaminos.flame-attachment.v1',enabled:true,centre:[0,.4,0],rotation:[0,0,0],radius:{output:'clearRadius',factor:1},feed:.2,fuel:.7,heat:2,flow:'speed'};
+const outputs={clearRadius:.3};
+const source=compileFlameAttachment({id:'any-body',transform:pose,flameAttachment:attachment},outputs);
+assert.equal(source.id,'any-body');assert.deepEqual(source.transform.position,[0,.4,0]);
+assert.equal(source.emission.settings['volume-immersed-radius'].value,.3);
+assert.equal(source.emission.settings['volume-immersed-speed'].value,.2);
+assert.throws(()=>compileFlameAttachment({id:'other',transform:pose,flameAttachment:attachment},{}),/clearRadius/);
+const manual={...attachment,radius:{value:.2}};
+assert.equal(compileFlameAttachment({id:'a-second-asset',transform:pose,flameAttachment:manual}).emission.settings['volume-immersed-radius'].value,.2);
+assert.equal(compileFlameAttachment({id:'closed',transform:pose,flameAttachment:{...manual,radius:{value:0}}}).emissionEnabled,false);
+assert.throws(()=>checkedFlameAttachment({...manual,feed:-1}),/feed/);
+assert.throws(()=>checkedFlameAttachment({...manual,radius:{output:'missing',factor:NaN}}),/radius/);
+const moved=compileFlameAttachment({id:'moved',transform:{...pose,position:[3,2,1],rotation:[0,0,Math.PI/2],scale:[2,2,2]},flameAttachment:manual});
+assert.ok(Math.abs(moved.transform.position[0]-2.2)<1e-10);assert.ok(Math.abs(moved.transform.position[1]-2)<1e-10);
+const support=attachmentSupport(source,{translation:[0,0,0],scale:1,controls:{resolution:32,gridHeightRatio:2}});
+assert.equal(support.inside,true);assert.equal(support.diameterCells,9.6);
+assert.equal(attachmentSupport(moved,{translation:[0,0,0],scale:1,controls:{resolution:32,gridHeightRatio:2}}).inside,false);
+const tiny=compileFlameAttachment({id:'tiny',transform:pose,flameAttachment:{...manual,radius:{value:.001}}});
+assert.equal(attachmentSupport(tiny,{translation:[0,0,0],scale:1,controls:{resolution:32,gridHeightRatio:2}}).footprintFloor,true);
+assert.equal(tiny.emission.settings['volume-immersed-speed'].value,.2,'floor policy is visible; compiler must not silently invent a compensation law');
+console.log('flame attachment: generic outputs/manual, pose, closure and grid consequences pass');

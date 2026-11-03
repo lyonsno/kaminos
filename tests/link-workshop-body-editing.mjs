@@ -4,7 +4,6 @@ import * as T from '../lib/three.core.js';
 import workshop from '../experiments/link-workshop.experiment.mjs';
 import {createSceneEdits,transformPose} from '../scene-edit-session.mjs';
 async function setup(){
- globalThis.Option=class extends Element{constructor(text,value){super();this.textContent=text;this.value=value;}};
  const scene=new T.Group(),edits=createSceneEdits({read(){throw Error('Missing target');},write(){throw Error('Missing target');}});let adapter;
  const session={async attach(root){scene.add(root);return {id:'workshop',root};},redraw(){},readView(){return {};},setView(){},onFrame(){return ()=>{};},async dispose(){scene.clear();}};
  const win={kaminosSceneEdits:edits,kaminosSelection:{set(){}}},host={scene:{async open(){return session;}},controls:{document:{defaultView:win},components:{register(id,a){adapter=a;return {changed(fn){edits.cancel();fn?.();},dispose(){}};}}}};

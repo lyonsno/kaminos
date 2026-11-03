@@ -15,7 +15,7 @@ import {normalizeCameraViews} from './scene-camera-views.mjs';
 import {CAMERA_TYPE,normalizeSceneCamera,normalizeCameraViewport} from './scene-camera.mjs';
 export const SCENE_SCHEMA = 'kaminos.scene.v1';
 export const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
-export const SCENE_VERSION = 11;
+export const SCENE_VERSION = 12;
 
 function cloneJson(value) {
   if (value === undefined) return undefined;
@@ -208,7 +208,7 @@ export function buildSceneDocument({
   }
   const document = {
     schema: SCENE_SCHEMA,
-    version: sceneObjects.some(o=>o.repetition)||sceneGroups.some(g=>g.repetition)?SCENE_VERSION:fireSettings?10:8,
+    version: sceneObjects.some(o=>o.flameAttachment)?12:sceneObjects.some(o=>o.repetition)||sceneGroups.some(g=>g.repetition)?11:fireSettings?10:8,
     timestamp,
     objects: fireSettings ? authorFireObjects(sceneObjects,fireSettings,{translation:authoredFlameDomain,scale:flameDomainScale,followSource:flameDomainFollowSource,worldFrame:flameWorldFrame,collision:composition?.route?.volume_collision==='kiln'}) : sceneObjects,
     ...(fireSettings?{fireRendering:fireRenderingSettings(fireSettings)}:{}),

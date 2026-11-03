@@ -2,6 +2,7 @@ import {ashSourceRecordDomain} from './ash/source-object.mjs';
 import {ashRecordDomain} from './ash/scene-record.mjs';
 import {brazierRoomRecordDomain} from './brazier-room-record.mjs';
 import {mechanismRecordDomain} from './experiments/link-workshop/record.mjs';
+import {crownRecordDomain} from './compound-crown-record.mjs';
 // Application installation only: payload meaning lives with each domain.
 import {sceneAssetRecordDomains} from './scene-asset-records.mjs';
 import {cameraRecordDomain} from './scene-camera.mjs';
@@ -15,5 +16,5 @@ import {promptReliefRecordDomain} from './inference-kiln-record.mjs';
 export const sceneRecordDomains=Object.freeze([
   ...sceneAssetRecordDomains,cameraRecordDomain,spotLightRecordDomain,proceduralMeshRecordDomain,
   {...proceduralMeshRecordDomain,type:'burner-bed'},fireSourceRecordDomain,fireDomainRecordDomain,
-  localLiquidRecordDomain,promptReliefRecordDomain,stageMoldRecordDomain,stageCastingRecordDomain,brazierRoomRecordDomain,ashRecordDomain,ashSourceRecordDomain,mechanismRecordDomain,
+  localLiquidRecordDomain,promptReliefRecordDomain,stageMoldRecordDomain,stageCastingRecordDomain,brazierRoomRecordDomain,ashRecordDomain,ashSourceRecordDomain,mechanismRecordDomain,crownRecordDomain,
 ]);

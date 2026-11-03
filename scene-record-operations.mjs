@@ -1,4 +1,5 @@
 import {checkedBurnable} from './scene-burning-settings.mjs';
+import {checkedFlameAttachment} from './flame-attachment.mjs';
 import {sceneRecordDomains} from './scene-record-domains.mjs';
 import {checkedObjectCollision,canCollideWithFire} from './scene-collider.mjs';
 import {checkedGiProxySetting} from './scene-gi-proxy-settings.mjs';
@@ -17,7 +18,7 @@ export function createSceneRecordOperations({domains=sceneRecordDomains,readers=
     table.set(key,Object.freeze({...domain}));
   }
   const domainFor=record=>sources.get(JSON.stringify([record?.type??'glb',record?.source]))??types.get(record?.type??'glb');
-  const properties=record=>structuredClone(domainFor(record)?.fields(record)??{});
+  const properties=record=>({...structuredClone(domainFor(record)?.fields(record)??{}),...(record?.flameAttachment?{flameAttachment:checkedFlameAttachment(record.flameAttachment)}:{})});
   const installed=[...types.values(),...sources.values()];
   function describe(object,metadata) {
     const owners=installed.filter(domain=>domain.recognize?.(object));
