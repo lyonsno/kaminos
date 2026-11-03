@@ -58,6 +58,7 @@ def visibility_holds():
 
 def asset_kind(path):
     suffix=Path(path).suffix.lower()
+    if str(path).lower().endswith('.stock-family.json'):return 'stock-family'
     return 'surface' if str(path).lower().endswith('.surface.json') else 'mesh' if suffix=='.glb' else 'image' if suffix in IMAGE_SUFFIXES else None
 
 def generator_receipt(receipt):
@@ -77,7 +78,7 @@ def read_catalog(collection, *, roots, image_entries, origins, output_resolver, 
     def append(path,source,*,name=None,title=None,job=None,generation=None,agent=None,output_class=None,preview=None):
         kind=asset_kind(path)
         if not kind:return
-        if kind=='surface' and collection!='generated-meshes':return
+        if kind in ('surface','stock-family') and collection!='generated-meshes':return
         stat=path.stat()
         entries.append(apply_hold({'id':source,'kind':kind,'root':collection,'path':path.relative_to(root).as_posix() if path.is_relative_to(root) else path.name,
             'name':name or path.name,'label':title or label(name or path.name), 'source':source,'size':stat.st_size,'mtime':stat.st_mtime,
@@ -144,6 +145,15 @@ def read_catalog(collection, *, roots, image_entries, origins, output_resolver, 
             if not resolved.is_relative_to(root):warn(path,'Asset symlink leaves its mounted collection');continue
             rel=path.relative_to(root).as_posix();source='/api/read?'+urlencode({'root':collection,'path':rel})
             generation=None;title=None;preview=None
+            if asset_kind(path)=='stock-family':
+                try:
+                    manifest=json.loads(path.read_text())
+                    if (not isinstance(manifest,dict) or manifest.get('schema')!='kaminos.stock-family-asset.v1'
+                        or not isinstance(manifest.get('name'),str) or not manifest['name'].strip()
+                        or not isinstance(manifest.get('recipe'),dict) or manifest['recipe'].get('schema')!='kaminos.stock-family.v1'):
+                        raise ValueError('Invalid stock family manifest')
+                    title=manifest['name']
+                except (ValueError,OSError,TypeError) as error:warn(path,error);continue
             if asset_kind(path)=='surface':
                 try:
                     manifest=json.loads(path.read_text())

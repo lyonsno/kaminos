@@ -1,4 +1,4 @@
-export const assetKind = name => /\.surface\.json$/i.test(name) ? 'surface' : /\.glb$/i.test(name) ? 'mesh' : /\.(png|jpe?g|webp)$/i.test(name) ? 'image' : null;
+export const assetKind = name => /\.stock-family\.json$/i.test(name) ? "stock-family" : /\.surface\.json$/i.test(name) ? 'surface' : /\.glb$/i.test(name) ? 'mesh' : /\.(png|jpe?g|webp)$/i.test(name) ? 'image' : null;
 export const assetWithheld = entry => entry?.visibility?.status==='withheld';
 const requireVisible = entry => {if(assetWithheld(entry))throw Error(entry.visibility.reason || 'Asset awaiting further review.');};
 const copy = value => structuredClone(value);
@@ -6,11 +6,12 @@ const collections=new Set(['generated-meshes','image-inbox','greenroom','trellis
 export function assetSource(root, path) {
   return `/api/read?${new URLSearchParams({root, path})}`;
 }
-export function createAuthoringAssets({request, addMesh, uploadImage, prepareImage, generator, nameForSource=()=>null, changed = () => {}}) {
+export function createAuthoringAssets({request, addMesh, openFamily, uploadImage, prepareImage, generator, nameForSource=()=>null, changed = () => {}}) {
   let state = {roots:[], root:'generated-meshes', path:'', entries:[], selected:null, preparation:null, loading:false, adding:false, error:null, results:[]};
   let preparationTicket=0,preparationAbort=null,preparationPromise=null;
   let navigation = 0,revision=0;
-  const publish = () => changed(copy(state));
+  const listeners=new Set();
+  const publish = () => {changed(copy(state));for(const listener of listeners)listener(copy(state));};
   const get = async url => {const value = await request(url); if(value.error)throw Error(value.error);return value;};
   function clearPreparation(){preparationTicket++;preparationAbort?.abort(new DOMException('Image selection changed','AbortError'));preparationAbort=null;preparationPromise=null;state.preparation=null;}
   async function prepare(){
@@ -36,7 +37,7 @@ export function createAuthoringAssets({request, addMesh, uploadImage, prepareIma
       if(ticket !== navigation)return false;
       if(collections.has(root)){
         if(result.schema!=='kaminos.authoring-assets.v1'||result.collection!==root||!Array.isArray(result.entries))throw Error('Asset catalog does not match the requested collection');
-        if(result.entries.some(entry=>!['image','mesh','surface'].includes(entry.kind)||typeof entry.source!=='string'||!/^\/api\/(read|job-output)\?/.test(entry.source)))throw Error('Asset catalog contains an invalid asset source');
+        if(result.entries.some(entry=>!['image','mesh','surface','stock-family'].includes(entry.kind)||typeof entry.source!=='string'||!/^\/api\/(read|job-output)\?/.test(entry.source)))throw Error('Asset catalog contains an invalid asset source');
         state.entries=result.entries.map(entry=>({...entry,label:(assetWithheld(entry)?null:nameForSource(entry.source))||entry.label||entry.name}));state.warnings=result.warnings||[];state.unavailableCount=result.unavailableCount||0;
       }else{
       if(result.type !== 'dir' || result.root !== root || result.path !== path || !Array.isArray(result.entries))throw Error('Asset folder response does not match the requested folder');
@@ -52,6 +53,7 @@ export function createAuthoringAssets({request, addMesh, uploadImage, prepareIma
   }
   return {
     read:()=>copy(state), browse, prepare,
+    subscribe(listener){listeners.add(listener);return()=>listeners.delete(listener);},
     async refresh() {
       try {
         const roots = await get('/api/roots');
@@ -61,13 +63,13 @@ export function createAuthoringAssets({request, addMesh, uploadImage, prepareIma
         return browse(state.root,state.path);
       }catch(error){state.error=error.message;publish();return false;}
     },
-    select(entry) {if(!entry || !['mesh','image','surface'].includes(entry.kind))throw Error('Choose a 3D asset or source image');clearPreparation();state.selected=copy(entry);state.error=null;publish();},
+    select(entry) {if(!entry || !['mesh','image','surface','stock-family'].includes(entry.kind))throw Error('Choose a 3D asset or source image');clearPreparation();state.selected=copy(entry);state.error=null;publish();},
     async add(entry = state.selected) {
       if(state.adding)throw Error('An asset is already being added');
-      if(!['mesh','surface'].includes(entry?.kind))throw Error('Choose a 3D asset to add');
+      if(!['mesh','surface','stock-family'].includes(entry?.kind))throw Error('Choose a 3D asset to add');
       requireVisible(entry);
       state.adding=true;state.error=null;publish();
-      try {return await addMesh({...copy(entry),source:entry.source || assetSource(entry.root,entry.path)});}
+      try {if(entry.kind==='stock-family'){if(!openFamily)throw Error('Stock family opening is unavailable');return await openFamily({...copy(entry),source:entry.source || assetSource(entry.root,entry.path)});}return await addMesh({...copy(entry),source:entry.source || assetSource(entry.root,entry.path)});}
       catch(error){state.error=error.message;throw error;}
       finally{state.adding=false;publish();}
     },
@@ -138,7 +140,7 @@ export function installAuthoringAssets({document,controller,edits}) {
       const button=document.createElement('button');button.type='button';button.className='asset-entry';button.dataset.assetPath=entry.source||entry.path;button.title=entry.path;
       if(assetWithheld(entry)){button.dataset.visibility='withheld';const cover=document.createElement('div');cover.className='asset-hold-cover';const cross=document.createElement('b');cross.textContent='×';cross.setAttribute('aria-hidden','true');const stamp=document.createElement('strong');stamp.textContent='TOP SECRET';const notice=document.createElement('p');notice.textContent=entry.visibility.reason;cover.append(cross,stamp,notice);button.append(cover);}
       else if(entry.kind==='image'||entry.preview){const img=document.createElement('img');img.loading='lazy';img.src=entry.preview || entry.source || assetSource(entry.root,entry.path);img.alt='';button.append(img);}
-      const title=document.createElement('span');title.textContent=(entry.kind==='folder'?'▸ ':entry.kind==='mesh'?'◇ ':'')+entry.label;button.append(title);const subtitle=document.createElement('small');subtitle.textContent=entry.kind==='mesh'?'Mesh · GLB':entry.kind==='surface'?'Fitted surface splats':entry.kind==='image'?'Image':'';button.append(subtitle);
+      const title=document.createElement('span');title.textContent=(entry.kind==='folder'?'▸ ':entry.kind==='mesh'?'◇ ':'')+entry.label;button.append(title);const subtitle=document.createElement('small');subtitle.textContent=entry.kind==='mesh'?'Mesh · GLB':entry.kind==='surface'?'Fitted surface splats':entry.kind==='stock-family'?'Stock family':entry.kind==='image'?'Image':'';button.append(subtitle);
       button.setAttribute('aria-pressed',String(!!selected&&(selected.source||selected.path)===(entry.source||entry.path)));
       button.onclick=()=>action(()=>entry.kind==='folder'?controller.browse(entry.root,entry.path):controller.select(entry));
       if(entry.kind==='mesh'&&!assetWithheld(entry))previews.set(button,entry);
@@ -165,7 +167,7 @@ export function installAuthoringAssets({document,controller,edits}) {
     for(const button of byId('asset-entries').querySelectorAll('.asset-entry'))button.setAttribute('aria-pressed',String((state.selected?.source||state.selected?.path)===button.dataset.assetPath));
     byId('asset-status').textContent=state.loading?'Loading assets…':state.error || (state.warnings?.length?`${state.warnings.length} output records could not be read.`:entries.length?'':`No assets in this collection`);
     if(!state.loading&&!state.error&&state.unavailableCount)byId('asset-status').textContent+=(byId('asset-status').textContent?' · ':'')+`${state.unavailableCount} historical output records are unavailable.`;
-    const selected=state.selected,withheld=assetWithheld(selected);byId('asset-hold-notice').hidden=!withheld;byId('asset-detail').hidden=!selected;byId('asset-add').hidden=withheld||!['mesh','surface'].includes(selected?.kind);byId('asset-use-image').hidden=withheld||selected?.kind!=='image';byId('asset-add').disabled=state.adding;
+    const selected=state.selected,withheld=assetWithheld(selected);byId('asset-hold-notice').hidden=!withheld;byId('asset-detail').hidden=!selected;byId('asset-add').hidden=withheld||!['mesh','surface','stock-family'].includes(selected?.kind);byId('asset-use-image').hidden=withheld||selected?.kind!=='image';byId('asset-add').disabled=state.adding;byId('asset-add').textContent=selected?.kind==='stock-family'?'Open family':'Add to scene';
     if(selected){byId('asset-name').textContent=selected.label || selected.name;byId('asset-name').title=selected.label || selected.name;byId('asset-source').textContent=selected.root?(labels[selected.root]||selected.root):selected.generation?'Generated in this session':'Local file';byId('asset-source').title=selected.source || selected.path || '';}
     const preparation=state.preparation;
     const usedInput=mode==='generate'&&controller.preparesInput?.()&&selected?.kind==='image'?usedInputPreviewFor(controller.generation().inputPreview,selected.source || assetSource(selected.root,selected.path)):null;
