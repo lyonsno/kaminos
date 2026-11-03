@@ -32,12 +32,14 @@ export function createDeferredSurfaceSplats(data,meta,footprints,depthTolerance)
   const sums=new RenderTarget(1,1,{count:3,type:HalfFloatType,minFilter:NearestFilter,magFilter:NearestFilter,depthBuffer:false});
   const tolerance=attribute('sourceTolerance','float').mul(worldScale),disc=uv().mul(2).sub(1),r2=disc.dot(disc);
   const viewNormal=varying(transformNormalToView(attribute('sourceNormal','vec3').normalize())).mul(faceDirection).normalize();
-  const nearSample=texture(nearest.texture,screenUV),weight=r2.mul(-4.5).exp();
+  const grazing=viewNormal.z.abs().smoothstep(0,.35).mul(.75).add(.25);
+  const nearSample=texture(nearest.texture,screenUV),weight=r2.mul(-4.5).exp().mul(grazing);
   const sourcePosition=attribute('center','vec3').add(attribute('axisU','vec4').xyz.mul(attribute('axisU','vec4').w.mul(positionGeometry.x).mul(3))).add(attribute('axisV','vec4').xyz.mul(attribute('axisV','vec4').w.mul(positionGeometry.y).mul(3)));
-  const mask=Fn(()=>{If(r2.greaterThan(1),()=>Discard());return bool(true);})();
-  const nearestMaterial=new MeshBasicNodeMaterial({side:DoubleSide});nearestMaterial.positionNode=sourcePosition;nearestMaterial.maskNode=mask;nearestMaterial.outputNode=vec4(viewNormal,positionView.z.negate());nearestMaterial.toneMapped=false;
+  const nearMask=Fn(()=>{If(r2.greaterThan(1).or(weight.lessThan(.08)),()=>Discard());return bool(true);})();
+  const sumMask=Fn(()=>{If(r2.greaterThan(1),()=>Discard());return bool(true);})();
+  const nearestMaterial=new MeshBasicNodeMaterial({side:DoubleSide});nearestMaterial.positionNode=sourcePosition;nearestMaterial.maskNode=nearMask;nearestMaterial.outputNode=vec4(viewNormal,positionView.z.negate());nearestMaterial.toneMapped=false;
   const sumMaterial=new MeshBasicNodeMaterial({side:DoubleSide,transparent:true,depthTest:false,depthWrite:false,blending:CustomBlending,blendSrc:OneFactor,blendDst:OneFactor,blendEquation:AddEquation,blendSrcAlpha:OneFactor,blendDstAlpha:OneFactor,blendEquationAlpha:AddEquation});
-  sumMaterial.positionNode=sourcePosition;sumMaterial.maskNode=mask;sumMaterial.toneMapped=false;
+  sumMaterial.positionNode=sourcePosition;sumMaterial.maskNode=sumMask;sumMaterial.toneMapped=false;
   const reject=Fn(()=>{If(positionView.z.negate().sub(nearSample.a).abs().greaterThan(tolerance).or(viewNormal.dot(nearSample.xyz).lessThan(.5)),()=>Discard());return vec4(0);})();
   sumMaterial.colorNode=reject;
   sumMaterial.outputNode=outputStruct(vec4(attribute('sourceColor','vec3').mul(weight),weight),vec4(viewNormal.mul(weight),positionView.z.negate().mul(weight)),vec4(vec3(attribute('sourceOpacity','float'),attribute('sourceMetal','float'),attribute('sourceRough','float')).mul(weight),weight));
@@ -46,7 +48,7 @@ export function createDeferredSurfaceSplats(data,meta,footprints,depthTolerance)
   const color=c.rgb.div(den),normal=n.xyz.div(den).normalize(),parameters=m.xyz.div(den),z=n.a.div(den).negate();
   const depth=Fn(([],builder)=>builder.camera.isOrthographicCamera?viewZToOrthographicDepth(z,cameraNear,cameraFar):viewZToPerspectiveDepth(z,cameraNear,cameraFar))();
   const position=getViewPosition(screenUV,depth,cameraProjectionMatrixInverse),world=cameraWorldMatrix.mul(vec4(position,1)).xyz;
-  const valid=c.a.greaterThan(1e-6);
+  const valid=c.a.greaterThan(.08);
   const material=new SurfaceMaterial({side:DoubleSide});fullscreen(material);material.surfacePosition=position;material.surfaceWorld=world;
   material.maskNode=valid;material.depthNode=depth;material.normalNode=normal;material.receivedShadowPositionNode=world;
   const mesh=new Mesh(new PlaneGeometry(2,2),material);mesh.frustumCulled=false;mesh.receiveShadow=true;mesh.name=p?'Resolved glass splats':'Resolved opaque splats';mesh.renderOrder=p?1:0;root.add(mesh);
@@ -85,7 +87,7 @@ export function createDeferredSurfaceSplats(data,meta,footprints,depthTolerance)
  }
  for(const l of layers)l.mesh.onBeforeRender=prepare;
  apply();
- return {root,read:()=>({...state,count:meta.count,sourceCount:meta.sourceCount??meta.count,route:'deferred-surface-splats',depthTolerance:depthTolerance?'per-splat':'uniform',layers:layers.length,lightingPrimitives:layers.length*2,updates,width:layers[0].nearest.width,height:layers[0].nearest.height,populations:layers.map(l=>({glass:!!l.p,count:l.count}))}),set(patch){
+ return {root,read:()=>({...state,count:meta.count,sourceCount:meta.sourceCount??meta.count,route:'deferred-surface-splats',depthTolerance:depthTolerance?'per-splat':'uniform',supportCutoff:.08,layers:layers.length,lightingPrimitives:layers.length*2,updates,width:layers[0].nearest.width,height:layers[0].nearest.height,populations:layers.map(l=>({glass:!!l.p,count:l.count}))}),set(patch){
   if(disposed)throw Error('Surface splats disposed');const next={...state,...patch};if(!['glass','opaque','opacity','plain','normals'].includes(next.mode)||!Number.isFinite(next.ior)||next.ior<1||next.ior>2.5||!Number.isFinite(next.thickness)||next.thickness<0||next.thickness>1)throw Error('Invalid splat optics');state={mode:next.mode,ior:next.ior,thickness:next.thickness};apply();return this.read();
  },async inspectSurface(x,y){if(!lastRenderer||disposed)throw Error('Splats have not rendered');return Promise.all(layers.map(async l=>({glass:!!l.p,nearest:Array.from(await lastRenderer.readRenderTargetPixelsAsync(l.nearest,x,y,1,1)),sums:await Promise.all(l.sums.textures.map(async(_,i)=>Array.from(await lastRenderer.readRenderTargetPixelsAsync(l.sums,x,y,1,1,i),DataUtils.fromHalfFloat)))})));},
  dispose(){if(disposed)return;disposed=true;zeroMaterial.dispose();for(const l of layers){l.mesh.geometry.dispose();l.geometry.dispose();for(const m of [l.material,l.aoMaterial,l.nearestMaterial,l.sumMaterial])m.dispose();l.nearest.dispose();l.sums.dispose();}root.clear();}};
