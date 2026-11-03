@@ -3,13 +3,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { test } from 'node:test';
+import {createEnvironmentLoader} from '../scene-environment-loader.mjs';
 import {bindSceneExposureControls} from '../scene-emissive-camera.mjs';
 
 import {createSceneEnvironmentState,normalizeEnvironmentRecipe} from '../scene-environment-state.mjs';
 import {bindSceneEnvironmentControls,environmentLegacySettings} from '../scene-environment-controls.mjs';
 const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const between = (a, b) => source.slice(source.indexOf(a), source.indexOf(b, source.indexOf(a)));
-function environmentContext({ storage = new Map(), startup = false } = {}) {
+function environmentContext({ storage = new Map(), startup = false, load = async url => ({name:url.split('.')[0]}) } = {}) {
   const elements = new Map();
   const document = {querySelectorAll:()=>[],getElementById(id){
     if(!elements.has(id))elements.set(id,{value:'0',min:'0',max:'1',checked:false,style:{},dataset:{},textContent:'',listeners:{},
@@ -20,8 +21,7 @@ function environmentContext({ storage = new Map(), startup = false } = {}) {
   }};
   const scene = { environmentRotation: { y: 0 }, environmentIntensity: 1 };
   const context = sceneContext({ createUserPreferences:()=>({load:async()=>null}),environmentLegacySettings,document, scene, sceneObjects: [],
-    envCache: { studio: { name: 'studio' }, warehouse: { name: 'warehouse' } },
-    HDR_ENVS: { studio: { exposure: 1.5, intensity: 1 }, warehouse: { exposure: 0.7, intensity: 0.5 } },
+    HDR_ENVS: { studio: { url:'studio.hdr', exposure: 1.5, intensity: 1 }, warehouse: { url:'warehouse.hdr', exposure: 0.7, intensity: 0.5 } },
     environmentLoadToken: 0, currentEnvMap: null,
     renderer: { toneMappingExposure: 1 }, sceneExposureControls: null, THREE: { Euler: class { constructor(x,y,z) { Object.assign(this,{x,y,z}); } } },
     updateBackground() {}, window: {}, console,
@@ -30,6 +30,8 @@ function environmentContext({ storage = new Map(), startup = false } = {}) {
   });
   context.sceneEnvironment=createSceneEnvironmentState({presets:context.HDR_ENVS});
   vm.runInContext(between('// --- Environment Loading ---', '// --- File Loading ---'), context);
+  context.environmentLoader=createEnvironmentLoader({presets:context.HDR_ENVS,load,apply:map=>context.applyEnvMap(map,context.readEnvironmentRecipe().intensity),fallback:()=>({name:'neutral'})});
+  context.environmentLoader.releaseFull();
   const flame=document.getElementById('volume-physical-exposure');flame.min='-8';flame.max='8';flame.ownerDocument={defaultView:{Event}};
   context.sceneExposureControls=bindSceneExposureControls({exposure:document.getElementById('exposure-slider'),flame,match:document.getElementById('rendering-match-flame-camera'),label:document.getElementById('scene-exposure-label'),output:document.getElementById('exposure-val'),readIndependent:()=>context.sceneEnvironment.read().exposure,writeIndependent:exposure=>context.sceneEnvironment.patch({exposure}),redraw(){}});
   context.sceneEnvironment.subscribe(context.applyEnvironmentParameters);
@@ -109,16 +111,14 @@ test('two startups retain map recipes and selection while ignoring obsolete brow
 });
 
 test('a late HDR response cannot replace the selected environment or its tuning', async () => {
-  const c = environmentContext(), requests = new Map();
-  c.envCache = {};
-  c.HDR_ENVS.studio.url = 'studio.hdr'; c.HDR_ENVS.warehouse.url = 'warehouse.hdr';
-  c.RGBELoader = class { load(url, resolve) { requests.set(url, resolve); } };
-  c.pmremGenerator = { fromEquirectangular: tex => ({ texture: { name: tex.name } }) };
-  const studio = c.loadEnvironment('studio'), warehouse = c.loadEnvironment('warehouse');
+  const requests = new Map();
+  const c = environmentContext({load:url=>new Promise(resolve=>requests.set(url,resolve))});
+  await c.loadEnvironment('studio');await new Promise(r=>setImmediate(r));
+  await c.loadEnvironment('warehouse');await new Promise(r=>setImmediate(r));
   const recipe = { exposure: 2.3, intensity: 0.37, rotation: 2.1, backgroundBrightness: 0.85, backgroundContrast: 1.6 };
   tune(c,recipe);
-  requests.get('warehouse.hdr')({ name: 'warehouse', dispose() {} }); await warehouse;
-  requests.get('studio.hdr')({ name: 'studio', dispose() {} }); await studio;
+  requests.get('warehouse.hdr')({ name: 'warehouse' }); await c.environmentLoader.whenSettled();
+  requests.get('studio.hdr')({ name: 'studio' }); await new Promise(r=>setImmediate(r));
   assert.equal(c.sceneEnvironment.read().name,'warehouse'); assert.equal(c.scene.environment.name,'warehouse');
   assert.equal(c.scene.environmentIntensity,0.37); assert.deepEqual(snapshot(c),recipe);
 });

@@ -254,7 +254,7 @@ canvas { display: block; }
 #scene-edit-hud[data-active="true"] { color:#f4c176; }
 #scene-edit-hud[data-alert="true"] { max-width:min(560px,calc(100% - 32px)); overflow:visible; text-overflow:clip; white-space:normal; overflow-wrap:anywhere; padding:5px 8px; border:1px solid rgba(169,120,55,.9); background:rgba(26,20,14,.94); color:#ffd18e; }
 
-#env-loading { position: absolute; bottom: 12px; left: 12px; padding: 6px 9px; border-radius: 4px; background: #181818cc; color: #ddd; font-size: 12px; font-family: 'SF Mono', monospace; pointer-events: none; }
+#env-loading { position: absolute; top: 12px; left: 12px; max-width: calc(100% - 24px); box-sizing: border-box; padding: 6px 9px; border-radius: 4px; background: #181818cc; color: #ddd; font-size: 12px; font-family: 'SF Mono', monospace; pointer-events: none; }
 
 /* Exposure slider */
 .slider-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; user-select: none; -webkit-user-select: none; }
@@ -10565,6 +10565,7 @@ const environmentLoader = createEnvironmentLoader({
   },
   apply: map => applyEnvMap(map, readEnvironmentRecipe().intensity),
   fallback: () => neutralEnvironmentMap ||= createProceduralEnv(),
+  placeholder: createPendingEnvironment,
   changed(state) {
     const label = HDR_ENVS[state.name]?.label || 'Environment';
     const el = document.getElementById('env-loading');
@@ -12285,6 +12286,15 @@ function applyEnvironmentParameters(value=sceneEnvironment.read()) {
     for(const material of [].concat(child.material||[]))material.envMapIntensity=value.intensity;
   });
   sceneExposureControls?.sync();updateBackground();window._kaminosDirty?.();
+}
+
+function createPendingEnvironment() {
+  // A tiny valid PMREM for consumers that render before even the preview arrives.
+  const texture = new THREE.DataTexture(new Float32Array([.18,.18,.18,1,.18,.18,.18,1]), 2, 1, THREE.RGBAFormat, THREE.FloatType);
+  texture.mapping = THREE.EquirectangularReflectionMapping;
+  texture.needsUpdate = true;
+  try { return pmremGenerator.fromEquirectangular(texture).texture; }
+  finally { texture.dispose(); }
 }
 
 function createProceduralEnv() {
@@ -26663,7 +26673,9 @@ async function loadSceneFile(file, options = {}) {
     setInfo('Wait for the current scene history action to finish');
     return;
   }
-  return sceneDocument.restore(file, options);
+  const release = environmentLoader.holdFull();
+  try { return await sceneDocument.restore(file, options); }
+  finally { requestAnimationFrame(() => setTimeout(release, 0)); }
 }
 
 async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, sceneFile}) {
