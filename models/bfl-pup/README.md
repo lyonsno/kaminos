@@ -174,3 +174,13 @@ and [model preflight](https://github.com/huggingface/transformers.js/blob/54652b
 Generate offers **Keep prompt helper loaded** and **Unload**. With retention enabled, a successful expansion leaves the initialized processor and model in its worker. Every request still claims, renews and releases its own Greenroom execution lease; idle resident weights do not reserve GPU execution. A second request starts with fresh request state and reports `modelReused: true`. Cancel, a worker error, Unload, disabling the preference, or closing the tab retires the context. The prompt studio keeps its per-request default.
 
 The choice persists in browser-local storage. `KAMINOS_PUP_KEEP_LOADED=true` supplies the serving machine's initial default without overriding a previously saved browser choice. Models are loaded by the first expansion, never preloaded merely by opening the page. Retention consumes memory while the tab is open.
+
+
+## Switchable weight-difference adapter over Qwen3.5-9B
+
+BFL trained `black-forest-labs/flux-3-image-klein-pup` (`3f3edb52b2c55de0d49feab28598b68f7f8e4830`) as a full fine-tune of `Qwen/Qwen3.5-9B` (`c202236235762e1c871ad0ccb60c8ee5ba337b9a`) with the 333 `model.visual.*` tensors frozen (`rel_L2 = 0.0`).
+
+- `extract_delta_adapter.py` streams tensor pairs from the BF16 source checkpoints (or local checkpoint directories), skips `mtp.*` and verifies `model.visual.*` identity, retains all 225 small language tensors (`dim < 1024`: norms, `conv1d.weight`, `in_proj_a.weight`, `in_proj_b.weight`, `A_log`, `dt_bias`) exactly in `shards/exact_small.safetensors`, and extracts rank-sliceable truncated SVD factors (`lora_B`, `lora_A`, `singular_values` ordered by descending singular value) for the 200 layer 2D projections plus `embed_tokens` and `lm_head`. Any rank `r <= max_rank` is a prefix slice `lora_B[:, :r] @ lora_A[:r, :]`.
+- `switchable_adapter.py` (`SwitchableDeltaController`, PyTorch) and `mlx_switchable_adapter.py` (`MLXSwitchableDeltaController`, MLX unquantized + 4-bit `QuantizedLinear`/`QuantizedEmbedding`) attach the extracted adapter to a single resident model, swap the exact small parameters, apply the rank-`r` sidecar delta without reloading or dequantizing the base 2D weights, and enforce KV + Gated DeltaNet recurrent state reset on every mode or rank switch.
+- `evaluate_switchable_mlx.py` evaluates a single resident MLX model across adapter modes/ranks (`off`, `on_r64`, `on_r128`, `on_r256`) with fail-first false-closure guards.
+- Manual unit checks: `tests/bfl-pup-delta-extract.py`, `tests/bfl-pup-switchable-adapter.py`, `tests/bfl-pup-mlx-switchable-adapter.py`, and `tests/bfl-pup-mlx-eval-harness.py`.
