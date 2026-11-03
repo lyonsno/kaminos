@@ -24990,6 +24990,7 @@ function compositionStatus(message, failed = false) {
 }
 
 async function collectSceneComposition() {
+  const saveIntent = sceneDocument.beginSave();
   if(!flameFeature.present&&!activeSceneComposition)return;
   const debug = volumePrototype?.debugState?.();
   if (!isFireLightFieldRoute() && !activeSceneComposition) return;
@@ -25001,6 +25002,7 @@ async function collectSceneComposition() {
   }
   if (!isFireLightFieldRoute()) throw new Error('Composition saving requires the ordinary flame light-field route');
   await volumeCockpitLayoutReady;
+  saveIntent.assertCurrent();
   const preset = buildVolumeSettingsPreset();
   const fingerprint = value => JSON.stringify([
     value.domControls, value.rendererControls, value.presentationControls, value.route,
@@ -25011,6 +25013,7 @@ async function collectSceneComposition() {
   ]);
   const savedFingerprint = fingerprint(preset);
   const assertUnchanged = () => {
+    saveIntent.assertCurrent();
     if (fingerprint(buildVolumeSettingsPreset()) !== savedFingerprint) {
       throw new Error('Flame settings changed during save or capture; try again');
     }
@@ -26410,13 +26413,15 @@ function sceneSaveIsBlocked() {
 // Save: overwrite current scene file, or create new if none
 window.saveScene = ({ result = false } = {}) => withAuthoringAction(async () => {
   if (sceneSaveIsBlocked()) return false;
+  const saveIntent = sceneDocument.beginSave();
   if (sceneIsEmpty()) {
     setInfo('Nothing to save');
     return false;
   }
   await collectSceneComposition();
+  saveIntent.assertCurrent();
   const data = buildSceneData();
-  return saveToServer(data, sceneDocument.state().filename, { result });
+  return saveToServer(data, saveIntent.filename, { result });
 }, { result });
 
 // Save As: always create a new scene file
@@ -26429,6 +26434,7 @@ function defaultSceneSaveStem() {
 }
 
 window.saveSceneAs = async ({ result = false, promptName = false, name = null } = {}) => {
+  const saveIntent = sceneDocument.beginSave();
   if (!promptName && name === null) {
     return withAuthoringAction(async () => {
       if (sceneSaveIsBlocked()) return false;
@@ -26436,7 +26442,9 @@ window.saveSceneAs = async ({ result = false, promptName = false, name = null } 
         setInfo('Nothing to save');
         return false;
       }
+      saveIntent.assertCurrent();
       await collectSceneComposition();
+      saveIntent.assertCurrent();
       const data = buildSceneData();
       return saveToServer(data, null, { result });
     }, { result });
@@ -26447,7 +26455,9 @@ window.saveSceneAs = async ({ result = false, promptName = false, name = null } 
   while (stem) {
     const saved = await withAuthoringAction(async () => {
       if (sceneSaveIsBlocked()) return false;
+      saveIntent.assertCurrent();
       await collectSceneComposition();
+      saveIntent.assertCurrent();
       return saveToServer(buildSceneData(), null, { result: true, saveAsName: stem, overwrite });
     }, { result: true });
     if (!saved?.exists) return result ? saved : saved?.ok === true;
