@@ -19,3 +19,7 @@ assert.deepEqual(view.manifest().warnings,[]);
 const saved=view.exportBodies();view.dispose();
 const restored=createBodyView(root);restored.update(recipe,0);restored.importBodies(saved);restored.update(recipe,1);assert.equal(root.getObjectByName('Door shell').position.x,1.39);restored.dispose();
 console.log('furnace geometry, opening and body return passed');
+const paired=furnaceAssembly({mirrored:true}),pairRoot=new T.Group(),pairView=createBodyView(pairRoot);pairView.update(paired.recipe,0);pairView.importBodies(paired.geometry);
+assert(pairRoot.getObjectByName('Mirror: Side operating lever'),'opposite-side lever exists');
+for(const t of [0,.25,.5,.75,1]){pairView.update(paired.recipe,t);const a=pairRoot.getObjectByName('Side operating lever'),b=pairRoot.getObjectByName('Mirror: Side operating lever');a.geometry.computeBoundingBox();b.geometry.computeBoundingBox();const ca=a.geometry.boundingBox.getCenter(new T.Vector3()).applyMatrix4(a.matrixWorld),cb=b.geometry.boundingBox.getCenter(new T.Vector3()).applyMatrix4(b.matrixWorld);assert(Math.abs(ca.x-cb.x)<1e-6&&Math.abs(ca.y-cb.y)<1e-6);assert(Math.abs(ca.z+cb.z+2.6)<1e-6);}
+pairView.dispose();

@@ -15,5 +15,17 @@ assert.equal(edits.state().undoCount,before.undoCount);assert.equal(edits.state(
 assert.equal((await rt.read()).bodies.replacements,8);assert.equal((await rt.read()).fraction,1);
 await rt.invoke('frame');assert.deepEqual(camera.position.toArray(),[8,5.3,7]);assert.equal(controls.enableDamping,true);
 await rt.invoke('period',{seconds:6});edits.undo();assert.equal((await rt.read()).bodies.replacements,8);assert.equal((await rt.read()).recipe.period,5);
+const signature=packet=>packet.bodies.map(b=>{const root=new T.ObjectLoader().parse(b.object);root.updateMatrixWorld(true);const meshes=[];root.traverse(o=>{if(o.isMesh)meshes.push({name:o.name,matrix:o.matrixWorld.toArray(),positions:Array.from(o.geometry.attributes.position.array),indices:o.geometry.index?Array.from(o.geometry.index.array):null,colors:(Array.isArray(o.material)?o.material:[o.material]).map(m=>m.color?.getHex())});});return {id:b.id,geometryKey:b.geometryKey,meshes};});
+const original=await rt.invoke('exportBodies');
+await rt.invoke('mirrorSelect',{selections:[{id:'piston:0:barrel'}]});
+const plane=await rt.invoke('mirrorPlane');assert.equal(rows.size,2,'One assembly plus its selectable mirror plane');
+rows.get(plane.planeObjectId).root.position.z=-1.3;
+await rt.invoke('mirrorCopy');const copied=await rt.invoke('exportBodies');
+assert.equal(copied.bodies.length,original.bodies.length);assert.notDeepEqual(copied.bodies.find(b=>b.id==='piston:0:barrel'),original.bodies.find(b=>b.id==='piston:0:barrel'));
+edits.undo();assert.deepEqual(signature(await rt.invoke('exportBodies')),signature(original),'Undo restores original body packet');
+edits.redo();assert.deepEqual(signature(await rt.invoke('exportBodies')),signature(copied),'Redo restores mirrored body packet');
+await rt.invoke('mirrorSelect',{selections:[{id:'link:1',names:['Side operating lever']}]});
+rows.get(plane.planeObjectId).root.rotation.x=.3;
+await assert.rejects(rt.invoke('mirrorCopy'),/parallel/);assert.deepEqual(signature(await rt.invoke('exportBodies')),signature(copied),'Unsupported plane leaves geometry intact');
 await rt.dispose();assert.equal(rows.size,0);assert.equal(scene.children.length,0);
 console.log('furnace initialization preserves history and uses scene-host framing');

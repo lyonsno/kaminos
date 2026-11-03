@@ -29,5 +29,5 @@ export function createMechanismView(root){
   try{if(packet?.schema!=='kaminos.assembly-geometry.v1'||!Array.isArray(packet.bodies))throw Error('Choose an assembly geometry package');next.update(lastModel,lastT);if(packet.bodies.length)next.importBodies(packet);}catch(e){next.dispose();throw e;}
   bodies.dispose();bodyRoot.removeFromParent();bodyRoot=nextRoot;bodies=next;root.add(bodyRoot);root.updateMatrixWorld(true);return bodies.manifest();
  }
- return {update,setBodies,replacementState:()=>bodies.replacementState(),bodyManifest:()=>bodies.manifest(),exportBodies:()=>bodies.exportBodies(),importBodies:p=>bodies.importBodies(p),markers:()=>markers,dispose(){bodies.dispose();bodyRoot.removeFromParent();clear();guides.removeFromParent();box.dispose();ring.dispose();for(const m of Object.values(materials))m.dispose();}};
+ return {update,setBodies,bodyMeshes:(...a)=>bodies.bodyMeshes(...a),bodySelection:m=>bodies.bodySelection(m),replacementState:()=>bodies.replacementState(),bodyManifest:()=>bodies.manifest(),exportBodies:()=>bodies.exportBodies(),importBodies:p=>bodies.importBodies(p),markers:()=>markers,dispose(){bodies.dispose();bodyRoot.removeFromParent();clear();guides.removeFromParent();box.dispose();ring.dispose();for(const m of Object.values(materials))m.dispose();}};
 }
