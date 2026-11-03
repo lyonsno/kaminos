@@ -1,5 +1,5 @@
 import {batchCoarseCompute} from './fracture-compute-batch.mjs';
-import {createContactTopologyReset} from './fracture-contact-cache.mjs';
+import {buildIgnoredPairTable,createContactTopologyReset} from './fracture-contact-cache.mjs';
 import * as THREE from './lib/three.core.js';
 import {ArchGpuEngine,ENGINE_REVISION} from './lib/fracture/rigid-engine.js';
 import {ARCH_GPU_KERNELS} from './fracture-coarse-kernels.mjs';
@@ -34,11 +34,13 @@ export async function createCoarseFractureDynamics(fixture, renderer) {
     enableBvhBuild:false,maxJointsPerBodySolver:jointCapacity,maxPairsPerBodyBroadphase:n-1,maxContactsPerBodySolver:(n-1)*4,
     pairManifoldSlots:4,avbdFriction:config.friction,avbdPenaltyDecayGamma:1});
   engine.setAvbdPreventPenetratingNormalDropout(config.preventPenetratingNormalDropout);
-  for(const cell of solverCells)engine.addBody({position:cell.position,halfExtents:cell.halfExtents,mass:cell.mass,friction:config.friction,collisionGroup:1,collisionMask:config.collisions==='floor-only'?2:0});
+  for(const cell of solverCells)engine.addBody({position:cell.position,halfExtents:cell.halfExtents,mass:cell.mass,friction:config.friction,collisionGroup:1,collisionMask:config.collisions==='none'?0:config.collisions==='floor-only'?2:3});
   engine.addBody({position:[0,restFrame.floorY-.2,0],halfExtents:[100,.2,100],mass:0,friction:config.friction,collisionGroup:2,collisionMask:1});
   for(const bond of solverBonds){const j=engine.addFixedJoint(bond.a,bond.b,bond.anchorA,bond.anchorB,bond.linearStiffness??config.stiffness,true),data=engine.jointRecordsData,arm=Math.max(data[j*44+7],1);
     data[j*44+16]=bond.linearStiffness??config.stiffness;data[j*44+17]=bond.rotationalStiffness===undefined?config.stiffness:bond.rotationalStiffness/(arm*arm);
   }
+  const ignoredPairs=buildIgnoredPairTable(solverCells,solverBonds,engine.pairIgnoredBitsOffset);
+  for(const pair of ignoredPairs.pairs)engine.setPairCollisionIgnored(pair.i,pair.j,true);
   for(const cell of solverCells){const j=engine.addSphericalJoint(null,cell.index,cell.position,[0,0,0],config.gripStiffness,false);engine.setInitialJointActive(j,false);}
   const counts=cells.map(()=>0);for(const bond of bonds){counts[bond.a]++;counts[bond.b]++;}
   if(counts.some(count=>count+1>jointCapacity))throw new Error('Material graph exceeds allocated joint-per-body capacity');
@@ -62,7 +64,7 @@ export async function createCoarseFractureDynamics(fixture, renderer) {
   const resources=[resident('positions'),resident('quaternions'),resident('velocities'),resident('angularVelocities'),resident('joints'),buffers.geometry,buffers.damage,buffers.grip,buffers.parameters,buffers.output];
   const group=device.createBindGroup({layout,entries:resources.map((buffer,binding)=>({binding,resource:{buffer}}))});
   const contactState=engine.getContactRenderBuffers();
-  contactReset=await createContactTopologyReset(device,{joints:resident('joints'),damage:buffers.damage,contacts:renderer.backend.get(contactState.pairContacts).buffer,parameters:buffers.parameters,bodies:cells.length,bonds:bonds.length,contactCount:contactState.maxPairContacts});
+  contactReset=await createContactTopologyReset(device,{joints:resident('joints'),damage:buffers.damage,contacts:renderer.backend.get(contactState.pairContacts).buffer,parameters:buffers.parameters,positions:resident('positions'),quaternions:resident('quaternions'),pairActivity:renderer.backend.get(contactState.pairActivity).buffer,ignoredPairs,bodies:cells.length,bonds:bonds.length,contactCount:contactState.maxPairContacts});
   let stepIndex=1,observedStep=0,epoch=0,hand=null,gripGeneration=0,bindRequest=null,residentHandIntent=false,observedResidentHand=null;
   const events=[],samples=[];
   const state={bodies:cells.map(cell=>({...cell,position:xyz(cell.position),rest:xyz(cell.position),quaternion:{x:0,y:0,z:0,w:1},velocity:{x:0,y:0,z:0},angularVelocity:{x:0,y:0,z:0}})),

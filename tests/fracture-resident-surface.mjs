@@ -5,4 +5,8 @@ const piece={index:0,center:[10,20,30],arrays:{positions:new Float32Array([10,20
 const packed=surface.packResidentFractureFaces({pieces:[piece],bonds:[{}]},[{side:0},{side:2}]);
 assert.equal(packed.faces.length,24);assert.deepEqual(Array.from(packed.faces.slice(0,12)),[0,0,0,0,1,0,0,0,0,1,0,0]);assert.equal(packed.faces[19],1,'Cap keeps its exact bond, encoded plus one');assert.equal(packed.faces[23],2,'Picking retains material sidedness');assert.equal(packed.owners[1].cell,0);assert.equal(packed.owners[1].face,1);
 assert.throws(()=>surface.packResidentFractureFaces({pieces:[{...piece,faceBonds:new Int32Array([-1,-1])}],bonds:[{}]},[]),/bond/,'Missing cap ownership cannot render as exterior');
+const residentSource=(await import('node:fs')).readFileSync(new URL('../fracture-resident-surface.mjs',import.meta.url),'utf8');
+const loopStart=residentSource.lastIndexOf('for(const piece of prepared.pieces)');
+const loopBody=residentSource.slice(loopStart);
+assert.ok(!loopBody.includes('new THREE.MeshStandardNodeMaterial'),'Resident surface must share node materials across pieces instead of compiling per-piece shader pipelines');
 console.log('Resident face ownership preserves source positions, cut bond and sidedness');

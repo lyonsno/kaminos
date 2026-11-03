@@ -19,13 +19,13 @@ export default {
    parts:view?.parts.map(p=>({id:p.id,triangles:p.triangles,areaFraction:p.areaFraction})),
    prepared:prepared?{route:prepared.route,receipt:prepared.receipt,cells:prepared.cells.length,bonds:prepared.bonds.length,internalBonds:prepared.bonds.filter(b=>b.kind==='internal').length,attachmentBonds:prepared.bonds.filter(b=>b.kind!=='internal').length}:null,
    material:model?.submitted()??null,presentation:residentSurface?.read()??null,visibleCapTriangles:null,setup:{...inputs,strength},
-   claim:'Whole detected object with breakable coarse material and direct surface grabbing; detailed original exterior retained, approximate mass/inertia and floor collisions'});
-  function sync(){if(status){const s=model?.submitted();status.textContent=busy?'Preparing all material…':error||`${view.parts.length} detected parts · ${prepared.cells.length} live material cells\nGPU fracture state · ${s.step} submitted steps\n${grip?'Dragging material':inspectParts?'Inspecting all detected parts':running?'Drag the surface to pull; release to let go.':'Paused. Play enables physical dragging.'}`;}
-   if(playButton)playButton.textContent=running?'Pause':'Play';if(inspectInput)inspectInput.checked=colorParts;
-   for(const [input,value]of [[strengthInput,strength],[separationInput,separation]])if(input&&input.ownerDocument.activeElement!==input)input.value=String(value);
+   claim:'Whole detected object with breakable coarse material and direct surface grabbing; detailed original exterior retained, approximate mass/inertia and piece/floor collisions'});
+  function sync(){if(status){const s=model?.submitted(),text=busy?'Preparing all material…':error||`${view.parts.length} detected parts · ${prepared.cells.length} live material cells\nGPU fracture state · ${s.step} submitted steps\n${grip?'Dragging material':inspectParts?'Inspecting all detected parts':running?'Drag the surface to pull; release to let go.':'Paused. Play enables physical dragging.'}`;if(status.textContent!==text)status.textContent=text;}
+   if(playButton){const label=running?'Pause':'Play';if(playButton.textContent!==label)playButton.textContent=label;}if(inspectInput&&inspectInput.checked!==colorParts)inspectInput.checked=colorParts;
+   for(const [input,value]of [[strengthInput,strength],[separationInput,separation]])if(input&&input.ownerDocument.activeElement!==input){const str=String(value);if(input.value!==str)input.value=str;}
   }
   function draw(){if(!model||disposed)return;residentSurface.present();residentSurface.setSeparation(inspectParts?separation*2:0);
-   for(const mesh of meshes)mesh.material=colorParts?mesh.userData.tinted:mesh.userData.original;
+   for(const mesh of meshes){const target=colorParts?mesh.userData.tinted:mesh.userData.original;if(mesh.material!==target)mesh.material=target;}
    marker.visible=Boolean(grip);if(grip)marker.position.fromArray(grip.target);
    session.redraw();sync();
   }

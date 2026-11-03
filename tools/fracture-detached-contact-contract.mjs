@@ -16,7 +16,7 @@ export function assertDetachedContactEnergy(before, after, index) {
  for (const state of [before,after]) {
   assert.equal(state.observation,'acquired','Witness needs acquired GPU state');
   assert.equal(state.backend,'webgpu-avbd','Witness needs the actual solver');
-  assert.equal(state.config.collisions,'floor-only','Removing the floor cannot satisfy the contact witness');
+  assert.ok(['floor-only','all'].includes(state.config.collisions),'Removing the floor cannot satisfy the contact witness');
   assert.ok(!state.hand?.indices?.includes(index),'Witness body must not be hand-loaded');
   assert.ok(!state.bonds.some(b=>b.alive&&(b.a===index||b.b===index)),'Witness body must already be detached');
  }

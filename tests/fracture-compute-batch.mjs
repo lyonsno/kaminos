@@ -32,3 +32,25 @@ assert.deepEqual(observed,[1,2,3,3,4],'Cached binding consumes each frame/versio
 const storage=device.createBuffer({size:16,usage:0});
 batchCoarseCompute(renderer,()=>{binding=device.createBindGroup({layout:{},entries:[{binding:0,resource:{buffer:storage}}]});device.queue.writeBuffer(storage,0,new Uint32Array([9,0,0,0]));emit();device.queue.writeBuffer(storage,0,new Uint32Array([10,0,0,0]));emit();});
 assert.deepEqual(observed.slice(-2),[9,10],'Storage writes preserve their position between dispatches');
+
+// Deduplicate recurring uniform states within a step and reuse GPU slabs/bind groups across steps.
+let createdBuffers=0,createdBindGroups=0,loopUniform,loopBinding;
+const origCreateBuffer=device.createBuffer,origCreateBindGroup=device.createBindGroup;
+batchCoarseCompute(renderer,()=>{loopUniform=device.createBuffer({size:16,usage:64});loopBinding=device.createBindGroup({layout:{},entries:[{binding:0,resource:{buffer:loopUniform}}]});});
+device.createBuffer=function(d){createdBuffers++;return origCreateBuffer.call(this,d);};
+device.createBindGroup=function(d){createdBindGroups++;return origCreateBindGroup.call(this,d);};
+const runIterativeStep=()=>batchCoarseCompute(renderer,()=>{
+ for(const value of [11,12,11,12]){
+  device.queue.writeBuffer(loopUniform,0,new Uint32Array([value,0,0,0]));
+  const group={};backend.beginCompute(group);const pass=backend.get(group).passEncoderGPU;
+  pass.setBindGroup(0,loopBinding);pass.dispatchWorkgroups(1);backend.finishCompute(group);
+ }
+});
+runIterativeStep();
+assert.deepEqual(observed.slice(-4),[11,12,11,12],'Recurring uniform states still observe exact per-dispatch values');
+assert.equal(createdBindGroups,2,'Recurring uniform states within a step must share deduplicated bind groups');
+createdBuffers=0;createdBindGroups=0;
+runIterativeStep();
+assert.deepEqual(observed.slice(-4),[11,12,11,12],'Second step observes exact per-dispatch values');
+assert.equal(createdBuffers,0,'Steady-state steps must reuse persistent uniform/upload buffers');
+assert.equal(createdBindGroups,0,'Steady-state steps must reuse cached bind groups across frames');

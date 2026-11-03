@@ -31,3 +31,4 @@ for(const a of [source,inverted]){
 for(const b of whole.bonds){assert.ok(b.linearStiffness>0&&b.rotationalStiffness>0,'Each material interface needs area-scaled linear and bending stiffness');const a=whole.cells[b.a],c=whole.cells[b.b],length=Math.hypot(...a.position.map((v,k)=>v-c.position[k]));assert.ok(Math.abs(b.linearStiffness-whole.config.elasticModulus*b.area/length)<1e-4);}
 
 for(const entry of whole.receipt.diagnostics.sectionCoverage){assert.ok(Math.abs(entry.positiveArea-entry.negativeArea)<1e-6,'Both sides must inherit one shared material section');assert.ok(Math.abs(entry.sharedArea-entry.positiveArea)<1e-6,'Cell matching must account for that shared section');}
+assert.equal(whole.config.collisions,'all','Whole-object preparation must enable inter-piece and floor collisions');

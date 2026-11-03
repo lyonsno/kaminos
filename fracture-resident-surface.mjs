@@ -92,17 +92,29 @@ export async function createResidentFractureSurface({renderer,prepared,materials
   handMarker=new THREE.Mesh(new THREE.SphereGeometry(sourceBounds.getSize(new THREE.Vector3()).length()*.006,12,8),markerMaterial);
   handMarker.name='Resident hand target';handMarker.frustumCulled=false;handMarker.renderOrder=10;handMarker.raycast=()=>{};
 
+  const meta=attribute('fractureCap','vec4'),part=attribute('fractureTint','vec4'),cap=meta.x.toInt(),cell=meta.y.toInt();
+  const pose=mat4(...[0,1,2,3].map(col=>textureLoad(wrapper,ivec2(col,cell))));
+  const alive=textureLoad(wrapper,ivec2(0,cap.sub(1).max(0).add(n))).x,offset=vec3(meta.z,meta.w,part.x);
+  const make=(source,tint)=>{const material=new THREE.MeshStandardNodeMaterial();for(const k of materialFields)if(source[k]!==undefined)material[k]=source[k]?.clone&&!source[k].isTexture?source[k].clone():source[k];if(tint){material.color.set(0xffffff);material.colorNode=part.yzw;material.map=null;material.metalness=0;material.roughness=.9;}
+   material.positionNode=Fn(()=>{normalLocal.assign(mat3(pose).mul(normalGeometry));return pose.mul(vec4(positionGeometry,1)).xyz.add(offset.mul(separation));})();
+   // Leave tangent-space maps, derivative tangents, flat shading and back-face
+   // inversion on the renderer's ordinary material normal path.
+   if(material.normalMap&&material.normalMapType===THREE.ObjectSpaceNormalMap){const mapped=texture(material.normalMap).xyz.mul(2).sub(1);material.normalNode=Fn((_,builder)=>{const scale=materialReference('normalScale','vec2');return transformNormalToView(mat3(pose).mul(vec3(mapped.xy.mul(builder.isFlatShading()?negateOnBackSide(scale):scale),mapped.z)));})();}material.maskNode=cap.equal(int(0)).or(alive.lessThan(.5));copies.push(material);return material;};
+  const original=materials.map(x=>make(x,false)),tinted=materials.map((x,i)=>make(x,i!==prepared.capMaterial));
   for(const piece of prepared.pieces){
-   const pose=mat4(...[0,1,2,3].map(col=>textureLoad(wrapper,ivec2(col,piece.index))));
-   const cap=attribute('fractureCap','float').toInt(),alive=textureLoad(wrapper,ivec2(0,cap.sub(1).max(0).add(n))).x;
-   const make=(source,tint)=>{const material=new THREE.MeshStandardNodeMaterial();for(const k of materialFields)if(source[k]!==undefined)material[k]=source[k]?.clone&&!source[k].isTexture?source[k].clone():source[k];if(tint){material.color.copy(tint);material.map=null;material.metalness=0;material.roughness=.9;}
-    material.positionNode=Fn(()=>{normalLocal.assign(mat3(pose).mul(normalGeometry));return pose.mul(vec4(positionGeometry,1)).xyz.add(vec3(...partOffsets[piece.index]).mul(separation));})();
-    // Leave tangent-space maps, derivative tangents, flat shading and back-face
-    // inversion on the renderer's ordinary material normal path.
-    if(material.normalMap&&material.normalMapType===THREE.ObjectSpaceNormalMap){const mapped=texture(material.normalMap).xyz.mul(2).sub(1);material.normalNode=Fn((_,builder)=>{const scale=materialReference('normalScale','vec2');return transformNormalToView(mat3(pose).mul(vec3(mapped.xy.mul(builder.isFlatShading()?negateOnBackSide(scale):scale),mapped.z)));})();}material.maskNode=cap.equal(int(0)).or(alive.lessThan(.5));copies.push(material);return material;};
-   const original=materials.map(x=>make(x)),color=new THREE.Color().setHSL((piece.part*.61803398875)%1,.5,.6),tinted=materials.map((x,i)=>make(x,i===prepared.capMaterial?null:color));
+   const color=new THREE.Color().setHSL((piece.part*.61803398875)%1,.5,.6),[ox,oy,oz]=partOffsets[piece.index];
    const mesh=createCoarseSurfaceMesh(piece.arrays,original,piece.center),old=mesh.geometry;mesh.geometry=old.toNonIndexed();old.dispose();mesh.position.set(0,0,0);mesh.frustumCulled=false;
-   mesh.geometry.setAttribute('fractureCap',new THREE.Float32BufferAttribute(Float32Array.from(Array.from(piece.faceInterfaces).flatMap((id,f)=>Array(3).fill(id?piece.faceBonds[f]+1:0))),1));
+   const faces=piece.faceInterfaces.length,capData=new Float32Array(faces*12),tintData=new Float32Array(faces*12);
+   for(let f=0;f<faces;f++){
+    const c=piece.faceInterfaces[f]?piece.faceBonds[f]+1:0,base=f*12;
+    for(let v=0;v<3;v++){
+     const k=base+v*4;
+     capData[k]=c;capData[k+1]=piece.index;capData[k+2]=ox;capData[k+3]=oy;
+     tintData[k]=oz;tintData[k+1]=color.r;tintData[k+2]=color.g;tintData[k+3]=color.b;
+    }
+   }
+   mesh.geometry.setAttribute('fractureCap',new THREE.Float32BufferAttribute(capData,4));
+   mesh.geometry.setAttribute('fractureTint',new THREE.Float32BufferAttribute(tintData,4));
    // Raycasting this rest geometry would lie after the first physical step.
    mesh.raycast=()=>{};mesh.userData.materialCell=piece.index;mesh.userData.original=original;mesh.userData.tinted=tinted;mesh.name=`Material ${piece.index+1} · part ${piece.part+1}`;meshes.push(mesh);
   }
@@ -115,6 +127,6 @@ export async function createResidentFractureSurface({renderer,prepared,materials
    if(disposed)throw Error('Resident surface disposed');if(boundsTask)return boundsTask;
    boundsTask=(async()=>{const read=device.createBuffer({label:'Frame object bounds result',size:24,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});try{const encoder=device.createCommandEncoder();for(const name of ['clearBounds','bounds']){const pass=encoder.beginComputePass();pass.setPipeline(pipelines[name]);pass.setBindGroup(0,boundsGroup);pass.dispatchWorkgroups(name==='clearBounds'?1:Math.ceil(packed.owners.length/64));pass.end();}encoder.copyBufferToBuffer(boundsBuffer,0,read,0,24);device.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);boundsCount++;const u=new Uint32Array(read.getMappedRange()),b=new Uint32Array(6);for(let k=0;k<6;k++)b[k]=(u[k]&0x80000000)?u[k]^0x80000000:~u[k];return Array.from(new Float32Array(b.buffer));}finally{read.destroy();}})();try{return await boundsTask;}finally{boundsTask=null;}
   }
-  present();return{meshes,handMarker,present,pick,bounds,beginHand,moveHand,endHand,setSeparation:value=>{separation.value=value;device.queue.writeBuffer(parameters,28,new Float32Array([value]));},read:()=>({route:'resident-fracture-surface-v1',pose:'gpu',capVisibility:'gpu-bond-liveness',ordinaryStateReadbacks:0,handSelection:'gpu',handIntentActive:handActive,pickQueries:pickCount,pickPending:pickTask!==null,pickReadbackBytes:pickCount*16,boundsQueries:boundsCount,boundsReadbackBytes:boundsCount*24}),dispose};
+  present();return{meshes,handMarker,present,pick,bounds,beginHand,moveHand,endHand,setSeparation:value=>{if(separation.value===value)return;separation.value=value;device.queue.writeBuffer(parameters,28,new Float32Array([value]));},read:()=>({route:'resident-fracture-surface-v1',pose:'gpu',capVisibility:'gpu-bond-liveness',ordinaryStateReadbacks:0,handSelection:'gpu',handIntentActive:handActive,pickQueries:pickCount,pickPending:pickTask!==null,pickReadbackBytes:pickCount*16,boundsQueries:boundsCount,boundsReadbackBytes:boundsCount*24}),dispose};
  }catch(error){await dispose();throw error;}
 }
