@@ -13,7 +13,12 @@ const steps = Number(process.env.SHRED_STEPS ?? 3);
 const profile = process.env.SHRED_PROFILE === '1';
 const report = {ok:false, phase:'source', root, sourceScene, sourceOffer, steps, profile, arms:[], errors:[], warnings:[]};
 await fs.mkdir(out, {recursive:true});
-const save = () => fs.writeFile(out+'/report.json', JSON.stringify(report,null,2));
+let writing = Promise.resolve();
+const save = () => {
+  const snapshot = JSON.stringify(report,null,2);
+  writing = writing.then(()=>fs.writeFile(out+'/report.json',snapshot));
+  return writing;
+};
 let browser, page, server;
 try {
   await save();
