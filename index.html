@@ -5372,7 +5372,7 @@ function updateGreenroomPreviewControls() {
   const preview = greenroomPreviewState.preview || {};
   document.getElementById('greenroom-preview-title').textContent = preview.display?.title || preview.fileName || 'Greenroom output';
   document.getElementById('greenroom-preview-source').textContent = preview.url || '';
-  if (importButton) importButton.disabled = !greenroomPreviewState.previewObject;
+  if (importButton) importButton.disabled = greenroomPreviewState.loading || !greenroomPreviewState.previewObject;
   panel.hidden = false;
 }
 
@@ -6240,9 +6240,10 @@ async function restoreAuthoredSceneFromPreview(options = {}) {
   if(!await sceneLifecycle.resumePreview(authored,{beforeRestore(){
     if(greenroomPreviewState!==state)return false;
     removeGreenroomPreviewObject({ dispose: options.disposePreview !== false });
-    greenroomPreviewState = null;
-    updateGreenroomPreviewControls();
   }}))return false;
+  if(greenroomPreviewState!==state)return false;
+  greenroomPreviewState=null;
+  updateGreenroomPreviewControls();
   if (!options.silent) setInfo('Returned to scene');
   return true;
 }
@@ -23698,6 +23699,7 @@ async function greenroomViewMesh(url, fileName, display) {
     authored,
     preview: { url, fileName, display, metadata },
     previewGeneration,
+    loading: true,
     previewObject: greenroomPreviewState?.previewObject ?? null,
   };
   updateGreenroomPreviewControls();
@@ -23714,6 +23716,7 @@ async function greenroomViewMesh(url, fileName, display) {
     });
     if (greenroomPreviewState?.previewGeneration === previewGeneration) {
       greenroomPreviewState.previewObject = previewObject;
+      greenroomPreviewState.loading = false;
     } else {
       scene.remove(previewObject);
       if (transformControls && currentMesh === previewObject) {
@@ -24054,7 +24057,7 @@ async function greenroomImportSplat(url, fileName, display, options = {}) {
 window.greenroomImportSplat = greenroomImportSplat;
 
 async function importGreenroomPreviewToScene() {
-  if (!greenroomPreviewState?.previewObject) {
+  if (greenroomPreviewState?.loading || !greenroomPreviewState?.previewObject) {
     setInfo('Greenroom preview is still loading');
     updateGreenroomPreviewControls();
     return false;

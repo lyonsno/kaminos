@@ -225,3 +225,28 @@ test('switching preview retires admitted runtime work before removing its object
  release();await switching;assert.equal(active,false);assert.equal(original.parent,null);
  assert.equal(state.greenroomPreviewState.preview.url,'/second.glb');
 });
+
+test('View during Back lighting restoration retains original authored presence',async()=>{
+ const state=context();state.fireLightFieldRouteParams=()=>new URLSearchParams('volume_light_field=1');
+ await state.flameFeature.restore({present:true,composition:false});await state.greenroomViewMesh('/first.glb','first.glb',{});
+ let release,started;const gate=new Promise(r=>release=r),lighting=new Promise(r=>started=r);
+ state.syncSceneRadianceRoute=async params=>{if(params.get('volume_light_field')){started();await gate;}};
+ const back=state.restoreAuthoredSceneFromPreview();await lighting;
+ const viewing=state.greenroomViewMesh('/second.glb','second.glb',{});release();await Promise.all([back,viewing]);
+ assert.equal(state.greenroomPreviewState.authored.flamePresent,true);
+ await state.restoreAuthoredSceneFromPreview();assert.equal(state.flameFeature.present,true);
+});
+test('Import cannot combine incoming preview metadata with the outgoing object during retirement',async()=>{
+ const state=context();await state.greenroomViewMesh('/first.glb','first.glb',{});
+ const importButton={disabled:false},panel={querySelector:()=>importButton};
+ state.document.getElementById=id=>id==='greenroom-preview-controls'?panel:{classList:{add(){},remove(){}}};
+ vm.runInContext(source('function updateGreenroomPreviewControls()', 'function removeGreenroomPreviewObject('),state);
+ let active=true,release,started;const gate=new Promise(r=>release=r),retiring=new Promise(r=>started=r);
+ state.volumePrototype={isActive:()=>active,setActive:async value=>{if(!value){started();await gate;}active=value;}};
+ const switching=state.greenroomViewMesh('/second.glb','second.glb',{});await retiring;
+ assert.equal(importButton.disabled,true,'pending preview cannot be imported through the visible control');
+ const importing=state.importGreenroomPreviewToScene();release();await switching;
+ assert.equal(await importing,false,'incoming preview has not loaded yet');assert.deepEqual(state.recordedInsertions,[]);
+ assert.equal(importButton.disabled,false);assert.equal(await state.importGreenroomPreviewToScene(),true);
+ assert.deepEqual(state.recordedInsertions,['/second.glb']);
+});
