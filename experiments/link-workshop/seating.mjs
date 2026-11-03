@@ -18,8 +18,9 @@ export function adjustSeating(root,model,objectId,t,entries,requested){
  const oldP=new T.Vector3().setFromMatrixPosition(source),oldQ=new T.Quaternion().setFromRotationMatrix(source);
  const delta=new T.Vector3(...requested.position).sub(oldP);delta.addScaledVector(normal,-delta.dot(normal));
  const turn=new T.Quaternion().setFromEuler(new T.Euler(...requested.rotation)).multiply(oldQ.clone().invert());
- const axial=turn.x*normal.x+turn.y*normal.y+turn.z*normal.z;
- const angle=Math.hypot(axial,turn.w)<1e-12?0:2*Math.atan2(axial,turn.w);
+ const axial=turn.x*normal.x+turn.y*normal.y+turn.z*normal.z,mag=Math.hypot(turn.x,turn.y,turn.z);
+ const dir=Math.abs(axial)>1e-3*mag?Math.sign(axial):Math.sign(turn.z||turn.y||turn.x||1);
+ const angle=Math.hypot(mag,turn.w)<1e-12?0:2*Math.atan2(dir*mag,turn.w);
  const q=new T.Quaternion().setFromAxisAngle(normal,angle).multiply(oldQ);
  const m=next.mounts.find(m=>m.id===a.sourceMount),objectQ=q.multiply(new T.Quaternion().setFromEuler(new T.Euler(...m.rotation)).invert());
  const scale=new T.Vector3(...a.offset.scale),position=oldP.add(delta).sub(new T.Vector3(...m.position).multiply(scale).applyQuaternion(objectQ));
