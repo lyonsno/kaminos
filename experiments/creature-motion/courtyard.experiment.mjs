@@ -1,4 +1,5 @@
 import * as THREE from '../../lib/three.core.js';
+import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {createLivingScene} from './living-scene.experiment.mjs';
 import {createStimulusSequence,validateStimulusProgram} from './stimulus-sequence.mjs';
 import {createInvestigationRecording,investigationOperations} from '../../investigation-recording.mjs';
@@ -27,13 +28,13 @@ export async function createCourtyard({host,inputs={},record=operation=>investig
  const materials=[0x968d7a,0xa59b86,0x8b8477,0xb1a58e].map(color=>new THREE.MeshStandardMaterial({color,roughness:.93}));
  const bronze=new THREE.MeshStandardMaterial({color:0x876844,metalness:.65,roughness:.48}),inlay=new THREE.MeshStandardMaterial({color:0x4b716e,metalness:.6,roughness:.5});
  function mesh(parent,geometry,material,position){const m=new THREE.Mesh(geometry,material);m.position.fromArray(position);m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;}
- // All 120 tiles remain individually represented by instance matrices, sharing
- // four drawables. The selected object is still the ordinary Stone court root.
+ // Bake rigid copies by material: native fire lighting requires static meshes.
+ // Preserve every tile surface while keeping four floor drawables.
  const floor=new THREE.Group();floor.name='Stone court';
  for(let material=0;material<4;material++){
   const positions=[];for(let x=0;x<12;x++)for(let z=0;z<10;z++)if((x*7+z*11)%4===material)positions.push([x-5.5,-.09,z-4.5]);
-  const tiles=new THREE.InstancedMesh(new THREE.BoxGeometry(.99,.16,.99),materials[material],positions.length);
-  positions.forEach((p,i)=>tiles.setMatrixAt(i,new THREE.Matrix4().makeTranslation(...p)));tiles.castShadow=true;tiles.receiveShadow=true;floor.add(tiles);
+  const pieces=positions.map(p=>new THREE.BoxGeometry(.99,.16,.99).translate(...p));
+  mesh(floor,mergeGeometries(pieces),materials[material],[0,0,0]);for(const piece of pieces)piece.dispose();
  }
  const architecture=new THREE.Group();architecture.name='Court colonnade';
  const boxes=[];
@@ -46,8 +47,8 @@ export async function createCourtyard({host,inputs={},record=operation=>investig
  for(const z of [-4.8,4.8])for(const x of [-4,-2,0,2,4])boxes.push({size:[1.98,.45,.35],p:[x,.225,z],index:2});
  for(let i=0;i<4;i++){
   const rows=boxes.filter(row=>row.index===i);if(!rows.length)continue;
-  const batch=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),materials[i],rows.length);
-  rows.forEach((row,n)=>batch.setMatrixAt(n,new THREE.Matrix4().compose(new THREE.Vector3(...row.p),new THREE.Quaternion(),new THREE.Vector3(...row.size))));batch.castShadow=true;batch.receiveShadow=true;architecture.add(batch);
+  const pieces=rows.map(row=>new THREE.BoxGeometry(...row.size).translate(...row.p));
+  mesh(architecture,mergeGeometries(pieces),materials[i],[0,0,0]);for(const piece of pieces)piece.dispose();
  }
  const programState=()=>({...sequence.read(),time:programTime,cycle:Math.floor(programTime/program.duration)});
  const identity=()=>({time:worldTime,clock:'viewer frame seconds',program:programState(),automatic});

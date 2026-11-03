@@ -3,6 +3,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.core.js';
 import {createCourtyard} from '../experiments/creature-motion/courtyard.experiment.mjs';
+import {collectStaticSceneGeometry} from '../scene-light-geometry.mjs';
 class Element{constructor(){this.children=[];this.style={};this.value='';}append(...nodes){this.children.push(...nodes);}setAttribute(k,v){this[k]=String(v);}remove(){}click(){}}
 const nodes=root=>typeof root==='object'?[root,...root.children.flatMap(nodes)]:[];
 async function fixture(){
@@ -26,6 +27,12 @@ test('the courtyard exposes no whole-world exact simulation step',async()=>{
 test('source controls are attached to the actual selectable object and edit it through the shared operation',async()=>{
  const f=await fixture();try{f.room.mount({root:new Element(),document:f.document,invoke:async(op,input)=>f.room.operations[op](input)});const seat=f.seats.find(x=>x.asset.root.name==='Bronze iris beacon');assert.ok(seat);const fields=nodes(seat.properties),size=fields.find(x=>x['aria-label']==='Beacon size');assert.ok(size,'Selected beacon needs a meaningful size property');size.value='.8';await size.oninput();assert.equal(f.room.read().sources.beacon.scale[0],.8);assert.equal(f.room.read().sources.beacon.scheduled,false,'Editing one source releases that source from its timer');assert.ok(!fields.some(x=>/Fire small|Fire large/.test(x.textContent??'')));}finally{await f.room.dispose();}
 });
-test('all floor tiles are retained without one drawable mesh per tile',async()=>{
- const f=await fixture();try{const floor=f.scene.children.find(x=>x.name==='Stone court');assert.ok(floor);let tiles=0,drawables=0;floor.traverse(x=>{if(x.isMesh){drawables++;tiles+=x.isInstancedMesh?x.count:1;}});assert.equal(tiles,120);assert.ok(drawables<120,'Static tiles should share drawable geometry');}finally{await f.room.dispose();}
+test('the full tiled court and colonnade are accepted by ordinary native fire lighting',async()=>{
+ const f=await fixture();try{
+  const floor=f.scene.children.find(x=>x.name==='Stone court'),columns=f.scene.children.find(x=>x.name==='Court colonnade');assert.ok(floor);assert.ok(columns);
+  const geometry=collectStaticSceneGeometry(floor);assert.equal(geometry.triangles.length,120*12,'All 120 box tiles must retain their surfaces');
+  let drawables=0;floor.traverse(x=>{if(x.isMesh)drawables++;});assert.ok(drawables<120,'Static tiles should share drawable geometry');
+  const bounds=new THREE.Box3().setFromObject(floor);assert.ok(bounds.min.distanceTo(new THREE.Vector3(-5.995,-.17,-4.995))<1e-6);assert.ok(bounds.max.distanceTo(new THREE.Vector3(5.995,-.01,4.995))<1e-6);
+  assert.ok(collectStaticSceneGeometry(columns).triangles.length>0,'Colonnade must also retain supported casting surfaces');
+ }finally{await f.room.dispose();}
 });
