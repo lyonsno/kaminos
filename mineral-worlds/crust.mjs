@@ -157,13 +157,21 @@ function overlaps(a,b){
 }
 function spatial(s){const index=createGrainIndex(s.grains),query=g=>index.query(g);query.add=g=>index.update(g);return query;}
 function growFace(s,g,volume,face,neighbors){
- if(volume<=0)return 0;const d=grainDimensions(g),area=face<2?d[1]*d[2]:face<4?d[0]*d[1]:d[0]*d[2],sign=face%2===0?1:-1,old=g.faces[face],delta=volume/area;
+ if(volume<=0)return 0;const before=s.wetting==='regions'?g.facePools.map(id=>id===null?null:faceFrame(g,s.pools[id].face)):null;const d=grainDimensions(g),area=face<2?d[1]*d[2]:face<4?d[0]*d[1]:d[0]*d[2],sign=face%2===0?1:-1,old=g.faces[face],delta=volume/area;
  g.faces[face]=old+sign*delta;
  const candidates=neighbors(g);let fraction=1;
  if((g.basis&&frameBounds(g)[2]<-1e-8)||[...candidates].some(other=>overlaps(g,other))){
   let lo=0,hi=1;while(hi-lo>1e-8){const f=(lo+hi)/2;g.faces[face]=old+sign*delta*f;if((g.basis&&frameBounds(g)[2]<-1e-8)||[...candidates].some(other=>overlaps(g,other)))hi=f;else lo=f;}fraction=lo;
  }
- g.faces[face]=old+sign*delta*fraction;neighbors.add(g);return volume*fraction;
+ g.faces[face]=old+sign*delta*fraction;
+ if(before)for(const [f,id]of g.facePools.entries())if(id!==null){
+  const frame=before[f];
+  for(const r of s.pools[id].regions)for(const l of r.lobes){
+   const point=frame.origin.map((v,i)=>v+frame.u[i]*l.entry[0]*frame.w+frame.v[i]*l.entry[1]*frame.h);
+   l.entry=faceUV(g,f,point).map(v=>clamp(v,0,1));
+  }
+ }
+ neighbors.add(g);return volume*fraction;
 }
 function growFromPool(s,p,mass,neighbors){
  let targets=[];

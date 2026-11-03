@@ -129,3 +129,10 @@ test('closed bridges clear their live connection and flux while retaining trappe
  e.connected=true;e.lastFlux=.01;e.water=.0001;g.faces[a.face]+=(a.face%2===0?1:-1)*bridgeGeometry(s,e).aperture*2;
  advanceCrust(s,.1);assert.equal(e.connected,false);assert.equal(e.lastFlux,0);assert.equal(e.water,.0001);
 });
+test('growth of a neighboring side does not stretch a wet spot across the top',async()=>{
+ const {addWetRegion}=await import('../mineral-worlds/crust-regions.mjs');const {facePoint}=await import('../mineral-worlds/crust-faces.mjs');
+ const s=specimen(),g=s.grains[0],top=s.pools[g.facePools[4]],side=s.pools[g.facePools[0]];s.pools[0].water=s.pools[0].salt=0;s.settings.growth=.01;
+ const spot=addWetRegion(s,top,[.3,.4],1e-6,0);addWetRegion(s,side,[.5,.5],.001,.01);
+ const before=facePoint(g,top.face,spot.lobes[0].entry),old=g.faces[0];advanceCrust(s,.1);assert.ok(g.faces[0]>old);
+ const after=facePoint(g,top.face,spot.lobes[0].entry);assert.ok(Math.abs(after[0]-before[0])<1e-12&&Math.abs(after[2]-before[2])<1e-12,'wet spot moved tangentially solely because the crystal widened');
+});
