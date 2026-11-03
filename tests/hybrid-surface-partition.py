@@ -157,6 +157,48 @@ class HybridPartitionTest(unittest.TestCase):
             self.assertFalse(report['ok'])
             self.assertEqual(report['phase'], 'sample')
 
+    def test_bounded_normal_cone_and_pinhole_fill_separate_wall_from_gradual_cylinder(self):
+        # Build a 2x2 planar wall subdivided into a 10x10 grid (200 triangles, area=4.0)
+        # where 4 interior triangles have a steep mortar-groove normal (pinholes),
+        # plus a 36-sided smooth cylinder (72 triangles, radius=0.04, length=1.2, pairwise dihedral=10 deg, cos=0.985 > 0.85).
+        xs = np.linspace(0., 2., 11)
+        ys = np.linspace(0., 2., 11)
+        verts, tris = [], []
+        for j in range(10):
+            for i in range(10):
+                b = len(verts)
+                z_bump = 0.008 if (i in (4, 5) and j == 5) else 0.0
+                verts.extend([
+                    [xs[i], ys[j], 0.0],
+                    [xs[i + 1], ys[j], 0.0],
+                    [xs[i + 1], ys[j + 1], z_bump],
+                    [xs[i], ys[j + 1], 0.0],
+                ])
+                tris.extend([[b, b + 1, b + 2], [b, b + 2, b + 3]])
+        wall_tri_count = len(tris)
+        # Add 36-sided cylinder (radius 0.04, height 1.2)
+        n_sides = 36
+        angles = np.linspace(0., 2. * np.pi, n_sides, endpoint=False)
+        for k in range(n_sides):
+            a0, a1 = angles[k], angles[(k + 1) % n_sides]
+            r = 0.04
+            b = len(verts)
+            verts.extend([
+                [3.0 + r * np.cos(a0), r * np.sin(a0), 0.0],
+                [3.0 + r * np.cos(a1), r * np.sin(a1), 0.0],
+                [3.0 + r * np.cos(a1), r * np.sin(a1), 1.2],
+                [3.0 + r * np.cos(a0), r * np.sin(a0), 1.2],
+            ])
+            tris.extend([[b, b + 1, b + 2], [b, b + 2, b + 3]])
+        pos = np.asarray(verts, dtype=np.float64)
+        idx = np.asarray(tris, dtype=np.int64)
+        nrm = np.tile([0., 0., 1.], (len(pos), 1))
+        res = hybrid.partition_surface(pos, nrm, idx)
+        self.assertTrue(res['meshTriangles'][:wall_tri_count].all(),
+                        'Broad wall including absorbed interior mortar pinholes must stay in mesh regime')
+        self.assertTrue(res['splatTriangles'][wall_tri_count:].all(),
+                        'Smooth high-curvature cylinder must split by normal cone and route to splat regime')
+
 
 if __name__ == '__main__':
     unittest.main()
