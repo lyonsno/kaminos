@@ -24,3 +24,13 @@ assert.throws(()=>motionSpace(recipe,{tolerance:NaN}),/positive/);
 const singular={...recipe,pistons:[{a:0,b:2}],nodes:[{parent:null,point:[0,0]},{parent:0,length:1,angles:[0,0]},{parent:1,length:1,angles:[Math.PI,Math.PI]}]};
 assert.throws(()=>motionSpace(singular),/coincident|separation/);
 console.log('Continuous motion-space vertex containment and invalid inputs pass');
+const {createBodyView}=await import('../experiments/link-workshop/bodies.mjs');
+const {mirrorBodyGeometry}=await import('../experiments/link-workshop/copy-geometry.mjs');
+const small={schema:'kaminos.links.v1',period:3,nodes:[{parent:null,point:[0,0]},{parent:0,length:1,angles:[0,.2]}],pistons:[]};
+const bodyView=createBodyView(new T.Group());bodyView.update(small,0);
+const geometry=mirrorBodyGeometry(bodyView.exportBodies(),{planeZ:-1,selections:[{id:'link:1'}],positions:{'link:1':.22}});
+const actual=motionSpace(small,{cellSize:.2,tolerance:.1,geometry});
+assert(actual.cells.some(c=>c[2]*.2 < -2),'Reserved space must contain mirrored replacement geometry');
+bodyView.importBodies(geometry);const reserved=new Set(actual.cells.map(c=>c.join(',')));
+for(const t of [0,.137,.63,1]){bodyView.update(small,t);for(const mesh of bodyView.bodyMeshes()){const a=mesh.geometry.attributes.position;for(let i=0;i<a.count;i++){const v=new T.Vector3().fromBufferAttribute(a,i).applyMatrix4(mesh.matrixWorld);assert(reserved.has(v.toArray().map(x=>Math.floor(x/actual.cellSize)).join(',')),'Current body vertex must be reserved');}}}
+bodyView.dispose();

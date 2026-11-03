@@ -1,17 +1,19 @@
 import * as T from '../../lib/three.core.js';
-import {constructBodies} from './bodies.mjs';
+import {constructBodies,createBodyView} from './bodies.mjs';
 import {frames} from './model.mjs';
 
 // A source-owned design guide. Primitive outer boxes fill holes and may reserve
 // extra space. Temporal padding encloses continuous motion between samples.
-export function motionSpace(recipe,{cellSize=.12,tolerance=.04}={}){
+export function motionSpace(recipe,{cellSize=.12,tolerance=.04,geometry=null}={}){
  if(![cellSize,tolerance].every(x=>Number.isFinite(x)&&x>0))throw Error('Cell size and tolerance must be finite and positive');
- const construction=constructBodies(recipe),cells=new Set(),bodies=[],speeds=[];
+ const construction=constructBodies(recipe),cells=new Set(),bodies=[],speeds=[];let resolved=null;
  try{
+  if(geometry?.bodies?.length){resolved=createBodyView(new T.Group());resolved.update(recipe,0);resolved.importBodies(geometry);}
   recipe.nodes.forEach((n,i)=>{const p=speeds[n.parent];speeds[i]=n.parent===null?{v:0,w:0}:{w:p.w+Math.abs(n.angles[1]-n.angles[0]),v:p.v+n.length*(p.w+Math.abs(n.angles[1]-n.angles[0]))};});
   for(const def of construction.defs){
    def.object.updateMatrixWorld(true);const boxes=[];
-   def.object.traverse(o=>{if(o.isMesh){o.geometry.computeBoundingBox();boxes.push(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld));}});
+   if(resolved){const pose=def.pose(frames(recipe,0)),inverse=new T.Matrix4().makeRotationZ(pose.angle);inverse.setPosition(...pose.position);inverse.invert();for(const o of resolved.bodyMeshes(def.id)){o.geometry.computeBoundingBox();boxes.push(o.geometry.boundingBox.clone().applyMatrix4(inverse.clone().multiply(o.matrixWorld)));}}
+   else def.object.traverse(o=>{if(o.isMesh){o.geometry.computeBoundingBox();boxes.push(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld));}});
    const radius=Math.max(...boxes.map(b=>Math.hypot(Math.max(Math.abs(b.min.x),Math.abs(b.max.x)),Math.max(Math.abs(b.min.y),Math.abs(b.max.y)),Math.max(Math.abs(b.min.z),Math.abs(b.max.z)))));
    const index=Number(def.id.split(':')[1]);let v,w;
    if(def.kind==='barrel'||def.kind==='rod'){
@@ -37,8 +39,8 @@ export function motionSpace(recipe,{cellSize=.12,tolerance=.04}={}){
     }
    }
   }
-  return {schema:'kaminos.motion-space.v1',method:'continuous outer-box enclosure',frame:'assembly-local',geometrySource:'constructed analytical bodies',recipe:structuredClone(recipe),cellSize,tolerance,bodies,cells:[...cells].map(s=>s.split(',').map(Number)),legend:{violet:'Reserved space for the entire authored motion; do not fill with housing'},limits:'Outer boxes fill bores and concavities. Covers the analytical construction, not replacement meshes. Does not establish collision freedom between moving bodies or generated geometry.'};
- }finally{for(const d of construction.defs)d.object.traverse(o=>{o.geometry?.dispose();for(const m of Array.isArray(o.material)?o.material:[o.material])m?.dispose();});}
+  return {schema:'kaminos.motion-space.v1',method:'continuous outer-box enclosure',frame:'assembly-local',geometrySource:resolved?'current assembly body geometry':'constructed analytical bodies',geometry:geometry?structuredClone(geometry):null,recipe:structuredClone(recipe),cellSize,tolerance,bodies,cells:[...cells].map(s=>s.split(',').map(Number)),legend:{violet:'Reserved space for the entire authored motion; do not fill with housing'},limits:'Outer boxes fill bores and concavities. Covers the supplied body geometry at calculation time. Does not establish collision freedom between moving bodies or generated geometry.'};
+ }finally{resolved?.dispose();for(const d of construction.defs)d.object.traverse(o=>{o.geometry?.dispose();for(const m of Array.isArray(o.material)?o.material:[o.material])m?.dispose();});}
 }
 
 export function motionSpaceMesh(packet){
