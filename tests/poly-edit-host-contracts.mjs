@@ -15,7 +15,9 @@ let origins=0;const origin=()=>{origins++;return Promise.resolve();};
 const slices=[];const slice=plane=>{slices.push(plane);return Promise.resolve();};
 const snappedFaces=[];const snapFace=plane=>{snappedFaces.push(plane);};
 const separate=()=>{separations++;if(separateFails)return Promise.reject(Error('Select faces to separate'));return new Promise(resolve=>{finishSeparate=resolve;});};
-const {active,api}=installPolyEditMode({document,viewport,canvas,camera,objectFor:id=>present&&id==='mesh-1'?object:null,selectedId:()=>selected,setInfo:t=>infos.push(t),blocked:()=>blocked,gizmo,separate,slice,origin,snapFace});
+let hostApi=null,redrawActiveChecks=0;
+const {active,api}=installPolyEditMode({document,viewport,canvas,camera,objectFor:id=>present&&id==='mesh-1'?object:null,selectedId:()=>selected,setInfo:t=>infos.push(t),blocked:()=>blocked,gizmo,redraw:()=>{if(hostApi){redrawActiveChecks++;hostApi.active();}},separate,slice,origin,snapFace});
+hostApi=api;
 const key=(code,init={})=>{
   const event=new Event('keydown',{cancelable:true}),fields={key:code==='Tab'?'Tab':code==='Escape'?'Escape':code.replace(/^(Key|Digit)/,'').toLowerCase(),code,target:body,ctrlKey:false,metaKey:false,altKey:false,shiftKey:false,...init};
   for(const [name,value] of Object.entries(fields))Object.defineProperty(event,name,{value});
@@ -24,6 +26,7 @@ const key=(code,init={})=>{
 
 let event=key('Tab');
 assert.equal(active(),true,'Tab on the selected mesh enters Edit Mode');
+assert.ok(redrawActiveChecks>0,'redraw querying api.active() during synchronous enter() does not prematurely exit Edit Mode');
 assert.ok(event.defaultPrevented,'and the key is consumed');
 assert.deepEqual([gizmo.visible,gizmo.enabled,helper.visible],[false,false,false],'the object gizmo and its drawn helper stand down while editing');
 key('Digit3');assert.equal(api.read().mode,'face');

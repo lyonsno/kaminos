@@ -19,7 +19,8 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
 
   function enter(id=selectedId(),{mode='vertex'}={}){
     const object=id&&objectFor(id);if(!object)throw Error('Select a mesh object, then press Tab to edit it');
-    const state=edit.enter(object,{objectId:id,mode});objectId=id;
+    objectId=id;let state;
+    try{state=edit.enter(object,{objectId:id,mode});}catch(error){objectId=null;throw error;}
     // TransformControls draws through a separate helper object in current Three; stand both down.
     const helper=gizmo?.getHelper?.();
     if(gizmo&&!gizmoState){gizmoState={visible:gizmo.visible,enabled:gizmo.enabled,helperVisible:helper?.visible};gizmo.visible=false;gizmo.enabled=false;if(helper)helper.visible=false;}

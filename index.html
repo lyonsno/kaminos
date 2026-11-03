@@ -21886,6 +21886,7 @@ function syncEditModeToolbar() {
   const modeBtn=document.getElementById('authoring-edit-mode'),submodes=document.getElementById('authoring-edit-submodes');
   if(!modeBtn)return;
   const polyActive=!!polyEdit?.active(),compActive=!!sceneComponents?.active(),active=polyActive||compActive;
+  document.body.dataset.polyEditing=String(polyActive);
   modeBtn.setAttribute('aria-pressed',String(active));
   modeBtn.textContent=active?'Edit Mode':'Object Mode';
   const entry=selectedSceneObjectEntry();
