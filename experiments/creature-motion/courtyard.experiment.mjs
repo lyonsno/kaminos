@@ -181,7 +181,14 @@ export async function createCourtyard({host,inputs={},record=operation=>investig
    action('Repeat object events','repeat');action('Restart creatures','restart');action('Save observation and event history','export');
    const fieldLabel=document.createElement('label'),field=document.createElement('input');field.type='checkbox';field.setAttribute('aria-label','Selected creature sensory field');field.onchange=()=>invoke('field',{visible:field.checked});fieldLabel.append(field,document.createTextNode('Show selected creature’s sensory field'));node.append(fieldLabel);
    const details=document.createElement('details'),summary=document.createElement('summary'),editor=document.createElement('textarea');summary.textContent='Timed event program';editor.setAttribute('aria-label','Courtyard event program');editor.rows=10;editor.style.width='100%';editor.value=JSON.stringify(program,null,2);editor.oninput=()=>{try{invoke('program',JSON.parse(editor.value)).catch(e=>status.textContent=e.message);}catch(e){status.textContent=e.message;}};details.append(summary,editor);node.append(details);
-   const note=document.createElement('p');note.textContent='Select a bronze object to edit it. Timed objects and creatures run independently; fire keeps its ordinary controls. Events use viewer seconds and do not provide exact fluid replay.';node.append(note);root.append(node);ui={status,automatic:timed};sync();
+   const note=document.createElement('p');note.textContent='Select a bronze object to edit it. Timed objects and creatures run independently; fire keeps its ordinary controls. Events use viewer seconds and do not provide exact fluid replay.';node.append(note);
+   const toolbar=document.getElementById('scene-add-menu')?.closest('nav');
+   if(toolbar){
+    const menu=document.createElement('details'),summary=document.createElement('summary');menu.className='creature-courtyard-menu';menu.style.cssText='position:relative';summary.textContent='Courtyard';summary.setAttribute('aria-label','Courtyard events');summary.style.cssText='cursor:pointer;padding:4px 7px;white-space:nowrap';
+    node.style.cssText+=';position:absolute;top:100%;left:0;width:290px;max-height:70vh;overflow:auto;z-index:50;background:#202226;border:1px solid #555;border-radius:5px;box-shadow:0 5px 18px #0008';
+    menu.append(summary,node);toolbar.append(menu);mountNode=menu;
+   }else root.append(node);
+   ui={status,automatic:timed};sync();
    if(host.controls.mountObject){for(const [id,row]of props)mountSource({asset:row.asset,id,document,invoke});const fire=host.scene.objects?.().find(x=>x.type==='flame-emitter');if(fire)mountSource({asset:{id:fire.id,root:fire.object},id:'fire',document,invoke});}
   },async dispose(){disposed=true;recording?.finish();if(globalThis.window?.kaminosCreatureCourtyard?.read===read)delete window.kaminosCreatureCourtyard;for(const seat of seatings)seat?.dispose?.();mountNode?.remove();await living?.dispose();await session.dispose();}};
  }catch(error){await living?.dispose();await session.dispose();throw error;}
