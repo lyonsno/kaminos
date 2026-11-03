@@ -16,5 +16,14 @@ assert.notEqual(JSON.stringify(model),original);follower.reset();follower.update
 const actual=matrixFrame(seatingFrame(root,model,'payload',0,entries)),delta=new T.Vector3(...actual.position).sub(new T.Vector3(...p.position));
 assert.ok(Math.abs(delta.dot(normal))<1e-8);assert.ok(Math.abs(delta.dot(along)-.7)<1e-8);assert.ok(Math.abs(new T.Quaternion().setFromEuler(new T.Euler(...actual.rotation)).dot(desiredQ))>1-1e-8);assert.ok(child.position.distanceTo(oldChild)>.1,'dependent stock follows seating edits');
 assert.ok(payload.scale.distanceTo(new T.Vector3(1.3,.7,2))<1e-8);
+// An unconstrained view-axis rotation (nearly grazing the seat plane) still turns by the requested angle about the seat normal.
+const grazingAxis=along.clone().multiplyScalar(.99).addScaledVector(normal,.14).normalize();
+const baseSeat=matrixFrame(seatingFrame(root,model,'payload',0,entries)),baseQ=new T.Quaternion().setFromEuler(new T.Euler(...baseSeat.rotation));
+const grazingQ=new T.Quaternion().setFromAxisAngle(grazingAxis,.35).multiply(baseQ),ge=new T.Euler().setFromQuaternion(grazingQ);
+const expectedGrazingQ=new T.Quaternion().setFromAxisAngle(normal,.35).multiply(baseQ);
+model=adjustSeating(root,model,'payload',0,entries,{position:baseSeat.position,rotation:[ge.x,ge.y,ge.z]});
+follower.reset();follower.update(model,0);
+const grazingActual=matrixFrame(seatingFrame(root,model,'payload',0,entries));
+assert.ok(Math.abs(new T.Quaternion().setFromEuler(new T.Euler(...grazingActual.rotation)).dot(expectedGrazingQ))>1-1e-8,'grazing view-axis R must twist around the contact normal by the full requested angle');
 const persisted=JSON.parse(JSON.stringify(model)),before=payload.matrixWorld.clone();follower.dispose();const next=createAttachmentFollower(root,()=>entries);next.update(persisted,0);assert.ok(before.elements.every((v,i)=>Math.abs(v-payload.matrixWorld.elements[i])<1e-8));next.dispose();
 console.log('Seating follows rotated/scaled receiver planes, turns about the contact normal, preserves payload scale and downstream attachments, and reconstructs from saved recipe');

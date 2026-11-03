@@ -6991,8 +6991,8 @@ function sceneHitsFromViewportPointer(event) {
 function pickSceneObjectFromViewportPointer(event,hits=sceneHitsFromViewportPointer(event)) {
   // In component mode, hidden supports have editor-only outlines; their authored visibility stays unchanged.
   if(assemblyEditing?.scope())for(const [id,guide] of assemblyGuides)if(guide.visible&&pointerHitsBoxOutline(guide.box,camera,{x:event.clientX,y:event.clientY},renderer.domElement.getBoundingClientRect()))return workingScene.find(id);
-  // Emitter symbols are drawn through geometry. Pick that same visible layer first.
-  for(const hit of hits){const record=sceneObjectRecordForDescendant(hit.object);if(record?.object.visible&&[FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(record.type))return record;}
+  // Emitter symbols and depth-free component anchors are drawn through geometry. Pick that same visible layer first.
+  for(const hit of hits){const record=sceneObjectRecordForDescendant(hit.object);if(record?.object.visible&&([FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(record.type)||(viewportDisplay.overlays&&hit.object.userData?.kaminosOverlayPick)))return record;}
   for (const hit of hits) {
     const record = sceneObjectRecordForDescendant(hit.object);
     if (record) return record;
@@ -7071,13 +7071,15 @@ function handleViewportSelectionClick(event) {
   if (drift > 5 || start.gizmo || transformGizmoDragging || transformControls?.dragging) return;
 
   const hits=sceneHitsFromViewportPointer(event),record=pickSceneObjectFromViewportPointer(event,hits);
-  const explicitEmitter=record&&[FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(record.type);
+  const overlayPick=viewportDisplay.overlays&&record&&hits.some(hit=>hit.object.userData?.kaminosOverlayPick&&sceneObjectRecordForDescendant(hit.object)===record);
+  const explicitEmitter=record&&([FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(record.type)||overlayPick);
   if(!assemblyEditing?.scope()&&!explicitEmitter&&!workingScene.groups.some(g=>g.assembly&&g.objectIds.includes(record?.id))&&pickVisibleFlameFromViewportPointer(hits)){
     window.selectSceneField('flame-field',{extend:!!event.shiftKey});setInfo('Selected: Fire & smoke domain');window._kaminosDirty?.();return;
   }
   // Geometry and emitter symbols own their pixels before helper outlines.
   if(record){
     window.selectSceneObject(record.id,{extend:!!event.shiftKey});
+    if(overlayPick&&!event.shiftKey&&sceneComponents?.toggle(record.id))sceneComponents.pick(event,{camera,canvas:renderer.domElement});
     setInfo(`Selected: ${record.label||record.id}`);window._kaminosDirty?.();return;
   }
   if(!assemblyEditing?.scope()&&pickFlameDomainFromViewportPointer(event)){

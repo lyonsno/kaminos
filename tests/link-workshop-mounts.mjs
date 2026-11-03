@@ -84,3 +84,15 @@ test('hidden collar cannot be selected; visible plates still select the relation
  f.adapters.get('a').pick({clientX:72.25,clientY:50},{camera,canvas});assert.equal(f.ra.read().selectedConnection,null,'ray through only hidden collar must miss');
  f.adapters.get('a').pick({clientX:70,clientY:50},{camera,canvas});assert.equal(f.ra.read().selectedConnection,'b');f.ra.operations.deleteSelected();assert.equal(f.ra.read().recipe.attachments.length,0);
  }finally{await f.dispose();}});
+test('clicking a fastened mount center or rim from an edge-on camera selects the fastening and marks overlay pick targets',async()=>{const f=await connectionFixture();try{
+ const recipe=f.ra.read().recipe;recipe.mounts[0].rotation=[-Math.PI/2,0,0];recipe.mounts[1].rotation=[-Math.PI/2,0,0];
+ recipe.attachments=[{objectId:'b',sourceMount:'source',targetMount:'dest',offset:{...structuredClone(frame),position:[0,0,.35]}}];
+ f.ra.operations.restore(recipe);f.ra.operations.tool({value:'select'});
+ let overlayMarkers=0;f.a.traverse(o=>{if(o.userData?.mount&&o.userData?.kaminosOverlayPick)overlayMarkers++;});
+ assert.ok(overlayMarkers>=4,'mount markers must expose depth-free overlay pick targets');
+ const camera=new T.OrthographicCamera(-5,5,5,-5,.1,20);camera.position.set(0,0,10);camera.lookAt(0,0,0);camera.updateMatrixWorld(true);const canvas={getBoundingClientRect:()=>({left:0,top:0,width:100,height:100})};
+ // At (2, 0.13, 0), the horizontal plate at y=0 is missed, hitting the mount marker rim; at (2, 0.08, 0), the ray passes inside the hollow torus hole.
+ f.adapters.get('a').pick({clientX:70,clientY:49.2},{camera,canvas});
+ assert.equal(f.ra.read().selectedConnection,'b','center of edge-on anchor ring must select the fastening');
+ assert.equal(f.ra.read().selectedMount,null,'fastened anchor click in select mode selects the connection, not the raw mount');
+ }finally{await f.dispose();}});

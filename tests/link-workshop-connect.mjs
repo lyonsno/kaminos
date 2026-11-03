@@ -59,5 +59,26 @@ try {
  edits.undo();c.operations.connectEnd({joint:0});assert.equal(edits.redo(),false,'a new pick clears draft redo');
  c.operations.previewConnection({kind:'piston'});c.operations.commitConnection();edits.undo();assert.equal(JSON.stringify(c.read().recipe),accepted,'completed connection remains one scene operation');
  edits.undo();assert.equal(c.read().recipe.period,3,'scene history resumes outside the draft');
+ c.operations.tool({value:'connect'});
+ c.operations.connectEnd({objectId:'cube',position:[-.5,0,0],rotation:[0,Math.PI/2,0]});
+ let planes=[];root.traverse(o=>{if(o.userData?.connectPlane!==undefined&&o.visible)planes.push(o);});
+ assert.equal(planes.length,1,'first Connect pick displays its oriented contact-plane guide immediately');
+ c.operations.connectEnd({joint:1,position:[0,0,0],rotation:[0,Math.PI/2,0]});
+ planes=[];root.traverse(o=>{if(o.userData?.connectPlane!==undefined&&o.visible)planes.push(o);});
+ assert.equal(planes.length,2,'second Connect pick displays the receiving contact-plane guide immediately');
+ c.operations.cancelConnection();
+ // HUD hides link pose modes and playback transport when no moving links exist.
+ {
+  class El{constructor(tag){this.tagName=tag;this.style={};this.children=[];this.hidden=false;this.attributes={};}setAttribute(k,v){this.attributes[k]=v;}append(...items){for(const x of items)if(typeof x==='object')this.children.push(x);}replaceChildren(...items){this.children=items.filter(x=>typeof x==='object');}}
+  globalThis.Option??=class extends El{constructor(text,value){super('option');this.textContent=text;this.value=value;}};
+  let mounted;const doc={activeElement:null,getElementById(){return null;},addEventListener(){},removeEventListener(){},createElement:tag=>new El(tag)};
+  host.controls.installNumberDrag=()=>({dispose(){}});host.controls.mountObject=m=>{mounted=m;return {dispose(){}};};
+  c.mount({root:new El('div'),document:doc,invoke:(op,args)=>Promise.resolve(c.operations[op](args))});
+  const [top,transport]=mounted.playback.children;
+  assert.equal(transport.hidden,false,'transport is visible when moving links exist');
+  c.operations.restore({schema:'kaminos.links.v1',period:3,nodes:[],pistons:[]});
+  assert.equal(transport.hidden,true,'playback transport hides when mechanism has no moving links');
+  assert.equal(top.children[0].hidden,true,'Build / Pose A / Pose B modes hide when mechanism has no moving links');
+ }
  console.log('Connect enters native editing; endpoints, alternatives, cancellation, atomic history and stale preview rejection passed');
 }finally{edits.clear();await c.dispose();cube.geometry.dispose();cube.material.dispose();}
