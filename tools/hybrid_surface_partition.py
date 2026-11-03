@@ -20,7 +20,7 @@ from spatial_surface_samples import spatial_samples
 def partition_surface(pos, normals, indices, min_chart_area_fraction=.002,
                       min_chart_thickness_ratio=.01, normal_cos_threshold=.85,
                       chart_cone_cos_threshold=.75, min_chart_compactness=.06,
-                      pinhole_max_triangles=64):
+                      pinhole_max_triangles=256, relief_plane_tolerance=.008):
     pos = np.asarray(pos, dtype=np.float64)
     normals = np.asarray(normals, dtype=np.float64)
     indices = np.asarray(indices, dtype=np.int64)
@@ -33,7 +33,8 @@ def partition_surface(pos, normals, indices, min_chart_area_fraction=.002,
             or not (-1 <= normal_cos_threshold <= 1)
             or not (-1 <= chart_cone_cos_threshold <= 1)
             or not (0 <= min_chart_compactness <= 1)
-            or pinhole_max_triangles < 0):
+            or pinhole_max_triangles < 0
+            or not (0 <= relief_plane_tolerance <= 1)):
         raise ValueError('Valid finite surface mesh and partition thresholds required')
 
     corners = pos[indices]
@@ -129,7 +130,40 @@ def partition_surface(pos, normals, indices, min_chart_area_fraction=.002,
     )
     mesh_mask = chart_is_mesh[chart_ids].copy()
 
-    # Absorb tiny interior pinhole components (e.g. steep mortar-groove triangles) surrounded by mesh charts.
+    # Coplanar surface-relief dilation: absorb shallow mortar grooves and surface relief whose vertices
+    # lie within relief_plane_tolerance * scale of a primary mesh chart's plane and within its bounds.
+    absorbed_relief_tris = 0
+    if relief_plane_tolerance > 0 and mesh_mask.any():
+        h_tol = relief_plane_tolerance * scale
+        tri_centers = corners.mean(axis=1)
+        q_relief = deque()
+        chart_planes = {}
+        for m_cid in np.unique(chart_ids[mesh_mask]):
+            m = (chart_ids == m_cid)
+            n_sum = cross[m].sum(axis=0)
+            n_len = float(np.linalg.norm(n_sum))
+            if n_len <= 1e-12:
+                continue
+            n_vec = n_sum / n_len
+            c_pt = (tri_centers[m] * area[m, None]).sum(axis=0) / max(float(area[m].sum()), 1e-12)
+            pts = corners[m].reshape(-1, 3)
+            chart_planes[int(m_cid)] = (c_pt, n_vec, pts.min(0) - h_tol, pts.max(0) + h_tol)
+            for t_idx in np.flatnonzero(m):
+                q_relief.append((int(t_idx), int(m_cid)))
+
+        while q_relief:
+            cur, m_cid = q_relief.popleft()
+            c_pt, n_vec, bmin, bmax = chart_planes[m_cid]
+            for nb in full_adj[cur]:
+                if not mesh_mask[nb] and len(full_adj[nb]) >= 3:
+                    pts = corners[nb]
+                    if (pts >= bmin).all() and (pts <= bmax).all():
+                        if float(np.abs((pts - c_pt) @ n_vec).max()) <= h_tol:
+                            mesh_mask[nb] = True
+                            absorbed_relief_tris += 1
+                            q_relief.append((nb, m_cid))
+
+    # Absorb tiny enclosed interior pinhole components (zero open boundary edges) surrounded by mesh charts.
     absorbed_pinhole_tris = 0
     if pinhole_max_triangles > 0 and mesh_mask.any():
         visited = mesh_mask.copy()
@@ -140,8 +174,11 @@ def partition_surface(pos, normals, indices, min_chart_area_fraction=.002,
             q = deque([t])
             comp = [t]
             touches_mesh = False
+            has_open_edge = False
             while q:
                 cur = q.popleft()
+                if len(full_adj[cur]) < 3:
+                    has_open_edge = True
                 for nb in full_adj[cur]:
                     if mesh_mask[nb]:
                         touches_mesh = True
@@ -149,7 +186,7 @@ def partition_surface(pos, normals, indices, min_chart_area_fraction=.002,
                         visited[nb] = True
                         q.append(nb)
                         comp.append(nb)
-            if touches_mesh and len(comp) <= pinhole_max_triangles:
+            if touches_mesh and not has_open_edge and len(comp) <= pinhole_max_triangles:
                 mesh_mask[comp] = True
                 absorbed_pinhole_tris += len(comp)
 
@@ -163,6 +200,7 @@ def partition_surface(pos, normals, indices, min_chart_area_fraction=.002,
             'totalTriangles': int(num_tris),
             'meshTriangleCount': int(mesh_mask.sum()),
             'splatTriangleCount': int(splat_mask.sum()),
+            'absorbedReliefTriangles': int(absorbed_relief_tris),
             'absorbedPinholeTriangles': int(absorbed_pinhole_tris),
             'totalArea': total_area,
             'meshArea': float(area[mesh_mask].sum()),
@@ -175,6 +213,8 @@ def partition_surface(pos, normals, indices, min_chart_area_fraction=.002,
             'normalCosThreshold': float(normal_cos_threshold),
             'chartConeCosThreshold': float(chart_cone_cos_threshold),
             'minChartCompactness': float(min_chart_compactness),
+            'pinholeMaxTriangles': int(pinhole_max_triangles),
+            'reliefPlaneTolerance': float(relief_plane_tolerance),
         },
     }
 
@@ -202,7 +242,7 @@ def _parse_glb(path):
 
     def view(i):
         v = doc['bufferViews'][i]
-        if v['buffer'] != 0 or v.get('extensions'):
+        if v.get('buffer') != 0 or v.get('extensions'):
             raise ValueError('Unsupported buffer view')
         off = v.get('byteOffset', 0)
         if off + v['byteLength'] > len(blob):
@@ -213,6 +253,10 @@ def _parse_glb(path):
         a = doc['accessors'][i]
         if a.get('sparse') or a.get('normalized'):
             raise ValueError('Sparse/normalized accessors unsupported')
+        if ('bufferView' not in a
+                or a.get('componentType') not in {5126, 5125, 5123, 5121}
+                or a.get('type') not in {'SCALAR', 'VEC2', 'VEC3'}):
+            raise ValueError('Unsupported accessor format')
         dtype = {5126: '<f4', 5125: '<u4', 5123: '<u2', 5121: 'u1'}[a['componentType']]
         width = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3}[a['type']]
         v = doc['bufferViews'][a['bufferView']]
@@ -229,7 +273,9 @@ def _parse_glb(path):
         if node.get('extensions') or node.get('skin') is not None:
             raise ValueError('Unsupported node semantics')
         if 'matrix' in node:
-            local = np.array(node['matrix']).reshape(4, 4).T
+            if any(k in node for k in ('translation', 'rotation', 'scale')):
+                raise ValueError('Node cannot specify both matrix and TRS properties')
+            local = np.array(node['matrix'], dtype=np.float64).reshape(4, 4).T
         else:
             x, y, z, w = node.get('rotation', [0, 0, 0, 1])
             local = np.eye(4)
@@ -254,6 +300,8 @@ def _parse_glb(path):
     primitive = primitives[0]
     if primitive.get('mode', 4) != 4 or primitive.get('extensions') or primitive.get('targets'):
         raise ValueError('Unsupported primitive semantics')
+    if 'attributes' not in primitive or 'material' not in primitive or 'indices' not in primitive:
+        raise ValueError('Primitive requires material, indices, and attributes')
     if set(primitive['attributes']) != {'POSITION', 'NORMAL', 'TEXCOORD_0'}:
         raise ValueError('Expected position, normal and UV only')
     material = doc.get('materials', [])[primitive['material']]
@@ -272,6 +320,9 @@ def _parse_glb(path):
         raise ValueError('Mismatched vertex attributes')
     if not all(np.isfinite(a).all() for a in [pos, normals, uv, matrix]):
         raise ValueError('Nonfinite source attributes')
+    det = float(np.linalg.det(matrix[:3, :3]))
+    if not np.isfinite(det) or abs(det) <= 1e-12:
+        raise ValueError('Singular node transform')
     world_pos = pos @ matrix[:3, :3].T + matrix[:3, 3]
     world_normals = normals @ np.linalg.inv(matrix[:3, :3])
     lengths = np.linalg.norm(world_normals, axis=1)
@@ -280,37 +331,91 @@ def _parse_glb(path):
     indices = accessor(primitive['indices']).reshape(-1, 3).astype(np.int64)
     if indices.max() >= len(pos):
         raise ValueError('Triangle index outside vertices')
+    if det < 0:
+        indices = indices[:, [0, 2, 1]]
     return payload, doc, bytes(blob), view, primitive, material, pbr, world_pos, world_normals, zero_normals, uv, indices, matrix
 
 
-def _write_subset_glb(doc, blob_bytes, primitive, subset_indices_u32, out_path):
+def _write_subset_glb(doc, view, primitive, world_pos, world_normals, uv, subset_indices_u32, out_path):
+    """Write a compacted world-space GLB containing only the referenced mesh-regime vertices, triangles, and images."""
+    subset_indices = np.asarray(subset_indices_u32, dtype=np.int64).reshape(-1, 3)
+    used_verts, remapped = np.unique(subset_indices, return_inverse=True)
+    remapped_u32 = remapped.reshape(-1, 3).astype('<u4')
+
+    sub_pos = np.ascontiguousarray(world_pos[used_verts], dtype='<f4')
+    sub_nrm = np.ascontiguousarray(world_normals[used_verts], dtype='<f4')
+    sub_uv = np.ascontiguousarray(uv[used_verts], dtype='<f4')
+
     new_doc = copy.deepcopy(doc)
-    idx_acc_id = primitive['indices']
-    idx_acc = new_doc['accessors'][idx_acc_id]
-    new_idx_bytes = np.asarray(subset_indices_u32, dtype='<u4').reshape(-1).tobytes()
-    new_blob = bytearray(blob_bytes)
-    new_blob.extend(b'\0' * (-len(new_blob) % 4))
-    new_view_id = len(new_doc['bufferViews'])
-    new_doc['bufferViews'].append({
-        'buffer': 0,
-        'byteOffset': len(new_blob),
-        'byteLength': len(new_idx_bytes),
-    })
-    new_blob.extend(new_idx_bytes)
-    new_blob.extend(b'\0' * (-len(new_blob) % 4))
-    idx_acc['bufferView'] = new_view_id
-    idx_acc['byteOffset'] = 0
-    idx_acc['componentType'] = 5125
-    idx_acc['count'] = int(subset_indices_u32.size)
-    idx_acc.pop('max', None)
-    idx_acc.pop('min', None)
-    new_doc['buffers'][0]['byteLength'] = len(new_blob)
+    new_blob = bytearray()
+    new_views = []
+
+    def append_chunk(raw_bytes, target=None):
+        offset = len(new_blob)
+        new_blob.extend(raw_bytes)
+        new_blob.extend(b'\0' * (-len(new_blob) % 4))
+        entry = {'buffer': 0, 'byteOffset': offset, 'byteLength': len(raw_bytes)}
+        if target is not None:
+            entry['target'] = target
+        vid = len(new_views)
+        new_views.append(entry)
+        return vid
+
+    idx_vid = append_chunk(remapped_u32.reshape(-1).tobytes(), 34963)
+    pos_vid = append_chunk(sub_pos.tobytes(), 34962)
+    nrm_vid = append_chunk(sub_nrm.tobytes(), 34962)
+    uv_vid = append_chunk(sub_uv.tobytes(), 34962)
+
+    for img in new_doc.get('images', []):
+        if 'bufferView' in img:
+            old_bytes = bytes(view(img['bufferView']))
+            img['bufferView'] = append_chunk(old_bytes)
+
+    new_doc['bufferViews'] = new_views
+    new_doc['accessors'] = [
+        {
+            'bufferView': idx_vid,
+            'componentType': 5125,
+            'type': 'SCALAR',
+            'count': int(remapped_u32.size),
+        },
+        {
+            'bufferView': pos_vid,
+            'componentType': 5126,
+            'type': 'VEC3',
+            'count': int(len(sub_pos)),
+            'min': sub_pos.min(axis=0).astype(float).tolist(),
+            'max': sub_pos.max(axis=0).astype(float).tolist(),
+        },
+        {
+            'bufferView': nrm_vid,
+            'componentType': 5126,
+            'type': 'VEC3',
+            'count': int(len(sub_nrm)),
+        },
+        {
+            'bufferView': uv_vid,
+            'componentType': 5126,
+            'type': 'VEC2',
+            'count': int(len(sub_uv)),
+        },
+    ]
+    new_prim = copy.deepcopy(primitive)
+    new_prim['indices'] = 0
+    new_prim['attributes'] = {'POSITION': 1, 'NORMAL': 2, 'TEXCOORD_0': 3}
+    new_doc['meshes'] = [{'primitives': [new_prim]}]
+    new_doc['nodes'] = [{'mesh': 0}]
+    new_doc['scenes'] = [{'nodes': [0]}]
+    new_doc['scene'] = 0
+    new_doc['buffers'] = [{'byteLength': len(new_blob)}]
+
     json_bytes = json.dumps(new_doc).encode('utf-8')
     json_bytes += b' ' * (-len(json_bytes) % 4)
     header = struct.pack('<III', 0x46546c67, 2, 28 + len(json_bytes) + len(new_blob))
     chunk0 = struct.pack('<II', len(json_bytes), 0x4e4f534a) + json_bytes
     chunk1 = struct.pack('<II', len(new_blob), 0x004e4942) + new_blob
     Path(out_path).write_bytes(header + chunk0 + chunk1)
+    return int(len(sub_pos)), int(len(remapped_u32))
 
 
 def _sample_triangle_subset(doc, view, pbr, world_pos, world_normals, zero_normals, uv,
@@ -389,7 +494,13 @@ def _sample_triangle_subset(doc, view, pbr, world_pos, world_normals, zero_norma
     rows[:, 9] = mr[:, 2] * pbr.get('metallicFactor', 1)
     rows[:, 10] = mr[:, 1] * pbr.get('roughnessFactor', 1)
     rows[:, 11] = 1
-    return rows, source_parents, bary.astype('<f4'), total
+    normal_fallback = {
+        'zeroSourceVertices': int(zero_normals.sum()),
+        'affectedSamples': int(missing.any(1).sum()),
+        'policy': 'zero corner normals use the sampled triangle geometric normal',
+        'scope': 'candidate pool before spatial selection',
+    }
+    return rows, source_parents, bary.astype('<f4'), total, normal_fallback
 
 
 def main():
@@ -401,6 +512,10 @@ def main():
     parser.add_argument('--min-chart-area-fraction', type=float, default=.002)
     parser.add_argument('--min-chart-thickness-ratio', type=float, default=.01)
     parser.add_argument('--normal-cos-threshold', type=float, default=.85)
+    parser.add_argument('--chart-cone-cos-threshold', type=float, default=.75)
+    parser.add_argument('--min-chart-compactness', type=float, default=.06)
+    parser.add_argument('--pinhole-max-triangles', type=int, default=256)
+    parser.add_argument('--relief-plane-tolerance', type=float, default=.008)
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
     report = {'ok': False, 'phase': 'sample', 'source': str(args.source.resolve()), 'requestedSplatCount': args.splat_count}
@@ -415,6 +530,10 @@ def main():
             min_chart_area_fraction=args.min_chart_area_fraction,
             min_chart_thickness_ratio=args.min_chart_thickness_ratio,
             normal_cos_threshold=args.normal_cos_threshold,
+            chart_cone_cos_threshold=args.chart_cone_cos_threshold,
+            min_chart_compactness=args.min_chart_compactness,
+            pinhole_max_triangles=args.pinhole_max_triangles,
+            relief_plane_tolerance=args.relief_plane_tolerance,
         )
         mesh_tri_ids = np.flatnonzero(part['meshTriangles'])
         splat_tri_ids = np.flatnonzero(part['splatTriangles'])
@@ -423,11 +542,14 @@ def main():
 
         report['phase'] = 'write_mesh'
         mesh_glb_path = args.output / 'mesh-region.glb'
-        _write_subset_glb(doc, blob_bytes, primitive, indices[mesh_tri_ids].astype('<u4'), mesh_glb_path)
+        mesh_vert_count, mesh_tri_count = _write_subset_glb(
+            doc, view, primitive, world_pos, world_normals, uv, indices[mesh_tri_ids].astype('<u4'), mesh_glb_path
+        )
+        part['stats']['meshVertexCount'] = mesh_vert_count
 
         report['phase'] = 'sample_splats'
         pool_count = args.splat_count * args.candidate_multiplier
-        rows, source_parents, bary, splat_area = _sample_triangle_subset(
+        rows, source_parents, bary, splat_area, normal_fallback = _sample_triangle_subset(
             doc, view, pbr, world_pos, world_normals, zero_normals, uv, indices, splat_tri_ids, pool_count
         )
         ids, footprints, selection = spatial_samples(rows, args.splat_count, splat_area)
@@ -449,6 +571,7 @@ def main():
             'sourceCount': int(args.splat_count),
             'stride': 12,
             'bounds': [world_pos.min(0).tolist(), world_pos.max(0).tolist()],
+            'normalFallback': normal_fallback,
             'surfaceArea': float(splat_area),
             'radius': float(np.sqrt(splat_area / args.splat_count) * .8),
             'spatialSampling': selection,
@@ -472,6 +595,7 @@ def main():
                 splat_meta[key] = {'file': name, 'sha256': sha, **({'stride': 8, 'supportSigma': 3} if key == 'footprints' else {})}
         (splat_dir / 'report.json').write_text(json.dumps(splat_meta, indent=2) + '\n')
 
+        repo_cwd = Path(__file__).resolve().parent
         report.update({
             'ok': True,
             'phase': 'complete',
@@ -483,15 +607,15 @@ def main():
             'splatCount': int(args.splat_count),
             'splatInstanceBytes': int(args.splat_count * 84),
             'spatialSampling': selection,
-            'repoRoot': subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], text=True).strip(),
-            'commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
-            'dirty': bool(subprocess.check_output(['git', 'status', '--porcelain'], text=True).strip()),
+            'repoRoot': subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], text=True, cwd=repo_cwd).strip(),
+            'commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True, cwd=repo_cwd).strip(),
+            'dirty': bool(subprocess.check_output(['git', 'status', '--porcelain'], text=True, cwd=repo_cwd).strip()),
         })
-        (args.output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
-    except Exception as exc:
+    except BaseException as exc:
         report['error'] = str(exc)
-        (args.output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
         raise
+    finally:
+        (args.output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
 
 
 if __name__ == '__main__':
