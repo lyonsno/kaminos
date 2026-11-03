@@ -88,4 +88,19 @@ assert.match(
   /setSceneGIControls\(data\.postprocessing\?\.sceneGI \?\? \{\}\);\s*(?:if \(typeof autoCalibrateSceneGIFromScene === 'function'\) )?autoCalibrateSceneGIFromScene\(\);/,
   'applySceneDocument must auto-calibrate SSGI after restoring sceneGI controls when the scene has no explicit radius/thickness',
 );
+assert.match(
+  shader,
+  /kaminosCycloramaFloor/,
+  'scene-gi.mjs must compute roughness-attenuated dielectric contact reflection on the cyclorama floor',
+);
+assert.match(
+  shader,
+  /setOpticalFinish\(/,
+  'scene-gi.mjs must expose setOpticalFinish for studio-look-coupled floor reflection and high-threshold specular glint',
+);
+assert.match(
+  shader,
+  /glintHalo/,
+  'scene-gi.mjs must add a high-threshold specular glint halo to the beauty scene view without altering physical-emission sceneBloom',
+);
 console.log('scene GI settings and receiver contracts passed');

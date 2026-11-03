@@ -280,3 +280,120 @@ test('studio look library defines curated looks and arrival rig materializes as 
     'applySceneDocument must mark saved scenes with objects as authored-scene so unauthored stage studio lights are not injected',
   );
 });
+
+test('arrived mesh materials get 16x anisotropic texture filtering and reversible surface micro-roughness polish', () => {
+  assert.equal(typeof assetArrival.prepareArrivedMeshMaterials, 'function', 'prepareArrivedMeshMaterials must be exported');
+  const mapTex = { isTexture: true, anisotropy: 1, needsUpdate: false };
+  const normalTex = { isTexture: true, anisotropy: 1, needsUpdate: false };
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 1, 1),
+    new THREE.MeshStandardMaterial({ color: 0x22262c, roughness: 0.6, metalness: 0.85 }),
+  );
+  mesh.material.map = mapTex;
+  mesh.material.normalMap = normalTex;
+  mesh.material.envMapIntensity = 1.0;
+  const root = new THREE.Group();
+  root.add(mesh);
+
+  const darkProfile = inspectArrivalMaterialProfile([{ color: [0.08, 0.09, 0.1], roughness: 0.6, metalness: 0.85, weight: 10 }]);
+  const polished = assetArrival.prepareArrivedMeshMaterials(root, {
+    maxAnisotropy: 16,
+    materialTuning: true,
+    materialProfile: darkProfile,
+  });
+  assert.equal(mapTex.anisotropy, 16, 'albedo map must be upgraded to 16x anisotropic filtering');
+  assert.equal(normalTex.anisotropy, 16, 'normal map must be upgraded to 16x anisotropic filtering');
+  assert.ok(polished.texturesUpdated >= 2, 'prepareArrivedMeshMaterials reports updated textures');
+  assert.ok(mesh.material.roughness < 0.6, `dark-metallic surface polish tightens flat scalar roughness (${mesh.material.roughness} < 0.6)`);
+  assert.ok(mesh.material.envMapIntensity > 1.0, `dark-metallic surface polish lifts envMapIntensity (${mesh.material.envMapIntensity} > 1.0)`);
+
+  assetArrival.prepareArrivedMeshMaterials(root, {
+    maxAnisotropy: 16,
+    materialTuning: false,
+    materialProfile: darkProfile,
+  });
+  close(mesh.material.roughness, 0.6, 'disabling materialTuning restores original scalar roughness');
+  close(mesh.material.envMapIntensity, 1.0, 'disabling materialTuning restores original envMapIntensity');
+  assert.equal(mapTex.anisotropy, 16, '16x anisotropic texture filtering remains active when materialTuning is toggled off');
+});
+
+test('studio look library includes opticalFinish, supports ?look= deep link, exposes viewport look pill, and records atomic undo/redo snapshots', () => {
+  assert.equal(typeof assetArrival.resolveStudioLookFromSearch, 'function', 'resolveStudioLookFromSearch must be exported');
+  assert.equal(assetArrival.resolveStudioLookFromSearch('?glb=kiln.glb&look=obsidian-stage'), 'obsidian-stage');
+  assert.equal(assetArrival.resolveStudioLookFromSearch('?glb=kiln.glb&look=unknown-look'), null);
+  assert.equal(assetArrival.resolveStudioLookFromSearch('?glb=kiln.glb'), null);
+
+  const sculptural = assetArrival.resolveStudioLook('sculptural-studio');
+  const obsidian = assetArrival.resolveStudioLook('obsidian-stage');
+  assert.ok(sculptural.opticalFinish && obsidian.opticalFinish, 'looks define opticalFinish');
+  assert.ok(
+    obsidian.opticalFinish.floorReflection > sculptural.opticalFinish.floorReflection,
+    'obsidian-stage has stronger floor contact reflection than sculptural-studio',
+  );
+  assert.ok(
+    obsidian.opticalFinish.glintStrength > 0 && sculptural.opticalFinish.glintStrength > 0,
+    'studio looks define positive high-threshold specular glint strength',
+  );
+
+  const workspaceSource = readFileSync(new URL('../authoring-workspace.mjs', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.ok(
+    workspaceSource.includes('id="viewport-studio-look-pill"') || html.includes('id="viewport-studio-look-pill"'),
+    'viewport toolbar must expose #viewport-studio-look-pill for one-click look switching',
+  );
+  assert.ok(
+    workspaceSource.includes('id="viewport-studio-look-select"') || html.includes('id="viewport-studio-look-select"'),
+    'viewport toolbar must expose #viewport-studio-look-select',
+  );
+  assert.match(
+    html,
+    /resolveStudioLookFromSearch\(window\.location\.search\)/,
+    'startup URL handling must support ?look=<lookId> query parameter',
+  );
+  assert.match(
+    html,
+    /scenePlacementTools\.edits\.register\(\s*['"]@studio-look-switch['"]/,
+    'scenePlacementTools.edits must register an atomic @studio-look-switch target for Cmd+Z undo/redo',
+  );
+  const applyLookStart = html.indexOf('async function applyStudioLookToCurrentScene(');
+  const applyLookEnd = html.indexOf('window._kaminosArrivalLighting =', applyLookStart);
+  const applyLookBody = html.slice(applyLookStart, applyLookEnd);
+  assert.match(
+    applyLookBody,
+    /scenePlacementTools\?\.edits\?\.recordApplied\(\s*['"]@studio-look-switch['"]/,
+    'applyStudioLookToCurrentScene must record an atomic @studio-look-switch undo/redo entry',
+  );
+});
+
+test('loading telemetry tracker reports byte progress, elapsed time, stall detection when hung, and completion receipt', () => {
+  assert.equal(typeof assetArrival.createLoadingTelemetryTracker, 'function', 'createLoadingTelemetryTracker must be exported');
+  const tracker = assetArrival.createLoadingTelemetryTracker({ stallThresholdMs: 5000 });
+  tracker.start('asset', { label: 'kiln.glb', phase: 'downloading', now: 1000 });
+  let state = tracker.read(1400);
+  assert.equal(state.active, true);
+  assert.equal(state.primary.label, 'kiln.glb');
+  assert.equal(state.primary.phase, 'downloading');
+  assert.equal(state.primary.stalled, false);
+
+  tracker.progress('asset', { loadedBytes: 2621440, totalBytes: 5242880, now: 1800 });
+  state = tracker.read(1800);
+  close(state.primary.progressRatio, 0.5, '50% byte progress');
+  assert.equal(state.primary.elapsedMs, 800);
+  assert.match(state.summary, /50%/, 'summary includes percentage');
+  assert.match(state.summary, /2\.5\s*\/\s*5\.0\s*MB/, 'summary includes MB downloaded');
+
+  // Simulate a hang: 5.5s with zero progress updates
+  state = tracker.read(7300);
+  assert.equal(state.primary.stalled, true, 'operation without progress for >= stallThresholdMs is flagged as stalled');
+  assert.match(state.summary, /Stalled/i, 'summary warns when loading is hung/stalled');
+
+  tracker.complete('asset', { now: 7600 });
+  state = tracker.read(7600);
+  assert.equal(state.active, false);
+  assert.equal(state.lastCompleted?.label, 'kiln.glb');
+  assert.equal(state.lastCompleted?.durationMs, 6600);
+
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.ok(html.includes('id="loading-telemetry-pill"'), 'index.html must include #loading-telemetry-pill');
+  assert.ok(html.includes('window.kaminosLoadingTelemetry'), 'index.html must expose window.kaminosLoadingTelemetry');
+});
