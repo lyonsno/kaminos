@@ -12,6 +12,14 @@ export function checkedAssembly(value,objectIds){
  for(const id of objectIds)result[id]??='body';
  return {kind:value.kind,roles:result};
 }
+// Explicit promotion of an existing group uses authored component capabilities
+// and local visibility, never names or inherited visibility from its parent.
+export function assemblyForMembers(members,hiddenIds=[]){
+ const hidden=new Set(hiddenIds),roles=Object.fromEntries(members.map(member=>[member.id,
+  member.type==='flame-emitter'?'outlet':hidden.has(member.id)&&member.type==='procedural-mesh'
+   &&['plane','sphere','bowl','box'].includes(member.geometry?.kind)&&member.waterCollision!==false?'collision':'body']));
+ return {kind:Object.values(roles).includes('outlet')?'burner':'assembly',roles};
+}
 export function copyAssembly(group,copies){
  if(!group.assembly)return null;
  return {kind:group.assembly.kind,roles:Object.fromEntries(group.objectIds.filter(id=>copies.has(id)).map(id=>[copies.get(id),group.assembly.roles[id]??'body']))};

@@ -3396,7 +3396,7 @@ import { installPolyEditMode } from './poly-edit-host.mjs';
 import { createViewProjection } from './view-projection.mjs';
 import { moveOrigin, separateSelection, sliceSelection } from './poly-separate-selection.mjs';
 import { captureSceneMembership, resolveSceneMembershipTopology } from './scene-membership-history.mjs';
-import {checkedAssembly,assemblySelection,createAssemblyEditing} from './scene-assembly.mjs';
+import {checkedAssembly,assemblyForMembers,assemblySelection,createAssemblyEditing} from './scene-assembly.mjs';
 import {createSceneComponentEdit} from './scene-component-edit.mjs';
 import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
 import { installLegacyRangeFields } from './legacy-range-field.mjs';
@@ -3519,7 +3519,7 @@ let viewportGizmosVisible=true;
 let viewportDisplay=checkedViewportDisplay();
 let selectionFeedback=null,selectionCaptureSuspended=false,viewportBoundsVisible=false,authoringAssets=null,authoringAssetsUI=null,authoringGenerator=null,authoringImageGenerator=null,authoringImageUI=null,authoringPromptExpansion=null,authoringPromptUI=null,authoringForegroundHandoff=null,authoringTrellisGenerator=null,authoringMeshModel=null,authoringGenerateLayout=null,authoringBrowseLayout=null,authoringImageHistory=null,authoringImageHistoryUI=null;
 function attachViewportGizmo(target) {
-  if(window.kaminosSceneVisibility&&readSceneSelection().ids.some(id=>!isSceneItemVisible(id))){transformControls.detach();return;}
+  if(window.kaminosSceneVisibility&&readSceneSelection().ids.some(id=>!isSceneItemEditable(id))){transformControls.detach();return;}
   const directEmitter=workingScene.selection.ids.length===1&&selectedSceneObjectEntry()?.type===FLAME_EMITTER_TYPE;
   const component=sceneComponents?.target();
   if(component)target=component.object;
@@ -3539,6 +3539,10 @@ function viewportVisibilityObjects(){
 }
 function sceneVisibilityContext(){return {objects:workingScene.objects,groups:workingScene.groups,fields:[...(activeSceneComposition?[{id:'flame-field'}]:[]),...(waterFeature.setup?[{id:'water-field'}]:[])]};}
 function isSceneItemVisible(id){return itemVisible(id,viewportDisplay.hiddenIds,sceneVisibilityContext());}
+function isSceneItemEditable(id) {
+  const scope=assemblyEditing?.scope();
+  return isSceneItemVisible(id)||!!(scope?.objectIds.includes(id)&&scope.assembly.roles[id]==='collision');
+}
 function syncViewportDisplayControls() {
  for(const key of ['overlays','gizmos','outlines','bounds','helpers','bones','paths','zones','domains','emitters','hints']){const input=document.getElementById('viewport-show-'+key);if(input)input.checked=viewportDisplay[key];}
  for(const key of ['outlineWidth','outlineOpacity','domainWidth','domainOpacity','emitterWidth','emitterOpacity']){const input=document.getElementById('viewport-'+key);if(input&&document.activeElement!==input)input.value=String(viewportDisplay[key]);}
@@ -6598,9 +6602,9 @@ function updateTransformInspector() {
   inspector.dataset.selectionCount=String(workingScene.selection.ids.length);
   inspector.dataset.selectedFieldId=workingScene.activeFieldId||'';
   inspector.hidden=!!workingScene.activeFieldId&&workingScene.activeFieldId!=='water-field';
-  inspector.dataset.componentEditing=String(!!sceneComponents?.active());
+  inspector.dataset.componentEditing=String(!!sceneComponents?.ownsTransforms());
   document.body.dataset.componentEditing=inspector.dataset.componentEditing;
-  for(const button of document.querySelectorAll('#transform-bar button[onclick]'))if(/snapToGround|flipAxis|rotateAxis|resetTransform/.test(button.getAttribute('onclick')))button.hidden=!!sceneComponents?.active();
+  for(const button of document.querySelectorAll('#transform-bar button[onclick]'))if(/snapToGround|flipAxis|rotateAxis|resetTransform/.test(button.getAttribute('onclick')))button.hidden=!!sceneComponents?.ownsTransforms();
   empty.hidden = !!entry;
   fields.hidden = !entry;
   setTransformInspectorFieldsDisabled(!entry);
@@ -7233,11 +7237,12 @@ window.selectSceneField=function(id,options={}) {
 };
 
 window.selectSceneObject = function(id,options={}) {
+  id=assemblySelection({ids:[id],activeId:id},workingScene.groups,assemblyEditing?.scope()).activeId;
   const next=changeSelection(workingScene.selection,id,options);
   if(sceneSelectionHistory)sceneSelectionHistory.set(next.ids,next.activeId);else setActiveSceneObject(id,options);
   if (currentMesh && !workingScene.activeFieldId) {
     const entry = workingScene.objects.find(obj => obj.id === workingScene.activeObjectId);
-    setInfo(`Selected: ${entry?.label || entry?.fileName || workingScene.activeObjectId}`);
+    setInfo(`Selected: ${selectedSceneGroupEntry()?.label || entry?.label || entry?.fileName || workingScene.activeObjectId}`);
     window._kaminosDirty?.();
   }
 };
@@ -10322,7 +10327,7 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
 
 function createPageSceneMembershipOperations() {
   return createSceneMembershipOperations({
-    scene:workingScene,
+    scene:workingScene,selectionScope:()=>assemblyEditing?.scope()?.objectIds??null,
     records:{serialize:entry=>serializeSceneObject(ashMembershipEntry(entry)),reloadable:isReloadableSceneObjectRecord,load:(record,options)=>addSceneObjectFromSource(record,null,options)},
     roots:{
       prepare(entry){sceneNavigation?.prepare(entry.object);applyGiProxySetting(entry);},
@@ -10415,7 +10420,7 @@ window.removeSceneObject = function(id) {
 };
 
 function shouldIgnoreSceneObjectDeleteShortcut(e) {
-  if (polyEdit?.active()||sceneComponents?.active()) return true;
+  if (polyEdit?.active()||sceneComponents?.ownsTransforms()) return true;
   const target = e.target;
   const tagName = target?.tagName;
   if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') return true;
@@ -25810,7 +25815,7 @@ function installSceneConstruction() {
   const groupPanel=document.createElement('section');groupPanel.id='selected-group-properties';groupPanel.hidden=true;
   groupPanel.innerHTML='<h3 id="group-kind-label">Group</h3><p id="group-mode-hint">Its frame places all members together. Select a member to edit its own data.</p><button type="button" class="btn" id="group-make-assembly">Make assembly</button><button type="button" class="btn" id="group-duplicate">Duplicate · Shift D</button><button type="button" class="btn" id="object-ungroup">Ungroup</button>';
   relations.after(groupPanel);
-  document.getElementById('group-make-assembly').onclick=()=>{try{const group=selectedSceneGroupEntry(),roles=Object.fromEntries(group.objectIds.map(id=>[id,workingScene.find(id)?.type===FLAME_EMITTER_TYPE?'outlet':'body']));setSceneAssembly(group.id,{kind:Object.values(roles).includes('outlet')?'burner':'assembly',roles});}catch(error){setInfo(error.message);}};
+  document.getElementById('group-make-assembly').onclick=()=>{try{const group=selectedSceneGroupEntry();setSceneAssembly(group.id,assemblyForMembers(group.objectIds.map(id=>workingScene.find(id)),viewportDisplay.hiddenIds));}catch(error){setInfo(error.message);}};
   const assemblyPanel=document.createElement('section');assemblyPanel.id='selected-assembly-properties';assemblyPanel.hidden=true;
   assemblyPanel.innerHTML='<h3>Burner</h3><p id="assembly-mode-hint"></p><label class="slider-row"><span>Outlet</span><select class="transform-input" id="assembly-outlet"></select></label>';
   document.getElementById('selected-flame-properties').before(assemblyPanel);
@@ -25967,7 +25972,7 @@ function setupSelectionHistory(){
     try{setSceneSelection(value.ids,value.activeId);}finally{burnerGraphWriting=previous;}
   }});
   sceneSelectionHistory={set(ids,activeId=ids.at(-1)??null){
-    const next=checkedSelection(ids,activeId);if(JSON.stringify(next)===JSON.stringify(read()))return read();
+    const next=assemblySelection(checkedSelection(ids,activeId),workingScene.groups,assemblyEditing?.scope());if(JSON.stringify(next)===JSON.stringify(read()))return read();
     if(window.kaminosPolyEdit?.active()&&(next.ids.length!==1||window.kaminosPolyEdit.read().objectId!==next.activeId))window.kaminosPolyEdit.exit();
     if(splatCorrectionMode&&(next.ids.length!==1||splatCorrectionMode.objectId!==next.activeId))exitSplatCorrectionMode({revert:false,silent:true});
     scenePlacementTools.selectionChanged();
@@ -26166,8 +26171,9 @@ function installSelectionInput(){
   },true);
   document.addEventListener('pointerup',event=>{
     if(!box?.start)return;event.preventDefault();event.stopImmediatePropagation();
-    const ids=objectsInScreenBox(workingScene.objects.filter(entry=>isSceneItemVisible(entry.id)&&(!assemblyEditing?.scope()||assemblyEditing.scope().objectIds.includes(entry.id))),camera,{x0:box.start.x,y0:box.start.y,x1:event.clientX,y1:event.clientY},renderer.domElement.getBoundingClientRect());
-    const next=box.subtract?workingScene.selection.ids.filter(id=>!ids.includes(id)):[...new Set([...workingScene.selection.ids,...ids])];stopBox();sceneSelectionHistory.set(next,next.at(-1));suppressBoxClick=true;
+    const hits=objectsInScreenBox(workingScene.objects.filter(entry=>isSceneItemEditable(entry.id)&&(!assemblyEditing?.scope()||assemblyEditing.scope().objectIds.includes(entry.id))).map(entry=>entry.object.visible?entry:{...entry,object:assemblyGuides.get(entry.id)??entry.object}),camera,{x0:box.start.x,y0:box.start.y,x1:event.clientX,y1:event.clientY},renderer.domElement.getBoundingClientRect());
+    const ids=assemblySelection({ids:hits,activeId:hits.at(-1)??null},workingScene.groups,assemblyEditing?.scope()).ids;
+    const next=box.subtract?workingScene.selection.ids.filter(id=>!ids.includes(id)):[...new Set([...workingScene.selection.ids,...ids])];stopBox();sceneSelectionHistory.set(next,next.at(-1));suppressBoxClick=event.button===0;
   },true);
   document.addEventListener('click',event=>{if(suppressBoxClick){event.preventDefault();event.stopImmediatePropagation();suppressBoxClick=false;}},true);
   window.addEventListener('blur',stopBox);
