@@ -26,6 +26,20 @@ export function burnJointState(bond,section){
   linearStiffness:bond.linearStiffness*fraction,rotationalStiffness:bond.rotationalStiffness*fraction*fraction};
 }
 
+// Match the initial AVBD penalty to the pair's inertial scale. Full material
+// stiffness stalls collective acceleration; a unit start stretches under load.
+// The solver still grows each penalty toward its unchanged material maximum.
+export function burnInitialJointPenalties({masses,halfExtents,timeStep,linearStiffness,rotationalStiffness,torqueArm}){
+ if(!Array.isArray(masses)||masses.length!==2||!masses.every(x=>Number.isFinite(x)&&x>=0)
+  ||!Array.isArray(halfExtents)||halfExtents.length!==2||!halfExtents.every(v=>Array.isArray(v)&&v.length===3&&v.every(x=>Number.isFinite(x)&&x>0))
+  ||![timeStep,linearStiffness,rotationalStiffness,torqueArm].every(x=>Number.isFinite(x)&&x>0))throw Error('Finite pair masses, box extents, timestep and joint coefficients required');
+ const inverseMass=masses.map(m=>m>0?1/m:0),sum=inverseMass[0]+inverseMass[1],dt2=timeStep*timeStep;
+ return {linear:Math.min(linearStiffness,sum>0?1/(sum*dt2):1),angular:[0,1,2].map(axis=>{
+  const inverseMoment=halfExtents.reduce((s,r,i)=>s+3*inverseMass[i]/(r[(axis+1)%3]**2+r[(axis+2)%3]**2),0);
+  return Math.min(rotationalStiffness,inverseMoment>0?1/(inverseMoment*dt2*torqueArm*torqueArm):1);
+ })};
+}
+
 // Provisional isotropic material, not a calibrated wood species. Units are
 // meters, kilograms, seconds and pascals; elasticity remains in the source graph.
 export const BURN_MATERIAL=Object.freeze({tension:3e6,compression:12e6,shear:2.4e6,charStrength:.1,density:500});

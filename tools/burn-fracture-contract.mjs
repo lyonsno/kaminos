@@ -21,6 +21,22 @@ export function burnMassMotion(before,after){
  return result;
 }
 
+export function checkBurnFreefall(before,after){
+ const motion=burnMassMotion(before,after);
+ for(const snapshot of [before,after]){
+  assert.deepEqual(snapshot.state.supports,[],'Freefall cannot include pinned material');
+  assert.ok(Array.isArray(snapshot.supportCollisionMasks)&&snapshot.supportCollisionMasks.every(x=>x===0),'Freefall requires disabled support contact');
+  assert.ok(snapshot.alive.length>0&&snapshot.alive.every(x=>x===true),'Freefall must preserve the connected material');
+ }
+ assert.equal(after.alive.length,before.alive.length);
+ const expected=before.state.gravity.map(v=>v*motion.seconds),tolerance=Math.hypot(...expected)*.01;
+ assert.ok(tolerance>0,'Freefall requires nonzero gravity');
+ for(let i=0;i<before.state.regionMasses.length;i++)for(let k=0;k<3;k++){
+  assert.ok(Math.abs(after.velocities[i*4+k]-before.velocities[i*4+k]-expected[k])<=tolerance,'Connected material must acquire gravitational velocity');
+ }
+ return motion;
+}
+
 export function checkBurnFractureObservation(read,snapshot,{requireStressFailure=false,comparison}={}){
  assert.equal(read.identity,'kaminos.burn-fracture.replay.v1');assert.equal(read.effective.backend,'WebGPU');assert.equal(read.effective.adapter?.vendor,'apple');
  assert.equal(read.thermal,'frozen-not-live-coupled');assert.equal(read.mechanics.identity,BURN_FRACTURE_IDENTITY);assert.equal(read.mechanics.runtimeReadbacks,0);

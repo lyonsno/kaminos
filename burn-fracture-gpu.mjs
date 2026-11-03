@@ -2,7 +2,7 @@ import * as THREE from './lib/three.webgpu.js';
 import {ArchGpuEngine,ENGINE_REVISION} from './lib/fracture/rigid-engine.js';
 import {coarseRestFrame} from './fracture-coarse-rest-frame.mjs';
 import {ARCH_GPU_KERNELS} from './fracture-coarse-kernels.mjs';
-import {BURN_FRACTURE_IDENTITY,checkBurnFractureInput,checkedBurnMaterial,checkedBurnSupport} from './burn-fracture-core.mjs';
+import {BURN_FRACTURE_IDENTITY,checkBurnFractureInput,checkedBurnMaterial,checkedBurnSupport,burnInitialJointPenalties} from './burn-fracture-core.mjs';
 import {createBurnRegionBodiesGpu} from './burn-region-bodies-gpu.mjs';
 import {batchCoarseCompute} from './fracture-compute-batch.mjs';
 
@@ -105,7 +105,8 @@ export async function createBurnFractureGpu({renderer,prepared,sections,supports
   for(const c of restFrame.cells)engine.addBody({position:c.position,halfExtents:c.halfExtents,mass:supports.includes(c.index)?0:regionMasses[c.index],collisionGroup:1,collisionMask:regionMasses[c.index]>0?2:0});
   const supportBodies=finiteSupports.map(s=>engine.addBody({...s,position:s.position.map((v,k)=>v-restFrame.origin[k]),mass:0,collisionGroup:2,collisionMask:1}));
   for(const b of restFrame.bonds){const j=engine.addFixedJoint(b.a,b.b,b.anchorA,b.anchorB,b.linearStiffness,true),a=engine.jointRecordsData,arm=Math.max(a[j*44+7],1);a[j*44+17]=b.rotationalStiffness/(arm*arm);
-   for(let axis=0;axis<3;axis++){a[j*44+36+axis]=a[j*44+16];a[j*44+40+axis]=a[j*44+17];}
+   const initial=burnInitialJointPenalties({masses:[b.a,b.b].map(i=>supports.includes(i)?0:regionMasses[i]),halfExtents:[restFrame.cells[b.a].halfExtents,restFrame.cells[b.b].halfExtents],timeStep:h/prepared.config.substeps,linearStiffness:a[j*44+16],rotationalStiffness:a[j*44+17],torqueArm:arm});
+   for(let axis=0;axis<3;axis++){a[j*44+36+axis]=initial.linear;a[j*44+40+axis]=initial.angular[axis];}
    if(regionMasses[b.a]===0||regionMasses[b.b]===0)engine.setInitialJointActive(j,false);
   }
   // The source engine's first zero-gravity step uploads and allocates its state.

@@ -6,6 +6,13 @@ import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {checkBurnFractureObservation,checkBurnMaterialContrast} from '../tools/burn-fracture-contract.mjs';
 import * as contract from '../tools/burn-fracture-contract.mjs';
+assert.equal(typeof contract.checkBurnFreefall,'function','Connected freefall must reject gravity starvation, not merely finite movement');
+const freeBefore={state:{regionMasses:[1,2],gravity:[0,-10,0],seconds:0,supports:[]},supportCollisionMasks:[0],positions:[0,2,0,1,1,2,0,.5],velocities:new Array(8).fill(0),alive:[true]};
+const freeAfter={...structuredClone(freeBefore),state:{...freeBefore.state,seconds:1},positions:[0,-3,0,1,1,-3,0,.5],velocities:[0,-10,0,0,0,-10,0,0]};
+assert.equal(contract.checkBurnFreefall(freeBefore,freeAfter).gravityVelocityFraction,1);
+for(const change of [s=>s.velocities.fill(0),s=>s.velocities[1]=-2,s=>s.alive[0]=false,s=>s.supportCollisionMasks[0]=1,s=>s.state.supports=[0],s=>s.state.gravity=[0,-1,0],s=>s.velocities.pop()]){
+ const bad=structuredClone(freeAfter);change(bad);assert.throws(()=>contract.checkBurnFreefall(freeBefore,bad));
+}
 assert.equal(typeof contract.waitForBurnReset,'function','Reset evidence must await resolved state, not a truthy polling promise');
 let resetReads=0,frames=0;
 const resetState=await contract.waitForBurnReset(async()=>({resetting:++resetReads<3,error:null}),async()=>{frames++;});
