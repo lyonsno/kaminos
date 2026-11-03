@@ -1,3 +1,4 @@
+import {releaseAshAttributes} from './gpu-disposal.mjs';
 import * as THREE from '../lib/three.webgpu.js';
 import {ashAirAdmissionWGSL} from './scan-wgsl.mjs';
 import {fallingLayout,sourceSettings,fallingGroupState} from './fall-plan.mjs';
@@ -134,7 +135,7 @@ fn wake_cell(i:u32){let c=vec3<u32>(i%p.dims.x,(i/p.dims.x)%p.dims.y,i/(p.dims.x
   clear(){if(tiled){device.queue.writeBuffer(airGroups,0,new Uint32Array(Math.ceil(capacity/64)*3+4));device.queue.writeBuffer(renderer.backend.get(drawAttr).buffer,4,new Uint32Array([0]));}device.queue.writeBuffer(particles,0,new Float32Array(capacity*8));device.queue.writeBuffer(state,0,new Uint32Array(4));queuedVolume=0;requestedVolume=0;},
   async schedulingSnapshot(){if(!tiled)return {scheduling:'all allocated slots'};const size=airGroups.size,b=device.createBuffer({size,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});try{const e=device.createCommandEncoder();e.copyBufferToBuffer(airGroups,0,b,0,size);device.queue.submit([e.finish()]);await b.mapAsync(GPUMapMode.READ);const words=new Uint32Array(b.getMappedRange());return {scheduling:'occupied groups',allocatedGroups:Math.ceil(capacity/64),lastDispatchedGroups:words[Math.ceil(capacity/64)*3]};}finally{b.unmap();b.destroy();}},
   read:()=>({backend:'webgpu-ballistic-parcels',allocatedBytes:description.bytes+owned.reduce((n,b)=>n+b.size,0)+extraAttrs.reduce((n,a)=>n+a.array.byteLength,0),scheduling:tiled?'occupied-64-slot-groups; indirect live parcel draw':'all allocated slots',...description,requestedVolume,queuedVolume,runtimeReadbacks:0}),
-  dispose(){if(disposed)return;disposed=true;root.removeFromParent();geometry.dispose();material.dispose();renderer.backend.destroyAttribute(attr);for(const a of extraAttrs)renderer.backend.destroyAttribute(a);for(const b of owned)b.destroy();}
+  dispose(){if(disposed)return;disposed=true;root.removeFromParent();geometry.dispose();material.dispose();releaseAshAttributes(renderer,[attr,...extraAttrs]);for(const b of owned)b.destroy();}
  };
- }catch(error){geometry?.dispose();material?.dispose();renderer.backend.destroyAttribute(attr);for(const a of extraAttrs)renderer.backend.destroyAttribute(a);for(const b of owned)b.destroy();throw error;}
+ }catch(error){geometry?.dispose();material?.dispose();releaseAshAttributes(renderer,[attr,...extraAttrs]);for(const b of owned)b.destroy();throw error;}
 }

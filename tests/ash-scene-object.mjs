@@ -110,3 +110,27 @@ test('native sliding edits persist and reach the existing field owner without re
  assert.equal(records.normalize({...record(),ash:object.read().settings}).ash.slideVariation,.8);
  assert.throws(()=>object.set({slideVariation:2}),/variation/);assert.equal(object.read().settings.slideVariation,.8);object.dispose();
 });
+
+test('regrid keeps field identity and sources, clears material, and rejects failed replacement atomically',async()=>{
+ const patches=[],sources=[{position:[0,1,0],rate:.01,spread:.1}];let fail=false;
+ const object=await createAshSceneObject({record:record(),readObjects:()=>[],readSources:()=>sources,createPatch:async options=>{
+  if(fail)throw Error('allocation refused');
+  const p={root:new Group(),options,disposed:0,deposits:0,received:[],syncScene(){},deposit:async()=>{p.deposits++;},step(c,s){p.received.push(s);},read:()=>({steps:p.received.length}),dispose(){p.disposed++;p.root.removeFromParent();}};patches.push(p);return p;
+ }});
+ await object.initialize();const root=object.root;
+ await object.regrid(.02);
+ assert.equal(object.root,root);assert.equal(object.read().id,'ash-1');assert.equal(object.read().settings.cellSize,.02);
+ assert.equal(patches[0].disposed,1);assert.equal(patches[1].deposits,0);assert.equal(object.read().settings.checkpoint,undefined);
+ object.tick(1000);assert.deepEqual(patches[1].received[0].sources,sources);
+ fail=true;await assert.rejects(object.regrid(.01),/allocation refused/);
+ assert.equal(object.read().settings.cellSize,.02);assert.equal(patches[1].disposed,0);assert.equal(object.read().busy,false);
+ object.dispose();assert.equal(patches[1].disposed,1);
+});
+
+test('deletion during async regrid releases both old and candidate fields',async()=>{
+ let resolve,calls=0;const patches=[];
+ const create=()=>{const p={root:new Group(),syncScene(){},deposit:async()=>{},read:()=>({}),disposed:0,dispose(){p.disposed++;p.root.removeFromParent();}};patches.push(p);return p;};
+ const object=await createAshSceneObject({record:record(),readObjects:()=>[],createPatch:async()=>++calls===1?create():new Promise(r=>resolve=r)});
+ await object.initialize();const pending=object.regrid(.02);object.dispose();resolve(create());
+ await assert.rejects(pending,/disposed/i);assert.deepEqual(patches.map(p=>p.disposed),[1,1]);
+});
