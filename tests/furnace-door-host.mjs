@@ -19,6 +19,7 @@ const signature=packet=>packet.bodies.map(b=>{const root=new T.ObjectLoader().pa
 const original=await rt.invoke('exportBodies');
 await rt.invoke('mirrorSelect',{selections:[{id:'piston:0:barrel'}]});
 const plane=await rt.invoke('mirrorPlane');assert.equal(rows.size,2,'One assembly plus its selectable mirror plane');
+assert(rows.get(plane.planeObjectId).root.scale.x<10,'Mirror plane fits body geometry, excluding construction grid');assert(rows.get(plane.planeObjectId).root.position.y>1,'Mirror plane centered on mechanism');
 rows.get(plane.planeObjectId).root.position.z=-1.3;
 await rt.invoke('mirrorCopy');const copied=await rt.invoke('exportBodies');
 assert.equal(copied.bodies.length,original.bodies.length);assert.notDeepEqual(copied.bodies.find(b=>b.id==='piston:0:barrel'),original.bodies.find(b=>b.id==='piston:0:barrel'));
