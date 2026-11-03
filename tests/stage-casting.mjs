@@ -34,3 +34,41 @@ test('casting pickup includes the mold parent transform',async()=>{
  assert.ok(new Vector3(...p.position).distanceTo(expected)<1e-9);assert.ok(p.scale.every(v=>Math.abs(v-2)<1e-9));
  const q=new Quaternion().setFromEuler(new Euler(...p.rotation));assert.ok(q.angleTo(child.getWorldQuaternion(new Quaternion()))<1e-7);
 });
+
+async function workshopFixture({saved=false}={}){
+ const {default:experiment}=await import('../experiments/stage-casting.experiment.mjs');
+ const {Group}=await import('../lib/three.core.js');
+ const rows=Array.from({length:96},(_,i)=>i>10&&i<50?'##..##..##':'##########');
+ const recipe={schema:'kaminos.stage-mold.v1',label:'AB',pitch:.1,wallHeight:.1,baseThickness:.1,rows};
+ const m=new Group();m.userData.kaminosStageMold=recipe;const k=new Group();k.position.set(4,0,0);
+ const objects=[{id:'mold',object:m},{id:'kiln',object:k,label:'Kiln · fixture'}],events=[];let resident=false,finish,frame;
+ const settled=new Promise(resolve=>finish=()=>{resident=true;resolve();});
+ const author={burningState:()=>({status:resident?'resident':'waiting-for-fire',state:resident?{elapsed:0}:null}),settleCombustion:()=>{events.push('settle');return settled;},addStageCasting:async p=>{const o=mold.createStageCasting(p),id='piece-'+objects.length;objects.push({id,object:o});return id;}};
+ if(saved){const part=(await import('../casting-transfer.mjs')).stageLetterCastings(recipe)[0],o=mold.createStageCasting(part.recipe);objects.push({id:'saved',object:o});}
+ const app={kaminosSceneAuthoring:author,removeSceneObject:id=>objects.splice(objects.findIndex(o=>o.id===id),1)};
+ const flame={read:()=>({scene:{objects:[{id:'flame-field'}]}}),setPaused:v=>events.push(['pause',v])};
+ const host={controls:{document:{defaultView:app}},scene:{objects:()=>objects,open:async()=>({onFrame:fn=>{frame=fn;return()=>{};},redraw(){},dispose(){}}),refreshPresentation(){}},flame:{open:async()=>flame},fire:{read:()=>({registered:false}),setEnabled:v=>events.push(['emit',v])}};
+ const study=await experiment.create({host,record:()=>{}},async()=>({read:()=>({moldId:'mold'}),operations:{stopPour:async()=>{}},dispose(){}}));
+ return {study,events,finish,frame:dt=>frame({deltaSeconds:dt}),objects};
+}
+test('reopened casting is adopted and ignition waits for resident material',async()=>{
+ const f=await workshopFixture({saved:true});assert.equal(f.study.read().pieceId,'saved');assert.equal(f.study.read().cursor,1);
+ const ignition=f.study.operations.ignite();await new Promise(resolve=>setImmediate(resolve));
+ assert.ok(f.events.includes('settle'));assert.equal(f.events.some(e=>e[0]==='emit'&&e[1]===true),false);
+ f.finish();await ignition;assert.ok(f.events.some(e=>e[0]==='emit'&&e[1]===true));await f.study.dispose();
+});
+test('next delivery requires explicitly clearing the current casting',async()=>{
+ const f=await workshopFixture();await f.study.operations.release();f.frame(4);
+ await assert.rejects(f.study.operations.release(),/casting.*remove|Remove.*casting/i);
+ assert.equal(typeof f.study.operations.removeCasting,'function');await f.study.operations.removeCasting();await f.study.operations.release();assert.equal(f.study.read().cursor,2);await f.study.dispose();
+});
+test('cold ignition does not enable the source before material initialization',async()=>{
+ const f=await workshopFixture();await f.study.operations.release();f.frame(4);
+ const ignition=f.study.operations.ignite();await new Promise(resolve=>setImmediate(resolve));
+ assert.ok(f.events.includes('settle'),'native material initialization must be awaited');assert.equal(f.events.some(e=>e[0]==='emit'&&e[1]===true),false);
+ f.finish();await ignition;await f.study.dispose();
+});
+test('native deletion of the active casting stops its ignition',async()=>{
+ const f=await workshopFixture();await f.study.operations.release();f.frame(4);f.finish();await f.study.operations.ignite();
+ f.objects.splice(2);f.frame(.1);assert.equal(f.study.read().igniting,false);assert.deepEqual(f.events.at(-1),['emit',false]);await f.study.dispose();
+});
