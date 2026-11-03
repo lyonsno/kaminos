@@ -4237,7 +4237,6 @@ let authoredWaterControls=null;
 
 
 let sceneLightingPreparation=null;
-let sceneDocumentRestoring=false;
 
 let sceneViewerPaused = null;
 
@@ -4249,10 +4248,10 @@ function createPageSceneDocumentSession(options = {}) {
     post:body=>fetch('/api/save-scene',{method:'POST',headers:{'Content-Type':'application/json'},body}),
     readAddress:()=>({origin:location.origin,workspace:authoringWorkspace?.state().mode??null,owner:readOwnerExperimentAddress(location)}),
     restoreUrl:(data,filename,address)=>compositionRestoreUrl(data.composition,filename,address.origin,address.workspace,address.owner),
-    apply:(...args)=>applySceneDocument(...args),
+    apply:async(...args)=>{try{return await applySceneDocument(...args);}finally{window._kaminosDirty?.();}},
     requiresNavigation:(plan,{mounted})=>(plan.composition||isCompositionAuthoring())&&!mounted,
     navigate:url=>location.assign(url),
-    assertSupported:plan=>{if(plan.objects.filter(record=>record.type===FLAME_EMITTER_TYPE).length>1&&typeof volumePrototype?.setImmersedSources!=='function')throw Error('This flame runtime does not yet support multiple authored sources');},
+    assertSupported:plan=>{if(plan.objects.filter(record=>record.type===FLAME_EMITTER_TYPE).length>1&&volumePrototype&&typeof volumePrototype.setImmersedSources!=='function')throw Error('This flame runtime does not yet support multiple authored sources');},
     bound:filename=>{
       const url=new URL(location.href),hash=new URLSearchParams(url.hash.slice(1));
       if(filename)history.replaceState(history.state,'',savedSceneLocation(location.href,filename));
@@ -12004,7 +12003,7 @@ async function initScene() {
     lastFrame:waterFeature.host?.state().lastFrame??null,source:volumePrototype?.debugState().sceneTransport??null,
     refraction:'existing-screen-space-scene-query',displayTransform:'one-final-scene-camera'});
   const frameComposition=createSceneFrameComposition({
-    readInputs:()=>({lightingHeld:sceneLightingPreparation?.state().held||(typeof sceneDocumentRestoring!=='undefined'&&sceneDocumentRestoring),
+    readInputs:()=>({lightingHeld:sceneLightingPreparation?.state().held||(typeof sceneDocument!=='undefined'&&sceneDocument?.state().phase==='applying'),
       exclusiveInspection:exclusiveInspectionRender,manualInspection:manualInspectionRender,
       transportRequired:authoredWaterFlameTransportActive||authoredFlameHDRActive,
       radianceReady:!window.__kaminosSceneRadiance||window.__kaminosSceneRadiance.canRender()}),
@@ -12120,7 +12119,7 @@ async function initScene() {
   function animate() {
     requestAnimationFrame(animate);
     if(outputCaptureExtent)return;
-    if(sceneLightingPreparation?.state().held||sceneDocumentRestoring||sceneDocument.state().phase==='applying'||(typeof startupRestorePending!=='undefined'&&startupRestorePending)){controls.update();return;}
+    if(sceneLightingPreparation?.state().held||(typeof sceneDocument!=='undefined'&&sceneDocument?.state().phase==='applying')||(typeof startupRestorePending!=='undefined'&&startupRestorePending)){controls.update();return;}
     // Outside any render: a quality change resizes render targets.
     syncViewportQuality(syncViewportRendererSize);
     if(recordingExtent)needsRender=true;
@@ -27263,8 +27262,13 @@ async function loadSceneFile(file, options = {}) {
 async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, sceneFile}) {
   await sceneLightingPreparation?.whenIdle();
   if(!sceneLoadRequests.isCurrent(loadRequestId))return false;
-  sceneDocumentRestoring = true;
-  try {
+  if((restorePlan.hasVolumePrimitiveScene||restorePlan.composition)&&!volumePrototype&&typeof initKaminosVolumeRoute==='function'){
+    await initKaminosVolumeRoute();
+    if(!sceneLoadRequests.isCurrent(loadRequestId))return false;
+  }
+  if(restorePlan.objects.filter(record=>record.type===FLAME_EMITTER_TYPE).length>1&&typeof volumePrototype?.setImmersedSources!=='function'){
+    throw Error('This flame runtime does not yet support multiple authored sources');
+  }
   await retireSceneFlame();
   if(!sceneLoadRequests.isCurrent(loadRequestId))return false;
   const objectRecords = restorePlan.objects;
@@ -27373,7 +27377,7 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
   if (typeof sceneBeautyLods !== 'undefined' && sceneBeautyLods) {
     await sceneBeautyLods.prepareFrame(camera, currentBeautyFrameOptions());
   }
-  if (isAuthoredKilnCollisionRoute()) {
+  if (typeof isAuthoredKilnCollisionRoute === 'function' && isAuthoredKilnCollisionRoute()) {
     await sceneColliderCollection.prepare(workingScene.objects, currentColliderLodOptions());
   }
   const firePresent=!!(hasVolumePrimitiveScene||activeSceneComposition);
@@ -27460,10 +27464,6 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
     setInfo(waterFeature.failure ? `Scene loaded; water host unavailable: ${waterFeature.failure}` : 'Volume scene loaded');
   }
   return true;
-  } finally {
-    sceneDocumentRestoring = false;
-    window._kaminosDirty?.();
-  }
 }
 
 // File input handler for Load Scene
