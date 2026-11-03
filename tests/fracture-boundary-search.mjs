@@ -42,3 +42,13 @@ test('minimum cut agrees with exhaustive partitions, including parallel and frac
   assert.equal(edges.reduce((sum,[a,b,w])=>sum+(result.inside[a]!==result.inside[b]?w:0),0),expected);
  }
 });
+
+test('minimum cut reuses deep path storage across branches and repeated calls',()=>{
+ const n=2000,edges=[];
+ for(let i=0;i<n-1;i++)edges.push([i,i+1,i===1000?.25:1]);
+ for(let repeat=0;repeat<2;repeat++){
+  const result=minimumSurfaceCut(n,edges,0,n-1);
+  assert.equal(result.flow,.25);
+  assert.deepEqual(result.inside,Uint8Array.from({length:n},(_,i)=>i<=1000?1:0));
+ }
+});

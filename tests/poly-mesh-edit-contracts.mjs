@@ -145,3 +145,11 @@ assert.throws(()=>sectionCap(top,cube,all(cube),zPlane,{side:1,fill:'nonsense'})
 
 assert.throws(()=>bisectFaces(cube,all(cube),{point:[0,0,0],normal:[0,0,0]}),/normal/);
 assert.throws(()=>extractFaces(cube,new Uint8Array(3)),/one entry per face/);
+
+// A caller extracting only one part must not materialize unrelated attributes.
+{
+ const values=[0,0,0,1,0,0,0,1,0, 3,0,0,4,0,0,3,1,0];
+ const source={positions:new Proxy(values,{get(target,key){if(/^\d+$/.test(String(key))&&Number(key)>=9)throw Error('Unselected geometry was read');return Reflect.get(target,key);}}),indices:new Uint32Array([0,1,2,3,4,5])};
+ const result=extractFaces(source,new Uint8Array([1,0]),{includeRest:false});
+ assert.equal(result.rest,null);assert.deepEqual(Array.from(result.part.positions),values.slice(0,9));assert.deepEqual(Array.from(result.part.indices),[0,1,2]);assert.deepEqual(Array.from(result.partFaces),[0]);assert.deepEqual(Array.from(result.restFaces),[1]);
+}

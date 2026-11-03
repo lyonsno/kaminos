@@ -154,8 +154,9 @@ export function bisectFaces(arrays,mask,plane,{epsilon}={}) {
 }
 
 // Split faces into the selected part and the rest, each with only the render
-// vertices it uses and every attribute unchanged.
-export function extractFaces(arrays,mask) {
+// vertices it uses and every attribute unchanged. Callers using only the part
+// may skip building the complement with includeRest:false (rest is then null).
+export function extractFaces(arrays,mask,{includeRest=true}={}) {
   checkedFaceMask(arrays,mask);
   let selected=0;for(let f=0;f<mask.length;f++)if(mask[f])selected++;
   const faces=[new Uint32Array(selected),new Uint32Array(mask.length-selected)];
@@ -169,7 +170,7 @@ export function extractFaces(arrays,mask) {
     const faceMaterial=new Uint8Array(list.length);if(arrays.faceMaterial)for(let j=0;j<list.length;j++)faceMaterial[j]=arrays.faceMaterial[list[j]];
     return {positions:gather(arrays.positions,3),normals:gather(arrays.normals,3),uvs:gather(arrays.uvs,2),indices,faceMaterial};
   };
-  return {part:take(faces[0]),rest:take(faces[1]),partFaces:faces[0],restFaces:faces[1]};
+  return {part:take(faces[0]),rest:includeRest?take(faces[1]):null,partFaces:faces[0],restFaces:faces[1]};
 }
 
 // Close the openings that lie in a plane. Loops come from the open boundary as

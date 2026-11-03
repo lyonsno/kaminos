@@ -25,9 +25,11 @@ export function minimumSurfaceCut(n,edges,source=0,sink=1){
  for(const [a,b,w]of edges){const x={to:b,c:w,rev:g[b].length},y={to:a,c:w,rev:g[a].length};g[a].push(x);g[b].push(y);}
  const level=new Int32Array(n),next=new Int32Array(n),queue=new Int32Array(n);let flow=0;
  const bfs=()=>{level.fill(-1);level[source]=0;queue[0]=source;let h=0,t=1;while(h<t){const a=queue[h++];for(const e of g[a])if(e.c>0&&level[e.to]<0){level[e.to]=level[a]+1;queue[t++]=e.to;}}return level[sink]>=0;};
- const send=()=>{const nodes=[source],path=[],capacity=[Infinity];while(nodes.length){const a=nodes.at(-1);if(a===sink){const amount=capacity.at(-1);for(let i=0;i<path.length;i++){const e=g[nodes[i]][path[i]];e.c=Math.max(0,e.c-amount);g[e.to][e.rev].c+=amount;}return amount;}
-  let found=false;for(;next[a]<g[a].length;next[a]++){const e=g[a][next[a]];if(e.c>0&&level[e.to]===level[a]+1){nodes.push(e.to);path.push(next[a]);capacity.push(Math.min(capacity.at(-1),e.c));found=true;break;}}
-  if(!found){level[a]=-1;nodes.pop();capacity.pop();path.pop();if(nodes.length)next[nodes.at(-1)]++;}
+ // A level path visits each node at most once; reuse its storage across augmentations.
+ const nodes=new Int32Array(n),path=new Int32Array(n),capacity=new Float64Array(n);
+ const send=()=>{let depth=0;nodes[0]=source;capacity[0]=Infinity;while(depth>=0){const a=nodes[depth];if(a===sink){const amount=capacity[depth];for(let i=0;i<depth;i++){const e=g[nodes[i]][path[i]];e.c=Math.max(0,e.c-amount);g[e.to][e.rev].c+=amount;}return amount;}
+  let found=false;for(;next[a]<g[a].length;next[a]++){const e=g[a][next[a]];if(e.c>0&&level[e.to]===level[a]+1){path[depth]=next[a];capacity[depth+1]=Math.min(capacity[depth],e.c);nodes[++depth]=e.to;found=true;break;}}
+  if(!found){level[a]=-1;depth--;if(depth>=0)next[nodes[depth]]++;}
  }return 0;};
  while(bfs()){next.fill(0);let value;while((value=send())>0)flow+=value;}
  return {flow,inside:Uint8Array.from(level,v=>v>=0)};

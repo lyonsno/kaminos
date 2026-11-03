@@ -17,7 +17,7 @@ export function materialMeasure(a,filter=()=>true){
  }
  return {area,min,max,center:moment.map(v=>v/(area||1)),volume:Math.abs(volume)};
 }
-function select(a,owners,mask,planes=null){const out=extractFaces(a,mask).part;return {arrays:out,faceInterfaces:Int32Array.from(owners.filter((_,i)=>mask[i])),faceSectionPlanes:planes?planes.filter((_,i)=>mask[i]):new Array(out.indices.length/3).fill(null)};}
+function select(a,owners,mask,planes=null){const out=extractFaces(a,mask,{includeRest:false}).part;return {arrays:out,faceInterfaces:Int32Array.from(owners.filter((_,i)=>mask[i])),faceSectionPlanes:planes?planes.filter((_,i)=>mask[i]):new Array(out.indices.length/3).fill(null)};}
 function insideDistance(p,leaf){return Math.hypot(...p.map((v,k)=>Math.max(leaf.bounds.min[k]-v,0,v-leaf.bounds.max[k])));}
 function closest(p,leaves){let winner=null,best=Infinity;for(const l of leaves){const distance=insideDistance(p,l);const score=distance+Math.hypot(...sub(p,l.center))*1e-8;if(score<best){best=score;winner=l;}}return winner;}
 
