@@ -116,6 +116,21 @@ class TestBflPupDeltaExtract(unittest.TestCase):
             self.assertLess(err_r4, err_r2)
             self.assertLess(err_r4 / full_norm, 0.16)
 
+            if torch.backends.mps.is_available():
+                from extract_delta_adapter import lowrank_svd_decompose
+
+                lb_mps, la_mps, sv_mps, _ = lowrank_svd_decompose(
+                    bfl_tensors["model.language_model.layers.0.self_attn.q_proj.weight"],
+                    qwen_tensors["model.language_model.layers.0.self_attn.q_proj.weight"],
+                    device=torch.device("mps"),
+                    max_rank=4,
+                    oversample=8,
+                    niter=4,
+                )
+                err_mps = torch.linalg.norm((lb_mps.float() @ la_mps.float()) - target_d).item()
+                self.assertLess(err_mps / full_norm, 0.16)
+                self.assertTrue(torch.allclose(sv_mps[:4], torch.tensor([12.0, 9.0, 6.0, 3.0]), atol=0.25))
+
             # Verify resume skips already-completed shards
             resumed = run_extraction(
                 source_mode="local-dir",
@@ -196,6 +211,171 @@ class TestBflPupDeltaExtract(unittest.TestCase):
             )
             self.assertEqual(list(res["shards"].keys()), ["exact_small"])
             self.assertEqual(res["counts"]["lowrank_saved"], 0)
+            manifest_partial = json.loads((out_dir / "manifest.json").read_text())
+            self.assertFalse(manifest_partial.get("complete"))
+
+    def test_resume_invalidated_on_changed_source_or_rank_and_cli_early_failure_report(self):
+        import subprocess
+        from extract_delta_adapter import run_extraction
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bfl_dir, qwen_dir, _, bfl_tensors = self._make_fixture_dirs(root)
+            out_dir = root / "out"
+
+            # 1. Extract at rank 2
+            run_extraction(
+                source_mode="local-dir",
+                bfl_dir=bfl_dir,
+                qwen_dir=qwen_dir,
+                out_dir=out_dir,
+                report_path=root / "report1.json",
+                device="cpu",
+                max_rank=2,
+                min_lora_dim=64,
+                oversample=8,
+                niter=2,
+                resume=True,
+            )
+
+            # 2. Resume with max_rank=4 -> must NOT reuse rank-2 shards
+            res_rank4 = run_extraction(
+                source_mode="local-dir",
+                bfl_dir=bfl_dir,
+                qwen_dir=qwen_dir,
+                out_dir=out_dir,
+                report_path=root / "report2.json",
+                device="cpu",
+                max_rank=4,
+                min_lora_dim=64,
+                oversample=8,
+                niter=2,
+                resume=True,
+            )
+            self.assertEqual(res_rank4["counts"]["resumed_shards"], 0)
+            manifest_r4 = json.loads((out_dir / "manifest.json").read_text())
+            self.assertEqual(manifest_r4["max_rank"], 4)
+            self.assertTrue(manifest_r4["complete"])
+            with safe_open(str(out_dir / "shards" / "layers_00_03.safetensors"), framework="pt") as sf:
+                self.assertEqual(
+                    sf.get_tensor("model.language_model.layers.0.self_attn.q_proj.weight.lora_B").shape[1],
+                    4,
+                )
+
+            # 3. Modify source tensor contents without changing shape/header -> resume must recompute
+            modified_bfl = dict(bfl_tensors)
+            modified_bfl["model.language_model.layers.0.self_attn.q_proj.weight"] = (
+                modified_bfl["model.language_model.layers.0.self_attn.q_proj.weight"] + 1.0
+            )
+            save_file(modified_bfl, str(bfl_dir / "model.safetensors"))
+            res_changed = run_extraction(
+                source_mode="local-dir",
+                bfl_dir=bfl_dir,
+                qwen_dir=qwen_dir,
+                out_dir=out_dir,
+                report_path=root / "report3.json",
+                device="cpu",
+                max_rank=4,
+                min_lora_dim=64,
+                oversample=8,
+                niter=2,
+                resume=True,
+            )
+            self.assertEqual(res_changed["counts"]["resumed_shards"], 0)
+
+            # 4. Early setup failure (--out-dir is a regular file) must still write --report
+            bad_out = root / "regular_file"
+            bad_out.write_text("not a dir")
+            early_report = root / "early_fail_report.json"
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "models" / "bfl-pup" / "extract_delta_adapter.py"),
+                    "--source-mode",
+                    "local-dir",
+                    "--bfl-dir",
+                    str(bfl_dir),
+                    "--qwen-dir",
+                    str(qwen_dir),
+                    "--out-dir",
+                    str(bad_out),
+                    "--report",
+                    str(early_report),
+                    "--device",
+                    "cpu",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertTrue(early_report.exists())
+            early_data = json.loads(early_report.read_text())
+            self.assertEqual(early_data["status"], "failed")
+
+    def test_http_range_rejects_status_200_and_oversized_stream_without_eager_read(self):
+        from unittest.mock import patch
+        from extract_delta_adapter import HFRangeSafetensorsReader
+
+        class FakeResponse200:
+            status_code = 200
+            headers = {"Content-Length": "1000000000"}
+            body_read = False
+            closed = False
+
+            def iter_content(self, chunk_size=1024):
+                FakeResponse200.body_read = True
+                yield b"x" * 1024
+
+            def close(self):
+                FakeResponse200.closed = True
+
+        class FakeSession200:
+            def get(self, url, headers=None, stream=False, timeout=None):
+                assert stream is True
+                return FakeResponse200()
+
+        reader = object.__new__(HFRangeSafetensorsReader)
+        reader.repo_id = "dummy/repo"
+        reader.revision = "deadbeef"
+        reader._get_session = lambda: FakeSession200()
+
+        with patch("time.sleep"):
+            with self.assertRaisesRegex(RuntimeError, "Expected HTTP 206 Partial Content"):
+                reader._fetch_range("model.safetensors", 0, 7)
+        self.assertFalse(FakeResponse200.body_read)
+        self.assertTrue(FakeResponse200.closed)
+
+        class FakeResponseOversized206:
+            status_code = 206
+            headers = {"Content-Range": "bytes 0-7/1000"}
+            chunks_yielded = 0
+            max_chunks_in_single_call = 0
+            closed = False
+
+            def iter_content(self, chunk_size=1024):
+                call_chunks = 0
+                for _ in range(10):
+                    call_chunks += 1
+                    FakeResponseOversized206.chunks_yielded += 1
+                    FakeResponseOversized206.max_chunks_in_single_call = max(
+                        FakeResponseOversized206.max_chunks_in_single_call, call_chunks
+                    )
+                    yield b"0123456789"
+
+            def close(self):
+                FakeResponseOversized206.closed = True
+
+        class FakeSessionOversized:
+            def get(self, url, headers=None, stream=False, timeout=None):
+                return FakeResponseOversized206()
+
+        reader._get_session = lambda: FakeSessionOversized()
+        with patch("time.sleep"):
+            with self.assertRaisesRegex(RuntimeError, "Range response exceeded requested length"):
+                reader._fetch_range("model.safetensors", 0, 7)
+        self.assertEqual(FakeResponseOversized206.max_chunks_in_single_call, 1)
+        self.assertEqual(FakeResponseOversized206.chunks_yielded, 4)
+        self.assertTrue(FakeResponseOversized206.closed)
 
 
 if __name__ == "__main__":

@@ -190,6 +190,10 @@ class TestMLXSwitchableAdapter(unittest.TestCase):
             "schema": "kaminos.bfl-pup.delta-adapter.v1",
             "max_rank": 4,
             "min_lora_dim": 32,
+            "complete": True,
+            "expected_shard_groups": ["exact_small", "layers_00_07"],
+            "expected_exact_count": len(exact_stats),
+            "expected_lowrank_count": len(lr_stats),
             "shards": {
                 "exact_small": {"file": "shards/exact_small.safetensors", "tensor_stats": exact_stats},
                 "layers_00_07": {"file": "shards/layers_00_07.safetensors", "tensor_stats": lr_stats},
@@ -320,32 +324,76 @@ class TestMLXSwitchableAdapter(unittest.TestCase):
                 0.0,
             )
 
-            # 3. BFL-resident role (`base_role="bfl"`): rank-2 slice and OFF (recovering Qwen baseline)
+            # 3. BFL-resident role (`base_role="bfl"`): requires explicit allow_bfl_residual_approx=True
+            # and on a true BFL model with a nonzero omitted SVD tail (rank > 4), retains that tail residual
+            bfl_with_tail_hf = dict(reconstruct_hf(rank=4))
+            tail_vec = np.ones_like(bfl_with_tail_hf["model.language_model.layers.0.linear_attn.out_proj.weight"]) * 0.05
+            bfl_with_tail_hf["model.language_model.layers.0.linear_attn.out_proj.weight"] = (
+                bfl_with_tail_hf["model.language_model.layers.0.linear_attn.out_proj.weight"] + tail_vec
+            )
             model_bfl_res = MiniMLXVLM()
-            self._load_hf_into_mlx(model_bfl_res, reconstruct_hf(rank=4))
-            ctrl_bfl = MLXSwitchableDeltaController(model_bfl_res, adapter_dir, base_role="bfl")
+            self._load_hf_into_mlx(model_bfl_res, bfl_with_tail_hf)
+
+            with self.assertRaisesRegex(ValueError, "allow_bfl_residual_approx=True"):
+                MLXSwitchableDeltaController(model_bfl_res, adapter_dir, base_role="bfl")
+
+            ctrl_bfl = MLXSwitchableDeltaController(
+                model_bfl_res, adapter_dir, base_role="bfl", allow_bfl_residual_approx=True
+            )
+            self.assertEqual(
+                ctrl_bfl.effective_model_semantics,
+                "bfl_resident_retains_unextracted_svd_tail_residual",
+            )
+            self.assertEqual(
+                ctrl_bf16.effective_model_semantics,
+                "qwen_resident_exact_target",
+            )
             epoch0 = ctrl_bfl.state_epoch
 
-            # Switch to rank 2 on BFL-resident model -> matches expected_r2
-            ctrl_bfl.set_mode(enabled=True, rank=2)
-            out_bfl_r2 = model_bfl_res(input_ids)
-            mx.eval(out_bfl_r2)
-            self.assertLess(
-                float(mx.max(mx.abs(out_bfl_r2.astype(mx.float32) - expected_r2.astype(mx.float32))).item()),
-                5e-2,
-            )
-
-            # Switch OFF on BFL-resident model -> recovers Qwen baseline_bf16
+            # Switch OFF on BFL-resident model with omitted tail -> differs from Qwen baseline_bf16 by the omitted tail
             ctrl_bfl.set_mode(enabled=False)
             out_bfl_off = model_bfl_res(input_ids)
             mx.eval(out_bfl_off)
-            self.assertLess(
-                float(mx.max(mx.abs(out_bfl_off.astype(mx.float32) - baseline_bf16.astype(mx.float32))).item()),
-                5e-2,
-            )
+            tail_diff = float(mx.max(mx.abs(out_bfl_off.astype(mx.float32) - baseline_bf16.astype(mx.float32))).item())
+            self.assertGreater(tail_diff, 1e-3)
 
             with self.assertRaises(RuntimeError):
                 ctrl_bfl.assert_cache_epoch(epoch0)
+
+            # 4. Unresolved required tensor path in manifest must fail loudly during attachment
+            bad_adapter_dir = root / "bad_adapter"
+            bad_shards = bad_adapter_dir / "shards"
+            bad_shards.mkdir(parents=True)
+            mx.save_safetensors(
+                str(bad_shards / "exact_small.safetensors"),
+                {
+                    "model.language_model.layers.99.nonexistent.weight.delta": mx.zeros((8,), dtype=mx.bfloat16),
+                    "model.language_model.layers.99.nonexistent.weight.bfl": mx.ones((8,), dtype=mx.bfloat16),
+                },
+            )
+            (bad_adapter_dir / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "kaminos.bfl-pup.delta-adapter.v1",
+                        "max_rank": 4,
+                        "min_lora_dim": 32,
+                        "complete": True,
+                        "shards": {
+                            "exact_small": {
+                                "file": "shards/exact_small.safetensors",
+                                "tensor_stats": {
+                                    "model.language_model.layers.99.nonexistent.weight": {
+                                        "mode": "exact",
+                                        "shape": [8],
+                                    }
+                                },
+                            }
+                        },
+                    }
+                )
+            )
+            with self.assertRaisesRegex(KeyError, "Unresolved MLX adapter target"):
+                MLXSwitchableDeltaController(MiniMLXVLM(), bad_adapter_dir, base_role="qwen")
 
 
 if __name__ == "__main__":

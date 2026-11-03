@@ -162,6 +162,34 @@ class TestSwitchableDeltaController(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 ctrl.assert_cache_valid(stale_cache)
 
+            # Unresolved tensor path in manifest must raise KeyError during attachment
+            import json
+            bad_dir = root / "bad_pt_adapter"
+            (bad_dir / "shards").mkdir(parents=True)
+            save_file(
+                {
+                    "nonexistent.weight.delta": torch.zeros(8, dtype=torch.bfloat16),
+                    "nonexistent.weight.bfl": torch.ones(8, dtype=torch.bfloat16),
+                },
+                str(bad_dir / "shards" / "exact_small.safetensors"),
+            )
+            (bad_dir / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "kaminos.bfl-pup.delta-adapter.v1",
+                        "max_rank": 4,
+                        "shards": {
+                            "exact_small": {
+                                "file": "shards/exact_small.safetensors",
+                                "tensor_stats": {"nonexistent.weight": {"mode": "exact", "shape": [8]}},
+                            }
+                        },
+                    }
+                )
+            )
+            with self.assertRaisesRegex(KeyError, "Unresolved PyTorch adapter parameter"):
+                SwitchableDeltaController(MiniQwen35Model(), bad_dir)
+
 
 if __name__ == "__main__":
     unittest.main()

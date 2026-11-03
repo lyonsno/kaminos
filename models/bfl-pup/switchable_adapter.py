@@ -65,22 +65,26 @@ class SwitchableDeltaController:
             if grp == "vocab_embed_lm_head" and not include_vocab:
                 continue
             shard_path = self.adapter_dir / shard_info["file"]
+            if not shard_path.is_file() or shard_path.stat().st_size == 0:
+                raise FileNotFoundError(f"Missing or empty PyTorch adapter shard for group {grp}: {shard_path}")
             with safe_open(str(shard_path), framework="pt", device="cpu") as sf:
                 for key, st in shard_info["tensor_stats"].items():
                     if st["mode"] == "exact":
-                        if key in param_map:
-                            p = param_map[key]
-                            qwen_copy = p.detach().clone()
-                            bfl_copy = sf.get_tensor(f"{key}.bfl").to(device=p.device, dtype=p.dtype)
-                            self._exact_params[key] = (p, qwen_copy, bfl_copy)
+                        if key not in param_map:
+                            raise KeyError(f"Unresolved PyTorch adapter parameter: {key}")
+                        p = param_map[key]
+                        qwen_copy = p.detach().clone()
+                        bfl_copy = sf.get_tensor(f"{key}.bfl").to(device=p.device, dtype=p.dtype)
+                        self._exact_params[key] = (p, qwen_copy, bfl_copy)
                     elif st["mode"] == "lowrank_svd":
                         mod_name = key.removesuffix(".weight")
-                        if mod_name in module_map:
-                            mod = module_map[mod_name]
-                            b_t = sf.get_tensor(f"{key}.lora_B")
-                            a_t = sf.get_tensor(f"{key}.lora_A")
-                            self._lowrank_factors[mod_name] = (b_t, a_t)
-                            self._install_hook(mod_name, mod)
+                        if mod_name not in module_map:
+                            raise KeyError(f"Unresolved PyTorch adapter module: {mod_name}")
+                        mod = module_map[mod_name]
+                        b_t = sf.get_tensor(f"{key}.lora_B")
+                        a_t = sf.get_tensor(f"{key}.lora_A")
+                        self._lowrank_factors[mod_name] = (b_t, a_t)
+                        self._install_hook(mod_name, mod)
 
     def _install_hook(self, mod_name: str, module: nn.Module) -> None:
         def _hook(mod: nn.Module, inputs: Tuple[Any, ...], output: torch.Tensor) -> Optional[torch.Tensor]:

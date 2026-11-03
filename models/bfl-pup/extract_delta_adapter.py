@@ -12,6 +12,7 @@ import json
 import math
 import re
 import struct
+import threading
 import time
 import traceback
 import urllib.request
@@ -35,6 +36,7 @@ DTYPE_MAP = {
 
 
 def atomic_write_json(path: Path, payload: Dict[str, Any]) -> None:
+    path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(payload, indent=2) + "\n")
@@ -50,7 +52,7 @@ def sha256_file(path: Path) -> str:
 
 
 class HFRangeSafetensorsReader:
-    """Streams individual tensors from Hugging Face safetensors via HTTP Range."""
+    """Streams individual tensors from Hugging Face safetensors via bounded HTTP Range."""
 
     def __init__(self, repo_id: str, revision: str, shard_files: List[str]):
         self.repo_id = repo_id
@@ -58,20 +60,50 @@ class HFRangeSafetensorsReader:
         self.shard_files = shard_files
         self.headers: Dict[str, Tuple[str, int, Dict[str, Any]]] = {}
         self.header_digests: Dict[str, str] = {}
+        self._tls = threading.local()
+        self._has_requests = False
         try:
+            import requests  # noqa: F401
+
+            self._has_requests = True
+        except ImportError:
+            self._has_requests = False
+        self._load_headers()
+
+    def _get_session(self) -> Any:
+        if not getattr(self, "_has_requests", False):
+            return None
+        tls = getattr(self, "_tls", None)
+        if tls is None:
+            self._tls = threading.local()
+            tls = self._tls
+        sess = getattr(tls, "session", None)
+        if sess is None:
             import requests
             from requests.adapters import HTTPAdapter
 
-            self._session = requests.Session()
-            adapter = HTTPAdapter(pool_connections=8, pool_maxsize=8, max_retries=3)
-            self._session.mount("https://", adapter)
-            self._session.mount("http://", adapter)
-        except ImportError:
-            self._session = None
-        self._load_headers()
+            sess = requests.Session()
+            adapter = HTTPAdapter(pool_connections=8, pool_maxsize=8, max_retries=2)
+            sess.mount("https://", adapter)
+            sess.mount("http://", adapter)
+            tls.session = sess
+        return sess
 
     def _url(self, filename: str) -> str:
         return f"https://huggingface.co/{self.repo_id}/resolve/{self.revision}/{filename}"
+
+    @staticmethod
+    def _validate_content_range(content_range: Optional[str], start: int, end_inclusive: int) -> None:
+        if not content_range:
+            return
+        m = re.match(r"^bytes\s+(\d+)-(\d+)/(\d+|\*)$", content_range.strip())
+        if not m:
+            raise RuntimeError(f"Malformed Content-Range header: {content_range!r}")
+        r_start, r_end = int(m.group(1)), int(m.group(2))
+        if r_start != start or r_end != end_inclusive:
+            raise RuntimeError(
+                f"Content-Range mismatch: requested {start}-{end_inclusive}, got {r_start}-{r_end}"
+            )
 
     def _fetch_range(self, filename: str, start: int, end_inclusive: int) -> bytes:
         expected_len = end_inclusive - start + 1
@@ -80,15 +112,45 @@ class HFRangeSafetensorsReader:
         last_err: Optional[Exception] = None
         for attempt in range(4):
             try:
-                if self._session is not None:
-                    resp = self._session.get(url, headers=headers, timeout=60)
-                    if resp.status_code not in (200, 206):
-                        raise RuntimeError(f"HTTP {resp.status_code} for {url} range {start}-{end_inclusive}")
-                    data = resp.content
+                sess_getter = getattr(self, "_get_session", None)
+                sess = sess_getter() if callable(sess_getter) else getattr(self, "_session", None)
+                if sess is not None:
+                    resp = sess.get(url, headers=headers, stream=True, timeout=60)
+                    try:
+                        if resp.status_code != 206:
+                            raise RuntimeError(
+                                f"Expected HTTP 206 Partial Content for {url} range {start}-{end_inclusive}, "
+                                f"got HTTP {resp.status_code}"
+                            )
+                        self._validate_content_range(resp.headers.get("Content-Range"), start, end_inclusive)
+                        buf = bytearray()
+                        for chunk in resp.iter_content(chunk_size=1024 * 1024):
+                            if not chunk:
+                                continue
+                            buf.extend(chunk)
+                            if len(buf) > expected_len:
+                                raise RuntimeError(
+                                    f"Range response exceeded requested length for {filename}: "
+                                    f"expected {expected_len} bytes, received >={len(buf)}"
+                                )
+                        data = bytes(buf)
+                    finally:
+                        resp.close()
                 else:
                     req = urllib.request.Request(url, headers=headers)
                     with urllib.request.urlopen(req, timeout=60) as r:
-                        data = r.read()
+                        status = getattr(r, "status", 206)
+                        if status is not None and int(status) != 206:
+                            raise RuntimeError(
+                                f"Expected HTTP 206 Partial Content for {url} range {start}-{end_inclusive}, "
+                                f"got HTTP {status}"
+                            )
+                        data = r.read(expected_len + 1)
+                        if len(data) > expected_len:
+                            raise RuntimeError(
+                                f"Range response exceeded requested length for {filename}: "
+                                f"expected {expected_len} bytes, received >={len(data)}"
+                            )
                 if len(data) != expected_len:
                     raise RuntimeError(
                         f"Truncated HTTP Range response for {filename}: expected {expected_len} bytes, got {len(data)}"
@@ -144,12 +206,14 @@ class LocalSafetensorsReader:
         self.key_to_shard: Dict[str, Path] = {}
         self.metas: Dict[str, Dict[str, Any]] = {}
         self.header_digests: Dict[str, str] = {}
+        self.file_digests: Dict[str, str] = {}
         for shard_name in self.shard_files:
             shard_path = self.directory / shard_name
             with shard_path.open("rb") as f:
                 header_len = struct.unpack("<Q", f.read(8))[0]
                 raw_header = f.read(header_len)
             self.header_digests[shard_name] = hashlib.sha256(raw_header).hexdigest()
+            self.file_digests[shard_name] = sha256_file(shard_path)
             parsed = json.loads(raw_header.decode("utf-8"))
             for k, meta in parsed.items():
                 if k == "__metadata__":
@@ -195,6 +259,84 @@ def shard_group_for_key(key: str, min_lora_dim: int, shape: Tuple[int, ...]) -> 
     return "other_lowrank"
 
 
+def _mps_gemm_svd_lowrank(
+    dw: torch.Tensor,
+    q: int,
+    niter: int,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Fast randomized SVD on MPS using GPU GEMMs (`@`) and CPU LAPACK on the small subspace.
+
+    Avoids PyTorch's `svd_kernel_mps` / `qr_kernel_mps`, which perform thousands of synchronous
+    per-column Metal command-buffer waits (>3 minutes per 12288x4096 matrix).
+    """
+    import numpy as np
+
+    transposed = dw.shape[0] < dw.shape[1]
+    a = dw.T if transposed else dw
+    d_max, d_min = a.shape
+
+    rng = np.random.default_rng(0)
+    omega_np = rng.standard_normal((d_min, q), dtype=np.float32)
+    q_np, _ = np.linalg.qr(omega_np, mode="reduced")
+
+    if d_max > 32768:
+        g_dev = torch.zeros((d_min, d_min), device=a.device, dtype=torch.float32)
+        step = 32768
+        for s_idx in range(0, d_max, step):
+            chunk = a[s_idx : s_idx + step]
+            g_dev.addmm_(chunk.T, chunk)
+    else:
+        g_dev = a.T @ a
+    g_np = g_dev.cpu().numpy()
+    del g_dev
+
+    steps = max(1, niter)
+    for _ in range(steps):
+        y_np = g_np @ q_np
+        q_np, _ = np.linalg.qr(y_np, mode="reduced")
+    del g_np
+
+    q_dev = torch.from_numpy(q_np).to(device=a.device, dtype=torch.float32)
+    if d_max > 32768:
+        b_chunks = []
+        step = 32768
+        for s_idx in range(0, d_max, step):
+            b_chunks.append(a[s_idx : s_idx + step] @ q_dev)
+        b_dev = torch.cat(b_chunks, dim=0)
+        del b_chunks
+    else:
+        b_dev = a @ q_dev
+    del q_dev
+
+    bb_np = (b_dev.T @ b_dev).cpu().numpy().astype(np.float64)
+    bb_np = 0.5 * (bb_np + bb_np.T)
+    u_b64, s_sq64, _ = np.linalg.svd(bb_np, hermitian=True)
+    s_np = np.sqrt(np.maximum(s_sq64, 0.0)).astype(np.float32)
+    v_small_np = (q_np.astype(np.float64) @ u_b64).astype(np.float32)
+
+    u_b_dev = torch.from_numpy(u_b64.astype(np.float32)).to(device=a.device)
+    s_dev = torch.from_numpy(s_np).to(device=a.device)
+    inv_s = torch.where(s_dev > 1e-7, 1.0 / s_dev, torch.zeros_like(s_dev))
+    scale_mat = u_b_dev * inv_s.unsqueeze(0)
+
+    if d_max > 32768:
+        u_chunks = []
+        step = 32768
+        for s_idx in range(0, d_max, step):
+            u_chunks.append((b_dev[s_idx : s_idx + step] @ scale_mat).cpu())
+        u_large = torch.cat(u_chunks, dim=0)
+        del u_chunks
+    else:
+        u_large = (b_dev @ scale_mat).cpu()
+    del b_dev, u_b_dev, s_dev, inv_s, scale_mat
+
+    v_small = torch.from_numpy(v_small_np)
+    s_cpu = torch.from_numpy(s_np)
+    if transposed:
+        return v_small, s_cpu, u_large
+    return u_large, s_cpu, v_small
+
+
 def lowrank_svd_decompose(
     bfl_t: torch.Tensor,
     qwen_t: torch.Tensor,
@@ -217,9 +359,13 @@ def lowrank_svd_decompose(
         frob_base = float(torch.linalg.norm(w_qwen).item())
         del w_qwen
 
-        torch.manual_seed(0)
-        u, s, v = torch.svd_lowrank(dw, q=q_eff, niter=niter)
-        del dw
+        if device.type == "mps":
+            u, s, v = _mps_gemm_svd_lowrank(dw, q=q_eff, niter=niter)
+            del dw
+        else:
+            torch.manual_seed(0)
+            u, s, v = torch.svd_lowrank(dw, q=q_eff, niter=niter)
+            del dw
 
         u_r = u[:, :r_eff]
         s_r = s[:r_eff]
@@ -246,7 +392,7 @@ def lowrank_svd_decompose(
         "frob_base": round(frob_base, 6),
         "rel_l2": round(frob_delta / max(frob_base, 1e-12), 6),
         "sv_top5": [round(float(x), 5) for x in sv_cpu[:5].tolist()],
-        "sv_rank_ boundary": round(float(sv_cpu[-1].item()), 5) if r_eff > 0 else 0.0,
+        "sv_rank_boundary": round(float(sv_cpu[-1].item()), 5) if r_eff > 0 else 0.0,
         "captured_frobenius_ratio": captured,
     }
     return lora_b, lora_a, sv_cpu, stats
@@ -276,15 +422,13 @@ def run_extraction(
 ) -> Dict[str, Any]:
     out_dir = Path(out_dir)
     report_path = Path(report_path)
-    shards_dir = out_dir / "shards"
-    shards_dir.mkdir(parents=True, exist_ok=True)
-    manifest_path = out_dir / "manifest.json"
 
     t0 = time.time()
     report: Dict[str, Any] = {
         "schema": "kaminos.bfl-pup-delta-extraction.v1",
         "status": "running",
         "failure_phase": "initialization",
+        "last_trustworthy_evidence": None,
         "started_at": t0,
         "source_mode": source_mode,
         "requested_device": device,
@@ -310,6 +454,13 @@ def run_extraction(
     atomic_write_json(report_path, report)
 
     try:
+        report["failure_phase"] = "output-dir-setup"
+        atomic_write_json(report_path, report)
+        shards_dir = out_dir / "shards"
+        shards_dir.mkdir(parents=True, exist_ok=True)
+        manifest_path = out_dir / "manifest.json"
+        report["last_trustworthy_evidence"] = "output-dir-setup"
+
         dev = resolve_device(device)
         report["effective_device"] = str(dev)
         report["failure_phase"] = "source-headers"
@@ -318,13 +469,15 @@ def run_extraction(
         if source_mode == "local-dir":
             if bfl_dir is None or qwen_dir is None:
                 raise ValueError("local-dir mode requires bfl_dir and qwen_dir")
-            bfl_reader = LocalSafetensorsReader(Path(bfl_dir))
-            qwen_reader = LocalSafetensorsReader(Path(qwen_dir))
+            bfl_reader: Any = LocalSafetensorsReader(Path(bfl_dir))
+            qwen_reader: Any = LocalSafetensorsReader(Path(qwen_dir))
             report["sources"] = {
                 "bfl_dir": str(bfl_dir),
                 "qwen_dir": str(qwen_dir),
                 "bfl_header_digests": bfl_reader.header_digests,
                 "qwen_header_digests": qwen_reader.header_digests,
+                "bfl_file_digests": bfl_reader.file_digests,
+                "qwen_file_digests": qwen_reader.file_digests,
             }
         elif source_mode == "hf-range":
             bfl_reader = HFRangeSafetensorsReader(bfl_repo, bfl_rev, ["model.safetensors"])
@@ -341,16 +494,17 @@ def run_extraction(
         else:
             raise ValueError(f"Unsupported source_mode: {source_mode}")
 
+        report["last_trustworthy_evidence"] = "source-headers"
+
         bfl_keys = bfl_reader.keys()
         qwen_key_set = set(qwen_reader.keys())
         missing = [k for k in bfl_keys if k not in qwen_key_set]
         if missing:
             raise KeyError(f"{len(missing)} BFL keys missing in Qwen source: {missing[:5]}")
 
-        # Group keys into shards
         groups: Dict[str, List[str]] = {}
         visual_keys: List[str] = []
-        for k in bfl_keys:
+        for k in sorted(bfl_keys):
             meta_bfl = bfl_reader.get_meta(k)
             meta_qwen = qwen_reader.get_meta(k)
             if tuple(meta_bfl["shape"]) != tuple(meta_qwen["shape"]):
@@ -362,6 +516,24 @@ def run_extraction(
                 continue
             else:
                 groups.setdefault(grp, []).append(k)
+
+        all_expected_groups = sorted(
+            groups.keys(),
+            key=lambda g: (0 if g == "exact_small" else (2 if g == "vocab_embed_lm_head" else 1), g),
+        )
+        expected_exact_count = len(groups.get("exact_small", []))
+        expected_lowrank_count = sum(len(v) for k, v in groups.items() if k != "exact_small")
+
+        extraction_signature_payload = {
+            "source_mode": source_mode,
+            "sources": report["sources"],
+            "params": report["params"],
+            "expected_groups": {g: groups[g] for g in all_expected_groups},
+        }
+        extraction_signature_sha256 = hashlib.sha256(
+            json.dumps(extraction_signature_payload, sort_keys=True).encode("utf-8")
+        ).hexdigest()
+        report["extraction_signature_sha256"] = extraction_signature_sha256
 
         # Verify visual identity on sampled (or all small fixture) visual tensors
         report["failure_phase"] = "visual-identity-check"
@@ -377,38 +549,80 @@ def run_extraction(
                     raise ValueError(f"Vision tensor {vk} is not identical between BFL and Qwen (max_abs={max_diff})")
                 report["counts"]["visual_verified"] += 1
             report["counts"]["visual_identical_skipped"] = len(visual_keys)
+        report["last_trustworthy_evidence"] = "visual-identity-check"
 
-        # Load prior manifest if resuming
         existing_manifest: Dict[str, Any] = {}
+        signature_matches_prior = False
         if resume and manifest_path.exists():
             try:
                 existing_manifest = json.loads(manifest_path.read_text())
+                signature_matches_prior = (
+                    existing_manifest.get("extraction_signature_sha256") == extraction_signature_sha256
+                )
             except Exception:
                 existing_manifest = {}
+                signature_matches_prior = False
 
-        ordered_groups = sorted(
-            groups.keys(),
-            key=lambda g: (0 if g == "exact_small" else (2 if g == "vocab_embed_lm_head" else 1), g),
-        )
+        ordered_groups = list(all_expected_groups)
         if selected_shards is not None:
             unknown = set(selected_shards) - set(ordered_groups)
             if unknown:
                 raise ValueError(f"Unknown shard names in selected_shards: {sorted(unknown)}")
             ordered_groups = [g for g in ordered_groups if g in set(selected_shards)]
 
-        merged_shards: Dict[str, Any] = dict(existing_manifest.get("shards", {}))
+        merged_shards: Dict[str, Any] = (
+            dict(existing_manifest.get("shards", {})) if signature_matches_prior else {}
+        )
+
+        def _write_current_manifest() -> None:
+            present_groups = set(merged_shards.keys())
+            total_exact = sum(
+                1
+                for g_info in merged_shards.values()
+                for st in g_info.get("tensor_stats", {}).values()
+                if st.get("mode") == "exact"
+            )
+            total_lr = sum(
+                1
+                for g_info in merged_shards.values()
+                for st in g_info.get("tensor_stats", {}).values()
+                if st.get("mode") == "lowrank_svd"
+            )
+            is_complete = (
+                present_groups == set(all_expected_groups)
+                and total_exact == expected_exact_count
+                and total_lr == expected_lowrank_count
+            )
+            manifest_payload = {
+                "schema": "kaminos.bfl-pup-delta-manifest.v1",
+                "complete": is_complete,
+                "extraction_signature_sha256": extraction_signature_sha256,
+                "max_rank": max_rank,
+                "min_lora_dim": min_lora_dim,
+                "expected_shard_groups": all_expected_groups,
+                "expected_exact_count": expected_exact_count,
+                "expected_lowrank_count": expected_lowrank_count,
+                "sources": report["sources"],
+                "params": report["params"],
+                "counts": report["counts"],
+                "shards": merged_shards,
+            }
+            atomic_write_json(manifest_path, manifest_payload)
 
         for grp in ordered_groups:
             keys_in_grp = groups[grp]
             shard_file = shards_dir / f"{grp}.safetensors"
-            prior_shard = existing_manifest.get("shards", {}).get(grp)
+            prior_shard = existing_manifest.get("shards", {}).get(grp) if signature_matches_prior else None
             if (
                 resume
+                and signature_matches_prior
                 and prior_shard
+                and prior_shard.get("expected_keys") == keys_in_grp
                 and shard_file.exists()
                 and sha256_file(shard_file) == prior_shard.get("sha256")
             ):
                 report["shards"][grp] = prior_shard
+                merged_shards[grp] = prior_shard
                 report["counts"]["resumed_shards"] += 1
                 if grp == "exact_small":
                     report["counts"]["exact_small_saved"] += len(keys_in_grp)
@@ -416,6 +630,8 @@ def run_extraction(
                     report["counts"]["lowrank_saved"] += len(keys_in_grp)
                 for k, st in prior_shard.get("tensor_stats", {}).items():
                     report["tensor_stats"][k] = st
+                report["last_trustworthy_evidence"] = f"resumed-{grp}"
+                _write_current_manifest()
                 atomic_write_json(report_path, report)
                 continue
 
@@ -475,6 +691,8 @@ def run_extraction(
                         st["mode"] = "lowrank_svd"
                         shard_stats[k] = st
                         report["counts"]["lowrank_saved"] += 1
+                        report["last_completed_tensor"] = k
+                        atomic_write_json(report_path, report)
 
                     del bfl_t, qwen_t
                     report["tensor_stats"][k] = shard_stats[k]
@@ -494,23 +712,18 @@ def run_extraction(
                 "sha256": shard_digest,
                 "size_bytes": shard_bytes,
                 "tensor_count": len(keys_in_grp),
+                "expected_keys": keys_in_grp,
                 "elapsed_seconds": round(time.time() - shard_t0, 3),
                 "tensor_stats": shard_stats,
             }
             report["shards"][grp] = shard_record
             merged_shards[grp] = shard_record
+            report["last_trustworthy_evidence"] = f"extracted-{grp}"
 
-            manifest_payload = {
-                "schema": "kaminos.bfl-pup-delta-manifest.v1",
-                "max_rank": max_rank,
-                "min_lora_dim": min_lora_dim,
-                "sources": report["sources"],
-                "counts": report["counts"],
-                "shards": merged_shards,
-            }
-            atomic_write_json(manifest_path, manifest_payload)
+            _write_current_manifest()
             atomic_write_json(report_path, report)
 
+        _write_current_manifest()
         report["status"] = "complete"
         report["failure_phase"] = None
         report["finished_at"] = time.time()
@@ -518,7 +731,7 @@ def run_extraction(
         atomic_write_json(report_path, report)
         return report
 
-    except Exception as exc:
+    except BaseException as exc:
         report["status"] = "failed"
         report["error_message"] = str(exc)
         report["traceback"] = traceback.format_exc()
@@ -589,9 +802,9 @@ def main() -> None:
     res = run_extraction(
         source_mode=args.source_mode,
         bfl_dir=args.bfl_dir,
-        qwen_dir=args.qwen_dir,
         bfl_repo=args.bfl_repo,
         bfl_rev=args.bfl_rev,
+        qwen_dir=args.qwen_dir,
         qwen_repo=args.qwen_repo,
         qwen_rev=args.qwen_rev,
         out_dir=args.out_dir,

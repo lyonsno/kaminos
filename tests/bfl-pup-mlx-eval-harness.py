@@ -6,8 +6,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import mlx.core as mx
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "models" / "bfl-pup"))
 
@@ -16,22 +14,10 @@ class TestMLXSwitchableEvalHarness(unittest.TestCase):
     def _write_partial_adapter(self, adapter_dir: Path, include_lowrank_file: bool = False) -> None:
         shards = adapter_dir / "shards"
         shards.mkdir(parents=True, exist_ok=True)
-        mx.save_safetensors(
-            str(shards / "exact_small.safetensors"),
-            {
-                "model.language_model.norm.weight.delta": mx.zeros((8,), dtype=mx.bfloat16),
-                "model.language_model.norm.weight.bfl": mx.ones((8,), dtype=mx.bfloat16),
-            },
-        )
+        empty_st = b"\x02\x00\x00\x00\x00\x00\x00\x00{}"
+        (shards / "exact_small.safetensors").write_bytes(empty_st)
         if include_lowrank_file:
-            mx.save_safetensors(
-                str(shards / "layers_00_07.safetensors"),
-                {
-                    "model.language_model.layers.0.linear_attn.out_proj.weight.lora_B": mx.zeros((8, 4), dtype=mx.bfloat16),
-                    "model.language_model.layers.0.linear_attn.out_proj.weight.lora_A": mx.zeros((4, 8), dtype=mx.bfloat16),
-                    "model.language_model.layers.0.linear_attn.out_proj.weight.singular_values": mx.ones((4,), dtype=mx.float32),
-                },
-            )
+            (shards / "layers_00_07.safetensors").write_bytes(empty_st)
         manifest = {
             "schema": "kaminos.bfl-pup.delta-adapter.v1",
             "max_rank": 4,
@@ -69,7 +55,7 @@ class TestMLXSwitchableEvalHarness(unittest.TestCase):
                     model_dir=root / "nonexistent-model",
                     adapter_dir=adapter_dir,
                     report_path=report_path,
-                    base_role="bfl",
+                    base_role="qwen",
                     modes=[{"name": "on_r4", "enabled": True, "rank": 4}],
                     cases=[{"id": "t2i", "task": "t2i", "prompt": "A copper kettle"}],
                 )
@@ -79,6 +65,54 @@ class TestMLXSwitchableEvalHarness(unittest.TestCase):
             self.assertEqual(rep["status"], "failed")
             self.assertEqual(rep["failure_phase"], "adapter-validation")
             self.assertIn("last_trustworthy_evidence", rep)
+
+            # Even if shard files exist, an incomplete adapter (missing expected groups or exact_small=0) must be rejected
+            self._write_partial_adapter(adapter_dir, include_lowrank_file=True)
+            with self.assertRaisesRegex(RuntimeError, "Incomplete adapter"):
+                run_switchable_evaluation(
+                    model_dir=root / "nonexistent-model",
+                    adapter_dir=adapter_dir,
+                    report_path=report_path,
+                    base_role="qwen",
+                    modes=[{"name": "on_r4", "enabled": True, "rank": 4}],
+                    cases=[{"id": "t2i", "task": "t2i", "prompt": "A copper kettle"}],
+                )
+
+    def test_cli_early_failure_writes_report_and_bfl_role_requires_explicit_approx_flag(self):
+        import subprocess
+        from evaluate_switchable_mlx import run_switchable_evaluation
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            early_report = root / "cli_early_report.json"
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "models" / "bfl-pup" / "evaluate_switchable_mlx.py"),
+                    "--config",
+                    str(root / "missing_config.json"),
+                    "--report",
+                    str(early_report),
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertTrue(early_report.exists())
+            early_data = json.loads(early_report.read_text())
+            self.assertEqual(early_data["status"], "failed")
+            self.assertIn("failure_phase", early_data)
+
+            # Reject base_role='bfl' unless allow_bfl_residual_approx=True is explicit
+            with self.assertRaisesRegex(RuntimeError, "base_role='bfl' retains the unextracted SVD tail residual"):
+                run_switchable_evaluation(
+                    model_dir=root / "nonexistent-model",
+                    adapter_dir=root / "nonexistent-adapter",
+                    report_path=root / "bfl_reject.json",
+                    base_role="bfl",
+                    modes=[{"name": "off", "enabled": False, "rank": 0}],
+                    cases=[{"id": "t2i", "task": "t2i", "prompt": "test"}],
+                )
 
     def test_rejects_blank_or_non_stop_generation_as_false_closure(self):
         from evaluate_switchable_mlx import validate_generation_observation
