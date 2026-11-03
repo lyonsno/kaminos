@@ -29,7 +29,7 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
   // GI passes that read these proxies declare themselves; with none, a proxy setting changes nothing on screen.
   const consumers=new Map();let consumerSeq=0;
   // Forgetting a root's version is enough: any later request for it takes a larger one, and an earlier one never matches.
-  const drop=root=>{disposeTree(owned.get(root));owned.delete(root);handles.delete(root);versions.delete(root);for(const fn of releaseListeners)fn(root);};
+  const drop=(root,{notifyRelease=true}={})=>{disposeTree(owned.get(root));owned.delete(root);handles.delete(root);versions.delete(root);if(notifyRelease)for(const fn of releaseListeners)fn(root);};
   function describe(root){
     const object=root.userData?.kaminosSceneObject,assetSha=shaOf(object?.source),surfels=surfelRootIn(root);
     if(!assetSha)return {state:'not-generated',reason:'not a stored generated mesh'};
@@ -90,7 +90,7 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
     registerConsumer(name){if(typeof name!=='string'||!name)throw Error('A GI proxy consumer needs a name');const key=++consumerSeq;consumers.set(key,name);return ()=>{consumers.delete(key);};},
     consumers:()=>[...consumers.values()],
     // GI proxy turned off for this object (its render settings): no proxy held, and the handle says so.
-    disable(root){drop(root);handles.set(root,{...describe(root),state:'disabled',proxyRoot:null,effective:null,levels:[],error:null});},
+    disable(root){const prev=handles.get(root);drop(root,{notifyRelease:false});handles.set(root,{...describe(root),state:'disabled',proxyRoot:null,effective:null,levels:prev?.levels??[],...(prev?.surfelLevels?{surfelLevels:prev.surfelLevels}:{}),error:null});},
     // A cleared or reopened scene: every proxy goes, and results still in flight are not published.
     clear(){for(const root of new Set([...handles.keys(),...owned.keys(),...versions.keys()]))drop(root);},
   };

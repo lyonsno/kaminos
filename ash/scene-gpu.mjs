@@ -73,6 +73,7 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
   }
   const fullBounds=cached.bounds,fullSize=fullBounds.getSize(new Vector3()),fullSpan=Math.max(...fullSize.toArray());
   if(!(fullSpan>0))throw Error(`Ash collision has zero extent: ${mesh.name}`);
+  if(prev&&prev.revision===cached.revision&&prev.matrix&&mesh.matrixWorld.elements.every((v,i)=>Math.abs(v-prev.matrix[i])<1e-10))return prev;
   const rawGrid=Math.max(4,Math.ceil(fullSpan*largest/p.cellSize-1e-8)+4);
   if(maxGrid<4)throw Error(`Ash shape exceeds effective GPU capacity: ${mesh.name} (${rawGrid} cubed)`);
   if(rawGrid<=maxGrid){
@@ -90,7 +91,8 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
   const activeBounds=reuseBounds?prev.bounds.clone():padBounds;
   const activeSpan=Math.max(1e-6,...activeBounds.getSize(new Vector3()).toArray());
   const clipRaw=Math.max(4,Math.ceil(activeSpan*largest/p.cellSize-1e-8)+4);
-  const grid=clipRaw<=32?clipRaw:Math.min(maxGrid,Math.ceil(clipRaw/32)*32),step=activeSpan/(grid-4);
+  const grid=clipRaw<=32?clipRaw:Math.min(maxGrid,Math.ceil(clipRaw/32)*32);
+  const qSpan=Math.max(activeSpan,Math.min(fullSpan,(grid-4)*(p.cellSize/largest))),step=qSpan/(grid-4);
   const center=activeBounds.getCenter(new Vector3()),extent=grid*step,origin=center.clone().addScalar(-extent/2);
   const isClipped=!activeBounds.min.equals(fullBounds.min)||!activeBounds.max.equals(fullBounds.max);
   const coarseGrid=Math.min(64,maxGrid),coarseStep=fullSpan/(coarseGrid-4),coarseCenter=fullBounds.getCenter(new Vector3()),coarseOrigin=coarseCenter.clone().addScalar(-coarseGrid*coarseStep/2);

@@ -539,7 +539,7 @@ export function selectAshCollisionLod(levels = [], {
       const dropped = Math.max(0, Number(err.sourceToLevel.max) / refDiag - Number(err.levelToSource.max) / refDiag - allowance);
       if (dropped > maxDropped) continue;
     }
-    const effectiveDiag = Math.min(wDiag, refDiag);
+    const effectiveDiag = refDiag;
     const relErr = effectiveRelativeGeomError(l, {stat, tailWeight, creviceAllowance});
     const worldError = effectiveDiag * relErr;
     const sha = l.sha ?? l.sha256;
@@ -1321,7 +1321,9 @@ export function createSceneBeautyLodController({
     resolveCollisionRung(root, {cellSize = 0.04} = {}) {
       if (disposed || !root) return null;
       const handle = giProxies?.get?.(root);
-      if (!handle || handle.representation === 'surfels' || !handle.levels?.length) return null;
+      if (!handle || handle.representation === 'surfels') return null;
+      if (handle.state === 'resolving') return {pending: true};
+      if (!handle.levels?.length) return null;
       root.updateWorldMatrix?.(true, false);
       const entry = ensureEntry(root);
       const worldBox = new THREE.Box3().copy(entry.localBox).applyMatrix4(root.matrixWorld);
@@ -1346,6 +1348,7 @@ export function createSceneBeautyLodController({
           return {tier: cand.tier, sha: cand.tier, faces: rec.faces, root: rec.root, worldError: cand.worldError};
         }
       }
+      if (entry.inFlight.size > 0) return {pending: true};
       return null;
     },
     async prepareCollision(roots = [], {cellSize = 0.04} = {}) {

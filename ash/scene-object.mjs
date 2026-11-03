@@ -20,6 +20,7 @@ export function createAshCollisionRecords(root,readObjects,{getCellSize=()=>0.04
     for(let node=entry.object;node;node=node.parent)if(!node.visible||node.userData?.kaminosEditorOnly||node.userData?.kaminosEditorHelper){objectVisible=false;break;}
     if(!objectVisible)continue;
     const rung=resolveCollisionRung?.(entry.object,{cellSize:getCellSize()})??entry.object.userData?.kaminosAshCollisionRung??null;
+    if(rung?.pending)continue;
     if(rung?.root){
      rung.root.updateWorldMatrix(true,true);invRung.copy(rung.root.matrixWorld).invert();
      const repCopies=(entry.object.children??[]).filter(c=>c.userData?.kaminosRepetitionCopy&&c.visible);

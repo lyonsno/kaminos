@@ -185,6 +185,8 @@ test('selectAshCollisionLod chooses stunt-double tiers by cell width while rejec
  assert.equal(scaledUp.faces,5000,'enlarging kiln keeps resident stunt-double tier instead of falling back to 368k hero');
  const at02=selectAshCollisionLod(kilnLevels,{cellSize:.02,worldDiag:2.023,heroFaces:368266});
  assert.equal(at02.faces,25000,'0.02m fine ash selects finer 25000-face kiln tier');
+ const scaledDown02=selectAshCollisionLod(kilnLevels,{cellSize:.02,worldDiag:0.25,heroFaces:368266});
+ assert.equal(scaledDown02.faces,25000,'shrinking kiln at 0.02m also keeps 25000-face tier without mid-drag tier switches');
  const beam=selectAshCollisionLod(beamLevels,{cellSize:.04,worldDiag:2.023,heroFaces:52936});
  assert.equal(beam.faces,500,'prismatic beam selects coarsest 500-face tier');
  const sealed=[
@@ -257,6 +259,7 @@ test('ash scene object prepares and consumes stunt-double collision rungs across
   createPatch:async options=>({
    root:new Group(),
    syncScene(){synced.push(options.sceneRecords());},
+   snapshot:async()=>({}),
    deposit:async()=>{},
    step(){},
    read:()=>({}),
@@ -276,6 +279,38 @@ test('ash scene object prepares and consumes stunt-double collision rungs across
  await ashObj.regrid(0.02);
  assert.equal(synced.length,2);
  assert.equal(synced[1][0].object.geometry.parameters.widthSegments,4,'0.02m regrid upgrades collision stunt double to 25000-face tier');
+
+ // ASHLOD-F2 (a): Disabling GI proxy for lighting comparison must not purge Stunt Double collision rungs or levels
+ giProxies.disable(kilnRoot);
+ assert.equal(giProxies.get(kilnRoot).state,'disabled');
+ assert.equal(giProxies.get(kilnRoot).proxyRoot,null);
+ await ashObj.checkpoint();
+ assert.equal(synced.length,3);
+ assert.notEqual(synced[2][0].object.geometry,heroGeom,'disabling GI proxy must not force ash collision back onto hero mesh');
+ assert.equal(synced[2][0].object.geometry.parameters.widthSegments,4,'disabled GI proxy retains 25000-face collision stunt double');
+
+ // ASHLOD-F2 (b): Late-imported mesh whose Stunt Double is still in flight must not voxelize 30k hero mesh first
+ const lateSha='9'.repeat(64);
+ const lateRoot=new Group();
+ lateRoot.userData.kaminosSceneObject={id:'kiln-2',type:'glb',source:`/api/read?root=generated-meshes&path=${lateSha}.glb`};
+ const lateHeroGeom=new BoxGeometry(1,2,1,50,50,50);
+ lateRoot.add(new Mesh(lateHeroGeom,new MeshBasicMaterial()));
+ scene.add(lateRoot);
+ giProxies.select(lateRoot,{faces:1000}); // in-flight!
+ const lateRecords=createAshCollisionRecords(ashObj.root,()=>[{id:'kiln-2',type:'glb',object:lateRoot}],{
+  getCellSize:()=>0.02,
+  resolveCollisionRung:(obj,opts)=>lodController.resolveCollisionRung(obj,opts),
+ });
+ const whileInFlight=lateRecords();
+ assert.equal(whileInFlight.length,0,'while Stunt Double manifest/rung is in flight, must defer rather than voxelizing 30k hero mesh');
+ await giProxies.whenIdle();
+ const whileRungLoading=lateRecords();
+ assert.equal(whileRungLoading.length,0,'while chosen Stunt Double GLB is loading, must defer rather than voxelizing 30k hero mesh');
+ await lodController.whenIdle();
+ const afterRungReady=lateRecords();
+ assert.equal(afterRungReady.length,1,'once Stunt Double rung finishes loading, collision record is emitted');
+ assert.notEqual(afterRungReady[0].object.geometry,lateHeroGeom,'emitted collision record uses Stunt Double tier, never hero');
+
  ashObj.dispose();lodController.dispose();giProxies.clear();
 });
 

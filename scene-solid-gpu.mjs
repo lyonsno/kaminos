@@ -58,7 +58,7 @@ struct Params { matrix:mat4x4<f32>, domain:vec4<f32>, dims:vec4<u32> }
 @group(0) @binding(6) var output:texture_storage_3d<r32uint,write>;
 @group(0) @binding(7) var<storage,read> support:array<u32>;
 @group(0) @binding(8) var<storage,read_write> stats:array<atomic<u32>>;
-struct MaterialMask {worldToMaterial:mat4x4<f32>,enabled:vec4<u32>}
+struct MaterialMask {worldToMaterial:mat4x4<f32>,capOriginStep:vec4<f32>,capBoundsMin:vec4<f32>,capBoundsMax:vec4<f32>,enabled:vec4<u32>}
 @group(0) @binding(9) var materialState:texture_3d<f32>;
 @group(0) @binding(10) var<uniform> material:MaterialMask;
 @group(0) @binding(11) var boundaryCap:texture_3d<u32>;
@@ -93,9 +93,9 @@ fn touches(a0:vec3<f32>,b0:vec3<f32>,c0:vec3<f32>,cell:vec3<i32>)->bool{
   root=0u;
   if(material.enabled.y!=0u){
    let local=(vec3<f32>(c)+vec3<f32>(0.5))*2.0*p.domain.w/f32(p.dims.x)-vec3<f32>(p.domain.w)+p.domain.xyz;
-   let bmin=material.worldToMaterial[1].xyz;let bmax=material.worldToMaterial[2].xyz;
+   let bmin=material.capBoundsMin.xyz;let bmax=material.capBoundsMax.xyz;
    if(all(local>=bmin)&&all(local<=bmax)){
-    let qc=vec3<i32>(floor((local-material.worldToMaterial[0].xyz)/material.worldToMaterial[0].w));
+    let qc=vec3<i32>(floor((local-material.capOriginStep.xyz)/material.capOriginStep.w));
     let cdims=vec3<i32>(textureDimensions(boundaryCap));
     if(all(qc>=vec3<i32>(0))&&all(qc<cdims)&&textureLoad(boundaryCap,qc,0).x!=0u){root=i+1u;}
    }
@@ -183,7 +183,7 @@ export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
     const values=new ArrayBuffer(96),floats=new Float32Array(values),uints=new Uint32Array(values);
     floats.set(matrix??[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]);
     uints.set([...dims,triangleCount],20);
-    const materialUniform=device.createBuffer({label:'scene solid remaining material',size:80,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+    const materialUniform=device.createBuffer({label:'scene solid remaining material',size:128,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
     const group=device.createBindGroup({layout,entries:[{binding:0,resource:{buffer:uniform}},{binding:1,resource:{buffer:triangles}},
       {binding:2,resource:{buffer:member.shell}},{binding:3,resource:{buffer:member.parent}},{binding:4,resource:{buffer:member.mask}},
       {binding:5,resource:{buffer:combined}},{binding:6,resource:view},{binding:7,resource:{buffer:support}},{binding:8,resource:{buffer:stats}},
@@ -199,19 +199,31 @@ export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
     setSourceSupport(values){if(!(values instanceof Uint32Array)||values.length!==cells)throw Error('Invalid GPU source support');device.queue.writeBuffer(support,0,values);pending=true;},
     update(input,transform,shape,{wallCells=[],materialMasks=[],boundaryCap=null}={}){
       if(shape.grid!==grid||shape.gridHeight!==gridHeight)throw Error('GPU scene solid shape mismatch');
+      if(boundaryCap&&(!boundaryCap.texture?.createView||!Array.isArray(boundaryCap.origin)||boundaryCap.origin.length!==3||!Number.isFinite(boundaryCap.step)||!(boundaryCap.step>0)||!Array.isArray(boundaryCap.boundsMin)||boundaryCap.boundsMin.length!==3||!Array.isArray(boundaryCap.boundsMax)||boundaryCap.boundsMax.length!==3))throw Error('Invalid scene solid boundary cap');
+      const boundaryCapKey=boundaryCap?JSON.stringify([boundaryCap.origin,boundaryCap.step,boundaryCap.boundsMin,boundaryCap.boundsMax]):null;
       const members=meshCache.update(input,transform),seen=new Set();builds=0;
       for(const member of members){
         seen.add(member.id);let m=objects.get(member.id);
-        if(!m){m={shell:buffer('scene solid shell',bytes),parent:buffer('scene solid components',bytes+4),mask:buffer('scene solid object mask',bytes,GPUBufferUsage.COPY_SRC),draws:[]};m.base=makeGroup(m);objects.set(member.id,m);}
+        if(!m){m={shell:buffer('scene solid shell',bytes),parent:buffer('scene solid components',bytes+4),mask:buffer('scene solid object mask',bytes,GPUBufferUsage.COPY_SRC),draws:[],materialTexture:null,boundaryCapTexture:null,materialRevision:undefined,boundaryCapKey:undefined};m.base=makeGroup(m);objects.set(member.id,m);}
         const filter=materialMasks.find(mask=>mask.objectId===member.id);
         if(filter&&(filter.device!==device||!filter.texture?.createView||!Array.isArray(filter.matrix)||filter.matrix.length!==16||!filter.matrix.every(Number.isFinite)))throw Error('Invalid same-device remaining material mask');
-        if(m.materialTexture!==(filter?.texture??null)||m.boundaryCapTexture!==(boundaryCap?.texture??null)){
+        const materialRevision=filter?.revision??null;
+        const texChanged=m.materialTexture!==(filter?.texture??null)||m.boundaryCapTexture!==(boundaryCap?.texture??null);
+        const capChanged=m.boundaryCapTexture!==(boundaryCap?.texture??null)||m.boundaryCapKey!==boundaryCapKey;
+        const matChanged=m.materialTexture!==(filter?.texture??null)||m.materialRevision!==materialRevision;
+        if(texChanged){
           destroyGroup(m.base);m.base=makeGroup(m,dummy,0,null,filter,boundaryCap);m.materialTexture=filter?.texture??null;m.boundaryCapTexture=boundaryCap?.texture??null;pending=true;
         }
-        if(filter||boundaryCap){const data=new ArrayBuffer(80),f=new Float32Array(data),u=new Uint32Array(data);if(filter){f.set(filter.matrix);u[16]=1;}else if(boundaryCap){f.set([...boundaryCap.origin,boundaryCap.step,...boundaryCap.boundsMin,0,...boundaryCap.boundsMax,0]);u[17]=1;}device.queue.writeBuffer(m.base.materialUniform,0,data);}
-        const materialRevision=filter?.revision??null;if(m.materialRevision!==materialRevision){m.materialRevision=materialRevision;pending=true;}
+        if(texChanged||matChanged||capChanged){
+          const data=new ArrayBuffer(128),f=new Float32Array(data),u=new Uint32Array(data);
+          if(filter){f.set(filter.matrix,0);u[28]=1;}
+          if(boundaryCap){f.set([...boundaryCap.origin,boundaryCap.step,...boundaryCap.boundsMin,0,...boundaryCap.boundsMax,0],16);u[29]=1;}
+          device.queue.writeBuffer(m.base.materialUniform,0,data);
+        }
+        if(matChanged){m.materialRevision=materialRevision;pending=true;}
+        if(capChanged){m.boundaryCapKey=boundaryCapKey;m.dirty=true;pending=true;}
         m.base.floats.set([...transform.translate,transform.scale],16);device.queue.writeBuffer(m.base.uniform,0,m.base.values);
-        if(m.revision===member.revision)continue;
+        if(m.revision===member.revision){if(capChanged)builds++;continue;}
         for(const d of m.draws)destroyGroup(d);m.draws=[];
         for(const draw of member.draws){const d=makeGroup(m,draw.resource,draw.triangleCount,draw.matrix);d.floats.set([...transform.translate,transform.scale],16);device.queue.writeBuffer(d.uniform,0,d.values);m.draws.push({...d,triangleCount:draw.triangleCount});}
         m.base.floats.set([...transform.translate,transform.scale],16);device.queue.writeBuffer(m.base.uniform,0,m.base.values);
@@ -219,7 +231,7 @@ export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
       }
       for(const [id,m] of objects)if(!seen.has(id)){destroyMember(m);objects.delete(id);pending=true;}
       const nextWallKey=JSON.stringify(wallCells);if(nextWallKey!==wallKey){wallKey=nextWallKey;pending=true;}
-      key=JSON.stringify(members.map(m=>[m.id,m.revision,objects.get(m.id).materialRevision]));
+      key=JSON.stringify(members.map(m=>[m.id,m.revision,objects.get(m.id).materialRevision,objects.get(m.id).boundaryCapKey]));
       current={backend:'gpu',key,revision:key,builds,triangleCount:members.reduce((n,m)=>n+m.triangleCount,0),members:members.map(m=>({id:m.id,triangleCount:m.triangleCount})),wallCells};
       return current;
     },
