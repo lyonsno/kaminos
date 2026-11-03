@@ -1,0 +1,27 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+import * as THREE from '../lib/three.core.js';
+import * as mls from '../authored-mls-water.mjs';
+import {fingerFluidAnalyticalSupportGeometry} from '../finger-fluid-support-geometry.mjs';
+const app=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+const body=app.slice(app.indexOf('function syncWaterDomainGuide(){'),app.indexOf('\nfunction pickWaterDomainFromViewportPointer'));
+const source={id:'drop',type:'local-liquid-emitter',transform:{position:[0,.5,0],rotation:[0,0,0],scale:[1,1,1]},localLiquidEmitter:{schema:'kaminos.local-liquid-emitter.v1',mode:'finite_drop',drop:{width:.2,samplesPerUnit:20}}};
+let records=[source];
+const options={waterSampling:{spacing:.05,container:{min:[-.6,-.1,-.6],max:[.6,1.5,.6]}}};
+const state={setup:options,host:null};
+const ctx=vm.createContext({THREE,...mls,fingerFluidAnalyticalSupportGeometry,waterFeature:state,localLiquidDomainGuide:null,localLiquidEmitterRecords:()=>records,scene:new THREE.Scene(),isSceneItemVisible:()=>true,selectionCaptureSuspended:false,viewportHelpersVisible:true,viewportDisplay:{domains:true,domainOpacity:1},styleSimulationDomainGuide(){}});
+vm.runInContext(body,ctx);
+const box=()=>{vm.runInContext('syncWaterDomainGuide()',ctx);return {min:ctx.localLiquidDomainGuide.box.min.toArray(),max:ctx.localLiquidDomainGuide.box.max.toArray()};};
+const {mlsConfig}=await import('../mls-juice-contract.mjs');
+const expected=mlsConfig(mls.authoredMlsSetup(records,options).solver).bounds;
+assert.deepEqual(box(),expected,'Preview outline must equal the MLS collision/outflow box, not the legacy playground');
+const live={min:[-1,0,-2],max:[2,3,4]};state.host={state:()=>({solver:{domain:{boundsWorld:live}}})};
+assert.deepEqual(box(),live,'Active solver bounds win over pending edits');
+state.setup={waterSampling:{spacing:.05,container:null,worldBounds:{min:[-2,-1,-2],max:[2,3,2]}}};
+assert.deepEqual(box(),live,'Editing bounds must not mislabel the running simulation');
+state.host=null;
+assert.deepEqual(box(),mlsConfig(mls.authoredMlsSetup(records,state.setup).solver).bounds,'Reset shows current open-domain bounds');
+state.setup=null;vm.runInContext('syncWaterDomainGuide()',ctx);assert.equal(ctx.localLiquidDomainGuide.visible,false);
+console.log('Actual MLS domain guide follows preview, active host, pending edits and reset');

@@ -2887,7 +2887,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 </script>
 
 <script type="module">
-import {authoredMlsCellSize,authoredMlsParticleVolume,authoredMlsMaterial,inspectAuthoredMlsMaterial} from './authored-mls-water.mjs';
+import {authoredMlsDomain,authoredMlsCellSize,authoredMlsParticleVolume,authoredMlsMaterial,inspectAuthoredMlsMaterial} from './authored-mls-water.mjs';
 import { loadStartupRuntimeConfig } from './runtime-config-once.mjs';
 import {createUserPreferences,sceneDefaultsFromDocument,sceneDefaultsApplyToLocation,newSceneDocument} from './user-preferences.mjs';
 import {installUserPreferences} from './user-preferences-ui.mjs';
@@ -3296,7 +3296,6 @@ import {
   updateFingerFluidOracleCockpitUrl,
 } from './finger-fluid-oracle-cockpit.js';
 import {loadFingerFluidBenchFeature,loadFingerFluidRuntime} from './finger-fluid-feature.mjs';
-import {fingerFluidAnalyticalSupportGeometry} from './finger-fluid-support-geometry.mjs';
 const {
   createFingerFluidAnalyticJetDescriptor,
   measureFingerFluidAnalyticJetFirstImpact,
@@ -25698,13 +25697,18 @@ function styleSimulationDomainGuide(guide,id){
   styleHelperLines(guide,{width:viewportDisplay.domainWidth+(selected?1:0),opacity:viewportDisplay.domainOpacity});
 }
 function syncWaterDomainGuide(){
-  if(waterFeature.setup&&!localLiquidDomainGuide){
-    const {boundsMin,boundsMax}=fingerFluidAnalyticalSupportGeometry();
-    localLiquidDomainGuide=new THREE.Box3Helper(new THREE.Box3(new THREE.Vector3(...boundsMin),new THREE.Vector3(...boundsMax)),0x5bd8f5);
+  let bounds=null;
+  if(waterFeature.setup){
+    bounds=waterFeature.host?.state().solver?.domain?.boundsWorld??null;
+    if(!bounds)try{bounds=authoredMlsDomain(localLiquidEmitterRecords(),waterFeature.setup).boundsWorld;}catch{ /* Invalid drafts have no executable domain. */ }
+  }
+  if(bounds&&!localLiquidDomainGuide){
+    localLiquidDomainGuide=new THREE.Box3Helper(new THREE.Box3(),0x5bd8f5);
     localLiquidDomainGuide.name='Water simulation bounds';localLiquidDomainGuide.userData.kaminosEditorHelper=true;localLiquidDomainGuide.userData.kaminosEditorOnly=true;
     localLiquidDomainGuide.material.depthTest=false;localLiquidDomainGuide.material.depthWrite=false;localLiquidDomainGuide.renderOrder=1000;scene.add(localLiquidDomainGuide);
   }
-  if(localLiquidDomainGuide){localLiquidDomainGuide.visible=isSceneItemVisible('water-field')&&!!waterFeature.setup&&!selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.domains&&viewportDisplay.domainOpacity>0;styleSimulationDomainGuide(localLiquidDomainGuide,'water-field');}
+  if(bounds&&localLiquidDomainGuide){localLiquidDomainGuide.box.min.fromArray(bounds.min);localLiquidDomainGuide.box.max.fromArray(bounds.max);localLiquidDomainGuide.updateMatrixWorld(true);}
+  if(localLiquidDomainGuide){localLiquidDomainGuide.visible=isSceneItemVisible('water-field')&&!!bounds&&!selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.domains&&viewportDisplay.domainOpacity>0;styleSimulationDomainGuide(localLiquidDomainGuide,'water-field');}
 }
 function pickWaterDomainFromViewportPointer(event){
   if(!localLiquidDomainGuide?.visible||selectionCaptureSuspended||!viewportHelpersVisible||!viewportDisplay.domains||viewportDisplay.domainOpacity===0||!renderer||!camera)return false;
