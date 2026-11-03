@@ -16,8 +16,11 @@ export function bindWorkbenchSurfaceDrag({canvas,camera,controls,roots,sceneRoot
   raycaster.layers.mask=camera.layers.mask;
   if(rayDrag){
    if(event.pointerType==='touch')return;
+   const helpers=[];for(const root of sceneRoots())root.traverse?.(o=>{if(o.isTransformControlsRoot)helpers.push(o);});
+   for(const helper of helpers){const transform=helper.controls;if(!visible(helper)||!transform?.enabled)continue;transform.pointerHover({...pointer,button:event.button});if(transform.axis!==null)return;}
+   const editorHelper=o=>{for(let n=o;n;n=n.parent)if(n.isTransformControlsRoot)return true;return false;};
    const own=new Set(roots()),owns=o=>{for(let n=o;n;n=n.parent)if(own.has(n))return true;return false;};
-   const foreign=raycaster.intersectObjects(sceneRoots(),true).find(h=>h.object.isMesh&&visible(h.object)&&!owns(h.object));
+   const foreign=raycaster.intersectObjects(sceneRoots(),true).find(h=>h.object.isMesh&&visible(h.object)&&!editorHelper(h.object)&&!owns(h.object));
    const value=rayValue(foreign?.distance??Infinity);
    if(callback({phase:'start',pointerId:event.pointerId,ray:value})!==true)return;
    grab={rayDrag:true,startX:event.clientX,startY:event.clientY,ray:value,pointerId:event.pointerId,controlsEnabled:controls.enabled};controls.enabled=false;skipClick=false;canvas.setPointerCapture?.(event.pointerId);consume(event);return;

@@ -58,10 +58,11 @@ export default {
    const frame=async()=>{const current=residentSurface,values=await current.bounds();if(disposed||current!==residentSurface)return;owned.updateWorldMatrix(true,true);const b=new Box3(new Vector3(...values.slice(0,3)),new Vector3(...values.slice(3))).applyMatrix4(asset.root.matrixWorld),c=b.getCenter(new Vector3()),r=b.getSize(new Vector3()).length();return session.setView({position:c.clone().add(new Vector3(1,.65,1.4).normalize().multiplyScalar(r*1.5)).toArray(),target:c.toArray()});};await frame();
    const localRay=value=>{asset.root.updateWorldMatrix(true,false);const inverse=asset.root.matrixWorld.clone().invert(),start=new Vector3(...value.origin).applyMatrix4(inverse),end=new Vector3(...value.origin).add(new Vector3(...value.direction)).applyMatrix4(inverse),scale=end.distanceTo(start);return{origin:start.toArray(),direction:end.sub(start).normalize().toArray(),normal:new Vector3(...value.normal).transformDirection(asset.root.matrixWorld.clone().transpose()).toArray(),maxDistance:value.maxDistance*scale};};
    undrag=session.onSurfaceDrag(hit=>{
-    if(disposed||busy||inspectParts||!running)return false;
+    if(disposed)return false;
+    if((hit.phase==='start'||hit.phase==='move')&&(busy||inspectParts||!running))return false;
     if(hit.phase==='start'){residentSurface.beginHand(localRay(hit.ray));residentMoved=false;residentLastRay=hit.ray;event('ray-grab',hit.ray);draw();return true;}
     if(hit.phase==='move'){if(!residentLastRay||['origin','direction'].some(k=>hit.ray[k].some((v,i)=>v!==residentLastRay[k][i]))){residentSurface.moveHand(localRay(hit.ray));residentMoved=true;residentLastRay=hit.ray;event('ray-drag',hit.ray);}return true;}
-    if(hit.phase==='end'||hit.phase==='cancel'){try{if(hit.phase==='end'&&residentMoved)model.step();}finally{residentSurface.endHand();residentMoved=false;residentLastRay=null;}event('ray-release',{cancel:hit.phase==='cancel'});draw();return true;}return false;
+    if(hit.phase==='end'||hit.phase==='cancel'){try{if(hit.phase==='end'&&residentMoved&&running)model.step();}finally{residentSurface.endHand();residentMoved=false;residentLastRay=null;}event('ray-release',{cancel:hit.phase==='cancel'});draw();return true;}return false;
    },{rayDrag:true,onError:e=>{error=e.message;running=false;sync();}});
    unframe=session.onFrame(()=>{if(running&&!inspectParts&&!busy&&!stepping&&!disposed)void advance().catch(()=>{});});
    const operations={reset,advance,acquire:async()=>{await stepFinished;await model.acquire();return{...read(),material:model.snapshot()};},pause:async()=>{running=false;await stepFinished;sync();return read();},play:()=>{inspectParts=false;separation=0;running=true;draw();return read();},grab,move,release:()=>{release();return read();},

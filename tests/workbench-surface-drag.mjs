@@ -49,3 +49,12 @@ test('resident mode leaves clicks and touch camera input with the editor',()=>{
  send('pointerdown');send('pointerup');assert.equal(send('click').defaultPrevented,false,'A click without a pull must reach native scene selection');
  const before=seen.length;assert.equal(send('pointerdown',{pointerType:'touch'}).defaultPrevented,false);assert.equal(seen.length,before,'Touch camera input must remain native');stop();
 });
+test('resident input gives the native transform handle priority and excludes its helper planes from occlusion',async()=>{
+ const {SceneTransformControls}=await import('../scene-transform-gizmo.mjs'),{Group}=await import('../lib/three.core.js');
+ const canvas=new Canvas(),camera=new PerspectiveCamera(45,1,.1,100),controls={enabled:true},scene=new Group(),object=new Mesh(new BoxGeometry(),new MeshBasicMaterial());camera.position.z=5;camera.lookAt(0,0,0);camera.updateMatrixWorld(true);scene.add(object);
+ const transform=new SceneTransformControls(camera);transform.domElement=canvas;transform.attach(object);const helper=transform.getHelper();scene.add(helper);scene.updateMatrixWorld(true);
+ const seen=[],stop=bindWorkbenchSurfaceDrag({canvas,camera,controls,roots:()=>[object],sceneRoots:()=>scene.children,rayDrag:true,callback:e=>{seen.push(e);return true;}});
+ const send=(type,x,y)=>{const e=new Event(type,{cancelable:true});Object.assign(e,{clientX:x,clientY:y,button:0,pointerId:1});canvas.dispatchEvent(e);return e;};
+ assert.equal(send('pointerdown',250,250).defaultPrevented,false,'Native center handle keeps its transform gesture');assert.equal(seen.length,0);
+ send('pointerdown',20,20);assert.equal(seen.at(-1).ray.maxDistance,Infinity,'The invisible transform plane cannot occlude the physical hand');send('pointerup',20,20);stop();transform.detach();
+});
