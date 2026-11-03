@@ -17,8 +17,10 @@ from glb_surface_fields import linear, srgb
 from spatial_surface_samples import spatial_samples
 
 
-def partition_surface(pos, normals, indices, min_chart_area_fraction=.01,
-                      min_chart_thickness_ratio=.015, normal_cos_threshold=.85):
+def partition_surface(pos, normals, indices, min_chart_area_fraction=.002,
+                      min_chart_thickness_ratio=.01, normal_cos_threshold=.85,
+                      chart_cone_cos_threshold=.75, min_chart_compactness=.06,
+                      pinhole_max_triangles=64):
     pos = np.asarray(pos, dtype=np.float64)
     normals = np.asarray(normals, dtype=np.float64)
     indices = np.asarray(indices, dtype=np.int64)
@@ -28,7 +30,10 @@ def partition_surface(pos, normals, indices, min_chart_area_fraction=.01,
             or indices.min() < 0 or indices.max() >= len(pos)
             or not (0 <= min_chart_area_fraction <= 1)
             or not (0 <= min_chart_thickness_ratio <= 1)
-            or not (-1 <= normal_cos_threshold <= 1)):
+            or not (-1 <= normal_cos_threshold <= 1)
+            or not (-1 <= chart_cone_cos_threshold <= 1)
+            or not (0 <= min_chart_compactness <= 1)
+            or pinhole_max_triangles < 0):
         raise ValueError('Valid finite surface mesh and partition thresholds required')
 
     corners = pos[indices]
@@ -50,78 +55,104 @@ def partition_surface(pos, normals, indices, min_chart_area_fraction=.01,
     _, welded_vid = np.unique(q_Struct, return_inverse=True)
     welded_tris = welded_vid[indices]
 
-    # Build directed half-edges on welded vertex IDs and record geometric edge lengths.
+    # Build undirected edges on welded vertex IDs.
     num_tris = len(indices)
     e0 = np.c_[welded_tris[:, 0], welded_tris[:, 1]]
     e1 = np.c_[welded_tris[:, 1], welded_tris[:, 2]]
     e2 = np.c_[welded_tris[:, 2], welded_tris[:, 0]]
     all_edges = np.vstack([e0, e1, e2])
     undirected = np.sort(all_edges, axis=1)
-
-    p0 = np.vstack([corners[:, 0], corners[:, 1], corners[:, 2]])
-    p1 = np.vstack([corners[:, 1], corners[:, 2], corners[:, 0]])
-    edge_lengths = np.linalg.norm(p1 - p0, axis=1)
     edge_tris = np.tile(np.arange(num_tris, dtype=np.int64), 3)
 
     u_view = np.ascontiguousarray(undirected).view(np.dtype((np.void, undirected.dtype.itemsize * 2))).ravel()
     order = np.argsort(u_view, kind='stable')
     sorted_u = undirected[order]
     sorted_tris = edge_tris[order]
-    sorted_len = edge_lengths[order]
 
     same_next = np.zeros(len(order), dtype=bool)
     if len(order) > 1:
         same_next[:-1] = (sorted_u[:-1, 0] == sorted_u[1:, 0]) & (sorted_u[:-1, 1] == sorted_u[1:, 1])
 
     adj = [[] for _ in range(num_tris)]
+    full_adj = [[] for _ in range(num_tris)]
     pair_indices = np.flatnonzero(same_next)
     for idx in pair_indices:
         ta = int(sorted_tris[idx])
         tb = int(sorted_tris[idx + 1])
         if ta != tb and valid_face[ta] and valid_face[tb]:
+            full_adj[ta].append(tb)
+            full_adj[tb].append(ta)
             if float(np.dot(face_normals[ta], face_normals[tb])) >= normal_cos_threshold:
-                adj[ta].append((tb, float(sorted_len[idx])))
-                adj[tb].append((ta, float(sorted_len[idx])))
+                adj[ta].append(tb)
+                adj[tb].append(ta)
 
+    # Seed charts in decreasing triangle-area order so broad flat faces anchor normal cones first.
+    tri_order = np.argsort(-area, kind='stable')
     chart_ids = np.full(num_tris, -1, dtype=np.int32)
     chart_areas = []
-    chart_perimeters = []
-    tri_total_perim = (
-        np.linalg.norm(corners[:, 1] - corners[:, 0], axis=1)
-        + np.linalg.norm(corners[:, 2] - corners[:, 1], axis=1)
-        + np.linalg.norm(corners[:, 0] - corners[:, 2], axis=1)
-    )
+    chart_diags = []
 
     cid = 0
-    for t in range(num_tris):
+    for t in tri_order:
+        t = int(t)
         if chart_ids[t] != -1:
             continue
+        seed_normal = face_normals[t]
         chart_ids[t] = cid
         q = deque([t])
+        tris = [t]
         c_area = 0.
-        c_total_edge = 0.
-        c_shared_edge = 0.
         while q:
             cur = q.popleft()
             c_area += float(area[cur])
-            c_total_edge += float(tri_total_perim[cur])
-            for nb, elen in adj[cur]:
-                if chart_ids[nb] == -1:
+            for nb in adj[cur]:
+                if chart_ids[nb] == -1 and float(np.dot(seed_normal, face_normals[nb])) >= chart_cone_cos_threshold:
                     chart_ids[nb] = cid
                     q.append(nb)
-                if chart_ids[nb] == cid:
-                    c_shared_edge += elen
+                    tris.append(nb)
+        pts = corners[tris].reshape(-1, 3)
+        c_diag = float(np.linalg.norm(pts.max(0) - pts.min(0)))
         chart_areas.append(c_area)
-        chart_perimeters.append(max(0., c_total_edge - c_shared_edge))
+        chart_diags.append(c_diag)
         cid += 1
 
     chart_areas = np.asarray(chart_areas, dtype=np.float64)
-    chart_perimeters = np.asarray(chart_perimeters, dtype=np.float64)
-    thickness = chart_areas / np.maximum(chart_perimeters, 1e-12)
+    chart_diags = np.asarray(chart_diags, dtype=np.float64)
+    thickness = chart_areas / np.maximum(chart_diags, 1e-12)
+    compactness = chart_areas / np.maximum(chart_diags ** 2, 1e-12)
     area_thresh = min_chart_area_fraction * total_area
     thick_thresh = min_chart_thickness_ratio * np.sqrt(total_area)
-    chart_is_mesh = (chart_areas >= area_thresh) & (thickness >= thick_thresh)
-    mesh_mask = chart_is_mesh[chart_ids]
+    chart_is_mesh = (
+        (chart_areas >= area_thresh)
+        & (thickness >= thick_thresh)
+        & (compactness >= min_chart_compactness)
+    )
+    mesh_mask = chart_is_mesh[chart_ids].copy()
+
+    # Absorb tiny interior pinhole components (e.g. steep mortar-groove triangles) surrounded by mesh charts.
+    absorbed_pinhole_tris = 0
+    if pinhole_max_triangles > 0 and mesh_mask.any():
+        visited = mesh_mask.copy()
+        for t in range(num_tris):
+            if visited[t]:
+                continue
+            visited[t] = True
+            q = deque([t])
+            comp = [t]
+            touches_mesh = False
+            while q:
+                cur = q.popleft()
+                for nb in full_adj[cur]:
+                    if mesh_mask[nb]:
+                        touches_mesh = True
+                    elif not visited[nb]:
+                        visited[nb] = True
+                        q.append(nb)
+                        comp.append(nb)
+            if touches_mesh and len(comp) <= pinhole_max_triangles:
+                mesh_mask[comp] = True
+                absorbed_pinhole_tris += len(comp)
+
     splat_mask = ~mesh_mask
 
     return {
@@ -132,6 +163,7 @@ def partition_surface(pos, normals, indices, min_chart_area_fraction=.01,
             'totalTriangles': int(num_tris),
             'meshTriangleCount': int(mesh_mask.sum()),
             'splatTriangleCount': int(splat_mask.sum()),
+            'absorbedPinholeTriangles': int(absorbed_pinhole_tris),
             'totalArea': total_area,
             'meshArea': float(area[mesh_mask].sum()),
             'splatArea': float(area[splat_mask].sum()),
@@ -141,6 +173,8 @@ def partition_surface(pos, normals, indices, min_chart_area_fraction=.01,
             'minChartAreaFraction': float(min_chart_area_fraction),
             'minChartThicknessRatio': float(min_chart_thickness_ratio),
             'normalCosThreshold': float(normal_cos_threshold),
+            'chartConeCosThreshold': float(chart_cone_cos_threshold),
+            'minChartCompactness': float(min_chart_compactness),
         },
     }
 
@@ -364,8 +398,8 @@ def main():
     parser.add_argument('output', type=Path)
     parser.add_argument('--splat-count', type=int, required=True)
     parser.add_argument('--candidate-multiplier', type=int, default=4)
-    parser.add_argument('--min-chart-area-fraction', type=float, default=.01)
-    parser.add_argument('--min-chart-thickness-ratio', type=float, default=.015)
+    parser.add_argument('--min-chart-area-fraction', type=float, default=.002)
+    parser.add_argument('--min-chart-thickness-ratio', type=float, default=.01)
     parser.add_argument('--normal-cos-threshold', type=float, default=.85)
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
