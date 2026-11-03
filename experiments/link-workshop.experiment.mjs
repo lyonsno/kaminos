@@ -7,12 +7,14 @@ import {motionSpace,motionSpaceMesh} from './link-workshop/envelope.mjs';
 export default {id:'link-workshop',title:'Link workshop',async create({host,inputs={},record=()=>{}}){
  const document=host.controls.document,win=document.defaultView,edits=win.kaminosSceneEdits;
  if(!edits||!host.controls.components)throw Error('Native component editing is required');
+ if(inputs.mode!==undefined&&!['build','A','B'].includes(inputs.mode))throw Error('Unknown initial mode');
  const session=await host.scene.open(),root=new T.Group(),proxy=new T.Object3D();root.name='Link workshop';
- let model=checkedMechanism(inputs.recipe??emptyMechanism()),selected=model.nodes.length-1,mode='build',tool='draw',editing=false,playing=false,time=0,t=0,disposed=false,refresh=()=>{},seat,controls;
+ let model=checkedMechanism(inputs.recipe??emptyMechanism()),selected=model.nodes.length-1,mode=inputs.mode??'build',tool='draw',editing=false,playing=false,time=0,t=inputs.mode==='B'?1:0,disposed=false,refresh=()=>{},seat,controls;
  const target='@link-joint:'+root.uuid,whole='@link-recipe:'+root.uuid,geometryTarget='@link-geometry:'+root.uuid;
  const grid=new T.GridHelper(30,60,0x637d88,0x344851);grid.rotation.x=Math.PI/2;grid.position.z=-.28;grid.material.transparent=true;grid.material.opacity=.35;grid.raycast=()=>{};root.add(grid);
  const origin=new T.Mesh(new T.SphereGeometry(.1,12,8),new T.MeshBasicMaterial({color:0x59dee2}));root.add(origin);
  const view=createMechanismView(root),asset=await session.attach(root,{owned:true,metadata:{label:root.name,type:'experiment',source:'experiment:link-workshop'}});root.parent.add(proxy);
+ try{view.update(model,t,selected,false);if(inputs.bodies)view.importBodies(inputs.bodies);}catch(error){proxy.removeFromParent();view.dispose();await session.dispose();throw error;}
  const constructionGuide=createConstructionGuide(root);
  let hoverJoint=null,hoverPoint=null,hoverShift=false,modeNotice=null;
  let pistonStart=null,snap=true,status,fields=[],stop=()=>{},unsubscribe=()=>{};
@@ -95,7 +97,7 @@ export default {id:'link-workshop',title:'Link workshop',async create({host,inpu
   exportMotionSpace(){if(!guide)throw Error('Reserve motion space first');guide.mesh.updateWorldMatrix(true,false);return {...guide.packet,currentRecipe:JSON.stringify(model)===JSON.stringify(guide.packet.recipe),sourceTransform:guide.sourceTransform,guideTransform:guide.mesh.matrixWorld.toArray(),view:session.readView(),brief:'The violet volume is reserved empty space for the complete motion of the supplied analytical assembly. Design a stationary housing around it, preserving passages to the exterior. The volume is a construction guide, not material to reproduce. Attachment features and precise dimensions remain defined by the accompanying geometry.'};},
   exportBodies(){return {...view.exportBodies(),recipe:structuredClone(model)};},
   async importBodies(packet){ensure();pause();const state=view.replacementState(),byId=new Map(state.bodies.map(b=>[b.id,b]));if(packet?.schema!=='kaminos.assembly-geometry.v1'||!Array.isArray(packet.bodies)||!packet.bodies.length)throw Error('Choose an assembly geometry package');const seen=new Set();for(const b of packet.bodies){if(seen.has(b.id))throw Error('Duplicate body');seen.add(b.id);byId.set(b.id,b);}await edits.applySettled(geometryTarget,{schema:packet.schema,bodies:[...byId.values()]},'Replace body geometry');const result=view.bodyManifest();record({kind:'links.geometry-return',phase:'applied',effective:result});return read();},
-  frame(){const points=[...evaluate(model,0),...evaluate(model,1)],box=new T.Box3();for(const p of points)box.expandByPoint(new T.Vector3(...p,0).applyMatrix4(root.matrixWorld));if(box.isEmpty())box.setFromCenterAndSize(new T.Vector3(0,2,0),new T.Vector3(6,4,1));const c=box.getCenter(new T.Vector3()),d=Math.max(box.getSize(new T.Vector3()).length(),4);session.setView({position:[c.x,c.y,c.z+d*1.85],target:c.toArray(),fov:38});return read();},
+  frame(){if(inputs.view){root.updateWorldMatrix(true,false);const point=value=>new T.Vector3(...value).applyMatrix4(root.matrixWorld).toArray();session.setView({...inputs.view,position:point(inputs.view.position),target:point(inputs.view.target)});return read();}const points=[...evaluate(model,0),...evaluate(model,1)],box=new T.Box3();for(const p of points)box.expandByPoint(new T.Vector3(...p,0).applyMatrix4(root.matrixWorld));if(box.isEmpty())box.setFromCenterAndSize(new T.Vector3(0,2,0),new T.Vector3(6,4,1));const c=box.getCenter(new T.Vector3()),d=Math.max(box.getSize(new T.Vector3()).length(),4);session.setView({position:[c.x,c.y,c.z+d*1.85],target:c.toArray(),fov:38});return read();},
  };
  update();operations.frame();win.kaminosSelection.set([asset.id],asset.id);
  return {read,operations,mount({root:panel,document,invoke}){
