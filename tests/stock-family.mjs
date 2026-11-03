@@ -20,6 +20,13 @@ assert.equal(replaced.sources.length,2);
 assert.deepEqual(stock.replaceStockSource(replaced,DEFAULT_RECIPE.source).variants,replaced.variants);
 assert.equal(stock.replaceStockSource(replaced,DEFAULT_RECIPE.source).sources.length,2);
 assert.throws(()=>stock.replaceStockSource(DEFAULT_RECIPE,{...replacement,profile:{...fitted.profile,locks:[[0,.6]]}}),/bands/);
+assert.equal(typeof stock.bandsFromPercent,'function','Band drafts must apply atomically without rounding source boundaries');
+assert.ok(stock.bandsFromPercent(fitted.profile,[['0','5'],['95','100']]).flat().every((v,i)=>Math.abs(v-[-.5,-.45,.45,.5][i])<1e-15));
+const touching={...DEFAULT_RECIPE.source.profile,locks:[[-.43,-.23],[-.23,-.185]]};
+const displayed=touching.locks.map(b=>b.map(v=>String(Number(((v-touching.min)/(touching.max-touching.min)*100).toFixed(4)))));
+assert.deepEqual(stock.bandsFromPercent(touching,displayed),touching.locks);
+assert.throws(()=>stock.bandsFromPercent(fitted.profile,[['','5']]),/finite percent/i);
+assert.throws(()=>stock.bandsFromPercent(fitted.profile,[['95','5']]),/bands/);
 
 const profile={min:-.5,max:.5,xMin:-.17,xMax:.17,locks:[[-.5,-.45],[-.43,-.23],[.22,.39],[.45,.5]]};
 const near=(a,b,e=1e-7)=>assert.ok(Math.abs(a-b)<e,`${a} != ${b}`);

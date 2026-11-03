@@ -36,6 +36,20 @@ export function validateStockSource(source){
   if(source.fit&&!['x','y','z','-x','-y','-z'].includes(source.fit.axis))throw Error('Invalid source axis');
   validateProfile(source.profile);return structuredClone(source);
 }
+export const bandPercent=(profile,value)=>String(Number(((value-profile.min)/(profile.max-profile.min)*100).toFixed(4)));
+export function bandsFromPercent(profile,rows){
+  validateProfile(profile);
+  const boundaries=[profile.min,profile.max,...profile.locks.flat()];
+  const locks=rows.map((row,index)=>row.map((text,end)=>{
+    if(typeof text!=='string'||!text.trim()||!Number.isFinite(Number(text)))throw Error('Enter a finite percent for both band endpoints');
+    const value=Number(text),original=profile.locks[index]?.[end];
+    // Display precision must not move an unchanged or shared source boundary.
+    if(original!==undefined&&Number(bandPercent(profile,original))===value)return original;
+    const boundary=boundaries.find(v=>Number(bandPercent(profile,v))===value);
+    return boundary??profile.min+value/100*(profile.max-profile.min);
+  }));
+  return validateProfile({...profile,locks}).locks;
+}
 export function replaceStockSource(recipe,source){
   const next=validateRecipe(recipe),checked=validateStockSource(source);
   const sources=new Map([next.source,...(next.sources??[]),checked].map(s=>[s.sha256,structuredClone(s)]));
