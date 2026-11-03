@@ -2934,7 +2934,8 @@ loadStartupRuntimeConfig().catch(() => {});
 import {inspectAuthoredWaterCompatibility,planAuthoredWaterBounds,planAuthoredWaterMatch,resolveAuthoredWaterSampling,describeAuthoredWaterDrop} from './authored-water-drop.mjs';
 import * as THREE from 'three';
 import { parsePlyPointCloud, createSplatPointSubsetGeometry, replaceSplatPointGeometry, splatPointInsideCrop, chooseSplatCropFrame } from './splat-point-cloud.mjs';
-import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
+import { createFireLightFieldShadow, renderFireShadowBatch } from './fire-light-field-shadow.mjs';
+import { createFireShadowCasters } from './fire-shadow-casters.mjs';
 import { PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS } from './volume-physics-appearance.mjs';
 import { applyVolumeControlDescriptions, volumeControlTooltip } from './volume-control-descriptions.mjs';
 applyVolumeControlDescriptions(document);
@@ -3595,6 +3596,14 @@ window.kaminosViewportQualityState=()=>({quality:viewportDisplay.quality,applied
 // materials and are unaffected.
 const VIEWPORT_SHADING_SKIPPED_TYPES=new Set(['splat','image','light',CAMERA_TYPE,FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE,'simulation-domain']);
 let viewportShading=null,lastViewportShadingRender=null;
+function currentBeautyFrameOptions() {
+ return {
+  viewportHeight: renderer?.domElement?.height || renderer?.domElement?.clientHeight || 1080,
+  pinnedObjects: (polyEdit?.active() || sceneComponents?.active())
+   ? new Set([polyEdit?.api?.read?.()?.objectId, workingScene?.selection?.activeId, ...(workingScene?.selection?.ids ?? [])].filter(Boolean))
+   : null,
+ };
+}
 function renderWithViewportShading(render) {
  viewportShading??=createViewportShading({createWireMaterial:()=>new THREE.MeshBasicNodeMaterial({color:0x15181c,wireframe:true,transparent:true,opacity:.42,depthWrite:false,side:THREE.DoubleSide})});
  const entries=viewportDisplay.shading==='wireframe'?workingScene.objects.filter(entry=>!VIEWPORT_SHADING_SKIPPED_TYPES.has(entry.type)):[];
@@ -4127,18 +4136,32 @@ const sceneRecords = createSceneRecordOperations({
 let sceneNavigation = null;
 // GI proxy handles (scene-gi-proxies.mjs): a stored low tier of each TRELLIS object's hero, loaded off the frame
 // loop and never in the scene. The GI renderer reads them via window.kaminosGiProxies; pass policy is its own.
-const sceneGiProxies = createGiProxyRegistry({ THREE, parseGlb: async bytes => (await new GLTFLoader().parseAsync(bytes, '')).scene });
+// Strip unused texture/image bindings so GI/shadow proxy tiers never decode or revoke 1024x1024 PNG blob textures.
+const sceneGiProxies = createGiProxyRegistry({
+  THREE,
+  parseGlb: async bytes => (await new GLTFLoader().register(parser => ({
+    name: 'KaminosUntexturedGiProxy',
+    beforeRoot() {
+      delete parser.json.textures;
+      delete parser.json.images;
+      for (const mat of parser.json.materials ?? []) {
+        delete mat.normalTexture;
+        delete mat.occlusionTexture;
+        delete mat.emissiveTexture;
+        if (mat.pbrMetallicRoughness) {
+          delete mat.pbrMetallicRoughness.baseColorTexture;
+          delete mat.pbrMetallicRoughness.metallicRoughnessTexture;
+        }
+      }
+    },
+  })).parseAsync(bytes, '')).scene,
+});
 let sceneBeautyLods = null;
 window.kaminosSceneLodBudget = {
   read: () => sceneBeautyLods?.read() ?? null,
   setSettings: patch => { const res = sceneBeautyLods?.setSettings(patch) ?? null; window._kaminosDirty?.(); return res; },
   state: () => sceneBeautyLods?.state() ?? null,
-  update: () => sceneBeautyLods?.update(camera, {
-    viewportHeight: renderer?.domElement?.height || renderer?.domElement?.clientHeight || 1080,
-    pinnedObjects: (polyEdit?.active() || sceneComponents?.active())
-      ? new Set([polyEdit?.api?.read?.()?.objectId, workingScene?.selection?.activeId, ...(workingScene?.selection?.ids ?? [])].filter(Boolean))
-      : null,
-  }) ?? null,
+  update: () => sceneBeautyLods?.update(camera, currentBeautyFrameOptions()) ?? null,
   whenIdle: () => sceneBeautyLods?.whenIdle() ?? Promise.resolve(),
   allocateBeauty: allocateSceneBeautyLods,
   allocateShadow: allocateShadowCasterLods,
@@ -4151,6 +4174,7 @@ window.kaminosGiProxies = {
   registerConsumer: name => { const release = sceneGiProxies.registerConsumer(name); syncSceneDataInspector(); return () => { release(); syncSceneDataInspector(); }; },
   consumers: () => sceneGiProxies.consumers(),
   select: (root, selection) => sceneGiProxies.select(root, selection),
+  whenIdle: () => sceneGiProxies.whenIdle(),
   prepare: async (rootOrSha, options = {}) => {
     const entry = typeof rootOrSha === 'string' && !/^[0-9a-f]{64}$/i.test(rootOrSha) ? workingScene.objects.find(o => o.id === rootOrSha) : workingScene.objects.find(o => o.object === rootOrSha);
     const handle = sceneGiProxies.get(entry?.object ?? rootOrSha);
@@ -4182,6 +4206,7 @@ let authoredWaterControls=null;
 
 
 let sceneLightingPreparation=null;
+let sceneDocumentRestoring=false;
 
 let sceneViewerPaused = null;
 
@@ -10839,6 +10864,14 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
   const fireShadow = createFireLightFieldShadow({renderer,scene,
     sourceNode:fireCenterWorld,receiverNode:worldPositionNode,normalNode:worldNormalNode,
     requested:routeParams.get('volume_light_field_shadows') === '1'});
+  const fireShadowCasters = createFireShadowCasters({scene, giProxies: sceneGiProxies, enabled: false});
+  const renderFireShadow = () => {
+    const lf = passState.lightField;
+    const flameBox = Array.isArray(lf?.worldMin) && Array.isArray(lf?.worldMax)
+      ? {min: lf.worldMin, max: lf.worldMax}
+      : undefined;
+    renderFireShadowBatch({scene, shadows: [fireShadow], casterScene: fireShadowCasters, flameBox});
+  };
   const fireShadowVisibility = fireShadow.visibility;
   const pixelLight = fireLightAt(worldPositionNode, worldNormalNode);
   const { lightDirection, gradientConfidence, wrappedNdotL, directionalResponse, exteriorFalloff, farSignal } = pixelLight;
@@ -10933,6 +10966,7 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
     passState.reason = reason;
     passState.sameDevice = false;
     fireLightFieldStrength.value = 0;
+    fireShadowCasters.setEnabled(false);
   };
 
   // World-point probes: the same fire light and shadow, evaluated at listed
@@ -10963,6 +10997,7 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
     if (!passState.effective) return { status: 'unavailable', reason: passState.reason, values: null };
     if (!points.length) return { status: 'effective', values: [] };
     while (lightProbe.busy) await lightProbe.busy;
+    if (shadow && !fireShadow.debugState().effective) renderFireShadow();
     if (lightProbe.count !== points.length || lightProbe.shadow !== shadow) buildLightProbe(points.length, shadow);
     const position = lightProbe.positions.array, normal = lightProbe.normals.array;
     points.forEach((p, i) => { position.set([...p.position, 1], i * 4); normal.set([...(p.normal ?? [0, 1, 0]), 0], i * 4); });
@@ -10983,9 +11018,16 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
   return {
     outputNode,
     probeLight,
-    renderShadows() { if(passState.effective) fireShadow.render(); },
+    renderShadows() {
+      const shouldRender = passState.effective && (!passState.witnessMuted || passState.isolate);
+      fireShadowCasters.setEnabled(shouldRender);
+      if (shouldRender) renderFireShadow();
+    },
     setShadowsEnabled(enabled) { return fireShadow.setEnabled(enabled); },
-    diagnoseShadows(anchors) { return fireShadow.diagnose(anchors,camera.position.toArray()); },
+    diagnoseShadows(anchors) {
+      if (passState.effective && !fireShadow.debugState().effective) renderFireShadow();
+      return fireShadow.diagnose(anchors,camera.position.toArray());
+    },
     update() {
       camera.updateMatrixWorld();
       sceneProjectionMatrixInverse.value.copy(camera.projectionMatrixInverse);
@@ -11073,6 +11115,7 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
       };
     },
     dispose() {
+      fireShadowCasters.dispose();
       fireShadow.dispose();
       blackAtlasTexture.destroy?.();
     },
@@ -11359,9 +11402,22 @@ async function initScene() {
   const sceneGI = createSceneGI(scene,camera,aoIntensity,{filterImplementation:lightingWorkParams.get('lighting_filter')==='separate'?'separate':'shared',surfaceReuse:lightingWorkParams.get('lighting_surface_reuse')!=='0',sourceComparison:lightingWorkParams.get('experiment')==='gi-source-study'});
   window.kaminosGISourceComparison=sceneGI.sourceComparison;
   window.__kaminosSurfaceLighting=sceneGI.surfaceLighting;
+  sceneBeautyLods ??= createSceneBeautyLodController({
+    THREE,
+    scene,
+    giProxies: sceneGiProxies,
+    surfaceLighting: { registerProxyRoot: root => window.__kaminosSurfaceLighting?.registerProxyRoot?.(root) ?? null },
+    parseGlb: async bytes => (await new GLTFLoader().parseAsync(bytes, '')).scene,
+    onUpdate: () => window._kaminosDirty?.(),
+  });
+  const borrowViewportAndBeautyVisibility = () => {
+    const restoreVis = borrowViewportVisibility(viewportVisibilityObjects(), isSceneItemVisible);
+    const restoreBeauty = sceneBeautyLods?.borrowFrame(camera, currentBeautyFrameOptions());
+    return () => { restoreBeauty?.(); restoreVis(); };
+  };
   sceneLightingPreparation=createLightingPreparation({
-    compile:()=>withViewportVisibilityAsync(viewportVisibilityObjects(),isSceneItemVisible,()=>compileSceneLighting(renderer,sceneGISettings.mode==='combined'?[sceneGI.source,sceneGI.beauty]:[prePass,scenePass])),
-    liveCompile:({isCurrent})=>compileSceneLighting(renderer,sceneGISettings.mode==='combined'?[sceneGI.source,sceneGI.beauty]:[prePass,scenePass],{live:true,isCurrent,visibility:()=>borrowViewportVisibility(viewportVisibilityObjects(),isSceneItemVisible)}),
+    compile:()=>withViewportVisibilityAsync(viewportVisibilityObjects(),isSceneItemVisible,async()=>{await sceneBeautyLods?.whenIdle?.();return compileSceneLighting(renderer,sceneGISettings.mode==='combined'?[sceneGI.source,sceneGI.beauty]:[prePass,scenePass],{visibility:()=>sceneBeautyLods?.borrowFrame(camera,currentBeautyFrameOptions())??(()=>{})});}),
+    liveCompile:({isCurrent})=>compileSceneLighting(renderer,sceneGISettings.mode==='combined'?[sceneGI.source,sceneGI.beauty]:[prePass,scenePass],{live:true,isCurrent,visibility:borrowViewportAndBeautyVisibility}),
     recover:()=>window.__kaminosSceneRadiance?.debugState().status==='lighting-compile-failed'?window.__kaminosSceneRadiance.retryRebuild():undefined,
     hold:value=>volumePrototype?.setSceneLightingRebuildPending(value),
     onStatus:state=>{
@@ -11917,7 +11973,7 @@ async function initScene() {
     lastFrame:waterFeature.host?.state().lastFrame??null,source:volumePrototype?.debugState().sceneTransport??null,
     refraction:'existing-screen-space-scene-query',displayTransform:'one-final-scene-camera'});
   const frameComposition=createSceneFrameComposition({
-    readInputs:()=>({lightingHeld:sceneLightingPreparation?.state().held,
+    readInputs:()=>({lightingHeld:sceneLightingPreparation?.state().held||(typeof sceneDocumentRestoring!=='undefined'&&sceneDocumentRestoring),
       exclusiveInspection:exclusiveInspectionRender,manualInspection:manualInspectionRender,
       transportRequired:authoredWaterFlameTransportActive||authoredFlameHDRActive,
       radianceReady:!window.__kaminosSceneRadiance||window.__kaminosSceneRadiance.canRender()}),
@@ -11955,14 +12011,6 @@ async function initScene() {
     updateSelectionFeedback();
     updateAnnularBurnerFrame(t0);
     fireLightFieldPass?.renderShadows();
-    sceneBeautyLods ??= createSceneBeautyLodController({
-      THREE,
-      scene,
-      giProxies: sceneGiProxies,
-      surfaceLighting: { registerProxyRoot: root => window.__kaminosSurfaceLighting?.registerProxyRoot?.(root) ?? null },
-      parseGlb: async bytes => (await new GLTFLoader().parseAsync(bytes, '')).scene,
-      onUpdate: () => window._kaminosDirty?.(),
-    });
     sceneExposureControls?.sync();
     let matchedCameraEffective=false;
     if(sceneEmissiveCamera && (sceneGISettings.mode === 'gtao' || sceneGISettings.view === 'scene')) {
@@ -12040,7 +12088,7 @@ async function initScene() {
   function animate() {
     requestAnimationFrame(animate);
     if(outputCaptureExtent)return;
-    if(sceneLightingPreparation?.state().held){controls.update();return;}
+    if(sceneLightingPreparation?.state().held||sceneDocumentRestoring){controls.update();return;}
     // Outside any render: a quality change resizes render targets.
     syncViewportQuality(syncViewportRendererSize);
     if(recordingExtent)needsRender=true;
@@ -19886,6 +19934,14 @@ async function mountSceneRadianceRoute(params) {
           if(!window.__kaminosSceneRadiance.debugState().casters?.error)throw error;
         }
       }
+      if(hybrid&&typeof window.__kaminosSceneRadiance.prepareShadowCasters==='function'){
+        const pose=typeof acceptedFlameDomainPose==='function'?(flameDomainDraft||acceptedFlameDomainPose()):null;
+        const domain=pose&&typeof domainTransformForPose==='function'?domainTransformForPose(pose):{translation:[0,0,0],scale:1};
+        const topY=typeof flameDomainTopY==='function'?flameDomainTopY():3;
+        const s=domain.scale??1,t=domain.translation??[0,0,0];
+        await window.__kaminosSceneRadiance.prepareShadowCasters({flameBox:{min:[-s+t[0],-s+t[1],-s+t[2]],max:[s+t[0],topY*s+t[1],s+t[2]]}});
+        if(typeof sceneBeautyLods!=='undefined'&&sceneBeautyLods)await sceneBeautyLods.prepareFrame?.(camera,currentBeautyFrameOptions());
+      }
       if(distributed)sceneRadianceEditStop=bindSceneLightEditInteraction({document,window,getLighting:()=>window.__kaminosSceneRadiance});
       if(distributed&&!hybrid){
         const debug=await import('./scene-light-debug-view.mjs');
@@ -21822,7 +21878,7 @@ async function initKaminosVolumeRoute() {
     refreshVolumeReadout();
   };
 
-  if (params.get('kaminos_volume_smoke') === '1') {
+  if (params.get('kaminos_volume_smoke') === '1' && !startupRestoreRequested) {
     setActiveTab('volume', { reveal: false });
     if (camera && controls) frameVolumeCamera();
     try {
@@ -27091,6 +27147,8 @@ async function loadSceneFile(file, options = {}) {
 async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, sceneFile}) {
   await sceneLightingPreparation?.whenIdle();
   if(!sceneLoadRequests.isCurrent(loadRequestId))return false;
+  sceneDocumentRestoring = true;
+  try {
   await retireSceneFlame();
   if(!sceneLoadRequests.isCurrent(loadRequestId))return false;
   const objectRecords = restorePlan.objects;
@@ -27177,6 +27235,28 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
   if (!activeSceneComposition || JSON.stringify(getVolumePrimitiveState()) !== JSON.stringify(restorePlan.volumePrimitives)) {
     setVolumePrimitivesState(restorePlan.volumePrimitives);
   }
+  // Seed the saved camera before pre-staging beauty LODs so screen-footprint
+  // allocation matches the restored viewpoint before the flame starts.
+  if (data.camera) {
+    camera.position.fromArray(data.camera.position);
+    controls.target.fromArray(data.camera.target);
+    camera.up.fromArray(Array.isArray(data.camera.up) && data.camera.up.length === 3 ? data.camera.up : [0, 1, 0]);
+    if (Number.isFinite(data.camera.near) && data.camera.near > 0) camera.near = data.camera.near;
+    if (Number.isFinite(data.camera.far) && data.camera.far > camera.near) camera.far = data.camera.far;
+    if (data.camera.fov) camera.fov = data.camera.fov;
+    camera.updateProjectionMatrix();
+    controls.update();
+  }
+  if (activeSceneComposition && typeof window.__kaminosSceneRadiance?.prepareShadowCasters === 'function') {
+    const pose = typeof acceptedFlameDomainPose === 'function' ? (flameDomainDraft || acceptedFlameDomainPose()) : null;
+    const domain = pose && typeof domainTransformForPose === 'function' ? domainTransformForPose(pose) : { translation: [0, 0, 0], scale: 1 };
+    const topY = typeof flameDomainTopY === 'function' ? flameDomainTopY() : 3;
+    const s = domain.scale ?? 1, t = domain.translation ?? [0, 0, 0];
+    await window.__kaminosSceneRadiance.prepareShadowCasters({ flameBox: { min: [-s + t[0], -s + t[1], -s + t[2]], max: [s + t[0], topY * s + t[1], s + t[2]] } });
+  }
+  if (typeof sceneBeautyLods !== 'undefined' && sceneBeautyLods) {
+    await sceneBeautyLods.prepareFrame(camera, currentBeautyFrameOptions());
+  }
   const firePresent=!!(hasVolumePrimitiveScene||activeSceneComposition);
   if(firePresent)setActiveTab(activeSceneComposition?'assets':'volume',{reveal:false});
   if(!await restoreSceneFlame({present:firePresent,composition:!!activeSceneComposition,isCurrent:()=>sceneLoadRequests.isCurrent(loadRequestId)}))return false;
@@ -27261,6 +27341,10 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
     setInfo(waterFeature.failure ? `Scene loaded; water host unavailable: ${waterFeature.failure}` : 'Volume scene loaded');
   }
   return true;
+  } finally {
+    sceneDocumentRestoring = false;
+    window._kaminosDirty?.();
+  }
 }
 
 // File input handler for Load Scene

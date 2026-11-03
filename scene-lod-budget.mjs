@@ -1239,6 +1239,25 @@ export function createSceneBeautyLodController({
         this.restoreAllHeroes();
       }
     },
+    borrowFrame(camera, options = {}) {
+      this.update(camera, options);
+      let restored = false;
+      return () => {
+        if (restored) return;
+        restored = true;
+        this.restoreAllHeroes();
+      };
+    },
+    async prepareFrame(camera, options = {}) {
+      if (disposed || !camera) return lastState;
+      await giProxies?.whenIdle?.();
+      this.update(camera, options);
+      this.restoreAllHeroes();
+      await this.whenIdle();
+      const state = this.update(camera, options);
+      this.restoreAllHeroes();
+      return state;
+    },
     restoreAllHeroes() {
       for (const [root, entry] of entries) {
         restoreRootToHero(root, entry);
