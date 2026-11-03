@@ -23,8 +23,9 @@ test('uniform block: joined boundary after the reactant block, off by default', 
   assert.equal(core.WAVELET_TURBULENCE_UNIFORM_OFFSET, core.JOINED_BOUNDARY_UNIFORM_OFFSET + core.JOINED_BOUNDARY_UNIFORM_FLOATS, 'wavelet turbulence follows the joined boundary');
   assert.equal(core.OPEN_WORLD_UNIFORM_OFFSET, core.WAVELET_TURBULENCE_UNIFORM_OFFSET + core.WAVELET_TURBULENCE_UNIFORM_FLOATS);
   assert.equal(core.DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET, core.OPEN_WORLD_UNIFORM_OFFSET + 4);
-  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET + 8);
-  assert.match(shader, /  reactant_combustion_d: vec4<f32>,\n  joined_boundary: vec4<f32>,\n  joined_ghost_geometry: vec4<f32>,\n  joined_ghost_dims: vec4<f32>,\n  wavelet_turbulence: vec4<f32>,\n  wavelet_octave_weights: vec4<f32>,\n  open_world_boundary: vec4<f32>,\n  display_reconstruction: vec4<f32>,\n  display_interpolation: vec4<f32>,\n\}/);
+  assert.equal(core.SHARED_ASH_UNIFORM_OFFSET, core.DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET + 8);
+  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.SHARED_ASH_UNIFORM_OFFSET + 4);
+  assert.match(shader, /  reactant_combustion_d: vec4<f32>,\n  joined_boundary: vec4<f32>,\n  joined_ghost_geometry: vec4<f32>,\n  joined_ghost_dims: vec4<f32>,\n  wavelet_turbulence: vec4<f32>,\n  wavelet_octave_weights: vec4<f32>,\n  open_world_boundary: vec4<f32>,\n  display_reconstruction: vec4<f32>,\n  display_interpolation: vec4<f32>,\n  shared_ash: vec4<f32>,[^\n]*\n\}/);
   assert.match(shader, /fn joinedBoundary\(\) -> bool \{\n  return u\.joined_boundary\.x > 0\.5;\n\}/);
   const m = core.JOINED_GHOST_MARGIN_CELLS;
   assert.deepEqual(core.joinedBoundaryUniformValues(null), [0, 0, 0, m, 0, 0, 0, 0, 0, 0, 0, 0]);

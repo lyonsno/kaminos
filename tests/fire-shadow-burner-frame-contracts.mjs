@@ -16,7 +16,7 @@ const context={performance:{now:()=>100},document:{getElementById:()=>({value:'c
  sceneExposureControls:null,sceneEmissiveCamera:null,waterFeature:{host:null},syncWaterProxy(){},syncFireProxy(){},
  polyEdit:null,sceneComponents:null,withViewportVisibility:(objects,visible,draw)=>draw(),viewportVisibilityObjects:()=>[],
  isSceneItemVisible:()=>true,camera:{},renderWithViewportShading:draw=>draw(),authoredFlameHDRActive:false,waterProxy:null,
- sceneFrameCount:0,recordingFrameSink:null,lastViewportShadingRender:null,fpsFrames:0,fpsLast:0,fpsEl:{}};
+ sceneFrameCount:0,outputCaptureFrame:null,recordingFrameSink:null,lastViewportShadingRender:null,fpsFrames:0,fpsLast:0,fpsEl:{}};
 const draw=vm.runInNewContext(`(function(){${body}})`,context);
 context.frameComposition=createSceneFrameComposition({readInputs:()=>({}),draw,frameCount:()=>context.sceneFrameCount});
 assert.equal(context.frameComposition.render(),true);

@@ -56,7 +56,7 @@ export function sceneContext(context, options) {
   context.restoreSceneFlame??=options=>context.flameFeature.restore(options);
   context.flameFeature??=createAuthoredFlameFeature({present:!!context.activeSceneComposition||!!context.volumePrototype?.isActive?.()&&!!context.isFireLightFieldRoute?.(),runtime:()=>context.volumePrototype,composed:()=>!!context.activeSceneComposition,visible:()=>context.isSceneItemVisible?.('flame-field')??true});
   // These scene-unit fixtures do not allocate World or its visual overlay.
-  context.volumePrototype??=null;context.worldSmokeGuide??=null;context.worldSmokeOverlayMode??='off';
+  context.volumePrototype??=null;context.worldSmokeGuide??=null;context.waterDomainProxy??=null;context.worldSmokeOverlayMode??='off';
   context.refreshWorldSmokeOverlay??=()=>({mode:'off'});
   context.worldSourceSupplyEnabled??=()=>{const c=context.readVolumeControls?.()??{};return c.worldSmoke==='on'&&c.emitterSourceLaw==='immersed-source';};
   context.checkedBurnAppearance??=checkedBurnAppearance;
@@ -73,7 +73,7 @@ export function sceneContext(context, options) {
   context.sceneComponents ??= null;
   context.checkedAssembly??=checkedAssembly;context.assemblySelection??=assemblySelection;context.assemblyEditing??=null;
   context.syncAssemblyGuides??=()=>{};context.syncAssemblyPresentation??=()=>{};
-  context.selectedFlameControlEntry??=()=>context.selectedSceneObjectEntry?.();
+  context.selectedFlameControlEntry??=()=>context.selectedSceneObjectEntry?.()??(context.workingScene?.activeObjectId?{id:context.workingScene.activeObjectId,type:'flame-emitter'}:null);
   context.sceneLightingPreparation ??= null;
   if(context.document){context.document.body ??= {dataset:{}};context.document.body.dataset ??= {};}
   if (!context.workingScene) {

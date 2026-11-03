@@ -12116,7 +12116,7 @@ async function initScene() {
       let fireReceipt=null,fireRaster=null,drawnFrames=0,composedShot=null;
       // WebGPU's canvas can be cleared when the browser presents. Copy the
       // final composed frame before sampleFrame awaits its GPU validation.
-      outputCaptureFrame=()=>{if(ordinarySceneTransportFrame&&!sceneGI.needsHistoryFrame())composedShot=captureComposedCanvases({host:renderer.domElement,volumeRaster:null,document,label:settings.filename});};
+      outputCaptureFrame=()=>{if(frameComposition.transportFrame&&!sceneGI.needsHistoryFrame())composedShot=captureComposedCanvases({host:renderer.domElement,volumeRaster:null,document,label:settings.filename});};
       return {release,async draw(){
         manualInspectionRender=true;
         try{
