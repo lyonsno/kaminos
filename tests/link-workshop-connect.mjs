@@ -21,7 +21,18 @@ try {
  c.operations.previewConnection({kind:'piston'});assert.deepEqual(cube.position.toArray(),position);assert.equal(c.read().connectionDraft.kind,'piston');
  c.operations.cancelConnection();assert.equal(JSON.stringify(c.read().recipe),original,'cancel leaves no orphan mounts');
  c.operations.tool({value:'connect'});c.operations.connectEnd({objectId:'cube',position:[-.5,0,0]});c.operations.connectEnd({joint:1});c.operations.previewConnection({kind:'fasten'});c.operations.commitConnection();
- assert.equal(c.read().recipe.attachments.length,1);assert.equal(c.read().recipe.mounts.length,2);edits.undo();assert.deepEqual(cube.position.toArray(),position);assert.equal(JSON.stringify(c.read().recipe),original,'one undo removes connection and new mounting points');edits.redo();assert.equal(c.read().recipe.attachments.length,1);edits.undo();
+ assert.equal(c.read().recipe.attachments.length,1);assert.equal(c.read().recipe.mounts.length,2);
+ c.operations.selectConnection({objectId:'cube'});components.toggle('mechanism');
+ assert.equal(c.read().editingConnection,'cube','Tab on a selected fastening enters seating editing');
+ const seating=components.target();assert.equal(seating.type,'connection-seating');
+ const seated=structuredClone(c.read().recipe),beforeSeat=seating.read(),count=edits.state().undoCount;
+ edits.begin(seating.id,'Adjust seating');edits.preview({position:[beforeSeat.position[0]+.4,beforeSeat.position[1]+.2,beforeSeat.position[2]+8],rotation:[0,0,.35]});edits.commit();
+ const adjusted=seating.read();assert.ok(Math.abs(adjusted.position[2]-beforeSeat.position[2])<1e-7,'normal displacement must not unseat the contact');
+ assert.ok(Math.abs(adjusted.position[0]-beforeSeat.position[0]-.4)<1e-7);assert.equal(edits.state().undoCount,count+1);
+ const edited=structuredClone(c.read().recipe);edits.undo();assert.deepEqual(c.read().recipe,seated);edits.redo();assert.deepEqual(c.read().recipe,edited);
+ const beforeCancel=seating.read();edits.begin(seating.id);edits.preview({position:[100,20,30]});edits.cancel();assert.deepEqual(seating.read(),beforeCancel,'Escape restores the previous seating');
+ components.toggle('mechanism');assert.equal(c.read().editingConnection,null);assert.equal(c.read().selectedConnection,'cube');assert.equal(components.active(),true,'leaving seating returns to the same selected connection');
+ edits.undo();edits.undo();assert.deepEqual(cube.position.toArray(),position);assert.equal(JSON.stringify(c.read().recipe),original,'one undo removes connection and new mounting points');edits.redo();assert.equal(c.read().recipe.attachments.length,1);edits.undo();
  c.operations.tool({value:'connect'});c.operations.connectEnd({joint:0});c.operations.connectEnd({joint:1});assert.throws(()=>c.operations.previewConnection({kind:'fasten'}),/object|link/i);c.operations.previewConnection({kind:'piston'});c.operations.commitConnection();assert.equal(c.read().recipe.mountPistons.length,1);edits.undo();assert.equal(JSON.stringify(c.read().recipe),original);
  c.operations.tool({value:'connect'});c.operations.connectEnd({objectId:'cube'});c.operations.connectEnd({joint:1});c.operations.previewConnection({kind:'fasten'});cube.position.x+=1;assert.throws(()=>c.operations.commitConnection(),/changed|preview/i);assert.equal(JSON.stringify(c.read().recipe),original);
  // A physical joint behind an opaque object must not steal the visible surface pick.

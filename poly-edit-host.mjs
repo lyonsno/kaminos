@@ -55,6 +55,7 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
 
   document.addEventListener('keydown',event=>{
     if(event.defaultPrevented||isText(event.target)||blocked())return;
+    if(event.key==='Tab'&&event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.shiftKey&&ownerComponents?.active()){if(!scoped())return;steal(event);attempt(()=>ownerComponents.back());return;}
     if(event.key==='Tab'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.shiftKey){
       if(!scoped())return;steal(event);attempt(()=>edit.active()?exit():ownerComponents?.toggle(selectedId())||enter());return;
     }
