@@ -58,6 +58,10 @@ def sample_glb(path, count):
         a = doc['accessors'][i]
         if a.get('sparse') or a.get('normalized'):
             raise ValueError('Sparse/normalized accessors unsupported')
+        if ('bufferView' not in a
+                or a.get('componentType') not in {5126, 5125, 5123, 5121}
+                or a.get('type') not in {'SCALAR', 'VEC2', 'VEC3'}):
+            raise ValueError('Unsupported accessor format')
         dtype = {5126: '<f4', 5125: '<u4', 5123: '<u2', 5121: 'u1'}[a['componentType']]
         width = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3}[a['type']]
         v = doc['bufferViews'][a['bufferView']]
@@ -74,7 +78,9 @@ def sample_glb(path, count):
         if node.get('extensions') or node.get('skin') is not None:
             raise ValueError('Unsupported node semantics')
         if 'matrix' in node:
-            local = np.array(node['matrix']).reshape(4, 4).T
+            if any(k in node for k in ('translation', 'rotation', 'scale')):
+                raise ValueError('Node cannot specify both matrix and TRS properties')
+            local = np.array(node['matrix'], dtype=np.float64).reshape(4, 4).T
         else:
             x, y, z, w = node.get('rotation', [0, 0, 0, 1])
             local = np.eye(4)
@@ -98,6 +104,8 @@ def sample_glb(path, count):
     primitive = primitives[0]
     if primitive.get('mode', 4) != 4 or primitive.get('extensions') or primitive.get('targets'):
         raise ValueError('Unsupported primitive semantics')
+    if 'attributes' not in primitive or 'material' not in primitive or 'indices' not in primitive:
+        raise ValueError('Primitive requires material, indices, and attributes')
     if set(primitive['attributes']) != {'POSITION', 'NORMAL', 'TEXCOORD_0'}:
         raise ValueError('Expected position, normal and UV only')
     material = doc.get('materials', [])[primitive['material']]
@@ -115,6 +123,9 @@ def sample_glb(path, count):
         raise ValueError('Mismatched vertex attributes')
     if not all(np.isfinite(a).all() for a in [pos, normals, uv, matrix]):
         raise ValueError('Nonfinite source attributes')
+    det = float(np.linalg.det(matrix[:3, :3]))
+    if not np.isfinite(det) or abs(det) <= 1e-12:
+        raise ValueError('Singular node transform')
     pos = pos @ matrix[:3, :3].T + matrix[:3, 3]
     normals = normals @ np.linalg.inv(matrix[:3, :3])
     lengths = np.linalg.norm(normals, axis=1)
@@ -235,9 +246,10 @@ def main():
             meta['normalFallback']['scope'] = 'candidate pool before spatial selection'
         report.update(meta)
         report['phase'] = 'write'
-        report['repoRoot'] = subprocess.check_output(['git','rev-parse','--show-toplevel'], text=True).strip()
-        report['commit'] = subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip()
-        report['dirty'] = bool(subprocess.check_output(['git','status','--porcelain'], text=True).strip())
+        repo_cwd = Path(__file__).resolve().parent
+        report['repoRoot'] = subprocess.check_output(['git','rev-parse','--show-toplevel'], text=True, cwd=repo_cwd).strip()
+        report['commit'] = subprocess.check_output(['git','rev-parse','HEAD'], text=True, cwd=repo_cwd).strip()
+        report['dirty'] = bool(subprocess.check_output(['git','status','--porcelain'], text=True, cwd=repo_cwd).strip())
         # Baseline isotropic reconstruction support; keep its policy explicit.
         normal = rows[:,3:6].astype(np.float64)
         axis = np.tile([0.,0.,1.], (len(rows),1))
