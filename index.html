@@ -25861,9 +25861,9 @@ function updateSelectionFeedback(){
   selectionFeedback?.suspend(selectionCaptureSuspended||!viewportDisplay.overlays||!viewportDisplay.outlines||!!sceneComponents?.active());
   const ids=new Set(sceneSelectionMembers());
   const activeIds=workingScene.activeGroupId?workingScene.groups.find(g=>g.id===workingScene.activeGroupId)?.objectIds||[]:[workingScene.activeObjectId];
-  selectionFeedback?.update(workingScene.objects.filter(entry=>isSceneItemVisible(entry.id)&&ids.has(entry.id)&&entry.type!=='splat'&&entry.type!=='light'&&entry.type!==CAMERA_TYPE&&entry.type!==FLAME_EMITTER_TYPE&&entry.type!==LOCAL_LIQUID_EMITTER_TYPE),activeIds);
+  selectionFeedback?.update(workingScene.objects.filter(entry=>isSceneItemVisible(entry.id)&&ids.has(entry.id)&&entry.type!=='splat'&&entry.type!=='light'&&entry.type!==CAMERA_TYPE&&entry.type!==FLAME_EMITTER_TYPE&&entry.type!==LOCAL_LIQUID_EMITTER_TYPE&&entry.type!==ASH_OBJECT_TYPE),activeIds);
   for(const [id,box] of selectionBoxes)if(!ids.has(id)){box.removeFromParent();box.geometry.dispose();box.material.dispose();selectionBoxes.delete(id);}
-  for(const id of ids){const entry=workingScene.objects.find(o=>o.id===id);if(!entry)continue;
+  for(const id of ids){const entry=workingScene.objects.find(o=>o.id===id);if(!entry||entry.type===ASH_OBJECT_TYPE)continue;
     let box=selectionBoxes.get(id);if(!box){box=new THREE.BoxHelper(entry.object);box.userData.kaminosEditorHelper=true;box.userData.kaminosEditorOnly=true;box.material.depthTest=false;box.renderOrder=1001;scene.add(box);selectionBoxes.set(id,box);}
     box.object=entry.object;box.update();box.material.color.set(id===workingScene.activeObjectId||workingScene.activeGroupId&&workingScene.groups.find(g=>g.id===workingScene.activeGroupId)?.objectIds.includes(id)?0xffc66d:0xe78932);
     styleHelperLines(box,{width:viewportDisplay.outlineWidth,opacity:viewportDisplay.outlineOpacity});

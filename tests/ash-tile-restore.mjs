@@ -4,10 +4,11 @@ import assert from 'node:assert/strict';
 import {createGpuTiledAsh,tileShader} from '../ash/tile-gpu.mjs';
 import {patchLayout} from '../ash/gpu-plan.mjs';
 // Local validation only: fake storage never executes WGSL or supplies GPU evidence.
-test('tileShader keeps partial-height surface cells unmerged, culls underground/uncapped-side quads, and etches outermost-cell perimeter opacity',async()=>{
+test('tileShader culls all bottom faces, subsurface top faces, and sloped run merges, and unifies corner height and perimeter cover',async()=>{
  const code=tileShader(patchLayout({cellSize:0.016,bounds:{min:[0,0,0],max:[1,1,1]},tileSize:16}));
- assert.match(code,/if\(p\.mode\.w!=0u&&band\.y>=1\.0\)/,'partial surface cells must remain 1x1 quads so corner height interpolation acts on every cell corner');
- assert.match(code,/face==2u&&c\.y==0u/,'underground floor bottom faces must be culled in surface_band');
+ assert.match(code,/flat_top\(c\)/,'run-merging on top faces must require a flat 3x3 interior neighborhood so sloped edges never tear horizontal T-junction slits');
+ assert.match(code,/if\(any\(c>=p\.dims\.xyz\)\|\|face==2u\)\{return vec2<f32>\(-1\);\}/,'all downward bottom faces must be culled including on elevated colliders');
+ assert.match(code,/if\(face==3u\)\{/,'top faces must only emit at the true top of each column stack, never on subsurface layers with a < 1.0 under upper ash');
  assert.match(code,/if\(!capAbove\)\{return vec2<f32>\(-1\);\}/,'uncapped cells must omit redundant vertical side quads');
  globalThis.GPUBufferUsage={STORAGE:1,COPY_SRC:2,COPY_DST:4,INDIRECT:8,UNIFORM:16,MAP_READ:32};globalThis.GPUShaderStage={COMPUTE:4};
  const attributes=new Map();
