@@ -18,6 +18,35 @@ try{
   const pixels=()=>page.evaluate(async()=>{await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));const source=[...document.querySelectorAll('canvas')].sort((a,b)=>b.clientWidth*b.clientHeight-a.clientWidth*a.clientHeight)[0],canvas=document.createElement('canvas');canvas.width=source.width;canvas.height=source.height;const ctx=canvas.getContext('2d');ctx.drawImage(source,0,0);const data=ctx.getImageData(0,0,canvas.width,canvas.height).data;let min=255,max=0,colored=0;for(let i=0;i<data.length;i+=4){min=Math.min(min,data[i]);max=Math.max(max,data[i]);if(Math.max(data[i],data[i+1],data[i+2])-Math.min(data[i],data[i+1],data[i+2])>15)colored++;}return {width:canvas.width,height:canvas.height,min,max,colored};});
   report.phase='baseline';report.initial=await read();
   assert.equal(report.initial.variants.filter(v=>v.status==='blocked').length,1);assert.equal(report.initial.variants.length,6);
+  if(args['source-file']){
+    report.phase='source-ui';assert.equal(await page.getByLabel('Stock member',{exact:true}).count(),0);
+    assert.equal(await page.getByLabel('Stock source',{exact:true}).count(),1);
+    report.phase='source-import';
+    const initial=await read(),expected=await fs.readFile(args['source-file']),{createHash}=await import('node:crypto'),digest=createHash('sha256').update(expected).digest('hex');
+    assert.notEqual(digest,initial.source.sha256,'Comparison must use different source bytes');
+    await page.getByLabel('Import stock source',{exact:true}).setInputFiles(args['source-file']);
+    await page.waitForFunction(digest=>{const select=document.querySelector('[aria-label="Stock source"]');return select?.value===digest&&!select.disabled;},digest);
+    report.imported=await read();assert.equal(report.imported.source.sha256,digest);assert.deepEqual(report.imported.source.profile.locks,[]);
+    assert.deepEqual(report.imported.variants.map(v=>[v.objectId,v.parameters,v.pose]),initial.variants.map(v=>[v.objectId,v.parameters,v.pose]));
+    await invoke('frame');await pixels();await page.screenshot({path:path.join(args.out,'second-source.png')});
+    await invoke('bands',{locks:[[-.5,-.45],[.45,.5]]});assert.equal((await read()).source.profile.locks.length,2);
+    await page.evaluate(()=>window.kaminosSceneEdits.undo());assert.deepEqual((await read()).source.profile.locks,[]);
+    await assert.rejects(()=>invoke('source',{source:{...initial.source,sha256:'f'.repeat(64)}}),/digest mismatch/);
+    assert.equal((await read()).source.sha256,digest);
+    await page.getByLabel('Stock source',{exact:true}).selectOption(initial.source.sha256);
+    await page.waitForFunction(sha=>{const select=document.querySelector('[aria-label="Stock source"]');return select?.value===sha&&!select.disabled;},initial.source.sha256);
+    assert.deepEqual((await read()).source.profile,initial.source.profile);
+    const retained=await invoke('export');assert.equal(retained.sources.length,2);
+    await page.evaluate(recipe=>window.kaminosWorkbenchExperiments.open('stock-family',{recipe}),retained);
+    assert.equal((await read()).sources.length,2);
+    await invoke('select',{id:'bend'});await page.evaluate(()=>window.kaminosFrameSelected());
+    for(const [width,height]of [[980,1050],[1500,1050]]){
+      await page.setViewportSize({width,height});await pixels();await page.evaluate(()=>window.kaminosFrameSelected());await pixels();
+      const layout=await page.evaluate(()=>{const list=document.getElementById('scene-object-list'),rows=[...list.querySelectorAll('.scene-object-row')],shape=document.querySelector('.stock-shape-properties:not([hidden])');return {scroll:list.scrollWidth,width:list.clientWidth,rowHeights:rows.map(n=>n.getBoundingClientRect().height),shapeText:shape?.textContent};});
+      assert.ok(layout.scroll<=layout.width+1,'Outliner overflows');assert.ok(layout.rowHeights.every(h=>h<=40),'Outliner rows too tall');assert.ok(!layout.shapeText.includes('Inner channel would fold'),'Another member warning leaked into selected shape');
+      report['layout'+width]=layout;await page.screenshot({path:path.join(args.out,`layout-${width}.png`)});
+    }
+  }
   await page.evaluate(()=>{window.stockUnrelated={value:0};window.kaminosSceneEdits.register('@stock-witness-unrelated',{read:()=>({...window.stockUnrelated}),check:v=>v,write:v=>window.stockUnrelated=v});window.kaminosSceneEdits.apply('@stock-witness-unrelated',{value:1},'Earlier unrelated edit');});
   await page.evaluate(()=>{window.kaminosAuthoringParameters?.set('@parameter:env-intensity-slider',{value:2});});
   await invoke('frame');report.desktopPixels=await pixels();assert.ok(report.desktopPixels.max-report.desktopPixels.min>30);assert.ok(report.desktopPixels.colored>0);await page.screenshot({path:path.join(args.out,'family.png')});
@@ -43,7 +72,7 @@ try{
   await page.evaluate(()=>window.kaminosSceneEdits.apply('@stock-witness-unrelated',{value:1},'Another unrelated edit'));
   await invoke('set',{id:'long',length:2.7});
   await page.getByLabel('Open stock family',{exact:true}).setInputFiles(path.join(args.out,'family.json'));
-  await page.waitForFunction(async()=>window.kaminosWorkbenchExperiments.state().id==='stock-family'&&(await window.kaminosWorkbenchExperiments.read())?.variants?.find(v=>v.id==='long')?.parameters.length===3.1);
+  await page.waitForFunction(()=>window.kaminosWorkbenchExperiments.state().id==='stock-family'&&document.querySelector('[aria-label="Long Length"]')?.value==='3.1');
   report.phase='close-active-edit';await invoke('select',{id:'long'});
   await page.evaluate(async()=>{const member=window.kaminosSelection.read().activeId,cube=window.kaminosSceneAuthoring.addMesh('box');window.kaminosSelection.set([member,cube],member);window.kaminosSelection.transform({position:[2,.4,0]});window.kaminosSelection.set([member],member);});
   await field.click();await field.fill('3.4');
