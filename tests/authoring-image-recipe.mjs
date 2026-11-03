@@ -57,3 +57,23 @@ test('starting a separate experiment clears helper provenance and lineage while 
  let reset=0;const h=harness({resetPrompt:()=>reset++});h.c.recall(entry());h.set({prompt:'edited glove'});const before=structuredClone(h.get());
  h.c.clear();assert.equal(reset,1);assert.equal(h.c.read().parent,null);assert.deepEqual(h.get(),before);assert.equal(h.c.decorate(h.get()).iteration,undefined);
 });
+
+test('a recipe carries experiment membership into the run snapshot independently of browsing',()=>{
+ const h=harness(),experiment={id:'gloves',title:'Glove flight'};
+ h.c.recall({...entry(),experiment});
+ const request=h.c.decorate(h.get());
+ assert.deepEqual(request.experiment,experiment,'Reopening a member must keep its reruns in that saved experiment');
+ h.history.observe(entry('/unrelated.png'));
+ assert.deepEqual(h.c.decorate(h.get()).experiment,experiment);
+ h.c.clear();assert.equal(h.c.decorate(h.get()).experiment,undefined);
+ h.c.recall(entry('/saved-child.png',{...p,experiment}));
+ assert.deepEqual(h.c.decorate(h.get()).experiment,experiment,'The saved PNG must recover experiment membership on another page');
+});
+test('an empty experiment can start its first recipe without inheriting an unrelated parent',()=>{
+ const h=harness();h.c.recall(entry());
+ assert.equal(typeof h.c.joinExperiment,'function','A saved collection needs a first-result path, not only imported members');
+ h.c.joinExperiment({id:'new-glove',title:'New glove'});
+ assert.equal(h.c.read().parent,null);
+ assert.deepEqual(h.c.decorate(h.get()).experiment,{id:'new-glove',title:'New glove'});
+ assert.equal(h.c.decorate(h.get()).iteration,undefined);
+});

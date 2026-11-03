@@ -272,7 +272,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       if(!active||!state.canStop||abort.signal.aborted)return false;
       abort.abort(new DOMException('Image generation stopped by operator','AbortError'));set({canStop:false,status:'stopping',progress:'Stopping… waiting for the current GPU work to settle.'});return true;
     },
-    async run({prompt,seed,size=512,level='4-bit',aspect='square',model='flux2',reference=null,promptExpansion=null,iteration=null,expectedModel=null,textLength='fit16'}){
+    async run({prompt,seed,size=512,level='4-bit',aspect='square',model='flux2',reference=null,promptExpansion=null,iteration=null,experiment=null,expectedModel=null,textLength='fit16'}){
       if(active)throw Error('Image generation is already running');
       if(pendingImage)throw Error('Save the generated image before generating another');
       const text=String(prompt||'').trim();if(!text)throw Error('Describe the image to generate');
@@ -342,6 +342,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         const provenance={schema:'kaminos.image-generation.v1',route:routeId,model:spec.name,prompt:text,seed,width:image.width,height:image.height,weights:base,aspect,weightsLevel:level,transformer:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,timings:image.timings,elapsed:timing(),...(image.sampling?{completion:structuredClone(image.sampling)}:{}),...(promptExpansion?{promptExpansion:structuredClone(promptExpansion)}:{})};
         if(reference)provenance.reference=structuredClone(reference.provenance);
         if(iteration)provenance.iteration=iteration;
+        if(experiment)provenance.experiment=structuredClone(experiment);
         provenance.textLength=model==='flux3'?'model':textLength;
         if(pipeline.ditManifest?.source)provenance.source=structuredClone(pipeline.ditManifest.source);
         if(model==='flux3')Object.assign(provenance,{sampling:structuredClone(pipeline.sampling),source:structuredClone(pipeline.ditManifest.source),...(pipeline.ditManifest.lora?{lora:structuredClone(pipeline.ditManifest.lora)}:{})});
