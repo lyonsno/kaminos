@@ -57,8 +57,8 @@ export function constructBodies(value){
  recipe.nodes.forEach((n,i)=>{
   const clevises=recipe.pistons.flatMap((p,j)=>p.a===i&&p.aOffset?[{offset:p.aOffset,z:pistonZ+j*pitch}]:p.b===i&&p.bOffset?[{offset:p.bOffset,z:pistonZ+j*pitch}]:[]);
   const addClevises=(g,baseZ)=>{for(const {offset:[ox,oy],z}of clevises){const rx=n.parent===null?0:Math.max(0,Math.min(n.length,ox)),dx=ox-rx,dy=oy,len=Math.hypot(dx,dy),dz=z-baseZ;if(len>1e-3){const strut=box(g,[len,.08,thickness*.8],[(rx+ox)/2,oy/2,dz],0xc9a875);strut.rotation.z=Math.atan2(dy,dx);strut.name='Clevis bracket';strut.userData.copyPart='clevis-lug';}const eyeMesh=cylinder(g,.09,thickness,[ox,oy,dz],0xc9a875,'z',holes[i]*.75);eyeMesh.name='Clevis pin eye';eyeMesh.userData.copyPart='clevis-lug';}};
-  if(n.parent===null)add(`anchor:${i}`,'anchor',[.5,.5,.18],g=>{box(g,[.5,.5,.18],[0,0,-.16],0x374653);addClevises(g,0);},f=>({position:[...f[i].point,0],angle:0}));
-  else add(`link:${i}`,'link',[n.length,thickness,eye,holes[n.parent],holes[i]],g=>{plate(g,n.length,[holes[n.parent],holes[i]]);addClevises(g,layers[i]);},f=>({position:[...f[n.parent].point,layers[i]],angle:f[i].angle}));
+  if(n.parent===null)add(`anchor:${i}`,'anchor',clevises.length?[.5,.5,.18,clevises]:[.5,.5,.18],g=>{box(g,[.5,.5,.18],[0,0,-.16],0x374653);addClevises(g,0);},f=>({position:[...f[i].point,0],angle:0}));
+  else add(`link:${i}`,'link',clevises.length?[n.length,thickness,eye,holes[n.parent],holes[i],clevises]:[n.length,thickness,eye,holes[n.parent],holes[i]],g=>{plate(g,n.length,[holes[n.parent],holes[i]]);addClevises(g,layers[i]);},f=>({position:[...f[n.parent].point,layers[i]],angle:f[i].angle}));
   const {low,high}=joints[i];
   add(`pin:${i}`,'pin',[low,high,holes[i]],g=>{cylinder(g,holes[i]*.94,high-low,[0,0,(high+low)/2],0xc9a875);for(const z of [low-.025,high+.025])cylinder(g,.105,.05,[0,0,z],0xc9a875);},f=>({position:[...f[i].point,0],angle:f[i].angle}));
  });

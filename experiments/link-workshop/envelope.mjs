@@ -10,6 +10,7 @@ export function motionSpace(recipe,{cellSize=.12,tolerance=.04,geometry=null}={}
  try{
   if(geometry?.bodies?.length){resolved=createBodyView(new T.Group());resolved.update(recipe,0);resolved.importBodies(geometry);}
   recipe.nodes.forEach((n,i)=>{const p=speeds[n.parent];speeds[i]=n.parent===null?{v:0,w:0}:{w:p.w+Math.abs(n.angles[1]-n.angles[0]),v:p.v+n.length*(p.w+Math.abs(n.angles[1]-n.angles[0]))};});
+  const mountSpeed=(id,offset)=>{if(!offset)return speeds[id].v;const n=recipe.nodes[id];if(n.parent===null)return 0;return speeds[n.parent].v+Math.hypot(offset[0],offset[1])*speeds[id].w;};
   for(const def of construction.defs){
    def.object.updateMatrixWorld(true);const boxes=[];
    if(resolved){const pose=def.pose(frames(recipe,0)),inverse=new T.Matrix4().makeRotationZ(pose.angle);inverse.setPosition(...pose.position);inverse.invert();for(const o of resolved.bodyMeshes(def.id)){o.geometry.computeBoundingBox();boxes.push(o.geometry.boundingBox.clone().applyMatrix4(inverse.clone().multiply(o.matrixWorld)));}}
@@ -19,7 +20,8 @@ export function motionSpace(recipe,{cellSize=.12,tolerance=.04,geometry=null}={}
    if(def.kind==='barrel'||def.kind==='rod'){
     const p=recipe.pistons[index],range=construction.travels[index];
     if(range.min<=1e-8)throw Error(`Piston ${index+1}: positive attachment separation required for a continuous envelope; coincident mounts make its direction undefined`);
-    v=speeds[def.kind==='barrel'?p.a:p.b].v;w=(speeds[p.a].v+speeds[p.b].v)/range.min;
+    const va=mountSpeed(p.a,p.aOffset),vb=mountSpeed(p.b,p.bOffset);
+    v=def.kind==='barrel'?va:vb;w=(va+vb)/range.min;
    }else{const origin=def.kind==='link'?recipe.nodes[index].parent:index;v=speeds[origin].v;w=def.kind==='anchor'?0:speeds[index].w;}
    const speed=v+radius*w;
    if(!Number.isFinite(speed))throw Error('Motion-space bound exceeds numeric range');

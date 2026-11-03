@@ -1,5 +1,5 @@
 import * as T from '../../lib/three.core.js';
-import {constructBodies} from './bodies.mjs';
+import {bodyLayout,constructBodies} from './bodies.mjs';
 import {frames} from './model.mjs';
 
 // Reflect geometry across an assembly-local plane parallel to the linkage XY
@@ -42,30 +42,51 @@ export function bodySpanLength(packet,id,fallback=0){
  return span>fallback*1.15?span:fallback;
 }
 
-export function sectionBodyGeometry(packet,{oldRecipe,nextRecipe,joint,count,mirrorPlaneZ=-1.3}){
+function refreshClevisMeshes(obj,def){
+ for(const child of [...obj.children]){
+  if(child.userData?.copyPart==='clevis-lug')obj.remove(child);
+  else if(child.name==='Mirrored shapes'){
+   for(const m of [...child.children])if(m.userData?.mirrorSource==='Clevis bracket'||m.userData?.mirrorSource==='Clevis pin eye')child.remove(m);
+   if(!child.children.length)obj.remove(child);
+  }
+ }
+ const names=[];
+ for(const child of def.object.children)if(child.userData?.copyPart==='clevis-lug'){const c=child.clone(true);obj.add(c);if(c.name)names.push(c.name);}
+ return [...new Set(names)];
+}
+
+export function sectionBodyGeometry(packet,{oldRecipe,nextRecipe,joint,count,nodeMap=null,mirrorPlaneZ=-1.3}){
  if(!packet?.bodies?.length)return {schema:'kaminos.assembly-geometry.v1',bodies:[]};
- const extra=count-1,mapNode=i=>i>joint?i+extra:i;
+ const extra=count-1,mapNode=nodeMap??(i=>i>joint?i+extra:i);
+ const oldLayout=bodyLayout(oldRecipe),freshLayout=bodyLayout(nextRecipe);
  const fresh=constructBodies(nextRecipe),freshById=new Map(fresh.defs.map(d=>[d.id,d]));
  const oldById=new Map(packet.bodies.map(b=>[b.id,b]));
  const hasMirror=packet.bodies.some(b=>JSON.stringify(b.object).includes('Mirrored shapes'));
  const out=new Map(),mirrorSelections=[];
  const serialize=object=>{object.position.set(0,0,0);object.quaternion.identity();object.scale.set(1,1,1);object.updateMatrixWorld(true);return object.toJSON();};
 
- // 1. Carry over non-sectioned anchors and links (remapping node indices > joint)
+ // 1. Carry over non-sectioned anchors and links (remapping node indices and syncing clevis lugs)
  for(const item of packet.bodies){
   const mAnchor=item.id.match(/^anchor:(\d+)$/),mLink=item.id.match(/^link:(\d+)$/),mPin=item.id.match(/^pin:(\d+)$/);
   if(mAnchor){
-   const oldIdx=Number(mAnchor[1]),newId=`anchor:${mapNode(oldIdx)}`,def=freshById.get(newId);
+   const mapped=mapNode(Number(mAnchor[1]));if(mapped===null||mapped===undefined)continue;
+   const newId=`anchor:${mapped}`,def=freshById.get(newId);
    if(def){
-    const obj=new T.ObjectLoader().parse(item.object);
-    for(const child of def.object.children)if(child.userData?.copyPart==='clevis-lug')obj.add(child.clone(true));
+    const obj=new T.ObjectLoader().parse(item.object),clevisNames=refreshClevisMeshes(obj,def);
     out.set(newId,{id:newId,geometryKey:def.geometryKey,object:serialize(obj)});
+    if(hasMirror&&clevisNames.length)mirrorSelections.push({id:newId,names:clevisNames});
    }
   }else if(mLink&&Number(mLink[1])!==joint){
-   const oldIdx=Number(mLink[1]),newId=`link:${mapNode(oldIdx)}`,def=freshById.get(newId);
-   if(def)out.set(newId,{id:newId,geometryKey:def.geometryKey,object:item.object});
+   const mapped=mapNode(Number(mLink[1]));if(mapped===null||mapped===undefined)continue;
+   const newId=`link:${mapped}`,def=freshById.get(newId);
+   if(def){
+    const obj=new T.ObjectLoader().parse(item.object),clevisNames=refreshClevisMeshes(obj,def);
+    out.set(newId,{id:newId,geometryKey:def.geometryKey,object:serialize(obj)});
+    if(hasMirror&&clevisNames.length)mirrorSelections.push({id:newId,names:clevisNames});
+   }
   }else if(mPin&&Number(mPin[1])!==joint){
-   const oldIdx=Number(mPin[1]),newId=`pin:${mapNode(oldIdx)}`,def=freshById.get(newId);
+   const mapped=mapNode(Number(mPin[1]));if(mapped===null||mapped===undefined)continue;
+   const newId=`pin:${mapped}`,def=freshById.get(newId);
    if(def)out.set(newId,{id:newId,geometryKey:def.geometryKey,object:item.object});
   }
  }
@@ -84,17 +105,18 @@ export function sectionBodyGeometry(packet,{oldRecipe,nextRecipe,joint,count,mir
   }
   for(let s=0;s<count;s++){
    const nodeId=joint+s,newId=`link:${nodeId}`,def=freshById.get(newId),segLen=nextRecipe.nodes[nodeId].length;
+   const dz=(oldLayout.layers[joint]??0)-(freshLayout.layers[nodeId]??0);
    const group=def.object.clone(true);group.name=`Door section ${s+1}`;
    const copyNames=[];
    for(const child of group.children){
     if(!child.userData?.copyPart){child.name='Side operating lever';child.userData.copyPart='operating-lever';child.material=bronze;}
     if(child.name)copyNames.push(child.name);
    }
-   for(const h of hingeTemplates)group.add(h.clone(true));
+   for(const h of hingeTemplates){const hc=h.clone(true);hc.position.z+=dz;group.add(hc);}
    for(const {child,size,center}of panelTemplates){
     const m=new T.Mesh(new T.BoxGeometry(Math.max(0.08,segLen-0.025),size.y,size.z),child.material.clone());
     m.name=`${child.name} (section ${s+1})`;
-    m.position.set(segLen/2,center.y,center.z);
+    m.position.set(segLen/2,center.y,center.z+dz);
     m.castShadow=child.castShadow;m.receiveShadow=child.receiveShadow;
     group.add(m);
    }
@@ -117,6 +139,44 @@ export function sectionBodyGeometry(packet,{oldRecipe,nextRecipe,joint,count,mir
   });
  }
 
+ let result={schema:'kaminos.assembly-geometry.v1',bodies:[...out.values()]};
+ if(hasMirror&&mirrorSelections.length){
+  const f0=frames(nextRecipe,0),positions=Object.fromEntries(fresh.defs.map(d=>[d.id,d.pose(f0).position[2]]));
+  result=mirrorBodyGeometry(result,{planeZ:mirrorPlaneZ,selections:mirrorSelections,positions});
+ }
+ for(const d of fresh.defs)d.object.traverse(o=>{o.geometry?.dispose();if(o.material)o.material.dispose();});
+ return result;
+}
+
+const baseGeometryKey=key=>{try{const [kind,params]=JSON.parse(key);return JSON.stringify([kind,kind==='link'?params.slice(0,5):params.slice(0,3)]);}catch{return key;}};
+
+export function resyncBodyGeometry(packet,nextRecipe,mirrorPlaneZ=-1.3){
+ if(!packet?.bodies?.length)return packet;
+ const fresh=constructBodies(nextRecipe),freshById=new Map(fresh.defs.map(d=>[d.id,d]));
+ const hasMirror=packet.bodies.some(b=>JSON.stringify(b.object).includes('Mirrored shapes'));
+ const out=new Map(),mirrorSelections=[];
+ const serialize=object=>{object.position.set(0,0,0);object.quaternion.identity();object.scale.set(1,1,1);object.updateMatrixWorld(true);return object.toJSON();};
+ for(const item of packet.bodies){
+  const def=freshById.get(item.id);if(!def)continue;
+  if(item.id.startsWith('anchor:')||item.id.startsWith('link:')){
+   if(baseGeometryKey(item.geometryKey)!==baseGeometryKey(def.geometryKey)){out.set(item.id,item);continue;}
+   const obj=new T.ObjectLoader().parse(item.object),clevisNames=refreshClevisMeshes(obj,def);
+   out.set(item.id,{id:item.id,geometryKey:def.geometryKey,object:serialize(obj)});
+   if(hasMirror&&clevisNames.length)mirrorSelections.push({id:item.id,names:clevisNames});
+  }else if(item.id.startsWith('pin:')){
+   out.set(item.id,{id:item.id,geometryKey:def.geometryKey,object:item.object});
+  }else if(!hasMirror){
+   out.set(item.id,item);
+  }
+ }
+ if(hasMirror){
+  nextRecipe.pistons.forEach((_,j)=>{
+   for(const part of ['barrel','rod']){
+    const pid=`piston:${j}:${part}`,def=freshById.get(pid);
+    if(def){out.set(pid,{id:pid,geometryKey:def.geometryKey,object:serialize(def.object.clone(true))});mirrorSelections.push({id:pid});}
+   }
+  });
+ }
  let result={schema:'kaminos.assembly-geometry.v1',bodies:[...out.values()]};
  if(hasMirror&&mirrorSelections.length){
   const f0=frames(nextRecipe,0),positions=Object.fromEntries(fresh.defs.map(d=>[d.id,d.pose(f0).position[2]]));

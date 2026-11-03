@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import * as T from '../lib/three.core.js';
 import * as model from '../experiments/link-workshop/model.mjs';
 import {constructBodies,createBodyView,travelEnvelope} from '../experiments/link-workshop/bodies.mjs';
+import {motionSpace} from '../experiments/link-workshop/envelope.mjs';
 import {furnaceAssembly} from '../experiments/link-workshop/furnace.mjs';
 import workshop from '../experiments/link-workshop.experiment.mjs';
 import {createSceneEdits} from '../scene-edit-session.mjs';
@@ -83,9 +84,17 @@ test('solvePistonClevis and connectPiston seat stand-off clevis lugs across flat
     assert.ok(env.max - env.min >= 0.06, `Piston ${idx} has positive stroke (${env.min.toFixed(3)} -> ${env.max.toFixed(3)})`);
   }
   const root = new T.Group(), view = createBodyView(root);
+  // Pre-update view BEFORE connecting pistons to verify geometryKey updates trigger clevis lug creation
+  const prePiston = { ...recipe, pistons: [] };
+  view.update(prePiston, 0);
   view.update(recipe, 0);
+  assert.ok(view.bodyMeshes('anchor:0').some(m => m.name === 'Clevis pin eye'), 'live view.update adds clevis lug to anchor:0 when piston connected');
+  assert.ok(view.bodyMeshes('link:1').some(m => m.name === 'Clevis pin eye'), 'live view.update adds clevis lug to link:1 when piston connected');
   const m0 = view.manifest();
   assert.deepEqual(m0.warnings, [], 'All 3 section pistons fit single-stage barrels without rod poke-through');
+  const envSpace = motionSpace(recipe, { cellSize: 0.4, tolerance: 0.2 });
+  const barrel0 = envSpace.bodies.find(b => b.id === 'piston:0:barrel');
+  assert.ok(barrel0.speedBound > 0, 'motionSpace accounts for clevis offset speed bound');
   view.update(recipe, 1);
   view.dispose();
 });
@@ -101,10 +110,14 @@ test('link-workshop section operation splits furnace door geometry and folds aro
   await rt.operations.section({ joint: 1, count: 3 });
   const after = rt.read();
   assert.equal(after.recipe.nodes.filter(n => n.parent !== null).length, 3, 'door split into 3 hinged panels');
+  assert.equal(after.recipe.nodes.length, 4, 'orphaned single-door cylinder bracket is pruned when replaced by section pistons');
   assert.equal(after.recipe.pistons.length, 3, '3 clevis-solved section pistons');
   assert.equal(after.bodies.warnings.length, 0, 'all section pistons satisfy single-stage travel');
-  assert.ok(after.bodies.replacements >= 11, `expected replacement bodies for housing, 3 door panels, pins, and pistons, got ${after.bodies.replacements}`);
+  const initialReplacements = after.bodies.replacements;
+  assert.ok(initialReplacements >= 14, `expected replacement bodies for housing, 3 door panels, pins, and pistons, got ${initialReplacements}`);
   const exported = rt.operations.exportBodies();
+  const anchor0Json = JSON.stringify(exported.bodies.find(b => b.id === 'anchor:0')?.object);
+  assert.ok(anchor0Json.includes('Clevis pin eye') && anchor0Json.includes('Mirrored shapes'), 'anchor:0 has bilateral mirrored clevis lugs');
   for (const id of ['link:1', 'link:2', 'link:3']) {
     const body = exported.bodies.find(b => b.id === id);
     assert.ok(body, `${id} present in exported bodies`);
@@ -116,10 +129,14 @@ test('link-workshop section operation splits furnace door geometry and folds aro
   const ray = new T.Raycaster(new T.Vector3(5, 2, -1.3), new T.Vector3(-1, 0, 0));
   assert.equal(ray.intersectObjects(scene.children, true)[0].object.name, 'Refractory back', 'Pose B folded 3-section door exposes hollow chamber');
   rt.operations.mode({ value: 'A' });
-  assert.ok(ray.intersectObjects(scene.children, true)[0].object.name.startsWith('Door'), 'Pose A 3-section door seals kiln mouth');
+  assert.ok(ray.intersectObjects(scene.children, true)[0].object.name.startsWith('Door'), 'Pose A 3-section door seals kiln mouth at center');
+  const edgeRay = new T.Raycaster(new T.Vector3(5, 2.2, -0.22), new T.Vector3(-1, 0, 0));
+  assert.ok(edgeRay.intersectObjects(scene.children, true)[0].object.name.startsWith('Door'), 'Pose A middle section 2 is Z-coplanar and seals kiln mouth near front-right edge z=-0.22');
   rt.operations.mode({ value: 'B' });
   rt.operations.fold({ joint: 3, point: [-1.45, 3.88], mode: 'B' });
-  assert.equal(rt.read().bodies.warnings.length, 0, 'folding tip to a new roof point keeps piston clevises valid');
+  const afterFold = rt.read();
+  assert.equal(afterFold.bodies.warnings.length, 0, 'folding tip to a new roof point keeps piston clevises valid');
+  assert.equal(afterFold.bodies.replacements, initialReplacements, 'subsequent fold preserves all mirrored piston and clevis replacement bodies');
   edits.undo();
   edits.undo();
   assert.equal(rt.read().recipe.nodes.filter(n => n.parent !== null).length, 1, 'Undo restores single-panel door');
