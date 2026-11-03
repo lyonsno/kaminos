@@ -161,3 +161,16 @@ for(const kind of ['mesh','splat','preview'])test(`superseded preview return abo
  assert.deepEqual(state.recordedInsertions,[]);
  assert.equal(state.sceneObjects.length,0,'no stale asset in the replacement document');
 });
+
+test('preview retirement releases dependent lighting and Back restores its accepted settings',async()=>{
+ const state=context(),events=[];
+ state.fireLightFieldRouteParams=()=>new URLSearchParams('volume_light_field=1&volume_light_field_shared_source=1');
+ state.fireShadowSceneRoute=()=>({volume_light_field_hybrid_shadow_resolution:'128'});
+ state.syncSceneRadianceRoute=async params=>{events.push(Object.fromEntries(params));};
+ await state.flameFeature.restore({present:true,composition:false});
+ await state.greenroomViewMesh('/preview.glb','preview.glb',{});
+ assert.deepEqual(events.at(-1),{},'retired producer must release scene lighting consumer before displaying preview');
+ await state.restoreAuthoredSceneFromPreview();
+ assert.equal(events.at(-1).volume_light_field_shared_source,'1');
+ assert.equal(events.at(-1).volume_light_field_hybrid_shadow_resolution,'128','retain accepted lighting settings across temporary preview');
+});

@@ -70,3 +70,12 @@ test('retirement does not waive persistence validation for a retained compositio
  assert.equal((await m.c.window.saveScene({result:true})).ok,false);
  assert.deepEqual(m.writes,[]);
 });
+
+test('Add then Undo after replacement cannot let stale route authority block Save',async()=>{
+ const m=mount({refused:false});await m.c.flameFeature.clear();
+ await m.c.flameFeature.restore({present:true,composition:true});
+ await m.c.flameFeature.restore({present:false,composition:false});
+ const result=await m.c.window.saveSceneAs({result:true});
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.deepEqual(m.writes.map(x=>x.kind),['scene']);
+});

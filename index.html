@@ -6237,7 +6237,7 @@ async function restoreAuthoredSceneFromPreview(options = {}) {
   if (!greenroomPreviewState) return false;
   const state = greenroomPreviewState;
   const authored = state.authored;
-  await flameFeature.clear();
+  await retireSceneFlame();
   if(greenroomPreviewState!==state)return false;
   removeGreenroomPreviewObject({ dispose: options.disposePreview !== false });
   greenroomPreviewState = null;
@@ -11975,7 +11975,7 @@ async function initScene() {
     const fireProxyEffective = fireProxySync?.effective() ?? false;
     const volumeBridgeActive = !liquidFireCompositionActive && !fireLightFieldRouteActive && !isAuthoredKilnCollisionRoute() && !fireProxyEffective && isSceneItemVisible('flame-field') && volumeBridge ? volumeBridge.update() === true : false;
     const fireLightFieldActive = fireLightFieldPass ? fireLightFieldPass.update() === true : false;
-    const mainRendererNeeded = !volumeSmokeRouteActive || fireLightFieldActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
+    const mainRendererNeeded = !volumePrototype?.isActive() || !volumeSmokeRouteActive || fireLightFieldActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
     const localWaterActive = waterFeature.active;
 
     if(needsRender || localWaterActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || fireLightFieldActive)sceneGI.requestHistoryFrames();
@@ -12325,18 +12325,32 @@ function createPageSceneLifecycle(){
     records:{load:(record,requestId)=>addSceneObjectFromSource(record,requestId,{activate:false}),restore:restoreLoadedSceneRecord},
     groups:{restore:setSceneGroupsFromRecords},
     selection:{set:setSceneSelection,object:setActiveSceneObject,group:setActiveSceneGroup},
-    context:{retire:()=>flameFeature.clear(),beforeClear:clearSceneEditingState,clearDomains:clearSceneDomains,clearTransient:clearSceneTransient,cleared:projectClearedScene,
+    context:{retire:retireSceneFlame,beforeClear:clearSceneEditingState,clearDomains:clearSceneDomains,clearTransient:clearSceneTransient,cleared:projectClearedScene,
       beginLoad:setup=>{waterFeature.setup=setup.water;activeSceneComposition=setup.flame.composition;authoredFlamePresent=setup.flame.sourcePresent;volumePrototype?.setSceneCompositionPresentation?.(Boolean(activeSceneComposition));},loaded:async setup=>{if(setup.water)await mountLocalLiquidHost();},
-      capturePreview:()=>({flamePresent:!!activeSceneComposition||!!volumePrototype?.isActive(),activeSceneFieldId:workingScene.activeFieldId,documentSession:sceneDocument.snapshot(),volumePrimitives:getVolumePrimitiveState(),modelSourceUrl,modelSourceType,glbFileName}),
+      capturePreview:()=>({flamePresent:flameFeature.present,flameRoute:Object.fromEntries([...fireLightFieldRouteParams(),...Object.entries(fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()))]),activeSceneFieldId:workingScene.activeFieldId,documentSession:sceneDocument.snapshot(),volumePrimitives:getVolumePrimitiveState(),modelSourceUrl,modelSourceType,glbFileName}),
       previewDetached(){
         currentMesh=null;setVolumePrimitivesState({schema:VOLUME_PRIMITIVE_SCHEMA,primitives:[]});
         if(transformControls){transformControls.detach();transformControls.visible=false;}
         renderSceneObjectList();updateTransformInspector();
       },
       restorePreview(authored){sceneDocument.resume(authored.documentSession);modelSourceUrl=authored.modelSourceUrl;modelSourceType=authored.modelSourceType;glbFileName=authored.glbFileName;setVolumePrimitivesState(authored.volumePrimitives);},
-      async previewResumed(authored,{isCurrent}){if(!workingScene.objects.length){renderSceneObjectList();document.getElementById('transform-bar').classList.remove('visible');}await flameFeature.restore({present:authored.flamePresent,composition:!!activeSceneComposition,isCurrent});},
+      async previewResumed(authored,{isCurrent}){if(!workingScene.objects.length){renderSceneObjectList();document.getElementById('transform-bar').classList.remove('visible');}await restoreSceneFlame({present:authored.flamePresent,composition:!!activeSceneComposition,isCurrent},new URLSearchParams(authored.flameRoute));},
     },
   });
+}
+async function retireSceneFlame(){
+  await flameFeature.clear();
+  // A consumer waiting for an encoded flame frame cannot own an ordinary
+  // scene after its producer retires. Release it before replacing inputs.
+  await syncSceneRadianceRoute(new URLSearchParams());
+  window._kaminosDirty?.();
+}
+async function restoreSceneFlame(options,route=fireLightFieldRouteParams()){
+  const isCurrent=options.isCurrent??(()=>true);
+  if(!isCurrent())return false;
+  await syncSceneRadianceRoute(options.present?route:new URLSearchParams());
+  if(!isCurrent())return false;
+  return flameFeature.restore(options);
 }
 const sceneLifecycle=createPageSceneLifecycle();
 function clearScene(options={}) {return sceneLifecycle.clear(options);}
@@ -21683,7 +21697,7 @@ async function initKaminosVolumeRoute() {
     setActiveTab('volume', { reveal: false });
     if (camera && controls) frameVolumeCamera();
     try {
-      await flameFeature.setActive(true);
+      await flameFeature.restore({present:true,composition:!!activeSceneComposition});
       refreshSyntheticExternalEmitters();
       if (routeExternalEmitters === 'synthetic_hand_trails') {
         syntheticEmitterTimer = window.setInterval(refreshSyntheticExternalEmitters, 100);
@@ -22192,8 +22206,7 @@ async function writeFirstFlameFieldStateUnchecked(value) {
     renderSceneObjectList();refreshRenderingControls();flameInspector?.sync(true);window._kaminosDirty?.();
   } finally {burnerGraphWriting=wasWriting;}
   const mounting=syncSceneRadianceRoute(value.composition?fireLightFieldRouteParams():new URLSearchParams()).then(async()=>{
-    if(value.composition&&activeSceneComposition){await flameFeature.setActive(isSceneItemVisible('flame-field'));await syncAuthoredFireActivity();}
-    if(!activeSceneComposition)await flameFeature.setActive(false);
+    await flameFeature.restore({present:!!activeSceneComposition,composition:!!activeSceneComposition});
   });
   window.__kaminosFirstFlameMount=mounting;
   return mounting;
@@ -24974,7 +24987,7 @@ function compositionStatus(message, failed = false) {
 }
 
 async function collectSceneComposition() {
-  if(flameFeature.retired&&!activeSceneComposition)return;
+  if(!flameFeature.present&&!activeSceneComposition)return;
   const debug = volumePrototype?.debugState?.();
   if (!isFireLightFieldRoute() && !activeSceneComposition) return;
   const retainedHiddenField=!debug?.active&&activeSceneComposition&&debug&&!debug.error&&!isSceneItemVisible('flame-field');
@@ -26371,7 +26384,7 @@ async function saveToServer(sceneData, filename, options = {}) {
 }
 
 function sceneIsEmpty() {
-  const persistableFlame = isFireLightFieldRoute() && volumePrototype?.debugState?.()?.active;
+  const persistableFlame = flameFeature.present && isFireLightFieldRoute() && volumePrototype?.debugState?.()?.active;
   return workingScene.objects.length === 0 && volumePrimitives.length === 0 && !persistableFlame && !waterFeature.setup;
 }
 
@@ -26381,7 +26394,7 @@ function sceneSaveIsBlocked() {
     setInfo('Wait for the current scene history action to finish');
     return true;
   }
-  if((activeSceneComposition||!flameFeature.retired&&isFireLightFieldRoute())&&volumePrototype?.debugState?.().gridHeight?.admitted===false){setInfo('Requested simulation grid was refused; Undo or choose supported dimensions before saving');return true;}
+  if((activeSceneComposition||flameFeature.present&&isFireLightFieldRoute())&&volumePrototype?.debugState?.().gridHeight?.admitted===false){setInfo('Requested simulation grid was refused; Undo or choose supported dimensions before saving');return true;}
   if (greenroomPreviewIsActive()) {
     setInfo('Greenroom preview is temporary; import or go back before saving');
     return true;
@@ -26485,7 +26498,7 @@ async function loadSceneFile(file, options = {}) {
 async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, sceneFile}) {
   await sceneLightingPreparation?.whenIdle();
   if(!sceneLoadRequests.isCurrent(loadRequestId))return false;
-  await flameFeature.clear();
+  await retireSceneFlame();
   if(!sceneLoadRequests.isCurrent(loadRequestId))return false;
   const objectRecords = restorePlan.objects;
   const hasVolumePrimitiveScene = restorePlan.hasVolumePrimitiveScene;
@@ -26571,9 +26584,9 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
   if (!activeSceneComposition || JSON.stringify(getVolumePrimitiveState()) !== JSON.stringify(restorePlan.volumePrimitives)) {
     setVolumePrimitivesState(restorePlan.volumePrimitives);
   }
-  const firePresent=!!(hasVolumePrimitiveScene||activeSceneComposition||new URLSearchParams(location.search).get('kaminos_volume_smoke')==='1');
+  const firePresent=!!(hasVolumePrimitiveScene||activeSceneComposition);
   if(firePresent)setActiveTab(activeSceneComposition?'assets':'volume',{reveal:false});
-  if(!await flameFeature.restore({present:firePresent,composition:!!activeSceneComposition,isCurrent:()=>sceneLoadRequests.isCurrent(loadRequestId)}))return false;
+  if(!await restoreSceneFlame({present:firePresent,composition:!!activeSceneComposition,isCurrent:()=>sceneLoadRequests.isCurrent(loadRequestId)}))return false;
 
 
   // Apply camera

@@ -2,8 +2,8 @@ import {createSceneSimulationActivity} from './scene-simulation-activity.mjs';
 
 // The flame prototype and its device remain with the rendering owner. Scene
 // admission owns whether that retained prototype may perform work.
-export function createAuthoredFlameFeature({runtime,visible,composed}) {
- let wanted=false,request=0,compositionAdmitted=false,retired=false;
+export function createAuthoredFlameFeature({runtime,visible,composed,present=false}) {
+ let wanted=false,request=0,compositionAdmitted=false,retired=false,scenePresent=Boolean(present);
  const reconcile=createSceneSimulationActivity({prototype:runtime,wanted:()=>wanted});
  async function setActive(active,{isCurrent=()=>true}={}){
   if(!isCurrent())return false;
@@ -17,13 +17,13 @@ export function createAuthoredFlameFeature({runtime,visible,composed}) {
  return Object.freeze({
   setActive,
   sync:()=>retired?reconcile():composed()?setActive(visible()):compositionAdmitted?setActive(false):Promise.resolve(),
-  clear:()=>{retired=true;return setActive(false);},
+  clear:()=>{scenePresent=false;retired=true;return setActive(false);},
   restore:({present,composition,isCurrent=()=>true})=>{
    if(!isCurrent())return Promise.resolve(false);
-   retired=!present;
+   scenePresent=Boolean(present);retired=!present;
    return setActive(present&&(!composition||visible()),{isCurrent});
   },
-  get retired(){return retired;},
+  get present(){return scenePresent;},
   get active(){return !!runtime()?.isActive();},
  });
 }

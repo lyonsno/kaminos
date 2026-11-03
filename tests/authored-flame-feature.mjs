@@ -45,3 +45,16 @@ console.log('Flame retirement, retained reuse, visibility and obsolete restore p
  visible=true;await feature.sync();
  assert.equal(active,true,'restored hidden flame can later be made visible');
 }
+
+{
+ let active=false;const runtime={isActive:()=>active,setActive:async value=>{active=value;}};
+ const feature=createAuthoredFlameFeature({runtime:()=>runtime,visible:()=>true,composed:()=>false});
+ await feature.restore({present:true,composition:false});await feature.setActive(false);
+ assert.equal(feature.present,true,'pausing rendering must retain scene presence');
+ await feature.clear();await feature.setActive(true);
+ assert.equal(feature.present,false,'runtime activation cannot invent authored presence');
+ await feature.restore({present:true,composition:true});
+ assert.equal(feature.present,true);
+ await feature.restore({present:false,composition:false});
+ assert.equal(feature.present,false,'Undo restores absent presence independently of URL and runtime history');
+}
