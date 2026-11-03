@@ -12120,7 +12120,7 @@ async function initScene() {
   function animate() {
     requestAnimationFrame(animate);
     if(outputCaptureExtent)return;
-    if(sceneLightingPreparation?.state().held||sceneDocumentRestoring||sceneDocument.state().phase==='loading'||(typeof startupRestorePending!=='undefined'&&startupRestorePending)){controls.update();return;}
+    if(sceneLightingPreparation?.state().held||sceneDocumentRestoring||sceneDocument.state().phase==='applying'||(typeof startupRestorePending!=='undefined'&&startupRestorePending)){controls.update();return;}
     // Outside any render: a quality change resizes render targets.
     syncViewportQuality(syncViewportRendererSize);
     if(recordingExtent)needsRender=true;
