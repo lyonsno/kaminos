@@ -26,11 +26,16 @@ export function installAshInspector({document,anchor,selected,read,edit,regrid,c
   if(input.type==='number')installRelativeNumberDrag({input,grip:input,step:input.dataset.ashKey==='rate'?.0001:.01});
  }
  for(const input of panel.querySelectorAll('[data-ash-layer],[data-ash-volume]'))installRelativeNumberDrag({input,grip:input,step:.001});
- panel.querySelector('[data-ash-regrid]').onclick=()=>act(()=>regrid(selected(),panel.querySelector('[data-ash-cell]').valueAsNumber));
+ const cellInput=panel.querySelector('[data-ash-cell]');
+ installRelativeNumberDrag({input:cellInput,grip:cellInput,step:.001});
+ let syncedCellId=null,syncedCellSize=null;
+ const runRegrid=()=>act(async()=>{const nextCell=cellInput.valueAsNumber;syncedCellSize=null;await regrid(selected(),nextCell);});
+ panel.querySelector('[data-ash-regrid]').onclick=runRegrid;
+ cellInput.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();runRegrid();}});
  panel.querySelector('[data-ash-cover]').onclick=()=>act(()=>cover(selected(),Number(panel.querySelector('[data-ash-layer]').value)));
  panel.querySelector('[data-ash-burst]').onclick=()=>act(()=>burst(selected(),Number(panel.querySelector('[data-ash-volume]').value)));
  function sync(){const id=selected();panel.hidden=!id;if(!id)return;const state=read(id),s=state.settings;
-  const cell=panel.querySelector('[data-ash-cell]');if(document.activeElement!==cell)cell.value=String(s.cellSize);panel.querySelector('[data-ash-regrid]').disabled=state.busy;
+  const cell=panel.querySelector('[data-ash-cell]');if(document.activeElement!==cell&&(id!==syncedCellId||s.cellSize!==syncedCellSize)){cell.value=String(s.cellSize);syncedCellId=id;syncedCellSize=s.cellSize;}panel.querySelector('[data-ash-regrid]').disabled=state.busy;
   panel.querySelector('[data-ash-status]').textContent=state.failure?`Ash stopped: ${state.failure}`:`${s.paused?'Paused':'Running'} · ${state.runtime.steps} steps · ${state.runtime.volume.toFixed(3)} introduced volume`;
   panel.querySelector('[data-ash-size]').textContent=`${s.width} × ${s.depth} × ${s.height} local field · ${s.cellSize} cell width · ${(state.runtime.allocatedBytes/1048576).toFixed(1)} MiB allocated`;
   for(const input of panel.querySelectorAll('[data-ash-key]')){const key=input.dataset.ashKey,value=key.startsWith('source')?s.sourcePosition[['sourceX','sourceY','sourceZ'].indexOf(key)]:(s[key]??((key==='slideVariation'||key==='slideRelease')?0:key==='slideScale'?.24:undefined));if(input.type==='checkbox')input.checked=value;else if(document.activeElement!==input)input.value=String(value);}

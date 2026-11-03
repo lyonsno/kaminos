@@ -1,8 +1,13 @@
 // kaminos-test: node
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGpuTiledAsh} from '../ash/tile-gpu.mjs';
+import {createGpuTiledAsh,tileShader} from '../ash/tile-gpu.mjs';
+import {patchLayout} from '../ash/gpu-plan.mjs';
 // Local validation only: fake storage never executes WGSL or supplies GPU evidence.
+test('tileShader keeps partial-height surface cells unmerged so corner heights interpolate smoothly across cell boundaries',()=>{
+ const code=tileShader(patchLayout({cellSize:0.016,bounds:{min:[0,0,0],max:[1,1,1]},tileSize:16}));
+ assert.match(code,/if\(p\.mode\.w!=0u&&band\.y>=1\.0\)/,'partial surface cells must remain 1x1 quads so corner height interpolation acts on every cell corner');
+});
 test('tiled restore rejects material loss and ledger disagreement before any upload',async()=>{
  globalThis.GPUBufferUsage={STORAGE:1,COPY_SRC:2,COPY_DST:4,INDIRECT:8,UNIFORM:16,MAP_READ:32};globalThis.GPUShaderStage={COMPUTE:4};
  const writes=[],attributes=new Map();

@@ -362,8 +362,9 @@ test('annular burner procedural meshes collapse 29 beauty sub-meshes into a sing
 import {installAshSourceInspector} from '../ash/source-controls.mjs';
 import {installAshInspector} from '../ash/scene-controls.mjs';
 import {checkedAshSource} from '../ash/source-object.mjs';
+import {setMaxListeners} from 'node:events';
 import {checkedAshSettings} from '../ash/scene-record.mjs';
-test('ash source and field inspectors ignore mid-typing empty/decimal strings, clamp non-negative scrubs, and clear stale errors on valid input',()=>{
+test('ash source and field inspectors ignore mid-typing empty/decimal strings, clamp non-negative scrubs, and clear stale errors on valid input',async()=>{
  class FakeControl extends EventTarget {
   constructor(tag='input',props={}){
    super();this.tagName=tag.toUpperCase();this.style={};this.dataset={};this.classList={add(){},remove(){},toggle(){}};
@@ -455,13 +456,15 @@ test('ash source and field inspectors ignore mid-typing empty/decimal strings, c
    return c;
   },
  });
+ setMaxListeners(20,doc2,doc2.defaultView);
  for(const c of [cellSizeInput,layerInput,volumeInput,pausedInput,falloutInput,softInput,emitInput])c.ownerDocument=doc2;
- let ashSettings=checkedAshSettings(record().ash),fieldError=null;
- installAshInspector({
+ let ashSettings=checkedAshSettings({...record().ash,cellSize:0.016}),fieldError=null,regriddedTo=null;
+ const inspector=installAshInspector({
   document:doc2,anchor:{after(){}},selected:()=>'ash-1',edits:{subscribe(){}},target:()=>'@ash-settings:ash-1',ownHistory(){},
-  read:()=>({settings:ashSettings,busy:false,failure:null,runtime:{steps:0,volume:0,allocatedBytes:0}}),
+  read:()=>({settings:ashSettings,busy:false,failure:null,runtime:{steps:10,volume:0.05,allocatedBytes:1048576}}),
   edit:(_id,patch)=>{ashSettings=checkedAshSettings({...ashSettings,...patch,checkpoint:null});},
-  regrid:async()=>{},cover:async()=>{},burst:async()=>{},changed(){},error:msg=>{fieldError=msg;},
+  regrid:async(_id,nextCell)=>{regriddedTo=nextCell;ashSettings=checkedAshSettings({...ashSettings,cellSize:nextCell,checkpoint:null});},
+  cover:async()=>{},burst:async()=>{},changed(){},error:msg=>{fieldError=msg;},
  });
  assert.equal(ashInputs.get('rate').min,'0','field fallout rate input must clamp scrubs at min=0');
  assert.equal(ashInputs.get('spread').min,'0','field source spread input must clamp scrubs at min=0');
@@ -469,6 +472,18 @@ test('ash source and field inspectors ignore mid-typing empty/decimal strings, c
  ashInputs.get('rate').value='';ashInputs.get('rate').fire('input');
  assert.equal(ashSettings.rate,0.008,'clearing field rate input mid-typing must not overwrite rate with 0 or throw');
  assert.equal(fieldError,null);
+
+ // Verify live tick sync() does not overwrite staged cellSize edit between mousedown (blur) and click on Reset at cell width
+ inspector.sync();
+ assert.equal(cellSizeInput.value,'0.016');
+ doc2.activeElement=cellSizeInput;
+ cellSizeInput.value='0.02';
+ // mousedown on Reset at cell width moves focus off cellSizeInput before mouseup fires onclick
+ doc2.activeElement=regridBtn;
+ inspector.sync();
+ assert.equal(cellSizeInput.value,'0.02','live status sync must not clobber staged cell width back to 0.016 before regrid click completes');
+ await regridBtn.onclick();
+ assert.equal(regriddedTo,0.02,'Reset at cell width must apply the staged 0.02 cell width');
 });
 
 

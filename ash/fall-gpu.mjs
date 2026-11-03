@@ -16,7 +16,7 @@ fn random(seed:u32)->f32{var h=seed;h=(h^(h>>16u))*0x7feb352du;h=(h^(h>>15u))*0x
 fn index(c:vec3<u32>)->u32{return c.x+p.dims.x*(c.y+p.dims.y*c.z);}
 fn take_budget()->f32{
  loop{let old=atomicLoad(&state[0]);let available=bitcast<f32>(old);if(available<=0.0){return 0.0;}
- let taken=min(available,8.0);let result=atomicCompareExchangeWeak(&state[0],old,bitcast<u32>(available-taken));if(result.exchanged){return taken;}}
+ let taken=min(available,clamp(available*(1.0/64.0),0.25,8.0));let result=atomicCompareExchangeWeak(&state[0],old,bitcast<u32>(available-taken));if(result.exchanged){return taken;}}
 }
 fn put(i:u32,amount:f32)->f32{
  loop{let old=atomicLoad(&density[i]);let available=1.0-bitcast<f32>(old);if(available<=0.0){return 0.0;}
@@ -70,7 +70,22 @@ fn put(i:u32,amount:f32)->f32{
  }
  if(hit){
   hitCell.x=clamp(hitCell.x,0,i32(p.dims.x)-1);hitCell.z=clamp(hitCell.z,0,i32(p.dims.z)-1);
-  for(var y=max(0,hitCell.y);y<i32(p.dims.y)&&amount>0.0;y++){
+  let y0=max(0,hitCell.y);
+  if(y0<i32(p.dims.y)){
+   let j0=index(vec3<u32>(u32(hitCell.x),u32(y0),u32(hitCell.z)));
+   if(solid[j0]==0u){amount-=put(j0,min(amount,0.28));}
+   for(var dz=-1;dz<=1;dz++){for(var dx=-1;dx<=1;dx++){
+    if((dx==0&&dz==0)||amount<=0.0){continue;}
+    let nx=hitCell.x+dx;let nz=hitCell.z+dz;
+    if(nx<0||nz<0||nx>=i32(p.dims.x)||nz>=i32(p.dims.z)){continue;}
+    let nj=index(vec3<u32>(u32(nx),u32(y0),u32(nz)));
+    if(solid[nj]!=0u){continue;}
+    var supported=y0==0;
+    if(!supported){let bj=index(vec3<u32>(u32(nx),u32(y0-1),u32(nz)));supported=solid[bj]!=0u||bitcast<f32>(atomicLoad(&density[bj]))>0.1;}
+    if(supported){let cap=select(0.08,0.14,dx==0||dz==0);amount-=put(nj,min(amount,cap));}
+   }}
+  }
+  for(var y=y0;y<i32(p.dims.y)&&amount>0.0;y++){
    let j=index(vec3<u32>(u32(hitCell.x),u32(y),u32(hitCell.z)));if(solid[j]!=0u){continue;}amount-=put(j,amount);
   }
   if(amount>0.0){
