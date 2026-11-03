@@ -1,6 +1,6 @@
 # @kaminos/webgpu-inference-kit
 
-Generate images and run vision models locally in the browser. Start with a model application; share its GPU device with your renderer when you need one.
+Generate images and text and run vision models locally in the browser. Start with a model application; share its GPU device with your renderer when you need one.
 
 ```sh
 npm install @kaminos/webgpu-inference-kit
@@ -9,6 +9,8 @@ npm install @kaminos/webgpu-inference-kit
 ## Start With A Model Application
 
 For image generation, material estimation and background removal, start with the model's application entry point. Your code supplies the input and uses the result; the application handles loading, queued inference, controls and cleanup. Install the [matching model packages](./docs/model-applications.md#install) for the examples below.
+
+Choose a starting point: **[image generation](https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein#using-it-in-an-application)** with Klein, or **[streaming text and chat](#generate-text-with-a-language-model)** with Qwen3.5 (source installation).
 
 **[Generate and display your first image](https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein#using-it-in-an-application)** with the complete Klein browser page, including setup, progress, repeated runs and model release. The short version:
 
@@ -58,6 +60,16 @@ Pass `{ device }` to share your renderer's GPU, or `{ session, foreground }` to 
 UniMate uses the same runner through its existing host-injected `createUniMateConsumer(host)`: provide a skeleton and prompt, receive an animated GLB, and retain solver controls and partial motion. Its `run/read/togglePause/stop/destroy` interface borrows your rendering host. [Animate a skeleton](./docs/model-applications.md#animate-a-skeleton-with-unimate) shows the host integration.
 
 [U2Net](https://github.com/lyonsno/kaminos/tree/main/models/u2net) uses `createU2NetApp().removeForeground(...)` for RGBA cutouts. It shares the application controls and preserves the loaded low-level runner at `app.model`.
+
+## Generate Text With A Language Model
+
+Build a streaming text interface or expand image prompts with the native WebGPU Qwen3.5-9B adapter. The [browser chat guide](https://github.com/lyonsno/kaminos/tree/cc/cranial-language-discovery-1103/models/qwen3_5#persistent-text-chat-example) starts with model setup and a usable conversation page: send follow-ups, stop a response, start a new conversation without reloading weights, and save the transcript.
+
+**[Embed language generation in your application](https://github.com/lyonsno/kaminos/tree/cc/cranial-language-discovery-1103/models/qwen3_5#use-the-model-outside-kaminos)** with an exported browser module and the kit's `./generation` entry point. The model borrows your device and inference control; successful conversation turns retain attention KV and recurrent state, so follow-ups evaluate only new input.
+
+This is currently a **source-install path**, using a local kit tarball from the same checkout, not the published 0.1.60 package. The available BFL checkpoint is an image-prompt fine-tune; this adapter accepts text, not reference images. The guide separates model setup from application code.
+
+For port authors, the [generation API](https://github.com/lyonsno/kaminos/tree/cc/cranial-language-discovery-1103/webgpu-inference-kit/docs/autoregressive-generation.md) covers token streaming, seeded sampling, stopping and reusable sessions. [Implementation and validation](https://github.com/lyonsno/kaminos/tree/cc/cranial-language-discovery-1103/models/qwen3_5/IMPLEMENTATION.md) contains kernel options, numerical comparisons and profiling.
 
 ## Segment Images With SAM 3
 
@@ -181,11 +193,12 @@ Kaminos separates common runtime machinery from model implementation and product
 
 ## One Runtime, Different Models
 
-The kit connects a growing family of browser model ports: generate an image from a text prompt, recover a scene's geometry, generate a textured object, turn an image into Gaussian splats, or animate a character from a text prompt. Each port brings its own model implementation and adopts shared runtime facilities where they serve its workload.
+The kit connects a growing family of browser model ports: expand a text prompt, generate an image, recover a scene's geometry, generate a textured object, turn an image into Gaussian splats, or animate a character from a text prompt. Each port brings its own model implementation and adopts shared runtime facilities where they serve its workload.
 
 | Model Port | What You Can Build | Integration |
 | --- | --- | --- |
 | [FLUX.2 [klein] 4B](https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein) | Images from a text prompt, generated on the visitor's GPU ([live demo](https://lyonsno.github.io/kaminos/inference-kit/klein/)) | The text encoder, 4-step transformer and image decoder all run in the browser, with int4 weights cached after the first download. GPU work is submitted in duties sized to measured throughput, so the application keeps rendering, and the inference control can pause, resume or stop a run. |
+| [Qwen3.5-9B / BFL prompt upsampler](https://github.com/lyonsno/kaminos/tree/cc/cranial-language-discovery-1103/models/qwen3_5) | Streaming text, image-prompt expansion and persistent browser chat | Native WebGPU four-bit language model with reusable conversation state. [Embed it in your app](https://github.com/lyonsno/kaminos/tree/cc/cranial-language-discovery-1103/models/qwen3_5#use-the-model-outside-kaminos) from source; the generation export is not in published kit 0.1.60. |
 | [TRELLIS 2](https://github.com/lyonsno/kaminos/tree/main/models/trellis2) | Textured 3D meshes from an image, exported as a GLB | Browser image-to-3D generation, stage-by-stage model loading, and a shared GPU device with the application renderer. |
 | [UniMate](https://github.com/lyonsno/kaminos/tree/main/models/unimate) | Skeletal animation from a text prompt, generated for any rigged skeleton (a robot dog, a cat, a parrot, your own creature) | The Flan-T5 text encoder, the motion transformer, an adaptive ODE sampler and the decode to joint rotations all run in the browser. Each network evaluation is submitted as duties sized to measured throughput, so the application keeps rendering, and a run can be paused, resumed or stopped. |
 | [Hand reconstruction](https://github.com/lyonsno/kaminos/blob/main/models/mobrecon/GETTING_STARTED.md) | Live hand meshes and landmarks from camera frames | WiLoR detection and MobRecon reconstruction use the shared application runner. The hand guide supplies checkout integration and model setup. |

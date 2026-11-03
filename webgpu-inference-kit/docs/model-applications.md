@@ -1,5 +1,7 @@
 # Model applications
 
+Start with [Klein image generation](https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein#using-it-in-an-application) or [streaming text and chat](#stream-text-and-keep-a-conversation). Image, material, motion and cutout applications have npm packages; the language path currently uses source packages.
+
 Klein, SuperMat, UniMate and U2Net use a shared runner for session admission, foreground ownership, cancellation and retirement. Each model keeps its application interface, complete output and lower-level producer available for hosts that need direct control.
 
 The [hand application guide](https://github.com/lyonsno/kaminos/blob/main/models/mobrecon/GETTING_STARTED.md) applies the same shared runner to WiLoR detection and MobRecon reconstruction. Its `createHandMeshApp()` entry point takes browser frames and returns hand presence, vertices and landmarks; the standalone hand demo consumes it. That port currently uses checkout/bundler imports and locally prepared models, with model terms handled by its one-command setup. Its guide explains fresh input after admission and whole-operation waiting when sharing a session.
@@ -22,6 +24,8 @@ npm install @kaminos/u2net@^0.1.0
 These versions include the application interfaces described here. Klein and UniMate require kit 0.1.60 or later in the 0.1 series. Use a bundler such as Vite or esbuild and serve over HTTPS or localhost. Model weights download separately; each guide describes memory requirements, model terms and custom weight locations. SuperMat's [worker build recipe](https://github.com/lyonsno/kaminos/blob/main/models/supermat/GETTING_STARTED.md#install) covers bundling its CPU worker.
 
 ## Install the source packages
+
+For language generation, follow [the Qwen browser-module recipe](https://github.com/lyonsno/kaminos/tree/cc/cranial-language-discovery-1103/models/qwen3_5#use-the-model-outside-kaminos). It exports the model and installs a kit tarball from the same checkout; published kit 0.1.60 does not have the generation export.
 
 Build the kit and model packages from the same Kaminos checkout. This recipe exercises the application APIs in this source revision; it does not require a matching npm release. Choose a new artifact directory outside the checkout. From Kaminos:
 
@@ -58,6 +62,12 @@ Both retain loaded state for sequential calls. An overlapping call on the same a
 Pause applies to an admitted cooperative inference. It waits behind an active CPU foreground window, then parks model duties while frames remain serviceable. It returns `null` during loading or while queued. Loading remains model-owned: Klein downloads/compiles before admitted GPU warmup; SuperMat retains its weight resource route and uses a CPU worker. Stopping SuperMat inference while it waits for a shared load cancels that inference request, while the load continues. `destroy()` stops active work and waits for its resources to retire.
 
 `cooperative: false` explicitly uses the model's direct execution path, retaining outer session admission and cleanup. It has no GPU pause or mid-model cancellation contract. For a host that already owns an admitted invocation, use the direct pipeline/adapter rather than enqueueing an application run inside that same session job.
+
+## Stream text and keep a conversation
+
+The [Qwen3.5 application guide](https://github.com/lyonsno/kaminos/tree/cc/cranial-language-discovery-1103/models/qwen3_5) covers running browser chat, exporting a model module and embedding it in your own application. Use `createQwenTextChat(...).send({text, onText})` for streaming turns, `reset(...)` for a new conversation over the loaded model, and `dispose()` to release conversation state. The model's weight lifetime is separate.
+
+This is a text-only adapter using BFL's image-prompt fine-tune. The hosted checkout example supplies GPU admission; an exported application supplies its own device and inference control. It is not the `load/pause/resume` application wrapper described above. The [generation reference](https://github.com/lyonsno/kaminos/tree/cc/cranial-language-discovery-1103/webgpu-inference-kit/docs/autoregressive-generation.md) covers the shared token loop and persistent-session contract.
 
 ## Animate a skeleton with UniMate
 

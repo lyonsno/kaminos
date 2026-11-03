@@ -45,7 +45,7 @@ The generation demos run inference locally on your GPU.
 | Material Photograph | One photograph becomes a relightable surface, with synchronized original, depth, image-as-albedo and inferred-material views | [Explore in your browser](https://lyonsno.github.io/kaminos/inference-kit/material-photo/) or [use your photograph locally](demos/material-photo/README.md) |
 | Browser combustion films | A stateful WebGPU fire material captured while being driven through ignition, contraction, chromatic change, extinction, and rebirth | [Watch the captured studies](https://lyonsno.github.io/kaminos/) |
 | WebGPU inference kit | Reusable browser model applications, with shared-device lifecycle and cooperative scheduling | [Generate your first image](models/flux2-klein/README.md#using-it-in-an-application), [read the package guide](webgpu-inference-kit/README.md) or [open npm](https://www.npmjs.com/package/@kaminos/webgpu-inference-kit) |
-| Generative and vision model ports | Image generation, depth and normals, Gaussian reconstruction, textured meshes, skeletal motion, segmentation, and material maps | [Inspect the port family](webgpu-inference-kit/README.md#one-runtime-different-models) |
+| Generative and vision model ports | Text and image generation, depth and normals, Gaussian reconstruction, textured meshes, skeletal motion, segmentation, and material maps | [Inspect the port family](webgpu-inference-kit/README.md#one-runtime-different-models) |
 | Spatial Asset Kiln | The workbench architecture for generated assets, live routes, World Chambers, Preview Benches, and Smoke Offers | [Read the architecture](docs/spatial-asset-kiln.md) |
 
 ## Build An Experiment
@@ -80,10 +80,12 @@ substantial models execute.
 
 ## WebGPU Inference Kit
 
-Generate images and run vision models locally in the browser. Start with a
+Generate images and text and run vision models locally in the browser. Start with a
 model application; share its GPU device with your renderer when you need one.
 
 **[Generate and display your first image](models/flux2-klein/README.md#using-it-in-an-application)** with a complete Klein browser page: setup, progress, repeated runs and cleanup.
+
+**[Build streaming text and chat](models/qwen3_5/README.md)** with the native WebGPU Qwen3.5 adapter: model setup, persistent conversations, prompt expansion and an export for your own application. This path currently uses source packages, not the published kit 0.1.60.
 
 ```sh
 npm install @kaminos/webgpu-inference-kit
@@ -96,6 +98,7 @@ The same runtime supports several kinds of model:
 | Port | Browser-native result | Runtime integration |
 | --- | --- | --- |
 | [FLUX.2 [klein] 4B](models/flux2-klein/README.md) | Images from a text prompt ([try it in your browser](https://lyonsno.github.io/kaminos/inference-kit/klein/)) | Text encoder, 4-step transformer and image decoder in the browser, with cached int4 weights and throughput-sized command duties that leave room for rendering |
+| [Qwen3.5-9B / BFL PUP](models/qwen3_5/README.md) | Streaming text, prompt expansion, and persistent browser chat | Native WebGPU four-bit language model with attention KV and recurrent state, exact-prefix conversation reuse, sampling, cancellation, and per-turn measurements; available from source, not yet in the published npm release |
 | [TRELLIS 2](models/trellis2/README.md) | Textured 3D meshes from an image, exported as a GLB | Browser image-to-3D generation, stage-by-stage model loading, and GPU sharing with the application renderer |
 | [UniMate](models/unimate/README.md) | Skeletal motion from a text prompt for different rigged skeletons | Browser text encoder, motion transformer, adaptive ODE sampling and joint-rotation decoding through the inference kit |
 | [Hand reconstruction](models/mobrecon/GETTING_STARTED.md) | Live hand meshes and landmarks from camera frames | WiLoR detection and MobRecon reconstruction with a shared application lifecycle and model setup command |
