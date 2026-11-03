@@ -168,7 +168,10 @@ function growFace(s,g,volume,face,neighbors){
   const frame=before[f];
   for(const r of s.pools[id].regions)for(const l of r.lobes){
    const point=frame.origin.map((v,i)=>v+frame.u[i]*l.entry[0]*frame.w+frame.v[i]*l.entry[1]*frame.h);
-   l.entry=faceUV(g,f,point).map(v=>clamp(v,0,1));
+   // A liquid contact pinned to an edge follows that moving edge. Interior
+   // spots and dry residue stay on the material; no tangential stretching.
+   const previous=l.entry;
+   l.entry=faceUV(g,f,point).map((v,i)=>r.water>0&&(previous[i]===0||previous[i]===1)?previous[i]:clamp(v,0,1));
   }
  }
  neighbors.add(g);return volume*fraction;

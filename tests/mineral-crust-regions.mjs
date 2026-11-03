@@ -136,3 +136,12 @@ test('growth of a neighboring side does not stretch a wet spot across the top',a
  const before=facePoint(g,top.face,spot.lobes[0].entry),old=g.faces[0];advanceCrust(s,.1);assert.ok(g.faces[0]>old);
  const after=facePoint(g,top.face,spot.lobes[0].entry);assert.ok(Math.abs(after[0]-before[0])<1e-12&&Math.abs(after[2]-before[2])<1e-12,'wet spot moved tangentially solely because the crystal widened');
 });
+
+test('wet edge contacts follow a growing edge while dry residue stays on the material',async()=>{
+ const {addWetRegion}=await import('../mineral-worlds/crust-regions.mjs');const {facePoint}=await import('../mineral-worlds/crust-faces.mjs');
+ const s=specimen(),g=s.grains[0],top=s.pools[g.facePools[4]],side=s.pools[g.facePools[0]];s.pools[0].water=s.pools[0].salt=0;s.settings.growth=.01;
+ const wet=addWetRegion(s,top,[1,.4],1e-8,0),dry=addWetRegion(s,top,[1,.7]);dry.residue=1e-8;
+ const before=facePoint(g,4,dry.lobes[0].entry),old=g.faces[0];addWetRegion(s,side,[.5,.5],.001,.01);advanceCrust(s,.1);
+ assert.ok(g.faces[0]>old);assert.equal(wet.lobes[0].entry[0],1,'edge-fed wet spot detached from its moving edge');
+ const after=facePoint(g,4,dry.lobes[0].entry);assert.ok(Math.abs(after[0]-before[0])<1e-12&&Math.abs(after[2]-before[2])<1e-12,'dry residue followed the moving edge');
+});
