@@ -1,8 +1,9 @@
 import * as T from '../lib/three.core.js';
-import {emptyMechanism,checkedMechanism,appendJoint,moveJoint,connectPiston,evaluate,frames} from './link-workshop/model.mjs';
+import {emptyMechanism,checkedMechanism,appendJoint,moveJoint,connectPiston,sectionLink,foldChainToPoint,resyncPistonClevises,evaluate,frames} from './link-workshop/model.mjs';
 import {createMechanismView} from './link-workshop/view.mjs';
 import {connectionGuide,createConstructionGuide} from './link-workshop/affordance.mjs';
 import {createMirrorTool} from './link-workshop/mirror-tool.mjs';
+import {bodySpanLength,sectionBodyGeometry} from './link-workshop/copy-geometry.mjs';
 import {motionSpace,motionSpaceMesh} from './link-workshop/envelope.mjs';
 
 export default {id:'link-workshop',title:'Link workshop',async create({host,inputs={},record=()=>{}}){
@@ -46,6 +47,26 @@ export default {id:'link-workshop',title:'Link workshop',async create({host,inpu
  function putProxy(){if(selected<0||!model.nodes[selected])return;root.updateWorldMatrix(true,false);const f=frames(model,t)[selected],p=new T.Vector3(...f.point,0).applyMatrix4(root.matrixWorld);proxy.position.copy(p);proxy.quaternion.copy(root.getWorldQuaternion(new T.Quaternion())).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),f.angle));proxy.scale.set(model.nodes[selected].length??1,1,1);proxy.updateMatrixWorld(true);}
  function update(){view.update(model,t,selected,!playing&&mode!=='build');mirror?.refresh();grid.visible=editing&&mode==='build';origin.visible=!model.nodes.length;if(!edits.state().active)putProxy();updateGuides();session.redraw();refresh();}
  function pause(){playing=false;stop();stop=()=>{};t=mode==='B'?1:0;update();}
+ function stationaryObstacles(m=model){
+  root.updateWorldMatrix(true,true);const inv=root.matrixWorld.clone().invert(),boxes=[];
+  m.nodes.forEach((n,i)=>{
+   if(n.parent!==null)return;
+   const agg=new T.Box3();
+   for(const mesh of view.bodyMeshes(`anchor:${i}`)){
+    if(mesh.userData?.copyPart==='clevis-lug')continue;
+    const b=new T.Box3().setFromObject(mesh).applyMatrix4(inv),sz=b.getSize(new T.Vector3()),c=b.getCenter(new T.Vector3());
+    if(sz.x<0.6&&sz.y<0.6)continue;
+    if(Math.hypot(c.x-n.point[0],c.y-n.point[1])<0.32&&sz.x<0.5&&sz.y<0.5)continue;
+    agg.union(b);
+   }
+   if(!agg.isEmpty()){
+    const minX=agg.min.x,maxX=agg.max.x>n.point[0]-0.25&&agg.min.x<n.point[0]-0.5?Math.min(agg.max.x,n.point[0]):agg.max.x;
+    const minY=agg.min.y,maxY=agg.max.y>n.point[1]-0.25&&agg.min.y<n.point[1]-0.5?Math.min(agg.max.y,n.point[1]-0.05):agg.max.y;
+    if(maxX-minX>0.5&&maxY-minY>0.5)boxes.push({min:[Number(minX.toFixed(3)),Number(minY.toFixed(3))],max:[Number(maxX.toFixed(3)),Number(maxY.toFixed(3))]});
+   }
+  });
+  return boxes;
+ }
  function apply(next,label){ensure();pause();edits.apply(whole,{recipe:checkedMechanism(next)},label);record({kind:'links.edit',phase:'applied',effective:read()});return read();}
  edits.register(geometryTarget,{read:()=>view.replacementState(),check:v=>structuredClone(v),write:v=>{view.setBodies(v);geometryRevision++;session.redraw();refresh();}});
  function restoreGeometry(packet){if(!packet)return;const keys=new Map(view.bodyManifest().bodies.map(b=>[b.id,b.geometryKey]));geometryRevision++;view.setBodies({...packet,bodies:packet.bodies.filter(b=>keys.get(b.id)===b.geometryKey)});}
@@ -62,8 +83,8 @@ export default {id:'link-workshop',title:'Link workshop',async create({host,inpu
   if(!edits.state().active){update();restoreGeometry(v.geometry);session.redraw();refresh();return;}
   const oldWorld=new T.Vector3(...f.point,0).applyMatrix4(root.matrixWorld),moved=oldWorld.distanceTo(new T.Vector3(...v.position))>1e-7;
   const resized=v.mode==='build'&&n.parent!==null&&Math.abs(v.scale[0]-n.length)>1e-7;
-  if(moved&&!resized)model=moveJoint(base,selected,[p.x,p.y],v.mode);
-  else if(n.parent!==null){const q=new T.Quaternion().setFromEuler(new T.Euler(...v.rotation)).premultiply(root.getWorldQuaternion(new T.Quaternion()).invert()),e=new T.Euler().setFromQuaternion(q),parent=frames(base,v.mode==='B'?1:0)[n.parent],length=v.mode==='build'?v.scale[0]:n.length;model=moveJoint(base,selected,[parent.point[0]+Math.cos(e.z)*length,parent.point[1]+Math.sin(e.z)*length],v.mode);}
+  if(moved&&!resized)model=resyncPistonClevises(moveJoint(base,selected,[p.x,p.y],v.mode),{obstacles:stationaryObstacles(base)});
+  else if(n.parent!==null){const q=new T.Quaternion().setFromEuler(new T.Euler(...v.rotation)).premultiply(root.getWorldQuaternion(new T.Quaternion()).invert()),e=new T.Euler().setFromQuaternion(q),parent=frames(base,v.mode==='B'?1:0)[n.parent],length=v.mode==='build'?v.scale[0]:n.length;model=resyncPistonClevises(moveJoint(base,selected,[parent.point[0]+Math.cos(e.z)*length,parent.point[1]+Math.sin(e.z)*length],v.mode),{obstacles:stationaryObstacles(base)});}
   update();restoreGeometry(v.geometry);session.redraw();refresh();
  }});
  seat=host.controls.components.register(asset.id,{enter(){editing=true;pause();update();},exit(){if(!mirror?.state().placing&&win.kaminosSelection.read?.().activeId!==mirror?.state().planeObjectId)mirror?.clear();editing=false;pistonStart=null;hoverJoint=null;hoverPoint=null;update();},target(){if(tool==='mirror'||selected<0)return null;if(!edits.state().active)putProxy();return {id:target,type:'link-joint',label:`Joint ${selected+1}`,object:proxy,read:handleRead,frameObjects:[view.markers()[selected]]};},hover(event,context){if(!editing||playing)return;const p=pointerAt(event,context);hoverJoint=p.joint;hoverPoint=p.point;hoverShift=!!event?.shiftKey;updateGuides();session.redraw();},cancel:cancelConstruction,pick(event,context){
@@ -87,8 +108,28 @@ export default {id:'link-workshop',title:'Link workshop',async create({host,inpu
  const operations={
   append({parent=selected<0?null:selected,point}){const next=appendJoint(model,parent,point);apply(next,'Draw link');seat.changed(()=>{selected=model.nodes.length-1;update();});return read();},
   select({joint}){if(!model.nodes[joint])throw Error('Unknown joint');seat.changed(()=>{selected=joint;update();});return read();},
-  move({joint=selected,point,mode:requested=mode}){return apply(moveJoint(model,joint,point,requested),'Move joint');},
-  piston({a,b}){return apply(connectPiston(model,a,b),'Connect piston');},
+  move({joint=selected,point,mode:requested=mode}){return apply(resyncPistonClevises(moveJoint(model,joint,point,requested),{obstacles:stationaryObstacles(model)}),'Move joint');},
+  fold({joint=selected,point,mode:requested=mode==='build'?'B':mode}){return apply(foldChainToPoint(model,joint,point,requested,{obstacles:stationaryObstacles(model)}),'Fold chain');},
+  async section({joint=selected,count=3,foldTarget=null}={}){
+   ensure();pause();
+   const targetJoint=(model.nodes[joint]&&model.nodes[joint].parent!==null)?joint:model.nodes.findIndex(n=>n.parent!==null);
+   if(targetJoint<0)throw Error('Choose a movable link to section');
+   const currentBodies=view.replacementState(),obstacles=stationaryObstacles(model);
+   const span=bodySpanLength(currentBodies,`link:${targetJoint}`,model.nodes[targetJoint].length);
+   let next=sectionLink(model,targetJoint,count,span);
+   const parentId=model.nodes[targetJoint].parent,tipId=targetJoint+count-1;
+   const defaultTarget=obstacles.length?[Number((obstacles[0].min[0]*0.63).toFixed(3)),Number((obstacles[0].max[1]+0.36).toFixed(3))]:evaluate(model,1)[targetJoint];
+   next=foldChainToPoint(next,tipId,foldTarget??defaultTarget,'B',{obstacles});
+   next.pistons=next.pistons.filter(p=>p.a!==targetJoint&&p.b!==targetJoint&&p.a!==tipId&&p.b!==tipId);
+   next=connectPiston(next,parentId,targetJoint,{obstacles});
+   for(let s=1;s<count;s++)next=connectPiston(next,targetJoint+s-1,targetJoint+s,{obstacles});
+   const nextGeometry=sectionBodyGeometry(currentBodies,{oldRecipe:model,nextRecipe:next,joint:targetJoint,count});
+   await edits.applySettled(whole,{recipe:next,geometry:nextGeometry},'Section link');
+   seat.changed(()=>{selected=tipId;update();});
+   record({kind:'links.section',phase:'applied',effective:read()});
+   return read();
+  },
+  piston({a,b}){return apply(connectPiston(model,a,b,{obstacles:stationaryObstacles(model)}),'Connect piston');},
   mode({value}){if(!['build','A','B'].includes(value))throw Error('Unknown mode');seat.changed(()=>{pause();mode=value;t=value==='B'?1:0;pistonStart=null;update();});return read();},
   tool({value}){if(!['draw','select','piston','mirror'].includes(value))throw Error('Unknown tool');ensure();win.kaminosSelection.set([asset.id],asset.id);seat.enter?.();tool=value;if(value!=='mirror')mirror.clear();pistonStart=null;hoverJoint=null;hoverPoint=null;updateGuides();session.redraw();refresh();return read();},
   cancel(){cancelConstruction();return read();},
@@ -111,6 +152,7 @@ export default {id:'link-workshop',title:'Link workshop',async create({host,inpu
   const buttons=[];const button=(parent,label,fn,active)=>{const b=document.createElement('button');b.textContent=label;b.type='button';b.style.cssText='margin:3px;padding:7px 10px;border:1px solid #667b87;border-radius:5px;background:#263740;color:#e4eef2';b.onclick=()=>Promise.resolve().then(fn).catch(e=>status.textContent=e.message);parent.append(b);buttons.push({b,active});return b;};
   for(const [label,value]of [['Build','build'],['Pose A','A'],['Pose B','B']])button(properties,label,()=>invoke('mode',{value}),()=>mode===value);
   const tools=document.createElement('div');properties.append(tools);for(const [label,value]of [['Draw links','draw'],['Select / move','select'],['Connect piston','piston'],['Mirror shapes','mirror']])button(tools,label,()=>invoke('tool',{value}),()=>tool===value);
+  const sectionActions=document.createElement('div');properties.append(sectionActions);button(sectionActions,'Split link into 3 sections',()=>invoke('section',{count:3}));
   const mirrorActions=document.createElement('div');properties.append(mirrorActions);button(mirrorActions,'Place / select mirror plane',()=>invoke('mirrorPlane'));button(mirrorActions,'Copy shapes across plane',()=>invoke('mirrorCopy'));
   const tip=document.createElement('p');tip.textContent='Connect piston: green rings are available joints; amber is your first mount; red is unavailable. Hover to preview, click to connect, Esc to cancel. Pistons follow the authored poses.';properties.append(tip);
   const label=document.createElement('label'),toggle=document.createElement('input');toggle.type='checkbox';toggle.checked=snap;toggle.onchange=()=>snap=toggle.checked;label.style.cssText='display:block;margin:10px 0';label.append(toggle,' Snap to ¼-unit grid');properties.append(label);
