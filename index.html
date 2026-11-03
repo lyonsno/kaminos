@@ -12120,7 +12120,7 @@ async function initScene() {
   function animate() {
     requestAnimationFrame(animate);
     if(outputCaptureExtent)return;
-    if(sceneLightingPreparation?.state().held||sceneDocumentRestoring){controls.update();return;}
+    if(sceneLightingPreparation?.state().held||sceneDocumentRestoring||sceneDocument.state().phase==='loading'||(typeof startupRestorePending!=='undefined'&&startupRestorePending)){controls.update();return;}
     // Outside any render: a quality change resizes render targets.
     syncViewportQuality(syncViewportRendererSize);
     if(recordingExtent)needsRender=true;
@@ -12531,9 +12531,9 @@ function clearSceneEditingState(){
   sceneMembershipBatch.clearHistoryTargets();
   sceneMembership.clearHistoryTargets();
 }
-function clearSceneDomains(){
+function clearSceneDomains(setup=null){
   activeSceneComposition=null;authoredFlamePresent=false;
-  volumePrototype?.setSceneCompositionPresentation?.(false);
+  volumePrototype?.setSceneCompositionPresentation?.(Boolean(setup?.flame?.composition));
   setVolumePrimitivesState({schema:VOLUME_PRIMITIVE_SCHEMA,primitives:[]});
   waterFeature.clear();
   for(const ash of authoredAsh.values())ash.dispose();authoredAsh.clear();
@@ -18659,7 +18659,9 @@ for (const [id, command] of [
   button.addEventListener('click', command);
   button.dataset.commandWired = 'true';
 }
-void refreshVolumeSettingsPresetList();
+if (!new URLSearchParams(location.hash.slice(1)).get('scene')) {
+  void refreshVolumeSettingsPresetList();
+}
 
 function applyVolumeControlsSnapshot(controlsSnapshot = {}) {
   for (const [key] of VOLUME_BASIN_ROUTE_FIELDS) {
@@ -20562,7 +20564,14 @@ async function initKaminosVolumeRoute() {
       installOpticalSteppingPreview(volumePrototype, document);
     });
   }
-  await syncSceneRadianceRoute();
+  const deferToStartupSceneRestore = typeof startupRestoreRequested !== 'undefined'
+    && startupRestoreRequested
+    && sceneDocument?.state?.().blocked === true
+    && sceneDocument.state().phase === 'idle'
+    && !routeExternalEmitters
+    && !params.has('full_support_live_step')
+    && !params.has('full_support_source_field_manifest');
+  if (!deferToStartupSceneRestore) await syncSceneRadianceRoute();
   // Optional composition-module seam: a URL HASH entry
   // #composition_module_url=<module> (hash, not query — settings routes are
   // contract-validated and reject unexpected query parameters) loads an ES
@@ -21950,16 +21959,18 @@ async function initKaminosVolumeRoute() {
   if (params.get('kaminos_volume_smoke') === '1' && !startupRestoreRequested) {
     setActiveTab('volume', { reveal: false });
     if (camera && controls) frameVolumeCamera();
-    try {
-      await flameFeature.restore({present:true,composition:!!activeSceneComposition});
-      refreshSyntheticExternalEmitters();
-      if (routeExternalEmitters === 'synthetic_hand_trails') {
-        syntheticEmitterTimer = window.setInterval(refreshSyntheticExternalEmitters, 100);
+    if (!deferToStartupSceneRestore) {
+      try {
+        await flameFeature.restore({present:true,composition:!!activeSceneComposition});
+        refreshSyntheticExternalEmitters();
+        if (routeExternalEmitters === 'synthetic_hand_trails') {
+          syntheticEmitterTimer = window.setInterval(refreshSyntheticExternalEmitters, 100);
+        }
+        setInfo('Volume renderer — native WebGPU compute fluid raymarch');
+      } catch (err) {
+        console.error('Volume route activation failed:', err);
+        setInfo(`Volume route controls loaded; renderer failed: ${err?.message || err}`);
       }
-      setInfo('Volume renderer — native WebGPU compute fluid raymarch');
-    } catch (err) {
-      console.error('Volume route activation failed:', err);
-      setInfo(`Volume route controls loaded; renderer failed: ${err?.message || err}`);
     }
   }
   const liveFullSupportOpticsRequested = params.has('full_support_live_step');
@@ -24873,10 +24884,18 @@ async function grInit() {
     document.getElementById('scratch-list').innerHTML = '<div style="font-size:10px; color:#444; padding:8px;">Volume smoke route: scratch browse deferred.</div>';
     return;
   }
-  grBrowseSplatAssets();
-  grBrowse();
-  grBrowseScenes();
-  grBrowseScratch();
+  const loadInitialBrowsers = () => {
+    if (isKaminosVolumeSmokeRoute()) return;
+    grBrowseSplatAssets();
+    grBrowse();
+    grBrowseScenes();
+    grBrowseScratch();
+  };
+  if (new URLSearchParams(location.hash.slice(1)).get('scene')) {
+    window.__kaminosDeferredGrInit = loadInitialBrowsers;
+    return;
+  }
+  loadInitialBrowsers();
 }
 
 async function grBrowse() {
@@ -27499,6 +27518,7 @@ initKaminosFingerJuiceHostRoute();
   const startupSceneRedirect = Symbol('saved-scene-recovery-redirect');
   const startupSceneHash = new URLSearchParams(location.hash.slice(1));
   const startupRestoreRequested = !!startupSceneHash.get('scene');
+  let startupRestorePending = startupRestoreRequested;
   const startupSceneFile = startupSceneHash.get('scene');
   // Admit the saved recipe before creating either renderer. Recipe recovery
   // navigates without allocating a 3D viewer or a fire runtime for the page
@@ -27537,6 +27557,10 @@ sceneInitialization.then(async () => {
   if (!startupSceneAdmitted) {
     rejectWorkbenchViewerReady(new Error('Saved scene recovery is navigating'));
     return;
+  }
+  window.__kaminosDeferredGrInit?.();
+  if (startupRestoreRequested && typeof refreshVolumeSettingsPresetList === 'function') {
+    void refreshVolumeSettingsPresetList();
   }
   await startupPreferencesLoaded;
   initEnvButtons();
@@ -27654,6 +27678,7 @@ sceneInitialization.then(async () => {
     // throwing. Its effective completion flag still governs owner admission.
     if (sceneDocument.state().blocked) throw new Error('Starting scene restoration did not complete');
   });
+  startupSceneRestore.then(() => { startupRestorePending = false; }, () => { startupRestorePending = false; });
   startupSceneRestore.catch(error => {
     // Only an authored composition restore blocks saving; ordinary routes keep
     // their own failure reporting (the volume route reports separately).

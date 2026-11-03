@@ -3,7 +3,7 @@
 export function createSceneLifecycle({scene,roots,records,groups,selection,context={}}){
   const current=id=>id===null||scene.loads.isCurrent(id);
   let pendingClears=0;
-  async function clear({loadRequestId=null}={}){
+  async function clear({loadRequestId=null,setup=null}={}){
     if(loadRequestId!==null&&!current(loadRequestId))return false;
     if(loadRequestId===null)scene.loads.invalidate();
     const request=scene.loads.current(),generation=scene.invalidateArrivals();
@@ -15,7 +15,7 @@ export function createSceneLifecycle({scene,roots,records,groups,selection,conte
       context.beforeClear?.();
       const rows=[...scene.objects,...scene.suspendedObjects()];
       scene.discardSuspendedMembership();
-      context.clearDomains?.();
+      context.clearDomains?.(setup);
       const released=new Set();
       for(const entry of rows){if(released.has(entry.object))continue;released.add(entry.object);roots.detach(entry);roots.dispose(entry.object);}
       context.clearTransient?.(released);
@@ -25,7 +25,7 @@ export function createSceneLifecycle({scene,roots,records,groups,selection,conte
   }
   async function replace(values,{loadRequestId=null,activeId=null,groups:nextGroups=[],activeGroupId=null,setup=null}={}){
     if(!current(loadRequestId))return false;
-    if(!await clear({loadRequestId}))return false;
+    if(!await clear({loadRequestId,setup}))return false;
     context.beginLoad?.(setup);
     const loaded=[];
     try{

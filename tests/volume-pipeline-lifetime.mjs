@@ -14,6 +14,12 @@ import {createWorldSeed} from '../volume-world-seed.mjs';
 import {createFineVelocityGrid, fineGridPlan} from '../volume-fine-grid.mjs';
 import {createPressureTransfer, pressureResolutionPlan} from '../volume-pressure-resolution.mjs';
 import {createOpenBoundary} from '../volume-open-boundary.mjs';
+import {createBvhReproject} from '../scene-bvh-reproject.mjs';
+import {createPreparedSmoke} from '../scene-prepared-smoke.mjs';
+import {createVolumeGather} from '../scene-volume-gather.mjs';
+import {createSpatialReducer} from '../scene-spatial-point-regions.mjs';
+import {createFireSmokeShadow} from '../fire-smoke-shadow.mjs';
+import {createShadowMedium} from '../scene-shadow-medium.mjs';
 
 globalThis.GPUBufferUsage ??= {MAP_READ: 1, MAP_WRITE: 2, COPY_SRC: 4, COPY_DST: 8, INDEX: 16, VERTEX: 32, UNIFORM: 64, STORAGE: 128, INDIRECT: 256, QUERY_RESOLVE: 512};
 globalThis.GPUTextureUsage ??= {COPY_SRC: 1, COPY_DST: 2, TEXTURE_BINDING: 4, STORAGE_BINDING: 8, RENDER_ATTACHMENT: 16};
@@ -62,8 +68,9 @@ function fixture(){
   return resource;
  };
  const device=()=>({
-  limits:{maxStorageBufferBindingSize:2**30,maxBufferSize:2**30,maxComputeWorkgroupsPerDimension:65535,maxTextureDimension3D:2048},
+  limits:{maxStorageBufferBindingSize:2**30,maxBufferSize:2**30,maxComputeWorkgroupsPerDimension:65535,maxTextureDimension2D:8192,maxTextureDimension3D:2048},
   queue:{writeBuffer(){},writeTexture(){},submit(){},onSubmittedWorkDone:async()=>{}},
+  createCommandEncoder:()=>({beginComputePass:()=>({setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}}),finish:()=>({})}),
   createShaderModule:make('shader'),
   createRenderPipeline:make('render'),
   createComputePipeline:make('compute'),
@@ -78,6 +85,7 @@ function fixture(){
   device:device(),
   fluidPipelineDevice:null,
   fluidPipelineTransparency:null,
+  fluidRenderPipelines:new Map(),
   optionalPipelines:{},
   transparentCanvas:true,
   format:'bgra8unorm',
@@ -171,12 +179,25 @@ test('a replacement device gets its own pipelines',()=>{
  f.context.device=f.device();f.rebuild();
  assert.equal(f.created.length,2*count);assert.notEqual(f.context.computePipeline,first);
 });
-test('changing canvas transparency refreshes the shader specialization',()=>{
+test('changing canvas transparency refreshes the shader specialization without recompiling compute pipelines or discarding cached transparency variants',()=>{
  const f=fixture();f.rebuild();
- const first=f.context.pipeline;
+ f.context.ensureFireIrradianceResources();
+ const firstRender=f.context.pipeline;
+ const firstCompute=f.context.computePipeline;
+ const firstSeed=f.context.irradianceSeedPipeline;
+ const afterTransparent=f.created.length;
  f.context.transparentCanvas=false;f.rebuild();
- assert.notEqual(f.context.pipeline,first);
- assert.equal(f.context.pipeline.descriptor.fragment.constants.TRANSPARENT_CANVAS,0);
+ const opaqueRender=f.context.pipeline;
+ assert.notEqual(opaqueRender,firstRender);
+ assert.equal(opaqueRender.descriptor.fragment.constants.TRANSPARENT_CANVAS,0);
+ assert.equal(f.context.computePipeline,firstCompute,'canvas transparency toggle must not recreate compute pipelines');
+ assert.equal(f.context.irradianceSeedPipeline,firstSeed,'canvas transparency toggle must not discard irradiance compute pipelines');
+ const createdOnOpaque=f.created.slice(afterTransparent);
+ assert.ok(createdOnOpaque.every(r=>r.kind==='render'),'canvas transparency toggle must only create render pipelines');
+ const afterOpaque=f.created.length;
+ f.context.transparentCanvas=true;f.rebuild();
+ assert.equal(f.context.pipeline,firstRender,'returning to previous canvas transparency reuses cached render pipeline');
+ assert.equal(f.created.length,afterOpaque,'cached transparency toggle must not create new GPU pipelines');
 });
 test('ordinary field initialization defers optional renderers and diagnostic captures',()=>{
  const f=fixture();f.rebuild();
@@ -250,6 +271,12 @@ test('companion GPU factories reuse shaders, layouts, and compute pipelines on t
    createFineVelocityGrid(dev,fineGridPlan({materialDims:dims,velocity:size/2,pressure:size/2})),
    createPressureTransfer(dev,pressureResolutionPlan({dims,mode:'half',solver:'converged'})),
    createOpenBoundary(dev,dims,stubTexture),
+   createBvhReproject(dev,{geometry:{nodes:new Float32Array(12),triangles:new Float32Array(12),nodeCount:1,triangleCount:1,coverage:{device:dev,texture:stubTexture,revision:1}},nodes:stubBuffer,triangles:stubBuffer}),
+   createPreparedSmoke(dev,{nodes:stubBuffer,triangles:stubBuffer,nodeCount:1,source:stubTexture,coarseDimensions:[8,8,8],factor:2}),
+   (()=>{const g=createVolumeGather(dev,{geometry:{nodes:new Float32Array(12),triangles:new Float32Array(12),nodeCount:1,triangleCount:1},receivers:[],volumeGrid:8,sourceDimensions:[8,8,8],directions:6,smokeRefinement:1,worldGeometry:true});g.encode({status:'encoded',texture:stubTexture,dimensions:[8,8,8],generation:1,frame:1});return g;})(),
+   createSpatialReducer(dev,4,stubTexture),
+   (()=>{const s=createFireSmokeShadow(dev,{points:stubTexture,resolution:8,steps:8,count:2,filter:true,mediumResolution:4});s.encode({status:'encoded',texture:stubTexture,dimensions:[size,size,size],generation:1,frame:1},{generation:1,frame:1,count:2});return {destroy:()=>s.dispose()};})(),
+   (()=>{const m=createShadowMedium(dev);m.encode(dev.createCommandEncoder(),{status:'encoded',texture:stubTexture,dimensions:[size,size,size],generation:1,frame:1},4);return m;})(),
   ];
  };
  f.created.length=0;

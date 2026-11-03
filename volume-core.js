@@ -11779,6 +11779,7 @@ export function createKaminosVolumePrototype({
   let context = null;
   let fluidPipelineDevice = null;
   let fluidPipelineTransparency = null;
+  const fluidRenderPipelines = new Map();
   const optionalPipelines = {
     opticalTransportContributionPipeline: null,
     browserResidualPipeline: null,
@@ -14422,79 +14423,104 @@ export function createKaminosVolumePrototype({
       },
     });
     const renderPipelineConstants = { TRANSPARENT_CANVAS: transparentCanvas ? 1 : 0, LEAN_STOCK_RAYMARCH: false, LEAN_EMISSIVE_RAYMARCH: false };
-    ordinaryDepthPipelines.clear();
-    opticalSteppingPipelines.clear();
-    scenePointPipelines.clear();
-    scenePointShaders.clear();
-    distributedPipelines.clear();
-    distributedShaders.clear();
-    fineVelocityPipelines.clear();
-    materialOnlyPipeline = null;
-    materialOnlyPredictPipeline = null;
-    separatedPressureProjectPipeline = null;
-    irradianceLatticeBindGroupLayout = null;
-    irradiancePipelineLayout = null;
-    irradianceSeedPipeline = null;
-    irradiancePropagatePipeline = null;
-    irradianceResolvePipeline = null;
-    irradianceAnalyticPipeline = null;
-    emissionExtentPipeline = null;
     const leanStockRenderPipelineConstants = { ...renderPipelineConstants, LEAN_STOCK_RAYMARCH: true };
     const leanEmissiveRenderPipelineConstants = { ...renderPipelineConstants, LEAN_EMISSIVE_RAYMARCH: true };
-    const computePipelineConstants = {};
-    const makePipeline = (targetFormat, label, constants = renderPipelineConstants) => device.createRenderPipeline({
-      label,
-      layout: productRaymarchPipelineLayout,
-      vertex: { module: shader, entryPoint: 'vs' },
-      fragment: { module: shader, entryPoint: 'fs', constants, targets: [{ format: targetFormat }] },
-      primitive: { topology: 'triangle-list' },
-    });
-    pipeline = makePipeline(format, `kaminos volume canvas native-3d-compute-fluid-raymarch-v0 ${gridShapeLabel(gridSize)}`);
-    readbackPipeline = makePipeline('rgba8unorm', `kaminos volume readback native-3d-compute-fluid-raymarch-v0 ${gridShapeLabel(gridSize)}`);
-    leanStockPipeline = makePipeline(
-      format,
-      `kaminos volume canvas lean-stock-direct-cell-raymarch-v0 ${gridShapeLabel(gridSize)}`,
-      leanStockRenderPipelineConstants,
-    );
-    leanStockReadbackPipeline = makePipeline(
-      'rgba8unorm',
-      `kaminos volume readback lean-stock-direct-cell-raymarch-v0 ${gridShapeLabel(gridSize)}`,
-      leanStockRenderPipelineConstants,
-    );
-    leanEmissivePipeline = makePipeline(format, `kaminos lean-emissive-raymarch-v0 ${gridShapeLabel(gridSize)}`, leanEmissiveRenderPipelineConstants);
-    leanEmissiveReadbackPipeline = makePipeline('rgba8unorm', `kaminos lean-emissive-readback-v0 ${gridShapeLabel(gridSize)}`, leanEmissiveRenderPipelineConstants);
-    if (productFrameOwner === 'caller') {
-      const makeProductRaymarchPipeline = (label, constants) => device.createRenderPipeline({
+    if (fluidPipelineDevice !== device) {
+      fluidRenderPipelines.clear();
+      ordinaryDepthPipelines.clear();
+      opticalSteppingPipelines.clear();
+      scenePointPipelines.clear();
+      scenePointShaders.clear();
+      distributedPipelines.clear();
+      distributedShaders.clear();
+      fineVelocityPipelines.clear();
+      materialOnlyPipeline = null;
+      materialOnlyPredictPipeline = null;
+      separatedPressureProjectPipeline = null;
+      irradianceLatticeBindGroupLayout = null;
+      irradiancePipelineLayout = null;
+      irradianceSeedPipeline = null;
+      irradiancePropagatePipeline = null;
+      irradianceResolvePipeline = null;
+      irradianceAnalyticPipeline = null;
+      emissionExtentPipeline = null;
+    }
+    const transparencyKey = transparentCanvas ? 1 : 0;
+    let renderPipelines = fluidRenderPipelines.get(transparencyKey);
+    if (!renderPipelines) {
+      const makePipeline = (targetFormat, label, constants = renderPipelineConstants) => device.createRenderPipeline({
         label,
         layout: productRaymarchPipelineLayout,
         vertex: { module: shader, entryPoint: 'vs' },
-        fragment: {
-          module: shader,
-          entryPoint: 'fsProduct',
-          constants,
-          targets: [{
-            format,
-            blend: {
-              color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
-              alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
-            },
-          }],
-        },
+        fragment: { module: shader, entryPoint: 'fs', constants, targets: [{ format: targetFormat }] },
         primitive: { topology: 'triangle-list' },
       });
-      productRaymarchPipeline = makeProductRaymarchPipeline(
-        `kaminos product caller-depth broad-smoke raymarch ${gridShapeLabel(gridSize)}`,
-        renderPipelineConstants,
-      );
-      leanStockProductRaymarchPipeline = makeProductRaymarchPipeline(
-        `kaminos product caller-depth lean-stock-direct-cell-raymarch-v0 ${gridShapeLabel(gridSize)}`,
-        leanStockRenderPipelineConstants,
-      );
-      leanEmissiveProductRaymarchPipeline = makeProductRaymarchPipeline(
-        `kaminos product lean-emissive-raymarch-v0 ${gridShapeLabel(gridSize)}`, leanEmissiveRenderPipelineConstants,
-      );
+      renderPipelines = {
+        pipeline: makePipeline(format, `kaminos volume canvas native-3d-compute-fluid-raymarch-v0 ${gridShapeLabel(gridSize)}`),
+        readbackPipeline: makePipeline('rgba8unorm', `kaminos volume readback native-3d-compute-fluid-raymarch-v0 ${gridShapeLabel(gridSize)}`),
+        leanStockPipeline: makePipeline(
+          format,
+          `kaminos volume canvas lean-stock-direct-cell-raymarch-v0 ${gridShapeLabel(gridSize)}`,
+          leanStockRenderPipelineConstants,
+        ),
+        leanStockReadbackPipeline: makePipeline(
+          'rgba8unorm',
+          `kaminos volume readback lean-stock-direct-cell-raymarch-v0 ${gridShapeLabel(gridSize)}`,
+          leanStockRenderPipelineConstants,
+        ),
+        leanEmissivePipeline: makePipeline(format, `kaminos lean-emissive-raymarch-v0 ${gridShapeLabel(gridSize)}`, leanEmissiveRenderPipelineConstants),
+        leanEmissiveReadbackPipeline: makePipeline('rgba8unorm', `kaminos lean-emissive-readback-v0 ${gridShapeLabel(gridSize)}`, leanEmissiveRenderPipelineConstants),
+        productRaymarchPipeline: null,
+        leanStockProductRaymarchPipeline: null,
+        leanEmissiveProductRaymarchPipeline: null,
+        opticalTransportContributionPipeline: null,
+        browserResidualSourcePipeline: null,
+      };
+      if (productFrameOwner === 'caller') {
+        const makeProductRaymarchPipeline = (label, constants) => device.createRenderPipeline({
+          label,
+          layout: productRaymarchPipelineLayout,
+          vertex: { module: shader, entryPoint: 'vs' },
+          fragment: {
+            module: shader,
+            entryPoint: 'fsProduct',
+            constants,
+            targets: [{
+              format,
+              blend: {
+                color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+                alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+              },
+            }],
+          },
+          primitive: { topology: 'triangle-list' },
+        });
+        renderPipelines.productRaymarchPipeline = makeProductRaymarchPipeline(
+          `kaminos product caller-depth broad-smoke raymarch ${gridShapeLabel(gridSize)}`,
+          renderPipelineConstants,
+        );
+        renderPipelines.leanStockProductRaymarchPipeline = makeProductRaymarchPipeline(
+          `kaminos product caller-depth lean-stock-direct-cell-raymarch-v0 ${gridShapeLabel(gridSize)}`,
+          leanStockRenderPipelineConstants,
+        );
+        renderPipelines.leanEmissiveProductRaymarchPipeline = makeProductRaymarchPipeline(
+          `kaminos product lean-emissive-raymarch-v0 ${gridShapeLabel(gridSize)}`, leanEmissiveRenderPipelineConstants,
+        );
+      }
+      fluidRenderPipelines.set(transparencyKey, renderPipelines);
     }
-    deferPipeline('opticalTransportContributionPipeline', () => device.createRenderPipeline({
+    ({
+      pipeline,
+      readbackPipeline,
+      leanStockPipeline,
+      leanStockReadbackPipeline,
+      leanEmissivePipeline,
+      leanEmissiveReadbackPipeline,
+      productRaymarchPipeline,
+      leanStockProductRaymarchPipeline,
+      leanEmissiveProductRaymarchPipeline,
+    } = renderPipelines);
+    deferPipeline('opticalTransportContributionPipeline', () => (renderPipelines.opticalTransportContributionPipeline ??= device.createRenderPipeline({
       label: `kaminos shared-transmittance pre-tone-map contribution readback ${gridShapeLabel(gridSize)}`,
       layout: pipelineLayout,
       vertex: { module: shader, entryPoint: 'vs' },
@@ -14509,8 +14535,8 @@ export function createKaminosVolumePrototype({
         ],
       },
       primitive: { topology: 'triangle-list' },
-    }));
-    deferPipeline('browserResidualSourcePipeline', () => device.createRenderPipeline({
+    })));
+    deferPipeline('browserResidualSourcePipeline', () => (renderPipelines.browserResidualSourcePipeline ??= device.createRenderPipeline({
       label: `kaminos volume browser residual shader-material-authority source ${gridShapeLabel(gridSize)}`,
       layout: pipelineLayout,
       vertex: { module: shader, entryPoint: 'vs' },
@@ -14521,7 +14547,9 @@ export function createKaminosVolumePrototype({
         targets: [{ format: 'rgba8unorm' }, { format: 'rgba8unorm' }],
       },
       primitive: { topology: 'triangle-list' },
-    }));
+    })));
+    if (fluidPipelineDevice !== device) {
+    const computePipelineConstants = {};
     deferPipeline('browserResidualPipeline', () => device.createRenderPipeline({
       label: `kaminos volume browser webgpu-direct-residual postprocess ${gridShapeLabel(gridSize)}`,
       layout: browserResidualPipelineLayout,
@@ -14842,6 +14870,7 @@ export function createKaminosVolumePrototype({
         primitive: { topology: 'triangle-list' },
       }),
     ));
+    }
       fluidPipelineDevice = device;
       fluidPipelineTransparency = transparentCanvas;
     }
@@ -21309,7 +21338,7 @@ export function createKaminosVolumePrototype({
       state.opticalStepping.fullRay=true;
       rebuildFluidBindGroups();
     }else{rayAllocationHistory.reset();}
-    const opticalKey = `:${optical.mode}:stats=${rayStepTelemetry.active}`;
+    const opticalKey = `:${transparentCanvas ? 1 : 0}:${optical.mode}:stats=${rayStepTelemetry.active}`;
     if ((optical.mode !== 'current'||rayStepTelemetry.active) && !multisampled && !scenePointBindGroup && !distributedGroup) {
       const key = `${targetPipeline === readbackPipeline}${opticalKey}`;
       if (!opticalSteppingPipelines.has(key)) {
