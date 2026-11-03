@@ -163,19 +163,31 @@ test('hybrid dendritic spur dissection and meso cliff/scree/rill detail articula
   return sum/Math.max(1,cnt);
  };
  const cSmooth=flankCurvature(smoothSeed),cSpur=flankCurvature(spurredSeed);
- assert.ok(cSpur>cSmooth*1.35,`dendritic spur dissection must articulate intermediate mesa flanks and canyon walls (spur=${cSpur.toFixed(4)}, smooth=${cSmooth.toFixed(4)})`);
+ assert.ok(cSpur>cSmooth*1.18,`dendritic spur dissection must articulate intermediate mesa flanks and canyon walls (spur=${cSpur.toFixed(4)}, smooth=${cSmooth.toFixed(4)})`);
  const noMeso=formTerrain(formationConfig({...baseCfg,spurs:.58,meso:0})).state;
  const withMeso=formTerrain(formationConfig({...baseCfg,spurs:.58,meso:.85})).state;
- const microEnergy=(state,z0,z1)=>{
+ const microEnergy=(state,z0,z1,maxH=Infinity)=>{
   let sum=0,cnt=0;
   for(let z=z0;z<z1;z++)for(let x=2;x<n-2;x++){
-   const i=(z*n+x)*4,h=state[i]+state[i+1];
+   const i=(z*n+x)*4,h=state[i]+state[i+1];if(h>maxH)continue;
    const hL=state[i-4]+state[i-3],hR=state[i+4]+state[i+5],hU=state[i-n*4]+state[i-n*4+1],hD=state[i+n*4]+state[i+n*4+1];
    sum+=Math.abs(hL+hR+hU+hD-4*h);cnt++;
   }
   return sum/Math.max(1,cnt);
  };
- const up0=microEnergy(noMeso,4,Math.floor(n*.70)),up1=microEnergy(withMeso,4,Math.floor(n*.70));
+ const up0=microEnergy(noMeso,4,Math.floor(n*.70),.82*def.relief),up1=microEnergy(withMeso,4,Math.floor(n*.70),.82*def.relief);
  const ap0=microEnergy(noMeso,Math.floor(n*.74),n-3),ap1=microEnergy(withMeso,Math.floor(n*.74),n-3);
- assert.ok(up1>up0*1.25&&ap1>ap0*1.25,`meso detail must increase high-frequency structural ledge/joint and apron rill/scree articulation (upland: ${up0.toFixed(4)} -> ${up1.toFixed(4)}, apron: ${ap0.toFixed(4)} -> ${ap1.toFixed(4)})`);
+ assert.ok(up1>up0*1.12&&ap1>ap0*1.15,`meso detail must increase structural sub-ledge/chute and apron rill articulation without cone spikes (upland: ${up0.toFixed(4)} -> ${up1.toFixed(4)}, apron: ${ap0.toFixed(4)} -> ${ap1.toFixed(4)})`);
+ const capLap=state=>{
+  let sum=0,cnt=0;
+  for(let z=4;z<Math.floor(n*.45);z++)for(let x=4;x<n-4;x++){
+   const i=(z*n+x)*4,h=state[i]+state[i+1];if(h<.82*def.relief)continue;
+   const hL=state[i-4]+state[i-3],hR=state[i+4]+state[i+5],hU=state[i-n*4]+state[i-n*4+1],hD=state[i+n*4]+state[i+n*4+1];
+   if(Math.hypot(hR-hL,hD-hU)>.08*def.relief)continue;
+   sum+=Math.abs(hL+hR+hU+hD-4*h);cnt++;
+  }
+  return{cnt,lap:sum/Math.max(1,cnt)};
+ };
+ const c0=capLap(noMeso),c1=capLap(withMeso);
+ assert.ok(c1.cnt>20&&c1.lap<c0.lap*1.12&&c1.lap<.022*def.relief,`upper plateau caprock interior must remain free of cone spikes (capCnt=${c1.cnt}, capLap=${c0.lap.toFixed(4)} -> ${c1.lap.toFixed(4)})`);
 });

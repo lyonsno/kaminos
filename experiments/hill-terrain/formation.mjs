@@ -105,12 +105,17 @@ export function seedGeology(input){
   canyons.push({x0,x1,amp,freq,phase,width,b1v,b1dir,b1len,b1slope,b2v,b2dir,b2len,b2slope});
  }
  // Seeded tectonic mesa plates and isolated outlier buttes across the territory.
+ // Discrete cap elevations (tIdx + 0.65) / tierCount place every plateau and bench top
+ // at frac = 0.65 (center of the flat tread) so plateau tops never cross tier boundaries.
+ const topTier=2+Math.round(1.2*terraceMix),tierCount=topTier+.65;
  const plates=[];
  for(let p=0;p<6;p++){
-  const px=.10+.80*hash(p*19+3,101,c.seed),pz=.08+.56*hash(p*29+7,107,c.seed);
-  const rx=.14+.20*hash(p*37+11,113,c.seed),rz=.12+.18*hash(p*47+13,127,c.seed);
+  const px=.10+.80*hash(p*19+3,101,c.seed),pz=.10+.56*hash(p*29+7,107,c.seed);
+  const rx=.16+.20*hash(p*37+11,113,c.seed),rz=.14+.18*hash(p*47+13,127,c.seed);
   const ang=(hash(p*53+17,131,c.seed)-.5)*Math.PI,ca=Math.cos(ang),sa=Math.sin(ang);
-  const h=(.48+.48*Math.max(0,1-pz*1.15))*(.72+.28*hash(p*61+19,137,c.seed));
+  const rawH=(.52+.46*Math.max(0,1-pz*1.05))*(.78+.22*hash(p*61+19,137,c.seed));
+  const tIdx=Math.min(topTier,Math.max(1,Math.round(rawH*topTier)));
+  const h=(tIdx+.65)/tierCount;
   plates.push({px,pz,rx,rz,ca,sa,h});
  }
  const segDist=(px,pz,ax,az,bx,bz)=>{
@@ -121,6 +126,7 @@ export function seedGeology(input){
   const u=x/(n-1),v=z/(n-1);
   const wx=u+.15*fbm(u*2.6+1.3,v*2.6+.7,c.seed+19,4),wz=v+.15*fbm(u*2.6-.9,v*2.6+2.1,c.seed+43,4);
   const texture=fbm(wx*3.8,wz*3.8,c.seed+5,5),smoothTex=fbm(u*2.1+3.1,v*2.1+1.7,c.seed+33,3);
+  const su=u+.06*smoothTex,sv=v+.06*fbm(u*2.1+.9,v*2.1+2.3,c.seed+59,2);
   let dMin=99,nearestFloor=.05;
   for(let m=0;m<numCanyons;m++){
    const cy=canyons[m],tv=clamp(wz/.78,0,1),cx=cy.x0+(cy.x1-cy.x0)*tv+cy.amp*Math.sin(wz*Math.PI*cy.freq+cy.phase);
@@ -135,51 +141,59 @@ export function seedGeology(input){
   const frontShift=c.apron>0?Math.min(c.apron*.26,.042)*(smoothstep(.8,2.2,dMin)-.5+.4*smoothTex):0;
   const localApron=clamp(c.apron+frontShift,0,.90);
   const upland=clamp((1-v-localApron)/Math.max(1e-4,1-localApron),0,1);
-  // Tectonic plateau & isolated outlier butte envelope
-  let plateEnv=.38+.52*(upland**.78);
+  // Tectonic plateau & isolated outlier butte envelope: monotonically additive (Math.max)
+  // with flat interior caps so lower plates never gouge rings into the upper caprock tableland.
+  let plateEnv=smoothstep(.10,.46,upland);
   for(let p=0;p<6;p++){
-   const pl=plates[p],dx=wx-pl.px,dz=wz-pl.pz,rx=(dx*pl.ca+dz*pl.sa)/pl.rx,rz=(-dx*pl.sa+dz*pl.ca)/pl.rz;
-   const r2=rx*rx+rz*rz,w=smoothstep(1.35,.28,r2);
-   plateEnv=Math.max(plateEnv*.75,w*pl.h+.25*plateEnv);
+   const pl=plates[p],dx=su-pl.px,dz=sv-pl.pz,rx=(dx*pl.ca+dz*pl.sa)/pl.rx,rz=(-dx*pl.sa+dz*pl.ca)/pl.rz;
+   const r2=rx*rx+rz*rz,w=smoothstep(1.28,.48,r2);
+   plateEnv=Math.max(plateEnv,w*pl.h);
   }
   const xw=(u-.5)*c.width,zw=(v-.5)*c.length,rx=xw*sca+zw*ssa,rz=-xw*ssa+zw*sca;
-  // Hybrid dendritic spur-and-chute dissection along canyon walls & mesa flanks
-  const flankMask=smoothstep(.08,.42,dMin)*(1-smoothstep(.65,1.04,dMin))*smoothstep(.04,.20,upland);
-  const spurWave1=Math.sin((wx*17.5+wz*11.0+.38*texture)*Math.PI+c.seed*.37);
-  const spurWave2=Math.cos((wx*13.0-wz*15.5+.38*smoothTex)*Math.PI+c.seed*.71);
-  const spurComb=.58*Math.abs(spurWave1)+.42*Math.abs(spurWave2)-.48;
-  const fineGully=Math.sin((wx*31-wz*24+.5*texture)*Math.PI)*Math.cos((wx*23+wz*29-.4*smoothTex)*Math.PI);
-  const dDissected=Math.max(0,dMin+spurMix*flankMask*(.72*spurComb+.32*fineGully));
-  const spurRibs=spurMix*flankMask*(.22*spurComb+.11*fineGully);
+  // Hybrid dendritic spur-and-chute dissection along canyon walls & mesa flanks:
+  // Ribs vary along the canyon wall (sAlong) and run continuously downslope (dMin),
+  // bifurcating on lower slopes without creating 2D egg-carton cone spikes.
+  const wallZone=smoothstep(.08,.40,dMin)*(1-smoothstep(.68,1.12,dMin))*smoothstep(.04,.18,upland);
+  const sAlong=(wz*1.15+.38*wx)*Math.max(4.2,c.valleys*.95)*Math.PI+1.8*smoothTex+c.seed*.31;
+  const primarySpur=1-2*Math.abs(Math.sin(sAlong+dMin*1.25));
+  const branchSpur=(1-2*Math.abs(Math.sin(sAlong*2-dMin*1.9+.9)))*smoothstep(1.05,.20,dMin);
+  const fineSpur=(1-2*Math.abs(Math.sin(sAlong*3.4+dMin*2.8+1.7)))*smoothstep(.95,.18,dMin);
+  const spurProfile=.52*primarySpur+.30*branchSpur+.18*fineSpur;
+  const dDissected=Math.max(0,dMin+spurMix*wallZone*.62*spurProfile);
+  const spurRibs=spurMix*wallZone*.34*spurProfile;
   // 1) Peaked ridge, anticlinal fold & cuesta hogback morphology (when mesa=0, terrace=0)
   const strikeWave=.5+.5*Math.cos((rx*1.35+.25*Math.sin(rz*.8))*Math.PI*Math.max(1.5,c.valleys*.5)+c.seed*.13);
   const canyonRidge=smoothstep(.15,2.1,dDissected)**1.25;
   const env=Math.sin(Math.PI*upland)**1.15;
   const ridgeNorm=.08+(.56*(upland**1.28)*(.55+.45*plateEnv)+.34*strikeWave*env)*canyonRidge+.36*texture*env+spurRibs;
   // 2) Flat-topped caprock mesas, isolated outlier buttes & stair-stepped structural terraces
-  const frontEscarp=smoothstep(.02,.18,upland);
-  const canyonCarve=smoothstep(.42,1.65,dDissected);
-  const blockField=clamp(frontEscarp*plateEnv*(.14+.86*canyonCarve)+.07*smoothTex*(1-.6*mesaMix)+.28*spurRibs*(1-.65*mesaMix),0,1);
-  const tierCount=2.5+1.6*terraceMix,scaled=blockField*tierCount,tierIdx=Math.floor(scaled),frac=scaled-tierIdx;
+  const frontEscarp=smoothstep(.02,.20,upland);
+  const canyonCarve=smoothstep(.38,1.52,dDissected);
+  const wallActive=(1-smoothstep(.88,1,canyonCarve)*smoothstep(.22,.42,upland));
+  const blockField=clamp(frontEscarp*plateEnv*(.12+.88*canyonCarve)+wallActive*(.05*smoothTex*(1-.65*mesaMix)+.26*spurRibs*(1-.65*mesaMix)),0,1);
+  const scaled=blockField*tierCount,tierIdx=Math.floor(scaled),frac=scaled-tierIdx;
   const riserW=.24-.08*mesaMix;
   const tierStep=frac<riserW?.97*smoothstep(0,riserW,frac):.97+.03*(frac-riserW)/(1-riserW);
-  const treadFlat=smoothstep(riserW+.01,riserW+.09,frac)*(1-smoothstep(.92,1,frac))*stepStyle;
+  const treadFlat=smoothstep(riserW+.01,riserW+.08,frac)*(1-smoothstep(.93,1,frac))*stepStyle;
   const dipShift=dipScale*c.tilt*rx*.04;
-  const treadGrade=.032*upland+.048*smoothstep(.40,.52,upland);
-  // 3) Sub-meter meso-relief: cliff columnar ribs, stepped cornice ledges, caprock joints & braided apron rills
-  const inRiser=smoothstep(0,riserW*.42,frac)*(1-smoothstep(riserW*.58,riserW*1.05,frac));
-  const jointA=Math.sin((rx*9.4+rz*3.6+.4*texture)*Math.PI+c.seed*.19);
-  const jointB=Math.cos((rz*9.4-rx*3.6-.4*smoothTex)*Math.PI+c.seed*.53);
-  const columnarRib=inRiser*(.085*(Math.abs(jointA)*Math.abs(jointB)-.38)+.048*Math.sin(frac/Math.max(.08,riserW)*Math.PI*4));
-  const rillChannel=Math.sin((wx*38+.7*Math.sin(wz*19+c.seed*.1))*Math.PI)*Math.cos((wx*24-wz*18)*Math.PI);
-  const apronMask=(1-smoothstep(.06,.28,upland))+.42*(1-canyonCarve);
-  const apronRill=apronMask*(.036*rillChannel+.020*Math.sin((wx*58+wz*41)*Math.PI));
-  const mesoDelta=mesoMix*(1-treadFlat)*(columnarRib+apronRill+flankMask*.065*fineGully);
-  const mesaNorm=clamp(nearestFloor*(1-canyonCarve)+(tierIdx+tierStep)/tierCount*.86+treadGrade+dipShift+.65*spurRibs*(1-treadFlat),0,1.05);
+  const treadGrade=.028*upland+.042*smoothstep(.40,.52,upland);
+  // 3) Coherent sub-meter meso-relief: stepped horizontal sub-ledges on active cliff walls,
+  // secondary side-gully chutes on flanks, and flow-aligned braided fan rills on the apron.
+  const riserMask=1-smoothstep(riserW*.95,riserW*1.65,frac);
+  const subLedgeStep=riserMask*.195*Math.sin(frac/Math.max(.08,riserW)*Math.PI*6);
+  const chuteZone=smoothstep(.04,.32,dMin)*(1-smoothstep(.88,1.52,dMin))*smoothstep(.04,.18,upland);
+  const sideChute=chuteZone*(.225*branchSpur+.168*fineSpur);
+  const uFan=(wx-.5)/(.65+.55*v)+.14*Math.sin(wz*2.8*Math.PI+c.seed*.17)+.10*smoothTex;
+  const rillBraid=.60*Math.sin(uFan*18*Math.PI)+.40*Math.cos(uFan*35*Math.PI-wz*3.5*Math.PI);
+  const apronMask=(1-smoothstep(.06,.28,upland))+.45*(1-canyonCarve);
+  const apronRill=apronMask*.038*rillBraid;
+  const topCapFlat=(tierIdx>=topTier?1:0)*smoothstep(.76,.94,canyonCarve)*smoothstep(.22,.40,upland);
+  const mesoDelta=mesoMix*(1-topCapFlat)*((1-treadFlat)*subLedgeStep+sideChute)+mesoMix*apronRill;
+  const mesaNorm=clamp(nearestFloor*(1-canyonCarve)+(tierIdx+tierStep)/tierCount*.86+treadGrade+dipShift+.68*spurRibs*(1-treadFlat)*wallActive,0,1.05);
   const y0=Math.max(0,c.relief*((1-stepStyle)*ridgeNorm+stepStyle*mesaNorm+mesoDelta));
-  const apronGrade=.002*(1-v)+Math.max(0,mesoMix*(1-upland)*.012*rillChannel);
+  const apronGrade=.002*(1-v)+Math.max(0,mesoMix*(1-upland)*.008*rillBraid);
   s[(z*n+x)*4]=.10+apronGrade+y0*smoothstep(0,.04,upland);
-  const screeSeed=mesoMix*inRiser*.008*Math.max(0,jointA);
+  const screeSeed=mesoMix*wallZone*.006*Math.max(0,branchSpur);
   s[(z*n+x)*4+1]=(upland>.15?.016*(1-.35*stepStyle):.022)+screeSeed;
  }
  return s;
@@ -256,10 +270,12 @@ export function formationStep(state,input,metrics,scratch=null){
    const u=(i%n)/(n-1),v=((i/n)|0)/(n-1),x=(u-.5)*c.width,z=(v-.5)*c.length,rx=x*ca+z*sa,rz=-x*sa+z*ca;
    const warp=.28*Math.sin(rx*.55+rz*.35+c.seed*.03)+.16*Math.cos(rz*.85-rx*.45);
    bedShift[i]=(-dipScale*c.tilt*rx-dipScale*c.fold*(Math.sin(rz*.7+rx*.2)+warp)+c.seed*.017)*invT;
-   // Spatial meso-joint & rill pattern: positive on resistant ribs/bars, negative in fracture crevices & rill threads
-   const j1=Math.sin((rx*9.2+rz*3.8)*Math.PI+c.seed*.23)*Math.cos((rz*9.2-rx*3.8)*Math.PI+c.seed*.61);
-   const r1=Math.sin((u*42+.6*Math.sin(v*21+c.seed*.17))*Math.PI)*Math.cos((u*27-v*31)*Math.PI);
-   mesoMod[i]=.55*j1+.45*r1;
+   // Flow-aligned meso-chute & braided rill modulation (continuous along slope, never a 2D cone grid)
+   const uFan=(u-.5)/(.65+.55*v)+.14*Math.sin(v*2.8*Math.PI+c.seed*.17);
+   const r1=.65*Math.sin(uFan*16*Math.PI)+.35*Math.cos(uFan*31*Math.PI-v*3.5*Math.PI);
+   const sAlong=(v*1.15+.38*u)*Math.max(3.5,c.valleys*.85)*Math.PI+c.seed*.31;
+   const c1=Math.sin(sAlong*2-u*4*Math.PI);
+   mesoMod[i]=.55*r1+.45*c1;
   }
  }
  const invBedT=1/c.bedThickness,tMix=.65*clamp(c.terrace??0,0,1);

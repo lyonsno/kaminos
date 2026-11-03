@@ -1,4 +1,5 @@
 import * as THREE from '../lib/three.core.js';
+import {MeshStandardNodeMaterial} from '../lib/three.webgpu.js';
 import {createTerrainGPU} from './hill-terrain/gpu.mjs';
 import {FORMATION_VERSION,FORMATION_FIELDS,FORMATION_PRESETS,formationConfig,formationRecipeKey,partitionTiles,buildTiledIndices,encodeFormation} from './hill-terrain/formation.mjs';
 import {requestFormation} from './hill-terrain/formation-cache.mjs';
@@ -13,7 +14,7 @@ export default {
   geometry.boundingBox=new THREE.Box3(new THREE.Vector3(-config.width/2,-2,-config.length/2),new THREE.Vector3(config.width/2,config.relief+1.5,config.length/2));geometry.boundingSphere=geometry.boundingBox.getBoundingSphere(new THREE.Sphere());
   const gpu=createTerrainGPU(geometry,{resolution:n,width:config.width,length:config.length,uplift:0,repose:34,transport:1.6});
   const root=new THREE.Group();root.name='Hill · formed rock and earth';
-  const material=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.92,side:THREE.DoubleSide}),mesh=new THREE.Mesh(geometry,material);mesh.name='Weathered hillside';mesh.frustumCulled=false;mesh.castShadow=true;mesh.receiveShadow=true;mesh.raycast=()=>{};mesh.userData.kaminosDynamicGeometry=true;root.add(mesh);mesh.visible=false;
+  const material=gpu.decorateMaterial(new MeshStandardNodeMaterial({vertexColors:true,roughness:.92,side:THREE.DoubleSide})),mesh=new THREE.Mesh(geometry,material);mesh.name='Weathered hillside';mesh.frustumCulled=false;mesh.castShadow=true;mesh.receiveShadow=true;mesh.raycast=()=>{};mesh.userData.kaminosDynamicGeometry=true;root.add(mesh);mesh.visible=false;
   const xLines=[0,...tiles.filter(t=>t.tz===0).map(t=>t.x1)],zLines=[0,...tiles.filter(t=>t.tx===0).map(t=>t.z1)];
   const seamSegs=(xLines.length*(n-1)+zLines.length*(n-1)),seamPos=new Float32Array(seamSegs*6),seamGeo=new THREE.BufferGeometry();
   seamGeo.setAttribute('position',new THREE.BufferAttribute(seamPos,3));
