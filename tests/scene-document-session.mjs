@@ -132,3 +132,14 @@ test('navigation retains the restore invocation address while file reading is pe
  gate.resolve(JSON.stringify(document()));assert.equal((await pending).navigating,true);
  assert.match(f.navigations[0],/localhost:9000/);assert.match(f.navigations[0],/record-fixture/);assert.doesNotMatch(f.navigations[0],/later/);
 });
+
+test('page retains the requested scene address after application fails, without allowing overwrite',async()=>{
+ const {sceneContext}=await import('./helpers/scene-context.mjs');
+ const requested='http://localhost:9000/?settings_preset=original#workspace=workbench&experiment=stage-casting&authoring=1&scene=workshop.kaminos.json';
+ const context=sceneContext({location:{href:requested},applySceneDocument:async()=>{throw Error('GPU device lost during restoration');}});
+ const result=await context.sceneDocument.restore(file(document()),{sceneFile:'workshop.kaminos.json',mounted:true});
+ assert.equal(result.ok,false);assert.match(result.error,/GPU device lost/);
+ assert.equal(context.sceneDocument.state().filename,null);
+ assert.equal(context.sceneDocument.state().blocked,true);
+ assert.equal(context.location.href,requested,'Reload must retry the requested workshop, not a standalone flame preset');
+});

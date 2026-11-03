@@ -15,7 +15,7 @@ export function createSceneDocumentSession({
     records.assertReloadable(plan.objects);
     return plan;
   }
-  function bind(value) { filename = value; revision++; bound(value); }
+  function bind(value, options) { filename = value; revision++; bound(value, options); }
   const failure = error => ({ok:false, error:error.message || String(error)});
 
   async function persist(document, target, {saveAsName = null, overwrite = false} = {}, address = structuredClone(readAddress())) {
@@ -91,7 +91,7 @@ export function createSceneDocumentSession({
       if (phase === 'reading') {
         ({filename, blocked, phase} = previous);
       } else {
-        phase = 'idle'; blocked = true; bind(null);
+        phase = 'idle'; blocked = true; bind(null, {restoreFailed:true});
       }
       restoring = null;
       status(`Scene load failed: ${error.message || error}`);

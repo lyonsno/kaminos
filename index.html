@@ -4230,7 +4230,9 @@ function createPageSceneDocumentSession(options = {}) {
     requiresNavigation:(plan,{mounted})=>(plan.composition||isCompositionAuthoring())&&!mounted,
     navigate:url=>location.assign(url),
     assertSupported:plan=>{if(plan.objects.filter(record=>record.type===FLAME_EMITTER_TYPE).length>1&&typeof volumePrototype?.setImmersedSources!=='function')throw Error('This flame runtime does not yet support multiple authored sources');},
-    bound:filename=>{
+    bound:(filename,{restoreFailed=false}={})=>{
+      // A failed restore loses overwrite authority, not its reload destination.
+      if(restoreFailed)return;
       const url=new URL(location.href),hash=new URLSearchParams(url.hash.slice(1));
       if(filename)history.replaceState(history.state,'',savedSceneLocation(location.href,filename));
       else {hash.delete('scene');url.hash=hash.toString();history.replaceState(history.state,'',url.href);}
