@@ -6823,6 +6823,7 @@ function renderSceneObjectList() {
 }
 
 function clearActiveSceneObjectSelection() {
+  window.kaminosPendingSurfacePick=null;
   if(window.kaminosPolyEdit?.active())window.kaminosPolyEdit.exit();
   workingScene.clearSelection();updateSelectionFeedback();
   if (!burnerGraphWriting) scenePlacementTools?.selectionChanged();
@@ -6837,12 +6838,14 @@ function clearActiveSceneObjectSelection() {
 }
 
 function setActiveSceneObject(id,options={}) {
+  window.kaminosPendingSurfacePick=null;
   if(id==='flame-field'||id==='water-field'){const next=changeSelection(workingScene.selection,id,options);return setSceneSelection(next.ids,next.activeId);}
   if(!workingScene.objects.some(o=>o.id===id)){clearActiveSceneObjectSelection();return;}
   if(splatCorrectionMode&&splatCorrectionMode.objectId!==id)exitSplatCorrectionMode({revert:false,silent:true});
   const next=changeSelection(workingScene.selection,id,options);return setSceneSelection(next.ids,next.activeId);
 }
 function setActiveSceneGroup(id,options={}) {
+  window.kaminosPendingSurfacePick=null;
   if(!workingScene.groups.some(g=>g.id===id)){clearActiveSceneObjectSelection();return;}
   const next=changeSelection(workingScene.selection,'@group:'+id,options);return setSceneSelection(next.ids,next.activeId);
 }
@@ -6879,6 +6882,7 @@ function sceneHitsFromViewportPointer(event) {
 }
 
 function pickSceneObjectFromViewportPointer(event,hits=sceneHitsFromViewportPointer(event)) {
+  if(hits?.then)return hits.then(result=>pickSceneObjectFromViewportPointer(event,result));
   // Emitter symbols are drawn through geometry. Pick that same visible layer first.
   for(const hit of hits){const record=sceneObjectRecordForDescendant(hit.object);if(record?.object.visible&&[FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(record.type))return record;}
   for (const hit of hits) {
@@ -6895,7 +6899,8 @@ function pickVisibleFlameFromViewportPointer(hits) {
   for(const hit of hits){
     const record=sceneObjectRecordForDescendant(hit.object);
     if([FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE,CAMERA_TYPE].includes(record?.type))continue;
-    const material=Array.isArray(hit.object.material)?hit.object.material[hit.face?.materialIndex??0]:hit.object.material;
+    const surface=hit.surfaceObject??hit.object;
+    const material=Array.isArray(surface.material)?surface.material[hit.face?.materialIndex??0]:surface.material;
     if(material?.visible!==false&&material?.depthWrite!==false&&(!material?.transparent||material.opacity>=1))maxDistance=Math.min(maxDistance,hit.distance);
   }
   if(groundPlane?.visible)for(const hit of sceneRaycaster.intersectObject(groundPlane,true))maxDistance=Math.min(maxDistance,hit.distance);
@@ -6913,6 +6918,7 @@ function viewportEventIsInsideCanvas(event) {
 }
 
 function handleViewportPointerDown(event) {
+  window.kaminosPendingSurfacePick=null;
   if (vantageCaptureHeld || polyEdit?.active() || sceneComponents?.active() || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
   viewportPointerDown = {
     x: event.clientX,
@@ -6958,7 +6964,10 @@ function handleViewportSelectionClick(event) {
   }
   if (drift > 5 || start.gizmo || transformGizmoDragging || transformControls?.dragging) return;
 
-  const hits=sceneHitsFromViewportPointer(event),record=pickSceneObjectFromViewportPointer(event,hits);
+  const ticket={};window.kaminosPendingSurfacePick=ticket;
+  const applyHits=hits=>{
+  if(window.kaminosPendingSurfacePick!==ticket)return;
+  const record=pickSceneObjectFromViewportPointer(event,hits);
   const explicitEmitter=record&&[FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(record.type);
   if(!explicitEmitter&&pickVisibleFlameFromViewportPointer(hits)){
     window.selectSceneField('flame-field',{extend:!!event.shiftKey});setInfo('Selected: Fire & smoke domain');window._kaminosDirty?.();return;
@@ -6979,17 +6988,23 @@ function handleViewportSelectionClick(event) {
     setInfo('Selection cleared');
   }
   window._kaminosDirty?.();
+  };
+  const result=sceneHitsFromViewportPointer(event);
+  if(result?.then)void result.then(applyHits).catch(error=>{if(window.kaminosPendingSurfacePick===ticket)setInfo(`Selection unavailable: ${error.message}`);});
+  else applyHits(result);
 }
 
 function handleViewportDoubleClick(event) {
   if (vantageCaptureHeld || polyEdit?.active() || sceneComponents?.active() || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
   if (greenroomPreviewIsActive() || transformGizmoDragging || transformControls?.dragging) return;
   const picked = pickSceneObjectFromViewportPointer(event);
-  const record = picked?.type === 'splat' ? picked : selectedSplatRecord();
+  const finish=picked=>{const record = picked?.type === 'splat' ? picked : selectedSplatRecord();
   if (!record) return;
   event.preventDefault?.();
   event.stopPropagation?.();
   enterSplatCorrectionMode(record.id);
+  };
+  if(picked?.then)void picked.then(finish).catch(error=>setInfo(`Selection unavailable: ${error.message}`));else finish(picked);
 }
 
 function localLiquidEmitterRecords() {
@@ -7205,6 +7220,7 @@ function registerSceneObject(object, metadata = {}, {activate = true} = {}) {
 }
 
 window.selectSceneField=function(id,options={}) {
+  window.kaminosPendingSurfacePick=null;
   const next=changeSelection(workingScene.selection,id,options);
   return sceneSelectionHistory?sceneSelectionHistory.set(next.ids,next.activeId):setSceneSelection(next.ids,next.activeId);
 };
@@ -25702,6 +25718,7 @@ function selectionTransformProxy(){
   selectionProxy.userData.kaminosSceneObject={label:`${workingScene.selection.ids.length} selected`};selectionProxy.updateMatrixWorld(true);return selectionProxy;
 }
 function setSceneSelection(ids,activeId=ids.at(-1)??null){
+  window.kaminosPendingSurfacePick=null;
   const valid=new Set([...workingScene.objects.map(o=>o.id),...workingScene.groups.map(g=>'@group:'+g.id),...(activeSceneComposition?['flame-field']:[]),...(waterFeature.setup?['water-field']:[])]);
   if(ids.some(id=>!valid.has(id)))throw Error('Selection contains an absent scene item');
   const next=checkedSelection(ids,activeId);

@@ -5,11 +5,12 @@ import {createBurnFractureSurface} from './burn-fracture-replay.mjs';
 import {LIVE_LOG_HEAT_IDENTITY} from './live-log-heat-core.mjs';
 import {sceneRadianceSourceMaterial} from './scene-radiance.mjs';
 import {burnMechanicsLocalScale} from './burn-fracture-core.mjs';
+import {registerPresentedSurface} from './scene-presented-surface.mjs';
 
 export function createSceneBurnFracture({renderer,field,structure,debris,parent,ground,materials,
  createDynamics=createBurnFractureGpu,createSurface=createBurnFractureSurface}){
  const {mesh}=field.residentState(),hiddenMaterials=new Map();
- let enabled=false,disposed=false,generation=0,status='off',error=null,pending=null,dynamics=null,surface=null,referenceScale=null;
+ let enabled=false,disposed=false,generation=0,status='off',error=null,pending=null,dynamics=null,surface=null,referenceScale=null,releasePresentation=null;
  function frame(){
   mesh.updateWorldMatrix(true,false);const inverse=mesh.matrixWorld.clone().invert(),g=ground();
   const worldScale=new Vector3().setFromMatrixScale(mesh.matrixWorld),s=worldScale.x;
@@ -18,7 +19,7 @@ export function createSceneBurnFracture({renderer,field,structure,debris,parent,
   const position=new Vector3(g.center[0],g.height-.05,g.center[2]).applyMatrix4(inverse),scale=new Vector3(),rotation=new Quaternion();inverse.decompose(new Vector3(),rotation,scale);
   return {scale:s,contactsEnabled:g.visible!==false,gravity:new Vector3(0,-9.81,0).applyMatrix3(new Matrix3().setFromMatrix4(inverse)).toArray(),support:{position:position.toArray(),quaternion:rotation.toArray(),halfExtents:[g.radius/s,.05/s,g.radius/s],friction:.6}};
  }
- function clear(){field.setRegionMotion(null);debris.setRegionMotion(null);surface?.dispose();surface=null;dynamics?.dispose();dynamics=null;referenceScale=null;for(const [material,visible] of hiddenMaterials)material.visible=visible;hiddenMaterials.clear();}
+ function clear(){releasePresentation?.();releasePresentation=null;field.setRegionMotion(null);debris.setRegionMotion(null);surface?.dispose();surface=null;dynamics?.dispose();dynamics=null;referenceScale=null;for(const [material,visible] of hiddenMaterials)material.visible=visible;hiddenMaterials.clear();}
  function present(){if(!surface)return;mesh.updateWorldMatrix(true,false);parent.updateWorldMatrix(true,false);surface.mesh.matrix.copy(parent.matrixWorld).invert().multiply(mesh.matrixWorld);surface.mesh.updateWorldMatrix(false,false);}
  async function prepare(token){let candidate,view;try{
   await structure.setRequired(true);if(disposed||token!==generation)return;
@@ -35,7 +36,7 @@ export function createSceneBurnFracture({renderer,field,structure,debris,parent,
   // Keep the authored object in collision and selection traversal. Only its
   // superseded draw materials are hidden; the moving surface owns presentation.
   for(const material of Array.isArray(mesh.material)?mesh.material:[mesh.material]){hiddenMaterials.set(material,material.visible);material.visible=false;}
-  present();status='live';
+  present();releasePresentation=registerPresentedSurface(mesh,surface);status='live';
  }catch(cause){candidate?.dispose();view?.dispose();if(disposed||token!==generation)return;clear();error=cause.message;status='failed';}}
  return {
   configure(value){if(disposed||enabled===(value===true))return pending;enabled=value===true;const token=++generation;error=null;

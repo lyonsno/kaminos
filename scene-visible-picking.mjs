@@ -1,11 +1,21 @@
 // Ordinary visible scene geometry wins by depth. Lines use a screen-sized
 // aperture, not Three's default one-world-unit invisible selection tube.
 import {BufferGeometry,Float32BufferAttribute,LineSegments,LineBasicMaterial,Vector3} from './lib/three.core.js';
+import {presentedSurface} from './scene-presented-surface.mjs';
 export function visibleSceneIntersections({raycaster,roots,camera,viewport,linePixels=6}) {
  if(!(viewport?.width>0&&viewport?.height>0)||!(linePixels>0))throw Error('Picking requires an actual viewport');
- const hits=[],seen=new Set(),prior=raycaster.params.Line.threshold;
+ const hits=[],pending=[],seen=new Set(),prior=raycaster.params.Line.threshold;
  function visit(node){
   if(!node.visible||seen.has(node))return;seen.add(node);
+  const surface=presentedSurface(node);
+  if(surface){
+   const near=raycaster.near,far=raycaster.far;
+   pending.push(Promise.resolve(surface.pick(raycaster.ray.clone())).then(hit=>{
+    if(hit&&hit.distance>=near&&hit.distance<=far&&presentedSurface(node)===surface){let visible=true;for(let p=node;p;p=p.parent)if(!p.visible)visible=false;for(let p=surface.mesh;p;p=p.parent)if(!p.visible)visible=false;
+     if(visible)hits.push({...hit,object:node,surfaceObject:surface.mesh});}
+   }));
+   for(const child of node.children)visit(child);return;
+  }
   const wide=node.userData.kaminosWideLine;
   if(wide?.visible&&wide.material.visible!==false&&wide.material.opacity>0){
    // Raycast the same centerline used by the visible expanded helper. Its
@@ -33,5 +43,6 @@ export function visibleSceneIntersections({raycaster,roots,camera,viewport,lineP
  }
  try{for(const root of roots){let visible=true;for(let parent=root;parent;parent=parent.parent)if(!parent.visible){visible=false;break;}if(visible)visit(root);}}
  finally{raycaster.params.Line.threshold=prior;}
- return hits.sort((a,b)=>a.distance-b.distance);
+ const sorted=()=>hits.sort((a,b)=>a.distance-b.distance);
+ return pending.length?Promise.all(pending).then(sorted):sorted();
 }

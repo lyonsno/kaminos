@@ -12,7 +12,7 @@ function fixture(){
  const gate=deferred(),dynamics={matrices:{},wrapper:{},setSupport(){},setGravity(){},setContactsEnabled:value=>{contacts=value;},advance:()=>steps++,read:()=>({steps}),dispose:()=>disposed++};
  const body=createSceneBurnFracture({renderer:{},field,parent,ground:()=>ground,materials:[material],
   structure:{setRequired:value=>{required=value;},resident:()=>({prepared,sourceMaterials:[material]})},debris:{setRegionMotion(){}},
-  createDynamics:()=>gate.promise,createSurface:()=>({mesh:new THREE.Mesh(),bindings:[],read:()=>({}),dispose(){viewDisposed++;this.mesh.removeFromParent();}})});
+  createDynamics:()=>gate.promise,createSurface:()=>({mesh:new THREE.Mesh(),bindings:[],pick:async()=>null,read:()=>({}),dispose(){viewDisposed++;this.mesh.removeFromParent();}})});
  return {body,mesh,parent,material,gate,dynamics,ground,read:()=>({required,motion,disposed,viewDisposed,steps,contacts})};
 }
 const live=fixture(),pending=live.body.configure(true);await Promise.resolve();live.gate.resolve(live.dynamics);await pending;

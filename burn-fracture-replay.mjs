@@ -3,6 +3,7 @@ import {createLogSurfaceMask} from './live-log-surface-mask.mjs';
 import {LOG_RESIDUE} from './log-consumption.mjs';
 import {createBurnMaterial} from './burn-table-material.mjs';
 import {createCoarseSurfaceMesh} from './fracture-coarse-surface.mjs';
+import {createBurnFracturePicker} from './burn-fracture-picking.mjs';
 import {mapBurnRegions} from './burn-structure-core.mjs';
 
 export function readBurnReplay(raw,replayMatrix){
@@ -71,6 +72,7 @@ export function createBurnFractureSurface({renderer,prepared,materials,field,dyn
  const alive=textureLoad(dynamics.wrapper,ivec2(0,connection.sub(1).max(0).add(prepared.cells.length))).x;
  for(const binding of bindings){binding.material.positionNode=Fn(()=>{normalLocal.assign(mat3(pose).mul(normalGeometry));return pose.mul(vec4(positionGeometry,1)).xyz;})();binding.material.maskNode=connection.equal(0).or(alive.lessThan(.5));}
  const mesh=createCoarseSurfaceMesh(arrays,bindings.map(b=>b.material));mesh.geometry.setAttribute('burnPiece',new THREE.Float32BufferAttribute(owners,1));mesh.geometry.setAttribute('burnCap',new THREE.Float32BufferAttribute(caps,1));mesh.frustumCulled=false;mesh.castShadow=false;mesh.name='Burned material regions';mesh.raycast=()=>{};
- return {mesh,bindings,read:()=>({exteriorTriangles:prepared.receipt.sourceTriangles,renderedTriangles:faces,regions:prepared.cells.length,pose:'resident-matrix-texture',stateIdentity,capVisibility:'resident-broken-connection',runtimeReadbacks:0,lighting:'ordinary-surface-no-dynamic-shadow-proxy'}),
-  dispose(){mesh.removeFromParent();mesh.geometry.dispose();for(const b of bindings)b.dispose();cap.dispose();}};
+ const picker=createBurnFracturePicker({field,dynamics,mesh,arrays,owners,caps,regions:prepared.cells.length});
+ return {mesh,bindings,pick:picker.pick,read:()=>({exteriorTriangles:prepared.receipt.sourceTriangles,renderedTriangles:faces,regions:prepared.cells.length,pose:'resident-matrix-texture',stateIdentity,capVisibility:'resident-broken-connection',runtimeReadbacks:0,picking:picker.read(),lighting:'ordinary-surface-no-dynamic-shadow-proxy'}),
+  dispose(){picker.dispose();mesh.removeFromParent();mesh.geometry.dispose();for(const b of bindings)b.dispose();cap.dispose();}};
 }
