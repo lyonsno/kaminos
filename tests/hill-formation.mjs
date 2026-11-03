@@ -58,3 +58,23 @@ test('inherited upland grades into a lower-gradient apron before the outlet',()=
  const c=formationConfig({resolution:33}),s=seedGeology(c),height=z=>s[(z*33+16)*4];
  assert.ok(Math.abs(height(28)-height(31))<Math.abs(height(14)-height(17))*.1,'the receiving apron must lose slope before sediment exits');
 });
+test('multi-receiver drainage and apron spreading retain fan deposits on finer grids',()=>{
+ const c=formationConfig({resolution:49,iterations:120}),initial=seedGeology(c),f=formTerrain(c),d=drainage(f.state,c);
+ assert.ok(d.targets instanceof Int32Array&&d.weights instanceof Float64Array,'drainage must expose multi-receiver targets and weights');
+ assert.ok(f.metrics.deposited/f.metrics.erodedVolume>.32,'apron fan spreading must retain a substantial share of eroded sediment');
+ let fanCols=0;for(let x=0;x<49;x++){let gain=0;for(let z=36;z<49;z++){const i=(z*49+x)*4;gain+=Math.max(0,f.state[i+1]-initial[i+1]);}if(gain>.02)fanCols++;}
+ assert.ok(fanCols>=14,'apron deposition must spread laterally across multiple columns rather than a single slot');
+});
+test('extended formation preserves exposed upland rock instead of burying the mountain in soil',()=>{
+ const f=formTerrain({resolution:33,iterations:600});let upland=0,exposed=0;
+ for(let z=0;z<24;z++)for(let x=0;x<33;x++){upland++;if(Math.exp(-f.state[(z*33+x)*4+1]/.045)>.5)exposed++;}
+ assert.ok(exposed/upland>.55,'extended formation must keep upland rock ridges and scarps visibly exposed');
+ assert.ok(f.metrics.weathered<f.metrics.rockEroded+f.metrics.bankCollapsed,'regolith cover must insulate bedrock so uniform weathering does not outpace channel and bank sculpture');
+});
+test('incremental formation exposes partial snapshots and resumes identically to a full run',async()=>{
+ const {createFormation}=await import(source),c=formationConfig({resolution:17,iterations:30}),early=createFormation({...c,iterations:12});
+ early.step();const snap=early.snapshot();assert.equal(snap.partial,true);assert.equal(snap.steps,1);assert.equal(snap.state.length,17*17*4);
+ while(!early.done)early.step();const mid=early.result(),resumed=createFormation(c,mid);
+ while(!resumed.done)resumed.step();const finalResumed=resumed.result(),full=formTerrain(c);
+ assert.deepEqual(finalResumed.state,full.state);assert.deepEqual(finalResumed.metrics,full.metrics);
+});

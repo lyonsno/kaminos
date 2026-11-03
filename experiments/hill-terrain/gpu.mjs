@@ -27,7 +27,8 @@ const normal=wgslFn(`fn hill_normal(v:u32,n:u32,dx:f32,dz:f32,state:ptr<storage,
 }`);
 
 const formedColor=wgslFn(`fn hill_geological_color(x:f32,z:f32,bed:f32,soil:f32,tilt:f32,fold:f32,thickness:f32,seed:f32)->vec4<f32>{
- let phase=(bed-tilt*x-fold*sin(z*.7+x*.2)+seed*.017)/thickness;
+ let warp=.3*sin(x*.55+z*.35+seed*.03)+.18*cos(z*.85-x*.45);
+ let phase=(bed-tilt*x-fold*(sin(z*.7+x*.2)+warp)+seed*.017)/thickness;
  let band=.5+.5*sin(phase*6.28318530718);
  let rock=mix(vec3<f32>(.13,.10,.065),vec3<f32>(.30,.245,.16),band);
  let earth=vec3<f32>(.12,.17,.065);let exposed=exp(-soil/.045);
