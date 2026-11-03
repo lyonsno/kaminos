@@ -252,7 +252,9 @@ const LIGHT_CELLS: u32 = LIGHT_GRID*LIGHT_GRID*LIGHT_GRID;
 @group(3) @binding(3) var<storage,read_write> emissiveIncidentDst: array<vec4<f32>>;
 fn lightIndex(c: vec3<u32>) -> u32 { return c.x+LIGHT_GRID*(c.y+LIGHT_GRID*c.z); }
 fn incidentAt(p: vec3<f32>) -> vec3<f32> {
-  let q = clamp((p*0.5+vec3<f32>(0.5))*f32(LIGHT_GRID)-vec3<f32>(0.5),vec3<f32>(0.0),vec3<f32>(f32(LIGHT_GRID)-1.001));
+  let top = 2.0 * f32(GRID_Y) / f32(GRID) - 1.0;
+  let uvw = vec3<f32>(p.x * 0.5 + 0.5, (p.y + 1.0) / max(top + 1.0, 2.0), p.z * 0.5 + 0.5);
+  let q = clamp(uvw*f32(LIGHT_GRID)-vec3<f32>(0.5),vec3<f32>(0.0),vec3<f32>(f32(LIGHT_GRID)-1.001));
   let c = vec3<u32>(floor(q)); let w = fract(q);
   var sum = vec3<f32>(0.0);
   for (var z=0u; z<2u; z++) { for (var y=0u; y<2u; y++) { for (var x=0u; x<2u; x++) {
@@ -267,10 +269,12 @@ fn incidentAt(p: vec3<f32>) -> vec3<f32> {
 fn seedEmissiveLight(@builtin(global_invocation_id) c: vec3<u32>) {
   seatGridShape();
   if (any(c>=vec3<u32>(LIGHT_GRID))) { return; }
+  let top = 2.0 * f32(GRID_Y) / f32(GRID) - 1.0;
+  let span = vec3<f32>(2.0, max(top + 1.0, 2.0), 2.0);
   var coefficients = vec4<f32>(0.0);
   for(var k=0u;k<8u;k++) {
     let offset = (vec3<f32>(f32(k&1u),f32((k>>1u)&1u),f32((k>>2u)&1u))+vec3<f32>(0.5))*0.5;
-    let p = (vec3<f32>(c)+offset)*(2.0/f32(LIGHT_GRID))-vec3<f32>(1.0);
+    let p = (vec3<f32>(c)+offset)*(span/f32(LIGHT_GRID))-vec3<f32>(1.0);
     let r = sampleWorldFlowReconstructionRaw(p);
     let support = liveBoundarySupportAt(p, max(u.topology_shell_carriers,vec4<f32>(0.0)));
     let coverage = support;

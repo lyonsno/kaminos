@@ -70,13 +70,17 @@ fn hierarchyHistory(p:vec3<f32>)->Gas{return hierarchyPlane(p,true);}
 }
 @compute @workgroup_size(64) fn advanceBricks(@builtin(workgroup_id) group:vec3<u32>,@builtin(num_workgroups) groups:vec3<u32>,@builtin(local_invocation_index) l:u32){
  let index=group.x+group.y*groups.x;if(index>=arrayLength(&work)){return;}let slot=work[index];let n=bricks[slot];let p=n.loPitch.xyz+(vec3<f32>(localCell(l))+.5)*n.loPitch.w;
- let fraction=fineFraction(p,n.loPitch.w);var owned=Gas(vec4<f32>(0),vec4<f32>(0));
+ let fraction=fineDonorWeight(p,n.loPitch.w);var owned=Gas(vec4<f32>(0),vec4<f32>(0));
  if(fraction>0.0){owned=gasScale(fineGasAt(p,n.loPitch.w),fraction);}
  var r=owned;
- if(fraction<1.0){
+ if(fraction<.999999){
   let back=clipped(p,p-velocity(p)*u.time.y);var history=hierarchyGas(back);
-  if(fraction>0.0){history=exteriorHistory(history,hierarchyHistory(back),p,back,n.loPitch.w);}
-  r=suppliedGas(gasScale(history,1.0/(1.0-fraction)),supplyTexel(materialSupply,2u*(slot*64u+l))/(1.0-fraction));
+  if(reactantLawOn()&&u.time.x>0.0){
+   r=suppliedGas(history,supplyTexel(materialSupply,2u*(slot*64u+l)));
+  }else{
+   if(fraction>0.0){history=exteriorHistory(history,hierarchyHistory(back),p,back,n.loPitch.w);}
+   r=suppliedGas(gasScale(history,1.0/(1.0-fraction)),supplyTexel(materialSupply,2u*(slot*64u+l))/(1.0-fraction));
+  }
   if(reactantLawOn()){
    let dt=u.time.x;
    let w=min(.16,max(0.0,u.reactant_combustion_a.w*dt*pow(u.material.w/n.loPitch.w,2.0)));
@@ -85,8 +89,12 @@ fn hierarchyHistory(p:vec3<f32>)->Gas{return hierarchyPlane(p,true);}
     let off=vec3<f32>(axis(a))*n.loPitch.w;let plus=hierarchyGas(clipped(p,p+off));let minus=hierarchyGas(clipped(p,p-off));
     neighbors+=plus.a+minus.a;momentNeighbors+=plus.b.yzw+minus.b.yzw;
    }
-   r.a=max(vec4<f32>(0),r.a*(1.0-6.0*w)+neighbors*w);
-   r.b=vec4<f32>(r.b.x,max(vec3<f32>(0),r.b.yzw*(1.0-6.0*w)+momentNeighbors*w));
+   let lapA=neighbors-6.0*r.a;
+   let prevSoot=r.a.x;
+   let nextSoot=coarseSootClump(r.a.x,lapA.x,dt);
+   let sootScale=select(0.0,nextSoot/prevSoot,prevSoot>1e-5);
+   r.a=vec4<f32>(nextSoot,max(vec3<f32>(0),r.a.yzw+w*lapA.yzw));
+   r.b=vec4<f32>(r.b.x,max(vec3<f32>(0),r.b.yzw*sootScale));
    let burned=reactantBurn(r.a.z,r.a.w,r.a.y,dt);
    let cooling=reactantCoolingSurvival(dt);let survival=reactantSootSurvival(dt);
    let moments=(shiftThermalMoments(r.b.yzw,r.a.x,burned.z-r.a.y,cooling)+thermalMoments(burned.w*u.reactant_combustion_b.z,burned.z*cooling))*survival;
@@ -139,6 +147,7 @@ var<workgroup> motionMax:array<vec4<f32>,64>;
  if(l==0u){demand[index*3u]=signal[0]/64.0;demand[index*3u+1u]=motionMin[0];demand[index*3u+2u]=motionMax[0];}
 }
 `;}
+export const MATERIAL_HIERARCHY_WGSL=hierarchyWGSL('');
 
 export function createMaterialHierarchyGPU(device,plan,worldCode,options={}){
  const sourceAtlas=createSourceAtlas(device,'adaptive material source supply');

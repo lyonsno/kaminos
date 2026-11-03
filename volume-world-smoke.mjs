@@ -80,6 +80,25 @@ export function worldWindAcceleration({strength=0,angle=0,height=0,speed=1,fineW
  return [Math.cos(angle)*gain,0,Math.sin(angle)*gain,height];
 }
 
+export function coarseSootClump(soot,lapSoot,dt){
+ const s=Math.max(0,soot);
+ if(s<=0)return 0;
+ const step=Math.max(dt,0);
+ const delta=lapSoot<0
+  ?Math.min(0.04*s,-0.02*step*lapSoot)
+  :Math.min(0.10*s,0.025*step*lapSoot);
+ return Math.max(0,s+delta*(1-Math.min(1,s*0.85)));
+}
+
+export function fineDonorEnvelope(p,top=3){
+ const spanY=Math.max(top+1,2);
+ const rx=Math.max(0,Math.min(1,(Math.abs(p[0])-0.56)/0.40));
+ const rz=Math.max(0,Math.min(1,(Math.abs(p[2])-0.56)/0.40));
+ const ry=Math.max(0,Math.min(1,(p[1]-(-1+0.72*spanY))/(0.26*spanY)));
+ const r=Math.min(1,Math.hypot(rx,ry,rz));
+ return 1-r*r*(3-2*r);
+}
+
 export const WORLD_SMOKE_WGSL=/* wgsl */`
 struct Params {
  flow:vec4<f32>, material:vec4<f32>, near:vec4<f32>, mapping:vec4<f32>,
@@ -129,6 +148,27 @@ fn boxFraction(p:vec3<f32>,pitch:f32,lo:vec3<f32>,hi:vec3<f32>)->f32{
  return d.x*d.y*d.z;
 }
 fn fineFraction(p:vec3<f32>,pitch:f32)->f32{return boxFraction(p,pitch,fineLo(),fineHi());}
+fn fineDonorEnvelope(p:vec3<f32>,top:f32)->f32{
+ let spanY=max(top+1.0,2.0);
+ let rx=clamp((abs(p.x)-0.56)/0.40,0.0,1.0);
+ let rz=clamp((abs(p.z)-0.56)/0.40,0.0,1.0);
+ let ry=clamp((p.y-(-1.0+0.72*spanY))/(0.26*spanY),0.0,1.0);
+ let r=clamp(length(vec3<f32>(rx,ry,rz)),0.0,1.0);
+ return 1.0-r*r*(3.0-2.0*r);
+}
+fn fineDonorWeight(p:vec3<f32>,pitch:f32)->f32{
+ let base=fineFraction(p,pitch);
+ if(!reactantLawOn()||u.time.x<=0.0||base<=0.0){return base;}
+ let top=2.0*u.near.y/u.near.x-1.0;
+ return base*fineDonorEnvelope(finePoint(p),top);
+}
+fn coarseSootClump(soot:f32,lapSoot:f32,dt:f32)->f32{
+ let s=max(0.0,soot);
+ if(s<=0.0){return 0.0;}
+ let step=max(dt,0.0);
+ let delta=select(min(0.10*s,0.025*step*lapSoot),min(0.04*s,-0.02*step*lapSoot),lapSoot<0.0);
+ return max(0.0,s+delta*(1.0-clamp(s*0.85,0.0,1.0)));
+}
 // Semi-Lagrangian cell reconstruction: the transported prior Fine portion and
 // exterior portion each occupy their own subvolume. Only the part now covered
 // by Fine is replaced. When Fine moves away, its previous gas is released.
@@ -162,11 +202,12 @@ fn momentumDonor(c:vec3<i32>,a:u32)->bool{
 // is continued; no radial force is invented. The usual whole-world pressure
 // projection follows, so this is not an independent shell pressure solve.
 fn collarVelocity(p:vec3<f32>,advected:f32,a:u32)->f32{
- if(u.lo.w<=0.0){return advected;}
+ let reach=select(u.lo.w,max(u.lo.w,1.5),reactantLawOn()&&u.time.x>0.0);
+ if(reach<=0.0){return advected;}
  let margin=2.0/u.near.x;
  let q=finePoint(p);let edge=clamp(q,vec3<f32>(-1.0+margin),vec3<f32>(1.0-margin,2.0*u.near.y/u.near.x-1.0-margin,1.0-margin));
  let delta=q-edge;let distance=length(delta)*u.mapping.w;
- let width=u.lo.w*u.flow.w;if(distance<=0.0||distance>=width){return advected;}
+ let width=reach*u.flow.w;if(distance<=0.0||distance>=width){return advected;}
  let sample=edge*u.mapping.w+u.mapping.xyz;
  // Do not extend momentum through an intervening coarse obstacle.
  if(length(clipped(p,sample)-sample)>1e-5){return advected;}
@@ -197,7 +238,7 @@ fn fineGasAt(p:vec3<f32>,pitch:f32)->Gas{
  let radius=.5*pitch/u.mapping.w*u.near.x*.5;
  let lo=max(vec3<f32>(0),center-vec3<f32>(radius));
  let hi=min(u.near.xyz,center+vec3<f32>(radius));
- var a=vec4<f32>(0);var b=vec4<f32>(0);var total=0.0;
+ var a=vec4<f32>(0);var b=vec4<f32>(0);var total=0.0;var peakSoot=0.0;
  for(var z=i32(floor(lo.z));z<i32(ceil(hi.z));z++){
  for(var y=i32(floor(lo.y));y<i32(ceil(hi.y));y++){
  for(var x=i32(floor(lo.x));x<i32(ceil(hi.x));x++){
@@ -205,9 +246,17 @@ fn fineGasAt(p:vec3<f32>,pitch:f32)->Gas{
   let overlap=max(vec3<f32>(0),min(f+1.0,hi)-max(f,lo));let w=overlap.x*overlap.y*overlap.z;
   let m=max(fine[4u*idx(c,u.near.xyz)+1u].xyz,vec3<f32>(0));
   let chemical=textureLoad(fineReaction,c,0).xy;
+  if(w>0.0){peakSoot=max(peakSoot,m.x);}
   a+=vec4<f32>(m,chemical.x)*w;b+=vec4<f32>(chemical.y,thermalMoments(m.x,m.y))*w;total+=w;
  }}}
- return Gas(a/max(total,1e-12),b/max(total,1e-12));
+ var avgA=a/max(total,1e-12);var avgB=b/max(total,1e-12);
+ if(reactantLawOn()&&u.time.x>0.0&&avgA.x>1e-5){
+  let nextSoot=mix(avgA.x,max(avgA.x,peakSoot*0.75),0.35);
+  let sootScale=nextSoot/avgA.x;
+  avgA.x=nextSoot;
+  avgB=vec4<f32>(avgB.x,avgB.yzw*sootScale);
+ }
+ return Gas(avgA,avgB);
 }
 fn fineGas(p:vec3<f32>)->Gas{return fineGasAt(p,u.material.w);}
 fn axis(a:u32)->vec3<i32>{var v=vec3<i32>(0);v[a]=1;return v;}
@@ -352,7 +401,7 @@ fn finePressureGradient(c:vec3<i32>,a:u32)->f32{
 }
 @compute @workgroup_size(4,4,4) fn project(@builtin(global_invocation_id) gid:vec3<u32>){
  let c=vec3<i32>(gid);if(!inside(c,u.flow.xyz)){return;}let i=idx(c,u.flow.xyz);var v=vin[i].xyz;
- for(var a=0u;a<3u;a++){let n=c+axis(a);v[a]-=finePressureGradient(c,a);if(blocked(c)||blocked(n)){v[a]=0;}}
+ for(var a=0u;a<3u;a++){let n=c+axis(a);let pScale=select(1.0,0.2,reactantLawOn()&&u.time.x>0.0&&momentumDonor(c,a));v[a]-=finePressureGradient(c,a)*pScale;if(blocked(c)||blocked(n)){v[a]=0;}}
  vout[i]=vec4<f32>(v,0);
  if(u.materialLo.w>.5){textureStore(exportedFlow,c,vec4<f32>(v,0));}
 }
@@ -369,13 +418,18 @@ fn storeMaterial(c:vec3<i32>,i:u32,p:vec3<f32>,value:Gas,contribution:Gas){
 }
 @compute @workgroup_size(4,4,4) fn transportMaterial(@builtin(global_invocation_id) gid:vec3<u32>){
  let c=vec3<i32>(gid);if(!inside(c,u.material.xyz)){return;}let i=idx(c,u.material.xyz);let p=u.lo.xyz+(vec3<f32>(c)+.5)*u.material.w;
- let fraction=fineFraction(p,u.material.w);var owned=Gas(vec4<f32>(0),vec4<f32>(0));
+ let fraction=fineDonorWeight(p,u.material.w);var owned=Gas(vec4<f32>(0),vec4<f32>(0));
  if(fraction>0.0){owned=gasScale(fineGas(p),fraction);}
- if(fraction==1.0){storeMaterial(c,i,p,owned,owned);return;}
+ if(fraction>=.999999){storeMaterial(c,i,p,owned,owned);return;}
  let back=clipped(p,p-velocity(p)*u.time.y);var history=gas(back);
- if(fraction>0.0){history=exteriorHistory(history,gasHistory(back),p,back,u.material.w);}
- // Exterior supply is already an amount per whole receiving-cell volume.
- var r=suppliedGas(gasScale(history,1.0/(1.0-fraction)),supplyTexel(materialSupply,2u*i)/(1.0-fraction));
+ var r:Gas;
+ if(reactantLawOn()&&u.time.x>0.0){
+   r=suppliedGas(history,supplyTexel(materialSupply,2u*i));
+ }else{
+   if(fraction>0.0){history=exteriorHistory(history,gasHistory(back),p,back,u.material.w);}
+   // Exterior supply is already an amount per whole receiving-cell volume.
+   r=suppliedGas(gasScale(history,1.0/(1.0-fraction)),supplyTexel(materialSupply,2u*i)/(1.0-fraction));
+ }
  if(reactantLawOn()){
    let dt=u.time.x;let w=reactantExchangeWeightFor(dt);var neighbors=vec4<f32>(0);var momentNeighbors=vec3<f32>(0);
    for(var a=0u;a<3u;a++){
@@ -383,8 +437,12 @@ fn storeMaterial(c:vec3<i32>,i:u32,p:vec3<f32>,value:Gas,contribution:Gas){
      let plus=gas(clipped(p,p+off));let minus=gas(clipped(p,p-off));
      neighbors+=plus.a+minus.a;momentNeighbors+=plus.b.yzw+minus.b.yzw;
    }
-   r.a=max(vec4<f32>(0),r.a*(1.0-6.0*w)+neighbors*w);
-   r.b=vec4<f32>(r.b.x,max(vec3<f32>(0),r.b.yzw*(1.0-6.0*w)+momentNeighbors*w));
+   let lapA=neighbors-6.0*r.a;
+   let prevSoot=r.a.x;
+   let nextSoot=coarseSootClump(r.a.x,lapA.x,dt);
+   let sootScale=select(0.0,nextSoot/prevSoot,prevSoot>1e-5);
+   r.a=vec4<f32>(nextSoot,max(vec3<f32>(0),r.a.yzw+w*lapA.yzw));
+   r.b=vec4<f32>(r.b.x,max(vec3<f32>(0),r.b.yzw*sootScale));
    let burned=reactantBurn(r.a.z,r.a.w,r.a.y,dt);
    let cooling=reactantCoolingSurvival(dt);let sootSurvival=reactantSootSurvival(dt);
    let moments=(shiftThermalMoments(r.b.yzw,r.a.x,burned.z-r.a.y,cooling)
@@ -395,6 +453,7 @@ fn storeMaterial(c:vec3<i32>,i:u32,p:vec3<f32>,value:Gas,contribution:Gas){
  storeMaterial(c,i,p,gasAdd(gasScale(r,1.0-fraction),owned),owned);
 }
 `;
+export const WORLD_SMOKE_SHARED_WGSL=WORLD_SMOKE_WGSL;
 
 export function createWorldSmoke(device,plan,anchor,{solidTexture,borrowMaterial=null,exportFields=false}={}){
   const flowOnly=!!borrowMaterial;

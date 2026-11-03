@@ -167,6 +167,14 @@ fn regionalMeanIncident(p:vec3<f32>)->vec3<f32>{
   if(middleLastMaskFlags.x>0.5||farMask.x>0.5){return middle;}
   return mix(far,middle,smoothstep(0.0,exteriorCoverage.middleLoBlend.w,distance));
 }
+fn fineIncidentEnvelope(p:vec3<f32>,top:f32)->f32{
+  let spanY=max(top+1.0,2.0);
+  let rx=clamp((abs(p.x)-0.58)/0.40,0.0,1.0);
+  let rz=clamp((abs(p.z)-0.58)/0.40,0.0,1.0);
+  let ry=clamp((p.y-(-1.0+0.72*spanY))/(0.26*spanY),0.0,1.0);
+  let r=clamp(length(vec3<f32>(rx,ry,rz)),0.0,1.0);
+  return 1.0-r*r*(3.0-2.0*r);
+}
 fn distributedMeanIncident(p:vec3<f32>)->vec3<f32>{
   let fine=fineMeanIncident(p);
   if(exteriorCoverage.hiEnabled.w<0.5){return fine;}
@@ -176,8 +184,7 @@ fn distributedMeanIncident(p:vec3<f32>)->vec3<f32>{
   if(!inside){distributedLastMaskFlags=exteriorLastMaskFlags;return coarse;}
   // Never fill a fine solid mask from a coarse neighbor across the wall.
   if(distributedLastMaskFlags.x>0.5||exteriorLastMaskFlags.x>0.5){return fine;}
-  let edge=min(p+vec3<f32>(1),hi-p);let distance=min(edge.x,min(edge.y,edge.z));
-  return mix(coarse,fine,smoothstep(0.0,exteriorCoverage.loBlend.w,distance));
+  return mix(coarse,fine,fineIncidentEnvelope(p,hi.y));
 }
 `;
 
