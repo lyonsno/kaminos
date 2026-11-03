@@ -81,7 +81,7 @@ test('incremental formation exposes partial snapshots and resumes identically to
 test('multi-tile stitched formation partitions into ~1000 seam-locked tiles across a high-resolution territory with continuous cross-tile drainage',async()=>{
  const mod=await import(source),def=formationConfig({});
  assert.ok(def.tilesX*def.tilesZ>=900&&def.tilesX*def.tilesZ<=1600,'default territory must span ~1,000 stitched tiles (e.g. 32x32 = 1,024)');
- assert.ok(def.resolution>=385&&def.valleys>=5,'default territory must pair 1,000-tile partitioning with higher feature resolution and multi-basin density');
+ assert.ok(def.resolution>=513&&def.valleys>=5,'default territory must pair 1,000-tile partitioning with >=513x513 (>500k triangle) feature resolution and multi-basin density');
  assert.equal(typeof mod.partitionTiles,'function','formation must export tile partitioning');
  assert.equal(typeof mod.buildTiledIndices,'function','formation must export tile-ordered index construction');
  const t1024=mod.partitionTiles(def);assert.equal(t1024.length,def.tilesX*def.tilesZ);
@@ -144,4 +144,38 @@ test('mesa and structural terrace controls form flat-topped benches bounded by c
  const uplandRms=(a,b)=>{let sq=0,k=0;for(let z=2;z<34;z++)for(let x=0;x<49;x++){const d=a[(z*49+x)*4]-b[(z*49+x)*4];sq+=d*d;k++;}return Math.sqrt(sq/k);};
  const rms1=uplandRms(s47,s344),rms2=uplandRms(s47,s862),rms3=uplandRms(s344,s862);
  assert.ok(rms1>.45&&rms2>.45&&rms3>.45,`different seeds must reorganize macro-topography rather than nudging fixed ridges (rms=${rms1.toFixed(3)}, ${rms2.toFixed(3)}, ${rms3.toFixed(3)})`);
+});
+test('hybrid dendritic spur dissection and meso cliff/scree/rill detail articulate mesa flanks, treads and aprons while preserving flat caps',async()=>{
+ const mod=await import(source),def=formationConfig({});
+ assert.ok(Number.isFinite(def.spurs)&&def.spurs>0&&Number.isFinite(def.meso)&&def.meso>0,'formationConfig must expose spurs and meso detail defaults');
+ assert.ok(mod.FORMATION_FIELDS.some(f=>f.key==='spurs')&&mod.FORMATION_FIELDS.some(f=>f.key==='meso'),'FORMATION_FIELDS must include spurs and meso sliders');
+ assert.ok(mod.FORMATION_PRESETS.some(p=>p.id==='dissected-mesa-spurs'&&p.patch.mesa>=.5&&p.patch.spurs>=.65),'FORMATION_PRESETS must include a hybrid dissected mesa-and-spur preset');
+ const n=97,baseCfg={resolution:n,iterations:30,mesa:.72,terrace:.64,valleys:6};
+ const smoothSeed=seedGeology(formationConfig({...baseCfg,spurs:0,meso:0}));
+ const spurredSeed=seedGeology(formationConfig({...baseCfg,spurs:.85,meso:0}));
+ const flankCurvature=state=>{
+  let sum=0,cnt=0;
+  for(let z=4;z<Math.floor(n*.72);z++)for(let x=4;x<n-4;x++){
+   const i=(z*n+x)*4,b=state[i];if(b<.22*def.relief||b>.82*def.relief)continue;
+   const lap=Math.abs(state[i-4]+state[i+4]+state[i-n*4]+state[i+n*4]-4*b);
+   sum+=lap;cnt++;
+  }
+  return sum/Math.max(1,cnt);
+ };
+ const cSmooth=flankCurvature(smoothSeed),cSpur=flankCurvature(spurredSeed);
+ assert.ok(cSpur>cSmooth*1.35,`dendritic spur dissection must articulate intermediate mesa flanks and canyon walls (spur=${cSpur.toFixed(4)}, smooth=${cSmooth.toFixed(4)})`);
+ const noMeso=formTerrain(formationConfig({...baseCfg,spurs:.58,meso:0})).state;
+ const withMeso=formTerrain(formationConfig({...baseCfg,spurs:.58,meso:.85})).state;
+ const microEnergy=(state,z0,z1)=>{
+  let sum=0,cnt=0;
+  for(let z=z0;z<z1;z++)for(let x=2;x<n-2;x++){
+   const i=(z*n+x)*4,h=state[i]+state[i+1];
+   const hL=state[i-4]+state[i-3],hR=state[i+4]+state[i+5],hU=state[i-n*4]+state[i-n*4+1],hD=state[i+n*4]+state[i+n*4+1];
+   sum+=Math.abs(hL+hR+hU+hD-4*h);cnt++;
+  }
+  return sum/Math.max(1,cnt);
+ };
+ const up0=microEnergy(noMeso,4,Math.floor(n*.70)),up1=microEnergy(withMeso,4,Math.floor(n*.70));
+ const ap0=microEnergy(noMeso,Math.floor(n*.74),n-3),ap1=microEnergy(withMeso,Math.floor(n*.74),n-3);
+ assert.ok(up1>up0*1.25&&ap1>ap0*1.25,`meso detail must increase high-frequency structural ledge/joint and apron rill/scree articulation (upland: ${up0.toFixed(4)} -> ${up1.toFixed(4)}, apron: ${ap0.toFixed(4)} -> ${ap1.toFixed(4)})`);
 });

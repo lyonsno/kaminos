@@ -1,29 +1,32 @@
 // Geological preparation only. Neither this solver nor its cache runs in playback.
-export const FORMATION_VERSION='hill-geology-8';
-const defaults={seed:47,tilesX:32,tilesZ:32,resolution:385,width:8,length:9,iterations:180,relief:3.6,mesa:.68,terrace:.64,valleys:6,apron:.24,tilt:.16,strike:18,fold:.16,bedThickness:.34,hardness:8.5,incision:.068,channelArea:.16,weathering:.00065,transport:.12,creep:.014,repose:34,bankFailure:1,bankRepose:54};
+export const FORMATION_VERSION='hill-geology-9';
+const defaults={seed:47,tilesX:32,tilesZ:32,resolution:513,width:8,length:9,iterations:160,relief:3.6,mesa:.66,terrace:.64,spurs:.58,meso:.72,valleys:6,apron:.24,tilt:.16,strike:18,fold:.16,bedThickness:.32,hardness:8.8,incision:.068,channelArea:.14,weathering:.00065,transport:.12,creep:.014,repose:34,bankFailure:1,bankRepose:54};
 export const FORMATION_FIELDS=[
  {key:'seed',group:'Epoch & Seed',title:'Territory seed',min:1,max:999,step:1,unit:'id',default:defaults.seed,tooltip:'Reorganizes the macro-territory: rotates canyon strike azimuths, relocates plateau massifs and trunk breaches, and shifts structural domes (default 47, range 1–999).'},
- {key:'iterations',group:'Epoch & Seed',title:'Formation age · steps',min:0,max:3000,step:20,unit:'steps',default:defaults.iterations,tooltip:'Geological erosion epoch along a non-convergent transient trajectory: 40–80 = youthful canyon rim incision, 160–400 = mature mesas, terraced benches & fans, 800–3000 = skeletal buttes & badlands (default 180).'},
+ {key:'iterations',group:'Epoch & Seed',title:'Formation age · steps',min:0,max:3000,step:20,unit:'steps',default:defaults.iterations,tooltip:'Geological erosion epoch along a non-convergent transient trajectory: 40–80 = youthful canyon rim incision, 140–400 = mature mesas, terraced benches & fans, 800–3000 = skeletal buttes & badlands (default 160).'},
  {key:'relief',group:'Macro Landform',title:'Initial relief',min:.5,max:7,step:.1,unit:'m',default:defaults.relief,tooltip:'Peak elevation of the inherited plateau and mountain massifs above the receiving basin floor before erosion begins (default 3.6, range 0.5–7.0).'},
- {key:'mesa',group:'Macro Landform',title:'Plateau & mesa cap',min:0,max:1,step:.02,unit:'ratio',default:defaults.mesa,tooltip:'Blends between peaked mountain ridge combs (0.0) and flat-topped caprock tablelands, isolated outlier buttes, and steep-walled box canyons (0.6–1.0, default 0.68).'},
+ {key:'mesa',group:'Macro Landform',title:'Plateau & mesa cap',min:0,max:1,step:.02,unit:'ratio',default:defaults.mesa,tooltip:'Blends between peaked mountain ridge combs (0.0) and flat-topped caprock tablelands, isolated outlier buttes, and steep-walled box canyons (0.6–1.0, default 0.66).'},
  {key:'terrace',group:'Macro Landform',title:'Structural terracing',min:0,max:1,step:.02,unit:'ratio',default:defaults.terrace,tooltip:'Carves stair-stepped structural benches and cliff risers across canyon walls and tableland flanks at bed-thickness intervals (default 0.64, range 0.0–1.0).'},
+ {key:'spurs',group:'Macro Landform',title:'Dendritic spur dissection',min:0,max:1,step:.02,unit:'ratio',default:defaults.spurs,tooltip:'Bridges smooth box-canyon mesa blocks (0.0) and deeply ribbed dendritic ridge spurs, scalloped rim alcoves, and branching side-gully chutes along tableland walls (default 0.58, range 0.0–1.0).'},
  {key:'valleys',group:'Macro Landform',title:'Major canyon systems',min:1,max:12,step:.5,unit:'basins',default:defaults.valleys,tooltip:'Density of primary and conjugate box-canyon corridors and dividing tableland/ridge blocks across the 1,024-tile territory (default 6, range 1–12).'},
  {key:'apron',group:'Macro Landform',title:'Receiving apron',min:.10,max:.55,step:.02,unit:'ratio',default:defaults.apron,tooltip:'Fraction of the foreland domain graded into a low-slope piedmont basin where coalescing alluvial fans deposit (default 0.24, range 0.10–0.55).'},
  {key:'tilt',group:'Rock Bedding',title:'Rock-bed tilt',min:-1.5,max:1.5,step:.05,unit:'slope',default:defaults.tilt,tooltip:'Dip slope (rise/run) of 3D rock strata. Near-zero values (0.0–0.2) form horizontal mesa caps and level terrace benches; high values (0.7–1.2) carve tilted cuesta hogbacks (default 0.16).'},
  {key:'strike',group:'Rock Bedding',title:'Bed strike angle',min:-90,max:90,step:2,unit:'deg',default:defaults.strike,tooltip:'Horizontal compass rotation of rock strata and hogback strike ridges across the territory in degrees (default 18°, range -90° to 90°).'},
  {key:'fold',group:'Rock Bedding',title:'Rock-bed folding',min:0,max:.8,step:.02,unit:'m',default:defaults.fold,tooltip:'Amplitude of synclinal/anticlinal wave folding in the 3D rock strata (default 0.16, range 0.0–0.8).'},
- {key:'bedThickness',group:'Rock Bedding',title:'Rock-bed thickness',min:.10,max:1.0,step:.02,unit:'m',default:defaults.bedThickness,tooltip:'Vertical height of each alternating hard caprock cliff unit and recessive interbed step (default 0.34, range 0.10–1.0).'},
- {key:'hardness',group:'Rock Bedding',title:'Bed resistance contrast',min:0,max:15,step:.2,unit:'×',default:defaults.hardness,tooltip:'Strength multiplier of hard caprock ledges vs. soft interbeds. High values (8–14) hold sharp mesa rims, stepped terrace treads, and hogback fins (default 8.5, range 0–15).'},
- {key:'channelArea',group:'Erosion & Weathering',title:'Channel source area',min:.02,max:1.0,step:.02,unit:'m²',default:defaults.channelArea,tooltip:'Minimum upstream catchment area before surface runoff incises bedrock channels; lower values branch finer tributary canyons (default 0.16, range 0.02–1.0).'},
+ {key:'bedThickness',group:'Rock Bedding',title:'Rock-bed thickness',min:.10,max:1.0,step:.02,unit:'m',default:defaults.bedThickness,tooltip:'Vertical height of each alternating hard caprock cliff unit and recessive interbed step (default 0.32, range 0.10–1.0).'},
+ {key:'hardness',group:'Rock Bedding',title:'Bed resistance contrast',min:0,max:15,step:.2,unit:'×',default:defaults.hardness,tooltip:'Strength multiplier of hard caprock ledges vs. soft interbeds. High values (8–14) hold sharp mesa rims, stepped terrace treads, and hogback fins (default 8.8, range 0–15).'},
+ {key:'meso',group:'Erosion & Weathering',title:'Meso cliff, scree & rill detail',min:0,max:1,step:.02,unit:'ratio',default:defaults.meso,tooltip:'Synthesizes sub-meter rock-ledge cornices, vertical columnar cliff joints, caprock fracture slabs, talus boulder scree cones, and braided alluvial fan rills (default 0.72, range 0.0–1.0).'},
+ {key:'channelArea',group:'Erosion & Weathering',title:'Channel source area',min:.02,max:1.0,step:.02,unit:'m²',default:defaults.channelArea,tooltip:'Minimum upstream catchment area before surface runoff incises bedrock channels; lower values branch finer tributary canyons (default 0.14, range 0.02–1.0).'},
  {key:'incision',group:'Erosion & Weathering',title:'Stream incision',min:0,max:.20,step:.005,unit:'rate',default:defaults.incision,tooltip:'Fluvial bedrock cutting power per formation step in active canyon and stream channels (default 0.068, range 0.0–0.20).'},
  {key:'weathering',group:'Erosion & Weathering',title:'Weathering rate',min:0,max:.004,step:.0001,unit:'m/step',default:defaults.weathering,tooltip:'Peak conversion rate of recessive bedrock into loose soil before regolith insulation shuts it off (default 0.00065, range 0.0–0.004).'}
 ];
 export const FORMATION_PRESETS=[
- {id:'canyon-mesas',title:'Canyonlands Mesas & Terraces (Default · 1,024 tiles)',description:'Flat-topped caprock mesas, isolated outlier buttes, and stair-stepped canyon benches dissected by branching box canyons and talus aprons.',patch:{iterations:180,relief:3.6,mesa:.68,terrace:.64,valleys:6,apron:.24,tilt:.16,strike:18,fold:.16,bedThickness:.34,hardness:8.5,channelArea:.16,incision:.068,weathering:.00065}},
- {id:'stepped-terraces',title:'Grand Staircase Structural Terraces (240 steps)',description:'Broad multi-tiered horizontal rock benches separated by crisp cliff risers stepping down from high tableland to the basin floor.',patch:{iterations:240,relief:3.5,mesa:.62,terrace:.88,valleys:4.5,apron:.22,tilt:.10,strike:12,fold:.10,bedThickness:.36,hardness:12.0,channelArea:.18,incision:.062,weathering:.00060}},
- {id:'butte-badlands',title:'Isolated Buttes & Dissected Badlands (320 steps)',description:'Deeply breached plateau leaving flat-capped outlier monadnocks and buttes surrounded by intricate badland rills and wide pediments.',patch:{iterations:320,relief:3.4,mesa:.84,terrace:.46,valleys:8.5,apron:.28,tilt:.08,strike:-14,fold:.14,bedThickness:.30,hardness:10.2,channelArea:.12,incision:.078,weathering:.00070}},
- {id:'cuesta-hogbacks',title:'Cuesta Hogbacks & Water Gaps (300 steps)',description:'Steeply tilted high-contrast monocline strata (tilt 0.95, hardness 11.5) carved into parallel strike ridges, dip slopes, and transverse water gaps.',patch:{iterations:300,relief:3.3,mesa:.08,terrace:.22,valleys:5.5,apron:.24,tilt:.95,strike:28,fold:.18,bedThickness:.38,hardness:11.5,channelArea:.16,incision:.068,weathering:.00075}},
- {id:'range-bajada',title:'Peaked Range & Coalescing Bajada (260 steps)',description:'High dendritic mountain massif without caprock flat-tops, shedding coarse sediment through deep gorges onto a broad alluvial fan apron.',patch:{iterations:260,relief:3.9,mesa:0,terrace:0,valleys:7,apron:.28,tilt:.38,strike:-20,fold:.26,bedThickness:.26,hardness:4.5,channelArea:.16,incision:.066,weathering:.00080}}
+ {id:'canyon-mesas',title:'Canyonlands Mesas, Spurs & Terraces (Default · 1,024 tiles)',description:'Flat-topped caprock mesas and stepped canyon benches flanked by ribbed dendritic ridge spurs, columnar cliff joints, talus scree, and braided alluvial fans.',patch:{iterations:160,relief:3.6,mesa:.66,terrace:.64,spurs:.58,meso:.72,valleys:6,apron:.24,tilt:.16,strike:18,fold:.16,bedThickness:.32,hardness:8.8,channelArea:.14,incision:.068,weathering:.00065}},
+ {id:'dissected-mesa-spurs',title:'Hybrid Dissected Mesa-Ridges & Side Gorges (220 steps)',description:'Bridges dendritic ridge spurs and flat-topped mesas: caprock tablelands break into deeply fluted buttress spurs, branching side-chutes, and coalescing fans.',patch:{iterations:220,relief:3.7,mesa:.56,terrace:.58,spurs:.88,meso:.84,valleys:7,apron:.25,tilt:.22,strike:15,fold:.20,bedThickness:.30,hardness:9.6,channelArea:.10,incision:.076,weathering:.00068}},
+ {id:'stepped-terraces',title:'Grand Staircase Structural Terraces (240 steps)',description:'Broad multi-tiered horizontal rock benches separated by crisp jointed cliff risers stepping down from high tableland to the basin floor.',patch:{iterations:240,relief:3.5,mesa:.62,terrace:.88,spurs:.42,meso:.74,valleys:4.5,apron:.22,tilt:.10,strike:12,fold:.10,bedThickness:.36,hardness:12.0,channelArea:.16,incision:.062,weathering:.00060}},
+ {id:'butte-badlands',title:'Isolated Buttes & Dissected Badlands (320 steps)',description:'Deeply breached plateau leaving flat-capped outlier monadnocks and buttes surrounded by intricate badland rills, scree cones, and wide pediments.',patch:{iterations:320,relief:3.4,mesa:.84,terrace:.46,spurs:.76,meso:.86,valleys:8.5,apron:.28,tilt:.08,strike:-14,fold:.14,bedThickness:.30,hardness:10.2,channelArea:.10,incision:.078,weathering:.00070}},
+ {id:'cuesta-hogbacks',title:'Cuesta Hogbacks & Water Gaps (300 steps)',description:'Steeply tilted high-contrast monocline strata (tilt 0.95, hardness 11.5) carved into parallel strike ridges, dip slopes, and transverse water gaps.',patch:{iterations:300,relief:3.3,mesa:.08,terrace:.22,spurs:.64,meso:.75,valleys:5.5,apron:.24,tilt:.95,strike:28,fold:.18,bedThickness:.38,hardness:11.5,channelArea:.14,incision:.068,weathering:.00075}},
+ {id:'range-bajada',title:'Peaked Range & Coalescing Bajada (260 steps)',description:'High dendritic mountain massif without caprock flat-tops, shedding coarse sediment through deep gorges onto a broad alluvial fan apron.',patch:{iterations:260,relief:3.9,mesa:0,terrace:0,spurs:.82,meso:.70,valleys:7,apron:.28,tilt:.38,strike:-20,fold:.26,bedThickness:.26,hardness:4.5,channelArea:.14,incision:.066,weathering:.00080}}
 ];
 export function formationConfig(input={}){
  const c=Object.fromEntries(Object.keys(defaults).map(k=>[k,input[k]??defaults[k]]));
@@ -33,6 +36,7 @@ export function formationConfig(input={}){
  if(!Number.isSafeInteger(c.iterations)||c.iterations<0)throw Error('Formation iterations must be nonnegative whole steps');
  if(!Number.isFinite(c.valleys)||c.valleys<1||c.valleys>16)throw Error('Formation valleys must be in 1..16');
  if(!Number.isFinite(c.mesa)||c.mesa<0||c.mesa>1||!Number.isFinite(c.terrace)||c.terrace<0||c.terrace>1)throw Error('Formation mesa and terrace ratios must be in 0..1');
+ if(!Number.isFinite(c.spurs)||c.spurs<0||c.spurs>1||!Number.isFinite(c.meso)||c.meso<0||c.meso>1)throw Error('Formation spurs and meso ratios must be in 0..1');
  for(const k of ['width','length','bedThickness','relief'])if(!Number.isFinite(c[k])||c[k]<=0)throw Error('Positive formation '+k+' required');
  for(const k of ['hardness','incision','channelArea','weathering','transport','creep','fold','bankFailure'])if(!Number.isFinite(c[k])||c[k]<0)throw Error('Nonnegative formation '+k+' required');
  if(!Number.isFinite(c.tilt)||!Number.isFinite(c.strike)||!Number.isFinite(c.repose)||c.repose<0||c.repose>=90)throw Error('Invalid formation slope');
@@ -74,15 +78,17 @@ export function rockResistance(x,y,z,c){
  const dipScale=1-.78*clamp(c.mesa??0,0,1)*clamp(c.terrace??0,0,1);
  const warp=.28*Math.sin(rx*.55+rz*.35+c.seed*.03)+.16*Math.cos(rz*.85-rx*.45);
  const phase=(y-dipScale*c.tilt*rx-dipScale*c.fold*(Math.sin(rz*.7+rx*.2)+warp)+c.seed*.017)/c.bedThickness;
- // Persistent strike-rotated beds in world space; terrace/mesa caprock concentrates resistance near bench tops.
  const frac=phase-Math.floor(phase),sineBand=Math.max(0,.5+.5*Math.sin(phase*Math.PI*2));
+ const subLedge=.5+.5*Math.sin(phase*Math.PI*6);
  const benchCap=smoothstep(.22,.42,frac)*(1-.35*smoothstep(.92,1,frac));
- const tMix=.65*clamp(c.terrace??0,0,1),band=(1-tMix)*sineBand+tMix*benchCap,b2=band*band;
+ const tMix=.65*clamp(c.terrace??0,0,1),mesoMix=clamp(c.meso??0,0,1);
+ const band=clamp((1-tMix)*sineBand+tMix*benchCap+.18*mesoMix*(subLedge-.5),0,1),b2=band*band;
  return 1+c.hardness*(b2*b2);
 }
 export function seedGeology(input){
  const c=formationConfig(input),n=c.resolution,s=new Float32Array(n*n*4);
- const mesaMix=clamp(c.mesa,0,1),terraceMix=clamp(c.terrace,0,1),stepStyle=clamp(.65*mesaMix+.65*terraceMix,0,1);
+ const mesaMix=clamp(c.mesa,0,1),terraceMix=clamp(c.terrace,0,1),spurMix=clamp(c.spurs??.58,0,1),mesoMix=clamp(c.meso??.72,0,1);
+ const stepStyle=clamp(.65*mesaMix+.65*terraceMix,0,1);
  const strikeRad=(c.strike??0)*Math.PI/180,sca=Math.cos(strikeRad),ssa=Math.sin(strikeRad);
  const dipScale=1-.88*stepStyle;
  // Seeded winding trunk canyons and oblique tributary branches (eliminates parallel sine-grating stripes).
@@ -137,25 +143,44 @@ export function seedGeology(input){
    plateEnv=Math.max(plateEnv*.75,w*pl.h+.25*plateEnv);
   }
   const xw=(u-.5)*c.width,zw=(v-.5)*c.length,rx=xw*sca+zw*ssa,rz=-xw*ssa+zw*sca;
+  // Hybrid dendritic spur-and-chute dissection along canyon walls & mesa flanks
+  const flankMask=smoothstep(.08,.42,dMin)*(1-smoothstep(.65,1.04,dMin))*smoothstep(.04,.20,upland);
+  const spurWave1=Math.sin((wx*17.5+wz*11.0+.38*texture)*Math.PI+c.seed*.37);
+  const spurWave2=Math.cos((wx*13.0-wz*15.5+.38*smoothTex)*Math.PI+c.seed*.71);
+  const spurComb=.58*Math.abs(spurWave1)+.42*Math.abs(spurWave2)-.48;
+  const fineGully=Math.sin((wx*31-wz*24+.5*texture)*Math.PI)*Math.cos((wx*23+wz*29-.4*smoothTex)*Math.PI);
+  const dDissected=Math.max(0,dMin+spurMix*flankMask*(.72*spurComb+.32*fineGully));
+  const spurRibs=spurMix*flankMask*(.22*spurComb+.11*fineGully);
   // 1) Peaked ridge, anticlinal fold & cuesta hogback morphology (when mesa=0, terrace=0)
   const strikeWave=.5+.5*Math.cos((rx*1.35+.25*Math.sin(rz*.8))*Math.PI*Math.max(1.5,c.valleys*.5)+c.seed*.13);
-  const canyonRidge=smoothstep(.15,2.1,dMin)**1.25;
+  const canyonRidge=smoothstep(.15,2.1,dDissected)**1.25;
   const env=Math.sin(Math.PI*upland)**1.15;
-  const ridgeNorm=.08+(.56*(upland**1.28)*(.55+.45*plateEnv)+.34*strikeWave*env)*canyonRidge+.36*texture*env;
+  const ridgeNorm=.08+(.56*(upland**1.28)*(.55+.45*plateEnv)+.34*strikeWave*env)*canyonRidge+.36*texture*env+spurRibs;
   // 2) Flat-topped caprock mesas, isolated outlier buttes & stair-stepped structural terraces
   const frontEscarp=smoothstep(.02,.18,upland);
-  const canyonCarve=smoothstep(.42,1.65,dMin);
-  const blockField=clamp(frontEscarp*plateEnv*(.14+.86*canyonCarve)+.07*smoothTex*(1-.6*mesaMix),0,1);
+  const canyonCarve=smoothstep(.42,1.65,dDissected);
+  const blockField=clamp(frontEscarp*plateEnv*(.14+.86*canyonCarve)+.07*smoothTex*(1-.6*mesaMix)+.28*spurRibs*(1-.65*mesaMix),0,1);
   const tierCount=2.5+1.6*terraceMix,scaled=blockField*tierCount,tierIdx=Math.floor(scaled),frac=scaled-tierIdx;
   const riserW=.24-.08*mesaMix;
   const tierStep=frac<riserW?.97*smoothstep(0,riserW,frac):.97+.03*(frac-riserW)/(1-riserW);
+  const treadFlat=smoothstep(riserW+.01,riserW+.09,frac)*(1-smoothstep(.92,1,frac))*stepStyle;
   const dipShift=dipScale*c.tilt*rx*.04;
   const treadGrade=.032*upland+.048*smoothstep(.40,.52,upland);
-  const mesaNorm=clamp(nearestFloor*(1-canyonCarve)+(tierIdx+tierStep)/tierCount*.86+treadGrade+dipShift,0,1.05);
-  const y0=c.relief*((1-stepStyle)*ridgeNorm+stepStyle*mesaNorm);
-  const apronGrade=.002*(1-v);
+  // 3) Sub-meter meso-relief: cliff columnar ribs, stepped cornice ledges, caprock joints & braided apron rills
+  const inRiser=smoothstep(0,riserW*.42,frac)*(1-smoothstep(riserW*.58,riserW*1.05,frac));
+  const jointA=Math.sin((rx*9.4+rz*3.6+.4*texture)*Math.PI+c.seed*.19);
+  const jointB=Math.cos((rz*9.4-rx*3.6-.4*smoothTex)*Math.PI+c.seed*.53);
+  const columnarRib=inRiser*(.085*(Math.abs(jointA)*Math.abs(jointB)-.38)+.048*Math.sin(frac/Math.max(.08,riserW)*Math.PI*4));
+  const rillChannel=Math.sin((wx*38+.7*Math.sin(wz*19+c.seed*.1))*Math.PI)*Math.cos((wx*24-wz*18)*Math.PI);
+  const apronMask=(1-smoothstep(.06,.28,upland))+.42*(1-canyonCarve);
+  const apronRill=apronMask*(.036*rillChannel+.020*Math.sin((wx*58+wz*41)*Math.PI));
+  const mesoDelta=mesoMix*(1-treadFlat)*(columnarRib+apronRill+flankMask*.065*fineGully);
+  const mesaNorm=clamp(nearestFloor*(1-canyonCarve)+(tierIdx+tierStep)/tierCount*.86+treadGrade+dipShift+.65*spurRibs*(1-treadFlat),0,1.05);
+  const y0=Math.max(0,c.relief*((1-stepStyle)*ridgeNorm+stepStyle*mesaNorm+mesoDelta));
+  const apronGrade=.002*(1-v)+Math.max(0,mesoMix*(1-upland)*.012*rillChannel);
   s[(z*n+x)*4]=.10+apronGrade+y0*smoothstep(0,.04,upland);
-  s[(z*n+x)*4+1]=upland>.15?.016*(1-.35*stepStyle):.022;
+  const screeSeed=mesoMix*inRiser*.008*Math.max(0,jointA);
+  s[(z*n+x)*4+1]=(upland>.15?.016*(1-.35*stepStyle):.022)+screeSeed;
  }
  return s;
 }
@@ -221,22 +246,29 @@ export function formationStep(state,input,metrics,scratch=null){
  const out=scratch?.out??new Float64Array(N*4);for(let i=0;i<N*4;i++)out[i]=state[i];
  const load=scratch?.load??new Float64Array(N);load.fill(0);
  const d=drainage(state,c,scratch);
- let bedShift=scratch?.bedShift;
- if(!bedShift){
-  bedShift=new Float64Array(N);if(scratch)scratch.bedShift=bedShift;
+ const mesoMix=clamp(c.meso??.72,0,1);
+ let bedShift=scratch?.bedShift,mesoMod=scratch?.mesoMod;
+ if(!bedShift||!mesoMod){
+  bedShift=new Float64Array(N);mesoMod=new Float64Array(N);
+  if(scratch){scratch.bedShift=bedShift;scratch.mesoMod=mesoMod;}
   const rad=(c.strike??0)*Math.PI/180,ca=Math.cos(rad),sa=Math.sin(rad),dipScale=1-.78*clamp(c.mesa??0,0,1)*clamp(c.terrace??0,0,1),invT=1/c.bedThickness;
   for(let i=0;i<N;i++){
-   const x=(i%n/(n-1)-.5)*c.width,z=(((i/n)|0)/(n-1)-.5)*c.length,rx=x*ca+z*sa,rz=-x*sa+z*ca;
+   const u=(i%n)/(n-1),v=((i/n)|0)/(n-1),x=(u-.5)*c.width,z=(v-.5)*c.length,rx=x*ca+z*sa,rz=-x*sa+z*ca;
    const warp=.28*Math.sin(rx*.55+rz*.35+c.seed*.03)+.16*Math.cos(rz*.85-rx*.45);
    bedShift[i]=(-dipScale*c.tilt*rx-dipScale*c.fold*(Math.sin(rz*.7+rx*.2)+warp)+c.seed*.017)*invT;
+   // Spatial meso-joint & rill pattern: positive on resistant ribs/bars, negative in fracture crevices & rill threads
+   const j1=Math.sin((rx*9.2+rz*3.8)*Math.PI+c.seed*.23)*Math.cos((rz*9.2-rx*3.8)*Math.PI+c.seed*.61);
+   const r1=Math.sin((u*42+.6*Math.sin(v*21+c.seed*.17))*Math.PI)*Math.cos((u*27-v*31)*Math.PI);
+   mesoMod[i]=.55*j1+.45*r1;
   }
  }
  const invBedT=1/c.bedThickness,tMix=.65*clamp(c.terrace??0,0,1);
  const cellStrength=(i,y)=>{
   const phase=y*invBedT+bedShift[i],frac=phase-Math.floor(phase),sineBand=Math.max(0,.5+.5*Math.sin(phase*Math.PI*2));
+  const subLedge=.5+.5*Math.sin(phase*Math.PI*6);
   const benchCap=smoothstep(.22,.42,frac)*(1-.35*smoothstep(.92,1,frac));
-  const band=(1-tMix)*sineBand+tMix*benchCap,b2=band*band;
-  return 1+c.hardness*(b2*b2);
+  const band=clamp((1-tMix)*sineBand+tMix*benchCap+.18*mesoMix*(subLedge-.5)+.22*mesoMix*mesoMod[i],0,1),b2=band*band;
+  return Math.max(.35,1+c.hardness*(b2*b2));
  };
  // Humped regolith weathering: bare rock cliffs weather slowly, moist thin cover
  // peaks around 0.018, and regolith cover >= 0.062 insulates underlying bedrock.
@@ -244,17 +276,22 @@ export function formationStep(state,input,metrics,scratch=null){
   const soil=out[i*4+1],insul=Math.max(0,1-soil/.062);
   if(insul<=0)continue;
   const strength=cellStrength(i,out[i*4]);
-  const hump=(.18+.82*Math.min(1,soil/.018))*(insul*insul),w=c.weathering*hump/strength;
+  const jointWeather=Math.max(.25,1-.48*mesoMix*mesoMod[i]);
+  const hump=(.18+.82*Math.min(1,soil/.018))*(insul*insul),w=c.weathering*hump*jointWeather/strength;
   out[i*4]-=w;out[i*4+1]+=w;metrics.weathered+=w*cell;
  }
  const capBoost=Math.max(c.mesa??0,c.terrace??0),capHard=capBoost*Math.min(1,c.hardness/4),resScale=Math.max(1,(n-1)/64);
  for(let k=N-1;k>=0;k--){const i=d.order[k],j=i*4,r=d.receiver[i];if(r<0){metrics.exportedVolume+=load[i];continue;}
-  const distEff=d.distance[i]/domainScale,h=out[j]+out[j+1],down=out[r*4]+out[r*4+1],slope=Math.max(0,(h-down)/distEff),stream=Math.sqrt(Math.max(0,d.area[i]*areaScale-c.channelArea));
+  const distEff=d.distance[i]/domainScale,h=out[j]+out[j+1],down=out[r*4]+out[r*4+1],slope=Math.max(0,(h-down)/distEff);
+  const localChArea=c.channelArea*Math.max(.45,1-.28*mesoMix*smoothstep(.18,.55,slope)*mesoMod[i]);
+  const stream=Math.sqrt(Math.max(0,d.area[i]*areaScale-localChArea));
   const z=(i/n)|0,v=z/(n-1),apronWeight=Math.max(0,Math.min(1,(v-(1-c.apron*1.25))/(c.apron*1.25)));
-  const capacity=c.transport*stream*slope*(domainScale*domainScale)*(1-.48*apronWeight);let sediment=load[i];
+  const rillCapMod=Math.max(.35,1-.36*mesoMix*apronWeight*mesoMod[i]);
+  const capacity=c.transport*stream*slope*(domainScale*domainScale)*(1-.48*apronWeight)*rillCapMod;let sediment=load[i];
   if(sediment>capacity){// Deposition steepens the reach and bifurcates across lower apron neighbors.
    const fanReach=distEff*(1+apronWeight*(.55/Math.max(1e-4,effCell)));
-   const deposit=Math.min((sediment-capacity)/cell,(sediment-capacity)/(cell*(1+c.transport*stream/(effCell*fanReach*resScale))));
+   const rawDep=Math.min((sediment-capacity)/cell,(sediment-capacity)/(cell*(1+c.transport*stream/(effCell*fanReach*resScale))));
+   const deposit=Math.min(rawDep,Math.max(0,.56-out[j+1])*.45);
    out[j+1]+=deposit;metrics.deposited+=deposit*cell;sediment-=deposit*cell;
    let wSum=0,f0=0,f1=0,f2=0,f3=0;
    const t0=d.targets[j],t1=d.targets[j+1],t2=d.targets[j+2],t3=d.targets[j+3];
@@ -284,18 +321,22 @@ export function formationStep(state,input,metrics,scratch=null){
  const bankFlow=scratch?.bankFlow??new Float64Array(N*4),bankLimit=Math.tan(c.bankRepose*Math.PI/180)*(1+2.2*capHard),baseBankRate=c.bankFailure/(1+4*c.bankFailure)*(1-.68*capHard);bankFlow.fill(0);
  for(let i=0;i<N;i++){const x=i%n,z=(i/n)|0,bed=out[i*4],rate=baseBankRate/cellStrength(i,bed);
   for(let k=0;k<4;k++){const xx=x+ox[k],zz=z+oz[k];if(xx<0||xx>=n||zz<0||zz>=n)continue;const j=zz*n+xx;
-   bankFlow[i*4+k]=Math.max(0,bed-out[j*4]-out[j*4+1]-bankLimit*(k<2?effDx:effDz))*rate;}
+   const room=Math.max(0,.48-out[j*4+1])*.22;
+   bankFlow[i*4+k]=Math.min(room,Math.max(0,bed-out[j*4]-out[j*4+1]-bankLimit*(k<2?effDx:effDz))*rate);}
  }
  for(let i=0;i<N;i++){const x=i%n,z=(i/n)|0,j=i*4,loss=bankFlow[j]+bankFlow[j+1]+bankFlow[j+2]+bankFlow[j+3];out[j]-=loss;
   out[j+1]+=(x?bankFlow[j-3]:0)+(x+1<n?bankFlow[j+4]:0)+(z?bankFlow[j-n*4+3]:0)+(z+1<n?bankFlow[j+n*4+2]:0);metrics.bankCollapsed=(metrics.bankCollapsed??0)+loss*cell;
  }
  // Conservative downslope creep, steep-scarp soil stripping and talus relaxation.
  const flow=scratch?.flow??new Float64Array(N*4),talus=Math.tan(c.repose*Math.PI/180),stripSlope=talus*.52;
+ const creepRate=c.creep*(1-.68*mesoMix);
  for(let i=0;i<N;i++){const x=i%n,z=(i/n)|0,j=i*4,h=out[j]+out[j+1],bed=out[j],soil=out[j+1];let e0=0,e1=0,e2=0,e3=0;
+  const localTalus=talus*Math.max(.50,1+.52*mesoMix*mesoMod[i]);
   for(let k=0;k<4;k++){const xx=x+ox[k],zz=z+oz[k];if(xx<0||xx>=n||zz<0||zz>=n)continue;
    const nb=(zz*n+xx)*4,dist=k<2?effDx:effDz,diff=Math.max(0,h-out[nb]-out[nb+1]),bedDiff=Math.max(0,bed-out[nb]);
+   const room=Math.max(0,.52-out[nb+1])*.22;
    const scarpStrip=Math.min(diff*.24,Math.max(0,bedDiff/dist-stripSlope)*soil*.42);
-   const amt=Math.min(diff*.24,diff*c.creep+scarpStrip+Math.max(0,diff-talus*dist)*.20);
+   const amt=Math.min(room,diff*.24,diff*creepRate+scarpStrip+Math.max(0,diff-localTalus*dist)*.20);
    if(k===0)e0=amt;else if(k===1)e1=amt;else if(k===2)e2=amt;else e3=amt;
   }
   const total=e0+e1+e2+e3,factor=total>0?Math.min(1,soil/total):0;

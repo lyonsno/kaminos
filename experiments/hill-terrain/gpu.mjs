@@ -21,21 +21,61 @@ const move=wgslFn(`fn hill_move(v:u32,n:u32,width:f32,length:f32,dt:f32,uplift:f
  let bed=s.x+uplift*dt*exp(-((p.x+.4)*(p.x+.4))/3.-((p.y+1.5)*(p.y+1.5))/.5);
  let soil=max(0.,s.y+incoming-f.x-f.y-f.z-f.w);return vec4<f32>(bed,soil,(bed+soil-s.x-s.y)/dt,s.w);
 }`);
-const normal=wgslFn(`fn hill_normal(v:u32,n:u32,dx:f32,dz:f32,state:ptr<storage,array<vec4<f32>>,read_write>)->vec4<f32>{
- let x=v%n;let z=v/n;let l=(*state)[v-select(0u,1u,x>0u)];let r=(*state)[v+select(0u,1u,x+1u<n)];let b=(*state)[v-select(0u,n,z>0u)];let f=(*state)[v+select(0u,n,z+1u<n)];
- let gx=(r.x+r.y-l.x-l.y)/(dx*select(1.,2.,x>0u&&x+1u<n));let gz=(f.x+f.y-b.x-b.y)/(dz*select(1.,2.,z>0u&&z+1u<n));return vec4<f32>(normalize(vec3<f32>(-gx,1.,-gz)),0.);
+const normal=wgslFn(`fn hill_normal(v:u32,n:u32,dx:f32,dz:f32,x:f32,z:f32,tilt:f32,strike:f32,fold:f32,thickness:f32,seed:f32,stepStyle:f32,meso:f32,useFormed:f32,state:ptr<storage,array<vec4<f32>>,read_write>)->vec4<f32>{
+ let xi=v%n;let zi=v/n;let l=(*state)[v-select(0u,1u,xi>0u)];let r=(*state)[v+select(0u,1u,xi+1u<n)];let b=(*state)[v-select(0u,n,zi>0u)];let f=(*state)[v+select(0u,n,zi+1u<n)];
+ var gx=(r.x+r.y-l.x-l.y)/(dx*select(1.,2.,xi>0u&&xi+1u<n));var gz=(f.x+f.y-b.x-b.y)/(dz*select(1.,2.,zi>0u&&zi+1u<n));
+ if(useFormed>.5&&meso>0.){
+  let s=(*state)[v];let exposed=exp(-s.y/.045);let steep=clamp(sqrt(gx*gx+gz*gz),0.,2.8);
+  let rad=strike*.017453292519943295;let ca=cos(rad);let sa=sin(rad);let rx=x*ca+z*sa;let rz=-x*sa+z*ca;
+  let dipScale=1.-.88*clamp(stepStyle,0.,1.);
+  let warp=.28*sin(rx*.55+rz*.35+seed*.03)+.16*cos(rz*.85-rx*.45);
+  let phase=(s.x-dipScale*tilt*rx-dipScale*fold*(sin(rz*.7+rx*.2)+warp)+seed*.017)/thickness;
+  // Triplanar cliff-scarp bedding micro-ledges & vertical columnar rock joints
+  let ledgeStep=cos(phase*6.2831853)+.6*cos(phase*25.13274)+.3*sin(phase*62.83185);
+  let jointX=cos(rx*19.+rz*6.+seed*.17)+.55*sin(rx*43.-s.x*14.);
+  let jointZ=sin(rz*19.-rx*6.+seed*.31)+.55*cos(rz*43.+s.x*14.);
+  let cliffAmp=meso*exposed*(.12+.34*clamp(steep,0.,1.5));
+  // Talus scree clast facets & flow-aligned apron rill normals
+  let clastX=sin(x*52.+z*37.+s.x*19.)*cos(z*47.-x*29.);
+  let clastZ=cos(z*52.-x*37.+s.x*17.)*sin(x*43.+z*31.);
+  let screeAmp=meso*(1.-exposed)*(.16*clamp(steep,0.15,1.2)+.09);
+  gx+=cliffAmp*(.65*jointX+.45*ledgeStep*ca)+screeAmp*clastX;
+  gz+=cliffAmp*(.65*jointZ+.45*ledgeStep*sa)+screeAmp*clastZ;
+ }
+ return vec4<f32>(normalize(vec3<f32>(-gx,1.,-gz)),0.);
 }`);
 
-const formedColor=wgslFn(`fn hill_geological_color(x:f32,z:f32,bed:f32,soil:f32,tilt:f32,strike:f32,fold:f32,thickness:f32,seed:f32,stepStyle:f32)->vec4<f32>{
+const formedColor=wgslFn(`fn hill_geological_color(x:f32,z:f32,bed:f32,soil:f32,nx:f32,ny:f32,nz:f32,tilt:f32,strike:f32,fold:f32,thickness:f32,seed:f32,stepStyle:f32,meso:f32)->vec4<f32>{
  let rad=strike*.017453292519943295;let ca=cos(rad);let sa=sin(rad);let rx=x*ca+z*sa;let rz=-x*sa+z*ca;
  let dipScale=1.-.88*clamp(stepStyle,0.,1.);
  let warp=.28*sin(rx*.55+rz*.35+seed*.03)+.16*cos(rz*.85-rx*.45);
  let phase=(bed-dipScale*tilt*rx-dipScale*fold*(sin(rz*.7+rx*.2)+warp)+seed*.017)/thickness;
  let band=.5+.5*sin(phase*6.28318530718);
- let ledge=smoothstep(.25,.75,band);
- let rock=mix(vec3<f32>(.12,.09,.06),vec3<f32>(.33,.26,.165),mix(band,ledge,.55*clamp(stepStyle,0.,1.)));
- let earth=vec3<f32>(.12,.17,.065);let exposed=exp(-soil/.045);
- return vec4<f32>(mix(earth,rock,exposed),1.);
+ let subBand=.5+.5*sin(phase*25.1327412+.5*sin(rx*4.2-rz*3.6));
+ let microLamina=.5+.5*cos(phase*62.831853+rx*8.5);
+ let ledge=smoothstep(.22,.76,band);
+ let stratMix=clamp(mix(band,ledge,.58*clamp(stepStyle,0.,1.))+meso*(.18*(subBand-.5)+.09*(microLamina-.5)),0.,1.);
+ let steep=clamp(1.-ny,0.,1.);
+ // 3D triplanar vertical fracture crevices & recessive overhang occlusion
+ let jointPlane=abs(sin(rx*13.5+rz*4.8+warp*2.2))*abs(cos(rz*14.2-rx*5.1-warp*1.8));
+ let crevice=meso*smoothstep(.16,.02,jointPlane)*smoothstep(.08,.38,steep);
+ let undercut=meso*(1.-ledge)*smoothstep(.15,.48,steep)*.36;
+ let shale=vec3<f32>(.105,.078,.055);
+ let ochre=vec3<f32>(.36,.275,.175);
+ let capSand=vec3<f32>(.48,.39,.265);
+ var rock=mix(shale,mix(ochre,capSand,smoothstep(.55,.92,stratMix)),stratMix);
+ rock=rock*(1.-.48*crevice-.32*undercut);
+ // Talus scree clasts at cliff toes & braided alluvial rill streaks on the apron
+ let clastNoise=.5+.5*sin(x*48.+z*33.+seed*.7)*cos(z*44.-x*39.);
+ let screeZone=clamp(smoothstep(.004,.022,soil)*(1.-smoothstep(.032,.075,soil))*(.35+.65*smoothstep(.05,.28,steep)),0.,1.);
+ let screeColor=mix(vec3<f32>(.21,.18,.13),vec3<f32>(.34,.29,.21),clastNoise);
+ let rillTrace=.5+.5*sin(x*32.+.8*sin(z*18.+seed*.2))*cos(x*19.-z*23.);
+ let meadow=vec3<f32>(.11,.165,.062);
+ let rillSand=vec3<f32>(.22,.225,.125);
+ let earth=mix(meadow,rillSand,meso*.42*smoothstep(.58,.92,rillTrace)*(1.-smoothstep(.15,.45,steep)));
+ let ground=mix(earth,screeColor,meso*.75*screeZone);
+ let exposed=exp(-soil/.045);
+ return vec4<f32>(mix(ground,rock,exposed),1.);
 }`);
 
 export function createTerrainGPU(geometry,input={}){
@@ -50,7 +90,7 @@ export function createTerrainGPU(geometry,input={}){
  const interpolators=states.map((state,i)=>Fn(()=>{displayState.element(instanceIndex).assign(mix(states[1-i].element(instanceIndex),state.element(instanceIndex),alpha));})().compute(count));
  const positionNode=storage(positions,'vec4',count),normalNode=storage(normals,'vec4',count),colorNode=storage(colors,'vec4',count);
  const formedAttribute=attribute(new Float32Array(count*4),4,'formed-source'),formedNode=storage(formedAttribute,'vec4',count),useFormed=uniform(0);
- const geoTilt=uniform(.16),geoStrike=uniform(18),geoFold=uniform(.16),geoThickness=uniform(.34),geoSeed=uniform(47),geoStepStyle=uniform(.86);
+ const geoTilt=uniform(.16),geoStrike=uniform(18),geoFold=uniform(.16),geoThickness=uniform(.32),geoSeed=uniform(47),geoStepStyle=uniform(.85),geoMeso=uniform(.72);
  const dt=uniform(.05),drive=uniform(config.uplift),talus=uniform(Math.tan(config.repose*Math.PI/180)),fraction=uniform(0),soil=uniform(config.soil);
  const initializers=states.map(state=>Fn(()=>{state.element(instanceIndex).assign(mix(init({v:instanceIndex,n:uint(n),width:float(config.width),length:float(config.length),soil,ridges:ridgeNode}),formedNode.element(instanceIndex),useFormed));})().compute(count));
  const solvers=states.map((state,i)=>[
@@ -61,11 +101,12 @@ export function createTerrainGPU(geometry,input={}){
   const state=displayState;
   const v=instanceIndex,s=state.element(v),x=v.mod(uint(n)).toFloat().div(n-1).sub(.5).mul(config.width),z=v.div(uint(n)).toFloat().floor().div(n-1).sub(.5).mul(config.length);
   positionNode.element(v).assign(initPosition(x,s.x.add(s.y),z));
-  const norm=normal({v,n:uint(n),dx:float(config.width/(n-1)),dz:float(config.length/(n-1)),state});normalNode.element(v).assign(norm);
+  const norm=normal({v,n:uint(n),dx:float(config.width/(n-1)),dz:float(config.length/(n-1)),x,z,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,useFormed,state});
+  normalNode.element(v).assign(norm);
   // Soil cover and actual slope control the material, independent of world time.
   const cover=s.y.mul(4).clamp(0,1),steep=float(1).sub(norm.y).mul(1.3).clamp(0,1),exposed=steep.mul(float(1).sub(cover.mul(.4)));
   const legacyColor=initPosition(float(.30).add(exposed.mul(.12)).add(cover.mul(.05)),float(.36).sub(exposed.mul(.04)).add(cover.mul(.10)),float(.20).add(exposed.mul(.08)));
-  colorNode.element(v).assign(mix(legacyColor,formedColor({x,z,bed:s.x,soil:s.y,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle}),useFormed));
+  colorNode.element(v).assign(mix(legacyColor,formedColor({x,z,bed:s.x,soil:s.y,nx:norm.x,ny:norm.y,nz:norm.z,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso}),useFormed));
  })().compute(count));
  nodes.push(...initializers,...solvers.flat(),...interpolators,...publishers);
  let renderer=null,initialized=false,index=0,steps=0,preparationSteps=0,seconds=0,disposed=false,pendingPresentation=true,generation=0,error=null,formationProvenance=null;
@@ -95,7 +136,7 @@ export function createTerrainGPU(geometry,input={}){
   loadFormation(result){
    if(result.config.resolution!==n||result.config.width!==config.width||result.config.length!==config.length)throw Error('Formation grid does not match GPU terrain');
    if(!(result.state instanceof Float32Array)||result.state.length!==count*4||!result.state.every(Number.isFinite))throw Error('Complete finite formed state required');
-   geoTilt.value=result.config.tilt;geoStrike.value=result.config.strike??0;geoFold.value=result.config.fold;geoThickness.value=result.config.bedThickness;geoSeed.value=result.config.seed;geoStepStyle.value=Math.min(1,Math.max(0,.65*(result.config.mesa??0)+.65*(result.config.terrace??0)));
+   geoTilt.value=result.config.tilt;geoStrike.value=result.config.strike??0;geoFold.value=result.config.fold;geoThickness.value=result.config.bedThickness;geoSeed.value=result.config.seed;geoStepStyle.value=Math.min(1,Math.max(0,.65*(result.config.mesa??0)+.65*(result.config.terrace??0)));geoMeso.value=result.config.meso??.72;
    formationProvenance={kind:'formed-landscape',version:result.version,recipe:{...result.config},preparationSteps:result.steps};
    formedAttribute.array.set(result.state);formedAttribute.needsUpdate=true;useFormed.value=1;initialized=false;steps=0;preparationSteps=0;seconds=0;generation++;alpha.value=1;if(renderer)flush(renderer);return read();
   },
