@@ -1,5 +1,9 @@
 # Getting Started
 
+For a useful model application, start with [Klein image generation](https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein#using-it-in-an-application) or [Qwen3.5 streaming text and chat](https://github.com/lyonsno/kaminos/tree/cc/cranial-language-discovery-1103/models/qwen3_5). The language guide includes source-package setup and an exported browser module; it is not included in published kit 0.1.60. [Choose another model application](./model-applications.md) for materials, motion or background removal.
+
+## Build your own model port
+
 This guide runs one complete browser-native WebGPU model port. The example creates one inference session, registers one reusable route, compiles a small affine WGSL kernel once, queues two invocations, reports three progress phases for each job, returns complete numeric outputs, and tears down the route and owned device session.
 
 The model is deliberately small so the runtime lifecycle remains visible. The same route shape scales to model-owned weights, kernels, preprocessing, cooperative boundaries, and output construction.

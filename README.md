@@ -80,10 +80,12 @@ substantial models execute.
 
 ## WebGPU Inference Kit
 
-Generate images and run vision models locally in the browser. Start with a
+Generate images and text and run vision models locally in the browser. Start with a
 model application; share its GPU device with your renderer when you need one.
 
 **[Generate and display your first image](models/flux2-klein/README.md#using-it-in-an-application)** with a complete Klein browser page: setup, progress, repeated runs and cleanup.
+
+**[Build streaming text and chat](models/qwen3_5/README.md)** with the native WebGPU Qwen3.5 adapter: model setup, persistent conversations, prompt expansion and an export for your own application. This path currently uses source packages, not the published kit 0.1.60.
 
 ```sh
 npm install @kaminos/webgpu-inference-kit

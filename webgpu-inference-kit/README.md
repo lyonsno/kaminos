@@ -10,6 +10,8 @@ npm install @kaminos/webgpu-inference-kit
 
 For image generation, material estimation and background removal, start with the model's application entry point. Your code supplies the input and uses the result; the application handles loading, queued inference, controls and cleanup. Install the [matching model packages](./docs/model-applications.md#install) for the examples below.
 
+Choose a starting point: **[image generation](https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein#using-it-in-an-application)** with Klein, or **[streaming text and chat](#generate-text-with-a-language-model)** with Qwen3.5 (source installation).
+
 **[Generate and display your first image](https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein#using-it-in-an-application)** with the complete Klein browser page, including setup, progress, repeated runs and model release. The short version:
 
 ```js
@@ -61,13 +63,13 @@ UniMate uses the same runner through its existing host-injected `createUniMateCo
 
 ## Generate Text With A Language Model
 
-The kit's `./generation` entry point provides autoregressive token generation, greedy or seeded sampling, penalties, EOS stopping and incremental output callbacks. A model adapter supplies prefill, cached decode and state cleanup; the token loop works with the host's existing inference control. Build the kit from this checkout to use this entry point; model implementations and weights are separate from the runtime package. [Generation API and adapter contract](./docs/autoregressive-generation.md).
+Build a streaming text interface or expand image prompts with the native WebGPU Qwen3.5-9B adapter. The [browser chat guide](https://github.com/lyonsno/kaminos/tree/cc/cranial-language-discovery-1103/models/qwen3_5#persistent-text-chat-example) starts with model setup and a usable conversation page: send follow-ups, stop a response, start a new conversation without reloading weights, and save the transcript.
 
-The [Qwen3.5-9B text adapter](https://github.com/lyonsno/kaminos/tree/main/models/qwen3_5) exercises that machinery with Black Forest Labs' FLUX 3 Image Klein prompt upsampler. It runs all 32 language layers in native WebGPU, loads packed four-bit language weights, and maintains both attention KV caches and DeltaNet recurrent state. The adapter borrows the application's device and control; BFL framing and generation settings live in a separate prompt-expansion entry point.
+**[Embed language generation in your application](https://github.com/lyonsno/kaminos/tree/cc/cranial-language-discovery-1103/models/qwen3_5#use-the-model-outside-kaminos)** with an exported browser module and the kit's `./generation` entry point. The model borrows your device and inference control; successful conversation turns retain attention KV and recurrent state, so follow-ups evaluate only new input.
 
-`createGenerationSession` keeps successful model state across turns. Exact-prefix extensions evaluate only new input; edited or shortened prefixes rebuild. Reset and disposal retire conversation state while the caller retains model-weight ownership. The source [browser chat example](https://github.com/lyonsno/kaminos/tree/main/models/qwen3_5#persistent-text-chat-example) provides streaming, Stop, reset, export, and per-turn timing plus reused/evaluated-token counts. Qwen retains both attention KV and recurrent state; history trimming and paging are not implemented.
+This is currently a **source-install path**, using a local kit tarball from the same checkout, not the published 0.1.60 package. The available BFL checkpoint is an image-prompt fine-tune; this adapter accepts text, not reference images. The guide separates model setup from application code.
 
-A browser run consumed 743 framed input tokens and streamed a complete 302-token expansion through EOS. Prefill, cached continuation and a prefix split across calls were checked against native FP32 computation over the same quantized weights, including all layer outputs and full-vocabulary logits. This is a source-level text integration; vision/reference-image processing and the Generate UI integration are subsequent work. See the [model guide](https://github.com/lyonsno/kaminos/tree/main/models/qwen3_5) for source packaging and an invocation example.
+For port authors, the [generation API](./docs/autoregressive-generation.md) covers token streaming, seeded sampling, stopping and reusable sessions. [Implementation and validation](https://github.com/lyonsno/kaminos/tree/cc/cranial-language-discovery-1103/models/qwen3_5/IMPLEMENTATION.md) contains kernel options, numerical comparisons and profiling.
 
 ## Segment Images With SAM 3
 
@@ -196,10 +198,10 @@ The kit connects a growing family of browser model ports: expand a text prompt, 
 | Model Port | What You Can Build | Integration |
 | --- | --- | --- |
 | [FLUX.2 [klein] 4B](https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein) | Images from a text prompt, generated on the visitor's GPU ([live demo](https://lyonsno.github.io/kaminos/inference-kit/klein/)) | The text encoder, 4-step transformer and image decoder all run in the browser, with int4 weights cached after the first download. GPU work is submitted in duties sized to measured throughput, so the application keeps rendering, and the inference control can pause, resume or stop a run. |
+| [Qwen3.5-9B / BFL prompt upsampler](https://github.com/lyonsno/kaminos/tree/cc/cranial-language-discovery-1103/models/qwen3_5) | Streaming text, image-prompt expansion and persistent browser chat | Native WebGPU four-bit language model with reusable conversation state. [Embed it in your app](https://github.com/lyonsno/kaminos/tree/cc/cranial-language-discovery-1103/models/qwen3_5#use-the-model-outside-kaminos) from source; the generation export is not in published kit 0.1.60. |
 | [TRELLIS 2](https://github.com/lyonsno/kaminos/tree/main/models/trellis2) | Textured 3D meshes from an image, exported as a GLB | Browser image-to-3D generation, stage-by-stage model loading, and a shared GPU device with the application renderer. |
 | [UniMate](https://github.com/lyonsno/kaminos/tree/main/models/unimate) | Skeletal animation from a text prompt, generated for any rigged skeleton (a robot dog, a cat, a parrot, your own creature) | The Flan-T5 text encoder, the motion transformer, an adaptive ODE sampler and the decode to joint rotations all run in the browser. Each network evaluation is submitted as duties sized to measured throughput, so the application keeps rendering, and a run can be paused, resumed or stopped. |
 | [Hand reconstruction](https://github.com/lyonsno/kaminos/blob/main/models/mobrecon/GETTING_STARTED.md) | Live hand meshes and landmarks from camera frames | WiLoR detection and MobRecon reconstruction use the shared application runner. The hand guide supplies checkout integration and model setup. |
-| [Qwen3.5-9B / BFL prompt upsampler](https://github.com/lyonsno/kaminos/tree/main/models/qwen3_5) | Stream expanded image prompts from a browser language model | Source adapter with packed four-bit language weights, attention KV and DeltaNet state, using the kit's reusable generation loop, sampling and borrowed inference control. Text expansion has been exercised through EOS; image/reference and application integration follow. |
 | [SuperMat](https://github.com/lyonsno/kaminos/tree/main/demos/material-photo) · [Application guide](https://github.com/lyonsno/kaminos/blob/main/models/supermat/GETTING_STARTED.md) | Albedo, roughness and metalness for relighting a photograph | Shared-device material inference with reusable resources and queued invocations, composed with MoGe geometry and a live renderer. |
 | [U2Net](https://github.com/lyonsno/kaminos/tree/main/models/u2net) | Foreground cutouts from opaque images | A background-removal application with loading, queued inference, controls and cleanup; lower-level runner and complete output provenance remain available. |
 | [SAM 3](./docs/sam-semantic-demo.md) | Instance masks from an image and text prompt | A complete browser WebGPU route with authenticated persistent model resources, cached image features, queued semantic requests, and same-device foreground submissions at phase boundaries. |
@@ -286,8 +288,3 @@ Each physical timestamp pair is used once per query set. Exhausted sets retire a
 ## License
 
 MIT. See [LICENSE](LICENSE).
-
-The [Qwen browser-module export](https://github.com/lyonsno/kaminos/tree/main/models/qwen3_5#use-the-model-outside-kaminos)
-shows an outside application consuming the installed kit's `/generation` and
-`/core` exports alongside a bundled model adapter. This source-branch workflow
-uses a local kit tarball until the corresponding kit release is published.
