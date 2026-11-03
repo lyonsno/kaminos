@@ -3442,6 +3442,7 @@ import {installGenerateLayout} from './authoring-generate-layout.mjs';
 import {createImageIterationHistory,installImageIterationHistory} from './authoring-image-history.mjs';
 import {installBrowseLayout} from './authoring-browse-layout.mjs';
 import {createAppFrameSource} from './app-frame-source.mjs';
+import {createSceneFrameComposition} from './scene-frame-composition.mjs';
 import {createAppGpuHost} from './app-gpu-host.mjs';
 import {fireAtBoot,createFluidBoot} from './fire-boot.mjs';
 import {createAuthoringPromptExpansion,installAuthoringPromptExpansion,authoringPromptWeightRoot} from './authoring-prompt-expansion.mjs';
@@ -11778,13 +11779,10 @@ async function initScene() {
   let ordinaryDepthEnabled = fireLightFieldRouteParams().get('volume_light_field_scene_depth') === '1'
     || isAuthoredKilnCollisionRoute();
 
-  let sceneRenderedForVolume = false;
-  let ordinarySceneTransportFrame = null;
   let transportPrototype = null;
   let transportCanvasVisibility = '';
   const consumeSceneTransportFrame=frame=>{
-    ordinarySceneTransportFrame=frame;
-    try{return frame.renderHost();}finally{ordinarySceneTransportFrame=null;}
+    return frameComposition.withTransport(frame,()=>frame.renderHost());
   };
   function syncAuthoredWaterFlameTransport() {
     syncWaterProxy();
@@ -11818,8 +11816,14 @@ async function initScene() {
     registered:!!transportPrototype,effective:!!transportPrototype&&!!waterFeature.host?.state().lastFrame?.volumeTransport,
     lastFrame:waterFeature.host?.state().lastFrame??null,source:volumePrototype?.debugState().sceneTransport??null,
     refraction:'existing-screen-space-scene-query',displayTransform:'one-final-scene-camera'});
-  let foregroundServiceActive = false;
-  let insideForegroundFrame = false;
+  const frameComposition=createSceneFrameComposition({
+    readInputs:()=>({lightingHeld:sceneLightingPreparation?.state().held,
+      exclusiveInspection:exclusiveInspectionRender,manualInspection:manualInspectionRender,
+      transportRequired:authoredWaterFlameTransportActive||authoredFlameHDRActive,
+      radianceReady:!window.__kaminosSceneRadiance||window.__kaminosSceneRadiance.canRender()}),
+    draw:drawSceneFrame,frameCount:()=>sceneFrameCount,
+    prepare:()=>{syncViewportRendererSize();camera.updateMatrixWorld();fireLightFieldPass?.update();},
+  });
   let sceneFrameCount = 0;
   ordinarySceneDepthProvider = () => {
     if (!ordinaryDepthEnabled) return null;
@@ -11829,8 +11833,7 @@ async function initScene() {
     syncViewportRendererSize();
     camera.updateMatrixWorld();
     fireLightFieldPass?.update();
-    if (renderSceneFrame() === false) return null;
-    sceneRenderedForVolume = true;
+    if (!frameComposition.renderDepth()) return null;
     const texture = renderer.backend.get(activeSceneDepth.value).texture;
     return {device:sharedGpu.device, camera, texture};
   };
@@ -11843,15 +11846,11 @@ async function initScene() {
   let fpsFrames = 0;
   let fpsLast = performance.now();
 
-  function renderSceneFrame() {
-    if(sceneLightingPreparation?.state().held)return false;
-    if(exclusiveInspectionRender&&!manualInspectionRender)return false;
-    if((authoredWaterFlameTransportActive||authoredFlameHDRActive)&&!ordinarySceneTransportFrame)return false;
+  function renderSceneFrame() { return frameComposition.render(); }
+
+  function drawSceneFrame() {
     renderer.toneMapping = document.getElementById('volume-tone-mapping').value === 'custom' ? THREE.ACESFilmicToneMapping : THREE.AgXToneMapping;
-    // Shared-source reset may span an await while this host's RAF keeps
-    // running. Keep the previous presented frame until both consumers have
-    // current inputs; do not submit retired medium resources or unlit fill.
-    if (window.__kaminosSceneRadiance && !window.__kaminosSceneRadiance.canRender()) return false;
+    const ordinarySceneTransportFrame=frameComposition.transportFrame;
     const t0 = performance.now();
     updateSelectionFeedback();
     updateAnnularBurnerFrame(t0);
@@ -11977,9 +11976,8 @@ async function initScene() {
 
     if(needsRender || localWaterActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || fireLightFieldActive)sceneGI.requestHistoryFrames();
 
-    if (!foregroundServiceActive && mainRendererNeeded && (sceneGI.needsHistoryFrame() || needsRender || localWaterActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || fireLightFieldActive || idleFrames < IDLE_THRESHOLD)) {
-      if (!sceneRenderedForVolume) renderSceneFrame();
-      sceneRenderedForVolume = false;
+    if (mainRendererNeeded && (sceneGI.needsHistoryFrame() || needsRender || localWaterActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || fireLightFieldActive || idleFrames < IDLE_THRESHOLD)) {
+      if (!frameComposition.renderOrdinary()) return;
 
       if (!needsRender && !motionAgencyActive && !motionDecisionActive && !motionPhraseControlActive && !motionTrackActive && !forgeHostActive && !volumeBridgeActive && !fireLightFieldActive) idleFrames++;
       needsRender = false;
@@ -11987,28 +11985,8 @@ async function initScene() {
   }
   compositionHost = {
     device: renderer.backend.device,
-    setForegroundServiceActive(active) { foregroundServiceActive = Boolean(active); },
-    runForegroundFrame(run) {
-      if (!foregroundServiceActive || insideForegroundFrame) throw new Error('invalid foreground scene frame state');
-      insideForegroundFrame = true;
-      sceneRenderedForVolume = false;
-      // Per request: a draw that renderSceneFrame skipped leaves the count unchanged.
-      const sceneFrameCountBefore = sceneFrameCount;
-      try {
-        // The ordinary depth provider runs after the volume updates controls
-        // and camera, preserving identical camera state for prepass/raymarch.
-        const result = run();
-        if (!sceneRenderedForVolume) {
-          syncViewportRendererSize();
-          camera.updateMatrixWorld();
-          fireLightFieldPass?.update();
-          renderSceneFrame();
-        }
-        const sceneDrawn = sceneFrameCount > sceneFrameCountBefore;
-        return {...result, sceneFrameCount, sceneFrameCountBefore, sceneFrameCountAfter: sceneFrameCount, sceneDrawn,
-          sceneAuthority: sceneDrawn ? 'three-render-returned-inside-service-not-presentation' : 'scene-draw-skipped-this-request'};
-      } finally { insideForegroundFrame = false; }
-    },
+    setForegroundServiceActive:frameComposition.setForegroundServiceActive,
+    runForegroundFrame:frameComposition.runForegroundFrame,
     async presentGlb(glb, {runId, sha256}) {
       const arrival=workingScene.arrival();
       const response = await fetch('/api/ingest-mesh', {method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:glb});
