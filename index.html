@@ -25927,7 +25927,7 @@ function setupSelectionTransforms(){
 
 function createPageSceneMembershipBatch(){
   return createSceneMembershipBatch({scene:workingScene,membership:sceneMembership,
-    records:{serialize:serializeSceneObject,reloadable:isReloadableSceneObjectRecord,apply:applyCompoundSceneRecord},
+    records:{serialize:entry=>serializeSceneObject(ashMembershipEntry(entry)),reloadable:isReloadableSceneObjectRecord,apply:applyCompoundSceneRecord},
     groups:{serialize:serializeSceneGroups,ensure:ensureGroupTarget,create:createSceneGroupForObjects},
     context:{
       capture:()=>({field:workingScene.activeFieldId,domain:[...flameDomainTranslation],domainScale:flameDomainScale,domainFollowSource:flameDomainFollowSource,activeCameraId:sceneCameras?.read().settings.activeId??null}),
@@ -25941,7 +25941,7 @@ function createPageSceneMembershipBatch(){
   });
 }
 function applyCompoundSceneRecord(entry,record){
-  const existing=serializeSceneObject(entry);
+  const existing=serializeSceneObject(ashMembershipEntry(entry));
   entry.repetition=checkedRepetition(record.repetition);
   if(JSON.stringify(existing.transform)!==JSON.stringify(record.transform))applyAuthoredScenePose(record.id,record.transform);
   if(entry.type==='light'&&JSON.stringify(entry.light)!==JSON.stringify(record.light))mountSceneSpotLight(record);

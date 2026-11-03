@@ -1,3 +1,6 @@
+import {ASH_OBJECT_TYPE} from '../../ash/scene-record.mjs';
+import {ASH_SOURCE_TYPE} from '../../ash/source-object.mjs';
+import {ashMembershipEntry} from '../../ash/history-record.mjs';
 import {createAuthoredFlameFeature} from '../../authored-flame-feature.mjs';
 import {createKilnRecipeStore} from '../../inference-kiln-selection.mjs';
 import {FIRE_RENDER_DEFAULTS} from '../../scene-fire-render-settings.mjs';
@@ -25,6 +28,10 @@ const recordInstallation=page.slice(recordStart,recordEnd).replace('const sceneR
 // while exercising extracted page consumers. Ownership/integration tests use
 // createWorkingScene itself; this double is not evidence for its invariants.
 export function sceneContext(context, options) {
+  context.ashMembershipEntry??=ashMembershipEntry;
+  context.ASH_OBJECT_TYPE??=ASH_OBJECT_TYPE;context.ASH_SOURCE_TYPE??=ASH_SOURCE_TYPE;
+  context.authoredAsh??=new Map();context.ashEditTargets??=new Set();
+  context.captureAuthoredAsh??=async()=>{for(const ash of context.authoredAsh.values())await ash.checkpoint();};
   // Page-consumer fixture projection only. Runtime lifetime tests instantiate
   // createAuthoredWaterFeature directly; these old fields describe domain inputs.
   if(!context.waterFeature){
