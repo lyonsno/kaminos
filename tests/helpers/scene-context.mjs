@@ -76,7 +76,7 @@ export function sceneContext(context, options) {
   context.selectedFlameControlEntry??=()=>context.selectedSceneObjectEntry?.()??(context.workingScene?.activeObjectId?{id:context.workingScene.activeObjectId,type:'flame-emitter'}:null);
   context.sceneLightingPreparation ??= null;
   // Domain fixtures do not prepare GPU environments; loading behavior has its own tests.
-  context.environmentLoader ??= {holdFull:()=>()=>{}};
+  context.environmentLoader ??= {holdFull:()=>()=>{},releaseFull(){}};
   context.requestAnimationFrame ??= fn=>fn();
   context.setTimeout ??= fn=>fn();
   if(context.document){context.document.body ??= {dataset:{}};context.document.body.dataset ??= {};}
