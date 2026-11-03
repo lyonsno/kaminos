@@ -1,14 +1,17 @@
-import {Group,Mesh,Matrix4,BoxGeometry,EdgesGeometry,LineSegments,LineBasicMaterial,TorusGeometry,MeshStandardMaterial} from '../lib/three.core.js';
+import {Group,Mesh,Matrix4,Matrix3,Vector2,Vector3,Quaternion,BoxGeometry,LatheGeometry,CylinderGeometry,EdgesGeometry,LineSegments,LineBasicMaterial,TorusGeometry,MeshBasicMaterial,MeshStandardMaterial} from '../lib/three.core.js';
+import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
+import {annularBurnerCasterKey,createAnnularBurnerCaster} from '../annular-burner.mjs';
 import {checkedAshRecord,checkedAshSettings,ashObjectLayout,ASH_OBJECT_TYPE} from './scene-record.mjs';
-import {selectAshCollisionLod} from '../scene-lod-budget.mjs';
+import {selectAshCollisionLod,applyRootVertexWarpToRung} from '../scene-lod-budget.mjs';
 
 export {selectAshCollisionLod};
 
 // Field coordinates belong to the object. Rigid scene triangles are borrowed,
 // transformed into that frame, and never mutated or disposed by ash.
 const ASH_COLLIDER_TYPES=['glb','pbr','procedural-mesh','burner-bed','brazier-room'];
+const burnerRecipeOf=r=>r?.userData?.kaminosAnnularBurnerRecipe??(r?.userData?.kaminosSceneObject?.geometry?.kind==='annular'?r.userData.kaminosSceneObject.geometry.parameters:null);
 export function createAshCollisionRecords(root,readObjects,{getCellSize=()=>0.04,resolveCollisionRung=null}={}){
- const proxies=new WeakMap(),inverse=new Matrix4(),invRung=new Matrix4(),repWorld=new Matrix4();
+ const proxies=new WeakMap(),burnerCasters=new WeakMap(),proxyMaterial=new MeshBasicMaterial(),inverse=new Matrix4(),invRung=new Matrix4(),repWorld=new Matrix4();
  return ()=>{
   root.updateWorldMatrix(true,false);if(Math.abs(root.matrixWorld.determinant())<1e-12)throw Error('Ash field transform must be invertible');inverse.copy(root.matrixWorld).invert();const result=[];
   for(const entry of readObjects()){
@@ -19,8 +22,28 @@ export function createAshCollisionRecords(root,readObjects,{getCellSize=()=>0.04
     let objectVisible=true;
     for(let node=entry.object;node;node=node.parent)if(!node.visible||node.userData?.kaminosEditorOnly||node.userData?.kaminosEditorHelper){objectVisible=false;break;}
     if(!objectVisible)continue;
-    const rung=resolveCollisionRung?.(entry.object,{cellSize:getCellSize()})??entry.object.userData?.kaminosAshCollisionRung??null;
+    let rung=resolveCollisionRung?.(entry.object,{cellSize:getCellSize()})??entry.object.userData?.kaminosAshCollisionRung??null;
     if(rung?.pending)continue;
+    if(!rung){
+     const recipe=burnerRecipeOf(entry.object);
+     if(recipe){
+      const key=annularBurnerCasterKey(recipe);let caster=burnerCasters.get(entry.object);
+      if(!caster||caster.key!==key){
+       caster?.geometry.dispose();
+       const built=createAnnularBurnerCaster({LatheGeometry,CylinderGeometry,Vector2},mergeGeometries,recipe);
+       const mesh=new Mesh(built.geometry,proxyMaterial);mesh.name=entry.object.name||'Annular burner caster';
+       caster={key,root:mesh,geometry:built.geometry,faces:built.triangles,warpFn:undefined,warpRev:undefined};
+       burnerCasters.set(entry.object,caster);
+      }
+      const warpFn=entry.object.userData?.kaminosVertexWarpFn??entry.object.userData?.kaminosVertexWarp??null;
+      const warpRev=entry.object.userData?.kaminosVertexWarpRevision??0;
+      if(caster.warpFn!==warpFn||caster.warpRev!==warpRev){
+       if(warpFn||caster.warpFn)applyRootVertexWarpToRung({Matrix4,Matrix3,Vector3,Quaternion},caster.root,warpFn,{bounds:entry.object.userData?.kaminosVertexWarpBounds??entry.object.userData?.kaminosUnwarpedRootBox??null});
+       caster.warpFn=warpFn;caster.warpRev=warpRev;
+      }
+      rung={root:caster.root,tier:'annular-caster',faces:caster.faces};
+     }
+    }
     if(rung?.root){
      rung.root.updateWorldMatrix(true,true);invRung.copy(rung.root.matrixWorld).invert();
      const repCopies=(entry.object.children??[]).filter(c=>c.userData?.kaminosRepetitionCopy&&c.visible);
@@ -84,7 +107,7 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,read
  try{patch=await build(settings);root.add(patch.root);}
  catch(error){dispose();throw error;}
  const api={root,
-  async initialize(){if(initialized)return;return locked(async()=>{await prepareCollision(settings.cellSize);patch.syncScene();if(pendingRestore){patch.restore(pendingRestore);pendingRestore=null;}else if(settings.initialDepth>0)await patch.deposit({blanketDepth:settings.initialDepth,groundOnly:true});patch.setSliding?.({variation:settings.slideVariation,scale:settings.slideScale,release:settings.slideRelease});initialized=true;});},
+  async initialize(){if(initialized)return;return locked(async()=>{await prepareCollision(settings.cellSize);patch.syncScene();if(pendingRestore){patch.restore(pendingRestore,{allowCollisionUpgrade:true});pendingRestore=null;}else if(settings.initialDepth>0)await patch.deposit({blanketDepth:settings.initialDepth,groundOnly:true});patch.setSliding?.({variation:settings.slideVariation,scale:settings.slideScale,release:settings.slideRelease});initialized=true;});},
   tick(timestamp,{active=true,selected=false}={}){
    guide.visible=selected;emitter.visible=selected&&settings.emitting;
    if(disposed||busy||!initialized||pendingRestore||!active||settings.paused){lastTick=null;return false;}

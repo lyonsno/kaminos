@@ -7,15 +7,15 @@ import {sceneTiles} from './scene-plan.mjs';
 // voxelized by the shared producer; live poses resample only affected ash tiles.
 export function createAshSceneSolids({device,layout:p,collision,headers}){
  const t=p.tiles,cache=new Map(),boundsCache=new WeakMap(),pendingDirty=new Set();let builds=0,updates=0,lastTiles=0,disposed=false,geometryRevision=0;
- const jobs=device.createBuffer({label:'ash moved-solid tile addresses',size:(t.count+1)*4,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
+ let jobsCapacity=t.count+1,jobs=device.createBuffer({label:'ash moved-solid tile addresses',size:jobsCapacity*4,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
  const dummy=device.createTexture({size:[1,1,1],dimension:'3d',format:'r32uint',usage:GPUTextureUsage.TEXTURE_BINDING});
- const blank=device.createBuffer({size:80,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+ const blank=device.createBuffer({size:96,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
  const code=`
  const ROW:u32=${device.limits.maxComputeWorkgroupsPerDimension}u;
  const B:u32=${t.width}u;const V:u32=${t.cellsPerTile}u;const G:u32=${t.groupsPerTile}u;
  const TD=vec3<u32>(${t.dims.map(n=>n+'u')});const D=vec3<u32>(${p.dims.map(n=>n+'u')});
  const O=vec3<f32>(${p.origin.map(n=>Number(n).toFixed(12))});const S:f32=${p.cellSize.toFixed(12)};
- struct Pose {inverse:mat4x4<f32>,local:vec4<f32>}
+ struct Pose {inverse:mat4x4<f32>,local:vec4<f32>,tiles:vec4<u32>}
  @group(0) @binding(0) var<storage,read_write> solid:array<u32>;
  @group(0) @binding(1) var<storage,read_write> headers:array<atomic<u32>>;
  @group(0) @binding(2) var<storage,read> jobs:array<u32>;
@@ -23,9 +23,9 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
  @group(0) @binding(4) var<uniform> pose:Pose;
  fn tc(i:u32)->vec3<u32>{return vec3<u32>(i%TD.x,(i/TD.x)%TD.y,i/(TD.x*TD.y));}
  fn ti(c:vec3<u32>)->u32{return c.x+TD.x*(c.y+TD.y*c.z);}
- fn cell(wg:u32,lid:u32)->vec3<u32>{let i=(wg%G)*64u+lid;return tc(jobs[1u+wg/G])*B+vec3<u32>(i%B,(i/B)%B,i/(B*B));}
+ fn cell(base:u32,wg:u32,lid:u32)->vec3<u32>{let i=(wg%G)*64u+lid;return tc(jobs[base+wg/G])*B+vec3<u32>(i%B,(i/B)%B,i/(B*B));}
  @compute @workgroup_size(64) fn clear(@builtin(workgroup_id) w:vec3<u32>,@builtin(local_invocation_id) l:vec3<u32>){
-  let group=w.x+w.y*ROW;if(group>=jobs[0]*G){return;}let local=(group%G)*64u+l.x;if(local>=V){return;}let c=cell(group,l.x);
+  let group=w.x+w.y*ROW;if(group>=jobs[0]*G){return;}let local=(group%G)*64u+l.x;if(local>=V){return;}let c=cell(1u,group,l.x);
   if(all(c<D)){solid[c.x+D.x*(c.y+D.y*c.z)]=0u;}
   if(local==0u){let a=vec3<i32>(tc(jobs[1u+group/G]));
    for(var z=-1;z<=1;z++){for(var y=-1;y<=1;y++){for(var x=-1;x<=1;x++){
@@ -34,7 +34,7 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
   }
  }
  @compute @workgroup_size(64) fn stamp(@builtin(workgroup_id) w:vec3<u32>,@builtin(local_invocation_id) l:vec3<u32>){
-  let group=w.x+w.y*ROW;if(group>=jobs[0]*G||(group%G)*64u+l.x>=V){return;}let c=cell(group,l.x);if(any(c>=D)){return;}
+  let group=w.x+w.y*ROW;if(group>=pose.tiles.y*G||(group%G)*64u+l.x>=V){return;}let c=cell(pose.tiles.x,group,l.x);if(any(c>=D)){return;}
   let world=O+(vec3<f32>(c)+vec3<f32>(.5))*S;
   let point=(pose.inverse*vec4<f32>(world,1)).xyz;let q=vec3<i32>(floor((point-pose.local.xyz)/pose.local.w));
   if(any(q<vec3<i32>(0))||any(q>=vec3<i32>(textureDimensions(shape)))){return;}
@@ -50,7 +50,7 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
  const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[bindLayout]});
  const pipelines=Object.fromEntries(['clear','stamp'].map(entryPoint=>[entryPoint,device.createComputePipeline({layout:pipelineLayout,compute:{module,entryPoint}})]));
  const group=(texture,uniform)=>device.createBindGroup({layout:bindLayout,entries:[{binding:0,resource:{buffer:collision}},{binding:1,resource:{buffer:headers}},{binding:2,resource:{buffer:jobs}},{binding:3,resource:texture.createView()},{binding:4,resource:{buffer:uniform}}]});
- const clearGroup=group(dummy,blank);
+ let clearGroup=group(dummy,blank);
  const destroy=m=>{m.texture.destroy();m.coarseTexture?.destroy();m.uniform.destroy();};
  const maxBytes=Math.min(device.limits.maxStorageBufferBindingSize,device.limits.maxBufferSize);
  const maxCells=Math.min(Math.floor((maxBytes-4)/4),device.limits.maxComputeWorkgroupsPerDimension*64);
@@ -121,10 +121,10 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
    producer.update([{id:mesh.uuid,object:proxy}],{translate:center.toArray(),scale:grid*step/2},{grid,gridHeight:grid},{boundaryCap});
    texture=device.createTexture({label:'cached local ash solid '+mesh.name,size:[grid,grid,grid],dimension:'3d',format:'r32uint',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});
    const e=device.createCommandEncoder();producer.encode(e);e.copyTextureToTexture({texture:producer.texture},{texture},[grid,grid,grid]);device.queue.submit([e.finish()]);
-   uniform=device.createBuffer({label:'ash object pose '+mesh.name,size:80,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+   uniform=device.createBuffer({label:'ash object pose '+mesh.name,size:96,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
    if(reusedCoarse)prev.coarseTexture=null;
    const coarseBytes=coarseTexture?coarseGrid**3*4:0;
-   builds++;return {...spec,texture,coarseTexture,uniform,group:group(texture,uniform),box:null,matrix:null,bytes:bytes+coarseBytes+80};
+   builds++;return {...spec,texture,coarseTexture,uniform,group:group(texture,uniform),box:null,matrix:null,bytes:bytes+coarseBytes+96};
   }catch(error){texture?.destroy();if(!reusedCoarse)coarseTexture?.destroy();uniform?.destroy();throw error;}finally{coarseProducer?.destroy();producer?.destroy();}
  }
  function update(records){
@@ -156,13 +156,27 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
    const values=new Float32Array(20);values.set(new Matrix4().copy(mesh.matrixWorld).invert().elements);values.set([...m.origin.toArray(),m.step],16);device.queue.writeBuffer(m.uniform,0,values);
   }
   lastTiles=dirty.size;if(!dirty.size)return false;
-  device.queue.writeBuffer(jobs,0,new Uint32Array([dirty.size,...dirty]));
-  const encoder=device.createCommandEncoder(),dispatch=(name,bind)=>{const pass=encoder.beginComputePass({label:'ash scene '+name});pass.setPipeline(pipelines[name]);pass.setBindGroup(0,bind);pass.dispatchWorkgroups(...ashDispatchGrid(dirty.size*t.groupsPerTile,device.limits.maxComputeWorkgroupsPerDimension));pass.end();};
-  dispatch('clear',clearGroup);
+  const packed=[dirty.size,...dirty],stamps=[];
+  for(const m of cache.values()){
+   const mDirty=sceneTiles(p,m.box).filter(i=>dirty.has(i));
+   if(!mDirty.length)continue;
+   let offset=1;
+   if(mDirty.length<dirty.size){offset=packed.length;packed.push(...mDirty);}
+   device.queue.writeBuffer(m.uniform,80,new Uint32Array([offset,mDirty.length,0,0]));
+   stamps.push({m,tiles:mDirty.length});
+  }
+  if(packed.length>jobsCapacity){
+   jobs.destroy();jobsCapacity=Math.max(packed.length,jobsCapacity*2);
+   jobs=device.createBuffer({label:'ash moved-solid tile addresses',size:jobsCapacity*4,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
+   clearGroup=group(dummy,blank);for(const m of cache.values())m.group=group(m.texture,m.uniform);
+  }
+  device.queue.writeBuffer(jobs,0,new Uint32Array(packed));
+  const encoder=device.createCommandEncoder(),dispatch=(name,bind,tiles)=>{const pass=encoder.beginComputePass({label:'ash scene '+name});pass.setPipeline(pipelines[name]);pass.setBindGroup(0,bind);pass.dispatchWorkgroups(...ashDispatchGrid(tiles*t.groupsPerTile,device.limits.maxComputeWorkgroupsPerDimension));pass.end();};
+  dispatch('clear',clearGroup,dirty.size);
   // Recompose all overlapping members, including unchanged objects, so moving
   // or removing one object cannot erase another object's occupied cells.
-  for(const m of cache.values())if(sceneTiles(p,m.box).some(i=>dirty.has(i)))dispatch('stamp',m.group);
+  for(const {m,tiles} of stamps)dispatch('stamp',m.group,tiles);
   device.queue.submit([encoder.finish()]);dirty.clear();updates++;return true;
  }
- return {update,read:()=>({route:'cached-local-triangle-occupancy',pendingDirtyTiles:pendingDirty.size,shapeBuilds:builds,updates,lastDirtyTiles:lastTiles,allocatedBytes:(t.count+1)*4+84+[...cache.values()].reduce((n,m)=>n+m.bytes,0),members:[...cache.values()].map(m=>({id:m.id,key:m.objectKey,name:m.name,geometry:m.identity,matrix:m.matrix,grid:m.grid}))}),dispose(){if(disposed)return;disposed=true;for(const m of cache.values())destroy(m);cache.clear();jobs.destroy();dummy.destroy();blank.destroy();}};
+ return {update,read:()=>({route:'cached-local-triangle-occupancy',pendingDirtyTiles:pendingDirty.size,shapeBuilds:builds,updates,lastDirtyTiles:lastTiles,allocatedBytes:jobsCapacity*4+100+[...cache.values()].reduce((n,m)=>n+m.bytes,0),members:[...cache.values()].map(m=>({id:m.id,key:m.objectKey,name:m.name,geometry:m.identity,matrix:m.matrix,grid:m.grid}))}),dispose(){if(disposed)return;disposed=true;for(const m of cache.values())destroy(m);cache.clear();jobs.destroy();dummy.destroy();blank.destroy();}};
 }

@@ -314,3 +314,24 @@ test('ash scene object prepares and consumes stunt-double collision rungs across
  ashObj.dispose();lodController.dispose();giProxies.clear();
 });
 
+import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
+import {BURNER_DEFAULTS,createAnnularBurner} from '../annular-burner.mjs';
+test('annular burner procedural meshes collapse 29 beauty sub-meshes into a single caster collision proxy',()=>{
+ const ashRoot=new Group();
+ const burner=createAnnularBurner(THREE,mergeGeometries,BURNER_DEFAULTS);
+ burner.group.position.set(1,0.5,-2);
+ burner.group.scale.setScalar(20);
+ assert.equal(burner.group.children.filter(c=>c.isMesh).length,29,'beauty burner has 29 sub-meshes');
+ const list=createAshCollisionRecords(ashRoot,()=>[{id:'burner-floor',type:'procedural-mesh',object:burner.group}]);
+ const first=list();
+ assert.equal(first.length,1,'annular burner must emit 1 merged collision proxy instead of 29 sub-meshes');
+ assert.equal(first[0].collisionTier,'annular-caster');
+ assert.ok(first[0].collisionFaces>1000&&first[0].collisionFaces<8000,`expected ~6.6k caster triangles, got ${first[0].collisionFaces}`);
+ assert.equal(burner.group.children.filter(c=>c.isMesh).length,29,'beauty burner children remain untouched');
+ const second=list();
+ assert.equal(second[0].object,first[0].object,'proxy mesh is reused across ticks');
+ assert.equal(second[0].object.geometry,first[0].object.geometry,'caster geometry is reused across ticks');
+ burner.dispose();
+});
+
+
