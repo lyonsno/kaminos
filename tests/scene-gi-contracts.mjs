@@ -40,6 +40,23 @@ const singleObjectCalibrated = calibrateSceneGISettingsForBounds({
 assert.ok(singleObjectCalibrated.radius >= 1.0 && singleObjectCalibrated.radius <= 2.0, `single arrived object radius should match object/camera scale, got ${singleObjectCalibrated.radius}`);
 assert.ok(singleObjectCalibrated.thickness >= 0.15 && singleObjectCalibrated.thickness <= 0.45, `single arrived object thickness should preserve local crevices, got ${singleObjectCalibrated.thickness}`);
 assert.equal(singleObjectCalibrated.estimator.backfaceLighting, 0.2, 'auto-calibrated SSGI keeps default backfaceLighting in physical thin-fill range');
+assert.equal(singleObjectCalibrated.bounceFeedback, true, 'auto-calibrated SSGI enables albedo-weighted multi-bounce feedback when temporal GI is active');
+const explicitBounceOff = calibrateSceneGISettingsForBounds({
+  boxes: [{ min: [-0.577, -0.85, -0.577], max: [0.577, 0.305, 0.577] }],
+  cameraDistance: 2.5,
+  current: { bounceFeedback: false },
+});
+assert.equal(explicitBounceOff.bounceFeedback, false, 'auto-calibrated SSGI preserves explicit bounceFeedback: false when configured by the scene or user');
+assert.match(
+  shader,
+  /rawVisibility\.mul\(rawVisibility\.add\(float\(0\.35\)\)\)\.div\(float\(1\.35\)\)/,
+  'scene-gi.mjs must sharpen deep contact crevice visibility while preserving 0 and 1 endpoints',
+);
+assert.match(
+  shader,
+  /contactBounceGuard\s*=\s*mix\(float\(0\.65\),\s*float\(1\),\s*rawVisibility\)/,
+  'scene-gi.mjs must guard tight contact seams against denoised bounce washout',
+);
 const roomCalibrated = calibrateSceneGISettingsForBounds({
   boxes: [
     { min: [-4, -0.85, -4], max: [4, 4, 4] },

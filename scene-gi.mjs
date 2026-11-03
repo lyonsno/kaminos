@@ -81,7 +81,9 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
     const pair=filtered?filterPair(settings.temporal):null;
     const aoInput=filtered?pair.ao.node:settings.temporal?history.getAONode():rawAO;
     const giInput=filtered?pair.gi.node:settings.temporal?history.getGINode():rawGI;
-    const visibility=aoInput.sample(screenUV).r.clamp(0,1);
+    const rawVisibility=aoInput.sample(screenUV).r.clamp(0,1);
+    const visibility=rawVisibility.mul(rawVisibility.add(float(0.35))).div(float(1.35));
+    const contactBounceGuard=mix(float(0.65),float(1),rawVisibility);
     const irradianceOverPi=giInput.sample(screenUV).rgb.mul(gain);
     const ao=mix(float(1),visibility,aoIntensity.min(1)).div(float(1).add(aoIntensity.sub(1).max(0).mul(float(1).sub(visibility))));
     const beauty=pass(scene,camera);
@@ -95,7 +97,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
     // Keeping this node when an emission attachment is added preserves GI.
     const receivingOutput=Fn(([],{material})=>{
       const diffuseReceiver=diffuseColor.rgb.mul(metalness.oneMinus());
-      const received=sceneGIReceives(material)?irradianceOverPi.mul(diffuseReceiver).mul(receiveWeight(material)):vec3(0);
+      const received=sceneGIReceives(material)?irradianceOverPi.mul(diffuseReceiver).mul(contactBounceGuard).mul(receiveWeight(material)):vec3(0);
       return mix(vec4(output.rgb.add(received),output.a),vec4(received.mul(output.a),1),float(viewMode.equal(2)));
     })();
     beauty.setMRT(mrt({output:receivingOutput}));
