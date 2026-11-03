@@ -159,15 +159,16 @@ class HybridPartitionTest(unittest.TestCase):
 
     def test_bounded_normal_cone_and_pinhole_fill_separate_wall_from_gradual_cylinder(self):
         # Build a 2x2 planar wall subdivided into a 10x10 grid (200 triangles, area=4.0)
-        # where 4 interior triangles have a steep mortar-groove normal (pinholes),
-        # plus a 36-sided smooth cylinder (72 triangles, radius=0.04, length=1.2, pairwise dihedral=10 deg, cos=0.985 > 0.85).
+        # where 40 interior triangles form a shallow mortar-groove relief network (z=-0.005)
+        # plus a 4-triangle protruding open-boundary tab on the edge (z=+0.08, open boundary edges)
+        # plus a 36-sided smooth cylinder (72 triangles, radius=0.04, length=1.2).
         xs = np.linspace(0., 2., 11)
         ys = np.linspace(0., 2., 11)
         verts, tris = [], []
         for j in range(10):
             for i in range(10):
                 b = len(verts)
-                z_bump = 0.008 if (i in (4, 5) and j == 5) else 0.0
+                z_bump = -0.006 if (2 <= i <= 7 and j in (4, 5)) else 0.0
                 verts.extend([
                     [xs[i], ys[j], 0.0],
                     [xs[i + 1], ys[j], 0.0],
@@ -176,6 +177,17 @@ class HybridPartitionTest(unittest.TestCase):
                 ])
                 tris.extend([[b, b + 1, b + 2], [b, b + 2, b + 3]])
         wall_tri_count = len(tris)
+        # Add a 4-triangle protruding perpendicular open-boundary tab attached to the outer wall edge (x=2.0)
+        b_tab = len(verts)
+        verts.extend([
+            [2.0, 0.4, 0.0], [2.0, 0.45, 0.0], [2.0, 0.45, 0.04], [2.0, 0.4, 0.04],
+            [2.0, 0.45, 0.0], [2.0, 0.5, 0.0], [2.0, 0.5, 0.04], [2.0, 0.45, 0.04],
+        ])
+        tris.extend([
+            [b_tab, b_tab + 1, b_tab + 2], [b_tab, b_tab + 2, b_tab + 3],
+            [b_tab + 4, b_tab + 5, b_tab + 6], [b_tab + 4, b_tab + 6, b_tab + 7],
+        ])
+        tab_tri_end = len(tris)
         # Add 36-sided cylinder (radius 0.04, height 1.2)
         n_sides = 36
         angles = np.linspace(0., 2. * np.pi, n_sides, endpoint=False)
@@ -193,11 +205,99 @@ class HybridPartitionTest(unittest.TestCase):
         pos = np.asarray(verts, dtype=np.float64)
         idx = np.asarray(tris, dtype=np.int64)
         nrm = np.tile([0., 0., 1.], (len(pos), 1))
-        res = hybrid.partition_surface(pos, nrm, idx)
+        res = hybrid.partition_surface(pos, nrm, idx, pinhole_max_triangles=8)
         self.assertTrue(res['meshTriangles'][:wall_tri_count].all(),
-                        'Broad wall including absorbed interior mortar pinholes must stay in mesh regime')
-        self.assertTrue(res['splatTriangles'][wall_tri_count:].all(),
+                        'Broad wall including shallow coplanar mortar-groove relief (>8 tris) must stay in mesh regime')
+        self.assertTrue(res['splatTriangles'][wall_tri_count:tab_tri_end].all(),
+                        'Protruding open-boundary edge tab must not be absorbed as an interior pinhole')
+        self.assertTrue(res['splatTriangles'][tab_tri_end:].all(),
                         'Smooth high-curvature cylinder must split by normal cone and route to splat regime')
+
+    def test_non_identity_node_transform_compacts_mesh_glb_in_world_space_and_cli_flags_work(self):
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t)
+            p = root / 'transformed.glb'
+            make_hybrid_glb(p)
+            # Rewrite node 0 in transformed.glb with non-identity translation and scale
+            raw = p.read_bytes()
+            jlen, _ = struct.unpack_from('<II', raw, 12)
+            doc = json.loads(raw[20:20 + jlen])
+            bin_chunk = raw[20 + jlen:]
+            doc['nodes'][0] = {'mesh': 0, 'translation': [1.5, -0.5, 2.0], 'scale': [2.0, 2.0, 2.0]}
+            jbytes = json.dumps(doc).encode()
+            jbytes += b' ' * (-len(jbytes) % 4)
+            p.write_bytes(
+                struct.pack('<III', 0x46546c67, 2, 20 + len(jbytes) + len(bin_chunk))
+                + struct.pack('<II', len(jbytes), 0x4e4f534a) + jbytes + bin_chunk
+            )
+            out = root / 'out'
+            cmd = [
+                sys.executable, str(Path(hybrid.__file__)), str(p), str(out),
+                '--splat-count', '32',
+                '--chart-cone-cos-threshold', '0.75',
+                '--min-chart-compactness', '0.06',
+                '--pinhole-max-triangles', '64',
+                '--relief-plane-tolerance', '0.008',
+            ]
+            # Run from temporary directory (outside git repo) to verify git cwd handling
+            proc = subprocess.run(cmd, cwd=str(root), capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            report = json.loads((out / 'report.json').read_text())
+            self.assertEqual(report['partition']['pinholeMaxTriangles'], 64)
+            self.assertAlmostEqual(report['partition']['reliefPlaneTolerance'], 0.008)
+            splat_report = json.loads((out / 'splat-region/report.json').read_text())
+            self.assertIn('normalFallback', splat_report)
+
+            # Parse exported mesh-region.glb and verify its vertices are compacted (only 6 wall vertices, not 38)
+            # and baked into world space with an identity node transform matching splat-region.
+            (_, sub_doc, _, _, _, _, _, sub_pos, _, _, _, sub_idx, sub_mat) = hybrid._parse_glb(out / 'mesh-region.glb')
+            self.assertEqual(sub_doc['nodes'], [{'mesh': 0}])
+            self.assertTrue(np.allclose(sub_mat, np.eye(4)))
+            self.assertLessEqual(len(sub_pos), 6, 'Subset GLB must compact out unreferenced splat-only vertices')
+            self.assertEqual(len(sub_idx), 2)
+            self.assertTrue(np.allclose(sub_pos.min(0), [1.5, -0.5, 2.0]))
+            self.assertTrue(np.allclose(sub_pos.max(0), [5.5, 3.5, 2.0]))
+            self.assertLess((out / 'mesh-region.glb').stat().st_size, p.stat().st_size,
+                            'Compacted subset GLB must be smaller than the full source GLB')
+
+    def test_parser_rejects_mixed_matrix_trs_and_missing_required_keys_with_value_error(self):
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t)
+            p = root / 'mixed.glb'
+            make_hybrid_glb(p)
+            raw = p.read_bytes()
+            jlen, _ = struct.unpack_from('<II', raw, 12)
+            base_doc = json.loads(raw[20:20 + jlen])
+            bin_chunk = raw[20 + jlen:]
+
+            def write_mutated(mut_doc, dest):
+                jb = json.dumps(mut_doc).encode()
+                jb += b' ' * (-len(jb) % 4)
+                dest.write_bytes(
+                    struct.pack('<III', 0x46546c67, 2, 20 + len(jb) + len(bin_chunk))
+                    + struct.pack('<II', len(jb), 0x4e4f534a) + jb + bin_chunk
+                )
+
+            # 1. Node with both matrix and translation
+            d1 = json.loads(json.dumps(base_doc))
+            d1['nodes'][0] = {'mesh': 0, 'matrix': [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1], 'translation': [1, 2, 3]}
+            write_mutated(d1, p)
+            with self.assertRaisesRegex(ValueError, 'matrix and TRS'):
+                hybrid._parse_glb(p)
+
+            # 2. Primitive missing material
+            d2 = json.loads(json.dumps(base_doc))
+            del d2['meshes'][0]['primitives'][0]['material']
+            write_mutated(d2, p)
+            with self.assertRaisesRegex(ValueError, 'Primitive requires'):
+                hybrid._parse_glb(p)
+
+            # 3. Singular matrix
+            d3 = json.loads(json.dumps(base_doc))
+            d3['nodes'][0] = {'mesh': 0, 'matrix': [0]*16}
+            write_mutated(d3, p)
+            with self.assertRaisesRegex(ValueError, 'Singular'):
+                hybrid._parse_glb(p)
 
 
 if __name__ == '__main__':

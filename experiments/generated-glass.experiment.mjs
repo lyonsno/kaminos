@@ -51,7 +51,7 @@ export default {
     if(usesSplats(inputs.representation)){splats=await makeSplats(currentField);splatHolder.add(splats.root);representation=inputs.representation;asset.root.visible=representation==='hybrid';splatHolder.visible=true;surfelHolder.visible=false;}
     if(inputs.material){surfels.set(inputs.material);rawMesh?.set(inputs.material);}
    }
-   const box=new Box3().setFromObject(asset.root),center=box.getCenter(new Vector3()),size=box.getSize(new Vector3());
+   const box=new Box3().setFromObject(asset.root);if(Array.isArray(fieldMeta?.bounds)&&fieldMeta.bounds.length===2){box.expandByPoint(new Vector3(...fieldMeta.bounds[0]));box.expandByPoint(new Vector3(...fieldMeta.bounds[1]));}const center=box.getCenter(new Vector3()),size=box.getSize(new Vector3());
    reference=createReferenceBottle();reference.root.scale.setScalar(size.y*.32);reference.root.position.set(box.min.x-size.x*.18,box.min.y,center.z+size.z*.25);
    await session.attach(reference.root,{owned:true,metadata:{label:reference.root.name,source:'fixture:smooth-hollow-bottle',type:'experiment'}});reference.set(glass.read());
    // An opaque striped card makes displacement and tint visible behind the bottles.
