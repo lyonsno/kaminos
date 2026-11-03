@@ -379,13 +379,13 @@ export function prepareArrivedMeshMaterials(
         };
       }
       const orig = material.userData.kaminosArrivalOriginal;
-      const envBase = Number.isFinite(baseEnvMapIntensity) ? baseEnvMapIntensity : (orig.envMapIntensity ?? 1);
+      const envBase = (Number.isFinite(baseEnvMapIntensity) ? baseEnvMapIntensity : 1) * (orig.envMapIntensity ?? 1);
       if (typeof orig.roughness !== 'number') continue;
 
       if (!materialTuning) {
         material.roughness = orig.roughness;
         if (typeof material.envMapIntensity === 'number' || orig.envMapIntensity != null) {
-          material.envMapIntensity = envBase;
+          material.envMapIntensity = Math.round(envBase * 1000) / 1000;
         }
         continue;
       }
@@ -615,11 +615,15 @@ export function createLoadingTelemetryTracker({
     return state;
   }
 
+  let nextToken = 0;
+
   return {
     start(id, { label = id, phase = 'downloading', loadedBytes = 0, totalBytes = 0, now } = {}) {
       const t = nowMs(now);
+      const token = ++nextToken;
       operations.set(id, {
         id,
+        token,
         label,
         phase,
         loadedBytes: Number.isFinite(loadedBytes) ? loadedBytes : 0,
@@ -628,7 +632,8 @@ export function createLoadingTelemetryTracker({
         lastProgressAtMs: t,
       });
       lastFailed = null;
-      return notify(t);
+      const state = notify(t);
+      return { ...state, token };
     },
     progress(id, { label, phase, loadedBytes, totalBytes, now } = {}) {
       const t = nowMs(now);
@@ -660,6 +665,14 @@ export function createLoadingTelemetryTracker({
         if (existing.id === 'asset' || !lastCompletedById.asset || t - lastCompletedById.asset.completedAtMs > 4000) {
           lastCompleted = receipt;
         }
+        operations.delete(id);
+      }
+      return notify(t);
+    },
+    cancel(id, { token = null, now } = {}) {
+      const t = nowMs(now);
+      const existing = operations.get(id);
+      if (existing && (token == null || existing.token === token)) {
         operations.delete(id);
       }
       return notify(t);

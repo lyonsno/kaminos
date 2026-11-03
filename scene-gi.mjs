@@ -102,13 +102,14 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
     const receivingOutput=Fn(([],{material})=>{
       const diffuseReceiver=diffuseColor.rgb.mul(metalness.oneMinus());
       const isCycloramaFloor=Boolean(material?.userData?.kaminosCycloramaFloor);
-      const smoothness=float(1).sub(roughness).clamp(0,1);
-      const ndotv=normalView.dot(positionViewDirection).abs().clamp(0,1);
-      const fresnel=float(0.18).add(float(0.82).mul(float(1).sub(ndotv).pow(3)));
-      const contactProximity=mix(float(0.55),float(1.4),float(1).sub(rawVisibility).clamp(0,1));
-      const floorContact=isCycloramaFloor
-        ?irradianceOverPi.mul(floorContactReflection).mul(smoothness.mul(smoothness)).mul(fresnel).mul(contactProximity)
-        :vec3(0);
+      let floorContact=vec3(0);
+      if(isCycloramaFloor){
+        const smoothness=float(1).sub(roughness).clamp(0,1);
+        const ndotv=normalView.dot(positionViewDirection).abs().clamp(0,1);
+        const fresnel=float(0.18).add(float(0.82).mul(float(1).sub(ndotv).pow(3)));
+        const contactProximity=mix(float(0.55),float(1.4),float(1).sub(rawVisibility).clamp(0,1));
+        floorContact=irradianceOverPi.mul(floorContactReflection).mul(smoothness.mul(smoothness)).mul(fresnel).mul(contactProximity);
+      }
       const received=sceneGIReceives(material)?irradianceOverPi.mul(diffuseReceiver).mul(contactBounceGuard).add(floorContact).mul(receiveWeight(material)):vec3(0);
       return mix(vec4(output.rgb.add(received),output.a),vec4(received.mul(output.a),1),float(viewMode.equal(2)));
     })();
@@ -123,20 +124,23 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
     const surface=texture(depth.value,screenUV).r.lessThan(1);
     const receivedView=vec4(beauty.rgb.mul(surface),1);
     const incomingView=vec4(irradianceOverPi.mul(surface),1);
-    const beautyTex=beauty.getTextureNode('output');
-    const highlightExcess=uv=>{
-      const sampleRgb=beautyTex.sample(uv.clamp(0.001,0.999)).rgb;
-      const peak=sampleRgb.max(vec3(0)).sub(glintThreshold).max(vec3(0));
-      return peak.div(float(1).add(peak.mul(float(0.35))));
-    };
-    const glintHalo=highlightExcess(screenUV.add(vec2(0.0022,0.0014)))
-      .add(highlightExcess(screenUV.add(vec2(-0.0022,-0.0014))))
-      .add(highlightExcess(screenUV.add(vec2(-0.0014,0.0022))))
-      .add(highlightExcess(screenUV.add(vec2(0.0014,-0.0022))))
-      .mul(float(0.25))
-      .mul(glintStrength)
-      .mul(surface);
-    const beautyWithGlint=vec4(beauty.rgb.add(glintHalo),beauty.a);
+    const beautyTex=typeof beauty.getTextureNode==='function'?beauty.getTextureNode('output'):null;
+    let beautyWithGlint=beauty;
+    if(beautyTex){
+      const highlightExcess=uv=>{
+        const sampleRgb=beautyTex.sample(uv.clamp(0.001,0.999)).rgb;
+        const peak=sampleRgb.max(vec3(0)).sub(glintThreshold).max(vec3(0));
+        return peak.div(float(1).add(peak.mul(float(0.35))));
+      };
+      const glintHalo=highlightExcess(screenUV.add(vec2(0.0022,0.0014)))
+        .add(highlightExcess(screenUV.add(vec2(-0.0022,-0.0014))))
+        .add(highlightExcess(screenUV.add(vec2(-0.0014,0.0022))))
+        .add(highlightExcess(screenUV.add(vec2(0.0014,-0.0022))))
+        .mul(float(0.25))
+        .mul(glintStrength)
+        .mul(surface);
+      beautyWithGlint=vec4(beauty.rgb.add(glintHalo),beauty.a);
+    }
     const displayedOutput=mix(mix(mix(beautyWithGlint,aoView,float(viewMode.equal(1))),receivedView,float(viewMode.equal(2))),incomingView,float(viewMode.equal(3)));
     const displayed=comparison?mix(displayedOutput,comparison.inputs.enabled.select(comparison.inputs.beauty,source.getTextureNode('output')),float(comparison.showSource)):displayedOutput;
     const result={beauty,output:displayed};routes.set(key,result);return result;

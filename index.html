@@ -3766,7 +3766,7 @@ window.kaminosViewportSettings={
 };
 
 let scenePlacementTools = null;
-let sceneGI = null;
+let activeSceneGI = null;
 let polyEdit = null, viewProjection = null;
 let sceneControlHistory = null;
 const authoringControlSessions = [];
@@ -10575,7 +10575,16 @@ function createPageSceneMembershipOperations() {
       [ASH_OBJECT_TYPE]:{retainRoot:true},
       glb:{retainRoot:true},
       light:{retainRoot:true,
-        detached(entry){setSceneObjectMounted(entry,false);},
+        detached(entry){
+          const b=sceneSpotLights.get(entry.id);
+          setSceneObjectMounted(entry,false);
+          if(b?.reusedStudioLight){
+            b.marker.removeFromParent();
+            sceneSpotLights.delete(entry.id);
+            scene.add(b.light,b.light.target);
+            if(typeof syncArrivalStudioLighting==='function')syncArrivalStudioLighting();
+          }
+        },
         attach:(_entry,snapshot)=>mountSceneSpotLight(snapshot.record),
         dispose:entry=>disposeSceneSpotLight(entry.id),
       },
@@ -11647,7 +11656,8 @@ async function initScene() {
     float(1).add(aoIntensity.sub(1).max(0).mul(float(1).sub(aoVisibility))));
   scenePass.contextNode = builtinAOContext(aoOutput);
   const lightingWorkParams=new URLSearchParams(location.search);
-  sceneGI = createSceneGI(scene,camera,aoIntensity,{filterImplementation:lightingWorkParams.get('lighting_filter')==='separate'?'separate':'shared',surfaceReuse:lightingWorkParams.get('lighting_surface_reuse')!=='0',sourceComparison:lightingWorkParams.get('experiment')==='gi-source-study'});
+  const sceneGI = createSceneGI(scene,camera,aoIntensity,{filterImplementation:lightingWorkParams.get('lighting_filter')==='separate'?'separate':'shared',surfaceReuse:lightingWorkParams.get('lighting_surface_reuse')!=='0',sourceComparison:lightingWorkParams.get('experiment')==='gi-source-study'});
+  activeSceneGI = sceneGI;
   if (typeof syncArrivalStudioLighting === 'function') syncArrivalStudioLighting();
   window.kaminosGISourceComparison=sceneGI.sourceComparison;
   window.__kaminosSurfaceLighting=sceneGI.surfaceLighting;
@@ -12757,9 +12767,21 @@ function applyEnvironmentParameters(value=sceneEnvironment.read()) {
   renderer.toneMappingExposure=value.exposure * activeDelta.exposureScale;
   scene.environmentIntensity=value.intensity * activeDelta.envIntensityScale;
   scene.environmentRotation=new THREE.Euler(0,value.rotation + activeDelta.envRotationOffset,0);
-  for(const {object} of workingScene.objects)object.traverse(child=>{
-    for(const material of [].concat(child.material||[]))material.envMapIntensity=scene.environmentIntensity;
-  });
+  const tunedMaterials = typeof prepareArrivedMeshMaterials === 'function' && typeof arrivalLightingState !== 'undefined' && Boolean(arrivalLightingState?.materialTuningEnabled);
+  for(const {object,type} of workingScene.objects){
+    if(tunedMaterials && object && type !== 'light' && type !== 'camera'){
+      prepareArrivedMeshMaterials(object,{
+        maxAnisotropy:renderer?.capabilities?.getMaxAnisotropy?.()||16,
+        materialTuning:true,
+        materialProfile:arrivalLightingState.materialProfile,
+        baseEnvMapIntensity:value.intensity,
+      });
+    } else if (object?.traverse) {
+      object.traverse(child=>{
+        for(const material of [].concat(child.material||[]))material.envMapIntensity=scene.environmentIntensity;
+      });
+    }
+  }
   sceneExposureControls?.sync();updateBackground();window._kaminosDirty?.();
 }
 
@@ -12816,10 +12838,19 @@ function applyEnvMap(envMap, intensity) {
   updateBackground();
 
   // Update all materials in scene to use envMap
-  workingScene.objects.forEach(({ object }) => {
+  const tunedMaterials = typeof prepareArrivedMeshMaterials === 'function' && typeof arrivalLightingState !== 'undefined' && Boolean(arrivalLightingState?.materialTuningEnabled);
+  workingScene.objects.forEach(({ object, type }) => {
+    if (tunedMaterials && object && type !== 'light' && type !== 'camera') {
+      prepareArrivedMeshMaterials(object, {
+        maxAnisotropy: typeof renderer !== 'undefined' ? (renderer?.capabilities?.getMaxAnisotropy?.() || 16) : 16,
+        materialTuning: true,
+        materialProfile: arrivalLightingState.materialProfile,
+        baseEnvMapIntensity: intensity,
+      });
+    }
     object.traverse(child => {
       for (const material of [].concat(child.material || [])) {
-        material.envMapIntensity = effectiveIntensity;
+        if (!tunedMaterials) material.envMapIntensity = effectiveIntensity;
         material.needsUpdate = true;
       }
     });
@@ -13266,37 +13297,55 @@ async function showGLB(file, options = {}) {
   modelSourceUrl = isBlob ? file.name : file;
   modelSourceType = 'glb';
   const loader = new GLTFLoader();
-  loadingTelemetry.start('asset', { label: assetFileName, phase: 'downloading' });
+  const telemetryOp = typeof loadingTelemetry !== 'undefined'
+    ? loadingTelemetry.start('asset', { label: assetFileName, phase: 'downloading' })
+    : null;
 	return new Promise((resolve, reject) => {
 	  loader.load(url, gltf => {
 	    if (isBlob) URL.revokeObjectURL(url);
-      loadingTelemetry.progress('asset', { label: assetFileName, phase: 'preparing-materials' });
+      if (typeof loadingTelemetry !== 'undefined') {
+        loadingTelemetry.progress('asset', { label: assetFileName, phase: 'preparing-materials' });
+      }
 	    glbSourceScene = gltf.scene;
 	    const model = gltf.scene;
       const stalePreviewLoad = options.register === false
         && options.previewGeneration !== undefined
         && greenroomPreviewState?.previewGeneration !== options.previewGeneration;
       if (loadToken !== workingScene.generation || stalePreviewLoad || options.isCurrent?.()===false || (greenroomPreviewIsActive() && options.register !== false)) {
+        if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.cancel?.('asset', { token: telemetryOp?.token });
         disposeObjectTree(model);
         reject(new Error('stale async GLB load ignored'));
         return;
+      }
+      const envIntensity = typeof sceneEnvironment !== 'undefined' ? sceneEnvironment.read().intensity : 1;
+      const maxAniso = typeof renderer !== 'undefined' ? (renderer?.capabilities?.getMaxAnisotropy?.() || 16) : 16;
+      if (typeof prepareArrivedMeshMaterials === 'function') {
+        prepareArrivedMeshMaterials(model, {
+          maxAnisotropy: maxAniso,
+          materialTuning: false,
+          baseEnvMapIntensity: envIntensity,
+        });
       }
       const arrivalPlacement = applyAssetArrival(model, arrival);
       model.traverse(child => {
         if (child.isMesh) {
           child.castShadow = true;
           child.receiveShadow = true;
-          if (child.material) {
-            child.material.envMapIntensity = sceneEnvironment.read().intensity;
+          if (child.material && typeof prepareArrivedMeshMaterials !== 'function') {
+            for (const mat of [].concat(child.material)) {
+              if (mat) mat.envMapIntensity = envIntensity;
+            }
           }
         }
       });
-      prepareArrivedMeshMaterials(model, {
-        maxAnisotropy: renderer?.capabilities?.getMaxAnisotropy?.() || 16,
-        materialTuning: arrivalLightingState.materialTuningEnabled,
-        materialProfile: arrivalLightingState.materialProfile,
-        baseEnvMapIntensity: scene?.environmentIntensity ?? sceneEnvironment.read().intensity,
-      });
+      if (typeof prepareArrivedMeshMaterials === 'function') {
+        prepareArrivedMeshMaterials(model, {
+          maxAnisotropy: maxAniso,
+          materialTuning: typeof arrivalLightingState !== 'undefined' ? arrivalLightingState.materialTuningEnabled : false,
+          materialProfile: typeof arrivalLightingState !== 'undefined' ? arrivalLightingState.materialProfile : null,
+          baseEnvMapIntensity: envIntensity,
+        });
+      }
       scene.add(model);
       let registeredAsset = null;
       if (options.register === false) {
@@ -13323,7 +13372,7 @@ async function showGLB(file, options = {}) {
       }
       if(options.activate!==false)document.getElementById('transform-bar').classList.add('visible');
       if (arrival === 'fresh' && arrivalPlacement) frameAssetArrival(model);
-      loadingTelemetry.complete('asset');
+      if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.complete('asset');
       setInfo('GLB Inspector — orbit to inspect | use toolbar to fix orientation');
       resolve(options.returnAsset ? {
         id: registeredAsset?.id ?? null,
@@ -13334,7 +13383,7 @@ async function showGLB(file, options = {}) {
         arrival,
       } : model);
     }, xhr => {
-      if (xhr && (Number.isFinite(xhr.loaded) || Number.isFinite(xhr.total))) {
+      if (typeof loadingTelemetry !== 'undefined' && xhr && (Number.isFinite(xhr.loaded) || Number.isFinite(xhr.total))) {
         loadingTelemetry.progress('asset', {
           label: assetFileName,
           phase: 'downloading',
@@ -13344,7 +13393,7 @@ async function showGLB(file, options = {}) {
       }
     }, (err) => {
       if (isBlob) URL.revokeObjectURL(url);
-      loadingTelemetry.fail('asset', err);
+      if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.fail('asset', err);
       setInfo('Failed to load GLB: ' + (err.message || 'unknown error'));
       reject(err);
     });
@@ -13676,13 +13725,19 @@ async function showOBJ(objFile, mtlFile, options = {}) {
   const objLoader = new OBJLoader();
   if (materials) objLoader.setMaterials(materials);
   const objLabel = options.metadata?.fileName ?? glbFileName ?? 'object.obj';
-  loadingTelemetry.start('asset', { label: objLabel, phase: 'downloading' });
+  if (typeof loadingTelemetry !== 'undefined') {
+    loadingTelemetry.start('asset', { label: objLabel, phase: 'downloading' });
+  }
 
   return new Promise((resolve, reject) => {
     objLoader.load(objUrl, obj => {
       URL.revokeObjectURL(objUrl);
-      loadingTelemetry.progress('asset', { label: objLabel, phase: 'preparing-materials' });
+      if (typeof loadingTelemetry !== 'undefined') {
+        loadingTelemetry.progress('asset', { label: objLabel, phase: 'preparing-materials' });
+      }
       glbSourceScene = obj;
+      const envIntensity = typeof sceneEnvironment !== 'undefined' ? sceneEnvironment.read().intensity : 1;
+      const maxAniso = typeof renderer !== 'undefined' ? (renderer?.capabilities?.getMaxAnisotropy?.() || 16) : 16;
       obj.traverse(child => {
         if (child.isMesh) {
           child.castShadow = true;
@@ -13693,20 +13748,35 @@ async function showOBJ(objFile, mtlFile, options = {}) {
               color: 0xcccccc,
               roughness: 0.5,
               metalness: 0.0,
-              envMapIntensity: sceneEnvironment.read().intensity,
+              envMapIntensity: 1.0,
             });
-          } else if (child.material) {
-            child.material.envMapIntensity = sceneEnvironment.read().intensity;
           }
         }
       });
+      if (typeof prepareArrivedMeshMaterials === 'function') {
+        prepareArrivedMeshMaterials(obj, {
+          maxAnisotropy: maxAniso,
+          materialTuning: false,
+          baseEnvMapIntensity: envIntensity,
+        });
+      } else {
+        obj.traverse(child => {
+          if (child.isMesh && child.material) {
+            for (const mat of [].concat(child.material)) {
+              if (mat) mat.envMapIntensity = envIntensity;
+            }
+          }
+        });
+      }
       const arrivalPlacement = applyAssetArrival(obj, arrival);
-      prepareArrivedMeshMaterials(obj, {
-        maxAnisotropy: renderer?.capabilities?.getMaxAnisotropy?.() || 16,
-        materialTuning: arrivalLightingState.materialTuningEnabled,
-        materialProfile: arrivalLightingState.materialProfile,
-        baseEnvMapIntensity: scene?.environmentIntensity ?? sceneEnvironment.read().intensity,
-      });
+      if (typeof prepareArrivedMeshMaterials === 'function') {
+        prepareArrivedMeshMaterials(obj, {
+          maxAnisotropy: maxAniso,
+          materialTuning: typeof arrivalLightingState !== 'undefined' ? arrivalLightingState.materialTuningEnabled : false,
+          materialProfile: typeof arrivalLightingState !== 'undefined' ? arrivalLightingState.materialProfile : null,
+          baseEnvMapIntensity: envIntensity,
+        });
+      }
       scene.add(obj);
       registerSceneObject(obj, {
         ...(options.metadata || {}),
@@ -13716,11 +13786,11 @@ async function showOBJ(objFile, mtlFile, options = {}) {
       });
       document.getElementById('transform-bar').classList.add('visible');
       if (arrival === 'fresh' && arrivalPlacement) frameAssetArrival(obj);
-      loadingTelemetry.complete('asset');
+      if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.complete('asset');
       setInfo('OBJ Inspector — orbit to inspect | use toolbar to fix orientation');
       resolve(obj);
     }, xhr => {
-      if (xhr && (Number.isFinite(xhr.loaded) || Number.isFinite(xhr.total))) {
+      if (typeof loadingTelemetry !== 'undefined' && xhr && (Number.isFinite(xhr.loaded) || Number.isFinite(xhr.total))) {
         loadingTelemetry.progress('asset', {
           label: objLabel,
           phase: 'downloading',
@@ -13730,7 +13800,7 @@ async function showOBJ(objFile, mtlFile, options = {}) {
       }
     }, (err) => {
       URL.revokeObjectURL(objUrl);
-      loadingTelemetry.fail('asset', err);
+      if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.fail('asset', err);
       setInfo('Failed to load OBJ: ' + (err.message || 'unknown error'));
       reject(err);
     });
@@ -23269,8 +23339,8 @@ function syncArrivalStudioLighting({ syncPromoted = false } = {}) {
   });
   arrivalLightingState.plan = plan;
   const activeLook = resolveStudioLook(plan.lookId);
-  if (typeof sceneGI !== 'undefined' && sceneGI?.setOpticalFinish && activeLook.opticalFinish) {
-    sceneGI.setOpticalFinish(activeLook.opticalFinish);
+  if (typeof activeSceneGI !== 'undefined' && activeSceneGI?.setOpticalFinish && activeLook.opticalFinish) {
+    activeSceneGI.setOpticalFinish(activeLook.opticalFinish);
   }
   const lookSelect = document.getElementById('arrival-studio-look-select');
   if (lookSelect && lookSelect.value !== plan.lookId) lookSelect.value = plan.lookId;
@@ -23412,6 +23482,31 @@ function recordAssetArrivalLightingAndGI(object, mode) {
     const samples = extractObjectMaterialSamples(object);
     if (samples.length) {
       arrivalLightingState.materialProfile = inspectArrivalMaterialProfile(samples);
+    }
+    const activeLook = resolveStudioLook(arrivalLightingState.lookId);
+    const lookGround = activeLook.environment?.ground;
+    if (groundPlane && lookGround) {
+      groundPlane.visible = lookGround.visible ?? true;
+      groundPlane.material.color.set(lookGround.color ?? '#ece9e2');
+      groundPlane.material.roughness = Number.isFinite(lookGround.roughness) ? lookGround.roughness : 0.78;
+      const visEl = document.getElementById('composition-ground-visible');
+      if (visEl) visEl.checked = groundPlane.visible;
+      const cEl = document.getElementById('composition-ground-color');
+      if (cEl) cEl.value = '#' + groundPlane.material.color.getHexString();
+      const rEl = document.getElementById('composition-ground-roughness');
+      if (rEl) rEl.value = String(groundPlane.material.roughness);
+      const rvEl = document.getElementById('composition-ground-roughness-value');
+      if (rvEl) rvEl.value = String(groundPlane.material.roughness);
+    }
+    if (typeof sceneEnvironment !== 'undefined' && activeLook.environment) {
+      const prevName = sceneEnvironment.read().name;
+      sceneEnvironment.restoreDocument({
+        ...activeLook.environment,
+        recipes: sceneEnvironment.read().recipes,
+      });
+      if (typeof loadEnvironment === 'function' && prevName !== activeLook.environment.name) {
+        void loadEnvironment(activeLook.environment.name, { remember: false });
+      }
     }
     sceneGIManuallyConfigured = false;
     sceneGIBounceManuallyConfigured = false;
@@ -23725,7 +23820,10 @@ async function applyStudioLookToCurrentScene(
   arrivalLightingState.rigTransformEdited = false;
   const env = look.environment;
   if (typeof sceneEnvironment !== 'undefined') {
-    sceneEnvironment.restoreDocument(env);
+    sceneEnvironment.restoreDocument({
+      ...env,
+      recipes: sceneEnvironment.read().recipes,
+    });
     await loadEnvironment(env.name, { remember: true });
   }
   if (groundPlane && env.ground) {
@@ -23832,11 +23930,6 @@ document.getElementById('arrival-studio-look-select')?.addEventListener('change'
   event.target.blur?.();
   void applyStudioLookToCurrentScene(nextLook);
 });
-document.getElementById('viewport-studio-look-select')?.addEventListener('change', event => {
-  const nextLook = event.target.value;
-  event.target.blur?.();
-  void applyStudioLookToCurrentScene(nextLook);
-});
 document.getElementById('arrival-material-tuning-toggle')?.addEventListener('change', event => {
   arrivalLightingState.materialTuningEnabled = Boolean(event.target.checked);
   syncArrivalStudioLighting({ syncPromoted: true });
@@ -23885,7 +23978,8 @@ window.kaminosArrivalLighting = {
       promotedIds: [...arrivalLightingState.promotedIds],
       promotedGroupId: arrivalLightingState.promotedGroupId,
       rigTransformEdited: arrivalLightingState.rigTransformEdited,
-      stageLightsVisible: Boolean(studioKeyLight?.visible || studioRimLight?.visible),
+      stageLightsVisible: Boolean((studioKeyLight?.visible && studioKeyLight?.parent === scene) || (studioRimLight?.visible && studioRimLight?.parent === scene)),
+      stageLightsParented: Boolean(studioKeyLight?.parent === scene && studioRimLight?.parent === scene),
       autoCalibratedGI: structuredClone(sceneGIAutoCalibrationState),
       rigInGroups: Boolean(typeof workingScene !== 'undefined' && workingScene.groups?.some(g => g.id === '@studio-light-rig')),
       spotLightIds: typeof workingScene !== 'undefined' ? workingScene.objects.filter(o => o.type === 'light').map(o => o.id) : [],
@@ -25456,12 +25550,14 @@ async function greenroomImportSplat(url, fileName, display, options = {}) {
     };
   }
   const splatLabel = display?.title || fileName || 'Splat';
-  loadingTelemetry.start('asset', { label: splatLabel, phase: 'downloading' });
+  const splatTelemetryOp = typeof loadingTelemetry !== 'undefined'
+    ? loadingTelemetry.start('asset', { label: splatLabel, phase: 'downloading' })
+    : null;
   let preview;
   try {
     preview = await createSplatSceneObjectPreview({ url, fileName, display, metadata });
   } catch (err) {
-    loadingTelemetry.fail('asset', err);
+    if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.fail('asset', err);
     throw err;
   }
   const object = preview.object;
@@ -25490,7 +25586,10 @@ async function greenroomImportSplat(url, fileName, display, options = {}) {
       }, {activate:options.activate!==false});
     },
   });
-  if (!published) return null;
+  if (!published) {
+    if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.cancel?.('asset', { token: splatTelemetryOp?.token });
+    return null;
+  }
   applySplatCorrectionToRecord(record, splat.correction);
   if(options.activate!==false){
     currentMesh = object;
@@ -25502,7 +25601,7 @@ async function greenroomImportSplat(url, fileName, display, options = {}) {
     document.getElementById('transform-bar').classList.add('visible');
   }
   buildRenderHandoffV0(record);
-  loadingTelemetry.complete('asset');
+  if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.complete('asset');
   setInfo(`Greenroom splat import: ${display?.title || fileName}`);
   return object;
 }
@@ -26689,7 +26788,9 @@ function mountSceneSpotLight(raw) {
     const points=[0,0,0,0,0,-.5,-.12,0,-.3,.12,0,-.3,0,-.12,-.3,0,.12,-.3];
     const marker=new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute(points,3)),new THREE.LineBasicMaterial({color:0xffc66d}));
     marker.userData.kaminosEditorOnly=true;binding={light,marker,reusedStudioLight:Boolean(reusedStudioLight)};sceneSpotLights.set(record.id,binding);
-    if(reusedStudioLight)scene.add(marker);else scene.add(light,light.target,marker);
+    scene.add(light,light.target,marker);
+  } else {
+    scene.add(binding.light,binding.light.target,binding.marker);
   }
   const {light,marker}=binding;
   const topologyChanged=(!entry&&!reusedStudioLight)||priorVisible!==record.light.enabled;
@@ -26712,6 +26813,7 @@ function disposeSceneSpotLight(id) {
   binding.marker.removeFromParent();binding.marker.geometry.dispose();binding.marker.material.dispose();
   sceneSpotLights.delete(id);
   if(binding.reusedStudioLight){
+    scene.add(binding.light,binding.light.target);
     if (typeof syncArrivalStudioLighting === 'function') syncArrivalStudioLighting();
     return;
   }
@@ -28504,7 +28606,9 @@ sceneInitialization.then(async () => {
     arrivalLightingState.lookId = requestedStudioLook;
     syncArrivalStudioLighting();
   }
-  const initialEnvironment = restoreSettings();
+  const initialEnvironment = requestedStudioLook
+    ? resolveStudioLook(requestedStudioLook).environment.name
+    : restoreSettings();
   const admittedEnvironment = (await startupSceneAdmission).data?.environment;
   if (admittedEnvironment) sceneEnvironment.restoreDocument(admittedEnvironment);
   // An image plane is unlit and can appear while the HDR environment downloads.
@@ -28568,7 +28672,7 @@ sceneInitialization.then(async () => {
       await (earlyImageLoaded ?? loadKaminosImageAssetRoute(imageRoute));
       if (params.get('sam') === '1') await window.kaminosOpenImageMasks(imageRoute.effectiveUrl, { fileName: imageRoute.fileName });
     }
-    if (requestedStudioLook) {
+    if (typeof requestedStudioLook !== 'undefined' && requestedStudioLook) {
       await applyStudioLookToCurrentScene(requestedStudioLook, { promoteRig: false, recordHistory: false });
     }
     if (params.get('sam') === '1' && !imageRoute) setActiveTab('masks');

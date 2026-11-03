@@ -93,7 +93,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   const actions = document.createElement('div'); actions.id = 'authoring-actions'; actions.setAttribute('role', 'group'); actions.setAttribute('aria-label', 'Selection and history');
   byId('authoring-box').before(actions); actions.append(...Object.keys(TOOLBAR_ICONS).map(byId).filter(Boolean));
   for(const [id,key] of [['selection-orientation','orientation'],['selection-pivot','pivot']])byId(id).onchange=event=>{document.defaultView.kaminosSelection.settings({[key]:event.target.value});event.target.blur();};
-  if(byId('viewport-studio-look-select'))byId('viewport-studio-look-select').onchange=event=>{const nextLook=event.target.value;event.target.blur();document.defaultView.kaminosArrivalLighting?.applyStudioLook?.(nextLook);};
+  if(byId('viewport-studio-look-select')){const lookSel=byId('viewport-studio-look-select'),initialLook=document.defaultView?.kaminosArrivalLighting?.read?.()?.lookId;if(initialLook)lookSel.value=initialLook;lookSel.onchange=event=>{const nextLook=event.target.value;event.target.blur();document.defaultView?.kaminosArrivalLighting?.applyStudioLook?.(nextLook);};}
   for(const [id,action] of [['authoring-box','box'],['authoring-duplicate','duplicate'],['authoring-delete','remove']])byId(id).onclick=()=>{try{document.defaultView.kaminosSelection[action]();}catch(error){byId('info-bar').textContent=error.message;}byId(id).blur();};
   document.querySelector('[data-scene-group-create]').textContent='Group selection';
   byId('authoring-group-selection').onclick=()=>{document.querySelector('[data-scene-group-create]')?.click();byId('authoring-group-selection').blur();};

@@ -315,6 +315,25 @@ test('arrived mesh materials get 16x anisotropic texture filtering and reversibl
   close(mesh.material.roughness, 0.6, 'disabling materialTuning restores original scalar roughness');
   close(mesh.material.envMapIntensity, 1.0, 'disabling materialTuning restores original envMapIntensity');
   assert.equal(mapTex.anisotropy, 16, '16x anisotropic texture filtering remains active when materialTuning is toggled off');
+
+  // Verify authored envMapIntensity (e.g. 0.5) scales with baseEnvMapIntensity without double-scaling
+  const authoredMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 1, 1),
+    new THREE.MeshStandardMaterial({ roughness: 0.6, metalness: 0.8, envMapIntensity: 0.5 }),
+  );
+  assetArrival.prepareArrivedMeshMaterials(authoredMesh, {
+    maxAnisotropy: 16,
+    materialTuning: false,
+    baseEnvMapIntensity: 2.0,
+  });
+  close(authoredMesh.material.envMapIntensity, 1.0, 'untuned material scales authored envMapIntensity (0.5) by baseEnvMapIntensity (2.0)');
+  assetArrival.prepareArrivedMeshMaterials(authoredMesh, {
+    maxAnisotropy: 16,
+    materialTuning: true,
+    materialProfile: darkProfile,
+    baseEnvMapIntensity: 2.0,
+  });
+  close(authoredMesh.material.envMapIntensity, 1.15, 'tuned dark-metallic material scales baseEnv (1.0) by 1.15 once');
 });
 
 test('studio look library includes opticalFinish, supports ?look= deep link, exposes viewport look pill, and records atomic undo/redo snapshots', () => {
@@ -363,11 +382,38 @@ test('studio look library includes opticalFinish, supports ?look= deep link, exp
     /scenePlacementTools\?\.edits\?\.recordApplied\(\s*['"]@studio-look-switch['"]/,
     'applyStudioLookToCurrentScene must record an atomic @studio-look-switch undo/redo entry',
   );
+  assert.match(
+    applyLookBody,
+    /recipes:\s*sceneEnvironment\.read\(\)\.recipes/,
+    'applyStudioLookToCurrentScene must preserve per-environment recipes when restoring look environment',
+  );
+  const recordArrivalStart = html.indexOf('function recordAssetArrivalLightingAndGI(');
+  const recordArrivalEnd = html.indexOf('function refreshArrivalLightingFromWorkingScene(', recordArrivalStart);
+  const recordArrivalBody = html.slice(recordArrivalStart, recordArrivalEnd);
+  assert.match(
+    recordArrivalBody,
+    /groundPlane\.material\.color\.set\(/,
+    'fresh asset arrival must apply the active Studio Look floor color and roughness out of the box',
+  );
+  const disposeStart = html.indexOf('function disposeSceneSpotLight(id)');
+  const disposeEnd = html.indexOf('function groupPivotPose(', disposeStart);
+  assert.match(
+    html.slice(disposeStart, disposeEnd),
+    /scene\.add\(binding\.light,\s*binding\.light\.target\)/,
+    'disposeSceneSpotLight must re-attach reused studio SpotLight nodes to scene when un-promoting on Undo',
+  );
 });
 
 test('loading telemetry tracker reports byte progress, elapsed time, stall detection when hung, and completion receipt', () => {
   assert.equal(typeof assetArrival.createLoadingTelemetryTracker, 'function', 'createLoadingTelemetryTracker must be exported');
   const tracker = assetArrival.createLoadingTelemetryTracker({ stallThresholdMs: 5000 });
+  const op1 = tracker.start('asset', { label: 'stale.glb', phase: 'downloading', now: 500 });
+  const op2 = tracker.start('asset', { label: 'kiln.glb', phase: 'downloading', now: 1000 });
+  tracker.cancel('asset', { token: op1.token, now: 1100 });
+  assert.equal(tracker.read(1100).active, true, 'stale cancel token must not cancel a newer active load');
+  tracker.cancel('asset', { token: op2.token, now: 1150 });
+  assert.equal(tracker.read(1150).active, false, 'matching cancel token clears discarded load so it never triggers a false stall');
+  assert.equal(tracker.read(1150).lastCompleted, null, 'cancelled stale load does not record a false completion receipt');
   tracker.start('asset', { label: 'kiln.glb', phase: 'downloading', now: 1000 });
   let state = tracker.read(1400);
   assert.equal(state.active, true);
