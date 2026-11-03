@@ -104,9 +104,10 @@ fn opticalStepInitPhased(start: f32, end: f32, base: f32, phase: f32) -> Optical
 }
 fn opticalStepConstrain(s: ptr<function, OpticalStepState>, minimum: f32, maximum: f32, stop: f32) {
   if ((*s).mask > 1u) { return; }
+  let desired = select(clamp((*s).width, minimum, maximum), maximum, abs(maximum - (*s).maximum) > 1e-6);
   (*s).minimum = minimum;
   (*s).maximum = maximum;
-  (*s).width = min((*s).end - (*s).cursor, min(stop, clamp((*s).width, minimum, maximum)));
+  (*s).width = min((*s).end - (*s).cursor, min(stop, desired));
   if ((*s).phased == 1u) {
     (*s).width = min((*s).end - (*s).cursor, min(stop, maximum * (0.25 + 0.75 * (*s).phase)));
   }

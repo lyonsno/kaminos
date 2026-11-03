@@ -22,14 +22,18 @@ fn worldResidentMaterial(p:vec3<f32>,smokeVisible:f32,fireVisible:f32)->Emissive
  let root=vec3<u32>(floor(q/4.0));let roots=vec3<u32>(ceil(dims/4.0));
  var slot=root.x+roots.x*(root.y+roots.y*root.z);
  var n=worldAtlasTexel(slot*WORLD_RENDER_STRIDE);
- loop{
+ for(var depth=0u;depth<16u;depth++){
   let children=worldAtlasTexel(slot*WORLD_RENDER_STRIDE+1u);
-  if(children.x==0.0){break;}
+  if(children.x<=0.0||n.w<=0.0){break;}
   let oct=vec3<u32>(clamp(floor((q-n.xyz)/(n.w*2.0)),vec3<f32>(0),vec3<f32>(1)));
   let i=oct.x+2u*(oct.y+2u*oct.z);
-  if(i<4u){slot=u32(children[i])-1u;}else{slot=u32(worldAtlasTexel(slot*WORLD_RENDER_STRIDE+2u)[i-4u])-1u;}
+  var child=0.0;
+  if(i<4u){child=children[i];}else{child=worldAtlasTexel(slot*WORLD_RENDER_STRIDE+2u)[i-4u];}
+  if(child<=0.0){break;}
+  slot=u32(child)-1u;
   n=worldAtlasTexel(slot*WORLD_RENDER_STRIDE);
  }
+ if(n.w<=0.0){return EmissiveMaterial(vec3<f32>(0),0,0);}
  let cell=clamp((q-n.xyz)/n.w+.5,vec3<f32>(0),vec3<f32>(5));let base=min(vec3<u32>(floor(cell)),vec3<u32>(4));let f=cell-vec3<f32>(base);var value=vec4<f32>(0);
  for(var z=0u;z<2u;z++){for(var y=0u;y<2u;y++){for(var x=0u;x<2u;x++){
   let c=base+vec3<u32>(x,y,z);let w=select(1.0-f,f,vec3<bool>(x==1u,y==1u,z==1u));
@@ -48,11 +52,16 @@ struct WorldRenderParams {dimsPitch:vec4<f32>,loMode:vec4<f32>,rootsCount:vec4<u
 @group(3) @binding(8) var worldRenderOutput:texture_storage_3d<rgba32float,write>;
 fn worldRenderLeaf(q:vec3<f32>)->u32{
  let root=vec3<u32>(floor(q/4.0));var slot=root.x+wr.rootsCount.x*(root.y+wr.rootsCount.y*root.z);
- loop{let n=worldRenderBricks[slot];if(n.children0.x==0xffffffffu){return slot;}
+ for(var depth=0u;depth<16u;depth++){
+  let n=worldRenderBricks[slot];if(n.children0.x==0xffffffffu||n.loPitch.w<=0.0){return slot;}
   let lo=(n.loPitch.xyz-wr.loMode.xyz)/wr.dimsPitch.w;let pitch=n.loPitch.w/wr.dimsPitch.w;
   let oct=vec3<u32>(clamp(floor((q-lo)/(pitch*2.0)),vec3<f32>(0),vec3<f32>(1)));let i=oct.x+2u*(oct.y+2u*oct.z);
-  if(i<4u){slot=n.children0[i];}else{slot=n.children1[i-4u];}
+  var child=0xffffffffu;
+  if(i<4u){child=n.children0[i];}else{child=n.children1[i-4u];}
+  if(child==0xffffffffu){return slot;}
+  slot=child;
  }
+ return slot;
 }
 fn worldRenderRaw(q:vec3<f32>)->WorldRenderGas{
  if(any(q<vec3<f32>(0))||any(q>=wr.dimsPitch.xyz)){return WorldRenderGas(vec4<f32>(0),vec4<f32>(0));}

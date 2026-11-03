@@ -120,4 +120,11 @@ test('joined numerical keeps Fine step scale and clips integration panels at reg
  assert.match(core,/opticalStepJoinStop\(opticalStep, nearHit\)/);
  assert.match(core,/opticalStepJoinStop\(opticalStep, middleHit\)/);
  assert.match(opticalNative.OPTICAL_STEPPING_WGSL,/fn opticalStepJoinStop/);
+ assert.match(core,/let insideMiddle\s*=\s*worldActive && !insideFine && \(middleHit\.y > middleHit\.x && localCursor >= middleHit\.x-opticalStep\.origin && localCursor < middleHit\.y-opticalStep\.origin\)/,
+  'joined optical stepping must distinguish the middle and outer World intervals outside Fine');
+ assert.match(core,/let regionBase\s*=\s*select\(worldMarchStep\(select\(worldRender\.loPitch\.w, worldMinimumMaterialPitch\(\), insideMiddle\), steps, 1\.6, 0\.0\), dtBase, insideFine\)/,
+  'exterior World intervals must step at their regional material pitch instead of collapsing to the Fine single-voxel floor');
+ assert.match(opticalNative.OPTICAL_STEPPING_WGSL,/abs\(maximum - \(\*s\)\.maximum\) > 1e-6/,
+  'crossing a region join must reset the unrefined panel target to the new region maximum');
 });
+

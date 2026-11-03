@@ -8083,10 +8083,12 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
         if (worldActive) {
           stop = min(opticalStepJoinStop(opticalStep, nearHit), opticalStepJoinStop(opticalStep, middleHit));
         }
-        var minimum = dtBase * select(1.0, 0.5, OPTICAL_STEP_MODE == 3u);
-        var maximum = minimum * select(1.0, 4.0, OPTICAL_STEP_MODE == 2u);
         let localCursor = opticalStep.cursor;
         let insideFine = !worldActive || (nearHit.y > nearHit.x && localCursor >= nearHit.x-opticalStep.origin && localCursor < nearHit.y-opticalStep.origin);
+        let insideMiddle = worldActive && !insideFine && (middleHit.y > middleHit.x && localCursor >= middleHit.x-opticalStep.origin && localCursor < middleHit.y-opticalStep.origin);
+        let regionBase = select(worldMarchStep(select(worldRender.loPitch.w, worldMinimumMaterialPitch(), insideMiddle), steps, 1.6, 0.0), dtBase, insideFine);
+        var minimum = regionBase * select(1.0, 0.5, OPTICAL_STEP_MODE == 3u);
+        var maximum = minimum * select(1.0, 4.0, OPTICAL_STEP_MODE == 2u);
         if (OPTICAL_STEP_MODE == 2u && priority > 0.0 && insideFine) {
           let horizon = min(stop, dtBase * 8.0);
           let guide = flameGuideSegment(ro + rd * (opticalStep.origin + localCursor), rd, horizon);
@@ -21107,6 +21109,20 @@ export function createKaminosVolumePrototype({
           if(!input?.encoder)throw new Error('Native scene transport requires the host encoder');
           const lean=emissiveRaymarchAdmission().eligible&&debugRaymarchShaderSpecialization!=='force-full';
           const optical=resolveOpticalStepping(debugOpticalStepping,{emissive:lean,exterior:state.worldSmoke?.effective==='one-way-world-field',explicit:debugOpticalSteppingExplicit});
+          state.opticalStepping = { ...optical, effective: optical.mode,
+            adaptivity:raymarchAdaptivity(optical.mode,controlsSnapshot.adaptiveRays),
+            source:'native-emissive-material-and-current-incident-light', fullRay:optical.mode !== 'current',
+            flamePriorityRequested:controlsSnapshot.flamePriority??0,
+            flamePriority:optical.mode==='numerical'?uniforms[42]:0,
+            quadratureJitterRequested:controlsSnapshot.quadratureJitter!==false,
+            quadratureJitter:optical.mode!=='current'&&uniforms[47]>0.5&&uniforms[43]>0.5,
+            guidance:'coverage-and-active-law-lookahead; guide reads excluded from material-sample counts' };
+          if (state.worldSmoke?.raymarch) {
+            const mode=optical.mode;
+            state.worldSmoke.raymarch={...state.worldSmoke.raymarch,effectiveMode:mode,
+              policy:mode==='current'?'shared-quality-material-cell-step':['budgeted','joins','history'].includes(mode)?'fixed-count-whole-ray':'nested-quadrature-fine-step-scale',
+              reference:mode==='current'?'160-steps-adaptive-off-half-cell':null};
+          }
           let code=WGSL,lighting=null;
           if(distributedGroup) {
             if(distributedFrame?.generation!==sceneVolumeSource?.describe().generation)throw new Error('Native scene transport lighting is stale');
@@ -21138,11 +21154,24 @@ export function createKaminosVolumePrototype({
     } finally {current=false;}
   }
 
+  function prepareVolumeRenderResources(encoder, displayTimestampWrites = null) {
+    const worldRenderChanged=worldRenderField.encode(encoder,state.worldSmoke?.effective==='one-way-world-field'?worldSmoke.renderResources():null,[uniforms[23],...uniforms.subarray(368,376),...uniforms.subarray(EMISSIVE_UNIFORM_OFFSET,EMISSIVE_UNIFORM_OFFSET+20),...uniforms.subarray(REACTANT_COMBUSTION_UNIFORM_OFFSET,REACTANT_COMBUSTION_UNIFORM_OFFSET+16)]);
+    state.worldRenderField=worldRenderField.read();
+    if(state.displayReconstruction)state.displayReconstruction.outerFields=state.worldRenderField.effective;
+    if(worldRenderChanged)rebuildFluidBindGroups();
+    device.queue.writeBuffer(worldRenderUniform,80,new Float32Array([state.worldRenderField.effective==='inactive'?0:1,...(state.worldRenderField.materialDims??[0,0,0])]));
+    if (displayReconstruction?.encode(encoder,currentFluid,
+      [state.fluidStateResetCount,state.simStepCount,JSON.stringify(controlsSnapshot)],displayTimestampWrites)) {
+      state.displayReconstruction = {...state.displayReconstruction,...displayReconstruction.read(),builtThisDraw:true};
+    } else if (state.displayReconstruction && !sceneSourcePreparedEncoders.has(encoder)) state.displayReconstruction.builtThisDraw=false;
+  }
+
   function prepareSharedSceneConsumers(encoder, foregroundService = null) {
     if (!sceneSourceFrameConsumer && !sceneTransportConsumer) return encoder;
     if (boundarySplatRequested() || browserResidualCanApply() || productFrameOwner !== 'prototype') {
       throw new Error('shared-scene-source-first-experiment-requires-ordinary-raymarch');
     }
+    prepareVolumeRenderResources(encoder);
     const submit=commands => foregroundService
         ? foregroundService.submit(commands, {metadata:{renderer:'scene-source-preparation',simStepCount:state.simStepCount}})
         : device.queue.submit(commands);
@@ -21167,15 +21196,7 @@ export function createKaminosVolumePrototype({
   }
 
   function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
-    const worldRenderChanged=worldRenderField.encode(encoder,state.worldSmoke?.effective==='one-way-world-field'?worldSmoke.renderResources():null,[uniforms[23],...uniforms.subarray(368,376),...uniforms.subarray(EMISSIVE_UNIFORM_OFFSET,EMISSIVE_UNIFORM_OFFSET+20),...uniforms.subarray(REACTANT_COMBUSTION_UNIFORM_OFFSET,REACTANT_COMBUSTION_UNIFORM_OFFSET+16)]);
-    state.worldRenderField=worldRenderField.read();
-    if(state.displayReconstruction)state.displayReconstruction.outerFields=state.worldRenderField.effective;
-
-    if(worldRenderChanged)rebuildFluidBindGroups();
-    if (displayReconstruction?.encode(encoder,currentFluid,
-      [state.fluidStateResetCount,state.simStepCount,JSON.stringify(controlsSnapshot)],options.displayTimestampWrites)) {
-      state.displayReconstruction = {...state.displayReconstruction,...displayReconstruction.read(),builtThisDraw:true};
-    } else if (state.displayReconstruction) state.displayReconstruction.builtThisDraw=false;
+    prepareVolumeRenderResources(encoder, options.displayTimestampWrites);
     if (sceneSourceFrameConsumer && !sceneSourcePreparedEncoders.has(encoder)) {
       throw new Error('shared-scene-source-frame-not-prepared');
     }

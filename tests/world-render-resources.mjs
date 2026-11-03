@@ -43,9 +43,22 @@ test('camera indexing consumes exact material dimensions instead of deriving str
  const {WORLD_RENDER_WGSL}=await import('../volume-world-render.mjs');
  assert.match(WORLD_RENDER_WGSL,/let dims=worldRender\.atlas\.yzw/);
  assert.doesNotMatch(WORLD_RENDER_WGSL,/let dims=\(worldRender\.hiEnabled/);
+ assert.match(WORLD_RENDER_WGSL,/for\(var depth=0u;depth<16u;depth\+\+\)/,'resident octree traversal must be depth-bounded');
+ assert.match(WORLD_RENDER_WGSL,/if\(n\.w<=0\.0\)\{return EmissiveMaterial\(vec3<f32>\(0\),0,0\);\}/,'resident sampling must guard zero brick pitch');
  const f=fixture();f.encode();assert.deepEqual(f.field.read().materialDims,[8,4,4]);
  // A valid translated mapping can cross ceil's integer boundary in f32.
  const r=Math.fround,derived=r(r(r(-3.862)-r(-4.662))/r(.1));
  assert.ok(derived>8);assert.equal(Math.ceil(derived/4),3);assert.equal(Math.ceil(8/4),2);
  f.field.destroy();
 });
+
+test('shared scene consumers prepare resident World optics and record stepping receipts when canvas draw is suppressed',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const core=readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
+ const shared=core.slice(core.indexOf('  function prepareSharedSceneConsumers('),core.indexOf('  function prepareRayStepCounters('));
+ assert.match(shared,/prepareVolumeRenderResources\(encoder\)/,'shared scene consumers must prepare World and display render resources before encoding scene source or host transport');
+ const host=core.slice(core.indexOf('  function renderSceneTransportHost('),core.indexOf('  function prepareSharedSceneConsumers('));
+ assert.match(host,/state\.opticalStepping\s*=/,'native scene transport must publish current opticalStepping state when encodeDraw is bypassed');
+ assert.match(host,/state\.worldSmoke\.raymarch\s*=/,'native scene transport must publish current worldSmoke.raymarch state when encodeDraw is bypassed');
+});
+
