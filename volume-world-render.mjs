@@ -1,6 +1,6 @@
 // Camera-only optical bricks for the admitted physics material law (one global
 // albedo, hence emission RGB + extinction suffice). The solver's conservative dense export stays intact.
-export const WORLD_RENDER_STRIDE = 219; // three topology texels + 6^3 cells including a one-cell halo
+export const WORLD_RENDER_STRIDE = 1003; // three topology texels + 10^3 2x subcells including a one-subcell halo
 export function worldRenderShape(capacity, limit) {
   if (!Number.isSafeInteger(capacity) || capacity < 1 || !Number.isInteger(limit) || limit < 1) throw Error('Invalid World render capacity');
   const texels=capacity*WORLD_RENDER_STRIDE;
@@ -9,7 +9,7 @@ export function worldRenderShape(capacity, limit) {
   return [x,y,z];
 }
 export const WORLD_RENDER_WGSL=/* wgsl */`
-const WORLD_RENDER_STRIDE:u32=219u;
+const WORLD_RENDER_STRIDE:u32=1003u;
 @group(0) @binding(40) var worldRenderAtlas:texture_3d<f32>;
 fn worldAtlasTexel(index:u32)->vec4<f32>{
  let dims=textureDimensions(worldRenderAtlas);
@@ -30,10 +30,10 @@ fn worldResidentMaterial(p:vec3<f32>,smokeVisible:f32,fireVisible:f32)->Emissive
   if(i<4u){slot=u32(children[i])-1u;}else{slot=u32(worldAtlasTexel(slot*WORLD_RENDER_STRIDE+2u)[i-4u])-1u;}
   n=worldAtlasTexel(slot*WORLD_RENDER_STRIDE);
  }
- let cell=clamp((q-n.xyz)/n.w+.5,vec3<f32>(0),vec3<f32>(5));let base=min(vec3<u32>(floor(cell)),vec3<u32>(4));let f=cell-vec3<f32>(base);var value=vec4<f32>(0);
+ let cell=clamp((q-n.xyz)/(n.w*0.5)+.5,vec3<f32>(0),vec3<f32>(9));let base=min(vec3<u32>(floor(cell)),vec3<u32>(8));let f=cell-vec3<f32>(base);var value=vec4<f32>(0);
  for(var z=0u;z<2u;z++){for(var y=0u;y<2u;y++){for(var x=0u;x<2u;x++){
   let c=base+vec3<u32>(x,y,z);let w=select(1.0-f,f,vec3<bool>(x==1u,y==1u,z==1u));
-  value+=worldAtlasTexel(slot*WORLD_RENDER_STRIDE+3u+c.x+6u*(c.y+6u*c.z))*w.x*w.y*w.z;
+  value+=worldAtlasTexel(slot*WORLD_RENDER_STRIDE+3u+c.x+10u*(c.y+10u*c.z))*w.x*w.y*w.z;
  }}}
  let sigma=max(value.w,0.0)*smokeVisible;let albedo=clamp(u.emissive_material.y,0.0,1.0);
  return EmissiveMaterial(max(value.rgb,vec3<f32>(0))*fireVisible,sigma*(1.0-albedo),sigma*albedo);
@@ -46,6 +46,49 @@ struct WorldRenderParams {dimsPitch:vec4<f32>,loMode:vec4<f32>,rootsCount:vec4<u
 @group(3) @binding(6) var<storage,read> worldRenderWork:array<u32>;
 @group(3) @binding(7) var<uniform> wr:WorldRenderParams;
 @group(3) @binding(8) var worldRenderOutput:texture_storage_3d<rgba32float,write>;
+fn worldRenderHash31(p:vec3<f32>)->f32{
+ var p3=fract(p*vec3<f32>(0.1031,0.1030,0.0973));
+ p3+=dot(p3,p3.yxz+33.33);
+ return fract((p3.x+p3.y)*p3.z);
+}
+fn worldRenderHash33(p:vec3<f32>)->vec3<f32>{
+ var p3=fract(p*vec3<f32>(0.1031,0.1030,0.0973));
+ p3+=dot(p3,p3.yxz+33.33);
+ return fract((p3.xxy+p3.yxx)*p3.zyx);
+}
+fn worldRenderSubgridNoise(x:vec3<f32>)->f32{
+ let i=floor(x);let f=fract(x);let u=f*f*(3.0-2.0*f);
+ let n000=worldRenderHash31(i+vec3<f32>(0,0,0));let n100=worldRenderHash31(i+vec3<f32>(1,0,0));
+ let n010=worldRenderHash31(i+vec3<f32>(0,1,0));let n110=worldRenderHash31(i+vec3<f32>(1,1,0));
+ let n001=worldRenderHash31(i+vec3<f32>(0,0,1));let n101=worldRenderHash31(i+vec3<f32>(1,0,1));
+ let n011=worldRenderHash31(i+vec3<f32>(0,1,1));let n111=worldRenderHash31(i+vec3<f32>(1,1,1));
+ return mix(mix(mix(n000,n100,u.x),mix(n010,n110,u.x),u.y),mix(mix(n001,n101,u.x),mix(n011,n111,u.x),u.y),u.z);
+}
+fn worldRenderSubgridNoise3(x:vec3<f32>)->vec3<f32>{
+ let i=floor(x);let f=fract(x);let u=f*f*(3.0-2.0*f);
+ let n000=worldRenderHash33(i+vec3<f32>(0,0,0));let n100=worldRenderHash33(i+vec3<f32>(1,0,0));
+ let n010=worldRenderHash33(i+vec3<f32>(0,1,0));let n110=worldRenderHash33(i+vec3<f32>(1,1,0));
+ let n001=worldRenderHash33(i+vec3<f32>(0,0,1));let n101=worldRenderHash33(i+vec3<f32>(1,0,1));
+ let n011=worldRenderHash33(i+vec3<f32>(0,1,1));let n111=worldRenderHash33(i+vec3<f32>(1,1,1));
+ return mix(mix(mix(n000,n100,u.x),mix(n010,n110,u.x),u.y),mix(mix(n001,n101,u.x),mix(n011,n111,u.x),u.y),u.z);
+}
+fn worldSubgridWarpGrid(g:vec3<f32>,stepScale:f32)->vec3<f32>{
+ let s=clamp(stepScale,0.125,2.0);
+ let q=vec3<f32>(g.x*0.85,g.y*0.65,g.z*0.85);
+ let w1=worldRenderSubgridNoise3(q+vec3<f32>(1.3,2.7,4.1))-vec3<f32>(0.5);
+ let w2=worldRenderSubgridNoise3(q*2.15+vec3<f32>(2.1,-1.4,3.3))-vec3<f32>(0.5);
+ return (0.65*w1+0.35*w2)*s*0.65;
+}
+fn worldSubgridClumpGrid(g:vec3<f32>,sigma:f32)->f32{
+ if(wr.loMode.w<1.5||sigma<=0.0){return 1.0;}
+ let q=vec3<f32>(g.x*1.05,g.y*0.78,g.z*1.05);
+ let n1=worldRenderSubgridNoise(q);
+ let n2=worldRenderSubgridNoise(q*vec3<f32>(2.15,2.05,2.15)+vec3<f32>(1.7,-0.9,2.3));
+ let billow=smoothstep(0.18,0.84,0.62*n1+0.38*n2);
+ let strength=smoothstep(0.02,0.85,sigma);
+ return mix(1.0,0.45+0.95*billow,strength);
+}
+fn worldRenderHasHierarchy()->bool{return (u32(wr.loMode.w)&1u)!=0u;}
 fn worldRenderLeaf(q:vec3<f32>)->u32{
  let root=vec3<u32>(floor(q/4.0));var slot=root.x+wr.rootsCount.x*(root.y+wr.rootsCount.y*root.z);
  loop{let n=worldRenderBricks[slot];if(n.children0.x==0xffffffffu){return slot;}
@@ -56,10 +99,36 @@ fn worldRenderLeaf(q:vec3<f32>)->u32{
 }
 fn worldRenderRaw(q:vec3<f32>)->WorldRenderGas{
  if(any(q<vec3<f32>(0))||any(q>=wr.dimsPitch.xyz)){return WorldRenderGas(vec4<f32>(0),vec4<f32>(0));}
- if(wr.loMode.w<.5){let c=vec3<u32>(floor(q));let d=vec3<u32>(wr.dimsPitch.xyz);return worldRenderGas[c.x+d.x*(c.y+d.y*c.z)];}
+ if(!worldRenderHasHierarchy()){let c=vec3<u32>(floor(q));let d=vec3<u32>(wr.dimsPitch.xyz);return worldRenderGas[c.x+d.x*(c.y+d.y*c.z)];}
  let slot=worldRenderLeaf(q);let n=worldRenderBricks[slot];let p=wr.loMode.xyz+q*wr.dimsPitch.w;
  let c=vec3<u32>(clamp(floor((p-n.loPitch.xyz)/n.loPitch.w),vec3<f32>(0),vec3<f32>(3)));
  return worldRenderGas[slot*64u+c.x+4u*(c.y+4u*c.z)];
+}
+fn worldRenderCellAt(slot:u32,n:WorldRenderBrick,sampleQ:vec3<f32>)->WorldRenderGas{
+ if(worldRenderHasHierarchy()){
+  let localCell=floor((sampleQ-n.loPitch.xyz)/n.loPitch.w);
+  if(all(localCell>=vec3<f32>(0))&&all(localCell<vec3<f32>(4))&&all(sampleQ>=vec3<f32>(0))&&all(sampleQ<wr.dimsPitch.xyz)){
+   let ic=vec3<u32>(localCell);
+   return worldRenderGas[slot*64u+ic.x+4u*(ic.y+4u*ic.z)];
+  }
+ }
+ return worldRenderRaw(sampleQ);
+}
+fn worldRenderSampleGas(slot:u32,n:WorldRenderBrick,qw:vec3<f32>)->WorldRenderGas{
+ let step=max(n.loPitch.w,1e-4);
+ let coord=(qw-n.loPitch.xyz)/step-vec3<f32>(0.5);
+ let base=floor(coord);
+ let f=fract(coord);
+ let w3=smoothstep(vec3<f32>(0.18),vec3<f32>(0.82),f);
+ var a=vec4<f32>(0);var b=vec4<f32>(0);
+ for(var z=0u;z<2u;z++){for(var y=0u;y<2u;y++){for(var x=0u;x<2u;x++){
+  let corner=base+vec3<f32>(f32(x),f32(y),f32(z));
+  let sampleQ=n.loPitch.xyz+(corner+vec3<f32>(0.5))*step;
+  let g=worldRenderCellAt(slot,n,sampleQ);
+  let w=select(1.0-w3.x,w3.x,x==1u)*select(1.0-w3.y,w3.y,y==1u)*select(1.0-w3.z,w3.z,z==1u);
+  a+=g.a*w;b+=g.b*w;
+ }}}
+ return WorldRenderGas(a,b);
 }
 fn writeWorldAtlas(index:u32,value:vec4<f32>){
  let d=textureDimensions(worldRenderOutput);
@@ -69,19 +138,20 @@ fn writeWorldAtlas(index:u32,value:vec4<f32>){
  seatGridShape();
  let index=group.x+group.y*groups.x;if(index>=wr.rootsCount.w){return;}
  var slot=index;var n:WorldRenderBrick;
- if(wr.loMode.w>.5){slot=worldRenderWork[index];n=worldRenderBricks[slot];n.loPitch=vec4<f32>((n.loPitch.xyz-wr.loMode.xyz)/wr.dimsPitch.w,n.loPitch.w/wr.dimsPitch.w);}
+ if(worldRenderHasHierarchy()){slot=worldRenderWork[index];n=worldRenderBricks[slot];n.loPitch=vec4<f32>((n.loPitch.xyz-wr.loMode.xyz)/wr.dimsPitch.w,n.loPitch.w/wr.dimsPitch.w);}
  else{let root=vec3<u32>(slot%wr.rootsCount.x,(slot/wr.rootsCount.x)%wr.rootsCount.y,slot/(wr.rootsCount.x*wr.rootsCount.y));n.loPitch=vec4<f32>(vec3<f32>(root)*4.0,1);n.children0=vec4<u32>(0xffffffffu);n.children1=n.children0;}
  let start=slot*WORLD_RENDER_STRIDE;
  if(local==0u){writeWorldAtlas(start,n.loPitch);writeWorldAtlas(start+1u,vec4<f32>(n.children0+vec4<u32>(1)));writeWorldAtlas(start+2u,vec4<f32>(n.children1+vec4<u32>(1)));}
  if(n.children0.x!=0xffffffffu){return;}
- for(var i=local;i<216u;i+=64u){
-  let c=vec3<u32>(i%6u,(i/6u)%6u,i/36u);let q=n.loPitch.xyz+(vec3<f32>(c)-.5)*n.loPitch.w;
-  var r:WorldRenderGas;
-  if(wr.loMode.w>.5 && all(c>=vec3<u32>(1)) && all(c<=vec3<u32>(4)) && all(q<wr.dimsPitch.xyz)){
-   let inner=c-vec3<u32>(1);r=worldRenderGas[slot*64u+inner.x+4u*(inner.y+4u*inner.z)];
-  }else{r=worldRenderRaw(q);}
+ for(var i=local;i<1000u;i+=64u){
+  let c=vec3<u32>(i%10u,(i/10u)%10u,i/100u);let q=n.loPitch.xyz+(vec3<f32>(c)-.5)*(n.loPitch.w*0.5);
+  var r=worldRenderCellAt(slot,n,q);
+  if(wr.loMode.w>=1.5){
+   r=worldRenderSampleGas(slot,n,q+worldSubgridWarpGrid(q,n.loPitch.w));
+  }
   let medium=regionSmokeMaterial(vec4<f32>(r.a.xyz,r.b.x),r.b.yzw,1,1);
-  writeWorldAtlas(start+3u+i,vec4<f32>(medium.emission,medium.absorption+medium.scattering));
+  let sigma=(medium.absorption+medium.scattering)*worldSubgridClumpGrid(q,medium.absorption+medium.scattering);
+  writeWorldAtlas(start+3u+i,vec4<f32>(medium.emission,sigma));
  }
 }
 `;
@@ -118,7 +188,8 @@ export function createWorldRenderField(device,module,uniformBuffer) {
     if(next[1]!==resources[1]||next[2]!==resources[2]||next[3]!==resources[3])bindings=new WeakMap();
     group3=bindings.get(gas)??device.createBindGroup({layout:pipeline.getBindGroupLayout(3),entries:[...next.slice(0,3).map((buffer,i)=>({binding:4+i,resource:{buffer}})),{binding:7,resource:{buffer:params}},{binding:8,resource:view}]});bindings.set(gas,group3);resources=next;
    }
-   const data=new ArrayBuffer(48);new Float32Array(data).set([...plan.materialDims,plan.materialPitch,...plan.min,hierarchy?1:0]);new Uint32Array(data).set([...roots,count],8);device.queue.writeBuffer(params,0,data);
+   const mode=(hierarchy?1:0)+(materialKey?.length>29&&materialKey[29]>.5?2:0);
+   const data=new ArrayBuffer(48);new Float32Array(data).set([...plan.materialDims,plan.materialPitch,...plan.min,mode]);new Uint32Array(data).set([...roots,count],8);device.queue.writeBuffer(params,0,data);
    const pass=encoder.beginComputePass({label:'World optical brick preparation'});pass.setPipeline(pipeline);for(const [i,g] of [group0,empty1,empty2,group3].entries())pass.setBindGroup(i,g);
    const x=Math.min(count,device.limits.maxComputeWorkgroupsPerDimension);pass.dispatchWorkgroups(x,Math.ceil(count/x));pass.end();last=key;builds++;
    receipt={effective:hierarchy?'resident-leaf-optics':'dense-cell-optics',materialDims:[...plan.materialDims],sourceSteps:steps,sourceRevision:hierarchy?.revision??null,builds,capacity,nodeCount:count,leafCount:hierarchy?.leafCount??count,bytes:texture.width*texture.height*texture.depthOrArrayLayers*16,reconstruction:'linear-optical-leaf-centres-with-neighbor-halo',denseExportUnchanged:true};

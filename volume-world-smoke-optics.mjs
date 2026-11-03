@@ -78,6 +78,11 @@ fn worldHash31(p:vec3<f32>)->f32{
  q+=dot(q,q.yxz+vec3<f32>(33.33));
  return fract((q.x+q.y)*q.z);
 }
+fn worldHash33(p:vec3<f32>)->vec3<f32>{
+ var q=fract(p*vec3<f32>(0.1031,0.1030,0.0973));
+ q+=dot(q,q.yxz+vec3<f32>(33.33));
+ return fract((q.xxy+q.yxx)*q.zyx);
+}
 fn worldSubgridNoise(q:vec3<f32>)->f32{
  let i=floor(q);
  let f=fract(q);
@@ -98,6 +103,26 @@ fn worldSubgridNoise(q:vec3<f32>)->f32{
  let nxy1=mix(nx01,nx11,u.y);
  return mix(nxy0,nxy1,u.z);
 }
+fn worldSubgridNoise3(q:vec3<f32>)->vec3<f32>{
+ let i=floor(q);
+ let f=fract(q);
+ let u=f*f*(vec3<f32>(3.0)-2.0*f);
+ let n000=worldHash33(i+vec3<f32>(0,0,0));
+ let n100=worldHash33(i+vec3<f32>(1,0,0));
+ let n010=worldHash33(i+vec3<f32>(0,1,0));
+ let n110=worldHash33(i+vec3<f32>(1,1,0));
+ let n001=worldHash33(i+vec3<f32>(0,0,1));
+ let n101=worldHash33(i+vec3<f32>(1,0,1));
+ let n011=worldHash33(i+vec3<f32>(0,1,1));
+ let n111=worldHash33(i+vec3<f32>(1,1,1));
+ let nx00=mix(n000,n100,u.x);
+ let nx10=mix(n010,n110,u.x);
+ let nx01=mix(n001,n101,u.x);
+ let nx11=mix(n011,n111,u.x);
+ let nxy0=mix(nx00,nx10,u.y);
+ let nxy1=mix(nx01,nx11,u.y);
+ return mix(nxy0,nxy1,u.z);
+}
 fn worldGridPoint(p:vec3<f32>)->vec3<f32>{
  let pitch=max(worldRender.loPitch.w,0.125);
  return (p-worldRender.loPitch.xyz)/pitch;
@@ -106,17 +131,8 @@ fn worldSubgridWarp(p:vec3<f32>,pitch:f32)->vec3<f32>{
  let step=clamp(pitch,0.125,0.75);
  let g=worldGridPoint(p);
  let q=vec3<f32>(g.x*0.85,g.y*0.65,g.z*0.85);
- let w1=vec3<f32>(
-  worldSubgridNoise(q+vec3<f32>(1.3,2.7,4.1))-0.5,
-  worldSubgridNoise(q+vec3<f32>(5.9,1.1,7.3))-0.5,
-  worldSubgridNoise(q+vec3<f32>(3.7,8.3,2.9))-0.5
- );
- let q2=q*2.15+vec3<f32>(2.1,-1.4,3.3);
- let w2=vec3<f32>(
-  worldSubgridNoise(q2+vec3<f32>(4.3,1.9,6.7))-0.5,
-  worldSubgridNoise(q2+vec3<f32>(2.9,7.1,1.3))-0.5,
-  worldSubgridNoise(q2+vec3<f32>(8.1,3.3,5.1))-0.5
- );
+ let w1=worldSubgridNoise3(q+vec3<f32>(1.3,2.7,4.1))-vec3<f32>(0.5);
+ let w2=worldSubgridNoise3(q*2.15+vec3<f32>(2.1,-1.4,3.3))-vec3<f32>(0.5);
  return (0.65*w1+0.35*w2)*step*0.65;
 }
 fn worldSubgridClump(p:vec3<f32>,sigma:f32)->f32{
@@ -169,15 +185,27 @@ fn worldMinimumMaterialPitch()->f32{
  return worldRender.loPitch.w;
 }
 fn worldSmokeMaterial(p:vec3<f32>,smokeVisible:f32,fireVisible:f32)->EmissiveMaterial{
- let pw=select(p,p+worldSubgridWarp(p,worldMinimumMaterialPitch()),u.reactant_combustion_a.x>0.5);
- var far:EmissiveMaterial;
- if(worldRender.atlas.x>.5){far=worldResidentMaterial(pw,smokeVisible,fireVisible);}
- else{far=regionSmokeMaterial(worldSmokeSample(pw),regionSmokeSample(worldOptical,pw,worldRender.loPitch,1).xyz,smokeVisible,fireVisible);}
+ if(worldRender.atlas.x>.5){let far=worldResidentMaterial(p,smokeVisible,fireVisible);if(middleSmokeWeight(p)<=0.0){return far;}
+  let mRaw0=regionSmokeSample(middleOptical,p,worldRender.middleLoPitch,0);
+  if(mRaw0.x<=1e-4&&mRaw0.y<=1e-4&&mRaw0.w<=1e-4){
+   let w=middleSmokeWeight(p);
+   return EmissiveMaterial(far.emission*(1.0-w),far.absorption*(1.0-w),far.scattering*(1.0-w));
+  }
+  var pw=p;if(u.reactant_combustion_a.x>0.5){pw+=worldSubgridWarp(p,worldRender.middleLoPitch.w);}
+  let w=middleSmokeWeight(pw);
+  var middle=regionSmokeMaterial(regionSmokeSample(middleOptical,pw,worldRender.middleLoPitch,0),regionSmokeSample(middleOptical,pw,worldRender.middleLoPitch,1).xyz,smokeVisible,fireVisible);
+  let clump=worldSubgridClump(p,middle.absorption+middle.scattering);
+  middle.absorption*=clump;middle.scattering*=clump;
+  return EmissiveMaterial(mix(far.emission,middle.emission,w),mix(far.absorption,middle.absorption,w),mix(far.scattering,middle.scattering,w));
+ }
+ let baseRaw=worldSmokeSample(p);
+ if(baseRaw.x<=1e-4&&baseRaw.y<=1e-4&&baseRaw.w<=1e-4&&middleSmokeWeight(p)<=0.0){return EmissiveMaterial(vec3<f32>(0),0,0);}
+ var pw=p;if(u.reactant_combustion_a.x>0.5){pw+=worldSubgridWarp(p,worldMinimumMaterialPitch());}
+ var out=regionSmokeMaterial(worldSmokeSample(pw),regionSmokeSample(worldOptical,pw,worldRender.loPitch,1).xyz,smokeVisible,fireVisible);
  let weight=middleSmokeWeight(pw);
- var out=far;
  if(weight>0.0){
   let middle=regionSmokeMaterial(regionSmokeSample(middleOptical,pw,worldRender.middleLoPitch,0),regionSmokeSample(middleOptical,pw,worldRender.middleLoPitch,1).xyz,smokeVisible,fireVisible);
-  out=EmissiveMaterial(mix(far.emission,middle.emission,weight),mix(far.absorption,middle.absorption,weight),mix(far.scattering,middle.scattering,weight));
+  out=EmissiveMaterial(mix(out.emission,middle.emission,weight),mix(out.absorption,middle.absorption,weight),mix(out.scattering,middle.scattering,weight));
  }
  let clump=worldSubgridClump(p,out.absorption+out.scattering);
  out.absorption*=clump;out.scattering*=clump;

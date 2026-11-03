@@ -209,7 +209,7 @@ fn seedSceneExteriorMedium(@builtin(global_invocation_id) c:vec3<u32>){
   seatGridShape();
   let dims=textureDimensions(sceneExteriorOut);if(any(c>=dims)){return;}
   let p=worldRender.loPitch.xyz+(vec3<f32>(c)+.5)*worldRender.loPitch.w;
-  let pw=select(p,p+worldSubgridWarp(p,worldRender.loPitch.w),u.reactant_combustion_a.x>0.5);
+  var pw=p;if(u.reactant_combustion_a.x>0.5){pw=p+worldSubgridWarp(p,worldRender.loPitch.w);}
   // Same physical law as the camera, before optional diagnostic tinting.
   let medium=regionSmokeMaterial(worldSmokeSample(pw),regionSmokeSample(worldOptical,pw,worldRender.loPitch,1).xyz,1.0,1.0);
   let sigma=(medium.absorption+medium.scattering)*worldSubgridClump(p,medium.absorption+medium.scattering);
@@ -220,7 +220,7 @@ fn seedSceneMiddleMedium(@builtin(global_invocation_id) c:vec3<u32>){
   seatGridShape();
   let dims=textureDimensions(sceneExteriorOut);if(any(c>=dims)){return;}
   let p=worldRender.middleLoPitch.xyz+(vec3<f32>(c)+.5)*worldRender.middleLoPitch.w;
-  let pw=select(p,p+worldSubgridWarp(p,worldRender.middleLoPitch.w),u.reactant_combustion_a.x>0.5);
+  var pw=p;if(u.reactant_combustion_a.x>0.5){pw=p+worldSubgridWarp(p,worldRender.middleLoPitch.w);}
   let medium=regionSmokeMaterial(regionSmokeSample(middleOptical,pw,worldRender.middleLoPitch,0),regionSmokeSample(middleOptical,pw,worldRender.middleLoPitch,1).xyz,1.0,1.0);
   let sigma=(medium.absorption+medium.scattering)*worldSubgridClump(p,medium.absorption+medium.scattering);
   textureStore(sceneExteriorOut,vec3<i32>(c),vec4<f32>(sigma,0,0,0));

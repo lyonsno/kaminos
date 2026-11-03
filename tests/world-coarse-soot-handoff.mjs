@@ -4,6 +4,7 @@ import test from 'node:test';
 import * as worldSmoke from '../volume-world-smoke.mjs';
 import * as materialHierarchy from '../volume-material-hierarchy-gpu.mjs';
 import * as worldOptics from '../volume-world-smoke-optics.mjs';
+import { WORLD_RENDER_WGSL } from '../volume-world-render.mjs';
 import { COMPOSED_SMOKE_WGSL } from '../scene-smoke-reconstruction.mjs';
 import { SCENE_VOLUME_SOURCE_WGSL } from '../scene-volume-source.mjs';
 import { EMISSIVE_TRANSPORT_WGSL } from '../volume-emissive-transport.mjs';
@@ -107,5 +108,16 @@ test('scene lighting and volume source blend smoothly across the rounded interio
   assert.match(SCENE_VOLUME_SOURCE_WGSL, /worldSubgridWarp\(p,worldRender\.middleLoPitch\.w\)/);
   assert.match(SCENE_VOLUME_SOURCE_WGSL, /worldSubgridClump\(p,\s*medium\.absorption\s*\+\s*medium\.scattering\)/);
   assert.match(EMISSIVE_TRANSPORT_WGSL, /2\.0\s*\*\s*f32\(GRID_Y\)\s*\/\s*f32\(GRID\)\s*-\s*1\.0/);
-  assert.match(EMISSIVE_TRANSPORT_WGSL, /select\(2\.0,max\(top\+1\.0,2\.0\),direction\/2u==1u\)\/f32\(LIGHT_GRID\)/);
+  assert.match(EMISSIVE_TRANSPORT_WGSL, /select\(2\.0,spanY,direction\/2u==1u\)\/f32\(LIGHT_GRID\)/);
+});
+
+test('resident World optical brick preparation performs Material-first sub-grid warp and clumping so camera ray steps pay zero per-step hash evaluations', () => {
+  assert.match(WORLD_RENDER_WGSL, /fn worldRenderSampleGas\(/);
+  assert.match(WORLD_RENDER_WGSL, /worldSubgridWarpGrid\(q,\s*n\.loPitch\.w\)/);
+  assert.match(WORLD_RENDER_WGSL, /worldSubgridClumpGrid\(q,\s*medium\.absorption\s*\+\s*medium\.scattering\)/);
+  // Camera raymarching on the resident-atlas route returns worldResidentMaterial(p, ...) without evaluating worldSubgridWarp or worldSubgridClump on far.
+  assert.match(
+    worldOptics.WORLD_SMOKE_OPTICS_WGSL,
+    /if\(worldRender\.atlas\.x>\.5\)\{let far=worldResidentMaterial\(p,smokeVisible,fireVisible\);if\(middleSmokeWeight\(p\)<=0\.0\)\{return far;\}/,
+  );
 });
