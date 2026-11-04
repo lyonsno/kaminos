@@ -219,6 +219,256 @@ def partition_surface(pos, normals, indices, min_chart_area_fraction=.002,
     }
 
 
+def _union_find_components(num_verts, tris):
+    parent = np.arange(num_verts, dtype=np.int64)
+    for a, b in ((0, 1), (1, 2), (2, 0)):
+        for ui, vi in zip(tris[:, a], tris[:, b]):
+            ru, rv = int(ui), int(vi)
+            while parent[ru] != ru:
+                parent[ru] = parent[parent[ru]]
+                ru = parent[ru]
+            while parent[rv] != rv:
+                parent[rv] = parent[parent[rv]]
+                rv = parent[rv]
+            if ru != rv:
+                parent[rv] = ru
+    for i in range(num_verts):
+        r = i
+        while parent[r] != r:
+            r = parent[r]
+        cur = i
+        while cur != r:
+            nxt = parent[cur]
+            parent[cur] = r
+            cur = nxt
+    return parent
+
+
+def partition_raw_field(surfels, triangles, opacity_cutoff=.98,
+                        min_manifold_component_triangles=256,
+                        absorb_pinhole_max_triangles=128):
+    """Partition a pre-finishing raw TRELLIS surface field into manifold opaque mesh sheets and glass/sponge splats."""
+    surfels = np.asarray(surfels, dtype=np.float64)
+    triangles = np.asarray(triangles, dtype=np.int64)
+    if (surfels.ndim != 2 or surfels.shape[1] != 12 or len(surfels) < 3
+            or triangles.ndim != 2 or triangles.shape[1] != 3 or len(triangles) < 1
+            or not np.isfinite(surfels).all()
+            or triangles.min() < 0 or triangles.max() >= len(surfels)
+            or not (0. <= opacity_cutoff <= 1.)
+            or min_manifold_component_triangles < 1
+            or absorb_pinhole_max_triangles < 0):
+        raise ValueError('Valid finite 12-channel raw surfels, triangle indices, and partition thresholds required')
+
+    pos = surfels[:, :3]
+    opacity = surfels[:, 11]
+    corners = pos[triangles]
+    area = np.linalg.norm(np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0]), axis=1) * .5
+    total_area = float(area.sum())
+    if not np.isfinite(total_area) or total_area <= 0:
+        raise ValueError('Raw field surface has no positive area')
+
+    e0 = triangles[:, [0, 1]]
+    e1 = triangles[:, [1, 2]]
+    e2 = triangles[:, [2, 0]]
+    all_e = np.sort(np.vstack([e0, e1, e2]), axis=1)
+    u_view = np.ascontiguousarray(all_e).view(np.dtype((np.void, all_e.dtype.itemsize * 2))).ravel()
+    _, inv, counts = np.unique(u_view, return_inverse=True, return_counts=True)
+    edge_valence = counts[inv]
+    tri_edges_manifold = (edge_valence.reshape(3, -1).T == 2).all(axis=1)
+
+    vert_nonmanifold = np.zeros(len(surfels), dtype=bool)
+    vert_nonmanifold[all_e[edge_valence != 2].ravel()] = True
+    vert_open_boundary = np.zeros(len(surfels), dtype=bool)
+    vert_open_boundary[all_e[edge_valence == 1].ravel()] = True
+
+    glass_mask = (opacity[triangles].min(axis=1) < opacity_cutoff)
+    cand_mesh = (~glass_mask) & (~vert_nonmanifold[triangles].any(axis=1))
+
+    mesh_mask = np.zeros(len(triangles), dtype=bool)
+    kept_components = 0
+    dropped_flake_tris = 0
+    if cand_mesh.any():
+        cand_ids = np.flatnonzero(cand_mesh)
+        cand_tris = triangles[cand_ids]
+        parent = _union_find_components(len(surfels), cand_tris)
+        tri_root = parent[cand_tris[:, 0]]
+        uniq_roots, comp_counts = np.unique(tri_root, return_counts=True)
+        keep_mask = comp_counts >= min_manifold_component_triangles
+        kept_components = int(keep_mask.sum())
+        keep_roots = set(uniq_roots[keep_mask].tolist())
+        kept_cand = np.isin(tri_root, list(keep_roots))
+        dropped_flake_tris = int((~kept_cand).sum())
+        mesh_mask[cand_ids[kept_cand]] = True
+
+    # 1-ring manifold collar dilation: include adjacent opaque valence-2-edge triangles up to the seam.
+    collar_tris = 0
+    if mesh_mask.any():
+        mesh_verts = np.zeros(len(surfels), dtype=bool)
+        mesh_verts[triangles[mesh_mask].ravel()] = True
+        collar = (~mesh_mask) & tri_edges_manifold & (~glass_mask) & mesh_verts[triangles].any(axis=1)
+        mesh_mask |= collar
+        collar_tris = int(collar.sum())
+
+    # Absorb small enclosed opaque pinhole components touching mesh_mask without open boundary edges.
+    absorbed_pinhole_tris = 0
+    if absorb_pinhole_max_triangles > 0 and mesh_mask.any():
+        rem_opaque = (~mesh_mask) & (~glass_mask)
+        if rem_opaque.any():
+            rem_ids = np.flatnonzero(rem_opaque)
+            rem_tris = triangles[rem_ids]
+            parent2 = _union_find_components(len(surfels), rem_tris)
+            rem_root = parent2[rem_tris[:, 0]]
+            u2, c2 = np.unique(rem_root, return_counts=True)
+            small_roots = set(u2[c2 <= absorb_pinhole_max_triangles].tolist())
+            if small_roots:
+                mesh_vert_mask = np.zeros(len(surfels), dtype=bool)
+                mesh_vert_mask[triangles[mesh_mask].ravel()] = True
+                flat_v = rem_tris.ravel()
+                touches_mesh_roots = set(parent2[flat_v[mesh_vert_mask[flat_v]]].tolist())
+                touches_open_roots = set(parent2[flat_v[vert_open_boundary[flat_v]]].tolist())
+                absorb_roots = (small_roots & touches_mesh_roots) - touches_open_roots
+                if absorb_roots:
+                    absorbed = np.isin(rem_root, list(absorb_roots))
+                    mesh_mask[rem_ids[absorbed]] = True
+                    absorbed_pinhole_tris = int(absorbed.sum())
+
+    splat_mask = ~mesh_mask
+    sponge_mask = splat_mask & (~glass_mask)
+    return {
+        'meshTriangles': mesh_mask,
+        'splatTriangles': splat_mask,
+        'glassTriangles': glass_mask,
+        'spongeTriangles': sponge_mask,
+        'stats': {
+            'sourceKind': 'raw-field-hybrid-partition',
+            'totalTriangles': int(len(triangles)),
+            'meshTriangleCount': int(mesh_mask.sum()),
+            'splatTriangleCount': int(splat_mask.sum()),
+            'glassTriangleCount': int(glass_mask.sum()),
+            'spongeTriangleCount': int(sponge_mask.sum()),
+            'manifoldSheetComponents': kept_components,
+            'collarManifoldTriangles': collar_tris,
+            'droppedFlakeTriangles': dropped_flake_tris,
+            'absorbedPinholeTriangles': absorbed_pinhole_tris,
+            'totalArea': total_area,
+            'meshArea': float(area[mesh_mask].sum()),
+            'splatArea': float(area[splat_mask].sum()),
+            'glassArea': float(area[glass_mask].sum()),
+            'spongeArea': float(area[sponge_mask].sum()),
+            'opacityCutoff': float(opacity_cutoff),
+            'minManifoldComponentTriangles': int(min_manifold_component_triangles),
+            'absorbPinholeMaxTriangles': int(absorb_pinhole_max_triangles),
+        },
+    }
+
+
+def _write_raw_field_mesh_glb(surfels, mesh_triangles_u32, out_path):
+    """Write a compacted pre-finishing manifold opaque mesh GLB with linear COLOR_0 and 1x1 white PBR texture."""
+    subset_indices = np.asarray(mesh_triangles_u32, dtype=np.int64).reshape(-1, 3)
+    used_verts, remapped = np.unique(subset_indices, return_inverse=True)
+    remapped_u32 = remapped.reshape(-1, 3).astype('<u4')
+
+    sub_rows = surfels[used_verts]
+    sub_pos = np.ascontiguousarray(sub_rows[:, :3], dtype='<f4')
+    raw_nrm = sub_rows[:, 3:6].astype(np.float64)
+    n_len = np.linalg.norm(raw_nrm, axis=1, keepdims=True)
+    raw_nrm = np.where(n_len > 1e-12, raw_nrm / np.maximum(n_len, 1e-12), [0., 0., 1.])
+    sub_nrm = np.ascontiguousarray(raw_nrm, dtype='<f4')
+    sub_uv = np.zeros((len(used_verts), 2), dtype='<f4')
+    sub_col = np.ascontiguousarray(linear(np.clip(sub_rows[:, 6:9].astype(np.float64), 0., 1.)), dtype='<f4')
+
+    metallic_mean = float(np.clip(sub_rows[:, 9].mean(), 0., 1.))
+    roughness_mean = float(np.clip(sub_rows[:, 10].mean(), 0., 1.))
+
+    white_stream = io.BytesIO()
+    Image.fromarray(np.full((2, 2, 4), 255, dtype=np.uint8)).save(white_stream, format='PNG')
+    png_bytes = white_stream.getvalue()
+
+    new_blob = bytearray()
+    new_views = []
+
+    def append_chunk(raw_bytes, target=None):
+        offset = len(new_blob)
+        new_blob.extend(raw_bytes)
+        new_blob.extend(b'\0' * (-len(new_blob) % 4))
+        entry = {'buffer': 0, 'byteOffset': offset, 'byteLength': len(raw_bytes)}
+        if target is not None:
+            entry['target'] = target
+        vid = len(new_views)
+        new_views.append(entry)
+        return vid
+
+    idx_vid = append_chunk(remapped_u32.reshape(-1).tobytes(), 34963)
+    pos_vid = append_chunk(sub_pos.tobytes(), 34962)
+    nrm_vid = append_chunk(sub_nrm.tobytes(), 34962)
+    uv_vid = append_chunk(sub_uv.tobytes(), 34962)
+    col_vid = append_chunk(sub_col.tobytes(), 34962)
+    img_vid = append_chunk(png_bytes)
+
+    doc = {
+        'asset': {'version': '2.0', 'generator': 'kaminos-raw-field-hybrid-partition'},
+        'scene': 0,
+        'scenes': [{'nodes': [0]}],
+        'nodes': [{'mesh': 0}],
+        'buffers': [{'byteLength': len(new_blob)}],
+        'bufferViews': new_views,
+        'accessors': [
+            {'bufferView': idx_vid, 'componentType': 5125, 'type': 'SCALAR', 'count': int(remapped_u32.size)},
+            {
+                'bufferView': pos_vid, 'componentType': 5126, 'type': 'VEC3', 'count': int(len(sub_pos)),
+                'min': sub_pos.min(axis=0).astype(float).tolist(),
+                'max': sub_pos.max(axis=0).astype(float).tolist(),
+            },
+            {'bufferView': nrm_vid, 'componentType': 5126, 'type': 'VEC3', 'count': int(len(sub_nrm))},
+            {'bufferView': uv_vid, 'componentType': 5126, 'type': 'VEC2', 'count': int(len(sub_uv))},
+            {'bufferView': col_vid, 'componentType': 5126, 'type': 'VEC3', 'count': int(len(sub_col))},
+        ],
+        'meshes': [{
+            'primitives': [{
+                'indices': 0,
+                'attributes': {'POSITION': 1, 'NORMAL': 2, 'TEXCOORD_0': 3, 'COLOR_0': 4},
+                'material': 0,
+            }],
+        }],
+        'materials': [{
+            'pbrMetallicRoughness': {
+                'baseColorTexture': {'index': 0},
+                'metallicFactor': metallic_mean,
+                'roughnessFactor': roughness_mean,
+            },
+            'alphaMode': 'OPAQUE',
+        }],
+        'textures': [{'source': 0}],
+        'images': [{'bufferView': img_vid, 'mimeType': 'image/png'}],
+    }
+    json_bytes = json.dumps(doc).encode('utf-8')
+    json_bytes += b' ' * (-len(json_bytes) % 4)
+    header = struct.pack('<III', 0x46546c67, 2, 28 + len(json_bytes) + len(new_blob))
+    chunk0 = struct.pack('<II', len(json_bytes), 0x4e4f534a) + json_bytes
+    chunk1 = struct.pack('<II', len(new_blob), 0x004e4942) + new_blob
+    Path(out_path).write_bytes(header + chunk0 + chunk1)
+    return int(len(sub_pos)), int(len(remapped_u32))
+
+
+def _raw_field_footprints(rows, radius):
+    n = rows[:, 3:6].astype(np.float64)
+    lengths = np.linalg.norm(n, axis=1, keepdims=True)
+    n = np.where(lengths > 1e-12, n / np.maximum(lengths, 1e-12), [0., 0., 1.])
+    ux = np.where(np.abs(n[:, 2]) < .9, n[:, 1], 0.)
+    uy = np.where(np.abs(n[:, 2]) < .9, -n[:, 0], n[:, 2])
+    uz = np.where(np.abs(n[:, 2]) < .9, 0., -n[:, 1])
+    u = np.stack([ux, uy, uz], axis=1)
+    u /= np.linalg.norm(u, axis=1, keepdims=True)
+    v = np.cross(n, u)
+    sigma = float(radius) * .5
+    footprints = np.empty((len(rows), 8), dtype='<f4')
+    footprints[:, :3] = u
+    footprints[:, 3] = sigma
+    footprints[:, 4:7] = v
+    footprints[:, 7] = sigma
+    return footprints
+
+
 def _parse_glb(path):
     payload = Path(path).read_bytes()
     magic, version, size = struct.unpack_from('<III', payload)
@@ -507,7 +757,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('source', type=Path)
     parser.add_argument('output', type=Path)
-    parser.add_argument('--splat-count', type=int, required=True)
+    parser.add_argument('--raw-field', action='store_true',
+                        help='Partition a pre-finishing TRELLIS raw field directory (report.json + surfels.f32 + triangles.u32)')
+    parser.add_argument('--splat-count', type=int, default=None)
     parser.add_argument('--candidate-multiplier', type=int, default=4)
     parser.add_argument('--min-chart-area-fraction', type=float, default=.002)
     parser.add_argument('--min-chart-thickness-ratio', type=float, default=.01)
@@ -516,11 +768,122 @@ def main():
     parser.add_argument('--min-chart-compactness', type=float, default=.06)
     parser.add_argument('--pinhole-max-triangles', type=int, default=256)
     parser.add_argument('--relief-plane-tolerance', type=float, default=.008)
+    parser.add_argument('--opacity-cutoff', type=float, default=.98)
+    parser.add_argument('--min-manifold-component-triangles', type=int, default=256)
     args = parser.parse_args()
+    if args.source.resolve() == args.output.resolve():
+        raise ValueError('Output must not overwrite source')
     args.output.mkdir(parents=True, exist_ok=False)
     report = {'ok': False, 'phase': 'sample', 'source': str(args.source.resolve()), 'requestedSplatCount': args.splat_count}
     try:
-        if args.splat_count < 1 or args.candidate_multiplier < 1:
+        repo_cwd = Path(__file__).resolve().parent
+        if args.raw_field:
+            report['phase'] = 'load'
+            meta = json.loads((args.source / 'report.json').read_text())
+            if not meta.get('ok') or 'triangles' not in meta:
+                raise ValueError('A successful raw field source with original triangle connectivity is required')
+            s_bytes = (args.source / 'surfels.f32').read_bytes()
+            if hashlib.sha256(s_bytes).hexdigest() != meta.get('dataSHA256'):
+                raise ValueError('Source surfels.f32 SHA-256 mismatch')
+            t_file = meta['triangles']['file']
+            t_bytes = (args.source / t_file).read_bytes()
+            if hashlib.sha256(t_bytes).hexdigest() != meta['triangles'].get('sha256'):
+                raise ValueError(f'Source {t_file} SHA-256 mismatch')
+            surfels = np.frombuffer(s_bytes, dtype='<f4').reshape(-1, 12).copy()
+            triangles = np.frombuffer(t_bytes, dtype='<u4').reshape(-1, 3).copy()
+            if len(surfels) != meta.get('count') or len(triangles) != meta['triangles'].get('count'):
+                raise ValueError('Raw field row/triangle count mismatch')
+
+            report['phase'] = 'partition'
+            part = partition_raw_field(
+                surfels, triangles,
+                opacity_cutoff=args.opacity_cutoff,
+                min_manifold_component_triangles=args.min_manifold_component_triangles,
+                absorb_pinhole_max_triangles=args.pinhole_max_triangles,
+            )
+            mesh_tri_ids = np.flatnonzero(part['meshTriangles'])
+            splat_tri_ids = np.flatnonzero(part['splatTriangles'])
+            if len(mesh_tri_ids) == 0 or len(splat_tri_ids) == 0:
+                raise ValueError('Raw field partition produced an empty regime; adjust thresholds')
+
+            report['phase'] = 'write_mesh'
+            mesh_glb_path = args.output / 'mesh-region.glb'
+            mesh_vert_count, mesh_tri_count = _write_raw_field_mesh_glb(
+                surfels, triangles[mesh_tri_ids], mesh_glb_path
+            )
+            part['stats']['meshVertexCount'] = mesh_vert_count
+
+            report['phase'] = 'write_splats'
+            splat_tris_orig = triangles[splat_tri_ids]
+            splat_vert_ids, remapped_splat_tris = np.unique(splat_tris_orig, return_inverse=True)
+            remapped_splat_tris = remapped_splat_tris.reshape(-1, 3).astype('<u4')
+            splat_rows = np.ascontiguousarray(surfels[splat_vert_ids], dtype='<f4')
+            part['stats']['splatVertexCount'] = int(len(splat_rows))
+            part['stats']['sharedSeamVertexCount'] = int(len(np.intersect1d(np.unique(triangles[mesh_tri_ids]), splat_vert_ids)))
+
+            radius = float(meta.get('radius', 0.8 / 512))
+            footprints = _raw_field_footprints(splat_rows, radius)
+
+            splat_dir = args.output / 'splat-region'
+            splat_dir.mkdir(parents=True, exist_ok=False)
+            s_out_bytes = splat_rows.tobytes()
+            t_out_bytes = remapped_splat_tris.tobytes()
+            f_out_bytes = footprints.tobytes()
+            (splat_dir / 'surfels.f32').write_bytes(s_out_bytes)
+            (splat_dir / 'triangles.u32').write_bytes(t_out_bytes)
+            (splat_dir / 'footprints.f32').write_bytes(f_out_bytes)
+
+            splat_meta = {
+                'schema': 'trellis-surfel-fields.v1',
+                'ok': True,
+                'phase': 'done',
+                'source': meta.get('source', str(args.source.resolve())),
+                'regionNormalizedYUp': meta.get('regionNormalizedYUp'),
+                'layout': meta.get('layout', ['x', 'y', 'z', 'nx', 'ny', 'nz', 'r', 'g', 'b', 'metallic', 'roughness', 'opacity']),
+                'sourceHashes': meta.get('sourceHashes', {'surfels': meta['dataSHA256'], 'triangles': meta['triangles']['sha256']}),
+                'sourceCount': int(len(splat_rows)),
+                'fallbackNormals': int(meta.get('fallbackNormals', 0)),
+                'sourceBounds': meta.get('sourceBounds', [surfels[:, :3].min(0).tolist(), surfels[:, :3].max(0).tolist()]),
+                'triangles': {
+                    'file': 'triangles.u32',
+                    'count': int(len(remapped_splat_tris)),
+                    'sha256': hashlib.sha256(t_out_bytes).hexdigest(),
+                    'sourceCount': int(len(triangles)),
+                },
+                'count': int(len(splat_rows)),
+                'stride': 12,
+                'gridSize': int(meta.get('gridSize', 512)),
+                'radius': radius,
+                'bounds': [splat_rows[:, :3].min(0).tolist(), splat_rows[:, :3].max(0).tolist()],
+                'dataSHA256': hashlib.sha256(s_out_bytes).hexdigest(),
+                'footprints': {
+                    'file': 'footprints.f32',
+                    'stride': 8,
+                    'sha256': hashlib.sha256(f_out_bytes).hexdigest(),
+                    'layout': 'tangent-u.xyz,sigma-u,tangent-v.xyz,sigma-v',
+                    'supportSigma': 3,
+                },
+                'partition': part['stats'],
+            }
+            (splat_dir / 'report.json').write_text(json.dumps(splat_meta, indent=2) + '\n')
+
+            report.update({
+                'ok': True,
+                'phase': 'complete',
+                'sourceHashes': splat_meta['sourceHashes'],
+                'partition': part['stats'],
+                'meshRegionGlb': str(mesh_glb_path.resolve()),
+                'meshRegionBytes': int(mesh_glb_path.stat().st_size),
+                'splatRegionDir': str(splat_dir.resolve()),
+                'splatCount': int(len(splat_rows)),
+                'splatInstanceBytes': int(len(splat_rows) * 84),
+                'repoRoot': subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], text=True, cwd=repo_cwd).strip(),
+                'commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True, cwd=repo_cwd).strip(),
+                'dirty': bool(subprocess.check_output(['git', 'status', '--porcelain'], text=True, cwd=repo_cwd).strip()),
+            })
+            return
+
+        if args.splat_count is None or args.splat_count < 1 or args.candidate_multiplier < 1:
             raise ValueError('Positive splat count and candidate multiplier required')
         (payload, doc, blob_bytes, view, primitive, material, pbr,
          world_pos, world_normals, zero_normals, uv, indices, matrix) = _parse_glb(args.source)

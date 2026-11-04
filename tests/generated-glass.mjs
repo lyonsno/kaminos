@@ -5,13 +5,14 @@ import {Group, Mesh, BoxGeometry, MeshStandardMaterial, Texture} from '../lib/th
 import {createGeneratedGlass} from '../generated-glass.mjs';
 
 test('glass study preserves source and restores exact materials without disposing shared maps', () => {
-  const root=new Group(), map=new Texture(), source=new MeshStandardMaterial({map,roughness:.6});
+  const root=new Group(), map=new Texture(), source=new MeshStandardMaterial({map,roughness:.6,vertexColors:true});
   const mesh=new Mesh(new BoxGeometry(),source);root.add(mesh);
   let textureDisposals=0;map.addEventListener('dispose',()=>textureDisposals++);
   const controller=createGeneratedGlass(root);
   assert.equal(source.transparent,false);
   assert.equal(source.roughness,.6);
   assert.notEqual(mesh.material,source);
+  assert.equal(mesh.material.vertexColors,true,'solid material in glass mode must preserve source vertexColors');
   assert.equal(mesh.children.length,1);
   assert.ok(mesh.children[0].material.transmissionNode);
   assert.ok(mesh.material.maskNode);
@@ -20,6 +21,7 @@ test('glass study preserves source and restores exact materials without disposin
   assert.equal(mesh.children[0].visible,false);
   controller.set({mode:'opacity'});
   assert.equal(mesh.material.alphaHash,true);
+  assert.equal(mesh.material.vertexColors,true,'hashed material in opacity mode must preserve source vertexColors');
   assert.equal(mesh.material.transparent,false);
   controller.set({mode:'glass',ior:1.5,thickness:.08});
   assert.equal(mesh.children[0].visible,true);
