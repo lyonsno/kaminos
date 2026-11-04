@@ -570,9 +570,48 @@ def run_extraction(
                 raise ValueError(f"Unknown shard names in selected_shards: {sorted(unknown)}")
             ordered_groups = [g for g in ordered_groups if g in set(selected_shards)]
 
-        merged_shards: Dict[str, Any] = (
-            dict(existing_manifest.get("shards", {})) if signature_matches_prior else {}
-        )
+        def _verify_existing_shard(grp_name: str, prior_shard_rec: Any, expected_keys_list: List[str]) -> bool:
+            if not isinstance(prior_shard_rec, dict):
+                return False
+            if prior_shard_rec.get("expected_keys") != expected_keys_list:
+                return False
+            sf_path = shards_dir / f"{grp_name}.safetensors"
+            if not sf_path.is_file() or sf_path.stat().st_size == 0:
+                return False
+            rec_size = prior_shard_rec.get("size_bytes")
+            if rec_size is not None and sf_path.stat().st_size != int(rec_size):
+                return False
+            rec_sha = prior_shard_rec.get("sha256")
+            if not rec_sha or sha256_file(sf_path) != rec_sha:
+                return False
+            try:
+                with sf_path.open("rb") as fh:
+                    raw_len = fh.read(8)
+                    if len(raw_len) != 8:
+                        return False
+                    hlen = struct.unpack("<Q", raw_len)[0]
+                    header_obj = json.loads(fh.read(hlen).decode("utf-8"))
+            except Exception:
+                return False
+            t_stats = prior_shard_rec.get("tensor_stats", {})
+            if not isinstance(t_stats, dict) or sorted(t_stats.keys()) != sorted(expected_keys_list):
+                return False
+            for tk in expected_keys_list:
+                mode = t_stats.get(tk, {}).get("mode")
+                if grp_name == "exact_small":
+                    if mode != "exact" or f"{tk}.delta" not in header_obj or f"{tk}.bfl" not in header_obj:
+                        return False
+                else:
+                    if mode != "lowrank_svd" or f"{tk}.lora_B" not in header_obj or f"{tk}.lora_A" not in header_obj:
+                        return False
+            return True
+
+        merged_shards: Dict[str, Any] = {}
+        if resume and signature_matches_prior:
+            for existing_grp, existing_rec in existing_manifest.get("shards", {}).items():
+                if existing_grp in groups and existing_grp not in ordered_groups:
+                    if _verify_existing_shard(existing_grp, existing_rec, groups[existing_grp]):
+                        merged_shards[existing_grp] = existing_rec
 
         def _write_current_manifest() -> None:
             present_groups = set(merged_shards.keys())
@@ -616,10 +655,7 @@ def run_extraction(
             if (
                 resume
                 and signature_matches_prior
-                and prior_shard
-                and prior_shard.get("expected_keys") == keys_in_grp
-                and shard_file.exists()
-                and sha256_file(shard_file) == prior_shard.get("sha256")
+                and _verify_existing_shard(grp, prior_shard, keys_in_grp)
             ):
                 report["shards"][grp] = prior_shard
                 merged_shards[grp] = prior_shard

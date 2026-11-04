@@ -133,6 +133,8 @@ class TestMLXSwitchableAdapter(unittest.TestCase):
 
         bfl_hf = {k: v.copy() for k, v in qwen_hf.items()}
         bfl_hf["model.language_model.layers.0.input_layernorm.weight"] += np.linspace(-0.1, 0.1, hidden, dtype=np.float32)
+        qwen_hf["model.language_model.layers.0.input_layernorm.weight"][0] = np.float32(0.10009765625)
+        bfl_hf["model.language_model.layers.0.input_layernorm.weight"][0] = np.float32(-0.10009765625)
         bfl_hf["model.language_model.layers.0.post_attention_layernorm.weight"] += 0.05
         bfl_hf["model.language_model.layers.0.linear_attn.conv1d.weight"] += rng.standard_normal((hidden, 1, 4)).astype(np.float32) * 0.05
         bfl_hf["model.language_model.layers.0.linear_attn.in_proj_a.weight"] += rng.standard_normal((heads, hidden)).astype(np.float32) * 0.08
@@ -272,6 +274,20 @@ class TestMLXSwitchableAdapter(unittest.TestCase):
 
             ref_r4 = MiniMLXVLM()
             self._load_hf_into_mlx(ref_r4, reconstruct_hf(rank=4))
+            # PUP-R2-01: Assert exact parameter-level equality (0.0 diff) on all offset norm weights
+            for norm_getter in (
+                lambda m: m.language_model.model.layers[0].input_layernorm.weight,
+                lambda m: m.language_model.model.layers[0].post_attention_layernorm.weight,
+                lambda m: m.language_model.model.norm.weight,
+            ):
+                p_switched = norm_getter(model_bf16).astype(mx.float32)
+                p_ref = norm_getter(ref_r4).astype(mx.float32)
+                mx.eval(p_switched, p_ref)
+                self.assertEqual(float(mx.max(mx.abs(p_switched - p_ref)).item()), 0.0)
+            self.assertEqual(
+                float(model_bf16.language_model.model.layers[0].input_layernorm.weight[0].item()),
+                0.8984375,
+            )
             expected_r4 = ref_r4(input_ids)
             mx.eval(expected_r4)
             max_diff_r4 = float(mx.max(mx.abs(out_on4.astype(mx.float32) - expected_r4.astype(mx.float32))).item())

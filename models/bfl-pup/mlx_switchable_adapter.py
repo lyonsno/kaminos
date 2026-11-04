@@ -17,9 +17,81 @@ Exploratory diagnostic mode (requires explicit `allow_bfl_residual_approx=True`)
 Works transparently on 4-bit `nn.QuantizedLinear` and `nn.QuantizedEmbedding` as well as
 unquantized `nn.Linear` and `nn.Embedding` without dequantizing or mutating base 2D weights.
 """
+import hashlib
 import json
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
+
+MLX_NORM_OFFSET_SUFFIXES = (
+    ".input_layernorm.weight",
+    ".post_attention_layernorm.weight",
+    "model.norm.weight",
+    ".q_norm.weight",
+    ".k_norm.weight",
+)
+
+
+def is_mlx_offset_norm_key(hf_key: str) -> bool:
+    return hf_key.endswith(MLX_NORM_OFFSET_SUFFIXES)
+
+
+def compute_mlx_exact_swap_pair(
+    key: str,
+    orig_arr: Any,
+    delta_arr: Any,
+    bfl_ref: Optional[Any],
+    base_role: str,
+    float32_dtype: Any = None,
+    moveaxis_fn: Optional[Callable[[Any, int, int], Any]] = None,
+) -> Tuple[Any, Any]:
+    """Compute exact (qwen_arr, bfl_arr) parameter arrays for MLX exact-small swaps.
+
+    Preserves the resident array (`orig_arr`) for exact restoration in its base mode,
+    and constructs the counterpart array from the saved `.bfl` reference through the
+    applicable MLX sanitization (`+ 1.0` in float32 then rounded to `orig_arr.dtype`
+    for offset RMSNorm keys).
+    """
+    dt = orig_arr.dtype
+    if float32_dtype is None:
+        import torch
+
+        float32_dtype = torch.float32
+    delta_mlx = delta_arr
+    if "conv1d.weight" in key and orig_arr.ndim == 3 and orig_arr.shape != delta_mlx.shape and moveaxis_fn is not None:
+        delta_mlx = moveaxis_fn(delta_mlx, 2, 1)
+
+    if bfl_ref is not None:
+        bfl_aligned = bfl_ref
+        if "conv1d.weight" in key and orig_arr.ndim == 3 and orig_arr.shape != bfl_aligned.shape and moveaxis_fn is not None:
+            bfl_aligned = moveaxis_fn(bfl_aligned, 2, 1)
+        bfl_f32 = bfl_aligned.astype(float32_dtype) if hasattr(bfl_aligned, "astype") else bfl_aligned.to(float32_dtype)
+        delta_f32 = delta_mlx.astype(float32_dtype) if hasattr(delta_mlx, "astype") else delta_mlx.to(float32_dtype)
+        qwen_raw_f32 = bfl_f32 - delta_f32
+        if is_mlx_offset_norm_key(key):
+            sanitized_bfl_f32 = bfl_f32 + 1.0
+            qwen_bf16 = qwen_raw_f32.astype(dt) if hasattr(qwen_raw_f32, "astype") else qwen_raw_f32.to(dt)
+            qwen_bf16_f32 = qwen_bf16.astype(float32_dtype) if hasattr(qwen_bf16, "astype") else qwen_bf16.to(float32_dtype)
+            sanitized_qwen_f32 = qwen_bf16_f32 + 1.0
+            sanitized_bfl = sanitized_bfl_f32.astype(dt) if hasattr(sanitized_bfl_f32, "astype") else sanitized_bfl_f32.to(dt)
+            sanitized_qwen = sanitized_qwen_f32.astype(dt) if hasattr(sanitized_qwen_f32, "astype") else sanitized_qwen_f32.to(dt)
+        else:
+            sanitized_bfl = bfl_aligned.astype(dt) if hasattr(bfl_aligned, "astype") else bfl_aligned.to(dt)
+            sanitized_qwen = qwen_raw_f32.astype(dt) if hasattr(qwen_raw_f32, "astype") else qwen_raw_f32.to(dt)
+    else:
+        orig_f32 = orig_arr.astype(float32_dtype) if hasattr(orig_arr, "astype") else orig_arr.to(float32_dtype)
+        delta_f32 = delta_mlx.astype(float32_dtype) if hasattr(delta_mlx, "astype") else delta_mlx.to(float32_dtype)
+        if base_role == "qwen":
+            sanitized_qwen = orig_arr
+            sum_f32 = orig_f32 + delta_f32
+            sanitized_bfl = sum_f32.astype(dt) if hasattr(sum_f32, "astype") else sum_f32.to(dt)
+        else:
+            sanitized_bfl = orig_arr
+            diff_f32 = orig_f32 - delta_f32
+            sanitized_qwen = diff_f32.astype(dt) if hasattr(diff_f32, "astype") else diff_f32.to(dt)
+
+    if base_role == "qwen":
+        return orig_arr, sanitized_bfl
+    return sanitized_qwen, orig_arr
 
 
 def _resolve_mlx_path(root: Any, hf_key: str) -> Optional[Tuple[Any, str]]:
@@ -160,6 +232,12 @@ class MLXSwitchableDeltaController:
         include_exact_small: bool = True,
         include_vocab: bool = True,
     ) -> None:
+        if not isinstance(allow_bfl_residual_approx, bool):
+            raise ValueError(f"allow_bfl_residual_approx must be a boolean, got {allow_bfl_residual_approx!r}")
+        if not isinstance(include_exact_small, bool):
+            raise ValueError(f"include_exact_small must be a boolean, got {include_exact_small!r}")
+        if not isinstance(include_vocab, bool):
+            raise ValueError(f"include_vocab must be a boolean, got {include_vocab!r}")
         if base_role not in ("qwen", "bfl"):
             raise ValueError(f"Unsupported base_role: {base_role!r}; expected 'qwen' or 'bfl'")
         if base_role == "bfl" and not allow_bfl_residual_approx:
@@ -199,6 +277,13 @@ class MLXSwitchableDeltaController:
             shard_path = self.adapter_dir / shard_info["file"]
             if not shard_path.is_file() or shard_path.stat().st_size == 0:
                 raise FileNotFoundError(f"Missing or empty MLX adapter shard for group {grp}: {shard_path}")
+            recorded_sha = shard_info.get("sha256")
+            if recorded_sha:
+                actual_sha = hashlib.sha256(shard_path.read_bytes()).hexdigest()
+                if actual_sha != recorded_sha:
+                    raise ValueError(
+                        f"MLX adapter shard {grp} SHA-256 mismatch: actual={actual_sha} != manifest={recorded_sha}"
+                    )
             tensors = mx.load(str(shard_path))
             for key, st in shard_info["tensor_stats"].items():
                 if st["mode"] == "exact":
@@ -221,23 +306,41 @@ class MLXSwitchableDeltaController:
                         raise KeyError(f"Unresolved MLX adapter target parameter: {key}")
                     parent, attr = resolved_param
                     orig_arr = getattr(parent, attr)
-                    delta_mlx = delta_arr
-                    if "conv1d.weight" in key and orig_arr.ndim == 3 and orig_arr.shape != delta_mlx.shape:
-                        delta_mlx = mx.moveaxis(delta_mlx, 2, 1)
-                    if f"{key}.bfl" in tensors and not key.endswith(
-                        (".input_layernorm.weight", ".post_attention_layernorm.weight", "model.norm.weight", ".q_norm.weight", ".k_norm.weight")
-                    ):
-                        bfl_ref = tensors[f"{key}.bfl"]
-                        if "conv1d.weight" in key and orig_arr.ndim == 3 and orig_arr.shape != bfl_ref.shape:
-                            bfl_ref = mx.moveaxis(bfl_ref, 2, 1)
-                        delta_f32 = delta_mlx.astype(mx.float32)
-                        delta_norm = float(mx.sqrt(mx.sum(delta_f32 * delta_f32)).item())
+                    bfl_raw = tensors.get(f"{key}.bfl")
+                    qwen_expected, bfl_expected = compute_mlx_exact_swap_pair(
+                        key=key,
+                        orig_arr=orig_arr,
+                        delta_arr=delta_arr,
+                        bfl_ref=bfl_raw,
+                        base_role=self.base_role,
+                        float32_dtype=mx.float32,
+                        moveaxis_fn=getattr(mx, "moveaxis", None),
+                    )
+                    if bfl_raw is not None:
+                        _, bfl_sanitized = compute_mlx_exact_swap_pair(
+                            key=key,
+                            orig_arr=orig_arr,
+                            delta_arr=delta_arr,
+                            bfl_ref=bfl_raw,
+                            base_role="qwen",
+                            float32_dtype=mx.float32,
+                            moveaxis_fn=getattr(mx, "moveaxis", None),
+                        )
+                        qwen_sanitized, _ = compute_mlx_exact_swap_pair(
+                            key=key,
+                            orig_arr=orig_arr,
+                            delta_arr=delta_arr,
+                            bfl_ref=bfl_raw,
+                            base_role="bfl",
+                            float32_dtype=mx.float32,
+                            moveaxis_fn=getattr(mx, "moveaxis", None),
+                        )
+                        ref_diff = bfl_sanitized.astype(mx.float32) - qwen_sanitized.astype(mx.float32)
+                        delta_norm = float(mx.sqrt(mx.sum(ref_diff * ref_diff)).item())
                         if delta_norm > 1e-4:
                             orig_f32 = orig_arr.astype(mx.float32)
-                            bfl_f32 = bfl_ref.astype(mx.float32)
-                            qwen_f32 = bfl_f32 - delta_f32
-                            diff_q = orig_f32 - qwen_f32
-                            diff_b = orig_f32 - bfl_f32
+                            diff_q = orig_f32 - qwen_sanitized.astype(mx.float32)
+                            diff_b = orig_f32 - bfl_sanitized.astype(mx.float32)
                             dist_qwen = float(mx.sqrt(mx.sum(diff_q * diff_q)).item())
                             dist_bfl = float(mx.sqrt(mx.sum(diff_b * diff_b)).item())
                             if self.base_role == "qwen" and dist_bfl + 1e-4 < dist_qwen:
@@ -250,13 +353,7 @@ class MLXSwitchableDeltaController:
                                     f"Loaded resident model parameter {key} matches Qwen weights "
                                     f"(dist_qwen={dist_qwen:.6f} < dist_bfl={dist_bfl:.6f}), contradicting base_role='bfl'"
                                 )
-                    dt = orig_arr.dtype
-                    if self.base_role == "qwen":
-                        qwen_arr = orig_arr
-                        bfl_arr = (orig_arr.astype(mx.float32) + delta_mlx.astype(mx.float32)).astype(dt)
-                    else:
-                        bfl_arr = orig_arr
-                        qwen_arr = (orig_arr.astype(mx.float32) - delta_mlx.astype(mx.float32)).astype(dt)
+                    qwen_arr, bfl_arr = qwen_expected, bfl_expected
                     mx.eval(qwen_arr, bfl_arr)
                     self._exact_array_swaps.append((parent, attr, qwen_arr, bfl_arr))
                     self.attached_exact_count += 1
@@ -335,13 +432,17 @@ class MLXSwitchableDeltaController:
             )
 
     def set_mode(self, enabled: bool, rank: int = 64) -> Dict[str, Any]:
+        if not isinstance(enabled, bool):
+            raise ValueError(f"enabled must be a boolean, got {enabled!r}")
+        if isinstance(rank, bool) or not isinstance(rank, int) or rank < 0:
+            raise ValueError(f"rank must be a non-negative integer, got {rank!r}")
         target_rank = min(rank, self.max_rank) if enabled else 0
-        changed = (bool(enabled) != self.enabled) or (enabled and target_rank != self.active_rank)
+        changed = (enabled != self.enabled) or (enabled and target_rank != self.active_rank)
 
         for parent, attr, qwen_arr, bfl_arr in self._exact_array_swaps:
             setattr(parent, attr, bfl_arr if enabled else qwen_arr)
 
-        self.enabled = bool(enabled)
+        self.enabled = enabled
         self.active_rank = target_rank
 
         if changed:

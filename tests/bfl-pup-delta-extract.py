@@ -283,6 +283,34 @@ class TestBflPupDeltaExtract(unittest.TestCase):
             )
             self.assertEqual(res_changed["counts"]["resumed_shards"], 0)
 
+            # 3b. PUP-R2-02: Tampering with an unselected shard (zeroing lora_B in layers_00_03)
+            # and resuming with selected_shards=["exact_small"] must drop the tampered shard and mark complete=False
+            lr_shard_path = out_dir / "shards" / "layers_00_03.safetensors"
+            tampered_lr = {}
+            with safe_open(str(lr_shard_path), framework="pt") as sf:
+                for tk in sf.keys():
+                    t_val = sf.get_tensor(tk)
+                    tampered_lr[tk] = torch.zeros_like(t_val) if tk.endswith(".lora_B") else t_val
+            save_file(tampered_lr, str(lr_shard_path))
+
+            run_extraction(
+                source_mode="local-dir",
+                bfl_dir=bfl_dir,
+                qwen_dir=qwen_dir,
+                out_dir=out_dir,
+                report_path=root / "report_tampered.json",
+                device="cpu",
+                max_rank=4,
+                min_lora_dim=64,
+                oversample=8,
+                niter=2,
+                selected_shards=["exact_small"],
+                resume=True,
+            )
+            manifest_after_tamper = json.loads((out_dir / "manifest.json").read_text())
+            self.assertFalse(manifest_after_tamper["complete"])
+            self.assertNotIn("layers_00_03", manifest_after_tamper["shards"])
+
             # 4. Early setup failure (--out-dir is a regular file) must still write --report
             bad_out = root / "regular_file"
             bad_out.write_text("not a dir")

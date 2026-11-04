@@ -58,11 +58,21 @@ def generated_presence_penalty(penalty: float):
     return process
 
 
+def _require_bool(val: Any, field_name: str) -> bool:
+    if not isinstance(val, bool):
+        raise ValueError(f"{field_name} must be a boolean (true/false), got {val!r}")
+    return val
+
+
 def validate_adapter_complete(
     adapter_dir: Path,
     require_lowrank: bool = True,
     allow_partial: bool = False,
 ) -> Dict[str, Any]:
+    import struct
+
+    _require_bool(require_lowrank, "require_lowrank")
+    _require_bool(allow_partial, "allow_partial")
     manifest_path = Path(adapter_dir) / "manifest.json"
     if not manifest_path.is_file():
         raise RuntimeError(f"Missing adapter manifest: {manifest_path}")
@@ -74,16 +84,68 @@ def validate_adapter_complete(
     lowrank_count = 0
     exact_count = 0
     for grp, info in shards.items():
+        if not isinstance(info, dict):
+            raise RuntimeError(f"Adapter shard {grp} entry must be a JSON object")
         rel_file = info.get("file")
         if not rel_file:
             raise RuntimeError(f"Adapter shard {grp} missing file field")
         shard_file = Path(adapter_dir) / rel_file
         if not shard_file.is_file() or shard_file.stat().st_size == 0:
             raise RuntimeError(f"Missing adapter shard for group {grp}: {shard_file}")
-        for _k, st in info.get("tensor_stats", {}).items():
-            if st.get("mode") == "lowrank_svd":
+
+        recorded_size = info.get("size_bytes")
+        actual_size = shard_file.stat().st_size
+        if recorded_size is not None and actual_size != int(recorded_size):
+            raise RuntimeError(
+                f"Adapter shard {grp} size_bytes mismatch: actual={actual_size} != manifest={recorded_size}"
+            )
+
+        recorded_sha = info.get("sha256")
+        if not allow_partial and (not isinstance(recorded_sha, str) or len(recorded_sha) != 64):
+            raise RuntimeError(
+                f"Incomplete adapter shard {grp}: missing or invalid sha256={recorded_sha!r} in strict mode"
+            )
+        if recorded_sha is not None:
+            actual_sha = hashlib.sha256(shard_file.read_bytes()).hexdigest()
+            if actual_sha != recorded_sha:
+                raise RuntimeError(
+                    f"Adapter shard {grp} SHA-256 mismatch: actual={actual_sha} != manifest={recorded_sha}"
+                )
+
+        try:
+            with shard_file.open("rb") as sf_fh:
+                raw_len = sf_fh.read(8)
+                if len(raw_len) != 8:
+                    raise RuntimeError("truncated header length")
+                hlen = struct.unpack("<Q", raw_len)[0]
+                if hlen <= 0 or hlen > actual_size - 8:
+                    raise RuntimeError(f"invalid header length {hlen}")
+                header_obj = json.loads(sf_fh.read(hlen).decode("utf-8"))
+        except Exception as exc:
+            raise RuntimeError(f"Corrupt safetensors shard {grp} ({shard_file}): {exc}") from exc
+
+        t_stats = info.get("tensor_stats", {})
+        if not isinstance(t_stats, dict):
+            raise RuntimeError(f"Adapter shard {grp} tensor_stats must be a JSON object")
+        expected_keys = info.get("expected_keys")
+        if expected_keys is not None and sorted(expected_keys) != sorted(t_stats.keys()):
+            raise RuntimeError(
+                f"Adapter shard {grp} expected_keys mismatch vs tensor_stats: "
+                f"expected_keys={expected_keys}, tensor_stats={sorted(t_stats.keys())}"
+            )
+        for k, st in t_stats.items():
+            mode = st.get("mode")
+            if mode == "lowrank_svd":
+                if not allow_partial and (f"{k}.lora_B" not in header_obj or f"{k}.lora_A" not in header_obj):
+                    raise RuntimeError(
+                        f"Adapter shard {grp} missing lowrank_svd tensors for {k} in safetensors header"
+                    )
                 lowrank_count += 1
-            elif st.get("mode") == "exact":
+            elif mode == "exact":
+                if not allow_partial and (f"{k}.delta" not in header_obj or f"{k}.bfl" not in header_obj):
+                    raise RuntimeError(
+                        f"Adapter shard {grp} missing exact tensors (.delta/.bfl) for {k} in safetensors header"
+                    )
                 exact_count += 1
 
     if require_lowrank and lowrank_count == 0:
@@ -224,21 +286,29 @@ def run_switchable_evaluation(
         "model_dir": str(model_dir),
         "adapter_dir": str(adapter_dir),
         "base_role": base_role,
-        "allow_bfl_residual_approx": bool(allow_bfl_residual_approx),
+        "allow_bfl_residual_approx": allow_bfl_residual_approx if isinstance(allow_bfl_residual_approx, bool) else None,
         "model_load_count": 0,
         "last_trustworthy_evidence": None,
         "observations": [],
+        "attempted_observations": [],
     }
     _atomic_write_json(report_path, report)
 
     try:
         report["failure_phase"] = "config-validation"
         _atomic_write_json(report_path, report)
+        allow_bfl_residual_approx = _require_bool(allow_bfl_residual_approx, "allow_bfl_residual_approx")
+        allow_partial_adapter = _require_bool(allow_partial_adapter, "allow_partial_adapter")
+        report["allow_bfl_residual_approx"] = allow_bfl_residual_approx
         if not isinstance(modes, list) or len(modes) == 0:
             raise ValueError("modes must be a non-empty list of mode specifications")
         for idx, m_spec in enumerate(modes):
             if not isinstance(m_spec, dict) or "name" not in m_spec or "enabled" not in m_spec:
                 raise ValueError(f"modes[{idx}] must be a dict containing 'name' and 'enabled'")
+            _require_bool(m_spec["enabled"], f"modes[{idx}].enabled")
+            if "rank" in m_spec and m_spec["rank"] is not None:
+                if isinstance(m_spec["rank"], bool) or not isinstance(m_spec["rank"], int) or m_spec["rank"] < 0:
+                    raise ValueError(f"modes[{idx}].rank must be a non-negative integer, got {m_spec['rank']!r}")
         if not isinstance(cases, list) or len(cases) == 0:
             raise ValueError("cases must be a non-empty list of prompt evaluation cases")
         for idx, c_spec in enumerate(cases):
@@ -343,7 +413,7 @@ def run_switchable_evaluation(
 
         for mode_spec in modes:
             mode_name = mode_spec["name"]
-            enabled = bool(mode_spec["enabled"])
+            enabled = _require_bool(mode_spec["enabled"], f"mode({mode_name}).enabled")
             rank = int(mode_spec.get("rank", controller.max_rank))
 
             report["failure_phase"] = f"switching:{mode_name}"
@@ -390,16 +460,45 @@ def run_switchable_evaluation(
                 gen_t0 = time.monotonic()
                 text_out = ""
                 final_chunk = None
-                for chunk in stream_generate(
-                    model,
-                    processor,
-                    formatted,
-                    image=images or None,
-                    **sampling,
-                    logits_processors=logits_procs,
-                ):
-                    text_out += chunk.text
-                    final_chunk = chunk
+                try:
+                    for chunk in stream_generate(
+                        model,
+                        processor,
+                        formatted,
+                        image=images or None,
+                        **sampling,
+                        logits_processors=logits_procs,
+                    ):
+                        text_out += chunk.text
+                        final_chunk = chunk
+                except BaseException as stream_exc:
+                    gen_s = round(time.monotonic() - gen_t0, 4)
+                    failed_obs = {
+                        "mode": mode_name,
+                        "enabled": sw_res["enabled"],
+                        "rank": sw_res["rank"],
+                        "state_epoch": sw_res["state_epoch"],
+                        "reset_performed_on_mode_entry": sw_res["reset_performed"],
+                        "effective_model_semantics": sw_res["effective_model_semantics"],
+                        "switch_ms": sw_ms,
+                        "case_id": case_id,
+                        "task": task,
+                        "prompt": prompt,
+                        "images": images,
+                        "raw_output": text_out,
+                        "output": text_out.strip(),
+                        "effective_backend": effective_backend,
+                        "generation_seconds": gen_s,
+                        "prompt_tokens": int(final_chunk.prompt_tokens) if final_chunk else 0,
+                        "generated_tokens": int(final_chunk.generation_tokens) if final_chunk else 0,
+                        "peak_memory_gb": float(final_chunk.peak_memory) if final_chunk and final_chunk.peak_memory else None,
+                        "finish_reason": final_chunk.finish_reason if final_chunk else None,
+                        "accepted": False,
+                        "stream_error": str(stream_exc),
+                    }
+                    report["attempted_observations"].append(failed_obs)
+                    _atomic_write_json(report_path, report)
+                    raise
 
                 gen_s = round(time.monotonic() - gen_t0, 4)
                 obs = {
@@ -414,6 +513,7 @@ def run_switchable_evaluation(
                     "task": task,
                     "prompt": prompt,
                     "images": images,
+                    "raw_output": text_out,
                     "output": text_out.strip(),
                     "effective_backend": effective_backend,
                     "generation_seconds": gen_s,
@@ -421,11 +521,21 @@ def run_switchable_evaluation(
                     "generated_tokens": int(final_chunk.generation_tokens) if final_chunk else 0,
                     "peak_memory_gb": float(final_chunk.peak_memory) if final_chunk and final_chunk.peak_memory else None,
                     "finish_reason": final_chunk.finish_reason if final_chunk else None,
+                    "accepted": False,
                 }
                 if case.get("reference_output"):
                     obs["word_jaccard_vs_reference"] = _word_jaccard(obs["output"], case["reference_output"])
 
-                validate_generation_observation(obs)
+                try:
+                    validate_generation_observation(obs)
+                except BaseException as val_exc:
+                    obs["validation_error"] = str(val_exc)
+                    report["attempted_observations"].append(obs)
+                    _atomic_write_json(report_path, report)
+                    raise
+
+                obs["accepted"] = True
+                report["attempted_observations"].append(obs)
                 report["observations"].append(obs)
                 report["last_trustworthy_evidence"] = f"generated:{mode_name}:{case_id}"
                 _atomic_write_json(report_path, report)
@@ -474,8 +584,10 @@ def main() -> int:
         modes = cfg["modes"]
         cases = cfg["cases"]
         base_role = str(cfg.get("base_role", "qwen"))
-        allow_bfl_residual_approx = bool(cfg.get("allow_bfl_residual_approx", False))
-        allow_partial_adapter = bool(cfg.get("allow_partial_adapter", False))
+        allow_bfl_residual_approx = _require_bool(
+            cfg.get("allow_bfl_residual_approx", False), "allow_bfl_residual_approx"
+        )
+        allow_partial_adapter = _require_bool(cfg.get("allow_partial_adapter", False), "allow_partial_adapter")
         sys_prompts_path = Path(cfg["system_prompts_path"]) if cfg.get("system_prompts_path") else None
         raw_max_tokens = cfg.get("max_tokens", 512)
         if isinstance(raw_max_tokens, bool):

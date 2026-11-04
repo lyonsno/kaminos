@@ -12,12 +12,29 @@ sys.path.insert(0, str(REPO_ROOT / "models" / "bfl-pup"))
 
 class TestMLXSwitchableEvalHarness(unittest.TestCase):
     def _write_partial_adapter(self, adapter_dir: Path, include_lowrank_file: bool = False) -> None:
+        import hashlib
+        import torch
+        from safetensors.torch import save_file
+
         shards = adapter_dir / "shards"
         shards.mkdir(parents=True, exist_ok=True)
-        empty_st = b"\x02\x00\x00\x00\x00\x00\x00\x00{}"
-        (shards / "exact_small.safetensors").write_bytes(empty_st)
+        exact_f = shards / "exact_small.safetensors"
+        lr_f = shards / "layers_00_07.safetensors"
+        save_file(
+            {
+                "model.language_model.norm.weight.delta": torch.zeros(8, dtype=torch.bfloat16),
+                "model.language_model.norm.weight.bfl": torch.ones(8, dtype=torch.bfloat16),
+            },
+            str(exact_f),
+        )
         if include_lowrank_file:
-            (shards / "layers_00_07.safetensors").write_bytes(empty_st)
+            save_file(
+                {
+                    "model.language_model.layers.0.linear_attn.out_proj.weight.lora_B": torch.ones(8, 4, dtype=torch.bfloat16),
+                    "model.language_model.layers.0.linear_attn.out_proj.weight.lora_A": torch.ones(4, 8, dtype=torch.bfloat16),
+                },
+                str(lr_f),
+            )
         manifest = {
             "schema": "kaminos.bfl-pup.delta-adapter.v1",
             "max_rank": 4,
@@ -25,10 +42,13 @@ class TestMLXSwitchableEvalHarness(unittest.TestCase):
             "shards": {
                 "exact_small": {
                     "file": "shards/exact_small.safetensors",
+                    "sha256": hashlib.sha256(exact_f.read_bytes()).hexdigest(),
+                    "size_bytes": exact_f.stat().st_size,
                     "tensor_stats": {"model.language_model.norm.weight": {"mode": "exact", "shape": [8]}},
                 },
                 "layers_00_07": {
                     "file": "shards/layers_00_07.safetensors",
+                    "sha256": hashlib.sha256(lr_f.read_bytes()).hexdigest() if include_lowrank_file else "0" * 64,
                     "tensor_stats": {
                         "model.language_model.layers.0.linear_attn.out_proj.weight": {
                             "mode": "lowrank_svd",
@@ -147,6 +167,9 @@ class TestMLXSwitchableEvalHarness(unittest.TestCase):
             self.assertIn("invalid literal for int()", opt_data.get("error", ""))
 
     def test_strict_completeness_requires_expected_counts_and_nonempty_modes_cases_and_provenance(self):
+        import hashlib
+        import torch
+        from safetensors.torch import save_file
         from evaluate_switchable_mlx import inspect_model_dir_provenance, run_switchable_evaluation, validate_adapter_complete
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -154,9 +177,22 @@ class TestMLXSwitchableEvalHarness(unittest.TestCase):
             adapter_dir = root / "adapter_counts"
             shards = adapter_dir / "shards"
             shards.mkdir(parents=True)
-            empty_st = b"\x02\x00\x00\x00\x00\x00\x00\x00{}"
-            (shards / "exact_small.safetensors").write_bytes(empty_st)
-            (shards / "layers_00_03.safetensors").write_bytes(empty_st)
+            exact_f = shards / "exact_small.safetensors"
+            lr_f = shards / "layers_00_03.safetensors"
+            save_file(
+                {
+                    "model.language_model.norm.weight.delta": torch.zeros(8, dtype=torch.bfloat16),
+                    "model.language_model.norm.weight.bfl": torch.ones(8, dtype=torch.bfloat16),
+                },
+                str(exact_f),
+            )
+            save_file(
+                {
+                    "model.language_model.layers.0.self_attn.q_proj.weight.lora_B": torch.ones(8, 4, dtype=torch.bfloat16),
+                    "model.language_model.layers.0.self_attn.q_proj.weight.lora_A": torch.ones(4, 8, dtype=torch.bfloat16),
+                },
+                str(lr_f),
+            )
 
             base_manifest = {
                 "schema": "kaminos.bfl-pup.delta-adapter.v1",
@@ -169,10 +205,16 @@ class TestMLXSwitchableEvalHarness(unittest.TestCase):
                 "shards": {
                     "exact_small": {
                         "file": "shards/exact_small.safetensors",
+                        "sha256": hashlib.sha256(exact_f.read_bytes()).hexdigest(),
+                        "size_bytes": exact_f.stat().st_size,
+                        "expected_keys": ["model.language_model.norm.weight"],
                         "tensor_stats": {"model.language_model.norm.weight": {"mode": "exact", "shape": [8]}},
                     },
                     "layers_00_03": {
                         "file": "shards/layers_00_03.safetensors",
+                        "sha256": hashlib.sha256(lr_f.read_bytes()).hexdigest(),
+                        "size_bytes": lr_f.stat().st_size,
+                        "expected_keys": ["model.language_model.layers.0.self_attn.q_proj.weight"],
                         "tensor_stats": {
                             "model.language_model.layers.0.self_attn.q_proj.weight": {
                                 "mode": "lowrank_svd",
@@ -224,6 +266,419 @@ class TestMLXSwitchableEvalHarness(unittest.TestCase):
             (bfl_model_dir / "README.md").write_text("base_model: black-forest-labs/flux-3-image-klein-pup\n")
             with self.assertRaisesRegex(RuntimeError, "contradicts requested base_role='qwen'"):
                 inspect_model_dir_provenance(bfl_model_dir, base_role="qwen")
+
+    def test_r2_01_mlx_offset_norm_exact_reconstruction_uses_sanitized_bfl_weights(self):
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock, patch
+        import torch
+        from safetensors.torch import save_file
+        from mlx_switchable_adapter import MLXSwitchableDeltaController
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            adapter_dir = root / "adapter_norm"
+            shards_dir = adapter_dir / "shards"
+            shards_dir.mkdir(parents=True)
+
+            qwen_hf_bf16 = torch.tensor([0.10009765625], dtype=torch.bfloat16)
+            bfl_hf_bf16 = torch.tensor([-0.10009765625], dtype=torch.bfloat16)
+            delta_bf16 = (bfl_hf_bf16.float() - qwen_hf_bf16.float()).to(torch.bfloat16)
+            resident_qwen_sanitized = (qwen_hf_bf16.float() + 1.0).to(torch.bfloat16)
+            expected_bfl_sanitized = (bfl_hf_bf16.float() + 1.0).to(torch.bfloat16)
+            self.assertEqual(float(resident_qwen_sanitized.item()), 1.1015625)
+            self.assertEqual(float(expected_bfl_sanitized.item()), 0.8984375)
+
+            exact_file = shards_dir / "exact_small.safetensors"
+            save_file(
+                {
+                    "model.language_model.norm.weight.delta": delta_bf16,
+                    "model.language_model.norm.weight.bfl": bfl_hf_bf16,
+                },
+                str(exact_file),
+            )
+            import hashlib
+
+            manifest = {
+                "schema": "kaminos.bfl-pup-delta-manifest.v1",
+                "complete": True,
+                "max_rank": 4,
+                "min_lora_dim": 8,
+                "shards": {
+                    "exact_small": {
+                        "file": "shards/exact_small.safetensors",
+                        "sha256": hashlib.sha256(exact_file.read_bytes()).hexdigest(),
+                        "size_bytes": exact_file.stat().st_size,
+                        "expected_keys": ["model.language_model.norm.weight"],
+                        "tensor_stats": {"model.language_model.norm.weight": {"mode": "exact", "shape": [1]}},
+                    }
+                },
+            }
+            (adapter_dir / "manifest.json").write_text(json.dumps(manifest))
+
+            class TorchArrayProxy:
+                def __init__(self, t: torch.Tensor):
+                    self.t = t
+                    self.dtype = t.dtype
+                    self.ndim = t.ndim
+                    self.shape = tuple(t.shape)
+
+                def astype(self, dt):
+                    return TorchArrayProxy(self.t.to(dt))
+
+                def __add__(self, other):
+                    o = other.t if isinstance(other, TorchArrayProxy) else other
+                    return TorchArrayProxy(self.t + o)
+
+                def __sub__(self, other):
+                    o = other.t if isinstance(other, TorchArrayProxy) else other
+                    return TorchArrayProxy(self.t - o)
+
+                def __mul__(self, other):
+                    o = other.t if isinstance(other, TorchArrayProxy) else other
+                    return TorchArrayProxy(self.t * o)
+
+                def item(self):
+                    return float(self.t.item())
+
+            fake_mx = SimpleNamespace(
+                array=TorchArrayProxy,
+                float32=torch.float32,
+                bfloat16=torch.bfloat16,
+                load=lambda _p: {
+                    "model.language_model.norm.weight.delta": TorchArrayProxy(delta_bf16),
+                    "model.language_model.norm.weight.bfl": TorchArrayProxy(bfl_hf_bf16),
+                },
+                sqrt=lambda x: TorchArrayProxy(torch.sqrt(x.t)),
+                sum=lambda x: TorchArrayProxy(torch.sum(x.t)),
+                eval=lambda *_args: None,
+            )
+            fake_nn = SimpleNamespace(Module=object)
+            fake_model = SimpleNamespace(
+                language_model=SimpleNamespace(
+                    model=SimpleNamespace(norm=SimpleNamespace(weight=TorchArrayProxy(resident_qwen_sanitized)))
+                )
+            )
+
+            with patch.dict(sys.modules, {"mlx": SimpleNamespace(core=fake_mx, nn=fake_nn), "mlx.core": fake_mx, "mlx.nn": fake_nn}):
+                ctrl = MLXSwitchableDeltaController(fake_model, adapter_dir, base_role="qwen")
+                ctrl.set_mode(enabled=True, rank=4)
+                switched_val = fake_model.language_model.model.norm.weight.item()
+                self.assertEqual(switched_val, 0.8984375)
+                ctrl.set_mode(enabled=False)
+                restored_val = fake_model.language_model.model.norm.weight.item()
+                self.assertEqual(restored_val, 1.1015625)
+
+    def test_r2_02_strict_validator_checks_recorded_sha256_and_safetensors_headers(self):
+        import hashlib
+        import torch
+        from safetensors.torch import save_file
+        from evaluate_switchable_mlx import validate_adapter_complete
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            adapter_dir = root / "adapter_sha"
+            shards_dir = adapter_dir / "shards"
+            shards_dir.mkdir(parents=True)
+            exact_file = shards_dir / "exact_small.safetensors"
+            lr_file = shards_dir / "layers_00_03.safetensors"
+            save_file(
+                {
+                    "model.language_model.norm.weight.delta": torch.zeros(8, dtype=torch.bfloat16),
+                    "model.language_model.norm.weight.bfl": torch.ones(8, dtype=torch.bfloat16),
+                },
+                str(exact_file),
+            )
+            save_file(
+                {
+                    "model.language_model.layers.0.self_attn.q_proj.weight.lora_B": torch.ones(8, 4, dtype=torch.bfloat16),
+                    "model.language_model.layers.0.self_attn.q_proj.weight.lora_A": torch.ones(4, 8, dtype=torch.bfloat16),
+                    "model.language_model.layers.0.self_attn.q_proj.weight.singular_values": torch.ones(4, dtype=torch.float32),
+                },
+                str(lr_file),
+            )
+
+            exact_sha = hashlib.sha256(exact_file.read_bytes()).hexdigest()
+            lr_sha = hashlib.sha256(lr_file.read_bytes()).hexdigest()
+            manifest_sha = {
+                "schema": "kaminos.bfl-pup-delta-manifest.v1",
+                "complete": True,
+                "max_rank": 4,
+                "min_lora_dim": 8,
+                "expected_shard_groups": ["exact_small", "layers_00_03"],
+                "expected_exact_count": 1,
+                "expected_lowrank_count": 1,
+                "shards": {
+                    "exact_small": {
+                        "file": "shards/exact_small.safetensors",
+                        "sha256": exact_sha,
+                        "size_bytes": exact_file.stat().st_size,
+                        "expected_keys": ["model.language_model.norm.weight"],
+                        "tensor_stats": {"model.language_model.norm.weight": {"mode": "exact", "shape": [8]}},
+                    },
+                    "layers_00_03": {
+                        "file": "shards/layers_00_03.safetensors",
+                        "sha256": lr_sha,
+                        "size_bytes": lr_file.stat().st_size,
+                        "expected_keys": ["model.language_model.layers.0.self_attn.q_proj.weight"],
+                        "tensor_stats": {
+                            "model.language_model.layers.0.self_attn.q_proj.weight": {
+                                "mode": "lowrank_svd",
+                                "shape": [8, 8],
+                                "rank": 4,
+                            }
+                        },
+                    },
+                },
+            }
+            (adapter_dir / "manifest.json").write_text(json.dumps(manifest_sha, indent=2))
+            self.assertTrue(validate_adapter_complete(adapter_dir, allow_partial=False)["complete"])
+
+            # Modify layers_00_03.safetensors (zero lora_B, valid safetensors) without updating manifest SHA-256
+            save_file(
+                {
+                    "model.language_model.layers.0.self_attn.q_proj.weight.lora_B": torch.zeros(8, 4, dtype=torch.bfloat16),
+                    "model.language_model.layers.0.self_attn.q_proj.weight.lora_A": torch.ones(4, 8, dtype=torch.bfloat16),
+                    "model.language_model.layers.0.self_attn.q_proj.weight.singular_values": torch.ones(4, dtype=torch.float32),
+                },
+                str(lr_file),
+            )
+            with self.assertRaisesRegex(RuntimeError, "SHA-256 mismatch"):
+                validate_adapter_complete(adapter_dir, allow_partial=False)
+
+    def test_r2_03_strict_booleans_reject_string_false_coercion(self):
+        import subprocess
+        from evaluate_switchable_mlx import run_switchable_evaluation
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for bad_kwargs, expected_field in [
+                ({"allow_bfl_residual_approx": "false"}, "allow_bfl_residual_approx"),
+                ({"allow_partial_adapter": "false"}, "allow_partial_adapter"),
+                ({"modes": [{"name": "off", "enabled": "false", "rank": 0}]}, "modes\\[0\\]\\.enabled"),
+            ]:
+                call_kwargs = {
+                    "model_dir": root / "missing_model",
+                    "adapter_dir": root / "missing_adapter",
+                    "report_path": root / "bool_reject.json",
+                    "base_role": "bfl" if "allow_bfl_residual_approx" in bad_kwargs else "qwen",
+                    "modes": [{"name": "off", "enabled": False, "rank": 0}],
+                    "cases": [{"id": "t2i", "task": "t2i", "prompt": "test"}],
+                }
+                call_kwargs.update(bad_kwargs)
+                with self.assertRaisesRegex(ValueError, expected_field):
+                    run_switchable_evaluation(**call_kwargs)
+                rep_bool = json.loads((root / "bool_reject.json").read_text())
+                self.assertEqual(rep_bool["status"], "failed")
+                self.assertEqual(rep_bool["failure_phase"], "config-validation")
+
+            cli_bool_cfg = root / "cli_bool_cfg.json"
+            cli_bool_rep = root / "cli_bool_rep.json"
+            cli_bool_cfg.write_text(
+                json.dumps(
+                    {
+                        "model_dir": str(root / "missing"),
+                        "adapter_dir": str(root / "missing_adapter"),
+                        "base_role": "bfl",
+                        "allow_bfl_residual_approx": "false",
+                        "modes": [{"name": "off", "enabled": False, "rank": 0}],
+                        "cases": [{"id": "t2i", "task": "t2i", "prompt": "test"}],
+                    }
+                )
+            )
+            proc_bool = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "models" / "bfl-pup" / "evaluate_switchable_mlx.py"),
+                    "--config",
+                    str(cli_bool_cfg),
+                    "--report",
+                    str(cli_bool_rep),
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(proc_bool.returncode, 0)
+            rep_cli = json.loads(cli_bool_rep.read_text())
+            self.assertEqual(rep_cli["status"], "failed")
+            self.assertEqual(rep_cli["failure_phase"], "cli-config-load")
+
+    def test_r2_04_rejected_or_interrupted_generation_retains_attempted_observations(self):
+        import hashlib
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock, patch
+        import torch
+        from safetensors.torch import save_file
+        from evaluate_switchable_mlx import run_switchable_evaluation
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            adapter_dir = root / "adapter_obs"
+            shards_dir = adapter_dir / "shards"
+            shards_dir.mkdir(parents=True)
+            exact_file = shards_dir / "exact_small.safetensors"
+            lr_file = shards_dir / "layers_00_03.safetensors"
+            save_file(
+                {
+                    "model.language_model.norm.weight.delta": torch.zeros(8, dtype=torch.bfloat16),
+                    "model.language_model.norm.weight.bfl": torch.ones(8, dtype=torch.bfloat16),
+                },
+                str(exact_file),
+            )
+            save_file(
+                {
+                    "model.language_model.layers.0.self_attn.q_proj.weight.lora_B": torch.ones(8, 4, dtype=torch.bfloat16),
+                    "model.language_model.layers.0.self_attn.q_proj.weight.lora_A": torch.ones(4, 8, dtype=torch.bfloat16),
+                    "model.language_model.layers.0.self_attn.q_proj.weight.singular_values": torch.ones(4, dtype=torch.float32),
+                },
+                str(lr_file),
+            )
+            manifest = {
+                "schema": "kaminos.bfl-pup-delta-manifest.v1",
+                "complete": True,
+                "max_rank": 4,
+                "min_lora_dim": 8,
+                "expected_shard_groups": ["exact_small", "layers_00_03"],
+                "expected_exact_count": 1,
+                "expected_lowrank_count": 1,
+                "shards": {
+                    "exact_small": {
+                        "file": "shards/exact_small.safetensors",
+                        "sha256": hashlib.sha256(exact_file.read_bytes()).hexdigest(),
+                        "size_bytes": exact_file.stat().st_size,
+                        "expected_keys": ["model.language_model.norm.weight"],
+                        "tensor_stats": {"model.language_model.norm.weight": {"mode": "exact", "shape": [8]}},
+                    },
+                    "layers_00_03": {
+                        "file": "shards/layers_00_03.safetensors",
+                        "sha256": hashlib.sha256(lr_file.read_bytes()).hexdigest(),
+                        "size_bytes": lr_file.stat().st_size,
+                        "expected_keys": ["model.language_model.layers.0.self_attn.q_proj.weight"],
+                        "tensor_stats": {
+                            "model.language_model.layers.0.self_attn.q_proj.weight": {
+                                "mode": "lowrank_svd",
+                                "shape": [8, 8],
+                                "rank": 4,
+                            }
+                        },
+                    },
+                },
+            }
+            (adapter_dir / "manifest.json").write_text(json.dumps(manifest))
+
+            qwen_model_dir = root / "qwen3.5-9b"
+            qwen_model_dir.mkdir()
+            (qwen_model_dir / "config.json").write_text(json.dumps({"model_type": "qwen3_5"}))
+            (qwen_model_dir / "system_prompts.json").write_text(json.dumps({"t2i": "sys t2i", "i2i": "sys i2i"}))
+
+            fake_mx = MagicMock()
+            fake_mx.metal.is_available.return_value = True
+            fake_ctrl = SimpleNamespace(
+                attached_lowrank_count=1,
+                attached_exact_count=1,
+                effective_model_semantics="qwen_resident_exact_target",
+                _wrapped_modules=[("p", "a", "m")],
+                _exact_array_swaps=[("p", "a", "q", "b")],
+                max_rank=4,
+                state_epoch=1,
+                set_mode=lambda **_kw: {
+                    "enabled": True,
+                    "rank": 4,
+                    "state_epoch": 1,
+                    "reset_performed": True,
+                    "effective_model_semantics": "qwen_resident_exact_target",
+                },
+                assert_cache_epoch=lambda _ep: None,
+            )
+            fake_ctrl_cls = lambda *_a, **_kw: fake_ctrl
+
+            fake_processor = MagicMock()
+            fake_processor.tokenizer.convert_tokens_to_ids.return_value = 151645
+            fake_processor.tokenizer.apply_chat_template.return_value = "<prompt>"
+
+            def fake_stream_length(*_args, **_kwargs):
+                yield SimpleNamespace(
+                    text="Truncated expansion text that hit max_tokens",
+                    prompt_tokens=20,
+                    generation_tokens=64,
+                    peak_memory=6.5,
+                    finish_reason="length",
+                )
+
+            fake_mlx_vlm = MagicMock()
+            fake_mlx_vlm.load.return_value = (MagicMock(), fake_processor)
+            fake_mlx_vlm.stream_generate = fake_stream_length
+
+            rep_len_path = root / "rep_length.json"
+            with patch.dict(
+                sys.modules,
+                {
+                    "mlx": MagicMock(core=fake_mx),
+                    "mlx.core": fake_mx,
+                    "mlx_vlm": fake_mlx_vlm,
+                },
+            ), patch("mlx_switchable_adapter.MLXSwitchableDeltaController", fake_ctrl_cls), patch(
+                "evaluate_switchable_mlx.version", return_value="0.0.0-test"
+            ):
+                with self.assertRaisesRegex(RuntimeError, "Non-terminal finish_reason: 'length'"):
+                    run_switchable_evaluation(
+                        model_dir=qwen_model_dir,
+                        adapter_dir=adapter_dir,
+                        report_path=rep_len_path,
+                        base_role="qwen",
+                        modes=[{"name": "on_r4", "enabled": True, "rank": 4}],
+                        cases=[{"id": "c1", "task": "t2i", "prompt": "A brass lantern"}],
+                    )
+            rep_len = json.loads(rep_len_path.read_text())
+            self.assertEqual(rep_len["status"], "failed")
+            self.assertEqual(rep_len["observations"], [])
+            self.assertEqual(len(rep_len.get("attempted_observations", [])), 1)
+            self.assertEqual(
+                rep_len["attempted_observations"][0]["output"],
+                "Truncated expansion text that hit max_tokens",
+            )
+            self.assertEqual(rep_len["attempted_observations"][0]["finish_reason"], "length")
+            self.assertFalse(rep_len["attempted_observations"][0]["accepted"])
+
+            def fake_stream_crash(*_args, **_kwargs):
+                yield SimpleNamespace(
+                    text="Partial stream text before crash",
+                    prompt_tokens=20,
+                    generation_tokens=5,
+                    peak_memory=6.5,
+                    finish_reason=None,
+                )
+                raise RuntimeError("Simulated mid-stream error")
+
+            fake_mlx_vlm.stream_generate = fake_stream_crash
+            rep_crash_path = root / "rep_crash.json"
+            with patch.dict(
+                sys.modules,
+                {
+                    "mlx": MagicMock(core=fake_mx),
+                    "mlx.core": fake_mx,
+                    "mlx_vlm": fake_mlx_vlm,
+                },
+            ), patch("mlx_switchable_adapter.MLXSwitchableDeltaController", fake_ctrl_cls), patch(
+                "evaluate_switchable_mlx.version", return_value="0.0.0-test"
+            ):
+                with self.assertRaisesRegex(RuntimeError, "Simulated mid-stream error"):
+                    run_switchable_evaluation(
+                        model_dir=qwen_model_dir,
+                        adapter_dir=adapter_dir,
+                        report_path=rep_crash_path,
+                        base_role="qwen",
+                        modes=[{"name": "on_r4", "enabled": True, "rank": 4}],
+                        cases=[{"id": "c1", "task": "t2i", "prompt": "A brass lantern"}],
+                    )
+            rep_crash = json.loads(rep_crash_path.read_text())
+            self.assertEqual(rep_crash["status"], "failed")
+            self.assertEqual(rep_crash["observations"], [])
+            self.assertEqual(len(rep_crash.get("attempted_observations", [])), 1)
+            self.assertEqual(
+                rep_crash["attempted_observations"][0]["raw_output"],
+                "Partial stream text before crash",
+            )
+            self.assertEqual(rep_crash["attempted_observations"][0]["stream_error"], "Simulated mid-stream error")
 
     def test_rejects_blank_or_non_stop_generation_as_false_closure(self):
         from evaluate_switchable_mlx import validate_generation_observation
