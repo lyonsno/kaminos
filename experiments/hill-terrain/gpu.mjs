@@ -159,7 +159,7 @@ const basePosNode=wgslFn(`fn hill_base_pos(pos:vec3<f32>,width:f32,length:f32,fx
 // Camera-centered arbitrary-zoom 3D surface synthesis:
 // Bicubic interpolation of the physical field + multi-octave 3D rock-ledge overhangs,
 // blocky joint steps, and discrete 3D talus boulders/cobbles at cliff toes.
-const zoomPosKernel=wgslFn(`fn hill_zoom_pos(v:u32,zn:u32,n:u32,width:f32,length:f32,fx:f32,fz:f32,fr:f32,tilt:f32,strike:f32,fold:f32,thickness:f32,seed:f32,stepStyle:f32,meso:f32,useFormed:f32,state:ptr<storage,array<vec4<f32>>,read_write>,meta:ptr<storage,array<vec4<f32>>,read_write>)->vec4<f32>{
+const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f32,length:f32,fx:f32,fz:f32,fr:f32,tilt:f32,strike:f32,fold:f32,thickness:f32,seed:f32,stepStyle:f32,meso:f32,useFormed:f32,mode:u32,state:ptr<storage,array<vec4<f32>>,read_write>)->vec4<f32>{
  let xi=v%zn;let zi=v/zn;
  let u=(f32(xi)/f32(zn-1u))*2.-1.;
  let w=(f32(zi)/f32(zn-1u))*2.-1.;
@@ -170,7 +170,6 @@ const zoomPosKernel=wgslFn(`fn hill_zoom_pos(v:u32,zn:u32,n:u32,width:f32,length
  let gz=clamp((wz/length+.5)*fn1,0.,fn1-.0001);
  let ix=u32(gx);let iz=u32(gz);
  let tx=gx-f32(ix);let tz=gz-f32(iz);
- // Exact triangle-matched barycentric interpolation on the base grid for seamless perimeter stitching
  let s00=(*state)[iz*n+ix];
  let s10=(*state)[iz*n+min(n-1u,ix+1u)];
  let s01=(*state)[min(n-1u,iz+1u)*n+ix];
@@ -183,7 +182,6 @@ const zoomPosKernel=wgslFn(`fn hill_zoom_pos(v:u32,zn:u32,n:u32,width:f32,length
   bedTri=s11.x+(1.-tx)*(s01.x-s11.x)+(1.-tz)*(s10.x-s11.x);
   soilTri=s11.y+(1.-tx)*(s01.y-s11.y)+(1.-tz)*(s10.y-s11.y);
  }
- // 16-tap Catmull-Rom bicubic interpolation for smooth facet-free interior zoomed surface
  let wx0=tx*(-.5+tx*(1.-.5*tx));let wx1=1.+tx*tx*(-2.5+1.5*tx);let wx2=tx*(.5+tx*(2.-1.5*tx));let wx3=tx*tx*(-.5+.5*tx);
  let wz0=tz*(-.5+tz*(1.-.5*tz));let wz1=1.+tz*tz*(-2.5+1.5*tz);let wz2=tz*(.5+tz*(2.-1.5*tz));let wz3=tz*tz*(-.5+.5*tz);
  let ix0=select(0u,ix-1u,ix>0u);let ix1=ix;let ix2=min(n-1u,ix+1u);let ix3=min(n-1u,ix+2u);
@@ -232,33 +230,27 @@ const zoomPosKernel=wgslFn(`fn hill_zoom_pos(v:u32,zn:u32,n:u32,width:f32,length
   let crevice1=smoothstep(.12,.01,abs(sin(rx*22.-rz*8.5+.4*sin(phase*12.566))));
   let ledgeOut=meso*wPatch*cliffMask*(oct0*(.055*shelf0+.024*shelf1+.018*block0-.028*crevice0)+oct1*(.018*shelf1+.013*lam2+.012*block1-.016*crevice1)+oct2*(.0065*lam3+.0055*block2)+oct3*.0025*sin(rx*165.+phase*240.));
   let ledgeUp=meso*wPatch*cliffMask*(oct0*(.030*shelf0+.014*shelf1-.016*crevice0)+oct1*(.010*lam2+.0065*block1)+oct2*.0038*lam3);
-  // 3D angular talus boulders, cobbles & pebbles in scree chutes and cliff toes
   let screeZone=smoothstep(.005,.022,soil)*smoothstep(.08,.48,rawSlope)*(1.-.65*cliffMask);
   let bCell0=max(0.,sin(wx*14.+sin(wz*11.+seed))*cos(wz*13.-sin(wx*10.))-.32);
   let bCell1=max(0.,sin(wx*38.+cos(wz*33.+seed*2.))*cos(wz*36.-sin(wx*31.))-.36);
   let bCell2=max(0.,sin(wx*105.+sin(wz*95.))*cos(wz*98.-cos(wx*88.))-.38);
   let cobbleH=meso*wPatch*screeZone*(oct0*.036*bCell0+oct1*.016*bCell1+oct2*.006*bCell2);
   cobbleOut=cobbleH;
-  // Bench outcrop slabs & shallow braided wash channels on lower ground
   let benchOutcrop=meso*wPatch*exposed*(1.-cliffMask)*smoothstep(.35,1.2,bed)*(oct1*.006*block1+oct2*.0025*block2);
   let washChannel=meso*wPatch*(1.-exposed)*(1.-screeZone)*(oct1*.0035*sin(wx*16.+sin(wz*8.))+oct2*.0014*cos(wx*48.-wz*22.));
   px=wx+ledgeOut*outX;
   py=py+ledgeUp+cobbleH+benchOutcrop+washChannel;
   pz=wz+ledgeOut*outZ;
  }
- (*meta)[v]=vec4<f32>(soil,cobbleOut,wPatch,rawSlope);
- return vec4<f32>(px,py,pz,bed);
+ if(mode==1u){return vec4<f32>(bed,max(0.,soil-cobbleOut*1.4),wPatch,rawSlope);}
+ return vec4<f32>(px,py,pz,1.);
 }`);
 
-const zoomNormKernel=wgslFn(`fn hill_zoom_norm(v:u32,zn:u32,tilt:f32,strike:f32,fold:f32,thickness:f32,seed:f32,stepStyle:f32,meso:f32,useFormed:f32,posBuf:ptr<storage,array<vec4<f32>>,read_write>,metaBuf:ptr<storage,array<vec4<f32>>,read_write>,colBuf:ptr<storage,array<vec4<f32>>,read_write>)->vec4<f32>{
+const zoomNormKernel=wgslFn(`fn hill_zoom_norm(v:u32,zn:u32,posBuf:ptr<storage,array<vec4<f32>>,read_write>)->vec4<f32>{
  let xi=v%zn;let zi=v/zn;
- let p=(*posBuf)[v];let m=(*metaBuf)[v];
  let l=(*posBuf)[v-select(0u,1u,xi>0u)].xyz;let r=(*posBuf)[v+select(0u,1u,xi+1u<zn)].xyz;
  let u=(*posBuf)[v-select(0u,zn,zi>0u)].xyz;let d=(*posBuf)[v+select(0u,zn,zi+1u<zn)].xyz;
  let nVec=normalize(cross(d-u,r-l));
- let effSoil=max(0.,m.x-m.y*1.4);
- let col=hill_geological_color(p.x,p.z,p.w,effSoil,nVec.x,nVec.y,nVec.z,tilt,strike,fold,thickness,seed,stepStyle,meso);
- (*colBuf)[v]=col;
  return vec4<f32>(nVec,0.);
 }`);
 
@@ -310,10 +302,14 @@ export function createTerrainGPU(geometry,input={}){
   colorNode.element(v).assign(mix(legacyColor,formedColor({x,z,bed:s.x,soil:s.y,nx:norm.x,ny:norm.y,nz:norm.z,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso}),useFormed));
  })().compute(count));
  const zoomPosPublisher=Fn(()=>{
-  zoomPosNode.element(instanceIndex).assign(zoomPosKernel({v:instanceIndex,zn:uint(zoomN),n:uint(n),width:float(config.width),length:float(config.length),fx:focusX,fz:focusZ,fr:focusRadius,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,useFormed,state:displayState,meta:zoomMetaNode}));
+  const v=instanceIndex;
+  zoomPosNode.element(v).assign(zoomSurfaceKernel({v,zn:uint(zoomN),n:uint(n),width:float(config.width),length:float(config.length),fx:focusX,fz:focusZ,fr:focusRadius,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,useFormed,mode:uint(0),state:displayState}));
+  zoomMetaNode.element(v).assign(zoomSurfaceKernel({v,zn:uint(zoomN),n:uint(n),width:float(config.width),length:float(config.length),fx:focusX,fz:focusZ,fr:focusRadius,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,useFormed,mode:uint(1),state:displayState}));
  })().compute(zoomCount);
  const zoomNormPublisher=Fn(()=>{
-  zoomNormNode.element(instanceIndex).assign(zoomNormKernel({v:instanceIndex,zn:uint(zoomN),tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,useFormed,posBuf:zoomPosNode,metaBuf:zoomMetaNode,colBuf:zoomColNode}));
+  const v=instanceIndex,norm=zoomNormKernel({v,zn:uint(zoomN),posBuf:zoomPosNode}),p=zoomPosNode.element(v),m=zoomMetaNode.element(v);
+  zoomNormNode.element(v).assign(norm);
+  zoomColNode.element(v).assign(formedColor({x:p.x,z:p.z,bed:m.x,soil:m.y,nx:norm.x,ny:norm.y,nz:norm.z,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso}));
  })().compute(zoomCount);
  nodes.push(...initializers,...solvers.flat(),...geologySolvers.flat(),...interpolators,...publishers,zoomPosPublisher,zoomNormPublisher);
 
