@@ -131,30 +131,29 @@ const geoFbm3=wgslFn(`fn hill_fbm3(p:vec3<f32>)->f32{
 // - a weathered structural bench tread (u in 0.46..0.92).
 // Returns vec3(protrusion, undercutDepth, riserSlope).
 const geoLedgeProfile=wgslFn(`fn hill_ledge(phase:f32)->vec3<f32>{
- let u=fract(phase);
- let undercut=smoothstep(.01,.11,u)*(1.-smoothstep(.12,.26,u));
- let rise=smoothstep(.20,.42,u);
- let tread=1.-.48*smoothstep(.45,.85,u);
- let close=1.-smoothstep(.84,.99,u);
- let shelf=rise*tread*close;
- let prof=shelf-.58*undercut;
- let riser=smoothstep(.18,.31,u)*(1.-smoothstep(.31,.46,u))-smoothstep(.82,.91,u)*(1.-smoothstep(.91,.99,u))*.55;
+ let a=phase*6.28318530718;
+ let s1=sin(a);let c1=cos(a);
+ let s2=sin(2.*a);let c2=cos(2.*a);
+ let s3=sin(3.*a);
+ let prof=.64*s1-.26*c2+.10*s3;
+ let undercut=clamp(-.55*s1+.25*c2,0.,1.);
+ let riser=clamp(.65*c1+.25*s2,-.6,1.);
  return vec3<f32>(prof,undercut,riser);
 }`);
 
 // Anisotropic 3D craggy rock buttress & staggered conjugate vertical fracture clefts (no honeycomb loops):
 // Returns vec3(blockRelief, cleftDepth, facetSlopeX).
 const geoRockCrag=wgslFn(`fn hill_crag(rx:f32,bed:f32,rz:f32,phase:f32,seed:f32)->vec3<f32>{
- let bedShift=.42*sin(phase*6.2831853);
+ let bedShift=.32*sin(phase*6.2831853);
  let nA=hill_fbm3(vec3<f32>(rx+bedShift,bed*.42,rz+seed*.19));
  let nB=hill_fbm3(vec3<f32>(rx*.72-rz*.68-bedShift*.7,bed*.48,rx*.68+rz*.72+seed*.31));
- let rA=1.-abs(nA)*2.1;
- let rB=1.-abs(nB)*2.1;
- let cleftA=smoothstep(.62,.94,rA);
- let cleftB=smoothstep(.66,.95,rB);
- let cleft=clamp(cleftA+.65*cleftB,0.,1.);
- let rib=clamp(.55*rA+.45*rB,-.6,.85)*(1.-.65*cleft);
- let facet=(nA*1.35-nB*.95)*(1.-.5*cleft);
+ let rA=1.-sqrt(nA*nA+.025)*1.85;
+ let rB=1.-sqrt(nB*nB+.025)*1.85;
+ let cleftA=smoothstep(.45,.72,rA);
+ let cleftB=smoothstep(.48,.74,rB);
+ let cleft=clamp(cleftA+.60*cleftB,0.,1.);
+ let rib=clamp(.55*rA+.45*rB,-.45,.65)*(1.-.50*cleft);
+ let facet=(nA*1.15-nB*.85)*(1.-.4*cleft);
  return vec3<f32>(rib,cleft,facet);
 }`,[geoFbm3]);
 
@@ -373,11 +372,12 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
  var cobbleOut=0.;
  if(useFormed>.5&&meso>0.&&wPatch>0.){
   let ds=(2.*fr)/f32(zn-1u);
-  let oct0=smoothstep(ds*.95,ds*2.4,.34);
-  let oct1=smoothstep(ds*.95,ds*2.4,.11);
-  let oct2=smoothstep(ds*.95,ds*2.4,.037);
-  let oct3=smoothstep(ds*.95,ds*2.4,.012);
-  let oct4=smoothstep(ds*.95,ds*2.4,.0042);
+  let dsSurf=ds*min(3.6,nLen);
+  let oct0=smoothstep(dsSurf*1.2,dsSurf*2.8,.34);
+  let oct1=smoothstep(dsSurf*1.2,dsSurf*2.8,.12);
+  let oct2=smoothstep(dsSurf*1.2,dsSurf*2.8,.045);
+  let oct3=smoothstep(dsSurf*1.2,dsSurf*2.8,.018);
+  let oct4=smoothstep(dsSurf*1.2,dsSurf*2.8,.007);
   let exposed=exp(-effSoil/.055);
   let cliffMask=smoothstep(.15,.62,rawSlope)*max(exposed,.78*smoothstep(.35,.95,rawSlope));
   let rad=strike*.017453292519943295;let ca=cos(rad);let sa=sin(rad);let rx=wx*ca+wz*sa;let rz=-wx*sa+wz*ca;
