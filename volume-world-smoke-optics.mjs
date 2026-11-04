@@ -211,6 +211,37 @@ fn worldSmokeMaterial(p:vec3<f32>,smokeVisible:f32,fireVisible:f32)->EmissiveMat
  out.absorption*=clump;out.scattering*=clump;
  return out;
 }
+fn worldSmokeBlendWeight(p:vec3<f32>)->f32{
+ if(!worldSmokeOn()||any(p<worldRender.loPitch.xyz)||any(p>worldRender.hiEnabled.xyz)){return 0.0;}
+ let top=2.0*f32(GRID_Y)/f32(GRID)-1.0;
+ return select(
+  1.0-smoothstep(0.0,min(.5,worldRender.loPitch.w),min(min(1.0-abs(p.x),1.0-abs(p.z)),min(p.y+1.0,top-p.y))),
+  1.0-fineOpticalEnvelope(p,top),
+  u.reactant_combustion_a.x>0.5
+ );
+}
+fn worldCollarSupport(p:vec3<f32>)->f32{
+ if(worldRender.atlas.x>.5&&middleSmokeWeight(p)<=0.0){
+  var n=vec4<f32>(0);let leafBounds=worldResidentLeafBounds(p,&n);
+  if(leafBounds.w>0.5){return leafBounds.z;}
+ }
+ let m=worldSmokeMaterial(p,1.0,1.0);
+ return m.absorption+m.scattering+length(m.emission);
+}
+fn worldPointSupportAndStep(p:vec3<f32>,rd:vec3<f32>,pitch:f32,middleInterval:bool,emptyExit:ptr<function,f32>)->f32{
+ *emptyExit=0.0;
+ if(worldRender.atlas.x>.5){
+  var n=vec4<f32>(0);let leafBounds=worldResidentLeafBounds(p,&n);
+  if(leafBounds.w>0.5&&leafBounds.z<=1e-4&&!middleInterval&&middleSmokeWeight(p)<=0.0){
+   *emptyExit=worldLeafExitDistance(p,rd,n);
+   return 0.0;
+  }
+  if(!middleInterval&&middleSmokeWeight(p)<=0.0){
+   return clamp(leafBounds.z*pitch,0.0,1.6);
+  }
+ }
+ return 0.0;
+}
 fn worldSmokeBlend(p:vec3<f32>,fine:EmissiveMaterial,smokeVisible:f32,fireVisible:f32)->EmissiveMaterial{
  let top=2.0*f32(GRID_Y)/f32(GRID)-1.0;
  let near=worldSmokeDiagnostic(fine,false);
@@ -220,6 +251,7 @@ fn worldSmokeBlend(p:vec3<f32>,fine:EmissiveMaterial,smokeVisible:f32,fireVisibl
   1.0-fineOpticalEnvelope(p,top),
   u.reactant_combustion_a.x>0.5
  );
+ if(weight<=1e-4){return near;}
  let coarse=worldSmokeDiagnostic(worldSmokeMaterial(p,smokeVisible,fireVisible),true);
  return EmissiveMaterial(mix(near.emission,coarse.emission,weight),mix(near.absorption,coarse.absorption,weight),mix(near.scattering,coarse.scattering,weight));
 }

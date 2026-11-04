@@ -15,6 +15,34 @@ fn worldAtlasTexel(index:u32)->vec4<f32>{
  let dims=textureDimensions(worldRenderAtlas);
  return textureLoad(worldRenderAtlas,vec3<i32>(i32(index%dims.x),i32((index/dims.x)%dims.y),i32(index/(dims.x*dims.y))),0);
 }
+fn worldResidentLeafBounds(p:vec3<f32>,brickLoPitch:ptr<function,vec4<f32>>)->vec4<f32>{
+ let q=(p-worldRender.loPitch.xyz)/worldRender.loPitch.w;
+ let dims=worldRender.atlas.yzw;
+ if(any(q<vec3<f32>(0))||any(q>=dims)){*brickLoPitch=vec4<f32>(0);return vec4<f32>(0);}
+ let root=vec3<u32>(floor(q/4.0));let roots=vec3<u32>(ceil(dims/4.0));
+ var slot=root.x+roots.x*(root.y+roots.y*root.z);
+ var n=worldAtlasTexel(slot*WORLD_RENDER_STRIDE);
+ loop{
+  let children=worldAtlasTexel(slot*WORLD_RENDER_STRIDE+1u);
+  if(children.x==0.0){break;}
+  let oct=vec3<u32>(clamp(floor((q-n.xyz)/(n.w*2.0)),vec3<f32>(0),vec3<f32>(1)));
+  let i=oct.x+2u*(oct.y+2u*oct.z);
+  if(i<4u){slot=u32(children[i])-1u;}else{slot=u32(worldAtlasTexel(slot*WORLD_RENDER_STRIDE+2u)[i-4u])-1u;}
+  n=worldAtlasTexel(slot*WORLD_RENDER_STRIDE);
+ }
+ *brickLoPitch=n;
+ return worldAtlasTexel(slot*WORLD_RENDER_STRIDE+2u);
+}
+fn worldLeafExitDistance(p:vec3<f32>,rd:vec3<f32>,n:vec4<f32>)->f32{
+ let lo=worldRender.loPitch.xyz+n.xyz*worldRender.loPitch.w;
+ let span=4.0*n.w*worldRender.loPitch.w;
+ let hi=lo+vec3<f32>(span);
+ var best=1.0e6;
+ if(abs(rd.x)>1e-4){let tx=(select(lo.x,hi.x,rd.x>0.0)-p.x)/rd.x;if(tx>1e-4){best=min(best,tx);}}
+ if(abs(rd.y)>1e-4){let ty=(select(lo.y,hi.y,rd.y>0.0)-p.y)/rd.y;if(ty>1e-4){best=min(best,ty);}}
+ if(abs(rd.z)>1e-4){let tz=(select(lo.z,hi.z,rd.z>0.0)-p.z)/rd.z;if(tz>1e-4){best=min(best,tz);}}
+ return min(best,span*1.75);
+}
 fn worldResidentMaterial(p:vec3<f32>,smokeVisible:f32,fireVisible:f32)->EmissiveMaterial{
  let q=(p-worldRender.loPitch.xyz)/worldRender.loPitch.w;
  let dims=worldRender.atlas.yzw;
@@ -30,6 +58,8 @@ fn worldResidentMaterial(p:vec3<f32>,smokeVisible:f32,fireVisible:f32)->Emissive
   if(i<4u){slot=u32(children[i])-1u;}else{slot=u32(worldAtlasTexel(slot*WORLD_RENDER_STRIDE+2u)[i-4u])-1u;}
   n=worldAtlasTexel(slot*WORLD_RENDER_STRIDE);
  }
+ let leafBounds=worldAtlasTexel(slot*WORLD_RENDER_STRIDE+2u);
+ if(leafBounds.w>0.5&&leafBounds.z<=1e-4){return EmissiveMaterial(vec3<f32>(0),0,0);}
  let cell=clamp((q-n.xyz)/(n.w*0.5)+.5,vec3<f32>(0),vec3<f32>(9));let base=min(vec3<u32>(floor(cell)),vec3<u32>(8));let f=cell-vec3<f32>(base);var value=vec4<f32>(0);
  for(var z=0u;z<2u;z++){for(var y=0u;y<2u;y++){for(var x=0u;x<2u;x++){
   let c=base+vec3<u32>(x,y,z);let w=select(1.0-f,f,vec3<bool>(x==1u,y==1u,z==1u));
@@ -134,25 +164,35 @@ fn writeWorldAtlas(index:u32,value:vec4<f32>){
  let d=textureDimensions(worldRenderOutput);
  textureStore(worldRenderOutput,vec3<i32>(i32(index%d.x),i32((index/d.x)%d.y),i32(index/(d.x*d.y))),value);
 }
+var<workgroup> worldBrickMax:array<vec2<f32>,64>;
 @compute @workgroup_size(64) fn prepareWorldRender(@builtin(workgroup_id) group:vec3<u32>,@builtin(num_workgroups) groups:vec3<u32>,@builtin(local_invocation_index) local:u32){
  seatGridShape();
- let index=group.x+group.y*groups.x;if(index>=wr.rootsCount.w){return;}
- var slot=index;var n:WorldRenderBrick;
- if(worldRenderHasHierarchy()){slot=worldRenderWork[index];n=worldRenderBricks[slot];n.loPitch=vec4<f32>((n.loPitch.xyz-wr.loMode.xyz)/wr.dimsPitch.w,n.loPitch.w/wr.dimsPitch.w);}
- else{let root=vec3<u32>(slot%wr.rootsCount.x,(slot/wr.rootsCount.x)%wr.rootsCount.y,slot/(wr.rootsCount.x*wr.rootsCount.y));n.loPitch=vec4<f32>(vec3<f32>(root)*4.0,1);n.children0=vec4<u32>(0xffffffffu);n.children1=n.children0;}
- let start=slot*WORLD_RENDER_STRIDE;
- if(local==0u){writeWorldAtlas(start,n.loPitch);writeWorldAtlas(start+1u,vec4<f32>(n.children0+vec4<u32>(1)));writeWorldAtlas(start+2u,vec4<f32>(n.children1+vec4<u32>(1)));}
- if(n.children0.x!=0xffffffffu){return;}
- for(var i=local;i<1000u;i+=64u){
-  let c=vec3<u32>(i%10u,(i/10u)%10u,i/100u);let q=n.loPitch.xyz+(vec3<f32>(c)-.5)*(n.loPitch.w*0.5);
-  var r=worldRenderCellAt(slot,n,q);
-  if(wr.loMode.w>=1.5){
-   r=worldRenderSampleGas(slot,n,q+worldSubgridWarpGrid(q,n.loPitch.w));
-  }
-  let medium=regionSmokeMaterial(vec4<f32>(r.a.xyz,r.b.x),r.b.yzw,1,1);
-  let sigma=(medium.absorption+medium.scattering)*worldSubgridClumpGrid(q,medium.absorption+medium.scattering);
-  writeWorldAtlas(start+3u+i,vec4<f32>(medium.emission,sigma));
+ let index=group.x+group.y*groups.x;let valid=index<wr.rootsCount.w;
+ var slot=0u;var n:WorldRenderBrick;n.children0=vec4<u32>(0u);
+ if(valid){
+  slot=index;
+  if(worldRenderHasHierarchy()){slot=worldRenderWork[index];n=worldRenderBricks[slot];n.loPitch=vec4<f32>((n.loPitch.xyz-wr.loMode.xyz)/wr.dimsPitch.w,n.loPitch.w/wr.dimsPitch.w);}
+  else{let root=vec3<u32>(slot%wr.rootsCount.x,(slot/wr.rootsCount.x)%wr.rootsCount.y,slot/(wr.rootsCount.x*wr.rootsCount.y));n.loPitch=vec4<f32>(vec3<f32>(root)*4.0,1);n.children0=vec4<u32>(0xffffffffu);n.children1=n.children0;}
  }
+ let start=slot*WORLD_RENDER_STRIDE;let isLeaf=valid&&n.children0.x==0xffffffffu;
+ if(valid&&!isLeaf&&local==0u){writeWorldAtlas(start,n.loPitch);writeWorldAtlas(start+1u,vec4<f32>(n.children0+vec4<u32>(1)));writeWorldAtlas(start+2u,vec4<f32>(n.children1+vec4<u32>(1)));}
+ var maxOptics=vec2<f32>(0);
+ if(isLeaf){
+  for(var i=local;i<1000u;i+=64u){
+   let c=vec3<u32>(i%10u,(i/10u)%10u,i/100u);let q=n.loPitch.xyz+(vec3<f32>(c)-.5)*(n.loPitch.w*0.5);
+   var r=worldRenderCellAt(slot,n,q);
+   if(wr.loMode.w>=1.5){
+    r=worldRenderSampleGas(slot,n,q+worldSubgridWarpGrid(q,n.loPitch.w));
+   }
+   let medium=regionSmokeMaterial(vec4<f32>(r.a.xyz,r.b.x),r.b.yzw,1,1);
+   let sigma=(medium.absorption+medium.scattering)*worldSubgridClumpGrid(q,medium.absorption+medium.scattering);
+   maxOptics=max(maxOptics,vec2<f32>(length(medium.emission),sigma));
+   writeWorldAtlas(start+3u+i,vec4<f32>(medium.emission,sigma));
+  }
+ }
+ worldBrickMax[local]=maxOptics;workgroupBarrier();
+ for(var s=32u;s>0u;s>>=1u){if(local<s){worldBrickMax[local]=max(worldBrickMax[local],worldBrickMax[local+s]);}workgroupBarrier();}
+ if(isLeaf&&local==0u){let m=worldBrickMax[0];writeWorldAtlas(start,n.loPitch);writeWorldAtlas(start+1u,vec4<f32>(0));writeWorldAtlas(start+2u,vec4<f32>(m.x,m.y,max(m.x,m.y),1));}
 }
 `;
 

@@ -119,7 +119,8 @@ fn recordRayGuidance(p:vec3<f32>,emission:vec3<f32>,sigma:f32,trans:f32,ds:f32){
   if(OPTICAL_STEP_MODE!=6u){return;}
   // Bounded positive score preserves optical contribution and opacity evidence.
   // No old color or old extinction enters the current integral.
-  let strength=max(length(max(emission,vec3<f32>(0)))*ds,max(sigma,0.0)*ds)*trans;
+  let effectiveSpan=max(ds,rayGuidance.loPitch.w);
+  let strength=max(length(max(emission,vec3<f32>(0)))*effectiveSpan,max(sigma,0.0)*effectiveSpan)*trans;
   let score=u32(round(65535.0*strength/(1.0+strength)));
   atomicMax(&rayGuidanceData[rayGuidance.dimsCells.w+guidanceIndex(guidanceCell(p))],score);
 }
@@ -132,8 +133,13 @@ fn joinProposal(p:vec3<f32>)->f32{
 }
 fn guidanceWeight(p:vec3<f32>)->f32{
   var weight=1.0;
-  if(OPTICAL_STEP_MODE>=5u){weight+=4.0*joinProposal(p);}
-  if(OPTICAL_STEP_MODE==6u){weight+=4.0*previousGuidance(p);}
+  if(OPTICAL_STEP_MODE>=5u){
+    weight=select(0.25,2.0,worldInsideFine(p))+4.0*joinProposal(p);
+  }
+  if(OPTICAL_STEP_MODE==6u){
+    let hist=previousGuidance(p);
+    weight=select(0.08,1.5,worldInsideFine(p))+4.0*joinProposal(p)+32.0*hist;
+  }
   return weight;
 }
 fn guidanceBoxStop(ro:vec3<f32>,rd:vec3<f32>,lo:vec3<f32>,hi:vec3<f32>,t:f32,stop:f32)->f32{
@@ -144,13 +150,16 @@ fn guidanceBoxStop(ro:vec3<f32>,rd:vec3<f32>,lo:vec3<f32>,hi:vec3<f32>,t:f32,sto
   return result;
 }
 fn guidanceStop(ro:vec3<f32>,rd:vec3<f32>,t:f32,end:f32)->f32{
-  // Midpoint-owned cells avoid a face-roundoff stall for either ray direction.
-  let p=ro+rd*t;let c=guidanceCell(p+rd*rayGuidance.loPitch.w*.0001);
-  let low=rayGuidance.loPitch.xyz+vec3<f32>(c)*rayGuidance.loPitch.w;
-  let face=select(low,low+vec3<f32>(rayGuidance.loPitch.w),rd>vec3<f32>(0));
+  if(OPTICAL_STEP_MODE==4u){return end;}
   var stop=end;
-  for(var axis=0u;axis<3u;axis++){
-    if(abs(rd[axis])>1e-12){let q=(face[axis]-ro[axis])/rd[axis];if(q>t){stop=min(stop,q);}}
+  if(OPTICAL_STEP_MODE==6u){
+    // Midpoint-owned cells avoid a face-roundoff stall for either ray direction.
+    let p=ro+rd*t;let c=guidanceCell(p+rd*rayGuidance.loPitch.w*.0001);
+    let low=rayGuidance.loPitch.xyz+vec3<f32>(c)*rayGuidance.loPitch.w;
+    let face=select(low,low+vec3<f32>(rayGuidance.loPitch.w),rd>vec3<f32>(0));
+    for(var axis=0u;axis<3u;axis++){
+      if(abs(rd[axis])>1e-12){let q=(face[axis]-ro[axis])/rd[axis];if(q>t){stop=min(stop,q);}}
+    }
   }
   let lo=vec3<f32>(-1);let hi=vec3<f32>(1,2.0*f32(GRID_Y)/f32(GRID)-1.0,1);
   let inset=vec3<f32>(min(.5,worldRender.loPitch.w));

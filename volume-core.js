@@ -6528,7 +6528,7 @@ fn raymarchInterest(
 
 fn adaptiveRayStepScale(interest: f32, adaptiveRays: f32) -> f32 {
   let fine = smoothstep(0.035, 0.92, interest);
-  let adaptiveScale = mix(2.65, 1.0, fine);
+  let adaptiveScale = mix(2.25, 0.75, fine);
   return mix(1.0, adaptiveScale, clamp(adaptiveRays, 0.0, 1.0));
 }
 
@@ -8116,17 +8116,21 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
       let sigma=medium.absorption+medium.scattering;
       let middleInterval=middleHit.y>middleHit.x&&t>=middleHit.x&&t<middleHit.y;
       let pitch=select(worldRender.loPitch.w,worldMinimumMaterialPitch(),middleInterval);
-      let interest=clamp(max(sigma*pitch,length(medium.emission)*pitch),0.0,1.6);
-      var ds=select(min(worldMarchStep(pitch,steps,interest,clamp(u.radiance_controls.w,0.0,1.0)),max(.0001,endT-t)),guidedRay.width,guided);
+      var brickExit=0.0;
+      let brickSupport=worldPointSupportAndStep(p,rd,pitch,middleInterval,&brickExit);
+      let interest=max(brickSupport,clamp(max(sigma*pitch,length(medium.emission)*pitch),0.0,1.6));
+      let baseStep=worldMarchStep(pitch,steps,interest,clamp(u.radiance_controls.w,0.0,1.0));
+      let skipStep=select(baseStep,mix(baseStep,max(baseStep,brickExit+0.0001),clamp(u.occupancy_controls.x,0.0,1.0)),brickExit>0.0&&sigma+length(medium.emission)<=1e-4);
+      var ds=select(min(skipStep,max(.0001,endT-t)),guidedRay.width,guided);
       if(!guided && middleHit.y>middleHit.x){
         if(t<middleHit.x&&t+ds>middleHit.x){ds=middleHit.x-t;}
         if(middleInterval&&t+ds>middleHit.y){ds=middleHit.y-t;}
       }
       if(!guided && nearHit.y>nearHit.x && t<nearHit.x && t+ds>nearHit.x){ds=nearHit.x-t;}
-      let scatteredSource=medium.scattering * incidentAt(p);
+      let scatteredSource = select(vec3<f32>(0.0), medium.scattering * incidentAt(p), medium.scattering > 1e-5);
       if(opticalStepping){
         opticalStepObserveWithTolerance(&opticalStep,vec4<f32>(medium.emission+scatteredSource,sigma),u.reserved_render_controls.y);
-        color=opticalStep.transfer.xyz;trans=opticalStep.transfer.w;continue;
+        color=opticalStep.transfer.xyz;trans=opticalStep.transfer.w;ds=0.0;
       }
       if(guided){recordRayGuidance(p,medium.emission+scatteredSource,sigma,trans,ds);}
       color+=trans*(medium.emission+scatteredSource)*emissionIntegral(sigma,ds);
@@ -8135,25 +8139,32 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
     let flowKernelReconstructionActive = u.reconstruction_kernel_controls.x > 0.0001;
     let occupancySkipStrength = clamp(u.occupancy_controls.x, 0.0, 1.0);
     var preparedFine:EmissiveMaterial;
-    if(displayReconstructionActive()){preparedFine=sampleDisplayMaterial(p,1.0);}
+    var displaySupport = 0.0;
+    if(displayReconstructionActive()){preparedFine=sampleDisplayMaterialWithSupport(p,1.0,&displaySupport);}
     var neighborhood: RaymarchNeighborhood;
     var directSupport: f32;
-    if (displayReconstructionActive()) {
+    if (displayReconstructionActive() && (opticalStepping || guided)) {
       directSupport = 1.0;
+    } else if (displayReconstructionActive()) {
+      directSupport = displaySupport;
     } else if (LEAN_EMISSIVE_RAYMARCH) {
       neighborhood = sampleRaymarchNeighborhood(p);
       directSupport = raymarchNeighborhoodSupport(neighborhood);
     } else {
       directSupport = directCellOpticalSupport(p);
     }
-    if (!worldActive && !displayReconstructionActive() && !opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0.0001) {
-      let cellExit = directCellExitDistance(p, rd);
+    if (worldActive && directSupport <= 0.0001 && worldSmokeBlendWeight(p) > 1e-4) {
+      directSupport = max(directSupport, worldCollarSupport(p));
+    }
+    if (!opticalStepping && !guided && !fullGridCapture && !opticalTrace && directSupport <= 0.0001) {
+      let cellExit = select(directCellExitDistance(p, rd), displayCellExitDistance(p, rd), displayReconstructionActive());
       let emptyCellAdvance = mix(
         dtBase,
         max(dtBase, cellExit + 0.0001),
         occupancySkipStrength
       );
-      t = t + min(emptyCellAdvance, max(0.0001, endT - t));
+      let emptyLimit = select(endT, min(endT, nearHit.y), worldActive);
+      t = t + min(emptyCellAdvance, max(0.0001, emptyLimit - t));
       continue;
     }
     var reconstructed: FlowReconstructionSample;
@@ -8221,7 +8232,10 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
     var interest = raymarchInterest(density, smoke, heat, temp, max(flame, combustionFrontTopology * 0.10), flameDetail, microTextureSignal, velMag, fireLick, interfaceShred);
     let fineSegmentEnd = select(endT, min(endT, nearHit.y), worldActive);
     if(displayReconstructionActive()){
-      interest=clamp(max(preparedFine.absorption+preparedFine.scattering,length(preparedFine.emission))*(2.0/f32(GRID)),0.0,1.6);
+      let pointSignal = max(preparedFine.absorption + preparedFine.scattering, length(preparedFine.emission) * 2.5);
+      interest = clamp(max(displaySupport, pointSignal) * 0.35, 0.0, 1.6);
+    } else if (LEAN_EMISSIVE_RAYMARCH) {
+      interest = max(interest, clamp(directSupport * 0.65, 0.0, 1.6));
     }
     let localDt = select(min(dtBase * adaptiveRayStepScale(interest, adaptiveRays), max(0.0001, fineSegmentEnd - t)),guidedRay.width,guided);
     let rayStepOpacity = localDt * 3.65;
@@ -9018,7 +9032,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
       }
       medium = worldSmokeBlend(p,medium,visibleSmokeAuthority,selectiveRaymarchFireAuthority);
       let sigma = medium.absorption + medium.scattering;
-      let scatteredSource = medium.scattering * incidentAt(p);
+      let scatteredSource = select(vec3<f32>(0.0), medium.scattering * incidentAt(p), medium.scattering > 1e-5);
       let emission = medium.emission + scatteredSource;
       if(guided){recordRayGuidance(p,emission,sigma,trans,localDt);}
       if (opticalStepping) {
