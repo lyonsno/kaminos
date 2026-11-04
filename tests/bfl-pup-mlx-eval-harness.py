@@ -1298,6 +1298,165 @@ class TestMLXSwitchableEvalHarness(unittest.TestCase):
                 self.assertIs(fake_model.language_model.model.layers[0].self_attn.q_proj, orig_q_proj)
                 self.assertIs(fake_model.language_model.model.embed_tokens, orig_embed)
 
+    def test_r4_02_rejects_outdated_mlx_vlm_runtime_and_torchless_provenance_check(self):
+        import hashlib
+        import struct
+        import sys
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock, patch
+        import numpy as np
+        from evaluate_switchable_mlx import inspect_model_dir_provenance, run_switchable_evaluation
+
+        def write_raw_bf16_safetensors(path: Path, tensors_f32: dict):
+            header = {}
+            payloads = []
+            offset = 0
+            for k, arr in tensors_f32.items():
+                arr_f32 = np.asarray(arr, dtype=np.float32)
+                u16 = (arr_f32.view(np.uint32) >> 16).astype("<u2")
+                raw = u16.tobytes()
+                header[k] = {
+                    "dtype": "BF16",
+                    "shape": list(arr_f32.shape),
+                    "data_offsets": [offset, offset + len(raw)],
+                }
+                payloads.append(raw)
+                offset += len(raw)
+            hdr_bytes = json.dumps(header, separators=(",", ":")).encode("utf-8")
+            with path.open("wb") as fh:
+                fh.write(struct.pack("<Q", len(hdr_bytes)))
+                fh.write(hdr_bytes)
+                for p in payloads:
+                    fh.write(p)
+            return hashlib.sha256(hdr_bytes).hexdigest(), hashlib.sha256(path.read_bytes()).hexdigest()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            adapter_dir = root / "adapter"
+            shards_dir = adapter_dir / "shards"
+            shards_dir.mkdir(parents=True)
+
+            exact_sf = shards_dir / "exact_small.safetensors"
+            write_raw_bf16_safetensors(
+                exact_sf,
+                {
+                    "model.language_model.norm.weight.bfl": np.full((8,), 1.0, dtype=np.float32),
+                    "model.language_model.norm.weight.delta": np.full((8,), 0.25, dtype=np.float32),
+                    "model.language_model.norm.weight.qwen": np.full((8,), 0.75, dtype=np.float32),
+                },
+            )
+            lr_sf = shards_dir / "layers_00_03.safetensors"
+            write_raw_bf16_safetensors(
+                lr_sf,
+                {
+                    "model.language_model.layers.0.self_attn.q_proj.weight.lora_A": np.ones((2, 8), dtype=np.float32),
+                    "model.language_model.layers.0.self_attn.q_proj.weight.lora_B": np.ones((8, 2), dtype=np.float32),
+                },
+            )
+
+            model_dir = root / "qwen-model"
+            model_dir.mkdir()
+            cfg_file = model_dir / "config.json"
+            cfg_file.write_text(json.dumps({"model_type": "qwen3_5"}))
+            (model_dir / "README.md").write_text("base_model: Qwen/Qwen3.5-9B\n")
+            (model_dir / "system_prompts.json").write_text(json.dumps({"t2i": "sys", "i2i": "sys"}))
+
+            # Write mismatched model weights (all 9.0 instead of 0.75 or 1.75)
+            model_sf = model_dir / "model.safetensors"
+            m_hdr_sha, m_file_sha = write_raw_bf16_safetensors(
+                model_sf,
+                {"language_model.model.norm.weight": np.full((8,), 9.0, dtype=np.float32)},
+            )
+
+            manifest = {
+                "schema": "kaminos.bfl-pup-delta-manifest.v1",
+                "complete": True,
+                "max_rank": 2,
+                "min_lora_dim": 8,
+                "expected_shard_groups": ["exact_small", "layers_00_03"],
+                "expected_exact_count": 1,
+                "expected_lowrank_count": 1,
+                "sources": {
+                    "qwen_header_digests": {"model.safetensors": m_hdr_sha},
+                    "qwen_file_digests": {"model.safetensors": m_file_sha},
+                },
+                "shards": {
+                    "exact_small": {
+                        "file": "shards/exact_small.safetensors",
+                        "sha256": hashlib.sha256(exact_sf.read_bytes()).hexdigest(),
+                        "size_bytes": exact_sf.stat().st_size,
+                        "expected_keys": ["model.language_model.norm.weight"],
+                        "tensor_stats": {"model.language_model.norm.weight": {"mode": "exact", "shape": [8]}},
+                    },
+                    "layers_00_03": {
+                        "file": "shards/layers_00_03.safetensors",
+                        "sha256": hashlib.sha256(lr_sf.read_bytes()).hexdigest(),
+                        "size_bytes": lr_sf.stat().st_size,
+                        "expected_keys": ["model.language_model.layers.0.self_attn.q_proj.weight"],
+                        "tensor_stats": {
+                            "model.language_model.layers.0.self_attn.q_proj.weight": {
+                                "mode": "lowrank_svd",
+                                "shape": [8, 8],
+                                "rank": 2,
+                            }
+                        },
+                    },
+                },
+            }
+            (adapter_dir / "manifest.json").write_text(json.dumps(manifest))
+
+            # 1. Even with torch completely absent (sys.modules["torch"] = None), inspect_model_dir_provenance
+            # must still catch the mismatched norm weight via pure NumPy safetensors slice inspection!
+            with patch.dict(sys.modules, {"torch": None}):
+                with self.assertRaisesRegex(RuntimeError, "provenance weight mismatch"):
+                    inspect_model_dir_provenance(model_dir, base_role="qwen", adapter_dir=adapter_dir)
+
+            # Now write matching Qwen norm weight (0.75 + 1.0 = 1.75 sanitized)
+            m_hdr_sha_ok, m_file_sha_ok = write_raw_bf16_safetensors(
+                model_sf,
+                {"language_model.model.norm.weight": np.full((8,), 1.75, dtype=np.float32)},
+            )
+            manifest["sources"]["qwen_header_digests"]["model.safetensors"] = m_hdr_sha_ok
+            manifest["sources"]["qwen_file_digests"]["model.safetensors"] = m_file_sha_ok
+            (adapter_dir / "manifest.json").write_text(json.dumps(manifest))
+
+            with patch.dict(sys.modules, {"torch": None}):
+                prov_ok = inspect_model_dir_provenance(model_dir, base_role="qwen", adapter_dir=adapter_dir)
+                self.assertEqual(prov_ok["provenance_mode"], "pinned_source_digests")
+
+            # 2. Outdated real mlx-vlm (< 0.7.8) or mlx (< 0.32.4) must fail-fast during backend-validation before load()
+            fake_mx = SimpleNamespace(
+                metal=SimpleNamespace(is_available=lambda: True),
+                gpu="gpu",
+                set_default_device=lambda d: None,
+                set_cache_limit=lambda l: None,
+                set_wired_limit=lambda l: 0,
+            )
+            load_mock = MagicMock()
+            fake_mlx_vlm = SimpleNamespace(
+                __file__="/fake/site-packages/mlx_vlm/__init__.py",
+                load=load_mock,
+                stream_generate=MagicMock(),
+            )
+            report_out = root / "outdated_runtime_report.json"
+            with patch.dict(sys.modules, {"mlx": SimpleNamespace(core=fake_mx), "mlx.core": fake_mx, "mlx_vlm": fake_mlx_vlm}):
+                with patch("evaluate_switchable_mlx.version", side_effect=lambda pkg: "0.32.0" if pkg == "mlx" else "0.6.3"):
+                    with self.assertRaisesRegex(RuntimeError, "mlx>=0.32.4.*mlx-vlm>=0.7.8"):
+                        run_switchable_evaluation(
+                            model_dir=model_dir,
+                            adapter_dir=adapter_dir,
+                            report_path=report_out,
+                            base_role="qwen",
+                            modes=[{"name": "off", "enabled": False, "rank": 0}],
+                            cases=[{"id": "c1", "task": "vlm", "prompt": "Hi", "images": []}],
+                        )
+            load_mock.assert_not_called()
+            rep_data = json.loads(report_out.read_text())
+            self.assertEqual(rep_data["status"], "failed")
+            self.assertEqual(rep_data["failure_phase"], "backend-validation")
+            self.assertEqual(rep_data["mlx_version"], "0.32.0")
+            self.assertEqual(rep_data["mlx_vlm_version"], "0.6.3")
+
 
 if __name__ == "__main__":
     unittest.main()

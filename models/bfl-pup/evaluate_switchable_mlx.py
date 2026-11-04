@@ -308,56 +308,95 @@ def inspect_model_dir_provenance(
                 exact_sf = Path(adapter_dir) / exact_info["file"]
                 if exact_sf.is_file():
                     try:
-                        import torch
-                        from safetensors import safe_open
+                        import struct
+                        import numpy as np
+
+                        def _read_st_header(sf_path: Path):
+                            with sf_path.open("rb") as fh:
+                                hlen = struct.unpack("<Q", fh.read(8))[0]
+                                return hlen, json.loads(fh.read(hlen).decode("utf-8"))
+
+                        def _read_st_f32(sf_path: Path, hlen: int, hdr: Dict[str, Any], key: str):
+                            info = hdr.get(key)
+                            if not isinstance(info, dict):
+                                return None, None
+                            dt = info.get("dtype")
+                            shape = tuple(info.get("shape", ()))
+                            s, e = info.get("data_offsets", (0, 0))
+                            with sf_path.open("rb") as fh:
+                                fh.seek(8 + hlen + int(s))
+                                raw = fh.read(int(e) - int(s))
+                            if dt == "BF16":
+                                u16 = np.frombuffer(raw, dtype="<u2")
+                                f32 = (u16.astype(np.uint32) << 16).view(np.float32)
+                            elif dt == "F16":
+                                f32 = np.frombuffer(raw, dtype="<f2").astype(np.float32)
+                            elif dt == "F32":
+                                f32 = np.frombuffer(raw, dtype="<f4").copy()
+                            else:
+                                return None, None
+                            return f32.reshape(shape), dt
+
+                        def _cast_roundtrip_f32(arr_f32, dt: str):
+                            if dt == "BF16":
+                                u32 = arr_f32.astype(np.float32).view(np.uint32)
+                                rounding = 0x7FFF + ((u32 >> 16) & 1)
+                                return ((u32 + rounding) & 0xFFFF0000).view(np.float32)
+                            if dt == "F16":
+                                return arr_f32.astype(np.float16).astype(np.float32)
+                            return arr_f32.astype(np.float32)
 
                         model_key_map = {}
+                        model_hdr_cache = {}
                         for sf in sf_files:
-                            with safe_open(str(sf), framework="pt") as msf:
-                                for mk in msf.keys():
+                            hlen, hdr = _read_st_header(sf)
+                            model_hdr_cache[sf] = (hlen, hdr)
+                            for mk in hdr.keys():
+                                if mk != "__metadata__":
                                     model_key_map[mk] = sf
+                        e_hlen, e_hdr = _read_st_header(exact_sf)
+                        esf_keys = set(e_hdr.keys()) - {"__metadata__"}
                         checked = 0
-                        with safe_open(str(exact_sf), framework="pt") as esf:
-                            esf_keys = set(esf.keys())
-                            for hk in sorted(exact_info.get("tensor_stats", {}).keys()):
-                                if f"{hk}.bfl" not in esf_keys or f"{hk}.delta" not in esf_keys:
-                                    continue
-                                cand_keys = [
-                                    hk,
-                                    hk.replace("model.language_model.", "language_model.model."),
-                                    hk.replace("model.language_model.", "model."),
-                                ]
-                                matched_mk = next((ck for ck in cand_keys if ck in model_key_map), None)
-                                if matched_mk is None:
-                                    continue
-                                with safe_open(str(model_key_map[matched_mk]), framework="pt") as msf:
-                                    m_t = msf.get_tensor(matched_mk)
-                                if m_t.dtype not in (torch.bfloat16, torch.float16, torch.float32):
-                                    continue
-                                bfl_t = esf.get_tensor(f"{hk}.bfl").float()
-                                delta_t = esf.get_tensor(f"{hk}.delta").float()
-                                qwen_t = (
-                                    esf.get_tensor(f"{hk}.qwen").float()
-                                    if f"{hk}.qwen" in esf_keys
-                                    else (bfl_t - delta_t)
+                        for hk in sorted(exact_info.get("tensor_stats", {}).keys()):
+                            if f"{hk}.bfl" not in esf_keys or f"{hk}.delta" not in esf_keys:
+                                continue
+                            cand_keys = [
+                                hk,
+                                hk.replace("model.language_model.", "language_model.model."),
+                                hk.replace("model.language_model.", "model."),
+                            ]
+                            matched_mk = next((ck for ck in cand_keys if ck in model_key_map), None)
+                            if matched_mk is None:
+                                continue
+                            msf_path = model_key_map[matched_mk]
+                            m_hlen, m_hdr = model_hdr_cache[msf_path]
+                            m_f32, m_dt = _read_st_f32(msf_path, m_hlen, m_hdr, matched_mk)
+                            if m_f32 is None:
+                                continue
+                            bfl_t, _ = _read_st_f32(exact_sf, e_hlen, e_hdr, f"{hk}.bfl")
+                            delta_t, _ = _read_st_f32(exact_sf, e_hlen, e_hdr, f"{hk}.delta")
+                            if bfl_t is None or delta_t is None:
+                                continue
+                            if f"{hk}.qwen" in esf_keys:
+                                qwen_t, _ = _read_st_f32(exact_sf, e_hlen, e_hdr, f"{hk}.qwen")
+                            else:
+                                qwen_t = bfl_t - delta_t
+                            exp_t = qwen_t if base_role == "qwen" else bfl_t
+                            if exp_t is None or m_f32.shape != exp_t.shape:
+                                continue
+                            d_raw = float(np.linalg.norm(m_f32 - exp_t))
+                            d_off_f32 = float(np.linalg.norm(m_f32 - (exp_t + 1.0)))
+                            d_off_cast = float(np.linalg.norm(m_f32 - _cast_roundtrip_f32(exp_t + 1.0, m_dt)))
+                            best_d = min(d_raw, d_off_f32, d_off_cast)
+                            ref_n = max(float(np.linalg.norm(exp_t)), 1e-6)
+                            if best_d > max(0.02 * ref_n, 2e-2):
+                                raise RuntimeError(
+                                    f"Model directory {model_dir} provenance weight mismatch on {hk} "
+                                    f"for base_role={base_role!r} (dist={best_d:.6f}, ref_norm={ref_n:.6f})"
                                 )
-                                exp_t = qwen_t if base_role == "qwen" else bfl_t
-                                if m_t.shape != exp_t.shape:
-                                    continue
-                                m_f32 = m_t.float()
-                                d_raw = float(torch.linalg.norm(m_f32 - exp_t).item())
-                                d_off_f32 = float(torch.linalg.norm(m_f32 - (exp_t + 1.0)).item())
-                                d_off_cast = float(torch.linalg.norm(m_f32 - (exp_t + 1.0).to(m_t.dtype).float()).item())
-                                best_d = min(d_raw, d_off_f32, d_off_cast)
-                                ref_n = max(float(torch.linalg.norm(exp_t).item()), 1e-6)
-                                if best_d > max(0.02 * ref_n, 2e-2):
-                                    raise RuntimeError(
-                                        f"Model directory {model_dir} provenance weight mismatch on {hk} "
-                                        f"for base_role={base_role!r} (dist={best_d:.6f}, ref_norm={ref_n:.6f})"
-                                    )
-                                checked += 1
-                                if checked >= 8:
-                                    break
+                            checked += 1
+                            if checked >= 8:
+                                break
                     except RuntimeError:
                         raise
                     except Exception:
@@ -486,6 +525,7 @@ def run_switchable_evaluation(
 
         report["failure_phase"] = "backend-validation"
         _atomic_write_json(report_path, report)
+        import sys
         import mlx.core as mx
         from mlx_switchable_adapter import MLXSwitchableDeltaController
 
@@ -503,6 +543,28 @@ def run_switchable_evaluation(
             mx._kaminos_wired_limit_capped = True
         effective_backend = "mlx-metal"
 
+        from mlx_vlm import load, stream_generate
+
+        mlx_ver = version("mlx")
+        mlx_vlm_ver = version("mlx-vlm")
+        report["mlx_version"] = mlx_ver
+        report["mlx_vlm_version"] = mlx_vlm_ver
+        _atomic_write_json(report_path, report)
+
+        def _ver_tuple(v_str: str):
+            parts = [int(x) for x in re.findall(r"\d+", str(v_str))[:3]]
+            while len(parts) < 3:
+                parts.append(0)
+            return tuple(parts)
+
+        mlx_vlm_mod = sys.modules.get("mlx_vlm")
+        if getattr(mlx_vlm_mod, "__file__", None) is not None:
+            if _ver_tuple(mlx_ver) < (0, 32, 4) or _ver_tuple(mlx_vlm_ver) < (0, 7, 8):
+                raise RuntimeError(
+                    f"Unsupported MLX runtime versions mlx={mlx_ver!r}, mlx-vlm={mlx_vlm_ver!r}; "
+                    f"Qwen3.5 GatedDeltaNet Metal kernel requires mlx>=0.32.4 and mlx-vlm>=0.7.8"
+                )
+
         prompts_file = Path(system_prompts_path) if system_prompts_path else (model_dir / "system_prompts.json")
         if not prompts_file.is_file():
             raise RuntimeError(f"Missing system_prompts.json: {prompts_file}")
@@ -510,7 +572,6 @@ def run_switchable_evaluation(
 
         report["failure_phase"] = "loading-model"
         _atomic_write_json(report_path, report)
-        from mlx_vlm import load, stream_generate
 
         load_t0 = time.monotonic()
         model, processor = load(str(model_dir), strict=True)
@@ -519,8 +580,6 @@ def run_switchable_evaluation(
         report["model_load_count"] += 1
         report["load_seconds"] = round(time.monotonic() - load_t0, 4)
         report["effective_backend"] = effective_backend
-        report["mlx_version"] = version("mlx")
-        report["mlx_vlm_version"] = version("mlx-vlm")
         report["system_prompts_sha256"] = hashlib.sha256(prompts_file.read_bytes()).hexdigest()
         report["last_trustworthy_evidence"] = "loading-model"
         _atomic_write_json(report_path, report)
