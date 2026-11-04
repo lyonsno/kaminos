@@ -112,6 +112,7 @@ export async function createMechanismController({host,inputs={},record=()=>{}}){
   const resized=v.mode==='build'&&n.parent!==null&&Math.abs(v.scale[0]-n.length)>1e-7;
   if(moved&&!resized)model=(v.mode!=='build'&&n.parent!==null&&base.nodes[n.parent]?.parent!==null)?foldChainToPoint(base,selected,[p.x,p.y],v.mode,{obstacles:stationaryObstacles(base)}):resyncPistonClevises(moveJoint(base,selected,[p.x,p.y],v.mode),{obstacles:stationaryObstacles(base)});
   else if(n.parent!==null){const q=new T.Quaternion().setFromEuler(new T.Euler(...v.rotation)).premultiply(root.getWorldQuaternion(new T.Quaternion()).invert()),e=new T.Euler().setFromQuaternion(q),parent=frames(base,v.mode==='B'?1:0)[n.parent],length=v.mode==='build'?v.scale[0]:n.length;model=moveJoint(base,selected,[parent.point[0]+Math.cos(e.z)*length,parent.point[1]+Math.sin(e.z)*length],v.mode);}
+  if(model.bodyGeometry)model={...model,bodyGeometry:resyncBodyGeometry(model.bodyGeometry,model)};
   update();
  }});
 
@@ -249,7 +250,7 @@ export async function createMechanismController({host,inputs={},record=()=>{}}){
    const nodeMap=oldIdx=>{const mid=oldIdx>targetJoint?oldIdx+count-1:oldIdx;return nextIdxMap.has(mid)?nextIdxMap.get(mid):null;};
    next=connectPiston(next,finalParentId,finalJoint,{obstacles});
    for(let s=1;s<count;s++)next=connectPiston(next,finalJoint+s-1,finalJoint+s,{obstacles});
-   const nextGeometry=sectionBodyGeometry(currentBodies,{oldRecipe:model,nextRecipe:next,joint:finalJoint,count,nodeMap});
+   const nextGeometry=sectionBodyGeometry(currentBodies,{oldRecipe:model,nextRecipe:next,joint:targetJoint,destinationJoint:finalJoint,count,nodeMap});
    apply({...next,bodyGeometry:nextGeometry},'Section link');
    seat.changed(()=>{selected=finalTipId;update();});
    record({kind:'links.section',phase:'applied',effective:read()});

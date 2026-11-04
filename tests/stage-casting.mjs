@@ -43,7 +43,7 @@ async function workshopFixture({saved=false}={}){
  const m=new Group();m.userData.kaminosStageMold=recipe;const k=new Group();k.position.set(4,0,0);
  const objects=[{id:'mold',object:m},{id:'kiln',object:k,label:'Kiln · fixture'}],events=[];let resident=false,finish,frame;
  const settled=new Promise(resolve=>finish=()=>{resident=true;resolve();});
- const author={burningState:()=>({status:resident?'resident':'waiting-for-fire',state:resident?{elapsed:0}:null}),settleCombustion:()=>{events.push('settle');return settled;},addStageCasting:async p=>{const o=mold.createStageCasting(p),id='piece-'+objects.length;objects.push({id,object:o});return id;}};
+ const author={burningState:()=>({status:resident?'resident':'waiting-for-fire',state:resident?{elapsed:0}:null}),settleCombustion:()=>{events.push('settle');return settled;},addStageCasting:async (p,pose)=>{const o=mold.createStageCasting(p);o.position.fromArray(pose.position);o.rotation.set(...pose.rotation);o.scale.fromArray(pose.scale);const id='piece-'+objects.length;objects.push({id,object:o});return id;}};
  if(saved){const part=(await import('../casting-transfer.mjs')).stageLetterCastings(recipe)[0],o=mold.createStageCasting(part.recipe);objects.push({id:'saved',object:o});}
  const app={kaminosSceneAuthoring:author,removeSceneObject:id=>objects.splice(objects.findIndex(o=>o.id===id),1)};
  const flame={read:()=>({scene:{objects:[{id:'flame-field'}]}}),setPaused:v=>events.push(['pause',v])};
@@ -107,4 +107,20 @@ test('deleting a carried casting stops automatic loader travel',async()=>{
  const f=await loaderFixture({phase:0,cycle:0});await f.study.operations.unmold();await f.study.operations.carry();f.frame(1);
  f.objects.splice(f.objects.findIndex(o=>o.id===f.study.read().pieceId),1);const cycle=f.state.cycle;f.frame(1);
  assert.equal(f.state.cycle,cycle);assert.equal(f.study.read().carriage.moving,false);await f.study.dispose();
+});
+
+test('each letter lifts to the editable paddle mount before articulated transport',async()=>{
+ const f=await loaderFixture({phase:0,cycle:0});
+ const{Group}=await import('../lib/three.core.js');const paddle=new Group();paddle.position.set(2,3,4);paddle.rotation.y=.4;paddle.scale.setScalar(2);f.objects.push({id:'paddle',object:paddle});
+ f.state.recipe.mounts=[{id:'load',owner:{objectId:'paddle'},position:[0,.05,0],rotation:[0,0,0]}];f.state.recipe.castingCarrier.pickupMount='load';
+ for(let n=0;n<2;n++){
+  await f.study.operations.unmold();assert.equal(f.study.read().transfer?.moving,true,'unmolding lifts to the loading mount');
+  await assert.rejects(f.study.operations.carry(),/transfer|lift/i);
+  f.frame(4);const piece=f.objects.find(o=>o.id===f.study.read().pieceId).object;
+  assert.ok(piece.position.distanceTo(new Vector3(2,3.1,4))<1e-8);assert.ok(Math.abs(piece.rotation.y-.4)<1e-8);assert.deepEqual(piece.scale.toArray(),[1,1,1]);
+  assert.match(f.study.read().phase,/loader/i);await f.study.operations.removeCasting();
+ }
+ f.state.fraction=1;await assert.rejects(f.study.operations.unmold(),/return.*loader|loader.*mold/i);assert.equal(f.objects.filter(o=>o.object.userData.kaminosStageCasting).length,0);
+ f.state.fraction=0;f.state.recipe.castingCarrier.pickupMount='missing';await assert.rejects(f.study.operations.unmold(),/mount/i);assert.equal(f.objects.filter(o=>o.object.userData.kaminosStageCasting).length,0);
+ await f.study.dispose();
 });

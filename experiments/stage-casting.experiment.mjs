@@ -1,4 +1,5 @@
 import * as THREE from '../lib/three.core.js';
+import {mountMatrix,matrixFrame} from './link-workshop/mounts.mjs';
 import {createCarriageRun} from '../casting-carriage.mjs';
 import pourStudy from './stage-pour.experiment.mjs';
 import {stageLetterCastings,createCastingTransfer,castingPickupPose} from '../casting-transfer.mjs';
@@ -8,6 +9,7 @@ export default {id:'stage-casting',title:'Workshop · casting to fire',async cre
  const study=await createPourStudy({host,inputs,record}),session=await host.scene.open();
  let flame,closed=false,pending=Promise.resolve(),pieceId=null,cursor=0,sourceRecipe=null,burnStart=null,ignitionSeconds=2,transferSeconds=4,phase='At the mold',status,updateButtons=()=>{},cleanup=()=>{},createdFire=false;
  const object=id=>host.scene.objects().find(o=>o.id===id)?.object;
+ let transferDestination='At the kiln · ignite when you like';
  let carriageRuntime=null,carriageId=null,carriagePose=null,carriageRecipe=null,carriagePayload=null;
  const carriage=createCarriageRun({write:position=>{
   if(!object(carriageId))throw Error('Loader was removed');
@@ -32,7 +34,7 @@ export default {id:'stage-casting',title:'Workshop · casting to fire',async cre
  const active=()=>{if(closed)throw Error('Casting workshop is closed');};
  const read=()=>({phase,pieceId,cursor,transfer:transfer.read(),carriage:carriage.read(),carrierId:carrierEntry()?.id,ignitionSeconds,transferSeconds,igniting:burnStart!==null,combustion:pieceId?author.burningState(pieceId):null,study:study.read(),fidelity:'Authored solid inserts and joint kinematics; existing thermal combustion. Liquid solidification is not simulated.',firePrepared:!!flame});
  const refresh=()=>{if(status)status.textContent=phase+(pieceId?' · '+author.burningState(pieceId).status:'');updateButtons();};
- const transfer=createCastingTransfer({write:p=>{const root=object(pieceId);if(!root)throw Error('The travelling casting was removed');root.position.fromArray(p.position);root.rotation.set(...p.rotation);root.scale.fromArray(p.scale);root.updateMatrixWorld(true);session.redraw();},arrive:()=>{phase='At the kiln · ignite when you like';host.scene.refreshPresentation({id:pieceId,root:object(pieceId)});record({kind:'casting.arrive',effective:{pieceId,pose:pose(object(pieceId))}});refresh();}});
+ const transfer=createCastingTransfer({write:p=>{const root=object(pieceId);if(!root)throw Error('The travelling casting was removed');root.position.fromArray(p.position);root.rotation.set(...p.rotation);root.scale.fromArray(p.scale);root.updateMatrixWorld(true);session.redraw();},arrive:()=>{phase=transferDestination;host.scene.refreshPresentation({id:pieceId,root:object(pieceId)});record({kind:'casting.arrive',effective:{pieceId,pose:pose(object(pieceId))}});refresh();}});
  const serial=fn=>arg=>{const task=pending.then(()=>{active();return fn(arg);});pending=task.catch(()=>{});return task;};
  async function prepare(){
   if(flame)return;
@@ -57,8 +59,15 @@ export default {id:'stage-casting',title:'Workshop · casting to fire',async cre
    const m=mold();if(!m)throw Error('The mold was removed');const p=m.userData.kaminosStageMold,signature=JSON.stringify(p);if(signature!==sourceRecipe){cursor=0;sourceRecipe=signature;}
    const letters=stageLetterCastings(p),part=letters[cursor%letters.length];
    const start=castingPickupPose(m,part.offset);
+   let pickup=null;const entry=carrierEntry(),pickupMount=entry?.object.userData.linkMechanism?.castingCarrier?.pickupMount;
+   if(pickupMount){
+    const {runtime}=await carrier(),state=runtime.read();
+    if(state.playing||carriage.read()?.moving||state.fraction>1e-6)throw Error('Return the loader to the mold before loading a letter');
+    pickup={...matrixFrame(mountMatrix(entry.object,state.recipe,pickupMount,state.fraction,host.scene.objects())),scale:start.scale};
+   }
    const id=await author.addStageCasting(part.recipe,start);pieceId=id;cursor++;
-   phase='At the mold · fasten or carry the casting';record({kind:'casting.unmold',effective:{id,part,cursor,pose:start}});refresh();return {id,part,start};
+   if(pickup){transferDestination='On the loader · carry to the kiln';transfer.start(start,pickup,{seconds:transferSeconds,lift:Math.max(.1,p.wallHeight)});}
+   phase=pickup?'Lifting letter to the loader':'At the mold · fasten or carry the casting';record({kind:'casting.unmold',effective:{id,part,cursor,pose:start,pickup}});refresh();return {id,part,start};
  }
  async function carrier(){
   const entry=carrierEntry();if(!entry)throw Error('This workshop has no loader assigned');
@@ -79,12 +88,13 @@ export default {id:'stage-casting',title:'Workshop · casting to fire',async cre
   prepare:serial(async()=>{try{await prepare();return read();}catch(e){flame=null;throw e;}}),
   unmold:serial(async()=>{await unmold();return read();}),
   release:serial(async()=>{
+   if(carrierEntry()?.object.userData.linkMechanism?.castingCarrier?.pickupMount)throw Error('Use Unmold and Carry with this loader');
    const k=kiln();if(!k)throw Error('Choose a kiln object for this workshop');k.updateWorldMatrix(true,false);
    const {id,part,start}=await unmold();
    const fire=host.fire.read(),source=fire.registered?fire.pose:{position:k.localToWorld(new THREE.Vector3(0,-.05,.28)).toArray()};
    const q=k.getWorldQuaternion(new THREE.Quaternion()).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI/2,0,0))),e=new THREE.Euler().setFromQuaternion(q);
    const target={position:source.position.map((v,i)=>v+(i===1?.75:i===2?.08:0)),rotation:[e.x,e.y,e.z],scale:start.scale};
-   phase='Carrying letter '+cursor;transfer.start(start,target,{seconds:transferSeconds,lift:1});record({kind:'casting.release',effective:{id,part,cursor,from:start,to:target,transferSeconds}});refresh();return read();
+   transferDestination='At the kiln · ignite when you like';phase='Carrying letter '+cursor;transfer.start(start,target,{seconds:transferSeconds,lift:1});record({kind:'casting.release',effective:{id,part,cursor,from:start,to:target,transferSeconds}});refresh();return read();
   }),
   carry:serial(async()=>{
    adopt();if(!pieceId||!object(pieceId))throw Error('Unmold a letter first');
@@ -96,6 +106,7 @@ export default {id:'stage-casting',title:'Workshop · casting to fire',async cre
   }),
   returnLoader:serial(async()=>{
    if(burnStart!==null)throw Error('Stop ignition before returning the loader');
+   if(transfer.read()?.moving)throw Error('Let the letter finish its lift before returning the loader');
    const {runtime}=await carrier();await detachCasting();
    startCarriage(runtime,0,null);phase='Casting set down · loader returning';refresh();return read();
   }),
@@ -127,7 +138,7 @@ export default {id:'stage-casting',title:'Workshop · casting to fire',async cre
   const title=doc.createElement('header'),label=doc.createElement('span');label.className='operating-title';label.textContent='Kiln';title.append(label);panel.append(title);
   const call=name=>invoke(name).catch(e=>{phase=e.message;refresh();});
   const ignite=doc.createElement('button');ignite.className='btn';ignite.textContent='Ignite';ignite.title='Heat the letter for the chosen simulation time, then turn the source off and let the material burn.';ignite.onclick=()=>call(burnStart!==null?'stopIgnition':'ignite');title.append(ignite);
-  const release=doc.createElement('button');release.className='btn';release.textContent='Unmold next letter';release.title='Lift a separate solid letter at the mold for pickup. Liquid solidification is not simulated.';release.onclick=()=>call('unmold');
+  const release=doc.createElement('button');release.className='btn';release.textContent='Unmold next letter';release.title='Lift a separate solid letter to the loader’s editable pickup mount, or leave it at the mold when no pickup mount is assigned. This lift is provisional; liquid solidification is not simulated.';release.onclick=()=>call('unmold');
   doc.querySelector('[data-stage-operating="mold"]').append(release);
   const loader=carrierEntry();let loaderMount;
   if(loader){

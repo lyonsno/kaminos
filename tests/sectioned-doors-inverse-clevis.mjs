@@ -151,3 +151,29 @@ test('sectioning persistent links retains distal attachment and mounting identit
  const split=model.sectionLink(base,1,3);
  assert.equal(split.attachments[0].joint,3);assert.equal(split.mounts[0].owner.joint,3);assert.equal(split.nodes[4].parent,3);assert.equal(split.castingCarrier.joint,3);
 });
+
+async function editableFurnace(reorder=false){
+ const scene=new T.Group(),edits=createSceneEdits({read(){throw Error('missing');},write(){throw Error('missing');}});
+ const session={async attach(root){scene.add(root);return{id:'workshop',root};},redraw(){},readView(){return{};},setView(){},onFrame(){return()=>{};},async dispose(){scene.clear();}};
+ const host={scene:{async open(){return session;},refreshPresentation(){}},controls:{document:{defaultView:{kaminosSceneEdits:edits,kaminosSelection:{set(){}}}},components:{register(){return{changed(fn){edits.cancel();fn?.();},dispose(){}};}}}};
+ const source=furnaceAssembly({mirrored:true});
+ if(reorder){const map={0:1,1:2,2:0};source.recipe.nodes=[2,0,1].map(i=>({...source.recipe.nodes[i],parent:source.recipe.nodes[i].parent===null?null:map[source.recipe.nodes[i].parent]}));source.recipe.pistons=source.recipe.pistons.map(p=>({...p,a:map[p.a],b:map[p.b]}));source.geometry.bodies=source.geometry.bodies.map(b=>({...b,id:b.id.replace(/^(anchor|link|pin):(\d+)$/,(_,kind,id)=>kind+':'+map[id])}));}
+ const rt=await workshop.create({host,inputs:{recipe:source.recipe,bodies:source.geometry,mode:'B'}});
+ await rt.operations.section({joint:reorder?2:1,count:3});
+ return{rt,edits,scene};
+}
+test('native articulated tip preview, commit, cancel and history preserve authored shells',async()=>{
+ const{rt,edits,scene}=await editableFurnace();
+ const shells=()=>{const names=[];scene.traverse(o=>{if(o.name==='Roof shell'||o.name.startsWith('Door shell'))names.push(o.name);});return names.sort();};
+ const before=shells();assert.ok(before.includes('Door shell (section 1)'));
+ rt.operations.mode({value:'B'});rt.operations.select({joint:3});
+ edits.begin('@link-joint:workshop','Move joint');edits.preview({position:[-1.45,3.88,0]});assert.deepEqual(shells(),before,'preview retains every shell');edits.commit();assert.deepEqual(shells(),before);
+ edits.undo();assert.deepEqual(shells(),before);edits.redo();assert.deepEqual(shells(),before);
+ edits.begin('@link-joint:workshop','Move joint');edits.preview({position:[-1.3,3.9,0]});edits.cancel();assert.deepEqual(shells(),before);
+ await rt.dispose();
+});
+test('sectioning after an earlier orphan anchor splits the original source shell into every destination',async()=>{
+ const{rt}=await editableFurnace(true),packet=rt.operations.exportBodies();
+ for(let i=1;i<=3;i++){const body=packet.bodies.find(b=>b.id===`link:${i}`);assert.ok(body);const names=[];new T.ObjectLoader().parse(body.object).traverse(o=>names.push(o.name));assert.ok(names.includes(`Door shell (section ${i})`),`section ${i} owns its shell`);assert.ok(!names.includes('Door shell'),'no whole source shell remains');}
+ await rt.dispose();
+});

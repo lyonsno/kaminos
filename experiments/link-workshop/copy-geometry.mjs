@@ -55,7 +55,7 @@ function refreshClevisMeshes(obj,def){
  return [...new Set(names)];
 }
 
-export function sectionBodyGeometry(packet,{oldRecipe,nextRecipe,joint,count,nodeMap=null,mirrorPlaneZ=-1.3}){
+export function sectionBodyGeometry(packet,{oldRecipe,nextRecipe,joint,destinationJoint=joint,count,nodeMap=null,mirrorPlaneZ=-1.3}){
  if(!packet?.bodies?.length)return {schema:'kaminos.assembly-geometry.v1',bodies:[]};
  const extra=count-1,mapNode=nodeMap??(i=>i>joint?i+extra:i);
  const oldLayout=bodyLayout(oldRecipe),freshLayout=bodyLayout(nextRecipe);
@@ -100,11 +100,11 @@ export function sectionBodyGeometry(packet,{oldRecipe,nextRecipe,joint,count,nod
   for(const child of srcObj.children){
    if(child.name==='Mirrored shapes'||child.userData?.copyPart==='operating-lever'||child.userData?.copyPart==='clevis-lug')continue;
    const b=new T.Box3().setFromObject(child),size=b.getSize(new T.Vector3()),center=b.getCenter(new T.Vector3());
-   if(size.x>nextRecipe.nodes[joint].length*1.05)panelTemplates.push({child,size,center});
-   else if(center.x<nextRecipe.nodes[joint].length*0.6)hingeTemplates.push(child);
+   if(size.x>nextRecipe.nodes[destinationJoint].length*1.05)panelTemplates.push({child,size,center});
+   else if(center.x<nextRecipe.nodes[destinationJoint].length*0.6)hingeTemplates.push(child);
   }
   for(let s=0;s<count;s++){
-   const nodeId=joint+s,newId=`link:${nodeId}`,def=freshById.get(newId),segLen=nextRecipe.nodes[nodeId].length;
+   const nodeId=destinationJoint+s,newId=`link:${nodeId}`,def=freshById.get(newId),segLen=nextRecipe.nodes[nodeId].length;
    const dz=(oldLayout.layers[joint]??0)-(freshLayout.layers[nodeId]??0);
    const group=def.object.clone(true);group.name=`Door section ${s+1}`;
    const copyNames=[];
@@ -128,7 +128,7 @@ export function sectionBodyGeometry(packet,{oldRecipe,nextRecipe,joint,count,nod
  // 3. Update pins and clevis-solved pistons (and mirror them if the assembly was mirrored)
  if(hasMirror){
   for(let s=0;s<count;s++){
-   const pinId=`pin:${joint+s}`,def=freshById.get(pinId);
+   const pinId=`pin:${destinationJoint+s}`,def=freshById.get(pinId);
    if(def){out.set(pinId,{id:pinId,geometryKey:def.geometryKey,object:serialize(def.object.clone(true))});mirrorSelections.push({id:pinId});}
   }
   nextRecipe.pistons.forEach((_,j)=>{
