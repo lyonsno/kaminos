@@ -259,10 +259,24 @@ test('studio look library defines curated looks and arrival rig materializes as 
   );
   const outlinerStart = html.indexOf('data-arrival-studio-rig="true"');
   const outlinerRow = html.slice(outlinerStart - 120, outlinerStart + 650);
-  assert.match(
+  assert.doesNotMatch(
     outlinerRow,
-    /data-arrival-rig-action="translate"/,
-    'Outliner Grab button must pass translate action to grabArrivalStudioRig',
+    /data-arrival-rig-action/,
+    'Outliner Arrival Studio Rig row must not render inline Grab / Orbit action buttons',
+  );
+  const groupRowStart = html.indexOf('function renderSceneGroupRow(');
+  const groupRowEnd = html.indexOf('const sceneOutlineCollapsed', groupRowStart);
+  assert.doesNotMatch(
+    html.slice(groupRowStart, groupRowEnd),
+    /data-arrival-rig-action/,
+    'renderSceneGroupRow must not render inline Grab / Orbit action buttons in the Outliner',
+  );
+  const beautyLodStart = html.indexOf('sceneBeautyLods ??= createSceneBeautyLodController({');
+  const beautyLodBlock = html.slice(beautyLodStart, beautyLodStart + 480);
+  assert.match(
+    beautyLodBlock,
+    /prepareArrivedMeshMaterials/,
+    'sceneBeautyLods parseGlb must apply prepareArrivedMeshMaterials so LOD rungs preserve 16x anisotropic filtering and surface finish',
   );
   const mountStart = html.indexOf('function mountSceneSpotLight(raw)');
   const mountEnd = html.indexOf('function groupPivotPose(', mountStart);
