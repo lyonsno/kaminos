@@ -299,6 +299,142 @@ class HybridPartitionTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Singular'):
                 hybrid._parse_glb(p)
 
+    def test_partition_raw_field_separates_manifold_opaque_from_glass_and_nonmanifold_sponge(self):
+        # Build a closed manifold icosahedron-like subdivided octahedron (32 manifold opaque triangles, 18 vertices)
+        # plus a 12-triangle closed glass tetrahedron/box (opacity = 0.25 < 0.98)
+        # plus a non-manifold sponge cluster (valence-3 T-junction and valence-1 open boundary ribbons)
+        # plus a tiny 4-triangle closed manifold tetrahedron flake (< min_manifold_component_triangles=16).
+        def make_closed_box(origin, scale, opacity_val):
+            ox, oy, oz = origin
+            s = scale
+            v = np.array([
+                [ox, oy, oz], [ox+s, oy, oz], [ox+s, oy+s, oz], [ox, oy+s, oz],
+                [ox, oy, oz+s], [ox+s, oy, oz+s], [ox+s, oy+s, oz+s], [ox, oy+s, oz+s],
+                # face centers to give 24 manifold triangles per box (or 2 boxes = 48 connected if welded, or 6*4=24 tris)
+                [ox+s*.5, oy+s*.5, oz], [ox+s*.5, oy+s*.5, oz+s],
+                [ox+s*.5, oy, oz+s*.5], [ox+s*.5, oy+s, oz+s*.5],
+                [ox, oy+s*.5, oz+s*.5], [ox+s, oy+s*.5, oz+s*.5],
+            ], dtype='<f4')
+            f = np.array([
+                [0,2,8],[0,3,2],[0,1,8],[1,2,8],
+            ], dtype='<u4')
+            # Clean 24-triangle closed manifold triangulated cube (6 faces * 4 tris sharing face center)
+            faces = []
+            for c_idx, loop in [
+                (8, [0, 3, 2, 1]),
+                (9, [4, 5, 6, 7]),
+                (10, [0, 1, 5, 4]),
+                (11, [3, 7, 6, 2]),
+                (12, [0, 4, 7, 3]),
+                (13, [1, 2, 6, 5]),
+            ]:
+                for k in range(4):
+                    faces.append([loop[k], loop[(k+1)%4], c_idx])
+            f = np.asarray(faces, dtype='<u4')
+            rows = np.zeros((len(v), 12), dtype='<f4')
+            rows[:, :3] = v
+            center = v[:8].mean(axis=0)
+            n = v - center
+            n /= np.linalg.norm(n, axis=1, keepdims=True)
+            rows[:, 3:6] = n
+            rows[:, 6:9] = [0.6, 0.4, 0.2]
+            rows[:, 9] = 0.05
+            rows[:, 10] = 0.7
+            rows[:, 11] = opacity_val
+            return rows, f
+
+        sheet_rows, sheet_tris = make_closed_box([0., 0., 0.], 0.4, 1.0)
+        glass_rows, glass_tris = make_closed_box([1.0, 0., 0.], 0.3, 0.25)
+        glass_tris = glass_tris + len(sheet_rows)
+
+        # Tiny 4-triangle closed manifold tetrahedron flake (4 < min_manifold_component_triangles=16)
+        base_f = len(sheet_rows) + len(glass_rows)
+        flake_v = np.array([
+            [2.0, 0., 0.], [2.05, 0., 0.], [2.02, 0.05, 0.], [2.02, 0.02, 0.05]
+        ], dtype='<f4')
+        flake_rows = np.zeros((4, 12), dtype='<f4')
+        flake_rows[:, :3] = flake_v
+        flake_rows[:, 3:6] = [0., 0., 1.]
+        flake_rows[:, 6:9] = [0.5, 0.5, 0.5]
+        flake_rows[:, 9:12] = [0., 0.8, 1.0]
+        flake_tris = np.array([
+            [0, 2, 1], [0, 1, 3], [1, 2, 3], [2, 0, 3]
+        ], dtype='<u4') + base_f
+
+        # Non-manifold T-junction sponge (3 triangles sharing edge (0,1), plus open boundary edges)
+        base_s = base_f + len(flake_rows)
+        sponge_v = np.array([
+            [3.0, 0., 0.], [3.1, 0., 0.], [3.05, 0.1, 0.], [3.05, -0.1, 0.], [3.05, 0., 0.1]
+        ], dtype='<f4')
+        sponge_rows = np.zeros((5, 12), dtype='<f4')
+        sponge_rows[:, :3] = sponge_v
+        sponge_rows[:, 3:6] = [0., 0., 1.]
+        sponge_rows[:, 6:9] = [0.3, 0.3, 0.3]
+        sponge_rows[:, 9:12] = [0., 0.9, 1.0]
+        sponge_tris = np.array([
+            [0, 1, 2], [0, 3, 1], [0, 1, 4]
+        ], dtype='<u4') + base_s
+
+        surfels = np.vstack([sheet_rows, glass_rows, flake_rows, sponge_rows])
+        triangles = np.vstack([sheet_tris, glass_tris, flake_tris, sponge_tris])
+
+        res = hybrid.partition_raw_field(surfels, triangles, min_manifold_component_triangles=16, absorb_pinhole_max_triangles=8)
+        self.assertEqual(res['stats']['totalTriangles'], 55)
+        self.assertEqual(res['stats']['meshTriangleCount'], 24)
+        self.assertEqual(res['stats']['glassTriangleCount'], 24)
+        self.assertEqual(res['stats']['spongeTriangleCount'], 7)
+        self.assertTrue(res['meshTriangles'][:24].all(), 'Manifold opaque sheet >=16 tris must route to mesh')
+        self.assertTrue(res['glassTriangles'][24:48].all(), 'Low-opacity closed bottle must route to glass splats')
+        self.assertTrue(res['splatTriangles'][24:].all(), 'Glass, tiny flakes, and non-manifold sponge must route to splats')
+
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t)
+            raw_dir = root / 'raw'
+            raw_dir.mkdir()
+            s_bytes = surfels.tobytes()
+            t_bytes = triangles.tobytes()
+            (raw_dir / 'surfels.f32').write_bytes(s_bytes)
+            (raw_dir / 'triangles.u32').write_bytes(t_bytes)
+            import hashlib
+            (raw_dir / 'report.json').write_text(json.dumps({
+                'schema': 'trellis-surfel-fields.v1',
+                'ok': True,
+                'phase': 'done',
+                'source': 'synthetic-raw',
+                'sourceHashes': {'mesh_raw.npz': 'h1', 'texture.npz': 'h2'},
+                'sourceCount': len(surfels),
+                'count': len(surfels),
+                'stride': 12,
+                'gridSize': 512,
+                'radius': 0.0015625,
+                'bounds': [surfels[:, :3].min(0).tolist(), surfels[:, :3].max(0).tolist()],
+                'dataSHA256': hashlib.sha256(s_bytes).hexdigest(),
+                'triangles': {
+                    'file': 'triangles.u32',
+                    'count': len(triangles),
+                    'sha256': hashlib.sha256(t_bytes).hexdigest(),
+                    'sourceCount': len(triangles),
+                },
+            }))
+            out_dir = root / 'out'
+            cmd = [
+                sys.executable, str(Path(hybrid.__file__)), str(raw_dir), str(out_dir),
+                '--raw-field', '--min-manifold-component-triangles', '16', '--pinhole-max-triangles', '8'
+            ]
+            proc = subprocess.run(cmd, capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            report = json.loads((out_dir / 'report.json').read_text())
+            self.assertTrue(report['ok'])
+            self.assertEqual(report['partition']['meshTriangleCount'], 24)
+            self.assertEqual(report['partition']['splatTriangleCount'], 31)
+            self.assertEqual(report['partition']['meshVertexCount'], 14)
+            self.assertTrue((out_dir / 'mesh-region.glb').exists())
+            splat_meta = json.loads((out_dir / 'splat-region/report.json').read_text())
+            self.assertEqual(splat_meta['schema'], 'trellis-surfel-fields.v1')
+            self.assertEqual(splat_meta['count'], 23)
+            self.assertEqual(splat_meta['triangles']['count'], 31)
+            self.assertIn('footprints', splat_meta)
+
 
 if __name__ == '__main__':
     unittest.main()
