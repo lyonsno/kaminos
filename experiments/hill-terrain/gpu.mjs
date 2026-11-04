@@ -284,9 +284,9 @@ const fragFormedColor=wgslFn(`fn hill_frag_color(vColor:vec4<f32>,x:f32,y:f32,z:
 }`,[geoFbm3,geoLedgeProfile,geoRockCrag,geoVoronoi2]);
 
 const baseCutoutKernel=wgslFn(`fn hill_base_cutout(x:f32,z:f32,fx:f32,fz:f32,fr:f32,useFormed:f32,zoomOn:f32)->f32{
- if(useFormed<.5||zoomOn<.5||fr>2.65){return 1.;}
+ if(useFormed<.5||zoomOn<.5||fr>2.85){return 1.;}
  let edge=max(abs(x-fx),abs(z-fz))/max(.05,fr);
- if(edge<.88){return 0.;}
+ if(edge<.72){return 0.;}
  return 1.;
 }`);
 
@@ -360,12 +360,15 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
  let outX=-dhdx/nLen;let outZ=-dhdz/nLen;
  let edge=max(abs(u),abs(w));
  let border=1.-smoothstep(.45,.49,max(abs(wx/width),abs(wz/length)));
- let zoomActive=1.-smoothstep(2.50,3.30,fr);
- let wPatch=(1.-smoothstep(.78,.93,edge))*border*zoomActive;
- let collarLift=(1.-smoothstep(.90,.96,edge))*.003*zoomActive-smoothstep(.94,.99,edge)*.008;
- let bed=mix(bedTri,cub.x,wPatch);
- let rawSoil=max(0.,mix(soilTri,cub.y,wPatch));
- let cliffStrip=smoothstep(.42,1.15,rawSlope)*(1.-smoothstep(.04,.28,cub.y));
+ let zoomActive=1.-smoothstep(2.60,3.30,fr);
+ let wPatch=(1.-smoothstep(.62,.95,edge))*border*zoomActive;
+ let inCollar=smoothstep(.58,.72,edge);
+ let collarLift=(1.-smoothstep(.88,.96,edge))*.004*zoomActive-smoothstep(.95,.995,edge)*.008;
+ let safeCubX=mix(cub.x,max(bedTri,cub.x),inCollar);
+ let safeCubY=mix(cub.y,max(soilTri,cub.y),inCollar);
+ let bed=mix(bedTri,safeCubX,wPatch);
+ let rawSoil=max(0.,mix(soilTri,safeCubY,wPatch));
+ let cliffStrip=smoothstep(.42,1.15,rawSlope)*(1.-smoothstep(.04,.28,cub.y))*(1.-inCollar);
  let effSoil=rawSoil*(1.-.95*wPatch*cliffStrip);
  var px=wx;var pz=wz;
  var py=bed+rawSoil+collarLift;
@@ -397,13 +400,14 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
   let nFine=hill_fbm3(vec3<f32>(rx*24.,bed*24.,rz*24.));
   let nMicro=hill_fbm3(vec3<f32>(rx*68.,bed*68.,rz*68.));
   let invN=1./nLen;
-  let shelfHoriz=invN*(oct0*(.028*l0.x+.016*crag0.x)+oct1*(.009*l1.x+.006*crag1.x)+oct2*(.003*l2.x+.002*crag2.x)+oct3*.001*l3.x);
+  let shelfHoriz=invN*(1.-inCollar)*(oct0*(.028*l0.x+.016*crag0.x)+oct1*(.009*l1.x+.006*crag1.x)+oct2*(.003*l2.x+.002*crag2.x)+oct3*.001*l3.x);
   let step0=.034*l0.x+.022*crag0.x-.014*crag0.y;
   let step1=.011*l1.x+.008*crag1.x-.005*crag1.y;
   let step2=.0038*l2.x+.0028*crag2.x-.0018*crag2.y;
   let step3=.0014*l3.x+.0015*nFine;
   let step4=.0006*nMicro;
-  let rockVert=oct0*step0+oct1*step1+oct2*step2+oct3*step3+oct4*step4;
+  let rawRockVert=oct0*step0+oct1*step1+oct2*step2+oct3*step3+oct4*step4;
+  let rockVert=mix(rawRockVert,max(0.,rawRockVert),inCollar);
   let ledgeOut=meso*wPatch*cliffMask*shelfHoriz;
   let ledgeUp=meso*wPatch*cliffMask*rockVert;
   // Irregular 3D Voronoi talus boulders & cobbles at cliff toes, couloir chutes, and benches
@@ -416,10 +420,11 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
   let stone1=clamp(1.-c1.x*1.22,0.,1.)*smoothstep(.02,.18,c1.y)*clamp(c1.z+.38,0.,1.);
   let stone2=clamp(1.-c2.x*1.25,0.,1.)*smoothstep(.02,.18,c2.y)*clamp(c2.z+.38,0.,1.);
   let cobbleH=meso*wPatch*screeZone*(oct0*.038*stone0+oct1*.014*stone1+oct2*.005*stone2+oct3*.0018*max(0.,nFine));
-  let cobbleHoriz=invN*meso*wPatch*screeZone*(oct0*.016*stone0+oct1*.006*stone1+oct2*.002*stone2);
+  let cobbleHoriz=invN*(1.-inCollar)*meso*wPatch*screeZone*(oct0*.016*stone0+oct1*.006*stone1+oct2*.002*stone2);
   cobbleOut=cobbleH;
-  let benchOutcrop=meso*wPatch*exposed*(1.-cliffMask)*smoothstep(.22,.95,bed)*(oct0*.018*crag0.x+oct1*.007*crag1.x+oct2*.0025*crag2.x+oct3*.001*nFine);
-  let washChannel=meso*wPatch*(1.-exposed)*(1.-screeZone)*(oct1*.004*hill_fbm3(vec3<f32>(wx*6.,0.,wz*6.))+oct2*.0015*hill_fbm3(vec3<f32>(wx*18.,1.,wz*18.)));
+  let rawBench=oct0*.018*crag0.x+oct1*.007*crag1.x+oct2*.0025*crag2.x+oct3*.001*nFine;
+  let benchOutcrop=meso*wPatch*exposed*(1.-cliffMask)*smoothstep(.22,.95,bed)*mix(rawBench,max(0.,rawBench),inCollar);
+  let washChannel=meso*wPatch*(1.-exposed)*(1.-screeZone)*(1.-inCollar)*(oct1*.004*hill_fbm3(vec3<f32>(wx*6.,0.,wz*6.))+oct2*.0015*hill_fbm3(vec3<f32>(wx*18.,1.,wz*18.)));
   let totalOut=ledgeOut+cobbleHoriz;
   px=wx+totalOut*outX;
   pz=wz+totalOut*outZ;
@@ -537,8 +542,10 @@ export function createTerrainGPU(geometry,input={}){
  function setCameraFocus({target=[0,1.2,0],position=null,distance=null,enabled=true}={}){
   const en=enabled?1:0;
   const tx=Number.isFinite(target?.[0])?target[0]:0,ty=Number.isFinite(target?.[1])?target[1]:1.2,tz=Number.isFinite(target?.[2])?target[2]:0;
-  const dist=Number.isFinite(distance)&&distance>0?distance:(Array.isArray(position)&&position.length>=3?Math.hypot(position[0]-tx,position[1]-ty,position[2]-tz):10);
-  const rawR=Math.max(.22,Math.min(3.4,dist*.66));
+  const hasPos=Array.isArray(position)&&position.length>=3&&Number.isFinite(position[0])&&Number.isFinite(position[2]);
+  const dist=Number.isFinite(distance)&&distance>0?distance:(hasPos?Math.hypot(position[0]-tx,position[1]-ty,position[2]-tz):10);
+  const horizSpan=hasPos?Math.max(Math.abs(position[0]-tx),Math.abs(position[2]-tz)):0;
+  const rawR=Math.max(.22,Math.min(3.4,Math.max(dist*.68,horizSpan*1.45)));
   const qR=Math.pow(2,Math.round(Math.log2(rawR)*4)/4),r=Math.max(.22,Math.min(3.4,qR));
   const step=(2*r)/(zoomN-1);
   const maxX=Math.max(.2,config.width*.5-.25),maxZ=Math.max(.2,config.length*.5-.25);
