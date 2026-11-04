@@ -30,17 +30,40 @@ export default {
    seamGeo.attributes.position.needsUpdate=true;
   };
   let manualFocus=false;
+  const sampleHeight=(st,wx,wz)=>{
+   const gx=Math.min(n-1.0001,Math.max(0,(wx/config.width+.5)*(n-1))),gz=Math.min(n-1.0001,Math.max(0,(wz/config.length+.5)*(n-1)));
+   const ix=Math.floor(gx),iz=Math.floor(gz),fx=gx-ix,fz=gz-iz;
+   const i00=(iz*n+ix)*4,i10=i00+4,i01=i00+n*4,i11=i01+4;
+   const h00=st[i00]+st[i00+1],h10=st[i10]+st[i10+1],h01=st[i01]+st[i01+1],h11=st[i11]+st[i11+1];
+   return (1-fz)*((1-fx)*h00+fx*h10)+fz*((1-fx)*h01+fx*h11);
+  };
   const syncFocusFromView=()=>{
    if(manualFocus)return;
    const v=session?.readView?.();if(!v?.position||!v?.target)return;
    const [px,py,pz]=v.position,[tx,ty,tz]=v.target;
-   let fy=ty;const st=formed?.state;
-   if(st instanceof Float32Array&&st.length===n*n*4&&Math.abs(tx)<=config.width*.5&&Math.abs(tz)<=config.length*.5){
-    const gx=Math.min(n-1,Math.max(0,Math.round((tx/config.width+.5)*(n-1)))),gz=Math.min(n-1,Math.max(0,Math.round((tz/config.length+.5)*(n-1)))),i=(gz*n+gx)*4;
-    fy=st[i]+st[i+1];
+   let hx=tx,hy=ty,hz=tz;const st=formed?.state;
+   if(st instanceof Float32Array&&st.length===n*n*4){
+    const dx=tx-px,dy=ty-py,dz=tz-pz,len=Math.hypot(dx,dy,dz);
+    if(len>1e-5){
+     const ux=dx/len,uy=dy/len,uz=dz/len,maxT=Math.min(28,len*2.5);
+     let prevT=0,hit=false;
+     for(let s=1;s<=64;s++){
+      const t=(s/64)*maxT,rx=px+ux*t,ry=py+uy*t,rz=pz+uz*t;
+      if(Math.abs(rx)<=config.width*.5&&Math.abs(rz)<=config.length*.5){
+       const th=sampleHeight(st,rx,rz);
+       if(ry<=th){
+        let lo=prevT,hi=t;
+        for(let b=0;b<6;b++){const mid=.5*(lo+hi),mx=px+ux*mid,my=py+uy*mid,mz=pz+uz*mid;if(my<=sampleHeight(st,mx,mz))hi=mid;else lo=mid;}
+        const ft=.5*(lo+hi);hx=px+ux*ft;hz=pz+uz*ft;hy=sampleHeight(st,hx,hz);hit=true;break;
+       }
+      }
+      prevT=t;
+     }
+     if(!hit&&Math.abs(tx)<=config.width*.5&&Math.abs(tz)<=config.length*.5)hy=sampleHeight(st,tx,tz);
+    }
    }
-   const dist=Math.hypot(px-tx,py-fy,pz-tz);
-   gpu.setCameraFocus({target:[tx,fy,tz],position:[px,py,pz],distance:dist,enabled:true});
+   const dist=Math.hypot(px-hx,py-hy,pz-hz);
+   gpu.setCameraFocus({target:[hx,hy,hz],position:[px,py,pz],distance:dist,enabled:true});
    zoomMesh.visible=Boolean(formed||pending?.partial)&&gpu.read().zoomDetail.enabled;
   };
   registerExportGeometrySnapshot(mesh,()=>{throw Error('GPU terrain export requires an explicit frozen snapshot; formation cache preserves the initial landscape');});
