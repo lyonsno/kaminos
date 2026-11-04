@@ -1,8 +1,9 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import { WORLD_SMOKE_WGSL } from '../volume-world-smoke.mjs';
-assert.match(WORLD_SMOKE_WGSL,/thermalMoments/, 'Outer material must retain hot-soot distribution, not only its mean temperature');
-const { sootHeatMoments, thermalQuadrature, evolveThermalMoments } = await import('../volume-thermal-moments.mjs');
+const { THERMAL_MOMENTS_WGSL, sootHeatMoments, thermalQuadrature, evolveThermalMoments } = await import('../volume-thermal-moments.mjs');
+assert.match(THERMAL_MOMENTS_WGSL, /fn thermalMoments/, 'Thermal moment WGSL helpers remain defined for moment quadrature consumers');
+assert.doesNotMatch(WORLD_SMOKE_WGSL.slice(WORLD_SMOKE_WGSL.indexOf('fn transportMaterial')), /shiftThermalMoments/, 'Smoke-only coarse World transport elides thermal moment evolution');
 const sum = (samples) => samples.reduce((a,[s,h]) => a.map((v,i)=>v+sootHeatMoments(s,h)[i]),[0,0,0]);
 for(const samples of [[[.7,.1],[.3,1.1]], [[.2,0],[.8,.9]], [[1,.6]]]){
  const soot=samples.reduce((s,p)=>s+p[0],0),m=sum(samples),q=thermalQuadrature(soot,m);

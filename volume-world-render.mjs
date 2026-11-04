@@ -1,6 +1,6 @@
-// Camera-only optical bricks for the admitted physics material law (one global
-// albedo, hence emission RGB + extinction suffice). The solver's conservative dense export stays intact.
-export const WORLD_RENDER_STRIDE = 1003; // three topology texels + 10^3 2x subcells including a one-subcell halo
+// Camera-only optical bricks for the smoke-only coarse World medium (one global
+// albedo, hence scalar extinction suffices). Four 2x subcell extinctions pack per rgba32float texel.
+export const WORLD_RENDER_STRIDE = 253; // three topology texels + 250 packed 4-subcell extinction texels (10^3 2x subcells)
 export function worldRenderShape(capacity, limit) {
   if (!Number.isSafeInteger(capacity) || capacity < 1 || !Number.isInteger(limit) || limit < 1) throw Error('Invalid World render capacity');
   const texels=capacity*WORLD_RENDER_STRIDE;
@@ -9,7 +9,7 @@ export function worldRenderShape(capacity, limit) {
   return [x,y,z];
 }
 export const WORLD_RENDER_WGSL=/* wgsl */`
-const WORLD_RENDER_STRIDE:u32=1003u;
+const WORLD_RENDER_STRIDE:u32=253u;
 @group(0) @binding(40) var worldRenderAtlas:texture_3d<f32>;
 fn worldAtlasTexel(index:u32)->vec4<f32>{
  let dims=textureDimensions(worldRenderAtlas);
@@ -64,13 +64,19 @@ fn worldResidentMaterial(p:vec3<f32>,smokeVisible:f32,fireVisible:f32)->Emissive
  let leafBounds=worldAtlasTexel(slot*WORLD_RENDER_STRIDE+2u);
  lastWorldLeafNode=n;lastWorldLeafBounds=leafBounds;
  if(leafBounds.w>0.5&&leafBounds.z<=1e-4){return EmissiveMaterial(vec3<f32>(0),0,0);}
- let cell=clamp((q-n.xyz)/(n.w*0.5)+.5,vec3<f32>(0),vec3<f32>(9));let base=min(vec3<u32>(floor(cell)),vec3<u32>(8));let f=cell-vec3<f32>(base);var value=vec4<f32>(0);
- for(var z=0u;z<2u;z++){for(var y=0u;y<2u;y++){for(var x=0u;x<2u;x++){
-  let c=base+vec3<u32>(x,y,z);let w=select(1.0-f,f,vec3<bool>(x==1u,y==1u,z==1u));
-  value+=worldAtlasTexel(slot*WORLD_RENDER_STRIDE+3u+c.x+10u*(c.y+10u*c.z))*w.x*w.y*w.z;
- }}}
- let sigma=max(value.w,0.0)*smokeVisible;let albedo=clamp(u.emissive_material.y,0.0,1.0);
- return EmissiveMaterial(max(value.rgb,vec3<f32>(0))*fireVisible,sigma*(1.0-albedo),sigma*albedo);
+ let cell=clamp((q-n.xyz)/(n.w*0.5)+.5,vec3<f32>(0),vec3<f32>(9));let base=min(vec3<u32>(floor(cell)),vec3<u32>(8));let f=cell-vec3<f32>(base);var sigmaRaw=0.0;
+ for(var z=0u;z<2u;z++){for(var y=0u;y<2u;y++){
+  let row=10u*((base.y+y)+10u*(base.z+z))+base.x;
+  let lane0=row&3u;
+  let tex0=worldAtlasTexel(slot*WORLD_RENDER_STRIDE+3u+(row>>2u));
+  var s1=0.0;
+  if(lane0<3u){s1=tex0[lane0+1u];}else{s1=worldAtlasTexel(slot*WORLD_RENDER_STRIDE+4u+(row>>2u)).x;}
+  let wy=select(1.0-f.y,f.y,y==1u)*select(1.0-f.z,f.z,z==1u);
+  sigmaRaw+=mix(tex0[lane0],s1,f.x)*wy;
+ }}
+ let _unused=fireVisible;
+ let sigma=max(sigmaRaw,0.0)*smokeVisible;let albedo=clamp(u.emissive_material.y,0.0,1.0);
+ return EmissiveMaterial(vec3<f32>(0),sigma*(1.0-albedo),sigma*albedo);
 }
 struct WorldRenderGas {a:vec4<f32>,b:vec4<f32>}
 struct WorldRenderBrick {loPitch:vec4<f32>,children0:vec4<u32>,children1:vec4<u32>,info:vec4<u32>}
@@ -154,15 +160,15 @@ fn worldRenderSampleGas(slot:u32,n:WorldRenderBrick,qw:vec3<f32>)->WorldRenderGa
  let base=floor(coord);
  let f=fract(coord);
  let w3=smoothstep(vec3<f32>(0.18),vec3<f32>(0.82),f);
- var a=vec4<f32>(0);var b=vec4<f32>(0);
+ var soot=0.0;
  for(var z=0u;z<2u;z++){for(var y=0u;y<2u;y++){for(var x=0u;x<2u;x++){
   let corner=base+vec3<f32>(f32(x),f32(y),f32(z));
   let sampleQ=n.loPitch.xyz+(corner+vec3<f32>(0.5))*step;
   let g=worldRenderCellAt(slot,n,sampleQ);
   let w=select(1.0-w3.x,w3.x,x==1u)*select(1.0-w3.y,w3.y,y==1u)*select(1.0-w3.z,w3.z,z==1u);
-  a+=g.a*w;b+=g.b*w;
+  soot+=g.a.x*w;
  }}}
- return WorldRenderGas(a,b);
+ return WorldRenderGas(vec4<f32>(soot,0,0,0),vec4<f32>(0));
 }
 fn writeWorldAtlas(index:u32,value:vec4<f32>){
  let d=textureDimensions(worldRenderOutput);
@@ -182,16 +188,21 @@ var<workgroup> worldBrickMax:array<vec2<f32>,64>;
  if(valid&&!isLeaf&&local==0u){writeWorldAtlas(start,n.loPitch);writeWorldAtlas(start+1u,vec4<f32>(n.children0+vec4<u32>(1)));writeWorldAtlas(start+2u,vec4<f32>(n.children1+vec4<u32>(1)));}
  var maxOptics=vec2<f32>(0);
  if(isLeaf){
-  for(var i=local;i<1000u;i+=64u){
-   let c=vec3<u32>(i%10u,(i/10u)%10u,i/100u);let q=n.loPitch.xyz+(vec3<f32>(c)-.5)*(n.loPitch.w*0.5);
-   var r=worldRenderCellAt(slot,n,q);
-   if(wr.loMode.w>=1.5){
-    r=worldRenderSampleGas(slot,n,q+worldSubgridWarpGrid(q,n.loPitch.w));
+  for(var t=local;t<250u;t+=64u){
+   var packed=vec4<f32>(0);
+   for(var lane=0u;lane<4u;lane++){
+    let i=4u*t+lane;
+    let c=vec3<u32>(i%10u,(i/10u)%10u,i/100u);let q=n.loPitch.xyz+(vec3<f32>(c)-.5)*(n.loPitch.w*0.5);
+    var r=worldRenderCellAt(slot,n,q);
+    if(wr.loMode.w>=1.5){
+     r=worldRenderSampleGas(slot,n,q+worldSubgridWarpGrid(q,n.loPitch.w));
+    }
+    let medium=regionSmokeMaterial(vec4<f32>(r.a.x,0,0,0),vec3<f32>(0),1,0);
+    let sigma=(medium.absorption+medium.scattering)*worldSubgridClumpGrid(q,medium.absorption+medium.scattering);
+    packed[lane]=sigma;
+    maxOptics=max(maxOptics,vec2<f32>(0.0,sigma));
    }
-   let medium=regionSmokeMaterial(vec4<f32>(r.a.xyz,r.b.x),r.b.yzw,1,1);
-   let sigma=(medium.absorption+medium.scattering)*worldSubgridClumpGrid(q,medium.absorption+medium.scattering);
-   maxOptics=max(maxOptics,vec2<f32>(length(medium.emission),sigma));
-   writeWorldAtlas(start+3u+i,vec4<f32>(medium.emission,sigma));
+   writeWorldAtlas(start+3u+t,packed);
   }
  }
  worldBrickMax[local]=maxOptics;workgroupBarrier();

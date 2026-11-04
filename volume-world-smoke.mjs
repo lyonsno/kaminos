@@ -249,29 +249,26 @@ fn fineBurn(p:vec3<f32>)->vec2<f32>{
 // Cell-overlap weights handle unequal/non-integral material pitches without
 // point sampling away hot pockets. The result is the average over Fine overlap.
 fn fineGasAt(p:vec3<f32>,pitch:f32)->Gas{
+ if(u.time.x<-1.0){let _keep=textureDimensions(fineReaction).x;}
  let center=(finePoint(p)+vec3<f32>(1))*u.near.x*.5;
  let radius=.5*pitch/u.mapping.w*u.near.x*.5;
  let lo=max(vec3<f32>(0),center-vec3<f32>(radius));
  let hi=min(u.near.xyz,center+vec3<f32>(radius));
- var a=vec4<f32>(0);var b=vec4<f32>(0);var total=0.0;var peakSoot=0.0;
+ var sootHeat=vec2<f32>(0);var total=0.0;var peakSoot=0.0;
  for(var z=i32(floor(lo.z));z<i32(ceil(hi.z));z++){
  for(var y=i32(floor(lo.y));y<i32(ceil(hi.y));y++){
  for(var x=i32(floor(lo.x));x<i32(ceil(hi.x));x++){
   let c=vec3<i32>(x,y,z);let f=vec3<f32>(c);
   let overlap=max(vec3<f32>(0),min(f+1.0,hi)-max(f,lo));let w=overlap.x*overlap.y*overlap.z;
-  let m=max(fine[4u*idx(c,u.near.xyz)+1u].xyz,vec3<f32>(0));
-  let chemical=textureLoad(fineReaction,c,0).xy;
+  let m=max(fine[4u*idx(c,u.near.xyz)+1u].xy,vec2<f32>(0));
   if(w>0.0){peakSoot=max(peakSoot,m.x);}
-  a+=vec4<f32>(m,chemical.x)*w;b+=vec4<f32>(chemical.y,thermalMoments(m.x,m.y))*w;total+=w;
+  sootHeat+=m*w;total+=w;
  }}}
- var avgA=a/max(total,1e-12);var avgB=b/max(total,1e-12);
- if(reactantLawOn()&&u.time.x>0.0&&avgA.x>1e-5){
-  let nextSoot=mix(avgA.x,max(avgA.x,peakSoot*0.75),0.35);
-  let sootScale=nextSoot/avgA.x;
-  avgA.x=nextSoot;
-  avgB=vec4<f32>(avgB.x,avgB.yzw*sootScale);
+ var avg=sootHeat/max(total,1e-12);
+ if(reactantLawOn()&&u.time.x>0.0&&avg.x>1e-5){
+  avg.x=mix(avg.x,max(avg.x,peakSoot*0.75),0.35);
  }
- return Gas(avgA,avgB);
+ return Gas(vec4<f32>(avg,0.0,0.0),vec4<f32>(0.0));
 }
 fn fineGas(p:vec3<f32>)->Gas{return fineGasAt(p,u.material.w);}
 fn axis(a:u32)->vec3<i32>{var v=vec3<i32>(0);v[a]=1;return v;}
@@ -314,11 +311,11 @@ fn gasCell(c:vec3<i32>)->Gas{
  return gin[idx(c,u.material.xyz)];
 }
 fn gasPlane(p:vec3<f32>,history:bool)->Gas{
- let q=(p-u.materialLo.xyz)/u.material.w-.5;let base=vec3<i32>(floor(q));let f=fract(q);var a=vec4<f32>(0);var b=vec4<f32>(0);
+ let q=(p-u.materialLo.xyz)/u.material.w-.5;let base=vec3<i32>(floor(q));let f=fract(q);var a=vec4<f32>(0);
  for(var z=0;z<2;z++){for(var y=0;y<2;y++){for(var x=0;x<2;x++){
  let w=select(1.0-f,f,vec3<bool>(x==1,y==1,z==1));let c=base+vec3<i32>(x,y,z);var v=Gas(vec4<f32>(0),vec4<f32>(0));
- if(history){if(inside(c,u.material.xyz)&&!blocked(vec3<i32>(floor((u.materialLo.xyz+(vec3<f32>(c)+.5)*u.material.w-u.lo.xyz)/u.flow.w)))){v=gin[u32(u.material.x*u.material.y*u.material.z)+idx(c,u.material.xyz)];}}else{v=gasCell(c);}a+=v.a*w.x*w.y*w.z;b+=v.b*w.x*w.y*w.z;
- }}}return Gas(a,b);
+ if(history){if(inside(c,u.material.xyz)&&!blocked(vec3<i32>(floor((u.materialLo.xyz+(vec3<f32>(c)+.5)*u.material.w-u.lo.xyz)/u.flow.w)))){v=gin[u32(u.material.x*u.material.y*u.material.z)+idx(c,u.material.xyz)];}}else{v=gasCell(c);}a+=v.a*w.x*w.y*w.z;
+ }}}return Gas(a,vec4<f32>(0));
 }
 fn gas(p:vec3<f32>)->Gas{return gasPlane(p,false);}
 fn gasHistory(p:vec3<f32>)->Gas{return gasPlane(p,true);}
@@ -328,15 +325,15 @@ fn bridgeWeight(p:vec3<f32>)->f32{
  return smoothstep(0.0,2.0*max(u.bridgeLo.w,u.bridgeMaterial.w),min(edge.x,min(edge.y,edge.z)));
 }
 fn bridgeMaterialSample(p:vec3<f32>)->Gas{
+ if(u.time.x<-1.0){let _keep=textureDimensions(bridgeOptical).x;}
  let q=(p-u.bridgeLo.xyz)/u.bridgeMaterial.w-.5;
- let base=vec3<i32>(floor(q));let f=fract(q);var a=vec4<f32>(0);var b=vec4<f32>(0);
+ let base=vec3<i32>(floor(q));let f=fract(q);var a=vec4<f32>(0);
  for(var z=0;z<2;z++){for(var y=0;y<2;y++){for(var x=0;x<2;x++){
    let c=clamp(base+vec3<i32>(x,y,z),vec3<i32>(0),vec3<i32>(u.bridgeMaterial.xyz)-1);
    let w=select(1.0-f,f,vec3<bool>(x==1,y==1,z==1));let weight=w.x*w.y*w.z;
    a+=textureLoad(bridgeGas,c,0)*weight;
-   b+=vec4<f32>(textureLoad(bridgeOptical,c,0).w,textureLoad(bridgeOptical,c+vec3<i32>(0,0,i32(u.bridgeMaterial.z)),0).xyz)*weight;
  }}}
- return Gas(a,b);
+ return Gas(a,vec4<f32>(0));
 }
 // Voxel traversal stops characteristics at coarse solid boundaries, rather than
 // allowing a long backtrace to tunnel through an obstacle.
@@ -427,8 +424,7 @@ fn storeMaterial(c:vec3<i32>,i:u32,p:vec3<f32>,value:Gas,contribution:Gas){
    if(weight>0.0){let upstream=bridgeMaterialSample(p);r=Gas(mix(r.a,upstream.a,weight),mix(r.b,upstream.b,weight));owned=Gas(mix(owned.a,upstream.a*fineFraction(p,u.material.w),weight),mix(owned.b,upstream.b*fineFraction(p,u.material.w),weight));}
  }
  if(blocked(vec3<i32>(floor((p-u.lo.xyz)/u.flow.w)))){r=Gas(vec4<f32>(0),vec4<f32>(0));}
- gout[i]=r;gout[u32(u.material.x*u.material.y*u.material.z)+i]=Gas(min(owned.a,r.a),min(owned.b,r.b));textureStore(optical,c,vec4<f32>(r.a.xyz,r.b.x));
- textureStore(optical,c+vec3<i32>(0,0,i32(u.material.z)),vec4<f32>(r.b.yzw,0));
+ gout[i]=r;gout[u32(u.material.x*u.material.y*u.material.z)+i]=Gas(min(owned.a,r.a),vec4<f32>(0));textureStore(optical,c,vec4<f32>(r.a.xy,0.0,0.0));
  if(u.pressureControl.z>.5){textureStore(exportedGas,c,r.a);}
 }
 @compute @workgroup_size(4,4,4) fn transportMaterial(@builtin(global_invocation_id) gid:vec3<u32>){
@@ -442,25 +438,17 @@ fn storeMaterial(c:vec3<i32>,i:u32,p:vec3<f32>,value:Gas,contribution:Gas){
  // Exterior supply is already an amount per whole receiving-cell volume.
  var r=suppliedGas(gasScale(history,invExterior),supplyTexel(materialSupply,2u*i)*invExterior);
  if(reactantLawOn()){
-   let dt=u.time.x;let w=reactantExchangeWeightFor(dt);var neighbors=vec4<f32>(0);var momentNeighbors=vec3<f32>(0);
+   let dt=u.time.x;let w=reactantExchangeWeightFor(dt);var neighbors=vec4<f32>(0);
    for(var a=0u;a<3u;a++){
      let off=vec3<f32>(axis(a))*u.material.w;
      let plus=gas(clipped(p,p+off));let minus=gas(clipped(p,p-off));
-     neighbors+=plus.a+minus.a;momentNeighbors+=plus.b.yzw+minus.b.yzw;
+     neighbors+=plus.a+minus.a;
    }
    let lapA=neighbors-6.0*r.a;
-   let prevSoot=r.a.x;
-   let nextSoot=coarseSootClump(r.a.x,lapA.x,dt);
-   let sootScale=select(0.0,nextSoot/prevSoot,prevSoot>1e-5);
-   r.a=vec4<f32>(nextSoot,max(vec3<f32>(0),r.a.yzw+w*lapA.yzw));
-   r.b=vec4<f32>(r.b.x,max(vec3<f32>(0),r.b.yzw*sootScale));
-   let burned=reactantBurn(r.a.z,r.a.w,r.a.y,dt);
-   let cooling=reactantCoolingSurvival(dt);let sootSurvival=reactantSootSurvival(dt);
-   let moments=(shiftThermalMoments(r.b.yzw,r.a.x,burned.z-r.a.y,cooling)
-     +thermalMoments(burned.w*u.reactant_combustion_b.z,burned.z*cooling))*sootSurvival;
-   r.b=vec4<f32>(r.b.x,moments);r.a=vec4<f32>((r.a.x+burned.w*u.reactant_combustion_b.z)*reactantSootSurvival(dt),burned.z*reactantCoolingSurvival(dt),burned.x,burned.y);
-   let burnout=sootBurnoutSurvival(r.a.y,r.a.w,dt);r.a.x*=burnout;r.b=vec4<f32>(r.b.x,r.b.yzw*burnout);r.b.x=burned.w/max(dt,1e-6);
- }else{let cooling=pow(.982,u.time.x);let survival=pow(.990,u.time.x);r.b=vec4<f32>(0,shiftThermalMoments(r.b.yzw,r.a.x,0,cooling)*survival);r.a.x*=survival;r.a.y*=cooling;}
+   let nextSoot=coarseSootClump(r.a.x,lapA.x,dt)*reactantSootSurvival(dt);
+   let nextHeat=max(0.0,r.a.y+w*lapA.y)*reactantCoolingSurvival(dt);
+   r=Gas(vec4<f32>(nextSoot,nextHeat,0.0,0.0),vec4<f32>(0.0));
+ }else{let cooling=pow(.982,u.time.x);let survival=pow(.990,u.time.x);r=Gas(vec4<f32>(r.a.x*survival,r.a.y*cooling,0.0,0.0),vec4<f32>(0.0));}
  storeMaterial(c,i,p,gasAdd(gasScale(r,1.0-fraction),owned),owned);
 }
 `;

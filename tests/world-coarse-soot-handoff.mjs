@@ -1,13 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { readFileSync } from 'node:fs';
 import * as worldSmoke from '../volume-world-smoke.mjs';
 import * as materialHierarchy from '../volume-material-hierarchy-gpu.mjs';
 import * as worldOptics from '../volume-world-smoke-optics.mjs';
-import { WORLD_RENDER_WGSL } from '../volume-world-render.mjs';
+import { WORLD_RENDER_STRIDE, WORLD_RENDER_WGSL } from '../volume-world-render.mjs';
 import { COMPOSED_SMOKE_WGSL } from '../scene-smoke-reconstruction.mjs';
 import { SCENE_VOLUME_SOURCE_WGSL } from '../scene-volume-source.mjs';
 import { EMISSIVE_TRANSPORT_WGSL } from '../volume-emissive-transport.mjs';
+
+const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 
 test('coarse soot transport excludes soot from gaseous Laplacian diffusion and sharpens soot peaks', () => {
   assert.equal(typeof worldSmoke.coarseSootClump, 'function');
@@ -35,9 +38,9 @@ test('coarse soot transport excludes soot from gaseous Laplacian diffusion and s
     materialHierarchy.MATERIAL_HIERARCHY_WGSL,
     /r\.a\s*=\s*max\(vec4<f32>\(0\),\s*r\.a\s*\*\s*\(1\.0\s*-\s*6\.0\s*\*\s*w\)\s*\+\s*neighbors\s*\*\s*w\)/,
   );
-  // Thermal moments r.b.yzw must scale with sootScale so moments/soot never explodes in zero-soot cells.
-  assert.match(worldSmoke.WORLD_SMOKE_WGSL, /r\.b\.yzw\s*\*\s*sootScale/);
-  assert.match(materialHierarchy.MATERIAL_HIERARCHY_WGSL, /r\.b\.yzw\s*\*\s*sootScale/);
+  // Smoke-only coarse World grid zeroes Plane B instead of evolving thermal moments.
+  assert.match(worldSmoke.WORLD_SMOKE_WGSL, /vec4<f32>\(nextSoot,nextHeat,0\.0,0\.0\),vec4<f32>\(0\.0\)/);
+  assert.match(materialHierarchy.MATERIAL_HIERARCHY_WGSL, /vec4<f32>\(nextSoot,nextHeat,0\.0,0\.0\),vec4<f32>\(0\.0\)/);
 });
 
 test('fine-to-coarse donor envelope tapers smoothly inside upper walls and corners so coarse advection takes over before the box edge', () => {
@@ -120,4 +123,44 @@ test('resident World optical brick preparation performs Material-first sub-grid 
     worldOptics.WORLD_SMOKE_OPTICS_WGSL,
     /if\(worldRender\.atlas\.x>\.5\)\{let far=worldResidentMaterial\(p,smokeVisible,fireVisible\);if\(middleSmokeWeight\(p\)<=0\.0\)\{return far;\}/,
   );
+});
+
+test('smoke-only coarse World grid packs 4 subcell extinctions per texel (WORLD_RENDER_STRIDE = 253), eliminates coarse emission/combustion/thermal-moment ALU, and sponges Fine flame inside the Fine boundary collar', () => {
+  assert.equal(WORLD_RENDER_STRIDE, 253, '3 header texels + 250 packed 4-subcell extinction texels = 253');
+  const regionFn = worldOptics.WORLD_SMOKE_OPTICS_WGSL.slice(
+    worldOptics.WORLD_SMOKE_OPTICS_WGSL.indexOf('fn regionSmokeMaterial('),
+    worldOptics.WORLD_SMOKE_OPTICS_WGSL.indexOf('fn middleSmokeWeight('),
+  );
+  assert.doesNotMatch(regionFn, /thermalQuadrature|physicsSootKelvin|thermalRadiance|emissiveMaterial/, 'coarse regionSmokeMaterial must not evaluate blackbody or moment emission');
+  assert.match(regionFn, /return EmissiveMaterial\(vec3<f32>\(0\.0\),sigma\*\(1\.0-albedo\),sigma\*albedo\);/);
+
+  const residentFn = WORLD_RENDER_WGSL.slice(
+    WORLD_RENDER_WGSL.indexOf('fn worldResidentMaterial('),
+    WORLD_RENDER_WGSL.indexOf('struct WorldRenderGas'),
+  );
+  assert.match(residentFn, /row>>2u/, 'worldResidentMaterial unpacks 4 subcell extinctions per atlas texel');
+  assert.match(residentFn, /return EmissiveMaterial\(vec3<f32>\(0\),sigma\*\(1\.0-albedo\),sigma\*albedo\);/);
+
+  const transportFn = worldSmoke.WORLD_SMOKE_WGSL.slice(worldSmoke.WORLD_SMOKE_WGSL.indexOf('fn transportMaterial('));
+  assert.doesNotMatch(transportFn, /reactantBurn|shiftThermalMoments|sootBurnoutSurvival/);
+  const advanceFn = materialHierarchy.MATERIAL_HIERARCHY_WGSL.slice(
+    materialHierarchy.MATERIAL_HIERARCHY_WGSL.indexOf('fn advanceBricks('),
+    materialHierarchy.MATERIAL_HIERARCHY_WGSL.indexOf('fn restrictBricks('),
+  );
+  assert.doesNotMatch(advanceFn, /reactantBurn|shiftThermalMoments|sootBurnoutSurvival/);
+
+  assert.equal(typeof worldOptics.fineFlameContainmentEnvelope, 'function');
+  assert.equal(worldOptics.fineFlameContainmentEnvelope([0, 0, 0], 3), 1);
+  assert.equal(worldOptics.fineFlameContainmentEnvelope([0.70, 1.0, 0], 3), 1, 'Fine flame box keeps 100% authority out to |x|,|z|=0.74');
+  assert.ok(
+    worldOptics.fineFlameContainmentEnvelope([0.70, 1.0, 0], 3) > worldOptics.fineOpticalEnvelope([0.70, 1.0, 0], 3),
+    'Fine flame containment envelope preserves a wider 100% interior than the smoke blend envelope',
+  );
+  assert.equal(worldOptics.fineFlameContainmentEnvelope([0.97, 1.0, 0], 3), 0, 'Flame emission is sponged to 0 before the Fine wall');
+  assert.equal(worldOptics.fineFlameContainmentEnvelope([0, 2.92, 0], 3), 0, 'Flame emission is sponged to 0 before the Fine ceiling');
+
+  assert.match(core, /let spongedFuel = fuel \* \(1\.0 - collarSurvival\);/);
+  assert.match(core, /smoke = smoke \+ spongedFuel \* select\(/);
+  assert.match(core, /reactantFreshBurnRate = reactantFreshBurnRate \* collarSurvival;/);
+  assert.match(core, /let warmBuoyancyCap = 450\.0 \/ max\(u\.emissive_physics\.y, 800\.0\);/);
 });

@@ -21,6 +21,15 @@ export function fineOpticalEnvelope(p,top=3){
  return 1-r*r*(3-2*r);
 }
 
+export function fineFlameContainmentEnvelope(p,top=3){
+ const spanY=Math.max(top+1,2);
+ const rx=Math.max(0,Math.min(1,(Math.abs(p[0])-0.74)/0.22));
+ const rz=Math.max(0,Math.min(1,(Math.abs(p[2])-0.74)/0.22));
+ const ry=Math.max(0,Math.min(1,(p[1]-(-1+0.78*spanY))/(0.19*spanY)));
+ const r=Math.min(1,Math.hypot(rx,ry,rz));
+ return 1-r*r*(3-2*r);
+}
+
 function fract1(x){return x-Math.floor(x);}
 function worldHash31(x,y,z){
  let qx=fract1(x*0.1031),qy=fract1(y*0.1030),qz=fract1(z*0.0973);
@@ -70,6 +79,14 @@ fn fineOpticalEnvelope(p:vec3<f32>,top:f32)->f32{
  let rx=clamp((abs(p.x)-0.58)/0.40,0.0,1.0);
  let rz=clamp((abs(p.z)-0.58)/0.40,0.0,1.0);
  let ry=clamp((p.y-(-1.0+0.72*spanY))/(0.26*spanY),0.0,1.0);
+ let r=clamp(length(vec3<f32>(rx,ry,rz)),0.0,1.0);
+ return 1.0-r*r*(3.0-2.0*r);
+}
+fn fineFlameContainmentEnvelope(p:vec3<f32>,top:f32)->f32{
+ let spanY=max(top+1.0,2.0);
+ let rx=clamp((abs(p.x)-0.74)/0.22,0.0,1.0);
+ let rz=clamp((abs(p.z)-0.74)/0.22,0.0,1.0);
+ let ry=clamp((p.y-(-1.0+0.78*spanY))/(0.19*spanY),0.0,1.0);
  let r=clamp(length(vec3<f32>(rx,ry,rz)),0.0,1.0);
  return 1.0-r*r*(3.0-2.0*r);
 }
@@ -162,18 +179,14 @@ fn regionSmokeSample(field:texture_3d<f32>,p:vec3<f32>,loPitch:vec4<f32>,layer:i
  }}}return value;
 }
 fn worldSmokeSample(p:vec3<f32>)->vec4<f32>{return regionSmokeSample(worldOptical,p,worldRender.loPitch,0);}
+fn worldSmokeExtinction(soot:f32)->f32{
+ return max(soot,0.0)*max(u.viewport_steps_density.w,0.0)*max(u.emissive_material.x,0.0);
+}
 fn regionSmokeMaterial(raw:vec4<f32>,moments:vec3<f32>,smokeVisible:f32,fireVisible:f32)->EmissiveMaterial{
- var r:FlowReconstructionSample;r.material=vec4<f32>(raw.xyz,0);r.freshBurn=raw.w;
- var medium=emissiveMaterial(r,fireVisible,smokeVisible);
- if(u.emissive_physics.x>.5&&raw.x>1e-4){
-   let rawQ=thermalQuadrature(max(raw.x,0.0),moments);
-   let maxHeat=max(raw.y*2.2,1.6);
-   let q=vec3<f32>(min(rawQ.x,maxHeat),min(rawQ.y,maxHeat),rawQ.z);
-   let mixture=mix(thermalRadiance(physicsSootKelvin(q.x,u.emissive_physics.y)),thermalRadiance(physicsSootKelvin(q.y,u.emissive_physics.y)),q.z);
-   let absorbing=max(raw.x,0.0)*max(u.viewport_steps_density.w,0.0)*u.emissive_material.x*(1.0-clamp(u.emissive_material.y,0.0,1.0));
-   medium.emission+=absorbing*(mixture-thermalRadiance(physicsSootKelvin(max(raw.y,0.0),u.emissive_physics.y)))*u.physical_fire.w;
- }
- medium.emission=max(medium.emission,vec3<f32>(0))*fireVisible;return medium;
+ let _unused=moments.x+fireVisible;
+ let sigma=worldSmokeExtinction(raw.x)*max(smokeVisible,0.0);
+ let albedo=clamp(u.emissive_material.y,0.0,1.0);
+ return EmissiveMaterial(vec3<f32>(0.0),sigma*(1.0-albedo),sigma*albedo);
 }
 fn middleSmokeWeight(p:vec3<f32>)->f32{
  if(worldRender.middleHiEnabled.w<.5){return 0.0;}
@@ -187,25 +200,25 @@ fn worldMinimumMaterialPitch()->f32{
 fn worldSmokeMaterial(p:vec3<f32>,smokeVisible:f32,fireVisible:f32)->EmissiveMaterial{
  if(worldRender.atlas.x>.5){let far=worldResidentMaterial(p,smokeVisible,fireVisible);if(middleSmokeWeight(p)<=0.0){return far;}
   let mRaw0=regionSmokeSample(middleOptical,p,worldRender.middleLoPitch,0);
-  if(mRaw0.x<=1e-4&&mRaw0.y<=1e-4&&mRaw0.w<=1e-4){
+  if(mRaw0.x<=1e-4){
    let w=middleSmokeWeight(p);
-   return EmissiveMaterial(far.emission*(1.0-w),far.absorption*(1.0-w),far.scattering*(1.0-w));
+   return EmissiveMaterial(vec3<f32>(0.0),far.absorption*(1.0-w),far.scattering*(1.0-w));
   }
   var pw=p;if(u.reactant_combustion_a.x>0.5){pw+=worldSubgridWarp(p,worldRender.middleLoPitch.w);}
   let w=middleSmokeWeight(pw);
-  var middle=regionSmokeMaterial(regionSmokeSample(middleOptical,pw,worldRender.middleLoPitch,0),regionSmokeSample(middleOptical,pw,worldRender.middleLoPitch,1).xyz,smokeVisible,fireVisible);
+  var middle=regionSmokeMaterial(regionSmokeSample(middleOptical,pw,worldRender.middleLoPitch,0),vec3<f32>(0.0),smokeVisible,fireVisible);
   let clump=worldSubgridClump(p,middle.absorption+middle.scattering);
   middle.absorption*=clump;middle.scattering*=clump;
-  return EmissiveMaterial(mix(far.emission,middle.emission,w),mix(far.absorption,middle.absorption,w),mix(far.scattering,middle.scattering,w));
+  return EmissiveMaterial(vec3<f32>(0.0),mix(far.absorption,middle.absorption,w),mix(far.scattering,middle.scattering,w));
  }
  let baseRaw=worldSmokeSample(p);
- if(baseRaw.x<=1e-4&&baseRaw.y<=1e-4&&baseRaw.w<=1e-4&&middleSmokeWeight(p)<=0.0){return EmissiveMaterial(vec3<f32>(0),0,0);}
+ if(baseRaw.x<=1e-4&&middleSmokeWeight(p)<=0.0){return EmissiveMaterial(vec3<f32>(0),0,0);}
  var pw=p;if(u.reactant_combustion_a.x>0.5){pw+=worldSubgridWarp(p,worldMinimumMaterialPitch());}
- var out=regionSmokeMaterial(worldSmokeSample(pw),regionSmokeSample(worldOptical,pw,worldRender.loPitch,1).xyz,smokeVisible,fireVisible);
+ var out=regionSmokeMaterial(worldSmokeSample(pw),vec3<f32>(0.0),smokeVisible,fireVisible);
  let weight=middleSmokeWeight(pw);
  if(weight>0.0){
-  let middle=regionSmokeMaterial(regionSmokeSample(middleOptical,pw,worldRender.middleLoPitch,0),regionSmokeSample(middleOptical,pw,worldRender.middleLoPitch,1).xyz,smokeVisible,fireVisible);
-  out=EmissiveMaterial(mix(out.emission,middle.emission,weight),mix(out.absorption,middle.absorption,weight),mix(out.scattering,middle.scattering,weight));
+  let middle=regionSmokeMaterial(regionSmokeSample(middleOptical,pw,worldRender.middleLoPitch,0),vec3<f32>(0.0),smokeVisible,fireVisible);
+  out=EmissiveMaterial(vec3<f32>(0.0),mix(out.absorption,middle.absorption,weight),mix(out.scattering,middle.scattering,weight));
  }
  let clump=worldSubgridClump(p,out.absorption+out.scattering);
  out.absorption*=clump;out.scattering*=clump;
@@ -253,6 +266,7 @@ fn worldSmokeBlend(p:vec3<f32>,fine:EmissiveMaterial,smokeVisible:f32,fireVisibl
  );
  if(weight<=1e-4){return near;}
  let coarse=worldSmokeDiagnostic(worldSmokeMaterial(p,smokeVisible,fireVisible),true);
- return EmissiveMaterial(mix(near.emission,coarse.emission,weight),mix(near.absorption,coarse.absorption,weight),mix(near.scattering,coarse.scattering,weight));
+ let flameKeep=select(1.0-weight,fineFlameContainmentEnvelope(p,top),u.reactant_combustion_a.x>0.5&&worldRender.overlayControls.x<0.5);
+ return EmissiveMaterial(near.emission*flameKeep+coarse.emission*weight,mix(near.absorption,coarse.absorption,weight),mix(near.scattering,coarse.scattering,weight));
 }
 `;

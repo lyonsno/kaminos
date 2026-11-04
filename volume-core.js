@@ -7358,7 +7358,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     heat = burn.z;
     reactantBurned = burn.w;
   }
-  let reactantFreshBurnRate = reactantBurned / max(timeStep, 1e-6);
+  var reactantFreshBurnRate = reactantBurned / max(timeStep, 1e-6);
   let smokeFromHeat = select(heatToSmokeConversion(heat, fuel, p.y), u.reactant_combustion_b.z * reactantFreshBurnRate, reactantOn);
   let columnSmokeBirth = source * 0.46 + emberRing * 0.13;
   let flameDirectSmokeBirthGain = (0.18);
@@ -7676,6 +7676,34 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   interfaceShred = interfaceShred * stepRate(mix(0.18, 1.0, wallFade));
   fireLick = fireLick * stepRate(mix(0.10, 1.0, wallFade) * mix(0.10, 1.0, fireTopFade));
   emberFleck = emberFleck * stepRate(mix(0.15, 1.0, wallFade));
+  if (joinedBoundary() || openWorldBoundary()) {
+    let flameContainSpanY = max(expandedTopY + 1.0, 2.0);
+    let flameContainRx = clamp((abs(p.x) - 0.74) / 0.22, 0.0, 1.0);
+    let flameContainRz = clamp((abs(p.z) - 0.74) / 0.22, 0.0, 1.0);
+    let flameContainRy = clamp((p.y - (-1.0 + 0.78 * flameContainSpanY)) / (0.19 * flameContainSpanY), 0.0, 1.0);
+    let flameContainR = clamp(length(vec3<f32>(flameContainRx, flameContainRy, flameContainRz)), 0.0, 1.0);
+    let flameContain = 1.0 - flameContainR * flameContainR * (3.0 - 2.0 * flameContainR);
+    if (flameContain < 0.9999) {
+      let collarSurvival = stepRate(mix(0.06, 1.0, flameContain)) * flameContain;
+      let spongedFuel = fuel * (1.0 - collarSurvival);
+      fuel = fuel * collarSurvival;
+      // Convert sponged unburned fuel into cold soot so boundary burnout feeds the smoke plume.
+      smoke = smoke + spongedFuel * select(0.18, u.reactant_combustion_b.z * 0.65, reactantOn);
+      reactantFreshBurnRate = reactantFreshBurnRate * collarSurvival;
+      // Cool incandescent excess heat down to a warm non-glowing buoyancy ceiling (~750 K)
+      // so the rising plume keeps its upward thermal buoyancy without glowing outside Fine.
+      let warmBuoyancyCap = 450.0 / max(u.emissive_physics.y, 800.0);
+      let incandescentExcess = max(0.0, heat - warmBuoyancyCap);
+      heat = min(heat, warmBuoyancyCap) + incandescentExcess * collarSurvival;
+      flame = flame * collarSurvival;
+      ember = ember * collarSurvival;
+      flameDetail = flameDetail * collarSurvival;
+      combustionFront = combustionFront * collarSurvival;
+      combustionFrontTopology = combustionFrontTopology * collarSurvival;
+      fireLick = fireLick * collarSurvival;
+      emberFleck = emberFleck * collarSurvival;
+    }
+  }
   // The quench field spreads to neighbours only while a liquid is bound with
   // transfer enabled (the host packs the flag); otherwise the six reads are
   // skipped and a wetted cell only decays.

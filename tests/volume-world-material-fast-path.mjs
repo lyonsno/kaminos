@@ -11,7 +11,8 @@ test('donor material bypasses evolution that would be overwritten',()=>{
   assert.ok(donor>=0&&evolution>donor,'wholly interior donor cells bypass source/evolution work');
   assert.match(body,/storeMaterial\(c,i,p,owned,owned\);return;/);
 });
-test('the known-empty collision route bypasses voxel traversal while both material planes share neighbor samples',()=>{
+test('the known-empty collision route bypasses voxel traversal while smoke-only transport elides Plane B neighbor reads',()=>{
   assert.match(WORLD_SMOKE_WGSL,/fn clipped[^]*?if\(u.time.w<.5\)\{return q;\}/);
-  assert.match(WORLD_SMOKE_WGSL,/neighbors\+=plus.a\+minus.a;momentNeighbors\+=plus.b.yzw\+minus.b.yzw/);
+  assert.match(WORLD_SMOKE_WGSL,/neighbors\+=plus\.a\+minus\.a;/);
+  assert.doesNotMatch(WORLD_SMOKE_WGSL,/momentNeighbors\+=plus\.b\.yzw\+minus\.b\.yzw/);
 });
