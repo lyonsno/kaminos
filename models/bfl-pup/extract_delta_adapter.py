@@ -94,15 +94,21 @@ class HFRangeSafetensorsReader:
 
     @staticmethod
     def _validate_content_range(content_range: Optional[str], start: int, end_inclusive: int) -> None:
-        if not content_range:
-            return
-        m = re.match(r"^bytes\s+(\d+)-(\d+)/(\d+|\*)$", content_range.strip())
+        if not content_range or not isinstance(content_range, str) or not content_range.strip():
+            raise RuntimeError(
+                f"Missing Content-Range header for requested range {start}-{end_inclusive}"
+            )
+        m = re.match(r"^bytes\s+(\d+)-(\d+)/(\d+|\*)$", content_range.strip(), re.IGNORECASE)
         if not m:
             raise RuntimeError(f"Malformed Content-Range header: {content_range!r}")
-        r_start, r_end = int(m.group(1)), int(m.group(2))
+        r_start, r_end, r_total = int(m.group(1)), int(m.group(2)), m.group(3)
         if r_start != start or r_end != end_inclusive:
             raise RuntimeError(
                 f"Content-Range mismatch: requested {start}-{end_inclusive}, got {r_start}-{r_end}"
+            )
+        if r_total != "*" and int(r_total) <= end_inclusive:
+            raise RuntimeError(
+                f"Content-Range total length {r_total} is smaller than requested end {end_inclusive}"
             )
 
     def _fetch_range(self, filename: str, start: int, end_inclusive: int) -> bytes:
@@ -117,12 +123,17 @@ class HFRangeSafetensorsReader:
                 if sess is not None:
                     resp = sess.get(url, headers=headers, stream=True, timeout=60)
                     try:
-                        if resp.status_code != 206:
+                        status_code = getattr(resp, "status_code", None)
+                        if not isinstance(status_code, int) or status_code != 206:
                             raise RuntimeError(
                                 f"Expected HTTP 206 Partial Content for {url} range {start}-{end_inclusive}, "
-                                f"got HTTP {resp.status_code}"
+                                f"got HTTP {status_code}"
                             )
-                        self._validate_content_range(resp.headers.get("Content-Range"), start, end_inclusive)
+                        resp_hdrs = getattr(resp, "headers", None)
+                        cr_val = None
+                        if isinstance(resp_hdrs, dict) or hasattr(resp_hdrs, "get"):
+                            cr_val = resp_hdrs.get("Content-Range") or resp_hdrs.get("content-range")
+                        self._validate_content_range(cr_val, start, end_inclusive)
                         buf = bytearray()
                         for chunk in resp.iter_content(chunk_size=1024 * 1024):
                             if not chunk:
@@ -139,12 +150,19 @@ class HFRangeSafetensorsReader:
                 else:
                     req = urllib.request.Request(url, headers=headers)
                     with urllib.request.urlopen(req, timeout=60) as r:
-                        status = getattr(r, "status", 206)
-                        if status is not None and int(status) != 206:
+                        status = getattr(r, "status", getattr(r, "code", None))
+                        if not isinstance(status, int) or status != 206:
                             raise RuntimeError(
                                 f"Expected HTTP 206 Partial Content for {url} range {start}-{end_inclusive}, "
                                 f"got HTTP {status}"
                             )
+                        r_hdrs = getattr(r, "headers", None)
+                        if r_hdrs is None and hasattr(r, "info") and callable(r.info):
+                            r_hdrs = r.info()
+                        cr_val = None
+                        if isinstance(r_hdrs, dict) or hasattr(r_hdrs, "get"):
+                            cr_val = r_hdrs.get("Content-Range") or r_hdrs.get("content-range")
+                        self._validate_content_range(cr_val, start, end_inclusive)
                         data = r.read(expected_len + 1)
                         if len(data) > expected_len:
                             raise RuntimeError(
@@ -352,6 +370,9 @@ def lowrank_svd_decompose(
     with torch.no_grad():
         w_bfl = bfl_t.to(device=device, dtype=torch.float32)
         w_qwen = qwen_t.to(device=device, dtype=torch.float32)
+        bfl_00 = float(w_bfl.flatten()[0].item())
+        qwen_00 = float(w_qwen.flatten()[0].item())
+        frob_bfl = float(torch.linalg.norm(w_bfl).item())
         dw = w_bfl - w_qwen
         del w_bfl
 
@@ -390,6 +411,9 @@ def lowrank_svd_decompose(
         "rank": r_eff,
         "frob_delta": round(frob_delta, 6),
         "frob_base": round(frob_base, 6),
+        "frob_bfl": round(frob_bfl, 6),
+        "qwen_00": round(qwen_00, 6),
+        "bfl_00": round(bfl_00, 6),
         "rel_l2": round(frob_delta / max(frob_base, 1e-12), 6),
         "sv_top5": [round(float(x), 5) for x in sv_cpu[:5].tolist()],
         "sv_rank_boundary": round(float(sv_cpu[-1].item()), 5) if r_eff > 0 else 0.0,
@@ -701,6 +725,7 @@ def run_extraction(
                         delta_t = (bfl_t.float() - qwen_t.float()).to(target_dtype).contiguous()
                         shard_tensors[f"{k}.delta"] = delta_t
                         shard_tensors[f"{k}.bfl"] = bfl_t.contiguous()
+                        shard_tensors[f"{k}.qwen"] = qwen_t.contiguous()
                         f_delta = float(torch.linalg.norm(delta_t.float()).item())
                         f_base = float(torch.linalg.norm(qwen_t.float()).item())
                         shard_stats[k] = {

@@ -569,6 +569,10 @@ class TestMLXSwitchableEvalHarness(unittest.TestCase):
             qwen_model_dir.mkdir()
             (qwen_model_dir / "config.json").write_text(json.dumps({"model_type": "qwen3_5"}))
             (qwen_model_dir / "system_prompts.json").write_text(json.dumps({"t2i": "sys t2i", "i2i": "sys i2i"}))
+            save_file(
+                {"model.language_model.norm.weight": torch.ones(8, dtype=torch.bfloat16)},
+                str(qwen_model_dir / "model.safetensors"),
+            )
 
             fake_mx = MagicMock()
             fake_mx.metal.is_available.return_value = True
@@ -691,6 +695,339 @@ class TestMLXSwitchableEvalHarness(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "Unexpected effective_backend"):
             validate_generation_observation({"output": "Caption", "finish_reason": "stop", "effective_backend": "cpu"})
+
+    def test_r3_01_mlx_2d_exact_linear_reconstructs_saved_bfl_under_cancellation(self):
+        import hashlib
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        import torch
+        from safetensors import safe_open
+        from safetensors.torch import save_file
+        from extract_delta_adapter import run_extraction
+        from mlx_switchable_adapter import MLXSwitchableDeltaController
+        from switchable_adapter import SwitchableDeltaController
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bfl_dir = root / "bfl"
+            qwen_dir = root / "qwen"
+            out_dir = root / "adapter"
+            bfl_dir.mkdir()
+            qwen_dir.mkdir()
+
+            qwen_small_w = torch.tensor([[1.0]], dtype=torch.bfloat16)
+            bfl_small_w = torch.tensor([[0.00099945068359375]], dtype=torch.bfloat16)
+            vis_w = torch.ones((4, 4), dtype=torch.bfloat16)
+            proj_q = torch.eye(8, dtype=torch.bfloat16)
+            proj_b = (proj_q.float() + 0.25 * torch.ones((8, 8), dtype=torch.float32)).to(torch.bfloat16)
+
+            save_file(
+                {
+                    "model.visual.blocks.0.attn.qkv.weight": vis_w,
+                    "model.language_model.layers.0.linear_attn.in_proj_a.weight": qwen_small_w,
+                    "model.language_model.layers.0.self_attn.q_proj.weight": proj_q,
+                },
+                str(qwen_dir / "model.safetensors"),
+            )
+            save_file(
+                {
+                    "model.visual.blocks.0.attn.qkv.weight": vis_w,
+                    "model.language_model.layers.0.linear_attn.in_proj_a.weight": bfl_small_w,
+                    "model.language_model.layers.0.self_attn.q_proj.weight": proj_b,
+                },
+                str(bfl_dir / "model.safetensors"),
+            )
+
+            run_extraction(
+                source_mode="local-dir",
+                bfl_dir=bfl_dir,
+                qwen_dir=qwen_dir,
+                out_dir=out_dir,
+                report_path=root / "extract_rep.json",
+                device="cpu",
+                max_rank=2,
+                min_lora_dim=4,
+                oversample=2,
+                niter=2,
+                resume=False,
+            )
+
+            class TorchArrayProxy:
+                def __init__(self, t: torch.Tensor):
+                    self.t = t
+                    self.dtype = t.dtype
+                    self.ndim = t.ndim
+                    self.shape = tuple(t.shape)
+
+                def astype(self, dt):
+                    return TorchArrayProxy(self.t.to(dt))
+
+                def __matmul__(self, other):
+                    o = other.t if isinstance(other, TorchArrayProxy) else other
+                    return TorchArrayProxy(self.t @ o)
+
+                def __add__(self, other):
+                    o = other.t if isinstance(other, TorchArrayProxy) else other
+                    return TorchArrayProxy(self.t + o)
+
+                def __sub__(self, other):
+                    o = other.t if isinstance(other, TorchArrayProxy) else other
+                    return TorchArrayProxy(self.t - o)
+
+                def __mul__(self, other):
+                    o = other.t if isinstance(other, TorchArrayProxy) else other
+                    return TorchArrayProxy(self.t * o)
+
+                def __getitem__(self, idx):
+                    return TorchArrayProxy(self.t[idx])
+
+                def item(self):
+                    return float(self.t.item())
+
+            def load_sf(p: str):
+                out = {}
+                with safe_open(p, framework="pt") as sf:
+                    for k in sf.keys():
+                        out[k] = TorchArrayProxy(sf.get_tensor(k))
+                return out
+
+            fake_mx = SimpleNamespace(
+                array=TorchArrayProxy,
+                float32=torch.float32,
+                bfloat16=torch.bfloat16,
+                load=load_sf,
+                transpose=lambda a: TorchArrayProxy(a.t.T.contiguous()),
+                sqrt=lambda x: TorchArrayProxy(torch.sqrt(x.t)),
+                sum=lambda x: TorchArrayProxy(torch.sum(x.t)),
+                eval=lambda *_args: None,
+            )
+            fake_nn = SimpleNamespace(Module=object)
+
+            class DummyLinear:
+                def __init__(self, w: torch.Tensor):
+                    self.weight = TorchArrayProxy(w.clone())
+                    self.bias = None
+
+                def __call__(self, x: TorchArrayProxy) -> TorchArrayProxy:
+                    return TorchArrayProxy((x.t.float() @ self.weight.t.float().T).to(x.dtype))
+
+            fake_model = SimpleNamespace(
+                language_model=SimpleNamespace(
+                    model=SimpleNamespace(
+                        layers=[
+                            SimpleNamespace(
+                                linear_attn=SimpleNamespace(in_proj_a=DummyLinear(qwen_small_w)),
+                                self_attn=SimpleNamespace(q_proj=DummyLinear(proj_q)),
+                            )
+                        ]
+                    )
+                )
+            )
+
+            with patch.dict(
+                sys.modules,
+                {"mlx": SimpleNamespace(core=fake_mx, nn=fake_nn), "mlx.core": fake_mx, "mlx.nn": fake_nn},
+            ):
+                ctrl = MLXSwitchableDeltaController(fake_model, out_dir, base_role="qwen")
+                x_in = TorchArrayProxy(torch.tensor([[1.0]], dtype=torch.bfloat16))
+                ctrl.set_mode(enabled=True, rank=2)
+                y_on = fake_model.language_model.model.layers[0].linear_attn.in_proj_a(x_in).item()
+                self.assertEqual(y_on, float(bfl_small_w.item()))
+                ctrl.set_mode(enabled=False)
+                y_off = fake_model.language_model.model.layers[0].linear_attn.in_proj_a(x_in).item()
+                self.assertEqual(y_off, float(qwen_small_w.item()))
+
+    def test_r3_conf_01_rejects_unrelated_qwen_weights_and_unverified_model_dir_provenance(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        import torch
+        from safetensors import safe_open
+        from safetensors.torch import save_file
+        from evaluate_switchable_mlx import inspect_model_dir_provenance, run_switchable_evaluation
+        from extract_delta_adapter import run_extraction
+        from mlx_switchable_adapter import MLXSwitchableDeltaController
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bfl_dir = root / "bfl"
+            qwen_dir = root / "qwen"
+            out_dir = root / "adapter"
+            bfl_dir.mkdir()
+            qwen_dir.mkdir()
+
+            vis_w = torch.ones((4, 4), dtype=torch.bfloat16)
+            norm_q = torch.tensor([1.0], dtype=torch.bfloat16)
+            norm_b = torch.tensor([2.0], dtype=torch.bfloat16)
+            proj_q = torch.ones((4, 4), dtype=torch.bfloat16)
+            proj_b = torch.full((4, 4), 1.5, dtype=torch.bfloat16)
+
+            save_file(
+                {
+                    "model.visual.blocks.0.attn.qkv.weight": vis_w,
+                    "model.language_model.norm.weight": norm_q,
+                    "model.language_model.layers.0.self_attn.q_proj.weight": proj_q,
+                },
+                str(qwen_dir / "model.safetensors"),
+            )
+            save_file(
+                {
+                    "model.visual.blocks.0.attn.qkv.weight": vis_w,
+                    "model.language_model.norm.weight": norm_b,
+                    "model.language_model.layers.0.self_attn.q_proj.weight": proj_b,
+                },
+                str(bfl_dir / "model.safetensors"),
+            )
+
+            run_extraction(
+                source_mode="local-dir",
+                bfl_dir=bfl_dir,
+                qwen_dir=qwen_dir,
+                out_dir=out_dir,
+                report_path=root / "extract_rep.json",
+                device="cpu",
+                max_rank=2,
+                min_lora_dim=4,
+                oversample=2,
+                niter=2,
+                resume=False,
+            )
+
+            class TorchArrayProxy:
+                def __init__(self, t: torch.Tensor):
+                    self.t = t
+                    self.dtype = t.dtype
+                    self.ndim = t.ndim
+                    self.shape = tuple(t.shape)
+
+                def astype(self, dt):
+                    return TorchArrayProxy(self.t.to(dt))
+
+                def __matmul__(self, other):
+                    o = other.t if isinstance(other, TorchArrayProxy) else other
+                    return TorchArrayProxy(self.t @ o)
+
+                def __add__(self, other):
+                    o = other.t if isinstance(other, TorchArrayProxy) else other
+                    return TorchArrayProxy(self.t + o)
+
+                def __sub__(self, other):
+                    o = other.t if isinstance(other, TorchArrayProxy) else other
+                    return TorchArrayProxy(self.t - o)
+
+                def __mul__(self, other):
+                    o = other.t if isinstance(other, TorchArrayProxy) else other
+                    return TorchArrayProxy(self.t * o)
+
+                def __getitem__(self, idx):
+                    return TorchArrayProxy(self.t[idx])
+
+                def item(self):
+                    return float(self.t.item())
+
+            def load_sf(p: str):
+                out = {}
+                with safe_open(p, framework="pt") as sf:
+                    for k in sf.keys():
+                        out[k] = TorchArrayProxy(sf.get_tensor(k))
+                return out
+
+            fake_mx = SimpleNamespace(
+                array=TorchArrayProxy,
+                float32=torch.float32,
+                bfloat16=torch.bfloat16,
+                load=load_sf,
+                transpose=lambda a: TorchArrayProxy(a.t.T.contiguous()),
+                sqrt=lambda x: TorchArrayProxy(torch.sqrt(x.t)),
+                sum=lambda x: TorchArrayProxy(torch.sum(x.t)),
+                eval=lambda *_args: None,
+            )
+            fake_nn = SimpleNamespace(Module=object)
+
+            class DummyLinear:
+                def __init__(self, w: torch.Tensor):
+                    self.weight = TorchArrayProxy(w.clone())
+                    self.bias = None
+
+                def __call__(self, x: TorchArrayProxy) -> TorchArrayProxy:
+                    return TorchArrayProxy((x.t.float() @ self.weight.t.float().T).to(x.dtype))
+
+            # Case 1: Resident norm is -100.0 (closer to Qwen 1.0 than BFL 2.0, but unrelated) -> must reject
+            bad_norm_model = SimpleNamespace(
+                language_model=SimpleNamespace(
+                    model=SimpleNamespace(
+                        norm=SimpleNamespace(weight=TorchArrayProxy(torch.tensor([-100.0], dtype=torch.bfloat16))),
+                        layers=[SimpleNamespace(self_attn=SimpleNamespace(q_proj=DummyLinear(proj_q)))],
+                    )
+                )
+            )
+            with patch.dict(
+                sys.modules,
+                {"mlx": SimpleNamespace(core=fake_mx, nn=fake_nn), "mlx.core": fake_mx, "mlx.nn": fake_nn},
+            ):
+                with self.assertRaisesRegex(ValueError, "does not match expected qwen"):
+                    MLXSwitchableDeltaController(bad_norm_model, out_dir, base_role="qwen")
+
+            # Case 2: Resident norm matches sanitized Qwen (1.0 + 1.0 = 2.0), but projection[0,0] is 51.0 -> must reject
+            bad_proj_w = proj_q.clone()
+            bad_proj_w[0, 0] = 51.0
+            bad_proj_model = SimpleNamespace(
+                language_model=SimpleNamespace(
+                    model=SimpleNamespace(
+                        norm=SimpleNamespace(weight=TorchArrayProxy(torch.tensor([2.0], dtype=torch.bfloat16))),
+                        layers=[SimpleNamespace(self_attn=SimpleNamespace(q_proj=DummyLinear(bad_proj_w)))],
+                    )
+                )
+            )
+            with patch.dict(
+                sys.modules,
+                {"mlx": SimpleNamespace(core=fake_mx, nn=fake_nn), "mlx.core": fake_mx, "mlx.nn": fake_nn},
+            ):
+                with self.assertRaisesRegex(ValueError, "does not match expected qwen"):
+                    MLXSwitchableDeltaController(bad_proj_model, out_dir, base_role="qwen")
+
+            # Case 3a: Unrelated directory with ordinary qwen3_5 config (no safetensors) must fail provenance-validation
+            unrelated_dir = root / "unrelated_qwen3_5"
+            unrelated_dir.mkdir()
+            (unrelated_dir / "config.json").write_text(json.dumps({"model_type": "qwen3_5"}))
+            rep_unrel = root / "rep_unrelated.json"
+            with self.assertRaisesRegex(RuntimeError, "provenance"):
+                run_switchable_evaluation(
+                    model_dir=unrelated_dir,
+                    adapter_dir=out_dir,
+                    report_path=rep_unrel,
+                    base_role="qwen",
+                    modes=[{"name": "off", "enabled": False, "rank": 0}],
+                    cases=[{"id": "c1", "task": "t2i", "prompt": "test"}],
+                )
+            rep_data = json.loads(rep_unrel.read_text())
+            self.assertEqual(rep_data["status"], "failed")
+            self.assertEqual(rep_data["failure_phase"], "provenance-validation")
+
+            # Case 3b: Unrelated directory with matching safetensors header schema but unrelated weights must also fail provenance-validation
+            unrelated_sf_dir = root / "unrelated_qwen3_5_with_sf"
+            unrelated_sf_dir.mkdir()
+            (unrelated_sf_dir / "config.json").write_text(json.dumps({"model_type": "qwen3_5"}))
+            save_file(
+                {
+                    "model.visual.blocks.0.attn.qkv.weight": vis_w,
+                    "model.language_model.norm.weight": torch.tensor([-100.0], dtype=torch.bfloat16),
+                    "model.language_model.layers.0.self_attn.q_proj.weight": proj_q,
+                },
+                str(unrelated_sf_dir / "model.safetensors"),
+            )
+            rep_unrel_sf = root / "rep_unrelated_sf.json"
+            with self.assertRaisesRegex(RuntimeError, "provenance"):
+                run_switchable_evaluation(
+                    model_dir=unrelated_sf_dir,
+                    adapter_dir=out_dir,
+                    report_path=rep_unrel_sf,
+                    base_role="qwen",
+                    modes=[{"name": "off", "enabled": False, "rank": 0}],
+                    cases=[{"id": "c1", "task": "t2i", "prompt": "test"}],
+                )
+            rep_sf_data = json.loads(rep_unrel_sf.read_text())
+            self.assertEqual(rep_sf_data["status"], "failed")
+            self.assertEqual(rep_sf_data["failure_phase"], "provenance-validation")
 
 
 if __name__ == "__main__":

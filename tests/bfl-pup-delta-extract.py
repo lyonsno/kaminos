@@ -187,8 +187,11 @@ class TestBflPupDeltaExtract(unittest.TestCase):
         reader.revision = "deadbeef"
         reader._session = None
         with patch("urllib.request.urlopen") as mock_open:
-            mock_open.return_value.__enter__.return_value.read.return_value = b"short"
-            with self.assertRaises(RuntimeError):
+            mock_resp = mock_open.return_value.__enter__.return_value
+            mock_resp.status = 206
+            mock_resp.headers = {"Content-Range": "bytes 0-15/100"}
+            mock_resp.read.return_value = b"short"
+            with self.assertRaisesRegex(RuntimeError, "Truncated HTTP Range response"):
                 reader._fetch_range("model.safetensors", 0, 15)
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -404,6 +407,72 @@ class TestBflPupDeltaExtract(unittest.TestCase):
         self.assertEqual(FakeResponseOversized206.max_chunks_in_single_call, 1)
         self.assertEqual(FakeResponseOversized206.chunks_yielded, 4)
         self.assertTrue(FakeResponseOversized206.closed)
+
+    def test_r3_02_http_range_requires_valid_content_range_on_requests_and_urllib(self):
+        from unittest.mock import patch
+        from extract_delta_adapter import HFRangeSafetensorsReader
+
+        reader = object.__new__(HFRangeSafetensorsReader)
+        reader.repo_id = "dummy/repo"
+        reader.revision = "deadbeef"
+
+        for bad_header, expected_msg in [
+            (None, "Missing Content-Range"),
+            ("", "Missing Content-Range"),
+            ("bytes invalid", "Malformed Content-Range"),
+            ("bytes 100-107/1000", "Content-Range mismatch"),
+        ]:
+            class FakeReqResp:
+                status_code = 206
+                headers = {} if bad_header is None else {"Content-Range": bad_header}
+                body_read = False
+                closed = False
+
+                def iter_content(self, chunk_size=1024):
+                    FakeReqResp.body_read = True
+                    yield b"01234567"
+
+                def close(self):
+                    FakeReqResp.closed = True
+
+            class FakeSess:
+                def get(self, url, headers=None, stream=False, timeout=None):
+                    return FakeReqResp()
+
+            reader._get_session = lambda: FakeSess()
+            with patch("time.sleep"):
+                with self.assertRaisesRegex(RuntimeError, expected_msg):
+                    reader._fetch_range("model.safetensors", 0, 7)
+            self.assertFalse(FakeReqResp.body_read)
+            self.assertTrue(FakeReqResp.closed)
+
+            class FakeUrllibResp:
+                status = 206
+                headers = {} if bad_header is None else {"Content-Range": bad_header}
+                body_read = False
+                closed = False
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, exc_type, exc_val, exc_tb):
+                    self.close()
+                    return False
+
+                def read(self, amt=None):
+                    FakeUrllibResp.body_read = True
+                    return b"01234567"
+
+                def close(self):
+                    FakeUrllibResp.closed = True
+
+            reader._get_session = lambda: None
+            reader._session = None
+            with patch("time.sleep"), patch("urllib.request.urlopen", return_value=FakeUrllibResp()):
+                with self.assertRaisesRegex(RuntimeError, expected_msg):
+                    reader._fetch_range("model.safetensors", 0, 7)
+            self.assertFalse(FakeUrllibResp.body_read)
+            self.assertTrue(FakeUrllibResp.closed)
 
 
 if __name__ == "__main__":

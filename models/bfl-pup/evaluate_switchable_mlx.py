@@ -205,7 +205,11 @@ def validate_adapter_complete(
     }
 
 
-def inspect_model_dir_provenance(model_dir: Path, base_role: str) -> Dict[str, Any]:
+def inspect_model_dir_provenance(
+    model_dir: Path,
+    base_role: str,
+    adapter_dir: Optional[Path] = None,
+) -> Dict[str, Any]:
     import struct
 
     model_dir = Path(model_dir)
@@ -221,7 +225,9 @@ def inspect_model_dir_provenance(model_dir: Path, base_role: str) -> Dict[str, A
     readme_sha256 = hashlib.sha256(readme_path.read_bytes()).hexdigest() if readme_path.is_file() else None
 
     header_digests: Dict[str, str] = {}
-    for sf in sorted(model_dir.glob("*.safetensors")):
+    file_digests: Dict[str, str] = {}
+    sf_files = sorted(model_dir.glob("*.safetensors"))
+    for sf in sf_files:
         with sf.open("rb") as f:
             raw_len = f.read(8)
             if len(raw_len) == 8:
@@ -243,6 +249,120 @@ def inspect_model_dir_provenance(model_dir: Path, base_role: str) -> Dict[str, A
             f"which contradicts requested base_role='bfl'"
         )
 
+    provenance_mode = "marker_only"
+    if adapter_dir is not None:
+        if not header_digests:
+            raise RuntimeError(
+                f"Model directory {model_dir} provenance unverified: no .safetensors weight files found"
+            )
+        manifest_path = Path(adapter_dir) / "manifest.json"
+        if manifest_path.is_file():
+            manifest = json.loads(manifest_path.read_text())
+            sources = manifest.get("sources", {})
+            expected_hdr = sources.get(f"{base_role}_header_digests")
+            expected_files = sources.get(f"{base_role}_file_digests")
+            conv_path = model_dir / "conversion_provenance.json"
+            if conv_path.is_file():
+                conv = json.loads(conv_path.read_text())
+                if conv.get("base_role") != base_role:
+                    raise RuntimeError(
+                        f"Model directory {model_dir} conversion_provenance.json base_role={conv.get('base_role')!r} "
+                        f"contradicts requested base_role={base_role!r}"
+                    )
+                if conv.get("converted_config_sha256") != cfg_sha256:
+                    raise RuntimeError(
+                        f"Model directory {model_dir} conversion_provenance.json config_sha256 mismatch"
+                    )
+                if conv.get("converted_header_digests") != header_digests:
+                    raise RuntimeError(
+                        f"Model directory {model_dir} conversion_provenance.json safetensors header digest mismatch"
+                    )
+                if expected_hdr and conv.get("source_header_digests") != expected_hdr:
+                    raise RuntimeError(
+                        f"Model directory {model_dir} conversion_provenance.json source_header_digests do not match "
+                        f"adapter manifest {base_role}_header_digests"
+                    )
+                provenance_mode = "verified_conversion_provenance"
+            else:
+                if expected_hdr and header_digests != expected_hdr:
+                    raise RuntimeError(
+                        f"Model directory {model_dir} provenance unverified: safetensors header digests "
+                        f"do not match adapter manifest {base_role}_header_digests or conversion_provenance.json"
+                    )
+                if expected_files:
+                    for sf in sf_files:
+                        h = hashlib.sha256()
+                        with sf.open("rb") as fh:
+                            for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+                                h.update(chunk)
+                        file_digests[sf.name] = h.hexdigest()
+                    if file_digests != expected_files:
+                        raise RuntimeError(
+                            f"Model directory {model_dir} provenance unverified: safetensors file digests "
+                            f"do not match adapter manifest {base_role}_file_digests"
+                        )
+                provenance_mode = "pinned_source_digests"
+
+            exact_info = manifest.get("shards", {}).get("exact_small")
+            if isinstance(exact_info, dict) and exact_info.get("file"):
+                exact_sf = Path(adapter_dir) / exact_info["file"]
+                if exact_sf.is_file():
+                    try:
+                        import torch
+                        from safetensors import safe_open
+
+                        model_key_map = {}
+                        for sf in sf_files:
+                            with safe_open(str(sf), framework="pt") as msf:
+                                for mk in msf.keys():
+                                    model_key_map[mk] = sf
+                        checked = 0
+                        with safe_open(str(exact_sf), framework="pt") as esf:
+                            esf_keys = set(esf.keys())
+                            for hk in sorted(exact_info.get("tensor_stats", {}).keys()):
+                                if f"{hk}.bfl" not in esf_keys or f"{hk}.delta" not in esf_keys:
+                                    continue
+                                cand_keys = [
+                                    hk,
+                                    hk.replace("model.language_model.", "language_model.model."),
+                                    hk.replace("model.language_model.", "model."),
+                                ]
+                                matched_mk = next((ck for ck in cand_keys if ck in model_key_map), None)
+                                if matched_mk is None:
+                                    continue
+                                with safe_open(str(model_key_map[matched_mk]), framework="pt") as msf:
+                                    m_t = msf.get_tensor(matched_mk)
+                                if m_t.dtype not in (torch.bfloat16, torch.float16, torch.float32):
+                                    continue
+                                bfl_t = esf.get_tensor(f"{hk}.bfl").float()
+                                delta_t = esf.get_tensor(f"{hk}.delta").float()
+                                qwen_t = (
+                                    esf.get_tensor(f"{hk}.qwen").float()
+                                    if f"{hk}.qwen" in esf_keys
+                                    else (bfl_t - delta_t)
+                                )
+                                exp_t = qwen_t if base_role == "qwen" else bfl_t
+                                if m_t.shape != exp_t.shape:
+                                    continue
+                                m_f32 = m_t.float()
+                                d_raw = float(torch.linalg.norm(m_f32 - exp_t).item())
+                                d_off_f32 = float(torch.linalg.norm(m_f32 - (exp_t + 1.0)).item())
+                                d_off_cast = float(torch.linalg.norm(m_f32 - (exp_t + 1.0).to(m_t.dtype).float()).item())
+                                best_d = min(d_raw, d_off_f32, d_off_cast)
+                                ref_n = max(float(torch.linalg.norm(exp_t).item()), 1e-6)
+                                if best_d > max(0.02 * ref_n, 2e-2):
+                                    raise RuntimeError(
+                                        f"Model directory {model_dir} provenance weight mismatch on {hk} "
+                                        f"for base_role={base_role!r} (dist={best_d:.6f}, ref_norm={ref_n:.6f})"
+                                    )
+                                checked += 1
+                                if checked >= 8:
+                                    break
+                    except RuntimeError:
+                        raise
+                    except Exception:
+                        pass
+
     return {
         "model_dir": str(model_dir),
         "config_sha256": cfg_sha256,
@@ -250,6 +370,7 @@ def inspect_model_dir_provenance(model_dir: Path, base_role: str) -> Dict[str, A
         "safetensors_header_digests": header_digests,
         "detected_bfl_marker": has_bfl_marker,
         "detected_qwen_marker": has_qwen_marker,
+        "provenance_mode": provenance_mode,
     }
 
 
@@ -341,7 +462,9 @@ def run_switchable_evaluation(
 
         report["failure_phase"] = "provenance-validation"
         _atomic_write_json(report_path, report)
-        model_provenance = inspect_model_dir_provenance(model_dir, base_role=base_role)
+        model_provenance = inspect_model_dir_provenance(
+            model_dir, base_role=base_role, adapter_dir=adapter_dir
+        )
         report["model_provenance"] = model_provenance
         report["last_trustworthy_evidence"] = "provenance-validation"
         _atomic_write_json(report_path, report)

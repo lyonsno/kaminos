@@ -138,6 +138,8 @@ class TestMLXSwitchableAdapter(unittest.TestCase):
         bfl_hf["model.language_model.layers.0.post_attention_layernorm.weight"] += 0.05
         bfl_hf["model.language_model.layers.0.linear_attn.conv1d.weight"] += rng.standard_normal((hidden, 1, 4)).astype(np.float32) * 0.05
         bfl_hf["model.language_model.layers.0.linear_attn.in_proj_a.weight"] += rng.standard_normal((heads, hidden)).astype(np.float32) * 0.08
+        qwen_hf["model.language_model.layers.0.linear_attn.in_proj_a.weight"][0, 0] = np.float32(1.0)
+        bfl_hf["model.language_model.layers.0.linear_attn.in_proj_a.weight"][0, 0] = np.float32(0.00099945068359375)
         bfl_hf["model.language_model.layers.0.linear_attn.A_log"] += 0.3
         bfl_hf["model.language_model.layers.0.linear_attn.dt_bias"] -= 0.1
         bfl_hf["model.language_model.layers.0.linear_attn.norm.weight"] += 0.15
@@ -176,6 +178,7 @@ class TestMLXSwitchableAdapter(unittest.TestCase):
             d_arr = (b_arr.astype(mx.float32) - q_arr.astype(mx.float32)).astype(dt)
             exact_tensors[f"{key}.delta"] = d_arr
             exact_tensors[f"{key}.bfl"] = b_arr
+            exact_tensors[f"{key}.qwen"] = q_arr
             exact_stats[key] = {"mode": "exact", "shape": list(qwen_hf[key].shape)}
         mx.save_safetensors(str(shards_dir / "exact_small.safetensors"), exact_tensors)
 
@@ -185,7 +188,18 @@ class TestMLXSwitchableAdapter(unittest.TestCase):
             lr_tensors[f"{key}.lora_B"] = mx.array(lb).astype(mx.bfloat16)
             lr_tensors[f"{key}.lora_A"] = mx.array(la).astype(mx.bfloat16)
             lr_tensors[f"{key}.singular_values"] = mx.array(sv).astype(mx.float32)
-            lr_stats[key] = {"mode": "lowrank_svd", "shape": list(qwen_hf[key].shape), "rank": 4}
+            q_np = qwen_hf[key].astype(np.float32)
+            b_np = bfl_hf[key].astype(np.float32)
+            lr_stats[key] = {
+                "mode": "lowrank_svd",
+                "shape": list(qwen_hf[key].shape),
+                "rank": 4,
+                "frob_base": round(float(np.linalg.norm(q_np)), 6),
+                "frob_bfl": round(float(np.linalg.norm(b_np)), 6),
+                "frob_delta": round(float(np.linalg.norm(b_np - q_np)), 6),
+                "qwen_00": round(float(q_np.reshape(-1)[0]), 6),
+                "bfl_00": round(float(b_np.reshape(-1)[0]), 6),
+            }
         mx.save_safetensors(str(shards_dir / "layers_00_07.safetensors"), lr_tensors)
 
         manifest = {
@@ -287,6 +301,17 @@ class TestMLXSwitchableAdapter(unittest.TestCase):
             self.assertEqual(
                 float(model_bf16.language_model.model.layers[0].input_layernorm.weight[0].item()),
                 0.8984375,
+            )
+            # PUP-R3-01: Assert 2D exact-small linear (in_proj_a) matches saved BFL target under BF16 cancellation
+            probe_x = mx.zeros((1, 64), dtype=mx.bfloat16)
+            probe_x[0, 0] = mx.array(1.0, dtype=mx.bfloat16)
+            y_in_proj_switched = model_bf16.language_model.model.layers[0].linear_attn.in_proj_a(probe_x)
+            y_in_proj_ref = ref_r4.language_model.model.layers[0].linear_attn.in_proj_a(probe_x)
+            mx.eval(y_in_proj_switched, y_in_proj_ref)
+            self.assertEqual(float(y_in_proj_switched[0, 0].item()), 0.00099945068359375)
+            self.assertEqual(
+                float(mx.max(mx.abs(y_in_proj_switched.astype(mx.float32) - y_in_proj_ref.astype(mx.float32))).item()),
+                0.0,
             )
             expected_r4 = ref_r4(input_ids)
             mx.eval(expected_r4)
