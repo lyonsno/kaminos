@@ -1,5 +1,5 @@
 import * as T from '../../lib/three.core.js';
-import {checkedMechanism,frames} from './model.mjs';
+import {checkedMechanism,frames,pistonMountPoint} from './model.mjs';
 
 // Construction is derived from an authored forest, never from an arm template.
 // Each body has immutable local geometry and a rigid placement at each pose.
@@ -24,12 +24,16 @@ function release(root){const gs=new Set(),ms=new Set();root.traverse(o=>{if(o.ge
 
 // Lipschitz enclosure over the WHOLE authored interpolation, including interior
 // extrema. Refinement stops at a length tolerance, not at a preset sample count.
-export function travelEnvelope(m,a,b,tolerance=1e-3){
+export function travelEnvelope(m,a,b,tolerance=1e-3,piston=null){
  checkedMechanism(m);if(![a,b].every(i=>Number.isInteger(i)&&m.nodes[i])||!Number.isFinite(tolerance)||tolerance<=0)throw Error('Valid attachments and positive travel tolerance required');
- const speeds=[];let speed=0;
+ const entry=piston??m.pistons.find(p=>(p.a===a&&p.b===b)||(p.a===b&&p.b===a));
+ const aOffset=entry?.a===a?entry.aOffset:entry?.b===a?entry.bOffset:undefined;
+ const bOffset=entry?.b===b?entry.bOffset:entry?.a===b?entry.aOffset:undefined;
+ const speeds=[];
  m.nodes.forEach((n,i)=>{if(n.parent===null)speeds[i]={angular:0,linear:0};else{const p=speeds[n.parent],angular=p.angular+Math.abs(n.angles[1]-n.angles[0]);speeds[i]={angular,linear:p.linear+n.length*angular};}});
- speed=speeds[a].linear+speeds[b].linear;if(!Number.isFinite(speed))throw Error('Authored motion exceeds numeric travel range');
- const distance=t=>{const f=frames(m,t),p=f[a].point,q=f[b].point;return Math.hypot(q[0]-p[0],q[1]-p[1]);};
+ const mountSpeed=(id,offset)=>{if(!offset)return speeds[id].linear;const n=m.nodes[id];if(n.parent===null)return 0;return speeds[n.parent].linear+Math.hypot(offset[0],offset[1])*speeds[id].angular;};
+ const speed=mountSpeed(a,aOffset)+mountSpeed(b,bOffset);if(!Number.isFinite(speed))throw Error('Authored motion exceeds numeric travel range');
+ const distance=t=>{const f=frames(m,t),p=pistonMountPoint(m,f,a,aOffset),q=pistonMountPoint(m,f,b,bOffset);return Math.hypot(q[0]-p[0],q[1]-p[1]);};
  let lo=Infinity,hi=0;const leaves=[],pending=[[0,1]];
  while(pending.length){const [l,r]=pending.pop(),mid=(l+r)/2,d=distance(mid),error=speed*(r-l)/2;lo=Math.min(lo,d);hi=Math.max(hi,d);
   if(error<=tolerance || (d-error>=lo-tolerance&&d+error<=hi+tolerance))leaves.push([Math.max(0,d-error),d+error]);
@@ -51,16 +55,19 @@ export function constructBodies(value){
  const holes=recipe.nodes.map((n,i)=>Math.min(bore,...recipe.nodes.flatMap((c,j)=>(j===i||c.parent===i)&&c.parent!==null?[c.length/6]:[])));
  const add=(id,kind,parameters,build,pose)=>{const object=new T.Group();object.name=id;object.userData.assemblyBody={id,kind,parameters,frame:'local XY links, local Z hinges, local X piston travel'};build(object);defs.push({id,kind,geometryKey:JSON.stringify([kind,parameters]),object,pose});};
  recipe.nodes.forEach((n,i)=>{
-  if(n.parent===null)add(`anchor:${i}`,'anchor',[.5,.5,.18],g=>box(g,[.5,.5,.18],[0,0,-.16],0x374653),f=>({position:[...f[i].point,0],angle:0}));
-  else add(`link:${i}`,'link',[n.length,thickness,eye,holes[n.parent],holes[i]],g=>plate(g,n.length,[holes[n.parent],holes[i]]),f=>({position:[...f[n.parent].point,layers[i]],angle:f[i].angle}));
+  const clevises=recipe.pistons.flatMap((p,j)=>p.a===i&&p.aOffset?[{offset:p.aOffset,z:pistonZ+j*pitch}]:p.b===i&&p.bOffset?[{offset:p.bOffset,z:pistonZ+j*pitch}]:[]);
+  const addClevises=(g,baseZ)=>{for(const {offset:[ox,oy],z}of clevises){const rx=n.parent===null?0:Math.max(0,Math.min(n.length,ox)),dx=ox-rx,dy=oy,len=Math.hypot(dx,dy),dz=z-baseZ;if(len>1e-3){const strut=box(g,[len,.08,thickness*.8],[(rx+ox)/2,oy/2,dz],0xc9a875);strut.rotation.z=Math.atan2(dy,dx);strut.name='Clevis bracket';strut.userData.copyPart='clevis-lug';}const eyeMesh=cylinder(g,.09,thickness,[ox,oy,dz],0xc9a875,'z',holes[i]*.75);eyeMesh.name='Clevis pin eye';eyeMesh.userData.copyPart='clevis-lug';}};
+  if(n.parent===null)add(`anchor:${i}`,'anchor',clevises.length?[.5,.5,.18,clevises]:[.5,.5,.18],g=>{box(g,[.5,.5,.18],[0,0,-.16],0x374653);addClevises(g,0);},f=>({position:[...f[i].point,0],angle:0}));
+  else add(`link:${i}`,'link',clevises.length?[n.length,thickness,eye,holes[n.parent],holes[i],clevises]:[n.length,thickness,eye,holes[n.parent],holes[i]],g=>{plate(g,n.length,[holes[n.parent],holes[i]]);addClevises(g,layers[i]);},f=>({position:[...f[n.parent].point,layers[i]],angle:f[i].angle}));
   const {low,high}=joints[i];
   add(`pin:${i}`,'pin',[low,high,holes[i]],g=>{cylinder(g,holes[i]*.94,high-low,[0,0,(high+low)/2],0xc9a875);for(const z of [low-.025,high+.025])cylinder(g,.105,.05,[0,0,z],0xc9a875);},f=>({position:[...f[i].point,0],angle:f[i].angle}));
  });
  const travels=recipe.pistons.map((p,j)=>{
-  const range=travelEnvelope(recipe,p.a,p.b),barrel=Math.max(.04,range.min*.85),rod=Math.max(.04,range.max-barrel+.08),z=pistonZ+j*pitch;
-  const angle=f=>Math.atan2(f[p.b].point[1]-f[p.a].point[1],f[p.b].point[0]-f[p.a].point[0]);
-  add(`piston:${j}:barrel`,'barrel',[barrel,holes[p.a]],g=>{cylinder(g,.11,barrel,[barrel/2,0,0],0x374653,'x',.049);cylinder(g,.13,thickness,[0,0,0],0xc9a875,'z',holes[p.a]);},f=>({position:[...f[p.a].point,z],angle:angle(f)}));
-  add(`piston:${j}:rod`,'rod',[rod,holes[p.b]],g=>{cylinder(g,.045,rod,[-rod/2,0,0],0xcdd7de,'x');cylinder(g,.13,thickness,[0,0,0],0xc9a875,'z',holes[p.b]);},f=>({position:[...f[p.b].point,z],angle:angle(f)}));
+  const range=travelEnvelope(recipe,p.a,p.b,1e-3,p),barrel=Math.max(.04,range.min*.85),rod=Math.max(.04,range.max-barrel+.08),z=pistonZ+j*pitch;
+  const mountA=f=>pistonMountPoint(recipe,f,p.a,p.aOffset),mountB=f=>pistonMountPoint(recipe,f,p.b,p.bOffset);
+  const angle=f=>{const a=mountA(f),b=mountB(f);return Math.atan2(b[1]-a[1],b[0]-a[0]);};
+  add(`piston:${j}:barrel`,'barrel',[barrel,holes[p.a]],g=>{cylinder(g,.11,barrel,[barrel/2,0,0],0x374653,'x',.049);cylinder(g,.13,thickness,[0,0,0],0xc9a875,'z',holes[p.a]);},f=>({position:[...mountA(f),z],angle:angle(f)}));
+  add(`piston:${j}:rod`,'rod',[rod,holes[p.b]],g=>{cylinder(g,.045,rod,[-rod/2,0,0],0xcdd7de,'x');cylinder(g,.13,thickness,[0,0,0],0xc9a875,'z',holes[p.b]);},f=>({position:[...mountB(f),z],angle:angle(f)}));
   return {...p,...range,barrel,rod};
  });
  return {recipe,defs,travels};

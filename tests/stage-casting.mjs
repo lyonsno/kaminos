@@ -49,7 +49,7 @@ async function workshopFixture({saved=false}={}){
  const flame={read:()=>({scene:{objects:[{id:'flame-field'}]}}),setPaused:v=>events.push(['pause',v])};
  const host={controls:{document:{defaultView:app}},scene:{objects:()=>objects,open:async()=>({onFrame:fn=>{frame=fn;return()=>{};},redraw(){},dispose(){}}),refreshPresentation(){}},flame:{open:async()=>flame},fire:{read:()=>({registered:false}),setEnabled:v=>events.push(['emit',v])}};
  const study=await experiment.create({host,record:()=>{}},async()=>({read:()=>({moldId:'mold'}),operations:{stopPour:async()=>{}},dispose(){}}));
- return {study,events,finish,frame:dt=>frame({deltaSeconds:dt}),objects};
+ return {study,app,events,finish,frame:dt=>frame({deltaSeconds:dt}),objects};
 }
 test('reopened casting is adopted and ignition waits for resident material',async()=>{
  const f=await workshopFixture({saved:true});assert.equal(f.study.read().pieceId,'saved');assert.equal(f.study.read().cursor,1);
@@ -71,4 +71,40 @@ test('cold ignition does not enable the source before material initialization',a
 test('native deletion of the active casting stops its ignition',async()=>{
  const f=await workshopFixture();await f.study.operations.release();f.frame(4);f.finish();await f.study.operations.ignite();
  f.objects.splice(2);f.frame(.1);assert.equal(f.study.read().igniting,false);assert.deepEqual(f.events.at(-1),['emit',false]);await f.study.dispose();
+});
+
+test('stationary unmolding leaves a letter at the mold for a mechanical pickup',async()=>{
+ const f=await workshopFixture();
+ assert.equal(typeof f.study.operations.unmold,'function','stationary unmold is a distinct operation');
+ await f.study.operations.unmold();
+ const id=f.study.read().pieceId,root=f.objects.find(o=>o.id===id).object;
+ const before=root.position.toArray();f.frame(20);
+ assert.deepEqual(root.position.toArray(),before);
+ assert.ok(!f.study.read().transfer?.moving);
+ await f.study.dispose();
+});
+
+async function loaderFixture({phase=.25,cycle=.5}={}){
+ const f=await workshopFixture(),{Group}=await import('../lib/three.core.js');
+ const root=new Group(),recipe={nodes:[{parent:null},{parent:0}],phase,castingCarrier:{moldId:'mold',joint:1},attachments:[]};root.userData.linkMechanism=recipe;
+ const state={recipe,cycle,fraction:(1-Math.cos((cycle+phase)*2*Math.PI))/2,playing:false};
+ const operations={pause(){state.playing=false;},seek({cycle}){state.cycle=((cycle%1)+1)%1;state.fraction=(1-Math.cos((cycle+phase)*2*Math.PI))/2;},attach(a){recipe.attachments.push(a);},detach({objectId}){recipe.attachments=recipe.attachments.filter(a=>a.objectId!==objectId);}};
+ const runtime={read:()=>structuredClone(state),operations};
+ f.objects.push({id:'loader',object:root});f.app.kaminosMechanisms={ensure:async()=>runtime,invoke:async(id,op,args)=>operations[op](args)};
+ return {...f,runtime,state};
+}
+test('carrier uses authored endpoints despite phase or a native cycle on the returning half',async()=>{
+ const f=await loaderFixture();await f.study.operations.unmold();await f.study.operations.carry();f.frame(4);
+ assert.ok(Math.abs(f.state.fraction-1)<1e-10);assert.equal(f.study.read().carriage.moving,false);
+ await f.study.operations.returnLoader();f.frame(4);assert.ok(Math.abs(f.state.fraction)<1e-10);await f.study.dispose();
+});
+test('native loader changes cancel automatic carry before it overwrites the edit',async()=>{
+ const f=await loaderFixture({phase:0,cycle:0});await f.study.operations.unmold();await f.study.operations.carry();f.frame(1);
+ f.runtime.operations.seek({cycle:.37});f.frame(1);
+ assert.ok(Math.abs(f.state.cycle-.37)<1e-10);assert.equal(f.study.read().carriage.moving,false);await f.study.dispose();
+});
+test('deleting a carried casting stops automatic loader travel',async()=>{
+ const f=await loaderFixture({phase:0,cycle:0});await f.study.operations.unmold();await f.study.operations.carry();f.frame(1);
+ f.objects.splice(f.objects.findIndex(o=>o.id===f.study.read().pieceId),1);const cycle=f.state.cycle;f.frame(1);
+ assert.equal(f.state.cycle,cycle);assert.equal(f.study.read().carriage.moving,false);await f.study.dispose();
 });
