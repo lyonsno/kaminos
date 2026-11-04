@@ -281,6 +281,8 @@ def _mps_gemm_svd_lowrank(
     dw: torch.Tensor,
     q: int,
     niter: int,
+    max_chunk_rows: int = 32768,
+    device: Optional[torch.device] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Fast randomized SVD on MPS using GPU GEMMs (`@`) and CPU LAPACK on the small subspace.
 
@@ -289,6 +291,8 @@ def _mps_gemm_svd_lowrank(
     """
     import numpy as np
 
+    target_dev = device if device is not None else dw.device
+    step = max(1, int(max_chunk_rows))
     transposed = dw.shape[0] < dw.shape[1]
     a = dw.T if transposed else dw
     d_max, d_min = a.shape
@@ -297,12 +301,12 @@ def _mps_gemm_svd_lowrank(
     omega_np = rng.standard_normal((d_min, q), dtype=np.float32)
     q_np, _ = np.linalg.qr(omega_np, mode="reduced")
 
-    if d_max > 32768:
-        g_dev = torch.zeros((d_min, d_min), device=a.device, dtype=torch.float32)
-        step = 32768
+    if d_max > step or a.device != target_dev:
+        g_dev = torch.zeros((d_min, d_min), device=target_dev, dtype=torch.float32)
         for s_idx in range(0, d_max, step):
-            chunk = a[s_idx : s_idx + step]
+            chunk = a[s_idx : s_idx + step].to(device=target_dev, dtype=torch.float32)
             g_dev.addmm_(chunk.T, chunk)
+            del chunk
     else:
         g_dev = a.T @ a
     g_np = g_dev.cpu().numpy()
@@ -314,39 +318,47 @@ def _mps_gemm_svd_lowrank(
         q_np, _ = np.linalg.qr(y_np, mode="reduced")
     del g_np
 
-    q_dev = torch.from_numpy(q_np).to(device=a.device, dtype=torch.float32)
-    if d_max > 32768:
+    q_dev = torch.from_numpy(q_np).to(device=target_dev, dtype=torch.float32)
+    if d_max > step or a.device != target_dev:
         b_chunks = []
-        step = 32768
+        bb_dev = torch.zeros((q_np.shape[1], q_np.shape[1]), device=target_dev, dtype=torch.float32)
         for s_idx in range(0, d_max, step):
-            b_chunks.append(a[s_idx : s_idx + step] @ q_dev)
-        b_dev = torch.cat(b_chunks, dim=0)
-        del b_chunks
+            chunk = a[s_idx : s_idx + step].to(device=target_dev, dtype=torch.float32)
+            b_part = chunk @ q_dev
+            bb_dev.addmm_(b_part.T, b_part)
+            b_chunks.append(b_part.cpu())
+            del chunk, b_part
+        bb_np = bb_dev.cpu().numpy().astype(np.float64)
+        del bb_dev
+        b_dev = None
     else:
         b_dev = a @ q_dev
+        bb_np = (b_dev.T @ b_dev).cpu().numpy().astype(np.float64)
+        b_chunks = None
     del q_dev
 
-    bb_np = (b_dev.T @ b_dev).cpu().numpy().astype(np.float64)
     bb_np = 0.5 * (bb_np + bb_np.T)
     u_b64, s_sq64, _ = np.linalg.svd(bb_np, hermitian=True)
     s_np = np.sqrt(np.maximum(s_sq64, 0.0)).astype(np.float32)
     v_small_np = (q_np.astype(np.float64) @ u_b64).astype(np.float32)
 
-    u_b_dev = torch.from_numpy(u_b64.astype(np.float32)).to(device=a.device)
-    s_dev = torch.from_numpy(s_np).to(device=a.device)
+    u_b_dev = torch.from_numpy(u_b64.astype(np.float32)).to(device=target_dev)
+    s_dev = torch.from_numpy(s_np).to(device=target_dev)
     inv_s = torch.where(s_dev > 1e-7, 1.0 / s_dev, torch.zeros_like(s_dev))
     scale_mat = u_b_dev * inv_s.unsqueeze(0)
 
-    if d_max > 32768:
+    if b_chunks is not None:
         u_chunks = []
-        step = 32768
-        for s_idx in range(0, d_max, step):
-            u_chunks.append((b_dev[s_idx : s_idx + step] @ scale_mat).cpu())
+        for b_part_cpu in b_chunks:
+            b_part_dev = b_part_cpu.to(device=target_dev, dtype=torch.float32)
+            u_chunks.append((b_part_dev @ scale_mat).cpu())
+            del b_part_dev
         u_large = torch.cat(u_chunks, dim=0)
-        del u_chunks
+        del u_chunks, b_chunks
     else:
         u_large = (b_dev @ scale_mat).cpu()
-    del b_dev, u_b_dev, s_dev, inv_s, scale_mat
+        del b_dev
+    del u_b_dev, s_dev, inv_s, scale_mat
 
     v_small = torch.from_numpy(v_small_np)
     s_cpu = torch.from_numpy(s_np)
@@ -362,31 +374,61 @@ def lowrank_svd_decompose(
     max_rank: int,
     oversample: int,
     niter: int,
+    max_chunk_rows: int = 32768,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, Dict[str, Any]]:
     m, n = bfl_t.shape
     r_eff = min(max_rank, m, n)
     q_eff = min(r_eff + oversample, m, n)
+    step = max(1, int(max_chunk_rows))
 
     with torch.no_grad():
-        w_bfl = bfl_t.to(device=device, dtype=torch.float32)
-        w_qwen = qwen_t.to(device=device, dtype=torch.float32)
-        bfl_00 = float(w_bfl.flatten()[0].item())
-        qwen_00 = float(w_qwen.flatten()[0].item())
-        frob_bfl = float(torch.linalg.norm(w_bfl).item())
-        dw = w_bfl - w_qwen
-        del w_bfl
+        bfl_00 = float(bfl_t.flatten()[0].float().item())
+        qwen_00 = float(qwen_t.flatten()[0].float().item())
+        if max(m, n) > step:
+            sq_bfl = 0.0
+            sq_base = 0.0
+            sq_delta = 0.0
+            dw_chunks = []
+            for r_idx in range(0, m, step):
+                b_c = bfl_t[r_idx : r_idx + step].to(dtype=torch.float32)
+                q_c = qwen_t[r_idx : r_idx + step].to(dtype=torch.float32)
+                d_c = b_c - q_c
+                sq_bfl += float(torch.linalg.norm(b_c).item()) ** 2
+                sq_base += float(torch.linalg.norm(q_c).item()) ** 2
+                sq_delta += float(torch.linalg.norm(d_c).item()) ** 2
+                dw_chunks.append(d_c)
+                del b_c, q_c
+            frob_bfl = sq_bfl ** 0.5
+            frob_base = sq_base ** 0.5
+            frob_delta = sq_delta ** 0.5
+            dw_cpu = torch.cat(dw_chunks, dim=0)
+            del dw_chunks
+            u, s, v = _mps_gemm_svd_lowrank(
+                dw_cpu, q=q_eff, niter=niter, max_chunk_rows=step, device=device
+            )
+            del dw_cpu
+        else:
+            w_bfl = bfl_t.to(device=device, dtype=torch.float32)
+            frob_bfl = float(torch.linalg.norm(w_bfl).item())
+            w_qwen = qwen_t.to(device=device, dtype=torch.float32)
+            frob_base = float(torch.linalg.norm(w_qwen).item())
+            dw = w_bfl - w_qwen
+            del w_bfl, w_qwen
+            frob_delta = float(torch.linalg.norm(dw).item())
 
-        frob_delta = float(torch.linalg.norm(dw).item())
-        frob_base = float(torch.linalg.norm(w_qwen).item())
-        del w_qwen
+            if device.type == "mps":
+                u, s, v = _mps_gemm_svd_lowrank(
+                    dw, q=q_eff, niter=niter, max_chunk_rows=step, device=device
+                )
+                del dw
+            else:
+                torch.manual_seed(0)
+                u, s, v = torch.svd_lowrank(dw, q=q_eff, niter=niter)
+                del dw
 
         if device.type == "mps":
-            u, s, v = _mps_gemm_svd_lowrank(dw, q=q_eff, niter=niter)
-            del dw
-        else:
-            torch.manual_seed(0)
-            u, s, v = torch.svd_lowrank(dw, q=q_eff, niter=niter)
-            del dw
+            torch.mps.synchronize()
+            torch.mps.empty_cache()
 
         u_r = u[:, :r_eff]
         s_r = s[:r_eff]
@@ -441,7 +483,7 @@ def run_extraction(
     resume: bool = True,
     verify_visual_samples: int = 8,
     include_vocab: bool = True,
-    prefetch_workers: int = 4,
+    prefetch_workers: int = 2,
     selected_shards: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     out_dir = Path(out_dir)
@@ -704,10 +746,11 @@ def run_extraction(
             def _fetch_pair(k: str) -> Tuple[str, torch.Tensor, torch.Tensor]:
                 return k, bfl_reader.get_tensor(k), qwen_reader.get_tensor(k)
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, prefetch_workers)) as pool:
+            effective_prefetch = min(max(1, prefetch_workers), 2) if dev.type == "mps" else max(1, prefetch_workers)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=effective_prefetch) as pool:
                 in_flight: List[concurrent.futures.Future] = []
                 key_iter = iter(keys_in_grp)
-                for _ in range(min(len(keys_in_grp), max(1, prefetch_workers))):
+                for _ in range(min(len(keys_in_grp), effective_prefetch)):
                     in_flight.append(pool.submit(_fetch_pair, next(key_iter)))
 
                 while in_flight:
@@ -854,7 +897,7 @@ def main() -> None:
     parser.add_argument("--niter", type=int, default=4)
     parser.add_argument("--no-resume", action="store_true")
     parser.add_argument("--skip-vocab", action="store_true")
-    parser.add_argument("--prefetch-workers", type=int, default=4)
+    parser.add_argument("--prefetch-workers", type=int, default=2)
     parser.add_argument("--shards", default=None, help="Comma-separated shard names to extract")
     args = parser.parse_args()
 

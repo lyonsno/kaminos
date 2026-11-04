@@ -474,6 +474,60 @@ class TestBflPupDeltaExtract(unittest.TestCase):
             self.assertFalse(FakeUrllibResp.body_read)
             self.assertTrue(FakeUrllibResp.closed)
 
+    def test_r4_02_chunked_mps_svd_and_bounded_prefetch_workers(self):
+        import inspect
+        import torch
+        from extract_delta_adapter import _mps_gemm_svd_lowrank, lowrank_svd_decompose, run_extraction
+
+        torch.manual_seed(42)
+        u_true = torch.randn(256, 8)
+        v_true = torch.randn(8, 32)
+        qwen_t = torch.randn(256, 32, dtype=torch.bfloat16)
+        bfl_t = (qwen_t.float() + (u_true @ v_true) * 0.5).to(torch.bfloat16)
+
+        # Reference unchunked decomposition
+        b_ref, a_ref, sv_ref, st_ref = lowrank_svd_decompose(
+            bfl_t,
+            qwen_t,
+            device=torch.device("cpu"),
+            max_rank=8,
+            oversample=4,
+            niter=2,
+            max_chunk_rows=1024,
+        )
+
+        # Chunked decomposition (max_chunk_rows=64 < 256)
+        b_chk, a_chk, sv_chk, st_chk = lowrank_svd_decompose(
+            bfl_t,
+            qwen_t,
+            device=torch.device("cpu"),
+            max_rank=8,
+            oversample=4,
+            niter=2,
+            max_chunk_rows=64,
+        )
+
+        self.assertAlmostEqual(st_chk["frob_bfl"], st_ref["frob_bfl"], places=3)
+        self.assertAlmostEqual(st_chk["frob_base"], st_ref["frob_base"], places=3)
+        self.assertAlmostEqual(st_chk["frob_delta"], st_ref["frob_delta"], places=3)
+        self.assertEqual(st_chk["bfl_00"], st_ref["bfl_00"])
+        self.assertEqual(st_chk["qwen_00"], st_ref["qwen_00"])
+        self.assertTrue(torch.allclose(sv_chk, sv_ref, rtol=1e-4, atol=1e-4))
+        recon_ref = b_ref.float() @ a_ref.float()
+        recon_chk = b_chk.float() @ a_chk.float()
+        self.assertTrue(torch.allclose(recon_chk, recon_ref, rtol=1e-2, atol=2e-2))
+
+        # Verify _mps_gemm_svd_lowrank accepts max_chunk_rows and matches unchunked
+        dw_cpu = bfl_t.float() - qwen_t.float()
+        u1, s1, v1 = _mps_gemm_svd_lowrank(dw_cpu, q=12, niter=2, max_chunk_rows=1024)
+        u2, s2, v2 = _mps_gemm_svd_lowrank(dw_cpu, q=12, niter=2, max_chunk_rows=64)
+        self.assertTrue(torch.allclose(s1, s2, rtol=1e-4, atol=1e-4))
+        self.assertTrue(torch.allclose(u1 @ torch.diag(s1) @ v1.T, u2 @ torch.diag(s2) @ v2.T, rtol=1e-4, atol=1e-4))
+
+        # Verify default prefetch_workers in run_extraction is <= 2
+        sig = inspect.signature(run_extraction)
+        self.assertLessEqual(sig.parameters["prefetch_workers"].default, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

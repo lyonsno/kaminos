@@ -477,6 +477,15 @@ def run_switchable_evaluation(
         if not mx.metal.is_available():
             raise RuntimeError("Metal is unavailable; no CPU fallback is permitted.")
         mx.set_default_device(mx.gpu)
+        if hasattr(mx, "set_cache_limit"):
+            mx.set_cache_limit(512 * 1024 * 1024)
+        if hasattr(mx, "set_wired_limit") and not getattr(mx, "_kaminos_wired_limit_capped", False):
+            _orig_set_wired_limit = mx.set_wired_limit
+            _max_wired_bytes = 16 * 1024 * 1024 * 1024
+            mx.set_wired_limit = lambda limit: _orig_set_wired_limit(
+                min(int(limit), _max_wired_bytes) if int(limit) > 0 else int(limit)
+            )
+            mx._kaminos_wired_limit_capped = True
         effective_backend = "mlx-metal"
 
         prompts_file = Path(system_prompts_path) if system_prompts_path else (model_dir / "system_prompts.json")
@@ -490,6 +499,8 @@ def run_switchable_evaluation(
 
         load_t0 = time.monotonic()
         model, processor = load(str(model_dir), strict=True)
+        if hasattr(mx, "clear_cache"):
+            mx.clear_cache()
         report["model_load_count"] += 1
         report["load_seconds"] = round(time.monotonic() - load_t0, 4)
         report["effective_backend"] = effective_backend
@@ -508,6 +519,8 @@ def run_switchable_evaluation(
             base_role=base_role,
             allow_bfl_residual_approx=allow_bfl_residual_approx,
         )
+        if hasattr(mx, "clear_cache"):
+            mx.clear_cache()
         if controller.attached_lowrank_count != adapter_summary["lowrank_tensor_count"]:
             raise RuntimeError(
                 f"Attached lowrank count mismatch: attached={controller.attached_lowrank_count} != "
@@ -622,6 +635,9 @@ def run_switchable_evaluation(
                     report["attempted_observations"].append(failed_obs)
                     _atomic_write_json(report_path, report)
                     raise
+                finally:
+                    if hasattr(mx, "clear_cache"):
+                        mx.clear_cache()
 
                 gen_s = round(time.monotonic() - gen_t0, 4)
                 obs = {

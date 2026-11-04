@@ -779,6 +779,10 @@ class TestMLXSwitchableEvalHarness(unittest.TestCase):
                     return TorchArrayProxy(self.t * o)
 
                 def __getitem__(self, idx):
+                    if isinstance(idx, tuple):
+                        idx = tuple(i.t if isinstance(i, TorchArrayProxy) else i for i in idx)
+                    elif isinstance(idx, TorchArrayProxy):
+                        idx = idx.t
                     return TorchArrayProxy(self.t[idx])
 
                 def item(self):
@@ -919,6 +923,10 @@ class TestMLXSwitchableEvalHarness(unittest.TestCase):
                     return TorchArrayProxy(self.t * o)
 
                 def __getitem__(self, idx):
+                    if isinstance(idx, tuple):
+                        idx = tuple(i.t if isinstance(i, TorchArrayProxy) else i for i in idx)
+                    elif isinstance(idx, TorchArrayProxy):
+                        idx = idx.t
                     return TorchArrayProxy(self.t[idx])
 
                 def item(self):
@@ -1028,6 +1036,250 @@ class TestMLXSwitchableEvalHarness(unittest.TestCase):
             rep_sf_data = json.loads(rep_unrel_sf.read_text())
             self.assertEqual(rep_sf_data["status"], "failed")
             self.assertEqual(rep_sf_data["failure_phase"], "provenance-validation")
+
+    def test_r4_01_mlx_memory_and_module_wrapping_safety(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        import torch
+        from safetensors import safe_open
+        from safetensors.torch import save_file
+        from extract_delta_adapter import run_extraction
+        from mlx_switchable_adapter import MLXSwitchableDeltaController
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bfl_dir = root / "bfl"
+            qwen_dir = root / "qwen"
+            out_dir = root / "adapter"
+            bfl_dir.mkdir()
+            qwen_dir.mkdir()
+
+            vis_w = torch.ones((4, 4), dtype=torch.bfloat16)
+            norm_q = torch.tensor([1.0, 1.0, 1.0, 1.0], dtype=torch.bfloat16)
+            norm_b = torch.tensor([1.5, 1.5, 1.5, 1.5], dtype=torch.bfloat16)
+            small_q = torch.full((2, 4), 0.5, dtype=torch.bfloat16)
+            small_b = torch.full((2, 4), 1.25, dtype=torch.bfloat16)
+            proj_q = torch.ones((8, 4), dtype=torch.bfloat16)
+            proj_b = torch.full((8, 4), 1.5, dtype=torch.bfloat16)
+            emb_q = torch.ones((16, 4), dtype=torch.bfloat16)
+            emb_b = torch.full((16, 4), 1.25, dtype=torch.bfloat16)
+
+            save_file(
+                {
+                    "model.visual.blocks.0.attn.qkv.weight": vis_w,
+                    "model.language_model.norm.weight": norm_q,
+                    "model.language_model.layers.0.linear_attn.in_proj_a.weight": small_q,
+                    "model.language_model.layers.0.self_attn.q_proj.weight": proj_q,
+                    "model.language_model.embed_tokens.weight": emb_q,
+                },
+                str(qwen_dir / "model.safetensors"),
+            )
+            save_file(
+                {
+                    "model.visual.blocks.0.attn.qkv.weight": vis_w,
+                    "model.language_model.norm.weight": norm_b,
+                    "model.language_model.layers.0.linear_attn.in_proj_a.weight": small_b,
+                    "model.language_model.layers.0.self_attn.q_proj.weight": proj_b,
+                    "model.language_model.embed_tokens.weight": emb_b,
+                },
+                str(bfl_dir / "model.safetensors"),
+            )
+
+            run_extraction(
+                source_mode="local-dir",
+                bfl_dir=bfl_dir,
+                qwen_dir=qwen_dir,
+                out_dir=out_dir,
+                report_path=root / "extract_rep.json",
+                device="cpu",
+                max_rank=2,
+                min_lora_dim=4,
+                oversample=2,
+                niter=2,
+                resume=False,
+            )
+
+            class FakeMLXModule(dict):
+                """Mimics mlx.nn.Module: stores public attributes inside dict (self)."""
+
+                def __setattr__(self, key, val):
+                    if not key.startswith("_"):
+                        self[key] = val
+                    super().__setattr__(key, val)
+
+            class TorchArrayProxy:
+                def __init__(self, t: torch.Tensor):
+                    self.t = t
+                    self.dtype = t.dtype
+                    self.ndim = t.ndim
+                    self.shape = tuple(t.shape)
+
+                def astype(self, dt):
+                    return TorchArrayProxy(self.t.to(dt))
+
+                def __matmul__(self, other):
+                    o = other.t if isinstance(other, TorchArrayProxy) else other
+                    return TorchArrayProxy(self.t @ o)
+
+                def __add__(self, other):
+                    o = other.t if isinstance(other, TorchArrayProxy) else other
+                    return TorchArrayProxy(self.t + o)
+
+                def __sub__(self, other):
+                    o = other.t if isinstance(other, TorchArrayProxy) else other
+                    return TorchArrayProxy(self.t - o)
+
+                def __mul__(self, other):
+                    o = other.t if isinstance(other, TorchArrayProxy) else other
+                    return TorchArrayProxy(self.t * o)
+
+                def __getitem__(self, idx):
+                    if isinstance(idx, tuple):
+                        idx = tuple(i.t if isinstance(i, TorchArrayProxy) else i for i in idx)
+                    elif isinstance(idx, TorchArrayProxy):
+                        idx = idx.t
+                    return TorchArrayProxy(self.t[idx])
+
+                def item(self):
+                    return float(self.t.item())
+
+            def load_sf(p: str):
+                out = {}
+                with safe_open(p, framework="pt") as sf:
+                    for k in sf.keys():
+                        out[k] = TorchArrayProxy(sf.get_tensor(k))
+                return out
+
+            dequant_row_counts = []
+            clear_cache_calls = []
+
+            def fake_dequantize(w, scales, biases=None, group_size=64, bits=4):
+                dequant_row_counts.append(w.shape[0])
+                return w
+
+            fake_mx = SimpleNamespace(
+                array=TorchArrayProxy,
+                float32=torch.float32,
+                bfloat16=torch.bfloat16,
+                load=load_sf,
+                transpose=lambda a: TorchArrayProxy(a.t.T.contiguous()),
+                sqrt=lambda x: TorchArrayProxy(torch.sqrt(x.t)),
+                sum=lambda x: TorchArrayProxy(torch.sum(x.t)),
+                eval=lambda *_args: None,
+                dequantize=fake_dequantize,
+                clear_cache=lambda: clear_cache_calls.append(1),
+            )
+            fake_nn = SimpleNamespace(Module=FakeMLXModule)
+
+            class DummyQuantLinear(FakeMLXModule):
+                def __init__(self, w: torch.Tensor):
+                    super().__init__()
+                    self.weight = TorchArrayProxy(w.clone())
+                    self.scales = TorchArrayProxy(torch.ones((w.shape[0], 1), dtype=torch.bfloat16))
+                    self.biases = TorchArrayProxy(torch.zeros((w.shape[0], 1), dtype=torch.bfloat16))
+                    self.group_size = 64
+                    self.bits = 4
+                    self.bias = None
+
+                def __call__(self, x: TorchArrayProxy) -> TorchArrayProxy:
+                    return TorchArrayProxy((x.t.float() @ self.weight.t.float().T).to(x.dtype))
+
+            class DummyQuantEmbedding(FakeMLXModule):
+                def __init__(self, w: torch.Tensor):
+                    super().__init__()
+                    self.weight = TorchArrayProxy(w.clone())
+                    self.scales = TorchArrayProxy(torch.ones((w.shape[0], 1), dtype=torch.bfloat16))
+                    self.biases = TorchArrayProxy(torch.zeros((w.shape[0], 1), dtype=torch.bfloat16))
+                    self.group_size = 64
+                    self.bits = 4
+
+                def __call__(self, x: TorchArrayProxy) -> TorchArrayProxy:
+                    return TorchArrayProxy(self.weight.t[x.t])
+
+                def as_linear(self, x: TorchArrayProxy) -> TorchArrayProxy:
+                    return TorchArrayProxy((x.t.float() @ self.weight.t.float().T).to(x.dtype))
+
+            norm_sanitized = TorchArrayProxy((norm_q.float() + 1.0).to(torch.bfloat16))
+            orig_in_proj_a = DummyQuantLinear(small_q)
+            orig_q_proj = DummyQuantLinear(proj_q)
+            orig_embed = DummyQuantEmbedding(emb_q)
+
+            fake_model = SimpleNamespace(
+                language_model=SimpleNamespace(
+                    model=SimpleNamespace(
+                        norm=SimpleNamespace(weight=norm_sanitized),
+                        embed_tokens=orig_embed,
+                        layers=[
+                            SimpleNamespace(
+                                linear_attn=SimpleNamespace(in_proj_a=orig_in_proj_a),
+                                self_attn=SimpleNamespace(q_proj=orig_q_proj),
+                            )
+                        ],
+                    )
+                )
+            )
+
+            with patch.dict(
+                sys.modules,
+                {"mlx": SimpleNamespace(core=fake_mx, nn=fake_nn), "mlx.core": fake_mx, "mlx.nn": fake_nn},
+            ):
+                ctrl = MLXSwitchableDeltaController(fake_model, out_dir, base_role="qwen")
+
+                # 1. Quantized low-rank provenance must never dequantize full matrices (>1 row)
+                # (only exact_small 2x4 or 1-row slices on lowrank_svd are dequantized)
+                self.assertTrue(all(r <= 2 for r in dequant_row_counts), f"Full-matrix dequantize called: {dequant_row_counts}")
+                self.assertGreaterEqual(len(clear_cache_calls), 2)
+
+                # 2. In off mode (base_role='qwen', enabled=False), original unwrapped modules stay attached
+                # so mlx_vlm's isinstance(m, nn.QuantizedLinear) fast path is preserved!
+                self.assertIs(fake_model.language_model.model.layers[0].linear_attn.in_proj_a, orig_in_proj_a)
+                self.assertIs(fake_model.language_model.model.layers[0].self_attn.q_proj, orig_q_proj)
+                self.assertIs(fake_model.language_model.model.embed_tokens, orig_embed)
+
+                # 3. Switching to enabled=True attaches the wrapper modules
+                ctrl.set_mode(enabled=True, rank=2)
+                wrapped_in_proj_a = fake_model.language_model.model.layers[0].linear_attn.in_proj_a
+                wrapped_q_proj = fake_model.language_model.model.layers[0].self_attn.q_proj
+                wrapped_embed = fake_model.language_model.model.embed_tokens
+                self.assertIsNot(wrapped_in_proj_a, orig_in_proj_a)
+                self.assertIsNot(wrapped_q_proj, orig_q_proj)
+                self.assertIsNot(wrapped_embed, orig_embed)
+
+                # 4. Wrapper modules must not register adapter tensors as mlx.nn.Module dict entries
+                self.assertEqual(list(wrapped_in_proj_a.keys()), ["base"])
+                self.assertEqual(list(wrapped_q_proj.keys()), ["base"])
+                self.assertEqual(list(wrapped_embed.keys()), ["base"])
+
+                # 5. Adapter tensors live on _holder in native bfloat16 without pre-transposed duplicate copies
+                self.assertEqual(wrapped_q_proj._holder.lora_B.dtype, torch.bfloat16)
+                self.assertEqual(wrapped_q_proj._holder.lora_A.dtype, torch.bfloat16)
+                self.assertFalse(hasattr(wrapped_q_proj._holder, "lora_B_T"))
+                self.assertFalse(hasattr(wrapped_embed._holder, "lora_B_T"))
+
+                # Verify forward pass in bfloat16 works accurately in on mode
+                x_in = TorchArrayProxy(torch.ones((1, 4), dtype=torch.bfloat16))
+                y_exact = wrapped_in_proj_a(x_in)
+                self.assertEqual(y_exact.dtype, torch.bfloat16)
+                self.assertTrue(torch.allclose(y_exact.t.float(), torch.full((1, 2), 5.0), atol=1e-2))
+
+                y_lora = wrapped_q_proj(x_in)
+                self.assertEqual(y_lora.dtype, torch.bfloat16)
+                self.assertTrue(torch.allclose(y_lora.t.float(), torch.full((1, 8), 6.0), atol=5e-2))
+
+                tok_ids = TorchArrayProxy(torch.tensor([0, 1], dtype=torch.long))
+                y_emb = wrapped_embed(tok_ids)
+                self.assertEqual(y_emb.dtype, torch.bfloat16)
+                self.assertTrue(torch.allclose(y_emb.t.float(), torch.full((2, 4), 1.25), atol=2e-2))
+
+                y_lm = wrapped_embed.as_linear(x_in)
+                self.assertEqual(y_lm.dtype, torch.bfloat16)
+                self.assertTrue(torch.allclose(y_lm.t.float(), torch.full((1, 16), 5.0), atol=5e-2))
+
+                # 6. Switching back to enabled=False restores the original unwrapped modules
+                ctrl.set_mode(enabled=False)
+                self.assertIs(fake_model.language_model.model.layers[0].linear_attn.in_proj_a, orig_in_proj_a)
+                self.assertIs(fake_model.language_model.model.layers[0].self_attn.q_proj, orig_q_proj)
+                self.assertIs(fake_model.language_model.model.embed_tokens, orig_embed)
 
 
 if __name__ == "__main__":

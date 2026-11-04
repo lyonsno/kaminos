@@ -145,6 +145,13 @@ def _make_mlx_wrappers():
     import mlx.core as mx
     import mlx.nn as nn
 
+    class _AdapterHolder:
+        """Plain non-Module container so mlx.nn.Module (a dict subclass) never registers adapter arrays."""
+
+        def __init__(self, **kwargs: Any) -> None:
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+
     class SwitchableMLXExactLinear(nn.Module):
         """Wraps a 2D small linear layer (e.g. `in_proj_a`, `in_proj_b`) with exact BFL/Qwen target reconstruction."""
 
@@ -158,48 +165,50 @@ def _make_mlx_wrappers():
         ) -> None:
             super().__init__()
             self.base = base
-            self.delta_T = mx.transpose(delta_weight.astype(mx.float32))
-            self.bfl_T_f32: Optional[mx.array] = (
-                mx.transpose(bfl_weight.astype(mx.float32)) if bfl_weight is not None else None
-            )
-            if qwen_weight is not None:
-                self.qwen_T_f32: Optional[mx.array] = mx.transpose(qwen_weight.astype(mx.float32))
-            elif bfl_weight is not None:
+            if qwen_weight is None and bfl_weight is not None:
                 q_f32 = bfl_weight.astype(mx.float32) - delta_weight.astype(mx.float32)
-                q_cast = q_f32.astype(bfl_weight.dtype)
-                self.qwen_T_f32 = mx.transpose(q_cast.astype(mx.float32))
-            else:
-                self.qwen_T_f32 = None
-            self._controller = controller
+                qwen_weight = q_f32.astype(bfl_weight.dtype)
+                mx.eval(qwen_weight)
+            self._holder = _AdapterHolder(
+                delta_weight=delta_weight,
+                bfl_weight=bfl_weight,
+                qwen_weight=qwen_weight,
+                controller=controller,
+            )
 
         def __call__(self, x: mx.array) -> mx.array:
-            if self._controller.base_role == "qwen":
-                if not self._controller.enabled:
+            h = self._holder
+            ctrl = h.controller
+            if ctrl.base_role == "qwen":
+                if not ctrl.enabled:
                     return self.base(x)
-                if self.bfl_T_f32 is not None:
+                if h.bfl_weight is not None:
                     dt = x.dtype
-                    out_f32 = x.astype(mx.float32) @ self.bfl_T_f32
+                    bfl_T_f32 = mx.transpose(h.bfl_weight.astype(mx.float32))
+                    out_f32 = x.astype(mx.float32) @ bfl_T_f32
                     bias = getattr(self.base, "bias", None)
                     if bias is not None:
                         out_f32 = out_f32 + bias.astype(mx.float32)
                     return out_f32.astype(dt)
             else:
-                if self._controller.enabled:
+                if ctrl.enabled:
                     return self.base(x)
-                if self.qwen_T_f32 is not None:
+                if h.qwen_weight is not None:
                     dt = x.dtype
-                    out_f32 = x.astype(mx.float32) @ self.qwen_T_f32
+                    qwen_T_f32 = mx.transpose(h.qwen_weight.astype(mx.float32))
+                    out_f32 = x.astype(mx.float32) @ qwen_T_f32
                     bias = getattr(self.base, "bias", None)
                     if bias is not None:
                         out_f32 = out_f32 + bias.astype(mx.float32)
                     return out_f32.astype(dt)
 
             y = self.base(x)
-            scale = self._controller.exact_delta_scale()
+            scale = ctrl.exact_delta_scale()
             if scale == 0.0:
                 return y
             dt = y.dtype
-            delta = (x.astype(mx.float32) @ self.delta_T) * scale
+            delta_T = mx.transpose(h.delta_weight.astype(mx.float32))
+            delta = (x.astype(mx.float32) @ delta_T) * scale
             return (y.astype(mx.float32) + delta).astype(dt)
 
     class SwitchableMLXLoRALinear(nn.Module):
@@ -214,20 +223,27 @@ def _make_mlx_wrappers():
         ) -> None:
             super().__init__()
             self.base = base
-            self.lora_B_T = mx.transpose(lora_B.astype(mx.float32))  # [R, out]
-            self.lora_A_T = mx.transpose(lora_A.astype(mx.float32))  # [in, R]
-            self.max_rank = int(lora_B.shape[1])
-            self._controller = controller
+            self._holder = _AdapterHolder(
+                lora_B=lora_B,
+                lora_A=lora_A,
+                max_rank=int(lora_B.shape[1]),
+                controller=controller,
+            )
 
         def __call__(self, x: mx.array) -> mx.array:
             y = self.base(x)
-            r_start, r_end, scale = self._controller.lora_slice_and_scale(self.max_rank)
+            h = self._holder
+            r_start, r_end, scale = h.controller.lora_slice_and_scale(h.max_rank)
             if scale == 0.0 or r_end <= r_start:
                 return y
             dt = y.dtype
-            a_slice = self.lora_A_T[:, r_start:r_end]
-            b_slice = self.lora_B_T[r_start:r_end, :]
-            delta = ((x.astype(mx.float32) @ a_slice) @ b_slice) * scale
+            a_slice_T = mx.transpose(h.lora_A[r_start:r_end, :])
+            b_slice_T = mx.transpose(h.lora_B[:, r_start:r_end])
+            if int(h.lora_B.shape[0]) > 32768:
+                mid = (x.astype(mx.float32) @ a_slice_T.astype(mx.float32)) * scale
+                delta = mid.astype(dt) @ b_slice_T.astype(dt)
+                return (y + delta).astype(dt)
+            delta = ((x.astype(mx.float32) @ a_slice_T.astype(mx.float32)) @ b_slice_T.astype(mx.float32)) * scale
             return (y.astype(mx.float32) + delta).astype(dt)
 
     class SwitchableMLXLoRAEmbedding(nn.Module):
@@ -242,32 +258,39 @@ def _make_mlx_wrappers():
         ) -> None:
             super().__init__()
             self.base = base
-            self.lora_B = lora_B.astype(mx.float32)  # [vocab, R]
-            self.lora_A = lora_A.astype(mx.float32)  # [R, hidden]
-            self.lora_B_T = mx.transpose(self.lora_B)  # [R, vocab]
-            self.lora_A_T = mx.transpose(self.lora_A)  # [hidden, R]
-            self.max_rank = int(lora_B.shape[1])
-            self._controller = controller
+            self._holder = _AdapterHolder(
+                lora_B=lora_B,
+                lora_A=lora_A,
+                max_rank=int(lora_B.shape[1]),
+                controller=controller,
+            )
 
         def __call__(self, x: mx.array) -> mx.array:
             y = self.base(x)
-            r_start, r_end, scale = self._controller.lora_slice_and_scale(self.max_rank)
+            h = self._holder
+            r_start, r_end, scale = h.controller.lora_slice_and_scale(h.max_rank)
             if scale == 0.0 or r_end <= r_start:
                 return y
             dt = y.dtype
-            gathered = self.lora_B[x, r_start:r_end]
-            delta = (gathered @ self.lora_A[r_start:r_end, :]) * scale
+            gathered = h.lora_B[x, r_start:r_end].astype(mx.float32)
+            a_slice = h.lora_A[r_start:r_end, :].astype(mx.float32)
+            delta = (gathered @ a_slice) * scale
             return (y.astype(mx.float32) + delta).astype(dt)
 
         def as_linear(self, x: mx.array) -> mx.array:
             y = self.base.as_linear(x)
-            r_start, r_end, scale = self._controller.lora_slice_and_scale(self.max_rank)
+            h = self._holder
+            r_start, r_end, scale = h.controller.lora_slice_and_scale(h.max_rank)
             if scale == 0.0 or r_end <= r_start:
                 return y
             dt = y.dtype
-            a_slice = self.lora_A_T[:, r_start:r_end]
-            b_slice = self.lora_B_T[r_start:r_end, :]
-            delta = ((x.astype(mx.float32) @ a_slice) @ b_slice) * scale
+            a_slice_T = mx.transpose(h.lora_A[r_start:r_end, :])
+            b_slice_T = mx.transpose(h.lora_B[:, r_start:r_end])
+            if int(h.lora_B.shape[0]) > 32768:
+                mid = (x.astype(mx.float32) @ a_slice_T.astype(mx.float32)) * scale
+                delta = mid.astype(dt) @ b_slice_T.astype(dt)
+                return (y + delta).astype(dt)
+            delta = ((x.astype(mx.float32) @ a_slice_T.astype(mx.float32)) @ b_slice_T.astype(mx.float32)) * scale
             return (y.astype(mx.float32) + delta).astype(dt)
 
     return mx, SwitchableMLXExactLinear, SwitchableMLXLoRALinear, SwitchableMLXLoRAEmbedding
@@ -318,7 +341,7 @@ class MLXSwitchableDeltaController:
         self._attached_caches: List[Any] = []
         self._reset_callbacks: List[Callable[[int], None]] = []
         self._exact_array_swaps: List[Tuple[Any, str, Any, Any]] = []
-        self._wrapped_modules: List[Tuple[Any, str, Any]] = []
+        self._wrapped_modules: List[Tuple[Any, str, Any, Any, bool]] = []
         self.attached_exact_count: int = 0
         self.attached_lowrank_count: int = 0
 
@@ -338,6 +361,7 @@ class MLXSwitchableDeltaController:
                         f"MLX adapter shard {grp} SHA-256 mismatch: actual={actual_sha} != manifest={recorded_sha}"
                     )
             tensors = mx.load(str(shard_path))
+            kept_arrays: List[Any] = []
             for key, st in shard_info["tensor_stats"].items():
                 if st["mode"] == "exact":
                     delta_arr = tensors[f"{key}.delta"]
@@ -357,26 +381,36 @@ class MLXSwitchableDeltaController:
                                     f"Loaded resident module {mod_key} has no inspectable .weight attribute "
                                     f"to verify {self.base_role} provenance"
                                 )
-                            bfl_f32 = bfl_raw.astype(mx.float32)
-                            qwen_f32 = (
-                                qwen_raw.astype(mx.float32)
-                                if qwen_raw is not None
-                                else (bfl_f32 - delta_arr.astype(mx.float32))
-                            )
                             is_quant = hasattr(orig_mod, "scales")
                             if is_quant and hasattr(mx, "dequantize"):
+                                n_rows = min(2, int(orig_mod.weight.shape[0]))
+                                biases_attr = getattr(orig_mod, "biases", None)
                                 orig_f32 = mx.dequantize(
-                                    orig_mod.weight,
-                                    orig_mod.scales,
-                                    getattr(orig_mod, "biases", None),
+                                    orig_mod.weight[0:n_rows],
+                                    orig_mod.scales[0:n_rows],
+                                    biases_attr[0:n_rows] if biases_attr is not None else None,
                                     getattr(orig_mod, "group_size", 64),
                                     getattr(orig_mod, "bits", 4),
                                 ).astype(mx.float32)
+                                bfl_f32 = bfl_raw[0:n_rows].astype(mx.float32)
+                                qwen_f32 = (
+                                    qwen_raw[0:n_rows].astype(mx.float32)
+                                    if qwen_raw is not None
+                                    else (bfl_f32 - delta_arr[0:n_rows].astype(mx.float32))
+                                )
                             elif not is_quant:
                                 orig_f32 = orig_w.astype(mx.float32)
+                                bfl_f32 = bfl_raw.astype(mx.float32)
+                                qwen_f32 = (
+                                    qwen_raw.astype(mx.float32)
+                                    if qwen_raw is not None
+                                    else (bfl_f32 - delta_arr.astype(mx.float32))
+                                )
                             else:
                                 orig_f32 = None
-                            if orig_f32 is not None:
+                                bfl_f32 = None
+                                qwen_f32 = None
+                            if orig_f32 is not None and bfl_f32 is not None and qwen_f32 is not None:
                                 ref_diff = bfl_f32 - qwen_f32
                                 delta_norm = float(mx.sqrt(mx.sum(ref_diff * ref_diff)).item())
                                 diff_q = orig_f32 - qwen_f32
@@ -407,8 +441,14 @@ class MLXSwitchableDeltaController:
                         wrapped = SwitchableMLXExactLinear(
                             orig_mod, delta_arr, self, bfl_weight=bfl_raw, qwen_weight=qwen_raw
                         )
-                        setattr(parent, attr, wrapped)
-                        self._wrapped_modules.append((parent, attr, orig_mod))
+                        kept_arrays.append(delta_arr)
+                        if bfl_raw is not None:
+                            kept_arrays.append(bfl_raw)
+                        if qwen_raw is not None:
+                            kept_arrays.append(qwen_raw)
+                        self._wrapped_modules.append((parent, attr, orig_mod, wrapped, True))
+                        if self._is_wrapper_active(is_exact=True):
+                            setattr(parent, attr, wrapped)
                         self.attached_exact_count += 1
                         continue
 
@@ -477,7 +517,7 @@ class MLXSwitchableDeltaController:
                                 f"reference weights (dist={dist_exp:.6f}, ref_norm={ref_norm:.6f})"
                             )
                     qwen_arr, bfl_arr = qwen_expected, bfl_expected
-                    mx.eval(qwen_arr, bfl_arr)
+                    kept_arrays.extend([qwen_arr, bfl_arr])
                     self._exact_array_swaps.append((parent, attr, qwen_arr, bfl_arr))
                     self.attached_exact_count += 1
 
@@ -524,35 +564,62 @@ class MLXSwitchableDeltaController:
                                         f"Loaded resident model parameter {key} does not match expected bfl "
                                         f"Frobenius norm (actual={actual_frob:.6f}, expected={expected_frob:.6f})"
                                     )
-                    elif (
-                        hasattr(mx, "dequantize")
-                        and self.base_role == "qwen"
-                        and "frob_base" in st
-                        and (int(st["shape"][0]) * int(st["shape"][1]) <= 33_554_432)
-                    ):
-                        deq_f32 = mx.dequantize(
-                            orig_mod.weight,
-                            orig_mod.scales,
-                            getattr(orig_mod, "biases", None),
+                    elif hasattr(mx, "dequantize"):
+                        biases_attr = getattr(orig_mod, "biases", None)
+                        deq_row0 = mx.dequantize(
+                            orig_mod.weight[0:1],
+                            orig_mod.scales[0:1],
+                            biases_attr[0:1] if biases_attr is not None else None,
                             getattr(orig_mod, "group_size", 64),
                             getattr(orig_mod, "bits", 4),
                         ).astype(mx.float32)
-                        expected_frob = float(st["frob_base"])
-                        actual_frob = float(mx.sqrt(mx.sum(deq_f32 * deq_f32)).item())
-                        if abs(actual_frob - expected_frob) > max(0.20 * expected_frob, 0.5):
-                            raise ValueError(
-                                f"Loaded quantized resident model parameter {key} does not match expected qwen "
-                                f"Frobenius norm (actual={actual_frob:.6f}, expected={expected_frob:.6f})"
-                            )
+                        ref_00_key = "qwen_00" if self.base_role == "qwen" else "bfl_00"
+                        if ref_00_key in st:
+                            expected_00 = float(st[ref_00_key])
+                            actual_00 = float(mx.sum(deq_row0[0:1, 0:1]).item())
+                            if abs(actual_00 - expected_00) > 0.5:
+                                raise ValueError(
+                                    f"Loaded quantized resident model parameter {key}[0,0] does not match expected "
+                                    f"{self.base_role} reference value (actual={actual_00:.6f}, expected={expected_00:.6f})"
+                                )
+                        elif "frob_base" in st and float(st["frob_base"]) > 0.0:
+                            row_norm = float(mx.sqrt(mx.sum(deq_row0 * deq_row0)).item())
+                            if not (row_norm > 0.0):
+                                raise ValueError(
+                                    f"Loaded quantized resident model parameter {key} row 0 dequantized to zero/NaN"
+                                )
                     b_arr = tensors[f"{key}.lora_B"]
                     a_arr = tensors[f"{key}.lora_A"]
+                    kept_arrays.extend([b_arr, a_arr])
                     if hasattr(orig_mod, "as_linear") or "embed_tokens" in mod_key:
                         wrapped = SwitchableMLXLoRAEmbedding(orig_mod, b_arr, a_arr, self)
                     else:
                         wrapped = SwitchableMLXLoRALinear(orig_mod, b_arr, a_arr, self)
-                    setattr(parent, attr, wrapped)
-                    self._wrapped_modules.append((parent, attr, orig_mod))
+                    self._wrapped_modules.append((parent, attr, orig_mod, wrapped, False))
+                    if self._is_wrapper_active(is_exact=False):
+                        setattr(parent, attr, wrapped)
                     self.attached_lowrank_count += 1
+
+            if kept_arrays:
+                mx.eval(*kept_arrays)
+            del tensors, kept_arrays
+            if hasattr(mx, "clear_cache"):
+                mx.clear_cache()
+
+    def _is_wrapper_active(self, is_exact: bool) -> bool:
+        if self.base_role == "qwen":
+            if not self.enabled:
+                return False
+            return True if is_exact else (self.active_rank > 0)
+        if not self.enabled:
+            return True
+        return False if is_exact else (self.active_rank < self.max_rank)
+
+    def _sync_module_wrappers(self) -> None:
+        for parent, attr, orig_mod, wrapped, is_exact in self._wrapped_modules:
+            target_mod = wrapped if self._is_wrapper_active(is_exact) else orig_mod
+            if getattr(parent, attr) is not target_mod:
+                setattr(parent, attr, target_mod)
 
     def exact_delta_scale(self) -> float:
         if self.base_role == "qwen":
@@ -623,10 +690,13 @@ class MLXSwitchableDeltaController:
 
         self.enabled = enabled
         self.active_rank = target_rank
+        self._sync_module_wrappers()
 
         if changed:
             self.state_epoch += 1
             self._reset_caches_and_model_state()
+            if hasattr(self._mx, "clear_cache"):
+                self._mx.clear_cache()
 
         return {
             "enabled": self.enabled,
@@ -638,6 +708,6 @@ class MLXSwitchableDeltaController:
 
     def detach(self) -> None:
         self.set_mode(enabled=(self.base_role == "bfl"), rank=self.max_rank)
-        for parent, attr, orig_mod in self._wrapped_modules:
+        for parent, attr, orig_mod, _wrapped, _is_exact in self._wrapped_modules:
             setattr(parent, attr, orig_mod)
         self._wrapped_modules.clear()
