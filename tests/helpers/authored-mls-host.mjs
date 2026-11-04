@@ -5,13 +5,13 @@ import {authoredMlsSetup,authoredMlsInlets} from '../../authored-mls-water.mjs';
 
 // Unit fixture for the production host; substitute GPU resources only. Real
 // allocation, dispatch and presentation remain the native witness's job.
-export async function createAuthoredMlsHostFixture() {
-  let target=null,solverOptions=null;
+export async function createAuthoredMlsHostFixture({document,now=()=>0}={}) {
+  let target=null,solverOptions=null,paused=false;
   const clock=createMlsClock(1/240);
   const solver={config:{},read:()=>({clock:clock.read(),particleCount:1000}),
-    setPacket(){},setSceneColliders(){},setPaused(value){clock.observe(0,value);},
+    setPacket(){},setSceneColliders(){},setPaused(value){clock.observe(now(),paused);paused=Boolean(value);},
     async advanceTo(step){clock.advanceSteps(step-clock.read().step);return clock.read();},
-    advance(){},dispose(){}};
+    advance(){return clock.advance(now(),paused);},dispose(){}};
   class Pipeline {render(){}dispose(){}}
   class Target {constructor(){this.texture={};}setSize(){}dispose(){}}
   const THREE={RenderPipeline:Pipeline,RenderTarget:Target,NodeMaterial:class{dispose(){}},Color:class{},Vector2:class{}};
@@ -21,7 +21,7 @@ export async function createAuthoredMlsHostFixture() {
   const device={addEventListener(){},removeEventListener(){},lost:new Promise(()=>{}),
     createCommandEncoder:()=>({finish:()=>({})}),queue:{submit(){}}};
   renderer.backend.device=device;
-  const context={THREE,texture:()=>({}),positionView:{z:{negate:()=>0}},vec4:()=>({}),
+  const context={document,THREE,texture:()=>({}),positionView:{z:{negate:()=>0}},vec4:()=>({}),
     createLocalLiquidScenePasses:()=>({update(){},state:()=>({camera:{transform:'test'}}),capture:new Pipeline(),presentation:new Pipeline(),dispose(){}}),
     createMlsJuiceSolver:async options=>{solverOptions=options;return solver;},createMlsJuiceRenderer:async()=>({encode(){},read:()=>({}),dispose(){}}),createMlsWaterProxy:async()=>({dispose(){}}),
     createFluidSceneEnvironment:()=>({render(){},view:()=>({}),state:()=>({}),dispose(){}}),

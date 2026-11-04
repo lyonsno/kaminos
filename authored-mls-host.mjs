@@ -23,23 +23,30 @@ export async function createAuthoredMlsHost({renderer,scene,camera,pipeline,devi
  const depthMaterial=new THREE.NodeMaterial();depthMaterial.fragmentNode=vec4(positionView.z.negate(),0,0,1);depthMaterial.blending=THREE.NoBlending;depthMaterial.toneMapped=false;
  const scenePasses=createLocalLiquidScenePasses({renderer,composedOutput:texture(output.texture),getDisplayPolicy,decorateOutput});
  let frameCount=0,paused=false,disposed=false,failure=null,lastFrame=null,mode='full',sourceGeneration=1,records=structuredClone(emitters),pendingSetup=structuredClone(setup),proxyStepEvery=1;
+ // Live playback owes visible wall time only. Keep background suspension
+ // separate from the author's Pause choice; observing both visibility edges
+ // preserves existing visible debt without replaying a hidden-tab interval.
+ const visibility=globalThis.document;
+ const syncPlayback=()=>solver.setPaused(paused||visibility?.hidden===true);
+ visibility?.addEventListener('visibilitychange',syncPlayback);
+ syncPlayback();
  const gpuError=event=>{failure=event.error?.message??'MLS GPU error';};device.addEventListener('uncapturederror',gpuError);
  device.lost.then(info=>{if(!disposed)failure=info.message||'MLS device lost';});
  const native=target=>renderer.backend.get(target.texture).texture.createView();
  function publishInlets(){solver.setPacket(makePacket(records,Date.now(),sourceGeneration));}
  const state=()=>({requestedRoute:MLS_ROUTE,effectiveRoute:frameCount&&!failure?MLS_ROUTE:null,source:MLS_SOURCE,registered:true,mounted:!disposed,mode:initial.mode,sourceIds:[...new Set([...initial.sourceIds,...records.filter(r=>r.localLiquidEmitter.mode!=='finite_drop').map(r=>r.id)])],sourceGeneration,
-  frameCount,paused,presentation:mode,failure,lastFrame,clock:{...solver.read().clock,paused},setup:structuredClone(pendingSetup),solver:{...solver.read(),stepCount:solver.read().clock.step},surface:surface.read(),
+  frameCount,paused,backgroundSuspended:visibility?.hidden===true,presentation:mode,failure,lastFrame,clock:{...solver.read().clock,paused},setup:structuredClone(pendingSetup),solver:{...solver.read(),stepCount:solver.read().clock.step},surface:surface.read(),
   pendingSourceChanges:(initial.mode==='finite_drop'&&records.some(r=>r.localLiquidEmitter.mode==='continuous'))||JSON.stringify(records.filter(r=>r.localLiquidEmitter.mode==='finite_drop').map(({id,type,transform,localLiquidEmitter})=>({id,type,transform,localLiquidEmitter})))!==JSON.stringify(initial.sourceRecords.filter(r=>r.localLiquidEmitter.mode==='finite_drop'))||JSON.stringify(setup)!==JSON.stringify(pendingSetup),
   ...scenePasses.state(),...environment.state(),fallbackRoute:null});
  return {supportsVolumeTransport:true,get paused(){return paused;},get presentation(){return mode;},get proxyStepEvery(){return proxyStepEvery;},
   setPresentation(value){localLiquidPresentationPlan(value);mode=value;return mode;},
   setProxyStepEvery(value){if(!Number.isSafeInteger(value)||value<1)throw Error('Proxy step interval must be a positive integer');proxyStepEvery=value;return value;},
-  setPaused(value){paused=Boolean(value);solver.setPaused(paused);return paused;},
+  setPaused(value){paused=Boolean(value);syncPlayback();return paused;},
   setEmitters(next){makePacket(next);records=structuredClone(next);sourceGeneration++;publishInlets();return true;},
   setSetup(next){pendingSetup=structuredClone(next);},
   interfaceRecordDescriptor:()=>disposed?null:proxy.descriptor(),
   snapshot:()=>solver.snapshot(),
-  async advanceTo(step){paused=true;publishInlets();const result=await solver.advanceTo(step);redraw();return result;},
+  async advanceTo(step){paused=true;syncPlayback();publishInlets();const result=await solver.advanceTo(step);redraw();return result;},
   async readSceneColor({x,y,width,height}){
    if(!frameCount||failure||mode!=='full')throw Error(failure||'Water has no current full scene-color frame');
    const frameId=frameCount,pixels=await renderer.readRenderTargetPixelsAsync(color,x,y,width,height),nativeBytesPerRow=Math.ceil(width*8/256)*256;
@@ -75,6 +82,6 @@ export async function createAuthoredMlsHost({renderer,scene,camera,pipeline,devi
    }catch(error){failure=String(error);throw error;}
    finally{scene.overrideMaterial=override;scene.background=background;renderer.setRenderObjectFunction(renderObject);renderer.setClearColor(clear,alpha);renderer.setRenderTarget(target);}
   },state,
-  dispose(){if(disposed)return;disposed=true;device.removeEventListener('uncapturederror',gpuError);proxy.dispose();surface.dispose();solver.dispose();depthMaterial.dispose();for(const t of [color,output,depth])t.dispose();scenePasses.dispose();environment.dispose();}
+  dispose(){if(disposed)return;disposed=true;visibility?.removeEventListener('visibilitychange',syncPlayback);device.removeEventListener('uncapturederror',gpuError);proxy.dispose();surface.dispose();solver.dispose();depthMaterial.dispose();for(const t of [color,output,depth])t.dispose();scenePasses.dispose();environment.dispose();}
  };
 }
