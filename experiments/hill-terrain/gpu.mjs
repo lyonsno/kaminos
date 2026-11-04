@@ -284,18 +284,18 @@ const fragFormedColor=wgslFn(`fn hill_frag_color(vColor:vec4<f32>,x:f32,y:f32,z:
 }`,[geoFbm3,geoLedgeProfile,geoRockCrag,geoVoronoi2]);
 
 const baseCutoutKernel=wgslFn(`fn hill_base_cutout(x:f32,z:f32,fx:f32,fz:f32,fr:f32,useFormed:f32,zoomOn:f32)->f32{
- if(useFormed<.5||zoomOn<.5||fr>2.85){return 1.;}
+ if(useFormed<.5||zoomOn<.5||fr>3.05){return 1.;}
  let edge=max(abs(x-fx),abs(z-fz))/max(.05,fr);
- if(edge<.72){return 0.;}
+ if(edge<.86){return 0.;}
  return 1.;
 }`);
 
 const basePosKernel=wgslFn(`fn hill_base_pos(x:f32,y:f32,z:f32,fx:f32,fz:f32,fr:f32,useFormed:f32,zoomOn:f32)->vec4<f32>{
- if(useFormed<.5||zoomOn<.5||fr>2.85){return vec4<f32>(x,y,z,1.);}
+ if(useFormed<.5||zoomOn<.5||fr>3.05){return vec4<f32>(x,y,z,1.);}
  let edge=max(abs(x-fx),abs(z-fz))/max(.05,fr);
- let zAct=1.-smoothstep(2.40,2.85,fr);
- let cut=1.-smoothstep(.52,.74,edge);
- return vec4<f32>(x,y-.28*zAct*cut,z,1.);
+ let zAct=1.-smoothstep(2.65,3.05,fr);
+ let cut=1.-smoothstep(.82,.94,edge);
+ return vec4<f32>(x,y-.32*zAct*cut,z,1.);
 }`);
 
 // Camera-centered arbitrary-zoom 3D surface synthesis:
@@ -368,10 +368,10 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
  let outX=-dhdx/nLen;let outZ=-dhdz/nLen;
  let edge=max(abs(u),abs(w));
  let border=1.-smoothstep(.45,.49,max(abs(wx/width),abs(wz/length)));
- let zoomActive=1.-smoothstep(2.60,3.30,fr);
- let wPatch=(1.-smoothstep(.62,.95,edge))*border*zoomActive;
- let inCollar=smoothstep(.58,.72,edge);
- let collarLift=(1.-smoothstep(.88,.96,edge))*.004*zoomActive-smoothstep(.95,.995,edge)*.008;
+ let zoomActive=1.-smoothstep(2.65,3.15,fr);
+ let wPatch=(1.-smoothstep(.84,.97,edge))*border*zoomActive;
+ let inCollar=smoothstep(.82,.92,edge);
+ let collarLift=(1.-smoothstep(.90,.97,edge))*.004*zoomActive-smoothstep(.96,.995,edge)*.008;
  let safeCubX=mix(cub.x,max(bedTri,cub.x),inCollar);
  let safeCubY=mix(cub.y,max(soilTri,cub.y),inCollar);
  let bed=mix(bedTri,safeCubX,wPatch);
@@ -553,7 +553,8 @@ export function createTerrainGPU(geometry,input={}){
   const hasPos=Array.isArray(position)&&position.length>=3&&Number.isFinite(position[0])&&Number.isFinite(position[2]);
   const dist=Number.isFinite(distance)&&distance>0?distance:(hasPos?Math.hypot(position[0]-tx,position[1]-ty,position[2]-tz):10);
   const horizSpan=hasPos?Math.max(Math.abs(position[0]-tx),Math.abs(position[2]-tz)):0;
-  const rawR=Math.max(.22,Math.min(3.4,Math.max(dist*.68,horizSpan*1.45)));
+  const minR=hasPos?.84:.22;
+  const rawR=Math.max(minR,Math.min(3.4,Math.max(dist*(hasPos?.88:.68),horizSpan*1.85)));
   const qR=Math.pow(2,Math.round(Math.log2(rawR)*4)/4),r=Math.max(.22,Math.min(3.4,qR));
   const step=(2*r)/(zoomN-1);
   const maxX=Math.max(.2,config.width*.5-.25),maxZ=Math.max(.2,config.length*.5-.25);
