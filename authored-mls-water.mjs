@@ -60,7 +60,7 @@ export function authoredMlsSetup(records,options={}){
 // per grid cell. Deriving cell width from authored spacing preserves that law.
  const {boundsWorld,...domain}=authoredMlsDomain(records,options),cell=domain.cellSize;
  const solver={particleCount:capacity||options.particleCount||12000,...domain,
-  obstacle:null,trackPopulation:true,...(options.mlsMaterial!=null?{mlsMaterial:structuredClone(options.mlsMaterial)}:{})};
+  maxSubstepsPerBatch:options.maxSubstepsPerBatch??12,maxBacklogSeconds:options.maxBacklogSeconds??(24/240),obstacle:null,trackPopulation:true,...(options.mlsMaterial!=null?{mlsMaterial:structuredClone(options.mlsMaterial)}:{})};
  const config=mlsConfig(solver),initialParticles=new Float32Array(initialCount*20);let slot=0;
  for(const d of drops){
   const rotation=new Euler(...d.record.transform.rotation),origin=new Vector3(...d.record.transform.position);

@@ -2922,6 +2922,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 <script type="module">
 import {waterDomainPose,checkedWaterDomainPose,waterDomainSampling} from './authored-water-domain.mjs';
 import {authoredMlsDomain,authoredMlsCellSize,authoredMlsParticleVolume,authoredMlsMaterial,inspectAuthoredMlsMaterial} from './authored-mls-water.mjs';
+import {createSimFrameCoordinator} from './mls-juice-contract.mjs';
 import { loadStartupRuntimeConfig } from './runtime-config-once.mjs';
 import {createUserPreferences,sceneDefaultsFromDocument,sceneDefaultsApplyToLocation,newSceneDocument} from './user-preferences.mjs';
 import {installUserPreferences} from './user-preferences-ui.mjs';
@@ -4317,6 +4318,8 @@ const waterFeature = createAuthoredWaterFeature({
   refresh:()=>{syncWaterDomainGuide();authoredWaterControls?.refresh();refreshLocalLiquidPerformance();if(!waterFeature.host)sharedWorkbench?.update({source:waterFeature.setup?'Authored water sources':'Shared scene',status:waterFeature.setup?'Initial preview':'No water',clock:waterFeature.setup?'Release starts water':''});window._kaminosDirty?.();},
   report:setInfo,
 });
+const simFrameCoordinator = createSimFrameCoordinator();
+window.kaminosSimFrameCoordinator = () => simFrameCoordinator.read();
 
 let sceneRepetitionController=null,sceneRepetitionInspector=null;
 const repetitionEditTargets=new Set();
@@ -12119,7 +12122,9 @@ async function initScene() {
         if(!isSceneItemVisible('water-field')) {
           applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedCameraOutput,matchedCameraEffective);
           renderPipeline.render();
-        } else try { waterFeature.render({advance:!outputCaptureExtent,volumeTransport:ordinarySceneTransportFrame}); authoredWaterControls?.refreshStatus();
+        } else try {
+          const waterPlan=typeof simFrameCoordinator!=='undefined'?simFrameCoordinator?.read()?.lastPlan?.water:null;
+          waterFeature.render({advance:!outputCaptureExtent&&waterPlan?.advance!==false,maxSteps:waterPlan?.maxSteps,volumeTransport:ordinarySceneTransportFrame}); authoredWaterControls?.refreshStatus();
           const state=waterFeature.host.state(),clock=state.clock??{paused:waterFeature.host.paused,step:state.solver?.stepCount??0,timeSeconds:state.solver?.simulatedTimeSeconds??0};
           sharedWorkbench?.update({source:state.mode==='finite_drop'?'Authored finite water':'Continuous water',status:clock.paused?'Paused':'Playing',clock:`tick ${clock.step} · ${clock.timeSeconds.toFixed(4)} s`}); }
         catch (error) {
@@ -12178,7 +12183,23 @@ async function initScene() {
     if (refinementStatus.textContent !== refinementText) refinementStatus.textContent = refinementText;
     viewProjection?.update();
     syncAuthoredWaterFlameTransport();
-    workbenchSceneFrames.tick(performance.now());
+    const frameNowMs=performance.now();
+    if(typeof simFrameCoordinator!=='undefined'){
+      const waterState=waterFeature.host?.state?.();
+      let ashActive=false,ashDue=false;
+      for(const entry of workingScene.objects){
+        const ash=authoredAsh.get(entry.id);if(!ash)continue;
+        const active=isSceneItemVisible(entry.id)&&entry.object.parent!==null&&sceneViewerPaused!==true;
+        if(active){ashActive=true;if(ash.due?.(frameNowMs,{active})??true)ashDue=true;}
+      }
+      simFrameCoordinator.planFrame({
+        nowMs:frameNowMs,
+        flame:{active:Boolean(volumePrototype?.isActive?.()&&isSceneItemVisible('flame-field')&&sceneViewerPaused!==true)},
+        water:{active:Boolean(waterFeature.active&&isSceneItemVisible('water-field')),pending:Boolean(waterState?.solver?.pending),backlogSeconds:waterState?.clock?.backlogSeconds},
+        ash:{active:ashActive,due:ashDue},
+      });
+    }
+    workbenchSceneFrames.tick(frameNowMs);
     const liquidFireCompositionActive = fingerFluidPyroCompositionRequested();
     const volumeSmokeRouteActive = isKaminosVolumeSmokeRoute() || liquidFireCompositionActive;
     updateHybridSplatOverlayFrame();
@@ -26489,8 +26510,9 @@ function installAuthoredAsh(){
  window.kaminosAsh.readSource=sourceRead;window.kaminosAsh.setSource=sourceSet;
  ashSourceInspector=installAshSourceInspector({document,anchor:document.getElementById('selected-ash-properties'),selected:()=>selectedSceneObjectEntry()?.type===ASH_SOURCE_TYPE?workingScene.activeObjectId:null,read:sourceRead,set:sourceSet,selectField:id=>setActiveSceneObject(sourceRead(id).settings.fieldId),edits:scenePlacementTools.edits,target:sourceTarget,ownHistory:session=>authoringControlSessions.push(session),error:setInfo});
  workbenchSceneFrames.onFrame(({timestampMs})=>{
+  const ashAdvance=typeof simFrameCoordinator!=='undefined'?simFrameCoordinator?.read()?.lastPlan?.ash?.advance!==false:true;
   for(const entry of workingScene.objects){const ash=authoredAsh.get(entry.id);if(!ash)continue;
-   if(ash.tick(timestampMs,{active:isSceneItemVisible(entry.id)&&entry.object.parent!==null&&sceneViewerPaused!==true,selected:workingScene.activeObjectId===entry.id})){window._kaminosDirty?.();}
+   if(ash.tick(timestampMs,{active:isSceneItemVisible(entry.id)&&entry.object.parent!==null&&sceneViewerPaused!==true,selected:workingScene.activeObjectId===entry.id,advance:ashAdvance})){window._kaminosDirty?.();}
   }
  });
 }
