@@ -15,6 +15,7 @@ export default {
   const gpu=createTerrainGPU(geometry,{resolution:n,width:config.width,length:config.length,uplift:0,repose:34,transport:1.6});
   const root=new THREE.Group();root.name='Hill · formed rock and earth';
   const material=gpu.decorateMaterial(new MeshStandardNodeMaterial({vertexColors:true,roughness:.92,side:THREE.DoubleSide})),mesh=new THREE.Mesh(geometry,material);mesh.name='Weathered hillside';mesh.frustumCulled=false;mesh.castShadow=true;mesh.receiveShadow=true;mesh.raycast=()=>{};mesh.userData.kaminosDynamicGeometry=true;root.add(mesh);mesh.visible=false;
+  const zoomMaterial=gpu.decorateZoomMaterial(new MeshStandardNodeMaterial({vertexColors:true,roughness:.90,side:THREE.DoubleSide})),zoomMesh=new THREE.Mesh(gpu.zoomGeometry,zoomMaterial);zoomMesh.name='Camera-centered 3D rock & ledge detail';zoomMesh.frustumCulled=false;zoomMesh.castShadow=true;zoomMesh.receiveShadow=true;zoomMesh.raycast=()=>{};zoomMesh.userData.kaminosDynamicGeometry=true;root.add(zoomMesh);zoomMesh.visible=false;
   const xLines=[0,...tiles.filter(t=>t.tz===0).map(t=>t.x1)],zLines=[0,...tiles.filter(t=>t.tx===0).map(t=>t.z1)];
   const seamSegs=(xLines.length*(n-1)+zLines.length*(n-1)),seamPos=new Float32Array(seamSegs*6),seamGeo=new THREE.BufferGeometry();
   seamGeo.setAttribute('position',new THREE.BufferAttribute(seamPos,3));
@@ -27,46 +28,68 @@ export default {
    for(const z of zLines)for(let x=0;x<n-1;x++){put(x,z);put(x+1,z);}
    seamGeo.attributes.position.needsUpdate=true;
   };
+  const syncFocusFromView=()=>{
+   const v=session?.readView?.();if(!v?.position||!v?.target)return;
+   const [px,py,pz]=v.position,[tx,ty,tz]=v.target,dx=tx-px,dy=ty-py,dz=tz-pz,rayLen=Math.hypot(dx,dy,dz);
+   if(!(rayLen>1e-4))return;
+   let fx=tx,fy=ty,fz=tz,dist=rayLen;
+   const st=formed?.state;
+   if(st instanceof Float32Array&&st.length===n*n*4){
+    const ux=dx/rayLen,uy=dy/rayLen,uz=dz/rayLen,maxT=Math.min(28,rayLen*1.35);
+    for(let s=1;s<=24;s++){
+     const t=(s/24)*maxT,rx=px+ux*t,ry=py+uy*t,rz=pz+uz*t;
+     if(Math.abs(rx)<=config.width*.5&&Math.abs(rz)<=config.length*.5){
+      const gx=Math.min(n-1,Math.max(0,Math.round((rx/config.width+.5)*(n-1)))),gz=Math.min(n-1,Math.max(0,Math.round((rz/config.length+.5)*(n-1))));
+      const i=(gz*n+gx)*4,h=st[i]+st[i+1];
+      if(ry<=h+.04){fx=rx;fy=h;fz=rz;dist=t;break;}
+     }
+    }
+   }
+   gpu.setCameraFocus({target:[fx,fy,fz],position:[px,py,pz],distance:dist,enabled:true});
+  };
   registerExportGeometrySnapshot(mesh,()=>{throw Error('GPU terrain export requires an explicit frozen snapshot; formation cache preserves the initial landscape');});
+  registerExportGeometrySnapshot(zoomMesh,()=>{throw Error('GPU terrain export requires an explicit frozen snapshot; formation cache preserves the initial landscape');});
   const session=await host.scene.open();let asset,unsubscribe;
-  const frame=()=>session.setView(inputs.view??{position:[11,9,14],target:[0,1.2,0],fov:43});
-  const read=()=>({route:'kaminos/hill/geological-formation-v1',config:{...config},tiles:{tilesX:config.tilesX,tilesZ:config.tilesZ,count:tiles.length,seamsVisible:showSeams,partitions:tiles.map(t=>({id:t.id,tx:t.tx,tz:t.tz,quads:t.quads,bounds:t.bounds}))},authoring:{preset:activePreset,fields:FORMATION_FIELDS.map(f=>({key:f.key,title:f.title,group:f.group,min:f.min,max:f.max,step:f.step,unit:f.unit,default:f.default})),presets:FORMATION_PRESETS.map(p=>({id:p.id,title:p.title}))},formation:formed?{version:formed.version,config:formed.config,steps:formed.steps,metrics:formed.metrics,cache:formed.cache,bytes:formed.bytes,warning:formed.warning}:null,pending,partialsShown:partials,error,playing,gpu:gpu.read(),objectId:asset?.id,view:session.readView(),presentation:{materialType:mesh.material.type,vertexColors:mesh.material.vertexColors,rootMatrix:Array.from(root.matrixWorld.elements)},preparationBackend:'cpu-worker-or-cache; no live geological solver',runtimeReadback:false});
+  const frame=()=>{session.setView(inputs.view??{position:[10.2,8.2,12.8],target:[0,1.15,0],fov:42});syncFocusFromView();};
+  const read=()=>({route:'kaminos/hill/geological-formation-v1',config:{...config},tiles:{tilesX:config.tilesX,tilesZ:config.tilesZ,count:tiles.length,seamsVisible:showSeams,partitions:tiles.map(t=>({id:t.id,tx:t.tx,tz:t.tz,quads:t.quads,bounds:t.bounds}))},authoring:{preset:activePreset,fields:FORMATION_FIELDS.map(f=>({key:f.key,title:f.title,group:f.group,min:f.min,max:f.max,step:f.step,unit:f.unit,default:f.default})),presets:FORMATION_PRESETS.map(p=>({id:p.id,title:p.title}))},formation:formed?{version:formed.version,config:formed.config,steps:formed.steps,metrics:formed.metrics,cache:formed.cache,bytes:formed.bytes,warning:formed.warning}:null,pending,partialsShown:partials,error,playing,gpu:gpu.read(),objectId:asset?.id,view:session.readView(),presentation:{materialType:mesh.material.type,vertexColors:mesh.material.vertexColors,zoomPatchVisible:zoomMesh.visible,rootMatrix:Array.from(root.matrixWorld.elements)},preparationBackend:'hybrid-webgpu-and-cached-formation',runtimeReadback:false});
   const regenerate=async(patch={})=>{
    const next=formationConfig({...config,...patch});for(const key of ['resolution','width','length','tilesX','tilesZ'])if(next[key]!==config[key])throw Error('Grid changes require reopening the experiment');
    const seed=formed&&formationRecipeKey(formed.config)===formationRecipeKey(next)&&formed.steps<next.iterations?formed:null;
    job?.cancel();const own=++epoch;config=next;playing=false;pending={step:seed?seed.steps:0,total:config.iterations,partial:false};error=null;sync();updateInputs({...config});
-   job=requestFormation(config,{initial:seed,onProgress:p=>{if(own!==epoch||disposed)return;pending={step:p.step,total:p.total,partial:p.state instanceof Float32Array};if(p.state instanceof Float32Array){partials++;gpu.loadFormation({version:FORMATION_VERSION,config:{...config,iterations:p.step},steps:p.step,state:p.state});updateSeams(p.state);mesh.visible=true;seamMesh.visible=showSeams;session.redraw();}sync();}});
-   try{const value=await job.promise;if(disposed||own!==epoch)return read();gpu.loadFormation(value);updateSeams(value.state);formed=value;pending=null;remainder=0;mesh.visible=true;seamMesh.visible=showSeams;error=null;session.redraw();sync();record({kind:'hill-geology.formation',effective:read()});return read();}
+   job=requestFormation(config,{initial:seed,onProgress:p=>{if(own!==epoch||disposed)return;pending={step:p.step,total:p.total,partial:p.state instanceof Float32Array};if(p.state instanceof Float32Array){partials++;gpu.loadFormation({version:FORMATION_VERSION,config:{...config,iterations:p.step},steps:p.step,state:p.state});updateSeams(p.state);mesh.visible=true;zoomMesh.visible=true;seamMesh.visible=showSeams;session.redraw();}sync();}});
+   try{const value=await job.promise;if(disposed||own!==epoch)return read();gpu.loadFormation(value);updateSeams(value.state);formed=value;pending=null;remainder=0;mesh.visible=true;zoomMesh.visible=true;seamMesh.visible=showSeams;error=null;syncFocusFromView();session.redraw();sync();record({kind:'hill-geology.formation',effective:read()});return read();}
    catch(e){if(disposed||own!==epoch)return read();pending=null;error=e.message;sync();throw e;}
   };
   const stepFormation=(count=20)=>{if(!Number.isSafeInteger(count)||count<1)throw Error('Positive whole formation step count required');return regenerate({iterations:config.iterations+count});};
+  const stepGeology=(count=20)=>{if(pending||error||!formed)throw Error('Landscape is not available');gpu.stepGeology(count);session.redraw();sync();return read();};
+  const setCameraFocus=focus=>{gpu.setCameraFocus(focus);session.redraw();return read();};
   const applyPreset=id=>{const found=FORMATION_PRESETS.find(p=>p.id===id);if(!found)throw Error('Unknown geological preset: '+id);activePreset=found.id;return regenerate(found.patch);};
   const setTileSeams=visible=>{if(typeof visible!=='boolean')throw Error('Boolean tile seam visibility required');showSeams=visible;seamMesh.visible=Boolean(formed||pending?.partial)&&showSeams;session.redraw();sync();return read();};
-  mesh.onBeforeRender=renderer=>{if(disposed||error||(!formed&&!pending?.partial))return;try{gpu.flush(renderer);}catch(e){error=e.message;playing=false;sync();}};
+  mesh.onBeforeRender=(renderer,scene,camera)=>{if(disposed||error||(!formed&&!pending?.partial))return;try{if(camera?.isPerspectiveCamera)syncFocusFromView();gpu.flush(renderer);}catch(e){error=e.message;playing=false;sync();}};
   try{asset=await session.attach(root,{owned:true,metadata:{label:root.name,type:'experiment',source:{route:'kaminos/hill/geological-formation-v1'}}});frame();
    unsubscribe=session.onFrame(({deltaSeconds})=>{if(!playing||!formed||pending||error||disposed)return;if(!Number.isFinite(deltaSeconds)||deltaSeconds<0){error='Invalid host frame time';playing=false;sync();return;}remainder+=deltaSeconds;const ticks=Math.floor((remainder+1e-10)/.05);if(ticks){gpu.advance(ticks);remainder=Math.max(0,remainder-ticks*.05);}gpu.present(Math.min(1,remainder/.05));session.redraw();});
    await regenerate();
   }catch(e){job?.cancel();unsubscribe?.();gpu.dispose();seamGeo.dispose();seamMat.dispose();await session.dispose();throw e;}
-  const diagnostic={read,snapshot:options=>gpu.snapshot(options),gpu:()=>{root.updateWorldMatrix(true,false);return{...gpu.surface(),localToWorld:Array.from(root.matrixWorld.elements)};}};
+  const diagnostic={read,snapshot:options=>gpu.snapshot(options),setCameraFocus,stepGeology,gpu:()=>{root.updateWorldMatrix(true,false);return{...gpu.surface(),localToWorld:Array.from(root.matrixWorld.elements)};}};
   if(globalThis.window)window.kaminosHillGeology=diagnostic;
-  return{read,operations:{regenerate,stepFormation,applyPreset,setTileSeams,frame,play(value){if(typeof value!=='boolean')throw Error('Boolean playback required');if(pending||error||!formed)throw Error('Landscape is not available');playing=value;sync();record({kind:'hill-geology.play',value});return read();},setInfluence(patch){gpu.configure(patch);sync();return read();},advance(count=1){if(pending||error)throw Error('Landscape is not available');gpu.advance(count);gpu.present(1);session.redraw();return read();},recipe:()=>({schema:'kaminos.hill-geology.recipe.v1',inputs:config}),cache:()=>encodeFormation(formed)},
+  return{read,operations:{regenerate,stepFormation,stepGeology,setCameraFocus,applyPreset,setTileSeams,frame,play(value){if(typeof value!=='boolean')throw Error('Boolean playback required');if(pending||error||!formed)throw Error('Landscape is not available');playing=value;sync();record({kind:'hill-geology.play',value});return read();},setInfluence(patch){gpu.configure(patch);sync();return read();},advance(count=1){if(pending||error)throw Error('Landscape is not available');gpu.advance(count);gpu.present(1);session.redraw();return read();},recipe:()=>({schema:'kaminos.hill-geology.recipe.v1',inputs:config}),cache:()=>encodeFormation(formed)},
   mount({root:panel,document,invoke}){
    const style=document.createElement('style');
    style.textContent=`.hill-geo-badge{font-size:11px;color:#b8c7ce;background:rgba(255,255,255,.05);padding:5px 8px;border-radius:4px;margin:6px 0}.hill-geo-hint{font-size:11.5px;line-height:1.35;height:4.2em;overflow:hidden;color:#d5e1e6;background:rgba(190,165,110,.11);border-left:2px solid #c9ae74;padding:6px 8px;margin:6px 0;border-radius:0 4px 4px 0}.hill-geo-group{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#9ab0b8;margin:10px 0 4px;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:2px}.hill-geo-row{display:block;margin:6px 0;padding:3px 0}.hill-geo-head{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-bottom:2px;cursor:ew-resize}.hill-geo-meta{font-size:10.5px;color:#8aa0a8;pointer-events:none}.hill-geo-controls{display:grid;grid-template-columns:1fr 5.2rem;gap:6px;align-items:center}.hill-geo-actions{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0}`;
    panel.append(style);
-   const intro=document.createElement('p');intro.textContent=`Stitched ${tiles.length}-tile (${config.tilesX}×${config.tilesZ}) geological territory: flat-topped caprock mesas, dendritic spur-and-gully flanks, stepped terraces, columnar cliff joints, talus scree, and braided alluvial fans.`;panel.append(intro);
-   const badge=document.createElement('div');badge.className='hill-geo-badge';badge.textContent=`Stitched quilt · ${config.tilesX}×${config.tilesZ} = ${tiles.length} tiles · ${n}×${n} grid (${((n-1)**2*2).toLocaleString()} tris)`;panel.append(badge);
+   const intro=document.createElement('p');intro.textContent=`Grounded ${tiles.length}-tile (${config.tilesX}×${config.tilesZ}) landscape with camera-centered arbitrary-zoom 3D rock ledges, fracture blocks & talus cobbles.`;panel.append(intro);
+   const badge=document.createElement('div');badge.className='hill-geo-badge';badge.textContent=`${n}×${n} base (${((n-1)**2*2).toLocaleString()} tris) + 129×129 3D zoom patch (32,768 tris)`;panel.append(badge);
    const presetRow=document.createElement('label');presetRow.className='hill-geo-row';presetRow.title='Select a curated geological authoring preset or reset all parameters to defaults.';
    const presetHead=document.createElement('div');presetHead.className='hill-geo-head';presetHead.textContent='Geological preset';
    const presetSelect=document.createElement('select');presetSelect.setAttribute('aria-label','Geological preset');presetSelect.style.width='100%';
    for(const p of FORMATION_PRESETS){const opt=document.createElement('option');opt.value=p.id;opt.textContent=p.title;presetSelect.append(opt);}
    presetRow.append(presetHead,presetSelect);panel.append(presetRow);
    const hint=document.createElement('div');hint.className='hill-geo-hint';hint.setAttribute('data-authoring-hint','true');
-   const defaultHint='Hover or adjust any slider/field to inspect its physical role, sane range, and default value. Age steps select a geological epoch rather than converging.';
+   const defaultHint='Hover or adjust any slider/field to inspect its physical role, sane range, and default value. Zoom in anywhere to resolve 3D overhanging rock ledges and talus cobbles.';
    hint.textContent=defaultHint;panel.append(hint);
    presetSelect.onchange=()=>{const p=FORMATION_PRESETS.find(x=>x.id===presetSelect.value);if(p)hint.textContent=p.title+': '+p.description;invoke('applyPreset',presetSelect.value).catch(e=>{status.textContent=e.message;});};
    const status=document.createElement('p'),fields=new Map(),sliders=new Map();let timer,draft={},currentGroup='';
-   const queuePatch=(key,value)=>{if(!Number.isFinite(value))return;draft[key]=value;clearTimeout(timer);status.textContent='Formation settings changed…';timer=setTimeout(()=>{const patch=draft;draft={};invoke('regenerate',patch).catch(e=>{status.textContent=e.message;});},260);};
+   const queuePatch=(key,value)=>{if(!Number.isFinite(value))return;draft[key]=value;clearTimeout(timer);status.textContent='Formation settings changed…';timer=setTimeout(()=>{const patch=draft;draft={};invoke('regenerate',patch).catch(e=>{status.textContent=e.message;});},180);};
    for(const f of FORMATION_FIELDS){
     if(f.group!==currentGroup){currentGroup=f.group;const g=document.createElement('div');g.className='hill-geo-group';g.textContent=currentGroup;panel.append(g);}
     const row=document.createElement('label');row.className='hill-geo-row';row.title=f.tooltip;
@@ -87,18 +110,20 @@ export default {
    const actions=document.createElement('div');actions.className='hill-geo-actions';
    const frameButton=document.createElement('button');frameButton.textContent='Frame landscape';frameButton.onclick=()=>invoke('frame');
    const stepButton=document.createElement('button');stepButton.textContent='Step formation';stepButton.title='Advance geological formation by +20 steps from the current state while streaming intermediate frames.';stepButton.onclick=()=>invoke('stepFormation',20).catch(e=>{status.textContent=e.message;});
+   const gpuStepButton=document.createElement('button');gpuStepButton.textContent='Step GPU erosion';gpuStepButton.title='Run +20 stratified bedrock weathering, chute incision, and cliff-bank collapse steps directly on WebGPU in <0.5ms.';gpuStepButton.onclick=()=>invoke('stepGeology',20).catch(e=>{status.textContent=e.message;});
    const play=document.createElement('button');play.title='Toggle live GPU loose-talus relaxation.';play.onclick=()=>invoke('play',!playing);
    const seamButton=document.createElement('button');seamButton.title=`Toggle 3D overlay showing the ${tiles.length} stitched tile boundaries on the terrain surface.`;seamButton.onclick=()=>invoke('setTileSeams',!showSeams);
-   const resetButton=document.createElement('button');resetButton.textContent='Reset defaults';resetButton.title=`Restore default ${tiles.length}-tile Canyonlands Mesas & Terraces recipe.`;resetButton.onclick=()=>{presetSelect.value='canyon-mesas';invoke('applyPreset','canyon-mesas').catch(e=>{status.textContent=e.message;});};
-   actions.append(frameButton,stepButton,play,seamButton,resetButton);panel.append(actions);
-   const note=document.createElement('p');note.textContent=`Step formation advances geological age incrementally and streams partial states across all ${tiles.length} tiles. Run settling redistributes loose cover on the GPU.`;panel.append(note,status);
+   const resetButton=document.createElement('button');resetButton.textContent='Reset defaults';resetButton.title=`Restore default ${tiles.length}-tile Grounded Mesa Headland recipe.`;resetButton.onclick=()=>{presetSelect.value='canyon-mesas';invoke('applyPreset','canyon-mesas').catch(e=>{status.textContent=e.message;});};
+   actions.append(frameButton,stepButton,gpuStepButton,play,seamButton,resetButton);panel.append(actions);
+   const note=document.createElement('p');note.textContent=`Step formation advances drainage-coupled age (+20 steps in ~18ms). Step GPU erosion runs 3D bedrock weathering & cliff slump directly on WebGPU (<0.5ms).`;panel.append(note,status);
    sync=()=>{
     for(const [key,input]of fields)if(document.activeElement!==input||input.readOnly)input.value=String(config[key]);
     for(const [key,slider]of sliders)if(document.activeElement!==slider)slider.value=String(config[key]);
     presetSelect.value=activePreset;
-    stepButton.disabled=Boolean(pending||error);play.textContent=playing?'Pause settling':'Run settling';play.disabled=Boolean(pending||error);
+    stepButton.disabled=Boolean(pending||error);gpuStepButton.disabled=Boolean(pending||error);play.textContent=playing?'Pause settling':'Run settling';play.disabled=Boolean(pending||error);
     seamButton.textContent=showSeams?`Hide ${tiles.length}-tile seams`:`Show ${tiles.length}-tile seams`;
-    status.textContent=error??(pending?`Forming ${tiles.length}-tile territory · `+pending.step+' / '+pending.total+(pending.partial?' · partial visible':''):(formed?`${tiles.length} tiles stored · ${Math.round(formed.bytes/1024)} KiB · ${formed.cache}`+(formed.warning?' · '+formed.warning:''):''));
+    const zd=gpu.read().zoomDetail;
+    status.textContent=error??(pending?`Forming ${tiles.length}-tile territory · `+pending.step+' / '+pending.total+(pending.partial?' · partial visible':''):(formed?`${tiles.length} tiles · ${Math.round(formed.bytes/1024)} KiB · ${formed.cache} · zoom ${(zd.vertexSpacing*1000).toFixed(1)}mm`+(formed.warning?' · '+formed.warning:''):''));
    };sync();this._cleanup=()=>clearTimeout(timer);
   },
   async dispose(){if(disposed)return;disposed=true;epoch++;job?.cancel();this._cleanup?.();unsubscribe?.();sync=()=>{};gpu.dispose();seamGeo.dispose();seamMat.dispose();await session.dispose();if(globalThis.window?.kaminosHillGeology===diagnostic)delete window.kaminosHillGeology;}

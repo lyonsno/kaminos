@@ -81,7 +81,7 @@ test('incremental formation exposes partial snapshots and resumes identically to
 test('multi-tile stitched formation partitions into ~1000 seam-locked tiles across a high-resolution territory with continuous cross-tile drainage',async()=>{
  const mod=await import(source),def=formationConfig({});
  assert.ok(def.tilesX*def.tilesZ>=900&&def.tilesX*def.tilesZ<=1600,'default territory must span ~1,000 stitched tiles (e.g. 32x32 = 1,024)');
- assert.ok(def.resolution>=513&&def.valleys>=5,'default territory must pair 1,000-tile partitioning with >=513x513 (>500k triangle) feature resolution and multi-basin density');
+ assert.ok(def.resolution===193&&def.valleys<=3,'default territory must pair 1,024-tile partitioning with a fast 193x193 (73.7k tri) base grid and grounded local landform scale (valleys <= 3)');
  assert.equal(typeof mod.partitionTiles,'function','formation must export tile partitioning');
  assert.equal(typeof mod.buildTiledIndices,'function','formation must export tile-ordered index construction');
  const t1024=mod.partitionTiles(def);assert.equal(t1024.length,def.tilesX*def.tilesZ);
@@ -190,4 +190,13 @@ test('hybrid dendritic spur dissection and meso cliff/scree/rill detail articula
  };
  const c0=capLap(noMeso),c1=capLap(withMeso);
  assert.ok(c1.cnt>20&&c1.lap<c0.lap*1.12&&c1.lap<.022*def.relief,`upper plateau caprock interior must remain free of cone spikes (capCnt=${c1.cnt}, capLap=${c0.lap.toFixed(4)} -> ${c1.lap.toFixed(4)})`);
+ const t0=performance.now(),defaultRun=formTerrain(def),elapsedMs=performance.now()-t0;
+ assert.ok(elapsedMs<450,`default grounded formation must complete in <450ms (took ${elapsedMs.toFixed(1)}ms)`);
+ const dn=def.resolution,ddx=def.width/(dn-1);
+ let maxApronSpike=0;
+ for(let z=Math.floor(dn*.78);z<dn-2;z++)for(let x=2;x<dn-2;x++){
+  const i=(z*dn+x)*4,h=defaultRun.state[i]+defaultRun.state[i+1],hL=defaultRun.state[i-4]+defaultRun.state[i-3],hR=defaultRun.state[i+4]+defaultRun.state[i+5];
+  maxApronSpike=Math.max(maxApronSpike,Math.abs(hL+hR-2*h)/ddx);
+ }
+ assert.ok(maxApronSpike<.35,`receiving apron must remain smooth and free of sawtooth floor spikes (maxApronSpike=${maxApronSpike.toFixed(3)})`);
 });

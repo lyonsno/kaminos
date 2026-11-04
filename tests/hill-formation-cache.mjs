@@ -17,5 +17,13 @@ test('generated cache is reused; cancellation stops exactly the pending worker',
 test('GPU consumer refuses mismatched grids and reports the actual formed source',()=>{
  const geometry=new BufferGeometry(),gpu=createTerrainGPU(geometry,{resolution:9,uplift:0}),f=formTerrain({resolution:9,iterations:2,seed:73});
  assert.throws(()=>gpu.loadFormation({...f,config:{...f.config,resolution:17}}),/grid/);assert.throws(()=>gpu.loadFormation({...f,state:f.state.slice(4)}),/state/);
- gpu.loadFormation(f);assert.equal(gpu.read().provenance.kind,'formed-landscape');assert.equal(gpu.read().provenance.recipe.seed,73);assert.equal(gpu.read().steps,0);assert.equal(gpu.read().readbackInRuntime,false);assert.equal(gpu.read().initialized,false);gpu.dispose();geometry.dispose();
+ gpu.loadFormation(f);assert.equal(gpu.read().provenance.kind,'formed-landscape');assert.equal(gpu.read().provenance.recipe.seed,73);assert.equal(gpu.read().steps,0);assert.equal(gpu.read().readbackInRuntime,false);assert.equal(gpu.read().initialized,false);
+ assert.ok(gpu.zoomGeometry instanceof BufferGeometry,'GPU terrain must expose a camera-centered arbitrary-zoom 3D detail geometry');
+ assert.equal(typeof gpu.setCameraFocus,'function','GPU terrain must expose camera focus tracking for arbitrary zoom');
+ assert.equal(typeof gpu.stepGeology,'function','GPU terrain must expose all-GPU geological stepping');
+ const zFar=gpu.setCameraFocus({target:[0,1.2,0],distance:14}).zoomDetail;
+ const zNear=gpu.setCameraFocus({target:[.8,1.5,-.6],distance:.5}).zoomDetail;
+ assert.ok(zFar.enabled&&zFar.triangles>=30000,'zoom detail patch must provide dense camera-centered triangles');
+ assert.ok(zNear.focusRadius<zFar.focusRadius*.2&&zNear.vertexSpacing<.006,`zoom detail spacing must scale down continuously to millimeter scale on close-up zoom (far=${zFar.vertexSpacing}, near=${zNear.vertexSpacing})`);
+ gpu.dispose();geometry.dispose();
 });
