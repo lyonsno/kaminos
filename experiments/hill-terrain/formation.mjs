@@ -205,7 +205,7 @@ export function drainage(state,input,scratch=null){
  const c=formationConfig(input),n=c.resolution,N=n*n;
  const filled=scratch?.filled??new Float64Array(N),receiver=scratch?.receiver??new Int32Array(N),floodParent=scratch?.floodParent??new Int32Array(N),rank=scratch?.rank??new Int32Array(N),seen=scratch?.seen??new Uint8Array(N),order=scratch?.order??new Int32Array(N),heap=scratch?.heap??new Int32Array(N);
  const distance=scratch?.distance??new Float64Array(N),area=scratch?.area??new Float64Array(N),targets=scratch?.targets??new Int32Array(N*4),weights=scratch?.weights??new Float64Array(N*4),dists=scratch?.dists??new Float64Array(N*4);
- const stride=n>=97?24:1;
+ const stride=n>=97?20:1;
  if(scratch?.hasFlood&&scratch.stepCount%stride!==0){
   scratch.stepCount++;
   return{receiver,order,area,distance,filled,outletArea:scratch.outletArea,targets,weights,dists};
@@ -393,6 +393,7 @@ export function formationStep(state,input,metrics,scratch=null){
     else if(dxH<0){const m=Math.min(res[r+1]*.35,-dxH*.32);res[r+1]-=m;res[i+1]+=m;}
     const dzH=(res[i]+res[i+1])-(res[d]+res[d+1]);
     if(dzH>0){const m=Math.min(res[i+1]*.25,dzH*.24);res[i+1]-=m;res[d+1]+=m;}
+    else if(dzH<0){const m=Math.min(res[d+1]*.25,-dzH*.24);res[d+1]-=m;res[i+1]+=m;}
    }
   }
  }

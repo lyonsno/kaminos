@@ -1,11 +1,14 @@
 // kaminos-test: node
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
 import {requestFormation} from '../experiments/hill-terrain/formation-cache.mjs';
-import {formTerrain,encodeFormation} from '../experiments/hill-terrain/formation.mjs';
+import {formTerrain,encodeFormation,formationKey} from '../experiments/hill-terrain/formation.mjs';
 import {createTerrainGPU} from '../experiments/hill-terrain/gpu.mjs';
 import {BufferGeometry} from '../lib/three.core.js';
 test('generated cache is reused; cancellation stops exactly the pending worker',async()=>{
+ const defaultRecipe=JSON.parse(await fs.readFile(new URL('../experiments/hill-terrain/cache/default.recipe.json',import.meta.url),'utf8'));
+ assert.equal(formationKey(defaultRecipe),formationKey({}),'default.recipe.json must match formationConfig({})');
  let launched=0,stopped=0,receivedInitial=null;const previous=globalThis.Worker,partials=[];
  globalThis.Worker=class{constructor(){launched++;}postMessage(msg){const c=msg?.config??msg;receivedInitial=msg?.initial??null;this.timer=setTimeout(()=>{const f=formTerrain(c);this.onmessage({data:{step:1,total:c.iterations,state:Float32Array.from(f.state)}});this.onmessage({data:{buffer:encodeFormation(f)}});},1);}terminate(){stopped++;clearTimeout(this.timer);}};
  try{const c={seed:721,resolution:9,iterations:2},seedRun=formTerrain({...c,iterations:1}),a=await requestFormation(c,{initial:seedRun,onProgress:p=>partials.push(p)}).promise,b=await requestFormation(c).promise;assert.equal(a.cache,'generated');assert.equal(b.cache,'memory');assert.equal(launched,1);assert.equal(stopped,1);assert.deepEqual(a.state,b.state);

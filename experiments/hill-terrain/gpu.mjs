@@ -40,6 +40,9 @@ const geologyBankFlux=wgslFn(`fn hill_geo_bank(v:u32,n:u32,width:f32,length:f32,
  if(xi+1u<n){let a=(*state)[v+1u];b.y=min(max(0.,.48-a.y)*.22,max(0.,s.x-a.x-a.y-bankLim*dx)*rate);}
  if(zi>0u){let a=(*state)[v-n];b.z=min(max(0.,.48-a.y)*.22,max(0.,s.x-a.x-a.y-bankLim*dz)*rate);}
  if(zi+1u<n){let a=(*state)[v+n];b.w=min(max(0.,.48-a.y)*.22,max(0.,s.x-a.x-a.y-bankLim*dz)*rate);}
+ let avail=max(0.,s.x-.08);
+ let bSum=b.x+b.y+b.z+b.w;
+ if(bSum>0.){b=b*(min(avail*.45,bSum)/bSum);}
  return b;
 }`);
 const geologyMove=wgslFn(`fn hill_geo_move(v:u32,n:u32,width:f32,length:f32,dx:f32,dz:f32,tilt:f32,strike:f32,fold:f32,thickness:f32,hardness:f32,weathering:f32,incision:f32,seed:f32,stepStyle:f32,meso:f32,state:ptr<storage,array<vec4<f32>>,read_write>,flow:ptr<storage,array<vec4<f32>>,read_write>,bank:ptr<storage,array<vec4<f32>>,read_write>)->vec4<f32>{
@@ -69,8 +72,10 @@ const geologyMove=wgslFn(`fn hill_geo_move(v:u32,n:u32,width:f32,length:f32,dx:f
  let concav=max(0.,lap/dx);
  let chuteCut=incision*.018*concav*smoothstep(.15,.85,slope)*clamp((s.x-.14)/.5,0.,1.)/strength;
  let bankLoss=bk.x+bk.y+bk.z+bk.w;
- let nextBed=max(.08,s.x-weath-chuteCut-bankLoss);
- let nextSoil=max(0.,s.y+weath+inBank+inSoil-f.x-f.y-f.z-f.w);
+ let availBed=max(0.,s.x-.08-bankLoss);
+ let rockToSoil=min(availBed,weath+chuteCut);
+ let nextBed=s.x-bankLoss-rockToSoil;
+ let nextSoil=max(0.,s.y+rockToSoil+inBank+inSoil-f.x-f.y-f.z-f.w);
  return vec4<f32>(nextBed,nextSoil,0.,0.);
 }`);
 const normal=wgslFn(`fn hill_normal(v:u32,n:u32,dx:f32,dz:f32,x:f32,z:f32,tilt:f32,strike:f32,fold:f32,thickness:f32,seed:f32,stepStyle:f32,meso:f32,useFormed:f32,state:ptr<storage,array<vec4<f32>>,read_write>)->vec4<f32>{
@@ -127,9 +132,9 @@ const formedColor=wgslFn(`fn hill_geological_color(x:f32,z:f32,bed:f32,soil:f32,
  return vec4<f32>(mix(ground,rock,exposed),1.);
 }`);
 
-// Multi-octave world-space fragment relief & rock/scree articulation down to millimeter zoom:
-// Synthesizes 3D triplanar sandstone bedding steps, blocky vertical joint clefts,
-// discrete angular talus cobbles/pebbles, and directional micro-normal self-shadowing per pixel.
+// Multi-octave world-space 3D fragment relief & rock/scree articulation down to millimeter zoom:
+// Synthesizes 3D triplanar sandstone fracture blocks, cross-bedded ledges, conjugate joint clefts,
+// discrete angular talus cobbles/pebbles, and 5-octave micro-normal self-shadowing per pixel.
 const fragFormedColor=wgslFn(`fn hill_frag_color(vColor:vec4<f32>,x:f32,y:f32,z:f32,nx:f32,ny:f32,nz:f32,tilt:f32,strike:f32,fold:f32,thickness:f32,seed:f32,stepStyle:f32,meso:f32,useFormed:f32)->vec4<f32>{
  if(useFormed<.5||meso<=0.){return vec4<f32>(vColor.xyz,1.);}
  let rad=strike*.017453292519943295;let ca=cos(rad);let sa=sin(rad);let rx=x*ca+z*sa;let rz=-x*sa+z*ca;
@@ -137,50 +142,69 @@ const fragFormedColor=wgslFn(`fn hill_frag_color(vColor:vec4<f32>,x:f32,y:f32,z:
  let warp=.28*sin(rx*.55+rz*.35+seed*.03)+.16*cos(rz*.85-rx*.45);
  let phase=(y-dipScale*tilt*rx-dipScale*fold*(sin(rz*.7+rx*.2)+warp)+seed*.017)/thickness;
  let steep=clamp(1.-ny,0.,1.);
- let cliffWall=smoothstep(.08,.30,steep);
- let talusBand=smoothstep(.04,.22,steep)*(1.-smoothstep(.28,.52,steep));
- // Multi-octave 3D rock bedding steps & vertical joint blocks on cliffs and bench rims
+ let cliffWall=smoothstep(.07,.28,steep);
+ let talusBand=smoothstep(.03,.20,steep)*(1.-smoothstep(.26,.54,steep));
+ // 3D triplanar rock blocks, cross-bedding steps & conjugate fracture network down to 2.5mm
  let subPhase=phase*4.-floor(phase*4.);
  let stepRiser=smoothstep(.08,.24,subPhase)*(1.-smoothstep(.82,.96,subPhase));
- let fineBand=sin(phase*37.699112+.4*sin(rx*5.2-rz*4.4));
- let microLamina=cos(phase*113.0973+rx*14.5-rz*9.2);
- let ultraLamina=sin(phase*280.+rx*38.-rz*27.);
- let joint0=abs(sin(rx*11.5+rz*4.2+warp*2.4+.3*sin(phase*6.2831853)));
- let joint1=abs(sin(rx*32.-rz*13.+.45*cos(phase*18.849556)));
- let joint2=abs(cos(rx*86.+rz*37.+.35*sin(phase*50.26548)));
- let crevice=(smoothstep(.11,.012,joint0)+.65*smoothstep(.09,.01,joint1)+.40*smoothstep(.08,.008,joint2))*cliffWall;
- let overhangOcc=smoothstep(.22,.02,subPhase)*cliffWall*.32;
- // Per-pixel 3D normal perturbation for crisp close-up rock facets & talus cobbles
- let dPhaseDy=cos(phase*25.1327)+.6*cos(phase*75.3982)+.35*cos(phase*220.);
- let dJointDx=cos(rx*11.5+rz*4.2)+.65*cos(rx*32.-rz*13.)+.4*sin(rx*86.+rz*37.);
- let dJointDz=sin(rz*11.5-rx*4.2)+.65*sin(rz*32.+rx*13.)+.4*cos(rz*86.-rx*37.);
- // Multi-scale talus cobbles & scree boulders on toe slopes
- let cob0=sin(x*18.+sin(z*15.+seed))*cos(z*17.-sin(x*14.));
- let cob1=sin(x*52.+cos(z*47.+seed*1.7))*cos(z*49.-sin(x*43.));
- let cob2=sin(x*148.+sin(z*132.))*cos(z*140.-cos(x*124.));
- let cobbleDome=max(0.,cob0-.25)+.55*max(0.,cob1-.28)+.30*max(0.,cob2-.30);
- let cobbleEdge=smoothstep(.20,.28,cob0)*smoothstep(.36,.28,cob0)+.6*smoothstep(.22,.30,cob1)*smoothstep(.38,.30,cob1);
- let dCobX=cos(x*18.+sin(z*15.+seed))*18.+.5*cos(x*52.+cos(z*47.))*52.;
- let dCobZ=-sin(z*17.-sin(x*14.))*17.-.5*sin(z*49.-sin(x*43.))*49.;
- let pnx=nx+meso*(cliffWall*(.38*dJointDx+.32*dPhaseDy*ca)+talusBand*.028*dCobX+(1.-cliffWall)*.012*dCobX);
- let pny=ny+meso*(cliffWall*.42*stepRiser-cliffWall*.32*overhangOcc+talusBand*.28*cobbleDome);
- let pnz=nz+meso*(cliffWall*(.38*dJointDz+.32*dPhaseDy*sa)+talusBand*.028*dCobZ+(1.-cliffWall)*.012*dCobZ);
+ let blk0=(1.-abs(sin(rx*14.+.6*sin(y*19.+rz*9.))))*(1.-abs(cos(rz*13.-.5*cos(y*17.-rx*8.))));
+ let blk1=(1.-abs(sin(rx*42.-rz*19.+.7*sin(y*54.))))*(1.-abs(cos(y*48.+rx*23.+rz*31.)));
+ let blk2=(1.-abs(sin(rx*135.+rz*62.+.6*cos(y*160.))))*(1.-abs(cos(y*145.-rx*78.+rz*94.)));
+ let blk3=(1.-abs(sin(rx*420.-rz*190.+y*460.)))*(1.-abs(cos(y*440.+rx*260.-rz*310.)));
+ let crossBed=sin(phase*31.4159+rx*6.8-rz*5.4+.5*blk0);
+ let microLamina=cos(phase*113.0973+rx*22.-rz*16.+.6*blk1);
+ let mineralGrain=sin(rx*920.+y*1100.-rz*780.)*cos(z*860.-x*940.+y*720.);
+ let joint0=abs(sin(rx*11.5+rz*4.2+warp*2.4+.35*sin(y*18.5)));
+ let joint1=abs(sin(rx*34.-rz*15.+.45*cos(y*52.+rx*9.)));
+ let joint2=abs(cos(rx*96.+rz*44.+.40*sin(y*140.-rz*28.)));
+ let joint3=abs(sin(rx*270.-rz*125.+.35*cos(y*340.)));
+ let crevice=(smoothstep(.12,.014,joint0)+.72*smoothstep(.10,.012,joint1)+.52*smoothstep(.09,.010,joint2)+.34*smoothstep(.08,.008,joint3))*cliffWall;
+ let overhangOcc=smoothstep(.22,.02,subPhase)*cliffWall*.34;
+ // 5-octave 3D normal perturbation for crisp close-up rock facets & talus cobbles
+ let dPhaseDy=cos(phase*25.1327)+.65*cos(phase*87.9646+rx*14.)+.45*cos(y*240.+rx*85.-rz*60.)+.28*cos(y*680.-rx*220.);
+ let dJointDx=cos(rx*11.5+rz*4.2)+.72*cos(rx*34.-rz*15.)+.52*sin(rx*96.+rz*44.)+.35*cos(rx*270.-rz*125.+y*180.)+.20*mineralGrain;
+ let dJointDz=sin(rz*11.5-rx*4.2)+.72*sin(rz*34.+rx*15.)+.52*cos(rz*96.-rx*44.)+.35*sin(rz*270.+rx*125.-y*180.)-.20*mineralGrain;
+ // Multi-scale 3D angular talus cobbles & scree stones on toe slopes and benches
+ let cob0=(1.-abs(sin(x*19.+.4*sin(z*16.+seed))))*(1.-abs(cos(z*18.-.4*sin(x*15.))));
+ let cob1=(1.-abs(sin(x*56.+.4*cos(z*49.+seed*1.7))))*(1.-abs(cos(z*52.-.4*sin(x*45.))));
+ let cob2=(1.-abs(sin(x*165.+.35*sin(z*148.))))*(1.-abs(cos(z*156.-.35*cos(x*138.))));
+ let cob3=(1.-abs(sin(x*480.+z*390.)))*(1.-abs(cos(z*450.-x*370.)));
+ let cobbleDome=max(0.,cob0-.32)+.62*max(0.,cob1-.34)+.40*max(0.,cob2-.35)+.24*max(0.,cob3-.36);
+ let cobbleGap=smoothstep(.34,.18,cob0)+.65*smoothstep(.35,.20,cob1)+.40*smoothstep(.36,.22,cob2);
+ let dCobX=sin(x*38.+z*14.)+.65*sin(x*112.-z*45.)+.42*sin(x*330.+z*140.)+.25*cos(x*960.-z*420.);
+ let dCobZ=cos(z*36.-x*15.)+.65*cos(z*104.+x*42.)+.42*cos(z*312.-x*135.)+.25*sin(z*900.+x*390.);
+ let pnx=nx+meso*(cliffWall*(.48*dJointDx+.36*dPhaseDy*ca)+talusBand*.42*dCobX+(1.-cliffWall)*.18*dCobX);
+ let pny=ny+meso*(cliffWall*(.44*stepRiser+.28*(blk1-.4)-.36*overhangOcc)+talusBand*.38*cobbleDome);
+ let pnz=nz+meso*(cliffWall*(.48*dJointDz+.36*dPhaseDy*sa)+talusBand*.42*dCobZ+(1.-cliffWall)*.18*dCobZ);
  let pNorm=normalize(vec3<f32>(pnx,max(.05,pny),pnz));
  let baseNorm=normalize(vec3<f32>(nx,max(.05,ny),nz));
  let sunDir=normalize(vec3<f32>(.52,.68,.51));
- let microShade=clamp(1.+(dot(pNorm,sunDir)-dot(baseNorm,sunDir))*1.75,0.42,1.55);
- let rockWarm=vec3<f32>(.40,.31,.21);
- let screeTint=mix(vColor.xyz,rockWarm,meso*talusBand*clamp(cobbleDome*1.1,0.,.78));
- let laminaGain=1.+meso*cliffWall*(.18*(stepRiser-.4)+.14*fineBand+.09*microLamina+.06*ultraLamina-.42*crevice-.32*overhangOcc);
- let grit=sin(x*165.+z*130.)*cos(z*155.-x*140.);
- let groundGain=1.+meso*(1.-cliffWall)*(.08*cob0+.06*cob1+.04*grit-.18*talusBand*cobbleEdge);
+ let microShade=clamp(1.+(dot(pNorm,sunDir)-dot(baseNorm,sunDir))*1.95,0.36,1.62);
+ let rockWarm=vec3<f32>(.41,.32,.215);
+ let rockCool=vec3<f32>(.24,.20,.165);
+ let blockTint=mix(rockCool,rockWarm,clamp(.5+.35*(blk0-.4)+.25*(blk1-.4)+.18*(blk2-.4),0.,1.));
+ let baseTint=mix(vColor.xyz,mix(vColor.xyz,blockTint,.46),cliffWall*meso);
+ let screeTint=mix(baseTint,mix(rockCool,rockWarm,clamp(cob1*1.2,0.,1.)),meso*talusBand*clamp(cobbleDome*1.25,0.,.85));
+ let laminaGain=1.+meso*cliffWall*(.18*(stepRiser-.4)+.15*(blk0-.45)+.12*(blk1-.45)+.09*(blk2-.45)+.06*(blk3-.45)+.09*crossBed+.07*microLamina+.05*mineralGrain-.46*crevice-.34*overhangOcc);
+ let groundGain=1.+meso*(1.-cliffWall)*(.12*(cob0-.45)+.09*(cob1-.45)+.07*(cob2-.45)+.05*(cob3-.45)+.04*mineralGrain-.24*talusBand*cobbleGap);
  return vec4<f32>(clamp(screeTint*laminaGain*groundGain*microShade,vec3<f32>(0.),vec3<f32>(1.)),1.);
 }`);
 
+// Discards coarse 193x193 base-mesh triangles strictly inside the camera-centered zoom patch
+// whenever zoomed in closer than the overview frame (fr <= 2.55), preventing coarse base-mesh
+// secant triangles from poking through concave bicubic cliff walls or talus toes.
+const baseCutoutKernel=wgslFn(`fn hill_base_cutout(x:f32,z:f32,width:f32,length:f32,fx:f32,fz:f32,fr:f32,useFormed:f32,zoomEnabled:f32)->f32{
+ if(useFormed<.5||zoomEnabled<.5||fr>2.55){return 1.;}
+ let edge=max(abs(x-fx),abs(z-fz))/max(.1,fr);
+ let inBorder=max(abs(x/width),abs(z/length))<.455;
+ if(inBorder&&edge<.78){return 0.;}
+ return 1.;
+}`);
+
 // Camera-centered arbitrary-zoom 3D surface synthesis:
-// Smooth 16-tap Catmull-Rom bicubic surface + positive 3D overhanging rock ledges,
-// stepped sandstone fracture blocks, and 3D talus boulders inside the camera's focal zone,
-// while smoothly tucking underneath the base mesh at the outer perimeter (zero seam).
+// Smooth 16-tap Catmull-Rom bicubic surface + analytic bicubic gradients + 5-octave 3D overhanging
+// rock ledges, faceted sandstone fracture blocks, and 3D talus boulders inside the camera's focal
+// zone, matching base-mesh triangle heights at edge = 0.78 before tucking underneath in [0.78, 0.96].
 const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f32,length:f32,fx:f32,fz:f32,fr:f32,tilt:f32,strike:f32,fold:f32,thickness:f32,seed:f32,stepStyle:f32,meso:f32,useFormed:f32,mode:u32,state:ptr<storage,array<vec4<f32>>,read_write>)->vec4<f32>{
  let xi=v%zn;let zi=v/zn;
  let u=(f32(xi)/f32(zn-1u))*2.-1.;
@@ -206,66 +230,90 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
  }
  let wx0=tx*(-.5+tx*(1.-.5*tx));let wx1=1.+tx*tx*(-2.5+1.5*tx);let wx2=tx*(.5+tx*(2.-1.5*tx));let wx3=tx*tx*(-.5+.5*tx);
  let wz0=tz*(-.5+tz*(1.-.5*tz));let wz1=1.+tz*tz*(-2.5+1.5*tz);let wz2=tz*(.5+tz*(2.-1.5*tz));let wz3=tz*tz*(-.5+.5*tz);
+ let dwx0=-.5+tx*(2.-1.5*tx);let dwx1=tx*(-5.+4.5*tx);let dwx2=.5+tx*(4.-4.5*tx);let dwx3=tx*(-1.+1.5*tx);
+ let dwz0=-.5+tz*(2.-1.5*tz);let dwz1=tz*(-5.+4.5*tz);let dwz2=.5+tz*(4.-4.5*tz);let dwz3=tz*(-1.+1.5*tz);
  let ix0=select(0u,ix-1u,ix>0u);let ix1=ix;let ix2=min(n-1u,ix+1u);let ix3=min(n-1u,ix+2u);
  let iz0=select(0u,iz-1u,iz>0u);let iz1=iz;let iz2=min(n-1u,iz+1u);let iz3=min(n-1u,iz+2u);
- let r0=wx0*(*state)[iz0*n+ix0].xy+wx1*(*state)[iz0*n+ix1].xy+wx2*(*state)[iz0*n+ix2].xy+wx3*(*state)[iz0*n+ix3].xy;
- let r1=wx0*(*state)[iz1*n+ix0].xy+wx1*(*state)[iz1*n+ix1].xy+wx2*(*state)[iz1*n+ix2].xy+wx3*(*state)[iz1*n+ix3].xy;
- let r2=wx0*(*state)[iz2*n+ix0].xy+wx1*(*state)[iz2*n+ix1].xy+wx2*(*state)[iz2*n+ix2].xy+wx3*(*state)[iz2*n+ix3].xy;
- let r3=wx0*(*state)[iz3*n+ix0].xy+wx1*(*state)[iz3*n+ix1].xy+wx2*(*state)[iz3*n+ix2].xy+wx3*(*state)[iz3*n+ix3].xy;
+ let p00=(*state)[iz0*n+ix0].xy;let p10=(*state)[iz0*n+ix1].xy;let p20=(*state)[iz0*n+ix2].xy;let p30=(*state)[iz0*n+ix3].xy;
+ let p01=(*state)[iz1*n+ix0].xy;let p11=(*state)[iz1*n+ix1].xy;let p21=(*state)[iz1*n+ix2].xy;let p31=(*state)[iz1*n+ix3].xy;
+ let p02=(*state)[iz2*n+ix0].xy;let p12=(*state)[iz2*n+ix1].xy;let p22=(*state)[iz2*n+ix2].xy;let p32=(*state)[iz2*n+ix3].xy;
+ let p03=(*state)[iz3*n+ix0].xy;let p13=(*state)[iz3*n+ix1].xy;let p23=(*state)[iz3*n+ix2].xy;let p33=(*state)[iz3*n+ix3].xy;
+ let r0=wx0*p00+wx1*p10+wx2*p20+wx3*p30;
+ let r1=wx0*p01+wx1*p11+wx2*p21+wx3*p31;
+ let r2=wx0*p02+wx1*p12+wx2*p22+wx3*p32;
+ let r3=wx0*p03+wx1*p13+wx2*p23+wx3*p33;
+ let dr0=dwx0*p00+dwx1*p10+dwx2*p20+dwx3*p30;
+ let dr1=dwx0*p01+dwx1*p11+dwx2*p21+dwx3*p31;
+ let dr2=dwx0*p02+dwx1*p12+dwx2*p22+dwx3*p32;
+ let dr3=dwx0*p03+dwx1*p13+dwx2*p23+dwx3*p33;
  let cub=wz0*r0+wz1*r1+wz2*r2+wz3*r3;
  let dxGrid=width/fn1;let dzGrid=length/fn1;
- let hL=(r1.x+r1.y);let hR=(r2.x+r2.y);
- let dhdx=(((*state)[iz1*n+ix2].x+(*state)[iz1*n+ix2].y)-((*state)[iz1*n+ix0].x+(*state)[iz1*n+ix0].y))/(2.*dxGrid);
- let dhdz=(((*state)[iz2*n+ix1].x+(*state)[iz2*n+ix1].y)-((*state)[iz0*n+ix1].x+(*state)[iz0*n+ix1].y))/(2.*dzGrid);
- let edge=max(abs(u),abs(w));
- let border=smoothstep(.495,.45,max(abs(wx/width),abs(wz/length)));
- let wPatch=(1.-smoothstep(.65,.90,edge))*border;
- let rimTuck=-smoothstep(.84,.98,edge)*.006;
- let bed=mix(bedTri,max(bedTri-.002,cub.x),wPatch);
- let soil=max(0.,mix(soilTri,max(soilTri-.001,cub.y),wPatch));
- var px=wx;var py=bed+soil+rimTuck;var pz=wz;var cobbleOut=0.;
+ let dCubX=(wz0*dr0+wz1*dr1+wz2*dr2+wz3*dr3)/dxGrid;
+ let dCubZ=(dwz0*r0+dwz1*r1+dwz2*r2+dwz3*r3)/dzGrid;
+ let dhdx=dCubX.x+dCubX.y;
+ let dhdz=dCubZ.x+dCubZ.y;
  let rawSlope=sqrt(dhdx*dhdx+dhdz*dhdz);
+ let edge=max(abs(u),abs(w));
+ let border=smoothstep(.49,.45,max(abs(wx/width),abs(wz/length)));
+ let zoomActive=smoothstep(2.8,2.0,fr);
+ let wPatch=(1.-smoothstep(.60,.77,edge))*border*zoomActive;
+ let rimTuck=-smoothstep(.77,.95,edge)*.005-.003*(1.-zoomActive);
+ let bed=mix(bedTri,cub.x,wPatch);
+ let rawSoil=max(0.,mix(soilTri,max(0.,cub.y),wPatch));
+ // Strip interpolated toe-soil curtains off steep cliff faces so cliff walls expose bare rock down to the toe
+ let cliffStrip=smoothstep(.72,1.75,rawSlope)*(1.-smoothstep(.0,.18,s00.y)*smoothstep(.0,.18,s10.y)*smoothstep(.0,.18,s01.y)*smoothstep(.0,.18,s11.y));
+ let effSoil=rawSoil*(1.-.92*wPatch*cliffStrip);
+ var px=wx;var py=bed+rawSoil+rimTuck;var pz=wz;var cobbleOut=0.;
  if(useFormed>.5&&meso>0.&&wPatch>0.){
   let ds=(2.*fr)/f32(zn-1u);
-  let oct0=smoothstep(ds*3.0,ds*1.4,.36);
-  let oct1=smoothstep(ds*3.2,ds*1.4,.12);
-  let oct2=smoothstep(ds*3.2,ds*1.4,.038);
-  let oct3=smoothstep(ds*3.2,ds*1.4,.012);
-  let exposed=exp(-soil/.055);
-  let cliffMask=smoothstep(.18,.75,rawSlope)*exposed;
-  let invSlope=1./max(.18,rawSlope);
+  let oct0=smoothstep(ds*2.8,ds*1.2,.34);
+  let oct1=smoothstep(ds*2.8,ds*1.2,.12);
+  let oct2=smoothstep(ds*2.8,ds*1.2,.042);
+  let oct3=smoothstep(ds*2.8,ds*1.2,.016);
+  let oct4=smoothstep(ds*2.8,ds*1.2,.0065);
+  let exposed=exp(-effSoil/.055);
+  let cliffMask=smoothstep(.16,.68,rawSlope)*exposed;
+  let invSlope=1./max(.16,rawSlope);
   let outX=-dhdx*invSlope;let outZ=-dhdz*invSlope;
   let rad=strike*.017453292519943295;let ca=cos(rad);let sa=sin(rad);let rx=wx*ca+wz*sa;let rz=-wx*sa+wz*ca;
   let dipScale=1.-.88*clamp(stepStyle,0.,1.);
   let warp=.28*sin(rx*.55+rz*.35+seed*.03)+.16*cos(rz*.85-rx*.45);
   let phase=(bed-dipScale*tilt*rx-dipScale*fold*(sin(rz*.7+rx*.2)+warp)+seed*.017)/thickness;
   let pFrac=phase-floor(phase);
-  let shelf0=smoothstep(.12,.30,pFrac)*(1.-.60*smoothstep(.80,.96,pFrac));
+  let shelf0=smoothstep(.10,.28,pFrac)*(1.-.65*smoothstep(.78,.96,pFrac));
   let subFrac=phase*3.-floor(phase*3.);
-  let shelf1=smoothstep(.10,.32,subFrac)*(1.-.55*smoothstep(.78,.96,subFrac));
+  let shelf1=smoothstep(.10,.30,subFrac)*(1.-.60*smoothstep(.76,.95,subFrac));
   let fineFrac=phase*9.-floor(phase*9.);
-  let shelf2=smoothstep(.12,.36,fineFrac)*(1.-.50*smoothstep(.78,.96,fineFrac));
-  let lam3=.5+.5*sin(phase*113.097+.4*cos(rx*18.+rz*14.));
-  let block0=max(0.,sin(rx*6.5+.4*sin(phase*6.283))*cos(rz*5.5-.3*cos(phase*6.283))+.3);
-  let block1=max(0.,sin(rx*22.+rz*8.+warp*3.)*cos(rz*19.-rx*7.)+.25);
-  let block2=max(0.,sin(rx*64.-rz*24.)*cos(rz*58.+rx*21.)+.25);
-  let notch0=1.-.72*smoothstep(.15,.01,abs(sin(rx*6.8+rz*2.6+warp*1.8)));
-  let notch1=1.-.62*smoothstep(.13,.01,abs(sin(rx*24.-rz*9.5+.4*sin(phase*12.566))));
-  let ledgeOut=meso*wPatch*cliffMask*notch0*notch1*(oct0*(.095*shelf0+.045*shelf1+.034*block0)+oct1*(.034*shelf1+.024*shelf2+.022*block1)+oct2*(.014*lam3+.012*block2)+oct3*.005*(.5+.5*sin(rx*165.+phase*240.)));
-  let ledgeUp=meso*wPatch*cliffMask*notch0*(oct0*(.052*shelf0+.026*shelf1)+oct1*(.018*shelf2+.014*block1)+oct2*.008*lam3);
-  let screeZone=smoothstep(.003,.018,soil)*smoothstep(.05,.48,rawSlope)*(1.-.45*cliffMask);
-  let bCell0=max(0.,sin(wx*16.+sin(wz*13.+seed))*cos(wz*15.-sin(wx*12.))-.18);
-  let bCell1=max(0.,sin(wx*44.+cos(wz*38.+seed*2.))*cos(wz*41.-sin(wx*35.))-.22);
-  let bCell2=max(0.,sin(wx*115.+sin(wz*102.))*cos(wz*108.-cos(wx*96.))-.24);
-  let cobbleH=meso*wPatch*screeZone*(oct0*.055*bCell0+oct1*.028*bCell1+oct2*.012*bCell2);
+  let shelf2=smoothstep(.12,.34,fineFrac)*(1.-.55*smoothstep(.76,.95,fineFrac));
+  let microFrac=phase*27.-floor(phase*27.);
+  let shelf3=smoothstep(.14,.36,microFrac)*(1.-.50*smoothstep(.76,.95,microFrac));
+  // 3D angular fracture blocks varying in (rx, bed, rz) across 5 octaves
+  let blk0=(1.-abs(sin(rx*7.5+.45*sin(bed*11.+rz*5.))))*(1.-abs(cos(rz*6.5-.4*cos(bed*9.-rx*4.5))));
+  let blk1=(1.-abs(sin(rx*24.+rz*9.+.55*sin(bed*28.))))*(1.-abs(cos(bed*24.+rx*11.-rz*19.)));
+  let blk2=(1.-abs(sin(rx*72.-rz*28.+.5*cos(bed*82.))))*(1.-abs(cos(bed*76.-rx*34.+rz*54.)));
+  let blk3=(1.-abs(sin(rx*210.+rz*85.+.45*sin(bed*230.))))*(1.-abs(cos(bed*215.+rx*95.-rz*160.)));
+  let blk4=(1.-abs(sin(rx*560.-rz*240.+bed*590.)))*(1.-abs(cos(bed*540.-rx*280.+rz*420.)));
+  let cleft0=1.-.76*smoothstep(.14,.012,abs(sin(rx*7.2+rz*2.8+warp*1.8+.25*sin(bed*9.))));
+  let cleft1=1.-.68*smoothstep(.12,.010,abs(sin(rx*25.-rz*10.+.35*cos(bed*26.))));
+  let cleft2=1.-.58*smoothstep(.11,.008,abs(cos(rx*78.+rz*32.+.30*sin(bed*74.))));
+  let clefts=cleft0*cleft1*cleft2;
+  let ledgeOut=meso*wPatch*cliffMask*clefts*(oct0*(.082*shelf0+.044*blk0)+oct1*(.036*shelf1+.028*blk1)+oct2*(.018*shelf2+.015*blk2)+oct3*(.0085*shelf3+.0075*blk3)+oct4*.004*blk4);
+  let ledgeUp=meso*wPatch*cliffMask*cleft0*cleft1*(oct0*(.044*shelf0+.024*blk0)+oct1*(.020*shelf1+.015*blk1)+oct2*(.010*shelf2+.008*blk2)+oct3*(.0045*shelf3+.004*blk3)+oct4*.0022*blk4);
+  // 4-octave 3D angular talus boulders & cobbles at cliff toes and scree slopes
+  let screeZone=clamp(smoothstep(.002,.016,rawSoil)*smoothstep(.04,.65,rawSlope)*(1.-.35*cliffMask)+cliffStrip*.65*(1.-cliffMask),0.,1.);
+  let bCell0=max(0.,(1.-abs(sin(wx*15.+.45*sin(wz*13.+seed))))*(1.-abs(cos(wz*14.-.45*sin(wx*12.))))-.28);
+  let bCell1=max(0.,(1.-abs(sin(wx*46.+.4*cos(wz*39.+seed*2.))))*(1.-abs(cos(wz*42.-.4*sin(wx*37.))))-.30);
+  let bCell2=max(0.,(1.-abs(sin(wx*135.+.35*sin(wz*118.))))*(1.-abs(cos(wz*126.-.35*cos(wx*110.))))-.32);
+  let bCell3=max(0.,(1.-abs(sin(wx*380.+wz*310.)))*(1.-abs(cos(wz*350.-wx*290.)))-.34);
+  let cobbleH=meso*wPatch*screeZone*(oct0*.058*bCell0+oct1*.032*bCell1+oct2*.015*bCell2+oct3*.0065*bCell3);
   cobbleOut=cobbleH;
-  let benchOutcrop=meso*wPatch*exposed*(1.-cliffMask)*smoothstep(.25,1.0,bed)*(oct1*.014*block1+oct2*.006*block2);
-  let washChannel=meso*wPatch*(1.-exposed)*(1.-screeZone)*(oct1*.005*(.5+.5*sin(wx*16.+sin(wz*8.)))+oct2*.0025*(.5+.5*cos(wx*48.-wz*22.)));
-  px=wx+ledgeOut*outX;
-  py=py+.006*wPatch+ledgeUp+cobbleH+benchOutcrop+washChannel;
-  pz=wz+ledgeOut*outZ;
+  let benchOutcrop=meso*wPatch*exposed*(1.-cliffMask)*smoothstep(.22,.95,bed)*(oct1*.016*blk1+oct2*.008*blk2+oct3*.004*blk3);
+  let washChannel=meso*wPatch*(1.-exposed)*(1.-screeZone)*(oct1*.004*(.5+.5*sin(wx*16.+sin(wz*8.)))+oct2*.002*(.5+.5*cos(wx*48.-wz*22.)));
+  px=wx+(ledgeOut+.45*cobbleH)*outX;
+  py=py+ledgeUp+cobbleH+benchOutcrop+washChannel;
+  pz=wz+(ledgeOut+.45*cobbleH)*outZ;
  }
- if(mode==1u){return vec4<f32>(bed,max(0.,soil-cobbleOut*1.8),wPatch,rawSlope);}
+ if(mode==1u){return vec4<f32>(bed,max(0.,effSoil-cobbleOut*2.2),wPatch,rawSlope);}
  return vec4<f32>(px,py,pz,1.);
 }`);
 
@@ -276,15 +324,15 @@ const zoomNormKernel=wgslFn(`fn hill_zoom_norm(v:u32,zn:u32,tilt:f32,strike:f32,
  let u=(*posBuf)[v-select(0u,zn,zi>0u)].xyz;let d=(*posBuf)[v+select(0u,zn,zi+1u<zn)].xyz;
  var nVec=normalize(cross(d-u,r-l));
  if(useFormed>.5&&meso>0.){
-  let exposed=exp(-m.y/.045);let cliffMask=smoothstep(.25,1.0,m.w)*exposed;
+  let exposed=exp(-m.y/.045);let cliffMask=smoothstep(.22,.95,m.w)*exposed;
   let rad=strike*.017453292519943295;let ca=cos(rad);let sa=sin(rad);let rx=p.x*ca+p.z*sa;let rz=-p.x*sa+p.z*ca;
   let dipScale=1.-.88*clamp(stepStyle,0.,1.);
   let warp=.28*sin(rx*.55+rz*.35+seed*.03)+.16*cos(rz*.85-rx*.45);
   let phase=(m.x-dipScale*tilt*rx-dipScale*fold*(sin(rz*.7+rx*.2)+warp)+seed*.017)/thickness;
   let ledgeStep=cos(phase*6.2831853)+.55*cos(phase*18.849556);
-  let jointX=cos(rx*7.5+rz*2.8+warp*2.+seed*.17);
-  let jointZ=sin(rz*7.5-rx*2.8-warp*2.+seed*.31);
-  let amp=meso*cliffMask*.26;
+  let jointX=cos(rx*7.5+rz*2.8+warp*2.+seed*.17)+.5*cos(rx*24.+rz*9.);
+  let jointZ=sin(rz*7.5-rx*2.8-warp*2.+seed*.31)+.5*sin(rz*24.-rx*9.);
+  let amp=meso*cliffMask*.24;
   nVec=normalize(vec3<f32>(nVec.x-amp*(.45*jointX+.55*ledgeStep*ca),nVec.y,nVec.z-amp*(.45*jointZ+.55*ledgeStep*sa)));
  }
  return vec4<f32>(nVec,0.);
@@ -377,7 +425,7 @@ export function createTerrainGPU(geometry,input={}){
   talus.value=Math.tan(config.repose*Math.PI/180);fraction.value=.22;
   for(let j=0;j<countSteps;j++){renderer.compute(geologySolvers[index]);index=1-index;preparationSteps++;}
   if(formationProvenance)formationProvenance={...formationProvenance,preparationSteps:(formationProvenance.preparationSteps??0)+countSteps};
-  pendingPresentation=true;pendingZoom=true;flush(renderer);return read();
+  alpha.value=1;pendingPresentation=true;pendingZoom=true;flush(renderer);return read();
  }
  function setCameraFocus({target=[0,1.2,0],position=null,distance=null,enabled=true}={}){
   const en=enabled?1:0;
@@ -407,8 +455,13 @@ export function createTerrainGPU(geometry,input={}){
   material.colorNode=fragFormedColor({vColor:tslAttribute('color','vec4'),x:positionLocal.x,y:positionLocal.y,z:positionLocal.z,nx:normalLocal.x,ny:normalLocal.y,nz:normalLocal.z,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,useFormed});
   return material;
  };
+ const applyBaseShader=material=>{
+  material.alphaTest=.5;
+  material.opacityNode=baseCutoutKernel({x:positionLocal.x,z:positionLocal.z,width:float(config.width),length:float(config.length),fx:focusX,fz:focusZ,fr:focusRadius,useFormed,zoomEnabled});
+  return applyFragShader(material);
+ };
  return{bind,flush,advance,stepGeology,setCameraFocus,configure,regenerate,read,zoomGeometry,
-  decorateMaterial:applyFragShader,
+  decorateMaterial:applyBaseShader,
   decorateZoomMaterial:applyFragShader,
   loadFormation(result){
    if(result.config.resolution!==n||result.config.width!==config.width||result.config.length!==config.length)throw Error('Formation grid does not match GPU terrain');

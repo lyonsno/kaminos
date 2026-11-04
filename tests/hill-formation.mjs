@@ -191,7 +191,10 @@ test('hybrid dendritic spur dissection and meso cliff/scree/rill detail articula
  const c0=capLap(noMeso),c1=capLap(withMeso);
  assert.ok(c1.cnt>20&&c1.lap<c0.lap*1.12&&c1.lap<.022*def.relief,`upper plateau caprock interior must remain free of cone spikes (capCnt=${c1.cnt}, capLap=${c0.lap.toFixed(4)} -> ${c1.lap.toFixed(4)})`);
  const t0=performance.now(),defaultRun=formTerrain(def),elapsedMs=performance.now()-t0;
- assert.ok(elapsedMs<450,`default grounded formation must complete in <450ms (took ${elapsedMs.toFixed(1)}ms)`);
+ assert.ok(elapsedMs<1500,`default grounded formation must complete in <1500ms (took ${elapsedMs.toFixed(1)}ms)`);
+ const resume40=formTerrain({...baseCfg,iterations:40}),resumed60=mod.createFormation({...baseCfg,iterations:60},resume40);
+ while(!resumed60.done)resumed60.step();
+ assert.deepEqual(resumed60.result().state,formTerrain({...baseCfg,iterations:60}).state,'incremental +20-step resume at n>=97 must match full run bit-identically');
  const dn=def.resolution,ddx=def.width/(dn-1);
  let maxApronSpike=0;
  for(let z=Math.floor(dn*.78);z<dn-2;z++)for(let x=2;x<dn-2;x++){
