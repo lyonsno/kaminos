@@ -49,11 +49,11 @@ export async function createAuthoredMlsHost({renderer,scene,camera,pipeline,devi
    return {frameId,encoding:'linear_hdr',format:'rgba16float',width,height,nativeType:pixels.constructor.name,nativeBytesPerRow,nativeValues,values};
   },
   async requestParticleState(){const step=solver.read().clock.step,words=await solver.snapshot();return {schema:'kaminos.mls-particle-state.v1',route:MLS_ROUTE,stepCount:step,particleCount:solver.config.capacity,recordFloats:20,coordinateSpace:'grid',originWorld:[...solver.config.min],cellSize:solver.config.cell,words:Array.from(words)};},
-  render({advance=true,volumeTransport=null}={}){
+  render({advance=true,maxSteps,volumeTransport=null}={}){
    if(disposed||failure)throw Error(failure||'MLS host disposed');
    const target=renderer.getRenderTarget(),override=scene.overrideMaterial,background=scene.background,renderObject=renderer.getRenderObjectFunction(),clear=renderer.getClearColor(new THREE.Color()),alpha=renderer.getClearAlpha();
    try{
-    solver.setSceneColliders(readColliders());publishInlets();if(advance&&(mode==='full'||frameCount%proxyStepEvery===0))solver.advance();
+    solver.setSceneColliders(readColliders());publishInlets();if(advance&&(mode==='full'||frameCount%proxyStepEvery===0))solver.advance(undefined,undefined,{maxSteps});
     const size=renderer.getDrawingBufferSize(new THREE.Vector2());for(const t of [color,output,depth])t.setSize(size.x,size.y);renderer.initRenderTarget(output);
     if(mode==='full')environment.render();
     scenePasses.update();renderer.setRenderTarget(color);scenePasses.capture.render();

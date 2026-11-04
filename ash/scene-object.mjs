@@ -59,9 +59,13 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,read
  catch(error){dispose();throw error;}
  const api={root,
   async initialize(){if(initialized)return;return locked(async()=>{patch.syncScene();if(pendingRestore){patch.restore(pendingRestore);pendingRestore=null;}else if(settings.initialDepth>0)await patch.deposit({blanketDepth:settings.initialDepth,groundOnly:true});patch.setSliding?.({variation:settings.slideVariation,scale:settings.slideScale,release:settings.slideRelease});initialized=true;});},
-  tick(timestamp,{active=true,selected=false}={}){
+  due(timestamp,{active=true}={}){
+   return !(disposed||busy||!initialized||pendingRestore||!active||settings.paused)&&(lastTick===null||timestamp-lastTick>=1000/30);
+  },
+  tick(timestamp,{active=true,selected=false,advance=true}={}){
    guide.visible=selected;emitter.visible=selected&&settings.emitting;
    if(disposed||busy||!initialized||pendingRestore||!active||settings.paused){lastTick=null;return false;}
+   if(!advance)return false;
    if(lastTick!==null&&timestamp-lastTick<1000/30)return false;lastTick=timestamp;
    try{patch.step(null,source());if(failure){failure=null;onError(null);}return true;}catch(error){const changed=failure!==error.message;failure=error.message;if(changed)onError(failure);return false;}
   },

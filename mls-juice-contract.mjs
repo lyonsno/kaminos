@@ -26,33 +26,126 @@ export function mlsConfig(setup={}) {
   const dimensions=gridDimensions(grid),gridCells=dimensions.reduce((n,v)=>n*v,1);
   if(!Number.isFinite(cell)||cell<=0)throw Error('Invalid MLS cell size');
   if(!Number.isFinite(viscosity)||viscosity<0)throw Error('Invalid MLS viscosity');
+  const dt=1/240;
+  const maxSubstepsPerBatch=setup.maxSubstepsPerBatch??24;
+  if(maxSubstepsPerBatch!==Infinity&&(!Number.isSafeInteger(maxSubstepsPerBatch)||maxSubstepsPerBatch<1))throw Error('Invalid MLS max substeps per batch');
+  const maxBacklogSeconds=setup.maxBacklogSeconds??(Number.isFinite(maxSubstepsPerBatch)?Math.max(24,maxSubstepsPerBatch*2)*dt:Infinity);
+  if(maxBacklogSeconds!==Infinity&&(!Number.isFinite(maxBacklogSeconds)||maxBacklogSeconds<dt))throw Error('Invalid MLS max backlog seconds');
   const min=setup.originWorld??[-dimensions[0]*cell/2,-2*cell,-dimensions[2]*cell/2];
   if(!Array.isArray(min)||min.length!==3||!min.every(Number.isFinite))throw Error('Invalid MLS domain origin');
   const obstacle=setup.obstacle===null?null:(setup.obstacle??{center:[-.35,.24,0],radius:.24});
   return {capacity,grid,dimensions,gridCells,cell,min,
-    bounds:{min:min.map(v=>v+2*cell),max:min.map((v,i)=>v+(dimensions[i]-3)*cell)},dt:1/240,
+    bounds:{min:min.map(v=>v+2*cell),max:min.map((v,i)=>v+(dimensions[i]-3)*cell)},dt,
+    maxSubstepsPerBatch,maxBacklogSeconds,
     modelSecondsPerSecond:Math.sqrt(9.81/(.4*cell)),restDensity:3,stiffness:50,viscosity,
     particleRadius:cell*.65,obstacle,boundaryWalls:setup.boundaryWalls!==false};
 }
 
-// Backlog is retained, not clamped away to make presentation FPS look healthy.
-export function createMlsClock(dt) {
-  let previous=null,accumulator=0,steps=0,elapsed=0;
+// Backlog is retained across brief frame-time jitter; when configured with
+// finite batch/backlog bounds, severe stalls shed excess backlog explicitly.
+export function createMlsClock(dt,{maxSubstepsPerBatch=Infinity,maxBacklogSeconds=Infinity}={}) {
+  if(maxSubstepsPerBatch!==Infinity&&(!Number.isSafeInteger(maxSubstepsPerBatch)||maxSubstepsPerBatch<1))throw Error('Invalid MLS max substeps per batch');
+  if(maxBacklogSeconds!==Infinity&&(!Number.isFinite(maxBacklogSeconds)||maxBacklogSeconds<dt))throw Error('Invalid MLS max backlog seconds');
+  let previous=null,accumulator=0,steps=0,elapsed=0,droppedSeconds=0,droppedSteps=0;
   function observe(now,paused=false){
     if(!Number.isFinite(now))throw Error('Invalid MLS clock');
     if(previous!==null&&now<previous)throw Error('MLS clock moved backwards');
     const delta=previous===null?0:(now-previous)/1000;previous=now;
-    if(!paused){accumulator+=delta;elapsed+=delta;}
+    if(!paused){
+      accumulator+=delta;elapsed+=delta;
+      if(accumulator>maxBacklogSeconds+1e-10){
+        const availableSteps=Math.floor((accumulator+1e-10)/dt);
+        const retainedSteps=Math.floor((maxBacklogSeconds+1e-10)/dt);
+        const shedSteps=Math.max(0,availableSteps-retainedSteps);
+        const shedSeconds=accumulator-maxBacklogSeconds;
+        accumulator=maxBacklogSeconds;
+        droppedSteps+=shedSteps;droppedSeconds+=shedSeconds;
+      }
+    }
   }
   return {observe,advanceSteps(count){
     if(!Number.isSafeInteger(count)||count<0)throw Error('Invalid MLS step count');
     steps+=count;elapsed+=count*dt;return count;
-  },advance(now,paused=false){
+  },advance(now,paused=false,maxSteps=maxSubstepsPerBatch){
+    if(maxSteps!==Infinity&&(!Number.isSafeInteger(maxSteps)||maxSteps<1))throw Error('Invalid MLS step cap');
     observe(now,paused);
-    const count=paused?0:Math.floor((accumulator+1e-10)/dt);
-    accumulator-=count*dt;steps+=count;return count;
+    const cap=Math.min(maxSteps,maxSubstepsPerBatch);
+    const available=paused?0:Math.floor((accumulator+1e-10)/dt);
+    const count=Math.min(cap,available);
+    accumulator=Math.max(0,accumulator-count*dt);steps+=count;return count;
   },read:()=>({policy:'wall-time-fixed-substeps-no-discard',elapsedSeconds:elapsed,
-    simulatedSeconds:steps*dt,timeSeconds:steps*dt,step:steps,backlogSeconds:Math.max(0,accumulator),stepCount:steps,dt})};
+    simulatedSeconds:steps*dt,timeSeconds:steps*dt,step:steps,backlogSeconds:Math.max(0,accumulator),
+    droppedSeconds,droppedSteps,maxSubstepsPerBatch,maxBacklogSeconds,stepCount:steps,dt})};
+}
+
+export function createSimFrameCoordinator({
+  targetFrameMs=1000/60,
+  waterBaseMaxSubsteps=12,
+  waterContendedMaxSubsteps=6,
+}={}){
+  if(!Number.isFinite(targetFrameMs)||targetFrameMs<=0)throw Error('Invalid simulator frame budget target');
+  if(!Number.isSafeInteger(waterBaseMaxSubsteps)||waterBaseMaxSubsteps<1)throw Error('Invalid water base substep cap');
+  if(!Number.isSafeInteger(waterContendedMaxSubsteps)||waterContendedMaxSubsteps<1||waterContendedMaxSubsteps>waterBaseMaxSubsteps)throw Error('Invalid water contended substep cap');
+  let lastNowMs=null,lastFrameDurationMs=0,secondaryTurn=0;
+  let frames=0,contendedFrames=0,waterFramesAdmitted=0,waterFramesDeferred=0,ashFramesAdmitted=0,ashFramesDeferred=0;
+  let lastPlan=null;
+  function planFrame({nowMs,flame={},water={},ash={}}={}){
+    if(!Number.isFinite(nowMs))throw Error('Invalid simulator coordinator timestamp');
+    lastFrameDurationMs=lastNowMs===null?0:Math.max(0,nowMs-lastNowMs);
+    lastNowMs=nowMs;
+    frames++;
+    const flameActive=Boolean(flame?.active);
+    const waterActive=Boolean(water?.active);
+    const waterReady=waterActive&&!water?.pending;
+    const waterNeedsStep=waterReady&&(water?.backlogSeconds===undefined||water.backlogSeconds>0);
+    const ashActive=Boolean(ash?.active);
+    const ashReady=ashActive&&ash?.due!==false;
+    const activeCount=(flameActive?1:0)+(waterActive?1:0)+(ashActive?1:0);
+    const contended=activeCount>=2&&lastFrameDurationMs>targetFrameMs*1.15;
+    if(contended)contendedFrames++;
+    const waterMaxSteps=contended?waterContendedMaxSubsteps:waterBaseMaxSubsteps;
+    let waterAdvance=waterReady;
+    let ashAdvance=ashReady;
+    if(contended&&waterNeedsStep&&ashReady){
+      if(secondaryTurn%2===0){
+        waterAdvance=true;
+        ashAdvance=false;
+      }else{
+        waterAdvance=false;
+        ashAdvance=true;
+      }
+      secondaryTurn++;
+    }
+    if(waterActive){if(waterAdvance)waterFramesAdmitted++;else if(waterNeedsStep)waterFramesDeferred++;}
+    if(ashActive){if(ashAdvance)ashFramesAdmitted++;else if(ashReady)ashFramesDeferred++;}
+    lastPlan={
+      nowMs,
+      frameDurationMs:lastFrameDurationMs,
+      targetFrameMs,
+      contended,
+      activeCount,
+      flame:{active:flameActive,advance:flameActive},
+      water:{active:waterActive,advance:waterAdvance,maxSteps:waterMaxSteps},
+      ash:{active:ashActive,advance:ashAdvance},
+    };
+    return lastPlan;
+  }
+  return {
+    planFrame,
+    read:()=>({
+      targetFrameMs,
+      waterBaseMaxSubsteps,
+      waterContendedMaxSubsteps,
+      frames,
+      contendedFrames,
+      lastFrameDurationMs,
+      waterFramesAdmitted,
+      waterFramesDeferred,
+      ashFramesAdmitted,
+      ashFramesDeferred,
+      lastPlan:lastPlan?structuredClone(lastPlan):null,
+    }),
+  };
 }
 
 export function validateMlsPacket(packet) {
