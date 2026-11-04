@@ -47,7 +47,7 @@ async function workshopFixture({saved=false}={}){
  if(saved){const part=(await import('../casting-transfer.mjs')).stageLetterCastings(recipe)[0],o=mold.createStageCasting(part.recipe);objects.push({id:'saved',object:o});}
  const app={kaminosSceneAuthoring:author,removeSceneObject:id=>objects.splice(objects.findIndex(o=>o.id===id),1)};
  const flame={read:()=>({scene:{objects:[{id:'flame-field'}]}}),setPaused:v=>events.push(['pause',v])};
- const host={controls:{document:{defaultView:app}},scene:{objects:()=>objects,open:async()=>({onFrame:fn=>{frame=fn;return()=>{};},redraw(){},dispose(){}}),refreshPresentation(){}},flame:{open:async()=>flame},fire:{read:()=>({registered:false}),setEnabled:v=>events.push(['emit',v])}};
+ const host={controls:{document:{defaultView:app}},scene:{objects:()=>objects,open:async()=>({onFrame:fn=>{frame=fn;return()=>{};},redraw(){},dispose(){}}),refreshPresentation({id,root}){events.push({presented:id,position:root.position.toArray()});}},flame:{open:async()=>flame},fire:{read:()=>({registered:false}),setEnabled:v=>events.push(['emit',v])}};
  const study=await experiment.create({host,record:()=>{}},async()=>({read:()=>({moldId:'mold'}),operations:{stopPour:async()=>{}},dispose(){}}));
  return {study,app,events,finish,frame:dt=>frame({deltaSeconds:dt}),objects};
 }
@@ -124,3 +124,17 @@ test('each letter lifts to the editable paddle mount before articulated transpor
  f.state.fraction=0;f.state.recipe.castingCarrier.pickupMount='missing';await assert.rejects(f.study.operations.unmold(),/mount/i);assert.equal(f.objects.filter(o=>o.object.userData.kaminosStageCasting).length,0);
  await f.study.dispose();
 });
+
+ test('carriage presents the selected casting at each move and at stop',async()=>{
+ const f=await loaderFixture({phase:0,cycle:0});await f.study.operations.unmold();
+ const id=f.study.read().pieceId,root=f.objects.find(o=>o.id===id).object;
+ f.app.kaminosSelection={read:()=>({ids:[id]})};
+ const seek=f.runtime.operations.seek;f.runtime.operations.seek=p=>{seek(p);root.position.x=f.state.fraction*10;};
+ await f.study.operations.carry();f.frame(1);
+ assert.deepEqual(f.events.at(-1),{presented:id,position:root.position.toArray()},'selected native controls follow the moved payload');
+ f.events.length=0;f.study.operations.stopTransfer();
+ assert.deepEqual(f.events.at(-1),{presented:id,position:root.position.toArray()},'Stop publishes the editable pose');
+ await f.study.operations.carry();f.frame(4);
+ assert.equal(root.position.x,10);assert.deepEqual(f.events.at(-1),{presented:id,position:root.position.toArray()});
+ await f.study.dispose();
+ });

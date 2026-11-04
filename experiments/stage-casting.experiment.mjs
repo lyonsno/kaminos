@@ -9,6 +9,7 @@ export default {id:'stage-casting',title:'Workshop · casting to fire',async cre
  const study=await createPourStudy({host,inputs,record}),session=await host.scene.open();
  let flame,closed=false,pending=Promise.resolve(),pieceId=null,cursor=0,sourceRecipe=null,burnStart=null,ignitionSeconds=2,transferSeconds=4,phase='At the mold',status,updateButtons=()=>{},cleanup=()=>{},createdFire=false;
  const object=id=>host.scene.objects().find(o=>o.id===id)?.object;
+ const presentCasting=()=>{const root=object(pieceId);if(root)host.scene.refreshPresentation({id:pieceId,root});};
  let transferDestination='At the kiln · ignite when you like';
  let carriageRuntime=null,carriageId=null,carriagePose=null,carriageRecipe=null,carriagePayload=null;
  const carriage=createCarriageRun({write:position=>{
@@ -18,7 +19,8 @@ export default {id:'stage-casting',title:'Workshop · casting to fire',async cre
   if(carriagePayload&&(!object(carriagePayload)||!current.recipe.attachments?.some(a=>a.objectId===carriagePayload)))throw Error('Casting removed or detached · transfer stopped');
   carriageRuntime.operations.seek({cycle:position-(current.recipe.phase??0)});
   const next=carriageRuntime.read();carriagePose=next.cycle;carriageRecipe=JSON.stringify(next.recipe);
- },arrive:()=>{phase='Loader at '+(carriage.read().target===.5?'kiln':'mold');refresh();}});
+  if(app.kaminosSelection?.read().ids.includes(pieceId))presentCasting();
+ },arrive:()=>{presentCasting();phase='Loader at '+(carriage.read().target===.5?'kiln':'mold');refresh();}});
  const carrierEntry=()=>host.scene.objects().find(e=>e.id===inputs.carrierId||(!inputs.carrierId&&e.object.userData.linkMechanism?.castingCarrier?.moldId===study.read().moldId));
  const mold=()=>object(study.read().moldId);
  const kiln=()=>host.scene.objects().find(o=>o.id===inputs.kilnId||(!inputs.kilnId&&o.label?.startsWith('Kiln ·')))?.object;
@@ -121,7 +123,7 @@ export default {id:'stage-casting',title:'Workshop · casting to fire',async cre
   }),
   removeCasting:serial(async()=>{adopt();if(!pieceId)return read();transfer.cancel();carriage.cancel();await detachCasting();if(flame)host.fire.setEnabled(false);burnStart=null;await app.removeSceneObject(pieceId);pieceId=null;phase='Casting removed · lift the next letter';refresh();return read();}),
   stopIgnition:serial(async()=>{if(flame)host.fire.setEnabled(false);burnStart=null;phase='Source off · material continues burning';refresh();return read();}),
-  stopTransfer(){active();transfer.cancel();carriage.cancel();phase='Transfer stopped · move the casting with native controls';refresh();return read();},
+  stopTransfer(){active();transfer.cancel();carriage.cancel();presentCasting();phase='Transfer stopped · move the casting with native controls';refresh();return read();},
   setIgnitionSeconds(value){active();value=Number(value);if(!Number.isFinite(value)||value<=0)throw Error('Ignition seconds must be positive');ignitionSeconds=value;refresh();return read();},
   setTransferSeconds(value){active();value=Number(value);if(!Number.isFinite(value)||value<=0)throw Error('Transfer seconds must be positive');transferSeconds=value;refresh();return read();},
   pause(){active();if(flame)flame.setPaused(!flame.read().paused);return read();},
@@ -130,7 +132,7 @@ export default {id:'stage-casting',title:'Workshop · casting to fire',async cre
   transfer.advance(deltaSeconds);carriage.advance(deltaSeconds);
   if(burnStart!==null){if(!object(pieceId))throw Error('Casting removed · ignition stopped');const state=author.burningState(pieceId);if(state.status!=='resident')throw Error(state.error??'Material unavailable · ignition stopped');const elapsed=state.state?.elapsed;if(Number.isFinite(elapsed)){burnStart.elapsed??=elapsed;if(elapsed-burnStart.elapsed>=ignitionSeconds){host.fire.setEnabled(false);burnStart=null;phase='Source off · material continues burning';record({kind:'casting.ignition-ended',effective:{pieceId,elapsed,ignitionSeconds}});}}}
   refresh();
- }catch(error){transfer.cancel();carriage.cancel();if(flame)host.fire.setEnabled(false);burnStart=null;phase=error.message;refresh();}});
+ }catch(error){transfer.cancel();carriage.cancel();presentCasting();if(flame)host.fire.setEnabled(false);burnStart=null;phase=error.message;refresh();}});
  return {read,operations,mount({root,invoke}){
   study.mount({root,invoke});
   const k=kiln(),row=host.scene.objects().find(o=>o.object===k);if(!row)throw Error('Choose a kiln object');

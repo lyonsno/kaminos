@@ -72,8 +72,23 @@ try {
   class El{constructor(tag){this.tagName=tag;this.style={};this.children=[];this.hidden=false;this.attributes={};}setAttribute(k,v){this.attributes[k]=v;}append(...items){for(const x of items)if(typeof x==='object')this.children.push(x);}replaceChildren(...items){this.children=items.filter(x=>typeof x==='object');}}
   globalThis.Option??=class extends El{constructor(text,value){super('option');this.textContent=text;this.value=value;}};
   let mounted;const doc={activeElement:null,getElementById(){return null;},addEventListener(){},removeEventListener(){},createElement:tag=>new El(tag)};
-  host.controls.installNumberDrag=()=>({dispose(){}});host.controls.mountObject=m=>{mounted=m;return {dispose(){}};};
+  host.controls.installNumberDrag=()=>({dispose(){}});host.controls.mountObject=m=>{mounted=m;return {update(){},dispose(){}};};
   c.mount({root:new El('div'),document:doc,invoke:(op,args)=>Promise.resolve(c.operations[op](args))});
+  const savedOpen=host.scene.open;host.scene.open=async()=>({async attach(mesh){scene.add(mesh);entries.push({id:'mirror-plane',object:mesh,type:'experiment'});return {id:'mirror-plane',root:mesh};},async dispose(){}});
+  host.controls.document.defaultView.kaminosSelection={set(ids){selected=ids[0];}};
+  await c.operations.mirrorPlane();host.scene.open=savedOpen;
+  const mirrorReceipt=mounted.relatedAssets.find(a=>a.id==='mirror-plane');assert.ok(mirrorReceipt);
+  const mountedRecipe=structuredClone(c.read().recipe);
+  mountedRecipe.mounts=[{id:'cube-mount',owner:{objectId:'cube'},position:[0,0,0],rotation:[0,0,0]}];
+  c.operations.restore(mountedRecipe);
+  assert.deepEqual(mounted.relatedAssets.map(a=>a.id),['mirror-plane','cube'],'mount-owned objects retain their controls');
+  const payload=new T.Group();scene.add(payload);entries.push({id:'payload',object:payload,type:'pbr'});
+  c.operations.attach({objectId:'payload',joint:1});
+  assert.deepEqual(mounted.relatedAssets.map(a=>a.id).sort(),['cube','mirror-plane','payload']);
+  c.operations.detach({objectId:'payload'});
+  assert.deepEqual(mounted.relatedAssets.map(a=>a.id),['mirror-plane','cube'],'detached casting loses loader controls while the paddle keeps them');
+  c.operations.restore({...mountedRecipe,mounts:[]});
+  assert.deepEqual(mounted.relatedAssets,[mirrorReceipt],'clearing mount and attachment owners preserves the mirror tool receipt');
   const [top,transport]=mounted.playback.children;
   assert.equal(transport.hidden,false,'transport is visible when moving links exist');
   c.operations.restore({schema:'kaminos.links.v1',period:3,nodes:[],pistons:[]});
