@@ -1256,24 +1256,41 @@ class TestMLXSwitchableEvalHarness(unittest.TestCase):
                 self.assertFalse(hasattr(wrapped_q_proj._holder, "lora_B_T"))
                 self.assertFalse(hasattr(wrapped_embed._holder, "lora_B_T"))
 
-                # Verify forward pass in bfloat16 works accurately in on mode
-                x_in = TorchArrayProxy(torch.ones((1, 4), dtype=torch.bfloat16))
+                # Verify forward pass in bfloat16 works accurately in on mode without casting 2D LoRA weights to float32
+                astype_2d_f32_shapes = []
+                orig_astype = TorchArrayProxy.astype
+
+                def tracking_astype(self_arr, dt):
+                    if dt == torch.float32 and self_arr.ndim == 2 and self_arr.shape[0] > 1 and self_arr.shape[1] > 1:
+                        astype_2d_f32_shapes.append(self_arr.shape)
+                    return orig_astype(self_arr, dt)
+
+                TorchArrayProxy.astype = tracking_astype
+                try:
+                    x_in = TorchArrayProxy(torch.ones((1, 4), dtype=torch.bfloat16))
+                    y_lora = wrapped_q_proj(x_in)
+                    self.assertEqual(y_lora.dtype, torch.bfloat16)
+                    self.assertTrue(torch.allclose(y_lora.t.float(), torch.full((1, 8), 6.0), atol=5e-2))
+
+                    tok_ids = TorchArrayProxy(torch.tensor([[0, 1]], dtype=torch.long))
+                    y_emb = wrapped_embed(tok_ids)
+                    self.assertEqual(y_emb.dtype, torch.bfloat16)
+                    self.assertTrue(torch.allclose(y_emb.t.float(), torch.full((1, 2, 4), 1.25), atol=2e-2))
+
+                    y_lm = wrapped_embed.as_linear(x_in)
+                    self.assertEqual(y_lm.dtype, torch.bfloat16)
+                    self.assertTrue(torch.allclose(y_lm.t.float(), torch.full((1, 16), 5.0), atol=5e-2))
+                    self.assertEqual(
+                        astype_2d_f32_shapes,
+                        [],
+                        f"LoRA forward pass cast 2D weight/activation matrices to float32: {astype_2d_f32_shapes}",
+                    )
+                finally:
+                    TorchArrayProxy.astype = orig_astype
+
                 y_exact = wrapped_in_proj_a(x_in)
                 self.assertEqual(y_exact.dtype, torch.bfloat16)
                 self.assertTrue(torch.allclose(y_exact.t.float(), torch.full((1, 2), 5.0), atol=1e-2))
-
-                y_lora = wrapped_q_proj(x_in)
-                self.assertEqual(y_lora.dtype, torch.bfloat16)
-                self.assertTrue(torch.allclose(y_lora.t.float(), torch.full((1, 8), 6.0), atol=5e-2))
-
-                tok_ids = TorchArrayProxy(torch.tensor([0, 1], dtype=torch.long))
-                y_emb = wrapped_embed(tok_ids)
-                self.assertEqual(y_emb.dtype, torch.bfloat16)
-                self.assertTrue(torch.allclose(y_emb.t.float(), torch.full((2, 4), 1.25), atol=2e-2))
-
-                y_lm = wrapped_embed.as_linear(x_in)
-                self.assertEqual(y_lm.dtype, torch.bfloat16)
-                self.assertTrue(torch.allclose(y_lm.t.float(), torch.full((1, 16), 5.0), atol=5e-2))
 
                 # 6. Switching back to enabled=False restores the original unwrapped modules
                 ctrl.set_mode(enabled=False)

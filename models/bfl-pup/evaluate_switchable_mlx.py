@@ -568,6 +568,8 @@ def run_switchable_evaluation(
                 report["failure_phase"] = f"generating:{mode_name}:{case_id}"
                 _atomic_write_json(report_path, report)
                 controller.assert_cache_epoch(bound_epoch)
+                if hasattr(controller, "_reset_caches_and_model_state"):
+                    controller._reset_caches_and_model_state()
 
                 if task == "vlm":
                     sys_text = case.get("system_prompt", "You are a helpful assistant.")

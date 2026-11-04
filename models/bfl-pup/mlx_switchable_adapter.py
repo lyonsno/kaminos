@@ -237,14 +237,17 @@ def _make_mlx_wrappers():
             if scale == 0.0 or r_end <= r_start:
                 return y
             dt = y.dtype
+            w_dt = h.lora_A.dtype
             a_slice_T = mx.transpose(h.lora_A[r_start:r_end, :])
             b_slice_T = mx.transpose(h.lora_B[:, r_start:r_end])
-            if int(h.lora_B.shape[0]) > 32768:
-                mid = (x.astype(mx.float32) @ a_slice_T.astype(mx.float32)) * scale
-                delta = mid.astype(dt) @ b_slice_T.astype(dt)
-                return (y + delta).astype(dt)
-            delta = ((x.astype(mx.float32) @ a_slice_T.astype(mx.float32)) @ b_slice_T.astype(mx.float32)) * scale
-            return (y.astype(mx.float32) + delta).astype(dt)
+            if a_slice_T.dtype != w_dt:
+                a_slice_T = a_slice_T.astype(w_dt)
+            if b_slice_T.dtype != w_dt:
+                b_slice_T = b_slice_T.astype(w_dt)
+            x_w = x if x.dtype == w_dt else x.astype(w_dt)
+            mid = (x_w @ a_slice_T).astype(mx.float32) * scale
+            delta = mid.astype(w_dt) @ b_slice_T
+            return (y.astype(mx.float32) + delta.astype(mx.float32)).astype(dt)
 
     class SwitchableMLXLoRAEmbedding(nn.Module):
         """Wraps `nn.Embedding` or `nn.QuantizedEmbedding` with a rank-sliceable SVD delta."""
@@ -272,9 +275,14 @@ def _make_mlx_wrappers():
             if scale == 0.0 or r_end <= r_start:
                 return y
             dt = y.dtype
-            gathered = h.lora_B[x, r_start:r_end].astype(mx.float32)
-            a_slice = h.lora_A[r_start:r_end, :].astype(mx.float32)
-            delta = (gathered @ a_slice) * scale
+            w_dt = h.lora_A.dtype
+            gathered = h.lora_B[x, r_start:r_end]
+            if gathered.dtype != w_dt:
+                gathered = gathered.astype(w_dt)
+            a_slice = h.lora_A[r_start:r_end, :]
+            if a_slice.dtype != w_dt:
+                a_slice = a_slice.astype(w_dt)
+            delta = (gathered @ a_slice).astype(mx.float32) * scale
             return (y.astype(mx.float32) + delta).astype(dt)
 
         def as_linear(self, x: mx.array) -> mx.array:
@@ -284,14 +292,17 @@ def _make_mlx_wrappers():
             if scale == 0.0 or r_end <= r_start:
                 return y
             dt = y.dtype
+            w_dt = h.lora_A.dtype
             a_slice_T = mx.transpose(h.lora_A[r_start:r_end, :])
             b_slice_T = mx.transpose(h.lora_B[:, r_start:r_end])
-            if int(h.lora_B.shape[0]) > 32768:
-                mid = (x.astype(mx.float32) @ a_slice_T.astype(mx.float32)) * scale
-                delta = mid.astype(dt) @ b_slice_T.astype(dt)
-                return (y + delta).astype(dt)
-            delta = ((x.astype(mx.float32) @ a_slice_T.astype(mx.float32)) @ b_slice_T.astype(mx.float32)) * scale
-            return (y.astype(mx.float32) + delta).astype(dt)
+            if a_slice_T.dtype != w_dt:
+                a_slice_T = a_slice_T.astype(w_dt)
+            if b_slice_T.dtype != w_dt:
+                b_slice_T = b_slice_T.astype(w_dt)
+            x_w = x if x.dtype == w_dt else x.astype(w_dt)
+            mid = (x_w @ a_slice_T).astype(mx.float32) * scale
+            delta = mid.astype(w_dt) @ b_slice_T
+            return (y.astype(mx.float32) + delta.astype(mx.float32)).astype(dt)
 
     return mx, SwitchableMLXExactLinear, SwitchableMLXLoRALinear, SwitchableMLXLoRAEmbedding
 
