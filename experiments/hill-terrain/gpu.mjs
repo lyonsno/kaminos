@@ -295,10 +295,11 @@ const baseCutoutKernel=wgslFn(`fn hill_base_cutout(x:f32,z:f32,fx:f32,fz:f32,fr:
 
 const basePosKernel=wgslFn(`fn hill_base_pos(x:f32,y:f32,z:f32,fx:f32,fz:f32,fr:f32,useFormed:f32,zoomOn:f32)->vec4<f32>{
  if(useFormed<.5||zoomOn<.5||fr>3.05){return vec4<f32>(x,y,z,1.);}
- let edge=max(abs(x-fx),abs(z-fz))/max(.05,fr);
+ let dBox=max(abs(x-fx),abs(z-fz));
+ let distToEdge=fr-dBox;
  let zAct=1.-smoothstep(2.65,3.05,fr);
- let cut=1.-smoothstep(.82,.94,edge);
- return vec4<f32>(x,y-.32*zAct*cut,z,1.);
+ let cut=step(.052,distToEdge);
+ return vec4<f32>(x,y-.36*zAct*cut,z,1.);
 }`);
 
 // Camera-centered arbitrary-zoom 3D surface synthesis:
@@ -368,12 +369,13 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
  let dhdz=dCubZ.x+dCubZ.y;
  let rawSlope=sqrt(dhdx*dhdx+dhdz*dhdz);
  let slopeScale=min(2.25,sqrt(1.+rawSlope*rawSlope));
- let edge=max(abs(u),abs(w));
+ let dBox=max(abs(wx-fx),abs(wz-fz));
+ let distToEdge=max(0.,fr-dBox);
  let border=1.-smoothstep(.45,.49,max(abs(wx/width),abs(wz/length)));
  let zoomActive=1.-smoothstep(2.65,3.15,fr);
- let wPatch=(1.-smoothstep(.84,.97,edge))*border*zoomActive;
- let inCollar=smoothstep(.82,.92,edge);
- let collarLift=(1.-smoothstep(.90,.97,edge))*.004*zoomActive-smoothstep(.96,.995,edge)*.008;
+ let wPatch=smoothstep(.055,.105,distToEdge)*border*zoomActive;
+ let inCollar=1.-smoothstep(.105,.135,distToEdge);
+ let collarLift=smoothstep(.002,.015,distToEdge)*inCollar*.0035*zoomActive-(1.-smoothstep(0.,.004,distToEdge))*.006;
  let safeCubX=mix(cub.x,max(bedTri,cub.x),inCollar);
  let safeCubY=mix(cub.y,max(soilTri,cub.y),inCollar);
  let bed=mix(bedTri,safeCubX,wPatch);
@@ -546,8 +548,9 @@ export function createTerrainGPU(geometry,input={}){
   const tx=Number.isFinite(target?.[0])?target[0]:0,ty=Number.isFinite(target?.[1])?target[1]:1.2,tz=Number.isFinite(target?.[2])?target[2]:0;
   const hasPos=Array.isArray(position)&&position.length>=3&&Number.isFinite(position[0])&&Number.isFinite(position[2]);
   const dist=Number.isFinite(distance)&&distance>0?distance:(hasPos?Math.hypot(position[0]-tx,position[1]-ty,position[2]-tz):10);
-  const rawR=Math.max(.22,Math.min(3.4,dist*.62));
-  const qR=Math.pow(2,Math.round(Math.log2(rawR)*4)/4),r=Math.max(.22,Math.min(3.4,qR));
+  const minR=hasPos?.35:.22;
+  const rawR=Math.max(minR,Math.min(3.4,dist*(hasPos?.68:.62)));
+  const qR=Math.pow(2,Math.round(Math.log2(rawR)*4)/4),r=Math.max(minR,Math.min(3.4,qR));
   const step=(2*r)/(zoomN-1);
   const maxX=Math.max(.2,config.width*.5-.25),maxZ=Math.max(.2,config.length*.5-.25);
   const cx=Math.max(-maxX,Math.min(maxX,Math.round(tx/step)*step));
