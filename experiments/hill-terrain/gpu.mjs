@@ -357,10 +357,14 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
  let dr1=dwx0*p01+dwx1*p11+dwx2*p21+dwx3*p31;
  let dr2=dwx0*p02+dwx1*p12+dwx2*p22+dwx3*p32;
  let dr3=dwx0*p03+dwx1*p13+dwx2*p23+dwx3*p33;
- let cub=wz0*r0+wz1*r1+wz2*r2+wz3*r3;
  let dxGrid=width/fn1;let dzGrid=length/fn1;
- let dCubX=(wz0*dr0+wz1*dr1+wz2*dr2+wz3*dr3)/dxGrid;
- let dCubZ=(dwz0*r0+dwz1*r1+dwz2*r2+dwz3*r3)/dzGrid;
+ let diagTwist=((p11+p22)-(p21+p12))*.5;
+ let bub=16.*tx*omt*tz*omz;
+ let dbubX=16.*(1.-2.*tx)*tz*omz/dxGrid;
+ let dbubZ=16.*tx*omt*(1.-2.*tz)/dzGrid;
+ let cub=wz0*r0+wz1*r1+wz2*r2+wz3*r3+.248*bub*diagTwist;
+ let dCubX=(wz0*dr0+wz1*dr1+wz2*dr2+wz3*dr3)/dxGrid+.248*dbubX*diagTwist;
+ let dCubZ=(dwz0*r0+dwz1*r1+dwz2*r2+dwz3*r3)/dzGrid+.248*dbubZ*diagTwist;
  let dhdx=dCubX.x+dCubX.y;
  let dhdz=dCubZ.x+dCubZ.y;
  let rawSlope=sqrt(dhdx*dhdx+dhdz*dhdz);
