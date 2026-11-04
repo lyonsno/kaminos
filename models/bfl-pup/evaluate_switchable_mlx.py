@@ -383,6 +383,21 @@ def validate_generation_observation(obs: Dict[str, Any]) -> None:
         raise RuntimeError(f"Non-terminal finish_reason: {obs.get('finish_reason')!r} (expected 'stop')")
 
 
+def _resolve_finish_reason(final_chunk: Any, stop_ids: List[int], max_tokens: int) -> Optional[str]:
+    if final_chunk is None:
+        return None
+    fr = getattr(final_chunk, "finish_reason", None)
+    if fr is not None:
+        return str(fr)
+    tok = getattr(final_chunk, "token", None)
+    if tok is not None and int(tok) in stop_ids:
+        return "stop"
+    gen_toks = getattr(final_chunk, "generation_tokens", 0)
+    if gen_toks and int(gen_toks) >= int(max_tokens):
+        return "length"
+    return None
+
+
 def run_switchable_evaluation(
     model_dir: Path,
     adapter_dir: Path,
@@ -630,7 +645,7 @@ def run_switchable_evaluation(
                         "prompt_tokens": int(final_chunk.prompt_tokens) if final_chunk else 0,
                         "generated_tokens": int(final_chunk.generation_tokens) if final_chunk else 0,
                         "peak_memory_gb": float(final_chunk.peak_memory) if final_chunk and final_chunk.peak_memory else None,
-                        "finish_reason": final_chunk.finish_reason if final_chunk else None,
+                        "finish_reason": _resolve_finish_reason(final_chunk, stop_ids, sampling["max_tokens"]),
                         "accepted": False,
                         "stream_error": str(stream_exc),
                     }
