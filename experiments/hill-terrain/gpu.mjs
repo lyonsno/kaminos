@@ -290,6 +290,14 @@ const baseCutoutKernel=wgslFn(`fn hill_base_cutout(x:f32,z:f32,fx:f32,fz:f32,fr:
  return 1.;
 }`);
 
+const basePosKernel=wgslFn(`fn hill_base_pos(x:f32,y:f32,z:f32,fx:f32,fz:f32,fr:f32,useFormed:f32,zoomOn:f32)->vec4<f32>{
+ if(useFormed<.5||zoomOn<.5||fr>2.85){return vec4<f32>(x,y,z,1.);}
+ let edge=max(abs(x-fx),abs(z-fz))/max(.05,fr);
+ let zAct=1.-smoothstep(2.40,2.85,fr);
+ let cut=1.-smoothstep(.52,.74,edge);
+ return vec4<f32>(x,y-.28*zAct*cut,z,1.);
+}`);
+
 // Camera-centered arbitrary-zoom 3D surface synthesis:
 // C2-continuous Uniform Cubic B-Spline surface + analytic gradients + 3D normal-displaced
 // overhanging sandstone shelves, recessed shale undercuts, anisotropic craggy rock buttresses,
@@ -490,7 +498,7 @@ export function createTerrainGPU(geometry,input={}){
  const publishers=states.map(()=>Fn(()=>{
   const state=displayState;
   const v=instanceIndex,s=state.element(v),x=v.mod(uint(n)).toFloat().div(n-1).sub(.5).mul(config.width),z=v.div(uint(n)).toFloat().floor().div(n-1).sub(.5).mul(config.length);
-  positionNode.element(v).assign(initPosition(x,s.x.add(s.y),z));
+  positionNode.element(v).assign(basePosKernel({x,y:s.x.add(s.y),z,fx:focusX,fz:focusZ,fr:focusRadius,useFormed,zoomOn:zoomEnabled}));
   const norm=normal({v,n:uint(n),dx:float(config.width/(n-1)),dz:float(config.length/(n-1)),x,z,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,useFormed,state});
   normalNode.element(v).assign(norm);
   const cover=s.y.mul(4).clamp(0,1),steep=float(1).sub(norm.y).mul(1.3).clamp(0,1),exposed=steep.mul(float(1).sub(cover.mul(.4)));
@@ -552,7 +560,7 @@ export function createTerrainGPU(geometry,input={}){
   const cx=Math.max(-maxX,Math.min(maxX,Math.round(tx/step)*step));
   const cz=Math.max(-maxZ,Math.min(maxZ,Math.round(tz/step)*step));
   if(zoomEnabled.value!==en||Math.abs(focusX.value-cx)>1e-5||Math.abs(focusZ.value-cz)>1e-5||Math.abs(focusRadius.value-r)>1e-5){
-   zoomEnabled.value=en;focusX.value=cx;focusZ.value=cz;focusRadius.value=r;pendingZoom=true;
+   zoomEnabled.value=en;focusX.value=cx;focusZ.value=cz;focusRadius.value=r;pendingZoom=true;pendingPresentation=true;
   }
   return read();
  }
