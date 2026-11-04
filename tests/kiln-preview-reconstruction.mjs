@@ -32,8 +32,9 @@ test('the preview uses native HDR background visibility, rotation and grading fi
  for(const showBackground of [true,false]){const scene=new THREE.Scene(),environment={url:'observed-fixture.hdr'},settings={name:'studio',showBackground,exposure:1.2,intensity:.7,rotation:.6,backgroundBlur:.2,backgroundBrightness:.35,backgroundContrast:1.7};
   const T={...THREE,PMREMGenerator:class{fromEquirectangular(){return {texture:map,dispose(){}};}dispose(){}}};
   await Function('saved','scene','environment','renderer','signal','RGBELoader','THREE','owned','applySceneEnvironmentBackground','return(async()=>{'+block+'})()')({environment:settings},scene,environment,{},null,class{loadAsync=load;},T,[],applySceneEnvironmentBackground);
-  if(showBackground){assert.equal(scene.background,map);assert.equal(scene.backgroundRotation.y,.6);assert.equal(scene.backgroundBlurriness,.2);assert.equal(scene.backgroundIntensity,.35);assert.ok(scene.backgroundNode);}
+  if(showBackground){assert.equal(scene.background,map);assert.equal(scene.backgroundRotation.y,.6);assert.equal(scene.backgroundBlurriness,.2);assert.ok(Math.abs(scene.backgroundIntensity-.245)<1e-6,`expected backgroundIntensity 0.35*0.7=0.245, got ${scene.backgroundIntensity}`);assert.ok(scene.backgroundNode);}
   else{assert.equal(scene.background.isColor,true);assert.equal(scene.backgroundNode,null);}
  }
- const scene=new THREE.Scene();scene.environmentRotation.y=.6;assert.deepEqual(applySceneEnvironmentBackground(scene,{showBackground:true,backgroundBlur:.2,backgroundBrightness:.35,backgroundContrast:1.7},map),{mode:'environment',rotation:.6,blur:.2,brightness:.35,contrast:1.7});map.dispose();
+ const scene=new THREE.Scene();scene.environmentRotation.y=.6;assert.deepEqual(applySceneEnvironmentBackground(scene,{showBackground:true,backgroundBlur:.2,backgroundBrightness:.35,backgroundContrast:1.7},map),{mode:'environment',rotation:.6,blur:.2,brightness:.35,contrast:1.7});
+ assert.deepEqual(applySceneEnvironmentBackground(scene,{showBackground:true,intensity:2,backgroundBlur:.2,backgroundBrightness:.35,backgroundContrast:1.7},map),{mode:'environment',rotation:.6,blur:.2,brightness:.7,contrast:1.7});map.dispose();
 });

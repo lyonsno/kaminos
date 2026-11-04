@@ -20,6 +20,7 @@ assert.equal(legacy.hidden,true);
 assert.equal(elements['rendering-fire-controls'].hidden,false);
 assert.equal(gain.value,'3');assert.equal(gain.listener(),42,'reparent existing controls, preserving state and handlers');
 assert.equal(gain.parentElement.parentElement,elements['rendering-fire-controls']);
+assert.equal(elements['rendering-match-flame-camera'].parentElement.parentElement,elements['rendering-fire-controls']);
 assert.equal(elements['rendering-fire-shadows'].parentElement,elements['rendering-fire-controls']);
 const childCount=elements['rendering-fire-controls'].children.length;
 organizeFireRenderingPanel(document);
