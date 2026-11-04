@@ -6872,9 +6872,6 @@ function renderSceneGroupRow(group, outline = null) {
   const active = group.id === workingScene.activeGroupId;
   const rowClass = `scene-group-row ${active?'active':workingScene.selection.ids.includes('@group:'+group.id)?'selected':''}`;
   const label = sceneGroupDisplayLabel(group);
-  const rigQuickActions = group.id === '@studio-light-rig'
-    ? `<button type="button" class="btn" data-arrival-rig-action="move" style="padding: 1px 5px; font-size: 9px;" title="One-click drag: move the Arrival Studio Rig (G)">Grab</button><button type="button" class="btn" data-arrival-rig-action="rotate" style="padding: 1px 5px; font-size: 9px;" title="One-click drag: orbit the Arrival Studio Rig around the object (R)">Orbit</button>`
-    : '';
   return `
     <div class="${rowClass}" data-scene-group-id="${escapeHtml(group.id)}"${sceneOutlineAttributes(outline)} role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
       <span>
@@ -6882,7 +6879,7 @@ function renderSceneGroupRow(group, outline = null) {
         <span class="scene-object-meta">${group.objectIds.length === 1 ? '1 object' : `${group.objectIds.length} objects`}</span>
       </span>
       <span class="scene-object-actions">
-        ${rigQuickActions}${sceneVisibilityButton('@group:'+group.id,label)}<span class="scene-object-chip">${group.assembly?.kind==='burner'?'Burner':group.assembly?'Assembly':'group'}</span>
+        ${sceneVisibilityButton('@group:'+group.id,label)}<span class="scene-object-chip">${group.assembly?.kind==='burner'?'Burner':group.assembly?'Assembly':'group'}</span>
       </span>
     </div>
   `;
@@ -6921,19 +6918,20 @@ function renderSceneObjectList() {
   }
   if (workingScene.objects.length > 0 && !workingScene.groups.some(g => g.id === '@studio-light-rig') && (studioKeyLight?.visible || studioRimLight?.visible)) {
     const lookLabel = arrivalLightingState?.plan?.lookLabel || 'Sculptural Studio';
-    rows.push(`<div class="scene-group-row" data-arrival-studio-rig="true" role="button" tabindex="0" title="Click to materialize Arrival Studio Rig as a scene group, or use Grab / Orbit for one-click interactive dragging"><span>${sceneOutlineGlyph('light')}<strong>Arrival Studio Rig</strong> <span class="scene-object-meta">(${escapeHtml(lookLabel)} · Key + Rim)</span></span><span class="scene-object-actions"><button type="button" class="btn" data-arrival-rig-action="translate" style="padding: 1px 5px; font-size: 9px;" title="One-click drag: materialize and move the Arrival Studio Rig (G)">Grab</button><button type="button" class="btn" data-arrival-rig-action="rotate" style="padding: 1px 5px; font-size: 9px;" title="One-click drag: materialize and orbit the Arrival Studio Rig around the object (R)">Orbit</button><span class="scene-object-chip">arrival rig</span></span></div>`);
+    rows.push(`<div class="scene-group-row" data-arrival-studio-rig="true" role="button" tabindex="0" title="Click to select Arrival Studio Rig in the viewport"><span>${sceneOutlineGlyph('light')}<strong>Arrival Studio Rig</strong> <span class="scene-object-meta">(${escapeHtml(lookLabel)} · Key + Rim)</span></span><span class="scene-object-actions"><span class="scene-object-chip">arrival rig</span></span></div>`);
   }
   list.innerHTML = rows.join('');
   list.querySelectorAll('[data-arrival-studio-rig="true"]').forEach(row => {
-    row.addEventListener('click', event => {
-      if (event.target.closest?.('[data-arrival-rig-action]')) return;
+    const selectRig = () => {
       try { promoteArrivalStudioLightsToScene({ groupRig: true, select: 'rig', recordHistory: false }); } catch (error) { setInfo(error.message); }
-    });
-  });
-  list.querySelectorAll('[data-arrival-rig-action]').forEach(button => {
-    button.addEventListener('click', event => {
-      event.stopPropagation();
-      try { grabArrivalStudioRig(button.dataset.arrivalRigAction); } catch (error) { setInfo(error.message); }
+    };
+    row.addEventListener('click', selectRig);
+    row.addEventListener('keydown', event => {
+      if (event.target !== row) return;
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        selectRig();
+      }
     });
   });
   list.querySelectorAll('[data-scene-visibility-id]').forEach(button=>button.addEventListener('click',event=>{event.stopPropagation();const id=button.dataset.sceneVisibilityId;try{window.kaminosSceneVisibility.set(id,!isSceneItemVisible(id));list.querySelector(`[data-scene-visibility-id="${CSS.escape(id)}"]`)?.focus();}catch(error){setInfo(error.message);}}));
@@ -12095,7 +12093,11 @@ async function initScene() {
       scene,
       giProxies: sceneGiProxies,
       surfaceLighting: { registerProxyRoot: root => window.__kaminosSurfaceLighting?.registerProxyRoot?.(root) ?? null },
-      parseGlb: async bytes => (await new GLTFLoader().parseAsync(bytes, '')).scene,
+      parseGlb: async bytes => {
+        const lodScene = (await new GLTFLoader().parseAsync(bytes, '')).scene;
+        if (typeof prepareArrivedMeshMaterials === 'function') prepareArrivedMeshMaterials(lodScene, { maxAnisotropy: 16 });
+        return lodScene;
+      },
       onUpdate: () => window._kaminosDirty?.(),
     });
     sceneExposureControls?.sync();

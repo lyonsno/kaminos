@@ -817,7 +817,7 @@ export function createSceneBeautyLodController({
   const config = {
     enabled: true,
     maxPixelError: 1.5,
-    faceBudget: 150000,
+    faceBudget: 350000,
     texelWeight: 0.5,
     tailWeight: 0.5,
     creviceAllowance: 0.005,

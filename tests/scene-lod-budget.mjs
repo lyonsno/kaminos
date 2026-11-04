@@ -1480,6 +1480,17 @@ test('Kiln side-pipe drop vs. beam crack-seal: footprint and budget allocators p
   const kilnPxZeroTail = screenPixelError(realKilnLevels[3], {worldBox: unitBox, worldDiag: diag, camera: cam, viewportHeight: 1080, tailWeight: 0});
   const kilnPxDefaultTail = screenPixelError(realKilnLevels[3], {worldBox: unitBox, worldDiag: diag, camera: cam, viewportHeight: 1080});
   assert.ok(kilnPxDefaultTail > kilnPxZeroTail, 'N1: tailWeight forwards through screenPixelError');
+
+  const defaultCtrl = createSceneBeautyLodController({THREE, scene: new THREE.Scene(), giProxies: null, parseGlb: async () => new THREE.Group()});
+  const defaultBudget = defaultCtrl.read().faceBudget;
+  assert.ok(defaultBudget >= 300000, `default beauty faceBudget (${defaultBudget}) must accommodate a single 287,407-face hero kiln at closeup`);
+  const singleHeroClose = allocateSceneBeautyLods(
+    [{id: 'kiln', heroFaces: 287407, levels: realKilnLevels, worldBox: unitBox, worldDiag: diag}],
+    {camera: closeCam, viewportHeight: 1080, maxPixelError: 1.5, faceBudget: defaultBudget},
+  );
+  assert.equal(singleHeroClose.allocations.kiln.tier, 'hero', 'single 287,407-face hero kiln stays on hero at closeup under default beauty faceBudget');
+  assert.equal(singleHeroClose.allocations.kiln.demotedByBudget, false);
+  defaultCtrl.dispose();
 });
 
 
