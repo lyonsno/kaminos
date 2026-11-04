@@ -611,6 +611,7 @@ def run_switchable_evaluation(
                 )
 
                 gen_t0 = time.monotonic()
+                last_progress_write = 0.0
                 text_out = ""
                 final_chunk = None
                 try:
@@ -624,6 +625,25 @@ def run_switchable_evaluation(
                     ):
                         text_out += chunk.text
                         final_chunk = chunk
+                        now_m = time.monotonic()
+                        if last_progress_write == 0.0 or (now_m - last_progress_write) >= 0.5:
+                            report["current_stream_progress"] = {
+                                "mode": mode_name,
+                                "case_id": case_id,
+                                "elapsed_case_seconds": round(now_m - gen_t0, 3),
+                                "prompt_tokens": int(getattr(chunk, "prompt_tokens", 0) or 0),
+                                "generated_tokens": int(getattr(chunk, "generation_tokens", 0) or 0),
+                                "prompt_tps": round(float(getattr(chunk, "prompt_tps", 0.0) or 0.0), 2),
+                                "generation_tps": round(float(getattr(chunk, "generation_tps", 0.0) or 0.0), 2),
+                                "peak_memory_gb": (
+                                    round(float(chunk.peak_memory), 4)
+                                    if getattr(chunk, "peak_memory", None)
+                                    else None
+                                ),
+                                "partial_output": text_out,
+                            }
+                            _atomic_write_json(report_path, report)
+                            last_progress_write = now_m
                 except BaseException as stream_exc:
                     gen_s = round(time.monotonic() - gen_t0, 4)
                     failed_obs = {
@@ -644,6 +664,16 @@ def run_switchable_evaluation(
                         "generation_seconds": gen_s,
                         "prompt_tokens": int(final_chunk.prompt_tokens) if final_chunk else 0,
                         "generated_tokens": int(final_chunk.generation_tokens) if final_chunk else 0,
+                        "prompt_tps": (
+                            round(float(getattr(final_chunk, "prompt_tps", 0.0) or 0.0), 2)
+                            if final_chunk
+                            else None
+                        ),
+                        "generation_tps": (
+                            round(float(getattr(final_chunk, "generation_tps", 0.0) or 0.0), 2)
+                            if final_chunk
+                            else None
+                        ),
                         "peak_memory_gb": float(final_chunk.peak_memory) if final_chunk and final_chunk.peak_memory else None,
                         "finish_reason": _resolve_finish_reason(final_chunk, stop_ids, sampling["max_tokens"]),
                         "accepted": False,
@@ -675,8 +705,18 @@ def run_switchable_evaluation(
                     "generation_seconds": gen_s,
                     "prompt_tokens": int(final_chunk.prompt_tokens) if final_chunk else 0,
                     "generated_tokens": int(final_chunk.generation_tokens) if final_chunk else 0,
+                    "prompt_tps": (
+                        round(float(getattr(final_chunk, "prompt_tps", 0.0) or 0.0), 2)
+                        if final_chunk
+                        else None
+                    ),
+                    "generation_tps": (
+                        round(float(getattr(final_chunk, "generation_tps", 0.0) or 0.0), 2)
+                        if final_chunk
+                        else None
+                    ),
                     "peak_memory_gb": float(final_chunk.peak_memory) if final_chunk and final_chunk.peak_memory else None,
-                    "finish_reason": final_chunk.finish_reason if final_chunk else None,
+                    "finish_reason": _resolve_finish_reason(final_chunk, stop_ids, sampling["max_tokens"]),
                     "accepted": False,
                 }
                 if case.get("reference_output"):
