@@ -15,7 +15,7 @@ export default {
   const gpu=createTerrainGPU(geometry,{resolution:n,width:config.width,length:config.length,uplift:0,repose:34,transport:1.6});
   const root=new THREE.Group();root.name='Hill · formed rock and earth';
   const material=gpu.decorateMaterial(new MeshStandardNodeMaterial({vertexColors:true,roughness:.92,side:THREE.DoubleSide})),mesh=new THREE.Mesh(geometry,material);mesh.name='Weathered hillside';mesh.frustumCulled=false;mesh.castShadow=true;mesh.receiveShadow=true;mesh.raycast=()=>{};mesh.userData.kaminosDynamicGeometry=true;root.add(mesh);mesh.visible=false;
-  const zoomMaterial=gpu.decorateZoomMaterial(new MeshStandardNodeMaterial({vertexColors:true,roughness:.90,side:THREE.DoubleSide})),zoomMesh=new THREE.Mesh(gpu.zoomGeometry,zoomMaterial);zoomMesh.name='Camera-centered 3D rock & ledge detail';zoomMesh.frustumCulled=false;zoomMesh.castShadow=true;zoomMesh.receiveShadow=true;zoomMesh.raycast=()=>{};zoomMesh.userData.kaminosDynamicGeometry=true;root.add(zoomMesh);zoomMesh.visible=false;
+  const zoomMaterial=gpu.decorateZoomMaterial(new MeshStandardNodeMaterial({vertexColors:true,roughness:.90,side:THREE.DoubleSide})),zoomMesh=new THREE.Mesh(gpu.zoomGeometry,zoomMaterial);zoomMesh.name='Camera-centered 3D rock & ledge detail';zoomMesh.frustumCulled=false;zoomMesh.castShadow=false;zoomMesh.receiveShadow=true;zoomMesh.raycast=()=>{};zoomMesh.userData.kaminosDynamicGeometry=true;root.add(zoomMesh);zoomMesh.visible=false;
   const tilePartitions=tiles.map(t=>({id:t.id,tx:t.tx,tz:t.tz,quads:t.quads,bounds:t.bounds})),authoringFields=FORMATION_FIELDS.map(f=>({key:f.key,title:f.title,group:f.group,min:f.min,max:f.max,step:f.step,unit:f.unit,default:f.default})),authoringPresets=FORMATION_PRESETS.map(p=>({id:p.id,title:p.title}));
   const xLines=[0,...tiles.filter(t=>t.tz===0).map(t=>t.x1)],zLines=[0,...tiles.filter(t=>t.tx===0).map(t=>t.z1)];
   const seamSegs=(xLines.length*(n-1)+zLines.length*(n-1)),seamPos=new Float32Array(seamSegs*6),seamGeo=new THREE.BufferGeometry();
@@ -34,24 +34,13 @@ export default {
    if(manualFocus)return;
    const v=session?.readView?.();if(!v?.position||!v?.target)return;
    const [px,py,pz]=v.position,[tx,ty,tz]=v.target;
-   let fx=tx,fy=ty,fz=tz;const st=formed?.state;
-   if(st instanceof Float32Array&&st.length===n*n*4){
-    const sampleH=(wx,wz)=>{
-     const gx=Math.min(n-1,Math.max(0,Math.round((wx/config.width+.5)*(n-1)))),gz=Math.min(n-1,Math.max(0,Math.round((wz/config.length+.5)*(n-1)))),i=(gz*n+gx)*4;
-     return st[i]+st[i+1];
-    };
-    if(Math.abs(tx)<=config.width*.5&&Math.abs(tz)<=config.length*.5)fy=sampleH(tx,tz);
-    // Ray-march sightline from camera to target so zooming toward a cliff wall focuses on the visible wall face
-    for(let s=1;s<=24;s++){
-     const t=s/24,rx=px+(tx-px)*t,ry=py+(ty-py)*t,rz=pz+(tz-pz)*t;
-     if(Math.abs(rx)<=config.width*.5&&Math.abs(rz)<=config.length*.5){
-      const gh=sampleH(rx,rz);
-      if(ry<=gh+.04){fx=rx;fy=gh;fz=rz;break;}
-     }
-    }
+   let fy=ty;const st=formed?.state;
+   if(st instanceof Float32Array&&st.length===n*n*4&&Math.abs(tx)<=config.width*.5&&Math.abs(tz)<=config.length*.5){
+    const gx=Math.min(n-1,Math.max(0,Math.round((tx/config.width+.5)*(n-1)))),gz=Math.min(n-1,Math.max(0,Math.round((tz/config.length+.5)*(n-1)))),i=(gz*n+gx)*4;
+    fy=st[i]+st[i+1];
    }
-   const dist=Math.hypot(px-fx,py-fy,pz-fz);
-   gpu.setCameraFocus({target:[fx,fy,fz],position:[px,py,pz],distance:dist,enabled:true});
+   const dist=Math.hypot(px-tx,py-fy,pz-tz);
+   gpu.setCameraFocus({target:[tx,fy,tz],position:[px,py,pz],distance:dist,enabled:true});
    zoomMesh.visible=Boolean(formed||pending?.partial)&&gpu.read().zoomDetail.enabled;
   };
   registerExportGeometrySnapshot(mesh,()=>{throw Error('GPU terrain export requires an explicit frozen snapshot; formation cache preserves the initial landscape');});

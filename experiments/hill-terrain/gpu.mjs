@@ -190,21 +190,11 @@ const fragFormedColor=wgslFn(`fn hill_frag_color(vColor:vec4<f32>,x:f32,y:f32,z:
  return vec4<f32>(clamp(screeTint*laminaGain*groundGain*microShade,vec3<f32>(0.),vec3<f32>(1.)),1.);
 }`);
 
-// Discards coarse 193x193 base-mesh triangles strictly inside the camera-centered zoom patch
-// whenever zoomed in closer than the overview frame (fr <= 2.55), preventing coarse base-mesh
-// secant triangles from poking through concave bicubic cliff walls or talus toes.
-const baseCutoutKernel=wgslFn(`fn hill_base_cutout(x:f32,z:f32,width:f32,length:f32,fx:f32,fz:f32,fr:f32,useFormed:f32,zoomEnabled:f32)->f32{
- if(useFormed<.5||zoomEnabled<.5||fr>2.55){return 1.;}
- let edge=max(abs(x-fx),abs(z-fz))/max(.1,fr);
- let inBorder=max(abs(x/width),abs(z/length))<.455;
- if(inBorder&&edge<.78){return 0.;}
- return 1.;
-}`);
-
 // Camera-centered arbitrary-zoom 3D surface synthesis:
 // Smooth 16-tap Catmull-Rom bicubic surface + analytic bicubic gradients + 5-octave 3D overhanging
 // rock ledges, faceted sandstone fracture blocks, and 3D talus boulders inside the camera's focal
-// zone, matching base-mesh triangle heights at edge = 0.78 before tucking underneath in [0.78, 0.96].
+// zone. Keeping (px, pz) = (wx, wz) with slope-scaled normal height (deltaY = deltaN * sqrt(1 + S^2))
+// above hLinear guarantees zero base-mesh triangle interpenetration and zero shadow/cutout seams.
 const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f32,length:f32,fx:f32,fz:f32,fr:f32,tilt:f32,strike:f32,fold:f32,thickness:f32,seed:f32,stepStyle:f32,meso:f32,useFormed:f32,mode:u32,state:ptr<storage,array<vec4<f32>>,read_write>)->vec4<f32>{
  let xi=v%zn;let zi=v/zn;
  let u=(f32(xi)/f32(zn-1u))*2.-1.;
@@ -253,17 +243,18 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
  let dhdx=dCubX.x+dCubX.y;
  let dhdz=dCubZ.x+dCubZ.y;
  let rawSlope=sqrt(dhdx*dhdx+dhdz*dhdz);
+ let slopeScale=min(4.2,sqrt(1.+rawSlope*rawSlope));
  let edge=max(abs(u),abs(w));
  let border=smoothstep(.49,.45,max(abs(wx/width),abs(wz/length)));
- let zoomActive=smoothstep(2.8,2.0,fr);
- let wPatch=(1.-smoothstep(.60,.77,edge))*border*zoomActive;
- let rimTuck=-smoothstep(.77,.95,edge)*.005-.003*(1.-zoomActive);
- let bed=mix(bedTri,cub.x,wPatch);
- let rawSoil=max(0.,mix(soilTri,max(0.,cub.y),wPatch));
+ let wPatch=(1.-smoothstep(.65,.90,edge))*border;
+ let rimTuck=-smoothstep(.84,.98,edge)*.006;
+ let bed=mix(bedTri,max(bedTri,cub.x),wPatch);
+ let rawSoil=max(0.,mix(soilTri,max(soilTri,cub.y),wPatch));
  // Strip interpolated toe-soil curtains off steep cliff faces so cliff walls expose bare rock down to the toe
- let cliffStrip=smoothstep(.72,1.75,rawSlope)*(1.-smoothstep(.0,.18,s00.y)*smoothstep(.0,.18,s10.y)*smoothstep(.0,.18,s01.y)*smoothstep(.0,.18,s11.y));
- let effSoil=rawSoil*(1.-.92*wPatch*cliffStrip);
- var px=wx;var py=bed+rawSoil+rimTuck;var pz=wz;var cobbleOut=0.;
+ let cliffStrip=smoothstep(.68,1.65,rawSlope)*(1.-smoothstep(.0,.18,s00.y)*smoothstep(.0,.18,s10.y)*smoothstep(.0,.18,s01.y)*smoothstep(.0,.18,s11.y));
+ let effSoil=rawSoil*(1.-.94*wPatch*cliffStrip);
+ var py=bed+rawSoil+.005*wPatch*min(2.2,slopeScale)+rimTuck;
+ var cobbleOut=0.;
  if(useFormed>.5&&meso>0.&&wPatch>0.){
   let ds=(2.*fr)/f32(zn-1u);
   let oct0=smoothstep(ds*2.8,ds*1.2,.34);
@@ -273,8 +264,6 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
   let oct4=smoothstep(ds*2.8,ds*1.2,.0065);
   let exposed=exp(-effSoil/.055);
   let cliffMask=smoothstep(.16,.68,rawSlope)*exposed;
-  let invSlope=1./max(.16,rawSlope);
-  let outX=-dhdx*invSlope;let outZ=-dhdz*invSlope;
   let rad=strike*.017453292519943295;let ca=cos(rad);let sa=sin(rad);let rx=wx*ca+wz*sa;let rz=-wx*sa+wz*ca;
   let dipScale=1.-.88*clamp(stepStyle,0.,1.);
   let warp=.28*sin(rx*.55+rz*.35+seed*.03)+.16*cos(rz*.85-rx*.45);
@@ -293,28 +282,26 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
   let blk2=(1.-abs(sin(rx*72.-rz*28.+.5*cos(bed*82.))))*(1.-abs(cos(bed*76.-rx*34.+rz*54.)));
   let blk3=(1.-abs(sin(rx*210.+rz*85.+.45*sin(bed*230.))))*(1.-abs(cos(bed*215.+rx*95.-rz*160.)));
   let blk4=(1.-abs(sin(rx*560.-rz*240.+bed*590.)))*(1.-abs(cos(bed*540.-rx*280.+rz*420.)));
-  let cleft0=1.-.76*smoothstep(.14,.012,abs(sin(rx*7.2+rz*2.8+warp*1.8+.25*sin(bed*9.))));
-  let cleft1=1.-.68*smoothstep(.12,.010,abs(sin(rx*25.-rz*10.+.35*cos(bed*26.))));
-  let cleft2=1.-.58*smoothstep(.11,.008,abs(cos(rx*78.+rz*32.+.30*sin(bed*74.))));
+  let cleft0=1.-.78*smoothstep(.14,.012,abs(sin(rx*7.2+rz*2.8+warp*1.8+.25*sin(bed*9.))));
+  let cleft1=1.-.70*smoothstep(.12,.010,abs(sin(rx*25.-rz*10.+.35*cos(bed*26.))));
+  let cleft2=1.-.62*smoothstep(.11,.008,abs(cos(rx*78.+rz*32.+.30*sin(bed*74.))));
   let clefts=cleft0*cleft1*cleft2;
-  let ledgeOut=meso*wPatch*cliffMask*clefts*(oct0*(.082*shelf0+.044*blk0)+oct1*(.036*shelf1+.028*blk1)+oct2*(.018*shelf2+.015*blk2)+oct3*(.0085*shelf3+.0075*blk3)+oct4*.004*blk4);
-  let ledgeUp=meso*wPatch*cliffMask*cleft0*cleft1*(oct0*(.044*shelf0+.024*blk0)+oct1*(.020*shelf1+.015*blk1)+oct2*(.010*shelf2+.008*blk2)+oct3*(.0045*shelf3+.004*blk3)+oct4*.0022*blk4);
+  let normalRelief=meso*wPatch*cliffMask*clefts*(oct0*(.052*shelf0+.032*blk0)+oct1*(.026*shelf1+.020*blk1)+oct2*(.013*shelf2+.011*blk2)+oct3*(.0065*shelf3+.0055*blk3)+oct4*.003*blk4);
+  let ledgeDispY=normalRelief*slopeScale;
   // 4-octave 3D angular talus boulders & cobbles at cliff toes and scree slopes
   let screeZone=clamp(smoothstep(.002,.016,rawSoil)*smoothstep(.04,.65,rawSlope)*(1.-.35*cliffMask)+cliffStrip*.65*(1.-cliffMask),0.,1.);
-  let bCell0=max(0.,(1.-abs(sin(wx*15.+.45*sin(wz*13.+seed))))*(1.-abs(cos(wz*14.-.45*sin(wx*12.))))-.28);
-  let bCell1=max(0.,(1.-abs(sin(wx*46.+.4*cos(wz*39.+seed*2.))))*(1.-abs(cos(wz*42.-.4*sin(wx*37.))))-.30);
-  let bCell2=max(0.,(1.-abs(sin(wx*135.+.35*sin(wz*118.))))*(1.-abs(cos(wz*126.-.35*cos(wx*110.))))-.32);
-  let bCell3=max(0.,(1.-abs(sin(wx*380.+wz*310.)))*(1.-abs(cos(wz*350.-wx*290.)))-.34);
-  let cobbleH=meso*wPatch*screeZone*(oct0*.058*bCell0+oct1*.032*bCell1+oct2*.015*bCell2+oct3*.0065*bCell3);
+  let bCell0=max(0.,(1.-abs(sin(wx*15.+.45*sin(wz*13.+seed))))*(1.-abs(cos(wz*14.-.45*sin(wx*12.))))-.26);
+  let bCell1=max(0.,(1.-abs(sin(wx*46.+.4*cos(wz*39.+seed*2.))))*(1.-abs(cos(wz*42.-.4*sin(wx*37.))))-.28);
+  let bCell2=max(0.,(1.-abs(sin(wx*135.+.35*sin(wz*118.))))*(1.-abs(cos(wz*126.-.35*cos(wx*110.))))-.30);
+  let bCell3=max(0.,(1.-abs(sin(wx*380.+wz*310.)))*(1.-abs(cos(wz*350.-wx*290.)))-.32);
+  let cobbleH=meso*wPatch*screeZone*min(2.6,slopeScale)*(oct0*.048*bCell0+oct1*.026*bCell1+oct2*.013*bCell2+oct3*.006*bCell3);
   cobbleOut=cobbleH;
-  let benchOutcrop=meso*wPatch*exposed*(1.-cliffMask)*smoothstep(.22,.95,bed)*(oct1*.016*blk1+oct2*.008*blk2+oct3*.004*blk3);
+  let benchOutcrop=meso*wPatch*exposed*(1.-cliffMask)*smoothstep(.22,.95,bed)*(oct1*.018*blk1+oct2*.009*blk2+oct3*.0045*blk3);
   let washChannel=meso*wPatch*(1.-exposed)*(1.-screeZone)*(oct1*.004*(.5+.5*sin(wx*16.+sin(wz*8.)))+oct2*.002*(.5+.5*cos(wx*48.-wz*22.)));
-  px=wx+(ledgeOut+.45*cobbleH)*outX;
-  py=py+ledgeUp+cobbleH+benchOutcrop+washChannel;
-  pz=wz+(ledgeOut+.45*cobbleH)*outZ;
+  py=py+ledgeDispY+cobbleH+benchOutcrop+washChannel;
  }
  if(mode==1u){return vec4<f32>(bed,max(0.,effSoil-cobbleOut*2.2),wPatch,rawSlope);}
- return vec4<f32>(px,py,pz,1.);
+ return vec4<f32>(wx,py,wz,1.);
 }`);
 
 const zoomNormKernel=wgslFn(`fn hill_zoom_norm(v:u32,zn:u32,tilt:f32,strike:f32,fold:f32,thickness:f32,seed:f32,stepStyle:f32,meso:f32,useFormed:f32,posBuf:ptr<storage,array<vec4<f32>>,read_write>,metaBuf:ptr<storage,array<vec4<f32>>,read_write>)->vec4<f32>{
@@ -455,13 +442,8 @@ export function createTerrainGPU(geometry,input={}){
   material.colorNode=fragFormedColor({vColor:tslAttribute('color','vec4'),x:positionLocal.x,y:positionLocal.y,z:positionLocal.z,nx:normalLocal.x,ny:normalLocal.y,nz:normalLocal.z,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,useFormed});
   return material;
  };
- const applyBaseShader=material=>{
-  material.alphaTest=.5;
-  material.opacityNode=baseCutoutKernel({x:positionLocal.x,z:positionLocal.z,width:float(config.width),length:float(config.length),fx:focusX,fz:focusZ,fr:focusRadius,useFormed,zoomEnabled});
-  return applyFragShader(material);
- };
  return{bind,flush,advance,stepGeology,setCameraFocus,configure,regenerate,read,zoomGeometry,
-  decorateMaterial:applyBaseShader,
+  decorateMaterial:applyFragShader,
   decorateZoomMaterial:applyFragShader,
   loadFormation(result){
    if(result.config.resolution!==n||result.config.width!==config.width||result.config.length!==config.length)throw Error('Formation grid does not match GPU terrain');
