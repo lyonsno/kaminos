@@ -133,12 +133,18 @@ fn joinProposal(p:vec3<f32>)->f32{
 }
 fn guidanceWeight(p:vec3<f32>)->f32{
   var weight=1.0;
-  if(OPTICAL_STEP_MODE>=5u){
-    weight=select(0.25,2.0,worldInsideFine(p))+4.0*joinProposal(p);
+  let insideFine=worldInsideFine(p);
+  if(OPTICAL_STEP_MODE==5u){
+    var exteriorBase=0.25;
+    if(!insideFine&&worldRender.atlas.x>0.5){
+      var n=vec4<f32>(0);let b=worldResidentLeafBounds(p,&n);
+      if(b.w>0.5){exteriorBase=0.04+0.60*clamp(b.z,0.0,1.6);}
+    }
+    weight=select(exteriorBase,2.0,insideFine)+4.0*joinProposal(p);
   }
   if(OPTICAL_STEP_MODE==6u){
     let hist=previousGuidance(p);
-    weight=select(0.08,1.5,worldInsideFine(p))+4.0*joinProposal(p)+32.0*hist;
+    weight=select(0.05,0.65,insideFine)+4.0*joinProposal(p)+36.0*hist;
   }
   return weight;
 }

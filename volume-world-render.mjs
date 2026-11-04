@@ -38,12 +38,15 @@ fn worldLeafExitDistance(p:vec3<f32>,rd:vec3<f32>,n:vec4<f32>)->f32{
  let span=4.0*n.w*worldRender.loPitch.w;
  let hi=lo+vec3<f32>(span);
  var best=1.0e6;
- if(abs(rd.x)>1e-4){let tx=(select(lo.x,hi.x,rd.x>0.0)-p.x)/rd.x;if(tx>1e-4){best=min(best,tx);}}
- if(abs(rd.y)>1e-4){let ty=(select(lo.y,hi.y,rd.y>0.0)-p.y)/rd.y;if(ty>1e-4){best=min(best,ty);}}
- if(abs(rd.z)>1e-4){let tz=(select(lo.z,hi.z,rd.z>0.0)-p.z)/rd.z;if(tz>1e-4){best=min(best,tz);}}
+ if(abs(rd.x)>1e-4){let tx=(select(lo.x,hi.x,rd.x>0.0)-p.x)/rd.x;best=min(best,max(0.0,tx));}
+ if(abs(rd.y)>1e-4){let ty=(select(lo.y,hi.y,rd.y>0.0)-p.y)/rd.y;best=min(best,max(0.0,ty));}
+ if(abs(rd.z)>1e-4){let tz=(select(lo.z,hi.z,rd.z>0.0)-p.z)/rd.z;best=min(best,max(0.0,tz));}
  return min(best,span*1.75);
 }
+var<private> lastWorldLeafNode:vec4<f32>;
+var<private> lastWorldLeafBounds:vec4<f32>;
 fn worldResidentMaterial(p:vec3<f32>,smokeVisible:f32,fireVisible:f32)->EmissiveMaterial{
+ lastWorldLeafNode=vec4<f32>(0);lastWorldLeafBounds=vec4<f32>(0);
  let q=(p-worldRender.loPitch.xyz)/worldRender.loPitch.w;
  let dims=worldRender.atlas.yzw;
  if(any(q<vec3<f32>(0))||any(q>=dims)){return EmissiveMaterial(vec3<f32>(0),0,0);}
@@ -59,6 +62,7 @@ fn worldResidentMaterial(p:vec3<f32>,smokeVisible:f32,fireVisible:f32)->Emissive
   n=worldAtlasTexel(slot*WORLD_RENDER_STRIDE);
  }
  let leafBounds=worldAtlasTexel(slot*WORLD_RENDER_STRIDE+2u);
+ lastWorldLeafNode=n;lastWorldLeafBounds=leafBounds;
  if(leafBounds.w>0.5&&leafBounds.z<=1e-4){return EmissiveMaterial(vec3<f32>(0),0,0);}
  let cell=clamp((q-n.xyz)/(n.w*0.5)+.5,vec3<f32>(0),vec3<f32>(9));let base=min(vec3<u32>(floor(cell)),vec3<u32>(8));let f=cell-vec3<f32>(base);var value=vec4<f32>(0);
  for(var z=0u;z<2u;z++){for(var y=0u;y<2u;y++){for(var x=0u;x<2u;x++){

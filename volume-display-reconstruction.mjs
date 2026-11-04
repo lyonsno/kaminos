@@ -247,9 +247,9 @@ fn displayCellExitDistance(p: vec3<f32>, rd: vec3<f32>) -> f32 {
   let q=clamp(mapped,vec3<f32>(0.0),max(dims-vec3<f32>(1.001),vec3<f32>(0.0)));
   let dqdt=rd*(0.5*f32(GRID)*scale);
   var best=1.0e6;
-  if(abs(dqdt.x)>0.0001){let bx=select(floor(q.x),floor(q.x)+1.0,dqdt.x>0.0);let tx=(bx-q.x)/dqdt.x;if(tx>0.0001){best=min(best,tx);}}
-  if(abs(dqdt.y)>0.0001){let by=select(floor(q.y),floor(q.y)+1.0,dqdt.y>0.0);let ty=(by-q.y)/dqdt.y;if(ty>0.0001){best=min(best,ty);}}
-  if(abs(dqdt.z)>0.0001){let bz=select(floor(q.z),floor(q.z)+1.0,dqdt.z>0.0);let tz=(bz-q.z)/dqdt.z;if(tz>0.0001){best=min(best,tz);}}
+  if(abs(dqdt.x)>0.0001){let bx=select(floor(q.x),floor(q.x)+1.0,dqdt.x>0.0);let tx=(bx-q.x)/dqdt.x;best=min(best,max(0.0,tx));}
+  if(abs(dqdt.y)>0.0001){let by=select(floor(q.y),floor(q.y)+1.0,dqdt.y>0.0);let ty=(by-q.y)/dqdt.y;best=min(best,max(0.0,ty));}
+  if(abs(dqdt.z)>0.0001){let bz=select(floor(q.z),floor(q.z)+1.0,dqdt.z>0.0);let tz=(bz-q.z)/dqdt.z;best=min(best,max(0.0,tz));}
   return min(best,0.20);
 }
 `;

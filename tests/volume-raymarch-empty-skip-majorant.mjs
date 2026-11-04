@@ -75,4 +75,74 @@ test('guided and history allocators elide unused DDA stops and concentrate histo
     /if\(OPTICAL_STEP_MODE==4u\)\{return end;\}/,
     'uniform budgeted mode skips per-cell DDA stops in guidanceStop',
   );
+  assert.match(
+    HISTORY_ALLOCATION_WGSL,
+    /if\(!insideFine&&worldRender\.atlas\.x>0\.5\)\{\s*var n=vec4<f32>\(0\);let b=worldResidentLeafBounds\(p,&n\);/,
+    'joins guidance weights outer World segments by leaf-brick majorant support behind a short-circuit guard',
+  );
+  assert.match(
+    core,
+    /if\(guided\)\{recordRayGuidance\(p,medium\.emission\+scatteredSource,max\(sigma,brickSupport\/max\(pitch,1e-4\)\),trans,ds\);\}/,
+    'outer World history guidance records leaf-brick majorant support',
+  );
+  assert.match(
+    core,
+    /if\(guided\)\{recordRayGuidance\(p,emission,max\(sigma,displaySupport\*0\.35\*visibleSmokeAuthority\),trans,localDt\);\}/,
+    'Fine history guidance records 8-corner display majorant support',
+  );
+});
+
+test('R1 regression: worldLeafExitDistance, displayCellExitDistance, and directCellExitDistance never drop near-face slab axes when tx <= 1e-4', () => {
+  const leafExitFn = WORLD_RENDER_WGSL.slice(
+    WORLD_RENDER_WGSL.indexOf('fn worldLeafExitDistance('),
+    WORLD_RENDER_WGSL.indexOf('fn worldResidentMaterial('),
+  );
+  assert.doesNotMatch(leafExitFn, /if\s*\(\s*t[xyz]\s*>\s*(?:1e-4|0\.0001)\s*\)/, 'worldLeafExitDistance must not ignore near-face exit axes');
+  assert.match(leafExitFn, /best=min\(best,max\(0\.0,tx\)\)/);
+  assert.match(leafExitFn, /best=min\(best,max\(0\.0,ty\)\)/);
+  assert.match(leafExitFn, /best=min\(best,max\(0\.0,tz\)\)/);
+
+  const displayExitFn = DISPLAY_RECONSTRUCTION_WGSL.slice(
+    DISPLAY_RECONSTRUCTION_WGSL.indexOf('fn displayCellExitDistance('),
+  );
+  assert.doesNotMatch(displayExitFn, /if\s*\(\s*t[xyz]\s*>\s*(?:1e-4|0\.0001)\s*\)/, 'displayCellExitDistance must not ignore near-face exit axes');
+  assert.match(displayExitFn, /best=min\(best,max\(0\.0,tx\)\)/);
+  assert.match(displayExitFn, /best=min\(best,max\(0\.0,ty\)\)/);
+  assert.match(displayExitFn, /best=min\(best,max\(0\.0,tz\)\)/);
+
+  const directExitStart = core.indexOf('fn directCellExitDistance(');
+  const directExitFn = core.slice(directExitStart, core.indexOf('\n}\n', directExitStart) + 3);
+  assert.doesNotMatch(directExitFn, /if\s*\(\s*t[xyz]\s*>\s*(?:1e-4|0\.0001)\s*\)/, 'directCellExitDistance must not ignore near-face exit axes');
+  assert.match(directExitFn, /best = min\(best, max\(0\.0, tx\)\);/);
+
+  // Numerical witness: a sample 5e-5 ray units from the -X face (q.x = 1.00001, dqdt.x = -200,
+  // dqdt.y = 10, dqdt.z = 10) must exit at tx = 5e-5, not overshoot to ty/tz = 0.05 or cap 0.20.
+  const q = { x: 1.00001, y: 1.5, z: 1.5 };
+  const dqdt = { x: -200.0, y: 10.0, z: 10.0 };
+  let bestFixed = 1.0e6;
+  for (const axis of ['x', 'y', 'z']) {
+    if (Math.abs(dqdt[axis]) > 0.0001) {
+      const b = dqdt[axis] > 0.0 ? Math.floor(q[axis]) + 1.0 : Math.floor(q[axis]);
+      const tAxis = (b - q[axis]) / dqdt[axis];
+      bestFixed = Math.min(bestFixed, Math.max(0.0, tAxis));
+    }
+  }
+  const exitFixed = Math.min(bestFixed, 0.20);
+  assert.ok(exitFixed > 0 && exitFixed <= 1e-4, `expected near-face exit <= 1e-4, got ${exitFixed}`);
+});
+
+test('worldPointSupportAndStep reuses cached leaf bounds from worldResidentMaterial without a second octree traversal', () => {
+  assert.match(WORLD_RENDER_WGSL, /var<private>\s+lastWorldLeafNode:\s*vec4<f32>;/);
+  assert.match(WORLD_RENDER_WGSL, /var<private>\s+lastWorldLeafBounds:\s*vec4<f32>;/);
+  const supportFn = WORLD_SMOKE_OPTICS_WGSL.slice(
+    WORLD_SMOKE_OPTICS_WGSL.indexOf('fn worldPointSupportAndStep('),
+    WORLD_SMOKE_OPTICS_WGSL.indexOf('fn worldSmokeBlend('),
+  );
+  assert.doesNotMatch(supportFn, /worldResidentLeafBounds\(/, 'worldPointSupportAndStep must not walk the octree a second time');
+  assert.match(supportFn, /let n=lastWorldLeafNode;let leafBounds=lastWorldLeafBounds;/);
+  assert.match(
+    core,
+    /let emptyBrickSkip=!guided&&!opticalStepping&&brickExit>0\.0&&sigma\+length\(medium\.emission\)<=1e-4&&u\.occupancy_controls\.x>1e-4;\s*if\(!emptyBrickSkip\)\{rayMaterialSamples \+= 1u;\}/,
+    'empty outer-World leaf brick skips do not inflate rayMaterialSamples',
+  );
 });

@@ -230,13 +230,13 @@ fn worldCollarSupport(p:vec3<f32>)->f32{
 }
 fn worldPointSupportAndStep(p:vec3<f32>,rd:vec3<f32>,pitch:f32,middleInterval:bool,emptyExit:ptr<function,f32>)->f32{
  *emptyExit=0.0;
- if(worldRender.atlas.x>.5){
-  var n=vec4<f32>(0);let leafBounds=worldResidentLeafBounds(p,&n);
-  if(leafBounds.w>0.5&&leafBounds.z<=1e-4&&!middleInterval&&middleSmokeWeight(p)<=0.0){
+ if(worldRender.atlas.x>.5&&!middleInterval&&middleSmokeWeight(p)<=0.0){
+  let n=lastWorldLeafNode;let leafBounds=lastWorldLeafBounds;
+  if(leafBounds.w>0.5&&leafBounds.z<=1e-4){
    *emptyExit=worldLeafExitDistance(p,rd,n);
    return 0.0;
   }
-  if(!middleInterval&&middleSmokeWeight(p)<=0.0){
+  if(leafBounds.w>0.5){
    return clamp(leafBounds.z*pitch,0.0,1.6);
   }
  }
