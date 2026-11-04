@@ -15,7 +15,8 @@ export default {
   const gpu=createTerrainGPU(geometry,{resolution:n,width:config.width,length:config.length,uplift:0,repose:34,transport:1.6});
   const root=new THREE.Group();root.name='Hill · formed rock and earth';
   const material=gpu.decorateMaterial(new MeshStandardNodeMaterial({vertexColors:true,roughness:.92,side:THREE.DoubleSide})),mesh=new THREE.Mesh(geometry,material);mesh.name='Weathered hillside';mesh.frustumCulled=false;mesh.castShadow=true;mesh.receiveShadow=true;mesh.raycast=()=>{};mesh.userData.kaminosDynamicGeometry=true;root.add(mesh);mesh.visible=false;
-  const zoomMaterial=gpu.decorateZoomMaterial(new MeshStandardNodeMaterial({vertexColors:true,roughness:.90,side:THREE.DoubleSide})),zoomMesh=new THREE.Mesh(gpu.zoomGeometry,zoomMaterial);zoomMesh.name='Camera-centered 3D rock & ledge detail';zoomMesh.frustumCulled=false;zoomMesh.castShadow=true;zoomMesh.receiveShadow=true;zoomMesh.raycast=()=>{};zoomMesh.userData.kaminosDynamicGeometry=true;root.add(zoomMesh);zoomMesh.visible=false;
+  const zoomMaterial=gpu.decorateZoomMaterial(new MeshStandardNodeMaterial({vertexColors:true,roughness:.90,side:THREE.DoubleSide})),zoomMesh=new THREE.Mesh(gpu.zoomGeometry,zoomMaterial);zoomMesh.name='Camera-centered 3D rock & ledge detail';zoomMesh.frustumCulled=false;zoomMesh.castShadow=false;zoomMesh.receiveShadow=true;zoomMesh.raycast=()=>{};zoomMesh.userData.kaminosDynamicGeometry=true;root.add(zoomMesh);zoomMesh.visible=false;
+  const tilePartitions=tiles.map(t=>({id:t.id,tx:t.tx,tz:t.tz,quads:t.quads,bounds:t.bounds})),authoringFields=FORMATION_FIELDS.map(f=>({key:f.key,title:f.title,group:f.group,min:f.min,max:f.max,step:f.step,unit:f.unit,default:f.default})),authoringPresets=FORMATION_PRESETS.map(p=>({id:p.id,title:p.title}));
   const xLines=[0,...tiles.filter(t=>t.tz===0).map(t=>t.x1)],zLines=[0,...tiles.filter(t=>t.tx===0).map(t=>t.z1)];
   const seamSegs=(xLines.length*(n-1)+zLines.length*(n-1)),seamPos=new Float32Array(seamSegs*6),seamGeo=new THREE.BufferGeometry();
   seamGeo.setAttribute('position',new THREE.BufferAttribute(seamPos,3));
@@ -28,30 +29,25 @@ export default {
    for(const z of zLines)for(let x=0;x<n-1;x++){put(x,z);put(x+1,z);}
    seamGeo.attributes.position.needsUpdate=true;
   };
+  let manualFocus=false;
   const syncFocusFromView=()=>{
+   if(manualFocus)return;
    const v=session?.readView?.();if(!v?.position||!v?.target)return;
-   const [px,py,pz]=v.position,[tx,ty,tz]=v.target,dx=tx-px,dy=ty-py,dz=tz-pz,rayLen=Math.hypot(dx,dy,dz);
-   if(!(rayLen>1e-4))return;
-   let fx=tx,fy=ty,fz=tz,dist=rayLen;
-   const st=formed?.state;
-   if(st instanceof Float32Array&&st.length===n*n*4){
-    const ux=dx/rayLen,uy=dy/rayLen,uz=dz/rayLen,maxT=Math.min(28,rayLen*1.35);
-    for(let s=1;s<=24;s++){
-     const t=(s/24)*maxT,rx=px+ux*t,ry=py+uy*t,rz=pz+uz*t;
-     if(Math.abs(rx)<=config.width*.5&&Math.abs(rz)<=config.length*.5){
-      const gx=Math.min(n-1,Math.max(0,Math.round((rx/config.width+.5)*(n-1)))),gz=Math.min(n-1,Math.max(0,Math.round((rz/config.length+.5)*(n-1))));
-      const i=(gz*n+gx)*4,h=st[i]+st[i+1];
-      if(ry<=h+.04){fx=rx;fy=h;fz=rz;dist=t;break;}
-     }
-    }
+   const [px,py,pz]=v.position,[tx,ty,tz]=v.target;
+   let fy=ty;const st=formed?.state;
+   if(st instanceof Float32Array&&st.length===n*n*4&&Math.abs(tx)<=config.width*.5&&Math.abs(tz)<=config.length*.5){
+    const gx=Math.min(n-1,Math.max(0,Math.round((tx/config.width+.5)*(n-1)))),gz=Math.min(n-1,Math.max(0,Math.round((tz/config.length+.5)*(n-1)))),i=(gz*n+gx)*4;
+    fy=st[i]+st[i+1];
    }
-   gpu.setCameraFocus({target:[fx,fy,fz],position:[px,py,pz],distance:dist,enabled:true});
+   const dist=Math.hypot(px-tx,py-fy,pz-tz);
+   gpu.setCameraFocus({target:[tx,fy,tz],position:[px,py,pz],distance:dist,enabled:true});
   };
   registerExportGeometrySnapshot(mesh,()=>{throw Error('GPU terrain export requires an explicit frozen snapshot; formation cache preserves the initial landscape');});
   registerExportGeometrySnapshot(zoomMesh,()=>{throw Error('GPU terrain export requires an explicit frozen snapshot; formation cache preserves the initial landscape');});
   const session=await host.scene.open();let asset,unsubscribe;
-  const frame=()=>{session.setView(inputs.view??{position:[10.2,8.2,12.8],target:[0,1.15,0],fov:42});syncFocusFromView();};
-  const read=()=>({route:'kaminos/hill/geological-formation-v1',config:{...config},tiles:{tilesX:config.tilesX,tilesZ:config.tilesZ,count:tiles.length,seamsVisible:showSeams,partitions:tiles.map(t=>({id:t.id,tx:t.tx,tz:t.tz,quads:t.quads,bounds:t.bounds}))},authoring:{preset:activePreset,fields:FORMATION_FIELDS.map(f=>({key:f.key,title:f.title,group:f.group,min:f.min,max:f.max,step:f.step,unit:f.unit,default:f.default})),presets:FORMATION_PRESETS.map(p=>({id:p.id,title:p.title}))},formation:formed?{version:formed.version,config:formed.config,steps:formed.steps,metrics:formed.metrics,cache:formed.cache,bytes:formed.bytes,warning:formed.warning}:null,pending,partialsShown:partials,error,playing,gpu:gpu.read(),objectId:asset?.id,view:session.readView(),presentation:{materialType:mesh.material.type,vertexColors:mesh.material.vertexColors,zoomPatchVisible:zoomMesh.visible,rootMatrix:Array.from(root.matrixWorld.elements)},preparationBackend:'hybrid-webgpu-and-cached-formation',runtimeReadback:false});
+  const frame=()=>{manualFocus=false;session.setView(inputs.view??{position:[10.2,8.2,12.8],target:[0,1.15,0],fov:42});syncFocusFromView();};
+  const setView=v=>{manualFocus=false;session.setView(v);syncFocusFromView();session.redraw();return read();};
+  const read=()=>({route:'kaminos/hill/geological-formation-v1',config:{...config},tiles:{tilesX:config.tilesX,tilesZ:config.tilesZ,count:tiles.length,seamsVisible:showSeams,partitions:tilePartitions},authoring:{preset:activePreset,fields:authoringFields,presets:authoringPresets},formation:formed?{version:formed.version,config:formed.config,steps:formed.steps,metrics:formed.metrics,cache:formed.cache,bytes:formed.bytes,warning:formed.warning}:null,pending,partialsShown:partials,error,playing,gpu:gpu.read(),objectId:asset?.id,view:session.readView(),presentation:{materialType:mesh.material.type,vertexColors:mesh.material.vertexColors,zoomPatchVisible:zoomMesh.visible,rootMatrix:Array.from(root.matrixWorld.elements)},preparationBackend:'hybrid-webgpu-and-cached-formation',runtimeReadback:false});
   const regenerate=async(patch={})=>{
    const next=formationConfig({...config,...patch});for(const key of ['resolution','width','length','tilesX','tilesZ'])if(next[key]!==config[key])throw Error('Grid changes require reopening the experiment');
    const seed=formed&&formationRecipeKey(formed.config)===formationRecipeKey(next)&&formed.steps<next.iterations?formed:null;
@@ -62,7 +58,7 @@ export default {
   };
   const stepFormation=(count=20)=>{if(!Number.isSafeInteger(count)||count<1)throw Error('Positive whole formation step count required');return regenerate({iterations:config.iterations+count});};
   const stepGeology=(count=20)=>{if(pending||error||!formed)throw Error('Landscape is not available');gpu.stepGeology(count);session.redraw();sync();return read();};
-  const setCameraFocus=focus=>{gpu.setCameraFocus(focus);session.redraw();return read();};
+  const setCameraFocus=focus=>{manualFocus=Boolean(focus?.manual);gpu.setCameraFocus(focus);session.redraw();return read();};
   const applyPreset=id=>{const found=FORMATION_PRESETS.find(p=>p.id===id);if(!found)throw Error('Unknown geological preset: '+id);activePreset=found.id;return regenerate(found.patch);};
   const setTileSeams=visible=>{if(typeof visible!=='boolean')throw Error('Boolean tile seam visibility required');showSeams=visible;seamMesh.visible=Boolean(formed||pending?.partial)&&showSeams;session.redraw();sync();return read();};
   mesh.onBeforeRender=(renderer,scene,camera)=>{if(disposed||error||(!formed&&!pending?.partial))return;try{if(camera?.isPerspectiveCamera)syncFocusFromView();gpu.flush(renderer);}catch(e){error=e.message;playing=false;sync();}};
@@ -70,9 +66,9 @@ export default {
    unsubscribe=session.onFrame(({deltaSeconds})=>{if(!playing||!formed||pending||error||disposed)return;if(!Number.isFinite(deltaSeconds)||deltaSeconds<0){error='Invalid host frame time';playing=false;sync();return;}remainder+=deltaSeconds;const ticks=Math.floor((remainder+1e-10)/.05);if(ticks){gpu.advance(ticks);remainder=Math.max(0,remainder-ticks*.05);}gpu.present(Math.min(1,remainder/.05));session.redraw();});
    await regenerate();
   }catch(e){job?.cancel();unsubscribe?.();gpu.dispose();seamGeo.dispose();seamMat.dispose();await session.dispose();throw e;}
-  const diagnostic={read,snapshot:options=>gpu.snapshot(options),setCameraFocus,stepGeology,gpu:()=>{root.updateWorldMatrix(true,false);return{...gpu.surface(),localToWorld:Array.from(root.matrixWorld.elements)};}};
+  const diagnostic={read,snapshot:options=>gpu.snapshot(options),setCameraFocus,setView,stepGeology,gpu:()=>{root.updateWorldMatrix(true,false);return{...gpu.surface(),localToWorld:Array.from(root.matrixWorld.elements)};}};
   if(globalThis.window)window.kaminosHillGeology=diagnostic;
-  return{read,operations:{regenerate,stepFormation,stepGeology,setCameraFocus,applyPreset,setTileSeams,frame,play(value){if(typeof value!=='boolean')throw Error('Boolean playback required');if(pending||error||!formed)throw Error('Landscape is not available');playing=value;sync();record({kind:'hill-geology.play',value});return read();},setInfluence(patch){gpu.configure(patch);sync();return read();},advance(count=1){if(pending||error)throw Error('Landscape is not available');gpu.advance(count);gpu.present(1);session.redraw();return read();},recipe:()=>({schema:'kaminos.hill-geology.recipe.v1',inputs:config}),cache:()=>encodeFormation(formed)},
+  return{read,operations:{regenerate,stepFormation,stepGeology,setCameraFocus,setView,applyPreset,setTileSeams,frame,play(value){if(typeof value!=='boolean')throw Error('Boolean playback required');if(pending||error||!formed)throw Error('Landscape is not available');playing=value;sync();record({kind:'hill-geology.play',value});return read();},setInfluence(patch){gpu.configure(patch);sync();return read();},advance(count=1){if(pending||error)throw Error('Landscape is not available');gpu.advance(count);gpu.present(1);session.redraw();return read();},recipe:()=>({schema:'kaminos.hill-geology.recipe.v1',inputs:config}),cache:()=>encodeFormation(formed)},
   mount({root:panel,document,invoke}){
    const style=document.createElement('style');
    style.textContent=`.hill-geo-badge{font-size:11px;color:#b8c7ce;background:rgba(255,255,255,.05);padding:5px 8px;border-radius:4px;margin:6px 0}.hill-geo-hint{font-size:11.5px;line-height:1.35;height:4.2em;overflow:hidden;color:#d5e1e6;background:rgba(190,165,110,.11);border-left:2px solid #c9ae74;padding:6px 8px;margin:6px 0;border-radius:0 4px 4px 0}.hill-geo-group{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#9ab0b8;margin:10px 0 4px;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:2px}.hill-geo-row{display:block;margin:6px 0;padding:3px 0}.hill-geo-head{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-bottom:2px;cursor:ew-resize}.hill-geo-meta{font-size:10.5px;color:#8aa0a8;pointer-events:none}.hill-geo-controls{display:grid;grid-template-columns:1fr 5.2rem;gap:6px;align-items:center}.hill-geo-actions{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0}`;
