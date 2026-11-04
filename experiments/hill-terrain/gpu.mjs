@@ -262,7 +262,7 @@ const fragFormedColor=wgslFn(`fn hill_frag_color(vColor:vec4<f32>,x:f32,y:f32,z:
  let dome1=clamp(1.-c1.x*1.30,0.,1.)*smoothstep(.01,.14,c1.y)*clamp(c1.z+.38,0.,1.);
  let dome2=clamp(1.-c2.x*1.35,0.,1.)*smoothstep(.01,.14,c2.y)*clamp(c2.z+.38,0.,1.);
  let cobbleDome=dome0+.65*dome1+.40*dome2;
- let cobbleGap=(smoothstep(.065,.008,c0.y)*step(-.15,c0.z)+.60*smoothstep(.055,.007,c1.y)*step(-.15,c1.z))*talusBand;
+ let cobbleGap=((1.-smoothstep(.008,.065,c0.y))*step(-.15,c0.z)+.60*(1.-smoothstep(.007,.055,c1.y))*step(-.15,c1.z))*talusBand;
  // High-contrast micro-ledge & rock-facet normal perturbation
  let dFacetX=crag0.z*1.1+crag1.z*.85+crag2.z*.55+grain0*.65+grain1*.45+grain2*.30;
  let dFacetZ=-crag0.z*.85+crag1.z*.65-crag2.z*.45+grain0*.55-grain1*.40+grain2*.25;
@@ -360,26 +360,26 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
  let outLen=max(.001,rawSlope);
  let outX=-dhdx/outLen;let outZ=-dhdz/outLen;
  let edge=max(abs(u),abs(w));
- let border=smoothstep(.49,.45,max(abs(wx/width),abs(wz/length)));
- let zoomActive=smoothstep(3.15,2.50,fr);
+ let border=1.-smoothstep(.45,.49,max(abs(wx/width),abs(wz/length)));
+ let zoomActive=1.-smoothstep(2.50,3.30,fr);
  let wPatch=(1.-smoothstep(.78,.93,edge))*border*zoomActive;
  let collarLift=(1.-smoothstep(.90,.96,edge))*.003*zoomActive-smoothstep(.94,.99,edge)*.008;
  let bed=mix(bedTri,cub.x,wPatch);
  let rawSoil=max(0.,mix(soilTri,cub.y,wPatch));
- let cliffStrip=smoothstep(.55,1.45,rawSlope)*(1.-smoothstep(.02,.16,cub.y));
+ let cliffStrip=smoothstep(.42,1.15,rawSlope)*(1.-smoothstep(.04,.28,cub.y));
  let effSoil=rawSoil*(1.-.95*wPatch*cliffStrip);
  var px=wx;var pz=wz;
  var py=bed+rawSoil+collarLift;
  var cobbleOut=0.;
  if(useFormed>.5&&meso>0.&&wPatch>0.){
   let ds=(2.*fr)/f32(zn-1u);
-  let oct0=smoothstep(ds*2.4,ds*.95,.34);
-  let oct1=smoothstep(ds*2.4,ds*.95,.11);
-  let oct2=smoothstep(ds*2.4,ds*.95,.037);
-  let oct3=smoothstep(ds*2.4,ds*.95,.012);
-  let oct4=smoothstep(ds*2.4,ds*.95,.0042);
+  let oct0=smoothstep(ds*.95,ds*2.4,.34);
+  let oct1=smoothstep(ds*.95,ds*2.4,.11);
+  let oct2=smoothstep(ds*.95,ds*2.4,.037);
+  let oct3=smoothstep(ds*.95,ds*2.4,.012);
+  let oct4=smoothstep(ds*.95,ds*2.4,.0042);
   let exposed=exp(-effSoil/.055);
-  let cliffMask=smoothstep(.16,.68,rawSlope)*exposed;
+  let cliffMask=smoothstep(.15,.62,rawSlope)*max(exposed,.78*smoothstep(.35,.95,rawSlope));
   let rad=strike*.017453292519943295;let ca=cos(rad);let sa=sin(rad);let rx=wx*ca+wz*sa;let rz=-wx*sa+wz*ca;
   let dipScale=1.-.88*clamp(stepStyle,0.,1.);
   let warp=.28*hill_fbm3(vec3<f32>(rx*.55,bed*.45,rz*.55+seed*.13));
