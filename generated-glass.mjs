@@ -12,7 +12,7 @@ function settings(value) {
   return value;
 }
 function copySurface(source,target) {
-  for(const name of ['map','normalMap','roughnessMap','metalnessMap','roughness','metalness','side']) target[name]=source[name];
+  for(const name of ['map','normalMap','roughnessMap','metalnessMap','roughness','metalness','side','vertexColors']) target[name]=source[name];
   target.color.copy(source.color);target.normalScale.copy(source.normalScale);
   target.emissive.copy(source.emissive);target.emissiveMap=source.emissiveMap;
   target.emissiveIntensity=source.emissiveIntensity;
