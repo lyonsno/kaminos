@@ -456,4 +456,28 @@ test('loading telemetry tracker reports byte progress, elapsed time, stall detec
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   assert.ok(html.includes('id="loading-telemetry-pill"'), 'index.html must include #loading-telemetry-pill');
   assert.ok(html.includes('window.kaminosLoadingTelemetry'), 'index.html must expose window.kaminosLoadingTelemetry');
+
+  const envStart = html.indexOf('id="authoring-source-environment"');
+  const envEnd = html.indexOf('id="authoring-source-render"', envStart);
+  assert.ok(envStart > 0 && envEnd > envStart, 'authoring-source-environment section exists');
+  assert.ok(
+    !html.slice(envStart, envEnd).includes('id="rendering-match-flame-camera"'),
+    'primary Environment UI must not expose the match-flame-camera checkbox',
+  );
+  const distStart = html.indexOf('id="rendering-distributed-controls"');
+  const distEnd = html.indexOf('id="authored-mix-panel-content"', distStart);
+  assert.ok(distStart > 0 && distEnd > distStart, 'rendering-distributed-controls section exists');
+  assert.match(
+    html.slice(distStart, distEnd),
+    /id="rendering-match-flame-camera"\s+checked/,
+    'match-flame-camera must live in the flame rendering controls and be checked by default',
+  );
+  const syncStart = html.indexOf('function syncArrivalStudioLighting(');
+  const syncEnd = html.indexOf('function autoCalibrateSceneGIFromScene(', syncStart);
+  assert.ok(syncStart > 0 && syncEnd > syncStart, 'syncArrivalStudioLighting exists');
+  assert.match(
+    html.slice(syncStart, syncEnd),
+    /renderer\.toneMappingExposure\s*=\s*env\.exposure\s*\*\s*delta\.exposureScale\s*\*\s*matchedEvScale/,
+    'syncArrivalStudioLighting must preserve matchedEvScale on renderer.toneMappingExposure',
+  );
 });

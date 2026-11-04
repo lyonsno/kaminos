@@ -873,8 +873,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <input type="range" id="exposure-slider" min="0.2" max="4" step="0.1" value="1.1">
       <span class="slider-val" id="exposure-val">1.1</span>
     </div>
-    <label class="import-mode" id="scene-match-flame-camera-row"><input type="checkbox" id="rendering-match-flame-camera"><span>Match flame camera</span></label>
-    <p class="slider-help" id="rendering-camera-status" hidden></p>
     <div class="slider-row">
       <span class="slider-label">Env Intensity</span>
       <input type="range" id="env-intensity-slider" min="0" max="5" step="0.1" value="0.7">
@@ -2899,6 +2897,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <p class="rendering-description" id="rendering-angular-cache">First visit prepares visibility. Retention uses extra GPU memory; geometry edits invalidate every set. Only the selected set runs each frame.</p>
         <div class="slider-row"><label class="slider-label" for="rendering-source-softness">Lighting source softness</label><input type="range" id="rendering-source-softness" min="0" max="16" step="1" value="0"><span class="slider-val" id="rendering-source-softness-value">0</span></div>
         <p class="rendering-description">Artistic lighting-source redistribution. Zero is unfiltered. Spreading emission while keeping extinction fixed can increase escaped light and reduce flicker; this is not brightness-neutral reconstruction. Visible flame and saved settings are unchanged.</p>
+        <label class="import-mode" id="scene-match-flame-camera-row"><input type="checkbox" id="rendering-match-flame-camera" checked><span>Match flame camera</span></label>
+        <p class="slider-help" id="rendering-camera-status" hidden></p>
         <label for="rendering-smoke-solver">Smoke illumination</label><select id="rendering-smoke-solver"><option value="distributed">Distributed · geometry-visible, full height</option><option value="legacy">Legacy comparison · lower cube, no solid visibility</option></select>
         <div class="slider-row"><label class="slider-label" for="rendering-surface-reconstruction">Surface reconstruction</label><input type="range" id="rendering-surface-reconstruction" min="0" max="32" step="2" value="0"><span class="slider-val" id="rendering-surface-reconstruction-value">0</span></div>
         <p class="rendering-description">Experimental same-frame mesh smoothing passes. Follows triangle connectivity and stops across sharp normal changes; split vertices remain split. No temporal history. Does not alter smoke or the visible flame. Zero bypasses reconstruction.</p>
@@ -12762,7 +12762,11 @@ function applyEnvironmentParameters(value=sceneEnvironment.read()) {
   const activeDelta = typeof arrivalLightingState !== 'undefined' && arrivalLightingState?.materialTuningEnabled && arrivalLightingState?.plan?.environmentDelta
     ? arrivalLightingState.plan.environmentDelta
     : { exposureScale: 1, envIntensityScale: 1, envRotationOffset: 0 };
-  renderer.toneMappingExposure=value.exposure * activeDelta.exposureScale;
+  const matchedFlameEv = (typeof window === 'undefined' || !window.__kaminosVolumePrototype) && document.getElementById('rendering-match-flame-camera')?.checked
+    ? Number(document.getElementById('volume-physical-exposure')?.value)
+    : 0;
+  const matchedEvScale = Number.isFinite(matchedFlameEv) && matchedFlameEv !== 0 ? 2 ** matchedFlameEv : 1;
+  renderer.toneMappingExposure=value.exposure * activeDelta.exposureScale * matchedEvScale;
   scene.environmentIntensity=value.intensity * activeDelta.envIntensityScale;
   scene.environmentRotation=new THREE.Euler(0,value.rotation + activeDelta.envRotationOffset,0);
   const tunedMaterials = typeof prepareArrivedMeshMaterials === 'function' && typeof arrivalLightingState !== 'undefined' && Boolean(arrivalLightingState?.materialTuningEnabled);
@@ -13290,19 +13294,27 @@ async function showGLB(file, options = {}) {
   const url = isBlob ? URL.createObjectURL(file) : file;
   const assetMetadata = {...(options.metadata || {})};
   const assetSource = assetMetadata.source ?? (isBlob ? file.name : file);
-  const assetFileName = assetMetadata.fileName ?? file?.name ?? (isBlob ? 'object.glb' : String(file).split('/').pop());
+  let resolvedUrlName = isBlob ? (file?.name || 'object.glb') : String(file);
+  if (!isBlob && resolvedUrlName.includes('path=')) {
+    try {
+      const pathParam = new URL(resolvedUrlName, window.location?.origin || 'http://127.0.0.1').searchParams.get('path');
+      if (pathParam) resolvedUrlName = pathParam;
+    } catch {}
+  }
+  const assetFileName = assetMetadata.fileName ?? file?.name ?? (isBlob ? 'object.glb' : resolvedUrlName.split('/').pop());
+  const telemetryLabel = assetMetadata.label || assetFileName;
   if (file && file.name) glbFileName = file.name;
   modelSourceUrl = isBlob ? file.name : file;
   modelSourceType = 'glb';
   const loader = new GLTFLoader();
   const telemetryOp = typeof loadingTelemetry !== 'undefined'
-    ? loadingTelemetry.start('asset', { label: assetFileName, phase: 'downloading' })
+    ? loadingTelemetry.start('asset', { label: telemetryLabel, phase: 'downloading' })
     : null;
 	return new Promise((resolve, reject) => {
 	  loader.load(url, gltf => {
 	    if (isBlob) URL.revokeObjectURL(url);
       if (typeof loadingTelemetry !== 'undefined') {
-        loadingTelemetry.progress('asset', { label: assetFileName, phase: 'preparing-materials' });
+        loadingTelemetry.progress('asset', { label: telemetryLabel, phase: 'preparing-materials' });
       }
 	    glbSourceScene = gltf.scene;
 	    const model = gltf.scene;
@@ -13383,7 +13395,7 @@ async function showGLB(file, options = {}) {
     }, xhr => {
       if (typeof loadingTelemetry !== 'undefined' && xhr && (Number.isFinite(xhr.loaded) || Number.isFinite(xhr.total))) {
         loadingTelemetry.progress('asset', {
-          label: assetFileName,
+          label: telemetryLabel,
           phase: 'downloading',
           loadedBytes: xhr.loaded,
           totalBytes: xhr.total,
@@ -23172,7 +23184,7 @@ sceneExposureControls=bindSceneExposureControls({
   exposure:document.getElementById('exposure-slider'),flame:document.getElementById('volume-physical-exposure'),
   match:document.getElementById('rendering-match-flame-camera'),label:document.getElementById('scene-exposure-label'),output:document.getElementById('exposure-val'),
   readIndependent:()=>sceneEnvironment.read().exposure,
-  writeIndependent:value=>{sceneEnvironment.patch({exposure:value});saveSettings();},redraw:()=>window._kaminosDirty?.(),
+  writeIndependent:value=>{sceneEnvironment.patch({exposure:value});saveSettings();},redraw:()=>{if(!window.__kaminosVolumePrototype)applyEnvironmentParameters();window._kaminosDirty?.();},
 });
 
 bindSceneEnvironmentControls({state:sceneEnvironment,document,onAccepted:saveSettings,onError:error=>setInfo(error.message)});
@@ -23392,9 +23404,14 @@ function syncArrivalStudioLighting({ syncPromoted = false } = {}) {
   if (renderer && scene && typeof sceneEnvironment !== 'undefined') {
     const env = sceneEnvironment.read();
     const delta = plan.environmentDelta;
-    renderer.toneMappingExposure = env.exposure * delta.exposureScale;
+    const matchedFlameEv = (typeof window === 'undefined' || !window.__kaminosVolumePrototype) && document.getElementById('rendering-match-flame-camera')?.checked
+      ? Number(document.getElementById('volume-physical-exposure')?.value)
+      : 0;
+    const matchedEvScale = Number.isFinite(matchedFlameEv) && matchedFlameEv !== 0 ? 2 ** matchedFlameEv : 1;
+    renderer.toneMappingExposure = env.exposure * delta.exposureScale * matchedEvScale;
     scene.environmentIntensity = env.intensity * delta.envIntensityScale;
     scene.environmentRotation = new THREE.Euler(0, env.rotation + delta.envRotationOffset, 0);
+    sceneExposureControls?.sync();
     const maxAniso = renderer?.capabilities?.getMaxAnisotropy?.() || 16;
     if (typeof workingScene !== 'undefined') {
       for (const { object, type } of workingScene.objects) {
@@ -28282,6 +28299,11 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
   setAnnularBurner(null);
 
   setInfo('Loading scene...');
+  const sceneTelemetryLabel = data.label || sceneFile || 'Scene';
+  const sceneTelemetryOp = typeof loadingTelemetry !== 'undefined' && objectRecords.length > 0
+    ? loadingTelemetry.start('scene', { label: `${sceneTelemetryLabel} (${objectRecords.length} objects)`, phase: 'downloading' })
+    : null;
+  try {
 
   // Restore the lighting recipe now; maps load independently of scene objects.
   if (data.environment) {
@@ -28465,7 +28487,13 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
   } else {
     setInfo(waterFeature.failure ? `Scene loaded; water host unavailable: ${waterFeature.failure}` : 'Volume scene loaded');
   }
+  if (sceneTelemetryOp && typeof loadingTelemetry !== 'undefined') loadingTelemetry.complete('scene');
   return true;
+  } finally {
+    if (sceneTelemetryOp && typeof loadingTelemetry !== 'undefined' && loadingTelemetry.read().operations.some(op => op.id === 'scene')) {
+      loadingTelemetry.cancel('scene', { token: sceneTelemetryOp.token });
+    }
+  }
 }
 
 // File input handler for Load Scene

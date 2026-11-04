@@ -31,7 +31,7 @@ export function bindSceneExposureControls({exposure,flame,match,label,output,rea
     else writeIndependent(value);
     sync();redraw();
   });
-  flame.addEventListener('input',sync);flame.addEventListener('change',sync);
+  flame.addEventListener('input',()=>{sync();redraw();});flame.addEventListener('change',()=>{sync();redraw();});
   exposure.addEventListener('change',()=>sync({force:true}));
   exposure.addEventListener('blur',()=>sync({force:true}));
   match.addEventListener('change',()=>{sync({force:true});redraw();});
