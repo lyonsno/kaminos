@@ -4,6 +4,14 @@ import {validateScenePointSource} from './scene-volume-source.mjs';
 import {SCENE_MEDIUM_LOOKUP_WGSL,SCENE_POINT_TRANSFER_WGSL} from './scene-point-light.mjs';
 
 const sourceMaterials=new WeakMap();
+// Every material that an adapter can restore, from the installed outer clone
+// through intermediate owners to the authored source. Appearance updates must
+// reach the whole chain while preserving each owner's shader adaptation.
+export function sceneRadianceMaterialChain(material){
+  const chain=[];
+  for(let value=material;value;value=sourceMaterials.get(value))chain.push(value);
+  return chain;
+}
 export function sceneRadianceSourceMaterial(material){
   while(sourceMaterials.has(material))material=sourceMaterials.get(material);
   return material;
