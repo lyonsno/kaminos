@@ -197,6 +197,10 @@ device.limits.maxStorageBufferBindingSize=bindingLimit;device.limits.maxComputeW
 assert.throws(()=>mount.setLightGrid(8),/dispatch/);assert.equal(mount.debugState().volumeGrid,4);assert.equal(mount.canRender(),true);
 device.limits.maxComputeWorkgroupsPerDimension=dispatchLimit;
 mount.setLightGrid(2);consume(field);
+// Near construction uses exterior refinement4, independently of Fine refinement1.
+const nearBefore=mount.debugState().nearBox,nearFrame=hostFrame;
+assert.throws(()=>mount.setNearBox({enabled:true,grid:24,directions:8}),/prepared smoke.*capacity/,'Near admission must use its actual refinement before state changes');
+assert.deepEqual(mount.debugState().nearBox,nearBefore);assert.equal(hostFrame,nearFrame);assert.equal(mount.canRender(),true);
 // Explicit owner coverage must remain authoritative after the next live frame.
 field.source.exterior={status:'encoded',texture:device.createTexture(),dimensions:[8,16,8],localMin:[-3,-3,-3],localMax:[3,9,3],generation:field.source.generation,frame:field.source.frame};
 mount.setNearBox({enabled:true,grid:4,directions:8,extent:[1.5,1.5,1.5]});

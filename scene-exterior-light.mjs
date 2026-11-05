@@ -32,6 +32,7 @@ export function createExteriorSmokeLight(device,{grid=8,refinement=4,receiverCov
       const fineCore=core.hi.every((v,a)=>v>core.lo[a])?core:null;
       for(const [name,region] of [['world',medium],['middle',near]]){
         if(!region)continue;
+        const regionDirections=(name==='middle'?nearCoverage?.directions:null)??directions;
         // Keep cubic receiver cells and exact physical coverage. In particular,
         // the default middle region is 3 by 5 by 3, not the fine box's 2:1 shape.
         const dims=region.dimensions;
@@ -44,11 +45,10 @@ export function createExteriorSmokeLight(device,{grid=8,refinement=4,receiverCov
         let current=regions.get(name);
         if(!current||current.key!==key){
           const next=createVolumeGather(device,{geometry,receivers:[],volumeGrid:regionGrid,sourceDimensions:source.dimensions,
-            receiverBounds:{lo:region.localMin,hi:region.localMax},smokeRefinement:refinement,directions,angularPattern:'source',worldGeometry,exteriorMedium:true,exteriorIntegrationGrid:grid,receiverExclusion:exclude});
+            receiverBounds:{lo:region.localMin,hi:region.localMax},smokeRefinement:refinement,directions:regionDirections,angularPattern:'source',worldGeometry,exteriorMedium:true,exteriorIntegrationGrid:grid,receiverExclusion:exclude});
           beforeReplace();current?.gather.destroy();current={key,gather:next};regions.set(name,current);builds++;
         }
         const {gather}=current;
-        const regionDirections=(name==='middle'?nearCoverage?.directions:null)??directions;
         if(worldGeometry)gather.setGeometryTransforms(geometry.matrices);
         gather.setDirections(regionDirections);
         const frame=gather.encode(source,{gain,sourceSoftness,environment,sceneLights});

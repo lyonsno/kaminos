@@ -95,3 +95,14 @@ const substitution=host.match(/code=code(\.replace(?:All)?\('medium\.scattering 
 const substituted=new Function('code',`return code${substitution}`)('medium.scattering * incidentAt(p); medium.scattering * incidentAt(p)');
 assert.equal(substituted.match(/distributedMeanIncident/g)?.length,2,'native host must light both fine and exterior material sites');
 console.log('exterior receivers preserve fine source bounds and actual world coordinates');
+
+// Near construction and bounds rebuild must never substitute Fine directions.
+device.limits.maxStorageBufferBindingSize=134217728;
+const independentNear=createExteriorSmokeLight(device,{receiverCoverage:{lo:[-1.5,-1,-1.5],hi:[1.5,5,1.5],pitch:.125,directions:8}});
+const independentSource={...source,exterior:{...source,dimensions:[8,16,8],localMin:[-3,-3,-3],localMax:[3,9,3]}};
+for(const coverage of [null,{lo:[-1.75,-1,-1.5],hi:[1.25,5,1.5],pitch:.125,directions:8}]){
+ if(coverage)independentNear.setReceiverCoverage(coverage);
+ let field;assert.doesNotThrow(()=>{field=independentNear.encode(independentSource,{geometry,revision:1,worldGeometry:false,directions:2048,gain:1});},'fitting Near8 must be constructed with8, even when Fine2048 is valid');
+ assert.equal(field.middle.directions,8);assert.equal(field.middle.smokeReconstruction.refinement,4);
+}
+independentNear.destroy();
