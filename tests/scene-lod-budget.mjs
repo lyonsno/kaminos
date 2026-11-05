@@ -1449,16 +1449,16 @@ test('Kiln side-pipe drop vs. beam crack-seal: footprint and budget allocators p
   assert.equal(beamFoot.selected.faces, 500, 'at z = 5.5m, beam coarsens all the way to 500 faces by screen footprint');
   assert.equal(kilnFoot.selected.faces, 25000, 'at z = 5.5m, kiln stays at 25,000 faces by screen footprint');
 
-  // At close range (z = 1.8m) where both want high detail:
-  // 1) Under a 320,000-face budget (combined hero faces = 287,407 + 97,670 = 385,077 > 320,000),
-  //    allocateSceneBeautyLods demotes the 97,670-face beam to 25,000 faces while keeping the 287,407-face kiln on hero!
+  // At close range the beam needs 5k faces for its geometry; texture density is allocated separately.
+  // Its 5k geometry and the hero kiln fit the 320k budget without a geometry budget demotion.
   const closeCam = makeCamera({z: 1.8, fov: 50});
   const heroStepBudget = allocateSceneBeautyLods([
     {id: 'kiln', heroFaces: 287407, levels: realKilnLevels, worldBox: unitBox, worldDiag: diag},
     {id: 'beam', heroFaces: 97670, levels: realBeamLevels, worldBox: unitBox, worldDiag: diag},
   ], {camera: closeCam, viewportHeight: 1080, maxPixelError: 1.5, faceBudget: 320000});
   assert.equal(heroStepBudget.withinBudget, true);
-  assert.equal(heroStepBudget.allocations.beam.faces, 25000, '320k budget demotes the 97,670-face beam to 25,000 faces first');
+  assert.equal(heroStepBudget.allocations.beam.faces, 5000, 'beam geometry needs 5k faces independently of its coarse texture');
+  assert.equal(heroStepBudget.allocations.beam.demotedByBudget, false, 'texture detail does not force a geometry budget demotion');
   assert.equal(heroStepBudget.allocations.kiln.tier, 'hero', '320k budget keeps the 287,407-face kiln on hero');
 
   // 2) Under a tight 10,500-face budget, it demotes the beam all the way to 500 faces while keeping the kiln at 10,000 faces:
@@ -1514,7 +1514,7 @@ test('Kiln side-pipe drop vs. beam crack-seal: footprint and budget allocators p
     worldDiag: diag,
     camera: makeCamera({z: 4.2, fov: 50}),
     viewportHeight: 1080,
-    maxPixelError: 1.5,
+    maxPixelError: 1.5, texelWeight: 0.5, // explicit legacy combined diagnostic
   });
   assert.equal(beamAt4p2.selected.faces, 5000, 'M2: at z = 4.2m where 1,000-face tier exceeds 1.5px, selectFootprintTier selects 5,000 faces (never skipping to 500 faces)');
   const beamAt2p1 = selectFootprintTier(realBeamLevels, {
@@ -1523,7 +1523,7 @@ test('Kiln side-pipe drop vs. beam crack-seal: footprint and budget allocators p
     worldDiag: diag,
     camera: makeCamera({z: 2.1, fov: 50}),
     viewportHeight: 1080,
-    maxPixelError: 1.5,
+    maxPixelError: 1.5, texelWeight: 0.5, // compatibility coverage for combined diagnostic
   });
   assert.equal(beamAt2p1.selected.faces, 25000, 'M2/M3: at z = 2.1m, selectFootprintTier reaches the 25,000-face tier on realBeamLevels once surface-crack inflation is removed');
   const beamGeomAt1p6 = selectFootprintTier(realBeamLevels, {
@@ -1996,4 +1996,14 @@ test('the beauty readout identifies a reduction forced by the scene face budget'
     objects: [{id: 'kiln', displayedTier: 'coarse', faces: 25000, pixelError: 20, demotedByBudget: true}],
   }});
   assert.match(readout.beautyText, /reduced to fit scene budget/i);
+});
+
+test('a flat surface with coarse textures does not demand more triangles', () => {
+  const camera = makeCamera({z: 1.5});
+  const result = selectFootprintTier([{sha: sha('flat-panel'), faces: 2, textureSize: 64,
+    error: {relative: {p95: 0, max: 0, mean: 0}}}], {
+    heroFaces: 100000, worldBox: {min: [-.5,-.5,-.1], max: [.5,.5,.1]}, camera,
+    viewportHeight: 1080, maxPixelError: 1.5,
+  });
+  assert.equal(result.selected.faces, 2, 'texture magnification must be resolved by appearance, not by buying more faces');
 });
