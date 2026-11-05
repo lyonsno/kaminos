@@ -174,3 +174,33 @@ In the chat page the system instruction stays editable while weights are loaded.
 Click **New conversation** to apply it; successful reset clears transcript and
 hybrid cache. Saved turns retain the instruction that was effective for each
 turn. Editing the field alone does not rewrite an ongoing conversation.
+## Switchable BFL delta over base Qwen (experimental source API)
+
+The native adapter can retain a base Qwen checkpoint and an extracted BFL
+low-rank sidecar on the same WebGPU device. `model.loadDelta(manifest, url)`
+loads the factors and exact small parameters; `await model.setDeltaMode({enabled,
+rank})` switches weights and retires language-generation states when effective
+weights change. Reset the owning chat/session before continuing after a switch.
+The low-rank sidecar approximates the full fine-tune.
+
+Prepare existing source files without rewriting the weight tensors:
+
+```sh
+node models/qwen3_5/prepare-delta.mjs \
+  --model-dir /path/to/Qwen3.5-9B-mlx-4bit \
+  --adapter-dir /path/to/adapter-r256 \
+  --out /path/to/browser-qwen-delta
+KAMINOS_QWEN35_WEIGHTS_ROOT=/path/to/browser-qwen-delta python3 serve.py 18760
+```
+
+Preparation verifies source config/header identities and complete adapter shard
+hashes, creates hard links, and indexes tensor ranges. The chat page detects
+this package and exposes Base Qwen / BFL prompt adapter plus rank selection.
+Both weight sets remain resident; a mode change starts a new conversation.
+Activations and factor multiplication use the native FP32 path, with a matching
+FP32 numerical reference for conformance.
+
+This slice supplies a text adapter. The vision encoder and image-first chat
+framing remain separate work. Shared encoder output can survive a prompt or
+adapter change; language KV/recurrent state depends on the weights and every
+preceding token.

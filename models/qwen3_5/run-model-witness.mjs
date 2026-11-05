@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import { startServer, launchChrome, sourceIdentity } from '../flux2-klein/cdp-harness.mjs';
 import { qwen35ModelLayout } from './model-layout.js';
-import { adjudicateModelReadbacks } from './model-witness-contract.js';
+import { adjudicateModelReadbacks, adjudicateDeltaSelection } from './model-witness-contract.js';
 import { adjudicatePupExpansion } from './pup-witness-contract.js';
 import { adjudicateServingProfile, adjudicateServingComparison, adjudicateAffineSelection, adjudicateBatchSelection, adjudicateAttentionSelection } from './serving-profile.js';
 import { QwenTokenizer } from '../flux2-klein/qwen-tokenizer.js';
@@ -13,11 +13,11 @@ import { createPupTextInput } from './pup-input.js';
 const sha = b => crypto.createHash('sha256').update(b).digest('hex');
 
 export async function runModelWitness({ fixture, modelRoot, chrome, out, request = null, servingProfile = false,
-  singleTokenKernel = 'oracle', compareKernels = false, batchDecode = false, compareBatching = false, decodeAttention = 'tiled', cliArgs = null }) {
+  singleTokenKernel = 'oracle', compareKernels = false, batchDecode = false, compareBatching = false, decodeAttention = 'tiled', deltaMode = null, cliArgs = null }) {
   if (!out) throw new Error('explicit report path required');
   const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
   const report = { schema: 'kaminos.qwen35-model-witness.v2', mode: compareKernels ? 'serving-comparison' : servingProfile ? 'serving-profile' : 'numerical-parity', status: 'failed', phase: 'setup', source: sourceIdentity(repo),
-    requested: { fixture, modelRoot, chrome, request, servingProfile, singleTokenKernel, compareKernels, batchDecode, compareBatching, decodeAttention, cliArgs }, rows: [] };
+    requested: { fixture, modelRoot, chrome, request, servingProfile, singleTokenKernel, compareKernels, batchDecode, compareBatching, decodeAttention, deltaMode, cliArgs }, rows: [] };
   const save = async () => { await fsp.mkdir(path.dirname(path.resolve(out)), { recursive: true }); await fsp.writeFile(out, JSON.stringify(report, null, 2) + '\n'); };
   let browser, server;
   try {
@@ -46,6 +46,7 @@ export async function runModelWitness({ fixture, modelRoot, chrome, out, request
     const weightsBytes = fs.readFileSync(path.join(root, 'weights.json')), manifest = JSON.parse(weightsBytes);
     if (native.status !== 'passed' || native.effective?.backend !== 'mlx-metal' || native.metaSha256 !== sha(metaBytes) || native.weightsManifestSha256 !== sha(weightsBytes) || meta.weightsManifestSha256 !== sha(weightsBytes)) throw new Error('failed/stale/wrong native reference or weights manifest');
     qwen35ModelLayout(manifest);
+    if(deltaMode!==null&&(deltaMode.enabled!==meta.enabled||deltaMode.rank!==meta.rank||manifest.delta?.sha256!==meta.deltaManifestSha256))throw Error('delta request/reference identity mismatch');
     const model = fs.realpathSync(modelRoot);
     if (model !== manifest.source.localRoot || sha(fs.readFileSync(path.join(model, 'config.json'))) !== manifest.source.configSha256) throw new Error('wrong model root/config');
     let pupRequest, pupExpected;
@@ -72,13 +73,13 @@ export async function runModelWitness({ fixture, modelRoot, chrome, out, request
     report.effectiveExecutable = executable;
     const serving = await startServer({ '/fixture/': root, '/model/': model, '/': repo }); server = serving.server;
     browser = await launchChrome(executable, [], report); report.browserProfile = report.profile;
-    await browser.send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.qwenWitnessMode = '+JSON.stringify(report.mode)+'; window.qwenSingleTokenKernel = '+JSON.stringify(singleTokenKernel)+'; window.qwenDecodeAttention = '+JSON.stringify(decodeAttention)+'; window.qwenBatchDecode = '+JSON.stringify(batchDecode)+'; window.qwenComparisonAxis = '+JSON.stringify(comparisonAxis)+'; window.qwenPupRequest = ' + JSON.stringify(pupRequest ?? null) + ';' });
+    await browser.send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.qwenDeltaMode = '+JSON.stringify(deltaMode)+';window.qwenWitnessMode = '+JSON.stringify(report.mode)+'; window.qwenSingleTokenKernel = '+JSON.stringify(singleTokenKernel)+'; window.qwenDecodeAttention = '+JSON.stringify(decodeAttention)+'; window.qwenBatchDecode = '+JSON.stringify(batchDecode)+'; window.qwenComparisonAxis = '+JSON.stringify(comparisonAxis)+'; window.qwenPupRequest = ' + JSON.stringify(pupRequest ?? null) + ';' });
     report.phase = 'gpu-execution'; report.url = serving.origin + '/models/qwen3_5/model-witness.html'; await save();
     await browser.navigate(report.url, 'window.qwenModelReady === true');
     const result = await browser.evaluate('window.qwenModelResult.then(r => ({ ...r, rows: r.rows.map(({data,...row})=>row) }))');
     report.adapter = result.adapter; report.errors = result.errors; report.effective = { backend: result.backend, weightsManifestSha256: result.weightsManifestSha256, limits: result.limits, residentWeightBytes: result.residentWeightBytes,
       decodeAttention: result.decodeAttention, attentionDispatches: result.attentionDispatches, singleTokenKernel: result.singleTokenKernel, affineDispatches: result.affineDispatches, batchDecode: result.batchDecode, layerBatchSubmissions: result.layerBatchSubmissions, layerBatchDuty: result.layerBatchDuty };
-    report.lengths = result.lengths; report.generation = result.generation; report.cleanup = result.cleanup; report.lastPhase = result.lastPhase;
+    report.delta = result.delta;report.lengths = result.lengths; report.generation = result.generation; report.cleanup = result.cleanup; report.lastPhase = result.lastPhase;
     if (result.expansion) report.expansion = result.expansion;
     if (result.profile) report.profile = result.profile;
     if (result.comparison) report.comparison = result.comparison;
@@ -88,6 +89,7 @@ export async function runModelWitness({ fixture, modelRoot, chrome, out, request
       const raw = Buffer.from(row.data, 'base64'), file = path.join(rawDir, `${index}.f32.bin`);
       await fsp.writeFile(file, raw); report.rows.push({ name: row.name, elements: row.elements, file, sha256: sha(raw) }); await save();
     }
+    if(deltaMode!==null)adjudicateDeltaSelection(result.delta,deltaMode,meta);
     let failure;
     try {
       if (comparisonMode) report.verdict = adjudicateServingComparison(result, { ...pupExpected, weightsManifestSha256: sha(weightsBytes), comparisonAxis, batchDecode, singleTokenKernel });

@@ -39,3 +39,7 @@ export function adjudicateModelReadbacks(result, meta, manifest, arrays, { chunk
   if (failures.length) throw new Error('model witness failed: ' + failures.join('; '));
   return { rows: seen.size, expectedNextIds: meta.expectedNextIds };
 }
+
+export function adjudicateDeltaSelection(actual,requested,meta){
+ if(typeof requested?.enabled!=='boolean'||!Number.isSafeInteger(requested.rank)||requested.rank<1||requested.enabled!==meta?.enabled||requested.rank!==meta?.rank||actual?.enabled!==requested.enabled||actual?.rank!==requested.rank||!meta.deltaManifestSha256||actual.manifestSha256!==meta.deltaManifestSha256)throw Error('wrong or missing delta weight selection evidence');
+}

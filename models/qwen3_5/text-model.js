@@ -1,3 +1,4 @@
+import {loadDelta,setDeltaMode,deltaLinear,addDeltaLinear,deltaEmbeddingShader} from './delta-adapter.js';
 import { qwen35ModelLayout } from './model-layout.js';
 import { fetchTensor, projectionSlices } from './model-source.js';
 import * as kernels from './kernels.js';
@@ -220,11 +221,17 @@ export class Qwen35TextModel {
     } catch (error) { await this.device.queue.onSubmittedWorkDone().catch(() => {}); for (const b of this.owned) b.destroy(); this.owned.clear(); this.weights.clear(); this.vectors.clear(); throw error; }
     finally { this.loading = false; this.finishLoading(); }
   }
+  loadDelta(manifest,baseUrl,options) { return loadDelta(this,manifest,baseUrl,options); }
+  setDeltaMode(options) { return setDeltaMode(this,options); }
+  async embed(input,hidden,tokens,ctx) {
+    for (const part of this.weights.get('model.embed_tokens').slices) await this.dispatch('embedding', embeddingShader, [input, part.weight, part.scales, part.biases, hidden], new Uint32Array([tokens, this.config.hiddenSize, part.rowStart, part.rows]), [Math.ceil(this.config.hiddenSize / 256), tokens, 1], ctx);
+    if(this.delta?.enabled){const e=this.delta.projections.get('model.embed_tokens');for(const p of e.slices)await this.dispatch('delta-embedding',deltaEmbeddingShader,[input,p.weight,e.a,hidden],new Uint32Array([tokens,this.config.hiddenSize,p.rowStart,p.rows,this.delta.rank,this.delta.maxRank,0,0]),[Math.ceil(this.config.hiddenSize/256),tokens,1],ctx);}
+  }
   async createState({ capacity, signal = null, control = this.control } = {}) {
     control ??= this.control;
     positive(capacity, 'capacity'); if (capacity > this.config.maxPositions) throw new RangeError('capacity exceeds model positions');
     checkAbort(signal);
-    if (!this.loaded || this.closed || this.loading) throw new Error('model weights are not loaded');
+    if (!this.loaded || this.closed || this.loading || this.switchingDelta) throw new Error('model weights are not loaded');
     if (typeof control?.runDuty !== 'function') throw new TypeError('inference control required');
     const c = this.config, buffers = new Set(), state = { owner: this, capacity, length: 0, failed: false, closed: false, buffers, layers: [], signal, control, abort: new AbortController() };
     try {
@@ -241,6 +248,7 @@ export class Qwen35TextModel {
     } catch (error) { for (const b of buffers) b.destroy(); throw error; }
   }
   async linear(name, input, output, tokens, ctx, { outputStride = this.weights.get(name).rows, outputOffset = 0, inputOffset = 0 } = {}) {
+    if(await deltaLinear(this,name,input,output,tokens,ctx,{outputStride,outputOffset,inputOffset}))return;
     const entry = this.weights.get(name);
     const tiled = tokens > 1, single = ctx.singleTokenKernel ?? this.singleTokenKernel;
     if (single !== 'oracle' && single !== 'quad') throw new RangeError('unsupported single-token kernel');
@@ -249,11 +257,12 @@ export class Qwen35TextModel {
       affineParams({ tokens, rows: part.rows, columns: entry.columns, group: entry.group, outputStride, outputOffset: outputOffset + part.rowStart, inputOffset }),
       tiled ? affineTiledDispatch(part.rows, tokens, this.device.limits.maxComputeWorkgroupsPerDimension)
         : affineDispatch(part.rows, tokens, this.device.limits.maxComputeWorkgroupsPerDimension, { rowsPerGroup: quad ? 4 : 1 }), ctx);
+    await addDeltaLinear(this,name,input,output,tokens,ctx,{outputStride,outputOffset,inputOffset});
   }
   async prefill(ids, state, ctx = {}) { if (state.length !== 0) throw new Error('prefill requires fresh state'); return this.append(ids, state, ctx); }
   async decode(id, state, ctx = {}) { if (!state.length) throw new Error('decode requires a prefix'); return this.append([id], state, ctx); }
   async append(inputIds, state, options = {}) {
-    if (this.closed || !this.loaded || state?.owner !== this || state.closed || state.failed) throw new Error('invalid generation state');
+    if (this.closed || this.switchingDelta || !this.loaded || state?.owner !== this || state.closed || state.failed) throw new Error('invalid generation state');
     if (this.active) throw new Error('concurrent model execution is not supported');
     const ids = Array.from(inputIds), c = this.config, tokens = ids.length;
     positive(tokens, 'input token count');
@@ -304,7 +313,8 @@ export class Qwen35TextModel {
       const mixed = f(tokens * deltaWidth), z = f(tokens * valueWidth), gates = f(tokens * 2 * c.linearValueHeads), convolved = f(tokens * deltaWidth), prepared = f(tokens * (deltaWidth + 2 * c.linearValueHeads)), recurrent = f(tokens * valueWidth), gatedDelta = f(tokens * valueWidth);
       const qw = c.queryHeads * c.headDim, kw = c.kvHeads * c.headDim;
       const qp = f(tokens * 2 * qw), kp = f(tokens * kw), vp = f(tokens * kw), q = f(tokens * qw), attention = f(tokens * qw), gatedAttention = f(tokens * qw);
-      for (const part of this.weights.get('model.embed_tokens').slices) await this.dispatch('embedding', embeddingShader, [input, part.weight, part.scales, part.biases, hidden], new Uint32Array([tokens, c.hiddenSize, part.rowStart, part.rows]), [Math.ceil(c.hiddenSize / 256), tokens, 1], ctx);
+      if(this.delta?.enabled)ctx={...ctx,deltaScratch:f(tokens*this.delta.maxRank)};
+      await this.embed(input,hidden,tokens,ctx);
       for (let index = 0; index < c.numLayers; index++) {
         const layerWork = async ctx => {
         const root = `model.layers.${index}`, layer = state.layers[index];
@@ -376,7 +386,7 @@ export class Qwen35TextModel {
     const errors = [];
     for (const state of [...this.states]) try { await this.disposeState(state); } catch (error) { errors.push(error instanceof Error ? error : new Error(String(error))); }
     try { await this.device.queue.onSubmittedWorkDone(); } catch (error) { errors.push(error instanceof Error ? error : new Error(String(error))); }
-    finally { for (const b of this.owned) b.destroy(); this.owned.clear(); this.weights.clear(); this.vectors.clear(); this.loaded = false; }
+    finally { for (const b of this.owned) b.destroy(); this.owned.clear(); this.weights.clear(); this.vectors.clear(); this.delta = null; this.loaded = false; }
     if (errors.length) throw new AggregateError(errors, 'model cleanup failed: ' + errors.map(e => e.message).join('; '));
   }
 }

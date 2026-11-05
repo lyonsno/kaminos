@@ -335,3 +335,40 @@ test('workspace retirement waits for an in-flight logits readback and rejects ov
   release();await assert.rejects(work,/disposed/);await disposal;assert.ok(owned.every(x=>x.destroyed));
  }finally{await model.destroy();await control.close();}
 });
+
+test('native delta mode is explicit and invalidates every language state before switching',async()=>{
+ const {manifest,fetchImpl}=fixture(),{device}=deviceFixture(),model=new Qwen35TextModel(device,manifest,{control:{runDuty:f=>f()}});
+ try{
+  await model.load('http://localhost/model/',{fetchImpl});
+  assert.equal(typeof model.setDeltaMode,'function','native model must expose the actual weight-mode switch');
+  await assert.rejects(model.setDeltaMode({enabled:true,rank:4}),/adapter/);
+  // Loaded adapter fixture represents already validated, GPU-resident sidecar state.
+  const baseVectors=model.vectors, enabledVectors=new Map(baseVectors);
+  model.delta={maxRank:8,enabled:false,rank:8,baseVectors,enabledVectors,owned:new Set(),projections:new Map(),exact:new Map()};
+  const a=await model.createState({capacity:4}),b=await model.createState({capacity:4});
+  await model.setDeltaMode({enabled:true,rank:4});assert.equal(model.states.size,0);assert.ok(a.closed&&b.closed);assert.equal(model.vectors,enabledVectors);
+  await assert.rejects(model.prefill([1],a),/state/);
+  const c=await model.createState({capacity:4});await model.setDeltaMode({enabled:true,rank:4});assert.equal(c.closed,false,'unchanged mode retains state');
+  await model.setDeltaMode({enabled:false});assert.equal(c.closed,true);assert.equal(model.vectors,baseVectors);
+  await assert.rejects(model.setDeltaMode({enabled:true,rank:9}),/rank/);assert.equal(model.delta.enabled,false);
+  model.active=Promise.resolve();await assert.rejects(model.setDeltaMode({enabled:true,rank:4}),/active/);model.active=null;
+ }finally{model.active=null;await model.destroy();}
+});
+
+test('adapter loading rejects ambiguous targets before any GPU upload',async()=>{
+ const {manifest}=fixture(),{device,buffers}=deviceFixture(),model=new Qwen35TextModel(device,manifest,{control:{runDuty:f=>f()}});
+ manifest.source={baseRole:'qwen',sourceRevision:'source',configSha256:'config'};
+ const delta={schema:'kaminos.qwen35-delta.v1',complete:true,maxRank:3,qwenRevision:'source',baseConfigSha256:'config',projections:{},exact:{}};
+ for(const [name,e]of model.layout.projections){delta.projections[name]={a:{shape:[3,e.columns]},b:{shape:[e.rows,3]}};}
+ for(const [name,row]of model.layout.vectors)delta.exact[name]={shape:row.shape};
+ delta.exact['lm_head.weight']={shape:[64,64]};model.loaded=true;
+ const before=buffers.length;await assert.rejects(model.loadDelta(delta,'http://fixture/'),/ambiguous/);assert.equal(buffers.length,before);
+ await model.destroy();
+});
+
+test('choosing adapter rank while disabled preserves base-model cache and reports the chosen rank',async()=>{
+ const {manifest,fetchImpl}=fixture(),{device}=deviceFixture(),model=new Qwen35TextModel(device,manifest,{control:{runDuty:f=>f()}});
+ try{await model.load('http://localhost/model/',{fetchImpl});model.delta={maxRank:8,rank:8,enabled:false,baseVectors:model.vectors,enabledVectors:new Map(model.vectors)};
+ const state=await model.createState({capacity:4});const result=await model.setDeltaMode({enabled:false,rank:3});assert.equal(result.rank,3);assert.equal(model.delta.rank,3);assert.equal(result.reset,false);assert.equal(state.closed,false);
+ }finally{await model.destroy();}
+});

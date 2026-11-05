@@ -61,6 +61,13 @@ window.qwenModelResult = (async () => {
     stage = 'weights'; window.qwenModelProgress = { stage };
     const loadStarted = performance.now();
     await model.load(new URL('/model/', location.href), { onProgress: progress => { window.qwenModelProgress = { stage, ...progress }; } });
+    if(window.qwenDeltaMode){
+      const descriptor=manifest.delta;if(!descriptor)throw Error('delta package required');
+      const bytes=await(await fetch('/model/'+descriptor.file)).arrayBuffer();
+      const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(x=>x.toString(16).padStart(2,'0')).join('');if(hash!==descriptor.sha256)throw Error('delta manifest mismatch');
+      await model.loadDelta(JSON.parse(new TextDecoder().decode(bytes)),new URL('/model/',location.href));
+      result.delta={...await model.setDeltaMode(window.qwenDeltaMode),manifestSha256:hash};
+    }
     const loadMs = performance.now() - loadStarted;
     result.residentWeightBytes = [...model.owned].reduce((s, b) => s + b.size, 0);
     const capacity = meta.inputIds.length + 1;

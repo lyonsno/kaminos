@@ -183,3 +183,13 @@ test('batch timing v1 cannot masquerade as independently fenced dispatch measure
  expected.batchDecode=true;
  assert.throws(()=>adjudicateServingProfile(result,expected),/clock|schema/);
 });
+
+// Delta route evidence must distinguish a prompt-only mode from switched weights.
+test('delta evidence rejects wrong mode, rank, and source identity', async()=>{
+ const contract=await import('../models/qwen3_5/model-witness-contract.js');
+ assert.equal(typeof contract.adjudicateDeltaSelection,'function','delta weight selection needs an executable evidence contract');
+ const requested={enabled:true,rank:256},meta={enabled:true,rank:256,deltaManifestSha256:'source'};
+ const actual={enabled:true,rank:256,manifestSha256:'source'};
+ contract.adjudicateDeltaSelection(actual,requested,meta);
+ for(const change of [r=>r.enabled=false,r=>r.rank=64,r=>delete r.manifestSha256]){const r={...actual};change(r);assert.throws(()=>contract.adjudicateDeltaSelection(r,requested,meta),/delta/);}
+});

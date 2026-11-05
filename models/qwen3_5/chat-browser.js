@@ -30,6 +30,12 @@ export async function loadChatExample({ manifestUrl, manifestSha256, modelUrl, s
     control=createWebGpuInferenceControl({queue:device.queue});
     model=new Qwen35TextModel(device,manifest,{control,singleTokenKernel:'quad',batchDecode:true,decodeAttention:'single-query'});
     const started=performance.now(); await model.load(modelUrl,{signal,onProgress});
+    if(manifest.delta){
+      const response=await fetch(new URL(manifest.delta.file,modelUrl),{signal});if(!response.ok)throw Error('Delta manifest unavailable');
+      const raw=await response.arrayBuffer(),hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',raw))].map(x=>x.toString(16).padStart(2,'0')).join('');
+      if(hash!==manifest.delta.sha256)throw Error('Delta manifest identity mismatch');
+      await model.loadDelta(JSON.parse(new TextDecoder().decode(raw)),modelUrl,{signal,onProgress});
+    }
     const tokenizerResponse=await fetch(new URL('tokenizer.json',modelUrl),{signal});
     if(!tokenizerResponse.ok) throw Error('Tokenizer unavailable');
     const tokenizer=new QwenTokenizer(await tokenizerResponse.json());
@@ -39,7 +45,7 @@ export async function loadChatExample({ manifestUrl, manifestSha256, modelUrl, s
     return {chat,model,control,dispose,errors,identity:{backend:'webgpu',manifestSha256:digest,
       source:manifest.source,adapter:Object.fromEntries(['vendor','architecture','device','description','isFallbackAdapter'].map(k=>[k,adapter[k]??adapter.info?.[k]??null])),
       singleTokenKernel:model.singleTokenKernel,decodeAttention:model.decodeAttention,batchDecode:model.batchDecode,
-      capacity,loadMs:performance.now()-started}};
+      delta:model.delta?{maxRank:model.delta.maxRank,enabled:false,rank:model.delta.rank}:null,capacity,loadMs:performance.now()-started}};
   } catch(e) { try { await dispose(); } catch(cleanup) { throw new AggregateError([e,cleanup],'chat load and cleanup failed'); } throw e; }
 }
 
