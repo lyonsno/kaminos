@@ -724,6 +724,58 @@ export function allocateColliderLods(candidates = [], {
   };
 }
 
+export function selectAshCollisionLod(levels = [], {
+  cellSize = 0.04,
+  worldDiag = 1,
+  heroFaces = Infinity,
+  maxCellError = 0.75,
+  maxDroppedFeature = 0.02,
+  stat = 'p95',
+  tailWeight = 0.5,
+  creviceAllowance = 0.005,
+} = {}) {
+  const sorted = [...(levels ?? [])]
+    .filter(l => Number.isFinite(l?.faces) && l.faces > 0 && (!Number.isFinite(heroFaces) || l.faces < heroFaces))
+    .sort((a, b) => b.faces - a.faces);
+  const hasOpenTier = sorted.some(l => l.closed === false);
+  const allowance = Number.isFinite(Number(creviceAllowance)) ? Math.max(0, Number(creviceAllowance)) : 0.005;
+  const maxDropped = Number.isFinite(Number(maxDroppedFeature)) ? Math.max(0, Number(maxDroppedFeature)) : 0.02;
+  const cellBudget = Math.max(1e-6, Number(cellSize) || 0.04) * (Number.isFinite(Number(maxCellError)) && Number(maxCellError) > 0 ? Number(maxCellError) : 0.75);
+  const wDiag = Number.isFinite(Number(worldDiag)) && Number(worldDiag) > 0 ? Number(worldDiag) : 1;
+
+  const admissible = [];
+  for (const l of sorted) {
+    if (hasOpenTier && l.closed === true) continue;
+    const err = l.error;
+    const refDiag = Number(err?.diagonal) > 0 ? Number(err.diagonal) : wDiag;
+    if (refDiag > 0 && err?.sourceToLevel?.max != null && err?.levelToSource?.max != null) {
+      const dropped = Math.max(0, Number(err.sourceToLevel.max) / refDiag - Number(err.levelToSource.max) / refDiag - allowance);
+      if (dropped > maxDropped) continue;
+    }
+    const effectiveDiag = refDiag;
+    const relErr = effectiveRelativeGeomError(l, {stat, tailWeight, creviceAllowance});
+    const worldError = effectiveDiag * relErr;
+    const sha = l.sha ?? l.sha256;
+    admissible.push({tier: sha, sha, faces: l.faces, worldError, level: l});
+  }
+  for (let i = 1; i < admissible.length; i++) {
+    if (admissible[i].worldError < admissible[i - 1].worldError) {
+      admissible[i].worldError = admissible[i - 1].worldError;
+    }
+  }
+  if (!admissible.length) {
+    return {tier: 'hero', sha: 'hero', faces: Number.isFinite(heroFaces) ? heroFaces : null, worldError: 0, level: null, admissible};
+  }
+  let chosen = admissible[0];
+  for (let i = admissible.length - 1; i >= 0; i--) {
+    if (admissible[i].worldError <= cellBudget) {
+      chosen = admissible[i];
+      break;
+    }
+  }
+  return {...chosen, admissible};
+}
+
 function cloneBorrowedRung(THREE, node) {
   const copy = node.isMesh ? new THREE.Mesh(node.geometry, node.userData?.kaminosOriginalMaterial ?? node.material) : new THREE.Group();
   copy.position.copy(node.position);
@@ -1359,6 +1411,54 @@ export function createSceneBeautyLodController({
 
   const unbindGiRelease = giProxies?.onRelease?.(root => release(root)) ?? null;
 
+  function ensureEntry(root) {
+    let entry = entries.get(root);
+    if (!entry) {
+      const {heroFaces, localBox, unwarpedBounds, texelStretch} = inspectHeroRoot(root);
+      entry = {
+        id: root.userData?.kaminosSceneObject?.id ?? root.uuid,
+        heroFaces,
+        localBox,
+        unwarpedBounds,
+        texelStretch,
+        rungs: new Map(),
+        inFlight: new Set(),
+        activeTier: 'hero',
+        footprintTier: 'hero',
+        displayedTier: 'hero',
+        mountedRungSha: null,
+        wrapper: null,
+        repCopies: [],
+        savedHeroVisibility: new Map(),
+        generation: 1,
+        surfelLevelsAttached: false,
+        surfelLevelsInFlight: false,
+        warpFn: typeof root.userData?.kaminosVertexWarp === 'function' ? root.userData.kaminosVertexWarp : null,
+        warpRevision: root.userData?.kaminosVertexWarpRevision ?? 0,
+      };
+      entries.set(root, entry);
+    } else {
+      const curWarpFn = typeof root.userData?.kaminosVertexWarp === 'function' ? root.userData.kaminosVertexWarp : null;
+      const curWarpRev = root.userData?.kaminosVertexWarpRevision ?? 0;
+      if (entry.warpFn !== curWarpFn || entry.warpRevision !== curWarpRev) {
+        entry.warpFn = curWarpFn;
+        entry.warpRevision = curWarpRev;
+        const {heroFaces, localBox, unwarpedBounds, texelStretch} = inspectHeroRoot(root);
+        entry.heroFaces = heroFaces;
+        entry.localBox = localBox;
+        if (unwarpedBounds) entry.unwarpedBounds = unwarpedBounds;
+        entry.texelStretch = texelStretch;
+        for (const rungRecord of entry.rungs.values()) {
+          const warpRes = applyRootVertexWarpToRung(THREE, rungRecord.root, curWarpFn, {bounds: entry.unwarpedBounds});
+          if (warpRes.texelStretch > entry.texelStretch) entry.texelStretch = warpRes.texelStretch;
+          rungRecord.warpFn = curWarpFn;
+          rungRecord.warpRevision = curWarpRev;
+        }
+      }
+    }
+    return entry;
+  }
+
   return {
     read: () => ({...config}),
     setSettings(patch = {}) {
@@ -1403,49 +1503,7 @@ export function createSceneBeautyLodController({
           }
           continue;
         }
-        if (!entry) {
-          const {heroFaces, localBox, unwarpedBounds, texelStretch} = inspectHeroRoot(root);
-          entry = {
-            id: root.userData?.kaminosSceneObject?.id ?? root.uuid,
-            heroFaces,
-            localBox,
-            unwarpedBounds,
-            texelStretch,
-            rungs: new Map(),
-            inFlight: new Set(),
-            activeTier: 'hero',
-            footprintTier: 'hero',
-            displayedTier: 'hero',
-            mountedRungSha: null,
-            wrapper: null,
-            repCopies: [],
-            savedHeroVisibility: new Map(),
-            generation: 1,
-            surfelLevelsAttached: false,
-            surfelLevelsInFlight: false,
-            warpFn: typeof root.userData?.kaminosVertexWarp === 'function' ? root.userData.kaminosVertexWarp : null,
-            warpRevision: root.userData?.kaminosVertexWarpRevision ?? 0,
-          };
-          entries.set(root, entry);
-        } else {
-          const curWarpFn = typeof root.userData?.kaminosVertexWarp === 'function' ? root.userData.kaminosVertexWarp : null;
-          const curWarpRev = root.userData?.kaminosVertexWarpRevision ?? 0;
-          if (entry.warpFn !== curWarpFn || entry.warpRevision !== curWarpRev) {
-            entry.warpFn = curWarpFn;
-            entry.warpRevision = curWarpRev;
-            const {heroFaces, localBox, unwarpedBounds, texelStretch} = inspectHeroRoot(root);
-            entry.heroFaces = heroFaces;
-            entry.localBox = localBox;
-            if (unwarpedBounds) entry.unwarpedBounds = unwarpedBounds;
-            entry.texelStretch = texelStretch;
-            for (const rungRecord of entry.rungs.values()) {
-              const warpRes = applyRootVertexWarpToRung(THREE, rungRecord.root, curWarpFn, {bounds: entry.unwarpedBounds});
-              if (warpRes.texelStretch > entry.texelStretch) entry.texelStretch = warpRes.texelStretch;
-              rungRecord.warpFn = curWarpFn;
-              rungRecord.warpRevision = curWarpRev;
-            }
-          }
-        }
+        entry = ensureEntry(root);
         if (handle.representation === 'surfels') {
           ensureSurfelLevelsLoaded(root, entry, handle);
           continue;
@@ -1610,6 +1668,47 @@ export function createSceneBeautyLodController({
       return entry ? [...entry.rungs.values()] : [];
     },
     applyWarp: (root, warpFn, options) => applyRootVertexWarpToRung(THREE, root, warpFn, options),
+    resolveCollisionRung(root, {cellSize = 0.04} = {}) {
+      if (disposed || !root) return null;
+      const handle = giProxies?.get?.(root);
+      if (!handle || handle.representation === 'surfels') return null;
+      if (handle.state === 'resolving') return {pending: true};
+      if (!handle.levels?.length) return null;
+      root.updateWorldMatrix?.(true, false);
+      const entry = ensureEntry(root);
+      const worldBox = new THREE.Box3().copy(entry.localBox).applyMatrix4(root.matrixWorld);
+      const worldDiag = boxDiagonal(worldBox);
+      const choice = selectAshCollisionLod(handle.levels, {
+        cellSize,
+        worldDiag,
+        heroFaces: entry.heroFaces,
+        stat: config.stat,
+        tailWeight: config.tailWeight,
+        creviceAllowance: config.creviceAllowance,
+      });
+      if (!choice.level || choice.tier === 'hero') return null;
+      ensureRungLoaded(root, entry, choice.level);
+      if (entry.rungs.has(choice.tier)) {
+        const rec = entry.rungs.get(choice.tier);
+        return {tier: choice.tier, sha: choice.tier, faces: rec.faces, root: rec.root, worldError: choice.worldError};
+      }
+      for (const cand of choice.admissible ?? []) {
+        if (entry.rungs.has(cand.tier)) {
+          const rec = entry.rungs.get(cand.tier);
+          return {tier: cand.tier, sha: cand.tier, faces: rec.faces, root: rec.root, worldError: cand.worldError};
+        }
+      }
+      if (entry.inFlight.size > 0) return {pending: true};
+      return null;
+    },
+    async prepareCollision(roots = [], {cellSize = 0.04} = {}) {
+      if (disposed) return [];
+      await giProxies?.whenIdle?.();
+      const list = Array.isArray(roots) ? roots.filter(Boolean) : [];
+      for (const root of list) this.resolveCollisionRung(root, {cellSize});
+      await this.whenIdle();
+      return list.map(root => this.resolveCollisionRung(root, {cellSize}));
+    },
     whenIdle: async () => {
       while (pendingLoads.size) await Promise.all([...pendingLoads]);
     },

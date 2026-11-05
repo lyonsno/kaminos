@@ -71,3 +71,16 @@ test('an automatic LOD change is outlined in the same frame the renderer draws i
   assert.notDeepEqual(drawn,[false,true],'the camera move crossed a level boundary');
   assert.deepEqual(outlined,drawn);
 });
+
+test('selection mask skips GPU procedural carrier meshes whose geometry uses indirect draw or material.positionNode',()=>{
+  const feedback=feedbackFor(),root=new THREE.Group();
+  const normalMesh=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial());
+  const indirectGeom=new THREE.PlaneGeometry(1,1);indirectGeom.indirect={};
+  const indirectMesh=new THREE.Mesh(indirectGeom,new THREE.MeshBasicMaterial());
+  const posNodeMat=new THREE.MeshBasicMaterial();posNodeMat.positionNode={};
+  const posNodeMesh=new THREE.Mesh(new THREE.IcosahedronGeometry(1,0),posNodeMat);
+  root.add(normalMesh,indirectMesh,posNodeMesh);
+  feedback.update([{id:'ash-like',object:root}],['ash-like']);
+  assert.equal(feedback.proxies().length,1,'only standard geometry-positioned mesh gets a mask proxy');
+  assert.equal(feedback.proxies()[0].geometry,normalMesh.geometry);
+});

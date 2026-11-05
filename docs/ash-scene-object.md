@@ -6,7 +6,7 @@ Select **Ash source** to set its emission rate/radius or pause it. Move/scale it
 
 Select **Ash field** to pause evolution, enable uniform fallout across its footprint, or add an explicit layer. **Smooth lighting (preview)** blends density-gradient normals on the existing cached faces; it does not change cells, face counts or silhouette. It adds vertex-stage sampling, not a second draw or simulation pass, and is off by default. Legacy saved fields retain their original embedded source under **Legacy field source**. F3 **Add Ash field** retains explicit lattice setup for deliberate field authoring.
 
-Field coordinates and gravity are local; its transform carries retained material. Source position is independently authored in world space and converted to field coordinates each step. Source radius conservatively uses the larger X/Z scale ratio. Changing lattice dimensions/cell width requires another field; moving/scaling remains available without resetting material. Several sources share one airborne transport/deposition dispatch and one field step. Parcel birth sites are sampled by source volume rate. Excess source budget remains field-owned pending mass, as before; the runtime does not retain per-emitter attribution for that backlog.
+Field coordinates and gravity are local; its transform carries retained material. Source position is independently authored in world space and converted to field coordinates each step. Source radius conservatively uses the larger X/Z scale ratio. Select the field to edit Width, Depth, Height and Cell width, then use **Reset at cell width**. Reset clears deposited and falling material while preserving field placement and connected source objects. Moving/scaling remains available without resetting material. Several sources share one airborne transport/deposition dispatch and one field step. Parcel birth sites are sampled by source volume rate. Excess source budget remains field-owned pending mass, as before; the runtime does not retain per-emitter attribution for that backlog.
 
 The runtime is the same shared-device WebGPU tiled solver as the ash experiment,
 using merged exposed-face runs. Ordinary rigid scene meshes are sampled in the
@@ -65,3 +65,26 @@ The field inspector exposes **Slide variation** (0–1), **Variation scale** (fi
 The first plain-variation fixture retained a long active settling tail; release is independently adjustable so that tradeoff remains inspectable. Recommended comparison values are variation1, scale0.24, release0.5, against all-zero variation/release. These are provisional appearance settings, not calibrated ash properties.
 
 Only already-admitted exchange work evaluates the variation. The six existing exchange passes and wake propagation remain; a settings edit wakes the field once so existing material can respond. Settling can take more or fewer steps and change exposed-face counts. No total-cost or speedup claim follows. With variation enabled, a one-millionth-cell fill-difference deadband stops floating-point creep at the repose threshold; material remains retained unchanged when a transfer is skipped. Sleeping fields retain their cached surface. Configuration and evolved density survive ordinary scene saving; old records/checkpoints retain uniform resistance by default. The Workbench tiled experiment uses the same `sliding({variation,scale,release})` operation and controls.
+
+
+## Coarse and fine regions
+
+The field inspector's **Coarse and fine regions** section enables two physical resolutions. **Cell width** is the fine width; the surrounding volume uses twice that width. Add and select fine regions, edit their field-local minimum and maximum bounds, then use **Reset at cell width**. The reset snaps bounds to coarse cell boundaries and rejects overlapping or empty regions. Amber boxes show the applied fine regions when the field is selected. A shallow fine region can cover a broad deposited surface, with additional non-overlapping regions above it around complex geometry.
+
+These are fixed regions in the field's frame. Moving rigid scene objects can cross their boundaries; the regions do not follow objects or automatically grow. Occupied fine material stays fine until an explicit reset. Reset clears it rather than resampling it. Several ash fields remain independent and are not a substitute for connected refinement.
+
+Both resolutions store conserved volume in units of one fine cell. Covered coarse cells are masked; a coarse cell outside refinement holds up to eight fine-cell volumes. Exchange across a coarse face accounts for its four fine neighbors and limits every transfer by shared source and destination capacity. This uses an offer/limit/gather step rather than the uniform solver's checkerboard pairs, so transient settling can differ. Falling parcels, moving-mesh collision and surface drawing use the same ownership map. Surface corners share the fine grid at a boundary, with cached face subdivisions joining the two resolutions. Smooth lighting remains optional.
+
+The implementation reserves a coarse background and explicit fine patches, including overlap slots masked out of the coarse storage. It has no dynamic paging, automatic refinement placement or occupied-patch demotion. Fine coverage and subdivision of exposed coarse faces both affect allocation. The inspector's allocation includes solver, parcel, collision and surface buffers; it does not establish GPU time or a speedup. Live stepping has no CPU readback. Refined checkpoints use `kaminos.refined-ash.v1`; uniform checkpoints retain `kaminos.tiled-ash.v1`.
+
+```js
+await window.kaminosAsh.regrid(fieldId, {
+  cellSize: .016,
+  refinement: {ratio: 2, regions: [
+    {min: [-3.52, 0, -1.92], max: [3.52, .128, 1.92]},
+    {min: [-.64, .128, -.64], max: [.64, .768, .64]}
+  ]}
+});
+```
+
+This example assumes a 7.04 × 3.84 field at least .768 high. Region coordinates must align relative to the field's minimum corner. Regridding is deliberate and cannot be undone; save the evolved scene first if its material needs to be kept.

@@ -1,5 +1,6 @@
 import {checkedSliding} from './sliding.mjs';
 import {patchLayout} from './gpu-plan.mjs';
+import {createRefinementLayout} from './refinement-plan.mjs';
 import {sourceSettings} from './fall-plan.mjs';
 export const ASH_OBJECT_TYPE='retained-ash';
 export const ASH_OBJECT_SOURCE='kaminos:retained-ash';
@@ -14,10 +15,13 @@ export function checkedAshSettings(raw){
  for(const key of ['paused','emitting'])if(typeof raw[key]!=='boolean')throw Error(`Invalid ash ${key}`);
  sourceSettings({position:raw.sourcePosition,rate:raw.rate,spread:raw.spread});
  if(raw.sourcePosition[1]<0||Math.abs(raw.sourcePosition[0])>raw.width/2||Math.abs(raw.sourcePosition[2])>raw.depth/2)throw Error('Place the ash source over its field');
- if(raw.checkpoint!=null&&raw.checkpoint.schema!=='kaminos.tiled-ash.v1')throw Error('Invalid retained ash checkpoint schema');
+ if(raw.checkpoint!=null&&raw.checkpoint.schema!==(raw.refinement?'kaminos.refined-ash.v1':'kaminos.tiled-ash.v1'))throw Error('Invalid retained ash checkpoint schema');
  const result=structuredClone(raw);ashObjectLayout(result);return result;
 }
-export function ashObjectLayout(s){return patchLayout({cellSize:s.cellSize,tileSize:16,bounds:{min:[-s.width/2,0,-s.depth/2],max:[s.width/2,s.height,s.depth/2]}});}
+export function ashObjectLayout(s){
+ const input={cellSize:s.cellSize,tileSize:16,bounds:{min:[-s.width/2,0,-s.depth/2],max:[s.width/2,s.height,s.depth/2]}};
+ return s.refinement?createRefinementLayout({...input,refinement:s.refinement}):patchLayout(input);
+}
 export function checkedAshPose(pose){
  for(const key of ['position','rotation','scale'])if(!Array.isArray(pose?.[key])||pose[key].length!==3||!pose[key].every(Number.isFinite))throw Error('Invalid ash transform');
  if(pose.scale.some(x=>x===0))throw Error('Ash scale must be nonzero');
