@@ -25808,7 +25808,7 @@ async function collectSceneComposition() {
   for (const [key, value] of fireLightFieldRouteParams()) {
     if (key.startsWith('volume_light_field')) route[key] = value;
   }
-  Object.assign(route,failedRecovery?(window.kaminosDeviceRecovery?.authoredFlameRoute()??{}):fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()));
+  Object.assign(route,failedRecovery?Object.fromEntries(Object.entries(window.kaminosDeviceRecovery?.authoredFlameRoute()??{}).filter(([key])=>key.startsWith('volume_light_field'))):fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()));
   const moduleUrl = new URLSearchParams(location.hash.slice(1)).get('composition_module_url');
   if (moduleUrl) route.composition_module_url = moduleUrl;
   route.volume_light_field_test_scene = document.getElementById('fire-light-test-scene-toggle').checked ? '1' : '0';

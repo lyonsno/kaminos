@@ -7,7 +7,7 @@ const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const start=source.indexOf('async function collectSceneComposition()');
 const collect=source.slice(start,source.indexOf('async function withAuthoringAction(',start));
 let phase='failed',checkpoints=0;
-const context=sceneContext({deviceRecovery:{state:()=>({phase})},window:{kaminosDeviceRecovery:{authoredFlameRoute:()=>({volume_light_field_hybrid_shadow_resolution:"64"})}},
+const context=sceneContext({deviceRecovery:{state:()=>({phase})},window:{kaminosDeviceRecovery:{authoredFlameRoute:()=>({workspace:"workbench",volume_light_field_hybrid_shadow_resolution:"64"})}},
  volumePrototype:{debugState:()=>({active:false})},activeSceneComposition:{flame:{presetId:'old'}},
  isAuthoredKilnCollisionRoute:()=>false,isSceneItemVisible:()=>true,isFireLightFieldRoute:()=>true,volumeCockpitLayoutReady:Promise.resolve(),
  buildVolumeSettingsPreset:()=>({domControls:{},rendererControls:{},presentationControls:{}}),
@@ -19,6 +19,7 @@ vm.runInContext(collect,context);
 await vm.runInContext('collectSceneComposition()',context);
 assert.equal(context.activeSceneComposition.flame.presetId,'current-authored','failed recovery must still save the authored flame settings');
 assert.equal(context.activeSceneComposition.route.volume_light_field_hybrid_shadow_resolution,'64');
+assert.equal(context.activeSceneComposition.route.workspace,undefined,'recovery URL state must not enter the saved composition');
 phase='active';await assert.rejects(vm.runInContext('collectSceneComposition()',context),/not active/,'ordinary inactive flame remains rejected');
 phase='failed';context.authoredAsh.set('ash',{checkpoint(){checkpoints++;throw Error('dead GPU read');}});
 await assert.rejects(vm.runInContext('collectSceneComposition()',context),/Ash state is unavailable after GPU loss/);
