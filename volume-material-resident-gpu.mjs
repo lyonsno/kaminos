@@ -31,7 +31,7 @@ struct ResidentRemap {source:vec4<u32>,loPitch:vec4<f32>}
 
 export function createResidentMaterialHierarchyGPU(device,plan,code,initialOptions){
  let options=validateAllocation(initialOptions),active=null,bank=0,current=0,steps=0,destroyed=false;
- let headerObservation=null,topologyObservation=null,demandObservation=null,observing=false,observeTopology=false,observeDemand=false,observeHeader=false,error=null,lastBacktrace=0;
+ let headerObservation=null,topologyObservation=null,demandObservation=null,observing=false,observeTopology=false,observeDemand=false,observeHeader=false,error=null,lastBacktrace=0,transportClock=0;
  const observationBuffers=new Set();
  const resources=new Set(),pipelines=new Map(),groups=new Map();
  let diagnostics={levels:[],bricks:[]};
@@ -64,12 +64,13 @@ export function createResidentMaterialHierarchyGPU(device,plan,code,initialOptio
  let observedStep=-1;
  function observation(encoder,s,which,requestedStep){
   if(observing||!observeTopology&&!observeDemand&&!observeHeader)return;
+  const sampledAt=performance.now()/1000,sampleClock=transportClock;
   const geometry=observeDemand||(observeTopology&&(!topologyObservation||topologyObservation.revision!==headerObservation?.revision)),stateBytes=geometry?s.state[which].size:64,metaBytes=geometry?s.nodes[which].size:0,demandBytes=observeDemand?s.demand.size:0;
   observeDemand=false;
   const copy=buffer('explicit material observation',stateBytes+metaBytes+demandBytes,D|usage.MAP_READ);observationBuffers.add(copy);encoder.copyBufferToBuffer(s.state[which],0,copy,0,stateBytes);if(metaBytes)encoder.copyBufferToBuffer(s.nodes[which],0,copy,stateBytes,metaBytes);if(demandBytes)encoder.copyBufferToBuffer(s.demand,0,copy,stateBytes+metaBytes,demandBytes);observing=true;
   queueMicrotask(async()=>{let mapped=false;try{await copy.mapAsync(GPUMapMode.READ);mapped=true;if(destroyed)return;const bytes=copy.getMappedRange(),u=new Uint32Array(bytes),f=new Float32Array(bytes),count=u[0],leaves=u[1],revision=u[2];headerObservation={allocatedBricks:count,leafBricks:leaves,revision,steps:requestedStep,observedAt:performance.now()/1000};observedStep=requestedStep;if(!metaBytes)return;const nodes=[];for(let i=0;i<count;i++){const slot=u[u[8]+i],base=stateBytes/4+slot*16,level=u[base+13],pitch=f[base+3],lo=Array.from(f.subarray(base,base+3)),c=lo.map((v,a)=>Math.round((v-plan.min[a])/(4*pitch))),children=u[base+4]===0xffffffff?null:Array.from(u.subarray(base+4,base+12));nodes.push({key:`${level}:${c.join(':')}`,slot,level,c,lo,pitch,childSlots:children,parentSlot:u[base+12]});}const bySlot=new Map(nodes.map(n=>[n.slot,n]));for(const n of nodes)n.children=n.childSlots?.map(k=>bySlot.get(k).key)??null;
    headerObservation={allocatedBricks:count,leafBricks:leaves,revision,steps:requestedStep,observedAt:performance.now()/1000};observedStep=requestedStep;setTopology({nodes,revision,steps:requestedStep});
-   if(demandBytes){const start=(stateBytes+metaBytes)/4;demandObservation={revision,steps:requestedStep,sampledAt:performance.now()/1000,boxes:nodes.filter(n=>!n.children).map(n=>{const d=start+n.slot*12,signal={reaction:f[d],mixing:f[d+1],thermal:f[d+2],smoke:f[d+3]},volume=n.lo.reduce((v,x,a)=>v*Math.max(0,Math.min(plan.max[a],x+4*n.pitch)-x),1);return{id:n.key,lo:n.lo,hi:n.lo.map((x,a)=>Math.min(plan.max[a],x+4*n.pitch)),weight:materialImportance(signal,options.weights)*volume,motionMin:Array.from(f.subarray(d+4,d+7)),motionMax:Array.from(f.subarray(d+8,d+11))};})};}
+   if(demandBytes){const start=(stateBytes+metaBytes)/4,previous=demandObservation,transportRate=previous&&sampledAt>previous.sampledAt?(sampleClock-previous.clock)/(sampledAt-previous.sampledAt):0;demandObservation={revision,steps:requestedStep,sampledAt,clock:sampleClock,transportRate,boxes:nodes.filter(n=>!n.children).map(n=>{const d=start+n.slot*12,signal={reaction:f[d],mixing:f[d+1],thermal:f[d+2],smoke:f[d+3]},volume=n.lo.reduce((v,x,a)=>v*Math.max(0,Math.min(plan.max[a],x+4*n.pitch)-x),1);return{id:n.key,lo:n.lo,hi:n.lo.map((x,a)=>Math.min(plan.max[a],x+4*n.pitch)),weight:materialImportance(signal,options.weights)*volume,motionMin:Array.from(f.subarray(d+4,d+7),v=>v*transportRate),motionMax:Array.from(f.subarray(d+8,d+11),v=>v*transportRate)};})};}
   }catch(e){if(!destroyed)error=e.message;}finally{if(mapped)copy.unmap();observationBuffers.delete(copy);destroyOne(copy);observing=false;}});
  }
  admission(options);
@@ -77,7 +78,7 @@ export function createResidentMaterialHierarchyGPU(device,plan,code,initialOptio
   configure(patch){const next=validateAllocation({...options,...patch,weights:{...options.weights,...patch.weights}});admission(next);options=next;return this.read();},
   observe({topology=observeTopology,demand=observeDemand,header=observeHeader}={}){observeTopology=!!topology;observeDemand=!!demand;observeHeader=!!header;},
   encode(encoder,world,backtraceScale=0,sources={}){
-   if(destroyed)throw Error('Material hierarchy disposed');uploadSources(sources);lastBacktrace=Math.abs(backtraceScale);
+   if(destroyed)throw Error('Material hierarchy disposed');uploadSources(sources);lastBacktrace=Math.abs(backtraceScale);transportClock+=lastBacktrace;
    let old=active,oldBank=bank,oldCurrent=current;const shape=admission(options);if(!active||active.capacity!==shape.cap||active.maxDetail!==options.maxDetail){active=make(options);bank=1;current=0;}bank=1-bank;
    const s=active,oldNodes=old?.nodes[oldBank]??dummyNodes,oldState=old?.state[oldBank]??dummyState,oldDemand=old?.demand??dummyDemand;
    // Prediction belongs to the prior topology. A capacity change retains that
