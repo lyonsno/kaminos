@@ -327,6 +327,18 @@ const fragFormedColor=wgslFn(`fn hill_frag_color(vColor:vec4<f32>,x:f32,y:f32,z:
  return vec4<f32>(clamp(finalLin,vec3<f32>(0.),vec3<f32>(1.)),1.);
 }`,[geoFbm3,geoLedgeProfile,geoRockCrag,geoVoronoi2]);
 
+const zoomCellKernel=wgslFn(`fn hill_cell_xy(ix:u32,iz:u32,n:u32,state:ptr<storage,array<vec4<f32>>,read_write>)->vec2<f32>{
+ let c=(*state)[iz*n+ix].xy;
+ let l=(*state)[iz*n+select(0u,ix-1u,ix>0u)].xy;
+ let r=(*state)[iz*n+min(n-1u,ix+1u)].xy;
+ let u=(*state)[select(0u,iz-1u,iz>0u)*n+ix].xy;
+ let d=(*state)[min(n-1u,iz+1u)*n+ix].xy;
+ let hc=c.x+c.y;
+ let minN=min(min(l.x+l.y,r.x+r.y),min(u.x+u.y,d.x+d.y));
+ if(minN>hc+.02){return vec2<f32>(c.x,c.y+(minN-hc));}
+ return c;
+}`);
+
 const baseCutoutKernel=wgslFn(`fn hill_base_cutout(x:f32,z:f32,fx:f32,fz:f32,fr:f32,useFormed:f32,zoomOn:f32)->f32{
  if(useFormed<.5||zoomOn<.5||fr>3.05){return 1.;}
  let distToEdge=fr-max(abs(x-fx),abs(z-fz));
@@ -334,14 +346,15 @@ const baseCutoutKernel=wgslFn(`fn hill_base_cutout(x:f32,z:f32,fx:f32,fz:f32,fr:
  return 1.;
 }`);
 
-const basePosKernel=wgslFn(`fn hill_base_pos(x:f32,y:f32,z:f32,fx:f32,fz:f32,fr:f32,useFormed:f32,zoomOn:f32)->vec4<f32>{
+const basePosKernel=wgslFn(`fn hill_base_pos(v:u32,n:u32,x:f32,y:f32,z:f32,fx:f32,fz:f32,fr:f32,useFormed:f32,zoomOn:f32,state:ptr<storage,array<vec4<f32>>,read_write>)->vec4<f32>{
  if(useFormed<.5||zoomOn<.5||fr>3.05){return vec4<f32>(x,y,z,1.);}
+ let c=hill_cell_xy(v%n,v/n,n,state);
  let dBox=max(abs(x-fx),abs(z-fz));
  let distToEdge=fr-dBox;
  let zAct=1.-smoothstep(2.65,3.05,fr);
  let cut=smoothstep(.10,.28,distToEdge);
- return vec4<f32>(x,y-.042*zAct*cut,z,1.);
-}`);
+ return vec4<f32>(x,c.x+c.y-.042*zAct*cut,z,1.);
+}`,[zoomCellKernel]);
 
 // Camera-centered arbitrary-zoom 3D surface synthesis:
 // Interpolating overshoot-clamped Catmull-Rom surface (0.0mm vertex discrepancy vs baseMesh)
@@ -362,10 +375,13 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
  let gz=clamp((wz/length+.5)*fn1,0.,fn1-.0001);
  let ix=u32(gx);let iz=u32(gz);
  let tx=gx-f32(ix);let tz=gz-f32(iz);
- let s00=(*state)[iz*n+ix];
- let s10=(*state)[iz*n+min(n-1u,ix+1u)];
- let s01=(*state)[min(n-1u,iz+1u)*n+ix];
- let s11=(*state)[min(n-1u,iz+1u)*n+min(n-1u,ix+1u)];
+ let ix0=select(0u,ix-1u,ix>0u);let ix1=ix;let ix2=min(n-1u,ix+1u);let ix3=min(n-1u,ix+2u);
+ let iz0=select(0u,iz-1u,iz>0u);let iz1=iz;let iz2=min(n-1u,iz+1u);let iz3=min(n-1u,iz+2u);
+ let p00=hill_cell_xy(ix0,iz0,n,state);let p10=hill_cell_xy(ix1,iz0,n,state);let p20=hill_cell_xy(ix2,iz0,n,state);let p30=hill_cell_xy(ix3,iz0,n,state);
+ let p01=hill_cell_xy(ix0,iz1,n,state);let p11=hill_cell_xy(ix1,iz1,n,state);let p21=hill_cell_xy(ix2,iz1,n,state);let p31=hill_cell_xy(ix3,iz1,n,state);
+ let p02=hill_cell_xy(ix0,iz2,n,state);let p12=hill_cell_xy(ix1,iz2,n,state);let p22=hill_cell_xy(ix2,iz2,n,state);let p32=hill_cell_xy(ix3,iz2,n,state);
+ let p03=hill_cell_xy(ix0,iz3,n,state);let p13=hill_cell_xy(ix1,iz3,n,state);let p23=hill_cell_xy(ix2,iz3,n,state);let p33=hill_cell_xy(ix3,iz3,n,state);
+ let s00=p11;let s10=p21;let s01=p12;let s11=p22;
  var bedTri=0.;var soilTri=0.;
  if(tx+tz<=1.){
   bedTri=s00.x+tx*(s10.x-s00.x)+tz*(s01.x-s00.x);
@@ -391,12 +407,6 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
  let dwz1=.5*tz*(3.*tz-4.);
  let dwz2=.5*(-3.*tz*tz+2.*tz+1.);
  let dwz3=.5*tz*tz;
- let ix0=select(0u,ix-1u,ix>0u);let ix1=ix;let ix2=min(n-1u,ix+1u);let ix3=min(n-1u,ix+2u);
- let iz0=select(0u,iz-1u,iz>0u);let iz1=iz;let iz2=min(n-1u,iz+1u);let iz3=min(n-1u,iz+2u);
- let p00=(*state)[iz0*n+ix0].xy;let p10=(*state)[iz0*n+ix1].xy;let p20=(*state)[iz0*n+ix2].xy;let p30=(*state)[iz0*n+ix3].xy;
- let p01=(*state)[iz1*n+ix0].xy;let p11=(*state)[iz1*n+ix1].xy;let p21=(*state)[iz1*n+ix2].xy;let p31=(*state)[iz1*n+ix3].xy;
- let p02=(*state)[iz2*n+ix0].xy;let p12=(*state)[iz2*n+ix1].xy;let p22=(*state)[iz2*n+ix2].xy;let p32=(*state)[iz2*n+ix3].xy;
- let p03=(*state)[iz3*n+ix0].xy;let p13=(*state)[iz3*n+ix1].xy;let p23=(*state)[iz3*n+ix2].xy;let p33=(*state)[iz3*n+ix3].xy;
  let r0=wx0*p00+wx1*p10+wx2*p20+wx3*p30;
  let r1=wx0*p01+wx1*p11+wx2*p21+wx3*p31;
  let r2=wx0*p02+wx1*p12+wx2*p22+wx3*p32;
@@ -516,7 +526,7 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
  }
  if(mode==1u){return vec4<f32>(py-rawSoil,max(0.,rawSoil-cobbleOut*2.2),dispOut,rawSlope);}
  return vec4<f32>(px,py,pz,1.);
-}`,[geoFbm3,geoLedgeProfile,geoRockCrag,geoVoronoi2]);
+}`,[zoomCellKernel,geoFbm3,geoLedgeProfile,geoRockCrag,geoVoronoi2]);
 
 const zoomNormKernel=wgslFn(`fn hill_zoom_norm(v:u32,zn:u32,tilt:f32,strike:f32,fold:f32,thickness:f32,seed:f32,stepStyle:f32,meso:f32,useFormed:f32,posBuf:ptr<storage,array<vec4<f32>>,read_write>,metaBuf:ptr<storage,array<vec4<f32>>,read_write>)->vec4<f32>{
  let xi=v%zn;let zi=v/zn;
@@ -568,7 +578,7 @@ export function createTerrainGPU(geometry,input={}){
  const publishers=states.map(()=>Fn(()=>{
   const state=displayState;
   const v=instanceIndex,s=state.element(v),x=v.mod(uint(n)).toFloat().div(n-1).sub(.5).mul(config.width),z=v.div(uint(n)).toFloat().floor().div(n-1).sub(.5).mul(config.length);
-  positionNode.element(v).assign(basePosKernel({x,y:s.x.add(s.y),z,fx:focusX,fz:focusZ,fr:focusRadius,useFormed,zoomOn:zoomEnabled}));
+  positionNode.element(v).assign(basePosKernel({v,n:uint(n),x,y:s.x.add(s.y),z,fx:focusX,fz:focusZ,fr:focusRadius,useFormed,zoomOn:zoomEnabled,state}));
   const norm=normal({v,n:uint(n),dx:float(config.width/(n-1)),dz:float(config.length/(n-1)),x,z,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,ledge:mesoLedge,crag:mesoCrag,rill:mesoRill,viewMode:viewModeUniform,useFormed,state});
   normalNode.element(v).assign(norm);
   const cover=s.y.mul(4).clamp(0,1),steep=float(1).sub(norm.y).mul(1.3).clamp(0,1),exposed=steep.mul(float(1).sub(cover.mul(.4)));
