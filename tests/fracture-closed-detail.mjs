@@ -1,7 +1,7 @@
 // kaminos-test: node
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {BoxGeometry} from '../lib/three.core.js';
+import {BoxGeometry,TorusGeometry} from '../lib/three.core.js';
 import {prepareWholeFracture,materialMeasure} from '../fracture-whole-prepare.mjs';
 
 const geometry=new BoxGeometry(2,2,2),source={positions:geometry.attributes.position.array,
@@ -47,6 +47,52 @@ test('a subdivision target never welds disconnected material to fit a body count
   const prepared=prepareWholeFracture(arrays,{labels:new Uint32Array(24),boundaries:[]},{targetPieces:1,cutVariation:1});
   assert.equal(prepared.pieces.length,2);assert.equal(prepared.bonds.length,0);
   assert.ok(Math.abs(prepared.receipt.exteriorAreaAfter-.75)<1e-6);
+});
+
+test('target termination keeps disjoint rods separate when every axis projection overlaps',()=>{
+  const a=new BoxGeometry(2,.1,.1),b=new BoxGeometry(2,.1,.1);
+  a.rotateZ(Math.PI/4);b.rotateZ(Math.PI/4);a.translate(.15,-.15,0);b.translate(-.15,.15,0);
+  const join=(T,x,y)=>{const out=new T(x.length+y.length);out.set(x);out.set(y,x.length);return out;};
+  const arrays={positions:join(Float32Array,a.attributes.position.array,b.attributes.position.array),
+    normals:join(Float32Array,a.attributes.normal.array,b.attributes.normal.array),uvs:join(Float32Array,a.attributes.uv.array,b.attributes.uv.array),
+    indices:join(Uint32Array,a.index.array,Uint32Array.from(b.index.array,i=>i+a.attributes.position.count)),faceMaterial:new Uint8Array(24)};
+  const before=structuredClone(arrays);
+  for(const cutVariation of [0,1]){
+    const prepared=prepareWholeFracture(arrays,{labels:new Uint32Array(24),boundaries:[]},{cellExtent:.4,targetPieces:1,cutVariation});
+    assert.equal(prepared.pieces.length,2,'A geometric target must not merge disconnected solid components');
+    for(const piece of prepared.pieces){
+      const signs=new Set(Array.from({length:piece.arrays.positions.length/3},(_,i)=>Math.sign(piece.arrays.positions[i*3]-piece.arrays.positions[i*3+1])));
+      assert.equal(signs.size,1,'Each mechanical body contains material from only one rod');
+    }
+    const volume=prepared.pieces.reduce((sum,piece)=>sum+materialMeasure(piece.arrays).volume,0);
+    assert.ok(Math.abs(volume-.04)<1e-6);
+    assert.ok(Math.abs(prepared.receipt.exteriorAreaAfter-materialMeasure(arrays).area)<1e-6);
+  }
+  assert.deepEqual(arrays,before);
+});
+
+function pack(geometries){
+  const positions=[],indices=[];
+  for(const g of geometries){const base=positions.length/3;positions.push(...g.attributes.position.array);indices.push(...Array.from(g.index.array,i=>i+base));}
+  return {positions:Float32Array.from(positions),indices:Uint32Array.from(indices),faceMaterial:new Uint8Array(indices.length/3)};
+}
+
+test('a cavity remains part of its surrounding material while a solid inside the cavity stays independent',()=>{
+  const outer=new BoxGeometry(2,2,2),cavity=new BoxGeometry(1,1,1),inside=new BoxGeometry(.25,.25,.25);
+  for(let i=0;i<cavity.index.array.length;i+=3)[cavity.index.array[i+1],cavity.index.array[i+2]]=[cavity.index.array[i+2],cavity.index.array[i+1]];
+  for(const geometries of [[outer,cavity],[outer,cavity,inside]]){
+    const arrays=pack(geometries),prepared=prepareWholeFracture(arrays,{labels:new Uint32Array(arrays.indices.length/3)},{targetPieces:1});
+    assert.equal(prepared.pieces.length,geometries.length-1,'Boundary shells do not individually become solid bodies');
+    const volume=prepared.pieces.reduce((sum,p)=>sum+materialMeasure(p.arrays).volume,0);
+    assert.ok(Math.abs(volume-materialMeasure(arrays).volume)<1e-6,'The cavity cannot become extra solid volume');
+  }
+});
+
+test('nested bounds do not join a separate solid in the empty center of a torus',()=>{
+  const arrays=pack([new TorusGeometry(1,.25,8,16),new BoxGeometry(.1,.1,.1)]);
+  const prepared=prepareWholeFracture(arrays,{labels:new Uint32Array(arrays.indices.length/3)},{targetPieces:1});
+  assert.equal(prepared.pieces.length,2);
+  assert.ok(Math.abs(prepared.pieces.reduce((sum,p)=>sum+materialMeasure(p.arrays).volume,0)-materialMeasure(arrays).volume)<1e-6);
 });
 
 test('the real preparation worker admits an explicit detailed comparison without changing the default',async()=>{

@@ -2,6 +2,7 @@
 import {bisectFaces,extractFaces,capPlanarOpenings,sectionSegments,sectionLoops,sectionCap} from './poly-mesh-edit.mjs';
 import {ShapeUtils,Vector2} from './lib/three.core.js';
 import {matchMaterialSections} from './fracture-material-sections.mjs';
+import {buildPolyMesh,faceComponents} from './poly-mesh-core.mjs';
 
 export const WHOLE_FRACTURE_ROUTE='kaminos.fracture.whole-object-coarse-material.v1';
 const sub=(a,b)=>a.map((v,k)=>v-b[k]),dot=(a,b)=>a.reduce((s,v,k)=>s+v*b[k],0);
@@ -35,6 +36,20 @@ export function materialMeasure(a,filter=null){
  return {area,min:[min0,min1,min2],max:[max0,max1,max2],center:[m0*inv,m1*inv,m2*inv],volume:Math.abs(volume)};
 }
 function select(a,owners,mask,planes=null){const out=extractFaces(a,mask).part;return {arrays:out,faceInterfaces:Int32Array.from(owners.filter((_,i)=>mask[i])),faceSectionPlanes:planes?planes.filter((_,i)=>mask[i]):new Array(out.indices.length/3).fill(null)};}
+function shellContains(leaf,point,interfaces){
+ let angle=0;
+ for(let f=0;f<leaf.faceInterfaces.length;f++){
+  const p=triangle(leaf.arrays,f),owner=leaf.faceInterfaces[f];
+  if(owner){
+   const u=sub(p[1],p[0]),v=sub(p[2],p[0]),cross=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]];
+   if(dot(cross,interfaces.get(Math.abs(owner)).normal)*Math.sign(owner)<0)[p[1],p[2]]=[p[2],p[1]];
+  }
+  const [a,b,c]=p.map(v=>sub(v,point)),la=Math.hypot(...a),lb=Math.hypot(...b),lc=Math.hypot(...c);
+  const cross=[b[1]*c[2]-b[2]*c[1],b[2]*c[0]-b[0]*c[2],b[0]*c[1]-b[1]*c[0]];
+  angle+=2*Math.atan2(dot(a,cross),la*lb*lc+dot(a,b)*lc+dot(b,c)*la+dot(c,a)*lb);
+ }
+ return Math.abs(angle)>2*Math.PI;
+}
 function insideDistance(p,leaf){return Math.hypot(...p.map((v,k)=>Math.max(leaf.bounds.min[k]-v,0,v-leaf.bounds.max[k])));}
 function closest(p,leaves){let winner=null,best=Infinity;for(const l of leaves){const distance=insideDistance(p,l);const score=distance+Math.hypot(...sub(p,l.center))*1e-8;if(score<best){best=score;winner=l;}}return winner;}
 
@@ -109,6 +124,45 @@ export function prepareWholeFracture(source,view,{cellExtent,targetPieces=null,c
  }
  function pushLeaf(leaf){
   const nFaces=leaf.arrays.indices.length/3,P=leaf.arrays.positions,I=leaf.arrays.indices;
+  if(targetPieces!==null){
+   const mesh=buildPolyMesh(leaf.arrays),components=faceComponents(mesh);
+   const parents=Uint32Array.from({length:components.count},(_,i)=>i);
+   const root=i=>{while(parents[i]!==i){parents[i]=parents[parents[i]];i=parents[i];}return i;};
+   // Earlier cuts can leave cap edges split on only one side. Welded vertices
+   // retain that contact without treating UV seams or cap slivers as bodies.
+   for(let v=0;v<mesh.vertexCount;v++){
+    const begin=mesh.vertexFaceOffsets[v],end=mesh.vertexFaceOffsets[v+1];
+    for(let i=begin+1;i<end;i++)parents[root(components.labels[mesh.vertexFaces[i]])]=root(components.labels[mesh.vertexFaces[begin]]);
+   }
+   const ids=new Map(),labels=Uint32Array.from(components.labels,label=>{const r=root(label);if(!ids.has(r))ids.set(r,ids.size);return ids.get(r);});
+   if(ids.size>1){
+    const shells=[];
+    for(let component=0;component<ids.size;component++){
+     const child={...select(leaf.arrays,leaf.faceInterfaces,Uint8Array.from(labels,label=>Number(label===component)),leaf.faceSectionPlanes),part:leaf.part};
+     child.bounds=materialMeasure(child.arrays);shells.push(child);
+    }
+    // A cavity's boundary belongs to the surrounding solid, not another body.
+    // Bounds only reject candidates; winding distinguishes a cavity from a torus hole.
+    const containers=shells.map((shell,i)=>{
+     const p=triangle(shell.arrays,0)[0],bounds=shell.bounds;let parent=-1;
+     for(let j=0;j<shells.length;j++)if(j!==i){
+      const other=shells[j],b=other.bounds;
+      if(b.volume<=bounds.volume||parent>=0&&b.volume>=shells[parent].bounds.volume)continue;
+      if(bounds.min.some((v,k)=>v<b.min[k])||bounds.max.some((v,k)=>v>b.max[k]))continue;
+      if(shellContains(other,p,interfaces))parent=j;
+     }
+     return parent;
+    });
+    const bodies=containers.map((parent,i)=>{let depth=0;for(let p=parent;p>=0;p=containers[p])depth++;return depth%2?parent:i;});
+    for(const body of new Set(bodies)){
+     const members=shells.map((_,i)=>i).filter(i=>bodies[i]===body);
+     if(members.length===1){leaves.push(shells[body]);continue;}
+     const memberSet=new Set(members),child={...select(leaf.arrays,leaf.faceInterfaces,Uint8Array.from(labels,label=>Number(memberSet.has(label))),leaf.faceSectionPlanes),part:leaf.part};
+     child.bounds=materialMeasure(child.arrays);leaves.push(child);
+    }
+   }else leaves.push(leaf);
+   return;
+  }
   if(nFaces>1)for(const axis of [0,1,2]){
    const intervals=new Array(nFaces);
    for(let f=0;f<nFaces;f++){
