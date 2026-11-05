@@ -14,3 +14,7 @@ const root=new THREE.Group().add(new THREE.Mesh(new THREE.BoxGeometry(),new THRE
 const reps=createCoarseRepetition({previews:()=>[{root,record:{id:'a',type:'glb',repetition:{mode:'line',count:3}}}],groups:()=>[{id:'g',objectIds:['a'],transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},repetition:{mode:'line',count:2}}]});
 reps.sync();assert.equal(root.children.filter(row=>row.userData.kaminosRepetitionCopy).length,5,'coarse view retains object and group repetition');reps.clear(root);assert.equal(root.children.length,1);
 console.log('Coarse proxies exercise the existing object/group repetition owner');
+// Native save/reopen r4: the serializer writes null repetition while restore
+// omits it. Both mean one instance and must preserve a preparation hint.
+const rawGroup={id:'lights',objectIds:['key','rim'],transform:input.objects[0].transform,repetition:null};
+assert.equal(lodPreparationContext({...input,groups:[rawGroup]}),lodPreparationContext({...input,groups:[{...rawGroup,repetition:undefined}]}),'Absent and null group repetition are the same allocation context');

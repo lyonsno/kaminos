@@ -2,7 +2,7 @@ import {createSceneRepetitionController} from './scene-repetition-controller.mjs
 // This cache warms downloads. Current camera/viewport policy still selects beauty.
 const schema='kaminos.scene-lod-preparation.v2';
 export function lodPreparationContext({camera,viewport,settings,objects,groups=[]}){
-  return JSON.stringify({camera,viewport,settings,objects:objects.filter(row=>row.type==='glb').map(({id,source,transform,giProxy,repetition})=>({id,source,transform,giProxy,repetition})).sort((a,b)=>a.id.localeCompare(b.id)),groups:groups.map(({id,objectIds,transform,repetition})=>({id,objectIds:[...objectIds].sort(),transform,repetition})).sort((a,b)=>a.id.localeCompare(b.id))});
+  return JSON.stringify({camera,viewport,settings,objects:objects.filter(row=>row.type==='glb').map(({id,source,transform,giProxy,repetition})=>({id,source,transform,giProxy,repetition})).sort((a,b)=>a.id.localeCompare(b.id)),groups:groups.map(({id,objectIds,transform,repetition})=>({id,objectIds:[...objectIds].sort(),transform,repetition:repetition??null})).sort((a,b)=>a.id.localeCompare(b.id))});
 }
 export function captureLodPreparation(context,allocation){
   if(!allocation?.enabled)return null;
