@@ -161,3 +161,65 @@ test('scene preparation finishes before ordered publication and is released afte
  const pending=f.lifecycle.replace([{id:'a'},{id:'b'}]);await new Promise(setImmediate);
  assert.deepEqual(events,['prepare'],'full records must wait for the complete coarse preparation phase');release();assert.equal(await pending,true);assert.deepEqual(events,['prepare','a','b','release']);
 });
+
+test('static geometry and lights present before deferred constructors regardless of saved order, while final order and selection remain authored',async()=>{
+ const f=fixture(),events=[];let release;
+ const gate=new Promise(resolve=>release=resolve);
+ f.adapters.records.load=async record=>{events.push(record.id);return f.add(record.id).object;};
+ f.adapters.context.loaded=()=>events.push('water-and-ash-initialize');
+ const id=f.state.loads.begin();let done=false;
+ const pending=f.lifecycle.replace([{id:'ash',type:'retained-ash'},{id:'geometry'},{id:'light'}],{
+  loadRequestId:id,deferRecord:record=>record.type==='retained-ash',
+  beforeDeferred:async()=>{events.push('lit-frame');await gate;},
+ }).then(value=>{done=true;return value;});
+ try{
+  await new Promise(r=>setImmediate(r));
+  assert.deepEqual(events,['geometry','light','lit-frame'],'lighting must be offered before even constructing the saved ash');
+  assert.equal(done,false,'provisional lighting cannot complete scene admission');
+ }finally{release();await pending;}
+ assert.deepEqual(events,['geometry','light','lit-frame','ash','water-and-ash-initialize']);
+ assert.deepEqual(f.state.objects.map(row=>row.id),['ash','geometry','light']);
+ assert.equal(f.state.activeObjectId,'light','constructor priority must not change the authored fallback selection');
+});
+
+test('lighting stage also precedes domain initialization when no records are deferred',async()=>{
+ const f=fixture(),events=[];
+ f.adapters.context.loaded=()=>events.push('water-initialize');
+ await f.lifecycle.replace([{id:'geometry'}],{deferRecord:()=>false,beforeDeferred:()=>events.push('lit-frame')});
+ assert.deepEqual(events,['lit-frame','water-initialize']);
+});
+
+test('lighting-stage refusal clears partial geometry and never starts a deferred domain',async()=>{
+ const f=fixture(),loaded=[];
+ f.adapters.records.load=async record=>{loaded.push(record.id);return f.add(record.id).object;};
+ await assert.rejects(f.lifecycle.replace([{id:'ash'},{id:'geometry'}],{
+  deferRecord:record=>record.id==='ash',beforeDeferred:()=>{throw Error('saved lighting refused');},
+ }),/saved lighting refused/);
+ assert.deepEqual(loaded,['geometry']);assert.equal(f.state.objects.length,0);
+});
+
+test('superseding lighting presentation cannot construct the old deferred field or reorder the newer scene',async()=>{
+ const f=fixture();let release;const gate=new Promise(resolve=>release=resolve);
+ const old=f.state.loads.begin(),pending=f.lifecycle.replace([{id:'old-ash'},{id:'old-geometry'}],{
+  loadRequestId:old,deferRecord:record=>record.id==='old-ash',beforeDeferred:()=>gate,
+ });
+ await new Promise(r=>setImmediate(r));
+ const current=f.state.loads.begin();await f.lifecycle.replace([{id:'new'}],{loadRequestId:current});release();
+ assert.equal(await pending,false);assert.deepEqual(f.state.objects.map(row=>row.id),['new']);
+});
+
+test('prepared assets span the lighting barrier and deferred construction, then release once',async()=>{
+ const f=fixture(),events=[],batch={released:false};
+ f.adapters.records.prepare=async rows=>{events.push('prepare');assert.deepEqual(rows.map(r=>r.id),['ash','geometry']);return batch;};
+ f.adapters.records.load=async(record,_id,prepared)=>{assert.equal(prepared,batch);assert.equal(batch.released,false);events.push(record.id);return f.add(record.id).object;};
+ f.adapters.records.releasePrepared=prepared=>{assert.equal(prepared,batch);assert.equal(batch.released,false);batch.released=true;events.push('release');};
+ await f.lifecycle.replace([{id:'ash'},{id:'geometry'}],{deferRecord:r=>r.id==='ash',beforeDeferred:()=>{assert.equal(batch.released,false);events.push('lighting');}});
+ assert.deepEqual(events,['prepare','geometry','lighting','ash','release']);assert.deepEqual(f.state.objects.map(r=>r.id),['ash','geometry']);
+});
+test('prepared assets release after lighting refusal without constructing a deferred domain',async()=>{
+ const f=fixture(),events=[],batch={};f.adapters.records.prepare=async()=>batch;
+ f.adapters.records.load=async(record,_id,prepared)=>{assert.equal(prepared,batch);events.push(record.id);return f.add(record.id).object;};
+ f.adapters.records.releasePrepared=prepared=>{assert.equal(prepared,batch);events.push('release');};
+ await assert.rejects(f.lifecycle.replace([{id:'ash'},{id:'geometry'}],{deferRecord:r=>r.id==='ash',beforeDeferred:()=>{throw Error('lighting refused');}}),/lighting refused/);
+ assert.deepEqual(events,['geometry','release']);assert.equal(f.state.objects.length,0);
+});

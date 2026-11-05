@@ -23,7 +23,7 @@ export function createSceneLifecycle({scene,roots,records,groups,selection,conte
       return true;
     }finally{pendingClears--;}
   }
-  async function replace(values,{loadRequestId=null,activeId=null,groups:nextGroups=[],activeGroupId=null,setup=null}={}){
+  async function replace(values,{loadRequestId=null,activeId=null,groups:nextGroups=[],activeGroupId=null,setup=null,deferRecord=()=>false,beforeDeferred=null}={}){
     if(!current(loadRequestId))return false;
     if(!await clear({loadRequestId,setup}))return false;
     context.beginLoad?.(setup);
@@ -31,16 +31,27 @@ export function createSceneLifecycle({scene,roots,records,groups,selection,conte
     try{
       prepared=await records.prepare?.(values,loadRequestId,setup);
       if(!current(loadRequestId))return false;
-      for(const record of values){
+      const immediate=[],deferred=[];
+      for(const record of values)(beforeDeferred&&deferRecord(record)?deferred:immediate).push(record);
+      const load=async rows=>{for(const record of rows){
         if(context.beforeLoad){await context.beforeLoad(record,loadRequestId);if(!current(loadRequestId))return false;}
         const object=await records.load(record,loadRequestId,prepared);
         if(!current(loadRequestId))return false;
         const entry=scene.find(record.id);
         if(!entry||entry.object!==object)throw Error(`Scene object "${record.id}" did not publish its loaded identity`);
         records.restore(entry,record);loaded.push(record.id);
-      }
+      }return true;};
+      if(!await load(immediate))return false;
+      if(!current(loadRequestId))return false;
+      if(beforeDeferred){await beforeDeferred();if(!current(loadRequestId))return false;}
+      if(!await load(deferred))return false;
       await context.loaded?.(setup,loadRequestId);
       if(!current(loadRequestId))return false;
+      if(beforeDeferred){
+        const rank=new Map(values.map((record,index)=>[record.id,index]));
+        scene.reorder([...scene.objects].sort((a,b)=>(rank.get(a.id)??Infinity)-(rank.get(b.id)??Infinity)).map(row=>row.id));
+        loaded.sort((a,b)=>rank.get(a)-rank.get(b));
+      }
       groups.restore(nextGroups,activeGroupId);
       if(activeGroupId&&scene.groups.some(group=>group.id===activeGroupId))selection.group(activeGroupId);
       else selection.object(activeId&&loaded.includes(activeId)?activeId:loaded.at(-1));
