@@ -44,3 +44,33 @@ test('invalid or withheld body choices and identity collisions fail before chang
  assert.throws(()=>planRingBurner(state,{...options,outletId:template.id}),/identity/i);
  const next=planRingBurner(state,options);assert.throws(()=>planBurnerBodyReplacement(next,{groupId:'ring',oldBodyId:'outlet',bodyId:'new',mesh}),/body/i);
 });
+import {createWorkingScene} from '../working-scene.mjs';
+import {createSceneMembershipBatch} from '../scene-membership-batch.mjs';
+import {createSceneEdits} from '../scene-edit-session.mjs';
+test('production membership selects a new burner from either field and restores selection on Undo/Redo',async()=>{
+ for(const field of ['flame-field','water-field']){
+  const scene=createWorkingScene();scene.put({...structuredClone(template),object:{}});scene.select([field],field,['flame-field','water-field']);
+  const edits=createSceneEdits({read:()=>null,write(){throw Error('wrong target');}}),serialize=({object,...row})=>structuredClone(row);
+  const batch=createSceneMembershipBatch({scene,membership:{async reconstruct(record){return scene.put({...structuredClone(record),object:{}});}},
+   detach:id=>scene.forget(id),records:{serialize,reloadable:()=>true,apply(){}},groups:{serialize:()=>structuredClone(scene.groups)},
+   context:{capture:()=>({field:scene.activeFieldId})},select:(ids,id)=>scene.select(ids,id,['flame-field','water-field'])});batch.attachHistory(edits);
+  await edits.applySettled('@selection-membership',planRingBurner(batch.capture(),options),'Add ring');assert.equal(scene.activeGroupId,'ring');
+  await edits.undo();assert.equal(scene.activeFieldId,field);assert.equal(scene.groups.length,0);await edits.redo();assert.equal(scene.activeGroupId,'ring');
+  scene.select([field],field,['flame-field','water-field']);
+  await edits.applySettled('@selection-membership',planBurnerBodyReplacement(batch.capture(),{groupId:'ring',oldBodyId:'housing',bodyId:'changed',mesh}),'Change body');assert.equal(scene.activeGroupId,'ring');
+  await edits.undo();assert.equal(scene.activeFieldId,field);assert.ok(scene.find('housing'));await edits.redo();assert.equal(scene.activeGroupId,'ring');assert.ok(scene.find('changed'));
+ }
+});
+
+import fs from 'node:fs';import vm from 'node:vm';
+import {FLAME_EMITTER_TYPE} from '../scene-flame-emitter.mjs';
+const settings={'volume-flow-rate':{type:'range',value:1}};
+test('an existing empty fire field can receive a new ring using its source template',async()=>{
+ const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8'),a=html.indexOf('async function addRingBurner('),b=html.indexOf('async function setBurnerBody(',a);let n=0,applied;
+ const workingScene={activeGroupId:null};const context={assertSceneConstructionAvailable(){},activeSceneComposition:{},requirePluralFlameSourceRuntime(){},primaryAuthoredFlameSource:()=>null,serializeSceneObject:v=>v,readVolumeSettingsValues:()=>({domControls:settings}),fireControlOwner:()=> 'source',FIRE_DOMAIN_ID:'flame-field',FLAME_EMITTER_TYPE,FLAME_EMITTER_SOURCE,readSelectionMembership:()=>({objects:[],groups:[],selection:{ids:[],activeId:null}}),planRingBurner,makeSceneObjectId:p=>p+ ++n,flameEmitterPose:pose,workingScene,scenePlacementTools:{edits:{async applySettled(_id,value){applied=value;workingScene.activeGroupId=value.groups[0].id;}}}};
+ vm.createContext(context);vm.runInContext(html.slice(a,b)+'\nthis.create=addRingBurner',context);await context.create();assert.equal(applied.objects.find(o=>o.type===FLAME_EMITTER_TYPE).emission.settings['volume-flow-rate'].value,1);
+});
+test('replacing an explicit fire obstacle body retains its authored collision participation',()=>{
+ const first=planRingBurner({objects:[],groups:[],selection:{ids:[],activeId:null}},{groupId:'ring',bodyId:'body',outletId:'outlet',template:{type:FLAME_EMITTER_TYPE,source:FLAME_EMITTER_SOURCE,emission:{domainId:'flame-field',settings}},pose});first.objects.find(o=>o.id==='body').collision={domainId:'flame-field',enabled:true};
+ const next=planBurnerBodyReplacement(first,{groupId:'ring',oldBodyId:'body',bodyId:'new',mesh:{kind:'mesh',source:'/api/read?root=generated-meshes&path=other.glb'}});assert.deepEqual(next.objects.find(o=>o.id==='new').collision,{domainId:'flame-field',enabled:true});
+});

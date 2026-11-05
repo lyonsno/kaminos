@@ -30,14 +30,17 @@ export function planRingBurner(state,{groupId,bodyId,outletId,template,pose=temp
  const body=meshBody(bodyId,mesh,belowOutlet(transform)),next=clone(state);
  next.objects=next.objects.filter(o=>!reuseSource||o.id!==outletId);next.objects.push(body,source);
  next.groups.push({id:groupId,type:'group',label:'Ring burner',transform,objectIds:[bodyId,outletId],assembly:{kind:'burner',roles:{[bodyId]:'body',[outletId]:'outlet'}}});
- next.selection={ids:['@group:'+groupId],activeId:'@group:'+groupId};return next;
+ next.field=null;next.selection={ids:['@group:'+groupId],activeId:'@group:'+groupId};return next;
 }
 export function planBurnerBodyReplacement(state,{groupId,oldBodyId,bodyId,mesh}){
  freeId(state,bodyId);const group=state.groups.find(g=>g.id===groupId&&g.assembly?.kind==='burner');
  const old=state.objects.find(o=>o.id===oldBodyId);
  if(!group?.objectIds.includes(oldBodyId)||group.assembly.roles[oldBodyId]!=='body'||!old)throw Error('Choose the burner body to replace');
  const body=meshBody(bodyId,mesh,clone(old.transform)),next=clone(state),owner=next.groups.find(g=>g.id===groupId);
+ // Authored obstacle participation is independent of the body's source asset.
+ if(old.collision)body.collision=clone(old.collision);
+ if(old.waterCollision!==undefined)body.waterCollision=old.waterCollision;
  next.objects.splice(next.objects.findIndex(o=>o.id===oldBodyId),1,body);
  owner.objectIds=owner.objectIds.map(id=>id===oldBodyId?bodyId:id);delete owner.assembly.roles[oldBodyId];owner.assembly.roles[bodyId]='body';
- next.selection={ids:['@group:'+groupId],activeId:'@group:'+groupId};return next;
+ next.field=null;next.selection={ids:['@group:'+groupId],activeId:'@group:'+groupId};return next;
 }

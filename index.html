@@ -28331,8 +28331,7 @@ async function addRingBurner({mesh=null,reuseSourceId=null}={}) {
   if(!activeSceneComposition)return openFirstFlameFieldDialog({title:'Add Ring burner',afterAdd:id=>addRingBurner({mesh,reuseSourceId:id})});
   requirePluralFlameSourceRuntime();
   const primary=primaryAuthoredFlameSource();
-  if(!primary)throw Error('Add a flame source before creating the ring burner');
-  const template=serializeSceneObject(primary);
+  const template=primary?serializeSceneObject(primary):{type:FLAME_EMITTER_TYPE,source:FLAME_EMITTER_SOURCE,emission:{domainId:FIRE_DOMAIN_ID,settings:Object.fromEntries(Object.entries(readVolumeSettingsValues().domControls).filter(([id])=>fireControlOwner(id)==='source'))}};
   const next=planRingBurner(readSelectionMembership(),{groupId:makeSceneObjectId('ring-burner'),bodyId:makeSceneObjectId('mesh'),outletId:reuseSourceId||makeSceneObjectId('flame-source'),template,pose:flameEmitterPose,mesh,reuseSource:!!reuseSourceId});
   await scenePlacementTools.edits.applySettled('@selection-membership',next,'Add ring burner');
   return workingScene.activeGroupId;
