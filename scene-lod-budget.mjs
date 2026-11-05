@@ -1447,10 +1447,10 @@ export function createSceneBeautyLodController({
     entries.delete(root);
   }
 
-  function interactiveRung(root, {matchDisplay, pinnedObjects}) {
+  function interactiveRung(root, {matchDisplay, pinnedObjects, maxFaces = 10000}) {
     const entry = entries.get(root);
     const id = root.userData?.kaminosSceneObject?.id;
-    if (!config.enabled || !root.parent || pinnedObjects?.has(root) || pinnedObjects?.has(id)) return null;
+    if (disposed || !config.enabled || !root.parent || pinnedObjects?.has(root) || pinnedObjects?.has(id)) return null;
     for (let object = root; object; object = object.parent) if (!object.visible) return null;
     const warp = root.userData?.kaminosVertexWarp ?? null;
     const revision = root.userData?.kaminosVertexWarpRevision ?? 0;
@@ -1459,11 +1459,11 @@ export function createSceneBeautyLodController({
 
     let best = null;
     for (const rung of entry?.rungs.values() ?? []) {
-      if (rung.faces <= 10000 && (!best || rung.faces > best.faces)) best = rung;
+      if (rung.faces <= maxFaces && (!best || rung.faces > best.faces)) best = rung;
     }
     if (best) return best.root;
     const handle = giProxies?.get?.(root);
-    if (!warp && handle?.representation === 'mesh' && handle.effective?.faces <= 10000) {
+    if (!warp && handle?.representation === 'mesh' && handle.effective?.faces <= maxFaces) {
       return handle.proxyRoot;
     }
     return null;
