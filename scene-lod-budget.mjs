@@ -197,7 +197,7 @@ export function selectFootprintTier(levels = [], {
   viewportHeight = 1080,
   maxPixelError = 1.5,
   stat = 'p95',
-  texelWeight = 0,
+  texelWeight = 0.5,
   texelStretch = 1,
   tailWeight = 0.5,
   creviceAllowance = 0.005,
@@ -216,7 +216,7 @@ export function selectFootprintTier(levels = [], {
         sha: id,
         isHero: false,
         faces: l.faces,
-        pixelError: screenPixelError(l, {worldBox, worldDiag, camera, viewportHeight, stat, texelWeight, texelStretch, tailWeight, creviceAllowance}),
+        pixelError: screenPixelError(l, {worldBox, worldDiag, camera, viewportHeight, stat, texelWeight: l.textureSet?.variants?.length ? 0 : texelWeight, texelStretch, tailWeight, creviceAllowance}),
         geomPixelError: screenPixelError(l, {worldBox, worldDiag, camera, viewportHeight, stat, texelWeight: 0, texelStretch, tailWeight, creviceAllowance}),
         level: l,
       };
@@ -272,7 +272,7 @@ export function allocateSceneBeautyLods(candidates = [], {
   maxPixelError = 1.5,
   faceBudget = Infinity,
   stat = 'p95',
-  texelWeight = 0,
+  texelWeight = 0.5,
   tailWeight = 0.5,
   creviceAllowance = 0.005,
   hysteresis = 0.15,
@@ -1229,7 +1229,7 @@ export function createSceneBeautyLodController({
     enabled: true,
     maxPixelError: 1.5,
     faceBudget: 350000,
-    texelWeight: 0,
+    texelWeight: 0.5,
     maxTexelPixels: 1.5,
     textureBudgetBytes: Infinity,
     tailWeight: 0.5,
@@ -1836,7 +1836,7 @@ export function createSceneBeautyLodController({
         if(!target||!allocation)continue;
         activeTextures.add(target.root);
         textureResidency.request(target.root,allocation,target.catalog);
-        state.texture={...textureResidency.state(target.root),targetSize:allocation.textureSize,targetTexelPixels:allocation.texelPixels,demotedByTextureBudget:allocation.demotedByTextureBudget};
+        state.texture={...textureResidency.state(target.root),independent:!!target.catalog,targetSize:allocation.textureSize,targetTexelPixels:allocation.texelPixels,demotedByTextureBudget:allocation.demotedByTextureBudget};
       }
       textureResidency.retain(activeTextures);
       lastState = {

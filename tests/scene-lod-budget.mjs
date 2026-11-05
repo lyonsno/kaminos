@@ -1449,16 +1449,15 @@ test('Kiln side-pipe drop vs. beam crack-seal: footprint and budget allocators p
   assert.equal(beamFoot.selected.faces, 500, 'at z = 5.5m, beam coarsens all the way to 500 faces by screen footprint');
   assert.equal(kilnFoot.selected.faces, 25000, 'at z = 5.5m, kiln stays at 25,000 faces by screen footprint');
 
-  // At close range the beam needs 5k faces for its geometry; texture density is allocated separately.
-  // Its 5k geometry and the hero kiln fit the 320k budget without a geometry budget demotion.
+  // Existing unprepared levels retain the previous blur guard while appearance products are unavailable.
+  // At this close view a 320k budget demotes the beam to 25k while retaining the hero kiln.
   const closeCam = makeCamera({z: 1.8, fov: 50});
   const heroStepBudget = allocateSceneBeautyLods([
     {id: 'kiln', heroFaces: 287407, levels: realKilnLevels, worldBox: unitBox, worldDiag: diag},
     {id: 'beam', heroFaces: 97670, levels: realBeamLevels, worldBox: unitBox, worldDiag: diag},
   ], {camera: closeCam, viewportHeight: 1080, maxPixelError: 1.5, faceBudget: 320000});
   assert.equal(heroStepBudget.withinBudget, true);
-  assert.equal(heroStepBudget.allocations.beam.faces, 5000, 'beam geometry needs 5k faces independently of its coarse texture');
-  assert.equal(heroStepBudget.allocations.beam.demotedByBudget, false, 'texture detail does not force a geometry budget demotion');
+  assert.equal(heroStepBudget.allocations.beam.faces, 25000, 'legacy beam retains its previous blur guard until appearance is prepared');
   assert.equal(heroStepBudget.allocations.kiln.tier, 'hero', '320k budget keeps the 287,407-face kiln on hero');
 
   // 2) Under a tight 10,500-face budget, it demotes the beam all the way to 500 faces while keeping the kiln at 10,000 faces:
@@ -2000,10 +1999,19 @@ test('the beauty readout identifies a reduction forced by the scene face budget'
 
 test('a flat surface with coarse textures does not demand more triangles', () => {
   const camera = makeCamera({z: 1.5});
-  const result = selectFootprintTier([{sha: sha('flat-panel'), faces: 2, textureSize: 64,
+  const result = selectFootprintTier([{sha: sha('flat-panel'), faces: 2, textureSize: 64, textureSet: {variants:[{textureSize:4096}]},
     error: {relative: {p95: 0, max: 0, mean: 0}}}], {
     heroFaces: 100000, worldBox: {min: [-.5,-.5,-.1], max: [.5,.5,.1]}, camera,
     viewportHeight: 1080, maxPixelError: 1.5,
   });
   assert.equal(result.selected.faces, 2, 'texture magnification must be resolved by appearance, not by buying more faces');
+});
+
+
+test('legacy levels retain their blur guard until compatible appearance choices arrive',()=>{
+  const camera=makeCamera({z:1.5}),worldBox={min:[-.5,-.5,-.1],max:[.5,.5,.1]};
+  const legacy={sha:sha('legacy-flat'),faces:2,textureSize:64,error:{relative:{p95:0,max:0,mean:0}}};
+  assert.equal(selectFootprintTier([legacy],{heroFaces:100000,worldBox,camera,viewportHeight:1080}).selected.id,'hero');
+  const prepared={...legacy,textureSet:{variants:[{sha256:sha('sharp-flat'),textureSize:4096}]}};
+  assert.equal(selectFootprintTier([prepared],{heroFaces:100000,worldBox,camera,viewportHeight:1080}).selected.faces,2);
 });
