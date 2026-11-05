@@ -22,7 +22,7 @@ fn intersection(i:u32)->f32{
  let q=cross(s,e);let v=dot(p.direction.xyz,q)/det;if(v<0.0||u+v>1.0){return -1.0;}
  let t=dot(f,q)/det;if(t<0.0){return -1.0;}
  let rest=aa.xyz+(bb.xyz-aa.xyz)*u+(cc.xyz-aa.xyz)*v;
- if(textureSampleLevel(material,linearSampler,(rest-p.lo.xyz)/p.size.xyz,0).w<=.5){return -1.0;}
+ if(p.counts.z!=0u&&textureSampleLevel(material,linearSampler,(rest-p.lo.xyz)/p.size.xyz,0).w<=.5){return -1.0;}
  return t;
 }
 @compute @workgroup_size(1) fn clear(){atomicStore(&hit[0],0x7f800000u);atomicStore(&hit[1],0xffffffffu);}
@@ -30,7 +30,7 @@ fn intersection(i:u32)->f32{
 @compute @workgroup_size(64) fn face(@builtin(global_invocation_id) id:vec3u){if(id.x>=p.counts.x){return;}let t=intersection(id.x);if(t>=0.0&&bitcast<u32>(t)==atomicLoad(&hit[0])){atomicMin(&hit[1],id.x);}}
 `;
 
-export function createBurnFracturePicker({field,dynamics,mesh,arrays,owners,caps,regions}){
+export function createBurnFracturePicker({field,dynamics,mesh,arrays,owners,caps,regions,surfaceCutout=true}){
  const device=field.device,resources=[],{bounds}=field.residentState();let disposed=false,compiled=null,tail=Promise.resolve(),queries=0;
  const allocate=(label,data,usage)=>{const buffer=device.createBuffer({label,size:data.byteLength,usage:usage|GPUBufferUsage.COPY_DST});device.queue.writeBuffer(buffer,0,data);resources.push(buffer);return buffer;};
  async function compile(){
@@ -54,7 +54,7 @@ export function createBurnFracturePicker({field,dynamics,mesh,arrays,owners,caps
  async function query(ray){
   if(disposed)return null;const state=await(compiled??=compile());if(disposed)return null;
   mesh.updateWorldMatrix(true,false);const world=mesh.matrixWorld.clone(),local=ray.clone().applyMatrix4(new Matrix4().copy(world).invert());
-  const bytes=new ArrayBuffer(80);new Float32Array(bytes).set([...local.origin,0,...local.direction,0,...bounds.min,0,...bounds.getSize(new Vector3()),0]);new Uint32Array(bytes).set([state.count,regions,0,0],16);
+  const bytes=new ArrayBuffer(80);new Float32Array(bytes).set([...local.origin,0,...local.direction,0,...bounds.min,0,...bounds.getSize(new Vector3()),0]);new Uint32Array(bytes).set([state.count,regions,Number(surfaceCutout),0],16);
   const read=device.createBuffer({label:'Burn pointer result only',size:8,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
   try{
    device.queue.writeBuffer(state.params,0,bytes);const encoder=device.createCommandEncoder();
@@ -65,5 +65,5 @@ export function createBurnFracturePicker({field,dynamics,mesh,arrays,owners,caps
    const point=local.at(distance,new Vector3()).applyMatrix4(world);return {point,distance:point.distanceTo(ray.origin),faceIndex,face:{materialIndex:arrays.faceMaterial[faceIndex]}};
   }finally{read.destroy();}
  }
- return {pick(ray){const captured=ray.clone(),task=tail.then(()=>query(captured));tail=task.catch(()=>{});return task;},read:()=>({queries,readbackBytes:queries*8,ordinaryStateReadbacks:0}),dispose(){if(disposed)return;disposed=true;void tail.finally(()=>{for(const resource of resources)resource.destroy();});}};
+ return {pick(ray){const captured=ray.clone(),task=tail.then(()=>query(captured));tail=task.catch(()=>{});return task;},read:()=>({queries,readbackBytes:queries*8,ordinaryStateReadbacks:0,surfaceCutout:Boolean(surfaceCutout)}),dispose(){if(disposed)return;disposed=true;void tail.finally(()=>{for(const resource of resources)resource.destroy();});}};
 }

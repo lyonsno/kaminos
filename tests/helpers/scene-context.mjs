@@ -147,7 +147,7 @@ export function composePageDocumentSession(context) {
   context.location??={};context.location.origin??='http://localhost:9000';
   context.location.href??=context.location.origin+'/'+(context.location.search??'')+(context.location.hash??'');
   context.history??={replaceState(_state,_title,url){context.location.href=String(url);}};
-  const a=page.indexOf('function createPageSceneDocumentSession('),b=page.indexOf('\nconst sceneDocument =',a);
+  const a=page.indexOf('let sceneDocumentFrameHolds ='),b=page.indexOf('\nconst sceneDocument =',a);
   if(a<0||b<a)throw Error('Missing production document-session installation');
   vm.runInContext(page.slice(a,b),context);
   context.sceneDocument=context.createPageSceneDocumentSession({filename:context.currentSceneFile??null,blocked:context.sceneSaveBlockedByFailedRestore??false});

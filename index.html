@@ -4213,12 +4213,7 @@ const refreshSceneObjectsForLodSource = async source => {
   if (typeof sceneColliderCollection !== 'undefined' && typeof currentColliderLodOptions === 'function' && workingScene.objects.some(o => o.collision?.enabled)) {
     void sceneColliderCollection.prepare?.(workingScene.objects, currentColliderLodOptions());
   }
-  for (const obj of workingScene.objects) {
-    const h = sceneGiProxies.get(obj.object);
-    if ((h?.heroSha === source || h?.assetSha === source || obj.source?.includes(source)) && obj.burnable?.enabled) {
-      if (sceneBurning?.read?.(obj.id)?.state?.fields?.[0]?.surfaceLod?.tier === 'hero') sceneBurning.forget(obj.object);
-    }
-  }
+  // New tiers may initialize later bodies, but must not reset resident material or mechanics.
   void sceneBurning?.sync?.();
 };
 window.__kaminosRefreshLodSource = refreshSceneObjectsForLodSource;
@@ -4282,13 +4277,27 @@ let sceneViewerPaused = null;
 
 
 const sceneLoadRequests = workingScene.loads;
+let sceneDocumentFrameHolds = 0;
+function syncVolumeSceneFrameHold(lightingHeld = sceneLightingPreparation?.state().held === true) {
+  return volumePrototype?.setSceneLightingRebuildPending(lightingHeld || sceneDocumentFrameHolds > 0);
+}
 function createPageSceneDocumentSession(options = {}) {
   return createSceneDocumentSession({
     requests:sceneLoadRequests, records:sceneRecords, planRestore:(...args)=>planSceneRestore(...args),
     post:body=>fetch('/api/save-scene',{method:'POST',headers:{'Content-Type':'application/json'},body}),
     readAddress:()=>({origin:location.origin,workspace:authoringWorkspace?.state().mode??null,owner:readOwnerExperimentAddress(location)}),
     restoreUrl:(data,filename,address)=>compositionRestoreUrl(data.composition,filename,address.origin,address.workspace,address.owner),
-    apply:async(...args)=>{try{return await applySceneDocument(...args);}finally{window._kaminosDirty?.();}},
+    apply:async(...args)=>{
+      sceneDocumentFrameHolds++;
+      try {
+        await syncVolumeSceneFrameHold();
+        return await applySceneDocument(...args);
+      } finally {
+        sceneDocumentFrameHolds--;
+        syncVolumeSceneFrameHold();
+        window._kaminosDirty?.();
+      }
+    },
     requiresNavigation:(plan,{mounted})=>(plan.composition||isCompositionAuthoring())&&!mounted,
     navigate:url=>location.assign(url),
     assertSupported:plan=>{if(plan.objects.filter(record=>record.type===FLAME_EMITTER_TYPE).length>1&&volumePrototype&&typeof volumePrototype.setImmersedSources!=='function')throw Error('This flame runtime does not yet support multiple authored sources');},
@@ -11507,7 +11516,7 @@ async function initScene() {
     compile:()=>withViewportVisibilityAsync(viewportVisibilityObjects(),isSceneItemVisible,async()=>{await sceneBeautyLods?.whenIdle?.();return compileSceneLighting(renderer,sceneGISettings.mode==='combined'?[sceneGI.source,sceneGI.beauty]:[prePass,scenePass],{visibility:()=>sceneBeautyLods?.borrowFrame(camera,currentBeautyFrameOptions())??(()=>{})});}),
     liveCompile:({isCurrent})=>compileSceneLighting(renderer,sceneGISettings.mode==='combined'?[sceneGI.source,sceneGI.beauty]:[prePass,scenePass],{live:true,isCurrent,visibility:borrowViewportAndBeautyVisibility}),
     recover:()=>window.__kaminosSceneRadiance?.debugState().status==='lighting-compile-failed'?window.__kaminosSceneRadiance.retryRebuild():undefined,
-    hold:value=>volumePrototype?.setSceneLightingRebuildPending(value),
+    hold:syncVolumeSceneFrameHold,
     onStatus:state=>{
       const node=document.getElementById('scene-lighting-preparation-status');
       node.hidden=!state.pending&&!state.error;
@@ -20128,6 +20137,7 @@ function createPageVolumePrototype(){
       return sceneColliderCollection.update(workingScene.objects, currentColliderLodOptions());
     },
   });
+  syncVolumeSceneFrameHold();
   volumePrototype.setSharedAshAtmosphere(sceneAshAtmosphereSettings);
   if (isFireLightFieldRoute() || isAuthoredKilnCollisionRoute()) {
     // Composition routes need the live Three scene visible under the flame:

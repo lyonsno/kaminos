@@ -22,11 +22,13 @@ import * as THREE from '../lib/three.webgpu.js';
  assert.equal(cutoutView.bindings[0].material.opacityNode,stateNode.w,'Cutout mode retains exterior voxel presence cutout');
  assert.equal(cutoutView.bindings[1].material.opacityNode,stateNode.w,'Cutout mode clips planar section caps where wood has disintegrated so dead caps do not float in mid-air');
  assert.equal(cutoutView.read().surfaceCutout,true);
+ assert.equal(cutoutView.read().picking.surfaceCutout,true);
  cutoutView.dispose();
  const solidView=surface.createBurnFractureSurface({renderer,prepared,materials:[baseMat],field,dynamics,surfaceCutout:false});
  assert.equal(solidView.bindings[0].material.opacityNode,null,'Solid regional mode keeps watertight region exteriors without mid-region voxel holes');
  assert.equal(solidView.bindings[1].material.opacityNode,null);
  assert.equal(solidView.read().surfaceCutout,false);
+ assert.equal(solidView.read().picking.surfaceCutout,false,'Selection must follow the presented surface rather than hidden voxel holes');
  solidView.dispose();
  baseMat.dispose();
 }
