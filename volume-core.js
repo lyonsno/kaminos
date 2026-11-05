@@ -2743,17 +2743,31 @@ export function createImmersedSourceWeightCache() {
 // mask so the solve, the backtrace and the projection treat it as the kiln.
 // No wall cell carries source weight, so the wall never masks supply (IS-03).
 export const IMMERSED_BACK_WALL_CELLS = 2;
-export function immersedBackWallCells(effective, { grid, gridHeight }) {
-  const c = effective.centreCells, n = effective.direction, r = effective.radiusCells + 0.5, half = Math.max(0.5, effective.thickness / 2) + 0.5;
-  const depth = effective.backWall?.thicknessCells ?? IMMERSED_BACK_WALL_CELLS;
-  const reach = Math.ceil(Math.max(r, half + depth) + 1);
+export function immersedBackWallCells(effective, { grid, gridHeight, coarseStep = 1 }) {
+  const s = Math.max(1, Number(coarseStep) || 1);
+  const c = effective.centreCells, n = effective.direction, r = effective.radiusCells + 0.5, halfFine = Math.max(0.5, effective.thickness / 2) + 0.5;
+  const halfCoarse = Math.max(0.5 * s, effective.thickness / 2) + 0.5 * s;
+  const depth = Math.max(effective.backWall?.thicknessCells ?? IMMERSED_BACK_WALL_CELLS, s);
+  const reach = Math.ceil(Math.max(r, halfCoarse + depth) + s);
   const cells = [];
   for (let z = Math.max(0, Math.floor(c[2] - reach)); z <= Math.min(grid - 1, Math.ceil(c[2] + reach)); z += 1)
     for (let y = Math.max(0, Math.floor(c[1] - reach)); y <= Math.min(gridHeight - 1, Math.ceil(c[1] + reach)); y += 1)
       for (let x = Math.max(0, Math.floor(c[0] - reach)); x <= Math.min(grid - 1, Math.ceil(c[0] + reach)); x += 1) {
         const d = [x + 0.5 - c[0], y + 0.5 - c[1], z + 0.5 - c[2]];
         const along = d[0] * n[0] + d[1] * n[1] + d[2] * n[2];
-        if (!(along < -half && along >= -(half + depth))) continue;
+        if (s > 1) {
+          const coords = [x, y, z], extents = [grid, gridHeight, grid];
+          let coarseAlong = 0, maxFineAlong = 0;
+          for (let i = 0; i < 3; i += 1) {
+            const ci = Math.floor(coords[i] / s);
+            const lo = Math.floor(ci * s) + 0.5 - c[i];
+            const hi = Math.min(extents[i] - 1, Math.ceil((ci + 1) * s) - 1) + 0.5 - c[i];
+            coarseAlong += ((ci + 0.5) * s - c[i]) * n[i];
+            maxFineAlong += (n[i] >= 0 ? hi : lo) * n[i];
+          }
+          const wallFront = -Math.max(halfCoarse, halfFine + (maxFineAlong - coarseAlong));
+          if (!(coarseAlong < wallFront && coarseAlong >= wallFront - depth)) continue;
+        } else if (!(along < -halfFine && along >= -(halfFine + depth))) continue;
         const radial = Math.hypot(d[0] - along * n[0], d[1] - along * n[1], d[2] - along * n[2]);
         if (radial <= r) cells.push({ x, y, z });
       }
@@ -5409,7 +5423,9 @@ fn rawTruthOracleActivityCueAtCell(c: vec3<i32>) -> f32 {
 }
 
 fn truthOracleActivityCueAtCell(c: vec3<i32>) -> f32 {
-  return rawTruthOracleActivityCueAtCell(c) * clamp(u.oracle_activity_controls.x, 0.0, 1.0);
+  let gain = clamp(u.oracle_activity_controls.x, 0.0, 1.0);
+  if (gain <= 0.0005) { return 0.0; }
+  return rawTruthOracleActivityCueAtCell(c) * gain;
 }
 
 fn oracleActivityCurlForce(c: vec3<i32>, cue: f32, gain: f32) -> vec3<f32> {
@@ -5421,7 +5437,9 @@ fn oracleActivityCurlForce(c: vec3<i32>, cue: f32, gain: f32) -> vec3<f32> {
 }
 
 fn oracleActivityVorticityConfinement(c: vec3<i32>, cue: f32, gain: f32) -> vec3<f32> {
-  return vorticityConfinement(c, clamp(cue * gain, 0.0, 3.0) * 0.085);
+  let amount = clamp(cue * gain, 0.0, 3.0) * 0.085;
+  if (amount <= 0.00005) { return vec3<f32>(0.0); }
+  return vorticityConfinement(c, amount);
 }
 
 fn oracleActivityMaterialBirth(cue: f32, gain: f32, heat: f32, smoke: f32, flame: f32, source: f32) -> f32 {
@@ -5750,7 +5768,7 @@ fn csProjectPressureConverged(@builtin(global_invocation_id) gid: vec3<u32>) {
   let idx = index3(gid);
   let base = idx * SLOTS_PER_CELL;
   let c = vec3<i32>(gid);
-  if (sceneSolidAt(c)) {
+  if (sceneSolidAt(c) && !SEPARATED_PRESSURE) {
     if (SEPARATED_PRESSURE) { fluidDst[base] = vec4<f32>(0.0); return; }
     frontDst[idx] = 0.0;
     if (reactantLawOn()) { textureStore(reactantDst, vec3<i32>(gid), vec4<f32>(0.0)); }
@@ -5771,20 +5789,20 @@ fn csProjectPressureConverged(@builtin(global_invocation_id) gid: vec3<u32>) {
   }
   let projectionGain = clamp(u.pressure_solver_controls.w, 0.0, 1.0);
   var correctedVelocity = velocityDensity.xyz - pressureGradient * projectionGain;
-  if (!sceneFaceOpen(c, 0u)) { correctedVelocity.x = 0.0; }
-  if (!sceneFaceOpen(c, 1u)) { correctedVelocity.y = 0.0; }
-  if (!sceneFaceOpen(c, 2u)) { correctedVelocity.z = 0.0; }
+  if (!sceneFaceOpen(c, 0u)) { correctedVelocity.x = select(0.0, velocityDensity.x, SEPARATED_PRESSURE); }
+  if (!sceneFaceOpen(c, 1u)) { correctedVelocity.y = select(0.0, velocityDensity.y, SEPARATED_PRESSURE); }
+  if (!sceneFaceOpen(c, 2u)) { correctedVelocity.z = select(0.0, velocityDensity.z, SEPARATED_PRESSURE); }
   // Closed walls carry no flux: the upper face of the last cell on each axis is
   // a wall unless it is the open top.
   let lastCell = i32(GRID) - 1;
   if (c.x >= lastCell && !openWorldBoundary()) {
-    correctedVelocity.x = 0.0;
+    correctedVelocity.x = select(0.0, velocityDensity.x, SEPARATED_PRESSURE);
   }
   if (c.y >= i32(GRID_Y) - 1 && !pressureSolverOpenTop() && !openWorldBoundary()) {
-    correctedVelocity.y = 0.0;
+    correctedVelocity.y = select(0.0, velocityDensity.y, SEPARATED_PRESSURE);
   }
   if (c.z >= lastCell && !openWorldBoundary()) {
-    correctedVelocity.z = 0.0;
+    correctedVelocity.z = select(0.0, velocityDensity.z, SEPARATED_PRESSURE);
   }
   // The legacy per-component velocity bound is retained; the residual probe
   // measures divergence after it, so anything it reintroduces is visible.
@@ -6268,15 +6286,11 @@ fn sampleWorldReactantBurn(p: vec3<f32>) -> f32 {
   return sampleReactantBurn(worldToCell(p));
 }
 
-// The MacCormack predictor evaluated in place (the oxidizer has no predictor
-// buffer): cell c's forward semi-Lagrangian estimate, by the same characteristic
-// csTransportPredict uses for the fluid slots (tall plume: no lateral damping).
+// The MacCormack predictor for oxidizer is cached in fluidPredict[base].w by
+// csTransportPredict along the shared characteristic, avoiding 8 in-place backtraces.
 fn reactantPredictedOxidizer(c: vec3<i32>) -> f32 {
   if (sceneSolidAt(c)) { return 0.0; }
-  let cc = vec3<i32>(clampCell(c));
-  let centre = vec3<f32>(cc) + vec3<f32>(0.5);
-  let back = sceneClipCharacteristic(centre, centre - centreVelocityAt(cc) * dynamicsBacktraceScale());
-  return sampleReactantOxidizer(back);
+  return fluidPredict[slotIndex(clampCell(c), 0u)].w;
 }
 
 fn sampleReactantPredicted(cellCenter: vec3<f32>) -> f32 {
@@ -6327,7 +6341,8 @@ fn reactantOxidizerExtrema(cellCenter: vec3<f32>) -> vec2<f32> {
 // first order where the backtrace touches the inflow ghost, revert to first
 // order outside the source extrema), first-order semi-Lagrangian otherwise.
 fn transportReactantOxidizer(cellI: vec3<i32>, backCell: vec3<f32>, forwardCell: vec3<f32>, macCormackScalars: bool) -> f32 {
-  let predicted = sampleReactantOxidizer(backCell);
+  if (VELOCITY_ONLY) { return u.reactant_combustion_c.z; }
+  let predicted = select(sampleReactantOxidizer(backCell), fluidPredict[slotIndex(clampCell(cellI), 0u)].w, macCormackScalars);
   if (openWorldBoundary() && max(ghostOutsideAmount(backCell), ghostOutsideAmount(forwardCell)) > 0.0) { return predicted; }
   if (!macCormackScalars || inflowGhostBlend(backCell) > 0.0) {
     return predicted;
@@ -6837,16 +6852,18 @@ fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
   let centreVelocity = centreVelocityAt(vec3<i32>(gid));
   let advectVelocity = materialTransportVelocity(cell, centreVelocity);
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * dynamicsBacktraceScale());
+  let predOx = select(0.0, sampleReactantOxidizer(backCell), !VELOCITY_ONLY && reactantLawOn() && u.transport_controls.x > 2.5);
   if (compactAppearanceOn()) {
     // Stored form: three slots predicted, slot 3 untouched.
-    fluidPredict[base] = sampleFluidSlotInflowWith(backCell, 0u, true);
+    fluidPredict[base] = vec4<f32>(select(sampleFluidSlotInflowWith(backCell, 0u, true).xyz, advectVelocity, MATERIAL_ONLY), predOx);
     fluidPredict[base + 1u] = sampleFluidSlotInflowWith(backCell, 1u, true);
     fluidPredict[base + 2u] = sampleFluidSlotInflowWith(backCell, 2u, true);
     return;
   }
-  for (var slot = 0u; slot < SLOTS_PER_CELL; slot = slot + 1u) {
+  for (var slot = select(0u, 1u, MATERIAL_ONLY); slot < SLOTS_PER_CELL; slot = slot + 1u) {
     fluidPredict[base + slot] = sampleFluidSlotInflow(backCell, slot);
   }
+  fluidPredict[base] = vec4<f32>(select(fluidPredict[base].xyz, advectVelocity, MATERIAL_ONLY), predOx);
 }
 
 @compute @workgroup_size(4, 4, 4)
@@ -6926,7 +6943,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let fireLayerRiseDirection = 1.0;
   let microdetailRiseDirection = 1.0;
   let centreVelocity = centreVelocityAt(cellI);
-  let advectVelocity = materialTransportVelocity(cell, centreVelocity);
+  let advectVelocity = select(materialTransportVelocity(cell, centreVelocity), fluidPredict[base].xyz, MATERIAL_ONLY && u.transport_controls.x > 1.5);
   let backtraceScale = transportBacktraceScale(speed) * timeStep;
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * backtraceScale);
   let noiseCell = calibrationNoiseCoordinate(cell);
@@ -13235,21 +13252,25 @@ export function createKaminosVolumePrototype({
   // The immersed source's back wall for the current step, from the receipt the
   // uniform pack just resolved (empty when the law is off or the wall toggled off).
   function immersedBackWallForState() {
+    const vWidth = Number(controlsSnapshot.fineVelocity) || gridSize;
+    const pWidth = Number(controlsSnapshot.finePressure) || (controlsSnapshot.pressureResolution === 'half' ? gridSize / 2 : vWidth);
+    const coarseStep = Math.max(1, gridSize / Math.min(gridSize, vWidth > 0 ? vWidth : gridSize, pWidth > 0 ? pWidth : gridSize));
+    const wallOpts = coarseStep > 1 ? { grid: gridSize, gridHeight, coarseStep } : { grid: gridSize, gridHeight };
     if(immersedCollectionRecords!==null){
       const sources=immersedCollectionPrepared?.sources??[];
       const keys=sources.filter(s=>s.config.effective.admitted&&s.config.effective.backWall?.requested).map(s=>s.config.effective);
-      const key=JSON.stringify([gridSize,gridHeight,keys.map(e=>[e.centreCells,e.direction,e.radiusCells,e.thickness,e.backWall.thicknessCells])]);
+      const key=JSON.stringify([gridSize,gridHeight,coarseStep,keys.map(e=>[e.centreCells,e.direction,e.radiusCells,e.thickness,e.backWall.thicknessCells])]);
       if(immersedWallCache?.key===key)return immersedWallCache;
-      const unique=new Map();for(const e of keys)for(const c of immersedBackWallCells(e,{grid:gridSize,gridHeight}))unique.set(c.x+gridSize*(c.y+gridHeight*c.z),c);
+      const unique=new Map();for(const e of keys)for(const c of immersedBackWallCells(e,wallOpts))unique.set(c.x+gridSize*(c.y+gridHeight*c.z),c);
       const cells=[...unique.values()];return immersedWallCache={key,cells,maskKey:JSON.stringify([gridSize,gridHeight,[...unique.keys()].sort((a,b)=>a-b)])};
     }
     const e = state.immersedSource?.effective;
     if (!e?.admitted || !e.backWall?.requested) return { cells: [], key: 'none', maskKey: 'none' };
     // Exact physical inputs: rounding can hide a cell-boundary crossing.
-    const key = JSON.stringify([gridSize, gridHeight, e.centreCells, e.direction,
+    const key = JSON.stringify([gridSize, gridHeight, coarseStep, e.centreCells, e.direction,
       e.radiusCells, e.thickness, e.backWall.thicknessCells]);
     if (immersedWallCache?.key === key) return immersedWallCache;
-    const cells = immersedBackWallCells(e, {grid: gridSize, gridHeight});
+    const cells = immersedBackWallCells(e, wallOpts);
     // A fractional pose change may leave rasterized occupancy unchanged.
     const maskKey = JSON.stringify([gridSize, gridHeight, cells.map(c => c.x + gridSize * (c.y + gridHeight * c.z))]);
     immersedWallCache = {key, cells, maskKey};
@@ -17976,11 +17997,12 @@ export function createKaminosVolumePrototype({
     }
     const transport = resolveTransportConfig(controlsSnapshot).effective;
     const time = resolveTimeStepConfig(controlsSnapshot).effective;
+    const calibrationGain = uniforms[WORLD_CALIBRATION_UNIFORM_OFFSET] || 1;
     owner.prepare({ fluid:velocityOwner?velocityOwner.fluid[velocityOwner.current]:fluidBuffers[currentFluid], solidTexture:targetSolid, burnTexture:targetBurn,
       fineLower:targetLower,openBoundary:uniforms[OPEN_WORLD_UNIFORM_OFFSET]>.5,
       openTop:solver.effective.openTop, nonLegacy:transport.scheme!=='legacy',
-      velocityScale:velocityOwner?1/velocityOwner.plan.materialPerVelocity:1,
-      maxSpeed:TRANSPORT_MAX_BACKTRACE_CELLS / time.backtraceScale / (velocityOwner?.plan.materialPerVelocity??1) });
+      velocityScale:(velocityOwner?1/velocityOwner.plan.materialPerVelocity:1)*calibrationGain,
+      maxSpeed:TRANSPORT_MAX_BACKTRACE_CELLS / time.backtraceScale / (velocityOwner?.plan.materialPerVelocity??1) * calibrationGain });
     const probe = !velocityOwner && beginPressureResidualProbe(encoder);
     owner.encode(encoder,'restrict');
     const open=uniforms[OPEN_WORLD_UNIFORM_OFFSET]>.5;

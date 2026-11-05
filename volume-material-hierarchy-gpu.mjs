@@ -80,20 +80,24 @@ fn hierarchyHistory(p:vec3<f32>)->Gas{return hierarchyPlane(p,true);}
   if(reactantLawOn()){
    let dt=u.time.x;
    let w=min(.16,max(0.0,u.reactant_combustion_a.w*dt*pow(u.material.w/n.loPitch.w,2.0)));
-   var neighbors=vec4<f32>(0);var momentNeighbors=vec3<f32>(0);
-   for(var a=0u;a<3u;a++){
-    let off=vec3<f32>(axis(a))*n.loPitch.w;let plus=hierarchyGas(clipped(p,p+off));let minus=hierarchyGas(clipped(p,p-off));
-    neighbors+=plus.a+minus.a;momentNeighbors+=plus.b.yzw+minus.b.yzw;
+   if(w>0.0){
+    var neighbors=vec4<f32>(0);var momentNeighbors=vec3<f32>(0);
+    for(var a=0u;a<3u;a++){
+     let off=vec3<f32>(axis(a))*n.loPitch.w;let plus=hierarchyGas(clipped(p,p+off));let minus=hierarchyGas(clipped(p,p-off));
+     neighbors+=plus.a+minus.a;momentNeighbors+=plus.b.yzw+minus.b.yzw;
+    }
+    r.a=max(vec4<f32>(0),r.a*(1.0-6.0*w)+neighbors*w);
+    r.b=vec4<f32>(r.b.x,max(vec3<f32>(0),r.b.yzw*(1.0-6.0*w)+momentNeighbors*w));
    }
-   r.a=max(vec4<f32>(0),r.a*(1.0-6.0*w)+neighbors*w);
-   r.b=vec4<f32>(r.b.x,max(vec3<f32>(0),r.b.yzw*(1.0-6.0*w)+momentNeighbors*w));
-   let burned=reactantBurn(r.a.z,r.a.w,r.a.y,dt);
    let cooling=reactantCoolingSurvival(dt);let survival=reactantSootSurvival(dt);
-   let moments=(shiftThermalMoments(r.b.yzw,r.a.x,burned.z-r.a.y,cooling)+thermalMoments(burned.w*u.reactant_combustion_b.z,burned.z*cooling))*survival;
-   r.a=vec4<f32>((r.a.x+burned.w*u.reactant_combustion_b.z)*survival,burned.z*cooling,burned.x,burned.y);
-   let burnout=sootBurnoutSurvival(r.a.y,r.a.w,dt);r.a.x*=burnout;
-   r.b=vec4<f32>(burned.w/max(dt,1e-6),moments*burnout);
-  }else{let cooling=pow(.982,u.time.x);let survival=pow(.990,u.time.x);r.b=vec4<f32>(0,shiftThermalMoments(r.b.yzw,r.a.x,0,cooling)*survival);r.a.x*=survival;r.a.y*=cooling;}
+   if(r.a.x>1e-6||r.a.y>1e-5||r.a.z>1e-6||r.b.y>1e-6){
+    let burned=reactantBurn(r.a.z,r.a.w,r.a.y,dt);
+    let moments=(shiftThermalMoments(r.b.yzw,r.a.x,burned.z-r.a.y,cooling)+thermalMoments(burned.w*u.reactant_combustion_b.z,burned.z*cooling))*survival;
+    r.a=vec4<f32>((r.a.x+burned.w*u.reactant_combustion_b.z)*survival,burned.z*cooling,burned.x,burned.y);
+    let burnout=sootBurnoutSurvival(r.a.y,r.a.w,dt);r.a.x*=burnout;
+    r.b=vec4<f32>(burned.w/max(dt,1e-6),moments*burnout);
+   }else{r.a=vec4<f32>(0.0,0.0,0.0,r.a.w);r.b=vec4<f32>(0.0);}
+  }else{let cooling=pow(.982,u.time.x);let survival=pow(.990,u.time.x);r.b=select(vec4<f32>(0),vec4<f32>(0,shiftThermalMoments(r.b.yzw,r.a.x,0,cooling)*survival),r.b.y>1e-6);r.a.x*=survival;r.a.y*=cooling;}
   r=gasAdd(gasScale(r,1.0-fraction),owned);
  }
  if(u.bridgeMaterial.w>0.0){let weight=bridgeWeight(p);if(weight>0.0){let upstream=bridgeMaterialSample(p);r=Gas(mix(r.a,upstream.a,weight),mix(r.b,upstream.b,weight));owned=Gas(mix(owned.a,upstream.a*fraction,weight),mix(owned.b,upstream.b*fraction,weight));}}

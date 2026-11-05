@@ -22,7 +22,7 @@ export const WORLD_CALIBRATION_FIELDS=[
 export const WORLD_CALIBRATION_WGSL=/* wgsl */`
 fn calibrationCellGain()->f32{return u.world_calibration.x;}
 fn calibrationConfinementGain()->f32{
- return select(1.0,f32(GRID)*u.world_calibration.y/max(1.0,u.world_calibration.w),u.world_calibration.w>0.0);
+ return select(VELOCITY_UNIT_SCALE,f32(GRID)*u.world_calibration.y/max(1.0,u.world_calibration.w),u.world_calibration.w>0.0);
 }
 fn calibrationNoiseCoordinate(cell:vec3<f32>)->vec3<f32>{
  if(u.world_calibration.w<=0.0){return cell;}

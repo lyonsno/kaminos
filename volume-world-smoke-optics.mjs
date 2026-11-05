@@ -39,11 +39,14 @@ fn worldSmokeSample(p:vec3<f32>)->vec4<f32>{return regionSmokeSample(worldOptica
 fn regionSmokeMaterial(raw:vec4<f32>,moments:vec3<f32>,smokeVisible:f32,fireVisible:f32)->EmissiveMaterial{
  var r:FlowReconstructionSample;r.material=vec4<f32>(raw.xyz,0);r.freshBurn=raw.w;
  var medium=emissiveMaterial(r,fireVisible,smokeVisible);
- if(u.emissive_physics.x>.5){
+ if(fireVisible>0.0&&u.emissive_physics.x>.5&&raw.x>1e-5&&moments.x>1e-6){
    let q=thermalQuadrature(max(raw.x,0.0),moments);
-   let mixture=mix(thermalRadiance(physicsSootKelvin(q.x,u.emissive_physics.y)),thermalRadiance(physicsSootKelvin(q.y,u.emissive_physics.y)),q.z);
-   let absorbing=max(raw.x,0.0)*max(u.viewport_steps_density.w,0.0)*u.emissive_material.x*(1.0-clamp(u.emissive_material.y,0.0,1.0));
-   medium.emission+=absorbing*(mixture-thermalRadiance(physicsSootKelvin(max(raw.y,0.0),u.emissive_physics.y)))*u.physical_fire.w;
+   let hotFloor=500.0/max(u.emissive_physics.y,1.0);
+   if(max(max(q.x,q.y),raw.y)>hotFloor){
+     let mixture=mix(thermalRadiance(physicsSootKelvin(q.x,u.emissive_physics.y)),thermalRadiance(physicsSootKelvin(q.y,u.emissive_physics.y)),q.z);
+     let absorbing=max(raw.x,0.0)*max(u.viewport_steps_density.w,0.0)*u.emissive_material.x*(1.0-clamp(u.emissive_material.y,0.0,1.0));
+     medium.emission+=absorbing*(mixture-thermalRadiance(physicsSootKelvin(max(raw.y,0.0),u.emissive_physics.y)))*u.physical_fire.w;
+   }
  }
  medium.emission=max(medium.emission,vec3<f32>(0))*fireVisible;return medium;
 }
@@ -55,9 +58,15 @@ fn middleSmokeWeight(p:vec3<f32>)->f32{
 fn worldSmokeMaterial(p:vec3<f32>,smokeVisible:f32,fireVisible:f32)->EmissiveMaterial{
  var far:EmissiveMaterial;
  if(worldRender.atlas.x>.5){far=worldResidentMaterial(p,smokeVisible,fireVisible);}
- else{far=regionSmokeMaterial(worldSmokeSample(p),regionSmokeSample(worldOptical,p,worldRender.loPitch,1).xyz,smokeVisible,fireVisible);}
+ else{
+  let raw=worldSmokeSample(p);
+  let moments=select(vec3<f32>(0.0),regionSmokeSample(worldOptical,p,worldRender.loPitch,1).xyz,fireVisible>0.0&&u.emissive_physics.x>.5&&raw.x>1e-5);
+  far=regionSmokeMaterial(raw,moments,smokeVisible,fireVisible);
+ }
  let weight=middleSmokeWeight(p);if(weight<=0.0){return far;}
- let middle=regionSmokeMaterial(regionSmokeSample(middleOptical,p,worldRender.middleLoPitch,0),regionSmokeSample(middleOptical,p,worldRender.middleLoPitch,1).xyz,smokeVisible,fireVisible);
+ let midRaw=regionSmokeSample(middleOptical,p,worldRender.middleLoPitch,0);
+ let midMoments=select(vec3<f32>(0.0),regionSmokeSample(middleOptical,p,worldRender.middleLoPitch,1).xyz,fireVisible>0.0&&u.emissive_physics.x>.5&&midRaw.x>1e-5);
+ let middle=regionSmokeMaterial(midRaw,midMoments,smokeVisible,fireVisible);
  return EmissiveMaterial(mix(far.emission,middle.emission,weight),mix(far.absorption,middle.absorption,weight),mix(far.scattering,middle.scattering,weight));
 }
 fn worldMinimumMaterialPitch()->f32{

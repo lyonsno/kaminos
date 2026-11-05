@@ -210,7 +210,7 @@ fn seedSceneExteriorMedium(@builtin(global_invocation_id) c:vec3<u32>){
   let dims=textureDimensions(sceneExteriorOut);if(any(c>=dims)){return;}
   let p=worldRender.loPitch.xyz+(vec3<f32>(c)+.5)*worldRender.loPitch.w;
   // Same physical law as the camera, before optional diagnostic tinting.
-  let medium=regionSmokeMaterial(worldSmokeSample(p),regionSmokeSample(worldOptical,p,worldRender.loPitch,1).xyz,1.0,1.0);
+  let medium=regionSmokeMaterial(worldSmokeSample(p),vec3<f32>(0.0),1.0,0.0);
   textureStore(sceneExteriorOut,vec3<i32>(c),vec4<f32>(medium.absorption+medium.scattering,0,0,0));
 }
 @compute @workgroup_size(4,4,4)
@@ -218,7 +218,7 @@ fn seedSceneMiddleMedium(@builtin(global_invocation_id) c:vec3<u32>){
   seatGridShape();
   let dims=textureDimensions(sceneExteriorOut);if(any(c>=dims)){return;}
   let p=worldRender.middleLoPitch.xyz+(vec3<f32>(c)+.5)*worldRender.middleLoPitch.w;
-  let medium=regionSmokeMaterial(regionSmokeSample(middleOptical,p,worldRender.middleLoPitch,0),regionSmokeSample(middleOptical,p,worldRender.middleLoPitch,1).xyz,1.0,1.0);
+  let medium=regionSmokeMaterial(regionSmokeSample(middleOptical,p,worldRender.middleLoPitch,0),vec3<f32>(0.0),1.0,0.0);
   textureStore(sceneExteriorOut,vec3<i32>(c),vec4<f32>(medium.absorption+medium.scattering,0,0,0));
 }
 @group(3) @binding(4) var sceneSourceOut: texture_storage_3d<rgba32float, write>;

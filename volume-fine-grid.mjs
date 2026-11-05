@@ -61,36 +61,42 @@ fn transferFace(c:vec3<u32>,a:u32,prior:bool)->f32{
 }
 fn restrictGeneral(c:vec3<u32>){
  let ci=idx(c,s.velocity.xyz);let r=s.ratio.x;let lo=transferLo(c,s.material.xyz,s.velocity.xyz);let hi=transferHi(c,s.material.xyz,s.velocity.xyz);
- let begin=transferBegin(c,s.material.xyz,s.velocity.xyz);let end=transferEnd(c,s.material.xyz,s.velocity.xyz);var a=vec4<f32>(0);var b=a;var d=a;var react=a;var front=0.0;var wet=0.0;var mask=0u;var weightSum=0.0;
+ let begin=transferBegin(c,s.material.xyz,s.velocity.xyz);let end=transferEnd(c,s.material.xyz,s.velocity.xyz);var a=vec4<f32>(0);var b=a;var d=a;var react=a;var front=0.0;var wet=0.0;var mask=0u;var weightSum=0.0;var fluidWeight=0.0;
  for(var z=begin.z;z<end.z;z++){for(var y=begin.y;y<end.y;y++){for(var x=begin.x;x<end.x;x++){
   let p=vec3<i32>(x,y,z);let o=transferOverlap(p,lo,hi);let w=o.x*o.y*o.z;if(w<=0.0){continue;}weightSum+=w;
+  let blocked=solid(p);mask=max(mask,select(0u,1u,blocked));if(blocked){continue;}fluidWeight+=w;
   let fi=idx(vec3<u32>(p),s.material.xyz);a+=fine[fi*4u+1u]*w;b+=fine[fi*4u+2u]*w;d+=fine[fi*4u+3u]*w;
-  front+=fineFront[fi]*w;wet+=f32(fineQuench[fi])*w;mask=max(mask,select(0u,1u,solid(p)));
+  front+=fineFront[fi]*w;wet+=f32(fineQuench[fi])*w;
   if(textureDimensions(fineReactant).x==s.material.x){react+=textureLoad(fineReactant,p,0)*w;}
  }}}
+ let norm=max(fluidWeight,1e-6);
  if(s.velocity.w==1u){var v=vec3<f32>(0);for(var axis=0u;axis<3u;axis++){v[axis]=transferFace(c,axis,false);}coarse[ci*4u]=vec4<f32>(v,0);}
- coarse[ci*4u+1u]=a/weightSum;coarse[ci*4u+2u]=b/weightSum;coarse[ci*4u+3u]=d/weightSum;coarseFront[ci]=front/weightSum;coarseQuench[ci]=u32(wet/weightSum+0.5);
+ coarse[ci*4u+1u]=a/norm;coarse[ci*4u+2u]=b/norm;coarse[ci*4u+3u]=d/norm;coarseFront[ci]=front/norm;coarseQuench[ci]=u32(wet/norm+0.5);
  if(ci==0u){let nf=s.material.x*s.material.y*s.material.z;let nc=s.velocity.x*s.velocity.y*s.velocity.z;for(var k=0u;k<5u;k++){coarseQuench[nc+k]=fineQuench[nf+k];}}
- textureStore(coarseSolid,vec3<i32>(c),vec4<u32>(mask));textureStore(coarseReactant,vec3<i32>(c),react/weightSum);
+ textureStore(coarseSolid,vec3<i32>(c),vec4<u32>(mask));textureStore(coarseReactant,vec3<i32>(c),react/norm);
 }
 @compute @workgroup_size(4,4,4)
 fn restrictScalars(@builtin(global_invocation_id) c:vec3<u32>){
  if(any(c>=s.velocity.xyz)){return;}
  if(GENERAL_TRANSFER){restrictGeneral(c);return;}
  let ci=idx(c,s.velocity.xyz);let r=s.material.w;let weight=1.0/f32(r*r*r);
- var a=vec4<f32>(0.0);var b=a;var d=a;var react=a;var front=0.0;var wet=0.0;var mask=0u;var vel=vec3<f32>(0.0);
+ var a=vec4<f32>(0.0);var b=a;var d=a;var react=a;var front=0.0;var wet=0.0;var mask=0u;var vel=vec3<f32>(0.0);var fluidWeight=0.0;
  for(var z=0u;z<r;z++){for(var y=0u;y<r;y++){for(var x=0u;x<r;x++){
   let o=vec3<u32>(x,y,z);let p=c*r+o;let fi=idx(p,s.material.xyz);let blocked=solid(vec3<i32>(p));
-  a+=fine[fi*4u+1u]*weight;b+=fine[fi*4u+2u]*weight;d+=fine[fi*4u+3u]*weight;
-  front+=fineFront[fi]*weight;wet+=f32(fineQuench[fi])*weight;mask=max(mask,select(0u,1u,blocked));
-  if(textureDimensions(fineReactant).x==s.material.x){react+=textureLoad(fineReactant,vec3<i32>(p),0)*weight;}
+  mask=max(mask,select(0u,1u,blocked));
+  if(!blocked){
+   fluidWeight+=weight;a+=fine[fi*4u+1u]*weight;b+=fine[fi*4u+2u]*weight;d+=fine[fi*4u+3u]*weight;
+   front+=fineFront[fi]*weight;wet+=f32(fineQuench[fi])*weight;
+   if(textureDimensions(fineReactant).x==s.material.x){react+=textureLoad(fineReactant,vec3<i32>(p),0)*weight;}
+  }
   if(s.velocity.w==1u){for(var axis=0u;axis<3u;axis++){var next=vec3<i32>(p);next[axis]++;if(o[axis]==r-1u&&!blocked&&!solid(next)){vel[axis]+=fine[fi*4u][axis]*weight;}}}
  }}}
+ let invFluid=select(0.0,1.0/fluidWeight,fluidWeight>0.0);
  if(s.velocity.w==1u){coarse[ci*4u]=vec4<f32>(vel,0.0);}
- coarse[ci*4u+1u]=a;coarse[ci*4u+2u]=b;coarse[ci*4u+3u]=d;
- coarseFront[ci]=front;coarseQuench[ci]=u32(wet+0.5);
+ coarse[ci*4u+1u]=a*invFluid;coarse[ci*4u+2u]=b*invFluid;coarse[ci*4u+3u]=d*invFluid;
+ coarseFront[ci]=front*invFluid;coarseQuench[ci]=u32(wet*invFluid+0.5);
  if(ci==0u){let nf=s.material.x*s.material.y*s.material.z;let nc=s.velocity.x*s.velocity.y*s.velocity.z;for(var k=0u;k<5u;k++){coarseQuench[nc+k]=fineQuench[nf+k];}}
- textureStore(coarseSolid,vec3<i32>(c),vec4<u32>(mask));textureStore(coarseReactant,vec3<i32>(c),react);
+ textureStore(coarseSolid,vec3<i32>(c),vec4<u32>(mask));textureStore(coarseReactant,vec3<i32>(c),react*invFluid);
 }
 // Analytic emitters act on the material lattice. Transfer only their velocity
 // increment, preserving the independently evolved coarse velocity history.

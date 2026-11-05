@@ -378,21 +378,26 @@ fn storeMaterial(c:vec3<i32>,i:u32,p:vec3<f32>,value:Gas,contribution:Gas){
  // Exterior supply is already an amount per whole receiving-cell volume.
  var r=suppliedGas(gasScale(history,1.0/(1.0-fraction)),supplyTexel(materialSupply,2u*i)/(1.0-fraction));
  if(reactantLawOn()){
-   let dt=u.time.x;let w=reactantExchangeWeightFor(dt);var neighbors=vec4<f32>(0);var momentNeighbors=vec3<f32>(0);
-   for(var a=0u;a<3u;a++){
-     let off=vec3<f32>(axis(a))*u.material.w;
-     let plus=gas(clipped(p,p+off));let minus=gas(clipped(p,p-off));
-     neighbors+=plus.a+minus.a;momentNeighbors+=plus.b.yzw+minus.b.yzw;
+   let dt=u.time.x;let w=reactantExchangeWeightFor(dt);
+   if(w>0.0){
+     var neighbors=vec4<f32>(0);var momentNeighbors=vec3<f32>(0);
+     for(var a=0u;a<3u;a++){
+       let off=vec3<f32>(axis(a))*u.material.w;
+       let plus=gas(clipped(p,p+off));let minus=gas(clipped(p,p-off));
+       neighbors+=plus.a+minus.a;momentNeighbors+=plus.b.yzw+minus.b.yzw;
+     }
+     r.a=max(vec4<f32>(0),r.a*(1.0-6.0*w)+neighbors*w);
+     r.b=vec4<f32>(r.b.x,max(vec3<f32>(0),r.b.yzw*(1.0-6.0*w)+momentNeighbors*w));
    }
-   r.a=max(vec4<f32>(0),r.a*(1.0-6.0*w)+neighbors*w);
-   r.b=vec4<f32>(r.b.x,max(vec3<f32>(0),r.b.yzw*(1.0-6.0*w)+momentNeighbors*w));
-   let burned=reactantBurn(r.a.z,r.a.w,r.a.y,dt);
    let cooling=reactantCoolingSurvival(dt);let sootSurvival=reactantSootSurvival(dt);
-   let moments=(shiftThermalMoments(r.b.yzw,r.a.x,burned.z-r.a.y,cooling)
-     +thermalMoments(burned.w*u.reactant_combustion_b.z,burned.z*cooling))*sootSurvival;
-   r.b=vec4<f32>(r.b.x,moments);r.a=vec4<f32>((r.a.x+burned.w*u.reactant_combustion_b.z)*reactantSootSurvival(dt),burned.z*reactantCoolingSurvival(dt),burned.x,burned.y);
-   let burnout=sootBurnoutSurvival(r.a.y,r.a.w,dt);r.a.x*=burnout;r.b=vec4<f32>(r.b.x,r.b.yzw*burnout);r.b.x=burned.w/max(dt,1e-6);
- }else{let cooling=pow(.982,u.time.x);let survival=pow(.990,u.time.x);r.b=vec4<f32>(0,shiftThermalMoments(r.b.yzw,r.a.x,0,cooling)*survival);r.a.x*=survival;r.a.y*=cooling;}
+   if(r.a.x>1e-6||r.a.y>1e-5||r.a.z>1e-6||r.b.y>1e-6){
+     let burned=reactantBurn(r.a.z,r.a.w,r.a.y,dt);
+     let moments=(shiftThermalMoments(r.b.yzw,r.a.x,burned.z-r.a.y,cooling)
+       +thermalMoments(burned.w*u.reactant_combustion_b.z,burned.z*cooling))*sootSurvival;
+     r.b=vec4<f32>(r.b.x,moments);r.a=vec4<f32>((r.a.x+burned.w*u.reactant_combustion_b.z)*sootSurvival,burned.z*cooling,burned.x,burned.y);
+     let burnout=sootBurnoutSurvival(r.a.y,r.a.w,dt);r.a.x*=burnout;r.b=vec4<f32>(r.b.x,r.b.yzw*burnout);r.b.x=burned.w/max(dt,1e-6);
+   }else{r.a=vec4<f32>(0.0,0.0,0.0,r.a.w);r.b=vec4<f32>(0.0);}
+ }else{let cooling=pow(.982,u.time.x);let survival=pow(.990,u.time.x);r.b=select(vec4<f32>(0),vec4<f32>(0,shiftThermalMoments(r.b.yzw,r.a.x,0,cooling)*survival),r.b.y>1e-6);r.a.x*=survival;r.a.y*=cooling;}
  storeMaterial(c,i,p,gasAdd(gasScale(r,1.0-fraction),owned),owned);
 }
 `;
