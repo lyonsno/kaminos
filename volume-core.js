@@ -24,6 +24,7 @@ import { leanEmissiveRaymarchAdmission, RAYMARCH_NEIGHBORHOOD_WGSL, FLAME_GUIDAN
 import { OPTICAL_TRACE_IDENTITY, traceChunkPlan, validateTraceRows, createOpticalCaptureOwner } from './volume-optical-trace.mjs';
 import { raymarchAdaptivity, emptySpaceThreshold, opticalSteppingConfig, resolveOpticalStepping, OPTICAL_STEPPING_WGSL } from './volume-optical-native.mjs';
 import { createRayStepTelemetry } from './volume-ray-step-telemetry.mjs';
+import {createIntegralReconstruction,integralReconstructionSettings} from './volume-integral-reconstruction.mjs';
 import { createRayAllocationHistory, rayHistorySettings, HISTORY_ALLOCATION_WGSL } from './volume-history-allocation.mjs';
 import { frameCadenceSummary } from './volume-frame-timing.mjs';
 import { applyPreviewQualityCaps } from './preview-quality.mjs';
@@ -9361,6 +9362,13 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let result = raymarchVolume(in, ordinarySceneDepthEndT(in), true, 0.0);
   return result.color;
 }
+struct IntegralOutput { @location(0) lightTransmission:vec4<f32>, @location(1) sceneDepth:f32 }
+@fragment fn fsIntegral(in:VSOut)->IntegralOutput {
+  seatGridShape();
+  let depth=ordinarySceneDepthEndT(in);
+  let result=raymarchVolume(in,depth,true,0.0);
+  var out:IntegralOutput;out.lightTransmission=vec4<f32>(result.linearRadiance,result.transmittance);out.sceneDepth=depth;return out;
+}
 
 @fragment
 fn fsProduct(in: VSOut) -> @location(0) vec4<f32> {
@@ -11085,6 +11093,7 @@ export function createKaminosVolumePrototype({
     throw new Error('caller-product-frame-requires-external-device-and-color-format');
   }
   const initialControlRetirement = stripRetiredRaymarchControls(getControls());
+  const initialReconstruction=integralReconstructionSettings(initialControlRetirement.controls);
   const initialHistory=rayHistorySettings({influence:initialControlRetirement.controls.historyInfluence,window:initialControlRetirement.controls.historyWindow});
   // The box shape (report §34) is seated from the controls once they exist
   // (below); until then the helper reads the authored twice-the-width.
@@ -11133,7 +11142,7 @@ export function createKaminosVolumePrototype({
   const uniforms = new Float32Array(VOLUME_UNIFORM_FLOATS);
   uniforms.set(THERMAL_LUT, 376);
   const volumePresentationControls = new Float32Array([1, 0, 0, 0]);
-  let controlsSnapshot = applyRuntimeQualityControls({...initialControlRetirement.controls,historyInfluence:initialHistory.influence,historyWindow:initialHistory.window});
+  let controlsSnapshot = applyRuntimeQualityControls({...initialControlRetirement.controls,...initialReconstruction,historyInfluence:initialHistory.influence,historyWindow:initialHistory.window});
   let volumePresentationModeRequestedRaw = 'beauty';
   let volumePresentationModeRequested = 'beauty';
   let volumePresentationModeEffective = 'beauty';
@@ -11780,6 +11789,7 @@ export function createKaminosVolumePrototype({
   let debugRaymarchShaderSpecialization = 'auto';
   let debugOpticalStepping = opticalSteppingConfig({mode:controlsSnapshot.raymarchMode??'numerical',tolerance:controlsSnapshot.opticalTolerance??0.001});
   let rayStepTelemetry = null;
+  let integralReconstruction=null, reconstructionSample=0;
   let rayAllocationHistory = null;
   let rayAllocationHistoryFrozen=false;
   let rayStepTelemetryCanvas = null;
@@ -15130,6 +15140,7 @@ export function createKaminosVolumePrototype({
     state.gpuInitStage = 'device';
     rayStepTelemetry = createRayStepTelemetry(device);
     rayAllocationHistory = createRayAllocationHistory(device);
+    integralReconstruction=createIntegralReconstruction(device,{transparent:transparentCanvas});
     rayStepTelemetry.setCanvas(rayStepTelemetryCanvas);
     rayStartNoiseTexture = await createRayStartTexture(device);
     worldOpticalFallback=device.createTexture({label:'disabled world smoke',size:[1,1,1],dimension:'3d',format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING});
@@ -16494,7 +16505,9 @@ export function createKaminosVolumePrototype({
     const occupancyThreshold=emptySpaceThreshold(controlsSnapshot.occupancyThreshold??0);
     uniforms[EMPTY_SPACE_UNIFORM_OFFSET]=occupancyThreshold;
     uniforms.fill(0, 41, 47);
-    uniforms[41] = controlsSnapshot.rayStartNoise !== false && controlsSnapshot.rayNoiseAnimated === true
+    uniforms[41] = controlsSnapshot.integralReconstruction!=='off' && controlsSnapshot.reconstructionFresh!==false && controlsSnapshot.rayNoiseFrame==null && controlsSnapshot.rayStartNoise!==false
+      ? reconstructionSample++ % 32
+      : controlsSnapshot.rayStartNoise !== false && controlsSnapshot.rayNoiseAnimated === true
       ? (controlsSnapshot.rayNoiseFrame ?? state.frameCount) % 32 : 0;
     uniforms[42] = clampFinite(controlsSnapshot.flamePriority, 0, 1, 0);
     uniforms[43] = controlsSnapshot.quadratureJitter === false ? 0 : 1;
@@ -21357,6 +21370,16 @@ export function createKaminosVolumePrototype({
     if(rayStepTelemetry.ensure(state.width,state.height,controlsSnapshot.rayStepTelemetry===true,
       {supported:telemetrySupported,reason:'requires-ordinary-emissive-beauty',allowResize:false}))rebuildFluidBindGroups();
     state.rayStepTelemetry=rayStepTelemetry.read();
+    const reconstructionRequested=controlsSnapshot.integralReconstruction??'off';
+    const reconstructionSupported=selectEmissive&&!options.opticalTrace&&!options.bindGroup
+      &&!nonRidgeOpticalCaptureSession&&!nonRidgeSourceBasisCaptureSession&&productFrameOwner==='prototype'
+      &&!sceneTransportConsumer&&!(controlsSnapshot.gridOverlay>0)&&!(controlsSnapshot.flowDebug>0)
+      &&volumePresentationModeEffective==='beauty';
+    const reconstruct=reconstructionRequested!=='off'&&reconstructionSupported;
+    if(!reconstruct)integralReconstruction?.disable(reconstructionRequested==='off'?'disabled':'unsupported-route');
+    state.integralReconstruction={requested:reconstructionRequested,effective:'off',reason:reconstructionRequested!=='off'?'requires-ordinary-emissive-beauty-without-debug-overlays':null};
+    const entryPoint=reconstruct?'fsIntegral':'fs';
+    const colorTargets=reconstruct?[{format:'rgba32float'},{format:'r32float'}]:[{format:targetPipeline===readbackPipeline?'rgba8unorm':format}];
     const opticalConstants = {OPTICAL_STEP_MODE:optical.value,RAY_STEP_STATS:rayStepTelemetry.active};
     state.opticalStepping = { ...optical, effective: optical.mode,
       adaptivity:raymarchAdaptivity(optical.mode,controlsSnapshot.adaptiveRays),
@@ -21378,7 +21401,7 @@ export function createKaminosVolumePrototype({
         throw Error('fixed-count allocation requires ordinary joined emissive beauty');
       }
       const map=worldSmokeMapping(worldSmoke.plan,worldSmoke.anchor,productTransform);
-      const {occupancySkip,occupancyThreshold,historyInfluence,historyWindow,...guidanceControls}=controlsSnapshot;
+      const {occupancySkip,occupancyThreshold,historyInfluence,historyWindow,integralReconstruction:reconstructionMode,reconstructionSpatial,reconstructionRadius,reconstructionWindow,reconstructionResponse,reconstructionEdge,reconstructionFresh,retention,...guidanceControls}=controlsSnapshot;
       const identity=JSON.stringify([guidanceControls,productTransform,worldSmokeKey,intermediateKey]);
       state.opticalStepping.allocation=rayAllocationHistory.prepare(encoder,
         {min:map.renderMin,max:map.renderMax,dims:worldSmoke.plan.materialDims},identity,state.simStepCount,{freeze:rayAllocationHistoryFrozen,influence:controlsSnapshot.historyInfluence,window:optical.mode==='history'?controlsSnapshot.historyWindow:1});
@@ -21386,15 +21409,15 @@ export function createKaminosVolumePrototype({
       state.opticalStepping.fullRay=true;
       rebuildFluidBindGroups();
     }else{rayAllocationHistory.reset();}
-    const opticalKey = `:${optical.mode}:stats=${rayStepTelemetry.active}`;
-    if ((optical.mode !== 'fallback-fixed'||rayStepTelemetry.active) && !multisampled && !scenePointBindGroup && !distributedGroup) {
+    const opticalKey = `:${optical.mode}:stats=${rayStepTelemetry.active}:integral=${reconstruct}`;
+    if ((optical.mode !== 'fallback-fixed'||rayStepTelemetry.active||reconstruct) && !multisampled && !scenePointBindGroup && !distributedGroup) {
       const key = `${targetPipeline === readbackPipeline}:${gridSize}:${gridHeight}${opticalKey}`;
       if (!opticalSteppingPipelines.has(key)) {
         opticalSteppingPipelines.set(key,device.createRenderPipeline({label:'experimental optical stepping',
           layout:device.createPipelineLayout({bindGroupLayouts:[bindGroupLayout,productRaymarchDepthBindGroupLayout]}),
-          vertex:{module:shader,entryPoint:'vs'},fragment:{module:shader,entryPoint:'fs',
+          vertex:{module:shader,entryPoint:'vs'},fragment:{module:shader,entryPoint,
             constants:{TRANSPARENT_CANVAS:transparentCanvas?1:0,LEAN_EMISSIVE_RAYMARCH:true,...opticalConstants},
-            targets:[{format:targetPipeline===readbackPipeline?'rgba8unorm':format}]},primitive:{topology:'triangle-list'}}));
+            targets:colorTargets},primitive:{topology:'triangle-list'}}));
       }
       drawPipeline=opticalSteppingPipelines.get(key);
     }
@@ -21415,11 +21438,11 @@ export function createKaminosVolumePrototype({
         ordinaryDepthPipelines.set(depthKey,device.createRenderPipeline({
           label:'ordinary emissive raymarch with MSAA scene-depth clipping',layout:ordinaryMultisamplePipelineLayout,
           vertex:{module:ordinaryMultisampleShader,entryPoint:'vs'},
-          fragment:{module:ordinaryMultisampleShader,entryPoint:'fs',
+          fragment:{module:ordinaryMultisampleShader,entryPoint,
             constants:{TRANSPARENT_CANVAS:transparentCanvas ? 1 : 0,
               LEAN_STOCK_RAYMARCH:basePipeline === leanStockPipeline || basePipeline === leanStockReadbackPipeline,
               LEAN_EMISSIVE_RAYMARCH: selectEmissive,...opticalConstants},
-            targets:[{format:targetPipeline === readbackPipeline ? 'rgba8unorm' : format}]},
+            targets:colorTargets},
           primitive:{topology:'triangle-list'},
         }));
       }
@@ -21441,9 +21464,9 @@ export function createKaminosVolumePrototype({
         const layout = device.createPipelineLayout({bindGroupLayouts:[bindGroupLayout,
           multisampled ? ordinaryMultisampleDepthLayout : productRaymarchDepthBindGroupLayout,scenePointBindings.layout]});
         scenePointPipelines.set(key,device.createRenderPipeline({label:'shared point light smoke consumer',layout,
-          vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',
+          vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint,
             constants:{TRANSPARENT_CANVAS:transparentCanvas?1:0,LEAN_STOCK_RAYMARCH:false,LEAN_EMISSIVE_RAYMARCH: selectEmissive,...opticalConstants},
-            targets:[{format:targetPipeline === readbackPipeline?'rgba8unorm':format}]},primitive:{topology:'triangle-list'}}));
+            targets:colorTargets},primitive:{topology:'triangle-list'}}));
       }
       drawPipeline = scenePointPipelines.get(key);
     }
@@ -21463,8 +21486,8 @@ export function createKaminosVolumePrototype({
         const module=device.createShaderModule({label:'distributed flame smoke consumer',code});
         const layout=device.createPipelineLayout({bindGroupLayouts:[bindGroupLayout,multisampled?ordinaryMultisampleDepthLayout:productRaymarchDepthBindGroupLayout,distributedLayout]});
         distributedPipelines.set(key,device.createRenderPipeline({label:'distributed flame scene smoke',layout,
-          vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',constants:{TRANSPARENT_CANVAS:transparentCanvas?1:0,LEAN_STOCK_RAYMARCH:false,LEAN_EMISSIVE_RAYMARCH: selectEmissive,OPTICAL_TRACE_CAPTURE:Boolean(options.opticalTrace),...opticalConstants},
-          targets:[{format:targetPipeline===readbackPipeline?'rgba8unorm':format}]},primitive:{topology:'triangle-list'}}));
+          vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint,constants:{TRANSPARENT_CANVAS:transparentCanvas?1:0,LEAN_STOCK_RAYMARCH:false,LEAN_EMISSIVE_RAYMARCH: selectEmissive,OPTICAL_TRACE_CAPTURE:Boolean(options.opticalTrace),...opticalConstants},
+          targets:colorTargets},primitive:{topology:'triangle-list'}}));
       }
       drawPipeline=distributedPipelines.get(key);
     }
@@ -21483,10 +21506,12 @@ export function createKaminosVolumePrototype({
     }
     if (uniforms[368] <= 1.5) emissiveSeedProducer = null;
     if (uniforms[368] <= 1.5 || !sceneVolumeSourceRequested) sceneVolumeSource?.invalidate('inactive-source-route');
+    const integralIdentity=JSON.stringify([Array.from(invViewProj.elements,x=>Math.round(x*1e5)/1e5),productTransform,controlsSnapshot,worldSmokeKey,intermediateKey]);
+    const integralAttachments=reconstruct?integralReconstruction.prepare(state.width,state.height,controlsSnapshot,integralIdentity,state.simStepCount):null;
     const pass = encoder.beginRenderPass({
       label,
       ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
-      colorAttachments: [{
+      colorAttachments: integralAttachments || [{
         view,
         clearValue: transparentCanvas
           ? { r: 0, g: 0, b: 0, a: 0 }
@@ -21502,6 +21527,13 @@ export function createKaminosVolumePrototype({
     if (distributedGroup) pass.setBindGroup(2,distributedGroup);
     pass.draw(3);
     pass.end();
+    if(reconstruct) {
+      const cameraValues=new Float32Array([...emissiveWhiteMatrix[0],0,...emissiveWhiteMatrix[1],0,...emissiveWhiteMatrix[2],0,
+        0,uniforms[373],uniforms[374],0,0,0,uniforms[46],0]);
+      state.integralReconstruction=integralReconstruction.encode(encoder,view,targetPipeline===readbackPipeline?'rgba8unorm':format,cameraValues);
+      state.integralReconstruction.samplePhase=uniforms[41];
+      state.integralReconstruction.freshSampling=controlsSnapshot.reconstructionFresh!==false&&controlsSnapshot.rayStartNoise!==false&&controlsSnapshot.rayNoiseFrame==null;
+    }
     rayStepTelemetry.encode(encoder,{frameCount:state.frameCount,simStepCount:state.simStepCount,
       backend:state.backend,mode:optical.mode,occupancySkip:state.occupancySkip,occupancyThreshold:state.occupancyThreshold});
   }
@@ -28232,6 +28264,7 @@ export function createKaminosVolumePrototype({
       return plan;
     },
     setControls(next) {
+      integralReconstructionSettings({...controlsSnapshot,...next});
       rayHistorySettings({influence:Object.hasOwn(next,'historyInfluence')?next.historyInfluence:controlsSnapshot.historyInfluence,window:Object.hasOwn(next,'historyWindow')?next.historyWindow:controlsSnapshot.historyWindow});
       if(Object.hasOwn(next,'occupancyThreshold'))emptySpaceThreshold(next.occupancyThreshold);
       rayStepTelemetry?.invalidate();
@@ -29066,6 +29099,11 @@ export function createKaminosVolumePrototype({
       if(device&&worldRenderUniform)device.queue.writeBuffer(worldRenderUniform,32,new Float32Array([mode==='contributions'?1:0,0,0,0]));
       return mode;
     },
+    async sampleIntegralReconstruction() {
+      if(!selectiveHeadLiveCapturePaused)throw Error('Integral readback requires held capture');
+      if(!integralReconstruction||state.integralReconstruction?.effective==='off')return {available:false,state:state.integralReconstruction};
+      return integralReconstruction.sample();
+    },
     debugState() {
       return {
         ...state,
@@ -29429,6 +29467,7 @@ export function createKaminosVolumePrototype({
       worldRenderField?.destroy();worldRenderField=null;
       worldOpticalFallback?.destroy();worldRenderUniform?.destroy();
       rayAllocationHistory?.dispose();
+      integralReconstruction?.dispose();
       ordinarySceneDepthFallback?.destroy();
       boundarySplatHdrTexture?.destroy();
       boundarySplatOpticalTexture?.destroy();

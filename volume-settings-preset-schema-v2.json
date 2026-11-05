@@ -2499,6 +2499,54 @@
       "tagName": "INPUT",
       "type": "range",
       "additiveDefault": 1
+    },
+    {
+      "key": "volume-integral-reconstruction",
+      "param": "volume_integral_reconstruction",
+      "tagName": "SELECT",
+      "additiveDefault": "off"
+    },
+    {
+      "key": "volume-reconstruction-spatial",
+      "param": "volume_reconstruction_spatial",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 0.6
+    },
+    {
+      "key": "volume-reconstruction-radius",
+      "param": "volume_reconstruction_radius",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 1
+    },
+    {
+      "key": "volume-reconstruction-window",
+      "param": "volume_reconstruction_window",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 8
+    },
+    {
+      "key": "volume-reconstruction-response",
+      "param": "volume_reconstruction_response",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 1
+    },
+    {
+      "key": "volume-reconstruction-edge",
+      "param": "volume_reconstruction_edge",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 2
+    },
+    {
+      "key": "volume-reconstruction-fresh",
+      "param": "volume_reconstruction_fresh",
+      "tagName": "INPUT",
+      "type": "checkbox",
+      "additiveDefault": true
     }
   ],
   "presentationControls": [

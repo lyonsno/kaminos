@@ -1937,6 +1937,14 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <label class="slider-label" for="volume-history-window">History window (frames)</label>
       <input id="volume-history-window" type="number" step="1" min="1" value="1" data-authoring-drag-step="1" data-volume-settings-role="renderer" title="Effective memory in rendered frames, not simulation steps. 1 remembers the previous draw only. Larger windows decay old importance exponentially (e-fold time = window minus 1); no hard age cutoff or color reuse. Uses the same two buffers plus one carry pass per history cell.">
     </div>
+    <div class="slider-row" title="Filters linear integrated light and transmission before the camera curve. Raw keeps the existing path. Camera motion resets image memory; moving flames use current-neighborhood rejection. Independent from importance history and 3D display smoothing."><label class="slider-label" for="volume-integral-reconstruction">Image reconstruction</label><select id="volume-integral-reconstruction" data-volume-settings-role="renderer"><option value="off">Raw</option><option value="spatial">Spatial</option><option value="temporal">Temporal</option><option value="combined">Spatial + temporal</option></select></div>
+    <div class="slider-row" title="Amount of local noise-aware smoothing. 0 disables spatial blending; 1 allows the strongest blending. A small floor also smooths persistent grid quantization."><label class="slider-label" for="volume-reconstruction-spatial">Spatial smoothing</label><input id="volume-reconstruction-spatial" type="number" min="0" max="1" step="0.1" value="0.6" data-authoring-drag-step="0.1" data-volume-settings-role="renderer"></div>
+    <div class="slider-row" title="Radius of the fixed nine-tap footprint in rendered pixels, before CSS upscaling. Wider costs the same number of taps but trades more detail for smoothness."><label class="slider-label" for="volume-reconstruction-radius">Blur radius (px)</label><input id="volume-reconstruction-radius" type="number" min="0" step="0.1" value="1" data-authoring-drag-step="0.1" data-volume-settings-role="renderer"></div>
+    <div class="slider-row" title="Effective maximum memory in rendered draws. 1 uses only the current draw. Larger values permit more reuse; motion and camera changes can shorten it. This is image history, independent of the marcher importance window."><label class="slider-label" for="volume-reconstruction-window">Image memory (frames)</label><input id="volume-reconstruction-window" type="number" min="1" step="1" value="8" data-authoring-drag-step="1" data-volume-settings-role="renderer"></div>
+    <div class="slider-row" title="How quickly changed light or smoke rejects old image history. Higher responds faster and retains more noise; 0 allows maximum reuse subject to neighborhood clamping. Camera changes always reset."><label class="slider-label" for="volume-reconstruction-response">Motion response</label><input id="volume-reconstruction-response" type="number" min="0" step="0.1" value="1" data-authoring-drag-step="0.1" data-volume-settings-role="renderer"></div>
+    <div class="slider-row" title="Protection against mixing unlike light/transmission across neighboring pixels. Higher preserves edges and more noise; 0 allows the most blur. Opaque geometry depth boundaries are protected separately."><label class="slider-label" for="volume-reconstruction-edge">Edge protection</label><input id="volume-reconstruction-edge" type="number" min="0" step="0.1" value="2" data-authoring-drag-step="0.1" data-volume-settings-role="renderer"></div>
+    <div class="slider-row" title="Advance sampling phases independently of frozen physics while image reconstruction is enabled. Turning this off follows the existing noise animation setting."><label class="slider-label" for="volume-reconstruction-fresh">Fresh samples while paused</label><input id="volume-reconstruction-fresh" type="checkbox" checked data-volume-settings-role="renderer"></div>
+    <output id="volume-reconstruction-status" class="flame-scope" role="status">Raw image</output>
     <output id="volume-raymarch-status" class="flame-scope" role="status">Awaiting renderer</output>
     <div class="slider-row">
       <label class="slider-label" for="volume-ray-step-telemetry">Ray statistics</label>
@@ -18712,6 +18720,14 @@ function readVolumeControls({quality=viewportDisplay.quality,document=globalThis
     opticalTolerance: Number(document.getElementById('volume-optical-tolerance').value),
     historyInfluence: Number(document.getElementById('volume-history-influence').value),
     historyWindow: Number(document.getElementById('volume-history-window').value),
+    reconstructionFresh: document.getElementById('volume-reconstruction-fresh').checked,
+    integralReconstruction: document.getElementById('volume-integral-reconstruction').value,
+    reconstructionSpatial: Number(document.getElementById('volume-reconstruction-spatial').value),
+    reconstructionRadius: Number(document.getElementById('volume-reconstruction-radius').value),
+    reconstructionWindow: Number(document.getElementById('volume-reconstruction-window').value),
+    reconstructionResponse: Number(document.getElementById('volume-reconstruction-response').value),
+    reconstructionEdge: Number(document.getElementById('volume-reconstruction-edge').value),
+
     rayStepTelemetry: document.getElementById('volume-ray-step-telemetry').checked,
     rayStartNoise: document.getElementById('volume-ray-start-noise').checked,
     rayNoiseAnimated: document.getElementById('volume-ray-noise-animated').checked,
@@ -19024,6 +19040,7 @@ function supersedeVolumeRebuildHolds() {
 function updateVolumeControlLabels() {
   const c = readVolumeControls();
   document.getElementById('volume-optical-tolerance').disabled=c.raymarchMode!=='numerical';
+  for(const id of ['volume-reconstruction-spatial', 'volume-reconstruction-radius', 'volume-reconstruction-window', 'volume-reconstruction-response', 'volume-reconstruction-edge'])document.getElementById(id).disabled=c.integralReconstruction==='off';
   for(const id of ['volume-history-influence','volume-history-window'])document.getElementById(id).disabled=c.raymarchMode!=='history';
   for(const id of ['volume-occupancy-skip','volume-occupancy-threshold'])document.getElementById(id).disabled=false;
   document.getElementById('volume-flame-priority').disabled=c.raymarchMode!=='numerical';
@@ -19401,6 +19418,10 @@ function refreshVolumeReadout() {
   const modeNames={numerical:'Adaptive',fixed:'Fixed quadrature reference',budgeted:'Fixed evaluation count',joins:'Guided count',history:'Guided count + history','fallback-fixed':'Uniform fallback'};
   document.getElementById('volume-raymarch-status').textContent=!stepping||stepping.requested!==requested?'Awaiting renderer':
     `${modeNames[stepping.effective]||'Unavailable'}${stepping.reason?` · ${stepping.reason.replaceAll('-',' ')}`:''}`;
+  const reconstruction=s.integralReconstruction;
+  document.getElementById('volume-reconstruction-status').textContent=reconstruction?.effective&&reconstruction.effective!=='off'
+    ? `${reconstruction.effective} · ${reconstruction.frames} draws · camera motion resets memory${reconstruction.freshSampling?' · fresh samples while paused':''}`
+    : reconstruction?.requested&&reconstruction.requested!=='off'?`Unavailable · ${String(reconstruction.reason||'awaiting frame').replaceAll('-',' ')}`:'Raw image';
   const telemetry=s.rayStepTelemetry;
   document.getElementById('volume-ray-step-status').textContent=telemetry?.active?'GPU · material samples':
     telemetry?.requested?`Unavailable · ${String(telemetry.reason||'awaiting frame').replaceAll('-',' ')}`:'Awaiting frame';
@@ -20204,6 +20225,14 @@ async function initKaminosVolumeRoute() {
     ['volume-optical-tolerance', 'volume_optical_tolerance'],
     ['volume-history-influence', 'volume_history_influence'],
     ['volume-history-window', 'volume_history_window'],
+    ['volume-reconstruction-fresh', 'volume_reconstruction_fresh'],
+    ['volume-integral-reconstruction', 'volume_integral_reconstruction'],
+    ['volume-reconstruction-spatial', 'volume_reconstruction_spatial'],
+    ['volume-reconstruction-radius', 'volume_reconstruction_radius'],
+    ['volume-reconstruction-window', 'volume_reconstruction_window'],
+    ['volume-reconstruction-response', 'volume_reconstruction_response'],
+    ['volume-reconstruction-edge', 'volume_reconstruction_edge'],
+
     ['volume-ray-step-telemetry', 'volume_ray_step_telemetry'],
     ['volume-ray-noise-animated', 'volume_ray_noise_animated'],
     ['volume-quadrature-jitter', 'volume_quadrature_jitter'],
@@ -20584,6 +20613,14 @@ async function initKaminosVolumeRoute() {
     'volume-optical-tolerance',
     'volume-history-influence',
     'volume-history-window',
+    'volume-reconstruction-fresh',
+    'volume-integral-reconstruction',
+    'volume-reconstruction-spatial',
+    'volume-reconstruction-radius',
+    'volume-reconstruction-window',
+    'volume-reconstruction-response',
+    'volume-reconstruction-edge',
+
     'volume-ray-step-telemetry',
     'volume-ray-start-noise',
     'volume-ray-noise-animated',
@@ -20698,7 +20735,7 @@ async function initKaminosVolumeRoute() {
     control.addEventListener('blur', confirm);
   }
 
-  for (const id of ['volume-scene', 'volume-resolution', 'emitter-assay-family', 'volume-artistic-swirl', 'volume-phased-sway', 'volume-swirl-jostle', 'volume-fine-breakup-localization', 'volume-density', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-history-influence', 'volume-history-window', 'volume-occupancy-skip', 'volume-occupancy-threshold', 'volume-fire-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-residual-mode', 'volume-residual-model-url', 'volume-residual-strength', 'volume-residual-feature-debug', 'volume-input-radius', 'volume-flow-rate', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-fire-lock', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  for (const id of ['volume-scene', 'volume-resolution', 'emitter-assay-family', 'volume-artistic-swirl', 'volume-phased-sway', 'volume-swirl-jostle', 'volume-fine-breakup-localization', 'volume-density', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-history-influence', 'volume-history-window', 'volume-reconstruction-fresh', 'volume-integral-reconstruction', 'volume-reconstruction-spatial', 'volume-reconstruction-radius', 'volume-reconstruction-window', 'volume-reconstruction-response', 'volume-reconstruction-edge', 'volume-occupancy-skip', 'volume-occupancy-threshold', 'volume-fire-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-residual-mode', 'volume-residual-model-url', 'volume-residual-strength', 'volume-residual-feature-debug', 'volume-input-radius', 'volume-flow-rate', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-fire-lock', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id)?.addEventListener('input', syncControls);
     document.getElementById(id)?.addEventListener('change', syncControls);
   }
