@@ -234,7 +234,7 @@ export async function prepareGenerationLevels({decode = null, materialFields = n
     const receipt = async response => { const text = await response.text(); try { return JSON.parse(text); } catch { return {raw: text.slice(0, 500)}; } };
     for (const tier of tiers) {
       const bytes = new Uint8Array(tier.glb), digest = await sha256(bytes);
-      const ingest = await fetch(`${server}/api/ingest-mesh?role=lod-tier`, {method: 'POST', body: bytes});
+      const ingest = await fetch(`${server}/api/ingest-mesh?role=${tier.purpose==='beauty'?'beauty-lod':'lod-tier'}`, {method: 'POST', body: bytes});
       const stored = await receipt(ingest);
       if (!ingest.ok) { report.failedTier = tier.target; throw Error(`ingest failed for ${tier.target} (HTTP ${ingest.status}): ${JSON.stringify(stored)}`); }
       if (stored.sha256 !== digest) { report.failedTier = tier.target; throw Error(`ingest receipt for ${tier.target} does not name the stored bytes ${digest}: ${JSON.stringify(stored).slice(0, 300)}`); }
