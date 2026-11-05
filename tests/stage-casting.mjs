@@ -159,3 +159,18 @@ test('Run next letter consumes cavity measurement and native stage completion',a
  elapsed=3;f.frame(.1);await drain();f.frame(4);await drain();
  assert.equal(f.study.read().cycle.phase,'complete');assert.equal(f.state.fraction,0);assert.equal(f.study.read().igniting,false);await f.study.dispose();
 });
+
+test('mold edits during readback invalidate the fill decision',async()=>{
+ const f=await loaderFixture({phase:0,cycle:0});let resolve;
+ f.app.kaminosWaterSources={read:()=>({runtime:{step:60}}),createRegionMeasurement:async()=>({measure:()=>new Promise(r=>resolve=r),dispose(){}})};
+ f.study.operations.pour=async()=>{};f.study.operations.runCycle();await new Promise(r=>setImmediate(r));f.frame(.1);await new Promise(r=>setImmediate(r));
+ f.objects[0].object.position.x=100;resolve({counts:[80,0],particleVolume:.001,step:60});await new Promise(r=>setImmediate(r));
+ assert.equal(f.study.read().pieceId,null);assert.match(f.study.read().cycle.error,/Mold changed/);await f.study.dispose();
+});
+test('Run resumes an interrupted pickup before fastening to the loader',async()=>{
+ const f=await loaderFixture({phase:0,cycle:0});const {Group}=await import('../lib/three.core.js');const paddle=new Group();paddle.position.set(2,3,4);f.objects.push({id:'paddle',object:paddle});
+ f.state.recipe.mounts=[{id:'load',owner:{objectId:'paddle'},position:[0,0,0],rotation:[0,0,0]}];f.state.recipe.castingCarrier.pickupMount='load';
+ await f.study.operations.unmold();f.frame(1);await f.study.operations.stopCycle();f.study.operations.runCycle();await new Promise(r=>setImmediate(r));
+ assert.equal(f.study.read().transfer.moving,true);assert.equal(f.state.recipe.attachments.length,0);
+ f.frame(4);await new Promise(r=>setImmediate(r));assert.deepEqual(f.objects.find(o=>o.id===f.study.read().pieceId).object.position.toArray(),[2,3,4]);assert.equal(f.state.recipe.attachments.length,1);await f.study.dispose();
+});

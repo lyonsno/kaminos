@@ -56,12 +56,12 @@ export default {id:'stage-casting',title:'Workshop · casting to fire',async cre
   }
   phase='Burner prepared · release a letter';refresh();
  }
- async function unmold(){
+ async function unmold(expectedFillIdentity=null){
    adopt();if(pieceId&&object(pieceId))throw Error('Remove the current casting before lifting the next letter');
    if(transfer.read()?.moving)throw Error('Let this letter arrive, or stop its transfer first');
    if(burnStart!==null)throw Error('Stop ignition before releasing another letter');
    await study.operations.stopPour();
-   const m=mold();if(!m)throw Error('The mold was removed');const p=m.userData.kaminosStageMold,signature=JSON.stringify(p);if(signature!==sourceRecipe){cursor=0;sourceRecipe=signature;}
+   const m=mold();if(!m)throw Error('The mold was removed');if(expectedFillIdentity&&JSON.stringify(stageFillQuery(m))!==expectedFillIdentity)throw Error('Mold changed · restart the cycle to measure its new cavities');const p=m.userData.kaminosStageMold,signature=JSON.stringify(p);if(signature!==sourceRecipe){cursor=0;sourceRecipe=signature;}
    const letters=stageLetterCastings(p),part=letters[cursor%letters.length];
    const start=castingPickupPose(m,part.offset);
    let pickup=null;const entry=carrierEntry(),pickupMount=entry?.object.userData.linkMechanism?.castingCarrier?.pickupMount;
@@ -91,7 +91,7 @@ export default {id:'stage-casting',title:'Workshop · casting to fire',async cre
  }
  const operations={...study.operations,read,
   prepare:serial(async()=>{try{await prepare();return read();}catch(e){flame=null;throw e;}}),
-  unmold:serial(async()=>{await unmold();return read();}),
+  unmold:serial(async expectedFillIdentity=>{await unmold(expectedFillIdentity);return read();}),
   release:serial(async()=>{
    if(carrierEntry()?.object.userData.linkMechanism?.castingCarrier?.pickupMount)throw Error('Use Unmold and Carry with this loader');
    const k=kiln();if(!k)throw Error('Choose a kiln object for this workshop');k.updateWorldMatrix(true,false);
@@ -142,15 +142,15 @@ export default {id:'stage-casting',title:'Workshop · casting to fire',async cre
   // A fill decision need not read back at display cadence. Sample each quarter
   // simulation second, and retain the measured fractions for the operating card.
   if(state.runtime.step-lastFillStep<60)return false;
-  const sample=await fillMeasurement.measure();lastFillStep=sample.step;lastFill=stageFillReading(fillQuery,sample);
+  const sample=await fillMeasurement.measure();if(JSON.stringify(stageFillQuery(mold()))!==identity)throw Error('Mold changed · restart the cycle to measure its new cavities');lastFillStep=sample.step;lastFill=stageFillReading(fillQuery,sample);
   record({kind:'casting.fill',effective:lastFill});
   return lastFill.regions[cursor%lastFill.regions.length].fraction>=fillTarget;
  }
  cycle=createCastingCycle({read,actions:{
-  pour:()=>operations.pour(),sampleFill,stopPour:()=>operations.stopPour(),unmold:()=>operations.unmold(),carry:()=>operations.carry(),ignite:()=>operations.ignite(),returnLoader:()=>operations.returnLoader(),
+  pour:()=>operations.pour(),sampleFill,stopPour:()=>operations.stopPour(),unmold:()=>operations.unmold(fillIdentity),carry:()=>operations.carry(),ignite:()=>operations.ignite(),returnLoader:()=>operations.returnLoader(),
   async stop(){transfer.cancel();carriage.cancel();if(flame)host.fire.setEnabled(false);burnStart=null;await operations.stopPour();phase='Cycle stopped · current water and casting retained';refresh();},
  }});
- operations.runCycle=()=>{active();if(cycle.read().running)return read();if(!carrierEntry())throw Error('Assign a loader before running the workshop');const signature=JSON.stringify(mold()?.userData.kaminosStageMold);if(!pieceId&&signature!==sourceRecipe){cursor=0;sourceRecipe=signature;}clearFill();cycle.start();void cycle.tick().then(refresh);refresh();return read();};
+ operations.runCycle=serial(async()=>{active();if(cycle.read().running)return read();if(!carrierEntry())throw Error('Assign a loader before running the workshop');const signature=JSON.stringify(mold()?.userData.kaminosStageMold);if(!pieceId&&signature!==sourceRecipe){cursor=0;sourceRecipe=signature;}clearFill();const lift=transfer.read();if(pieceId&&lift&&!lift.moving&&lift.elapsed<lift.seconds){transfer.start(pose(object(pieceId)),lift.to,{seconds:lift.seconds-lift.elapsed,lift:lift.lift});}cycle.start();void cycle.tick().then(refresh);refresh();return read();});
  operations.stopCycle=async()=>{await cycle.stop();refresh();return read();};
  operations.setFillTarget=value=>{value=Number(value)/100;if(!Number.isFinite(value)||value<=0||value>1)throw Error('Fill target must be above 0 and at most 100 percent');fillTarget=value;refresh();return read();};
  const stop=session.onFrame(({deltaSeconds})=>{try{
