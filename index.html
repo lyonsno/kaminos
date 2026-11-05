@@ -4342,12 +4342,13 @@ function createPageSceneDocumentSession(options = {}) {
 }
 const sceneDocument = createPageSceneDocumentSession();
 
+let waterFrameInspectionHeld=()=>false;
 const waterFeature = createAuthoredWaterFeature({
   services:()=>({renderer,scene,camera,pipeline:renderPipeline,device:sharedGpu?.device,
     readColliders:()=>workingScene.objects,redraw:()=>window._kaminosDirty?.(),
     canAdvanceOnCompletion:()=>!document.hidden&&!outputCaptureExtent&&!deviceRecoveryHeld()
       &&!sceneLightingPreparation?.state().held&&sceneDocument.state().phase!=='applying'
-      &&!startupRestorePending&&!exclusiveInspectionRender&&!manualInspectionRender,
+      &&!startupRestorePending&&!waterFrameInspectionHeld(),
     getDisplayPolicy:()=>getLocalLiquidDisplayPolicy?.(),decorateOutput:output=>selectionFeedback.output(output)}),
   emitters:localLiquidEmitterRecords,
   enabledEmitters:()=>localLiquidEmitterRecords().filter(record=>isSceneItemVisible(record.id)),
@@ -11761,6 +11762,7 @@ async function initScene() {
     return { position: camera.position.toArray(), target: controls.target.toArray() };
   };
   let exclusiveInspectionRender=false,manualInspectionRender=false;
+  waterFrameInspectionHeld=()=>exclusiveInspectionRender||manualInspectionRender;
   window.__kaminosBeginSceneInspection=()=>{if(exclusiveInspectionRender)throw new Error('scene inspection draw session already active');exclusiveInspectionRender=true;return ()=>{exclusiveInspectionRender=false;};};
   window.__kaminosRenderSceneForInspection=()=>{const before=sceneFrameCount;manualInspectionRender=true;try{const result=renderSceneFrame();if(result===false||sceneFrameCount===before)throw new Error('inspection scene draw skipped');return {frame:renderer.info.frame,sceneFrameCount,drawn:true};}finally{manualInspectionRender=false;}};
   const IDLE_THRESHOLD = 3;
