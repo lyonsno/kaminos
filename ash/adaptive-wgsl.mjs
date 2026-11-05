@@ -53,11 +53,14 @@ fn ap_demand(page:u32)->u32{
  }}}
  return score;
 }
+fn ap_probe(k:u32,mid:i32)->i32{if(k==0u){return -1;}if(k==1u){return mid;}return i32(AP_WIDTH);}
 fn ap_dirty(page:u32){
  let low=vec3<i32>(ap_coords(page)*AP_WIDTH);
- // Wake both representations through all touching tiles, including corners.
- for(var z=-1;z<=i32(AP_WIDTH);z+=i32(AP_WIDTH)+1){for(var y=-1;y<=i32(AP_WIDTH);y+=i32(AP_WIDTH)+1){for(var x=-1;x<=i32(AP_WIDTH);x+=i32(AP_WIDTH)+1){
-  let q=low+vec3<i32>(x,y,z);let i=ash_locate(q);if(i!=0xffffffffu){let t=ash_cell(i).tile;atomicStore(&headers[t*8u],1u);atomicStore(&headers[t*8u+2u],1u);}
+ // Include face/edge neighbors and valid interior coordinates in shallow
+ // fields; corner-only probes miss those tiles entirely.
+ let mid=min(vec3<i32>(i32(AP_WIDTH/2u)),vec3<i32>(ASH_FINE_DIMS)-low-vec3<i32>(1));
+ for(var z=0u;z<3u;z++){for(var y=0u;y<3u;y++){for(var x=0u;x<3u;x++){
+  let q=low+vec3<i32>(ap_probe(x,mid.x),ap_probe(y,mid.y),ap_probe(z,mid.z));let i=ash_locate(q);if(i!=0xffffffffu){let t=ash_cell(i).tile;atomicStore(&headers[t*8u],1u);atomicStore(&headers[t*8u+2u],1u);}
  }}}
  let coarse=(vec3<u32>(low)/2u)/B;let t=coarse.x+AC_TD.x*(coarse.y+AC_TD.y*coarse.z);atomicStore(&headers[t*8u],1u);atomicStore(&headers[t*8u+2u],1u);
  let slot=ap_load(${a.map}u+page);if(slot!=0u){let t=AP_TILES+slot-1u;atomicStore(&headers[t*8u],1u);atomicStore(&headers[t*8u+2u],1u);}
@@ -70,12 +73,22 @@ fn ap_dirty(page:u32){
 @compute @workgroup_size(64) fn adaptive_release(@builtin(global_invocation_id) id:vec3<u32>){
  let slot=id.x;if(slot>=${pool.capacity}u||ap_load(${a.state+7}u)==0u){return;}let page=ap_load(${a.slots}u+slot);
  if(page!=0u){var occupied=false;for(var j=0u;j<AP_CELLS;j++){if(mass[AP_OFFSET+slot*AP_CELLS+j]>0.0){occupied=true;break;}}
-  if(occupied){atomicAdd(&arena[${a.state+5}u],1u);return;}
-  if(ap_demand(page-1u)>0u){return;}
+  if(occupied){atomicAnd(&arena[${a.flags}u+slot],0xfffffffbu);atomicAdd(&arena[${a.state+5}u],1u);return;}
+  atomicOr(&arena[${a.flags}u+slot],4u);if(ap_demand(page-1u)>0u){return;}
   atomicStore(&arena[${a.map}u+page-1u],0u);atomicStore(&arena[${a.slots}u+slot],0u);atomicStore(&arena[${a.flags}u+slot],0u);
   atomicStore(&headers[(AP_TILES+slot)*8u+3u],0u);ap_dirty(page-1u);atomicAdd(&arena[${a.state+3}u],1u);
  }
  let index=atomicAdd(&arena[${a.state}u],1u);atomicStore(&arena[${a.free}u+index],slot);
+}
+@compute @workgroup_size(64) fn adaptive_count_direct(@builtin(global_invocation_id) id:vec3<u32>){
+ let page=id.x;if(ap_load(${a.state+7}u)!=0u&&page<${pool.pages}u&&ap_load(${a.map}u+page)==0u&&ap_demand(page)==2u){atomicAdd(&arena[${a.state+9}u],1u);}
+}
+@compute @workgroup_size(64) fn adaptive_reclaim_halo(@builtin(global_invocation_id) id:vec3<u32>){
+ let slot=id.x;if(ap_load(${a.state+7}u)==0u||slot>=${pool.capacity}u||(ap_load(${a.flags}u+slot)&4u)==0u){return;}
+ let page=ap_load(${a.slots}u+slot);if(page==0u||ap_demand(page-1u)!=1u){return;}
+ loop{let free=ap_load(${a.state}u);if(free>=ap_load(${a.state+9}u)){return;}let r=atomicCompareExchangeWeak(&arena[${a.state}u],free,free+1u);
+  if(r.exchanged){atomicStore(&arena[${a.map}u+page-1u],0u);atomicStore(&arena[${a.slots}u+slot],0u);atomicStore(&arena[${a.flags}u+slot],0u);atomicStore(&headers[(AP_TILES+slot)*8u+3u],0u);atomicStore(&arena[${a.free}u+free],slot);atomicAdd(&arena[${a.state+3}u],1u);ap_dirty(page-1u);return;}
+ }
 }
 fn ap_take()->u32{loop{let n=ap_load(${a.state}u);if(n==0u){return 0xffffffffu;}let r=atomicCompareExchangeWeak(&arena[${a.state}u],n,n-1u);if(r.exchanged){return ap_load(${a.free}u+n-1u);}}}
 fn ap_allocate(page:u32,priority:u32){

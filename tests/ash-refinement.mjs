@@ -141,3 +141,14 @@ test('refined checkpoint collision mismatch carries the native strict-recovery c
  const patch=await smallRefined(storageRenderer());
  try{const state=await patch.snapshot();state.collisionIdentity=[{key:'0/missing',geometry:'saved',matrix:[]}];assert.throws(()=>patch.restore(state),error=>error.code==='ASH_CHECKPOINT_COLLISION_MISMATCH');}finally{patch.dispose();}
 });
+
+
+test('rejected adaptive checkpoint preserves different current maps, density and continuation',async()=>{
+ const renderer=storageRenderer(),patch=await createGpuRefinedAsh({renderer,cellSize:.1,bounds:{min:[0,0,0],max:[.8,.8,.8]},refinement:{ratio:2,mode:'adaptive',fineCapacity:1}});
+ try{
+  await patch.deposit({blanketDepth:.1,groundOnly:true});const before=await patch.snapshot();
+  const bad={...structuredClone(before),residency:{map:[1],slots:[1]},values:Array(patch.layout.count).fill(0),seededVolume:0,volume:0,retainedVolume:0,steps:999,sliding:{variation:0,scale:.24,release:2}};
+  const writes=renderer.writes.length;assert.throws(()=>patch.restore(bad),/release/i);assert.equal(renderer.writes.length,writes,'invalid sliding must not upload topology or material');
+  const after=await patch.snapshot();for(const key of ['residency','values','volume','steps','lastContact','sliding'])assert.deepEqual(after[key],before[key],key);
+ }finally{patch.dispose();}
+});

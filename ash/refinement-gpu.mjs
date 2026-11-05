@@ -57,7 +57,7 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
     if(errors.length)throw Error(errors.map(m=>`${m.lineNum}: ${m.message}`).join('; '));
     const layout=device.createBindGroupLayout({entries:Array.from({length:8},(_,binding)=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:binding===7?'uniform':binding===2?'read-only-storage':'storage'}}))});
     const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]});
-    const names=[...(p.adaptive?['adaptive_reset','adaptive_release','adaptive_allocate_detail','adaptive_allocate_halo','adaptive_prolong','adaptive_collision_list','adaptive_collision_args','adaptive_recount']:[]),'reset','admit','clear_wake','pack_dispatch','limit_flux','gather_flux','commit_mass','admit_surface','build_surface','finish_surface','draw_prefix','wake_all'];
+    const names=[...(p.adaptive?['adaptive_reset','adaptive_release','adaptive_count_direct','adaptive_reclaim_halo','adaptive_allocate_detail','adaptive_allocate_halo','adaptive_prolong','adaptive_collision_list','adaptive_collision_args','adaptive_recount']:[]),'reset','admit','clear_wake','pack_dispatch','limit_flux','gather_flux','commit_mass','admit_surface','build_surface','finish_surface','draw_prefix','wake_all'];
     const pipelines=Object.fromEntries(await Promise.all(names.map(async name=>[name,await device.createComputePipelineAsync({label:'refined ash '+name,layout:pipelineLayout,compute:{module,entryPoint:name}})])));
     const group=device.createBindGroup({layout,entries:[mass.buffer,next,solid.buffer,limits,headers,work.buffer,faces.buffer,uniform].map((b,binding)=>({binding,resource:{buffer:b}}))});
     function dispatch(encoder,name,count=1,indirect=null) {
@@ -92,7 +92,7 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
     if(p.adaptive&&colliders.length)fineCollision=createAdaptiveCollision({device,p,arena:work.buffer,collision:solid.buffer,headers,shapes:colliders[0]});
     function adapt(encoder){
       if(!p.adaptive)return;
-      dispatch(encoder,'adaptive_reset');dispatch(encoder,'adaptive_release',Math.ceil(p.pool.capacity/64));
+      dispatch(encoder,'adaptive_reset');dispatch(encoder,'adaptive_release',Math.ceil(p.pool.capacity/64));dispatch(encoder,'adaptive_count_direct',Math.ceil(p.pool.pages/64));dispatch(encoder,'adaptive_reclaim_halo',Math.ceil(p.pool.capacity/64));
       dispatch(encoder,'adaptive_allocate_detail',Math.ceil(p.pool.pages/64));dispatch(encoder,'adaptive_allocate_halo',Math.ceil(p.pool.pages/64));
       dispatch(encoder,'adaptive_prolong',Math.ceil(p.pool.capacity/64));dispatch(encoder,'adaptive_collision_list',Math.ceil(p.pool.capacity/64));dispatch(encoder,'adaptive_collision_args');
       fineCollision?.encode(encoder);
@@ -212,7 +212,7 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
         return {schema:p.adaptive?'kaminos.adaptive-ash.v1':'kaminos.refined-ash.v1',residency:state.residency,layout:p,collisionIdentity:collisionIdentity(),values:Array.from(state.values),pendingTiles:p.tileRecords.flatMap((_,i)=>state.headers[i*8]?[i]:[]),steps,sliding:{...sliding},lastContact,seededVolume,volume:seededVolume+fall.read().requestedVolume,retainedVolume:retained(state.values,air),falling:air};
       },
       restore(state,{allowCollisionUpgrade=false}={}) {
-        check();syncCollision(state?.collisionIdentity);
+        check();const restoredSliding=checkedSliding(state?.sliding);syncCollision(state?.collisionIdentity);
         const view=p.adaptive?adaptiveView(p,state?.residency):p;
         if(state?.schema!==(p.adaptive?'kaminos.adaptive-ash.v1':'kaminos.refined-ash.v1')||JSON.stringify(state.layout)!==JSON.stringify(p)||!Array.isArray(state.values)||state.values.length!==p.count||state.values.some((value,i)=>!Number.isFinite(value)||value<0||value>refinementCell(view,i).size**3+1e-6||(!refinementCell(view,i).owned&&value!==0)))throw Error('Invalid refined ash checkpoint');
         const exactCollision=JSON.stringify(state.collisionIdentity)===JSON.stringify(collisionIdentity());
@@ -223,7 +223,7 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
         if(!(state.lastContact===null||Array.isArray(state.lastContact)&&state.lastContact.length===4&&state.lastContact.every(Number.isFinite)&&state.lastContact[3]>0))throw Error('Invalid refined ash contact');
         if(!Array.isArray(state.pendingTiles)||state.pendingTiles.some(i=>!Number.isSafeInteger(i)||i<0||i>=p.tiles.count)||!Number.isSafeInteger(state.steps)||state.steps<0)throw Error('Invalid refined ash continuation');
         if(p.adaptive){const a=p.adaptiveArena;device.queue.writeBuffer(work.buffer,a.state*4,new Uint32Array(16));device.queue.writeBuffer(work.buffer,a.map*4,Uint32Array.from(view.residency.map));device.queue.writeBuffer(work.buffer,a.slots*4,Uint32Array.from(view.residency.slots));device.queue.writeBuffer(work.buffer,a.flags*4,Uint32Array.from(view.residency.slots,n=>n?2:0));}
-        restoredCollision=state.collisionIdentity;sliding=checkedSliding(state.sliding);parameters();upload(values,exactCollision?new Set(state.pendingTiles):null);fall.restore(state.falling);steps=state.steps;seededVolume=state.seededVolume;lastContact=state.lastContact?.slice()??null;
+        restoredCollision=state.collisionIdentity;sliding=restoredSliding;parameters();upload(values,exactCollision?new Set(state.pendingTiles):null);fall.restore(state.falling);steps=state.steps;seededVolume=state.seededVolume;lastContact=state.lastContact?.slice()??null;
         if(p.adaptive){const e=device.createCommandEncoder();dispatch(e,'adaptive_recount',Math.ceil(p.pool.pages/64));device.queue.submit([e.finish()]);}
       },
       read:()=>({backend:p.adaptive?'webgpu-adaptive-ash':'webgpu-coarse-fine-ash',surface:'joined-cached-refined-faces',surfaceMode:'refined',layout:p,steps,volume:seededVolume+fall.read().requestedVolume,falling:fall.read(),sliding:{...sliding},sceneCollision:{route:'regional-cached-collision',members:colliders.flatMap(c=>c.read().members),allocatedBytes:colliders.reduce((sum,c)=>sum+c.read().allocatedBytes,0)},runtimeReadbacks:0,explicitReadbacks:readbacks,allocatedBytes:owned.reduce((sum,b)=>sum+b.size,0)+attributes.reduce((sum,a)=>sum+a.array.byteLength,0)+(fineCollision?.read().allocatedBytes??0)+fall.read().allocatedBytes+colliders.reduce((sum,c)=>sum+c.read().allocatedBytes,0),allocationMeaning:p.adaptive?'resident coarse covering and reusable fine pool; occupied fine history pinned':'resident coarse volume and explicit fine regions, including cached surface capacity',boundary:'single material owner and conservative coarse-fine exchange',lastContact}),

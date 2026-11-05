@@ -34,7 +34,8 @@ export function refinementVertexWGSL(p, arena) {
  let edge=min(min(point.x,f32(ASH_FINE_DIMS.x)-point.x),min(point.z,f32(ASH_FINE_DIMS.z)-point.z));
  let span=clamp(f32(min(ASH_FINE_DIMS.x,ASH_FINE_DIMS.z))*0.04,1.5,8.0);
  corner.y=min(corner.y,clamp(0.22+0.78*edge/span,0.0,1.0));
- if(face==3u||(!capped&&uv.y>0.5&&abs(point.y-top)<0.00001)){point.y=corner.x;}
+ // Keep geometry on its physical fill bands. Averaging positions across
+ // stacked cells folds top/side faces; only lighting normals are smoothed.
  var normal=vec3<f32>(0.0);normal[face/2u]=select(-1.0,1.0,face%2u==1u);
  let gradient=vec3<f32>(corner.z,1.0,corner.w);
  normal=normalize(mix(normal,normalize(gradient),soft*select(0.35,0.95,face==3u)));
