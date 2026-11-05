@@ -5,7 +5,7 @@
 // failed startup leaves its error visible.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {settleStartupVeil, STARTING_CLASS} from '../startup-veil.mjs';
+import {settleStartupVeil, updateStartupVeil, STARTING_CLASS} from '../startup-veil.mjs';
 import {createRuntimeConfigLoader} from '../runtime-config-once.mjs';
 
 function fakeDocument() {
@@ -39,6 +39,24 @@ test('settling twice is harmless', async () => {
   await settleStartupVeil(document, Promise.resolve());
   await settleStartupVeil(document, Promise.resolve());
   assert.equal(document.classes.has(STARTING_CLASS), false);
+});
+
+test('updateStartupVeil reports live startup phases in-place and stops once settled or watchdog-prompted', async () => {
+  const document = fakeDocument();
+  assert.equal(typeof updateStartupVeil, 'function');
+  assert.equal(updateStartupVeil(document, 'Requesting WebGPU device'), true);
+  assert.equal(document.veil.textContent, 'Starting Kaminos… · Requesting WebGPU device');
+  assert.equal(updateStartupVeil(document, 'Initializing WebGPU renderer'), true);
+  assert.equal(document.veil.textContent, 'Starting Kaminos… · Initializing WebGPU renderer');
+
+  // If the watchdog appended an action button, phase updates must not clobber it
+  document.veil.children = [{}];
+  assert.equal(updateStartupVeil(document, 'Building lighting & GI pipeline'), false);
+  assert.equal(document.veil.textContent, 'Starting Kaminos… · Initializing WebGPU renderer');
+  document.veil.children = [];
+
+  await settleStartupVeil(document, Promise.resolve());
+  assert.equal(updateStartupVeil(document, 'Late phase after settle'), false);
 });
 
 test('runtime configuration is requested once and shared', async () => {
