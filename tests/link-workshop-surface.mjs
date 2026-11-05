@@ -52,3 +52,9 @@ console.log('Surface seams preserve actuator positions and authored poses');
  await workshop.create({host,inputs:{recipe:next.recipe,bodies:next.geometry},updateInputs:v=>remembered=v});assert.equal(added,1);assert.deepEqual(remembered,{objectId:'kept'});
  await workshop.create({host,inputs:remembered});assert.equal(ensured,1);assert.equal(added,1,'Saved experiment adopts its restored mechanism without adding a fixture');
 }
+// Reconstructed physical hardware must agree with the endpoint math.
+{
+ const {addSurfaceActuators}=await import('../experiments/link-workshop/surface.mjs');
+ const object=new T.ObjectLoader().parse(next.geometry.bodies.find(b=>b.id==='pin:1').object);assert.ok(Math.abs(object.children[0].position.x+.27)<1e-6,'Serialized pin retains the original lever eye instead of drifting to the seam');
+ const built=addSurfaceActuators(next.recipe,next.geometry,2),rod=new T.ObjectLoader().parse(built.geometry.bodies.find(b=>b.id==='piston:1:rod').object);assert.ok(rod.children[0].position.x<-.02,'Serialized rod keeps its constructed position');
+}

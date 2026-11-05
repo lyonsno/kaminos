@@ -4,6 +4,7 @@ import {constructBodies,bodyLayout} from './bodies.mjs';
 import {bisectFaces,extractFaces,capPlanarOpenings} from '../../poly-mesh-edit.mjs';
 
 const loader=new T.ObjectLoader();
+const serialize=object=>{object.updateMatrixWorld(true);return object.toJSON();};
 export function disposeGeometry(root){const gs=new Set(),ms=new Set();root.traverse(o=>{if(o.geometry)gs.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material])if(m)ms.add(m);});for(const g of gs)g.dispose();for(const m of ms)m.dispose();}
 export function surfaceBounds(geometry,id){const entry=geometry.bodies.find(b=>b.id===id);if(!entry)throw Error('Choose existing body geometry');const object=loader.parse(entry.object);try{object.updateMatrixWorld(true);return new T.Box3().setFromObject(object);}finally{disposeGeometry(object);}}
 function arraysOf(mesh){const g=mesh.geometry,p=g.getAttribute('position'),n=g.getAttribute('normal'),uv=g.getAttribute('uv'),idx=g.index?.array??Uint32Array.from({length:p.count},(_,i)=>i),matrix=mesh.matrixWorld,normal=new T.Matrix3().getNormalMatrix(matrix),positions=[],normals=n?[]:null,uvs=uv?[]:null;
@@ -37,9 +38,9 @@ export function divideSurface({recipe,geometry,joint,cuts}){
   for(const [k,g]of panels.entries()){
    if(!g.children.length)throw Error('A seam creates an empty panel');
    if(k){const depth=bounds.max.z-bounds.min.z,geo=new T.CylinderGeometry(.075,.075,depth,24);geo.rotateX(Math.PI/2);const material=new T.MeshStandardMaterial({color:0xb28a52,metalness:.65,roughness:.35}),pin=new T.Mesh(geo,material);pin.position.set(0,0,(bounds.max.z+bounds.min.z)/2);pin.name=`Panel ${k+1} hinge axle`;g.add(pin);const lug=new T.Mesh(new T.BoxGeometry(.12,.22,depth),material);lug.position.set(.04,.09,pin.position.z);lug.name=`Panel ${k+1} hinge attachment`;g.add(lug);}
-   if(!g.children.length)throw Error('A seam creates an empty panel');const def=defs.get(`link:${joint+k}`);bodies.push({id:def.id,geometryKey:def.geometryKey,object:g.toJSON()});}
+   if(!g.children.length)throw Error('A seam creates an empty panel');const def=defs.get(`link:${joint+k}`);bodies.push({id:def.id,geometryKey:def.geometryKey,object:serialize(g)});}
   for(const item of geometry.bodies){if(item.id===id)continue;const match=/^(anchor|link|pin):(\d+)$/.exec(item.id),nextId=match?`${match[1]}:${map(+match[2])}`:item.id,def=defs.get(nextId);if(!def)continue;const object=loader.parse(item.object);
-   try{if(item.id===`pin:${joint}`){const o=owner(old.length),x=old.length-o.start-o.length;for(const child of object.children)child.position.x+=x;}bodies.push({...item,id:nextId,geometryKey:def.geometryKey,object:object.toJSON()});}finally{disposeGeometry(object);}
+   try{if(item.id===`pin:${joint}`){const o=owner(old.length),x=old.length-o.start-o.length;for(const child of object.children)child.position.x+=x;}bodies.push({...item,id:nextId,geometryKey:def.geometryKey,object:serialize(object)});}finally{disposeGeometry(object);}
   }
   return {recipe:checkedMechanism(m),geometry:{schema:geometry.schema,bodies},panels:panels.map((_,k)=>`link:${joint+k}`),seams:cuts};
  }finally{disposeGeometry(source);panels.forEach(disposeGeometry);fresh.defs.forEach(d=>disposeGeometry(d.object));}
@@ -55,6 +56,6 @@ export function addSurfaceActuators(recipe,geometry,joint){
  const m=checkedMechanism(recipe),node=m.nodes[joint];if(!node?.surfacePanel)throw Error('Choose a divided panel');const source=node.surfacePanel.source,chain=m.nodes.map((n,i)=>({n,i})).filter(v=>v.n.surfacePanel?.source===source),before=constructBodies(m);
  for(const {n,i}of chain){if(n.surfacePanel.index===0||m.pistons.some(p=>p.hinge&&p.b===i))continue;const parent=m.nodes[n.parent],h=Math.min(parent.length,n.length)*.32;const pa=surfaceBounds(geometry,`link:${n.parent}`),pb=surfaceBounds(geometry,`link:${i}`);m.pistons.push({a:n.parent,b:i,aBaseZ:pa.max.z,bBaseZ:pb.max.z,aOffset:[parent.length*.45,-h],bOffset:[n.length*.15,h],hinge:true,z:bodyLayout(m).layers[i]+.27});}
  const fresh=constructBodies(m),byId=new Map(geometry.bodies.map(b=>[b.id,b])),bodies=[];
- for(const d of fresh.defs){const prior=byId.get(d.id);if(prior&&!d.id.startsWith('piston:')){const object=loader.parse(prior.object);for(const child of [...object.children])if(child.userData.surfaceDrive)object.remove(child);for(const child of d.object.children)if(child.userData.surfaceDrive)object.add(child.clone(true));bodies.push({id:d.id,geometryKey:d.geometryKey,object:object.toJSON()});disposeGeometry(object);}else if(prior&&prior.geometryKey===d.geometryKey)bodies.push(prior);else bodies.push({id:d.id,geometryKey:d.geometryKey,object:d.object.toJSON()});}
+ for(const d of fresh.defs){const prior=byId.get(d.id);if(prior&&!d.id.startsWith('piston:')){const object=loader.parse(prior.object);for(const child of [...object.children])if(child.userData.surfaceDrive)object.remove(child);for(const child of d.object.children)if(child.userData.surfaceDrive)object.add(child.clone(true));bodies.push({id:d.id,geometryKey:d.geometryKey,object:serialize(object)});disposeGeometry(object);}else if(prior&&prior.geometryKey===d.geometryKey)bodies.push(prior);else bodies.push({id:d.id,geometryKey:d.geometryKey,object:serialize(d.object)});}
  before.defs.forEach(d=>disposeGeometry(d.object));fresh.defs.forEach(d=>disposeGeometry(d.object));return {recipe:m,geometry:{schema:geometry.schema,bodies},report:actuatorReport(m)};
 }
