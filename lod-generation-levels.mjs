@@ -49,7 +49,7 @@ export async function prepareGenerationLevels({decode = null, materialFields = n
     // Refuse taken slots before storing anything (unless replacing): the server keeps one level per
     // (faces, route) or (mergeFactor, route), and a tier stored but then refused would linger as an unregistered mesh.
     phase('preflight');
-    const existing = await fetch(`${server}/api/mesh-lods?source=${source}`);
+    const existing = await fetch(`${server}/api/mesh-lods?source=${source}&prepare=client`);
     if (!existing.ok) throw Error(`cannot read existing levels (HTTP ${existing.status})`);
     const existingLevels = (await existing.json()).levels;
     const slotTaken = faces => existingLevels.find(l => l.route === LOW_TIER_ROUTE && l.faces === faces);
