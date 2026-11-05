@@ -5,7 +5,7 @@ import net from 'node:net';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 const [out,route]=process.argv.slice(2),water=route==='water',presetFile=water?null:route;assert(out,'output directory required');
-const root=process.cwd(),report={status:'running',phase:'launch',root,commit:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),errors:[],observations:[]};
+const root=process.cwd(),report={status:'running',phase:'launch',root,commit:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),errors:[],events:[],observations:[]};
 await fs.mkdir(out,{recursive:true});const save=()=>fs.writeFile(out+'/report.json',JSON.stringify(report,null,2));await save();
 let server,context,page;
 try{
@@ -23,7 +23,8 @@ try{
  context=await chromium.launchPersistentContext(dirs.profile,{executablePath:report.executable,headless:true,viewport:{width:1280,height:900},args:['--enable-unsafe-webgpu','--use-angle=metal','--use-mock-keychain','--password-store=basic']});
  page=context.pages()[0];
  await page.exposeFunction('__recoveryGpuError',message=>report.errors.push(message));
- await page.addInitScript(()=>{const request=GPUAdapter.prototype.requestDevice;GPUAdapter.prototype.requestDevice=async function(...args){const device=await request.apply(this,args);device.addEventListener('uncapturederror',event=>window.__recoveryGpuError(event.error.message));return device;};});page.on('pageerror',e=>report.errors.push(e.message));
+ await page.exposeFunction('__recoveryTrace',event=>report.events.push(event));
+ await page.addInitScript(()=>{let next=0;const request=GPUAdapter.prototype.requestDevice;GPUAdapter.prototype.requestDevice=async function(...args){const device=await request.apply(this,args),id=++next;device.addEventListener('uncapturederror',event=>window.__recoveryGpuError(event.error.message));device.lost.then(info=>window.__recoveryTrace({kind:'lost',id,time:performance.now(),reason:info.reason,water:window.kaminosWaterSources?.read().runtime??null}));const create=device.createBuffer.bind(device);device.createBuffer=options=>{const buffer=create(options),map=buffer.mapAsync.bind(buffer);buffer.mapAsync=(...args)=>map(...args).catch(error=>{window.__recoveryTrace({kind:'map-error',id,time:performance.now(),label:options.label,error:String(error),recovery:window.kaminosDeviceRecovery?.state()});throw error;});return buffer;};return device;};});page.on('pageerror',e=>report.errors.push(e.message));
  page.on('console',m=>{if(m.type()==='error')report.errors.push(m.text()+' '+JSON.stringify(m.location()));});
  // Exercise a registered but unused SAM host without loading model weights.
  report.samRegistrationFixture={mounted:true,manifestUrl:'/sam3-packet/tensor-manifest.json'};
