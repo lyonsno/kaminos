@@ -22,3 +22,13 @@ test('reconstruction configuration rejects invalid values at initial admission a
     assert.deepEqual(p.adaptiveMaterialState().requested,before);
   }finally{p.dispose();}
 });
+
+test('actual select-one DOM inventory is admitted by the additive renderer schema',async()=>{
+  const {readFileSync}=await import('node:fs');
+  const {validateVolumeCockpitControlInventory}=await import('../volume-cockpit-layout.mjs');
+  const schema=JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json',import.meta.url)));
+  const records=[...schema.controls,...schema.rendererControls].map(c=>({id:c.key,tagName:c.tagName,type:c.key==='volume-integral-reconstruction'?'select-one':c.type,rootId:'volume-primary-control-root'}));
+  assert.doesNotThrow(()=>validateVolumeCockpitControlInventory({schema,controlRecords:records}));
+  const mode=schema.rendererControls.find(c=>c.key==='volume-integral-reconstruction');
+  assert.deepEqual(mode.allowedValues,['off','spatial','temporal','combined']);
+});

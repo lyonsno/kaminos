@@ -2504,7 +2504,14 @@
       "key": "volume-integral-reconstruction",
       "param": "volume_integral_reconstruction",
       "tagName": "SELECT",
-      "additiveDefault": "off"
+      "additiveDefault": "off",
+      "type": "select-one",
+      "allowedValues": [
+        "off",
+        "spatial",
+        "temporal",
+        "combined"
+      ]
     },
     {
       "key": "volume-reconstruction-spatial",
