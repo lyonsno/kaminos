@@ -9,6 +9,17 @@ import path from 'node:path';
 const tool = path.resolve('tools/prepare-lod-tiers.mjs');
 const run = (args, env = {}) => { try { execFileSync(process.execPath, [tool, ...args], {env: {...process.env, ...env}, stdio: 'pipe'}); return 0; } catch (e) { return e.status; } };
 
+test('missing or empty beauty targets replace stale output with an admission failure report',()=>{
+  for(const tail of [['--beauty-targets'],['--beauty-targets','']]){
+    const dir=fs.mkdtempSync(path.join(os.tmpdir(),'lod-beauty-args-')),report=path.join(dir,'report.json');
+    fs.writeFileSync(report,JSON.stringify({phase:'done',stale:true}));
+    assert.notEqual(run(['--source','a'.repeat(64),'--server','http://127.0.0.1:9','--report',report,...tail]),0);
+    const result=JSON.parse(fs.readFileSync(report,'utf8'));
+    assert.equal(result.phase,'admission');assert.match(result.error.message,/--beauty-targets/);
+    assert.ok(result.finishedAt);assert.equal(result.stale,undefined);
+  }
+});
+
 test('a dependency that cannot load still ends in a failure report naming the phase', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lod-report-')), report = path.join(dir, 'report.json');
   const status = run(['--input', dir, '--source', 'a'.repeat(64), '--server', 'http://127.0.0.1:9', '--report', report],

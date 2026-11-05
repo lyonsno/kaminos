@@ -2410,22 +2410,24 @@ def _import_mesh_lod_sidecar(sha, candidate_dirs, root_path):
             continue
         if doc.get("source") != sha or not isinstance(doc.get("levels"), list):
             continue
-        dependencies = list(doc["levels"]) + [v for t in doc.get("textureSets", {}).values() for v in t.get("variants", [])]
+        dependencies = _mesh_lod_records(doc) + [v for t in doc.get("textureSets", {}).values() for v in t.get("variants", [])]
         for level in dependencies:
             tsha = level.get("sha256") if isinstance(level, dict) else None
             if not (isinstance(tsha, str) and re.fullmatch(r"[0-9a-f]{64}", tsha)):
                 continue
-            local_tier = root_path / f"{tsha}.glb"
+            local_tier = (root_path / ".lod-beauty" if level.get("purpose") == "beauty" else root_path) / f"{tsha}.glb"
             if local_tier.is_file():
                 continue
-            cand_tier = cdir / f"{tsha}.glb"
+            cand_tier = _generated_mesh_path_for_sha(cdir, tsha)
+            if cand_tier is None:
+                continue
             try:
                 tdata = cand_tier.read_bytes()
             except OSError:
                 continue
             if hashlib.sha256(tdata).hexdigest() == tsha:
-                root_path.mkdir(parents=True, exist_ok=True)
-                staging = root_path / f".{tsha}.glb.{uuid.uuid4().hex}.tmp"
+                local_tier.parent.mkdir(parents=True, exist_ok=True)
+                staging = local_tier.parent / f".{tsha}.glb.{uuid.uuid4().hex}.tmp"
                 staging.write_bytes(tdata)
                 os.replace(staging, local_tier)
         if not local_sidecar.is_file():
@@ -2855,9 +2857,9 @@ class MeshLodRecordError(Exception):
 def _generated_mesh_path_for_sha(root, sha):
     if not isinstance(sha, str) or not _SHA256_HEX.fullmatch(sha):
         return None
-    direct = root / (sha + '.glb')
-    if direct.is_file():
-        return direct
+    for direct in (root / (sha + '.glb'), root / '.lod-beauty' / (sha + '.glb')):
+        if direct.is_file():
+            return direct
     for candidate in sorted(root.rglob('*.glb')):
         try:
             rel_parts = candidate.relative_to(root).parts
@@ -2917,7 +2919,13 @@ def read_mesh_lod_set(source):
         raise MeshLodRecordError(f'Unreadable level-set record {path.name}: {error}') from error
     if data.get('schema') != 'kaminos.lod-set.v0' or data.get('source') != source or not isinstance(data.get('levels'), list):
         raise MeshLodRecordError(f'Invalid level-set record {path.name}')
+    if not isinstance(data.get('beautyLevels', []), list) or any(not isinstance(level, dict) or level.get('purpose') != 'beauty' for level in data.get('beautyLevels', [])):
+        raise MeshLodRecordError(f'Invalid beauty catalog {path.name}')
     return data
+
+
+def _mesh_lod_records(data):
+    return data.get('levels', []) + data.get('beautyLevels', [])
 
 
 def mesh_lod_level_index():
@@ -2928,11 +2936,11 @@ def mesh_lod_level_index():
         source = path.name[1:-len('.glb.lods.json')]
         try:
             record = read_mesh_lod_set(source)
-            for level in record['levels']:
+            for level in _mesh_lod_records(record):
                 index[level['sha256']] = {'source': source, 'faces': level['faces']}
             for geometry, texture_set in record.get('textureSets', {}).items():
                 for variant in texture_set.get('variants', []):
-                    index[variant['sha256']] = {'source': source, 'faces': next((l['faces'] for l in record['levels'] if l['sha256'] == geometry), 0), 'appearanceOf': geometry}
+                    index[variant['sha256']] = {'source': source, 'faces': next((l['faces'] for l in _mesh_lod_records(record) if l['sha256'] == geometry), 0), 'appearanceOf': geometry}
             for variant in record.get('retiredTextureVariants', []):
                 index[variant['sha256']] = {'source': source, 'faces': 0, 'retired': True}
             for level in record.get('retired', []):
@@ -2974,12 +2982,13 @@ def save_mesh_lod_level(payload):
     with (root / ('.' + source + '.lods.lock')).open('a+b') as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
         data = read_mesh_lod_set(source)
-        previous = next((l for l in data['levels'] if l['sha256'] == level['sha256']), None)
+        collection = data.setdefault('beautyLevels' if level.get('purpose') == 'beauty' else 'levels', [])
+        previous = next((l for l in _mesh_lod_records(data) if l['sha256'] == level['sha256']), None)
         if previous is not None and previous != level:
             raise ValueError('Registered level is immutable')
-        if any(l['sha256'] != level['sha256'] and l['route'] == level['route'] and (('mergeFactor' in l) != ('mergeFactor' in level)) for l in data['levels']):
+        if any(l['sha256'] != level['sha256'] and l['route'] == level['route'] and (('mergeFactor' in l) != ('mergeFactor' in level)) for l in collection):
             raise ValueError(f"Route {level['route']} cannot mix mergeFactor and face-count levels")
-        same_slot = next((l for l in data['levels'] if l['sha256'] != level['sha256'] and l['route'] == level['route']
+        same_slot = next((l for l in collection if l['sha256'] != level['sha256'] and l['route'] == level['route']
                           and (l.get('mergeFactor') == level.get('mergeFactor') if 'mergeFactor' in level else l['faces'] == level['faces'])), None)
         retired_now = []
         if any(r['sha256'] == level['sha256'] for r in data.get('retired', [])):
@@ -2989,13 +2998,13 @@ def save_mesh_lod_level(payload):
                 slot_desc = f"x{level['mergeFactor']}" if 'mergeFactor' in level else f"{level['faces']}-face"
                 raise ValueError(f"A {slot_desc} {level['route']} level is already registered: {same_slot['sha256']}")
             # Replace with retire: the old level leaves the choice set but its record is kept.
-            data['levels'].remove(same_slot)
+            collection.remove(same_slot)
             data.setdefault('retired', []).append({**same_slot, 'retiredBy': level['sha256'],
                                                    'retiredAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())})
             retired_now.append(same_slot['sha256'])
         if previous is None:
-            data['levels'].append(level)
-            data['levels'].sort(key=lambda l: -l['faces'])
+            collection.append(level)
+            collection.sort(key=lambda l: -l['faces'])
             with tempfile.NamedTemporaryFile(mode='w', dir=root, prefix='.mesh-lods-', delete=False) as handle:
                 temporary = Path(handle.name)
                 json.dump(data, handle)
@@ -3024,7 +3033,8 @@ def mesh_lod_choice(source, faces=None, max_error=None, stat='max', route=None, 
     if purpose not in (None, 'beauty'):
         raise ValueError('purpose must be beauty when specified')
     data = read_mesh_lod_set(source)
-    levels = [{**l, 'source': '/api/read?' + urlencode({'root': 'generated-meshes', 'path': l['sha256'] + '.glb'})} for l in data['levels']]
+    levels = [{**l, 'source': '/api/read?' + urlencode({'root': 'generated-meshes', 'path': l['sha256'] + '.glb'})} for l in _mesh_lod_records(data)]
+    levels.sort(key=lambda level: -level['faces'])
     for level in levels:
         if level['sha256'] in data.get('textureSets', {}):
             level['textureSet'] = data['textureSets'][level['sha256']]
@@ -3070,7 +3080,7 @@ _MESH_LOD_PREPARE_RUNNER = None
 
 def should_auto_prepare_mesh_lods(sha, glb_bytes, role=None):
     """True when a stored GLB is a triangle-mesh hero without a .lods.json sidecar."""
-    if role in ('lod-tier', 'client-prepares-lods') or not isinstance(sha, str) or not _SHA256_HEX.fullmatch(sha):
+    if role in ('lod-tier', 'beauty-lod', 'client-prepares-lods') or not isinstance(sha, str) or not _SHA256_HEX.fullmatch(sha):
         return False
     if not mesh_lod_targets_missing(sha) or sha in mesh_lod_level_index():
         return False
@@ -5421,7 +5431,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             digest = hashlib.sha256(content).hexdigest()
             root = BROWSE_ROOTS["generated-meshes"].resolve()
             root.mkdir(parents=True, exist_ok=True)
-            target = root / f"{digest}.glb"
+            storage = root / ".lod-beauty" if role == "beauty-lod" else root
+            storage.mkdir(parents=True, exist_ok=True)
+            target = storage / f"{digest}.glb"
             # Publish atomically without overwriting another writer's content.
             with tempfile.NamedTemporaryFile(dir=root, delete=False) as stream:
                 temporary = Path(stream.name)
