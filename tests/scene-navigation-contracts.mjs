@@ -157,6 +157,10 @@ test('framing an offset mesh includes its authored pivot so F restores pivot vis
  assert.ok(frameObject(root,c,controls));
  const pivot=root.getWorldPosition(new THREE.Vector3()).project(c);
  assert.ok(Math.abs(pivot.x)<1 && Math.abs(pivot.y)<1,'selected authored origin must remain inside the framed view even when geometry is offset');
+ c.up.set(-0.55,0.82,0.15).normalize();controls.update();
+ assert.ok(Math.abs(new THREE.Vector3(1,0,0).applyQuaternion(c.quaternion).y)>0.1,'precondition: stale camera.up rolls the camera');
+ assert.ok(frameObject(root,c,controls));
+ assert.ok(Math.abs(new THREE.Vector3(1,0,0).applyQuaternion(c.quaternion).y)<1e-9,'framing an object restores a level horizon');
 });
 
 test('dolly expands the far plane with camera distance and keeps framed scene geometry visible',()=>{

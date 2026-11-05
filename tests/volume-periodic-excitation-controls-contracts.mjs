@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { assertWgslCallsOwnedByBlock } from './helpers/wgsl-guard-ownership.mjs';
+import { assertWgslCallsOwnedByBlock, balancedWgslBlock } from './helpers/wgsl-guard-ownership.mjs';
 
 const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
@@ -35,7 +35,11 @@ for (const force of ['detailForce', 'microForce', 'shredForce', 'fineBreakup']) 
 for (const call of ['transportedDetailDirection', 'interfaceShreddingForce', 'fieldDerivedFineScaleBreakup']) {
   assert.ok(core.indexOf(`${call}(`, detailGateStart) > detailGateStart, `${call} is evaluated only after the detail-force gate`);
 }
-assertWgslCallsOwnedByBlock(core, 'if (proceduralDetailForces > 0.5) {', {
+const shred = balancedWgslBlock(core, 'if (SHRED_ONLY) {\n    // One activity memory.');
+assertWgslCallsOwnedByBlock(shred, 'if (shredOperatorGain > 0.0 && u.artistic_motion_controls.z > 0.5 && u.detail_force_isolation.z > 0.5) {', {
+  interfaceShreddingForce: 1,
+}, { label: 'Shred-only procedural detail-force guard' });
+assertWgslCallsOwnedByBlock(core.replace(shred, ''), 'if (proceduralDetailForces > 0.5) {', {
   transportedDetailDirection: 2,
   interfaceShreddingForce: 1,
   fieldDerivedFineScaleBreakup: 1,

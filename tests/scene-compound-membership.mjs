@@ -84,3 +84,21 @@ test('group Redo republishes restored flame sources through the production domai
  assert.deepEqual(published.at(-1),['flame',copy],'Redo must publish every restored source, not just restore its handle');
  assert.equal(state.find(copy).emission.fuel,.8);
 });
+test('assembly duplication remaps every role and restores those roles through Undo/Redo',async()=>{
+ const f=fixture();f.add('outlet');f.state.setGroups([{id:'original',label:'Burner',objectIds:['lamp','outlet'],transform:pose,
+  assembly:{kind:'burner',roles:{lamp:'body',outlet:'outlet'}}}]);
+ const id=f.context.duplicateSceneGroup('original');
+ assert.deepEqual(f.state.groups.find(g=>g.id===id).assembly,{kind:'burner',roles:{'lamp-copy':'body','outlet-copy':'outlet'}});
+ await f.edits.undo();assert.equal(f.state.groups.some(g=>g.id===id),false);
+ await f.edits.redo();assert.deepEqual(f.state.groups.find(g=>g.id===id).assembly.roles,{'lamp-copy':'body','outlet-copy':'outlet'});
+ assert.deepEqual(f.state.groups.find(g=>g.id==='original').assembly.roles,{lamp:'body',outlet:'outlet'});
+});
+test('duplicating a component inside assembly Edit Mode keeps membership and role in one Undo step',async()=>{
+ const f=fixture();f.state.setGroups([{id:'original',label:'Burner',objectIds:['lamp'],transform:pose,assembly:{kind:'burner',roles:{lamp:'outlet'}}}]);
+ f.state.select(['lamp']);
+ f.context.sceneMembershipBatch.duplicateSelection(['lamp'],['lamp'],{scope:'original'});
+ assert.deepEqual(f.state.groups[0].objectIds,['lamp','lamp-copy']);
+ assert.equal(f.state.groups[0].assembly.roles['lamp-copy'],'outlet');
+ await f.edits.undo();assert.deepEqual(f.state.groups[0].objectIds,['lamp']);assert.equal(f.state.find('lamp-copy'),undefined);
+ await f.edits.redo();assert.deepEqual(f.state.groups[0].objectIds,['lamp','lamp-copy']);assert.equal(f.state.groups[0].assembly.roles['lamp-copy'],'outlet');
+});

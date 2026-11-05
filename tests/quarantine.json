@@ -46,14 +46,6 @@
       "signature": "AssertionError [ERR_ASSERTION]: particle allocation preflight must run before proportional CPU truth-scene arrays are created",
       "testLastChanged": "2026-07-20 2460360d"
     },
-    "tests/fire-shadow-burner-frame-contracts.mjs": {
-      "class": "regression",
-      "owner": "operlocutor",
-      "since": "2026-10-12",
-      "reason": "passed at 8dd3c04a on the first-parent side of its last change and first fails at the merge fa19156b, which joined 060a7631 Hold shared-source host draws while producer resources are unavailable; the owner decides whether the source or the test is wrong",
-      "signature": "ReferenceError: exclusiveInspectionRender is not defined",
-      "testLastChanged": "2026-09-26 89aa0bec"
-    },
     "tests/liquid-fire-contact-consumer-contracts.mjs": {
       "class": "regression",
       "owner": "soggy",

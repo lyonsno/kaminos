@@ -29,6 +29,7 @@ export function reduceSpatialRegions(values,dims,count,gain=1){
   visit([0,0,0],dims,count,1);return rows;
 }
 
+const spatialReducerCache=new WeakMap();
 export function createSpatialReducer(device,count,texture){
   const tree=spatialRegionTree(count),shards=16,owned=[];
   const buffer=(label,size,usage=GPUBufferUsage.STORAGE)=>{const b=device.createBuffer({label,size,usage:usage|GPUBufferUsage.COPY_DST});owned.push(b);return b;};
@@ -41,9 +42,15 @@ export function createSpatialReducer(device,count,texture){
   const params=tree.levels.map((ids,i)=>{const b=buffer('spatial emission level '+i,32,GPUBufferUsage.UNIFORM);return b;});
   const ids=buffer('spatial emission level node indices',tree.nodes.length*4);
   device.queue.writeBuffer(ids,0,new Uint32Array(tree.levels.flat()));
-  const module=device.createShaderModule({label:'three-axis emission partition',code:`const SHARDS:u32=${shards}u;\n`+SPATIAL_REGIONS_WGSL});
-  const scan=device.createComputePipeline({layout:'auto',compute:{module,entryPoint:'scan'}});
-  const finish=device.createComputePipeline({layout:'auto',compute:{module,entryPoint:'finish'}});
+  let cached=spatialReducerCache.get(device);
+  if(!cached){
+    const module=device.createShaderModule({label:'three-axis emission partition',code:`const SHARDS:u32=${shards}u;\n`+SPATIAL_REGIONS_WGSL});
+    const scan=device.createComputePipeline({layout:'auto',compute:{module,entryPoint:'scan'}});
+    const finish=device.createComputePipeline({layout:'auto',compute:{module,entryPoint:'finish'}});
+    cached={module,scan,finish};
+    spatialReducerCache.set(device,cached);
+  }
+  const {scan,finish}=cached;
   let source=null,dimensions='',groups=[];
   return {encode(field){
     const key=field.dimensions.join(',');

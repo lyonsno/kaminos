@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { assertTimeFreeWgslCallGraph } from './helpers/wgsl-time-free-callgraph.mjs';
-import { assertWgslCallsOwnedByBlock } from './helpers/wgsl-guard-ownership.mjs';
+import { assertWgslCallsOwnedByBlock, balancedWgslBlock } from './helpers/wgsl-guard-ownership.mjs';
 
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 
@@ -46,8 +46,12 @@ function assertTransportedDetailForceBoundary(source) {
     const callIndex = mainDetailRegion.indexOf(`${call}(`);
     assert.ok(callIndex > gate, `${call} must be evaluated only after the procedural-detail gate`);
   }
+  const shred = balancedWgslBlock(source, 'if (SHRED_ONLY) {\n    // One activity memory.');
+  assertWgslCallsOwnedByBlock(shred, 'if (shredOperatorGain > 0.0 && u.artistic_motion_controls.z > 0.5 && u.detail_force_isolation.z > 0.5) {', {
+    interfaceShreddingForce: 1,
+  }, { label: 'Shred-only procedural detail-force guard' });
   assertWgslCallsOwnedByBlock(
-    source,
+    source.replace(shred, ''),
     'if (proceduralDetailForces > 0.5) {',
     {
       transportedDetailDirection: 2,

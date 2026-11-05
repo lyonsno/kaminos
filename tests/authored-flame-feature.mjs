@@ -27,3 +27,34 @@ const {createAuthoredFlameFeature}=await import('../authored-flame-feature.mjs')
  assert.equal(await pending,false);assert.equal(active,false,'Superseded restore cannot revive retained fire');
 }
 console.log('Flame retirement, retained reuse, visibility and obsolete restore preserve borrowed runtime custody');
+{
+ let active=true;const calls=[];
+ const runtime={isActive:()=>active,setActive:async value=>{calls.push(value);active=value;}};
+ const feature=createAuthoredFlameFeature({runtime:()=>runtime,visible:()=>true,composed:()=>true});
+ await feature.clear();await feature.sync();
+ assert.equal(active,false,'visibility projection cannot readmit a retired scene while its replacement is loading');
+ await feature.restore({present:true,composition:true,isCurrent:()=>true});
+ assert.equal(active,true,'explicit restore admits the retained runtime again');
+}
+{
+ let active=true,visible=false;
+ const runtime={isActive:()=>active,setActive:async value=>{active=value;}};
+ const feature=createAuthoredFlameFeature({runtime:()=>runtime,visible:()=>visible,composed:()=>true});
+ await feature.clear();await feature.restore({present:true,composition:true,isCurrent:()=>true});
+ assert.equal(active,false,'restored hidden flame stays inactive');
+ visible=true;await feature.sync();
+ assert.equal(active,true,'restored hidden flame can later be made visible');
+}
+
+{
+ let active=false;const runtime={isActive:()=>active,setActive:async value=>{active=value;}};
+ const feature=createAuthoredFlameFeature({runtime:()=>runtime,visible:()=>true,composed:()=>false});
+ await feature.restore({present:true,composition:false});await feature.setActive(false);
+ assert.equal(feature.present,true,'pausing rendering must retain scene presence');
+ await feature.clear();await feature.setActive(true);
+ assert.equal(feature.present,false,'runtime activation cannot invent authored presence');
+ await feature.restore({present:true,composition:true});
+ assert.equal(feature.present,true);
+ await feature.restore({present:false,composition:false});
+ assert.equal(feature.present,false,'Undo restores absent presence independently of URL and runtime history');
+}

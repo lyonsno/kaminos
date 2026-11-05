@@ -51,4 +51,3 @@ for(const piece of prepared.pieces)for(let face=0;face<piece.faceInterfaces.leng
  const asymmetricMap=mapBurnSections(Asymmetric,{...material,initial:sparseInitial});
  assert.equal(asymmetricMap.receipt.unmapped.length,0,'Bonds with occupied material must map through endpoint faces or nearest occupied cells');
 }
-

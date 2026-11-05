@@ -30,4 +30,3 @@ import * as THREE from '../lib/three.webgpu.js';
  solidView.dispose();
  baseMat.dispose();
 }
-

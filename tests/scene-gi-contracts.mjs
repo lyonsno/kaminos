@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 assert.ok(html.includes('id="scene-gi-mode"'), 'operator must be able to select combined AO/GI in the actual scene');
-const { resolveSceneGISettings, sceneGIReceives } = await import('../scene-gi-settings.mjs');
+const { resolveSceneGISettings, sceneGIReceives, calibrateSceneGISettingsForBounds } = await import('../scene-gi-settings.mjs');
 const defaults = resolveSceneGISettings();
 assert.equal(defaults.mode, 'combined');
 assert.equal(defaults.gain, 5);
@@ -32,4 +32,43 @@ assert.equal(sceneGIReceives({isMeshPhysicalMaterial:true}),true);
 assert.equal(resolveSceneGISettings({view:'incoming'}).view,'incoming');
 assert.equal(sceneGIReceives({isMeshStandardNodeMaterial:true,transparent:true}),false);
 assert.equal(sceneGIReceives({isMeshBasicNodeMaterial:true}),false);
+assert.equal(typeof calibrateSceneGISettingsForBounds, 'function', 'bounds-aware SSGI auto-calibration must be exported');
+const singleObjectCalibrated = calibrateSceneGISettingsForBounds({
+  boxes: [{ min: [-0.577, -0.85, -0.577], max: [0.577, 0.305, 0.577] }],
+  cameraDistance: 2.5,
+});
+assert.ok(singleObjectCalibrated.radius >= 1.0 && singleObjectCalibrated.radius <= 2.0, `single arrived object radius should match object/camera scale, got ${singleObjectCalibrated.radius}`);
+assert.ok(singleObjectCalibrated.thickness >= 0.15 && singleObjectCalibrated.thickness <= 0.45, `single arrived object thickness should preserve local crevices, got ${singleObjectCalibrated.thickness}`);
+assert.equal(singleObjectCalibrated.estimator.backfaceLighting, 0.2, 'auto-calibrated SSGI keeps default backfaceLighting in physical thin-fill range');
+const roomCalibrated = calibrateSceneGISettingsForBounds({
+  boxes: [
+    { min: [-4, -0.85, -4], max: [4, 4, 4] },
+    { min: [-0.577, -0.85, -0.577], max: [0.577, 0.305, 0.577] },
+  ],
+  cameraDistance: 6.0,
+});
+assert.ok(roomCalibrated.radius > singleObjectCalibrated.radius * 2, `multi-object room scene expands GI horizon radius, got ${roomCalibrated.radius}`);
+assert.ok(roomCalibrated.thickness < 0.6, `multi-object room scene keeps thickness anchored to local prop scale, got ${roomCalibrated.thickness}`);
+assert.match(
+  shader,
+  /vec4\(output\.rgb\.add\(reflected\)\.mul\(output\.a\),\s*1\)/,
+  'SSGI source pass must weight surface radiance by output.a with alpha 1 so feathered CustomBlending floors do not blend skybox into GI transport',
+);
+assert.match(
+  shader,
+  /vec4\(received\.mul\(output\.a\),\s*1\),\s*float\(viewMode\.equal\(2\)\)/,
+  'SSGI received-bounce diagnostic view (viewMode === 2) must weight received bounce by output.a with alpha 1 so CustomBlending floors do not display skybox background',
+);
+assert.ok(
+  !html.includes('!typeof workingScene'),
+  'autoCalibrateSceneGIFromScene must not use !typeof workingScene operator-precedence bug that duplicates extraObject',
+);
+const applyDocStart = html.indexOf('async function applySceneDocument(');
+const applyDocEnd = html.indexOf('// File input handler for Load Scene', applyDocStart);
+const applyDocBody = html.slice(applyDocStart, applyDocEnd);
+assert.match(
+  applyDocBody,
+  /setSceneGIControls\(data\.postprocessing\?\.sceneGI \?\? \{\}\);\s*(?:if \(typeof autoCalibrateSceneGIFromScene === 'function'\) )?autoCalibrateSceneGIFromScene\(\);/,
+  'applySceneDocument must auto-calibrate SSGI after restoring sceneGI controls when the scene has no explicit radius/thickness',
+);
 console.log('scene GI settings and receiver contracts passed');

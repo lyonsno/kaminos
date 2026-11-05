@@ -19,6 +19,7 @@
 //    and evaluate screen footprint at their closest in-frustum instance.
 
 import {readSurfelGLBExtension, attachStoredSurfelLevels} from './trellis-surfels.mjs';
+import {presentedSurface} from './scene-presented-surface.mjs';
 
 const digestHex = async bytes =>
   Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('');
@@ -511,6 +512,219 @@ export function allocateShadowCasterLods(candidates = [], {
   };
 }
 
+export function voxelSolidError(tier, {
+  worldBox,
+  worldDiag,
+  voxelSize = null,
+  grid = 64,
+  domainScale = 1,
+  geomStretch = 1,
+  stat = 'p95',
+  tailWeight = 0.5,
+  creviceAllowance = 0.005,
+} = {}) {
+  if (!tier || tier === 'hero' || tier.isHero) return 0;
+  const pitch = Number.isFinite(Number(voxelSize)) && Number(voxelSize) > 0
+    ? Number(voxelSize)
+    : (2 * Math.max(Number(domainScale) || 1, 1e-6)) / Math.max(Number(grid) || 64, 2);
+  const diag = Number.isFinite(worldDiag) && worldDiag > 0 ? worldDiag : boxDiagonal(worldBox);
+  const stretch = Math.max(1, Number(geomStretch) || 1);
+  const geomRel = effectiveRelativeGeomError(tier, {stat, tailWeight, creviceAllowance});
+  return (diag * geomRel * stretch) / pitch;
+}
+
+export function selectColliderTier(levels = [], {
+  heroFaces = Infinity,
+  worldBox,
+  worldDiag,
+  voxelSize = null,
+  grid = 64,
+  domainScale = 1,
+  maxVoxelError = 0.85,
+  requireClosed = true,
+  geomStretch = 1,
+  stat = 'p95',
+  tailWeight = 0.5,
+  creviceAllowance = 0.005,
+  activeTier = null,
+  hysteresis = 0.15,
+} = {}) {
+  const sorted = [...(levels ?? [])]
+    .filter(l =>
+      Number.isFinite(l?.faces) &&
+      l.faces > 0 &&
+      (!Number.isFinite(heroFaces) || l.faces < heroFaces) &&
+      (!requireClosed || l.closed !== false)
+    )
+    .sort((a, b) => b.faces - a.faces);
+  const rungs = [
+    {id: 'hero', sha: 'hero', isHero: true, faces: heroFaces, voxelError: 0, level: null},
+    ...sorted.map(l => {
+      const id = l.sha ?? l.sha256;
+      return {
+        id,
+        sha: id,
+        isHero: false,
+        faces: l.faces,
+        voxelError: voxelSolidError(l, {worldBox, worldDiag, voxelSize, grid, domainScale, geomStretch, stat, tailWeight, creviceAllowance}),
+        level: l,
+      };
+    }),
+  ];
+  for (let i = 1; i < rungs.length; i++) {
+    if (rungs[i].voxelError < rungs[i - 1].voxelError) {
+      rungs[i].voxelError = rungs[i - 1].voxelError;
+    }
+  }
+  const prevIdx = activeTier != null ? rungs.findIndex(r => r.id === activeTier) : -1;
+  const coarsenLimit = maxVoxelError * (1 - hysteresis);
+  const refineLimit = maxVoxelError * (1 + hysteresis);
+  let chosenIndex = 0;
+  if (prevIdx < 0) {
+    for (let i = rungs.length - 1; i >= 0; i--) {
+      if (rungs[i].voxelError <= maxVoxelError) {
+        chosenIndex = i;
+        break;
+      }
+    }
+  } else {
+    let coarsened = -1;
+    for (let i = rungs.length - 1; i > prevIdx; i--) {
+      if (rungs[i].voxelError <= coarsenLimit) {
+        coarsened = i;
+        break;
+      }
+    }
+    if (coarsened >= 0) {
+      chosenIndex = coarsened;
+    } else if (rungs[prevIdx].voxelError > refineLimit) {
+      chosenIndex = 0;
+      for (let i = prevIdx - 1; i >= 0; i--) {
+        if (rungs[i].voxelError <= maxVoxelError) {
+          chosenIndex = i;
+          break;
+        }
+      }
+    } else {
+      chosenIndex = prevIdx;
+    }
+  }
+  const sel = rungs[chosenIndex];
+  return {selected: sel, tier: sel.id, sha: sel.sha, faces: sel.faces, voxelError: sel.voxelError, chosenIndex, rungs};
+}
+
+export function allocateColliderLods(candidates = [], {
+  voxelSize = null,
+  grid = 64,
+  domainScale = 1,
+  maxVoxelError = 0.85,
+  colliderFaceBudget = Infinity,
+  requireClosed = true,
+  stat = 'p95',
+  tailWeight = 0.5,
+  creviceAllowance = 0.005,
+  hysteresis = 0.15,
+} = {}) {
+  const pitch = Number.isFinite(Number(voxelSize)) && Number(voxelSize) > 0
+    ? Number(voxelSize)
+    : (2 * Math.max(Number(domainScale) || 1, 1e-6)) / Math.max(Number(grid) || 64, 2);
+  const items = candidates.map((c, order) => {
+    const boxes = c.instanceBoxes?.length ? c.instanceBoxes : (c.worldBox ? [c.worldBox] : [{min: [-0.5, -0.5, -0.5], max: [0.5, 0.5, 0.5]}]);
+    let maxDiag = 0;
+    for (const b of boxes) maxDiag = Math.max(maxDiag, boxDiagonal(b));
+    const diag = c.worldDiag ?? (maxDiag || 1);
+    const instanceCount = Math.max(1, c.instanceCount ?? (boxes.length || 1));
+    const {rungs, chosenIndex} = selectColliderTier(c.levels ?? [], {
+      heroFaces: c.heroFaces,
+      worldBox: boxes[0],
+      worldDiag: diag,
+      voxelSize: pitch,
+      grid,
+      domainScale,
+      maxVoxelError,
+      requireClosed,
+      geomStretch: c.geomStretch ?? 1,
+      stat,
+      tailWeight,
+      creviceAllowance,
+      activeTier: c.voxelTier ?? c.activeTier ?? null,
+      hysteresis,
+    });
+    const effectiveIdx = c.pinned ? 0 : chosenIndex;
+    return {
+      id: c.id ?? String(order),
+      order,
+      pinned: Boolean(c.pinned),
+      instanceCount,
+      heroFaces: c.heroFaces ?? 0,
+      activeTier: c.activeTier ?? null,
+      voxelTier: rungs[effectiveIdx].id,
+      rungs,
+      chosenIndex: effectiveIdx,
+      demotedByBudget: false,
+    };
+  });
+
+  let totalFaces = 0;
+  let heroFacesTotal = 0;
+  for (const item of items) {
+    totalFaces += item.instanceCount * item.rungs[item.chosenIndex].faces;
+    heroFacesTotal += item.instanceCount * item.heroFaces;
+  }
+
+  while (Number.isFinite(colliderFaceBudget) && totalFaces > colliderFaceBudget) {
+    let bestItem = null;
+    let bestCost = Infinity;
+    let bestDeltaFaces = -1;
+    for (const item of items) {
+      if (item.pinned || item.chosenIndex >= item.rungs.length - 1) continue;
+      const cur = item.rungs[item.chosenIndex];
+      const next = item.rungs[item.chosenIndex + 1];
+      const deltaFaces = item.instanceCount * (cur.faces - next.faces);
+      if (deltaFaces <= 0) continue;
+      const deltaError = Math.max(0, next.voxelError - cur.voxelError);
+      const stickiness = cur.id === item.activeTier ? 1 + hysteresis : 1;
+      const cost = (deltaError / deltaFaces) * stickiness;
+      if (cost < bestCost - 1e-12 || (Math.abs(cost - bestCost) <= 1e-12 && deltaFaces > bestDeltaFaces)) {
+        bestCost = cost;
+        bestDeltaFaces = deltaFaces;
+        bestItem = item;
+      }
+    }
+    if (!bestItem) break;
+    bestItem.chosenIndex++;
+    bestItem.demotedByBudget = true;
+    totalFaces -= bestDeltaFaces;
+  }
+
+  const allocations = {};
+  for (const item of items) {
+    const rung = item.rungs[item.chosenIndex];
+    allocations[item.id] = {
+      id: item.id,
+      tier: rung.id,
+      voxelTier: item.voxelTier,
+      faces: rung.faces,
+      totalFaces: item.instanceCount * rung.faces,
+      instanceCount: item.instanceCount,
+      voxelError: rung.voxelError,
+      pinned: item.pinned,
+      demotedByBudget: item.demotedByBudget,
+    };
+  }
+  return {
+    allocations,
+    totalFaces,
+    heroFacesTotal,
+    colliderFaceBudget,
+    maxVoxelError,
+    voxelSize: pitch,
+    grid,
+    domainScale,
+    withinBudget: totalFaces <= colliderFaceBudget,
+  };
+}
+
 function cloneBorrowedRung(THREE, node) {
   const copy = node.isMesh ? new THREE.Mesh(node.geometry, node.userData?.kaminosOriginalMaterial ?? node.material) : new THREE.Group();
   copy.position.copy(node.position);
@@ -566,6 +780,116 @@ function arrayBounds(pos) {
     }
   }
   return min[0] <= max[0] ? {min, max} : {min: [-0.5, -0.5, -0.5], max: [0.5, 0.5, 0.5]};
+}
+
+export function bakeRungMeshesToRootSpace(THREE, rungRoot) {
+  if (!rungRoot) return rungRoot;
+  rungRoot.updateMatrixWorld?.(true);
+  const invRung = new THREE.Matrix4().copy(rungRoot.matrixWorld).invert();
+  const meshToRoot = new THREE.Matrix4();
+  const identity = new THREE.Matrix4();
+  const seenGeometries = new Set();
+  const visit = node => {
+    if (!node) return;
+    if (
+      node !== rungRoot &&
+      (node.userData?.kaminosRepetitionCopy ||
+        node.userData?.kaminosBeautyLodProxy ||
+        node.userData?.kaminosEditorHelper ||
+        node.userData?.kaminosEditorOnly)
+    ) {
+      return;
+    }
+    if (node.isMesh && node.geometry && !seenGeometries.has(node.geometry)) {
+      seenGeometries.add(node.geometry);
+      meshToRoot.multiplyMatrices(invRung, node.matrixWorld);
+      let isIdentity = true;
+      for (let i = 0; i < 16; i++) {
+        if (Math.abs(meshToRoot.elements[i] - identity.elements[i]) > 1e-7) {
+          isIdentity = false;
+          break;
+        }
+      }
+      if (!isIdentity) {
+        node.geometry.applyMatrix4(meshToRoot);
+        node.geometry.computeBoundingBox?.();
+        node.geometry.computeBoundingSphere?.();
+        if (node.geometry.userData?.kaminosWarpBase) {
+          delete node.geometry.userData.kaminosWarpBase;
+          delete node.geometry.userData.kaminosWarpApplied;
+        }
+      }
+    }
+    for (const child of node.children ?? []) visit(child);
+  };
+  visit(rungRoot);
+  const resetNodes = node => {
+    if (!node) return;
+    if (
+      node !== rungRoot &&
+      (node.userData?.kaminosRepetitionCopy ||
+        node.userData?.kaminosBeautyLodProxy ||
+        node.userData?.kaminosEditorHelper ||
+        node.userData?.kaminosEditorOnly)
+    ) {
+      return;
+    }
+    if (node !== rungRoot) {
+      node.position.set(0, 0, 0);
+      node.quaternion.set(0, 0, 0, 1);
+      node.scale.set(1, 1, 1);
+      node.matrix.identity();
+      node.matrixWorld.copy(rungRoot.matrixWorld);
+    }
+    for (const child of node.children ?? []) resetNodes(child);
+  };
+  resetNodes(rungRoot);
+  return rungRoot;
+}
+
+export function formatLodBudgetReadout({objectId = null, beautyState = null, colliderBudget = null, burnFieldState = null} = {}) {
+  let beautyText = null;
+  if (beautyState) {
+    if (!beautyState.enabled) {
+      beautyText = 'Beauty LOD: off';
+    } else {
+      const obj = objectId ? beautyState.objects?.find(o => o.id === objectId) : null;
+      const sceneBudgetStr = Number.isFinite(beautyState.faceBudget)
+        ? `Scene ${(beautyState.totalFaces ?? 0).toLocaleString('en-US')} / ${beautyState.faceBudget.toLocaleString('en-US')} faces`
+        : `Scene ${(beautyState.totalFaces ?? 0).toLocaleString('en-US')} faces`;
+      if (obj) {
+        const tierLabel = obj.displayedTier === 'hero'
+          ? `hero (${(obj.faces ?? 0).toLocaleString('en-US')} faces${obj.pinned ? ', pinned' : ''})`
+          : `${(obj.faces ?? 0).toLocaleString('en-US')} faces (${Number(obj.pixelError ?? 0).toFixed(2)} px)`;
+        beautyText = `Beauty: ${tierLabel} · ${sceneBudgetStr}`;
+      } else {
+        beautyText = `Beauty: ${sceneBudgetStr}`;
+      }
+    }
+  }
+  let colliderText = null;
+  const colAlloc = objectId && colliderBudget?.allocations ? colliderBudget.allocations[objectId] : null;
+  if (colAlloc) {
+    const tierLabel = colAlloc.tier === 'hero'
+      ? `hero (${(colAlloc.faces ?? 0).toLocaleString('en-US')} faces)`
+      : `${(colAlloc.faces ?? 0).toLocaleString('en-US')} faces (${Number(colAlloc.voxelError ?? 0).toFixed(2)} vox)`;
+    colliderText = `Collider: ${tierLabel}`;
+  }
+  let burnText = null;
+  const burnLod = burnFieldState?.surfaceLod ?? null;
+  if (burnLod && Number.isFinite(burnLod.faces)) {
+    const tierLabel = burnLod.tier === 'hero'
+      ? `hero (${burnLod.faces.toLocaleString('en-US')} faces)`
+      : `${burnLod.faces.toLocaleString('en-US')} faces (${Number(burnLod.voxelError ?? 0).toFixed(2)} cell)`;
+    burnText = `Burn mask: ${tierLabel}`;
+  }
+  const parts = [beautyText, colliderText, burnText].filter(Boolean);
+  return {
+    beautyText,
+    colliderText,
+    burnText,
+    combinedText: parts.join(' · '),
+  };
 }
 
 export function applyRootVertexWarpToRung(THREE, rungRoot, warpFn, {bounds = null} = {}) {
@@ -957,6 +1281,7 @@ export function createSceneBeautyLodController({
         const bytes = await fetchBytes(url);
         if (await digest(bytes) !== sha) throw Error(`beauty LOD content mismatch for ${sha}`);
         rungRoot = await parseGlb(bytes);
+        bakeRungMeshesToRootSpace(THREE, rungRoot);
         rungRoot.traverse(m => {
           if (m.isMesh) {
             m.castShadow = true;
@@ -1135,7 +1460,9 @@ export function createSceneBeautyLodController({
           copyWorldMat.multiplyMatrices(root.matrixWorld, rep.matrix);
           instanceBoxes.push(new THREE.Box3().copy(entry.localBox).applyMatrix4(copyWorldMat));
         }
-        const pinned = pinnedSet.has(root) || pinnedSet.has(entry.id);
+        let posed = false;
+        root.traverse(node => { if (presentedSurface(node)) posed = true; });
+        const pinned = posed || pinnedSet.has(root) || pinnedSet.has(entry.id);
         candidates.push({
           id: entry.id,
           root,
@@ -1239,6 +1566,25 @@ export function createSceneBeautyLodController({
         this.restoreAllHeroes();
       }
     },
+    borrowFrame(camera, options = {}) {
+      this.update(camera, options);
+      let restored = false;
+      return () => {
+        if (restored) return;
+        restored = true;
+        this.restoreAllHeroes();
+      };
+    },
+    async prepareFrame(camera, options = {}) {
+      if (disposed || !camera) return lastState;
+      await giProxies?.whenIdle?.();
+      this.update(camera, options);
+      this.restoreAllHeroes();
+      await this.whenIdle();
+      const state = this.update(camera, options);
+      this.restoreAllHeroes();
+      return state;
+    },
     restoreAllHeroes() {
       for (const [root, entry] of entries) {
         restoreRootToHero(root, entry);
@@ -1259,6 +1605,13 @@ export function createSceneBeautyLodController({
       }
     },
     state: () => lastState,
+    getResidentRung(root, sha) {
+      return entries.get(root)?.rungs.get(sha) ?? null;
+    },
+    listResidentRungs(root) {
+      const entry = entries.get(root);
+      return entry ? [...entry.rungs.values()] : [];
+    },
     applyWarp: (root, warpFn, options) => applyRootVertexWarpToRung(THREE, root, warpFn, options),
     whenIdle: async () => {
       while (pendingLoads.size) await Promise.all([...pendingLoads]);

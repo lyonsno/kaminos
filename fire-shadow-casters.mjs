@@ -3,6 +3,7 @@ import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {annularBurnerCasterKey,createAnnularBurnerCaster} from './annular-burner.mjs';
 import {allocateShadowCasterLods,applyRootVertexWarpToRung} from './scene-lod-budget.mjs';
+import {residentLightCoverage} from './scene-resident-coverage.mjs';
 // Explicit provisional Stunt Doubles mapping, 2026-10-17T14:43:30Z; no measured-error selection.
 export const KILN_CASTER_SOURCE='f8e6ce918e3e5cf234d186724dc21b40b3f9cf7cbc9e776000cf55f24801c91b';
 export const KILN_CASTERS=Object.freeze({'5k':'1050a1d34389366eac0161ea002176fece47c7eeaac53a7795bae63ed4807456','10k':'11319add7e7593d80f33ec9c25b6f43c531122d423b9a25ef06b86b71b2d7470'});
@@ -71,6 +72,63 @@ export function createFireShadowCasters({scene,load=loadFireCaster,giProxies=nul
   const bufferKey=a=>{if(!a)return null;if(!bufferIds.has(a))bufferIds.set(a,++nextBufferId);return [bufferIds.get(a),a.version,a.count];};
   const disposeInstance=inst=>{if(!inst)return;inst.wrapper.removeFromParent();inst.ownGeometry?.dispose();inst.proxy.traverse(m=>{if(m.isMesh){if(m.userData?.kaminosOwnsWarpedGeometry)m.geometry.dispose();m.material.dispose();}});};
   const clear=()=>{for(const inst of instances.values())disposeInstance(inst);instances.clear();};
+  const collectAndAllocate=({smokeVisibility=false,flameBox=null}={})=>{
+    if(flameBox?.min&&flameBox?.max)budgetConfig.flameBox=flameBox;
+    scene.updateMatrixWorld(true);
+    const candidates=[],reg=proxies();
+    const visit=node=>{
+      if(!node.visible)return;
+      let hasResident=false;node.traverse(m=>{if(m.isMesh&&residentLightCoverage(m))hasResident=true;});
+      if(hasResident)return;
+      if(!smokeVisibility&&level!=='original'&&matches(node)){candidates.push({root:node,kind:'explicit-kiln'});return;}
+      const handle=reg?.handleFor?.(node)??reg?.get?.(node);
+      if((handle?.state==='loaded'||handle?.state==='resolving')&&handle.proxyRoot){candidates.push({root:node,kind:'gi-proxy',handle});return;}
+      const recipe=burnerRecipeOf(node);
+      if(recipe){candidates.push({root:node,kind:'annular-burner',recipe});return;}
+      for(const child of node.children)visit(child);
+    };
+    visit(scene);
+    const shadowCandidates=[];
+    const copyMat=new THREE.Matrix4();
+    for(const c of candidates){
+      if(c.kind!=='gi-proxy'||!c.handle?.levels?.length)continue;
+      const lb=typeof c.root.userData?.kaminosVertexWarp==='function'?rootLocalBoxOf(c.root):localBoxOf(c.handle.proxyRoot);
+      const repSources=c.root.children.filter(ch=>ch.visible&&ch.userData?.kaminosRepetitionCopy===true);
+      const instanceBoxes=[new THREE.Box3().copy(lb).applyMatrix4(c.root.matrixWorld)];
+      for(const rep of repSources){copyMat.multiplyMatrices(c.root.matrixWorld,rep.matrix);instanceBoxes.push(new THREE.Box3().copy(lb).applyMatrix4(copyMat));}
+      shadowCandidates.push({
+        id:c.root.userData?.kaminosSceneObject?.id??c.root.uuid,
+        root:c.root,
+        handle:c.handle,
+        levels:c.handle.levels,
+        instanceBoxes,
+        instanceCount:instanceBoxes.length,
+        activeTier:shadowActiveTiers.get(c.root)??c.handle.effective?.sha??null,
+      });
+    }
+    if(shadowCandidates.length){
+      lastShadowBudget=allocateShadowCasterLods(shadowCandidates,{
+        flameBox:budgetConfig.flameBox,
+        shadowFaceBudget:budgetConfig.shadowFaceBudget,
+        maxSolidAngleError:budgetConfig.maxSolidAngleError,
+      });
+      for(const sc of shadowCandidates){
+        const alloc=lastShadowBudget.allocations[sc.id];
+        if(!alloc)continue;
+        shadowActiveTiers.set(sc.root,alloc.tier);
+        const pendingFaces=pendingShadowSelections.get(sc.root);
+        if(alloc.faces&&sc.handle.effective?.sha!==alloc.tier&&pendingFaces!==alloc.faces&&typeof reg?.select==='function'){
+          pendingShadowSelections.set(sc.root,alloc.faces);
+          const task=Promise.resolve(reg.select(sc.root,{faces:alloc.faces})).finally(()=>{
+            if(pendingShadowSelections.get(sc.root)===alloc.faces)pendingShadowSelections.delete(sc.root);
+            inFlightSelections.delete(task);
+          });
+          inFlightSelections.add(task);
+        }
+      }
+    }
+    return candidates;
+  };
   return {
     setEnabled(v){if(disposed)throw Error('fire caster consumer disposed');syncConsumer(!!v);},
     setShadowBudget(patch={}){
@@ -80,6 +138,18 @@ export function createFireShadowCasters({scene,load=loadFireCaster,giProxies=nul
       return {...budgetConfig};
     },
     whenShadowBudgetSettled:async()=>{while(inFlightSelections.size)await Promise.all([...inFlightSelections]);},
+    async prepareCapture({flameBox=null}={}){
+      if(disposed)throw Error('fire caster consumer disposed');
+      await proxies()?.whenIdle?.();
+      if(disposed)return null;
+      const beautyRestores=[];
+      scene.traverse(n=>{if(typeof n.userData?.kaminosBeautyLodRestore==='function')beautyRestores.push(n.userData.kaminosBeautyLodRestore());});
+      try{collectAndAllocate({smokeVisibility:false,flameBox});}
+      finally{for(let i=beautyRestores.length-1;i>=0;i--)beautyRestores[i]?.();}
+      await this.whenShadowBudgetSettled();
+      await proxies()?.whenIdle?.();
+      return lastShadowBudget;
+    },
     async setLevel(v){
       validateCasterLevel(v);if(disposed)throw Error('fire caster consumer disposed');const version=++generation;requested=v;error=null;
       if(v==='original'){level=v;clear();Object.assign(state,{targets:0,originalTriangles:0,captureTriangles:0,errorMeasured:false});return;}
@@ -88,61 +158,10 @@ export function createFireShadowCasters({scene,load=loadFireCaster,giProxies=nul
     },
     withCapture(fn,{smokeVisibility=false,flameBox=null}={}){
       if(disposed)throw Error('fire caster consumer disposed');if(active)return fn();
-      if(flameBox?.min&&flameBox?.max)budgetConfig.flameBox=flameBox;
       const beautyRestores=[];
       scene.traverse(n=>{if(typeof n.userData?.kaminosBeautyLodRestore==='function')beautyRestores.push(n.userData.kaminosBeautyLodRestore());});
       try{
-      scene.updateMatrixWorld(true);
-      const candidates=[],reg=proxies();
-      const visit=node=>{
-        if(!node.visible)return;
-        if(!smokeVisibility&&level!=='original'&&matches(node)){candidates.push({root:node,kind:'explicit-kiln'});return;}
-        const handle=reg?.handleFor?.(node)??reg?.get?.(node);
-        if((handle?.state==='loaded'||handle?.state==='resolving')&&handle.proxyRoot){candidates.push({root:node,kind:'gi-proxy',handle});return;}
-        const recipe=burnerRecipeOf(node);
-        if(recipe){candidates.push({root:node,kind:'annular-burner',recipe});return;}
-        for(const child of node.children)visit(child);
-      };
-      visit(scene);
-      const shadowCandidates=[];
-      const copyMat=new THREE.Matrix4();
-      for(const c of candidates){
-        if(c.kind!=='gi-proxy'||!c.handle?.levels?.length)continue;
-        const lb=typeof c.root.userData?.kaminosVertexWarp==='function'?rootLocalBoxOf(c.root):localBoxOf(c.handle.proxyRoot);
-        const repSources=c.root.children.filter(ch=>ch.visible&&ch.userData?.kaminosRepetitionCopy===true);
-        const instanceBoxes=[new THREE.Box3().copy(lb).applyMatrix4(c.root.matrixWorld)];
-        for(const rep of repSources){copyMat.multiplyMatrices(c.root.matrixWorld,rep.matrix);instanceBoxes.push(new THREE.Box3().copy(lb).applyMatrix4(copyMat));}
-        shadowCandidates.push({
-          id:c.root.userData?.kaminosSceneObject?.id??c.root.uuid,
-          root:c.root,
-          handle:c.handle,
-          levels:c.handle.levels,
-          instanceBoxes,
-          instanceCount:instanceBoxes.length,
-          activeTier:shadowActiveTiers.get(c.root)??c.handle.effective?.sha??null,
-        });
-      }
-      if(shadowCandidates.length){
-        lastShadowBudget=allocateShadowCasterLods(shadowCandidates,{
-          flameBox:budgetConfig.flameBox,
-          shadowFaceBudget:budgetConfig.shadowFaceBudget,
-          maxSolidAngleError:budgetConfig.maxSolidAngleError,
-        });
-        for(const sc of shadowCandidates){
-          const alloc=lastShadowBudget.allocations[sc.id];
-          if(!alloc)continue;
-          shadowActiveTiers.set(sc.root,alloc.tier);
-          const pendingFaces=pendingShadowSelections.get(sc.root);
-          if(alloc.faces&&sc.handle.effective?.sha!==alloc.tier&&pendingFaces!==alloc.faces&&typeof reg?.select==='function'){
-            pendingShadowSelections.set(sc.root,alloc.faces);
-            const task=Promise.resolve(reg.select(sc.root,{faces:alloc.faces})).finally(()=>{
-              if(pendingShadowSelections.get(sc.root)===alloc.faces)pendingShadowSelections.delete(sc.root);
-              inFlightSelections.delete(task);
-            });
-            inFlightSelections.add(task);
-          }
-        }
-      }
+      const candidates=collectAndAllocate({smokeVisibility,flameBox});
       if(!smokeVisibility)Object.assign(state,{targets:0,originalTriangles:0,captureTriangles:0,errorMeasured:false});
       const seenRoots=new Set();
       if(!candidates.length){

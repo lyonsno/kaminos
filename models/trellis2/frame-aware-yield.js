@@ -1,0 +1,45 @@
+// Provisional route-local sleep injection for the retained-block experiment.
+// Normal generation keeps the current shared-runtime scheduling policy.
+const postedTask=()=>new Promise((resolve,reject)=>{
+ const channel=new MessageChannel();
+ const close=()=>{channel.port1.close();channel.port2.close();};
+ channel.port1.onmessage=()=>{close();resolve();};
+ try{channel.port2.postMessage(null);}catch(error){close();reject(error);}
+});
+export function createTrellisFrameAwareSleep({queue,frameBudgetMs=8,maxTaskYieldsPerFrame=8,perDutyFence=false,signal,
+ now=()=>performance.now(),task=postedTask,timer=ms=>new Promise(r=>setTimeout(r,ms)),
+ requestFrame=globalThis.requestAnimationFrame?.bind(globalThis),
+ cancelFrame=globalThis.cancelAnimationFrame?.bind(globalThis)}={}){
+ if(typeof queue?.onSubmittedWorkDone!=='function'||(!perDutyFence&&(typeof requestFrame!=='function'||typeof cancelFrame!=='function')))
+  throw TypeError('actual queue completion and cancellable frame callbacks required');
+ if(!Number.isSafeInteger(maxTaskYieldsPerFrame)||maxTaskYieldsPerFrame<1)throw RangeError('positive integer task duty budget required');
+ if(!Number.isFinite(frameBudgetMs)||frameBudgetMs<=0)throw RangeError('positive finite frame budget required');
+ const counts={kind:perDutyFence?'per-duty-fence-task':'frame-aware',frameBudgetMs,maxTaskYieldsPerFrame,taskYields:0,frameYields:0,positiveWaits:0,gpuDrains:0};
+ const stopError=()=>signal?.reason instanceof Error&&signal.reason.name==='AbortError'?signal.reason:new DOMException(String(signal?.reason?.message??signal?.reason??'TRELLIS stopped'),'AbortError');
+ const stopped=()=>{if(signal?.aborted)throw stopError();};
+ let lastFrame=now(),tasksSinceFrame=0;
+ const frame=()=>new Promise((resolve,reject)=>{
+  let id;const remove=()=>signal?.removeEventListener('abort',abort);
+  const abort=()=>{cancelFrame(id);remove();reject(stopError());};
+  signal?.addEventListener('abort',abort,{once:true});
+  try{id=requestFrame(()=>{remove();try{stopped();lastFrame=now();tasksSinceFrame=0;counts.frameYields++;resolve();}catch(error){reject(error);}});}
+  catch(error){remove();reject(error);}
+ });
+ const sleep=async ms=>{
+  if(!Number.isFinite(ms)||ms<0)throw RangeError('nonnegative finite delay required');
+  stopped();
+  if(ms>0){await timer(ms);counts.positiveWaits++;stopped();return;}
+  if(perDutyFence){
+   // The existing app frame source queues its own render request while this
+   // duty settles. The next runtime boundary services it without another RAF.
+   await queue.onSubmittedWorkDone();counts.gpuDrains++;stopped();
+   await task();counts.taskYields++;stopped();return;
+  }
+  if(now()-lastFrame>=frameBudgetMs||tasksSinceFrame>=maxTaskYieldsPerFrame){
+   // Drain submitted model work before yielding the frame: a fast CPU task loop
+   // must not put an unbounded inference backlog ahead of the ordinary renderer.
+   await queue.onSubmittedWorkDone();counts.gpuDrains++;stopped();await frame();
+  }else{await task();counts.taskYields++;tasksSinceFrame++;stopped();}
+ };
+ sleep.snapshot=()=>({...counts});return sleep;
+}

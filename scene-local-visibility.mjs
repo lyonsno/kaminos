@@ -11,22 +11,24 @@ export function createLocalSceneVisibility({readCoverage=residentLightCoverage}=
   const id=value=>{if(!value)return null;if(!ids.has(value))ids.set(value,++serial);return ids.get(value);};
   return {snapshot(scene){
     staticSceneGeometryRevision(scene,{exclude:m=>!!readCoverage(m)});
-    const meshes=[],coverageByMesh=new Map();
-    scene.traverseVisible(m=>{if(m.isMesh&&m.castShadow){const binding=readCoverage(m);if(binding){const value=validateResidentLightCoverage(m,binding);if(binding.owner!==m)return;coverageByMesh.set(m,value);}meshes.push(m);}});
+    const meshes=[],coverageByMesh=new Map(),seenCoverages=new Set();
+    scene.traverseVisible(m=>{if(m.isMesh&&m.castShadow){const binding=readCoverage(m);if(binding){const value=validateResidentLightCoverage(m,binding);if((binding.owner!==m&&!m.userData?.kaminosBeautyLodBurnProxy)||seenCoverages.has(binding))return;seenCoverages.add(binding);coverageByMesh.set(m,value);}meshes.push(m);}});
     const coverage=[...coverageByMesh.values()][0]??null;
     const keys=meshes.map(m=>{const c=coverageByMesh.get(m);if(c)return JSON.stringify(['resident',id(c.texture),id(c.initial),c.dimensions,c.bounds.min.toArray(),c.bounds.max.toArray()]);const g=m.geometry,p=g.attributes.position,i=g.index;return JSON.stringify([id(g),g.version,id(p),p.version,p.count,id(i),i?.version,i?.count]);});
-    const revision=JSON.stringify(meshes.map((m,i)=>[m.uuid,keys[i]]));
+    const revision=JSON.stringify(meshes.map((m,i)=>[readCoverage(m)?.owner?.uuid??m.uuid,keys[i]]));
     const matrices=new Float32Array(Math.max(1,meshes.length)*16);
     if(!meshes.length)matrices.set(new THREE.Matrix4().elements);
     meshes.forEach((m,i)=>{
-      if(!m.matrixWorld.elements.every(Number.isFinite)||m.matrixWorld.determinant()===0)throw Error('local visibility needs finite invertible mesh transforms');
-      matrices.set(m.matrixWorld.elements,i*16);
+      const owner=readCoverage(m)?.owner??m;
+      if(owner!==m)owner.updateWorldMatrix(true,false);
+      if(!owner.matrixWorld.elements.every(Number.isFinite)||owner.matrixWorld.determinant()===0)throw Error('local visibility needs finite invertible mesh transforms');
+      matrices.set(owner.matrixWorld.elements,i*16);
     });
     if(revision!==previous||!packed){
       const parts=meshes.map((mesh,i)=>{
-        const g=mesh.geometry,prior=cache.get(g);if(prior?.key===keys[i])return prior.packed;
+        const cacheGeom=(readCoverage(mesh)?.owner??mesh).geometry,g=mesh.geometry,prior=cache.get(cacheGeom);if(prior?.key===keys[i])return prior.packed;
         const coverage=coverageByMesh.get(mesh);
-        if(coverage){const records=residentCellTriangles(coverage),result=buildTriangleVisibility(records).packGpu();for(let j=0;j<result.triangleCount;j++)result.triangles[j*12+3]=records[result.triangleIndices[j]].cell+1;cache.set(g,{key:keys[i],packed:result});builds++;return result;}
+        if(coverage){const records=residentCellTriangles(coverage),result=buildTriangleVisibility(records).packGpu();for(let j=0;j<result.triangleCount;j++)result.triangles[j*12+3]=records[result.triangleIndices[j]].cell+1;cache.set(cacheGeom,{key:keys[i],packed:result});builds++;return result;}
         const p=g.attributes.position,index=g.index,count=index?.count??p.count,records=[];
         if(count%3)throw Error('local visibility requires complete triangles');
         for(let j=0;j<count;j+=3){

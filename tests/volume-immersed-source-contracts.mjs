@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as core from '../volume-core.js';
 import { effectiveMismatches } from '../volume-arm-capture-checks.mjs';
+import { balancedWgslBlock } from './helpers/wgsl-guard-ownership.mjs';
 
 const source = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -180,12 +181,21 @@ test('IS-01: the momentum relaxation carries the time step once, after the fold'
   }
   assert.ok(Math.abs(core.immersedMomentumModel({ transported: 0.04, target: 0.1, weight: 1, gain: 0.5, dt: 1 }) - 0.07) < 1e-9, 'partial gain relaxes halfway');
   const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('\nfn ', source.indexOf('\nfn cs(@builtin') + 10));
-  const foldAt = main.search(/let forceIncrement = .*\* timeStep;/);
-  const relaxAt = main.indexOf('vel = mix(vel, immersedSourcesAtCell.velocity * VELOCITY_UNIT_SCALE, stepBlend(immersedSourcesAtCell.relaxation));');
+  const shred = balancedWgslBlock(main, 'if (SHRED_ONLY) {\n    // One activity memory.');
+  const legacy = main.replace(shred, '');
+  const foldAt = legacy.search(/let forceIncrement = .*\* timeStep;/);
+  const relaxation = 'vel = mix(vel, immersedSourcesAtCell.velocity * VELOCITY_UNIT_SCALE, stepBlend(immersedSourcesAtCell.relaxation));';
+  const relaxAt = legacy.indexOf(relaxation);
   // The reactant candidate opens the top through materialWallFade (equal to wallFade under the authored law).
-  const spongeAt = Math.max(main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, wallFade));'), main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, materialWallFade));'));
+  const spongeAt = Math.max(legacy.indexOf('vel = vel * stepRate(mix(0.55, 1.0, wallFade));'), legacy.indexOf('vel = vel * stepRate(mix(0.55, 1.0, materialWallFade));'));
   assert.ok(foldAt > 0 && relaxAt > 0 && spongeAt > 0);
   assert.ok(relaxAt > foldAt && relaxAt < spongeAt, 'the relaxation follows the fold (its stepBlend is the only time dependence) and precedes the sponge');
+  const shredFold = shred.indexOf('vel = velTransported + increment;');
+  const shredRelax = shred.indexOf(relaxation);
+  const shredSponge = shred.indexOf('vel *= stepRate(mix(0.55, 1.0, fade));');
+  assert.match(shred, /let increment = .*\* timeStep;/);
+  assert.ok(shredFold > 0 && shredRelax > shredFold && shredSponge > shredRelax,
+    'Shred-only relaxation also follows its timestep fold and precedes its velocity-only sponge');
 });
 
 test('IS-02: positive supply needs a volume outlet — the closed-top converged solve is refused', () => {

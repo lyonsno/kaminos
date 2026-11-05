@@ -14,6 +14,7 @@ export function fineGridPlan({materialDims,velocity=0,pressure=0}) {
 export const FINE_GRID_TRANSFER_WGSL=/* wgsl */`
 struct Shape { material:vec4<u32>, velocity:vec4<u32>, ratio:vec4<f32> };
 override GENERAL_TRANSFER:bool=false;
+override SHRED_ONLY:bool=false;
 ${TRANSFER_GEOMETRY_WGSL}
 @group(0) @binding(0) var<uniform> s:Shape;
 @group(0) @binding(1) var<storage,read_write> fine:array<vec4<f32>>;
@@ -62,8 +63,10 @@ fn restrictGeneral(c:vec3<u32>){
  let begin=transferBegin(c,s.material.xyz,s.velocity.xyz);let end=transferEnd(c,s.material.xyz,s.velocity.xyz);var a=vec4<f32>(0);var b=a;var d=a;var react=a;var front=0.0;var wet=0.0;var mask=0u;var weightSum=0.0;
  for(var z=begin.z;z<end.z;z++){for(var y=begin.y;y<end.y;y++){for(var x=begin.x;x<end.x;x++){
   let p=vec3<i32>(x,y,z);let o=transferOverlap(p,lo,hi);let w=o.x*o.y*o.z;if(w<=0.0){continue;}weightSum+=w;
-  let fi=idx(vec3<u32>(p),s.material.xyz);a+=fine[fi*4u+1u]*w;b+=fine[fi*4u+2u]*w;d+=fine[fi*4u+3u]*w;
-  front+=fineFront[fi]*w;wet+=f32(fineQuench[fi])*w;mask=max(mask,select(0u,1u,solid(p)));
+  let fi=idx(vec3<u32>(p),s.material.xyz);
+  if(SHRED_ONLY){a+=vec4<f32>(fine[fi*4u+1u].xyz,0.0)*w;d.y+=fine[fi*4u+3u].y*w;}
+  else{a+=fine[fi*4u+1u]*w;b+=fine[fi*4u+2u]*w;d+=fine[fi*4u+3u]*w;front+=fineFront[fi]*w;}
+  wet+=f32(fineQuench[fi])*w;mask=max(mask,select(0u,1u,solid(p)));
   if(textureDimensions(fineReactant).x==s.material.x){react+=textureLoad(fineReactant,p,0)*w;}
  }}}
  if(s.velocity.w==1u){var v=vec3<f32>(0);for(var axis=0u;axis<3u;axis++){v[axis]=transferFace(c,axis,false);}coarse[ci*4u]=vec4<f32>(v,0);}
@@ -79,8 +82,9 @@ fn restrictScalars(@builtin(global_invocation_id) c:vec3<u32>){
  var a=vec4<f32>(0.0);var b=a;var d=a;var react=a;var front=0.0;var wet=0.0;var mask=0u;var vel=vec3<f32>(0.0);
  for(var z=0u;z<r;z++){for(var y=0u;y<r;y++){for(var x=0u;x<r;x++){
   let o=vec3<u32>(x,y,z);let p=c*r+o;let fi=idx(p,s.material.xyz);let blocked=solid(vec3<i32>(p));
-  a+=fine[fi*4u+1u]*weight;b+=fine[fi*4u+2u]*weight;d+=fine[fi*4u+3u]*weight;
-  front+=fineFront[fi]*weight;wet+=f32(fineQuench[fi])*weight;mask=max(mask,select(0u,1u,blocked));
+  if(SHRED_ONLY){a+=vec4<f32>(fine[fi*4u+1u].xyz,0.0)*weight;d.y+=fine[fi*4u+3u].y*weight;}
+  else{a+=fine[fi*4u+1u]*weight;b+=fine[fi*4u+2u]*weight;d+=fine[fi*4u+3u]*weight;front+=fineFront[fi]*weight;}
+  wet+=f32(fineQuench[fi])*weight;mask=max(mask,select(0u,1u,blocked));
   if(textureDimensions(fineReactant).x==s.material.x){react+=textureLoad(fineReactant,vec3<i32>(p),0)*weight;}
   if(s.velocity.w==1u){for(var axis=0u;axis<3u;axis++){var next=vec3<i32>(p);next[axis]++;if(o[axis]==r-1u&&!blocked&&!solid(next)){vel[axis]+=fine[fi*4u][axis]*weight;}}}
  }}}
@@ -136,25 +140,44 @@ fn prolongVelocity(@builtin(global_invocation_id) c:vec3<u32>){
 }
 `;
 
+const fineVelocityGridPipelines = new WeakMap();
+
 export function createFineVelocityGrid(device,plan,uniformBytes) {
  const owned=[],d=plan.velocityDims,n=d.reduce((a,b)=>a*b,1);
  const buffer=(label,size,usage=GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC)=>{const b=device.createBuffer({label:'fine velocity '+label,size,usage});owned.push(b);return b;};
  const texture=(label,format,size=d,dimension='3d')=>{const t=device.createTexture({label:'fine velocity '+label,format,size,dimension,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC|GPUTextureUsage.COPY_DST});owned.push(t);return t;};
  const fluid=[0,1].map(i=>buffer('history '+i,n*64)),front=[0,1].map(i=>buffer('front '+i,n*4)),quench=[0,1].map(i=>buffer('quench '+i,(n+5)*4));
  const reactant=[0,1].map(i=>texture('reactant '+i,'rg32float')),wavelet=[0,1].map(i=>texture('wavelet '+i,'rgba32float',[d[0],d[1],d[2]*2]));
- const lattice=new Float32Array(n*8);let at=0;
- for(let set=0;set<2;set++)for(let z=0;z<d[2];z++)for(let y=0;y<d[1];y++)for(let x=0;x<d[0];x++){lattice[at]=x+.5;lattice[at+1]=y+.5;lattice[at+2]=z+.5;at+=4;}
- const resetWavelet=()=>{for(const t of wavelet)device.queue.writeTexture({texture:t},lattice,{bytesPerRow:d[0]*16,rowsPerImage:d[1]},[d[0],d[1],d[2]*2]);};
+ const resetWavelet=()=>{
+  const lattice=new Float32Array(n*8);let at=0;
+  for(let set=0;set<2;set++)for(let z=0;z<d[2];z++)for(let y=0;y<d[1];y++)for(let x=0;x<d[0];x++){lattice[at]=x+.5;lattice[at+1]=y+.5;lattice[at+2]=z+.5;at+=4;}
+  for(const t of wavelet)device.queue.writeTexture({texture:t},lattice,{bytesPerRow:d[0]*16,rowsPerImage:d[1]},[d[0],d[1],d[2]*2]);
+ };
  resetWavelet();
  const solid=texture('obstacles','r32uint'),burn=texture('expansion','r32float'),force=texture('force and low-pass','r32float',[d[0],d[1],d[2]*9]);
  const side=Math.max(...d),lower=texture('lower faces','r32float',[side,side,3],'2d');
  const uniform=buffer('uniforms',uniformBytes,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),shape=buffer('transfer shape',48,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),seedShape=buffer('seed shape',48,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),predictor=buffer('predictor',n*64);
  for(const [buffer,seed] of [[shape,0],[seedShape,1]]){const data=new ArrayBuffer(48);new Uint32Array(data).set([...plan.materialDims,Math.floor(plan.materialPerVelocity),...d,seed]);new Float32Array(data)[8]=plan.materialPerVelocity;device.queue.writeBuffer(buffer,0,data);}
- const module=device.createShaderModule({label:'fine material-velocity transfer',code:FINE_GRID_TRANSFER_WGSL});
- const pipelines=Object.fromEntries(['restrictScalars','restrictBurn','injectMomentum','prolongVelocity'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'fine '+entryPoint,layout:'auto',compute:{module,entryPoint,constants:{GENERAL_TRANSFER:!Number.isInteger(plan.materialPerVelocity)}}})]));
+ const general=!Number.isInteger(plan.materialPerVelocity);
+ let cached=fineVelocityGridPipelines.get(device);
+ if(!cached){
+  cached={module:device.createShaderModule({label:'fine material-velocity transfer',code:FINE_GRID_TRANSFER_WGSL}),byGeneral:new Map()};
+  fineVelocityGridPipelines.set(device,cached);
+ }
+ let entry=cached.byGeneral.get(general);
+ if(!entry){
+  const base=Object.fromEntries(['restrictScalars','restrictBurn','injectMomentum','prolongVelocity'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'fine '+entryPoint,layout:'auto',compute:{module:cached.module,entryPoint,constants:{GENERAL_TRANSFER:general}}})]));
+  entry={base,restrictions:new Map([[false,base.restrictScalars]])};
+  cached.byGeneral.set(general,entry);
+ }
+ const pipelines={...entry.base},restrictions=entry.restrictions;
+ let activeShredOnly=false;
  let current=0,seed=true,bindings,prior=[];
- function prepare(f) {
-  const resources=[f.fluid,f.front,f.quench,f.solid,f.reactant,f.burn,f.lower,f.prior,current];
+ function prepare(f,{shredOnly=activeShredOnly}={}) {
+  activeShredOnly=shredOnly;
+  if(!restrictions.has(shredOnly))restrictions.set(shredOnly,device.createComputePipeline({label:'fine Shred-only restriction',layout:'auto',compute:{module:cached.module,entryPoint:'restrictScalars',constants:{GENERAL_TRANSFER:general,SHRED_ONLY:shredOnly}}}));
+  pipelines.restrictScalars=restrictions.get(shredOnly);
+  const resources=[f.fluid,f.front,f.quench,f.solid,f.reactant,f.burn,f.lower,f.prior,current,shredOnly];
   if(bindings&&resources.every((v,i)=>v===prior[i]))return;
   prior=resources;
   const bs=[shape,f.fluid,fluid[current],fluid[current],f.front,front[0],f.quench,quench[0]];

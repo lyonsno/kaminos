@@ -5,7 +5,7 @@ import {createWorkingScene} from '../working-scene.mjs';
 import {createSceneEdits} from '../scene-edit-session.mjs';
 import {createSceneMembershipOperations, membershipEditTargetId} from '../scene-membership-operations.mjs';
 
-function fixture({admit = () => {}, domains = {fixture:{retainRoot:true}}, reloadable = record => record.source !== null} = {}) {
+function fixture({selectionScope = () => null, admit = () => {}, domains = {fixture:{retainRoot:true}}, reloadable = record => record.source !== null} = {}) {
   const scene = createWorkingScene(), calls = [], messages = [];
   const edits = createSceneEdits({read:() => null, write(){}, admit});
   const add = (id, type = 'fixture', source = id) => {
@@ -13,7 +13,7 @@ function fixture({admit = () => {}, domains = {fixture:{retainRoot:true}}, reloa
     scene.put(entry);
     return entry;
   };
-  const operations = createSceneMembershipOperations({scene, domains,
+  const operations = createSceneMembershipOperations({scene, domains, selectionScope,
     records:{serialize:entry => ({id:entry.id, type:entry.type, source:entry.source, label:entry.label}),
       reloadable, async load(record){calls.push('load');return add(record.id, record.type, record.source).object;}},
     roots:{
@@ -155,3 +155,11 @@ test('record reconstruction can be consumed without creating history or changing
   assert.equal(f.edits.state().undoCount,0);assert.equal(f.calls.includes('load'),false);
   assert.deepEqual(f.calls,['admit','attach','restore']);
 });
+
+ test('component removal keeps fallback selection inside the active assembly', async () => {
+  const f=fixture({selectionScope:()=>['body','support']});f.add('body');f.add('support');f.add('outside');
+  f.scene.setGroups([{id:'assembly',objectIds:['body','support'],assembly:{kind:'assembly',roles:{body:'body',support:'collision'}}}]);
+  f.scene.select(['support']);f.operations.remove('support');assert.equal(f.scene.activeObjectId,'body');
+  await f.edits.undo();assert.equal(f.scene.activeObjectId,'support');assert.equal(f.scene.groups[0].assembly.roles.support,'collision');
+  await f.edits.redo();assert.equal(f.scene.activeObjectId,'body');
+ });

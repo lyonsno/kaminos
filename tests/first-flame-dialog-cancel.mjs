@@ -55,7 +55,7 @@ function fixture({ holdActivation = false, coldBoot = false } = {}) {
     document: { createElement: type => type === 'dialog' ? dialog : {}, body: { append() {} } },
     fetch: async () => ({ ok: true, json: async () => ({ entries: [{ presetId: 'saved-immersed-basin' }] }) }),
     validateVolumeSettingsPresetIndex() {},
-    activeSceneComposition: null, authoringBusy: false, sceneSaveBlockedByFailedRestore: false,
+    activeSceneComposition: null, sceneLifecycle:{clearing:false},authoringBusy: false, sceneSaveBlockedByFailedRestore: false,
     scenePlacementTools: { edits }, firstFlameFieldState: () => field,
     loadAuthoredFlameBasin: () => (basinLoads++, new Promise((resolve, reject) => { pending = { resolve: () => resolve(settings), reject }; })),
     COMPOSITION_SCHEMA: 'scene-composition', FLAME_EMITTER_ID: 'flame-emitter',

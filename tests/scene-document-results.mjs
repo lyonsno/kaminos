@@ -118,3 +118,37 @@ test('result retains the submitted scene while later edits continue independentl
 test('a successful Save As binds the current address to the new document; failed Save keeps it',async()=>{
  const {context,run}=mounted();const before=new URL(context.location.href);const result=await run('window.saveSceneAs({result:true})');const after=new URL(context.location.href);assert.equal(new URLSearchParams(after.hash.slice(1)).get('scene'),result.filename,'reload must address the current saved document');assert.equal(after.search,before.search,'saving does not replace the live renderer route');const accepted=context.location.href;context.fetch=async()=>({ok:false,status:503,json:async()=>({error:'Unavailable'})});await run('window.saveScene({result:true})');assert.equal(context.location.href,accepted,'failed Save cannot claim another address');
 });
+
+for (const stage of ['name', 'overwrite', 'preparation']) test(`Save As refuses document substitution during ${stage}`, async () => {
+  const {context,run}=mounted();
+  const posts=[];let changed=false;
+  context.sanitizeFileStem=value=>value;
+  const replace=()=>{changed=true;context.sceneLoadRequests.begin();context.sceneDocument.sceneCleared();};
+  context.buildSceneData=()=>({version:8,composition:null,objects:[{id:changed?'dog':'tank',type:'pbr',source:'demos/cube.glb'}]});
+  let prompts=0;
+  context.promptForFileName=async()=>{if(stage==='name'||stage==='overwrite'&&++prompts===2)replace();return 'tank';};
+  context.collectSceneComposition=async()=>{if(stage==='preparation')replace();};
+  context.fetch=async(_url,options)=>{posts.push(JSON.parse(options.body));return stage==='overwrite'&&posts.length===1
+    ? {ok:false,status:409,json:async()=>({exists:'tank.kaminos.json'})}
+    : {ok:true,json:async()=>({saved:'tank.kaminos.json'})};};
+  const result=await run('window.saveSceneAs({result:true,promptName:true})');
+  assert.equal(result.ok,false,'stale interaction must refuse instead of saving the replacement');
+  assert.match(result.error,/scene|document/i);
+  assert.equal(posts.length,stage==='overwrite'?1:0);
+  assert.ok(posts.every(doc=>doc.objects[0].id==='tank'));
+});
+
+for (const invocation of ['window.saveScene({result:true})','window.saveSceneAs({result:true})']) test(`${invocation} preserves identity through preparation`,async()=>{
+ const {context,run}=mounted();let writes=0;
+ context.collectSceneComposition=async()=>{context.sceneLoadRequests.begin();context.sceneDocument.sceneCleared();};
+ context.fetch=async()=>{writes++;return {ok:true,json:async()=>({saved:'wrong.kaminos.json'})};};
+ assert.equal((await run(invocation)).ok,false);assert.equal(writes,0);
+});
+
+test('unchanged named Save As can confirm an overwrite',async()=>{
+ const {context,run}=mounted();let posts=0;
+ context.sanitizeFileStem=value=>value;context.promptForFileName=async()=> 'same';
+ context.fetch=async()=>++posts===1?{ok:false,status:409,json:async()=>({exists:'same.kaminos.json'})}:{ok:true,json:async()=>({saved:'same.kaminos.json'})};
+ const result=await run('window.saveSceneAs({result:true,promptName:true})');
+ assert.equal(result.ok,true);assert.equal(posts,2);
+});

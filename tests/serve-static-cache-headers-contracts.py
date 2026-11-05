@@ -4,7 +4,7 @@ Witnessed failure (2026-10-06, operator route): after a plain reload the page
 fetched the new index.html but the browser kept a heuristically-fresh copy of
 scene-placement-tools.mjs from before it exported addHistoryScope, and
 initScene threw. Per-import ?v= tags only cover the imports that carry them;
-the server must make every static file uncacheable.
+code and page responses must remain uncacheable; bundled HDR data may revalidate.
 """
 import http.client
 import os
@@ -44,7 +44,22 @@ def main():
         conn.request("GET", "/index.html")
         page = conn.getresponse()
         assert page.getheader("Cache-Control") == "no-store", page.getheader("Cache-Control")
-        print("ok: static responses are no-store")
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        conn.request("HEAD", "/assets/hdr/studio_small_09_1k.hdr")
+        hdr = conn.getresponse()
+        assert hdr.status == 200
+        assert hdr.getheader("Cache-Control") == "public, no-cache", hdr.getheader("Cache-Control")
+        modified = hdr.getheader("Last-Modified")
+        assert modified
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        conn.request("GET", "/assets/hdr/studio_small_09_1k.hdr", headers={"If-Modified-Since": modified})
+        cached = conn.getresponse()
+        assert cached.status == 304, cached.status
+        assert cached.getheader("Cache-Control") == "public, no-cache"
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        conn.request("GET", "/api/runtime-config?asset=/assets/hdr/studio_small_09_1k.hdr")
+        assert conn.getresponse().getheader("Cache-Control") == "no-store"
+        print("ok: code/page/API no-store; bundled HDR revalidates without retransmission")
     finally:
         proc.terminate()
         proc.wait(timeout=10)

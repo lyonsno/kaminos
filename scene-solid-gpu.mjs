@@ -142,6 +142,8 @@ fn join(a:u32,b:u32){
 }
 `;
 
+const sceneSolidGpuPipelines = new WeakMap();
+
 export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
   const dims=[grid,gridHeight,grid],cells=grid*gridHeight*grid,bytes=cells*4;
   const buffer=(label,size,extra=0)=>device.createBuffer({label,size:Math.max(16,size),usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|extra});
@@ -151,19 +153,25 @@ export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
   const noMaterial=device.createTexture({label:'unfiltered scene solid material',size:[1,1,1],dimension:'3d',format:'rgba16float',usage:GPUTextureUsage.TEXTURE_BINDING});
   device.queue.writeBuffer(support,0,new Uint32Array(cells));
   const meshCache=createResidentSolidMeshes({upload(data){const b=buffer('resident scene solid local triangles',data.byteLength);device.queue.writeBuffer(b,0,data);return b;},release:b=>b.destroy()});
-  const module=device.createShaderModule({label:'GPU scene solid conservative raster and exterior connectivity',code:SCENE_SOLID_GPU_WGSL});
-  const layout=device.createBindGroupLayout({entries:[
-    {binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:'uniform'}},
-    {binding:1,visibility:GPUShaderStage.COMPUTE,buffer:{type:'read-only-storage'}},
-    ...[2,3,4,5].map(binding=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:'storage'}})),
-    {binding:6,visibility:GPUShaderStage.COMPUTE,storageTexture:{access:'write-only',format:'r32uint',viewDimension:'3d'}},
-    {binding:7,visibility:GPUShaderStage.COMPUTE,buffer:{type:'read-only-storage'}},
-    {binding:8,visibility:GPUShaderStage.COMPUTE,buffer:{type:'storage'}},
-    {binding:9,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:'float',viewDimension:'3d'}},
-    {binding:10,visibility:GPUShaderStage.COMPUTE,buffer:{type:'uniform'}}
-  ]});
-  const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]});
-  const pipelines=Object.fromEntries(['raster','init','connect','fill','merge','measure','present'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'scene solid '+entryPoint,layout:pipelineLayout,compute:{module,entryPoint}})]));
+  let cached=sceneSolidGpuPipelines.get(device);
+  if(!cached){
+    const module=device.createShaderModule({label:'GPU scene solid conservative raster and exterior connectivity',code:SCENE_SOLID_GPU_WGSL});
+    const layout=device.createBindGroupLayout({entries:[
+      {binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:'uniform'}},
+      {binding:1,visibility:GPUShaderStage.COMPUTE,buffer:{type:'read-only-storage'}},
+      ...[2,3,4,5].map(binding=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:'storage'}})),
+      {binding:6,visibility:GPUShaderStage.COMPUTE,storageTexture:{access:'write-only',format:'r32uint',viewDimension:'3d'}},
+      {binding:7,visibility:GPUShaderStage.COMPUTE,buffer:{type:'read-only-storage'}},
+      {binding:8,visibility:GPUShaderStage.COMPUTE,buffer:{type:'storage'}},
+      {binding:9,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:'float',viewDimension:'3d'}},
+      {binding:10,visibility:GPUShaderStage.COMPUTE,buffer:{type:'uniform'}}
+    ]});
+    const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]});
+    const pipelines=Object.fromEntries(['raster','init','connect','fill','merge','measure','present'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'scene solid '+entryPoint,layout:pipelineLayout,compute:{module,entryPoint}})]));
+    cached={layout,pipelines};
+    sceneSolidGpuPipelines.set(device,cached);
+  }
+  const {layout,pipelines}=cached;
   const objects=new Map();let pending=false,key='',builds=0,current=null,wallKey='',one;
   function makeGroup(member,triangles=dummy,triangleCount=0,matrix=null,materialMask=null){
     const uniform=device.createBuffer({label:'scene solid transform',size:96,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
