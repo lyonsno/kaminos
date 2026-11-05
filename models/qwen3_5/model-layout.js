@@ -5,7 +5,10 @@ export function qwen35ModelLayout(manifest) {
   const quant = manifest.config?.quantization;
   if (quant?.bits !== 4 || quant.group_size !== 64 || quant.mode !== 'affine') throw new Error('unsupported source quantization');
   const config = readQwen35Config(manifest.config), raw = manifest.config.text_config ?? manifest.config;
-  if (raw.attention_bias !== false || raw.tie_word_embeddings !== false || raw.hidden_act !== 'silu' || raw.attn_output_gate !== true) throw new Error('unsupported dense text-model variant');
+  const nestedTying = Object.hasOwn(raw, 'tie_word_embeddings');
+  if (raw !== manifest.config && nestedTying && Object.hasOwn(manifest.config, 'tie_word_embeddings') && raw.tie_word_embeddings !== manifest.config.tie_word_embeddings) throw new Error('conflicting embedding declarations');
+  const tiedEmbeddings = nestedTying ? raw.tie_word_embeddings : manifest.config.tie_word_embeddings;
+  if (raw.attention_bias !== false || tiedEmbeddings !== false || raw.hidden_act !== 'silu' || raw.attn_output_gate !== true) throw new Error('unsupported dense text-model variant');
   if (!Number.isFinite(raw.rms_norm_eps) || raw.rms_norm_eps <= 0) throw new Error('rms_norm_eps is required');
   const tensors = manifest.tensors, projections = new Map(), vectors = new Map();
   function tensor(name, shape, dtype) {

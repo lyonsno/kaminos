@@ -10,8 +10,8 @@ import { generateTokens } from '../webgpu-inference-kit/src/autoregressive-gener
 import { expandPupText } from '../models/qwen3_5/pup-text.js';
 
 // Host-lifecycle fixture only. Fake GPU commands establish no numerical claim.
-function fixture() {
-  const config = JSON.parse(fs.readFileSync(new URL('./fixtures/qwen35/config.json', import.meta.url)));
+function fixture(configUrl = new URL('./fixtures/qwen35/config.json', import.meta.url)) {
+  const config = JSON.parse(fs.readFileSync(configUrl));
   Object.assign(config.text_config, { hidden_size: 64, intermediate_size: 128, vocab_size: 64, num_hidden_layers: 2,
     layer_types: ['linear_attention', 'full_attention'], num_attention_heads: 4, num_key_value_heads: 2, head_dim: 16,
     linear_num_key_heads: 2, linear_num_value_heads: 4, linear_key_head_dim: 8, linear_value_head_dim: 16 });
@@ -54,6 +54,24 @@ test('model layout requires all projections and direct source norm shapes', () =
   const missing = structuredClone(manifest); delete missing.tensors['lm_head.biases']; assert.throws(() => qwen35ModelLayout(missing), /lm_head.biases/);
   const wrong = structuredClone(manifest); wrong.tensors['model.layers.1.self_attn.k_norm.weight'].shape = [32]; assert.throws(() => qwen35ModelLayout(wrong), /k_norm/);
   const quant = structuredClone(manifest); quant.config.quantization.bits = 8; assert.throws(() => qwen35ModelLayout(quant), /quantization/);
+});
+test('observed base-Qwen root embedding declaration is supported without admitting tied or conflicting layouts', () => {
+  const { manifest } = fixture(new URL('./fixtures/qwen35/base-qwen-config.json', import.meta.url));
+  assert.equal(manifest.config.tie_word_embeddings, false);
+  assert.equal(Object.hasOwn(manifest.config.text_config, 'tie_word_embeddings'), false);
+  assert.equal(qwen35ModelLayout(manifest).projections.size, 17);
+  for (const mutate of [
+    c => { c.tie_word_embeddings = true; },
+    c => { delete c.tie_word_embeddings; },
+    c => { c.text_config.tie_word_embeddings = true; },
+    c => { c.tie_word_embeddings = true; c.text_config.tie_word_embeddings = false; },
+    c => { c.text_config.tie_word_embeddings = null; },
+  ]) {
+    const bad = structuredClone(manifest); mutate(bad.config);
+    assert.throws(() => qwen35ModelLayout(bad), /embedding|dense text-model/);
+  }
+  const matching = structuredClone(manifest); matching.config.text_config.tie_word_embeddings = false;
+  assert.equal(qwen35ModelLayout(matching).projections.size, 17);
 });
 test('request validation precedes allocation and model teardown preserves borrowed device/control', async () => {
   const { manifest, fetchImpl } = fixture(), { device, buffers } = deviceFixture(), control = createWebGpuInferenceControl({ queue: device.queue });

@@ -1,0 +1,11 @@
+{
+  "fixture": "base-qwen-config.json",
+  "observedAt": "2026-11-05",
+  "sourcePath": "/Users/noahlyons/.local/share/models/Qwen3.5-9B-mlx-4bit/config.json",
+  "sha256": "a96942cb6a8a1d3f1d17514d81a1925d04362a6a3233b389d13012211baaa9f8",
+  "sourceRepo": "Qwen/Qwen3.5-9B",
+  "sourceRevision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+  "convertedRepo": "mlx-community/Qwen3.5-9B-MLX-4bit",
+  "convertedRevision": "938d8919941c6e7efd3c7150eff7fe9d12afa631",
+  "observation": "Untied embedding declaration exists at top level and is absent from text_config. Exact installed config bytes retained; tests shrink only numeric model dimensions."
+}
