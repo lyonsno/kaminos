@@ -66,9 +66,13 @@ pipeline or scene witness when those are the behavior being tested.
 ## Commit enforcement
 
 In the shop, the managed pre-commit hook checks new direct source-text assertion
-syntax against staged shader sources. It recognizes named production WGSL imports,
-constant direct Node file reads with literal paths, and inline string or regex
-checks on those values. Standard Node assertions and standard `expect` text,
+syntax against staged shader sources. It recognizes named production WGSL text imports declared directly as immutable
+string/template constants, constant direct Node file reads with literal paths,
+and inline string or regex checks on those values. Bare relative filesystem
+paths use the repository root as the supported test working directory;
+`new URL(literal, import.meta.url)` uses the test module directory. Custom URL
+bases, callable or mutable exports, default objects and re-exports are outside
+source classification. Standard Node assertions and standard `expect` text,
 equality and length matchers are covered. It reads staged Git objects and does
 not execute repository code or load repository lint configuration.
 
