@@ -595,6 +595,9 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 <link rel="stylesheet" href="./authoring-workspace.css">
 <link rel="stylesheet" href="./volume-grid-tuning.css">
 <link rel="stylesheet" href="./startup-veil.css">
+<!-- Begin the shared renderer dependencies before parsing the large page module. -->
+<link rel="modulepreload" href="./lib/three.core.js">
+<link rel="modulepreload" href="./lib/three.webgpu.js">
 <script src="./startup-veil-guard.js"></script>
 <noscript><style>body.kaminos-starting > * { visibility: visible; } #kaminos-startup-veil { display: none; }</style></noscript>
 <link rel="stylesheet" href="./experiment-workspace.css">
@@ -27751,17 +27754,28 @@ initKaminosFingerJuiceHostRoute();
   // Admit the saved recipe before creating either renderer. Recipe recovery
   // navigates without allocating a 3D viewer or a fire runtime for the page
   // that navigation will discard.
-  const startupSceneData = startupSceneFile
-    ? fetch(`/api/read?root=scenes&path=${encodeURIComponent(startupSceneFile)}`).then(async response => {
-        if (!response.ok) throw new Error(`Scene unavailable: ${startupSceneFile}`);
-        return response.json();
-      })
+  let startupSceneText = startupSceneFile
+    ? (() => {
+        const early = window.__kaminosEarlySceneText;
+        window.__kaminosEarlySceneText = null;
+        return early?.filename === startupSceneFile ? early.text
+          : fetch(`/api/read?root=scenes&path=${encodeURIComponent(startupSceneFile)}&raw=1`, {cache:'no-store'}).then(response => {
+              if (!response.ok) throw new Error(`Scene unavailable: ${startupSceneFile}`);
+              return response.text();
+            });
+      })()
     : Promise.resolve(null);
+  const startupSceneData = startupSceneText.then(text => {
+    if (text === null) return null;
+    window.kaminosStartup?.phase('Parsing saved scene');
+    return JSON.parse(text);
+  });
   const startupSceneAdmission = startupSceneData.then(data => {
     const hash = startupSceneHash;
     const sceneFile = startupSceneFile;
     if (!sceneFile) return {data, plan: null};
     sceneDocument.holdRestore();
+    window.kaminosStartup?.phase('Checking saved scene');
     const plan = planSceneRestore(data);
     if (plan.composition) {
       const preset = new URLSearchParams(location.search).get('settings_preset');
@@ -27901,13 +27915,13 @@ sceneInitialization.then(async () => {
     }
     const sceneFile = startupSceneFile;
     if (!sceneFile) return;
-    const restored = await loadSceneFile(new File([JSON.stringify(admission.data)], sceneFile), { sceneFile, mounted: true });
+    const restored = await loadSceneFile({name:sceneFile,text:()=>startupSceneText}, { sceneFile, mounted: true });
     if (restored?.ok === false) throw new Error(restored.error || 'Starting scene restoration did not complete');
     // The ordinary loader reports some refusals in the UI and returns without
     // throwing. Its effective completion flag still governs owner admission.
     if (sceneDocument.state().blocked) throw new Error('Starting scene restoration did not complete');
   });
-  startupSceneRestore.then(() => { startupRestorePending = false; }, () => { startupRestorePending = false; });
+  startupSceneRestore.then(() => { startupRestorePending = false; startupSceneText = null; }, () => { startupRestorePending = false; startupSceneText = null; });
   startupSceneRestore.catch(error => {
     // Only an authored composition restore blocks saving; ordinary routes keep
     // their own failure reporting (the volume route reports separately).
@@ -27946,6 +27960,7 @@ sceneInitialization.then(async () => {
   initKaminosFingerJuiceHostRoute();
   initKaminosFingerJuiceTabRoute();
 }).catch(err => {
+  startupSceneText = null;
   rejectWorkbenchViewerReady(err);
   console.error('initScene failed:', err);
   if (!startupSceneAdmitted) {

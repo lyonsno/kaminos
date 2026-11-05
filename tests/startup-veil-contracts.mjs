@@ -71,7 +71,7 @@ test('a failed runtime configuration request is shared, then retried on the next
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 const guardSource = readFileSync(new URL('../startup-veil-guard.js', import.meta.url), 'utf8');
-function guardWorld({fetchImpl} = {}) {
+function guardWorld({fetchImpl,hash=''} = {}) {
   const listeners = {};
   const classes = new Set(['kaminos-starting']);
   const veil = {textContent: 'Starting Kaminos…', removed: false, children: [], style: {}, remove() { this.removed = true; }, append(node) { this.children.push(node); }};
@@ -86,7 +86,7 @@ function guardWorld({fetchImpl} = {}) {
     getElementById: id => id==='kaminos-startup-veil'?(!veil.removed?veil:null):nodes[id.replace('kaminos-startup-','')]??null,
     createElement: () => ({textContent: '', addEventListener(type, fn) { this.onclick = fn; }}),
   };
-  const window = {document, addEventListener: (type, fn) => { listeners[type] = fn; }, setTimeout: (fn, ms) => {const timer={fn,ms,cancelled:false};timers.push(timer);return timer;},clearTimeout: timer=>{if(timer)timer.cancelled=true;},performance:{now:()=>clock},
+  const window = {document, URLSearchParams,location:{hash}, addEventListener: (type, fn) => { listeners[type] = fn; }, setTimeout: (fn, ms) => {const timer={fn,ms,cancelled:false};timers.push(timer);return timer;},clearTimeout: timer=>{if(timer)timer.cancelled=true;},performance:{now:()=>clock},
     fetch: fetchImpl || (async () => ({ok: true, json: async () => ({sam3: null})}))};
   window.window = window;
   vm.runInNewContext(guardSource, window);
@@ -193,4 +193,19 @@ test('the head heartbeat waits for body parsing and failure stops its timers',()
  world.advance(250);world.pulse();assert.equal(world.window.kaminosStartup.read().status,'starting');
  world.document.body=body;world.listeners.error({message:'module unavailable'});
  assert.equal(world.window.kaminosStartup.read().status,'failed');assert.ok(world.timers.every(t=>t.cancelled));
+});
+
+
+test('head downloads the named scene body while application modules are still unavailable',async()=>{
+ const calls=[];let finish;const body=new Promise(resolve=>finish=resolve);
+ const world=guardWorld({hash:'#scene=shrine%20one.kaminos.json',fetchImpl:(url,init)=>{calls.push({url,init});return Promise.resolve({ok:true,text:()=>body,json:async()=>({})});}});
+ assert.equal(calls.length,2,'scene transfer must start beside configuration, before modules execute');
+ assert.equal(calls[1].url,'/api/read?root=scenes&path=shrine%20one.kaminos.json&raw=1');assert.equal(calls[1].init.cache,'no-store');
+ assert.equal(world.window.__kaminosEarlySceneText.filename,'shrine one.kaminos.json');
+ finish(' {"version":11} \n');assert.equal(await world.window.__kaminosEarlySceneText.text,' {"version":11} \n');
+ assert.equal(world.window.kaminosStartup.read().status,'starting','download does not admit a viewer');
+});
+test('head scene refusal remains rejected for admission without unhandled rejection during module loading',async()=>{
+ const world=guardWorld({hash:'#scene=missing.kaminos.json',fetchImpl:async url=>({ok:!url.includes('root=scenes'),text:async()=>'{}',json:async()=>({})})});
+ assert.ok(world.window.__kaminosEarlySceneText,'the failed request must remain available for the real admission path');await assert.rejects(world.window.__kaminosEarlySceneText.text,/Scene unavailable: missing/);
 });

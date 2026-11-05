@@ -5650,8 +5650,21 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         if self.refuse_sf3d_source(target):
             return
 
-        # For images, serve directly
+        # Startup needs the original document bytes, not a server-side JSON
+        # decode/encode of multi-megabyte simulation checkpoints. This explicit
+        # mode leaves ordinary JSON API validation unchanged; the client parses
+        # and validates the complete scene before allocating its viewer.
         ext = target.suffix.lower()
+        if root_name == "scenes" and ext == ".json" and params.get("raw") == ["1"]:
+            with target.open("rb") as body:
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(os.fstat(body.fileno()).st_size))
+                self.end_headers()
+                shutil.copyfileobj(body, self.wfile)
+            return
+
+        # For images, serve directly
         if ext in (".png", ".jpg", ".jpeg", ".webp", ".exr", ".glb", ".gltf", ".ply", ".spz", ".f32", ".u32"):
             body = target.read_bytes()
             self.send_response(200)
@@ -5840,6 +5853,10 @@ class KaminosServer(http.server.ThreadingHTTPServer):
     http.server performs while binding. On macOS that lookup goes to multicast
     DNS and can stall for tens of seconds per process. Nothing here reads
     server_name, so the bound host stands in for it."""
+
+    # A module graph opens many short connections. Do not inherit TCPServer's
+    # five-slot accept queue and force retries when this process is contended.
+    request_queue_size = socket.SOMAXCONN
 
     def server_bind(self):
         socketserver.TCPServer.server_bind(self)

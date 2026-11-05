@@ -20,7 +20,7 @@ function fixture({matching=false,failed=false,ordinary=false}={}){
  const controls={disabled:false};const c={URLSearchParams,Promise,Symbol,fireAtBoot,compositionRestoreUrl,readOwnerExperimentAddress,window:{location:{search:'?settings_preset=vsp-test'}},ownerVolumeReady:null,activeVolumeSettingsPresetReceipt:{},volumeSettingsPresetStatus:message=>events.push(['preset-failure',message]),console:{error(){}},
  location:{origin:'http://localhost',hash:ordinary?'':'#workspace=workbench&scene=chosen.kaminos.json',search:matching?'?settings_preset='+composition.flame.presetId:'',replace:url=>events.push(['redirect',url])},
  environmentLoaded:environment.promise,initKaminosVolumeRoute(){events.push(['boot']);return volume.promise;},reportKaminosVolumeRouteInitFailure(){},
- fetch:async()=>{events.push(['fetch']);return {ok:!failed,json:async()=>({version:8})};},
+ fetch:async()=>{events.push(['fetch']);return {ok:!failed,json:async()=>({version:8}),text:async()=>'{"version":8}'};},
  planSceneRestore:()=>({composition}),sceneDocument:{holdRestore(){events.push(['hold']);},state:()=>({blocked:false})},
  File:class{},loadSceneFile:async()=>events.push(['apply']),setInfo(){},setActiveTab(){},document:{getElementById:()=>controls,body:{classList:{add(){}}}}
  };

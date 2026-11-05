@@ -83,4 +83,18 @@
   } catch (error) {
     window.__kaminosEarlyRuntimeConfig = null;
   }
+  // Start consuming the scene body alongside the module graph. Retain the
+  // exact text for the ordinary admission/restore path; never admit it here.
+  var sceneFile = window.location && new window.URLSearchParams(window.location.hash.slice(1)).get('scene');
+  if (sceneFile) {
+    var text;
+    try {
+      text = window.fetch('/api/read?root=scenes&path=' + encodeURIComponent(sceneFile) + '&raw=1', {cache:'no-store'}).then(function (response) {
+        if (!response.ok) throw new Error('Scene unavailable: ' + sceneFile);
+        return response.text();
+      });
+    } catch (error) { text = Promise.reject(error); }
+    text.catch(function () {}); // Admission observes the same refusal after modules arrive.
+    window.__kaminosEarlySceneText = {filename:sceneFile,text:text};
+  }
 })();
