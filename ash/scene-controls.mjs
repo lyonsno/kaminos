@@ -7,15 +7,20 @@ export function installAshInspector({document,anchor,selected,read,edit,regrid,c
 
  for(const [key,label]of [['slideVariation','Slide variation'],['slideScale','Variation scale'],['slideRelease','Slide release'],['rate','Fallout volume / second'],['spread','Source radius'],['sourceX','Source X'],['sourceY','Source height'],['sourceZ','Source Z']]){
   const row=document.createElement('label');row.className='slider-row';row.textContent=label;
-  const input=document.createElement('input');input.type='number';input.step='any';input.className='transform-input';input.dataset.ashKey=key;row.append(input);panel.querySelector(['rate','slideVariation','slideScale','slideRelease'].includes(key)?'[data-ash-fields]':'[data-legacy-fields]').append(row);
+  const input=document.createElement('input');input.type='number';input.step='any';if(!key.startsWith('source'))input.min='0';if(key==='slideVariation'||key==='slideRelease')input.max='1';input.className='transform-input';input.dataset.ashKey=key;row.append(input);panel.querySelector(['rate','slideVariation','slideScale','slideRelease'].includes(key)?'[data-ash-fields]':'[data-legacy-fields]').append(row);
  }
- const act=async fn=>{try{const pending=fn();sync();await pending;changed();sync();}catch(e){error(e.message);sync();}};
- for(const input of panel.querySelectorAll('[data-ash-key]'))input.addEventListener(input.type==='checkbox'?'change':'input',()=>act(()=>{
-  const id=selected(),s=read(id).settings,key=input.dataset.ashKey,value=input.type==='checkbox'?input.checked:Number(input.value);
-  if(input.value==='')throw Error('Enter an ash value');
-  if(key.startsWith('source')){const position=[...s.sourcePosition];position[['sourceX','sourceY','sourceZ'].indexOf(key)]=value;return edit(id,{sourcePosition:position});}
-  return edit(id,{[key]:value});
- }));
+ const act=async fn=>{try{const pending=fn();sync();await pending;error('');changed();sync();}catch(e){error(e.message);sync();}};
+ for(const input of panel.querySelectorAll('[data-ash-key]')){
+  input.addEventListener(input.type==='checkbox'?'change':'input',()=>{
+   if(input.type==='number'&&(input.value.trim()===''||!Number.isFinite(input.valueAsNumber)))return;
+   act(()=>{
+    const id=selected(),s=read(id).settings,key=input.dataset.ashKey,value=input.type==='checkbox'?input.checked:input.valueAsNumber;
+    if(key.startsWith('source')){const position=[...s.sourcePosition];position[['sourceX','sourceY','sourceZ'].indexOf(key)]=value;return edit(id,{sourcePosition:position});}
+    return edit(id,{[key]:value});
+   });
+  });
+  if(input.type==='number')input.addEventListener('blur',()=>sync());
+ }
  for(const input of panel.querySelectorAll('[data-ash-key]')){
   ownHistory(installSceneControlHistory({controls:[input],edits,id:()=>target(selected()),label:'Edit ash',onError:e=>error(e.message)}));
   if(input.type==='number')installRelativeNumberDrag({input,grip:input,step:input.dataset.ashKey==='rate'?.0001:.01});

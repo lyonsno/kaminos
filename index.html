@@ -4177,6 +4177,14 @@ const sceneGiProxies = createGiProxyRegistry({
   })).parseAsync(bytes, '')).scene,
 });
 let sceneBeautyLods = null;
+const ensureSceneBeautyLods = () => (sceneBeautyLods ??= createSceneBeautyLodController({
+  THREE,
+  scene,
+  giProxies: sceneGiProxies,
+  surfaceLighting: { registerProxyRoot: root => window.__kaminosSurfaceLighting?.registerProxyRoot?.(root) ?? null },
+  parseGlb: async bytes => (await new GLTFLoader().parseAsync(bytes, '')).scene,
+  onUpdate: () => window._kaminosDirty?.(),
+}));
 window.kaminosSceneLodBudget = {
   read: () => sceneBeautyLods?.read() ?? null,
   setSettings: patch => { const res = sceneBeautyLods?.setSettings(patch) ?? null; if (typeof syncSceneLodReadout === 'function') syncSceneLodReadout(); window._kaminosDirty?.(); return res; },
@@ -4193,6 +4201,8 @@ window.kaminosSceneLodBudget = {
   },
   update: () => sceneBeautyLods?.update(camera, currentBeautyFrameOptions()) ?? null,
   whenIdle: () => Promise.all([sceneBeautyLods?.whenIdle() ?? Promise.resolve(), sceneColliderCollection.whenIdle()]),
+  resolveCollisionRung: (root, options) => ensureSceneBeautyLods().resolveCollisionRung(root, options),
+  prepareCollision: (roots, options) => ensureSceneBeautyLods().prepareCollision(roots, options),
   allocateBeauty: allocateSceneBeautyLods,
   allocateShadow: allocateShadowCasterLods,
   allocateColliders: allocateColliderLods,
@@ -26194,6 +26204,8 @@ async function importSceneMesh(file,{generation:origin=null,label=null,assetOrig
   autoPreparedLodSources.add(digest);
   await showGLB(receipt.source,{clear:false,arrival:'append',isCurrent:()=>generation===workingScene.generation&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying&&!authoringBusy,metadata:{id,type:'glb',source:receipt.source,fileName:file.name,label:label||file.name.replace(/\.glb$/i,''),generation:origin,assetOrigin:assetOrigin?{...assetOrigin,sha256:digest}:null}});
   try{await recordSceneObjectInsertion(id);}catch(error){if(!alreadyPrepared)autoPreparedLodSources.delete(digest);removeSceneObjectInternal(id,{recordHistory:false});throw error;}
+  const importedEntry=workingScene.objects.find(o=>o.id===id),activeAsh=workingScene.objects.find(o=>o.type===ASH_OBJECT_TYPE);
+  if(importedEntry?.object&&activeAsh)await ensureSceneBeautyLods()?.prepareCollision?.([importedEntry.object],{cellSize:activeAsh.ash?.cellSize??0.04});
   if(!alreadyPrepared){
     window.kaminosGiProxies?.prepare?.(digest,{heroGLB:new Uint8Array(bytes.slice(0)),input:file.name,route:origin?.route||'imported-glb'}).then(report=>{
       window.__kaminosLastGenerationLevels={source:digest,...report};
@@ -26412,8 +26424,7 @@ async function makeSceneRepetitionReal(id){
 
 async function mountAuthoredAsh(record,{activate=true,loadRequestId=null}={}) {
  const arrival=workingScene.arrival();
- if(loadRequestId===null&&typeof sceneColliderCollection!=='undefined')await sceneColliderCollection.prepare?.(workingScene.objects,{...(typeof currentColliderLodOptions==='function'?currentColliderLodOptions():{}),ashCellSize:record.ash?.cellSize??0.04});
- const ash=await createAshSceneObject({record,renderer,readObjects:()=>workingScene.objects,readSources:()=>readAshSources(record.id),resolveObstacle:typeof sceneColliderCollection!=='undefined'?(entry,opts)=>sceneColliderCollection.resolveObstacle(entry,opts):null,onError:message=>{setInfo(message?'Ash stopped: '+message:'Ash resumed after scene correction');ashInspector?.sync();}});
+ const ash=await createAshSceneObject({record,renderer,readObjects:()=>workingScene.objects,readSources:()=>readAshSources(record.id),lodController:ensureSceneBeautyLods(),onError:message=>{setInfo(message?'Ash stopped: '+message:'Ash resumed after scene correction');ashInspector?.sync();}});
  if(!arrival.isCurrent()||(loadRequestId!==null&&!sceneLoadRequests.isCurrent(loadRequestId))){ash.dispose();throw Error('Ash scene load superseded');}
  try{scene.add(ash.root);authoredAsh.set(record.id,ash);registerSceneObject(ash.root,record,{activate});if(loadRequestId===null)await ash.initialize();return ash.root;}
  catch(error){if(workingScene.find(record.id))removeSceneObjectInternal(record.id,{recordHistory:false});else{authoredAsh.delete(record.id);ash.dispose();}throw error;}
