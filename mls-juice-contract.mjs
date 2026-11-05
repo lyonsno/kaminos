@@ -73,7 +73,7 @@ export function createMlsClock(dt,{maxSubstepsPerBatch=Infinity,maxBacklogSecond
     const available=paused?0:Math.floor((accumulator+1e-10)/dt);
     const count=Math.min(cap,available);
     accumulator=Math.max(0,accumulator-count*dt);steps+=count;return count;
-  },read:()=>({policy:'wall-time-fixed-substeps-no-discard',elapsedSeconds:elapsed,
+  },read:()=>({policy:Number.isFinite(maxBacklogSeconds)?'wall-time-fixed-substeps-bounded-backlog':'wall-time-fixed-substeps-no-discard',elapsedSeconds:elapsed,
     simulatedSeconds:steps*dt,timeSeconds:steps*dt,step:steps,backlogSeconds:Math.max(0,accumulator),
     droppedSeconds,droppedSteps,maxSubstepsPerBatch,maxBacklogSeconds,stepCount:steps,dt})};
 }
@@ -81,11 +81,13 @@ export function createMlsClock(dt,{maxSubstepsPerBatch=Infinity,maxBacklogSecond
 export function createSimFrameCoordinator({
   targetFrameMs=1000/60,
   waterBaseMaxSubsteps=12,
+  waterSteadyContendedMaxSubsteps=8,
   waterContendedMaxSubsteps=6,
 }={}){
   if(!Number.isFinite(targetFrameMs)||targetFrameMs<=0)throw Error('Invalid simulator frame budget target');
   if(!Number.isSafeInteger(waterBaseMaxSubsteps)||waterBaseMaxSubsteps<1)throw Error('Invalid water base substep cap');
   if(!Number.isSafeInteger(waterContendedMaxSubsteps)||waterContendedMaxSubsteps<1||waterContendedMaxSubsteps>waterBaseMaxSubsteps)throw Error('Invalid water contended substep cap');
+  if(!Number.isSafeInteger(waterSteadyContendedMaxSubsteps)||waterSteadyContendedMaxSubsteps<waterContendedMaxSubsteps||waterSteadyContendedMaxSubsteps>waterBaseMaxSubsteps)throw Error('Invalid water steady contended substep cap');
   let lastNowMs=null,lastFrameDurationMs=0,secondaryTurn=0;
   let frames=0,contendedFrames=0,waterFramesAdmitted=0,waterFramesDeferred=0,ashFramesAdmitted=0,ashFramesDeferred=0;
   let lastPlan=null;
@@ -97,24 +99,35 @@ export function createSimFrameCoordinator({
     const flameActive=Boolean(flame?.active);
     const waterActive=Boolean(water?.active);
     const waterReady=waterActive&&!water?.pending;
-    const waterNeedsStep=waterReady&&(water?.backlogSeconds===undefined||water.backlogSeconds>0);
+    const accruedSeconds=lastFrameDurationMs>0?lastFrameDurationMs/1000:0;
+    const effectiveBacklogSeconds=water?.backlogSeconds===undefined?Infinity:water.backlogSeconds+accruedSeconds;
+    const waterNeedsStep=waterReady&&effectiveBacklogSeconds+1e-10>=1/240;
     const ashActive=Boolean(ash?.active);
     const ashReady=ashActive&&ash?.due!==false;
     const activeCount=(flameActive?1:0)+(waterActive?1:0)+(ashActive?1:0);
     const contended=activeCount>=2&&lastFrameDurationMs>targetFrameMs*1.15;
     if(contended)contendedFrames++;
-    const waterMaxSteps=contended?waterContendedMaxSubsteps:waterBaseMaxSubsteps;
     let waterAdvance=waterReady;
     let ashAdvance=ashReady;
-    if(contended&&waterNeedsStep&&ashReady){
-      if(secondaryTurn%2===0){
-        waterAdvance=true;
-        ashAdvance=false;
+    let waterMaxSteps=waterBaseMaxSubsteps;
+    if(contended){
+      if(waterNeedsStep&&ashReady){
+        // Alternate secondary simulator priority across consecutive contended frames:
+        // when Ash steps, tighten Water to waterContendedMaxSubsteps (6) so both do not
+        // stack full catch-up batches; on the alternate contended frame, defer Ash and
+        // allow Water up to waterBaseMaxSubsteps (12) so 30 FPS (8 substeps/frame) drains
+        // with zero dropped steps ((6 + 12) / 2 = 9 >= 8 substeps/frame capacity).
+        if(secondaryTurn%2===0){
+          ashAdvance=true;
+          waterMaxSteps=waterContendedMaxSubsteps;
+        }else{
+          ashAdvance=false;
+          waterMaxSteps=waterBaseMaxSubsteps;
+        }
+        secondaryTurn++;
       }else{
-        waterAdvance=false;
-        ashAdvance=true;
+        waterMaxSteps=lastFrameDurationMs>1000/25?waterContendedMaxSubsteps:waterSteadyContendedMaxSubsteps;
       }
-      secondaryTurn++;
     }
     if(waterActive){if(waterAdvance)waterFramesAdmitted++;else if(waterNeedsStep)waterFramesDeferred++;}
     if(ashActive){if(ashAdvance)ashFramesAdmitted++;else if(ashReady)ashFramesDeferred++;}
@@ -135,6 +148,7 @@ export function createSimFrameCoordinator({
     read:()=>({
       targetFrameMs,
       waterBaseMaxSubsteps,
+      waterSteadyContendedMaxSubsteps,
       waterContendedMaxSubsteps,
       frames,
       contendedFrames,

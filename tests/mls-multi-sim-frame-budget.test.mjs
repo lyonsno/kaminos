@@ -162,29 +162,46 @@ try {
   assert.equal(planNormal.ash.advance,true);
 
   // Next frame arrives 28ms later (over the 16.67ms budget) with all three sims active and due:
-  // Coordinator must throttle water's per-frame batch cap to waterContendedMaxSubsteps (6)
-  // and alternate secondary simulator priority across consecutive overloaded frames so neither starves.
+  // Coordinator must alternate Ash admission across consecutive overloaded frames: when Ash steps,
+  // Water tightens to waterContendedMaxSubsteps (6); on the alternate frame, Ash defers and Water
+  // gets waterBaseMaxSubsteps (12) so 30 FPS water (8 substeps/frame) never falls into slow-motion
+  // or drops steps, even when water.backlogSeconds was 0 before observing the new frame's delta.
   const planContended1=coordinator.planFrame({
     nowMs:44,
     flame:{active:true},
-    water:{active:true,pending:false,backlogSeconds:8/240},
+    water:{active:true,pending:false,backlogSeconds:0},
     ash:{active:true,due:true,lagMs:34},
   });
   const planContended2=coordinator.planFrame({
     nowMs:72,
     flame:{active:true},
-    water:{active:true,pending:false,backlogSeconds:8/240},
+    water:{active:true,pending:false,backlogSeconds:2/240},
     ash:{active:true,due:true,lagMs:34},
   });
   assert.equal(planContended1.contended,true);
   assert.equal(planContended2.contended,true);
+  assert.equal(planContended1.water.advance,true);
+  assert.equal(planContended2.water.advance,true);
   assert.notEqual(
-    planContended1.water.advance && !planContended1.ash.advance,
-    planContended2.water.advance && !planContended2.ash.advance,
-    'Overloaded multi-sim frames must alternate secondary simulator duties rather than starving one or running both unchecked',
+    planContended1.ash.advance,
+    planContended2.ash.advance,
+    'Overloaded multi-sim frames must alternate Ash admission rather than stacking full catch-up work every frame',
   );
-  const waterAdmitted=planContended1.water.advance?planContended1.water:planContended2.water;
-  assert.equal(waterAdmitted.maxSteps,6,'Contended multi-sim frame must tighten water substep duty to keep frame time steady');
+  const ashSteppingFrame=planContended1.ash.advance?planContended1:planContended2;
+  const ashDeferredFrame=planContended1.ash.advance?planContended2:planContended1;
+  assert.equal(ashSteppingFrame.water.maxSteps,6,'On the contended frame where Ash steps, Water tightens to 6 substeps');
+  assert.equal(ashDeferredFrame.water.maxSteps,12,'On the alternate contended frame where Ash defers, Water gets 12 substeps to drain buffered substeps without real-time loss');
+
+  // Steady 30 FPS (33.3ms/frame) with Flame + Water (no Ash) must allow 8 substeps/frame so
+  // 30 FPS multi-sim execution never drops steps or slows water below real-time.
+  const planSteady30Fps=coordinator.planFrame({
+    nowMs:105.3,
+    flame:{active:true},
+    water:{active:true,pending:false,backlogSeconds:0},
+    ash:{active:false,due:false},
+  });
+  assert.equal(planSteady30Fps.contended,true);
+  assert.equal(planSteady30Fps.water.maxSteps,8,'Steady 30 FPS Flame+Water must sustain 8 substeps/frame (1.0x real-time)');
 
   // 4. Ash scene object must preserve its 30Hz due state when deferred on a contended frame
   // (`advance: false`), then step on the following admitted frame without losing its cadence.
