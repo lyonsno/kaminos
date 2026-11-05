@@ -74,25 +74,27 @@ const supportAdmission = traversal.slice(
   traversal.indexOf('var directSupport:'),
   traversal.indexOf('var reconstructed: FlowReconstructionSample;'),
 );
-const displayAdmission = /if \(displayReconstructionActive\(\) && \(opticalStepping \|\| guided\)\) \{\s*directSupport = 1\.0;\s*\} else if/;
+const displayAdmission = /if \(displayReconstructionActive\(\) && \(opticalStepping \|\| guided\)\) \{\s*directSupport = 1\.0;\s*\} else if \(displayReconstructionActive\(\)\) \{\s*directSupport = displaySupport;\s*\} else if/;
 assert.match(supportAdmission, displayAdmission, 'display support bypass requires both the explicit cache and optical stepping');
+const worldCollarAdmission = /\s*if \(worldActive && directSupport <= u\.empty_space_controls\.x && worldSmokeBlendWeight\(p\) > 1e-4\) \{\s*directSupport = max\(directSupport, worldCollarSupport\(p\)\);\s*\}/;
 const baselineAdmission = supportAdmission.replace(displayAdmission, 'if')
-  .replace('!worldActive && !displayReconstructionActive() && !opticalStepping && !fullGridCapture && !opticalTrace', '!fullGridCapture');
-assert.match(supportAdmission, /if \(!worldActive && !displayReconstructionActive\(\) && !opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0\.0001\)/,
-  'only World transport and explicit comparison/capture modes bypass Fine support admission');
+  .replace(worldCollarAdmission, '')
+  .replace('occupancySkipStrength>0.0 && !opticalStepping && !guided && !fullGridCapture && !opticalTrace', '!fullGridCapture');
+assert.match(supportAdmission, /if \(occupancySkipStrength>0\.0 && !opticalStepping && !guided && !fullGridCapture && !opticalTrace && directSupport <= u\.empty_space_controls\.x\)/,
+  'only explicit comparison/capture modes bypass Fine support admission');
 assert.match(
   baselineAdmission,
-  /^var directSupport: f32;\s*if \(LEAN_EMISSIVE_RAYMARCH\) \{\s*neighborhood = sampleRaymarchNeighborhood\(p\);\s*directSupport = raymarchNeighborhoodSupport\(neighborhood\);\s*\} else \{\s*directSupport = directCellOpticalSupport\(p\);\s*\}\s*if \(!fullGridCapture && directSupport <= 0\.0001\) \{\s*let cellExit = directCellExitDistance\(p, rd\);\s*let emptyCellAdvance = mix\(\s*dtBase,\s*max\(dtBase, cellExit \+ 0\.0001\),\s*occupancySkipStrength\s*\);\s*t = t \+ min\(emptyCellAdvance, max\(0\.0001, endT - t\)\);\s*continue;\s*\}\s*$/,
+  /^var directSupport: f32;\s*if \(LEAN_EMISSIVE_RAYMARCH\) \{\s*neighborhood = sampleRaymarchNeighborhood\(p\);\s*directSupport = raymarchNeighborhoodSupport\(neighborhood\);\s*\} else \{\s*directSupport = directCellOpticalSupport\(p\);\s*\}\s*if \(!fullGridCapture && directSupport <= u\.empty_space_controls\.x\) \{\s*let cellExit = select\(directCellExitDistance\(p, rd\), displayCellExitDistance\(p, rd\), displayReconstructionActive\(\)\);\s*let emptyCellAdvance = mix\(\s*dtBase,\s*max\(dtBase, cellExit \+ 0\.0001\),\s*occupancySkipStrength\s*\);\s*let emptyLimit = select\(endT, min\(endT, nearHit\.y\), worldActive\);\s*t = t \+ min\(emptyCellAdvance, max\(0\.0001, emptyLimit - t\)\);\s*continue;\s*\}\s*$/,
   'one live direct-support skip must own admission before sampling',
 );
 const sampleBranch = traversal.slice(
   traversal.indexOf('var reconstructed: FlowReconstructionSample;'),
 ).replace(/\/\/[^\n]*/g, '');
-const displaySample = /if \(displayReconstructionActive\(\) && \(opticalStepping \|\| guided\)\) \{\s*\} else if/;
+const displaySample = /if \(displayReconstructionActive\(\)\) \{\s*\} else if/;
 assert.match(sampleBranch, displaySample, 'only the explicit prepared-field arm omits raw reconstruction');
 assert.match(
   sampleBranch.replace(displaySample, 'if'),
-  /^var reconstructed: FlowReconstructionSample;\s*if \(flowKernelReconstructionActive\) \{\s*reconstructed = sampleWorldFlowReconstruction\(p\);\s*\} else if \(LEAN_EMISSIVE_RAYMARCH\) \{\s*reconstructed = reconstructRaymarchNeighborhood\(neighborhood\);\s*\} else \{\s*reconstructed = sampleWorldFlowReconstructionRaw\(p\);\s*\}\s*expensiveSamples = expensiveSamples \+ 1u;\s*rayMaterialSamples\+\+;\s*$/,
+  /^var reconstructed: FlowReconstructionSample;\s*if \(flowKernelReconstructionActive\) \{\s*reconstructed = sampleWorldFlowReconstruction\(p\);\s*\} else if \(LEAN_EMISSIVE_RAYMARCH\) \{\s*reconstructed = reconstructRaymarchNeighborhood\(neighborhood\);\s*\} else \{\s*reconstructed = sampleWorldFlowReconstructionRaw\(p\);\s*\}\s*expensiveSamples = expensiveSamples \+ 1u;\s*if\(!displayReconstructionActive\(\)\)\{rayMaterialSamples\+\+;\}\s*$/,
   'raw zero route must contain one direct trilinear assignment and no filtering',
 );
 }
@@ -130,7 +132,7 @@ const falseClosureMutations = [
     source => source
       .replace('    var directSupport: f32;', '    /*\n    var directSupport: f32;')
       .replace('    var reconstructed: FlowReconstructionSample;', '    */\n    let directSupport = directCellOpticalSupport(p);\n    let effectiveSupport = select(directSupport, 1.0, flowKernelReconstructionActive);\n    if (!fullGridCapture && effectiveSupport <= 0.0001) { continue; }\n    var reconstructed: FlowReconstructionSample;'),
-    /display support bypass requires both|only explicit comparison\/capture modes bypass production support admission|one live direct-support skip must own admission before sampling/,
+    /display support bypass requires both|only explicit comparison\/capture modes bypass Fine support admission|one live direct-support skip must own admission before sampling/,
   ],
   [
     'renamed first-sample hash helper',
@@ -149,7 +151,7 @@ const falseClosureMutations = [
   [
     'dead support skip with live global-occupancy alias',
     source => source
-      .replace('    if (!worldActive && !displayReconstructionActive() && !opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0.0001) {', '    if (false) {\n    if (!worldActive && !displayReconstructionActive() && !opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0.0001) {')
+      .replace('    if (occupancySkipStrength>0.0 && !opticalStepping && !guided && !fullGridCapture && !opticalTrace && directSupport <= u.empty_space_controls.x) {', '    if (false) {\n    if (occupancySkipStrength>0.0 && !opticalStepping && !guided && !fullGridCapture && !opticalTrace && directSupport <= u.empty_space_controls.x) {')
       .replace('    var reconstructed: FlowReconstructionSample;', '    }\n    let effectiveSupport = select(directSupport, 1.0, flowKernelReconstructionActive);\n    if (!fullGridCapture && effectiveSupport <= 0.0001) { continue; }\n    var reconstructed: FlowReconstructionSample;'),
     /one live direct-support skip must own admission before sampling/,
   ],

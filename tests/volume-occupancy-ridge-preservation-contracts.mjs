@@ -39,7 +39,7 @@ function assertOccupancyRidgeContract(source) {
   const reconstructionStart = raymarch.indexOf('var reconstructed: FlowReconstructionSample;');
   assert.ok(reconstructionStart >= 0, 'supported-sample reconstruction boundary is discoverable');
   const emptyCellBranch = raymarch.match(
-    /if \(!worldActive && !displayReconstructionActive\(\) && !opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0\.0001\) \{([^{}]*)\}/,
+    /if \(occupancySkipStrength>0\.0 && !opticalStepping && !guided && !fullGridCapture && !opticalTrace && directSupport <= u\.empty_space_controls\.x\) \{([^{}]*)\}/,
   );
   assert.ok(emptyCellBranch, 'conservative empty-cell branch has a stable non-nested boundary');
   const branchStart = emptyCellBranch.index;
@@ -123,9 +123,9 @@ assert.throws(
 );
 
 assert.equal(
-  [...core.matchAll(/occupancyAcceleration:\s*\{\s*identity:\s*['"]conservative-empty-native-support-cells-v1['"],\s*strength:\s*state\.occupancySkip,?\s*\}/g)].length,
+  [...core.matchAll(/occupancyAcceleration:\s*\{\s*identity:\s*['"]bounded-optical-support-cells-v2['"],\s*strength:\s*state\.occupancySkip,\s*threshold:\s*state\.occupancyThreshold,/g)].length,
   2,
-  'success and failure receipts expose the empty-space-only semantic identity alongside the legacy state key',
+  'success and failure receipts expose the bounded optical-support identity and authored threshold',
 );
 
 const inlineDiscardMutation = core.replace(

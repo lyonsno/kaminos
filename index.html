@@ -2013,6 +2013,10 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-occupancy-skip-val">0.35</span>
     </div>
     <div class="slider-row">
+      <label class="slider-label" for="volume-occupancy-threshold">Empty-space threshold</label>
+      <input type="number" id="volume-occupancy-threshold" min="0" step="0.0001" value="0" data-volume-settings-role="renderer" title="Old adaptive: skip cells whose optical-support bound is at most this value. Zero skips only exactly empty support; positive values permit an approximation. Fixed-count and numerical modes keep their own sample placement.">
+    </div>
+    <div class="slider-row">
       <span class="slider-label">Render Scale</span>
       <input type="range" id="volume-render-scale" min="0.1" max="1" step="any" value="0.3" data-effective-value="0.3" data-render-scale-mode="low">
       <span class="slider-val" id="volume-render-scale-val">30.0%</span>
@@ -17238,6 +17242,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['raySteps', 'volume_steps'],
   ['adaptiveRays', 'volume_adaptive_rays'],
   ['occupancySkip', 'volume_occupancy_skip'],
+  ['occupancyThreshold', 'volume_occupancy_threshold'],
   ['renderScale', 'volume_render_scale'],
   ['resolution', 'volume_resolution'],
   ['flowDebug', 'volume_flow_debug'],
@@ -18695,6 +18700,7 @@ function readVolumeControls({quality=viewportDisplay.quality,document=globalThis
     raySteps: parseFloat(document.getElementById('volume-steps').value),
     adaptiveRays: parseFloat(document.getElementById('volume-adaptive-rays').value),
     occupancySkip: parseFloat(document.getElementById('volume-occupancy-skip').value),
+    occupancyThreshold: Number(document.getElementById('volume-occupancy-threshold').value),
     fireScale: parseFloat(document.getElementById('volume-fire-scale').value),
     detailScale: 1.75, // retired 2026-10-21: the single Flame simulator fixes the detail frequency
     plumeHeight: parseFloat(document.getElementById('volume-plume-height').value),
@@ -19058,7 +19064,7 @@ function supersedeVolumeRebuildHolds() {
 function updateVolumeControlLabels() {
   const c = readVolumeControls();
   document.getElementById('volume-optical-tolerance').disabled=c.raymarchMode!=='numerical';
-  for(const id of ['volume-adaptive-rays','volume-occupancy-skip'])document.getElementById(id).disabled=c.raymarchMode!=='current';
+  for(const id of ['volume-adaptive-rays','volume-occupancy-skip','volume-occupancy-threshold'])document.getElementById(id).disabled=c.raymarchMode!=='current';
   document.getElementById('volume-flame-priority').disabled=c.raymarchMode!=='numerical';
   document.getElementById('volume-ray-noise-animated').disabled=!c.rayStartNoise;
   document.getElementById('volume-quadrature-jitter').disabled=c.raymarchMode==='current'||!c.rayStartNoise;
@@ -20734,7 +20740,7 @@ async function initKaminosVolumeRoute() {
     control.addEventListener('blur', confirm);
   }
 
-  for (const id of ['volume-scene', 'volume-resolution', 'emitter-assay-family', 'volume-artistic-swirl', 'volume-phased-sway', 'volume-swirl-jostle', 'volume-fine-breakup-localization', 'volume-density', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-fire-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-residual-mode', 'volume-residual-model-url', 'volume-residual-strength', 'volume-residual-feature-debug', 'volume-input-radius', 'volume-flow-rate', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-fire-lock', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  for (const id of ['volume-scene', 'volume-resolution', 'emitter-assay-family', 'volume-artistic-swirl', 'volume-phased-sway', 'volume-swirl-jostle', 'volume-fine-breakup-localization', 'volume-density', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-occupancy-threshold', 'volume-fire-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-residual-mode', 'volume-residual-model-url', 'volume-residual-strength', 'volume-residual-feature-debug', 'volume-input-radius', 'volume-flow-rate', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-fire-lock', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id)?.addEventListener('input', syncControls);
     document.getElementById(id)?.addEventListener('change', syncControls);
   }

@@ -224,6 +224,7 @@ export const VOLUME_CONTROL_DESCRIPTIONS = Object.freeze({
     tooltip: "How finely each ray samples the volume. More steps resolve thin flame sheets and cost more GPU time; fewer steps can cause banding or missed detail." },
   "volume-adaptive-rays": { kind: "conditional", activeWhen: "Ray marcher = Old adaptive (disabled otherwise)",
     tooltip: "Old adaptive only. Lets rays take longer steps through uninteresting regions to save time. Higher is faster but can miss faint detail." },
+  "volume-occupancy-threshold": {kind:"conditional",activeWhen:"Ray marcher = Old adaptive and Empty-space acceleration > 0",effect:"Optical-support cutoff for empty-cell and empty-World-brick advances. Zero requires exactly empty support. Positive values trade weak material for fewer samples; fixed-count and numerical sample placement bypass this control."},
   "volume-occupancy-skip": { kind: "conditional", activeWhen: "Ray marcher = Old adaptive (disabled otherwise)",
     tooltip: "Old adaptive only. Skips faster through empty cells. Higher is faster; filled regions are always sampled fully." },
   "volume-render-scale": { kind: "quality", activeWhen: "always",

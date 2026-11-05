@@ -4,17 +4,18 @@ import assert from 'node:assert/strict';
 import {createRayStepTelemetry} from '../volume-ray-step-telemetry.mjs';
 
 function fixture(){
-  globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,COPY_SRC:4};
+  globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,COPY_SRC:4,MAP_READ:8};
   globalThis.GPUShaderStage={COMPUTE:1};
   globalThis.GPUTextureUsage={TEXTURE_BINDING:1,COPY_DST:2,RENDER_ATTACHMENT:4};
+  globalThis.GPUMapMode={READ:1};
   navigator.gpu={getPreferredCanvasFormat:()=> 'bgra8unorm'};
   const buffers=[],calls=[];
   const device={limits:{maxBufferSize:4096,maxStorageBufferBindingSize:2048,maxComputeWorkgroupsPerDimension:2},
-    createBuffer(options){const buffer={...options,destroy(){this.destroyed=true;}};buffers.push(buffer);return buffer;},
+    createBuffer(options){const buffer={...options,data:new ArrayBuffer(options.size),async mapAsync(){},getMappedRange(){return this.data;},unmap(){},destroy(){this.destroyed=true;}};buffers.push(buffer);return buffer;},
     createShaderModule:()=>({}),createBindGroupLayout:()=>({}),createPipelineLayout:()=>({}),
     createComputePipeline:()=>({getBindGroupLayout:()=>({})}),createRenderPipeline:()=>({getBindGroupLayout:()=>({})}),
     createBindGroup:()=>({}),createTexture:()=>({createView:()=>({}),destroy(){calls.push('destroy-atlas');}}),
-    queue:{copyExternalImageToTexture(){calls.push('font-upload');}}};
+    createCommandEncoder:()=>({copyBufferToBuffer(src,so,dst,dof,n){new Uint8Array(dst.data,dof,n).set(new Uint8Array(src.data,so,n));},finish(){return {};}}),queue:{submit(){},copyExternalImageToTexture(){calls.push('font-upload');}}};
   const context={configure(){calls.push('configure');},unconfigure(){calls.push('unconfigure');},getCurrentTexture:()=>({createView:()=>({})})};
   const canvas={style:{},visible:true,getClientRects(){return this.visible?[{}]:[];},getContext:()=>context};
   const document={createElement:()=>({getContext:()=>({fillText(){}})})};
@@ -85,4 +86,18 @@ test('live telemetry changes preserve counters referenced by an unsubmitted flui
   meter.ensure(16,16,false);
   for(const counter of encoded)assert.notEqual(counter.destroyed,true,'queue submission must retain every encoded counter');
   const current=meter.counterBuffer;meter.dispose();assert.equal(current.destroyed,true);
+});
+
+test('diagnostic readback rejects inactive and unrendered data and preserves complete actual counts',async()=>{
+ const {meter,canvas}=fixture();meter.setCanvas(canvas);
+ assert.equal(typeof meter.sample,'function');
+ await assert.rejects(()=>meter.sample(),/instrumented draw/);
+ meter.ensure(2,1,true);
+ await assert.rejects(()=>meter.sample(),/instrumented draw/);
+ const pass={setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},draw(){},end(){}};
+ meter.encode({clearBuffer(){},beginComputePass:()=>pass,beginRenderPass:()=>pass});
+ new Uint32Array(meter.counterBuffer.data).set([3,4]);
+ new Uint32Array(meter.summaryBuffer.data).set([2,7,0,3,4,4]);
+ const result=await meter.sample();assert.equal(result.rays,2);assert.equal(result.totalSamples,7);assert.deepEqual(result.counts,[3,4]);
+ meter.ensure(2,1,false);await assert.rejects(()=>meter.sample(),/instrumented draw/);meter.dispose();
 });

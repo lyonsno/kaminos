@@ -2318,6 +2318,13 @@
   ],
   "rendererControls": [
     {
+      "key": "volume-occupancy-threshold",
+      "param": "volume_occupancy_threshold",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 0
+    },
+    {
       "key": "volume-raymarch-mode",
       "param": "volume_raymarch_mode",
       "tagName": "SELECT",

@@ -214,7 +214,7 @@ fn finishDisplayField(@builtin(global_invocation_id) c: vec3<u32>) {
 fn displayReconstructionActive() -> bool {
   return LEAN_EMISSIVE_RAYMARCH && u.display_reconstruction.x>0.5;
 }
-fn sampleDisplayMaterial(p: vec3<f32>, smokeVisible: f32) -> EmissiveMaterial {
+fn sampleDisplayMaterialWithSupport(p: vec3<f32>, smokeVisible: f32, cellSupport: ptr<function, f32>) -> EmissiveMaterial {
   let dims=textureDimensions(displayField);
   // Cubic simulation cells: a tall domain has more Y cells, not taller cells.
   let cell=worldToCell(p);
@@ -222,14 +222,35 @@ fn sampleDisplayMaterial(p: vec3<f32>, smokeVisible: f32) -> EmissiveMaterial {
   let q=clamp(mapped,vec3<f32>(0.0),vec3<f32>(dims)-1.0);
   let c=vec3<i32>(floor(q)); let f=fract(q);
   var value=vec4<f32>(0.0);
+  var cornerMax=vec4<f32>(0.0);
   for(var z=0;z<2;z++){for(var y=0;y<2;y++){for(var x=0;x<2;x++){
     let cell=min(c+vec3<i32>(x,y,z),vec3<i32>(dims)-1);
     let w=select(1.0-f.x,f.x,x==1)*select(1.0-f.y,f.y,y==1)*select(1.0-f.z,f.z,z==1);
-    value+=textureLoad(displayField,cell,0)*w;
+    let texel=textureLoad(displayField,cell,0);
+    value+=texel*w;
+    cornerMax=max(cornerMax,texel);
   }}}
   let extinction=max(value.w,0.0)*smokeVisible;
   let albedo=clamp(u.emissive_material.y,0.0,1.0);
+  *cellSupport=max(cornerMax.w*smokeVisible,length(cornerMax.rgb)*2.5);
   return EmissiveMaterial(value.rgb,extinction*(1.0-albedo),extinction*albedo);
+}
+fn sampleDisplayMaterial(p: vec3<f32>, smokeVisible: f32) -> EmissiveMaterial {
+  var unusedSupport=0.0;
+  return sampleDisplayMaterialWithSupport(p,smokeVisible,&unusedSupport);
+}
+fn displayCellExitDistance(p: vec3<f32>, rd: vec3<f32>) -> f32 {
+  let dims=vec3<f32>(textureDimensions(displayField));
+  let scale=max(u.display_reconstruction.w,1.0);
+  let cell=worldToCell(p);
+  let mapped=select(cell*scale-0.5,(cell-0.5)*scale,u.display_interpolation.x>0.5);
+  let q=clamp(mapped,vec3<f32>(0.0),max(dims-vec3<f32>(1.001),vec3<f32>(0.0)));
+  let dqdt=rd*(0.5*f32(GRID)*scale);
+  var best=1.0e6;
+  if(abs(dqdt.x)>0.0001){let bx=select(floor(q.x),floor(q.x)+1.0,dqdt.x>0.0);let tx=(bx-q.x)/dqdt.x;best=min(best,max(0.0,tx));}
+  if(abs(dqdt.y)>0.0001){let by=select(floor(q.y),floor(q.y)+1.0,dqdt.y>0.0);let ty=(by-q.y)/dqdt.y;best=min(best,max(0.0,ty));}
+  if(abs(dqdt.z)>0.0001){let bz=select(floor(q.z),floor(q.z)+1.0,dqdt.z>0.0);let tz=(bz-q.z)/dqdt.z;best=min(best,max(0.0,tz));}
+  return min(best,0.20);
 }
 `;
 
