@@ -21506,7 +21506,8 @@ export function createKaminosVolumePrototype({
     }
     if (uniforms[368] <= 1.5) emissiveSeedProducer = null;
     if (uniforms[368] <= 1.5 || !sceneVolumeSourceRequested) sceneVolumeSource?.invalidate('inactive-source-route');
-    const integralIdentity=JSON.stringify([Array.from(invViewProj.elements,x=>Math.round(x*1e5)/1e5),productTransform,controlsSnapshot,worldSmokeKey,intermediateKey]);
+    const {rayNoiseFrame:samplePhase,...integralControls}=controlsSnapshot;
+    const integralIdentity=reconstruct?JSON.stringify([Array.from(invViewProj.elements),productTransform,integralControls,worldSmokeKey,intermediateKey]):null;
     const integralAttachments=reconstruct?integralReconstruction.prepare(state.width,state.height,controlsSnapshot,integralIdentity,state.simStepCount):null;
     const pass = encoder.beginRenderPass({
       label,
