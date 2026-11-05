@@ -7,11 +7,12 @@ import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {solidCubeCadenceNative} from './solid-cube-cadence-native.mjs';
 import {compositionRestoreUrl} from '../scene-authoring.mjs';
-const [out,presetFile]=process.argv.slice(2);
+const [out,presetFile,mode='all']=process.argv.slice(2);
+assert.ok(['all','page-inspect'].includes(mode),'mode all or page-inspect required');
 assert.ok(out&&presetFile,'Caller-owned output and observed preset required');
 await fs.mkdir(out,{recursive:true});
-const materialWidth=32;
-const root=process.cwd(),report={status:'failed',phase:'setup',root,errors:[],arms:[]};
+const materialWidth=mode==='page-inspect'?16:32;
+const root=process.cwd(),report={status:'failed',phase:'setup',mode,materialWidth,root,errors:[],arms:[]};
 let server,browser,page;
 const save=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));
 let sourceFiles;
@@ -42,6 +43,7 @@ try{
  page.on('response',r=>{if(r.status()>=400)report.errors.push(`HTTP ${r.status()} ${r.url()}`);});
  page.on('pageerror',e=>report.errors.push(String(e)));page.on('console',m=>{if(m.type()==='error')report.errors.push(m.text());});
 
+ if(mode==='all'){
  report.phase='native';await save();
  await page.route('**/solid-cube-native-fixture',r=>r.fulfill({contentType:'text/html',body:'<!doctype html><title>Solid cube cadence conformance</title><script type="importmap">{"imports":{"three":"/lib/three.webgpu.js","three/webgpu":"/lib/three.webgpu.js","three/tsl":"/lib/three.tsl.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"}}</script>' }));
  await page.goto(origin+'/solid-cube-native-fixture');report.native=await page.evaluate(solidCubeCadenceNative);await save();
@@ -62,15 +64,25 @@ try{
  }
  assert.ok(n.rows[1].points.regions.some((r,i)=>distance(r.energy,n.rows[0].points.regions[i].energy)>1e-3),'live power must change');
  assert.ok(n.rows[1].state.solidShadowCapture.refreshedIndices.some(i=>JSON.stringify(n.rows[1].cubes[i])!==JSON.stringify(n.rows[0].cubes[i])),'real refreshed cube pixels must change');
+ }
+ let effectivePreset=path.basename(presetFile,'.json');
+ if(mode==='page-inspect'){
+  const bundle=JSON.parse(await fs.readFile(presetFile,'utf8')),preset=structuredClone(bundle.preset);
+  const small={'volume-look-freeze':1,'volume-resolution':16,'volume-grid-height-ratio':2,'volume-fine-velocity':16,'volume-fine-pressure':8,'volume-pressure-solver-iterations':4,'volume-world-smoke':'off','volume-steps':8,'volume-render-scale':.5};
+  for(const controls of [preset.domControls,preset.rendererControls])for(const [key,value] of Object.entries(small))if(controls?.[key])controls[key].value=value;
+  const result=await fetch(origin+'/api/volume-settings-presets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label:'Solid cube control inspection Fine16',preset,publishAlias:false})});
+  assert.ok(result.ok,await result.clone().text());report.inspectionPreset=await result.json();effectivePreset=report.inspectionPreset.presetId;assert.ok(effectivePreset);
+ }
  report.phase='load';await save();await page.goto(origin+'/index.html?workspace=workbench');
  await page.waitForFunction(()=>window.kaminosSceneAuthoring?.addFlameEmitter);
- await page.evaluate(id=>window.kaminosSceneAuthoring.addFlameEmitter(id,{lightingRoute:{volume_light_field_shared_source:'1',volume_light_field_distributed:'1',volume_light_field_hybrid:'1',volume_light_field_hybrid_points:'6',volume_light_field_hybrid_shadow_capture_budget:'2',volume_light_field_hybrid_shadow_resolution:'16',volume_light_field_hybrid_blocker_samples:'1',volume_light_field_hybrid_filter_samples:'1',volume_light_field_hybrid_light_grid:'4',volume_light_field_hybrid_light_directions:'8',volume_light_field_hybrid_smoke_refinement:'1'}}),path.basename(presetFile,'.json'));
+ await page.evaluate(id=>window.kaminosSceneAuthoring.addFlameEmitter(id,{lightingRoute:{volume_light_field_shared_source:'1',volume_light_field_distributed:'1',volume_light_field_hybrid:'1',volume_light_field_hybrid_points:'6',volume_light_field_hybrid_shadow_capture_budget:'2',volume_light_field_hybrid_shadow_resolution:'16',volume_light_field_hybrid_blocker_samples:'1',volume_light_field_hybrid_filter_samples:'1',volume_light_field_hybrid_light_grid:'4',volume_light_field_hybrid_light_directions:'8',volume_light_field_hybrid_smoke_refinement:'1'}}),effectivePreset);
  const control=async(id,value)=>page.evaluate(({id,value})=>{const e=document.getElementById(id);if(!e)throw Error('Missing '+id);e.value=String(value);if(e.value!==String(value))throw Error('Rejected '+id);e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));},{id,value});
- for(const [id,v] of Object.entries({'volume-look-freeze':1,'volume-resolution':32,'volume-grid-height-ratio':2,'volume-fine-velocity':16,'volume-fine-pressure':8,'volume-render-scale':.5,'volume-steps':8,'volume-pressure-solver-iterations':4,'volume-world-smoke':'off'}))await control(id,v);
+ for(const [id,v] of Object.entries({'volume-look-freeze':1,'volume-resolution':materialWidth,'volume-grid-height-ratio':2,'volume-fine-velocity':16,'volume-fine-pressure':8,'volume-render-scale':.5,'volume-steps':8,'volume-pressure-solver-iterations':4,'volume-world-smoke':'off'}))await control(id,v);
  await page.waitForFunction(()=>window.__kaminosSceneRadiance?.canRender());
+ await page.evaluate(()=>{for(const position of [[.8,-.3,0],[-.8,.1,-.6]]){const id=window.kaminosSceneAuthoring.addMesh('box',{width:.4,height:1.2,depth:.4});window.kaminosSetSceneObjectTransform(id,{position});}});
  await page.evaluate(()=>window.kaminosSetCameraDebugPose({position:[7,5,9],target:[0,1.5,0]}));
  await control('volume-look-freeze',0);
- await page.waitForFunction(()=>window.__kaminosVolumePrototype.debugState().simStepCount>=12&&window.__kaminosSceneRadiance.canRender());
+ await page.waitForFunction(n=>window.__kaminosVolumePrototype.debugState().simStepCount>=n&&window.__kaminosSceneRadiance.canRender(),mode==='page-inspect'?3:12);
  await page.evaluate(()=>window.__kaminosVolumePrototype.setSimulationPaused(true));
  report.phase='controls';await save();await page.getByRole('button',{name:'Scene',exact:true}).click();
  const input=page.getByRole('spinbutton',{name:'Solid cube captures per frame (0 = all)',exact:true});assert.equal(await input.count(),1);
