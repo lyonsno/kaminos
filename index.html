@@ -13195,7 +13195,7 @@ function applyAuthoredWaterSettings(id,patch){
   replaceAuthoredWaterSettings(id,value);
  }});waterSettingTargets.add(target);}
  const next=normalizeLocalLiquidEmitter({...row.localLiquidEmitter,...patch},sceneObjectTransformState(row.object));
- authoredMlsMaterial(localLiquidEmitterRecords().map(r=>r.id===id?{...r,localLiquidEmitter:next}:r),localLiquidSetup??{});
+ authoredMlsMaterial(localLiquidEmitterRecords().map(r=>r.id===id?{...r,localLiquidEmitter:next}:r),waterFeature.setup??{});
  return scenePlacementTools.edits.apply(target,next,'Edit initial water');
 }
 function replaceAuthoredWaterSettings(id,value,prepared=null,{deferSync=false}={}){
@@ -13280,7 +13280,7 @@ function matchAuthoredWaterSetup(referenceId){
   }});waterMatchTargets.add(target);
  }
  const entries=Object.fromEntries(plan.changes.map(c=>[c.id,c.settings]));
- authoredMlsMaterial(localLiquidEmitterRecords().map(r=>entries[r.id]?{...r,localLiquidEmitter:entries[r.id]}:r),localLiquidSetup??{});
+ authoredMlsMaterial(localLiquidEmitterRecords().map(r=>entries[r.id]?{...r,localLiquidEmitter:entries[r.id]}:r),waterFeature.setup??{});
  scenePlacementTools.edits.apply(target,{entries},'Match water sampling and container');
  return authoredWaterState();
 }
@@ -13295,7 +13295,7 @@ function editAuthoredWaterSimulation(patch){
   // Keep deletion explicit through the history API's shallow patch merge.
   return {...next,mlsMaterial:next.mlsMaterial??null};
  };
- if(!authoredWaterSimulationTarget){scenePlacementTools.edits.register(target,{read:()=>structuredClone(localLiquidSetup),check:checked,write:value=>{
+ if(!authoredWaterSimulationTarget){scenePlacementTools.edits.register(target,{read:()=>structuredClone(waterFeature.setup),check:checked,write:value=>{
   const next=normalizeLocalLiquidSetup(checked(value));
   // Restore authored proposals through Undo/Redo, even if their material is
   // not executable. New edits are validated below before opening history.

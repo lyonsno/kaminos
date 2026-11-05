@@ -14,7 +14,7 @@ assert.ok(inner.normal[0]<0&&inner.normal[1]>0);assert.ok(outer.normal[0]>0&&out
 const built=createProceduralMesh(THREE,null,record.geometry);
 const p=built.group.geometry.attributes.position;
 for(let i=0;i<p.count;i++)assert.ok(Math.abs(sceneLiquidDistance(c,[p.getX(i),p.getY(i),p.getZ(i)]).distance)<2e-7,'Rendered vertices must follow the analytical wall including both lips');
-assert.equal(packSceneLiquidColliders([c])[0],3);assert.equal(packSceneLiquidColliders([c]).length,20);
+assert.equal(packSceneLiquidColliders([c])[0],4);assert.equal(packSceneLiquidColliders([c]).length,20);
 const moved=sceneLiquidCollider({...record,transform:{position:[1,2,3],rotation:[0,0,Math.PI/2],scale:[2,2,2]}});
 const v=new THREE.Vector3(.36,0,0).multiplyScalar(2).applyEuler(new THREE.Euler(0,0,Math.PI/2)).add(new THREE.Vector3(1,2,3));
 assert.ok(Math.abs(sceneLiquidDistance(moved,v.toArray()).distance-inner.distance*2)<1e-8);

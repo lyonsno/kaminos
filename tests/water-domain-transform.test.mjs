@@ -14,7 +14,7 @@ test('selecting the water field exposes its native placement target',()=>{
 });
 test('water guide follows authored bounds instead of the retired playground',()=>{
  const bounds={min:[1,2,3],max:[4,6,8]},c={THREE,waterFeature:{setup:{},host:null},localLiquidDomainGuide:null,localLiquidRunningDomainGuide:null,waterDomainProxy:null,waterDomainDraft:null,localLiquidHost:null,
- waterDomainBounds:()=>bounds,acceptedWaterDomainPose:()=>({position:[2.5,4,5.5],rotation:[0,0,0],scale:[3,4,5]}),
+ authoredMlsDomain:()=>({boundsWorld:bounds}),localLiquidEmitterRecords:()=>[],waterDomainBounds:()=>bounds,acceptedWaterDomainPose:()=>({position:[2.5,4,5.5],rotation:[0,0,0],scale:[3,4,5]}),
  fingerFluidAnalyticalSupportGeometry:()=>({boundsMin:[-10,-10,-10],boundsMax:[10,10,10]}),
  transformControls:null,scene:new THREE.Scene(),isSceneItemVisible:()=>true,selectionCaptureSuspended:false,viewportHelpersVisible:true,viewportDisplay:{domains:true,domainOpacity:1},styleSimulationDomainGuide(){},styleHelperLines(){},applySceneObjectTransformState(){}};
  vm.createContext(c);vm.runInContext(grab('syncWaterDomainGuide'),c);c.syncWaterDomainGuide();

@@ -23,7 +23,7 @@ export function sceneLiquidDistance(c,world) {
   distance=length+Math.min(Math.max(...delta),0);
   if(length>0)normal=outside.map((v,i)=>v/length*(q[i]<0?-1:1));
   else{const axis=delta.indexOf(Math.max(...delta));normal=q.map((v,i)=>i===axis?(v<0?-1:1):0);}
- }else c.kind==='funnel'){
+ }else if(c.kind==='funnel'){
   const radial=Math.hypot(q[0],q[2]),dr=c.parameters.topRadius-c.parameters.bottomRadius,h=c.parameters.height;
   const x=radial-c.parameters.bottomRadius,y=q[1]+h/2,t=Math.max(0,Math.min(1,(x*dr+y*h)/(dr*dr+h*h)));
   const dx=x-t*dr,dy=y-t*h,len=Math.hypot(dx,dy),nx=len>1e-10?dx/len:h/Math.hypot(dr,h),ny=len>1e-10?dy/len:-dr/Math.hypot(dr,h);
