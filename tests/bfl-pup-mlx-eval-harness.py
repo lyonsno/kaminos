@@ -1587,10 +1587,18 @@ class TestMLXSwitchableEvalHarness(unittest.TestCase):
                     vision_encode_calls.append((pv, grid_thw))
                     return SimpleNamespace(nbytes=4096, shape=(16, 8)), None
 
+            class FakeLanguageModel:
+                def __init__(self):
+                    self._position_ids = "pos"
+                    self._rope_deltas = "rope"
+
+                def __call__(self, *args, **kwargs):
+                    return SimpleNamespace(logits="logits")
+
             fake_model = SimpleNamespace(
                 config=SimpleNamespace(image_token_index=151655),
                 vision_tower=FakeVisionTower(),
-                language_model=SimpleNamespace(_position_ids="pos", _rope_deltas="rope"),
+                language_model=FakeLanguageModel(),
             )
             fake_processor = SimpleNamespace(
                 apply_chat_template=lambda msgs, **kw: "formatted_multimodal",
@@ -1642,17 +1650,40 @@ class TestMLXSwitchableEvalHarness(unittest.TestCase):
             stream_calls = []
 
             def fake_stream_generate(model, processor, formatted, image=None, **kwargs):
-                cb = kwargs.get("prompt_cache_checkpoint")
-                cb_len = kwargs.get("prompt_cache_checkpoint_len")
-                mode_at_prefill = (fake_ctrl_ref[0].enabled, fake_ctrl_ref[0].active_rank)
-                if callable(cb) and cb_len is not None:
-                    cb(cb_len, ["fake_cache"])
-                mode_at_decode = (fake_ctrl_ref[0].enabled, fake_ctrl_ref[0].active_rank)
+                # Match mlx_vlm 0.7.8 dispatch.py:1064-1074: passing prompt_cache_checkpoint in kwargs raises TypeError
+                if "prompt_cache_checkpoint" in kwargs or "prompt_cache_checkpoint_len" in kwargs:
+                    raise TypeError("generate_step() got multiple values for keyword argument 'prompt_cache_checkpoint'")
+                cache_stub = [SimpleNamespace(state="cache_state")]
+                # 1. ar.py:489 chunked prefill for tokens 0..N-2
+                model.language_model(
+                    inputs="chunk_ids",
+                    inputs_embeds="chunk_embeds",
+                    cache=cache_stub,
+                    n_to_process=11,
+                )
+                mode_after_chunk_prefill = (fake_ctrl_ref[0].enabled, fake_ctrl_ref[0].active_rank)
+                # 2. ar.py:511 final prompt token (produces Token 1 y)
+                model.language_model(
+                    "last_prompt_id",
+                    inputs_embeds="last_prompt_embed",
+                    cache=cache_stub,
+                    logits_to_keep=1,
+                )
+                mode_at_token_1 = (fake_ctrl_ref[0].enabled, fake_ctrl_ref[0].active_rank)
+                # 3. ar.py:537 lookahead _step(y[None]) for Token 2 BEFORE yielding Token 1!
+                model.language_model(
+                    "token_1_id",
+                    inputs_embeds=None,
+                    cache=cache_stub,
+                    logits_to_keep=1,
+                )
+                mode_at_token_2 = (fake_ctrl_ref[0].enabled, fake_ctrl_ref[0].active_rank)
                 stream_calls.append(
                     {
                         "cached_image_features": kwargs.get("cached_image_features"),
-                        "mode_at_prefill": mode_at_prefill,
-                        "mode_at_decode": mode_at_decode,
+                        "mode_after_chunk_prefill": mode_after_chunk_prefill,
+                        "mode_at_token_1": mode_at_token_1,
+                        "mode_at_token_2": mode_at_token_2,
                     }
                 )
                 yield SimpleNamespace(
@@ -1724,6 +1755,14 @@ class TestMLXSwitchableEvalHarness(unittest.TestCase):
                                 "rank": 0,
                                 "split_point": "before_last_prompt_token",
                             },
+                            {
+                                "name": "cheat_off_prefill_r4_decode_after_tok1",
+                                "prefill_enabled": False,
+                                "prefill_rank": 0,
+                                "enabled": True,
+                                "rank": 4,
+                                "split_point": "after_token_1",
+                            },
                         ],
                         cases=[
                             {
@@ -1736,22 +1775,42 @@ class TestMLXSwitchableEvalHarness(unittest.TestCase):
                     )
 
             self.assertEqual(rep["status"], "complete")
-            # 1. Vision tower was called ONLY ONCE across the 2 modes; 2nd mode got a vision_cache_hit!
+            # 1. Vision tower was called ONLY ONCE across the 3 modes; 2nd and 3rd modes got vision_cache_hit!
             self.assertEqual(len(vision_encode_calls), 1)
             self.assertFalse(rep["observations"][0]["vision_cache_hit"])
             self.assertTrue(rep["observations"][1]["vision_cache_hit"])
+            self.assertTrue(rep["observations"][2]["vision_cache_hit"])
             self.assertIsNotNone(stream_calls[0]["cached_image_features"])
             self.assertIs(stream_calls[0]["cached_image_features"], stream_calls[1]["cached_image_features"])
+            self.assertIs(stream_calls[0]["cached_image_features"], stream_calls[2]["cached_image_features"])
 
-            # 2. Split mode ran prefill in (True, 4) and hot-swapped to (False, 0) with preserve_cache=True before decode!
-            self.assertEqual(stream_calls[1]["mode_at_prefill"], (True, 4))
-            self.assertEqual(stream_calls[1]["mode_at_decode"], (False, 0))
+            # 2a. before_last_prompt_token ran chunk prefill in (True, 4) and swapped to (False, 0) before Token 1!
+            self.assertEqual(stream_calls[1]["mode_after_chunk_prefill"], (True, 4))
+            self.assertEqual(stream_calls[1]["mode_at_token_1"], (False, 0))
+            self.assertEqual(stream_calls[1]["mode_at_token_2"], (False, 0))
             self.assertEqual(rep["observations"][1]["prefill_enabled"], True)
             self.assertEqual(rep["observations"][1]["prefill_rank"], 4)
             self.assertEqual(rep["observations"][1]["enabled"], False)
             self.assertEqual(rep["observations"][1]["rank"], 0)
             self.assertEqual(rep["observations"][1]["split_point"], "before_last_prompt_token")
+            self.assertTrue(rep["observations"][1]["reset_performed_on_mode_entry"])
+
+            # 2b. after_token_1 kept chunk prefill AND Token 1 in (False, 0), and swapped to (True, 4) before Token 2 lookahead!
+            # Also verifies Finding 3: even though Mode 2 ended in (False, 0) and Mode 3 prefill started in (False, 0),
+            # reset_performed_on_mode_entry is True and state_epoch incremented cleanly!
+            self.assertEqual(stream_calls[2]["mode_after_chunk_prefill"], (False, 0))
+            self.assertEqual(stream_calls[2]["mode_at_token_1"], (False, 0))
+            self.assertEqual(stream_calls[2]["mode_at_token_2"], (True, 4))
+            self.assertEqual(rep["observations"][2]["prefill_enabled"], False)
+            self.assertEqual(rep["observations"][2]["prefill_rank"], 0)
+            self.assertEqual(rep["observations"][2]["enabled"], True)
+            self.assertEqual(rep["observations"][2]["rank"], 4)
+            self.assertEqual(rep["observations"][2]["split_point"], "after_token_1")
+            self.assertTrue(rep["observations"][2]["reset_performed_on_mode_entry"])
+            self.assertGreater(rep["observations"][2]["state_epoch"], rep["observations"][1]["state_epoch"])
             self.assertTrue(any(t == (False, 0, True) for t in mode_transitions))
+            self.assertTrue(any(t == (True, 4, True) for t in mode_transitions))
+            self.assertIs(type(fake_model.language_model), FakeLanguageModel)
 
             # 3. False-closure guard: if a backend ignores prompt_cache_checkpoint in split mode, fail loud!
             def broken_stream_generate(model, processor, formatted, image=None, **kwargs):

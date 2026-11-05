@@ -674,10 +674,15 @@ def run_switchable_evaluation(
             _atomic_write_json(report_path, report)
             sw_t0 = time.monotonic()
             sw_res = controller.set_mode(enabled=prefill_enabled, rank=prefill_rank)
+            if has_split and not sw_res.get("reset_performed"):
+                controller.state_epoch += 1
+                if hasattr(controller, "_reset_caches_and_model_state"):
+                    controller._reset_caches_and_model_state()
+                sw_res = dict(sw_res, state_epoch=controller.state_epoch, reset_performed=True)
             sw_ms = round((time.monotonic() - sw_t0) * 1000.0, 3)
             bound_epoch = controller.state_epoch
 
-            for case in cases:
+            for case_idx, case in enumerate(cases):
                 case_id = case["id"]
                 task = case["task"]
                 prompt = case["prompt"]
@@ -685,9 +690,16 @@ def run_switchable_evaluation(
 
                 report["failure_phase"] = f"generating:{mode_name}:{case_id}"
                 _atomic_write_json(report_path, report)
-                if has_split and (controller.enabled != prefill_enabled or controller.active_rank != prefill_rank):
+                if has_split and (
+                    case_idx > 0 or controller.enabled != prefill_enabled or controller.active_rank != prefill_rank
+                ):
                     sw_t0 = time.monotonic()
                     sw_res = controller.set_mode(enabled=prefill_enabled, rank=prefill_rank)
+                    if not sw_res.get("reset_performed"):
+                        controller.state_epoch += 1
+                        if hasattr(controller, "_reset_caches_and_model_state"):
+                            controller._reset_caches_and_model_state()
+                        sw_res = dict(sw_res, state_epoch=controller.state_epoch, reset_performed=True)
                     sw_ms = round((time.monotonic() - sw_t0) * 1000.0, 3)
                     bound_epoch = controller.state_epoch
                 controller.assert_cache_epoch(bound_epoch)
@@ -790,54 +802,80 @@ def run_switchable_evaluation(
                 split_swap_ms: Optional[float] = None
                 split_swapped_done = False
                 active_sw_res = sw_res
+                lm_obj = getattr(model, "language_model", None)
+                orig_lm_cls = type(lm_obj) if lm_obj is not None else None
 
-                if has_split and split_point == "before_last_prompt_token":
-                    if prep is not None and prep.get("input_ids") is not None:
-                        n_prompt_toks = int(prep["input_ids"].shape[1])
-                    elif hasattr(tokenizer, "encode") and callable(tokenizer.encode):
-                        n_prompt_toks = len(tokenizer.encode(formatted))
-                    else:
-                        n_prompt_toks = 2
-                    if n_prompt_toks < 2:
-                        raise RuntimeError(
-                            f"Split mode {mode_name!r} ('before_last_prompt_token') requires at least 2 prompt tokens, "
-                            f"got {n_prompt_toks}"
-                        )
+                if has_split:
+                    if split_point == "before_last_prompt_token":
+                        if prep is not None and prep.get("input_ids") is not None:
+                            n_prompt_toks = int(prep["input_ids"].shape[1])
+                        elif hasattr(tokenizer, "encode") and callable(tokenizer.encode):
+                            n_prompt_toks = len(tokenizer.encode(formatted))
+                        else:
+                            n_prompt_toks = 2
+                        if n_prompt_toks < 2:
+                            raise RuntimeError(
+                                f"Split mode {mode_name!r} ('before_last_prompt_token') requires at least 2 prompt tokens, "
+                                f"got {n_prompt_toks}"
+                            )
+                    if lm_obj is None or orig_lm_cls is None:
+                        raise RuntimeError(f"Split mode {mode_name!r} requires model.language_model to be present")
 
-                    def _on_prompt_checkpoint(_processed_tokens: int, _cache: Any) -> None:
-                        nonlocal split_swap_ms, split_swapped_done, active_sw_res
-                        if not split_swapped_done:
-                            t_sp = time.monotonic()
-                            active_sw_res = controller.set_mode(enabled=enabled, rank=rank, preserve_cache=True)
-                            split_swap_ms = round((time.monotonic() - t_sp) * 1000.0, 3)
-                            split_swapped_done = True
+                    class _SplitLanguageModel(orig_lm_cls):
+                        def __call__(self, *lm_args: Any, **lm_kwargs: Any) -> Any:
+                            nonlocal split_swap_ms, split_swapped_done, active_sw_res
+                            if not split_swapped_done:
+                                ie = lm_kwargs.get("inputs_embeds")
+                                is_last_prompt_step = (ie is not None) and ("n_to_process" not in lm_kwargs)
+                                is_first_decode_step = ie is None
+                                if split_point == "before_last_prompt_token" and is_last_prompt_step:
+                                    cache_list = lm_kwargs.get("cache") or []
+                                    if hasattr(mx, "eval"):
+                                        states = [
+                                            c.state
+                                            for c in cache_list
+                                            if hasattr(c, "state") and getattr(c, "state") is not None
+                                        ]
+                                        if states:
+                                            mx.eval(*states)
+                                    t_sp = time.monotonic()
+                                    active_sw_res = controller.set_mode(enabled=enabled, rank=rank, preserve_cache=True)
+                                    split_swap_ms = round((time.monotonic() - t_sp) * 1000.0, 3)
+                                    split_swapped_done = True
+                                elif split_point == "after_token_1" and is_first_decode_step:
+                                    cache_list = lm_kwargs.get("cache") or []
+                                    if hasattr(mx, "eval"):
+                                        eval_targets = list(lm_args[:1]) + [
+                                            c.state
+                                            for c in cache_list
+                                            if hasattr(c, "state") and getattr(c, "state") is not None
+                                        ]
+                                        if eval_targets:
+                                            mx.eval(*eval_targets)
+                                    t_sp = time.monotonic()
+                                    active_sw_res = controller.set_mode(enabled=enabled, rank=rank, preserve_cache=True)
+                                    split_swap_ms = round((time.monotonic() - t_sp) * 1000.0, 3)
+                                    split_swapped_done = True
+                            return orig_lm_cls.__call__(self, *lm_args, **lm_kwargs)
 
-                    extra_stream_kwargs["prompt_cache_checkpoint"] = _on_prompt_checkpoint
-                    extra_stream_kwargs["prompt_cache_checkpoint_len"] = n_prompt_toks - 1
+                    lm_obj.__class__ = _SplitLanguageModel
 
                 gen_t0 = time.monotonic()
                 last_progress_write = 0.0
                 text_out = ""
                 final_chunk = None
                 try:
-                    for chunk_idx, chunk in enumerate(
-                        stream_generate(
-                            model,
-                            processor,
-                            formatted,
-                            image=None if can_use_vision_cache else (images or None),
-                            **sampling,
-                            logits_processors=logits_procs,
-                            **extra_stream_kwargs,
-                        )
+                    for chunk in stream_generate(
+                        model,
+                        processor,
+                        formatted,
+                        image=None if can_use_vision_cache else (images or None),
+                        **sampling,
+                        logits_processors=logits_procs,
+                        **extra_stream_kwargs,
                     ):
                         text_out += chunk.text
                         final_chunk = chunk
-                        if has_split and split_point == "after_token_1" and chunk_idx == 0 and not split_swapped_done:
-                            t_sp = time.monotonic()
-                            active_sw_res = controller.set_mode(enabled=enabled, rank=rank, preserve_cache=True)
-                            split_swap_ms = round((time.monotonic() - t_sp) * 1000.0, 3)
-                            split_swapped_done = True
                         now_m = time.monotonic()
                         if last_progress_write == 0.0 or (now_m - last_progress_write) >= 0.5:
                             report["current_stream_progress"] = {
@@ -909,6 +947,8 @@ def run_switchable_evaluation(
                     _atomic_write_json(report_path, report)
                     raise
                 finally:
+                    if lm_obj is not None and orig_lm_cls is not None:
+                        lm_obj.__class__ = orig_lm_cls
                     if hasattr(mx, "clear_cache"):
                         mx.clear_cache()
 
