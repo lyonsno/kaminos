@@ -5656,10 +5656,20 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         # and validates the complete scene before allocating its viewer.
         ext = target.suffix.lower()
         if root_name == "scenes" and ext == ".json" and params.get("raw") == ["1"]:
-            with target.open("rb") as body:
+            try:
+                body = target.open("rb")
+            except OSError:
+                self.send_json({"error": "Failed to read file"}, 500)
+                return
+            with body:
+                try:
+                    length = os.fstat(body.fileno()).st_size
+                except OSError:
+                    self.send_json({"error": "Failed to read file"}, 500)
+                    return
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(os.fstat(body.fileno()).st_size))
+                self.send_header("Content-Length", str(length))
                 self.end_headers()
                 shutil.copyfileobj(body, self.wfile)
             return
