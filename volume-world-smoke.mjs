@@ -77,8 +77,13 @@ export function worldTransitionSample(p,{fineDims,mapping,flowPitch,cells}){
 // Fine authored acceleration is in material-cell units; outer flow is in
 // anchor-local distance units. The material and height coupling stay in WGSL.
 export function worldWindAcceleration({strength=0,angle=0,height=0,speed=1,fineWidth,scale=1,calibration={}}){
- const gain=strength*(.020+speed*.004)*2/fineWidth*scale*resolveWorldCalibration(calibration,{grid:fineWidth}).cellGain;
+ const gain=strength*(.020+speed*.004)*2/fineWidth*scale*resolveWorldCalibration(calibration,{grid:fineWidth,scale}).cellGain;
  return [Math.cos(angle)*gain,0,Math.sin(angle)*gain,height];
+}
+export function worldBuoyancyAcceleration({buoyancy=.002,fineWidth=32,scale=1,calibration={}}={}){
+ if(!Number.isFinite(buoyancy)||buoyancy<0)throw Error('Invalid world buoyancy');
+ if(!Number.isFinite(fineWidth)||fineWidth<=0||!Number.isFinite(scale)||scale<=0)throw Error('Invalid world buoyancy scale');
+ return buoyancy*(32/fineWidth)*scale*resolveWorldCalibration(calibration,{grid:fineWidth,scale}).cellGain;
 }
 
 export const WORLD_SMOKE_WGSL=/* wgsl */`
@@ -127,10 +132,18 @@ fn gasAdd(a:Gas,b:Gas)->Gas{return Gas(a.a+b.a,a.b+b.b);}
 fn fineLo()->vec3<f32>{return u.mapping.xyz-vec3<f32>(u.mapping.w);}
 fn fineHi()->vec3<f32>{return u.mapping.xyz+vec3<f32>(1,2.0*u.near.y/u.near.x-1.0,1)*u.mapping.w;}
 fn boxFraction(p:vec3<f32>,pitch:f32,lo:vec3<f32>,hi:vec3<f32>)->f32{
- let d=clamp((min(p+vec3<f32>(pitch*.5),hi)-max(p-vec3<f32>(pitch*.5),lo))/pitch,vec3<f32>(0),vec3<f32>(1));
- return d.x*d.y*d.z;
+ let half=vec3<f32>(pitch*.5);
+ let d=clamp((min(p+half,hi)-max(p-half,lo))/pitch,vec3<f32>(0),vec3<f32>(1));
+ let snapped=select(select(d,vec3<f32>(0),d<vec3<f32>(1e-4)),vec3<f32>(1),d>vec3<f32>(1.0-1e-4));
+ return snapped.x*snapped.y*snapped.z;
 }
 fn fineFraction(p:vec3<f32>,pitch:f32)->f32{return boxFraction(p,pitch,fineLo(),fineHi());}
+fn clampStraddleExterior(unscaled:Gas,totalBack:Gas,fg:Gas)->Gas{
+ let maxA=max(totalBack.a.xyz,fg.a.xyz);
+ let ox=clamp(unscaled.a.w,min(totalBack.a.w,fg.a.w),u.reactant_combustion_c.z);
+ let maxB=max(totalBack.b,fg.b);
+ return Gas(vec4<f32>(clamp(unscaled.a.xyz,vec3<f32>(0),maxA),ox),clamp(unscaled.b,vec4<f32>(0),maxB));
+}
 // Semi-Lagrangian cell reconstruction: the transported prior Fine portion and
 // exterior portion each occupy their own subvolume. Only the part now covered
 // by Fine is replaced. When Fine moves away, its previous gas is released.
@@ -150,10 +163,13 @@ fn exteriorHistory(total:Gas,owned:Gas,p:vec3<f32>,back:vec3<f32>,pitch:f32)->Ga
 fn remapMaterial(total:Gas,owned:Gas,source:vec3<f32>,sourcePitch:f32,p:vec3<f32>,pitch:f32)->array<Gas,2>{
  let old=boxFraction(source,sourcePitch,u.priorFineLo.xyz,u.priorFineHi.xyz);
  let next=boxFraction(p,pitch,u.priorFineLo.xyz,u.priorFineHi.xyz);
- var part=Gas(vec4<f32>(0),vec4<f32>(0));var exterior=total;
- if(old>0.0){part=gasScale(owned,next/old);}
- if(old<1.0){exterior=gasScale(Gas(max(vec4<f32>(0),total.a-owned.a),max(vec4<f32>(0),total.b-owned.b)),(1.0-next)/(1.0-old));}
- else{exterior=Gas(vec4<f32>(0),vec4<f32>(0));}
+ if(old>=1.0){return array<Gas,2>(total,total);}
+ if(old<=0.0){return array<Gas,2>(total,Gas(vec4<f32>(0),vec4<f32>(0)));}
+ let ownedDensity=gasScale(owned,1.0/max(old,1e-2));
+ let rawExtDensity=gasScale(Gas(max(vec4<f32>(0),total.a-owned.a),max(vec4<f32>(0),total.b-owned.b)),1.0/max(1.0-old,1e-2));
+ let extDensity=clampStraddleExterior(rawExtDensity,total,ownedDensity);
+ let part=gasScale(ownedDensity,next);
+ let exterior=gasScale(extDensity,1.0-next);
  return array<Gas,2>(gasAdd(exterior,part),part);
 }
 fn momentumDonor(c:vec3<i32>,a:u32)->bool{
@@ -375,23 +391,21 @@ fn storeMaterial(c:vec3<i32>,i:u32,p:vec3<f32>,value:Gas,contribution:Gas){
 }
 @compute @workgroup_size(4,4,4) fn transportMaterial(@builtin(global_invocation_id) gid:vec3<u32>){
  let c=vec3<i32>(gid);if(!inside(c,u.material.xyz)){return;}let i=idx(c,u.material.xyz);let p=u.lo.xyz+(vec3<f32>(c)+.5)*u.material.w;
- let fraction=fineFraction(p,u.material.w);var owned=Gas(vec4<f32>(0),vec4<f32>(0));
- if(fraction>0.0){owned=gasScale(fineGas(p),fraction);}
+ let fraction=fineFraction(p,u.material.w);var fg=Gas(vec4<f32>(0),vec4<f32>(0));var owned=fg;
+ if(fraction>0.0){fg=fineGas(p);owned=gasScale(fg,fraction);}
  if(fraction==1.0){storeMaterial(c,i,p,owned,owned);return;}
- let back=clipped(p,p-velocity(p)*u.time.y);var history=gas(back);
- if(fraction>0.0){history=exteriorHistory(history,gasHistory(back),p,back,u.material.w);}
+ let back=clipped(p,p-velocity(p)*u.time.y);let totalBack=gas(back);var extDensity=totalBack;
+ if(fraction>0.0){
+  let history=exteriorHistory(totalBack,gasHistory(back),p,back,u.material.w);
+  extDensity=clampStraddleExterior(gasScale(history,1.0/(1.0-fraction)),totalBack,fg);
+ }
  // Exterior supply is already an amount per whole receiving-cell volume.
- var r=suppliedGas(gasScale(history,1.0/(1.0-fraction)),supplyTexel(materialSupply,2u*i)/(1.0-fraction));
+ var r=suppliedGas(extDensity,supplyTexel(materialSupply,2u*i)/(1.0-fraction));
  if(worldSmokeOnly()){
    if(reactantLawOn()){
-     let dt=u.time.x;let w=reactantExchangeWeightFor(dt);
-     if(w>0.0){
-       var neighbors=vec2<f32>(0);
-       for(var a=0u;a<3u;a++){let off=vec3<f32>(axis(a))*u.material.w;neighbors+=gas(clipped(p,p+off)).a.xy+gas(clipped(p,p-off)).a.xy;}
-       r.a=vec4<f32>(max(vec2<f32>(0),r.a.xy*(1.0-6.0*w)+neighbors*w),0.0,0.0);
-     }
+     let dt=u.time.x;
      let nextHeat=r.a.y*reactantCoolingSurvival(dt);
-     let nextSoot=r.a.x*reactantSootSurvival(dt)*sootBurnoutSurvival(nextHeat,1.0,dt);
+     let nextSoot=r.a.x*reactantSootSurvival(dt);
      r.a=vec4<f32>(select(0.0,nextSoot,nextSoot>1e-6),select(0.0,nextHeat,nextHeat>1e-5),0.0,0.0);
    }else{r.a=vec4<f32>(r.a.x*pow(.990,u.time.x),r.a.y*pow(.982,u.time.x),0.0,0.0);}
    r.b=vec4<f32>(0.0);
@@ -485,10 +499,11 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture,borrowMaterial
         sourceReceipt={count:sources.count,parcels:sources.parcels.length,route:'world-position-finite-volume-source',ownership:'outside-fine-support',supplyVolume:sources.parcels.reduce((q,p)=>q+p.rate*p.lo.reduce((v,x,a)=>v*(p.hi[a]-x),1),0)};
       }
       const mapping=worldSmokeMapping(plan,anchor,transform);
-      values.set([...plan.flowDims,plan.flowPitch,...plan.materialDims,plan.materialPitch,...fineDims,fineVelocityMode==='staggered'?1:0,...mapping.fineToField,...plan.min,transitionCells,time.dtScale,time.backtraceScale,buoyancy,solids===fallback?0:1]);
+      const effectiveBuoyancy=worldBuoyancyAcceleration({buoyancy,fineWidth:fineDims[0],scale:mapping.fineToField[3],calibration:{...calibration,simulationDomainScale:transform.scale}});
+      values.set([...plan.flowDims,plan.flowPitch,...plan.materialDims,plan.materialPitch,...fineDims,fineVelocityMode==='staggered'?1:0,...mapping.fineToField,...plan.min,transitionCells,time.dtScale,time.backtraceScale,effectiveBuoyancy,solids===fallback?0:1]);
       values.set(reactantCombustionUniformValues(reactant),24);
       // Diffusivity is in fine-local length units; scale to the anchored field.
-      if(reactant?.effective?.admitted)values[27]=reactant.effective.model.exchangeDiffusivity*(mapping.fineToField[3]*resolveWorldCalibration(calibration,{grid:fineDims[0]}).lengthGain)**2/plan.materialPitch**2;
+      if(reactant?.effective?.admitted)values[27]=reactant.effective.model.exchangeDiffusivity*(mapping.fineToField[3]*resolveWorldCalibration({...calibration,simulationDomainScale:transform.scale},{grid:fineDims[0],scale:transform.scale}).lengthGain)**2/plan.materialPitch**2;
       if(physics)values.set(physicsAppearanceUniformValues(physics),40);
       values.set([...(plan.materialMin??plan.min),(flowOnly||exportFields)?1:0],44);
       values.set(intermediate?[...intermediate.plan.min,intermediate.plan.flowPitch,...intermediate.plan.flowDims,1]:[0,0,0,1,1,1,1,0],48);

@@ -71,26 +71,24 @@ fn hierarchyHistory(p:vec3<f32>)->Gas{return hierarchyPlane(p,true);}
 }
 @compute @workgroup_size(64) fn advanceBricks(@builtin(workgroup_id) group:vec3<u32>,@builtin(num_workgroups) groups:vec3<u32>,@builtin(local_invocation_index) l:u32){
  let index=group.x+group.y*groups.x;if(index>=arrayLength(&work)){return;}let slot=work[index];let n=bricks[slot];let p=n.loPitch.xyz+(vec3<f32>(localCell(l))+.5)*n.loPitch.w;
- let fraction=fineFraction(p,n.loPitch.w);var owned=Gas(vec4<f32>(0),vec4<f32>(0));
- if(fraction>0.0){owned=gasScale(fineGasAt(p,n.loPitch.w),fraction);}
+ if(any(p<u.materialLo.xyz)||any(p>=u.materialLo.xyz+u.material.xyz*u.material.w)||blocked(vec3<i32>(floor((p-u.lo.xyz)/u.flow.w)))){
+  hout[slot*64u+l]=Gas(vec4<f32>(0,0,0,u.reactant_combustion_c.z),vec4<f32>(0));hout[arrayLength(&hout)/2u+slot*64u+l]=Gas(vec4<f32>(0),vec4<f32>(0));return;
+ }
+ let fraction=fineFraction(p,n.loPitch.w);var fg=Gas(vec4<f32>(0),vec4<f32>(0));var owned=fg;
+ if(fraction>0.0){fg=fineGasAt(p,n.loPitch.w);owned=gasScale(fg,fraction);}
  var r=owned;
  if(fraction<1.0){
-  let back=clipped(p,p-velocity(p)*u.time.y);var history=hierarchyGas(back);
-  if(fraction>0.0){history=exteriorHistory(history,hierarchyHistory(back),p,back,n.loPitch.w);}
-  r=suppliedGas(gasScale(history,1.0/(1.0-fraction)),supplyTexel(materialSupply,2u*(slot*64u+l))/(1.0-fraction));
+  let back=clipped(p,p-velocity(p)*u.time.y);let totalBack=hierarchyGas(back);var extDensity=totalBack;
+  if(fraction>0.0){
+   let history=exteriorHistory(totalBack,hierarchyHistory(back),p,back,n.loPitch.w);
+   extDensity=clampStraddleExterior(gasScale(history,1.0/(1.0-fraction)),totalBack,fg);
+  }
+  r=suppliedGas(extDensity,supplyTexel(materialSupply,2u*(slot*64u+l))/(1.0-fraction));
   if(worldSmokeOnly()){
    if(reactantLawOn()){
     let dt=u.time.x;
-    let w=min(.16,max(0.0,u.reactant_combustion_a.w*dt*pow(u.material.w/n.loPitch.w,2.0)));
-    if(w>0.0){
-     var neighbors=vec2<f32>(0);
-     for(var a=0u;a<3u;a++){
-      let off=vec3<f32>(axis(a))*n.loPitch.w;neighbors+=hierarchyGas(clipped(p,p+off)).a.xy+hierarchyGas(clipped(p,p-off)).a.xy;
-     }
-     r.a=vec4<f32>(max(vec2<f32>(0),r.a.xy*(1.0-6.0*w)+neighbors*w),0.0,0.0);
-    }
     let nextHeat=r.a.y*reactantCoolingSurvival(dt);
-    let nextSoot=r.a.x*reactantSootSurvival(dt)*sootBurnoutSurvival(nextHeat,1.0,dt);
+    let nextSoot=r.a.x*reactantSootSurvival(dt);
     r.a=vec4<f32>(select(0.0,nextSoot,nextSoot>1e-6),select(0.0,nextHeat,nextHeat>1e-5),0.0,0.0);
    }else{r.a=vec4<f32>(r.a.x*pow(.990,u.time.x),r.a.y*pow(.982,u.time.x),0.0,0.0);}
    r.b=vec4<f32>(0.0);
@@ -148,14 +146,17 @@ var<workgroup> motionMax:array<vec4<f32>,64>;
  let index=group.x+group.y*groups.x;if(index>=arrayLength(&work)){return;}let slot=work[index];let n=bricks[slot];let p=n.loPitch.xyz+(vec3<f32>(localCell(l))+.5)*n.loPitch.w;let r=hin[slot*64u+l];
  var grad=vec4<f32>(0);var opportunity=0.0;
  let smokeOnly=worldSmokeOnly();
- for(var a=0u;a<3u;a++){
-  let off=vec3<f32>(axis(a))*n.loPitch.w;let plus=hierarchyGas(p+off).a;let minus=hierarchyGas(p-off).a;
-  grad+=abs(plus-minus)/(2.0*n.loPitch.w);
-  if(!smokeOnly){opportunity=max(opportunity,min(max(plus.z,minus.z),max(plus.w,minus.w)/max(u.reactant_combustion_b.x,1e-6))*smoothstep(.1,.3,max(plus.y,minus.y)));}
+ let inDomain=all(p>=u.materialLo.xyz)&&all(p<u.materialLo.xyz+u.material.xyz*u.material.w);
+ if(inDomain&&(!smokeOnly||r.a.x>1e-5||r.a.y>1e-5)){
+  for(var a=0u;a<3u;a++){
+   let off=vec3<f32>(axis(a))*n.loPitch.w;let plus=hierarchyGas(p+off).a;let minus=hierarchyGas(p-off).a;
+   grad+=abs(plus-minus)/(2.0*n.loPitch.w);
+   if(!smokeOnly){opportunity=max(opportunity,min(max(plus.z,minus.z),max(plus.w,minus.w)/max(u.reactant_combustion_b.x,1e-6))*smoothstep(.1,.3,max(plus.y,minus.y)));}
+  }
  }
  // Fixed material/physical units; no frame-maximum normalization.
- signal[l]=vec4<f32>(r.b.x/.04,opportunity,grad.y,grad.x);
- motionMin[l]=vec4<f32>(velocity(p),0);motionMax[l]=motionMin[l];workgroupBarrier();
+ signal[l]=select(vec4<f32>(0),vec4<f32>(select(r.b.x/.04,0.0,smokeOnly),opportunity,grad.y,grad.x),inDomain);
+ motionMin[l]=vec4<f32>(select(vec3<f32>(0),velocity(p),inDomain),0);motionMax[l]=motionMin[l];workgroupBarrier();
  for(var stride=32u;stride>0u;stride/=2u){if(l<stride){signal[l]+=signal[l+stride];motionMin[l]=min(motionMin[l],motionMin[l+stride]);motionMax[l]=max(motionMax[l],motionMax[l+stride]);}workgroupBarrier();}
  // Compact work order omits parents and unused pool slots from readback.
  if(l==0u){demand[index*3u]=signal[0]/64.0;demand[index*3u+1u]=motionMin[0];demand[index*3u+2u]=motionMax[0];}

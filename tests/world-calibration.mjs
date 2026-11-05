@@ -130,6 +130,42 @@ test('initial wavelet coordinates use the authored wavelength on independent vel
 
 import {checkCalibrationState} from '../tools/world-calibration-check.mjs';
 import * as calibrationModule from '../volume-world-calibration.mjs';
+import * as worldSmokeModule from '../volume-world-smoke.mjs';
+import {MaterialHierarchy,predictDemand,materialImportance} from '../volume-material-hierarchy.mjs';
+test('adaptive material demand prediction stays finite for non-multiple-of-4 world material dimensions',()=>{
+ for(const n of [10,14,20,28]){
+  const dims=[n,n,n];
+  const h=new MaterialHierarchy({dims,options:{budget:2,maxDetail:2}});
+  const lastRoot=h.roots.at(-1).key;
+  const seed=new Map([[lastRoot,{reaction:10,mixing:10,thermal:10,smoke:10,motionMin:[-1,-1,-1],motionMax:[1,1,1]}]]);
+  const first=h.allocate(seed);
+  assert.ok(first.leaves.length>h.roots.length);
+  const leafSignals=new Map(first.leaves.map(l=>[l.key,{reaction:10,mixing:10,thermal:10,smoke:10,motionMin:[-1,-1,-1],motionMax:[1,1,1]}]));
+  const predicted=predictDemand(first.nodes,leafSignals,{dims,basePitch:12/n,horizon:12/n});
+  for(const [k,sig] of predicted.entries()){
+   assert.ok(Number.isFinite(materialImportance(sig)),`non-finite importance at ${k} for dims=${n}`);
+  }
+  const second=h.allocate(predicted);
+  assert.ok(second.leaves.length>=h.roots.length);
+ }
+});
+test('world boxFraction snaps f32 rounding residuals and straddling exterior history is bounded',()=>{
+ const smokeSrc=readFileSync(new URL('../volume-world-smoke.mjs',import.meta.url),'utf8');
+ const hierGpuSrc=readFileSync(new URL('../volume-material-hierarchy-gpu.mjs',import.meta.url),'utf8');
+ assert.match(smokeSrc,/fn boxFraction\(p:vec3<f32>,pitch:f32,lo:vec3<f32>,hi:vec3<f32>\)->f32\{[\s\S]*1\.0-1e-4/);
+ assert.match(smokeSrc,/fn clampStraddleExterior\(/);
+ assert.match(hierGpuSrc,/clampStraddleExterior\(gasScale\(history,1\.0\/\(1\.0-fraction\)\),totalBack,fg\)/);
+});
+test('world buoyancy acceleration and diffusivity respect simulation world scale and fine transform scale',()=>{
+ assert.equal(typeof worldSmokeModule.worldBuoyancyAcceleration,'function');
+ const cal={calibrationMode:'world',simulationWorldScale:4,calibrationMaterialCells:24,calibrationVelocityCells:24};
+ for(const fineWidth of [24,32,48])for(const scale of [1,2,4]){
+  const b=worldSmokeModule.worldBuoyancyAcceleration({buoyancy:.002,fineWidth,scale,calibration:{...cal,simulationDomainScale:scale}});
+  close(b,.002*(4/2)*(32/24));
+ }
+ const core=readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
+ assert.doesNotMatch(core,/let heatExpansion = thermalExpansionForce\([^\n]+\) \* calibrationCellGain\(\);/);
+});
 test('independent simulation levers toggle world emissive material, empty-air fast bypass and separated velocity wavelet',()=>{
  assert.equal(typeof calibrationModule.resolveSimulationLevers,'function');
  const defaults=calibrationModule.resolveSimulationLevers({});
@@ -174,6 +210,8 @@ test('independent simulation levers toggle world emissive material, empty-air fa
  assert.match(core,/fn worldSmokeOnlyOn\(\) -> bool \{\s*return u\.open_world_boundary\.y > 0\.5;\s*\}/);
  assert.match(core,/fn fastBypassOn\(\) -> bool \{\s*return u\.open_world_boundary\.z > 0\.5;\s*\}/);
  assert.match(core,/fn velocityWaveletOn\(\) -> bool \{\s*return u\.open_world_boundary\.w > 0\.5;\s*\}/);
+ assert.match(core,/if \(!VELOCITY_ONLY && fastBypassOn\(\) && u\.emissive_physics\.x > 0\.5\)/);
+ assert.match(core,/if \(!VELOCITY_ONLY && fastBypassOn\(\) && bypassOutsidePrimitive/);
  assert.match(core,/if \(waveletOn\(\) && VELOCITY_ONLY && velocityWaveletOn\(\)\) \{ vel = vel \+ waveletCorrection\(backCell, velTransported, waveletCoordA, waveletCoordB, timeStep\); \}/);
  assert.match(core,/if\(!MATERIAL_ONLY\|\|!waveletOn\(\)\|\|velocityWaveletOn\(\)\)\{return resolved;\}/);
  assert.match(worldSmoke,/fn worldSmokeOnly\(\)->bool\{return u\.pressureControl\.w>0\.5;\}/);
