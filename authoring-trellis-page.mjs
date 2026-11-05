@@ -17,7 +17,9 @@ const MODEL_DEPS=async()=>{
 // activation memory); it needs shader-f16 on the shared device.
 // Every run also yields a surfel asset (trellis-surfels.mjs) from the decoded field, built from the raw
 // mesh before any cleanup. finishMesh:false stops there: no cleanup, UV or bake, and no mesh GLB.
-export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixelValues,highResolutionPixelValues,finishing,finishMesh=true,decoderActivationStorage,scheduling,signal,onPhase=()=>{},provenance={},deps}){
+export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixelValues,highResolutionPixelValues,finishing,finishMesh=true,textureSize=1024,decoderActivationStorage,scheduling,signal,onPhase=()=>{},provenance={},deps}){
+  if(!Number.isSafeInteger(textureSize)||textureSize<1||!Number.isSafeInteger(textureSize**2))
+    throw TypeError('positive representable texture size required');
   if(!(pixelValues instanceof Float32Array)||pixelValues.length!==512*512*3)
     throw TypeError('TRELLIS needs the selected image as prepared 512x512 RGB pixels');
   if(finishMesh&&(typeof finishing?.postprocessMesh!=='function'||typeof finishing?.unwrapMesh!=='function'))
@@ -72,7 +74,7 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
       }finally{meshConsumer.dispose?.();}
     }else{
     let surfels=null;
-    asset=d.createTrellisAssetAdapter({runtime:run.route.runtime,geometry:out.geometry,material:out.material,
+    asset=d.createTrellisAssetAdapter({runtime:run.route.runtime,geometry:out.geometry,material:out.material,textureSize,
       postprocessMesh:async mesh=>{
         const rawMesh=mesh?.vertices instanceof Float32Array&&mesh?.triangles instanceof Uint32Array?{vertices:mesh.vertices,triangles:mesh.triangles}:null;
         surfels=await buildRunSurfels({...surfelInputs,rawMesh});

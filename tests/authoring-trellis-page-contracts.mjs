@@ -318,3 +318,17 @@ test('a 1024 page return publishes mesh levels while reporting unsupported autom
   assert.deepEqual(report.surfels,{status:'skipped',reason:'unsupported-resolution',resolution:1024,maxResolution:512});
   assert.deepEqual(result.levelInputs.decode.vertices,mesh.vertices);assert.equal(result.levelInputs.materialFields.features.length,18);
 });
+
+test('caller-selected atlas size reaches the existing page asset consumer',async()=>{
+  for(const size of [1024,2048,4096]){
+    const f=fixture(),base=f.deps.createTrellisAssetAdapter;let selected;
+    f.deps.createTrellisAssetAdapter=options=>{selected=options.textureSize;return base(options);};
+    await call(f,{textureSize:size});assert.equal(selected,size);
+  }
+});
+test('an invalid atlas size is refused before borrowing the page GPU',async()=>{
+  for(const size of [0,-1,1.5,NaN,Number.MAX_SAFE_INTEGER]){
+    const f=fixture();await assert.rejects(call(f,{textureSize:size}),/texture.*size/i);
+    assert.equal(f.events.length,0);
+  }
+});

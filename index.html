@@ -28148,7 +28148,7 @@ function setupAuthoringAssets(){
   // Browser U2Net for opaque photos: the shop-hosted package (immutable revision, sha-checked on load).
   const U2NET_PACKAGE_URL='https://huggingface.co/BasinShapers/u2net-webgpu/resolve/f4f82a54b6e8d7ffd4321005dbff1cb03198c78b/f32/';
   let u2netRunner=null;
-  const trellisPageRunInner=async({pixels,highResolutionPixels,image,label='TRELLIS page',signal,onPhase,onInput,finishMesh=true,scheduling}={})=>{
+  const trellisPageRunInner=async({pixels,highResolutionPixels,image,label='TRELLIS page',signal,onPhase,onInput,finishMesh=true,textureSize=1024,scheduling}={})=>{
     const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};
     const [{runTrellisInPage,createTrellisPageCheckpoints},{createBrowserMeshPostprocess},{createWasmXatlasUnwrapper}]=await Promise.all([
       import('./authoring-trellis-page.mjs'),import('./models/trellis2/mesh-cleanup.js'),import('./models/trellis2/wasm-xatlas.js')]);
@@ -28192,7 +28192,7 @@ function setupAuthoringAssets(){
     imageSha256??=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',pixelValues)),b=>b.toString(16).padStart(2,'0')).join('');
     const runId=`authoring-trellis-page-${crypto.randomUUID()}`;
     try{
-      const result=await runTrellisInPage({appGpu,manifest:pack.manifest,fetchTensor:pack.fetchTensor,pixelValues,highResolutionPixelValues,signal,onPhase,scheduling,decoderActivationStorage:'f16',finishMesh:finishMesh!==false,
+      const result=await runTrellisInPage({appGpu,manifest:pack.manifest,fetchTensor:pack.fetchTensor,pixelValues,highResolutionPixelValues,signal,onPhase,scheduling,decoderActivationStorage:'f16',finishMesh:finishMesh!==false,textureSize,
         // Stop reaches the finishing providers too (cleanup and UV in workers where supported).
         finishing:{postprocessMesh:createBrowserMeshPostprocess({targetFaces:200000,WorkerClass:Worker,signal}),unwrapMesh:createWasmXatlasUnwrapper({WorkerClass:Worker,signal})},
         provenance:{checkpointManifestSha256:pack.manifestSha256,
