@@ -85,7 +85,8 @@ test('WGSL carries the predictor buffer, the MacCormack corrector with an extrem
   assert.doesNotMatch(corrector, /clamp\(corrected, extrema\.lo, extrema\.hi\)/, 'clamping to the extremum is rejected: it inflates fields toward their running maximum');
   const bound = wgslFunction('boundVelocity');
   assert.ok(bound, 'boundVelocity must exist');
-  assert.match(bound, /vec3<f32>\(-0\.34 \* VELOCITY_UNIT_SCALE\), vec3<f32>\(0\.52 \* VELOCITY_UNIT_SCALE\)/, 'legacy scheme keeps the exact fixed component clamp');
+  assert.match(bound, /vec3<f32>\(-0\.34 \* VELOCITY_UNIT_SCALE \* calibrationCellGain\(\)\), vec3<f32>\(0\.52 \* VELOCITY_UNIT_SCALE \* calibrationCellGain\(\)\)/, 'the fixed component clamp scales with calibrated cell units; the legacy gain is one');
+  assert.match(bound, /max\(0\.05, u\.transport_controls\.z\) \* VELOCITY_UNIT_SCALE \* calibrationCellGain\(\) \/ dynamicsBacktraceScale\(\)/, 'the non-legacy bound uses the same calibrated units');
   assert.match(bound, /transport_controls\.z/, 'non-legacy schemes bound the step by backtrace cells from the uniform');
   // The separated projection emits a coarse correction, then bounds the
   // prolonged velocity in the receiving lattice. Solid-cell clearing carries
@@ -96,7 +97,10 @@ test('WGSL carries the predictor buffer, the MacCormack corrector with an extrem
     'separated pressure applies the legacy bound after prolongation in the receiving lattice units');
   assert.match(pressureTransfer, /if\(magnitude>shape\.bounds\.y\) \{ velocity\*=shape\.bounds\.y\/magnitude; \}/,
     'separated pressure also applies the selected backtrace bound after prolongation');
-  const velocityWrites = source.replace(separatedProjection, '').match(/fluidDst\[base\] = vec4<f32>\([^\n]*\n/g) || [];
+  assert.match(source, /bypassVel = select\(boundVelocity\(bypassVel\), bypassVel, faceForcesOn\(\)\);/, 'the empty-air path bounds its velocity before storage; face forces retain their separate projection');
+  const bypassWrite = 'fluidDst[base] = vec4<f32>(bypassVel, 0.0);';
+  assert.equal(source.split(bypassWrite).length - 1, 1, 'exactly one bounded empty-air write');
+  const velocityWrites = source.replace(separatedProjection, '').replace(bypassWrite, '').match(/fluidDst\[base\] = vec4<f32>\([^\n]*\n/g) || [];
   assert.ok(velocityWrites.length >= 4, `expected the main kernel and three projection kernels to write velocity: ${velocityWrites.length}`);
   for (const write of velocityWrites) {
     assert.match(write, /boundVelocity\(/, `each remaining velocity write uses the selected bound: ${write.trim()}`);

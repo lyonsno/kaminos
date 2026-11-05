@@ -6895,7 +6895,10 @@ fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
   let advectVelocity = materialTransportVelocity(cell, centreVelocity);
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * dynamicsBacktraceScale());
   if (SHRED_ONLY) {
-    if (!MATERIAL_ONLY) { fluidPredict[base] = sampleFluidSlotInflow(backCell, 0u); }
+    // The material-only corrector reuses this characteristic; scalar
+    // MacCormack also reuses .w for oxidizer, including in Shred mode.
+    let predOx = select(0.0, sampleReactantOxidizer(backCell), !VELOCITY_ONLY && reactantLawOn() && u.transport_controls.x > 2.5);
+    fluidPredict[base] = vec4<f32>(select(sampleFluidSlotInflow(backCell, 0u).xyz, advectVelocity, MATERIAL_ONLY), predOx);
     fluidPredict[base + 1u] = vec4<f32>(sampleFluidSlotInflow(backCell, 1u).xyz, 0.0);
     fluidPredict[base + 3u] = vec4<f32>(0.0, sampleFluidSlotInflow(backCell, 3u).y, 0.0, 0.0);
     return;

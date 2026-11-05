@@ -7,12 +7,13 @@ import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {solidCubeCadenceNative} from './solid-cube-cadence-native.mjs';
 import {compositionRestoreUrl} from '../scene-authoring.mjs';
-const [out,presetFile,mode='all']=process.argv.slice(2);
+const [out,presetFile,mode='all',appearance='authored']=process.argv.slice(2);
+assert.ok(['authored','shred-only'].includes(appearance),'appearance authored or shred-only required');
 assert.ok(['all','page-inspect','all-inspect'].includes(mode),'mode all, page-inspect or all-inspect required');
 assert.ok(out&&presetFile,'Caller-owned output and observed preset required');
 await fs.mkdir(out,{recursive:true});
 const materialWidth=mode.endsWith('inspect')?16:32;
-const root=process.cwd(),report={status:'failed',phase:'setup',mode,materialWidth,root,errors:[],arms:[]};
+const root=process.cwd(),report={status:'failed',phase:'setup',mode,materialWidth,appearance,root,errors:[],arms:[]};
 let server,browser,page;
 const save=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));
 let sourceFiles;
@@ -68,7 +69,7 @@ try{
  let effectivePreset=path.basename(presetFile,'.json');
  if(mode.endsWith('inspect')){
   const bundle=JSON.parse(await fs.readFile(presetFile,'utf8')),preset=structuredClone(bundle.preset),presetRoute=new URL(preset.route);
-  const small={'volume-look-freeze':1,'volume-resolution':16,'volume-grid-height-ratio':2,'volume-fine-velocity':mode==='all-inspect'?8:16,'volume-fine-pressure':8,'volume-pressure-solver-iterations':4,'volume-world-smoke':'off','volume-steps':8,'volume-render-scale':.5};
+  const small={'volume-appearance-model':appearance,'volume-look-freeze':1,'volume-resolution':16,'volume-grid-height-ratio':2,'volume-fine-velocity':mode==='all-inspect'?8:16,'volume-fine-pressure':8,'volume-pressure-solver-iterations':4,'volume-world-smoke':'off','volume-steps':8,'volume-render-scale':.5};
   for(const controls of [preset.domControls,preset.rendererControls])for(const [key,value] of Object.entries(small))if(controls?.[key]){controls[key].value=typeof controls[key].value==='string'?String(value):value;presetRoute.searchParams.set(controls[key].param,String(value));}
   preset.route=presetRoute.href;
   const result=await fetch(origin+'/api/volume-settings-presets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label:'Solid cube control inspection Fine16',preset,publishAlias:false})});
@@ -78,7 +79,7 @@ try{
  await page.waitForFunction(()=>window.kaminosSceneAuthoring?.addFlameEmitter);
  await page.evaluate(id=>window.kaminosSceneAuthoring.addFlameEmitter(id,{lightingRoute:{volume_light_field_shared_source:'1',volume_light_field_distributed:'1',volume_light_field_hybrid:'1',volume_light_field_hybrid_points:'6',volume_light_field_hybrid_shadow_capture_budget:'2',volume_light_field_hybrid_shadow_resolution:'16',volume_light_field_hybrid_blocker_samples:'1',volume_light_field_hybrid_filter_samples:'1',volume_light_field_hybrid_light_grid:'4',volume_light_field_hybrid_light_directions:'8',volume_light_field_hybrid_smoke_refinement:'1'}}),effectivePreset);
  const control=async(id,value)=>page.evaluate(({id,value})=>{const e=document.getElementById(id);if(!e)throw Error('Missing '+id);e.value=String(value);if(e.value!==String(value))throw Error('Rejected '+id);e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));},{id,value});
- for(const [id,v] of Object.entries({'volume-look-freeze':1,'volume-resolution':materialWidth,'volume-grid-height-ratio':2,'volume-fine-velocity':mode==='all-inspect'?8:16,'volume-fine-pressure':8,'volume-render-scale':.5,'volume-steps':8,'volume-pressure-solver-iterations':4,'volume-world-smoke':'off'}))await control(id,v);
+ for(const [id,v] of Object.entries({'volume-appearance-model':appearance,'volume-look-freeze':1,'volume-resolution':materialWidth,'volume-grid-height-ratio':2,'volume-fine-velocity':mode==='all-inspect'?8:16,'volume-fine-pressure':8,'volume-render-scale':.5,'volume-steps':8,'volume-pressure-solver-iterations':4,'volume-world-smoke':'off'}))await control(id,v);
  await page.waitForFunction(()=>window.__kaminosSceneRadiance?.canRender());
  await page.evaluate(()=>{for(const position of [[.8,-.3,0],[-.8,.1,-.6]]){const id=window.kaminosSceneAuthoring.addMesh('box',{width:.4,height:1.2,depth:.4});window.kaminosSetSceneObjectTransform(id,{position});}});
  await page.evaluate(()=>window.kaminosSetCameraDebugPose({position:[7,5,9],target:[0,1.5,0]}));
@@ -94,6 +95,9 @@ try{
  await page.evaluate(()=>window.kaminosSceneEdits.redo());assert.equal(await page.evaluate(()=>window.__kaminosSceneRadiance.debugState().shadowCaptureBudget),1);
  await page.screenshot({path:path.join(out,'inspector.png')});
  report.live=await page.evaluate(()=>({simulation:window.__kaminosVolumePrototype.debugState(),lighting:window.__kaminosSceneRadiance.debugState(),work:document.querySelector('[aria-label="Solid shadow refresh workload"]').textContent}));
+ assert.equal(report.live.simulation.appearanceModel.effective,appearance);
+ assert.equal(report.live.simulation.reactantCombustion.effective.admitted,true);
+ assert.equal(report.live.simulation.transport.effective.scheme,'maccormack');
  assert.equal(report.live.lighting.pointCount,6);assert.equal(report.live.lighting.residentShadowCount,6);assert.equal(report.live.lighting.evaluatedPointCount,6);
  report.phase='save';await save();report.saved=await page.evaluate(()=>window.saveSceneAs({result:true,name:'beaming-solid-cube-stagger'}));assert.equal(report.saved.ok,true,report.saved.error);
  const scene=await(await fetch(origin+'/api/read?root=scenes&path='+encodeURIComponent(report.saved.filename))).json();await fs.writeFile(path.join(out,'scene.json'),JSON.stringify(scene,null,2));
@@ -101,6 +105,9 @@ try{
  await page.waitForFunction(()=>/^(Scene loaded|Volume scene loaded)/.test(document.getElementById('info-bar')?.textContent||''));
  await page.waitForFunction(()=>window.__kaminosSceneRadiance?.canRender());await page.evaluate(()=>window.__kaminosVolumePrototype.setSimulationPaused(true));
  report.reopened=await page.evaluate(()=>({simulation:window.__kaminosVolumePrototype.debugState(),lighting:window.__kaminosSceneRadiance.debugState()}));
+ assert.equal(report.reopened.simulation.appearanceModel.effective,appearance);
+ assert.equal(report.reopened.simulation.reactantCombustion.effective.admitted,true);
+ assert.equal(report.reopened.simulation.transport.effective.scheme,'maccormack');
  assert.equal(report.reopened.lighting.shadowCaptureBudget,1);assert.equal(report.reopened.lighting.pointCount,6);assert.equal(report.reopened.lighting.residentShadowCount,6);
  assert.deepEqual(report.errors,[]);assert.deepEqual(await hashes(),report.source,'Source changed during run');
  await page.screenshot({path:path.join(out,'cold-reopened.png')});report.status='passed';report.phase='complete';

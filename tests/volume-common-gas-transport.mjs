@@ -42,6 +42,14 @@ assert.notEqual(mainKernelStart, -1, 'main sim kernel is located');
 const mainStart = core.indexOf('  let backtraceScale = transportBacktraceScale(speed)', mainKernelStart);
 const mainEnd = core.indexOf('  // Reactant law (', mainStart);
 assert.ok(mainStart >= 0 && mainEnd > mainStart, 'production advection block is located');
+const commonStart = core.indexOf('  // Shared characteristic for gas-carried state', mainStart);
+assert.ok(commonStart > mainStart && commonStart < mainEnd);
+// Keep the production characteristic and advection branches. Wavelet writes
+// and the optional empty-air bypass between them have separate contracts.
+const flagsStart = core.indexOf('  let macCormack =', mainStart);
+const flagsEnd = core.indexOf('  let bypassSourceBand', flagsStart);
+const advection = core.slice(mainStart, core.indexOf('  let noiseCell', mainStart))
+  + core.slice(flagsStart, flagsEnd) + core.slice(commonStart, mainEnd);
 const run = new Function('cell', 'advectVelocity', 'speed', 'heat', 'enabled', `
   const calls = [];
   const vec = (x, y = x, z = x, w = x) => ({x,y,z,w});
@@ -70,7 +78,7 @@ const run = new Function('cell', 'advectVelocity', 'speed', 'heat', 'enabled', `
   const sampleFrontField = p => {calls.push({slot:'front',p:[p.x,p.y,p.z]}); return 0.5;};
   const sampleFrontFieldTransport = sampleFrontField;
   ${translate(helpers)}
-  ${translate(core.slice(mainStart, mainEnd))}
+  ${translate(advection)}
   return calls;
 `);
 const at = {x:30.5,y:40.5,z:20.5};
