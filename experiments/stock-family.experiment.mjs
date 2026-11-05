@@ -34,11 +34,11 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
   function update(item,value){
     assertLive(item);item.value={...item.value,...validateParameters(value)};item.error=null;
     try{
-      const result=deformStock(sourceGeometry.attributes.position.array,sourceGeometry.attributes.normal.array,recipe.source.profile,item.value,sourceGeometry.attributes.stockRestAxial?.array);
+      const result=deformStock(sourceGeometry.attributes.position.array,sourceGeometry.attributes.normal.array,recipe.source.profile,item.value,sourceGeometry.attributes.stockRestAxial?.array,sourceGeometry.userData.stockRestCurve);
       item.mesh.geometry.attributes.position.array.set(result.positions);item.mesh.geometry.attributes.normal.array.set(result.normals);
       item.mesh.geometry.attributes.position.needsUpdate=true;item.mesh.geometry.attributes.normal.needsUpdate=true;
       item.mesh.geometry.computeBoundingBox();item.mesh.geometry.computeBoundingSphere();item.metrics=result.metrics;item.mesh.visible=true;item.invalid.visible=false;
-      const warp=createStockWarp(recipe.source.profile,item.value),colors=new Float32Array(result.positions.length);
+      const warp=createStockWarp(recipe.source.profile,item.value,sourceGeometry.userData.stockRestCurve),colors=new Float32Array(result.positions.length);
       for(let i=0;i<colors.length;i+=3){const s=warp.point(Array.from(sourceGeometry.attributes.position.array.subarray(i,i+3))).axial/(sourceGeometry.attributes.stockRestAxial?.array[i/3]??1);
         const magnitude=Math.min(1,Math.abs(Math.log2(s))/3);colors.set(s>=1?[.15+.85*magnitude,.65-.4*magnitude,.65-.55*magnitude]:[.15+.4*magnitude,.65-.4*magnitude,.65+.35*magnitude],i);}
       item.mesh.geometry.setAttribute('color',new BufferAttribute(colors,3));
@@ -192,6 +192,7 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
         for(const [key,value]of Object.entries(values))arcInputs[key].value=value;
       }
       sourceIdentity.textContent=recipe.source.sha256;sourceIdentity.title=recipe.source.url;
+      bandTitle.textContent=recipe.source.fit?.arc?'Protected tangent bands (%)':'Protected bands (%)';
       const profile=recipe.source.profile,nextKey=JSON.stringify([recipe.source.sha256,profile]);if(nextKey===bandKey)return;bandKey=nextKey;bandDraft=profile.locks.map(b=>b.map(v=>bandPercent(profile,v)));renderBands();sourceStatus.textContent='';
     }
     const frame=document.createElement('button');frame.className='btn';frame.textContent='Frame family';frame.onclick=()=>invoke('frame');common.append(frame);
