@@ -305,16 +305,16 @@ const fragFormedColor=wgslFn(`fn hill_frag_color(vColor:vec4<f32>,x:f32,y:f32,z:
  let sunDir=normalize(vec3<f32>(.52,.68,.51));
  let fillDir=normalize(vec3<f32>(-.48,.55,.68));
  if(viewMode>2.5){
-  let simRock=vColor.x*(.34+.66*smoothstep(.04,.34,steep));
-  let simSoil=vColor.y;
-  let fragProc=clamp(meso*(cliffWall*(.38*eLedge*abs(l0.x+.5*l1.x)+.45*cleft)+talusBand*.48*cobbleDome+(1.-cliffWall)*.32*abs(grain0)),0.,1.);
-  let procAmp=clamp(vColor.z+.55*fragProc,0.,1.);
-  let cRock=vec3<f32>(.92,.25,.10)*simRock;
-  let cSoil=vec3<f32>(.10,.82,.30)*simSoil*(1.-.42*simRock);
-  let cProc=vec3<f32>(.06,.60,1.0)*procAmp;
-  let provSrgb=clamp(vec3<f32>(.04,.045,.055)+cRock+cSoil+cProc,vec3<f32>(0.),vec3<f32>(1.));
-  let pShade=clamp(.64+.42*dot(pNorm,sunDir)+.16*dot(pNorm,fillDir),.38,1.25);
-  return vec4<f32>(clamp(provSrgb*provSrgb*1.42*pShade,vec3<f32>(0.),vec3<f32>(1.)),1.);
+  let simRock=clamp(vColor.x*(.38+.62*smoothstep(.04,.34,steep)),0.,1.);
+  let simSoil=clamp(vColor.y*1.15,0.,1.)*(1.-.55*simRock);
+  let fragProc=clamp(meso*(cliffWall*(.42*eLedge*abs(l0.x+.5*l1.x)+.52*cleft)+talusBand*.58*cobbleDome+(1.-cliffWall)*.35*abs(grain0)),0.,1.);
+  let procAmp=clamp(vColor.z*1.35+.55*fragProc,0.,1.);
+  let cRock=vec3<f32>(.72,.16,.05)*simRock*(1.-.45*procAmp);
+  let cSoil=vec3<f32>(.06,.58,.16)*simSoil*(1.-.45*procAmp);
+  let cProc=vec3<f32>(.04,.38,.82)*procAmp;
+  let provSrgb=clamp(vec3<f32>(.03,.035,.045)+cRock+cSoil+cProc,vec3<f32>(0.),vec3<f32>(.82));
+  let pShade=clamp(.52+.38*dot(pNorm,sunDir)+.14*dot(pNorm,fillDir),.30,1.05);
+  return vec4<f32>(clamp(provSrgb*provSrgb*1.05*pShade,vec3<f32>(0.),vec3<f32>(1.)),1.);
  }
  let dSun=(dot(pNorm,sunDir)-dot(baseNorm,sunDir))*2.45;
  let dFill=(dot(pNorm,fillDir)-dot(baseNorm,fillDir))*1.15;
@@ -329,8 +329,8 @@ const fragFormedColor=wgslFn(`fn hill_frag_color(vColor:vec4<f32>,x:f32,y:f32,z:
 
 const baseCutoutKernel=wgslFn(`fn hill_base_cutout(x:f32,z:f32,fx:f32,fz:f32,fr:f32,useFormed:f32,zoomOn:f32)->f32{
  if(useFormed<.5||zoomOn<.5||fr>3.05){return 1.;}
- let edge=max(abs(x-fx),abs(z-fz))/max(.05,fr);
- if(edge<.86){return 0.;}
+ let distToEdge=fr-max(abs(x-fx),abs(z-fz));
+ if(distToEdge>.055){return 0.;}
  return 1.;
 }`);
 
@@ -339,8 +339,8 @@ const basePosKernel=wgslFn(`fn hill_base_pos(x:f32,y:f32,z:f32,fx:f32,fz:f32,fr:
  let dBox=max(abs(x-fx),abs(z-fz));
  let distToEdge=fr-dBox;
  let zAct=1.-smoothstep(2.65,3.05,fr);
- let cut=step(.052,distToEdge);
- return vec4<f32>(x,y-.36*zAct*cut,z,1.);
+ let cut=step(.145,distToEdge);
+ return vec4<f32>(x,y-.28*zAct*cut,z,1.);
 }`);
 
 // Camera-centered arbitrary-zoom 3D surface synthesis:
@@ -434,9 +434,9 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
  let distToEdge=max(0.,fr-dBox);
  let border=1.-smoothstep(.45,.49,max(abs(wx/width),abs(wz/length)));
  let zoomActive=1.-smoothstep(2.65,3.15,fr);
- let wPatch=smoothstep(.055,.115,distToEdge)*border*zoomActive;
- let inCollar=1.-smoothstep(.105,.140,distToEdge);
- let collarLift=smoothstep(.002,.015,distToEdge)*inCollar*.0035*zoomActive-(1.-smoothstep(0.,.004,distToEdge))*.006;
+ let wPatch=smoothstep(.085,.185,distToEdge)*border*zoomActive;
+ let inCollar=1.-smoothstep(.145,.195,distToEdge);
+ let collarLift=smoothstep(.003,.020,distToEdge)*inCollar*.0025*zoomActive-(1.-smoothstep(0.,.004,distToEdge))*.004;
  let isSimOnly=viewMode>.5&&viewMode<1.5;
  let safeCubX=select(mix(cub.x,max(bedTri,cub.x),inCollar),bedTri,isSimOnly);
  let safeCubY=select(mix(cub.y,max(soilTri,cub.y),inCollar),soilTri,isSimOnly);
