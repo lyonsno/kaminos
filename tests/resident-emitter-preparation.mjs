@@ -56,3 +56,9 @@ test('GPU source integer bounds retain every reference cell while avoiding a thi
  }
  const b=immersedSourceIntegerBounds({admitted:true,centreCells:[4,8,4],direction:[0,1,0],thickness:200,radiusCells:2},{grid:8,gridHeight:16,worldSource:true});assert.ok(b.span[0]<12&&b.span[2]<12&&b.span[1]>200,'thickness may lengthen the normal axis without expanding a cubic walk');
 });
+
+test('pose changes retain every current authored pattern beyond the shared reference cache size',()=>{
+ const compiler=collection.createRuntimeImmersedSourceCache(),records=Array.from({length:20},(_,i)=>({id:'source-'+i,worldSource:true,controls:{...controls,emitterAperturePattern:'jets',immersedRadius:.2+i*.01}})),options={controls,grid:8,gridHeight:16},before=compiler.collection(records,options),moved=compiler.collection(records.map(r=>({...r,controls:{...r.controls,immersedCentreX:.1}})),options);
+ for(let i=0;i<records.length;i++)assert.ok(moved.sources[i].pattern===before.sources[i].pattern,records[i].id+' rebuilt unchanged pattern');
+ const changed=compiler.collection(records.map((r,i)=>({...r,controls:{...r.controls,immersedCentreX:.1,...(i===0?{immersedRadius:.8}:{})}})),options);assert.notEqual(changed.sources[0].pattern,moved.sources[0].pattern);assert.equal(changed.sources[1].pattern,moved.sources[1].pattern);
+});

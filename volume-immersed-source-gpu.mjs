@@ -25,7 +25,7 @@ fn noiseAt(i:u32)->f32{return clamp(bitcast<f32>(noiseNodes[i].x),-1.0,1.0);}
 `;
 export function createGPUImmersedCollection(device){
  const U=GPUBufferUsage,T=GPUTextureUsage,streams=new Map(),retired=new Set();let packet=null,last=null,shape=null,base=null,texture=null,baseView=null,outputView=null,destroyed=false,encodedStep=-1,observePuffs=false,readingPuffs=false,puffObservation=null,observationTask=Promise.resolve(null);
- const geometry=createGPUImmersedGeometry(device);let patterns=[];
+ const geometry=createGPUImmersedGeometry(device);let patterns=[];const pendingPatternRows=new Set();
  const dummy=device.createBuffer({label:'inactive GPU inlet streams',size:16,usage:U.STORAGE});
  const retire=(resources)=>{for(const r of resources)if(r)retired.add(r);queueMicrotask(()=>{const done=()=>{for(const r of resources)if(r&&retired.delete(r))r.destroy();};device.queue.onSubmittedWorkDone().then(done,done);});};
  if(!pipelines.has(device)){const module=device.createShaderModule({label:'GPU immersed source fields',code:CODE});pipelines.set(device,device.createComputePipeline({label:'GPU immersed source fields',layout:'auto',compute:{module,entryPoint:'buildSourceField'}}));}const pipeline=pipelines.get(device);
@@ -42,12 +42,12 @@ export function createGPUImmersedCollection(device){
    if(destroyed)throw Error('GPU source collection disposed');const width=next?.width??Math.max(6,grid),height=next?.height??grid+1,layers=next?.layers??1,key=[width,height,layers].join(':');
    if(layers>device.limits.maxTextureArrayLayers)throw Error(`immersed-source-collection-capacity:requested=${layers-1}:supported=${device.limits.maxTextureArrayLayers-1}`);
    const changed=shape!==key;
-   if(changed){const previous=[base,texture];base=device.createTexture({label:'static authored source inputs',size:[width,height,layers],format:'rgba32float',usage:T.TEXTURE_BINDING|T.COPY_DST});texture=device.createTexture({label:'GPU authored source collection',size:[width,height,layers],format:'rgba32float',usage:T.TEXTURE_BINDING|T.STORAGE_BINDING|T.COPY_DST|T.COPY_SRC});baseView=base.createView({dimension:'2d-array'});outputView=texture.createView({dimension:'2d-array'});shape=key;last=null;patterns=[];resetBindings();retire(previous);}
+   if(changed){const previous=[base,texture];base=device.createTexture({label:'static authored source inputs',size:[width,height,layers],format:'rgba32float',usage:T.TEXTURE_BINDING|T.COPY_DST});texture=device.createTexture({label:'GPU authored source collection',size:[width,height,layers],format:'rgba32float',usage:T.TEXTURE_BINDING|T.STORAGE_BINDING|T.COPY_DST|T.COPY_SRC});baseView=base.createView({dimension:'2d-array'});outputView=texture.createView({dimension:'2d-array'});shape=key;last=null;patterns=[];pendingPatternRows.clear();resetBindings();retire(previous);}
    if(last!==next||changed){
     const metadata=new Float32Array([1,next?.count??0,grid,0]);for(const target of[base,texture])device.queue.writeTexture({texture:target},metadata,{bytesPerRow:16},[1,1,1]);
     for(const [index,source]of(next?.sources??[]).entries()){
      device.queue.writeTexture({texture:base,origin:[0,0,index+1]},source.coefficients,{bytesPerRow:96},[6,1,1]);
-     if(source.pattern&&patterns[index]!==source.pattern){const values=new Float32Array(grid*grid*4);for(let i=0;i<source.pattern.cells.length;i++)values[i*4]=source.pattern.cells[i];device.queue.writeTexture({texture:base,origin:[0,1,index+1]},values,{bytesPerRow:grid*16,rowsPerImage:grid},[grid,grid,1]);}
+     if(source.pattern&&patterns[index]!==source.pattern){pendingPatternRows.add(index);const values=new Float32Array(grid*grid*4);for(let i=0;i<source.pattern.cells.length;i++)values[i*4]=source.pattern.cells[i];device.queue.writeTexture({texture:base,origin:[0,1,index+1]},values,{bytesPerRow:grid*16,rowsPerImage:grid},[grid,grid,1]);}
      patterns[index]=source.pattern;
     }last=next;
    }
@@ -66,7 +66,7 @@ export function createGPUImmersedCollection(device){
     const local={...controls,...source.controls},age=Math.max(0,step-s.birth);if(settings.turbulence>0)s.noise.encode(encoder,age,inletDynamicsTauSteps(local,INLET_TURBULENCE_CORRELATION_SECONDS));if(settings.puff>0)s.puff.encode(encoder,age,inletDynamicsTauSteps(local,settings.puffPeriod));
     s.inputs??=createGPUInputSlots(device,'GPU source field parameters '+source.id,64,buffer=>device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer}},{binding:1,resource:baseView},{binding:2,resource:{buffer:s.noise?.buffer??dummy}},{binding:3,resource:{buffer:s.puff?.buffer??dummy}},{binding:4,resource:outputView},{binding:5,resource:{buffer:geometry.resources.stats}}]}));
     const data=new ArrayBuffer(64);new Uint32Array(data).set([index+1,packet.width,packet.height,s.grid]);new Float32Array(data).set([settings.turbulence,settings.puff,s.scale??1,0],4);new Uint32Array(data).set([Math.ceil(s.grid/(s.scale??1)),0,0,0],8);
-    const group=s.inputs.lease(encoder,data),pass=encoder.beginComputePass({label:'GPU immersed source fields'});pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.ceil(packet.width/8),Math.ceil((settings.turbulence>0?packet.height:2)/8));pass.end();
+    const group=s.inputs.lease(encoder,data),pass=encoder.beginComputePass({label:'GPU immersed source fields'});pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.ceil(packet.width/8),Math.ceil((settings.turbulence>0||pendingPatternRows.has(index)?packet.height:2)/8));pass.end();pendingPatternRows.delete(index);
    }encodedStep=step;capturePuffs(encoder,step);
   },
   releaseTextures(){resetBindings();retire([base,texture]);base=null;texture=null;baseView=null;outputView=null;shape=null;last=null;packet=null;},

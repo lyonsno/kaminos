@@ -1,6 +1,6 @@
 import {resolveWorldCalibration} from './volume-world-calibration.mjs';
 // Authored immersed sources share a field, but retain their local supply law.
-import {resolveImmersedSourceConfig,immersedSourceUniformValues,immersedCoverageMapForConfig,createImmersedSourceWeightCache,immersedSlabLookup,resolvePressureSolverConfig} from './volume-core.js';
+import {resolveImmersedSourceConfig,immersedSourceUniformValues,immersedCoverageMapForConfig,immersedCoverageSignatureFor,createImmersedSourceWeightCache,immersedSlabLookup,resolvePressureSolverConfig} from './volume-core.js';
 export const IMMERSED_COLLECTION_IDENTITY='kaminos.volume.immersed-source-collection.v1';
 const sourceKey=key=>/^(immersed|emitter)/.test(key)||['inputRadius','flowRate','fixedSourceDephase'].includes(key);
 export function checkedImmersedSources(records){
@@ -74,13 +74,18 @@ export function compileWorldSourceParcels(packed,{grid,gridHeight,transform,anch
 // normalization, stochastic fields and exterior parcel construction belong to GPU.
 // The full CPU compilers above are offline numerical references.
 export function createRuntimeImmersedSourceCache(){
- let collectionKey=null,packet=null,singletonKey=null,singleton=null;
+ let collectionKey=null,packet=null,singletonKey=null,singleton=null;const patterns=new Map();
  const signature=(controls,{grid,gridHeight})=>[grid,gridHeight,Object.fromEntries(Object.entries(controls).filter(([k])=>sourceKey(k))),resolvePressureSolverConfig(controls).effective,resolveWorldCalibration(controls,{grid})];
  return{
   collection(records,options){
    const {controls={},grid,gridHeight}=options,checked=checkedImmersedSources(records),key=JSON.stringify([checked,signature(controls,options)]);
    if(key===collectionKey)return packet;
-   const sources=checked.map(record=>{const local={...controls,...record.controls},config=resolveImmersedSourceConfig(local,{grid,gridHeight,geometryOnly:true,worldSource:record.worldSource,puffFactor:1});return {...record,config,coefficients:new Float32Array(immersedSourceUniformValues(config)),pattern:immersedCoverageMapForConfig(config)};});
+   const activeIds=new Set(checked.map(record=>record.id));for(const id of patterns.keys())if(!activeIds.has(id))patterns.delete(id);
+   const sources=checked.map(record=>{
+    const local={...controls,...record.controls},config=resolveImmersedSourceConfig(local,{grid,gridHeight,geometryOnly:true,worldSource:record.worldSource,puffFactor:1});let pattern=null;
+    if(config.effective.admitted){const signature=immersedCoverageSignatureFor(config);let retained=patterns.get(record.id);if(!retained||retained.signature!==signature){retained={signature,value:immersedCoverageMapForConfig(config)};patterns.set(record.id,retained);}pattern=retained.value;}
+    return {...record,config,coefficients:new Float32Array(immersedSourceUniformValues(config)),pattern};
+   });
    collectionKey=key;packet={identity:IMMERSED_COLLECTION_IDENTITY,backend:'gpu-parameters',gridHeight,count:sources.length,width:Math.max(6,grid),height:grid+1,layers:sources.length+1,sources};return packet;
   },
   singleton(controls,options){const key=JSON.stringify(signature(controls,options));if(key!==singletonKey){singleton=resolveImmersedSourceConfig(controls,{...options,geometryOnly:true,puffFactor:1,inletSignals:{}});singletonKey=key;}return singleton;},
