@@ -229,7 +229,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   }
   return {
     setNearBox(value){const next=admitNearSmokeBox({...nearBox,...value},sourceDomain,device.limits,smokeRefinement);if(disposed)throw Error('hybrid lighting disposed');nearBox=next;valid=false;},
-    setExteriorReceiverCoverage(value){exteriorLight.setReceiverCoverage(value);prototype.setSceneDistributedLightFrame(null);valid=false;},
+    setExteriorReceiverCoverage(value){exteriorLight.setReceiverCoverage(value);exteriorReceiverCoverage=value;prototype.setSceneDistributedLightFrame(null);valid=false;},
     setLightGrid(value){
       if(!Number.isSafeInteger(value)||value<1)throw Error('positive integer light grid required');
       volumeGatherPlan({volumeGrid:value,sourceDimensions:sourceDomain.dimensions,directions,smokeRefinement,

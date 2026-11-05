@@ -68,7 +68,7 @@ try{
  const scene=await(await fetch(origin+'/api/read?root=scenes&path='+encodeURIComponent(report.saved.filename))).json();await fs.writeFile(path.join(out,'scene.json'),JSON.stringify(scene,null,2));
  report.phase='cold-reopen';await save();await page.goto('about:blank');await page.goto(compositionRestoreUrl(scene.composition,report.saved.filename,origin,'workbench'));
  await page.waitForFunction(()=>window.__kaminosSceneRadiance?.canRender()&&window.__kaminosSceneRadiance.debugState().frame?.exterior?.middle);
- await control('volume-look-freeze',1);report.reopened=await capture('cold-reopened');
+ await live();report.reopened=await capture('cold-reopened');
  assert.deepEqual(report.reopened.lighting.nearBox,{enabled:true,grid:4,directions:8,extent:[1.5,1.75,1.5]});
  assert.equal(report.reopened.simulation.controls.worldEmissive,'off');
  assert.equal(report.reopened.simulation.controls.resolution,32);assert.deepEqual(report.errors,[]);assert.deepEqual(await hashes(),report.source,'Source changed during run');report.status='passed';report.phase='complete';
