@@ -79,7 +79,7 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
           ...(l.source?{source:l.source}:{}),
           ...(l.error?{error:l.error}:{}),
         }));
-        const extra=surfelLevels.length?{surfelLevels}:{};
+        const extra={...(surfelLevels.length?{surfelLevels}:{}),prepareQueued:set.prepareQueued===true,prepareState:set.prepareState??null};
         if(!set.choice)return settle({...base,levels,...extra,state:'no-tiers',reason:base.heroSha?'no stored tiers for this hero':'a surfels-only asset has no hero mesh to take tiers from'});
         const choice=set.choice;
         let proxyRoot;
@@ -99,6 +99,18 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
     attach(root,selection=DEFAULT_GI_PROXY_SELECTION){return trackedResolve(root,selection);},
     select(root,selection){return trackedResolve(root,selection);},
     whenIdle:async()=>{while(inFlight.size)await Promise.all([...inFlight]);},
+    async whenPrepared(root){
+      const handle=handles.get(root),version=versions.get(root);
+      if(!handle?.prepareQueued)return handle;
+      const source=handle.heroSha??handle.assetSha;
+      while(versions.get(root)===version){
+        await new Promise(resolve=>setTimeout(resolve,500));
+        const state=await fetchJson('/api/mesh-lods?'+new URLSearchParams({source,prepare:'client'}));
+        if(versions.get(root)!==version)return handles.get(root)??null;
+        if(!state.prepareQueued)return resolve(root,handle.requested);
+      }
+      return handles.get(root)??null;
+    },
     get:root=>handles.get(root)??null,
     list:()=>[...handles.entries()].map(([root,h])=>({root,...h})),
     release(root){drop(root);},

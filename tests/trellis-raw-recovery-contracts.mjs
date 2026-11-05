@@ -22,7 +22,7 @@ for(const retry of [false,true])test(`actual failed-finish page retains raw1024 
  const fetch=async(url,request)=>{
   if(diskFails)throw Error('disk full');
   const route=new URL(url,'http://kaminos.local');
-  if(route.pathname==='/api/ingest-mesh'){assert.equal(route.searchParams.get('role'),'client-prepares-lods');const sha=createHash('sha256').update(Buffer.from(request.body)).digest('hex');artifacts.set(sha,request.body);return {ok:true,json:async()=>({sha256:sha,bytes:request.body.byteLength,source:`/api/read?root=generated-meshes&path=${sha}.glb`})};}
+  if(route.pathname==='/api/ingest-mesh'){assert.equal(route.searchParams.get('role'),null);const sha=createHash('sha256').update(Buffer.from(request.body)).digest('hex');artifacts.set(sha,request.body);return {ok:true,json:async()=>({sha256:sha,bytes:request.body.byteLength,source:`/api/read?root=generated-meshes&path=${sha}.glb`})};}
   const result=JSON.parse(request.body),glb=artifacts.get(result.sha256);
   try{execFileSync('/usr/bin/python3',['-c',`import json,sys,tempfile,base64
 from pathlib import Path

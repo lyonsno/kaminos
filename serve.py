@@ -2944,6 +2944,8 @@ def save_mesh_lod_level(payload):
         raise ValueError('Level sha256 required')
     if type(level.get('faces')) is not int or level['faces'] < 1 or not isinstance(level.get('route'), str) or not level['route']:
         raise ValueError('Level faces and route required')
+    if 'targetFaces' in level and (type(level['targetFaces']) is not int or level['targetFaces'] < 1):
+        raise ValueError('Level targetFaces must be a positive integer')
     if 'textureSize' in level and (type(level['textureSize']) is not int or level['textureSize'] < 1):
         raise ValueError('Level textureSize must be a positive integer')
     if 'mergeFactor' in level and (type(level['mergeFactor']) is not int or level['mergeFactor'] < 1):
@@ -3031,6 +3033,18 @@ def mesh_lod_choice(source, faces=None, max_error=None, stat='max', route=None):
     return result
 
 
+_MESH_LOD_TARGETS = {25000, 10000, 5000, 1000, 500}
+
+
+def mesh_lod_targets_missing(sha):
+    levels = [level for level in read_mesh_lod_set(sha)['levels']
+              if level.get('route') == 'closed-remesh+projection+trellis-simplify']
+    # Legacy ladders publish actual counts without carrying their recipe targets.
+    if len(levels) >= len(_MESH_LOD_TARGETS) and all('targetFaces' not in level for level in levels):
+        return False
+    return bool(_MESH_LOD_TARGETS - {level.get('targetFaces', level['faces']) for level in levels})
+
+
 _MESH_LOD_PREPARE_LOCK = threading.Lock()
 _MESH_LOD_PREPARE_QUEUE = []
 _MESH_LOD_PREPARE_ACTIVE = None
@@ -3043,7 +3057,7 @@ def should_auto_prepare_mesh_lods(sha, glb_bytes, role=None):
     """True when a stored GLB is a triangle-mesh hero without a .lods.json sidecar."""
     if role in ('lod-tier', 'client-prepares-lods') or not isinstance(sha, str) or not _SHA256_HEX.fullmatch(sha):
         return False
-    if _lod_set_path(sha).exists() or sha in mesh_lod_level_index():
+    if not mesh_lod_targets_missing(sha) or sha in mesh_lod_level_index():
         return False
     if not isinstance(glb_bytes, (bytes, bytearray, memoryview)) or len(glb_bytes) < 20:
         return False
@@ -3061,7 +3075,7 @@ def should_auto_prepare_mesh_lods(sha, glb_bytes, role=None):
         return False
     extras = doc.get('extras')
     if isinstance(extras, dict):
-        if 'lodNormalMap' in extras:
+        if 'lodNormalMap' in extras or isinstance(extras.get('trellisReconstruction'), dict):
             return False
         trellis = extras.get('trellis')
         if isinstance(trellis, dict):
@@ -3108,6 +3122,7 @@ def _default_mesh_lod_prepare_runner(sha, server_port):
         '--server', f'http://127.0.0.1:{server_port}',
         '--source', sha,
         '--report', str(report_path),
+        '--complete-missing', 'true',
     ]
     env = {**os.environ, 'PATH': f"/opt/homebrew/bin:{os.environ.get('PATH', '')}"}
     proc = subprocess.run(cmd, cwd=str(ROOT), env=env, capture_output=True, text=True)
@@ -3160,7 +3175,7 @@ def enqueue_mesh_lod_prepare(sha, server_port=None):
     with _MESH_LOD_PREPARE_LOCK:
         if _MESH_LOD_PREPARE_ACTIVE == sha or any(item[0] == sha for item in _MESH_LOD_PREPARE_QUEUE):
             return False
-        if _lod_set_path(sha).exists():
+        if not mesh_lod_targets_missing(sha):
             return False
         _MESH_LOD_PREPARE_QUEUE.append((sha, port))
         if not _MESH_LOD_PREPARE_WORKER_STARTED:
@@ -4381,7 +4396,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 payload = mesh_lod_choice(query.get("source", [None])[0], int(faces) if faces is not None else None,
                                           float(max_error) if max_error is not None else None, query.get("stat", ["max"])[0],
                                           query.get("route", [None])[0])
-                if not payload.get("levels") and query.get("prepare", [None])[0] != "client":
+                if mesh_lod_targets_missing(payload["source"]) and query.get("prepare", [None])[0] != "client":
                     src_sha = payload.get("source")
                     root_dir = Path(BROWSE_ROOTS["generated-meshes"]).resolve()
                     glb_path = _generated_mesh_path_for_sha(root_dir, src_sha) if src_sha else None
@@ -4392,6 +4407,11 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                                     payload['prepareQueued'] = True
                         except OSError:
                             pass
+                with _MESH_LOD_PREPARE_LOCK:
+                    sha = payload['source']
+                    payload['prepareQueued'] = (_MESH_LOD_PREPARE_ACTIVE == sha or
+                                                any(item[0] == sha for item in _MESH_LOD_PREPARE_QUEUE))
+                    payload['prepareState'] = _MESH_LOD_PREPARE_COMPLETED.get(sha)
                 self.send_json(payload)
             except MeshLodRecordError as error:
                 self.send_json({"error": str(error), "phase": "mesh-lods-record"}, 500)
