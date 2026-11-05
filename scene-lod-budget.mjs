@@ -937,7 +937,7 @@ export function formatLodBudgetReadout({objectId = null, beautyState = null, col
         const tierLabel = obj.displayedTier === 'hero'
           ? `hero (${(obj.faces ?? 0).toLocaleString('en-US')} faces${obj.pinned ? ', pinned' : ''})`
           : `${(obj.faces ?? 0).toLocaleString('en-US')} faces (${Number(obj.pixelError ?? 0).toFixed(2)} px)`;
-        beautyText = `Beauty: ${tierLabel} · ${sceneBudgetStr}`;
+        beautyText = `Beauty: ${tierLabel} · ${sceneBudgetStr}${obj.demotedByBudget ? ' · Reduced to fit scene budget' : ''}`;
       } else {
         beautyText = `Beauty: ${sceneBudgetStr}`;
       }

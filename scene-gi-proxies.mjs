@@ -45,7 +45,7 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
     }
     return {representation:'mesh',assetSha,heroSha:assetSha};
   }
-  function resolve(root,selection){
+  function resolve(root,selection,{enabled=true}={}){
     const task=(async()=>{
       const version=++sequence;versions.set(root,version);
       const base={...describe(root),requested:{...selection},effective:null,levels:[],error:null,frame:'trellis-source',proxyRoot:null,
@@ -55,7 +55,7 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
         if(owned.get(root)!==handle.proxyRoot){disposeTree(owned.get(root));if(handle.proxyRoot)owned.set(root,handle.proxyRoot);else owned.delete(root);}
         handles.set(root,handle);return handle;};
       if(base.state)return settle(base);
-      handles.set(root,{...(handles.get(root)??base),state:'resolving'});
+      handles.set(root,{...(handles.get(root)??base),state:enabled?'resolving':'disabled'});
       try{
         const query=new URLSearchParams({source:base.heroSha??base.assetSha,prepare:'client'});
         if(selection.faces!=null)query.set('faces',String(selection.faces));
@@ -80,6 +80,7 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
           ...(l.error?{error:l.error}:{}),
         }));
         const extra={...(surfelLevels.length?{surfelLevels}:{}),prepareQueued:set.prepareQueued===true,prepareState:set.prepareState??null};
+        if(!enabled)return settle({...base,levels,...extra,state:'disabled'});
         if(!set.choice)return settle({...base,levels,...extra,state:'no-tiers',reason:base.heroSha?'no stored tiers for this hero':'a surfels-only asset has no hero mesh to take tiers from'});
         const choice=set.choice;
         let proxyRoot;
@@ -107,7 +108,7 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
         await new Promise(resolve=>setTimeout(resolve,500));
         const state=await fetchJson('/api/mesh-lods?'+new URLSearchParams({source,prepare:'client'}));
         if(versions.get(root)!==version)return handles.get(root)??null;
-        if(!state.prepareQueued)return resolve(root,handle.requested);
+        if(!state.prepareQueued)return resolve(root,handle.requested,{enabled:handle.state!=='disabled'});
       }
       return handles.get(root)??null;
     },
@@ -118,7 +119,18 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
     registerConsumer(name){if(typeof name!=='string'||!name)throw Error('A GI proxy consumer needs a name');const key=++consumerSeq;consumers.set(key,name);return ()=>{consumers.delete(key);};},
     consumers:()=>[...consumers.values()],
     // GI proxy turned off for this object (its render settings): no proxy held, and the handle says so.
-    disable(root){const prev=handles.get(root);drop(root,{notifyRelease:false});handles.set(root,{...describe(root),state:'disabled',proxyRoot:null,effective:null,levels:prev?.levels??[],...(prev?.surfelLevels?{surfelLevels:prev.surfelLevels}:{}),error:null});},
+    disable(root,{retainLevels=true}={}){
+      if(!retainLevels){
+        drop(root);
+        handles.set(root,{...describe(root),state:'disabled',proxyRoot:null,effective:null,levels:[],error:null});
+        return;
+      }
+      const previous=handles.get(root);
+      disposeTree(owned.get(root));
+      owned.delete(root);
+      handles.set(root,{...(previous??describe(root)),state:'disabled',proxyRoot:null,effective:null,error:null});
+      return resolve(root,previous?.requested??DEFAULT_GI_PROXY_SELECTION,{enabled:false});
+    },
     // A cleared or reopened scene: every proxy goes, and results still in flight are not published.
     clear(){for(const root of new Set([...handles.keys(),...owned.keys(),...versions.keys()]))drop(root);},
   };
