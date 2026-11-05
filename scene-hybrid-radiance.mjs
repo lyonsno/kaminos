@@ -20,7 +20,7 @@ import {createExteriorSmokeLight} from './scene-exterior-light.mjs';
 
 // Opt-in prototype. Smoke retains distributed transport. Surfaces consume a
 // live GPU reduction of that same source, with independent raster visibility.
-export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16,smokeRefinement=4,pointCount=4,pointSampling='all',pointEvaluationBudget=0,surfaceEnabled=true,smokeShadowSteps=0,smokeShadowResolution=16,smokeShadowFilter=false,smokeShadowFilterAngle=null,smokeShadowFilterTaps=3,smokeShadowMediumResolution=0,shadowEdgeFilter=false,shadowComparison={},shadowResolution=256,shadowSoftness=0,shadowSampling='fixed',blockerSamples=9,filterSamples=16,getSourceGuide=null,getSourceRegions=null,smokeEnvironmentBlur=0,onStatus=()=>{},createShadow=createFireLightFieldShadow,rebuild=null,surfaceLighting=null}) {
+export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16,smokeRefinement=4,pointCount=4,pointSampling='all',pointEvaluationBudget=0,surfaceEnabled=true,smokeShadowSteps=0,smokeShadowResolution=16,smokeShadowFilter=false,smokeShadowFilterAngle=null,smokeShadowFilterTaps=3,smokeShadowMediumResolution=0,shadowEdgeFilter=false,shadowComparison={},shadowResolution=256,shadowSoftness=0,shadowSampling='fixed',blockerSamples=9,filterSamples=16,getSourceGuide=null,getSourceRegions=null,smokeEnvironmentBlur=0,onStatus=()=>{},createShadow=createFireLightFieldShadow,rebuild=null,surfaceLighting=null,exteriorReceiverCoverage=null}) {
   if(smokeShadowFilterAngle===null)smokeShadowFilterAngle=Math.atan(2/smokeShadowResolution)*180/Math.PI;
   validateSmokeAngularFilter({angleDegrees:smokeShadowFilterAngle,tapsPerAxis:smokeShadowFilterTaps});
   validateShadowMediumResolution(smokeShadowMediumResolution);
@@ -38,7 +38,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   };
   validateSmoke(smokeShadowSteps,smokeShadowResolution);
   const smokeEnvironment=createSceneSmokeEnvironment({renderer,scene,device,blur:smokeEnvironmentBlur});
-  const exteriorLight=createExteriorSmokeLight(device,{beforeReplace:()=>prototype.setSceneDistributedLightFrame(null)});
+  const exteriorLight=createExteriorSmokeLight(device,{receiverCoverage:exteriorReceiverCoverage,beforeReplace:()=>prototype.setSceneDistributedLightFrame(null)});
   const {uniform,vec2,vec3,textureLoad,ivec2,positionWorld,normalWorld,screenCoordinate,Fn,If}=THREE.TSL;
   // Deferred surfaces reconstruct their world position per pixel. The default
   // positionWorld is the fullscreen carrier geometry, not the visible surface.
@@ -199,7 +199,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       const environment=smokeMode==='distributed'||surfaceScattering?smokeEnvironment.frame():null;
       const sceneLights=collectSceneSmokeLights(scene,sourceTransform);
       frame=gather.encode(field.source,{gain,sourceSoftness,surfaceScattering,smokeEnabled:smokeMode==='distributed',environment,sceneLights,samplingFrame:prototype.sceneLightSamplingFrame?.()??field.source.frame});
-      const exterior=smokeMode==='distributed'?exteriorLight.encode(field.source,{geometry:packed,revision,directions,gain,sourceSoftness,environment,sceneLights}):null;
+      const exterior=smokeMode==='distributed'?exteriorLight.encode(field.source,{geometry:packed,revision,directions,gain,sourceSoftness,environment,sceneLights,fineReceiverGrid:volumeGrid}):null;
       const reduction=surfaceEnabled?points.encode(gather.transportSource()):null;
       const medium=surfaceEnabled&&smokeShadowSteps&&smokeShadow?smokeShadow.encode(field.source,reduction):null;
       if(surfaceEnabled){
@@ -226,6 +226,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     }
   }
   return {
+    setExteriorReceiverCoverage(value){exteriorLight.setReceiverCoverage(value);prototype.setSceneDistributedLightFrame(null);valid=false;},
     setLightGrid(value){
       if(!Number.isSafeInteger(value)||value<1)throw Error('positive integer light grid required');
       volumeGatherPlan({volumeGrid:value,sourceDimensions:sourceDomain.dimensions,directions,smokeRefinement,

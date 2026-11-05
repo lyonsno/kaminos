@@ -1,3 +1,4 @@
+import {FINE_SMOKE_HANDOFF_WGSL} from './scene-smoke-handoff.mjs';
 export function buildSmokeReconstructionCells(geometry, dimensions) {
   if (!Array.isArray(dimensions) || dimensions.length !== 3 || !dimensions.every(n=>Number.isInteger(n)&&n>0)) throw new Error('positive smoke dimensions required');
   const {triangles, triangleCount} = geometry;
@@ -52,7 +53,9 @@ export function createDistributedSmokeBindings(device) {
       const e=region?.smokeReconstruction;
       if(region&&(region.generation!==frame.generation||region.frame!==frame.frame||e?.identity!=='prepared-planar-support-v4'||!e.texture||!e.masks||!e.planes||!(e.staticPreparations>0)||!(e.updates>0)||!e.localMin||!e.localMax))throw Error('exterior lighting requires current same-generation reconstruction resources');
     }
-    const data=[...(e?[...e.localMin,2/r.coarseDimensions[0],...e.localMax,1]:Array(8).fill(0)),
+    const margin=Number(frame.handoffMargin??exterior?.handoffMargin);
+    const handoffMargin=Number.isFinite(margin)&&margin>0?Math.min(.60,Math.max(.05,margin)):0;
+    const data=[...(e?[...e.localMin,2/r.coarseDimensions[0],...e.localMax,1+handoffMargin]:Array(8).fill(0)),
       ...(m?[...m.localMin,(m.localMax[0]-m.localMin[0])/m.coarseDimensions[0],...m.localMax,1]:Array(8).fill(0))];
     // Pack masks followed by plane words into one storage binding. This keeps
     // the guided camera plus distributed lighting within the native ten slots.
@@ -145,7 +148,7 @@ const middleLookup=exteriorLookup.replaceAll('@binding(18)','@binding(21)').repl
  .replaceAll('exteriorIncident','middleIncident').replaceAll('exteriorBoundaryMasks','middleBoundaryMasks')
  .replaceAll('exteriorLastMaskFlags','middleLastMaskFlags').replaceAll('exteriorMeanIncident','middleMeanIncident')
  .replaceAll('exteriorCoverage.loBlend','exteriorCoverage.middleLoBlend').replaceAll('exteriorCoverage.hiEnabled','exteriorCoverage.middleHiEnabled');
-const composedSmokeSource=DISTRIBUTED_SMOKE_WGSL.replace('fn distributedMeanIncident(','fn fineMeanIncident(')
+const composedSmokeSource=FINE_SMOKE_HANDOFF_WGSL+DISTRIBUTED_SMOKE_WGSL.replace('fn distributedMeanIncident(','fn fineMeanIncident(')
  .replaceAll('smokeBoundaryMasks[','smokeBoundaryMasks[exteriorCoverage.maskOffsets.x+')
  .replaceAll('smokeSupportPlanes[','smokeSupportPlanes[exteriorCoverage.maskOffsets.x+')+`
 struct ExteriorCoverage {loBlend:vec4<f32>,hiEnabled:vec4<f32>,middleLoBlend:vec4<f32>,middleHiEnabled:vec4<f32>,maskOffsets:vec4<u32>}
@@ -177,7 +180,10 @@ fn distributedMeanIncident(p:vec3<f32>)->vec3<f32>{
   // Never fill a fine solid mask from a coarse neighbor across the wall.
   if(distributedLastMaskFlags.x>0.5||exteriorLastMaskFlags.x>0.5){return fine;}
   let edge=min(p+vec3<f32>(1),hi-p);let distance=min(edge.x,min(edge.y,edge.z));
-  return mix(coarse,fine,smoothstep(0.0,exteriorCoverage.loBlend.w,distance));
+  let authoredMargin=exteriorCoverage.hiEnabled.w-1.0;
+  var fineWeight=smoothstep(0.0,exteriorCoverage.loBlend.w,distance);
+  if(authoredMargin>0.0001){fineWeight=fineSmokeEnvelope(p,hi.y,authoredMargin);}
+  return mix(coarse,fine,fineWeight);
 }
 `;
 

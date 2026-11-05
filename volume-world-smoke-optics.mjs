@@ -1,3 +1,4 @@
+import {FINE_SMOKE_HANDOFF_WGSL} from './scene-smoke-handoff.mjs';
 import { THERMAL_MOMENTS_WGSL } from './volume-thermal-moments.mjs';
 // Geometry comes from the dispatched field, never pending inspector choices.
 export function worldSmokeOverlayGeometry(s) {
@@ -14,6 +15,7 @@ export function worldSmokeOverlayGeometry(s) {
 // One ray integral for the fine flame and world material. No alpha-overlay seam.
 export const WORLD_SMOKE_OPTICS_WGSL=/* wgsl */`
 ${THERMAL_MOMENTS_WGSL}
+${FINE_SMOKE_HANDOFF_WGSL}
 struct WorldSmokeRender { loPitch:vec4<f32>, hiEnabled:vec4<f32>, overlayControls:vec4<f32>, middleLoPitch:vec4<f32>, middleHiEnabled:vec4<f32> }
 @group(0) @binding(20) var worldOptical:texture_3d<f32>;
 @group(0) @binding(21) var<uniform> worldRender:WorldSmokeRender;
@@ -62,12 +64,22 @@ fn worldMinimumMaterialPitch()->f32{
  if(worldRender.middleHiEnabled.w>.5){return min(worldRender.loPitch.w,worldRender.middleLoPitch.w);}
  return worldRender.loPitch.w;
 }
+fn worldSmokeBlendWeight(p:vec3<f32>)->f32{
+ if(!worldSmokeOn()||any(p<worldRender.loPitch.xyz)||any(p>worldRender.hiEnabled.xyz)){return 0.0;}
+ let top=2.0*f32(GRID_Y)/f32(GRID)-1.0;
+ if(worldRender.overlayControls.y>0.0){return 1.0-fineSmokeEnvelope(p,top,worldRender.overlayControls.y);}
+ let d=min(min(1.0-abs(p.x),1.0-abs(p.z)),min(p.y+1.0,top-p.y));
+ return 1.0-smoothstep(0.0,min(.5,worldRender.loPitch.w),d);
+}
+fn worldSmokePhysicalBlend(p:vec3<f32>,fine:EmissiveMaterial,smokeVisible:f32,fireVisible:f32)->EmissiveMaterial{
+ let weight=worldSmokeBlendWeight(p);if(weight<=0.0){return fine;}
+ let coarse=worldSmokeMaterial(p,smokeVisible,fireVisible);
+ return EmissiveMaterial(mix(fine.emission,coarse.emission,weight),mix(fine.absorption,coarse.absorption,weight),mix(fine.scattering,coarse.scattering,weight));
+}
 fn worldSmokeBlend(p:vec3<f32>,fine:EmissiveMaterial,smokeVisible:f32,fireVisible:f32)->EmissiveMaterial{
  let near=worldSmokeDiagnostic(fine,false);
  if(!worldSmokeOn()||any(p<worldRender.loPitch.xyz)||any(p>worldRender.hiEnabled.xyz)){return near;}
- let top=2.0*f32(GRID_Y)/f32(GRID)-1.0;
- let d=min(min(1.0-abs(p.x),1.0-abs(p.z)),min(p.y+1.0,top-p.y));
- let weight=1.0-smoothstep(0.0,min(.5,worldRender.loPitch.w),d);
+ let weight=worldSmokeBlendWeight(p);
  let coarse=worldSmokeDiagnostic(worldSmokeMaterial(p,smokeVisible,fireVisible),true);
  return EmissiveMaterial(mix(near.emission,coarse.emission,weight),mix(near.absorption,coarse.absorption,weight),mix(near.scattering,coarse.scattering,weight));
 }
