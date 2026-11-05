@@ -58,3 +58,7 @@ console.log('Surface seams preserve actuator positions and authored poses');
  const object=new T.ObjectLoader().parse(next.geometry.bodies.find(b=>b.id==='pin:1').object);assert.ok(Math.abs(object.children[0].position.x+.27)<1e-6,'Serialized pin retains the original lever eye instead of drifting to the seam');
  const built=addSurfaceActuators(next.recipe,next.geometry,2),rod=new T.ObjectLoader().parse(built.geometry.bodies.find(b=>b.id==='piston:1:rod').object);assert.ok(rod.children[0].position.x<-.02,'Serialized rod keeps its constructed position');
 }
+{
+ const {addSurfaceActuators,closestSurfacePatch}=await import('../experiments/link-workshop/surface.mjs');const a=addSurfaceActuators(next.recipe,next.geometry,2),p=a.recipe.pistons[2];
+ for(const end of ['a','b']){const id=`link:${p[end]}`,patch=p[end+'Seat'],actual=closestSurfacePatch(next.geometry,id,patch);assert.ok(new T.Vector3(...patch).distanceTo(new T.Vector3(...actual))<1e-8,'Mounting support starts on an actual retained triangle');const body=new T.ObjectLoader().parse(a.geometry.bodies.find(b=>b.id===id).object),supports=body.children.filter(m=>m.name==='Panel-to-horn support');assert.ok(supports.length);body.updateMatrixWorld(true);assert.ok(supports.some(m=>{m.geometry.computeBoundingBox();return m.geometry.boundingBox.clone().applyMatrix4(m.matrixWorld).distanceToPoint(new T.Vector3(...patch))<1e-6;}),'Reconstructed support reaches its retained panel patch');}
+}

@@ -57,6 +57,8 @@ export function constructBodies(value){
   const owner=defs.at(-1);const baseZ=n.parent===null?0:layers[i];
   for(const [j,p]of recipe.pistons.entries())for(const end of ['a','b'])if(p.hinge&&p[end]===i){const at=p[end+'Offset'],rx=Math.max(0,Math.min(n.length??0,at[0])),z=(p.z??pistonZ+j*pitch)-baseZ,seat=p[end+'BaseZ']??0;
    const shape=new T.Shape();shape.moveTo(rx-.09,0);shape.lineTo(at[0],at[1]);shape.lineTo(rx+.09,0);shape.closePath();const geo=new T.ExtrudeGeometry(shape,{depth:.12,bevelEnabled:false});geo.translate(0,0,-.06);const horn=mesh(owner.object,geo,0xc9a875);horn.position.z=seat;horn.name='Hinge horn';horn.userData.surfaceDrive=true;
+   if(p[end+'Seat']){const from=new T.Vector3(...p[end+'Seat']),to=new T.Vector3(rx,0,seat),direction=to.clone().sub(from),length=direction.length();if(length>1e-6){const support=mesh(owner.object,new T.CylinderGeometry(.065,.065,length+.12,16),0xc9a875);support.position.copy(from).add(to).multiplyScalar(.5);support.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),direction.normalize());support.name='Panel-to-horn support';support.userData.surfaceDrive=true;}}
+
    const pin=cylinder(owner.object,.055,Math.abs(z-seat)+.18,[...at,(z+seat)/2],0xc9a875);pin.name='Actuator mount pin';pin.userData.surfaceDrive=true;
   }
   if(recipe.pistons.some(p=>p.hinge&&(p.a===i||p.b===i)))owner.geometryKey=JSON.stringify([owner.geometryKey,recipe.pistons.filter(p=>p.hinge&&(p.a===i||p.b===i))]);
