@@ -13,6 +13,27 @@ SCHEMA = 'kaminos.lod-textures.v1'
 SHA = re.compile(r'[0-9a-f]{64}')
 
 
+def validate_beauty_catalog(record):
+    """Validate the restricted identity/selection fields before using a sidecar."""
+    levels = record.get('beautyLevels', [])
+    if not isinstance(levels, list):
+        raise ValueError('Invalid beauty catalog: expected a list')
+    for level in levels:
+        if (not isinstance(level, dict) or level.get('purpose') != 'beauty'
+                or not isinstance(level.get('sha256'), str) or not SHA.fullmatch(level['sha256'])
+                or type(level.get('faces')) is not int or level['faces'] < 1
+                or not isinstance(level.get('route'), str) or not level['route']):
+            raise ValueError('Invalid beauty level: digest, positive faces, route and beauty purpose required')
+        for field in ('targetFaces', 'textureSize', 'mergeFactor'):
+            if field in level and (type(level[field]) is not int or level[field] < 1):
+                raise ValueError('Invalid beauty level: ' + field + ' must be a positive integer')
+        if 'error' in level:
+            relative = level['error'].get('relative') if isinstance(level['error'], dict) else None
+            if not isinstance(relative, dict) or any(type(relative.get(k)) not in (int, float)
+                    or not math.isfinite(relative[k]) or relative[k] < 0 for k in ('max', 'p95', 'mean')):
+                raise ValueError('Invalid beauty level: finite non-negative relative error required')
+
+
 def _document(data):
     if len(data) < 20 or data[:4] != b'glTF' or struct.unpack_from('<I', data, 4)[0] != 2:
         raise ValueError('Appearance needs a binary glTF 2.0 file')
@@ -110,8 +131,7 @@ def save_texture_set(payload, *, root, resolve_mesh, resolve_source):
     with (root / ('.' + source + '.lods.lock')).open('a+b') as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
         record = json.loads(path.read_text()) if path.exists() else {'schema': 'kaminos.lod-set.v0', 'source': source, 'levels': []}
-        if not isinstance(record.get('beautyLevels', []), list) or any(not isinstance(level, dict) or level.get('purpose') != 'beauty' for level in record.get('beautyLevels', [])):
-            raise ValueError('Invalid beauty catalog')
+        validate_beauty_catalog(record)
         if geometry != source and not any(l.get('sha256') == geometry for l in record['levels'] + record.get('beautyLevels', [])):
             raise ValueError('Appearance geometry is not a current level of this source')
         previous = record.setdefault('textureSets', {}).get(geometry)

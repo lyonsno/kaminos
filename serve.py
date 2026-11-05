@@ -2408,8 +2408,9 @@ def _import_mesh_lod_sidecar(sha, candidate_dirs, root_path):
             doc = json.loads(cand_sidecar.read_text())
         except (OSError, json.JSONDecodeError):
             continue
-        if doc.get("source") != sha or not isinstance(doc.get("levels"), list):
+        if not isinstance(doc, dict) or doc.get("source") != sha or not isinstance(doc.get("levels"), list):
             continue
+        _validate_mesh_beauty_catalog(doc, cand_sidecar.name)
         dependencies = _mesh_lod_records(doc) + [v for t in doc.get("textureSets", {}).values() for v in t.get("variants", [])]
         for level in dependencies:
             tsha = level.get("sha256") if isinstance(level, dict) else None
@@ -2917,11 +2918,18 @@ def read_mesh_lod_set(source):
         data = json.loads(path.read_text())
     except ValueError as error:
         raise MeshLodRecordError(f'Unreadable level-set record {path.name}: {error}') from error
-    if data.get('schema') != 'kaminos.lod-set.v0' or data.get('source') != source or not isinstance(data.get('levels'), list):
+    if not isinstance(data, dict) or data.get('schema') != 'kaminos.lod-set.v0' or data.get('source') != source or not isinstance(data.get('levels'), list):
         raise MeshLodRecordError(f'Invalid level-set record {path.name}')
-    if not isinstance(data.get('beautyLevels', []), list) or any(not isinstance(level, dict) or level.get('purpose') != 'beauty' for level in data.get('beautyLevels', [])):
-        raise MeshLodRecordError(f'Invalid beauty catalog {path.name}')
+    _validate_mesh_beauty_catalog(data, path.name)
     return data
+
+
+def _validate_mesh_beauty_catalog(data, name):
+    from mesh_lod_textures import validate_beauty_catalog
+    try:
+        validate_beauty_catalog(data)
+    except ValueError as error:
+        raise MeshLodRecordError(f'{error}: {name}') from error
 
 
 def _mesh_lod_records(data):
@@ -5646,8 +5654,12 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         except (OSError, ValueError) as error:
             self.send_json({'error': f'Could not retain the scene fire basin: {error}'}, 400)
             return
-        dependencies = [scene_library_import_dependency(obj.get("source"), store)
-                        for obj in document.get("objects") or [] if isinstance(obj, dict) and str(obj.get("source") or "").startswith("/api/read?")]
+        try:
+            dependencies = [scene_library_import_dependency(obj.get("source"), store)
+                            for obj in document.get("objects") or [] if isinstance(obj, dict) and str(obj.get("source") or "").startswith("/api/read?")]
+        except MeshLodRecordError as error:
+            self.send_json({'error': str(error), 'phase': 'mesh-lods-import'}, 400)
+            return
         filename = f"{scene_path.name[: -len('.kaminos.json')]}_{uuid.uuid4().hex}.kaminos.json"
         written_stat = _atomic_write_json(SCENES_DIR / filename, document)
         scene_catalogue().remember(SCENES_DIR / filename, document, written_stat)
