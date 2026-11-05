@@ -71,7 +71,7 @@ test('a failure leaves the report at its phase with the error, and nothing is st
 });
 
 // Review M1/N1/N2: publication counts only with receipts that name what was stored and registered.
-async function publishWith({ingest, register, targets = [200]}) {
+async function publishWith({ingest, register, targets = [200], existingLevels = [], completeMissing = false}) {
   const THREE = await import('three'), {MeshBVH} = await import('three-mesh-bvh'), {prepareGenerationLevels} = await import('../lod-generation-levels.mjs');
   const {finishTrellisMesh} = await import('../models/trellis2/trellis-material.js');
   const {createWasmXatlasUnwrapper} = await import('../models/trellis2/wasm-xatlas.js');
@@ -81,19 +81,30 @@ async function publishWith({ingest, register, targets = [200]}) {
   const calls = [], json = value => new Response(JSON.stringify(value), {headers: {'Content-Type': 'application/json'}});
   const fetch = async (url, init = {}) => {
     calls.push(`${init.method || 'GET'} ${url.split('?')[0]}`);
-    if (url.startsWith('/api/mesh-lods') && !init.method) return json({levels: []});
+    if (url.startsWith('/api/mesh-lods') && !init.method) return json({levels: existingLevels});
     if (url.startsWith('/api/ingest-mesh')) return ingest(new Uint8Array(await new Response(init.body).arrayBuffer()), json);
     if (url.startsWith('/api/mesh-lods')) return register(JSON.parse(init.body), json);
     return new Response('unexpected', {status: 500});
   };
   const report = await prepareGenerationLevels({decode: {vertices: new Float32Array([0,0,0, 1,0,0, 0,1,0]), triangles: new Uint32Array([0,1,2])},
     materialFields: {features: new Float32Array(features), coordinates: new Int32Array(coordinates), resolution: 4}, source: 'a'.repeat(64), heroGLB: heroGLB(), fetch,
-    THREE, MeshBVH, finish: finishTrellisMesh, unwrapMesh: createWasmXatlasUnwrapper(), WorkerClass: NodeTrellisUVWorker, targets});
+    THREE, MeshBVH, finish: finishTrellisMesh, unwrapMesh: createWasmXatlasUnwrapper(), WorkerClass: NodeTrellisUVWorker, targets, completeMissing});
   return {report, calls};
 }
 const html = () => new Response('<html>fallback</html>', {status: 200, headers: {'Content-Type': 'text/html'}});
 const goodIngest = (bytes, json) => json({schema: 'kaminos.generated-mesh.v0', sha256: hex(bytes), bytes: bytes.length});
 const goodRegister = (body, json) => json({schema: 'kaminos.lod-set.v0', source: body.source, level: body.level, retired: []});
+
+test('automatic completion fills missing targets while retaining already published off-target rungs', async () => {
+  const existingLevels = [{sha256:'b'.repeat(64), faces:1350, targetFaces:1000, route:'closed-remesh+projection+trellis-simplify'}];
+  const {report} = await publishWith({ingest:goodIngest, register:goodRegister, targets:[1000,200], existingLevels, completeMissing:true});
+  assert.equal(report.phase,'done', report.error?.message);
+  assert.deepEqual(report.tiers.map(level=>level.target),[200]);
+  assert.equal(report.tiers[0].targetFaces,200);
+  const complete = await publishWith({ingest:goodIngest, register:goodRegister, targets:[1000], existingLevels, completeMissing:true});
+  assert.equal(complete.report.phase,'done');
+  assert.equal(complete.calls.some(call=>call.startsWith('POST')),false);
+});
 
 test('review M1: an ingest success without a receipt naming the stored bytes is not publication', async () => {
   for (const ingest of [() => html(), (bytes, json) => json({sha256: 'f'.repeat(64)}), (bytes, json) => json({})]) {

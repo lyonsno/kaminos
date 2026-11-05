@@ -160,10 +160,17 @@ export function navigationPivot(camera, target, ndc, roots, {retainedPivot = tar
       if (o.isMesh && o.layers.test(camera.layers)) {
         const materials = Array.isArray(o.material) ? o.material : [o.material];
         if (!materials.some(material => material?.visible && (!material.transparent || material.opacity > 0))) return;
-        const state = depthIndexes.get(o.geometry)?.status;
+        const index = depthIndexes.get(o.geometry);
+        const state = index?.status;
         if (state === 'building') indexing = true;
         else if (state === 'failed') failed = true;
-        else meshes.add(o);
+        else {
+          if (state === 'indexed') {
+            index.meshes.add(o);
+            useIndexedRaycast(o);
+          }
+          meshes.add(o);
+        }
       }
     });
   }
