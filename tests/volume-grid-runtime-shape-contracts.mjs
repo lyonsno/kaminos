@@ -107,6 +107,7 @@ test('interpolated modules: every entry point seats first except the lattice-onl
   const exempt = new Set(['sweepEmissiveLight', 'resolveEmissiveLight']);
   const interpolated = [...moduleText('WGSL').matchAll(/\$\{([A-Z_]+_WGSL)\}/g)].map(m => m[1]);
   const texts = {
+    EMPTY_SPACE_WGSL:(await import('../volume-empty-space.mjs')).EMPTY_SPACE_WGSL,
     TRANSFER_GEOMETRY_WGSL: (await import('../volume-grid-transfer.mjs')).TRANSFER_GEOMETRY_WGSL,
     WORLD_CALIBRATION_WGSL: (await import('../volume-world-calibration.mjs')).WORLD_CALIBRATION_WGSL,
     WORLD_RENDER_WGSL: (await import('../volume-world-render.mjs')).WORLD_RENDER_WGSL,

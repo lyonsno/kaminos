@@ -17,7 +17,9 @@ fn worldAtlasTexel(index:u32)->vec4<f32>{
  return textureLoad(worldRenderAtlas,vec3<i32>(i32(index%dims.x),i32((index/dims.x)%dims.y),i32(index/(dims.x*dims.y))),0);
 }
 fn worldResidentLeafBounds(p:vec3<f32>,brickLoPitch:ptr<function,vec4<f32>>)->vec4<f32>{
- let q=(p-worldRender.loPitch.xyz)/worldRender.loPitch.w;
+ return worldResidentLeafBoundsAtGrid((p-worldRender.loPitch.xyz)/worldRender.loPitch.w,brickLoPitch);
+}
+fn worldResidentLeafBoundsAtGrid(q:vec3<f32>,brickLoPitch:ptr<function,vec4<f32>>)->vec4<f32>{
  let dims=worldRender.atlas.yzw;
  if(any(q<vec3<f32>(0))||any(q>=dims)){*brickLoPitch=vec4<f32>(0);return vec4<f32>(0);}
  let root=vec3<u32>(floor(q/4.0));let roots=vec3<u32>(ceil(dims/4.0));

@@ -1918,12 +1918,11 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="slider-row">
       <label class="slider-label" for="volume-raymarch-mode">Ray marcher</label>
       <select id="volume-raymarch-mode" class="select-input" data-volume-settings-role="renderer">
-        <option value="current">Old adaptive</option>
-        <option value="numerical" selected>New adaptive</option>
-        <option value="fixed" title="Uniform reference: four integration panels per authored base interval">Standard (fixed)</option>
-        <option value="budgeted">Fixed count</option>
-        <option value="joins">Fixed count · joins</option>
-        <option value="history">Fixed count · joins + history</option>
+        <option value="numerical" selected>Adaptive</option>
+        <option value="fixed" title="Uniform reference: four integration panels per authored base interval">Fixed quadrature reference</option>
+        <option value="budgeted">Fixed evaluation count</option>
+        <option value="joins">Guided count</option>
+        <option value="history">Guided count + history</option>
       </select>
     </div>
     <div class="slider-row">
@@ -2003,18 +2002,13 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-flame-priority-val">0.00</span>
     </div>
     <div class="slider-row">
-      <span class="slider-label">Adaptive Rays</span>
-      <input type="range" id="volume-adaptive-rays" min="0" max="1" step="0.05" value="0.65">
-      <span class="slider-val" id="volume-adaptive-rays-val">0.65</span>
-    </div>
-    <div class="slider-row">
       <span class="slider-label" title="Advances through conservatively empty native-support cells; supported reconstructed samples are always evaluated and composited.">Empty-Space Acceleration</span>
       <input type="range" id="volume-occupancy-skip" min="0" max="1" step="0.05" value="0.35">
       <span class="slider-val" id="volume-occupancy-skip-val">0.35</span>
     </div>
     <div class="slider-row">
       <label class="slider-label" for="volume-occupancy-threshold">Empty-space threshold</label>
-      <input type="number" id="volume-occupancy-threshold" min="0" step="0.0001" value="0" data-volume-settings-role="renderer" title="Old adaptive: skip cells whose optical-support bound is at most this value. Zero skips only exactly empty support; positive values permit an approximation. Fixed-count and numerical modes keep their own sample placement.">
+      <input type="number" id="volume-occupancy-threshold" min="0" step="0.0001" value="0" data-volume-settings-role="renderer" title="Skip complete intervals certified empty by prepared optical bounds. Zero preserves exactly empty support. Positive values permit weak-material error; raw Fine is exact-zero only. Applies to every retained marcher.">
     </div>
     <div class="slider-row">
       <span class="slider-label">Render Scale</span>
@@ -2046,16 +2040,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-residual-model-url-val">none</span>
     </div>
     <div class="ray-budget-wrap" id="volume-ray-budget-section">
-      <div class="ray-budget-grid">
-        <div class="ray-budget-axis-y">Adaptive</div>
-        <div id="volume-ray-budget-gamut" class="ray-budget-gamut" role="slider" tabindex="0" aria-label="Ray budget gamut" aria-valuemin="0" aria-valuemax="1">
-          <div class="ray-budget-corners"><span>Draft</span><span>Rich</span><span>Live</span><span>Hero</span></div>
-          <div id="volume-ray-budget-handle" class="ray-budget-handle"></div>
-        </div>
-        <div></div>
-        <div class="ray-budget-axis-x">Ray Steps</div>
-      </div>
-      <div id="volume-ray-budget-readout" class="ray-budget-readout">96 steps / 0.65 adaptive</div>
       <div class="ray-budget-presets">
         <button type="button" class="btn" data-volume-budget-preset="draft">Draft</button>
         <button type="button" class="btn" data-volume-budget-preset="live">Live</button>
@@ -2236,7 +2220,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </select>
       <span class="slider-val" id="volume-appearance-model-val">authored</span>
     </div>
-    <span class="slider-help">A/B of the appearance state. Authored stores nine appearance channels per cell (flame, ember, flame detail, combustion front, micro smoke, interface shred, fire lick, ember fleck, material detail) plus a separate front field. Compact stores three (flame, interface shred, combustion front) and rebuilds the other six wherever they are read, by fixed ratios fitted on the saved basin; the Physics look draws none of these channels, so the choice shows mainly in motion, where detail forces read them, and in the Old adaptive ray marcher&rsquo;s step choice. Compact needs the Reactant reaction law; otherwise Authored runs. Known limit: the separate front field is approximated by one ratio of the stored front. Saved basins load on Authored.</span>
+    <span class="slider-help">A/B of the appearance state. Authored stores nine appearance channels per cell (flame, ember, flame detail, combustion front, micro smoke, interface shred, fire lick, ember fleck, material detail) plus a separate front field. Compact stores three (flame, interface shred, combustion front) and rebuilds the other six wherever they are read, by fixed ratios fitted on the saved basin; the Physics look draws none of these channels, so the choice shows mainly in motion, where detail forces read them, Compact needs the Reactant reaction law; otherwise Authored runs. Known limit: the separate front field is approximated by one ratio of the stored front. Saved basins load on Authored.</span>
     <div class="slider-row">
       <span class="slider-label">Solver Sweeps</span>
       <input type="range" id="volume-pressure-solver-iterations" min="4" max="240" step="4" value="60" data-volume-settings-param="volume_pressure_solver_iterations">
@@ -16760,9 +16744,7 @@ function snapVolumeRaySteps(value) {
   return Math.round(clampVolumeValue(value, 1, 160));
 }
 
-function snapVolumeAdaptiveRays(value) {
-  return Math.round(clampVolumeValue(value, 0, 1) / 0.05) * 0.05;
-}
+
 
 function normalizeVolumePressureTierControls(values = {}) {
   const lowerMax = clampVolumeValue(values.lowerMax ?? values.pressureTierLowerMax ?? 0.50, 0.10, 0.98);
@@ -16875,6 +16857,7 @@ function volumeAperturePatternValue(select) {
 }
 
 function setVolumeControlValue(id, value) {
+  if(id==='volume-raymarch-mode')value=opticalSteppingConfig({mode:value}).mode;
   if (id === 'volume-scene') {
     const select = document.getElementById(id);
     if (!select) return;
@@ -17978,7 +17961,7 @@ function observeVolumeBasinDriveCockpitEvent(event) {
   if (!activeVolumeBasinDriveRecorder || volumeBasinDriveReplaying) return;
   if (event.target?.closest?.('[data-volume-basin-drive-ignore]')) return;
   if (['pointerdown', 'pointermove', 'keydown'].includes(event.type)
-    && !event.target?.closest?.('#volume-ray-budget-gamut')) return;
+) return;
   const generation = volumeBasinDriveGeneration;
   const before = volumeBasinDrivePreviousDescriptors || captureVolumeBasinDriveDescriptors();
   const direct = volumeBasinDriveTarget(event, before);
@@ -18506,47 +18489,13 @@ function applyCanonicalVolumeMacroPreset(name) {
   return true;
 }
 
-function rayBudgetGamutPointFromControls() {
-  const steps = parseFloat(document.getElementById('volume-steps').value);
-  const adaptive = parseFloat(document.getElementById('volume-adaptive-rays').value);
-  return {
-    x: (snapVolumeRaySteps(steps) - 1) / (160 - 1),
-    y: 1 - snapVolumeAdaptiveRays(adaptive),
-  };
-}
-
-function syncRayBudgetPresetButtons() {
-  document.querySelectorAll('[data-volume-budget-preset]').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.volumeBudgetPreset === activeVolumeRayBudgetPreset);
-  });
-}
-
-function syncRayBudgetGamutFromControls() {
-  const handle = document.getElementById('volume-ray-budget-handle');
-  const readout = document.getElementById('volume-ray-budget-readout');
-  if (!handle || !readout) return;
-  const p = rayBudgetGamutPointFromControls();
-  const c = readVolumeControls();
-  handle.style.left = `${p.x * 100}%`;
-  handle.style.top = `${p.y * 100}%`;
-  readout.textContent = `${c.raySteps | 0} steps / ${c.adaptiveRays.toFixed(2)} adaptive`;
-  syncRayBudgetPresetButtons();
-}
-
-function applyRayBudgetGamutPoint(x, y) {
-  const nextSteps = snapVolumeRaySteps(1 + clampVolumeValue(x, 0, 1) * (160 - 1));
-  const nextAdaptive = snapVolumeAdaptiveRays(1 - clampVolumeValue(y, 0, 1));
-  setVolumeControlValue('volume-steps', nextSteps);
-  setVolumeControlValue('volume-adaptive-rays', nextAdaptive.toFixed(2));
-  activeVolumeRayBudgetPreset = '';
-  routedVolumeRayBudgetPreset = '';
-}
+function syncRayBudgetPresetButtons(){document.querySelectorAll('[data-volume-budget-preset]').forEach(btn=>btn.classList.toggle('active',btn.dataset.volumeBudgetPreset===activeVolumeRayBudgetPreset));}
+function syncRayBudgetGamutFromControls(){syncRayBudgetPresetButtons();}
 
 function applyRayBudgetPreset(name, options = {}) {
   const preset = VOLUME_RAY_BUDGET_PRESETS[name];
   if (!preset) return false;
   setVolumeControlValue('volume-steps', preset.raySteps);
-  setVolumeControlValue('volume-adaptive-rays', preset.adaptiveRays.toFixed(2));
   activeVolumeRayBudgetPreset = name;
   routedVolumeRayBudgetPreset = options.route ? name : '';
   return true;
@@ -18698,7 +18647,7 @@ function readVolumeControls({quality=viewportDisplay.quality,document=globalThis
     projection: parseFloat(document.getElementById('volume-projection').value),
     speed: parseFloat(document.getElementById('volume-speed').value),
     raySteps: parseFloat(document.getElementById('volume-steps').value),
-    adaptiveRays: parseFloat(document.getElementById('volume-adaptive-rays').value),
+    adaptiveRays: 0,
     occupancySkip: parseFloat(document.getElementById('volume-occupancy-skip').value),
     occupancyThreshold: Number(document.getElementById('volume-occupancy-threshold').value),
     fireScale: parseFloat(document.getElementById('volume-fire-scale').value),
@@ -19064,10 +19013,10 @@ function supersedeVolumeRebuildHolds() {
 function updateVolumeControlLabels() {
   const c = readVolumeControls();
   document.getElementById('volume-optical-tolerance').disabled=c.raymarchMode!=='numerical';
-  for(const id of ['volume-adaptive-rays','volume-occupancy-skip','volume-occupancy-threshold'])document.getElementById(id).disabled=c.raymarchMode!=='current';
+  for(const id of ['volume-occupancy-skip','volume-occupancy-threshold'])document.getElementById(id).disabled=false;
   document.getElementById('volume-flame-priority').disabled=c.raymarchMode!=='numerical';
   document.getElementById('volume-ray-noise-animated').disabled=!c.rayStartNoise;
-  document.getElementById('volume-quadrature-jitter').disabled=c.raymarchMode==='current'||!c.rayStartNoise;
+  document.getElementById('volume-quadrature-jitter').disabled=!c.rayStartNoise;
   document.getElementById('volume-ray-step-stats').hidden=!c.rayStepTelemetry;
   for(const id of ['volume-display-grid-scale','volume-display-alignment','volume-emission-interpolation','volume-smoke-interpolation','volume-emission-smoothing','volume-smoke-smoothing'])
     document.getElementById(id).disabled=c.displayReconstruction==='off';
@@ -19094,7 +19043,6 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-steps-val').textContent = String(c.raySteps | 0);
   document.getElementById('volume-ray-start-noise-val').textContent = c.rayStartNoise ? 'on' : 'off';
   document.getElementById('volume-flame-priority-val').textContent = c.flamePriority.toFixed(2);
-  document.getElementById('volume-adaptive-rays-val').textContent = c.adaptiveRays.toFixed(2);
   document.getElementById('volume-occupancy-skip-val').textContent = c.occupancySkip.toFixed(2);
   document.getElementById('volume-fire-scale-val').textContent = c.fireScale.toFixed(2);
   document.getElementById('volume-plume-height-val').textContent = c.plumeHeight.toFixed(2);
@@ -19317,7 +19265,7 @@ function syncVolumePresentationControls(receipt = volumePrototype?.debugState?.(
     ? `${receipt.effectiveMode} / ${receipt.fallbackReason}`
     : receipt.effectiveMode;
   const quality = receipt.effectiveRayQuality || {};
-  document.getElementById('volume-presentation-ray-quality').textContent = `${quality.raySteps ?? '--'} steps / adaptive ${Number.isFinite(quality.adaptiveRays) ? quality.adaptiveRays.toFixed(2) : '--'} / scale ${Number.isFinite(quality.renderScale) ? quality.renderScale.toFixed(2) : '--'}`;
+  document.getElementById('volume-presentation-ray-quality').textContent = `${quality.raySteps ?? '--'} steps / scale ${Number.isFinite(quality.renderScale) ? quality.renderScale.toFixed(2) : '--'}`;
   document.getElementById('volume-presentation-target').textContent = receipt.targetIdentity || 'missing-target-identity';
 }
 
@@ -19438,7 +19386,7 @@ function refreshVolumeReadout() {
   const s = volumePrototype.debugState();
   const stepping=s.opticalStepping;
   const requested=document.getElementById('volume-raymarch-mode').value;
-  const modeNames={current:'Old adaptive',numerical:'New adaptive',fixed:'Standard (fixed)','fixed-dense':'Fixed reference 2x',budgeted:'Fixed count',joins:'Fixed count · joins',history:'Fixed count · joins + history'};
+  const modeNames={numerical:'Adaptive',fixed:'Fixed quadrature reference',budgeted:'Fixed evaluation count',joins:'Guided count',history:'Guided count + history','fallback-fixed':'Uniform fallback'};
   document.getElementById('volume-raymarch-status').textContent=!stepping||stepping.requested!==requested?'Awaiting renderer':
     `${modeNames[stepping.effective]||'Unavailable'}${stepping.reason?` · ${stepping.reason.replaceAll('-',' ')}`:''}`;
   const telemetry=s.rayStepTelemetry;
@@ -20130,14 +20078,9 @@ async function initKaminosVolumeRoute() {
     applyRayBudgetPreset(routeRayBudgetPreset, { route: true });
   }
   const routeRaySteps = Number(params.get('volume_steps'));
+  if(params.has('volume_raymarch_mode'))params.set('volume_raymarch_mode',opticalSteppingConfig({mode:params.get('volume_raymarch_mode')}).mode);
   if (params.has('volume_steps') && Number.isFinite(routeRaySteps)) {
     document.getElementById('volume-steps').value = String(Math.max(1, Math.min(160, routeRaySteps)));
-    activeVolumeRayBudgetPreset = '';
-    routedVolumeRayBudgetPreset = '';
-  }
-  const routeAdaptiveRays = Number(params.get('volume_adaptive_rays'));
-  if (params.has('volume_adaptive_rays') && Number.isFinite(routeAdaptiveRays)) {
-    document.getElementById('volume-adaptive-rays').value = String(Math.max(0, Math.min(1, routeAdaptiveRays)));
     activeVolumeRayBudgetPreset = '';
     routedVolumeRayBudgetPreset = '';
   }
@@ -20560,7 +20503,6 @@ async function initKaminosVolumeRoute() {
 
   const rayBudgetPresetOwnedControls = new Set([
     'volume-steps',
-    'volume-adaptive-rays',
   ]);
   const emitterMorphologyControls = new Set([
     'emitter-assay-family',
@@ -20740,7 +20682,7 @@ async function initKaminosVolumeRoute() {
     control.addEventListener('blur', confirm);
   }
 
-  for (const id of ['volume-scene', 'volume-resolution', 'emitter-assay-family', 'volume-artistic-swirl', 'volume-phased-sway', 'volume-swirl-jostle', 'volume-fine-breakup-localization', 'volume-density', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-occupancy-threshold', 'volume-fire-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-residual-mode', 'volume-residual-model-url', 'volume-residual-strength', 'volume-residual-feature-debug', 'volume-input-radius', 'volume-flow-rate', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-fire-lock', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  for (const id of ['volume-scene', 'volume-resolution', 'emitter-assay-family', 'volume-artistic-swirl', 'volume-phased-sway', 'volume-swirl-jostle', 'volume-fine-breakup-localization', 'volume-density', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-occupancy-skip', 'volume-occupancy-threshold', 'volume-fire-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-residual-mode', 'volume-residual-model-url', 'volume-residual-strength', 'volume-residual-feature-debug', 'volume-input-radius', 'volume-flow-rate', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-fire-lock', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id)?.addEventListener('input', syncControls);
     document.getElementById(id)?.addEventListener('change', syncControls);
   }
@@ -21619,34 +21561,6 @@ async function initKaminosVolumeRoute() {
     applyVolumeEmitterFamilyRuntimeToCockpit(readVolumeControls());
     refreshVolumeReadout();
   };
-  const gamut = document.getElementById('volume-ray-budget-gamut');
-  const updateGamutFromPointer = event => {
-    const rect = gamut.getBoundingClientRect();
-    applyRayBudgetGamutPoint((event.clientX - rect.left) / rect.width, (event.clientY - rect.top) / rect.height);
-    applyBudgetControls();
-  };
-  gamut.addEventListener('pointerdown', event => {
-    gamut.setPointerCapture(event.pointerId);
-    updateGamutFromPointer(event);
-  });
-  gamut.addEventListener('pointermove', event => {
-    if (event.buttons) updateGamutFromPointer(event);
-  });
-  gamut.addEventListener('keydown', event => {
-    const c = readVolumeControls();
-    let handled = true;
-    if (event.key === 'ArrowLeft') setVolumeControlValue('volume-steps', snapVolumeRaySteps(c.raySteps - 4));
-    else if (event.key === 'ArrowRight') setVolumeControlValue('volume-steps', snapVolumeRaySteps(c.raySteps + 4));
-    else if (event.key === 'ArrowDown') setVolumeControlValue('volume-adaptive-rays', snapVolumeAdaptiveRays(c.adaptiveRays - 0.05).toFixed(2));
-    else if (event.key === 'ArrowUp') setVolumeControlValue('volume-adaptive-rays', snapVolumeAdaptiveRays(c.adaptiveRays + 0.05).toFixed(2));
-    else handled = false;
-    if (handled) {
-      event.preventDefault();
-      activeVolumeRayBudgetPreset = '';
-      routedVolumeRayBudgetPreset = '';
-      applyBudgetControls();
-    }
-  });
   document.querySelectorAll('[data-volume-budget-preset]').forEach(btn => {
     btn.addEventListener('click', () => {
       applyRayBudgetPreset(btn.dataset.volumeBudgetPreset);
@@ -27262,7 +27176,7 @@ function setupAuthoringAssets(){
     let recipe=await kilnRecipes.load();signal.throwIfAborted();
     if(!recipe){const response=await fetch('./artifacts/generation-flame/basin.json');if(!response.ok)throw Error('Starter kiln unavailable');const reference=await response.json(),basinResponse=await fetch(`/api/volume-settings-preset?id=${encodeURIComponent(reference.presetId)}`,{cache:'no-store'});if(!basinResponse.ok)throw Error('Starter kiln basin unavailable');const artifact=await basinResponse.json();const receipt=validateVolumeSettingsPresetDocument(artifact,reference.presetId,schema);const starter=structuredClone(receipt.preset),studyResponse=await fetch('./artifacts/inference-kiln/study.json');if(!studyResponse.ok)throw Error('Kiln study settings unavailable');const study=await studyResponse.json();
       for(const axis of ['domControls','rendererControls','presentationControls'])for(const descriptor of Object.values(starter[axis]))if(Object.hasOwn(study.query,descriptor.param)){const raw=study.query[descriptor.param];delete descriptor.rawValue;descriptor.value=descriptor.type==='checkbox'?['1','true'].includes(raw):['range','number'].includes(descriptor.type)?Number(raw):raw;}
-      for(const [id,value]of [['volume-resolution',32],['volume-steps',6],['volume-adaptive-rays',1],['volume-render-scale',1]]){starter.domControls[id].value=value;delete starter.domControls[id].rawValue;}
+      for(const [id,value]of [['volume-resolution',32],['volume-steps',6],['volume-render-scale',1]]){starter.domControls[id].value=value;delete starter.domControls[id].rawValue;}
       recipe=defaultKilnRecipe(document,artifact,starter);}
     let sourceSettings=recipe.plan.fireSettings;
     if(!sourceSettings){const response=await fetch(`/api/volume-settings-preset?id=${encodeURIComponent(recipe.plan.composition.flame.presetId)}`,{cache:'no-store'});if(!response.ok)throw Error('Saved kiln basin unavailable');const artifact=await response.json();sourceSettings=validateVolumeSettingsPresetDocument(artifact,recipe.plan.composition.flame.presetId,schema).preset;}

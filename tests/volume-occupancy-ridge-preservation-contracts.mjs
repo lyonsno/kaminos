@@ -35,37 +35,14 @@ function assertOccupancyRidgeContract(source) {
     assert.equal((arm.match(/\bcontinue\s*;/g) || []).length, 1,
       'each optical arm has one continuation after consumption');
   }
-  const raymarch = allRaymarch.replace(opticalStepArm, '').replace(opticalTraceArm, '').replace(worldArm, '');
-  const reconstructionStart = raymarch.indexOf('var reconstructed: FlowReconstructionSample;');
-  assert.ok(reconstructionStart >= 0, 'supported-sample reconstruction boundary is discoverable');
-  const emptyCellBranch = raymarch.match(
-    /if \(occupancySkipStrength>0\.0 && !opticalStepping && !guided && !fullGridCapture && !opticalTrace && directSupport <= u\.empty_space_controls\.x\) \{([^{}]*)\}/,
-  );
-  assert.ok(emptyCellBranch, 'conservative empty-cell branch has a stable non-nested boundary');
-  const branchStart = emptyCellBranch.index;
-  const branchEnd = branchStart + emptyCellBranch[0].length;
-  assert.ok(branchEnd < reconstructionStart, 'empty-cell acceleration ends before supported-sample reconstruction');
-
-  assert.match(
-    raymarch,
-    /let occupancySkipStrength = clamp\(u\.occupancy_controls\.x,[\s\S]*directSupport = raymarchNeighborhoodSupport\(neighborhood\);[\s\S]*directSupport = directCellOpticalSupport\(p\);/,
-    'occupancy strength is available at the conservative empty-cell decision',
-  );
-  assert.match(
-    emptyCellBranch[1],
-    /directCellExitDistance\(p, rd\)[\s\S]*occupancySkipStrength[\s\S]*continue;/,
-    'occupancy acceleration acts only inside a conservatively proven-empty cell',
-  );
-  assert.equal(
-    (raymarch.match(/\bcontinue\s*;/g) || []).length,
-    1,
-    'the production raymarch has exactly one early continuation',
-  );
-  assert.doesNotMatch(
-    raymarch.slice(branchEnd),
-    /\bcontinue\s*;/,
-    'supported reconstructed samples cannot take an early continuation before composition',
-  );
+  const emptyArm=balancedWgslBlock(allRaymarch,'if(LEAN_EMISSIVE_RAYMARCH&&!fullGridCapture&&!opticalTrace&&u.occupancy_controls.x>0.0){');
+  assert.equal((emptyArm.match(/emptyOpticalInterval\(/g)||[]).length,2,'both active integrators require an interval certificate');
+  assert.match(emptyArm,/if\(guided&&emptyOpticalInterval[\s\S]*allocatedSamples\+\+; continue;/);
+  assert.match(emptyArm,/if\(opticalStepping[\s\S]*emptyOpticalInterval[\s\S]*opticalStepSkipEmpty\(&opticalStep\);continue;/);
+  const raymarch=allRaymarch.replace(opticalStepArm,'').replace(opticalTraceArm,'').replace(worldArm,'').replace(emptyArm,'');
+  const reconstructionStart=raymarch.indexOf('var reconstructed: FlowReconstructionSample;');
+  assert.ok(reconstructionStart>=0);
+  assert.equal((raymarch.match(/\bcontinue\s*;/g)||[]).length,0,'supported reconstruction cannot discard material before composition');
   assert.match(
     raymarch.slice(reconstructionStart),
     /let extinctionStep =[\s\S]*trans = trans \* exp\(-extinctionStep\);[\s\S]*t = t \+ localDt;/,
@@ -123,7 +100,7 @@ assert.throws(
 );
 
 assert.equal(
-  [...core.matchAll(/occupancyAcceleration:\s*\{\s*identity:\s*['"]bounded-optical-support-cells-v2['"],\s*strength:\s*state\.occupancySkip,\s*threshold:\s*state\.occupancyThreshold,/g)].length,
+  [...core.matchAll(/occupancyAcceleration:\s*\{\s*identity:\s*['"]active-marcher-whole-empty-interval-v3['"],\s*strength:\s*state\.occupancySkip,\s*threshold:\s*state\.occupancyThreshold,/g)].length,
   2,
   'success and failure receipts expose the bounded optical-support identity and authored threshold',
 );

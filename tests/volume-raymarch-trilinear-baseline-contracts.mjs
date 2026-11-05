@@ -70,23 +70,10 @@ assert.equal(
   1,
   'reconstruction-off evaluates the trilinear semantic bundle exactly once per admitted occupied point',
 );
-const supportAdmission = traversal.slice(
-  traversal.indexOf('var directSupport:'),
-  traversal.indexOf('var reconstructed: FlowReconstructionSample;'),
-);
-const displayAdmission = /if \(displayReconstructionActive\(\) && \(opticalStepping \|\| guided\)\) \{\s*directSupport = 1\.0;\s*\} else if \(displayReconstructionActive\(\)\) \{\s*directSupport = displaySupport;\s*\} else if/;
-assert.match(supportAdmission, displayAdmission, 'display support bypass requires both the explicit cache and optical stepping');
-const worldCollarAdmission = /\s*if \(worldActive && directSupport <= u\.empty_space_controls\.x && worldSmokeBlendWeight\(p\) > 1e-4\) \{\s*directSupport = max\(directSupport, worldCollarSupport\(p\)\);\s*\}/;
-const baselineAdmission = supportAdmission.replace(displayAdmission, 'if')
-  .replace(worldCollarAdmission, '')
-  .replace('occupancySkipStrength>0.0 && !opticalStepping && !guided && !fullGridCapture && !opticalTrace', '!fullGridCapture');
-assert.match(supportAdmission, /if \(occupancySkipStrength>0\.0 && !opticalStepping && !guided && !fullGridCapture && !opticalTrace && directSupport <= u\.empty_space_controls\.x\)/,
-  'only explicit comparison/capture modes bypass Fine support admission');
-assert.match(
-  baselineAdmission,
-  /^var directSupport: f32;\s*if \(LEAN_EMISSIVE_RAYMARCH\) \{\s*neighborhood = sampleRaymarchNeighborhood\(p\);\s*directSupport = raymarchNeighborhoodSupport\(neighborhood\);\s*\} else \{\s*directSupport = directCellOpticalSupport\(p\);\s*\}\s*if \(!fullGridCapture && directSupport <= u\.empty_space_controls\.x\) \{\s*let cellExit = select\(directCellExitDistance\(p, rd\), displayCellExitDistance\(p, rd\), displayReconstructionActive\(\)\);\s*let emptyCellAdvance = mix\(\s*dtBase,\s*max\(dtBase, cellExit \+ 0\.0001\),\s*occupancySkipStrength\s*\);\s*let emptyLimit = select\(endT, min\(endT, nearHit\.y\), worldActive\);\s*t = t \+ min\(emptyCellAdvance, max\(0\.0001, emptyLimit - t\)\);\s*continue;\s*\}\s*$/,
-  'one live direct-support skip must own admission before sampling',
-);
+const emptyArm=balancedWgslBlock(raymarch,'if(LEAN_EMISSIVE_RAYMARCH&&!fullGridCapture&&!opticalTrace&&u.occupancy_controls.x>0.0){');
+assert.equal((emptyArm.match(/emptyOpticalInterval\(/g)||[]).length,2,'active interval certificate guards both integrators');
+assert.ok(raymarch.indexOf(emptyArm)<raymarch.indexOf('var reconstructed:'),'interval certification precedes reconstruction');
+assert.doesNotMatch(traversal,/\bcontinue\s*;/,'raw reconstruction cannot discard a supported sample');
 const sampleBranch = traversal.slice(
   traversal.indexOf('var reconstructed: FlowReconstructionSample;'),
 ).replace(/\/\/[^\n]*/g, '');
@@ -102,11 +89,6 @@ assert.match(
 assertRaymarchTrilinearAuthority(core);
 
 const falseClosureMutations = [
-  [
-    'display support enabled outside its explicit mode',
-    source => source.replace('if (displayReconstructionActive() && (opticalStepping || guided))', 'if (true)'),
-    /display support bypass requires both/,
-  ],
   [
     'renamed hash added to first-sample startT',
     source => source
@@ -128,13 +110,6 @@ const falseClosureMutations = [
     /raw material callee must preserve direct trilinear field sampling/,
   ],
   [
-    'commented decoy skip followed by global support alias',
-    source => source
-      .replace('    var directSupport: f32;', '    /*\n    var directSupport: f32;')
-      .replace('    var reconstructed: FlowReconstructionSample;', '    */\n    let directSupport = directCellOpticalSupport(p);\n    let effectiveSupport = select(directSupport, 1.0, flowKernelReconstructionActive);\n    if (!fullGridCapture && effectiveSupport <= 0.0001) { continue; }\n    var reconstructed: FlowReconstructionSample;'),
-    /display support bypass requires both|only explicit comparison\/capture modes bypass Fine support admission|one live direct-support skip must own admission before sampling/,
-  ],
-  [
     'renamed first-sample hash helper',
     source => source
       .replace('fn sampleWorldFlowReconstructionRaw(', 'fn hiddenRayOffset(p: vec3<f32>) -> f32 { return hash31(p) * 0.2; }\n\nfn sampleWorldFlowReconstructionRaw(')
@@ -149,11 +124,9 @@ const falseClosureMutations = [
     /raw zero route must contain one direct trilinear assignment and no filtering/,
   ],
   [
-    'dead support skip with live global-occupancy alias',
-    source => source
-      .replace('    if (occupancySkipStrength>0.0 && !opticalStepping && !guided && !fullGridCapture && !opticalTrace && directSupport <= u.empty_space_controls.x) {', '    if (false) {\n    if (occupancySkipStrength>0.0 && !opticalStepping && !guided && !fullGridCapture && !opticalTrace && directSupport <= u.empty_space_controls.x) {')
-      .replace('    var reconstructed: FlowReconstructionSample;', '    }\n    let effectiveSupport = select(directSupport, 1.0, flowKernelReconstructionActive);\n    if (!fullGridCapture && effectiveSupport <= 0.0001) { continue; }\n    var reconstructed: FlowReconstructionSample;'),
-    /one live direct-support skip must own admission before sampling/,
+    'supported reconstruction discarded through a renamed helper',
+    source=>source.replace('    var reconstructed: FlowReconstructionSample;','    if(hiddenDiscard(p)){continue;}\n    var reconstructed: FlowReconstructionSample;'),
+    /cannot discard a supported sample/,
   ],
 ];
 for (const [name, mutate, expectedFailure] of falseClosureMutations) {

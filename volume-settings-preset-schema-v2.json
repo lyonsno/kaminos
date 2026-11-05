@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 174,
+  "controlCount": 173,
   "controls": [
     {
       "key": "volume-fine-velocity",
@@ -862,12 +862,6 @@
     {
       "key": "volume-steps",
       "param": "volume_steps",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
-      "key": "volume-adaptive-rays",
-      "param": "volume_adaptive_rays",
       "tagName": "INPUT",
       "type": "range"
     },
@@ -2314,6 +2308,13 @@
       "param": "volume_force_fine_breakup",
       "tagName": "INPUT",
       "type": "checkbox"
+    },
+    {
+      "key": "volume-adaptive-rays",
+      "param": "volume_adaptive_rays",
+      "tagName": "INPUT",
+      "type": "range",
+      "axis": "domControls"
     }
   ],
   "rendererControls": [
@@ -2330,7 +2331,6 @@
       "tagName": "SELECT",
       "type": "select-one",
       "allowedValues": [
-        "current",
         "numerical",
         "fixed",
         "budgeted",

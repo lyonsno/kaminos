@@ -1,6 +1,5 @@
 import {FINE_COVERAGE_FIELDS} from './volume-fine-coverage-controls.mjs';
 import {ADAPTIVE_MATERIAL_FIELDS} from './volume-adaptive-material-controls.mjs';
-import {resolveRaymarchAdaptivity} from './volume-optical-native.mjs';
 import {createGridTuningInspector} from './volume-grid-tuning-ui.mjs';
 import {GRID_TUNING_FIELDS} from './volume-grid-tuning.mjs';
 import {PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS} from './volume-physics-appearance.mjs';
@@ -131,7 +130,7 @@ export const FLAME_PROPERTY_GROUPS = [
   { name:'Ray marching', view:'quality', open:true, fields:[
     ['volume-raymarch-mode','Ray marcher'], ['volume-optical-tolerance','Tolerance'], ['volume-ray-step-telemetry','Ray statistics'],
     ['volume-steps','Ray count'],
-    ['volume-adaptive-rays','Adaptive rays'], ['volume-occupancy-skip','Empty-space acceleration'], ['volume-occupancy-threshold','Empty-space threshold'],
+    ['volume-occupancy-skip','Empty-space acceleration'], ['volume-occupancy-threshold','Empty-space threshold'],
     ['volume-ray-start-noise','Blue noise'], ['volume-ray-noise-animated','Animate noise'], ['volume-quadrature-jitter','Interior jitter'],
     ['volume-flame-priority','Flame priority'], ['volume-render-scale','Screen resolution (%)'],
     ['volume-pressure-resolution','Pressure grid (experimental)'],
@@ -387,19 +386,10 @@ export function createFlameInspector({ document, host, gridTuning, sharedHost = 
           const bound=bounds&&Object.hasOwn(bounds,key)?bounds[key]:source[key];
           field[key]=bound===null||bound===undefined||bound===''?'':String(flameControlDisplayValue(id,bound));
         }
-        const adaptivity=id==='volume-adaptive-rays'
-          ?resolveRaymarchAdaptivity(byId('volume-raymarch-mode').value,Number(source.value),readRaymarchRuntime()):null;
-        field.disabled=adaptivity?adaptivity.automatic:source.disabled;
-        if(adaptivity){
-          grip.textContent=adaptivity.label;
-          field.setAttribute('aria-label',`Flame ${adaptivity.label}`);
-          grip.title=field.title=adaptivity.pending?'Awaiting the effective ray marcher.':adaptivity.automatic
-            ?`${adaptivity.value?'On':'Off'} automatically for this marcher. The old adaptive amount is retained for Old adaptive.`
-            :volumeControlTooltip(id);
-        }
+        field.disabled=source.disabled;
         if(force!==true&&document.activeElement===field)return;
         const descriptor=readSourceControl(id),value=descriptor?(descriptor.rawValue??descriptor.value):source.type==='checkbox'?source.checked:source.value;
-        if(field.type==='checkbox')field.checked=typeof value==='boolean'?value:Number(value)>=.5;else field.value=String(adaptivity?(adaptivity.value??''):flameControlDisplayValue(id,value));
+        if(field.type==='checkbox')field.checked=typeof value==='boolean'?value:Number(value)>=.5;else field.value=String(flameControlDisplayValue(id,value));
       }
       const eventName=source.tagName==='SELECT'||field.type==='checkbox'?'change':'input';
       field.addEventListener(eventName,()=>{

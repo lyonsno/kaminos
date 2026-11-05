@@ -309,3 +309,14 @@ console.log('volume retired-control migration contracts passed');
   }
 }
 console.log('grid height cells control retirement contracts passed');
+
+// A saved obsolete selection is migrated at the document boundary, with a receipt;
+// no removed menu option or old GPU algorithm is reconstructed.
+for(const [before,after] of [['current','numerical'],['fixed-dense','fixed']]){
+ const artifact=currentPresetArtifact();const descriptor=artifact.preset.rendererControls['volume-raymarch-mode'];descriptor.value=before;
+ const route=new URL(artifact.preset.route);route.searchParams.set('volume_raymarch_mode',before);artifact.preset.route=route.href;
+ const receipt=validateVolumeSettingsPresetDocument(artifact,artifact.presetId,schema);
+ assert.equal(receipt.preset.rendererControls['volume-raymarch-mode'].value,after);
+ assert.equal(receipt.presetRoute.searchParams.get('volume_raymarch_mode'),after);
+ assert.deepEqual(receipt.retirementMigration.retiredModeChanges,[{before,after}]);
+}

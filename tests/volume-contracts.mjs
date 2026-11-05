@@ -881,8 +881,8 @@ assert.doesNotMatch(core, /fn\s+microDetailDomainWarp\b/, 'raymarch must not rep
 assert.match(core, /microTextureSignal/, 'raymarch keeps microdetail texture separate from body density');
 assert.match(core, /microBodyContribution/, 'raymarch limits microdetail contribution to visible volume body');
 assert.match(core, /rayStepOpacity/, 'raymarch alpha integrates with per-step optical thickness');
-assert.match(core, /raymarchInterest/, 'raymarch computes local sample interest before adapting step distance');
-assert.match(core, /adaptiveRayStepScale/, 'raymarch adapts step distance instead of only changing alpha');
+assert.match(core,/opticalStepObserveWithTolerance/,'active adaptive marcher refines estimated optical transfer');
+assert.doesNotMatch(core,/fn adaptiveRayStepScale/,'deprecated heuristic step algorithm is removed');
 assert.match(core, /raymarchEarlyTermination/, 'raymarch exposes named early-termination behavior');
 assert.match(core, /occupancy_controls/, 'volume uniforms carry occupancy/importance skip controls separately from adaptive rays');
 assert.match(core, /directCellOpticalSupport/, 'raymarch conservatively proves native cells empty before occupancy acceleration');

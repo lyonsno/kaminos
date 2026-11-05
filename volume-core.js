@@ -1,3 +1,4 @@
+import {EMPTY_SPACE_WGSL} from './volume-empty-space.mjs';
 import {resolveWorldCalibration,calibrationSignature,calibrationWaveletLattice,WORLD_CALIBRATION_WGSL,resolveSimulationLevers} from './volume-world-calibration.mjs';
 import {WORLD_RENDER_WGSL,createWorldRenderField} from './volume-world-render.mjs';
 import {sourceCoverageBounds} from './volume-fine-coverage.mjs';
@@ -704,6 +705,7 @@ function normalizeRenderScale(value) {
 }
 
 const RETIRED_RAYMARCH_CONTROL_KEYS = Object.freeze([
+  'adaptiveRays',
   'majorantSkip',
   'majorantSmooth',
   'majorantGuard',
@@ -6467,6 +6469,7 @@ ${FLAME_GUIDANCE_WGSL}
 override RAY_STEP_STATS: bool = false;
 @group(0) @binding(26) var<storage, read_write> rayStepCounters: array<u32>;
 ${HISTORY_ALLOCATION_WGSL}
+${EMPTY_SPACE_WGSL}
 ${EMISSIVE_TRANSPORT_WGSL}
 ${WORLD_SMOKE_OPTICS_WGSL}
 ${WORLD_RENDER_WGSL}
@@ -6544,35 +6547,7 @@ fn smokeRadianceExtinction(smokeDensity: f32, microSmoke: f32, interfaceShred: f
   return clamp(body * (0.34 + absorptionGain * 0.46), 0.0, 2.3);
 }
 
-fn raymarchInterest(
-  density: f32,
-  smoke: f32,
-  heat: f32,
-  temp: f32,
-  flame: f32,
-  flameDetail: f32,
-  microTextureSignal: f32,
-  velMag: f32,
-  fireLick: f32,
-  interfaceShred: f32
-) -> f32 {
-  let body = density * 0.22 + smoke * 0.16 + heat * 0.10;
-  let fire = temp * 0.40 + flame * 0.36 + flameDetail * 0.22 + fireLick * 0.30;
-  let edge = microTextureSignal * 0.22 + interfaceShred * 0.42 + velMag * 0.46;
-  return clamp(body + fire + edge, 0.0, 1.6);
-}
-
-fn adaptiveRayStepScale(interest: f32, adaptiveRays: f32) -> f32 {
-  let fine = smoothstep(0.035, 0.92, interest);
-  let adaptiveScale = mix(2.25, 1.0, fine);
-  return mix(1.0, adaptiveScale, clamp(adaptiveRays, 0.0, 1.0));
-}
-
-// At 160 steps and adaptive=0 this matches the previous half-material-cell
-// exterior march. The same cockpit controls now change both representations.
-fn worldMarchStep(pitch: f32, steps: f32, interest: f32, adaptive: f32) -> f32 {
-  return pitch * (80.0 / steps) * adaptiveRayStepScale(interest, adaptive);
-}
+fn worldMarchStep(pitch:f32,steps:f32)->f32{return pitch*(80.0/steps);}
 
 fn segmentOpacity(opticalDepth: f32, maxOpacity: f32) -> f32 {
   return min(1.0 - exp(-max(0.0, opticalDepth)), maxOpacity);
@@ -8155,19 +8130,20 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
   let exitP = ro + rd * endT;
   var gridAccum = max(gridLine(entryP), gridLine(exitP));
   let expensiveSampleBudget = select(u32(ceil(steps)), nonRidgeOpticalCaptureHeader.sampleCount, opticalTrace);
-  let maxTraversalSteps = GRID_Y * 3u + expensiveSampleBudget + 3u + select(0u,u32(ceil(max(0.0,endT-startT)/max(.0001,worldMarchStep(worldMinimumMaterialPitch(),steps,1.6,0.0))))+4u,worldActive);
+  let maxTraversalSteps = GRID_Y * 3u + expensiveSampleBudget + 3u + select(0u,u32(ceil(max(0.0,endT-startT)/max(.0001,worldMarchStep(worldMinimumMaterialPitch(),steps))))+4u,worldActive);
   var expensiveSamples = 0u;
   var rayMaterialSamples = 0u;
+  var allocatedSamples = 0u;
   var traversalSteps = 0u;
   var guidedRay:GuidedRay;
   if(guided){guidedRay=guidedRayInit(ro,rd,max(startT,sceneDepthStartT),endT);}
   loop {
-    if(guided && rayMaterialSamples>=expensiveSampleBudget){break;}
+    if(guided && allocatedSamples>=expensiveSampleBudget){break;}
     if (!opticalStepping && ((!worldActive && expensiveSamples >= expensiveSampleBudget) || traversalSteps >= maxTraversalSteps)) { break; }
     if (!opticalStepping && !fullGridCapture && !opticalTrace && (!guided && (raymarchEarlyTermination(trans) || t > endT))) { break; }
     if(guided){
       let phase=select(.5,.05+.9*rayNoiseSample(in.pos.xy,u.occupancy_controls.y,1u),u.reserved_render_controls.w>.5 && u.occupancy_controls.w>.5);
-      t=guidedNext(&guidedRay,ro,rd,rayMaterialSamples,expensiveSampleBudget,phase,rayPhase);
+      t=guidedNext(&guidedRay,ro,rd,allocatedSamples,expensiveSampleBudget,phase,rayPhase);
     }
     if (opticalStepping) {
       if (opticalStep.cursor >= opticalStep.end) { break; }
@@ -8181,8 +8157,8 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
         let localCursor = opticalStep.cursor;
         let insideFine = !worldActive || (nearHit.y > nearHit.x && localCursor >= nearHit.x-opticalStep.origin && localCursor < nearHit.y-opticalStep.origin);
         let insideMiddle = worldActive && !insideFine && (middleHit.y > middleHit.x && localCursor >= middleHit.x-opticalStep.origin && localCursor < middleHit.y-opticalStep.origin);
-        let regionBase = select(worldMarchStep(select(worldRender.loPitch.w, worldMinimumMaterialPitch(), insideMiddle), steps, 1.6, 0.0), dtBase, insideFine);
-        var minimum = regionBase * select(1.0, 0.5, OPTICAL_STEP_MODE == 3u);
+        let regionBase = select(worldMarchStep(select(worldRender.loPitch.w, worldMinimumMaterialPitch(), insideMiddle), steps), dtBase, insideFine);
+        var minimum = regionBase;
         var maximum = minimum * select(1.0, 4.0, OPTICAL_STEP_MODE == 2u);
         if (OPTICAL_STEP_MODE == 2u && priority > 0.0 && insideFine) {
           let horizon = min(stop, dtBase * 8.0);
@@ -8202,6 +8178,15 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
         t = opticalStepPositionJittered(&opticalStep, rayNoiseSample(in.pos.xy, u.occupancy_controls.y, rayMaterialSamples + 1u));
       }
     }
+    if(LEAN_EMISSIVE_RAYMARCH&&!fullGridCapture&&!opticalTrace&&u.occupancy_controls.x>0.0){
+      if(guided&&emptyOpticalInterval(ro,rd,guidedRay.intervalStart,guidedRay.left,t,worldActive,nearHit,middleHit)){
+        allocatedSamples++; continue;
+      }
+      if(opticalStepping&&opticalStep.mask<=1u&&(opticalStep.mask==0u||all(abs(opticalStep.probes[0])<=vec4<f32>(u.empty_space_controls.x*clamp(u.occupancy_controls.x,0.0,1.0))))&&emptyOpticalInterval(ro,rd,opticalStep.origin+opticalStep.cursor,opticalStep.origin+opticalStep.cursor+opticalStep.width,t,worldActive,nearHit,middleHit)){
+        opticalStepSkipEmpty(&opticalStep);continue;
+      }
+    }
+    if(guided){allocatedSamples++;}
     traversalSteps = traversalSteps + 1u;
     let sampleIndex = expensiveSamples;
     if (opticalTrace) {
@@ -8223,10 +8208,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
       var brickExit=0.0;
       let brickSupport=worldPointSupportAndStep(p,rd,pitch,middleInterval,&brickExit);
       rayMaterialSamples += 1u; // Count the World material lookup even when its result advances an empty brick.
-      let interest=max(brickSupport,clamp(max(sigma*pitch,length(medium.emission)*pitch),0.0,1.6));
-      let baseStep=worldMarchStep(pitch,steps,interest,clamp(u.radiance_controls.w,0.0,1.0));
-      let skipStep=select(baseStep,mix(baseStep,max(baseStep,brickExit+0.0001),clamp(u.occupancy_controls.x,0.0,1.0)),brickExit>0.0&&sigma+length(medium.emission)<=u.empty_space_controls.x);
-      var ds=select(min(skipStep,max(.0001,endT-t)),guidedRay.width,guided);
+      var ds=select(min(worldMarchStep(pitch,steps),max(.0001,endT-t)),guidedRay.width,guided);
       if(!guided && middleHit.y>middleHit.x){
         if(t<middleHit.x&&t+ds>middleHit.x){ds=middleHit.x-t;}
         if(middleInterval&&t+ds>middleHit.y){ds=middleHit.y-t;}
@@ -8243,36 +8225,13 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
       trans*=exp(-sigma*ds);t+=ds;continue;
     }
     let flowKernelReconstructionActive = u.reconstruction_kernel_controls.x > 0.0001;
-    let occupancySkipStrength = clamp(u.occupancy_controls.x, 0.0, 1.0);
+    var directSupport=0.0;
+    if(opticalTrace){directSupport=directCellOpticalSupport(p);}
     var preparedFine:EmissiveMaterial;
-    var displaySupport = 0.0;
+    var displaySupport=0.0;
     if(displayReconstructionActive()){preparedFine=sampleDisplayMaterialWithSupport(p,1.0,&displaySupport);rayMaterialSamples++;}
-    var neighborhood: RaymarchNeighborhood;
-    var directSupport: f32;
-    if (displayReconstructionActive() && (opticalStepping || guided)) {
-      directSupport = 1.0;
-    } else if (displayReconstructionActive()) {
-      directSupport = displaySupport;
-    } else if (LEAN_EMISSIVE_RAYMARCH) {
-      neighborhood = sampleRaymarchNeighborhood(p);
-      directSupport = raymarchNeighborhoodSupport(neighborhood);
-    } else {
-      directSupport = directCellOpticalSupport(p);
-    }
-    if (worldActive && directSupport <= u.empty_space_controls.x && worldSmokeBlendWeight(p) > 1e-4) {
-      directSupport = max(directSupport, worldCollarSupport(p));
-    }
-    if (occupancySkipStrength>0.0 && !opticalStepping && !guided && !fullGridCapture && !opticalTrace && directSupport <= u.empty_space_controls.x) {
-      let cellExit = select(directCellExitDistance(p, rd), displayCellExitDistance(p, rd), displayReconstructionActive());
-      let emptyCellAdvance = mix(
-        dtBase,
-        max(dtBase, cellExit + 0.0001),
-        occupancySkipStrength
-      );
-      let emptyLimit = select(endT, min(endT, nearHit.y), worldActive);
-      t = t + min(emptyCellAdvance, max(0.0001, emptyLimit - t));
-      continue;
-    }
+    var neighborhood:RaymarchNeighborhood;
+    if(!displayReconstructionActive()&&LEAN_EMISSIVE_RAYMARCH){neighborhood=sampleRaymarchNeighborhood(p);}
     var reconstructed: FlowReconstructionSample;
     if (displayReconstructionActive()) {
       // The prepared field contains the optical coefficients consumed below.
@@ -8308,7 +8267,6 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
     let radianceGain = max(0.0, u.radiance_controls.x);
     let absorptionGain = max(0.0, u.radiance_controls.y);
     let glowGain = max(0.0, u.radiance_controls.z);
-    let adaptiveRays = clamp(u.radiance_controls.w, 0.0, 1.0);
     let sampleCell = vec3<i32>(floor(clamp(worldToCell(p), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0, f32(GRID_Y) - 1.0, f32(GRID) - 1.0))));
     var curlDebug=0.0;var divDebug=0.0;
     if(!LEAN_EMISSIVE_RAYMARCH || (shellInspectMode>7.5 && !displayReconstructionActive())){
@@ -8335,15 +8293,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
       * smoothstep(0.54, 1.18, flameRenderTransitionStagger)
       * (0.020 + flameDetail * 0.035 + interfaceShred * 0.025 + microSmoke * 0.016);
     let extinction = rawExtinction + flameTransitionWisps * absorptionGain * 0.34;
-    var interest = raymarchInterest(density, smoke, heat, temp, max(flame, combustionFrontTopology * 0.10), flameDetail, microTextureSignal, velMag, fireLick, interfaceShred);
-    let fineSegmentEnd = select(endT, min(endT, nearHit.y), worldActive);
-    if(displayReconstructionActive()){
-      let pointSignal = max(preparedFine.absorption + preparedFine.scattering, length(preparedFine.emission) * 2.5);
-      interest = clamp(max(displaySupport, pointSignal) * 0.35, 0.0, 1.6);
-    } else if (LEAN_EMISSIVE_RAYMARCH) {
-      interest = max(interest, clamp(directSupport * 0.65, 0.0, 1.6));
-    }
-    let localDt = select(min(dtBase * adaptiveRayStepScale(interest, adaptiveRays), max(0.0001, fineSegmentEnd - t)),guidedRay.width,guided);
+    let localDt = select(min(dtBase,max(0.0001,fineSegmentEnd-t)),guidedRay.width,guided);
     let rayStepOpacity = localDt * 3.65;
     let transportedCurtainStructure = clamp(
       0.86
@@ -11824,6 +11774,7 @@ export function createKaminosVolumePrototype({
   let debugOpticalStepping = opticalSteppingConfig({mode:controlsSnapshot.raymarchMode??'numerical',tolerance:controlsSnapshot.opticalTolerance??0.001});
   let rayStepTelemetry = null;
   let rayAllocationHistory = null;
+  let rayAllocationHistoryFrozen=false;
   let rayStepTelemetryCanvas = null;
   let debugOpticalSteppingExplicit = false;
   const opticalSteppingPipelines = new Map();
@@ -16531,7 +16482,7 @@ export function createKaminosVolumePrototype({
     uniforms[36] = controlsSnapshot.radiance ?? 1.65;
     uniforms[37] = controlsSnapshot.absorption ?? 0.85;
     uniforms[38] = controlsSnapshot.glow ?? 1.15;
-    uniforms[39] = controlsSnapshot.adaptiveRays ?? 0.65;
+    uniforms[39] = 0; // Retired heuristic step control; slot retained for uniform compatibility.
     uniforms[40] = controlsSnapshot.occupancySkip ?? 0.35;
     const occupancyThreshold=emptySpaceThreshold(controlsSnapshot.occupancyThreshold??0);
     uniforms[EMPTY_SPACE_UNIFORM_OFFSET]=occupancyThreshold;
@@ -21287,17 +21238,17 @@ export function createKaminosVolumePrototype({
           const optical=resolveOpticalStepping(debugOpticalStepping,{emissive:lean,exterior:state.worldSmoke?.effective==='one-way-world-field',explicit:debugOpticalSteppingExplicit});
           state.opticalStepping = { ...optical, effective: optical.mode,
             adaptivity:raymarchAdaptivity(optical.mode,controlsSnapshot.adaptiveRays),
-            source:'native-emissive-material-and-current-incident-light', fullRay:optical.mode !== 'current',
+            source:'native-emissive-material-and-current-incident-light', fullRay:optical.mode !== 'fallback-fixed',
             flamePriorityRequested:controlsSnapshot.flamePriority??0,
             flamePriority:optical.mode==='numerical'?uniforms[42]:0,
             quadratureJitterRequested:controlsSnapshot.quadratureJitter!==false,
-            quadratureJitter:optical.mode!=='current'&&uniforms[47]>0.5&&uniforms[43]>0.5,
+            quadratureJitter:optical.mode!=='fallback-fixed'&&uniforms[47]>0.5&&uniforms[43]>0.5,
             guidance:'coverage-and-active-law-lookahead; guide reads excluded from material-sample counts' };
           if (state.worldSmoke?.raymarch) {
             const mode=optical.mode;
             state.worldSmoke.raymarch={...state.worldSmoke.raymarch,effectiveMode:mode,
-              policy:mode==='current'?'shared-quality-material-cell-step':['budgeted','joins','history'].includes(mode)?'fixed-count-whole-ray':'nested-quadrature-fine-step-scale',
-              reference:mode==='current'?'160-steps-adaptive-off-half-cell':null};
+              policy:mode==='fallback-fixed'?'shared-quality-material-cell-step':['budgeted','joins','history'].includes(mode)?'fixed-count-whole-ray':'nested-quadrature-fine-step-scale',
+              reference:mode==='fallback-fixed'?'160-steps-adaptive-off-half-cell':null};
           }
           let code=WGSL,lighting=null;
           if(distributedGroup) {
@@ -21402,17 +21353,17 @@ export function createKaminosVolumePrototype({
     const opticalConstants = {OPTICAL_STEP_MODE:optical.value,RAY_STEP_STATS:rayStepTelemetry.active};
     state.opticalStepping = { ...optical, effective: optical.mode,
       adaptivity:raymarchAdaptivity(optical.mode,controlsSnapshot.adaptiveRays),
-      source:'native-emissive-material-and-current-incident-light', fullRay:optical.mode !== 'current',
+      source:'native-emissive-material-and-current-incident-light', fullRay:optical.mode !== 'fallback-fixed',
       flamePriorityRequested:controlsSnapshot.flamePriority??0,
       flamePriority:optical.mode==='numerical'?uniforms[42]:0,
       quadratureJitterRequested:controlsSnapshot.quadratureJitter!==false,
-      quadratureJitter:optical.mode!=='current'&&uniforms[47]>0.5&&uniforms[43]>0.5,
+      quadratureJitter:optical.mode!=='fallback-fixed'&&uniforms[47]>0.5&&uniforms[43]>0.5,
       guidance:'coverage-and-active-law-lookahead; guide reads excluded from material-sample counts' };
     if(state.worldSmoke?.raymarch){
       const mode=optical.mode;
       state.worldSmoke.raymarch={...state.worldSmoke.raymarch,effectiveMode:mode,
-        policy:mode==='current'?'shared-quality-material-cell-step':['budgeted','joins','history'].includes(mode)?'fixed-count-whole-ray':'nested-quadrature-fine-step-scale',
-        reference:mode==='current'?'160-steps-adaptive-off-half-cell':null};
+        policy:mode==='fallback-fixed'?'shared-quality-material-cell-step':['budgeted','joins','history'].includes(mode)?'fixed-count-whole-ray':'nested-quadrature-fine-step-scale',
+        reference:mode==='fallback-fixed'?'160-steps-adaptive-off-half-cell':null};
     }
     device.queue.writeBuffer(worldRenderUniform,80,new Float32Array([state.worldRenderField.effective==='inactive'?0:1,...(state.worldRenderField.materialDims??[0,0,0])]));
     if(optical.value>=4){
@@ -21420,15 +21371,16 @@ export function createKaminosVolumePrototype({
         throw Error('fixed-count allocation requires ordinary joined emissive beauty');
       }
       const map=worldSmokeMapping(worldSmoke.plan,worldSmoke.anchor,productTransform);
-      const identity=JSON.stringify([controlsSnapshot,productTransform,worldSmokeKey,intermediateKey]);
+      const {occupancySkip,occupancyThreshold,...guidanceControls}=controlsSnapshot;
+      const identity=JSON.stringify([guidanceControls,productTransform,worldSmokeKey,intermediateKey]);
       state.opticalStepping.allocation=rayAllocationHistory.prepare(encoder,
-        {min:map.renderMin,max:map.renderMax,dims:worldSmoke.plan.materialDims},identity,state.simStepCount);
+        {min:map.renderMin,max:map.renderMax,dims:worldSmoke.plan.materialDims},identity,state.simStepCount,{freeze:rayAllocationHistoryFrozen});
       state.opticalStepping.guidance='uniform-positive-coverage + known-blend-bands + previous-march-spatial-importance';
       state.opticalStepping.fullRay=true;
       rebuildFluidBindGroups();
     }else{rayAllocationHistory.reset();}
     const opticalKey = `:${optical.mode}:stats=${rayStepTelemetry.active}`;
-    if ((optical.mode !== 'current'||rayStepTelemetry.active) && !multisampled && !scenePointBindGroup && !distributedGroup) {
+    if ((optical.mode !== 'fallback-fixed'||rayStepTelemetry.active) && !multisampled && !scenePointBindGroup && !distributedGroup) {
       const key = `${targetPipeline === readbackPipeline}:${gridSize}:${gridHeight}${opticalKey}`;
       if (!opticalSteppingPipelines.has(key)) {
         opticalSteppingPipelines.set(key,device.createRenderPipeline({label:'experimental optical stepping',
@@ -26266,11 +26218,11 @@ export function createKaminosVolumePrototype({
         occupancySkip: state.occupancySkip,
         occupancyThreshold: state.occupancyThreshold,
         occupancyAcceleration: {
-          identity: 'bounded-optical-support-cells-v2',
+          identity: 'active-marcher-whole-empty-interval-v3',
           strength: state.occupancySkip,
           threshold: state.occupancyThreshold,
-          effective: state.opticalStepping?.effective==='current' && state.occupancySkip>0,
-          scope: 'native/prepared-Fine and resident-World; fixed-count/numerical placement unchanged',
+          effective: ['numerical','fixed','budgeted','joins','history'].includes(state.opticalStepping?.effective) && state.occupancySkip>0,
+          scope: 'whole prepared-Fine/World intervals; raw Fine exact-zero only; allocated intervals retained, certified material evaluations omitted',
         },
         fireScale: state.fireScale,
         detailScale: state.detailScale,
@@ -26651,11 +26603,11 @@ export function createKaminosVolumePrototype({
       occupancySkip: state.occupancySkip,
         occupancyThreshold: state.occupancyThreshold,
       occupancyAcceleration: {
-        identity: 'bounded-optical-support-cells-v2',
+        identity: 'active-marcher-whole-empty-interval-v3',
         strength: state.occupancySkip,
           threshold: state.occupancyThreshold,
-          effective: state.opticalStepping?.effective==='current' && state.occupancySkip>0,
-          scope: 'native/prepared-Fine and resident-World; fixed-count/numerical placement unchanged',
+          effective: ['numerical','fixed','budgeted','joins','history'].includes(state.opticalStepping?.effective) && state.occupancySkip>0,
+          scope: 'whole prepared-Fine/World intervals; raw Fine exact-zero only; allocated intervals retained, certified material evaluations omitted',
       },
       ...retiredRaymarchControlReceiptPayload(state),
       fireScale: state.fireScale,
@@ -28228,6 +28180,10 @@ export function createKaminosVolumePrototype({
       return canvasPresentationSuppressed;
     },
     sampleRayAllocationHistory() { return rayAllocationHistory.sample(); },
+    setRayAllocationHistoryFrozen(frozen){
+      if(!selectiveHeadLiveCapturePaused)throw Error('Guidance freeze requires held renderer');
+      rayAllocationHistoryFrozen=frozen===true;return {requested:rayAllocationHistoryFrozen,history:rayAllocationHistory.read()};
+    },
     async sampleRayStepStatistics(){
       const frameCount=state.frameCount,simStepCount=state.simStepCount;
       const result=await rayStepTelemetry.sample();
@@ -28375,7 +28331,7 @@ export function createKaminosVolumePrototype({
       state.analyticEmitterRequestedEdgeEntrainment = Number(controlsSnapshot.emitterEdgeEntrainment ?? 0.65);
       state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
       state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
-      state.adaptiveRaymarch = controlsSnapshot.adaptiveRays ?? 0.65;
+      state.adaptiveRaymarch = raymarchAdaptivity(debugOpticalStepping.mode).value;
       state.occupancySkip = controlsSnapshot.occupancySkip ?? 0.35;
       state.fireScale = Math.max(0.35, Math.min(1.3, controlsSnapshot.fireScale ?? 0.86));
       state.detailScale = Math.max(0.45, Math.min(3.2, controlsSnapshot.detailScale ?? 1.75));

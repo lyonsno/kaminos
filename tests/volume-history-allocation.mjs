@@ -12,7 +12,7 @@ test('fixed-count allocations are available on the joined emissive route',()=>{
     const actual=resolveOpticalStepping(requested,{emissive:true,exterior:true,explicit:true});
     assert.equal(actual.mode,mode);
     assert.equal(actual.reason,null);
-    assert.equal(actual.floor,'one fresh material evaluation per allocated stratum');
+    assert.match(actual.floor,/at most one fresh material evaluation per allocated stratum/);
   }
 });
 
@@ -65,7 +65,7 @@ test('fixed-count history refuses trace/non-emissive substitution',()=>{
   const requested=opticalSteppingConfig({mode:'history'});
   for(const route of [{emissive:false},{emissive:true,trace:true}]){
     assert.throws(()=>resolveOpticalStepping(requested,{...route,explicit:true}),/requires/);
-    assert.equal(resolveOpticalStepping(requested,route).mode,'current');
+    assert.equal(resolveOpticalStepping(requested,route).mode,'fallback-fixed');
   }
 });
 
@@ -129,4 +129,12 @@ test('a reserved fresh point does not duplicate a guided point with noise off',(
   assert.equal(bins[0].start,0);assert.equal(bins.at(-1).end,1);
   assert.ok(Math.abs(bins.reduce((v,b)=>v+b.width,0)-1)<1e-12);
  }
+});
+
+test('held comparison can keep the same previous-draw guidance bank through multiple draws',()=>{
+ const device={limits:{maxBufferSize:1e6,maxStorageBufferBindingSize:1e6},createBuffer:o=>({...o,destroy(){}}),queue:{writeBuffer(){}}};
+ const h=createRayAllocationHistory(device),encoder={clearBuffer(){}};const box={min:[-1,-1,-1],max:[1,1,1],dims:[4,4,4]};
+ h.prepare(encoder,box,'same',20);const previous=h.prepare(encoder,box,'same',20);
+ const frozen=h.prepare(encoder,box,'same',20,{freeze:true});assert.equal(frozen.frames,previous.frames);assert.equal(frozen.previousOffset,previous.previousOffset);assert.equal(frozen.frozen,true);
+ assert.equal(h.prepare(encoder,box,'same',20,{freeze:true}).frames,previous.frames);assert.equal(h.prepare(encoder,box,'same',20).frames,previous.frames+1);h.dispose();
 });

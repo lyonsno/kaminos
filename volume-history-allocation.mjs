@@ -53,9 +53,9 @@ export function createRayAllocationHistory(device){
   let buffer=device.createBuffer({label:'inactive ray guidance',size:8,usage});
   // Immutable per-bank uniforms also support multiple draws in one encoder.
   const uniforms=[0,1].map(()=>device.createBuffer({label:'ray guidance geometry',size:32,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST}));
-  let geometry=null,key=null,index=0,frames=0,lastStep=null,resetReason='cold-start';
+  let geometry=null,key=null,index=0,frames=0,lastStep=null,resetReason='cold-start',frozen=false;
   function reset(){key=null;frames=0;resetReason='explicit-reset';}
-  function prepare(encoder,request,identity,step){
+  function prepare(encoder,request,identity,step,{freeze=false}={}){
     const next=historyAllocationGeometry(request);
     if(next.bytes*2>Math.min(device.limits.maxBufferSize,device.limits.maxStorageBufferBindingSize))throw Error('ray guidance exceeds device storage limits');
     const nextKey=JSON.stringify([next,identity]);
@@ -74,10 +74,11 @@ export function createRayAllocationHistory(device){
       }
       geometry=next;key=nextKey;frames=0;index=0;
     }
-    lastStep=step;index=1-index;encoder.clearBuffer(buffer,index*geometry.bytes,geometry.bytes);frames++;
+    if(freeze&&frames>0){lastStep=step;frozen=true;return read();}
+    frozen=freeze;lastStep=step;index=1-index;encoder.clearBuffer(buffer,index*geometry.bytes,geometry.bytes);frames++;
     return read();
   }
-  function read(){return {frames,historyFrames:frames>1?1:0,resetReason,geometry,
+  function read(){return {frames,frozen,historyFrames:frames>1?1:0,resetReason,geometry,
     previousOffset:geometry?(1-index)*geometry.bytes:0,observationsOffset:geometry?index*geometry.bytes:0,
     representation:'previous-draw-spatial-importance-max',prediction:'one-cell-neighborhood; no velocity advection',
     freshCoverage:'one uniform-distance observation per ray; remaining observations guided',colorReuse:false};}
@@ -181,7 +182,7 @@ fn guidanceStop(ro:vec3<f32>,rd:vec3<f32>,t:f32,end:f32)->f32{
 }
 struct GuidedRay {
   cursor:f32, end:f32, mass:f32, total:f32,
-  segmentEnd:f32, weight:f32, left:f32, width:f32,
+  segmentEnd:f32, weight:f32, left:f32, width:f32, intervalStart:f32,
   start:f32, freshPoint:f32, candidate:f32, currentPoint:f32,
   guidedCount:u32, guidedIndex:u32, freshPending:u32,
 }
@@ -229,6 +230,7 @@ fn guidedPop(s:ptr<function,GuidedRay>,ro:vec3<f32>,rd:vec3<f32>,phase:f32)->f32
   return point;
 }
 fn guidedNext(s:ptr<function,GuidedRay>,ro:vec3<f32>,rd:vec3<f32>,index:u32,count:u32,phase:f32,freshPhase:f32)->f32{
+  (*s).intervalStart=(*s).left;
   if(OPTICAL_STEP_MODE==4u){
     let sample=guidedQuantile(s,ro,rd,(*s).total*(f32(index)+phase)/f32(count));
     var right=(*s).end;

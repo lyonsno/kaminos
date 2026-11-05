@@ -477,6 +477,7 @@ export function validateVolumeSettingsPresetDocument(document, requestedPresetRe
       removedRouteParams: Object.freeze([...retirementMigration.removedRouteParams]),
       addedControlIds: Object.freeze([...retirementMigration.addedControlIds]),
       addedRouteParams: Object.freeze([...retirementMigration.addedRouteParams]),
+      retiredModeChanges:Object.freeze((retirementMigration.retiredModeChanges??[]).map(row=>Object.freeze({...row}))),
     }),
   });
 }
