@@ -27,6 +27,12 @@ const recordEnd=page.indexOf('\n});',recordStart)+4;
 if(recordStart<0||recordEnd<recordStart)throw Error('Missing production scene-record installation');
 const recordInstallation=page.slice(recordStart,recordEnd).replace('const sceneRecords =','globalThis.sceneRecords =');
 
+const interactionFunctions=['currentBeautyFrameOptions','interactiveSceneRoots','prepareSceneNavigationRoot'].map(name=>{
+  const start=page.indexOf('function '+name+'('),end=page.indexOf('\n}',start)+2;
+  if(start<0||end<start)throw Error('Missing production '+name);
+  return page.slice(start,end);
+}).join('\n');
+
 // Domain-unit fixture adapter. These tests deliberately stub the scene service
 // while exercising extracted page consumers. Ownership/integration tests use
 // createWorkingScene itself; this double is not evidence for its invariants.
@@ -76,6 +82,12 @@ export function sceneContext(context, options) {
   context.sceneAO ??= createSceneAOState();
   context.promptReliefRecord??=promptReliefRecord;context.PROMPT_RELIEF_SOURCE??=PROMPT_RELIEF_SOURCE;context.assertSceneSourcesReloadable??=assertSceneSourcesReloadable;
   context.sceneComponents ??= null;
+  context.sceneBeautyLods ??= null;
+  context.sceneNavigation ??= null;
+  context.polyEdit ??= null;
+  context.renderer ??= null;
+  context.sceneGiProxies ??= {};
+  context.sceneGiProxies.get ??= () => null;
   context.checkedAssembly??=checkedAssembly;context.assemblySelection??=assemblySelection;context.assemblyEditing??=null;
   context.syncAssemblyGuides??=()=>{};context.syncAssemblyPresentation??=()=>{};
   context.selectedFlameControlEntry??=()=>context.selectedSceneObjectEntry?.()??(context.workingScene?.activeObjectId?{id:context.workingScene.activeObjectId,type:'flame-emitter'}:null);
@@ -136,6 +148,7 @@ export function sceneContext(context, options) {
   };
   context.sceneMembershipBatch ??= {clearHistoryTargets(){},attachHistory(){}};
   const result=vm.createContext(context,options);
+  vm.runInContext(interactionFunctions,result);
   if(!context.sceneRecords){context.createSceneRecordOperations=createSceneRecordOperations;vm.runInContext(recordInstallation,result);}
   if(!context.sceneDocument)composePageDocumentSession(result);
   return result;
