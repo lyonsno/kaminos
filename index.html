@@ -3454,7 +3454,7 @@ import {loadBrazierRoom} from './brazier-room.mjs';
 import { trellisSurfelsGLTFPlugin, configureSurfelRendering } from './trellis-surfels.mjs';
 import { createGiProxyRegistry } from './scene-gi-proxies.mjs';
 import { seedInitialBeautyLevels, releaseInitialBeautyLevels, createSceneBeautyLodController, allocateSceneBeautyLods, allocateShadowCasterLods, allocateColliderLods, screenPixelError, selectFootprintTier, voxelSolidError, selectColliderTier, bakeRungMeshesToRootSpace, formatLodBudgetReadout } from './scene-lod-budget.mjs';
-import { giProxySettingFor, checkedGiProxySetting, canHaveGiProxy, GI_PROXY_FACE_TIERS, giProxySettingFromControls } from './scene-gi-proxy-settings.mjs';
+import { giProxySettingFor, checkedGiProxySetting, canHaveGiProxy } from './scene-gi-proxy-settings.mjs';
 // Every GLB this page loads understands TRELLIS surfel assets (trellis-surfels.mjs); other GLBs are unaffected.
 class GLTFLoader extends ThreeGLTFLoader { constructor(manager) { super(manager); this.register(trellisSurfelsGLTFPlugin(THREE)); configureAssetTextures(this,renderer,()=>new KTX2Loader(manager)); } }
 // Surfel detail follows the drawing buffer's real height (backing pixels), read at every LOD update.
@@ -27475,11 +27475,14 @@ function ensureObjectBurnableTarget(id){
   return target;
 }
 const giProxyEditTargets=new Set();
-// The object's GI proxy follows its render settings: on, the stored tier they choose (loaded off the frame loop);
-// off, no proxy held. The setting is the stored state; the load just follows it.
+// Shadow proxy availability follows the object's setting. Its level catalog remains
+// available to automatic viewport LOD selection when shadow proxies are disabled.
 function applyGiProxySetting(entry){
   if(!entry?.giProxy||!entry.object)return;
-  if(entry.giProxy.enabled)return sceneGiProxies.select(entry.object,entry.giProxy.selection).then(async h=>{
+  const pending=entry.giProxy.enabled
+    ?sceneGiProxies.select(entry.object,entry.giProxy.selection)
+    :sceneGiProxies.disable(entry.object,{retainLevels:true});
+  return Promise.resolve(pending).then(async h=>{
     if(h?.prepareQueued){
       await sceneGiProxies.whenPrepared(entry.object);
       if(!workingScene.objects.includes(entry))return null;
@@ -27487,7 +27490,7 @@ function applyGiProxySetting(entry){
     }
     syncSceneDataInspector();window.kaminosFireLightingSettings?.sync?.();window._kaminosDirty?.();
     const source=h?.heroSha;
-    if(h?.state==='no-tiers'&&source&&!autoPreparedLodSources.has(source)&&window.__kaminosLastGenerationLevels?.source!==source){
+    if((h?.state==='no-tiers'||(h?.state==='disabled'&&!h.levels?.length))&&source&&!autoPreparedLodSources.has(source)&&window.__kaminosLastGenerationLevels?.source!==source){
       autoPreparedLodSources.add(source);
       window.__kaminosLastGenerationLevels={source,phase:'running'};
       window.__kaminosLastGenerationLevelsPromise=Promise.resolve().then(()=>window.kaminosGiProxies?.prepare?.(source,{completeMissing:true,input:entry.label||entry.fileName||source,route:entry.generation?.route||'auto-arrival-lod'})).then(report=>{
@@ -27499,7 +27502,6 @@ function applyGiProxySetting(entry){
     prepareSceneNavigationRoot(entry.object);
     return h;
   });
-  sceneGiProxies.disable(entry.object);window.kaminosFireLightingSettings?.sync?.();window._kaminosDirty?.();
 }
 function writeObjectGiProxy(id,value){
   const entry=workingScene.objects.find(record=>record.id===id)||workingScene.retained(id);
@@ -27571,16 +27573,14 @@ function syncSceneDataInspector() {
     document.getElementById('object-burn-fracture').disabled=!supported||entry?.burnable?.enabled!==true;
   }
   if(renderPanel){renderPanel.hidden=!canHaveGiProxy(entry)||!entry?.giProxy;
-    if(!renderPanel.hidden){const setting=entry.giProxy,editing=scenePlacementTools.edits.state().active?.id===`@object-gi-proxy:${entry.id}`,detail=document.getElementById('object-gi-proxy-detail'),error=document.getElementById('object-gi-proxy-error');
-      if(!editing){document.getElementById('object-gi-proxy').checked=setting.enabled;detail.value=setting.selection.faces?`faces:${setting.selection.faces}`:'error';if(setting.selection.maxError!=null)error.value=String(setting.selection.maxError);}
-      detail.disabled=!setting.enabled;error.closest('label').hidden=detail.value!=='error';error.disabled=!setting.enabled;
+    if(!renderPanel.hidden){const setting=entry.giProxy,editing=scenePlacementTools.edits.state().active?.id===`@object-gi-proxy:${entry.id}`;
+      if(!editing)document.getElementById('object-gi-proxy').checked=setting.enabled;
       const h=sceneGiProxies.get(entry.object),consumers=sceneGiProxies.consumers();
-      // Not silent when nothing renders with proxies: the scene's GI is screen-space and sees only drawn geometry.
-      const unused=consumers.length?'':' No GI pass uses proxies yet: the scene GI sees only the drawn mesh, so this setting does not change the image.';
-      document.getElementById('object-gi-proxy-status').textContent=!setting.enabled?`Off: no GI proxy is held for this object.${unused}`
-        :!h||h.state==='resolving'?'Loading the GI proxy…':h.state==='loaded'?`${consumers.length?'Using':'Holding'} the ${h.effective.faces}-face tier${h.error?.relative?.p95!=null?`, p95 error ${(h.error.relative.p95*100).toFixed(2)}% of its size`:''}.${unused}`
-        :h.state==='no-tiers'?(h.reason?`No GI proxy: ${h.reason}.`:'No stored tiers for this mesh.'):h.state==='not-generated'?'Only generated meshes have stored GI tiers.'
-        :h.state==='failed'?`GI proxy failed: ${h.failure}`:'';
+      const usage=consumers.length?' Shadow detail is selected automatically.':' Shadow rendering is idle.';
+      document.getElementById('object-gi-proxy-status').textContent=!setting.enabled?'Shadow proxies off.'
+        :!h||h.state==='resolving'?'Loading shadow geometry…':h.state==='loaded'?`${h.effective.faces.toLocaleString('en-US')}-face shadow tier cached.${usage}`
+        :h.state==='no-tiers'?(h.reason?`No shadow proxy: ${h.reason}.`:'No stored tiers for this mesh.'):h.state==='not-generated'?'Only stored meshes have proxy tiers.'
+        :h.state==='failed'?`Shadow proxy failed: ${h.failure}`:'';
       syncSceneLodReadout();}}
   const choice=document.getElementById('object-parent');choice.replaceChildren(...[['','None'],...workingScene.groups.map(g=>[g.id,g.label])].map(([id,label])=>{const option=document.createElement('option');option.value=id;option.textContent=label;return option;}));choice.value=entry?.groupId||'';
   if(!primitive.hidden){
@@ -27800,11 +27800,9 @@ function installSceneConstruction() {
     createGas:createLogGasSourceGpu,createBody:entry=>createSceneBurnBody({entry,renderer,scene,document,kelvinPerHeat:()=>Number(document.getElementById('volume-physical-kelvin-per-heat').value),ground:()=>({center:[groundPlane.position.x,groundPlane.position.y,groundPlane.position.z],height:groundPlane.position.y,radius:5,visible:groundPlane.visible}),onFrame:workbenchSceneFrames.onFrame,beautyLods:()=>sceneBeautyLods,resolveSurfaceGeometry:(e,opts)=>sceneColliderCollection.resolveBurnableSurface(e,opts)}),
     onError:error=>{setInfo('Combustion: '+error.message);console.error('Scene combustion',error);},dirty:()=>window._kaminosDirty?.()});
   workbenchSceneFrames.onFrame(()=>void sceneBurning.sync().then(syncBurnableStatus));
-  // Render: the object's GI proxy (scene-gi-proxy-settings.mjs), on or off and which stored tier, plus live stunt-double LOD readout.
+  // Automatic shadow proxies and viewport LOD controls, with the effective beauty readout.
   const renderPanel=document.createElement('section');renderPanel.id='selected-render-properties';renderPanel.hidden=true;
-  renderPanel.innerHTML='<h3>Render</h3><label class="slider-row"><span class="slider-label">GI proxy</span><input id="object-gi-proxy" type="checkbox"></label>'
-    +'<label class="slider-row"><span class="slider-label">Proxy detail</span><select id="object-gi-proxy-detail">'+GI_PROXY_FACE_TIERS.map(f=>`<option value="faces:${f}">${f} faces</option>`).join('')+'<option value="error">By error</option></select></label>'
-    +'<label class="slider-row"><span class="slider-label">Max error</span><input id="object-gi-proxy-error" type="number" min="0" step="0.001" value="0.005"></label>'
+  renderPanel.innerHTML='<h3>Render</h3><label class="slider-row"><span class="slider-label">Shadow proxies</span><input id="object-gi-proxy" type="checkbox"></label>'
     +'<p id="object-gi-proxy-status" class="flame-scope"></p>'
     +'<label class="slider-row"><span class="slider-label">Auto beauty LOD</span><input id="scene-beauty-lod-enabled" type="checkbox" checked></label>'
     +'<label class="slider-row"><span class="slider-label">Scene face budget</span><input id="scene-beauty-lod-budget" class="transform-input" type="number" min="500" step="5000" value="150000"></label>'
@@ -27813,14 +27811,12 @@ function installSceneConstruction() {
   const beautyLodEnabledInput=document.getElementById('scene-beauty-lod-enabled'),beautyLodBudgetInput=document.getElementById('scene-beauty-lod-budget');
   beautyLodEnabledInput?.addEventListener('change',()=>{window.kaminosSceneLodBudget?.setSettings({enabled:beautyLodEnabledInput.checked});});
   for(const ev of ['input','change'])beautyLodBudgetInput?.addEventListener(ev,()=>{const val=Number(beautyLodBudgetInput.value);if(Number.isFinite(val)&&val>=500)window.kaminosSceneLodBudget?.setSettings({faceBudget:val});});
-  const giProxyInput=document.getElementById('object-gi-proxy'),giProxyDetail=document.getElementById('object-gi-proxy-detail'),giProxyError=document.getElementById('object-gi-proxy-error');
-  const giProxyControlValue=()=>giProxySettingFromControls({enabled:giProxyInput.checked,detail:giProxyDetail.value,maxError:giProxyError.value},selectedSceneObjectEntry()?.giProxy);
+  const giProxyInput=document.getElementById('object-gi-proxy');
+  const giProxyControlValue=()=>({...giProxySettingFor(selectedSceneObjectEntry()),enabled:giProxyInput.checked});
   // input as well as change: Enter commits a typed value before change fires (scene-control-history.mjs).
-  for(const control of [giProxyInput,giProxyDetail,giProxyError])for(const type of ['input','change'])control.addEventListener(type,()=>{try{const target=ensureObjectGiProxyTarget(workingScene.activeObjectId);const value=giProxyControlValue();
-    // A half-typed error value waits for the next keystroke instead of reporting an error mid-typing.
-    if(value.selection.maxError!==undefined&&!(Number.isFinite(value.selection.maxError)&&value.selection.maxError>=0&&giProxyError.value!==''))return;
+  for(const type of ['input','change'])giProxyInput.addEventListener(type,()=>{try{const target=ensureObjectGiProxyTarget(workingScene.activeObjectId);const value=giProxyControlValue();
     if(edits.state().active?.id===target)edits.preview(value);}catch(error){setInfo(error.message);syncSceneDataInspector();}});
-  authoringControlSessions.push(installSceneControlHistory({controls:[giProxyInput,giProxyDetail,giProxyError],edits,id:()=>ensureObjectGiProxyTarget(workingScene.activeObjectId),label:'Set GI proxy',onError:error=>setInfo(error.message)}));
+  authoringControlSessions.push(installSceneControlHistory({controls:[giProxyInput],edits,id:()=>ensureObjectGiProxyTarget(workingScene.activeObjectId),label:'Set shadow proxies',onError:error=>setInfo(error.message)}));
   const groupPanel=document.createElement('section');groupPanel.id='selected-group-properties';groupPanel.hidden=true;
   groupPanel.innerHTML='<h3 id="group-kind-label">Group</h3><p id="group-mode-hint">Its frame places all members together. Select a member to edit its own data.</p><button type="button" class="btn" id="group-make-assembly">Make assembly</button><button type="button" class="btn" id="group-duplicate">Duplicate · Shift D</button><button type="button" class="btn" id="object-ungroup">Ungroup</button>';
   relations.after(groupPanel);
