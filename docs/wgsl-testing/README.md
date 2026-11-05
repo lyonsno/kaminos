@@ -65,25 +65,27 @@ pipeline or scene witness when those are the behavior being tested.
 
 ## Commit enforcement
 
-Automation status, November 5: the shared commit-blocker candidate is under
-review and has not been activated. The testing rule above applies now.
+In the shop, the managed pre-commit hook checks new direct source-text assertion
+syntax against staged shader sources. It recognizes named production WGSL imports,
+constant direct Node file reads with literal paths, and inline string or regex
+checks on those values. Standard Node assertions and standard `expect` text,
+equality and length matchers are covered. It reads staged Git objects and does
+not execute repository code or load repository lint configuration.
 
-The candidate examines staged JavaScript against staged shader sources and
-rejects new assertions on production WGSL text with the file and line plus the
-replacement guide. The check follows imported shader names,
-source reads, aliases and extracted text through common string operations.
-It covers Node assertions and standard `expect(...).toMatch`/`toContain` forms.
-It does not evaluate repository code.
+The mechanical rule has no alias propagation, object-property tracking,
+mutable-value analysis or helper-return analysis. Indirect wording checks remain
+prohibited as shader-behavior evidence and are enforced through review. Numerical
+execution results, error-message regexes and legitimate parser, extractor or
+code-generation output contracts remain valid.
 
-Existing unchanged assertions are grandfathered against `HEAD`, so a conversion
-can be incremental. Adding a duplicate, changing an expectation or copying a
-check into a new file does not create an allowance. Unstaged edits cannot hide
-the staged assertion; a parse failure rejects inspection. Ordinary regexes on
-error messages and assertions on executed numerical results remain valid.
+Legacy allowances count normalized assertion syntax from `HEAD`. Comments and
+formatting remain compatible; a new duplicate, copied file or directly changed
+expectation has no new allowance. Changes behind an expectation binding or other
+code outside the assertion are not analyzed and remain review obligations.
+Unstaged edits cannot hide a staged direct assertion; parser or inspection
+failures reject inspection.
 
-The policy applies to shader behavior even when a particular metaprogrammed
-test form is beyond the static check. Parser, extractor and code-generation
-tests may assert their actual text outputs; that establishes a text-transform
-contract, not shader execution. Describe that scope accurately.
+Passing this rule establishes no claim that shader behavior was exercised. Use
+production WGSL execution and concrete output assertions for that evidence.
 
 See [the test runner guide](../testing.md#native-shader-tests) for route details.
