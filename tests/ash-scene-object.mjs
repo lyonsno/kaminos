@@ -563,5 +563,25 @@ test('ash collision retains GLB node coordinates when display rungs bake their t
   assert.notEqual(cm.geometry,display.geometry,'display warps cannot mutate checkpoint collision geometry');
   const records=createAshCollisionRecords(new Group(),()=>[{id:'kiln',type:'glb',object:source}],{getCellSize:()=>.02,resolveCollisionRung:(r,o)=>controller.resolveCollisionRung(r,o)})();
   assert.equal(records.length,1);assert.ok(Math.abs(records[0].object.matrix.elements[6]+1)<1e-12,'raw node transform reaches field collision');
+  const positions=m=>{m.updateWorldMatrix(true,false);return Array.from({length:m.geometry.attributes.position.count},(_,i)=>new THREE.Vector3().fromBufferAttribute(m.geometry.attributes.position,i).applyMatrix4(m.matrixWorld).toArray()).flat();};
+  const close=(a,b,message)=>assert.ok(a.every((v,i)=>Math.abs(v-b[i])<1e-6),message);
+  const baseDisplay=positions(display),baseCollision=positions(cm);
+  close(baseDisplay,baseCollision,'initial display and collision agree in root coordinates');
+  source.userData.kaminosVertexWarp=values=>Float32Array.from(values,(v,i)=>v+(i%3===0?.6:0));
+  source.userData.kaminosVertexWarpRevision=1;
+  controller.resolveCollisionRung(source,{cellSize:.02});
+  const warpedDisplay=positions(display),warpedCollision=positions(cm);
+  assert.notDeepEqual(warpedDisplay,baseDisplay,'display responds to active warp');
+  assert.notDeepEqual(warpedCollision,baseCollision,'collision responds to active warp');
+  close(warpedDisplay,warpedCollision,'active warp agrees across coordinate representations');
+  delete source.userData.kaminosVertexWarp;source.userData.kaminosVertexWarpRevision=2;
+  controller.resolveCollisionRung(source,{cellSize:.02});
+  const restoredDisplay=positions(display),restoredCollision=positions(cm);
+  close(restoredDisplay,baseDisplay,'display returns to its baseline');
+  close(restoredCollision,baseCollision,'collision returns to its baseline after warp removal');
+  assert.notDeepEqual(restoredCollision,warpedCollision,'removal must change collision from preceding warped stage');
+  close(restoredDisplay,restoredCollision,'removed warp agrees across coordinate representations');
+  assert.notEqual(cm.geometry.userData,display.geometry.userData,'mutable geometry bookkeeping is independent');
+
  }finally{controller.dispose();originalGeometry?.dispose();hero.geometry.dispose();hero.material.dispose();}
 });

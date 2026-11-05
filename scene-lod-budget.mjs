@@ -1335,7 +1335,12 @@ export function createSceneBeautyLodController({
         // Display baking changes vertex identity. Keep the source node frame
         // for saved ash collisions, with independently owned geometry/material.
         collisionRoot = cloneBorrowedRung(THREE, rungRoot);
-        collisionRoot.traverse(m => {if(m.isMesh){m.geometry=m.geometry.clone();m.material=Array.isArray(m.material)?m.material.map(x=>x.clone()):m.material.clone();}});
+        collisionRoot.traverse(m => {if(m.isMesh){m.geometry=m.geometry.clone();
+          // BufferGeometry.copy shares userData in the bundled Three build.
+          // Warp bases contain coordinates specific to this source frame.
+          m.geometry.userData={...m.geometry.userData};
+          delete m.geometry.userData.kaminosWarpBase;delete m.geometry.userData.kaminosWarpApplied;
+          m.material=Array.isArray(m.material)?m.material.map(x=>x.clone()):m.material.clone();}});
         bakeRungMeshesToRootSpace(THREE, rungRoot);
         rungRoot.traverse(m => {
           if (m.isMesh) {
