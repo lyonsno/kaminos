@@ -42,7 +42,8 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
   const timer=createWebGpuGpuTimer({device,queue:device.queue,options:profile}),timingBatches=[];
   let support=null;
   let live=validateMlsPacket(packet),paused=false,pending=false,failure=null,disposed=false,time=0,pendingCompletion=Promise.resolve();
-  let population=null;const cadence={completedBatches:0,completedStep:0,lastBatchSteps:0,lastBatchWallMs:0,lastCompletionIntervalMs:null};let lastCompletedAt=null;
+  let knownEmpty=!!setup?.trackPopulation&&!initialParticles?.some((v,i)=>i%20===3&&v>0);
+  let population=knownEmpty?{active:0,capacity:config.capacity,step:0,authority:'initialized_empty_buffer'}:null;const cadence={completedBatches:0,completedStep:0,lastBatchSteps:0,lastBatchWallMs:0,lastCompletionIntervalMs:null};let lastCompletedAt=null;
   if(initialParticles&&(!(initialParticles instanceof Float32Array)||initialParticles.length%20||initialParticles.length>config.capacity*20||!initialParticles.every(Number.isFinite)))throw Error('Invalid native MLS initial population');
   const particles=buffer(config.capacity*80,U.STORAGE|U.COPY_DST|U.COPY_SRC,'MLS particles 80-byte APIC');
   if(initialParticles){
@@ -133,6 +134,13 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
           const births=plan.step(live,time,epochMs);injections.push(births);time+=config.dt;
         }
         const birthCount=injections.reduce((n,b)=>n+b.length,0);
+        // No material can evolve in an authoritatively empty domain. Still
+        // advance admission and time, so opening a source has no restart delay.
+        if(knownEmpty&&birthCount===0){
+          const step=clock.read().step;population={...population,step};cadence.completedStep=step;
+          cadence.emptySteps=(cadence.emptySteps??0)+steps;return true;
+        }
+        knownEmpty=false;
         const upload=birthCount?device.createBuffer({size:birthCount*80,usage:U.COPY_SRC,mappedAtCreation:true,label:'MLS chronological emissions'}):null;
         if(upload){const values=new Float32Array(upload.getMappedRange());let i=0;for(const births of injections)for(const b of births){
           values.set(b.position,i*20);values[i*20+3]=b.life;values.set(b.velocity,i*20+4);i++;
@@ -158,7 +166,7 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
           if(disposed)return;
           if(words[0]>config.capacity)throw Error('Invalid MLS population readback');
           plan.reconcileOccupancy(words.subarray(1));
-          population={active:words[0],capacity:config.capacity,step:submittedStep,authority:'completed_gpu_occupancy'};
+          population={active:words[0],capacity:config.capacity,step:submittedStep,authority:'completed_gpu_occupancy'};knownEmpty=words[0]===0;
         }):device.queue.onSubmittedWorkDone();
         pendingCompletion=completion.then(()=>{
           const completedAt=now();cadence.completedBatches++;cadence.completedStep=submittedStep;cadence.lastBatchSteps=steps;

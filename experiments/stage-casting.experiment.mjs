@@ -1,3 +1,5 @@
+import {createCastingCycle} from '../casting-cycle.mjs';
+import {stageFillQuery,stageFillReading} from '../stage-fill.mjs';
 import * as THREE from '../lib/three.core.js';
 import {mountMatrix,matrixFrame} from './link-workshop/mounts.mjs';
 import {createCarriageRun} from '../casting-carriage.mjs';
@@ -6,6 +8,7 @@ import {stageLetterCastings,createCastingTransfer,castingPickupPose} from '../ca
 
 export default {id:'stage-casting',title:'Workshop · casting to fire',async create({host,inputs={},record},createPourStudy=pourStudy.create){
  const doc=host.controls.document,app=doc.defaultView,author=app.kaminosSceneAuthoring;
+ let cycle=null,fillMeasurement=null,fillQuery=null,fillIdentity=null,lastFill=null,lastFillStep=-Infinity,fillTarget=.8;
  const study=await createPourStudy({host,inputs,record}),session=await host.scene.open();
  let flame,closed=false,pending=Promise.resolve(),pieceId=null,cursor=0,sourceRecipe=null,burnStart=null,ignitionSeconds=2,transferSeconds=4,phase='At the mold',status,updateButtons=()=>{},cleanup=()=>{},createdFire=false;
  const object=id=>host.scene.objects().find(o=>o.id===id)?.object;
@@ -34,10 +37,10 @@ export default {id:'stage-casting',title:'Workshop · casting to fire',async cre
  };
  adopt();
  const active=()=>{if(closed)throw Error('Casting workshop is closed');};
- const read=()=>({phase,pieceId,cursor,transfer:transfer.read(),carriage:carriage.read(),carrierId:carrierEntry()?.id,ignitionSeconds,transferSeconds,igniting:burnStart!==null,combustion:pieceId?author.burningState(pieceId):null,study:study.read(),fidelity:'Authored solid inserts and joint kinematics; existing thermal combustion. Liquid solidification is not simulated.',firePrepared:!!flame});
- const refresh=()=>{if(status)status.textContent=phase+(pieceId?' · '+author.burningState(pieceId).status:'');updateButtons();};
+ const read=()=>({cycle:cycle?.read(),fill:lastFill,fillTarget,phase,pieceId,cursor,transfer:transfer.read(),carriage:carriage.read(),carrierId:carrierEntry()?.id,ignitionSeconds,transferSeconds,igniting:burnStart!==null,combustion:pieceId?author.burningState(pieceId):null,study:study.read(),fidelity:'Authored solid inserts and joint kinematics; existing thermal combustion. Liquid solidification is not simulated.',firePrepared:!!flame});
+ const refresh=()=>{if(status)status.textContent=(cycle?.read().running?'Cycle · '+cycle.read().phase+(lastFill&&cycle.read().phase==='filling'?' · '+Math.round(lastFill.regions[cursor%lastFill.regions.length].fraction*100)+'% / '+Math.round(fillTarget*100)+'%':''):cycle?.read().error??phase)+(pieceId&&author.burningState(pieceId).status!=='resident'?' · '+author.burningState(pieceId).status:'');updateButtons();};
  const transfer=createCastingTransfer({write:p=>{const root=object(pieceId);if(!root)throw Error('The travelling casting was removed');root.position.fromArray(p.position);root.rotation.set(...p.rotation);root.scale.fromArray(p.scale);root.updateMatrixWorld(true);session.redraw();},arrive:()=>{phase=transferDestination;host.scene.refreshPresentation({id:pieceId,root:object(pieceId)});record({kind:'casting.arrive',effective:{pieceId,pose:pose(object(pieceId))}});refresh();}});
- const serial=fn=>arg=>{const task=pending.then(()=>{active();return fn(arg);});pending=task.catch(()=>{});return task;};
+ const serial=fn=>arg=>{const task=pending.then(()=>{active();if(app.kaminosPolyEdit?.read().editing)app.kaminosPolyEdit.exit();return fn(arg);});pending=task.catch(()=>{});return task;};
  async function prepare(){
   if(flame)return;
   const k=kiln();if(!k)throw Error('Choose a kiln object for this workshop');
@@ -128,20 +131,45 @@ export default {id:'stage-casting',title:'Workshop · casting to fire',async cre
   setTransferSeconds(value){active();value=Number(value);if(!Number.isFinite(value)||value<=0)throw Error('Transfer seconds must be positive');transferSeconds=value;refresh();return read();},
   pause(){active();if(flame)flame.setPaused(!flame.read().paused);return read();},
  };
+ function clearFill(){fillMeasurement?.dispose();fillMeasurement=null;fillQuery=null;fillIdentity=null;lastFill=null;lastFillStep=-Infinity;}
+ async function sampleFill(){
+  const water=app.kaminosWaterSources,state=water.read();
+  if(state.failure||!state.runtime)throw Error(state.failure||'Water simulation is unavailable');
+  if(state.runtime.pendingSourceChanges)throw Error('Restart water to apply its changed setup before running the cycle');
+  const q=stageFillQuery(mold()),identity=JSON.stringify(q);
+  if(fillIdentity&&identity!==fillIdentity)throw Error('Mold changed · restart the cycle to measure its new cavities');
+  if(!fillMeasurement){fillMeasurement=await water.createRegionMeasurement(q);fillQuery=q;fillIdentity=identity;}
+  // A fill decision need not read back at display cadence. Sample each quarter
+  // simulation second, and retain the measured fractions for the operating card.
+  if(state.runtime.step-lastFillStep<60)return false;
+  const sample=await fillMeasurement.measure();lastFillStep=sample.step;lastFill=stageFillReading(fillQuery,sample);
+  record({kind:'casting.fill',effective:lastFill});
+  return lastFill.regions[cursor%lastFill.regions.length].fraction>=fillTarget;
+ }
+ cycle=createCastingCycle({read,actions:{
+  pour:()=>operations.pour(),sampleFill,stopPour:()=>operations.stopPour(),unmold:()=>operations.unmold(),carry:()=>operations.carry(),ignite:()=>operations.ignite(),returnLoader:()=>operations.returnLoader(),
+  async stop(){transfer.cancel();carriage.cancel();if(flame)host.fire.setEnabled(false);burnStart=null;await operations.stopPour();phase='Cycle stopped · current water and casting retained';refresh();},
+ }});
+ operations.runCycle=()=>{active();if(cycle.read().running)return read();if(!carrierEntry())throw Error('Assign a loader before running the workshop');const signature=JSON.stringify(mold()?.userData.kaminosStageMold);if(!pieceId&&signature!==sourceRecipe){cursor=0;sourceRecipe=signature;}clearFill();cycle.start();void cycle.tick().then(refresh);refresh();return read();};
+ operations.stopCycle=async()=>{await cycle.stop();refresh();return read();};
+ operations.setFillTarget=value=>{value=Number(value)/100;if(!Number.isFinite(value)||value<=0||value>1)throw Error('Fill target must be above 0 and at most 100 percent');fillTarget=value;refresh();return read();};
  const stop=session.onFrame(({deltaSeconds})=>{try{
   transfer.advance(deltaSeconds);carriage.advance(deltaSeconds);
   if(burnStart!==null){if(!object(pieceId))throw Error('Casting removed · ignition stopped');const state=author.burningState(pieceId);if(state.status!=='resident')throw Error(state.error??'Material unavailable · ignition stopped');const elapsed=state.state?.elapsed;if(Number.isFinite(elapsed)){burnStart.elapsed??=elapsed;if(elapsed-burnStart.elapsed>=ignitionSeconds){host.fire.setEnabled(false);burnStart=null;phase='Source off · material continues burning';record({kind:'casting.ignition-ended',effective:{pieceId,elapsed,ignitionSeconds}});}}}
+  if(cycle.read().running)void cycle.tick().then(refresh);
   refresh();
- }catch(error){transfer.cancel();carriage.cancel();presentCasting();if(flame)host.fire.setEnabled(false);burnStart=null;phase=error.message;refresh();}});
+ }catch(error){if(cycle.read().running)void cycle.stop().catch(()=>{});transfer.cancel();carriage.cancel();presentCasting();if(flame)host.fire.setEnabled(false);burnStart=null;phase=error.message;refresh();}});
  return {read,operations,mount({root,invoke}){
   study.mount({root,invoke});
   const k=kiln(),row=host.scene.objects().find(o=>o.object===k);if(!row)throw Error('Choose a kiln object');
   const panel=doc.createElement('section');panel.dataset.stageOperating='kiln';panel.setAttribute('aria-label','Kiln controls');
   const title=doc.createElement('header'),label=doc.createElement('span');label.className='operating-title';label.textContent='Kiln';title.append(label);panel.append(title);
-  const call=name=>invoke(name).catch(e=>{phase=e.message;refresh();});
+  const call=name=>{if(cycle.read().running&&!['stopCycle','runCycle'].includes(name)){phase='Stop the cycle before operating individual stages';return;}return invoke(name).catch(e=>{phase=e.message;refresh();});};
   const ignite=doc.createElement('button');ignite.className='btn';ignite.textContent='Ignite';ignite.title='Heat the letter for the chosen simulation time, then turn the source off and let the material burn.';ignite.onclick=()=>call(burnStart!==null?'stopIgnition':'ignite');title.append(ignite);
   const release=doc.createElement('button');release.className='btn';release.textContent='Unmold next letter';release.title='Lift a separate solid letter to the loader’s editable pickup mount, or leave it at the mold when no pickup mount is assigned. This lift is provisional; liquid solidification is not simulated.';release.onclick=()=>call('unmold');
-  doc.querySelector('[data-stage-operating="mold"]').append(release);
+  const moldCard=doc.querySelector('[data-stage-operating="mold"]');moldCard.append(release);
+  const run=doc.createElement('button');run.className='btn';run.textContent='Run next letter';run.title='Pour to measured letter volume, lift, carry, ignite and return the loader. Existing liquid and casting are preserved on Stop. The solid insert remains a separate authored object.';run.onclick=()=>call(cycle.read().running?'stopCycle':'runCycle');moldCard.append(run);
+  const fillLabel=doc.createElement('label');fillLabel.textContent='Fill · %';const fillInput=doc.createElement('input');fillInput.type='number';fillInput.min='1';fillInput.max='100';fillInput.value=fillTarget*100;fillInput.className='transform-input';fillInput.title='Target nominal fluid volume inside this letter, measured from live particles. Excludes the runner and overflow; not a solidification simulation.';fillInput.onchange=()=>invoke('setFillTarget',fillInput.value).catch(e=>{phase=e.message;refresh();});fillLabel.append(fillInput);moldCard.append(fillLabel);
   const loader=carrierEntry();let loaderMount;
   if(loader){
    const card=doc.createElement('section');card.dataset.stageOperating='loader';card.setAttribute('aria-label','Loader controls');
@@ -154,8 +182,8 @@ export default {id:'stage-casting',title:'Workshop · casting to fire',async cre
   for(const [name,text,value]of [['setTransferSeconds','Carry · seconds',transferSeconds],['setIgnitionSeconds','Ignition · sim seconds',ignitionSeconds]]){const l=doc.createElement('label');l.textContent=text;const input=doc.createElement('input');input.type='number';input.min='.01';input.step='.1';input.value=value;fields[name]=input;input.className='transform-input';input.setAttribute('aria-label',text);input.onchange=()=>invoke(name,input.value).catch(e=>{phase=e.message;refresh();});l.append(input);panel.append(l);drags.push(host.controls.installNumberDrag({input,step:.1}));}
   status=doc.createElement('p');status.className='operating-status';status.setAttribute('role','status');panel.append(status);
   const mount=host.controls.mountOperating({asset:{id:row.id,root:k},node:panel,side:'right',anchor:[.35,.3,.2]});
-  updateButtons=()=>{for(const [name,value]of [['setTransferSeconds',transferSeconds],['setIgnitionSeconds',ignitionSeconds]])if(doc.activeElement!==fields[name])fields[name].value=value;ignite.textContent=burnStart!==null?'Stop ignition':'Ignite';release.disabled=!!(pieceId&&object(pieceId));};
+  updateButtons=()=>{run.textContent=cycle.read().running?'Stop cycle':'Run next letter';run.setAttribute('aria-pressed',String(cycle.read().running));for(const [name,value]of [['setTransferSeconds',transferSeconds],['setIgnitionSeconds',ignitionSeconds]])if(doc.activeElement!==fields[name])fields[name].value=value;ignite.textContent=burnStart!==null?'Stop ignition':'Ignite';release.disabled=!!(pieceId&&object(pieceId));};
   const note=doc.createElement('p');note.textContent='Unmold a letter, carry it with the loader, then ignite it at the kiln. The loader follows authored joint poses; burning uses the actual thermal material. Liquid solidification is not simulated.';root.prepend(note);
-  cleanup=()=>{drags.forEach(d=>d.dispose());release.remove();loaderMount?.dispose();mount.dispose();};refresh();
- },async dispose(){if(closed)return;closed=true;await pending;stop();cleanup();transfer.cancel();carriage.cancel();if(burnStart!==null&&flame)host.fire.setEnabled(false);burnStart=null;if(createdFire&&flame)flame.setPaused(true);await study.dispose();await session.dispose();}};
+  cleanup=()=>{drags.forEach(d=>d.dispose());release.remove();run.remove();fillLabel.remove();loaderMount?.dispose();mount.dispose();};refresh();
+ },async dispose(){if(closed)return;closed=true;if(cycle.read().running)await cycle.stop().catch(()=>{});await cycle.settled();await pending;clearFill();stop();cleanup();transfer.cancel();carriage.cancel();if(burnStart!==null&&flame)host.fire.setEnabled(false);burnStart=null;if(createdFire&&flame)flame.setPaused(true);await study.dispose();await session.dispose();}};
 }};

@@ -138,3 +138,24 @@ test('each letter lifts to the editable paddle mount before articulated transpor
  assert.equal(root.position.x,10);assert.deepEqual(f.events.at(-1),{presented:id,position:root.position.toArray()});
  await f.study.dispose();
  });
+
+test('Carry exits polygon editing through its normal owner before attaching, without bypassing edit history',async()=>{
+ const f=await loaderFixture({phase:0,cycle:0});await f.study.operations.unmold();
+ let editing=true,exits=0;f.app.kaminosPolyEdit={read:()=>({editing}),exit(){editing=false;exits++;}};
+ const attach=f.runtime.operations.attach;f.runtime.operations.attach=a=>{if(editing)throw Error('Finish preview or correction before editing placement');attach(a);};
+ await f.study.operations.carry();assert.equal(exits,1);f.frame(4);assert.equal(f.state.fraction,1);await f.study.dispose();
+});
+
+test('Run next letter consumes cavity measurement and native stage completion',async()=>{
+ const f=await loaderFixture({phase:0,cycle:0});let step=0,counts=[0,0],flowing=false,elapsed=0;
+ // The fixture supplies the GPU measurement boundary; its kernel has a separate native witness.
+ f.app.kaminosWaterSources={read:()=>({runtime:{step}}),createRegionMeasurement:async()=>({measure:async()=>({counts,particleVolume:.001,step}),dispose(){}})};
+ f.study.operations.pour=async()=>{flowing=true;};f.study.operations.stopPour=async()=>{flowing=false;};
+ const old=f.app.kaminosSceneAuthoring.burningState;f.app.kaminosSceneAuthoring.burningState=id=>{const s=old(id);if(s.state)s.state.elapsed=elapsed;return s;};
+ const drain=async()=>{for(let i=0;i<8;i++)await new Promise(r=>setImmediate(r));};
+ f.study.operations.runCycle();await drain();assert.equal(flowing,true);f.frame(.1);await drain();assert.equal(f.study.read().pieceId,null);
+ step=60;counts=[80,0];f.frame(.1);await drain();assert.ok(f.study.read().pieceId);assert.equal(flowing,false);
+ f.frame(4);await drain();f.frame(4);await drain();f.finish();await drain();assert.equal(f.study.read().igniting,true);
+ elapsed=3;f.frame(.1);await drain();f.frame(4);await drain();
+ assert.equal(f.study.read().cycle.phase,'complete');assert.equal(f.state.fraction,0);assert.equal(f.study.read().igniting,false);await f.study.dispose();
+});

@@ -10,7 +10,7 @@ const THREE={RenderPipeline:Pipeline,RenderTarget:Target,NodeMaterial:class{disp
 const display={update:()=>({effective:true}),outputNode:matched};
 const decorateOutput=node=>({decorated:node});
 const renderer={backend:{get:()=>({texture:{createView:()=>({})}})},getRenderTarget:()=>target,setRenderTarget:t=>{target=t;},getRenderObjectFunction:()=>null,setRenderObjectFunction(){},getClearColor:()=>({}),getClearAlpha:()=>1,setClearColor(){},getDrawingBufferSize:()=>({x:100,y:100}),initRenderTarget(){},render(){},copyTextureToTexture(){}};
-const solver={config:{},read:()=>({clock:{step:0}}),setPacket(){},setSceneColliders(){},advance(){},dispose(){}};
+const solver={config:{},read:()=>({clock:{step:0}}),setPacket(){},setSceneColliders(){},setPaused(){},advance(){},dispose(){}};
 const device={addEventListener(){},removeEventListener(){},lost:new Promise(()=>{}),createCommandEncoder:()=>({finish:()=>({})}),queue:{submit(){}}};renderer.backend.device=device;
 const context={THREE,texture:()=>linear,positionView:{z:{negate:()=>0}},vec4:()=>({}),createSceneEmissiveCamera:()=>display,applySceneEmissiveCamera:(p,o,m,e)=>{p.outputNode=e?m:o;p.outputColorTransform=!e;},
  createMlsJuiceSolver:async()=>solver,createMlsJuiceRenderer:async()=>({encode(){},read:()=>({}),dispose(){}}),createMlsWaterProxy:async()=>({dispose(){}}),
