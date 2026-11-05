@@ -21490,7 +21490,7 @@ export function createKaminosVolumePrototype({
           if(!current||sourceFrame!==state.frameCount||sourceStep!==state.simStepCount)throw new Error('Native scene transport frame expired');
           if(!input?.encoder)throw new Error('Native scene transport requires the host encoder');
           const lean=emissiveRaymarchAdmission().eligible&&debugRaymarchShaderSpecialization!=='force-full';
-          const optical=resolveOpticalStepping(debugOpticalStepping,{emissive:lean,exterior:state.worldSmoke?.effective==='one-way-world-field'&&debugOpticalStepping.value<4,explicit:debugOpticalSteppingExplicit});
+          const optical=resolveOpticalStepping(debugOpticalStepping,{emissive:lean,exterior:state.worldSmoke?.effective==='one-way-world-field',explicit:debugOpticalSteppingExplicit});
           state.opticalStepping = { ...optical, effective: optical.mode,
             adaptivity:raymarchAdaptivity(optical.mode,controlsSnapshot.adaptiveRays),
             source:'native-emissive-material-and-current-incident-light', fullRay:optical.mode !== 'current',
