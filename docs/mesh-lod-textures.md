@@ -25,6 +25,15 @@ catalog, including when a route is specified. Shadow, collision and thermal
 consumers continue to use the shared catalog. A closed flag on a beauty record
 does not widen its eligibility.
 
+On disk the restricted records live in a separate `beautyLevels` array, while
+the original `levels` array retains shared proxies. The `beauty-lod` ingest
+role stores their immutable GLBs under `.lod-beauty/`, addressed through the
+ordinary digest URL. Older servers ignore that sidecar field and hidden asset
+directory. Updated indexing, appearance registration and scene imports carry
+the beauty geometry and its dependencies. The HTTP `beautyLevels` field is
+the shared-plus-beauty catalog; the on-disk field contains only restricted
+records.
+
 Existing complete ladders are not silently rebuilt. Offline callers can add
 only the intermediate with `--targets none --beauty-targets 100000` on
 `tools/prepare-lod-tiers.mjs`; `--beauty-targets none` preserves proxy-only

@@ -58,5 +58,15 @@ with tempfile.TemporaryDirectory() as directory:
         # Cross-store scene reconstruction copies the appearance dependencies too.
         destination=root/'import';destination.mkdir();serve._import_mesh_lod_sidecar(source,[root],destination)
         assert (destination/(high+'.glb')).read_bytes()==(root/(high+'.glb')).read_bytes()
+        # Beauty-only geometry lives outside legacy levels and keeps the same appearance contract.
+        hidden=root/'.lod-beauty';hidden.mkdir(exist_ok=True)
+        beauty_bytes=glb(3);beauty=hashlib.sha256(beauty_bytes).hexdigest();(hidden/(beauty+'.glb')).write_bytes(beauty_bytes)
+        serve.save_mesh_lod_level({'source':source,'level':{'sha256':beauty,'faces':1,'route':'trellis-simplify+pairing','purpose':'beauty'}})
+        assert request('POST','/api/mesh-lod-textures',{**payload,'geometry':beauty})[0]==200
+        status,state=request('GET',f'/api/mesh-lods?source={source}&purpose=beauty')
+        assert any(level['sha256']==beauty and level['textureSet']['variants'][0]['sha256']==high for level in state['levels'])
+        destination_two=root/'import-beauty';serve._import_mesh_lod_sidecar(source,[root],destination_two)
+        assert (destination_two/'.lod-beauty'/(beauty+'.glb')).read_bytes()==beauty_bytes
+        assert (destination_two/(high+'.glb')).read_bytes()==(root/(high+'.glb')).read_bytes()
     finally:
         server.shutdown();server.server_close()

@@ -110,7 +110,9 @@ def save_texture_set(payload, *, root, resolve_mesh, resolve_source):
     with (root / ('.' + source + '.lods.lock')).open('a+b') as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
         record = json.loads(path.read_text()) if path.exists() else {'schema': 'kaminos.lod-set.v0', 'source': source, 'levels': []}
-        if geometry != source and not any(l.get('sha256') == geometry for l in record['levels']):
+        if not isinstance(record.get('beautyLevels', []), list) or any(not isinstance(level, dict) or level.get('purpose') != 'beauty' for level in record.get('beautyLevels', [])):
+            raise ValueError('Invalid beauty catalog')
+        if geometry != source and not any(l.get('sha256') == geometry for l in record['levels'] + record.get('beautyLevels', [])):
             raise ValueError('Appearance geometry is not a current level of this source')
         previous = record.setdefault('textureSets', {}).get(geometry)
         merged = {v['textureSize']: v for v in (previous or {}).get('variants', [])}
