@@ -25,6 +25,8 @@ The runner checks that every package in `package-lock.json` is installed at the 
 
 ## Native shader tests
 
+For WGSL work, read [Testing WGSL behavior](wgsl-testing/README.md) first. New shader-behavior checks must execute the production WGSL rather than assert its source wording.
+
 `@kaminos/shader-herder` is a development dependency installed from the versioned archive in `artifacts/shader-herder/`. Ordinary `npm ci` installs it and its locked Dawn binding. The test bridge imports this installed package; no neighboring checkout is needed. `SHADER_HERDER_ROOT` explicitly selects a development package root, and an invalid override fails instead of falling back to another source.
 
 Run the shader checks through the normal runner:
