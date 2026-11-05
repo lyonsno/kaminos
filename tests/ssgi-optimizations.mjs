@@ -12,6 +12,14 @@ const input=TSL.texture(),camera=new PerspectiveCamera(),effect=new SSGI(input,i
 assert.equal(effect.useMipSampling?.value,false,'distance-dependent mips need an independent opt-in control');
 assert.equal(effect.usePerspectiveReconstruction?.value,false,'perspective reconstruction needs an independent opt-in control');
 assert.equal(typeof effect.getOptimizationState,'function','effective optimization state must be inspectable');
+const coords=TSL.vec2(.27,.61),level=TSL.float(2);
+for(let i=0;i<3;i++){
+ const sample=effect._sourcePyramid.sample(i,coords,level);
+ assert.equal(sample.uvNode,coords,'outward mip sample coordinates must survive cloning');
+ assert.equal(sample.levelNode,level,'explicit mip level must survive cloning');
+ assert.equal(sample.value,effect._sourcePyramid.target.textures[i]);
+}
+assert.equal(effect._sourcePyramid.depthNode.passNode,effect._sourcePyramid,'mip source retains its scheduling producer');
 // A disabled pyramid must perform no source draw or allocation work.
 effect._sourcePyramid.updateBefore({renderer:{}});
 assert.equal(effect._sourcePyramid.frames,0);
