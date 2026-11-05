@@ -92,10 +92,14 @@ export function hasVolumePrimitives(data) {
   return Array.isArray(data?.volumePrimitives?.primitives) && data.volumePrimitives.primitives.length > 0;
 }
 
+function sceneContentsAreLoadable(data, objectRecords) {
+  return objectRecords.length > 0 || hasVolumePrimitives(data) || !!normalizeComposition(data.composition)
+    || !!normalizeLocalLiquidSetup(data.localLiquid);
+}
+
 export function sceneDocumentIsLoadable(data) {
   if (!data?.version) return false;
-  return getSceneObjectRecords(data).length > 0 || hasVolumePrimitives(data) || !!normalizeComposition(data.composition)
-    || !!normalizeLocalLiquidSetup(data.localLiquid);
+  return sceneContentsAreLoadable(data, getSceneObjectRecords(data));
 }
 
 export function isReloadableSceneObjectRecord(record) {
@@ -108,8 +112,11 @@ export function assertSceneSourcesReloadable(records=[]) {
 
 export function planSceneRestore(data, { allowEmpty = false } = {}) {
   if(Number(data?.version)>SCENE_VERSION)throw Error('Scene version requires a newer authoring client');
-  if (!sceneDocumentIsLoadable(data) && !(allowEmpty && Number.isInteger(data?.version) && data.version > 0)) throw new Error('Invalid scene format');
+  if (!data?.version) throw new Error('Invalid scene format');
+  // Domain normalization can detach large saved checkpoints; reuse that work
+  // for admission rather than normalizing the same records a second time.
   const authoredObjects = getSceneObjectRecords(data);
+  if (!sceneContentsAreLoadable(data, authoredObjects) && !(allowEmpty && Number.isInteger(data.version) && data.version > 0)) throw new Error('Invalid scene format');
   checkSceneCollisionReferences(authoredObjects,{implicitFireDomain:data.version<9&&!!normalizeComposition(data.composition)});
   const fire = authoredObjects.some(o=>o.type===FIRE_DOMAIN_TYPE)?readFireObjects(authoredObjects,data.fireRendering):null;
   if(data.version>=9 && data.composition && !fire)throw Error('Saved fire domain is missing');
