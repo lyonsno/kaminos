@@ -55,9 +55,9 @@ export function constructBodies(value){
   if(n.parent===null)add(`anchor:${i}`,'anchor',[.5,.5,.18],g=>box(g,[.5,.5,.18],[0,0,-.16],0x374653),f=>({position:[...f[i].point,0],angle:0}));
   else add(`link:${i}`,'link',[n.length,thickness,eye,holes[n.parent],holes[i]],g=>plate(g,n.length,[holes[n.parent],holes[i]]),f=>({position:[...f[n.parent].point,layers[i]],angle:f[i].angle}));
   const owner=defs.at(-1);const baseZ=n.parent===null?0:layers[i];
-  for(const [j,p]of recipe.pistons.entries())for(const end of ['a','b'])if(p.hinge&&p[end]===i){const at=p[end+'Offset'],rx=Math.max(0,Math.min(n.length??0,at[0])),z=(p.z??pistonZ+j*pitch)-baseZ;
-   const shape=new T.Shape();shape.moveTo(rx-.09,0);shape.lineTo(at[0],at[1]);shape.lineTo(rx+.09,0);shape.closePath();const geo=new T.ExtrudeGeometry(shape,{depth:.12,bevelEnabled:false});geo.translate(0,0,-.06);const horn=mesh(owner.object,geo,0xc9a875);horn.name='Hinge horn';horn.userData.surfaceDrive=true;
-   const pin=cylinder(owner.object,.055,Math.abs(z)+.18,[...at,z/2],0xc9a875);pin.name='Actuator mount pin';pin.userData.surfaceDrive=true;
+  for(const [j,p]of recipe.pistons.entries())for(const end of ['a','b'])if(p.hinge&&p[end]===i){const at=p[end+'Offset'],rx=Math.max(0,Math.min(n.length??0,at[0])),z=(p.z??pistonZ+j*pitch)-baseZ,seat=p[end+'BaseZ']??0;
+   const shape=new T.Shape();shape.moveTo(rx-.09,0);shape.lineTo(at[0],at[1]);shape.lineTo(rx+.09,0);shape.closePath();const geo=new T.ExtrudeGeometry(shape,{depth:.12,bevelEnabled:false});geo.translate(0,0,-.06);const horn=mesh(owner.object,geo,0xc9a875);horn.position.z=seat;horn.name='Hinge horn';horn.userData.surfaceDrive=true;
+   const pin=cylinder(owner.object,.055,Math.abs(z-seat)+.18,[...at,(z+seat)/2],0xc9a875);pin.name='Actuator mount pin';pin.userData.surfaceDrive=true;
   }
   if(recipe.pistons.some(p=>p.hinge&&(p.a===i||p.b===i)))owner.geometryKey=JSON.stringify([owner.geometryKey,recipe.pistons.filter(p=>p.hinge&&(p.a===i||p.b===i))]);
   const {low,high}=joints[i];
