@@ -1,7 +1,8 @@
-import {BufferGeometry,BufferAttribute,Box3,Vector3,Sphere} from '../../lib/three.core.js';
+import {BufferGeometry,BufferAttribute,Box3,Vector3,Sphere,DataTexture,NearestFilter} from '../../lib/three.core.js';
 import {StorageBufferAttribute} from '../../lib/three.webgpu.js';
-import {storage,Fn,wgslFn,instanceIndex,uint,float,uniform,mix,attribute as tslAttribute,positionLocal,normalLocal,normalView,positionViewDirection} from '../../lib/three.tsl.js';
+import {storage,Fn,wgslFn,instanceIndex,uint,float,uniform,mix,attribute as tslAttribute,positionLocal,normalView,positionViewDirection} from '../../lib/three.tsl.js';
 import {terrainConfig,makeRidges,ROUTE} from './model.mjs';
+import {detailLattice,baseMaskTransform} from './lod.mjs';
 import {mesoAuthoringConfig,VIEW_MODES} from './formation.mjs';
 
 const init=wgslFn(`fn hill_initial(v:u32,n:u32,width:f32,length:f32,soil:f32,ridges:ptr<storage,array<vec4<f32>>,read_write>)->vec4<f32>{
@@ -355,106 +356,50 @@ const zoomCellKernel=wgslFn(`fn hill_cell_xy(ix:u32,iz:u32,n:u32,state:ptr<stora
  return c;
 }`);
 
-const baseCutoutKernel=wgslFn(`fn hill_base_cutout(x:f32,z:f32,fx:f32,fz:f32,fr:f32,useFormed:f32,zoomOn:f32)->f32{
- if(useFormed<.5||zoomOn<.5||fr>3.25){return 1.;}
- let distToEdge=fr-max(abs(x-fx),abs(z-fz));
- if(distToEdge>.055){return 0.;}
- return 1.;
+const sampleTriangleField=wgslFn(`fn hill_sample_field(x:f32,z:f32,n:u32,width:f32,length:f32,field:ptr<storage,array<vec4<f32>>,read_write>)->vec4<f32>{
+ let gx=clamp((x/width+.5)*f32(n-1u),0.,f32(n-1u)-.0001);
+ let gz=clamp((z/length+.5)*f32(n-1u),0.,f32(n-1u)-.0001);
+ let ix=u32(gx);let iz=u32(gz);let u=gx-f32(ix);let v=gz-f32(iz);
+ let a=(*field)[iz*n+ix];let b=(*field)[iz*n+ix+1u];
+ let c=(*field)[(iz+1u)*n+ix];let d=(*field)[(iz+1u)*n+ix+1u];
+ if(u+v<=1.){return a+u*(b-a)+v*(c-a);}
+ return d+(1.-u)*(c-d)+(1.-v)*(b-d);
 }`);
 
 const basePosKernel=wgslFn(`fn hill_base_pos(v:u32,n:u32,x:f32,y:f32,z:f32,fx:f32,fz:f32,fr:f32,useFormed:f32,zoomOn:f32,state:ptr<storage,array<vec4<f32>>,read_write>)->vec4<f32>{
- if(useFormed<.5||zoomOn<.5||fr>3.25){return vec4<f32>(x,y,z,1.);}
+ if(useFormed<.5){return vec4<f32>(x,y,z,1.);}
  let c=hill_cell_xy(v%n,v/n,n,state);
- let dBox=max(abs(x-fx),abs(z-fz));
- let distToEdge=fr-dBox;
- let zAct=1.-smoothstep(2.90,3.25,fr);
- let cut=smoothstep(.10,.28,distToEdge);
- return vec4<f32>(x,c.x+c.y-.042*zAct*cut,z,1.);
+ return vec4<f32>(x,c.x+c.y,z,1.);
 }`,[zoomCellKernel]);
 
-// Camera-centered arbitrary-zoom 3D surface synthesis:
-// Interpolating overshoot-clamped Catmull-Rom surface (0.0mm vertex discrepancy vs baseMesh)
-// + smooth B-spline analytic gradients + radial focus warp + 3D eye-distance-gated
-// overhanging sandstone shelves, craggy rock buttresses, and 3D Voronoi talus boulders/cobbles.
-const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f32,length:f32,fx:f32,fz:f32,fr:f32,camX:f32,camY:f32,camZ:f32,tilt:f32,strike:f32,fold:f32,thickness:f32,seed:f32,stepStyle:f32,meso:f32,ledge:f32,crag:f32,cobble:f32,rill:f32,viewMode:f32,useFormed:f32,state:ptr<storage,array<vec4<f32>>,read_write>,metaBuf:ptr<storage,array<vec4<f32>>,read_write>)->vec4<f32>{
+// Camera-centered height relief on the fixed macro triangles. Smooth source
+// gradients guide material placement; they do not replace the macro geometry.
+const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f32,length:f32,fx:f32,fz:f32,fr:f32,gridX:f32,gridZ:f32,stepX:f32,stepZ:f32,camX:f32,camY:f32,camZ:f32,tilt:f32,strike:f32,fold:f32,thickness:f32,seed:f32,stepStyle:f32,meso:f32,ledge:f32,crag:f32,cobble:f32,rill:f32,viewMode:f32,useFormed:f32,state:ptr<storage,array<vec4<f32>>,read_write>,metaBuf:ptr<storage,array<vec4<f32>>,read_write>)->vec4<f32>{
  let xi=v%zn;let zi=v/zn;
- let uRaw=(f32(xi)/f32(zn-1u))*2.-1.;
- let wRaw=(f32(zi)/f32(zn-1u))*2.-1.;
- let u=uRaw*(.54+.46*abs(uRaw));
- let w=wRaw*(.54+.46*abs(wRaw));
- let du=.54+.92*abs(uRaw);
- let dw=.54+.92*abs(wRaw);
- let wx=clamp(fx+u*fr,-width*.5,width*.5);
- let wz=clamp(fz+w*fr,-length*.5,length*.5);
+ // Dyadic subdivision preserves every coarse triangle edge and diagonal.
+ // Re-centering translates an integer number of cells; shared vertices stay put.
+ let wx=clamp(gridX+(f32(xi)-f32(zn-1u)*.5)*stepX,-width*.5,width*.5);
+ let wz=clamp(gridZ+(f32(zi)-f32(zn-1u)*.5)*stepZ,-length*.5,length*.5);
  let fn1=f32(n-1u);
  let gx=clamp((wx/width+.5)*fn1,0.,fn1-.0001);
  let gz=clamp((wz/length+.5)*fn1,0.,fn1-.0001);
  let ix=u32(gx);let iz=u32(gz);
  let tx=gx-f32(ix);let tz=gz-f32(iz);
- let ix0=select(0u,ix-1u,ix>0u);let ix1=ix;let ix2=min(n-1u,ix+1u);let ix3=min(n-1u,ix+2u);
- let iz0=select(0u,iz-1u,iz>0u);let iz1=iz;let iz2=min(n-1u,iz+1u);let iz3=min(n-1u,iz+2u);
- let p00=hill_cell_xy(ix0,iz0,n,state);let p10=hill_cell_xy(ix1,iz0,n,state);let p20=hill_cell_xy(ix2,iz0,n,state);let p30=hill_cell_xy(ix3,iz0,n,state);
- let p01=hill_cell_xy(ix0,iz1,n,state);let p11=hill_cell_xy(ix1,iz1,n,state);let p21=hill_cell_xy(ix2,iz1,n,state);let p31=hill_cell_xy(ix3,iz1,n,state);
- let p02=hill_cell_xy(ix0,iz2,n,state);let p12=hill_cell_xy(ix1,iz2,n,state);let p22=hill_cell_xy(ix2,iz2,n,state);let p32=hill_cell_xy(ix3,iz2,n,state);
- let p03=hill_cell_xy(ix0,iz3,n,state);let p13=hill_cell_xy(ix1,iz3,n,state);let p23=hill_cell_xy(ix2,iz3,n,state);let p33=hill_cell_xy(ix3,iz3,n,state);
- let s00=p11;let s10=p21;let s01=p12;let s11=p22;
- var bedTri=0.;var soilTri=0.;
+ let s00=hill_cell_xy(ix,iz,n,state);let s10=hill_cell_xy(min(n-1u,ix+1u),iz,n,state);
+ let s01=hill_cell_xy(ix,min(n-1u,iz+1u),n,state);let s11=hill_cell_xy(min(n-1u,ix+1u),min(n-1u,iz+1u),n,state);
+ var bedTri=0.;var soilTri=0.;var dhdx=0.;var dhdz=0.;
+ let dxGrid=width/fn1;let dzGrid=length/fn1;
  if(tx+tz<=1.){
   bedTri=s00.x+tx*(s10.x-s00.x)+tz*(s01.x-s00.x);
   soilTri=s00.y+tx*(s10.y-s00.y)+tz*(s01.y-s00.y);
+  dhdx=(s10.x+s10.y-s00.x-s00.y)/dxGrid;dhdz=(s01.x+s01.y-s00.x-s00.y)/dzGrid;
  }else{
   bedTri=s11.x+(1.-tx)*(s01.x-s11.x)+(1.-tz)*(s10.x-s11.x);
   soilTri=s11.y+(1.-tx)*(s01.y-s11.y)+(1.-tz)*(s10.y-s11.y);
+  dhdx=(s11.x+s11.y-s01.x-s01.y)/dxGrid;dhdz=(s11.x+s11.y-s10.x-s10.y)/dzGrid;
  }
- let omt=1.-tx;let omz=1.-tz;
- let wx0=(omt*omt*omt)/6.;
- let wx1=(3.*tx*tx*tx-6.*tx*tx+4.)/6.;
- let wx2=(-3.*tx*tx*tx+3.*tx*tx+3.*tx+1.)/6.;
- let wx3=(tx*tx*tx)/6.;
- let wz0=(omz*omz*omz)/6.;
- let wz1=(3.*tz*tz*tz-6.*tz*tz+4.)/6.;
- let wz2=(-3.*tz*tz*tz+3.*tz*tz+3.*tz+1.)/6.;
- let wz3=(tz*tz*tz)/6.;
- let dwx0=-.5*omt*omt;
- let dwx1=.5*tx*(3.*tx-4.);
- let dwx2=.5*(-3.*tx*tx+2.*tx+1.);
- let dwx3=.5*tx*tx;
- let dwz0=-.5*omz*omz;
- let dwz1=.5*tz*(3.*tz-4.);
- let dwz2=.5*(-3.*tz*tz+2.*tz+1.);
- let dwz3=.5*tz*tz;
- let r0=wx0*p00+wx1*p10+wx2*p20+wx3*p30;
- let r1=wx0*p01+wx1*p11+wx2*p21+wx3*p31;
- let r2=wx0*p02+wx1*p12+wx2*p22+wx3*p32;
- let r3=wx0*p03+wx1*p13+wx2*p23+wx3*p33;
- let dr0=dwx0*p00+dwx1*p10+dwx2*p20+dwx3*p30;
- let dr1=dwx0*p01+dwx1*p11+dwx2*p21+dwx3*p31;
- let dr2=dwx0*p02+dwx1*p12+dwx2*p22+dwx3*p32;
- let dr3=dwx0*p03+dwx1*p13+dwx2*p23+dwx3*p33;
- let dxGrid=width/fn1;let dzGrid=length/fn1;
- let dCubX=(wz0*dr0+wz1*dr1+wz2*dr2+wz3*dr3)/dxGrid;
- let dCubZ=(dwz0*r0+dwz1*r1+dwz2*r2+dwz3*r3)/dzGrid;
- // Interpolating overshoot-clamped Catmull-Rom / Hermite spline (tau = 0.35):
- // passes through every 193x193 vertex with 0.0mm error while providing C1 intra-cell smoothness.
- let tau=.35;let tx2=tx*tx;let tx3=tx2*tx;let tz2=tz*tz;let tz3=tz2*tz;
- let cwx0=-tau*tx*(1.-2.*tx+tx2);
- let cwx1=1.-(3.-tau)*tx2+(2.-tau)*tx3;
- let cwx2=tau*tx+(3.-2.*tau)*tx2-(2.-tau)*tx3;
- let cwx3=-tau*tx2*(1.-tx);
- let cwz0=-tau*tz*(1.-2.*tz+tz2);
- let cwz1=1.-(3.-tau)*tz2+(2.-tau)*tz3;
- let cwz2=tau*tz+(3.-2.*tau)*tz2-(2.-tau)*tz3;
- let cwz3=-tau*tz2*(1.-tz);
- let cr0=cwx0*p00+cwx1*p10+cwx2*p20+cwx3*p30;
- let cr1=cwx0*p01+cwx1*p11+cwx2*p21+cwx3*p31;
- let cr2=cwx0*p02+cwx1*p12+cwx2*p22+cwx3*p32;
- let cr3=cwx0*p03+cwx1*p13+cwx2*p23+cwx3*p33;
- let minCell=min(min(p11,p21),min(p12,p22));
- let maxCell=max(max(p11,p21),max(p12,p22));
- let bSpline=wz0*r0+wz1*r1+wz2*r2+wz3*r3;
- let cub=clamp(cwz0*cr0+cwz1*cr1+cwz2*cr2+cwz3*cr3,minCell,maxCell);
- let dhdx=dCubX.x+dCubX.y;
- let dhdz=dCubZ.x+dCubZ.y;
+ // Filter against the slope of the triangles actually being refined. A smooth
+ // derivative underestimates narrow scarps and admits aliased shelf harmonics.
  let rawSlope=sqrt(dhdx*dhdx+dhdz*dhdz);
  let slopeScale=min(2.25,sqrt(1.+rawSlope*rawSlope));
  let dBox=max(abs(wx-fx),abs(wz-fz));
@@ -465,11 +410,10 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
  let inCollar=1.-smoothstep(.12,.22,distToEdge);
  let collarLift=smoothstep(.002,.025,distToEdge)*.0018*zoomActive-(1.-smoothstep(0.,.003,distToEdge))*.003;
  let isSimOnly=viewMode>.5&&viewMode<1.5;
- let smoothSoil=mix(bSpline.y,cub.y,inCollar);
- let safeCubX=select(mix(cub.x+cub.y-smoothSoil,max(bedTri,cub.x),inCollar),bedTri,isSimOnly);
- let safeCubY=select(mix(smoothSoil,max(soilTri,cub.y),inCollar),soilTri,isSimOnly);
- let bed=mix(bedTri,safeCubX,wPatch);
- let rawSoil=max(0.,mix(soilTri,safeCubY,wPatch));
+ // The detail patch refines the same macro triangles; patch placement must not
+ // blend the terrain into a different surface or change its material thickness.
+ let bed=bedTri;
+ let rawSoil=max(0.,soilTri);
  let slopeStrip=smoothstep(.58,1.35,rawSlope)*(1.-smoothstep(.052,.26,rawSoil));
  let effSoil=rawSoil*(1.-.85*slopeStrip);
  var px=wx;var pz=wz;
@@ -477,7 +421,8 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
  var cobbleOut=0.;
  var dispOut=0.;
  if(useFormed>.5&&meso>0.&&wPatch>0.&&!isSimOnly){
-  let dsLocal=((2.*fr)/f32(zn-1u))*max(du,dw);
+  // Conservative continuous spacing bound across allocation-level changes.
+  let dsLocal=4.*fr/f32(zn-2u);
   let dCam=vec3<f32>(wx-camX,bed+rawSoil-camY,wz-camZ);
   let distToCam=sqrt(dot(dCam,dCam));
   let ds=max(dsLocal,.0042*distToCam);
@@ -575,14 +520,21 @@ const fragSafeNormal=wgslFn(`fn hill_safe_normal(nv:vec3<f32>,vd:vec3<f32>)->vec
 export function createTerrainGPU(geometry,input={}){
  let config=terrainConfig(input),ridges=makeRidges(config),mesoState=mesoAuthoringConfig({}),activeViewMode='authored',lastLiveUpdateMs=0;
  const n=config.resolution,count=n*n,attributes=[],nodes=[];
+ const maskPixels=new Uint8Array(3*3*4).fill(255);maskPixels.fill(0,4*4,5*4);
+ const baseAlphaMap=new DataTexture(maskPixels,3,3);baseAlphaMap.name='hill-coarse-coverage';
+ baseAlphaMap.magFilter=NearestFilter;baseAlphaMap.minFilter=NearestFilter;baseAlphaMap.generateMipmaps=false;baseAlphaMap.matrixAutoUpdate=false;baseAlphaMap.needsUpdate=true;
+ const uv=new Float32Array(count*2);for(let v=0;v<count;v++){uv[v*2]=(v%n)/(n-1);uv[v*2+1]=Math.floor(v/n)/(n-1);}
+ geometry.setAttribute('uv',new BufferAttribute(uv,2));
+
  const attribute=(array,size,label)=>{const a=new StorageBufferAttribute(array,size);a.name='hill-'+label;attributes.push(a);return a;};
  const stateAttributes=[0,1].map(i=>attribute(new Float32Array(count*4),4,'state-'+i)),states=stateAttributes.map(a=>storage(a,'vec4',count));
  const flowAttribute=attribute(new Float32Array(count*4),4,'transport'),flows=storage(flowAttribute,'vec4',count);
  const bankAttribute=attribute(new Float32Array(count*4),4,'bank-collapse'),banks=storage(bankAttribute,'vec4',count);
  const ridgeAttribute=attribute(Float32Array.from(ridges.flatMap(e=>[...e.a,...e.b])),4,'initial-ridges'),ridgeNode=storage(ridgeAttribute,'vec4',ridges.length*2);
  const positions=attribute(new Float32Array(count*4),4,'positions'),normals=attribute(new Float32Array(count*4),4,'normals'),colors=attribute(new Float32Array(count*4),4,'colors');
- geometry.setAttribute('position',positions);geometry.setAttribute('normal',normals);geometry.setAttribute('color',colors);
+ geometry.setAttribute('position',positions);geometry.setAttribute('normal',normals);geometry.setAttribute('color',colors);geometry.setAttribute('hillMacroNormal',normals);
  const displayAttribute=attribute(new Float32Array(count*4),4,'display-state'),displayState=storage(displayAttribute,'vec4',count),alpha=uniform(1);
+ geometry.setAttribute('hillSurface',displayAttribute);
  const interpolators=states.map((state,i)=>Fn(()=>{displayState.element(instanceIndex).assign(mix(states[1-i].element(instanceIndex),state.element(instanceIndex),alpha));})().compute(count));
  const positionNode=storage(positions,'vec4',count),normalNode=storage(normals,'vec4',count),colorNode=storage(colors,'vec4',count);
  const formedAttribute=attribute(new Float32Array(count*4),4,'formed-source'),formedNode=storage(formedAttribute,'vec4',count),useFormed=uniform(0);
@@ -590,15 +542,20 @@ export function createTerrainGPU(geometry,input={}){
  const mesoLedge=uniform(mesoState.ledge),mesoCrag=uniform(mesoState.crag),mesoCobble=uniform(mesoState.cobble),mesoRill=uniform(mesoState.rill),viewModeUniform=uniform(0);
  const dt=uniform(.05),drive=uniform(config.uplift),talus=uniform(Math.tan(config.repose*Math.PI/180)),fraction=uniform(0),soil=uniform(config.soil);
 
- // Camera-centered arbitrary-zoom 3D detail patch (193x193 = 73,728 triangles with radial focus warp)
+ // Camera-centered detail patch (193x193 = 73,728 world-aligned triangles)
  const zoomN=193,zoomCount=zoomN*zoomN,zoomIndices=new Uint32Array((zoomN-1)**2*6);
  let zk=0;for(let z=0;z<zoomN-1;z++)for(let x=0;x<zoomN-1;x++){const a=z*zoomN+x;zoomIndices[zk++]=a;zoomIndices[zk++]=a+zoomN;zoomIndices[zk++]=a+1;zoomIndices[zk++]=a+1;zoomIndices[zk++]=a+zoomN;zoomIndices[zk++]=a+zoomN+1;}
  const zoomGeometry=new BufferGeometry();zoomGeometry.setIndex(new BufferAttribute(zoomIndices,1));
  zoomGeometry.boundingBox=new Box3(new Vector3(-config.width/2,-2,-config.length/2),new Vector3(config.width/2,8,config.length/2));
  zoomGeometry.boundingSphere=zoomGeometry.boundingBox.getBoundingSphere(new Sphere());
  const zoomPositions=attribute(new Float32Array(zoomCount*4),4,'zoom-positions'),zoomNormals=attribute(new Float32Array(zoomCount*4),4,'zoom-normals'),zoomColors=attribute(new Float32Array(zoomCount*4),4,'zoom-colors'),zoomMetaAttr=attribute(new Float32Array(zoomCount*4),4,'zoom-meta');
+ const zoomMacroNormals=attribute(new Float32Array(zoomCount*4),4,'zoom-macro-normals'),zoomSurfaceFields=attribute(new Float32Array(zoomCount*4),4,'zoom-surface-fields');
+ const zoomMacroNode=storage(zoomMacroNormals,'vec4',zoomCount),zoomSurfaceNode=storage(zoomSurfaceFields,'vec4',zoomCount);
+ zoomGeometry.setAttribute('hillMacroNormal',zoomMacroNormals);zoomGeometry.setAttribute('hillSurface',zoomSurfaceFields);
  zoomGeometry.setAttribute('position',zoomPositions);zoomGeometry.setAttribute('normal',zoomNormals);zoomGeometry.setAttribute('color',zoomColors);
  const zoomPosNode=storage(zoomPositions,'vec4',zoomCount),zoomNormNode=storage(zoomNormals,'vec4',zoomCount),zoomColNode=storage(zoomColors,'vec4',zoomCount),zoomMetaNode=storage(zoomMetaAttr,'vec4',zoomCount);
+ let latticeRefines=true;
+ const gridX=uniform(0),gridZ=uniform(0),stepX=uniform(config.width/(zoomN-1)),stepZ=uniform(config.length/(zoomN-1));
  const focusX=uniform(0),focusZ=uniform(0),focusRadius=uniform(3.2),zoomEnabled=uniform(1),camX=uniform(10.2),camY=uniform(8.2),camZ=uniform(12.8);
 
  const initializers=states.map(state=>Fn(()=>{state.element(instanceIndex).assign(mix(init({v:instanceIndex,n:uint(n),width:float(config.width),length:float(config.length),soil,ridges:ridgeNode}),formedNode.element(instanceIndex),useFormed));})().compute(count));
@@ -623,12 +580,17 @@ export function createTerrainGPU(geometry,input={}){
  })().compute(count));
  const zoomPosPublisher=Fn(()=>{
   const v=instanceIndex;
-  zoomPosNode.element(v).assign(zoomSurfaceKernel({v,zn:uint(zoomN),n:uint(n),width:float(config.width),length:float(config.length),fx:focusX,fz:focusZ,fr:focusRadius,camX,camY,camZ,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,ledge:mesoLedge,crag:mesoCrag,cobble:mesoCobble,rill:mesoRill,viewMode:viewModeUniform,useFormed,state:displayState,metaBuf:zoomMetaNode}));
+  zoomPosNode.element(v).assign(zoomSurfaceKernel({v,zn:uint(zoomN),n:uint(n),width:float(config.width),length:float(config.length),fx:focusX,fz:focusZ,fr:focusRadius,gridX,gridZ,stepX,stepZ,camX,camY,camZ,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,ledge:mesoLedge,crag:mesoCrag,cobble:mesoCobble,rill:mesoRill,viewMode:viewModeUniform,useFormed,state:displayState,metaBuf:zoomMetaNode}));
  })().compute(zoomCount);
  const zoomNormPublisher=Fn(()=>{
-  const v=instanceIndex,norm=zoomNormKernel({v,zn:uint(zoomN),tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,useFormed,posBuf:zoomPosNode,metaBuf:zoomMetaNode}),p=zoomPosNode.element(v),m=zoomMetaNode.element(v);
+  const v=instanceIndex,norm=zoomNormKernel({v,zn:uint(zoomN),tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,useFormed,posBuf:zoomPosNode,metaBuf:zoomMetaNode}),p=zoomPosNode.element(v);
   zoomNormNode.element(v).assign(norm);
-  zoomColNode.element(v).assign(formedColor({x:p.x,z:p.z,bed:m.x,soil:m.y,disp:m.z,nx:norm.x,ny:norm.y,nz:norm.z,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,ledge:mesoLedge,crag:mesoCrag,cobble:mesoCobble,rill:mesoRill,viewMode:viewModeUniform}));
+  const sample=field=>sampleTriangleField({x:p.x,z:p.z,n:uint(n),width:float(config.width),length:float(config.length),field});
+  // Material coverage comes from the same coarse field on both meshes. Detail
+  // relief and its slope must not turn soil into rock as the patch passes.
+  zoomColNode.element(v).assign(sample(colorNode));
+  zoomMacroNode.element(v).assign(sample(normalNode));
+  zoomSurfaceNode.element(v).assign(sample(displayState));
  })().compute(zoomCount);
  nodes.push(...initializers,...solvers.flat(),...geologySolvers.flat(),...interpolators,...publishers,zoomPosPublisher,zoomNormPublisher);
 
@@ -643,6 +605,8 @@ export function createTerrainGPU(geometry,input={}){
  }
  function flush(r){
   bind(r);if(error)throw Error(error);
+  const mask=baseMaskTransform(config,{x:focusX.value,z:focusZ.value,radius:focusRadius.value},useFormed.value>.5&&zoomEnabled.value>.5&&focusRadius.value<3.30&&latticeRefines);
+  baseAlphaMap.matrix.set(mask[0],0,mask[1],0,mask[2],mask[3],0,0,1);
   const runMain=pendingPresentation,runZoom=(pendingPresentation||pendingZoom)&&useFormed.value>.5&&zoomEnabled.value>.5;
   const t0=(runMain||runZoom)?performance.now():0;
   if(runMain){renderer.compute([interpolators[index],publishers[index]]);pendingPresentation=false;}
@@ -696,6 +660,8 @@ export function createTerrainGPU(geometry,input={}){
   const cx=Math.max(-maxX,Math.min(maxX,tx));
   const cz=Math.max(-maxZ,Math.min(maxZ,tz));
   if(zoomEnabled.value!==en||Math.abs(focusX.value-cx)>1e-4||Math.abs(focusZ.value-cz)>1e-4||Math.abs(focusRadius.value-r)>1e-4||Math.abs(camX.value-px)>1e-4||Math.abs(camY.value-py)>1e-4||Math.abs(camZ.value-pz)>1e-4){
+   const grid=detailLattice(config,{x:cx,z:cz,radius:r},zoomN);
+   latticeRefines=grid.refining;gridX.value=grid.center[0];gridZ.value=grid.center[1];stepX.value=grid.spacing[0];stepZ.value=grid.spacing[1];
    zoomEnabled.value=en;focusX.value=cx;focusZ.value=cz;focusRadius.value=r;camX.value=px;camY.value=py;camZ.value=pz;pendingZoom=true;pendingPresentation=true;
   }
   return read();
@@ -706,21 +672,22 @@ export function createTerrainGPU(geometry,input={}){
  }
  function regenerate(patch={}){const next=terrainConfig({...config,...patch});for(const key of ['resolution','width','length'])if(next[key]!==config[key])throw Error('Grid changes require a new simulator instance');config=next;formationProvenance=null;useFormed.value=0;ridges=makeRidges(config);ridgeAttribute.array.set(ridges.flatMap(e=>[...e.a,...e.b]));ridgeAttribute.needsUpdate=true;soil.value=config.soil;initialized=false;steps=0;preparationSteps=0;seconds=0;generation++;if(renderer)flush(renderer);return read();}
  function read(){
-  const avgSpacing=(2*focusRadius.value)/(zoomN-1),centerSpacing=avgSpacing*.54;
-  return{route:ROUTE,backend:renderer?'webgpu':'unbound',initialized,config:{...config},generation,steps,preparationSteps,seconds,stateIndex:index,readbackInRuntime:false,error,viewMode:activeViewMode,mesoAuthoring:{...mesoState},liveUpdateMs:lastLiveUpdateMs,representation:{kind:'height-material-grid',samples:count,triangles:(n-1)**2*2,bytes:attributes.reduce((s,a)=>s+a.array.byteLength,0),fields:['substrate_height','loose_depth','vertical_velocity','actor_memory']},zoomDetail:{enabled:Boolean(zoomEnabled.value>.5),resolution:zoomN,samples:zoomCount,triangles:(zoomN-1)**2*2,focusX:focusX.value,focusZ:focusZ.value,focusRadius:focusRadius.value,vertexSpacing:centerSpacing,meanVertexSpacing:avgSpacing,cameraEye:[camX.value,camY.value,camZ.value]},capabilities:{initialConditions:true,prepare:true,advance:true,gpuGeology:true,arbitraryZoom3D:true,liveMesoAuthoring:true,provenanceInspector:true,gpuSurface:true,actorHistoryIngress:false,fluidCoupling:false,cpuSurfaceQueries:false},provenance:formationProvenance??{seed:config.seed,layout:config.layout},clock:{dt:.05,displayAlpha:alpha.value,authority:'submitted_gpu_steps'},surfaceSelection:'scene-object-row; exact surface picking unavailable'};
+  const avgSpacing=(2*focusRadius.value)/(zoomN-1);
+  return{route:ROUTE,backend:renderer?'webgpu':'unbound',initialized,config:{...config},generation,steps,preparationSteps,seconds,stateIndex:index,readbackInRuntime:false,error,viewMode:activeViewMode,mesoAuthoring:{...mesoState},liveUpdateMs:lastLiveUpdateMs,representation:{kind:'height-material-grid',samples:count,triangles:(n-1)**2*2,bytes:attributes.reduce((s,a)=>s+a.array.byteLength,0),fields:['substrate_height','loose_depth','vertical_velocity','actor_memory']},zoomDetail:{enabled:Boolean(zoomEnabled.value>.5&&focusRadius.value<3.30&&latticeRefines),inactiveReason:zoomEnabled.value<.5?'disabled':focusRadius.value>=3.30?'outside-detail-range':!latticeRefines?'source-already-finer-than-patch':null,resolution:zoomN,samples:zoomCount,triangles:(zoomN-1)**2*2,focusX:focusX.value,focusZ:focusZ.value,focusRadius:focusRadius.value,vertexSpacing:Math.max(stepX.value,stepZ.value),meanVertexSpacing:avgSpacing,lattice:{center:[gridX.value,gridZ.value],spacing:[stepX.value,stepZ.value],kind:'world-aligned-dyadic'},cameraEye:[camX.value,camY.value,camZ.value]},capabilities:{initialConditions:true,prepare:true,advance:true,gpuGeology:true,arbitraryZoom3D:true,liveMesoAuthoring:true,provenanceInspector:true,gpuSurface:true,actorHistoryIngress:false,fluidCoupling:false,cpuSurfaceQueries:false},provenance:formationProvenance??{seed:config.seed,layout:config.layout},clock:{dt:.05,displayAlpha:alpha.value,authority:'submitted_gpu_steps'},surfaceSelection:'scene-object-row; exact surface picking unavailable'};
  }
  const applyFragShader=material=>{
   material.vertexColors=false;
   material.roughness=.96;
   material.specularIntensity=.16;
+  const macro=tslAttribute('hillMacroNormal','vec4'),surface=tslAttribute('hillSurface','vec4');
   material.normalNode=fragSafeNormal({nv:normalView,vd:positionViewDirection});
-  material.colorNode=fragFormedColor({vColor:tslAttribute('color','vec4'),x:positionLocal.x,y:positionLocal.y,z:positionLocal.z,nx:normalLocal.x,ny:normalLocal.y,nz:normalLocal.z,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,ledge:mesoLedge,crag:mesoCrag,cobble:mesoCobble,rill:mesoRill,viewMode:viewModeUniform,useFormed});
+  material.colorNode=fragFormedColor({vColor:tslAttribute('color','vec4'),x:positionLocal.x,y:surface.x.add(surface.y),z:positionLocal.z,nx:macro.x,ny:macro.y,nz:macro.z,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,ledge:mesoLedge,crag:mesoCrag,cobble:mesoCobble,rill:mesoRill,viewMode:viewModeUniform,useFormed});
   return material;
  };
  const decorateBaseMaterial=material=>{
   applyFragShader(material);
   material.alphaTest=.5;
-  material.opacityNode=baseCutoutKernel({x:positionLocal.x,z:positionLocal.z,fx:focusX,fz:focusZ,fr:focusRadius,useFormed,zoomOn:zoomEnabled});
+  material.alphaMap=baseAlphaMap;
   return material;
  };
  return{bind,flush,advance,stepGeology,setMesoAuthoring,setViewMode,setCameraFocus,configure,regenerate,read,zoomGeometry,
@@ -735,9 +702,9 @@ export function createTerrainGPU(geometry,input={}){
    formedAttribute.array.set(result.state);formedAttribute.needsUpdate=true;useFormed.value=1;initialized=false;steps=0;preparationSteps=0;seconds=0;generation++;alpha.value=1;pendingZoom=true;if(renderer)flush(renderer);return read();
   },
   present(value){if(!Number.isFinite(value)||value<0||value>1)throw Error("Terrain interpolation must be in [0,1]");if(alpha.value!==value){alpha.value=value;pendingPresentation=true;pendingZoom=true;}},
-  surface:()=>{if(!renderer)throw Error('Hill GPU not mounted');flush(renderer);return{device:renderer.backend.device,state:renderer.backend.get(displayAttribute).buffer,currentState:renderer.backend.get(stateAttributes[index]).buffer,previousState:renderer.backend.get(stateAttributes[1-index]).buffer,alpha:alpha.value,positions:renderer.backend.get(positions).buffer,normals:renderer.backend.get(normals).buffer,zoomPositions:renderer.backend.get(zoomPositions).buffer,zoomNormals:renderer.backend.get(zoomNormals).buffer,resolution:n,width:config.width,length:config.length,generation,steps};},
+  surface:()=>{if(!renderer)throw Error('Hill GPU not mounted');flush(renderer);return{device:renderer.backend.device,state:renderer.backend.get(displayAttribute).buffer,currentState:renderer.backend.get(stateAttributes[index]).buffer,previousState:renderer.backend.get(stateAttributes[1-index]).buffer,alpha:alpha.value,positions:renderer.backend.get(positions).buffer,normals:renderer.backend.get(normals).buffer,zoomPositions:renderer.backend.get(zoomPositions).buffer,zoomNormals:renderer.backend.get(zoomNormals).buffer,colors:renderer.backend.get(colors).buffer,zoomColors:renderer.backend.get(zoomColors).buffer,resolution:n,width:config.width,length:config.length,generation,steps};},
   async snapshot({presentation=false}={}){if(!renderer||disposed)throw Error('Hill GPU not mounted');flush(renderer);const identity=read(),values=new Float32Array(await renderer.getArrayBufferAsync(stateAttributes[index]));if(values.length!==count*4||!values.every(Number.isFinite))throw Error('Invalid Hill GPU snapshot');const result={identity,values};if(presentation){result.display=new Float32Array(await renderer.getArrayBufferAsync(displayAttribute));result.positions=new Float32Array(await renderer.getArrayBufferAsync(positions));}return result;},
-  dispose(){if(disposed)return;disposed=true;for(const node of nodes)node.dispose();zoomGeometry.dispose();if(renderer){renderer.backend.device.removeEventListener('uncapturederror',gpuError);for(const a of attributes)if(![positions,normals,colors,zoomPositions,zoomNormals,zoomColors].includes(a))renderer._attributes.delete(a);}}
+  dispose(){if(disposed)return;disposed=true;baseAlphaMap.dispose();for(const node of nodes)node.dispose();zoomGeometry.dispose();if(renderer){renderer.backend.device.removeEventListener('uncapturederror',gpuError);for(const a of attributes)if(![positions,normals,colors,zoomPositions,zoomNormals,zoomColors,zoomMacroNormals,zoomSurfaceFields].includes(a))renderer._attributes.delete(a);}}
  };
 }
 const initPosition=wgslFn('fn hill_vec4(x:f32,y:f32,z:f32)->vec4<f32>{return vec4<f32>(x,y,z,1.);}');
