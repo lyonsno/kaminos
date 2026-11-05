@@ -54,3 +54,20 @@ test('initial unsupported presentation and same-step bypass transitions publish 
     assert.equal(p.debugState().integralReconstruction.frames,0);
   }finally{p.dispose();}
 });
+
+test('same-plan World restoration invalidates the actual source without a Fine or step change',()=>{
+  const p=prototype({integralReconstruction:'combined'});
+  try{
+    const frame={translate:[0,0,0],scale:1,referenceDims:[32,64,32]};
+    p.restoreWorldFrame(frame);const before=p.debugState();
+    p.restoreWorldFrame(frame);const restored=p.debugState();
+    assert.equal(restored.simStepCount,before.simStepCount);
+    assert.equal(restored.thermalFluidAllocationId,before.thermalFluidAllocationId);
+    assert.ok(restored.integralSourceGeneration>before.integralSourceGeneration);
+    assert.equal(restored.integralReconstruction.frames,0);
+    assert.equal(restored.integralReconstruction.reason,'world-frame-restored');
+    const generation=restored.integralSourceGeneration;
+    assert.throws(()=>p.restoreWorldFrame({translate:[],scale:0,referenceDims:[]}));
+    assert.equal(p.debugState().integralSourceGeneration,generation,'invalid frame rejects before changing history');
+  }finally{p.dispose();}
+});

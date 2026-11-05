@@ -11879,6 +11879,7 @@ export function createKaminosVolumePrototype({
     device.queue.writeBuffer(uniformBuffer,OPEN_WORLD_UNIFORM_OFFSET*4,uniforms.subarray(OPEN_WORLD_UNIFORM_OFFSET,OPEN_WORLD_UNIFORM_OFFSET+4));
     const key=JSON.stringify(plan);
     if(!worldSmoke||worldSmokeKey!==key){
+      invalidateIntegralReconstruction('world-field-rebuilt',{source:true});
       retireIntermediateFlow();
       worldSmoke?.destroy();worldSolidProducer?.destroy();
       worldSolidProducer=createGpuSceneSolidProducer(device,{grid:plan.flowDims[0],gridHeight:plan.flowDims[1]});
@@ -11895,6 +11896,7 @@ export function createKaminosVolumePrototype({
       const middlePlan=regions.middle;
       const middleKey=JSON.stringify([regions.middleMode,middlePlan]);
       if(intermediateKey!==middleKey){
+        invalidateIntegralReconstruction('intermediate-field-rebuilt',{source:true});
         retireIntermediateFlow();
         intermediateFlow=createWorldSmoke(device,middlePlan,worldSmoke.anchor,regions.middleMode==='fields'?{exportFields:true}:{borrowMaterial:worldSmoke.materialResources()});
         intermediateSolidProducer=createGpuSceneSolidProducer(device,{grid:middlePlan.flowDims[0],gridHeight:middlePlan.flowDims[1]});
@@ -29110,7 +29112,7 @@ export function createKaminosVolumePrototype({
     },
     adaptiveMaterialState(){return {requested:adaptiveMaterialOptions,effective:worldSmoke?.adaptiveMaterialState()??null,error:adaptiveMaterialError};},
     worldFrame(){const anchor=worldFrameRestore!==undefined?worldFrameRestore:worldSmoke?.anchor;return anchor?{translate:[...anchor.translate],scale:anchor.scale,referenceDims:[...(worldReferenceDims??[gridSize,gridHeight,gridSize])]}:null;},
-    restoreWorldFrame(value){const frame=checkedWorldFrame(value);worldFrameRestore=frame?{translate:frame.translate,scale:frame.scale}:null;worldReferenceDims=frame?.referenceDims??null;worldSmokeKey=null;return frame;},
+    restoreWorldFrame(value){const frame=checkedWorldFrame(value);invalidateIntegralReconstruction('world-frame-restored',{source:true});worldFrameRestore=frame?{translate:frame.translate,scale:frame.scale}:null;worldReferenceDims=frame?.referenceDims??null;worldSmokeKey=null;return frame;},
     async adaptiveMaterialSnapshot(){const owner=worldSmoke;if(!owner)throw Error('World field is absent');const identity={anchor:structuredClone(owner.anchor),worldSteps:state.worldSmoke?.steps};const snapshot=await owner.adaptiveMaterialSnapshot();if(owner!==worldSmoke)throw Error('World material snapshot became stale');if(!snapshot)throw Error('Adaptive material is absent');return {...snapshot,...identity};},
     setWorldSmokeOverlay(mode) {
       if(!['off','bounds','contributions'].includes(mode))throw Error('Unknown world smoke overlay');
