@@ -89,22 +89,28 @@ export default {id:'stage-casting',title:'Workshop · casting to fire',async cre
  async function detachCasting(){
   for(const row of host.scene.objects())if(row.object.userData.linkMechanism?.attachments?.some(a=>a.objectId===pieceId))await app.kaminosMechanisms.invoke(row.id,'detach',{objectId:pieceId});
  }
+ function moveToKiln(){
+  const k=kiln();if(!k)throw Error('Choose a kiln object for this workshop');k.updateWorldMatrix(true,false);
+  const start=pose(object(pieceId)),fire=host.fire.read(),source=fire.registered?fire.pose:{position:k.localToWorld(new THREE.Vector3(0,-.05,.28)).toArray()};
+  const q=k.getWorldQuaternion(new THREE.Quaternion()).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI/2,0,0))),e=new THREE.Euler().setFromQuaternion(q);
+  const target={position:source.position.map((v,i)=>v+(i===1?.75:i===2?.08:0)),rotation:[e.x,e.y,e.z],scale:start.scale};
+  transferDestination='At the kiln · ignite when you like';phase='Carrying letter '+cursor;transfer.start(start,target,{seconds:transferSeconds,lift:1});record({kind:'casting.carry',effective:{id:pieceId,from:start,to:target,transferSeconds}});refresh();
+ }
+ let resumeFire=false;
  const operations={...study.operations,read,
+  async suspend(){await operations.stopCycle();if(flame){resumeFire=!flame.read().paused;flame.setPaused(true);}return read();},
+  resume(){if(resumeFire&&flame)flame.setPaused(false);resumeFire=false;return read();},
   prepare:serial(async()=>{try{await prepare();return read();}catch(e){flame=null;throw e;}}),
   unmold:serial(async expectedFillIdentity=>{await unmold(expectedFillIdentity);return read();}),
   release:serial(async()=>{
    if(carrierEntry()?.object.userData.linkMechanism?.castingCarrier?.pickupMount)throw Error('Use Unmold and Carry with this loader');
-   const k=kiln();if(!k)throw Error('Choose a kiln object for this workshop');k.updateWorldMatrix(true,false);
-   const {id,part,start}=await unmold();
-   const fire=host.fire.read(),source=fire.registered?fire.pose:{position:k.localToWorld(new THREE.Vector3(0,-.05,.28)).toArray()};
-   const q=k.getWorldQuaternion(new THREE.Quaternion()).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI/2,0,0))),e=new THREE.Euler().setFromQuaternion(q);
-   const target={position:source.position.map((v,i)=>v+(i===1?.75:i===2?.08:0)),rotation:[e.x,e.y,e.z],scale:start.scale};
-   transferDestination='At the kiln · ignite when you like';phase='Carrying letter '+cursor;transfer.start(start,target,{seconds:transferSeconds,lift:1});record({kind:'casting.release',effective:{id,part,cursor,from:start,to:target,transferSeconds}});refresh();return read();
+   await unmold();moveToKiln();return read();
   }),
   carry:serial(async()=>{
    adopt();if(!pieceId||!object(pieceId))throw Error('Unmold a letter first');
    if(burnStart!==null)throw Error('Stop ignition before moving the loader');
    if(transfer.read()?.moving)throw Error('Stop the hover transfer first');
+   if(!carrierEntry()){moveToKiln();return read();}
    const {runtime,joint}=await carrier();
    if(!runtime.read().recipe.attachments?.some(a=>a.objectId===pieceId))runtime.operations.attach({objectId:pieceId,joint});
    startCarriage(runtime,.5,pieceId);phase='Loader carrying the casting';refresh();return read();
@@ -112,6 +118,7 @@ export default {id:'stage-casting',title:'Workshop · casting to fire',async cre
   returnLoader:serial(async()=>{
    if(burnStart!==null)throw Error('Stop ignition before returning the loader');
    if(transfer.read()?.moving)throw Error('Let the letter finish its lift before returning the loader');
+   if(!carrierEntry()){phase='Casting at kiln';refresh();return read();}
    const {runtime}=await carrier();await detachCasting();
    startCarriage(runtime,0,null);phase='Casting set down · loader returning';refresh();return read();
   }),
@@ -150,7 +157,7 @@ export default {id:'stage-casting',title:'Workshop · casting to fire',async cre
   pour:()=>operations.pour(),sampleFill,stopPour:()=>operations.stopPour(),unmold:()=>operations.unmold(fillIdentity),carry:()=>operations.carry(),ignite:()=>operations.ignite(),returnLoader:()=>operations.returnLoader(),
   async stop(){transfer.cancel();carriage.cancel();if(flame)host.fire.setEnabled(false);burnStart=null;await operations.stopPour();phase='Cycle stopped · current water and casting retained';refresh();},
  }});
- operations.runCycle=()=>{const request=++cycleRequest;return serial(async()=>{if(request!==cycleRequest)return read();active();if(cycle.read().running)return read();if(!carrierEntry())throw Error('Assign a loader before running the workshop');const signature=JSON.stringify(mold()?.userData.kaminosStageMold);if(!pieceId&&signature!==sourceRecipe){cursor=0;sourceRecipe=signature;}clearFill();const lift=transfer.read();if(pieceId&&lift&&!lift.moving&&lift.elapsed<lift.seconds){transfer.start(pose(object(pieceId)),lift.to,{seconds:lift.seconds-lift.elapsed,lift:lift.lift});}cycle.start();void cycle.tick().then(refresh);refresh();return read();})()};
+ operations.runCycle=()=>{const request=++cycleRequest;return serial(async()=>{if(request!==cycleRequest)return read();active();if(cycle.read().running)return read();if(!kiln())throw Error('Choose a kiln before running the workshop');const signature=JSON.stringify(mold()?.userData.kaminosStageMold);if(!pieceId&&signature!==sourceRecipe){cursor=0;sourceRecipe=signature;}clearFill();const lift=transfer.read();if(pieceId&&lift&&!lift.moving&&lift.elapsed<lift.seconds){transfer.start(pose(object(pieceId)),lift.to,{seconds:lift.seconds-lift.elapsed,lift:lift.lift});}cycle.start();void cycle.tick().then(refresh);refresh();return read();})()};
  operations.stopCycle=async()=>{cycleRequest++;await cycle.stop();refresh();return read();};
  operations.setFillTarget=value=>{value=Number(value)/100;if(!Number.isFinite(value)||value<=0||value>1)throw Error('Fill target must be above 0 and at most 100 percent');fillTarget=value;refresh();return read();};
  const stop=session.onFrame(({deltaSeconds})=>{try{
@@ -176,14 +183,14 @@ export default {id:'stage-casting',title:'Workshop · casting to fire',async cre
    const head=doc.createElement('header');head.className='operating-title';head.textContent='Loader';card.append(head);
    for(const [label,op,tip]of [['Carry to kiln','carry','Fasten the current letter at its current position, then move the loader from here to Pose B.'],['Set down & return','returnLoader','Detach the letter in place and return the loader to Pose A.'],['Stop','stopTransfer','Hold the loader and attached casting where they are.']]){const b=doc.createElement('button');b.className='btn';b.textContent=label;b.title=tip;b.onclick=()=>call(op);card.append(b);}
    loaderMount=host.controls.mountOperating({asset:{id:loader.id,root:loader.object},node:card,side:'left',anchor:[0,1,0]});
-  }else{const hover=doc.createElement('button');hover.className='btn';hover.textContent='Lift & hover to kiln';hover.onclick=()=>call('release');panel.append(hover);}
+  }else{const hover=doc.createElement('button');hover.className='btn';hover.textContent='Carry to kiln';hover.title='Move the unmolded casting on the provisional hover path.';hover.onclick=()=>call('carry');moldCard.append(hover);}
   const remove=doc.createElement('button');remove.className='btn';remove.textContent='Remove casting';remove.title='Remove the current casting through scene history; Undo restores it. Clear it before the next delivery.';remove.onclick=()=>call('removeCasting');panel.append(remove);
   const drags=[],fields={};
   for(const [name,text,value]of [['setTransferSeconds','Carry · seconds',transferSeconds],['setIgnitionSeconds','Ignition · sim seconds',ignitionSeconds]]){const l=doc.createElement('label');l.textContent=text;const input=doc.createElement('input');input.type='number';input.min='.01';input.step='.1';input.value=value;fields[name]=input;input.className='transform-input';input.setAttribute('aria-label',text);input.onchange=()=>invoke(name,input.value).catch(e=>{phase=e.message;refresh();});l.append(input);panel.append(l);drags.push(host.controls.installNumberDrag({input,step:.1}));}
   status=doc.createElement('p');status.className='operating-status';status.setAttribute('role','status');panel.append(status);
   const mount=host.controls.mountOperating({asset:{id:row.id,root:k},node:panel,side:'right',anchor:[.35,.3,.2]});
   updateButtons=()=>{run.textContent=cycle.read().running?'Stop cycle':'Run next letter';run.setAttribute('aria-pressed',String(cycle.read().running));for(const [name,value]of [['setTransferSeconds',transferSeconds],['setIgnitionSeconds',ignitionSeconds]])if(doc.activeElement!==fields[name])fields[name].value=value;ignite.textContent=burnStart!==null?'Stop ignition':'Ignite';release.disabled=!!(pieceId&&object(pieceId));};
-  const note=doc.createElement('p');note.textContent='Unmold a letter, carry it with the loader, then ignite it at the kiln. The loader follows authored joint poses; burning uses the actual thermal material. Liquid solidification is not simulated.';root.prepend(note);
+  const note=doc.createElement('p');note.textContent=loader?'Run pours to measured fill, lifts, carries, ignites and returns the loader.':'Run pours to measured fill, unmolds, hovers the casting to the kiln and ignites it. Transfer is provisional; liquid solidification is not simulated.';root.prepend(note);
   cleanup=()=>{drags.forEach(d=>d.dispose());release.remove();run.remove();fillLabel.remove();loaderMount?.dispose();mount.dispose();};refresh();
  },async dispose(){if(closed)return;closed=true;if(cycle.read().running)await cycle.stop().catch(()=>{});await cycle.settled();await pending;clearFill();stop();cleanup();transfer.cancel();carriage.cancel();if(burnStart!==null&&flame)host.fire.setEnabled(false);burnStart=null;if(createdFire&&flame)flame.setPaused(true);await study.dispose();await session.dispose();}};
 }};

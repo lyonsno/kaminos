@@ -14,3 +14,8 @@ await assert.rejects(async()=>c.start(),/Remove/);
 s.pieceId=null;filled=false;c.start();await c.tick();actions.sampleFill=()=>new Promise(r=>release=r);const waiting=c.tick();await c.stop();release(true);await waiting;assert.equal(events.at(-1),'stop');assert.equal(c.read().running,false,'Late measurement cannot restart a stopped cycle');
 actions.pour=async()=>{throw Error('Missing water');};c.start();await c.tick();assert.equal(c.read().running,false);assert.match(c.read().error,/Missing water/);assert.equal(events.at(-1),'stop');
 console.log('Cycle follows physical fill and operation completion; stop and failure cannot advance it');
+
+// A hover path has no carriage; ignition must still wait for physical arrival.
+let hover={pieceId:'A',transfer:{moving:false},igniting:false},ignitions=0;
+const h=m.createCastingCycle({read:()=>hover,actions:{carry:async()=>hover.transfer.moving=true,ignite:async()=>{ignitions++;hover.igniting=true;},returnLoader:async()=>{},stop:async()=>{}}});
+h.start();await h.tick();await h.tick();assert.equal(ignitions,0);hover.transfer.moving=false;await h.tick();assert.equal(ignitions,1);await h.stop();

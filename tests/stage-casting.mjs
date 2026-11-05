@@ -180,3 +180,11 @@ test('Stop cancels a queued Run before it starts pouring',async()=>{
  const run=f.study.operations.runCycle();await f.study.operations.stopCycle();await run;await new Promise(r=>setImmediate(r));
  assert.equal(f.study.read().cycle.running,false);assert.equal(pours,0);await f.study.dispose();
 });
+
+test('simplified workshop carries the existing casting without requiring articulated machinery',async()=>{
+ const f=await workshopFixture();await f.study.operations.unmold();const id=f.study.read().pieceId;
+ await f.study.operations.carry();assert.equal(f.study.read().transfer.moving,true);f.frame(4);
+ assert.equal(f.study.read().pieceId,id);assert.equal(f.objects.filter(o=>o.object.userData.kaminosStageCasting).length,1);
+ assert.equal(f.objects.find(o=>o.id===id).object.position.x,4);
+ await f.study.operations.returnLoader();assert.equal(f.study.read().pieceId,id);await f.study.dispose();
+});

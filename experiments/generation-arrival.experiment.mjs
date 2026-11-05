@@ -1,16 +1,17 @@
 import * as THREE from '../lib/three.webgpu.js';
 import pourStudy from './stage-pour.experiment.mjs';
 import {createGenerationArrival,arrivalTranslation} from '../generation-arrival.mjs';
-export default {id:'generation-arrival',title:'Generate · arrival study',async create({host,inputs,record}){
+export default {id:'generation-arrival',title:'Generate · arrival study',async create({host,inputs,record},createStudy=pourStudy.create){
  const document=host.controls.document,app=document.defaultView;
  if(!Array.isArray(inputs.stageIds)||!inputs.stageIds.length)throw Error('Choose the saved kiln, mold and spigot object IDs as stageIds.');
  const ids=new Set(inputs.stageIds),rows=host.scene.objects().filter(row=>ids.has(row.id));
  if(rows.length!==ids.size)throw Error('Some arrival objects are absent from the current scene.');
- const session=await host.scene.open(),study=await pourStudy.create({host,inputs,record});
+ const session=await host.scene.open(),study=await createStudy({host,inputs,record});
  let stopFrame,disposed=false,anchored=false,lastPlacement=null,offset=[0,0,0],slider,status,pausedByExit=false;
+ const liveIds=()=>[...ids,...[study.read().pieceId].filter(Boolean)];
  const present=amount=>{
-  if((amount===0||amount===null)&&anchored){host.scene.translateArrivalStage([...ids],offset.map(v=>-v));offset=[0,0,0];anchored=false;}
-  host.scene.arrivalPresentation.set(amount===null?null:[...host.scene.objects().map(row=>[row.id,ids.has(row.id)?amount:1-amount]),['water-field',amount]]);
+  if((amount===0||amount===null)&&anchored){host.scene.translateArrivalStage(liveIds(),offset.map(v=>-v));offset=[0,0,0];anchored=false;}
+  host.scene.arrivalPresentation.set(amount===null?null:[...host.scene.objects().map(row=>[row.id,(ids.has(row.id)||row.id===study.read().pieceId||row.id==='flame-field')?amount:1-amount]),['water-field',amount]]);
   if(slider)slider.value=String(amount??0);
   if(status)status.textContent=amount===null?'Closed':`${Math.round(amount*100)}% arrival · schematic visibility blend`;
   session.redraw();
@@ -19,17 +20,17 @@ export default {id:'generation-arrival',title:'Generate · arrival study',async 
   const box=new THREE.Box3();for(const row of rows){row.object.updateWorldMatrix(true,true);box.expandByObject(row.object);}
   const sphere=box.getBoundingSphere(new THREE.Sphere()),view=session.readView(),canvas=host.scene.renderer().domElement;
   const placement=arrivalTranslation({view:{...view,aspect:canvas.clientWidth/canvas.clientHeight},center:sphere.center.toArray(),radius:sphere.radius});
-  host.scene.translateArrivalStage([...ids],placement.translation);offset=[...placement.translation];
+  host.scene.translateArrivalStage(liveIds(),placement.translation);offset=[...placement.translation];
   anchored=true;lastPlacement={...placement,view};record({kind:'generation-arrival.place',phase:'applied',effective:lastPlacement});
  };
  const arrival=createGenerationArrival({duration:inputs.duration??2.5,present,place});
- const enter=()=>{arrival.enter();if(pausedByExit){app.kaminosPauseLocalLiquid(false);pausedByExit=false;}session.redraw();return read();};
- const exit=()=>{const runtime=app.kaminosWaterSources.read().runtime;if(runtime&&!runtime.paused){app.kaminosPauseLocalLiquid(true);pausedByExit=true;}arrival.exit();session.redraw();return read();};
+ const enter=()=>{study.operations.resume?.();arrival.enter();if(pausedByExit){app.kaminosPauseLocalLiquid(false);pausedByExit=false;}session.redraw();return read();};
+ const exit=async()=>{await study.operations.suspend?.();const runtime=app.kaminosWaterSources.read().runtime;if(runtime&&!runtime.paused){app.kaminosPauseLocalLiquid(true);pausedByExit=true;}arrival.exit();session.redraw();return read();};
  const read=()=>({arrival:arrival.read(),stageIds:[...ids],placement:lastPlacement,anchored,view:session.readView(),study:study.read(),atmosphere:'not connected',inference:'existing Generate controls; entry does not start a run'});
  const click=event=>{if(!event.target.closest('[data-workbench-tab="generate"]'))return;event.preventDefault();event.stopImmediatePropagation();try{enter();}catch(error){if(status)status.textContent=error.message;}};
  document.addEventListener('click',click,true);
- stopFrame=session.onFrame(({deltaSeconds})=>arrival.advance(deltaSeconds));
- return {read,operations:{...study.operations,enter,exit,hold:()=>{arrival.hold();return read();},seek:value=>{arrival.seek(Number(value));return read();},generationControls:()=>app.kaminosAssets.open('generate')},
+ stopFrame=session.onFrame(({deltaSeconds})=>{arrival.advance(deltaSeconds);present(arrival.read().amount);});
+ return {read,operations:{...study.operations,enter,exit,hold:()=>{arrival.hold();return read();},seek:async value=>{value=Number(value);if(value===0)await exit();arrival.seek(value);return read();},generationControls:()=>app.kaminosAssets.open('generate')},
   mount({root,invoke}){
    const section=document.createElement('section');root.append(section);study.mount({root:section,invoke});
    const title=document.createElement('h3');title.textContent='Generate arrival';

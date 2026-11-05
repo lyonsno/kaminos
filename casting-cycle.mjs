@@ -15,7 +15,7 @@ export function createCastingCycle({read,actions}){
     const filled=await actions.sampleFill();if(!current())return;
     if(filled&&await act('stopPour')&&await act('unmold'))phase='lifting';
    }else if(phase==='lifting'&&!s.transfer?.moving){if(await act('carry'))phase='carrying';}
-   else if(phase==='carrying'&&!s.carriage?.moving){if(await act('ignite'))phase='igniting';}
+   else if(phase==='carrying'&&!s.carriage?.moving&&!s.transfer?.moving){if(await act('ignite'))phase='igniting';}
    else if(phase==='igniting'&&!s.igniting){if(await act('returnLoader'))phase='returning';}
    else if(phase==='returning'&&!s.carriage?.moving){phase='complete';running=false;}
   }catch(e){if(current()){error=e.message;running=false;phase='failed';generation++;try{await actions.stop();}catch(stopError){error+='; '+stopError.message;}}}
