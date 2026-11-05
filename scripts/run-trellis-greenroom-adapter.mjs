@@ -7,7 +7,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {parseArgs} from 'node:util';
 import {fileURLToPath} from 'node:url';
-import {validateLocalGenerationConfig} from '../models/trellis2/generate-image.mjs';
+import {validateLocalGenerationConfig,assertIsolatedAssetGenerationAllowed} from '../models/trellis2/generate-image.mjs';
 import {persistGenerationAsset} from '../models/trellis2/sparse-generation-witness-checks.js';
 const hash=b=>createHash('sha256').update(b).digest('hex');
 const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -24,6 +24,8 @@ export async function runTrellisAdapter(values){
     kind:'adapter-progress',phase,message,status,runId,jobId:state.job?.job_id}));
   await persist();
   try{
+    state.phase='route-policy';state.backend={modelFamily:'TRELLIS 2',requestedRuntime:'browser-webgpu',runtime:null};
+    assertIsolatedAssetGenerationAllowed();
     if(!configPath)throw Error('TRELLIS setup required: set KAMINOS_TRELLIS_CONFIG to the local model configuration');
     // Express asks Greenroom for its quick lane; every submission declares its class so a
     // quick-eligible route never jumps the line unless asked.
