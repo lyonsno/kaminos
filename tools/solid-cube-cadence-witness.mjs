@@ -67,9 +67,10 @@ try{
  }
  let effectivePreset=path.basename(presetFile,'.json');
  if(mode==='page-inspect'){
-  const bundle=JSON.parse(await fs.readFile(presetFile,'utf8')),preset=structuredClone(bundle.preset);
+  const bundle=JSON.parse(await fs.readFile(presetFile,'utf8')),preset=structuredClone(bundle.preset),presetRoute=new URL(preset.route);
   const small={'volume-look-freeze':1,'volume-resolution':16,'volume-grid-height-ratio':2,'volume-fine-velocity':16,'volume-fine-pressure':8,'volume-pressure-solver-iterations':4,'volume-world-smoke':'off','volume-steps':8,'volume-render-scale':.5};
-  for(const controls of [preset.domControls,preset.rendererControls])for(const [key,value] of Object.entries(small))if(controls?.[key])controls[key].value=value;
+  for(const controls of [preset.domControls,preset.rendererControls])for(const [key,value] of Object.entries(small))if(controls?.[key]){controls[key].value=typeof controls[key].value==='string'?String(value):value;presetRoute.searchParams.set(controls[key].param,String(value));}
+  preset.route=presetRoute.href;
   const result=await fetch(origin+'/api/volume-settings-presets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label:'Solid cube control inspection Fine16',preset,publishAlias:false})});
   assert.ok(result.ok,await result.clone().text());report.inspectionPreset=await result.json();effectivePreset=report.inspectionPreset.presetId;assert.ok(effectivePreset);
  }
