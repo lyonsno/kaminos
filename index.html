@@ -4319,6 +4319,25 @@ const waterFeature = createAuthoredWaterFeature({
   report:setInfo,
 });
 const simFrameCoordinator = createSimFrameCoordinator();
+let lastPlannedSceneFrame = -1;
+function ensureSimFramePlan(frameNowMs = performance.now()) {
+  const existing = simFrameCoordinator.read().lastPlan;
+  if (existing && (lastPlannedSceneFrame === sceneFrameCount || Math.abs(frameNowMs - existing.nowMs) < 1)) return existing;
+  lastPlannedSceneFrame = sceneFrameCount;
+  const waterState = waterFeature.host?.state?.();
+  let ashActive = false, ashDue = false;
+  for (const entry of workingScene.objects) {
+    const ash = authoredAsh.get(entry.id); if (!ash) continue;
+    const active = isSceneItemVisible(entry.id) && entry.object.parent !== null && sceneViewerPaused !== true;
+    if (active) { ashActive = true; if (ash.due?.(frameNowMs, { active }) ?? true) ashDue = true; }
+  }
+  return simFrameCoordinator.planFrame({
+    nowMs: frameNowMs,
+    flame: { active: Boolean(volumePrototype?.isActive?.() && isSceneItemVisible('flame-field') && sceneViewerPaused !== true) },
+    water: { active: Boolean(waterFeature.active && isSceneItemVisible('water-field')), pending: Boolean(waterState?.solver?.pending), backlogSeconds: waterState?.clock?.backlogSeconds },
+    ash: { active: ashActive, due: ashDue },
+  });
+}
 window.kaminosSimFrameCoordinator = () => simFrameCoordinator.read();
 
 let sceneRepetitionController=null,sceneRepetitionInspector=null;
@@ -12123,7 +12142,7 @@ async function initScene() {
           applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedCameraOutput,matchedCameraEffective);
           renderPipeline.render();
         } else try {
-          const waterPlan=typeof simFrameCoordinator!=='undefined'?simFrameCoordinator?.read()?.lastPlan?.water:null;
+          const waterPlan=typeof ensureSimFramePlan==='function'?ensureSimFramePlan(t0)?.water:(typeof simFrameCoordinator!=='undefined'?simFrameCoordinator?.read()?.lastPlan?.water:null);
           waterFeature.render({advance:!outputCaptureExtent&&waterPlan?.advance!==false,maxSteps:waterPlan?.maxSteps,volumeTransport:ordinarySceneTransportFrame}); authoredWaterControls?.refreshStatus();
           const state=waterFeature.host.state(),clock=state.clock??{paused:waterFeature.host.paused,step:state.solver?.stepCount??0,timeSeconds:state.solver?.simulatedTimeSeconds??0};
           sharedWorkbench?.update({source:state.mode==='finite_drop'?'Authored finite water':'Continuous water',status:clock.paused?'Paused':'Playing',clock:`tick ${clock.step} · ${clock.timeSeconds.toFixed(4)} s`}); }
@@ -12184,21 +12203,7 @@ async function initScene() {
     viewProjection?.update();
     syncAuthoredWaterFlameTransport();
     const frameNowMs=performance.now();
-    if(typeof simFrameCoordinator!=='undefined'){
-      const waterState=waterFeature.host?.state?.();
-      let ashActive=false,ashDue=false;
-      for(const entry of workingScene.objects){
-        const ash=authoredAsh.get(entry.id);if(!ash)continue;
-        const active=isSceneItemVisible(entry.id)&&entry.object.parent!==null&&sceneViewerPaused!==true;
-        if(active){ashActive=true;if(ash.due?.(frameNowMs,{active})??true)ashDue=true;}
-      }
-      simFrameCoordinator.planFrame({
-        nowMs:frameNowMs,
-        flame:{active:Boolean(volumePrototype?.isActive?.()&&isSceneItemVisible('flame-field')&&sceneViewerPaused!==true)},
-        water:{active:Boolean(waterFeature.active&&isSceneItemVisible('water-field')),pending:Boolean(waterState?.solver?.pending),backlogSeconds:waterState?.clock?.backlogSeconds},
-        ash:{active:ashActive,due:ashDue},
-      });
-    }
+    if(typeof ensureSimFramePlan==='function')ensureSimFramePlan(frameNowMs);
     workbenchSceneFrames.tick(frameNowMs);
     const liquidFireCompositionActive = fingerFluidPyroCompositionRequested();
     const volumeSmokeRouteActive = isKaminosVolumeSmokeRoute() || liquidFireCompositionActive;
