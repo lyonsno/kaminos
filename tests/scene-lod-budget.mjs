@@ -434,7 +434,9 @@ test('interactive queries use the displayed mesh for picking and a resident coar
   delete root.userData.kaminosVertexWarpRevision;
   controller.setSettings({enabled: false});
   assert.deepEqual(controller.interactiveRoots([root]), [root]);
+  controller.setSettings({enabled: true});
   controller.dispose();
+  assert.equal(controller.interactiveRoots([root])[0] === root, true, 'disposed controllers release the interactive route');
 });
 
 test('attachStoredSurfelLevels upgrades x4 to hero normals and adds x8 and x16 levels to SurfelChunk', () => {
