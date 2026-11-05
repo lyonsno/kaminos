@@ -1,4 +1,5 @@
 import {sceneSolidRevision} from './volume-scene-solid.mjs';
+import {createBurnRegionSolidRaster} from './burn-region-solid-gpu.mjs';
 
 // Local triangles are uploaded only when their geometry changes. World matrices
 // deliberately do not participate in this cache: a drag updates 80 bytes/mesh.
@@ -201,7 +202,7 @@ export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
   }
   function dispatch(encoder,name,group,n){const pass=encoder.beginComputePass({label:'scene solid '+name});pass.setPipeline(pipelines[name]);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.ceil(n/64));pass.end();}
   function destroyGroup(g){g.uniform.destroy();g.materialUniform.destroy();}
-  function destroyMember(m){m.shell.destroy();m.parent.destroy();m.mask.destroy();destroyGroup(m.base);for(const d of m.draws)destroyGroup(d);}
+  function destroyMember(m){m.regional?.dispose();m.shell.destroy();m.parent.destroy();m.mask.destroy();destroyGroup(m.base);for(const d of m.draws)destroyGroup(d);}
   return {
     backend:'gpu',texture,view,
     setSourceSupport(values){if(!(values instanceof Uint32Array)||values.length!==cells)throw Error('Invalid GPU source support');device.queue.writeBuffer(support,0,values);pending=true;},
@@ -223,14 +224,18 @@ export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
         if(texChanged){
           destroyGroup(m.base);m.base=makeGroup(m,dummy,0,null,filter,boundaryCap);m.materialTexture=filter?.texture??null;m.boundaryCapTexture=boundaryCap?.texture??null;pending=true;
         }
-        if(texChanged||matChanged||capChanged){
+        const regionChanged=!!filter?.regions!==!!m.regional;
+        if(texChanged||matChanged||capChanged||regionChanged){
           const data=new ArrayBuffer(128),f=new Float32Array(data),u=new Uint32Array(data);
-          if(filter){f.set(filter.matrix,0);u[28]=1;}
+          if(filter){f.set(filter.matrix,0);u[28]=filter.regions?0:1;}
           if(boundaryCap){f.set([...boundaryCap.origin,boundaryCap.step,...boundaryCap.boundsMin,0,...boundaryCap.boundsMax,0],16);u[29]=1;}
           device.queue.writeBuffer(m.base.materialUniform,0,data);
         }
         if(matChanged){m.materialRevision=materialRevision;m.materialMatrixKey=materialMatrixKey;pending=true;}
         if(capChanged){m.boundaryCapKey=boundaryCapKey;m.dirty=true;pending=true;}
+        if(filter?.regions){
+          m.regional??=createBurnRegionSolidRaster(device,{grid,gridHeight,mask:m.mask});m.regional.update(filter,transform);pending=true;
+        }else if(m.regional){m.regional.dispose();m.regional=null;m.dirty=true;pending=true;}
         m.base.floats.set([...transform.translate,transform.scale],16);device.queue.writeBuffer(m.base.uniform,0,m.base.values);
         if(m.revision===member.revision){if(capChanged)builds++;continue;}
         for(const d of m.draws)destroyGroup(d);m.draws=[];
@@ -250,7 +255,8 @@ export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
       // Sparse authored walls are cheap host inputs, not mesh voxelization.
       for(const cell of current.wallCells){const i=cell.x+grid*(cell.y+gridHeight*cell.z);encoder.copyBufferToBuffer(wallOne(),0,combined,i*4,4);}
       for(const m of objects.values()){
-        if(m.dirty){encoder.clearBuffer(m.shell);for(const d of m.draws)dispatch(encoder,'raster',d.group,d.triangleCount);
+        if(m.regional){m.regional.encode(encoder);m.dirty=false;}
+        else if(m.dirty){encoder.clearBuffer(m.shell);for(const d of m.draws)dispatch(encoder,'raster',d.group,d.triangleCount);
           for(const phase of ['init','connect','fill'])dispatch(encoder,phase,m.base.group,cells);m.dirty=false;}
         dispatch(encoder,'merge',m.base.group,cells);
       }

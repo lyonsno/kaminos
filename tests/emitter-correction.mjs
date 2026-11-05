@@ -81,9 +81,11 @@ test('saved field visibility governs restore even when the hidden set did not ch
  const start=html.indexOf("  const firePresent=",html.indexOf('async function applySceneDocument(')),end=html.indexOf('  // Apply camera',start);assert.ok(start>0&&end>start);
  for(const initiallyActive of [true,false])for(const visible of [true,false]){
   let active=initiallyActive;const runtime={isActive:()=>active,setActive:async value=>{active=value;}};
-  const context={hasVolumePrimitiveScene:false,activeSceneComposition:{},URLSearchParams,location:{search:''},volumePrototype:runtime,isSceneItemVisible:()=>visible,setActiveTab(){},loadRequestId:1,sceneLoadRequests:{isCurrent:()=>true}};
+  let readouts=0;
+  const context={hasVolumePrimitiveScene:false,activeSceneComposition:{},URLSearchParams,location:{search:''},volumePrototype:runtime,isSceneItemVisible:()=>visible,setActiveTab(){},refreshVolumeReadout(){readouts++;},loadRequestId:1,sceneLoadRequests:{isCurrent:()=>true}};
   context.syncAuthoredFireActivity=createSceneSimulationActivity({prototype:()=>runtime,wanted:()=>visible});
   sceneContext(context);await vm.runInContext('(async()=>{'+html.slice(start,end)+'})()',context);assert.equal(active,visible,'restore must finish with the saved visibility, independently of prior runtime activity');
+  assert.equal(readouts,1,'restore refreshes playback controls after field activation settles');
  }
 });
 

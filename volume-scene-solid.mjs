@@ -181,39 +181,39 @@ export function trianglesFromSceneObject(object, productTransform = { translate:
   return { triangles, revision: sceneSolidRevision(object, productTransform) };
 }
 
-function dot(a, b) {
-  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-}
-
-function cross(a, b) {
-  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-}
-
-function triangleTouchesCell(a, b, c, x, y, z) {
-  const center = [x + .5, y + .5, z + .5];
-  const p = [a, b, c].map(v => [v[0] - center[0], v[1] - center[1], v[2] - center[2]]);
-  const edges = [
-    [p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]],
-    [p[2][0] - p[1][0], p[2][1] - p[1][1], p[2][2] - p[1][2]],
-    [p[0][0] - p[2][0], p[0][1] - p[2][1], p[0][2] - p[2][2]],
-  ];
-  const axes = [[1, 0, 0], [0, 1, 0], [0, 0, 1], cross(edges[0], edges[1])];
-  for (const edge of edges) {
-    axes.push([0, -edge[2], edge[1]], [edge[2], 0, -edge[0]], [-edge[1], edge[0], 0]);
-  }
-  for (const axis of axes) {
-    const radius = .5 * (Math.abs(axis[0]) + Math.abs(axis[1]) + Math.abs(axis[2]));
-    const projections = p.map(point => dot(axis, point));
-    if (Math.min(...projections) > radius + 1e-7 || Math.max(...projections) < -radius - 1e-7) return false;
-  }
+function checkEdgeAxes(ex, ey, ez, px0, py0, pz0, px1, py1, pz1, px2, py2, pz2) {
+  let r, d0, d1, d2;
+  r = .5 * (Math.abs(ez) + Math.abs(ey)) + 1e-7;
+  d0 = -ez * py0 + ey * pz0; d1 = -ez * py1 + ey * pz1; d2 = -ez * py2 + ey * pz2;
+  if (Math.min(d0, d1, d2) > r || Math.max(d0, d1, d2) < -r) return false;
+  r = .5 * (Math.abs(ez) + Math.abs(ex)) + 1e-7;
+  d0 = ez * px0 - ex * pz0; d1 = ez * px1 - ex * pz1; d2 = ez * px2 - ex * pz2;
+  if (Math.min(d0, d1, d2) > r || Math.max(d0, d1, d2) < -r) return false;
+  r = .5 * (Math.abs(ey) + Math.abs(ex)) + 1e-7;
+  d0 = -ey * px0 + ex * py0; d1 = -ey * px1 + ex * py1; d2 = -ey * px2 + ex * py2;
+  if (Math.min(d0, d1, d2) > r || Math.max(d0, d1, d2) < -r) return false;
   return true;
 }
 
-function gridPoint(point, grid) {
-  if (!Array.isArray(point) || point.length !== 3 || !point.every(Number.isFinite)) {
+function triangleTouchesCell(ax, ay, az, bx, by, bz, cx, cy, cz, e0x, e0y, e0z, e1x, e1y, e1z, e2x, e2y, e2z, nx, ny, nz, nr, x, y, z) {
+  const px0 = ax - (x + .5), py0 = ay - (y + .5), pz0 = az - (z + .5);
+  const px1 = bx - (x + .5), py1 = by - (y + .5), pz1 = bz - (z + .5);
+  const px2 = cx - (x + .5), py2 = cy - (y + .5), pz2 = cz - (z + .5);
+  const lim = .5 + 1e-7;
+  if (Math.min(px0, px1, px2) > lim || Math.max(px0, px1, px2) < -lim) return false;
+  if (Math.min(py0, py1, py2) > lim || Math.max(py0, py1, py2) < -lim) return false;
+  if (Math.min(pz0, pz1, pz2) > lim || Math.max(pz0, pz1, pz2) < -lim) return false;
+  const dn = nx * px0 + ny * py0 + nz * pz0;
+  if (dn > nr + 1e-7 || dn < -nr - 1e-7) return false;
+  return checkEdgeAxes(e0x, e0y, e0z, px0, py0, pz0, px1, py1, pz1, px2, py2, pz2)
+    && checkEdgeAxes(e1x, e1y, e1z, px0, py0, pz0, px1, py1, pz1, px2, py2, pz2)
+    && checkEdgeAxes(e2x, e2y, e2z, px0, py0, pz0, px1, py1, pz1, px2, py2, pz2);
+}
+
+function checkPoint(point) {
+  if (!Array.isArray(point) || point.length !== 3 || !Number.isFinite(point[0] + point[1] + point[2])) {
     throw new Error('scene solid triangle has a nonfinite vertex');
   }
-  return [(point[0] + 1) * grid / 2, (point[1] + 1) * grid / 2, (point[2] + 1) * grid / 2];
 }
 
 /** Conservative triangle-shell rasterization, followed by an exterior flood fill.
@@ -224,19 +224,34 @@ export function voxelizeTriangleSolid(triangles, grid, height = 2 * grid) {
   if (!Number.isInteger(grid) || grid < 2) throw new Error('scene solid grid must be an integer >= 2');
   if (!Array.isArray(triangles) || triangles.length === 0) throw new Error('scene solid requires triangles');
   if (!Number.isInteger(height) || height < 2) throw new Error('scene solid height must be an integer >= 2');
-  const cells = new Uint8Array(grid * height * grid);
+  const cells = new Uint8Array(grid * height * grid), half = grid / 2;
   let surfaceCellCount = 0;
-  for (const triangle of triangles) {
+  for (let i = 0; i < triangles.length; i++) {
+    const triangle = triangles[i];
     if (!Array.isArray(triangle) || triangle.length !== 3) throw new Error('scene solid requires triangular faces');
-    const [a, b, c] = triangle.map(point => gridPoint(point, grid));
-    const lo = [0, 1, 2].map(i => Math.max(0, Math.floor(Math.min(a[i], b[i], c[i]) - 1e-7)));
-    const hi = [0, 1, 2].map(i => Math.min(i === 1 ? height - 1 : grid - 1, Math.floor(Math.max(a[i], b[i], c[i]) + 1e-7)));
-    for (let z = lo[2]; z <= hi[2]; z++) {
-      for (let y = lo[1]; y <= hi[1]; y++) {
-        for (let x = lo[0]; x <= hi[0]; x++) {
-          if (!triangleTouchesCell(a, b, c, x, y, z)) continue;
-          const index = solidFieldIndex(grid, x, y, z, height);
+    const a = triangle[0], b = triangle[1], c = triangle[2];
+    checkPoint(a); checkPoint(b); checkPoint(c);
+    const ax = (a[0] + 1) * half, ay = (a[1] + 1) * half, az = (a[2] + 1) * half;
+    const bx = (b[0] + 1) * half, by = (b[1] + 1) * half, bz = (b[2] + 1) * half;
+    const cx = (c[0] + 1) * half, cy = (c[1] + 1) * half, cz = (c[2] + 1) * half;
+    const lx = Math.max(0, Math.floor(Math.min(ax, bx, cx) - 1e-7));
+    const ly = Math.max(0, Math.floor(Math.min(ay, by, cy) - 1e-7));
+    const lz = Math.max(0, Math.floor(Math.min(az, bz, cz) - 1e-7));
+    const hx = Math.min(grid - 1, Math.floor(Math.max(ax, bx, cx) + 1e-7));
+    const hy = Math.min(height - 1, Math.floor(Math.max(ay, by, cy) + 1e-7));
+    const hz = Math.min(grid - 1, Math.floor(Math.max(az, bz, cz) + 1e-7));
+    if (lx > hx || ly > hy || lz > hz) continue;
+    const e0x = bx - ax, e0y = by - ay, e0z = bz - az;
+    const e1x = cx - bx, e1y = cy - by, e1z = cz - bz;
+    const e2x = ax - cx, e2y = ay - cy, e2z = az - cz;
+    const nx = e0y * e1z - e0z * e1y, ny = e0z * e1x - e0x * e1z, nz = e0x * e1y - e0y * e1x;
+    const nr = .5 * (Math.abs(nx) + Math.abs(ny) + Math.abs(nz));
+    for (let z = lz; z <= hz; z++) {
+      for (let y = ly; y <= hy; y++) {
+        for (let x = lx; x <= hx; x++) {
+          const index = x + grid * (y + height * z);
           if (cells[index]) continue;
+          if (!triangleTouchesCell(ax, ay, az, bx, by, bz, cx, cy, cz, e0x, e0y, e0z, e1x, e1y, e1z, e2x, e2y, e2z, nx, ny, nz, nr, x, y, z)) continue;
           cells[index] = 1;
           surfaceCellCount++;
         }

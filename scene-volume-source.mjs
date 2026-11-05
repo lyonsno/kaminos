@@ -23,9 +23,9 @@ export function validateScenePointSource(source) {
   return {position:source.position.slice(), intensity:source.intensity.slice(), stepLength:source.stepLength};
 }
 
-export function prepareSceneSourceFrame({encoder, encode, submit, consume, renderHost, createEncoder}) {
+export function prepareSceneSourceFrame({encoder, finish=value=>value.finish(), encode, submit, consume, renderHost, createEncoder}) {
   const field = encode(encoder);
-  submit([encoder.finish()]);
+  submit([finish(encoder)]);
   consume(field);
   if (!renderHost()) throw new Error('shared-scene-source-host-depth-unavailable');
   return createEncoder();

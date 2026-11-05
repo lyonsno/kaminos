@@ -6,7 +6,15 @@ const startupSceneRedirect=Symbol('saved-scene-recovery-redirect');
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');const start=html.indexOf('    if (plan.composition) {',html.indexOf('const startupSceneRedirect ='));const end=html.indexOf('    return {data, plan};',start);assert.ok(start>=0&&end>start);const code=html.slice(start,end);
 const comp={schema:'kaminos.stationary-flame-composition.v1',flame:{presetId:'vsp-'+ 'a'.repeat(64),label:'Saved tuning',stationary:true},route:{volume_light_field:'1',volume_light_field_scene_depth:'1'},lightGainStops:0};
 test('saved composition redirects a stale mounted basin to the saved recipe',()=>{let redirected=null;const c=vm.createContext({plan:{composition:comp},sceneFile:'tuned.kaminos.json',compositionRestoreUrl,readOwnerExperimentAddress,startupSceneRedirect,hash:new URLSearchParams(),URLSearchParams,setInfo(){},location:{origin:'http://localhost:50825',search:'?settings_preset=vsp-'+ 'b'.repeat(64),replace:url=>redirected=url}});assert.doesNotThrow(()=>vm.runInContext('(function(){'+code+'})()',c),'a stale address must not refuse an intact saved scene');assert.equal(redirected,compositionRestoreUrl(comp,'tuned.kaminos.json','http://localhost:50825'));});
-test('matching or ordinary documents do not redirect',()=>{for(const composition of [comp,null]){let count=0;vm.runInNewContext('(function(){'+code+'})()',{plan:{composition},sceneFile:'tuned.kaminos.json',compositionRestoreUrl,readOwnerExperimentAddress,startupSceneRedirect,hash:new URLSearchParams(),URLSearchParams,setInfo(){},location:{origin:'http://localhost:50825',search:'?settings_preset='+comp.flame.presetId,replace:()=>count++}});assert.equal(count,0);}});
+test('matching or ordinary documents do not redirect',()=>{for(const composition of [comp,null]){
+ let count=0,writes=0;const url=new URL('http://localhost:50825/?settings_preset='+comp.flame.presetId+'#volume_light_field=0&extra=kept');
+ const location={href:url.href,origin:url.origin,search:url.search,replace:()=>count++};
+ vm.runInNewContext('(function(){'+code+'})()',{plan:{composition},sceneFile:'tuned.kaminos.json',compositionRestoreUrl,readOwnerExperimentAddress,startupSceneRedirect,hash:new URLSearchParams(url.hash.slice(1)),URL,URLSearchParams,setInfo(){},location,history:{state:null,replaceState(_state,_title,next){location.href=next.href;writes++;}}});
+ assert.equal(count,0);assert.equal(writes,composition?1:0);
+ const hash=new URLSearchParams(new URL(location.href).hash.slice(1));
+ assert.equal(hash.get('extra'),'kept');assert.equal(hash.get('volume_light_field'),'0','Explicit route choices remain intact');
+ assert.equal(hash.get('volume_light_field_scene_depth'),composition?'1':null,'Matching saved recipes still restore missing scene-depth admission');
+}});
 
 test('saved document address preserves renderer and unknown view parameters',async()=>{
  const {savedSceneLocation}=await import('../scene-authoring.mjs');const before=new URL('http://localhost:50825/index.html?renderer=custom&mesh_root=assets#workspace=workbench&extra=kept&scene=old.kaminos.json'),after=new URL(savedSceneLocation(before.href,'new.kaminos.json'));

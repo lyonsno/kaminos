@@ -1,0 +1,85 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
+import {checkBurnFractureObservation,checkBurnMaterialContrast,burnMassMotion,waitForBurnReset} from './burn-fracture-contract.mjs';
+import {readBurnReplay} from '../burn-fracture-replay.mjs';
+const [origin,out,assetPath,coldPath,hotPath]=process.argv.slice(2);
+const releaseComparison=process.env.BURN_RELEASE_COMPARE==='1';
+if(!origin||!out)throw Error('Usage: burn-fracture-witness.mjs <origin> <out> <asset> <cold material> <burned material>');
+await fs.mkdir(out,{recursive:true});
+const report={status:'running',phase:'launch',releaseComparison,claim:releaseComparison?'diagnostic-observation-not-collapse-acceptance':'material-and-collapse-comparison',repoRoot:path.resolve(import.meta.dirname,'..'),errors:[],observations:[]},save=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2)),hash=b=>createHash('sha256').update(b).digest('hex');
+let context;
+try{
+ await save();if(!hotPath)throw Error('Complete source, cold and burned material inputs required');report.revision=execFileSync('git',['rev-parse','HEAD'],{cwd:report.repoRoot,encoding:'utf8'}).trim();
+ report.executable=process.env.CHROME_EXECUTABLE;assert.ok(report.executable&&!report.executable.includes('/Applications/Google Chrome.app/'));
+ const {chromium}=await import(process.env.PLAYWRIGHT_MODULE);context=await chromium.launchPersistentContext(path.join(out,'browser-profile'),{executablePath:report.executable,headless:true,viewport:{width:1280,height:900},args:['--enable-unsafe-webgpu','--use-angle=metal','--use-mock-keychain','--password-store=basic']});
+ const page=context.pages()[0];page.setDefaultTimeout(0);let reject;const failure=new Promise((_,fail)=>{reject=fail;});failure.catch(()=>{});const guard=p=>Promise.race([p,failure]);
+ const fail=e=>{report.errors.push(String(e));reject(Error(String(e)));};page.on('pageerror',fail);page.on('console',m=>{if(m.type()==='error')fail(m.text());});
+ await guard(page.goto(origin));
+ if(!releaseComparison){report.phase='material-kernel';await save();report.materialKernel=await guard(page.evaluate(async()=>{const {probeBurnStress}=await import('/tools/burn-material-kernel-probe.mjs');return probeBurnStress();}));await save();
+ report.phase='production-material-load';await save();
+ report.materialLoad=await guard(page.evaluate(async()=>{const {probeBurnMaterialLoad}=await import('/tools/burn-material-load-probe.mjs');try{return await probeBurnMaterialLoad();}catch(error){return {error:String(error.stack??error),rows:error.probeEvidence??[]};}}));await save();
+ assert.ok(!report.materialLoad.error,report.materialLoad.error);report.materialLoad.verdict=checkBurnMaterialContrast(report.materialLoad.rows);await save();}
+ const asset=await fs.readFile(assetPath),sourceSha256=hash(asset),upload=await page.request.post(origin+'/api/ingest-mesh',{data:asset,headers:{'Content-Type':'model/gltf-binary'}});assert.ok(upload.ok());const receipt=await upload.json();assert.equal(receipt.sha256,sourceSha256);
+ report.source={path:assetPath,sha256:sourceSha256,url:receipt.source};report.sources=[];
+ for(const name of ['tools/burn-material-load-probe.mjs','tools/burn-material-kernel-probe.mjs','tools/burn-fracture-contract.mjs']){const local=await fs.readFile(path.join(report.repoRoot,name)),response=await page.request.get(origin+'/'+name);assert.ok(response.ok());assert.equal(hash(await response.body()),hash(local));report.sources.push({name,sha256:hash(local)});}
+ for(const name of ['burn-fracture-core.mjs','burn-fracture-gpu.mjs','burn-fracture-replay.mjs','burn-structure-core.mjs','burn-structure-gpu.mjs','scene-burn-structure.mjs','burn-structure.worker.mjs','fracture-whole-prepare.mjs','fracture-material-sections.mjs','fracture-coarse-rest-frame.mjs','fracture-coarse-kernels.mjs','lib/fracture/rigid-engine.js','log-consumption.mjs','experiments/sinter/burn-fracture-replay.experiment.mjs']){const local=await fs.readFile(path.join(report.repoRoot,name)),response=await page.request.get(origin+'/'+name);assert.ok(response.ok());assert.equal(hash(await response.body()),hash(local));report.sources.push({name,sha256:hash(local)});}
+ const invoke=(op,value)=>guard(page.evaluate(({op,value})=>window.kaminosWorkbenchExperiments.invoke(op,value),{op,value}));
+ const waitForReset=()=>guard(waitForBurnReset(()=>page.evaluate(()=>window.kaminosWorkbenchExperiments.read()),()=>page.evaluate(()=>new Promise(requestAnimationFrame))));
+ const replayMatrix=readBurnReplay(JSON.parse(await fs.readFile(coldPath,'utf8'))).recordedMatrix;
+ report.comparison={poseSource:coldPath,replayMatrix,meaning:'Identical placement, gravity and support orientation; recorded burn transforms preserved separately'};
+ for(const [name,file]of [['cold',coldPath],['burned',hotPath]]){
+  report.phase='load:'+name;await save();const bytes=await fs.readFile(file),sha256=hash(bytes),relative='scratch/burn-fracture-'+sha256+'.json';await fs.copyFile(file,path.join(report.repoRoot,relative));
+  const inputs={source:receipt.source,sourceSha256,material:'/'+relative,materialSha256:sha256,replayMatrix},url=origin+'/?workspace=workbench&experiment=sinter-burn-fracture-replay&experiment_inputs='+encodeURIComponent(JSON.stringify(inputs));
+  await guard(page.goto(origin+'/?workspace=workbench'));await guard(page.waitForFunction(()=>window.kaminosWorkbenchExperiments));await guard(page.evaluate(inputs=>window.kaminosWorkbenchExperiments.open('sinter-burn-fracture-replay',inputs),inputs));
+  assert.equal(new URL(page.url()).searchParams.get('experiment'),'sinter-burn-fracture-replay');report.effectiveUrl=page.url();
+  const read=await guard(page.evaluate(()=>window.kaminosWorkbenchExperiments.read())),before=await invoke('snapshot');checkBurnFractureObservation(read,before);assert.equal(read.sceneContact,'finite-editable-support');
+  assert.deepEqual(read.contactGeometry.replayMatrix,replayMatrix);
+  const supportRecord=await page.evaluate(()=>window.kaminosSceneObjectDebugState().find(r=>r.label==='Mechanical support'));assert.ok(supportRecord?.transform?.position);
+  const observation={name,input:{path:file,sha256,url},read,before,supportRecord};report.observations.push(observation);await save();await page.screenshot({path:path.join(out,name+'-before.png')});
+  report.phase='advance:'+name;await save();await invoke('advance',.5);observation.after=await invoke('snapshot');await save();
+  await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await page.screenshot({path:path.join(out,name+'-after.png')});
+  const moves=before.positions.filter((_,i)=>i%4<3).map((v,i)=>Math.abs(v-observation.after.positions[Math.floor(i/3)*4+i%3]));observation.maximumMovement=Math.max(...moves);
+  const rotations=before.quaternions.map((v,i)=>Math.abs(v-observation.after.quaternions[i]));observation.maximumRotationDelta=Math.max(...rotations);
+  observation.verdict=checkBurnFractureObservation(await page.evaluate(()=>window.kaminosWorkbenchExperiments.read()),observation.after,{comparison:{name,maximumMovement:observation.maximumMovement}});await save();
+  report.phase='playback:'+name;await save();
+  await page.getByRole('button',{name:'Run',exact:true}).click();
+  observation.playbackStarted=await guard(page.evaluate(()=>window.kaminosWorkbenchExperiments.read()));await save();
+  await guard(page.evaluate(async start=>{for(;;){const s=await window.kaminosWorkbenchExperiments.read();if(s.error)throw Error(s.error);if(s.mechanics.seconds>start+.05)return;await new Promise(requestAnimationFrame);}},observation.after.state.seconds));
+  report.phase='pause:'+name;await save();
+  await page.getByRole('button',{name:'Pause',exact:true}).click();
+  observation.playback=await guard(page.evaluate(()=>window.kaminosWorkbenchExperiments.read()));assert.equal(observation.playback.running,false);assert.ok(observation.playback.mechanics.seconds>observation.after.state.seconds);
+  observation.playbackSnapshot=await invoke('snapshot');checkBurnFractureObservation(observation.playback,observation.playbackSnapshot);
+  if(name==='cold'){
+   report.phase='remove-support';await save();const support=await page.evaluate(()=>window.kaminosSceneObjectDebugState().find(r=>r.label==='Mechanical support'));
+   observation.supportRecord=support;assert.ok(support,'Registered support is required');
+   await invoke('moveSupport',[0,-10,0]);await invoke('advance',.25);observation.unsupported=await invoke('snapshot');
+   const moved=Math.max(...before.positions.filter((_,i)=>i%4<3).map((v,i)=>Math.abs(v-observation.unsupported.positions[Math.floor(i/3)*4+i%3])));
+   checkBurnFractureObservation(await page.evaluate(()=>window.kaminosWorkbenchExperiments.read()),observation.unsupported);
+   observation.verdict.expectations.push({claim:'Removing contact must release gravity without unpinning a region',passed:moved>.1,actual:moved,expected:'maximum coordinate movement > 0.1'});await save();await page.screenshot({path:path.join(out,'cold-unsupported.png')});
+  }
+  if(releaseComparison){
+   report.phase='contact-off:'+name;await save();
+   await invoke('moveSupport',observation.supportRecord.transform.position);
+   await page.getByLabel('Support contact',{exact:true}).uncheck();
+   await page.getByRole('button',{name:'Reset',exact:true}).click();
+   await waitForReset();
+   observation.releaseBefore=await invoke('snapshot');assert.equal(observation.releaseBefore.state.steps,0);assert.equal(observation.releaseBefore.state.contactsEnabled,false);
+   assert.ok(observation.releaseBefore.positions.every((v,i)=>Math.abs(v-before.positions[i])<1e-5),'Reset must restore every original region, not just the visible root');
+   await invoke('advance',.25);observation.releaseAfter=await invoke('snapshot');
+   assert.deepEqual(observation.releaseAfter.supportCollisionMasks,[0],'Contact-off must reach the resident GPU mask');
+   checkBurnFractureObservation(await page.evaluate(()=>window.kaminosWorkbenchExperiments.read()),observation.releaseAfter);
+   observation.releaseMotion=burnMassMotion(observation.releaseBefore,observation.releaseAfter);await save();
+   await page.screenshot({path:path.join(out,name+'-contact-off.png')});
+   await page.getByLabel('Support contact',{exact:true}).check();await page.getByRole('button',{name:'Reset',exact:true}).click();await waitForReset();await invoke('advance',1/60);
+   observation.contactRestored=await invoke('snapshot');assert.deepEqual(observation.contactRestored.supportCollisionMasks,[1]);
+   if(name==='burned'){await page.setViewportSize({width:390,height:844});await page.screenshot({path:path.join(out,'mobile-controls.png')});await page.setViewportSize({width:1280,height:900});}
+  }
+  await save();await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());
+ }
+ report.phase='comparison';report.failedExpectations=report.observations.flatMap(row=>row.verdict.expectations.filter(x=>!x.passed).map(x=>({name:row.name,...x})));await save();
+ assert.deepEqual(report.errors,[]);assert.deepEqual(report.observations.map(x=>x.name),['cold','burned']);if(!releaseComparison)assert.equal(report.failedExpectations.length,0,JSON.stringify(report.failedExpectations));report.status=releaseComparison?'observed':'passed';report.phase='complete';
+}catch(error){report.status='failed';report.error=String(error.stack??error);process.exitCode=1;}
+finally{await context?.close();await save();}

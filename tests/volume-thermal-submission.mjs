@@ -1,0 +1,20 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import {createThermalSubmission} from '../volume-thermal-submission.mjs';
+const tracker=createThermalSubmission(),events=[];
+const encoder=()=>({finish:()=>({})}),a=encoder(),b=encoder();
+tracker.record(a,()=>events.push('material-a'));
+tracker.record(a,()=>events.push('material-a2'));
+tracker.record(b,()=>events.push('material-b'));
+const ca=tracker.finish(a),cb=tracker.finish(b);
+assert.deepEqual(events,[],'Encoding and finishing must not advance mechanics');
+assert.throws(()=>tracker.submit([ca],()=>{throw Error('submit failed');}),/submit failed/);
+assert.deepEqual(events,[],'Failed submission is not an advanced simulation step');
+tracker.submit([cb,ca],commands=>{assert.deepEqual(commands,[cb,ca]);events.push('queue');});
+assert.deepEqual(events,['queue','material-b','material-a','material-a2']);
+tracker.submit([ca,cb],()=>{});assert.equal(events.length,4,'A submitted step is consumed once');
+const c=encoder();tracker.record(c,()=>{throw Error('body failed');});tracker.record(c,()=>events.push('other-body'));
+const cc=tracker.finish(c);assert.throws(()=>tracker.submit([cc],()=>{}),AggregateError);
+assert.equal(events.at(-1),'other-body','One body failure must not lose another submitted step');
+tracker.submit([cc],()=>{});assert.equal(events.length,5);
+assert.throws(()=>tracker.record(encoder(),null),/continuation/);

@@ -141,3 +141,36 @@ resident.destroy();
   assert.equal(new Float32Array(moved.bytes.buffer,moved.bytes.byteOffset,32)[12],-2,'mutable input array is compared against retained snapshot');
   producer.destroy();
 }
+// Regional motion is an explicit material route; static meshes retain their
+// triangle cache, and unbinding must rebuild that mask instead of retaining it.
+const {createGpuSceneSolidProducer}=await import('../scene-solid-gpu.mjs');
+globalThis.GPUBufferUsage={STORAGE:128,COPY_DST:8,COPY_SRC:4,UNIFORM:64};
+globalThis.GPUTextureUsage={TEXTURE_BINDING:4,STORAGE_BINDING:8,COPY_SRC:1};
+globalThis.GPUShaderStage={COMPUTE:4};
+const resources=[],passes=[],materialWrites=[];
+const make=spec=>{const r={...spec,destroyed:0,createView:()=>({}),destroy(){this.destroyed++;}};resources.push(r);return r;};
+const device={createBuffer:make,createTexture:make,createShaderModule:make,createBindGroupLayout:make,createPipelineLayout:make,
+ createComputePipeline:spec=>({...spec,getBindGroupLayout:()=>({})}),createBindGroup:spec=>spec,queue:{writeBuffer(buffer,offset,data){if(buffer.label==='scene solid remaining material')materialWrites.push(new Uint32Array(data.slice(0)));}}};
+const producer=createGpuSceneSolidProducer(device,{grid:8,gridHeight:16}),shape={grid:8,gridHeight:16};
+const encoder={clearBuffer(){},beginComputePass({label}){passes.push(label);return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};}};
+const texture={width:16,height:16,depthOrArrayLayers:16,createView:()=>({})},borrowed={size:64},ownerBuffer={size:16**3*4};
+const filter={device,objectId:'log',texture,matrix:new THREE.Matrix4().elements,revision:1,
+ regions:{matrices:borrowed,ownerBuffer,count:1,world:new THREE.Matrix4().elements,lo:[-.5,-.5,-.5],size:[1,1,1]}};
+const cap={texture,origin:[0,0,0],step:.25,boundsMin:[-.5,-.5,-.5],boundsMax:[.5,.5,.5]};
+producer.update(objects,domain,shape,{materialMasks:[filter],boundaryCap:cap});producer.encode(encoder);
+assert.equal(materialWrites.at(-1).length,32,'Regional material uses the expanded boundary-cap ABI');
+assert.equal(materialWrites.at(-1)[28],0,'Regional mask is not filtered again in the original material frame');
+assert.equal(materialWrites.at(-1)[29],1,'Boundary cap remains enabled independently of regional motion');
+assert.ok(passes.includes('Current surviving material obstruction'));assert.ok(!passes.includes('scene solid raster'));
+passes.length=0;producer.update(objects,domain,shape,{materialMasks:[filter],boundaryCap:cap});producer.encode(encoder);
+assert.ok(passes.includes('Current surviving material obstruction'),'GPU pose changes cannot be hidden by unchanged CPU transforms');
+passes.length=0;producer.update(objects,domain,shape,{materialMasks:[{...filter,regions:undefined}],boundaryCap:cap});producer.encode(encoder);
+assert.equal(materialWrites.at(-1)[28],1,'Unbinding regional motion restores filtering at unchanged texture, matrix and thermal revision');
+assert.equal(materialWrites.at(-1)[29],1);assert.ok(passes.includes('scene solid raster'));
+producer.update(objects,domain,shape,{materialMasks:[filter],boundaryCap:cap});producer.encode(encoder);
+assert.equal(materialWrites.at(-1)[28],0,'Rebinding restores the regional merge without double filtering');
+passes.length=0;producer.update(objects,domain,shape);producer.encode(encoder);
+assert.equal(materialWrites.at(-1)[28],0);assert.equal(materialWrites.at(-1)[29],0,'Clearing masks releases both independent flags');
+assert.ok(passes.includes('scene solid raster'));assert.ok(!passes.includes('Current surviving material obstruction'));
+assert.throws(()=>producer.update(objects,domain,shape,{materialMasks:[{...filter,device:{}}]}),/same-device/);
+producer.destroy();assert.ok(resources.filter(r=>r.usage).every(r=>r.destroyed===1),'Own allocations are disposed once');
