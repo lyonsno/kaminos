@@ -42,13 +42,15 @@ try{
   const state=await page.evaluate(async()=>({sameCanvas:window.__recoveryWitnessCanvas===document.getElementById('kaminos-host-renderer-canvas'),experiment:await window.kaminosWorkbenchExperiments.read(),objects:window.kaminosSceneAuthoring.read(),edits:window.kaminosSceneEdits.state(),sameEdits:window.__recoveryEdits===window.kaminosSceneEdits,flame:window.__kaminosVolumePrototype?.debugState(),water:window.kaminosWaterSources.read(),recovery:window.kaminosDeviceRecovery.state(),gi:window.kaminosSceneGIDebugState()}));
   assert(state.sameCanvas&&state.sameEdits);assert.deepEqual(state.objects,report.before.objects);assert.deepEqual(state.edits,report.before.edits);assert.equal(state.experiment.roughness,.37);assert(state.gi.sceneFrames>report.before.gi.sceneFrames);if(water){assert(state.water.runtime);assert(state.water.runtime.step>0);assert.equal(state.water.runtime.paused,false);}if(presetFile){assert(state.flame.active);assert(state.flame.frameCount>0);assert.equal(state.flame.error,null);}report.observations.push(state);await page.screenshot({path:out+'/after-'+i+'.png'});await save();
  }
- if(!presetFile){
+ {
   report.phase='replacement-unavailable';await save();
   await page.evaluate(()=>{window.__requestDeviceBeforeFailure=GPUAdapter.prototype.requestDevice;GPUAdapter.prototype.requestDevice=async()=>{throw Error('witness adapter unavailable');};window.kaminosLoseDevice();});
   await page.waitForFunction(()=>window.kaminosDeviceRecovery.state().phase==='failed');
   report.failedReplacement=await page.evaluate(()=>({recovery:window.kaminosDeviceRecovery.state(),objects:window.kaminosSceneAuthoring.read()}));
   assert.match(report.failedReplacement.recovery.error,/witness adapter unavailable/);assert.deepEqual(report.failedReplacement.objects,report.before.objects);
   await page.screenshot({path:out+'/unavailable.png'});
+  report.savedDuringFailure=await page.evaluate(()=>window.saveSceneAs({result:true,name:'recovered-authored-scene'}));
+  assert.equal(report.savedDuringFailure.ok,true,'authored scene must remain saveable when replacement fails');
   await page.evaluate(()=>{GPUAdapter.prototype.requestDevice=window.__requestDeviceBeforeFailure;return window.kaminosDeviceRecovery.retry();});
   await page.waitForFunction(()=>window.kaminosDeviceRecovery.state().phase==='active');
  }

@@ -25744,13 +25744,15 @@ function compositionStatus(message, failed = false) {
 
 async function collectSceneComposition() {
   const saveIntent = sceneDocument.beginSave();
+  const failedRecovery=typeof deviceRecovery!=='undefined'&&deviceRecovery?.state().phase==='failed';
+  if(failedRecovery&&authoredAsh.size)throw Error('Ash state is unavailable after GPU loss; saving cannot preserve its current simulation.');
   await captureAuthoredAsh();
   saveIntent.assertCurrent();
   if(!flameFeature.present&&!activeSceneComposition)return;
   const debug = volumePrototype?.debugState?.();
   if (!isFireLightFieldRoute() && !activeSceneComposition) return;
   const retainedHiddenField=!debug?.active&&activeSceneComposition&&debug&&!debug.error&&!isSceneItemVisible('flame-field');
-  if (!debug?.active&&!retainedHiddenField) {
+  if (!debug?.active&&!retainedHiddenField&&!failedRecovery) {
     if (activeSceneComposition || isFireLightFieldRoute()) throw new Error(debug?.error || 'Authored flame is not active');
     activeSceneComposition = null;
     return;
