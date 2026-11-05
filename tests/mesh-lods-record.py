@@ -235,7 +235,7 @@ with tempfile.TemporaryDirectory() as directory:
 
         # Auto-prepare classification and deduplicated queue contract:
         def mesh_glb(tag, extras=None, extensions=None, has_mesh=True):
-            doc = {'asset': {'version': '2.0'}}
+            doc = {'asset': {'version': '2.0', 'generator': tag}}
             if has_mesh:
                 doc['meshes'] = [{'primitives': [{'attributes': {'POSITION': 0}, 'mode': 4}]}]
             if extras is not None:
@@ -255,6 +255,7 @@ with tempfile.TemporaryDirectory() as directory:
 
         assert serve.should_auto_prepare_mesh_lods(hero_mesh_sha, hero_mesh_bytes) is True
         assert serve.should_auto_prepare_mesh_lods(hero_mesh_sha, hero_mesh_bytes, role='lod-tier') is False
+        assert serve.should_auto_prepare_mesh_lods(hero_mesh_sha, hero_mesh_bytes, role='client-prepares-lods') is False
         assert serve.should_auto_prepare_mesh_lods(tier_mesh_sha, tier_mesh_bytes) is False
         assert serve.should_auto_prepare_mesh_lods(surfel_only_sha, surfel_only_bytes) is False
         assert serve.should_auto_prepare_mesh_lods(stored['l500'], hero_mesh_bytes) is False, 'registered tier sha is excluded'
@@ -274,8 +275,11 @@ with tempfile.TemporaryDirectory() as directory:
             assert request('POST', '/api/ingest-mesh?role=lod-tier', hero_mesh_bytes)[0] == 200
             qstate = serve.mesh_lod_prepare_queue_state()
             assert hero_mesh_sha not in qstate['queued'] and qstate['active'] != hero_mesh_sha
-            # Ingesting a hero GLB without ?role=lod-tier enqueues it once (and deduplicates repeat requests):
-            assert serve.enqueue_mesh_lod_prepare(hero_mesh_sha, server_port=server.server_address[1]) is True
+            assert request('POST', '/api/ingest-mesh?role=client-prepares-lods', hero_mesh_bytes)[0] == 200
+            assert request('GET', f'/api/mesh-lods?source={hero_mesh_sha}&prepare=client')[0] == 200
+            assert serve.mesh_lod_prepare_queue_state()['active'] != hero_mesh_sha
+            # The normal ingest route, rather than a direct queue call, starts the worker.
+            assert request('POST', '/api/ingest-mesh', hero_mesh_bytes)[0] == 200
             assert serve.enqueue_mesh_lod_prepare(hero_mesh_sha, server_port=server.server_address[1]) is False, 'deduplicated while active/queued'
             gate.set()
             for _ in range(50):

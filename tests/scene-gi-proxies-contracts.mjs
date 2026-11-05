@@ -30,7 +30,11 @@ test('a TRELLIS mesh object gets its 1000-face tier by default, loaded but never
   assert.deepEqual(h.levels.map(l=>l.faces),[5000,1000,500]);
   assert.equal(h.error.reference.kind,'hero');assert.equal(h.error.units,'fraction of the hero bounding-box diagonal');assert.equal(h.error.relative.p95,.0072);
   assert.equal(h.proxyRoot,loaded[0]);assert.equal(h.proxyRoot.parent,null,'never in the scene graph');assert.equal(root.children.length,0,'no child added to the object');
-  assert.match(calls[0],/\/api\/mesh-lods\?source=a{64}&faces=1000/);
+  const route=new URL(calls[0],'http://kaminos.local');
+  assert.equal(route.pathname,'/api/mesh-lods');
+  assert.equal(route.searchParams.get('source'),HERO);
+  assert.equal(route.searchParams.get('faces'),'1000');
+  assert.equal(route.searchParams.get('prepare'),'client');
   assert.equal(registry.get(root),h);
 });
 
@@ -73,7 +77,9 @@ test('a surfels-only asset with raw-decode tiers registered under its own assetS
   const h=await registry.attach(root);
   assert.equal(h.state,'loaded');assert.equal(h.representation,'surfels');assert.equal(h.assetSha,SURF);assert.equal(h.heroSha,null);
   assert.equal(h.effective.faces,1000);assert.equal(h.proxyRoot,loaded[0]);assert.equal(h.surfels.coarsest,16);
-  assert.match(calls[0],new RegExp(`/api/mesh-lods\\?source=${SURF}&faces=1000`));
+  const route=new URL(calls[0],'http://kaminos.local');
+  assert.equal(route.searchParams.get('source'),SURF);
+  assert.equal(route.searchParams.get('faces'),'1000');
 });
 
 test('objects with no TRELLIS tiers say why, and nothing is loaded',async()=>{
@@ -224,8 +230,8 @@ test('applyGiProxySetting auto-prepares missing tiers once per heroSha and LOD r
     select: async () => ({state: 'no-tiers', heroSha: HERO, assetSha: HERO}),
     disable() {},
   };
-  const fn = new Function('sceneGiProxies', 'syncSceneDataInspector', 'window', 'setInfo', 'autoPreparedLodSources', `${snippet}; return applyGiProxySetting;`)(
-    sceneGiProxies, () => {}, window, () => {}, autoPreparedLodSources
+  const fn = new Function('sceneGiProxies', 'syncSceneDataInspector', 'window', 'setInfo', 'autoPreparedLodSources', 'prepareSceneNavigationRoot', `${snippet}; return applyGiProxySetting;`)(
+    sceneGiProxies, () => {}, window, () => {}, autoPreparedLodSources, () => {}
   );
   const entry = {id: 'kiln-1', label: 'Kiln', giProxy: {enabled: true, selection: {faces: 1000}}, object: {}};
   await fn(entry);
