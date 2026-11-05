@@ -222,12 +222,19 @@ export function selectFootprintTier(levels = [], {
       };
     }),
   ];
+  let legacyPixelError = 0;
   for (let i = 1; i < rungs.length; i++) {
     if (rungs[i].geomPixelError < rungs[i - 1].geomPixelError) {
       rungs[i].geomPixelError = rungs[i - 1].geomPixelError;
     }
-    if (rungs[i].pixelError < rungs[i - 1].pixelError) {
-      rungs[i].pixelError = rungs[i - 1].pixelError;
+    // Shape error remains monotonic across every rung. Bundled-map penalties
+    // remain monotonic only among legacy rungs: a prepared rung can supply
+    // sharper maps independently, even when a finer legacy rung cannot.
+    if (rungs[i].level.textureSet?.variants?.length) {
+      rungs[i].pixelError = rungs[i].geomPixelError;
+    } else {
+      legacyPixelError = Math.max(legacyPixelError, rungs[i].pixelError);
+      rungs[i].pixelError = Math.max(rungs[i].geomPixelError, legacyPixelError);
     }
   }
   const prevIdx = activeTier != null ? rungs.findIndex(r => r.id === activeTier) : -1;
