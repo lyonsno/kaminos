@@ -72,7 +72,7 @@ try{
   for(const controls of [preset.domControls,preset.rendererControls])for(const [key,value] of Object.entries(small))if(controls?.[key]){controls[key].value=typeof controls[key].value==='string'?String(value):value;presetRoute.searchParams.set(controls[key].param,String(value));}
   preset.route=presetRoute.href;
   const result=await fetch(origin+'/api/volume-settings-presets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label:'Solid cube control inspection Fine16',preset,publishAlias:false})});
-  assert.ok(result.ok,await result.clone().text());report.inspectionPreset=await result.json();effectivePreset=report.inspectionPreset.presetId;assert.ok(effectivePreset);
+  assert.ok(result.ok,await result.clone().text());report.inspectionPreset=await result.json();effectivePreset=report.inspectionPreset.effective.presetId;assert.ok(effectivePreset);
  }
  report.phase='load';await save();await page.goto(origin+'/index.html?workspace=workbench');
  await page.waitForFunction(()=>window.kaminosSceneAuthoring?.addFlameEmitter);
@@ -86,7 +86,7 @@ try{
  await page.waitForFunction(n=>window.__kaminosVolumePrototype.debugState().simStepCount>=n&&window.__kaminosSceneRadiance.canRender(),mode==='page-inspect'?3:12);
  await page.evaluate(()=>window.__kaminosVolumePrototype.setSimulationPaused(true));
  report.phase='controls';await save();await page.getByRole('button',{name:'Scene',exact:true}).click();
- const input=page.getByRole('spinbutton',{name:'Solid cube captures per frame (0 = all)',exact:true});assert.equal(await input.count(),1);
+ const input=page.locator('[aria-label="Solid cube captures per frame (0 = all)"]');assert.equal(await input.count(),1);
  await input.evaluate(e=>{for(let p=e.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;});await input.scrollIntoViewIfNeeded();assert.ok(await input.isVisible());
  await input.evaluate(e=>{e.value='1';e.dispatchEvent(new Event('change',{bubbles:true}));});
  await page.waitForFunction(()=>window.__kaminosSceneRadiance.debugState().shadowCaptureBudget===1&&window.__kaminosSceneRadiance.canRender());
