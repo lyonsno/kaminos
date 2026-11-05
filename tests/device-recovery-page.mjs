@@ -17,12 +17,12 @@ function fixture({loading=false,fail=false,present=true}={}){
  sceneLightingPreparation:null,sceneRadianceRouteTask:Promise.resolve(),releaseSceneRadianceRoute:async()=>{},volumeBridge:null,
  giOutputGraphs:new Map(),fireLightFieldPass:null,sceneFlameHDR:null,sceneBloom:{dispose:no},neutralEnvironmentMap:null,scene:{remove:()=>events.push('voxel-remove')},
  collisionVoxelMesh:{userData:{disposeGpuSolid:()=>events.push('voxel-dispose')},geometry:{dispose:no},material:{dispose:no}},collisionVoxelRevision:'old',
- pmremGenerator:{dispose:no},THREE:{Vector2:class{},WebGPURenderer:class{constructor({device}){return renderer(device);}},PMREMGenerator:class{}},
+ pmremGenerator:{dispose:no},THREE:{Vector2:class{},WebGPURenderer:class{constructor({device}){return renderer(device);}},PMREMGenerator:class{dispose(){}}},
  combinedRequirements:{},sharedDeviceHostRequirements:o=>o,requestKaminosSharedWebGpuDevice:async options=>{events.push(['requirements',options]);const device={destroy:()=>events.push('device-destroy')};devices.push(device);return {device};},
  isFireLightFieldTimingRoute:()=>false,location:{search:''},sharedGpu:null,sharedGpuFailureReason:null,compositionHost:{},renderPipeline:{},sceneGI:{resetHistory:no},
  createPageVolumePrototype:()=>{ctx.volumePrototype=volume();},flameDomainTranslation:[],flameDomainScale:1,volumePrimitivesInFlameDomain:()=>[],applyFlameEmitterPose:no,flameEmitterPose:{},syncAuthoredFlameSources:no,createVolumeMainRendererBridge:()=>({dispose:no}),
  window:{__kaminosSceneRadiance:{debugState:()=>({live:7})}},fireLightFieldRouteParams:()=>new URLSearchParams('volume_light_field=1'),fireShadowSceneRoute:s=>({live:s.live}),syncSceneRadianceRoute:async route=>routes.push([...route]),
- rebuildSceneGIOutput:no,applyEnvMap:no,createProceduralEnv:()=>({}),readEnvironmentRecipe:()=>({intensity:1}),recoveryNotice:{},recoveryRetry:{},recoveryText:{},markDirty:no};
+ rebuildSceneGIOutput:no,applyEnvMap:no,createProceduralEnv:()=>({dispose:no}),readEnvironmentRecipe:()=>({intensity:1}),recoveryNotice:{},recoveryRetry:{},recoveryText:{},markDirty:no};
  vm.createContext(ctx);vm.runInContext(source,ctx);
  return {ctx,hooks,events,routes,devices,setFail:value=>{fail=value;},run:()=>hooks.rebuild({assertCurrent:no,watch:()=>()=>events.push('detach')})};
 }
