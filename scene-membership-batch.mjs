@@ -2,6 +2,7 @@ import {captureSceneMembership,resolveSceneMembershipTopology} from './scene-mem
 import {checkedPose} from './scene-edit-session.mjs';
 import {checkedGroupPose} from './scene-group.mjs';
 import {checkedSelection} from './scene-selection.mjs';
+import {copyAssembly} from './scene-assembly.mjs';
 import {checkedRepetition} from './scene-repetition.mjs';
 
 const selectionTarget='@selection-membership';
@@ -67,7 +68,7 @@ export function createSceneMembershipBatch({scene,membership,records,groups,
     edits.assertCanRecordApplied(selectionTarget);
     try{
       for(const entry of members)copies.push(duplicate.object(entry.id));
-      groups.create(copies,`${original.label} copy`,{id:groupId,transform:structuredClone(original.transform),repetition:checkedRepetition(original.repetition)});
+      groups.create(copies,`${original.label} copy`,{id:groupId,transform:structuredClone(original.transform),repetition:checkedRepetition(original.repetition),assembly:copyAssembly(original,new Map(members.map((entry,i)=>[entry.id,copies[i]])))});
     }catch(error){for(const copy of copies)membership.remove(copy,{recordHistory:false});throw error;}
     function snapshot(){
       const group=scene.groups.find(row=>row.id===groupId),present=copies.filter(copy=>scene.find(copy));
@@ -97,16 +98,19 @@ export function createSceneMembershipBatch({scene,membership,records,groups,
     if(interactive){if(!start('translate',complete)){complete({commit:false});throw Error('Could not start group placement');}}
     else complete({commit:true});return groupId;
   }
-  function duplicateSelection(roots,members,{interactive=false,start}={}){
+  function duplicateSelection(roots,members,{interactive=false,start,scope=null}={}){
+    const owner=scope?scene.groups.find(group=>group.id===scope&&group.assembly):null;
+    if(scope&&(!owner||members.some(id=>!owner.objectIds.includes(id))))throw Error("Choose components inside the edited assembly");
     if(members.some(id=>!duplicate.supported(scene.find(id))))throw Error('This selection contains a source whose independent duplication is unsupported');
     const before=check(capture()),copies=new Map(),newRoots=[];edits.assertCanRecordApplied(selectionTarget);
     const revert=()=>{for(const id of copies.values())detach(id);scene.setGroups(before.groups);select(before.selection.ids,before.selection.activeId);membership.releaseUnreferenced();};
     try{
       for(const id of members){const copy=duplicate.object(id);copies.set(id,copy);membership.retainForHistory(copy,selectionTarget);}
       for(const id of roots){
-        if(id.startsWith('@group:')){const group=scene.groups.find(row=>row.id===id.slice(7)),copyId=duplicate.groupId();groups.create(group.objectIds.filter(id=>copies.has(id)).map(id=>copies.get(id)),`${group.label} copy`,{id:copyId,transform:structuredClone(group.transform),repetition:checkedRepetition(group.repetition)});newRoots.push('@group:'+copyId);}
+        if(id.startsWith('@group:')){const group=scene.groups.find(row=>row.id===id.slice(7)),copyId=duplicate.groupId();groups.create(group.objectIds.filter(id=>copies.has(id)).map(id=>copies.get(id)),`${group.label} copy`,{id:copyId,transform:structuredClone(group.transform),repetition:checkedRepetition(group.repetition),assembly:copyAssembly(group,copies)});newRoots.push('@group:'+copyId);}
         else newRoots.push(copies.get(id));
       }
+      if(owner)scene.setGroups(scene.groups.map(group=>group.id!==owner.id?group:{...group,objectIds:[...group.objectIds,...copies.values()],assembly:{...group.assembly,roles:{...group.assembly.roles,...copyAssembly(owner,copies).roles}}}));
       select(newRoots,newRoots.at(-1));
     }catch(error){revert();throw error;}
     const complete=({commit})=>{

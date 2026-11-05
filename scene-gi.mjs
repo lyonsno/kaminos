@@ -31,7 +31,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
     // tone mapping, display transforms and receiving-pass AO stay outside it.
     const reflected=history.feedbackForSurface().mul(diffuseColor.rgb.clamp(0,1))
       .mul(metalness.oneMinus().clamp(0,1)).mul(receiveWeight(material));
-    return vec4(output.rgb.add(reflected),output.a);
+    return vec4(output.rgb.add(reflected).mul(output.a),1);
   })();
   // MRT reads its explicit output node; getOutput alone is superseded by MRT.
   const bounceProbe=new URLSearchParams(globalThis.location?.search??'').get('gi_bounce_probe')==='1';
@@ -96,7 +96,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
     const receivingOutput=Fn(([],{material})=>{
       const diffuseReceiver=diffuseColor.rgb.mul(metalness.oneMinus());
       const received=sceneGIReceives(material)?irradianceOverPi.mul(diffuseReceiver).mul(receiveWeight(material)):vec3(0);
-      return mix(vec4(output.rgb.add(received),output.a),vec4(received,output.a),float(viewMode.equal(2)));
+      return mix(vec4(output.rgb.add(received),output.a),vec4(received.mul(output.a),1),float(viewMode.equal(2)));
     })();
     beauty.setMRT(mrt({output:receivingOutput}));
     const setup=beauty.setup;

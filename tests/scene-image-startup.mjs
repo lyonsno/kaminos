@@ -12,7 +12,7 @@ function run(search='?image_root=images&image_path=one.png'){
  const environment=deferred(),image=deferred(),calls=[];
  const route={effectiveUrl:'/api/read?root=images&path=one.png',fileName:'one.png'};
  const c={URLSearchParams,location:{search,hash:'',href:'http://localhost/'+search},window:{location:{search}},
-  initialEnvironment:'studio',loadEnvironment:()=>{calls.push('environment');return environment.promise;},
+  initialEnvironment:'studio',admittedEnvironment:null,loadEnvironment:()=>{calls.push('environment');return environment.promise;},
   startupPreferences:null,kaminosImageAssetRouteFromSearch:p=>p.has('image_path')?route:null,
   kaminosMeshAssetRouteFromSearch:()=>null,kaminosSplatAssetRouteFromSearch:()=>null,
   loadKaminosImageAssetRoute:()=>{calls.push('image');return image.promise;},setInfo:()=>{},

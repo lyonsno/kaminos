@@ -290,6 +290,7 @@ assert.deepEqual(loadedInputs.dinoIdentity, baseManifest.dino.identity);
 const mockRoute = {
   routeId: 'pixal3d.inputs.composition.test',
   runtime: {
+    device: { queue: { async onSubmittedWorkDone() {} } },
     createTensor: d => ({ ...d, buffer: {} }),
     createManagedBuffer: d => ({ ...d }),
     createUniformBuffer: d => ({ ...d, buffer: {} }),

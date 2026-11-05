@@ -173,6 +173,8 @@ var<workgroup> motionMax:array<vec4<f32>,64>;
 }
 `;}
 
+const materialHierarchyPipelines = new WeakMap();
+
 export function createMaterialHierarchyGPU(device,plan,worldCode,options={}){
  return createResidentMaterialHierarchyGPU(device,plan,hierarchyWGSL(worldCode,{resident:true}),options);
 }
@@ -185,8 +187,14 @@ export function createMaterialHierarchyCPUReference(device,plan,worldCode,option
  const topology=new MaterialHierarchy({dims:plan.materialDims,options});
  admission(topology.capacity);
  const S=GPUBufferUsage.STORAGE,D=GPUBufferUsage.COPY_DST,C=GPUBufferUsage.COPY_SRC;
- const module=device.createShaderModule({label:'adaptive material hierarchy',code:hierarchyWGSL(worldCode)});
- const pipelines=Object.fromEntries(['migrateBricks','advanceBricks','restrictBricks','exportBricks','measureBricks'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:entryPoint,layout:'auto',compute:{module,entryPoint}})]));
+ let byCode=materialHierarchyPipelines.get(device);
+ if(!byCode){byCode=new Map();materialHierarchyPipelines.set(device,byCode);}
+ let pipelines=byCode.get(worldCode);
+ if(!pipelines){
+  const module=device.createShaderModule({label:'adaptive material hierarchy',code:hierarchyWGSL(worldCode)});
+  pipelines=Object.fromEntries(['migrateBricks','advanceBricks','restrictBricks','exportBricks','measureBricks'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:entryPoint,layout:'auto',compute:{module,entryPoint}})]));
+  byCode.set(worldCode,pipelines);
+ }
  let current=0,storage=null,pending=true,initialized=false,destroyed=false,reading=false,readback=null,error=null,revision=0,steps=0,latestSignals=new Map(),lastPlan=null,transportClock=0,demandLag=0,diagnostics={levels:[],bricks:[]};
  const buffer=(label,size,usage=S|D|C)=>device.createBuffer({label,size:Math.max(4,size),usage});
  const params=buffer('hierarchy parameters',48,GPUBufferUsage.UNIFORM|D);

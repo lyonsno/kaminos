@@ -17,7 +17,7 @@ const MODEL_DEPS=async()=>{
 // activation memory); it needs shader-f16 on the shared device.
 // Every run also yields a surfel asset (trellis-surfels.mjs) from the decoded field, built from the raw
 // mesh before any cleanup. finishMesh:false stops there: no cleanup, UV or bake, and no mesh GLB.
-export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixelValues,highResolutionPixelValues,finishing,finishMesh=true,decoderActivationStorage,signal,onPhase=()=>{},provenance={},deps}){
+export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixelValues,highResolutionPixelValues,finishing,finishMesh=true,decoderActivationStorage,scheduling,signal,onPhase=()=>{},provenance={},deps}){
   if(!(pixelValues instanceof Float32Array)||pixelValues.length!==512*512*3)
     throw TypeError('TRELLIS needs the selected image as prepared 512x512 RGB pixels');
   if(finishMesh&&(typeof finishing?.postprocessMesh!=='function'||typeof finishing?.unwrapMesh!=='function'))
@@ -32,7 +32,7 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
   const session=await appGpu.session();
   const host=await d.createTrellisSharedHost({appGpu:{device:appGpu.device,queue:appGpu.queue,session,
     beginRun:(runId,options)=>appGpu.beginRun(runId,options)}});
-  let run,generation,asset,released=false,result,timing=null;
+  let run,generation,asset,released=false,result,timing=null,primaryError;
   // Per phase: wall time, and GPU time from the kit's timestamp-query timer (the change in
   // its running total; timings resolve lazily, so the totals are settled before release).
   const phases=[],clock=()=>globalThis.performance.now();
@@ -43,7 +43,7 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
     return onPhase(event);
   };
   try{
-    run=await host.beginRun({runId:`authoring-trellis-page-${globalThis.crypto.randomUUID()}`,signal:stop});
+    run=await host.beginRun({runId:`authoring-trellis-page-${globalThis.crypto.randomUUID()}`,signal:stop,scheduling});
     await timed({phase:'checkpoint-loading'});
     // CPU/network spans open a foreground window so scene frames run while they wait;
     // GPU work and readbacks keep the run's boundary admission.
@@ -87,6 +87,7 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
       ...(surfels??{surfelGlb:null,surfels:{status:'failed',error:'the asset consumer did not hand over the raw mesh'}})};
     }
   }catch(error){
+    primaryError=error;
     // While the run still holds its tensors: what a decoder-only replay needs.
     if(run&&generation&&error&&typeof error==='object')
       error.trellisCapture=await captureFailure(generation,run.route.runtime).catch(failure=>({captureError:failure.message}));
@@ -96,7 +97,7 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
     if(run){
       const gpu=await run.route?.runtime?.settleGpuTiming?.().catch(()=>null);
       closePhase();
-      timing={gpu:gpu?{...gpu}:run.route?.runtime?.profile?.gpuTiming??null,stages:stageSummary(run.route?.runtime?.profile),phases:phases.map(p=>({phase:p.phase,modelRole:p.modelRole,
+      timing={scheduling:run.scheduling?.()??{kind:'current-timer-zero-delay'},gpu:gpu?{...gpu}:run.route?.runtime?.profile?.gpuTiming??null,stages:stageSummary(run.route?.runtime?.profile),phases:phases.map(p=>({phase:p.phase,modelRole:p.modelRole,
         wallMs:Math.round(p.endMs-p.startMs),gpuMs:p.gpuStart==null?null:Math.round(((p===phases.at(-1)?gpu?.totalGpuMs??p.gpuEnd:p.gpuEnd)-p.gpuStart)*10)/10}))};
       const report=await run.finish().catch(error=>({status:'held',error}));
       released=report?.status==='released';
@@ -104,6 +105,7 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
       if(!released)failure=Object.assign(Error(`TRELLIS GPU route was not released: ${report?.status}${report?.error?` (${report.error.message})`:''}`),{gpuRouteHeld:true});
     }else released=true;
     // A held run keeps its tensors; disposing under it would free resources still in use.
+    if(released&&primaryError?.trellisSurfels)primaryError.trellisSurfels.receiptValidation={ok:true,by:'authoring-trellis-page',checks:['route-released']};
     if(released){asset?.dispose();generation?.dispose();await host.dispose();}
     if(failure)throw failure;
   }
@@ -173,11 +175,12 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
   const elapsed=()=>{const s=Math.round((now()-started)/1000);return s<60?`${s}s`:`${Math.floor(s/60)}m ${String(s%60).padStart(2,'0')}s`;};
   async function storePending(){
     const {glb,generation,label,surfelGlb,surfels,levelInputs,meshError}=state.pending;
-    set({status:'saving',stage:glb?'Saving mesh':'Saving surfels',progress:glb?'Saving generated mesh…':'Saving the surfels from the decoded field…'});
+    const recovery=!glb&&!surfelGlb&&!!levelInputs,kept=recovery?'raw reconstruction':'surfels';
+    set({status:'saving',stage:glb?'Saving mesh':`Saving ${kept}`,progress:glb?'Saving generated mesh…':`Saving the ${kept} from the decoded field…`});
     const saved=await persist(glb,generation,label,{surfelGlb,surfels,levelInputs});
     state.results.push(saved);state.pending=null;
     // A mesh-finishing failure stays the run's outcome; the surfels are what it kept.
-    if(meshError)set({status:'failed',error:`inference: ${meshError}; surfels saved`,stage:null,progress:'The mesh could not be finished. The surfels from the decoded field were saved.'});
+    if(meshError)set({status:'failed',error:`inference: ${meshError}; ${kept} saved`,stage:null,progress:`The mesh could not be finished. The ${kept} from the decoded field was saved.`});
     else set({status:'complete',error:null,stage:'Complete',progress:'Mesh saved. Add it to this scene when you want.'});
     return saved;
   }
@@ -218,11 +221,11 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
         // Decoding succeeded and mesh finishing failed: keep the surfels built before cleanup, saved
         // through the same pending/retry path, with the mesh failure as the run's outcome.
         const kept=phase==='inference'&&!cancelled?error?.trellisSurfelsRun:null;
-        if(kept?.surfelGlb){
+        if(kept?.surfelGlb||kept?.levelInputs){
           const message=error?.message||String(error);
           state.pending={glb:null,generation:{...kept.generation,input:{...kept.generation?.input,source:input.source}},label:kept.label||label,
-            surfelGlb:kept.surfelGlb,surfels:kept.surfels??null,meshError:message};
-          try{await storePending();}catch(persistError){set({status:'failed',error:`inference: ${message}; surfels not saved yet: ${persistError.message}`,stage:null});}
+            surfelGlb:kept.surfelGlb,surfels:kept.surfels??null,levelInputs:kept.levelInputs??null,meshError:message};
+          try{await storePending();}catch(persistError){set({status:'failed',error:`inference: ${message}; decoded output not saved yet: ${persistError.message}`,stage:null});}
           throw error;
         }
         set({status:'failed',error:`${phase}: ${error?.message||error}`,stage:null});throw error;
@@ -287,19 +290,23 @@ export async function describeTrellisInput({image,cutout,label,fetch=globalThis.
 }
 
 async function buildRunSurfels({runtime,out,rawMesh,withForeground,provenance}){
+  let levelInputs;
   try{
     if(!rawMesh)throw Error('the asset consumer did not hand over the raw mesh');
-    const [gc,mc,mf]=await Promise.all([out.geometry.coordinates,out.material.coordinates,out.material.features].map(t=>runtime.readTensor(t)));
+    // Retain reconstruction inputs independently of optional surfel support.
+    // Copy the raw mesh before a cleanup worker can transfer its buffers away.
+    const decode={vertices:rawMesh.vertices.slice(),triangles:rawMesh.triangles.slice()};
+    const [mc,mf]=await Promise.all([out.material.coordinates,out.material.features].map(t=>runtime.readTensor(t)));
+    levelInputs={decode,materialFields:{features:new Float32Array(mf),coordinates:new Int32Array(mc),resolution:out.material.resolution}};
+    const gc=await runtime.readTensor(out.geometry.coordinates);
+    decode.coordinates=new Int32Array(gc);
     const {buildSurfelField,encodeSurfelGLB}=await import('./trellis-surfels.mjs');
     return await withForeground('trellis-surfels',()=>{
       const field=buildSurfelField({...rawMesh,geometryCoordinates:new Int32Array(gc),
         material:{coordinates:new Int32Array(mc),features:new Float32Array(mf),resolution:out.material.resolution}});
       const surfelGlb=encodeSurfelGLB(field,{provenance});
-      // The decode and material, as copies the cleanup cannot take away, for the GI proxy tiers built
-      // once the finished mesh is stored (generation-levels-runner.mjs).
-      const levelInputs={decode:{vertices:rawMesh.vertices.slice(),triangles:rawMesh.triangles.slice(),coordinates:new Int32Array(gc)},
-        materialFields:{features:new Float32Array(mf),coordinates:new Int32Array(mc),resolution:out.material.resolution}};
+
       return {surfelGlb,surfels:{status:'built',count:field.count,bytes:surfelGlb.byteLength,resolution:field.resolution},levelInputs};
     });
-  }catch(error){return {surfelGlb:null,surfels:{status:'failed',error:String(error?.message||error)}};}
+  }catch(error){return {surfelGlb:null,surfels:{status:'failed',error:String(error?.message||error)},...(levelInputs?{levelInputs}:{})};}
 }

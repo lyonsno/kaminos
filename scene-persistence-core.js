@@ -1,3 +1,5 @@
+import {checkedAssembly} from './scene-assembly.mjs';
+import {canonicalAuthoredWaterFlowRecords} from './authored-mls-water.mjs';
 import {defaultSceneRecordOperations,normalizeSceneObjectRecord} from './scene-record-operations.mjs';
 import {checkedRepetition} from './scene-repetition.mjs';
 import {checkedViewportDisplay} from './viewport-display-settings.mjs';
@@ -30,6 +32,7 @@ function normalizeSceneGroupRecord(record) {
     id,
     label: record.label ?? id,
     objectIds,
+    ...(record.assembly?{assembly:checkedAssembly(record.assembly,objectIds)}:{}),
     type:GROUP_TYPE,transform:checkedGroupPose(record.transform || identityGroupPose()),
     ...(record.repetition?{repetition:checkedRepetition(record.repetition)}:{}),
     source: record.source ?? null,
@@ -89,10 +92,14 @@ export function hasVolumePrimitives(data) {
   return Array.isArray(data?.volumePrimitives?.primitives) && data.volumePrimitives.primitives.length > 0;
 }
 
+function sceneContentsAreLoadable(data, objectRecords) {
+  return objectRecords.length > 0 || hasVolumePrimitives(data) || !!normalizeComposition(data.composition)
+    || !!normalizeLocalLiquidSetup(data.localLiquid);
+}
+
 export function sceneDocumentIsLoadable(data) {
   if (!data?.version) return false;
-  return getSceneObjectRecords(data).length > 0 || hasVolumePrimitives(data) || !!normalizeComposition(data.composition)
-    || !!normalizeLocalLiquidSetup(data.localLiquid);
+  return sceneContentsAreLoadable(data, getSceneObjectRecords(data));
 }
 
 export function isReloadableSceneObjectRecord(record) {
@@ -105,13 +112,16 @@ export function assertSceneSourcesReloadable(records=[]) {
 
 export function planSceneRestore(data, { allowEmpty = false } = {}) {
   if(Number(data?.version)>SCENE_VERSION)throw Error('Scene version requires a newer authoring client');
-  if (!sceneDocumentIsLoadable(data) && !(allowEmpty && Number.isInteger(data?.version) && data.version > 0)) throw new Error('Invalid scene format');
+  if (!data?.version) throw new Error('Invalid scene format');
+  // Domain normalization can detach large saved checkpoints; reuse that work
+  // for admission rather than normalizing the same records a second time.
   const authoredObjects = getSceneObjectRecords(data);
+  if (!sceneContentsAreLoadable(data, authoredObjects) && !(allowEmpty && Number.isInteger(data.version) && data.version > 0)) throw new Error('Invalid scene format');
   checkSceneCollisionReferences(authoredObjects,{implicitFireDomain:data.version<9&&!!normalizeComposition(data.composition)});
   const fire = authoredObjects.some(o=>o.type===FIRE_DOMAIN_TYPE)?readFireObjects(authoredObjects,data.fireRendering):null;
   if(data.version>=9 && data.composition && !fire)throw Error('Saved fire domain is missing');
   if(fire)data={...data,flameDomainTranslation:fire.frame.translation,flameDomainScale:fire.frame.scale,flameDomainFollowSource:fire.frame.followSource};
-  const objects = authoredObjects.filter(o=>o.type!==FIRE_DOMAIN_TYPE);
+  const objects = canonicalAuthoredWaterFlowRecords(authoredObjects.filter(o=>o.type!==FIRE_DOMAIN_TYPE),data.localLiquid??{});
   const flameSources = objects.filter(record => record.type === FLAME_EMITTER_TYPE);
   const flameIds=new Set();for(const record of flameSources){if(flameIds.has(record.id))throw Error('Duplicate flame source identity');flameIds.add(record.id);}
   if (flameSources.length && !normalizeComposition(data.composition)) throw new Error('Flame source requires its saved flame composition');

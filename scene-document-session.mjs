@@ -103,13 +103,21 @@ export function createSceneDocumentSession({
     if (restoring && requests.isCurrent(restoring.id)) return;
     restoring = null; phase = 'idle'; blocked = false; revision++;
   }
+  function beginSave() {
+    const startRevision = revision, loadGeneration = requests.current(), target = filename;
+    return Object.freeze({filename:target, assertCurrent() {
+      if (revision !== startRevision || requests.current() !== loadGeneration || state().blocked) {
+        throw Error('Scene changed during Save; start Save again for the current document');
+      }
+    }});
+  }
   function snapshot() { return Object.freeze({filename, blocked, revision}); }
   function resume(snapshot) {
     if (snapshot?.revision !== revision || restoring) return false;
     filename = snapshot.filename; blocked = snapshot.blocked; return true;
   }
   return Object.freeze({state, save, capture:(document,target,options)=>save(document,target,options,true), restore,
-    authoringChanged, sceneCleared, snapshot, resume,
+    authoringChanged, sceneCleared, snapshot, resume, beginSave,
     holdRestore() { blocked = true; revision++; },
   });
 }

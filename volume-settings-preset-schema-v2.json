@@ -1059,7 +1059,8 @@
       "additiveDefault": "authored",
       "allowedValues": [
         "authored",
-        "compact-3"
+        "compact-3",
+        "shred-only"
       ],
       "additiveSinceControlCount": 256
     },

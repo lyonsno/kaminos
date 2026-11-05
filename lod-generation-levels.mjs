@@ -14,7 +14,7 @@
 import {prepareLowTiers, readGLBWorldMesh, measureGeometricError, glbNodeWorldMatrices} from './mesh-lod-ladder.mjs';
 import {addNormalMapToGLB, createHeroNormalSampler} from './lod-normal-bake.mjs';
 import {readGLBLocalSurfaceAndMaterials, createGLBMeshMaterialBaker} from './lod-mesh-bake.mjs';
-import {buildSurfelField, mergeSurfelLevel, surfelPositions, sampleSurfelNormals, surfelTriangles, encodeSurfelGLB} from './trellis-surfels.mjs';
+import {buildSurfelField, mergeSurfelLevel, surfelPositions, sampleSurfelNormals, surfelTriangles, encodeSurfelGLB, readSurfelGLBExtension} from './trellis-surfels.mjs';
 
 export const LOW_TIER_ROUTE = 'closed-remesh+projection+trellis-simplify';
 export const SURFEL_TIER_ROUTE = 'trellis-surfels+hero-normals';
@@ -25,20 +25,22 @@ export const GENERATION_LEVEL_REFERENCES = Object.freeze(['hero', 'raw-decode'])
 const sha256 = async array => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new Uint8Array(array.buffer, array.byteOffset, array.byteLength)))]
   .map(b => b.toString(16).padStart(2, '0')).join('');
 
-export async function prepareGenerationLevels({decode = null, materialFields = null, source, heroGLB = null, server = '', fetch = globalThis.fetch,
-  THREE, MeshBVH, finish, unwrapMesh, WorkerClass, targets = [5000, 1000, 500], surfelFactors = [], textureSizeFor, replace = false, normalMaps = true, input = null, route = null,
+export async function prepareGenerationLevels({decode = null, materialFields = null, source, heroGLB = null, surfelGLB = null, surfelSource = null, server = '', fetch = globalThis.fetch,
+  THREE, MeshBVH, finish, unwrapMesh, WorkerClass, targets = [25000, 10000, 5000, 1000, 500], surfelFactors = [], textureSizeFor, replace = false, normalMaps = true, input = null, route = null,
   reference = 'hero', report = {}, onPhase = () => {}}) {
   const fromHeroGLB = !decode;
+  const hasSurfelGLB = Boolean(surfelGLB || surfelSource);
   let {vertices, triangles, coordinates: decodeCoordinates} = decode ?? {};
-  Object.assign(report, {schema: 'kaminos.lod-tiers-report.v0', source, targets, ...(surfelFactors.length ? {surfelFactors} : {}), tiers: report.tiers ?? []});
+  Object.assign(report, {schema: 'kaminos.lod-tiers-report.v0', source, ...(surfelSource ? {surfelSource} : {}), targets, ...(surfelFactors.length ? {surfelFactors} : {}), tiers: report.tiers ?? []});
   const phase = name => { report.phase = name; onPhase(report); };
   try {
     if (!GENERATION_LEVEL_REFERENCES.includes(reference)) throw Error(`reference must be one of ${GENERATION_LEVEL_REFERENCES.join(', ')}`);
     if (reference === 'raw-decode' && heroGLB) throw Error('a raw-decode reference takes no hero; levels are measured against the decode');
     if (fromHeroGLB && reference !== 'hero') throw Error('decode is required when reference is not hero');
     if (surfelFactors.length && reference !== 'hero') throw Error('merged surfel levels with hero normals require reference: hero');
-    if (surfelFactors.length && (fromHeroGLB || !(decodeCoordinates instanceof Int32Array) || decodeCoordinates.length !== vertices.length))
-      throw Error('decode.coordinates (Int32Array[N,3]) are required when surfelFactors are requested');
+    if (surfelSource && !/^[a-f0-9]{64}$/.test(surfelSource)) throw Error('surfelSource must be the sha256 of a stored surfel GLB');
+    if (surfelFactors.length && !hasSurfelGLB && (fromHeroGLB || !(decodeCoordinates instanceof Int32Array) || decodeCoordinates.length !== vertices.length))
+      throw Error('decode.coordinates (Int32Array[N,3]) or surfelGLB/surfelSource are required when surfelFactors are requested');
     report.reference = reference;
     if (!/^[a-f0-9]{64}$/.test(source || '')) throw Error('source must be the sha256 of the stored mesh the levels belong to');
     if ((!targets.length && !surfelFactors.length) || !targets.every(t => Number.isSafeInteger(t) && t > 0) || !surfelFactors.every(k => Number.isSafeInteger(k) && k > 0))
@@ -59,8 +61,13 @@ export async function prepareGenerationLevels({decode = null, materialFields = n
       if (!response.ok) throw Error(`source mesh ${source} is not stored (HTTP ${response.status})`);
       heroGLB = await response.arrayBuffer();
     }
+    if (surfelFactors.length && !surfelGLB && surfelSource) {
+      const sResp = await fetch(`${server}/api/read?root=generated-meshes&path=${surfelSource}.glb`);
+      if (!sResp.ok) throw Error(`surfel source mesh ${surfelSource} is not stored (HTTP ${sResp.status})`);
+      surfelGLB = await sResp.arrayBuffer();
+    }
     let glbSurface = null;
-    if (fromHeroGLB) {
+    if (fromHeroGLB && targets.length) {
       glbSurface = await readGLBLocalSurfaceAndMaterials(heroGLB);
       vertices = glbSurface.vertices;
       triangles = glbSurface.triangles;
@@ -81,9 +88,9 @@ export async function prepareGenerationLevels({decode = null, materialFields = n
         return {point: [hit.point.x, hit.point.y, hit.point.z], normal: [nx/l, ny/l, nz/l]};
       }, {bvh});
     };
-    const closestSource = closestFor(vertices, triangles);
-    const closestPoint = (x, y, z) => closestSource(x, y, z).point;
-    const bakeMaterial = fromHeroGLB ? createGLBMeshMaterialBaker(glbSurface, {THREE, MeshBVH, bvh: closestSource.bvh}) : undefined;
+    const closestSource = (!fromHeroGLB || targets.length) ? closestFor(vertices, triangles) : null;
+    const closestPoint = closestSource ? (x, y, z) => closestSource(x, y, z).point : null;
+    const bakeMaterial = (fromHeroGLB && targets.length) ? createGLBMeshMaterialBaker(glbSurface, {THREE, MeshBVH, bvh: closestSource.bvh}) : undefined;
     phase('tiers');
     const started = performance.now();
     const tiers = targets.length ? await prepareLowTiers({mesh: {vertices, triangles}, materialFields, bakeMaterial, targets, closestPoint, finish, unwrapMesh, WorkerClass,
@@ -106,6 +113,7 @@ export async function prepareGenerationLevels({decode = null, materialFields = n
       // Error against the hero, in the world frame both are drawn in. A frame mismatch is refused
       // before anything is stored.
       hero = readGLBWorldMesh(heroGLB);
+      if (fromHeroGLB && !report.raw) report.raw = {vertices: hero.vertices.length / 3, faces: hero.faces.length / 3, fromHeroGLB: true};
       hb = bounds(hero.vertices); heroDiagonal = Math.hypot(...hb.hi.map((h, a) => h - hb.lo[a])); heroClosest = closestFor(hero.vertices, hero.faces);
       for (const tier of tiers) {
         const world = readGLBWorldMesh(tier.glb);
@@ -155,7 +163,9 @@ export async function prepareGenerationLevels({decode = null, materialFields = n
     if (surfelFactors.length) {
       phase('surfels');
       if (!report.referenceHasNormals) throw Error('hero has no shading normals to sample onto surfels');
-      const fullField = buildSurfelField({vertices, triangles, geometryCoordinates: decodeCoordinates, material: materialFields});
+      const fullField = surfelGLB
+        ? readSurfelGLBExtension(surfelGLB).field
+        : buildSurfelField({vertices, triangles, geometryCoordinates: decodeCoordinates, material: materialFields});
       for (const factor of surfelFactors) {
         const t0 = performance.now(), {field: merged} = mergeSurfelLevel(fullField, factor);
         const reach = 2 / merged.resolution;
@@ -167,13 +177,15 @@ export async function prepareGenerationLevels({decode = null, materialFields = n
         const surfelTier = {target: `x${factor}`, mergeFactor: factor, resolution: sampled.field.resolution, representation: 'trellis-surfels',
           faces: sampled.field.count, route: SURFEL_TIER_ROUTE, closed: false};
         checkFrame(surfelTier, drift(bounds(worldCenters), hb, heroDiagonal));
-        surfelTier.errorAgainstRawDecode = measureGeometricError({source: {vertices, faces: triangles}, level: {vertices: tri.positions, faces: triIndices},
-          closestSource, closestLevel: closestFor(tri.positions, triIndices), reference: {kind: 'raw-decode', input, digests: inputDigests, faces: triangles.length / 3}});
+        if (!fromHeroGLB) {
+          surfelTier.errorAgainstRawDecode = measureGeometricError({source: {vertices, faces: triangles}, level: {vertices: tri.positions, faces: triIndices},
+            closestSource, closestLevel: closestFor(tri.positions, triIndices), reference: {kind: 'raw-decode', input, digests: inputDigests, faces: triangles.length / 3}});
+        }
         surfelTier.error = measureGeometricError({source: hero, level: {vertices: worldPos, faces: triIndices},
           closestSource: heroClosest, closestLevel: closestFor(worldPos, triIndices), reference: {kind: 'hero', sha256: source, faces: hero.faces.length / 3}});
-        surfelTier.normalMap = {source: {kind: 'hero', sha256: source}, sampler: 'ray-along-surfel-normal+footprint',
+        surfelTier.normalMap = {source: {kind: 'hero', sha256: source, ...(surfelSource ? {surfelSha256: surfelSource} : {})}, sampler: 'ray-along-surfel-normal+footprint',
           reach, diameter: sampled.diameter, sampledSurfels: sampled.sampled, unsampledSurfels: sampled.unsampled};
-        surfelTier.glb = encodeSurfelGLB(sampled.field, {provenance: {input, route: SURFEL_TIER_ROUTE, mergeFactor: factor, heroSha256: source, normalMap: surfelTier.normalMap}, fallbackFactor: 4});
+        surfelTier.glb = encodeSurfelGLB(sampled.field, {provenance: {input: input ?? (surfelSource ? `glb:${surfelSource}` : `glb:${source}`), route: SURFEL_TIER_ROUTE, mergeFactor: factor, heroSha256: source, ...(surfelSource ? {surfelSha256: surfelSource} : {}), normalMap: surfelTier.normalMap}, fallbackFactor: 4});
         surfelTier.timing = {surfelSeconds: +((performance.now() - t0) / 1000).toFixed(3)};
         tiers.push(surfelTier);
       }

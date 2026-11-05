@@ -101,12 +101,16 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   byId('scene-water-data').onclick=()=>document.defaultView.selectSceneField('water-field');
   const entries = [];
   // Document commands and the viewport toolbar serve both workspaces.
-  const sharedDestinations = new Set(['authoring-document-actions', 'authoring-add-slot', 'authoring-gizmo-slot', 'authoring-navigation-slot']);
+  const sharedDestinations = new Set(['authoring-document-actions', 'authoring-add-slot', 'authoring-gizmo-slot', 'authoring-navigation-slot', 'authoring-viewport-tools']);
   const move = (node, destination) => entries.push({ node, destination: byId(destination),
     workbenchDestination: sharedDestinations.has(destination) ? byId(destination) : null });
   move(byId('scene-object-list').closest('.panel'), 'authoring-tree');
+  move(byId('assembly-edit-mode'), 'authoring-viewport-tools');
   move(byId('transform-inspector'), 'authoring-transform-slot');
+  move(byId('selected-assembly-properties'), 'authoring-type-slot');
   move(byId('selected-flame-properties'), 'authoring-type-slot');
+  if(byId('selected-ash-source-properties'))move(byId('selected-ash-source-properties'), 'authoring-type-slot');
+  if(byId('selected-ash-properties'))move(byId('selected-ash-properties'), 'authoring-type-slot');
   if(byId('selected-water-properties'))move(byId('selected-water-properties'), 'authoring-type-slot');
   if(byId('selected-water-simulation-properties'))move(byId('selected-water-simulation-properties'), 'authoring-type-slot');
   move(byId('selected-bed-properties'), 'authoring-type-slot');
@@ -119,14 +123,12 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   move(byId('selected-object-relations'), 'authoring-type-slot');
   move(byId('selected-group-properties'), 'authoring-type-slot');
   move(byId('selected-repetition-properties'), 'authoring-type-slot');
-  move(byId('selected-assembly-properties'), 'authoring-type-slot');
   move(byId('authoring-source-environment'), 'authoring-world-slot');
   move(byId('authoring-source-render'), 'authoring-render-slot');
   move(byId('authoring-source-fire-light'), 'authoring-render-slot');
   const renderingPanel=byId('rendering-panel-content');
   if(renderingPanel)move(renderingPanel,'authoring-render-slot');
   let workbenchRenderingHidden=renderingPanel?.hidden;
-  move(byId('local-liquid-performance'), 'authoring-type-slot');
   move(byId('composition-label').closest('.authoring-controls'), 'authoring-composition-slot');
   move(byId('scene-add-menu').closest('nav'), 'authoring-add-slot');
   move(byId('navigation-input-mode').closest('label'), 'authoring-navigation-slot');
@@ -229,7 +231,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   });
   observer.observe(byId('transform-inspector'), { attributes: true, attributeFilter: ['data-selected-object-id', 'data-selected-group-id','data-selected-field-id'] });
   const updateCount = () => {
-    const count = byId('scene-object-list').querySelectorAll('[data-scene-object-id]').length;
+    const count = byId('scene-object-list').querySelectorAll('[data-scene-object-id], [data-scene-group-id]').length;
     byId('authoring-object-count').textContent = `${count} ${count === 1 ? 'object' : 'objects'}`;
   };
   const treeObserver = new Observer(updateCount);

@@ -23,6 +23,38 @@ The Python check never fails a run. Before running anything, whatever tests are 
 
 The runner checks that every package in `package-lock.json` is installed at the locked version before running anything, and records whether integrity could be verified. It hands child tests a stub executable through `KAMINOS_CHROME`, `CHROME_BIN`, `CHROME` and `KAMINOS_SHARP_WEBGPU_CHROME`. A witness that reaches a browser launch hits the stub, which records the attempt and fails; the run then fails and names the test. Witnesses that read other variables or hardcode a browser path are not covered.
 
+## Native shader tests
+
+For WGSL work, read [Testing WGSL behavior](wgsl-testing/README.md) first. New shader-behavior checks must execute the production WGSL rather than assert its source wording.
+
+`@kaminos/shader-herder` is a development dependency installed from the versioned archive in `artifacts/shader-herder/`. Ordinary `npm ci` installs it and its locked Dawn binding. The test bridge imports this installed package; no neighboring checkout is needed. `SHADER_HERDER_ROOT` explicitly selects a development package root, and an invalid override fails instead of falling back to another source.
+
+Run the shader checks through the normal runner:
+
+```sh
+npm test -- --only tests/shader-herder-resolution.mjs,tests/shader-herder-bridge.mjs,tests/shader-herder-production.mjs,tests/fine-grid-witness-contract.mjs
+```
+
+The bridge requires an Apple hardware adapter. When a macOS Seatbelt sandbox specifically blocks Metal shared-event creation, it can run Dawn's null backend for compilation and pipeline validation, with a warning that numerical execution was unavailable. Other adapter or validation failures remain errors. `shader-herder-evidence:` records in each test's log identify the effective package entry, adapter, route and evidence authority. They distinguish `hardware` from `compiler-only`.
+
+Fallback requires nonblank WGSL and at least one declared compute `entryPoint` whose pipeline passes validation. Omitted, blank or module-only inputs fail instead of skipping the numerical callback and certifying no work. Compiler-only records include counts of validated modules and compute pipelines. Explicit null/software options cannot invoke the hardware callback or receive hardware authority, including under strict mode. Adapter architecture is optional descriptive metadata; acceptance checks vendor, fallback status and numerical behavior.
+
+Require hardware numerical execution for the production checks with:
+
+```sh
+SHADER_HERDER_STRICT_METAL=1 npm test -- --only tests/shader-herder-production.mjs,tests/fine-grid-witness-contract.mjs
+```
+
+The bridge's own fallback tests deliberately simulate the sandbox restriction; run them without strict mode. Production coverage currently includes extracted immersed-source WGSL, optical emission/transmittance composition and the actual Fine-grid restriction/momentum/prolongation witness. The joined-step and World-tree tests on the older integration branch require their simulation stack; these checks do not establish that stack's current-main integration or rendered appearance.
+
+The flow reconstruction pilot replaces twelve math-wording assertions in `tests/volume-flow-reconstruction-kernel-contracts.mjs` with three numerical tests in `tests/volume-flow-reconstruction-native.mjs`. Run both through the ordinary runner:
+
+```sh
+SHADER_HERDER_STRICT_METAL=1 npm test -- --only tests/volume-flow-reconstruction-kernel-contracts.mjs,tests/volume-flow-reconstruction-native.mjs
+```
+
+The native tests extract the renderer's actual sample struct and mixing, normal, reconstruction and sidecar functions. Controlled fields expose lane mixing/clamping, finite gradient normals, tangent direction, symmetric tap locations, radius/coherence and kernel-off tap counts. Each test includes a valid WGSL mutation whose numerical result must fail its oracle. Remaining source checks cover UI, admission and receipt wiring. The controlled fields isolate arithmetic and sampling policy; they do not exercise renderer texture bindings, trilinear interpolation or rendered appearance. Compiler-only fallback validates the evaluation bodies and pipelines, including the controls, while explicitly withholding numerical authority.
+
 ## Warnings
 
 Warnings report something worth fixing that should not stop anyone's work. They never fail a run or change its exit code. The report lists them in `warnings`, each with its source (`python-dependencies`, `test`, `run-ledger`, `sandbox` or `runner`), the test that wrote it if any, and the message; the summary prints each one once, after the counts line. A test emits one by writing a line that begins `kaminos-test-warning: ` to stdout or stderr, for example `console.log('kaminos-test-warning: no WebGPU adapter, skipped the GPU leg')`. The line stays in the test's log and is left out of its failure signature, so a test that warns keeps the signature it would have without the warning.

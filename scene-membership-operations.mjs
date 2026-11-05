@@ -9,7 +9,7 @@ export function createSceneMembershipOperations({
   scene, records, roots, domains = {},
   select = (ids, activeId) => scene.select(ids, activeId),
   createGroup = () => {},
-  finishInteraction = () => {}, captureContext = () => ({}),
+  finishInteraction = () => {}, captureContext = () => ({}), selectionScope = () => null,
   changed = () => {}, status = () => {},
 }) {
   let edits = null, unsubscribe = null;
@@ -162,7 +162,9 @@ export function createSceneMembershipOperations({
     if (retain) scene.retain(entry, disposeTree);
     else if (disposeTree && !domain(entry).dispose) disposeTree(entry.object);
     else dispose(entry);
-    const fallback = wasActive ? (scene.objects[index] || scene.objects[index - 1]) : scene.find(scene.activeObjectId);
+    const scope=selectionScope();
+    const fallback = wasActive ? (scope ? scope.map(id=>scene.find(id)).find(Boolean)
+      : scene.objects[index] || scene.objects[index - 1]) : scene.find(scene.activeObjectId);
     if (scene.selection.ids.length) {
       select(scene.selection.ids, scene.selection.activeId);
     } else if (!wasActive && previousGroup && scene.groups.some(group => group.id === previousGroup)) {

@@ -5,15 +5,17 @@ export function createSceneComponentEdit({selected,cancel,refresh}){
   if(!current||leaving)return;leaving=true;
   try{cancel();const owner=current;current=null;owner.adapter.exit();refresh();}finally{leaving=false;}
  }
- function active(){if(current&&selected()!==current.id)exit();return !!current;}
+ function active(){if(current&&!(current.adapter.isCurrent?.()??(selected()===current.id)))exit();return !!current;}
  function target(){if(!active())return null;const value=current.adapter.target();return value?{...value,ownerId:current.id}:null;}
  return {
   active,target,exit,
+  scope(){return active()?current.adapter.scope?.()??null:null;},
+  ownsTransforms(){return active()&&!current.adapter.scope;},
   resolve(id){const value=target();return value?.id===id?value:null;},
   toggle(id){
    if(active()){exit();return true;}
    const adapter=owners.get(id);if(!adapter)return false;
-   cancel();adapter.enter();current={id,adapter};refresh();return true;
+   cancel();current={id,adapter};try{adapter.enter();refresh();return true;}catch(error){exit();throw error;}
   },
   pick(event,context){if(!active())return false;current.adapter.pick?.(event,context);return true;},
   selectAll(action){if(active())current.adapter.selectAll?.(action);},

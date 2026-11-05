@@ -53,7 +53,7 @@ test('continuous water runtime receives visible sources without deleting hidden 
  assert.deepEqual(Array.from(context.localLiquidEmitterState().emitters,x=>x.id),['b']);assert.equal(objects.length,2);
 });
 test('a hidden water field submits neither solver nor water rendering work while ordinary scene keeps drawing',()=>{
- const start=html.indexOf('      if (waterFeature.host) {',html.indexOf('  function renderSceneFrame()')),end=html.indexOf('    }));',start),arm=html.slice(start,end);
+ const start=html.indexOf('      if (waterFeature.host) {',html.indexOf('  function renderSceneFrame()')),end=html.indexOf('    })));',start),arm=html.slice(start,end);
  let water=0,scene=0;const context={localLiquidHost:{render:()=>water++,state:()=>({clock:{paused:false,step:0,timeSeconds:0}})},isSceneItemVisible:()=>false,outputCaptureExtent:null,recordingFrameSink:null,ordinarySceneTransportFrame:null,
   authoredWaterControls:null,sharedWorkbench:null,console,localLiquidFailure:null,refreshLocalLiquidPerformance(){},setInfo(){},applySceneEmissiveCamera(){},renderPipeline:{render:()=>scene++},outlinedSceneOutput:{},outlinedCameraOutput:{},matchedCameraEffective:false};
  sceneContext(context);vm.runInContext(arm,context);assert.equal(water,0);assert.equal(scene,1);
@@ -81,9 +81,11 @@ test('saved field visibility governs restore even when the hidden set did not ch
  const start=html.indexOf("  const firePresent=",html.indexOf('async function applySceneDocument(')),end=html.indexOf('  // Apply camera',start);assert.ok(start>0&&end>start);
  for(const initiallyActive of [true,false])for(const visible of [true,false]){
   let active=initiallyActive;const runtime={isActive:()=>active,setActive:async value=>{active=value;}};
-  const context={hasVolumePrimitiveScene:false,activeSceneComposition:{},URLSearchParams,location:{search:''},volumePrototype:runtime,isSceneItemVisible:()=>visible,setActiveTab(){},loadRequestId:1,sceneLoadRequests:{isCurrent:()=>true}};
+  let readouts=0;
+  const context={hasVolumePrimitiveScene:false,activeSceneComposition:{},URLSearchParams,location:{search:''},volumePrototype:runtime,isSceneItemVisible:()=>visible,setActiveTab(){},refreshVolumeReadout(){readouts++;},loadRequestId:1,sceneLoadRequests:{isCurrent:()=>true}};
   context.syncAuthoredFireActivity=createSceneSimulationActivity({prototype:()=>runtime,wanted:()=>visible});
   sceneContext(context);await vm.runInContext('(async()=>{'+html.slice(start,end)+'})()',context);assert.equal(active,visible,'restore must finish with the saved visibility, independently of prior runtime activity');
+  assert.equal(readouts,1,'restore refreshes playback controls after field activation settles');
  }
 });
 

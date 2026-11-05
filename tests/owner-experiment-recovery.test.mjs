@@ -9,7 +9,7 @@ import * as ownerAddress from '../owner-experiment-entry.mjs';
 import {fireAtBoot} from '../fire-boot.mjs';
 import {createSceneOwnerControls} from '../scene-owner-controls.mjs';
 const html=fs.readFileSync(process.env.KAMINOS_RECOVERY_TEST_INDEX||new URL('../index.html',import.meta.url),'utf8');
-const start=html.indexOf('sceneInitialization.then(async () => {'),end=html.indexOf('</script>',start);assert.ok(start>=0&&end>start);
+const start=html.indexOf('// --- Init ---'),end=html.indexOf('</script>',start);assert.ok(start>=0&&end>start);
 const tail=html.slice(start,end);
 const entryStart=html.indexOf('async function installOwnerWorkbenchEntry()'),entryEnd=html.indexOf('\n}',entryStart);assert.ok(entryStart>=0&&entryEnd>entryStart);
 const entry=html.slice(entryStart,entryEnd+2);
@@ -21,14 +21,14 @@ const inputs={size:2,label:'water & flame / Δ',nested:{step:1/240},samples:Arra
 const inputsText=JSON.stringify(inputs);
 const incoming=new URL('http://localhost/index.html?workspace=workbench&experiment=fixture%2Fowner&experiment_inputs='+encodeURIComponent(inputsText)+'&settings_preset='+wrong+'#workspace=workbench&scene=tuned.kaminos.json');
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
-async function startup(url,{matching=false}={}){
- let redirects=[],loads=0,admissions=0,owners=0,rejection=null;
+async function startup(url,{matching=false,restoreError=null}={}){
+ let redirects=[],loads=0,admissions=0,owners=0,rejection=null,info=[];
  const location={href:url.href,search:url.search,hash:url.hash,origin:url.origin,replace:value=>redirects.push(value)};
- const c={URL,URLSearchParams,Promise,Symbol,File:class{},compositionRestoreUrl,forwardCompositionHash,...ownerAddress,sceneInitialization:Promise.resolve(),document:{body:{classList:{add(){}}},getElementById:()=>({value:'0.6'})},startupPreferences:null,startupPreferencesLoaded:Promise.resolve(),factorySceneDocument:null,preferencesUI:null,buildSceneData:()=>({environment:{}}),environmentDefaults:()=>({}),installUserPreferences:()=>({}),userPreferences:{state:()=>({receipt:{revision:null}})},window:{location},location,console:{error(){}},sceneSaveBlockedByFailedRestore:false,
+ const c={URL,URLSearchParams,Promise,Symbol,File:class{},compositionRestoreUrl,forwardCompositionHash,...ownerAddress,grInit(){},initScene:()=>Promise.resolve(),settleStartupVeil:(_document,promise)=>promise,document:{body:{classList:{add(){}}},getElementById:()=>({value:'0.6'})},startupPreferences:null,startupPreferencesLoaded:Promise.resolve(),factorySceneDocument:null,preferencesUI:null,buildSceneData:()=>({environment:{}}),environmentDefaults:()=>({}),installUserPreferences:()=>({}),userPreferences:{state:()=>({receipt:{revision:null}})},window:{location},location,console:{error(){}},sceneSaveBlockedByFailedRestore:false,
  initEnvButtons(){},loadDemoButtons(){},restoreSettings(){return 'studio';},loadEnvironment:()=>Promise.resolve(),kaminosMeshAssetRouteFromSearch:()=>null,kaminosSplatAssetRouteFromSearch:()=>null,kaminosImageAssetRouteFromSearch:()=>null,
- fireAtBoot,initKaminosVolumeRoute:()=>Promise.resolve(),reportKaminosVolumeRouteInitFailure(){},initKaminosMotionAgencyRoute(){},initWorldChambersRoute(){},initKaminosFingerFluidBenchRoute(){},initKaminosFingerJuiceHostRoute(){},initKaminosFingerJuiceTabRoute(){},setActiveTab(){},compositionStatus(){},setInfo(){},planSceneRestore:()=>({composition}),fetch:async()=>({ok:true,json:async()=>({})}),
- async loadSceneFile(){loads++;c.sceneDocument.authoringChanged();},resolveWorkbenchViewerReady(){admissions++;},rejectWorkbenchViewerReady(error){rejection=error.message;},async installOwnerWorkbenchEntry(){owners++;},};
- sceneContext(c);vm.runInContext(tail,c);for(let i=0;i<5;i++)await flush();return {redirects,loads,admissions,owners,rejection,blocked:c.sceneDocument.state().blocked};
+ fireAtBoot,initKaminosVolumeRoute:()=>Promise.resolve(),reportKaminosVolumeRouteInitFailure(){},initKaminosMotionAgencyRoute(){},initWorldChambersRoute(){},initKaminosFingerFluidBenchRoute(){},initKaminosFingerJuiceHostRoute(){},initKaminosFingerJuiceTabRoute(){},setActiveTab(){},compositionStatus(){},setInfo(text){info.push(text);},planSceneRestore:()=>({composition}),fetch:async()=>({ok:true,text:async()=>'{}'}),
+ async loadSceneFile(){loads++;if(restoreError)return {ok:false,error:restoreError};c.sceneDocument.authoringChanged();return {ok:true};},resolveWorkbenchViewerReady(){admissions++;},rejectWorkbenchViewerReady(error){rejection=error.message;},async installOwnerWorkbenchEntry(){owners++;},};
+ sceneContext(c);vm.runInContext(tail,c);for(let i=0;i<5;i++)await flush();return {redirects,loads,admissions,owners,rejection,info,experimentError:c.window.kaminosWorkbenchExperimentError,sceneError:c.window.kaminosSceneRestoreError,blocked:c.sceneDocument.state().blocked};
 }
 function destination(recovery){const url=new URL(recovery),target='http://localhost/index.html?settings_preset='+preset;return new URL(vm.runInNewContext(forwardedExpression,{forwardCompositionHash,target,location:{hash:url.hash,search:url.search}}));}
 async function openActualEntry(url){
@@ -57,4 +57,9 @@ test('closing an owner opened from recovery clears both address channels',async(
 });
 test('ordinary query inputs override stale recovered inputs as one coherent pair',async()=>{
  const url=new URL(incoming);url.hash='experiment=stale&experiment_inputs='+encodeURIComponent('{"stale":true}');assert.deepEqual((await openActualEntry(url)).opened,{id:'fixture/owner',inputs});
+});
+
+for(const restoreError of ['Ash shape exceeds effective GPU capacity: annular plate (165 cubed)','Checkpoint scene geometry or poses differ; restore the scene first'])test('scene restoration preserves its actual refusal: '+restoreError,async()=>{
+ const recovery=await startup(incoming),target=destination(recovery.redirects[0]);const result=await startup(target,{restoreError});
+ assert.equal(result.loads,1);assert.equal(result.admissions,0);assert.equal(result.owners,0);assert.equal(result.blocked,true);assert.equal(result.rejection,restoreError);assert.equal(result.sceneError,restoreError);assert.equal(result.experimentError,undefined);assert.equal(result.info.at(-1),'Composition restore failed: '+restoreError);
 });

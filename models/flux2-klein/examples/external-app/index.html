@@ -28,6 +28,16 @@
   #stop { color: #a13d49; }
   #status, #error { overflow-wrap: anywhere; margin: 14px 0 0; font-size: 13px; }
   #status { color: #596560; } #error { color: #a52d3e; }
+  [hidden] { display: none !important; }
+  aside { min-width: 0; }
+  progress { width: 100%; height: 5px; display: block; margin: 10px 0 8px; accent-color: #186b4c; }
+  .progress-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; color: #596560; font-size: 12px; }
+  details { margin-top: 22px; border-top: 1px solid #d9ddda; padding-top: 12px; font-size: 12px; }
+  summary { cursor: pointer; font-weight: 600; }
+  dl { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 7px 10px; }
+  dt { color: #596560; } dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+  .operation { grid-column: 1 / -1; text-align: left; }
+  details h2 { font-size: 12px; margin: 20px 0 8px; }
   .workspace { display: flex; min-width: 0; flex-direction: column; padding: 20px; gap: 12px; height: 100dvh; }
   .toolbar { display: flex; align-items: center; gap: 12px; min-height: 40px; }
   .toolbar label { margin: 0; font-size: 13px; font-weight: 500; }
@@ -60,11 +70,26 @@
       </div>
       <div class="actions">
         <button id="generate" disabled>Generate</button>
+        <button id="pause" class="icon" type="button" data-icon="Pause" title="Pause generation" aria-label="Pause generation" disabled></button>
         <button id="stop" class="icon" type="button" data-icon="Square" title="Stop generation" aria-label="Stop generation" disabled></button>
       </div>
     </form>
     <p id="status" role="status">Connecting to WebGPU</p>
+    <div id="progress-area" hidden>
+      <progress id="progress" max="1" aria-labelledby="status progress-label"></progress>
+      <div class="progress-meta"><span id="progress-label"></span><span id="elapsed"></span></div>
+    </div>
     <p id="error" role="alert"></p>
+    <details id="runtime" hidden><summary>Details</summary>
+      <dl><dt>Model loading</dt><dd id="time-loading">--</dd><dt>Generation</dt><dd id="time-generation">--</dd>
+        <dt>Weight bytes</dt><dd id="transfer">--</dd><dt>Model part</dt><dd id="load-part">--</dd>
+        <dt class="operation">Weight file</dt><dd id="load-file" class="operation">--</dd>
+        <dt>GPU work (est.)</dt><dd id="work">--</dd><dt>Last queue interval</dt><dd id="queue-time">--</dd>
+        <dt class="operation">Current operation</dt><dd id="operation" class="operation">--</dd></dl>
+      <h2>Phase elapsed time</h2><dl><dt>Prompt encoding</dt><dd id="time-text">--</dd>
+        <dt>Sampling</dt><dd id="time-denoise">--</dd><dt>Image decoding</dt><dd id="time-decode">--</dd>
+        <dt>Weight preparation</dt><dd id="time-weights">--</dd><dt>Reference encoding</dt><dd id="time-reference">--</dd></dl>
+    </details>
   </aside>
   <section class="workspace" aria-label="Image">
     <div class="toolbar">

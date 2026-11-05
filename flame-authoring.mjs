@@ -46,8 +46,8 @@ export function flamePresetForLocalControls(preset,localScale) {
 // Presets contain authored coefficients, never a checkpoint of the evolving fluid.
 export function createFlameAuthoring({ edits, read, write, check, load, canApply = () => {}, changed = () => {} }) {
   const id = '@flame-settings';
-  function restore(next) {
-    const checked = check(structuredClone(next));
+  function restore(next, alreadyChecked = false, notifyChanged = true) {
+    const checked = alreadyChecked ? next : check(structuredClone(next));
     const previous = read();
     try { write(checked); }
     catch (error) {
@@ -55,9 +55,9 @@ export function createFlameAuthoring({ edits, read, write, check, load, canApply
       catch (rollback) { throw new AggregateError([error, rollback], 'Flame settings failed and could not be restored'); }
       throw error;
     }
-    changed();
+    if (notifyChanged) changed();
   }
-  edits.register(id, { read, write: restore, check });
+  edits.register(id, { read, write: next => restore(next), check });
   function edit(change, label = 'Edit flame settings') {
     canApply();
     if (edits.state().active || edits.state().replaying) throw Error('Finish the current edit before applying a basin');
@@ -68,7 +68,7 @@ export function createFlameAuthoring({ edits, read, write, check, load, canApply
   }
   function apply(next, label = 'Apply flame settings') {
     const checked = check(structuredClone(next));
-    return edit(() => restore(checked), label);
+    return edit(() => restore(checked, true, false), label);
   }
   let loading = false;
   return {
@@ -178,6 +178,7 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-smoke-interpolation','Smoke kernel'], ['volume-smoke-smoothing','Smoke cubic blend'],
   ] },
   { name:'Carriers & added forces', view:'motion', fields:[
+    ['volume-appearance-model','Activity model'],
     ['volume-microdetail','Microdetail'], ['volume-interface-shred','Shred'],
     ['volume-fire-licks','Fire licks'], ['volume-swirl-jostle','Swirl jostle'], ['volume-fine-breakup-localization','Swirl jostle focus'], ['volume-fire-scale','Carrier contour scale'],
   ] },
@@ -422,6 +423,7 @@ export function createFlameInspector({ document, host, gridTuning, sharedHost = 
     if(group.name==='Domain & simulation')section.append(pressureStatus);
     if(group.name==='World smoke')section.append(worldStatus,overlayRow,overlayStatus);
     if(group.name==='Combustion')section.append(appearanceStatus);
+    if(group.name==='Carriers & added forces')section.append(byId('volume-appearance-model-state'));
     if(group.name==='Ray marching')section.append(byId('volume-raymarch-status'),byId('volume-ray-step-stats'));
     (group.quick||group.scope==='emitter'?host:panels.get(group.view)).append(section);
     sections.push({section,group,rows:sectionRows,open:!!group.open});

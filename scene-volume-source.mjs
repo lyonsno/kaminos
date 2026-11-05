@@ -23,9 +23,9 @@ export function validateScenePointSource(source) {
   return {position:source.position.slice(), intensity:source.intensity.slice(), stepLength:source.stepLength};
 }
 
-export function prepareSceneSourceFrame({encoder, encode, submit, consume, renderHost, createEncoder}) {
+export function prepareSceneSourceFrame({encoder, finish=value=>value.finish(), encode, submit, consume, renderHost, createEncoder}) {
   const field = encode(encoder);
-  submit([encoder.finish()]);
+  submit([finish(encoder)]);
   consume(field);
   if (!renderHost()) throw new Error('shared-scene-source-host-depth-unavailable');
   return createEncoder();
@@ -63,6 +63,9 @@ export function integrateSceneMediumSegment(field, source, receiver, stepLength)
   return tau;
 }
 
+const sceneVolumeSourcePipelines = new WeakMap();
+const sceneOpticalDepthPipelines = new WeakMap();
+
 export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuffers, frontBuffers, getReactantTextures, grid, gridY, fluidGrid = grid, fluidGridY = gridY,getWorldSmoke=()=>null,worldRenderUniform=null}) {
   for (const n of [grid, gridY, fluidGrid, fluidGridY]) {
     if (!Number.isInteger(n) || n <= 0) throw new Error('positive integer source dimensions required');
@@ -73,8 +76,17 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
     usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC});
   const scatteringTexture=device.createTexture({label:'raw live smoke scattering coefficient',dimension:'3d',size:[grid,gridY,grid],format:'r32float',
     usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});
-  const pipeline = device.createComputePipeline({label: 'raw scene volume source seed', layout: 'auto',
-    compute: {module, entryPoint: 'seedSceneVolumeSource'}});
+  let byModule = sceneVolumeSourcePipelines.get(device);
+  if (!byModule) { byModule = new WeakMap(); sceneVolumeSourcePipelines.set(device, byModule); }
+  let cachedPipelines = byModule.get(module);
+  if (!cachedPipelines) {
+    cachedPipelines = {
+      seed: device.createComputePipeline({label: 'raw scene volume source seed', layout: 'auto', compute: {module, entryPoint: 'seedSceneVolumeSource'}}),
+      exterior: new Map(),
+    };
+    byModule.set(module, cachedPipelines);
+  }
+  const pipeline = cachedPipelines.seed;
   // The seed reaches sceneEmissiveMaterialAt, which reads the reactant sidecar
   // (fresh burn); the sidecar is reallocated when the reaction law changes.
   let boundTextures = null;
@@ -98,8 +110,12 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
     if(!r||r.key!==key){
       r?.texture.destroy();
       const texture=device.createTexture({label:`physical ${name} smoke extinction`,dimension:'3d',size:region.dimensions,format:'r32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});
-      const pipeline=device.createComputePipeline({label:`encode ${name} smoke extinction`,layout:'auto',compute:{module,entryPoint:name==='middle'?'seedSceneMiddleMedium':'seedSceneExteriorMedium'}});
-      r={key,texture,pipeline};exteriorResources.set(name,r);
+      let extPipeline=cachedPipelines.exterior.get(name);
+      if(!extPipeline){
+        extPipeline=device.createComputePipeline({label:`encode ${name} smoke extinction`,layout:'auto',compute:{module,entryPoint:name==='middle'?'seedSceneMiddleMedium':'seedSceneExteriorMedium'}});
+        cachedPipelines.exterior.set(name,extPipeline);
+      }
+      r={key,texture,pipeline:extPipeline};exteriorResources.set(name,r);
     }
     if(r.input!==region.texture){
       r.group=device.createBindGroup({layout:r.pipeline.getBindGroupLayout(0),entries:[
@@ -146,8 +162,12 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
           usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC});
         const params = device.createBuffer({label: 'source local position and integration step', size: 16,
           usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST});
-        const depthPipeline = device.createComputePipeline({label: 'source medium segment integration', layout: 'auto',
-          compute: {module: device.createShaderModule({code: SCENE_OPTICAL_DEPTH_WGSL}), entryPoint: 'integrateMedium'}});
+        let depthPipeline = sceneOpticalDepthPipelines.get(device);
+        if (!depthPipeline) {
+          depthPipeline = device.createComputePipeline({label: 'source medium segment integration', layout: 'auto',
+            compute: {module: device.createShaderModule({code: SCENE_OPTICAL_DEPTH_WGSL}), entryPoint: 'integrateMedium'}});
+          sceneOpticalDepthPipelines.set(device, depthPipeline);
+        }
         const group = device.createBindGroup({layout: depthPipeline.getBindGroupLayout(0), entries: [
           {binding: 0, resource: texture.createView()}, {binding: 1, resource: {buffer: params}},
           {binding: 2, resource: depth.createView()}]});

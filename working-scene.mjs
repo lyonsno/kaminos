@@ -1,4 +1,5 @@
 import { createSceneLoadRequests } from './scene-load-generation.mjs';
+import {checkedAssembly} from './scene-assembly.mjs';
 import { checkedSelection } from './scene-selection.mjs';
 
 // The authored registry and its live roots share one lifetime. Domain records
@@ -45,7 +46,7 @@ export function createWorkingScene() {
         if (!present.has(id) || members.has(id)) throw Error('Scene group contains an absent or already grouped object');
         members.add(id);
       }
-      return freezeData({...structuredClone(group),objectIds});
+      return freezeData({...structuredClone(group),objectIds,...(group.assembly?{assembly:checkedAssembly(group.assembly,objectIds)}:{})});
     }).filter(group=>group.objectIds.length);
     groups = Object.freeze(checked);
     for (const row of objects) {

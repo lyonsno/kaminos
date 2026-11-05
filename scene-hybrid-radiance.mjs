@@ -178,7 +178,8 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       sourceRadius=Math.hypot(...sourceDomain.hi.map((x,a)=>Math.max(Math.abs(x),Math.abs(sourceDomain.lo[a]))));
       translation.value.set(...sourceTransform.translate);scale.value=sourceTransform.scale;
       installAllMaterials();
-      const started=performance.now(),snapshot=casterScene.withCapture(()=>localVisibility.snapshot(scene),{smokeVisibility:true}),{revision,geometry:packed}=snapshot;
+      const flameBox={min:sourceDomain.lo.map((v,a)=>v*sourceTransform.scale+sourceTransform.translate[a]),max:sourceDomain.hi.map((v,a)=>v*sourceTransform.scale+sourceTransform.translate[a])};
+      const started=performance.now(),snapshot=casterScene.withCapture(()=>localVisibility.snapshot(scene),{smokeVisibility:true,flameBox}),{revision,geometry:packed}=snapshot;
       status.localBvhBuilds=snapshot.localBuilds;status.visibilityMeshes=snapshot.meshCount;
       if(!gather||revision!==geometryRevision||domainKey!==builtDomain){
         status.status='building-smoke-world-visibility';onStatus({...status});
@@ -202,8 +203,8 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       const reduction=surfaceEnabled?points.encode(gather.transportSource()):null;
       const medium=surfaceEnabled&&smokeShadowSteps&&smokeShadow?smokeShadow.encode(field.source,reduction):null;
       if(surfaceEnabled){
-        if(comparison.implementation==='shared')renderFireShadowBatch({scene,shadows:lights.map(light=>light.shadow),casterScene});
-        else casterScene.withCapture(()=>{for(const light of lights)light.shadow.render();});
+        if(comparison.implementation==='shared')renderFireShadowBatch({scene,shadows:lights.map(light=>light.shadow),casterScene,flameBox});
+        else casterScene.withCapture(()=>{for(const light of lights)light.shadow.render();},{flameBox});
       }
       frame={...frame,exterior,pointRegions:reduction,smokeShadow:medium,surfaceTransport:status.surfaceTransport,previewStale:false};
       prototype.setSceneDistributedLightFrame(smokeMode==='distributed'?{texture:gather.smoke,...frame}:null);
@@ -244,6 +245,8 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     },
     setSurfaceEnabled(value){if(typeof value!=='boolean')throw Error('surface lighting enabled must be boolean');if(disposed)throw Error('hybrid lighting disposed');if(surfaceEnabled===value)return;surfaceEnabled=value;surfaceOn.value=value;casterScene.setEnabled(value);valid=false;onStatus({...status});},
     async setShadowCasterLevel(value){await casterScene.setLevel(value);onStatus({...status});},
+    setShadowBudget(patch){return casterScene.setShadowBudget(patch);},
+    prepareShadowCasters({flameBox=null}={}){return casterScene.prepareCapture({flameBox});},
     setShadowComparison(value){
       const next=validateShadowComparison({...comparison,...value});
       if(disposed)throw Error('hybrid lighting disposed');

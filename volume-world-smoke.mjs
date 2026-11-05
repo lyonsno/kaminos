@@ -436,6 +436,8 @@ fn storeMaterial(c:vec3<i32>,i:u32,p:vec3<f32>,value:Gas,contribution:Gas){
 }
 `;
 
+const worldSmokePipelines = new WeakMap();
+
 export function createWorldSmoke(device,plan,anchor,{solidTexture,borrowMaterial=null,exportFields=false}={}){
   const flowOnly=!!borrowMaterial;
   const b=(label,size)=>device.createBuffer({label,size,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC});
@@ -453,10 +455,16 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture,borrowMaterial
   const bridgeFallback=device.createTexture({label:'disabled intermediate velocity',size:[1,1,1],dimension:'3d',format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING});
   const fallback=solidTexture?null:device.createTexture({label:'world smoke empty solids',size:plan.flowDims,dimension:'3d',format:'r32uint',usage:GPUTextureUsage.TEXTURE_BINDING});
   const uniform=device.createBuffer({label:'world smoke uniforms',size:352,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
-  const module=device.createShaderModule({label:'world smoke separate flow and material',code:WORLD_SMOKE_WGSL});
-  const layout=device.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:'uniform'}},...[1,2,3,4,5,6,7,13].map(binding=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:[3,5,7,13].includes(binding)?'storage':'read-only-storage'}})),{binding:8,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:'unfilterable-float',viewDimension:'3d'}},{binding:9,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:'uint',viewDimension:'3d'}},...[10,12,16].map(binding=>({binding,visibility:GPUShaderStage.COMPUTE,storageTexture:{access:'write-only',format:'rgba32float',viewDimension:'3d'}})),...[17,18].map(binding=>({binding,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:'unfilterable-float',viewDimension:'2d'}})),...[11,14,15].map(binding=>({binding,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:'unfilterable-float',viewDimension:'3d'}}))]});
-  const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]});
-  const pipelines=Object.fromEntries(['transportFlow','restrictPressure','pressure','project','transportMaterial'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'world smoke '+entryPoint,layout:pipelineLayout,compute:{module,entryPoint}})]));
+  let cached=worldSmokePipelines.get(device);
+  if(!cached){
+    const module=device.createShaderModule({label:'world smoke separate flow and material',code:WORLD_SMOKE_WGSL});
+    const layout=device.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:'uniform'}},...[1,2,3,4,5,6,7,13].map(binding=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:[3,5,7,13].includes(binding)?'storage':'read-only-storage'}})),{binding:8,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:'unfilterable-float',viewDimension:'3d'}},{binding:9,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:'uint',viewDimension:'3d'}},...[10,12,16].map(binding=>({binding,visibility:GPUShaderStage.COMPUTE,storageTexture:{access:'write-only',format:'rgba32float',viewDimension:'3d'}})),...[17,18].map(binding=>({binding,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:'unfilterable-float',viewDimension:'2d'}})),...[11,14,15].map(binding=>({binding,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:'unfilterable-float',viewDimension:'3d'}}))]});
+    const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]});
+    const pipelines=Object.fromEntries(['transportFlow','restrictPressure','pressure','project','transportMaterial'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'world smoke '+entryPoint,layout:pipelineLayout,compute:{module,entryPoint}})]));
+    cached={layout,pipelines};
+    worldSmokePipelines.set(device,cached);
+  }
+  const {layout,pipelines}=cached;
   let adaptive=null,seed=null;
   const sourceFlow=createGPUWorldSourceAtlas(device,{dims:plan.flowDims,min:plan.min,pitch:plan.flowPitch},'world source momentum and volume'),sourceMaterial=createGPUWorldSourceAtlas(device,{dims:plan.materialDims,min:plan.materialMin??plan.min,pitch:plan.materialPitch},'world source material');
   let sourceFlowView,sourceMaterialView,lastSourceKey;

@@ -1,5 +1,6 @@
 import * as THREE from './lib/three.webgpu.js';
 import {pass,vec2,vec4,mix,textureSize,screenUV,uniform} from './lib/three.tsl.js';
+import {presentedSurface} from './scene-presented-surface.mjs';
 
 // This mask owns no authored geometry/materials. It never enters lighting,
 // simulation, serialization or export, and is suspended during clean capture.
@@ -13,7 +14,7 @@ export function createSelectionFeedback(camera) {
   const edges=dilation.sub(mask.sample(screenUV).rg).clamp(0,1).mul(enabled).mul(opacity);
   const pairs=[],masks=createSelectionMaskProxies(maskScene,{selected,active,pairs,camera});
   const update=masks.update;
-  return{update,setStyle(style){width.value=style.width;opacity.value=style.opacity;},suspend(value){enabled.value=value?0:1;},output:base=>mix(mix(base,vec4(1,.38,.04,1),edges.x),vec4(1,.72,.22,1),edges.y),state:()=>({meshCount:pairs.length,activeCount:pairs.filter(p=>p.proxy.material===active).length,suspended:enabled.value===0})};
+  return{update,setStyle(style){width.value=style.width;opacity.value=style.opacity;},suspend(value){enabled.value=value?0:1;},output:base=>mix(mix(base,vec4(1,.38,.04,1),edges.x),vec4(1,.72,.22,1),edges.y),state:()=>({meshCount:pairs.length,activeCount:pairs.filter(p=>p.active).length,suspended:enabled.value===0})};
 }
 
 // The mask scene's proxies: one per drawn mesh of each selected object, sharing its geometry (and, for an
@@ -28,22 +29,28 @@ function createSelectionMaskProxies(maskScene,{selected,active,pairs=[],camera=n
     const next=entries.map(entry=>entry.object),activeSet=new Set(activeIds);
     const meshes=[];
     for(const entry of entries)entry.object.traverse(source=>{
-      if(source.isMesh&&!source.isSkinnedMesh&&!source.userData.kaminosEditorHelper&&!source.userData.kaminosEditorOnly)meshes.push({source,id:entry.id,root:entry.object});
+      const presentation=presentedSurface(source);
+      if(presentation)meshes.push({source:presentation.mesh,owner:source,id:entry.id,root:entry.object,presentation});
+      else if(source.isMesh&&!source.isSkinnedMesh&&!source.userData.kaminosEditorHelper&&!source.userData.kaminosEditorOnly)meshes.push({source,id:entry.id,root:entry.object});
     });
     if(next.length!==roots.length||next.some((object,i)=>object!==roots[i])||meshes.length!==pairs.length||meshes.some((mesh,i)=>mesh.source!==pairs[i].source||mesh.id!==pairs[i].id)){
+      for(const pair of pairs)for(const material of pair.owned??[])material.dispose();
       roots=next;maskScene.clear();pairs.length=0;
-      for(const {source,id,root} of meshes){
+      for(const {source,owner,id,root,presentation} of meshes){
         const proxy=source.isInstancedMesh?new THREE.InstancedMesh(source.geometry,selected,source.count):new THREE.Mesh(source.geometry,selected);
-        proxy.matrixAutoUpdate=false;maskScene.add(proxy);pairs.push({source,proxy,id,root});
+        const owned=[];
+        const materialFor=base=>{const make=material=>{const mask=base.clone();for(const key of ['positionNode','maskNode','opacityNode','alphaTest','side'])mask[key]=material[key];owned.push(mask);return mask;};return Array.isArray(source.material)?source.material.map(make):make(source.material);};
+        const masks=presentation?{selected:materialFor(selected),active:materialFor(active)}:{selected,active};
+        proxy.matrixAutoUpdate=false;proxy.frustumCulled=source.frustumCulled;maskScene.add(proxy);pairs.push({source,owner,proxy,id,root,masks,owned});
       }
     }
     for(const root of roots)root.updateWorldMatrix(true,true);
     if(camera)for(const root of roots)root.traverse(o=>{if(o.isLOD&&o.autoUpdate)o.update(camera);});
     for(const pair of pairs){const {source,proxy}=pair;
-      proxy.geometry=source.geometry;proxy.matrix.copy(source.matrixWorld);
+      source.updateWorldMatrix(true,false);proxy.geometry=source.geometry;proxy.matrix.copy(source.matrixWorld);
       if(source.isInstancedMesh){proxy.instanceMatrix=source.instanceMatrix;proxy.count=source.count;
         if(source.boundingSphere===null)source.computeBoundingSphere();proxy.boundingSphere=source.boundingSphere;}
-      proxy.visible=shown(source,pair.root);proxy.material=activeSet.has(pair.id)?active:selected;}
+      proxy.visible=shown(source,pair.root)&&shown(pair.owner??source,pair.root);pair.active=activeSet.has(pair.id);proxy.material=pair.active?pair.masks.active:pair.masks.selected;}
   }
   return {update,pairs:()=>pairs,proxies:()=>pairs.map(p=>p.proxy)};
 }

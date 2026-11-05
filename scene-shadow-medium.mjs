@@ -39,6 +39,7 @@ export function sampleShadowMediumReference(field,p){
   return sum;
 }
 
+const shadowMediumPipelineCache=new WeakMap();
 export function createShadowMedium(device){
   let texture=null,pipeline=null,group=null,source=null,plan=null,signature=null,committed=null,pending=null,builds=0;
   const same=(a,b)=>a&&b&&a.source===b.source&&a.generation===b.generation&&a.frame===b.frame&&a.signature===b.signature;
@@ -46,7 +47,13 @@ export function createShadowMedium(device){
     encode(encoder,field,resolution){
       if(field.status!=='encoded'||!field.texture?.createView)throw Error('shadow medium requires current encoded extinction');
       const domain=sceneLightingDomain(field),nextPlan=shadowMediumPlan(field.dimensions,resolution,device.limits),nextSignature=JSON.stringify([field.dimensions,nextPlan.dimensions]);
-      pipeline??=device.createComputePipeline({label:'volume-average shadow extinction',layout:'auto',compute:{module:device.createShaderModule({code:SHADOW_MEDIUM_WGSL}),entryPoint:'prepareMedium'}});
+      if(!pipeline){
+        pipeline=shadowMediumPipelineCache.get(device);
+        if(!pipeline){
+          pipeline=device.createComputePipeline({label:'volume-average shadow extinction',layout:'auto',compute:{module:device.createShaderModule({code:SHADOW_MEDIUM_WGSL}),entryPoint:'prepareMedium'}});
+          shadowMediumPipelineCache.set(device,pipeline);
+        }
+      }
       if(signature!==nextSignature||source!==field.texture){
         const nextTexture=signature===nextSignature?texture:device.createTexture({label:'prepared coarse shadow extinction',dimension:'3d',size:nextPlan.dimensions,format:'r32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});
         let nextGroup;try{nextGroup=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:field.texture.createView()},{binding:1,resource:nextTexture.createView()}]});}catch(error){if(nextTexture!==texture)nextTexture.destroy();throw error;}

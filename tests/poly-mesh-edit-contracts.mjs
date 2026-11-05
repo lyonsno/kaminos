@@ -145,3 +145,12 @@ assert.throws(()=>sectionCap(top,cube,all(cube),zPlane,{side:1,fill:'nonsense'})
 
 assert.throws(()=>bisectFaces(cube,all(cube),{point:[0,0,0],normal:[0,0,0]}),/normal/);
 assert.throws(()=>extractFaces(cube,new Uint8Array(3)),/one entry per face/);
+
+// Dense crossing sections retain their annulus without marching-squares triangle bloat.
+{
+  const denseTube=tube(256,1,.5,2);
+  const empty={positions:new Float32Array(),normals:new Float32Array(),uvs:new Float32Array(),indices:new Uint32Array(),faceMaterial:new Uint8Array()};
+  const denseCap=sectionCap(empty,denseTube,all(denseTube),{point:[0,0,1],normal:[0,0,1]},{side:1,absoluteWinding:true});
+  assert.ok(near(capArea(denseCap),denseTube.annulusArea,denseTube.annulusArea*.03),`dense tube annulus area preserved (got ${capArea(denseCap)} vs ${denseTube.annulusArea})`);
+  assert.ok(denseCap.capFaces<=denseCap.segments,`collinear grid samples must not inflate the cap beyond its input section (${denseCap.capFaces} faces from ${denseCap.segments} segments)`);
+}

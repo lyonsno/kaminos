@@ -58,7 +58,7 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
     if(event.key==='Tab'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.shiftKey){
       if(!scoped())return;steal(event);attempt(()=>edit.active()?exit():ownerComponents?.toggle(selectedId())||enter());return;
     }
-    if(ownerComponents?.active()){
+    if(ownerComponents?.active()&&!ownerComponents.scope?.()){
       if(event.code==='KeyA'&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey){steal(event);attempt(()=>ownerComponents.selectAll(event.altKey?'deselect':'select'));return;}
       if(['Delete','Backspace'].includes(event.key)||['KeyB','KeyP','KeyL','Digit1','Digit2','Digit3'].includes(event.code)||(event.shiftKey&&event.code==='KeyD')){steal(event);setInfo('Joint topology is fixed in this editor; click or Shift-click joints to select them');}
       return;
@@ -122,7 +122,7 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
   for(const type of ['click','dblclick'])document.addEventListener(type,event=>{
     if(!insideCanvas(event)||overlayHit(event))return;
     if(edit.active())steal(event);
-    else if(ownerComponents?.active()){
+    else if(ownerComponents?.active()&&!ownerComponents.scope?.()){
       if(type==='click'&&!gizmo?.dragging&&!gizmo?.axis)attempt(()=>ownerComponents.pick(event,{camera,canvas}));
       steal(event);
     }

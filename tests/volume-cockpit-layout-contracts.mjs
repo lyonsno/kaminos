@@ -71,7 +71,7 @@ assert.match(
 assert.match(index, /window\.__kaminosSetActiveTab\s*=\s*setActiveTab/, 'the viewer exposes an explicit tab admission API to same-origin volume wrappers');
 assert.match(index, /window\.__kaminosActiveTab\s*=\s*\(\)\s*=>/, 'the viewer exposes effective tab identity for volume-only overlay gating');
 const volumeTabAdmission = "if (isKaminosVolumeSmokeRoute(initialViewerParams)) setActiveTab('volume');";
-const sceneInitializationCall = 'const sceneInitialization = initScene();';
+const sceneInitializationCall = 'const sceneInitialization = startupSceneAdmission.then(admission => {';
 const sceneInitializationContinuation = 'sceneInitialization.then(async () => {';
 const volumeAdmissionPrecedesSceneInitialization = source => {
   const admissionIndex = source.indexOf(volumeTabAdmission);

@@ -15,7 +15,17 @@ ${disintegrate?LOG_CONSUMPTION_WGSL:''}
 @group(0) @binding(4) var<uniform> params:Params;
 @group(0) @binding(5) var<storage,read> surfaces:array<Surface>;
 @group(0) @binding(6) var solids:texture_3d<u32>;
+@group(0) @binding(8) var<storage,read> regionOwners:array<u32>;
+@group(0) @binding(9) var<storage,read> regionPoses:array<mat4x4<f32>>;
 const N:u32=${LIVE_LOG_GRID}u;
+fn materialPose(i:u32)->mat4x4<f32>{
+ if(params.gas.y==0.0){return mat4x4<f32>(vec4<f32>(1,0,0,0),vec4<f32>(0,1,0,0),vec4<f32>(0,0,1,0),vec4<f32>(0,0,0,1));}
+ return regionPoses[regionOwners[i]];
+}
+fn posedSurface(s:Surface,i:u32)->Surface{
+ let pose=materialPose(i);
+ return Surface(vec4<f32>((pose*vec4<f32>(s.point.xyz,1)).xyz,s.point.w),vec4<f32>((pose*vec4<f32>(s.normal.xyz,0)).xyz,0));
+}
 fn inside(c:vec3<i32>)->bool{return all(c>=vec3<i32>(0))&&all(c<vec3<i32>(params.gridDt.xyz));}
 fn solid(c:vec3<i32>)->bool{
   if(any(textureDimensions(solids)!=vec3<u32>(params.gridDt.xyz))){return false;}
@@ -42,8 +52,9 @@ fn surfaceHeat(s:Surface)->f32{
   if(weight>0.0){return heat/weight;}
   return 0.0;
 }
-fn localHeat(c:vec3<i32>)->f32{
+fn localHeat(c:vec3<i32>,origin:vec3<i32>)->f32{
   let q=vec3<u32>(clamp(c,vec3<i32>(0),vec3<i32>(i32(N)-1)));
+  ${disintegrate?'if(params.gas.y>0.0&&!neighbourPresent(origin,vec3<i32>(q))){return before[u32(origin.x)+N*(u32(origin.y)+N*u32(origin.z))].material.x;}':''}
   return before[q.x+N*(q.y+N*q.z)].material.x;
 }
 ${disintegrate?`
@@ -52,27 +63,39 @@ fn hasMaterial(c:vec3<i32>)->bool{
  if(any(c<vec3<i32>(0))||any(c>=vec3<i32>(i32(N)))){return false;}
  return materialPresent(before[u32(c.x)+N*(u32(c.y)+N*u32(c.z))].burn.y);
 }
-fn exposedCount(c:vec3<i32>)->u32{var count=0u;for(var j=0u;j<6u;j++){if(!hasMaterial(c+directions[j])){count++;}}return count;}
+fn regionsTouch(c:vec3<i32>,q:vec3<i32>)->bool{
+ if(any(q<vec3<i32>(0))||any(q>=vec3<i32>(i32(N)))){return false;}
+ let i=u32(c.x)+N*(u32(c.y)+N*u32(c.z));let j=u32(q.x)+N*(u32(q.y)+N*u32(q.z));
+ if(params.gas.y==0.0||regionOwners[i]==regionOwners[j]){return true;}
+ let face=params.lo.xyz+(vec3<f32>(c+q)*0.5+vec3<f32>(0.5))*params.size.xyz/f32(N);
+ let a=materialPose(i)*vec4<f32>(face,1);let b=materialPose(j)*vec4<f32>(face,1);
+ // Cell-scale contact tolerance, independent of step time or fragment speed.
+ let pitch=min(params.size.x,min(params.size.y,params.size.z))/f32(N);
+ return distance(a.xyz,b.xyz)<=pitch*0.25;
+}
+fn neighbourPresent(c:vec3<i32>,q:vec3<i32>)->bool{return hasMaterial(q)&&regionsTouch(c,q);}
+fn exposedCount(c:vec3<i32>)->u32{var count=0u;for(var j=0u;j<6u;j++){if(!neighbourPresent(c,c+directions[j])){count++;}}return count;}
 fn gasHasMaterial(c:vec3<i32>)->bool{
  if(any(c<vec3<i32>(0))||any(c>=vec3<i32>(i32(N)))){return false;}
  return materialPresent(after[u32(c.x)+N*(u32(c.y)+N*u32(c.z))].burn.y);
 }
+fn gasNeighbourPresent(c:vec3<i32>,q:vec3<i32>)->bool{return gasHasMaterial(q)&&regionsTouch(c,q);}
 fn faceSample(c:vec3<u32>,j:u32)->Surface{
  let point=params.lo.xyz+(vec3<f32>(c)+vec3<f32>(0.5)+vec3<f32>(directions[j])*0.5)*params.size.xyz/f32(N);
- return Surface(vec4<f32>(point,1),vec4<f32>(vec3<f32>(directions[j]),0));
+ return posedSurface(Surface(vec4<f32>(point,1),vec4<f32>(vec3<f32>(directions[j]),0)),c.x+N*(c.y+N*c.z));
 }
 fn volumeHeat(c:vec3<u32>)->f32{
- var heat=0.0;var count=0.0;for(var j=0u;j<6u;j++){if(!hasMaterial(vec3<i32>(c)+directions[j])){heat+=surfaceHeat(faceSample(c,j));count+=1.0;}}
+ var heat=0.0;var count=0.0;for(var j=0u;j<6u;j++){if(!neighbourPresent(vec3<i32>(c),vec3<i32>(c)+directions[j])){heat+=surfaceHeat(faceSample(c,j));count+=1.0;}}
  return heat/max(count,1.0);
 }`:''}
 @compute @workgroup_size(4,4,4)
 fn advance(@builtin(global_invocation_id) c:vec3<u32>) {
   if(any(c>=vec3<u32>(N))){return;}
   let index=c.x+N*(c.y+N*c.z);
-  let exposure=${disintegrate?'volumeHeat(c)':'surfaceHeat(surfaces[index])'};
+  let exposure=${disintegrate?'volumeHeat(c)':'surfaceHeat(posedSurface(surfaces[index],index))'};
   let old=before[index];let dt=params.gridDt.w;
   let q=vec3<i32>(c);
-  let mean=(localHeat(q+vec3<i32>(1,0,0))+localHeat(q-vec3<i32>(1,0,0))+localHeat(q+vec3<i32>(0,1,0))+localHeat(q-vec3<i32>(0,1,0))+localHeat(q+vec3<i32>(0,0,1))+localHeat(q-vec3<i32>(0,0,1)))/6.0;
+  let mean=(localHeat(q+vec3<i32>(1,0,0),q)+localHeat(q-vec3<i32>(1,0,0),q)+localHeat(q+vec3<i32>(0,1,0),q)+localHeat(q-vec3<i32>(0,1,0),q)+localHeat(q+vec3<i32>(0,0,1),q)+localHeat(q-vec3<i32>(0,0,1),q))/6.0;
   let conducted=mix(old.material.x,mean,1.0-exp(-2.4*dt));
   ${disintegrate?`var next=finiteConsumption(old,evolveLog(old,exposure,conducted,dt,hasMaterial(q)&&exposedCount(q)>0u));
   next.material.z=next.burn.z/(materialRate*dt);`:'let next=evolveLog(old,exposure,conducted,dt,surfaces[index].point.w>0.0);'}
@@ -113,9 +136,9 @@ fn emitFuel(@builtin(global_invocation_id) c:vec3<u32>){
  if(any(c>=vec3<u32>(N))){return;}
  let i=c.x+N*(c.y+N*c.z);let state=after[i];if(state.material.z<=0.0){return;}
  let rate=state.material.z*${disintegrate?LOG_DISINTEGRATION_RATE:LIVE_LOG_BURN_RATE}/60.0*params.gas.x;
- ${disintegrate?`var count=0u;for(var j=0u;j<6u;j++){if(!gasHasMaterial(vec3<i32>(c)+directions[j])){count++;}}if(count==0u){return;}
- for(var j=0u;j<6u;j++){if(!gasHasMaterial(vec3<i32>(c)+directions[j])){releaseGas(faceSample(c,j),state,rate/f32(count));}}`:
- 'if(surfaces[i].point.w>0.0){releaseGas(surfaces[i],state,rate);}'}
+ ${disintegrate?`var count=0u;for(var j=0u;j<6u;j++){if(!gasNeighbourPresent(vec3<i32>(c),vec3<i32>(c)+directions[j])){count++;}}if(count==0u){return;}
+ for(var j=0u;j<6u;j++){if(!gasNeighbourPresent(vec3<i32>(c),vec3<i32>(c)+directions[j])){releaseGas(faceSample(c,j),state,rate/f32(count));}}`:
+ 'if(surfaces[i].point.w>0.0){releaseGas(posedSurface(surfaces[i],i),state,rate);}'}
 }`;}
 export const LIVE_LOG_HEAT_WGSL=liveLogHeatWGSL();
 
@@ -131,12 +154,12 @@ fn summarize() {
   textureStore(summary,vec2<i32>(0),peak);
 }`;
 
-export async function createLiveLogHeatGpu({renderer,mesh,bounds,disintegrate=false}) {
+export async function createLiveLogHeatGpu({renderer,mesh,bounds,surfaceGeometry=null,surfaceLod=null,disintegrate=false}) {
   const device=renderer.backend.device;
   if(!device?.createComputePipelineAsync)throw Error('Live log requires WebGPU');
   const size=bounds.getSize(new THREE.Vector3());
   if(Math.min(size.x,size.y,size.z)<=0)throw Error('Live log requires volumetric mesh bounds');
-  const surfaceMask=createLogSurfaceMask(mesh.geometry,bounds,LIVE_LOG_GRID,{filled:disintegrate});
+  const surfaceMask=createLogSurfaceMask(surfaceGeometry??mesh.geometry,bounds,LIVE_LOG_GRID,{filled:disintegrate});
   const summaryCellCount=surfaceMask.reduce((a,b)=>a+b,0);
   const owned=[];let disposed=false;
   try {
@@ -154,6 +177,9 @@ export async function createLiveLogHeatGpu({renderer,mesh,bounds,disintegrate=fa
     const surface=device.createBuffer({label:'live log mesh-intersecting cells',size:surfaceMask.byteLength,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});owned.push(surface);device.queue.writeBuffer(surface,0,surfaceMask);
     const samples=device.createBuffer({label:'live log surface points and normals',size:surfaceMask.samples.byteLength,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});owned.push(samples);device.queue.writeBuffer(samples,0,surfaceMask.samples);
     const params=device.createBuffer({label:'live log local-to-volume transform',size:192,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});owned.push(params);
+    const owners=device.createBuffer({label:'original material region owners',size:LIVE_LOG_GRID**3*4,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});owned.push(owners);
+    const identityPose=device.createBuffer({label:'undeformed material pose',size:64,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});owned.push(identityPose);device.queue.writeBuffer(identityPose,0,new Float32Array(new THREE.Matrix4().elements));
+    let regionMotion=null;
     const texture=device.createTexture({label:'live log thermal material',dimension:'3d',size:[LIVE_LOG_GRID,LIVE_LOG_GRID,LIVE_LOG_GRID],format:'rgba16float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});owned.push(texture);
     const summaryTexture=device.createTexture({label:'live log burn status texture',size:[1,1],format:'rgba16float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});owned.push(summaryTexture);
     const summaryWrapper=new THREE.ExternalTexture(summaryTexture);summaryWrapper.type=THREE.HalfFloatType;summaryWrapper.format=THREE.RGBAFormat;summaryWrapper.colorSpace=THREE.NoColorSpace;
@@ -161,7 +187,7 @@ export async function createLiveLogHeatGpu({renderer,mesh,bounds,disintegrate=fa
     const summaryGroups=buffers.map(buffer=>device.createBindGroup({layout:summaryPipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer}},{binding:1,resource:summaryTexture.createView()},{binding:2,resource:{buffer:surface}}]}));
     const wrapper=new THREE.ExternalTexture(texture);wrapper.is3DTexture=true;wrapper.image={width:LIVE_LOG_GRID,height:LIVE_LOG_GRID,depth:LIVE_LOG_GRID};
     wrapper.type=THREE.HalfFloatType;wrapper.format=THREE.RGBAFormat;wrapper.colorSpace=THREE.NoColorSpace;wrapper.minFilter=THREE.LinearFilter;wrapper.magFilter=THREE.LinearFilter;wrapper.generateMipmaps=false;
-    const p=THREE.TSL.positionLocal.sub(THREE.TSL.vec3(...bounds.min.toArray())).div(THREE.TSL.vec3(...size.toArray()));
+    const p=THREE.TSL.positionGeometry.sub(THREE.TSL.vec3(...bounds.min.toArray())).div(THREE.TSL.vec3(...size.toArray()));
     const stateNode=THREE.TSL.texture3D(wrapper,p);
     let index=0,steps=0,seconds=0,lastSource=null,generation=1;let cache=new WeakMap();
     function writeParams(source){
@@ -173,6 +199,7 @@ export async function createLiveLogHeatGpu({renderer,mesh,bounds,disintegrate=fa
       const matrix=worldToVolume.multiply(mesh.matrixWorld),normalMatrix=matrix.clone().invert().transpose();
       const values=new Float32Array(48);values.set([...source.dimensions,source.dt]);values.set(bounds.min.toArray(),4);values.set(size.toArray(),8);values.set(matrix.elements,12);values.set(normalMatrix.elements,28);
       values[44]=LIVE_LOG_GAS_EXPANSION_RATIO*size.x*size.y*size.z*Math.abs(mesh.matrixWorld.determinant())/LIVE_LOG_GRID**3/(2*s/source.dimensions[0])**3;
+      values[45]=regionMotion?.count??0;
       if(!values.every(Number.isFinite))throw Error('Nonfinite log source transform or cell mass');
       device.queue.writeBuffer(params,0,values);return matrix;
     }
@@ -187,14 +214,22 @@ export async function createLiveLogHeatGpu({renderer,mesh,bounds,disintegrate=fa
     }
     reset();
     return {device,stateNode,texture,summaryNode,summaryTexture,disintegrate,sampleState:coordinates=>THREE.TSL.texture3D(wrapper,coordinates),
-      residentState:()=>({before:buffers[1-index],after:buffers[index],samples,initial:surfaceMask,surface:surfaceMask.surface,dimensions:[LIVE_LOG_GRID,LIVE_LOG_GRID,LIVE_LOG_GRID],bounds,mesh}),
-      materialMask(objectId){mesh.updateWorldMatrix(true,false);const matrix=new THREE.Matrix4().makeScale(1/size.x,1/size.y,1/size.z);matrix.setPosition(-bounds.min.x/size.x,-bounds.min.y/size.y,-bounds.min.z/size.z);matrix.multiply(mesh.matrixWorld.clone().invert());return {objectId,device,texture,matrix:matrix.toArray(),revision:generation+':'+steps};},
+      residentState:()=>({before:buffers[1-index],after:buffers[index],samples,initial:surfaceMask,surface:surfaceMask.surface,dimensions:[LIVE_LOG_GRID,LIVE_LOG_GRID,LIVE_LOG_GRID],bounds,mesh,regionMotion}),
+      setRegionMotion(value){
+        if(disposed)throw Error('Live log is disposed');
+        if(value&&(value.device!==device||!Number.isSafeInteger(value.count)||value.count<1||!(value.owners instanceof Uint32Array)||value.owners.length!==LIVE_LOG_GRID**3||value.owners.some(i=>i>=value.count)||!value.matrices||value.matrices.size<value.count*64))throw Error('Same-device complete original region ownership and resident poses required');
+        if(value)device.queue.writeBuffer(owners,0,value.owners);
+        regionMotion=value?{...value,owners:Uint32Array.from(value.owners),ownerBuffer:owners}:null;cache=new WeakMap();
+      },
+      materialMask(objectId){mesh.updateWorldMatrix(true,false);const matrix=new THREE.Matrix4().makeScale(1/size.x,1/size.y,1/size.z);matrix.setPosition(-bounds.min.x/size.x,-bounds.min.y/size.y,-bounds.min.z/size.z);matrix.multiply(mesh.matrixWorld.clone().invert());return {objectId,device,texture,matrix:matrix.toArray(),revision:generation+':'+steps,
+       ...(regionMotion?{regions:{ownerBuffer:owners,matrices:regionMotion.matrices,count:regionMotion.count,world:mesh.matrixWorld.toArray(),lo:bounds.min.toArray(),size:size.toArray()}}:{})};},
       encode(encoder,source){
         const matrix=writeParams(source);
         let cached=cache.get(source.fluid);
         if(!cached||cached.collision!==source.collision){const groups=buffers.map((buffer,i)=>device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[
           {binding:0,resource:{buffer:source.fluid}},{binding:1,resource:{buffer}},{binding:2,resource:{buffer:buffers[1-i]}},
-          {binding:3,resource:texture.createView()},{binding:4,resource:{buffer:params}},...(!disintegrate?[{binding:5,resource:{buffer:samples}}]:[]),{binding:6,resource:source.collision.createView()}]}));cached={collision:source.collision,groups};cache.set(source.fluid,cached);}
+          {binding:3,resource:texture.createView()},{binding:4,resource:{buffer:params}},...(!disintegrate?[{binding:5,resource:{buffer:samples}}]:[]),{binding:6,resource:source.collision.createView()},
+          {binding:8,resource:{buffer:owners}},{binding:9,resource:{buffer:regionMotion?.matrices??identityPose}}]}));cached={collision:source.collision,groups};cache.set(source.fluid,cached);}
         const pass=encoder.beginComputePass({label:'live log heat and scar'});pass.setPipeline(pipeline);pass.setBindGroup(0,cached.groups[index]);pass.dispatchWorkgroups(LIVE_LOG_GRID/4,LIVE_LOG_GRID/4,LIVE_LOG_GRID/4);pass.end();
         index=1-index;
         const summaryPass=encoder.beginComputePass({label:'live log GPU burn summary'});summaryPass.setPipeline(summaryPipeline);summaryPass.setBindGroup(0,summaryGroups[index]);summaryPass.dispatchWorkgroups(1);summaryPass.end();
@@ -202,10 +237,11 @@ export async function createLiveLogHeatGpu({renderer,mesh,bounds,disintegrate=fa
       },reset,
       encodeGasSource(encoder,source,target){
         writeParams(source);if(!target.enabled)return;
-        const group=device.createBindGroup({layout:gasPipeline.getBindGroupLayout(0),entries:[{binding:2,resource:{buffer:buffers[index]}},{binding:4,resource:{buffer:params}},...(!disintegrate?[{binding:5,resource:{buffer:samples}}]:[]),{binding:6,resource:source.collision.createView()},{binding:7,resource:{buffer:target.accumulation}}]});
+        const group=device.createBindGroup({layout:gasPipeline.getBindGroupLayout(0),entries:[{binding:2,resource:{buffer:buffers[index]}},{binding:4,resource:{buffer:params}},...(!disintegrate?[{binding:5,resource:{buffer:samples}}]:[]),{binding:6,resource:source.collision.createView()},{binding:7,resource:{buffer:target.accumulation}},
+          {binding:8,resource:{buffer:owners}},{binding:9,resource:{buffer:regionMotion?.matrices??identityPose}}]});
         const pass=encoder.beginComputePass({label:'wood fuel to exterior fluid'});pass.setPipeline(gasPipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(LIVE_LOG_GRID/4,LIVE_LOG_GRID/4,LIVE_LOG_GRID/4);pass.end();
       },
-      read:()=>({identity:LIVE_LOG_HEAT_IDENTITY,model:disintegrate?'filled-material-finite-residue-v1':LIVE_LOG_THERMAL_MODEL,status:disposed?'disposed':'resident',grid:LIVE_LOG_GRID,generation,steps,referenceSeconds:seconds,lastSource,runtimeReadbacks:0,selfEmission:true,summaryDomain:disintegrate?'occupied-material-voxels':'mesh-intersecting-voxels',summaryCellCount,heatExchange:'outward-open-fluid-faces',conduction:'six-neighbour-local-grid',ignition:'local-temperature-dose',fuel:disintegrate?'finite-volume-gas-plus-residue':'finite-surface-cell-reserve'}),
+      read:()=>({identity:LIVE_LOG_HEAT_IDENTITY,model:disintegrate?'filled-material-finite-residue-v1':LIVE_LOG_THERMAL_MODEL,status:disposed?'disposed':'resident',grid:LIVE_LOG_GRID,generation,steps,referenceSeconds:seconds,lastSource,runtimeReadbacks:0,selfEmission:true,summaryDomain:disintegrate?'occupied-material-voxels':'mesh-intersecting-voxels',summaryCellCount,surfaceLod,heatExchange:'outward-open-fluid-faces',conduction:regionMotion?'surviving-original-neighbours-with-quarter-cell-contact':'six-neighbour-local-grid',regionMotion:regionMotion?{count:regionMotion.count,pose:'original-local-to-current-local',collision:'conservative-surviving-material-cells'}:null,ignition:'local-temperature-dose',fuel:disintegrate?'finite-volume-gas-plus-residue':'finite-surface-cell-reserve'}),
       dispose(){if(disposed)return;disposed=true;for(const wrapped of [wrapper,summaryWrapper]){delete renderer.backend.get(wrapped).texture;wrapped.dispose();}for(const resource of owned)resource.destroy();cache=new WeakMap();},
     };
   }catch(error){for(const resource of owned)resource.destroy();throw error;}

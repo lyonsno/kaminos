@@ -101,6 +101,7 @@ fn smokeCubeUV(d:vec3<f32>)->vec3<f32>{
 }`;
 const cubeCoordinates=THREE.TSL.wgslFn(CUBE_COORDINATES_WGSL);
 
+const fireSmokeShadowCache=new WeakMap();
 // Per-light radial optical-depth prefixes, not an opaque first-hit depth.
 // Four prefix endpoints per RGBA texel keep angular filtering to two reads.
 // All coordinates and extinction lengths stay volume-local; world scale is
@@ -109,6 +110,16 @@ export function createFireSmokeShadow(device,{points,resolution=16,steps=16,coun
   const managed=typeof renderer?.initTexture==='function';
   let lastDimensions=null;
   const filteredMedium=device.features?.has('float32-filterable')===true,medium=createShadowMedium(device);
+  let deviceCache=fireSmokeShadowCache.get(device);
+  if(!deviceCache){
+    deviceCache={
+      pipeline:device.createComputePipeline({label:'smoke optical-depth prefix rays',layout:'auto',compute:{module:device.createShaderModule({code:FIRE_SMOKE_SHADOW_WGSL}),entryPoint:'integrate'}}),
+      filterPipeline:device.createComputePipeline({label:'smoke neighboring-direction transmission filter',layout:'auto',compute:{module:device.createShaderModule({code:FIRE_SMOKE_FILTER_WGSL}),entryPoint:'filterDirections'}}),
+      preparedPipelines:new Map(),
+      mediumSampler:null,
+    };
+    fireSmokeShadowCache.set(device,deviceCache);
+  }
   let preparedPipeline=null,mediumSampler=null;
   const validate=q=>{
     validateShadowMediumResolution(q.mediumResolution);
@@ -123,8 +134,7 @@ export function createFireSmokeShadow(device,{points,resolution=16,steps=16,coun
   const params=device.createBuffer({label:'smoke shadow atlas layout',size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
   const mediumDomain=device.createBuffer({label:'smoke shadow medium domain',size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
   const filterParams=device.createBuffer({label:'smoke shadow angular filter quality',size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
-  const pipeline=device.createComputePipeline({label:'smoke optical-depth prefix rays',layout:'auto',compute:{module:device.createShaderModule({code:FIRE_SMOKE_SHADOW_WGSL}),entryPoint:'integrate'}});
-  const filterPipeline=device.createComputePipeline({label:'smoke neighboring-direction transmission filter',layout:'auto',compute:{module:device.createShaderModule({code:FIRE_SMOKE_FILTER_WGSL}),entryPoint:'filterDirections'}});
+  const {pipeline,filterPipeline}=deviceCache;
   let outputGpu=null;
   const external=managed?new THREE.StorageTexture(...plan.size):new THREE.ExternalTexture();
   external.image={width:plan.size[0],height:plan.size[1]};external.type=THREE.HalfFloatType;external.format=THREE.RGBAFormat;external.colorSpace=THREE.NoColorSpace;
@@ -170,10 +180,16 @@ export function createFireSmokeShadow(device,{points,resolution=16,steps=16,coun
       let input=field.texture,activePipeline=pipeline,prepared=null;
       if(quality.mediumResolution){
         prepared=medium.encode(encoder,field,quality.mediumResolution);input=prepared.texture;
-        preparedPipeline??=device.createComputePipeline({label:'filtered smoke optical-depth prefix rays',layout:'auto',compute:{module:device.createShaderModule({code:smokeShadowIntegrationWGSL({prepared:true,filterable:filteredMedium})}),entryPoint:'integrate'}});
+        if(!preparedPipeline){
+          preparedPipeline=deviceCache.preparedPipelines.get(filteredMedium);
+          if(!preparedPipeline){
+            preparedPipeline=device.createComputePipeline({label:'filtered smoke optical-depth prefix rays',layout:'auto',compute:{module:device.createShaderModule({code:smokeShadowIntegrationWGSL({prepared:true,filterable:filteredMedium})}),entryPoint:'integrate'}});
+            deviceCache.preparedPipelines.set(filteredMedium,preparedPipeline);
+          }
+        }
         activePipeline=preparedPipeline;
         device.queue.writeBuffer(mediumDomain,0,new Float32Array([...domain.hi,0]));
-        if(filteredMedium)mediumSampler??=device.createSampler({minFilter:'linear',magFilter:'linear',mipmapFilter:'nearest',addressModeU:'clamp-to-edge',addressModeV:'clamp-to-edge',addressModeW:'clamp-to-edge'});
+        if(filteredMedium)mediumSampler??=(deviceCache.mediumSampler??=device.createSampler({minFilter:'linear',magFilter:'linear',mipmapFilter:'nearest',addressModeU:'clamp-to-edge',addressModeV:'clamp-to-edge',addressModeW:'clamp-to-edge'}));
       }
       if(bound!==input){group=device.createBindGroup({layout:activePipeline.getBindGroupLayout(0),entries:[{binding:0,resource:input.createView()},{binding:1,resource:points.createView()},{binding:2,resource:(quality.filter?gpu:outputGpu).createView()},{binding:3,resource:{buffer:params}},...(prepared?[{binding:4,resource:{buffer:mediumDomain}},...(filteredMedium?[{binding:5,resource:mediumSampler}]:[])]:[])]});bound=input;}
       const pass=encoder.beginComputePass({label:'live smoke shadow prefix integration'});

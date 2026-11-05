@@ -188,6 +188,8 @@ fn prolong(@builtin(global_invocation_id) c:vec3<u32>) {
 
 // Resources persist across frames and control changes. Neither transfer reads
 // back to the CPU. The caller supplies the existing pressure solver pipelines.
+const pressureTransferPipelines = new WeakMap();
+
 export function createPressureTransfer(device, plan) {
   const owned=[];
   const buffer=(label,size,usage=GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC)=>{
@@ -207,8 +209,17 @@ export function createPressureTransfer(device, plan) {
   // without binding the same texture for both reading and writing.
   const closedLower=device.createTexture({label:'closed pressure lower-face placeholder',size:[1,1,3],format:'r32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING});owned.push(closedLower);
   const params=buffer('pressure transfer geometry',64,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST);
-  const module=device.createShaderModule({label:'material-pressure transfer',code:PRESSURE_TRANSFER_WGSL});
-  const pipelines=Object.fromEntries(['restrict','prolong'].map(kind=>[kind,device.createComputePipeline({label:`pressure ${kind}`,layout:'auto',compute:{module,entryPoint:kind==='restrict'?'restrictField':kind,constants:{GENERAL_TRANSFER:!Number.isInteger(plan.divisor)}}})]));
+  const general=!Number.isInteger(plan.divisor);
+  let cached=pressureTransferPipelines.get(device);
+  if(!cached){
+    cached={module:device.createShaderModule({label:'material-pressure transfer',code:PRESSURE_TRANSFER_WGSL}),byGeneral:new Map()};
+    pressureTransferPipelines.set(device,cached);
+  }
+  let pipelines=cached.byGeneral.get(general);
+  if(!pipelines){
+    pipelines=Object.fromEntries(['restrict','prolong'].map(kind=>[kind,device.createComputePipeline({label:`pressure ${kind}`,layout:'auto',compute:{module:cached.module,entryPoint:kind==='restrict'?'restrictField':kind,constants:{GENERAL_TRANSFER:general}}})]));
+    cached.byGeneral.set(general,pipelines);
+  }
   let bindings=null, prior=[];
   function prepare({fluid,solidTexture,burnTexture,openTop,nonLegacy,maxSpeed,fineLower,openBoundary=false,velocityScale=1}) {
     if(openBoundary&&!fineLower)throw Error('Open pressure transfer requires fine lower-face texture');

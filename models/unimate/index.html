@@ -12,7 +12,7 @@
   canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
   canvas:active { cursor: grabbing; }
   .panel { position: fixed; top: 16px; left: 16px; width: min(340px, calc(100vw - 32px)); background: var(--panel); border: 1px solid var(--line);
-    border-radius: 12px; padding: 14px 16px; backdrop-filter: blur(8px); box-sizing: border-box; }
+    border-radius: 8px; padding: 14px 16px; backdrop-filter: blur(8px); box-sizing: border-box; max-height: calc(100dvh - 160px); overflow-y: auto; }
   h1 { font-size: 16px; margin: 0 0 2px; font-weight: 600; }
   .sub { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
   label { display: block; color: var(--muted); font-size: 12px; margin: 10px 0 4px; }
@@ -23,8 +23,12 @@
   button.primary { background: #1f6f80; border-color: #2b8ea3; }
   button:disabled { opacity: 0.45; cursor: default; }
   .status { margin-top: 12px; font-size: 13px; min-height: 1.4em; }
-  .bar { height: 4px; border-radius: 2px; background: #1c2026; margin-top: 6px; overflow: hidden; }
-  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
+  progress { display: block; width: 100%; height: 5px; accent-color: var(--accent); margin: 8px 0; }
+  .progress-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: 12px; color: var(--muted); }
+  details.runtime { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 10px; font-size: 12px; }
+  details.runtime summary { cursor: pointer; }
+  dl { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 6px 10px; }
+  dt { color: var(--muted); } dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
   .stats { margin-top: 8px; font-size: 12px; color: var(--muted); white-space: pre-line; }
   .dock { position: fixed; left: 16px; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
   .dock > * { pointer-events: auto; }
@@ -97,8 +101,15 @@
     <button id="rest" disabled>Rest pose</button>
   </div>
   <div class="status" id="status">Starting…</div>
-  <div class="bar" id="bar" hidden><div></div></div>
-  <div class="stats" id="stats"></div>
+  <div id="progress-area" hidden>
+    <progress id="bar" max="1" aria-labelledby="status progress-label"></progress>
+    <div class="progress-meta"><span id="progress-label"></span><span id="elapsed"></span></div>
+  </div>
+  <details class="runtime" id="runtime" hidden><summary>Details</summary>
+    <dl><dt>Weight bytes</dt><dd id="download-bytes">--</dd><dt>Evaluations</dt><dd id="evaluations">--</dd>
+      <dt>Accepted solver time</dt><dd id="accepted-time">--</dd></dl>
+    <div class="stats" id="stats"></div>
+  </details>
 </div>
 <div class="drop" id="drop" hidden>Drop a rigged .glb to animate it</div>
 <div class="dock">
@@ -117,6 +128,7 @@ import { createUniMateDemo, decodeClip } from './unimate-demo.js';
 import { readRig, buildSkeletonBundle, turnRest } from './unimate-rig-import.js';
 import { createLabeler } from './unimate-rig-labels.js';
 import { exportMotionGlb } from './unimate-export-glb.js';
+import { createMotionProgress } from './unimate-progress-view.js';
 
 const $ = id => document.getElementById(id);
 const state = { phase: 'load', progress: null, result: null, error: null, clip: null };
@@ -126,9 +138,9 @@ const resize = () => { canvas.width = Math.round(innerWidth * devicePixelRatio);
 resize();
 addEventListener('resize', resize);
 const setStatus = text => { $('status').textContent = text; };
-const setBar = frac => { $('bar').hidden = frac === null; if (frac !== null) $('bar').firstElementChild.style.width = `${(100 * frac).toFixed(1)}%`; };
+const progress = createMotionProgress($, setStatus);
+addEventListener('pagehide', event => { if (!event.persisted) progress.destroy(); });
 $('noise').addEventListener('change', () => { $('seed').hidden = $('noise').value !== 'seed'; });
-const mb = n => (n / 1e6).toFixed(0);
 
 let demo, current = null;
 const clips = [];     // { meta, clip (decoded, lazily), chip }
@@ -262,15 +274,12 @@ try {
 } catch (e) { console.warn('no clip gallery', e); }
 
 try {
-  setStatus('Downloading the model…');
+  progress.start('Loading model');
   await demo.loadModel({
-    onStatus: s => { if (s.phase !== 'ready') { state.phase = 'load'; if (s.detail !== 'model weights') setStatus(`Loading ${s.detail}…`); } },
-    onBytes: (loaded, total) => {
-      setStatus(total ? `Downloading the model · ${mb(loaded)} of ${mb(total)} MB` : `Downloading the model · ${mb(loaded)} MB`);
-      setBar(total ? loaded / total : null);
-    },
+    onStatus: s => { if (s.phase !== 'ready') { state.phase = 'load'; if (s.detail !== 'model weights') progress.status(`Loading ${s.detail}…`); } },
+    onBytes: progress.bytes,
   });
-  setBar(null);
+  progress.finish('Model loaded');
   // The built-in skeletons (published), or the local server's one, then "your own rig".
   const builtIn = skeletons ? skeletons.map(k => new Option(`${k.label} · ${k.joints} joints`, k.key))
     : [new Option(`${skeletonLabel()} · ${demo.bundle.skeleton.joints} joints`, '__local')];
@@ -281,14 +290,13 @@ try {
   showSkeletonPrompts();
   for (const id of ['prompt', 'generate', 'rest', 'skeleton']) $(id).disabled = false;
   state.phase = 'ready';
-  setStatus(`Ready · ${demo.parameterCount.toLocaleString()} parameters${demo.hasTextEncoder() ? ' · type any prompt' : ''}`);
 } catch (e) {
-  setBar(null);
-  state.error = String(e?.stack ?? e); state.phase = 'failed'; setStatus(`Could not load the model: ${e.message ?? e}`);
+  state.error = String(e?.stack ?? e); state.phase = 'failed'; progress.finish(`Could not load the model: ${e.message ?? e}`);
 }
 
-let own = 0;
+let own = 0, generationId = 0, stopping = false;
 async function generate() {
+  generationId++; stopping = false;
   for (const id of ['generate', 'prompt', 'noise', 'seed', 'rest', 'skeleton']) $(id).disabled = true;
   for (const id of ['pause', 'stop']) $(id).disabled = false;
   $('pause').textContent = 'Pause';
@@ -298,19 +306,19 @@ async function generate() {
   const captured = demo.bundle.prompts.some(p => p.text === text);
   if (!captured && $('noise').value === 'reference') { $('noise').value = 'seed'; $('seed').hidden = false; }
   const seed = $('noise').value === 'seed' ? Number($('seed').value) >>> 0 : null;
-  const started = performance.now();
+  progress.start('Preparing generation', demo.bundle.outputTimes);
   try {
     const result = await demo.generate({
       text, seed,
-      onEvaluation: e => { state.progress = { evaluations: e.evaluations, t: e.t };
-        setStatus(`Generating · ${e.evaluations} evaluations · t = ${Math.min(e.t, 1).toFixed(3)} · ${((performance.now() - started) / 1000).toFixed(1)} s`); },
+      onEvaluation: e => { state.progress = { evaluations: e.evaluations, t: e.t }; progress.evaluation(e); },
+      onStep: progress.step,
     });
     const f = result.frameStats;
     state.result = { textEncoder: result.textEncoder, encodeMs: result.encodeMs, prompt: result.prompt, noise: result.noise, wallMs: result.wallMs, evaluations: result.evaluations,
       steps: result.steps.length, accepted: result.steps.filter(s => s.accepted).length, dutyCount: result.dutyCount,
       longestDutyMs: result.longestDutyMs, frameStats: f, referenceMaxJointDeviation: result.referenceMaxJointDeviation ?? null };
     state.phase = 'done';
-    setStatus(`Done in ${(result.wallMs / 1000).toFixed(1)} s · playing`);
+    progress.finish('Motion complete');
     $('stats').textContent = [
       `${result.evaluations} evaluations · ${result.steps.length} steps (${state.result.accepted} accepted) · ${result.dutyCount} GPU duties`,
       f ? `Scene during generation: ${f.frames} frames, p95 ${f.p95.toFixed(1)} ms, max ${f.max.toFixed(1)} ms` : '',
@@ -331,7 +339,7 @@ async function generate() {
     $('strip').scrollLeft = 0;
   } catch (e) {
     state.error = String(e?.message ?? e); state.phase = e?.name === 'AbortError' ? 'stopped' : 'failed';
-    setStatus(state.phase === 'stopped' ? 'Stopped' : `Failed: ${state.error}`);
+    progress.finish(state.phase === 'stopped' ? 'Stopped' : `Failed: ${state.error}`);
   } finally {
     for (const id of ['generate', 'prompt', 'noise', 'seed', 'rest', 'skeleton']) $(id).disabled = false;
     for (const id of ['pause', 'stop']) $(id).disabled = true;
@@ -475,8 +483,25 @@ window.__unimateApplyRigLabels = async ({ clean, face }) => {
   $('rig-apply').click();
 };
 window.__unimateUseSkeleton = key => { $('skeleton').value = key; $('skeleton').dispatchEvent(new Event('change')); };
-$('pause').addEventListener('click', async () => { const s = await demo.togglePause(); if (s) $('pause').textContent = s === 'paused' ? 'Resume' : 'Pause'; });
-$('stop').addEventListener('click', () => demo.stop());
+$('pause').addEventListener('click', async () => {
+  const current = generationId, wasPaused = $('pause').textContent === 'Resume';
+  if (state.phase !== 'generating' || stopping) return;
+  $('pause').disabled = true;
+  progress.control(wasPaused ? 'Resuming generation' : 'Pausing generation');
+  try {
+    const s = await demo.togglePause();
+    if (current !== generationId || state.phase !== 'generating' || stopping) return;
+    $('pause').textContent = s === 'paused' ? 'Resume' : 'Pause';
+    progress.control(s === 'paused' ? 'Generation paused' : null);
+  } catch (e) {
+    if (current === generationId && state.phase === 'generating' && !stopping) progress.control(wasPaused ? 'Generation paused' : null);
+    console.error(e);
+  } finally { if (current === generationId && state.phase === 'generating' && !stopping) $('pause').disabled = false; }
+});
+$('stop').addEventListener('click', () => {
+  stopping = true; $('pause').disabled = $('stop').disabled = true;
+  progress.control('Stopping generation'); demo.stop();
+});
 $('rest').addEventListener('click', () => { demo.showGenerationSkeleton(); demo.showRest(); $('now').hidden = true; for (const e of clips) e.chip.setAttribute('aria-pressed', 'false'); });
 window.__unimateGenerate = (prompt, seed = null) => {
   $('prompt').value = typeof prompt === 'number' ? demo.bundle.prompts[prompt].text : prompt;

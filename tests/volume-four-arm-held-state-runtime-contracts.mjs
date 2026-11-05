@@ -329,7 +329,7 @@ assert.match(residualUploadBody, /layout:\s*fourArmHeldStateResidualBindGroupLay
 assert.match(core, /sampleFourArmHeldStateLedger/, 'volume runtime must expose a dedicated held-state sampler');
 const timestampMarkerBody = core.match(/function encodeBoundarySplatTimestampMarker\([^]*?\n  }\n\n/)?.[0] || '';
 assert.ok(timestampMarkerBody, 'held-state timestamp marker implementation is missing');
-assert.match(timestampMarkerBody, /setPipeline\(fourArmHeldStateTimestampMarkerPipeline\)/,
+assert.match(timestampMarkerBody, /setPipeline\(optionalPipelines\.fourArmHeldStateTimestampMarkerPipeline\)/,
   'timestamp markers must encode GPU work instead of relying on empty-pass timestamps');
 assert.match(timestampMarkerBody, /dispatchWorkgroups\(1\)/,
   'timestamp markers must dispatch one bounded workgroup so Apple WebGPU writes the query');

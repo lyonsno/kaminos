@@ -119,3 +119,26 @@ test('shared parameter history writes let the inspector choose its selected-sour
  assert.equal(alias.value,'.8','a primary cockpit write must not impersonate another selected source');
  assert.equal(control.value,'0.3');
 });
+
+test('restoring a plural flame composition from an ordinary page without a booted flame runtime navigates or boots the runtime before checking plural source support',async()=>{
+ const stop=html.indexOf('  setFlameDomainTranslation(restorePlan.flameDomainTranslation',html.indexOf('async function loadSceneFile('));
+ const start=html.indexOf('async function loadSceneFile(');const prefix=html.slice(start,stop)+'\n  return true;\n}';
+ const composition={schema:'kaminos.stationary-flame-composition.v1',flame:{presetId:'vsp-'+'a'.repeat(64),label:'Two braziers',stationary:true},route:{volume_light_field:'1'},lightGainStops:0};
+ const plan=()=>({objects:[{id:'a',type:'flame-emitter'},{id:'b',type:'flame-emitter'}],composition,flameSourcePresent:true});
+ const navigated=[];
+ const unmounted={authoringBusy:false,vantageCaptureHeld:false,scenePlacementTools:null,sceneRecords:{assertReloadable(){}},currentSceneFile:'existing.json',getVolumePrimitiveState:()=>[],flameDomainTranslation:[0,0,0],flameDomainScale:1,flameDomainFollowSource:false,planSceneRestore:plan,isCompositionAuthoring:()=>false,location:{origin:'http://127.0.0.1:8630',href:'http://127.0.0.1:8630/',assign:url=>navigated.push(url)},FLAME_EMITTER_TYPE:'flame-emitter',FLAME_EMITTER_ID:'flame-emitter',setInfo(){},volumePrototype:null};
+ sceneContext(unmounted);vm.runInContext(prefix,unmounted);
+ const navResult=await unmounted.loadSceneFile({text:async()=>JSON.stringify({composition})},{sceneFile:'beaming-two-brazier.kaminos.json'});
+ assert.equal(navResult?.ok,true);assert.equal(navResult?.navigating,true);assert.equal(navigated.length,1);
+ assert.match(navigated[0],/preset=vsp-a{64}/);assert.match(navigated[0],/scene=beaming-two-brazier\.kaminos\.json/);
+
+ let booted=0;const holds=[];
+ const mounted={authoringBusy:false,vantageCaptureHeld:false,scenePlacementTools:null,sceneRecords:{assertReloadable(){}},currentSceneFile:'existing.json',getVolumePrimitiveState:()=>[],flameDomainTranslation:[0,0,0],flameDomainScale:1,flameDomainFollowSource:false,planSceneRestore:plan,isCompositionAuthoring:()=>true,window:{kaminosViewportSettings:{set(){}},__kaminosVolumeEmitterReceipt:{effective:{family:'ring'}}},viewportDisplay:{},activeSceneComposition:null,sceneObjects:[],FLAME_EMITTER_TYPE:'flame-emitter',FLAME_EMITTER_ID:'flame-emitter',setAnnularBurner(){},setRimLight(){},setInfo(){},volumePrototype:null,initKaminosVolumeRoute:async()=>{booted++;mounted.volumePrototype={setImmersedSources(){},isActive:()=>false,setActive:async()=>{}};}};
+ const boot=mounted.initKaminosVolumeRoute;
+ mounted.initKaminosVolumeRoute=async()=>{await boot();mounted.volumePrototype.setSceneLightingRebuildPending=async value=>holds.push(value);};
+ sceneContext(mounted);vm.runInContext(prefix,mounted);
+ const applyResult=await mounted.loadSceneFile({text:async()=>JSON.stringify({composition})},{sceneFile:'beaming-two-brazier.kaminos.json',mounted:true});
+ assert.equal(applyResult?.ok,true,JSON.stringify(applyResult));assert.equal(booted,1);
+ assert.equal(holds.at(-1),false,'document completion releases its runtime hold');
+});
+

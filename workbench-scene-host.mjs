@@ -54,7 +54,7 @@ function vector(value,name){
 export function createWorkbenchSceneHost({scene,camera,controls,loadAsset,registerObject,findObject,removeObject,redraw,onFrame,resourceConsumers=()=>[scene]}) {
  const readView=()=>({schema:'kaminos.workbench-scene-view.v0',position:camera.position.toArray(),target:controls.target.toArray(),up:camera.up.toArray(),fov:camera.fov,zoom:camera.zoom,near:camera.near,far:camera.far});
  const setView=view=>{
-  const next={...readView(),...view};
+  const next={...readView(),up:[0,1,0],...view};
   for(const name of ['position','target','up'])next[name]=vector(next[name],name);
   if(Math.hypot(...next.up)===0||next.position.every((x,i)=>x===next.target[i])||!Number.isFinite(next.fov)||next.fov<=0||next.fov>=180||!Number.isFinite(next.zoom)||next.zoom<=0||!Number.isFinite(next.near)||next.near<=0||!Number.isFinite(next.far)||next.far<=next.near)throw Error('Invalid scene view projection or orientation');
   // Clear pending orbit/pan damping before restoring a retained view. Otherwise

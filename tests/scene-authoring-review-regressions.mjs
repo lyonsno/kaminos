@@ -12,7 +12,7 @@ const gainControl = { value: '0' };
 const geometryControl = { checked: false };
 const context = sceneContext({
   burnerRecipe: null, normalizeBurner, activeVolumeSettingsPresetReceipt: null, volumeSettingsPresetControlValuesEqual,
-  volumePrototype: { debugState: () => ({ active: true }) }, activeSceneComposition: null,
+  volumePrototype: { isActive:()=>true, debugState: () => ({ active: true }) }, activeSceneComposition: null,
   isFireLightFieldRoute: () => true, volumeCockpitLayoutReady: Promise.resolve(),
   buildVolumeSettingsPreset: () => ({ savedAt: new Date().toISOString(), domControls: { intensity }, rendererControls: {}, presentationControls: {}, route: 'exact' }),
   saveVolumeSettingsPreset: async () => { intensity = 2; return { effective: { presetId: 'old', label: 'Old' } }; },

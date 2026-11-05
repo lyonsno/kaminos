@@ -53,8 +53,8 @@ function prepareShadowScene(scene) {
 
 // Synchronous and frame-local: reuse preparation, never reuse old captures or
 // let a retained snapshot authorize a later frame's geometry.
-export function renderFireShadowBatch({scene,shadows,casterScene=null,RendererUtils=THREE.RendererUtils}) {
-  if(casterScene)return casterScene.withCapture(()=>renderFireShadowBatch({scene,shadows,RendererUtils}));
+export function renderFireShadowBatch({scene,shadows,casterScene=null,flameBox=null,RendererUtils=THREE.RendererUtils}) {
+  if(casterScene)return casterScene.withCapture(()=>renderFireShadowBatch({scene,shadows,RendererUtils}),{flameBox});
   if(shadows.some(shadow=>shadow.batchScene&&shadow.batchScene!==scene))throw Error('fire-shadow-inactive-or-foreign-batch');
   const prepared=prepareShadowScene(scene);
   const renderer=shadows[0]?.batchRenderer;

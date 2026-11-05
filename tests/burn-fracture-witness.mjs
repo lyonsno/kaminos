@@ -1,0 +1,53 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {spawnSync} from 'node:child_process';
+import {checkBurnFractureObservation,checkBurnMaterialContrast} from '../tools/burn-fracture-contract.mjs';
+import * as contract from '../tools/burn-fracture-contract.mjs';
+assert.equal(typeof contract.checkBurnFreefall,'function','Connected freefall must reject gravity starvation, not merely finite movement');
+const freeBefore={state:{regionMasses:[1,2],gravity:[0,-10,0],seconds:0,supports:[]},supportCollisionMasks:[0],positions:[0,2,0,1,1,2,0,.5],velocities:new Array(8).fill(0),alive:[true]};
+const freeAfter={...structuredClone(freeBefore),state:{...freeBefore.state,seconds:1},positions:[0,-3,0,1,1,-3,0,.5],velocities:[0,-10,0,0,0,-10,0,0]};
+assert.equal(contract.checkBurnFreefall(freeBefore,freeAfter).gravityVelocityFraction,1);
+for(const change of [s=>s.velocities.fill(0),s=>s.velocities[1]=-2,s=>s.alive[0]=false,s=>s.supportCollisionMasks[0]=1,s=>s.state.supports=[0],s=>s.state.gravity=[0,-1,0],s=>s.velocities.pop()]){
+ const bad=structuredClone(freeAfter);change(bad);assert.throws(()=>contract.checkBurnFreefall(freeBefore,bad));
+}
+assert.equal(typeof contract.waitForBurnReset,'function','Reset evidence must await resolved state, not a truthy polling promise');
+let resetReads=0,frames=0;
+const resetState=await contract.waitForBurnReset(async()=>({resetting:++resetReads<3,error:null}),async()=>{frames++;});
+assert.equal(resetState.resetting,false);assert.equal(resetReads,3);assert.equal(frames,2);
+await assert.rejects(contract.waitForBurnReset(async()=>({resetting:true,error:'reset failed'}),async()=>{}),/reset failed/);
+await assert.rejects(contract.waitForBurnReset(async()=>({}),async()=>{}));
+const read={identity:'kaminos.burn-fracture.replay.v1',effective:{backend:'WebGPU',adapter:{vendor:'apple'}},thermal:'frozen-not-live-coupled',mechanics:{identity:'kaminos.burn-fracture.resident-cohesive.v1',runtimeReadbacks:0,regions:2,connections:1}};
+const identity=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
+const snapshot={matrices:[...identity,...identity],positions:new Array(8).fill(0),quaternions:[0,0,0,1,0,0,0,1],velocities:new Array(8).fill(0),angularVelocities:new Array(8).fill(0),alive:[true],geometry:new Array(12).fill(0),state:{seconds:0}};
+checkBurnFractureObservation(read,snapshot);
+// Physical comparison failures remain evidence, so the other material can still be captured.
+const coldComparison=checkBurnFractureObservation(read,{...snapshot,alive:[false]},{comparison:{name:'cold',maximumMovement:.02}});
+assert.deepEqual(coldComparison.expectations?.map(x=>x.passed),[false,false],'Record cold behavior failures without aborting the comparison');
+const burnedComparison=checkBurnFractureObservation(read,{...snapshot,alive:[false]},{comparison:{name:'burned',maximumMovement:.2}});
+assert.deepEqual(burnedComparison.expectations.map(x=>x.passed),[true,true]);
+assert.equal([coldComparison,burnedComparison].every(row=>row.expectations.every(x=>x.passed)),false,'A passing burned case cannot erase cold failures');
+assert.deepEqual(checkBurnFractureObservation(read,snapshot,{comparison:{name:'cold',maximumMovement:.009}}).expectations.map(x=>x.passed),[true,true]);
+assert.deepEqual(checkBurnFractureObservation(read,snapshot,{comparison:{name:'burned',maximumMovement:0}}).expectations.map(x=>x.passed),[false,false]);
+assert.throws(()=>checkBurnFractureObservation({...read,effective:{backend:'WebGL'}},snapshot,{comparison:{name:'cold',maximumMovement:0}}),'Invalid runtime evidence must still abort');
+const noFailure={...snapshot,alive:[false],damage:new Array(12).fill(0),state:{seconds:.5,steps:30}};
+assert.throws(()=>checkBurnFractureObservation(read,noFailure,{requireStressFailure:true}),/stress|failure/i,'A disconnected region with zero load-failure evidence cannot establish material failure');
+const loaded={...noFailure,geometry:[1,...new Array(11).fill(0)],damage:[3,2,1.2,10,0,0,0,0,0,0,0,1]};
+assert.equal(checkBurnFractureObservation(read,loaded,{requireStressFailure:true}).failures.stress.length,1);
+for(const patch of [{alive:[true]},{damage:[0,0,2,10,...new Array(8).fill(0)]},{damage:[3,2,.5,10,...new Array(8).fill(0)]},{damage:[3,2,2,31,...new Array(8).fill(0)]},{geometry:new Array(12).fill(0)}])assert.throws(()=>checkBurnFractureObservation(read,{...loaded,...patch},{requireStressFailure:true}));
+const rows=['intact','charred','unloaded'].map((name,i)=>({name,before:{...snapshot,geometry:loaded.geometry},after:{...loaded,alive:[i!==1],damage:i===1?loaded.damage:[3,2,.5,0,0,0,0,0,0,0,0,i===0?0:1],state:{...loaded.state,material:{tension:100},regionMasses:[1,1],gravity:i===2?[0,0,0]:[0,-9.81,0]}}}));
+checkBurnMaterialContrast(rows);
+const noOp=structuredClone(rows);noOp[1].after.alive=[true];noOp[1].after.damage.fill(0);
+assert.throws(()=>checkBurnMaterialContrast(noOp),/production failure kernel/,'Bypassing the production failure kernel cannot pass');
+const consumedOnly=structuredClone(rows);consumedOnly[1].after.geometry=[0,...loaded.geometry.slice(1)];consumedOnly[1].after.damage=new Array(12).fill(0);
+assert.throws(()=>checkBurnMaterialContrast(consumedOnly),/consume/);
+const wrongLoad=structuredClone(rows);wrongLoad[1].after.state.gravity=[0,-100,0];assert.throws(()=>checkBurnMaterialContrast(wrongLoad));
+const lost=structuredClone(rows);lost[1].after.damage=[];assert.throws(()=>checkBurnMaterialContrast(lost));
+assert.throws(()=>checkBurnFractureObservation({...read,sceneContact:'finite-editable-support',mechanics:{...read.mechanics,supports:[0],finiteSupports:[{}]}},snapshot),'A clamped piece must not masquerade as a contact-supported object');
+for(const effective of [{backend:'WebGL',adapter:{vendor:'apple'}},{backend:'WebGPU',adapter:{vendor:'google'}},{backend:'WebGPU',adapter:null}])assert.throws(()=>checkBurnFractureObservation({...read,effective},snapshot));
+for(const patch of [{matrices:[]},{matrices:new Array(32).fill(0)},{positions:[]},{alive:[]},{geometry:[]},{quaternions:new Array(8).fill(0)},{velocities:[NaN,...snapshot.velocities.slice(1)]}])assert.throws(()=>checkBurnFractureObservation(read,{...snapshot,...patch}));
+const out=fs.mkdtempSync(path.join(os.tmpdir(),'burn-fracture-failed-input-'));
+assert.equal(spawnSync(process.execPath,[new URL('../tools/burn-fracture-witness.mjs',import.meta.url).pathname,'http://127.0.0.1:1',out]).status,1);
+const failed=JSON.parse(fs.readFileSync(path.join(out,'report.json')));assert.equal(failed.status,'failed');assert.equal(failed.phase,'launch');assert.ok(failed.error);assert.deepEqual(failed.observations,[]);

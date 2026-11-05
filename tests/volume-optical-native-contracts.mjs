@@ -127,4 +127,3 @@ test('joined numerical keeps Fine step scale and clips integration panels at reg
  assert.match(opticalNative.OPTICAL_STEPPING_WGSL,/abs\(maximum - \(\*s\)\.maximum\) > 1e-6/,
   'crossing a region join must reset the unrefined panel target to the new region maximum');
 });
-

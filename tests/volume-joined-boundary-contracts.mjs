@@ -23,9 +23,9 @@ test('uniform block: joined boundary after the reactant block, off by default', 
   assert.equal(core.WAVELET_TURBULENCE_UNIFORM_OFFSET, core.JOINED_BOUNDARY_UNIFORM_OFFSET + core.JOINED_BOUNDARY_UNIFORM_FLOATS, 'wavelet turbulence follows the joined boundary');
   assert.equal(core.OPEN_WORLD_UNIFORM_OFFSET, core.WAVELET_TURBULENCE_UNIFORM_OFFSET + core.WAVELET_TURBULENCE_UNIFORM_FLOATS);
   assert.equal(core.DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET, core.OPEN_WORLD_UNIFORM_OFFSET + 4);
-  assert.equal(core.WORLD_CALIBRATION_UNIFORM_OFFSET, core.DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET + 8);
+  assert.equal(core.SHARED_ASH_UNIFORM_OFFSET, core.DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET + 8);
+  assert.equal(core.WORLD_CALIBRATION_UNIFORM_OFFSET, core.SHARED_ASH_UNIFORM_OFFSET + 4);
   assert.equal(core.VOLUME_UNIFORM_FLOATS, core.WORLD_CALIBRATION_UNIFORM_OFFSET + 8);
-  assert.match(shader, /  reactant_combustion_d: vec4<f32>,\n  joined_boundary: vec4<f32>,\n  joined_ghost_geometry: vec4<f32>,\n  joined_ghost_dims: vec4<f32>,\n  wavelet_turbulence: vec4<f32>,\n  wavelet_octave_weights: vec4<f32>,\n  open_world_boundary: vec4<f32>,\n  display_reconstruction: vec4<f32>,\n  display_interpolation: vec4<f32>,\n  world_calibration: vec4<f32>,\n  calibration_pose: vec4<f32>,\n\}/);
   assert.match(shader, /fn joinedBoundary\(\) -> bool \{\n  return u\.joined_boundary\.x > 0\.5;\n\}/);
   const m = core.JOINED_GHOST_MARGIN_CELLS;
   assert.deepEqual(core.joinedBoundaryUniformValues(null), [0, 0, 0, m, 0, 0, 0, 0, 0, 0, 0, 0]);
@@ -281,7 +281,7 @@ test('JG-02-C: settlement requires the join admitted, the ghosts bound and the r
 
 test('JG-03: the front-topology field blends to the exterior appearance (0) beyond the box like the appearance slots', () => {
   assert.match(shader, /fn sampleFrontFieldTransport\(p: vec3<f32>\) -> f32 \{\n  let fine = sampleFrontFieldMasked\(p\);\n  if \(openWorldBoundary\(\)\) \{[^\n]+\}\n  if \(!joinedGhosts\(\)\) \{ return fine; \}\n  return mix\(fine, 0\.0, clamp\(ghostOutsideAmount\(p\) \* 2\.0, 0\.0, 1\.0\)\);\n\}/);
-  assert.match(shader, /var combustionFrontTopology = sampleFrontFieldTransport\(backCell\) \* stepRate\(0\.936\);/);
+  assert.match(shader, /var combustionFrontTopology = 0\.0;\s*if \(!SHRED_ONLY\) \{ combustionFrontTopology = sampleFrontFieldTransport\(backCell\) \* stepRate\(0\.936\); \}/, 'legacy front transport retains exterior blending; Shred only has no front history');
 });
 
 test('JG-04: the band readback is labelled from the queued snapshot and refuses nonfinite results', () => {

@@ -134,12 +134,12 @@ test('GI-PROXY-01: the page clears the registry when it clears a scene, and rele
   const {registry}=world(),{root}=sceneObject(heroSource);await registry.attach(root);let disposed=0;
   registry.get(root).proxyRoot.traverse(node=>node.geometry?.addEventListener('dispose',()=>disposed++));
   const h=vm.createContext({createSceneLifecycle,workingScene:createWorkingScene(),scene:{remove(){}},disposeObjectTree(){},setSceneObjectMounted(){},restoreLoadedSceneRecord(){},setSceneGroupsFromRecords(){},setSceneSelection(){},setActiveSceneObject(){},setActiveSceneGroup(){},
-    clearSceneEditingState(){},clearSceneTransient(){},projectClearedScene(){},sceneGiProxies:registry,waterFeature:{clear(){}},flameFeature:{clear:async()=>{}},setInfo(){},sceneSpotLights:new Map()});
+    volumePrototype:null,setVolumePrimitivesState(){},VOLUME_PRIMITIVE_SCHEMA:"kaminos.volume-primitives.v0",clearSceneEditingState(){},clearSceneTransient(){},projectClearedScene(){},sceneGiProxies:registry,waterFeature:{clear(){}},authoredAsh:new Map(),retireSceneFlame:async()=>{},flameFeature:{clear:async()=>{}},setInfo(){},sceneSpotLights:new Map()});
   const extract=name=>{const a=html.indexOf('function '+name+'('),b=html.indexOf('\n}',a)+2;assert.ok(a>=0&&b>a);return html.slice(a,b);};
   vm.runInContext(extract('createPageSceneLifecycle')+'\n'+extract('clearSceneDomains'),h);
   h.sceneLifecycle=h.createPageSceneLifecycle();
   const start=html.indexOf('function clearScene('),end=html.indexOf('\nfunction clearSceneEditingState(',start);
-  vm.runInContext(html.slice(start,end)+'\nclearScene();',h);
+  await vm.runInContext(html.slice(start,end)+'\nclearScene();',h);
   assert.equal(registry.list().length,0);assert.equal(disposed,1,'page lifecycle must release the real proxy registry');
   assert.match(body('createPageSceneMembershipOperations'),/sceneGiProxies\.release\(entry\.object\)/);
 });
@@ -171,4 +171,79 @@ test('Review N4: index.html wires window.kaminosGiProxies.prepare and importScen
   const importBody = html.slice(importStart, importStart + 2500);
   assert.match(importBody, /window\.kaminosGiProxies\?\.prepare\?\.\(digest,\s*\{heroGLB:/, 'importSceneMesh triggers background GI proxy tier preparation on imported GLBs');
 });
+
+test('named .glb files in generated-meshes resolve through /api/mesh-lods and adopt the canonical sha256', async () => {
+  const calls = [], loaded = [];
+  const registry = createGiProxyRegistry({
+    THREE,
+    fetchJson: async url => {
+      calls.push(url);
+      const q = new URL(url, 'http://k');
+      const src = q.searchParams.get('source');
+      if (src === 'trellis-kiln-mlx1024-500k.glb') {
+        const levels = TIERS.map(t => ({...t, source: `/api/read?root=generated-meshes&path=${t.sha256}.glb`}));
+        return {schema: 'kaminos.lod-set.v0', source: HERO, levels, choice: levels[1], withinBudget: true};
+      }
+      if (src === 'untiered-kiln.glb') {
+        return {schema: 'kaminos.lod-set.v0', source: HERO, levels: [], choice: null, withinBudget: false};
+      }
+      throw Error('unexpected source ' + src);
+    },
+    fetchBytes: async () => tierBytes(1000),
+    parseGlb: async () => { const g = new THREE.Group(); g.add(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial())); loaded.push(g); return g; },
+  });
+  const namedLoaded = await registry.attach(sceneObject('/api/read?root=generated-meshes&path=trellis-kiln-mlx1024-500k.glb').root);
+  assert.equal(namedLoaded.state, 'loaded');
+  assert.equal(namedLoaded.heroSha, HERO);
+  assert.equal(namedLoaded.assetSha, HERO);
+  const namedUntiered = await registry.attach(sceneObject('/api/read?root=generated-meshes&path=untiered-kiln.glb').root);
+  assert.equal(namedUntiered.state, 'no-tiers');
+  assert.equal(namedUntiered.heroSha, HERO);
+  assert.equal(namedUntiered.assetSha, HERO);
+});
+
+test('applyGiProxySetting auto-prepares missing tiers once per heroSha and LOD refresh preserves live burn bodies', async () => {
+  const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.ok(html.includes('const autoPreparedLodSources = new Set(), inFlightLodPrepares = new Map();'), 'index.html defines autoPreparedLodSources and inFlightLodPrepares');
+  const start = html.indexOf('function applyGiProxySetting(entry){');
+  const end = html.indexOf('\nfunction writeObjectGiProxy(', start);
+  const snippet = html.slice(start, end);
+  const prepared = [];
+  const autoPreparedLodSources = new Set();
+  const window = {
+    kaminosFireLightingSettings: {sync() {}},
+    _kaminosDirty() {},
+    kaminosGiProxies: {
+      prepare: async (sha, opts) => {
+        prepared.push({sha, opts});
+        return {phase: 'done', tiers: [{faces: 1000}]};
+      },
+    },
+  };
+  const sceneGiProxies = {
+    select: async () => ({state: 'no-tiers', heroSha: HERO, assetSha: HERO}),
+    disable() {},
+  };
+  const fn = new Function('sceneGiProxies', 'syncSceneDataInspector', 'window', 'setInfo', 'autoPreparedLodSources', `${snippet}; return applyGiProxySetting;`)(
+    sceneGiProxies, () => {}, window, () => {}, autoPreparedLodSources
+  );
+  const entry = {id: 'kiln-1', label: 'Kiln', giProxy: {enabled: true, selection: {faces: 1000}}, object: {}};
+  await fn(entry);
+  await fn(entry);
+  assert.equal(prepared.length, 1, 'auto-prepare runs once per heroSha');
+  assert.equal(prepared[0].sha, HERO);
+  const refreshStart=html.indexOf('const refreshSceneObjectsForLodSource =');
+  const refreshEnd=html.indexOf('\nwindow.__kaminosRefreshLodSource',refreshStart);
+  assert.ok(refreshStart>=0&&refreshEnd>refreshStart);
+  const refreshed=[],resident={fuel:.42,steps:71},other={id:'other',object:{}};
+  const burning={read:()=>({state:{fields:[{surfaceLod:{tier:'hero'},...resident}]}}),
+    forget(){assert.fail('LOD completion must not destroy resident burn history');},sync(){}};
+  const refresh=new Function('workingScene','sceneGiProxies','applyGiProxySetting','sceneBurning',
+    html.slice(refreshStart,refreshEnd)+';return refreshSceneObjectsForLodSource;')(
+      {objects:[entry,other]},{get:root=>({heroSha:root===entry.object?HERO:'other'})},async row=>refreshed.push(row.id),burning);
+  await refresh(HERO);
+  assert.deepEqual(refreshed,[entry.id]);
+  assert.equal(burning.read().state.fields[0].steps,71);
+});
+
 

@@ -8,6 +8,7 @@ let serviceInput, fail = false;
 const device = {queue: {submit() {throw new Error('private submit');}}};
 const state = {active: true, frameCount: 0, simStepCount: 0};
 const make = new Function('state','device','requestAnimationFrame','cancelAnimationFrame','renderOrdinaryFrame','canvas','emitStatus','performance', `
+let deviceRetired = false;
 let foregroundRequester = null, foregroundPending = null, foregroundSequence = 0, raf = 0;
 let sceneLightingRebuildPending = false, stillPresentationHeld = false, foregroundDrain = Promise.resolve();
 let selectiveHeadLiveCapturePaused = false;
@@ -52,7 +53,8 @@ assert.equal(state.active, false);
 assert.match(state.error, /renderer failed/);
 assert.equal(scheduled.length, heldSchedules+1, 'failed frame cannot silently reschedule');
 const body = core.slice(core.indexOf('  function renderOrdinaryFrame('), core.indexOf('  function pumpLookLabFrozenFrame('));
-assert.match(body, /foregroundService\.submit\(\[encoder\.finish\(\)\]/);
+assert.match(body, /submitVolumeCommands\(\[finishVolumeEncoder\(encoder\)\], commands=>foregroundService\.submit\(commands/);
+assert.doesNotMatch(body, /device\.queue\.submit\(/,'ordinary frames must retain foreground-service ownership through the thermal bridge');
 assert.match(body, /encodeFireIrradianceLightField\(encoder\)/);
 assert.match(body, /updateUniforms\(now\)/);
 assert.match(body, /if \(foregroundService\) throw err/);

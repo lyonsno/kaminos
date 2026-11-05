@@ -68,14 +68,23 @@ export function emissiveCoefficientStats(values) {
   return { cells, finiteCells, nonzeroCells, extinctionMax, extinctionMean, emissionMax, extinctionStdDev };
 }
 
+const emissiveLightPipelines = new WeakMap();
+
 export function createEmissiveLightField(device, module, uniformBuffer, fluidBuffers, frontBuffers, getReactantTextures) {
   const cells = EMISSIVE_LIGHT_GRID ** 3;
   const allocate = (label, count) => device.createBuffer({ label, size: count*16, usage: GPUBufferUsage.STORAGE });
   const coefficients = device.createBuffer({ label: 'emissive material coefficients', size: cells*16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
   const directions = allocate('six-direction incident radiance', cells*6);
   const incident = allocate('single-scattering mean incident radiance', cells);
-  const pipeline = name => device.createComputePipeline({ label: name, layout: 'auto', compute: { module, entryPoint: name } });
-  const seed = pipeline('seedEmissiveLight'), sweep = pipeline('sweepEmissiveLight'), resolve = pipeline('resolveEmissiveLight');
+  let byModule = emissiveLightPipelines.get(device);
+  if (!byModule) { byModule = new WeakMap(); emissiveLightPipelines.set(device, byModule); }
+  let cached = byModule.get(module);
+  if (!cached) {
+    const pipeline = name => device.createComputePipeline({ label: name, layout: 'auto', compute: { module, entryPoint: name } });
+    cached = { seed: pipeline('seedEmissiveLight'), sweep: pipeline('sweepEmissiveLight'), resolve: pipeline('resolveEmissiveLight') };
+    byModule.set(module, cached);
+  }
+  const { seed, sweep, resolve } = cached;
   const group = (pipe, index, buffers) => device.createBindGroup({
     layout: pipe.getBindGroupLayout(index),
     entries: buffers.map(([binding, buffer]) => ({ binding, resource: { buffer } })),
