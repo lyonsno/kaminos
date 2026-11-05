@@ -6,6 +6,7 @@ import {createAshSceneSolids} from './scene-gpu.mjs';
 import {createRefinementLayout, refinementCell} from './refinement-plan.mjs';
 import {refinementArena, refinementShader} from './refinement-shader.mjs';
 import {refinementVertexWGSL, refinementNormalWGSL, refinementOpacityWGSL} from './refinement-surface.mjs';
+import {seedRefinedLayer} from './refinement-seed.mjs';
 import {checkedSliding} from './sliding.mjs';
 
 export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,refinement,sceneRecords=null,sliding:initialSliding={}}) {
@@ -153,16 +154,12 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
       setSoftNormals(value){check();softNormals.value=value?1:0;},
       burst(volume){check();fall.request(volume);},
       async deposit(input) {
-        const state=await capture(),values=state.values.slice();
+        const state=await capture(),values=input.blanketDepth===undefined?state.values.slice():seedRefinedLayer(p,state.solid,input,state.values);
         const cells=[];
         for(let i=0;i<p.count;i++) {
           const c=refinementCell(p,i);if(!c.owned||state.solid[i])continue;
-          if(input.blanketDepth!==undefined) {
-            if(!Number.isFinite(input.blanketDepth)||input.blanketDepth<=0)throw Error('Invalid blanket depth');
-            const low=c.coord[1]*cellSize;
-            const height=Math.max(0,Math.min(c.size*cellSize,input.blanketDepth-low));
-            values[i]=Math.max(values[i],height/cellSize*c.size*c.size);
-          }else{
+          if(input.blanketDepth!==undefined)continue;
+          {
             if(!Number.isFinite(input.volume)||input.volume<=0||!Number.isFinite(input.radius)||input.radius<=0||!input.center?.every(Number.isFinite))throw Error('Invalid deposit');
             const x=p.origin[0]+(c.coord[0]+c.size*.5)*cellSize,z=p.origin[2]+(c.coord[2]+c.size*.5)*cellSize;
             if(Math.hypot(x-input.center[0],z-input.center[2])<=input.radius)cells.push({i,c});
@@ -193,7 +190,7 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
         if(!exactCollision&&!(allowCollisionUpgrade&&sameAshCollisionPoses(state.collisionIdentity,collisionIdentity())))throw Error('Checkpoint scene geometry or poses differ; restore the scene first');
         fall.validate(state.falling);const values=Float32Array.from(state.values);
         const actual=retained(values,state.falling),introduced=state.seededVolume+state.falling.requestedVolume;
-        if(!Number.isFinite(state.seededVolume)||state.seededVolume<0||!Number.isFinite(state.retainedVolume)||Math.abs(state.retainedVolume-actual)>Math.max(1e-9,actual*1e-4)||!Number.isFinite(introduced)||Math.abs(actual-introduced)>Math.max(1e-9,introduced*1e-4)||Math.abs(state.volume-introduced)>1e-8)throw Error('Checkpoint volume differs from retained material');
+        if(!Number.isFinite(state.volume)||state.volume<0||!Number.isFinite(state.seededVolume)||state.seededVolume<0||!Number.isFinite(state.retainedVolume)||Math.abs(state.retainedVolume-actual)>Math.max(1e-9,actual*1e-4)||!Number.isFinite(introduced)||Math.abs(actual-introduced)>Math.max(1e-9,introduced*1e-4)||Math.abs(state.volume-introduced)>1e-8)throw Error('Checkpoint volume differs from retained material');
         if(!(state.lastContact===null||Array.isArray(state.lastContact)&&state.lastContact.length===4&&state.lastContact.every(Number.isFinite)&&state.lastContact[3]>0))throw Error('Invalid refined ash contact');
         if(!Array.isArray(state.pendingTiles)||state.pendingTiles.some(i=>!Number.isSafeInteger(i)||i<0||i>=p.tiles.count)||!Number.isSafeInteger(state.steps)||state.steps<0)throw Error('Invalid refined ash continuation');
         sliding=checkedSliding(state.sliding);parameters();upload(values,exactCollision?new Set(state.pendingTiles):null);fall.restore(state.falling);steps=state.steps;seededVolume=state.seededVolume;lastContact=state.lastContact?.slice()??null;

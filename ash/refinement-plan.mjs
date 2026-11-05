@@ -151,7 +151,11 @@ export function refinementFlux(p, values, i, j, axis, area, {solid = [], gravity
   const a = refinementCell(p, i), b = refinementCell(p, j);
   const va = a.size ** 3, vb = b.size ** 3, ma = values[i], mb = values[j];
   if (solid[i] || solid[j]) {
-    if (solid[i] && solid[j]) return 0;
+    if (solid[i] === 1 || solid[j] === 1) return 0;
+    if (solid[i] === 2 && solid[j] === 2) {
+      const amount = .5 * area * (ma / va - mb / vb);
+      return amount >= 0 ? Math.min(amount, ma, vb - mb) : -Math.min(-amount, mb, va - ma);
+    }
     return solid[i] ? Math.min(ma * area / (a.size * a.size), (vb - mb) * area / (b.size * b.size)) : -Math.min(mb * area / (b.size * b.size), (va - ma) * area / (a.size * a.size));
   }
   if (axis === 1 && gravity) {
