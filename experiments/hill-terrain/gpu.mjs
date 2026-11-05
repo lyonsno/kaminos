@@ -334,8 +334,10 @@ const zoomCellKernel=wgslFn(`fn hill_cell_xy(ix:u32,iz:u32,n:u32,state:ptr<stora
  let u=(*state)[select(0u,iz-1u,iz>0u)*n+ix].xy;
  let d=(*state)[min(n-1u,iz+1u)*n+ix].xy;
  let hc=c.x+c.y;
- let minN=min(min(l.x+l.y,r.x+r.y),min(u.x+u.y,d.x+d.y));
- if(minN>hc+.02){return vec2<f32>(c.x,c.y+(minN-hc));}
+ let hl=l.x+l.y;let hr=r.x+r.y;let hu=u.x+u.y;let hd=d.x+d.y;
+ let minN=min(min(hl,hr),min(hu,hd));
+ let avgN=.25*(hl+hr+hu+hd);
+ if(minN>hc+.015||(c.y>.46&&avgN>hc+.05)){return vec2<f32>(c.x,c.y+max(0.,avgN-hc));}
  return c;
 }`);
 
