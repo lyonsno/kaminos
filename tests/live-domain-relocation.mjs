@@ -44,6 +44,10 @@ const ui = {flameDomainDraft: null, checkedFlameDomainPose: x => x, refreshFlame
 vm.runInNewContext(`${preview}; writeFlameDomainPreview({position:[.2,0,0],scale:[1,1,1]});`, ui);
 assert.equal(moves, 1, 'preview must move live coverage during the gesture');
 assert.equal(sources, 1, 'source coordinates must follow the preview transform');
+ui.authoredFlamePresent=false;
+vm.runInNewContext(`${preview}; writeFlameDomainPreview({position:[.3,0,0],scale:[1,1,1]});`, ui);
+assert.equal(moves,2,'source-free coverage still follows the gesture');
+assert.equal(sources,1,'source-free coverage never writes an absent emitter');
 
 // Moving coverage while a diagnostic map is in flight must retire its result
 // without stranding the map guard or replacing a still-mapped buffer.
