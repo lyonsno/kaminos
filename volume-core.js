@@ -11084,6 +11084,8 @@ export function createKaminosVolumePrototype({
   if (productFrameOwner === 'caller' && (!externalDevice || !externalColorFormat)) {
     throw new Error('caller-product-frame-requires-external-device-and-color-format');
   }
+  const initialControlRetirement = stripRetiredRaymarchControls(getControls());
+  const initialHistory=rayHistorySettings({influence:initialControlRetirement.controls.historyInfluence,window:initialControlRetirement.controls.historyWindow});
   // The box shape (report §34) is seated from the controls once they exist
   // (below); until then the helper reads the authored twice-the-width.
   let gridShape = null;
@@ -11131,8 +11133,7 @@ export function createKaminosVolumePrototype({
   const uniforms = new Float32Array(VOLUME_UNIFORM_FLOATS);
   uniforms.set(THERMAL_LUT, 376);
   const volumePresentationControls = new Float32Array([1, 0, 0, 0]);
-  const initialControlRetirement = stripRetiredRaymarchControls(getControls());
-  let controlsSnapshot = applyRuntimeQualityControls(initialControlRetirement.controls);
+  let controlsSnapshot = applyRuntimeQualityControls({...initialControlRetirement.controls,historyInfluence:initialHistory.influence,historyWindow:initialHistory.window});
   let volumePresentationModeRequestedRaw = 'beauty';
   let volumePresentationModeRequested = 'beauty';
   let volumePresentationModeEffective = 'beauty';
@@ -28231,6 +28232,7 @@ export function createKaminosVolumePrototype({
       return plan;
     },
     setControls(next) {
+      rayHistorySettings({influence:Object.hasOwn(next,'historyInfluence')?next.historyInfluence:controlsSnapshot.historyInfluence,window:Object.hasOwn(next,'historyWindow')?next.historyWindow:controlsSnapshot.historyWindow});
       if(Object.hasOwn(next,'occupancyThreshold'))emptySpaceThreshold(next.occupancyThreshold);
       rayStepTelemetry?.invalidate();
       resolveDisplayReconstruction({...controlsSnapshot,...next});
@@ -28246,7 +28248,6 @@ export function createKaminosVolumePrototype({
           tolerance:next.opticalTolerance??controlsSnapshot.opticalTolerance??0.001});
         debugOpticalStepping=config;debugOpticalSteppingExplicit=false;
       }
-      rayHistorySettings({influence:Object.hasOwn(next,'historyInfluence')?next.historyInfluence:controlsSnapshot.historyInfluence,window:Object.hasOwn(next,'historyWindow')?next.historyWindow:controlsSnapshot.historyWindow});
       const previousGrid = gridSize;
       const previousBoundarySplatTelemetryControlSignature = boundarySplatTelemetryControlSignature(controlsSnapshot);
       const previousCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
