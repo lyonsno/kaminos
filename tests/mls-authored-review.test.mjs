@@ -1,13 +1,14 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import {authoredWaterChanges} from '../authored-water-changes.mjs';
 import {authoredMlsSetup} from '../authored-mls-water.mjs';
 import {createMlsJuiceSolver} from '../mls-juice-solver.mjs';
 const row={id:'water',label:'Water',type:'local-liquid-emitter',transform:{position:[0,1,0],rotation:[0,0,0],scale:[1,1,1]},localLiquidEmitter:{schema:'kaminos.local-liquid-emitter.v1',mode:'finite_drop',drop:{width:.5,samplesPerUnit:48}}};
 const setup={waterSampling:{spacing:1/48,particleTarget:12000,container:{min:[-2,-1,-2],max:[2,3,2]},worldBounds:{min:[-2,-1,-2],max:[2,3,2]}}};
 const text=await fs.readFile(new URL('../authored-mls-host.mjs',import.meta.url),'utf8');
 const pendingExpression=text.match(/pendingSourceChanges:(.*),\n/)[1];
-const pending=(records,initial,saved=setup,next=setup)=>new Function('records','initial','setup','pendingSetup',`return ${pendingExpression}`)(records,initial,saved,next);
+const pending=(records,initial,saved=setup,next=setup)=>new Function('records','initial','setup','pendingSetup','authoredWaterChanges',`return ${pendingExpression}`)(records,initial,saved,next,authoredWaterChanges);
 const initial=authoredMlsSetup([row],setup);
 assert.equal(pending([row],initial),false,'fresh release must not claim that its initial source has changed');
 const flow={...structuredClone(row),id:'flow',localLiquidEmitter:{schema:'kaminos.local-liquid-emitter.v1',mode:'continuous',rate:240,baseRadius:.08,strength:1}};
