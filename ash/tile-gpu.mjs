@@ -9,9 +9,9 @@ import {createAshSceneSolids} from './scene-gpu.mjs';
 import {retainedVolume} from './fall-plan.mjs';
 // Header words: pending wake, current awake, dirty surface, cached faces,
 // physical update count, surface revision, reserved, reserved.
-export function tileShader(p,dispatchLimit=65535){const t=p.tiles;return `
+export function tileShader(p,dispatchLimit=65535){const t=p.tiles,maxDepth=Math.min(t.width,Math.max(1,Math.floor((2**32-1)/(t.cellsPerTile*6*t.width))));return `
 const DISPATCH_ROW:u32=${dispatchLimit}u;
-const B:u32=${t.width}u;const V:u32=${t.cellsPerTile}u;const G:u32=${t.groupsPerTile}u;
+const B:u32=${t.width}u;const MAX_D:u32=${maxDepth}u;const V:u32=${t.cellsPerTile}u;const G:u32=${t.groupsPerTile}u;
 const TD=vec3<u32>(${t.dims.map(v=>v+'u').join(',')});const NT:u32=${t.count}u;const HALO:i32=${t.phaseHalo};
 struct Params {dims:vec4<u32>,origin:vec4<f32>,contact:vec4<f32>,previous:vec4<f32>,mode:vec4<u32>,sliding:vec4<f32>}
 @group(0) @binding(0) var<storage,read_write> density:array<f32>;
@@ -89,10 +89,17 @@ fn flat_top(c:vec3<u32>)->bool{
  let d0=density[index(c)];if(d0<${ASH_SURFACE_MIN_FILL.toFixed(8)}){return false;}
  for(var dz=-1;dz<=1;dz++){for(var dx=-1;dx<=1;dx++){
   let q=vec3<u32>(u32(i32(c.x)+dx),c.y,u32(i32(c.z)+dz));let qi=index(q);let dq=density[qi];
-  if(solid[qi]!=0u||dq<${ASH_SURFACE_MIN_FILL.toFixed(8)}||abs(dq-d0)>0.025){return false;}
+  if(solid[qi]!=0u||dq<${ASH_SURFACE_MIN_FILL.toFixed(8)}||abs(dq-d0)>0.005){return false;}
   if(c.y+1u<p.dims.y){let up=index(q+vec3<u32>(0u,1u,0u));if(solid[up]!=0u||density[up]>=${ASH_SURFACE_MIN_FILL.toFixed(8)}){return false;}}
  }}
  return true;
+}
+fn flat_run_width(c:vec3<u32>)->u32{
+ if(!flat_top(c)){return 0u;}
+ if(c.x%B>0u&&flat_top(c-vec3<u32>(1u,0u,0u))){return 0u;}
+ var w=1u;var q=c;
+ for(var k=1u;k<B-c.x%B;k++){q.x=c.x+k;if(q.x>=p.dims.x||!flat_top(q)){break;}w++;}
+ return w;
 }
 fn surface_band(c:vec3<u32>,face:u32)->vec2<f32>{
  if(any(c>=p.dims.xyz)||face==2u){return vec2<f32>(-1);}
@@ -117,20 +124,24 @@ fn surface_band(c:vec3<u32>,face:u32)->vec2<f32>{
  if(any(c>=p.dims.xyz)){return;}
  if(density[index(c)]<${ASH_SURFACE_MIN_FILL.toFixed(8)}||solid[index(c)]!=0u){return;}
  for(var face=0u;face<6u;face++){
-  let band=surface_band(c,face);if(band.x<0.0){continue;}var length=1u;
+  let band=surface_band(c,face);if(band.x<0.0){continue;}var width=1u;var depth=1u;
   if(p.mode.w!=0u){
-   let tangent=select(0u,2u,face<2u);var q=c;
    if(face==3u){
     if(flat_top(c)){
-     if(c[tangent]%B>0u){q[tangent]-=1u;if(flat_top(q)){continue;}}
-     q=c;for(var k=1u;k<B-c[tangent]%B;k++){q[tangent]=c[tangent]+k;if(any(q>=p.dims.xyz)||!flat_top(q)){break;}length++;}
+     let w0=flat_run_width(c);if(w0==0u){continue;}width=w0;
+     if(MAX_D>1u){
+      if(c.z%B>0u&&flat_run_width(c-vec3<u32>(0u,0u,1u))==width){continue;}
+      let maxDz=min(MAX_D,B-c.z%B);
+      for(var dz=1u;dz<maxDz;dz++){let rz=c+vec3<u32>(0u,0u,dz);if(rz.z>=p.dims.z||flat_run_width(rz)!=width){break;}depth++;}
+     }
     }
    }else if(band.y>=1.0){
+    let tangent=select(0u,2u,face<2u);var q=c;
     if(c[tangent]%B>0u){q[tangent]-=1u;if(all(surface_band(q,face)==band)){continue;}}
-    q=c;for(var k=1u;k<B-c[tangent]%B;k++){q[tangent]=c[tangent]+k;if(any(q>=p.dims.xyz)||any(surface_band(q,face)!=band)){break;}length++;}
+    q=c;for(var k=1u;k<B-c[tangent]%B;k++){q[tangent]=c[tangent]+k;if(any(q>=p.dims.xyz)||any(surface_band(q,face)!=band)){break;}width++;}
    }
   }
-  let slot=atomicAdd(&headers[tile*8u+3u],1u);faces[tile*V*6u+slot]=local*6u+face+(length-1u)*V*6u;
+  let slot=atomicAdd(&headers[tile*8u+3u],1u);faces[tile*V*6u+slot]=local*6u+face+((width-1u)+(depth-1u)*B)*V*6u;
  }
 }
 @compute @workgroup_size(1) fn pack_dispatch(){
@@ -144,11 +155,11 @@ const address=THREE.TSL.wgslFn(`fn ash_face_address(rank:u32,nt:u32,v:u32,faces:
  return vec2<u32>(lo,(*faces)[lo*v*6u+rank-(*prefix)[lo]]);
 }`);
 const vertex=THREE.TSL.wgslFn(`fn ash_face_vertex(a:vec2<u32>,uv:vec2<f32>,b:u32,td:vec3<u32>,dims:vec3<u32>,origin:vec3<f32>,size:f32,density:ptr<storage,array<f32>,read>,solid:ptr<storage,array<u32>,read>)->vec4<f32>{
- let code=a.y%(b*b*b*6u);let length=a.y/(b*b*b*6u)+1u;let local=code/6u;let face=code%6u;let tile=vec3<u32>(a.x%td.x,(a.x/td.x)%td.y,a.x/(td.x*td.y));
+ let code=a.y%(b*b*b*6u);let span=a.y/(b*b*b*6u);let width=(span%b)+1u;let depth=(span/b)+1u;let local=code/6u;let face=code%6u;let tile=vec3<u32>(a.x%td.x,(a.x/td.x)%td.y,a.x/(td.x*td.y));
  let c=tile*b+vec3<u32>(local%b,(local/b)%b,local/(b*b));let i=c.x+dims.x*(c.y+dims.y*c.z);let amount=(*density)[i];
  var p=vec3<f32>(0.0);
  switch face{case 0u:{p=vec3<f32>(0,0,uv.x);}case 1u:{p=vec3<f32>(1,0,1.0-uv.x);}case 2u:{p=vec3<f32>(uv.x,0,uv.y);}case 3u:{p=vec3<f32>(uv.x,1,1.0-uv.y);}case 4u:{p=vec3<f32>(1.0-uv.x,0,0);}default:{p=vec3<f32>(uv.x,0,1);}}
- p[select(0u,2u,face<2u)]*=f32(length);
+ if(face==3u){p.x*=f32(width);p.z*=f32(depth);}else{p[select(0u,2u,face<2u)]*=f32(width);}
  var capAbove=false;
  if(c.y+1u<dims.y){let up=c.x+dims.x*((c.y+1u)+dims.y*c.z);capAbove=(*solid)[up]!=0u||(*density)[up]>=0.02;}
  let gx=i32(c.x)+i32(round(p.x));let gz=i32(c.z)+i32(round(p.z));

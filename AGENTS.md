@@ -59,6 +59,10 @@ recommendation to the operator. Material detail and rendering approximations may
 express the physical state; they must not silently invent heating, combustion,
 motion or material loss.
 
+## Scene Lighting Default (SSGI)
+
+Kaminos uses **SSGI (`mode: 'combined'` in `scene-gi.mjs` and `scene-gi-settings.mjs`)** by default, not standalone GTAO (`mode: 'gtao'` in `scene-ao-depth.mjs`). In `mode: 'combined'`, opaque scene geometry renders in two passes per frame: `SSGI opaque linear source` (`samples: 0`, exporting linear color, view normal, and cached `SceneSurfaceLighting` irradiance) and `SSGI material receiving` (`beauty`). When profiling or optimizing scene rendering, materials, or procedural geometry, target the default SSGI (`mode: 'combined'`) route rather than only standalone GTAO.
+
 ## Feature Branch Ancestry
 
 Before editing on a feature branch, fetch `origin/main` and record the chosen

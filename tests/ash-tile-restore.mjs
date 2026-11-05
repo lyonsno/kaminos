@@ -7,7 +7,27 @@ import {patchLayout} from '../ash/gpu-plan.mjs';
 test('tileShader culls all bottom faces, subsurface top faces, and sloped run merges, and unifies corner height and perimeter cover',async()=>{
  const code=tileShader(patchLayout({cellSize:0.016,bounds:{min:[0,0,0],max:[1,1,1]},tileSize:16}));
  assert.match(code,/flat_top\(c\)/,'run-merging on top faces must require a flat 3x3 interior neighborhood so sloped edges never tear horizontal T-junction slits');
- assert.match(code,/abs\(dq-d0\)>0\.025/,'flat_top merges coplanar fractional top blankets within 0.025 fill tolerance');
+ assert.match(code,/flat_run_width\(/,'top-face run merging coalesces 2D width x depth rectangles across coplanar tile rows');
+ assert.match(code,/\(\(width-1u\)\+\(depth-1u\)\*B\)\*V\*6u/,'2D top-face rectangles pack width and depth into the single u32 face record');
+ assert.match(code,/abs\(dq-d0\)>0\.005/,'flat_top merges coplanar fractional top blankets within tight 0.005 fill tolerance for 2D rectangles');
+ const B=16,coalesce2D=mask=>{
+  const runW=(x,z)=>{if(!mask(x,z)||(x>0&&mask(x-1,z)))return 0;let w=1;while(x+w<B&&mask(x+w,z))w++;return w;};
+  const rects=[];
+  for(let z=0;z<B;z++)for(let x=0;x<B;x++){
+   if(!mask(x,z))continue;
+   const w=runW(x,z);if(w===0)continue;
+   if(z>0&&runW(x,z-1)===w)continue;
+   let d=1;while(z+d<B&&runW(x,z+d)===w)d++;
+   rects.push({x,z,w,d});
+  }
+  return rects;
+ };
+ assert.deepEqual(coalesce2D(()=>true),[{x:0,z:0,w:16,d:16}],'uniform 16x16 flat tile coalesces into 1 single 16x16 quad');
+ for(const mask of [(x,z)=>(x+z)%3!==0,(x,z)=>x>=2&&x<13&&z>=3&&z<11,(x,z)=>((x*7+z*13)&3)!==1]){
+  const rects=coalesce2D(mask),covered=Array.from({length:B*B},()=>0);
+  for(const {x,z,w,d} of rects)for(let dz=0;dz<d;dz++)for(let dx=0;dx<w;dx++)covered[(z+dz)*B+(x+dx)]++;
+  for(let z=0;z<B;z++)for(let x=0;x<B;x++)assert.equal(covered[z*B+x],mask(x,z)?1:0,'2D rectangle coalescing partitions flat_top cells with zero overlap or gaps');
+ }
  assert.match(code,/if\(any\(c>=p\.dims\.xyz\)\|\|face==2u\)\{return vec2<f32>\(-1\);\}/,'all downward bottom faces must be culled including on elevated colliders');
  assert.match(code,/if\(face==3u\)\{/,'top faces must only emit at the true top of each column stack, never on subsurface layers with a < 1.0 under upper ash');
  assert.match(code,/if\(!capAbove\)\{return vec2<f32>\(-1\);\}/,'uncapped cells must omit redundant vertical side quads');
