@@ -3,8 +3,9 @@
 // animation frame requested through it and submitted inside the model's foreground
 // window. With no requester installed the app renders on its own, as before.
 export function createAppFrameSource({device,queue,requestAnimationFrame:raf=globalThis.requestAnimationFrame}){
-  let requester=null,pending=null,sequence=0,scheduled=false;
+  let requester=null,pending=null,sequence=0,scheduled=false,retired=false;
   const state={completedFrames:0,lastReceipt:null,error:null};
+  device.lost?.then(()=>{retired=true;requester=null;state.error='GPU device retired';});
   function schedule(){if(requester&&!scheduled&&!pending){scheduled=true;raf(tick);}}
   function tick(){
     scheduled=false;
@@ -14,6 +15,7 @@ export function createAppFrameSource({device,queue,requestAnimationFrame:raf=glo
     let handle;
     try{
       handle=current({requestId,metadata:{renderer:'kaminos-app'},run(service){
+        if(retired)throw Error('GPU device retired');
         if(service?.device!==device||service?.queue!==queue)throw Error('app foreground device/queue mismatch');
         // The host's runForegroundFrame wrapper renders the scene; nothing else to submit here.
         return {status:'submitted'};
@@ -27,6 +29,7 @@ export function createAppFrameSource({device,queue,requestAnimationFrame:raf=glo
   return {
     foregroundGpuContext:()=>({renderer:'kaminos-app',productFrameOwner:'app',device,queue}),
     setForegroundOpportunityRequester(next){
+      if(retired&&next!==null)throw Error('GPU device retired');
       if(next!==null&&typeof next!=='function')throw Error('foreground requester must be a function or null');
       if(pending)throw Error('foreground frame is still pending');
       requester=next;schedule();

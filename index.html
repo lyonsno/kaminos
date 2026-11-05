@@ -2930,6 +2930,7 @@ import {createRecordingSink} from './recording-mp4.mjs';
 import {installRenderOutput} from './render-output-ui.mjs';
 import { settleStartupVeil } from './startup-veil.mjs';
 import { createEnvironmentLoader } from './scene-environment-loader.mjs';
+import {createDeviceRecovery} from './scene-device-recovery.mjs';
 // Adopt the <head> guard's early runtime-config request (startup-veil-guard.js).
 loadStartupRuntimeConfig().catch(() => {});
 import {inspectAuthoredWaterCompatibility,planAuthoredWaterBounds,planAuthoredWaterMatch,resolveAuthoredWaterSampling,describeAuthoredWaterDrop} from './authored-water-drop.mjs';
@@ -3549,6 +3550,8 @@ function escapeHtml(s) {
 
 // --- State ---
 let scene, camera, renderer, controls, pmremGenerator, transformControls,sceneComponents;
+let deviceRecovery=null;
+const deviceRecoveryHeld=()=>deviceRecovery&&deviceRecovery.state().phase!=='active';
 let assemblyEditing=null;
 const assemblyOutletChoices=new Map(),assemblyGuides=new Map();
 let sceneExposureControls=null;
@@ -4200,6 +4203,25 @@ window.kaminosSceneLodBudget = {
   bakeRungMeshesToRootSpace,
   formatLodBudgetReadout,
 };
+const autoPreparedLodSources = new Set(), inFlightLodPrepares = new Map();
+const refreshSceneObjectsForLodSource = async source => {
+  if (typeof workingScene === 'undefined') return;
+  await Promise.all(workingScene.objects.map(obj => {
+    const h = sceneGiProxies.get(obj.object);
+    return (h?.heroSha === source || h?.assetSha === source || obj.source?.includes(source)) ? applyGiProxySetting(obj) : null;
+  }));
+  if (typeof sceneColliderCollection !== 'undefined' && typeof currentColliderLodOptions === 'function' && workingScene.objects.some(o => o.collision?.enabled)) {
+    void sceneColliderCollection.prepare?.(workingScene.objects, currentColliderLodOptions());
+  }
+  for (const obj of workingScene.objects) {
+    const h = sceneGiProxies.get(obj.object);
+    if ((h?.heroSha === source || h?.assetSha === source || obj.source?.includes(source)) && obj.burnable?.enabled) {
+      if (sceneBurning?.read?.(obj.id)?.state?.fields?.[0]?.surfaceLod?.tier === 'hero') sceneBurning.forget(obj.object);
+    }
+  }
+  void sceneBurning?.sync?.();
+};
+window.__kaminosRefreshLodSource = refreshSceneObjectsForLodSource;
 window.kaminosGiProxies = {
   handleFor: root => sceneGiProxies.get(root),
   // A GI pass that reads proxies registers here (returns its release); the Render section reports when none does.
@@ -4208,17 +4230,34 @@ window.kaminosGiProxies = {
   select: (root, selection) => sceneGiProxies.select(root, selection),
   whenIdle: () => sceneGiProxies.whenIdle(),
   prepare: async (rootOrSha, options = {}) => {
+    if (typeof rootOrSha !== 'string' || !/^[0-9a-f]{64}$/i.test(rootOrSha)) await sceneGiProxies.whenIdle?.();
     const entry = typeof rootOrSha === 'string' && !/^[0-9a-f]{64}$/i.test(rootOrSha) ? workingScene.objects.find(o => o.id === rootOrSha) : workingScene.objects.find(o => o.object === rootOrSha);
     const handle = sceneGiProxies.get(entry?.object ?? rootOrSha);
-    const source = typeof rootOrSha === 'string' && /^[0-9a-f]{64}$/i.test(rootOrSha) ? rootOrSha.toLowerCase() : (handle?.heroSha ?? handle?.assetSha);
-    if (!source) throw Error('Provide a stored generated-meshes sha256 or a registered scene object');
-    const { runGenerationLevels } = await import('./generation-levels-runner.mjs');
-    const report = await runGenerationLevels({ source, ...options });
-    if (report.phase === 'done') for (const obj of workingScene.objects) {
-      const h = sceneGiProxies.get(obj.object);
-      if (h?.heroSha === source || h?.assetSha === source) applyGiProxySetting(obj);
+    let source = typeof rootOrSha === 'string' && /^[0-9a-f]{64}$/i.test(rootOrSha) ? rootOrSha.toLowerCase() : (handle?.heroSha ?? handle?.assetSha);
+    if (typeof source === 'string' && !/^[0-9a-f]{64}$/i.test(source)) {
+      const resp = await fetch(`/api/mesh-lods?${new URLSearchParams({ source })}`);
+      if (resp.ok) { const j = await resp.json(); if (/^[0-9a-f]{64}$/i.test(j?.source ?? '')) source = j.source.toLowerCase(); }
     }
-    return report;
+    if (!source || !/^[0-9a-f]{64}$/i.test(source)) throw Error('Provide a stored generated-meshes sha256 or a registered scene object');
+    autoPreparedLodSources.add(source);
+    if (!options.replace && inFlightLodPrepares.has(source)) return inFlightLodPrepares.get(source);
+    window.__kaminosLastGenerationLevels = { source, phase: 'running' };
+    const task = (async () => {
+      const { runGenerationLevels } = await import('./generation-levels-runner.mjs');
+      const report = await runGenerationLevels({ source, ...options });
+      window.__kaminosLastGenerationLevels = { source, ...report };
+      if (report.phase === 'done') await refreshSceneObjectsForLodSource(source);
+      else autoPreparedLodSources.delete(source);
+      return report;
+    })().catch(err => {
+      autoPreparedLodSources.delete(source);
+      throw err;
+    }).finally(() => {
+      if (inFlightLodPrepares.get(source) === task) inFlightLodPrepares.delete(source);
+    });
+    inFlightLodPrepares.set(source, task);
+    window.__kaminosLastGenerationLevelsPromise = task;
+    return task;
   },
   state: () => sceneGiProxies.list().map(({ root, proxyRoot, surfels, placement, ...h }) => ({ id: root.userData?.kaminosSceneObject?.id ?? null, ...h,
     proxyLoaded: !!proxyRoot, ...(surfels ? { surfels: { levels: surfels.levels, coarsest: surfels.coarsest } } : {}) })),
@@ -4271,6 +4310,7 @@ const waterFeature = createAuthoredWaterFeature({
     getDisplayPolicy:()=>getLocalLiquidDisplayPolicy?.(),decorateOutput:output=>selectionFeedback.output(output)}),
   emitters:localLiquidEmitterRecords,
   enabledEmitters:()=>localLiquidEmitterRecords().filter(record=>isSceneItemVisible(record.id)),
+  recoveryEmitters:()=>localLiquidEmitterRecords().filter(record=>itemVisible(record.id,viewportDisplay.hiddenIds.filter(id=>id!=='water-field'),sceneVisibilityContext())),
   runtimeEmitters:()=>localLiquidEmitterState().emitters,
   visible:()=>isSceneItemVisible('water-field'),viewerPaused:()=>sceneViewerPaused,
   preview:visible=>{refreshAuthoredWaterSamplingPreviews();setAuthoredWaterPreviewVisible(visible);},
@@ -10638,8 +10678,9 @@ let neutralEnvironmentMap;
 const environmentLoader = createEnvironmentLoader({
   presets: HDR_ENVS,
   async load(url) {
+    const generator=pmremGenerator;
     const texture = await new RGBELoader().loadAsync(url);
-    try { return pmremGenerator.fromEquirectangular(texture).texture; }
+    try { if(generator!==pmremGenerator||deviceRecoveryHeld())throw Error('Environment device retired');return generator.fromEquirectangular(texture).texture; }
     finally { texture.dispose(); }
   },
   apply: map => applyEnvMap(map, readEnvironmentRecipe().intensity),
@@ -12006,7 +12047,7 @@ async function initScene() {
     lastFrame:waterFeature.host?.state().lastFrame??null,source:volumePrototype?.debugState().sceneTransport??null,
     refraction:'existing-screen-space-scene-query',displayTransform:'one-final-scene-camera'});
   const frameComposition=createSceneFrameComposition({
-    readInputs:()=>({lightingHeld:sceneLightingPreparation?.state().held||(typeof sceneDocument!=='undefined'&&sceneDocument?.state().phase==='applying'),
+    readInputs:()=>({lightingHeld:deviceRecoveryHeld()||sceneLightingPreparation?.state().held||(typeof sceneDocument!=='undefined'&&sceneDocument?.state().phase==='applying'),
       exclusiveInspection:exclusiveInspectionRender,manualInspection:manualInspectionRender,
       transportRequired:authoredWaterFlameTransportActive||authoredFlameHDRActive,
       radianceReady:!window.__kaminosSceneRadiance||window.__kaminosSceneRadiance.canRender()}),
@@ -12034,7 +12075,7 @@ async function initScene() {
     });
   }
   ordinarySceneDepthProvider = () => {
-    if (!ordinaryDepthEnabled) return null;
+    if (deviceRecoveryHeld() || !ordinaryDepthEnabled) return null;
     if (!sharedGpu?.device) throw new Error('ordinary-scene-depth-shared-device-unavailable');
     // Own a current prepass before the ordinary volume frame encodes. Both
     // consumers share camera/device; the volume may render at lower resolution.
@@ -12057,6 +12098,7 @@ async function initScene() {
   function renderSceneFrame() { return frameComposition.render(); }
 
   function drawSceneFrame() {
+    if(deviceRecoveryHeld())return;
     renderer.toneMapping = document.getElementById('volume-tone-mapping').value === 'custom' ? THREE.ACESFilmicToneMapping : THREE.AgXToneMapping;
     const ordinarySceneTransportFrame=frameComposition.transportFrame;
     const t0 = performance.now();
@@ -12143,6 +12185,7 @@ async function initScene() {
   function animate() {
     requestAnimationFrame(animate);
     if(outputCaptureExtent)return;
+    if(deviceRecoveryHeld())return;
     if(sceneLightingPreparation?.state().held||(typeof sceneDocument!=='undefined'&&sceneDocument?.state().phase==='applying')||(typeof startupRestorePending!=='undefined'&&startupRestorePending)){controls.update();return;}
     // Outside any render: a quality change resizes render targets.
     syncViewportQuality(syncViewportRendererSize);
@@ -12213,9 +12256,110 @@ async function initScene() {
       return {status:'registered',objectId:entry.id,source:entry.source,sha256,runId};
     },
   };
+  const recoveryNotice=document.createElement('div');
+  recoveryNotice.id='scene-device-recovery';recoveryNotice.hidden=true;
+  recoveryNotice.setAttribute('role','status');
+  recoveryNotice.style.cssText='position:fixed;inset:12px auto auto 50%;transform:translateX(-50%);z-index:10000;background:#252525;color:#fff;padding:12px;max-width:600px;border:1px solid #b88b47';
+  const recoveryText=document.createElement('span'),recoveryRetry=document.createElement('button');
+  recoveryRetry.textContent='Retry GPU recovery';recoveryRetry.onclick=()=>deviceRecovery.retry();
+  recoveryNotice.append(recoveryText,recoveryRetry);document.body.append(recoveryNotice);
+  let recoverySimulation=null;
+  deviceRecovery=createDeviceRecovery({device:renderer.backend.device,
+    stop(){
+      recoverySimulation??={flame:!!volumePrototype,active:!!volumePrototype?.isActive(),paused:!!volumePrototype?.debugState().simulationPaused,
+        water:waterFeature.recoveryRequested,waterPaused:waterFeature.paused,
+        flamePresent:flameFeature.present||!!activeSceneComposition,
+        flameRoute:Object.fromEntries([...fireLightFieldRouteParams(),...Object.entries(fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()))])};
+      environmentLoader.invalidateResources();
+      transportPrototype?.setSceneTransportConsumer(null);transportPrototype=null;
+      authoredWaterFlameTransportActive=false;authoredFlameHDRActive=false;
+      frameComposition.setForegroundServiceActive(false);
+      waterFeature.restart(waterFeature.setup);
+      // Stop future simulation submission immediately; recreation happens below.
+      volumePrototype?.retireLostDevice();
+      return volumePrototype?.setActive(false);
+    },
+    async rebuild({watch,assertCurrent}){
+      if(authoredAsh.size||workingScene.objects.some(entry=>entry.burnable?.enabled))throw Error('This scene contains burning state. Automatic recovery excludes burning; your authored scene is retained.');
+      if(compositionModule||fingerFluidPyroCompositionRequested()||samImageToolsPromise)throw Error('This custom GPU composition does not yet support device recovery. Your authored scene is retained.');
+      await sceneLightingPreparation?.whenIdle().catch(()=>{});assertCurrent();
+      await sceneRadianceRouteTask.catch(()=>{});assertCurrent();
+      await releaseSceneRadianceRoute();assertCurrent();
+      await samHostContext?.inferenceSession.close();samHostContext=null;assertCurrent();
+      waterFeature.restart(waterFeature.setup);
+      if(collisionVoxelMesh){scene.remove(collisionVoxelMesh);collisionVoxelMesh.userData.disposeGpuSolid?.();collisionVoxelMesh.geometry.dispose();collisionVoxelMesh.material.dispose();collisionVoxelMesh=null;}
+      collisionVoxelRevision=undefined;
+      volumeBridge?.dispose?.();volumeBridge=null;
+      await volumePrototype?.dispose();volumePrototype=null;assertCurrent();
+      for(const graph of giOutputGraphs.values())graph.fireLightFieldPass?.dispose();
+      giOutputGraphs.clear();fireLightFieldPass=null;
+      sceneFlameHDR?.dispose();sceneFlameHDR=null;sceneBloom.dispose();
+      neutralEnvironmentMap?.dispose();neutralEnvironmentMap=null;
+      scene.environment=null;scene.background=null;pmremGenerator.dispose();
+      const old=renderer,canvas=old.domElement,size=old.getSize(new THREE.Vector2());
+      const pixelRatio=old.getPixelRatio(),toneMapping=old.toneMapping,exposure=old.toneMappingExposure;
+      old.dispose();
+      const next=await requestKaminosSharedWebGpuDevice({bufferRequirements:combinedRequirements,
+        hostRequirements:sharedDeviceHostRequirements({sam:samHostConfig?.mounted?samHostDeviceRequirements:null})});
+      try{assertCurrent();}catch(error){next.device.destroy();throw error;}
+      const detachCandidate=watch(next.device);
+      let replacement;
+      try{
+      replacement=new THREE.WebGPURenderer({canvas,device:next.device,antialias:true,trackTimestamp:isFireLightFieldTimingRoute()||new URLSearchParams(location.search).get('ash_timing')==='1'});
+      replacement.setPixelRatio(pixelRatio);replacement.setSize(size.x,size.y);
+      replacement.toneMapping=toneMapping;replacement.toneMappingExposure=exposure;
+      replacement.shadowMap.enabled=old.shadowMap.enabled;replacement.shadowMap.type=old.shadowMap.type;
+      replacement.outputColorSpace=old.outputColorSpace;
+      await replacement.init();assertCurrent();
+      renderer=replacement;sharedGpu=next;sharedGpuFailureReason=null;compositionHost.device=next.device;
+      renderPipeline.renderer=renderer;renderPipeline.needsUpdate=true;
+      pmremGenerator=new THREE.PMREMGenerator(renderer);
+      // Render-target contents are gone, even though their CPU descriptors survived.
+      sceneGI.resetHistory('device-replaced');
+      if(recoverySimulation.flame){
+        createPageVolumePrototype();
+        volumePrototype.setSceneCompositionPresentation(Boolean(activeSceneComposition));
+        volumePrototype.relocateOrdinaryDomain(flameDomainTranslation,volumePrimitivesInFlameDomain(),flameDomainScale);
+        volumePrototype.setVolumePrimitives(volumePrimitivesInFlameDomain());
+        applyFlameEmitterPose?.(flameEmitterPose);syncAuthoredFlameSources();
+        volumePrototype.setSimulationPaused(recoverySimulation.paused);
+        volumeBridge=createVolumeMainRendererBridge();
+        window.__kaminosVolumeBridge=window.__kaminosVolumeMainRendererBridge=volumeBridge;
+        await syncSceneRadianceRoute(new URLSearchParams(recoverySimulation.flamePresent?recoverySimulation.flameRoute:{}));assertCurrent();
+      }
+      rebuildSceneGIOutput();
+      // Neutral is rebuilt synchronously; HDR loads use the new generator after resume.
+      applyEnvMap(neutralEnvironmentMap=createProceduralEnv(),readEnvironmentRecipe().intensity);
+      if(recoverySimulation.water){
+        const mounted=await waterFeature.recover(recoverySimulation.waterPaused);assertCurrent();
+        if(!mounted)throw Error(waterFeature.failure||'Water could not restart');
+      }
+      if(recoverySimulation.active){await flameFeature.setActive(true,{isCurrent:()=>{assertCurrent();return true;}});assertCurrent();}
+      }catch(error){
+        detachCandidate();
+        waterFeature.restart(waterFeature.setup);
+        volumePrototype?.retireLostDevice();
+        try{await volumePrototype?.setActive(false);}finally{replacement?.dispose();next.device.destroy();}
+        throw error;
+      }
+    },
+    changed(state){
+      recoveryNotice.hidden=state.phase==='active';recoveryRetry.hidden=state.phase!=='failed';
+      recoveryText.textContent=state.phase==='failed'?`GPU recovery stopped: ${state.error} `:'Recovering graphics — your scene and edits are retained. ';
+      if(state.phase==='active'){
+        recoverySimulation=null;
+        environmentLoader.select(sceneEnvironment.read().name??'studio');
+
+        markDirty();
+      }
+    },
+  });
+  window.kaminosDeviceRecovery={state:deviceRecovery.state,whenSettled:deviceRecovery.whenSettled,retry:deviceRecovery.retry,authoredFlameRoute:()=>recoverySimulation?.flameRoute};
+  // Explicit test injection; normal callers cannot accidentally destroy a device.
+  if(new URLSearchParams(location.search).get('device_loss_test')==='1')window.kaminosLoseDevice=()=>renderer.backend.device.destroy();
   // Agent vantage: a sub (camera object) an agent pilots with tools/vantage.mjs.
   // ?vantage=0 leaves the terminal link closed.
-  const vantageBusy=()=>authoringBusy?'A scene document action is running':window.kaminosSelection?.boxing?.()?'A box selection is in progress':(controls?.state??-1)!==-1?'A touch gesture is moving the view':scenePlacementTools?.edits.state().active?'An edit is in progress in Kaminos':scenePlacementTools?.edits.state().replaying?'Kaminos is replaying history':sceneNavigation?.state().gesture?'The viewport is being navigated':transformGizmoDragging||transformControls?.dragging?'A gizmo is being dragged':splatCorrectionMode?'Splat correction mode is active':greenroomPreviewIsActive()?'A Greenroom preview is showing':null;
+  const vantageBusy=()=>deviceRecoveryHeld()?'GPU recovery is holding rendering':authoringBusy?'A scene document action is running':window.kaminosSelection?.boxing?.()?'A box selection is in progress':(controls?.state??-1)!==-1?'A touch gesture is moving the view':scenePlacementTools?.edits.state().active?'An edit is in progress in Kaminos':scenePlacementTools?.edits.state().replaying?'Kaminos is replaying history':sceneNavigation?.state().gesture?'The viewport is being navigated':transformGizmoDragging||transformControls?.dragging?'A gizmo is being dragged':splatCorrectionMode?'Splat correction mode is active':greenroomPreviewIsActive()?'A Greenroom preview is showing':null;
   // Hides what captureComposition hides for a clean shot when `all`; `hide` names objects hidden either way.
   // Navigation is held by vantageCaptureHeld, not controls.enabled, which transforms save and restore themselves.
   const suspendEditorDrawingForVantage=({all=true,hide=[]}={})=>{
@@ -12371,8 +12515,8 @@ async function initScene() {
   const vantageCameraMatrices=()=>{camera.updateMatrixWorld();return {projection:camera.projectionMatrix.toArray(),viewInverse:camera.matrixWorldInverse.toArray(),near:camera.near,far:camera.far,coordinateSystem:camera.coordinateSystem,reversedDepth:!!camera.reversedDepth};};
   const vantageTargets=()=>activeSceneComposition&&flameDomainGuide?.box&&!flameDomainGuide.box.isEmpty()?[{id:'flame-field',label:'Fire & smoke',type:'simulation-domain',bounds:{min:flameDomainGuide.box.min.toArray(),max:flameDomainGuide.box.max.toArray()}}]:[];
   try{
-    const idPass=createIdPass({THREE,TSL,renderer,scene,hideEditorObjects:hideEditorObjectsForIdPass,cameraLayers:()=>camera.layers.mask});
-    const glance=createGlance({THREE,TSL,renderer,scene,hideEditorObjects:hideEditorObjectsForIdPass,cameraLayers:()=>camera.layers.mask});
+    const renewablePass=factory=>{let owner=null,pass=null;return {draw(options){if(owner!==renderer){owner=renderer;pass=factory({THREE,TSL,renderer,scene,hideEditorObjects:hideEditorObjectsForIdPass,cameraLayers:()=>camera.layers.mask});}return pass.draw(options);}};};
+    const idPass=renewablePass(createIdPass),glance=renewablePass(createGlance);
     const agentVantage=installAgentVantage({THREE,document,window,edits:scenePlacementTools.edits,cameras:sceneCameras,entries:()=>workingScene.objects,
       selection:()=>window.kaminosSelection?.read()?.memberIds??[],readView:readAuthoredCameraView,writeView:writeAuthoredCameraView,
       viewport:viewportEl,hostCanvas:renderer.domElement,busy:vantageBusy,hold:holdViewportForVantage,cameraMatrices:vantageCameraMatrices,suspendEditorDrawing:suspendEditorDrawingForVantage,
@@ -19962,6 +20106,48 @@ window.kaminosFluidBootState = () => initKaminosVolumeRoute.boot?.state() ?? { s
 // Serialize mounts/disposal: Undo during a module import cannot leave a second
 // consumer or duplicate inspector listeners behind.
 let sceneRadianceRouteTask=Promise.resolve(),sceneRadianceRouteKey=null,sceneRadianceEditStop=null,sceneRadianceDebugView=null;
+function createPageVolumePrototype(){
+  volumePrototype = createKaminosVolumePrototype({
+    THREE,
+    viewport: document.getElementById('viewport'),
+    camera,
+    controls,
+    getControls: readVolumeControls,
+    onStatus: status => {
+      document.getElementById('volume-backend').textContent = status.backend || status.phase || 'unknown';
+      const p = status.pressureResolution;
+      if (p) document.getElementById('volume-pressure-resolution-val').textContent = p.dispatched
+        ? `${p.pressureDims.join('×')} pressure · ${p.materialDims.join('×')} material (live)`
+        : `original${p.reason ? ` (${p.reason})` : ''}`;
+      flameInspector?.sync();
+      if (status.error) setInfo(`Volume renderer: ${status.error}`);
+    },
+    transparentCanvas: fingerFluidPyroCompositionRequested() || isFireLightFieldRoute() || isAuthoredKilnCollisionRoute(),
+    // The finger-fluid liquid-contact route adopts the fluid solver's device
+    // through its descriptor; seating the host device here would refuse it.
+    sharedGpuContext: fingerFluidPyroCompositionRequested() ? null : sharedGpu,
+    getPresentationSize: () => outputCaptureExtent??recordingExtent,
+    onPresentedFrame: frame=>{if(recordingFrameSink&&isSceneItemVisible('flame-field'))recordingFrameSink({fire:frame});},
+    getSceneDepth: () => ordinarySceneDepthProvider?.() ?? null,
+    // The kiln is an explicit authored-solid experiment. Its exact registered
+    // mesh and world transform, not its bounding box or camera depth, feed the
+    // volume solver when the scene route requests volume_collision=kiln.
+    getSceneCollision: () => {
+      if (!isAuthoredKilnCollisionRoute()) {sceneColliderCollection.clear();return null;}
+      return sceneColliderCollection.update(workingScene.objects, currentColliderLodOptions());
+    },
+  });
+  volumePrototype.setSharedAshAtmosphere(sceneAshAtmosphereSettings);
+  if (isFireLightFieldRoute() || isAuthoredKilnCollisionRoute()) {
+    // Composition routes need the live Three scene visible under the flame:
+    // alpha-composite the native volume canvas and depth-clip volume behind
+    // authored surfaces instead of painting an opaque near-black overlay.
+    const volumeCanvasElement = volumePrototype.canvasElement?.();
+    if (volumeCanvasElement) volumeCanvasElement.style.background = 'transparent';
+  }
+  window.__kaminosVolumePrototype = volumePrototype;
+  volumePrototype.setRayStepTelemetryCanvas(document.getElementById('volume-ray-step-display'));
+}
 async function releaseSceneRadianceRoute() {
   sceneRadianceEditStop?.();sceneRadianceEditStop=null;
   sceneRadianceDebugView?.dispose();sceneRadianceDebugView=null;
@@ -20544,46 +20730,7 @@ async function initKaminosVolumeRoute() {
   }
   updateVolumeControlLabels();
   flameInspector?.sync(true);
-  volumePrototype = createKaminosVolumePrototype({
-    THREE,
-    viewport: document.getElementById('viewport'),
-    camera,
-    controls,
-    getControls: readVolumeControls,
-    onStatus: status => {
-      document.getElementById('volume-backend').textContent = status.backend || status.phase || 'unknown';
-      const p = status.pressureResolution;
-      if (p) document.getElementById('volume-pressure-resolution-val').textContent = p.dispatched
-        ? `${p.pressureDims.join('×')} pressure · ${p.materialDims.join('×')} material (live)`
-        : `original${p.reason ? ` (${p.reason})` : ''}`;
-      flameInspector?.sync();
-      if (status.error) setInfo(`Volume renderer: ${status.error}`);
-    },
-    transparentCanvas: fingerFluidPyroCompositionRequested() || isFireLightFieldRoute() || isAuthoredKilnCollisionRoute(),
-    // The finger-fluid liquid-contact route adopts the fluid solver's device
-    // through its descriptor; seating the host device here would refuse it.
-    sharedGpuContext: fingerFluidPyroCompositionRequested() ? null : sharedGpu,
-    getPresentationSize: () => outputCaptureExtent??recordingExtent,
-    onPresentedFrame: frame=>{if(recordingFrameSink&&isSceneItemVisible('flame-field'))recordingFrameSink({fire:frame});},
-    getSceneDepth: () => ordinarySceneDepthProvider?.() ?? null,
-    // The kiln is an explicit authored-solid experiment. Its exact registered
-    // mesh and world transform, not its bounding box or camera depth, feed the
-    // volume solver when the scene route requests volume_collision=kiln.
-    getSceneCollision: () => {
-      if (!isAuthoredKilnCollisionRoute()) {sceneColliderCollection.clear();return null;}
-      return sceneColliderCollection.update(workingScene.objects, currentColliderLodOptions());
-    },
-  });
-  volumePrototype.setSharedAshAtmosphere(sceneAshAtmosphereSettings);
-  if (isFireLightFieldRoute() || isAuthoredKilnCollisionRoute()) {
-    // Composition routes need the live Three scene visible under the flame:
-    // alpha-composite the native volume canvas and depth-clip volume behind
-    // authored surfaces instead of painting an opaque near-black overlay.
-    const volumeCanvasElement = volumePrototype.canvasElement?.();
-    if (volumeCanvasElement) volumeCanvasElement.style.background = 'transparent';
-  }
-  window.__kaminosVolumePrototype = volumePrototype;
-  volumePrototype.setRayStepTelemetryCanvas(document.getElementById('volume-ray-step-display'));
+  createPageVolumePrototype();
   if (fireLightFieldRouteParams().get('volume_light_field_optical_preview') === '1') {
     import('./volume-optical-native.mjs').then(({installOpticalSteppingPreview}) => {
       installOpticalSteppingPreview(volumePrototype, document);
@@ -25640,13 +25787,15 @@ function compositionStatus(message, failed = false) {
 
 async function collectSceneComposition() {
   const saveIntent = sceneDocument.beginSave();
+  const failedRecovery=typeof deviceRecovery!=='undefined'&&deviceRecovery?.state().phase==='failed';
+  if(failedRecovery&&authoredAsh.size)throw Error('Ash state is unavailable after GPU loss; saving cannot preserve its current simulation.');
   await captureAuthoredAsh();
   saveIntent.assertCurrent();
   if(!flameFeature.present&&!activeSceneComposition)return;
   const debug = volumePrototype?.debugState?.();
   if (!isFireLightFieldRoute() && !activeSceneComposition) return;
   const retainedHiddenField=!debug?.active&&activeSceneComposition&&debug&&!debug.error&&!isSceneItemVisible('flame-field');
-  if (!debug?.active&&!retainedHiddenField) {
+  if (!debug?.active&&!retainedHiddenField&&!failedRecovery) {
     if (activeSceneComposition || isFireLightFieldRoute()) throw new Error(debug?.error || 'Authored flame is not active');
     activeSceneComposition = null;
     return;
@@ -25686,7 +25835,7 @@ async function collectSceneComposition() {
   for (const [key, value] of fireLightFieldRouteParams()) {
     if (key.startsWith('volume_light_field')) route[key] = value;
   }
-  Object.assign(route,fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()));
+  Object.assign(route,failedRecovery?Object.fromEntries(Object.entries(window.kaminosDeviceRecovery?.authoredFlameRoute()??{}).filter(([key])=>key.startsWith('volume_light_field'))):fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()));
   const moduleUrl = new URLSearchParams(location.hash.slice(1)).get('composition_module_url');
   if (moduleUrl) route.composition_module_url = moduleUrl;
   route.volume_light_field_test_scene = document.getElementById('fire-light-test-scene-toggle').checked ? '1' : '0';
@@ -25942,6 +26091,7 @@ function attachSceneObject(id,groupId) {
   },groupId?'Parent object':'Unparent object');
 }
 function assertSceneConstructionAvailable() {
+  if(deviceRecoveryHeld())throw Error('GPU recovery is holding scene edits');
   if(sceneLifecycle.clearing)throw Error('Wait for the scene to finish retiring');
   if(sceneLightingPreparation?.state().compiling)throw Error('Lighting is being prepared; scene edits resume when it finishes');
   if(workingScene.isSuspended)throw Error('Finish preview before editing the scene');
@@ -26040,9 +26190,11 @@ async function importSceneMesh(file,{generation:origin=null,label=null,assetOrig
   if(receipt.schema!=='kaminos.generated-mesh.v0'||receipt.sha256!==digest||receipt.bytes!==bytes.byteLength||receipt.source!==`/api/read?root=generated-meshes&path=${digest}.glb`)throw Error('Mesh storage returned a different source');
   if(generation!==workingScene.generation)throw Error('Scene changed while importing');assertSceneConstructionAvailable();
   const id=makeSceneObjectId('mesh'),target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
+  const alreadyPrepared=window.__kaminosLastGenerationLevels?.source===digest||autoPreparedLodSources.has(digest);
+  autoPreparedLodSources.add(digest);
   await showGLB(receipt.source,{clear:false,arrival:'append',isCurrent:()=>generation===workingScene.generation&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying&&!authoringBusy,metadata:{id,type:'glb',source:receipt.source,fileName:file.name,label:label||file.name.replace(/\.glb$/i,''),generation:origin,assetOrigin:assetOrigin?{...assetOrigin,sha256:digest}:null}});
-  try{await recordSceneObjectInsertion(id);}catch(error){removeSceneObjectInternal(id,{recordHistory:false});throw error;}
-  if(window.__kaminosLastGenerationLevels?.source!==digest){
+  try{await recordSceneObjectInsertion(id);}catch(error){if(!alreadyPrepared)autoPreparedLodSources.delete(digest);removeSceneObjectInternal(id,{recordHistory:false});throw error;}
+  if(!alreadyPrepared){
     window.kaminosGiProxies?.prepare?.(digest,{heroGLB:new Uint8Array(bytes.slice(0)),input:file.name,route:origin?.route||'imported-glb'}).then(report=>{
       window.__kaminosLastGenerationLevels={source:digest,...report};
       if(report?.phase==='done')setInfo(`GI proxy levels ready for ${label||file.name}: ${report.tiers?.map(t=>t.faces).join(', ')} faces`);
@@ -26100,8 +26252,21 @@ const giProxyEditTargets=new Set();
 // off, no proxy held. The setting is the stored state; the load just follows it.
 function applyGiProxySetting(entry){
   if(!entry?.giProxy||!entry.object)return;
-  if(entry.giProxy.enabled)sceneGiProxies.select(entry.object,entry.giProxy.selection).then(()=>{syncSceneDataInspector();window.kaminosFireLightingSettings?.sync?.();window._kaminosDirty?.();});
-  else{sceneGiProxies.disable(entry.object);window.kaminosFireLightingSettings?.sync?.();window._kaminosDirty?.();}
+  if(entry.giProxy.enabled)return sceneGiProxies.select(entry.object,entry.giProxy.selection).then(h=>{
+    syncSceneDataInspector();window.kaminosFireLightingSettings?.sync?.();window._kaminosDirty?.();
+    const source=h?.heroSha;
+    if(h?.state==='no-tiers'&&source&&!autoPreparedLodSources.has(source)&&window.__kaminosLastGenerationLevels?.source!==source){
+      autoPreparedLodSources.add(source);
+      window.__kaminosLastGenerationLevels={source,phase:'running'};
+      window.__kaminosLastGenerationLevelsPromise=Promise.resolve().then(()=>window.kaminosGiProxies?.prepare?.(source,{input:entry.label||entry.fileName||source,route:entry.generation?.route||'auto-arrival-lod'})).then(report=>{
+        if(report)window.__kaminosLastGenerationLevels={source,...report};
+        if(report?.phase==='done')setInfo(`GI proxy levels ready for ${entry.label||entry.fileName||source.slice(0,8)}: ${report.tiers?.map(t=>t.faces).join(', ')} faces`);
+        return window.__kaminosLastGenerationLevels;
+      }).catch(()=>null);
+    }
+    return h;
+  });
+  sceneGiProxies.disable(entry.object);window.kaminosFireLightingSettings?.sync?.();window._kaminosDirty?.();
 }
 function writeObjectGiProxy(id,value){
   const entry=workingScene.objects.find(record=>record.id===id)||workingScene.retained(id);
@@ -27764,7 +27929,7 @@ function setupAuthoringAssets(){
   // The frame owner models borrow frames from: the fire scene's volume prototype while it
   // renders, otherwise the ordinary scene itself, so Generate needs no fire scene. A fluid
   // route that booted but stayed inactive (a cancelled or refused Add > Flame) draws nothing.
-  let appFrameSource=null;
+  let appFrameSource=null,appFrameDevice=null;
   const frameOwner=()=>{
     if(volumePrototype?.foregroundGpuContext?.().active){
       // A fire scene took over: the app owner stops requesting frames.
@@ -27773,6 +27938,7 @@ function setupAuthoringAssets(){
     }
     const device=sharedGpu?.device;
     if(!device||!compositionHost||compositionHost.device!==device)return null;
+    if(appFrameDevice!==device){appFrameDevice=device;appFrameSource=null;}
     return appFrameSource||=createAppFrameSource({device,queue:device.queue});
   };
   window.kaminosAppFrameSource=()=>appFrameSource?.debugState()||null;
@@ -27786,16 +27952,20 @@ function setupAuthoringAssets(){
   // through its foreground service. SAM, UniMate and SuperMat consumers take it too.
   // Reserved before the first await, so concurrent first callers share the one host; a
   // failed construction clears the reservation and the next call retries.
-  let appGpuPending=null;
+  let appGpuPending=null,appGpuDevice=null;
   const appGpuHost=()=>{
+    if(deviceRecoveryHeld())return Promise.reject(Error('GPU recovery is holding model work'));
+    if(appGpuDevice!==sharedGpu?.device){appGpuDevice=sharedGpu?.device;appGpuPending=null;}
     if(appGpuPending)return appGpuPending;
     if(!sharedGpu?.device||!compositionHost)return Promise.resolve(null);
+    const admittedGpu=sharedGpu;
     appGpuPending=(async()=>{
       const kit=await import('./webgpu-inference-kit/src/core.js');
-      return createAppGpuHost({sharedGpu,host:compositionHost,kit,frameOwner,
+      if(admittedGpu!==sharedGpu||deviceRecoveryHeld())throw Error('Model host device retired');
+      return createAppGpuHost({sharedGpu:admittedGpu,host:compositionHost,kit,frameOwner,
         install:async requester=>{const handoff=foregroundHandoff();if(!handoff)throw Error('no frame owner');if(!handoff.has('app'))handoff.install('app',requester);await handoff.activate('app');}});
     })();
-    appGpuPending.catch(()=>{appGpuPending=null;});
+    const pending=appGpuPending;pending.catch(()=>{if(appGpuPending===pending)appGpuPending=null;});
     return appGpuPending;
   };
   window.kaminosAppGpu=appGpuHost;
@@ -27842,20 +28012,24 @@ function setupAuthoringAssets(){
     const saved={...await persistGeneratedMesh(out.glb,{...out.generation,surfels,reconstruction:retained},out.label,'TRELLIS'),surfels,reconstruction:retained};
     // GI proxy tiers (Stunt Doubles' prepareGenerationLevels) from this run's decode, registered as levels
     // of the stored hero. They build in a worker after the mesh is saved; the result never holds or fails it.
-    if(out.levelInputs){
-      const inputs=out.levelInputs,source=saved.sha256;out.levelInputs=null;
+    if(out.levelInputs||out.glb){
+      const inputs=out.levelInputs??{},heroGLB=out.glb?new Uint8Array(out.glb.slice(0)):null,source=saved.sha256;out.levelInputs=null;
+      const surfelExtra=!inputs.surfelGLB&&!inputs.surfelSource&&/^[a-f0-9]{64}$/.test(surfels?.sha256??'')?{surfelSource:surfels.sha256}:{};
+      if(typeof autoPreparedLodSources!=='undefined')autoPreparedLodSources.add(source);
       window.__kaminosLastGenerationLevels={source,phase:'running'};
       // Not awaited: any failure here, including the runner module failing to load, is a levels report.
-      (async()=>{
+      window.__kaminosLastGenerationLevelsPromise=(async()=>{
         const {runGenerationLevels}=await loadModule('./generation-levels-runner.mjs');
-        return runGenerationLevels({...inputs,source,input:`TRELLIS page run ${out.generation?.runId}`,route:out.generation?.route});
-      })().catch(error=>({phase:'worker',error:String(error?.message||error)})).then(report=>{
+        return runGenerationLevels({...inputs,...surfelExtra,...(heroGLB?{heroGLB}:{}),source,input:`TRELLIS page run ${out.generation?.runId}`,route:out.generation?.route});
+      })().catch(error=>({phase:'worker',error:String(error?.message||error)})).then(async report=>{
         window.__kaminosLastGenerationLevels={source,...report};
         if(report.phase==='done'){
-          for(const obj of workingScene.objects){const h=sceneGiProxies.get(obj.object);if(h?.heroSha===source||h?.assetSha===source)applyGiProxySetting(obj);}
+          if(typeof window.__kaminosRefreshLodSource==='function')await window.__kaminosRefreshLodSource(source);
+          else for(const obj of (typeof workingScene!=='undefined'?workingScene.objects:[])){const h=sceneGiProxies.get(obj.object);if(h?.heroSha===source||h?.assetSha===source)await applyGiProxySetting(obj);}
           setInfo(`GI proxy levels ready for ${out.label}: ${report.tiers?.map(t=>t.faces).join(', ')} faces`);
         }
-        else if(report.phase!=='skipped')console.warn(`GI proxy levels did not finish: ${report.phase}: ${report.error||report.reason||''}`,report);});
+        else if(report.phase!=='skipped')console.warn(`GI proxy levels did not finish: ${report.phase}: ${report.error||report.reason||''}`,report);
+        return window.__kaminosLastGenerationLevels;});
     }
     return saved;
   };
@@ -27974,7 +28148,9 @@ function setupAuthoringAssets(){
     let out;
     try{out=await trellisPageRun(options);}
     catch(error){if(error?.trellisSurfelsRun){error.trellisSurfelsSaved=await persistTrellisPageRun({...error.trellisSurfelsRun,glb:null}).catch(e=>({error:e.message}));}throw error;}
-    return {...await persistTrellisPageRun(out),timing:out.timing};};
+    const saved=await persistTrellisPageRun(out);
+    const levels=options?.awaitLevels===false?null:await window.__kaminosLastGenerationLevelsPromise;
+    return {...saved,...(levels?{levels}:{}),timing:out.timing};};
   // The Generate drawer's "TRELLIS 2 · this page" target: the prepared cutout, on this page's GPU.
   let trellisPageAvailability=null,authoringTrellisPageGenerator=null;
   const trellisPage=()=>{
@@ -28002,7 +28178,25 @@ function setupAuthoringAssets(){
         runPipeline:async(payload,{onProgress})=>readPipelineRunStream(await fetch('/api/run-pipeline',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/x-ndjson'},body:JSON.stringify(payload)}),onProgress),
         meshUrl:result=>{const artifact=pipelineRunOutputArtifacts(result).find(pipelineArtifactIsLoadableMesh);return artifact?pipelineRunReadUrlForPath(result,artifact.path):null;},
         fetchBytes:async url=>{const response=await fetch(url);if(!response.ok)throw Error(`TRELLIS mesh HTTP ${response.status}`);return response.arrayBuffer();},
-        persist:(glb,generation,label)=>persistGeneratedMesh(glb,generation,label,'TRELLIS'),
+        persist:async(glb,generation,label)=>{
+          const saved=await persistGeneratedMesh(glb,generation,label,'TRELLIS');
+          const source=saved.sha256,heroGLB=new Uint8Array(glb.slice(0));
+          if(typeof autoPreparedLodSources!=='undefined')autoPreparedLodSources.add(source);
+          window.__kaminosLastGenerationLevels={source,phase:'running'};
+          window.__kaminosLastGenerationLevelsPromise=(async()=>{
+            const {runGenerationLevels}=await loadModule('./generation-levels-runner.mjs');
+            return runGenerationLevels({heroGLB,source,input:`TRELLIS queued run ${generation?.runId}`,route:generation?.route});
+          })().catch(error=>({phase:'worker',error:String(error?.message||error)})).then(async report=>{
+            window.__kaminosLastGenerationLevels={source,...report};
+            if(report.phase==='done'){
+              if(typeof window.__kaminosRefreshLodSource==='function')await window.__kaminosRefreshLodSource(source);
+              else for(const obj of (typeof workingScene!=='undefined'?workingScene.objects:[])){const h=sceneGiProxies.get(obj.object);if(h?.heroSha===source||h?.assetSha===source)await applyGiProxySetting(obj);}
+              setInfo(`GI proxy levels ready for ${label}: ${report.tiers?.map(t=>t.faces).join(', ')} faces`);
+            }
+            else if(report.phase!=='skipped')console.warn(`GI proxy levels did not finish: ${report.phase}: ${report.error||report.reason||''}`,report);
+            return window.__kaminosLastGenerationLevels;});
+          return saved;
+        },
       });
       authoringTrellisGenerator={...authoringTrellisGenerator,run:withExpressSnapshot(tracked('trellis',authoringTrellisGenerator.run),()=>authoringMeshModel?.express()===true)};
     }

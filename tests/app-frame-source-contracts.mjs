@@ -46,3 +46,14 @@ test('SF3D connects to the app frame owner as well as to the volume prototype',(
  connectSf3dForeground(producer,source,host);assert.equal(active,true);
  assert.throws(()=>connectSf3dForeground(producer,{foregroundGpuContext:()=>({renderer:'other',productFrameOwner:'x',device,queue:device.queue}),setForegroundOpportunityRequester(){}},host),/renderer/);
 });
+
+test('device loss retires foreground scheduling and rejects stale frame work',async()=>{
+ let lose,request;const lost=new Promise(r=>lose=r),d={queue:{},lost};
+ const r=manualRaf(),source=createAppFrameSource({device:d,queue:d.queue,requestAnimationFrame:r.raf});
+ let complete;source.setForegroundOpportunityRequester(value=>{request=value;return {completion:new Promise(r=>complete=r)};});r.step();
+ lose({reason:'destroyed'});await Promise.resolve();
+ assert.equal(source.debugState().active,false,'lost device must relinquish its frame requests');
+ assert.throws(()=>request.run({device:d,queue:d.queue}),/retired/);
+ complete({});await new Promise(r=>setTimeout(r,0));assert.equal(r.pending(),0);
+ assert.throws(()=>source.setForegroundOpportunityRequester(()=>{}),/retired/);
+});

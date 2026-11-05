@@ -8,7 +8,7 @@ const start=html.indexOf('  const frameComposition=createSceneFrameComposition('
 const hostStart=html.indexOf('  compositionHost = {'),hostEnd=html.indexOf('    async presentGlb(',hostStart);
 assert.ok(start>0&&end>start&&hostStart>0&&hostEnd>hostStart);
 function host({draws}){
- const context={createSceneFrameComposition,sceneFrameCount:7,sceneLightingPreparation:null,
+ const context={deviceRecoveryHeld:()=>false,createSceneFrameComposition,sceneFrameCount:7,sceneLightingPreparation:null,
   exclusiveInspectionRender:false,manualInspectionRender:false,authoredWaterFlameTransportActive:false,authoredFlameHDRActive:false,
   window:{__kaminosSceneRadiance:{canRender:()=>draws}},renderer:{backend:{device:{}}},
   syncViewportRendererSize(){},camera:{updateMatrixWorld(){}},fireLightFieldPass:null,

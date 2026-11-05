@@ -172,3 +172,67 @@ test('Review N4: index.html wires window.kaminosGiProxies.prepare and importScen
   assert.match(importBody, /window\.kaminosGiProxies\?\.prepare\?\.\(digest,\s*\{heroGLB:/, 'importSceneMesh triggers background GI proxy tier preparation on imported GLBs');
 });
 
+test('named .glb files in generated-meshes resolve through /api/mesh-lods and adopt the canonical sha256', async () => {
+  const calls = [], loaded = [];
+  const registry = createGiProxyRegistry({
+    THREE,
+    fetchJson: async url => {
+      calls.push(url);
+      const q = new URL(url, 'http://k');
+      const src = q.searchParams.get('source');
+      if (src === 'trellis-kiln-mlx1024-500k.glb') {
+        const levels = TIERS.map(t => ({...t, source: `/api/read?root=generated-meshes&path=${t.sha256}.glb`}));
+        return {schema: 'kaminos.lod-set.v0', source: HERO, levels, choice: levels[1], withinBudget: true};
+      }
+      if (src === 'untiered-kiln.glb') {
+        return {schema: 'kaminos.lod-set.v0', source: HERO, levels: [], choice: null, withinBudget: false};
+      }
+      throw Error('unexpected source ' + src);
+    },
+    fetchBytes: async () => tierBytes(1000),
+    parseGlb: async () => { const g = new THREE.Group(); g.add(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial())); loaded.push(g); return g; },
+  });
+  const namedLoaded = await registry.attach(sceneObject('/api/read?root=generated-meshes&path=trellis-kiln-mlx1024-500k.glb').root);
+  assert.equal(namedLoaded.state, 'loaded');
+  assert.equal(namedLoaded.heroSha, HERO);
+  assert.equal(namedLoaded.assetSha, HERO);
+  const namedUntiered = await registry.attach(sceneObject('/api/read?root=generated-meshes&path=untiered-kiln.glb').root);
+  assert.equal(namedUntiered.state, 'no-tiers');
+  assert.equal(namedUntiered.heroSha, HERO);
+  assert.equal(namedUntiered.assetSha, HERO);
+});
+
+test('applyGiProxySetting auto-prepares missing tiers once per heroSha when sceneGiProxies.select returns no-tiers, and refreshSceneObjectsForLodSource upgrades hero-fallback burnable objects', async () => {
+  const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.ok(html.includes('const autoPreparedLodSources = new Set(), inFlightLodPrepares = new Map();'), 'index.html defines autoPreparedLodSources and inFlightLodPrepares');
+  const start = html.indexOf('function applyGiProxySetting(entry){');
+  const end = html.indexOf('\nfunction writeObjectGiProxy(', start);
+  const snippet = html.slice(start, end);
+  const prepared = [];
+  const autoPreparedLodSources = new Set();
+  const window = {
+    kaminosFireLightingSettings: {sync() {}},
+    _kaminosDirty() {},
+    kaminosGiProxies: {
+      prepare: async (sha, opts) => {
+        prepared.push({sha, opts});
+        return {phase: 'done', tiers: [{faces: 1000}]};
+      },
+    },
+  };
+  const sceneGiProxies = {
+    select: async () => ({state: 'no-tiers', heroSha: HERO, assetSha: HERO}),
+    disable() {},
+  };
+  const fn = new Function('sceneGiProxies', 'syncSceneDataInspector', 'window', 'setInfo', 'autoPreparedLodSources', `${snippet}; return applyGiProxySetting;`)(
+    sceneGiProxies, () => {}, window, () => {}, autoPreparedLodSources
+  );
+  const entry = {id: 'kiln-1', label: 'Kiln', giProxy: {enabled: true, selection: {faces: 1000}}, object: {}};
+  await fn(entry);
+  await fn(entry);
+  assert.equal(prepared.length, 1, 'auto-prepare runs once per heroSha');
+  assert.equal(prepared[0].sha, HERO);
+  assert.match(html, /if\s*\(sceneBurning\?\.read\?\.\(obj\.id\)\?\.state\?\.fields\?\.\[0\]\?\.surfaceLod\?\.tier\s*===\s*'hero'\)\s*sceneBurning\.forget\(obj\.object\)/, 'refreshSceneObjectsForLodSource forgets resident hero-fallback burn bodies before sceneBurning.sync()');
+});
+
+

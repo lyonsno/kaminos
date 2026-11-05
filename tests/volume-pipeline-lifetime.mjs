@@ -34,6 +34,11 @@ const end=source.indexOf('    fourArmHeldStateResidualParamsBuffer?.destroy();',
 assert.ok(start>=0&&end>start);
 const guardStart=source.lastIndexOf('    if (fluidPipelineDevice !== device',start);
 const block=source.slice(guardStart>source.lastIndexOf('function rebuildFluidState',start)?guardStart:start,end);
+const protoStart=source.indexOf('export function createKaminosVolumePrototype(');
+const protoDeclarations=new Set([...source.slice(protoStart).matchAll(/\b(?:let|const|var|function)\s+([a-zA-Z_$][\w$]*)/g)].map(m=>m[1]));
+for(const m of block.matchAll(/^\s*([a-zA-Z_$][\w$]*)\s*(?:=\s*null\s*;|\.clear\(\)\s*;)/gm)){
+ assert.ok(protoDeclarations.has(m[1]),`${m[1]} in pipeline reset block must be declared in createKaminosVolumePrototype`);
+}
 
 function sliceFunction(name){
  const fnStart=source.indexOf(`  function ${name}(`);
@@ -117,10 +122,9 @@ function fixture(){
   options:{},
   fineVelocity:null,
   fineVelocityPipelines:new Map(),
+  simulationVariants:new Map(),
   scenePointShaders:new Map(),
   distributedShaders:new Map(),
-  materialOnlyPipeline:null,
-  materialOnlyPredictPipeline:null,
   separatedPressure:null,
   separatedPressureProjectPipeline:null,
   irradianceResourcesKey:null,
@@ -158,26 +162,34 @@ function fixture(){
   state:{},
  };
  // Imported shader/layout handles and label constants are opaque to this test.
- for(const m of block.matchAll(/\b(?:layout|module):\s*([a-zA-Z]\w*)/g))if(!(m[1] in context))context[m[1]]={name:m[1]};
- for(const m of block.matchAll(/\b[A-Z][A-Z_]+\b/g))if(!(m[0] in context))context[m[0]]=m[0];
+ for(const name of protoDeclarations)if(!(name in context))context[name]=null;
+ for(const m of block.matchAll(/\b(?:layout|module):\s*([a-zA-Z]\w*)/g))if(!context[m[1]])context[m[1]]={name:m[1]};
+ for(const m of block.matchAll(/\b[A-Z][A-Z_]+\b/g))if(!context[m[0]])context[m[0]]=m[0];
  for(const name of ['ordinaryDepthPipelines','opticalSteppingPipelines','scenePointPipelines','distributedPipelines'])context[name]=new Map();
  vm.createContext(context);
  vm.runInContext(irradianceBlock,context);
- const rebuild=()=>vm.runInContext(`(()=>{${block}})()`,context);
- const selectRender=(overrides={})=>vm.runInContext(`(()=>{let {drawPipeline=pipeline,targetPipeline=pipeline,multisampled=false,scenePointBindGroup=null,distributedGroup=null,selectEmissive=false}=${JSON.stringify(overrides)};${renderSelectionBlock};return drawPipeline;})()`,context);
+ const rebuild=()=>vm.runInContext(`(()=>{'use strict';${block}})()`,context);
+ const selectRender=(overrides={})=>vm.runInContext(`(()=>{'use strict';let {drawPipeline=pipeline,targetPipeline=pipeline,multisampled=false,scenePointBindGroup=null,distributedGroup=null,selectEmissive=false}=${JSON.stringify(overrides)};${renderSelectionBlock};return drawPipeline;})()`,context);
  return {context,created,rebuild,selectRender,device};
 }
 test('field resize and scene restoration reuse pipelines on the same device',()=>{
- const f=fixture();f.rebuild();const count=f.created.length,first=f.context.computePipeline;
+ const f=fixture();
+ f.context.simulationVariants.set('cached-variant',{label:'variant'});
+ f.rebuild();const count=f.created.length,first=f.context.computePipeline;
  assert.ok(count>0,'first use constructs real descriptors');
+ assert.equal(f.context.simulationVariants.size,0,'initial device attachment clears stale simulation variants');
+ f.context.simulationVariants.set('same-device-variant',{label:'variant'});
  f.context.gridSize=64;f.context.gridHeight=128;f.rebuild();
  assert.equal(f.created.length,count,'grid-only rebuild must not recreate device pipelines');
  assert.equal(f.context.computePipeline,first);
+ assert.equal(f.context.simulationVariants.size,1,'grid-only rebuild preserves specialized simulation variants on the same device');
 });
 test('a replacement device gets its own pipelines',()=>{
  const f=fixture();f.rebuild();const count=f.created.length,first=f.context.computePipeline;
+ f.context.simulationVariants.set('device-1-variant',{label:'variant'});
  f.context.device=f.device();f.rebuild();
  assert.equal(f.created.length,2*count);assert.notEqual(f.context.computePipeline,first);
+ assert.equal(f.context.simulationVariants.size,0,'replacement device clears specialized simulation variants');
 });
 test('changing canvas transparency refreshes the shader specialization without recompiling compute pipelines or discarding cached transparency variants',()=>{
  const f=fixture();f.rebuild();
