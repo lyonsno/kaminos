@@ -53,7 +53,8 @@ try{
  await live();
  const capture=async name=>{const state=await page.evaluate(()=>({simulation:window.__kaminosVolumePrototype.debugState(),lighting:window.__kaminosSceneRadiance.debugState(),history:window.kaminosSceneEdits.state()}));report.arms.push({name,...state});await save();assert.match(state.simulation.backend,/^webgpu:apple/i);assert.equal(state.lighting.error,null);assert.equal(state.simulation.worldSmoke.effective,'one-way-world-field');assert.ok(state.lighting.frame.exterior.middle.activeVolumeReceivers>0);await page.screenshot({path:path.join(out,name+'.png')});return state;};
  report.phase='controls';await save();
- const input=page.getByRole('spinbutton',{name:'Near light height multiplier',exact:true});assert.equal(await input.count(),1);await input.scrollIntoViewIfNeeded();assert.ok(await input.isVisible());
+ await page.getByRole('button',{name:'Scene',exact:true}).click();
+ const input=page.locator('[aria-label="Near light height multiplier"]');assert.equal(await input.count(),1);await input.evaluate(e=>{for(let p=e.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;});await input.scrollIntoViewIfNeeded();assert.ok(await input.isVisible());
  await input.evaluate(e=>{e.value='1.75';e.dispatchEvent(new Event('change',{bubbles:true}));});
  await page.waitForFunction(()=>window.__kaminosSceneRadiance.debugState().nearBox.extent[1]===1.75&&window.__kaminosSceneRadiance.canRender());
  await page.evaluate(()=>window.kaminosSceneEdits.undo());assert.equal(await page.evaluate(()=>window.__kaminosSceneRadiance.debugState().nearBox.extent[1]),1.5);
