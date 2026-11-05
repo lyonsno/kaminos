@@ -26,7 +26,7 @@ const sha256 = async array => [...new Uint8Array(await crypto.subtle.digest('SHA
   .map(b => b.toString(16).padStart(2, '0')).join('');
 
 export async function prepareGenerationLevels({decode = null, materialFields = null, source, heroGLB = null, surfelGLB = null, surfelSource = null, server = '', fetch = globalThis.fetch,
-  THREE, MeshBVH, finish, unwrapMesh, WorkerClass, targets = [25000, 10000, 5000, 1000, 500], surfelFactors = [], textureSizeFor, replace = false, normalMaps = true, input = null, route = null,
+  THREE, MeshBVH, finish, unwrapMesh, WorkerClass, targets = [25000, 10000, 5000, 1000, 500], surfelFactors = [], textureSizeFor, replace = false, completeMissing = false, normalMaps = true, input = null, route = null,
   reference = 'hero', report = {}, onPhase = () => {}}) {
   const fromHeroGLB = !decode;
   const hasSurfelGLB = Boolean(surfelGLB || surfelSource);
@@ -54,6 +54,16 @@ export async function prepareGenerationLevels({decode = null, materialFields = n
     const existingLevels = (await existing.json()).levels;
     const slotTaken = faces => existingLevels.find(l => l.route === LOW_TIER_ROUTE && l.faces === faces);
     const surfelSlotTaken = factor => existingLevels.find(l => l.route === SURFEL_TIER_ROUTE && l.mergeFactor === factor);
+    if (completeMissing && !replace) {
+      report.requestedTargets = [...targets];
+      targets = targets.filter(target => !existingLevels.some(level =>
+        level.route === LOW_TIER_ROUTE && (level.targetFaces ?? level.faces) === target));
+      surfelFactors = surfelFactors.filter(factor => !surfelSlotTaken(factor));
+      if (!targets.length && !surfelFactors.length) {
+        phase('done');
+        return report;
+      }
+    }
     const taken = [...targets.map(slotTaken), ...surfelFactors.map(surfelSlotTaken)].filter(Boolean);
     if (taken.length && !replace) throw Error(taken.map(l => `a ${l.mergeFactor ? `x${l.mergeFactor}` : `${l.faces}-face`} ${l.route} level is already registered: ${l.sha256}`).join('; '));
     if (reference === 'hero' && !heroGLB) {
@@ -200,7 +210,7 @@ export async function prepareGenerationLevels({decode = null, materialFields = n
       const stored = await receipt(ingest);
       if (!ingest.ok) { report.failedTier = tier.target; throw Error(`ingest failed for ${tier.target} (HTTP ${ingest.status}): ${JSON.stringify(stored)}`); }
       if (stored.sha256 !== digest) { report.failedTier = tier.target; throw Error(`ingest receipt for ${tier.target} does not name the stored bytes ${digest}: ${JSON.stringify(stored).slice(0, 300)}`); }
-      const level = {sha256: digest, faces: tier.faces, route: tier.route,
+      const level = {sha256: digest, faces: tier.faces, ...(typeof tier.target === 'number' ? {targetFaces: tier.target} : {}), route: tier.route,
         ...(tier.textureSize !== undefined ? {textureSize: tier.textureSize} : {}),
         ...(tier.mergeFactor !== undefined ? {mergeFactor: tier.mergeFactor, resolution: tier.resolution, representation: tier.representation} : {}),
         ...(tier.closed !== undefined ? {closed: tier.closed} : {}),

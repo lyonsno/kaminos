@@ -3676,9 +3676,12 @@ function interactiveSceneRoots(roots, {matchDisplay = false} = {}) {
 }
 function prepareSceneNavigationRoot(root) {
  if (!sceneNavigation || !root.parent) return;
- for (const queryRoot of interactiveSceneRoots([root])) {
-  // A warped rung shares mutable vertex positions with beauty. Its small
-  // triangle set can be queried directly without a stale acceleration tree.
+ const handle=sceneGiProxies.get(root);
+ if (handle?.state==='resolving'||handle?.state==='no-tiers') return;
+ const queryRoots=new Set([...interactiveSceneRoots([root]),...interactiveSceneRoots([root],{matchDisplay:true})]);
+ for (const queryRoot of queryRoots) {
+  // Picking follows the visible surface. Navigation can use a separate rung.
+  // Each index is built by the existing worker.
   if (queryRoot !== root && root.userData?.kaminosVertexWarp) continue;
   sceneNavigation.prepare(queryRoot);
  }
@@ -7180,7 +7183,12 @@ function sceneHitsFromViewportPointer(event) {
   sceneRaycaster.setFromCamera(scenePointerNdc, camera);
   sceneRaycaster.params.Points.threshold = SCENE_OBJECT_POINT_PICK_THRESHOLD;
   const roots=workingScene.objects.filter(record=>(!assemblyEditing?.scope()||assemblyEditing.scope().objectIds.includes(record.id))&&record.object.visible&&isSceneItemVisible(record.id)).map(record=>record.object);
-  return visibleSceneIntersections({raycaster:sceneRaycaster,roots:interactiveSceneRoots(roots,{matchDisplay:true}),camera,viewport:rect});
+  const queryRoots=interactiveSceneRoots(roots,{matchDisplay:true});
+  for(const root of queryRoots){
+    const owner=sceneBeautyLods?.interactiveOwner(root);
+    if(!owner?.userData?.kaminosVertexWarp)sceneNavigation?.prepare(root);
+  }
+  return visibleSceneIntersections({raycaster:sceneRaycaster,roots:queryRoots,camera,viewport:rect});
 }
 
 function pickSceneObjectFromViewportPointer(event,hits=sceneHitsFromViewportPointer(event)) {
@@ -10593,7 +10601,7 @@ function createPageSceneMembershipOperations() {
         const pending=applyGiProxySetting(entry);
         if(!pending)prepareSceneNavigationRoot(entry.object);
       },
-      attach(entry){setSceneObjectMounted(entry,true);prepareSceneNavigationRoot(entry.object);sceneDocument.authoringChanged();},
+      attach(entry){setSceneObjectMounted(entry,true);if(!entry.giProxy?.enabled)prepareSceneNavigationRoot(entry.object);sceneDocument.authoringChanged();},
       detach(entry){
         if(hybridSplatOverlayState.objectId===entry.id)stopHybridSplatOverlay({silent:true});
         if(splatCorrectionMode?.objectId===entry.id)exitSplatCorrectionMode({revert:false,silent:true});
@@ -11701,7 +11709,10 @@ async function initScene() {
   window.kaminosGISourceComparison=sceneGI.sourceComparison;
   window.__kaminosSurfaceLighting=sceneGI.surfaceLighting;
   sceneBeautyLods ??= createSceneBeautyLodController({
-    onRungLoaded: prepareSceneNavigationRoot,
+    onRungLoaded: (root,rungRoot) => {
+      prepareSceneNavigationRoot(root);
+      if(!root.userData?.kaminosVertexWarp)sceneNavigation?.prepare(rungRoot);
+    },
     THREE,
     scene,
     giProxies: sceneGiProxies,
@@ -12508,7 +12519,7 @@ async function initScene() {
     runForegroundFrame:frameComposition.runForegroundFrame,
     async presentGlb(glb, {runId, sha256}) {
       const arrival=workingScene.arrival();
-      const response = await fetch('/api/ingest-mesh?role=client-prepares-lods', {method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:glb});
+      const response = await fetch('/api/ingest-mesh', {method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:glb});
       const saved = await response.json();
       if (!response.ok || saved.sha256 !== sha256) throw new Error(saved.error || 'generated mesh persistence hash mismatch');
       await scenePlacementTools.edits.waitForReplay();
@@ -27419,7 +27430,7 @@ async function importSceneMesh(file,{generation:origin=null,label=null,assetOrig
   const importedEntry=workingScene.objects.find(o=>o.id===id),activeAsh=workingScene.objects.find(o=>o.type===ASH_OBJECT_TYPE);
   if(importedEntry?.object&&activeAsh)await ensureSceneBeautyLods()?.prepareCollision?.([importedEntry.object],{cellSize:activeAsh.ash?.cellSize??0.04});
   if(!alreadyPrepared){
-    window.kaminosGiProxies?.prepare?.(digest,{heroGLB:new Uint8Array(bytes.slice(0)),input:file.name,route:origin?.route||'imported-glb'}).then(report=>{
+    window.kaminosGiProxies?.prepare?.(digest,{heroGLB:new Uint8Array(bytes.slice(0)),completeMissing:true,input:file.name,route:origin?.route||'imported-glb'}).then(report=>{
       window.__kaminosLastGenerationLevels={source:digest,...report};
       if(report?.phase==='done')setInfo(`GI proxy levels ready for ${label||file.name}: ${report.tiers?.map(t=>t.faces).join(', ')} faces`);
     }).catch(()=>{});
@@ -27477,13 +27488,18 @@ const giProxyEditTargets=new Set();
 // off, no proxy held. The setting is the stored state; the load just follows it.
 function applyGiProxySetting(entry){
   if(!entry?.giProxy||!entry.object)return;
-  if(entry.giProxy.enabled)return sceneGiProxies.select(entry.object,entry.giProxy.selection).then(h=>{
+  if(entry.giProxy.enabled)return sceneGiProxies.select(entry.object,entry.giProxy.selection).then(async h=>{
+    if(h?.prepareQueued){
+      await sceneGiProxies.whenPrepared(entry.object);
+      if(!workingScene.objects.includes(entry))return null;
+      return applyGiProxySetting(entry);
+    }
     syncSceneDataInspector();window.kaminosFireLightingSettings?.sync?.();window._kaminosDirty?.();
     const source=h?.heroSha;
     if(h?.state==='no-tiers'&&source&&!autoPreparedLodSources.has(source)&&window.__kaminosLastGenerationLevels?.source!==source){
       autoPreparedLodSources.add(source);
       window.__kaminosLastGenerationLevels={source,phase:'running'};
-      window.__kaminosLastGenerationLevelsPromise=Promise.resolve().then(()=>window.kaminosGiProxies?.prepare?.(source,{input:entry.label||entry.fileName||source,route:entry.generation?.route||'auto-arrival-lod'})).then(report=>{
+      window.__kaminosLastGenerationLevelsPromise=Promise.resolve().then(()=>window.kaminosGiProxies?.prepare?.(source,{completeMissing:true,input:entry.label||entry.fileName||source,route:entry.generation?.route||'auto-arrival-lod'})).then(report=>{
         if(report)window.__kaminosLastGenerationLevels={source,...report};
         if(report?.phase==='done')setInfo(`GI proxy levels ready for ${entry.label||entry.fileName||source.slice(0,8)}: ${report.tiers?.map(t=>t.faces).join(', ')} faces`);
         return window.__kaminosLastGenerationLevels;
@@ -28051,7 +28067,7 @@ function removeSelectedSceneObjects(){
 // for undo, not rewritten.
 async function storeDerivedMesh(bytes){
   const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
-  const response=await fetch('/api/ingest-mesh?role=client-prepares-lods',{method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:bytes});
+  const response=await fetch('/api/ingest-mesh',{method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:bytes});
   const receipt=await response.json();if(!response.ok)throw Error(receipt.error||'Mesh storage failed');
   if(receipt.schema!=='kaminos.generated-mesh.v0'||receipt.sha256!==digest||receipt.bytes!==bytes.byteLength||receipt.source!==`/api/read?root=generated-meshes&path=${digest}.glb`)throw Error('Mesh storage returned a different source');
   return receipt;
@@ -29285,9 +29301,9 @@ function setupAuthoringAssets(){
   const meshBusy=model=>meshRunning[model]||!!authoringPromptExpansion?.busy();
   const tracked=(model,run)=>async input=>{meshRunning[model]=true;redraw();try{return await run(input);}finally{meshRunning[model]=false;redraw();}};
   // Stored GLB plus its generation origin, as the SF3D service persists its meshes.
-  const persistGeneratedMesh=async(glb,generation,label,suffix)=>{
+  const persistGeneratedMesh=async(glb,generation,label,suffix,clientPreparesLods=false)=>{
     const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',glb)),b=>b.toString(16).padStart(2,'0')).join('');
-    const response=await fetch('/api/ingest-mesh?role=client-prepares-lods',{method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:glb});const saved=await response.json();
+    const response=await fetch('/api/ingest-mesh'+(clientPreparesLods?'?role=client-prepares-lods':''),{method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:glb});const saved=await response.json();
     if(!response.ok||saved.sha256!==sha256||saved.bytes!==glb.byteLength)throw Error(saved.error||'Generated mesh storage returned a different artifact');
     const result={source:saved.source,sha256,name:`${label} · ${suffix}.glb`,generation:{...generation,sha256,bytes:glb.byteLength}};
     const originResponse=await fetch('/api/mesh-generation-origin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(result)});const origin=await originResponse.json();
@@ -29318,7 +29334,7 @@ function setupAuthoringAssets(){
         surfels={...surfels,sha256:saved.sha256,source:saved.source};}
       catch(error){surfels={...surfels,status:'not stored',error:String(error?.message||error)};}
     }
-    const saved={...await persistGeneratedMesh(out.glb,{...out.generation,surfels,reconstruction:retained},out.label,'TRELLIS'),surfels,reconstruction:retained};
+    const saved={...await persistGeneratedMesh(out.glb,{...out.generation,surfels,reconstruction:retained},out.label,'TRELLIS',true),surfels,reconstruction:retained};
     // GI proxy tiers (Stunt Doubles' prepareGenerationLevels) from this run's decode, registered as levels
     // of the stored hero. They build in a worker after the mesh is saved; the result never holds or fails it.
     if(out.levelInputs||out.glb){
@@ -29329,7 +29345,7 @@ function setupAuthoringAssets(){
       // Not awaited: any failure here, including the runner module failing to load, is a levels report.
       window.__kaminosLastGenerationLevelsPromise=(async()=>{
         const {runGenerationLevels}=await loadModule('./generation-levels-runner.mjs');
-        return runGenerationLevels({...inputs,...surfelExtra,...(heroGLB?{heroGLB}:{}),source,input:`TRELLIS page run ${out.generation?.runId}`,route:out.generation?.route});
+        return runGenerationLevels({completeMissing:true,...inputs,...surfelExtra,...(heroGLB?{heroGLB}:{}),source,input:`TRELLIS page run ${out.generation?.runId}`,route:out.generation?.route});
       })().catch(error=>({phase:'worker',error:String(error?.message||error)})).then(async report=>{
         window.__kaminosLastGenerationLevels={source,...report};
         if(report.phase==='done'){
@@ -29488,13 +29504,13 @@ function setupAuthoringAssets(){
         meshUrl:result=>{const artifact=pipelineRunOutputArtifacts(result).find(pipelineArtifactIsLoadableMesh);return artifact?pipelineRunReadUrlForPath(result,artifact.path):null;},
         fetchBytes:async url=>{const response=await fetch(url);if(!response.ok)throw Error(`TRELLIS mesh HTTP ${response.status}`);return response.arrayBuffer();},
         persist:async(glb,generation,label)=>{
-          const saved=await persistGeneratedMesh(glb,generation,label,'TRELLIS');
+          const saved=await persistGeneratedMesh(glb,generation,label,'TRELLIS',true);
           const source=saved.sha256,heroGLB=new Uint8Array(glb.slice(0));
           if(typeof autoPreparedLodSources!=='undefined')autoPreparedLodSources.add(source);
           window.__kaminosLastGenerationLevels={source,phase:'running'};
           window.__kaminosLastGenerationLevelsPromise=(async()=>{
             const {runGenerationLevels}=await loadModule('./generation-levels-runner.mjs');
-            return runGenerationLevels({heroGLB,source,input:`TRELLIS queued run ${generation?.runId}`,route:generation?.route});
+            return runGenerationLevels({heroGLB,source,completeMissing:true,input:`TRELLIS queued run ${generation?.runId}`,route:generation?.route});
           })().catch(error=>({phase:'worker',error:String(error?.message||error)})).then(async report=>{
             window.__kaminosLastGenerationLevels={source,...report};
             if(report.phase==='done'){

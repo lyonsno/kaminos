@@ -259,7 +259,8 @@ with tempfile.TemporaryDirectory() as directory:
         assert serve.should_auto_prepare_mesh_lods(tier_mesh_sha, tier_mesh_bytes) is False
         assert serve.should_auto_prepare_mesh_lods(surfel_only_sha, surfel_only_bytes) is False
         assert serve.should_auto_prepare_mesh_lods(stored['l500'], hero_mesh_bytes) is False, 'registered tier sha is excluded'
-        assert serve.should_auto_prepare_mesh_lods(hero, hero_mesh_bytes) is False, 'hero with existing .lods.json is excluded'
+        assert serve.should_auto_prepare_mesh_lods(hero, hero_mesh_bytes) is True, 'an incomplete sidecar still needs preparation'
+        assert serve.should_auto_prepare_mesh_lods(hero_mesh_sha, mesh_glb('raw', extras={'trellisReconstruction': {'schema': 'kaminos.trellis-reconstruction.v1'}})) is False
 
         prepared_calls = []
         gate = threading.Event()
@@ -281,6 +282,8 @@ with tempfile.TemporaryDirectory() as directory:
             # The normal ingest route, rather than a direct queue call, starts the worker.
             assert request('POST', '/api/ingest-mesh', hero_mesh_bytes)[0] == 200
             assert serve.enqueue_mesh_lod_prepare(hero_mesh_sha, server_port=server.server_address[1]) is False, 'deduplicated while active/queued'
+            status, payload = request('GET', f'/api/mesh-lods?source={hero_mesh_sha}&prepare=client')
+            assert status == 200 and payload['prepareQueued'] is True, payload
             gate.set()
             for _ in range(50):
                 if serve.mesh_lod_prepare_queue_state()['completed'].get(hero_mesh_sha):
