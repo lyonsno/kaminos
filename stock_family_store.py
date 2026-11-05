@@ -18,7 +18,9 @@ def save_family(root, payload, write_json):
     json.dumps(recipe,allow_nan=False)
     sources=recipe.get('sources',[])
     if not isinstance(sources,list):raise ValueError('Source library must be a list')
-    for source in [recipe.get('source'),*sources]:
+    supports=recipe.get('supports',[])
+    if not isinstance(supports,list) or any(not isinstance(support,dict) for support in supports):raise ValueError('Supports must be a list of objects')
+    for source in [recipe.get('source'),*sources,*(support.get('source') for support in supports)]:
         if not isinstance(source,dict) or not re.fullmatch(r'[a-f0-9]{64}',str(source.get('sha256',''))):raise ValueError('Source digest required')
         if not isinstance(source.get('url'),str):raise ValueError('Source URL required')
         sha=source['sha256'];url=urlsplit(source['url']);query=parse_qs(url.query)
