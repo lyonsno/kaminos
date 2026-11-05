@@ -28224,6 +28224,8 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
   if (data.camera && typeof applySceneCameraView === 'function') {
     applySceneCameraView(data.camera);
   }
+  // The downloading proxy uses the saved scene's GI recipe too.
+  setSceneGIControls(data.postprocessing?.sceneGI ?? {});
   if (typeof stageSceneLowLodStandIns === 'function') {
     stageSceneLowLodStandIns(objectRecords, loadRequestId,restorePlan.groups);
   }
@@ -28314,8 +28316,6 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
   // Apply postprocessing
   restoreFireRendering(document,data.postprocessing?.fireLighting);
   sceneBloom.set(checkedSceneBloom(data.postprocessing?.bloom??{}));bloomControls?.sync();
-  // Scenes without a saved GI record use defaults, independent of prior tuning.
-  setSceneGIControls(data.postprocessing?.sceneGI ?? {});
   if (typeof autoCalibrateSceneGIFromScene === 'function') autoCalibrateSceneGIFromScene();
   if (typeof arrivalLightingState !== 'undefined') {
     if (Array.isArray(data?.objects) && data.objects.length > 0) {
