@@ -148,7 +148,6 @@ export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
   const view=texture.createView(),combined=buffer('scene solid union',bytes,GPUBufferUsage.COPY_SRC),dummy=buffer('scene solid unused triangles',48);
   const support=buffer('scene solid source support',bytes),stats=buffer('scene solid validation',32,GPUBufferUsage.COPY_SRC);
   const noMaterial=device.createTexture({label:'unfiltered scene solid material',size:[1,1,1],dimension:'3d',format:'rgba16float',usage:GPUTextureUsage.TEXTURE_BINDING});
-  device.queue.writeBuffer(support,0,new Uint32Array(cells));
   const meshCache=createResidentSolidMeshes({upload(data){const b=buffer('resident scene solid local triangles',data.byteLength);device.queue.writeBuffer(b,0,data);return b;},release:b=>b.destroy()});
   const module=device.createShaderModule({label:'GPU scene solid conservative raster and exterior connectivity',code:SCENE_SOLID_GPU_WGSL});
   const layout=device.createBindGroupLayout({entries:[
@@ -164,6 +163,7 @@ export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
   const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]});
   const pipelines=Object.fromEntries(['raster','init','connect','fill','merge','measure','present'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'scene solid '+entryPoint,layout:pipelineLayout,compute:{module,entryPoint}})]));
   const objects=new Map();let pending=false,key='',builds=0,current=null,wallKey='',one;
+  let supportUniform=null,supportPipeline=null,supportGroup=null,supportWorkgroups=null,supportPending=false;
   function makeGroup(member,triangles=dummy,triangleCount=0,matrix=null,materialMask=null){
     const uniform=device.createBuffer({label:'scene solid transform',size:96,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
     const values=new ArrayBuffer(96),floats=new Float32Array(values),uints=new Uint32Array(values);
@@ -181,7 +181,21 @@ export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
   function destroyMember(m){m.shell.destroy();m.parent.destroy();m.mask.destroy();destroyGroup(m.base);for(const d of m.draws)destroyGroup(d);}
   return {
     backend:'gpu',texture,view,
-    setSourceSupport(values){if(!(values instanceof Uint32Array)||values.length!==cells)throw Error('Invalid GPU source support');device.queue.writeBuffer(support,0,values);pending=true;},
+    setAnalyticSourceSupport({pipeline,uniforms,workgroups}){
+      if(!(uniforms instanceof ArrayBuffer)||uniforms.byteLength!==144)throw Error('Invalid analytic source parameters');
+      const shape=new Uint32Array(uniforms);
+      if(shape[31]!==grid||shape[35]!==gridHeight)throw Error('Analytic source support dimensions mismatch');
+      const expected=Array.from(shape.subarray(32,35),n=>Math.ceil(n/4));
+      if(!Array.isArray(workgroups)||workgroups.length!==3||workgroups.some((v,i)=>!Number.isSafeInteger(v)||v!==expected[i]||v>device.limits.maxComputeWorkgroupsPerDimension))throw Error('Invalid analytic source support dispatch');
+      if(workgroups.every(n=>n>0)&&!pipeline?.getBindGroupLayout)throw Error('Analytic source support pipeline required');
+      supportUniform??=device.createBuffer({label:'scene solid source parameters',size:144,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+      if(pipeline&&supportPipeline!==pipeline){
+        supportGroup=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:supportUniform}},{binding:3,resource:{buffer:support}}]});
+        supportPipeline=pipeline;
+      }
+      device.queue.writeBuffer(supportUniform,0,uniforms);
+      supportWorkgroups=[...workgroups];supportPending=true;pending=true;
+    },
     update(input,transform,shape,{wallCells=[],materialMasks=[]}={}){
       if(shape.grid!==grid||shape.gridHeight!==gridHeight)throw Error('GPU scene solid shape mismatch');
       const members=meshCache.update(input,transform),seen=new Set();builds=0;
@@ -210,6 +224,14 @@ export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
     },
     encode(encoder){
       if(!pending)return false;
+      if(supportPending){
+        encoder.clearBuffer(support);
+        if(supportWorkgroups.every(n=>n>0)){
+          const pass=encoder.beginComputePass({label:'scene solid analytic source support'});
+          pass.setPipeline(supportPipeline);pass.setBindGroup(0,supportGroup);pass.dispatchWorkgroups(...supportWorkgroups);pass.end();
+        }
+        supportPending=false;
+      }
       encoder.clearBuffer(combined);
       // Sparse authored walls are cheap host inputs, not mesh voxelization.
       for(const cell of current.wallCells){const i=cell.x+grid*(cell.y+gridHeight*cell.z);encoder.copyBufferToBuffer(wallOne(),0,combined,i*4,4);}
@@ -235,7 +257,7 @@ export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
           members:members.map(([id],i)=>({id,solidCellCount:values.subarray(cells*(i+1),cells*(i+2)).reduce((a,b)=>a+b,0)}))};
       }finally{staging.unmap();staging.destroy();}
     },
-    destroy(){meshCache.destroy();for(const m of objects.values())destroyMember(m);objects.clear();combined.destroy();dummy.destroy();support.destroy();stats.destroy();one?.destroy();noMaterial.destroy();texture.destroy();}
+    destroy(){meshCache.destroy();for(const m of objects.values())destroyMember(m);objects.clear();combined.destroy();dummy.destroy();support.destroy();supportUniform?.destroy();stats.destroy();one?.destroy();noMaterial.destroy();texture.destroy();}
   };
   function wallOne(){if(!one){one=buffer('scene solid wall value',16,GPUBufferUsage.COPY_SRC);device.queue.writeBuffer(one,0,new Uint32Array([1]));}return one;}
 }

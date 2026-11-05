@@ -51,7 +51,8 @@ test('every compute and fragment entry point seats the grid shape first; vertex 
   }
   assert.match(moduleText('WGSL'), /fn seatGridShape\(\) \{\n  GRID = u32\(u\.grid_shape\.x\);\n  GRID_Y = u32\(u\.grid_shape\.y\);\n  IRRADIANCE_GRID = u32\(u\.grid_shape\.z\);\n  IRRADIANCE_GRID_Y = u32\(u\.grid_shape\.w\);\n  SCENE_SOURCE_GRID = u32\(u\.grid_shape_b\.x\);\n  SCENE_SOURCE_GRID_Y = u32\(u\.grid_shape_b\.y\);\n\}/);
   const emitter = entryPoints(moduleText('ANALYTIC_EMITTER_INJECTION_WGSL'));
-  assert.deepEqual(emitter.map(e => e.firstLine), ['seatGridShape();']);
+  assert.deepEqual(emitter.map(e => e.name), ['seedAnalyticSourceSupport', 'injectAnalyticEmitter']);
+  for (const e of emitter) assert.equal(e.firstLine, 'seatGridShape();');
   assert.match(moduleText('ANALYTIC_EMITTER_INJECTION_WGSL'), /fn seatGridShape\(\) \{\n  GRID = emitter\.cell_min_grid\.w;\n  GRID_Y = emitter\.cell_extent\.w;\n\}/);
   const splat = entryPoints(moduleText('BOUNDARY_SPLAT_WGSL'));
   assert.equal(splat.length, 8);
@@ -107,6 +108,7 @@ test('interpolated modules: every entry point seats first except the lattice-onl
   const interpolated = [...moduleText('WGSL').matchAll(/\$\{([A-Z_]+_WGSL)\}/g)].map(m => m[1]);
   const texts = {
     TRANSFER_GEOMETRY_WGSL: (await import('../volume-grid-transfer.mjs')).TRANSFER_GEOMETRY_WGSL,
+    WORLD_CALIBRATION_WGSL: (await import('../volume-world-calibration.mjs')).WORLD_CALIBRATION_WGSL,
     WORLD_RENDER_WGSL: (await import('../volume-world-render.mjs')).WORLD_RENDER_WGSL,
     WORLD_SMOKE_OPTICS_WGSL: (await import('../volume-world-smoke-optics.mjs')).WORLD_SMOKE_OPTICS_WGSL,
     PASSIVE_MATERIAL_WGSL: core.PASSIVE_MATERIAL_WGSL,

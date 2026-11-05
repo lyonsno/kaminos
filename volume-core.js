@@ -9448,6 +9448,7 @@ struct AnalyticEmitterInjectionUniforms {
 @group(0) @binding(0) var<uniform> emitter: AnalyticEmitterInjectionUniforms;
 @group(0) @binding(1) var<storage, read_write> fluid: array<vec4<f32>>;
 @group(0) @binding(2) var emitterSceneSolidCells: texture_3d<u32>;
+@group(0) @binding(3) var<storage, read_write> analyticSourceSupport: array<u32>;
 
 fn cellIndex(c: vec3<u32>) -> u32 {
   return c.x + c.y * GRID + c.z * GRID * GRID_Y;
@@ -9518,6 +9519,40 @@ fn apertureSignedDistance(
   return abs(length(planar) - extent) - radius;
 }
 
+fn analyticGeometrySignedDistance(p: vec3<f32>, familyMode: u32, origin: vec3<f32>, axis: vec3<f32>, supportAxis: vec3<f32>, radius: f32, extent: f32) -> f32 {
+  if (familyMode == 1u) {
+    let halfSpan = axis * extent * 0.5;
+    return capsuleSignedDistance(p, origin - halfSpan, origin + halfSpan, radius);
+  }
+  if (familyMode == 2u) { return cylinderSignedDistance(p, origin, axis, radius, extent); }
+  if (familyMode == 3u) { return ribbonSignedDistance(p, origin, axis, supportAxis, radius, extent); }
+  if (familyMode == 4u) { return torusSignedDistance(p, origin, axis, extent, radius); }
+  return 1.0;
+}
+
+// Collision validation uses the same geometry as injection, including its
+// antialias footprint. It never reads or writes the evolving fluid.
+@compute @workgroup_size(4, 4, 4)
+fn seedAnalyticSourceSupport(@builtin(global_invocation_id) localId: vec3<u32>) {
+  seatGridShape();
+  if (any(localId >= emitter.cell_extent.xyz)) { return; }
+  let cell = emitter.cell_min_grid.xyz + localId;
+  if (any(cell >= vec3<u32>(GRID, GRID_Y, GRID))) { return; }
+  let familyMode = u32(max(0.0, floor(emitter.origin_mode.w + 0.5)));
+  if (familyMode == 0u || emitter.axis_strength.w <= 0.0) { return; }
+  let p = cellToWorld(vec3<f32>(cell) + vec3<f32>(0.5));
+  var distance = analyticGeometrySignedDistance(p, familyMode, emitter.origin_mode.xyz,
+    emitter.axis_strength.xyz, emitter.support_radius.xyz, max(0.006, emitter.support_radius.w), max(0.012, emitter.geometry.x));
+  if (emitter.transport.y >= 0.5) {
+    let axial = dot(p - emitter.origin_mode.xyz, emitter.axis_strength.xyz);
+    let depth = max(0.006, emitter.transport.z);
+    var inlet = abs(axial) - depth * 0.5;
+    if (familyMode == 2u) { inlet = max(-axial, axial - depth); }
+    distance = max(distance, inlet);
+  }
+  if (distance < 1.0 / f32(GRID)) { analyticSourceSupport[cellIndex(cell)] = 1u; }
+}
+
 @compute @workgroup_size(4, 4, 4)
 fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
   seatGridShape();
@@ -9534,17 +9569,7 @@ fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
   let supportAxis = emitter.support_radius.xyz;
   let radius = max(0.006, emitter.support_radius.w);
   let extent = max(0.012, emitter.geometry.x);
-  var geometrySignedDistance = 1.0;
-  if (familyMode == 1u) {
-    let halfSpan = axis * extent * 0.5;
-    geometrySignedDistance = capsuleSignedDistance(p, origin - halfSpan, origin + halfSpan, radius);
-  } else if (familyMode == 2u) {
-    geometrySignedDistance = cylinderSignedDistance(p, origin, axis, radius, extent);
-  } else if (familyMode == 3u) {
-    geometrySignedDistance = ribbonSignedDistance(p, origin, axis, supportAxis, radius, extent);
-  } else if (familyMode == 4u) {
-    geometrySignedDistance = torusSignedDistance(p, origin, axis, extent, radius);
-  }
+  let geometrySignedDistance = analyticGeometrySignedDistance(p, familyMode, origin, axis, supportAxis, radius, extent);
   let cellWidth = 2.0 / f32(GRID);
   let sourceLaw = emitter.transport.y;
   let sourceDepth = max(0.006, emitter.transport.z);
@@ -9636,6 +9661,12 @@ ${VOLUME_EMITTER_FIELD_COMMIT_WGSL}
   fluid[base + 3u] = committedMicroLayer;
 }
 `;
+
+
+export function createAnalyticSourceSupportPipeline(device, module = null) {
+  module ??= device.createShaderModule({label: 'analytic emitter source support', code: ANALYTIC_EMITTER_INJECTION_WGSL});
+  return device.createComputePipeline({label: 'analytic emitter source support', layout: 'auto', compute: {module, entryPoint: 'seedAnalyticSourceSupport'}});
+}
 
 const BROWSER_RESIDUAL_WGSL = `
 struct VertexOut {
@@ -11959,6 +11990,7 @@ export function createKaminosVolumePrototype({
   let emptyGasSourceTexture = null;
   let transportGasSourceTexture = null;
   let analyticEmitterInjectionPipeline = null;
+  let analyticSourceSupportPipeline = null;
   let pressureDivergencePipeline = null;
   let pressureJacobiPipeline = null;
   let pressureJacobiTieredLowerPipeline = null;
@@ -12123,6 +12155,9 @@ export function createKaminosVolumePrototype({
   let uniformBuffer = null;
   let analyticEmitterInjectionUniformBuffer = null;
   const analyticEmitterInjectionUniformData = new ArrayBuffer(36 * Float32Array.BYTES_PER_ELEMENT);
+  const analyticSourceSupportUniformData = new ArrayBuffer(36 * Float32Array.BYTES_PER_ELEMENT);
+  const analyticSourceSupportFloats = new Float32Array(analyticSourceSupportUniformData);
+  const analyticSourceSupportWords = new Uint32Array(analyticSourceSupportUniformData);
   const analyticEmitterInjectionUniformFloats = new Float32Array(analyticEmitterInjectionUniformData);
   const analyticEmitterInjectionUniformWords = new Uint32Array(analyticEmitterInjectionUniformData);
   let volumePresentationControlsBuffer = null;
@@ -13407,9 +13442,16 @@ export function createKaminosVolumePrototype({
         const geometry=sceneSolidGpu.update(source.objects||[{id:sourceId,object:source.object}],productTransform,{grid:gridSize,gridHeight},{wallCells:backWall.cells,materialMasks:gpuThermalConsumer?.materialMasks?.()??[]});
         const supportKey=JSON.stringify([analyticEmitterDescriptorSignature,analyticEmitterDispatch.active,analyticEmitterDispatch.cellMin,analyticEmitterDispatch.cellExtent]);
         if(sceneSolidGpuSupportKey!==supportKey){
-          const support=new Uint32Array(gridSize*gridHeight*gridSize);
-          countEmitterChemicalSupport(analyticEmitterDescriptor,analyticEmitterDispatch,new Uint8Array(support.length),gridSize,gridHeight,i=>{support[i]=1;});
-          sceneSolidGpu.setSourceSupport(support);sceneSolidGpuSupportKey=supportKey;
+          if(analyticEmitterDispatch.active)analyticSourceSupportPipeline ??= createAnalyticSourceSupportPipeline(device, analyticEmitterInjectionShader);
+          writeAnalyticEmitterInjectionUniform(analyticSourceSupportFloats, analyticSourceSupportWords,
+            analyticEmitterDescriptor, analyticEmitterDispatch, 0, {gridHeight});
+          // The injection packer zeros an inactive descriptor, including shape.
+          // Disabling support must still address this producer's current grid.
+          analyticSourceSupportWords[31] = gridSize;
+          analyticSourceSupportWords[35] = gridHeight;
+          sceneSolidGpu.setAnalyticSourceSupport({pipeline: analyticSourceSupportPipeline,
+            uniforms: analyticSourceSupportUniformData, workgroups: analyticEmitterDispatch.workgroups});
+          sceneSolidGpuSupportKey=supportKey;
         }
         const maskKey=JSON.stringify([geometry.key,backWall.maskKey,supportKey]);
         if(sceneSolidTexture!==sceneSolidGpu.texture){
