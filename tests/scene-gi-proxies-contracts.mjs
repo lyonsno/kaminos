@@ -280,3 +280,17 @@ test('a saved shadow opt-out resolves levels for beauty without fetching or pars
   assert.equal(calls.length, 1);
   assert.equal(registry.get(root).proxyRoot, null);
 });
+
+
+test('a cold shadow opt-out exposes catalog retrieval failure without loading geometry', async () => {
+  const {root} = sceneObject(heroSource);
+  const registry = createGiProxyRegistry({THREE,
+    fetchJson: async () => { throw Error('catalog unavailable'); },
+    fetchBytes: async () => { throw Error('proxy geometry must remain unloaded'); },
+    parseGlb: async () => { throw Error('proxy geometry must remain unloaded'); },
+  });
+  await registry.disable(root, {retainLevels: true});
+  assert.equal(registry.get(root).state, 'failed');
+  assert.equal(registry.get(root).failure, 'catalog unavailable');
+  assert.equal(registry.get(root).proxyRoot, null);
+});
