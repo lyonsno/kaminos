@@ -25,7 +25,7 @@ export default {
    if(panel){for(const el of panel.querySelectorAll('[data-setting]')){if(host.controls.document.activeElement===el)continue;const k=el.dataset.setting;el.value=String(k.startsWith('weight.')?requested.weights[k.slice(7)]:requested[k]);}for(const el of panel.querySelectorAll('[data-toggle]'))el.checked=el.dataset.toggle==='setEnabled'?enabled:overlay;}
    if(coverageStatus){const c=host.fire.coverage.read();for(const el of panel.querySelectorAll('[data-coverage]'))if(host.controls.document.activeElement!==el)el.value=String(c.options[el.dataset.coverage]);
     const age=Number.isFinite(c.demandSampledAt)?Math.max(0,performance.now()/1000-c.demandSampledAt):null;
-    coverageStatus.textContent=`${c.status}${c.error?': '+c.error:''} · ${c.moves} moves / ${c.checks} checks${c.sourceCoverage!==undefined?' · source coverage '+Math.round(c.sourceCoverage*100)+'%':''}${c.options.mode==='fire'?' · fire demand: '+(c.demandStatus??'awaiting measurement')+(age!==null?' ('+age.toFixed(1)+' s old)':''):''}${c.worldLimited?' · World bounds limit following':''}`;
+    coverageStatus.textContent=`${c.status}${c.error?': '+c.error:''} · ${c.moves} moves / ${c.checks} checks${c.sourceCoverage!==undefined?' · source coverage '+Math.round(c.sourceCoverage*100)+'%':''}${c.options.mode==='fire'?' · fire demand: '+(c.demandStatus??'awaiting measurement')+(age!==null?' ('+age.toFixed(1)+' s old)':''):''}${c.headroomPending?' · Headroom waiting for coverage or World bounds':''}${c.worldLimited?' · World bounds limit following':''}`;
    }
    root.visible=overlay&&!!effective;
    if(overlay&&effective&&lastRevision!==effective.revision){
