@@ -81,11 +81,12 @@ export async function decodePNGBytes(input) {
 const det3 = m => m[0]*(m[5]*m[10]-m[9]*m[6]) - m[4]*(m[1]*m[10]-m[9]*m[2]) + m[8]*(m[1]*m[6]-m[5]*m[2]);
 
 export async function readGLBLocalSurfaceAndMaterials(input) {
-  const glb = input instanceof Uint8Array ? input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength) : input;
-  const view = new DataView(glb);
+  const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+  const glb = bytes.buffer, glbOffset = bytes.byteOffset;
+  const view = new DataView(glb, glbOffset, bytes.byteLength);
   if (view.getUint32(0, true) !== 0x46546c67 || view.getUint32(4, true) !== 2) throw Error('not a glTF 2.0 binary');
   const jsonLength = view.getUint32(12, true);
-  const json = JSON.parse(new TextDecoder().decode(new Uint8Array(glb, 20, jsonLength))), bin = 28 + jsonLength;
+  const json = JSON.parse(new TextDecoder().decode(new Uint8Array(glb, glbOffset + 20, jsonLength))), bin = glbOffset + 28 + jsonLength;
   const worlds = glbNodeWorldMatrices(json);
 
   const decodedImages = new Map();
@@ -99,8 +100,8 @@ export async function readGLBLocalSurfaceAndMaterials(input) {
     if (!img || typeof img.bufferView !== 'number') throw Error(`GLB image ${tex.source} requires an embedded bufferView`);
     if (img.mimeType && img.mimeType !== 'image/png') throw Error(`unsupported GLB image mimeType ${img.mimeType}; image/png required`);
     const bv = json.bufferViews[img.bufferView];
-    const bytes = new Uint8Array(glb, bin + (bv.byteOffset || 0), bv.byteLength);
-    const decoded = await decodePNGBytes(bytes);
+    const imgBytes = new Uint8Array(glb, bin + (bv.byteOffset || 0), bv.byteLength);
+    const decoded = await decodePNGBytes(imgBytes);
     decodedImages.set(tex.source, decoded);
     return decoded;
   };
@@ -126,12 +127,37 @@ export async function readGLBLocalSurfaceAndMaterials(input) {
     const T = {5126: Float32Array, 5125: Uint32Array, 5123: Uint16Array, 5121: Uint8Array}[a.componentType];
     if (!T) throw Error(`unsupported accessor componentType ${a.componentType}`);
     const scale = a.componentType === 5121 ? 1 / 255 : a.componentType === 5123 && a.type !== 'SCALAR' ? 1 / 65535 : 1;
-    const stride = bv.byteStride || width * T.BYTES_PER_ELEMENT;
+    const elemBytes = width * T.BYTES_PER_ELEMENT;
+    const stride = bv.byteStride || elemBytes;
     const start = bin + (bv.byteOffset || 0) + (a.byteOffset || 0);
-    const out = a.type === 'SCALAR' ? new Uint32Array(a.count) : new Float32Array(a.count * width);
-    for (let i = 0; i < a.count; i++) {
-      const row = new T(glb, start + i * stride, width);
-      for (let k = 0; k < width; k++) out[i * width + k] = row[k] * scale;
+    const total = a.count * width;
+    if (stride === elemBytes && scale === 1) {
+      if ((a.type === 'SCALAR' && T === Uint32Array) || (a.type !== 'SCALAR' && T === Float32Array)) {
+        if (start % T.BYTES_PER_ELEMENT === 0) return {array: new T(glb, start, total), width, count: a.count};
+        const out = new T(total);
+        new Uint8Array(out.buffer).set(new Uint8Array(glb, start, total * T.BYTES_PER_ELEMENT));
+        return {array: out, width, count: a.count};
+      }
+      if (start % T.BYTES_PER_ELEMENT === 0) {
+        const src = new T(glb, start, total);
+        const out = a.type === 'SCALAR' ? new Uint32Array(total) : new Float32Array(total);
+        out.set(src);
+        return {array: out, width, count: a.count};
+      }
+    }
+    const out = a.type === 'SCALAR' ? new Uint32Array(a.count) : new Float32Array(total);
+    if (start % T.BYTES_PER_ELEMENT === 0 && stride % T.BYTES_PER_ELEMENT === 0) {
+      const step = stride / T.BYTES_PER_ELEMENT;
+      const src = new T(glb, start, (a.count - 1) * step + width);
+      for (let i = 0; i < a.count; i++) {
+        const base = i * step;
+        for (let k = 0; k < width; k++) out[i * width + k] = src[base + k] * scale;
+      }
+    } else {
+      for (let i = 0; i < a.count; i++) {
+        const row = new T(glb.slice(start + i * stride, start + i * stride + elemBytes));
+        for (let k = 0; k < width; k++) out[i * width + k] = row[k] * scale;
+      }
     }
     return {array: out, width, count: a.count};
   };

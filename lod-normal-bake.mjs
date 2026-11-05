@@ -54,28 +54,67 @@ export function bakeTangentNormalMap({positions, normals, uvs, indices, textureS
   let coveredPixels = 0, unsampled = 0, maxDegrees = 0;
   // How large one texel is on the surface: area over covered texels. Samplers can average over it.
   let area = 0, covered = 0;
-  for (let f = 0; f < indices.length; f += 3) area += Math.hypot(...cross(sub(at(positions, indices[f+1]), at(positions, indices[f])), sub(at(positions, indices[f+2]), at(positions, indices[f])))) / 2;
+  for (let f = 0; f < indices.length; f += 3) {
+    const a = indices[f] * 3, b = indices[f + 1] * 3, c = indices[f + 2] * 3;
+    const e1x = positions[b] - positions[a], e1y = positions[b + 1] - positions[a + 1], e1z = positions[b + 2] - positions[a + 2];
+    const e2x = positions[c] - positions[a], e2y = positions[c + 1] - positions[a + 1], e2z = positions[c + 2] - positions[a + 2];
+    area += Math.hypot(e1y * e2z - e1z * e2y, e1z * e2x - e1x * e2z, e1x * e2y - e1y * e2x) / 2;
+  }
   for (let p = 0; p < count; p++) if (faces[p] >= 0) covered++;
   const texelSize = covered ? Math.sqrt(area / covered) : 0;
+
+  // Precompute per-vertex bitangent B = cross(unit(N_v) ?? [0,0,1], T_v) * w_v once.
+  const vCount = positions.length / 3;
+  const vBitangents = new Float64Array(vCount * 3);
+  for (let v = 0; v < vCount; v++) {
+    const nv = unit([normals[v * 3], normals[v * 3 + 1], normals[v * 3 + 2]]) ?? [0, 0, 1];
+    const tx = tangents[v * 4], ty = tangents[v * 4 + 1], tz = tangents[v * 4 + 2], tw = tangents[v * 4 + 3];
+    const b = cross(nv, [tx, ty, tz]);
+    vBitangents[v * 3] = b[0] * tw;
+    vBitangents[v * 3 + 1] = b[1] * tw;
+    vBitangents[v * 3 + 2] = b[2] * tw;
+  }
+
   for (let p = 0; p < count; p++) {
     const face = faces[p]; if (face < 0) continue;
     mask[p] = 1; coveredPixels++;
-    const w = [bary[p*3], bary[p*3+1], bary[p*3+2]], vs = [indices[face*3], indices[face*3+1], indices[face*3+2]];
-    const mix = (array, width, map = x => x) => { const o = [0, 0, 0]; vs.forEach((v, i) => { const x = map(at(array, v, width), v); for (let k = 0; k < 3; k++) o[k] += w[i] * x[k]; }); return o; };
-    const point = mix(positions, 3), N = unit(mix(normals, 3)) ?? [0, 0, 1];
+    const w0 = bary[p * 3], w1 = bary[p * 3 + 1], w2 = bary[p * 3 + 2];
+    const v0 = indices[face * 3], v1 = indices[face * 3 + 1], v2 = indices[face * 3 + 2];
+    const point = [
+      w0 * positions[v0 * 3] + w1 * positions[v1 * 3] + w2 * positions[v2 * 3],
+      w0 * positions[v0 * 3 + 1] + w1 * positions[v1 * 3 + 1] + w2 * positions[v2 * 3 + 1],
+      w0 * positions[v0 * 3 + 2] + w1 * positions[v1 * 3 + 2] + w2 * positions[v2 * 3 + 2],
+    ];
+    const N = unit([
+      w0 * normals[v0 * 3] + w1 * normals[v1 * 3] + w2 * normals[v2 * 3],
+      w0 * normals[v0 * 3 + 1] + w1 * normals[v1 * 3 + 1] + w2 * normals[v2 * 3 + 1],
+      w0 * normals[v0 * 3 + 2] + w1 * normals[v1 * 3 + 2] + w2 * normals[v2 * 3 + 2],
+    ]) ?? [0, 0, 1];
     // As the decoder does: per-vertex B = cross(N, T) * w, then T, B, N interpolated and normalized.
-    const T = unit(mix(tangents, 4)) ?? [1, 0, 0];
-    const B = unit(mix(tangents, 4, (t, v) => cross(unit(at(normals, v)) ?? [0, 0, 1], t).map(x => x * t[3]))) ?? cross(N, T);
+    const T = unit([
+      w0 * tangents[v0 * 4] + w1 * tangents[v1 * 4] + w2 * tangents[v2 * 4],
+      w0 * tangents[v0 * 4 + 1] + w1 * tangents[v1 * 4 + 1] + w2 * tangents[v2 * 4 + 1],
+      w0 * tangents[v0 * 4 + 2] + w1 * tangents[v1 * 4 + 2] + w2 * tangents[v2 * 4 + 2],
+    ]) ?? [1, 0, 0];
+    const B = unit([
+      w0 * vBitangents[v0 * 3] + w1 * vBitangents[v1 * 3] + w2 * vBitangents[v2 * 3],
+      w0 * vBitangents[v0 * 3 + 1] + w1 * vBitangents[v1 * 3 + 1] + w2 * vBitangents[v2 * 3 + 1],
+      w0 * vBitangents[v0 * 3 + 2] + w1 * vBitangents[v1 * 3 + 2] + w2 * vBitangents[v2 * 3 + 2],
+    ]) ?? cross(N, T);
     let source = sampleNormal(point, N, texelSize);
     source = source && unit(source);
     if (!source) { unsampled++; source = N; }
-    if (dot(source, N) < 0) source = source.map(x => -x); // a normal map never turns the surface inside out
+    if (dot(source, N) < 0) source = [-source[0], -source[1], -source[2]]; // a normal map never turns the surface inside out
     maxDegrees = Math.max(maxDegrees, Math.acos(Math.min(1, dot(source, N))) * 180 / Math.PI);
     // Solve [T B N] m = source (the basis need not be orthonormal), then normalize m.
-    const det = dot(T, cross(B, N));
-    let m = Math.abs(det) > 1e-9 ? unit([dot(source, cross(B, N)) / det, dot(source, cross(N, T)) / det, dot(source, cross(T, B)) / det]) : null;
+    const cBN = cross(B, N), det = dot(T, cBN);
+    let m = Math.abs(det) > 1e-9 ? unit([dot(source, cBN) / det, dot(source, cross(N, T)) / det, dot(source, cross(T, B)) / det]) : null;
     if (!m || m[2] < 0) m = [0, 0, 1]; // degenerate frame or unrepresentable: keep the level's normal
-    pixels.set([byte(m[0]), byte(m[1]), byte(m[2]), 255], p * 4);
+    const idx4 = p * 4;
+    pixels[idx4] = byte(m[0]);
+    pixels[idx4 + 1] = byte(m[1]);
+    pixels[idx4 + 2] = byte(m[2]);
+    pixels[idx4 + 3] = 255;
   }
   if (!coveredPixels) throw Error('no covered UV texels to bake');
   const seeds = nearestCovered(mask, textureSize);
@@ -100,41 +139,180 @@ export function createHeroNormalSampler({hero: {vertices, faces, normals = null}
   let bvh = prebuilt;
   if (!bvh) { const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3)); geometry.setIndex(new THREE.BufferAttribute(faces, 1)); bvh = new MeshBVH(geometry); }
-  const ray = new THREE.Ray(), tri = new THREE.Triangle(), weights = new THREE.Vector3();
-  const corner = i => new THREE.Vector3(vertices[i*3], vertices[i*3+1], vertices[i*3+2]);
+  const ray = new THREE.Ray(), tri = new THREE.Triangle(), weights = new THREE.Vector3(), hitPt = new THREE.Vector3();
+  const c0 = new THREE.Vector3(), c1 = new THREE.Vector3(), c2 = new THREE.Vector3();
   const normalAt = (face, at) => {
-    const v = [0, 1, 2].map(k => faces[face * 3 + k]);
-    tri.set(corner(v[0]), corner(v[1]), corner(v[2]));
+    const f3 = face * 3;
+    const v0 = faces[f3], v1 = faces[f3 + 1], v2 = faces[f3 + 2];
+    const i0 = v0 * 3, i1 = v1 * 3, i2 = v2 * 3;
+    c0.set(vertices[i0], vertices[i0 + 1], vertices[i0 + 2]);
+    c1.set(vertices[i1], vertices[i1 + 1], vertices[i1 + 2]);
+    c2.set(vertices[i2], vertices[i2 + 1], vertices[i2 + 2]);
+    tri.set(c0, c1, c2);
     if (faceNormals) {
       tri.getNormal(weights);
       return (weights.x || weights.y || weights.z) ? [weights.x, weights.y, weights.z] : null;
     }
     tri.getBarycoord(at, weights);
-    const w = [weights.x, weights.y, weights.z];
-    if (!w.every(Number.isFinite)) return null;
-    return [0, 1, 2].map(a => v.reduce((sum, vi, k) => sum + w[k] * normals[vi * 3 + a], 0));
+    const wx = weights.x, wy = weights.y, wz = weights.z;
+    if (!(Number.isFinite(wx) && Number.isFinite(wy) && Number.isFinite(wz))) return null;
+    return [
+      wx * normals[i0] + wy * normals[i1] + wz * normals[i2],
+      wx * normals[i0 + 1] + wy * normals[i1 + 1] + wz * normals[i2 + 1],
+      wx * normals[i0 + 2] + wy * normals[i1 + 2] + wz * normals[i2 + 2],
+    ];
   };
-  const sample = (p, n, texelSize = 0) => {
-    const limit = Math.min(reach, maxTexels < Infinity && texelSize > 0 ? maxTexels * texelSize : Infinity);
-    if (!n || !(limit > 0 && limit < Infinity)) return null;
-    let best = null;
-    for (const side of [1, -1]) {
-      ray.origin.set(p[0], p[1], p[2]); ray.direction.set(n[0] * side, n[1] * side, n[2] * side);
-      const h = bvh.raycastFirst(ray, THREE.DoubleSide, 0, best ? best.distance : limit);
-      if (h && h.distance <= limit && (!best || h.distance < best.distance)) best = h;
-    }
-    if (!best) return null;
-    const out = normalAt(best.faceIndex, best.point);
-    return out && faceNormals && dot(out, n) < 0 ? [-out[0], -out[1], -out[2]] : out;
-  };
+
+  const canFastTraverse = bvh._roots?.length === 1 && !bvh._indirectBuffer && bvh.geometry?.index && bvh.geometry?.attributes?.position;
+  let sample;
+  if (canFastTraverse) {
+    const rootBuf = bvh._roots[0];
+    const f32 = new Float32Array(rootBuf);
+    const u16 = new Uint16Array(rootBuf);
+    const u32 = new Uint32Array(rootBuf);
+    const bvhIdx = bvh.geometry.index.array;
+    const bvhPos = bvh.geometry.attributes.position.array;
+    let ox = 0, oy = 0, oz = 0, dx = 0, dy = 0, dz = 0, invDx = 0, invDy = 0, invDz = 0;
+    let hitDist = Infinity, hitFace = -1, hitX = 0, hitY = 0, hitZ = 0;
+
+    const intersectBox = (minX, minY, minZ, maxX, maxY, maxZ, far) => {
+      let tmin, tmax, tymin, tymax, tzmin, tzmax;
+      if (invDx >= 0) { tmin = (minX - ox) * invDx; tmax = (maxX - ox) * invDx; }
+      else { tmin = (maxX - ox) * invDx; tmax = (minX - ox) * invDx; }
+      if (invDy >= 0) { tymin = (minY - oy) * invDy; tymax = (maxY - oy) * invDy; }
+      else { tymin = (maxY - oy) * invDy; tymax = (minY - oy) * invDy; }
+      if (tmin > tymax || tymin > tmax) return false;
+      if (tymin > tmin || tmin !== tmin) tmin = tymin;
+      if (tymax < tmax || tmax !== tmax) tmax = tymax;
+      if (invDz >= 0) { tzmin = (minZ - oz) * invDz; tzmax = (maxZ - oz) * invDz; }
+      else { tzmin = (maxZ - oz) * invDz; tzmax = (minZ - oz) * invDz; }
+      if (tmin > tzmax || tzmin > tmax) return false;
+      if (tzmin > tmin || tmin !== tmin) tmin = tzmin;
+      if (tzmax < tmax || tmax !== tmax) tmax = tzmax;
+      return tmin <= far && tmax >= 0;
+    };
+
+    const raycastSubtree = (node32, far) => {
+      const node16 = node32 << 1;
+      const isLeaf = u16[node16 + 15] === 0xffff;
+      if (isLeaf) {
+        const offset = u32[node32 + 6];
+        const count = u16[node16 + 14];
+        hitDist = Infinity;
+        hitFace = -1;
+        for (let i = offset, end = offset + count; i < end; i++) {
+          const i3 = i * 3;
+          const a = bvhIdx[i3] * 3, b = bvhIdx[i3 + 1] * 3, c = bvhIdx[i3 + 2] * 3;
+          const ax = bvhPos[a], ay = bvhPos[a + 1], az = bvhPos[a + 2];
+          const e1x = bvhPos[b] - ax, e1y = bvhPos[b + 1] - ay, e1z = bvhPos[b + 2] - az;
+          const e2x = bvhPos[c] - ax, e2y = bvhPos[c + 1] - ay, e2z = bvhPos[c + 2] - az;
+          const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
+          let DdN = dx * nx + dy * ny + dz * nz;
+          let sign;
+          if (DdN > 0) { sign = 1; }
+          else if (DdN < 0) { sign = -1; DdN = -DdN; }
+          else continue;
+          const diffx = ox - ax, diffy = oy - ay, diffz = oz - az;
+          const DdQxE2 = sign * (dx * (diffy * e2z - diffz * e2y) + dy * (diffz * e2x - diffx * e2z) + dz * (diffx * e2y - diffy * e2x));
+          if (DdQxE2 < 0) continue;
+          const DdE1xQ = sign * (dx * (e1y * diffz - e1z * diffy) + dy * (e1z * diffx - e1x * diffz) + dz * (e1x * diffy - e1y * diffx));
+          if (DdE1xQ < 0 || DdQxE2 + DdE1xQ > DdN) continue;
+          const QdN = -sign * (diffx * nx + diffy * ny + diffz * nz);
+          if (QdN < 0) continue;
+          const t = QdN / DdN;
+          const px = ox + t * dx, py = oy + t * dy, pz = oz + t * dz;
+          const d = Math.hypot(px - ox, py - oy, pz - oz);
+          if (d < 0 || d > far) continue;
+          if (d < hitDist) {
+            hitDist = d;
+            hitFace = i;
+            hitX = px; hitY = py; hitZ = pz;
+          }
+        }
+        return hitFace >= 0;
+      }
+
+      const splitAxis = u32[node32 + 7];
+      const dAxis = splitAxis === 0 ? dx : splitAxis === 1 ? dy : dz;
+      const l2r = dAxis >= 0;
+      const c1 = l2r ? node32 + 8 : u32[node32 + 6];
+      const c2 = l2r ? u32[node32 + 6] : node32 + 8;
+
+      const in1 = intersectBox(f32[c1], f32[c1 + 1], f32[c1 + 2], f32[c1 + 3], f32[c1 + 4], f32[c1 + 5], far);
+      let hit1 = false, c1Dist = Infinity, c1Face = -1, c1Px = 0, c1Py = 0, c1Pz = 0;
+      if (in1 && raycastSubtree(c1, far)) {
+        hit1 = true;
+        c1Dist = hitDist; c1Face = hitFace; c1Px = hitX; c1Py = hitY; c1Pz = hitZ;
+        const pAxis = splitAxis === 0 ? c1Px : splitAxis === 1 ? c1Py : c1Pz;
+        const to2 = l2r ? pAxis <= f32[c2 + splitAxis] : pAxis >= f32[c2 + splitAxis + 3];
+        if (to2) {
+          return true;
+        }
+      }
+
+      const far2 = hit1 && c1Dist < far ? c1Dist : far;
+      const in2 = intersectBox(f32[c2], f32[c2 + 1], f32[c2 + 2], f32[c2 + 3], f32[c2 + 4], f32[c2 + 5], far2);
+      if (in2 && raycastSubtree(c2, far2)) {
+        if (!hit1 || hitDist < c1Dist) {
+          return true;
+        }
+      }
+      if (hit1) {
+        hitDist = c1Dist; hitFace = c1Face; hitX = c1Px; hitY = c1Py; hitZ = c1Pz;
+        return true;
+      }
+      return false;
+    };
+
+    const rMinX = f32[0], rMinY = f32[1], rMinZ = f32[2], rMaxX = f32[3], rMaxY = f32[4], rMaxZ = f32[5];
+    sample = (p, n, texelSize = 0) => {
+      const limit = Math.min(reach, maxTexels < Infinity && texelSize > 0 ? maxTexels * texelSize : Infinity);
+      if (!n || !(limit > 0 && limit < Infinity)) return null;
+      ox = p[0]; oy = p[1]; oz = p[2];
+      let bestDist = Infinity, bestFace = -1, bestX = 0, bestY = 0, bestZ = 0;
+      for (let s = 0; s < 2; s++) {
+        const side = s === 0 ? 1 : -1;
+        dx = n[0] * side; dy = n[1] * side; dz = n[2] * side;
+        invDx = 1 / dx; invDy = 1 / dy; invDz = 1 / dz;
+        const far = bestFace >= 0 ? bestDist : limit;
+        if (intersectBox(rMinX, rMinY, rMinZ, rMaxX, rMaxY, rMaxZ, far)) {
+          if (raycastSubtree(0, far) && hitDist <= limit && hitDist < bestDist) {
+            bestDist = hitDist; bestFace = hitFace; bestX = hitX; bestY = hitY; bestZ = hitZ;
+          }
+        }
+      }
+      if (bestFace < 0) return null;
+      hitPt.set(bestX, bestY, bestZ);
+      const out = normalAt(bestFace, hitPt);
+      return out && faceNormals && dot(out, n) < 0 ? [-out[0], -out[1], -out[2]] : out;
+    };
+  } else {
+    sample = (p, n, texelSize = 0) => {
+      const limit = Math.min(reach, maxTexels < Infinity && texelSize > 0 ? maxTexels * texelSize : Infinity);
+      if (!n || !(limit > 0 && limit < Infinity)) return null;
+      let best = null;
+      for (const side of [1, -1]) {
+        ray.origin.set(p[0], p[1], p[2]); ray.direction.set(n[0] * side, n[1] * side, n[2] * side);
+        const h = bvh.raycastFirst(ray, THREE.DoubleSide, 0, best ? best.distance : limit);
+        if (h && h.distance <= limit && (!best || h.distance < best.distance)) best = h;
+      }
+      if (!best) return null;
+      const out = normalAt(best.faceIndex, best.point);
+      return out && faceNormals && dot(out, n) < 0 ? [-out[0], -out[1], -out[2]] : out;
+    };
+  }
   const method = `ray along the level normal within reach (both ways, nearest hit), else level normal; ${faceNormals ? 'face geometric normal' : 'interpolated shading normal'}`;
   if (!footprint) { sample.method = method; return sample; }
+  const samplePt = [0, 0, 0];
   const averaged = (p, n, texelSize) => {
     if (!(texelSize > 0) || !n) return sample(p, n, texelSize);
     const u = unit(cross(n, Math.abs(n[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0])), v = cross(n, u), sum = [0, 0, 0], step = texelSize / 3;
     let any = false;
-    for (const i of [-1, 0, 1]) for (const j of [-1, 0, 1]) {
-      const h = sample([0, 1, 2].map(a => p[a] + (u[a] * i + v[a] * j) * step), n, texelSize), hn = h && unit(h);
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+      samplePt[0] = p[0] + (u[0] * i + v[0] * j) * step;
+      samplePt[1] = p[1] + (u[1] * i + v[1] * j) * step;
+      samplePt[2] = p[2] + (u[2] * i + v[2] * j) * step;
+      const h = sample(samplePt, n, texelSize), hn = h && unit(h);
       if (!hn) continue;
       const side = dot(hn, n) < 0 ? -1 : 1; for (let a = 0; a < 3; a++) sum[a] += side * hn[a]; any = true;
     }

@@ -3031,6 +3031,143 @@ def mesh_lod_choice(source, faces=None, max_error=None, stat='max', route=None):
     return result
 
 
+_MESH_LOD_PREPARE_LOCK = threading.Lock()
+_MESH_LOD_PREPARE_QUEUE = []
+_MESH_LOD_PREPARE_ACTIVE = None
+_MESH_LOD_PREPARE_COMPLETED = {}
+_MESH_LOD_PREPARE_WORKER_STARTED = False
+_MESH_LOD_PREPARE_RUNNER = None
+
+
+def should_auto_prepare_mesh_lods(sha, glb_bytes, role=None):
+    """True when a stored GLB is a triangle-mesh hero without a .lods.json sidecar."""
+    if role == 'lod-tier' or not isinstance(sha, str) or not _SHA256_HEX.fullmatch(sha):
+        return False
+    if _lod_set_path(sha).exists() or sha in mesh_lod_level_index():
+        return False
+    if not isinstance(glb_bytes, (bytes, bytearray, memoryview)) or len(glb_bytes) < 20:
+        return False
+    raw = bytes(glb_bytes)
+    if raw[:4] != b'glTF' or int.from_bytes(raw[4:8], 'little') != 2:
+        return False
+    json_len = int.from_bytes(raw[12:16], 'little')
+    if json_len <= 0 or 20 + json_len > len(raw) or raw[16:20] != b'JSON':
+        return False
+    try:
+        doc = json.loads(raw[20:20 + json_len].decode('utf-8'))
+    except (UnicodeDecodeError, ValueError):
+        return False
+    if not isinstance(doc, dict):
+        return False
+    extras = doc.get('extras')
+    if isinstance(extras, dict):
+        if 'lodNormalMap' in extras:
+            return False
+        trellis = extras.get('trellis')
+        if isinstance(trellis, dict):
+            if isinstance(trellis.get('lod'), dict):
+                return False
+            prov = trellis.get('provenance')
+            if isinstance(prov, dict):
+                if isinstance(prov.get('lod'), dict):
+                    return False
+                route = str(prov.get('route') or '')
+                if route.startswith(('closed-remesh', 'trellis-simplify', 'trellis-surfels')):
+                    return False
+    meshes = doc.get('meshes')
+    if not isinstance(meshes, list) or not meshes:
+        return False
+    has_tri_position = False
+    for mesh in meshes:
+        if not isinstance(mesh, dict):
+            continue
+        for prim in mesh.get('primitives') or []:
+            if not isinstance(prim, dict):
+                continue
+            if prim.get('mode', 4) != 4:
+                continue
+            attrs = prim.get('attributes')
+            if isinstance(attrs, dict) and 'POSITION' in attrs:
+                has_tri_position = True
+                break
+        if has_tri_position:
+            break
+    return has_tri_position
+
+
+def _default_mesh_lod_prepare_runner(sha, server_port):
+    report_dir = Path(BROWSE_ROOTS['generated-meshes']).resolve() / '.lod-prepare-reports'
+    report_dir.mkdir(parents=True, exist_ok=True)
+    report_path = report_dir / f'{sha[:16]}.json'
+    cmd = [
+        'node',
+        str(ROOT / 'tools' / 'prepare-lod-tiers.mjs'),
+        '--server', f'http://127.0.0.1:{server_port}',
+        '--source', sha,
+        '--report', str(report_path),
+    ]
+    env = {**os.environ, 'PATH': f"/opt/homebrew/bin:{os.environ.get('PATH', '')}"}
+    proc = subprocess.run(cmd, cwd=str(ROOT), env=env, capture_output=True, text=True, timeout=600)
+    return {
+        'status': 'done' if proc.returncode == 0 else 'failed',
+        'returncode': proc.returncode,
+        'reportPath': str(report_path),
+    }
+
+
+def _mesh_lod_prepare_worker():
+    global _MESH_LOD_PREPARE_ACTIVE, _MESH_LOD_PREPARE_WORKER_STARTED
+    while True:
+        with _MESH_LOD_PREPARE_LOCK:
+            if not _MESH_LOD_PREPARE_QUEUE:
+                _MESH_LOD_PREPARE_ACTIVE = None
+                _MESH_LOD_PREPARE_WORKER_STARTED = False
+                return
+            sha, port = _MESH_LOD_PREPARE_QUEUE.pop(0)
+            _MESH_LOD_PREPARE_ACTIVE = sha
+            runner = _MESH_LOD_PREPARE_RUNNER or _default_mesh_lod_prepare_runner
+        try:
+            outcome = runner(sha, port) or {'status': 'done', 'returncode': 0}
+        except Exception as error:
+            outcome = {'status': 'failed', 'error': str(error)}
+        with _MESH_LOD_PREPARE_LOCK:
+            _MESH_LOD_PREPARE_COMPLETED[sha] = {
+                **outcome,
+                'finishedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+            }
+            if _MESH_LOD_PREPARE_ACTIVE == sha:
+                _MESH_LOD_PREPARE_ACTIVE = None
+
+
+def mesh_lod_prepare_queue_state():
+    with _MESH_LOD_PREPARE_LOCK:
+        return {
+            'active': _MESH_LOD_PREPARE_ACTIVE,
+            'queued': [item[0] for item in _MESH_LOD_PREPARE_QUEUE],
+            'completed': dict(_MESH_LOD_PREPARE_COMPLETED),
+        }
+
+
+def enqueue_mesh_lod_prepare(sha, server_port=None):
+    """Queue background 5-tier .lods.json preparation for `sha` if not already active/queued."""
+    global _MESH_LOD_PREPARE_WORKER_STARTED
+    if os.environ.get('KAMINOS_AUTO_PREPARE_LODS', '1').strip().lower() in ('0', 'false', 'no', 'off'):
+        return False
+    port = int(server_port or PORT)
+    with _MESH_LOD_PREPARE_LOCK:
+        if _MESH_LOD_PREPARE_ACTIVE == sha or any(item[0] == sha for item in _MESH_LOD_PREPARE_QUEUE):
+            return False
+        if _lod_set_path(sha).exists():
+            return False
+        _MESH_LOD_PREPARE_QUEUE.append((sha, port))
+        if not _MESH_LOD_PREPARE_WORKER_STARTED:
+            _MESH_LOD_PREPARE_WORKER_STARTED = True
+            t = threading.Thread(target=_mesh_lod_prepare_worker, name='kaminos-lod-prepare', daemon=True)
+            t.start()
+        return True
+
+
+
 def pipeline_manifest_payload():
     document = json.loads(PIPELINE_MANIFEST_PATH.read_text())
     for pipeline in document.get("pipelines", []):
@@ -4238,9 +4375,20 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             query = parse_qs(parsed.query)
             try:
                 faces, max_error = query.get("faces", [None])[0], query.get("maxError", [None])[0]
-                self.send_json(mesh_lod_choice(query.get("source", [None])[0], int(faces) if faces is not None else None,
-                                               float(max_error) if max_error is not None else None, query.get("stat", ["max"])[0],
-                                               query.get("route", [None])[0]))
+                payload = mesh_lod_choice(query.get("source", [None])[0], int(faces) if faces is not None else None,
+                                          float(max_error) if max_error is not None else None, query.get("stat", ["max"])[0],
+                                          query.get("route", [None])[0])
+                if not payload.get("levels"):
+                    src_sha = payload.get("source")
+                    root_dir = Path(BROWSE_ROOTS["generated-meshes"]).resolve()
+                    glb_path = _generated_mesh_path_for_sha(root_dir, src_sha) if src_sha else None
+                    if glb_path is not None and glb_path.is_file():
+                        try:
+                            if should_auto_prepare_mesh_lods(src_sha, glb_path.read_bytes()):
+                                enqueue_mesh_lod_prepare(src_sha, server_port=self.server.server_address[1])
+                        except OSError:
+                            pass
+                self.send_json(payload)
             except MeshLodRecordError as error:
                 self.send_json({"error": str(error), "phase": "mesh-lods-record"}, 500)
             except ValueError as error:
@@ -4320,7 +4468,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         elif parsed.path == "/api/mesh-lods":
             self.handle_mesh_lods_register()
         elif parsed.path == "/api/ingest-mesh":
-            self.handle_ingest_mesh()
+            self.handle_ingest_mesh(parse_qs(parsed.query))
         elif parsed.path == "/api/scene-library-import":
             self.handle_scene_library_import()
         elif parsed.path == "/api/save-scene":
@@ -5181,8 +5329,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         except OSError as error:
             self.send_json({'error': str(error), 'phase': 'origin-persistence'}, 500)
 
-    def handle_ingest_mesh(self):
+    def handle_ingest_mesh(self, params=None):
         """Persist a generated GLB by content hash for the existing scene loader."""
+        role = (params or {}).get("role", [None])[0]
         try:
             length = int(self.headers.get("Content-Length", 0))
             if length < 20:
@@ -5225,6 +5374,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         except OSError as error:
             self.send_json({"error": str(error), "phase": "mesh-persistence"}, 500)
             return
+        if should_auto_prepare_mesh_lods(digest, content, role=role):
+            enqueue_mesh_lod_prepare(digest, server_port=self.server.server_address[1])
         self.send_json({"schema": "kaminos.generated-mesh.v0", "sha256": digest,
                         "bytes": length, "source": f"/api/read?root=generated-meshes&path={digest}.glb"})
 
@@ -5677,6 +5828,20 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         # For images, serve directly
         if ext in (".png", ".jpg", ".jpeg", ".webp", ".exr", ".glb", ".gltf", ".ply", ".spz", ".f32", ".u32"):
             body = target.read_bytes()
+            immutable_sha = None
+            if root_name == "generated-meshes" and ext == ".glb" and re.fullmatch(r"[a-f0-9]{64}\.glb", sub_path):
+                candidate_sha = sub_path[:-4]
+                if hashlib.sha256(body).hexdigest() == candidate_sha:
+                    immutable_sha = candidate_sha
+            if immutable_sha is not None:
+                etag = f'"{immutable_sha}"'
+                self._custom_cache_control = "public, max-age=31536000, immutable"
+                if_none_match = self.headers.get("If-None-Match")
+                if if_none_match and (if_none_match.strip() == "*" or etag in [t.strip() for t in if_none_match.split(",")]):
+                    self.send_response(304)
+                    self.send_header("ETag", etag)
+                    self.end_headers()
+                    return
             self.send_response(200)
             content_types = {
                 ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
@@ -5686,6 +5851,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             }
             self.send_header("Content-Type", content_types.get(ext, "application/octet-stream"))
             self.send_header("Content-Length", str(len(body)))
+            if immutable_sha is not None:
+                self.send_header("ETag", f'"{immutable_sha}"')
 
             self.end_headers()
             self.wfile.write(body)
@@ -5846,9 +6013,14 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         # Code/API freshness is mandatory. Bundled HDR bytes may be retained,
         # but revalidate on every use so a newer asset at the same URL wins.
         # SimpleHTTPRequestHandler supplies Last-Modified and conditional 304s.
-        path = urlparse(self.path).path
-        bundled_hdr = path.startswith("/assets/hdr/") and path.endswith(".hdr")
-        self.send_header("Cache-Control", "public, no-cache" if bundled_hdr else "no-store")
+        custom_cc = getattr(self, "_custom_cache_control", None)
+        if custom_cc:
+            self._custom_cache_control = None
+            self.send_header("Cache-Control", custom_cc)
+        else:
+            path = urlparse(self.path).path
+            bundled_hdr = path.startswith("/assets/hdr/") and path.endswith(".hdr")
+            self.send_header("Cache-Control", "public, no-cache" if bundled_hdr else "no-store")
         super().end_headers()
 
     def log_message(self, format, *args):
