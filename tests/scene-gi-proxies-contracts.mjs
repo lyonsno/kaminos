@@ -294,3 +294,46 @@ test('a cold shadow opt-out exposes catalog retrieval failure without loading ge
   assert.equal(registry.get(root).failure, 'catalog unavailable');
   assert.equal(registry.get(root).proxyRoot, null);
 });
+
+test('the actual page source refresh publishes new levels to shadow opt-outs and retains them through a failed refresh', async () => {
+  const vm = await import('node:vm');
+  const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  let levels = [TIERS[2]], available = true, releases = 0;
+  const {root} = sceneObject(heroSource);
+  const registry = createGiProxyRegistry({THREE,
+    fetchJson: async () => {
+      if (!available) throw Error('catalog unavailable');
+      return {source: HERO, levels, choice: levels[0]};
+    },
+    fetchBytes: async () => { throw Error('disabled shadows must not load proxy geometry'); },
+    parseGlb: async () => { throw Error('disabled shadows must not parse proxy geometry'); },
+  });
+  registry.onRelease(() => releases++);
+  const entry = {id: 'refresh-kiln', type: 'glb', source: heroSource, object: root,
+    giProxy: {enabled: false, selection: {faces: 1000}}, label: 'Kiln'};
+  const context = vm.createContext({Promise, workingScene: {objects: [entry]}, sceneGiProxies: registry,
+    autoPreparedLodSources: new Set(), sceneColliderCollection: null, sceneBurning: null,
+    syncSceneDataInspector() {}, prepareSceneNavigationRoot() {},
+    window: {kaminosFireLightingSettings: {sync() {}}, _kaminosDirty() {}},
+  });
+  const refreshStart = html.indexOf('const refreshSceneObjectsForLodSource = async source => {');
+  const refreshEnd = html.indexOf('\nwindow.__kaminosRefreshLodSource', refreshStart);
+  const applyStart = html.indexOf('function applyGiProxySetting(entry)');
+  const applyEnd = html.indexOf('\nfunction writeObjectGiProxy(', applyStart);
+  assert.ok(refreshStart >= 0 && refreshEnd > refreshStart && applyStart >= 0 && applyEnd > applyStart);
+  vm.runInContext(html.slice(refreshStart, refreshEnd) + '\n' + html.slice(applyStart, applyEnd) +
+    '\nglobalThis.refresh = refreshSceneObjectsForLodSource;', context);
+  await context.applyGiProxySetting(entry);
+  assert.deepEqual(registry.get(root).levels.map(level => level.faces), [500]);
+  levels = [TIERS[0], TIERS[2]];
+  await context.refresh(HERO);
+  assert.deepEqual(registry.get(root).levels.map(level => level.faces), [5000, 500], 'completed preparation must publish its new ladder');
+  available = false;
+  await context.refresh(HERO);
+  assert.deepEqual(registry.get(root).levels.map(level => level.faces), [5000, 500], 'failed refresh preserves the last usable catalog');
+  assert.equal(registry.get(root).state, 'disabled');
+  assert.equal(registry.get(root).catalogFailure, 'catalog unavailable');
+  assert.equal(registry.get(root).proxyRoot, null);
+  assert.equal(releases, 0, 'refresh never releases resident beauty consumers');
+  registry.clear();
+});
