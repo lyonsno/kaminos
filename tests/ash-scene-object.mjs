@@ -546,3 +546,22 @@ test('ash source and field inspectors ignore mid-typing empty/decimal strings, c
  assert.equal(ashSettings.rate,0.008,'clearing field rate input mid-typing must not overwrite rate with 0 or throw');
  assert.equal(fieldError,null);
 });
+
+test('ash collision retains GLB node coordinates when display rungs bake their transforms',async()=>{
+ const source=new Group(),hero=new Mesh(new BoxGeometry(1,2,1,50,50,50),new MeshBasicMaterial());source.add(hero);
+ const sha='e'.repeat(64);let originalGeometry;
+ const controller=createSceneBeautyLodController({THREE,scene:new Group(),giProxies:{get:()=>({state:'resolved',levels:kilnLevels}),whenIdle:async()=>{}},
+  fetchBytes:async()=>new Uint8Array([1]),digest:async()=>sha,
+  parseGlb:async()=>{const r=new Group(),m=new Mesh(new BoxGeometry(1,2,3),new MeshBasicMaterial());m.rotation.x=-Math.PI/2;r.add(m);originalGeometry=m.geometry.clone();return r;}});
+ try{
+  await controller.prepareCollision([source],{cellSize:.02});
+  const collision=controller.resolveCollisionRung(source,{cellSize:.02}).root;
+  const cm=collision.children[0],display=controller.getResidentRung(source,sha).root.children[0];
+  assert.deepEqual(Array.from(cm.geometry.attributes.position.array),Array.from(originalGeometry.attributes.position.array),'collision preserves raw GLB vertex identity');
+  assert.ok(Math.abs(cm.rotation.x+Math.PI/2)<1e-12,'collision retains original node rotation');
+  assert.ok(Math.abs(display.rotation.x)<1e-12,'display continues to bake rotation');
+  assert.notEqual(cm.geometry,display.geometry,'display warps cannot mutate checkpoint collision geometry');
+  const records=createAshCollisionRecords(new Group(),()=>[{id:'kiln',type:'glb',object:source}],{getCellSize:()=>.02,resolveCollisionRung:(r,o)=>controller.resolveCollisionRung(r,o)})();
+  assert.equal(records.length,1);assert.ok(Math.abs(records[0].object.matrix.elements[6]+1)<1e-12,'raw node transform reaches field collision');
+ }finally{controller.dispose();originalGeometry?.dispose();hero.geometry.dispose();hero.material.dispose();}
+});

@@ -123,5 +123,21 @@ resident.destroy();
   dispatches.length = 0;
   assert.equal(producer.encode(fakeEncoder), true);
   assert.ok(dispatches.some(d => d.label === 'scene solid init'), 'clearing boundaryCap must re-run init/connect/fill');
+  // The live thermal producer changes worldToMaterial with pose while its
+  // generation:steps revision stays fixed (live-log-heat-gpu.mjs).
+  const material={objectId:'kiln',device:fakeDevice,texture:matTex,matrix:new THREE.Matrix4().elements.slice(),revision:'0:10'};
+  const beforeMove=producer.update([{id:'kiln',object:boxMesh}],domain,{grid:16,gridHeight:16},{materialMasks:[material]});
+  producer.encode(fakeEncoder);
+  boxMesh.position.x=1;material.matrix[12]=-1;
+  producer.update([{id:'kiln',object:boxMesh}],domain,{grid:16,gridHeight:16},{materialMasks:[material]});
+  let moved=writes.filter(w=>w.label==='scene solid remaining material').at(-1);
+  assert.equal(new Float32Array(moved.bytes.buffer,moved.bytes.byteOffset,32)[12],-1,'moved pose uploads material transform at unchanged thermal revision');
+  producer.encode(fakeEncoder);
+  material.matrix[12]=-2;
+  const matrixOnly=producer.update([{id:'kiln',object:boxMesh}],domain,{grid:16,gridHeight:16},{materialMasks:[material]});
+  assert.notEqual(matrixOnly.key,beforeMove.key,'mask matrix participates in producer identity');
+  assert.equal(producer.encode(fakeEncoder),true,'mask-only transform change recomposes collision');
+  moved=writes.filter(w=>w.label==='scene solid remaining material').at(-1);
+  assert.equal(new Float32Array(moved.bytes.buffer,moved.bytes.byteOffset,32)[12],-2,'mutable input array is compared against retained snapshot');
   producer.destroy();
 }

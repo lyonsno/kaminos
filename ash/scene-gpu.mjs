@@ -88,8 +88,9 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
  const destroy=m=>{m.texture?.destroy();m.coarseTexture?.destroy();m.uniform.destroy();};
  const maxBytes=Math.min(device.limits.maxStorageBufferBindingSize,device.limits.maxBufferSize);
  const maxCells=Math.min(Math.floor((maxBytes-4)/4),device.limits.maxComputeWorkgroupsPerDimension*64);
- const maxGrid=Math.min(128,device.limits.maxTextureDimension3D,Math.floor(Math.cbrt(Math.max(0,maxCells))));
- function geometry(mesh,prev=null){
+ const capacityGrid=Math.min(device.limits.maxTextureDimension3D,Math.floor(Math.cbrt(Math.max(0,maxCells))));
+ const maxGrid=Math.min(128,capacityGrid);
+ function geometry(mesh,prev=null,checkpoint=null){
   const g=mesh.geometry,a=g?.getAttribute('position'),i=g?.getIndex();
   if(!a)throw Error(`Ash collision requires triangles: ${mesh.name}`);
   if(mesh.isSkinnedMesh||mesh.isInstancedMesh||mesh.morphTargetInfluences?.some(v=>v!==0))throw Error(`Ash collision requires evaluated rigid geometry: ${mesh.name}`);
@@ -114,14 +115,21 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
   }
   const fullBounds=cached.bounds,fullSize=fullBounds.getSize(new Vector3()),fullSpan=Math.max(...fullSize.toArray());
   if(!(fullSpan>0))throw Error(`Ash collision has zero extent: ${mesh.name}`);
-  if(prev&&prev.revision===cached.revision&&prev.matrix&&mesh.matrixWorld.elements.every((v,i)=>Math.abs(v-prev.matrix[i])<1e-10))return prev;
+  // A checkpoint names its original full-mesh sampling grid. Recreate that
+  // grid only for matching content and pose; strict restore still compares
+  // every identity row before admitting any saved material.
+  const prefix=[cached.digest,a.count,i?.count??0].join(':')+':';
+  const suffix=typeof checkpoint?.geometry==='string'&&checkpoint.geometry.startsWith(prefix)?checkpoint.geometry.slice(prefix.length):'';
+  const savedGrid=/^\d+$/.test(suffix)?Number(suffix):null;
+  const samplingGrid=savedGrid>4&&savedGrid<=capacityGrid&&checkpoint.matrix?.length===16&&mesh.matrixWorld.elements.every((v,i)=>v===checkpoint.matrix[i])?savedGrid:null;
+  if(prev&&prev.samplingGrid===samplingGrid&&prev.revision===cached.revision&&prev.matrix&&mesh.matrixWorld.elements.every((v,i)=>Math.abs(v-prev.matrix[i])<1e-10))return prev;
   const rawGrid=Math.max(4,Math.ceil(fullSpan*largest/p.cellSize-1e-8)+4);
   if(maxGrid<4)throw Error(`Ash shape exceeds effective GPU capacity: ${mesh.name} (${rawGrid} cubed)`);
-  if(rawGrid<=maxGrid){
-   const grid=rawGrid<=32?rawGrid:Math.min(maxGrid,Math.ceil(rawGrid/32)*32),step=fullSpan/(grid-4);
+  if(samplingGrid!==null||rawGrid<=maxGrid){
+   const grid=samplingGrid??(rawGrid<=32?rawGrid:Math.min(maxGrid,Math.ceil(rawGrid/32)*32)),step=fullSpan/(grid-4);
    const center=fullBounds.getCenter(new Vector3()),extent=grid*step,origin=center.clone().addScalar(-extent/2);
    const key=[g.uuid,cached.revision,grid].join(':'),identity=[cached.digest,a.count,i?.count??0,grid].join(':');
-   return {key,identity,revision:cached.revision,grid,step,origin,center,bounds:fullBounds,fullBounds,clipped:false,coarseKey:null};
+   return {key,identity,samplingGrid,revision:cached.revision,grid,step,origin,center,bounds:fullBounds,fullBounds,clipped:false,coarseKey:null};
   }
   const inv=new Matrix4().copy(mesh.matrixWorld).invert();
   const localBox=pad=>{const w=new Box3(new Vector3(p.origin[0]-pad,p.origin[1]-pad,p.origin[2]-pad),new Vector3(p.origin[0]+p.dims[0]*p.cellSize+pad,p.origin[1]+p.dims[1]*p.cellSize+pad,p.origin[2]+p.dims[2]*p.cellSize+pad)).applyMatrix4(inv);return fullBounds.clone().intersect(w);};
@@ -140,7 +148,7 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
   const coarseKey=isClipped?[g.uuid,cached.revision,coarseGrid].join(':'):null;
   const boxTag=isClipped?[...activeBounds.min.toArray(),...activeBounds.max.toArray()].map(v=>v.toFixed(6)).join(','):'full';
   const key=[g.uuid,cached.revision,grid,boxTag].join(':'),identity=[cached.digest,a.count,i?.count??0,grid,boxTag].join(':');
-  return {key,identity,revision:cached.revision,grid,step,origin,center,bounds:activeBounds,fullBounds,clipped:isClipped,coarseKey,coarseGrid,coarseStep,coarseCenter,coarseOrigin};
+  return {key,identity,samplingGrid,revision:cached.revision,grid,step,origin,center,bounds:activeBounds,fullBounds,clipped:isClipped,coarseKey,coarseGrid,coarseStep,coarseCenter,coarseOrigin};
  }
  function build(mesh,spec,prev=null){
   if(spec.analyticBurner){
@@ -172,7 +180,8 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
    builds++;return {...spec,texture,coarseTexture,uniform,group:group(texture,uniform),box:null,matrix:null,bytes:bytes+coarseBytes+128};
   }catch(error){texture?.destroy();if(!reusedCoarse)coarseTexture?.destroy();uniform?.destroy();throw error;}finally{coarseProducer?.destroy();producer?.destroy();}
  }
- function update(records){
+ function update(records,{checkpointIdentity=null}={}){
+  const checkpoints=new Map((Array.isArray(checkpointIdentity)?checkpointIdentity:[]).map(row=>[row.key,row]));
   if(disposed)throw Error('Ash scene collision disposed');
   const meshes=new Map();
   for(const {id,object,key:objectKey=id} of records){
@@ -187,7 +196,7 @@ export function createAshSceneSolids({device,layout:p,collision,headers}){
   const dirty=pendingDirty,include=box=>{for(const i of sceneTiles(p,box))dirty.add(i);};
   for(const [key,m] of cache)if(!meshes.has(key)){include(m.box);destroy(m);cache.delete(key);}
   for(const [key,{mesh,id,objectKey}] of meshes){
-   let m=cache.get(key);const spec=geometry(mesh,m);
+   let m=cache.get(key);const spec=geometry(mesh,m,checkpoints.get(objectKey));
    if(spec.empty){if(m){include(m.box);destroy(m);cache.delete(key);}continue;}
    const matrix=mesh.matrixWorld.toArray();
    const worldBox=spec.bounds.clone().expandByScalar(spec.step).applyMatrix4(mesh.matrixWorld),boxNow={min:worldBox.min.toArray(),max:worldBox.max.toArray()};
