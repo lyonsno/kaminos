@@ -1,6 +1,6 @@
-import {BufferGeometry,BufferAttribute,Box3,Vector3,Sphere,DataTexture,NearestFilter} from '../../lib/three.core.js';
+import {BufferGeometry,BufferAttribute,Box3,Vector3,Sphere,DataTexture,NearestFilter,DoubleSide,BackSide} from '../../lib/three.core.js';
 import {StorageBufferAttribute} from '../../lib/three.webgpu.js';
-import {storage,Fn,If,wgslFn,instanceIndex,uint,float,uniform,mix,attribute as tslAttribute,positionLocal,normalLocal,positionViewDirection,transformNormalToView} from '../../lib/three.tsl.js';
+import {storage,Fn,If,wgslFn,instanceIndex,uint,float,uniform,mix,attribute as tslAttribute,positionLocal,normalLocal,positionViewDirection,transformNormalToView,faceDirection} from '../../lib/three.tsl.js';
 import {terrainConfig,makeRidges,ROUTE} from './model.mjs';
 import {detailLattice,baseMaskTransform} from './lod.mjs';
 import {mesoAuthoringConfig,VIEW_MODES} from './formation.mjs';
@@ -650,8 +650,12 @@ export function createTerrainGPU(geometry,input={}){
   material.roughness=.96;
   material.specularIntensity=.16;
   const macro=tslAttribute('hillMacroNormal','vec4'),surface=tslAttribute('hillSurface','vec4');
-  const detailNormal=fragRockNormal({n:normalLocal,p:positionLocal,exposed:tslAttribute('color','vec4').w,meso:geoMeso,crag:mesoCrag,cobble:mesoCobble,seed:geoSeed,strike:geoStrike,macroNy:macro.y,viewMode:viewModeUniform,useFormed});
-  material.normalNode=fragSafeNormal({nv:transformNormalToView(detailNormal),vd:positionViewDirection});
+  const detailNormal=fragRockNormal({n:normalLocal.normalize(),p:positionLocal,exposed:tslAttribute('color','vec4').w,meso:geoMeso,crag:mesoCrag,cobble:mesoCobble,seed:geoSeed,strike:geoStrike,macroNy:macro.y,viewMode:viewModeUniform,useFormed});
+  const viewNormal=transformNormalToView(detailNormal);
+  // Match the pinned renderer's side rule; faceDirection also exists in the
+  // older Node-side Three used by the lightweight experiment tests.
+  const facingNormal=material.side===DoubleSide?viewNormal.mul(faceDirection):material.side===BackSide?viewNormal.mul(-1):viewNormal;
+  material.normalNode=fragSafeNormal({nv:facingNormal,vd:positionViewDirection});
   material.colorNode=fragFormedColor({vColor:tslAttribute('color','vec4'),x:positionLocal.x,y:surface.x.add(surface.y),z:positionLocal.z,nx:macro.x,ny:macro.y,nz:macro.z,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,ledge:mesoLedge,crag:mesoCrag,cobble:mesoCobble,rill:mesoRill,viewMode:viewModeUniform,useFormed});
   return material;
  };
