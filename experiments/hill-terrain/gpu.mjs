@@ -284,8 +284,10 @@ const fragFormedColor=wgslFn(`fn hill_frag_color(vColor:vec4<f32>,x:f32,y:f32,z:
  let l1=hill_ledge(phase*1.618034+.14*nWarp);
  let l2=hill_ledge(phase*4.236068-.10*nWarp);
  let talusBand=clamp((1.-exposed)*smoothstep(.03,.24,steep)+smoothstep(.15,.58,l0.x*bedWeight)*smoothstep(.12,.48,steep)*(1.-smoothstep(.58,.85,steep)),0.,1.);
- let grain0=hill_fbm3(vec3<f32>(rx*28.,y*38.,rz*28.))*cGrain;
- let grain1=hill_fbm3(vec3<f32>(rx*110.,y*145.,rz*110.))*cGrain;
+ // Retain close grain while filtering wavelengths smaller than a pixel.
+ let pixelSpan=max(fwidth(rx),max(fwidth(y),fwidth(rz)));
+ let grain0=hill_fbm3(vec3<f32>(rx*28.,y*38.,rz*28.))*cGrain*(1.-smoothstep(.35,.85,pixelSpan*38.));
+ let grain1=hill_fbm3(vec3<f32>(rx*110.,y*145.,rz*110.))*cGrain*(1.-smoothstep(.35,.85,pixelSpan*145.));
  let aperiodicBand=.5+.32*sin(phase*6.2831853)+.18*sin(phase*3.883222+.9);
  let ledgeMix=clamp(.5+(.42*l0.x+.24*l1.x+.14*l2.x*cGrain)*bedWeight,0.,1.);
  let stratMix=clamp(mix(.5+(aperiodicBand-.5)*bedWeight,ledgeMix,.68*sStyle)+eCrag*(.16*crag0.x+.11*crag1.x+.07*crag2.x)+.07*grain0+.04*grain1,0.,1.);
@@ -373,7 +375,7 @@ const basePosKernel=wgslFn(`fn hill_base_pos(v:u32,n:u32,x:f32,y:f32,z:f32,fx:f3
 
 // Camera-centered height relief on the fixed macro triangles. Smooth source
 // gradients guide material placement; they do not replace the macro geometry.
-const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f32,length:f32,fx:f32,fz:f32,fr:f32,filterSpacing:f32,gridX:f32,gridZ:f32,stepX:f32,stepZ:f32,camX:f32,camY:f32,camZ:f32,tilt:f32,strike:f32,fold:f32,thickness:f32,seed:f32,stepStyle:f32,meso:f32,ledge:f32,crag:f32,cobble:f32,rill:f32,viewMode:f32,useFormed:f32,state:ptr<storage,array<vec4<f32>>,read_write>,metaBuf:ptr<storage,array<vec4<f32>>,read_write>)->vec4<f32>{
+const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f32,length:f32,fx:f32,fz:f32,fr:f32,filterSpacing:f32,gridX:f32,gridZ:f32,stepX:f32,stepZ:f32,camX:f32,camY:f32,camZ:f32,tilt:f32,strike:f32,fold:f32,thickness:f32,seed:f32,stepStyle:f32,meso:f32,ledge:f32,crag:f32,cobble:f32,rill:f32,viewMode:f32,useFormed:f32,state:ptr<storage,array<vec4<f32>>,read_write>,macroNormals:ptr<storage,array<vec4<f32>>,read_write>,metaBuf:ptr<storage,array<vec4<f32>>,read_write>)->vec4<f32>{
  let xi=v%zn;let zi=v/zn;
  // Dyadic subdivision preserves every coarse triangle edge and diagonal.
  // Re-centering translates an integer number of cells; shared vertices stay put.
@@ -465,12 +467,35 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
   let rawRockVert=ledgeStep+buttress;
   let rockVert=mix(rawRockVert,max(0.,rawRockVert),inCollar);
   let ledgeUp=meso*wPatch*cliffMask*rockVert;
+  // Resolve bed and joint depth on the heightfield. Mapping a normal-space
+  // depth into height gives steep faces useful relief without folding the
+  // horizontal parameterization. World coordinates anchor neighboring faces.
+  let sourceNormal=normalize(hill_sample_field(wx,wz,n,width,length,macroNormals).xyz);
+  let smoothSlope=sqrt(sourceNormal.x*sourceNormal.x+sourceNormal.z*sourceNormal.z)/max(.05,sourceNormal.y);
+  let reliefBedGate=smoothstep(ds*5.,ds*9.,thickness/max(.35,smoothSlope));
+  let jointGate=smoothstep(ds*5.,ds*9.,.34);
+  let jointA=rx*2.6+rz*.57+.65*nWarp+seed*.13;
+  let jointB=rz*3.1-rx*.71+.48*nWarp+seed*.29;
+  let jointWidth=.10;
+  let cleftA=1.-smoothstep(jointWidth,jointWidth+.20,abs(sin(jointA*3.14159265)));
+  let cleftB=1.-smoothstep(jointWidth,jointWidth+.18,abs(sin(jointB*3.14159265)));
+  let cleft=jointGate*max(cleftA,.65*cleftB);
+  let hardBed=smoothstep(-.25,.45,sin(a)+.24*sin(a*.618034+.9));
+  let shelfDepth=eLedge*thickness*.32*reliefBedGate*bedWeight*(hardBed-.42);
+  let fractureDepth=eCrag*(.018*jointGate*hill_fbm3(vec3<f32>(rx*1.2,bed*.75,rz*1.2+seed*.19))-.025*cleft);
+  let soilSeal=1.-smoothstep(.025,.085,rawSoil);
+  let reliefMask=meso*wPatch*(1.-inCollar)*smoothstep(.35,1.5,smoothSlope)*exp(-rawSoil/.022)*soilSeal;
+  // Soil closes the relief continuously. Shallow ledges retain the existing
+  // single-valued surface; caves and deep undercuts need another representation.
+  let reliefScale=.035;
+  let relief=reliefScale*tanh(reliefMask*(shelfDepth+fractureDepth)/reliefScale);
+  let faceRelief=relief/max(.25,sourceNormal.y);
   // Smooth C1 paraboloid-domed 3D Voronoi talus boulders & cobbles (zero conical tips)
   let gCob0=smoothstep(ds*5.2,ds*8.8,.28);
   let gCob1=smoothstep(ds*5.2,ds*8.8,.10);
   let gCob2=smoothstep(ds*5.2,ds*8.8,.042);
   let benchTread=clamp(.5+.55*sLedge0,0.,1.)*smoothstep(.20,2.4,rawSlope)*(1.-smoothstep(2.0,3.6,rawSlope));
-  let screeZone=clamp(smoothstep(.001,.022,rawSoil)*smoothstep(.05,1.45,rawSlope)*(1.-smoothstep(1.2,2.4,rawSlope))+.55*benchTread,0.,1.);
+  let screeZone=clamp(smoothstep(.001,.022,rawSoil)*(1.-smoothstep(.025,.085,rawSoil))*smoothstep(.05,1.45,rawSlope)*(1.-smoothstep(1.2,2.4,rawSlope))+.55*benchTread*exposed,0.,1.);
   let c0=hill_vor2(vec2<f32>(wx*3.5+.08*nWarp,wz*3.5-.08*nWarp),seed+5.3);
   let c1=hill_vor2(vec2<f32>(wx*9.8+.04*rib1,wz*9.8-.04*rib1),seed+23.9);
   let c2=hill_vor2(vec2<f32>(wx*24.+.02*rib2,wz*24.-.02*rib2),seed+61.7);
@@ -488,13 +513,13 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
   // Outcrop & gully rill carving: branched erosional gullies on hillslopes/aprons + emergent tor outcrops
   let gullyWave=gCrag1*hill_fbm3(vec3<f32>(wx*4.2+.25*nWarp,bed*.8,wz*4.2-.25*nWarp))+.45*gCrag2*hill_fbm3(vec3<f32>(wx*11.,bed*1.8,wz*11.));
   let washChannel=meso*eRill*wPatch*(1.-screeZone)*(1.-inCollar)*(.018*smoothstep(.08,.65,rawSlope)*gullyWave+.005*(1.-exposed)*gullyWave);
-  let totalDisp=ledgeUp+cobbleH+benchOutcrop+washChannel;
+  let totalDisp=ledgeUp+faceRelief+cobbleH+benchOutcrop+washChannel;
   dispOut=abs(totalDisp)+cobbleH*1.2;
   py=py+totalDisp;
  }
  (*metaBuf)[v]=vec4<f32>(py-rawSoil,max(0.,rawSoil-cobbleOut*2.2),dispOut,rawSlope);
  return vec4<f32>(px,py,pz,1.);
-}`,[zoomCellKernel,geoFbm3,geoLedgeProfile,geoRockCrag,geoVoronoi2]);
+}`,[zoomCellKernel,geoFbm3,geoLedgeProfile,geoRockCrag,geoVoronoi2,sampleTriangleField]);
 
 const zoomNormKernel=wgslFn(`fn hill_zoom_norm(v:u32,zn:u32,tilt:f32,strike:f32,fold:f32,thickness:f32,seed:f32,stepStyle:f32,meso:f32,useFormed:f32,posBuf:ptr<storage,array<vec4<f32>>,read_write>,metaBuf:ptr<storage,array<vec4<f32>>,read_write>)->vec4<f32>{
  let xi=v%zn;let zi=v/zn;
@@ -580,7 +605,7 @@ export function createTerrainGPU(geometry,input={}){
  })().compute(count));
  const zoomPosPublisher=Fn(()=>{
   const v=instanceIndex;
-  zoomPosNode.element(v).assign(zoomSurfaceKernel({v,zn:uint(zoomN),n:uint(n),width:float(config.width),length:float(config.length),fx:focusX,fz:focusZ,fr:focusRadius,filterSpacing,gridX,gridZ,stepX,stepZ,camX,camY,camZ,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,ledge:mesoLedge,crag:mesoCrag,cobble:mesoCobble,rill:mesoRill,viewMode:viewModeUniform,useFormed,state:displayState,metaBuf:zoomMetaNode}));
+  zoomPosNode.element(v).assign(zoomSurfaceKernel({v,zn:uint(zoomN),n:uint(n),width:float(config.width),length:float(config.length),fx:focusX,fz:focusZ,fr:focusRadius,filterSpacing,gridX,gridZ,stepX,stepZ,camX,camY,camZ,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,ledge:mesoLedge,crag:mesoCrag,cobble:mesoCobble,rill:mesoRill,viewMode:viewModeUniform,useFormed,state:displayState,macroNormals:normalNode,metaBuf:zoomMetaNode}));
  })().compute(zoomCount);
  const zoomNormPublisher=Fn(()=>{
   const v=instanceIndex,norm=zoomNormKernel({v,zn:uint(zoomN),tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,useFormed,posBuf:zoomPosNode,metaBuf:zoomMetaNode}),p=zoomPosNode.element(v);
