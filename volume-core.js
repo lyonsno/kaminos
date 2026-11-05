@@ -14434,8 +14434,7 @@ export function createKaminosVolumePrototype({
       distributedPipelines.clear();
       distributedShaders.clear();
       fineVelocityPipelines.clear();
-      materialOnlyPipeline = null;
-      materialOnlyPredictPipeline = null;
+      simulationVariants.clear();
       separatedPressureProjectPipeline = null;
       irradianceLatticeBindGroupLayout = null;
       irradiancePipelineLayout = null;
