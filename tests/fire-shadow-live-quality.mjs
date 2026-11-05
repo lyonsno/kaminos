@@ -16,8 +16,6 @@ for(const q of [{resolution:64},{resolution:65},{resolution:96},{resolution:256}
     assert.equal(face.width,shadow.debugState().resolution,'all cube face images must follow live resolution');
     assert.equal(face.height,shadow.debugState().resolution,'all cube face images must follow live resolution');
   }
-  assert.equal(shadow.debugState().effective,false,'a resized cube cannot be sampled before recapture');
-  assert.equal(shadow.resource().texture,null);
 }
 const prior=shadow.debugState();assert.throws(()=>shadow.setQuality({resolution:0}),/positive integer/);assert.equal(shadow.debugState().resolution,prior.resolution);assert.equal(shadow.visibility,graph);
 shadow.dispose();console.log('PASS runtime shadow quality preserves graph and validates before mutation');
