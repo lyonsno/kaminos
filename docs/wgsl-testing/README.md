@@ -65,9 +65,12 @@ pipeline or scene witness when those are the behavior being tested.
 
 ## Commit enforcement
 
-The shared shop pre-commit hook examines staged JavaScript against staged shader
-sources. New assertions on production WGSL text are rejected with the file and
-line plus the replacement guide. The check follows imported shader names,
+Automation status, November 5: the shared commit-blocker candidate is under
+review and has not been activated. The testing rule above applies now.
+
+The candidate examines staged JavaScript against staged shader sources and
+rejects new assertions on production WGSL text with the file and line plus the
+replacement guide. The check follows imported shader names,
 source reads, aliases and extracted text through common string operations.
 It covers Node assertions and standard `expect(...).toMatch`/`toContain` forms.
 It does not evaluate repository code.
