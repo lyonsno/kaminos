@@ -31,9 +31,9 @@ export function installAshInspector({document,anchor,selected,read,edit,regrid,c
  const residency=document.createElement('p');residency.className='hint';residency.dataset.ashResidency='';
  inspect.addEventListener('click',()=>act(async()=>{const result=await diagnostics(selected());const a=result.allocation;residency.textContent=a?`${a.resident}/${a.capacity} fine bricks · ${a.pinned} retaining deposited history · ${a.unmet} unmet requests. Snapshot on request; no live CPU readback.`:'This field uses a fixed lattice.';}));
  const showRow=document.createElement('label');showRow.className='slider-row';showRow.textContent='Show fine bricks';const show=document.createElement('input');show.type='checkbox';show.dataset.ashShowRefinement='';show.addEventListener('change',()=>showRefinement(selected(),show.checked));showRow.append(show);
- panel.append(showRow,inspect,residency);
  const cellInput=panel.querySelector('[data-ash-cell]');
  const refinementControls=installAshRefinementControls({document,panel,anchor:cellInput});
+ refinementControls.element.append(showRow,inspect,residency);
  const dimInputs={cellSize:cellInput};
  for(const [key,label]of [['width','Width'],['depth','Depth'],['height','Height']]){
   const row=document.createElement('label');row.className='slider-row';row.textContent=label;

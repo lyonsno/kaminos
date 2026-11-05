@@ -48,7 +48,7 @@ export function installAshRefinementControls({document,panel,anchor}) {
     regions.push(region);active=regions.length-1;display();
   });
   remove.addEventListener('click',()=>{regions.splice(active,1);active=Math.max(0,active-1);display();});
-  return {
+  return {element:group,
     sync(nextId,nextSettings) {
       settings=nextSettings;const nextVersion=JSON.stringify(settings.refinement??null);
       if(id===nextId&&version===nextVersion)return;
