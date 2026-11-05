@@ -35,6 +35,8 @@ npm test -- --only tests/shader-herder-resolution.mjs,tests/shader-herder-bridge
 
 The bridge requires an Apple hardware adapter. When a macOS Seatbelt sandbox specifically blocks Metal shared-event creation, it can run Dawn's null backend for compilation and pipeline validation, with a warning that numerical execution was unavailable. Other adapter or validation failures remain errors. `shader-herder-evidence:` records in each test's log identify the effective package entry, adapter, route and evidence authority. They distinguish `hardware` from `compiler-only`.
 
+Fallback requires nonblank WGSL and at least one declared compute `entryPoint` whose pipeline passes validation. Omitted, blank or module-only inputs fail instead of skipping the numerical callback and certifying no work. Compiler-only records include counts of validated modules and compute pipelines. Explicit null/software options cannot invoke the hardware callback or receive hardware authority, including under strict mode. Adapter architecture is optional descriptive metadata; acceptance checks vendor, fallback status and numerical behavior.
+
 Require hardware numerical execution for the production checks with:
 
 ```sh

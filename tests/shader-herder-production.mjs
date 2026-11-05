@@ -38,7 +38,9 @@ test('production immersed source has full centre weight, antialiased slab edge a
       'let halfThickness = 0.0;');
     assert.notEqual(broken, preamble);
     assert.notDeepEqual(await evalWgslBatch(ctx, { ...options, preamble: broken }), [1, 0.84375, 0]);
-  }, { wgslSources: [{ label: 'production-immersed-source', code: preamble }] });
+  }, { wgslSources: [{ label: 'production-immersed-source',
+    code: `${preamble}\n@compute @workgroup_size(1) fn main() { _ = immersedSourceWeight(vec3<f32>(0.0)); }`,
+    entryPoint: 'main' }] });
 });
 
 test('production optical composition preserves emitted radiance and multiplies transmittance', async () => {
@@ -51,5 +53,7 @@ test('production optical composition preserves emitted radiance and multiplies t
       inputs: [[0.5, 0.25], [0, 0.25]],
     });
     assert.deepEqual(result, [[3, 4.5, 6, 0.125], [1, 2, 3, 0]]);
-  }, { wgslSources: [{ label: 'production-optical-composition', code: OPTICAL_STEPPING_WGSL }] });
+  }, { wgslSources: [{ label: 'production-optical-composition',
+    code: `${OPTICAL_STEPPING_WGSL}\n@compute @workgroup_size(1) fn main() { _ = opticalCompose(vec4<f32>(0.0), vec4<f32>(0.0)); }`,
+    entryPoint: 'main' }] });
 });

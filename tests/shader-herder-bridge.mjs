@@ -42,6 +42,56 @@ test('withKaminosGpu validates Apple adapter identity and rejects non-matching v
   );
 });
 
+test('explicit null backend cannot invoke the hardware callback or receive hardware authority, including strict mode', async () => {
+  const previous = process.env.SHADER_HERDER_STRICT_METAL;
+  try {
+    for (const strict of ['0', '1']) {
+      process.env.SHADER_HERDER_STRICT_METAL = strict;
+      const evidence = [];
+      let hardwareRan = false;
+      await assert.rejects(() => withKaminosGpu(async () => { hardwareRan = true; }, {
+        requiredVendor: null,
+        allowFallbackAdapter: true,
+        dawnFlags: ['backend=null'],
+        onEvidence: (record) => evidence.push(record),
+      }), (error) => error instanceof AdapterIdentityError && error.code === 'ERR_KAMINOS_HARDWARE_REQUIRED');
+      assert.equal(hardwareRan, false);
+      assert.deepEqual(evidence, []);
+    }
+  } finally {
+    if (previous === undefined) delete process.env.SHADER_HERDER_STRICT_METAL;
+    else process.env.SHADER_HERDER_STRICT_METAL = previous;
+  }
+});
+
+test('fallback rejects missing, blank and unbound validation work without publishing authority', async () => {
+  const previousForce = process.env.SHADER_HERDER_FORCE_SEATBELT_FALLBACK;
+  const previousStrict = process.env.SHADER_HERDER_STRICT_METAL;
+  try {
+    process.env.SHADER_HERDER_FORCE_SEATBELT_FALLBACK = '1';
+    delete process.env.SHADER_HERDER_STRICT_METAL;
+    for (const sources of [undefined, [], [''], [' \n '], ['// placeholder'],
+      ['@compute @workgroup_size(1) fn main() {}']]) {
+      const evidence = [];
+      let fallbackRan = false;
+      await assert.rejects(() => withKaminosGpu(async () => {
+        throw new Error('hardware callback must not run');
+      }, {
+        ...(sources === undefined ? {} : { wgslSources: sources }),
+        onSeatbeltFallback: () => { fallbackRan = true; },
+        onEvidence: (record) => evidence.push(record),
+      }), (error) => error instanceof GpuValidationError && /fallback.*validation/i.test(error.message));
+      assert.equal(fallbackRan, false);
+      assert.deepEqual(evidence, []);
+    }
+  } finally {
+    if (previousForce === undefined) delete process.env.SHADER_HERDER_FORCE_SEATBELT_FALLBACK;
+    else process.env.SHADER_HERDER_FORCE_SEATBELT_FALLBACK = previousForce;
+    if (previousStrict === undefined) delete process.env.SHADER_HERDER_STRICT_METAL;
+    else process.env.SHADER_HERDER_STRICT_METAL = previousStrict;
+  }
+});
+
 test('withKaminosGpu Seatbelt fallback compiles and validates pipelines on backend=null and fails loud on invalid WGSL, bad entryPoint, or strict mode', async () => {
   const prevForce = process.env.SHADER_HERDER_FORCE_SEATBELT_FALLBACK;
   const prevStrict = process.env.SHADER_HERDER_STRICT_METAL;
@@ -80,6 +130,7 @@ test('withKaminosGpu Seatbelt fallback compiles and validates pipelines on backe
     assert.equal(evidence.length, 1);
     assert.equal(evidence[0].route, 'compiler-only');
     assert.equal(evidence[0].authority, 'compile-and-pipeline-validation-only');
+    assert.deepEqual(evidence[0].validation, { shaderModules: 2, computePipelines: 2 });
     assert.ok(warnings.some((w) => w.includes('kaminos-test-warning:')));
 
     await assert.rejects(

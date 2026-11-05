@@ -35,7 +35,7 @@ function attachWebGpuGlobals(ctx) {
 }
 
 /**
- * Runs `fn(ctx)` against a native Apple Metal-3 WebGPU context and ensures
+ * Runs `fn(ctx)` against a native Apple WebGPU context and ensures
  * deterministic device destruction.
  *
  * When invoked inside an external macOS Seatbelt `--sandbox` where
@@ -45,7 +45,8 @@ function attachWebGpuGlobals(ctx) {
  * `wgslSources` and `onSeatbeltFallback(nullCtx)` (unless
  * `SHADER_HERDER_STRICT_METAL=1` is set) while emitting an explicit
  * `kaminos-test-warning` lowering evidence authority to compile/pipeline
- * validation. All other adapter/vendor/fallback failures throw loud
+ * validation. Fallback requires nonblank WGSL and an explicit compute entry
+ * point whose pipeline is actually validated. All other adapter/vendor/fallback failures throw loud
  * unconditionally.
  */
 export async function withKaminosGpu(
@@ -58,12 +59,13 @@ export async function withKaminosGpu(
     ...options
   } = {}
 ) {
-  async function recordEvidence(context, route) {
+  async function recordEvidence(context, route, validation = null) {
     const record = {
       source: shaderHerderSource,
       route,
       authority: route === 'hardware' ? 'hardware-execution' : 'compile-and-pipeline-validation-only',
       adapterInfo: context.adapterInfo,
+      ...(validation ? { validation } : {}),
       ...(context.metalAdapterInfo ? { metalAdapterInfo: context.metalAdapterInfo } : {}),
     };
     console.log(`shader-herder-evidence: ${JSON.stringify(record)}`);
@@ -77,6 +79,13 @@ export async function withKaminosGpu(
       err?.code === 'ERR_METAL_SANDBOX_SHARED_EVENT' &&
       process.env.SHADER_HERDER_STRICT_METAL !== '1'
     ) {
+      if (!Array.isArray(wgslSources) || wgslSources.length === 0 ||
+          wgslSources.some((item) => {
+            const code = typeof item === 'string' ? item : item?.code;
+            return typeof code !== 'string' || code.trim().length === 0;
+          })) {
+        throw new GpuValidationError('Compiler-only fallback requires declared nonblank WGSL validation work; hardware callback was not run.');
+      }
       console.warn(
         'kaminos-test-warning: Metal MTLSharedEvent blocked by external Seatbelt sandbox (authority=compile-and-pipeline-validation-only); verifying WGSL and pipelines via Dawn backend=null'
       );
@@ -89,6 +98,7 @@ export async function withKaminosGpu(
       );
       nullCtx.seatbeltFallback = true;
       nullCtx.metalAdapterInfo = err?.details?.adapterInfo ?? null;
+      const validation = { shaderModules: 0, computePipelines: 0 };
       try {
         for (let i = 0; i < wgslSources.length; i++) {
           const item = wgslSources[i];
@@ -99,6 +109,7 @@ export async function withKaminosGpu(
           const checkInstrumented = typeof item === 'object' && item !== null ? Boolean(item.instrumentLoops) : false;
 
           const mod = await nullCtx.compileShaderModule({ label, code });
+          validation.shaderModules++;
           if (entryPoint) {
             await withGpuErrorScopes(nullCtx.device, `${label}-pipeline`, async () => {
               nullCtx.device.createComputePipeline({
@@ -111,6 +122,7 @@ export async function withKaminosGpu(
                 },
               });
             });
+            validation.computePipelines++;
           }
           if (checkInstrumented) {
             const inst = instrumentWgslLoops(code, { maxIterations: 512 });
@@ -118,6 +130,7 @@ export async function withKaminosGpu(
               label: `${label}-instrumented`,
               code: inst.code,
             });
+            validation.shaderModules++;
             if (entryPoint) {
               await withGpuErrorScopes(nullCtx.device, `${label}-instrumented-pipeline`, async () => {
                 nullCtx.device.createComputePipeline({
@@ -130,13 +143,17 @@ export async function withKaminosGpu(
                   },
                 });
               });
+              validation.computePipelines++;
             }
           }
+        }
+        if (validation.computePipelines === 0) {
+          throw new GpuValidationError('Compiler-only fallback validation requires an explicit compute entryPoint; hardware callback was not run.');
         }
         if (typeof onSeatbeltFallback === 'function') {
           await onSeatbeltFallback(nullCtx);
         }
-        await recordEvidence(nullCtx, 'compiler-only');
+        await recordEvidence(nullCtx, 'compiler-only', validation);
         return {
           seatbeltFallback: true,
           adapterInfo: nullCtx.adapterInfo,
@@ -149,8 +166,13 @@ export async function withKaminosGpu(
     throw err;
   }
 
-  attachWebGpuGlobals(ctx);
   try {
+    if (ctx.adapterInfo.vendor !== 'apple' || ctx.adapterInfo.isFallbackAdapter) {
+      throw new AdapterIdentityError('withKaminosGpu requires an Apple hardware adapter before invoking its hardware callback.', {
+        code: 'ERR_KAMINOS_HARDWARE_REQUIRED', adapterInfo: ctx.adapterInfo,
+      });
+    }
+    attachWebGpuGlobals(ctx);
     const result = await fn(ctx);
     await recordEvidence(ctx, 'hardware');
     return result;
