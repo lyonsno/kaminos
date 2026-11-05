@@ -75,13 +75,14 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
           ...(l.textureSize!=null?{textureSize:l.textureSize}:{}),
           ...(l.error?{error:l.error}:{}),
           ...(l.normalMap?{normalMap:l.normalMap}:{}),
+          ...(l.textureSet?{textureSet:l.textureSet}:{}),
         }));
         const surfelLevels=allLevels.filter(l=>l.mergeFactor!=null||l.route==='trellis-surfels+hero-normals').map(l=>({
           sha:l.sha256,mergeFactor:l.mergeFactor,count:l.count??null,route:l.route,
           ...(l.source?{source:l.source}:{}),
           ...(l.error?{error:l.error}:{}),
         }));
-        const extra={...(surfelLevels.length?{surfelLevels}:{}),prepareQueued:set.prepareQueued===true,prepareState:set.prepareState??null};
+        const extra={heroTextureSet:set.textureSets?.[set.source]??null,...(surfelLevels.length?{surfelLevels}:{}),prepareQueued:set.prepareQueued===true,prepareState:set.prepareState??null};
         if(!enabled)return settle({...base,levels,...extra,state:'disabled'});
         if(!set.choice)return settle({...base,levels,...extra,state:'no-tiers',reason:base.heroSha?'no stored tiers for this hero':'a surfels-only asset has no hero mesh to take tiers from'});
         const choice=set.choice;
