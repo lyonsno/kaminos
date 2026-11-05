@@ -26865,7 +26865,8 @@ async function loadSceneObjects(records, activeId, groups = [], activeGroupId = 
       const waitingForDomains=liquidSetup||authoredFlamePresent||records.some(record=>record.type===ASH_OBJECT_TYPE||record.type===ASH_SOURCE_TYPE);
       // Preserve textured coarse arrival for static scenes. Domain restores
       // retain the readable fallback until their actual producers are present.
-      if(!sceneArrivalState.coarsePresented||waitingForDomains)await sceneGeometryPreview?.present(loadRequestId,{isVisible});
+      const coarseHasGeometry=sceneArrivalState.coarsePresented&&sceneArrivalState.coarseObjects>0;
+      if(!coarseHasGeometry||waitingForDomains)await sceneGeometryPreview?.present(loadRequestId,{isVisible});
       if(!current()||!prepareLighting)return;
       await prepareLighting();if(!current())return;
       // The matched display camera belongs to the pending fire producer.
