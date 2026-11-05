@@ -2588,7 +2588,7 @@ _preparation_spec = importlib.util.spec_from_file_location('kaminos_image_prepar
 _preparation_module = importlib.util.module_from_spec(_preparation_spec)
 _preparation_spec.loader.exec_module(_preparation_module)
 IMAGE_PREPARATION_INSTALLATION = _preparation_module.ImagePreparationInstallation()
-MOUNTED_PACKAGES = {'/pup-weights/': 'pup', '/klein-weights/': 'klein', '/flux3-weights/': 'flux3', '/trellis-checkpoints/': 'trellisPage'}
+MOUNTED_PACKAGES = {'/qwen35-weights/': 'qwen35', '/pup-weights/': 'pup', '/klein-weights/': 'klein', '/flux3-weights/': 'flux3', '/trellis-checkpoints/': 'trellisPage'}
 
 BROWSE_ROOTS = {
     "generated-meshes": Path(os.environ.get("KAMINOS_GENERATED_MESH_DIR", str(KAMINOS_ASSETS_DIR / "generated-meshes"))).expanduser(),
