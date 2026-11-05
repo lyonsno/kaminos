@@ -30,7 +30,7 @@ try{
  await page.evaluate(async()=>{await window.kaminosWorkbenchExperiments.open('material-study',{roughness:.37});window._kaminosDirty();});
  await page.getByRole('button',{name:'Frame comparison',exact:true}).click();
  if(presetFile){await page.evaluate(id=>window.kaminosSceneAuthoring.addFlameEmitter(id),path.basename(presetFile,'.json'));await page.waitForFunction(()=>window.__kaminosVolumePrototype?.debugState().frameCount>3);}
- if(water){await page.evaluate(async()=>{const id=await window.kaminosWaterSources.add();window.kaminosWaterSources.editSimulation({waterSampling:{particleTarget:256}});await window.kaminosWaterSources.release(id);});}
+ if(water){await page.evaluate(async()=>{const id=await window.kaminosWaterSources.add();window.kaminosWaterSources.editSimulation({waterSampling:{...window.kaminosWaterSources.read().simulation.sampling,particleTarget:256}});await window.kaminosWaterSources.release(id);});}
  await page.evaluate(async()=>{const id=window.kaminosSceneAuthoring.addLight();await window.kaminosSceneAuthoring.setLight(id,{intensity:12});window.__recoveryLight=id;await window.kaminosSceneLightingPreparation.whenIdle();window.__recoveryEdits=window.kaminosSceneEdits;});
  await page.waitForTimeout(1200);
  report.phase='before';report.before=await page.evaluate(async()=>({experiment:await window.kaminosWorkbenchExperiments.read(),objects:window.kaminosSceneAuthoring.read(),edits:window.kaminosSceneEdits.state(),sameEdits:window.__recoveryEdits===window.kaminosSceneEdits,flame:window.__kaminosVolumePrototype?.debugState(),water:window.kaminosWaterSources.read(),recovery:window.kaminosDeviceRecovery.state(),gi:window.kaminosSceneGIDebugState()}));await page.screenshot({path:out+'/before.png'});await save();
