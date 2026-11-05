@@ -50,6 +50,8 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
       const version=++sequence;versions.set(root,version);
       const base={...describe(root),assetSource:root.userData?.kaminosSceneObject?.source,requested:{...selection},effective:null,levels:[],error:null,frame:'trellis-source',proxyRoot:null,
         placement:scene=>new THREE.Matrix4().copy(scene.matrixWorld).invert().multiply(root.updateWorldMatrix(true,false)??root.matrixWorld)};
+      const previous=handles.get(root);
+      const retainCatalog=!enabled&&previous?.assetSource===base.assetSource&&(previous?.levels?.length||previous?.surfelLevels?.length);
       const settle=handle=>{
         if(versions.get(root)!==version){disposeTree(handle.proxyRoot);return {...handle,proxyRoot:null,superseded:true};}
         if(owned.get(root)!==handle.proxyRoot){disposeTree(owned.get(root));if(handle.proxyRoot)owned.set(root,handle.proxyRoot);else owned.delete(root);}
@@ -90,7 +92,11 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
         return settle({...base,levels,...extra,state:'loaded',proxyRoot,
           effective:{sha:choice.sha256,faces:choice.faces,withinBudget:set.withinBudget??null},
           error:choice.error?{reference:choice.error.reference,units:'fraction of the hero bounding-box diagonal',relative:choice.error.relative}:null});
-      }catch(error){return settle({...base,state:'failed',failure:String(error?.message||error)});}
+      }catch(error){
+        const failure=String(error?.message||error);
+        if(retainCatalog)return settle({...previous,state:'disabled',proxyRoot:null,effective:null,catalogFailure:failure});
+        return settle({...base,state:'failed',failure});
+      }
     })().finally(()=>inFlight.delete(task));
     inFlight.add(task);
     return task;
@@ -128,13 +134,7 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
       const previous=handles.get(root);
       disposeTree(owned.get(root));
       owned.delete(root);
-      const handle={...(previous??describe(root)),state:'disabled',proxyRoot:null,effective:null,error:null};
-      handles.set(root,handle);
-      const sameSource=previous?.assetSource===root.userData?.kaminosSceneObject?.source;
-      if(sameSource&&(previous?.levels?.length||previous?.surfelLevels?.length)){
-        versions.set(root,++sequence);
-        return Promise.resolve(handle);
-      }
+      handles.set(root,{...(previous??describe(root)),state:'disabled',proxyRoot:null,effective:null,error:null});
       return resolve(root,previous?.requested??DEFAULT_GI_PROXY_SELECTION,{enabled:false});
     },
     // A cleared or reopened scene: every proxy goes, and results still in flight are not published.
