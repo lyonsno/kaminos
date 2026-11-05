@@ -791,6 +791,8 @@ export function selectAshCollisionLod(levels = [], {
 
 function cloneBorrowedRung(THREE, node) {
   const copy = node.isMesh ? new THREE.Mesh(node.geometry, node.userData?.kaminosOriginalMaterial ?? node.material) : new THREE.Group();
+  copy.name = node.name;
+  copy.layers.mask = node.layers.mask;
   copy.position.copy(node.position);
   copy.quaternion.copy(node.quaternion);
   copy.scale.copy(node.scale);
@@ -1202,6 +1204,7 @@ export function createSceneBeautyLodController({
   digest = digestHex,
   settings: initialSettings = {},
   onUpdate = null,
+  onRungLoaded = null,
 }) {
   const config = {
     enabled: true,
@@ -1215,6 +1218,8 @@ export function createSceneBeautyLodController({
     ...initialSettings,
   };
   const entries = new Map();
+  const interactiveCopies = new WeakMap();
+  const interactiveOwners = new WeakMap();
   const pendingLoads = new Set();
   let disposed = false,preparing=false;
   let lastState = {enabled: config.enabled, totalFaces: 0, heroFacesTotal: 0, faceBudget: config.faceBudget, withinBudget: true, objects: []};
@@ -1382,6 +1387,7 @@ export function createSceneBeautyLodController({
         }
         entry.rungs.set(sha,createResidentRung(entry,level,rungRoot));
         rungRoot = collisionRoot = null;
+        onRungLoaded?.(root);
         onUpdate?.();
       } catch {
         if (rungRoot) disposeTree(rungRoot);
@@ -1439,6 +1445,72 @@ export function createSceneBeautyLodController({
     entry.rungs.clear();
     entry.inFlight.clear();
     entries.delete(root);
+  }
+
+  function interactiveRung(root, {matchDisplay, pinnedObjects}) {
+    const entry = entries.get(root);
+    const id = root.userData?.kaminosSceneObject?.id;
+    if (!config.enabled || !root.parent || pinnedObjects?.has(root) || pinnedObjects?.has(id)) return null;
+    for (let object = root; object; object = object.parent) if (!object.visible) return null;
+    const warp = root.userData?.kaminosVertexWarp ?? null;
+    const revision = root.userData?.kaminosVertexWarpRevision ?? 0;
+    if (entry && (entry.warpFn !== warp || entry.warpRevision !== revision)) return null;
+    if (matchDisplay) return entry?.rungs.get(entry.displayedTier)?.root ?? null;
+
+    let best = null;
+    for (const rung of entry?.rungs.values() ?? []) {
+      if (rung.faces <= 10000 && (!best || rung.faces > best.faces)) best = rung;
+    }
+    if (best) return best.root;
+    const handle = giProxies?.get?.(root);
+    if (!warp && handle?.representation === 'mesh' && handle.effective?.faces <= 10000) {
+      return handle.proxyRoot;
+    }
+    return null;
+  }
+
+  function interactiveRoots(roots, options = {}) {
+    const result = [];
+    for (const root of roots) {
+      if (!root) continue;
+      const source = interactiveRung(root, options);
+      const heroVisible = child => entryVisibility(root, child) && isHeroChild(child);
+      const repetitions = root.children.filter(child => child.userData?.kaminosRepetitionCopy && heroVisible(child));
+      if (!source || root.isMesh || !root.children.some(child => !child.userData?.kaminosRepetitionCopy && heroVisible(child))) {
+        result.push(root);
+        continue;
+      }
+      let copies = interactiveCopies.get(root);
+      if (!copies) interactiveCopies.set(root, copies = new WeakMap());
+      let proxy = copies.get(source);
+      if (!proxy) {
+        proxy = new THREE.Group();
+        proxy.matrixAutoUpdate = false;
+        proxy.add(cloneBorrowedRung(THREE, source));
+        copies.set(source, proxy);
+        interactiveOwners.set(proxy, root);
+      }
+      while (proxy.children.length > repetitions.length + 1) proxy.remove(proxy.children.at(-1));
+      while (proxy.children.length < repetitions.length + 1) {
+        const repeat = new THREE.Group();
+        repeat.matrixAutoUpdate = false;
+        repeat.add(cloneBorrowedRung(THREE, source));
+        proxy.add(repeat);
+      }
+      for (const [i, repeat] of repetitions.entries()) {
+        if (repeat.matrixAutoUpdate) repeat.updateMatrix();
+        proxy.children[i + 1].matrix.copy(repeat.matrix);
+      }
+      root.updateWorldMatrix(true, false);
+      proxy.matrix.copy(root.matrixWorld);
+      proxy.updateMatrixWorld(true);
+      result.push(proxy, ...root.children.filter(child => !isHeroChild(child) && !child.userData?.kaminosBeautyLodProxy));
+    }
+    return result;
+  }
+
+  function entryVisibility(root, child) {
+    return entries.get(root)?.savedHeroVisibility.get(child) ?? child.visible;
   }
 
   const unbindGiRelease = giProxies?.onRelease?.(root => release(root)) ?? null;
@@ -1715,6 +1787,14 @@ export function createSceneBeautyLodController({
       } finally {
         for (let i = restores.length - 1; i >= 0; i--) restores[i]();
       }
+    },
+    interactiveRoots,
+    interactiveOwner(object) {
+      for (let cursor = object; cursor; cursor = cursor.parent) {
+        const owner = interactiveOwners.get(cursor);
+        if (owner) return owner;
+      }
+      return null;
     },
     state: () => lastState,
     getResidentRung(root, sha) {

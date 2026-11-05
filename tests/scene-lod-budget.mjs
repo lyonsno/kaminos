@@ -23,6 +23,8 @@ import {
 import {createGiProxyRegistry} from '../scene-gi-proxies.mjs';
 import {createFireShadowCasters} from '../fire-shadow-casters.mjs';
 import {registerPresentedSurface} from '../scene-presented-surface.mjs';
+import {visibleSceneIntersections} from '../scene-visible-picking.mjs';
+import {navigationPivot} from '../scene-navigation.mjs';
 
 const sha = text => createHash('sha256').update(text).digest('hex');
 
@@ -376,6 +378,63 @@ test('createSceneBeautyLodController caches resident rungs, never blanks while l
   assert.equal(lightingReleased.size, 2, 'released primary and repetition copy surfaceLighting registrations on disposal');
   assert.equal(heroMesh.visible, true, 'restores hero visibility when released');
   casters.dispose();
+});
+
+test('interactive queries use the displayed mesh for picking and a resident coarse rung for navigation', async () => {
+  const scene = new THREE.Scene();
+  const parent = new THREE.Group();
+  const root = new THREE.Group();
+  const hero = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2, 20, 20, 20), new THREE.MeshBasicMaterial());
+  root.userData.kaminosSceneObject = {id: 'asset'};
+  parent.position.x = 2;
+  root.add(hero);
+  parent.add(root);
+  scene.add(parent);
+  const repeat = new THREE.Group();
+  repeat.userData.kaminosRepetitionCopy = true;
+  repeat.position.x = -2;
+  repeat.add(new THREE.Mesh(hero.geometry, hero.material));
+  root.add(repeat);
+
+  const coarse = {...SAMPLE_LEVELS[3], faces: 1000};
+  const makeRung = () => {
+    const group = new THREE.Group();
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(2, 2, 1), hero.material));
+    return group;
+  };
+  const handle = {root, representation: 'mesh', levels: [coarse], proxyRoot: makeRung(), effective: {faces: 1000}};
+  const controller = createSceneBeautyLodController({
+    THREE, scene,
+    giProxies: {list: () => [handle], get: () => handle},
+    fetchBytes: async () => new ArrayBuffer(0),
+    digest: async () => coarse.sha,
+    parseGlb: async () => makeRung(),
+    settings: {faceBudget: 2000, maxPixelError: 100},
+  });
+  const camera = makeCamera({z: 8});
+  assert.deepEqual(controller.interactiveRoots([root], {matchDisplay: true}), [root]);
+  assert.notEqual(controller.interactiveRoots([root])[0], root, 'uses the GI rung while beauty is cold');
+  await controller.prepareFrame(camera);
+  const query = controller.interactiveRoots([root], {matchDisplay: true});
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+  const [hit] = visibleSceneIntersections({raycaster, roots: query, camera, viewport: {width: 800, height: 600}});
+  assert.equal(hit.point.z, 0.5, 'the repeated rung is hit in world space');
+  assert.equal(controller.interactiveOwner(hit.object), root);
+  assert.equal(navigationPivot(camera, new THREE.Vector3(), new THREE.Vector2(), controller.interactiveRoots([root])).point.z, 0.5);
+  assert.equal(hero.visible, true);
+  assert.equal(repeat.visible, true);
+  assert.equal(root.children.length, 2, 'queries leave the authored scene graph alone');
+  assert.deepEqual(controller.interactiveRoots([root], {pinnedObjects: new Set(['asset'])}), [root]);
+  parent.visible = false;
+  assert.deepEqual(controller.interactiveRoots([root]), [root], 'an invisible ancestor cannot be bypassed');
+  parent.visible = true;
+  root.userData.kaminosVertexWarpRevision = 1;
+  assert.deepEqual(controller.interactiveRoots([root]), [root], 'a rung from before a deformation is stale');
+  delete root.userData.kaminosVertexWarpRevision;
+  controller.setSettings({enabled: false});
+  assert.deepEqual(controller.interactiveRoots([root]), [root]);
+  controller.dispose();
 });
 
 test('attachStoredSurfelLevels upgrades x4 to hero normals and adds x8 and x16 levels to SurfelChunk', () => {
