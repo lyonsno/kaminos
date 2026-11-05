@@ -22,6 +22,11 @@ for(let i=0;i<raw.length;i+=3){
 assert.deepEqual(p,before,'Fitting must not mutate source bytes');
 assert.ok(result.referencePositions,'Curved fit must retain an undeformed reference');
 assert.ok(result.restAxial,'Strain must include the original curvature');
+near(result.restCurve[0],-.5/1.4);near(result.restCurve[1],(arc.radius*arc.sweep*Math.PI/180-.5)/1.4);
+assert.throws(()=>stock.createStockWarp({...result.profile,locks:[[-.2,.2]]},{length:1,bend:0,protect:true},[-.3,.3]),/protected.*rest arc/i);
+assert.doesNotThrow(()=>stock.createStockWarp({...result.profile,locks:[[-.5,-.4]]},{length:1,bend:0,protect:true},[-.3,.3]));
+assert.throws(()=>stock.deformStock(result.positions,result.normals,{...result.profile,locks:[[-.2,.2]]},{length:1,bend:0,protect:true},result.restAxial,result.restCurve),/protected.*rest arc/i);
+assert.doesNotThrow(()=>stock.deformStock(result.positions,result.normals,{...result.profile,locks:[[-.2,.2]]},{length:1,bend:0,protect:false},result.restAxial,result.restCurve));
 const straight=stock.deformStock(result.positions,result.normals,result.profile,{length:1,bend:0,protect:false},result.restAxial);
 near(straight.metrics.minAxialStretch,1/1.2);
 near(straight.metrics.maxAxialStretch,1/.8);
