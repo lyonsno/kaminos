@@ -76,16 +76,18 @@ export function fitStockSource(positions,normals,axis,arc){
       referencePositions[i]=(out[i]-(lo[i%3]+hi[i%3])/2)/extent;
       unwrapped.positions[i]=(unwrapped.positions[i]-(i%3===0?0:(low[i%3]+high[i%3])/2))/extent;
     }
-    return {...unwrapped,referencePositions,referenceNormals,profile:{min:-.5,max:.5,xMin:Math.fround(low[0]/extent),xMax:Math.fround(high[0]/extent),locks:[]}};
+    const middle=(low[2]+high[2])/2,restCurve=[Math.max(-.5,-middle/extent),Math.min(.5,(arc.radius*arc.sweep*Math.PI/180-middle)/extent)];
+    return {...unwrapped,referencePositions,referenceNormals,restCurve:restCurve[0]<restCurve[1]?restCurve:null,profile:{min:-.5,max:.5,xMin:Math.fround(low[0]/extent),xMax:Math.fround(high[0]/extent),locks:[]}};
   }
   const extent=hi[2]-lo[2];if(!(extent>0)||!(hi[0]>lo[0]))throw Error('Source needs nonzero longitudinal and cross-section extent');
   for(let i=0;i<out.length;i++)out[i]=(out[i]-(lo[i%3]+hi[i%3])/2)/extent;
   return {positions:out,normals:n,profile:{min:-.5,max:.5,xMin:Math.fround((lo[0]-hi[0])/2/extent),xMax:Math.fround((hi[0]-lo[0])/2/extent),locks:[]}};
 }
-export function createStockWarp(profile,parameters){
+export function createStockWarp(profile,parameters,restCurve=null){
   const p=validateProfile(profile),v=validateParameters(parameters),angle=v.bend*Math.PI/180;
   if(Math.abs(angle)>=2*Math.PI)throw Error('A closed turn overlaps the open channel endpoints');
   const locks=v.protect?p.locks:[],locked=locks.reduce((s,b)=>s+b[1]-b[0],0),free=p.max-p.min-locked;
+  if(restCurve&&locks.some(([a,b])=>a<restCurve[1]&&b>restCurve[0]))throw Error('Protected bands cross the rest arc: use tangent-leg bands or disable protection');
   if(free<=0||v.length<=locked)throw Error('Length cannot contain the protected bands and positive free spans');
   const stretch=(v.length-locked)/free,k=angle/(v.length-locked),minFactor=Math.min(1-k*p.xMin,1-k*p.xMax);
   if(minFactor<=0)throw Error('Inner channel would fold: increase length or reduce bend');
@@ -113,10 +115,10 @@ export function createStockWarp(profile,parameters){
     maxCurvature:Math.abs(k),protectedBands:locks.map(b=>[...b]),
     limitations:['UVs travel with the surface; texel scale changes in free spans.','Global self-intersection and fluid transport are not tested.']}};
 }
-export function deformStock(positions,normals,profile,parameters,restAxial){
+export function deformStock(positions,normals,profile,parameters,restAxial,restCurve=null){
   if(positions.length%3||positions.length!==normals.length||!positions.every(Number.isFinite)||!normals.every(Number.isFinite))throw Error('Finite matching position and normal arrays required');
   if(restAxial&&(restAxial.length!==positions.length/3||!restAxial.every(v=>Number.isFinite(v)&&v>0)))throw Error('Positive matching rest strain required');
-  const warp=createStockWarp(profile,parameters),out=new Float32Array(positions.length),n=new Float32Array(normals.length);
+  const warp=createStockWarp(profile,parameters,restCurve),out=new Float32Array(positions.length),n=new Float32Array(normals.length);
   let min=Infinity,max=-Infinity;
   for(let i=0;i<positions.length;i+=3){const p=Array.from(positions.subarray(i,i+3)),q=warp.point(p);out.set(q.position,i);n.set(warp.normal(Array.from(normals.subarray(i,i+3)),p),i);
     const strain=q.axial/(restAxial?.[i/3]??1);min=Math.min(min,strain);max=Math.max(max,strain);}

@@ -24,6 +24,7 @@ export async function loadStockSource(source,{fit=false}={}){
       }
       geometry.attributes.position.array.set(result.positions);geometry.attributes.normal.array.set(result.normals);
       if(result.restAxial)geometry.setAttribute('stockRestAxial',new BufferAttribute(result.restAxial,1));
+      geometry.userData.stockRestCurve=result.restCurve??null;
       if(fit)descriptor={...descriptor,fit:{axis,...(arc===undefined?{}:{arc:structuredClone(arc)})},profile:result.profile};
     }
     validateStockSource(descriptor);
