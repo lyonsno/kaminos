@@ -118,10 +118,14 @@ export function bisectFaces(arrays,mask,plane,{epsilon}={}) {
   const cutter=checkedCutter(plane),mesh=buildPolyMesh(arrays),eps=epsilon??defaultEpsilon(arrays.positions);
   const d=vertexDistances(mesh,cutter,eps),edgeT=new Float64Array(mesh.edgeCount).fill(NaN);
   const {cornerEdge,cornerVertex,edgeVertices,vertexPositions:Q}=mesh,I=arrays.indices,N=arrays.normals,U=arrays.uvs;
-  for(let f=0;f<mesh.faceCount;f++)if(mask[f])for(let c=3*f;c<3*f+3;c++){
-    const e=cornerEdge[c];if(e===NO_EDGE)continue;
-    const a=edgeVertices[2*e],b=edgeVertices[2*e+1];
-    if(d[a]*d[b]<0)edgeT[e]=cutter.crossing?cutter.crossing(Q.subarray(3*a,3*a+3),Q.subarray(3*b,3*b+3),d[a],d[b]):d[a]/(d[a]-d[b]);
+  for(let f=0;f<mesh.faceCount;f++)if(mask[f]){
+    const c0=3*f,d0=d[cornerVertex[c0]],d1=d[cornerVertex[c0+1]],d2=d[cornerVertex[c0+2]];
+    if((d0>=0&&d1>=0&&d2>=0)||(d0<=0&&d1<=0&&d2<=0))continue;
+    for(let c=c0;c<c0+3;c++){
+      const e=cornerEdge[c];if(e===NO_EDGE)continue;
+      const a=edgeVertices[2*e],b=edgeVertices[2*e+1];
+      if(d[a]*d[b]<0)edgeT[e]=cutter.crossing?cutter.crossing(Q.subarray(3*a,3*a+3),Q.subarray(3*b,3*b+3),d[a],d[b]):d[a]/(d[a]-d[b]);
+    }
   }
   const out=builder(arrays),cuts=new Map(),side=[],sourceFace=[],material=arrays.faceMaterial;
   const lerp=(values,width,r,s,t)=>Array.from({length:width},(_,k)=>values[width*r+k]+t*(values[width*s+k]-values[width*r+k]));
@@ -136,6 +140,10 @@ export function bisectFaces(arrays,mask,plane,{epsilon}={}) {
   };
   const emitFace=(f,s)=>(a,b,c)=>{out.indices.push(a,b,c);out.faceMaterial.push(material?.[f]??0);side.push(s);sourceFace.push(f);};
   for(let f=0;f<mesh.faceCount;f++){
+    const c0=3*f,d0=d[cornerVertex[c0]],d1=d[cornerVertex[c0+1]],d2=d[cornerVertex[c0+2]];
+    if((d0>0&&d1>0&&d2>0)||(d0<0&&d1<0&&d2<0)){
+      out.indices.push(I[c0],I[c0+1],I[c0+2]);out.faceMaterial.push(material?.[f]??0);side.push(mask[f]?(d0>0?1:-1):0);sourceFace.push(f);continue;
+    }
     const polygon=[];
     for(let i=0;i<3;i++){polygon.push({r:I[3*f+i],d:d[cornerVertex[3*f+i]]});const x=cutPoint(f,i);if(x>=0)polygon.push({r:x,d:0});}
     const above=polygon.some(v=>v.d>0),below=polygon.some(v=>v.d<0);
@@ -256,9 +264,9 @@ export function sectionSegments(sourceArrays,mask,plane) {
   const flat=xyz=>[(xyz[0]-p[0])*U[0]+(xyz[1]-p[1])*U[1]+(xyz[2]-p[2])*U[2],(xyz[0]-p[0])*V[0]+(xyz[1]-p[1])*V[1]+(xyz[2]-p[2])*V[2]];
   for(let f=0;f<I.length/3;f++){
     if(!mask[f])continue;
-    const r=[I[3*f],I[3*f+1],I[3*f+2]],d=r.map(dist);
-    if(!(d.some(x=>x>0)&&d.some(x=>x<0)))continue;
-    const points=[];
+    const r0=I[3*f],r1=I[3*f+1],r2=I[3*f+2],d0=dist(r0),d1=dist(r1),d2=dist(r2);
+    if(!((d0>0||d1>0||d2>0)&&(d0<0||d1<0||d2<0)))continue;
+    const r=[r0,r1,r2],d=[d0,d1,d2],points=[];
     for(let i=0;i<3;i++){const j=(i+1)%3;if(d[i]===0)points.push(r[i]);if(d[i]*d[j]<0){const t=d[i]/(d[i]-d[j]);points.push([0,1,2].map(k=>P[3*r[i]+k]+t*(P[3*r[j]+k]-P[3*r[i]+k])));}}
     const q=points.map(x=>typeof x==='number'?flat([P[3*x],P[3*x+1],P[3*x+2]]):flat(x));
     if(q.length!==2)continue;
@@ -388,10 +396,10 @@ export function sectionLoops(segments) {
   return {loops:[...loops,...stitched.loops],openChains:stitched.open.length,bridged:stitched.bridged};
 }
 
-export function sectionCap(arrays,sourceArrays,mask,plane,{side,material=1,budget=4e7,fill='winding'}={}) {
+export function sectionCap(arrays,sourceArrays,mask,plane,{side,material=1,budget=4e7,fill='winding',absoluteWinding=false,section:precomputedSection=null}={}) {
   if(side!==1&&side!==-1)throw Error('Section cap needs the side the part lies on, 1 or -1');
   if(fill!=='winding'&&fill!=='outline')throw Error("Section cap fill is 'winding' or 'outline'");
-  const section=sectionSegments(sourceArrays,mask,plane),{segments}=section;
+  const section=precomputedSection??sectionSegments(sourceArrays,mask,plane),{segments}=section;
   const start=arrays.indices.length/3;
   if(!segments.length)return {arrays,capFaces:0,firstFace:start,segments:0,regions:0,openChains:0};
   if(fill==='outline'){
@@ -401,27 +409,61 @@ export function sectionCap(arrays,sourceArrays,mask,plane,{side,material=1,budge
     const capped=emitSectionCap(arrays,outermost.map(outer=>({outer,holes:[]})),{section,side,material,tiny:0});
     return {...capped,firstFace:start,segments:segments.length,regions:outermost.length,openChains:openChains+(section.openChains??0),bridged:bridged+(section.bridged??0),loops:loops.length};
   }
-  const lo=[Infinity,Infinity],hi=[-Infinity,-Infinity];
-  for(const s of segments)for(const q of s)for(let k=0;k<2;k++){lo[k]=Math.min(lo[k],q[k]);hi[k]=Math.max(hi[k],q[k]);}
-  const span=Math.max(hi[0]-lo[0],hi[1]-lo[1])||1,cells=Math.max(48,Math.min(1024,Math.floor(Math.sqrt(budget/segments.length)))),h=span/cells;
+  const nSeg=segments.length,segFlat=new Float64Array(nSeg*4),lo=[Infinity,Infinity],hi=[-Infinity,-Infinity];
+  for(let s=0;s<nSeg;s++){
+    const [[ax,ay],[bx,by]]=segments[s],o=s*4;
+    segFlat[o]=ax;segFlat[o+1]=ay;segFlat[o+2]=bx;segFlat[o+3]=by;
+    if(ax<lo[0])lo[0]=ax;if(bx<lo[0])lo[0]=bx;if(ax>hi[0])hi[0]=ax;if(bx>hi[0])hi[0]=bx;
+    if(ay<lo[1])lo[1]=ay;if(by<lo[1])lo[1]=by;if(ay>hi[1])hi[1]=ay;if(by>hi[1])hi[1]=by;
+  }
+  const span=Math.max(hi[0]-lo[0],hi[1]-lo[1])||1,cells=Math.max(48,Math.min(1024,Math.floor(Math.sqrt(budget/nSeg)))),h=span/cells;
   const nx=Math.ceil((hi[0]-lo[0])/h)+4,ny=Math.ceil((hi[1]-lo[1])/h)+4,ox=lo[0]-2*h,oy=lo[1]-2*h;
   const w=new Float32Array((nx+1)*(ny+1));
-  for(let j=0;j<=ny;j++)for(let i=0;i<=nx;i++){
-    const x=ox+i*h,y=oy+j*h;let sum=0;
-    for(const [a,b] of segments){const ax=a[0]-x,ay=a[1]-y,bx=b[0]-x,by=b[1]-y;sum+=Math.atan2(ax*by-ay*bx,ax*bx+ay*by);}
-    w[j*(nx+1)+i]=sum/(2*Math.PI);
+  const tol=1e-11*span,net=new Map();
+  for(let s=0;s<nSeg*4;s+=4){
+    const ax=segFlat[s],ay=segFlat[s+1],bx=segFlat[s+2],by=segFlat[s+3];
+    const ka=`${Math.round(ax/tol)},${Math.round(ay/tol)}`,kb=`${Math.round(bx/tol)},${Math.round(by/tol)}`;
+    const ea=net.get(ka);if(ea)ea.w-=1;else net.set(ka,{x:ax,y:ay,w:-1});
+    const eb=net.get(kb);if(eb)eb.w+=1;else net.set(kb,{x:bx,y:by,w:1});
+  }
+  const poles=[...net.values()].filter(e=>e.w!==0),nPoles=poles.length,poleFlat=new Float64Array(nPoles*3);
+  for(let p=0;p<nPoles;p++){poleFlat[p*3]=poles[p].x;poleFlat[p*3+1]=poles[p].y;poleFlat[p*3+2]=poles[p].w;}
+  const diff=new Int32Array((nx+2)*(ny+1)),yEps=1e-11*h,inv2Pi=1/(2*Math.PI);
+  for(let s=0;s<nSeg*4;s+=4){
+    const ax=segFlat[s],ay=segFlat[s+1],bx=segFlat[s+2],by=segFlat[s+3];
+    const yMin=ay<by?ay:by,yMax=ay<by?by:ay;
+    const j0=Math.max(0,Math.ceil((yMin-(oy+yEps))/h)),j1=Math.min(ny,Math.floor((yMax-(oy+yEps))/h));
+    if(j0>j1)continue;
+    const dir=ay<by?-1:1,dxDy=(bx-ax)/(by-ay);
+    for(let j=j0;j<=j1;j++){
+      const y=oy+j*h+yEps,xCross=ax+(y-ay)*dxDy;
+      const iStart=Math.max(0,Math.min(nx+1,Math.floor((xCross-ox)/h)+1));
+      diff[j*(nx+2)+iStart]+=dir;
+    }
+  }
+  for(let j=0;j<=ny;j++){
+    const y=oy+j*h+yEps,row=j*(nx+1),dRow=j*(nx+2);
+    let crossSum=0;
+    for(let i=0;i<=nx;i++){
+      crossSum+=diff[dRow+i];
+      const x=ox+i*h;let poleSum=0;
+      for(let p=0;p<nPoles*3;p+=3)poleSum+=poleFlat[p+2]*Math.atan2(poleFlat[p+1]-y,poleFlat[p]-x);
+      const val=crossSum+poleSum*inv2Pi;
+      w[row+i]=absoluteWinding?Math.abs(val):val;
+    }
   }
   // Marching squares at w = 1/2 over grid nodes, linking edge crossings into closed outlines.
-  const at=(i,j)=>w[j*(nx+1)+i],iso=.5,cross=new Map(),links=new Map();
-  const point=(i0,j0,i1,j1)=>{const key=i0<i1||j0<j1?`${i0},${j0},${i1},${j1}`:`${i1},${j1},${i0},${j0}`;if(!cross.has(key)){const a=at(i0,j0),b=at(i1,j1),t=(iso-a)/(b-a);cross.set(key,[ox+(i0+t*(i1-i0))*h,oy+(j0+t*(j1-j0))*h]);}return key;};
+  const stride=nx+1,at=(i,j)=>w[j*stride+i],iso=.5,cross=new Map(),links=new Map();
+  const point=(i0,j0,i1,j1)=>{const key=i0<i1?(j0*stride+i0)*2:j0<j1?(j0*stride+i0)*2+1:i1<i0?(j1*stride+i1)*2:(j1*stride+i1)*2+1;if(!cross.has(key)){const a=at(i0,j0),b=at(i1,j1),t=(iso-a)/(b-a);cross.set(key,[ox+(i0+t*(i1-i0))*h,oy+(j0+t*(j1-j0))*h]);}return key;};
   // The cases below are written with inside on the right; storing each piece reversed
   // makes outlines run counterclockwise around inside, holes clockwise.
   const link=(a,b)=>{links.set(b,a);};
   for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){
-    const c=[at(i,j)>=iso,at(i+1,j)>=iso,at(i+1,j+1)>=iso,at(i,j+1)>=iso],code=c[0]|c[1]<<1|c[2]<<2|c[3]<<3;
+    const w00=w[j*stride+i],w10=w[j*stride+i+1],w11=w[(j+1)*stride+i+1],w01=w[(j+1)*stride+i];
+    const code=(w00>=iso)|(w10>=iso)<<1|(w11>=iso)<<2|(w01>=iso)<<3;
     if(code===0||code===15)continue;
     const bottom=()=>point(i,j,i+1,j),right=()=>point(i+1,j,i+1,j+1),top=()=>point(i,j+1,i+1,j+1),left=()=>point(i,j,i,j+1);
-    const centre=(at(i,j)+at(i+1,j)+at(i+1,j+1)+at(i,j+1))/4>=iso;
+    const centre=(w00+w10+w11+w01)*.25>=iso;
     switch(code){
       case 1:link(left(),bottom());break; case 2:link(bottom(),right());break; case 3:link(left(),right());break;
       case 4:link(right(),top());break; case 6:link(bottom(),top());break; case 7:link(left(),top());break;
@@ -432,13 +474,27 @@ export function sectionCap(arrays,sourceArrays,mask,plane,{side,material=1,budge
     }
   }
   // Snap outline points onto the section segments they approximate.
-  const snap=([x,y])=>{let best=null,bd=(1.5*h)**2;for(const [a,b] of segments){const sx=b[0]-a[0],sy=b[1]-a[1],l=sx*sx+sy*sy,t=l?Math.max(0,Math.min(1,((x-a[0])*sx+(y-a[1])*sy)/l)):0,px=a[0]+t*sx,py=a[1]+t*sy,dd=(px-x)**2+(py-y)**2;if(dd<bd){bd=dd;best=[px,py];}}return best??[x,y];};
+  const maxSnap=(1.5*h)**2,snap=([x,y])=>{let bx=x,by=y,bd=maxSnap;for(let s=0;s<nSeg*4;s+=4){const ax=segFlat[s],ay=segFlat[s+1],sx=segFlat[s+2]-ax,sy=segFlat[s+3]-ay,l=sx*sx+sy*sy,t=l?Math.max(0,Math.min(1,((x-ax)*sx+(y-ay)*sy)/l)):0,px=ax+t*sx,py=ay+t*sy,dd=(px-x)**2+(py-y)**2;if(dd<bd){bd=dd;bx=px;by=py;}}return [bx,by];};
+  const simplifyLoop=pts=>{
+    const dedup=[];const minStep2=(1e-5*h)**2;
+    for(const p of pts){const prev=dedup.at(-1);if(!prev||(p[0]-prev[0])**2+(p[1]-prev[1])**2>minStep2)dedup.push(p);}
+    if(dedup.length>1&&(dedup[0][0]-dedup.at(-1)[0])**2+(dedup[0][1]-dedup.at(-1)[1])**2<=minStep2)dedup.pop();
+    if(dedup.length<=3)return dedup;
+    const out=[];const colTol=1e-4*h;
+    for(let i=0;i<dedup.length;i++){
+      const a=out.at(-1)??dedup[(i+dedup.length-1)%dedup.length],b=dedup[i],c=dedup[(i+1)%dedup.length];
+      const ux=b[0]-a[0],uy=b[1]-a[1],vx=c[0]-b[0],vy=c[1]-b[1],wx=c[0]-a[0],wy=c[1]-a[1],wl=Math.hypot(wx,wy);
+      if(ux*vx+uy*vy>=0&&wl>0&&Math.abs(ux*wy-uy*wx)<=colTol*wl&&out.length+dedup.length-i>3)continue;
+      out.push(b);
+    }
+    return out;
+  };
   const outlines=[];const seen=new Set();
   for(const startKey of links.keys()){
     if(seen.has(startKey))continue;
-    const loop=[];let key=startKey;
-    while(key!==undefined&&!seen.has(key)){seen.add(key);loop.push(snap(cross.get(key)));key=links.get(key);}
-    if(key===startKey&&loop.length>=3)outlines.push(loop.map(([x,y])=>new Vector2(x,y)));
+    const rawLoop=[];let key=startKey;
+    while(key!==undefined&&!seen.has(key)){seen.add(key);rawLoop.push(snap(cross.get(key)));key=links.get(key);}
+    if(key===startKey&&rawLoop.length>=3){const loop=simplifyLoop(rawLoop);if(loop.length>=3)outlines.push(loop.map(([x,y])=>new Vector2(x,y)));}
   }
   const area=ShapeUtils.area,outers=outlines.filter(o=>area(o)>0),holes=outlines.filter(o=>area(o)<0);
   const inside=(ring,q)=>{let c=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++)if((ring[i].y>q.y)!==(ring[j].y>q.y)&&q.x<(ring[j].x-ring[i].x)*(q.y-ring[i].y)/(ring[j].y-ring[i].y)+ring[i].x)c=!c;return c;};

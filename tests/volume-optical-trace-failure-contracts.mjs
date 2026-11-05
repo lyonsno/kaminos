@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
+import {volumeSubmissionContext} from './helpers/volume-submission.mjs';
 import {OPTICAL_TRACE_IDENTITY,traceChunkPlan,validateTraceRows} from '../volume-optical-trace.mjs';
 
 // Exercise the actual API body with a synthetic GPU readback, not GPU conformance.
@@ -26,6 +27,7 @@ const environment={state:{active:true,simStepCount:151,physicalColor:{incidentLi
   traceChunkPlan,OPTICAL_TRACE_IDENTITY,GPUBufferUsage:{STORAGE:1,COPY_SRC:2,COPY_DST:4,MAP_READ:8},GPUMapMode:{READ:1},
   rebuildNonRidgeOpticalCaptureBindGroups(){},nonRidgeOpticalCaptureHeaderBuffer:{},prepareSharedSceneConsumers:x=>x,
   distributedGroup:{},encodeBoundarySidecar(){},encodeDraw(){},readbackPipeline:{},controlsSnapshot:{},validateTraceRows};
+Object.assign(environment,volumeSubmissionContext(device));
 const result=await new AsyncFunction(...Object.keys(environment),'options',body)(...Object.values(environment),{
   now:4000,specialization:'auto',firstRay:0,rayCount:1,sampleOffset:0,sampleCount:2,subdivisions:1});
 assert.equal(result.ok,false);

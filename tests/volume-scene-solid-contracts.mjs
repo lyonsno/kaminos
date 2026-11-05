@@ -148,5 +148,10 @@ console.log('volume scene solid contracts: PASS');
   assert.ok(coreSource.includes('countEmitterChemicalSupport(analyticEmitterDescriptor, sourceBounds, field.cells, gridSize, gridHeight)'),'support counting receives the seated height');
   assert.match(coreSource, /const packed = packSolidTextureRows\(field\.cells, gridSize, gridHeight\);/);
   assert.match(coreSource, /sceneSolidGeometryCache\.update\([^\n]*\{grid:gridSize,gridHeight\}/, 'the cache receives the seated height');
+  const denseBox = Array.from({length: 24000}, (_, i) => box[i % box.length]);
+  const denseField = voxelizeTriangleSolid(denseBox, 24, 48);
+  assert.deepEqual(denseField.cells, solid.cells, 'dense duplicate shell voxelizes to the exact same occupancy');
+  assert.deepEqual(denseField.surfaceCells,solid.surfaceCells,'Duplicate triangles cannot change the shell or turn exterior cells into interior');
+  assert.equal(denseField.surfaceCellCount,solid.surfaceCellCount);
 }
 console.log('scene solid non-default height contracts passed');

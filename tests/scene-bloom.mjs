@@ -1,6 +1,8 @@
 // kaminos-test: node
 import {test} from 'node:test';import assert from 'node:assert/strict';
 import {checkedSceneBloom,createSceneBloom} from '../scene-bloom.mjs';
+import {installSceneBloomControls} from '../scene-bloom-controls.mjs';
+import {createSceneEdits} from '../scene-edit-session.mjs';
 test('bloom preserves coverage, leaves the disabled scene alone and reuses its display graph',()=>{
  let allocations=0,rebuilds=0,redraws=0;const input={rgb:{add:emission=>({emission})},a:{identity:'coverage'}};
  const api=createSceneBloom({bloom:(_node,strength,radius,threshold)=>{allocations++;return {rgb:{},strength:{value:strength},radius:{value:radius},threshold:{value:threshold},dispose(){}};},convertToTexture:x=>x,vec4:(rgb,a)=>({rgb,a}),rebuild:()=>rebuilds++,redraw:()=>redraws++});

@@ -1,4 +1,5 @@
 import {sceneSolidRevision} from './volume-scene-solid.mjs';
+import {createBurnRegionSolidRaster} from './burn-region-solid-gpu.mjs';
 
 // Local triangles are uploaded only when their geometry changes. World matrices
 // deliberately do not participate in this cache: a drag updates 80 bytes/mesh.
@@ -58,9 +59,10 @@ struct Params { matrix:mat4x4<f32>, domain:vec4<f32>, dims:vec4<u32> }
 @group(0) @binding(6) var output:texture_storage_3d<r32uint,write>;
 @group(0) @binding(7) var<storage,read> support:array<u32>;
 @group(0) @binding(8) var<storage,read_write> stats:array<atomic<u32>>;
-struct MaterialMask {worldToMaterial:mat4x4<f32>,enabled:vec4<u32>}
+struct MaterialMask {worldToMaterial:mat4x4<f32>,capOriginStep:vec4<f32>,capBoundsMin:vec4<f32>,capBoundsMax:vec4<f32>,enabled:vec4<u32>}
 @group(0) @binding(9) var materialState:texture_3d<f32>;
 @group(0) @binding(10) var<uniform> material:MaterialMask;
+@group(0) @binding(11) var boundaryCap:texture_3d<u32>;
 fn indexOf(c:vec3<u32>)->u32{return c.x+p.dims.x*(c.y+p.dims.y*c.z);}
 fn coord(i:u32)->vec3<u32>{return vec3<u32>(i%p.dims.x,(i/p.dims.x)%p.dims.y,i/(p.dims.x*p.dims.y));}
 fn count()->u32{return p.dims.x*p.dims.y*p.dims.z;}
@@ -88,7 +90,18 @@ fn touches(a0:vec3<f32>,b0:vec3<f32>,c0:vec3<f32>,cell:vec3<i32>)->bool{
 }
 @compute @workgroup_size(64) fn init(@builtin(global_invocation_id) gid:vec3<u32>){
  let i=gid.x;if(i>=count()){return;}let c=coord(i);var root=i+1u;
- if(any(c==vec3<u32>(0))||any(c==p.dims.xyz-vec3<u32>(1))){root=0u;}
+ if(any(c==vec3<u32>(0))||any(c==p.dims.xyz-vec3<u32>(1))){
+  root=0u;
+  if(material.enabled.y!=0u){
+   let local=(vec3<f32>(c)+vec3<f32>(0.5))*2.0*p.domain.w/f32(p.dims.x)-vec3<f32>(p.domain.w)+p.domain.xyz;
+   let bmin=material.capBoundsMin.xyz;let bmax=material.capBoundsMax.xyz;
+   if(all(local>=bmin)&&all(local<=bmax)){
+    let qc=vec3<i32>(floor((local-material.capOriginStep.xyz)/material.capOriginStep.w));
+    let cdims=vec3<i32>(textureDimensions(boundaryCap));
+    if(all(qc>=vec3<i32>(0))&&all(qc<cdims)&&textureLoad(boundaryCap,qc,0).x!=0u){root=i+1u;}
+   }
+  }
+ }
  if(atomicLoad(&shell[i])!=0u){root=0xffffffffu;}
  atomicStore(&parent[i+1u],root);if(i==0u){atomicStore(&parent[0],0u);}
 }
@@ -150,6 +163,7 @@ export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
   const view=texture.createView(),combined=buffer('scene solid union',bytes,GPUBufferUsage.COPY_SRC),dummy=buffer('scene solid unused triangles',48);
   const support=buffer('scene solid source support',bytes),stats=buffer('scene solid validation',32,GPUBufferUsage.COPY_SRC);
   const noMaterial=device.createTexture({label:'unfiltered scene solid material',size:[1,1,1],dimension:'3d',format:'rgba16float',usage:GPUTextureUsage.TEXTURE_BINDING});
+  const noCap=device.createTexture({label:'unfiltered scene solid boundary cap',size:[1,1,1],dimension:'3d',format:'r32uint',usage:GPUTextureUsage.TEXTURE_BINDING});
   device.queue.writeBuffer(support,0,new Uint32Array(cells));
   const meshCache=createResidentSolidMeshes({upload(data){const b=buffer('resident scene solid local triangles',data.byteLength);device.queue.writeBuffer(b,0,data);return b;},release:b=>b.destroy()});
   let cached=sceneSolidGpuPipelines.get(device);
@@ -163,7 +177,8 @@ export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
       {binding:7,visibility:GPUShaderStage.COMPUTE,buffer:{type:'read-only-storage'}},
       {binding:8,visibility:GPUShaderStage.COMPUTE,buffer:{type:'storage'}},
       {binding:9,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:'float',viewDimension:'3d'}},
-      {binding:10,visibility:GPUShaderStage.COMPUTE,buffer:{type:'uniform'}}
+      {binding:10,visibility:GPUShaderStage.COMPUTE,buffer:{type:'uniform'}},
+      {binding:11,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:'uint',viewDimension:'3d'}}
     ]});
     const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]});
     const pipelines=Object.fromEntries(['raster','init','connect','fill','merge','measure','present'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'scene solid '+entryPoint,layout:pipelineLayout,compute:{module,entryPoint}})]));
@@ -172,39 +187,57 @@ export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
   }
   const {layout,pipelines}=cached;
   const objects=new Map();let pending=false,key='',builds=0,current=null,wallKey='',one;
-  function makeGroup(member,triangles=dummy,triangleCount=0,matrix=null,materialMask=null){
+  function makeGroup(member,triangles=dummy,triangleCount=0,matrix=null,materialMask=null,boundaryCap=null){
     const uniform=device.createBuffer({label:'scene solid transform',size:96,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
     const values=new ArrayBuffer(96),floats=new Float32Array(values),uints=new Uint32Array(values);
     floats.set(matrix??[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]);
     uints.set([...dims,triangleCount],20);
-    const materialUniform=device.createBuffer({label:'scene solid remaining material',size:80,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+    const materialUniform=device.createBuffer({label:'scene solid remaining material',size:128,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
     const group=device.createBindGroup({layout,entries:[{binding:0,resource:{buffer:uniform}},{binding:1,resource:{buffer:triangles}},
       {binding:2,resource:{buffer:member.shell}},{binding:3,resource:{buffer:member.parent}},{binding:4,resource:{buffer:member.mask}},
       {binding:5,resource:{buffer:combined}},{binding:6,resource:view},{binding:7,resource:{buffer:support}},{binding:8,resource:{buffer:stats}},
-      {binding:9,resource:(materialMask?.texture??noMaterial).createView()},{binding:10,resource:{buffer:materialUniform}}]});
+      {binding:9,resource:(materialMask?.texture??noMaterial).createView()},{binding:10,resource:{buffer:materialUniform}},
+      {binding:11,resource:(boundaryCap?.texture??noCap).createView()}]});
     return {uniform,materialUniform,values,floats,group};
   }
   function dispatch(encoder,name,group,n){const pass=encoder.beginComputePass({label:'scene solid '+name});pass.setPipeline(pipelines[name]);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.ceil(n/64));pass.end();}
   function destroyGroup(g){g.uniform.destroy();g.materialUniform.destroy();}
-  function destroyMember(m){m.shell.destroy();m.parent.destroy();m.mask.destroy();destroyGroup(m.base);for(const d of m.draws)destroyGroup(d);}
+  function destroyMember(m){m.regional?.dispose();m.shell.destroy();m.parent.destroy();m.mask.destroy();destroyGroup(m.base);for(const d of m.draws)destroyGroup(d);}
   return {
     backend:'gpu',texture,view,
     setSourceSupport(values){if(!(values instanceof Uint32Array)||values.length!==cells)throw Error('Invalid GPU source support');device.queue.writeBuffer(support,0,values);pending=true;},
-    update(input,transform,shape,{wallCells=[],materialMasks=[]}={}){
+    update(input,transform,shape,{wallCells=[],materialMasks=[],boundaryCap=null}={}){
       if(shape.grid!==grid||shape.gridHeight!==gridHeight)throw Error('GPU scene solid shape mismatch');
+      if(boundaryCap&&(!boundaryCap.texture?.createView||!Array.isArray(boundaryCap.origin)||boundaryCap.origin.length!==3||!Number.isFinite(boundaryCap.step)||!(boundaryCap.step>0)||!Array.isArray(boundaryCap.boundsMin)||boundaryCap.boundsMin.length!==3||!Array.isArray(boundaryCap.boundsMax)||boundaryCap.boundsMax.length!==3))throw Error('Invalid scene solid boundary cap');
+      const boundaryCapKey=boundaryCap?JSON.stringify([boundaryCap.origin,boundaryCap.step,boundaryCap.boundsMin,boundaryCap.boundsMax]):null;
       const members=meshCache.update(input,transform),seen=new Set();builds=0;
       for(const member of members){
         seen.add(member.id);let m=objects.get(member.id);
-        if(!m){m={shell:buffer('scene solid shell',bytes),parent:buffer('scene solid components',bytes+4),mask:buffer('scene solid object mask',bytes,GPUBufferUsage.COPY_SRC),draws:[]};m.base=makeGroup(m);objects.set(member.id,m);}
+        if(!m){m={shell:buffer('scene solid shell',bytes),parent:buffer('scene solid components',bytes+4),mask:buffer('scene solid object mask',bytes,GPUBufferUsage.COPY_SRC),draws:[],materialTexture:null,boundaryCapTexture:null,materialRevision:undefined,boundaryCapKey:undefined};m.base=makeGroup(m);objects.set(member.id,m);}
         const filter=materialMasks.find(mask=>mask.objectId===member.id);
         if(filter&&(filter.device!==device||!filter.texture?.createView||!Array.isArray(filter.matrix)||filter.matrix.length!==16||!filter.matrix.every(Number.isFinite)))throw Error('Invalid same-device remaining material mask');
-        if(m.materialTexture!==(filter?.texture??null)){
-          destroyGroup(m.base);m.base=makeGroup(m,dummy,0,null,filter);m.materialTexture=filter?.texture??null;pending=true;
+        const materialRevision=filter?.revision??null;
+        const texChanged=m.materialTexture!==(filter?.texture??null)||m.boundaryCapTexture!==(boundaryCap?.texture??null);
+        const capChanged=m.boundaryCapTexture!==(boundaryCap?.texture??null)||m.boundaryCapKey!==boundaryCapKey;
+        const materialMatrixKey=filter?JSON.stringify(filter.matrix):null;
+        const matChanged=m.materialTexture!==(filter?.texture??null)||m.materialRevision!==materialRevision||m.materialMatrixKey!==materialMatrixKey;
+        if(texChanged){
+          destroyGroup(m.base);m.base=makeGroup(m,dummy,0,null,filter,boundaryCap);m.materialTexture=filter?.texture??null;m.boundaryCapTexture=boundaryCap?.texture??null;pending=true;
         }
-        if(filter){const data=new ArrayBuffer(80);new Float32Array(data).set(filter.matrix);new Uint32Array(data)[16]=1;device.queue.writeBuffer(m.base.materialUniform,0,data);}
-        const materialRevision=filter?.revision??null;if(m.materialRevision!==materialRevision){m.materialRevision=materialRevision;pending=true;}
+        const regionChanged=!!filter?.regions!==!!m.regional;
+        if(texChanged||matChanged||capChanged||regionChanged){
+          const data=new ArrayBuffer(128),f=new Float32Array(data),u=new Uint32Array(data);
+          if(filter){f.set(filter.matrix,0);u[28]=filter.regions?0:1;}
+          if(boundaryCap){f.set([...boundaryCap.origin,boundaryCap.step,...boundaryCap.boundsMin,0,...boundaryCap.boundsMax,0],16);u[29]=1;}
+          device.queue.writeBuffer(m.base.materialUniform,0,data);
+        }
+        if(matChanged){m.materialRevision=materialRevision;m.materialMatrixKey=materialMatrixKey;pending=true;}
+        if(capChanged){m.boundaryCapKey=boundaryCapKey;m.dirty=true;pending=true;}
+        if(filter?.regions){
+          m.regional??=createBurnRegionSolidRaster(device,{grid,gridHeight,mask:m.mask});m.regional.update(filter,transform);pending=true;
+        }else if(m.regional){m.regional.dispose();m.regional=null;m.dirty=true;pending=true;}
         m.base.floats.set([...transform.translate,transform.scale],16);device.queue.writeBuffer(m.base.uniform,0,m.base.values);
-        if(m.revision===member.revision)continue;
+        if(m.revision===member.revision){if(capChanged)builds++;continue;}
         for(const d of m.draws)destroyGroup(d);m.draws=[];
         for(const draw of member.draws){const d=makeGroup(m,draw.resource,draw.triangleCount,draw.matrix);d.floats.set([...transform.translate,transform.scale],16);device.queue.writeBuffer(d.uniform,0,d.values);m.draws.push({...d,triangleCount:draw.triangleCount});}
         m.base.floats.set([...transform.translate,transform.scale],16);device.queue.writeBuffer(m.base.uniform,0,m.base.values);
@@ -212,7 +245,7 @@ export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
       }
       for(const [id,m] of objects)if(!seen.has(id)){destroyMember(m);objects.delete(id);pending=true;}
       const nextWallKey=JSON.stringify(wallCells);if(nextWallKey!==wallKey){wallKey=nextWallKey;pending=true;}
-      key=JSON.stringify(members.map(m=>[m.id,m.revision,objects.get(m.id).materialRevision]));
+      key=JSON.stringify(members.map(m=>[m.id,m.revision,objects.get(m.id).materialRevision,objects.get(m.id).materialMatrixKey,objects.get(m.id).boundaryCapKey]));
       current={backend:'gpu',key,revision:key,builds,triangleCount:members.reduce((n,m)=>n+m.triangleCount,0),members:members.map(m=>({id:m.id,triangleCount:m.triangleCount})),wallCells};
       return current;
     },
@@ -222,7 +255,8 @@ export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
       // Sparse authored walls are cheap host inputs, not mesh voxelization.
       for(const cell of current.wallCells){const i=cell.x+grid*(cell.y+gridHeight*cell.z);encoder.copyBufferToBuffer(wallOne(),0,combined,i*4,4);}
       for(const m of objects.values()){
-        if(m.dirty){encoder.clearBuffer(m.shell);for(const d of m.draws)dispatch(encoder,'raster',d.group,d.triangleCount);
+        if(m.regional){m.regional.encode(encoder);m.dirty=false;}
+        else if(m.dirty){encoder.clearBuffer(m.shell);for(const d of m.draws)dispatch(encoder,'raster',d.group,d.triangleCount);
           for(const phase of ['init','connect','fill'])dispatch(encoder,phase,m.base.group,cells);m.dirty=false;}
         dispatch(encoder,'merge',m.base.group,cells);
       }
@@ -243,7 +277,7 @@ export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
           members:members.map(([id],i)=>({id,solidCellCount:values.subarray(cells*(i+1),cells*(i+2)).reduce((a,b)=>a+b,0)}))};
       }finally{staging.unmap();staging.destroy();}
     },
-    destroy(){meshCache.destroy();for(const m of objects.values())destroyMember(m);objects.clear();combined.destroy();dummy.destroy();support.destroy();stats.destroy();one?.destroy();noMaterial.destroy();texture.destroy();}
+    destroy(){meshCache.destroy();for(const m of objects.values())destroyMember(m);objects.clear();combined.destroy();dummy.destroy();support.destroy();stats.destroy();one?.destroy();noMaterial.destroy();noCap.destroy();texture.destroy();}
   };
   function wallOne(){if(!one){one=buffer('scene solid wall value',16,GPUBufferUsage.COPY_SRC);device.queue.writeBuffer(one,0,new Uint32Array([1]));}return one;}
 }

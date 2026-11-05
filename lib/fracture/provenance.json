@@ -1,0 +1,14 @@
+{
+  "sourceRepo": "lyonsno/kaminos",
+  "sourceCommit": "7739d5b77975c4d52132acb0cdd5aa3fa61db052",
+  "sourceFile": "dist/structural-material-arch-gpu-engine.js",
+  "sha256": "470213bdf2e52359b0b111b78b35c2e2c8553b9e6827d4e4ccd1680e03621dca",
+  "engineRevision": "96b043c88dc2a4af5367820caf1e1e9f458d5560",
+  "license": "LICENSE.md",
+  "rebuildSource": "structural-material-arch-gpu-engine.js and scripts/build-arch-gpu-engine.mjs at sourceCommit",
+  "note": "Retained compiled engine with trailing whitespace removed; local change admits caller-measured maxJointsPerBodySolver (minimum eight) so whole-object attachment degree is not silently limited.",
+  "copiedSha256": "ea663abd11f1451315db7ba0312b405700c18e9754446c17ce9b9029f025194e",
+  "localChanges": [
+    "ArchGpuEngine constructor: maxJointsPerBodySolver uses explicit graph degree plus hand constraint; default remains eight."
+  ]
+}

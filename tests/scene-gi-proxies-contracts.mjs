@@ -202,7 +202,7 @@ test('named .glb files in generated-meshes resolve through /api/mesh-lods and ad
   assert.equal(namedUntiered.assetSha, HERO);
 });
 
-test('applyGiProxySetting auto-prepares missing tiers once per heroSha when sceneGiProxies.select returns no-tiers, and refreshSceneObjectsForLodSource upgrades hero-fallback burnable objects', async () => {
+test('applyGiProxySetting auto-prepares missing tiers once per heroSha and LOD refresh preserves live burn bodies', async () => {
   const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   assert.ok(html.includes('const autoPreparedLodSources = new Set(), inFlightLodPrepares = new Map();'), 'index.html defines autoPreparedLodSources and inFlightLodPrepares');
   const start = html.indexOf('function applyGiProxySetting(entry){');
@@ -232,7 +232,18 @@ test('applyGiProxySetting auto-prepares missing tiers once per heroSha when scen
   await fn(entry);
   assert.equal(prepared.length, 1, 'auto-prepare runs once per heroSha');
   assert.equal(prepared[0].sha, HERO);
-  assert.match(html, /if\s*\(sceneBurning\?\.read\?\.\(obj\.id\)\?\.state\?\.fields\?\.\[0\]\?\.surfaceLod\?\.tier\s*===\s*'hero'\)\s*sceneBurning\.forget\(obj\.object\)/, 'refreshSceneObjectsForLodSource forgets resident hero-fallback burn bodies before sceneBurning.sync()');
+  const refreshStart=html.indexOf('const refreshSceneObjectsForLodSource =');
+  const refreshEnd=html.indexOf('\nwindow.__kaminosRefreshLodSource',refreshStart);
+  assert.ok(refreshStart>=0&&refreshEnd>refreshStart);
+  const refreshed=[],resident={fuel:.42,steps:71},other={id:'other',object:{}};
+  const burning={read:()=>({state:{fields:[{surfaceLod:{tier:'hero'},...resident}]}}),
+    forget(){assert.fail('LOD completion must not destroy resident burn history');},sync(){}};
+  const refresh=new Function('workingScene','sceneGiProxies','applyGiProxySetting','sceneBurning',
+    html.slice(refreshStart,refreshEnd)+';return refreshSceneObjectsForLodSource;')(
+      {objects:[entry,other]},{get:root=>({heroSha:root===entry.object?HERO:'other'})},async row=>refreshed.push(row.id),burning);
+  await refresh(HERO);
+  assert.deepEqual(refreshed,[entry.id]);
+  assert.equal(burning.read().state.fields[0].steps,71);
 });
 
 

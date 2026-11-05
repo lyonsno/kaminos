@@ -59,6 +59,8 @@ export function sceneContext(context, options) {
   // These scene-unit fixtures do not allocate World or its visual overlay.
   context.volumePrototype??=null;context.worldSmokeGuide??=null;context.waterDomainProxy??=null;context.worldSmokeOverlayMode??='off';
   context.refreshWorldSmokeOverlay??=()=>({mode:'off'});
+  context.refreshVolumeReadout??=()=>{};
+  context.sceneBurning??=null;
   context.worldSourceSupplyEnabled??=()=>{const c=context.readVolumeControls?.()??{};return c.worldSmoke==='on'&&c.emitterSourceLaw==='immersed-source';};
   context.checkedBurnAppearance??=checkedBurnAppearance;
   context.createKilnRecipeStore??=createKilnRecipeStore;
@@ -76,6 +78,7 @@ export function sceneContext(context, options) {
   context.syncAssemblyGuides??=()=>{};context.syncAssemblyPresentation??=()=>{};
   context.selectedFlameControlEntry??=()=>context.selectedSceneObjectEntry?.()??(context.workingScene?.activeObjectId?{id:context.workingScene.activeObjectId,type:'flame-emitter'}:null);
   context.sceneLightingPreparation ??= null;
+  context.sceneGeometryPreview ??= null;
   // Domain fixtures do not prepare GPU environments; loading behavior has its own tests.
   context.environmentLoader ??= {holdFull:()=>()=>{},releaseFull(){}};
   context.requestAnimationFrame ??= fn=>fn();
@@ -147,9 +150,9 @@ export function composePageDocumentSession(context) {
   context.location??={};context.location.origin??='http://localhost:9000';
   context.location.href??=context.location.origin+'/'+(context.location.search??'')+(context.location.hash??'');
   context.history??={replaceState(_state,_title,url){context.location.href=String(url);}};
-  const a=page.indexOf('function createPageSceneDocumentSession('),b=page.indexOf('\nconst sceneDocument =',a);
+  const a=page.indexOf('let sceneDocumentFrameHolds ='),b=page.indexOf('\nconst sceneDocument =',a);
   if(a<0||b<a)throw Error('Missing production document-session installation');
-  vm.runInContext(page.slice(a,b),context);
+  if(!context.createPageSceneDocumentSession)vm.runInContext(page.slice(a,b),context);
   context.sceneDocument=context.createPageSceneDocumentSession({filename:context.currentSceneFile??null,blocked:context.sceneSaveBlockedByFailedRestore??false});
   return context.sceneDocument;
 }
