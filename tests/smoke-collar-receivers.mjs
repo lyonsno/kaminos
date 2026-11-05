@@ -2,7 +2,8 @@
 import assert from 'node:assert/strict';
 import {volumeGatherPlan,createVolumeGather} from '../scene-volume-gather.mjs';
 import {createSceneVolumeSource} from '../scene-volume-source.mjs';
-import {createDistributedSmokeBindings} from '../scene-smoke-reconstruction.mjs';
+import {WORLD_SMOKE_OPTICS_WGSL} from '../volume-world-smoke-optics.mjs';
+import {COMPOSED_SMOKE_WGSL,createDistributedSmokeBindings} from '../scene-smoke-reconstruction.mjs';
 import {createExteriorSmokeLight} from '../scene-exterior-light.mjs';
 const limits={maxStorageBufferBindingSize:1e9,maxBufferSize:1e9,maxTextureDimension2D:1024,maxTextureDimension3D:256,maxComputeWorkgroupsPerDimension:65535};
 const bounds={lo:[-2,-1,-3],hi:[2,7,3]};
@@ -11,7 +12,7 @@ globalThis.GPUShaderStage={FRAGMENT:1};
 globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,UNIFORM:4,COPY_SRC:8};
 globalThis.GPUTextureUsage={STORAGE_BINDING:1,TEXTURE_BINDING:2,COPY_SRC:4};
 const groups=[],writes=new Map();
-const device={limits,queue:{writeBuffer(b,offset,data){const next=offset===0?new Float32Array(Math.max(b.size??0,offset+data.byteLength)/4):writes.get(b.label);next.set(new Float32Array(data),offset/4);writes.set(b.label,next);},submit(){}},
+const device={limits,queue:{writeBuffer(b,offset,data){const next=offset===0?new Float32Array(Math.max(b.size??0,offset+data.byteLength)/4):(writes.get(b.label)??new Float32Array(Math.max(b.size??0,offset+data.byteLength)/4));next.set(new Float32Array(data),offset/4);writes.set(b.label,next);},submit(){}},
  createBindGroupLayout(o){return o;},
  createBuffer(o){return {...o,destroy(){}};},createTexture(){return {createView(){return {};},destroy(){}};},createShaderModule(){return {};},
  createComputePipeline(){return {getBindGroupLayout(){return {};}};},createBindGroup(g){groups.push(g);return g;},
@@ -57,3 +58,11 @@ const binding=createDistributedSmokeBindings(device);
 binding.update({...source,smokeReconstruction:prepared(),exterior:{...source,handoffMargin:.17,smokeReconstruction:prepared()}});
 assert.ok(Math.abs(writes.get('exterior smoke lookup coverage')[7]-1.17)<1e-6,'lookup consumes the propagated authored margin');
 binding.destroy();
+
+const rounded=createExteriorSmokeLight(device,{grid:8,refinement:4,receiverCoverage:{lo:[-1.5,-1,-1.5],hi:[1.5,5,1.5],pitch:.125}});
+const roundedFrame=rounded.encode({...far,exterior:{...far.exterior,handoffMargin:.36}},{geometry,revision:1,worldGeometry:false,directions:4,gain:1});
+assert.ok(roundedFrame.middle.skippedVolumeReceivers>0,'default rounded handoff retains an anisotropic Fine core instead of applying top margin to X/Z');
+rounded.destroy();
+
+const functions=[...(WORLD_SMOKE_OPTICS_WGSL+COMPOSED_SMOKE_WGSL).matchAll(/\bfn\s+(\w+)\s*\(/g)].map(m=>m[1]);
+assert.deepEqual(functions.filter((name,i)=>functions.indexOf(name)!==i),[],'assembled camera fragments must have distinct module-scope declarations');

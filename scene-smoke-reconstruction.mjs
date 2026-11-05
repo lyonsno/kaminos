@@ -148,7 +148,7 @@ const middleLookup=exteriorLookup.replaceAll('@binding(18)','@binding(21)').repl
  .replaceAll('exteriorIncident','middleIncident').replaceAll('exteriorBoundaryMasks','middleBoundaryMasks')
  .replaceAll('exteriorLastMaskFlags','middleLastMaskFlags').replaceAll('exteriorMeanIncident','middleMeanIncident')
  .replaceAll('exteriorCoverage.loBlend','exteriorCoverage.middleLoBlend').replaceAll('exteriorCoverage.hiEnabled','exteriorCoverage.middleHiEnabled');
-const composedSmokeSource=FINE_SMOKE_HANDOFF_WGSL+DISTRIBUTED_SMOKE_WGSL.replace('fn distributedMeanIncident(','fn fineMeanIncident(')
+const composedSmokeSource=FINE_SMOKE_HANDOFF_WGSL.replaceAll('fineSmokeEnvelope','fineIncidentEnvelope')+DISTRIBUTED_SMOKE_WGSL.replace('fn distributedMeanIncident(','fn fineMeanIncident(')
  .replaceAll('smokeBoundaryMasks[','smokeBoundaryMasks[exteriorCoverage.maskOffsets.x+')
  .replaceAll('smokeSupportPlanes[','smokeSupportPlanes[exteriorCoverage.maskOffsets.x+')+`
 struct ExteriorCoverage {loBlend:vec4<f32>,hiEnabled:vec4<f32>,middleLoBlend:vec4<f32>,middleHiEnabled:vec4<f32>,maskOffsets:vec4<u32>}
@@ -182,7 +182,7 @@ fn distributedMeanIncident(p:vec3<f32>)->vec3<f32>{
   let edge=min(p+vec3<f32>(1),hi-p);let distance=min(edge.x,min(edge.y,edge.z));
   let authoredMargin=exteriorCoverage.hiEnabled.w-1.0;
   var fineWeight=smoothstep(0.0,exteriorCoverage.loBlend.w,distance);
-  if(authoredMargin>0.0001){fineWeight=fineSmokeEnvelope(p,hi.y,authoredMargin);}
+  if(authoredMargin>0.0001){fineWeight=min(smoothstep(0.0,exteriorCoverage.loBlend.w,p.y+1.0),fineIncidentEnvelope(p,hi.y,authoredMargin));}
   return mix(coarse,fine,fineWeight);
 }
 `;

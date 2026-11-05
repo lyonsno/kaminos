@@ -32,7 +32,7 @@ try{
   const {createVolumeGather}=await import('/scene-volume-gather.mjs');
   const {createExteriorSmokeLight}=await import('/scene-exterior-light.mjs');
   const {buildTriangleVisibility}=await import('/scene-light-visibility.mjs');
-  const {COMPOSED_SMOKE_WGSL}=await import('/scene-smoke-reconstruction.mjs');
+  const {COMPOSED_SMOKE_WGSL,createDistributedSmokeBindings}=await import('/scene-smoke-reconstruction.mjs');
   const adapter=await navigator.gpu.requestAdapter();if(!adapter||adapter.isFallbackAdapter)throw Error('native adapter required');
   const identity={vendor:adapter.info.vendor,architecture:adapter.info.architecture,description:adapter.info.description,fallback:adapter.isFallbackAdapter};
   if(/swiftshader/i.test(JSON.stringify(identity)))throw Error('software fallback refused');
@@ -92,9 +92,9 @@ try{
      let v=fluid[0].x+front[0].x+textureLoad(reactant,vec3<i32>(0),0).x;
      return EmissiveMaterial(vec3<f32>(10.0+v+p.x*0.0),1.0,2.0);
     }`;
-   const seedModule=device.createShaderModule({code:definitions+WORLD_SMOKE_OPTICS_WGSL+SCENE_VOLUME_SOURCE_WGSL});
+   const seedModule=device.createShaderModule({code:definitions+WORLD_SMOKE_OPTICS_WGSL+SCENE_VOLUME_SOURCE_WGSL+COMPOSED_SMOKE_WGSL});
    const seedCompilation=await seedModule.getCompilationInfo();
-   if(seedCompilation.messages.some(m=>m.type==='error'))throw Error(JSON.stringify(seedCompilation.messages));
+   if(seedCompilation.messages.some(m=>m.type==='error'))throw Error(JSON.stringify(seedCompilation.messages.map(m=>({message:m.message,line:m.lineNum,type:m.type}))));
    const uniform=device.createBuffer({size:64,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
    const worldUniform=device.createBuffer({size:80,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
    const fluid=device.createBuffer({size:16,usage:GPUBufferUsage.STORAGE});
@@ -109,13 +109,44 @@ try{
    try{
     const encode=async()=>{const e=device.createCommandEncoder();producer.encode(e,0,1);device.queue.submit([e.finish()]);return producer.readback();};
     seed=await encode();
+    world.handoffMargin=.36;seed.rounded=await encode();
     world=null;device.queue.writeBuffer(worldUniform,0,new Float32Array(8));
     seed.off=await encode();
    }finally{producer.destroy();uniform.destroy();worldUniform.destroy();fluid.destroy();raw.destroy();reactant.destroy();}
+   // Exercise the actual composed fragment lookup and binding owner at the
+   // bottom join using constant incident fields and production clear masks.
+   const fFrame=fine.encode(source),cFrame=coarse.encode(source);
+   const constant=(r,value)=>{
+    const texture=device.createTexture({dimension:'3d',size:r.dimensions,format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});
+    const data=new Float32Array(r.dimensions.reduce((a,b)=>a*b,4));for(let i=0;i<data.length;i+=4)data.set([value,value,value,1],i);
+    device.queue.writeTexture({texture},data,{bytesPerRow:r.dimensions[0]*16,rowsPerImage:r.dimensions[1]},r.dimensions);return texture;
+   };
+   const fineConstant=constant(fFrame.smokeReconstruction,10),coarseConstant=constant(cFrame.smokeReconstruction,20);
+   const binding=createDistributedSmokeBindings(device);
+   const query=device.createBuffer({size:64,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
+   device.queue.writeBuffer(query,0,new Float32Array([0,-1.001,0,0,0,-1,0,0,0,-.999,0,0,0,-.95,0,0]));
+   const queryLayout=device.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.FRAGMENT,buffer:{type:'read-only-storage'}}]});
+   const queryGroup=device.createBindGroup({layout:queryLayout,entries:[{binding:0,resource:{buffer:query}}]});
+   const target=device.createTexture({size:[4,1],format:'rgba32float',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC});
+   const read=device.createBuffer({size:256,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+   let bottom;
+   try{
+    const group=binding.update({...source,smokeReconstruction:{...fFrame.smokeReconstruction,texture:fineConstant},exterior:{...cFrame,texture:coarse.smoke,handoffMargin:.36,smokeReconstruction:{...cFrame.smokeReconstruction,texture:coarseConstant}}});
+    const module=device.createShaderModule({code:COMPOSED_SMOKE_WGSL+`
+     @group(0) @binding(0) var<storage,read> queries:array<vec4<f32>>;
+     @vertex fn vertex(@builtin(vertex_index) i:u32)->@builtin(position) vec4<f32>{let x=f32((i<<1u)&2u);let y=f32(i&2u);return vec4<f32>(x*2.0-1.0,y*2.0-1.0,0,1);}
+     @fragment fn fragment(@builtin(position) p:vec4<f32>)->@location(0) vec4<f32>{return vec4<f32>(distributedMeanIncident(queries[u32(p.x)].xyz),1);}`});
+    const layout=device.createPipelineLayout({bindGroupLayouts:[queryLayout,device.createBindGroupLayout({entries:[]}),binding.layout]});
+    const pipeline=device.createRenderPipeline({layout,vertex:{module,entryPoint:'vertex'},fragment:{module,entryPoint:'fragment',targets:[{format:'rgba32float'}]}});
+    const e=device.createCommandEncoder();const pass=e.beginRenderPass({colorAttachments:[{view:target.createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}]});
+    pass.setPipeline(pipeline);pass.setBindGroup(0,queryGroup);pass.setBindGroup(2,group);pass.draw(3);pass.end();
+    e.copyTextureToBuffer({texture:target},{buffer:read,bytesPerRow:256},[4,1]);device.queue.submit([e.finish()]);
+    await read.mapAsync(GPUMapMode.READ);bottom=Array.from(new Float32Array(read.getMappedRange()).slice(0,16));
+   }finally{binding.destroy();fineConstant.destroy();coarseConstant.destroy();query.destroy();target.destroy();read.destroy();}
    const module=device.createShaderModule({code:COMPOSED_SMOKE_WGSL});
    const compilation=await module.getCompilationInfo();
    const validation=await device.popErrorScope();
-   return {identity,rows,independent,overlap,seed,errors,validation:validation?.message??null,compilation:compilation.messages.map(m=>({type:m.type,message:m.message,line:m.lineNum}))};
+   return {identity,rows,independent,overlap,seed,bottom,errors,validation:validation?.message??null,compilation:compilation.messages.map(m=>({type:m.type,message:m.message,line:m.lineNum}))};
   }finally{fine.destroy();coarse.destroy();texture.destroy();medium.destroy();middle.destroy();device.destroy();}
  });await save();
  assert.equal(report.signal.validation,null);assert.deepEqual(report.signal.errors,[]);assert.deepEqual(report.errors,[]);
@@ -133,6 +164,9 @@ try{
   else assert.deepEqual(overlap.clipped.slice(i,i+4),overlap.full.slice(i,i+4),'retained receivers preserve full quadrature');
  }
  assert.equal(zeroed,overlap.allocated-overlap.active,'GPU skip mask matches effective receiver count');
+ assert.equal(report.signal.bottom.length,16);
+ for(let i=0;i<3;i++)assert.ok(Math.abs(report.signal.bottom[i*4]-20)<.001,'bottom incident join must approach the exterior field continuously');
+ assert.ok(report.signal.bottom[12]<20&&report.signal.bottom[12]>19,'inside bottom blend samples both fields');
  const seed=report.signal.seed;
  assert.deepEqual(seed.dimensions,[4,8,4]);
  assert.ok(seed.values.every(Number.isFinite)&&seed.values.length===512);
@@ -147,6 +181,14 @@ try{
   const i=4*(x+4*(y+8*z));
   assert.ok(Math.abs(seed.values[i]-(10+10*weight))<1e-5,'live seed emission must match camera ownership');
   assert.ok(Math.abs(seed.values[i+3]-(3+6*weight))<1e-5,'collar extinction is mixed, never omitted or doubled');
+  let roundedWeight=0;
+  for(let k=0;k<8;k++){
+   const p=[x,y,z].map((v,a)=>(v+(((k>>a)&1)+.5)*.5)*.5-1);
+   const rx=Math.max(0,Math.min(1,(Math.abs(p[0])-.58)/.4)),rz=Math.max(0,Math.min(1,(Math.abs(p[2])-.58)/.4));
+   const ry=Math.max(0,Math.min(1,(p[1]-1.88)/1.04));
+   roundedWeight+=smooth(Math.min(1,Math.hypot(rx,ry,rz)))/8;
+  }
+  assert.ok(Math.abs(seed.rounded.values[i+3]-(3+6*roundedWeight))<1e-5,'authored margin drives physical camera uniform and seeded extinction together');
   assert.deepEqual(seed.off.values.slice(i,i+4),[10,10,10,3],'disabled World preserves original Fine coefficients');
  }
  const [a,b,c,d,m,s,r]=report.signal.rows;assert.equal(report.signal.rows.length,7);

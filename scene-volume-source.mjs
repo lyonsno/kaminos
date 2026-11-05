@@ -146,6 +146,9 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
     encode(encoder, index, currentFrame,transform) {
       if (status === 'destroyed') throw new Error('scene source destroyed');
       const world=getWorldSmoke();
+      // This optional authored value is also the camera's physical ownership
+      // parameter. Publish and seed from the same value in this queued frame.
+      if(Number.isFinite(world?.handoffMargin))device.queue.writeBuffer(worldRenderUniform,36,new Float32Array([Math.min(.60,Math.max(.05,world.handoffMargin))]));
       if (getReactantTextures() !== boundTextures||(world?.texture??emptyWorld)!==boundWorld||(world?.middle?.texture??emptyWorld)!==boundMiddle) inputs = buildInputs();
       if (!Number.isInteger(index) || !inputs[index]) throw new Error('invalid scene source index');
       worldTransform=validateSceneSourceTransform(transform);

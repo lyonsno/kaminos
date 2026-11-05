@@ -24,7 +24,10 @@ export function createExteriorSmokeLight(device,{grid=8,refinement=4,receiverCov
       const near=nearCoverage??medium.middle;
       const fineHi=source.dimensions.map(n=>-1+2*n/source.dimensions[0]);
       const margin=Number.isFinite(medium.handoffMargin)?Math.min(.60,Math.max(.05,medium.handoffMargin)):null;
-      const fineBlend=margin!==null?Math.max(.02+Math.max(.04,.4/.36*margin),(.02+Math.max(.04,.26/.36*margin))*(fineHi[1]+1)):2/fineReceiverGrid;
+      const cellBlend=2/fineReceiverGrid;
+      const xz=margin!==null?.02+Math.max(.04,.4/.36*margin):cellBlend;
+      const top=margin!==null?(.02+Math.max(.04,.26/.36*margin))*(fineHi[1]+1):cellBlend;
+      const fineCore={lo:[-1+xz,-1+cellBlend,-1+xz],hi:[1-xz,fineHi[1]-top,1-xz],blendWidth:0};
       for(const [name,region] of [['world',medium],['middle',near]]){
         if(!region)continue;
         // Keep cubic receiver cells and exact physical coverage. In particular,
@@ -34,7 +37,7 @@ export function createExteriorSmokeLight(device,{grid=8,refinement=4,receiverCov
         const gcd=(a,b)=>b?gcd(b,a%b):a;
         const widthUnit=dims[0]/dims.reduce(gcd);
         const regionGrid=name==='middle'&&nearCoverage?dims[0]:Math.ceil(grid/widthUnit)*widthUnit;
-        const exclude=name==='world'&&near?{lo:near.localMin,hi:near.localMax,blendWidth:nearCoverage?.pitch??(near.localMax[0]-near.localMin[0])/grid}:{lo:[-1,-1,-1],hi:fineHi,blendWidth:fineBlend};
+        const exclude=name==='world'&&near?{lo:near.localMin,hi:near.localMax,blendWidth:nearCoverage?.pitch??(near.localMax[0]-near.localMin[0])/grid}:fineCore;
         const key=JSON.stringify([revision,source.dimensions,region.localMin,region.localMax,regionGrid,exclude]);
         let current=regions.get(name);
         if(!current||current.key!==key){
