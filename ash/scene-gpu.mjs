@@ -91,17 +91,23 @@ export function createAshSceneSolids({device,layout:p,collision,headers,collisio
   code=code.replace('solid[c.x+D.x*(c.y+D.y*c.z)]=0u;',`solid[c.x+D.x*(c.y+D.y*c.z)]=0u;
    if(all(c%4u==vec3<u32>(0))){atomicStore(&ashMap[${a.demand}u+page_of(c)],0u);}
    let slot=atomicLoad(&ashMap[${a.map}u+page_of(c)]);if(slot!=0u){atomicOr(&ashMap[${a.flags}u+slot-1u],2u);}`);
-  code=code.replace('  let point=(pose.inverse*vec4<f32>(world,1)).xyz;',`  var mask=0u;
+  const stampStart=code.indexOf(' @compute @workgroup_size(64) fn stamp');
+  code=code.slice(0,stampStart)+`
+ @compute @workgroup_size(64) fn stamp(@builtin(workgroup_id) w:vec3<u32>,@builtin(local_invocation_id) l:vec3<u32>){
+  let group=w.x+w.y*ROW;if(group>=pose.tiles.y*G||(group%G)*64u+l.x>=V){return;}let c=cell(pose.tiles.x,group,l.x);if(any(c>=D)){return;}
+  let world=O+(vec3<f32>(c)+vec3<f32>(.5))*S;let center=fine_occupied(world);var mask=0u;
   for(var z=0u;z<2u;z++){for(var y=0u;y<2u;y++){for(var x=0u;x<2u;x++){
    let at=O+(vec3<f32>(c)+(vec3<f32>(f32(x),f32(y),f32(z))+.5)*.5)*S;
    if(fine_occupied(at)){mask|=1u<<(x+2u*y+4u*z);}
   }}}
-  // Horizontal variation finds ledges/gaps and rejects a uniform horizontal
-  // support plane. Compare the four fine columns of the same coarse cell.
+  // Conservative sampled covering: a finer cache must not make a support
+  // disappear merely because its coarse center falls between occupied texels.
+  if(mask!=0u||center){solid[c.x+D.x*(c.y+D.y*c.z)]=2u;}
   let column=mask&5u;var differs=false;
   for(var z=0u;z<2u;z++){for(var x=0u;x<2u;x++){if(((mask>>(x+4u*z))&5u)!=column){differs=true;}}}
-  if(differs){atomicMax(&ashMap[${a.demand}u+page_of(c)],2u);}
-  let point=(pose.inverse*vec4<f32>(world,1)).xyz;`);
+  if(differs||(mask!=0u&&!center)){atomicMax(&ashMap[${a.demand}u+page_of(c)],2u);}
+ }`;
+
  }
  const module=device.createShaderModule({label:'ash moving scene occupancy',code});
  const bindLayout=device.createBindGroupLayout({entries:[
