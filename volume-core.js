@@ -6302,7 +6302,7 @@ fn sampleWorldReactantBurn(p: vec3<f32>) -> f32 {
 // csTransportPredict along the shared characteristic, avoiding 8 in-place backtraces.
 fn reactantPredictedOxidizer(c: vec3<i32>) -> f32 {
   if (sceneSolidAt(c)) { return 0.0; }
-  return fluidPredict[slotIndex(clampCell(c), 0u)].w;
+  return fluidPredict[slotIndex(c, 0u)].w;
 }
 
 fn sampleReactantPredicted(cellCenter: vec3<f32>) -> f32 {
@@ -6354,7 +6354,7 @@ fn reactantOxidizerExtrema(cellCenter: vec3<f32>) -> vec2<f32> {
 // order outside the source extrema), first-order semi-Lagrangian otherwise.
 fn transportReactantOxidizer(cellI: vec3<i32>, backCell: vec3<f32>, forwardCell: vec3<f32>, macCormackScalars: bool) -> f32 {
   if (VELOCITY_ONLY) { return u.reactant_combustion_c.z; }
-  let predicted = select(sampleReactantOxidizer(backCell), fluidPredict[slotIndex(clampCell(cellI), 0u)].w, macCormackScalars);
+  let predicted = select(sampleReactantOxidizer(backCell), fluidPredict[slotIndex(cellI, 0u)].w, macCormackScalars);
   if (openWorldBoundary() && max(ghostOutsideAmount(backCell), ghostOutsideAmount(forwardCell)) > 0.0) { return predicted; }
   if (!macCormackScalars || inflowGhostBlend(backCell) > 0.0) {
     return predicted;
@@ -6997,12 +6997,12 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     let c1 = readSlot(cellI, 1u);
     let c2 = readSlot(cellI, 2u);
     let m1 = sampleFluidSlotMasked(backCell, 1u);
-    let nxp = readSlot(vec3<i32>(clampCell(bI + vec3<i32>(1, 0, 0))), 1u);
-    let nxm = readSlot(vec3<i32>(clampCell(bI + vec3<i32>(-1, 0, 0))), 1u);
-    let nyp = readSlot(vec3<i32>(clampCell(bI + vec3<i32>(0, 1, 0))), 1u);
-    let nym = readSlot(vec3<i32>(clampCell(bI + vec3<i32>(0, -1, 0))), 1u);
-    let nzp = readSlot(vec3<i32>(clampCell(bI + vec3<i32>(0, 0, 1))), 1u);
-    let nzm = readSlot(vec3<i32>(clampCell(bI + vec3<i32>(0, 0, -1))), 1u);
+    let nxp = readSlot(bI + vec3<i32>(1, 0, 0), 1u);
+    let nxm = readSlot(bI + vec3<i32>(-1, 0, 0), 1u);
+    let nyp = readSlot(bI + vec3<i32>(0, 1, 0), 1u);
+    let nym = readSlot(bI + vec3<i32>(0, -1, 0), 1u);
+    let nzp = readSlot(bI + vec3<i32>(0, 0, 1), 1u);
+    let nzm = readSlot(bI + vec3<i32>(0, 0, -1), 1u);
     let neighborMass = c1.x + c1.y + c1.z + c2.x + m1.x + m1.y + m1.z
       + nxp.x + nxp.y + nxp.z + nxm.x + nxm.y + nxm.z
       + nyp.x + nyp.y + nyp.z + nym.x + nym.y + nym.z

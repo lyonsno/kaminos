@@ -58,7 +58,7 @@ test('material predictor caches oxidizer and turbulent characteristic while opti
  const sceneSource=readFileSync(new URL('../scene-volume-source.mjs',import.meta.url),'utf8');
  const worldOptics=readFileSync(new URL('../volume-world-smoke-optics.mjs',import.meta.url),'utf8');
  const predOx=code.slice(code.indexOf('fn reactantPredictedOxidizer('),code.indexOf('fn sampleReactantPredicted('));
- assert.match(predOx,/fluidPredict\[slotIndex\(clampCell\(c\), 0u\)\]\.w/);
+ assert.match(predOx,/fluidPredict\[slotIndex\(c, 0u\)\]\.w/);
  assert.doesNotMatch(predOx,/sampleReactantOxidizer/);
  assert.match(sceneSource,/regionSmokeMaterial\(worldSmokeSample\(p\),vec3<f32>\(0\.0\),1\.0,0\.0\)/);
  assert.match(sceneSource,/regionSmokeMaterial\(regionSmokeSample\(middleOptical,p,worldRender\.middleLoPitch,0\),vec3<f32>\(0\.0\),1\.0,0\.0\)/);

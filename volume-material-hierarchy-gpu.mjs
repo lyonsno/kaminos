@@ -123,11 +123,10 @@ fn hierarchyHistory(p:vec3<f32>)->Gas{return hierarchyPlane(p,true);}
 }
 @compute @workgroup_size(64) fn restrictBricks(@builtin(workgroup_id) group:vec3<u32>,@builtin(num_workgroups) groups:vec3<u32>,@builtin(local_invocation_index) l:u32){
  let index=group.x+group.y*groups.x;if(index>=arrayLength(&work)){return;}let slot=work[index];let n=bricks[slot];let c=localCell(l);var a=vec4<f32>(0);var b=vec4<f32>(0);var ownedA=vec4<f32>(0);var ownedB=vec4<f32>(0);
- let smokeOnly=worldSmokeOnly();
  for(var z=0u;z<2u;z++){for(var y=0u;y<2u;y++){for(var x=0u;x<2u;x++){
   let q=2u*c+vec3<u32>(x,y,z);let oct=q/4u;let child=childSlot(n,oct.x+2u*(oct.y+2u*oct.z));
-  let r=hout[child*64u+localIndex(q%4u)];a+=r.a*.125;if(!smokeOnly){b+=r.b*.125;}
-  let owned=hout[arrayLength(&hout)/2u+child*64u+localIndex(q%4u)];ownedA+=owned.a*.125;if(!smokeOnly){ownedB+=owned.b*.125;}
+  let r=hout[child*64u+localIndex(q%4u)];a+=r.a*.125;b+=r.b*.125;
+  let owned=hout[arrayLength(&hout)/2u+child*64u+localIndex(q%4u)];ownedA+=owned.a*.125;ownedB+=owned.b*.125;
  }}}hout[slot*64u+l]=Gas(a,b);hout[arrayLength(&hout)/2u+slot*64u+l]=Gas(ownedA,ownedB);
 }
 @compute @workgroup_size(4,4,4) fn exportBricks(@builtin(global_invocation_id) gid:vec3<u32>){
