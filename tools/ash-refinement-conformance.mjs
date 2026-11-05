@@ -30,4 +30,4 @@ try{
  report.phase='capture';save();await page.screenshot({path:resolve(out,'surface.png')});
  report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack??error);process.exitCode=1;}
-finally{await browser?.close();report.browserClosed=true;save();console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,report:resolve(out,'report.json')}));}
+finally{try{await browser?.close();report.browserClosed=true;}catch(error){report.cleanupError=String(error);report.status='failed';report.browserClosed=false;process.exitCode=1;}finally{save();console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,report:resolve(out,'report.json')}));}}
