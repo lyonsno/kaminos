@@ -1,0 +1,9 @@
+# Analytical hinge families
+
+Select an existing hinged connection in Link workshop. The Analytical hinge section offers Fork · hub · pin, Interleaved knuckles, and Flange pivot. New Hinge together connections start with the fork family.
+
+Edit axle enters a native component target. G moves the pivot, R changes its axis, and S uniformly sizes its analytical hardware. The axle frame is independent of the picked receiving plane. Edit seating returns to contact-plane adjustment; Pose A/B authors swing about the axle. Tab returns to connection selection.
+
+Changing family or size rebuilds analytical geometry; Undo restores an earlier appearance. Fixed half, moving half and pin remain separate rigid slots. Export hinge parts writes kaminos.hinge-parts.v1: local Three object geometry for each slot, a family/dimension key, role and joint/bore metadata. Return hinge parts accepts the same three distinct slots and key, validates that each contains geometry, retains its local transforms beneath a separate driven wrapper, and persists the appearance in the ordinary scene recipe. The fixed half and pin follow the receiving frame; the moving half and payload follow the authored joint angle. Existing connections without hardware retain their prior display.
+
+The export/return operations are also available through kaminosWorkbenchExperiments.invoke('exportHinge', {objectId}) and invoke('importHinge', {objectId, packet}); hingeHardware selects family/size, editAxle and editSeat select the native targets. Image generation, TRELLIS execution, generated-geometry registration, bore rectification and collision checking are subsequent pipeline stages. The current return exercise changes a part's appearance to establish slot retention without claiming a generation result.
