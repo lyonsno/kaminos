@@ -2153,6 +2153,22 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="slider-row"><span class="slider-label">Fine velocity width (0 = material)</span><input type="number" id="volume-fine-velocity" data-volume-settings-param="volume_fine_velocity" min="0" step="1" value="0"></div>
     <div class="slider-row"><span class="slider-label">Fine pressure width (0 = velocity / legacy choice)</span><input type="number" id="volume-fine-pressure" data-volume-settings-param="volume_fine_pressure" min="0" step="1" value="0"></div>
     <span class="slider-help">Fine material uses Grid width. Independent velocity requires converged pressure and staggered face forces. Material, velocity and pressure widths are independent integer cell counts. Floor inflow and joined pressure are not supported by this mode.</span>
+    <div hidden data-volume-grid-editor-state id="volume-calibration-controls">
+<select id="volume-calibration-mode" data-volume-settings-param="volume_calibration_mode"><option value="legacy">Legacy</option><option value="world">World scale</option></select>
+<input type="number" id="volume-simulation-world-scale" data-volume-settings-param="volume_simulation_world_scale" value="2" step="any" min="0">
+<input type="number" id="volume-calibration-material-cells" data-volume-settings-param="volume_calibration_material_cells" value="64" step="1" min="4">
+<input type="number" id="volume-calibration-velocity-cells" data-volume-settings-param="volume_calibration_velocity_cells" value="64" step="1" min="2">
+<select id="volume-world-emissive" data-volume-settings-param="volume_world_emissive"><option value="on" selected>On</option><option value="off">Off (smoke only)</option></select>
+<select id="volume-fast-bypass" data-volume-settings-param="volume_fast_bypass"><option value="off" selected>Off</option><option value="on">On</option></select>
+<select id="volume-velocity-wavelet" data-volume-settings-param="volume_velocity_wavelet"><option value="off" selected>Off</option><option value="on">On</option></select>
+</div>
+    <div class="slider-row"><span class="slider-label">Following</span><select id="volume-coverage-mode" data-volume-settings-param="volume_coverage_mode" title="Off: leave Fine coverage where you place it. Sources: follow source supply. Fire + sources: also use measured reaction, mixing, heat and smoke demand from adaptive material." class="select-input"><option value="off">Off</option><option value="sources">Sources</option><option value="fire">Fire + sources</option></select></div>
+    <div class="slider-row"><span class="slider-label">Interior margin</span><input type="number" min="0" step="any" value="0.15" id="volume-coverage-margin" data-volume-settings-param="volume_coverage_margin" title="Fraction of each side reserved as spare coverage. Larger margins trigger earlier movement and leave less interior space."></div>
+    <div class="slider-row"><span class="slider-label">Headroom</span><input type="number" min="0" step="any" value="0.75" id="volume-coverage-headroom" data-volume-settings-param="volume_coverage_headroom" title="Fraction of Fine height above a source when choosing a new placement. Does not resize the box."></div>
+    <div class="slider-row"><span class="slider-label">Prediction (seconds)</span><input type="number" min="0" step="any" value="0.3" id="volume-coverage-lookahead" data-volume-settings-param="volume_coverage_lookahead" title="Predict source motion and measured gas motion this many wall-clock seconds ahead. More prediction can move coverage earlier."></div>
+    <div class="slider-row"><span class="slider-label">Check interval (seconds)</span><input type="number" min="0" step="any" value="0.25" id="volume-coverage-interval" data-volume-settings-param="volume_coverage_interval" title="Minimum time between placement checks and moves. Larger values reduce remap work but follow moving fire later. Zero checks every frame."></div>
+    <div class="slider-row"><span class="slider-label">Fire / source priority</span><input type="number" min="0" step="any" value="1" id="volume-coverage-activity-weight" data-volume-settings-param="volume_coverage_activity_weight" title="Relative total weight of measured fire demand versus source supply. Zero follows sources alone. Fire measurements use the adaptive material refinement priorities."></div>
+    <div class="slider-row"><span class="slider-label">Required coverage gain</span><input type="number" min="0" step="any" value="0.05" id="volume-coverage-hysteresis" data-volume-settings-param="volume_coverage_hysteresis" title="Minimum improvement as a fraction of total weighted demand before moving. Larger values resist small improvements and reduce movement."></div>
     <div class="slider-row"><span class="slider-label">Adaptive material</span><input type="checkbox" id="volume-adaptive-material" data-volume-settings-param="volume_adaptive_material"></div>
     <div class="slider-row"><span class="slider-label">Extra material budget</span><input type="number" min="0" step="any" value="1" id="volume-adaptive-budget" data-volume-settings-param="volume_adaptive_budget"></div>
     <div class="slider-row"><span class="slider-label">Spread</span><input type="number" min="0" step="any" value="1" id="volume-adaptive-spread" data-volume-settings-param="volume_adaptive_spread"></div>
@@ -2965,6 +2981,9 @@ import {authorFireObjects,fireControlOwner,FIRE_DOMAIN_ID,projectFireSettingsToS
 import { createFlameAuthoring, createFlameInspector, flameControlDisplayValue, portableFlamePreset, flamePresetRadius, flamePresetForLocalControls } from './flame-authoring.mjs';
 import { GRID_TUNING_FIELDS } from './volume-grid-tuning.mjs';
 import { REGION_CONTROL_FIELDS } from './volume-region-controls.mjs';
+import {FineCoverageController} from './volume-fine-coverage.mjs';
+import {WORLD_CALIBRATION_FIELDS,SIMULATION_LEVER_FIELDS,readWorldCalibrationControls,resolveWorldCalibration,resolveSimulationLevers,captureWorldCalibration} from './volume-world-calibration.mjs';
+import {FINE_COVERAGE_FIELDS,readFineCoverageControls,patchFineCoverageControls} from './volume-fine-coverage-controls.mjs';
 import { ADAPTIVE_MATERIAL_FIELDS, readAdaptiveMaterialControls, patchAdaptiveMaterialControls, hasAuthoredAdaptiveMaterial } from './volume-adaptive-material-controls.mjs';
 let adaptiveMaterialSettingsAuthored=false;
 import { worldSmokeOverlayGeometry } from './volume-world-smoke-optics.mjs';
@@ -3028,6 +3047,7 @@ function refreshWorldSmokeOverlay() {
 let waterDomainProxy=null;
 let flameDomainTranslation = [0, 0, 0];
 let flameDomainScale = 1, flameDomainFollowSource = true;
+let fineCoverageController=new FineCoverageController(),fineCoverageStatus={status:'off'};
 let flameDomainDraft = null, flameDomainProxy = null;
 import {
   VOLUME_EMITTER_INLET_PROFILES,
@@ -5681,7 +5701,14 @@ function refreshFlameDomainPreview() {
   window._kaminosDirty?.();
 }
 function writeFlameDomainPreview(value) {
-  flameDomainDraft=checkedFlameDomainPose(value);refreshFlameDomainPreview();
+  const pose=checkedFlameDomainPose(value),next=domainTransformForPose(pose);
+  const previous=[...flameDomainTranslation],previousScale=flameDomainScale;
+  if(!volumePrototype?.relocateOrdinaryDomain || !applyFlameEmitterPose)throw Error('The flame simulation is not mounted');
+  if(authoredFlamePresent&&window.__kaminosVolumeEmitterReceipt?.requested?.sourceLaw==='immersed-source')immersedControlsForFlamePose(window.__kaminosVolumeEmitterReceipt.requested,flamePoseToDomain(flameEmitterPose,next.translation,next.scale),false);
+  const analytic=window.__kaminosVolumeEmitterReceipt?.effective?.family!=='cluster';
+  try {if(setFlameDomainTranslation(next.translation,next.scale)&&analytic)writeAuthoredFlameEmitterPose(flameEmitterPose);}
+  catch(error){setFlameDomainTranslation(previous,previousScale);if(analytic)writeAuthoredFlameEmitterPose(flameEmitterPose);throw error;}
+  flameDomainDraft=pose;refreshFlameDomainPreview();
 }
 function flameDomainTopY() {
   const dims = window.__kaminosVolumeGridPreview?.dimensions ?? window.__kaminosVolumeGridDimensions;
@@ -5705,15 +5732,10 @@ function setFlameDomainTranslation(next, scale = flameDomainScale) {
   return true;
 }
 function settleAuthoredFlameDomain(event) {
-  const next=domainTransformForPose(event.after),previous=[...flameDomainTranslation],previousScale=flameDomainScale;
-  if(!volumePrototype?.relocateOrdinaryDomain || !applyFlameEmitterPose)throw Error('The flame simulation is not mounted');
-  if(authoredFlamePresent&&window.__kaminosVolumeEmitterReceipt?.requested?.sourceLaw==='immersed-source')immersedControlsForFlamePose(window.__kaminosVolumeEmitterReceipt.requested,flamePoseToDomain(flameEmitterPose,next.translation,next.scale),false);
-  const analytic = window.__kaminosVolumeEmitterReceipt?.effective?.family !== 'cluster';
-  try {setFlameDomainTranslation(next.translation,next.scale);if(analytic)writeAuthoredFlameEmitterPose(flameEmitterPose);}
-  catch(error){setFlameDomainTranslation(previous,previousScale);if(analytic)writeAuthoredFlameEmitterPose(flameEmitterPose);throw error;}
+  writeFlameDomainPreview(event.after);
   flameDomainFollowSource=event.operation==='commit'?false:event.afterContext;
   flameDomainDraft=null;refreshFlameDomainPreview();
-  setInfo(worldSourceSupplyEnabled()?'Fine detail region moved; existing world gas continues':flameEmitterInjectionSuspended?'Simulation box changed; field restarted · emitter outside box, injection paused':'Simulation box changed; field restarted · emitter stays in place');
+  setInfo(worldSourceSupplyEnabled()?'Fine coverage moved; overlapping detail and World gas continue':'Simulation box changed; overlapping gas retained · newly covered space starts as ambient');
 }
 
 function settleFlameDomainForPose(pose, targetDomain = null) {
@@ -5738,7 +5760,7 @@ function settleFlameDomainForPose(pose, targetDomain = null) {
   }
   setInfo(flameEmitterInjectionSuspended
     ? 'Flame source support still exceeds the relocated grid: injection paused'
-    : 'Flame grid moved to the released source; the field restarted there');
+    : 'Fine coverage moved to the released source; overlapping gas retained');
   return true;
 }
 
@@ -11824,6 +11846,7 @@ async function initScene() {
   scenePlacementTools.edits.register('@water-domain',{read:acceptedWaterDomainPose,write:writeWaterDomainPose,check:checkWaterDomainPose});
   scenePlacementTools.edits.register('@flame-domain',{read:()=>structuredClone(flameDomainDraft||acceptedFlameDomainPose()),write:writeFlameDomainPreview,check:checkedFlameDomainPose});
   scenePlacementTools.edits.subscribe(state=>{if(!state.active){flameDomainDraft=null;refreshFlameDomainPreview();}});
+  window.kaminosFineCoverage={read:readFineCoverageState,set:setFineCoverageSettings};
   window.kaminosFlameDomain={helpers:()=>({guideVisible:flameDomainGuide?.visible??false,guideCount:scene.children.filter(object=>object.name==='Flame simulation bounds').length}),read:()=>({translation:[...flameDomainTranslation],scale:flameDomainScale,followSource:flameDomainFollowSource}),set:patch=>{if(scenePlacementTools.edits.state().active)throw Error('Finish the active edit first');try{return scenePlacementTools.edits.apply('@flame-domain',patch,'Edit simulation box');}catch(error){scenePlacementTools.edits.cancel();throw error;}}};
   scenePlacementTools.edits.register('@burner-controls', {
     read: readBurnerControlHistoryState,
@@ -12177,6 +12200,7 @@ async function initScene() {
     if (refinementStatus.textContent !== refinementText) refinementStatus.textContent = refinementText;
     viewProjection?.update();
     syncAuthoredWaterFlameTransport();
+    updateAutomaticFineCoverage(performance.now()/1000);
     workbenchSceneFrames.tick(performance.now());
     const liquidFireCompositionActive = fingerFluidPyroCompositionRequested();
     const volumeSmokeRouteActive = isKaminosVolumeSmokeRoute() || liquidFireCompositionActive;
@@ -13350,6 +13374,7 @@ async function installOwnerWorkbenchEntry() {
   fire:{add:id=>window.kaminosSceneAuthoring.addFlameEmitter(id,{lightingRoute:Object.fromEntries([...fireLightFieldRouteParams()].filter(([key])=>key.startsWith('volume_light_field')||key==='volume_collision'))}),
     setEnabled:enabled=>scenePlacementTools.edits.apply('@flame-source-enabled',{enabled},enabled?'Enable fire source':'Disable fire source'),
     read:()=>window.kaminosFlameEmitterState(),settings:()=>window.kaminosFlameAuthoring.read(),
+    coverage:{read:readFineCoverageState,set:setFineCoverageSettings},
     adaptiveMaterial:{read:readAdaptiveMaterialSettings,set:setAdaptiveMaterialSettings,adopt:adoptAdaptiveMaterialExperiment},
     select:()=>window.selectSceneObject(primaryAuthoredFlameSource()?.id),setVisible:visible=>{volumePrototype.canvasElement().style.opacity=visible?'1':'0';window._kaminosDirty?.();}},
   atmosphere:{async open(settings){await workbenchViewerReady;await ownerVolumeReady;const {createAshAtmosphere}=await import('./ash/atmosphere-gpu.mjs');return createAshAtmosphere({scene,camera,renderer,volume:{sharedAshAtmosphere:()=>structuredClone(sceneAshAtmosphereSettings),setSharedAshAtmosphere(value){sceneAshAtmosphereSettings=structuredClone(value);volumePrototype?.setSharedAshAtmosphere(value);}},groundY:groundPlane.position.y,settings});}},
@@ -17697,6 +17722,36 @@ function readVolumeSettingsControls(role = 'basin') {
   return controls;
 }
 
+function readFineCoverageSettings(){
+  return readFineCoverageControls(Object.fromEntries(FINE_COVERAGE_FIELDS.map(f=>[f.id,{value:readVolumeDomControlValue(document.getElementById(f.id))}])));
+}
+function setFineCoverageSettings(patch,{history=true}={}){
+  if(window.kaminosFlameAuthoring&&volumePrototype?.debugState?.().active){
+    const state=window.kaminosFlameAuthoring.read();state.domControls=patchFineCoverageControls(state.domControls,patch);
+    if(history)window.kaminosFlameAuthoring.apply(state,'Edit Fine coverage');else writeFlameSettingsState(state);
+  }else{const next=patchFineCoverageControls(readVolumeDomControls(),patch);for(const f of FINE_COVERAGE_FIELDS)setVolumeControlValue(f.id,next[f.id].value);}
+  return readFineCoverageSettings();
+}
+function updateAutomaticFineCoverage(now){
+  try{
+    const options=readFineCoverageSettings();
+    if(options.mode==='off'){fineCoverageController.release();fineCoverageStatus={status:'off'};return;}
+    if(authoringBusy||sceneDocument?.state().blocked||scenePlacementTools?.edits.state().replaying||scenePlacementTools?.edits.state().active?.id==='@flame-domain'||flameDomainDraft){fineCoverageStatus={status:'editing'};return;}
+    if(!fineCoverageController.due(options,now))return;
+    const input=volumePrototype?.fineCoverageInputs?.({activity:options.mode==='fire'});
+    if(input?.status!=='active'){fineCoverageStatus={status:input?.status??'awaiting-runtime'};return;}
+    const result=fineCoverageController.update(input,options,now);
+    fineCoverageStatus={...result,demandStatus:input.demandStatus,demandSampledAt:input.demandSampledAt,demandRevision:input.demandRevision};
+    if(!result.target)return;
+    const before={translate:[...flameDomainTranslation],scale:flameDomainScale};
+    try{
+      setFlameDomainTranslation(result.target.translate,result.target.scale);
+      if(primaryAuthoredFlameSource())writeAuthoredFlameEmitterPose(flameEmitterPose);else syncAuthoredFlameSources();
+    }catch(error){setFlameDomainTranslation(before.translate,before.scale);if(primaryAuthoredFlameSource())writeAuthoredFlameEmitterPose(flameEmitterPose);else syncAuthoredFlameSources();throw error;}
+    fineCoverageController.accept(result.target,now);refreshFlameDomainPreview();window._kaminosDirty?.();
+  }catch(error){fineCoverageStatus={status:'error',error:error.message};}
+}
+function readFineCoverageState(){return {options:readFineCoverageSettings(),...fineCoverageController.read(),...fineCoverageStatus};}
 function readAdaptiveMaterialSettings() {
   return readAdaptiveMaterialControls(Object.fromEntries(ADAPTIVE_MATERIAL_FIELDS.map(field=>{
     const el=document.getElementById(field.id);return [field.id,{value:readVolumeDomControlValue(el)}];
@@ -19333,6 +19388,7 @@ function readVolumeControls({quality=viewportDisplay.quality,document=globalThis
     worldSmokeIntermediate: document.getElementById('volume-world-smoke-intermediate').value,
     ...Object.fromEntries(REGION_CONTROL_FIELDS.map(field=>[field.key,Number(document.getElementById(field.id).value)])),
     adaptiveMaterial: adaptiveMaterialRuntimeControls(),
+    ...Object.fromEntries([...WORLD_CALIBRATION_FIELDS,...SIMULATION_LEVER_FIELDS].map(f=>[f.key,f.type==='select-one'?document.getElementById(f.id).value:Number(document.getElementById(f.id).value)])),
     heatReleaseExpansion: parseFloat(document.getElementById('volume-heat-release-expansion').value),
     reactionLaw: document.getElementById('volume-reaction-law').value || 'authored-tall-plume',
     reactantMixingTime: parseFloat(document.getElementById('volume-reactant-mixing-time').value),
@@ -20216,6 +20272,7 @@ async function mountSceneRadianceRoute(params) {
         let statusKey='';
         window.kaminosFireLightingSettings={...settings,invoke,syncStatus(state){
           const current=window.__kaminosSceneRadiance?.debugState();
+          settings.syncCaptureStatus(current);
           const key=JSON.stringify([state.status,fireShadowSceneRoute(current),state.error,current?.casters]);
           if(key!==statusKey){statusKey=key;settings.sync();}
         }};
@@ -20693,6 +20750,9 @@ async function initKaminosVolumeRoute() {
     ['volume-world-smoke-intermediate', 'volume_world_smoke_intermediate'],
     ...REGION_CONTROL_FIELDS.map(field=>[field.id,field.param]),
     ...ADAPTIVE_MATERIAL_FIELDS.map(field=>[field.id,field.param]),
+    ...FINE_COVERAGE_FIELDS.map(field=>[field.id,field.param]),
+    ...WORLD_CALIBRATION_FIELDS.map(field=>[field.id,field.param]),
+    ...SIMULATION_LEVER_FIELDS.map(field=>[field.id,field.param]),
     ['volume-pressure-solver-iterations', 'volume_pressure_solver_iterations'],
     ['volume-advection-scheme', 'volume_advection_scheme'],
     ['volume-confinement', 'volume_confinement'],
@@ -21082,6 +21142,9 @@ async function initKaminosVolumeRoute() {
     'volume-world-smoke-intermediate',
     ...REGION_CONTROL_FIELDS.map(field=>field.id),
     ...ADAPTIVE_MATERIAL_FIELDS.map(field=>field.id),
+    ...FINE_COVERAGE_FIELDS.map(field=>field.id),
+    ...WORLD_CALIBRATION_FIELDS.map(field=>field.id),
+    ...SIMULATION_LEVER_FIELDS.map(field=>field.id),
     'volume-pressure-solver-iterations',
     'volume-advection-scheme',
     'volume-confinement',
@@ -22354,13 +22417,17 @@ function createFlameQuickFields() {
   flameInspector=createFlameInspector({document,host:document.getElementById('selected-flame-fields'),sharedHost:shared,
     gridTuning:{
       read:()=>readVolumeControls(),
+      calibration:{
+        capture:()=>{const patch=captureWorldCalibration(readVolumeControls(),flameDomainScale);const next=window.kaminosFlameAuthoring.read();for(const f of WORLD_CALIBRATION_FIELDS){const d=next.domControls[f.id];d.value=patch[f.key];if('rawValue' in d)d.rawValue=String(d.value);}window.kaminosFlameAuthoring.apply(next,'Capture simulation world scale');},
+        set:(patch,{preview=false}={})=>{const next=window.kaminosFlameAuthoring.read();for(const f of [...WORLD_CALIBRATION_FIELDS,...SIMULATION_LEVER_FIELDS])if(Object.hasOwn(patch,f.key)){const d=next.domControls[f.id];d.value=patch[f.key];if('rawValue' in d)d.rawValue=String(d.value);}if(preview){if(scenePlacementTools.edits.state().active?.id==='@flame-settings')window.kaminosFlameAuthoring.preview(next);}else window.kaminosFlameAuthoring.apply(next,'Tune simulation world scale');},
+      },
       validate:c=>volumePrototype.validateGridControls(c),
-      bindLiveField:input=>installSceneControlHistory({controls:[input],edits:scenePlacementTools.edits,id:'@flame-settings',label:'Tune pressure iterations',onError:error=>showFlameEditRefused(error)}),
+      bindLiveField:(input,label='Tune pressure iterations')=>installSceneControlHistory({controls:[input],edits:scenePlacementTools.edits,id:'@flame-settings',label,onError:error=>showFlameEditRefused(error)}),
       live:(key,value)=>{
         const id=GRID_TUNING_FIELDS.find(field=>field[0]===key)?.[1];
         const next=window.kaminosFlameAuthoring.read();const descriptor=next.domControls[id];
         descriptor.value=value;if('rawValue' in descriptor)descriptor.rawValue=String(value);
-        window.kaminosFlameAuthoring.preview(next);
+        if(scenePlacementTools.edits.state().active?.id==='@flame-settings')window.kaminosFlameAuthoring.preview(next);
       },
       apply:patch=>{
         const next=window.kaminosFlameAuthoring.read();
@@ -22520,6 +22587,9 @@ function clampedFlameSettingsState(state) {
   return next;
 }
 function checkFlameSettingsState(state) {
+  const cal=readWorldCalibrationControls(state.domControls);
+  resolveWorldCalibration(cal);
+  resolveSimulationLevers(cal);
   readAdaptiveMaterialControls(state.domControls);
   const problems=flameSettingsStateProblems(state);
   if(problems.length)throw Error(problems[0].message);
@@ -27481,6 +27551,7 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
   const restoredFlame=objectRecords.find(record=>record.id===FLAME_EMITTER_ID)??objectRecords.find(record=>record.type===FLAME_EMITTER_TYPE);
   setFlameDomainTranslation(restorePlan.flameDomainTranslation || [0, 0, 0],restorePlan.flameDomainScale);
   flameDomainFollowSource=restorePlan.flameDomainFollowSource;
+  fineCoverageController=new FineCoverageController();fineCoverageStatus={status:'awaiting-scene'};
   try {
     const loadStage = await sceneLoadRequests.awaitStage(loadRequestId, loadSceneObjects(objectRecords, restorePlan.activeObjectId, restorePlan.groups, restorePlan.activeGroupId, restorePlan.localLiquid, loadRequestId));
     if (!loadStage.current || !loadStage.value || !sceneLoadRequests.isCurrent(loadRequestId)) return false;

@@ -180,7 +180,8 @@ test('the inflow resolver admits only a converged open-top solve and packs the a
   assert.equal(core.OPEN_WORLD_UNIFORM_OFFSET, core.WAVELET_TURBULENCE_UNIFORM_OFFSET + core.WAVELET_TURBULENCE_UNIFORM_FLOATS, 'open-boundary parameters follow the complete wavelet block');
   assert.equal(core.DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET, core.OPEN_WORLD_UNIFORM_OFFSET + 4);
   assert.equal(core.SHARED_ASH_UNIFORM_OFFSET, core.DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET + 8, 'two display vec4 blocks follow without changing earlier offsets');
-  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.SHARED_ASH_UNIFORM_OFFSET + 4);
+  assert.equal(core.WORLD_CALIBRATION_UNIFORM_OFFSET, core.SHARED_ASH_UNIFORM_OFFSET + 4, 'two display vec4 blocks retain their offsets');
+  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.WORLD_CALIBRATION_UNIFORM_OFFSET + 8, 'calibration appends two vec4 blocks');
   assert.equal(core.VOLUME_UNIFORM_FLOATS % 4, 0, 'vec4 aligned');
 });
 

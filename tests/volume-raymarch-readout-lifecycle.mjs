@@ -21,6 +21,7 @@ for(const route of ['residual','splats','proxy'])test('leaving ordinary beauty f
   let receipt={...state.rayStepTelemetry},visible=true;
   const rayStepTelemetry={ensure(w,h,requested,options){const active=options.supported&&options.activate!==false;receipt={requested,active,reason:options.reason};visible=active;return false;},read:()=>receipt};
   const encoder={finish:()=>({})},context=vm.createContext({
+    pendingDomainRemap:null,encodeDomainRemap:noop,
     state,rayStepTelemetry,debugOpticalStepping:{mode:'numerical',tolerance:.001},controlsSnapshot:{lookFreeze:1,density:1,fire:1,rayStepTelemetry:true},
     productFrameOwner:'prototype',selectiveHeadLiveCapturePaused:false,raf:0,controls:{update:noop},updateUniforms:()=>context.prepareRayStepCounters(),
     emissiveRaymarchAdmission:()=>({eligible:true}),debugRaymarchShaderSpecialization:'auto',rebuildFluidBindGroups:noop,
@@ -41,4 +42,16 @@ for(const route of ['residual','splats','proxy'])test('leaving ordinary beauty f
   assert.equal(state.error,undefined,'the chosen branch must successfully submit');assert.equal(state.frameCount,2);
   assert.equal(state.rayStepTelemetry.active,false);assert.equal(visible,false);
   assert.equal(state.opticalStepping.effective,null);assert.equal(state.opticalStepping.requested,'numerical');
+});
+
+test('World readout follows this draw resolution rather than the invalidated prior frame',()=>{
+ const block=source.match(/    if\(state.worldSmoke\?\.raymarch\)\{[^]*?\n    \}/)?.[0];
+ assert.ok(block);
+ for(const mode of ['current','numerical','budgeted','joins','history']){
+  const state={worldSmoke:{raymarch:{}},opticalStepping:{effective:null}};
+  vm.runInNewContext(block,{state,optical:{mode}});
+  assert.equal(state.worldSmoke.raymarch.effectiveMode,mode);
+  assert.equal(state.worldSmoke.raymarch.policy,mode==='current'?'shared-quality-material-cell-step':mode==='numerical'?'nested-quadrature-fine-step-scale':'fixed-count-whole-ray');
+ }
+ assert.ok(source.indexOf(block)>source.indexOf('    state.opticalStepping = { ...optical, effective: optical.mode,'),'receipt follows effective route resolution');
 });

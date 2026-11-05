@@ -1,8 +1,9 @@
+import {WORLD_CALIBRATION_FIELDS,SIMULATION_LEVER_FIELDS} from './volume-world-calibration.mjs';
 import {volumeControlTooltip,INTERMEDIATE_GRID_MODE_DESCRIPTIONS} from './volume-control-descriptions.mjs';
 import {installRelativeNumberDrag} from './scene-control-history.mjs';
 import {GRID_TUNING_GROUPS,GRID_TUNING_FIELDS,gridTuningSummary,intermediateCoverageChoices} from './volume-grid-tuning.mjs';
 
-export function createGridTuningInspector({document,host,read,validate,apply,live,bindLiveField,installNumberDrag=installRelativeNumberDrag}) {
+export function createGridTuningInspector({document,host,read,validate,apply,live,calibration,bindLiveField,installNumberDrag=installRelativeNumberDrag}) {
  const element=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e;};
  const root=element('section','flame-grid-tuning');root.id='flame-grid-tuning';
  const openButton=element('button','btn','Edit simulation grids · Alt G');openButton.type='button';openButton.id='grid-tuning-open';root.append(openButton);host.prepend(root);
@@ -14,6 +15,33 @@ export function createGridTuningInspector({document,host,read,validate,apply,liv
  const close=element('button','btn','Close · Esc');close.type='button';close.id='grid-tuning-close';toolbar.append(applyButton,reset,close);panel.append(toolbar);
  const status=element('p','grid-editor-status');status.id='grid-tuning-status';status.setAttribute('role','status');panel.append(status);
  const intro=element('p','flame-scope','Material holds detail; velocity carries motion; pressure corrects flow. Cell counts grow cubically. Apply dimension changes together; iterations update live.');panel.append(intro);
+ let syncCalibration=()=>{},calibrationDrag=null,calibrationHistory=null;
+ if(calibration){
+  const area=element('div','grid-editor-calibration'),toggle=element('select','transform-input'),width=element('input','transform-input'),capture=element('button','btn','Use current tuning as reference'),description=element('p','flame-scope');
+  toggle.id='grid-calibration-mode';toggle.setAttribute('aria-label','Simulation calibration');
+  for(const [value,label] of [['legacy','Legacy cell scale'],['world','Independent world scale']]){const o=element('option',null,label);o.value=value;toggle.append(o);}
+  toggle.title=WORLD_CALIBRATION_FIELDS[0].description;
+  width.id='grid-calibration-width';width.type='number';width.step='any';width.min='0';width.setAttribute('aria-label','Simulation world scale');width.title=WORLD_CALIBRATION_FIELDS[1].description;
+  capture.type='button';capture.id='grid-calibration-capture';capture.title='Keep the current force, source and mixing tuning as the reference, enable compensation, and save its material and velocity cell counts. Later grid changes keep that reference.';
+  const row=element('label','grid-editor-shape');row.append(element('span',null,'Simulation world scale'),toggle,width,capture);
+  const leverRow=element('div','grid-editor-shape');leverRow.id='grid-calibration-levers';
+  const leverSelects=new Map();
+  for(const f of SIMULATION_LEVER_FIELDS){
+   const s=element('select','transform-input');s.id=`grid-lever-${f.key}`;s.dataset.controlId=f.id;s.setAttribute('aria-label',f.label);s.title=f.description;
+   for(const [val,lbl] of [['on',`${f.label}: On`],['off',`${f.label}: Off`]]){const o=element('option',null,lbl);o.value=val;s.append(o);}
+   s.addEventListener('change',()=>act(()=>calibration.set({[f.key]:s.value})));
+   leverSelects.set(f.key,s);leverRow.append(s);
+  }
+  area.append(row,leverRow,description);panel.append(area);
+  const act=fn=>{try{fn();syncCalibration();}catch(e){status.textContent=e.message;}};
+  toggle.addEventListener('change',()=>act(()=>toggle.value==='world'&&read().calibrationMode!=='world'?calibration.capture():calibration.set({calibrationMode:toggle.value})));
+  width.addEventListener('input',()=>{if(width.value!==''&&Number(width.value)>0&&Number(width.value)<Infinity)act(()=>calibration.set({simulationWorldScale:Number(width.value)},{preview:true}));});
+  capture.onclick=()=>act(()=>calibration.capture());
+  syncCalibration=()=>{const c=read();if(document.activeElement!==toggle)toggle.value=c.calibrationMode??'legacy';if(document.activeElement!==width)width.value=String(c.simulationWorldScale??2);width.disabled=c.calibrationMode!=='world';for(const f of SIMULATION_LEVER_FIELDS){const s=leverSelects.get(f.key);if(s&&document.activeElement!==s)s.value=String(c[f.key]??f.value);}description.textContent=c.calibrationMode==='world'?`World calibration · reference material ${c.calibrationMaterialCells}, velocity ${c.calibrationVelocityCells}. Coverage and grid detail do not redefine this scale. Coarser grids still lose motion and mixing detail; an inlet thinner than a velocity cell can also transfer less momentum.`:'Legacy tuning follows cell size. Use current tuning as reference to try independent world scale without changing its starting coefficients.';};
+  calibrationDrag=installNumberDrag({input:width,grip:width,step:.01});
+  calibrationHistory=bindLiveField?.(width,'Tune simulation world scale');
+  width.title=WORLD_CALIBRATION_FIELDS[1].description+' Drag to adjust; click to type.';
+ }
  const fields=new Map(),summaries=new Map();let baseline=null,draft=null,dirty=false,applying=false,selected='Fine',layer='material',lastPreview='',physicalReach=0;
  const pick=c=>Object.fromEntries(GRID_TUNING_FIELDS.map(([key])=>[key,c[key]]));
  const signature=c=>JSON.stringify(pick(c));
@@ -58,7 +86,7 @@ export function createGridTuningInspector({document,host,read,validate,apply,liv
  for(const name of ['Fine','Intermediate','World']){const out=element('p','flame-grid-summary');summaries.set(name,out);details.append(out);}panel.append(details);
  panel.append(element('p','flame-scope','Dimension changes restart affected fields. Iterations update immediately and keep the field. Escape closes this editor and retains the draft. Zero velocity/pressure follows its parent.'));
  (document.body||root).append(panel);
- const bindings=[];for(const [key,input] of fields){if(input.tagName==='INPUT'){bindings.push(installNumberDrag({input,grip:input,step:Number(input.step)||.01}));if(key.endsWith('Iterations')&&bindLiveField)bindings.push(bindLiveField(input));}}bindings.push(installNumberDrag({input:reach,grip:reach,step:.01}));
+ const bindings=calibrationHistory?[calibrationHistory]:[];for(const [key,input] of fields){if(input.tagName==='INPUT'){bindings.push(installNumberDrag({input,grip:input,step:Number(input.step)||.01}));if(key.endsWith('Iterations')&&bindLiveField)bindings.push(bindLiveField(input));}}bindings.push(installNumberDrag({input:reach,grip:reach,step:.01}));
  function draw(plan){
   const key=JSON.stringify([plan?.rows.map(r=>[r.name,r.materialDims,r.flowDims,r.pressureDims,r.min,r.max]),selected,layer]);if(key===lastPreview)return;lastPreview=key;
   const ctx=canvas.getContext?.('2d');if(!ctx)return;ctx.clearRect(0,0,720,240);ctx.fillStyle='#11191e';ctx.fillRect(0,0,720,240);if(!plan)return;
@@ -72,6 +100,7 @@ export function createGridTuningInspector({document,host,read,validate,apply,liv
   ctx.fillStyle='#cbd6df';ctx.fillText(`${selected} · ${layer} spacing · draft coverage`,14,232);
  }
  function refresh(){
+  syncCalibration();
   const current=read(),candidate={...current,...draft};let plan,error;
   try{
    for(const [key,input] of fields)if(key.endsWith('Iterations')&&candidate[key]!==undefined&&(!key.startsWith('worldSmoke')||candidate.worldSmoke==='on')&&(!key.startsWith('intermediate')||candidate.worldSmoke==='on'&&candidate.worldSmokeIntermediate==='fields')){const v=Number(candidate[key]);if(v<Number(input.min||0)||(input.max!==undefined&&input.max!==''&&v>Number(input.max)))throw Error(`${key} must be between ${input.min||0} and ${input.max||'the supported maximum'}`);}
@@ -97,5 +126,5 @@ export function createGridTuningInspector({document,host,read,validate,apply,liv
  openButton.onclick=open;close.onclick=hide;
  const keyboard=e=>{if(e.altKey&&e.code==='KeyG'){e.preventDefault();open();}else if(!panel.hidden&&e.key==='Escape'){e.preventDefault();hide();}else if(!panel.hidden&&(e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();applyButton.onclick();}};
  document.addEventListener?.('keydown',keyboard);
- sync();return {sync,root,open,close:hide,dispose(){bindings.forEach(b=>b?.dispose?.());document.removeEventListener?.('keydown',keyboard);panel.remove?.();}};
+ sync();return {sync,root,open,close:hide,dispose(){calibrationDrag?.dispose?.();bindings.forEach(b=>b?.dispose?.());document.removeEventListener?.('keydown',keyboard);panel.remove?.();}};
 }

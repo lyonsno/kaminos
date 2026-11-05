@@ -1,3 +1,5 @@
+import {calibrationWaveletLattice} from './volume-world-calibration.mjs';
+import {createDomainRemap} from './volume-domain-remap.mjs';
 import {latticeDimensions,transferWork,TRANSFER_GEOMETRY_WGSL} from './volume-grid-transfer.mjs';
 export function fineGridPlan({materialDims,velocity=0,pressure=0}) {
  if(!Array.isArray(materialDims)||materialDims.length!==3||materialDims.some(n=>!Number.isSafeInteger(n)||n<2))throw Error('Invalid fine material dimensions');
@@ -60,39 +62,46 @@ fn transferFace(c:vec3<u32>,a:u32,prior:bool)->f32{
 }
 fn restrictGeneral(c:vec3<u32>){
  let ci=idx(c,s.velocity.xyz);let r=s.ratio.x;let lo=transferLo(c,s.material.xyz,s.velocity.xyz);let hi=transferHi(c,s.material.xyz,s.velocity.xyz);
- let begin=transferBegin(c,s.material.xyz,s.velocity.xyz);let end=transferEnd(c,s.material.xyz,s.velocity.xyz);var a=vec4<f32>(0);var b=a;var d=a;var react=a;var front=0.0;var wet=0.0;var mask=0u;var weightSum=0.0;
+ let begin=transferBegin(c,s.material.xyz,s.velocity.xyz);let end=transferEnd(c,s.material.xyz,s.velocity.xyz);var a=vec4<f32>(0);var b=a;var d=a;var react=a;var front=0.0;var wet=0.0;var mask=0u;var weightSum=0.0;var fluidWeight=0.0;
  for(var z=begin.z;z<end.z;z++){for(var y=begin.y;y<end.y;y++){for(var x=begin.x;x<end.x;x++){
   let p=vec3<i32>(x,y,z);let o=transferOverlap(p,lo,hi);let w=o.x*o.y*o.z;if(w<=0.0){continue;}weightSum+=w;
+  let blocked=solid(p);mask=max(mask,select(0u,1u,blocked));if(blocked){continue;}fluidWeight+=w;
   let fi=idx(vec3<u32>(p),s.material.xyz);
   if(SHRED_ONLY){a+=vec4<f32>(fine[fi*4u+1u].xyz,0.0)*w;d.y+=fine[fi*4u+3u].y*w;}
   else{a+=fine[fi*4u+1u]*w;b+=fine[fi*4u+2u]*w;d+=fine[fi*4u+3u]*w;front+=fineFront[fi]*w;}
-  wet+=f32(fineQuench[fi])*w;mask=max(mask,select(0u,1u,solid(p)));
+  wet+=f32(fineQuench[fi])*w;
   if(textureDimensions(fineReactant).x==s.material.x){react+=textureLoad(fineReactant,p,0)*w;}
  }}}
+ let norm=max(fluidWeight,1e-6);
  if(s.velocity.w==1u){var v=vec3<f32>(0);for(var axis=0u;axis<3u;axis++){v[axis]=transferFace(c,axis,false);}coarse[ci*4u]=vec4<f32>(v,0);}
- coarse[ci*4u+1u]=a/weightSum;coarse[ci*4u+2u]=b/weightSum;coarse[ci*4u+3u]=d/weightSum;coarseFront[ci]=front/weightSum;coarseQuench[ci]=u32(wet/weightSum+0.5);
+ coarse[ci*4u+1u]=a/norm;coarse[ci*4u+2u]=b/norm;coarse[ci*4u+3u]=d/norm;coarseFront[ci]=front/norm;coarseQuench[ci]=u32(wet/norm+0.5);
  if(ci==0u){let nf=s.material.x*s.material.y*s.material.z;let nc=s.velocity.x*s.velocity.y*s.velocity.z;for(var k=0u;k<5u;k++){coarseQuench[nc+k]=fineQuench[nf+k];}}
- textureStore(coarseSolid,vec3<i32>(c),vec4<u32>(mask));textureStore(coarseReactant,vec3<i32>(c),react/weightSum);
+ textureStore(coarseSolid,vec3<i32>(c),vec4<u32>(mask));textureStore(coarseReactant,vec3<i32>(c),react/norm);
 }
 @compute @workgroup_size(4,4,4)
 fn restrictScalars(@builtin(global_invocation_id) c:vec3<u32>){
  if(any(c>=s.velocity.xyz)){return;}
  if(GENERAL_TRANSFER){restrictGeneral(c);return;}
  let ci=idx(c,s.velocity.xyz);let r=s.material.w;let weight=1.0/f32(r*r*r);
- var a=vec4<f32>(0.0);var b=a;var d=a;var react=a;var front=0.0;var wet=0.0;var mask=0u;var vel=vec3<f32>(0.0);
+ var a=vec4<f32>(0.0);var b=a;var d=a;var react=a;var front=0.0;var wet=0.0;var mask=0u;var vel=vec3<f32>(0.0);var fluidWeight=0.0;
  for(var z=0u;z<r;z++){for(var y=0u;y<r;y++){for(var x=0u;x<r;x++){
   let o=vec3<u32>(x,y,z);let p=c*r+o;let fi=idx(p,s.material.xyz);let blocked=solid(vec3<i32>(p));
+  mask=max(mask,select(0u,1u,blocked));
+  if(!blocked){
+   fluidWeight+=weight;
   if(SHRED_ONLY){a+=vec4<f32>(fine[fi*4u+1u].xyz,0.0)*weight;d.y+=fine[fi*4u+3u].y*weight;}
   else{a+=fine[fi*4u+1u]*weight;b+=fine[fi*4u+2u]*weight;d+=fine[fi*4u+3u]*weight;front+=fineFront[fi]*weight;}
-  wet+=f32(fineQuench[fi])*weight;mask=max(mask,select(0u,1u,blocked));
+  wet+=f32(fineQuench[fi])*weight;
   if(textureDimensions(fineReactant).x==s.material.x){react+=textureLoad(fineReactant,vec3<i32>(p),0)*weight;}
+  }
   if(s.velocity.w==1u){for(var axis=0u;axis<3u;axis++){var next=vec3<i32>(p);next[axis]++;if(o[axis]==r-1u&&!blocked&&!solid(next)){vel[axis]+=fine[fi*4u][axis]*weight;}}}
  }}}
+ let invFluid=select(0.0,1.0/fluidWeight,fluidWeight>0.0);
  if(s.velocity.w==1u){coarse[ci*4u]=vec4<f32>(vel,0.0);}
- coarse[ci*4u+1u]=a;coarse[ci*4u+2u]=b;coarse[ci*4u+3u]=d;
- coarseFront[ci]=front;coarseQuench[ci]=u32(wet+0.5);
+ coarse[ci*4u+1u]=a*invFluid;coarse[ci*4u+2u]=b*invFluid;coarse[ci*4u+3u]=d*invFluid;
+ coarseFront[ci]=front*invFluid;coarseQuench[ci]=u32(wet*invFluid+0.5);
  if(ci==0u){let nf=s.material.x*s.material.y*s.material.z;let nc=s.velocity.x*s.velocity.y*s.velocity.z;for(var k=0u;k<5u;k++){coarseQuench[nc+k]=fineQuench[nf+k];}}
- textureStore(coarseSolid,vec3<i32>(c),vec4<u32>(mask));textureStore(coarseReactant,vec3<i32>(c),react);
+ textureStore(coarseSolid,vec3<i32>(c),vec4<u32>(mask));textureStore(coarseReactant,vec3<i32>(c),react*invFluid);
 }
 // Analytic emitters act on the material lattice. Transfer only their velocity
 // increment, preserving the independently evolved coarse velocity history.
@@ -142,19 +151,16 @@ fn prolongVelocity(@builtin(global_invocation_id) c:vec3<u32>){
 
 const fineVelocityGridPipelines = new WeakMap();
 
-export function createFineVelocityGrid(device,plan,uniformBytes) {
+export function createFineVelocityGrid(device,plan,uniformBytes,waveletFrame={}) {
  const owned=[],d=plan.velocityDims,n=d.reduce((a,b)=>a*b,1);
  const buffer=(label,size,usage=GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC)=>{const b=device.createBuffer({label:'fine velocity '+label,size,usage});owned.push(b);return b;};
  const texture=(label,format,size=d,dimension='3d')=>{const t=device.createTexture({label:'fine velocity '+label,format,size,dimension,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC|GPUTextureUsage.COPY_DST});owned.push(t);return t;};
  const fluid=[0,1].map(i=>buffer('history '+i,n*64)),front=[0,1].map(i=>buffer('front '+i,n*4)),quench=[0,1].map(i=>buffer('quench '+i,(n+5)*4));
  const reactant=[0,1].map(i=>texture('reactant '+i,'rg32float')),wavelet=[0,1].map(i=>texture('wavelet '+i,'rgba32float',[d[0],d[1],d[2]*2]));
- const resetWavelet=()=>{
-  const lattice=new Float32Array(n*8);let at=0;
-  for(let set=0;set<2;set++)for(let z=0;z<d[2];z++)for(let y=0;y<d[1];y++)for(let x=0;x<d[0];x++){lattice[at]=x+.5;lattice[at+1]=y+.5;lattice[at+2]=z+.5;at+=4;}
-  for(const t of wavelet)device.queue.writeTexture({texture:t},lattice,{bytesPerRow:d[0]*16,rowsPerImage:d[1]},[d[0],d[1],d[2]*2]);
- };
+ const resetWavelet=(frame=waveletFrame)=>{const lattice=calibrationWaveletLattice(d,frame);for(const t of wavelet)device.queue.writeTexture({texture:t},lattice,{bytesPerRow:d[0]*16,rowsPerImage:d[1]},[d[0],d[1],d[2]*2]);};
  resetWavelet();
  const solid=texture('obstacles','r32uint'),burn=texture('expansion','r32float'),force=texture('force and low-pass','r32float',[d[0],d[1],d[2]*9]);
+ const remapper=createDomainRemap(device,d);
  const side=Math.max(...d),lower=texture('lower faces','r32float',[side,side,3],'2d');
  const uniform=buffer('uniforms',uniformBytes,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),shape=buffer('transfer shape',48,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),seedShape=buffer('seed shape',48,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),predictor=buffer('predictor',n*64);
  for(const [buffer,seed] of [[shape,0],[seedShape,1]]){const data=new ArrayBuffer(48);new Uint32Array(data).set([...plan.materialDims,Math.floor(plan.materialPerVelocity),...d,seed]);new Float32Array(data)[8]=plan.materialPerVelocity;device.queue.writeBuffer(buffer,0,data);}
@@ -190,7 +196,7 @@ export function createFineVelocityGrid(device,plan,uniformBytes) {
   bindings.seed=device.createBindGroup({layout:pipelines.restrictScalars.getBindGroupLayout(0),entries:entries.filter(e=>used.restrictScalars.includes(e.binding)).map(e=>e.binding===0?{binding:0,resource:{buffer:seedShape}}:e)});
  }
  function encode(encoder,kind,timestampWrites){if(!bindings)throw Error('Fine velocity transfer not prepared');const p=encoder.beginComputePass({label:'fine '+kind,...(timestampWrites?{timestampWrites}:{})});p.setPipeline(pipelines[kind]);p.setBindGroup(0,kind==='restrictScalars'&&seed?bindings.seed:bindings[kind]);p.dispatchWorkgroups(...(kind==='prolongVelocity'?plan.materialDims:d).map(n=>Math.ceil(n/4)));p.end();if(kind==='restrictScalars')seed=false;}
- return {plan,fluid,front,quench,reactant,wavelet,solid,burn,force,lower,uniform,predictor,prepare,encode,resetWavelet,
-  get current(){return current;},flip(){current=1-current;bindings=null;},destroy(){owned.forEach(r=>r.destroy());},
-  residentBytes:n*(128+8+8+16+64+4+4+36+64)+40+side*side*12+uniformBytes+64};
+ return {plan,fluid,front,quench,reactant,wavelet,solid,burn,force,lower,uniform,predictor,prepare,encode,resetWavelet,remapper,
+  get current(){return current;},flip(){current=1-current;bindings=null;},destroy(){remapper.destroy();owned.forEach(r=>r.destroy());},
+  residentBytes:n*(128+8+8+16+64+4+4+36+64)+40+side*side*12+uniformBytes+64+remapper.residentBytes};
 }

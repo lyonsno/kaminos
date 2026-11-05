@@ -338,6 +338,12 @@ export const VOLUME_CONTROL_DESCRIPTIONS = Object.freeze({
     tooltip: "Length of the flow-aligned smoothing. Only works when Kernel strength is above 0." },
   "volume-flow-kernel-coherence": { kind: "conditional", activeWhen: "Kernel strength above 0",
     tooltip: "Stretches the flow smoothing further where the flow swirls. Only works when Kernel strength is above 0." },
+  "volume-world-emissive": { kind: "quality", activeWhen: "World smoke = On",
+    tooltip: "On transports and renders incandescent reaction moments on the coarse World grid. Off makes the coarse World grid smoke-only (skipping coarse reaction, thermal-moment transport, layer-1 optical writes and Planck emission) while containing Fine flame inside the Fine boundary." },
+  "volume-fast-bypass": { kind: "quality", activeWhen: "always",
+    tooltip: "On fast-bypasses cold ambient air cells in the Fine material update (skipping MacCormack reversals, 6-neighbor reactant Laplacians, interface gradients and carrier synthesis when the cell, backtrace foot and neighbors are empty) and trims unused medium-seed interpolations." },
+  "volume-velocity-wavelet": { kind: "conditional", activeWhen: "Wavelet turbulence > 0 and Fine velocity resolution differs from Fine material resolution",
+    tooltip: "On keeps energy-deficit-gated wavelet turbulence active on the separated coarse Fine velocity solve before pressure projection, instead of suppressing velocity-step wavelet injection when Fine velocity is coarser than Fine material." },
 });
 // Fire controls that are not part of a saved basin (scene state and views).
 export const VOLUME_SCENE_CONTROL_DESCRIPTIONS = Object.freeze({

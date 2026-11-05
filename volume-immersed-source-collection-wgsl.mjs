@@ -28,7 +28,7 @@ fn immersedContributions(cell:vec3<f32>) -> ImmersedContributions {
   let e=textureLoad(immersedSources,vec2<i32>(4,0),layer,0);
   let f=textureLoad(immersedSources,vec2<i32>(5,0),layer,0);
   let delta=cell-a.yzw/materialPerCell;let along=dot(delta,b.xyz);let radial=length(delta-along*b.xyz);
-  let thickness=c.x/materialPerCell;let radius=b.w/materialPerCell;
+  let thickness=max(1.0,c.x/materialPerCell);let radius=b.w/materialPerCell;
   let slab=(1.0-smoothstep(thickness*0.5-0.5,thickness*0.5+0.5,abs(along)))*(1.0-smoothstep(radius-0.5,radius+0.5,radial));
   let e2=normalize(cross(e.xyz,b.xyz));
   let uv=vec2<i32>(clamp(i32(floor(materialGrid*0.5+dot(delta,e.xyz)*materialPerCell)),0,i32(materialGrid)-1),clamp(i32(floor(materialGrid*0.5+dot(delta,e2)*materialPerCell)),0,i32(materialGrid)-1));

@@ -17,9 +17,9 @@ edits.register('@flame-domain',{read:()=>ctx.flameDomainDraft||ctx.acceptedFlame
 edits.subscribe(state=>{if(!state.active)ctx.flameDomainDraft=null;});
 const original=structuredClone(ctx.flameEmitterPose);
 edits.begin('@flame-domain');edits.preview({scale:[2,2,2]});
-assert.equal(rebuilds,0);assert.deepEqual(ctx.flameDomainGuide.box.min.toArray(),[-2,-3,-2]);
-edits.cancel();assert.equal(rebuilds,0);assert.deepEqual(ctx.flameDomainGuide.box.min.toArray(),[-1,-1,-1]);
-edits.apply('@flame-domain',{scale:[2,2,2]});assert.equal(rebuilds,1);assert.equal(engine.scale,2);assert.equal(ctx.flameDomainFollowSource,false);
+assert.equal(rebuilds,1,'coverage follows the drag');assert.deepEqual(ctx.flameDomainGuide.box.min.toArray(),[-2,-3,-2]);
+edits.cancel();assert.equal(rebuilds,2,'cancel restores coverage through the same live path');assert.deepEqual(ctx.flameDomainGuide.box.min.toArray(),[-1,-1,-1]);
+edits.apply('@flame-domain',{scale:[2,2,2]});assert.equal(rebuilds,3);assert.equal(engine.scale,2);assert.equal(ctx.flameDomainFollowSource,false);
 assert.deepEqual(ctx.flameEmitterPose,original);assert.equal(edits.state().undoCount,1);
 edits.undo();assert.equal(engine.scale,1);assert.equal(ctx.flameDomainFollowSource,true);
 edits.redo();assert.equal(engine.scale,2);assert.equal(ctx.flameDomainFollowSource,false);
@@ -41,4 +41,4 @@ assert.equal(engine.scale,.125);
 assert.ok(Math.abs(ctx.flameDomainGuide.box.max.x-ctx.flameDomainGuide.box.min.x-.25)<1e-10);
 assert.ok(Math.abs(ctx.flameDomainGuide.box.max.y-ctx.flameDomainGuide.box.min.y-.5)<1e-10);
 edits.undo();assert.equal(engine.scale,2);
-console.log('Actual editor preview/cancel, one restart, history and source preservation pass');
+console.log('Actual live editor preview/cancel, history and source preservation pass');

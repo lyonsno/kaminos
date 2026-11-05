@@ -26,7 +26,7 @@ export function resolveRaymarchAdaptivity(requested, legacyAmount, receipt) {
 }
 
 export function resolveOpticalStepping(config, {emissive, trace = false, exterior = false, explicit = false}) {
-  const wrongExterior=config.value>=4 ? !exterior : exterior;
+  const wrongExterior=config.value>=4 && !exterior;
   if (config.mode !== 'current' && (!emissive || trace || wrongExterior)) {
     if (explicit) throw new Error('optical stepping comparison requires lean emissive beauty, without trace capture or joined exterior');
     return {...opticalSteppingConfig({mode:'current',tolerance:config.tolerance}),requested:config.mode,
@@ -104,13 +104,26 @@ fn opticalStepInitPhased(start: f32, end: f32, base: f32, phase: f32) -> Optical
 }
 fn opticalStepConstrain(s: ptr<function, OpticalStepState>, minimum: f32, maximum: f32, stop: f32) {
   if ((*s).mask > 1u) { return; }
+  let desired = select(clamp((*s).width, minimum, maximum), maximum, abs(maximum - (*s).maximum) > 1e-6);
   (*s).minimum = minimum;
   (*s).maximum = maximum;
-  (*s).width = min((*s).end - (*s).cursor, min(stop, clamp((*s).width, minimum, maximum)));
+  (*s).width = min((*s).end - (*s).cursor, min(stop, desired));
   if ((*s).phased == 1u) {
     (*s).width = min((*s).end - (*s).cursor, min(stop, maximum * (0.25 + 0.75 * (*s).phase)));
   }
   opticalStepResetPositions(s);
+}
+// Distances share the controller's entry-relative coordinates so a clipped
+// endpoint is crossed exactly once, without absolute-ray addition rounding.
+fn opticalStepJoinStop(s: OpticalStepState, interval: vec2<f32>) -> f32 {
+  var stop = s.end - s.cursor;
+  if (interval.y > interval.x) {
+    let entry = interval.x - s.origin;
+    let exit = interval.y - s.origin;
+    if (entry > s.cursor) { stop = min(stop, entry - s.cursor); }
+    if (exit > s.cursor) { stop = min(stop, exit - s.cursor); }
+  }
+  return stop;
 }
 fn opticalStepIndex(mask: u32) -> u32 {
   for (var i = 0u; i < 5u; i++) { if ((mask & (1u << i)) == 0u) { return i; } }

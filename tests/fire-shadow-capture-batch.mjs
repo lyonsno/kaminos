@@ -36,7 +36,8 @@ assert.throws(()=>shadow.renderFireShadowBatch({scene,shadows:[{render(frame){fa
 assert.throws(()=>real.render(failedFrame),/inactive-or-foreign-batch/,'failed batches must also expire');
 real.dispose();mesh.geometry.dispose();mesh.material.dispose();
 let casterScopes=0;
-shadow.renderFireShadowBatch({scene:new THREE.Scene(),shadows:[],casterScene:{withCapture(fn){casterScopes++;return fn();}}});
+const flameBox=new THREE.Box3(new THREE.Vector3(-1,-1,-1),new THREE.Vector3(1,3,1));
+shadow.renderFireShadowBatch({scene:new THREE.Scene(),shadows:[],flameBox,casterScene:{withCapture(fn,options){assert.equal(options.flameBox,flameBox);casterScopes++;return fn();}}});
 assert.equal(casterScopes,1,'one caster-only scene scope must enclose the complete fresh-cube batch');
 for(const failure of [false,true]){
   const scene=new THREE.Scene(),mesh=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial());mesh.castShadow=true;scene.add(mesh);

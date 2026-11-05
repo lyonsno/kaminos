@@ -336,7 +336,8 @@ function isAuthorableControl(control) {
   // document naming a control the page does not author (3d73ef32 excluded
   // them and every saved layout failed to load: volume-cockpit-layout-unknown-control).
   // The stylesheet hides their rows wherever the layout puts them.
-  return control.type !== 'hidden' && !control.closest('[data-volume-retired-control-state]');
+  // Grid-editor backing state remains in presets, outside rearrangeable rows.
+  return control.type !== 'hidden' && !control.closest('[data-volume-retired-control-state], [data-volume-grid-editor-state]');
 }
 
 function controlCluster(control) {

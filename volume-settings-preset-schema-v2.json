@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 160,
+  "controlCount": 174,
   "controls": [
     {
       "key": "volume-fine-velocity",
@@ -1195,6 +1195,153 @@
       "additiveDefault": 0.25,
       "additiveLineage": "adaptive-material",
       "additiveSinceControlCount": 10
+    },
+    {
+      "key": "volume-coverage-mode",
+      "param": "volume_coverage_mode",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "additiveDefault": "off",
+      "additiveLineage": "fine-coverage",
+      "allowedValues": [
+        "off",
+        "sources",
+        "fire"
+      ],
+      "additiveSinceControlCount": 1
+    },
+    {
+      "key": "volume-coverage-margin",
+      "param": "volume_coverage_margin",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 0.15,
+      "additiveLineage": "fine-coverage",
+      "additiveSinceControlCount": 2
+    },
+    {
+      "key": "volume-coverage-headroom",
+      "param": "volume_coverage_headroom",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 0.75,
+      "additiveLineage": "fine-coverage",
+      "additiveSinceControlCount": 3
+    },
+    {
+      "key": "volume-coverage-lookahead",
+      "param": "volume_coverage_lookahead",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 0.3,
+      "additiveLineage": "fine-coverage",
+      "additiveSinceControlCount": 4
+    },
+    {
+      "key": "volume-coverage-interval",
+      "param": "volume_coverage_interval",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 0.25,
+      "additiveLineage": "fine-coverage",
+      "additiveSinceControlCount": 5
+    },
+    {
+      "key": "volume-coverage-activity-weight",
+      "param": "volume_coverage_activity_weight",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 1,
+      "additiveLineage": "fine-coverage",
+      "additiveSinceControlCount": 6
+    },
+    {
+      "key": "volume-coverage-hysteresis",
+      "param": "volume_coverage_hysteresis",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 0.05,
+      "additiveLineage": "fine-coverage",
+      "additiveSinceControlCount": 7
+    },
+    {
+      "key": "volume-calibration-mode",
+      "param": "volume_calibration_mode",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "additiveDefault": "legacy",
+      "additiveLineage": "world-calibration",
+      "additiveSinceControlCount": 1,
+      "allowedValues": [
+        "legacy",
+        "world"
+      ]
+    },
+    {
+      "key": "volume-simulation-world-scale",
+      "param": "volume_simulation_world_scale",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 2,
+      "additiveLineage": "world-calibration",
+      "additiveSinceControlCount": 2
+    },
+    {
+      "key": "volume-calibration-material-cells",
+      "param": "volume_calibration_material_cells",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 64,
+      "additiveLineage": "world-calibration",
+      "additiveSinceControlCount": 3
+    },
+    {
+      "key": "volume-calibration-velocity-cells",
+      "param": "volume_calibration_velocity_cells",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 64,
+      "additiveLineage": "world-calibration",
+      "additiveSinceControlCount": 4
+    },
+    {
+      "key": "volume-world-emissive",
+      "param": "volume_world_emissive",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "additiveDefault": "on",
+      "additiveLineage": "world-calibration",
+      "additiveSinceControlCount": 5,
+      "allowedValues": [
+        "on",
+        "off"
+      ]
+    },
+    {
+      "key": "volume-fast-bypass",
+      "param": "volume_fast_bypass",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "additiveDefault": "off",
+      "additiveLineage": "world-calibration",
+      "additiveSinceControlCount": 6,
+      "allowedValues": [
+        "off",
+        "on"
+      ]
+    },
+    {
+      "key": "volume-velocity-wavelet",
+      "param": "volume_velocity_wavelet",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "additiveDefault": "off",
+      "additiveLineage": "world-calibration",
+      "additiveSinceControlCount": 7,
+      "allowedValues": [
+        "off",
+        "on"
+      ]
     }
   ],
   "retiredControls": [
@@ -2244,7 +2391,11 @@
       "param": "volume_display_reconstruction",
       "tagName": "SELECT",
       "type": "select-one",
-      "allowedValues": ["off", "material", "optical"],
+      "allowedValues": [
+        "off",
+        "material",
+        "optical"
+      ],
       "additiveDefault": "off"
     },
     {
@@ -2252,7 +2403,11 @@
       "param": "volume_display_grid_scale",
       "tagName": "SELECT",
       "type": "select-one",
-      "allowedValues": ["1", "2", "4"],
+      "allowedValues": [
+        "1",
+        "2",
+        "4"
+      ],
       "additiveDefault": "2"
     },
     {
@@ -2260,7 +2415,10 @@
       "param": "volume_display_alignment",
       "tagName": "SELECT",
       "type": "select-one",
-      "allowedValues": ["cell-centred", "aligned"],
+      "allowedValues": [
+        "cell-centred",
+        "aligned"
+      ],
       "additiveDefault": "cell-centred"
     },
     {
@@ -2268,7 +2426,11 @@
       "param": "volume_emission_interpolation",
       "tagName": "SELECT",
       "type": "select-one",
-      "allowedValues": ["positive", "interpolating", "monotone"],
+      "allowedValues": [
+        "positive",
+        "interpolating",
+        "monotone"
+      ],
       "additiveDefault": "positive"
     },
     {
@@ -2276,7 +2438,11 @@
       "param": "volume_smoke_interpolation",
       "tagName": "SELECT",
       "type": "select-one",
-      "allowedValues": ["positive", "interpolating", "monotone"],
+      "allowedValues": [
+        "positive",
+        "interpolating",
+        "monotone"
+      ],
       "additiveDefault": "positive"
     },
     {

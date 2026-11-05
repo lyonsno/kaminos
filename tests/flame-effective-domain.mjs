@@ -5,6 +5,7 @@ import{flamePoseInDomain,flamePoseToDomain,normalizeFlameEmitterPose,immersedCon
 import{buildSceneDocument,planSceneRestore}from'../scene-persistence-core.js';
 import{applyVolumeEmitterFamilyRuntime}from'../volume-emitter-runtime.mjs';
 import{gridTuningPlan}from'../volume-grid-tuning.mjs';
+import{resolveWorldCalibration}from'../volume-world-calibration.mjs';
 import{resolvePressureSolverConfig,resolveVelocityStaggeringConfig,resolveGridHeight,gridShapeAdmission,resolveImmersedSourceConfig,resolveDisplayReconstruction}from'../volume-core.js';
 const html=readFileSync(process.env.KAMINOS_HEIGHT_PAGE_SOURCE||new URL('../index.html',import.meta.url),'utf8'),grab=name=>{const at=html.indexOf(`function ${name}(`);return html.slice(at,html.indexOf('\n}',at)+2);};
 const primary=html.match(/function primaryAuthoredFlameSource\(\)[^\n]+/)[0];
@@ -46,7 +47,7 @@ test('the actual cockpit and core admission prefix keep a source suspended after
  const backend={gridSize:96,gridHeight:192,gridShape:resolveGridHeight({gridHeightRatio:2},96),controlsSnapshot:{...requested,gridHeightRatio:2},state:{},device:{limits},resolveGridHeight,gridShapeAdmission,normalizeGridSize:Number,boundarySplatTelemetryControlSignature:()=>'',canonicalSourceControlSignature:()=>'',stripRetiredRaymarchControls:controls=>({controls}),applyRuntimeQualityControls:x=>x,updateRetiredRaymarchControlReceipt:()=>null};
  const acceptedControls=structuredClone(backend.controlsSnapshot);
  backend.resolveDisplayReconstruction=resolveDisplayReconstruction;
- Object.assign(backend,{gridTuningPlan,resolvePressureSolverConfig,resolveVelocityStaggeringConfig});
+ Object.assign(backend,{gridTuningPlan,resolvePressureSolverConfig,resolveVelocityStaggeringConfig,resolveWorldCalibration,productTransform:{scale:1}});
  const validator=core.match(/    validateGridControls\(next\) \{[\s\S]*?\n    \},/)[0].trim().replace(/^validateGridControls/, 'function validateGridControls').replace(/,$/,'');
  sceneContext(backend);vm.runInContext(validator+'\nfunction setControls(next){'+prefix+'}',backend);
  const fields=new Map(),prototype={previewGridShape:c=>{const shape=resolveGridHeight(c,c.resolution);return{...gridShapeAdmission(shape,limits),dimensions:[shape.widthCells,shape.heightCells,shape.widthCells]};},debugState:()=>({active:true,frameCount:1,simGridDimensions:[backend.gridSize,backend.gridHeight,backend.gridSize],gridHeight:backend.state.gridHeight}),setControls:c=>backend.setControls(c),setAnalyticEmitterDescriptor:()=>({mode:'off',count:0}),setCoreEmitterSourceMode:()=>({effectiveMode:'analytic-only',effectiveFlowRate:0})};

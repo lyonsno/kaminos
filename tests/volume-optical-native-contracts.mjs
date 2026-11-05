@@ -106,3 +106,24 @@ test('adaptivity describes the selected algorithm without overwriting legacy tun
   }
   assert.throws(()=>policy('missing',.5),/unknown optical stepping mode/);
 });
+
+test('numerical and fixed optical integration cover the combined World without fallback',()=>{
+ for(const mode of ['numerical','fixed','fixed-dense']){
+  const resolved=resolveOpticalStepping(opticalSteppingConfig({mode}),{emissive:true,exterior:true,explicit:true});
+  assert.equal(resolved.mode,mode);assert.equal(resolved.reason,null);
+ }
+});
+
+test('joined numerical keeps Fine step scale and clips integration panels at region joins',()=>{
+ assert.match(core,/opticalStepInitPhased\(max\(startT, sceneDepthStartT\), endT, dtBase,/,'World extent must not enlarge the Fine refinement floor');
+ assert.doesNotMatch(core,/OPTICAL_STEP_MODE == 2u && !worldActive && priority/,'Fine guide must remain usable inside joined Fine');
+ assert.match(core,/opticalStepJoinStop\(opticalStep, nearHit\)/);
+ assert.match(core,/opticalStepJoinStop\(opticalStep, middleHit\)/);
+ assert.match(opticalNative.OPTICAL_STEPPING_WGSL,/fn opticalStepJoinStop/);
+ assert.match(core,/let insideMiddle\s*=\s*worldActive && !insideFine && \(middleHit\.y > middleHit\.x && localCursor >= middleHit\.x-opticalStep\.origin && localCursor < middleHit\.y-opticalStep\.origin\)/,
+  'joined optical stepping must distinguish the middle and outer World intervals outside Fine');
+ assert.match(core,/let regionBase\s*=\s*select\(worldMarchStep\(select\(worldRender\.loPitch\.w, worldMinimumMaterialPitch\(\), insideMiddle\), steps, 1\.6, 0\.0\), dtBase, insideFine\)/,
+  'exterior World intervals must step at their regional material pitch instead of collapsing to the Fine single-voxel floor');
+ assert.match(opticalNative.OPTICAL_STEPPING_WGSL,/abs\(maximum - \(\*s\)\.maximum\) > 1e-6/,
+  'crossing a region join must reset the unrefined panel target to the new region maximum');
+});

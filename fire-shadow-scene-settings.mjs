@@ -1,3 +1,5 @@
+import {normalizeNearSmokeBox} from './scene-near-smoke-box.mjs';
+import {validateShadowCaptureBudget} from './fire-shadow-cadence.mjs';
 import {validateShadowMediumResolution} from './scene-shadow-medium.mjs';
 import {validateSmokeEnvironmentBlur} from './scene-smoke-environment.mjs';
 import {validateShadowQuality} from './fire-shadow-quality.mjs';
@@ -17,6 +19,8 @@ export function readFireShadowSceneSettings(params) {
   const points=number('points',4),pointSampling=params.get(prefix+'point_sampling')??'all';
   validateSourceQuadrature(points,pointSampling);
   const smoke={};
+  if(params.has(prefix+'shadow_capture_budget'))smoke.shadowCaptureBudget=validateShadowCaptureBudget(number('shadow_capture_budget',0));
+  if(params.has(prefix+'near_box')){try{smoke.nearBox=normalizeNearSmokeBox(JSON.parse(params.get(prefix+'near_box')));}catch(error){throw Error('Invalid near light box: '+error.message);}}
   if(params.has(prefix+'smoke_shadow_medium_grid'))smoke.smokeShadowMediumResolution=validateShadowMediumResolution(number('smoke_shadow_medium_grid',0));
   if(params.has(prefix+'point_evaluation_budget'))smoke.pointEvaluationBudget=validateSourceEvaluationBudget(number('point_evaluation_budget',0));
   if(params.has(prefix+'smoke_environment_blur'))smoke.smokeEnvironmentBlur=validateSmokeEnvironmentBlur(number('smoke_environment_blur',0));
@@ -51,9 +55,11 @@ export function fireShadowSceneRoute(state) {
     shadow_grain:state.shadowGrain,shadow_world_cell_size:state.shadowWorldCellSize,...(state.shadowCasterLevel===undefined?{}:{caster_level:validateCasterLevel(state.shadowCasterLevel)})};
   if(state.shadowEdgeFilter!==undefined){if(typeof state.shadowEdgeFilter!=='boolean')throw Error('shadow edge filter must be boolean');values.shadow_edge_filter=state.shadowEdgeFilter?'1':'0';}
   if(state.pointEvaluationBudget!==undefined)values.point_evaluation_budget=validateSourceEvaluationBudget(state.pointEvaluationBudget);
+  if(state.shadowCaptureBudget!==undefined)values.shadow_capture_budget=validateShadowCaptureBudget(state.shadowCaptureBudget);
   if(state.smokeShadowFilterAngle!==undefined)values.smoke_shadow_filter_angle=state.smokeShadowFilterAngle;
   if(state.smokeShadowMediumResolution!==undefined)values.smoke_shadow_medium_grid=validateShadowMediumResolution(state.smokeShadowMediumResolution);
   if(state.smokeShadowFilterTaps!==undefined)values.smoke_shadow_filter_taps=state.smokeShadowFilterTaps;
+  if(state.nearBox!==undefined)values.near_box=JSON.stringify(normalizeNearSmokeBox(state.nearBox));
   if(state.volumeGrid!==undefined)values.light_grid=state.volumeGrid;
   if(state.directions!==undefined)values.light_directions=state.directions;
   if(state.smokeEnvironmentBlur!==undefined)values.smoke_environment_blur=validateSmokeEnvironmentBlur(state.smokeEnvironmentBlur);

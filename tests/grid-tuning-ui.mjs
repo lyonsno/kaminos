@@ -53,3 +53,17 @@ const number=key=>find('grid-draft-'+key,document.body);
 const event=(input,type)=>input.listeners[type]?.({currentTarget:input,preventDefault(){}});
 closing.open();const liveField=number('pressureSolverIterations');event(liveField,'focusin');liveField.value='7';event(liveField,'input');event(liveField,'change');assert.equal(edits.state().undoCount,1);
 const focusOnly=number('intermediateIterations');event(focusOnly,'focusin');assert.equal(edits.state().active.id,'@flame-settings');closing.close();assert.equal(edits.state().active,null,'closing releases a focus-only live gesture before hiding controls');edits.undo();assert.equal(current.pressureSolverIterations,12,'Undo reaches the last actual live change after closing');
+
+// World scale is a live authored value: one edit per gesture, with cancellation.
+document.body=new Element('body');
+current={...current,calibrationMode:'world',simulationWorldScale:2,calibrationMaterialCells:64,calibrationVelocityCells:32};
+const calibrated=createGridTuningInspector({document,host:new Element('div'),read:()=>current,validate:gridTuningPlan,apply:next=>authoring.apply(next),calibration:{
+ set:(patch,{preview=false}={})=>preview?authoring.preview({...current,...patch}):authoring.apply({...current,...patch}),capture:()=>{},
+},bindLiveField:input=>installSceneControlHistory({controls:[input],edits,id:'@flame-settings'}),installNumberDrag:()=>({dispose(){}})});
+calibrated.open();const width=find('grid-calibration-width',document.body),before=edits.state().undoCount;
+event(width,'focusin');width.value='2.4';event(width,'input');width.value='2.8';event(width,'input');
+assert.equal(current.simulationWorldScale,2.8,'world scale previews while the gesture owns history');assert.equal(edits.state().undoCount,before,'intermediate previews do not commit');
+event(width,'change');assert.equal(edits.state().undoCount,before+1);edits.undo();assert.equal(current.simulationWorldScale,2);edits.redo();assert.equal(current.simulationWorldScale,2.8);
+event(width,'focusin');width.value='3';event(width,'input');width.listeners.keydown({currentTarget:width,key:'Escape',preventDefault(){}});assert.equal(current.simulationWorldScale,2.8,'Escape restores the pre-gesture reference');
+event(width,'focusin');width.value='3.2';event(width,'input');calibrated.close();assert.equal(edits.state().active,null,'closing releases the calibration gesture');assert.equal(current.simulationWorldScale,3.2);edits.undo();assert.equal(current.simulationWorldScale,2.8);
+console.log('PASS world-scale preview, single undo entry, Escape cancellation and close commit');

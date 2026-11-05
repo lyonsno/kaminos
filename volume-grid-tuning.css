@@ -16,6 +16,8 @@
 .grid-region { border: 0; background: transparent; color: #e5c898; padding: 0; cursor: pointer; font: inherit; font-weight: 600; }
 .grid-editor-shape { display: flex; align-items: center; gap: 12px; margin: 10px 0; font-size: 12px; }
 .grid-editor-shape .transform-input { width: 85px; }
+.grid-editor-calibration .grid-editor-shape { flex-wrap: wrap; }
+.grid-editor-calibration select.transform-input { width: 220px; }
 .grid-editor-preview-controls { display: flex; align-items: center; justify-content: space-between; font-size: 11px; margin-top: 16px; }
 .grid-editor-preview-controls select { width: 120px !important; }
 .grid-editor-preview { display: block; width: 100%; height: 240px; margin: 8px 0; border-radius: 6px; background: #11191e; }
