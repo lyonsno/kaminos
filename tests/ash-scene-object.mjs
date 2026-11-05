@@ -502,6 +502,7 @@ test('ash source and field inspectors ignore mid-typing empty/decimal strings, c
  const emitInput=new FakeControl('input',{type:'checkbox',dataset:{ashKey:'emitting'}});
  for(const c of [pausedInput,falloutInput,softInput,emitInput])ashInputs.set(c.dataset.ashKey,c);
  const fieldPanel={
+  append(){},
   hidden:true,innerHTML:'',
   querySelector:sel=>{
    if(sel==='[data-ash-cell]')return cellSizeInput;

@@ -1,3 +1,4 @@
+import {createAdaptiveLayout,adaptiveIndex,adaptiveCell} from './adaptive-plan.mjs';
 import {patchLayout} from './gpu-plan.mjs';
 import {slidingThreshold} from './sliding.mjs';
 
@@ -9,6 +10,7 @@ const coordinates = (i, dims) => [i % dims[0], Math.floor(i / dims[0]) % dims[1]
 // Resolution changes only storage and ownership. All material quantities use
 // the volume of one finest cell, including coarse cells whose capacity is eight.
 export function createRefinementLayout({cellSize, bounds, tileSize = 16, refinement}) {
+  if(refinement?.mode==='adaptive')return createAdaptiveLayout({cellSize,bounds,refinement});
   if (refinement?.ratio !== 2 || !Array.isArray(refinement.regions)) {
     throw Error('Ash refinement requires ratio 2 and explicit regions');
   }
@@ -106,6 +108,7 @@ export function createRefinementLayout({cellSize, bounds, tileSize = 16, refinem
 }
 
 export function refinementIndex(p, q) {
+  if(p.adaptive)return adaptiveIndex(p,q);
   if (!inside(q, [0, 0, 0], p.dims)) return -1;
   let owner = p.regions[0];
   for (let region = 1; region < p.regions.length; region++) {
@@ -115,6 +118,7 @@ export function refinementIndex(p, q) {
 }
 
 export function refinementCell(p, i) {
+  if(p.adaptive)return adaptiveCell(p,i);
   const region = p.regions.find(r => i >= r.offset && i < r.offset + r.layout.count);
   if (!region) return {coord: [0, 0, 0], size: 0, owned: false, tile: -1};
   const native = coordinates(i - region.offset, region.layout.dims);

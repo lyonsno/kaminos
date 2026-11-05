@@ -1,3 +1,4 @@
+import {adaptiveOffsets,adaptiveTopologyWGSL} from './adaptive-wgsl.mjs';
 import {refinementAddressWGSL} from './refinement-wgsl.mjs';
 import {slidingWGSL} from './sliding.mjs';
 
@@ -8,19 +9,21 @@ export function refinementArena(p) {
   const surface = active + p.tiles.count;
   const stats = surface + p.tiles.count;
   const prefix = stats + 16;
-  const words = new Uint32Array(prefix + p.tiles.count + 1);
+  const adaptive=p.adaptive?adaptiveOffsets(p,prefix+p.tiles.count+1):null;
+  if(adaptive)p.adaptiveArena=adaptive;
+  const words = new Uint32Array(adaptive?.end??(prefix + p.tiles.count + 1));
   for (const [tile, record] of p.tileRecords.entries()) {
     const c = record.coord ?? [0, 0, 0];
     words.set([record.region < 0 ? 0xffffffff : record.region, ...c, record.faceOffset,
       record.faceCapacity, record.neighborOffset ?? 0, record.neighbors.length], tile * 8);
   }
   words.set(p.tileNeighbors, neighbors);
-  return {meta, neighbors, active, surface, stats, prefix, words};
+  return {meta, neighbors, active, surface, stats, prefix, words, adaptive};
 }
 
 export function refinementShader(p, arena, row = 65535) {
   const origin = `vec3<f32>(${p.origin.map(n => n.toFixed(12)).join(',')})`;
-  return `${refinementAddressWGSL(p)}
+  let code = `${refinementAddressWGSL(p)}
 ${slidingWGSL}
 const B:u32=${p.tiles.width}u;
 const V:u32=${p.tiles.cellsPerTile}u;
@@ -218,4 +221,19 @@ fn face_band(i:u32,face:u32,sub:u32,shape:vec2<u32>)->vec2<f32> {
  if(id.x<ASH_TILE_COUNT){atomicStore(&headers[id.x*8u],1u);}
 }
 `;
+  if(p.adaptive){
+    code=code.replace('fn neighbor_count(tile:u32)->u32 {return word(tile*8u+7u);}',`fn neighbor_count(tile:u32)->u32 {return 64u;}`);
+    const start=code.indexOf('fn neighbor_at('),end=code.indexOf('fn mark_cell(',start);
+    code=code.slice(0,start)+`fn neighbor_at(tile:u32,n:u32)->u32 {
+      let first=ash_tile_cell(tile,0u);if(first==0xffffffffu){return tile;}let c=ash_cell(first);let width=i32(B*c.size);
+      let d=vec3<i32>(i32(n%4u),i32((n/4u)%4u),i32(n/16u));
+      let q=c.lower+vec3<i32>(-1)+d*(width+1)/3;
+      let i=ash_locate(q);if(i==0xffffffffu){return tile;}return ash_cell(i).tile;
+    }
+`+code.slice(end);
+    code=code.replaceAll('word(tile*8u)==0xffffffffu','ash_tile_cell(tile,0u)==0xffffffffu');
+    code=code.replace('if(nextMass[i]!=mass[i]){mark_cell(i);',`if(nextMass[i]!=mass[i]){if(i>=AP_OFFSET&&nextMass[i]==0.0&&mass[i]>0.0){atomicStore(&arena[${arena.adaptive.state+8}u],1u);}mark_cell(i);`);
+    code+=adaptiveTopologyWGSL(p,arena.adaptive);
+  }
+  return code;
 }

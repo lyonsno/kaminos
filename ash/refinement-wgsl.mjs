@@ -1,9 +1,11 @@
+import {adaptiveAddressWGSL} from './adaptive-wgsl.mjs';
 const u3 = values => `vec3<u32>(${values.map(n => `${n}u`).join(',')})`;
 const i3 = values => `vec3<i32>(${values.join(',')})`;
 
 // The fixed-region slice compiles its compact address map into each consumer.
 // Density, collision, airborne deposition and drawing therefore share ownership.
-export function refinementAddressWGSL(p) {
+export function refinementAddressWGSL(p, options) {
+  if(p.adaptive)return adaptiveAddressWGSL(p,p.adaptiveArena,options);
   const regions = p.regions;
   return `
 const ASH_FINE_DIMS = ${u3(p.dims)};

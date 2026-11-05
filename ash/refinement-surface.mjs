@@ -3,7 +3,7 @@ import {refinementAddressWGSL} from './refinement-wgsl.mjs';
 // Both levels reconstruct corners at the same finest-grid positions. Coarse
 // top faces are subdivided there as well, including their shared boundary edge.
 export function refinementVertexWGSL(p, arena) {
-  return `fn ash_refined_vertex(rank:u32,uv:vec2<f32>,soft:f32,density:ptr<storage,array<f32>,read>,solid:ptr<storage,array<u32>,read>,faces:ptr<storage,array<u32>,read>,arena:ptr<storage,array<u32>,read>)->vec4<f32>{
+  let code = `fn ash_refined_vertex(rank:u32,uv:vec2<f32>,soft:f32,density:ptr<storage,array<f32>,read>,solid:ptr<storage,array<u32>,read>,faces:ptr<storage,array<u32>,read>,arena:ptr<storage,array<u32>,read>)->vec4<f32>{
  var low=0u;var high=ASH_TILE_COUNT;
  loop{if(low>=high){break;}let mid=(low+high)/2u;if((*arena)[${arena.prefix}u+mid+1u]<=rank){low=mid+1u;}else{high=mid;}}
  let tile=low;let slot=rank-(*arena)[${arena.prefix}u+tile];
@@ -71,6 +71,28 @@ fn ash_refined_corner(q:vec2<i32>,reference:f32,density:ptr<storage,array<f32>,r
  let cover=min(clamp(0.24+0.22*count,0.0,1.0),clamp(0.22+0.78*edge/span,0.0,1.0));
  return vec4<f32>(height,cover,0.5*((va+vc)-(vb+vd)),0.5*((va+vb)-(vc+vd)));
 }`;
+  if(p.adaptive){
+    // Every address helper receives the same storage pointer already used by
+    // the vertex consumer; no extra render binding or CPU topology mirror.
+    const fixed=refinementAddressWGSL(p);
+    const dynamic=refinementAddressWGSL(p,{load:i=>`(*ashMap)[${i}]`,parameter:true});
+    const cut=code.indexOf(fixed);const before=code.slice(0,cut),after=code.slice(cut+fixed.length);
+    function passMap(source){
+      const names=['ash_locate','ash_cell','ash_capacity','ash_tile_cell','ash_face_shape','ash_refined_height','ash_refined_corner'];
+      for(const name of names){
+        let cursor=0;
+        while((cursor=source.indexOf(name+'(',cursor))>=0){
+          const open=cursor+name.length;let end=open+1,depth=1;
+          while(depth){if(source[end]==='(')depth++;if(source[end]===')')depth--;end++;}
+          const declaration=source.slice(Math.max(0,cursor-3),cursor)==='fn ';
+          const param=declaration?',arena:ptr<storage,array<u32>,read>':',arena';
+          source=source.slice(0,end-1)+param+source.slice(end-1);cursor=end+param.length;
+        }
+      }return source;
+    }
+    code=passMap(before)+dynamic+passMap(after);
+  }
+  return code;
 }
 
 export const refinementNormalWGSL = `fn ash_refined_normal(packed:f32)->vec3<f32>{

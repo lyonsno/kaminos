@@ -86,7 +86,7 @@ export function createAshCollisionRecords(root,readObjects,{getCellSize=()=>0.04
 export async function createAshSceneObject({record:raw,renderer,readObjects,readSources=()=>[],lodController=null,resolveObstacle=null,onError=()=>{},createPatch=async options=>options.refinement?(await import('./refinement-gpu.mjs')).createGpuRefinedAsh(options):(await import('./tile-gpu.mjs')).createGpuTiledAsh(options)}){
  const record=checkedAshRecord(raw),root=new Group();root.name=record.label||'Ash';
  root.position.fromArray(record.transform?.position??[0,0,0]);root.rotation.set(...(record.transform?.rotation??[0,0,0]));root.scale.fromArray(record.transform?.scale??[1,1,1]);
- let settings=record.ash,patch=null,busy=false,disposed=false,pendingRestore=settings.checkpoint,initialized=false,lastTick=null,failure=null;
+ let settings=record.ash,patch=null,busy=false,disposed=false,pendingRestore=settings.checkpoint,initialized=false,lastTick=null,failure=null,showRefinement=false;
  const device=renderer?.backend?.device;
  function checkedLayout(s){const layout=ashObjectLayout(s);
   if(device)for(const bytes of [layout.count*4,(layout.faceWords??layout.tiles.count*layout.tiles.cellsPerTile*6)*4])if(bytes>device.limits.maxStorageBufferBindingSize||bytes>device.limits.maxBufferSize)throw Error('Ash field exceeds effective GPU capacity; increase cell width or reduce field dimensions');
@@ -113,7 +113,7 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,read
  const locked=async fn=>{check();busy=true;try{return await fn();}finally{busy=false;}};
  function dispose(){if(disposed)return;disposed=true;patch?.dispose();for(const child of fineGuides.children)child.geometry.dispose();fineMaterial.dispose();guide.geometry.dispose();guide.material.dispose();emitter.geometry.dispose();emitter.material.dispose();root.removeFromParent();}
  async function build(s){const layout=checkedLayout(s);let candidate;
-  try{candidate=await createPatch({renderer,cellSize:layout.cellSize,bounds:layout.bounds,solid:new Uint8Array(layout.count),tileSize:16,refinement:s.refinement,sceneRecords:collisionRecords,surfaceMode:'runs',sliding:{variation:s.slideVariation,scale:s.slideScale,release:s.slideRelease}});
+  try{candidate=await createPatch({renderer,cellSize:layout.cellSize,bounds:layout.bounds,solid:s.refinement?undefined:new Uint8Array(layout.count),tileSize:16,refinement:s.refinement,sceneRecords:collisionRecords,surfaceMode:'runs',sliding:{variation:s.slideVariation,scale:s.slideScale,release:s.slideRelease}});
    candidate.setSoftNormals?.(s.softNormals);return candidate;
   }catch(error){candidate?.dispose();throw error;}
  }
@@ -122,11 +122,12 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,read
  const api={root,
   async initialize(){if(initialized)return;return locked(async()=>{await prepareCollision(settings.cellSize);patch.syncScene();if(pendingRestore){patch.restore(pendingRestore,{allowCollisionUpgrade:true});pendingRestore=null;}else if(settings.initialDepth>0)await patch.deposit({blanketDepth:settings.initialDepth,groundOnly:true});patch.setSliding?.({variation:settings.slideVariation,scale:settings.slideScale,release:settings.slideRelease});initialized=true;});},
   tick(timestamp,{active=true,selected=false}={}){
-   guide.visible=selected;fineGuides.visible=selected;emitter.visible=selected&&settings.emitting;
+   guide.visible=selected;fineGuides.visible=selected;patch.setShowRefinement?.(showRefinement&&selected);emitter.visible=selected&&settings.emitting;
    if(disposed||busy||!initialized||pendingRestore||!active||settings.paused){lastTick=null;return false;}
    if(lastTick!==null&&timestamp-lastTick<1000/30)return false;lastTick=timestamp;
    try{patch.step(null,source());if(failure){failure=null;onError(null);}return true;}catch(error){const changed=failure!==error.message;failure=error.message;if(changed)onError(failure);return false;}
   },
+  setShowRefinement(value){showRefinement=!!value;patch.setShowRefinement?.(showRefinement);},
   set(patchSettings){check();if(Object.hasOwn(patchSettings,'checkpoint'))throw Error('Checkpoint state is owned by scene saving');const next=checkedAshSettings({...settings,...patchSettings,checkpoint:null});next.checkpoint=settings.checkpoint;
    for(const key of ['width','depth','height','cellSize','initialDepth','refinement'])if(JSON.stringify(next[key])!==JSON.stringify(settings[key]))throw Error('Use Reset at cell width to rebuild the lattice; dimensions belong to creation');
    patch.setSliding?.({variation:next.slideVariation,scale:next.slideScale,release:next.slideRelease});settings=next;patch.setSoftNormals?.(settings.softNormals);sync();return api.read();
@@ -145,7 +146,7 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,read
   burst(volume){check();patch.burst(volume);},
   advance(steps=1){check();if(!Number.isSafeInteger(steps)||steps<1)throw Error('Ash steps must be a positive integer');for(let i=0;i<steps;i++)patch.step(null,source());},
   diagnostics:options=>locked(()=>patch.diagnostics(options)),
-  read:()=>({id:record.id,settings:{...settings,checkpoint:undefined},pendingRestore:!!pendingRestore,busy,failure,disposed,runtime:patch.read()}),
+  read:()=>({id:record.id,settings:{...settings,checkpoint:undefined},showRefinement,pendingRestore:!!pendingRestore,busy,failure,disposed,runtime:patch.read()}),
   dispose,
  };
  root.userData.disposeAshObject=dispose;return api;

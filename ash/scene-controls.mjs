@@ -2,7 +2,7 @@ import {installRelativeNumberDrag,installSceneControlHistory} from '../scene-con
 import {installAshRefinementControls} from './refinement-controls.mjs';
 import {checkedAshSettings} from './scene-record.mjs';
 // Native selection inspector; all controls call the same authored operations.
-export function installAshInspector({document,anchor,selected,read,edit,regrid,cover,burst,changed,error,edits,target,ownHistory}){
+export function installAshInspector({document,anchor,selected,read,edit,regrid,cover,burst,diagnostics,showRefinement,changed,error,edits,target,ownHistory}){
  const panel=document.createElement('section');panel.id='selected-ash-properties';panel.hidden=true;anchor.after(panel);
  panel.innerHTML='<h3>Ash field</h3><p data-ash-status class="hint"></p><p data-ash-size class="hint"></p><label class="slider-row"><span>Cell width</span><input data-ash-cell class="transform-input" type="number" min="0" step="any"></label><button class="btn" type="button" data-ash-regrid>Reset at cell width</button><p class="hint">Clears deposited and falling ash. Keeps field placement and connected sources. This reset cannot be undone.</p><label class="slider-row"><span>Pause ash</span><input data-ash-key="paused" type="checkbox"></label><label class="slider-row"><span>Fallout across field</span><input data-ash-key="fallout" type="checkbox"></label><div data-ash-fields></div><label class="slider-row"><span>Smooth lighting (preview)</span><input data-ash-key="softNormals" type="checkbox"></label><label class="slider-row"><span>Layer depth</span><input data-ash-layer class="transform-input" type="number" value="0.04" step="any" min="0"></label><button class="btn" type="button" data-ash-cover>Add layer</button><details><summary>Legacy field source</summary><label class="slider-row"><span>Emit from legacy source</span><input data-ash-key="emitting" type="checkbox"></label><div data-legacy-fields></div><label class="slider-row"><span>Burst volume</span><input data-ash-volume class="transform-input" type="number" value="0.02" step="any" min="0"></label><button class="btn" type="button" data-ash-burst>Release burst</button></details><p class="hint">Variation changes local resistance; release controls how far a slip relaxes. Editing either wakes the field once. Move or scale this field with the scene tools. Sources are separate objects; removing a source leaves its deposited ash here. Save retains deposited and falling material.</p>';
 
@@ -27,6 +27,11 @@ export function installAshInspector({document,anchor,selected,read,edit,regrid,c
   if(input.type==='number')installRelativeNumberDrag({input,grip:input,step:input.dataset.ashKey==='rate'?.0001:.01});
  }
  for(const input of panel.querySelectorAll('[data-ash-layer],[data-ash-volume]'))installRelativeNumberDrag({input,grip:input,step:.001});
+ const inspect=document.createElement('button');inspect.type='button';inspect.className='btn';inspect.textContent='Inspect fine residency';inspect.dataset.ashInspectResidency='';
+ const residency=document.createElement('p');residency.className='hint';residency.dataset.ashResidency='';
+ inspect.addEventListener('click',()=>act(async()=>{const result=await diagnostics(selected());const a=result.allocation;residency.textContent=a?`${a.resident}/${a.capacity} fine bricks · ${a.pinned} retaining deposited history · ${a.unmet} unmet requests. Snapshot on request; no live CPU readback.`:'This field uses a fixed lattice.';}));
+ const showRow=document.createElement('label');showRow.className='slider-row';showRow.textContent='Show fine bricks';const show=document.createElement('input');show.type='checkbox';show.dataset.ashShowRefinement='';show.addEventListener('change',()=>showRefinement(selected(),show.checked));showRow.append(show);
+ panel.append(showRow,inspect,residency);
  const cellInput=panel.querySelector('[data-ash-cell]');
  const refinementControls=installAshRefinementControls({document,panel,anchor:cellInput});
  const dimInputs={cellSize:cellInput};
@@ -55,7 +60,7 @@ export function installAshInspector({document,anchor,selected,read,edit,regrid,c
  for(const input of Object.values(dimInputs))input.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();runRegrid();}});
  panel.querySelector('[data-ash-cover]').onclick=()=>act(()=>cover(selected(),Number(panel.querySelector('[data-ash-layer]').value)));
  panel.querySelector('[data-ash-burst]').onclick=()=>act(()=>burst(selected(),Number(panel.querySelector('[data-ash-volume]').value)));
- function sync(){const id=selected();panel.hidden=!id;if(!id)return;const state=read(id),s=state.settings;refinementControls.sync(id,s);
+ function sync(){const id=selected();panel.hidden=!id;if(!id)return;const state=read(id),s=state.settings;refinementControls.sync(id,s);show.checked=!!state.showRefinement;inspect.hidden=s.refinement?.mode!=='adaptive';residency.hidden=inspect.hidden;showRow.hidden=inspect.hidden;
   for(const [key,input]of Object.entries(dimInputs)){
    if(document.activeElement!==input&&(id!==syncedCellId||s[key]!==syncedDims[key])){input.value=String(s[key]);syncedDims[key]=s[key];}
   }

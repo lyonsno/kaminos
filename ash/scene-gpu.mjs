@@ -5,12 +5,12 @@ import {sceneTiles} from './scene-plan.mjs';
 
 // Object-local occupancy survives rigid motion. Geometry is conservatively
 // voxelized by the shared producer; live poses resample only affected ash tiles.
-export function createAshSceneSolids({device,layout:p,collision,headers,collisionOffset=0,headersOffset=0}){
+export function createAshSceneSolids({device,layout:p,collision,headers,collisionOffset=0,headersOffset=0,samplingCellSize=p.cellSize,adaptive=null}){
  const t=p.tiles,cache=new Map(),boundsCache=new WeakMap(),pendingDirty=new Set();let builds=0,updates=0,lastTiles=0,disposed=false,geometryRevision=0;
  let jobsCapacity=t.count+1,jobs=device.createBuffer({label:'ash moved-solid tile addresses',size:jobsCapacity*4,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
  const dummy=device.createTexture({size:[1,1,1],dimension:'3d',format:'r32uint',usage:GPUTextureUsage.TEXTURE_BINDING});
  const blank=device.createBuffer({size:128,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
- const code=`
+ let code=`
  const ROW:u32=${device.limits.maxComputeWorkgroupsPerDimension}u;
  const B:u32=${t.width}u;const V:u32=${t.cellsPerTile}u;const G:u32=${t.groupsPerTile}u;
  const TD=vec3<u32>(${t.dims.map(n=>n+'u')});const D=vec3<u32>(${p.dims.map(n=>n+'u')});
@@ -74,16 +74,45 @@ export function createAshSceneSolids({device,layout:p,collision,headers,collisio
   if(any(q<vec3<i32>(0))||any(q>=vec3<i32>(textureDimensions(shape)))){return;}
   if(textureLoad(shape,q,0).x!=0u){solid[c.x+D.x*(c.y+D.y*c.z)]=2u;}
  }`;
+ const burnerWGSL=code.slice(code.indexOf(' fn burner_solid'),code.indexOf(' @compute'));
+ if(adaptive){
+  const {layout:ap,arena:map}=adaptive,a=ap.adaptiveArena,dp=ap.pool.pageDims;
+  code=code.replace(' @compute @workgroup_size(64) fn clear',`
+ @group(0) @binding(5) var<storage,read_write> ashMap:array<atomic<u32>>;
+ fn page_of(c:vec3<u32>)->u32{let q=c/4u;return q.x+${dp[0]}u*(q.y+${dp[1]}u*q.z);}
+ fn fine_occupied(world:vec3<f32>)->bool{
+ let point=(pose.inverse*vec4<f32>(world,1)).xyz;
+  if(pose.tiles.z==1u){return burner_solid(point,pose.local.w,pose.burner0,pose.burner1);}
+  let q=vec3<i32>(floor((point-pose.local.xyz)/pose.local.w));
+  if(any(q<vec3<i32>(0))||any(q>=vec3<i32>(textureDimensions(shape)))){return false;}
+  return textureLoad(shape,q,0).x!=0u;
+ }
+ @compute @workgroup_size(64) fn clear`);
+  code=code.replace('solid[c.x+D.x*(c.y+D.y*c.z)]=0u;',`solid[c.x+D.x*(c.y+D.y*c.z)]=0u;
+   if(all(c%4u==vec3<u32>(0))){atomicStore(&ashMap[${a.demand}u+page_of(c)],0u);}
+   let slot=atomicLoad(&ashMap[${a.map}u+page_of(c)]);if(slot!=0u){atomicOr(&ashMap[${a.flags}u+slot-1u],2u);}`);
+  code=code.replace('  let point=(pose.inverse*vec4<f32>(world,1)).xyz;',`  var mask=0u;
+  for(var z=0u;z<2u;z++){for(var y=0u;y<2u;y++){for(var x=0u;x<2u;x++){
+   let at=O+(vec3<f32>(c)+(vec3<f32>(f32(x),f32(y),f32(z))+.5)*.5)*S;
+   if(fine_occupied(at)){mask|=1u<<(x+2u*y+4u*z);}
+  }}}
+  // Horizontal variation finds ledges/gaps and rejects a uniform horizontal
+  // support plane. Compare the four fine columns of the same coarse cell.
+  let column=mask&5u;var differs=false;
+  for(var z=0u;z<2u;z++){for(var x=0u;x<2u;x++){if(((mask>>(x+4u*z))&5u)!=column){differs=true;}}}
+  if(differs){atomicMax(&ashMap[${a.demand}u+page_of(c)],2u);}
+  let point=(pose.inverse*vec4<f32>(world,1)).xyz;`);
+ }
  const module=device.createShaderModule({label:'ash moving scene occupancy',code});
  const bindLayout=device.createBindGroupLayout({entries:[
   {binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:'storage'}},
   {binding:1,visibility:GPUShaderStage.COMPUTE,buffer:{type:'storage'}},
   {binding:2,visibility:GPUShaderStage.COMPUTE,buffer:{type:'read-only-storage'}},
   {binding:3,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:'uint',viewDimension:'3d'}},
-  {binding:4,visibility:GPUShaderStage.COMPUTE,buffer:{type:'uniform'}}]});
+  {binding:4,visibility:GPUShaderStage.COMPUTE,buffer:{type:'uniform'}},...(adaptive?[{binding:5,visibility:GPUShaderStage.COMPUTE,buffer:{type:'storage'}}]:[])]});
  const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[bindLayout]});
  const pipelines=Object.fromEntries(['clear','stamp'].map(entryPoint=>[entryPoint,device.createComputePipeline({layout:pipelineLayout,compute:{module,entryPoint}})]));
- const group=(texture,uniform)=>device.createBindGroup({layout:bindLayout,entries:[{binding:0,resource:{buffer:collision,offset:collisionOffset,size:p.count*4}},{binding:1,resource:{buffer:headers,offset:headersOffset,size:t.count*32}},{binding:2,resource:{buffer:jobs}},{binding:3,resource:texture.createView()},{binding:4,resource:{buffer:uniform}}]});
+ const group=(texture,uniform)=>device.createBindGroup({layout:bindLayout,entries:[{binding:0,resource:{buffer:collision,offset:collisionOffset,size:p.count*4}},{binding:1,resource:{buffer:headers,offset:headersOffset,size:t.count*32}},{binding:2,resource:{buffer:jobs}},{binding:3,resource:texture.createView()},{binding:4,resource:{buffer:uniform}},...(adaptive?[{binding:5,resource:{buffer:adaptive.arena}}]:[])]});
  let clearGroup=group(dummy,blank);
  const destroy=m=>{m.texture?.destroy();m.coarseTexture?.destroy();m.uniform.destroy();};
  const maxBytes=Math.min(device.limits.maxStorageBufferBindingSize,device.limits.maxBufferSize);
@@ -98,7 +127,7 @@ export function createAshSceneSolids({device,layout:p,collision,headers,collisio
   const b=mesh.userData?.kaminosAnalyticAnnularBurner;
   if(b){
    const rMax=b.outerRadius+0.045,bounds=new Box3(new Vector3(-rMax,-b.thickness,-rMax),new Vector3(rMax,Math.max(0,b.rimHeight),rMax));
-   const step=p.cellSize/largest,tag=[b.innerRadius,b.outerRadius,b.ringCount,b.grooveFraction,b.grooveDepth,b.sectorCount,b.thickness,b.rimHeight].join(',');
+   const step=samplingCellSize/largest,tag=[b.innerRadius,b.outerRadius,b.ringCount,b.grooveFraction,b.grooveDepth,b.sectorCount,b.thickness,b.rimHeight].join(',');
    const key='annular-analytic:'+tag;
    return {analyticBurner:b,key,identity:key,revision:0,grid:0,step,origin:new Vector3(),center:new Vector3(),bounds,fullBounds:bounds,clipped:false,coarseKey:null};
   }
@@ -115,7 +144,7 @@ export function createAshSceneSolids({device,layout:p,collision,headers,collisio
   const fullBounds=cached.bounds,fullSize=fullBounds.getSize(new Vector3()),fullSpan=Math.max(...fullSize.toArray());
   if(!(fullSpan>0))throw Error(`Ash collision has zero extent: ${mesh.name}`);
   if(prev&&prev.revision===cached.revision&&prev.matrix&&mesh.matrixWorld.elements.every((v,i)=>Math.abs(v-prev.matrix[i])<1e-10))return prev;
-  const rawGrid=Math.max(4,Math.ceil(fullSpan*largest/p.cellSize-1e-8)+4);
+  const rawGrid=Math.max(4,Math.ceil(fullSpan*largest/samplingCellSize-1e-8)+4);
   if(maxGrid<4)throw Error(`Ash shape exceeds effective GPU capacity: ${mesh.name} (${rawGrid} cubed)`);
   if(rawGrid<=maxGrid){
    const grid=rawGrid<=32?rawGrid:Math.min(maxGrid,Math.ceil(rawGrid/32)*32),step=fullSpan/(grid-4);
@@ -124,16 +153,16 @@ export function createAshSceneSolids({device,layout:p,collision,headers,collisio
    return {key,identity,revision:cached.revision,grid,step,origin,center,bounds:fullBounds,fullBounds,clipped:false,coarseKey:null};
   }
   const inv=new Matrix4().copy(mesh.matrixWorld).invert();
-  const localBox=pad=>{const w=new Box3(new Vector3(p.origin[0]-pad,p.origin[1]-pad,p.origin[2]-pad),new Vector3(p.origin[0]+p.dims[0]*p.cellSize+pad,p.origin[1]+p.dims[1]*p.cellSize+pad,p.origin[2]+p.dims[2]*p.cellSize+pad)).applyMatrix4(inv);return fullBounds.clone().intersect(w);};
-  const reqBounds=localBox(2*p.cellSize);
+  const localBox=pad=>{const w=new Box3(new Vector3(p.origin[0]-pad,p.origin[1]-pad,p.origin[2]-pad),new Vector3(p.origin[0]+p.dims[0]*samplingCellSize+pad,p.origin[1]+p.dims[1]*samplingCellSize+pad,p.origin[2]+p.dims[2]*samplingCellSize+pad)).applyMatrix4(inv);return fullBounds.clone().intersect(w);};
+  const reqBounds=localBox(2*samplingCellSize);
   if(reqBounds.isEmpty())return {empty:true,bounds:reqBounds,step:0};
-  const padBounds=localBox(8*p.cellSize);
+  const padBounds=localBox(8*samplingCellSize);
   const reuseBounds=prev?.clipped&&prev.revision===cached.revision&&prev.bounds.containsBox(reqBounds)&&prev.bounds.getSize(new Vector3()).length()<=padBounds.getSize(new Vector3()).length()*1.6;
   const activeBounds=reuseBounds?prev.bounds.clone():padBounds;
   const activeSpan=Math.max(1e-6,...activeBounds.getSize(new Vector3()).toArray());
-  const clipRaw=Math.max(4,Math.ceil(activeSpan*largest/p.cellSize-1e-8)+4);
+  const clipRaw=Math.max(4,Math.ceil(activeSpan*largest/samplingCellSize-1e-8)+4);
   const grid=clipRaw<=32?clipRaw:Math.min(maxGrid,Math.ceil(clipRaw/32)*32);
-  const qSpan=Math.max(activeSpan,Math.min(fullSpan,(grid-4)*(p.cellSize/largest))),step=qSpan/(grid-4);
+  const qSpan=Math.max(activeSpan,Math.min(fullSpan,(grid-4)*(samplingCellSize/largest))),step=qSpan/(grid-4);
   const center=activeBounds.getCenter(new Vector3()),extent=grid*step,origin=center.clone().addScalar(-extent/2);
   const isClipped=!activeBounds.min.equals(fullBounds.min)||!activeBounds.max.equals(fullBounds.max);
   const coarseGrid=Math.min(64,maxGrid),coarseStep=fullSpan/(coarseGrid-4),coarseCenter=fullBounds.getCenter(new Vector3()),coarseOrigin=coarseCenter.clone().addScalar(-coarseGrid*coarseStep/2);
@@ -224,5 +253,5 @@ export function createAshSceneSolids({device,layout:p,collision,headers,collisio
   for(const {m,tiles} of stamps)dispatch('stamp',m.group,tiles);
   device.queue.submit([encoder.finish()]);dirty.clear();updates++;return true;
  }
- return {update,read:()=>({route:'cached-local-triangle-occupancy',pendingDirtyTiles:pendingDirty.size,shapeBuilds:builds,updates,lastDirtyTiles:lastTiles,allocatedBytes:jobsCapacity*4+100+[...cache.values()].reduce((n,m)=>n+m.bytes,0),members:[...cache.values()].map(m=>({id:m.id,key:m.objectKey,name:m.name,geometry:m.identity,matrix:m.matrix,grid:m.grid}))}),dispose(){if(disposed)return;disposed=true;for(const m of cache.values())destroy(m);cache.clear();jobs.destroy();dummy.destroy();blank.destroy();}};
+ return {update,burnerWGSL,members:()=>[...cache.values()],read:()=>({route:'cached-local-triangle-occupancy',pendingDirtyTiles:pendingDirty.size,shapeBuilds:builds,updates,lastDirtyTiles:lastTiles,allocatedBytes:jobsCapacity*4+100+[...cache.values()].reduce((n,m)=>n+m.bytes,0),members:[...cache.values()].map(m=>({id:m.id,key:m.objectKey,name:m.name,geometry:m.identity,matrix:m.matrix,grid:m.grid}))}),dispose(){if(disposed)return;disposed=true;for(const m of cache.values())destroy(m);cache.clear();jobs.destroy();dummy.destroy();blank.destroy();}};
 }
