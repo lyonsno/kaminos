@@ -1939,3 +1939,52 @@ test('seeded arrival rungs retain source-frame collision geometry and bake displ
  assert.equal(controller.resolveCollisionRung(root,{cellSize:.04}).root,resident.collisionRoot);
  controller.dispose();
 });
+
+test('automatic beauty retains its displayed rung when shadow proxies are disabled, including saved opt-outs', async () => {
+  const bytes = new TextEncoder().encode('independent-beauty-rung').buffer;
+  const tierSha = createHash('sha256').update(new Uint8Array(bytes)).digest('hex');
+  const level = {sha256: tierSha, faces: 12, source: `/api/read?root=generated-meshes&path=${tierSha}.glb`};
+  const source = 'e'.repeat(64);
+  const scene = new THREE.Scene();
+  const root = new THREE.Group();
+  root.userData.kaminosSceneObject = {id: 'independent-beauty', source: `/api/read?root=generated-meshes&path=${source}.glb`};
+  root.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1, 10, 10, 10), new THREE.MeshStandardMaterial()));
+  scene.add(root);
+  const makeRung = () => new THREE.Group().add(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial()));
+  const registry = createGiProxyRegistry({THREE,
+    fetchJson: async () => ({source, levels: [level], choice: level}),
+    fetchBytes: async () => bytes,
+    parseGlb: async () => makeRung(),
+  });
+  let beautyLoads = 0;
+  const controller = createSceneBeautyLodController({THREE, scene, giProxies: registry,
+    settings: {faceBudget: 100}, fetchBytes: async () => { beautyLoads++; return bytes; }, parseGlb: async () => makeRung(),
+  });
+  const camera = makeCamera({z: 1.5});
+  await registry.attach(root);
+  await controller.prepareFrame(camera);
+  const before = controller.state();
+  const resident = controller.getResidentRung(root, tierSha);
+  assert.equal(before.objects[0].displayedTier, tierSha);
+  await registry.disable(root, {retainLevels: true});
+  await controller.prepareFrame(camera);
+  assert.equal(controller.state().objects[0]?.displayedTier, tierSha, 'shadow opt-out must not restore the hero in the viewport');
+  assert.equal(controller.state().totalFaces, before.totalFaces);
+  assert.equal(controller.getResidentRung(root, tierSha), resident, 'resident beauty geometry stays cached');
+  assert.equal(beautyLoads, 1);
+  registry.release(root);
+  await registry.disable(root, {retainLevels: true});
+  await controller.prepareFrame(camera);
+  assert.equal(controller.state().objects[0]?.displayedTier, tierSha, 'a saved shadow opt-out also participates in automatic beauty');
+  controller.dispose();
+  registry.clear();
+});
+
+test('the beauty readout identifies a reduction forced by the scene face budget', async () => {
+  const {formatLodBudgetReadout} = await import('../scene-lod-budget.mjs');
+  const readout = formatLodBudgetReadout({objectId: 'kiln', beautyState: {
+    enabled: true, totalFaces: 25000, faceBudget: 150000,
+    objects: [{id: 'kiln', displayedTier: 'coarse', faces: 25000, pixelError: 20, demotedByBudget: true}],
+  }});
+  assert.match(readout.beautyText, /reduced to fit scene budget/i);
+});
