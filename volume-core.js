@@ -14650,7 +14650,7 @@ export function createKaminosVolumePrototype({
     const transparencyKey = transparentCanvas ? 1 : 0;
     let renderPipelines = fluidRenderPipelines.get(transparencyKey);
     if (!renderPipelines) {
-      const makePipeline = (targetFormat, label, constants = renderPipelineConstants) => device.createRenderPipeline({
+      const makePipeline = (targetFormat, label, constants = renderPipelineConstants) => rayStepPipelineVariants.create({
         label,
         layout: productRaymarchPipelineLayout,
         vertex: { module: shader, entryPoint: 'vs' },
@@ -21601,7 +21601,7 @@ export function createKaminosVolumePrototype({
       rebuildFluidBindGroups();
     }else{rayAllocationHistory.reset();}
     const opticalKey = `:${transparentCanvas ? 1 : 0}:${optical.mode}:stats=false`;
-    if ((optical.mode !== 'current'||rayStepTelemetry.active) && !multisampled && !scenePointBindGroup && !distributedGroup) {
+    if (optical.mode !== 'current' && !multisampled && !scenePointBindGroup && !distributedGroup) {
       const key = `${targetPipeline === readbackPipeline}${opticalKey}`;
       if (!opticalSteppingPipelines.has(key)) {
         opticalSteppingPipelines.set(key,rayStepPipelineVariants.create({label:'experimental optical stepping',
