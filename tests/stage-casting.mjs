@@ -174,3 +174,9 @@ test('Run resumes an interrupted pickup before fastening to the loader',async()=
  assert.equal(f.study.read().transfer.moving,true);assert.equal(f.state.recipe.attachments.length,0);
  f.frame(4);await new Promise(r=>setImmediate(r));assert.deepEqual(f.objects.find(o=>o.id===f.study.read().pieceId).object.position.toArray(),[2,3,4]);assert.equal(f.state.recipe.attachments.length,1);await f.study.dispose();
 });
+
+test('Stop cancels a queued Run before it starts pouring',async()=>{
+ const f=await loaderFixture({phase:0,cycle:0});let pours=0;f.study.operations.pour=async()=>{pours++;};
+ const run=f.study.operations.runCycle();await f.study.operations.stopCycle();await run;await new Promise(r=>setImmediate(r));
+ assert.equal(f.study.read().cycle.running,false);assert.equal(pours,0);await f.study.dispose();
+});
