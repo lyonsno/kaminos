@@ -21,6 +21,30 @@ The repository spans four connected capabilities:
   state, and generated environments can be inspected, corrected, staged, and
   composed in one WebGPU workbench.
 
+## WebGPU Inference Kit
+
+**Local AI that leaves room for your application.** Generate images, estimate materials, segment photographs and animate skeletons on the visitor's GPU. Use the kit in your own browser application; the Kaminos editor is not required. Model applications handle loading, queued inference, progress and cleanup, with cooperative scheduling to share the GPU with your renderer.
+
+**[Try the browser models](https://lyonsno.github.io/kaminos/inference-kit/)** · **[Build your first application](models/flux2-klein/examples/external-app)** · **[Kit guide and model catalog](webgpu-inference-kit/README.md)** · **[npm](https://www.npmjs.com/package/@kaminos/webgpu-inference-kit)**
+
+[![Images generated locally in the browser with FLUX.2 Klein: a blue tank engine in a variety of scenes and styles](models/flux2-klein/assets/jank-engine.jpg)](https://lyonsno.github.io/kaminos/inference-kit/klein/)
+
+Start with image generation in your own project; the model package brings the inference kit as a dependency:
+
+```sh
+npm install @kaminos/flux2-klein@^0.1.2
+```
+
+The [Klein Image Studio](models/flux2-klein/examples/external-app) is a standalone, editable application with prompt entry, live progress, pan and zoom, and PNG export. No Python environment, inference server or manual weight placement is needed for this path. Hosted weights download on first use and stay in the browser cache (about 3.2 GB for Klein's default model).
+
+Choose a [model application](webgpu-inference-kit/docs/model-applications.md) for image generation, material estimation, animation or background removal. For your own model port or shared rendering host, install the runtime directly:
+
+```sh
+npm install @kaminos/webgpu-inference-kit
+```
+
+The Basin Maintenance Division monitors [GitHub issues](https://github.com/lyonsno/kaminos/issues) daily. Tell us what you tried and where you got stuck.
+
 ## Turn A Photograph Into A Surface You Can Relight
 
 [![Four synchronized views of a metallic sculpture: the original photograph, recovered depth, the image under new lighting, and inferred materials with glow](demos/material-photo/comparison.png)](https://lyonsno.github.io/kaminos/inference-kit/material-photo/)
@@ -34,8 +58,8 @@ The repository spans four connected capabilities:
 ## Start Here
 
 **[Try the browser models](https://lyonsno.github.io/kaminos/inference-kit/)**:
-[relight a photograph](https://lyonsno.github.io/kaminos/inference-kit/material-photo/),
 [generate an image with FLUX](https://lyonsno.github.io/kaminos/inference-kit/klein/),
+[relight a photograph](https://lyonsno.github.io/kaminos/inference-kit/material-photo/),
 [animate a skeleton with UniMate](https://lyonsno.github.io/kaminos/inference-kit/unimate/),
 or [reconstruct your hand](https://lyonsno.github.io/kaminos/inference-kit/hand-mesh/).
 The generation demos run inference locally on your GPU.
@@ -78,18 +102,7 @@ Kaminos is the authoring surface. The
 runtime extracted from the work required to keep that surface responsive while
 substantial models execute.
 
-## WebGPU Inference Kit
-
-Generate images and run vision models locally in the browser. Start with a
-model application; share its GPU device with your renderer when you need one.
-
-**[Generate and display your first image](models/flux2-klein/README.md#using-it-in-an-application)** with a complete Klein browser page: setup, progress, repeated runs and cleanup.
-
-```sh
-npm install @kaminos/webgpu-inference-kit
-```
-
-Choose a [model application](webgpu-inference-kit/docs/model-applications.md) to generate images with Klein, estimate materials with SuperMat, animate a skeleton with UniMate, or remove a background with U2Net. The applications handle loading, queued inference, controls and cleanup while preserving each model's options, complete output and lower-level pipeline. For a live renderer, the shared foreground service coordinates its GPU work with inference across runs.
+## Model Ports
 
 The same runtime supports several kinds of model:
 
