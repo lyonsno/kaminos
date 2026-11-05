@@ -94,14 +94,19 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   irradiance=Fn(()=>{
     prepareSurfaceSampling();
     const sum=vec3(0).toVar();
-    const add=indices=>{for(const i of indices)sum.addAssign(currentLights[i].irradiance.mul(2));};
-    If(surfaceOn,()=>{If(budgeted,()=>{
+    If(surfaceOn,()=>{
       const phase=(grain?grain.bits.shiftRight(THREE.TSL.uint(4)).mod(THREE.TSL.uint(count)).toInt():screenCoordinate.x.floor().add(screenCoordinate.y.floor()).mod(count).toInt()).toVar();
-      for(let i=0;i<count;i++)If(THREE.TSL.int(i).sub(phase).add(count).mod(count).lessThan(evaluatedSources),()=>sum.addAssign(currentLights[i].irradiance.mul(THREE.TSL.float(count).div(evaluatedSources))));
-    }).Else(()=>{if(count===4)If(paired,()=>{
-      If(grain?.firstPair??screenCoordinate.x.floor().add(screenCoordinate.y.floor()).mod(2).lessThan(1),()=>add([0,2])).Else(()=>add([1,3]));
-    }).Else(()=>{for(const light of currentLights)sum.addAssign(light.irradiance);});
-    else for(const light of currentLights)sum.addAssign(light.irradiance);});});
+      const firstPair=grain?.firstPair??screenCoordinate.x.floor().add(screenCoordinate.y.floor()).mod(2).lessThan(1);
+      const legacyWeight=count===4?paired.select(2,1):THREE.TSL.float(1);
+      const weight=budgeted.select(THREE.TSL.float(count).div(evaluatedSources),legacyWeight).toVar();
+      // Share each source's shadow/filter body across all evaluation modes.
+      // Separate budget/all/pair branches duplicated those large shader graphs.
+      for(let i=0;i<count;i++){
+        const withinBudget=THREE.TSL.int(i).sub(phase).add(count).mod(count).lessThan(evaluatedSources);
+        const legacySelected=count===4?paired.not().or(i%2===0?firstPair:firstPair.not()):THREE.TSL.bool(true);
+        If(budgeted.select(withinBudget,legacySelected),()=>sum.addAssign(currentLights[i].irradiance.mul(weight)));
+      }
+    });
     return sum.mul(surfaceGain);
   })();
   }
