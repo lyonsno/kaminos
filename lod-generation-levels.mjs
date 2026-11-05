@@ -11,6 +11,7 @@
 // build any requested merged surfel levels (x4, x8, x16) with hero normals; ingest and register each tier.
 // The reference is the hero (default) or the raw decode (face geometric normals averaged over the texel footprint).
 // `report` is updated at every phase and returned, including on failure (with `error`).
+import {prepareMeshTextureLevels} from './lod-texture-generation.mjs';
 import {prepareLowTiers, readGLBWorldMesh, measureGeometricError, glbNodeWorldMatrices} from './mesh-lod-ladder.mjs';
 import {addNormalMapToGLB, createHeroNormalSampler} from './lod-normal-bake.mjs';
 import {readGLBLocalSurfaceAndMaterials, createGLBMeshMaterialBaker} from './lod-mesh-bake.mjs';
@@ -27,7 +28,7 @@ const sha256 = async array => [...new Uint8Array(await crypto.subtle.digest('SHA
 
 export async function prepareGenerationLevels({decode = null, materialFields = null, source, heroGLB = null, surfelGLB = null, surfelSource = null, server = '', fetch = globalThis.fetch,
   THREE, MeshBVH, finish, unwrapMesh, WorkerClass, targets = [25000, 10000, 5000, 1000, 500], surfelFactors = [], textureSizeFor, replace = false, completeMissing = false, normalMaps = true, input = null, route = null,
-  reference = 'hero', report = {}, onPhase = () => {}}) {
+  reference = 'hero', textureLevels = true, report = {}, onPhase = () => {}}) {
   const fromHeroGLB = !decode;
   const hasSurfelGLB = Boolean(surfelGLB || surfelSource);
   let {vertices, triangles, coordinates: decodeCoordinates} = decode ?? {};
@@ -233,6 +234,12 @@ export async function prepareGenerationLevels({decode = null, materialFields = n
       if (registered.source !== source || registered.level?.sha256 !== digest) { report.failedTier = tier.target; report.orphanedIngest = digest;
         throw Error(`registration receipt for ${tier.target} does not name level ${digest} of ${source}: ${JSON.stringify(registered).slice(0, 300)}`); }
       report.tiers.push({target: tier.target, ...level, bytes: tier.glb.byteLength, timing: tier.timing}); onPhase(report);
+    }
+    if (textureLevels && reference === 'hero' && tiers.some(t=>typeof t.target==='number')) {
+      phase('appearance');
+      report.appearance={};
+      await prepareMeshTextureLevels({source,server,fetch,THREE,MeshBVH,heroGLB,report:report.appearance,onPhase:()=>onPhase(report)});
+      if(report.appearance.error)throw Error(report.appearance.error.message);
     }
     phase('done');
   } catch (error) {
