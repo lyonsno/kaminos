@@ -41,3 +41,11 @@ const integrated=await createAuthoredMlsHostFixture();try{
  integrated.host.render({...first.water,advance:false,advanceOnCompletion:false});
  integrated.solverOptions.onBatchComplete();assert.equal(calls,2,'Capture or explicit hold must override completion permission');
 }finally{integrated.host.dispose();}
+
+let held=false;
+const owner=await createAuthoredMlsHostFixture({canAdvanceOnCompletion:()=>!held});try{
+ let calls=0;owner.solver.advance=()=>{calls++;};
+ owner.host.render({advance:true,advanceOnCompletion:true});held=true;
+ owner.solverOptions.onBatchComplete();assert.equal(calls,1,'An owner hold beginning between draws must stop completion continuation');
+ held=false;owner.solverOptions.onBatchComplete();assert.equal(calls,2,'Clearing an owner hold allows due continuation');
+}finally{owner.host.dispose();}

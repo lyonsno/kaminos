@@ -4345,6 +4345,9 @@ const sceneDocument = createPageSceneDocumentSession();
 const waterFeature = createAuthoredWaterFeature({
   services:()=>({renderer,scene,camera,pipeline:renderPipeline,device:sharedGpu?.device,
     readColliders:()=>workingScene.objects,redraw:()=>window._kaminosDirty?.(),
+    canAdvanceOnCompletion:()=>!document.hidden&&!outputCaptureExtent&&!deviceRecoveryHeld()
+      &&!sceneLightingPreparation?.state().held&&sceneDocument.state().phase!=='applying'
+      &&!startupRestorePending&&!exclusiveInspectionRender&&!manualInspectionRender,
     getDisplayPolicy:()=>getLocalLiquidDisplayPolicy?.(),decorateOutput:output=>selectionFeedback.output(output)}),
   emitters:localLiquidEmitterRecords,
   enabledEmitters:()=>localLiquidEmitterRecords().filter(record=>isSceneItemVisible(record.id)),

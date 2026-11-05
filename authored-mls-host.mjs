@@ -8,12 +8,12 @@ import {createMlsJuiceRenderer} from './mls-juice-renderer.mjs';
 import {createMlsWaterProxy} from './mls-water-proxy.mjs';
 import {MLS_ROUTE,MLS_SOURCE} from './mls-juice-contract.mjs';
 import {localLiquidPresentationPlan} from './local-liquid-presentation.mjs';
-export async function createAuthoredMlsHost({renderer,scene,camera,pipeline,device,setup={},emitters=[],initial,makePacket,readColliders=()=>[],isCurrent=()=>true,decorateOutput=x=>x,redraw=()=>{},getDisplayPolicy}){
+export async function createAuthoredMlsHost({renderer,scene,camera,pipeline,device,setup={},emitters=[],initial,makePacket,readColliders=()=>[],isCurrent=()=>true,decorateOutput=x=>x,redraw=()=>{},getDisplayPolicy,canAdvanceOnCompletion=()=>true}){
  if(!device||renderer.backend.device!==device)throw Error('Authored MLS requires the actual shared WebGPU device');
  let solver,surface,proxy;
  let completionAdvance=false,completionMaxSteps;
  function advanceDueWater(){
-  if(disposed||paused||!completionAdvance||mode!=='full')return;
+  if(disposed||paused||!completionAdvance||mode!=='full'||!canAdvanceOnCompletion())return;
   solver.setSceneColliders(readColliders());publishInlets();
   solver.advance(undefined,undefined,{maxSteps:completionMaxSteps});
  }
