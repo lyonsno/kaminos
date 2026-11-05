@@ -11,9 +11,15 @@ import {localLiquidPresentationPlan} from './local-liquid-presentation.mjs';
 export async function createAuthoredMlsHost({renderer,scene,camera,pipeline,device,setup={},emitters=[],initial,makePacket,readColliders=()=>[],isCurrent=()=>true,decorateOutput=x=>x,redraw=()=>{},getDisplayPolicy}){
  if(!device||renderer.backend.device!==device)throw Error('Authored MLS requires the actual shared WebGPU device');
  let solver,surface,proxy;
+ let completionAdvance=false,completionMaxSteps;
+ function advanceDueWater(){
+  if(disposed||paused||!completionAdvance||mode!=='full')return;
+  solver.setSceneColliders(readColliders());publishInlets();
+  solver.advance(undefined,undefined,{maxSteps:completionMaxSteps});
+ }
  try{
   const profile=typeof location!=='undefined'&&new URLSearchParams(location.search).get('mls_profile')==='1';
-  solver=await createMlsJuiceSolver({device,setup:initial.solver,packet:makePacket(emitters),initialParticles:initial.initialParticles,sceneColliders:readColliders(),profile});
+  solver=await createMlsJuiceSolver({device,setup:initial.solver,packet:makePacket(emitters),initialParticles:initial.initialParticles,sceneColliders:readColliders(),profile,onBatchComplete:advanceDueWater});
   surface=await createMlsJuiceRenderer({device,solver,hostEnvironment:true});proxy=await createMlsWaterProxy(device,solver);
  }catch(error){proxy?.dispose();surface?.dispose();solver?.dispose();throw error;}
  if(!isCurrent()){proxy.dispose();surface.dispose();solver.dispose();return null;}
@@ -55,6 +61,7 @@ export async function createAuthoredMlsHost({renderer,scene,camera,pipeline,devi
   async requestParticleState(){const step=solver.read().clock.step,words=await solver.snapshot();return {schema:'kaminos.mls-particle-state.v1',route:MLS_ROUTE,stepCount:step,particleCount:solver.config.capacity,recordFloats:20,coordinateSpace:'grid',originWorld:[...solver.config.min],cellSize:solver.config.cell,words:Array.from(words)};},
   render({advance=true,maxSteps,volumeTransport=null}={}){
    if(disposed||failure)throw Error(failure||'MLS host disposed');
+   completionAdvance=advance&&mode==='full';completionMaxSteps=maxSteps;
    const target=renderer.getRenderTarget(),override=scene.overrideMaterial,background=scene.background,renderObject=renderer.getRenderObjectFunction(),clear=renderer.getClearColor(new THREE.Color()),alpha=renderer.getClearAlpha();
    try{
     solver.setSceneColliders(readColliders());publishInlets();if(advance&&(mode==='full'||frameCount%proxyStepEvery===0))solver.advance(undefined,undefined,{maxSteps});

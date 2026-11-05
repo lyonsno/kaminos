@@ -29,7 +29,7 @@ const boundaryFor=(config,sceneSupport)=>`
     }
 }`;
 
-export async function createMlsJuiceSolver({device,setup,packet,initialParticles=null,sceneColliders=null,profile=false,now=()=>performance.now()}) {
+export async function createMlsJuiceSolver({device,setup,packet,initialParticles=null,sceneColliders=null,profile=false,onBatchComplete=null,now=()=>performance.now()}) {
   const config=mlsConfig(setup),owned=[];
   for(const size of [config.capacity*80,config.gridCells*16]){
     if(size>(device.limits?.maxStorageBufferBindingSize??Infinity)||size>(device.limits?.maxBufferSize??Infinity))throw Error('MLS domain exceeds effective device buffer limits');
@@ -175,7 +175,12 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
           const completedAt=now();cadence.completedBatches++;cadence.completedStep=submittedStep;cadence.lastBatchSteps=steps;
           if(timing)timing.submitToCompletionMs=completedAt-submittedAt;
           cadence.lastBatchWallMs=completedAt-startedAt;cadence.lastCompletionIntervalMs=lastCompletedAt===null?null:completedAt-lastCompletedAt;lastCompletedAt=completedAt;
-        }).catch(e=>{if(!disposed)failure=String(e);}).finally(()=>{pending=false;upload?.destroy();});
+        }).catch(e=>{if(!disposed)failure=String(e);}).finally(()=>{
+          pending=false;upload?.destroy();
+          // Queue order and the single-flight gate stay intact. Let the owner
+          // consume elapsed time immediately instead of waiting for another draw.
+          if(!disposed&&!failure)try{onBatchComplete?.();}catch(error){failure=String(error);}
+        });
         return true;
     };
     return {config,particles,
