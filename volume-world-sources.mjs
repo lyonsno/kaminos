@@ -79,3 +79,40 @@ fn sourceMomentum(c:vec3<i32>,a:u32,prior:f32)->f32{
  return mix(prior,s[a]/s.w,blend);
 }
 `;
+
+// Live World deposition uploads compact parcels; recipient-cell overlap and
+// accumulation stay on the GPU. The CPU rasterizers above are offline oracles.
+export function createGPUWorldSourceAtlas(device,{dims,min,pitch},label){
+ const U=GPUBufferUsage,T=GPUTextureUsage,owned=[];
+ const make=(name,size,usage)=>{const b=device.createBuffer({label:name,size,usage});owned.push(b);return b;};
+ const parameters=make(label+' parameters',48,U.UNIFORM|U.COPY_DST);
+ let descriptors=make(label+' parcels',64,U.STORAGE|U.COPY_DST),texture=null,view=null,key=null,group=null;
+ const empty=device.createTexture({label:label+' empty',size:[2,1],format:'rgba32float',usage:T.TEXTURE_BINDING}),emptyView=empty.createView();
+ const cells=dims.reduce((a,b)=>a*b,1),width=Math.min(device.limits.maxTextureDimension2D,cells*2),height=Math.ceil(cells*2/width);
+ if(height>device.limits.maxTextureDimension2D)throw Error('World source atlas exceeds GPU texture limits');
+ const module=device.createShaderModule({label:label+' GPU deposition',code:`
+ struct Parcel {loRate:vec4<f32>,hiFuel:vec4<f32>,velocityRelax:vec4<f32>,heat:vec4<f32>}
+ struct Params {dims:vec4<u32>,originPitch:vec4<f32>,counts:vec4<u32>}
+ @group(0) @binding(0) var<uniform> p:Params;
+ @group(0) @binding(1) var<storage,read> parcels:array<Parcel>;
+ @group(0) @binding(2) var output:texture_storage_2d<rgba32float,write>;
+ @compute @workgroup_size(4,4,4) fn deposit(@builtin(global_invocation_id) c:vec3<u32>){
+  if(any(c>=p.dims.xyz)){return;}let lo=p.originPitch.xyz+vec3<f32>(c)*p.originPitch.w;let hi=lo+p.originPitch.w;
+  var a=vec4<f32>(0);var b=vec4<f32>(0);
+  for(var i=0u;i<p.counts.x;i++){let s=parcels[i];let f=max(vec3<f32>(0),min(hi,s.hiFuel.xyz)-max(lo,s.loRate.xyz))/p.originPitch.w;let v=f.x*f.y*f.z;let q=s.loRate.w*v;let r=s.velocityRelax.w*v;a+=vec4<f32>(q,q*s.hiFuel.w,q*s.heat.x,0);b+=vec4<f32>(s.velocityRelax.xyz*r,r);}
+  let index=2u*(c.x+p.dims.x*(c.y+p.dims.y*c.z));let d=textureDimensions(output);textureStore(output,vec2<i32>(i32(index%d.x),i32(index/d.x)),a);textureStore(output,vec2<i32>(i32((index+1u)%d.x),i32((index+1u)/d.x)),b);
+ }`});
+ const pipeline=device.createComputePipeline({label:label+' GPU deposition',layout:'auto',compute:{module,entryPoint:'deposit'}});
+ return {encode(encoder,parcels){
+  const next=JSON.stringify(parcels);if(next===key)return parcels.length?view:emptyView;
+  if(!parcels.length){key=next;return emptyView;}
+  const bytes=parcels.length*64;if(bytes>device.limits.maxStorageBufferBindingSize||bytes>device.limits.maxBufferSize)throw Error('World source descriptors exceed GPU storage limits');
+  const data=new Float32Array(parcels.length*16);for(const [i,p]of parcels.entries()){const values=[...p.lo,p.rate,...p.hi,p.fuel,...p.velocity,p.relax,p.heat,0,0,0];if(values.some(v=>!Number.isFinite(v)))throw Error('Invalid World source parcel');data.set(values,i*16);}
+  if(descriptors.size!==bytes){const old=descriptors;descriptors=make(label+' parcels',bytes,U.STORAGE|U.COPY_DST);queueMicrotask(()=>device.queue.onSubmittedWorkDone().then(()=>old.destroy()));group=null;}
+  if(!texture){texture=device.createTexture({label,size:[width,height],format:'rgba32float',usage:T.TEXTURE_BINDING|T.STORAGE_BINDING});view=texture.createView();}
+  const params=new ArrayBuffer(48);new Uint32Array(params).set([...dims,0]);new Float32Array(params).set([...min,pitch],4);new Uint32Array(params).set([parcels.length,0,0,0],8);
+  device.queue.writeBuffer(parameters,0,params);device.queue.writeBuffer(descriptors,0,data);
+  group??=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:parameters}},{binding:1,resource:{buffer:descriptors}},{binding:2,resource:view}]});
+  const pass=encoder.beginComputePass({label:label+' GPU deposition'});pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(...dims.map(n=>Math.ceil(n/4)));pass.end();key=next;return view;
+ },destroy(){for(const b of owned)b.destroy();texture?.destroy();empty.destroy();}};
+}

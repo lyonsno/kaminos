@@ -1,4 +1,4 @@
-// CPU topology/policy; material never comes back to the CPU in the live route.
+// Offline allocation oracle and shared policy validation. Live topology is GPU-owned.
 export const ALLOCATION_DEFAULTS=Object.freeze({budget:1,spread:1,maxDetail:2,persistence:.2,lookahead:1,weights:Object.freeze({reaction:1,mixing:1,thermal:.5,smoke:.25})});
 export function validateAllocation(input={}){
  const o={...ALLOCATION_DEFAULTS,...input,weights:{...ALLOCATION_DEFAULTS.weights,...input.weights}};

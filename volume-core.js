@@ -29054,6 +29054,7 @@ export function createKaminosVolumePrototype({
       const demand=activity?worldSmoke.fineCoverageDemand():{status:'source-only',boxes:[]};
       return {status:'active',frame,dims,world:{lo:plan.min.map((x,a)=>x*anchor.scale+anchor.translate[a]),hi:plan.max.map((x,a)=>x*anchor.scale+anchor.translate[a])},sources:sourceCoverageBounds(immersedCollectionPrepared,{dims,frame}),demand:demand.boxes,demandStatus:demand.status,demandSampledAt:demand.sampledAt,demandRevision:demand.revision};
     },
+    observeAdaptiveMaterial(options){worldSmoke?.observeAdaptiveMaterial(options);},
     adaptiveMaterialState(){return {requested:adaptiveMaterialOptions,effective:worldSmoke?.adaptiveMaterialState()??null,error:adaptiveMaterialError};},
     worldFrame(){const anchor=worldFrameRestore!==undefined?worldFrameRestore:worldSmoke?.anchor;return anchor?{translate:[...anchor.translate],scale:anchor.scale,referenceDims:[...(worldReferenceDims??[gridSize,gridHeight,gridSize])]}:null;},
     restoreWorldFrame(value){const frame=checkedWorldFrame(value);worldFrameRestore=frame?{translate:frame.translate,scale:frame.scale}:null;worldReferenceDims=frame?.referenceDims??null;worldSmokeKey=null;return frame;},

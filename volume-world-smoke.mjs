@@ -1,6 +1,6 @@
 import {resolveWorldCalibration} from './volume-world-calibration.mjs';
 import {createWorldSeed} from './volume-world-seed.mjs';
-import {depositWorldSources,createSourceAtlas,WORLD_SOURCE_WGSL} from './volume-world-sources.mjs';
+import {createGPUWorldSourceAtlas,WORLD_SOURCE_WGSL} from './volume-world-sources.mjs';
 export {depositWorldSources} from './volume-world-sources.mjs';
 import {createMaterialHierarchyGPU} from './volume-material-hierarchy-gpu.mjs';
 import {TRANSFER_GEOMETRY_WGSL} from './volume-grid-transfer.mjs';
@@ -458,7 +458,7 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture,borrowMaterial
   const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]});
   const pipelines=Object.fromEntries(['transportFlow','restrictPressure','pressure','project','transportMaterial'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'world smoke '+entryPoint,layout:pipelineLayout,compute:{module,entryPoint}})]));
   let adaptive=null,seed=null;
-  const sourceFlow=createSourceAtlas(device,'world source momentum and volume'),sourceMaterial=createSourceAtlas(device,'world source material');
+  const sourceFlow=createGPUWorldSourceAtlas(device,{dims:plan.flowDims,min:plan.min,pitch:plan.flowPitch},'world source momentum and volume'),sourceMaterial=createGPUWorldSourceAtlas(device,{dims:plan.materialDims,min:plan.materialMin??plan.min,pitch:plan.materialPitch},'world source material');
   let sourceFlowView,sourceMaterialView,lastSourceKey;
   let sourceReceipt={count:0,parcels:0};
   const adaptiveViews=new WeakMap();
@@ -480,6 +480,7 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture,borrowMaterial
       if(adaptive)return adaptive.configure(options);
       adaptive=createMaterialHierarchyGPU(device,plan,WORLD_SMOKE_WGSL,options);return adaptive.read();
     },
+    observeAdaptiveMaterial(options){adaptive?.observe(options);},
     adaptiveMaterialState(){const state=adaptive?.read();return state?{...state,anchor}:null;},
     fineCoverageDemand(){
       const m=adaptive?.coverageDemand();if(!m)return {status:'adaptive-material-off',boxes:[]};
@@ -491,10 +492,10 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture,borrowMaterial
       if(!Number.isInteger(iterations)||iterations<0)throw Error('Invalid world pressure iterations');
       if(!Number.isFinite(transitionCells)||transitionCells<0)throw Error('Invalid world transition collar');
       if(!['collocated','staggered'].includes(fineVelocityMode))throw Error('Unknown fine velocity convention');
-      const sourceKey=JSON.stringify(sources);
+      const sourceKey=JSON.stringify([sources,!!adaptive]);
       if(sourceKey!==lastSourceKey){
-        const f=sourceFlow.upload(sources.parcels.length?depositWorldSources(sources.parcels,{dims:plan.flowDims,min:plan.min,pitch:plan.flowPitch}):new Float32Array(8));
-        const m=sourceMaterial.upload(sources.parcels.length&&!flowOnly?depositWorldSources(sources.parcels,{dims:plan.materialDims,min:plan.materialMin??plan.min,pitch:plan.materialPitch}):new Float32Array(8));
+        const f=sourceFlow.encode(encoder,sources.parcels);
+        const m=sourceMaterial.encode(encoder,flowOnly||adaptive?[]:sources.parcels);
         if(f!==sourceFlowView||m!==sourceMaterialView)groups.clear();sourceFlowView=f;sourceMaterialView=m;lastSourceKey=sourceKey;
         sourceReceipt={count:sources.count,parcels:sources.parcels.length,route:'world-position-finite-volume-source',ownership:'outside-fine-support',supplyVolume:sources.parcels.reduce((q,p)=>q+p.rate*p.lo.reduce((v,x,a)=>v*(p.hi[a]-x),1),0)};
       }

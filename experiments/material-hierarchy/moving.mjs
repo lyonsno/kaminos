@@ -30,7 +30,7 @@ export async function movingPocket(device,fine,reaction){
   for(let step=0;step<18;step++){
    const encoder=device.createCommandEncoder();world.encode(encoder,{fineBuffer:fine,reactionTexture:reaction,fineDims:[4,4,4],transform:{translate:[100,100,100],scale:1},time:{...result.time,backtraceScale:step<2?0:1},reactant,iterations:0,buoyancy:0});
    device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();await new Promise(r=>setTimeout(r,0));
-   result.frames.push({step,state:world.adaptiveMaterialState(),snapshot:await world.adaptiveMaterialSnapshot()});
+   const snapshot=await world.adaptiveMaterialSnapshot();result.frames.push({step,state:world.adaptiveMaterialState(),snapshot});
   }
   return result;
  }finally{world.destroy();}

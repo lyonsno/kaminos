@@ -1,7 +1,7 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {createMaterialHierarchyGPU} from '../volume-material-hierarchy-gpu.mjs';
+import {createMaterialHierarchyCPUReference as createMaterialHierarchyGPU} from '../volume-material-hierarchy-gpu.mjs';
 globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,COPY_SRC:4,UNIFORM:8,MAP_READ:16};
 globalThis.GPUMapMode={READ:1};
 globalThis.GPUTextureUsage={TEXTURE_BINDING:1,COPY_DST:2};

@@ -1,9 +1,10 @@
+import {createResidentMaterialHierarchyGPU} from './volume-material-resident-gpu.mjs';
 import {depositHierarchySources,createSourceAtlas,sourceDemandAt} from './volume-world-sources.mjs';
 import {MaterialHierarchy,validateAllocation,predictDemand,materialImportance} from './volume-material-hierarchy.mjs';
 
-// Material remains resident. Only one compact demand record per leaf brick
-// crosses to the CPU, asynchronously, for the replaceable allocation policy.
-export function hierarchyWGSL(worldCode){return worldCode+/* wgsl */`
+// Shared transport kernels support GPU-resident live allocation and an explicit
+// offline CPU reference. Observation readbacks never drive the live allocator.
+export function hierarchyWGSL(worldCode,{resident=false}={}){return worldCode+/* wgsl */`
 struct Brick {loPitch:vec4<f32>, children0:vec4<u32>, children1:vec4<u32>, info:vec4<u32>}
 struct Remap {source:vec4<u32>, loPitch:vec4<f32>}
 struct HierarchyParams {base:vec4<f32>, lo:vec4<f32>, count:vec4<u32>}
@@ -14,6 +15,14 @@ struct HierarchyParams {base:vec4<f32>, lo:vec4<f32>, count:vec4<u32>}
 @group(1) @binding(4) var<storage,read> remaps:array<Remap>;
 @group(1) @binding(5) var<storage,read_write> demand:array<vec4<f32>>;
 @group(1) @binding(6) var<uniform> h:HierarchyParams;
+${resident?`@group(1) @binding(7) var<storage,read> residentMigrationInput:array<Gas>;
+@group(1) @binding(8) var<storage,read> residentState:array<u32>;
+override HIERARCHY_LEVEL:u32=0u;
+var<private> useResidentMigration:bool;
+fn residentInputCell(index:u32,history:bool)->Gas{
+ if(useResidentMigration){return residentMigrationInput[index+select(0u,arrayLength(&residentMigrationInput)/2u,history)];}
+ return hin[index+select(0u,arrayLength(&hin)/2u,history)];
+}`:''}
 fn localCell(l:u32)->vec3<u32>{return vec3<u32>(l%4u,(l/4u)%4u,l/16u);}
 fn localIndex(c:vec3<u32>)->u32{return c.x+4u*(c.y+4u*c.z);}
 fn childSlot(n:Brick,oct:u32)->u32{if(oct<4u){return n.children0[oct];}return n.children1[oct-4u];}
@@ -30,7 +39,7 @@ fn leafAt(p:vec3<f32>)->u32{
 fn nearestPlane(p:vec3<f32>,history:bool)->Gas{
  let slot=leafAt(p);if(slot==0xffffffffu){return Gas(vec4<f32>(0,0,0,select(u.reactant_combustion_c.z,0.0,history)),vec4<f32>(0));}
  let n=bricks[slot];let c=vec3<u32>(clamp(floor((p-n.loPitch.xyz)/n.loPitch.w),vec3<f32>(0),vec3<f32>(3)));
- return hin[slot*64u+localIndex(c)+select(0u,arrayLength(&hin)/2u,history)];
+ ${resident?'return residentInputCell(slot*64u+localIndex(c),history);':'return hin[slot*64u+localIndex(c)+select(0u,arrayLength(&hin)/2u,history)];'}
 }
 fn hierarchyPlane(p:vec3<f32>,history:bool)->Gas{
  let slot=leafAt(p);if(slot==0xffffffffu){return Gas(vec4<f32>(0,0,0,select(u.reactant_combustion_c.z,0.0,history)),vec4<f32>(0));}
@@ -43,7 +52,7 @@ fn hierarchyPlane(p:vec3<f32>,history:bool)->Gas{
   // bricks must still use ambient outside the physical field.
   let cell=(pos-n.loPitch.xyz)/n.loPitch.w;var value:Gas;
   if(all(cell>=vec3<f32>(0))&&all(cell<vec3<f32>(4))&&all(pos>=u.materialLo.xyz)&&all(pos<u.materialLo.xyz+u.material.xyz*u.material.w)){
-   value=hin[slot*64u+localIndex(vec3<u32>(floor(cell)))+select(0u,arrayLength(&hin)/2u,history)];
+   ${resident?'value=residentInputCell(slot*64u+localIndex(vec3<u32>(floor(cell))),history);':'value=hin[slot*64u+localIndex(vec3<u32>(floor(cell)))+select(0u,arrayLength(&hin)/2u,history)];'}
   }else{value=nearestPlane(pos,history);}
   let w=select(1.0-f,f,vec3<bool>(x==1,y==1,z==1));a+=value.a*w.x*w.y*w.z;if(!smokeOnly){b+=value.b*w.x*w.y*w.z;}
  }}}return Gas(a,b);
@@ -51,7 +60,7 @@ fn hierarchyPlane(p:vec3<f32>,history:bool)->Gas{
 fn hierarchyGas(p:vec3<f32>)->Gas{return hierarchyPlane(p,false);}
 fn hierarchyHistory(p:vec3<f32>)->Gas{return hierarchyPlane(p,true);}
 @compute @workgroup_size(64) fn migrateBricks(@builtin(workgroup_id) group:vec3<u32>,@builtin(num_workgroups) groups:vec3<u32>,@builtin(local_invocation_index) l:u32){
- let index=group.x+group.y*groups.x;if(index>=arrayLength(&work)){return;}let slot=work[index];let n=bricks[slot];let r=remaps[slot];let p=n.loPitch.xyz+(vec3<f32>(localCell(l))+.5)*n.loPitch.w;
+ let index=group.x+group.y*groups.x;${resident?'if(index>=residentState[0]){return;}':'if(index>=arrayLength(&work)){return;}'}let slot=work[index];let n=bricks[slot];let r=remaps[slot];let p=n.loPitch.xyz+(vec3<f32>(localCell(l))+.5)*n.loPitch.w;
  if(any(p<u.materialLo.xyz)||any(p>=u.materialLo.xyz+u.material.xyz*u.material.w)||blocked(vec3<i32>(floor((p-u.lo.xyz)/u.flow.w)))){
   hout[slot*64u+l]=Gas(vec4<f32>(0,0,0,u.reactant_combustion_c.z),vec4<f32>(0));hout[arrayLength(&hout)/2u+slot*64u+l]=Gas(vec4<f32>(0),vec4<f32>(0));return;
  }
@@ -70,7 +79,8 @@ fn hierarchyHistory(p:vec3<f32>)->Gas{return hierarchyPlane(p,true);}
  hout[slot*64u+l]=remapped[0];hout[arrayLength(&hout)/2u+slot*64u+l]=remapped[1];
 }
 @compute @workgroup_size(64) fn advanceBricks(@builtin(workgroup_id) group:vec3<u32>,@builtin(num_workgroups) groups:vec3<u32>,@builtin(local_invocation_index) l:u32){
- let index=group.x+group.y*groups.x;if(index>=arrayLength(&work)){return;}let slot=work[index];let n=bricks[slot];let p=n.loPitch.xyz+(vec3<f32>(localCell(l))+.5)*n.loPitch.w;
+ ${resident?'useResidentMigration=residentState[3]!=0u;':''}
+ let index=group.x+group.y*groups.x;${resident?'if(index>=residentState[1]){return;}':'if(index>=arrayLength(&work)){return;}'}let slot=work[index];let n=bricks[slot];let p=n.loPitch.xyz+(vec3<f32>(localCell(l))+.5)*n.loPitch.w;
  if(any(p<u.materialLo.xyz)||any(p>=u.materialLo.xyz+u.material.xyz*u.material.w)||blocked(vec3<i32>(floor((p-u.lo.xyz)/u.flow.w)))){
   hout[slot*64u+l]=Gas(vec4<f32>(0,0,0,u.reactant_combustion_c.z),vec4<f32>(0));hout[arrayLength(&hout)/2u+slot*64u+l]=Gas(vec4<f32>(0),vec4<f32>(0));return;
  }
@@ -120,7 +130,7 @@ fn hierarchyHistory(p:vec3<f32>)->Gas{return hierarchyPlane(p,true);}
  hout[slot*64u+l]=r;hout[arrayLength(&hout)/2u+slot*64u+l]=Gas(min(owned.a,r.a),min(owned.b,r.b));
 }
 @compute @workgroup_size(64) fn restrictBricks(@builtin(workgroup_id) group:vec3<u32>,@builtin(num_workgroups) groups:vec3<u32>,@builtin(local_invocation_index) l:u32){
- let index=group.x+group.y*groups.x;if(index>=arrayLength(&work)){return;}let slot=work[index];let n=bricks[slot];let c=localCell(l);var a=vec4<f32>(0);var b=vec4<f32>(0);var ownedA=vec4<f32>(0);var ownedB=vec4<f32>(0);
+ let index=group.x+group.y*groups.x;${resident?'if(index>=residentState[32u+4u*HIERARCHY_LEVEL+3u]){return;}':'if(index>=arrayLength(&work)){return;}'}let slot=work[index];let n=bricks[slot];let c=localCell(l);var a=vec4<f32>(0);var b=vec4<f32>(0);var ownedA=vec4<f32>(0);var ownedB=vec4<f32>(0);
  for(var z=0u;z<2u;z++){for(var y=0u;y<2u;y++){for(var x=0u;x<2u;x++){
   let q=2u*c+vec3<u32>(x,y,z);let oct=q/4u;let child=childSlot(n,oct.x+2u*(oct.y+2u*oct.z));
   let r=hout[child*64u+localIndex(q%4u)];a+=r.a*.125;b+=r.b*.125;
@@ -143,7 +153,7 @@ var<workgroup> signal:array<vec4<f32>,64>;
 var<workgroup> motionMin:array<vec4<f32>,64>;
 var<workgroup> motionMax:array<vec4<f32>,64>;
 @compute @workgroup_size(64) fn measureBricks(@builtin(workgroup_id) group:vec3<u32>,@builtin(num_workgroups) groups:vec3<u32>,@builtin(local_invocation_index) l:u32){
- let index=group.x+group.y*groups.x;if(index>=arrayLength(&work)){return;}let slot=work[index];let n=bricks[slot];let p=n.loPitch.xyz+(vec3<f32>(localCell(l))+.5)*n.loPitch.w;let r=hin[slot*64u+l];
+ let index=group.x+group.y*groups.x;${resident?'if(index>=residentState[1]){return;}':'if(index>=arrayLength(&work)){return;}'}let slot=work[index];let n=bricks[slot];let p=n.loPitch.xyz+(vec3<f32>(localCell(l))+.5)*n.loPitch.w;let r=hin[slot*64u+l];
  var grad=vec4<f32>(0);var opportunity=0.0;
  let smokeOnly=worldSmokeOnly();
  let inDomain=all(p>=u.materialLo.xyz)&&all(p<u.materialLo.xyz+u.material.xyz*u.material.w);
@@ -159,11 +169,16 @@ var<workgroup> motionMax:array<vec4<f32>,64>;
  motionMin[l]=vec4<f32>(select(vec3<f32>(0),velocity(p),inDomain),0);motionMax[l]=motionMin[l];workgroupBarrier();
  for(var stride=32u;stride>0u;stride/=2u){if(l<stride){signal[l]+=signal[l+stride];motionMin[l]=min(motionMin[l],motionMin[l+stride]);motionMax[l]=max(motionMax[l],motionMax[l+stride]);}workgroupBarrier();}
  // Compact work order omits parents and unused pool slots from readback.
- if(l==0u){demand[index*3u]=signal[0]/64.0;demand[index*3u+1u]=motionMin[0];demand[index*3u+2u]=motionMax[0];}
+ if(l==0u){demand[${resident?'slot':'index'}*3u]=signal[0]/64.0;demand[${resident?'slot':'index'}*3u+1u]=motionMin[0];demand[${resident?'slot':'index'}*3u+2u]=motionMax[0];}
 }
 `;}
 
 export function createMaterialHierarchyGPU(device,plan,worldCode,options={}){
+ return createResidentMaterialHierarchyGPU(device,plan,hierarchyWGSL(worldCode,{resident:true}),options);
+}
+// Retained for offline parity and historical evidence; the live caller above
+// always uses resident GPU allocation and never silently selects this reference.
+export function createMaterialHierarchyCPUReference(device,plan,worldCode,options={}){
  const sourceAtlas=createSourceAtlas(device,'adaptive material source supply');
  let coverageMeasurement=null;
  let sourceKey=null,sourceUploadKey=null,sourceView=null;

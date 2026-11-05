@@ -7,7 +7,7 @@ import {samplingParity,validateSamplingEvidence} from './sampling.mjs';
 export async function run(){
  const adapter=await navigator.gpu.requestAdapter();if(!adapter||adapter.isFallbackAdapter||adapter.info.vendor!=='apple')throw Error('Native Apple WebGPU required');
  const device=await adapter.requestDevice({requiredLimits:{maxStorageBuffersPerShaderStage:8}});const errors=[];device.addEventListener('uncapturederror',e=>errors.push(e.error.message));device.pushErrorScope('validation');
- let world;const owned=[];
+ let world,scopeOpen=true;const owned=[];
  const result={adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture},steps:[]};
  try{
   result.sampling=await samplingParity(device);result.samplingSummary=validateSamplingEvidence(result.sampling);
@@ -25,7 +25,7 @@ export async function run(){
    device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();
    // Permit the compact-demand asynchronous completion to publish.
    await new Promise(r=>setTimeout(r,0));
-   const state=world.adaptiveMaterialState();const snapshot=await world.adaptiveMaterialSnapshot();
+   const snapshot=await world.adaptiveMaterialSnapshot();const state=world.adaptiveMaterialState();
    const totals=Array(8).fill(0);for(const n of snapshot.nodes.filter(n=>!n.children)){for(let c=0;c<64;c++)for(let ch=0;ch<8;ch++)totals[ch]+=snapshot.values[(n.slot*64+c)*8+ch]*n.pitch**3;}
    result.steps.push({...state,totals,snapshot});
   }
@@ -37,15 +37,18 @@ export async function run(){
   pair[1].configureAdaptiveMaterial({budget:0,maxDetail:2});
   const reactant=resolveReactantCombustionConfig({reactionLaw:'reactant-v0',emitterSourceLaw:'immersed-source'},{grid:4});
   if(!reactant.effective.admitted)throw Error('Native reference chemistry was not admitted');
+  result.referenceSteps=[];
   for(let step=0;step<4;step++){
    for(const field of pair){const encoder=device.createCommandEncoder();field.encode(encoder,{fineBuffer:fine,reactionTexture:reaction,fineDims:[4,4,4],transform:{translate:[100,100,100],scale:1},time:{dtScale:.5,backtraceScale:1},reactant,iterations:2,buoyancy:.2});device.queue.submit([encoder.finish()]);}
    await device.queue.onSubmittedWorkDone();await new Promise(r=>setTimeout(r,0));
+   const fields=[];for(const field of pair){const r=field.materialResources(),copy=device.createBuffer({size:r.gasByteLength,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST}),e=device.createCommandEncoder();e.copyBufferToBuffer(r.buffers[r.index],0,copy,0,r.gasByteLength);device.queue.submit([e.finish()]);await copy.mapAsync(GPUMapMode.READ);fields.push(Array.from(new Float32Array(copy.getMappedRange())));copy.destroy();}
+   result.referenceSteps.push({step,fields});
   }
   result.reference=[];
   for(const field of pair){const resources=field.materialResources(),buffer=resources.buffers[resources.index],size=resources.gasByteLength;const copy=device.createBuffer({size,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(buffer,0,copy,0,size);device.queue.submit([encoder.finish()]);await copy.mapAsync(GPUMapMode.READ);result.reference.push(Array.from(new Float32Array(copy.getMappedRange())));copy.destroy();}
   result.moving=await movingPocket(device,fine,reaction);
   result.movingSummary=validateMovingEvidence(result.moving);
-  const validation=await device.popErrorScope();if(validation)errors.push(validation.message);
+  const validation=await device.popErrorScope();scopeOpen=false;if(validation)errors.push(validation.message);
   result.errors=errors;return validateNativeEvidence(result,{fieldLength:plan.materialCells*8});
- }catch(e){return {...result,errors,error:e.stack,failed:true};}finally{world?.destroy();for(const x of owned)x.destroy();device.destroy();}
+ }catch(e){if(scopeOpen){const validation=await device.popErrorScope();if(validation)errors.push(validation.message);}return {...result,errors,error:e.stack,failed:true};}finally{world?.destroy();for(const x of owned)x.destroy();device.destroy();}
 }

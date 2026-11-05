@@ -50,6 +50,7 @@ struct WorldRenderParams {dimsPitch:vec4<f32>,loMode:vec4<f32>,rootsCount:vec4<u
 @group(3) @binding(6) var<storage,read> worldRenderWork:array<u32>;
 @group(3) @binding(7) var<uniform> wr:WorldRenderParams;
 @group(3) @binding(8) var worldRenderOutput:texture_storage_3d<rgba32float,write>;
+@group(3) @binding(9) var<storage,read> worldRenderAllocationState:array<u32>;
 fn worldRenderHierarchy()->bool{return(u32(wr.loMode.w)&1u)!=0u;}
 fn worldRenderSmokeOnly()->bool{return(u32(wr.loMode.w)&4u)!=0u;}
 fn worldRenderLeaf(q:vec3<f32>)->u32{
@@ -78,7 +79,7 @@ fn writeWorldAtlas(index:u32,value:vec4<f32>){
 }
 @compute @workgroup_size(64) fn prepareWorldRender(@builtin(workgroup_id) group:vec3<u32>,@builtin(num_workgroups) groups:vec3<u32>,@builtin(local_invocation_index) local:u32){
  seatGridShape();
- let index=group.x+group.y*groups.x;if(index>=wr.rootsCount.w){return;}
+ let index=group.x+group.y*groups.x;if(index>=wr.rootsCount.w){return;}if((u32(wr.loMode.w)&8u)!=0u&&index>=worldRenderAllocationState[0]){return;}
  var slot=index;var n:WorldRenderBrick;
  if(worldRenderHierarchy()){slot=worldRenderWork[index];n=worldRenderBricks[slot];n.loPitch=vec4<f32>((n.loPitch.xyz-wr.loMode.xyz)/wr.dimsPitch.w,n.loPitch.w/wr.dimsPitch.w);}
  else{let root=vec3<u32>(slot%wr.rootsCount.x,(slot/wr.rootsCount.x)%wr.rootsCount.y,slot/(wr.rootsCount.x*wr.rootsCount.y));n.loPitch=vec4<f32>(vec3<f32>(root)*4.0,1);n.children0=vec4<u32>(0xffffffffu);n.children1=n.children0;}
@@ -125,16 +126,15 @@ export function createWorldRenderField(device,module,uniformBuffer) {
     group0=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:uniformBuffer}}]});
     empty1=device.createBindGroup({layout:pipeline.getBindGroupLayout(1),entries:[]});empty2=device.createBindGroup({layout:pipeline.getBindGroupLayout(2),entries:[]});
    }
-   const next=[gas,hierarchy?.nodes??dummy,hierarchy?.work??dummy,texture];
+   const next=[gas,hierarchy?.nodes??dummy,hierarchy?.work??dummy,texture,hierarchy?.state??dummy];
    if(next.some((v,i)=>v!==resources[i])){
-    if(next[1]!==resources[1]||next[2]!==resources[2]||next[3]!==resources[3])bindings=new WeakMap();
-    group3=bindings.get(gas)??device.createBindGroup({layout:pipeline.getBindGroupLayout(3),entries:[...next.slice(0,3).map((buffer,i)=>({binding:4+i,resource:{buffer}})),{binding:7,resource:{buffer:params}},{binding:8,resource:view}]});bindings.set(gas,group3);resources=next;
+    let node=bindings;for(const [resourceIndex,resource] of next.entries()){if(!node.has(resource))node.set(resource,{next:new WeakMap()});const entry=node.get(resource);if(resourceIndex===next.length-1){if(!entry.group)entry.group=device.createBindGroup({layout:pipeline.getBindGroupLayout(3),entries:[{binding:4,resource:{buffer:gas}},{binding:5,resource:{buffer:next[1]}},{binding:6,resource:{buffer:next[2],...(hierarchy?.workOffset?{offset:hierarchy.workOffset,size:hierarchy.workSize}:{})}},{binding:7,resource:{buffer:params}},{binding:8,resource:view},{binding:9,resource:{buffer:next[4]}}]});group3=entry.group;}node=entry.next;}resources=next;
    }
-   const mode=(hierarchy?1:0)+(worldSmokeOnly?4:0);
+   const mode=(hierarchy?1:0)+(worldSmokeOnly?4:0)+(hierarchy?.gpuResident?8:0);
    const data=new ArrayBuffer(48);new Float32Array(data).set([...plan.materialDims,plan.materialPitch,...plan.min,mode]);new Uint32Array(data).set([...roots,count],8);device.queue.writeBuffer(params,0,data);
    const pass=encoder.beginComputePass({label:'World optical brick preparation'});pass.setPipeline(pipeline);for(const [i,g] of [group0,empty1,empty2,group3].entries())pass.setBindGroup(i,g);
-   const x=Math.min(count,device.limits.maxComputeWorkgroupsPerDimension);pass.dispatchWorkgroups(x,Math.ceil(count/x));pass.end();last=key;builds++;
-   receipt={effective:hierarchy?'resident-leaf-optics':'dense-cell-optics',smokeOnly:Boolean(worldSmokeOnly),materialDims:[...plan.materialDims],sourceSteps:steps,sourceRevision:hierarchy?.revision??null,builds,capacity,nodeCount:count,leafCount:hierarchy?.leafCount??count,bytes:texture.width*texture.height*texture.depthOrArrayLayers*16,reconstruction:'linear-optical-leaf-centres-with-neighbor-halo',denseExportUnchanged:true};
+   if(hierarchy?.gpuResident)pass.dispatchWorkgroupsIndirect(hierarchy.state,hierarchy.indirectOffset);else{const x=Math.min(count,device.limits.maxComputeWorkgroupsPerDimension);pass.dispatchWorkgroups(x,Math.ceil(count/x));}pass.end();last=key;builds++;
+   receipt={effective:hierarchy?'resident-leaf-optics':'dense-cell-optics',smokeOnly:Boolean(worldSmokeOnly),materialDims:[...plan.materialDims],sourceSteps:steps,sourceRevision:hierarchy?.revision??null,builds,capacity,nodeCount:hierarchy?.gpuResident?null:count,dispatchCapacity:count,allocationBackend:hierarchy?.gpuResident?'gpu-resident':'host-counted',leafCount:hierarchy?.gpuResident?hierarchy.leafCount:hierarchy?.leafCount??count,bytes:texture.width*texture.height*texture.depthOrArrayLayers*16,reconstruction:'linear-optical-leaf-centres-with-neighbor-halo',denseExportUnchanged:true};
    return changed;
   },
   read(){return {...receipt};},

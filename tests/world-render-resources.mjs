@@ -10,7 +10,7 @@ function fixture(){
  createBuffer:x=>({...x,destroy(){}}),createComputePipeline:x=>({...x,getBindGroupLayout:i=>i}),
  createTexture(x){const t={...x,width:x.size[0],height:x.size[1],depthOrArrayLayers:x.size[2],dead:false,createView(){return {texture:this};},destroy(){this.dead=true;}};textures.push(t);return t;},
  createBindGroup(x){groups.push(x);return x;},queue:{writeBuffer(...args){writes.push(args);},onSubmittedWorkDone:()=>new Promise(r=>{finish=r;})}};
- const encoder={beginComputePass(x){passes.push(x);return {setPipeline(){},setBindGroup(i,g){for(const e of g.entries)assert.equal(e.resource?.texture?.dead??false,false);},dispatchWorkgroups(...v){x.dispatch=v;},end(){}};}};
+ const encoder={beginComputePass(x){passes.push(x);return {setPipeline(){},setBindGroup(i,g){for(const e of g.entries)assert.equal(e.resource?.texture?.dead??false,false);},dispatchWorkgroups(...v){x.dispatch=v;},dispatchWorkgroupsIndirect(buffer,offset){x.indirect={buffer,offset};},end(){}};}};
  const field=createWorldRenderField(device,{},{});
  const source={steps:1,gas:{},plan:{materialDims:[8,4,4],materialPitch:.5,min:[-2,-1,-1],max:[2,1,1]},hierarchy:null};
  return {field,source,groups,passes,textures,writes,encode:()=>field.encode(encoder,source,[1,2]),finish:()=>finish?.()};
@@ -67,3 +67,12 @@ test('shared scene consumers prepare resident World optics and record stepping r
  assert.match(host,/state\.worldSmoke\.raymarch\s*=/,'native scene transport must publish current worldSmoke.raymarch state when encodeDraw is bypassed');
 });
 
+
+ test('GPU-owned allocation counts drive optics indirectly and preserve list ranges across ping-pong banks',()=>{
+  const f=fixture(),state={},work={},nodes={};
+  f.source.hierarchy={gpuResident:true,state,work,nodes,gas:f.source.gas,nodeCount:18,capacity:18,leafCount:null,revision:null,steps:1,workOffset:256,workSize:72,indirectOffset:64};
+  f.encode();assert.deepEqual(f.passes.at(-1).indirect,{buffer:state,offset:64});assert.equal(f.field.read().nodeCount,null);assert.equal(f.field.read().leafCount,null,'capacity is not an observed leaf count');
+  const group=f.groups.find(g=>g.entries.some(e=>e.binding===9)),range=group.entries.find(e=>e.binding===6).resource;assert.deepEqual(range,{buffer:work,offset:256,size:72});
+  f.source.steps++;const bank={...f.source.hierarchy,state:{},work:{},nodes:{}};f.source.hierarchy=bank;f.encode();const count=f.groups.length;
+  f.source.steps++;f.source.hierarchy={...bank,state,work,nodes};f.encode();assert.equal(f.groups.length,count,'returning to a live buffer bank reuses its binding');assert.deepEqual(f.passes.at(-1).indirect,{buffer:state,offset:64});f.field.destroy();
+ });
