@@ -19782,6 +19782,7 @@ async function mountSceneRadianceRoute(params) {
         let statusKey='';
         window.kaminosFireLightingSettings={...settings,invoke,syncStatus(state){
           const current=window.__kaminosSceneRadiance?.debugState();
+          settings.syncCaptureStatus(current);
           const key=JSON.stringify([state.status,fireShadowSceneRoute(current),state.error,current?.casters]);
           if(key!==statusKey){statusKey=key;settings.sync();}
         }};

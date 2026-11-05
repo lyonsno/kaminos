@@ -1,4 +1,5 @@
 import * as THREE from './lib/three.webgpu.js';
+export {createShadowCaptureSchedule,createShadowSourceSnapshots} from './fire-shadow-cadence.mjs';
 import {radialSoftVisibility,createShadowFilterPattern} from './fire-shadow-filter.mjs';
 import {validateShadowQuality,validateRuntimeShadowQuality,shadowStrata} from './fire-shadow-quality.mjs';
 import {validateShadowSampling} from './fire-shadow-sampling.mjs';
@@ -51,8 +52,8 @@ function prepareShadowScene(scene) {
   return {scene,casters,extent,triangleCount:casters.reduce((sum,m)=>sum+(m.geometry.index?.count??m.geometry.attributes.position.count)/3,0)};
 }
 
-// Synchronous and frame-local: reuse preparation, never reuse old captures or
-// let a retained snapshot authorize a later frame's geometry.
+// Synchronous and frame-local preparation for the selected whole cubes. The
+// cadence owner may retain completed targets, never this preparation object.
 export function renderFireShadowBatch({scene,shadows,casterScene=null,RendererUtils=THREE.RendererUtils}) {
   if(casterScene)return casterScene.withCapture(()=>renderFireShadowBatch({scene,shadows,RendererUtils}));
   if(shadows.some(shadow=>shadow.batchScene&&shadow.batchScene!==scene))throw Error('fire-shadow-inactive-or-foreign-batch');
@@ -114,7 +115,7 @@ export function renderFireShadowCube({renderer,scene,cubeCamera,material,far,cas
   }
 }
 
-export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNode,normalNode,requested=false,resolution=512,sourceRadius=()=>Math.sqrt(11),sourceSizeNode=null,shadowSoftness=0,shadowSampling='fixed',shadowEdgeFilter=false,filterCoordinates,screenAligned=true,sharedPreparation=true,blockerSamples=9,filterSamples=16,filterPattern=null,runtimeQuality=false}) {
+export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNode,normalNode,requested=false,resolution=512,sourceRadius=()=>Math.sqrt(11),sourceSizeNode=null,shadowSoftness=0,shadowSampling='fixed',shadowEdgeFilter=false,filterCoordinates,screenAligned=true,sharedPreparation=true,blockerSamples=9,filterSamples=16,filterPattern=null,runtimeQuality=false,sourceIdentity='live-gpu-emission-centroid'}) {
   (runtimeQuality?validateRuntimeShadowQuality:validateShadowQuality)({resolution,blockerSamples,filterSamples},renderer.backend?.device?.limits);
   if(!Number.isInteger(resolution)||resolution<=0) throw new Error('fire-shadow-resolution-must-be-positive-integer');
   filterPattern??=runtimeQuality?{count:filterSamples,route:'runtime-arithmetic',reason:null,bytes:0,node:null}:createShadowFilterPattern(filterSamples,renderer.backend?.device?.limits);
@@ -132,15 +133,15 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
     minFilter:THREE.NearestFilter,magFilter:THREE.NearestFilter,
     generateMipmaps:false,depthBuffer:true,
   });
-  target.texture.name='Live emission centroid kiln radial shadow';
+  target.texture.name='Fire source solid radial shadow';
   target.texture.colorSpace=THREE.NoColorSpace;
   const cubeCamera=new THREE.CubeCamera(.005,100,target);
   const material=new THREE.NodeMaterial();
   const coverageMaterials=new Map();
   material.name='Fire light radial depth from GPU centroid';
   material.blending=THREE.NoBlending;material.toneMapped=false;
-  // Native WebGPU cube rotations; source translation is GPU-resident and is
-  // identical to the receiver's live far-field source. No CPU centroid lag.
+  // Capture and solid-visibility lookup share one GPU source node. A staggered
+  // consumer supplies its retained capture anchor, not the newer live centroid.
   material.vertexNode=cameraProjectionMatrix.mul(cameraViewMatrix).mul(vec4(positionWorld.sub(sourceNode),1));
   material.fragmentNode=vec4(vec3(positionWorld.sub(sourceNode).length()),1);
   const sourceDistance=receiverNode.sub(sourceNode).length();
@@ -178,7 +179,7 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
     const hard=step(pointDistance.sub(pointDistance.mul(float(2).div(resolutionNode)).max(.001)),radial);
     return mix(float(1),hard,enabled.mul(effective));
   };
-  const status={identity:'gpu-centroid-cube-fire-visibility-v0',requested,effective:false,reason:'not-rendered',resolution,source:'live-gpu-emission-centroid',approximation:'single-center-opaque-static-mesh',renderCount:0,shadowEdgeFilter,filter:sourceSizeNode===null||shadowSoftness===0?'hard':'radial-pcss',shadowSoftness,shadowSampling,blockerSamples,filterSamples};
+  const status={identity:'gpu-centroid-cube-fire-visibility-v0',requested,effective:false,reason:'not-rendered',resolution,source:sourceIdentity,approximation:'single-center-opaque-static-mesh',renderCount:0,shadowEdgeFilter,filter:sourceSizeNode===null||shadowSoftness===0?'hard':'radial-pcss',shadowSoftness,shadowSampling,blockerSamples,filterSamples};
   return {
     batchRenderer:sharedPreparation?renderer:null,
     batchScene:scene,

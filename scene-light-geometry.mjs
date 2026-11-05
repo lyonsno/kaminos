@@ -3,7 +3,7 @@ import * as THREE from './lib/three.webgpu.js';
 const hasMorph = mesh => Array.isArray(mesh.morphTargetInfluences)
   || Object.values(mesh.geometry?.morphAttributes || {}).some(attributes => attributes.length);
 
-export function staticSceneGeometryRevision(scene,{exclude=()=>false}={}) {
+export function staticSceneGeometryRevision(scene,{exclude=()=>false,transforms=true}={}) {
   scene.updateMatrixWorld(true);
   const items = [];
   scene.traverseVisible(mesh => {
@@ -17,7 +17,7 @@ export function staticSceneGeometryRevision(scene,{exclude=()=>false}={}) {
     const index = geometry.index;
     const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     items.push([
-      mesh.uuid, mesh.matrixWorld.elements, geometry.uuid, geometry.version,
+      mesh.uuid, transforms?mesh.matrixWorld.elements:null, geometry.uuid, geometry.version,
       position.version, position.count, index?.version ?? null, index?.count ?? null,
       geometry.groups.map(group => [group.start, group.count, group.materialIndex]),
       materials.map(material => materialState(material, mesh)),
