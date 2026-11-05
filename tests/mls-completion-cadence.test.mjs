@@ -1,6 +1,7 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import {createSimFrameCoordinator} from '../mls-juice-contract.mjs';
 import {createMlsJuiceSolver} from '../mls-juice-solver.mjs';
 import {createAuthoredMlsHostFixture} from './helpers/authored-mls-host.mjs';
 globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,COPY_SRC:4,UNIFORM:8,MAP_READ:16};
@@ -23,3 +24,20 @@ const f=await createAuthoredMlsHostFixture();try{
  f.host.dispose();f.solverOptions.onBatchComplete();assert.equal(calls,count);
 }finally{f.host.dispose();}
 console.log('Completion continues due water work without render-frame wait, preserving pause, deferral and disposal');
+
+const integrated=await createAuthoredMlsHostFixture();try{
+ let calls=0;integrated.solver.advance=()=>{calls++;};
+ const coordinator=createSimFrameCoordinator();
+ const first=coordinator.planFrame({nowMs:0,water:{active:true,pending:false}});
+ integrated.host.render(first.water);
+ const busy=coordinator.planFrame({nowMs:30,water:{active:true,pending:true}});
+ assert.equal(busy.water.advance,false);
+ integrated.host.render(busy.water);
+ integrated.solverOptions.onBatchComplete();
+ assert.equal(calls,2,'A busy-only coordinator denial must not suppress completed water continuation');
+ const shared=coordinator.planFrame({nowMs:60,water:{active:true,pending:true},flame:{active:true}});
+ integrated.host.render(shared.water);integrated.solverOptions.onBatchComplete();
+ assert.equal(calls,2,'Completion must preserve the current frame-based shared-simulation budget');
+ integrated.host.render({...first.water,advance:false,advanceOnCompletion:false});
+ integrated.solverOptions.onBatchComplete();assert.equal(calls,2,'Capture or explicit hold must override completion permission');
+}finally{integrated.host.dispose();}

@@ -139,7 +139,9 @@ export function createSimFrameCoordinator({
       contended,
       activeCount,
       flame:{active:flameActive,advance:flameActive},
-      water:{active:waterActive,advance:waterAdvance,maxSteps:waterMaxSteps},
+      // Busy is temporary; completion can continue water-only work without
+      // bypassing the frame coordinator's shared-simulator budget.
+      water:{active:waterActive,advance:waterAdvance,advanceOnCompletion:waterActive&&activeCount===1,maxSteps:waterMaxSteps},
       ash:{active:ashActive,advance:ashAdvance},
     };
     return lastPlan;

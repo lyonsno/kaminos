@@ -12208,7 +12208,7 @@ async function initScene() {
           renderPipeline.render();
         } else try {
           const waterPlan=typeof ensureSimFramePlan==='function'?ensureSimFramePlan(t0)?.water:(typeof simFrameCoordinator!=='undefined'?simFrameCoordinator?.read()?.lastPlan?.water:null);
-          waterFeature.render({advance:!outputCaptureExtent&&waterPlan?.advance!==false,maxSteps:waterPlan?.maxSteps,volumeTransport:ordinarySceneTransportFrame}); authoredWaterControls?.refreshStatus();
+          waterFeature.render({advance:!outputCaptureExtent&&waterPlan?.advance!==false,advanceOnCompletion:!outputCaptureExtent&&waterPlan?.advanceOnCompletion===true,maxSteps:waterPlan?.maxSteps,volumeTransport:ordinarySceneTransportFrame}); authoredWaterControls?.refreshStatus();
           const state=waterFeature.host.state(),clock=state.clock??{paused:waterFeature.host.paused,step:state.solver?.stepCount??0,timeSeconds:state.solver?.simulatedTimeSeconds??0};
           sharedWorkbench?.update({source:state.mode==='finite_drop'?'Authored finite water':'Continuous water',status:clock.paused?'Paused':'Playing',clock:`tick ${clock.step} · ${clock.timeSeconds.toFixed(4)} s`}); }
         catch (error) {
