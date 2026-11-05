@@ -28,3 +28,12 @@ test('native family open keeps a live internal address, not an inline revision s
 test('malformed retained reference poses fail before creating scene objects',()=>{
  assert.throws(()=>validateFamilyAsset({schema:'kaminos.stock-family-asset.v1',id,name:'Test',revision:'a'.repeat(64),recipe:{...recipe,referencePose:{position:[0,0],rotation:[0,0,0],scale:[1,1,1]}}}),/reference pose/);
 });
+test('support sources retain their own bytes and local identity alongside the family source',async()=>{
+ const supportBytes=new TextEncoder().encode('support fixture'),supportSha=createHash('sha256').update(supportBytes).digest('hex'),supportUrl=`/api/read?root=generated-meshes&path=${supportSha}.glb`,calls=[];
+ const support={label:'Timber post',source:{...source,sha256:supportSha,url:'/support-job.glb'},pose:{position:[0,1,0],rotation:[0,0,0],scale:[1,1,1]}};
+ const request=async(path,options)=>{calls.push(path);if(path===source.url)return new Response(bytes);if(path===support.source.url)return new Response(supportBytes);
+  if(path==='/api/ingest-mesh'){const isSupport=new Uint8Array(options.body).length===supportBytes.length;return Response.json({schema:'kaminos.generated-mesh.v0',sha256:isSupport?supportSha:sha,bytes:isSupport?supportBytes.length:bytes.length,source:isSupport?supportUrl:url});}
+  const input=JSON.parse(options.body);return Response.json({schema:'kaminos.stock-family-asset.v1',id,name:input.name,revision:'b'.repeat(64),recipe:input.recipe});};
+ const saved=await saveFamilyAsset({recipe:{...recipe,supports:[support]},name:'Supported channels'},{request});
+ assert.equal(saved.recipe.supports[0].source.url,supportUrl);assert.equal(saved.recipe.supports[0].source.originUrl,support.source.url);assert.ok(calls.includes(support.source.url));assert.deepEqual(support.source.url,'/support-job.glb');
+});
