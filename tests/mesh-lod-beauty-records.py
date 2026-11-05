@@ -45,6 +45,7 @@ class RestrictedCatalogTests(unittest.TestCase):
             {'sha256': 'bad'}, {'faces': '100'}, {'faces': True}, {'faces': 0},
             {'route': ''}, {'route': []}, {'purpose': 'unknown'}, {'error': 'bad'},
             {'error': {'relative': {'max': 0, 'mean': 0, 'p95': -1}}},
+            {'error': {'relative': {'max': 10**309, 'mean': 0, 'p95': 0}}},
         )]
 
     def document(self, restricted):
@@ -93,21 +94,24 @@ class RestrictedCatalogTests(unittest.TestCase):
         scene = scenes / 'kiln.kaminos.json'
         scene.write_text(json.dumps({'objects': [{'source': f'/api/read?root=generated-meshes&path={self.source}.glb'}]}))
         (self.root / (self.source + '.glb')).write_bytes(b'hero')
-        (meshes / self.path.name).write_text(json.dumps(self.document(None)))
         handler = serve.KaminosHandler.__new__(serve.KaminosHandler)
         body = b'{}'
         handler.client_address = ('127.0.0.1', 1)
         handler.headers = {'Content-Length': str(len(body))}
-        handler.rfile = io.BytesIO(body)
         handler._scene_library_scene_path = lambda *args: (scenes, scene)
         replies = []
         handler.send_json = lambda value, status=200: replies.append((status, value))
-        handler.handle_scene_library_import()
-        self.assertEqual(len(replies), 1)
-        self.assertEqual(replies[0][0], 400)
-        self.assertEqual(replies[0][1]['phase'], 'mesh-lods-import')
-        self.assertFalse(self.path.exists())
-        self.assertEqual(list(serve.SCENES_DIR.iterdir()), [])
+        for bad in (None, self.bad[-1]):
+            with self.subTest(bad=bad):
+                replies.clear()
+                handler.rfile = io.BytesIO(body)
+                (meshes / self.path.name).write_text(json.dumps(self.document(bad)))
+                handler.handle_scene_library_import()
+                self.assertEqual(len(replies), 1)
+                self.assertEqual(replies[0][0], 400)
+                self.assertEqual(replies[0][1]['phase'], 'mesh-lods-import')
+                self.assertFalse(self.path.exists())
+                self.assertEqual(list(serve.SCENES_DIR.iterdir()), [])
 
 
 if __name__ == '__main__':
