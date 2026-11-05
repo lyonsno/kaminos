@@ -695,3 +695,32 @@ export function createLoadingTelemetryTracker({
     },
   };
 }
+
+/**
+ * Extract the 64-hex SHA256 from a generated-meshes `/api/read` URL or raw SHA string.
+ */
+export function extractGeneratedMeshSha(source) {
+  if (typeof source !== 'string') return null;
+  const trimmed = source.trim();
+  if (/^[a-f0-9]{64}$/i.test(trimmed)) return trimmed.toLowerCase();
+  try {
+    const u = new URL(trimmed, 'http://kaminos.local');
+    if (u.pathname !== '/api/read' || u.searchParams.get('root') !== 'generated-meshes') return null;
+    const m = /^([a-f0-9]{64})\.glb$/i.exec(u.searchParams.get('path') ?? '');
+    return m ? m[1].toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve the hero mesh SHA256 for a URL or scene object record (including surfel records
+ * whose `generation.meshSha256` points to the stored hero mesh pyramid).
+ */
+export function resolveEarlyLowLodMeshSha(sourceOrRecord) {
+  if (!sourceOrRecord) return null;
+  if (typeof sourceOrRecord === 'string') return extractGeneratedMeshSha(sourceOrRecord);
+  const heroSha = extractGeneratedMeshSha(sourceOrRecord.generation?.meshSha256);
+  const directSha = extractGeneratedMeshSha(sourceOrRecord.source);
+  return heroSha || directSha;
+}

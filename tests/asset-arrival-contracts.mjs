@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 import * as THREE from '../lib/three.core.js';
 import * as assetArrival from '../asset-arrival.mjs';
 import {
@@ -480,4 +481,210 @@ test('loading telemetry tracker reports byte progress, elapsed time, stall detec
     /renderer\.toneMappingExposure\s*=\s*env\.exposure\s*\*\s*delta\.exposureScale\s*\*\s*matchedEvScale/,
     'syncArrivalStudioLighting must preserve matchedEvScale on renderer.toneMappingExposure',
   );
+});
+
+test('geometry-first arrival promotes camera placement and 500-face low-LOD proxy stand-ins before hero downloads complete', () => {
+  assert.equal(typeof assetArrival.extractGeneratedMeshSha, 'function', 'extractGeneratedMeshSha must be exported');
+  assert.equal(typeof assetArrival.resolveEarlyLowLodMeshSha, 'function', 'resolveEarlyLowLodMeshSha must be exported');
+
+  const sha = 'f8e6ce918e3e5cf234d186724dc21b40b3f9cf7cbc9e776000cf55f24801c91b';
+  assert.equal(
+    assetArrival.extractGeneratedMeshSha(`/api/read?root=generated-meshes&path=${sha}.glb`),
+    sha,
+  );
+  assert.equal(assetArrival.extractGeneratedMeshSha('/api/read?root=scratch&path=test.glb'), null);
+  assert.equal(
+    assetArrival.resolveEarlyLowLodMeshSha({
+      source: `/api/read?root=generated-meshes&path=${'a'.repeat(64)}.glb`,
+      generation: { meshSha256: sha },
+    }),
+    sha,
+    'surfel records with generation.meshSha256 resolve their hero mesh SHA for low-LOD proxy stand-ins',
+  );
+
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+
+  // 1. initScene reports zero-cost startup phase telemetry to #kaminos-startup-veil
+  const initStart = html.indexOf('async function initScene()');
+  const initEnd = html.indexOf('async function loadEnvironment(', initStart);
+  const initBody = html.slice(initStart, initEnd);
+  assert.match(initBody, /updateStartupVeil\(document,\s*['"]Requesting WebGPU device['"]\)/);
+  assert.match(initBody, /updateStartupVeil\(document,\s*['"]Initializing WebGPU renderer['"]\)/);
+  assert.match(initBody, /updateStartupVeil\(document,\s*['"]Building lighting & GI pipeline['"]\)/);
+
+  // 2. applySceneDocument applies camera and stages 500-face proxy stand-ins BEFORE loadSceneObjects
+  const applyDocStart = html.indexOf('async function applySceneDocument(');
+  const applyDocEnd = html.indexOf('document.getElementById(\'scene-file-input\')', applyDocStart);
+  const applyDocBody = html.slice(applyDocStart, applyDocEnd);
+  const earlyCameraIdx = applyDocBody.indexOf('applySceneCameraView(data.camera)');
+  const stageProxiesIdx = applyDocBody.indexOf('stageSceneLowLodStandIns(objectRecords, loadRequestId)');
+  const loadObjectsIdx = applyDocBody.indexOf('loadSceneObjects(objectRecords');
+  assert.ok(earlyCameraIdx > 0 && earlyCameraIdx < loadObjectsIdx, 'applySceneDocument must place the camera before awaiting loadSceneObjects');
+  assert.ok(stageProxiesIdx > 0 && stageProxiesIdx < loadObjectsIdx, 'applySceneDocument must stage 500-face low-LOD stand-ins before awaiting loadSceneObjects');
+  assert.match(applyDocBody, /clearSceneLowLodStandIns\(loadRequestId\)/, 'applySceneDocument finally block must clear any remaining low-LOD stand-ins');
+
+  // 3. restoreLoadedSceneRecord swaps out each object's low-LOD stand-in as its hero mesh mounts
+  const restoreRecStart = html.indexOf('function restoreLoadedSceneRecord(');
+  const restoreRecEnd = html.indexOf('async function loadSceneObjects(', restoreRecStart);
+  assert.match(
+    html.slice(restoreRecStart, restoreRecEnd),
+    /removeSceneLowLodStandIn\(record\.id\)/,
+    'restoreLoadedSceneRecord must remove the object low-LOD stand-in once the hero mesh transform is applied',
+  );
+
+  // 4. showGLB mounts a single-asset low-LOD stand-in with early camera framing while the hero GLB downloads
+  const showGlbStart = html.indexOf('async function showGLB(');
+  const showGlbEnd = html.indexOf('window.kaminosWorkbenchLoadAsset =', showGlbStart);
+  const showGlbBody = html.slice(showGlbStart, showGlbEnd);
+  assert.match(showGlbBody, /mountSingleAssetLowLodStandIn\(/, 'showGLB must mount a 500-face low-LOD stand-in while the full hero GLB downloads');
+  assert.match(showGlbBody, /releaseEarlyStandIn\?\.\(\)/, 'showGLB must release and dispose the early low-LOD stand-in when the hero GLB settles');
+});
+
+test('low-LOD proxy stand-in helpers stage, adopt, frame, and dispose stand-ins cleanly in VM execution', async () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const sliceStart = html.indexOf('let sceneLoadingStandInGroup = null;');
+  const sliceEnd = html.indexOf('async function showGLB(', sliceStart);
+  assert.ok(sliceStart > 0 && sliceEnd > sliceStart, 'stand-in helper slice exists');
+
+  const shaA = 'f8e6ce918e3e5cf234d186724dc21b40b3f9cf7cbc9e776000cf55f24801c91b';
+  const shaB = '0d24383aa50398cf1e1a0c7d96f9d29cf51412276a09eb3db8c87e22c5531a82';
+  const disposed = [];
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(40, 16 / 9, 0.01, 100);
+  const controls = { target: new THREE.Vector3(), update() {} };
+  const groundPlane = { visible: true, position: { y: -0.85 }, material: { color: new THREE.Color('#808080'), roughness: 0.65 } };
+  const workingScene = { objects: [] };
+  let currentReqId = 'req-1';
+
+  class FakeGLTFLoader {
+    async parseAsync(_bytes, _path) {
+      const root = new THREE.Group();
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
+      root.add(mesh);
+      return { scene: root };
+    }
+  }
+
+  const context = {
+    THREE,
+    Map,
+    Set,
+    Array,
+    Number,
+    Boolean,
+    encodeURIComponent,
+    GLTFLoader: FakeGLTFLoader,
+    scene,
+    camera,
+    controls,
+    groundPlane,
+    workingScene,
+    sceneLoadRequests: { isCurrent: id => id === currentReqId },
+    sceneEnvironment: { read: () => ({ intensity: 1.2 }) },
+    renderer: { capabilities: { getMaxAnisotropy: () => 16 } },
+    resolveEarlyLowLodMeshSha: assetArrival.resolveEarlyLowLodMeshSha,
+    prepareArrivedMeshMaterials: assetArrival.prepareArrivedMeshMaterials,
+    applySceneObjectTransformState(obj, tf) {
+      if (tf?.position) obj.position.fromArray(tf.position);
+    },
+    applyMaterialStateToObject() {},
+    applyAssetArrival(obj, mode) {
+      if (!mode) return null;
+      obj.position.set(0, -0.35, 0);
+      return { position: [0, -0.35, 0], scale: 1 };
+    },
+    frameAssetArrival() {
+      camera.position.set(1.5, 1.1, 2.4);
+      controls.target.set(0, 0.15, 0);
+      return true;
+    },
+    disposeObjectTree(obj) {
+      disposed.push(obj);
+    },
+    fetch: async url => {
+      if (String(url).startsWith('/api/mesh-lods')) {
+        return {
+          ok: true,
+          json: async () => ({
+            choice: { faces: 500, source: `/api/read?root=generated-meshes&path=${shaA}.lods/closed-remesh-f500.glb` },
+          }),
+        };
+      }
+      return {
+        ok: true,
+        arrayBuffer: async () => new ArrayBuffer(16),
+      };
+    },
+    window: { _kaminosDirty() {} },
+  };
+  vm.createContext(context);
+  vm.runInContext(html.slice(sliceStart, sliceEnd), context);
+
+  // 1. Pre-stage admitted scene camera and proxies on startup (loadRequestId = null)
+  const records = [
+    { id: 'obj-1', source: `/api/read?root=generated-meshes&path=${shaA}.glb`, transform: { position: [2, 0, -1] } },
+    { id: 'obj-2', source: `/api/read?root=generated-meshes&path=${shaB}.glb`, transform: { position: [-3, 0, 4] } },
+  ];
+  context.prestageAdmittedSceneCameraAndProxies({
+    data: {
+      camera: { position: [4, 3, 5], target: [0, 1, 0], up: [0, 1, 0], near: 0.05, far: 120, fov: 35 },
+      environment: { ground: { visible: true, height: -0.9, color: '#222222', roughness: 0.5 } },
+    },
+    plan: { objects: records },
+  });
+  close(camera.position.x, 4, 'prestage places camera.position.x immediately');
+  close(controls.target.y, 1, 'prestage places controls.target.y immediately');
+  close(groundPlane.position.y, -0.9, 'prestage updates groundPlane height immediately');
+
+  // Adopt into active loadRequestId ('req-1') when applySceneDocument starts
+  context.stageSceneLowLodStandIns(records, 'req-1');
+  await new Promise(r => setTimeout(r, 20));
+  assert.equal(context.window.kaminosLoadingStandIns.state().mountedCount, 2, 'both 500-face scene stand-ins mount in parallel');
+  assert.equal(context.window.kaminosLoadingStandIns.state().groupChildren, 2);
+
+  // Remove obj-1 stand-in as its hero mesh mounts
+  assert.equal(context.removeSceneLowLodStandIn('obj-1'), true);
+  assert.equal(context.window.kaminosLoadingStandIns.state().mountedCount, 1);
+  assert.equal(disposed.length, 1, 'removed stand-in is disposed immediately');
+
+  // Clear remaining stand-ins on applySceneDocument finally
+  context.clearSceneLowLodStandIns('req-1');
+  assert.equal(context.window.kaminosLoadingStandIns.state().mountedCount, 0);
+  assert.equal(context.window.kaminosLoadingStandIns.state().groupChildren, 0);
+  assert.equal(disposed.length, 2, 'all remaining stand-ins are disposed');
+
+  // Reloading/switching scenes while workingScene.objects still contains previous objects with matching IDs
+  // (before loadSceneObjects clears the old scene) must still stage the new scene's 500-face stand-ins (M1 regression test)
+  workingScene.objects.push({ id: 'obj-1' }, { id: 'obj-2' });
+  currentReqId = 'req-2';
+  context.stageSceneLowLodStandIns(records, 'req-2');
+  await new Promise(r => setTimeout(r, 20));
+  assert.equal(
+    context.window.kaminosLoadingStandIns.state().mountedCount,
+    2,
+    'scene reload stages 500-face stand-ins even before loadSceneObjects clears old workingScene.objects',
+  );
+  context.clearSceneLowLodStandIns('req-2');
+  assert.equal(disposed.length, 4);
+
+  // 2. Single-asset stand-in mounts, frames camera, detects user orbit, and disposes on release
+  const releaseSingle = context.mountSingleAssetLowLodStandIn({
+    url: `/api/read?root=generated-meshes&path=${shaA}.glb`,
+    isBlob: false,
+    arrival: 'fresh',
+    assetMetadata: {},
+    isCurrent: () => true,
+  });
+  assert.equal(typeof releaseSingle, 'function');
+  await new Promise(r => setTimeout(r, 20));
+  assert.equal(context.window.kaminosLoadingStandIns.state().groupChildren, 1, 'single-asset stand-in is mounted');
+  close(camera.position.x, 1.5, 'single-asset stand-in frames camera immediately');
+
+  // Simulate user orbiting while hero downloads
+  camera.position.set(2.2, 1.4, 1.9);
+  const receipt = releaseSingle();
+  assert.equal(receipt.framed, true);
+  assert.equal(receipt.cameraMovedSinceFrame, true, 'detects user camera orbit while stand-in was visible');
+  assert.equal(context.window.kaminosLoadingStandIns.state().groupChildren, 0, 'single-asset stand-in is removed on release');
+  assert.equal(disposed.length, 5, 'single-asset stand-in is disposed on release');
 });
