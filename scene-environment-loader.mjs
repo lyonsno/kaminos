@@ -4,6 +4,7 @@
 // that explicitly need final lighting.
 export function createEnvironmentLoader({presets, load, apply, fallback, placeholder = fallback, changed = () => {}}) {
   const cache = new Map(), pending = new Map();
+  let resourceEpoch = 0;
   let generation = 0, hasMap = false, holds = 0, release;
   let fullAllowed = Promise.resolve();
   function holdFull() {
@@ -20,8 +21,12 @@ export function createEnvironmentLoader({presets, load, apply, fallback, placeho
     const key = `${name}:${quality}`;
     if (cache.has(key)) return cache.get(key);
     if (pending.has(key)) return pending.get(key);
+    const epoch = resourceEpoch;
     const promise = Promise.resolve().then(() => load(presets[name][quality === 'preview' ? 'previewUrl' : 'url'], {name, quality}))
-      .then(map => { cache.set(key, map); return map; }).finally(() => pending.delete(key));
+      .then(map => {
+        if(epoch!==resourceEpoch){map?.dispose?.();throw Error('Environment resource superseded');}
+        cache.set(key, map); return map;
+      }).finally(() => {if(pending.get(key)===promise)pending.delete(key);});
     pending.set(key, promise);
     return promise;
   }
@@ -65,6 +70,10 @@ export function createEnvironmentLoader({presets, load, apply, fallback, placeho
     })();
     return {...state};
   }
-  return {select, read: () => ({...state}), holdFull, releaseFull: releaseStartup,
+  return {select, invalidateResources(){
+    generation++;resourceEpoch++;pending.clear();
+    for(const map of cache.values())map?.dispose?.();cache.clear();hasMap=false;
+    state={name:null,mapName:null,quality:'none',pending:false,error:null};completion=Promise.resolve(state);
+  }, read: () => ({...state}), holdFull, releaseFull: releaseStartup,
     async whenSettled() { for (;;) { const chosen = completion; await chosen; if (chosen === completion) return {...state}; } }};
 }

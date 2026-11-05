@@ -68,6 +68,13 @@ export function createAuthoredWaterFeature({services,emitters,enabledEmitters=em
    if(mounted)report('Water mounted in the shared scene. The solver restarts from its saved authored setup.');
    return mounted;
   },
+  async recover(wasPaused){
+   const ticket=generation;
+   const mounted=await acquire();
+   if(ticket!==generation)return false;
+   if(mounted)feature.setPaused(wasPaused);
+   return mounted;
+  },
   release:()=>acquire({replace:true}),
   async openExperiment(value){
    if(setup)throw Error('Close authored water before opening a numerical experiment');

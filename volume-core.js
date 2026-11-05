@@ -21747,6 +21747,7 @@ export function createKaminosVolumePrototype({
   }
 
   let foregroundRequester = null;
+  let deviceRetired = false;
   let foregroundPending = null;
   let foregroundSequence = 0;
   let activitySequence = 0;
@@ -21764,6 +21765,7 @@ export function createKaminosVolumePrototype({
   }
 
   function setForegroundOpportunityRequester(requester) {
+    if(deviceRetired&&requester)throw Error('Volume GPU device retired');
     if (requester !== null && typeof requester !== 'function') throw new Error('foreground requester must be a function or null');
     if (foregroundPending) throw new Error('foreground frame is still pending');
     if (productFrameOwner === 'caller') throw new Error('ordinary foreground service requires the prototype-owned renderer');
@@ -21773,6 +21775,7 @@ export function createKaminosVolumePrototype({
   }
 
   function render(now) {
+    if(deviceRetired){raf=0;return;}
     if (sceneLightingRebuildPending || stillPresentationHeld) { raf = 0; return; }
     if (!foregroundRequester) return renderOrdinaryFrame(now);
     raf = 0;
@@ -28806,6 +28809,7 @@ export function createKaminosVolumePrototype({
       return {...state.sceneCompositionPresentation};
     },
     async setActive(active) {
+      if(deviceRetired){if(active)throw Error('Volume GPU device retired');return;}
       const activity = ++activitySequence;
       if (active) {
         if (state.fullFieldImportReceipt?.status === 'applied'
@@ -28847,6 +28851,11 @@ export function createKaminosVolumePrototype({
         raf = 0;
         emitStatus({ phase: 'inactive' });
       }
+    },
+    retireLostDevice(){
+      deviceRetired=true;activitySequence++;state.active=false;
+      foregroundRequester=null;cancelAnimationFrame(raf);raf=0;
+      canvas.classList.remove('active');
     },
     setForegroundOpportunityRequester,
     foregroundGpuContext() {
