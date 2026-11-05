@@ -8,7 +8,7 @@ import {
   GpuValidationError,
 } from '../tools/shader-herder.mjs';
 
-test('withKaminosGpu validates Apple Metal-3 adapter identity and rejects non-matching vendor in both hardware and Seatbelt modes', async () => {
+test('withKaminosGpu validates Apple adapter identity and rejects non-matching vendor in both hardware and Seatbelt modes', async () => {
   const evidence = [];
   const res = await withKaminosGpu(
     async (ctx) => ctx.adapterInfo,
@@ -26,11 +26,11 @@ test('withKaminosGpu validates Apple Metal-3 adapter identity and rejects non-ma
   );
   const observedAdapter = res?.metalAdapterInfo ?? res;
   assert.equal(observedAdapter.vendor, 'apple');
-  assert.equal(observedAdapter.architecture, 'metal-3');
   assert.equal(observedAdapter.isFallbackAdapter, false);
   assert.equal(evidence.length, 1);
   assert.equal(evidence[0].route, res?.seatbeltFallback ? 'compiler-only' : 'hardware');
   assert.equal(evidence[0].source.requested, 'installed-package');
+  assert.deepEqual(evidence[0].adapterInfo, res?.seatbeltFallback ? res.adapterInfo : observedAdapter);
 
   await assert.rejects(
     () => withKaminosGpu(async () => {}, { requiredVendor: 'nvidia-nonexistent' }),

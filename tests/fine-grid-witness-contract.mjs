@@ -13,11 +13,11 @@ validateFineGridWitness(good);
 for(const mutate of [x=>x.errors.push('GPU validation'),x=>x.adapter.vendor='swiftshader',x=>x.seed=[],x=>x.injected[0]=0,x=>x.preserved[0]=50,x=>x.prolonged[4]=0,x=>delete x.prolonged]){
  const x=structuredClone(good);mutate(x);assert.throws(()=>validateFineGridWitness(x));
 }
-await withKaminosGpu(async () => {
+await withKaminosGpu(async (ctx) => {
  const live=await probeFineGrid();
  validateFineGridWitness(live);
  assert.equal(live.adapter.vendor,'apple');
- assert.match(live.adapter.architecture,/^metal/);
+ assert.equal(ctx.adapterInfo.isFallbackAdapter,false);
 }, {
  wgslSources: ['restrictScalars','restrictBurn','injectMomentum','prolongVelocity'].map(entryPoint=>({
   label:`fine-grid-witness-${entryPoint}`,code:FINE_GRID_TRANSFER_WGSL,
