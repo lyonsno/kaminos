@@ -215,6 +215,77 @@ with tempfile.TemporaryDirectory() as directory:
         read_bytes2 = read_resp2.read()
         conn.close()
         assert read_resp2.status == 200 and read_bytes2 == nested_bytes
+        # Verified content-addressed <sha256>.glb reads return immutable Cache-Control + ETag and honor If-None-Match -> 304.
+        assert read_resp2.getheader('Cache-Control') == 'public, max-age=31536000, immutable', read_resp2.getheader('Cache-Control')
+        assert read_resp2.getheader('ETag') == f'"{nested_sha}"', read_resp2.getheader('ETag')
+        conn = http.client.HTTPConnection(*server.server_address)
+        conn.request('GET', f'/api/read?root=generated-meshes&path={nested_sha}.glb', headers={'If-None-Match': f'"{nested_sha}"'})
+        not_mod = conn.getresponse()
+        not_mod_bytes = not_mod.read()
+        conn.close()
+        assert not_mod.status == 304 and not_mod_bytes == b'', (not_mod.status, len(not_mod_bytes))
+        assert not_mod.getheader('ETag') == f'"{nested_sha}"'
+        # Non-hash named paths keep Cache-Control: no-store.
+        conn = http.client.HTTPConnection(*server.server_address)
+        conn.request('GET', '/api/read?root=generated-meshes&path=named-trellis-kiln.glb')
+        named_resp = conn.getresponse()
+        named_resp.read()
+        conn.close()
+        assert named_resp.status == 200 and named_resp.getheader('Cache-Control') == 'no-store', named_resp.getheader('Cache-Control')
+
+        # Auto-prepare classification and deduplicated queue contract:
+        def mesh_glb(tag, extras=None, extensions=None, has_mesh=True):
+            doc = {'asset': {'version': '2.0'}}
+            if has_mesh:
+                doc['meshes'] = [{'primitives': [{'attributes': {'POSITION': 0}, 'mode': 4}]}]
+            if extras is not None:
+                doc['extras'] = extras
+            if extensions is not None:
+                doc['extensions'] = extensions
+            raw = json.dumps(doc).encode()
+            raw += b' ' * (-len(raw) % 4)
+            return b'glTF' + struct.pack('<II', 2, 20 + len(raw)) + struct.pack('<II', len(raw), 0x4e4f534a) + raw
+
+        hero_mesh_bytes = mesh_glb('auto-hero')
+        hero_mesh_sha = hashlib.sha256(hero_mesh_bytes).hexdigest()
+        tier_mesh_bytes = mesh_glb('auto-tier', extras={'lodNormalMap': {'textureSize': 256}})
+        tier_mesh_sha = hashlib.sha256(tier_mesh_bytes).hexdigest()
+        surfel_only_bytes = mesh_glb('auto-surfel', extensions={'KAMINOS_trellis_surfels': {'count': 10}}, has_mesh=False)
+        surfel_only_sha = hashlib.sha256(surfel_only_bytes).hexdigest()
+
+        assert serve.should_auto_prepare_mesh_lods(hero_mesh_sha, hero_mesh_bytes) is True
+        assert serve.should_auto_prepare_mesh_lods(hero_mesh_sha, hero_mesh_bytes, role='lod-tier') is False
+        assert serve.should_auto_prepare_mesh_lods(tier_mesh_sha, tier_mesh_bytes) is False
+        assert serve.should_auto_prepare_mesh_lods(surfel_only_sha, surfel_only_bytes) is False
+        assert serve.should_auto_prepare_mesh_lods(stored['l500'], hero_mesh_bytes) is False, 'registered tier sha is excluded'
+        assert serve.should_auto_prepare_mesh_lods(hero, hero_mesh_bytes) is False, 'hero with existing .lods.json is excluded'
+
+        prepared_calls = []
+        gate = threading.Event()
+        def stub_runner(sha_to_prep, port):
+            prepared_calls.append((sha_to_prep, port))
+            gate.wait(timeout=2.0)
+            return {'status': 'done', 'returncode': 0}
+
+        old_runner = getattr(serve, '_MESH_LOD_PREPARE_RUNNER', None)
+        serve._MESH_LOD_PREPARE_RUNNER = stub_runner
+        try:
+            # Ingesting with ?role=lod-tier does NOT enqueue auto-prepare:
+            assert request('POST', '/api/ingest-mesh?role=lod-tier', hero_mesh_bytes)[0] == 200
+            qstate = serve.mesh_lod_prepare_queue_state()
+            assert hero_mesh_sha not in qstate['queued'] and qstate['active'] != hero_mesh_sha
+            # Ingesting a hero GLB without ?role=lod-tier enqueues it once (and deduplicates repeat requests):
+            assert serve.enqueue_mesh_lod_prepare(hero_mesh_sha, server_port=server.server_address[1]) is True
+            assert serve.enqueue_mesh_lod_prepare(hero_mesh_sha, server_port=server.server_address[1]) is False, 'deduplicated while active/queued'
+            gate.set()
+            for _ in range(50):
+                if serve.mesh_lod_prepare_queue_state()['completed'].get(hero_mesh_sha):
+                    break
+                import time as _t; _t.sleep(0.02)
+            assert prepared_calls == [(hero_mesh_sha, server.server_address[1])], prepared_calls
+        finally:
+            gate.set()
+            serve._MESH_LOD_PREPARE_RUNNER = old_runner
     finally:
         server.shutdown()
         server.server_close()
