@@ -41,18 +41,31 @@ export function chooseFineCoverage(input,options={}) {
  const sb=normalized(sources,1,o.lookahead),db=normalized(demand,o.mode==='fire'?o.activityWeight:0,o.lookahead),all=[...sb,...db].filter(b=>b.weight>0);
  if(!all.length)return {...result,status:'no-demand'};
  const score=t=>{const lo=t.map((x,a)=>x-frame.scale+extent[a]*o.margin),hi=lo.map((x,a)=>x+extent[a]*(1-2*o.margin));return all.reduce((sum,b)=>sum+b.weight*fraction(b,lo,hi),0);};
- const current=score(frame.translate),candidates=[frame.translate];
+ // A live Headroom edit may improve placement without improving coverage.
+ // Keep coverage first; use the requested source-relative height only to break
+ // coverage ties, and retain a blocked request until the consumer can apply it.
+ const headroomError=t=>sb.reduce((sum,b)=>sum+b.weight*Math.abs((t[1]-frame.scale+extent[1]-center(b)[1])/extent[1]-o.headroom),0);
+ const headroomRequested=input.headroomPending===true&&sb.length>0;
+ const current=score(frame.translate),currentHeadroom=headroomError(frame.translate),candidates=[frame.translate];
  const add=(c,headroom=false)=>{let t=c.map((x,a)=>x-offset[a]+(a===1&&headroom?(o.headroom-.5)*extent[a]:0));
   // Quantize within the World, never round a clamped placement back outside it.
   t=t.map((x,a)=>{const origin=frame.translate[a],min=Math.ceil((lower[a]-origin)/pitch-1e-8),max=Math.floor((upper[a]-origin)/pitch+1e-8);return min<=max?origin+Math.max(min,Math.min(max,Math.round((x-origin)/pitch)))*pitch:Math.max(lower[a],Math.min(upper[a],x));});candidates.push(t);};
  const centroid=bs=>{const total=bs.reduce((s,b)=>s+b.weight,0);return total?Array.from({length:3},(_,a)=>bs.reduce((s,b)=>s+center(b)[a]*b.weight,0)/total):null;};
  for(const b of sb)add(center(b),true);
  for(const [bs,headroom] of [[sb,true],[db,false],[all,false]]){const c=centroid(bs);if(c)add(c,headroom);}
+ const sourceCenter=centroid(sb);
+ if(headroomRequested&&sourceCenter)add([frame.translate[0]+offset[0],sourceCenter[1],frame.translate[2]+offset[2]],true);
  const strongest=db.reduce((best,b)=>b.weight>(best?.weight??0)?b:best,null);if(strongest)add(center(strongest));
- let best=frame.translate,bestScore=current,bestDistance=0;
- for(const t of candidates){const s=score(t),distance=t.reduce((sum,x,a)=>sum+(x-frame.translate[a])**2,0);if(s>bestScore+1e-9||(Math.abs(s-bestScore)<1e-9&&distance<bestDistance)){best=t;bestScore=s;bestDistance=distance;}}
+ let best=frame.translate,bestScore=current,bestDistance=0,bestHeadroom=currentHeadroom;
+ for(const t of candidates){
+  const s=score(t),h=headroomError(t),distance=t.reduce((sum,x,a)=>sum+(x-frame.translate[a])**2,0);
+  const equalCoverage=Math.abs(s-bestScore)<1e-9;
+  if(s>bestScore+1e-9||(equalCoverage&&(headroomRequested&&h<bestHeadroom-1e-9||(!headroomRequested||Math.abs(h-bestHeadroom)<1e-9)&&distance<bestDistance))){best=t;bestScore=s;bestDistance=distance;bestHeadroom=h;}
+ }
  const total=all.reduce((s,b)=>s+b.weight,0),gain=bestScore-current;
- if(gain>o.hysteresis*total+1e-9)result.target={translate:best,scale:frame.scale};else best=frame.translate;
+ const headroomMove=headroomRequested&&Math.abs(gain)<1e-9&&bestHeadroom<currentHeadroom-1e-9;
+ if(gain>o.hysteresis*total+1e-9||headroomMove){result.target={translate:best,scale:frame.scale};if(headroomMove)result.cause='headroom-edit';}else best=frame.translate;
+ if(input.headroomPending===true)result.headroomPending=!sb.length||headroomError(best)>pitch/(2*extent[1])+1e-9;
  const lo=best.map((x,a)=>x-frame.scale+extent[a]*o.margin),hi=lo.map((x,a)=>x+extent[a]*(1-2*o.margin));
  const coverage=bs=>{const w=bs.reduce((s,b)=>s+b.weight,0);return w?Math.min(1,bs.reduce((s,b)=>s+b.weight*fraction(b,lo,hi),0)/w):0;};
  result.sourceCoverage=coverage(sb);result.activityCoverage=coverage(db);result.gain=result.target?gain:0;
@@ -75,23 +88,26 @@ export function sourceCoverageBounds(packed,{dims,frame}) {
  return out;
 }
 export class FineCoverageController {
- constructor(){this.lastCheck=-Infinity;this.lastFrame=null;this.policy=null;this.sources=null;this.history=new Map();this.manualHold=false;this.checks=0;this.moves=0;this.lastResult={status:'off',target:null};}
- release(){this.lastFrame=null;this.policy=null;this.sources=null;this.manualHold=false;this.history.clear();}
- due(options,now){const o=checkedFineCoverageOptions(options);return JSON.stringify(o)!==this.policy||now-this.lastCheck>=o.interval;}
+ constructor(){this.lastCheck=-Infinity;this.lastFrame=null;this.policy=null;this.sources=null;this.history=new Map();this.manualHold=false;this.headroom=null;this.headroomPending=false;this.checks=0;this.moves=0;this.lastResult={status:'off',target:null};}
+ release(){this.lastCheck=-Infinity;this.headroom=null;this.headroomPending=false;this.lastFrame=null;this.policy=null;this.sources=null;this.manualHold=false;this.history.clear();}
+ due(options,now){const o=checkedFineCoverageOptions(options);return now-this.lastCheck>=o.interval;}
  update(input,options,now){
   if(!Number.isFinite(now))throw new Error('Coverage clock must be finite');
   const o=checkedFineCoverageOptions(options),policy=JSON.stringify(o),signature=JSON.stringify((input.sources??[]).map(b=>[b.id,b.authoredSupply,...b.lo,...b.hi].map(x=>typeof x==='number'?Math.round(x*1e7)/1e7:x)));
+  if(this.headroom!==null&&o.headroom!==this.headroom)this.headroomPending=true;
+  this.headroom=o.headroom;
   const changed=policy!==this.policy||signature!==this.sources;
   const external=this.lastFrame&&!sameFrame(input.frame,this.lastFrame);
-  if(external&&policy===this.policy)this.manualHold=true;else if(changed)this.manualHold=false;
+  if(external&&policy===this.policy){this.manualHold=true;this.headroomPending=false;}else if(changed)this.manualHold=false;
   const sources=(input.sources??[]).map(b=>{const c=center(b),old=this.history.get(b.id);this.history.set(b.id,{c,time:now});
    const velocity=old&&now>old.time?c.map((x,a)=>(x-old.c[a])/(now-old.time)):[0,0,0];
    return {...b,motionMin:b.motionMin??velocity,motionMax:b.motionMax??velocity};});
   for(const id of this.history.keys())if(!sources.some(b=>b.id===id))this.history.delete(id);
   this.lastCheck=now;this.lastFrame={translate:[...input.frame.translate],scale:input.frame.scale};this.policy=policy;this.sources=signature;this.checks++;
-  this.lastResult=this.manualHold&&o.mode!=='off'?{target:null,status:'manual-hold'}:chooseFineCoverage({...input,sources},o);
+  this.lastResult=this.manualHold&&o.mode!=='off'?{target:null,status:'manual-hold'}:chooseFineCoverage({...input,sources,headroomPending:this.headroomPending},o);
+  if(!this.lastResult.target&&this.lastResult.headroomPending===false)this.headroomPending=false;
   return this.lastResult;
  }
- accept(frame,now){this.lastFrame={translate:[...frame.translate],scale:frame.scale};this.moves++;this.lastApplied=now;}
+ accept(frame,now){if(this.lastResult.headroomPending===false)this.headroomPending=false;this.lastFrame={translate:[...frame.translate],scale:frame.scale};this.moves++;this.lastApplied=now;}
  read(){return {...this.lastResult,checks:this.checks,moves:this.moves,lastApplied:this.lastApplied??null};}
 }

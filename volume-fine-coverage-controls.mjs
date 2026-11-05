@@ -24,7 +24,7 @@ export const FINE_COVERAGE_FIELDS=[
   "param": "volume_coverage_headroom",
   "label": "Headroom",
   "value": 0.75,
-  "description": "Fraction of Fine height above a source when choosing a new placement. Does not resize the box.",
+  "description": "Desired fraction of Fine height above source supply. Live edits reposition the fixed-size box while preserving coverage; fire demand or World bounds can hold a request pending.",
   "type": "number"
  },
  {

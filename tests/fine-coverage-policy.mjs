@@ -13,6 +13,47 @@ test('upward movement raises fixed-size coverage before the source meets the cei
 test('source motion inside the interior margin incurs no remap',()=>{
  assert.equal(chooseFineCoverage(input([box('one',[.1,0,0])]),opts).target,null);
 });
+test('authored Headroom changes reframe equally covered sources and settle without repeated remaps',()=>{
+ const c=new FineCoverageController(),i=input([box('one',[0,0,0])]);
+ assert.equal(c.update(i,opts,0).target,null);
+ const edited={...opts,headroom:.5};
+ assert.equal(c.due(edited,.1),false,'editing must retain the configured minimum check interval');
+ assert.equal(c.due(edited,.25),true);
+ const r=c.update(i,edited,.25);
+ assert.ok(r.target,'the authored headroom must move an already covered source');
+ assert.equal(r.target.translate[1],-1);assert.equal(r.sourceCoverage,1);assert.equal(r.target.scale,1);
+ assert.equal(r.cause,'headroom-edit');assert.equal(r.gain,0,'coverage is retained, not invented as a gain');
+ c.accept(r.target,.25);
+ assert.equal(c.update({...i,frame:r.target},edited,.5).target,null,'accepted headroom must not keep remapping');
+});
+test('a pending Headroom placement survives a refused move until the consumer accepts it',()=>{
+ const c=new FineCoverageController(),i=input([box('one',[0,0,0])]);c.update(i,opts,0);
+ const edited={...opts,headroom:.5},first=c.update(i,edited,.25);assert.ok(first.target);
+ const retry=c.update(i,edited,.5);assert.deepEqual(retry.target,first.target,'no accept means the old box remains and the edit must retry');
+ c.accept(retry.target,.5);assert.equal(c.update({...i,frame:retry.target},edited,.75).target,null);
+});
+test('live headroom preserves higher-priority covered fire instead of silently discarding it',()=>{
+ const c=new FineCoverageController(),i=input([box('one',[0,0,0])],{demand:[box('fire',[0,2,0],.1)]}),fire={...opts,mode:'fire',activityWeight:2};
+ c.update(i,fire,0);const r=c.update(i,{...fire,headroom:.5},.25);
+ assert.equal(r.target,null);assert.equal(r.sourceCoverage,1);assert.equal(r.activityCoverage,1);
+ assert.equal(r.headroomPending,true,'demand-constrained headroom remains explicit');
+});
+test('blocked headroom resumes when fire clears; manual placement overrides the pending request',()=>{
+ const c=new FineCoverageController(),i=input([box('one',[0,0,0])],{demand:[box('fire',[0,2,0])]}),fire={...opts,mode:'fire',activityWeight:2};
+ c.update(i,fire,0);const edited={...fire,headroom:.5};
+ assert.equal(c.update(i,edited,.25).target,null);
+ const cleared={...i,demand:[]};const r=c.update(cleared,edited,.5);assert.ok(r.target);assert.equal(r.target.translate[1],-1);
+ c.accept(r.target,.5);assert.equal(c.update({...cleared,frame:r.target},edited,.75).target,null);
+ const manual={...cleared,frame:{translate:[0,1,0],scale:1}};
+ assert.equal(c.update(manual,edited,1).status,'manual-hold');
+ assert.equal(c.update(manual,edited,1.25).target,null);
+});
+test('sub-cell headroom edits settle and re-enabling coverage checks immediately',()=>{
+ const c=new FineCoverageController(),i=input([box('one',[0,0,0])]);c.update(i,opts,0);
+ const edited={...opts,headroom:.751};const r=c.update(i,edited,.25);
+ assert.equal(r.target,null);assert.equal(r.headroomPending,false);
+ c.release();assert.equal(c.due(edited,.26),true);
+});
 test('fixed World bounds contain every proposed Fine box',()=>{
  const r=chooseFineCoverage(input([box('one',[10,10,0])]),opts);
  if(r.target){const t=r.target.translate;assert.ok(t[0]<=3);assert.ok(t[1]<=9);}
