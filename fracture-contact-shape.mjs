@@ -17,7 +17,9 @@ export function boxContactShape(halfExtents,reason=null){
 // exterior retain their established frame and identity.
 export function materialContactShape(arrays,center,halfExtents){
  const points=[],seen=new Set();
- for(const id of arrays.indices){const p=Array.from(arrays.positions.subarray(id*3,id*3+3),(x,k)=>x-center[k]);
+ // QuickHull and deduplication use the exact Float32 support coordinates that
+ // will be packed for GPU contact; post-hull rounding can collapse an edge.
+ for(const id of arrays.indices){const p=Array.from(arrays.positions.subarray(id*3,id*3+3),(x,k)=>Math.fround(x-center[k]));
   if(!p.every(Number.isFinite))throw Error('Collision support needs finite material vertices');
   const key=p.join(',');if(!seen.has(key)){seen.add(key);points.push(new Vector3(...p));}
  }
@@ -57,7 +59,11 @@ export function materialContactShape(arrays,center,halfExtents){
 export function contactShapeFeatures(shape){
  const vertex=i=>Array.from(shape.vertices.subarray(i*3,i*3+3)),edges=[],normals=[],seen=new Set();
  for(const face of shape.faces){
-  const n=norm(cross(sub(vertex(face[1]),vertex(face[0])),sub(vertex(face[2]),vertex(face[0]))));
+  // Coplanar merging can retain straight boundary segments. A valid polygon
+  // need not begin with a noncollinear triple; use its complete oriented area.
+  const origin=vertex(face[0]),area=[0,0,0];
+  for(let i=1;i+1<face.length;i++){const c=cross(sub(vertex(face[i]),origin),sub(vertex(face[i+1]),origin));for(let k=0;k<3;k++)area[k]+=c[k];}
+  const n=norm(area);
   if(!n)throw Error('Degenerate collision face');normals.push(n);
   for(let k=0;k<face.length;k++){const a=face[k],b=face[(k+1)%face.length],key=Math.min(a,b)+':'+Math.max(a,b);if(!seen.has(key)){seen.add(key);edges.push([a,b]);}}
  }
