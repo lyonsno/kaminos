@@ -27577,10 +27577,9 @@ function syncSceneDataInspector() {
       if(!editing)document.getElementById('object-gi-proxy').checked=setting.enabled;
       const h=sceneGiProxies.get(entry.object),consumers=sceneGiProxies.consumers();
       const usage=consumers.length?' Shadow detail is selected automatically.':' Shadow rendering is idle.';
-      document.getElementById('object-gi-proxy-status').textContent=!setting.enabled?'Shadow proxies off.'
+      document.getElementById('object-gi-proxy-status').textContent=h?.state==='failed'?`Proxy levels unavailable: ${h.failure}`:!setting.enabled?'Shadow proxies off.'
         :!h||h.state==='resolving'?'Loading shadow geometry…':h.state==='loaded'?`${h.effective.faces.toLocaleString('en-US')}-face shadow tier cached.${usage}`
-        :h.state==='no-tiers'?(h.reason?`No shadow proxy: ${h.reason}.`:'No stored tiers for this mesh.'):h.state==='not-generated'?'Only stored meshes have proxy tiers.'
-        :h.state==='failed'?`Shadow proxy failed: ${h.failure}`:'';
+        :h.state==='no-tiers'?(h.reason?`No shadow proxy: ${h.reason}.`:'No stored tiers for this mesh.'):h.state==='not-generated'?'Only stored meshes have proxy tiers.':'';
       syncSceneLodReadout();}}
   const choice=document.getElementById('object-parent');choice.replaceChildren(...[['','None'],...workingScene.groups.map(g=>[g.id,g.label])].map(([id,label])=>{const option=document.createElement('option');option.value=id;option.textContent=label;return option;}));choice.value=entry?.groupId||'';
   if(!primitive.hidden){

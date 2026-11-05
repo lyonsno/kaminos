@@ -1951,8 +1951,12 @@ test('automatic beauty retains its displayed rung when shadow proxies are disabl
   root.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1, 10, 10, 10), new THREE.MeshStandardMaterial()));
   scene.add(root);
   const makeRung = () => new THREE.Group().add(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial()));
+  let catalogAvailable = true;
   const registry = createGiProxyRegistry({THREE,
-    fetchJson: async () => ({source, levels: [level], choice: level}),
+    fetchJson: async () => {
+      if (!catalogAvailable) throw Error('level endpoint unavailable');
+      return {source, levels: [level], choice: level};
+    },
     fetchBytes: async () => bytes,
     parseGlb: async () => makeRung(),
   });
@@ -1966,12 +1970,17 @@ test('automatic beauty retains its displayed rung when shadow proxies are disabl
   const before = controller.state();
   const resident = controller.getResidentRung(root, tierSha);
   assert.equal(before.objects[0].displayedTier, tierSha);
+  catalogAvailable = false;
   await registry.disable(root, {retainLevels: true});
   await controller.prepareFrame(camera);
   assert.equal(controller.state().objects[0]?.displayedTier, tierSha, 'shadow opt-out must not restore the hero in the viewport');
   assert.equal(controller.state().totalFaces, before.totalFaces);
   assert.equal(controller.getResidentRung(root, tierSha), resident, 'resident beauty geometry stays cached');
   assert.equal(beautyLoads, 1);
+  controller.borrowFrame(camera);
+  assert.equal(root.children[0].visible, false, 'cached beauty still draws when the endpoint is unavailable');
+  controller.restoreAllHeroes();
+  catalogAvailable = true;
   registry.release(root);
   await registry.disable(root, {retainLevels: true});
   await controller.prepareFrame(camera);
