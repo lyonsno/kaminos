@@ -67,7 +67,10 @@ test('explicit null backend cannot invoke the hardware callback or receive hardw
 test('fallback rejects missing, blank and unbound validation work without publishing authority', async () => {
   const previousForce = process.env.SHADER_HERDER_FORCE_SEATBELT_FALLBACK;
   const previousStrict = process.env.SHADER_HERDER_STRICT_METAL;
+  const previousWarn = console.warn;
   try {
+    // These expected rejection cases deliberately simulate the sandbox restriction.
+    console.warn = () => {};
     process.env.SHADER_HERDER_FORCE_SEATBELT_FALLBACK = '1';
     delete process.env.SHADER_HERDER_STRICT_METAL;
     for (const sources of [undefined, [], [''], [' \n '], ['// placeholder'],
@@ -85,6 +88,7 @@ test('fallback rejects missing, blank and unbound validation work without publis
       assert.deepEqual(evidence, []);
     }
   } finally {
+    console.warn = previousWarn;
     if (previousForce === undefined) delete process.env.SHADER_HERDER_FORCE_SEATBELT_FALLBACK;
     else process.env.SHADER_HERDER_FORCE_SEATBELT_FALLBACK = previousForce;
     if (previousStrict === undefined) delete process.env.SHADER_HERDER_STRICT_METAL;
