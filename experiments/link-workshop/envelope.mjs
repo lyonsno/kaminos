@@ -19,7 +19,7 @@ export function motionSpace(recipe,{cellSize=.12,tolerance=.04,geometry=null}={}
    if(def.kind==='barrel'||def.kind==='rod'){
     const p=recipe.pistons[index],range=construction.travels[index];
     if(range.min<=1e-8)throw Error(`Piston ${index+1}: positive attachment separation required for a continuous envelope; coincident mounts make its direction undefined`);
-    v=speeds[def.kind==='barrel'?p.a:p.b].v;w=(speeds[p.a].v+speeds[p.b].v)/range.min;
+    const speed=(id,offset)=>!offset?speeds[id].v:recipe.nodes[id].parent===null?0:speeds[recipe.nodes[id].parent].v+Math.hypot(...offset)*speeds[id].w;const av=speed(p.a,p.aOffset),bv=speed(p.b,p.bOffset);v=def.kind==='barrel'?av:bv;w=(av+bv)/range.min;
    }else{const origin=def.kind==='link'?recipe.nodes[index].parent:index;v=speeds[origin].v;w=def.kind==='anchor'?0:speeds[index].w;}
    const speed=v+radius*w;
    if(!Number.isFinite(speed))throw Error('Motion-space bound exceeds numeric range');

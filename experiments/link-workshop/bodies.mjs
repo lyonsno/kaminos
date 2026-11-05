@@ -1,5 +1,5 @@
 import * as T from '../../lib/three.core.js';
-import {checkedMechanism,frames} from './model.mjs';
+import {checkedMechanism,frames,pistonMountPoint} from './model.mjs';
 
 // Construction is derived from an authored forest, never from an arm template.
 // Each body has immutable local geometry and a rigid placement at each pose.
@@ -24,12 +24,13 @@ function release(root){const gs=new Set(),ms=new Set();root.traverse(o=>{if(o.ge
 
 // Lipschitz enclosure over the WHOLE authored interpolation, including interior
 // extrema. Refinement stops at a length tolerance, not at a preset sample count.
-export function travelEnvelope(m,a,b,tolerance=1e-3){
+export function travelEnvelope(m,a,b,tolerance=1e-3,piston=null){
  checkedMechanism(m);if(![a,b].every(i=>Number.isInteger(i)&&m.nodes[i])||!Number.isFinite(tolerance)||tolerance<=0)throw Error('Valid attachments and positive travel tolerance required');
  const speeds=[];let speed=0;
  m.nodes.forEach((n,i)=>{if(n.parent===null)speeds[i]={angular:0,linear:0};else{const p=speeds[n.parent],angular=p.angular+Math.abs(n.angles[1]-n.angles[0]);speeds[i]={angular,linear:p.linear+n.length*angular};}});
- speed=speeds[a].linear+speeds[b].linear;if(!Number.isFinite(speed))throw Error('Authored motion exceeds numeric travel range');
- const distance=t=>{const f=frames(m,t),p=f[a].point,q=f[b].point;return Math.hypot(q[0]-p[0],q[1]-p[1]);};
+ const entry=piston??m.pistons.find(p=>p.a===a&&p.b===b),mountSpeed=(id,offset)=>!offset?speeds[id].linear:m.nodes[id].parent===null?0:speeds[m.nodes[id].parent].linear+Math.hypot(...offset)*speeds[id].angular;
+ speed=mountSpeed(a,entry?.aOffset)+mountSpeed(b,entry?.bOffset);if(!Number.isFinite(speed))throw Error('Authored motion exceeds numeric travel range');
+ const distance=t=>{const f=frames(m,t),p=pistonMountPoint(m,f,a,entry?.aOffset),q=pistonMountPoint(m,f,b,entry?.bOffset);return Math.hypot(q[0]-p[0],q[1]-p[1]);};
  let lo=Infinity,hi=0;const leaves=[],pending=[[0,1]];
  while(pending.length){const [l,r]=pending.pop(),mid=(l+r)/2,d=distance(mid),error=speed*(r-l)/2;lo=Math.min(lo,d);hi=Math.max(hi,d);
   if(error<=tolerance || (d-error>=lo-tolerance&&d+error<=hi+tolerance))leaves.push([Math.max(0,d-error),d+error]);
@@ -40,9 +41,9 @@ export function travelEnvelope(m,a,b,tolerance=1e-3){
 
 export function bodyLayout(recipe){
  const used=recipe.nodes.map(()=>new Set()),layers=[];
- recipe.nodes.forEach((n,i)=>{if(n.parent===null){layers[i]=0;used[i].add(0);}else{let slot=0;while(used[n.parent].has(slot))slot++;used[n.parent].add(slot);used[i].add(slot);layers[i]=slot*pitch;}});
+ recipe.nodes.forEach((n,i)=>{if(n.parent===null){layers[i]=0;used[i].add(0);}else{let slot=0;while(used[n.parent].has(slot))slot++;used[n.parent].add(slot);used[i].add(slot);layers[i]=n.layer??slot*pitch;}});
  const pistonZ=layers.reduce((a,b)=>Math.max(a,b),0)+pitch;
- const joints=recipe.nodes.map((n,i)=>{const z=[layers[i],...recipe.nodes.flatMap((c,j)=>c.parent===i?[layers[j]]:[]),...recipe.pistons.flatMap((p,j)=>(p.a===i||p.b===i)?[pistonZ+j*pitch]:[])];return {low:Math.min(...z)-thickness/2,high:Math.max(...z)+thickness/2};});
+ const joints=recipe.nodes.map((n,i)=>{const z=[layers[i],...recipe.nodes.flatMap((c,j)=>c.parent===i?[layers[j]]:[]),...recipe.pistons.flatMap((p,j)=>((p.a===i&&!p.aOffset)||(p.b===i&&!p.bOffset))?[p.z??pistonZ+j*pitch]:[])];return {low:Math.min(...z)-thickness/2,high:Math.max(...z)+thickness/2};});
  return {layers,pistonZ,joints};
 }
 
@@ -53,14 +54,20 @@ export function constructBodies(value){
  recipe.nodes.forEach((n,i)=>{
   if(n.parent===null)add(`anchor:${i}`,'anchor',[.5,.5,.18],g=>box(g,[.5,.5,.18],[0,0,-.16],0x374653),f=>({position:[...f[i].point,0],angle:0}));
   else add(`link:${i}`,'link',[n.length,thickness,eye,holes[n.parent],holes[i]],g=>plate(g,n.length,[holes[n.parent],holes[i]]),f=>({position:[...f[n.parent].point,layers[i]],angle:f[i].angle}));
+  const owner=defs.at(-1);const baseZ=n.parent===null?0:layers[i];
+  for(const [j,p]of recipe.pistons.entries())for(const end of ['a','b'])if(p.hinge&&p[end]===i){const at=p[end+'Offset'],rx=Math.max(0,Math.min(n.length??0,at[0])),z=(p.z??pistonZ+j*pitch)-baseZ;
+   const shape=new T.Shape();shape.moveTo(rx-.09,0);shape.lineTo(at[0],at[1]);shape.lineTo(rx+.09,0);shape.closePath();const geo=new T.ExtrudeGeometry(shape,{depth:.12,bevelEnabled:false});geo.translate(0,0,-.06);const horn=mesh(owner.object,geo,0xc9a875);horn.name='Hinge horn';horn.userData.surfaceDrive=true;
+   const pin=cylinder(owner.object,.055,Math.abs(z)+.18,[...at,z/2],0xc9a875);pin.name='Actuator mount pin';pin.userData.surfaceDrive=true;
+  }
+  if(recipe.pistons.some(p=>p.hinge&&(p.a===i||p.b===i)))owner.geometryKey=JSON.stringify([owner.geometryKey,recipe.pistons.filter(p=>p.hinge&&(p.a===i||p.b===i))]);
   const {low,high}=joints[i];
   add(`pin:${i}`,'pin',[low,high,holes[i]],g=>{cylinder(g,holes[i]*.94,high-low,[0,0,(high+low)/2],0xc9a875);for(const z of [low-.025,high+.025])cylinder(g,.105,.05,[0,0,z],0xc9a875);},f=>({position:[...f[i].point,0],angle:f[i].angle}));
  });
  const travels=recipe.pistons.map((p,j)=>{
-  const range=travelEnvelope(recipe,p.a,p.b),barrel=Math.max(.04,range.min*.85),rod=Math.max(.04,range.max-barrel+.08),z=pistonZ+j*pitch;
-  const angle=f=>Math.atan2(f[p.b].point[1]-f[p.a].point[1],f[p.b].point[0]-f[p.a].point[0]);
-  add(`piston:${j}:barrel`,'barrel',[barrel,holes[p.a]],g=>{const m=cylinder(g,.11,barrel,[barrel/2,0,0],0x374653,'x',.049);m.userData.baseColor=0x374653;cylinder(g,.13,thickness,[0,0,0],0xc9a875,'z',holes[p.a]);},f=>({position:[...f[p.a].point,z],angle:angle(f)}));
-  add(`piston:${j}:rod`,'rod',[rod,holes[p.b]],g=>{const m=cylinder(g,.045,rod,[-rod/2,0,0],0xcdd7de,'x');m.userData.baseColor=0xcdd7de;cylinder(g,.13,thickness,[0,0,0],0xc9a875,'z',holes[p.b]);},f=>({position:[...f[p.b].point,z],angle:angle(f)}));
+  const range=travelEnvelope(recipe,p.a,p.b,1e-3,p),barrel=Math.max(.04,range.min*.85),rod=Math.max(.04,range.max-barrel+.08),z=p.z??pistonZ+j*pitch;
+  const a=f=>pistonMountPoint(recipe,f,p.a,p.aOffset),b=f=>pistonMountPoint(recipe,f,p.b,p.bOffset),angle=f=>Math.atan2(b(f)[1]-a(f)[1],b(f)[0]-a(f)[0]);
+  add(`piston:${j}:barrel`,'barrel',[barrel,holes[p.a]],g=>{const m=cylinder(g,.11,barrel,[barrel/2,0,0],0x374653,'x',.049);m.userData.baseColor=0x374653;cylinder(g,.13,thickness,[0,0,0],0xc9a875,'z',holes[p.a]);},f=>({position:[...a(f),z],angle:angle(f)}));
+  add(`piston:${j}:rod`,'rod',[rod,holes[p.b]],g=>{const m=cylinder(g,.045,rod,[-rod/2,0,0],0xcdd7de,'x');m.userData.baseColor=0xcdd7de;cylinder(g,.13,thickness,[0,0,0],0xc9a875,'z',holes[p.b]);},f=>({position:[...b(f),z],angle:angle(f)}));
   return {...p,...range,barrel,rod};
  });
  for(const d of defs){const m=/^piston:(\d+):/.exec(d.id);if(m)d.object.traverse(o=>{if(o.isMesh)o.userData.piston={kind:'pistons',index:+m[1]};});}

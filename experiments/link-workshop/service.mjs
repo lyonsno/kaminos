@@ -19,7 +19,7 @@ export function installMechanisms({host,addRecord,onFrame,onError}){
   for(const runtime of runtimes.values())runtime.tick();
   for(const root of roots)if(!runtimes.has(root)&&!pending.has(root))void ensure(root).catch(onError);
  });
- return {ensure,async add(recipe=emptyMechanism()){
-  const root=mechanismObject(checkedMechanism(recipe));const id=await addRecord(root,{type:'pbr',source:MECHANISM_SOURCE,mechanism:recipe,label:'Mechanism',fileName:'Mechanism'});const runtime=await ensure(root);host.scene.select(id);return runtime;
+ return {ensure,async add(recipe=emptyMechanism(),{geometry}={}){
+  const root=mechanismObject(checkedMechanism(recipe),geometry);const id=await addRecord(root,{type:'pbr',source:MECHANISM_SOURCE,mechanism:recipe,...(geometry?{geometry}:{}),label:'Mechanism',fileName:'Mechanism'});const runtime=await ensure(root);host.scene.select(id);return runtime;
  },read:()=>[...runtimes.values()].map(r=>r.read()),async invoke(id,name,arg){const entry=host.scene.objects().find(e=>e.id===id&&e.object.userData.linkMechanism);if(!entry)throw Error('Choose a mechanism');const runtime=await ensure(entry.object);if(typeof runtime.operations[name]!=='function')throw Error('Unknown mechanism operation');return runtime.operations[name](arg);}};
 }

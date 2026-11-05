@@ -9,6 +9,8 @@ export function checkedMechanism(m){
   else if(!Number.isInteger(n.parent)||n.parent<0||n.parent>=i)throw Error('Joint parent must precede child');
   else if(!Number.isFinite(n.length)||n.length<=1e-6||!point(n.angles))throw Error('Positive link length and finite angles required');
  }
+ for(const n of m.nodes)if(n.layer!==undefined&&!Number.isFinite(n.layer))throw Error('Finite body layer required');
+ for(const p of m.pistons){for(const k of ['aOffset','bOffset'])if(p[k]!==undefined&&!point(p[k]))throw Error('Finite body-local piston offset required');if(p.z!==undefined&&!Number.isFinite(p.z))throw Error('Finite piston layer required');}
  const pairs=new Set();for(const p of m.pistons){if(![p.a,p.b].every(i=>Number.isInteger(i)&&i>=0&&i<m.nodes.length)||p.a===p.b)throw Error('Piston needs distinct existing joints');const key=[p.a,p.b].sort((a,b)=>a-b).join(':');if(pairs.has(key))throw Error('Piston already connected');pairs.add(key);}
  if(m.phase!==undefined&&!Number.isFinite(m.phase))throw Error('Finite cycle phase required');
  const mounts=new Map();for(const mount of m.mounts??[]){
@@ -32,6 +34,7 @@ export function frames(m,t=0){
  if(!Number.isFinite(t)||t<0||t>1)throw Error('Pose fraction must be between zero and one');
  const out=[];for(const n of m.nodes){if(n.parent===null)out.push({point:[...n.point],angle:0});else{const p=out[n.parent],angle=p.angle+n.angles[0]+(n.angles[1]-n.angles[0])*t;out.push({angle,point:[p.point[0]+Math.cos(angle)*n.length,p.point[1]+Math.sin(angle)*n.length]});}}return out;
 }
+export function pistonMountPoint(m,f,id,offset){if(!offset)return f[id].point;const n=m.nodes[id],origin=n.parent===null?f[id].point:f[n.parent].point,angle=n.parent===null?0:f[id].angle;return [origin[0]+Math.cos(angle)*offset[0]-Math.sin(angle)*offset[1],origin[1]+Math.sin(angle)*offset[0]+Math.cos(angle)*offset[1]];}
 export const evaluate=(m,t=0)=>frames(m,t).map(f=>f.point);
 export function appendJoint(value,parent,p){
  const m=checkedMechanism(value);if(!point(p))throw Error('Finite construction point required');
@@ -54,7 +57,7 @@ export function removeBranch(value,id){
  const removed=new Set([id]);m.nodes.forEach((n,i)=>{if(removed.has(n.parent))removed.add(i);});
  const ids=new Map();m.nodes.forEach((n,i)=>{if(!removed.has(i))ids.set(i,ids.size);});
  m.nodes=m.nodes.filter((_,i)=>!removed.has(i)).map(n=>({...n,parent:n.parent===null?null:ids.get(n.parent)}));
- m.pistons=m.pistons.filter(p=>!removed.has(p.a)&&!removed.has(p.b)).map(p=>({a:ids.get(p.a),b:ids.get(p.b)}));
+ m.pistons=m.pistons.filter(p=>!removed.has(p.a)&&!removed.has(p.b)).map(p=>({...p,a:ids.get(p.a),b:ids.get(p.b)}));
  if(m.mounts)m.mounts=m.mounts.filter(v=>!removed.has(v.owner.joint)).map(v=>({...v,owner:v.owner.joint===undefined?v.owner:{joint:ids.get(v.owner.joint)}}));
  const mounts=new Set((m.mounts??[]).map(v=>v.id));
  if(m.mountPistons)m.mountPistons=m.mountPistons.filter(p=>mounts.has(p.a)&&mounts.has(p.b));
