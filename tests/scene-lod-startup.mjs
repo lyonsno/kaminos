@@ -1,0 +1,8 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import {lodPreparationContext,captureLodPreparation,cachedLodPreparation} from '../scene-lod-startup.mjs';
+const input={camera:{position:[1,2,3]},viewport:[1000,900],settings:{faceBudget:350000},objects:[{type:'glb',id:'x',source:'hero-a',transform:{scale:[1,1,1]}}]};
+const key=lodPreparationContext(input),sha='a'.repeat(64),hint=captureLodPreparation(key,{enabled:true,objects:[{id:'x',targetTier:sha}]});assert.equal(cachedLodPreparation(hint,key).get('x'),sha);
+for(const patch of [{viewport:[2000,1800]},{camera:{position:[4,5,6]}},{settings:{faceBudget:100000}},{objects:[{...input.objects[0],source:'hero-b'}]}])assert.equal(cachedLodPreparation(hint,lodPreparationContext({...input,...patch})).size,0);
+assert.equal(cachedLodPreparation({...hint,extra:'compatible'},key).size,1);assert.equal(cachedLodPreparation({...hint,levels:[{id:'x',sha:'bad'}]},key).size,0);assert.equal(cachedLodPreparation(null,key).size,0);
+console.log('Saved LOD preparation is portable, additive, and invalidated by view, budget or asset changes');

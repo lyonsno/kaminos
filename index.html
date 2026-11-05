@@ -3015,6 +3015,8 @@ import {ASH_SOURCE_TYPE,checkedAshSource,createAshSourceObject,sourceInField} fr
 import {installAshSourceInspector} from './ash/source-controls.mjs';
 import {installAshInspector,askAshSetup} from './ash/scene-controls.mjs';
 import {createSceneLifecycle} from './scene-lifecycle.mjs';
+import {createPreparedAssetPool,disposePreparedAsset,releasePreparedRoot,prepareSceneAssetBatch} from './scene-asset-preparation.mjs';
+import {lodPreparationContext,captureLodPreparation,cachedLodPreparation} from './scene-lod-startup.mjs';
 import { createSceneObjectPublicationGuard, publishSceneObjectIfCurrent } from './scene-object-publication.mjs';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig, emitterCompilerControls } from './volume-core.js';
 import { pressureResolutionPlan } from './volume-pressure-resolution.mjs';
@@ -3419,7 +3421,7 @@ import {configureAssetTextures} from './asset-texture-support.mjs';
 import {loadBrazierRoom} from './brazier-room.mjs';
 import { trellisSurfelsGLTFPlugin, configureSurfelRendering } from './trellis-surfels.mjs';
 import { createGiProxyRegistry } from './scene-gi-proxies.mjs';
-import { createSceneBeautyLodController, allocateSceneBeautyLods, allocateShadowCasterLods, screenPixelError, selectFootprintTier } from './scene-lod-budget.mjs';
+import { seedInitialBeautyLevels, releaseInitialBeautyLevels, createSceneBeautyLodController, allocateSceneBeautyLods, allocateShadowCasterLods, screenPixelError, selectFootprintTier } from './scene-lod-budget.mjs';
 import { giProxySettingFor, checkedGiProxySetting, canHaveGiProxy, GI_PROXY_FACE_TIERS, giProxySettingFromControls } from './scene-gi-proxy-settings.mjs';
 // Every GLB this page loads understands TRELLIS surfel assets (trellis-surfels.mjs); other GLBs are unaffected.
 class GLTFLoader extends ThreeGLTFLoader { constructor(manager) { super(manager); this.register(trellisSurfelsGLTFPlugin(THREE)); configureAssetTextures(this,renderer,()=>new KTX2Loader(manager)); } }
@@ -4152,14 +4154,31 @@ const sceneRecords = createSceneRecordOperations({
     async pbr(record,{activate}){const files=await loadDemoFiles(record.source);if(!files)throw Error(`Scene object "${record.fileName||record.id}" demo source "${record.source}" is not readable`);return handleFiles(files,{clear:false,activate,metadata:record});},
     image:(record,{activate})=>showImagePlane(record.source,{clear:false,activate,metadata:record}),
     splat:(record,{activate,loadRequestId})=>greenroomImportSplat(record.source,record.fileName||'splat.ply',{title:record.label||record.fileName||'Splat',raw_name:record.fileName||record.source},{clear:false,activate,metadata:record,isCurrent:loadRequestId===null?undefined:()=>sceneLoadRequests.isCurrent(loadRequestId)}),
-    async glb(record,{activate}){const object=await showGLB(record.source,{clear:false,activate,normalize:false,metadata:record});const leveling=normalizeArrivalLeveling(record.arrivalLeveling);if(leveling)object.userData.kaminosLeveling=leveling;return object;},
+    async glb(record,{activate,loadRequestId,preparedAsset}){const object=await showGLB(record.source,{clear:false,activate,normalize:false,metadata:record,preparedAsset,isCurrent:loadRequestId==null?undefined:()=>sceneLoadRequests.isCurrent(loadRequestId)});const leveling=normalizeArrivalLeveling(record.arrivalLeveling);if(leveling)object.userData.kaminosLeveling=leveling;return object;},
   },
 });
 
 let sceneNavigation = null;
 // GI proxy handles (scene-gi-proxies.mjs): a stored low tier of each TRELLIS object's hero, loaded off the frame
 // loop and never in the scene. The GI renderer reads them via window.kaminosGiProxies; pass policy is its own.
-const sceneGiProxies = createGiProxyRegistry({ THREE, parseGlb: async bytes => (await new GLTFLoader().parseAsync(bytes, '')).scene });
+const fullSceneAssetPool=createPreparedAssetPool({load:source=>new GLTFLoader().loadAsync(source)});
+const sceneLodAssetPool=createPreparedAssetPool();
+async function loadPreparedLod(level){
+  const sha=level.sha256??level.sha;
+  if(typeof sha!=='string'||!/^([a-f0-9]{64})$/.test(sha))throw Error('LOD source requires its content identity');
+  return sceneLodAssetPool.acquire(sha,async()=>{
+    const response=await fetch(level.source??('/api/read?root=generated-meshes&path='+sha+'.glb'));
+    if(!response.ok)throw Error('LOD source HTTP '+response.status);
+    const bytes=await response.arrayBuffer();
+    const actual=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),byte=>byte.toString(16).padStart(2,'0')).join('');
+    if(actual!==sha)throw Error('LOD content does not match its identity');
+    return (await new GLTFLoader().parseAsync(bytes,'')).scene;
+  });
+}
+const sceneGiProxies = createGiProxyRegistry({THREE,loadLevel:loadPreparedLod,parseGlb:async bytes=>(await new GLTFLoader().parseAsync(bytes,'')).scene});
+let sceneAssetPreparationActive=false,sceneAssetPreparationOwner=null;
+let sceneArrivalState={phase:'idle',coarseObjects:0,expectedCoarseObjects:0};
+window.kaminosSceneArrivalState=()=>({...sceneArrivalState,sourcePreparation:fullSceneAssetPool.state(),lodPreparation:sceneLodAssetPool.state()});
 let sceneBeautyLods = null;
 window.kaminosSceneLodBudget = {
   read: () => sceneBeautyLods?.read() ?? null,
@@ -5289,6 +5308,7 @@ function sceneObjectMetadataFor(object) {
 }
 
 function disposeObjectTree(object) {
+  releasePreparedRoot(object);releaseInitialBeautyLevels(object);
   if(object.userData?.disposeAshObject){object.userData.disposeAshObject();for(const [id,ash] of authoredAsh)if(ash.root===object)authoredAsh.delete(id);return;}
   sceneBurning?.forget(object);
   for(const child of [...(object.children||[])])if(child.userData?.kaminosRepetitionCopy)object.remove(child);
@@ -12099,6 +12119,7 @@ async function initScene() {
       scene,
       giProxies: sceneGiProxies,
       surfaceLighting: { registerProxyRoot: root => window.__kaminosSurfaceLighting?.registerProxyRoot?.(root) ?? null },
+      loadLevel:async level=>{const root=await loadPreparedLod(level);prepareArrivedMeshMaterials(root,{maxAnisotropy:16});return root;},
       parseGlb: async bytes => {
         const lodScene = (await new GLTFLoader().parseAsync(bytes, '')).scene;
         if (typeof prepareArrivedMeshMaterials === 'function') prepareArrivedMeshMaterials(lodScene, { maxAnisotropy: 16 });
@@ -12106,6 +12127,7 @@ async function initScene() {
       },
       onUpdate: () => window._kaminosDirty?.(),
     });
+    sceneBeautyLods.setPreparation(sceneAssetPreparationActive);
     sceneExposureControls?.sync();
     let matchedCameraEffective=false;
     if(sceneEmissiveCamera && (sceneGISettings.mode === 'gtao' || sceneGISettings.view === 'scene')) {
@@ -12560,7 +12582,7 @@ function applyEnvMap(envMap, intensity) {
 function createPageSceneLifecycle(){
   return createSceneLifecycle({scene:workingScene,
     roots:{detach:entry=>scene.remove(entry.object),dispose:disposeObjectTree,mount:setSceneObjectMounted},
-    records:{load:(record,requestId)=>addSceneObjectFromSource(record,requestId,{activate:false}),restore:restoreLoadedSceneRecord},
+    records:{prepare:prepareSavedSceneAssets,releasePrepared:batch=>batch?.dispose(),load:(record,requestId,batch)=>addSceneObjectFromSource(record,requestId,{activate:false,preparedAsset:batch?.take(record.id)}),restore:restoreLoadedSceneRecord},
     groups:{restore:setSceneGroupsFromRecords},
     selection:{set:setSceneSelection,object:setActiveSceneObject,group:setActiveSceneGroup},
     context:{retire:retireSceneFlame,beforeClear:clearSceneEditingState,clearDomains:clearSceneDomains,clearTransient:clearSceneTransient,cleared:projectClearedScene,
@@ -13002,27 +13024,15 @@ function ensureSceneLoadingStandInGroup() {
   return sceneLoadingStandInGroup;
 }
 
-async function fetchLowLodStandInBytes(sha) {
-  if (!sha || typeof fetch !== 'function') return null;
-  if (lowLodStandInBytesCache.has(sha)) return lowLodStandInBytesCache.get(sha);
-  const promise = (async () => {
-    try {
-      const metaRes = await fetch(`/api/mesh-lods?source=${encodeURIComponent(sha)}&faces=500`);
-      if (!metaRes.ok) return null;
-      const meta = await metaRes.json();
-      const sourceUrl = meta?.choice?.source;
-      if (!sourceUrl) return null;
-      const glbRes = await fetch(sourceUrl);
-      if (!glbRes.ok) return null;
-      return await glbRes.arrayBuffer();
-    } catch {
-      return null;
-    }
-  })();
-  lowLodStandInBytesCache.set(sha, promise);
-  const bytes = await promise;
-  if (!bytes) lowLodStandInBytesCache.delete(sha);
-  return bytes;
+async function loadSceneLowLodStandIn(sha){
+  if(!sha||typeof fetch!=='function')return null;
+  let pending=lowLodStandInBytesCache.get(sha);
+  if(!pending){
+    pending=fetch('/api/mesh-lods?source='+encodeURIComponent(sha)+'&faces=500').then(async response=>{if(!response.ok)throw Error('LOD metadata HTTP '+response.status);return response.json();});
+    lowLodStandInBytesCache.set(sha,pending);
+    pending.finally(()=>{if(lowLodStandInBytesCache.get(sha)===pending)lowLodStandInBytesCache.delete(sha);}).catch(()=>{});
+  }
+  try{const meta=await pending;if(!meta.choice)return null;return {root:await loadPreparedLod(meta.choice),level:meta.choice,levels:meta.levels??[]};}catch{return null;}
 }
 
 function applySceneCameraView(cameraData) {
@@ -13079,6 +13089,7 @@ function stageSceneLowLodStandIns(records, loadRequestId = null) {
     if (!nextIds.has(id)) removeSceneLowLodStandIn(id, { markSettled: false });
   }
   activeSceneStandInRequestId = loadRequestId;
+  const preparations=[];
   for (const record of records) {
     if (!record?.id || settledSceneStandInIds.has(record.id)) continue;
     const sha = typeof resolveEarlyLowLodMeshSha === 'function' ? resolveEarlyLowLodMeshSha(record) : null;
@@ -13086,28 +13097,28 @@ function stageSceneLowLodStandIns(records, loadRequestId = null) {
     const existing = activeSceneStandIns.get(record.id);
     if (existing && (existing.loadRequestId === null || existing.loadRequestId === loadRequestId) && existing.sha === sha) {
       existing.loadRequestId = loadRequestId;
+      preparations.push(existing.promise);
       continue;
     }
     if (existing) removeSceneLowLodStandIn(record.id, { markSettled: false });
     const placeholder = { id: record.id, root: null, sha, loadRequestId };
     activeSceneStandIns.set(record.id, placeholder);
-    void (async () => {
-      const bytes = await fetchLowLodStandInBytes(sha);
-      if (!bytes || activeSceneStandIns.get(record.id) !== placeholder) return;
+    placeholder.promise=(async()=>{
+      const prepared=await loadSceneLowLodStandIn(sha);
+      if(!prepared)return;
+      const proxyRoot=prepared.root;
+      if(activeSceneStandIns.get(record.id)!==placeholder){disposeObjectTree(proxyRoot);return;}
+      placeholder.level=prepared.level;placeholder.levels=prepared.levels;
       if (placeholder.loadRequestId !== null && typeof sceneLoadRequests !== 'undefined' && !sceneLoadRequests.isCurrent(placeholder.loadRequestId)) {
-        activeSceneStandIns.delete(record.id);
+        activeSceneStandIns.delete(record.id);disposeObjectTree(proxyRoot);
         return;
       }
       if (settledSceneStandInIds.has(record.id)) {
-        activeSceneStandIns.delete(record.id);
+        activeSceneStandIns.delete(record.id);disposeObjectTree(proxyRoot);
         return;
       }
       try {
-        const loader = new GLTFLoader();
-        if (typeof loader.parseAsync !== 'function') return;
-        const gltf = await loader.parseAsync(bytes.slice(0), '');
-        const proxyRoot = gltf?.scene;
-        if (!proxyRoot) return;
+
         if (activeSceneStandIns.get(record.id) !== placeholder || settledSceneStandInIds.has(record.id)) {
           disposeObjectTree(proxyRoot);
           activeSceneStandIns.delete(record.id);
@@ -13139,10 +13150,47 @@ function stageSceneLowLodStandIns(records, loadRequestId = null) {
         group.add(proxyRoot);
         window._kaminosDirty?.();
       } catch {
+        proxyRoot.removeFromParent();disposeObjectTree(proxyRoot);placeholder.root=null;
         if (activeSceneStandIns.get(record.id) === placeholder) activeSceneStandIns.delete(record.id);
       }
     })();
+    preparations.push(placeholder.promise);
   }
+  return Promise.all(preparations);
+}
+
+function sceneLodContext(records){return lodPreparationContext({camera:readAuthoredCameraView(),viewport:[renderer.domElement.width,renderer.domElement.height],settings:sceneBeautyLods?.read()??null,objects:records});}
+async function prepareSavedSceneAssets(records,requestId,setup){
+  const current=()=>requestId==null||sceneLoadRequests.isCurrent(requestId);
+  const owner={requestId};sceneAssetPreparationOwner=owner;sceneAssetPreparationActive=false;
+  sceneArrivalState={phase:'coarse',expectedCoarseObjects:records.filter(record=>resolveEarlyLowLodMeshSha(record)).length,coarseObjects:0};
+  await stageSceneLowLodStandIns(records,requestId);
+  if(!current())throw Error('Scene load superseded');
+  sceneArrivalState.coarseObjects=[...activeSceneStandIns.values()].filter(row=>row.root).length;
+  // Let the complete small scene paint before source decoding competes for the main thread.
+  await sceneLightingPreparation?.whenIdle();window._kaminosDirty?.();await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);
+  if(!current())throw Error('Scene load superseded');
+  window.dispatchEvent(new CustomEvent('kaminos-scene-coarse-ready',{detail:{...sceneArrivalState}}));
+  sceneAssetPreparationActive=true;sceneArrivalState.phase='sources';
+  const hints=cachedLodPreparation(setup?.startupLodHint,sceneLodContext(records));
+  sceneArrivalState.cachedHints=hints.size;
+  const seeds=new Map();
+  const seedWork=Promise.allSettled(records.filter(row=>row.type==='glb').map(async record=>{
+    const preview=activeSceneStandIns.get(record.id);if(!preview?.level)return;
+    const levels=[preview.level],warm=(preview.levels??[]).find(level=>level.sha256===hints.get(record.id)&&!level.mergeFactor);
+    if(warm&&warm.sha256!==preview.level.sha256)levels.push(warm);
+    const rows=[];seeds.set(record.id,rows);
+    for(const level of levels){let root;try{root=await loadPreparedLod(level);prepareArrivedMeshMaterials(root,{maxAnisotropy:16});rows.push({sha:level.sha256,faces:level.faces,root});}catch{if(root)disposePreparedAsset(root);}}
+  }));
+  const outcomes=await Promise.allSettled([prepareSceneAssetBatch(records,{acquire:source=>fullSceneAssetPool.acquire(source),isCurrent:current}),seedWork]);
+  const batch=outcomes[0].status==='fulfilled'?outcomes[0].value:null;
+  const releaseSeeds=()=>{for(const rows of seeds.values())for(const row of rows)disposePreparedAsset(row.root);seeds.clear();};
+  if(!batch||!current()){
+    batch?.dispose();releaseSeeds();if(sceneAssetPreparationOwner===owner){sceneAssetPreparationActive=false;sceneArrivalState.phase=current()?'failed':'superseded';}
+    throw outcomes[0].status==='rejected'?outcomes[0].reason:Error('Scene load superseded');
+  }
+  sceneArrivalState.phase='publishing';
+  return {take(id){const asset=batch.take(id),levels=seeds.get(id);if(asset&&levels){seedInitialBeautyLevels(asset.scene,levels);seeds.delete(id);}return asset;},dispose(){batch.dispose();releaseSeeds();if(sceneAssetPreparationOwner===owner){sceneAssetPreparationActive=false;sceneArrivalState.phase='published';window._kaminosDirty?.();}}};
 }
 
 function prestageAdmittedSceneCameraAndProxies(admittedScene) {
@@ -13173,14 +13221,12 @@ function mountSingleAssetLowLodStandIn({ url, isBlob, arrival, assetMetadata, is
   let framedCameraPos = null;
   let framedTarget = null;
   void (async () => {
-    const bytes = await fetchLowLodStandInBytes(sha);
-    if (!bytes || released || (typeof isCurrent === 'function' && !isCurrent())) return;
+    const prepared=await loadSceneLowLodStandIn(sha);
+    if(!prepared)return;
+    const proxyRoot=prepared.root;
+    if(released||(typeof isCurrent==='function'&&!isCurrent())){disposeObjectTree(proxyRoot);return;}
     try {
-      const loader = new GLTFLoader();
-      if (typeof loader.parseAsync !== 'function') return;
-      const gltf = await loader.parseAsync(bytes.slice(0), '');
-      const proxyRoot = gltf?.scene;
-      if (!proxyRoot) return;
+
       if (released || (typeof isCurrent === 'function' && !isCurrent())) {
         disposeObjectTree(proxyRoot);
         return;
@@ -13227,7 +13273,7 @@ function mountSingleAssetLowLodStandIn({ url, isBlob, arrival, assetMetadata, is
         }
       }
       window._kaminosDirty?.();
-    } catch {}
+    } catch {proxyRoot.removeFromParent();disposeObjectTree(proxyRoot);standInRoot=null;}
   })();
   return () => {
     released = true;
@@ -13299,7 +13345,7 @@ async function showGLB(file, options = {}) {
       })
     : null;
 	return new Promise((resolve, reject) => {
-	  loader.load(url, gltf => {
+    const onLoad=gltf=>{
       heroSettled = true;
       const earlyStandIn = releaseEarlyStandIn?.() ?? null;
 	    if (isBlob) URL.revokeObjectURL(url);
@@ -13388,7 +13434,8 @@ async function showGLB(file, options = {}) {
         fileName: assetFileName,
         arrival,
       } : model);
-    }, xhr => {
+    };
+    const onProgress=xhr=>{
       if (typeof loadingTelemetry !== 'undefined' && xhr && (Number.isFinite(xhr.loaded) || Number.isFinite(xhr.total))) {
         loadingTelemetry.progress('asset', {
           label: telemetryLabel,
@@ -13397,14 +13444,17 @@ async function showGLB(file, options = {}) {
           totalBytes: xhr.total,
         });
       }
-    }, (err) => {
+    };
+    const onError=err=>{
       heroSettled = true;
       releaseEarlyStandIn?.();
       if (isBlob) URL.revokeObjectURL(url);
       if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.fail('asset', err);
       setInfo('Failed to load GLB: ' + (err.message || 'unknown error'));
       reject(err);
-    });
+    };
+    if(options.preparedAsset)Promise.resolve(options.preparedAsset).then(onLoad).catch(onError);
+    else loader.load(url,onLoad,onProgress,onError);
   });
 }
 
@@ -26361,8 +26411,8 @@ function readNumberControl(id, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-async function addSceneObjectFromSource(record, loadRequestId = null, {activate = true} = {}) {
-  return sceneRecords.load(record,{loadRequestId,activate});
+async function addSceneObjectFromSource(record, loadRequestId = null, {activate = true,preparedAsset} = {}) {
+  return sceneRecords.load(record,{loadRequestId,activate,preparedAsset});
 }
 
 function assertSceneObjectsReloadable(records) {
@@ -26379,8 +26429,8 @@ function restoreLoadedSceneRecord(entry,record){
   if (typeof removeSceneLowLodStandIn === 'function') removeSceneLowLodStandIn(record.id);
   if(record.groupId)setSceneObjectGroupId(entry,record.groupId);
 }
-async function loadSceneObjects(records, activeId, groups = [], activeGroupId = null, liquidSetup = null, loadRequestId = null) {
-  return sceneLifecycle.replace(records,{activeId,groups,activeGroupId,setup:{water:liquidSetup,flame:{composition:activeSceneComposition,sourcePresent:authoredFlamePresent}},loadRequestId});
+async function loadSceneObjects(records, activeId, groups = [], activeGroupId = null, liquidSetup = null, loadRequestId = null,startupLodHint=null) {
+  return sceneLifecycle.replace(records,{activeId,groups,activeGroupId,setup:{water:liquidSetup,flame:{composition:activeSceneComposition,sourcePresent:authoredFlamePresent},startupLodHint},loadRequestId});
 }
 
 function writeAuthoredCameraView(view){
@@ -26480,6 +26530,7 @@ function buildSceneData(capture = null) {
     backdrop: !!backdropMesh,
     backdropBrightness: backdropMesh ? parseFloat(document.getElementById('backdrop-brightness').value) : undefined,
   });
+  data.lodPreparation=captureLodPreparation(sceneLodContext(objects),sceneBeautyLods?.state());
   data.label = document.getElementById('composition-label').value.trim() || 'Untitled composition';
   return data;
 }
@@ -28195,7 +28246,7 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
   setFlameDomainTranslation(restorePlan.flameDomainTranslation || [0, 0, 0],restorePlan.flameDomainScale);
   flameDomainFollowSource=restorePlan.flameDomainFollowSource;
   try {
-    const loadStage = await sceneLoadRequests.awaitStage(loadRequestId, loadSceneObjects(objectRecords, restorePlan.activeObjectId, restorePlan.groups, restorePlan.activeGroupId, restorePlan.localLiquid, loadRequestId));
+    const loadStage = await sceneLoadRequests.awaitStage(loadRequestId, loadSceneObjects(objectRecords, restorePlan.activeObjectId, restorePlan.groups, restorePlan.activeGroupId, restorePlan.localLiquid, loadRequestId,data.lodPreparation));
     if (!loadStage.current || !loadStage.value || !sceneLoadRequests.isCurrent(loadRequestId)) return false;
   } catch (e) {
     if (!sceneLoadRequests.isCurrent(loadRequestId)) return false;
