@@ -6864,10 +6864,10 @@ fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
   let centreVelocity = centreVelocityAt(vec3<i32>(gid));
   let advectVelocity = materialTransportVelocity(cell, centreVelocity);
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * dynamicsBacktraceScale());
-  if (MATERIAL_ONLY && fastBypassOn() && u.emissive_physics.x > 0.5) {
+  if (!VELOCITY_ONLY && fastBypassOn() && u.emissive_physics.x > 0.5) {
     let m1 = sampleFluidSlotInflowWith(backCell, 1u, true);
     if (m1.x + m1.y + m1.z + m1.w <= 1e-5) {
-      fluidPredict[base] = vec4<f32>(advectVelocity, u.reactant_combustion_c.z);
+      fluidPredict[base] = vec4<f32>(select(sampleFluidSlotInflowWith(backCell, 0u, true).xyz, advectVelocity, MATERIAL_ONLY), u.reactant_combustion_c.z);
       fluidPredict[base + 1u] = vec4<f32>(0.0);
       fluidPredict[base + 2u] = vec4<f32>(0.0);
       if (!compactAppearanceOn()) { fluidPredict[base + 3u] = vec4<f32>(0.0); }
@@ -6992,7 +6992,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bypassSourceBand = smoothstep(-0.25, -0.06, p.y - u.primitive_source.y) * (1.0 - smoothstep(0.92, 1.32, p.y - u.primitive_source.y));
   let bypassSourceRadial = length(p.xz - u.primitive_source.xz);
   let bypassOutsidePrimitive = u.emissive_physics.x > 0.5 || bypassSourceBand <= 1e-5 || bypassSourceRadial > 3.5 * max(scaledSourceRadius, scaledSmokeSourceRadius);
-  if (MATERIAL_ONLY && fastBypassOn() && bypassOutsidePrimitive && immersedWeight <= 0.0 && immersedTarget <= 0.0 && immersedSlabWeight <= 0.0 && !(cellI.y == 0 && u.inflow_aperture.x > 0.5) && u.scene_controls.x <= 0.5 && u.oracle_activity_controls.x <= 0.5 && !(u.reactant_combustion_d.z > 0.5) && idx != 0u && quenchSrc[idx] == 0u && !(reactantLawOn() && all(textureDimensions(residentGasSource) == vec3<u32>(GRID, GRID_Y, GRID)))) {
+  if (!VELOCITY_ONLY && fastBypassOn() && bypassOutsidePrimitive && immersedWeight <= 0.0 && immersedTarget <= 0.0 && immersedSlabWeight <= 0.0 && !(cellI.y == 0 && u.inflow_aperture.x > 0.5) && u.scene_controls.x <= 0.5 && u.oracle_activity_controls.x <= 0.5 && !(u.reactant_combustion_d.z > 0.5) && idx != 0u && quenchSrc[idx] == 0u && !(reactantLawOn() && all(textureDimensions(residentGasSource) == vec3<u32>(GRID, GRID_Y, GRID)))) {
     let bI = vec3<i32>(clampCell(vec3<i32>(floor(backCell))));
     let c1 = readSlot(cellI, 1u);
     let c2 = readSlot(cellI, 2u);
@@ -7008,7 +7008,23 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       + nyp.x + nyp.y + nyp.z + nym.x + nym.y + nym.z
       + nzp.x + nzp.y + nzp.z + nzm.x + nzm.y + nzm.z;
     if (neighborMass <= 1e-5) {
-      fluidDst[base] = vec4<f32>(prev.xyz, 0.0);
+      var bypassVel = prev.xyz;
+      if (!MATERIAL_ONLY) {
+        let forwardCell = sceneClipCharacteristic(cell, cell + advectVelocity * backtraceScale);
+        let adv0 = select(sampleFluidSlotInflow(backCell, 0u), macCormackSlot(cellI, idx, backCell, forwardCell, 0u), macCormack);
+        bypassVel = adv0.xyz * transportVelocityDamping();
+        if (faceForcesOn()) {
+          forceDeltaStore(cellI, vec3<f32>(0.0));
+        }
+        let expandedTopY = -1.0 + 2.0 * f32(GRID_Y) / f32(GRID);
+        let verticalWall = select(max(-p.y, p.y - expandedTopY + 1.0), -p.y, reactantLawOn());
+        let materialWall = max(max(abs(p.x), verticalWall), abs(p.z));
+        let materialWallFade = select(1.0 - smoothstep(0.86, 1.0, materialWall), 1.0, joinedBoundary() || openWorldBoundary());
+        bypassVel = bypassVel * stepRate(mix(0.55, 1.0, materialWallFade));
+        bypassVel.y = mix(max(bypassVel.y, -0.015 * calibrationCellGain()), bypassVel.y, select(0.0, 1.0, joinedBoundary() || openWorldBoundary()));
+        bypassVel = select(boundVelocity(bypassVel), bypassVel, faceForcesOn());
+      }
+      fluidDst[base] = vec4<f32>(bypassVel, 0.0);
       fluidDst[base + 1u] = vec4<f32>(0.0);
       fluidDst[base + 2u] = vec4<f32>(0.0);
       if (!compactAppearanceOn()) {
@@ -7293,7 +7309,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   combustionFrontTopology = max(combustionFrontTopology, (columnFrontTopologyBirth));
   let externalInjection = applyExternalEmitterInjection(externalEmitterInfluence(p));
   let confinementMode = u.reserved_source_extension_0.y;
-  let heatExpansion = thermalExpansionForce(cellI, heat, select(u.reserved_source_extension_0.w, 0.048 + curl * 0.019, confinementMode < 0.5)) * calibrationCellGain();
+  let heatExpansion = thermalExpansionForce(cellI, heat, select(u.reserved_source_extension_0.w, 0.048 + curl * 0.019, confinementMode < 0.5));
   let oracleActivityCue = truthOracleActivityCueAtCell(cellI);
   if (!MATERIAL_ONLY) {
   let oracleActivityCurlGain = clamp(u.oracle_activity_controls.y, 0.0, 3.0);

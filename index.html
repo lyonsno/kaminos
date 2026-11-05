@@ -21957,7 +21957,7 @@ function createFlameQuickFields() {
       read:()=>readVolumeControls(),
       calibration:{
         capture:()=>{const patch=captureWorldCalibration(readVolumeControls(),flameDomainScale);const next=window.kaminosFlameAuthoring.read();for(const f of WORLD_CALIBRATION_FIELDS){const d=next.domControls[f.id];d.value=patch[f.key];if('rawValue' in d)d.rawValue=String(d.value);}window.kaminosFlameAuthoring.apply(next,'Capture simulation world scale');},
-        set:(patch,{preview=false}={})=>{const next=window.kaminosFlameAuthoring.read();for(const f of [...WORLD_CALIBRATION_FIELDS,...SIMULATION_LEVER_FIELDS])if(Object.hasOwn(patch,f.key)){const d=next.domControls[f.id];d.value=patch[f.key];if('rawValue' in d)d.rawValue=String(d.value);}if(preview)window.kaminosFlameAuthoring.preview(next);else window.kaminosFlameAuthoring.apply(next,'Tune simulation world scale');},
+        set:(patch,{preview=false}={})=>{const next=window.kaminosFlameAuthoring.read();for(const f of [...WORLD_CALIBRATION_FIELDS,...SIMULATION_LEVER_FIELDS])if(Object.hasOwn(patch,f.key)){const d=next.domControls[f.id];d.value=patch[f.key];if('rawValue' in d)d.rawValue=String(d.value);}if(preview){if(scenePlacementTools.edits.state().active?.id==='@flame-settings')window.kaminosFlameAuthoring.preview(next);}else window.kaminosFlameAuthoring.apply(next,'Tune simulation world scale');},
       },
       validate:c=>volumePrototype.validateGridControls(c),
       bindLiveField:(input,label='Tune pressure iterations')=>installSceneControlHistory({controls:[input],edits:scenePlacementTools.edits,id:'@flame-settings',label,onError:error=>showFlameEditRefused(error)}),
@@ -21965,7 +21965,7 @@ function createFlameQuickFields() {
         const id=GRID_TUNING_FIELDS.find(field=>field[0]===key)?.[1];
         const next=window.kaminosFlameAuthoring.read();const descriptor=next.domControls[id];
         descriptor.value=value;if('rawValue' in descriptor)descriptor.rawValue=String(value);
-        window.kaminosFlameAuthoring.preview(next);
+        if(scenePlacementTools.edits.state().active?.id==='@flame-settings')window.kaminosFlameAuthoring.preview(next);
       },
       apply:patch=>{
         const next=window.kaminosFlameAuthoring.read();

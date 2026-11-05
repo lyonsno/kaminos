@@ -92,17 +92,18 @@ export function predictDemand(nodes,signals,{dims,basePitch,horizon}){
  const result=new Map(nodes.map(n=>[n.key,{...signals.get(n.key)}]));
  const byKey=new Map(nodes.map(n=>[n.key,n]));
  const roots=dims.map(n=>Math.ceil(n/4));
- const box=n=>{const width=4/2**n.level;return {lo:n.c.map(c=>c*width),hi:n.c.map((c,a)=>Math.min((c+1)*width,dims[a]))};};
+ const box=n=>{const width=4/2**n.level;return {lo:n.c.map((c,a)=>Math.min(c*width,dims[a])),hi:n.c.map((c,a)=>Math.min((c+1)*width,dims[a]))};};
  for(const source of nodes.filter(n=>!n.children)){
   const signal=signals.get(source.key);if(!signal||!fields.some(k=>signal[k]>0))continue;
   // Keep the starting support as well as its swept extent. Legacy absolute
   // motion records retain their conservative two-sided interpretation.
-  const b=box(source),halo=1/2**source.level,scale=horizon/basePitch;
+  const b=box(source);if(b.lo.some((v,a)=>v>=b.hi[a]))continue;
+  const halo=1/2**source.level,scale=horizon/basePitch;
   const min=signal.motionMin??(signal.motion??[0,0,0]).map(v=>-Math.abs(v));
   const max=signal.motionMax??(signal.motion??[0,0,0]).map(Math.abs);
   const lo=b.lo.map((v,a)=>v+Math.min(0,min[a])*scale-halo),hi=b.hi.map((v,a)=>v+Math.max(0,max[a])*scale+halo);
   const visit=n=>{
-   const nb=box(n);if(nb.lo.some((v,a)=>v>=hi[a]||nb.hi[a]<=lo[a]))return;
+   const nb=box(n);if(nb.lo.some((v,a)=>v>=nb.hi[a]||v>=hi[a]||nb.hi[a]<=lo[a]))return;
    if(n.children){for(const child of n.children)visit(byKey.get(child));return;}
    // Signals are brick-average densities. A guard intersecting one sliver of
    // an otherwise empty brick must not equal the measured source's priority.
