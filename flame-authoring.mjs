@@ -481,6 +481,7 @@ export function createFlameInspector({ document, host, gridTuning, sharedHost = 
       const source=readSourceRuntime();
       runtimeStatus.textContent=!source||source.requested?.sourceLaw!=='immersed-source'?'Source awaiting simulation step'
         : !source.effective.admitted ? `Supply off · ${source.effective.reason}`
+        : source.effective.fluxEffectivePredicted===null?`Authored supply ${Number(source.effective.fluxNominal??source.effective.fluxRequested).toPrecision(3)} cells³/step · GPU total unmeasured`
         : `Gas supply ${Number(source.effective.fluxEffectivePredicted).toPrecision(3)} cells³/step${source.effective.clipPredicted?.cells?' · rate capped':''}${source.effective.masked?.cells?' · intersects scene geometry':''}`;
     }
     const source=readSource();byId('flame-basin-current').textContent=source?`${source.label || 'Loaded basin'}${source.modified?' · Modified':''}`:'Scene working settings';

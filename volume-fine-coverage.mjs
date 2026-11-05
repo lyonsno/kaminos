@@ -79,10 +79,12 @@ export function chooseFineCoverage(input,options={}) {
  result.status=result.target?'move':result.worldLimited?'world-limited':'holding';
  return result;
 }
-export function sourceCoverageBounds(packed,{dims,frame}) {
+export function sourceCoverageBounds(packed,{dims,frame,puffFactors=null,coverageFractions=null}) {
  const pitch=2*frame.scale/dims[0],out=[];
  for(const source of packed?.sources??[]){const e=source.config?.effective;if(!e||e.admitted===false)continue;
-  const weight=Math.max(0,source.worldSource?(e.fullFlux??e.fluxRequested??0):(e.fluxRequested??0));if(!weight)continue;
+  const puff=puffFactors?.get(source.id)??1;if(!Number.isFinite(puff)||puff<0)throw Error('Source puff factor must be finite and nonnegative');
+  const fraction=source.worldSource?1:(coverageFractions?.get(source.id)??1);if(!Number.isFinite(fraction)||fraction<0||fraction>1)throw Error('Source coverage fraction must be in [0,1]');
+  const weight=puff*fraction*Math.max(0,source.worldSource?(e.fullFlux??e.fluxRequested??0):(e.fluxRequested??0));if(!weight)continue;
   const normal=e.direction??[0,1,0],len=Math.hypot(...normal)||1,c=e.centreCells.map((x,a)=>(2*x/dims[0]-1)*frame.scale+frame.translate[a]);
   const radius=Math.max(0,e.radiusCells??0),half=Math.max(0,e.thickness??1)/2;
   const reach=normal.map(x=>{const n=x/len;return (radius*Math.sqrt(Math.max(0,1-n*n))+half*Math.abs(n)+1.5)*pitch;});

@@ -1,3 +1,4 @@
+import {createGPUInputSlots} from './volume-inlet-perturbation-gpu.mjs';
 // Finite-volume source support. Source parcels are physical volumes, never
 // allocations of simulation space. Refinement changes the recipients only.
 export function depositWorldSources(parcels,{dims,min,pitch},output=new Float32Array(dims.reduce((a,b)=>a*b,1)*8),offset=0){
@@ -83,10 +84,11 @@ fn sourceMomentum(c:vec3<i32>,a:u32,prior:f32)->f32{
 // Live World deposition uploads compact parcels; recipient-cell overlap and
 // accumulation stay on the GPU. The CPU rasterizers above are offline oracles.
 export function createGPUWorldSourceAtlas(device,{dims,min,pitch},label){
- const U=GPUBufferUsage,T=GPUTextureUsage,owned=[];
- const make=(name,size,usage)=>{const b=device.createBuffer({label:name,size,usage});owned.push(b);return b;};
- const parameters=make(label+' parameters',48,U.UNIFORM|U.COPY_DST);
- let descriptors=make(label+' parcels',64,U.STORAGE|U.COPY_DST),texture=null,view=null,key=null,group=null;
+ const U=GPUBufferUsage,T=GPUTextureUsage,owned=new Set();
+ const make=(name,size,usage)=>{const b=device.createBuffer({label:name,size,usage});owned.add(b);return b;};
+ const dummyCounts=make(label+' unused counts',16,U.STORAGE);const inputPools=[];
+ const groups=new WeakMap();let destroyed=false;
+ let descriptors=make(label+' parcels',64,U.STORAGE|U.COPY_DST),texture=null,view=null,key=null;
  const empty=device.createTexture({label:label+' empty',size:[2,1],format:'rgba32float',usage:T.TEXTURE_BINDING}),emptyView=empty.createView();
  const cells=dims.reduce((a,b)=>a*b,1),width=Math.min(device.limits.maxTextureDimension2D,cells*2),height=Math.ceil(cells*2/width);
  if(height>device.limits.maxTextureDimension2D)throw Error('World source atlas exceeds GPU texture limits');
@@ -96,23 +98,27 @@ export function createGPUWorldSourceAtlas(device,{dims,min,pitch},label){
  @group(0) @binding(0) var<uniform> p:Params;
  @group(0) @binding(1) var<storage,read> parcels:array<Parcel>;
  @group(0) @binding(2) var output:texture_storage_2d<rgba32float,write>;
+ @group(0) @binding(3) var<storage,read> actualCount:array<u32>;
  @compute @workgroup_size(4,4,4) fn deposit(@builtin(global_invocation_id) c:vec3<u32>){
   if(any(c>=p.dims.xyz)){return;}let lo=p.originPitch.xyz+vec3<f32>(c)*p.originPitch.w;let hi=lo+p.originPitch.w;
   var a=vec4<f32>(0);var b=vec4<f32>(0);
-  for(var i=0u;i<p.counts.x;i++){let s=parcels[i];let f=max(vec3<f32>(0),min(hi,s.hiFuel.xyz)-max(lo,s.loRate.xyz))/p.originPitch.w;let v=f.x*f.y*f.z;let q=s.loRate.w*v;let r=s.velocityRelax.w*v;a+=vec4<f32>(q,q*s.hiFuel.w,q*s.heat.x,0);b+=vec4<f32>(s.velocityRelax.xyz*r,r);}
+  for(var i=0u;i<select(arrayLength(&parcels),actualCount[0],p.dims.w>0u);i++){let s=parcels[i];let f=max(vec3<f32>(0),min(hi,s.hiFuel.xyz)-max(lo,s.loRate.xyz))/p.originPitch.w;let v=f.x*f.y*f.z;let q=s.loRate.w*v;let r=s.velocityRelax.w*v;a+=vec4<f32>(q,q*s.hiFuel.w,q*s.heat.x,0);b+=vec4<f32>(s.velocityRelax.xyz*r,r);}
   let index=2u*(c.x+p.dims.x*(c.y+p.dims.y*c.z));let d=textureDimensions(output);textureStore(output,vec2<i32>(i32(index%d.x),i32(index/d.x)),a);textureStore(output,vec2<i32>(i32((index+1u)%d.x),i32((index+1u)/d.x)),b);
  }`});
  const pipeline=device.createComputePipeline({label:label+' GPU deposition',layout:'auto',compute:{module,entryPoint:'deposit'}});
+ const params=new ArrayBuffer(48);new Uint32Array(params).set([...dims,0]);new Float32Array(params).set([...min,pitch],4);
+ function ensureTarget(){if(!texture){texture=device.createTexture({label,size:[width,height],format:'rgba32float',usage:T.TEXTURE_BINDING|T.STORAGE_BINDING});view=texture.createView();}}
  return {encode(encoder,parcels){
-  const next=JSON.stringify(parcels);if(next===key)return parcels.length?view:emptyView;
+  if(destroyed)throw Error('World source atlas disposed');const next=JSON.stringify(parcels);if(next===key)return parcels.length?view:emptyView;
   if(!parcels.length){key=next;return emptyView;}
   const bytes=parcels.length*64;if(bytes>device.limits.maxStorageBufferBindingSize||bytes>device.limits.maxBufferSize)throw Error('World source descriptors exceed GPU storage limits');
   const data=new Float32Array(parcels.length*16);for(const [i,p]of parcels.entries()){const values=[...p.lo,p.rate,...p.hi,p.fuel,...p.velocity,p.relax,p.heat,0,0,0];if(values.some(v=>!Number.isFinite(v)))throw Error('Invalid World source parcel');data.set(values,i*16);}
-  if(descriptors.size!==bytes){const old=descriptors;descriptors=make(label+' parcels',bytes,U.STORAGE|U.COPY_DST);queueMicrotask(()=>device.queue.onSubmittedWorkDone().then(()=>old.destroy()));group=null;}
-  if(!texture){texture=device.createTexture({label,size:[width,height],format:'rgba32float',usage:T.TEXTURE_BINDING|T.STORAGE_BINDING});view=texture.createView();}
-  const params=new ArrayBuffer(48);new Uint32Array(params).set([...dims,0]);new Float32Array(params).set([...min,pitch],4);new Uint32Array(params).set([parcels.length,0,0,0],8);
-  device.queue.writeBuffer(parameters,0,params);device.queue.writeBuffer(descriptors,0,data);
-  group??=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:parameters}},{binding:1,resource:{buffer:descriptors}},{binding:2,resource:view}]});
-  const pass=encoder.beginComputePass({label:label+' GPU deposition'});pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(...dims.map(n=>Math.ceil(n/4)));pass.end();key=next;return view;
- },destroy(){for(const b of owned)b.destroy();texture?.destroy();empty.destroy();}};
+  if(descriptors.size!==bytes){const old=descriptors;descriptors=make(label+' parcels',bytes,U.STORAGE|U.COPY_DST);queueMicrotask(()=>{const done=()=>{if(owned.delete(old))old.destroy();};device.queue.onSubmittedWorkDone().then(done,done);});}
+  device.queue.writeBuffer(descriptors,0,data);const result=this.encodeResident(encoder,{buffer:descriptors,count:parcels.length});key=next;return result;
+ },encodeResident(encoder,{buffer,count,maxParcels=count,counts=null}){
+  if(destroyed)throw Error('World source atlas disposed');const dynamic=count===null;if(dynamic&&(!counts||counts.size<4))throw Error('Missing resident World source count');if(!Number.isSafeInteger(maxParcels)||maxParcels<0||(!dynamic&&(!Number.isSafeInteger(count)||count<0)))throw Error('Invalid resident World source count');key=null;if(!maxParcels)return emptyView;
+  const size=maxParcels*64;if(!buffer||!Number.isFinite(buffer.size)||size>buffer.size||size>device.limits.maxStorageBufferBindingSize)throw Error('Invalid resident World source buffer extent');ensureTarget();const counter=counts??dummyCounts;
+  if(!groups.has(buffer))groups.set(buffer,new Map());const variants=groups.get(buffer);if(!variants.has(size))variants.set(size,new WeakMap());const modes=variants.get(size);if(!modes.has(counter)){const slots=createGPUInputSlots(device,label+' deposition inputs',48,parameters=>device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:parameters}},{binding:1,resource:{buffer,size}},{binding:2,resource:view},{binding:3,resource:{buffer:counter}}]}));modes.set(counter,slots);inputPools.push(slots);}
+  new Uint32Array(params)[3]=dynamic?1:0;const pass=encoder.beginComputePass({label:label+' GPU deposition'});pass.setPipeline(pipeline);pass.setBindGroup(0,modes.get(counter).lease(encoder,params));pass.dispatchWorkgroups(...dims.map(n=>Math.ceil(n/4)));pass.end();return view;
+ },destroy(){destroyed=true;for(const p of inputPools)p.destroy();for(const b of owned)b.destroy();owned.clear();texture?.destroy();empty.destroy();}};
 }

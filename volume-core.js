@@ -1,3 +1,5 @@
+import {createGPUImmersedCollection} from './volume-immersed-source-gpu.mjs';
+import {createGPUImmersedWorldSources} from './volume-immersed-world-source-gpu.mjs';
 import {resolveWorldCalibration,calibrationSignature,calibrationWaveletLattice,WORLD_CALIBRATION_WGSL,resolveSimulationLevers} from './volume-world-calibration.mjs';
 import {WORLD_RENDER_WGSL,createWorldRenderField} from './volume-world-render.mjs';
 import {sourceCoverageBounds} from './volume-fine-coverage.mjs';
@@ -6,7 +8,7 @@ import {validateAllocation} from './volume-material-hierarchy.mjs';
 import {gridTuningPlan} from './volume-grid-tuning.mjs';
 import {TRANSFER_GEOMETRY_WGSL} from './volume-grid-transfer.mjs';
 import {IMMERSED_COLLECTION_WGSL} from './volume-immersed-source-collection-wgsl.mjs';
-import {checkedImmersedSources,compileImmersedSourceCollection,compileWorldSourceParcels,IMMERSED_COLLECTION_IDENTITY} from './volume-immersed-source-collection.mjs';
+import {checkedImmersedSources,createRuntimeImmersedSourceCache,IMMERSED_COLLECTION_IDENTITY} from './volume-immersed-source-collection.mjs';
 export {compileImmersedSourceCollection} from './volume-immersed-source-collection.mjs';
 import { FIRE_EMISSION_EXTENT_WGSL } from './fire-emission-extent.mjs';
 import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT, EMISSIVE_UNIFORM_OFFSET } from './volume-physical-color.mjs';
@@ -2824,6 +2826,11 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   // the cap is a fraction of one stored-velocity unit per step. Reported, never silent.
   const capPerCell = capFraction;
   const effective = { admitted: true, reason: null, grid, calibration, centreCells, direction, basis: immersedSlabBasis(direction, yaw), radiusCells, thickness, speed, fuel, temperature, momentumGain, capPerCell, fluxRequested, puffFactor, backWall: { requested: backWallRequested, thicknessCells: IMMERSED_BACK_WALL_CELLS }, pattern, inletDynamics };
+  if(options.geometryOnly){
+    Object.assign(effective,{normalizationBackend:'gpu',normaliser:null,coverageFraction:null,fluxNominal:fluxRequested,fluxEffectivePredicted:null,supplyPredictionAuthority:'gpu-unmeasured',clipPredicted:null,masked:null,footprint:null});
+    if(options.worldSource)Object.assign(effective,{fullFlux:fluxRequested,fullWeightSum:null});
+    return {identity:IMMERSED_SOURCE_IDENTITY,requested,effective};
+  }
   // The normaliser is the discrete weight sum over the cells the kernel will
   // actually write (the scene-solid mask skips its cells before the target), so
   // Σ target over fluid cells = Q exactly on this grid; the analytic slab volume
@@ -2891,7 +2898,7 @@ export function immersedSourceUniformValues(config, { materialPerVelocity = 1 } 
     1, ...e.centreCells.map(v => v / materialPerVelocity),
     e.direction[0], e.direction[1], e.direction[2], e.radiusCells / materialPerVelocity,
     Math.max(1, e.thickness / materialPerVelocity), e.speed, e.fuel, e.temperature,
-    e.momentumGain, e.capPerCell, e.fluxRequested / e.normaliser, 0,
+    e.momentumGain, e.capPerCell, e.normalizationBackend==='gpu'?0:e.fluxRequested / e.normaliser, 0,
     e.basis.e1[0], e.basis.e1[1], e.basis.e1[2], e.inletDynamics?.turbulence ?? 0,
     e.pattern && e.pattern.kind !== 'shape' ? 1 : 0, materialPerVelocity, 0, 0,
   ];
@@ -2923,9 +2930,9 @@ export function pressureResidualMeasurement(heatRelease, immersedSource, collect
   if(collection?.active){
     const result=pressureResidualMeasurement(heatRelease,null),sources=collection.sources??[];
     const admitted=sources.filter(source=>source.config.effective.admitted);
-    const sum=key=>admitted.reduce((total,source)=>total+(source.config.effective[key]??0),0);
+    const sum=key=>admitted.some(source=>!Number.isFinite(source.config.effective[key]))?null:admitted.reduce((total,source)=>total+source.config.effective[key],0);
     result.immersedSource={admitted:admitted.length>0,count:sources.length,fluxRequested:sum('fluxRequested'),fluxEffectivePredicted:sum('fluxEffectivePredicted'),capPerCell:null,law:'sum of independently capped local source supply',predictionAuthority:sources.map(source=>({id:source.id,authority:source.config.effective.supplyPredictionAuthority}))};
-    if(admitted.length){result.targets.push('immersed-source');result.compact='divergence-minus-expansion-target';result.statement+=`; immersed collection adds the sum of ${admitted.length} independently capped source targets; predicted supply ${result.immersedSource.fluxEffectivePredicted} cells³/step (mask authority reported per source)`;}
+    if(admitted.length){result.targets.push('immersed-source');result.compact='divergence-minus-expansion-target';result.statement+=`; immersed collection adds the sum of ${admitted.length} independently capped source targets; predicted supply ${result.immersedSource.fluxEffectivePredicted===null?'unmeasured GPU total':result.immersedSource.fluxEffectivePredicted+' cells³/step'} (mask authority reported per source)`;}
     return result;
   }
   const e = heatRelease?.effective;
@@ -2934,7 +2941,7 @@ export function pressureResidualMeasurement(heatRelease, immersedSource, collect
   const i = immersedSource?.effective;
   const immersedAdmitted = i?.admitted === true;
   const fluxRequested = immersedAdmitted && Number.isFinite(i.fluxRequested) ? i.fluxRequested : 0;
-  const fluxEffectivePredicted = immersedAdmitted && Number.isFinite(i.fluxEffectivePredicted) ? i.fluxEffectivePredicted : 0;
+  const fluxEffectivePredicted = immersedAdmitted ? (Number.isFinite(i.fluxEffectivePredicted)?i.fluxEffectivePredicted:null) : 0;
   const capPerCell = immersedAdmitted && Number.isFinite(i.capPerCell) ? i.capPerCell : 0;
   const clipPredicted = immersedAdmitted && i.clipPredicted ? { cells: i.clipPredicted.cells, of: i.clipPredicted.of } : { cells: 0, of: 0 };
   const targets = [];
@@ -2945,7 +2952,7 @@ export function pressureResidualMeasurement(heatRelease, immersedSource, collect
   // The immersed term is the capped per-cell law (confirmation IS-04-C): the
   // requested Q is the authored supply, the predicted effective total is the
   // CPU model's sum of the capped targets on the dispatched mask.
-  if (immersedAdmitted) terms.push(`immersed source target min(cap ${capPerCell}, w × Q/Σw) per slab cell: requested Q ${fluxRequested.toFixed(2)}, predicted effective ${fluxEffectivePredicted.toFixed(2)} cells³/step (${clipPredicted.cells ? `${clipPredicted.cells} of ${clipPredicted.of} cells clipped` : 'no cell clipped'})`);
+  if (immersedAdmitted) terms.push(`immersed source target min(cap ${capPerCell}, w × Q/Σw) per slab cell: requested Q ${fluxRequested.toFixed(2)}, predicted effective ${fluxEffectivePredicted===null?'unmeasured GPU total':fluxEffectivePredicted.toFixed(2)+' cells³/step'} (${fluxEffectivePredicted===null?'clipping unmeasured':clipPredicted.cells ? `${clipPredicted.cells} of ${clipPredicted.of} cells clipped` : 'no cell clipped'})`);
   return {
     compact: targets.length ? 'divergence-minus-expansion-target' : 'divergence',
     wide: 'legacy-central-divergence',
@@ -11922,7 +11929,8 @@ export function createKaminosVolumePrototype({
     }
     const time=resolveTimeStepConfig(controlsSnapshot).effective;
     const physics=resolvePhysicsAppearance(controlsSnapshot,{reactantAdmitted:true,emissiveRouteEffective:true});
-    const sources=immersedCollectionPrepared?compileWorldSourceParcels(immersedCollectionPrepared,{grid:gridSize,gridHeight,transform:productTransform,anchor:worldSmoke.anchor}):{parcels:[],supports:[],count:0};
+    let sources={parcels:[],supports:[],count:0};
+    if(immersedCollectionPrepared){immersedWorldSourcesGPU??=createGPUImmersedWorldSources(device);immersedWorldSourcesGPU.update(immersedCollectionPrepared,{grid:gridSize,gridHeight});sources=immersedWorldSourcesGPU.encode(encoder,{mapping:worldSmokeMapping(plan,worldSmoke.anchor,productTransform),collection:immersedCollectionGPU,step:state.simStepCount});}
     const simLevers=resolveSimulationLevers(controlsSnapshot);
     const input={sources,fineBuffer:fluidBuffers[currentFluid],reactionTexture:reactantTextures[currentFluid],fineDims:[gridSize,gridHeight,gridSize],fineVelocityMode:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode,transform:productTransform,time,reactant:state.reactantCombustion,physics,calibration:controlsSnapshot,wind:{strength:uniforms[53],angle:uniforms[54],height:uniforms[55],speed:time.dynamicsSpeed},worldSmokeOnly:simLevers.worldSmokeOnly};
     let intermediateState={effective:'off'};
@@ -12231,8 +12239,8 @@ export function createKaminosVolumePrototype({
   let immersedCollectionRecords = null;
   let immersedCollectionRevision = 0;
   let immersedCollectionLegacyId = null;
-  const immersedCollectionCaches = new Map();
-  const immersedCollectionSignals = new Map();
+  const immersedRuntimeCache=createRuntimeImmersedSourceCache();
+  let immersedCollectionGPU=null,immersedWorldSourcesGPU=null,immersedCollectionPlaceholder=null;
   let immersedCollectionPrepared = null;
   // Inlet turbulence field (one f32 per floor cell) and the puff signal: seeded,
   // step-locked processes; the field is rebuilt with the grid.
@@ -12249,7 +12257,7 @@ export function createKaminosVolumePrototype({
   // controls; an admission change rebuilds the fluid state so the lower-plane
   // texture and every bind group follow it.
   function refreshJoinedBoundary(requested = Boolean(state.joinedBoundary?.requested)) {
-    const immersed = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight });
+    const immersed = immersedRuntimeCache.singleton(controlsSnapshot,{grid:gridSize,gridHeight});
     const next = resolveJoinedBoundary({
       requested,
       sourceLaw: String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume'),
@@ -12290,18 +12298,10 @@ export function createKaminosVolumePrototype({
     device.queue.writeTexture({ texture: forceDeltaTexture }, new Float32Array(gridSize * gridHeight * gridSize * planes), { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT, rowsPerImage: gridHeight }, [gridSize, gridHeight, gridSize * planes]);
   }
   function prepareImmersedCollectionTexture(packed=null) {
-    if(!device)return false;
-    const width=packed?.width??Math.max(6,gridSize),height=packed?.height??gridSize+1,layers=packed?.layers??1;
-    if(layers>device.limits.maxTextureArrayLayers)throw Error(`immersed-source-collection-capacity:requested=${layers-1}:supported=${device.limits.maxTextureArrayLayers-1}`);
-    const key=[width,height,layers].join('x'),changed=key!==immersedCollectionTextureKey;
-    if(changed){
-      const old=immersedCollectionTexture;
-      immersedCollectionTexture=device.createTexture({label:'authored immersed source collection',size:[width,height,layers],format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});
-      immersedCollectionTextureKey=key;
-      if(old)device.queue.onSubmittedWorkDone().then(()=>old.destroy());
-    }
-    device.queue.writeTexture({texture:immersedCollectionTexture},packed?.data??new Float32Array(width*height*layers*4),{bytesPerRow:width*16,rowsPerImage:height},[width,height,layers]);
-    return changed;
+    if(!device)return false;const old=immersedCollectionTexture;
+    if(packed){immersedCollectionGPU??=createGPUImmersedCollection(device);immersedCollectionGPU.update(packed,{grid:gridSize,step:state.simStepCount,legacyId:immersedCollectionLegacyId});immersedCollectionTexture=immersedCollectionGPU.texture;}
+    else{immersedCollectionPlaceholder??=device.createTexture({label:'inactive source collection',size:[1,1,1],format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING});immersedCollectionTexture=immersedCollectionPlaceholder;}
+    return old!==immersedCollectionTexture;
   }
   function sourcesAdmittedInCollection(){
     // Admission names the source regime, not current supply. Removing or
@@ -12309,21 +12309,8 @@ export function createKaminosVolumePrototype({
     const pressure=resolvePressureSolverConfig(controlsSnapshot).effective;
     return pressure.solver===PRESSURE_SOLVER_CONVERGED&&pressure.dispatch===PRESSURE_SOLVER_CONVERGED&&pressure.openTop;
   }
-  function compileCurrentImmersedCollection(solidCells=null) {
-    return compileImmersedSourceCollection(immersedCollectionRecords,{controls:controlsSnapshot,grid:gridSize,gridHeight,solidCells,weightCaches:immersedCollectionCaches,
-      signalsFor:(id,local)=>{
-        let signal=immersedCollectionSignals.get(id);
-        if(!signal||signal.grid!==gridSize){
-          const legacy=id===immersedCollectionLegacyId;
-          signal={grid:gridSize,puff:legacy?inletPuffProcess:new StochasticSignalSet(2,1),field:legacy?inletPerturbationField:new InletPerturbationField({grid:gridSize,seed:1}),birthStep:legacy?0:state.simStepCount};
-          immersedCollectionSignals.set(id,signal);
-        }
-        const requested=resolveInletDynamicsConfig(local).requested,step=Math.max(0,state.simStepCount-signal.birthStep);
-        const puff=requested.puff>0?signal.puff.sampleAt(step,inletDynamicsTauSteps(local,requested.puffPeriod)):[0];
-        let turbulence=null;
-        if(requested.turbulence>0&&signal.field){signal.field.sampleAt({step,tauSteps:inletDynamicsTauSteps(local,INLET_TURBULENCE_CORRELATION_SECONDS),scaleCells:requested.turbulenceScaleCells});turbulence={rms:signal.field.rms,field:signal.field.cells};}
-        const signals={puff,turbulence};return {...signals,puffFactor:resolveInletDynamicsConfig(local,signals).effective.puffFactor};
-      }});
+  function compileCurrentImmersedCollection() {
+    return immersedRuntimeCache.collection(immersedCollectionRecords,{controls:controlsSnapshot,grid:gridSize,gridHeight});
   }
   const inletPuffProcess = new StochasticSignalSet(2, 1);
   const windGustProcess = new WindGustProcess(1);
@@ -13048,7 +13035,7 @@ export function createKaminosVolumePrototype({
     for (const texture of waveletTextures) texture.destroy();
     waveletTextures = [];
     waveletSidecarFull = false;
-    immersedCollectionTexture?.destroy();immersedCollectionTexture=null;immersedCollectionTextureKey=null;if(!preserveWorld)immersedCollectionSignals.clear();
+    immersedCollectionPlaceholder?.destroy();immersedCollectionPlaceholder=null;immersedCollectionTexture=null;immersedCollectionTextureKey=null;if(preserveWorld)immersedCollectionGPU?.releaseTextures();else{immersedCollectionGPU?.destroy();immersedCollectionGPU=null;immersedWorldSourcesGPU?.destroy();immersedWorldSourcesGPU=null;}
     inflowCoverageTexture?.destroy();
     inflowCoverageTexture = null;
     inflowCoverageSignature = '';
@@ -16865,12 +16852,13 @@ export function createKaminosVolumePrototype({
     // turbulence field (a patchwork of signals on the floor), both step-locked;
     // sampled before the resolver so the receipt and the uniforms agree.
     const inletStep = state.simStepCount ?? 0;
+    const gpuCollectionActive=immersedCollectionRecords!==null;
     const inletDynamicsRequested = resolveInletDynamicsConfig(controlsSnapshot).requested;
     const inletSignals = {
-      puff: inletDynamicsRequested.puff > 0 ? inletPuffProcess.sampleAt(inletStep, inletDynamicsTauSteps(controlsSnapshot, inletDynamicsRequested.puffPeriod)) : [0],
+      puff: !gpuCollectionActive && inletDynamicsRequested.puff > 0 ? inletPuffProcess.sampleAt(inletStep, inletDynamicsTauSteps(controlsSnapshot, inletDynamicsRequested.puffPeriod)) : [0],
       turbulence: null,
     };
-    if (inletDynamicsRequested.turbulence > 0 && inletPerturbationField && inflowPerturbationTexture) {
+    if (!gpuCollectionActive && inletDynamicsRequested.turbulence > 0 && inletPerturbationField && inflowPerturbationTexture) {
       device.queue.writeTexture({ texture: inflowPerturbationTexture }, inletPerturbationField.sampleAt({ step: inletStep, tauSteps: inletDynamicsTauSteps(controlsSnapshot, INLET_TURBULENCE_CORRELATION_SECONDS), scaleCells: inletDynamicsRequested.turbulenceScaleCells }), { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT }, [gridSize, gridSize, 1]);
       inletSignals.turbulence = { rms: inletPerturbationField.rms, field: inletPerturbationField.cells };
     }
@@ -16889,10 +16877,10 @@ export function createKaminosVolumePrototype({
     // normalised against the mask the kernel will actually dispatch on. The
     // refresh in encodeSim is a no-op by key after this.
     const immersedPuffFactor = inflowBoundaryConfig.requested?.inletDynamics?.puffFactor ?? resolveInletDynamicsConfig(controlsSnapshot, inletSignals).effective.puffFactor;
-    state.immersedSource = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals, weightCache: immersedSourceWeightCache });
+    state.immersedSource = gpuCollectionActive?immersedRuntimeCache.singleton(controlsSnapshot,{grid:gridSize,gridHeight}):resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals, weightCache: immersedSourceWeightCache });
     if(immersedCollectionRecords!==null)immersedCollectionPrepared=compileCurrentImmersedCollection();
     refreshSceneCollision();
-    const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals, solidCells: sceneSolidCellsCpu, weightCache: immersedSourceWeightCache });
+    const immersedSourceConfig = gpuCollectionActive?immersedRuntimeCache.singleton(controlsSnapshot,{grid:gridSize,gridHeight}):resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals, solidCells: sceneSolidCellsCpu, weightCache: immersedSourceWeightCache });
     if(immersedCollectionRecords!==null){
       immersedCollectionPrepared=compileCurrentImmersedCollection(sceneSolidCellsCpu);
       if(prepareImmersedCollectionTexture(immersedCollectionPrepared)){
@@ -16900,14 +16888,14 @@ export function createKaminosVolumePrototype({
         rebuildSelectiveHeadLiveBindGroups();
       }
       const sources=immersedCollectionPrepared.sources;
-      if(sceneSolidGpu)for(const source of sources){source.config.effective.supplyPredictionAuthority='unmasked-projection-gpu-solid-field';source.config.effective.masked={cells:null,weight:null,weightShare:null,authority:'gpu-resident-unread'};}
-      Object.assign(state.immersedSources,{preparedRevision:immersedCollectionRevision,preparedStep:state.simStepCount,sources:sources.map(({id,config,worldSource})=>({id,config:structuredClone(config),worldSource:!!worldSource})),overlapLaw:'sum-local-capped-supply; bounded-supply-weighted-mixture; union-relaxation-weighted-momentum',aggregateSupplyCap:null,mixtureEntryCap:1});
+      if(sceneSolidGpu)for(const source of sources){source.config.effective.supplyPredictionAuthority='gpu-unmeasured-solid-masked-at-injection';source.config.effective.masked={cells:null,weight:null,weightShare:null,authority:'gpu-resident-unread'};}
+      Object.assign(state.immersedSources,{backend:'gpu-resident-source',preparedRevision:immersedCollectionRevision,preparedStep:state.simStepCount,sources:sources.map(({id,config,worldSource})=>({id,config:structuredClone(config),worldSource:!!worldSource})),overlapLaw:'sum-local-capped-supply; bounded-supply-weighted-mixture; union-relaxation-weighted-momentum',aggregateSupplyCap:null,mixtureEntryCap:1});
     }
     uniforms.set(immersedSourceUniformValues(immersedSourceConfig), IMMERSED_SOURCE_UNIFORM_OFFSET);
     uniforms.set(gridShapeUniformValues({ grid: gridSize, gridHeight, irradianceGrid: irradianceGridSize, irradianceGridHeight: gridHeightForSize(irradianceGridSize), sceneSourceGrid: EMISSIVE_LIGHT_GRID, sceneSourceGridHeight: gridHeightForSize(EMISSIVE_LIGHT_GRID) }), GRID_SHAPE_UNIFORM_OFFSET);
     state.immersedSource = immersedSourceConfig;
     if(sceneSolidGpu&&immersedSourceConfig.effective.admitted){
-      state.immersedSource.effective.supplyPredictionAuthority='unmasked-projection-gpu-solid-field';
+      state.immersedSource.effective.supplyPredictionAuthority='gpu-unmeasured-solid-masked-at-injection';
       state.immersedSource.effective.masked={cells:null,weight:null,weightShare:null,authority:'gpu-resident-unread'};
     }
     const gasPressure=resolvePressureSolverConfig(controlsSnapshot).effective;
@@ -17693,6 +17681,7 @@ export function createKaminosVolumePrototype({
       return false;
     }
     const worldPlan = prepareWorldSmoke();
+    if(immersedCollectionPrepared&&immersedCollectionGPU){immersedCollectionGPU.encode(encoder,{step:state.simStepCount,controls:controlsSnapshot});state.immersedSources.submittedStep=state.simStepCount;}
     encodeDomainRemap(encoder);
     refreshSceneCollision();
     if(pendingWorldSeed){
@@ -29052,7 +29041,8 @@ export function createKaminosVolumePrototype({
       if(pendingDomainRemap)return {status:'awaiting-remap'};
       const {anchor,plan}=worldSmoke;
       const demand=activity?worldSmoke.fineCoverageDemand():{status:'source-only',boxes:[]};
-      return {status:'active',frame,dims,world:{lo:plan.min.map((x,a)=>x*anchor.scale+anchor.translate[a]),hi:plan.max.map((x,a)=>x*anchor.scale+anchor.translate[a])},sources:sourceCoverageBounds(immersedCollectionPrepared,{dims,frame}),demand:demand.boxes,demandStatus:demand.status,demandSampledAt:demand.sampledAt,demandRevision:demand.revision};
+      immersedCollectionGPU?.observePuffs();const observed=immersedCollectionGPU?.puffObservation(),matching=observed?.packet===immersedCollectionPrepared&&observed.status==='measured',puffFactors=matching?new Map(observed.factors.map(f=>[f.id,f.factor])):null,coverageFractions=matching?new Map(observed.factors.map(f=>[f.id,f.coverageFraction])):null;
+      return {status:'active',sourceObservation:matching?{status:'measured',sampledAt:observed.sampledAt,step:observed.step,ageSteps:state.simStepCount-observed.step}:{status:'awaiting-gpu-observation',weightAuthority:'nominal-authored'},frame,dims,world:{lo:plan.min.map((x,a)=>x*anchor.scale+anchor.translate[a]),hi:plan.max.map((x,a)=>x*anchor.scale+anchor.translate[a])},sources:sourceCoverageBounds(immersedCollectionPrepared,{dims,frame,puffFactors,coverageFractions}),demand:demand.boxes,demandStatus:demand.status,demandSampledAt:demand.sampledAt,demandRevision:demand.revision};
     },
     observeAdaptiveMaterial(options){worldSmoke?.observeAdaptiveMaterial(options);},
     adaptiveMaterialState(){return {requested:adaptiveMaterialOptions,effective:worldSmoke?.adaptiveMaterialState()??null,error:adaptiveMaterialError};},

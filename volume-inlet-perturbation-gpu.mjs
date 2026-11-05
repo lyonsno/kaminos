@@ -1,6 +1,16 @@
 // Seeded OU streams use the same global xorshift draw order as the offline
 // StochasticSignalSet. Input changes initialize stream starting points; each
 // simulation step evolves them independently on GPU with a shared jump matrix.
+const pendingUniforms=new WeakMap();
+function releaseUniformAfterSubmission(device,encoder,release){
+ let callbacks=pendingUniforms.get(encoder);if(!callbacks){callbacks=[];pendingUniforms.set(encoder,callbacks);queueMicrotask(()=>{const done=()=>{for(const f of callbacks)f();pendingUniforms.delete(encoder);};device.queue.onSubmittedWorkDone().then(done,done);});}callbacks.push(release);
+}
+// A queued encoder may contain several source steps. Recycle uniform slots
+// only after submission completes, so later host writes cannot replace them.
+export function createGPUInputSlots(device,label,size,makeGroup){
+ const slots=[];let destroyed=false;
+ return{lease(encoder,data){if(destroyed)throw Error('GPU input slots disposed');let slot=slots.find(s=>!s.busy);if(!slot){const buffer=device.createBuffer({label,size,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});slot={buffer,group:makeGroup(buffer),busy:false};slots.push(slot);}slot.busy=true;device.queue.writeBuffer(slot.buffer,0,data);releaseUniformAfterSubmission(device,encoder,()=>{slot.busy=false;});return slot.group;},destroy(){if(destroyed)return;destroyed=true;queueMicrotask(()=>{const done=()=>{for(const s of slots)s.buffer.destroy();};device.queue.onSubmittedWorkDone().then(done,done);});}};
+}
 const pipelines=new WeakMap();
 const next=x=>{x^=x<<13;x^=x>>>17;x^=x<<5;return x>>>0;};
 function apply(matrix,value){let out=0;for(let i=0;i<32;i++)if((value>>>i)&1)out^=matrix[i];return out>>>0;}
@@ -27,18 +37,18 @@ fn nextStep(value:u32)->u32{var result=0u;for(var i=0u;i<32u;i++){if(((value>>i)
 export function createGPUStochasticSignalSet(device,{seed=1,count=1,label='GPU inlet streams'}={}){
  if(!Number.isSafeInteger(count)||count<1)throw Error('GPU inlet stream count must be a positive integer');
  const bytes=count*16;if(!Number.isSafeInteger(bytes)||bytes>device.limits.maxStorageBufferBindingSize||bytes>device.limits.maxBufferSize)throw Error('GPU inlet streams exceed device storage limits');
- const U=GPUBufferUsage,buffer=device.createBuffer({label,size:bytes,usage:U.STORAGE|U.COPY_DST|U.COPY_SRC}),time=device.createBuffer({label:label+' time',size:16,usage:U.UNIFORM|U.COPY_DST}),jump=device.createBuffer({label:label+' RNG stride',size:128,usage:U.STORAGE|U.COPY_DST});
+ const U=GPUBufferUsage,buffer=device.createBuffer({label,size:bytes,usage:U.STORAGE|U.COPY_DST|U.COPY_SRC}),jump=device.createBuffer({label:label+' RNG stride',size:128,usage:U.STORAGE|U.COPY_DST});
  const states=new Uint32Array(count*4);let rng=((Math.max(1,Math.floor(Number(seed)||1))>>>0)*2654435761+1013904223)>>>0;
  for(let j=0;j<count;j++){states[j*4+1]=rng;states[j*4+3]=rng;for(let k=0;k<12;k++)rng=next(rng);}
  device.queue.writeBuffer(buffer,0,states);device.queue.writeBuffer(jump,0,jumpMatrix(12*count));
  if(!pipelines.has(device)){const module=device.createShaderModule({label:'GPU seeded inlet dynamics',code:CODE});pipelines.set(device,device.createComputePipeline({label:'GPU seeded inlet dynamics',layout:'auto',compute:{module,entryPoint:'evolveInlet'}}));}
- const pipeline=pipelines.get(device),group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:time}},{binding:1,resource:{buffer}},{binding:2,resource:{buffer:jump}}]});let destroyed=false;
+ const pipeline=pipelines.get(device),inputs=createGPUInputSlots(device,label+' time',16,time=>device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:time}},{binding:1,resource:{buffer}},{binding:2,resource:{buffer:jump}}]}));let destroyed=false;
  return{buffer,count,
   encode(encoder,step,tauSteps){
    if(destroyed)throw Error('GPU inlet streams disposed');const target=Math.max(0,Math.floor(Number(step)||0));if(target>0xffffffff)throw Error('GPU inlet step exceeds u32 clock capacity');
-   const tau=Math.max(1,Number(tauSteps)||1),decay=Math.exp(-1/tau),kick=.45*Math.sqrt(1-decay*decay),data=new ArrayBuffer(16);new Uint32Array(data).set([target,count]);new Float32Array(data).set([decay,kick],2);device.queue.writeBuffer(time,0,data);
+   const tau=Math.max(1,Number(tauSteps)||1),decay=Math.exp(-1/tau),kick=.45*Math.sqrt(1-decay*decay),data=new ArrayBuffer(16);new Uint32Array(data).set([target,count]);new Float32Array(data).set([decay,kick],2);const group=inputs.lease(encoder,data);
    const pass=encoder.beginComputePass({label:'GPU seeded inlet evolution'});pass.setPipeline(pipeline);pass.setBindGroup(0,group);const work=Math.ceil(count/64),x=Math.min(work,device.limits.maxComputeWorkgroupsPerDimension);pass.dispatchWorkgroups(x,Math.ceil(work/x));pass.end();
   },
-  destroy(){destroyed=true;buffer.destroy();time.destroy();jump.destroy();},
+  destroy(){if(destroyed)return;destroyed=true;inputs.destroy();queueMicrotask(()=>{const done=()=>{buffer.destroy();jump.destroy();};device.queue.onSubmittedWorkDone().then(done,done);});},
  };
 }

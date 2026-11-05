@@ -492,12 +492,12 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture,borrowMaterial
       if(!Number.isInteger(iterations)||iterations<0)throw Error('Invalid world pressure iterations');
       if(!Number.isFinite(transitionCells)||transitionCells<0)throw Error('Invalid world transition collar');
       if(!['collocated','staggered'].includes(fineVelocityMode))throw Error('Unknown fine velocity convention');
-      const sourceKey=JSON.stringify([sources,!!adaptive]);
-      if(sourceKey!==lastSourceKey){
-        const f=sourceFlow.encode(encoder,sources.parcels);
-        const m=sourceMaterial.encode(encoder,flowOnly||adaptive?[]:sources.parcels);
+      const sourceKey=sources.gpu?null:JSON.stringify([sources,!!adaptive]);
+      if(sources.gpu||sourceKey!==lastSourceKey){
+        const f=sources.gpu?sourceFlow.encodeResident(encoder,{buffer:sources.gpu.parcels,count:sources.gpu.parcelCount,maxParcels:sources.gpu.maxParcels,counts:sources.gpu.counts}):sourceFlow.encode(encoder,sources.parcels);
+        const m=flowOnly||adaptive?sourceMaterial.encode(encoder,[]):sources.gpu?sourceMaterial.encodeResident(encoder,{buffer:sources.gpu.parcels,count:sources.gpu.parcelCount,maxParcels:sources.gpu.maxParcels,counts:sources.gpu.counts}):sourceMaterial.encode(encoder,sources.parcels);
         if(f!==sourceFlowView||m!==sourceMaterialView)groups.clear();sourceFlowView=f;sourceMaterialView=m;lastSourceKey=sourceKey;
-        sourceReceipt={count:sources.count,parcels:sources.parcels.length,route:'world-position-finite-volume-source',ownership:'outside-fine-support',supplyVolume:sources.parcels.reduce((q,p)=>q+p.rate*p.lo.reduce((v,x,a)=>v*(p.hi[a]-x),1),0)};
+        sourceReceipt=sources.gpu?{count:sources.count,parcels:sources.gpu.parcelCount,parcelCapacity:sources.gpu.maxParcels,sourceStep:sources.gpu.sourceStep,route:sources.gpu.backend,ownership:'outside-fine-support',supplyVolume:null,countAuthority:'gpu-unread'}:{count:sources.count,parcels:sources.parcels.length,route:'world-position-finite-volume-source',ownership:'outside-fine-support',supplyVolume:sources.parcels.reduce((q,p)=>q+p.rate*p.lo.reduce((v,x,a)=>v*(p.hi[a]-x),1),0)};
       }
       const mapping=worldSmokeMapping(plan,anchor,transform);
       const effectiveBuoyancy=worldBuoyancyAcceleration({buoyancy,fineWidth:fineDims[0],scale:mapping.fineToField[3],calibration:{...calibration,simulationDomainScale:transform.scale}});

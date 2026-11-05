@@ -28,3 +28,9 @@ test('Fine-follow observations convert simulated displacement to wall-clock seco
   assert.deepEqual(actual.target,expected.target,'the existing seconds-based coverage consumer receives the converted bounds');assert.ok(actual.target.translate[0]>2);
  }finally{h.destroy();globalThis.performance=originalNow;}
 });
+
+test('resident allocation consumes borrowed GPU source buffers and empty supply skips grid deposition',()=>{
+ const f=fixture(),h=createMaterialHierarchyGPU(f.d,{materialDims:[4,4,4],materialPitch:1,min:[0,0,0],max:[4,4,4]},'',{budget:0});
+ const gpu={parcels:f.d.createBuffer({size:64}),supports:f.d.createBuffer({size:48}),parcelCount:1,supportCount:1,sourceStep:0,backend:'gpu-resident-immersed-source'},sources={gpu,get parcels(){throw Error('GPU sources must not be serialized or visited on CPU');},get supports(){throw Error('GPU supports must not be reconstructed on CPU');}};
+ try{h.encode(f.encoder,f.world,1,sources);assert.ok(f.passes.includes('GPU source deposition'));const before=f.passes.filter(x=>x==='GPU source deposition').length;h.encode(f.encoder,f.world,1,{gpu:{...gpu,parcelCount:0,supportCount:0}});assert.equal(f.passes.filter(x=>x==='GPU source deposition').length,before,'no source binds the empty supply instead of clearing every recipient cell');}finally{h.destroy();}
+});
