@@ -38,3 +38,8 @@ test('empty numerical panel follows the zero-transfer acceptance progression, in
   assert.equal(state.cursor,2+width);assert.equal(state.width,Math.min(2-width,phased?1:Math.min(1,width*2)));assert.deepEqual(state.transfer,[.3,.2,.1,.8]);assert.equal(state.mask,1);assert.deepEqual(Array.from(state.probes[0]),[0,0,0,0]);
  }
 });
+
+test('uniform fallback advance retains its declared Fine interval end',()=>{
+ const beforeAdvance=core.slice(core.indexOf('    let smoke = select(legacySmoke'),core.indexOf('    let rayStepOpacity'));
+ assert.match(beforeAdvance,/let fineSegmentEnd\s*=\s*select\(endT, min\(endT, nearHit.y\), worldActive\)/);
+});

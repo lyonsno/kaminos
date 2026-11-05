@@ -84,14 +84,14 @@ fn emptyOpticalInterval(ro:vec3<f32>,rd:vec3<f32>,a:f32,b:f32,sampleT:f32,worldA
  if(displayReconstructionActive()){
   let dims=vec3<f32>(textureDimensions(displayField));let scale=u.display_reconstruction.w;
   let cp=worldToCell(p);
-  let mapped=select(cp*scale-0.5,(cp-0.5)*scale,u.display_interpolation.x>0.5);
-  let c=vec3<i32>(floor(clamp(mapped,vec3<f32>(0),dims-1.0)));
-  let m0=select(worldToCell(p0)*scale-0.5,(worldToCell(p0)-0.5)*scale,u.display_interpolation.x>0.5);
-  let m1=select(worldToCell(p1)*scale-0.5,(worldToCell(p1)-0.5)*scale,u.display_interpolation.x>0.5);
-  if(!emptyBoxContains(clamp(m0,vec3<f32>(0),dims-1.0),clamp(m1,vec3<f32>(0),dims-1.0),clamp(mapped,vec3<f32>(0),dims-1.0),vec3<f32>(c),vec3<f32>(c)+1.0)){return false;}
+  let mapped=select(cp*scale-vec3<f32>(0.5),(cp-vec3<f32>(0.5))*scale,u.display_interpolation.x>0.5);
+  let c=vec3<i32>(floor(clamp(mapped,vec3<f32>(0),dims-vec3<f32>(1.0))));
+  let m0=select(worldToCell(p0)*scale-vec3<f32>(0.5),(worldToCell(p0)-vec3<f32>(0.5))*scale,u.display_interpolation.x>0.5);
+  let m1=select(worldToCell(p1)*scale-vec3<f32>(0.5),(worldToCell(p1)-vec3<f32>(0.5))*scale,u.display_interpolation.x>0.5);
+  if(!emptyBoxContains(clamp(m0,vec3<f32>(0),dims-vec3<f32>(1.0)),clamp(m1,vec3<f32>(0),dims-vec3<f32>(1.0)),clamp(mapped,vec3<f32>(0),dims-vec3<f32>(1.0)),vec3<f32>(c),vec3<f32>(c)+vec3<f32>(1.0))){return false;}
   var support=0.0;
   for(var z=0;z<2;z++){for(var y=0;y<2;y++){for(var x=0;x<2;x++){
-   let v=abs(textureLoad(displayField,min(c+vec3<i32>(x,y,z),vec3<i32>(dims)-1),0));
+   let v=abs(textureLoad(displayField,min(c+vec3<i32>(x,y,z),vec3<i32>(dims)-vec3<i32>(1)),0));
    support=max(support,max(max(v.x,v.y),max(v.z,v.w)));
   }}}
   return support<=cutoff;
@@ -100,10 +100,10 @@ fn emptyOpticalInterval(ro:vec3<f32>,rd:vec3<f32>,a:f32,b:f32,sampleT:f32,worldA
  // Flow-kernel reconstruction has a wider footprint and is not certified here.
  if(u.reconstruction_kernel_controls.x>0.0){return false;}
  let dims=vec3<f32>(f32(GRID),f32(GRID_Y),f32(GRID));
- let q=clamp(worldToCell(p)-0.5,vec3<f32>(0),dims-1.001);let c=vec3<i32>(floor(q));
- let q0=clamp(worldToCell(p0)-0.5,vec3<f32>(0),dims-1.001);
- let q1=clamp(worldToCell(p1)-0.5,vec3<f32>(0),dims-1.001);
- if(!emptyBoxContains(q0,q1,q,vec3<f32>(c),vec3<f32>(c)+1.0)){return false;}
+ let q=clamp(worldToCell(p)-vec3<f32>(0.5),vec3<f32>(0),dims-vec3<f32>(1.001));let c=vec3<i32>(floor(q));
+ let q0=clamp(worldToCell(p0)-vec3<f32>(0.5),vec3<f32>(0),dims-vec3<f32>(1.001));
+ let q1=clamp(worldToCell(p1)-vec3<f32>(0.5),vec3<f32>(0),dims-vec3<f32>(1.001));
+ if(!emptyBoxContains(q0,q1,q,vec3<f32>(c),vec3<f32>(c)+vec3<f32>(1.0))){return false;}
  for(var z=0;z<2;z++){for(var y=0;y<2;y++){for(var x=0;x<2;x++){
   let cell=clampCell(c+vec3<i32>(x,y,z));let index=index3(cell);
   for(var slot=0u;slot<4u;slot++){if(any(fluidSrc[index*SLOTS_PER_CELL+slot]!=vec4<f32>(0))){return false;}}

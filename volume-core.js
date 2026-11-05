@@ -8293,6 +8293,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
       * smoothstep(0.54, 1.18, flameRenderTransitionStagger)
       * (0.020 + flameDetail * 0.035 + interfaceShred * 0.025 + microSmoke * 0.016);
     let extinction = rawExtinction + flameTransitionWisps * absorptionGain * 0.34;
+    let fineSegmentEnd = select(endT, min(endT, nearHit.y), worldActive);
     let localDt = select(min(dtBase,max(0.0001,fineSegmentEnd-t)),guidedRay.width,guided);
     let rayStepOpacity = localDt * 3.65;
     let transportedCurtainStructure = clamp(
