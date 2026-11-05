@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import * as source from '../scene-volume-source.mjs';
 const textures=[],groups=[];
+globalThis.GPUBufferUsage={UNIFORM:1,COPY_DST:2};
 globalThis.GPUTextureUsage={STORAGE_BINDING:1,TEXTURE_BINDING:2,COPY_SRC:4};
-const device={createTexture(spec){const t={spec,createView(){return {texture:t};},destroy(){t.destroyed=true;}};textures.push(t);return t;},
+const device={queue:{writeBuffer(){}},createBuffer(){return {destroy(){}};},createTexture(spec){const t={spec,createView(){return {texture:t};},destroy(){t.destroyed=true;}};textures.push(t);return t;},
  createComputePipeline(){return {getBindGroupLayout(i){return i;}};},createBindGroup(spec){groups.push(spec);return spec;}};
 // The seed binds the reactant sidecar (fresh burn) beside each fluid buffer; the getter must return a stable array (the seed rebinds when it changes).
 const reactant=[{createView(){return {};}}];

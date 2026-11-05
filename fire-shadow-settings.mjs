@@ -1,3 +1,4 @@
+import {normalizeNearSmokeBox} from './scene-near-smoke-box.mjs';
 import {validateShadowSampling,validateShadowComparison} from './fire-shadow-sampling.mjs';
 import {validateSourceQuadrature,validateSourceEvaluationBudget} from './fire-source-quadrature.mjs';
 import {DEFAULT_SHADOW_QUALITY,validateShadowQuality} from './fire-shadow-quality.mjs';
@@ -8,10 +9,10 @@ import {installRenderingNumberControl} from './rendering-number-controls.mjs';
 export function createFireShadowSettings({session,document,inputs={},record=()=>{},updateInputs=()=>{},applyInitial=true,installNumberDrag,diagnostics=false}) {
     const win=document.defaultView;
     let requested=validateShadowSampling(inputs.sampling??'complementary');
-    let selector,pointSelector,status,implementationSelector,grainSelector,cellInput,cellRow,retry,casterSelector,casterStatus,surfaceSwitch,smokeFilterSwitch,edgeSwitch,smokeWork;
+    let selector,pointSelector,status,implementationSelector,grainSelector,cellInput,cellRow,retry,casterSelector,casterStatus,surfaceSwitch,smokeFilterSwitch,edgeSwitch,smokeWork,nearSwitch,nearStatus;
     let requestedComparison=inputs.shadowComparison===undefined?null:validateShadowComparison(inputs.shadowComparison);
     let requestedQuality=inputs.shadowQuality===undefined?null:validateShadowQuality(inputs.shadowQuality);
-    const qualityControls=[],lightControls=[],mediumControls=[],numberScrubs=[];
+    const qualityControls=[],lightControls=[],mediumControls=[],nearControls=[],numberScrubs=[];
     let requestedPoints=inputs.points??null;
     let requestedPointSampling=inputs.pointSampling??'all';
     let requestedBudget=inputs.pointEvaluationBudget??null;
@@ -19,13 +20,17 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
     validateSourceQuadrature(requestedPoints??1,requestedPointSampling);
     const persist=()=>updateInputs({...inputs,sampling:requested,...(requestedPoints===null?{}:{points:requestedPoints,pointSampling:requestedPointSampling}),...(requestedBudget===null?{}:{pointEvaluationBudget:requestedBudget}),...(requestedQuality===null?{}:{shadowQuality:requestedQuality}),...(requestedComparison===null?{}:{shadowComparison:requestedComparison})});
     const source=()=>{const value=win.__kaminosSceneRadiance;if(!value?.setShadowSampling)throw Error('This scene has no hybrid fire shadow consumer');return value;};
-    const read=()=>{const state=win.__kaminosSceneRadiance?.debugState();return {requested,status:state?.status,error:state?.error,available:!!state?.shadowSampling,effective:state?.shadowSampling??null,softness:state?.shadowSoftness??null,points:state?.pointCount??null,pointSampling:state?.pointSampling??null,evaluatedPoints:state?.evaluatedPointCount??null,capturedPoints:state?.capturedPointCount??null,pointEvaluationBudget:state?.pointEvaluationBudget??0,shadowComparison:state?.shadowImplementation===undefined?null:{implementation:state.shadowImplementation,grain:state.shadowGrain,worldCellSize:state.shadowWorldCellSize},shadowQuality:state?.shadowResolution===undefined?null:{resolution:state.shadowResolution,blockerSamples:state.blockerSamples,filterSamples:state.filterSamples},maxShadowResolution:state?.maxShadowResolution??null,shadows:state?.shadows??[],bounceGain:win.kaminosSceneGIDebugState?.().gain??null};};
+    const read=()=>{const state=win.__kaminosSceneRadiance?.debugState();return {requested,status:state?.status,error:state?.error,available:!!state?.shadowSampling,effective:state?.shadowSampling??null,softness:state?.shadowSoftness??null,points:state?.pointCount??null,pointSampling:state?.pointSampling??null,evaluatedPoints:state?.evaluatedPointCount??null,capturedPoints:state?.capturedPointCount??null,pointEvaluationBudget:state?.pointEvaluationBudget??0,nearBox:normalizeNearSmokeBox(state?.nearBox),shadowComparison:state?.shadowImplementation===undefined?null:{implementation:state.shadowImplementation,grain:state.shadowGrain,worldCellSize:state.shadowWorldCellSize},shadowQuality:state?.shadowResolution===undefined?null:{resolution:state.shadowResolution,blockerSamples:state.blockerSamples,filterSamples:state.filterSamples},maxShadowResolution:state?.maxShadowResolution??null,shadows:state?.shadows??[],bounceGain:win.kaminosSceneGIDebugState?.().gain??null};};
     const shown=new WeakMap();
     const sync=(force=false)=>{
       const value=(control,next)=>{if(control&&(force||shown.get(control)!==String(next))){control.value=String(next);shown.set(control,String(next));}};
       const state=read();
       const medium=win.__kaminosSceneRadiance?.debugState();
       for(const {key,number} of lightControls)value(number,medium?.[key]??(key==='smokeEnvironmentBlur'||key==='pointEvaluationBudget'?0:16));
+      const near=normalizeNearSmokeBox(medium?.nearBox);
+      if(nearSwitch)nearSwitch.checked=near.enabled;
+      for(const {key,axis,number}of nearControls)value(number,axis===undefined?near[key]:near.extent[axis]);
+      if(nearStatus){const field=medium?.frame?.exterior?.middle;nearStatus.textContent=!near.enabled?'Near light box off.':field?.coverage==='independent-near-receivers'?`${field.activeVolumeReceivers.toLocaleString()} active / ${field.allocatedVolumeReceivers.toLocaleString()} near receivers · ${field.directions} directions · ${field.smokeReconstruction.coarseDimensions.join(' × ')} cells`:'Near light box applies when World smoke is active.';}
       if(edgeSwitch)edgeSwitch.checked=medium?.shadowEdgeFilter===true;
       if(smokeFilterSwitch)smokeFilterSwitch.checked=medium?.smokeShadowFilter===true;
       for(const {key,number} of mediumControls)value(number,medium?.[key]??(key==='smokeShadowSteps'||key==='smokeShadowMediumResolution'?0:key==='smokeShadowFilterTaps'?3:key==='smokeShadowFilterAngle'?7.125:16));
@@ -80,6 +85,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
       read,sync,
       operations:{
         setPointEvaluationBudget(value){validateSourceEvaluationBudget(value);source().setPointEvaluationBudget(value);requestedBudget=value;persist();sync();session.redraw();const effective=read();record({kind:'fire-shadow.source-budget',requested:value,effective});return effective;},
+        setNearBox(value){source().setNearBox(value);sync();session.redraw();const effective=source().debugState().nearBox;record({kind:'fire-shadow.near-box',requested:value,effective});return effective;},
         setLightGrid(value){source().setLightGrid(value);sync();session.redraw();record({kind:'fire-shadow.light-grid',effective:value});return read();},
         setSmokeEnvironmentBlur(value){source().setSmokeEnvironmentBlur(value);sync();session.redraw();record({kind:'fire-shadow.smoke-environment-blur',effective:value});return source().debugState();},
         setShadowEdgeFilter(value){source().setShadowEdgeFilter(value);sync();session.redraw();record({kind:'fire-shadow.edge-filter',effective:value});return read();},
@@ -146,6 +152,21 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
         gridRow.title='Independent lighting samples across the domain width. Material and flow resolution stay independent. Height follows the domain aspect.';
         const gridInput=document.createElement('input');gridInput.type='number';gridInput.min='1';gridInput.step='1';gridInput.setAttribute('aria-label','Smoke light receiver resolution');
         gridInput.addEventListener('change',()=>invoke('setLightGrid',Number(gridInput.value)).catch(failed));gridRow.append(gridInput);panel.append(gridRow);lightControls.push({key:'volumeGrid',number:gridInput});numberScrubs.push(installRenderingNumberControl(gridInput,installNumberDrag));
+        const nearHeading=document.createElement('h3');nearHeading.textContent='Near smoke light box';panel.append(nearHeading);
+        const nearLabel=document.createElement('label');nearLabel.textContent='Use near smoke light box';
+        nearSwitch=document.createElement('input');nearSwitch.type='checkbox';nearSwitch.setAttribute('aria-label','Use near smoke light box');
+        nearSwitch.addEventListener('change',()=>invoke('setNearBox',{enabled:nearSwitch.checked}).catch(failed));nearLabel.append(nearSwitch);panel.append(nearLabel);
+        for(const [key,axis,text,min,step]of [['grid',undefined,'Near light resolution across Fine width',1,'1'],['directions',undefined,'Near light directions',2,'2'],['extent',0,'Near light width multiplier',1,'.25'],['extent',1,'Near light height multiplier',1,'.25'],['extent',2,'Near light depth multiplier',1,'.25']]){
+          const row=document.createElement('label');row.textContent=text;
+          row.title=key==='grid'?'Independent cubic-cell spacing: this many near receivers span the Fine width. Actual dimensions grow with the box extent.':key==='directions'?'Live quadrature per near receiver, independent of Fine lighting directions.':'Total extent relative to Fine. Extra height reaches above the outlet; extra width/depth is symmetric.';
+          const number=document.createElement('input');number.type='number';number.min=String(min);number.step=step;number.setAttribute('aria-label',text);
+          number.addEventListener('change',()=>{
+            const next=axis===undefined?{[key]:Number(number.value)}:{extent:source().debugState().nearBox.extent.map((n,a)=>a===axis?Number(number.value):n)};
+            invoke('setNearBox',next).catch(failed);
+          });
+          nearControls.push({key,axis,number});row.append(number);panel.append(row);numberScrubs.push(installRenderingNumberControl(number,installNumberDrag));
+        }
+        nearStatus=document.createElement('p');nearStatus.setAttribute('aria-label','Near light receiver workload');panel.append(nearStatus);
         const environmentRow=document.createElement('label');environmentRow.textContent='Smoke environment blur';environmentRow.title='Prefilter environment directions using the existing normalized PMREM mips. Reduces isolated bright HDR samples by spreading their angular footprint. Zero keeps original detail; fire emission and direct surface environment lighting are unchanged.';
         const environmentNumber=document.createElement('input');environmentNumber.type='number';environmentNumber.min='0';environmentNumber.max='1';environmentNumber.step='.05';environmentNumber.setAttribute('aria-label','Smoke environment blur');
         environmentNumber.addEventListener('change',()=>invoke('setSmokeEnvironmentBlur',Number(environmentNumber.value)).catch(failed));lightControls.push({key:'smokeEnvironmentBlur',number:environmentNumber});environmentRow.append(environmentNumber);panel.append(environmentRow);numberScrubs.push(installRenderingNumberControl(environmentNumber,installNumberDrag));

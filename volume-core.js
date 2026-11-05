@@ -21182,7 +21182,7 @@ export function createKaminosVolumePrototype({
         const map=worldSmokeMapping(worldSmoke.plan,worldSmoke.anchor,productTransform);
         const middleMap=intermediateFlow?.exportFields?worldSmokeMapping(intermediateFlow.plan,intermediateFlow.anchor,productTransform):null;
         const middle=middleMap?{texture:intermediateFlow.optical,dimensions:intermediateFlow.plan.materialDims,localMin:middleMap.renderMin,localMax:middleMap.renderMax}:null;
-        return {texture:worldSmoke.optical,dimensions:worldSmoke.plan.materialDims,localMin:map.renderMin,localMax:map.renderMax,middle};
+        return {texture:worldSmoke.optical,dimensions:worldSmoke.plan.materialDims,localMin:map.renderMin,localMax:map.renderMax,renderView:worldRenderField.view,middle};
       },
       grid: EMISSIVE_LIGHT_GRID, gridY: EMISSIVE_LIGHT_GRID * gridHeight / gridSize, fluidGrid: gridSize, fluidGridY: gridHeight});
     sceneVolumeSource.encode(encoder, currentFluid, state.frameCount,productTransform);

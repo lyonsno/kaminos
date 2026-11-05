@@ -66,6 +66,7 @@ test('GH-02: the shared scene-source lattice accepts every height the resolver a
     apply() { return stub(); },
     construct() { return stub(); },
   });
+  globalThis.GPUBufferUsage ??= {UNIFORM: 1, COPY_DST: 2};
   globalThis.GPUTextureUsage ??= { STORAGE_BINDING: 8, TEXTURE_BINDING: 4, COPY_SRC: 1 };
   const device = stub();
   // The seed binds the reactant sidecar beside each fluid buffer (a stub texture pair here).
