@@ -3041,20 +3041,20 @@ _MESH_LOD_PREPARE_RUNNER = None
 
 def should_auto_prepare_mesh_lods(sha, glb_bytes, role=None):
     """True when a stored GLB is a triangle-mesh hero without a .lods.json sidecar."""
-    if role == 'lod-tier' or not isinstance(sha, str) or not _SHA256_HEX.fullmatch(sha):
+    if role in ('lod-tier', 'client-prepares-lods') or not isinstance(sha, str) or not _SHA256_HEX.fullmatch(sha):
         return False
     if _lod_set_path(sha).exists() or sha in mesh_lod_level_index():
         return False
     if not isinstance(glb_bytes, (bytes, bytearray, memoryview)) or len(glb_bytes) < 20:
         return False
-    raw = bytes(glb_bytes)
+    raw = memoryview(glb_bytes)
     if raw[:4] != b'glTF' or int.from_bytes(raw[4:8], 'little') != 2:
         return False
     json_len = int.from_bytes(raw[12:16], 'little')
     if json_len <= 0 or 20 + json_len > len(raw) or raw[16:20] != b'JSON':
         return False
     try:
-        doc = json.loads(raw[20:20 + json_len].decode('utf-8'))
+        doc = json.loads(raw[20:20 + json_len].tobytes())
     except (UnicodeDecodeError, ValueError):
         return False
     if not isinstance(doc, dict):
@@ -3081,7 +3081,10 @@ def should_auto_prepare_mesh_lods(sha, glb_bytes, role=None):
     for mesh in meshes:
         if not isinstance(mesh, dict):
             continue
-        for prim in mesh.get('primitives') or []:
+        primitives = mesh.get('primitives')
+        if not isinstance(primitives, list):
+            continue
+        for prim in primitives:
             if not isinstance(prim, dict):
                 continue
             if prim.get('mode', 4) != 4:
@@ -3107,7 +3110,7 @@ def _default_mesh_lod_prepare_runner(sha, server_port):
         '--report', str(report_path),
     ]
     env = {**os.environ, 'PATH': f"/opt/homebrew/bin:{os.environ.get('PATH', '')}"}
-    proc = subprocess.run(cmd, cwd=str(ROOT), env=env, capture_output=True, text=True, timeout=600)
+    proc = subprocess.run(cmd, cwd=str(ROOT), env=env, capture_output=True, text=True)
     return {
         'status': 'done' if proc.returncode == 0 else 'failed',
         'returncode': proc.returncode,
@@ -4390,14 +4393,15 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 payload = mesh_lod_choice(query.get("source", [None])[0], int(faces) if faces is not None else None,
                                           float(max_error) if max_error is not None else None, query.get("stat", ["max"])[0],
                                           query.get("route", [None])[0])
-                if not payload.get("levels"):
+                if not payload.get("levels") and query.get("prepare", [None])[0] != "client":
                     src_sha = payload.get("source")
                     root_dir = Path(BROWSE_ROOTS["generated-meshes"]).resolve()
                     glb_path = _generated_mesh_path_for_sha(root_dir, src_sha) if src_sha else None
                     if glb_path is not None and glb_path.is_file():
                         try:
                             if should_auto_prepare_mesh_lods(src_sha, glb_path.read_bytes()):
-                                enqueue_mesh_lod_prepare(src_sha, server_port=self.server.server_address[1])
+                                if enqueue_mesh_lod_prepare(src_sha, server_port=self.server.server_address[1]):
+                                    payload['prepareQueued'] = True
                         except OSError:
                             pass
                 self.send_json(payload)

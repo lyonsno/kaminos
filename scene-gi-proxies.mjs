@@ -57,7 +57,7 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
       if(base.state)return settle(base);
       handles.set(root,{...(handles.get(root)??base),state:'resolving'});
       try{
-        const query=new URLSearchParams({source:base.heroSha??base.assetSha});
+        const query=new URLSearchParams({source:base.heroSha??base.assetSha,prepare:'client'});
         if(selection.faces!=null)query.set('faces',String(selection.faces));
         if(selection.maxError!=null){query.set('maxError',String(selection.maxError));query.set('stat',selection.stat??'p95');}
         const set=await fetchJson(`/api/mesh-lods?${query}`);

@@ -3670,6 +3670,19 @@ function currentBeautyFrameOptions() {
    : null,
  };
 }
+function interactiveSceneRoots(roots, {matchDisplay = false} = {}) {
+ if (!sceneBeautyLods || polyEdit?.active()) return roots;
+ return sceneBeautyLods.interactiveRoots(roots, {matchDisplay, pinnedObjects: currentBeautyFrameOptions().pinnedObjects});
+}
+function prepareSceneNavigationRoot(root) {
+ if (!sceneNavigation || !root.parent) return;
+ for (const queryRoot of interactiveSceneRoots([root])) {
+  // A warped rung shares mutable vertex positions with beauty. Its small
+  // triangle set can be queried directly without a stale acceleration tree.
+  if (queryRoot !== root && root.userData?.kaminosVertexWarp) continue;
+  sceneNavigation.prepare(queryRoot);
+ }
+}
 function renderWithViewportShading(render) {
  viewportShading??=createViewportShading({createWireMaterial:()=>new THREE.MeshBasicNodeMaterial({color:0x15181c,wireframe:true,transparent:true,opacity:.42,depthWrite:false,side:THREE.DoubleSide})});
  const entries=viewportDisplay.shading==='wireframe'?workingScene.objects.filter(entry=>!VIEWPORT_SHADING_SKIPPED_TYPES.has(entry.type)):[];
@@ -4303,7 +4316,7 @@ window.kaminosGiProxies = {
     const handle = sceneGiProxies.get(entry?.object ?? rootOrSha);
     let source = typeof rootOrSha === 'string' && /^[0-9a-f]{64}$/i.test(rootOrSha) ? rootOrSha.toLowerCase() : (handle?.heroSha ?? handle?.assetSha);
     if (typeof source === 'string' && !/^[0-9a-f]{64}$/i.test(source)) {
-      const resp = await fetch(`/api/mesh-lods?${new URLSearchParams({ source })}`);
+      const resp = await fetch(`/api/mesh-lods?${new URLSearchParams({ source, prepare: 'client' })}`);
       if (resp.ok) { const j = await resp.json(); if (/^[0-9a-f]{64}$/i.test(j?.source ?? '')) source = j.source.toLowerCase(); }
     }
     if (!source || !/^[0-9a-f]{64}$/i.test(source)) throw Error('Provide a stored generated-meshes sha256 or a registered scene object');
@@ -7138,6 +7151,7 @@ function setActiveSceneGroup(id,options={}) {
 }
 
 function sceneObjectRecordForDescendant(object) {
+  object = sceneBeautyLods?.interactiveOwner(object) ?? object;
   for (const record of workingScene.objects) {
     let cursor = object;
     while (cursor) {
@@ -7165,7 +7179,8 @@ function sceneHitsFromViewportPointer(event) {
   );
   sceneRaycaster.setFromCamera(scenePointerNdc, camera);
   sceneRaycaster.params.Points.threshold = SCENE_OBJECT_POINT_PICK_THRESHOLD;
-  return visibleSceneIntersections({raycaster:sceneRaycaster,roots:workingScene.objects.filter(record=>(!assemblyEditing?.scope()||assemblyEditing.scope().objectIds.includes(record.id))&&record.object.visible&&isSceneItemVisible(record.id)).map(record=>record.object),camera,viewport:rect});
+  const roots=workingScene.objects.filter(record=>(!assemblyEditing?.scope()||assemblyEditing.scope().objectIds.includes(record.id))&&record.object.visible&&isSceneItemVisible(record.id)).map(record=>record.object);
+  return visibleSceneIntersections({raycaster:sceneRaycaster,roots:interactiveSceneRoots(roots,{matchDisplay:true}),camera,viewport:rect});
 }
 
 function pickSceneObjectFromViewportPointer(event,hits=sceneHitsFromViewportPointer(event)) {
@@ -10574,8 +10589,11 @@ function createPageSceneMembershipOperations() {
     scene:workingScene,selectionScope:()=>assemblyEditing?.scope()?.objectIds??null,
     records:{serialize:entry=>serializeSceneObject(ashMembershipEntry(entry)),reloadable:isReloadableSceneObjectRecord,load:(record,options)=>addSceneObjectFromSource(record,null,options)},
     roots:{
-      prepare(entry){sceneNavigation?.prepare(entry.object);applyGiProxySetting(entry);},
-      attach(entry){setSceneObjectMounted(entry,true);sceneNavigation?.prepare(entry.object);sceneDocument.authoringChanged();},
+      prepare(entry){
+        const pending=applyGiProxySetting(entry);
+        if(!pending)prepareSceneNavigationRoot(entry.object);
+      },
+      attach(entry){setSceneObjectMounted(entry,true);prepareSceneNavigationRoot(entry.object);sceneDocument.authoringChanged();},
       detach(entry){
         if(hybridSplatOverlayState.objectId===entry.id)stopHybridSplatOverlay({silent:true});
         if(splatCorrectionMode?.objectId===entry.id)exitSplatCorrectionMode({revert:false,silent:true});
@@ -11683,6 +11701,7 @@ async function initScene() {
   window.kaminosGISourceComparison=sceneGI.sourceComparison;
   window.__kaminosSurfaceLighting=sceneGI.surfaceLighting;
   sceneBeautyLods ??= createSceneBeautyLodController({
+    onRungLoaded: prepareSceneNavigationRoot,
     THREE,
     scene,
     giProxies: sceneGiProxies,
@@ -11823,7 +11842,22 @@ async function initScene() {
   window.kaminosSceneGIReceiverAt = (u,v) => {
     const ray=new THREE.Raycaster();
     ray.setFromCamera(new THREE.Vector2(u*2-1,1-v*2),camera);
-    const hit=ray.intersectObjects(scene.children,true).find(hit=>hit.object.isMesh&&!hit.object.material?.transparent);
+    const meshes=[], sceneRoots=new Set(workingScene.objects.map(entry=>entry.object));
+    function visit(object) {
+      if (!object.visible) return;
+      const roots=sceneRoots.has(object)?interactiveSceneRoots([object],{matchDisplay:true}):[object];
+      if (roots.length !== 1 || roots[0] !== object) {
+        for (const root of roots) root.traverseVisible(node=>{if(node.isMesh)meshes.push(node);});
+        return;
+      }
+      if (object.isMesh) meshes.push(object);
+      for (const child of object.children) visit(child);
+    }
+    visit(scene);
+    const hit=ray.intersectObjects(meshes,false).find(({object,face})=>{
+      const material=Array.isArray(object.material)?object.material[face?.materialIndex]:object.material;
+      return material?.visible&&!material.transparent;
+    });
     return hit?{isGround:hit.object===groundPlane,uuid:hit.object.uuid,point:hit.point.toArray(),linearColor:hit.object.material?.color?.toArray()}:null;
   };
   window.kaminosSceneEmissiveCameraDebugState=()=>sceneEmissiveCamera?.debugState()??{requested:false,effective:false,reason:'distributed-route-not-mounted'};
@@ -11991,8 +12025,8 @@ async function initScene() {
     camera,
     controls,
     gizmo: transformControls,
-    roots: () => [...workingScene.objects.filter(entry => isSceneItemVisible(entry.id) && entry.type !== 'splat' && entry.type!=='light' && entry.type!==CAMERA_TYPE).map(entry => entry.object),
-      ...(currentMesh && !workingScene.objects.some(entry => entry.object === currentMesh) ? [currentMesh] : [])],
+    roots: () => interactiveSceneRoots([...workingScene.objects.filter(entry => isSceneItemVisible(entry.id) && entry.type !== 'splat' && entry.type!=='light' && entry.type!==CAMERA_TYPE).map(entry => entry.object),
+      ...(currentMesh && !workingScene.objects.some(entry => entry.object === currentMesh) ? [currentMesh] : [])]),
     occluders: () => groundPlane ? [groundPlane] : [],
     navigationHook:{viewChange:()=>sceneCameras?.leave({continueFromCamera:true}),frameBounds:()=>sceneCameras?.frameBounds(),begin:mode=>sceneCameras?.beginNavigation(mode)??false,changed:()=>sceneCameras?.navigationChanged(),end:cancel=>sceneCameras?.endNavigation(cancel),wheelEnd:()=>sceneCameras?.wheelEnd(),frameLayout:()=>sceneCameras?.frameLayout(),restoreFrameLayout:value=>sceneCameras?.restoreFrameLayout(value),pan:(dx,dy)=>sceneCameras?.panFrame(dx,dy),zoom:factor=>sceneCameras?.zoomFrame(factor)},
     frameAll: () => { const framed = frameObjects(sceneObjectsForFraming(workingScene.objects.filter(entry=>isSceneItemVisible(entry.id))), camera, controls); if (framed) markDirty(); return framed; },
@@ -12002,7 +12036,7 @@ async function initScene() {
     status: updateNavigationHint,
   });
   sceneNavigation = navigation;
-  for (const entry of workingScene.objects) navigation.prepare(entry.object);
+  for (const entry of workingScene.objects) prepareSceneNavigationRoot(entry.object);
   if (currentMesh && !workingScene.objects.some(entry => entry.object === currentMesh)) navigation.prepare(currentMesh);
   navigationInput.addEventListener('change', () => {
     try { localStorage.setItem('kaminos.navigationInput', navigationInput.value); } catch {}
@@ -12474,7 +12508,7 @@ async function initScene() {
     runForegroundFrame:frameComposition.runForegroundFrame,
     async presentGlb(glb, {runId, sha256}) {
       const arrival=workingScene.arrival();
-      const response = await fetch('/api/ingest-mesh', {method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:glb});
+      const response = await fetch('/api/ingest-mesh?role=client-prepares-lods', {method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:glb});
       const saved = await response.json();
       if (!response.ok || saved.sha256 !== sha256) throw new Error(saved.error || 'generated mesh persistence hash mismatch');
       await scenePlacementTools.edits.waitForReplay();
@@ -27373,7 +27407,7 @@ async function importSceneMesh(file,{generation:origin=null,label=null,assetOrig
   assertSceneConstructionAvailable();if(!file?.name?.toLowerCase().endsWith('.glb'))throw Error('Choose a binary GLB mesh');
   const generation=workingScene.generation,bytes=await file.arrayBuffer();
   const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
-  const response=await fetch('/api/ingest-mesh',{method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:bytes});
+  const response=await fetch('/api/ingest-mesh?role=client-prepares-lods',{method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:bytes});
   const receipt=await response.json();if(!response.ok)throw Error(receipt.error||'Mesh storage failed');
   if(receipt.schema!=='kaminos.generated-mesh.v0'||receipt.sha256!==digest||receipt.bytes!==bytes.byteLength||receipt.source!==`/api/read?root=generated-meshes&path=${digest}.glb`)throw Error('Mesh storage returned a different source');
   if(generation!==workingScene.generation)throw Error('Scene changed while importing');assertSceneConstructionAvailable();
@@ -27455,6 +27489,7 @@ function applyGiProxySetting(entry){
         return window.__kaminosLastGenerationLevels;
       }).catch(()=>null);
     }
+    prepareSceneNavigationRoot(entry.object);
     return h;
   });
   sceneGiProxies.disable(entry.object);window.kaminosFireLightingSettings?.sync?.();window._kaminosDirty?.();
@@ -28016,7 +28051,7 @@ function removeSelectedSceneObjects(){
 // for undo, not rewritten.
 async function storeDerivedMesh(bytes){
   const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
-  const response=await fetch('/api/ingest-mesh',{method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:bytes});
+  const response=await fetch('/api/ingest-mesh?role=client-prepares-lods',{method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:bytes});
   const receipt=await response.json();if(!response.ok)throw Error(receipt.error||'Mesh storage failed');
   if(receipt.schema!=='kaminos.generated-mesh.v0'||receipt.sha256!==digest||receipt.bytes!==bytes.byteLength||receipt.source!==`/api/read?root=generated-meshes&path=${digest}.glb`)throw Error('Mesh storage returned a different source');
   return receipt;
@@ -29252,7 +29287,7 @@ function setupAuthoringAssets(){
   // Stored GLB plus its generation origin, as the SF3D service persists its meshes.
   const persistGeneratedMesh=async(glb,generation,label,suffix)=>{
     const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',glb)),b=>b.toString(16).padStart(2,'0')).join('');
-    const response=await fetch('/api/ingest-mesh',{method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:glb});const saved=await response.json();
+    const response=await fetch('/api/ingest-mesh?role=client-prepares-lods',{method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:glb});const saved=await response.json();
     if(!response.ok||saved.sha256!==sha256||saved.bytes!==glb.byteLength)throw Error(saved.error||'Generated mesh storage returned a different artifact');
     const result={source:saved.source,sha256,name:`${label} · ${suffix}.glb`,generation:{...generation,sha256,bytes:glb.byteLength}};
     const originResponse=await fetch('/api/mesh-generation-origin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(result)});const origin=await originResponse.json();
