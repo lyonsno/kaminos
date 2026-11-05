@@ -43,7 +43,7 @@ try{
  page.on('pageerror',e=>report.errors.push(String(e)));page.on('console',m=>{if(m.type()==='error')report.errors.push(m.text());});
 
  report.phase='native';await save();
- await page.route('**/solid-cube-native-fixture',r=>r.fulfill({contentType:'text/html',body:'<!doctype html><title>Solid cube cadence conformance</title>'}));
+ await page.route('**/solid-cube-native-fixture',r=>r.fulfill({contentType:'text/html',body:'<!doctype html><title>Solid cube cadence conformance</title><script type="importmap">{"imports":{"three":"/lib/three.webgpu.js","three/webgpu":"/lib/three.webgpu.js","three/tsl":"/lib/three.tsl.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"}}</script>' }));
  await page.goto(origin+'/solid-cube-native-fixture');report.native=await page.evaluate(solidCubeCadenceNative);await save();
  const n=report.native;assert.equal(n.validation,null);assert.deepEqual(n.errors,[]);assert.equal(n.outputFrame,true);
  assert.equal(n.rows.length,5);assert.deepEqual(n.rows[0].state.solidShadowCapture.ages,[0,0,0,0,0,0]);
