@@ -11790,6 +11790,15 @@ export function createKaminosVolumePrototype({
   let debugOpticalStepping = opticalSteppingConfig({mode:controlsSnapshot.raymarchMode??'numerical',tolerance:controlsSnapshot.opticalTolerance??0.001});
   let rayStepTelemetry = null;
   let integralReconstruction=null, reconstructionSample=0;
+  let integralEncodedForFrame=false;
+  state.integralSourceGeneration=0;
+  state.integralReconstruction={requested:controlsSnapshot.integralReconstruction??'off',effective:'off',reason:'awaiting-presentation',frames:0};
+  function invalidateIntegralReconstruction(reason,{source=false,release=false}={}) {
+    if(source)state.integralSourceGeneration++;
+    if(release)integralReconstruction?.disable(reason);else integralReconstruction?.reset(reason);
+    integralEncodedForFrame=false;
+    state.integralReconstruction={requested:controlsSnapshot.integralReconstruction??'off',effective:'off',reason,frames:0,sourceGeneration:state.integralSourceGeneration};
+  }
   let rayAllocationHistory = null;
   let rayAllocationHistoryFrozen=false;
   let rayStepTelemetryCanvas = null;
@@ -14308,6 +14317,7 @@ export function createKaminosVolumePrototype({
   }
 
   function rebuildFluidState(nextGridSize = gridSize, reason = 'grid-rebuilt') {
+    invalidateIntegralReconstruction(reason,{source:true});
     const preserveWorld=!!worldSmoke&&controlsSnapshot.worldSmoke==='on'&&['grid-rebuilt','grid-height-change','authored-flame-domain-relocation','volume-primitive-change'].includes(reason);
     const previousStep=state.simStepCount;
     state.thermalFluidAllocationId='thermal-fluid-'+(++thermalFluidGeneration);
@@ -16274,6 +16284,7 @@ export function createKaminosVolumePrototype({
     fallbackReason = null,
     captureContext = null,
   } = {}) {
+    if(!integralEncodedForFrame||!raymarchApplied||residualApplied)invalidateIntegralReconstruction('presentation:'+compositionEffective,{release:true});
     const application = {
       identity: 'volume-presentation-applied-pass-receipt-v0',
       effectiveMode: volumePresentationModeEffective,
@@ -16361,6 +16372,8 @@ export function createKaminosVolumePrototype({
   }
 
   function updateUniforms(now) {
+    integralEncodedForFrame=false;
+    state.integralReconstruction={requested:controlsSnapshot.integralReconstruction??'off',effective:'off',reason:'awaiting-presentation',frames:0};
     resize();
     if (!sceneSourceFrameConsumer && !sceneTransportConsumer) updateOrdinarySceneDepth();
     camera.updateMatrixWorld();
@@ -21507,7 +21520,7 @@ export function createKaminosVolumePrototype({
     if (uniforms[368] <= 1.5) emissiveSeedProducer = null;
     if (uniforms[368] <= 1.5 || !sceneVolumeSourceRequested) sceneVolumeSource?.invalidate('inactive-source-route');
     const {rayNoiseFrame:samplePhase,...integralControls}=controlsSnapshot;
-    const integralIdentity=reconstruct?JSON.stringify([Array.from(invViewProj.elements),productTransform,integralControls,worldSmokeKey,intermediateKey]):null;
+    const integralIdentity=reconstruct?JSON.stringify([Array.from(invViewProj.elements),productTransform,integralControls,worldSmokeKey,intermediateKey,state.integralSourceGeneration]):null;
     const integralAttachments=reconstruct?integralReconstruction.prepare(state.width,state.height,controlsSnapshot,integralIdentity,state.simStepCount):null;
     const pass = encoder.beginRenderPass({
       label,
@@ -21532,6 +21545,8 @@ export function createKaminosVolumePrototype({
       const cameraValues=new Float32Array([...emissiveWhiteMatrix[0],0,...emissiveWhiteMatrix[1],0,...emissiveWhiteMatrix[2],0,
         0,uniforms[373],uniforms[374],0,0,0,uniforms[46],0]);
       state.integralReconstruction=integralReconstruction.encode(encoder,view,targetPipeline===readbackPipeline?'rgba8unorm':format,cameraValues);
+      integralEncodedForFrame=true;
+      state.integralReconstruction.sourceGeneration=state.integralSourceGeneration;
       state.integralReconstruction.samplePhase=uniforms[41];
       state.integralReconstruction.freshSampling=controlsSnapshot.reconstructionFresh!==false&&controlsSnapshot.rayStartNoise!==false&&controlsSnapshot.rayNoiseFrame==null;
     }
@@ -22589,6 +22604,7 @@ export function createKaminosVolumePrototype({
         actualFrontSha256,
       });
     }
+    invalidateIntegralReconstruction('full-field-import',{source:true});
     device.queue.writeBuffer(fluidBuffers[0], 0, upload.fluid.bytes);
     device.queue.writeBuffer(fluidBuffers[1], 0, upload.fluid.bytes);
     device.queue.writeBuffer(frontBuffers[0], 0, upload.front.bytes);
@@ -28217,6 +28233,7 @@ export function createKaminosVolumePrototype({
     },
     setCanvasPresentationSuppressed(suppressed) {
       canvasPresentationSuppressed = suppressed === true;
+      invalidateIntegralReconstruction(canvasPresentationSuppressed?'canvas-presentation-suppressed':'canvas-presentation-resumed',{release:true});
       return canvasPresentationSuppressed;
     },
     sampleRayAllocationHistory() { return rayAllocationHistory.sample(); },
@@ -28453,6 +28470,7 @@ export function createKaminosVolumePrototype({
       pumpLookLabFrozenFrame();
     },
     setVolumePrimitives(next) {
+      invalidateIntegralReconstruction('volume-primitive-change',{source:true});
       const incoming = Array.isArray(next) ? next : [];
       volumePrimitives = incoming.map(normalizePrimitiveRecord);
       publishVolumePrimitiveState();
@@ -29363,6 +29381,7 @@ export function createKaminosVolumePrototype({
       if(consumer!==null&&typeof consumer!=='function')throw new Error('Native scene transport consumer must be a function or null');
       if(consumer&&(productFrameOwner!=='prototype'||typeof getSceneDepth!=='function'))throw new Error('Native scene transport requires the shared ordinary scene host');
       sceneTransportConsumer=consumer;
+      invalidateIntegralReconstruction(consumer?'scene-transport-presentation':'ordinary-presentation-resumed',{release:true});
       if(!consumer)state.sceneTransport={requested:false,effective:false};
       return {requested:Boolean(consumer)};
     },
