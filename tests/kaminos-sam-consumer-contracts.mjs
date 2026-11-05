@@ -108,7 +108,7 @@ const hostStart=html.indexOf('  compositionHost = {'),hostEnd=html.indexOf('    
 assert.ok(frameStart>=0&&frameEnd>frameStart&&hostStart>0&&hostEnd>hostStart);
 const skippedHost = vm.runInNewContext(`${html.slice(frameStart,frameEnd)}
 ${html.slice(hostStart,hostEnd)}};compositionHost`, {
-  createSceneFrameComposition,sceneLightingPreparation:null,sceneFrameCount:7,
+  deviceRecoveryHeld:()=>false,createSceneFrameComposition,sceneLightingPreparation:null,sceneFrameCount:7,
   authoredWaterFlameTransportActive:false,authoredFlameHDRActive:false,exclusiveInspectionRender:false,manualInspectionRender:false,
   renderer:{backend:{device:{}}},drawSceneFrame(){throw Error('held radiance must not draw');},
   window:{__kaminosSceneRadiance:{canRender:()=>false}},

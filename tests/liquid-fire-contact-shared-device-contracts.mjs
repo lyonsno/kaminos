@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 // therefore not be seated on the volume for that route. This evaluates the
 // real index.html wiring and the real prototype (stubbed DOM, no GPU).
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const routeStart = html.indexOf('async function initKaminosVolumeRoute()');
+const routeStart = html.indexOf('function createPageVolumePrototype()');
 const constructAt = html.indexOf('volumePrototype = createKaminosVolumePrototype({', routeStart);
 assert.ok(routeStart >= 0 && constructAt > routeStart, 'volume route constructs the prototype');
 const contextLine = html.slice(constructAt, html.indexOf('\n  });', constructAt)).match(/sharedGpuContext:\s*([^\n]+?),\n/);

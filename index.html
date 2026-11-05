@@ -12240,7 +12240,9 @@ async function initScene() {
   deviceRecovery=createDeviceRecovery({device:renderer.backend.device,
     stop(){
       recoverySimulation??={flame:!!volumePrototype,active:!!volumePrototype?.isActive(),paused:!!volumePrototype?.debugState().simulationPaused,
-        water:!!waterFeature.host,waterPaused:waterFeature.paused};
+        water:!!waterFeature.host||waterFeature.isLoading(),waterPaused:waterFeature.paused,
+        flamePresent:flameFeature.present||!!activeSceneComposition,
+        flameRoute:Object.fromEntries([...fireLightFieldRouteParams(),...Object.entries(fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()))])};
       environmentLoader.invalidateResources();
       transportPrototype?.setSceneTransportConsumer(null);transportPrototype=null;
       authoredWaterFlameTransportActive=false;authoredFlameHDRActive=false;
@@ -12252,10 +12254,14 @@ async function initScene() {
     },
     async rebuild({watch,assertCurrent}){
       if(authoredAsh.size||workingScene.objects.some(entry=>entry.burnable?.enabled))throw Error('This scene contains burning state. Automatic recovery excludes burning; your authored scene is retained.');
-      if(compositionModule||fingerFluidPyroCompositionRequested()||samHostContext)throw Error('This custom GPU composition does not yet support device recovery. Your authored scene is retained.');
+      if(compositionModule||fingerFluidPyroCompositionRequested()||samImageToolsPromise)throw Error('This custom GPU composition does not yet support device recovery. Your authored scene is retained.');
       await sceneLightingPreparation?.whenIdle().catch(()=>{});assertCurrent();
       await sceneRadianceRouteTask.catch(()=>{});assertCurrent();
       await releaseSceneRadianceRoute();assertCurrent();
+      await samHostContext?.inferenceSession.close();samHostContext=null;assertCurrent();
+      waterFeature.restart(waterFeature.setup);
+      if(collisionVoxelMesh){scene.remove(collisionVoxelMesh);collisionVoxelMesh.userData.disposeGpuSolid?.();collisionVoxelMesh.geometry.dispose();collisionVoxelMesh.material.dispose();collisionVoxelMesh=null;}
+      collisionVoxelRevision=undefined;
       volumeBridge?.dispose?.();volumeBridge=null;
       await volumePrototype?.dispose();volumePrototype=null;assertCurrent();
       for(const graph of giOutputGraphs.values())graph.fireLightFieldPass?.dispose();
@@ -12267,14 +12273,17 @@ async function initScene() {
       const pixelRatio=old.getPixelRatio(),toneMapping=old.toneMapping,exposure=old.toneMappingExposure;
       old.dispose();
       const next=await requestKaminosSharedWebGpuDevice({bufferRequirements:combinedRequirements,
-        hostRequirements:sharedDeviceHostRequirements({sam:null})});
-      assertCurrent();const detachCandidate=watch(next.device);
-      const replacement=new THREE.WebGPURenderer({canvas,device:next.device,antialias:true,trackTimestamp:isFireLightFieldTimingRoute()||new URLSearchParams(location.search).get('ash_timing')==='1'});
+        hostRequirements:sharedDeviceHostRequirements({sam:samHostConfig?.mounted?samHostDeviceRequirements:null})});
+      try{assertCurrent();}catch(error){next.device.destroy();throw error;}
+      const detachCandidate=watch(next.device);
+      let replacement;
+      try{
+      replacement=new THREE.WebGPURenderer({canvas,device:next.device,antialias:true,trackTimestamp:isFireLightFieldTimingRoute()||new URLSearchParams(location.search).get('ash_timing')==='1'});
       replacement.setPixelRatio(pixelRatio);replacement.setSize(size.x,size.y);
       replacement.toneMapping=toneMapping;replacement.toneMappingExposure=exposure;
       replacement.shadowMap.enabled=old.shadowMap.enabled;replacement.shadowMap.type=old.shadowMap.type;
       replacement.outputColorSpace=old.outputColorSpace;
-      try{await replacement.init();assertCurrent();}catch(error){detachCandidate();replacement.dispose();next.device.destroy();throw error;}
+      await replacement.init();assertCurrent();
       renderer=replacement;sharedGpu=next;sharedGpuFailureReason=null;compositionHost.device=next.device;
       renderPipeline.renderer=renderer;renderPipeline.needsUpdate=true;
       pmremGenerator=new THREE.PMREMGenerator(renderer);
@@ -12289,7 +12298,7 @@ async function initScene() {
         volumePrototype.setSimulationPaused(recoverySimulation.paused);
         volumeBridge=createVolumeMainRendererBridge();
         window.__kaminosVolumeBridge=window.__kaminosVolumeMainRendererBridge=volumeBridge;
-        await syncSceneRadianceRoute();assertCurrent();
+        await syncSceneRadianceRoute(new URLSearchParams(recoverySimulation.flamePresent?recoverySimulation.flameRoute:{}));assertCurrent();
       }
       rebuildSceneGIOutput();
       // Neutral is rebuilt synchronously; HDR loads use the new generator after resume.
@@ -12299,6 +12308,13 @@ async function initScene() {
         if(!mounted)throw Error(waterFeature.failure||'Water could not restart');
       }
       if(recoverySimulation.active){await flameFeature.setActive(true,{isCurrent:()=>{assertCurrent();return true;}});assertCurrent();}
+      }catch(error){
+        detachCandidate();
+        waterFeature.restart(waterFeature.setup);
+        volumePrototype?.retireLostDevice();
+        try{await volumePrototype?.setActive(false);}finally{replacement?.dispose();next.device.destroy();}
+        throw error;
+      }
     },
     changed(state){
       recoveryNotice.hidden=state.phase==='active';recoveryRetry.hidden=state.phase!=='failed';
@@ -12311,7 +12327,7 @@ async function initScene() {
       }
     },
   });
-  window.kaminosDeviceRecovery={state:deviceRecovery.state,whenSettled:deviceRecovery.whenSettled,retry:deviceRecovery.retry};
+  window.kaminosDeviceRecovery={state:deviceRecovery.state,whenSettled:deviceRecovery.whenSettled,retry:deviceRecovery.retry,authoredFlameRoute:()=>recoverySimulation?.flameRoute};
   // Explicit test injection; normal callers cannot accidentally destroy a device.
   if(new URLSearchParams(location.search).get('device_loss_test')==='1')window.kaminosLoseDevice=()=>renderer.backend.device.destroy();
   // Agent vantage: a sub (camera object) an agent pilots with tools/vantage.mjs.
@@ -25792,7 +25808,7 @@ async function collectSceneComposition() {
   for (const [key, value] of fireLightFieldRouteParams()) {
     if (key.startsWith('volume_light_field')) route[key] = value;
   }
-  Object.assign(route,fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()));
+  Object.assign(route,failedRecovery?(window.kaminosDeviceRecovery?.authoredFlameRoute()??{}):fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()));
   const moduleUrl = new URLSearchParams(location.hash.slice(1)).get('composition_module_url');
   if (moduleUrl) route.composition_module_url = moduleUrl;
   route.volume_light_field_test_scene = document.getElementById('fire-light-test-scene-toggle').checked ? '1' : '0';

@@ -16,13 +16,13 @@ export function createAuthoredWaterFeature({services,emitters,enabledEmitters=em
   generation++;request++;pending=null;admitted=null;
   const previous=host;host=null;previous?.dispose();
  }
- async function acquire({replace=false,experiment=null}={}){
+ async function acquire({replace=false,experiment=null,recovery=false}={}){
   if(!setup&&!experiment)return false;
   if(!replace&&host)return true;
   if(!replace&&pending)return pending.promise;
   const ticket={generation,request:++request};
   const isCurrent=()=>ticket.generation===generation&&(admitted===ticket||ticket.request===request);
-  const inputs={setup:structuredClone(experiment??setup),emitters:experiment?[]:structuredClone((replace?enabledEmitters:emitters)())};
+  const inputs={setup:structuredClone(experiment??setup),emitters:experiment?[]:structuredClone(((replace||recovery)?enabledEmitters:emitters)())};
   if(replace&&!experiment&&!inputs.emitters.length)throw Error('Show a water emitter before releasing water');
   const run=async()=>{
    let candidate=null,published=false;
@@ -70,9 +70,9 @@ export function createAuthoredWaterFeature({services,emitters,enabledEmitters=em
   },
   async recover(wasPaused){
    const ticket=generation;
-   const mounted=await acquire();
+   const mounted=await acquire({recovery:true});
    if(ticket!==generation)return false;
-   if(mounted)feature.setPaused(wasPaused);
+   if(mounted){paused=Boolean(wasPaused);host.setPaused(paused||!visible());}
    return mounted;
   },
   release:()=>acquire({replace:true}),
