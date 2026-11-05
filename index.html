@@ -12909,9 +12909,10 @@ function createPageSceneLifecycle(){
       beginLoad:setup=>{waterFeature.setup=setup.water;activeSceneComposition=setup.flame.composition;authoredFlamePresent=setup.flame.sourcePresent;volumePrototype?.setSceneCompositionPresentation?.(Boolean(activeSceneComposition));},beforeLoad:(record,requestId)=>record.type===ASH_OBJECT_TYPE?sceneGeometryPreview?.present(requestId):undefined,
       loaded:async(setup,requestId)=>{
         const waitingForDomains=setup.water||setup.flame.sourcePresent||workingScene.objects.some(entry=>entry.type===ASH_OBJECT_TYPE);
-        // Static scenes already have a textured coarse frame. A later neutral
-        // preview would erase those materials without buying any domain progress.
-        if(!sceneArrivalState.coarsePresented||waitingForDomains)await sceneGeometryPreview?.present(requestId);
+        // Preserve a textured coarse frame through static refinement. An empty
+        // draw (no eligible or successfully loaded stand-ins) still needs its fallback.
+        const hasCoarseGeometry=sceneArrivalState.coarsePresented&&sceneArrivalState.coarseObjects>0;
+        if(!hasCoarseGeometry||waitingForDomains)await sceneGeometryPreview?.present(requestId);
         if(setup.water)await mountLocalLiquidHost();
         for(const entry of workingScene.objects)if(entry.type===ASH_OBJECT_TYPE){if(typeof sceneColliderCollection!=='undefined')await sceneColliderCollection.prepare?.(workingScene.objects,{...(typeof currentColliderLodOptions==='function'?currentColliderLodOptions():{}),ashCellSize:entry.ash?.cellSize??0.04});await authoredAsh.get(entry.id).initialize();}
       },

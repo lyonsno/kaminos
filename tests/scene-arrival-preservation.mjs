@@ -7,6 +7,7 @@ import * as THREE from '../lib/three.core.js';
 import {planArrivalStudioLights,resolveStudioLook,inspectArrivalMaterialProfile,resolveEarlyLowLodMeshSha} from '../asset-arrival.mjs';
 import {createCoarseRepetition} from '../scene-lod-startup.mjs';
 import {sceneItemVisible,withViewportVisibility} from '../scene-visibility.mjs';
+import {prepareSceneAssetBatch} from '../scene-asset-preparation.mjs';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const section=(start,end)=>{const a=html.indexOf(start),b=html.indexOf(end,a);assert.ok(a>=0&&b>a,start);return html.slice(a,b);};
 
@@ -39,10 +40,35 @@ test('coarse and replacement roots obey saved object/group visibility',async()=>
 test('static coarse arrival never regresses to neutral gray; domain waits retain their fallback',async()=>{
  for(const [coarsePresented,domain,expected]of [[true,null,[]],[false,null,['gray']],[true,'water',['gray','water']],[true,'ash',['gray','ash']],[true,'flame',['gray']]]){
   const calls=[],rows=domain==='ash'?[{id:'ash',type:'retained-ash',ash:{}}]:[];
-  const c={createSceneLifecycle:x=>x,workingScene:{objects:rows},scene:{},disposeObjectTree(){},setSceneObjectMounted(){},prepareSavedSceneAssets(){},addSceneObjectFromSource(){},restoreLoadedSceneRecord(){},setSceneGroupsFromRecords(){},setSceneSelection(){},setActiveSceneObject(){},setActiveSceneGroup(){},retireSceneFlame(){},clearSceneEditingState(){},clearSceneDomains(){},clearSceneTransient(){},projectClearedScene(){},sceneArrivalState:{coarsePresented},sceneGeometryPreview:{present:async()=>calls.push('gray')},mountLocalLiquidHost:async()=>calls.push('water'),ASH_OBJECT_TYPE:'retained-ash',authoredAsh:new Map([['ash',{initialize:async()=>calls.push('ash')}]]),sceneColliderCollection:{}};
+  const c={createSceneLifecycle:x=>x,workingScene:{objects:rows},scene:{},disposeObjectTree(){},setSceneObjectMounted(){},prepareSavedSceneAssets(){},addSceneObjectFromSource(){},restoreLoadedSceneRecord(){},setSceneGroupsFromRecords(){},setSceneSelection(){},setActiveSceneObject(){},setActiveSceneGroup(){},retireSceneFlame(){},clearSceneEditingState(){},clearSceneDomains(){},clearSceneTransient(){},projectClearedScene(){},sceneArrivalState:{coarsePresented,coarseObjects:coarsePresented?1:0},sceneGeometryPreview:{present:async()=>calls.push('gray')},mountLocalLiquidHost:async()=>calls.push('water'),ASH_OBJECT_TYPE:'retained-ash',authoredAsh:new Map([['ash',{initialize:async()=>calls.push('ash')}]]),sceneColliderCollection:{}};
   vm.createContext(c);vm.runInContext(section('function createPageSceneLifecycle(', 'function loadTexture(').replace('const sceneLifecycle=createPageSceneLifecycle();',''),c);
   const setup={water:domain==='water'?{}:null,flame:{sourcePresent:domain==='flame'}};
   await c.createPageSceneLifecycle().context.loaded(setup,1);
   assert.deepEqual(calls,expected,JSON.stringify({coarsePresented,domain}));
+ }
+});
+
+test('preparation preserves the fallback when no coarse asset root reaches its presented frame',async()=>{
+ for(const mode of ['procedural','failed-lod','textured-lod']){
+  const calls=[],sha='b'.repeat(64),record={id:'asset',type:mode==='procedural'?'procedural-mesh':'glb',source:mode==='procedural'?'/local/procedural':`/api/read?root=generated-meshes&path=${sha}.glb`};
+  const c={THREE,createCoarseRepetition,resolveEarlyLowLodMeshSha,prepareSceneAssetBatch,
+   createSceneLifecycle:x=>x,workingScene:{objects:[record],groups:[]},scene:new THREE.Scene(),
+   disposeObjectTree(){},disposePreparedAsset(){},setSceneObjectMounted(){},addSceneObjectFromSource(){},restoreLoadedSceneRecord(){},setSceneGroupsFromRecords(){},setSceneSelection(){},setActiveSceneObject(){},setActiveSceneGroup(){},retireSceneFlame(){},clearSceneEditingState(){},clearSceneDomains(){},clearSceneTransient(){},projectClearedScene(){},
+   sceneArrivalState:{},sceneAssetPreparationOwner:null,setSceneAssetPreparationActive(){},lodPreparationContext:()=>({}),readAuthoredCameraView:()=>({}),renderer:{domElement:{width:128,height:128}},sceneBeautyLods:null,cachedLodPreparation:()=>new Map(),fullSceneAssetPool:{acquire:async()=>({scene:new THREE.Group()})},prepareArrivedMeshMaterials(){},seedInitialBeautyLevels(){},
+   sceneGeometryPreview:{present:async()=>calls.push('gray')},ASH_OBJECT_TYPE:'retained-ash',sceneColliderCollection:{},
+   GLTFLoader:class{},fetch:async()=>({ok:true,json:async()=>({choice:{sha256:sha,faces:12},levels:[]})}),
+   loadPreparedLod:async()=>{if(mode==='failed-lod')throw Error('LOD unavailable');return new THREE.Group().add(new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial({color:'#a04020'})));},
+   sceneLoadRequests:{isCurrent:()=>true},window:{dispatchEvent(){}},CustomEvent:class{},requestAnimationFrame:fn=>queueMicrotask(fn),
+   sceneLightingPreparation:{whenIdle:async()=>{},withRenderer:fn=>fn()},deviceRecoveryHeld:()=>false,syncViewportRendererSize(){},camera:new THREE.PerspectiveCamera(),sceneFrameCount:0,drawSceneFrame(){c.sceneFrameCount++;},
+  };
+  vm.createContext(c);
+  vm.runInContext(section('let sceneLoadingStandInGroup = null;', 'async function showGLB(')+section('function createPageSceneLifecycle(', 'function loadTexture(').replace('const sceneLifecycle=createPageSceneLifecycle();','')+section('presentSceneCoarseFrame=async requestId=>{','  window.kaminosSceneLoadPresentation='),c);
+  const setup={flame:{sourcePresent:false}},batch=await c.prepareSavedSceneAssets([record],1,setup);
+  assert.equal(c.sceneFrameCount,2,'the real presenter draws even when staging has no roots');
+  assert.equal(c.sceneArrivalState.coarseObjects,mode==='textured-lod'?1:0,mode);
+  assert.equal(c.sceneArrivalState.expectedCoarseObjects,mode==='procedural'?0:1,mode);
+  await c.createPageSceneLifecycle().context.loaded(setup,1);
+  assert.deepEqual(calls,mode==='textured-lod'?[]:['gray'],mode);
+  batch.dispose();
  }
 });
