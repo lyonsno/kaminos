@@ -14,7 +14,7 @@ const composition={schema:'kaminos.stationary-flame-composition.v1',flame:{prese
 function fixture({matching=false,missing=false,ordinary=false}={}){
  const events=[];let release;
  const response=new Promise(resolve=>release=resolve);
- const c={URLSearchParams,Symbol,Promise,compositionRestoreUrl,readOwnerExperimentAddress,
+ const c={URLSearchParams,Symbol,Promise,compositionRestoreUrl,readOwnerExperimentAddress,window:{},
   location:{origin:'http://localhost',hash:ordinary?'':'#scene=chosen.kaminos.json&workspace=workbench',search:matching?'?settings_preset='+preset:'',replace:url=>events.push(['redirect',url])},
   fetch:()=>{events.push(['fetch']);return response;},planSceneRestore:()=>({composition}),
   sceneDocument:{holdRestore(){events.push(['hold']);}},setInfo(){},document:{},

@@ -600,7 +600,14 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 <link rel="stylesheet" href="./experiment-workspace.css">
 </head>
 <body class="kaminos-starting">
-<div id="kaminos-startup-veil" role="status">Starting Kaminos…</div>
+<div id="kaminos-startup-veil" role="status">
+  <div class="kaminos-startup-card">
+    <div class="kaminos-startup-heading"><span class="kaminos-startup-spinner" aria-hidden="true"></span><strong>Starting Kaminos…</strong></div>
+    <p id="kaminos-startup-phase">Loading application modules</p>
+    <div class="kaminos-startup-metrics" aria-live="off"><p id="kaminos-startup-elapsed">0 ms elapsed</p><p id="kaminos-startup-delay">UI scheduling: awaiting first sample</p></div>
+    <div id="kaminos-startup-actions"></div>
+  </div>
+</div>
 
 <div id="sidebar">
   <h1>Kaminos</h1>
@@ -2931,6 +2938,7 @@ import {installRenderOutput} from './render-output-ui.mjs';
 import { settleStartupVeil } from './startup-veil.mjs';
 import { createEnvironmentLoader } from './scene-environment-loader.mjs';
 import {createDeviceRecovery} from './scene-device-recovery.mjs';
+window.kaminosStartup?.phase('Preparing application');
 // Adopt the <head> guard's early runtime-config request (startup-veil-guard.js).
 loadStartupRuntimeConfig().catch(() => {});
 import {inspectAuthoredWaterCompatibility,planAuthoredWaterBounds,planAuthoredWaterMatch,resolveAuthoredWaterSampling,describeAuthoredWaterDrop} from './authored-water-drop.mjs';
@@ -11207,6 +11215,7 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
 }
 
 async function initScene() {
+  window.kaminosStartup?.phase('Reading startup configuration');
   await initializeHybridSplatOverlayModuleUrl();
   const vp = document.getElementById('viewport');
   scene = new THREE.Scene();
@@ -11227,6 +11236,7 @@ async function initScene() {
   window.__kaminosCompositionSetup = {moduleUrl: compositionModuleUrl, status: compositionModuleUrl ? 'pending' : 'absent', phase: 'module-load'};
   try {
     if (compositionModuleUrl) {
+      window.kaminosStartup?.phase('Loading scene integration');
       compositionModule = await importCompositionModule(compositionModuleUrl);
       if (typeof compositionModule.mountComposition !== 'function') {
         throw new Error('composition module did not export mountComposition');
@@ -11242,6 +11252,7 @@ async function initScene() {
   const requiresSharedDevice = hasCompositionBufferRequirements || hasCompositionDeviceAcquisition;
   let generationAdapter=null,generationRequirements={};
   if(new URLSearchParams(location.hash.slice(1)).get('authoring')==='1'){
+    window.kaminosStartup?.phase('Requesting GPU adapter');
     generationAdapter=await navigator.gpu?.requestAdapter({powerPreference:'high-performance'});
     if(generationAdapter && Object.entries(assetGenerationBufferRequirements).every(([name,value])=>generationAdapter.limits[name]>=value))generationRequirements=assetGenerationBufferRequirements;
   }
@@ -11253,6 +11264,7 @@ async function initScene() {
     // merging must not turn absence, strings, or invalid numbers into authority.
     combinedRequirements[name]=Number.isSafeInteger(value)&&value>0?Math.max(value,combinedRequirements[name]||0):value;
   }
+  window.kaminosStartup?.phase('Requesting GPU device');
   window.__kaminosCompositionSetup.phase = 'shared-device-acquisition';
   try {
     sharedGpu = await requestKaminosSharedWebGpuDevice({
@@ -11277,6 +11289,7 @@ async function initScene() {
     console.warn('Kaminos shared WebGPU device unavailable; falling back to independent devices:', sharedGpuFailureReason);
   }
   if (samHostConfig?.mounted) {
+    window.kaminosStartup?.phase('Preparing image tools');
     const { createWebGpuDeviceRequest, createWebGpuInferenceSession } = await import('./webgpu-inference-kit/src/core.js');
     let adapter = sharedGpu?.adapter || null;
     let device = sharedGpu?.device || null;
@@ -11304,7 +11317,9 @@ async function initScene() {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   vp.appendChild(renderer.domElement);
 
+  window.kaminosStartup?.phase('Initializing renderer');
   await renderer.init();
+  window.kaminosStartup?.phase('Building workspace');
   console.log('WebGPU renderer initialized, backend:', renderer.backend?.constructor?.name || 'unknown');
 
   controls = new OrbitControls(camera, renderer.domElement);
@@ -27723,6 +27738,7 @@ initKaminosFingerJuiceHostRoute();
   const startupRestoreRequested = !!startupSceneHash.get('scene');
   let startupRestorePending = startupRestoreRequested;
   const startupSceneFile = startupSceneHash.get('scene');
+  window.kaminosStartup?.phase(startupSceneFile ? 'Reading saved scene' : 'Preparing workspace');
   // Admit the saved recipe before creating either renderer. Recipe recovery
   // navigates without allocating a 3D viewer or a fire runtime for the page
   // that navigation will discard.
