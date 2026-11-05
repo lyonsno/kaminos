@@ -11534,7 +11534,7 @@ async function initScene() {
   document.querySelector('#scene-lighting-preparation-status button').onclick=()=>{sceneLightingPreparation.retry()?.catch(()=>{});};
   sceneGeometryPreview=createSceneLoadingGeometry({THREE,renderer,camera,readObjects:()=>workingScene.objects,
     isCurrent:id=>sceneLoadRequests.isCurrent(id)&&!deviceRecoveryHeld(),isVisible:isSceneItemVisible,
-    waitForLighting:()=>sceneLightingPreparation.whenIdle(),
+    waitForLighting:()=>sceneLightingPreparation.whenIdle(),withRenderer:sceneLightingPreparation.withRenderer,
     onStatus:state=>{if(!state.active)return;if(state.error)setInfo('Geometry preview unavailable; scene restoration continues');else if(state.phase==='geometry-visible')setInfo('Geometry preview · restoring ash, fire and lighting…');}});
   window.kaminosSceneLoadPresentation=()=>({document:sceneDocument.state(),preview:sceneGeometryPreview.read()});
   let activeSceneDepth = prePassDepth;

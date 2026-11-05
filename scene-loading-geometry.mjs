@@ -2,7 +2,7 @@
 // borrows geometry and the existing camera/renderer; final lighting and scene
 // admission remain with the ordinary restore path.
 const TYPES=new Set(['glb','pbr','procedural-mesh','burner-bed','brazier-room']);
-export function createSceneLoadingGeometry({THREE,renderer,camera,readObjects,isCurrent,isVisible=()=>true,waitForLighting=async()=>{},yieldForPaint=()=>new Promise(resolve=>setTimeout(resolve,0)),onStatus=()=>{}}){
+export function createSceneLoadingGeometry({THREE,renderer,camera,readObjects,isCurrent,isVisible=()=>true,waitForLighting=async()=>{},withRenderer=operation=>operation(),yieldForPaint=()=>new Promise(resolve=>setTimeout(resolve,0)),onStatus=()=>{}}){
  const scene=new THREE.Scene(),content=new THREE.Group(),material=new THREE.MeshLambertMaterial({color:0xa5acb5,side:THREE.DoubleSide});
  scene.name='Loading geometry preview';scene.background=new THREE.Color(0x171a20);scene.add(content,new THREE.HemisphereLight(0xdce8ff,0x45413a,2.5));
  let active=false,requestId=null,phase='idle',draws=0,error=null,lastPresentation=null,signature=null,unsupportedIds=[],disposed=false,pending=Promise.resolve();
@@ -26,6 +26,8 @@ export function createSceneLoadingGeometry({THREE,renderer,camera,readObjects,is
   const task=pending.then(async()=>{
    if(!current(id))return false;
    await waitForLighting();if(!current(id))return false;
+   const shown=await withRenderer(async()=>{
+   if(!current(id))return false;
    const snapshot=collect();unsupportedIds=snapshot.unsupportedIds;
    if(!snapshot.meshes.length)return false;
    const next=JSON.stringify(snapshot.meshes.map(({id,mesh,matrix})=>[id,mesh.uuid,mesh.geometry.uuid,mesh.geometry.attributes.position?.version,mesh.geometry.index?.version,...matrix.elements]));
@@ -41,8 +43,10 @@ export function createSceneLoadingGeometry({THREE,renderer,camera,readObjects,is
     lastPresentation={requestId:id,ids:[...new Set(snapshot.meshes.map(row=>row.id))],meshes:snapshot.meshes.length,shading:'neutral-loading-preview',authority:'render-returned; final restoration pending'};
     onStatus(read());
    }finally{renderer.setRenderTarget(target);renderer.setMRT(mrt);renderer.autoClear=autoClear;content.clear();}
-   // Let this provisional frame paint before beginning deferred domain work.
-   await yieldForPaint();return current(id);
+   return true;
+   });
+   // Release renderer ownership before letting the provisional frame paint.
+   if(shown)await yieldForPaint();return shown&&current(id);
   }).catch(cause=>{if(current(id)){error=String(cause.message??cause);onStatus(read());}return false;});
   pending=task;return task;
  }

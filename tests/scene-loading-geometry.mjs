@@ -35,3 +35,19 @@ test('optional preview failure restores renderer ownership and is recorded witho
 test('finishing an older request cannot dismiss the newer preview and later geometry can replace an earlier partial preview',async()=>{
  const f=fixture();f.add('one');f.preview.begin(1);await f.preview.present(1);f.add('two');await f.preview.present(1);assert.equal(f.draws.length,2);assert.deepEqual(f.preview.read().lastPresentation.ids,['one','two']);f.setCurrent(2);f.preview.begin(2);f.preview.finish(1,true);assert.equal(f.preview.read().active,true);assert.equal(f.preview.read().requestId,2);assert.equal(await f.preview.present(1),false);
 });
+test('later lighting preparation waits for preview ownership, then uses its own target and restores the original state',async()=>{
+ const {createLightingPreparation,compileSceneLighting}=await import('../scene-lighting-compile.mjs');
+ const p=gate(),l=gate(),litScene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(),draws=[];
+ const prior={label:'original'},lightTarget={label:'lighting-pass'},mrt={label:'original-mrt'},context={};
+ const renderer={target:prior,mrt,autoClear:false,contextNode:context,transparent:true,opaque:true,getRenderTarget(){return this.target;},setRenderTarget(v){this.target=v;},getMRT(){return this.mrt;},setMRT(v){this.mrt=v;},compileAsync:scene=>scene===litScene?l.promise:p.promise,render(){draws.push(this.target);}};
+ const pass={scene:litScene,camera,renderTarget:lightTarget,_mrt:null,overrideMaterial:null,contextNode:null};
+ const prep=createLightingPreparation({compile:()=>compileSceneLighting(renderer,[pass]),hold:()=>{}});
+ const mesh=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial());
+ const preview=createSceneLoadingGeometry({THREE,renderer,camera,readObjects:()=>[{id:'mesh',type:'glb',object:mesh}],isCurrent:()=>true,waitForLighting:prep.whenIdle,withRenderer:prep.withRenderer,yieldForPaint:async()=>{}});
+ preview.begin(1);const previewTask=preview.present(1);await new Promise(r=>setImmediate(r));const lightingTask=prep.request(()=>{});await new Promise(r=>setImmediate(r));
+ try{
+  assert.equal(renderer.target,null,'a later preparation cannot replace the preview canvas target');
+  p.resolve();await previewTask;assert.deepEqual(draws,[null],'preview actually submits to canvas');await new Promise(r=>setImmediate(r));assert.equal(renderer.target,lightTarget,'lighting acquires its own target after preview restoration');
+ }finally{p.resolve();l.resolve();await Promise.allSettled([previewTask,lightingTask]);}
+ assert.equal(renderer.target,prior);assert.equal(renderer.mrt,mrt);assert.equal(renderer.autoClear,false);assert.equal(renderer.contextNode,context);
+});
