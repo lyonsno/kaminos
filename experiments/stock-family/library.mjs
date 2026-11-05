@@ -9,7 +9,7 @@ export function validateFamilyAsset(value){
 async function json(request,url,options){const response=await request(url,options),value=await response.json();if(!response.ok)throw Error(value.error||`Stock library HTTP ${response.status}`);return value;}
 export async function readFamilyAsset(source,{request=fetch}={}){return validateFamilyAsset(await json(request,source,{cache:'no-store'}));}
 export async function saveFamilyAsset({recipe,name,id,revision},{request=fetch}={}){
- const retained=validateRecipe(recipe),sources=[retained.source,...(retained.sources??[])],stored=new Map();
+ const retained=validateRecipe(recipe),sources=[retained.source,...(retained.sources??[]),...(retained.supports??[]).map(s=>s.source)],stored=new Map();
  for(const source of sources){
   const key=source.sha256;if(stored.has(key))continue;
   const response=await request(source.url,{cache:'no-store'});if(!response.ok)throw Error('Source retention HTTP '+response.status);
@@ -21,7 +21,7 @@ export async function saveFamilyAsset({recipe,name,id,revision},{request=fetch}=
   stored.set(key,canonical(key));
  }
  const local=source=>({...source,...(source.url!==stored.get(source.sha256)?{originUrl:source.originUrl??source.url}:{}),url:stored.get(source.sha256)});
- retained.source=local(retained.source);if(retained.sources)retained.sources=retained.sources.map(local);
+ retained.source=local(retained.source);if(retained.sources)retained.sources=retained.sources.map(local);if(retained.supports)retained.supports=retained.supports.map(s=>({...s,source:local(s.source)}));
  const value=validateFamilyAsset(await json(request,'/api/stock-families',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,revision,name,recipe:retained})}));
  if((id&&value.id!==id)||value.name!==name.trim()||JSON.stringify(value.recipe)!==JSON.stringify(retained))throw Error('Family storage receipt mismatch');
  return value;

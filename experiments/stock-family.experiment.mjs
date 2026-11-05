@@ -5,6 +5,7 @@ import {validateFamilyAsset,readFamilyAsset,saveFamilyAsset,familyAssetSource} f
 import {assetWithheld,assetSource} from '../authoring-assets.mjs';
 import {installSceneControlHistory} from '../scene-control-history.mjs';
 import {cloneStockMaterial,disposeStockMaterial,stockHistoryReferences,stockRetirementIds} from './stock-family/lifecycle.mjs';
+import {createStockMouthTools} from './stock-family/mouth-tools.mjs';
 
 const pose=root=>({position:root.position.toArray(),rotation:[root.rotation.x,root.rotation.y,root.rotation.z],scale:root.scale.toArray()});
 const putPose=(root,p)=>{if(p){root.position.fromArray(p.position);root.rotation.set(...p.rotation);root.scale.fromArray(p.scale);}};
@@ -13,10 +14,10 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
   let library=inputs.asset?validateFamilyAsset(inputs.asset):inputs.assetSource?await readFamilyAsset(inputs.assetSource):null;
   let recipe=validateRecipe(library?.recipe??inputs.recipe??DEFAULT_RECIPE),saving=false;
   const session=await host.scene.open();
-  const win=host.controls.document.defaultView,edits=win.kaminosSceneEdits,items=[],seats=[],drags=[],histories=[];
+  const win=host.controls.document.defaultView,edits=win.kaminosSceneEdits,items=[],supports=[],seats=[],drags=[],histories=[];
   let disposed=false,strainEnabled=false,refresh=()=>{},unsubscribe=()=>{},reference,sourceGeometry,sourceMaterial,sourceRequest=0,sourceBusy=false;
   const sourceTarget='@stock-source:'+crypto.randomUUID();
-  const removals=[];
+  const removals=[];let mouthTools;
   const params=item=>({length:item.value.length,bend:item.value.bend,protect:item.value.protect});
   function assertLive(item){if(disposed||!item.asset.root.parent)throw Error('Stock removed; reopen the family');}
   function watchRemoval(asset,item){
@@ -44,12 +45,13 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
       item.mesh.geometry.setAttribute('color',new BufferAttribute(colors,3));
     }catch(e){item.error=e.message;item.metrics=null;item.mesh.visible=false;item.invalid.visible=true;}
     item.root.name=item.value.label+(item.error?' (blocked)':'');
-    host.scene.refreshPresentation(item.asset);session.redraw();refresh();
+    mouthTools?.update(item);host.scene.refreshPresentation(item.asset);session.redraw();refresh();
   }
   const intact=()=>reference?.root.parent&&items.every(i=>!i.removed);
-  function exported(){if(!intact())throw Error('Family members were removed; reopen the family before saving');return validateRecipe({...recipe,variants:items.map(i=>({...i.value,pose:pose(i.root)})),view:session.readView(),referencePose:pose(reference.root)});}
+  function exported(){if(!intact())throw Error('Family members were removed; reopen the family before saving');return validateRecipe({...recipe,...(recipe.supports?{supports:supports.filter(s=>s.asset.root.parent).map(s=>({...s.value,pose:pose(s.asset.root)}))}:{}),variants:items.map(i=>({...i.value,pose:pose(i.root)})),view:session.readView(),referencePose:pose(reference.root)});}
   function read(){return {source:structuredClone(recipe.source),sources:structuredClone(recipe.sources??[recipe.source]),sourceBusy,referenceId:reference?.id,variants:items.map(i=>({id:i.value.id,label:i.value.label,objectId:i.asset.id,targetId:i.target,parameters:params(i),status:i.removed?'removed':i.error?'blocked':'deformed',error:i.error,metrics:i.metrics,pose:pose(i.root),materialMaps:Object.fromEntries(['map','roughnessMap','metalnessMap','normalMap'].map(key=>[key,!!i.mesh.material[key]]))})),recipe:intact()?exported():null};}
   const operations={
+    mouths:args=>mouthTools.operations.mouths(args),join:args=>mouthTools.operations.join(args),mouthMarkers:args=>mouthTools.operations.mouthMarkers(args),
     read,export:exported,
     library:()=>library?{id:library.id,name:library.name,revision:library.revision}:null,
     async save({name,copy=false}){
@@ -81,7 +83,7 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
         const next=replaceStockSource(recipe,loaded.source);
         const replacements=[reference,...items.map(i=>i.asset)].map((_,index)=>({geometry:(index===0?loaded.referenceGeometry??loaded.geometry:loaded.geometry).clone(),material:cloneStockMaterial(loaded.material)}));
         loaded.referenceGeometry?.dispose();
-        edits.discard(entry=>stockHistoryReferences(entry,new Set([sourceTarget,...items.map(i=>i.target)])));
+        edits.discard(entry=>stockHistoryReferences(entry,new Set([sourceTarget,mouthTools.target,...items.map(i=>i.target)])));
         const oldGeometry=sourceGeometry,oldMaterial=sourceMaterial;
         recipe=next;sourceGeometry=loaded.geometry;sourceMaterial=loaded.material;loaded=null;
         for(const [index,asset]of [reference,...items.map(i=>i.asset)].entries()){
@@ -101,7 +103,7 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
       record({kind:'stock-family.shape',phase:'applied',target:item.asset.id,effective:{...params(item),error:item.error}});return read();},
     select({id}){const item=items.find(i=>i.value.id===id);if(!item)throw Error('Unknown stock member');assertLive(item);win.kaminosSelection.set([item.asset.id],item.asset.id);return read();},
     strain({enabled}){if(typeof enabled!=='boolean')throw Error('Explicit strain display required');strainEnabled=enabled;for(const i of items)if(!i.removed)i.mesh.material=enabled?i.strainMaterial:i.surfaceMaterial;session.redraw();refresh();return {enabled};},
-    frame(){const box=new Box3();for(const a of [reference,...items.map(i=>i.asset)])if(a.root.parent)box.expandByObject(a.root);if(box.isEmpty())return session.readView();const center=box.getCenter(new Vector3()),size=box.getSize(new Vector3());
+    frame(){const box=new Box3();for(const a of [reference,...items.map(i=>i.asset),...supports.map(s=>s.asset)])if(a.root.parent)box.expandByObject(a.root);if(box.isEmpty())return session.readView();const center=box.getCenter(new Vector3()),size=box.getSize(new Vector3());
       const canvas=[...host.controls.document.querySelectorAll('canvas')].sort((a,b)=>b.clientWidth*b.clientHeight-a.clientWidth*a.clientHeight)[0];
       const aspect=canvas?canvas.clientWidth/Math.max(canvas.clientHeight,1):1,angle=Math.atan(Math.tan(Math.PI/8)*Math.min(1,aspect));
       const distance=size.length()*.56/Math.sin(angle);
@@ -123,10 +125,15 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
       edits.register(item.target,{read:()=>params(item),check:validateParameters,write:v=>update(item,v)});update(item,params(item));
       watchRemoval(asset,item);
     }
+    mouthTools=createStockMouthTools({host,win,items,session,edits,source:()=>recipe.source,geometry:()=>sourceGeometry,write:mouths=>{recipe=replaceStockSource(recipe,{...recipe.source,mouths});},record});
+    for(const value of recipe.supports??[]){
+      const loaded=await loadStockSource(value.source),root=new Group();root.name=value.label;root.add(new Mesh(loaded.geometry,loaded.material));loaded.referenceGeometry?.dispose();putPose(root,value.pose);
+      const asset=await session.attach(root,{owned:true,metadata:{label:value.label,source:value.source.url}});supports.push({asset,value:structuredClone(value)});watchRemoval(asset);
+    }
     if(recipe.view)session.setView(recipe.view);else operations.frame();
     edits.register(sourceTarget,{read:()=>structuredClone(recipe.source.profile),check:validateProfile,write:profile=>{recipe=replaceStockSource(recipe,{...recipe.source,profile:structuredClone(profile)});for(const item of items)if(!item.removed)update(item,params(item));}});
     unsubscribe=edits.subscribe(()=>refresh());
-  }catch(e){disposed=true;removals.forEach(remove=>remove());edits?.unregister(sourceTarget);for(const i of items){edits?.unregister(i.target);i.strainMaterial.dispose();}await session.dispose();sourceGeometry?.dispose();if(sourceMaterial)disposeStockMaterial(sourceMaterial);throw e;}
+  }catch(e){disposed=true;mouthTools?.dispose();removals.forEach(remove=>remove());edits?.unregister(sourceTarget);for(const i of items){edits?.unregister(i.target);i.strainMaterial.dispose();}await session.dispose();sourceGeometry?.dispose();if(sourceMaterial)disposeStockMaterial(sourceMaterial);throw e;}
   return {read,operations,mount({root:panel,document,invoke}){
     host.scene.enterWorkbench();
     document.body.classList.add('stock-family-active');
@@ -195,6 +202,7 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
       bandTitle.textContent=recipe.source.fit?.arc?'Protected tangent bands (%)':'Protected bands (%)';
       const profile=recipe.source.profile,nextKey=JSON.stringify([recipe.source.sha256,profile]);if(nextKey===bandKey)return;bandKey=nextKey;bandDraft=profile.locks.map(b=>b.map(v=>bandPercent(profile,v)));renderBands();sourceStatus.textContent='';
     }
+    mouthTools.mountSource(common,document,invoke);
     const frame=document.createElement('button');frame.className='btn';frame.textContent='Frame family';frame.onclick=()=>invoke('frame');common.append(frame);
     const strainLabel=document.createElement('label'),strain=document.createElement('input');strain.type='checkbox';strain.onchange=()=>invoke('strain',{enabled:strain.checked});strainLabel.append(strain,' Axial strain');common.append(strainLabel);
     const fields=[];
@@ -209,7 +217,7 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
       }
       histories.push(installSceneControlHistory({controls:inputs,edits,id:item.target,label:'Shape '+item.value.label,onError:e=>{status.textContent=e.message;}}));
       const label=document.createElement('label'),protect=document.createElement('input');protect.type='checkbox';protect.setAttribute('aria-label',item.value.label+' Protect source bands');protect.onchange=()=>invoke('set',{id:item.value.id,protect:protect.checked});label.append(protect,' Protect source bands');properties.append(label,status);
-      item.ui={status,protect,properties};seats.push(host.controls.mountObject({asset:item.asset,properties}));
+      mouthTools.mountItem(item,properties,document,invoke);item.ui={status,protect,properties};seats.push(host.controls.mountObject({asset:item.asset,properties}));
     }
     const fileStatus=document.createElement('output');fileStatus.style.display='block';
     const saveInternal=document.createElement('button');saveInternal.className='btn';saveInternal.textContent='Save family';saveInternal.onclick=async()=>{saveInternal.disabled=true;try{const value=await invoke('save',{name:name.value});fileStatus.textContent='Saved '+value.name;}catch(e){fileStatus.textContent=e.message;}finally{refresh();}};common.append(saveInternal);
@@ -222,8 +230,8 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
     refresh=()=>{if(disposed)return;const sceneSlot=document.getElementById('experiment-scene-slot'),parent=sceneSlot&&!sceneSlot.hidden?sceneSlot:panel;if(common.parentNode!==parent)parent.prepend(common);refreshSources();
       strain.checked=strainEnabled;for(const {item,key,input}of fields){input.disabled=!!item.removed;if(document.activeElement!==input||input.readOnly)input.value=String(item.value[key]);}
       for(const i of items){i.ui.protect.disabled=!!i.removed;i.ui.protect.checked=i.value.protect;i.ui.status.textContent=i.removed?'Removed':i.error?'Blocked: '+i.error:`Axial stretch ${i.metrics.minAxialStretch.toFixed(2)} to ${i.metrics.maxAxialStretch.toFixed(2)} x`;i.ui.status.dataset.blocked=String(!!i.error);}
-      save.disabled=!intact();saveInternal.disabled=!intact()||saving||sourceBusy;};refresh();operations.select({id:items[0].value.id});
+      mouthTools.refresh();save.disabled=!intact();saveInternal.disabled=!intact()||saving||sourceBusy;};refresh();operations.select({id:items[0].value.id});
   },async dispose(){if(disposed)return;refresh=()=>{};unsubscribe();for(const h of histories)h.dispose();for(const d of drags)d.dispose();for(const s of seats)s.dispose();
-    const ids=stockRetirementIds([sourceTarget,reference.id,...items.flatMap(i=>[i.target,i.asset.id])],win.kaminosSceneAuthoring.read().groups);edits.discard(e=>stockHistoryReferences(e,ids));disposed=true;sourceRequest++;edits.unregister(sourceTarget);removals.forEach(remove=>remove());for(const i of items)if(!i.removed){edits.unregister(i.target);i.mesh.material=i.surfaceMaterial;i.strainMaterial.dispose();}await session.dispose();sourceGeometry.dispose();disposeStockMaterial(sourceMaterial);
+    const ids=stockRetirementIds([sourceTarget,mouthTools.target,reference.id,...items.flatMap(i=>[i.target,i.asset.id]),...supports.map(s=>s.asset.id)],win.kaminosSceneAuthoring.read().groups);edits.discard(e=>stockHistoryReferences(e,ids));disposed=true;mouthTools.dispose();sourceRequest++;edits.unregister(sourceTarget);removals.forEach(remove=>remove());for(const i of items)if(!i.removed){edits.unregister(i.target);i.mesh.material=i.surfaceMaterial;i.strainMaterial.dispose();}await session.dispose();sourceGeometry.dispose();disposeStockMaterial(sourceMaterial);
   }};
 }};

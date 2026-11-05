@@ -1,4 +1,6 @@
 import {validateRestArc,unwrapRestArc} from './rest-arc.mjs';
+import {stockMouths} from './mouths.mjs';
+export {stockMouths,stockMouthFrame,alignStockMouth,stockMouthGap} from './mouths.mjs';
 export const SOURCE_SHA='0d24383aa503956b927c7e9b0e52fcf6197a1c0928a0a465989b92fc9c458773';
 // Source-local Z is longitudinal. Authored bands surround observed feet and
 // mouths; these are not automatically inferred semantic segments.
@@ -31,13 +33,19 @@ export function validateRecipe(value){
   if(r.referencePose!==undefined){for(const k of ['position','rotation','scale'])if(!Array.isArray(r.referencePose?.[k])||r.referencePose[k].length!==3||!r.referencePose[k].every(Number.isFinite))throw Error('Invalid reference pose');}
   if(!Array.isArray(r.variants)||!r.variants.length)throw Error('Variants required');
   const ids=new Set();for(const v of r.variants){validateParameters(v);if(typeof v.id!=='string'||!v.id||ids.has(v.id)||typeof v.label!=='string')throw Error('Unique named variants required');ids.add(v.id);
-    if(v.pose){for(const k of ['position','rotation','scale'])if(!Array.isArray(v.pose[k])||v.pose[k].length!==3||!v.pose[k].every(Number.isFinite))throw Error('Invalid variant pose');}}return r;
+    if(v.pose){for(const k of ['position','rotation','scale'])if(!Array.isArray(v.pose[k])||v.pose[k].length!==3||!v.pose[k].every(Number.isFinite))throw Error('Invalid variant pose');}}
+  for(const v of r.variants)if(v.join&&(!ids.has(v.join.targetId)||v.join.targetId===v.id||!['start','end'].includes(v.join.movingSide)||!['start','end'].includes(v.join.targetSide)))throw Error('Invalid mouth join target');
+  if(r.supports!==undefined){
+    if(!Array.isArray(r.supports))throw Error('Invalid supports');
+    for(const s of r.supports){validateStockSource(s.source);if(typeof s.label!=='string')throw Error('Invalid support label');for(const k of ['position','rotation','scale'])if(!Array.isArray(s.pose?.[k])||s.pose[k].length!==3||!s.pose[k].every(Number.isFinite)||(k==='scale'&&s.pose[k].some(v=>v<=0)))throw Error('Invalid support pose');}
+  }
+  return r;
 }
 export function validateStockSource(source){
   if(!source||typeof source.url!=='string'||!source.url||!/^[a-f0-9]{64}$/.test(source.sha256))throw Error('Invalid stock source');
   if(source.fit&&!['x','y','z','-x','-y','-z'].includes(source.fit.axis))throw Error('Invalid source axis');
   if(source.fit?.arc!==undefined)validateRestArc(source.fit.arc);
-  validateProfile(source.profile);return structuredClone(source);
+  validateProfile(source.profile);if(source.mouths!==undefined)stockMouths(source.profile,source.mouths);return structuredClone(source);
 }
 export const bandPercent=(profile,value)=>String(Number(((value-profile.min)/(profile.max-profile.min)*100).toFixed(4)));
 export function bandsFromPercent(profile,rows){

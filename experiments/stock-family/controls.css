@@ -19,3 +19,7 @@
 .stock-shape-properties .authoring-number-wrap { flex:0 1 150px; width:150px; min-width:0; }
 .stock-shape-properties .transform-input { max-width:none; }
 body.stock-family-active #navigation-hint { display:none; }
+.stock-mouth-join { border-top:1px solid #3b3c3f; margin-top:12px; padding-top:12px; display:grid; gap:6px; }
+.stock-mouth-join label { display:grid; grid-template-columns:90px minmax(0,1fr); gap:8px; align-items:center; }
+.stock-mouth-join select { min-width:0; width:100%; }
+.stock-mouth-gap { display:block; overflow-wrap:anywhere; color:#b8c3c7; }
