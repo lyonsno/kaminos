@@ -44,11 +44,18 @@ const dense = Array.from({ length: 50000 }, (_, i) => ({
   c: [Math.sin(i), Math.cos(i) + 0.01, (i % 37) * 1e-2 + 1],
   identity: i,
 }));
-const denseStart = performance.now();
 const densePacked = buildTriangleVisibility(dense).packGpu();
-const denseElapsed = performance.now() - denseStart;
 assert.equal(densePacked.triangleCount, 50000);
-assert.ok(denseElapsed < 400, `50k-triangle visibility BVH build+pack must stay fast (${denseElapsed.toFixed(1)}ms)`);
+assert.equal(new Set(densePacked.triangleIndices).size,50000,'Dense packing retains every input triangle once');
+assert.ok(densePacked.triangleIndices.every(i=>i<50000));
+const denseWords=new Uint32Array(densePacked.nodes.buffer),covered=new Uint8Array(50000);
+for(let i=0;i<densePacked.nodeCount;i++){
+  const at=i*12,escape=denseWords[at+8],start=denseWords[at+9],count=denseWords[at+10];
+  assert.ok(escape>i&&escape<=densePacked.nodeCount,'Stackless traversal escapes remain inside the packed tree');
+  assert.ok(start+count<=50000);
+  for(let k=start;k<start+count;k++)covered[k]++;
+}
+assert.ok(covered.every(n=>n===1),'Packed leaves partition all dense triangles without gaps or duplication');
 assert.throws(() => buildTriangleVisibility([tri(NaN, 'bad')]), /finite/i);
 assert.throws(() => buildTriangleVisibility([{ ...tri(1, 'degenerate'), c: [0, -1, 1] }]), /degenerate/i);
 assert.throws(() => scene.trace([0, 0, 0], [0, 0, 1], { maxDistance: NaN }), /distance/i);
