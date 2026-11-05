@@ -120,7 +120,7 @@ export function createHeroNormalSampler({hero: {vertices, faces, normals = null}
     let best = null;
     for (const side of [1, -1]) {
       ray.origin.set(p[0], p[1], p[2]); ray.direction.set(n[0] * side, n[1] * side, n[2] * side);
-      const h = bvh.raycastFirst(ray, THREE.DoubleSide);
+      const h = bvh.raycastFirst(ray, THREE.DoubleSide, 0, best ? best.distance : limit);
       if (h && h.distance <= limit && (!best || h.distance < best.distance)) best = h;
     }
     if (!best) return null;

@@ -1,6 +1,8 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import test from 'node:test';
+import vm from 'node:vm';
 import {createSceneDocumentSession} from '../scene-document-session.mjs';
 import {createSceneLoadRequests} from '../scene-load-generation.mjs';
 import {createSceneRecordOperations} from '../scene-record-operations.mjs';
@@ -142,4 +144,32 @@ test('page retains the requested scene address after application fails, without 
  assert.equal(context.sceneDocument.state().filename,null);
  assert.equal(context.sceneDocument.state().blocked,true);
  assert.equal(context.location.href,requested,'Reload must retry the requested workshop, not a standalone flame preset');
+});
+
+test('animate render hold pauses ordinary rendering while sceneDocument is applying and resumes after success or failure',async()=>{
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const animStart=html.indexOf('  function animate() {');
+ const guardMatch=html.slice(animStart,animStart+400).match(/if\((sceneLightingPreparation\?\.state\(\)\.held.+?)\)\{controls\.update\(\);return;\}/);
+ assert.ok(guardMatch,'animate() must contain the scene-restore render hold predicate');
+ const predicate=guardMatch[1];
+ const isHeld=session=>Boolean(vm.runInNewContext(predicate,{sceneLightingPreparation:null,sceneDocument:session,startupRestorePending:false}));
+ const applyGate=deferred(),f=fixture({apply:()=>applyGate.promise});
+ assert.equal(isHeld(f.session),false,'idle session after startup must not hold rendering');
+ const pending=f.session.restore(file(document()),{sceneFile:'incoming.kaminos.json'});
+ await new Promise(r=>setImmediate(r));
+ assert.equal(f.session.state().phase,'applying');
+ assert.equal(isHeld(f.session),true,'applying a scene document must hold intermediate ordinary rendering');
+ applyGate.resolve(true);
+ assert.equal((await pending).ok,true);
+ assert.equal(f.session.state().phase,'idle');
+ assert.equal(isHeld(f.session),false,'completed scene application must release the render hold');
+ const failGate=deferred(),g=fixture({apply:async()=>{await failGate.promise;throw Error('stage failed');}});
+ const failing=g.session.restore(file(document()),{sceneFile:'broken.kaminos.json'});
+ await new Promise(r=>setImmediate(r));
+ assert.equal(isHeld(g.session),true,'in-flight failing application holds rendering until it settles');
+ failGate.resolve();
+ assert.equal((await failing).ok,false);
+ assert.equal(g.session.state().blocked,true);
+ assert.equal(g.session.state().phase,'idle');
+ assert.equal(isHeld(g.session),false,'failed restoration that remains save-blocked in idle phase must not permanently hold rendering');
 });

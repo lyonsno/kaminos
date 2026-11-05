@@ -521,7 +521,7 @@ def normalize_volume_settings_preset_payload(payload, schema=None, tolerate_fore
     does not offer fall back to the control's additive default with a receipt.
     """
     schema = _validate_settings_preset_schema(
-        schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+        _load_volume_settings_preset_schema(schema)
     )
     # On reads, a basin whose inventory differs from this schema is schema
     # skew (saved by another branch), not a damaged artifact.
@@ -766,7 +766,7 @@ def validate_volume_settings_preset_payload(payload, schema=None):
     if "sourceRadiusSpace" in payload and payload["sourceRadiusSpace"] != "simulation-v1":
         raise ValueError("Unknown preset source radius space")
     schema = _validate_settings_preset_schema(
-        schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+        _load_volume_settings_preset_schema(schema)
     )
     if payload.get("identity") != VOLUME_SETTINGS_PRESET_IDENTITY or payload.get("kind") != "settings-preset":
         raise ValueError("settings preset identity mismatch")
@@ -1003,7 +1003,7 @@ def _project_volume_cockpit_layout(layout, schema=None, *, allow_declared_retire
         raise ValueError("volume cockpit layout groups are required")
 
     schema = _validate_settings_preset_schema(
-        schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+        _load_volume_settings_preset_schema(schema)
     )
     known_control_ids = {
         descriptor["key"]
@@ -1285,7 +1285,7 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
     """
     if not isinstance(publish_alias, bool):
         raise ValueError("publishAlias must be a boolean")
-    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    schema = _load_volume_settings_preset_schema(schema)
     normalized_payload, schema_projection, content_hash = _prepare_volume_settings_preset_write(payload, schema)
     store = _volume_settings_store_path(store_path)
     effective_label = str(label or "").strip() or "Unnamed preset"
@@ -1374,7 +1374,7 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
 
 
 def read_volume_settings_preset(store_path, preset_ref, schema=None):
-    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    schema = _load_volume_settings_preset_schema(schema)
     store = _volume_settings_store_path(store_path)
     requested = str(preset_ref or "").strip()
     if not requested:
@@ -1447,15 +1447,48 @@ def read_volume_settings_preset(store_path, preset_ref, schema=None):
 # files keep their identity (inode, size, mtime). A changed or missing file is
 # read again; a read that fails is never cached.
 _VOLUME_SETTINGS_PRESET_SUMMARIES = {}
-
-
-def _volume_settings_schema_key(schema):
-    return hashlib.sha256(json.dumps(schema, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+_VOLUME_SETTINGS_ALIAS_DOCUMENTS = {}
+_VOLUME_SETTINGS_HISTORY_SCANS = {}
+_VOLUME_SETTINGS_DEFAULT_SCHEMA_CACHE = None
 
 
 def _file_identity(path):
     stat = path.stat()
     return (str(path), stat.st_ino, stat.st_size, stat.st_mtime_ns)
+
+
+def _load_volume_settings_preset_schema(schema=None):
+    global _VOLUME_SETTINGS_DEFAULT_SCHEMA_CACHE
+    if schema is not None:
+        return schema
+    try:
+        identity = _file_identity(VOLUME_SETTINGS_PRESET_SCHEMA_PATH)
+    except OSError:
+        identity = None
+    if (
+        identity is not None
+        and _VOLUME_SETTINGS_DEFAULT_SCHEMA_CACHE is not None
+        and _VOLUME_SETTINGS_DEFAULT_SCHEMA_CACHE[0] == identity
+    ):
+        return _VOLUME_SETTINGS_DEFAULT_SCHEMA_CACHE[1]
+    loaded = json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    if identity is not None:
+        _VOLUME_SETTINGS_DEFAULT_SCHEMA_CACHE = (identity, loaded)
+    return loaded
+
+
+def _read_cached_volume_settings_alias_file(alias_path):
+    identity = _file_identity(alias_path)
+    cached = _VOLUME_SETTINGS_ALIAS_DOCUMENTS.get(str(alias_path))
+    if cached is not None and cached[0] == identity:
+        return identity, copy.deepcopy(cached[1])
+    document = _read_json_object(alias_path, "alias")
+    _VOLUME_SETTINGS_ALIAS_DOCUMENTS[str(alias_path)] = (identity, copy.deepcopy(document))
+    return identity, document
+
+
+def _volume_settings_schema_key(schema):
+    return hashlib.sha256(json.dumps(schema, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 def _volume_settings_preset_summary_from_document(document):
@@ -1483,12 +1516,12 @@ def read_volume_settings_preset_summary(store_path, preset_ref, schema, schema_k
     ref = str(preset_ref or "").strip()
     try:
         if ref.startswith("vsp-"):
-            paths = [store / "presets" / f"{ref}.json"]
+            identity = (_file_identity(store / "presets" / f"{ref}.json"),)
         else:
             alias_path = store / "aliases" / f"{ref}.json"
-            preset_id = _read_json_object(alias_path, "alias").get("presetId")
-            paths = [alias_path, store / "presets" / f"{preset_id}.json"]
-        identity = tuple(_file_identity(path) for path in paths)
+            alias_identity, alias_document = _read_cached_volume_settings_alias_file(alias_path)
+            preset_id = alias_document.get("presetId")
+            identity = (alias_identity, _file_identity(store / "presets" / f"{preset_id}.json"))
     except (OSError, ValueError, TypeError):
         identity = None
     key = (str(store), ref, schema_key)
@@ -1503,7 +1536,7 @@ def read_volume_settings_preset_summary(store_path, preset_ref, schema, schema_k
 
 
 def list_volume_settings_presets(store_path, schema=None):
-    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    schema = _load_volume_settings_preset_schema(schema)
     store = _volume_settings_store_path(store_path)
     schema_key = _volume_settings_schema_key(schema)
     aliases_dir = store / "aliases"
@@ -1514,7 +1547,7 @@ def list_volume_settings_presets(store_path, schema=None):
     for alias_path in sorted(aliases_dir.glob("*.json")):
         # A malformed alias is reported on its own; it must not fail the index.
         try:
-            alias_document = _read_json_object(alias_path, "alias")
+            _alias_identity, alias_document = _read_cached_volume_settings_alias_file(alias_path)
             alias = alias_document.get("alias")
             if alias_path.stem != alias:
                 raise ValueError(f"volume settings preset alias filename mismatch: {alias_path.name}")
@@ -1691,6 +1724,13 @@ def _scan_volume_settings_alias_history(store, alias):
     invalid = []
     if not path.exists():
         return rows, invalid
+    try:
+        identity = _file_identity(path)
+    except OSError:
+        identity = None
+    cached = _VOLUME_SETTINGS_HISTORY_SCANS.get(str(path))
+    if identity is not None and cached is not None and cached[0] == identity:
+        return copy.deepcopy(cached[1]), copy.deepcopy(cached[2])
     for number, line in enumerate(path.read_text().splitlines(), start=1):
         if not line.strip():
             continue
@@ -1709,6 +1749,8 @@ def _scan_volume_settings_alias_history(store, alias):
             invalid.append({"alias": alias, "path": str(path), "line": number, "error": "label history row is not a basin version"})
             continue
         rows.append(row)
+    if identity is not None:
+        _VOLUME_SETTINGS_HISTORY_SCANS[str(path)] = (identity, copy.deepcopy(rows), copy.deepcopy(invalid))
     return rows, invalid
 
 
@@ -1884,7 +1926,7 @@ def _publish_volume_settings_artifact_locked(store, document, label, published_a
 
 def publish_volume_settings_preset(shared_store_path, document, label, source, schema=None, fallback_hold=None, publish_alias=True):
     """Publish one hash-verified basin artifact into the shared library."""
-    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    schema = _load_volume_settings_preset_schema(schema)
     _verify_volume_settings_artifact(document, schema)
     store = _volume_settings_store_path(shared_store_path)
     effective_label = str(label or document.get("initialLabel") or "").strip() or "Unnamed preset"
@@ -1927,7 +1969,7 @@ def write_volume_settings_preset_to_library(local_store_path, shared_store_path,
     branch cannot hold. If the library cannot be written, the local store
     decides alone and the receipt says the basin did not reach the library.
     """
-    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    schema = _load_volume_settings_preset_schema(schema)
     if not isinstance(publish_alias, bool):
         raise ValueError("publishAlias must be a boolean")
     if shared_store_path is None:
@@ -2001,7 +2043,7 @@ def _volume_settings_authority_order(layers):
 
 
 def read_volume_settings_preset_layered(layers, preset_ref, schema=None):
-    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    schema = _load_volume_settings_preset_schema(schema)
     requested = str(preset_ref or "").strip()
     order = list(layers)
     if requested and not requested.startswith("vsp-"):
@@ -2025,7 +2067,7 @@ def read_volume_settings_preset_layered(layers, preset_ref, schema=None):
 
 
 def list_volume_settings_presets_layered(layers, schema=None):
-    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    schema = _load_volume_settings_preset_schema(schema)
     listings = [(role, list_volume_settings_presets(store, schema)) for role, store in layers]
     # A label's current version is its pointer in the authority store (the
     # library, else the local store) whether or not it loads here: an
@@ -2098,7 +2140,7 @@ def import_volume_settings_stores(shared_store_path, store_paths, schema=None):
     Every artifact's content hash is verified before it is accepted; labels are
     merged through the append-only history, and a label only moves forward.
     """
-    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    schema = _load_volume_settings_preset_schema(schema)
     shared = _volume_settings_store_path(shared_store_path)
     report = {
         "identity": "kaminos-volume-settings-store-import-receipt-v1",
@@ -2354,6 +2396,45 @@ SCENE_LIBRARY_DEFAULT_GLOBS = (
 )
 
 
+def _import_mesh_lod_sidecar(sha, candidate_dirs, root_path):
+    """Copy a hero mesh's .lods.json and verified tier GLBs from candidate stores if missing locally."""
+    sidecar_name = f".{sha}.glb.lods.json"
+    local_sidecar = root_path / sidecar_name
+    for cdir in candidate_dirs:
+        cand_sidecar = cdir / sidecar_name
+        if not cand_sidecar.is_file() or cand_sidecar.is_symlink():
+            continue
+        try:
+            doc = json.loads(cand_sidecar.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        if doc.get("source") != sha or not isinstance(doc.get("levels"), list):
+            continue
+        for level in doc["levels"]:
+            tsha = level.get("sha256") if isinstance(level, dict) else None
+            if not (isinstance(tsha, str) and re.fullmatch(r"[0-9a-f]{64}", tsha)):
+                continue
+            local_tier = root_path / f"{tsha}.glb"
+            if local_tier.is_file():
+                continue
+            cand_tier = cdir / f"{tsha}.glb"
+            try:
+                tdata = cand_tier.read_bytes()
+            except OSError:
+                continue
+            if hashlib.sha256(tdata).hexdigest() == tsha:
+                root_path.mkdir(parents=True, exist_ok=True)
+                staging = root_path / f".{tsha}.glb.{uuid.uuid4().hex}.tmp"
+                staging.write_bytes(tdata)
+                os.replace(staging, local_tier)
+        if not local_sidecar.is_file():
+            root_path.mkdir(parents=True, exist_ok=True)
+            staging = root_path / f"{sidecar_name}.{uuid.uuid4().hex}.tmp"
+            staging.write_text(json.dumps(doc, indent=2) + "\n")
+            os.replace(staging, local_sidecar)
+        return
+
+
 def scene_library_import_dependency(source, store):
     """Make one /api/read source of an imported scene resolvable here.
 
@@ -2372,13 +2453,16 @@ def scene_library_import_dependency(source, store):
     # neither trusted as present nor written through.
     if destination.is_symlink() or not destination.resolve().is_relative_to(root_path):
         return {"source": source, "status": "missing", "reason": "destination outside this server's root"}
-    if destination.is_file():
-        return {"source": source, "status": "present"}
     match = re.fullmatch(r"([0-9a-f]{64})\.glb", path)
+    candidate_dirs = [store.parent / "assets" / "generated-meshes"]
+    candidate_dirs += [Path(p).parent for p in glob.glob(os.path.expanduser("~/.local/state/kaminos/*/assets/generated-meshes/" + path))]
+    candidate_dirs.append(Path(os.path.expanduser("~/.local/state/kaminos/assets/generated-meshes")))
+    if destination.is_file():
+        if root == "generated-meshes" and match:
+            _import_mesh_lod_sidecar(match.group(1), candidate_dirs, root_path)
+        return {"source": source, "status": "present"}
     if root == "generated-meshes" and match:
-        candidates = [store.parent / "assets" / "generated-meshes" / path]
-        candidates += [Path(p) for p in glob.glob(os.path.expanduser("~/.local/state/kaminos/*/assets/generated-meshes/" + path))]
-        candidates.append(Path(os.path.expanduser("~/.local/state/kaminos/assets/generated-meshes")) / path)
+        candidates = [cdir / path for cdir in candidate_dirs]
         for candidate in candidates:
             try:
                 data = candidate.read_bytes()
@@ -2389,6 +2473,7 @@ def scene_library_import_dependency(source, store):
                 staging = root_path / f".{path}.{uuid.uuid4().hex}.tmp"
                 staging.write_bytes(data)
                 os.replace(staging, root_path / path)
+                _import_mesh_lod_sidecar(match.group(1), [candidate.parent, *candidate_dirs], root_path)
                 return {"source": source, "status": "imported", "from": str(candidate)}
     return {"source": source, "status": "missing"}
 
@@ -2759,20 +2844,69 @@ def save_mesh_generation_origin(result):
 
 
 _SHA256_HEX = re.compile(r'[a-f0-9]{64}')
+_NAMED_GENERATED_MESH_CACHE = {}
 
 
 class MeshLodRecordError(Exception):
     """A stored level-set record that cannot be read: a server-side fault, not a bad request."""
 
 
-def _lod_set_path(source):
-    if not isinstance(source, str) or not _SHA256_HEX.fullmatch(source):
+def _generated_mesh_path_for_sha(root, sha):
+    if not isinstance(sha, str) or not _SHA256_HEX.fullmatch(sha):
+        return None
+    direct = root / (sha + '.glb')
+    if direct.is_file():
+        return direct
+    for candidate in sorted(root.rglob('*.glb')):
+        try:
+            rel_parts = candidate.relative_to(root).parts
+        except ValueError:
+            continue
+        if _SHA256_HEX.fullmatch(candidate.stem) or any(p.startswith('.') for p in rel_parts) or not candidate.is_file():
+            continue
+        try:
+            st = candidate.stat()
+            key = (str(candidate), st.st_size, st.st_mtime_ns)
+            digest = _NAMED_GENERATED_MESH_CACHE.get(key)
+            if digest is None:
+                digest = hashlib.sha256(candidate.read_bytes()).hexdigest()
+                _NAMED_GENERATED_MESH_CACHE[key] = digest
+            if digest == sha:
+                return candidate
+        except OSError:
+            continue
+    return None
+
+
+def _resolve_generated_mesh_source(source):
+    if not isinstance(source, str) or not source:
         raise ValueError('Source mesh sha256 required')
+    if _SHA256_HEX.fullmatch(source):
+        return source
+    parts = Path(source).parts
+    if not source.lower().endswith('.glb') or '\\' in source or not parts or any(p in ('', '.', '..') or p.startswith('.') for p in parts):
+        raise ValueError('Source mesh sha256 required')
+    root = Path(BROWSE_ROOTS['generated-meshes']).resolve()
+    candidate = (root / source).resolve()
+    if not candidate.is_relative_to(root) or not candidate.is_file():
+        raise ValueError('Source mesh sha256 required')
+    st = candidate.stat()
+    key = (str(candidate), st.st_size, st.st_mtime_ns)
+    digest = _NAMED_GENERATED_MESH_CACHE.get(key)
+    if digest is None:
+        digest = hashlib.sha256(candidate.read_bytes()).hexdigest()
+        _NAMED_GENERATED_MESH_CACHE[key] = digest
+    return digest
+
+
+def _lod_set_path(source):
+    source = _resolve_generated_mesh_source(source)
     return Path(BROWSE_ROOTS['generated-meshes']).resolve() / ('.' + source + '.glb.lods.json')
 
 
 def read_mesh_lod_set(source):
     """Coarse levels registered for a stored mesh; an empty set when none exist."""
+    source = _resolve_generated_mesh_source(source)
     path = _lod_set_path(source)
     if not path.exists():
         return {'schema': 'kaminos.lod-set.v0', 'source': source, 'levels': []}
@@ -2804,7 +2938,7 @@ def mesh_lod_level_index():
 
 def save_mesh_lod_level(payload):
     """Register one coarse level of a stored source mesh. Levels are immutable by sha."""
-    source, level = payload.get('source'), payload.get('level')
+    source, level = _resolve_generated_mesh_source(payload.get('source')), payload.get('level')
     path = _lod_set_path(source)
     if not isinstance(level, dict) or not isinstance(level.get('sha256'), str) or not _SHA256_HEX.fullmatch(level['sha256']):
         raise ValueError('Level sha256 required')
@@ -2825,7 +2959,7 @@ def save_mesh_lod_level(payload):
             raise ValueError('Level error needs finite non-negative relative max, p95 and mean')
     root = Path(BROWSE_ROOTS['generated-meshes']).resolve()
     for sha in (source, level['sha256']):
-        if not (root / (sha + '.glb')).is_file():
+        if not _generated_mesh_path_for_sha(root, sha):
             raise ValueError('Mesh not stored: ' + sha)
     with (root / ('.' + source + '.lods.lock')).open('a+b') as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
@@ -2890,7 +3024,7 @@ def mesh_lod_choice(source, faces=None, max_error=None, stat='max', route=None):
         if measured:
             fitting = [l for l in measured if l['error']['relative'][stat] <= max_error]
             choice, within = (min(fitting, key=lambda l: l['faces']), True) if fitting else (max(measured, key=lambda l: l['faces']), False)
-    result = {'schema': 'kaminos.lod-set.v0', 'source': source, 'levels': levels, 'choice': choice, 'withinBudget': within,
+    result = {'schema': 'kaminos.lod-set.v0', 'source': data['source'], 'levels': levels, 'choice': choice, 'withinBudget': within,
               'retired': data.get('retired', [])}
     if unmeasured is not None:
         result['unmeasured'] = unmeasured
@@ -5430,20 +5564,27 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                     receipt=status_receipt,
                     size=info["size"],
                 )
-            if root_name == 'generated-meshes' and entry.is_file() and re.fullmatch(r'[a-f0-9]{64}\.glb', entry.name):
+            if root_name == 'generated-meshes' and entry.is_file() and entry.name.lower().endswith('.glb') and not entry.name.startswith('.'):
                 if lod_levels is None:
                     lod_levels = mesh_lod_level_index()
-                if entry.stem in lod_levels:
-                    info['lodOf'] = lod_levels[entry.stem]
-                try:
-                    origins = read_mesh_generation_origins(entry.stem)
-                    if origins:
-                        origin = origins['origins'][origins['latestRunId']]
-                        info['generation'] = origin['generation']
-                        info['generationOriginCount'] = len(origins['origins'])
-                        info['display']['title'] = origin['name']
-                except (ValueError, KeyError, OSError) as error:
-                    info['originError'] = str(error)
+                mesh_sha = entry.stem.lower() if re.fullmatch(r'[a-f0-9]{64}', entry.stem.lower()) else None
+                if not mesh_sha:
+                    try:
+                        mesh_sha, _ = _resolve_generated_mesh_source(entry.name)
+                    except (ValueError, OSError):
+                        mesh_sha = None
+                if mesh_sha and mesh_sha in lod_levels:
+                    info['lodOf'] = lod_levels[mesh_sha]
+                if mesh_sha:
+                    try:
+                        origins = read_mesh_generation_origins(mesh_sha)
+                        if origins:
+                            origin = origins['origins'][origins['latestRunId']]
+                            info['generation'] = origin['generation']
+                            info['generationOriginCount'] = len(origins['origins'])
+                            info['display']['title'] = origin['name']
+                    except (ValueError, KeyError, OSError) as error:
+                        info['originError'] = str(error)
             entries.append(info)
 
         self.send_json({
@@ -5497,6 +5638,11 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json({"error": "Path traversal"}, 403)
                 return
 
+        if not target.is_file() and root_name == "generated-meshes" and re.fullmatch(r"[a-f0-9]{64}\.glb", sub_path):
+            aliased = _generated_mesh_path_for_sha(root.resolve(), sub_path[:-4])
+            if aliased is not None:
+                target = aliased
+
         if not target.is_file():
             self.send_json({"error": "Not a file"}, 404)
             return
@@ -5504,8 +5650,31 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         if self.refuse_sf3d_source(target):
             return
 
-        # For images, serve directly
+        # Startup needs the original document bytes, not a server-side JSON
+        # decode/encode of multi-megabyte simulation checkpoints. This explicit
+        # mode leaves ordinary JSON API validation unchanged; the client parses
+        # and validates the complete scene before allocating its viewer.
         ext = target.suffix.lower()
+        if root_name == "scenes" and ext == ".json" and params.get("raw") == ["1"]:
+            try:
+                body = target.open("rb")
+            except OSError:
+                self.send_json({"error": "Failed to read file"}, 500)
+                return
+            with body:
+                try:
+                    length = os.fstat(body.fileno()).st_size
+                except OSError:
+                    self.send_json({"error": "Failed to read file"}, 500)
+                    return
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(length))
+                self.end_headers()
+                shutil.copyfileobj(body, self.wfile)
+            return
+
+        # For images, serve directly
         if ext in (".png", ".jpg", ".jpeg", ".webp", ".exr", ".glb", ".gltf", ".ply", ".spz", ".f32", ".u32"):
             body = target.read_bytes()
             self.send_response(200)
@@ -5694,6 +5863,10 @@ class KaminosServer(http.server.ThreadingHTTPServer):
     http.server performs while binding. On macOS that lookup goes to multicast
     DNS and can stall for tens of seconds per process. Nothing here reads
     server_name, so the bound host stands in for it."""
+
+    # A module graph opens many short connections. Do not inherit TCPServer's
+    # five-slot accept queue and force retries when this process is contended.
+    request_queue_size = socket.SOMAXCONN
 
     def server_bind(self):
         socketserver.TCPServer.server_bind(self)

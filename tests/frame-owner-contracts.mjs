@@ -7,7 +7,7 @@ function page(volumePrototype){
   const device={queue:{}},made=[];
   const context={volumePrototype,sharedGpu:{device},compositionHost:{device},appFrameSource:null,
     createAppFrameSource:({device:d})=>{const s={kind:'app',device:d,debugState:()=>({active:false,pending:false}),setForegroundOpportunityRequester(){}};made.push(s);return s;}};
-  vm.runInNewContext(`let appFrameSource=null;\n${html.slice(a,b)}\nthis.frameOwner=frameOwner;`,context);
+  vm.runInNewContext(`let appFrameSource=null,appFrameDevice=null;\n${html.slice(a,b)}\nthis.frameOwner=frameOwner;`,context);
   return {owner:()=>context.frameOwner(),made};
 }
 const volume=active=>({kind:'volume',setForegroundOpportunityRequester(){},foregroundGpuContext:()=>({active,renderer:'ordinary-volume'})});

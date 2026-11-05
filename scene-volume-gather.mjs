@@ -68,8 +68,11 @@ export function volumeGatherPlan({volumeGrid=16,sourceDimensions=[volumeGrid,vol
   return {volumeDimensions,volumeCount,total,bankDirections,importanceBytes,bounds,receiverPitch};
 }
 
+const volumeGatherShaderCache=new WeakMap();
 export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[],volumeGrid=16,sourceDimensions=[volumeGrid,volumeGrid*2,volumeGrid],directions=24,smokeRefinement=4,angularRotation=0,angularPattern='fixed',worldGeometry=false,samplingNoise=null,receiverBounds=null,exteriorMedium=false,exteriorIntegrationGrid=8}) {
   if(worldGeometry&&receivers.length)throw new Error('world BVH mode requires smoke-only receivers');
+  let deviceShaderCache=volumeGatherShaderCache.get(device);
+  if(!deviceShaderCache){deviceShaderCache=new Map();volumeGatherShaderCache.set(device,deviceShaderCache);}
   lightingDirections(directions); // Validate before allocating shared resources.
   if(!Number.isFinite(exteriorIntegrationGrid)||exteriorIntegrationGrid<=0)throw Error('positive finite exterior integration grid required');
   const domain=sceneSourceDomain(sourceDimensions);
@@ -148,21 +151,45 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
       const environmentDirections=sourcePattern()?buffer('uniform environment directions',new Float32Array(lightingDirections(directions,angularRotation).flatMap(d=>[...d,0])),GPUBufferUsage.STORAGE,owned):null;
       const environmentHits=sourcePattern()?buffer('cached environment solid distances',new Float32Array(volumeCount*directions),GPUBufferUsage.STORAGE,owned):null;
       const constants=`const DISPATCH_WIDTH:u32=${dispatchLimit*64}u;const DIRECTION_COUNT:u32=${bankDirections}u;override CACHE_START:u32=0u;const SURFACE_COUNT:u32=${receivers.length}u;const RECEIVER_COUNT:u32=${total}u;const NODE_COUNT:u32=${geometry.nodeCount}u;const VOLUME_GRID:u32=${volumeGrid}u;const VOLUME_HEIGHT:u32=${volumeHeight}u;const SURFACE_WIDTH:u32=${surfaceWidth}u;`;
-      const module=device.createShaderModule({label:'distributed volume ray gather',code:`const SOURCE_PATTERN:bool=${sourcePattern()};const SPATIAL_PATTERN:bool=${angularPattern==='spatial'};const BLUE_PATTERN:bool=${['blue','importance'].includes(angularPattern)};const IMPORTANCE_PATTERN:bool=${angularPattern==='importance'};`+constants+(['blue','importance'].includes(angularPattern)?SMOKE_LIGHT_NOISE_WGSL:'fn blueReceiverRotation(p:vec3<f32>)->vec4<f32>{return vec4<f32>(0,0,0,1);}fn blueRayPhase(p:vec3<f32>,a:u32)->f32{return 0.5;}')+GATHER_WGSL_BODY+(exteriorMedium?EXTERIOR_MEDIUM_WGSL:NO_EXTERIOR_MEDIUM_WGSL)+(angularPattern==='importance'?ANGULAR_IMPORTANCE_WGSL:'fn selectImportance(receiver:u32,u:f32)->u32{return 0u;}fn importanceProbability(receiver:u32,a:u32)->f32{return 1.0;}fn recordImportance(receiver:u32,a:u32,radiance:vec3<f32>){}')+(sourcePattern()?SOURCE_ENVIRONMENT_WGSL:'fn sourceEnvironment(receiver:u32,p:vec3<f32>)->vec3<f32>{return vec3<f32>(0.0);}')+(angularPattern==='regions'?REGION_SOURCE_WGSL:angularPattern==='guided'?SOURCE_GUIDE_WGSL:SOURCE_AWARE_WGSL)});
-      if(!sceneLightPipeline)sceneLightPipeline=device.createComputePipeline({label:'cache scene-light smoke visibility',layout:'auto',compute:{module,entryPoint:'cacheSceneLights'}});
-      const cache=device.createComputePipeline({label:'cache static solid ray intersections',layout:'auto',compute:{module,entryPoint:'cacheGeometry',constants:{CACHE_START:prefix?.capacity||0}}});
+      const code=`const SOURCE_PATTERN:bool=${sourcePattern()};const SPATIAL_PATTERN:bool=${angularPattern==='spatial'};const BLUE_PATTERN:bool=${['blue','importance'].includes(angularPattern)};const IMPORTANCE_PATTERN:bool=${angularPattern==='importance'};`+constants+(['blue','importance'].includes(angularPattern)?SMOKE_LIGHT_NOISE_WGSL:'fn blueReceiverRotation(p:vec3<f32>)->vec4<f32>{return vec4<f32>(0,0,0,1);}fn blueRayPhase(p:vec3<f32>,a:u32)->f32{return 0.5;}')+GATHER_WGSL_BODY+(exteriorMedium?EXTERIOR_MEDIUM_WGSL:NO_EXTERIOR_MEDIUM_WGSL)+(angularPattern==='importance'?ANGULAR_IMPORTANCE_WGSL:'fn selectImportance(receiver:u32,u:f32)->u32{return 0u;}fn importanceProbability(receiver:u32,a:u32)->f32{return 1.0;}fn recordImportance(receiver:u32,a:u32,radiance:vec3<f32>){}')+(sourcePattern()?SOURCE_ENVIRONMENT_WGSL:'fn sourceEnvironment(receiver:u32,p:vec3<f32>)->vec3<f32>{return vec3<f32>(0.0);}')+(angularPattern==='regions'?REGION_SOURCE_WGSL:angularPattern==='guided'?SOURCE_GUIDE_WGSL:SOURCE_AWARE_WGSL);
+      let compiled=deviceShaderCache.get(code);
+      if(!compiled){
+        const module=device.createShaderModule({label:'distributed volume ray gather',code});
+        compiled={
+          module,
+          sceneLightPipeline:device.createComputePipeline({label:'cache scene-light smoke visibility',layout:'auto',compute:{module,entryPoint:'cacheSceneLights'}}),
+          gather:device.createComputePipeline({label:'integrate actual flame emission to receivers',layout:'auto',compute:{module,entryPoint:'gatherLight'}}),
+          gatherVolume:device.createComputePipeline({label:'direct flame incident on smoke',layout:'auto',compute:{module,entryPoint:'gatherVolume'}}),
+          environmentCache:sourcePattern()?device.createComputePipeline({label:'cache full-sphere environment visibility',layout:'auto',compute:{module,entryPoint:'cacheEnvironment'}}):null,
+          importance:null,
+          cacheByStart:new Map(),
+        };
+        deviceShaderCache.set(code,compiled);
+      }
+      const {module,gather,gatherVolume,environmentCache}=compiled;
+      if(!sceneLightPipeline)sceneLightPipeline=compiled.sceneLightPipeline;
+      const cacheStart=prefix?.capacity||0;
+      let cache=compiled.cacheByStart.get(cacheStart);
+      if(!cache){
+        cache=device.createComputePipeline({label:'cache static solid ray intersections',layout:'auto',compute:{module,entryPoint:'cacheGeometry',constants:{CACHE_START:cacheStart}}});
+        compiled.cacheByStart.set(cacheStart,cache);
+      }
       const cacheGroup=device.createBindGroup({layout:cache.getBindGroupLayout(0),entries:[...[nodes,triangles,receiverBuffer,directionBuffer,distances].map((b,binding)=>({binding,resource:{buffer:b}})),...(angularPattern==='regions'?guideEntries():[]),...(['blue','importance'].includes(angularPattern)?[{binding:18,resource:samplingNoise.createView()}]:[])]});
-      const fullCache=prefix?device.createComputePipeline({label:'refresh moving solid ray intersections',layout:'auto',compute:{module,entryPoint:'cacheGeometry'}}):cache;
+      let fullCache=cache;
+      if(prefix){
+        fullCache=compiled.cacheByStart.get(0);
+        if(!fullCache){
+          fullCache=device.createComputePipeline({label:'refresh moving solid ray intersections',layout:'auto',compute:{module,entryPoint:'cacheGeometry'}});
+          compiled.cacheByStart.set(0,fullCache);
+        }
+      }
       const fullCacheGroup=prefix?device.createBindGroup({layout:fullCache.getBindGroupLayout(0),entries:[...[nodes,triangles,receiverBuffer,directionBuffer,distances].map((b,binding)=>({binding,resource:{buffer:b}})),...(angularPattern==='regions'?guideEntries():[]),...(['blue','importance'].includes(angularPattern)?[{binding:18,resource:samplingNoise.createView()}]:[])]}):cacheGroup;
-      const gather=device.createComputePipeline({label:'integrate actual flame emission to receivers',layout:'auto',compute:{module,entryPoint:'gatherLight'}});
-      const gatherVolume=device.createComputePipeline({label:'direct flame incident on smoke',layout:'auto',compute:{module,entryPoint:'gatherVolume'}});
-      const environmentCache=sourcePattern()?device.createComputePipeline({label:'cache full-sphere environment visibility',layout:'auto',compute:{module,entryPoint:'cacheEnvironment'}}):null;
       const environmentCacheGroup=environmentCache?device.createBindGroup({layout:environmentCache.getBindGroupLayout(0),entries:[
         {binding:0,resource:{buffer:nodes}},{binding:1,resource:{buffer:triangles}},{binding:2,resource:{buffer:receiverBuffer}},
         {binding:12,resource:{buffer:environmentParams}},{binding:13,resource:{buffer:environmentDirections}},{binding:14,resource:{buffer:environmentHits}}]}):null;
       const importanceScores=angularPattern==='importance'?buffer('recent angular contribution scores',new Float32Array(total*bankDirections),GPUBufferUsage.STORAGE,owned):null;
       const importanceCdf=angularPattern==='importance'?buffer('angular proposal CDF',new Float32Array(total*bankDirections),GPUBufferUsage.STORAGE,owned):null;
-      const importance=importanceScores?device.createComputePipeline({label:'prepare cached angular importance',layout:'auto',compute:{module,entryPoint:'prepareImportance'}}):null;
+      const importance=importanceScores?(compiled.importance??=device.createComputePipeline({label:'prepare cached angular importance',layout:'auto',compute:{module,entryPoint:'prepareImportance'}})):null;
       const importanceEntries=importanceScores?[{binding:20,resource:{buffer:importanceScores}},{binding:21,resource:{buffer:importanceCdf}}]:[];
       const importanceGroup=importance?device.createBindGroup({layout:importance.getBindGroupLayout(0),entries:importanceEntries}):null;
       const state={importance,importanceGroup,importanceEntries,owned,directionBuffer,distances,cache,cacheGroup,fullCache,fullCacheGroup,gather,gatherVolume,environmentCache,environmentCacheGroup,environmentDirections,environmentHits,environmentCount:directions,environmentCacheBuilt:false,family:family(),capacity:bankDirections,requestedDirections:directions,prefix,sourceTexture:null,gatherGroup:null,cacheBuilt:false};

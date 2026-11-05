@@ -134,3 +134,454 @@ test('deletion during async regrid releases both old and candidate fields',async
  await object.initialize();const pending=object.regrid(.02);object.dispose();resolve(create());
  await assert.rejects(pending,/disposed/i);assert.deepEqual(patches.map(p=>p.disposed),[1,1]);
 });
+
+test('createAshCollisionRecords restores beauty LODs and excludes kaminosBeautyLodProxy meshes',()=>{
+ const root=new Group();
+ const obstacle=new Group();
+ const heroMesh=new Mesh(new BoxGeometry(1,1,1),new MeshBasicMaterial());
+ const beautyProxy=new Group();
+ beautyProxy.userData.kaminosBeautyLodProxy=true;
+ const proxyMesh=new Mesh(new BoxGeometry(.5,.5,.5),new MeshBasicMaterial());
+ beautyProxy.add(proxyMesh);
+ obstacle.add(heroMesh);
+ obstacle.add(beautyProxy);
+
+ heroMesh.visible=false;
+ beautyProxy.visible=true;
+ obstacle.userData.kaminosBeautyLodRestore=()=>{
+  heroMesh.visible=true;
+  beautyProxy.visible=false;
+  return ()=>{
+   heroMesh.visible=false;
+   beautyProxy.visible=true;
+  };
+ };
+
+ const list=createAshCollisionRecords(root,()=>[{id:'kiln',type:'glb',object:obstacle}]);
+ const records=list();
+ assert.equal(records.length,1,'only the restored hero mesh enters ash collision records');
+ assert.equal(records[0].object.geometry,heroMesh.geometry,'ash collision record uses hero geometry, not beauty proxy');
+ assert.equal(heroMesh.visible,false,'beauty LOD visibility state is restored after createAshCollisionRecords');
+ assert.equal(beautyProxy.visible,true,'beauty proxy visibility is restored after createAshCollisionRecords');
+});
+
+test('review WO1: createAshCollisionRecords substitutes cellSize-matched stunt-double rung via resolveObstacle instead of hashing full hero mesh',async()=>{
+ const THREE=await import('../lib/three.core.js');
+ const {createSceneColliderCollection}=await import('../scene-collider.mjs');
+ const {createGiProxyRegistry}=await import('../scene-gi-proxies.mjs');
+
+ const HERO_SHA='a'.repeat(64);
+ const TIER_500='b'.repeat(64);
+ const levels=[
+  {sha256:TIER_500,faces:500,closed:true,source:`/api/read?root=generated-meshes&path=${TIER_500}.glb`,error:{diagonal:1.0,relative:{p95:0.002,max:0.008},levelToSource:{p95:0.002,max:0.008},sourceToLevel:{p95:0.002,max:0.008}}},
+ ];
+
+ const obstacle=new Group();
+ obstacle.position.set(2,0,-3);
+ obstacle.userData.kaminosSceneObject={source:`/api/read?root=generated-meshes&path=${HERO_SHA}.glb`};
+ const heroGeom=new THREE.SphereGeometry(0.5,64,48); // > 6,000 triangles
+ const heroMesh=new Mesh(heroGeom,new MeshBasicMaterial());
+ obstacle.add(heroMesh);
+ obstacle.updateMatrixWorld(true);
+
+ const stuntGeom=new BoxGeometry(0.8,0.8,0.8,1,1,1); // 12 triangles
+ const giProxies=createGiProxyRegistry({
+  THREE,
+  fetchJson:async()=>({schema:'kaminos.lod-set.v0',source:HERO_SHA,levels,choice:levels[0],withinBudget:true}),
+  fetchBytes:async()=>new TextEncoder().encode(TIER_500).buffer,
+  digest:async bytes=>new TextDecoder().decode(bytes),
+  parseGlb:async()=>{const g=new Group();g.add(new Mesh(stuntGeom,new MeshBasicMaterial()));return g;},
+ });
+ await giProxies.attach(obstacle,{faces:500});
+ const colliderCollection=createSceneColliderCollection(THREE,{giProxies});
+
+ const ashRoot=new Group();
+ ashRoot.position.set(1,0,-2);
+ ashRoot.userData.kaminosSceneObject={ash:{cellSize:0.04}};
+ const list=createAshCollisionRecords(
+  ashRoot,
+  ()=>[{id:'beam',type:'glb',object:obstacle}],
+  {resolveObstacle:(entry,opts)=>colliderCollection.resolveObstacle(entry,opts)}
+ );
+ const records=list();
+ assert.equal(records.length,1,'ash collision emits 1 proxy mesh for stunt-double');
+ assert.equal(records[0].object.geometry.attributes.position.count,stuntGeom.attributes.position.count,'WO1: ash obstacle uses 12-triangle stunt-double rung instead of 6,000-triangle hero mesh');
+ assert.deepEqual(records[0].object.matrixWorld.elements.slice(12,15),[1,0,-1],'WO1: stunt-double rung is transformed into ash field coordinates');
+
+ obstacle.visible=false;
+ assert.equal(list().length,0,'WO1: hidden obstacle is excluded from ash collision records');
+});
+
+
+
+test('a checkpoint retries exact original colliders after an adaptive collider mismatch and retains that source',async()=>{
+ const original=new Mesh(new BoxGeometry(),new MeshBasicMaterial()),proxy=new Mesh(new BoxGeometry(.5,.5,.5),new MeshBasicMaterial());
+ const saved={schema:'kaminos.tiled-ash.v1',values:[.25,.75],steps:3522};let sceneRecords,restored,ticks=0;const attempts=[];
+ const object=await createAshSceneObject({record:{...record(),ash:{...record().ash,checkpoint:saved}},readObjects:()=>[{id:'mesh',type:'glb',object:original}],resolveObstacle:()=>proxy,createPatch:async options=>{sceneRecords=options.sceneRecords;return {root:new Group(),syncScene(){},restore(state){const geometry=sceneRecords()[0].object.geometry;attempts.push(geometry);if(geometry!==original.geometry)throw Object.assign(Error('Checkpoint scene geometry or poses differ; restore the scene first'),{code:'ASH_CHECKPOINT_COLLISION_MISMATCH'});restored=structuredClone(state);},step(){assert.equal(sceneRecords()[0].object.geometry,original.geometry);ticks++;},read:()=>({steps:saved.steps+ticks}),dispose(){}};}});
+ try{await object.initialize();assert.deepEqual(attempts,[proxy.geometry,original.geometry]);assert.deepEqual(restored,saved);assert.equal(object.read().pendingRestore,false);assert.equal(object.read().collisionSource,'checkpoint-original');object.tick(1000);assert.equal(ticks,1);await object.initialize();assert.equal(attempts.length,2);}finally{object.dispose();for(const m of [original,proxy]){m.geometry.dispose();m.material.dispose();}}
+});
+
+test('checkpoint recovery still rejects changed original geometry and unrelated checkpoint failures',async()=>{
+ for(const code of ['ASH_CHECKPOINT_COLLISION_MISMATCH','INVALID_CHECKPOINT']){
+  const original=new Mesh(new BoxGeometry(),new MeshBasicMaterial());let attempts=0;
+  const object=await createAshSceneObject({record:{...record(),ash:{...record().ash,checkpoint:{schema:'kaminos.tiled-ash.v1'}}},readObjects:()=>[{id:'mesh',type:'glb',object:original}],resolveObstacle:()=>original,createPatch:async()=>({root:new Group(),syncScene(){},restore(){attempts++;throw Object.assign(Error('refused'),{code});},step(){throw Error('must not step');},read:()=>({}),dispose(){}})});
+  try{await assert.rejects(object.initialize(),/refused/);assert.equal(attempts,code==='ASH_CHECKPOINT_COLLISION_MISMATCH'?2:1);assert.equal(object.read().pendingRestore,true);assert.equal(object.tick(1000),false);}finally{object.dispose();original.geometry.dispose();original.material.dispose();}
+ }
+});
+
+test('collision records isolate ash from viewport camera beauty LOD proxies',()=>{
+ const ashRoot=new Group();
+ const entryRoot=new Group();
+ const heroGeom=new BoxGeometry(1,2,1);
+ const heroMesh=new Mesh(heroGeom,new MeshBasicMaterial());
+ entryRoot.add(heroMesh);
+ const beautyGeom=new BoxGeometry(.5,.5,.5);
+ const beautyMesh=new Mesh(beautyGeom,new MeshBasicMaterial());
+ const wrapper=new Group();
+ wrapper.userData.kaminosBeautyLodProxy=true;
+ wrapper.add(beautyMesh);
+ const mountBeauty=()=>{
+  heroMesh.visible=false;
+  if(wrapper.parent!==entryRoot)entryRoot.add(wrapper);
+  entryRoot.userData.kaminosBeautyLodRestore=()=>{
+   heroMesh.visible=true;
+   if(wrapper.parent===entryRoot)entryRoot.remove(wrapper);
+   delete entryRoot.userData.kaminosBeautyLodRestore;
+   return mountBeauty;
+  };
+ };
+ mountBeauty();
+ const list=createAshCollisionRecords(ashRoot,()=>[{id:'kiln',type:'glb',object:entryRoot}]);
+ const out=list();
+ assert.equal(out.length,1);
+ assert.equal(out[0].object.geometry,heroGeom,'ash collision must read hero or ash-selected geometry, never camera beauty proxy');
+ assert.equal(heroMesh.visible,false,'camera beauty visibility state must be restored after collision inspection');
+ assert.equal(wrapper.parent,entryRoot,'camera beauty wrapper must remain mounted for viewport after inspection');
+ heroGeom.dispose();beautyGeom.dispose();
+});
+
+import {selectAshCollisionLod} from '../ash/scene-object.mjs';
+const kilnLevels=[
+ {faces:500,sha:'a'.repeat(64),closed:false,error:{diagonal:2.022905,relative:{p95:0.017971,max:0.135345},sourceToLevel:{p95:0.036353,max:0.273791},levelToSource:{p95:0.025811,max:0.151652}}},
+ {faces:1000,sha:'b'.repeat(64),closed:false,error:{diagonal:2.022905,relative:{p95:0.014104,max:0.135345},sourceToLevel:{p95:0.028532,max:0.273791},levelToSource:{p95:0.021121,max:0.165143}}},
+ {faces:5000,sha:'c'.repeat(64),closed:false,error:{diagonal:2.022905,relative:{p95:0.013183,max:0.089763},sourceToLevel:{p95:0.011002,max:0.171482},levelToSource:{p95:0.013183,max:0.181582}}},
+ {faces:10000,sha:'d'.repeat(64),closed:false,error:{diagonal:2.022905,relative:{p95:0.010283,max:0.075123},sourceToLevel:{p95:0.008512,max:0.138112},levelToSource:{p95:0.010283,max:0.151988}}},
+ {faces:25000,sha:'e'.repeat(64),closed:false,error:{diagonal:2.022905,relative:{p95:0.004917,max:0.066353},sourceToLevel:{p95:0.003999,max:0.134226},levelToSource:{p95:0.004917,max:0.134226}}},
+];
+const beamLevels=[
+ {faces:500,sha:'1'.repeat(64),closed:true,error:{diagonal:2.022871,relative:{p95:0.00505,max:0.023879},sourceToLevel:{p95:0.010215,max:0.036301},levelToSource:{p95:0.007909,max:0.048304}}},
+ {faces:1000,sha:'2'.repeat(64),closed:true,error:{diagonal:2.022871,relative:{p95:0.002976,max:0.017014},sourceToLevel:{p95:0.00602,max:0.034418},levelToSource:{p95:0.004521,max:0.031521}}},
+];
+test('selectAshCollisionLod chooses stunt-double tiers by cell width while rejecting pipe-dropping or topology-sealing tiers',()=>{
+ const at04=selectAshCollisionLod(kilnLevels,{cellSize:.04,worldDiag:2.023,heroFaces:368266});
+ assert.equal(at04.faces,5000,'0.04m ash selects 5000-face kiln and rejects pipe-dropping 500/1000 tiers');
+ const scaledUp=selectAshCollisionLod(kilnLevels,{cellSize:.04,worldDiag:8.0,heroFaces:368266});
+ assert.equal(scaledUp.faces,5000,'enlarging kiln keeps resident stunt-double tier instead of falling back to 368k hero');
+ const at02=selectAshCollisionLod(kilnLevels,{cellSize:.02,worldDiag:2.023,heroFaces:368266});
+ assert.equal(at02.faces,25000,'0.02m fine ash selects finer 25000-face kiln tier');
+ const scaledDown02=selectAshCollisionLod(kilnLevels,{cellSize:.02,worldDiag:0.25,heroFaces:368266});
+ assert.equal(scaledDown02.faces,25000,'shrinking kiln at 0.02m also keeps 25000-face tier without mid-drag tier switches');
+ const beam=selectAshCollisionLod(beamLevels,{cellSize:.04,worldDiag:2.023,heroFaces:52936});
+ assert.equal(beam.faces,500,'prismatic beam selects coarsest 500-face tier');
+ const sealed=[
+  {faces:500,sha:'f'.repeat(64),closed:true,error:beamLevels[0].error},
+  {faces:5000,sha:'9'.repeat(64),closed:false,error:kilnLevels[2].error},
+ ];
+ assert.equal(selectAshCollisionLod(sealed,{cellSize:.04,worldDiag:2.023,heroFaces:100000}).faces,5000,'rejects coarse tier that seals an open mesh');
+});
+
+import * as THREE from '../lib/three.core.js';
+import {createGiProxyRegistry} from '../scene-gi-proxies.mjs';
+import {createSceneBeautyLodController} from '../scene-lod-budget.mjs';
+test('ash scene object prepares and consumes stunt-double collision rungs across initialize, repetition, vertex warp, and regrid',async()=>{
+ const heroSha='f'.repeat(64);
+ const scene=new Group();
+ const kilnRoot=new Group();
+ kilnRoot.position.set(1,0,-1);
+ kilnRoot.userData.kaminosSceneObject={id:'kiln-1',type:'glb',source:`/api/read?root=generated-meshes&path=${heroSha}.glb`};
+ const heroGeom=new BoxGeometry(1,2,1,50,50,50); // 30000 faces > 25000
+ const heroMesh=new Mesh(heroGeom,new MeshBasicMaterial());
+ kilnRoot.add(heroMesh);
+ const repCopy=new Group();
+ repCopy.userData.kaminosRepetitionCopy=true;
+ repCopy.position.set(2,0,0);
+ repCopy.updateMatrix();
+ kilnRoot.add(repCopy);
+ kilnRoot.userData.kaminosVertexWarp=pos=>{
+  const out=new Float32Array(pos.length);
+  for(let i=0;i<pos.length;i+=3){out[i]=pos[i]+0.25;out[i+1]=pos[i+1];out[i+2]=pos[i+2];}
+  return out;
+ };
+ kilnRoot.userData.kaminosVertexWarpRevision=1;
+ scene.add(kilnRoot);
+
+ const tierGeoms=new Map([
+  ['c'.repeat(64),new BoxGeometry(1,2,1,2,2,2)],
+  ['e'.repeat(64),new BoxGeometry(1,2,1,4,4,4)],
+ ]);
+ const levels=kilnLevels.map(l=>({...l,sha256:l.sha,source:`/api/read?root=generated-meshes&path=${l.sha}.glb`}));
+ const giProxies=createGiProxyRegistry({
+  THREE,
+  fetchJson:async()=>({levels,choice:levels[1],withinBudget:true}),
+  fetchBytes:async url=>new TextEncoder().encode(url),
+  digest:async bytes=>{const u=new TextDecoder().decode(bytes);return /([a-f0-9]{64})\.glb/.exec(u)?.[1]??'';},
+  parseGlb:async bytes=>{
+   const sha=/([a-f0-9]{64})\.glb/.exec(new TextDecoder().decode(bytes))?.[1];
+   const g=(tierGeoms.get(sha)??new BoxGeometry(1,2,1)).clone();
+   const root=new Group();root.add(new Mesh(g,new MeshBasicMaterial()));return root;
+  },
+ });
+ giProxies.select(kilnRoot,{faces:1000}); // deliberately in-flight (not awaited yet)
+ const lodController=createSceneBeautyLodController({
+  THREE,
+  scene,
+  giProxies,
+  fetchBytes:async url=>new TextEncoder().encode(url),
+  digest:async bytes=>{const u=new TextDecoder().decode(bytes);return /([a-f0-9]{64})\.glb/.exec(u)?.[1]??'';},
+  parseGlb:async bytes=>{
+   const sha=/([a-f0-9]{64})\.glb/.exec(new TextDecoder().decode(bytes))?.[1];
+   const g=(tierGeoms.get(sha)??new BoxGeometry(1,2,1)).clone();
+   const root=new Group();root.add(new Mesh(g,new MeshBasicMaterial()));return root;
+  },
+ });
+
+ const synced=[];
+ const ashObj=await createAshSceneObject({
+  record:record(),
+  readObjects:()=>[{id:'kiln-1',type:'glb',object:kilnRoot}],
+  lodController,
+  createPatch:async options=>({
+   root:new Group(),
+   syncScene(){synced.push(options.sceneRecords());},
+   snapshot:async()=>({}),
+   deposit:async()=>{},
+   step(){},
+   read:()=>({}),
+   dispose(){},
+  }),
+ });
+ await ashObj.initialize();
+ assert.equal(synced.length,1);
+ assert.equal(synced[0].length,2,'primary placement + 1 repetition copy');
+ assert.notEqual(synced[0][0].object.geometry,heroGeom,'must use 5000-face stunt double instead of hero');
+ assert.equal(synced[0][0].object.geometry.parameters.widthSegments,2,'0.04m ash uses 5000-face tier geometry');
+ assert.equal(synced[0][0].object.geometry.userData.kaminosWarpApplied,true,'vertex warp propagated to ash collision stunt double');
+ assert.notEqual(synced[0][0].object,synced[0][1].object,'distinct proxy Mesh instances for each repetition copy');
+ assert.deepEqual(synced[0][0].object.matrixWorld.elements.slice(12,15),[-1,0,2]);
+ assert.deepEqual(synced[0][1].object.matrixWorld.elements.slice(12,15),[1,0,2]);
+
+ await ashObj.regrid(0.02);
+ assert.equal(synced.length,2);
+ assert.equal(synced[1][0].object.geometry.parameters.widthSegments,4,'0.02m regrid upgrades collision stunt double to 25000-face tier');
+
+ // ASHLOD-F2 (a): Disabling GI proxy for lighting comparison must not purge Stunt Double collision rungs or levels
+ giProxies.disable(kilnRoot);
+ assert.equal(giProxies.get(kilnRoot).state,'disabled');
+ assert.equal(giProxies.get(kilnRoot).proxyRoot,null);
+ await ashObj.checkpoint();
+ assert.equal(synced.length,3);
+ assert.notEqual(synced[2][0].object.geometry,heroGeom,'disabling GI proxy must not force ash collision back onto hero mesh');
+ assert.equal(synced[2][0].object.geometry.parameters.widthSegments,4,'disabled GI proxy retains 25000-face collision stunt double');
+
+ // ASHLOD-F2 (b): Late-imported mesh whose Stunt Double is still in flight must not voxelize 30k hero mesh first
+ const lateSha='9'.repeat(64);
+ const lateRoot=new Group();
+ lateRoot.userData.kaminosSceneObject={id:'kiln-2',type:'glb',source:`/api/read?root=generated-meshes&path=${lateSha}.glb`};
+ const lateHeroGeom=new BoxGeometry(1,2,1,50,50,50);
+ lateRoot.add(new Mesh(lateHeroGeom,new MeshBasicMaterial()));
+ scene.add(lateRoot);
+ giProxies.select(lateRoot,{faces:1000}); // in-flight!
+ const lateRecords=createAshCollisionRecords(ashObj.root,()=>[{id:'kiln-2',type:'glb',object:lateRoot}],{
+  getCellSize:()=>0.02,
+  resolveCollisionRung:(obj,opts)=>lodController.resolveCollisionRung(obj,opts),
+ });
+ const whileInFlight=lateRecords();
+ assert.equal(whileInFlight.length,0,'while Stunt Double manifest/rung is in flight, must defer rather than voxelizing 30k hero mesh');
+ await giProxies.whenIdle();
+ const whileRungLoading=lateRecords();
+ assert.equal(whileRungLoading.length,0,'while chosen Stunt Double GLB is loading, must defer rather than voxelizing 30k hero mesh');
+ await lodController.whenIdle();
+ const afterRungReady=lateRecords();
+ assert.equal(afterRungReady.length,1,'once Stunt Double rung finishes loading, collision record is emitted');
+ assert.notEqual(afterRungReady[0].object.geometry,lateHeroGeom,'emitted collision record uses Stunt Double tier, never hero');
+
+ ashObj.dispose();lodController.dispose();giProxies.clear();
+});
+
+import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
+import {BURNER_DEFAULTS,createAnnularBurner} from '../annular-burner.mjs';
+test('annular burner procedural meshes collapse 29 beauty sub-meshes into a single analytic ring collider (or caster proxy when vertex-warped)',()=>{
+ const ashRoot=new Group();
+ const burner=createAnnularBurner(THREE,mergeGeometries,BURNER_DEFAULTS);
+ burner.group.position.set(1,0.5,-2);
+ burner.group.scale.setScalar(20);
+ assert.equal(burner.group.children.filter(c=>c.isMesh).length,29,'beauty burner has 29 sub-meshes');
+ const list=createAshCollisionRecords(ashRoot,()=>[{id:'burner-floor',type:'procedural-mesh',object:burner.group}]);
+ const first=list();
+ assert.equal(first.length,1,'annular burner must emit 1 collider record instead of 29 sub-meshes');
+ assert.equal(first[0].collisionTier,'annular-analytic');
+ assert.equal(first[0].object.userData.kaminosAnalyticAnnularBurner?.ringCount,24,'unwarped annular burner carries analytic ring recipe');
+ assert.equal(burner.group.children.filter(c=>c.isMesh).length,29,'beauty burner children remain untouched');
+ const second=list();
+ assert.equal(second[0].object,first[0].object,'proxy mesh is reused across ticks');
+ // Vertex-warped burner falls back to triangle caster proxy
+ burner.group.userData.kaminosVertexWarp=pos=>new Float32Array(pos);
+ burner.group.userData.kaminosVertexWarpRevision=1;
+ const warped=list();
+ assert.equal(warped.length,1);
+ assert.equal(warped[0].collisionTier,'annular-caster');
+ assert.equal(warped[0].object.userData.kaminosAnalyticAnnularBurner,null,'vertex-warped burner uses triangle caster instead of unwarped analytic formula');
+ assert.ok(warped[0].collisionFaces>1000&&warped[0].collisionFaces<8000);
+ burner.dispose();
+});
+
+import {installAshSourceInspector} from '../ash/source-controls.mjs';
+import {installAshInspector} from '../ash/scene-controls.mjs';
+import {checkedAshSource} from '../ash/source-object.mjs';
+import {checkedAshSettings} from '../ash/scene-record.mjs';
+test('ash source and field inspectors ignore mid-typing empty/decimal strings, clamp non-negative scrubs, and clear stale errors on valid input',()=>{
+ class FakeControl extends EventTarget {
+  constructor(tag='input',props={}){
+   super();this.tagName=tag.toUpperCase();this.style={};this.dataset={};this.classList={add(){},remove(){},toggle(){}};
+   this.value='';this.checked=false;this.min='';this.max='';this.step='any';this.children=[];Object.assign(this,props);
+  }
+  get valueAsNumber(){return this.value.trim()===''?NaN:Number(this.value);}
+  append(...nodes){this.children.push(...nodes);}
+  replaceChildren(...nodes){this.children=nodes;}
+  querySelector(){return new FakeControl('span');}
+  fire(type){this.dispatchEvent(new Event(type,{bubbles:true,cancelable:true}));}
+ }
+ const sourceControls=[
+  new FakeControl('input',{type:'checkbox',dataset:{key:'enabled'},checked:true}),
+  new FakeControl('input',{type:'number',min:'0',step:'any',dataset:{key:'rate'},value:'0.008'}),
+  new FakeControl('input',{type:'number',min:'0',step:'any',dataset:{key:'spread'},value:'0.24'}),
+ ];
+ const statusNode=new FakeControl('p'),fieldSelect=new FakeControl('select'),selectBtn=new FakeControl('button');
+ const sourcePanel={
+  hidden:true,innerHTML:'',
+  querySelector:sel=>sel==='[data-status]'?statusNode:sel==='[data-field]'?fieldSelect:selectBtn,
+  querySelectorAll:sel=>sel==='[data-key]'?sourceControls:[],
+ };
+ const doc=Object.assign(new FakeControl('document'),{activeElement:null,defaultView:new FakeControl('window'),createElement:tag=>tag==='section'?sourcePanel:new FakeControl(tag)});
+ for(const c of sourceControls)c.ownerDocument=doc;
+ let sourceState={fieldId:'ash-1',enabled:true,rate:0.008,spread:0.24},lastError=null;
+ const sourceInspector=installAshSourceInspector({
+  document:doc,anchor:{after(){}},selected:()=>'src-1',
+  read:()=>({settings:sourceState,fields:[{id:'ash-1',label:'Ash'}],fieldExists:true,status:'Emitting · Ash'}),
+  set:(_id,patch)=>{sourceState=checkedAshSource({...sourceState,...patch});},
+  selectField(){},edits:{subscribe(){}},target:()=>'@ash-source:src-1',ownHistory(){},error:msg=>{lastError=msg;},
+ });
+ sourceInspector.sync();
+ const rateInput=sourceControls[1];
+ doc.activeElement=rateInput;
+ for(const partial of ['','.']){
+  rateInput.value=partial;rateInput.fire('input');
+ }
+ assert.equal(lastError,null,'clearing or typing a leading decimal on the way to 0.00001 must not emit Invalid falling ash source');
+ assert.equal(sourceState.rate,0.008,'partial typing must not mutate committed rate to 0 or NaN');
+ // Simulate a rejected negative value followed by valid 0.00001
+ rateInput.value='-1';rateInput.fire('input');
+ assert.match(String(lastError),/Invalid falling ash source/);
+ rateInput.value='0.00001';rateInput.fire('input');
+ assert.equal(sourceState.rate,0.00001,'fine 0.00001 rate is accepted');
+ assert.equal(lastError,'','valid input clears prior error toast');
+
+ // Verify installAshInspector sets min=0 on non-negative fields and ignores empty mid-typing input
+ const ashInputs=new Map();
+ const cellSizeInput=new FakeControl('input',{type:'number',value:'0.04'});
+ const layerInput=new FakeControl('input',{type:'number',value:'0.04'});
+ const volumeInput=new FakeControl('input',{type:'number',value:'0.02'});
+ const statusEl=new FakeControl('p'),sizeEl=new FakeControl('p'),regridBtn=new FakeControl('button'),coverBtn=new FakeControl('button'),burstBtn=new FakeControl('button'),ashFields=new FakeControl('div'),legacyFields=new FakeControl('div');
+ const pausedInput=new FakeControl('input',{type:'checkbox',dataset:{ashKey:'paused'}});
+ const falloutInput=new FakeControl('input',{type:'checkbox',dataset:{ashKey:'fallout'}});
+ const softInput=new FakeControl('input',{type:'checkbox',dataset:{ashKey:'softNormals'}});
+ const emitInput=new FakeControl('input',{type:'checkbox',dataset:{ashKey:'emitting'}});
+ for(const c of [pausedInput,falloutInput,softInput,emitInput])ashInputs.set(c.dataset.ashKey,c);
+ const fieldPanel={
+  hidden:true,innerHTML:'',
+  querySelector:sel=>{
+   if(sel==='[data-ash-cell]')return cellSizeInput;
+   if(sel==='[data-ash-regrid]')return regridBtn;
+   if(sel==='[data-ash-cover]')return coverBtn;
+   if(sel==='[data-ash-burst]')return burstBtn;
+   if(sel==='[data-ash-layer]')return layerInput;
+   if(sel==='[data-ash-volume]')return volumeInput;
+   if(sel==='[data-ash-status]')return statusEl;
+   if(sel==='[data-ash-size]')return sizeEl;
+   if(sel==='[data-ash-fields]')return ashFields;
+   if(sel==='[data-legacy-fields]')return legacyFields;
+   return new FakeControl('div');
+  },
+  querySelectorAll:sel=>{
+   if(sel==='[data-ash-key]')return [...ashInputs.values()];
+   if(sel==='[data-ash-layer],[data-ash-volume]')return [layerInput,volumeInput];
+   return [];
+  },
+ };
+ const doc2=Object.assign(new FakeControl('document'),{
+  activeElement:null,defaultView:new FakeControl('window'),
+  createElement:tag=>{
+   if(tag==='section')return fieldPanel;
+   const c=new FakeControl(tag);c.ownerDocument=doc2;
+   if(tag==='input'){
+    const ds={};
+    Object.defineProperty(c,'dataset',{get:()=>ds});
+    Object.defineProperty(ds,'ashKey',{set(v){this._k=v;ashInputs.set(v,c);},get(){return this._k;}});
+   }
+   return c;
+  },
+ });
+ for(const c of [cellSizeInput,layerInput,volumeInput,pausedInput,falloutInput,softInput,emitInput])c.ownerDocument=doc2;
+ let ashSettings=checkedAshSettings(record().ash),fieldError=null;
+ installAshInspector({
+  document:doc2,anchor:{after(){}},selected:()=>'ash-1',edits:{subscribe(){}},target:()=>'@ash-settings:ash-1',ownHistory(){},
+  read:()=>({settings:ashSettings,busy:false,failure:null,runtime:{steps:0,volume:0,allocatedBytes:0}}),
+  edit:(_id,patch)=>{ashSettings=checkedAshSettings({...ashSettings,...patch,checkpoint:null});},
+  regrid:async()=>{},cover:async()=>{},burst:async()=>{},changed(){},error:msg=>{fieldError=msg;},
+ });
+ assert.equal(ashInputs.get('rate').min,'0','field fallout rate input must clamp scrubs at min=0');
+ assert.equal(ashInputs.get('spread').min,'0','field source spread input must clamp scrubs at min=0');
+ doc2.activeElement=ashInputs.get('rate');
+ ashInputs.get('rate').value='';ashInputs.get('rate').fire('input');
+ assert.equal(ashSettings.rate,0.008,'clearing field rate input mid-typing must not overwrite rate with 0 or throw');
+ assert.equal(fieldError,null);
+});
+
+test('ash collision retains GLB node coordinates when display rungs bake their transforms',async()=>{
+ const source=new Group(),hero=new Mesh(new BoxGeometry(1,2,1,50,50,50),new MeshBasicMaterial());source.add(hero);
+ const sha='e'.repeat(64);let originalGeometry;
+ const controller=createSceneBeautyLodController({THREE,scene:new Group(),giProxies:{get:()=>({state:'resolved',levels:kilnLevels}),whenIdle:async()=>{}},
+  fetchBytes:async()=>new Uint8Array([1]),digest:async()=>sha,
+  parseGlb:async()=>{const r=new Group(),m=new Mesh(new BoxGeometry(1,2,3),new MeshBasicMaterial());m.rotation.x=-Math.PI/2;r.add(m);originalGeometry=m.geometry.clone();return r;}});
+ try{
+  await controller.prepareCollision([source],{cellSize:.02});
+  const collision=controller.resolveCollisionRung(source,{cellSize:.02}).root;
+  const cm=collision.children[0],display=controller.getResidentRung(source,sha).root.children[0];
+  assert.deepEqual(Array.from(cm.geometry.attributes.position.array),Array.from(originalGeometry.attributes.position.array),'collision preserves raw GLB vertex identity');
+  assert.ok(Math.abs(cm.rotation.x+Math.PI/2)<1e-12,'collision retains original node rotation');
+  assert.ok(Math.abs(display.rotation.x)<1e-12,'display continues to bake rotation');
+  assert.notEqual(cm.geometry,display.geometry,'display warps cannot mutate checkpoint collision geometry');
+  const records=createAshCollisionRecords(new Group(),()=>[{id:'kiln',type:'glb',object:source}],{getCellSize:()=>.02,resolveCollisionRung:(r,o)=>controller.resolveCollisionRung(r,o)})();
+  assert.equal(records.length,1);assert.ok(Math.abs(records[0].object.matrix.elements[6]+1)<1e-12,'raw node transform reaches field collision');
+  const positions=m=>{m.updateWorldMatrix(true,false);return Array.from({length:m.geometry.attributes.position.count},(_,i)=>new THREE.Vector3().fromBufferAttribute(m.geometry.attributes.position,i).applyMatrix4(m.matrixWorld).toArray()).flat();};
+  const close=(a,b,message)=>assert.ok(a.every((v,i)=>Math.abs(v-b[i])<1e-6),message);
+  const baseDisplay=positions(display),baseCollision=positions(cm);
+  close(baseDisplay,baseCollision,'initial display and collision agree in root coordinates');
+  source.userData.kaminosVertexWarp=values=>Float32Array.from(values,(v,i)=>v+(i%3===0?.6:0));
+  source.userData.kaminosVertexWarpRevision=1;
+  controller.resolveCollisionRung(source,{cellSize:.02});
+  const warpedDisplay=positions(display),warpedCollision=positions(cm);
+  assert.notDeepEqual(warpedDisplay,baseDisplay,'display responds to active warp');
+  assert.notDeepEqual(warpedCollision,baseCollision,'collision responds to active warp');
+  close(warpedDisplay,warpedCollision,'active warp agrees across coordinate representations');
+  delete source.userData.kaminosVertexWarp;source.userData.kaminosVertexWarpRevision=2;
+  controller.resolveCollisionRung(source,{cellSize:.02});
+  const restoredDisplay=positions(display),restoredCollision=positions(cm);
+  close(restoredDisplay,baseDisplay,'display returns to its baseline');
+  close(restoredCollision,baseCollision,'collision returns to its baseline after warp removal');
+  assert.notDeepEqual(restoredCollision,warpedCollision,'removal must change collision from preceding warped stage');
+  close(restoredDisplay,restoredCollision,'removed warp agrees across coordinate representations');
+  assert.notEqual(cm.geometry.userData,display.geometry.userData,'mutable geometry bookkeeping is independent');
+
+ }finally{controller.dispose();originalGeometry?.dispose();hero.geometry.dispose();hero.material.dispose();}
+});

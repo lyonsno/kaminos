@@ -45,8 +45,8 @@ export function flamePresetForLocalControls(preset,localScale) {
 // Presets contain authored coefficients, never a checkpoint of the evolving fluid.
 export function createFlameAuthoring({ edits, read, write, check, load, canApply = () => {}, changed = () => {} }) {
   const id = '@flame-settings';
-  function restore(next) {
-    const checked = check(structuredClone(next));
+  function restore(next, alreadyChecked = false, notifyChanged = true) {
+    const checked = alreadyChecked ? next : check(structuredClone(next));
     const previous = read();
     try { write(checked); }
     catch (error) {
@@ -54,9 +54,9 @@ export function createFlameAuthoring({ edits, read, write, check, load, canApply
       catch (rollback) { throw new AggregateError([error, rollback], 'Flame settings failed and could not be restored'); }
       throw error;
     }
-    changed();
+    if (notifyChanged) changed();
   }
-  edits.register(id, { read, write: restore, check });
+  edits.register(id, { read, write: next => restore(next), check });
   function edit(change, label = 'Edit flame settings') {
     canApply();
     if (edits.state().active || edits.state().replaying) throw Error('Finish the current edit before applying a basin');
@@ -67,7 +67,7 @@ export function createFlameAuthoring({ edits, read, write, check, load, canApply
   }
   function apply(next, label = 'Apply flame settings') {
     const checked = check(structuredClone(next));
-    return edit(() => restore(checked), label);
+    return edit(() => restore(checked, true, false), label);
   }
   let loading = false;
   return {

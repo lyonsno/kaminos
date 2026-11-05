@@ -11,7 +11,11 @@ export const DEFAULT_GI_PROXY_SELECTION=Object.freeze({faces:1000});
 const shaOf=source=>{
   if(typeof source!=='string')return null;
   try{const u=new URL(source,'http://kaminos.local');if(u.pathname!=='/api/read'||u.searchParams.get('root')!==GENERATED)return null;
-    const m=/^([a-f0-9]{64})\.glb$/.exec(u.searchParams.get('path')??'');return m?m[1]:null;}catch{return null;}
+    const p=(u.searchParams.get('path')??'').trim();
+    const m=/^([a-f0-9]{64})\.glb$/i.exec(p);if(m)return m[1].toLowerCase();
+    const parts=p.split('/');
+    if(p.toLowerCase().endsWith('.glb')&&parts.every(seg=>/^[A-Za-z0-9._-]+$/.test(seg)&&!seg.startsWith('.')))return p;
+    return null;}catch{return null;}
 };
 const surfelRootIn=root=>{let found=null;root.traverse(o=>{if(!found&&o.isTrellisSurfelRoot)found=o;});return found;};
 const digestHex=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
@@ -29,7 +33,7 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
   // GI passes that read these proxies declare themselves; with none, a proxy setting changes nothing on screen.
   const consumers=new Map();let consumerSeq=0;
   // Forgetting a root's version is enough: any later request for it takes a larger one, and an earlier one never matches.
-  const drop=root=>{disposeTree(owned.get(root));owned.delete(root);handles.delete(root);versions.delete(root);for(const fn of releaseListeners)fn(root);};
+  const drop=(root,{notifyRelease=true}={})=>{disposeTree(owned.get(root));owned.delete(root);handles.delete(root);versions.delete(root);if(notifyRelease)for(const fn of releaseListeners)fn(root);};
   function describe(root){
     const object=root.userData?.kaminosSceneObject,assetSha=shaOf(object?.source),surfels=surfelRootIn(root);
     if(!assetSha)return {state:'not-generated',reason:'not a stored generated mesh'};
@@ -56,6 +60,11 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
         if(selection.faces!=null)query.set('faces',String(selection.faces));
         if(selection.maxError!=null){query.set('maxError',String(selection.maxError));query.set('stat',selection.stat??'p95');}
         const set=await fetchJson(`/api/mesh-lods?${query}`);
+        if(typeof set?.source==='string'&&/^[a-f0-9]{64}$/.test(set.source)){
+          if(base.representation==='mesh'){base.assetSha=set.source;base.heroSha=set.source;}
+          else if(base.heroSha){base.heroSha=set.source;}
+          else{base.assetSha=set.source;}
+        }
         const allLevels=set.levels??[];
         const levels=allLevels.filter(l=>!l.mergeFactor&&l.route!=='trellis-surfels+hero-normals').map(l=>({
           sha:l.sha256,faces:l.faces,closed:l.closed??null,
@@ -82,9 +91,10 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
     inFlight.add(task);
     return task;
   }
+  const trackedResolve=(root,selection)=>{const p=resolve(root,selection);inFlight.add(p);p.finally(()=>inFlight.delete(p));return p;};
   return {
-    attach(root,selection=DEFAULT_GI_PROXY_SELECTION){return resolve(root,selection);},
-    select(root,selection){return resolve(root,selection);},
+    attach(root,selection=DEFAULT_GI_PROXY_SELECTION){return trackedResolve(root,selection);},
+    select(root,selection){return trackedResolve(root,selection);},
     whenIdle:async()=>{while(inFlight.size)await Promise.all([...inFlight]);},
     get:root=>handles.get(root)??null,
     list:()=>[...handles.entries()].map(([root,h])=>({root,...h})),
@@ -93,7 +103,7 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
     registerConsumer(name){if(typeof name!=='string'||!name)throw Error('A GI proxy consumer needs a name');const key=++consumerSeq;consumers.set(key,name);return ()=>{consumers.delete(key);};},
     consumers:()=>[...consumers.values()],
     // GI proxy turned off for this object (its render settings): no proxy held, and the handle says so.
-    disable(root){drop(root);handles.set(root,{...describe(root),state:'disabled',proxyRoot:null,effective:null,levels:[],error:null});},
+    disable(root){const prev=handles.get(root);drop(root,{notifyRelease:false});handles.set(root,{...describe(root),state:'disabled',proxyRoot:null,effective:null,levels:prev?.levels??[],...(prev?.surfelLevels?{surfelLevels:prev.surfelLevels}:{}),error:null});},
     // A cleared or reopened scene: every proxy goes, and results still in flight are not published.
     clear(){for(const root of new Set([...handles.keys(),...owned.keys(),...versions.keys()]))drop(root);},
   };

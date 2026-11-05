@@ -47,6 +47,7 @@ export function sceneContext(context, options) {
     water.setPaused=value=>{context.localLiquidPaused=Boolean(value);context.localLiquidHost?.setPaused(value);return context.localLiquidPaused;};
     context.waterFeature=water;
   }
+  context.deviceRecoveryHeld??=()=>false;
   context.window??={};
   context.fireLightFieldRouteParams??=()=>new URLSearchParams();
   context.fireShadowSceneRoute??=()=>({});
@@ -75,6 +76,7 @@ export function sceneContext(context, options) {
   context.syncAssemblyGuides??=()=>{};context.syncAssemblyPresentation??=()=>{};
   context.selectedFlameControlEntry??=()=>context.selectedSceneObjectEntry?.()??(context.workingScene?.activeObjectId?{id:context.workingScene.activeObjectId,type:'flame-emitter'}:null);
   context.sceneLightingPreparation ??= null;
+  context.sceneGeometryPreview ??= null;
   // Domain fixtures do not prepare GPU environments; loading behavior has its own tests.
   context.environmentLoader ??= {holdFull:()=>()=>{},releaseFull(){}};
   context.requestAnimationFrame ??= fn=>fn();

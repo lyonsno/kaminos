@@ -22,18 +22,26 @@ fn faces(@builtin(global_invocation_id) gid:vec3<u32>) {
 }
 `;
 
+const openBoundaryPipelines = new WeakMap();
+
 export function createOpenBoundary(device,dims,texture) {
   const params=device.createBuffer({label:'open fine boundary parameters',size:32,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
-  const layout=device.createBindGroupLayout({entries:[
-    {binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:'uniform'}},
-    {binding:1,visibility:GPUShaderStage.COMPUTE,buffer:{type:'read-only-storage'}},
-    {binding:2,visibility:GPUShaderStage.COMPUTE,buffer:{type:'read-only-storage'}},
-    {binding:3,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:'uint',viewDimension:'3d'}},
-    {binding:4,visibility:GPUShaderStage.COMPUTE,storageTexture:{access:'write-only',format:'r32float',viewDimension:'2d-array'}},
-  ]});
-  const module=device.createShaderModule({label:'open fine boundary flux',code:OPEN_BOUNDARY_WGSL});
-  const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]});
-  const pipelines=[false,true].map(project=>device.createComputePipeline({label:project?'project open lower faces':'predict open lower faces',layout:pipelineLayout,compute:{module,entryPoint:'faces',constants:{PROJECT:project}}}));
+  let cached=openBoundaryPipelines.get(device);
+  if(!cached){
+    const layout=device.createBindGroupLayout({entries:[
+      {binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:'uniform'}},
+      {binding:1,visibility:GPUShaderStage.COMPUTE,buffer:{type:'read-only-storage'}},
+      {binding:2,visibility:GPUShaderStage.COMPUTE,buffer:{type:'read-only-storage'}},
+      {binding:3,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:'uint',viewDimension:'3d'}},
+      {binding:4,visibility:GPUShaderStage.COMPUTE,storageTexture:{access:'write-only',format:'r32float',viewDimension:'2d-array'}},
+    ]});
+    const module=device.createShaderModule({label:'open fine boundary flux',code:OPEN_BOUNDARY_WGSL});
+    const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]});
+    const pipelines=[false,true].map(project=>device.createComputePipeline({label:project?'project open lower faces':'predict open lower faces',layout:pipelineLayout,compute:{module,entryPoint:'faces',constants:{PROJECT:project}}}));
+    cached={layout,pipelines};
+    openBoundaryPipelines.set(device,cached);
+  }
+  const {layout,pipelines}=cached;
   let group,prior=[];
   function prepare({fluid,pressure,solid,gain}) {
     const data=new ArrayBuffer(32);new Uint32Array(data).set([...dims,0]);new Float32Array(data)[4]=gain;

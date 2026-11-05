@@ -3,6 +3,7 @@ import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {annularBurnerCasterKey,createAnnularBurnerCaster} from './annular-burner.mjs';
 import {allocateShadowCasterLods,applyRootVertexWarpToRung} from './scene-lod-budget.mjs';
+import {residentLightCoverage} from './scene-resident-coverage.mjs';
 // Explicit provisional Stunt Doubles mapping, 2026-10-17T14:43:30Z; no measured-error selection.
 export const KILN_CASTER_SOURCE='f8e6ce918e3e5cf234d186724dc21b40b3f9cf7cbc9e776000cf55f24801c91b';
 export const KILN_CASTERS=Object.freeze({'5k':'1050a1d34389366eac0161ea002176fece47c7eeaac53a7795bae63ed4807456','10k':'11319add7e7593d80f33ec9c25b6f43c531122d423b9a25ef06b86b71b2d7470'});
@@ -77,6 +78,8 @@ export function createFireShadowCasters({scene,load=loadFireCaster,giProxies=nul
     const candidates=[],reg=proxies();
     const visit=node=>{
       if(!node.visible)return;
+      let hasResident=false;node.traverse(m=>{if(m.isMesh&&residentLightCoverage(m))hasResident=true;});
+      if(hasResident)return;
       if(!smokeVisibility&&level!=='original'&&matches(node)){candidates.push({root:node,kind:'explicit-kiln'});return;}
       const handle=reg?.handleFor?.(node)??reg?.get?.(node);
       if((handle?.state==='loaded'||handle?.state==='resolving')&&handle.proxyRoot){candidates.push({root:node,kind:'gi-proxy',handle});return;}

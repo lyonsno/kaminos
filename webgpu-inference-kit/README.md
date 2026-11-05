@@ -2,9 +2,15 @@
 
 Generate images and run vision models locally in the browser. Start with a model application; share its GPU device with your renderer when you need one.
 
+**[Try the browser models](https://lyonsno.github.io/kaminos/inference-kit/)** · **[Start with Klein Image Studio](https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein/examples/external-app)** · **[Choose a model application](./docs/model-applications.md)**
+
+Use the kit in your own application without the Kaminos editor. The Klein studio uses npm packages and downloads its hosted weights automatically: no Python environment, inference server or manual weight placement. Model-specific guides cover setup and download sizes for the other ports.
+
 ```sh
 npm install @kaminos/webgpu-inference-kit
 ```
+
+The Basin Maintenance Division monitors [GitHub issues](https://github.com/lyonsno/kaminos/issues) daily. Tell us what you tried and where you got stuck.
 
 ## Start With A Model Application
 

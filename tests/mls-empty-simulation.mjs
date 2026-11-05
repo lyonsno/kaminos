@@ -10,9 +10,9 @@ const device={createBuffer:({size})=>({mapAsync:async()=>{},getMappedRange:()=>n
 let solver;
 try{
  solver=await createMlsJuiceSolver({device,setup:{particleCount:20,trackPopulation:true},packet:{authority:{simulation_safe:false},emitters:[]},now:()=>now});
- solver.advance(0);solver.advance(now=1000);
+ solver.advance(0);now=1000;await solver.advanceTo(240);solver.setPaused(false);
  assert.equal(passes,0,'An initially empty solver must not dispatch 240 empty physical steps');
- assert.equal(solver.read().clock.step,240,'Empty time still advances the physical clock');
+ assert.equal(solver.read().clock.step,240,'Explicit empty stepping still advances the physical clock');
  assert.equal(solver.read().clock.completedStep,240);
  assert.equal(solver.read().population.active,0);
  solver.setPacket({authority:{simulation_safe:true},timestamp_ms:Date.now(),emitters:[{id:'source',active:true,origin_world:[0,1,0],aim_world:[0,-1,0],radius:.04,strength:1,source_flux_particles_per_second:240,lifetime_seconds:6}]});

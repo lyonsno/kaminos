@@ -140,28 +140,42 @@ fn prolongVelocity(@builtin(global_invocation_id) c:vec3<u32>){
 }
 `;
 
+const fineVelocityGridPipelines = new WeakMap();
+
 export function createFineVelocityGrid(device,plan,uniformBytes) {
  const owned=[],d=plan.velocityDims,n=d.reduce((a,b)=>a*b,1);
  const buffer=(label,size,usage=GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC)=>{const b=device.createBuffer({label:'fine velocity '+label,size,usage});owned.push(b);return b;};
  const texture=(label,format,size=d,dimension='3d')=>{const t=device.createTexture({label:'fine velocity '+label,format,size,dimension,usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC|GPUTextureUsage.COPY_DST});owned.push(t);return t;};
  const fluid=[0,1].map(i=>buffer('history '+i,n*64)),front=[0,1].map(i=>buffer('front '+i,n*4)),quench=[0,1].map(i=>buffer('quench '+i,(n+5)*4));
  const reactant=[0,1].map(i=>texture('reactant '+i,'rg32float')),wavelet=[0,1].map(i=>texture('wavelet '+i,'rgba32float',[d[0],d[1],d[2]*2]));
- const lattice=new Float32Array(n*8);let at=0;
- for(let set=0;set<2;set++)for(let z=0;z<d[2];z++)for(let y=0;y<d[1];y++)for(let x=0;x<d[0];x++){lattice[at]=x+.5;lattice[at+1]=y+.5;lattice[at+2]=z+.5;at+=4;}
- const resetWavelet=()=>{for(const t of wavelet)device.queue.writeTexture({texture:t},lattice,{bytesPerRow:d[0]*16,rowsPerImage:d[1]},[d[0],d[1],d[2]*2]);};
+ const resetWavelet=()=>{
+  const lattice=new Float32Array(n*8);let at=0;
+  for(let set=0;set<2;set++)for(let z=0;z<d[2];z++)for(let y=0;y<d[1];y++)for(let x=0;x<d[0];x++){lattice[at]=x+.5;lattice[at+1]=y+.5;lattice[at+2]=z+.5;at+=4;}
+  for(const t of wavelet)device.queue.writeTexture({texture:t},lattice,{bytesPerRow:d[0]*16,rowsPerImage:d[1]},[d[0],d[1],d[2]*2]);
+ };
  resetWavelet();
  const solid=texture('obstacles','r32uint'),burn=texture('expansion','r32float'),force=texture('force and low-pass','r32float',[d[0],d[1],d[2]*9]);
  const side=Math.max(...d),lower=texture('lower faces','r32float',[side,side,3],'2d');
  const uniform=buffer('uniforms',uniformBytes,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),shape=buffer('transfer shape',48,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),seedShape=buffer('seed shape',48,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),predictor=buffer('predictor',n*64);
  for(const [buffer,seed] of [[shape,0],[seedShape,1]]){const data=new ArrayBuffer(48);new Uint32Array(data).set([...plan.materialDims,Math.floor(plan.materialPerVelocity),...d,seed]);new Float32Array(data)[8]=plan.materialPerVelocity;device.queue.writeBuffer(buffer,0,data);}
- const module=device.createShaderModule({label:'fine material-velocity transfer',code:FINE_GRID_TRANSFER_WGSL});
- const pipelines=Object.fromEntries(['restrictScalars','restrictBurn','injectMomentum','prolongVelocity'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'fine '+entryPoint,layout:'auto',compute:{module,entryPoint,constants:{GENERAL_TRANSFER:!Number.isInteger(plan.materialPerVelocity)}}})]));
- const restrictions=new Map([[false,pipelines.restrictScalars]]);
+ const general=!Number.isInteger(plan.materialPerVelocity);
+ let cached=fineVelocityGridPipelines.get(device);
+ if(!cached){
+  cached={module:device.createShaderModule({label:'fine material-velocity transfer',code:FINE_GRID_TRANSFER_WGSL}),byGeneral:new Map()};
+  fineVelocityGridPipelines.set(device,cached);
+ }
+ let entry=cached.byGeneral.get(general);
+ if(!entry){
+  const base=Object.fromEntries(['restrictScalars','restrictBurn','injectMomentum','prolongVelocity'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'fine '+entryPoint,layout:'auto',compute:{module:cached.module,entryPoint,constants:{GENERAL_TRANSFER:general}}})]));
+  entry={base,restrictions:new Map([[false,base.restrictScalars]])};
+  cached.byGeneral.set(general,entry);
+ }
+ const pipelines={...entry.base},restrictions=entry.restrictions;
  let activeShredOnly=false;
  let current=0,seed=true,bindings,prior=[];
  function prepare(f,{shredOnly=activeShredOnly}={}) {
   activeShredOnly=shredOnly;
-  if(!restrictions.has(shredOnly))restrictions.set(shredOnly,device.createComputePipeline({label:'fine Shred-only restriction',layout:'auto',compute:{module,entryPoint:'restrictScalars',constants:{GENERAL_TRANSFER:!Number.isInteger(plan.materialPerVelocity),SHRED_ONLY:shredOnly}}}));
+  if(!restrictions.has(shredOnly))restrictions.set(shredOnly,device.createComputePipeline({label:'fine Shred-only restriction',layout:'auto',compute:{module:cached.module,entryPoint:'restrictScalars',constants:{GENERAL_TRANSFER:general,SHRED_ONLY:shredOnly}}}));
   pipelines.restrictScalars=restrictions.get(shredOnly);
   const resources=[f.fluid,f.front,f.quench,f.solid,f.reactant,f.burn,f.lower,f.prior,current,shredOnly];
   if(bindings&&resources.every((v,i)=>v===prior[i]))return;

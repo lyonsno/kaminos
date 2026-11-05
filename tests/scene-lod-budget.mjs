@@ -1625,5 +1625,196 @@ test('prepareCapture settles demoted shadow caster tiers before frame 1 and borr
   casters.dispose();
 });
 
+test('solid collider LOD selection and budget allocation: voxelSolidError, selectColliderTier, and allocateColliderLods preserve kiln chamber/pipe at 5k while demoting beam to 500 faces', async () => {
+  const mod = await import('../scene-lod-budget.mjs');
+  assert.equal(typeof mod.voxelSolidError, 'function', 'scene-lod-budget exports voxelSolidError');
+  assert.equal(typeof mod.selectColliderTier, 'function', 'scene-lod-budget exports selectColliderTier');
+  assert.equal(typeof mod.allocateColliderLods, 'function', 'scene-lod-budget exports allocateColliderLods');
+
+  const {voxelSolidError, selectColliderTier, allocateColliderLods} = mod;
+
+  const realKilnLevels = [
+    {sha: '57b5a750', faces: 25000, closed: true, textureSize: 1024, normalMap: {texelSize: 0.004260175}, error: {diagonal: 1.487462, relative: {max: 0.011843, p95: 0.002828, mean: 0.000579}, levelToSource: {max: 0.011467, p95: 0.003489, mean: 0.000678}, sourceToLevel: {max: 0.017617, p95: 0.004823, mean: 0.001044}}},
+    {sha: '414cca4f', faces: 10000, closed: true, textureSize: 512, normalMap: {texelSize: 0.007478695}, error: {diagonal: 1.487462, relative: {max: 0.025876, p95: 0.005484, mean: 0.001108}, levelToSource: {max: 0.015106, p95: 0.005359, mean: 0.001028}, sourceToLevel: {max: 0.038490, p95: 0.011303, mean: 0.002268}}},
+    {sha: '7dbc98d3', faces: 5000, closed: true, textureSize: 512, normalMap: {texelSize: 0.006812807}, error: {diagonal: 1.487462, relative: {max: 0.025906, p95: 0.009047, mean: 0.001854}, levelToSource: {max: 0.024469, p95: 0.008665, mean: 0.001704}, sourceToLevel: {max: 0.038534, p95: 0.016442, mean: 0.003811}}},
+    {sha: '6858aec1', faces: 1000, closed: true, textureSize: 256, normalMap: {texelSize: 0.009611729}, error: {diagonal: 1.487462, relative: {max: 0.061201, p95: 0.026436, mean: 0.006755}, levelToSource: {max: 0.051067, p95: 0.019752, mean: 0.004896}, sourceToLevel: {max: 0.091034, p95: 0.044281, mean: 0.015200}}},
+    {sha: 'f5889e96', faces: 500, closed: true, textureSize: 256, normalMap: {texelSize: 0.009764150}, error: {diagonal: 1.487462, relative: {max: 0.063995, p95: 0.027777, mean: 0.007391}, levelToSource: {max: 0.042772, p95: 0.020955, mean: 0.005821}, sourceToLevel: {max: 0.095191, p95: 0.046434, mean: 0.016168}}},
+  ];
+  const realBeamLevels = [
+    {sha: 'bae07caf', faces: 25000, closed: true, textureSize: 1024, normalMap: {texelSize: 0.001788627}, error: {diagonal: 1.051690, relative: {max: 0.005581, p95: 0.000292, mean: 0.000076}, levelToSource: {max: 0.003203, p95: 0.000397, mean: 0.000101}, sourceToLevel: {max: 0.005870, p95: 0.000218, mean: 0.000059}}},
+    {sha: '05a311ac', faces: 10000, closed: true, textureSize: 512, normalMap: {texelSize: 0.003357881}, error: {diagonal: 1.051690, relative: {max: 0.005951, p95: 0.000538, mean: 0.000132}, levelToSource: {max: 0.005335, p95: 0.000733, mean: 0.000180}, sourceToLevel: {max: 0.006259, p95: 0.000378, mean: 0.000098}}},
+    {sha: '8045c108', faces: 5000, closed: true, textureSize: 512, normalMap: {texelSize: 0.003273525}, error: {diagonal: 1.051690, relative: {max: 0.005407, p95: 0.000832, mean: 0.000202}, levelToSource: {max: 0.005687, p95: 0.001112, mean: 0.000277}, sourceToLevel: {max: 0.005344, p95: 0.000560, mean: 0.000147}}},
+    {sha: 'adb066b2', faces: 1000, closed: true, textureSize: 256, normalMap: {texelSize: 0.006745198}, error: {diagonal: 1.051690, relative: {max: 0.011962, p95: 0.001910, mean: 0.000537}, levelToSource: {max: 0.012580, p95: 0.002616, mean: 0.000735}, sourceToLevel: {max: 0.007859, p95: 0.001374, mean: 0.000395}}},
+    {sha: '7208b932', faces: 500, closed: true, textureSize: 256, normalMap: {texelSize: 0.004554675}, error: {diagonal: 1.051690, relative: {max: 0.013912, p95: 0.001645, mean: 0.000598}, levelToSource: {max: 0.014632, p95: 0.001640, mean: 0.000603}, sourceToLevel: {max: 0.008618, p95: 0.001854, mean: 0.000654}}},
+  ];
+
+  const unitBox = {min: [-0.5, -0.5, -0.5], max: [0.5, 0.5, 0.5]};
+  const worldDiag = Math.sqrt(3);
+
+  // 1. voxelSolidError ignores UV texelSize/texelStretch (pure 3D geometric surface error in voxel units)
+  const hugeTexelTier = {
+    sha: sha('huge-texel'),
+    faces: 5000,
+    closed: true,
+    textureSize: 64,
+    normalMap: {texelSize: 0.25}, // enormous UV stretch that would inflate screenPixelError
+    error: {diagonal: 1.0, relative: {p95: 0.002, max: 0.004}, sourceToLevel: {p95: 0.002, max: 0.004}, levelToSource: {p95: 0.002, max: 0.004}},
+  };
+  assert.ok(
+    Math.abs(voxelSolidError(hugeTexelTier, {worldDiag: 2.0, voxelSize: 0.05}) - (2.0 * 0.002) / 0.05) < 1e-9,
+    'voxelSolidError depends only on 3D geometric error and voxelSize, not UV texelSize',
+  );
+
+  // 2. On grid = 64 (voxelSize = 2/64 = 0.03125), selectColliderTier selects 500 faces for the Beam and 5,000 faces for the Kiln:
+  const kilnChoice64 = selectColliderTier(realKilnLevels, {heroFaces: 287407, worldBox: unitBox, worldDiag, grid: 64, domainScale: 1, maxVoxelError: 0.85});
+  const beamChoice64 = selectColliderTier(realBeamLevels, {heroFaces: 97670, worldBox: unitBox, worldDiag, grid: 64, domainScale: 1, maxVoxelError: 0.85});
+  assert.equal(beamChoice64.selected.faces, 500, 'Beam coarsens all the way to 500 faces (< 0.15 voxels of geometric error)');
+  assert.equal(kilnChoice64.selected.faces, 5000, 'Kiln coarsens to 5,000 faces (~0.74 voxels) and refuses 1,000/500 which drop the side pipe (> 2.2 voxels)');
+
+  // 3. Cumulative rung monotonicity on voxelError across all rungs:
+  for (let i = 1; i < beamChoice64.rungs.length; i++) {
+    assert.ok(
+      beamChoice64.rungs[i].voxelError >= beamChoice64.rungs[i - 1].voxelError,
+      `beam rung[${i}].voxelError must be >= rung[${i - 1}].voxelError`,
+    );
+  }
+
+  // 4. Unsealed levels (closed: false) are excluded when requireClosed is true (default):
+  const unsealedFine = [
+    {...realKilnLevels[0], closed: true},
+    {...realKilnLevels[1], closed: false},
+    {...realKilnLevels[2], closed: false},
+  ];
+  const closedChoice = selectColliderTier(unsealedFine, {heroFaces: 287407, worldBox: unitBox, worldDiag, grid: 64, domainScale: 1, maxVoxelError: 0.85});
+  assert.equal(closedChoice.selected.faces, 25000, 'requireClosed skips closed:false levels so exterior flood fill never leaks through unsealed shells');
+
+  // 5. allocateColliderLods with repetition multiplicity and greedy budget enforcement:
+  const allocUnbounded = allocateColliderLods([
+    {id: 'kiln', heroFaces: 287407, levels: realKilnLevels, worldBox: unitBox, worldDiag, instanceCount: 1},
+    {id: 'beam', heroFaces: 97670, levels: realBeamLevels, worldBox: unitBox, worldDiag, instanceCount: 6},
+  ], {grid: 64, domainScale: 1, maxVoxelError: 0.85, colliderFaceBudget: 50000});
+  assert.equal(allocUnbounded.withinBudget, true);
+  assert.equal(allocUnbounded.allocations.kiln.faces, 5000, 'kiln allocated 5,000 faces');
+  assert.equal(allocUnbounded.allocations.beam.faces, 500, '6 beams allocated 500 faces each (3,000 total)');
+  assert.equal(allocUnbounded.totalFaces, 5000 + 6 * 500, 'total collider faces reduced from 873,427 to 8,000 (-99.1%)');
+
+  // Under a tight maxVoxelError (e.g. 0.02 voxels where both want 25k/hero initially) and a 28,000-face budget:
+  const allocTight = allocateColliderLods([
+    {id: 'kiln', heroFaces: 287407, levels: realKilnLevels, worldBox: unitBox, worldDiag, instanceCount: 1},
+    {id: 'beam', heroFaces: 97670, levels: realBeamLevels, worldBox: unitBox, worldDiag, instanceCount: 6},
+  ], {grid: 64, domainScale: 1, maxVoxelError: 0.01, colliderFaceBudget: 28000});
+  assert.equal(allocTight.withinBudget, true);
+  assert.equal(allocTight.allocations.beam.faces, 500, 'tight budget demotes all 6 beams to 500 faces (3,000 total) first');
+  assert.equal(allocTight.allocations.kiln.faces, 25000, 'tight budget preserves the kiln at 25,000 faces (total 28,000 <= 28,000)');
+});
+
+test('bakeRungMeshesToRootSpace aligns Z-up GLB node transforms to hero local bounds, resolveBurnableSurface selects cell-matched thermal stunt-double geometry, and formatLodBudgetReadout formats live inspector status', async () => {
+  const mod = await import('../scene-lod-budget.mjs');
+  const {createSceneColliderCollection} = await import('../scene-collider.mjs');
+  const {createLogSurfaceMask} = await import('../live-log-surface-mask.mjs');
+  const {LIVE_LOG_GRID} = await import('../live-log-heat-core.mjs');
+
+  assert.equal(typeof mod.bakeRungMeshesToRootSpace, 'function', 'scene-lod-budget exports bakeRungMeshesToRootSpace');
+  assert.equal(typeof mod.formatLodBudgetReadout, 'function', 'scene-lod-budget exports formatLodBudgetReadout');
+
+  // 1. Test bakeRungMeshesToRootSpace on a rung whose GLB node has a -90 deg X rotation (Z-up -> Y-up)
+  // Hero mesh has identity transform and Y-up bounds [-0.5, -0.125, -0.2] .. [0.5, 0.125, 0.2]
+  const heroRoot = new THREE.Group();
+  const heroMesh = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.25, 0.4, 8, 8, 8), new THREE.MeshStandardMaterial());
+  heroRoot.add(heroMesh);
+  heroMesh.geometry.computeBoundingBox();
+  const heroBounds = heroMesh.geometry.boundingBox;
+
+  // Rung mesh in Z-up before -90 deg X node rotation: size is (1.0, 0.4, 0.25) so after RotateX(-90deg) (y' = z, z' = -y) it matches (1.0, 0.25, 0.4)
+  const rungRoot = new THREE.Group();
+  const rungMesh = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.4, 0.25, 1, 1, 1), new THREE.MeshStandardMaterial());
+  rungMesh.rotation.x = -Math.PI / 2;
+  rungMesh.updateMatrix();
+  rungRoot.add(rungMesh);
+
+  mod.bakeRungMeshesToRootSpace(THREE, rungRoot);
+  rungMesh.geometry.computeBoundingBox();
+  assert.ok(Math.abs(rungMesh.rotation.x) < 1e-9, 'bakeRungMeshesToRootSpace resets node rotation to identity');
+  assert.ok(Math.abs(rungMesh.geometry.boundingBox.min.y - heroBounds.min.y) < 1e-6, 'baked rung geometry Y min matches hero bounds');
+  assert.ok(Math.abs(rungMesh.geometry.boundingBox.max.z - heroBounds.max.z) < 1e-6, 'baked rung geometry Z max matches hero bounds');
+
+  const heroMask = createLogSurfaceMask(heroMesh.geometry, heroBounds, LIVE_LOG_GRID, {filled: true});
+  const rungMask = createLogSurfaceMask(rungMesh.geometry, heroBounds, LIVE_LOG_GRID, {filled: true});
+  assert.deepEqual(Array.from(rungMask), Array.from(heroMask), 'baked 12-face rung produces 100% identical 16^3 filled thermal mask to 384-face hero');
+
+  // 2. Test sceneColliderCollection.resolveBurnableSurface on a stockroom-like beam with -90 deg X node transform in its 500-face GLB
+  const BEAM_HERO = '7be0be28'.padEnd(64, 'a');
+  const BEAM_500 = '7208b932'.padEnd(64, 'b');
+  heroRoot.userData.kaminosSceneObject = {id: 'beam', type: 'glb', source: `/api/read?root=generated-meshes&path=${BEAM_HERO}.glb`};
+  const giProxies = createGiProxyRegistry({
+    THREE,
+    fetchJson: async () => ({
+      schema: 'kaminos.lod-set.v0',
+      source: BEAM_HERO,
+      levels: [
+        {sha256: BEAM_500, faces: 500, closed: true, source: `/api/read?root=generated-meshes&path=${BEAM_500}.glb`, error: {diagonal: 1.107, relative: {p95: 0.001645, max: 0.0139}, levelToSource: {p95: 0.00164, max: 0.0146}, sourceToLevel: {p95: 0.00185, max: 0.0086}}},
+      ],
+      choice: null,
+      withinBudget: true,
+    }),
+    fetchBytes: async () => new Uint8Array([1, 2, 3]).buffer,
+    digest: async () => BEAM_500,
+    parseGlb: async () => {
+      const g = new THREE.Group();
+      const m = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.4, 0.25, 1, 1, 1), new THREE.MeshStandardMaterial());
+      m.rotation.x = -Math.PI / 2;
+      m.updateMatrix();
+      g.add(m);
+      return g;
+    },
+  });
+  await giProxies.attach(heroRoot);
+
+  const colliders = createSceneColliderCollection(THREE, {
+    giProxies,
+    fetchBytes: async () => new Uint8Array([1, 2, 3]).buffer,
+    digest: async () => BEAM_500,
+    parseGlb: async () => {
+      const g = new THREE.Group();
+      const m = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.4, 0.25, 1, 1, 1), new THREE.MeshStandardMaterial());
+      m.rotation.x = -Math.PI / 2;
+      m.updateMatrix();
+      g.add(m);
+      return g;
+    },
+  });
+  assert.equal(typeof colliders.resolveBurnableSurface, 'function', 'sceneColliderCollection exports resolveBurnableSurface');
+  const resolved = await colliders.resolveBurnableSurface({id: 'beam', object: heroRoot}, {mesh: heroMesh, bounds: heroBounds, grid: LIVE_LOG_GRID});
+  assert.equal(resolved.tier, BEAM_500, 'resolveBurnableSurface selects the 500-face closed stunt-double tier');
+  assert.equal(resolved.faces, 500);
+  const resolvedMask = createLogSurfaceMask(resolved.geometry, heroBounds, LIVE_LOG_GRID, {filled: true});
+  assert.deepEqual(Array.from(resolvedMask), Array.from(heroMask), 'resolved burnable stunt-double geometry produces 100% identical thermal mask');
+
+  // 3. Test formatLodBudgetReadout
+  const readout = mod.formatLodBudgetReadout({
+    objectId: 'beam',
+    beautyState: {
+      enabled: true,
+      totalFaces: 10500,
+      faceBudget: 150000,
+      objects: [{id: 'beam', displayedTier: BEAM_500, faces: 500, pixelError: 0.42, pinned: false}],
+    },
+    colliderBudget: {
+      totalFaces: 5500,
+      colliderFaceBudget: 50000,
+      allocations: {beam: {tier: BEAM_500, faces: 500, voxelError: 0.055}},
+    },
+    burnFieldState: {
+      surfaceLod: {tier: BEAM_500, faces: 500, heroFaces: 97670, voxelError: 0.114},
+    },
+  });
+  assert.match(readout.beautyText, /Beauty: 500 faces.*0\.42 px.*10,500 \/ 150,000/);
+  assert.match(readout.colliderText, /Collider: 500 faces.*0\.06 vox/);
+  assert.match(readout.burnText, /Burn mask: 500 faces.*0\.11 cell/);
+  assert.match(readout.combinedText, /Beauty: 500 faces.*Collider: 500 faces.*Burn mask: 500 faces/);
+});
+
+
+
 
 

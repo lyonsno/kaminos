@@ -233,6 +233,8 @@ fn sampleDisplayMaterial(p: vec3<f32>, smokeVisible: f32) -> EmissiveMaterial {
 }
 `;
 
+const displayReconstructionPipelines = new WeakMap();
+
 export function createDisplayReconstruction(device, module, uniformBuffer, getInputs) {
   const texture = size => device.createTexture({label:'flame display-only field',dimension:'3d',size,
     format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.COPY_SRC});
@@ -246,12 +248,17 @@ export function createDisplayReconstruction(device, module, uniformBuffer, getIn
   const group=(pipeline,index,entries)=>device.createBindGroup({layout:pipeline.getBindGroupLayout(index),entries});
   const initialize=()=>{
     if(pipelines)return;
+    let byModule=displayReconstructionPipelines.get(device);
+    if(!byModule){byModule=new WeakMap();displayReconstructionPipelines.set(device,byModule);}
+    pipelines=byModule.get(module);
+    if(pipelines)return;
     const axisModule=device.createShaderModule({label:'separable display filter',code:DISPLAY_AXIS_WGSL});
     const prefilterModule=device.createShaderModule({label:'interpolating spline coefficient solve',code:DISPLAY_PREFILTER_WGSL});
     const create=(entryPoint,shader=module,constants={})=>device.createComputePipeline({label:entryPoint,layout:'auto',compute:{module:shader,entryPoint,constants}});
     pipelines={seed:create('seedDisplayField'),finish:create('finishDisplayField'),
       axes:[0,1].map(axis=>create('filterDisplayAxis',axisModule,{DISPLAY_AXIS:axis})),
       prefilter:[0,1,2].map(axis=>create('prefilterDisplayLine',prefilterModule,{DISPLAY_AXIS:axis}))};
+    byModule.set(module,pipelines);
   };
   return {
     get view(){return (textures[3]??fallback).createView({dimension:'3d'});},
