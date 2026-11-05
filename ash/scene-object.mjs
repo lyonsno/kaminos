@@ -45,7 +45,10 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,read
  const guide=new LineSegments(edges,new LineBasicMaterial({color:0xa4aba4,transparent:true,opacity:.4}));guide.position.y=settings.height/2;guide.userData.kaminosEditorHelper=true;root.add(guide);
  const emitter=new Mesh(new TorusGeometry(1,.018,6,48),new MeshStandardMaterial({color:0x8abdb2,roughness:.8}));emitter.rotation.x=Math.PI/2;emitter.userData.kaminosEditorHelper=true;root.add(emitter);
  const sync=()=>{emitter.position.fromArray(settings.sourcePosition);emitter.scale.setScalar(Math.max(settings.spread,.01));root.userData.kaminosSceneObject={...(root.userData.kaminosSceneObject??record),ash:settings};};sync();
- const collisionRecords=createAshCollisionRecords(root,readObjects,{resolveObstacle});
+ let collisionSource='adaptive';
+ const adaptiveCollisionRecords=createAshCollisionRecords(root,readObjects,{resolveObstacle});
+ const originalCollisionRecords=createAshCollisionRecords(root,readObjects);
+ const collisionRecords=()=>collisionSource==='checkpoint-original'?originalCollisionRecords():adaptiveCollisionRecords();
  const check=()=>{if(disposed)throw Error('Ash object disposed');if(busy)throw Error('Ash operation in progress');};
  const source=()=>({position:[...settings.sourcePosition],rate:settings.emitting?settings.rate:0,spread:settings.spread,dt:1/30,sources:[...readSources(),...(settings.fallout?[{position:[0,settings.height,0],spread:0,rate:settings.rate,halfExtents:[settings.width/2,settings.depth/2]}]:[])]});
  const locked=async fn=>{check();busy=true;try{return await fn();}finally{busy=false;}};
@@ -58,7 +61,22 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,read
  try{patch=await build(settings);root.add(patch.root);}
  catch(error){dispose();throw error;}
  const api={root,
-  async initialize(){if(initialized)return;return locked(async()=>{patch.syncScene();if(pendingRestore){patch.restore(pendingRestore);pendingRestore=null;}else if(settings.initialDepth>0)await patch.deposit({blanketDepth:settings.initialDepth,groundOnly:true});patch.setSliding?.({variation:settings.slideVariation,scale:settings.slideScale,release:settings.slideRelease});initialized=true;});},
+  async initialize(){if(initialized)return;return locked(async()=>{
+   patch.syncScene();
+   if(pendingRestore){
+    try{patch.restore(pendingRestore);}
+    catch(error){
+     if(error.code!=='ASH_CHECKPOINT_COLLISION_MISMATCH'||typeof resolveObstacle!=='function')throw error;
+     // Older checkpoints can name original triangles even when the current
+     // scene selects a collision LOD. The same strict identity and material
+     // checks must pass against the original before retaining that source.
+     collisionSource='checkpoint-original';
+     try{patch.restore(pendingRestore);}catch(originalError){collisionSource='adaptive';throw originalError;}
+    }
+    pendingRestore=null;
+   }else if(settings.initialDepth>0)await patch.deposit({blanketDepth:settings.initialDepth,groundOnly:true});
+   patch.setSliding?.({variation:settings.slideVariation,scale:settings.slideScale,release:settings.slideRelease});initialized=true;
+  });},
   due(timestamp,{active=true}={}){
    return !(disposed||busy||!initialized||pendingRestore||!active||settings.paused)&&(lastTick===null||timestamp-lastTick>=1000/30);
   },
@@ -85,7 +103,7 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,read
   burst(volume){check();patch.burst(volume);},
   advance(steps=1){check();if(!Number.isSafeInteger(steps)||steps<1)throw Error('Ash steps must be a positive integer');for(let i=0;i<steps;i++)patch.step(null,source());},
   diagnostics:options=>locked(()=>patch.diagnostics(options)),
-  read:()=>({id:record.id,settings:{...settings,checkpoint:undefined},pendingRestore:!!pendingRestore,busy,failure,disposed,runtime:patch.read()}),
+  read:()=>({id:record.id,settings:{...settings,checkpoint:undefined},pendingRestore:!!pendingRestore,collisionSource,busy,failure,disposed,runtime:patch.read()}),
   dispose,
  };
  root.userData.disposeAshObject=dispose;return api;

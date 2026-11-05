@@ -213,3 +213,18 @@ test('review WO1: createAshCollisionRecords substitutes cellSize-matched stunt-d
 });
 
 
+
+test('a checkpoint retries exact original colliders after an adaptive collider mismatch and retains that source',async()=>{
+ const original=new Mesh(new BoxGeometry(),new MeshBasicMaterial()),proxy=new Mesh(new BoxGeometry(.5,.5,.5),new MeshBasicMaterial());
+ const saved={schema:'kaminos.tiled-ash.v1',values:[.25,.75],steps:3522};let sceneRecords,restored,ticks=0;const attempts=[];
+ const object=await createAshSceneObject({record:{...record(),ash:{...record().ash,checkpoint:saved}},readObjects:()=>[{id:'mesh',type:'glb',object:original}],resolveObstacle:()=>proxy,createPatch:async options=>{sceneRecords=options.sceneRecords;return {root:new Group(),syncScene(){},restore(state){const geometry=sceneRecords()[0].object.geometry;attempts.push(geometry);if(geometry!==original.geometry)throw Object.assign(Error('Checkpoint scene geometry or poses differ; restore the scene first'),{code:'ASH_CHECKPOINT_COLLISION_MISMATCH'});restored=structuredClone(state);},step(){assert.equal(sceneRecords()[0].object.geometry,original.geometry);ticks++;},read:()=>({steps:saved.steps+ticks}),dispose(){}};}});
+ try{await object.initialize();assert.deepEqual(attempts,[proxy.geometry,original.geometry]);assert.deepEqual(restored,saved);assert.equal(object.read().pendingRestore,false);assert.equal(object.read().collisionSource,'checkpoint-original');object.tick(1000);assert.equal(ticks,1);await object.initialize();assert.equal(attempts.length,2);}finally{object.dispose();for(const m of [original,proxy]){m.geometry.dispose();m.material.dispose();}}
+});
+
+test('checkpoint recovery still rejects changed original geometry and unrelated checkpoint failures',async()=>{
+ for(const code of ['ASH_CHECKPOINT_COLLISION_MISMATCH','INVALID_CHECKPOINT']){
+  const original=new Mesh(new BoxGeometry(),new MeshBasicMaterial());let attempts=0;
+  const object=await createAshSceneObject({record:{...record(),ash:{...record().ash,checkpoint:{schema:'kaminos.tiled-ash.v1'}}},readObjects:()=>[{id:'mesh',type:'glb',object:original}],resolveObstacle:()=>original,createPatch:async()=>({root:new Group(),syncScene(){},restore(){attempts++;throw Object.assign(Error('refused'),{code});},step(){throw Error('must not step');},read:()=>({}),dispose(){}})});
+  try{await assert.rejects(object.initialize(),/refused/);assert.equal(attempts,code==='ASH_CHECKPOINT_COLLISION_MISMATCH'?2:1);assert.equal(object.read().pendingRestore,true);assert.equal(object.tick(1000),false);}finally{object.dispose();original.geometry.dispose();original.material.dispose();}
+ }
+});
