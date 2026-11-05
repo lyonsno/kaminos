@@ -4428,13 +4428,13 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                             if should_auto_prepare_mesh_lods(src_sha, glb_path.read_bytes()):
                                 if enqueue_mesh_lod_prepare(src_sha, server_port=self.server.server_address[1]):
                                     payload['prepareQueued'] = True
-                        except OSError:
-                            pass
+                        except Exception as error:
+                            payload['lodPreparation'] = {'status': 'failed', 'phase': 'mesh-lod-preparation', 'error': str(error)}
                 with _MESH_LOD_PREPARE_LOCK:
                     sha = payload['source']
                     payload['prepareQueued'] = (_MESH_LOD_PREPARE_ACTIVE == sha or
                                                 any(item[0] == sha for item in _MESH_LOD_PREPARE_QUEUE))
-                    payload['prepareState'] = _MESH_LOD_PREPARE_COMPLETED.get(sha)
+                    payload['prepareState'] = payload.get('lodPreparation') or _MESH_LOD_PREPARE_COMPLETED.get(sha)
                 self.send_json(payload)
             except MeshLodRecordError as error:
                 self.send_json({"error": str(error), "phase": "mesh-lods-record"}, 500)

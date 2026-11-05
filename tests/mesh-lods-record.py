@@ -342,6 +342,34 @@ process.stdout.write(Buffer.from(encodeSurfelGLB(field,{fallbackFactor:1})));
             assert (root / f'{digest}.glb').read_bytes() == content
             assert not serve._MESH_LOD_PREPARE_WORKER_STARTED
             assert digest not in serve.mesh_lod_prepare_queue_state()['queued']
+        content = mesh_glb('get-worker-start')
+        digest = hashlib.sha256(content).hexdigest()
+        assert request('POST', '/api/ingest-mesh?role=client-prepares-lods', content)[0] == 200
+        assert request('POST', '/api/mesh-lods', {'source': digest, 'level': level('l500', 500)})[0] == 200
+        with patch.object(threading.Thread, 'start', new=fail_lod_start):
+            try:
+                status, payload = request('GET', f'/api/mesh-lods?source={digest}')
+            except http.client.RemoteDisconnected:
+                raise AssertionError('GET worker startup failure lost the existing level-set response') from None
+        assert status == 200 and payload['source'] == digest
+        assert [row['sha256'] for row in payload['levels']] == [stored['l500']]
+        assert payload['lodPreparation']['status'] == 'failed'
+        assert payload['prepareQueued'] is False
+        assert digest not in serve.mesh_lod_prepare_queue_state()['queued']
+        assert not serve._MESH_LOD_PREPARE_WORKER_STARTED
+        retried = threading.Event()
+        def retry_runner(source, port):
+            assert source == digest
+            retried.set()
+            return {'status': 'done', 'returncode': 0}
+        with patch.object(serve, '_MESH_LOD_PREPARE_RUNNER', retry_runner):
+            assert request('GET', f'/api/mesh-lods?source={digest}')[0] == 200
+            assert retried.wait(2), 'a failed optional startup remains retryable'
+            for _ in range(100):
+                if not serve._MESH_LOD_PREPARE_WORKER_STARTED:
+                    break
+                _t.sleep(.01)
+        assert not serve._MESH_LOD_PREPARE_WORKER_STARTED
     finally:
         server.shutdown()
         server.server_close()
