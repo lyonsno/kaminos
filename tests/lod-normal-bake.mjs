@@ -203,5 +203,5 @@ test('readGLBWorldMesh accepts Uint8Array subarrays with non-zero byteOffset and
   const fromSub = readGLBWorldMesh(sub);
   assert.deepEqual([...fromSub.vertices], [...fromAb.vertices]);
   assert.deepEqual([...fromSub.faces], [...fromAb.faces]);
-  assert.deepEqual([...fromSub.normals], [...fromSub.normals]);
+  assert.deepEqual([...fromSub.normals], [...fromAb.normals]);
 });
