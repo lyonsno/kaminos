@@ -2410,7 +2410,8 @@ def _import_mesh_lod_sidecar(sha, candidate_dirs, root_path):
             continue
         if doc.get("source") != sha or not isinstance(doc.get("levels"), list):
             continue
-        for level in doc["levels"]:
+        dependencies = list(doc["levels"]) + [v for t in doc.get("textureSets", {}).values() for v in t.get("variants", [])]
+        for level in dependencies:
             tsha = level.get("sha256") if isinstance(level, dict) else None
             if not (isinstance(tsha, str) and re.fullmatch(r"[0-9a-f]{64}", tsha)):
                 continue
@@ -2929,6 +2930,11 @@ def mesh_lod_level_index():
             record = read_mesh_lod_set(source)
             for level in record['levels']:
                 index[level['sha256']] = {'source': source, 'faces': level['faces']}
+            for geometry, texture_set in record.get('textureSets', {}).items():
+                for variant in texture_set.get('variants', []):
+                    index[variant['sha256']] = {'source': source, 'faces': next((l['faces'] for l in record['levels'] if l['sha256'] == geometry), 0), 'appearanceOf': geometry}
+            for variant in record.get('retiredTextureVariants', []):
+                index[variant['sha256']] = {'source': source, 'faces': 0, 'retired': True}
             for level in record.get('retired', []):
                 index[level['sha256']] = {'source': source, 'faces': level['faces'], 'retired': True}
         except (ValueError, MeshLodRecordError, KeyError, OSError):
@@ -3014,6 +3020,9 @@ def mesh_lod_choice(source, faces=None, max_error=None, stat='max', route=None):
         raise ValueError('route must be a non-empty string')
     data = read_mesh_lod_set(source)
     levels = [{**l, 'source': '/api/read?' + urlencode({'root': 'generated-meshes', 'path': l['sha256'] + '.glb'})} for l in data['levels']]
+    for level in levels:
+        if level['sha256'] in data.get('textureSets', {}):
+            level['textureSet'] = data['textureSets'][level['sha256']]
     candidates = ([l for l in levels if l.get('route') == route] if route is not None else
                   [l for l in levels if l.get('representation') != 'trellis-surfels' and not str(l.get('route', '')).startswith('trellis-surfels')])
     choice, within, unmeasured = None, None, None
@@ -3027,7 +3036,7 @@ def mesh_lod_choice(source, faces=None, max_error=None, stat='max', route=None):
             fitting = [l for l in measured if l['error']['relative'][stat] <= max_error]
             choice, within = (min(fitting, key=lambda l: l['faces']), True) if fitting else (max(measured, key=lambda l: l['faces']), False)
     result = {'schema': 'kaminos.lod-set.v0', 'source': data['source'], 'levels': levels, 'choice': choice, 'withinBudget': within,
-              'retired': data.get('retired', [])}
+              'retired': data.get('retired', []), 'textureSets': data.get('textureSets', {})}
     if unmeasured is not None:
         result['unmeasured'] = unmeasured
     return result
@@ -4512,6 +4521,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_gpu_queue_cancel()
         elif parsed.path == "/api/mesh-generation-origin":
             self.handle_mesh_generation_origin()
+        elif parsed.path == "/api/mesh-lod-textures":
+            self.handle_mesh_lod_textures_register()
         elif parsed.path == "/api/mesh-lods":
             self.handle_mesh_lods_register()
         elif parsed.path == "/api/ingest-mesh":
@@ -5344,6 +5355,20 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": str(error)}, 409)
         except (OSError, subprocess.SubprocessError) as error:
             self.send_json({"error": str(error)}, 503)
+
+    def handle_mesh_lod_textures_register(self):
+        import struct
+        from mesh_lod_textures import save_texture_set
+        try:
+            length = int(self.headers.get('Content-Length', 0))
+            payload = json.loads(self.rfile.read(length))
+            result = save_texture_set(payload, root=BROWSE_ROOTS['generated-meshes'],
+                                      resolve_mesh=_generated_mesh_path_for_sha, resolve_source=_resolve_generated_mesh_source)
+            self.send_json(result)
+        except (ValueError, KeyError, TypeError, struct.error) as error:
+            self.send_json({'error': str(error), 'phase': 'mesh-lod-textures'}, 400)
+        except Exception as error:
+            self.send_json({'error': str(error), 'phase': 'mesh-lod-textures'}, 500)
 
     def handle_mesh_lods_register(self):
         try:

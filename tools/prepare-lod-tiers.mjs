@@ -19,6 +19,7 @@ for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], proce
 const input = args.get('--input'), source = args.get('--source'), surfelSource = args.get('--surfel-source') || null, server = args.get('--server'), reportPath = args.get('--report');
 const rawTargets = args.get('--targets'), targets = rawTargets === 'none' ? [] : (rawTargets || '25000,10000,5000,1000,500').split(',').filter(Boolean).map(Number);
 const surfelFactors = (args.get('--surfel-factors') || '').split(',').filter(Boolean).map(Number);
+const textureLevels = args.get('--texture-levels') !== 'false';
 const replace = args.get('--replace') === 'true', normalMaps = args.get('--normal-maps') !== 'false', reference = args.get('--reference') || 'hero', completeMissing = args.get('--complete-missing') === 'true';
 const report = {schema: 'kaminos.lod-tiers-report.v0', phase: 'admission', input, source, ...(surfelSource ? {surfelSource} : {}), server, targets, ...(surfelFactors.length ? {surfelFactors} : {}), startedAt: new Date().toISOString(), tiers: []};
 const save = () => reportPath && fs.writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n');
@@ -58,7 +59,7 @@ try {
   // The same steps the page runs at Generate (lod-generation-levels.mjs), with Node's worker and fetch.
   await prepareGenerationLevels({decode, materialFields, heroGLB, source, surfelSource, server, THREE, MeshBVH, finish: finishTrellisMesh,
     unwrapMesh: createWasmXatlasUnwrapper(), WorkerClass: NodeTrellisUVWorker, targets, surfelFactors, replace, normalMaps, input: inputName, route: routeName,
-    reference, completeMissing, report, onPhase: save});
+    reference, completeMissing, textureLevels, report, onPhase: save});
   if (report.error) throw Object.assign(Error(report.error.message), {stack: report.error.stack});
 } catch (error) {
   report.error = {message: error.message, stack: error.stack}; process.exitCode = 1;

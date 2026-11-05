@@ -19,6 +19,8 @@
 //    and evaluate screen footprint at their closest in-frustum instance.
 
 import {releasePreparedRoot} from './scene-asset-preparation.mjs';
+import {geometrySignature, textureInfo} from './lod-textures.mjs';
+import {allocateTextureLods, createTextureResidency, inspectRootTextures} from './scene-lod-textures.mjs';
 import {readSurfelGLBExtension, attachStoredSurfelLevels} from './trellis-surfels.mjs';
 import {presentedSurface} from './scene-presented-surface.mjs';
 
@@ -160,8 +162,7 @@ export function effectiveRelativeGeomError(tier, {stat = 'p95', tailWeight = 0.5
   return Math.max(baseRel, srcP95) + weight * droppedFeatureExcess;
 }
 
-export function screenPixelError(tier, {worldBox, worldDiag, camera, viewportHeight = 1080, stat = 'p95', texelWeight = 0.5, texelStretch = 1, tailWeight = 0.5, creviceAllowance = 0.005} = {}) {
-  if (!tier || tier === 'hero' || tier.isHero) return 0;
+export function screenPixelsPerUnit({worldBox,camera,viewportHeight=1080}={}) {
   const camPos = cameraWorldPosition(camera);
   const near = Math.max(camera?.near ?? 0.01, 1e-6);
   const d = Math.max(boxDistanceToPoint(worldBox, camPos), near);
@@ -174,6 +175,12 @@ export function screenPixelError(tier, {worldBox, worldDiag, camera, viewportHei
     const projY = camera?.projectionMatrix?.elements?.[5] ?? (1 / Math.tan(((camera?.fov ?? 50) * Math.PI) / 360));
     pixelsPerUnit = (height * 0.5 * projY) / d;
   }
+  return pixelsPerUnit;
+}
+
+export function screenPixelError(tier, {worldBox, worldDiag, camera, viewportHeight = 1080, stat = 'p95', texelWeight = 0.5, texelStretch = 1, tailWeight = 0.5, creviceAllowance = 0.005} = {}) {
+  if (!tier || tier === 'hero' || tier.isHero) return 0;
+  const pixelsPerUnit = screenPixelsPerUnit({worldBox,camera,viewportHeight});
   const diag = Number.isFinite(worldDiag) && worldDiag > 0 ? worldDiag : boxDiagonal(worldBox);
   const stretch = Math.max(1, Number(texelStretch) || 1);
   const geomRel = effectiveRelativeGeomError(tier, {stat, tailWeight, creviceAllowance});
@@ -190,7 +197,7 @@ export function selectFootprintTier(levels = [], {
   viewportHeight = 1080,
   maxPixelError = 1.5,
   stat = 'p95',
-  texelWeight = 0.5,
+  texelWeight = 0,
   texelStretch = 1,
   tailWeight = 0.5,
   creviceAllowance = 0.005,
@@ -265,7 +272,7 @@ export function allocateSceneBeautyLods(candidates = [], {
   maxPixelError = 1.5,
   faceBudget = Infinity,
   stat = 'p95',
-  texelWeight = 0.5,
+  texelWeight = 0,
   tailWeight = 0.5,
   creviceAllowance = 0.005,
   hysteresis = 0.15,
@@ -938,6 +945,8 @@ export function formatLodBudgetReadout({objectId = null, beautyState = null, col
           ? `hero (${(obj.faces ?? 0).toLocaleString('en-US')} faces${obj.pinned ? ', pinned' : ''})`
           : `${(obj.faces ?? 0).toLocaleString('en-US')} faces (${Number(obj.pixelError ?? 0).toFixed(2)} px)`;
         beautyText = `Beauty: ${tierLabel} · ${sceneBudgetStr}${obj.demotedByBudget ? ' · Reduced to fit scene budget' : ''}`;
+        if (obj.textureFailure) beautyText += ` · Texture catalog failed: ${obj.textureFailure}`;
+        if (obj.texture) beautyText += ` · Maps ${obj.texture.textureSize || 0}px (${((obj.texture.gpuBytes??0)/1048576).toFixed(1)} MiB)${obj.texture.loading ? ` → ${obj.texture.targetSize}px loading` : ''}${obj.texture.demotedByTextureBudget ? ' · Texture budget pressure' : ''}${obj.texture.error ? ` · Texture refresh failed: ${obj.texture.error}` : ''}`;
       } else {
         beautyText = `Beauty: ${sceneBudgetStr}`;
       }
@@ -1220,7 +1229,9 @@ export function createSceneBeautyLodController({
     enabled: true,
     maxPixelError: 1.5,
     faceBudget: 350000,
-    texelWeight: 0.5,
+    texelWeight: 0,
+    maxTexelPixels: 1.5,
+    textureBudgetBytes: Infinity,
     tailWeight: 0.5,
     creviceAllowance: 0.005,
     hysteresis: 0.15,
@@ -1233,6 +1244,16 @@ export function createSceneBeautyLodController({
   const pendingLoads = new Set();
   let disposed = false,preparing=false;
   let lastState = {enabled: config.enabled, totalFaces: 0, heroFacesTotal: 0, faceBudget: config.faceBudget, withinBudget: true, objects: []};
+
+  const textureResidency = createTextureResidency({fetchBytes,parseGlb,digest,onChange(textureRoot) {
+    if (textureRoot) for (const [root,entry] of entries) {
+      if (textureRoot===root || [...entry.rungs.values()].some(r=>r.root===textureRoot)) {
+        releaseRepCopies(entry);
+        onRungLoaded?.(root,textureRoot);
+      }
+    }
+    onUpdate?.();
+  }});
 
   const isHeroChild = child =>
     !child.userData?.kaminosBeautyLodProxy &&
@@ -1388,14 +1409,23 @@ export function createSceneBeautyLodController({
     const task = (async () => {
       let rungRoot = null, collisionRoot = null;
       try {
-        if(loadLevel)rungRoot=await loadLevel(level);
-        else{const bytes=await fetchBytes(url);if(await digest(bytes)!==sha)throw Error(`beauty LOD content mismatch for ${sha}`);rungRoot=await parseGlb(bytes);}
+        let bytes=null,signature=null,info=null;
+        if(!loadLevel||level.textureSet){
+          bytes=await fetchBytes(url);if(await digest(bytes)!==sha)throw Error(`beauty LOD content mismatch for ${sha}`);
+          if(level.textureSet){signature=await geometrySignature(bytes);info=textureInfo(bytes);}
+        }
+        rungRoot=loadLevel?await loadLevel(level):await parseGlb(bytes);
         if (disposed || entries.get(root) !== entry || entry.generation !== gen) {
           disposeTree(rungRoot);disposeTree(collisionRoot);
           rungRoot = collisionRoot = null;
           return;
         }
-        entry.rungs.set(sha,createResidentRung(entry,level,rungRoot));
+        const record=createResidentRung(entry,level,rungRoot);
+        collisionRoot=record.collisionRoot;
+        try{textureResidency.register(rungRoot,{geometry:sha,signature,textureSet:level.textureSet,info});}
+        catch(error){record.releaseLighting?.();throw error;}
+        record.textureSignature=signature;
+        entry.rungs.set(sha,record);
         rungRoot = collisionRoot = null;
         onRungLoaded?.(root, entry.rungs.get(sha).root);
         onUpdate?.();
@@ -1407,6 +1437,40 @@ export function createSceneBeautyLodController({
         pendingLoads.delete(task);
       }
     })();
+    pendingLoads.add(task);
+  }
+
+  function ensureRungTextureCatalog(root,entry,level) {
+    const record=entry.rungs.get(level.sha??level.sha256);
+    if(!record||!level.textureSet||record.textureSignature||record.textureSignaturePending||(record.textureCatalogError&&record.textureCatalogObject===level.textureSet))return;
+    record.textureCatalogObject=level.textureSet;record.textureCatalogError=null;
+    record.textureSignaturePending=true;const generation=entry.generation;
+    const task=Promise.resolve().then(async()=>{try {
+      const sha=level.sha??level.sha256;
+      const bytes=await fetchBytes(level.source??`/api/read?root=generated-meshes&path=${sha}.glb`);
+      if(await digest(bytes)!==sha)throw Error('Texture catalog base identity mismatch');
+      const signature=await geometrySignature(bytes);
+      if(disposed||entries.get(root)!==entry||entry.generation!==generation)return;
+      textureResidency.register(record.root,{geometry:sha,signature,textureSet:level.textureSet});
+      record.textureSignature=signature;
+    }catch(error){record.textureCatalogError=String(error?.message??error);}
+    finally{record.textureSignaturePending=false;pendingLoads.delete(task);onUpdate?.();}});
+    pendingLoads.add(task);
+  }
+
+  function ensureHeroTextures(root,entry,handle) {
+    if (!handle.heroTextureSet || entry.heroTextureSignature || entry.heroTexturePending || (entry.heroTextureError&&entry.heroTextureCatalog===handle.heroTextureSet)) return;
+    entry.heroTextureCatalog=handle.heroTextureSet;entry.heroTextureError=null;
+    entry.heroTexturePending=true;const generation=entry.generation;
+    const task=Promise.resolve().then(async()=>{try {
+      const bytes=await fetchBytes(`/api/read?root=generated-meshes&path=${handle.heroSha}.glb`);
+      if(await digest(bytes)!==handle.heroSha)throw Error('Hero texture source identity mismatch');
+      const signature=await geometrySignature(bytes);
+      if(disposed||entries.get(root)!==entry||entry.generation!==generation)return;
+      textureResidency.register(root,{geometry:handle.heroSha,signature,textureSet:handle.heroTextureSet,info:inspectRootTextures(root)});
+      entry.heroTextureSignature=signature;
+    }catch(error){entry.heroTextureError=String(error?.message??error);}
+    finally{entry.heroTexturePending=false;pendingLoads.delete(task);onUpdate?.();}});
     pendingLoads.add(task);
   }
 
@@ -1445,9 +1509,11 @@ export function createSceneBeautyLodController({
     const entry = entries.get(root);
     if (!entry) {releaseInitialBeautyLevels(root);return;}
     entry.generation++;
+    textureResidency.release(root);
     restoreRootToHero(root, entry);
     releaseRepCopies(entry);
     for (const r of entry.rungs.values()) {
+      textureResidency.release(r.root);
       r.releaseLighting?.();
       disposeTree(r.root);
       disposeTree(r.collisionRoot);
@@ -1589,12 +1655,15 @@ export function createSceneBeautyLodController({
       if (typeof patch.enabled === 'boolean') config.enabled = patch.enabled;
       if (Number.isFinite(patch.maxPixelError) && patch.maxPixelError > 0) config.maxPixelError = patch.maxPixelError;
       if (patch.faceBudget === Infinity || (Number.isFinite(patch.faceBudget) && patch.faceBudget > 0)) config.faceBudget = patch.faceBudget;
+      if (patch.textureBudgetBytes === Infinity || (Number.isFinite(patch.textureBudgetBytes) && patch.textureBudgetBytes >= 0)) config.textureBudgetBytes=patch.textureBudgetBytes;
+      if (Number.isFinite(patch.maxTexelPixels) && patch.maxTexelPixels > 0) config.maxTexelPixels=patch.maxTexelPixels;
       if (Number.isFinite(patch.texelWeight) && patch.texelWeight >= 0) config.texelWeight = patch.texelWeight;
       if (Number.isFinite(patch.tailWeight) && patch.tailWeight >= 0) config.tailWeight = patch.tailWeight;
       if (Number.isFinite(patch.creviceAllowance) && patch.creviceAllowance >= 0) config.creviceAllowance = patch.creviceAllowance;
       if (Number.isFinite(patch.hysteresis) && patch.hysteresis >= 0 && patch.hysteresis < 1) config.hysteresis = patch.hysteresis;
       if (['p95', 'max', 'mean'].includes(patch.stat)) config.stat = patch.stat;
       if (!config.enabled) {
+        textureResidency.retain(new Set());
         for (const [root, entry] of entries) {
           entry.activeTier = 'hero';
           entry.footprintTier = 'hero';
@@ -1669,6 +1738,7 @@ export function createSceneBeautyLodController({
       }
 
       if (!config.enabled) {
+        textureResidency.retain(new Set());
         for (const {root, entry} of candidates) {
           entry.activeTier = 'hero';
           entry.footprintTier = 'hero';
@@ -1703,6 +1773,7 @@ export function createSceneBeautyLodController({
       });
 
       const objectStates = [];
+      const textureCandidates = [], textureRoots = new Map();
       for (const c of candidates) {
         const alloc = budgetResult.allocations[c.id];
         const targetTier = alloc.tier;
@@ -1725,6 +1796,22 @@ export function createSceneBeautyLodController({
         const displayedFaces = c.entry.displayedTier === 'hero'
           ? c.entry.heroFaces
           : (c.entry.rungs.get(c.entry.displayedTier)?.faces ?? c.entry.heroFaces);
+        const displayedLevel=c.entry.displayedTier==='hero'?null:c.handle.levels.find(l=>(l.sha??l.sha256)===c.entry.displayedTier);
+        const textureRoot=displayedLevel?c.entry.rungs.get(c.entry.displayedTier)?.root:c.root;
+        const catalog=displayedLevel?.textureSet??(displayedLevel?null:c.handle.heroTextureSet);
+        if (!displayedLevel && !c.pinned) ensureHeroTextures(c.root,c.entry,c.handle);
+        if (displayedLevel) ensureRungTextureCatalog(c.root,c.entry,displayedLevel);
+        const resident=textureResidency.state(textureRoot);
+        if (textureRoot && !c.pinned && (displayedLevel || resident) && (!catalog || (displayedLevel?c.entry.rungs.get(c.entry.displayedTier)?.textureSignature:c.entry.heroTextureSignature))) {
+          const planes=extractFrustumPlanes(camera),visible=c.instanceBoxes.filter(b=>boxIntersectsFrustum(b,planes));
+          const closest=visible.reduce((a,b)=>boxDistanceToPoint(a,cameraWorldPosition(camera))<boxDistanceToPoint(b,cameraWorldPosition(camera))?a:b,visible[0]??c.instanceBoxes[0]);
+          const original=resident??inspectRootTextures(textureRoot);
+          const variants=catalog?.variants?.length?catalog.variants:[{sha256:c.entry.displayedTier==='hero'?c.handle.heroSha:c.entry.displayedTier,
+            textureSize:original.textureSize,gpuBytes:original.gpuBytes,known:original.known,relativeTexelSize:original.textureSize>0?1/original.textureSize:0}];
+          textureCandidates.push({id:c.id,variants,worldDiag:c.worldDiag,pixelsPerUnit:screenPixelsPerUnit({worldBox:closest,camera,viewportHeight}),texelStretch:c.entry.texelStretch,
+            activeSha:resident?.displayedSha,inFrustum:alloc.inFrustum});
+          textureRoots.set(c.id,{root:textureRoot,catalog});
+        }
         objectStates.push({
           id: c.id,
           targetTier,
@@ -1738,9 +1825,20 @@ export function createSceneBeautyLodController({
           pinned: alloc.pinned,
           demotedByBudget: alloc.demotedByBudget,
           residentRungs: c.entry.rungs.size,
+          textureFailure: displayedLevel?c.entry.rungs.get(c.entry.displayedTier)?.textureCatalogError:c.entry.heroTextureError,
         });
       }
 
+      const textureBudget=allocateTextureLods(textureCandidates,{textureBudgetBytes:config.textureBudgetBytes,maxTexelPixels:config.maxTexelPixels,hysteresis:config.hysteresis});
+      const activeTextures=new Set();
+      for (const state of objectStates) {
+        const target=textureRoots.get(state.id),allocation=textureBudget.allocations[state.id];
+        if(!target||!allocation)continue;
+        activeTextures.add(target.root);
+        textureResidency.request(target.root,allocation,target.catalog);
+        state.texture={...textureResidency.state(target.root),targetSize:allocation.textureSize,targetTexelPixels:allocation.texelPixels,demotedByTextureBudget:allocation.demotedByTextureBudget};
+      }
+      textureResidency.retain(activeTextures);
       lastState = {
         enabled: true,
         totalFaces: budgetResult.totalFaces,
@@ -1749,6 +1847,7 @@ export function createSceneBeautyLodController({
         maxPixelError: config.maxPixelError,
         withinBudget: budgetResult.withinBudget,
         objects: objectStates,
+        textures: {...textureBudget,allocatedWithinBudget:textureBudget.withinBudget,withinBudget:textureBudget.withinBudget&&textureResidency.totalBytes()<=config.textureBudgetBytes,residentBytes:textureResidency.totalBytes(),scope:'managed PNG appearance mip chains'},
       };
       return lastState;
     },
@@ -1776,10 +1875,12 @@ export function createSceneBeautyLodController({
       await giProxies?.whenIdle?.();
       this.update(camera, options);
       this.restoreAllHeroes();
-      await this.whenIdle();
-      const state = this.update(camera, options);
-      this.restoreAllHeroes();
-      return state;
+      for (;;) {
+        await this.whenIdle();
+        const state = this.update(camera, options);
+        this.restoreAllHeroes();
+        if (!pendingLoads.size && !textureResidency.hasPending()) return state;
+      }
     },
     restoreAllHeroes() {
       for (const [root, entry] of entries) {
@@ -1860,10 +1961,13 @@ export function createSceneBeautyLodController({
     },
     whenIdle: async () => {
       while (pendingLoads.size) await Promise.all([...pendingLoads]);
+      await textureResidency.whenIdle();
     },
     restoreHero(root) {
       const entry = entries.get(root);
       if (!entry) return;
+      textureResidency.release(root);
+      entry.heroTextureSignature=null;
       entry.activeTier = 'hero';
       entry.footprintTier = 'hero';
       entry.displayedTier = 'hero';
@@ -1877,6 +1981,7 @@ export function createSceneBeautyLodController({
       if (disposed) return;
       disposed = true;
       unbindGiRelease?.();
+      textureResidency.dispose();
       for (const root of [...entries.keys()]) release(root);
     },
   };

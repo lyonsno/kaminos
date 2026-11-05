@@ -27444,12 +27444,14 @@ function syncSceneLodReadout(){
   const statusEl=document.getElementById('object-lod-budget-status');
   const enabledEl=document.getElementById('scene-beauty-lod-enabled');
   const budgetEl=document.getElementById('scene-beauty-lod-budget');
+  const textureBudgetEl=document.getElementById('scene-texture-budget');
   const beautySettings=sceneBeautyLods?.read?.();
   if(enabledEl&&beautySettings)enabledEl.checked=beautySettings.enabled!==false;
   if(budgetEl&&beautySettings&&document.activeElement!==budgetEl){
     budgetEl.value=Number.isFinite(beautySettings.faceBudget)?String(beautySettings.faceBudget):'150000';
     budgetEl.disabled=beautySettings.enabled===false;
   }
+  if(textureBudgetEl&&beautySettings&&document.activeElement!==textureBudgetEl){textureBudgetEl.value=Number.isFinite(beautySettings.textureBudgetBytes)?String(beautySettings.textureBudgetBytes/1048576):'';textureBudgetEl.disabled=beautySettings.enabled===false;}
   if(!statusEl)return;
   const entry=selectedSceneObjectEntry();
   if(!entry||!canHaveGiProxy(entry)){if(statusEl.textContent!=='')statusEl.textContent='';return;}
@@ -27815,11 +27817,14 @@ function installSceneConstruction() {
     +'<p id="object-gi-proxy-status" class="flame-scope"></p>'
     +'<label class="slider-row"><span class="slider-label">Auto beauty LOD</span><input id="scene-beauty-lod-enabled" type="checkbox" checked></label>'
     +'<label class="slider-row"><span class="slider-label">Scene face budget</span><input id="scene-beauty-lod-budget" class="transform-input" type="number" min="500" step="5000" value="150000"></label>'
+    +'<label class="slider-row"><span class="slider-label">Texture budget (MiB)</span><input id="scene-texture-budget" class="transform-input" type="number" min="0" step="8" placeholder="Unlimited" title="Budget for managed surface-map mip chains; blank follows screen demand without a memory ceiling"></label>'
     +'<p id="object-lod-budget-status" class="flame-scope"></p>';
   collisionPanel.after(renderPanel);scenePlacementTools.addHistoryScope(renderPanel);
   const beautyLodEnabledInput=document.getElementById('scene-beauty-lod-enabled'),beautyLodBudgetInput=document.getElementById('scene-beauty-lod-budget');
   beautyLodEnabledInput?.addEventListener('change',()=>{window.kaminosSceneLodBudget?.setSettings({enabled:beautyLodEnabledInput.checked});});
   for(const ev of ['input','change'])beautyLodBudgetInput?.addEventListener(ev,()=>{const val=Number(beautyLodBudgetInput.value);if(Number.isFinite(val)&&val>=500)window.kaminosSceneLodBudget?.setSettings({faceBudget:val});});
+  const textureBudgetInput=document.getElementById('scene-texture-budget');
+  for(const ev of ['input','change'])textureBudgetInput?.addEventListener(ev,()=>{const value=textureBudgetInput.value.trim();const mib=Number(value);if(!value||(Number.isFinite(mib)&&mib>=0))window.kaminosSceneLodBudget?.setSettings({textureBudgetBytes:value?mib*1048576:Infinity});});
   const giProxyInput=document.getElementById('object-gi-proxy');
   const giProxyControlValue=()=>({...giProxySettingFor(selectedSceneObjectEntry()),enabled:giProxyInput.checked});
   // input as well as change: Enter commits a typed value before change fires (scene-control-history.mjs).
