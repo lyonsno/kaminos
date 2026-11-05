@@ -2950,6 +2950,8 @@ def save_mesh_lod_level(payload):
         raise ValueError('Level sha256 required')
     if type(level.get('faces')) is not int or level['faces'] < 1 or not isinstance(level.get('route'), str) or not level['route']:
         raise ValueError('Level faces and route required')
+    if 'purpose' in level and level['purpose'] != 'beauty':
+        raise ValueError('Level purpose must be beauty when present')
     if 'targetFaces' in level and (type(level['targetFaces']) is not int or level['targetFaces'] < 1):
         raise ValueError('Level targetFaces must be a positive integer')
     if 'textureSize' in level and (type(level['textureSize']) is not int or level['textureSize'] < 1):
@@ -3004,12 +3006,13 @@ def save_mesh_lod_level(payload):
     return {'schema': 'kaminos.lod-set.v0', 'source': source, 'level': level, 'retired': retired_now}
 
 
-def mesh_lod_choice(source, faces=None, max_error=None, stat='max', route=None):
+def mesh_lod_choice(source, faces=None, max_error=None, stat='max', route=None, purpose=None):
     """All levels plus a choice: by face budget, the largest level within it (else the
     smallest, flagged); by relative geometric error, the coarsest level whose `stat`
     (max, p95 or mean) fits (else the finest measured level, flagged). Levels without a
     measurement are never chosen by error. When `route` is omitted, choice considers only
-    triangle-mesh routes so existing mesh consumers never receive a surfel GLB by default."""
+    triangle-mesh routes so existing mesh consumers never receive a surfel GLB by default.
+    Beauty-only products are exposed separately unless purpose=beauty is explicit."""
     if faces is not None and max_error is not None:
         raise ValueError('Choose by faces or by maxError, not both')
     if stat not in ('max', 'p95', 'mean'):
@@ -3018,13 +3021,16 @@ def mesh_lod_choice(source, faces=None, max_error=None, stat='max', route=None):
         raise ValueError('maxError must be a finite, non-negative relative error')
     if route is not None and (not isinstance(route, str) or not route):
         raise ValueError('route must be a non-empty string')
+    if purpose not in (None, 'beauty'):
+        raise ValueError('purpose must be beauty when specified')
     data = read_mesh_lod_set(source)
     levels = [{**l, 'source': '/api/read?' + urlencode({'root': 'generated-meshes', 'path': l['sha256'] + '.glb'})} for l in data['levels']]
     for level in levels:
         if level['sha256'] in data.get('textureSets', {}):
             level['textureSet'] = data['textureSets'][level['sha256']]
-    candidates = ([l for l in levels if l.get('route') == route] if route is not None else
-                  [l for l in levels if l.get('representation') != 'trellis-surfels' and not str(l.get('route', '')).startswith('trellis-surfels')])
+    eligible = [l for l in levels if l.get('purpose') is None or l.get('purpose') == purpose == 'beauty']
+    candidates = ([l for l in eligible if l.get('route') == route] if route is not None else
+                  [l for l in eligible if l.get('representation') != 'trellis-surfels' and not str(l.get('route', '')).startswith('trellis-surfels')])
     choice, within, unmeasured = None, None, None
     if faces is not None and candidates:
         fitting = [l for l in candidates if l['faces'] <= faces]
@@ -3035,7 +3041,7 @@ def mesh_lod_choice(source, faces=None, max_error=None, stat='max', route=None):
         if measured:
             fitting = [l for l in measured if l['error']['relative'][stat] <= max_error]
             choice, within = (min(fitting, key=lambda l: l['faces']), True) if fitting else (max(measured, key=lambda l: l['faces']), False)
-    result = {'schema': 'kaminos.lod-set.v0', 'source': data['source'], 'levels': levels, 'choice': choice, 'withinBudget': within,
+    result = {'schema': 'kaminos.lod-set.v0', 'source': data['source'], 'levels': eligible, 'beautyLevels': [l for l in levels if l.get('purpose') in (None, 'beauty')], 'choice': choice, 'withinBudget': within,
               'retired': data.get('retired', []), 'textureSets': data.get('textureSets', {})}
     if unmeasured is not None:
         result['unmeasured'] = unmeasured
@@ -4427,7 +4433,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 faces, max_error = query.get("faces", [None])[0], query.get("maxError", [None])[0]
                 payload = mesh_lod_choice(query.get("source", [None])[0], int(faces) if faces is not None else None,
                                           float(max_error) if max_error is not None else None, query.get("stat", ["max"])[0],
-                                          query.get("route", [None])[0])
+                                          query.get("route", [None])[0], query.get("purpose", [None])[0])
                 if mesh_lod_targets_missing(payload["source"]) and query.get("prepare", [None])[0] != "client":
                     src_sha = payload.get("source")
                     root_dir = Path(BROWSE_ROOTS["generated-meshes"]).resolve()

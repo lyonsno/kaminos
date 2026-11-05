@@ -11,7 +11,7 @@ export async function prepareMeshTextureLevels({source,server='',fetch=globalThi
   try{
     if(!/^[a-f0-9]{64}$/.test(source??''))throw Error('Stored source identity required');
     if(heroGLB&&textureInfo(heroGLB).textureSize===0){report.status='skipped';report.reason='source-has-no-textures';phase('done');return report;}
-    const response=await fetch(`${server}/api/mesh-lods?${new URLSearchParams({source,prepare:'client'})}`),set=await response.json();
+    const response=await fetch(`${server}/api/mesh-lods?${new URLSearchParams({source,prepare:'client',purpose:'beauty'})}`),set=await response.json();
     if(!response.ok||set.source!==source||!Array.isArray(set.levels))throw Error('Appearance catalog did not confirm source identity');
     if(!heroGLB){const response=await fetch(`${server}/api/read?root=generated-meshes&path=${source}.glb`);if(!response.ok)throw Error('Appearance source unavailable');heroGLB=await response.arrayBuffer();}
     sizes??=sourceTextureSizes(heroGLB);
