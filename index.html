@@ -27861,13 +27861,13 @@ function selectionTransformProxy(){
   if(selectionTransforms&&!transformControls?.dragging){const pose=selectionTransforms.pose();if(pose)applySceneObjectTransformState(selectionProxy,pose);}
   selectionProxy.userData.kaminosSceneObject={label:`${workingScene.selection.ids.length} selected`};selectionProxy.updateMatrixWorld(true);return selectionProxy;
 }
-function setSceneSelection(ids,activeId=ids.at(-1)??null){
+function setSceneSelection(ids,activeId=ids.at(-1)??null,{fromHistory=false}={}){
   window.kaminosPendingSurfacePick=null;
   const valid=new Set([...workingScene.objects.map(o=>o.id),...workingScene.groups.map(g=>'@group:'+g.id),...(activeSceneComposition?['flame-field']:[]),...(waterFeature.setup?['water-field']:[])]);
   if(ids.some(id=>!valid.has(id)))throw Error('Selection contains an absent scene item');
   const next=assemblySelection(checkedSelection(ids,activeId),workingScene.groups,assemblyEditing?.scope());
   if(window.kaminosPolyEdit?.active()&&(next.ids.length!==1||window.kaminosPolyEdit.read().objectId!==next.activeId))window.kaminosPolyEdit.exit();
-  if(JSON.stringify(next)!==JSON.stringify(workingScene.selection)&&!burnerGraphWriting)scenePlacementTools?.selectionChanged();
+  if(!fromHistory&&JSON.stringify(next)!==JSON.stringify(workingScene.selection)&&!burnerGraphWriting)scenePlacementTools?.selectionChanged();
   workingScene.select(next.ids,next.activeId,[...(activeSceneComposition?['flame-field']:[]),...(waterFeature.setup?['water-field']:[])]);
   const mixedFields=next.ids.length>1&&next.ids.some(id=>id==='flame-field'||id==='water-field');
   currentMesh=mixedFields?null:next.ids.length>1?selectionTransformProxy():workingScene.activeFieldId==='flame-field'?flameDomainEditObject():workingScene.activeFieldId==='water-field'?waterDomainEditObject():workingScene.activeGroupId?groupProxy(selectedSceneGroupEntry()):selectedSceneObjectEntry()?.object||null;
@@ -27969,7 +27969,7 @@ function createPageSceneMembershipBatch(){
       check(value){normalizeFlameDomainTranslation(value.domain);normalizeFlameDomainScale(value.domainScale??1);if(value.domainFollowSource!==undefined&&typeof value.domainFollowSource!=='boolean')throw Error('Domain follow-source must be Boolean');},
       restore:restoreCompoundSceneContext,
     },
-    select:(ids,id)=>ids.length?setSceneSelection(ids,id):clearActiveSceneObjectSelection(),
+    select:(ids,id)=>setSceneSelection(ids,id,{fromHistory:true}),
     detach:detachSelectionMember,
     duplicate:{supported:canDuplicateObject,object:id=>duplicateSceneObject(id,{deferRecord:true}),groupId:()=>makeSceneObjectId('group')},
     changed(){renderSceneObjectList();updateTransformInspector();window._kaminosDirty?.();},

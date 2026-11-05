@@ -47,3 +47,22 @@ test('subtract marquee does not swallow the next outliner click',()=>{
  const event={button:1,clientX:0,clientY:0,target:{closest:()=>false},preventDefault(){},stopImmediatePropagation(){}};
  listeners.pointerdown(event);listeners.pointerup(event);let swallowed=false;listeners.click({...event,stopImmediatePropagation(){swallowed=true;}});assert.equal(swallowed,false);
 });
+test('membership restoration selects without cancelling its own edit; ordinary selection still interrupts',()=>{
+ let interrupts=0,selection={ids:[],activeId:null};
+ const c={window:{},structuredClone,assemblySelection:assembly.assemblySelection,
+  workingScene:{objects:[{id:'body',object:{}}],groups:[group],get selection(){return selection;},select(ids,activeId){selection={ids,activeId};},get activeFieldId(){return null;},get activeGroupId(){return selection.activeId?.startsWith('@group:')?selection.activeId.slice(7):null;}},
+  checkedSelection:(ids,activeId)=>({ids,activeId}),activeSceneComposition:{},waterFeature:{setup:null},assemblyEditing:null,burnerGraphWriting:false,
+  scenePlacementTools:{selectionChanged(){interrupts++;}},currentMesh:null,selectionTransformProxy:()=>({}),selectedSceneGroupEntry:()=>group,groupProxy:()=>({}),selectedSceneObjectEntry:()=>({object:{}}),
+  renderSceneObjectList(){},updateTransformInspector(){},authoringWorkspace:null,transformControls:null,updateSelectionFeedback(){}};
+ vm.runInNewContext(grab('setSceneSelection'),c);
+ c.setSceneSelection(['@group:burner'],'@group:burner',{fromHistory:true});assert.equal(interrupts,0,'history restoration must not send a user selection cancellation');
+ c.setSceneSelection(['body'],'body',{fromHistory:true});assert.equal(interrupts,0);
+ c.workingScene.groups=[];c.setSceneSelection(['body'],'body');assert.equal(interrupts,1,'ordinary selection still notifies the gesture owner');
+});
+test('the page membership adapter marks both nonempty and empty restored selection as internal',()=>{
+ const calls=[],c={createSceneMembershipBatch:options=>({select:options.select}),workingScene:{},sceneMembership:{},
+  isReloadableSceneObjectRecord(){},applyCompoundSceneRecord(){},clearActiveSceneObjectSelection(){calls.push({ids:[],id:null});},serializeSceneGroups(){},ensureGroupTarget(){},createSceneGroupForObjects(){},restoreCompoundSceneContext(){},detachSelectionMember(){},canDuplicateObject(){},makeSceneObjectId(){},
+  setSceneSelection:(ids,id,options)=>calls.push({ids,id,options})};
+ vm.runInNewContext(grab('createPageSceneMembershipBatch'),c);const batch=c.createPageSceneMembershipBatch();batch.select(['body'],'body');batch.select([],null);
+ assert.deepEqual(calls.map(c=>c.options?.fromHistory),[true,true]);assert.deepEqual(calls.map(c=>c.ids.length),[1,0]);
+});
