@@ -9,7 +9,7 @@ import {compositionRestoreUrl} from '../scene-authoring.mjs';
 const [out,presetFile]=process.argv.slice(2);
 assert.ok(out&&presetFile,'Caller-owned output and observed preset required');
 await fs.mkdir(out,{recursive:true});
-const materialWidth=16;
+const materialWidth=32;
 const root=process.cwd(),report={status:'failed',phase:'setup',root,errors:[],arms:[]};
 let server,browser,page;
 const save=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));
@@ -46,7 +46,7 @@ try{
  report.phase='scene-create';await save();
  await page.evaluate(id=>window.kaminosSceneAuthoring.addFlameEmitter(id,{lightingRoute:{volume_light_field_shared_source:'1',volume_light_field_distributed:'1',volume_light_field_hybrid:'1',volume_light_field_hybrid_points:'2',volume_light_field_hybrid_shadow_resolution:'16',volume_light_field_hybrid_blocker_samples:'1',volume_light_field_hybrid_filter_samples:'1',volume_light_field_hybrid_light_grid:'4',volume_light_field_hybrid_light_directions:'8',volume_light_field_hybrid_smoke_refinement:'1',volume_light_field_hybrid_surface_enabled:'0'}}),path.basename(presetFile,'.json'));
  const control=async(id,value)=>page.evaluate(({id,value})=>{const e=document.getElementById(id);if(!e)throw Error('Missing '+id);e.value=String(value);if(e.value!==String(value))throw Error('Rejected '+id);e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));},{id,value});
- for(const [id,v] of Object.entries({'volume-look-freeze':1,'volume-resolution':16,'volume-grid-height-ratio':2,'volume-fine-velocity':8,'volume-fine-pressure':4,'volume-render-scale':.5,'volume-steps':8,'volume-pressure-solver-iterations':4,'volume-world-smoke':'on','volume-world-smoke-flow':8,'volume-world-smoke-material':16,'volume-world-smoke-pressure':4,'volume-world-smoke-iterations':4,'volume-world-smoke-intermediate':'off'}))await control(id,v);
+ for(const [id,v] of Object.entries({'volume-look-freeze':1,'volume-resolution':32,'volume-grid-height-ratio':2,'volume-fine-velocity':16,'volume-fine-pressure':8,'volume-render-scale':.5,'volume-steps':8,'volume-pressure-solver-iterations':4,'volume-world-smoke':'on','volume-world-smoke-flow':8,'volume-world-smoke-material':16,'volume-world-smoke-pressure':4,'volume-world-smoke-iterations':4,'volume-world-smoke-intermediate':'off'}))await control(id,v);
  await page.waitForFunction(()=>window.__kaminosSceneRadiance?.canRender());
  await page.evaluate(async()=>{await window.kaminosFireLightingSettings.invoke('setNearBox',{enabled:true,grid:4,directions:8,extent:[1.5,1.5,1.5]});window.selectSceneField('flame-field');window.kaminosSetCameraDebugPose({position:[9,6,12],target:[0,3,0]});});
  const live=async()=>{await control('volume-look-freeze',0);await page.waitForFunction(()=>{const s=window.__kaminosVolumePrototype.debugState(),l=window.__kaminosSceneRadiance.debugState();if(s.error||l.error)throw Error(s.error||l.error);return s.simStepCount>=30&&l.frame?.exterior?.middle?.coverage==='independent-near-receivers';});await control('volume-look-freeze',1);};
@@ -70,7 +70,7 @@ try{
  await control('volume-look-freeze',1);report.reopened=await capture('cold-reopened');
  assert.deepEqual(report.reopened.lighting.nearBox,{enabled:true,grid:4,directions:8,extent:[1.5,1.75,1.5]});
  assert.equal(report.reopened.simulation.controls.worldEmissive,'off');
- assert.equal(report.reopened.simulation.controls.resolution,16);assert.deepEqual(report.errors,[]);assert.deepEqual(await hashes(),report.source,'Source changed during run');report.status='passed';report.phase='complete';
+ assert.equal(report.reopened.simulation.controls.resolution,32);assert.deepEqual(report.errors,[]);assert.deepEqual(await hashes(),report.source,'Source changed during run');report.status='passed';report.phase='complete';
 }catch(e){report.error=e.stack;if(page)try{report.failureState=await page.evaluate(()=>({volume:window.__kaminosVolumePrototype?.debugState(),lighting:window.__kaminosSceneRadiance?.debugState(),info:document.getElementById('info-bar')?.textContent}));await page.screenshot({path:path.join(out,'failure.png')});}catch(c){report.captureError=String(c);}process.exitCode=1;}
 finally{await browser?.close();if(server&&server.exitCode===null){const stopped=new Promise(r=>server.once('exit',r));server.kill('SIGTERM');await stopped;}await save();}
 console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,errors:report.errors}));
