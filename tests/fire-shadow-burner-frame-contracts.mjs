@@ -9,10 +9,10 @@ const source=process.argv[2]
   : readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const body=source.match(/function drawSceneFrame\(\) \{([\s\S]*?)\n  \}/)[1];
 const calls=[];let mounted=false;
-const context={deviceRecoveryHeld:()=>false,performance:{now:()=>100},document:{getElementById:()=>({value:'custom'})},THREE:{ACESFilmicToneMapping:1,AgXToneMapping:2},
+const context={deviceRecoveryHeld:()=>false,sceneAssetPreparationActive:false,performance:{now:()=>100},document:{getElementById:()=>({value:'custom'})},THREE:{ACESFilmicToneMapping:1,AgXToneMapping:2},
  renderer:{},updateSelectionFeedback(){},updateAnnularBurnerFrame(){mounted=true;calls.push('burner');},
  fireLightFieldPass:{renderShadows(){assert.equal(mounted,true,'shadow draw must see current burner placement');calls.push('shadows');}},
- renderPipeline:{render(){calls.push('visible');}},sceneBeautyLods:{withFrame:(camera,options,draw)=>draw()},
+ renderPipeline:{render(){calls.push('visible');}},sceneBeautyLods:{setPreparation(){},withFrame:(camera,options,draw)=>draw()},
  sceneExposureControls:null,sceneEmissiveCamera:null,waterFeature:{host:null},syncWaterProxy(){},syncFireProxy(){},
  polyEdit:null,sceneComponents:null,withViewportVisibility:(objects,visible,draw)=>draw(),viewportVisibilityObjects:()=>[],
  isSceneItemVisible:()=>true,camera:{},renderWithViewportShading:draw=>draw(),authoredFlameHDRActive:false,waterProxy:null,

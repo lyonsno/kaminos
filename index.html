@@ -3621,9 +3621,9 @@ function restoreVisibilitySelection(ids,activeId){
  try{return setSceneSelection(ids,activeId);}finally{burnerGraphWriting=previous;}
 }
 function viewportVisibilityObjects(){
- return [...workingScene.objects,...Array.from(sceneSpotLights,([id,{light}])=>({id,object:light}))];
+ return [...workingScene.objects,...Array.from(sceneSpotLights,([id,{light}])=>({id,object:light})),...Array.from(activeSceneStandIns.values()).filter(entry=>entry.root).map(entry=>({id:entry.id,object:entry.root}))];
 }
-function sceneVisibilityContext(){return {objects:workingScene.objects,groups:workingScene.groups,fields:[...(activeSceneComposition?[{id:'flame-field'}]:[]),...(waterFeature.setup?[{id:'water-field'}]:[])]};}
+function sceneVisibilityContext(){return {objects:[...workingScene.objects,...Array.from(activeSceneStandIns.values(),entry=>entry.record)],groups:[...workingScene.groups,...coarseSceneGroups],fields:[...(activeSceneComposition?[{id:'flame-field'}]:[]),...(waterFeature.setup?[{id:'water-field'}]:[])]};}
 function isSceneItemVisible(id){return itemVisible(id,viewportDisplay.hiddenIds,sceneVisibilityContext());}
 function isSceneItemEditable(id) {
   const scope=assemblyEditing?.scope();
@@ -13393,6 +13393,7 @@ function clearSceneLowLodStandIns(matchRequestId = undefined) {
     return;
   }
   activeSceneStandInRequestId = null;
+  coarseSceneGroups=[];
   settledSceneStandInIds.clear();
   for (const id of [...activeSceneStandIns.keys()]) {
     removeSceneLowLodStandIn(id, { markSettled: false });
@@ -23924,7 +23925,7 @@ function recordAssetArrivalLightingAndGI(object, mode) {
   }
 }
 
-function refreshArrivalLightingFromWorkingScene() {
+function refreshArrivalLightingFromWorkingScene({syncPromoted=false}={}) {
   const union = new THREE.Box3();
   const allSamples = [];
   if (typeof workingScene !== 'undefined') {
@@ -23939,11 +23940,11 @@ function refreshArrivalLightingFromWorkingScene() {
   }
   arrivalLightingState.bounds = union.isEmpty() ? null : { min: union.min.toArray(), max: union.max.toArray() };
   arrivalLightingState.materialProfile = inspectArrivalMaterialProfile(allSamples);
-  syncArrivalStudioLighting({ syncPromoted: true });
+  syncArrivalStudioLighting({ syncPromoted });
 }
 
 function syncArrivalLightingAndGI(object) {
-  syncArrivalStudioLighting({ syncPromoted: true });
+  syncArrivalStudioLighting();
   autoCalibrateSceneGIFromScene(object);
 }
 
@@ -24238,7 +24239,7 @@ async function applyStudioLookToCurrentScene(
     const rvEl = document.getElementById('composition-ground-roughness-value');
     if (rvEl) rvEl.value = String(groundPlane.material.roughness);
   }
-  refreshArrivalLightingFromWorkingScene();
+  refreshArrivalLightingFromWorkingScene({syncPromoted:true});
   if (promoteRig) {
     if (typeof sceneLightingPreparation !== 'undefined') await sceneLightingPreparation?.whenIdle?.();
     promoteArrivalStudioLightsToScene({ groupRig: true, select: 'rig', recordHistory: false });
