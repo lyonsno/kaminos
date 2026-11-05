@@ -201,12 +201,22 @@ export function dedupCorners({positions, normals, uvs}) {
 // closed remesh projected onto the raw TRELLIS surface, then the caller's TRELLIS finisher
 // (finishTrellisMesh) unwraps it and bakes PBR textures from the same material field.
 // closestPoint projects onto the raw surface (for example a three-mesh-bvh query over it).
+// purpose:'beauty' instead simplifies the existing surface; it does not rebuild a closed grid.
 export async function prepareLowTiers({mesh, materialFields, bakeMaterial, closestPoint, finish, unwrapMesh, WorkerClass,
-  targets = [25000, 10000, 5000, 1000, 500], textureSizeFor = target => target >= 25000 ? 1024 : target >= 5000 ? 512 : 256, provenance = {}, compact = true, measure = null}) {
+  targets = [25000, 10000, 5000, 1000, 500], textureSizeFor = null, purpose = null, provenance = {}, compact = true, measure = null}) {
   if (typeof finish !== 'function') throw TypeError('TRELLIS finisher (finishTrellisMesh) required');
+  if(purpose!==null&&purpose!=='beauty')throw Error('purpose must be beauty when specified');
+  textureSizeFor??=target=>purpose==='beauty'?2048:target>=25000?1024:target>=5000?512:256;
+  // UV seams are attribute splits, not holes in the underlying source surface.
+  let surface={vertices:mesh.vertices,faces:mesh.triangles};
+  if(purpose==='beauty'){
+    const positions=new Float32Array(mesh.triangles.length*3);
+    for(let i=0;i<mesh.triangles.length;i++)positions.set(mesh.vertices.subarray(mesh.triangles[i]*3,mesh.triangles[i]*3+3),i*3);
+    const welded=dedupCorners({positions});surface={vertices:welded.positions,faces:Uint32Array.from(welded.indices)};
+  }
   const tiers = [];
   for (const target of targets) {
-    const level = remeshLevel({vertices: mesh.vertices, faces: mesh.triangles}, target, {closestPoint});
+    const level = purpose==='beauty'?reduceLevel(surface,target):remeshLevel(surface, target, {closestPoint});
     const census = edgeCensus(level.vertices, level.faces), textureSize = textureSizeFor(target);
     const finished = await finish({vertices: level.vertices.slice(), triangles: level.faces.slice(), metadata: {lod: {target, route: level.route}}},
       {WorkerClass, unwrapMesh, textureSize, materialFields, ...(bakeMaterial ? {bakeMaterial} : {}), provenance: {...provenance, lod: {target, route: level.route, grid: level.grid, cell: level.cell}}});
@@ -216,7 +226,7 @@ export async function prepareLowTiers({mesh, materialFields, bakeMaterial, close
       reference: measure.reference ?? null}) : null;
     const glb = compact ? compactTrellisGLB(finished.glb, {dropTimings: true}) : finished.glb;
     const timing = {uvSeconds: glb.timings?.['extras.trellis.uv.elapsedSeconds'] ?? finished.mesh?.uvMetadata?.elapsedSeconds ?? null, ...(glb.timings ? {dropped: glb.timings} : {})};
-    tiers.push({target, error, timing, glb, compacted: compact, faces: level.faces.length / 3, route: level.route, textureSize,
+    tiers.push({target, ...(purpose?{purpose}:{}), error, timing, glb, compacted: compact, faces: level.faces.length / 3, route: level.route, textureSize,
       closed: census.boundaryEdges === 0, boundaryEdges: census.boundaryEdges, nonManifoldEdges: census.nonManifoldEdges, grid: level.grid});
   }
   return tiers;

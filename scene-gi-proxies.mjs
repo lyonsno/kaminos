@@ -48,10 +48,10 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
   function resolve(root,selection,{enabled=true}={}){
     const task=(async()=>{
       const version=++sequence;versions.set(root,version);
-      const base={...describe(root),assetSource:root.userData?.kaminosSceneObject?.source,requested:{...selection},effective:null,levels:[],error:null,frame:'trellis-source',proxyRoot:null,
+      const base={...describe(root),assetSource:root.userData?.kaminosSceneObject?.source,requested:{...selection},effective:null,levels:[],beautyLevels:[],error:null,frame:'trellis-source',proxyRoot:null,
         placement:scene=>new THREE.Matrix4().copy(scene.matrixWorld).invert().multiply(root.updateWorldMatrix(true,false)??root.matrixWorld)};
       const previous=handles.get(root);
-      const retainCatalog=!enabled&&previous?.assetSource===base.assetSource&&(previous?.levels?.length||previous?.surfelLevels?.length);
+      const retainCatalog=!enabled&&previous?.assetSource===base.assetSource&&(previous?.levels?.length||previous?.beautyLevels?.length||previous?.surfelLevels?.length);
       const settle=handle=>{
         if(versions.get(root)!==version){disposeTree(handle.proxyRoot);return {...handle,proxyRoot:null,superseded:true};}
         if(owned.get(root)!==handle.proxyRoot){disposeTree(owned.get(root));if(handle.proxyRoot)owned.set(root,handle.proxyRoot);else owned.delete(root);}
@@ -68,21 +68,23 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
           else if(base.heroSha){base.heroSha=set.source;}
           else{base.assetSha=set.source;}
         }
-        const allLevels=set.levels??[];
-        const levels=allLevels.filter(l=>!l.mergeFactor&&l.route!=='trellis-surfels+hero-normals').map(l=>({
-          sha:l.sha256,faces:l.faces,closed:l.closed??null,
+        const allLevels=set.beautyLevels??set.levels??[];
+        const meshLevels=allLevels.filter(l=>!l.mergeFactor&&l.route!=='trellis-surfels+hero-normals').map(l=>({
+          sha:l.sha256,faces:l.faces,closed:l.closed??null,...(l.purpose?{purpose:l.purpose}:{}),
           ...(l.source?{source:l.source}:{}),
           ...(l.textureSize!=null?{textureSize:l.textureSize}:{}),
           ...(l.error?{error:l.error}:{}),
           ...(l.normalMap?{normalMap:l.normalMap}:{}),
           ...(l.textureSet?{textureSet:l.textureSet}:{}),
         }));
+        const levels=meshLevels.filter(l=>!l.purpose);
+        const beautyLevels=meshLevels.filter(l=>!l.purpose||l.purpose==='beauty');
         const surfelLevels=allLevels.filter(l=>l.mergeFactor!=null||l.route==='trellis-surfels+hero-normals').map(l=>({
           sha:l.sha256,mergeFactor:l.mergeFactor,count:l.count??null,route:l.route,
           ...(l.source?{source:l.source}:{}),
           ...(l.error?{error:l.error}:{}),
         }));
-        const extra={heroTextureSet:set.textureSets?.[set.source]??null,...(surfelLevels.length?{surfelLevels}:{}),prepareQueued:set.prepareQueued===true,prepareState:set.prepareState??null};
+        const extra={beautyLevels,heroTextureSet:set.textureSets?.[set.source]??null,...(surfelLevels.length?{surfelLevels}:{}),prepareQueued:set.prepareQueued===true,prepareState:set.prepareState??null};
         if(!enabled)return settle({...base,levels,...extra,state:'disabled'});
         if(!set.choice)return settle({...base,levels,...extra,state:'no-tiers',reason:base.heroSha?'no stored tiers for this hero':'a surfels-only asset has no hero mesh to take tiers from'});
         const choice=set.choice;
@@ -129,7 +131,7 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
     disable(root,{retainLevels=true}={}){
       if(!retainLevels){
         drop(root);
-        handles.set(root,{...describe(root),state:'disabled',proxyRoot:null,effective:null,levels:[],error:null});
+        handles.set(root,{...describe(root),state:'disabled',proxyRoot:null,effective:null,levels:[],beautyLevels:[],error:null});
         return;
       }
       const previous=handles.get(root);

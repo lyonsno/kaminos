@@ -19,6 +19,7 @@ for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], proce
 const input = args.get('--input'), source = args.get('--source'), surfelSource = args.get('--surfel-source') || null, server = args.get('--server'), reportPath = args.get('--report');
 const rawTargets = args.get('--targets'), targets = rawTargets === 'none' ? [] : (rawTargets || '25000,10000,5000,1000,500').split(',').filter(Boolean).map(Number);
 const surfelFactors = (args.get('--surfel-factors') || '').split(',').filter(Boolean).map(Number);
+const beautyTargets = args.has('--beauty-targets') ? (args.get('--beauty-targets')==='none'?[]:args.get('--beauty-targets').split(',').filter(Boolean).map(Number)) : null;
 const textureLevels = args.get('--texture-levels') !== 'false';
 const replace = args.get('--replace') === 'true', normalMaps = args.get('--normal-maps') !== 'false', reference = args.get('--reference') || 'hero', completeMissing = args.get('--complete-missing') === 'true';
 const report = {schema: 'kaminos.lod-tiers-report.v0', phase: 'admission', input, source, ...(surfelSource ? {surfelSource} : {}), server, targets, ...(surfelFactors.length ? {surfelFactors} : {}), startedAt: new Date().toISOString(), tiers: []};
@@ -26,7 +27,7 @@ const save = () => reportPath && fs.writeFileSync(reportPath, JSON.stringify(rep
 try {
   if (!server || !reportPath || !/^[a-f0-9]{64}$/.test(source || '') || (surfelFactors.length && !input && !surfelSource))
     throw Error('--source <sha256>, --server and --report are required (--input <dir> or --surfel-source <sha256> required for --surfel-factors)');
-  if ((!targets.length && !surfelFactors.length) || !targets.every(t => Number.isSafeInteger(t) && t > 0) || !surfelFactors.every(k => Number.isSafeInteger(k) && k > 0))
+  if ((!targets.length && !surfelFactors.length && !beautyTargets?.length) || !targets.every(t => Number.isSafeInteger(t) && t > 0) || (beautyTargets && !beautyTargets.every(t => Number.isSafeInteger(t) && t > 0)) || !surfelFactors.every(k => Number.isSafeInteger(k) && k > 0))
     throw Error('--targets / --surfel-factors must be positive integers');
   save();
   // Loaded here so a missing dependency still ends in a written failure report.
@@ -59,7 +60,7 @@ try {
   // The same steps the page runs at Generate (lod-generation-levels.mjs), with Node's worker and fetch.
   await prepareGenerationLevels({decode, materialFields, heroGLB, source, surfelSource, server, THREE, MeshBVH, finish: finishTrellisMesh,
     unwrapMesh: createWasmXatlasUnwrapper(), WorkerClass: NodeTrellisUVWorker, targets, surfelFactors, replace, normalMaps, input: inputName, route: routeName,
-    reference, completeMissing, textureLevels, report, onPhase: save});
+    reference, completeMissing, textureLevels, beautyTargets, report, onPhase: save});
   if (report.error) throw Object.assign(Error(report.error.message), {stack: report.error.stack});
 } catch (error) {
   report.error = {message: error.message, stack: error.stack}; process.exitCode = 1;
