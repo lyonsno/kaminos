@@ -180,19 +180,31 @@ fn generate(@builtin(global_invocation_id) id:vec3u){
   if(matchedSlot<4u){used|=1u<<matchedSlot;features|=1u<<(bitcast<u32>(previous[matchedSlot][0].w)&0x1ffu);}
  }
  for(var s=0u;s<count;s++){
-  let c=candidates.points[selected[s]];let localA=inverseRotate(qa,c.a-positions[a].xyz);let localB=inverseRotate(qb,c.b-positions[b].xyz);let matchedSlot=matches[s];
+  let c=candidates.points[selected[s]];var localA=inverseRotate(qa,c.a-positions[a].xyz);var localB=inverseRotate(qb,c.b-positions[b].xyz);let matchedSlot=matches[s];
   let base=(pair*4u+s)*9u;var feature=s;var flags=0u;
-  if(matchedSlot<4u){used|=1u<<matchedSlot;feature=bitcast<u32>(previous[matchedSlot][0].w)&0x1ffu;flags=(1u<<16u)|(1u<<21u);}
+  if(matchedSlot<4u){
+   let oldFlags=bitcast<u32>(previous[matchedSlot][0].w);feature=oldFlags&0x1ffu;
+   flags=(oldFlags&((127u<<9u)|(1u<<17u)))|(1u<<16u)|(1u<<21u);
+   if((oldFlags&(1u<<17u))!=0u){localA=previous[matchedSlot][2].xyz;localB=previous[matchedSlot][3].xyz;flags|=1u<<18u;}
+  }
   // A fresh row cannot alias a feature already carried by another point.
   if(matchedSlot==4u){feature=0u;while((features&(1u<<feature))!=0u){feature++;}}
   features|=1u<<feature;
+  let delta=positions[a].xyz+rotate(qa,localA)-positions[b].xyz-rotate(qb,localB);let depth=dot(delta,n);
+  // Native sticking matches retain their material anchors only while those
+  // anchors still touch. A separating point loses its entire correspondence.
+  if(depth<0.0){contacts[base]=vec4f(f32(a),f32(b),0.0,0.0);contacts[base+8u]=vec4f(0.0);continue;}
   contacts[base]=vec4f(f32(a),f32(b),f32(pair+1u),bitcast<f32>(feature|flags));
-  contacts[base+1u]=vec4f(n,c.depth);contacts[base+2u]=vec4f(localA,0.0);contacts[base+3u]=vec4f(localB,0.0);
-  let delta=c.a-c.b;contacts[base+4u]=vec4f(-dot(delta,n)+MARGIN,dot(delta,t1),dot(delta,t2),0.0);
+  contacts[base+1u]=vec4f(n,depth);contacts[base+2u]=vec4f(localA,0.0);contacts[base+3u]=vec4f(localB,0.0);
+  contacts[base+4u]=vec4f(-depth+MARGIN,dot(delta,t1),dot(delta,t2),0.0);
   if(matchedSlot<4u){
    let oldN=previous[matchedSlot][1].xyz;let oldT=tangent(oldN);let oldB=cross(oldN,oldT);
    let dual=previous[matchedSlot][6];let shadow=previous[matchedSlot][5];let d=oldT*dual.y+oldB*dual.z;let h=oldT*shadow.y+oldB*shadow.z;
-   contacts[base+5u]=vec4f(shadow.x,dot(h,t1),dot(h,t2),shadow.w);
+   let oldC0=previous[matchedSlot][4];let c0T=oldT*oldC0.y+oldB*oldC0.z;
+   contacts[base+4u]=vec4f(-depth+MARGIN,dot(c0T,t1),dot(c0T,t2),0.0);
+   var shadowT=vec2f(dot(h,t1),dot(h,t2));let shadowN=max(shadow.x,0.0);let bound=${friction}*shadow.w*shadowN;
+   if(dot(shadowT,shadowT)>bound*bound&&dot(shadowT,shadowT)>1e-12){shadowT*=bound*inverseSqrt(dot(shadowT,shadowT));}
+   contacts[base+5u]=vec4f(shadowN,shadowT,shadow.w);
    contacts[base+6u]=vec4f(dual.x,dot(d,t1),dot(d,t2),0.0);contacts[base+7u]=previous[matchedSlot][7];
    contacts[base+8u]=bitcast<vec4f>(vec4u(bitcast<u32>(previous[matchedSlot][8].x),axis.kind,axis.a,axis.b));
   }else{
