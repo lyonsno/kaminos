@@ -3,26 +3,35 @@ import {checkedAshRecord,checkedAshSettings,ashObjectLayout,ASH_OBJECT_TYPE} fro
 
 // Field coordinates belong to the object. Rigid scene triangles are borrowed,
 // transformed into that frame, and never mutated or disposed by ash.
-export function createAshCollisionRecords(root,readObjects){
+export function createAshCollisionRecords(root,readObjects,{resolveObstacle=null}={}){
  const proxies=new WeakMap(),inverse=new Matrix4();
  return ()=>{
   root.updateWorldMatrix(true,false);if(Math.abs(root.matrixWorld.determinant())<1e-12)throw Error('Ash field transform must be invertible');inverse.copy(root.matrixWorld).invert();const result=[];
+  const cellSize=root.userData?.kaminosSceneObject?.ash?.cellSize??0.04;
   for(const entry of readObjects()){
    if(entry.type===ASH_OBJECT_TYPE||!['glb','pbr','procedural-mesh','burner-bed','brazier-room'].includes(entry.type))continue;
-   entry.object.updateWorldMatrix(true,true);let index=0;
-   entry.object.traverse(mesh=>{
-    const part=index++;if(!mesh.isMesh)return;
-    for(let node=mesh;node;node=node.parent)if(!node.visible||node.userData?.kaminosEditorOnly||node.userData?.kaminosEditorHelper)return;
-    if(mesh.isSkinnedMesh||mesh.isInstancedMesh||mesh.morphTargetInfluences?.some(x=>x!==0))throw Error(`Ash needs rigid triangles: ${entry.label||entry.id}`);
-    let proxy=proxies.get(mesh);if(!proxy){proxy=new Mesh(mesh.geometry,mesh.material);proxy.matrixAutoUpdate=false;proxies.set(mesh,proxy);}
-    proxy.geometry=mesh.geometry;proxy.material=mesh.material;proxy.name=mesh.name;
-    proxy.matrix.multiplyMatrices(inverse,mesh.matrixWorld);proxy.updateMatrixWorld(true);
-    result.push({id:entry.id,key:`${entry.id}:${part}`,object:proxy});
-   });
+   const restoreBeauty=entry.object.userData?.kaminosBeautyLodRestore?.();
+   try{
+    entry.object.updateWorldMatrix(true,true);
+    const sourceObj=typeof resolveObstacle==='function'?resolveObstacle(entry,{voxelSize:cellSize}):entry.object;
+    if(!sourceObj)continue;
+    let index=0;
+    sourceObj.traverse(mesh=>{
+     const part=index++;if(!mesh.isMesh)return;
+     for(let node=mesh;node;node=node.parent)if(!node.visible||node.userData?.kaminosBeautyLodProxy||node.userData?.kaminosEditorOnly||node.userData?.kaminosEditorHelper)return;
+     if(mesh.isSkinnedMesh||mesh.isInstancedMesh||mesh.morphTargetInfluences?.some(x=>x!==0))throw Error(`Ash needs rigid triangles: ${entry.label||entry.id}`);
+     let proxy=proxies.get(mesh);if(!proxy){proxy=new Mesh(mesh.geometry,mesh.material);proxy.matrixAutoUpdate=false;proxies.set(mesh,proxy);}
+     proxy.geometry=mesh.geometry;proxy.material=mesh.material;proxy.name=mesh.name;
+     proxy.matrix.multiplyMatrices(inverse,mesh.matrixWorld);proxy.updateMatrixWorld(true);
+     result.push({id:entry.id,key:`${entry.id}:${part}`,object:proxy});
+    });
+   }finally{
+    restoreBeauty?.();
+   }
   }return result;
  };
 }
-export async function createAshSceneObject({record:raw,renderer,readObjects,readSources=()=>[],onError=()=>{},createPatch=async options=>(await import('./tile-gpu.mjs')).createGpuTiledAsh(options)}){
+export async function createAshSceneObject({record:raw,renderer,readObjects,readSources=()=>[],resolveObstacle=null,onError=()=>{},createPatch=async options=>(await import('./tile-gpu.mjs')).createGpuTiledAsh(options)}){
  const record=checkedAshRecord(raw),root=new Group();root.name=record.label||'Ash';
  root.position.fromArray(record.transform?.position??[0,0,0]);root.rotation.set(...(record.transform?.rotation??[0,0,0]));root.scale.fromArray(record.transform?.scale??[1,1,1]);
  let settings=record.ash,patch=null,busy=false,disposed=false,pendingRestore=settings.checkpoint,initialized=false,lastTick=null,failure=null;
@@ -36,7 +45,7 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,read
  const guide=new LineSegments(edges,new LineBasicMaterial({color:0xa4aba4,transparent:true,opacity:.4}));guide.position.y=settings.height/2;guide.userData.kaminosEditorHelper=true;root.add(guide);
  const emitter=new Mesh(new TorusGeometry(1,.018,6,48),new MeshStandardMaterial({color:0x8abdb2,roughness:.8}));emitter.rotation.x=Math.PI/2;emitter.userData.kaminosEditorHelper=true;root.add(emitter);
  const sync=()=>{emitter.position.fromArray(settings.sourcePosition);emitter.scale.setScalar(Math.max(settings.spread,.01));root.userData.kaminosSceneObject={...(root.userData.kaminosSceneObject??record),ash:settings};};sync();
- const collisionRecords=createAshCollisionRecords(root,readObjects);
+ const collisionRecords=createAshCollisionRecords(root,readObjects,{resolveObstacle});
  const check=()=>{if(disposed)throw Error('Ash object disposed');if(busy)throw Error('Ash operation in progress');};
  const source=()=>({position:[...settings.sourcePosition],rate:settings.emitting?settings.rate:0,spread:settings.spread,dt:1/30,sources:[...readSources(),...(settings.fallout?[{position:[0,settings.height,0],spread:0,rate:settings.rate,halfExtents:[settings.width/2,settings.depth/2]}]:[])]});
  const locked=async fn=>{check();busy=true;try{return await fn();}finally{busy=false;}};

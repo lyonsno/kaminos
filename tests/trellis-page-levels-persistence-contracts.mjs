@@ -35,3 +35,30 @@ for(const [name,loadModule] of [
     assert.match(window.__kaminosLastGenerationLevels?.error,/simulated/);
   });
 }
+
+test('persistTrellisPageRun builds GI proxy levels from heroGLB even when levelInputs is absent, and kaminosTrellisPage awaits levels by default',async()=>{
+  const calls=[];
+  const window={};
+  const {persist}=pagePersist({
+    window,
+    loadModule:async()=>({
+      runGenerationLevels:async args=>{
+        calls.push(args);
+        await new Promise(r=>setTimeout(r,10));
+        return {phase:'done',tiers:[{faces:25000},{faces:10000},{faces:5000},{faces:1000},{faces:500}]};
+      },
+    }),
+  });
+  const glb=new Uint8Array([0x67,0x6c,0x54,0x46,2,0,0,0,12,0,0,0]).buffer;
+  await persist({glb,generation:{runId:'r-fallback',route:'trellis2.image-generation.webgpu.v0'},label:'kiln',levelInputs:null});
+  assert.ok(window.__kaminosLastGenerationLevelsPromise,'levels promise exposed for headless callers');
+  const report=await window.__kaminosLastGenerationLevelsPromise;
+  assert.equal(calls.length,1,'runGenerationLevels called from heroGLB when levelInputs is null');
+  assert.equal(calls[0].source,'a'.repeat(64));
+  assert.ok(calls[0].heroGLB instanceof Uint8Array && calls[0].heroGLB.byteLength===12);
+  assert.equal(report.phase,'done');
+  assert.match(html,/window\.kaminosTrellisPage=async options=>\{[\s\S]*await window\.__kaminosLastGenerationLevelsPromise/,'window.kaminosTrellisPage awaits levels promise unless disabled');
+  const trellisStart=html.indexOf('const trellis=()=>{');
+  const trellisBody=html.slice(trellisStart,trellisStart+3000);
+  assert.match(trellisBody,/runGenerationLevels\(\{heroGLB,source/,'queued trellis() persist triggers runGenerationLevels from heroGLB');
+});

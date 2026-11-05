@@ -47,6 +47,7 @@ export function sceneContext(context, options) {
     water.setPaused=value=>{context.localLiquidPaused=Boolean(value);context.localLiquidHost?.setPaused(value);return context.localLiquidPaused;};
     context.waterFeature=water;
   }
+  context.deviceRecoveryHeld??=()=>false;
   context.window??={};
   context.fireLightFieldRouteParams??=()=>new URLSearchParams();
   context.fireShadowSceneRoute??=()=>({});

@@ -217,3 +217,14 @@ test('dispose keeps the world geometry buffer alive through fluid cleanup',async
   await f.api.dispose();assert.equal(writes,1);assert.equal(destroyed,true);
  }finally{await f.close();}
 });
+
+test('device loss retires immediately even with a queued model frame',async()=>{
+ const f=await fixture();try{
+  f.api.render(0);await turn();
+  assert.equal(typeof f.api.retireLostDevice,'function','lost devices need retirement independent of a model drain');
+  f.api.retireLostDevice();await f.api.setActive(false);
+  assert.equal(f.api.isActive(),false);assert.equal(f.scheduled.size,0);
+  await assert.rejects(f.api.setActive(true),/retired/);
+  await f.boundary();assert.deepEqual(f.submissions,[]);
+ }finally{await f.close();}
+});

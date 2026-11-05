@@ -36,9 +36,14 @@ fn seedFine(@builtin(global_invocation_id)c:vec3<u32>){
  textureStore(reaction,vec3<i32>(c),vec4<f32>(r.a.w,r.b.x,0,0));
 }
 `;
+const worldSeedPipelines = new WeakMap();
 export function createWorldSeed(device){
- const module=device.createShaderModule({label:'world gas into relocated Fine region',code:WORLD_SEED_WGSL});
- const pipeline=device.createComputePipeline({layout:'auto',compute:{module,entryPoint:'seedFine'}});
+ let pipeline=worldSeedPipelines.get(device);
+ if(!pipeline){
+  const module=device.createShaderModule({label:'world gas into relocated Fine region',code:WORLD_SEED_WGSL});
+  pipeline=device.createComputePipeline({layout:'auto',compute:{module,entryPoint:'seedFine'}});
+  worldSeedPipelines.set(device,pipeline);
+ }
  const uniform=device.createBuffer({label:'world seed coordinates',size:96,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
  return {encode(encoder,{plan,mapping,dims,staggered,gas,velocity,fluid,reaction,ambient=1}){
   device.queue.writeBuffer(uniform,0,new Float32Array([...dims,staggered?1:0,...mapping,...plan.min,0,...plan.flowDims,plan.flowPitch,...plan.materialDims,plan.materialPitch,ambient,0,0,0]));

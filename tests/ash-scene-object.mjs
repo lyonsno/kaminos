@@ -134,3 +134,82 @@ test('deletion during async regrid releases both old and candidate fields',async
  await object.initialize();const pending=object.regrid(.02);object.dispose();resolve(create());
  await assert.rejects(pending,/disposed/i);assert.deepEqual(patches.map(p=>p.disposed),[1,1]);
 });
+
+test('createAshCollisionRecords restores beauty LODs and excludes kaminosBeautyLodProxy meshes',()=>{
+ const root=new Group();
+ const obstacle=new Group();
+ const heroMesh=new Mesh(new BoxGeometry(1,1,1),new MeshBasicMaterial());
+ const beautyProxy=new Group();
+ beautyProxy.userData.kaminosBeautyLodProxy=true;
+ const proxyMesh=new Mesh(new BoxGeometry(.5,.5,.5),new MeshBasicMaterial());
+ beautyProxy.add(proxyMesh);
+ obstacle.add(heroMesh);
+ obstacle.add(beautyProxy);
+
+ heroMesh.visible=false;
+ beautyProxy.visible=true;
+ obstacle.userData.kaminosBeautyLodRestore=()=>{
+  heroMesh.visible=true;
+  beautyProxy.visible=false;
+  return ()=>{
+   heroMesh.visible=false;
+   beautyProxy.visible=true;
+  };
+ };
+
+ const list=createAshCollisionRecords(root,()=>[{id:'kiln',type:'glb',object:obstacle}]);
+ const records=list();
+ assert.equal(records.length,1,'only the restored hero mesh enters ash collision records');
+ assert.equal(records[0].object.geometry,heroMesh.geometry,'ash collision record uses hero geometry, not beauty proxy');
+ assert.equal(heroMesh.visible,false,'beauty LOD visibility state is restored after createAshCollisionRecords');
+ assert.equal(beautyProxy.visible,true,'beauty proxy visibility is restored after createAshCollisionRecords');
+});
+
+test('review WO1: createAshCollisionRecords substitutes cellSize-matched stunt-double rung via resolveObstacle instead of hashing full hero mesh',async()=>{
+ const THREE=await import('../lib/three.core.js');
+ const {createSceneColliderCollection}=await import('../scene-collider.mjs');
+ const {createGiProxyRegistry}=await import('../scene-gi-proxies.mjs');
+
+ const HERO_SHA='a'.repeat(64);
+ const TIER_500='b'.repeat(64);
+ const levels=[
+  {sha256:TIER_500,faces:500,closed:true,source:`/api/read?root=generated-meshes&path=${TIER_500}.glb`,error:{diagonal:1.0,relative:{p95:0.002,max:0.008},levelToSource:{p95:0.002,max:0.008},sourceToLevel:{p95:0.002,max:0.008}}},
+ ];
+
+ const obstacle=new Group();
+ obstacle.position.set(2,0,-3);
+ obstacle.userData.kaminosSceneObject={source:`/api/read?root=generated-meshes&path=${HERO_SHA}.glb`};
+ const heroGeom=new THREE.SphereGeometry(0.5,64,48); // > 6,000 triangles
+ const heroMesh=new Mesh(heroGeom,new MeshBasicMaterial());
+ obstacle.add(heroMesh);
+ obstacle.updateMatrixWorld(true);
+
+ const stuntGeom=new BoxGeometry(0.8,0.8,0.8,1,1,1); // 12 triangles
+ const giProxies=createGiProxyRegistry({
+  THREE,
+  fetchJson:async()=>({schema:'kaminos.lod-set.v0',source:HERO_SHA,levels,choice:levels[0],withinBudget:true}),
+  fetchBytes:async()=>new TextEncoder().encode(TIER_500).buffer,
+  digest:async bytes=>new TextDecoder().decode(bytes),
+  parseGlb:async()=>{const g=new Group();g.add(new Mesh(stuntGeom,new MeshBasicMaterial()));return g;},
+ });
+ await giProxies.attach(obstacle,{faces:500});
+ const colliderCollection=createSceneColliderCollection(THREE,{giProxies});
+
+ const ashRoot=new Group();
+ ashRoot.position.set(1,0,-2);
+ ashRoot.userData.kaminosSceneObject={ash:{cellSize:0.04}};
+ const list=createAshCollisionRecords(
+  ashRoot,
+  ()=>[{id:'beam',type:'glb',object:obstacle}],
+  {resolveObstacle:(entry,opts)=>colliderCollection.resolveObstacle(entry,opts)}
+ );
+ const records=list();
+ assert.equal(records.length,1,'ash collision emits 1 proxy mesh for stunt-double');
+ assert.equal(records[0].object.geometry.attributes.position.count,stuntGeom.attributes.position.count,'WO1: ash obstacle uses 12-triangle stunt-double rung instead of 6,000-triangle hero mesh');
+ assert.deepEqual(records[0].object.matrixWorld.elements.slice(12,15),[1,0,-1],'WO1: stunt-double rung is transformed into ash field coordinates');
+
+ obstacle.visible=false;
+ assert.equal(list().length,0,'WO1: hidden obstacle is excluded from ash collision records');
+});
+
+

@@ -3,26 +3,27 @@ import {resolveAuthoredWaterSampling} from './authored-water-drop.mjs';
 
 // The application lends scene/render services. This feature owns only its water
 // runtime and authored setup; factory disposal must preserve those borrowed services.
-export function createAuthoredWaterFeature({services,emitters,enabledEmitters=emitters,runtimeEmitters=emitters,
+export function createAuthoredWaterFeature({services,emitters,enabledEmitters=emitters,recoveryEmitters=enabledEmitters,runtimeEmitters=emitters,
   visible=()=>true,viewerPaused=()=>null,preview=()=>{},refresh=()=>{},report=()=>{},
   loadHost=()=>import('./authored-water-host.mjs'),
   loadExperiment=async options=>{
    const [{createFiniteFluidHost},{createFluidViewportHost},{createWebGPUFingerFluidSolver}]=await Promise.all([import('./finite-fluid-host.mjs'),import('./fluid-viewport-host.mjs'),import('./finger-fluid-webgpu-core.js')]);
    return createFiniteFluidHost({...options,createSolver:createWebGPUFingerFluidSolver,createPresentation:solver=>createFluidViewportHost({...options,solver})});
   }}) {
- let setup=null,host=null,failure=null,paused=false,generation=0,request=0,admitted=null,pending=null;
+ let setup=null,host=null,failure=null,paused=false,generation=0,request=0,admitted=null,pending=null,recoveryRequested=false;
  const superseded=()=>Error('Water release superseded or scene changed');
  function retire(){
   generation++;request++;pending=null;admitted=null;
   const previous=host;host=null;previous?.dispose();
  }
- async function acquire({replace=false,experiment=null}={}){
+ async function acquire({replace=false,experiment=null,recovery=false}={}){
   if(!setup&&!experiment)return false;
   if(!replace&&host)return true;
   if(!replace&&pending)return pending.promise;
+  if(!experiment)recoveryRequested=true;
   const ticket={generation,request:++request};
   const isCurrent=()=>ticket.generation===generation&&(admitted===ticket||ticket.request===request);
-  const inputs={setup:structuredClone(experiment??setup),emitters:experiment?[]:structuredClone((replace?enabledEmitters:emitters)())};
+  const inputs={setup:structuredClone(experiment??setup),emitters:experiment?[]:structuredClone((recovery?recoveryEmitters:replace?enabledEmitters:emitters)())};
   if(replace&&!experiment&&!inputs.emitters.length)throw Error('Show a water emitter before releasing water');
   const run=async()=>{
    let candidate=null,published=false;
@@ -55,17 +56,24 @@ export function createAuthoredWaterFeature({services,emitters,enabledEmitters=em
  const feature={
   get setup(){return setup;},set setup(value){setup=value;},
   get host(){return host;},get failure(){return failure;},get generation(){return generation;},
-  get paused(){return paused;},
+  get paused(){return paused;},get recoveryRequested(){return recoveryRequested;},
   isLoading:()=>pending!==null,
   async restore(){
    if(!setup)return false;if(host)return true;failure=null;
    if(emitters().some(r=>r.localLiquidEmitter?.mode==='finite_drop')){
     setup=normalizeLocalLiquidSetup({...setup,waterSampling:resolveAuthoredWaterSampling(emitters(),setup)});
-    paused=true;preview(true);refresh();
+    recoveryRequested=false;paused=true;preview(true);refresh();
     report('Initial water preview restored. Place or edit it, then Release water.');return true;
    }
    const mounting=acquire();refresh();const mounted=await mounting;refresh();
    if(mounted)report('Water mounted in the shared scene. The solver restarts from its saved authored setup.');
+   return mounted;
+  },
+  async recover(wasPaused){
+   const ticket=generation;
+   const mounted=await acquire({recovery:true});
+   if(ticket!==generation)return false;
+   if(mounted){paused=Boolean(wasPaused);host.setPaused(paused||!visible());}
    return mounted;
   },
   release:()=>acquire({replace:true}),
@@ -81,8 +89,8 @@ export function createAuthoredWaterFeature({services,emitters,enabledEmitters=em
     }
    }};
   },
-  reset(){retire();paused=true;failure=null;preview(true);},
-  clear(){retire();setup=null;failure=null;paused=false;},
+  reset(){recoveryRequested=false;retire();paused=true;failure=null;preview(true);},
+  clear(){recoveryRequested=false;retire();setup=null;failure=null;paused=false;},
   restart(next){retire();setup=next;failure=null;return generation;},
   fail(error){retire();failure=String(error?.message||error);},
   setPaused(value){paused=Boolean(value);host?.setPaused(paused);return paused;},

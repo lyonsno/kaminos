@@ -12,7 +12,7 @@ function fixture(){
  const adapters={scene:state,roots:{detach:row=>row.object.removeFromParent(),dispose:root=>disposed.push(root),mount:(row,on)=>on?world.add(row.object):row.object.removeFromParent()},
  records:{load:async record=>add(record.id).object,restore:(row,record)=>{row.object.position.x=record.x??0;}},
  groups:{restore:rows=>state.setGroups(rows)},selection:{set:(ids,id)=>state.select(ids,id),object:id=>state.select(id?[id]:[],id??null),group:id=>state.select(['@group:'+id])},
- context:{beforeClear(){events.push(['history',state.objects.length+state.suspendedObjects().length]);},clearDomains(){events.push(['domains',state.generation]);},cleared(){events.push(['cleared',state.objects.length]);}}};
+ context:{beforeClear(){events.push(['history',state.objects.length+state.suspendedObjects().length]);},clearDomains(setup=null){events.push(['domains',state.generation,setup]);},cleared(){events.push(['cleared',state.objects.length]);}}};
  return {state,world,events,disposed,adapters,add,lifecycle:createSceneLifecycle(adapters)};
 }
 test('clear invalidates pending work, retires active or parked roots once, and ends history before disposal',async()=>{
@@ -22,8 +22,17 @@ test('clear invalidates pending work, retires active or parked roots once, and e
   await f.lifecycle.clear();assert.deepEqual(f.disposed,[a.object]);assert.equal(a.object.parent,null);
   assert.equal(f.state.objects.length,0);assert.equal(f.state.suspendedObjects().length,0);assert.equal(f.state.isSuspended,false);
   assert.equal(arrival.isCurrent(),false);assert.equal(f.state.loads.isCurrent(load),false);assert.equal(f.state.generation,before+1);
-  assert.deepEqual(f.events,[['history',1],['domains',before+1],['cleared',0]]);
+  assert.deepEqual(f.events,[['history',1],['domains',before+1,null],['cleared',0]]);
  }
+});
+test('replacement forwards incoming setup to clearDomains so composition state does not flip-flop, while failed replacement clears with null setup',async()=>{
+ const f=fixture(),setup={flame:{present:true,composition:true}};
+ assert.equal(await f.lifecycle.replace([{id:'a'}],{setup}),true);
+ assert.deepEqual(f.events.find(e=>e[0]==='domains'),['domains',1,setup]);
+ f.events.length=0;
+ f.adapters.records.load=async()=>{throw Error('load failed');};
+ await assert.rejects(f.lifecycle.replace([{id:'broken'}],{setup}),/load failed/);
+ assert.deepEqual(f.events.filter(e=>e[0]==='domains'),[['domains',2,setup],['domains',3,null]]);
 });
 test('replacement uses nonactivating typed constructors, restores groups, then selects the saved group',async()=>{
  const f=fixture(),old=f.add('old'),id=f.state.loads.begin();

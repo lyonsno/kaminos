@@ -22,7 +22,7 @@ assert.throws(()=>validateOrdinarySceneDepth({device,camera,texture:{...texture,
 const shell=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const providerBody=shell.match(/ordinarySceneDepthProvider = \(\) => \{([\s\S]*?)\n  };/)[1];
 let sceneRenders=0;
-const provider=new Function('ordinaryDepthEnabled','sharedGpu','camera','syncViewportRendererSize','fireLightFieldPass','frameComposition','renderer','activeSceneDepth',providerBody);
+const provider=new Function('ordinaryDepthEnabled','sharedGpu','camera','syncViewportRendererSize','fireLightFieldPass','frameComposition','renderer','activeSceneDepth',`const deviceRecoveryHeld=()=>false;${providerBody}`);
 const invoke=enabled=>provider(enabled,null,{updateMatrixWorld(){}},()=>{},null,{renderDepth(){sceneRenders++;return true;}},{backend:{get:()=>({texture})}},{getTexture:()=>({})});
 assert.throws(()=>invoke(true),/ordinary-scene-depth-shared-device-unavailable/);
 assert.equal(sceneRenders,0,'unavailable shared device must refuse before rendering scene depth');

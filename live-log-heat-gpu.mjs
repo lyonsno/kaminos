@@ -131,12 +131,12 @@ fn summarize() {
   textureStore(summary,vec2<i32>(0),peak);
 }`;
 
-export async function createLiveLogHeatGpu({renderer,mesh,bounds,disintegrate=false}) {
+export async function createLiveLogHeatGpu({renderer,mesh,bounds,surfaceGeometry=null,surfaceLod=null,disintegrate=false}) {
   const device=renderer.backend.device;
   if(!device?.createComputePipelineAsync)throw Error('Live log requires WebGPU');
   const size=bounds.getSize(new THREE.Vector3());
   if(Math.min(size.x,size.y,size.z)<=0)throw Error('Live log requires volumetric mesh bounds');
-  const surfaceMask=createLogSurfaceMask(mesh.geometry,bounds,LIVE_LOG_GRID,{filled:disintegrate});
+  const surfaceMask=createLogSurfaceMask(surfaceGeometry??mesh.geometry,bounds,LIVE_LOG_GRID,{filled:disintegrate});
   const summaryCellCount=surfaceMask.reduce((a,b)=>a+b,0);
   const owned=[];let disposed=false;
   try {
@@ -205,7 +205,7 @@ export async function createLiveLogHeatGpu({renderer,mesh,bounds,disintegrate=fa
         const group=device.createBindGroup({layout:gasPipeline.getBindGroupLayout(0),entries:[{binding:2,resource:{buffer:buffers[index]}},{binding:4,resource:{buffer:params}},...(!disintegrate?[{binding:5,resource:{buffer:samples}}]:[]),{binding:6,resource:source.collision.createView()},{binding:7,resource:{buffer:target.accumulation}}]});
         const pass=encoder.beginComputePass({label:'wood fuel to exterior fluid'});pass.setPipeline(gasPipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(LIVE_LOG_GRID/4,LIVE_LOG_GRID/4,LIVE_LOG_GRID/4);pass.end();
       },
-      read:()=>({identity:LIVE_LOG_HEAT_IDENTITY,model:disintegrate?'filled-material-finite-residue-v1':LIVE_LOG_THERMAL_MODEL,status:disposed?'disposed':'resident',grid:LIVE_LOG_GRID,generation,steps,referenceSeconds:seconds,lastSource,runtimeReadbacks:0,selfEmission:true,summaryDomain:disintegrate?'occupied-material-voxels':'mesh-intersecting-voxels',summaryCellCount,heatExchange:'outward-open-fluid-faces',conduction:'six-neighbour-local-grid',ignition:'local-temperature-dose',fuel:disintegrate?'finite-volume-gas-plus-residue':'finite-surface-cell-reserve'}),
+      read:()=>({identity:LIVE_LOG_HEAT_IDENTITY,model:disintegrate?'filled-material-finite-residue-v1':LIVE_LOG_THERMAL_MODEL,status:disposed?'disposed':'resident',grid:LIVE_LOG_GRID,generation,steps,referenceSeconds:seconds,lastSource,runtimeReadbacks:0,selfEmission:true,summaryDomain:disintegrate?'occupied-material-voxels':'mesh-intersecting-voxels',summaryCellCount,surfaceLod,heatExchange:'outward-open-fluid-faces',conduction:'six-neighbour-local-grid',ignition:'local-temperature-dose',fuel:disintegrate?'finite-volume-gas-plus-residue':'finite-surface-cell-reserve'}),
       dispose(){if(disposed)return;disposed=true;for(const wrapped of [wrapper,summaryWrapper]){delete renderer.backend.get(wrapped).texture;wrapped.dispose();}for(const resource of owned)resource.destroy();cache=new WeakMap();},
     };
   }catch(error){for(const resource of owned)resource.destroy();throw error;}

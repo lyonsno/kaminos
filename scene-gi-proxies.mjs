@@ -11,7 +11,11 @@ export const DEFAULT_GI_PROXY_SELECTION=Object.freeze({faces:1000});
 const shaOf=source=>{
   if(typeof source!=='string')return null;
   try{const u=new URL(source,'http://kaminos.local');if(u.pathname!=='/api/read'||u.searchParams.get('root')!==GENERATED)return null;
-    const m=/^([a-f0-9]{64})\.glb$/.exec(u.searchParams.get('path')??'');return m?m[1]:null;}catch{return null;}
+    const p=(u.searchParams.get('path')??'').trim();
+    const m=/^([a-f0-9]{64})\.glb$/i.exec(p);if(m)return m[1].toLowerCase();
+    const parts=p.split('/');
+    if(p.toLowerCase().endsWith('.glb')&&parts.every(seg=>/^[A-Za-z0-9._-]+$/.test(seg)&&!seg.startsWith('.')))return p;
+    return null;}catch{return null;}
 };
 const surfelRootIn=root=>{let found=null;root.traverse(o=>{if(!found&&o.isTrellisSurfelRoot)found=o;});return found;};
 const digestHex=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
@@ -56,6 +60,11 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
         if(selection.faces!=null)query.set('faces',String(selection.faces));
         if(selection.maxError!=null){query.set('maxError',String(selection.maxError));query.set('stat',selection.stat??'p95');}
         const set=await fetchJson(`/api/mesh-lods?${query}`);
+        if(typeof set?.source==='string'&&/^[a-f0-9]{64}$/.test(set.source)){
+          if(base.representation==='mesh'){base.assetSha=set.source;base.heroSha=set.source;}
+          else if(base.heroSha){base.heroSha=set.source;}
+          else{base.assetSha=set.source;}
+        }
         const allLevels=set.levels??[];
         const levels=allLevels.filter(l=>!l.mergeFactor&&l.route!=='trellis-surfels+hero-normals').map(l=>({
           sha:l.sha256,faces:l.faces,closed:l.closed??null,
