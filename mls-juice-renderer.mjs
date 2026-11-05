@@ -93,15 +93,21 @@ export async function createMlsJuiceRenderer({device,solver,hostEnvironment=fals
     const group=(pipeline,entries)=>device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:camera}},...entries.map((resource,i)=>({binding:i+1,resource}))]});
     const frontGroup=group(front,[{buffer:solver.particles}]),thicknessGroup=group(thickness,[{buffer:solver.particles}]);
     const texture=format=>{const t=device.createTexture({size:[width,height],format,usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING});resources.push(t);return t;};
-    let depth,depthTest,thick,ping,filtered;
+    let depth,depthTest,thick,ping,filtered,depthView,depthTestView,thickView,pingView,filteredView,smoothGroup0,smoothGroup1;
+    let lastSurfaceKey='',cachedSurfacePassesReused=0;
     return {
       encode({encoder,hostCamera,environment=null,sceneColor,sceneDepth,target,width:fullWidth,height:fullHeight,beforeComposite=null,afterComposite=null}){
         const w=Math.ceil(fullWidth*.7),h=Math.ceil(fullHeight*.7);
         if(w!==width||h!==height){for(const t of resources)t.destroy();resources.length=0;width=w;height=h;
-          depth=texture('r32float');depthTest=texture('depth32float');thick=texture('r16float');ping=texture('r32float');filtered=texture('r32float');}
+          depth=texture('r32float');depthTest=texture('depth32float');thick=texture('r16float');ping=texture('r32float');filtered=texture('r32float');
+          depthView=depth.createView();depthTestView=depthTest.createView();thickView=thick.createView();pingView=ping.createView();filteredView=filtered.createView();
+          smoothGroup0=group(smoothing[0],[depthView]);smoothGroup1=group(smoothing[1],[pingView]);
+          lastSurfaceKey='';}
         const c=solver.config;hostCamera.updateMatrixWorld();
-        device.queue.writeBuffer(camera,0,new Float32Array([...hostCamera.matrixWorldInverse.elements,...hostCamera.projectionMatrix.elements,
-          ...hostCamera.projectionMatrixInverse.elements,...hostCamera.matrixWorld.elements,...c.min,c.cell,width,height,c.particleRadius,hostCamera.far]));
+        const cameraData=new Float32Array([...hostCamera.matrixWorldInverse.elements,...hostCamera.projectionMatrix.elements,
+          ...hostCamera.projectionMatrixInverse.elements,...hostCamera.matrixWorld.elements,...c.min,c.cell,width,height,c.particleRadius,hostCamera.far]);
+        const solverStep=solver.read?.()?.clock?.step??-1;
+        const surfaceKey=solverStep>=0?`${solverStep}:${cameraData.join(',')}`:'';
         function draw(pipeline,bind,view,clearValue,instances=1,test=null){
           const pass=encoder.beginRenderPass({colorAttachments:[{view,clearValue,loadOp:'clear',storeOp:'store'}],...(test?{depthStencilAttachment:{view:test,depthClearValue:1,depthLoadOp:'clear',depthStoreOp:'store'}}:{})});
           pass.setPipeline(pipeline);pass.setBindGroup(0,bind);pass.draw(instances===1?3:6,instances);pass.end();
@@ -111,16 +117,23 @@ export async function createMlsJuiceRenderer({device,solver,hostEnvironment=fals
           const pass=encoder.beginRenderPass({colorAttachments:[{view,clearValue:clear,loadOp:'clear',storeOp:'store'}],...(test?{depthStencilAttachment:{view:test,depthClearValue:1,depthLoadOp:'clear',depthStoreOp:'store'}}:{})});
           pass.setPipeline(pipeline);pass.setBindGroup(0,bind);pass.draw(6,c.capacity);pass.end();
         };
-        particleDraw(front,frontGroup,depth.createView(),{r:hostCamera.far,g:0,b:0,a:0},depthTest.createView());
-        particleDraw(thickness,thicknessGroup,thick.createView(),{r:0,g:0,b:0,a:0});
-        draw(smoothing[0],group(smoothing[0],[depth.createView()]),ping.createView(),{r:hostCamera.far,g:0,b:0,a:0});
-        draw(smoothing[1],group(smoothing[1],[ping.createView()]),filtered.createView(),{r:hostCamera.far,g:0,b:0,a:0});
-        const frontDepthView=filtered.createView();
+        if(!surfaceKey||surfaceKey!==lastSurfaceKey){
+          device.queue.writeBuffer(camera,0,cameraData);
+          particleDraw(front,frontGroup,depthView,{r:hostCamera.far,g:0,b:0,a:0},depthTestView);
+          particleDraw(thickness,thicknessGroup,thickView,{r:0,g:0,b:0,a:0});
+          draw(smoothing[0],smoothGroup0,pingView,{r:hostCamera.far,g:0,b:0,a:0});
+          draw(smoothing[1],smoothGroup1,filteredView,{r:hostCamera.far,g:0,b:0,a:0});
+          lastSurfaceKey=surfaceKey;
+        }else{
+          cachedSurfacePassesReused++;
+        }
+        const frontDepthView=filteredView;
         beforeComposite?.({frontDepthView});
-        draw(compose,group(compose,[frontDepthView,thick.createView(),sceneColor,sceneDepth,...(hostEnvironment?[environment,environmentSampler]:[])]),target,{r:0,g:0,b:0,a:1});
+        draw(compose,group(compose,[frontDepthView,thickView,sceneColor,sceneDepth,...(hostEnvironment?[environment,environmentSampler]:[])]),target,{r:0,g:0,b:0,a:1});
         afterComposite?.({frontDepthView});
       },
       read:()=>({method:'sphere_front_depth_two_pass_bilateral_scene_refraction',renderScale:.7,width,height,
+        cachedSurfacePassesReused,
         environment:hostEnvironment?'host_environment_world_radiance':'analytic_sky_not_host_environment',surfaceTension:false}),
       dispose(){camera.destroy();for(const t of resources)t.destroy();}
     };

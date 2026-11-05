@@ -4,7 +4,7 @@ import {sharedDeviceHostRequirements} from '../authoring-image-generation.mjs';
 import {createRuntimeConfigLoader} from '../runtime-config-once.mjs';
 const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const start = source.indexOf('async function initScene()');
-const setupEnd = source.indexOf('  if (samHostConfig?.mounted) {\n    const { createWebGpuDeviceRequest', start);
+const setupEnd = source.indexOf('  if (samHostConfig?.mounted) {', start);
 assert.ok(start >= 0 && setupEnd > start, 'host bootstrap through shared-device acquisition is present');
 const setup = source.slice(start, setupEnd);
 const AsyncFunction = Object.getPrototypeOf(async function() {}).constructor;
