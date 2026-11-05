@@ -1708,7 +1708,8 @@ export function createSceneBeautyLodController({
           ensureSurfelLevelsLoaded(root, entry, handle);
           continue;
         }
-        if (!handle.levels?.length) {
+        const levels=handle.beautyLevels??handle.levels;
+        if (!levels?.length) {
           if(config.enabled&&handle.state==='resolving')applyDisplayedRung(root,entry);
           else{entry.displayedTier='hero';restoreRootToHero(root,entry);}
           continue;
@@ -1730,7 +1731,7 @@ export function createSceneBeautyLodController({
           entry,
           handle,
           heroFaces: entry.heroFaces,
-          levels: handle.levels,
+          levels,
           instanceBoxes,
           worldDiag: boxDiagonal(instanceBoxes[0]),
           texelStretch: entry.texelStretch,
@@ -1792,7 +1793,7 @@ export function createSceneBeautyLodController({
         } else if (c.entry.rungs.has(targetTier)) {
           c.entry.displayedTier = targetTier;
         } else {
-          const levelObj = c.handle.levels.find(l => (l.sha ?? l.sha256) === targetTier);
+          const levelObj = c.levels.find(l => (l.sha ?? l.sha256) === targetTier);
           if (levelObj) ensureRungLoaded(c.root, c.entry, levelObj);
           // Non-blocking fallback: keep current displayedTier if still valid/resident, else 'hero'
           if (c.entry.displayedTier !== 'hero' && !c.entry.rungs.has(c.entry.displayedTier)) {
@@ -1803,7 +1804,7 @@ export function createSceneBeautyLodController({
         const displayedFaces = c.entry.displayedTier === 'hero'
           ? c.entry.heroFaces
           : (c.entry.rungs.get(c.entry.displayedTier)?.faces ?? c.entry.heroFaces);
-        const displayedLevel=c.entry.displayedTier==='hero'?null:c.handle.levels.find(l=>(l.sha??l.sha256)===c.entry.displayedTier);
+        const displayedLevel=c.entry.displayedTier==='hero'?null:c.levels.find(l=>(l.sha??l.sha256)===c.entry.displayedTier);
         const textureRoot=displayedLevel?c.entry.rungs.get(c.entry.displayedTier)?.root:c.root;
         const catalog=displayedLevel?.textureSet??(displayedLevel?null:c.handle.heroTextureSet);
         if (!displayedLevel && !c.pinned) ensureHeroTextures(c.root,c.entry,c.handle);

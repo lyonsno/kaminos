@@ -9,6 +9,27 @@ does not expose a trustworthy automatic device-memory allowance. A caller may
 set a measured or authored working-set budget without changing the face budget.
 The native Render inspector accepts MiB, with blank meaning unlimited.
 
+Camera rendering also has a surface-preserving intermediate. Default mesh
+preparation adds a 100k-face direct simplification of the stored hero alongside
+the five closed proxy targets. Sources already below that target keep their
+original geometry. The intermediate uses a 2K source-baked material bundle;
+its independent appearance products follow the same texture policy as other
+geometry. Actual face counts, source-relative error and boundary facts are
+recorded. The scene face budget remains a hard allocation limit.
+
+These records carry `purpose:"beauty"`. The default mesh-LOD HTTP catalog and
+choice contain shared levels, preserving older shadow/collision clients.
+An additive `beautyLevels` catalog includes shared and beauty-only geometry for
+the camera controller. Explicit `purpose=beauty` requests select from that
+catalog, including when a route is specified. Shadow, collision and thermal
+consumers continue to use the shared catalog. A closed flag on a beauty record
+does not widen its eligibility.
+
+Existing complete ladders are not silently rebuilt. Offline callers can add
+only the intermediate with `--targets none --beauty-targets 100000` on
+`tools/prepare-lod-tiers.mjs`; `--beauty-targets none` preserves proxy-only
+preparation. Source/target identity makes completed preparation reusable.
+
 `prepareMeshTextureLevels` in `lod-texture-generation.mjs` prepares appearance for
 stored geometry. `prepareGenerationLevels` invokes it after publishing new mesh
 levels by default; `textureLevels:false` requests geometry preparation alone.

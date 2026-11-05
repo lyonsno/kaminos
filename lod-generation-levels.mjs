@@ -17,6 +17,7 @@ import {addNormalMapToGLB, createHeroNormalSampler} from './lod-normal-bake.mjs'
 import {readGLBLocalSurfaceAndMaterials, createGLBMeshMaterialBaker} from './lod-mesh-bake.mjs';
 import {buildSurfelField, mergeSurfelLevel, surfelPositions, sampleSurfelNormals, surfelTriangles, encodeSurfelGLB, readSurfelGLBExtension} from './trellis-surfels.mjs';
 
+export const BEAUTY_TIER_ROUTE = 'trellis-simplify+pairing';
 export const LOW_TIER_ROUTE = 'closed-remesh+projection+trellis-simplify';
 export const SURFEL_TIER_ROUTE = 'trellis-surfels+hero-normals';
 // The references this module measures levels against. Callers gate on it: a build without
@@ -28,13 +29,17 @@ const sha256 = async array => [...new Uint8Array(await crypto.subtle.digest('SHA
 
 export async function prepareGenerationLevels({decode = null, materialFields = null, source, heroGLB = null, surfelGLB = null, surfelSource = null, server = '', fetch = globalThis.fetch,
   THREE, MeshBVH, finish, unwrapMesh, WorkerClass, targets = [25000, 10000, 5000, 1000, 500], surfelFactors = [], textureSizeFor, replace = false, completeMissing = false, normalMaps = true, input = null, route = null,
-  reference = 'hero', textureLevels = true, report = {}, onPhase = () => {}}) {
+  reference = 'hero', textureLevels = true, purpose = null, beautyTargets = null, report = {}, onPhase = () => {}}) {
+  beautyTargets??=purpose===null&&reference==='hero'&&targets.includes(25000)?[100000]:[];
+  const meshRoute=purpose==='beauty'?BEAUTY_TIER_ROUTE:LOW_TIER_ROUTE;
   const fromHeroGLB = !decode;
   const hasSurfelGLB = Boolean(surfelGLB || surfelSource);
   let {vertices, triangles, coordinates: decodeCoordinates} = decode ?? {};
   Object.assign(report, {schema: 'kaminos.lod-tiers-report.v0', source, ...(surfelSource ? {surfelSource} : {}), targets, ...(surfelFactors.length ? {surfelFactors} : {}), tiers: report.tiers ?? []});
   const phase = name => { report.phase = name; onPhase(report); };
   try {
+    if(purpose!==null&&purpose!=='beauty')throw Error('purpose must be beauty when specified');
+    if(purpose==='beauty'&&reference!=='hero')throw Error('beauty levels require a hero reference');
     if (!GENERATION_LEVEL_REFERENCES.includes(reference)) throw Error(`reference must be one of ${GENERATION_LEVEL_REFERENCES.join(', ')}`);
     if (reference === 'raw-decode' && heroGLB) throw Error('a raw-decode reference takes no hero; levels are measured against the decode');
     if (fromHeroGLB && reference !== 'hero') throw Error('decode is required when reference is not hero');
@@ -44,23 +49,40 @@ export async function prepareGenerationLevels({decode = null, materialFields = n
       throw Error('decode.coordinates (Int32Array[N,3]) or surfelGLB/surfelSource are required when surfelFactors are requested');
     report.reference = reference;
     if (!/^[a-f0-9]{64}$/.test(source || '')) throw Error('source must be the sha256 of the stored mesh the levels belong to');
-    if ((!targets.length && !surfelFactors.length) || !targets.every(t => Number.isSafeInteger(t) && t > 0) || !surfelFactors.every(k => Number.isSafeInteger(k) && k > 0))
+    if ((!targets.length && !surfelFactors.length && !beautyTargets.length) || !targets.every(t => Number.isSafeInteger(t) && t > 0) || !beautyTargets.every(t => Number.isSafeInteger(t) && t > 0) || !surfelFactors.every(k => Number.isSafeInteger(k) && k > 0))
       throw Error('at least one target face count or surfel merge factor is required, each a positive integer');
+    const prepareBeauty=async()=>{
+      if(purpose||reference!=='hero'||!beautyTargets.length)return;
+      phase('beauty-tiers');report.beauty={};
+      await prepareGenerationLevels({source,heroGLB,server,fetch,THREE,MeshBVH,finish,unwrapMesh,WorkerClass,
+        targets:beautyTargets,purpose:'beauty',beautyTargets:[],textureSizeFor,replace,completeMissing,normalMaps,
+        textureLevels:false,report:report.beauty,onPhase:()=>onPhase(report)});
+      if(report.beauty.error)throw Error(report.beauty.error.message);
+      report.tiers.push(...report.beauty.tiers);
+    };
+    const prepareAppearance=async()=>{
+      if(textureLevels&&reference==='hero'&&report.tiers.some(t=>typeof t.target==='number')){
+        phase('appearance');report.appearance={};
+        await prepareMeshTextureLevels({source,server,fetch,THREE,MeshBVH,heroGLB,report:report.appearance,onPhase:()=>onPhase(report)});
+        if(report.appearance.error)throw Error(report.appearance.error.message);
+      }
+    };
     if (!fromHeroGLB) report.raw = {vertices: vertices.length / 3, faces: triangles.length / 3};
     // Refuse taken slots before storing anything (unless replacing): the server keeps one level per
     // (faces, route) or (mergeFactor, route), and a tier stored but then refused would linger as an unregistered mesh.
     phase('preflight');
-    const existing = await fetch(`${server}/api/mesh-lods?source=${source}&prepare=client`);
+    const existing = await fetch(`${server}/api/mesh-lods?source=${source}&prepare=client${purpose==='beauty'?'&purpose=beauty':''}`);
     if (!existing.ok) throw Error(`cannot read existing levels (HTTP ${existing.status})`);
     const existingLevels = (await existing.json()).levels;
-    const slotTaken = faces => existingLevels.find(l => l.route === LOW_TIER_ROUTE && l.faces === faces);
+    const slotTaken = faces => existingLevels.find(l => l.route === meshRoute && l.faces === faces);
     const surfelSlotTaken = factor => existingLevels.find(l => l.route === SURFEL_TIER_ROUTE && l.mergeFactor === factor);
     if (completeMissing && !replace) {
       report.requestedTargets = [...targets];
       targets = targets.filter(target => !existingLevels.some(level =>
-        level.route === LOW_TIER_ROUTE && (level.targetFaces ?? level.faces) === target));
+        level.route === meshRoute && (level.targetFaces ?? level.faces) === target));
       surfelFactors = surfelFactors.filter(factor => !surfelSlotTaken(factor));
       if (!targets.length && !surfelFactors.length) {
+        await prepareBeauty();await prepareAppearance();
         phase('done');
         return report;
       }
@@ -84,6 +106,11 @@ export async function prepareGenerationLevels({decode = null, materialFields = n
       triangles = glbSurface.triangles;
       report.raw = {vertices: vertices.length / 3, faces: triangles.length / 3, fromHeroGLB: true};
     }
+    if(purpose==='beauty'){
+      report.skippedTargets=targets.filter(target=>target>=triangles.length/3);
+      targets=targets.filter(target=>target<triangles.length/3);
+      if(!targets.length){phase('done');return report;}
+    }
     const inputDigests = fromHeroGLB ? null : {'vertices.f32': await sha256(vertices), 'triangles.u32': await sha256(triangles)};
     phase('bvh');
     // Closest point plus that face's normal on a surface, through a BVH over it.
@@ -104,7 +131,7 @@ export async function prepareGenerationLevels({decode = null, materialFields = n
     const bakeMaterial = (fromHeroGLB && targets.length) ? createGLBMeshMaterialBaker(glbSurface, {THREE, MeshBVH, bvh: closestSource.bvh}) : undefined;
     phase('tiers');
     const started = performance.now();
-    const tiers = targets.length ? await prepareLowTiers({mesh: {vertices, triangles}, materialFields, bakeMaterial, targets, closestPoint, finish, unwrapMesh, WorkerClass,
+    const tiers = targets.length ? await prepareLowTiers({mesh: {vertices, triangles}, materialFields, bakeMaterial, targets, purpose, closestPoint, finish, unwrapMesh, WorkerClass,
       ...(textureSizeFor ? {textureSizeFor} : {}),
       measure: fromHeroGLB ? null : {closestSource, closestFor, reference: {kind: 'raw-decode', input, digests: inputDigests, faces: triangles.length / 3}},
       provenance: {input: input ?? (fromHeroGLB ? `glb:${source}` : null), route: route ?? (fromHeroGLB ? 'glb-mesh-bake' : null)}}) : [];
@@ -212,6 +239,7 @@ export async function prepareGenerationLevels({decode = null, materialFields = n
       if (!ingest.ok) { report.failedTier = tier.target; throw Error(`ingest failed for ${tier.target} (HTTP ${ingest.status}): ${JSON.stringify(stored)}`); }
       if (stored.sha256 !== digest) { report.failedTier = tier.target; throw Error(`ingest receipt for ${tier.target} does not name the stored bytes ${digest}: ${JSON.stringify(stored).slice(0, 300)}`); }
       let level = {sha256: digest, faces: tier.faces, ...(typeof tier.target === 'number' ? {targetFaces: tier.target} : {}), route: tier.route,
+        ...(tier.purpose?{purpose:tier.purpose}:{}),
         ...(tier.textureSize !== undefined ? {textureSize: tier.textureSize} : {}),
         ...(tier.mergeFactor !== undefined ? {mergeFactor: tier.mergeFactor, resolution: tier.resolution, representation: tier.representation} : {}),
         ...(tier.closed !== undefined ? {closed: tier.closed} : {}),
@@ -235,12 +263,8 @@ export async function prepareGenerationLevels({decode = null, materialFields = n
         throw Error(`registration receipt for ${tier.target} does not name level ${digest} of ${source}: ${JSON.stringify(registered).slice(0, 300)}`); }
       report.tiers.push({target: tier.target, ...level, bytes: tier.glb.byteLength, timing: tier.timing}); onPhase(report);
     }
-    if (textureLevels && reference === 'hero' && tiers.some(t=>typeof t.target==='number')) {
-      phase('appearance');
-      report.appearance={};
-      await prepareMeshTextureLevels({source,server,fetch,THREE,MeshBVH,heroGLB,report:report.appearance,onPhase:()=>onPhase(report)});
-      if(report.appearance.error)throw Error(report.appearance.error.message);
-    }
+    await prepareBeauty();
+    await prepareAppearance();
     phase('done');
   } catch (error) {
     report.error = {message: error.message, stack: error.stack};
