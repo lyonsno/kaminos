@@ -81,6 +81,7 @@ export function sceneContext(context, options) {
   context.selectedFlameControlEntry??=()=>context.selectedSceneObjectEntry?.()??(context.workingScene?.activeObjectId?{id:context.workingScene.activeObjectId,type:'flame-emitter'}:null);
   context.sceneLightingPreparation ??= null;
   context.sceneGeometryPreview ??= null;
+  context.sceneArrivalState ??= {coarsePresented:false};
   context.activeSceneStandIns ??= new Map();context.coarseSceneGroups ??= [];
   // These domain fixtures do not download assets. Preparation and resource
   // lifetime are exercised by the real pool/lifecycle tests and native scene.

@@ -12906,7 +12906,15 @@ function createPageSceneLifecycle(){
     groups:{restore:setSceneGroupsFromRecords},
     selection:{set:setSceneSelection,object:setActiveSceneObject,group:setActiveSceneGroup},
     context:{retire:retireSceneFlame,beforeClear:clearSceneEditingState,clearDomains:clearSceneDomains,clearTransient:clearSceneTransient,cleared:projectClearedScene,
-      beginLoad:setup=>{waterFeature.setup=setup.water;activeSceneComposition=setup.flame.composition;authoredFlamePresent=setup.flame.sourcePresent;volumePrototype?.setSceneCompositionPresentation?.(Boolean(activeSceneComposition));},beforeLoad:(record,requestId)=>record.type===ASH_OBJECT_TYPE?sceneGeometryPreview?.present(requestId):undefined,loaded:async(setup,requestId)=>{await sceneGeometryPreview?.present(requestId);if(setup.water)await mountLocalLiquidHost();for(const entry of workingScene.objects)if(entry.type===ASH_OBJECT_TYPE){if(typeof sceneColliderCollection!=='undefined')await sceneColliderCollection.prepare?.(workingScene.objects,{...(typeof currentColliderLodOptions==='function'?currentColliderLodOptions():{}),ashCellSize:entry.ash?.cellSize??0.04});await authoredAsh.get(entry.id).initialize();}},
+      beginLoad:setup=>{waterFeature.setup=setup.water;activeSceneComposition=setup.flame.composition;authoredFlamePresent=setup.flame.sourcePresent;volumePrototype?.setSceneCompositionPresentation?.(Boolean(activeSceneComposition));},beforeLoad:(record,requestId)=>record.type===ASH_OBJECT_TYPE?sceneGeometryPreview?.present(requestId):undefined,
+      loaded:async(setup,requestId)=>{
+        const waitingForDomains=setup.water||setup.flame.sourcePresent||workingScene.objects.some(entry=>entry.type===ASH_OBJECT_TYPE);
+        // Static scenes already have a textured coarse frame. A later neutral
+        // preview would erase those materials without buying any domain progress.
+        if(!sceneArrivalState.coarsePresented||waitingForDomains)await sceneGeometryPreview?.present(requestId);
+        if(setup.water)await mountLocalLiquidHost();
+        for(const entry of workingScene.objects)if(entry.type===ASH_OBJECT_TYPE){if(typeof sceneColliderCollection!=='undefined')await sceneColliderCollection.prepare?.(workingScene.objects,{...(typeof currentColliderLodOptions==='function'?currentColliderLodOptions():{}),ashCellSize:entry.ash?.cellSize??0.04});await authoredAsh.get(entry.id).initialize();}
+      },
       capturePreview:()=>({flamePresent:flameFeature.present,flameRoute:Object.fromEntries([...fireLightFieldRouteParams(),...Object.entries(fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()))]),activeSceneFieldId:workingScene.activeFieldId,documentSession:sceneDocument.snapshot(),volumePrimitives:getVolumePrimitiveState(),modelSourceUrl,modelSourceType,glbFileName}),
       previewDetached(){
         currentMesh=null;setVolumePrimitivesState({schema:VOLUME_PRIMITIVE_SCHEMA,primitives:[]});

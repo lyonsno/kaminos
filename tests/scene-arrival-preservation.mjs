@@ -35,3 +35,14 @@ test('coarse and replacement roots obey saved object/group visibility',async()=>
  c.workingScene.groups=groups;c.clearSceneLowLodStandIns(1);
  assert.deepEqual(draw(),{hidden:false,grouped:false,visible:true});
 });
+
+test('static coarse arrival never regresses to neutral gray; domain waits retain their fallback',async()=>{
+ for(const [coarsePresented,domain,expected]of [[true,null,[]],[false,null,['gray']],[true,'water',['gray','water']],[true,'ash',['gray','ash']],[true,'flame',['gray']]]){
+  const calls=[],rows=domain==='ash'?[{id:'ash',type:'retained-ash',ash:{}}]:[];
+  const c={createSceneLifecycle:x=>x,workingScene:{objects:rows},scene:{},disposeObjectTree(){},setSceneObjectMounted(){},prepareSavedSceneAssets(){},addSceneObjectFromSource(){},restoreLoadedSceneRecord(){},setSceneGroupsFromRecords(){},setSceneSelection(){},setActiveSceneObject(){},setActiveSceneGroup(){},retireSceneFlame(){},clearSceneEditingState(){},clearSceneDomains(){},clearSceneTransient(){},projectClearedScene(){},sceneArrivalState:{coarsePresented},sceneGeometryPreview:{present:async()=>calls.push('gray')},mountLocalLiquidHost:async()=>calls.push('water'),ASH_OBJECT_TYPE:'retained-ash',authoredAsh:new Map([['ash',{initialize:async()=>calls.push('ash')}]]),sceneColliderCollection:{}};
+  vm.createContext(c);vm.runInContext(section('function createPageSceneLifecycle(', 'function loadTexture(').replace('const sceneLifecycle=createPageSceneLifecycle();',''),c);
+  const setup={water:domain==='water'?{}:null,flame:{sourcePresent:domain==='flame'}};
+  await c.createPageSceneLifecycle().context.loaded(setup,1);
+  assert.deepEqual(calls,expected,JSON.stringify({coarsePresented,domain}));
+ }
+});
