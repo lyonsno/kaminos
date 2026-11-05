@@ -71,7 +71,7 @@ test('a failure leaves the report at its phase with the error, and nothing is st
 });
 
 // Review M1/N1/N2: publication counts only with receipts that name what was stored and registered.
-async function publishWith({ingest, register, targets = [200], existingLevels = [], completeMissing = false}) {
+async function publishWith({ingest, register, targets = [200], existingLevels = [], completeMissing = false, replace = false}) {
   const THREE = await import('three'), {MeshBVH} = await import('three-mesh-bvh'), {prepareGenerationLevels} = await import('../lod-generation-levels.mjs');
   const {finishTrellisMesh} = await import('../models/trellis2/trellis-material.js');
   const {createWasmXatlasUnwrapper} = await import('../models/trellis2/wasm-xatlas.js');
@@ -88,7 +88,7 @@ async function publishWith({ingest, register, targets = [200], existingLevels = 
   };
   const report = await prepareGenerationLevels({decode: {vertices: new Float32Array([0,0,0, 1,0,0, 0,1,0]), triangles: new Uint32Array([0,1,2])},
     materialFields: {features: new Float32Array(features), coordinates: new Int32Array(coordinates), resolution: 4}, source: 'a'.repeat(64), heroGLB: heroGLB(), fetch,
-    THREE, MeshBVH, finish: finishTrellisMesh, unwrapMesh: createWasmXatlasUnwrapper(), WorkerClass: NodeTrellisUVWorker, targets, completeMissing});
+    THREE, MeshBVH, finish: finishTrellisMesh, unwrapMesh: createWasmXatlasUnwrapper(), WorkerClass: NodeTrellisUVWorker, targets, completeMissing, replace});
   return {report, calls};
 }
 const html = () => new Response('<html>fallback</html>', {status: 200, headers: {'Content-Type': 'text/html'}});
@@ -104,6 +104,17 @@ test('automatic completion fills missing targets while retaining already publish
   const complete = await publishWith({ingest:goodIngest, register:goodRegister, targets:[1000], existingLevels, completeMissing:true});
   assert.equal(complete.report.phase,'done');
   assert.equal(complete.calls.some(call=>call.startsWith('POST')),false);
+});
+
+test('rebaking identical bytes preserves legacy immutable registration metadata',async()=>{
+  const first=await publishWith({ingest:goodIngest,register:goodRegister});
+  const {target,bytes,timing,targetFaces,...legacy}=first.report.tiers[0];
+  const repeat=await publishWith({ingest:goodIngest,existingLevels:[legacy],replace:true,
+    register:(body,json)=>{
+      assert.deepEqual(body.level,legacy,'same stored bytes retain their original immutable record');
+      return goodRegister(body,json);
+    }});
+  assert.equal(repeat.report.phase,'done',repeat.report.error?.message);
 });
 
 test('review M1: an ingest success without a receipt naming the stored bytes is not publication', async () => {

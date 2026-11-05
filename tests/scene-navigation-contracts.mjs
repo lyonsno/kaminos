@@ -89,6 +89,24 @@ test('new repetition meshes reuse their shared navigation tree and release it on
  await invalidateNavigationGeometry(first);
  assert.equal(repeated.raycast===THREE.Mesh.prototype.raycast,true,'invalidating shared geometry restores every borrowed instance');
 });
+test('shared geometry indexes track burn-coordinate and vertex-warp revisions',async()=>{
+ const c=cameraAt(),target=new THREE.Vector3();
+ const mesh=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshBasicMaterial());
+ await prepareNavigationGeometry(mesh);
+ const before=mesh.geometry.boundsTree;
+ mesh.geometry.translate(-3,0,0);
+ mesh.position.x=3;
+ await prepareNavigationGeometry(mesh);
+ assert.equal(mesh.geometry.boundsTree===before,false,'burn-coordinate conversion rebuilds the old tree');
+ assert.equal(navigationPivot(c,target,new THREE.Vector2(),[mesh]).source,'mesh-surface');
+ const burnTree=mesh.geometry.boundsTree;
+ mesh.geometry.translate(4,0,0);
+ c.position.x=4;c.lookAt(4,0,0);c.updateMatrixWorld(true);
+ navigationPivot(c,target,new THREE.Vector2(),[mesh]);
+ await prepareNavigationGeometry(mesh);
+ assert.equal(mesh.geometry.boundsTree===burnTree,false,'a query rejects an index from before a vertex warp');
+ assert.equal(navigationPivot(c,new THREE.Vector3(4,0,0),new THREE.Vector2(),[mesh]).source,'mesh-surface');
+});
 test('a winding edit invalidates the old surface index before rebuilding',async()=>{
  const c=cameraAt(),target=new THREE.Vector3(),mesh=new THREE.Mesh(new THREE.PlaneGeometry(2,2),new THREE.MeshBasicMaterial());
  await prepareNavigationGeometry(mesh);
