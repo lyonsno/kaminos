@@ -10,7 +10,7 @@ import * as THREE from '../lib/three.core.js';
 const page=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const a=page.indexOf('async function loadSceneObjects('),b=page.indexOf('\nfunction writeAuthoredCameraView',a);
 assert.ok(a>=0&&b>a);
-function fixture(compile=async()=>{}, {fire=false,match=false}={}){
+function fixture(compile=async()=>{}, {fire=false,match=false,coarse=false}={}){
  const scene=createWorkingScene(),events=[];let preparedSetup;const prepared={};
  const lifecycle=createSceneLifecycle({scene,roots:{detach(){},dispose(){}},
   records:{prepare:async(_rows,_id,setup)=>{preparedSetup=setup;return prepared;},load:async(record,_id,batch)=>{assert.equal(batch,prepared);events.push('construct:'+record.id);const object=new THREE.Group();scene.put({...record,object});return object;},restore(){}},
@@ -19,6 +19,7 @@ function fixture(compile=async()=>{}, {fire=false,match=false}={}){
  });
  const context=vm.createContext({sceneLifecycle:lifecycle,activeSceneComposition:null,authoredFlamePresent:fire,
   ASH_OBJECT_TYPE:'retained-ash',ASH_SOURCE_TYPE:'ash-source',sceneLoadRequests:scene.loads,
+  sceneArrivalState:{coarsePresented:coarse},
   sceneGeometryPreview:{present:async()=>events.push('neutral'),presentLighting:async()=>{events.push('lit');return true;}},
   sceneLightingPreparation:{request:async()=>{events.push('compile');await compile();}},
   viewportDisplay:{hiddenIds:[]},sceneVisibilityContext:()=>({objects:scene.objects,groups:scene.groups}),itemVisible:()=>true,
@@ -39,6 +40,20 @@ test('saved fire-camera matching keeps useful neutral geometry while lighting se
  const f=fixture(async()=>{}, {fire:true,match:true}),id=f.scene.loads.begin();
  assert.equal(await f.load([{id:'mesh'},{id:'ash',type:'retained-ash'}],null,[],null,null,id,null,()=>f.events.push('saved lighting')),true);
  assert.deepEqual(f.events,['construct:mesh','neutral','saved lighting','status:Scene lighting restored · geometry preview · restoring ash, fire and water…','construct:ash','water/ash initialization']);
+});
+test('static scenes preserve their textured coarse frame until saved lighting can replace it',async()=>{
+ const f=fixture(async()=>{}, {coarse:true}),id=f.scene.loads.begin();
+ assert.equal(await f.load([{id:'mesh',type:'glb'}],null,[],null,null,id,null,()=>f.events.push('saved lighting')),true);
+ assert.deepEqual(f.events,['construct:mesh','saved lighting','compile','lit','water/ash initialization']);
+});
+test('domain restores keep the readable fallback even when a coarse frame was submitted',async()=>{
+ for(const route of [{fire:true,match:true},{water:{kind:'water'}},{ash:true}]){
+  const f=fixture(async()=>{}, {...route,coarse:true}),id=f.scene.loads.begin();
+  const rows=[{id:'mesh',type:'glb'},...(route.ash?[{id:'ash',type:'retained-ash'}]:[])];
+  assert.equal(await f.load(rows,null,[],null,route.water??null,id,null,()=>f.events.push('saved lighting')),true);
+  assert.equal(f.events.filter(x=>x==='neutral').length,1);
+  assert.ok(f.events.indexOf('neutral')<f.events.indexOf('saved lighting'));
+ }
 });
 test('fire scenes with an ordinary camera can present ordinary lighting before the deferred producers',async()=>{
  const f=fixture(async()=>{}, {fire:true,match:false}),id=f.scene.loads.begin();
