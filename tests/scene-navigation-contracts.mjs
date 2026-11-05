@@ -79,6 +79,16 @@ test('prepared dense geometry keeps exact surface depth without changing the ren
  near(actual.point,expected.point);
  assert.equal(actual.source,'mesh-surface');
 });
+test('new repetition meshes reuse their shared navigation tree and release it on invalidation',async()=>{
+ const c=cameraAt(),target=new THREE.Vector3();
+ const first=new THREE.Mesh(new THREE.PlaneGeometry(2,2),new THREE.MeshBasicMaterial());
+ await prepareNavigationGeometry(first);
+ const repeated=new THREE.Mesh(first.geometry,first.material);
+ navigationPivot(c,target,new THREE.Vector2(),[repeated]);
+ assert.equal(repeated.raycast===first.raycast,true,'new mesh instances bind the existing geometry index');
+ await invalidateNavigationGeometry(first);
+ assert.equal(repeated.raycast===THREE.Mesh.prototype.raycast,true,'invalidating shared geometry restores every borrowed instance');
+});
 test('a winding edit invalidates the old surface index before rebuilding',async()=>{
  const c=cameraAt(),target=new THREE.Vector3(),mesh=new THREE.Mesh(new THREE.PlaneGeometry(2,2),new THREE.MeshBasicMaterial());
  await prepareNavigationGeometry(mesh);

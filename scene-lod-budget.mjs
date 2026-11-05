@@ -1387,7 +1387,7 @@ export function createSceneBeautyLodController({
         }
         entry.rungs.set(sha,createResidentRung(entry,level,rungRoot));
         rungRoot = collisionRoot = null;
-        onRungLoaded?.(root);
+        onRungLoaded?.(root, entry.rungs.get(sha).root);
         onUpdate?.();
       } catch {
         if (rungRoot) disposeTree(rungRoot);
