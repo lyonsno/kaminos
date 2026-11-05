@@ -6,6 +6,7 @@ recurrent/KV cache resets on every transition, and writes a durable JSON report 
 fail-first false-closure guards.
 """
 import argparse
+import contextlib
 import hashlib
 import json
 import re
@@ -16,7 +17,19 @@ from importlib.metadata import version
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from mlx_switchable_adapter import (
+    DEFAULT_BFL_RANK_DOWNSHIFT_SCHEDULE,
+    MLXSwitchableDeltaController as _RealMLXSwitchableDeltaController,
+)
+
 SAMPLING = dict(temperature=0.0, top_p=0.95, top_k=20, min_p=0.0, max_tokens=1024)
+DEFAULT_MODES: List[Dict[str, Any]] = [
+    {"name": "off", "enabled": False, "rank": 0},
+    {"name": "on_r64", "enabled": True, "rank": 64},
+    {"name": "on_r128", "enabled": True, "rank": 128},
+    {"name": "on_r256", "enabled": True, "rank": 256},
+    dict(DEFAULT_BFL_RANK_DOWNSHIFT_SCHEDULE),
+]
 SCAFFOLD = (
     "Reference images follow in order (the first image, the second image, ...).\n"
     "User request: {instruction}\n"
@@ -475,6 +488,8 @@ def run_switchable_evaluation(
         allow_bfl_residual_approx = _require_bool(allow_bfl_residual_approx, "allow_bfl_residual_approx")
         allow_partial_adapter = _require_bool(allow_partial_adapter, "allow_partial_adapter")
         report["allow_bfl_residual_approx"] = allow_bfl_residual_approx
+        if modes is None:
+            modes = [dict(m) for m in DEFAULT_MODES]
         if not isinstance(modes, list) or len(modes) == 0:
             raise ValueError("modes must be a non-empty list of mode specifications")
         for idx, m_spec in enumerate(modes):
@@ -639,8 +654,14 @@ def run_switchable_evaluation(
             except Exception:
                 prepare_inputs_fn = None
 
-        vision_feature_cache: Dict[Any, Any] = {}
-        prepared_inputs_cache: Dict[Any, Dict[str, Any]] = {}
+        if not hasattr(controller, "_mx"):
+            controller._mx = mx
+        if not hasattr(controller, "model"):
+            controller.model = model
+        if not hasattr(controller, "_vision_feature_cache"):
+            controller._vision_feature_cache = {}
+        if not hasattr(controller, "_prepared_inputs_cache"):
+            controller._prepared_inputs_cache = {}
 
         tokenizer = processor.tokenizer
         stop_ids = [tokenizer.convert_tokens_to_ids(t) for t in ("<|im_end|>", "<|endoftext|>")]
@@ -730,80 +751,34 @@ def run_switchable_evaluation(
                     messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
                 )
 
-                prep: Optional[Dict[str, Any]] = None
-                vision_cache_hit: Optional[bool] = None
-                vision_encode_ms: Optional[float] = None
-                extra_stream_kwargs: Dict[str, Any] = {}
-
-                can_use_vision_cache = (
-                    bool(images)
-                    and bool(getattr(controller, "vision_tower_invariant", False))
-                    and getattr(model, "vision_tower", None) is not None
-                    and callable(prepare_inputs_fn)
-                )
-                if can_use_vision_cache:
-                    img_cache_key = tuple(
-                        (
-                            str(p),
-                            hashlib.sha256(Path(p).read_bytes()).hexdigest() if Path(p).is_file() else "",
-                        )
-                        for p in images
+                prep_fn = getattr(controller, "prepare_multimodal_inputs", None)
+                if callable(prep_fn):
+                    mm_prep = prep_fn(
+                        processor=processor,
+                        formatted_prompt=formatted,
+                        images=images,
+                        prepare_inputs_fn=prepare_inputs_fn,
+                        force_prepare=bool(has_split and split_point == "before_last_prompt_token"),
                     )
-                    prep_key = (img_cache_key, formatted)
-                    if prep_key in prepared_inputs_cache:
-                        prep = prepared_inputs_cache[prep_key]
-                    else:
-                        prep = prepare_inputs_fn(
-                            processor,
-                            images=images,
-                            prompts=formatted,
-                            image_token_index=getattr(getattr(model, "config", None), "image_token_index", None),
-                        )
-                        prepared_inputs_cache[prep_key] = prep
-
-                    if img_cache_key in vision_feature_cache:
-                        cached_img_features = vision_feature_cache[img_cache_key]
-                        vision_cache_hit = True
-                        vision_encode_ms = 0.0
-                    else:
-                        vt_t0 = time.monotonic()
-                        vt_dtype = model.vision_tower.patch_embed.proj.weight.dtype
-                        pv_cast = prep["pixel_values"].astype(vt_dtype)
-                        if hasattr(mx, "eval"):
-                            mx.eval(pv_cast)
-                        vt_out = model.vision_tower(pv_cast, prep.get("image_grid_thw"))
-                        cached_img_features = vt_out[0] if isinstance(vt_out, (tuple, list)) else vt_out
-                        if hasattr(mx, "eval"):
-                            mx.eval(cached_img_features)
-                        vision_encode_ms = round((time.monotonic() - vt_t0) * 1000.0, 3)
-                        vision_feature_cache[img_cache_key] = cached_img_features
-                        vision_cache_hit = False
-
-                    extra_stream_kwargs["input_ids"] = prep.get("input_ids")
-                    extra_stream_kwargs["pixel_values"] = prep.get("pixel_values")
-                    extra_stream_kwargs["mask"] = prep.get("attention_mask")
-                    extra_stream_kwargs["image_grid_thw"] = prep.get("image_grid_thw")
-                    extra_stream_kwargs["cached_image_features"] = cached_img_features
-                elif has_split and split_point == "before_last_prompt_token" and callable(prepare_inputs_fn):
-                    prep = prepare_inputs_fn(
-                        processor,
-                        images=images or None,
-                        prompts=formatted,
-                        image_token_index=getattr(getattr(model, "config", None), "image_token_index", None),
+                else:
+                    mm_prep = _RealMLXSwitchableDeltaController.prepare_multimodal_inputs(
+                        controller,
+                        processor=processor,
+                        formatted_prompt=formatted,
+                        images=images,
+                        prepare_inputs_fn=prepare_inputs_fn,
+                        force_prepare=bool(has_split and split_point == "before_last_prompt_token"),
                     )
-                    extra_stream_kwargs["input_ids"] = prep.get("input_ids")
-                    if prep.get("pixel_values") is not None:
-                        extra_stream_kwargs["pixel_values"] = prep.get("pixel_values")
-                    if prep.get("attention_mask") is not None:
-                        extra_stream_kwargs["mask"] = prep.get("attention_mask")
-                    if prep.get("image_grid_thw") is not None:
-                        extra_stream_kwargs["image_grid_thw"] = prep.get("image_grid_thw")
+                prep = mm_prep["prep"]
+                extra_stream_kwargs = mm_prep["extra_stream_kwargs"]
+                vision_cache_hit = mm_prep["vision_cache_hit"]
+                vision_encode_ms = mm_prep["vision_encode_ms"]
+                can_use_vision_cache = mm_prep["used_vision_cache"]
 
                 split_swap_ms: Optional[float] = None
                 split_swapped_done = False
                 active_sw_res = sw_res
                 lm_obj = getattr(model, "language_model", None)
-                orig_lm_cls = type(lm_obj) if lm_obj is not None else None
 
                 if has_split:
                     if split_point == "before_last_prompt_token":
@@ -818,89 +793,81 @@ def run_switchable_evaluation(
                                 f"Split mode {mode_name!r} ('before_last_prompt_token') requires at least 2 prompt tokens, "
                                 f"got {n_prompt_toks}"
                             )
-                    if lm_obj is None or orig_lm_cls is None:
+                    if lm_obj is None:
                         raise RuntimeError(f"Split mode {mode_name!r} requires model.language_model to be present")
 
-                    class _SplitLanguageModel(orig_lm_cls):
-                        def __call__(self, *lm_args: Any, **lm_kwargs: Any) -> Any:
-                            nonlocal split_swap_ms, split_swapped_done, active_sw_res
-                            if not split_swapped_done:
-                                ie = lm_kwargs.get("inputs_embeds")
-                                is_last_prompt_step = (ie is not None) and ("n_to_process" not in lm_kwargs)
-                                is_first_decode_step = ie is None
-                                if split_point == "before_last_prompt_token" and is_last_prompt_step:
-                                    cache_list = lm_kwargs.get("cache") or []
-                                    if hasattr(mx, "eval"):
-                                        states = [
-                                            c.state
-                                            for c in cache_list
-                                            if hasattr(c, "state") and getattr(c, "state") is not None
-                                        ]
-                                        if states:
-                                            mx.eval(*states)
-                                    t_sp = time.monotonic()
-                                    active_sw_res = controller.set_mode(enabled=enabled, rank=rank, preserve_cache=True)
-                                    split_swap_ms = round((time.monotonic() - t_sp) * 1000.0, 3)
-                                    split_swapped_done = True
-                                elif split_point == "after_token_1" and is_first_decode_step:
-                                    cache_list = lm_kwargs.get("cache") or []
-                                    if hasattr(mx, "eval"):
-                                        eval_targets = list(lm_args[:1]) + [
-                                            c.state
-                                            for c in cache_list
-                                            if hasattr(c, "state") and getattr(c, "state") is not None
-                                        ]
-                                        if eval_targets:
-                                            mx.eval(*eval_targets)
-                                    t_sp = time.monotonic()
-                                    active_sw_res = controller.set_mode(enabled=enabled, rank=rank, preserve_cache=True)
-                                    split_swap_ms = round((time.monotonic() - t_sp) * 1000.0, 3)
-                                    split_swapped_done = True
-                            return orig_lm_cls.__call__(self, *lm_args, **lm_kwargs)
-
-                    lm_obj.__class__ = _SplitLanguageModel
+                split_ctx_fn = getattr(controller, "split_generation_context", None)
+                split_cm = (
+                    (
+                        split_ctx_fn(
+                            enabled=enabled,
+                            rank=rank,
+                            split_point=split_point or "before_last_prompt_token",
+                            initial_sw_res=sw_res,
+                        )
+                        if callable(split_ctx_fn)
+                        else _RealMLXSwitchableDeltaController.split_generation_context(
+                            controller,
+                            enabled=enabled,
+                            rank=rank,
+                            split_point=split_point or "before_last_prompt_token",
+                            initial_sw_res=sw_res,
+                        )
+                    )
+                    if has_split
+                    else contextlib.nullcontext(
+                        {"swapped": False, "swap_ms": None, "active_sw_res": sw_res}
+                    )
+                )
 
                 gen_t0 = time.monotonic()
                 last_progress_write = 0.0
                 text_out = ""
                 final_chunk = None
                 try:
-                    for chunk in stream_generate(
-                        model,
-                        processor,
-                        formatted,
-                        image=None if can_use_vision_cache else (images or None),
-                        **sampling,
-                        logits_processors=logits_procs,
-                        **extra_stream_kwargs,
-                    ):
-                        text_out += chunk.text
-                        final_chunk = chunk
-                        now_m = time.monotonic()
-                        if last_progress_write == 0.0 or (now_m - last_progress_write) >= 0.5:
-                            report["current_stream_progress"] = {
-                                "mode": mode_name,
-                                "case_id": case_id,
-                                "elapsed_case_seconds": round(now_m - gen_t0, 3),
-                                "prompt_tokens": int(getattr(chunk, "prompt_tokens", 0) or 0),
-                                "generated_tokens": int(getattr(chunk, "generation_tokens", 0) or 0),
-                                "prompt_tps": round(float(getattr(chunk, "prompt_tps", 0.0) or 0.0), 2),
-                                "generation_tps": round(float(getattr(chunk, "generation_tps", 0.0) or 0.0), 2),
-                                "peak_memory_gb": (
-                                    round(float(chunk.peak_memory), 4)
-                                    if getattr(chunk, "peak_memory", None)
-                                    else None
-                                ),
-                                "partial_output": text_out,
-                            }
-                            _atomic_write_json(report_path, report)
-                            last_progress_write = now_m
+                    with split_cm as split_state:
+                        for chunk in stream_generate(
+                            model,
+                            processor,
+                            formatted,
+                            image=None if can_use_vision_cache else (images or None),
+                            **sampling,
+                            logits_processors=logits_procs,
+                            **extra_stream_kwargs,
+                        ):
+                            text_out += chunk.text
+                            final_chunk = chunk
+                            now_m = time.monotonic()
+                            if last_progress_write == 0.0 or (now_m - last_progress_write) >= 0.5:
+                                report["current_stream_progress"] = {
+                                    "mode": mode_name,
+                                    "case_id": case_id,
+                                    "elapsed_case_seconds": round(now_m - gen_t0, 3),
+                                    "prompt_tokens": int(getattr(chunk, "prompt_tokens", 0) or 0),
+                                    "generated_tokens": int(getattr(chunk, "generation_tokens", 0) or 0),
+                                    "prompt_tps": round(float(getattr(chunk, "prompt_tps", 0.0) or 0.0), 2),
+                                    "generation_tps": round(float(getattr(chunk, "generation_tps", 0.0) or 0.0), 2),
+                                    "peak_memory_gb": (
+                                        round(float(chunk.peak_memory), 4)
+                                        if getattr(chunk, "peak_memory", None)
+                                        else None
+                                    ),
+                                    "partial_output": text_out,
+                                }
+                                _atomic_write_json(report_path, report)
+                                last_progress_write = now_m
+                        active_sw_res = split_state["active_sw_res"]
+                        split_swap_ms = split_state["swap_ms"]
+                        split_swapped_done = bool(split_state["swapped"])
                     if has_split and not split_swapped_done:
                         raise RuntimeError(
                             f"Split mode {mode_name!r} ({split_point}) failed to execute adapter transition "
                             f"during generation for case {case_id!r}"
                         )
                 except BaseException as stream_exc:
+                    if has_split and "split_state" in locals() and isinstance(split_state, dict):
+                        active_sw_res = split_state.get("active_sw_res", active_sw_res)
+                        split_swap_ms = split_state.get("swap_ms", split_swap_ms)
                     gen_s = round(time.monotonic() - gen_t0, 4)
                     failed_obs = {
                         "mode": mode_name,
@@ -947,8 +914,6 @@ def run_switchable_evaluation(
                     _atomic_write_json(report_path, report)
                     raise
                 finally:
-                    if lm_obj is not None and orig_lm_cls is not None:
-                        lm_obj.__class__ = orig_lm_cls
                     if hasattr(mx, "clear_cache"):
                         mx.clear_cache()
 
@@ -1051,7 +1016,7 @@ def main() -> int:
             raise ValueError("Evaluation config root must be a JSON object")
         model_dir = Path(cfg["model_dir"])
         adapter_dir = Path(cfg["adapter_dir"])
-        modes = cfg["modes"]
+        modes = cfg.get("modes")
         cases = cfg["cases"]
         base_role = str(cfg.get("base_role", "qwen"))
         allow_bfl_residual_approx = _require_bool(

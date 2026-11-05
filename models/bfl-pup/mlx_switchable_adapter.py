@@ -17,10 +17,21 @@ Exploratory diagnostic mode (requires explicit `allow_bfl_residual_approx=True`)
 Works transparently on 4-bit `nn.QuantizedLinear` and `nn.QuantizedEmbedding` as well as
 unquantized `nn.Linear` and `nn.Embedding` without dequantizing or mutating base 2D weights.
 """
+import contextlib
 import hashlib
 import json
+import time
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
+
+DEFAULT_BFL_RANK_DOWNSHIFT_SCHEDULE: Dict[str, Any] = {
+    "name": "on_r256_prefill_to_r64_decode",
+    "prefill_enabled": True,
+    "prefill_rank": 256,
+    "enabled": True,
+    "rank": 64,
+    "split_point": "before_last_prompt_token",
+}
 
 MLX_NORM_OFFSET_SUFFIXES = (
     ".input_layernorm.weight",
@@ -356,6 +367,8 @@ class MLXSwitchableDeltaController:
         self.attached_exact_count: int = 0
         self.attached_lowrank_count: int = 0
         self.vision_tower_invariant: bool = True
+        self._vision_feature_cache: Dict[Any, Any] = {}
+        self._prepared_inputs_cache: Dict[Any, Dict[str, Any]] = {}
 
         for grp, shard_info in self.manifest["shards"].items():
             for t_key in shard_info.get("tensor_stats", {}).keys():
@@ -725,8 +738,177 @@ class MLXSwitchableDeltaController:
             "effective_model_semantics": self.effective_model_semantics,
         }
 
+    def prepare_multimodal_inputs(
+        self,
+        processor: Any,
+        formatted_prompt: str,
+        images: Optional[List[str]] = None,
+        prepare_inputs_fn: Optional[Callable[..., Dict[str, Any]]] = None,
+        force_prepare: bool = False,
+    ) -> Dict[str, Any]:
+        """Prepare multimodal or text inputs and reuse cached `vision_tower` features across modes when invariant."""
+        images_list = list(images) if images else []
+        prep: Optional[Dict[str, Any]] = None
+        vision_cache_hit: Optional[bool] = None
+        vision_encode_ms: Optional[float] = None
+        extra_stream_kwargs: Dict[str, Any] = {}
+
+        can_use_vision_cache = (
+            bool(images_list)
+            and bool(getattr(self, "vision_tower_invariant", False))
+            and getattr(self.model, "vision_tower", None) is not None
+            and callable(prepare_inputs_fn)
+        )
+        if can_use_vision_cache and prepare_inputs_fn is not None:
+            img_cache_key = tuple(
+                (
+                    str(p),
+                    hashlib.sha256(Path(p).read_bytes()).hexdigest() if Path(p).is_file() else "",
+                )
+                for p in images_list
+            )
+            prep_key = (img_cache_key, formatted_prompt)
+            if prep_key in self._prepared_inputs_cache:
+                prep = self._prepared_inputs_cache[prep_key]
+            else:
+                prep = prepare_inputs_fn(
+                    processor,
+                    images=images_list,
+                    prompts=formatted_prompt,
+                    image_token_index=getattr(getattr(self.model, "config", None), "image_token_index", None),
+                )
+                self._prepared_inputs_cache[prep_key] = prep
+
+            if img_cache_key in self._vision_feature_cache:
+                cached_img_features = self._vision_feature_cache[img_cache_key]
+                vision_cache_hit = True
+                vision_encode_ms = 0.0
+            else:
+                vt_t0 = time.monotonic()
+                vt_dtype = self.model.vision_tower.patch_embed.proj.weight.dtype
+                pv_cast = prep["pixel_values"].astype(vt_dtype)
+                if hasattr(self._mx, "eval"):
+                    self._mx.eval(pv_cast)
+                vt_out = self.model.vision_tower(pv_cast, prep.get("image_grid_thw"))
+                cached_img_features = vt_out[0] if isinstance(vt_out, (tuple, list)) else vt_out
+                if hasattr(self._mx, "eval"):
+                    self._mx.eval(cached_img_features)
+                vision_encode_ms = round((time.monotonic() - vt_t0) * 1000.0, 3)
+                self._vision_feature_cache[img_cache_key] = cached_img_features
+                vision_cache_hit = False
+
+            extra_stream_kwargs["input_ids"] = prep.get("input_ids")
+            extra_stream_kwargs["pixel_values"] = prep.get("pixel_values")
+            extra_stream_kwargs["mask"] = prep.get("attention_mask")
+            extra_stream_kwargs["image_grid_thw"] = prep.get("image_grid_thw")
+            extra_stream_kwargs["cached_image_features"] = cached_img_features
+        elif force_prepare and callable(prepare_inputs_fn):
+            prep = prepare_inputs_fn(
+                processor,
+                images=images_list or None,
+                prompts=formatted_prompt,
+                image_token_index=getattr(getattr(self.model, "config", None), "image_token_index", None),
+            )
+            extra_stream_kwargs["input_ids"] = prep.get("input_ids")
+            if prep.get("pixel_values") is not None:
+                extra_stream_kwargs["pixel_values"] = prep.get("pixel_values")
+            if prep.get("attention_mask") is not None:
+                extra_stream_kwargs["mask"] = prep.get("attention_mask")
+            if prep.get("image_grid_thw") is not None:
+                extra_stream_kwargs["image_grid_thw"] = prep.get("image_grid_thw")
+
+        return {
+            "prep": prep,
+            "extra_stream_kwargs": extra_stream_kwargs,
+            "vision_cache_hit": vision_cache_hit,
+            "vision_encode_ms": vision_encode_ms,
+            "used_vision_cache": can_use_vision_cache,
+        }
+
+    @contextlib.contextmanager
+    def split_generation_context(
+        self,
+        enabled: bool,
+        rank: int = 64,
+        split_point: str = "before_last_prompt_token",
+        initial_sw_res: Optional[Dict[str, Any]] = None,
+    ) -> Iterator[Dict[str, Any]]:
+        """Context manager that intercepts `model.language_model` forward to switch adapter rank/mode mid-generation."""
+        if split_point not in ("before_last_prompt_token", "after_token_1"):
+            raise ValueError(
+                f"split_point must be 'before_last_prompt_token' or 'after_token_1', got {split_point!r}"
+            )
+        lm_obj = getattr(self.model, "language_model", None)
+        orig_lm_cls = type(lm_obj) if lm_obj is not None else None
+        if lm_obj is None or orig_lm_cls is None:
+            raise RuntimeError("Split generation mode requires model.language_model to be present")
+
+        state: Dict[str, Any] = {
+            "swapped": False,
+            "swap_ms": None,
+            "active_sw_res": initial_sw_res
+            or {
+                "enabled": self.enabled,
+                "rank": self.active_rank,
+                "state_epoch": self.state_epoch,
+                "reset_performed": False,
+                "preserve_cache": False,
+                "effective_model_semantics": self.effective_model_semantics,
+            },
+        }
+        controller = self
+        mx = self._mx
+
+        class _SplitLanguageModel(orig_lm_cls):
+            def __call__(self, *lm_args: Any, **lm_kwargs: Any) -> Any:
+                if not state["swapped"]:
+                    ie = lm_kwargs.get("inputs_embeds")
+                    is_last_prompt_step = (ie is not None) and ("n_to_process" not in lm_kwargs)
+                    is_first_decode_step = ie is None
+                    if split_point == "before_last_prompt_token" and is_last_prompt_step:
+                        cache_list = lm_kwargs.get("cache") or []
+                        if hasattr(mx, "eval"):
+                            states = [
+                                c.state
+                                for c in cache_list
+                                if hasattr(c, "state") and getattr(c, "state") is not None
+                            ]
+                            if states:
+                                mx.eval(*states)
+                        t_sp = time.monotonic()
+                        state["active_sw_res"] = controller.set_mode(
+                            enabled=enabled, rank=rank, preserve_cache=True
+                        )
+                        state["swap_ms"] = round((time.monotonic() - t_sp) * 1000.0, 3)
+                        state["swapped"] = True
+                    elif split_point == "after_token_1" and is_first_decode_step:
+                        cache_list = lm_kwargs.get("cache") or []
+                        if hasattr(mx, "eval"):
+                            eval_targets = list(lm_args[:1]) + [
+                                c.state
+                                for c in cache_list
+                                if hasattr(c, "state") and getattr(c, "state") is not None
+                            ]
+                            if eval_targets:
+                                mx.eval(*eval_targets)
+                        t_sp = time.monotonic()
+                        state["active_sw_res"] = controller.set_mode(
+                            enabled=enabled, rank=rank, preserve_cache=True
+                        )
+                        state["swap_ms"] = round((time.monotonic() - t_sp) * 1000.0, 3)
+                        state["swapped"] = True
+                return orig_lm_cls.__call__(self, *lm_args, **lm_kwargs)
+
+        lm_obj.__class__ = _SplitLanguageModel
+        try:
+            yield state
+        finally:
+            lm_obj.__class__ = orig_lm_cls
+
     def detach(self) -> None:
         self.set_mode(enabled=(self.base_role == "bfl"), rank=self.max_rank)
         for parent, attr, orig_mod, _wrapped, _is_exact in self._wrapped_modules:
             setattr(parent, attr, orig_mod)
         self._wrapped_modules.clear()
+        self._vision_feature_cache.clear()
+        self._prepared_inputs_cache.clear()

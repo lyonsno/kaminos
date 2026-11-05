@@ -1867,6 +1867,119 @@ class TestMLXSwitchableEvalHarness(unittest.TestCase):
             self.assertEqual(len(broken_rep["attempted_observations"]), 1)
             self.assertFalse(broken_rep["attempted_observations"][0]["accepted"])
 
+    def test_r4_04_default_rank_downshift_schedule_and_controller_runtime_helpers(self) -> None:
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from evaluate_switchable_mlx import DEFAULT_MODES
+        from mlx_switchable_adapter import DEFAULT_BFL_RANK_DOWNSHIFT_SCHEDULE, MLXSwitchableDeltaController
+
+        self.assertEqual(
+            DEFAULT_BFL_RANK_DOWNSHIFT_SCHEDULE,
+            {
+                "name": "on_r256_prefill_to_r64_decode",
+                "prefill_enabled": True,
+                "prefill_rank": 256,
+                "enabled": True,
+                "rank": 64,
+                "split_point": "before_last_prompt_token",
+            },
+        )
+        self.assertIn(DEFAULT_BFL_RANK_DOWNSHIFT_SCHEDULE, DEFAULT_MODES)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            img_path = Path(tmp) / "img.png"
+            img_path.write_bytes(b"png_bytes")
+            vt_calls = []
+
+            class FakeLM:
+                def __call__(self, *args, **kwargs):
+                    return ("lm_out", args, kwargs)
+
+            class FakeVT:
+                def __init__(self):
+                    self.patch_embed = SimpleNamespace(proj=SimpleNamespace(weight=SimpleNamespace(dtype="bf16")))
+
+                def __call__(self, pv, thw):
+                    vt_calls.append((pv, thw))
+                    return ("vis_feat",)
+
+            fake_model = SimpleNamespace(
+                config=SimpleNamespace(image_token_index=151655),
+                vision_tower=FakeVT(),
+                language_model=FakeLM(),
+            )
+            fake_ctrl = SimpleNamespace(
+                model=fake_model,
+                _mx=SimpleNamespace(eval=lambda *a: None),
+                vision_tower_invariant=True,
+                _vision_feature_cache={},
+                _prepared_inputs_cache={},
+                enabled=True,
+                active_rank=256,
+                state_epoch=1,
+                effective_model_semantics="qwen_resident_exact_target",
+            )
+            mode_calls = []
+
+            def fake_set_mode(enabled: bool, rank: int = 64, preserve_cache: bool = False):
+                mode_calls.append((enabled, rank, preserve_cache))
+                fake_ctrl.enabled = enabled
+                fake_ctrl.active_rank = rank if enabled else 0
+                return {
+                    "enabled": fake_ctrl.enabled,
+                    "rank": fake_ctrl.active_rank,
+                    "state_epoch": fake_ctrl.state_epoch,
+                    "reset_performed": not preserve_cache,
+                    "preserve_cache": preserve_cache,
+                    "effective_model_semantics": fake_ctrl.effective_model_semantics,
+                }
+
+            fake_ctrl.set_mode = fake_set_mode
+
+            def fake_prep(proc, images=None, prompts=None, **kw):
+                return {
+                    "input_ids": SimpleNamespace(shape=(1, 10)),
+                    "pixel_values": SimpleNamespace(astype=lambda dt: f"pv_{dt}"),
+                    "attention_mask": "mask",
+                    "image_grid_thw": "thw",
+                }
+
+            res1 = MLXSwitchableDeltaController.prepare_multimodal_inputs(
+                fake_ctrl,
+                processor="proc",
+                formatted_prompt="<p>",
+                images=[str(img_path)],
+                prepare_inputs_fn=fake_prep,
+            )
+            res2 = MLXSwitchableDeltaController.prepare_multimodal_inputs(
+                fake_ctrl,
+                processor="proc",
+                formatted_prompt="<p>",
+                images=[str(img_path)],
+                prepare_inputs_fn=fake_prep,
+            )
+            self.assertFalse(res1["vision_cache_hit"])
+            self.assertTrue(res2["vision_cache_hit"])
+            self.assertEqual(len(vt_calls), 1)
+            self.assertEqual(res1["extra_stream_kwargs"]["cached_image_features"], "vis_feat")
+
+            with MLXSwitchableDeltaController.split_generation_context(
+                fake_ctrl,
+                enabled=True,
+                rank=64,
+                split_point="before_last_prompt_token",
+            ) as sp_state:
+                # 1. Chunked prefill (n_to_process present) -> stays at rank 256
+                fake_model.language_model(inputs="chunk", inputs_embeds="emb", n_to_process=9, cache=[])
+                self.assertFalse(sp_state["swapped"])
+                self.assertEqual(fake_ctrl.active_rank, 256)
+                # 2. Final prompt token (inputs_embeds present, no n_to_process) -> downshifts to rank 64 with preserve_cache=True
+                fake_model.language_model("last_tok", inputs_embeds="last_emb", cache=[])
+                self.assertTrue(sp_state["swapped"])
+                self.assertEqual(fake_ctrl.active_rank, 64)
+                self.assertEqual(mode_calls, [(True, 64, True)])
+            self.assertIs(type(fake_model.language_model), FakeLM)
+
 
 if __name__ == "__main__":
     unittest.main()
