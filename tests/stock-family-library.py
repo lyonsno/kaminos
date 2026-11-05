@@ -32,6 +32,13 @@ class StockLibrary(unittest.TestCase):
      self.assertEqual(len(list(root.glob('*.stock-family.json'))),1)
      self.assertEqual(request('/api/stock-families',payload)[0],409,'stale writers must not overwrite')
      self.assertEqual(request(entry['source'])[1],updated)
+     support_sha=hashlib.sha256(b'support fixture').hexdigest();support={**source,'sha256':support_sha,'url':f'/api/read?root=generated-meshes&path={support_sha}.glb'}
+     support_recipe={**changed,'supports':[{'label':'Post','source':support,'pose':{'position':[0,0,0],'rotation':[0,0,0],'scale':[1,1,1]}}]}
+     support_payload={**payload,'revision':updated['revision'],'recipe':support_recipe}
+     target=root/(saved['id']+'.stock-family.json');prior=target.read_bytes()
+     for data in [None,b'wrong support bytes']:
+      if data is not None:(root/(support_sha+'.glb')).write_bytes(data)
+      status,error=request('/api/stock-families',support_payload);self.assertEqual(status,400,error);self.assertIn('Stored source',error['error']);self.assertEqual(target.read_bytes(),prior)
      target=root/(saved['id']+'.stock-family.json')
      for corrupt in ['[]','null','false','{"broken":', '{"revision":"bad"}']:
       target.write_text(corrupt)
