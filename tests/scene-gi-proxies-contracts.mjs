@@ -253,3 +253,30 @@ test('applyGiProxySetting auto-prepares missing tiers once per heroSha and LOD r
 });
 
 
+
+test('disabling a shadow proxy can retain its level catalog without releasing automatic beauty consumers', async () => {
+  const {registry, loaded} = world();
+  const {root} = sceneObject(heroSource);
+  const initial = await registry.attach(root);
+  let releases = 0;
+  registry.onRelease(() => releases++);
+  const disabled = await registry.disable(root, {retainLevels: true});
+  assert.equal(disabled?.state, 'disabled');
+  assert.equal(disabled.proxyRoot, null);
+  assert.deepEqual(disabled.levels, initial.levels, 'automatic beauty retains the source ladder');
+  assert.equal(loaded.length, 1, 'catalog retrieval never loads another proxy mesh');
+  assert.equal(releases, 0, 'shadow opt-out does not release other LOD consumers');
+  registry.release(root);
+  assert.equal(releases, 1, 'object removal still releases all consumers');
+});
+
+test('a saved shadow opt-out resolves levels for beauty without fetching or parsing proxy geometry', async () => {
+  const {registry, loaded, calls} = world();
+  const {root} = sceneObject(heroSource);
+  const disabled = await registry.disable(root, {retainLevels: true});
+  assert.equal(disabled?.state, 'disabled');
+  assert.deepEqual(disabled.levels.map(level => level.faces), [5000, 1000, 500]);
+  assert.equal(loaded.length, 0);
+  assert.equal(calls.length, 1);
+  assert.equal(registry.get(root).proxyRoot, null);
+});
