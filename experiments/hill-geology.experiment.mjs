@@ -117,12 +117,29 @@ export default {
   const setCameraFocus=focus=>{manualFocus=Boolean(focus?.manual);gpu.setCameraFocus(focus);zoomMesh.visible=Boolean(formed||pending?.partial)&&gpu.read().zoomDetail.enabled;session.redraw();sync();return read();};
   const applyPreset=id=>{const found=FORMATION_PRESETS.find(p=>p.id===id);if(!found)throw Error('Unknown geological preset: '+id);activePreset=found.id;return regenerate(found.patch);};
   const setTileSeams=visible=>{if(typeof visible!=='boolean')throw Error('Boolean tile seam visibility required');showSeams=visible;seamMesh.visible=Boolean(formed||pending?.partial)&&showSeams;session.redraw();sync();return read();};
-  mesh.onBeforeRender=(renderer,scene,camera)=>{if(disposed||error||(!formed&&!pending?.partial))return;try{if(camera?.isPerspectiveCamera)syncFocusFromView();gpu.flush(renderer);}catch(e){error=e.message;playing=false;sync();}};
-  try{asset=await session.attach(root,{owned:true,metadata:{label:root.name,type:'experiment',source:{route:'kaminos/hill/geological-formation-v1'}}});frame();
+  const savedLights=[];
+  const scaleStudioLights=sc=>{
+   if(!sc?.children||savedLights.length)return;
+   for(const ch of sc.children){
+    if(ch?.isSpotLight&&(ch.name==='Startup studio key light'||ch.name==='Startup studio rim light')){
+     savedLights.push({light:ch,pos:ch.position.toArray(),target:ch.target.position.toArray(),intensity:ch.intensity});
+     const isKey=ch.name.includes('key');
+     ch.position.set(isKey?-6.2:7.4,isKey?11.0:8.2,isKey?9.3:-11.8);
+     ch.target.position.set(0,1.0,0);ch.target.updateMatrixWorld?.();
+     ch.intensity=isKey?1180:640;ch.shadow?.camera?.updateProjectionMatrix?.();
+    }
+   }
+  };
+  const restoreStudioLights=()=>{
+   for(const s of savedLights){s.light.position.fromArray(s.pos);s.light.target.position.fromArray(s.target);s.light.target.updateMatrixWorld?.();s.light.intensity=s.intensity;s.light.shadow?.camera?.updateProjectionMatrix?.();}
+   savedLights.length=0;
+  };
+  mesh.onBeforeRender=(renderer,scene,camera)=>{if(disposed||error||(!formed&&!pending?.partial))return;try{scaleStudioLights(scene);if(camera?.isPerspectiveCamera)syncFocusFromView();gpu.flush(renderer);}catch(e){error=e.message;playing=false;sync();}};
+  try{asset=await session.attach(root,{owned:true,metadata:{label:root.name,type:'experiment',source:{route:'kaminos/hill/geological-formation-v1'}}});scaleStudioLights(root.parent);frame();
    unsubscribe=session.onFrame(({deltaSeconds})=>{if(!playing||!formed||pending||error||disposed)return;if(!Number.isFinite(deltaSeconds)||deltaSeconds<0){error='Invalid host frame time';playing=false;sync();return;}remainder+=deltaSeconds;const ticks=Math.floor((remainder+1e-10)/.05);if(ticks){gpu.advance(ticks);remainder=Math.max(0,remainder-ticks*.05);}gpu.present(Math.min(1,remainder/.05));session.redraw();});
    await regenerate();
-  }catch(e){job?.cancel();unsubscribe?.();gpu.dispose();seamGeo.dispose();seamMat.dispose();await session.dispose();throw e;}
-  const diagnostic={read,snapshot:options=>gpu.snapshot(options),setCameraFocus,setView,stepGeology,setMesoAuthoring,setViewMode,gpu:()=>{root.updateWorldMatrix(true,false);return{...gpu.surface(),localToWorld:Array.from(root.matrixWorld.elements)};}};
+  }catch(e){restoreStudioLights();job?.cancel();unsubscribe?.();gpu.dispose();seamGeo.dispose();seamMat.dispose();await session.dispose();throw e;}
+  const diagnostic={read,snapshot:options=>gpu.snapshot(options),setCameraFocus,setView,stepGeology,setMesoAuthoring,setViewMode,applyPreset,gpu:()=>{root.updateWorldMatrix(true,false);return{...gpu.surface(),localToWorld:Array.from(root.matrixWorld.elements)};}};
   if(globalThis.window)window.kaminosHillGeology=diagnostic;
   return{read,operations:{regenerate,stepFormation,stepGeology,setMesoAuthoring,setViewMode,setCameraFocus,setView,applyPreset,setTileSeams,frame,play(value){if(typeof value!=='boolean')throw Error('Boolean playback required');if(pending||error||!formed)throw Error('Landscape is not available');playing=value;sync();record({kind:'hill-geology.play',value});return read();},setInfluence(patch){gpu.configure(patch);sync();return read();},advance(count=1){if(pending||error)throw Error('Landscape is not available');gpu.advance(count);gpu.present(1);session.redraw();return read();},recipe:()=>({schema:'kaminos.hill-geology.recipe.v1',inputs:{...config,mesoAuthoring:gpu.read().mesoAuthoring,viewMode:gpu.read().viewMode}}),cache:()=>encodeFormation(formed)},
   mount({root:panel,document,invoke}){
@@ -208,7 +225,7 @@ export default {
     status.textContent=error??(pending?`Forming ${tiles.length}-tile territory · `+pending.step+' / '+pending.total+(pending.partial?' · partial visible':''):(formed?`${tiles.length} tiles · ${Math.round(formed.bytes/1024)} KiB · ${formed.cache} · zoom ${(zd.vertexSpacing*1000).toFixed(1)}mm · live GPU ${gState.liveUpdateMs}ms`+(formed.warning?' · '+formed.warning:''):''));
    };sync();this._cleanup=()=>clearTimeout(timer);
   },
-  async dispose(){if(disposed)return;disposed=true;epoch++;job?.cancel();this._cleanup?.();unsubscribe?.();sync=()=>{};gpu.dispose();seamGeo.dispose();seamMat.dispose();await session.dispose();if(globalThis.window?.kaminosHillGeology===diagnostic)delete window.kaminosHillGeology;}
+  async dispose(){if(disposed)return;disposed=true;epoch++;restoreStudioLights();job?.cancel();this._cleanup?.();unsubscribe?.();sync=()=>{};gpu.dispose();seamGeo.dispose();seamMat.dispose();await session.dispose();if(globalThis.window?.kaminosHillGeology===diagnostic)delete window.kaminosHillGeology;}
   };
  }
 };
