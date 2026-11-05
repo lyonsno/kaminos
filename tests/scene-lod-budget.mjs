@@ -10,6 +10,7 @@ import {
   allocateSceneBeautyLods,
   allocateShadowCasterLods,
   createSceneBeautyLodController,
+  seedInitialBeautyLevels,
 } from '../scene-lod-budget.mjs';
 import {
   buildSurfelField,
@@ -1841,3 +1842,13 @@ test('bakeRungMeshesToRootSpace aligns Z-up GLB node transforms to hero local bo
 
 
 
+
+test('coarse arrival remains visible during batch preparation and while the selected rung loads',async()=>{
+ const scene=new THREE.Scene(),root=new THREE.Group(),hero=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshStandardMaterial());root.add(hero);scene.add(root);root.userData.kaminosSceneObject={id:'arrival',type:'glb',source:'/api/read?root=generated-meshes&path='+('a'.repeat(64))+'.glb'};
+ const low='b'.repeat(64),fine='c'.repeat(64),coarse=new THREE.Group().add(new THREE.Mesh(new THREE.PlaneGeometry(),new THREE.MeshStandardMaterial()));
+ seedInitialBeautyLevels(root,[{sha:low,faces:2,root:coarse}]);let finish,requests=0;
+ const controller=createSceneBeautyLodController({THREE,scene,giProxies:{list:()=>[{root,levels:[{sha:low,faces:2,error:{relative:{p95:.3}}},{sha:fine,faces:4,error:{relative:{p95:0}}}]}]},loadLevel:async()=>{requests++;return new Promise(resolve=>finish=resolve);},settings:{faceBudget:10,texelWeight:0}});
+ const camera=makeCamera({z:4});controller.setPreparation(true);let state=controller.update(camera,{viewportHeight:500});assert.equal(state.totalFaces,2,'preparation counts the actual coarse display');assert.equal(state.objects[0].displayedTier,low);assert.equal(hero.visible,false);assert.equal(requests,0,'partial scene must not request intermediate allocations');
+ controller.setPreparation(false);state=controller.update(camera,{viewportHeight:500});assert.equal(state.objects[0].displayedTier,low);assert.equal(requests,1);assert.equal(hero.visible,false,'no hero flash while refinement is pending');
+ finish(new THREE.Group().add(new THREE.Mesh(new THREE.PlaneGeometry(1,1,2,1),new THREE.MeshStandardMaterial())));await controller.whenIdle();state=controller.update(camera,{viewportHeight:500});assert.equal(state.objects[0].displayedTier,fine);controller.dispose();
+});

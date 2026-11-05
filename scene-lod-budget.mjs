@@ -18,6 +18,7 @@
 // 6. Repetition multiplicity (N * faces): repeated objects (kaminosRepetitionCopy) weight face savings by N * faces
 //    and evaluate screen footprint at their closest in-frustum instance.
 
+import {releasePreparedRoot} from './scene-asset-preparation.mjs';
 import {readSurfelGLBExtension, attachStoredSurfelLevels} from './trellis-surfels.mjs';
 import {presentedSurface} from './scene-presented-surface.mjs';
 
@@ -26,6 +27,7 @@ const digestHex = async bytes =>
 
 const disposeTree = root => {
   if (!root) return;
+  releasePreparedRoot(root);
   const seen = new Set();
   const once = r => {
     if (r && !seen.has(r)) {
@@ -127,6 +129,16 @@ function boxIntersectsFrustum(box, planes) {
     if (nx * px + ny * py + nz * pz + w < 0) return false;
   }
   return true;
+}
+
+const initialBeautyLevels=new WeakMap();
+export function seedInitialBeautyLevels(root,levels){
+  releaseInitialBeautyLevels(root);
+  if(levels?.length)initialBeautyLevels.set(root,levels);
+}
+export function releaseInitialBeautyLevels(root){
+  const levels=initialBeautyLevels.get(root);initialBeautyLevels.delete(root);
+  for(const level of levels??[])disposeTree(level.root);
 }
 
 export function effectiveRelativeGeomError(tier, {stat = 'p95', tailWeight = 0.5, creviceAllowance = 0.005} = {}) {
@@ -1186,6 +1198,7 @@ export function createSceneBeautyLodController({
     return r.arrayBuffer();
   },
   parseGlb,
+  loadLevel = null,
   digest = digestHex,
   settings: initialSettings = {},
   onUpdate = null,
@@ -1203,7 +1216,7 @@ export function createSceneBeautyLodController({
   };
   const entries = new Map();
   const pendingLoads = new Set();
-  let disposed = false;
+  let disposed = false,preparing=false;
   let lastState = {enabled: config.enabled, totalFaces: 0, heroFacesTotal: 0, faceBudget: config.faceBudget, withinBudget: true, objects: []};
 
   const isHeroChild = child =>
@@ -1330,9 +1343,8 @@ export function createSceneBeautyLodController({
     const task = (async () => {
       let rungRoot = null, collisionRoot = null;
       try {
-        const bytes = await fetchBytes(url);
-        if (await digest(bytes) !== sha) throw Error(`beauty LOD content mismatch for ${sha}`);
-        rungRoot = await parseGlb(bytes);
+        if(loadLevel)rungRoot=await loadLevel(level);
+        else{const bytes=await fetchBytes(url);if(await digest(bytes)!==sha)throw Error(`beauty LOD content mismatch for ${sha}`);rungRoot=await parseGlb(bytes);}
         // Display baking changes vertex identity. Keep the source node frame
         // for saved ash collisions, with independently owned geometry/material.
         collisionRoot = cloneBorrowedRung(THREE, rungRoot);
@@ -1408,7 +1420,7 @@ export function createSceneBeautyLodController({
 
   function release(root) {
     const entry = entries.get(root);
-    if (!entry) return;
+    if (!entry) {releaseInitialBeautyLevels(root);return;}
     entry.generation++;
     restoreRootToHero(root, entry);
     releaseRepCopies(entry);
@@ -1449,6 +1461,12 @@ export function createSceneBeautyLodController({
         warpFn: typeof root.userData?.kaminosVertexWarp === 'function' ? root.userData.kaminosVertexWarp : null,
         warpRevision: root.userData?.kaminosVertexWarpRevision ?? 0,
       };
+      const initial=initialBeautyLevels.get(root);initialBeautyLevels.delete(root);
+      for(const level of initial??[]){
+        level.root.traverse(node=>{if(node.isMesh){node.castShadow=true;node.receiveShadow=true;node.userData.kaminosOriginalMaterial=node.material;}});
+        entry.rungs.set(level.sha,{...level,releaseLighting:surfaceLighting?.registerProxyRoot?.(level.root)??null,warpFn:null,warpRevision:0});
+      }
+      if(initial?.length)entry.displayedTier=initial[0].sha;
       entries.set(root, entry);
     } else {
       const curWarpFn = typeof root.userData?.kaminosVertexWarp === 'function' ? root.userData.kaminosVertexWarp : null;
@@ -1474,6 +1492,7 @@ export function createSceneBeautyLodController({
   }
 
   return {
+    setPreparation: value => {preparing=value===true;},
     read: () => ({...config}),
     setSettings(patch = {}) {
       if (typeof patch.enabled === 'boolean') config.enabled = patch.enabled;
@@ -1522,7 +1541,11 @@ export function createSceneBeautyLodController({
           ensureSurfelLevelsLoaded(root, entry, handle);
           continue;
         }
-        if (!handle.levels?.length) continue;
+        if (!handle.levels?.length) {
+          if(config.enabled&&handle.state==='resolving')applyDisplayedRung(root,entry);
+          else{entry.displayedTier='hero';restoreRootToHero(root,entry);}
+          continue;
+        }
 
         const repSources = root.children.filter(c => c.userData?.kaminosRepetitionCopy === true && (entry.savedHeroVisibility.get(c) ?? c.visible));
         const instanceBoxes = [new THREE.Box3().copy(entry.localBox).applyMatrix4(root.matrixWorld)];
@@ -1565,6 +1588,17 @@ export function createSceneBeautyLodController({
         return lastState;
       }
 
+      if(preparing){
+        const planes=extractFrustumPlanes(camera);
+        const objects=candidates.map(({root,entry,id,instanceBoxes})=>{
+          const visible=instanceBoxes.filter(box=>boxIntersectsFrustum(box,planes));
+          const inFrustum=visible.length>0,instanceCount=Math.max(1,visible.length||instanceBoxes.length);
+          applyDisplayedRung(root,entry);
+          const faces=entry.displayedTier==='hero'?entry.heroFaces:entry.rungs.get(entry.displayedTier).faces;
+          return {id,targetTier:entry.displayedTier,displayedTier:entry.displayedTier,faces,targetFaces:faces,instanceCount,inFrustum,residentRungs:entry.rungs.size};
+        });
+        lastState={enabled:true,preparing:true,totalFaces:objects.reduce((sum,row)=>sum+(row.inFrustum?row.faces*row.instanceCount:0),0),heroFacesTotal:candidates.reduce((sum,row)=>sum+row.entry.heroFaces,0),faceBudget:config.faceBudget,withinBudget:objects.reduce((sum,row)=>sum+(row.inFrustum?row.faces*row.instanceCount:0),0)<=config.faceBudget,objects};return lastState;
+      }
       const budgetResult = allocateSceneBeautyLods(candidates, {
         camera,
         viewportHeight,
