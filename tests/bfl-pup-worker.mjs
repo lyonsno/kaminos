@@ -34,9 +34,11 @@ const residentFirst=resident.expand({prompt:'first'}),residentWorker=workers.at(
 residentWorker.emit({type:'complete',value:{text:'first'}});await residentFirst;
 assert.equal(residentWorker.terminated,false,'resident completion must retain its idle worker');
 assert.equal(resident.resident,true);
-const residentCount=workers.length,residentSecond=resident.expand({prompt:'different',images:['another']});
+const residentCount=workers.length,residentSecond=resident.expand({prompt:'different',images:['another'],mode:'vlm',systemPrompt:'Inspect image'});
 assert.equal(workers.length,residentCount,'next request must reuse the loaded runtime');
-residentWorker.emit({type:'complete',value:{text:'different'}});assert.equal((await residentSecond).text,'different');
+assert.equal(residentWorker.request.mode,'vlm');
+assert.equal(residentWorker.request.systemPrompt,'Inspect image');
+residentWorker.emit({type:'complete',value:{text:'different',mode:'vlm'}});assert.equal((await residentSecond).text,'different');
 await resident.dispose();assert.equal(residentWorker.terminated,true);assert.equal(resident.resident,false);
 const isolatedResident=createWorkerPromptHelper({modelUrl:'/weights',WorkerClass:FakeWorker,keepLoaded:true});
 const one=isolatedResident.expand({prompt:'one'}),kept=workers.at(-1),oldId=kept.request.requestId;kept.emit({type:'complete',value:{text:'one'}});await one;

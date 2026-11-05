@@ -175,6 +175,8 @@ Generate offers **Keep prompt helper loaded** and **Unload**. With retention ena
 
 The choice persists in browser-local storage. `KAMINOS_PUP_KEEP_LOADED=true` supplies the serving machine's initial default without overriding a previously saved browser choice. Models are loaded by the first expansion, never preloaded merely by opening the page. Retention consumes memory while the tab is open.
 
+While the browser worker remains resident, `browser-backend.mjs` also caches prepared reference images and per-image post-merger `vision_encoder` feature snapshots (`(64, 4096)` FP16, keyed by SHA-256 over `(grid, dtype, dims, pixel_values)` in a 16-entry LRU, reported under `visionCache: {hits, misses, entries}`) and clears both caches on `dispose()`. In addition to default BFL prompt expansion (`mode: 'expand'`), `expand({prompt, images, mode: 'vlm', systemPrompt})` exposes general vision-language chat/critique over the same resident WebGPU session and cached image features.
+
 
 ## Switchable weight-difference adapter over Qwen3.5-9B
 

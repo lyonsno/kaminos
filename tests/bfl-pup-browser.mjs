@@ -18,6 +18,13 @@ assert.deepEqual(helperMessages('blue',2,{t2i:'scene',i2i:'edit'}),[
  {role:'system',content:'edit'},
  {role:'user',content:[{type:'image'},{type:'image'},{type:'text',text:'Reference images follow in order (the first image, the second image, ...).\nUser request: blue\nOutput the caption.'}]}]);
 assert.equal(helperMessages('train',0,{t2i:'scene',i2i:'edit'})[1].content,'train');
+assert.deepEqual(helperMessages('What is written on the chalkboard?',1,{t2i:'scene',i2i:'edit'},{mode:'vlm'}),[
+ {role:'system',content:'You are a helpful assistant.'},
+ {role:'user',content:[{type:'image'},{type:'text',text:'What is written on the chalkboard?'}]}]);
+assert.deepEqual(helperMessages('Critique the rim light.',0,{t2i:'scene',i2i:'edit'},{mode:'vlm',systemPrompt:'You are a lookdev supervisor.'}),[
+ {role:'system',content:'You are a lookdev supervisor.'},
+ {role:'user',content:'Critique the rim light.'}]);
+assert.throws(()=>helperMessages('x',0,{t2i:'scene',i2i:'edit'},{mode:'bogus'}),/Unsupported prompt helper mode/);
 assert.throws(()=>helperMessages('x',11,{}),/10/);
 console.log('BFL browser input contracts pass');
 const {validateExpansion}=await import('../models/bfl-pup/witness-contract.mjs');

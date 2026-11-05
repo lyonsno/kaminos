@@ -26,15 +26,36 @@ export function visionPositions(grid, side=48, merge=2) {
 export function penalizeGenerated(ids,promptLength,logits,penalty){
   for(const id of new Set(ids.slice(promptLength))) logits[Number(id)]-=penalty;
 }
-export function helperMessages(prompt,referenceCount,systems){
+export function helperMessages(prompt,referenceCount,systems,{mode='expand',systemPrompt}={}){
   if(!Number.isInteger(referenceCount)||referenceCount<0||referenceCount>10) throw Error('BFL accepts up to 10 ordered reference images.');
+  if(mode!=='expand'&&mode!=='vlm') throw Error(`Unsupported prompt helper mode: ${mode}`);
   if(!prompt.trim()) throw Error('Enter an image request.');
+  if(mode==='vlm'){
+    const sys=systemPrompt?.trim()||'You are a helpful assistant.';
+    const content=referenceCount?[...Array.from({length:referenceCount},()=>({type:'image'})),{type:'text',text:prompt}]:prompt;
+    return [{role:'system',content:sys},{role:'user',content}];
+  }
   const task=referenceCount?'i2i':'t2i';
   const content=referenceCount?[...Array.from({length:referenceCount},()=>({type:'image'})),{type:'text',text:`Reference images follow in order (the first image, the second image, ...).\nUser request: ${prompt}\nOutput the caption.`}]:prompt;
   return [{role:'system',content:systems[task]},{role:'user',content}];
 }
 
-export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runtimeUrl=TRANSFORMERS_URL}={}){
+async function visionFeatureKey(grid,pixels){
+  const header=new TextEncoder().encode(`${grid.join('x')}:${pixels.type}:${pixels.dims.join('x')}:`);
+  const bytes=new Uint8Array(pixels.data.buffer,pixels.data.byteOffset,pixels.data.byteLength);
+  const combined=new Uint8Array(header.byteLength+bytes.byteLength);
+  combined.set(header,0);combined.set(bytes,header.byteLength);
+  const digest=await globalThis.crypto.subtle.digest('SHA-256',combined);
+  return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+function lruSet(map,key,value,maxEntries){
+  if(map.has(key))map.delete(key);
+  map.set(key,value);
+  while(map.size>maxEntries)map.delete(map.keys().next().value);
+}
+
+export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runtimeUrl=TRANSFORMERS_URL,prepareReferenceImpl=prepareReference,maxCacheEntries=16}={}){
   if(!modelUrl) throw Error('A BFL ONNX model package URL is required.');
   const base=new URL(modelUrl,globalThis.location?.href).href.replace(/\/$/,'');
   if(new URL(base).origin!==globalThis.location.origin)throw Error('Mount the local conversion package on the page origin for this browser trial.');
@@ -62,7 +83,8 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
   if(!templateResponse.ok)throw Error(`BFL chat template HTTP ${templateResponse.status}`);
   processor.chat_template=await templateResponse.text();
   if(!processor.chat_template.trim())throw Error('The BFL chat template is empty.');
-  let model=null,busy=false;
+  let model=null,busy=false,currentVisionStats={hits:0,misses:0};
+  const visionFeatureCache=new Map(),preparedReferenceCache=new Map();
   async function load(){
     if(model)return;
     onProgress({phase:'model'});
@@ -81,18 +103,34 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
     }
     installTextRopeCompatibility(candidate);
     // The exported single-image graph takes source-equivalent position inputs.
+    // Because all 333 vision_encoder tensors are frozen across base Qwen3.5 and BFL-PUP,
+    // per-image post-merger features are cached as typed-array snapshots across resident turns.
     candidate.encode_image=async({pixel_values,image_grid_thw})=>{
       const grids=image_grid_thw.tolist(),features=[];
       let offset=0;
       for(const grid of grids){
         const count=Number(grid[0])*Number(grid[1])*Number(grid[2]);
-        const p=visionPositions(grid),pixels=pixel_values.slice([offset,offset+count],null);
-        const feeds={pixel_values:pixels,
-          position_ids:new tf.Tensor('int64',p.positionIds,[count,2]),
-          interp_indices:new tf.Tensor('int64',p.interpIndices,[count,4]),
-          interp_weights:new tf.Tensor('float32',p.interpWeights,[count,4])};
-        try{features.push(await candidate._encode_input('vision_encoder',feeds,'image_features'));}
-        finally{for(const t of Object.values(feeds))t.dispose();}
+        const pixels=pixel_values.slice([offset,offset+count],null);
+        const cacheKey=await visionFeatureKey(grid,pixels);
+        const cached=visionFeatureCache.get(cacheKey);
+        if(cached){
+          pixels.dispose();
+          lruSet(visionFeatureCache,cacheKey,cached,maxCacheEntries);
+          currentVisionStats.hits++;
+          features.push(new tf.Tensor(cached.type,cached.data.slice(),[...cached.dims]));
+        }else{
+          const p=visionPositions(grid);
+          const feeds={pixel_values:pixels,
+            position_ids:new tf.Tensor('int64',p.positionIds,[count,2]),
+            interp_indices:new tf.Tensor('int64',p.interpIndices,[count,4]),
+            interp_weights:new tf.Tensor('float32',p.interpWeights,[count,4])};
+          try{
+            const feat=await candidate._encode_input('vision_encoder',feeds,'image_features');
+            lruSet(visionFeatureCache,cacheKey,{type:feat.type,data:feat.data.slice(),dims:[...feat.dims]},maxCacheEntries);
+            currentVisionStats.misses++;
+            features.push(feat);
+          }finally{for(const t of Object.values(feeds))t.dispose();}
+        }
         offset+=count;
       }
       if(offset!==pixel_values.dims[0])throw Error('Reference grid does not account for all image patches.');
@@ -104,25 +142,36 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
   }
   return {
     backend:'transformers.js/onnx-webgpu',modelRevision:BFL_SOURCE_REVISION,
-    async expand({prompt,images=[],signal,onText=()=>{}}){
+    async expand({prompt,images=[],mode='expand',systemPrompt,signal,onText=()=>{}}){
       if(busy)throw Error('The prompt helper is already generating.');
       busy=true;const started=performance.now();let output=null,inputs=null,stopping=null;
+      currentVisionStats={hits:0,misses:0};
       try{
-        const messages=helperMessages(prompt,images.length,systems);
+        const messages=helperMessages(prompt,images.length,systems,{mode,systemPrompt});
         if(signal?.aborted)throw signal.reason??Error('Prompt expansion cancelled.');
         const text=processor.apply_chat_template(messages,{add_generation_prompt:true,enable_thinking:false});
-        const raw=await Promise.all(images.map(async image=>prepareReference(
-          image instanceof tf.RawImage?image:await tf.RawImage.read(image),images.length,tf.RawImage)));
+        const raw=await Promise.all(images.map(async image=>{
+          if(typeof image==='string'){
+            const prepKey=`${images.length}:${image}`;
+            const cachedRaw=preparedReferenceCache.get(prepKey);
+            if(cachedRaw){lruSet(preparedReferenceCache,prepKey,cachedRaw,maxCacheEntries);return cachedRaw;}
+            const prepared=await prepareReferenceImpl(await tf.RawImage.read(image),images.length,tf.RawImage);
+            lruSet(preparedReferenceCache,prepKey,prepared,maxCacheEntries);
+            return prepared;
+          }
+          return prepareReferenceImpl(image instanceof tf.RawImage?image:await tf.RawImage.read(image),images.length,tf.RawImage);
+        }));
         // Original attachment order survives preparation and vision concatenation.
         inputs=await processor(text,raw.length?raw:undefined,{padding:false,truncation:false});
         const promptLength=inputs.input_ids.dims[1];
         if(signal?.aborted)throw signal.reason??Error('Prompt expansion cancelled.');
         const modelReused=!!model;await load();
         if(signal?.aborted)throw signal.reason??Error('Prompt expansion cancelled.');
+        const presencePenalty=mode==='expand'&&!images.length?1.5:0;
         class GeneratedPresence extends tf.LogitsProcessor{
           _call(ids,logits){
             const vocab=logits.dims.at(-1);
-            ids.forEach((row,i)=>penalizeGenerated(row,promptLength,logits.data.subarray(i*vocab,(i+1)*vocab),images.length?0:1.5));
+            ids.forEach((row,i)=>penalizeGenerated(row,promptLength,logits.data.subarray(i*vocab,(i+1)*vocab),presencePenalty));
             return logits;
           }
         }
@@ -143,9 +192,10 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
         if(signal?.aborted)throw signal.reason??Error('Prompt expansion cancelled.');
         if(!expanded)throw Error('The prompt helper returned empty output.');
         const last=Number(ids.at(-1)),stopReason=[248046,248044].includes(last)?'eos':'output-limit';
-        return {modelReused,text:expanded,stopReason,partial:stopReason!=='eos',promptTokens:promptLength,generatedTokens:ids.length,
+        return {modelReused,mode,text:expanded,stopReason,partial:stopReason!=='eos',promptTokens:promptLength,generatedTokens:ids.length,
           generationMs:performance.now()-generationStarted,totalMs:performance.now()-started,
           backend:'transformers.js/onnx-webgpu',modelRevision:BFL_SOURCE_REVISION,modelUrl:base,referenceCount:images.length,
+          visionCache:{hits:currentVisionStats.hits,misses:currentVisionStats.misses,entries:visionFeatureCache.size},
           runtimeCompatibility:['Transformers.js4.2 text-only continuation delta'],
           referencePreparation:{sizes:raw.map(image=>[image.width,image.height]),resizer:'browser-canvas',jpegQuality:.92,whiteBackdrop:true},
           sessions:Object.fromEntries(Object.entries(model.sessions).map(([name,s])=>[name,{...s.config,inputNames:s.inputNames,outputNames:s.outputNames}]))};
@@ -156,6 +206,6 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
         busy=false;
       }
     },
-    async dispose(){if(busy)throw Error('Cancel the active request before disposing the prompt helper.');await model?.dispose();model=null;},
+    async dispose(){if(busy)throw Error('Cancel the active request before disposing the prompt helper.');visionFeatureCache.clear();preparedReferenceCache.clear();await model?.dispose();model=null;},
   };
 }
