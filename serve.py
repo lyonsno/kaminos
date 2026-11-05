@@ -2979,9 +2979,8 @@ def save_mesh_lod_level(payload):
     if level['sha256'] == source:
         raise ValueError('A mesh cannot be its own level')
     if 'error' in level:
-        relative = (level['error'] or {}).get('relative') if isinstance(level['error'], dict) else None
-        if not isinstance(relative, dict) or any(type(relative.get(k)) not in (int, float) or not math.isfinite(relative[k]) or relative[k] < 0
-                                                 for k in ('max', 'p95', 'mean')):
+        from mesh_lod_textures import valid_relative_error
+        if not valid_relative_error(level['error']):
             raise ValueError('Level error needs finite non-negative relative max, p95 and mean')
     root = Path(BROWSE_ROOTS['generated-meshes']).resolve()
     for sha in (source, level['sha256']):

@@ -13,6 +13,15 @@ SCHEMA = 'kaminos.lod-textures.v1'
 SHA = re.compile(r'[0-9a-f]{64}')
 
 
+def valid_relative_error(error):
+    relative = error.get('relative') if isinstance(error, dict) else None
+    try:
+        return isinstance(relative, dict) and all(type(relative.get(k)) in (int, float)
+            and math.isfinite(relative[k]) and relative[k] >= 0 for k in ('max', 'p95', 'mean'))
+    except OverflowError:
+        return False
+
+
 def validate_beauty_catalog(record):
     """Validate the restricted identity/selection fields before using a sidecar."""
     levels = record.get('beautyLevels', [])
@@ -27,11 +36,8 @@ def validate_beauty_catalog(record):
         for field in ('targetFaces', 'textureSize', 'mergeFactor'):
             if field in level and (type(level[field]) is not int or level[field] < 1):
                 raise ValueError('Invalid beauty level: ' + field + ' must be a positive integer')
-        if 'error' in level:
-            relative = level['error'].get('relative') if isinstance(level['error'], dict) else None
-            if not isinstance(relative, dict) or any(type(relative.get(k)) not in (int, float)
-                    or not math.isfinite(relative[k]) or relative[k] < 0 for k in ('max', 'p95', 'mean')):
-                raise ValueError('Invalid beauty level: finite non-negative relative error required')
+        if 'error' in level and not valid_relative_error(level['error']):
+            raise ValueError('Invalid beauty level: finite non-negative relative error required')
 
 
 def _document(data):
