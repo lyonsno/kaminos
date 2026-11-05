@@ -80,21 +80,41 @@ export function worldWindAcceleration({strength=0,angle=0,height=0,speed=1,fineW
  return [Math.cos(angle)*gain,0,Math.sin(angle)*gain,height];
 }
 
-export function coarseSootClump(soot,lapSoot,dt){
- const s=Math.max(0,soot);
+export function coarseSootClump(soot,lapSoot,dt,diffusion=0.35){
+ const s=Math.max(0,Number(soot)||0);
  if(s<=0)return 0;
- const step=Math.max(dt,0);
- const delta=lapSoot<0
-  ?Math.min(0.04*s,-0.02*step*lapSoot)
-  :Math.min(0.10*s,0.025*step*lapSoot);
- return Math.max(0,s+delta*(1-Math.min(1,s*0.85)));
+ const lap=Number(lapSoot)||0;
+ const step=Math.min(2,Math.max(0.25,Math.max(Number(dt)||0,0)*4));
+ const diff=Math.min(1,Math.max(-1,Number(diffusion??0.35)));
+ if(diff>=0){
+  const delta=Math.max(-0.35*s,Math.min(0.35*s,0.12*diff*step*lap));
+  return Math.max(0,s+delta);
+ }
+ const clump=-diff;
+ const env=s*Math.max(0,1-s);
+ const delta=Math.max(-0.20*s,Math.min(0.20*Math.max(0,1-s),-0.08*clump*step*lap*(0.35+env)));
+ return Math.max(0,s+delta);
 }
 
-export function fineDonorEnvelope(p,top=3){
+export function worldSmokeDissipationSurvival(soot,dt,dissipationRate=0.035){
+ const rate=Math.max(0,Number(dissipationRate??0.035));
+ const step=Math.max(0,Number(dt)||0);
+ if(rate<=0||step<=0)return 1;
+ const t=Math.min(1,Math.max(0,(Math.max(0,Number(soot)||0)-0.01)/(0.12-0.01)));
+ const wispyBoost=1+1.2*(1-t*t*(3-2*t));
+ return Math.exp(-rate*wispyBoost*step);
+}
+
+export function fineDonorEnvelope(p,top=3,margin=0.36){
  const spanY=Math.max(top+1,2);
- const rx=Math.max(0,Math.min(1,(Math.abs(p[0])-0.56)/0.40));
- const rz=Math.max(0,Math.min(1,(Math.abs(p[2])-0.56)/0.40));
- const ry=Math.max(0,Math.min(1,(p[1]-(-1+0.72*spanY))/(0.26*spanY)));
+ const m=Math.min(0.60,Math.max(0.05,Number(margin??0.36)));
+ const widthXZ=Math.max(0.04,m*(0.40/0.36));
+ const startXZ=Math.max(0,0.96-widthXZ);
+ const widthY=Math.max(0.04,m*(0.26/0.36));
+ const startY=Math.max(0,0.98-widthY);
+ const rx=Math.max(0,Math.min(1,(Math.abs(p[0])-startXZ)/widthXZ));
+ const rz=Math.max(0,Math.min(1,(Math.abs(p[2])-startXZ)/widthXZ));
+ const ry=Math.max(0,Math.min(1,(p[1]-(-1+startY*spanY))/(widthY*spanY)));
  const r=Math.min(1,Math.hypot(rx,ry,rz));
  return 1-r*r*(3-2*r);
 }
@@ -113,7 +133,8 @@ struct Params {
  reactant_combustion_c:vec4<f32>, reactant_combustion_d:vec4<f32>, emissive_physics:vec4<f32>,
  materialLo:vec4<f32>, bridgeLo:vec4<f32>, bridgeDims:vec4<f32>,
  pressureGrid:vec4<f32>, pressureControl:vec4<f32>, bridgeMaterial:vec4<f32>, wind:vec4<f32>,
- momentumLo:vec4<f32>, momentumHi:vec4<f32>, priorFineLo:vec4<f32>, priorFineHi:vec4<f32>
+ momentumLo:vec4<f32>, momentumHi:vec4<f32>, priorFineLo:vec4<f32>, priorFineHi:vec4<f32>,
+ dissipation:vec4<f32>, sponge:vec4<f32>
 }
 struct Gas { a:vec4<f32>, b:vec4<f32> } // soot,heat,fuel,oxygen; fresh burn, soot-weighted heat moments 1..3
 @group(0) @binding(0) var<uniform> u:Params;
@@ -156,9 +177,14 @@ fn boxFraction(p:vec3<f32>,pitch:f32,lo:vec3<f32>,hi:vec3<f32>)->f32{
 fn fineFraction(p:vec3<f32>,pitch:f32)->f32{return boxFraction(p,pitch,fineLo(),fineHi());}
 fn fineDonorEnvelope(p:vec3<f32>,top:f32)->f32{
  let spanY=max(top+1.0,2.0);
- let rx=clamp((abs(p.x)-0.56)/0.40,0.0,1.0);
- let rz=clamp((abs(p.z)-0.56)/0.40,0.0,1.0);
- let ry=clamp((p.y-(-1.0+0.72*spanY))/(0.26*spanY),0.0,1.0);
+ let margin=clamp(select(0.36,u.dissipation.z,u.sponge.w>0.5&&u.dissipation.z>0.0),0.05,0.60);
+ let widthXZ=max(0.04,margin*(0.40/0.36));
+ let startXZ=max(0.0,0.96-widthXZ);
+ let widthY=max(0.04,margin*(0.26/0.36));
+ let startY=max(0.0,0.98-widthY);
+ let rx=clamp((abs(p.x)-startXZ)/widthXZ,0.0,1.0);
+ let rz=clamp((abs(p.z)-startXZ)/widthXZ,0.0,1.0);
+ let ry=clamp((p.y-(-1.0+startY*spanY))/(widthY*spanY),0.0,1.0);
  let r=clamp(length(vec3<f32>(rx,ry,rz)),0.0,1.0);
  return 1.0-r*r*(3.0-2.0*r);
 }
@@ -176,12 +202,47 @@ fn priorFineDonorWeight(p:vec3<f32>,pitch:f32)->f32{
  let top=(u.priorFineHi.y-center.y)/halfSpanX;
  return base*fineDonorEnvelope((p-center)/halfSpanX,top);
 }
-fn coarseSootClump(soot:f32,lapSoot:f32,dt:f32)->f32{
+fn coarseSootClump(soot:f32,lapSoot:f32,dt:f32,diffusion:f32)->f32{
  let s=max(0.0,soot);
  if(s<=0.0){return 0.0;}
- let step=max(dt,0.0);
- let delta=select(min(0.10*s,0.025*step*lapSoot),min(0.04*s,-0.02*step*lapSoot),lapSoot<0.0);
- return max(0.0,s+delta*(1.0-clamp(s*0.85,0.0,1.0)));
+ let step=clamp(max(dt,0.0)*4.0,0.25,2.0);
+ let diff=clamp(select(0.35,diffusion,u.sponge.w>0.5),-1.0,1.0);
+ if(diff>=0.0){
+  let delta=clamp(0.12*diff*step*lapSoot,-0.35*s,0.35*s);
+  return max(0.0,s+delta);
+ }
+ let clump=-diff;
+ let env=s*max(0.0,1.0-s);
+ let delta=clamp(-0.08*clump*step*lapSoot*(0.35+env),-0.20*s,0.20*max(0.0,1.0-s));
+ return max(0.0,s+delta);
+}
+fn worldSmokeDissipationSurvival(soot:f32,dt:f32,dissipationRate:f32)->f32{
+ let rate=max(0.0,select(0.035,dissipationRate,u.sponge.w>0.5));
+ let step=max(0.0,dt);
+ if(rate<=0.0||step<=0.0){return 1.0;}
+ let wispyBoost=1.0+1.2*(1.0-smoothstep(0.01,0.12,max(0.0,soot)));
+ return exp(-rate*wispyBoost*step);
+}
+fn worldBoundarySpongeSurvival(p:vec3<f32>,dt:f32)->f32{
+ let configured=u.sponge.w>0.5;
+ let hm=clamp(select(0.18,u.sponge.x,configured),0.0,0.5);
+ let vm=clamp(select(0.20,u.sponge.y,configured),0.0,0.5);
+ let strength=clamp(select(0.85,u.sponge.z,configured),0.0,1.0);
+ if(strength<=0.0||(hm<=1e-5&&vm<=1e-5)){return 1.0;}
+ let lo=u.materialLo.xyz;
+ let hi=lo+u.material.xyz*u.material.w;
+ let halfXZ=max((hi.x-lo.x)*0.5,1e-6);
+ let centerXZ=(lo.xz+hi.xz)*0.5;
+ let ax=abs(p.x-centerXZ.x)/halfXZ;
+ let az=abs(p.z-centerXZ.y)/halfXZ;
+ let ay=clamp((p.y-lo.y)/max(hi.y-lo.y,1e-6),0.0,1.0);
+ let rx=select(0.0,clamp((ax-(1.0-hm))/max(hm,1e-5),0.0,1.0),hm>1e-5);
+ let rz=select(0.0,clamp((az-(1.0-hm))/max(hm,1e-5),0.0,1.0),hm>1e-5);
+ let ry=select(0.0,clamp((ay-(1.0-vm))/max(vm,1e-5),0.0,1.0),vm>1e-5);
+ let r=clamp(length(vec3<f32>(rx,ry,rz)),0.0,1.0);
+ let collar=r*r*(3.0-2.0*r);
+ let step=max(dt,0.25);
+ return pow(max(0.0,1.0-0.88*strength*collar),step)*(1.0-0.65*strength*collar*collar);
 }
 // Semi-Lagrangian cell reconstruction: the transported prior Fine portion and
 // exterior portion each occupy their own subvolume. Only the part now covered
@@ -265,8 +326,9 @@ fn fineGasAt(p:vec3<f32>,pitch:f32)->Gas{
   sootHeat+=m*w;total+=w;
  }}}
  var avg=sootHeat/max(total,1e-12);
- if(reactantLawOn()&&u.time.x>0.0&&avg.x>1e-5){
-  avg.x=mix(avg.x,max(avg.x,peakSoot*0.75),0.35);
+ let sootBoost=clamp(select(0.10,u.dissipation.w,u.sponge.w>0.5),0.0,1.0);
+ if(reactantLawOn()&&u.time.x>0.0&&avg.x>1e-5&&sootBoost>0.0){
+  avg.x=mix(avg.x,max(avg.x,peakSoot*0.75),sootBoost);
  }
  return Gas(vec4<f32>(avg,0.0,0.0),vec4<f32>(0.0));
 }
@@ -445,10 +507,12 @@ fn storeMaterial(c:vec3<i32>,i:u32,p:vec3<f32>,value:Gas,contribution:Gas){
      neighbors+=plus.a+minus.a;
    }
    let lapA=neighbors-6.0*r.a;
-   let nextSoot=coarseSootClump(r.a.x,lapA.x,dt)*reactantSootSurvival(dt);
-   let nextHeat=max(0.0,r.a.y+w*lapA.y)*reactantCoolingSurvival(dt);
-   r=Gas(vec4<f32>(nextSoot,nextHeat,0.0,0.0),vec4<f32>(0.0));
- }else{let cooling=pow(.982,u.time.x);let survival=pow(.990,u.time.x);r=Gas(vec4<f32>(r.a.x*survival,r.a.y*cooling,0.0,0.0),vec4<f32>(0.0));}
+   let sponge=worldBoundarySpongeSurvival(p,dt);
+   let nextHeat=max(0.0,r.a.y+w*lapA.y)*reactantCoolingSurvival(dt)*sponge;
+   let rawSoot=coarseSootClump(r.a.x,lapA.x,dt,u.dissipation.y)*reactantSootSurvival(dt)*sootBurnoutSurvival(nextHeat,1.0,dt)*worldSmokeDissipationSurvival(r.a.x,dt,u.dissipation.x)*sponge;
+   let nextSoot=select(0.0,rawSoot,rawSoot>=1e-4);
+   r=Gas(vec4<f32>(nextSoot,select(0.0,nextHeat,nextHeat>=1e-4),0.0,0.0),vec4<f32>(0.0));
+ }else{let dt=u.time.x;let sponge=worldBoundarySpongeSurvival(p,dt);let cooling=pow(.982,dt)*sponge;let survival=pow(.990,dt)*worldSmokeDissipationSurvival(r.a.x,dt,u.dissipation.x)*sponge;r=Gas(vec4<f32>(select(0.0,r.a.x*survival,r.a.x*survival>=1e-4),select(0.0,r.a.y*cooling,r.a.y*cooling>=1e-4),0.0,0.0),vec4<f32>(0.0));}
  storeMaterial(c,i,p,gasAdd(gasScale(r,1.0-fraction),owned),owned);
 }
 `;
@@ -470,7 +534,7 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture,borrowMaterial
   const gasTexture=device.createTexture({label:'world smoke gas export',size:exportFields?plan.materialDims:[1,1,1],dimension:'3d',format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.STORAGE_BINDING});
   const bridgeFallback=device.createTexture({label:'disabled intermediate velocity',size:[1,1,1],dimension:'3d',format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING});
   const fallback=solidTexture?null:device.createTexture({label:'world smoke empty solids',size:plan.flowDims,dimension:'3d',format:'r32uint',usage:GPUTextureUsage.TEXTURE_BINDING});
-  const uniform=device.createBuffer({label:'world smoke uniforms',size:352,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+  const uniform=device.createBuffer({label:'world smoke uniforms',size:384,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
   const module=device.createShaderModule({label:'world smoke separate flow and material',code:WORLD_SMOKE_WGSL});
   const layout=device.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:'uniform'}},...[1,2,3,4,5,6,7,13].map(binding=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:[3,5,7,13].includes(binding)?'storage':'read-only-storage'}})),{binding:8,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:'unfilterable-float',viewDimension:'3d'}},{binding:9,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:'uint',viewDimension:'3d'}},...[10,12,16].map(binding=>({binding,visibility:GPUShaderStage.COMPUTE,storageTexture:{access:'write-only',format:'rgba32float',viewDimension:'3d'}})),...[17,18].map(binding=>({binding,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:'unfilterable-float',viewDimension:'2d'}})),...[11,14,15].map(binding=>({binding,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:'unfilterable-float',viewDimension:'3d'}}))]});
   const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]});
@@ -482,7 +546,7 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture,borrowMaterial
   const adaptiveViews=new WeakMap();
   const adaptiveView=texture=>{if(!adaptiveViews.has(texture))adaptiveViews.set(texture,texture.createView());return adaptiveViews.get(texture);};
   let v=0,m=0,p=0,steps=0;const groups=new Map();let lastFine,lastReaction,lastSolid,lastBridge,lastBridgeGas,lastBridgeOptical;
-  const values=new Float32Array(88);let priorFineBounds=Array(8).fill(0);
+  const values=new Float32Array(96);let priorFineBounds=Array(8).fill(0);
   return {optical,flowTexture,gasTexture,exportFields,plan,anchor,
     renderResources(){const hierarchy=adaptive?.renderResources();return {plan,steps,gas:hierarchy?.gas??materials[m],hierarchy};},
     remapResources(){return {plan,anchor,gas:materials[m],velocity:flows[v]};},
@@ -504,7 +568,7 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture,borrowMaterial
       return {...m,boxes:m.boxes.map(b=>({...b,lo:b.lo.map((x,a)=>x*anchor.scale+anchor.translate[a]),hi:b.hi.map((x,a)=>x*anchor.scale+anchor.translate[a]),motionMin:b.motionMin.map(x=>x*anchor.scale),motionMax:b.motionMax.map(x=>x*anchor.scale)}))};
     },
     adaptiveMaterialSnapshot(){return adaptive?.snapshot()??null;},
-    encode(encoder,{fineBuffer,reactionTexture,fineDims,fineVelocityMode='collocated',transform,time,reactant,physics,iterations=16,buoyancy=.002,transitionCells=0,solids=solidTexture??fallback,collisionSource=null,timing=null,intermediate=null,materialIndex=0,wind={},sources={parcels:[],supports:[],count:0}}){
+    encode(encoder,{fineBuffer,reactionTexture,fineDims,fineVelocityMode='collocated',transform,time,reactant,physics,iterations=16,buoyancy=.002,transitionCells=0,solids=solidTexture??fallback,collisionSource=null,timing=null,intermediate=null,materialIndex=0,wind={},dissipation={},sources={parcels:[],supports:[],count:0}}){
       if(flowOnly)m=materialIndex;
       if(!Number.isInteger(iterations)||iterations<0)throw Error('Invalid world pressure iterations');
       if(!Number.isFinite(transitionCells)||transitionCells<0)throw Error('Invalid world transition collar');
@@ -530,6 +594,16 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture,borrowMaterial
       const momentum=momentumBounds(plan,mapping.fineToField,fineDims);
       values.set([...momentum.lo,0,...momentum.hi,0],72);
       values.set(priorFineBounds,80);
+      values.set([
+        Number.isFinite(dissipation.rate)?dissipation.rate:0.035,
+        Number.isFinite(dissipation.diffusion)?dissipation.diffusion:0.35,
+        Number.isFinite(dissipation.handoffMargin)?dissipation.handoffMargin:0.36,
+        Number.isFinite(dissipation.handoffSootBoost)?dissipation.handoffSootBoost:0.10,
+        Number.isFinite(dissipation.spongeHorizontal)?dissipation.spongeHorizontal:0.18,
+        Number.isFinite(dissipation.spongeVertical)?dissipation.spongeVertical:0.20,
+        Number.isFinite(dissipation.spongeStrength)?dissipation.spongeStrength:0.85,
+        1,
+      ],88);
       device.queue.writeBuffer(uniform,0,values);
       const bridge=intermediate?.flowTexture??bridgeFallback;
       const bridgeGas=intermediate?.exportFields?intermediate.gasTexture:bridgeFallback,bridgeOptical=intermediate?.exportFields?intermediate.optical:bridgeFallback;

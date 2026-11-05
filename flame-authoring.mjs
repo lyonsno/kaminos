@@ -140,6 +140,10 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-world-smoke','World smoke'], ['volume-world-smoke-flow','Flow width'], ['volume-world-smoke-material','Material width'], ['volume-world-smoke-extent','Extent / fine width'],
     ['volume-world-smoke-pressure','Pressure width (0 = flow)'], ['volume-world-smoke-iterations','Pressure iterations'],
     ['volume-world-smoke-transition','Momentum collar (experimental)'],
+    ['volume-world-dissipation','Smoke dissipation'], ['volume-world-diffusion','Eddy diffusion'],
+    ['volume-world-sponge-horizontal','Horizontal sponge'], ['volume-world-sponge-vertical','Vertical sponge'], ['volume-world-sponge-strength','Sponge strength'],
+    ['volume-handoff-margin','Fine-to-World handoff margin'], ['volume-handoff-soot-boost','Handoff peak soot blend'],
+    ['volume-world-subgrid-warp','Sub-grid warp'], ['volume-world-subgrid-clump','Sub-grid clumping'],
   ] },
   { name:'Intermediate region', view:'quality', open:true, scope:'Independent material and velocity mode uses its own material field. Width changes preserve the physical extent. Material, velocity and pressure detail are independent.', fields:[
     ['volume-world-smoke-intermediate','Mode'],
@@ -161,7 +165,9 @@ export const FLAME_PROPERTY_GROUPS = [
   ] },
   { name:'Soot', view:'look', open:true, fields:[
     ['volume-reactant-soot-yield','Yield per fuel burned'],
+    ['volume-burnout-smoke-yield','Boundary sponge soot yield'],
     ['volume-physical-soot-burnout-rate','Burnout rate'], ['volume-physical-soot-burnout-kelvin','Burnout temperature (K)'],
+    ['volume-fine-sponge-horizontal','Fine horizontal sponge'], ['volume-fine-sponge-vertical','Fine vertical sponge'], ['volume-fine-sponge-strength','Fine sponge strength'],
     ['volume-density','Display gain'], ['volume-physical-smoke-extinction','Extinction'],
     ['volume-physical-smoke-albedo','Scattering albedo'],
   ] },

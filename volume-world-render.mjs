@@ -80,7 +80,7 @@ fn worldResidentMaterial(p:vec3<f32>,smokeVisible:f32,fireVisible:f32)->Emissive
 }
 struct WorldRenderGas {a:vec4<f32>,b:vec4<f32>}
 struct WorldRenderBrick {loPitch:vec4<f32>,children0:vec4<u32>,children1:vec4<u32>,info:vec4<u32>}
-struct WorldRenderParams {dimsPitch:vec4<f32>,loMode:vec4<f32>,rootsCount:vec4<u32>}
+struct WorldRenderParams {dimsPitch:vec4<f32>,loMode:vec4<f32>,rootsCount:vec4<u32>,subgrid:vec4<f32>}
 @group(3) @binding(4) var<storage,read> worldRenderGas:array<WorldRenderGas>;
 @group(3) @binding(5) var<storage,read> worldRenderBricks:array<WorldRenderBrick>;
 @group(3) @binding(6) var<storage,read> worldRenderWork:array<u32>;
@@ -113,20 +113,23 @@ fn worldRenderSubgridNoise3(x:vec3<f32>)->vec3<f32>{
  return mix(mix(mix(n000,n100,u.x),mix(n010,n110,u.x),u.y),mix(mix(n001,n101,u.x),mix(n011,n111,u.x),u.y),u.z);
 }
 fn worldSubgridWarpGrid(g:vec3<f32>,stepScale:f32)->vec3<f32>{
+ let warpGain=select(0.55,clamp(wr.subgrid.x,0.0,1.5),wr.subgrid.z>0.5);
+ if(warpGain<=0.0){return vec3<f32>(0.0);}
  let s=clamp(stepScale,0.125,2.0);
  let q=vec3<f32>(g.x*0.85,g.y*0.65,g.z*0.85);
  let w1=worldRenderSubgridNoise3(q+vec3<f32>(1.3,2.7,4.1))-vec3<f32>(0.5);
  let w2=worldRenderSubgridNoise3(q*2.15+vec3<f32>(2.1,-1.4,3.3))-vec3<f32>(0.5);
- return (0.65*w1+0.35*w2)*s*0.65;
+ return (0.65*w1+0.35*w2)*s*0.65*(warpGain/0.55);
 }
 fn worldSubgridClumpGrid(g:vec3<f32>,sigma:f32)->f32{
- if(wr.loMode.w<1.5||sigma<=0.0){return 1.0;}
+ let clumpGain=select(0.75,clamp(wr.subgrid.y,0.0,1.5),wr.subgrid.z>0.5);
+ if(wr.loMode.w<1.5||sigma<=0.0||clumpGain<=0.0){return 1.0;}
  let q=vec3<f32>(g.x*1.05,g.y*0.78,g.z*1.05);
  let n1=worldRenderSubgridNoise(q);
  let n2=worldRenderSubgridNoise(q*vec3<f32>(2.15,2.05,2.15)+vec3<f32>(1.7,-0.9,2.3));
  let billow=smoothstep(0.18,0.84,0.62*n1+0.38*n2);
- let strength=smoothstep(0.02,0.85,sigma);
- return mix(1.0,0.45+0.95*billow,strength);
+ let strength=smoothstep(0.02,0.85,sigma)*clamp(clumpGain/0.75,0.0,2.0);
+ return max(0.0,mix(1.0,0.45+0.95*billow,strength));
 }
 fn worldRenderHasHierarchy()->bool{return (u32(wr.loMode.w)&1u)!=0u;}
 fn worldRenderLeaf(q:vec3<f32>)->u32{
@@ -214,7 +217,7 @@ var<workgroup> worldBrickMax:array<vec2<f32>,64>;
 export function createWorldRenderField(device,module,uniformBuffer) {
  const S=GPUBufferUsage.STORAGE,D=GPUBufferUsage.COPY_DST;
  const dummy=device.createBuffer({label:'World render absent hierarchy',size:64,usage:S});
- const params=device.createBuffer({label:'World render preparation parameters',size:48,usage:GPUBufferUsage.UNIFORM|D});
+ const params=device.createBuffer({label:'World render preparation parameters',size:64,usage:GPUBufferUsage.UNIFORM|D});
  const fallback=device.createTexture({label:'World render inactive',dimension:'3d',size:[1,1,1],format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING});
  let texture=null,view=fallback.createView(),capacity=0,pipeline=null,last=null,builds=0,receipt={effective:'inactive'};
  let group0=null,empty1=null,empty2=null,group3=null,resources=[],bindings=new WeakMap();
@@ -244,7 +247,9 @@ export function createWorldRenderField(device,module,uniformBuffer) {
     group3=bindings.get(gas)??device.createBindGroup({layout:pipeline.getBindGroupLayout(3),entries:[...next.slice(0,3).map((buffer,i)=>({binding:4+i,resource:{buffer}})),{binding:7,resource:{buffer:params}},{binding:8,resource:view}]});bindings.set(gas,group3);resources=next;
    }
    const mode=(hierarchy?1:0)+(materialKey?.length>29&&materialKey[29]>.5?2:0);
-   const data=new ArrayBuffer(48);new Float32Array(data).set([...plan.materialDims,plan.materialPitch,...plan.min,mode]);new Uint32Array(data).set([...roots,count],8);device.queue.writeBuffer(params,0,data);
+   const warpGain=materialKey?.length>=47&&Number.isFinite(materialKey[45])?materialKey[45]:0.55;
+   const clumpGain=materialKey?.length>=47&&Number.isFinite(materialKey[46])?materialKey[46]:0.75;
+   const data=new ArrayBuffer(64);const f=new Float32Array(data);f.set([...plan.materialDims,plan.materialPitch,...plan.min,mode]);new Uint32Array(data).set([...roots,count],8);f.set([warpGain,clumpGain,1,0],12);device.queue.writeBuffer(params,0,data);
    const pass=encoder.beginComputePass({label:'World optical brick preparation'});pass.setPipeline(pipeline);for(const [i,g] of [group0,empty1,empty2,group3].entries())pass.setBindGroup(i,g);
    const x=Math.min(count,device.limits.maxComputeWorkgroupsPerDimension);pass.dispatchWorkgroups(x,Math.ceil(count/x));pass.end();last=key;builds++;
    receipt={effective:hierarchy?'resident-leaf-optics':'dense-cell-optics',materialDims:[...plan.materialDims],sourceSteps:steps,sourceRevision:hierarchy?.revision??null,builds,capacity,nodeCount:count,leafCount:hierarchy?.leafCount??count,bytes:texture.width*texture.height*texture.depthOrArrayLayers*16,reconstruction:'linear-optical-leaf-centres-with-neighbor-halo',denseExportUnchanged:true};

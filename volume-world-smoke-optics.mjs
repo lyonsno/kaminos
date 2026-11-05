@@ -12,22 +12,31 @@ export function worldSmokeOverlayGeometry(s) {
   middleFlowPitch:hasMiddle?m.flowPitch*s.anchor.scale:null,middleMaterialPitch:hasMiddle?m.materialPitch*s.anchor.scale:null,middlePressurePitch:hasMiddle?m.pressurePitch*s.anchor.scale:null};
 }
 
-export function fineOpticalEnvelope(p,top=3){
+export function fineOpticalEnvelope(p,top=3,margin=0.36){
  const spanY=Math.max(top+1,2);
- const rx=Math.max(0,Math.min(1,(Math.abs(p[0])-0.58)/0.40));
- const rz=Math.max(0,Math.min(1,(Math.abs(p[2])-0.58)/0.40));
- const ry=Math.max(0,Math.min(1,(p[1]-(-1+0.72*spanY))/(0.26*spanY)));
+ const m=Math.min(0.60,Math.max(0.05,Number(margin??0.36)));
+ const widthXZ=Math.max(0.04,m*(0.40/0.36));
+ const startXZ=Math.max(0,0.98-widthXZ);
+ const widthY=Math.max(0.04,m*(0.26/0.36));
+ const startY=Math.max(0,0.98-widthY);
+ const rx=Math.max(0,Math.min(1,(Math.abs(p[0])-startXZ)/widthXZ));
+ const rz=Math.max(0,Math.min(1,(Math.abs(p[2])-startXZ)/widthXZ));
+ const ry=Math.max(0,Math.min(1,(p[1]-(-1+startY*spanY))/(widthY*spanY)));
  const r=Math.min(1,Math.hypot(rx,ry,rz));
  return 1-r*r*(3-2*r);
 }
 
-export function fineFlameContainmentEnvelope(p,top=3){
+export function fineFlameContainmentEnvelope(p,top=3,horizMargin=0.22,vertMargin=0.20,strength=1){
+ const s=Math.max(0,Math.min(1,Number(strength??1)));
+ if(s<=0)return 1;
  const spanY=Math.max(top+1,2);
- const rx=Math.max(0,Math.min(1,(Math.abs(p[0])-0.74)/0.22));
- const rz=Math.max(0,Math.min(1,(Math.abs(p[2])-0.74)/0.22));
- const ry=Math.max(0,Math.min(1,(p[1]-(-1+0.78*spanY))/(0.19*spanY)));
+ const hm=Math.max(0,Math.min(0.6,Number(horizMargin??0.22)));
+ const vm=Math.max(0,Math.min(0.6,Number(vertMargin??0.20)));
+ const rx=hm>1e-5?Math.max(0,Math.min(1,(Math.abs(p[0])-(0.96-hm))/hm)):0;
+ const rz=hm>1e-5?Math.max(0,Math.min(1,(Math.abs(p[2])-(0.96-hm))/hm)):0;
+ const ry=vm>1e-5?Math.max(0,Math.min(1,(p[1]-(-1+(0.97-0.95*vm)*spanY))/(0.95*vm*spanY))):0;
  const r=Math.min(1,Math.hypot(rx,ry,rz));
- return 1-r*r*(3-2*r);
+ return 1-s*r*r*(3-2*r);
 }
 
 function fract1(x){return x-Math.floor(x);}
@@ -76,19 +85,29 @@ struct WorldSmokeRender { loPitch:vec4<f32>, hiEnabled:vec4<f32>, overlayControl
 fn worldSmokeOn()->bool{return worldRender.hiEnabled.w>0.5;}
 fn fineOpticalEnvelope(p:vec3<f32>,top:f32)->f32{
  let spanY=max(top+1.0,2.0);
- let rx=clamp((abs(p.x)-0.58)/0.40,0.0,1.0);
- let rz=clamp((abs(p.z)-0.58)/0.40,0.0,1.0);
- let ry=clamp((p.y-(-1.0+0.72*spanY))/(0.26*spanY),0.0,1.0);
+ let margin=clamp(select(0.36,worldRender.overlayControls.y,worldRender.overlayControls.y>0.0),0.05,0.60);
+ let widthXZ=max(0.04,margin*(0.40/0.36));
+ let startXZ=max(0.0,0.98-widthXZ);
+ let widthY=max(0.04,margin*(0.26/0.36));
+ let startY=max(0.0,0.98-widthY);
+ let rx=clamp((abs(p.x)-startXZ)/widthXZ,0.0,1.0);
+ let rz=clamp((abs(p.z)-startXZ)/widthXZ,0.0,1.0);
+ let ry=clamp((p.y-(-1.0+startY*spanY))/(widthY*spanY),0.0,1.0);
  let r=clamp(length(vec3<f32>(rx,ry,rz)),0.0,1.0);
  return 1.0-r*r*(3.0-2.0*r);
 }
 fn fineFlameContainmentEnvelope(p:vec3<f32>,top:f32)->f32{
+ let configured=u.viewport_steps_density.x>0.0;
+ let strength=clamp(select(0.92,u.open_world_boundary.w,configured),0.0,1.0);
+ if(strength<=0.0){return 1.0;}
  let spanY=max(top+1.0,2.0);
- let rx=clamp((abs(p.x)-0.74)/0.22,0.0,1.0);
- let rz=clamp((abs(p.z)-0.74)/0.22,0.0,1.0);
- let ry=clamp((p.y-(-1.0+0.78*spanY))/(0.19*spanY),0.0,1.0);
+ let hm=clamp(select(0.22,u.open_world_boundary.y,configured),0.0,0.6);
+ let vm=clamp(select(0.20,u.open_world_boundary.z,configured),0.0,0.6);
+ let rx=select(0.0,clamp((abs(p.x)-(0.96-hm))/max(hm,1e-5),0.0,1.0),hm>1e-5);
+ let rz=select(0.0,clamp((abs(p.z)-(0.96-hm))/max(hm,1e-5),0.0,1.0),hm>1e-5);
+ let ry=select(0.0,clamp((p.y-(-1.0+(0.97-0.95*vm)*spanY))/max(0.95*vm*spanY,1e-5),0.0,1.0),vm>1e-5);
  let r=clamp(length(vec3<f32>(rx,ry,rz)),0.0,1.0);
- return 1.0-r*r*(3.0-2.0*r);
+ return 1.0-strength*r*r*(3.0-2.0*r);
 }
 fn worldHash31(p:vec3<f32>)->f32{
  var q=fract(p*vec3<f32>(0.1031,0.1030,0.0973));
@@ -145,22 +164,25 @@ fn worldGridPoint(p:vec3<f32>)->vec3<f32>{
  return (p-worldRender.loPitch.xyz)/pitch;
 }
 fn worldSubgridWarp(p:vec3<f32>,pitch:f32)->vec3<f32>{
+ let warpGain=select(0.55,clamp(worldRender.overlayControls.z,0.0,1.5),worldRender.overlayControls.y>0.0);
+ if(warpGain<=0.0){return vec3<f32>(0.0);}
  let step=clamp(pitch,0.125,0.75);
  let g=worldGridPoint(p);
  let q=vec3<f32>(g.x*0.85,g.y*0.65,g.z*0.85);
  let w1=worldSubgridNoise3(q+vec3<f32>(1.3,2.7,4.1))-vec3<f32>(0.5);
  let w2=worldSubgridNoise3(q*2.15+vec3<f32>(2.1,-1.4,3.3))-vec3<f32>(0.5);
- return (0.65*w1+0.35*w2)*step*0.65;
+ return (0.65*w1+0.35*w2)*step*0.65*(warpGain/0.55);
 }
 fn worldSubgridClump(p:vec3<f32>,sigma:f32)->f32{
- if(u.reactant_combustion_a.x<0.5||sigma<=0.0){return 1.0;}
+ let clumpGain=select(0.75,clamp(worldRender.overlayControls.w,0.0,1.5),worldRender.overlayControls.y>0.0);
+ if(u.reactant_combustion_a.x<0.5||sigma<=0.0||clumpGain<=0.0){return 1.0;}
  let g=worldGridPoint(p);
  let q=vec3<f32>(g.x*1.05,g.y*0.78,g.z*1.05);
  let n1=worldSubgridNoise(q);
  let n2=worldSubgridNoise(q*vec3<f32>(2.15,2.05,2.15)+vec3<f32>(1.7,-0.9,2.3));
  let billow=smoothstep(0.18,0.84,0.62*n1+0.38*n2);
- let strength=smoothstep(0.02,0.85,sigma);
- return mix(1.0,0.45+0.95*billow,strength);
+ let strength=smoothstep(0.02,0.85,sigma)*clamp(clumpGain/0.75,0.0,2.0);
+ return max(0.0,mix(1.0,0.45+0.95*billow,strength));
 }
 fn worldSmokeDiagnostic(m:EmissiveMaterial,coarse:bool)->EmissiveMaterial{
  if(worldRender.overlayControls.x<.5||!worldSmokeOn()){return m;}

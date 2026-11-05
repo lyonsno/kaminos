@@ -7350,6 +7350,14 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // Reactant law: the single local burn. Fuel, oxidizer and heat change here;
   // under the candidate smokeFromHeat is the soot made this step per unit time
   // (no smoke from heat), and the expansion source below takes the same amount.
+  let preBurnContain = select(1.0, fineFlameContainmentEnvelope(p, -1.0 + 2.0 * f32(GRID_Y) / f32(GRID)), joinedBoundary() || openWorldBoundary() || (reactantOn && u.open_world_boundary.w > 0.0));
+  if (preBurnContain < 0.9999) {
+    let preBurnSurvival = stepRate(mix(0.06, 1.0, preBurnContain)) * preBurnContain;
+    let preSpongedFuel = fuel * (1.0 - preBurnSurvival);
+    fuel = fuel * preBurnSurvival;
+    let preBurnoutYield = clamp(select(0.10, u.display_interpolation.w, u.viewport_steps_density.x > 0.0), 0.0, 1.0);
+    smoke = smoke + preSpongedFuel * select(0.18, u.reactant_combustion_b.z * preBurnoutYield, reactantOn);
+  }
   var reactantBurned = 0.0;
   if (reactantOn) {
     let burn = reactantBurn(fuel, oxidizer, heat, timeStep);
@@ -7676,19 +7684,15 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   interfaceShred = interfaceShred * stepRate(mix(0.18, 1.0, wallFade));
   fireLick = fireLick * stepRate(mix(0.10, 1.0, wallFade) * mix(0.10, 1.0, fireTopFade));
   emberFleck = emberFleck * stepRate(mix(0.15, 1.0, wallFade));
-  if (joinedBoundary() || openWorldBoundary()) {
-    let flameContainSpanY = max(expandedTopY + 1.0, 2.0);
-    let flameContainRx = clamp((abs(p.x) - 0.74) / 0.22, 0.0, 1.0);
-    let flameContainRz = clamp((abs(p.z) - 0.74) / 0.22, 0.0, 1.0);
-    let flameContainRy = clamp((p.y - (-1.0 + 0.78 * flameContainSpanY)) / (0.19 * flameContainSpanY), 0.0, 1.0);
-    let flameContainR = clamp(length(vec3<f32>(flameContainRx, flameContainRy, flameContainRz)), 0.0, 1.0);
-    let flameContain = 1.0 - flameContainR * flameContainR * (3.0 - 2.0 * flameContainR);
+  if (joinedBoundary() || openWorldBoundary() || (reactantOn && u.open_world_boundary.w > 0.0)) {
+    let flameContain = fineFlameContainmentEnvelope(p, expandedTopY);
     if (flameContain < 0.9999) {
       let collarSurvival = stepRate(mix(0.06, 1.0, flameContain)) * flameContain;
       let spongedFuel = fuel * (1.0 - collarSurvival);
       fuel = fuel * collarSurvival;
       // Convert sponged unburned fuel into cold soot so boundary burnout feeds the smoke plume.
-      smoke = smoke + spongedFuel * select(0.18, u.reactant_combustion_b.z * 0.65, reactantOn);
+      let burnoutYield = clamp(select(0.10, u.display_interpolation.w, u.viewport_steps_density.x > 0.0), 0.0, 1.0);
+      smoke = smoke + spongedFuel * select(0.18, u.reactant_combustion_b.z * burnoutYield, reactantOn);
       reactantFreshBurnRate = reactantFreshBurnRate * collarSurvival;
       // Cool incandescent excess heat down to a warm non-glowing buoyancy ceiling (~750 K)
       // so the rising plume keeps its upward thermal buoyancy without glowing outside Fine.
@@ -11824,7 +11828,16 @@ export function createKaminosVolumePrototype({
     const time=resolveTimeStepConfig(controlsSnapshot).effective;
     const physics=resolvePhysicsAppearance(controlsSnapshot,{reactantAdmitted:true,emissiveRouteEffective:true});
     const sources=immersedCollectionPrepared?compileWorldSourceParcels(immersedCollectionPrepared,{grid:gridSize,gridHeight,transform:productTransform,anchor:worldSmoke.anchor}):{parcels:[],supports:[],count:0};
-    const input={sources,fineBuffer:fluidBuffers[currentFluid],reactionTexture:reactantTextures[currentFluid],fineDims:[gridSize,gridHeight,gridSize],fineVelocityMode:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode,transform:productTransform,time,reactant:state.reactantCombustion,physics,wind:{strength:uniforms[53],angle:uniforms[54],height:uniforms[55],speed:time.dynamicsSpeed}};
+    const dissipation={
+      rate:Math.min(0.25,Math.max(0,Number(controlsSnapshot.worldDissipation??0.035))),
+      diffusion:Math.min(1,Math.max(-1,Number(controlsSnapshot.worldDiffusion??0.35))),
+      handoffMargin:Math.min(0.60,Math.max(0.05,Number(controlsSnapshot.handoffMargin??0.36))),
+      handoffSootBoost:Math.min(1,Math.max(0,Number(controlsSnapshot.handoffSootBoost??0.10))),
+      spongeHorizontal:Math.min(0.5,Math.max(0,Number(controlsSnapshot.worldSpongeHorizontal??0.18))),
+      spongeVertical:Math.min(0.5,Math.max(0,Number(controlsSnapshot.worldSpongeVertical??0.20))),
+      spongeStrength:Math.min(1,Math.max(0,Number(controlsSnapshot.worldSpongeStrength??0.85))),
+    };
+    const input={sources,fineBuffer:fluidBuffers[currentFluid],reactionTexture:reactantTextures[currentFluid],fineDims:[gridSize,gridHeight,gridSize],fineVelocityMode:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode,transform:productTransform,time,reactant:state.reactantCombustion,physics,dissipation,wind:{strength:uniforms[53],angle:uniforms[54],height:uniforms[55],speed:time.dynamicsSpeed}};
     let intermediateState={effective:'off'};
     if(intermediateFlow){
       let middleSolids;
@@ -11839,12 +11852,27 @@ export function createKaminosVolumePrototype({
     }
     state.worldSmoke={requested:true,effective:'one-way-world-field',...worldSmoke.encode(encoder,{...input,iterations:regions.worldIterations,transitionCells:Number(controlsSnapshot.worldSmokeTransition??0),solids,collisionSource,timing,intermediate:intermediateFlow}),intermediate:intermediateState};
     Object.assign(state.worldSmoke,{min:[...plan.min],max:[...plan.max],fineDims:[gridSize,gridHeight,gridSize],fineTransform:{translate:[...productTransform.translate],scale:productTransform.scale},raymarch:{policy:'shared-quality-material-cell-step',reference:'160-steps-adaptive-off-half-cell',steps:uniforms[22],adaptive:controlsSnapshot.adaptiveRays,sampleTelemetry:'includes-exterior'}});
-    refreshWorldRenderMapping();
+    const map=worldSmokeMapping(plan,worldSmoke.anchor,productTransform);
+    device.queue.writeBuffer(worldRenderUniform,0,new Float32Array([...map.renderMin,map.renderPitch,...map.renderMax,1]));
+    device.queue.writeBuffer(worldRenderUniform,32,new Float32Array([
+      typeof worldSmokeOverlay!=='undefined'&&worldSmokeOverlay==='contributions'?1:0,
+      dissipation.handoffMargin,
+      Math.min(1.5,Math.max(0,Number(controlsSnapshot.worldSubgridWarp??0.55))),
+      Math.min(1.5,Math.max(0,Number(controlsSnapshot.worldSubgridClump??0.75))),
+    ]));
+    const middleMap=intermediateFlow?.exportFields?worldSmokeMapping(intermediateFlow.plan,intermediateFlow.anchor,productTransform):null;
+    device.queue.writeBuffer(worldRenderUniform,48,new Float32Array(middleMap?[...middleMap.renderMin,middleMap.renderPitch,...middleMap.renderMax,1]:Array(8).fill(0)));
   }
   function refreshWorldRenderMapping() {
     if (!worldSmoke || controlsSnapshot.worldSmoke !== 'on') return;
     const map=worldSmokeMapping(worldSmoke.plan,worldSmoke.anchor,productTransform);
     device.queue.writeBuffer(worldRenderUniform,0,new Float32Array([...map.renderMin,map.renderPitch,...map.renderMax,1]));
+    device.queue.writeBuffer(worldRenderUniform,32,new Float32Array([
+      worldSmokeOverlay==='contributions'?1:0,
+      Math.min(0.60,Math.max(0.05,Number(controlsSnapshot.handoffMargin??0.36))),
+      Math.min(1.5,Math.max(0,Number(controlsSnapshot.worldSubgridWarp??0.55))),
+      Math.min(1.5,Math.max(0,Number(controlsSnapshot.worldSubgridClump??0.75))),
+    ]));
     const middleMap=intermediateFlow?.exportFields?worldSmokeMapping(intermediateFlow.plan,intermediateFlow.anchor,productTransform):null;
     device.queue.writeBuffer(worldRenderUniform,48,new Float32Array(middleMap?[...middleMap.renderMin,middleMap.renderPitch,...middleMap.renderMax,1]:Array(8).fill(0)));
   }
@@ -16912,10 +16940,15 @@ export function createKaminosVolumePrototype({
       displayConfig = {...displayRequest,value:0};
       displayAdmission = displayReconstruction.ensure([gridSize,gridHeight,gridSize],displayConfig);
     }
+    uniforms[OPEN_WORLD_UNIFORM_OFFSET + 1] = Math.min(0.6, Math.max(0, Number(controlsSnapshot.fineSpongeHorizontal ?? 0.22)));
+    uniforms[OPEN_WORLD_UNIFORM_OFFSET + 2] = Math.min(0.6, Math.max(0, Number(controlsSnapshot.fineSpongeVertical ?? 0.20)));
+    uniforms[OPEN_WORLD_UNIFORM_OFFSET + 3] = Math.min(1, Math.max(0, Number(controlsSnapshot.fineSpongeStrength ?? 0.92)));
+    if (worldRenderUniform && worldSmoke && controlsSnapshot.worldSmoke === 'on') refreshWorldRenderMapping();
     uniforms.set([displayConfig.value,displayConfig.emission,displayConfig.smoke,displayConfig.scale], DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET);
     uniforms.set([displayConfig.alignment==='aligned'?1:0,
       displayConfig.emissionInterpolation==='monotone'?2:displayConfig.emissionInterpolation==='interpolating'?1:0,
-      displayConfig.smokeInterpolation==='monotone'?2:displayConfig.smokeInterpolation==='interpolating'?1:0,0], DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET+4);
+      displayConfig.smokeInterpolation==='monotone'?2:displayConfig.smokeInterpolation==='interpolating'?1:0,
+      Math.min(1, Math.max(0, Number(controlsSnapshot.burnoutSmokeYield ?? 0.10)))], DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET+4);
     if (displayAdmission?.changed) {
       rebuildFluidBindGroups();
       rebuildSceneSolidBindingViews();
@@ -21193,7 +21226,7 @@ export function createKaminosVolumePrototype({
   }
 
   function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
-    const worldRenderChanged=worldRenderField.encode(encoder,state.worldSmoke?.effective==='one-way-world-field'?worldSmoke.renderResources():null,[uniforms[23],...uniforms.subarray(368,376),...uniforms.subarray(EMISSIVE_UNIFORM_OFFSET,EMISSIVE_UNIFORM_OFFSET+20),...uniforms.subarray(REACTANT_COMBUSTION_UNIFORM_OFFSET,REACTANT_COMBUSTION_UNIFORM_OFFSET+16)]);
+    const worldRenderChanged=worldRenderField.encode(encoder,state.worldSmoke?.effective==='one-way-world-field'?worldSmoke.renderResources():null,[uniforms[23],...uniforms.subarray(368,376),...uniforms.subarray(EMISSIVE_UNIFORM_OFFSET,EMISSIVE_UNIFORM_OFFSET+20),...uniforms.subarray(REACTANT_COMBUSTION_UNIFORM_OFFSET,REACTANT_COMBUSTION_UNIFORM_OFFSET+16),Math.min(1.5,Math.max(0,Number(controlsSnapshot.worldSubgridWarp??0.55))),Math.min(1.5,Math.max(0,Number(controlsSnapshot.worldSubgridClump??0.75)))]);
     state.worldRenderField=worldRenderField.read();
     if(state.displayReconstruction)state.displayReconstruction.outerFields=state.worldRenderField.effective;
 
@@ -28909,7 +28942,12 @@ export function createKaminosVolumePrototype({
     setWorldSmokeOverlay(mode) {
       if(!['off','bounds','contributions'].includes(mode))throw Error('Unknown world smoke overlay');
       worldSmokeOverlay=mode;
-      if(device&&worldRenderUniform)device.queue.writeBuffer(worldRenderUniform,32,new Float32Array([mode==='contributions'?1:0,0,0,0]));
+      if(device&&worldRenderUniform)device.queue.writeBuffer(worldRenderUniform,32,new Float32Array([
+        mode==='contributions'?1:0,
+        Math.min(0.60,Math.max(0.05,Number(controlsSnapshot.handoffMargin??0.36))),
+        Math.min(1.5,Math.max(0,Number(controlsSnapshot.worldSubgridWarp??0.55))),
+        Math.min(1.5,Math.max(0,Number(controlsSnapshot.worldSubgridClump??0.75))),
+      ]));
       return mode;
     },
     debugState() {

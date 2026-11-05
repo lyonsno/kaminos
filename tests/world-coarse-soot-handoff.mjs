@@ -9,38 +9,55 @@ import { WORLD_RENDER_STRIDE, WORLD_RENDER_WGSL } from '../volume-world-render.m
 import { COMPOSED_SMOKE_WGSL } from '../scene-smoke-reconstruction.mjs';
 import { SCENE_VOLUME_SOURCE_WGSL } from '../scene-volume-source.mjs';
 import { EMISSIVE_TRANSPORT_WGSL } from '../volume-emissive-transport.mjs';
+import { VOLUME_CONTROL_DESCRIPTIONS } from '../volume-control-descriptions.mjs';
+import { FLAME_PROPERTY_GROUPS } from '../flame-authoring.mjs';
 
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+const indexHtml = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const presetSchema = JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json', import.meta.url), 'utf8'));
 
-test('coarse soot transport excludes soot from gaseous Laplacian diffusion and sharpens soot peaks', () => {
+test('coarse soot transport dilutes peaks by default without creating net mass and supports tunable diffusion', () => {
   assert.equal(typeof worldSmoke.coarseSootClump, 'function');
 
   // Zero soot stays zero even with positive neighbor Laplacian.
   assert.equal(worldSmoke.coarseSootClump(0, 0.4, 0.25), 0);
 
-  // A local soot peak (negative Laplacian) is preserved/sharpened rather than diffused down.
+  // Under default positive eddy diffusion (+0.35), a local soot peak (lapSoot < 0) dilutes down
+  // and a valley (lapSoot > 0) receives no more mass than the peak loses (no net mass creation).
   const peakSoot = 0.24;
-  const sharpened = worldSmoke.coarseSootClump(peakSoot, -0.15, 0.25);
+  const valleySoot = 0.08;
+  const nextPeak = worldSmoke.coarseSootClump(peakSoot, -0.15, 0.25, 0.35);
+  const nextValley = worldSmoke.coarseSootClump(valleySoot, +0.15, 0.25, 0.35);
   assert.ok(
-    sharpened >= peakSoot,
-    `expected local soot peak to resist diffusion (got ${sharpened} < ${peakSoot})`,
+    nextPeak < peakSoot,
+    `expected local soot peak to dilute under positive diffusion (got ${nextPeak} >= ${peakSoot})`,
+  );
+  assert.ok(
+    nextPeak + nextValley <= peakSoot + valleySoot + 1e-12,
+    `expected peak+valley pair not to create net soot mass (${nextPeak + nextValley} > ${peakSoot + valleySoot})`,
   );
 
-  // Both coarse material solvers must use coarseSootClump on r.a.x and restrict w * lapA to .yzw.
+  // Negative diffusion (-0.5) clumps peaks while draining valleys without creating mass across both signs.
+  const clumpedPeak = worldSmoke.coarseSootClump(peakSoot, -0.15, 0.25, -0.5);
+  const drainedValley = worldSmoke.coarseSootClump(valleySoot, +0.15, 0.25, -0.5);
+  assert.ok(clumpedPeak > peakSoot, `expected negative diffusion to clump peaks (${clumpedPeak} <= ${peakSoot})`);
+  assert.ok(drainedValley < valleySoot, `expected negative diffusion to drain valleys (${drainedValley} >= ${valleySoot})`);
+
+  // Both coarse material solvers must use coarseSootClump(r.a.x, lapA.x, dt, u.dissipation.y).
   assert.match(worldSmoke.WORLD_SMOKE_SHARED_WGSL, /fn coarseSootClump\(/);
-  assert.match(worldSmoke.WORLD_SMOKE_WGSL, /coarseSootClump\(r\.a\.x,\s*lapA\.x,\s*dt\)/);
+  assert.match(worldSmoke.WORLD_SMOKE_WGSL, /coarseSootClump\(r\.a\.x,\s*lapA\.x,\s*dt,\s*u\.dissipation\.y\)/);
   assert.doesNotMatch(worldSmoke.WORLD_SMOKE_WGSL, /r\.a\s*=\s*max\(vec4<f32>\(0\),\s*r\.a\s*\*\s*\(1\.0\s*-\s*6\.0\s*\*\s*w\)\s*\+\s*neighbors\s*\*\s*w\)/);
   assert.match(
     materialHierarchy.MATERIAL_HIERARCHY_WGSL,
-    /coarseSootClump\(r\.a\.x,\s*lapA\.x,\s*dt\)/,
+    /coarseSootClump\(r\.a\.x,\s*lapA\.x,\s*dt,\s*u\.dissipation\.y\)/,
   );
   assert.doesNotMatch(
     materialHierarchy.MATERIAL_HIERARCHY_WGSL,
     /r\.a\s*=\s*max\(vec4<f32>\(0\),\s*r\.a\s*\*\s*\(1\.0\s*-\s*6\.0\s*\*\s*w\)\s*\+\s*neighbors\s*\*\s*w\)/,
   );
   // Smoke-only coarse World grid zeroes Plane B instead of evolving thermal moments.
-  assert.match(worldSmoke.WORLD_SMOKE_WGSL, /vec4<f32>\(nextSoot,nextHeat,0\.0,0\.0\),vec4<f32>\(0\.0\)/);
-  assert.match(materialHierarchy.MATERIAL_HIERARCHY_WGSL, /vec4<f32>\(nextSoot,nextHeat,0\.0,0\.0\),vec4<f32>\(0\.0\)/);
+  assert.match(worldSmoke.WORLD_SMOKE_WGSL, /vec4<f32>\(nextSoot,select\(0\.0,nextHeat,nextHeat>=1e-4\),0\.0,0\.0\),vec4<f32>\(0\.0\)/);
+  assert.match(materialHierarchy.MATERIAL_HIERARCHY_WGSL, /vec4<f32>\(nextSoot,select\(0\.0,nextHeat,nextHeat>=1e-4\),0\.0,0\.0\),vec4<f32>\(0\.0\)/);
 });
 
 test('fine-to-coarse donor envelope tapers smoothly inside upper walls and corners so coarse advection takes over before the box edge', () => {
@@ -142,12 +159,24 @@ test('smoke-only coarse World grid packs 4 subcell extinctions per texel (WORLD_
   assert.match(residentFn, /return EmissiveMaterial\(vec3<f32>\(0\),sigma\*\(1\.0-albedo\),sigma\*albedo\);/);
 
   const transportFn = worldSmoke.WORLD_SMOKE_WGSL.slice(worldSmoke.WORLD_SMOKE_WGSL.indexOf('fn transportMaterial('));
-  assert.doesNotMatch(transportFn, /reactantBurn|shiftThermalMoments|sootBurnoutSurvival/);
+  assert.doesNotMatch(transportFn, /reactantBurn|shiftThermalMoments/);
+  assert.match(transportFn, /sootBurnoutSurvival\(nextHeat,\s*1\.0,\s*dt\)/);
+  assert.match(transportFn, /worldSmokeDissipationSurvival\(r\.a\.x,\s*dt,\s*u\.dissipation\.x\)/);
+  assert.match(transportFn, /worldBoundarySpongeSurvival\(p,\s*dt\)/);
   const advanceFn = materialHierarchy.MATERIAL_HIERARCHY_WGSL.slice(
     materialHierarchy.MATERIAL_HIERARCHY_WGSL.indexOf('fn advanceBricks('),
     materialHierarchy.MATERIAL_HIERARCHY_WGSL.indexOf('fn restrictBricks('),
   );
-  assert.doesNotMatch(advanceFn, /reactantBurn|shiftThermalMoments|sootBurnoutSurvival/);
+  assert.doesNotMatch(advanceFn, /reactantBurn|shiftThermalMoments/);
+  assert.match(advanceFn, /sootBurnoutSurvival\(nextHeat,\s*1\.0,\s*dt\)/);
+  assert.match(advanceFn, /worldSmokeDissipationSurvival\(r\.a\.x,\s*dt,\s*u\.dissipation\.x\)/);
+  assert.match(advanceFn, /worldBoundarySpongeSurvival\(p,\s*dt\)/);
+
+  // measureBricks keeps raw soot out of mixing (signal.y) so diluted smoke bricks can coarsen.
+  assert.match(
+    materialHierarchy.MATERIAL_HIERARCHY_WGSL,
+    /signal\[l\]=vec4<f32>\(0\.0,0\.0,grad\.y,grad\.x\+0\.35\*r\.a\.x\);/,
+  );
 
   assert.equal(typeof worldOptics.fineFlameContainmentEnvelope, 'function');
   assert.equal(worldOptics.fineFlameContainmentEnvelope([0, 0, 0], 3), 1);
@@ -158,9 +187,37 @@ test('smoke-only coarse World grid packs 4 subcell extinctions per texel (WORLD_
   );
   assert.equal(worldOptics.fineFlameContainmentEnvelope([0.97, 1.0, 0], 3), 0, 'Flame emission is sponged to 0 before the Fine wall');
   assert.equal(worldOptics.fineFlameContainmentEnvelope([0, 2.92, 0], 3), 0, 'Flame emission is sponged to 0 before the Fine ceiling');
+  assert.equal(worldOptics.fineFlameContainmentEnvelope([0.97, 1.0, 0], 3, 0.22, 0.20, 0), 1, 'Zero sponge strength disables Fine containment');
 
   assert.match(core, /let spongedFuel = fuel \* \(1\.0 - collarSurvival\);/);
   assert.match(core, /smoke = smoke \+ spongedFuel \* select\(/);
   assert.match(core, /reactantFreshBurnRate = reactantFreshBurnRate \* collarSurvival;/);
   assert.match(core, /let warmBuoyancyCap = 450\.0 \/ max\(u\.emissive_physics\.y, 800\.0\);/);
+  assert.match(EMISSIVE_TRANSPORT_WGSL, /fineFlameContainmentEnvelope\(p,\s*top\)/);
+});
+
+test('boundary sponging, dissipation, handoff, and World sub-grid detail are promoted to explicit authoring controls', () => {
+  const expectedControls = [
+    'volume-fine-sponge-horizontal',
+    'volume-fine-sponge-vertical',
+    'volume-fine-sponge-strength',
+    'volume-burnout-smoke-yield',
+    'volume-world-dissipation',
+    'volume-world-diffusion',
+    'volume-world-sponge-horizontal',
+    'volume-world-sponge-vertical',
+    'volume-world-sponge-strength',
+    'volume-handoff-margin',
+    'volume-handoff-soot-boost',
+    'volume-world-subgrid-warp',
+    'volume-world-subgrid-clump',
+  ];
+  const schemaKeys = new Set(presetSchema.controls.map(c => c.key));
+  const groupKeys = new Set(FLAME_PROPERTY_GROUPS.flatMap(g => g.fields.map(f => f[0])));
+  for (const id of expectedControls) {
+    assert.match(indexHtml, new RegExp(`id="${id}"`), `missing ${id} in index.html`);
+    assert.ok(schemaKeys.has(id), `missing ${id} in volume-settings-preset-schema-v2.json`);
+    assert.ok(VOLUME_CONTROL_DESCRIPTIONS[id], `missing ${id} in VOLUME_CONTROL_DESCRIPTIONS`);
+    assert.ok(groupKeys.has(id), `missing ${id} in FLAME_PROPERTY_GROUPS`);
+  }
 });

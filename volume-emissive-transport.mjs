@@ -279,7 +279,8 @@ fn seedEmissiveLight(@builtin(global_invocation_id) c: vec3<u32>) {
     let support = liveBoundarySupportAt(p, max(u.topology_shell_carriers,vec4<f32>(0.0)));
     let coverage = support;
     let medium = emissiveMaterial(r,coverage,1.0-u.boundary_fire_display.z);
-    coefficients += vec4<f32>(medium.emission,medium.absorption+medium.scattering)*0.125;
+    let flameKeep = select(1.0, fineFlameContainmentEnvelope(p, top), u.reactant_combustion_a.x > 0.5 && u.open_world_boundary.w > 0.0);
+    coefficients += vec4<f32>(medium.emission * flameKeep,medium.absorption+medium.scattering)*0.125;
   }
   emissiveCoefficientsDst[lightIndex(c)] = coefficients;
 }

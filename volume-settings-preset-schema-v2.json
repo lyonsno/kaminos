@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 167,
+  "controlCount": 180,
   "controls": [
     {
       "key": "volume-fine-velocity",
@@ -1262,6 +1262,123 @@
       "additiveDefault": 0.05,
       "additiveLineage": "fine-coverage",
       "additiveSinceControlCount": 7
+    },
+    {
+      "key": "volume-fine-sponge-horizontal",
+      "param": "volume_fine_sponge_horizontal",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "0.22",
+      "additiveLineage": "boundary-sponge-dissipation",
+      "additiveSinceControlCount": 1
+    },
+    {
+      "key": "volume-fine-sponge-vertical",
+      "param": "volume_fine_sponge_vertical",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "0.2",
+      "additiveLineage": "boundary-sponge-dissipation",
+      "additiveSinceControlCount": 2
+    },
+    {
+      "key": "volume-fine-sponge-strength",
+      "param": "volume_fine_sponge_strength",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "0.92",
+      "additiveLineage": "boundary-sponge-dissipation",
+      "additiveSinceControlCount": 3
+    },
+    {
+      "key": "volume-burnout-smoke-yield",
+      "param": "volume_burnout_smoke_yield",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "0.1",
+      "additiveLineage": "boundary-sponge-dissipation",
+      "additiveSinceControlCount": 4
+    },
+    {
+      "key": "volume-world-dissipation",
+      "param": "volume_world_dissipation",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "0.035",
+      "additiveLineage": "boundary-sponge-dissipation",
+      "additiveSinceControlCount": 5
+    },
+    {
+      "key": "volume-world-diffusion",
+      "param": "volume_world_diffusion",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "0.35",
+      "additiveLineage": "boundary-sponge-dissipation",
+      "additiveSinceControlCount": 6
+    },
+    {
+      "key": "volume-world-sponge-horizontal",
+      "param": "volume_world_sponge_horizontal",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "0.18",
+      "additiveLineage": "boundary-sponge-dissipation",
+      "additiveSinceControlCount": 7
+    },
+    {
+      "key": "volume-world-sponge-vertical",
+      "param": "volume_world_sponge_vertical",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "0.2",
+      "additiveLineage": "boundary-sponge-dissipation",
+      "additiveSinceControlCount": 8
+    },
+    {
+      "key": "volume-world-sponge-strength",
+      "param": "volume_world_sponge_strength",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "0.85",
+      "additiveLineage": "boundary-sponge-dissipation",
+      "additiveSinceControlCount": 9
+    },
+    {
+      "key": "volume-handoff-margin",
+      "param": "volume_handoff_margin",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "0.36",
+      "additiveLineage": "boundary-sponge-dissipation",
+      "additiveSinceControlCount": 10
+    },
+    {
+      "key": "volume-handoff-soot-boost",
+      "param": "volume_handoff_soot_boost",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "0.1",
+      "additiveLineage": "boundary-sponge-dissipation",
+      "additiveSinceControlCount": 11
+    },
+    {
+      "key": "volume-world-subgrid-warp",
+      "param": "volume_world_subgrid_warp",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "0.55",
+      "additiveLineage": "boundary-sponge-dissipation",
+      "additiveSinceControlCount": 12
+    },
+    {
+      "key": "volume-world-subgrid-clump",
+      "param": "volume_world_subgrid_clump",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "0.75",
+      "additiveLineage": "boundary-sponge-dissipation",
+      "additiveSinceControlCount": 13
     }
   ],
   "retiredControls": [
