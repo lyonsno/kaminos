@@ -197,7 +197,7 @@ const formedColor=wgslFn(`fn hill_geological_color(x:f32,z:f32,bed:f32,soil:f32,
  let effSoil=soil*(1.-.82*slopeStrip);
  let soilScale=mix(.014,.044,smoothstep(.04,.26,steep));
  let rawExp=exp(-effSoil/soilScale);
- let exposed=mix(rawExp,smoothstep(.26,.72,rawExp),.72*(1.-sStyle));
+ let exposed=rawExp;
  if(viewMode>.5&&viewMode<1.5){
   let simEarth=vec3<f32>(.125,.192,.072);
   let simRock=vec3<f32>(.32,.255,.185);
@@ -246,8 +246,8 @@ const formedColor=wgslFn(`fn hill_geological_color(x:f32,z:f32,bed:f32,soil:f32,
  let rillMask=clamp(meso*eRill*.34*smoothstep(.16,.42,gullyNoise)*smoothstep(.05,.24,steep)*(1.-cliffWall),0.,.68);
  let earth=mix(turfMix,stonyWash,rillMask);
  let ground=mix(earth,screeColor,clamp(meso*eCob*.58*screeZone*sStyle,0.,.78));
- let outExp=clamp(exposed+meso*eRill*.24*smoothstep(.20,.44,gullyNoise)*smoothstep(.10,.30,steep)*hillElev,0.,1.);
- let srgb=mix(ground,rock,outExp);
+ let outExp=clamp(exposed+meso*eRill*.16*smoothstep(.18,.46,gullyNoise)*smoothstep(.10,.30,steep)*hillElev,0.,1.);
+ let srgb=mix(ground,rock,outExp*.65);
  return vec4<f32>(clamp(srgb*srgb*1.42,vec3<f32>(.02),vec3<f32>(.32)),outExp);
 }`,[geoFbm3,geoLedgeProfile,geoRockCrag]);
 
@@ -272,15 +272,17 @@ const fragFormedColor=wgslFn(`fn hill_frag_color(vColor:vec4<f32>,x:f32,y:f32,z:
  let bedWeight=clamp(.20+.80*sStyle,.20,1.)*lensMask;
  let phase=(y-dipScale*tilt*rx-dipScale*fold*warp+seed*.017)/thickness+.18*nWarp*(1.-.45*sStyle);
  let steep=clamp(1.-ny,0.,1.);
- let exposed=clamp(vColor.w,0.,1.);
+ let rawExp=clamp(vColor.w,0.,1.);
+ let crag0=hill_crag(rx*1.8,y*1.5,rz*1.8,phase,seed);
+ let crag1=hill_crag(rx*6.8,y*5.6,rz*6.8,phase*2.618,seed+17.3);
+ let crag2=hill_crag(rx*24.,y*20.,rz*24.,phase*6.854,seed+41.9);
+ let fragOutcrop=smoothstep(.24,.66,rawExp+.18*(1.-sStyle)*nWarp+.10*crag0.x+.08*eRill*nWarp*smoothstep(.08,.28,steep));
+ let exposed=mix(rawExp,fragOutcrop,.76*(1.-sStyle));
  let cliffWall=smoothstep(.10,.34,steep)*exposed;
  let l0=hill_ledge(phase);
  let l1=hill_ledge(phase*1.618034+.14*nWarp);
  let l2=hill_ledge(phase*4.236068-.10*nWarp);
  let talusBand=clamp((1.-exposed)*smoothstep(.03,.24,steep)+smoothstep(.15,.58,l0.x*bedWeight)*smoothstep(.12,.48,steep)*(1.-smoothstep(.58,.85,steep)),0.,1.);
- let crag0=hill_crag(rx*1.8,y*1.5,rz*1.8,phase,seed);
- let crag1=hill_crag(rx*6.8,y*5.6,rz*6.8,phase*2.618,seed+17.3);
- let crag2=hill_crag(rx*24.,y*20.,rz*24.,phase*6.854,seed+41.9);
  let grain0=hill_fbm3(vec3<f32>(rx*28.,y*38.,rz*28.))*cGrain;
  let grain1=hill_fbm3(vec3<f32>(rx*110.,y*145.,rz*110.))*cGrain;
  let aperiodicBand=.5+.32*sin(phase*6.2831853)+.18*sin(phase*3.883222+.9);
@@ -354,18 +356,18 @@ const zoomCellKernel=wgslFn(`fn hill_cell_xy(ix:u32,iz:u32,n:u32,state:ptr<stora
 }`);
 
 const baseCutoutKernel=wgslFn(`fn hill_base_cutout(x:f32,z:f32,fx:f32,fz:f32,fr:f32,useFormed:f32,zoomOn:f32)->f32{
- if(useFormed<.5||zoomOn<.5||fr>3.05){return 1.;}
+ if(useFormed<.5||zoomOn<.5||fr>3.25){return 1.;}
  let distToEdge=fr-max(abs(x-fx),abs(z-fz));
  if(distToEdge>.055){return 0.;}
  return 1.;
 }`);
 
 const basePosKernel=wgslFn(`fn hill_base_pos(v:u32,n:u32,x:f32,y:f32,z:f32,fx:f32,fz:f32,fr:f32,useFormed:f32,zoomOn:f32,state:ptr<storage,array<vec4<f32>>,read_write>)->vec4<f32>{
- if(useFormed<.5||zoomOn<.5||fr>3.05){return vec4<f32>(x,y,z,1.);}
+ if(useFormed<.5||zoomOn<.5||fr>3.25){return vec4<f32>(x,y,z,1.);}
  let c=hill_cell_xy(v%n,v/n,n,state);
  let dBox=max(abs(x-fx),abs(z-fz));
  let distToEdge=fr-dBox;
- let zAct=1.-smoothstep(2.65,3.05,fr);
+ let zAct=1.-smoothstep(2.90,3.25,fr);
  let cut=smoothstep(.10,.28,distToEdge);
  return vec4<f32>(x,c.x+c.y-.042*zAct*cut,z,1.);
 }`,[zoomCellKernel]);
@@ -449,6 +451,7 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
  let cr3=cwx0*p03+cwx1*p13+cwx2*p23+cwx3*p33;
  let minCell=min(min(p11,p21),min(p12,p22));
  let maxCell=max(max(p11,p21),max(p12,p22));
+ let bSpline=wz0*r0+wz1*r1+wz2*r2+wz3*r3;
  let cub=clamp(cwz0*cr0+cwz1*cr1+cwz2*cr2+cwz3*cr3,minCell,maxCell);
  let dhdx=dCubX.x+dCubX.y;
  let dhdz=dCubZ.x+dCubZ.y;
@@ -457,13 +460,14 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
  let dBox=max(abs(wx-fx),abs(wz-fz));
  let distToEdge=max(0.,fr-dBox);
  let border=1.-smoothstep(.45,.49,max(abs(wx/width),abs(wz/length)));
- let zoomActive=1.-smoothstep(2.65,3.15,fr);
+ let zoomActive=1.-smoothstep(2.90,3.30,fr);
  let wPatch=smoothstep(.085,.22,distToEdge)*border*zoomActive;
  let inCollar=1.-smoothstep(.12,.22,distToEdge);
  let collarLift=smoothstep(.002,.025,distToEdge)*.0018*zoomActive-(1.-smoothstep(0.,.003,distToEdge))*.003;
  let isSimOnly=viewMode>.5&&viewMode<1.5;
- let safeCubX=select(mix(cub.x,max(bedTri,cub.x),inCollar),bedTri,isSimOnly);
- let safeCubY=select(mix(cub.y,max(soilTri,cub.y),inCollar),soilTri,isSimOnly);
+ let smoothSoil=mix(bSpline.y,cub.y,inCollar);
+ let safeCubX=select(mix(cub.x+cub.y-smoothSoil,max(bedTri,cub.x),inCollar),bedTri,isSimOnly);
+ let safeCubY=select(mix(smoothSoil,max(soilTri,cub.y),inCollar),soilTri,isSimOnly);
  let bed=mix(bedTri,safeCubX,wPatch);
  let rawSoil=max(0.,mix(soilTri,safeCubY,wPatch));
  let slopeStrip=smoothstep(.58,1.35,rawSlope)*(1.-smoothstep(.052,.26,rawSoil));
@@ -687,7 +691,7 @@ export function createTerrainGPU(geometry,input={}){
   const dist=Number.isFinite(distance)&&distance>0?distance:(hasPos?Math.hypot(position[0]-tx,position[1]-ty,position[2]-tz):10);
   const px=hasPos?position[0]:tx,py=hasPos?position[1]:ty+dist,pz=hasPos?position[2]:tz;
   const minR=hasPos?.36:.24;
-  const r=Math.max(minR,Math.min(3.4,dist*(hasPos?.76:.64)));
+  const r=Math.max(minR,Math.min(3.4,dist*(hasPos?.56:.52)));
   const maxX=Math.max(.2,config.width*.5-.25),maxZ=Math.max(.2,config.length*.5-.25);
   const cx=Math.max(-maxX,Math.min(maxX,tx));
   const cz=Math.max(-maxZ,Math.min(maxZ,tz));
