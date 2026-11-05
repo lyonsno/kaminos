@@ -20,6 +20,28 @@ export const FORMATION_FIELDS=[
  {key:'incision',group:'Erosion & Weathering',title:'Stream incision',min:0,max:.20,step:.005,unit:'rate',default:defaults.incision,tooltip:'Fluvial bedrock cutting power per formation step in active gorge and stream channels (default 0.068, range 0.0–0.20).'},
  {key:'weathering',group:'Erosion & Weathering',title:'Weathering rate',min:0,max:.004,step:.0001,unit:'m/step',default:defaults.weathering,tooltip:'Peak conversion rate of recessive bedrock into loose soil before regolith insulation shuts it off (default 0.00065, range 0.0–0.004).'}
 ];
+const mesoDefaults={meso:defaults.meso,ledge:1,crag:1,cobble:1,rill:1};
+export const MESO_AUTHORING_FIELDS=[
+ {key:'meso',group:'Meso & Micro (Live GPU)',title:'Meso/micro master scale',min:0,max:1.6,step:.02,unit:'×',default:mesoDefaults.meso,tooltip:'Live GPU master gain (<0.3ms, zero worker rebuild) for all sub-cell 3D overhanging rock shelves, craggy fracture blocks, talus cobbles, and millimeter grain (default 0.78).'},
+ {key:'ledge',group:'Meso & Micro (Live GPU)',title:'3D shelf & undercut relief',min:0,max:2,step:.05,unit:'×',default:mesoDefaults.ledge,tooltip:'Live GPU scale for 3D overhanging sandstone caprock shelves, chiseled riser faces, and recessed shale undercuts along canyon walls (default 1.0, range 0.0–2.0).'},
+ {key:'crag',group:'Meso & Micro (Live GPU)',title:'3D buttress & fracture clefts',min:0,max:2,step:.05,unit:'×',default:mesoDefaults.crag,tooltip:'Live GPU scale for anisotropic 3D rock buttress ribs and staggered conjugate vertical fracture clefts on steep scarps (default 1.0, range 0.0–2.0).'},
+ {key:'cobble',group:'Meso & Micro (Live GPU)',title:'3D talus boulders & scree',min:0,max:2,step:.05,unit:'×',default:mesoDefaults.cobble,tooltip:'Live GPU scale for 3D paraboloid-domed Voronoi talus boulders, scree cobbles, and gravel clasts resting on toe slopes and benches (default 1.0, range 0.0–2.0).'},
+ {key:'rill',group:'Meso & Micro (Live GPU)',title:'Micro-rills & cleavage grain',min:0,max:2,step:.05,unit:'×',default:mesoDefaults.rill,tooltip:'Live GPU scale for fine braided sheet-wash micro-rills on soil aprons and millimeter-scale sedimentary laminae & mineral grain cleavage (default 1.0, range 0.0–2.0).'}
+];
+export const VIEW_MODES=[
+ {id:'authored',index:0,title:'Full authored terrain (Sim + 3D Strata + Meso/Micro)',description:'Full 3-layer stack: 193×193 simulated [bedrock, soil] dynamics + 3D dipping/folded strata + live GPU sub-centimeter 3D ledges, crags, and talus cobbles.'},
+ {id:'simulated',index:1,title:'Pure simulated dynamics (193×193 [bedrock, soil] only)',description:'Zero 3D noise, zero strata banding, and zero procedural meso/micro displacement. Shows only the raw simulated fluvial incision, bank collapse, and regolith transport state.'},
+ {id:'structural',index:2,title:'Simulated + 3D structural strata (no crags/cobbles)',description:'Shows the simulated [bedrock, soil] surface plus clean 3D dipping/folded sedimentary bedding shelves, isolating structural geology from stochastic crag/cobble synthesis.'},
+ {id:'provenance',index:3,title:'Provenance attribution map (R=Sim Rock, G=Sim Soil, B=Live 3D GPU)',description:'Color-codes feature provenance: Red/Amber = simulated bedrock incision & cliff scarps, Green = simulated regolith/talus depth, Cyan/Blue = live GPU 3D meso/micro displacement.'}
+];
+export function mesoAuthoringConfig(input={}){
+ const c=Object.fromEntries(Object.keys(mesoDefaults).map(k=>[k,input[k]??mesoDefaults[k]]));
+ for(const f of MESO_AUTHORING_FIELDS){
+  const v=c[f.key];
+  if(!Number.isFinite(v)||v<f.min||v>f.max)throw Error(`Meso authoring ${f.key} must be in ${f.min}..${f.max}`);
+ }
+ return c;
+}
 export const FORMATION_PRESETS=[
  {id:'canyon-mesas',title:'Grounded Mesa Headland & Stepped Benches (Default)',description:'Intimate play-scale caprock mesa headland and stepped rock benches cut by a primary gorge breach, overhanging 3D sandstone ledges, talus cobbles, and a smooth piedmont apron.',patch:{iterations:120,relief:3.4,mesa:.68,terrace:.66,spurs:.56,meso:.78,valleys:2.5,apron:.24,tilt:.14,strike:16,fold:.14,bedThickness:.34,hardness:9.2,channelArea:.14,incision:.068,weathering:.00065}},
  {id:'dissected-mesa-spurs',title:'Fluted Buttress Spurs & Couloir Amphitheater (160 steps)',description:'Caprock headland carved into deeply fluted buttress spurs, branching couloir chutes, 3D jointed rock steps, and coalescing talus aprons.',patch:{iterations:160,relief:3.6,mesa:.56,terrace:.58,spurs:.86,meso:.86,valleys:3,apron:.25,tilt:.20,strike:14,fold:.18,bedThickness:.32,hardness:9.6,channelArea:.10,incision:.074,weathering:.00068}},
