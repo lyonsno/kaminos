@@ -184,6 +184,37 @@ with tempfile.TemporaryDirectory() as directory:
         assert st == 200
         st, body = request('POST', '/api/mesh-lods', {'source': hero, 'level': {'sha256': m_shas['m4'], 'faces': 200, 'route': 'custom-mixed-route-reverse'}})
         assert st == 400 and 'mergeFactor' in body.get('error', ''), (st, body)
+
+        # Named .glb files in generated-meshes resolve to their content sha256 for /api/mesh-lods and /api/read.
+        named_bytes = glb('named-trellis-kiln')
+        named_sha = hashlib.sha256(named_bytes).hexdigest()
+        (root / 'named-trellis-kiln.glb').write_bytes(named_bytes)
+        st, empty_named = request('GET', '/api/mesh-lods?source=named-trellis-kiln.glb&faces=2000')
+        assert st == 200 and empty_named['source'] == named_sha and empty_named['levels'] == [], (st, empty_named)
+        conn = http.client.HTTPConnection(*server.server_address)
+        conn.request('GET', f'/api/read?root=generated-meshes&path={named_sha}.glb')
+        read_resp = conn.getresponse()
+        read_bytes = read_resp.read()
+        conn.close()
+        assert read_resp.status == 200 and read_bytes == named_bytes
+        st, reg_named = request('POST', '/api/mesh-lods', {'source': 'named-trellis-kiln.glb', 'level': level('l1000', 1000)})
+        assert st == 200 and reg_named['source'] == named_sha, (st, reg_named)
+        st, chosen_named = request('GET', '/api/mesh-lods?source=named-trellis-kiln.glb&faces=2000')
+        assert st == 200 and chosen_named['source'] == named_sha and chosen_named['choice']['sha256'] == stored['l1000'], (st, chosen_named)
+
+        # Subdirectory .glb files in generated-meshes also resolve to their content sha256.
+        nested_bytes = glb('nested-trellis-kiln')
+        nested_sha = hashlib.sha256(nested_bytes).hexdigest()
+        (root / 'subdir').mkdir(exist_ok=True)
+        (root / 'subdir' / 'nested-kiln.glb').write_bytes(nested_bytes)
+        st, empty_nested = request('GET', '/api/mesh-lods?source=subdir/nested-kiln.glb&faces=2000')
+        assert st == 200 and empty_nested['source'] == nested_sha and empty_nested['levels'] == [], (st, empty_nested)
+        conn = http.client.HTTPConnection(*server.server_address)
+        conn.request('GET', f'/api/read?root=generated-meshes&path={nested_sha}.glb')
+        read_resp2 = conn.getresponse()
+        read_bytes2 = read_resp2.read()
+        conn.close()
+        assert read_resp2.status == 200 and read_bytes2 == nested_bytes
     finally:
         server.shutdown()
         server.server_close()

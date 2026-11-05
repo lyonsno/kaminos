@@ -42,7 +42,15 @@ with TemporaryDirectory() as directory:
         folder.mkdir(parents=True)
     glb = b"glTF" + bytes(range(64))
     digest = hashlib.sha256(glb).hexdigest()
+    tier_glb = b"glTF" + bytes(range(32, 96))
+    tier_digest = hashlib.sha256(tier_glb).hexdigest()
     (there_meshes / f"{digest}.glb").write_bytes(glb)
+    (there_meshes / f"{tier_digest}.glb").write_bytes(tier_glb)
+    (there_meshes / f".{digest}.glb.lods.json").write_text(json.dumps({
+        "schema": "kaminos.mesh-lods.v0",
+        "source": digest,
+        "levels": [{"sha256": tier_digest, "faces": 1000, "route": "closed-remesh+projection+trellis-simplify"}],
+    }))
     (there_meshes / f"{'0' * 64}.glb").write_bytes(b"glTF tampered")
     scene = {"label": "Chair study", "timestamp": "2026-10-08T12:00:00Z", "objects": [
         {"id": "a", "type": "glb", "source": f"/api/read?root=generated-meshes&path={digest}.glb"},
@@ -65,6 +73,8 @@ with TemporaryDirectory() as directory:
     deps = {dep["source"]: dep["status"] for dep in reply["dependencies"]}
     assert deps[f"/api/read?root=generated-meshes&path={digest}.glb"] == "imported"
     assert (here_meshes / f"{digest}.glb").read_bytes() == glb, "the mesh only the other server had is now here"
+    assert (here_meshes / f".{digest}.glb.lods.json").is_file(), "importing a mesh also imports its .lods.json sidecar"
+    assert (here_meshes / f"{tier_digest}.glb").read_bytes() == tier_glb, "importing a mesh also imports its verified LOD tier GLBs"
     assert deps[f"/api/read?root=generated-meshes&path={'0' * 64}.glb"] == "missing", "a mesh whose content does not match its name is not imported"
     assert not (here_meshes / f"{'0' * 64}.glb").exists()
     assert deps["/api/read?root=pipeline-runs&path=elsewhere/model.glb"] == "missing"
