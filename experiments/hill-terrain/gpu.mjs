@@ -450,7 +450,8 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
  var dispOut=0.;
  if(useFormed>.5&&meso>0.&&wPatch>0.&&!isSimOnly){
   let dsLocal=((2.*fr)/f32(zn-1u))*max(du,dw);
-  let distToCam=length(vec3<f32>(wx-camX,bed+rawSoil-camY,wz-camZ));
+  let dCam=vec3<f32>(wx-camX,bed+rawSoil-camY,wz-camZ);
+  let distToCam=sqrt(dot(dCam,dCam));
   let ds=max(dsLocal,.0042*distToCam);
   let dsEff=ds*slopeScale;
   let eLedge=ledge;
