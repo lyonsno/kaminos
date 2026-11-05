@@ -128,3 +128,25 @@ test('joined numerical keeps Fine step scale and clips integration panels at reg
   'crossing a region join must reset the unrefined panel target to the new region maximum');
 });
 
+
+test('high-interest low-extinction standalone rays retain complete budgeted interval coverage',()=>{
+ const fn=core.match(/fn adaptiveRayStepScale\([\s\S]*?\n\}/)[0];
+ const [,lo,hi]=fn.match(/mix\(([\d.]+), ([\d.]+), fine\)/).map(Number);
+ for(const adaptive of [0,.65,1]){const scale=1+(hi-1)*adaptive;const end=2,steps=20;let t=0;for(let i=0;i<steps;i++)t+=end/steps*scale;assert.ok(t>=end-1e-12,`high-interest ray omitted ${end-t}`);assert.ok(lo>=hi);}
+});
+
+test('all actual scene lighting specializations replace both Fine and World scattering sites',()=>{
+ const shader=core.slice(0,core.indexOf('  function renderSceneTransportHost('));
+ const expressions=[...core.matchAll(/(replaceAll\('medium\.scattering \* incidentAt\(p\)',\s*'[^']+'\))/g)];
+ assert.equal(expressions.length,4);
+ for(const match of expressions){const expression=match[1].replace(/\s*$/,'');const generated=vm.runInNewContext('code.'+expression,{code:shader});
+ const selected=expression.includes('distributedMeanIncident')?'distributedMeanIncident(p)':'scenePointIncident(p)';
+ assert.equal(generated.split('medium.scattering * '+(selected.startsWith('distributed')?selected:'(incidentAt(p) + '+selected+')')).length-1,2);
+ }
+});
+
+test('empty-space threshold must survive the actual GPU coefficient conversion',()=>{
+ assert.equal(typeof opticalNative.emptySpaceThreshold,'function');
+ for(const v of [-1,NaN,Infinity,1e100,1e-100])assert.throws(()=>opticalNative.emptySpaceThreshold(v),/threshold/);
+ for(const v of [0,.0001,1,1e20])assert.equal(opticalNative.emptySpaceThreshold(v),Math.fround(v));
+});

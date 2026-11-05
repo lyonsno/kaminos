@@ -101,3 +101,15 @@ test('diagnostic readback rejects inactive and unrendered data and preserves com
  const result=await meter.sample();assert.equal(result.rays,2);assert.equal(result.totalSamples,7);assert.deepEqual(result.counts,[3,4]);
  meter.ensure(2,1,false);await assert.rejects(()=>meter.sample(),/instrumented draw/);meter.dispose();
 });
+
+test('reactivation and preflight require a new draw and metadata belongs to that draw',async()=>{
+ const {meter,canvas}=fixture();meter.setCanvas(canvas);meter.ensure(2,1,true);
+ const pass={setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},draw(){},end(){}};
+ const encoder={clearBuffer(){},beginComputePass:()=>pass,beginRenderPass:()=>pass};
+ const observation={frameCount:12,simStepCount:20,mode:'current',occupancySkip:0,occupancyThreshold:0};
+ const draw=()=>{meter.encode(encoder,observation);new Uint32Array(meter.counterBuffer.data).set([3,4]);new Uint32Array(meter.summaryBuffer.data).set([2,7,0,3,4,4]);};
+ draw();meter.ensure(2,1,true,{supported:false});meter.ensure(2,1,true);await assert.rejects(()=>meter.sample(),/instrumented draw/);
+ draw();meter.ensure(2,1,true,{activate:false});meter.ensure(2,1,true,{allowResize:false});await assert.rejects(()=>meter.sample(),/instrumented draw/);
+ draw();observation.simStepCount=99;assert.equal((await meter.sample()).observation.simStepCount,20);
+ meter.invalidate();await assert.rejects(()=>meter.sample(),/instrumented draw/);meter.dispose();
+});

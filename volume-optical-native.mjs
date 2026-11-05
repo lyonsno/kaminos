@@ -1,3 +1,9 @@
+export function emptySpaceThreshold(value=0){
+  const requested=Number(value),effective=Math.fround(requested);
+  if(!Number.isFinite(requested)||requested<0||!Number.isFinite(effective)||(requested>0&&effective===0))throw Error('Empty-space threshold must fit a finite nonnegative GPU coefficient');
+  return effective;
+}
+
 export function opticalSteppingConfig({mode = 'numerical', tolerance = 0.001} = {}) {
   const modes = ['current', 'fixed', 'numerical', 'fixed-dense', 'budgeted', 'joins', 'history'];
   if (!modes.includes(mode)) throw new Error(`unknown optical stepping mode: ${mode}`);

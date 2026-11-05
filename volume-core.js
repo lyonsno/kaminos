@@ -21,7 +21,7 @@ import { createOpenBoundary } from './volume-open-boundary.mjs';
 import { RAY_START_WGSL, createRayStartTexture } from './volume-ray-start.mjs';
 import { leanEmissiveRaymarchAdmission, RAYMARCH_NEIGHBORHOOD_WGSL, FLAME_GUIDANCE_WGSL } from './volume-raymarch-sampling.mjs';
 import { OPTICAL_TRACE_IDENTITY, traceChunkPlan, validateTraceRows, createOpticalCaptureOwner } from './volume-optical-trace.mjs';
-import { raymarchAdaptivity, opticalSteppingConfig, resolveOpticalStepping, OPTICAL_STEPPING_WGSL } from './volume-optical-native.mjs';
+import { raymarchAdaptivity, emptySpaceThreshold, opticalSteppingConfig, resolveOpticalStepping, OPTICAL_STEPPING_WGSL } from './volume-optical-native.mjs';
 import { createRayStepTelemetry } from './volume-ray-step-telemetry.mjs';
 import { createRayAllocationHistory, HISTORY_ALLOCATION_WGSL } from './volume-history-allocation.mjs';
 import { frameCadenceSummary } from './volume-frame-timing.mjs';
@@ -6564,7 +6564,7 @@ fn raymarchInterest(
 
 fn adaptiveRayStepScale(interest: f32, adaptiveRays: f32) -> f32 {
   let fine = smoothstep(0.035, 0.92, interest);
-  let adaptiveScale = mix(2.25, 0.75, fine);
+  let adaptiveScale = mix(2.25, 1.0, fine);
   return mix(1.0, adaptiveScale, clamp(adaptiveRays, 0.0, 1.0));
 }
 
@@ -8233,7 +8233,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
       }
       if(!guided && nearHit.y>nearHit.x && t<nearHit.x && t+ds>nearHit.x){ds=nearHit.x-t;}
       var scatteredSource=vec3<f32>(0.0);
-      if(medium.scattering>0.0){scatteredSource=medium.scattering*incidentAt(p);}
+      if(medium.scattering>0.0){scatteredSource=medium.scattering * incidentAt(p);}
       if(opticalStepping){
         opticalStepObserveWithTolerance(&opticalStep,vec4<f32>(medium.emission+scatteredSource,sigma),u.reserved_render_controls.y);
         color=opticalStep.transfer.xyz;trans=opticalStep.transfer.w;ds=0.0;
@@ -9139,7 +9139,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
       medium = worldSmokeBlend(p,medium,visibleSmokeAuthority,selectiveRaymarchFireAuthority);
       let sigma = medium.absorption + medium.scattering;
       var scatteredSource=vec3<f32>(0.0);
-      if(medium.scattering>0.0){scatteredSource=medium.scattering*incidentAt(p);}
+      if(medium.scattering>0.0){scatteredSource=medium.scattering * incidentAt(p);}
       let emission = medium.emission + scatteredSource;
       if(guided){recordRayGuidance(p,emission,max(sigma,displaySupport*0.35*visibleSmokeAuthority),trans,localDt);}
       if (opticalStepping) {
@@ -16533,8 +16533,7 @@ export function createKaminosVolumePrototype({
     uniforms[38] = controlsSnapshot.glow ?? 1.15;
     uniforms[39] = controlsSnapshot.adaptiveRays ?? 0.65;
     uniforms[40] = controlsSnapshot.occupancySkip ?? 0.35;
-    const occupancyThreshold=Number(controlsSnapshot.occupancyThreshold??0);
-    if(!Number.isFinite(occupancyThreshold)||occupancyThreshold<0)throw Error('Empty-space threshold must be finite and nonnegative');
+    const occupancyThreshold=emptySpaceThreshold(controlsSnapshot.occupancyThreshold??0);
     uniforms[EMPTY_SPACE_UNIFORM_OFFSET]=occupancyThreshold;
     uniforms.fill(0, 41, 47);
     uniforms[41] = controlsSnapshot.rayStartNoise !== false && controlsSnapshot.rayNoiseAnimated === true
@@ -21544,7 +21543,8 @@ export function createKaminosVolumePrototype({
     if (distributedGroup) pass.setBindGroup(2,distributedGroup);
     pass.draw(3);
     pass.end();
-    rayStepTelemetry.encode(encoder);
+    rayStepTelemetry.encode(encoder,{frameCount:state.frameCount,simStepCount:state.simStepCount,
+      backend:state.backend,mode:optical.mode,occupancySkip:state.occupancySkip,occupancyThreshold:state.occupancyThreshold});
   }
 
   async function sampleOpticalTraceChunk(options = {}) {
@@ -28231,8 +28231,8 @@ export function createKaminosVolumePrototype({
     async sampleRayStepStatistics(){
       const frameCount=state.frameCount,simStepCount=state.simStepCount;
       const result=await rayStepTelemetry.sample();
-      if(frameCount!==state.frameCount||simStepCount!==state.simStepCount)throw Error('Ray count observation changed during readback');
-      return {...result,frameCount,simStepCount,backend:state.backend,mode:state.opticalStepping?.effective,occupancySkip:state.occupancySkip,occupancyThreshold:state.occupancyThreshold};
+      if(frameCount!==state.frameCount||simStepCount!==state.simStepCount||result.observation?.simStepCount!==simStepCount)throw Error('Ray count observation changed during readback');
+      return {...result,...result.observation,sampledAtFrameCount:frameCount};
     },
     setDebugOpticalStepping(config = {}) {
       const next = opticalSteppingConfig(config);
@@ -28269,6 +28269,8 @@ export function createKaminosVolumePrototype({
       return plan;
     },
     setControls(next) {
+      if(Object.hasOwn(next,'occupancyThreshold'))emptySpaceThreshold(next.occupancyThreshold);
+      rayStepTelemetry?.invalidate();
       resolveDisplayReconstruction({...controlsSnapshot,...next});
       resolveWorldCalibration({...controlsSnapshot,...next},{grid:Number(next.resolution??gridSize),scale:productTransform.scale});
       // Reject incompatible dimensions before mutating controls or destroying GPU fields.
