@@ -11720,7 +11720,8 @@ async function initScene() {
   sceneGeometryPreview=createSceneLoadingGeometry({THREE,renderer,camera,readObjects:()=>workingScene.objects,
     isCurrent:id=>sceneLoadRequests.isCurrent(id)&&!deviceRecoveryHeld(),isVisible:isSceneItemVisible,
     waitForLighting:()=>sceneLightingPreparation.whenIdle(),withRenderer:sceneLightingPreparation.withRenderer,
-    onStatus:state=>{if(!state.active)return;if(state.error)setInfo('Geometry preview unavailable; scene restoration continues');else if(state.phase==='geometry-visible')setInfo('Geometry preview · restoring ash, fire and lighting…');}});
+    renderLighting:options=>presentSceneRestoreLightingFrame(options),
+    onStatus:state=>{if(!state.active)return;if(state.error)setInfo('Scene preview unavailable; restoration continues');else if(state.phase==='lighting-visible')setInfo('Scene lighting · restoring ash, fire and water…');else if(state.phase==='geometry-visible')setInfo('Geometry preview · preparing scene lighting…');}});
   // Restore holds remain in force for automatic frames. This explicit coarse
   // frame borrows the existing lighting renderer only for its current request.
   presentSceneCoarseFrame=async requestId=>{
@@ -11744,6 +11745,28 @@ async function initScene() {
   sceneBloom=createSceneBloom({bloom,convertToTexture,vec4,initial:{enabled:lightingWorkParams.get('scene_bloom')==='1',composeFlame:lightingWorkParams.get('scene_bloom')==='1'},rebuild:()=>rebuildSceneGIOutput(),redraw:()=>markDirty()});
   const bloomHost=document.createElement('section');bloomHost.id='scene-bloom-controls';document.getElementById('rendering-fire-controls').before(bloomHost);
   window.kaminosSceneBloom={read:()=>({...sceneBloom.read(),effective:sceneBloom.read().settings.enabled&&sceneBloom.read().settings.radius>0&&sceneBloom.read().settings.strength>0&&!waterFeature.host&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene'),flameComposition:{...sceneFlameHDR?.read(),effective:authoredFlameHDRActive&&sceneFlameHDR?.read().effective===true}}),set(settings){bloomControls.set(settings);return this.read();}};
+  function presentSceneRestoreLightingFrame({isVisible,isCurrent}) {
+    if(!isCurrent())return false;
+    syncViewportRendererSize();camera.updateMatrixWorld();
+    const prior={output:renderPipeline.outputNode,colorTransform:renderPipeline.outputColorTransform,toneMapping:renderer.toneMapping};
+    const combined=sceneGISettings.mode==='combined',diagnostic=combined&&sceneGISettings.view!=='scene';
+    const base=combined?sceneGI.output(sceneGISettings.view):scenePass;
+    // The ordinary lighting graph uses the real materials, lights and GI.
+    // Fire-generated light joins only after its simulation producer restores.
+    renderPipeline.outputNode=diagnostic?base:sceneBloom.output(base,sceneEmissionSource);
+    renderPipeline.outputColorTransform=true;renderPipeline.needsUpdate=true;
+    try {
+      renderer.toneMapping=document.getElementById('volume-tone-mapping').value==='custom'?THREE.ACESFilmicToneMapping:THREE.AgXToneMapping;
+      sceneExposureControls?.sync();
+      return withViewportVisibility(viewportVisibilityObjects(),isVisible,()=>sceneBeautyLods.withFrame(camera,currentBeautyFrameOptions(),()=>{
+        if(!isCurrent())return false;
+        renderPipeline.render();return true;
+      }));
+    } finally {
+      renderPipeline.outputNode=prior.output;renderPipeline.outputColorTransform=prior.colorTransform;renderPipeline.needsUpdate=true;
+      renderer.toneMapping=prior.toneMapping;
+    }
+  }
   function rebuildSceneGIOutput() {
     const combined = sceneGISettings.mode === 'combined';
     const diagnostic = combined && sceneGISettings.view !== 'scene';
@@ -12906,7 +12929,7 @@ function createPageSceneLifecycle(){
     groups:{restore:setSceneGroupsFromRecords},
     selection:{set:setSceneSelection,object:setActiveSceneObject,group:setActiveSceneGroup},
     context:{retire:retireSceneFlame,beforeClear:clearSceneEditingState,clearDomains:clearSceneDomains,clearTransient:clearSceneTransient,cleared:projectClearedScene,
-      beginLoad:setup=>{waterFeature.setup=setup.water;activeSceneComposition=setup.flame.composition;authoredFlamePresent=setup.flame.sourcePresent;volumePrototype?.setSceneCompositionPresentation?.(Boolean(activeSceneComposition));},beforeLoad:(record,requestId)=>record.type===ASH_OBJECT_TYPE?sceneGeometryPreview?.present(requestId):undefined,loaded:async(setup,requestId)=>{await sceneGeometryPreview?.present(requestId);if(setup.water)await mountLocalLiquidHost();for(const entry of workingScene.objects)if(entry.type===ASH_OBJECT_TYPE){if(typeof sceneColliderCollection!=='undefined')await sceneColliderCollection.prepare?.(workingScene.objects,{...(typeof currentColliderLodOptions==='function'?currentColliderLodOptions():{}),ashCellSize:entry.ash?.cellSize??0.04});await authoredAsh.get(entry.id).initialize();}},
+      beginLoad:setup=>{waterFeature.setup=setup.water;activeSceneComposition=setup.flame.composition;authoredFlamePresent=setup.flame.sourcePresent;volumePrototype?.setSceneCompositionPresentation?.(Boolean(activeSceneComposition));},loaded:async(setup,requestId)=>{if(setup.water)await mountLocalLiquidHost();for(const entry of workingScene.objects)if(entry.type===ASH_OBJECT_TYPE){if(typeof sceneColliderCollection!=='undefined')await sceneColliderCollection.prepare?.(workingScene.objects,{...(typeof currentColliderLodOptions==='function'?currentColliderLodOptions():{}),ashCellSize:entry.ash?.cellSize??0.04});await authoredAsh.get(entry.id).initialize();}},
       capturePreview:()=>({flamePresent:flameFeature.present,flameRoute:Object.fromEntries([...fireLightFieldRouteParams(),...Object.entries(fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()))]),activeSceneFieldId:workingScene.activeFieldId,documentSession:sceneDocument.snapshot(),volumePrimitives:getVolumePrimitiveState(),modelSourceUrl,modelSourceType,glbFileName}),
       previewDetached(){
         currentMesh=null;setVolumePrimitivesState({schema:VOLUME_PRIMITIVE_SCHEMA,primitives:[]});
@@ -26832,8 +26855,20 @@ function restoreLoadedSceneRecord(entry,record){
   if (typeof removeSceneLowLodStandIn === 'function') removeSceneLowLodStandIn(record.id);
   if(record.groupId)setSceneObjectGroupId(entry,record.groupId);
 }
-async function loadSceneObjects(records, activeId, groups = [], activeGroupId = null, liquidSetup = null, loadRequestId = null,startupLodHint=null) {
-  return sceneLifecycle.replace(records,{activeId,groups,activeGroupId,setup:{water:liquidSetup,flame:{composition:activeSceneComposition,sourcePresent:authoredFlamePresent},startupLodHint,startupGroups:groups},loadRequestId});
+async function loadSceneObjects(records, activeId, groups = [], activeGroupId = null, liquidSetup = null, loadRequestId = null, startupLodHint = null, prepareLighting = null) {
+  const current=()=>loadRequestId===null||sceneLoadRequests.isCurrent(loadRequestId);
+  const isVisible=id=>itemVisible(id,viewportDisplay.hiddenIds,{...sceneVisibilityContext(),groups});
+  return sceneLifecycle.replace(records,{activeId,groups,activeGroupId,setup:{water:liquidSetup,flame:{composition:activeSceneComposition,sourcePresent:authoredFlamePresent},startupLodHint,startupGroups:groups},loadRequestId,
+    deferRecord:record=>record.type===ASH_OBJECT_TYPE||record.type===ASH_SOURCE_TYPE,
+    beforeDeferred:async()=>{
+      if(!current())return;
+      await sceneGeometryPreview?.present(loadRequestId,{isVisible});
+      if(!current()||!prepareLighting)return;
+      await prepareLighting();if(!current())return;
+      await sceneLightingPreparation?.request(()=>{});if(!current())return;
+      await sceneGeometryPreview?.presentLighting(loadRequestId,{isVisible});
+    },
+  });
 }
 
 function writeAuthoredCameraView(view){
@@ -28645,6 +28680,37 @@ async function loadSceneFile(file, options = {}) {
   finally { requestAnimationFrame(() => setTimeout(release, 0)); }
 }
 
+function restoreSavedSceneLighting(data) {
+  // Apply postprocessing
+  restoreFireRendering(document,data.postprocessing?.fireLighting);
+  sceneBloom.set(checkedSceneBloom(data.postprocessing?.bloom??{}));bloomControls?.sync();
+  // Scenes without a saved GI record use defaults, independent of prior tuning.
+  setSceneGIControls(data.postprocessing?.sceneGI ?? {});
+  if (data.postprocessing) {
+    const ao = data.postprocessing.ao;
+    if (ao) {sceneAO.restoreDocument(ao);saveSettings();}
+    const dof = data.postprocessing.dof;
+    if (dof) {
+      const dofEnabled = dof.enabled ?? false;
+      document.getElementById('dof-toggle').checked = dofEnabled;
+      document.getElementById('dof-controls').style.display = dofEnabled ? '' : 'none';
+      if (dof.focus !== undefined) {
+        document.getElementById('dof-focus').value = dof.focus;
+        document.getElementById('dof-focus-val').textContent = dof.focus.toFixed(1);
+      }
+      if (dof.aperture !== undefined) {
+        document.getElementById('dof-aperture').value = dof.aperture;
+        document.getElementById('dof-aperture-val').textContent = dof.aperture.toFixed(4);
+      }
+      if (dof.maxblur !== undefined) {
+        document.getElementById('dof-maxblur').value = dof.maxblur;
+        document.getElementById('dof-maxblur-val').textContent = dof.maxblur.toFixed(3);
+      }
+    }
+  }
+
+}
+
 async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, sceneFile}) {
   await sceneLightingPreparation?.whenIdle();
   if(!sceneLoadRequests.isCurrent(loadRequestId))return false;
@@ -28735,7 +28801,7 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
   setFlameDomainTranslation(restorePlan.flameDomainTranslation || [0, 0, 0],restorePlan.flameDomainScale);
   flameDomainFollowSource=restorePlan.flameDomainFollowSource;
   try {
-    const loadStage = await sceneLoadRequests.awaitStage(loadRequestId, loadSceneObjects(objectRecords, restorePlan.activeObjectId, restorePlan.groups, restorePlan.activeGroupId, restorePlan.localLiquid, loadRequestId,data.lodPreparation));
+    const loadStage = await sceneLoadRequests.awaitStage(loadRequestId, loadSceneObjects(objectRecords, restorePlan.activeObjectId, restorePlan.groups, restorePlan.activeGroupId, restorePlan.localLiquid, loadRequestId,data.lodPreparation,()=>restoreSavedSceneLighting(data)));
     if (!loadStage.current || !loadStage.value || !sceneLoadRequests.isCurrent(loadRequestId)) return false;
   } catch (e) {
     if (!sceneLoadRequests.isCurrent(loadRequestId)) return false;
@@ -28808,9 +28874,6 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
   // Apply material state
   if (!Array.isArray(data.objects)) applyMaterialState(data.materials);
 
-  // Apply postprocessing
-  restoreFireRendering(document,data.postprocessing?.fireLighting);
-  sceneBloom.set(checkedSceneBloom(data.postprocessing?.bloom??{}));bloomControls?.sync();
   if (typeof autoCalibrateSceneGIFromScene === 'function') autoCalibrateSceneGIFromScene();
   if (typeof arrivalLightingState !== 'undefined') {
     if (Array.isArray(data?.objects) && data.objects.length > 0) {
@@ -28821,28 +28884,6 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
     }
   }
   if (typeof refreshArrivalLightingFromWorkingScene === 'function') refreshArrivalLightingFromWorkingScene();
-  if (data.postprocessing) {
-    const ao = data.postprocessing.ao;
-    if (ao) {sceneAO.restoreDocument(ao);saveSettings();}
-    const dof = data.postprocessing.dof;
-    if (dof) {
-      const dofEnabled = dof.enabled ?? false;
-      document.getElementById('dof-toggle').checked = dofEnabled;
-      document.getElementById('dof-controls').style.display = dofEnabled ? '' : 'none';
-      if (dof.focus !== undefined) {
-        document.getElementById('dof-focus').value = dof.focus;
-        document.getElementById('dof-focus-val').textContent = dof.focus.toFixed(1);
-      }
-      if (dof.aperture !== undefined) {
-        document.getElementById('dof-aperture').value = dof.aperture;
-        document.getElementById('dof-aperture-val').textContent = dof.aperture.toFixed(4);
-      }
-      if (dof.maxblur !== undefined) {
-        document.getElementById('dof-maxblur').value = dof.maxblur;
-        document.getElementById('dof-maxblur-val').textContent = dof.maxblur.toFixed(3);
-      }
-    }
-  }
 
   // Apply backdrop
   if (data.backdrop) {

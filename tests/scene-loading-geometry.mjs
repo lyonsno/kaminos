@@ -4,10 +4,10 @@ import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.core.js';
 import {createSceneLoadingGeometry} from '../scene-loading-geometry.mjs';
 const gate=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {resolve,promise};};
-function fixture({waitForLighting=async()=>{},compile=async()=>{}}={}){
+function fixture({waitForLighting=async()=>{},compile=async()=>{},renderLighting=null}={}){
  const rows=[],draws=[],events=[],camera=new THREE.PerspectiveCamera(),world=new THREE.Group();let current=1;
  const renderer={target:{label:'prior-target'},mrt:{label:'prior-mrt'},autoClear:false,getRenderTarget(){return this.target;},setRenderTarget(value){this.target=value;},getMRT(){return this.mrt;},setMRT(value){this.mrt=value;},compileAsync:async(scene,cam)=>{events.push('compile');await compile(scene,cam);},render(scene,cam){draws.push({meshes:scene.children.flatMap(root=>root.children??[]).filter(m=>m.isMesh).map(m=>({geometry:m.geometry,matrix:m.matrixWorld.toArray(),material:m.material})),camera:cam,target:this.target,mrt:this.mrt});events.push('draw');}};
- const preview=createSceneLoadingGeometry({THREE,renderer,camera,readObjects:()=>rows,isCurrent:id=>id===current,waitForLighting,yieldForPaint:async()=>events.push('paint')});
+ const preview=createSceneLoadingGeometry({THREE,renderer,camera,readObjects:()=>rows,isCurrent:id=>id===current,waitForLighting,renderLighting,yieldForPaint:async()=>events.push('paint')});
  const add=(id='mesh',type='glb')=>{const object=new THREE.Group(),mesh=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshStandardMaterial());object.add(mesh);world.add(object);rows.push({id,type,object});return {object,mesh};};
  return {rows,draws,events,camera,renderer,preview,add,world,setCurrent:id=>current=id};
 }
@@ -20,6 +20,46 @@ test('preview borrows actual geometry/world poses and the existing camera, with 
  assert.deepEqual(f.preview.read().lastPresentation.ids,['mesh']);assert.equal(f.preview.read().lastPresentation.shading,'neutral-loading-preview');
  assert.equal(await f.preview.present(1),false,'identical geometry does not cause another compile/draw');
  f.preview.finish(1,true);await f.preview.dispose();assert.equal(disposed,0,'preview never disposes borrowed geometry or authored material');
+});
+
+test('a later authored-lighting frame preserves neutral first contact and stays provisional',async()=>{
+ const lighting=[];const f=fixture({renderLighting:options=>{lighting.push(options);return true;}});f.add('geometry');f.add('hidden');
+ assert.equal(typeof f.preview.presentLighting,'function','preview must support an authored lighting stage');
+ f.preview.begin(1);await f.preview.present(1,{isVisible:id=>id!=='hidden'});
+ assert.deepEqual(f.preview.read().lastPresentation.ids,['geometry'],'saved group visibility can be supplied before group admission');
+ assert.equal(f.preview.read().lastPresentation.shading,'neutral-loading-preview');
+ assert.equal(await f.preview.presentLighting(1,{isVisible:id=>id!=='hidden'}),true);
+ assert.equal(lighting.length,1);assert.equal(lighting[0].isVisible('hidden'),false);
+ const state=f.preview.read();assert.equal(state.phase,'lighting-visible');assert.equal(state.active,true);
+ assert.equal(state.lastPresentation.shading,'saved-scene-lighting');assert.deepEqual(state.lastPresentation.ids,['geometry']);
+ assert.equal(state.draws,2);assert.deepEqual(f.events,['compile','draw','paint','paint']);
+ assert.equal(await f.preview.presentLighting(1),false,'a completed lit stage is not redrawn by the post-load callback');
+ f.preview.finish(1,true);assert.equal(f.preview.read().phase,'complete');
+});
+
+test('authored lighting shares renderer ownership, rejects stale requests, and drains before disposal',async()=>{
+ let enter;const gate=new Promise(resolve=>enter=resolve);let calls=0;
+ const f=fixture({renderLighting:async()=>{calls++;await gate;return true;}});f.add();
+ assert.equal(typeof f.preview.presentLighting,'function');
+ f.preview.begin(1);const pending=f.preview.presentLighting(1);await new Promise(r=>setImmediate(r));
+ let disposed=false;const done=f.preview.dispose().then(()=>disposed=true);await Promise.resolve();assert.equal(disposed,false);
+ enter();await Promise.all([pending,done]);assert.equal(calls,1);assert.equal(disposed,true);
+ const next=fixture({renderLighting:()=>calls++});next.add();next.preview.begin(1);next.setCurrent(2);
+ assert.equal(await next.preview.presentLighting(1),false);assert.equal(calls,1,'stale lighting never acquires a draw');
+});
+
+test('a skipped lighting draw cannot masquerade as a displayed lighting frame',async()=>{
+ const f=fixture({renderLighting:()=>false});f.add();f.preview.begin(1);await f.preview.present(1);
+ assert.equal(await f.preview.presentLighting(1),false);
+ assert.equal(f.preview.read().lastPresentation.shading,'neutral-loading-preview');
+ assert.equal(f.preview.read().draws,1);
+});
+
+test('authored lighting failure is visible and does not falsely claim a lit presentation',async()=>{
+ const f=fixture({renderLighting:()=>{throw Error('lighting draw rejected');}});f.add();
+ assert.equal(typeof f.preview.presentLighting,'function');
+ f.preview.begin(1);await f.preview.present(1);assert.equal(await f.preview.presentLighting(1),false);
+ assert.equal(f.preview.read().lastPresentation.shading,'neutral-loading-preview');assert.match(f.preview.read().error,/lighting draw rejected/);
 });
 test('preview waits for renderer lighting ownership and refuses superseded compilation before drawing',async()=>{
  const lighting=gate(),compilation=gate();const f=fixture({waitForLighting:()=>lighting.promise,compile:()=>compilation.promise});f.add();f.preview.begin(1);const pending=f.preview.present(1);await new Promise(r=>setImmediate(r));assert.deepEqual(f.events,[]);

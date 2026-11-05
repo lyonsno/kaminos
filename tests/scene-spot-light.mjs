@@ -77,20 +77,21 @@ test('complete parameter installation has no dependency on an obsolete rim synch
  assert.deepEqual(Array.from(c.authoringParameterTargets.keys()),['@scene-gi','@burner-controls']);assert.equal(typeof c.window.kaminosAuthoringParameters.set,'function');
 });
 test('actual scene load reaches camera, postprocessing and file publication without rim adapters',async()=>{
- const c=context(),info=[];
+ const c=context(),info=[],lighting=[];
  const data=buildSceneDocument({objects:[record()],camera:{position:[7,8,9],target:[1,2,3],up:[0,1,0],near:.2,far:100,fov:45},postprocessing:{ao:{enabled:true,intensity:1.75}}});
  Object.assign(c,{authoringBusy:false,vantageCaptureHeld:false,scenePlacementTools:null,
   sceneLoadRequests:{begin:()=>1,isCurrent:()=>true,awaitStage:async(id,promise)=>({current:true,value:await promise})},currentSceneFile:'previous',sceneSaveBlockedByFailedRestore:false,
   getVolumePrimitiveState:()=>({schema:'kaminos.volume-primitives.v0',primitives:[]}),flameDomainTranslation:[0,0,0],flameDomainScale:1,flameDomainFollowSource:true,
   planSceneRestore,assertSceneObjectsReloadable(){},isCompositionAuthoring:()=>false,viewportDisplay:{},activeSceneComposition:null,
   FLAME_EMITTER_TYPE:'flame-emitter',FLAME_EMITTER_ID:'flame-emitter',PROCEDURAL_MESH_TYPE:'procedural-mesh',volumePrototype:null,
-  flameEmitterPose:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},setAnnularBurner(){},setInfo:text=>info.push(text),setFlameDomainTranslation(){},loadSceneObjects:async rows=>{for(const row of rows)c.mountSceneSpotLight(row);return true;},
+  flameEmitterPose:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},setAnnularBurner(){},setInfo:text=>info.push(text),setFlameDomainTranslation(){},loadSceneObjects:async(rows,_active,_groups,_group,_water,_request,prepareLighting)=>{for(const row of rows)c.mountSceneSpotLight(row);await prepareLighting();lighting.push('domains');return true;},
   applyFlameEmitterPose(){},setVolumePrimitivesState(){},location:{search:''},URLSearchParams,
-  camera:new THREE.PerspectiveCamera(),controls:{target:new THREE.Vector3(),update(){}},setSceneGIControls(){},saveSettings(){},removeBackdrop(){},
+  camera:new THREE.PerspectiveCamera(),controls:{target:new THREE.Vector3(),update(){}},setSceneGIControls:value=>lighting.push(['GI',value]),autoCalibrateSceneGIFromScene:()=>lighting.push('calibrate'),saveSettings(){},removeBackdrop(){},
   document:{getElementById:()=>({style:{}})},sceneCameras:null,cameraViews:null,sceneNavigation:null,cameraAuthoring:null,localLiquidFailure:null});
  composePageDocumentSession(c);
  c.window.kaminosViewportSettings={set(){}};
  const a=html.indexOf('async function loadSceneFile('),b=html.indexOf('// File input handler for Load Scene',a);
  vm.runInContext(html.slice(a,b),c);await c.loadSceneFile({text:async()=>JSON.stringify(data)},{sceneFile:'lights.kaminos.json'});
  assert.equal(c.sceneDocument.state().filename,'lights.kaminos.json');assert.equal(c.sceneDocument.state().blocked,false);assert.deepEqual(c.camera.position.toArray(),[7,8,9]);assert.equal(c.sceneAO.read().intensity,1.75);assert.match(info.at(-1),/Scene loaded: 1 object/);assert.equal(c.window.kaminosSceneLightState()[0].id,'@rim-light');
+ assert.deepEqual(JSON.parse(JSON.stringify(lighting)),[['GI',{}],'domains','calibrate'],'saved controls precede domains and full-scene calibration still runs afterward');
 });
