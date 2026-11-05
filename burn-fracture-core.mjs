@@ -4,10 +4,10 @@ import {LOG_RESIDUE,LOG_MATERIAL_EPSILON} from './log-consumption.mjs';
 // inertia use a coarse surviving-material box, not the original hollow shell.
 export function remainingBurnBody({points,fuel,pitch,mass,bounds}){
  if(!Array.isArray(points)||!points.length||points.some(p=>p.length!==3||!p.every(Number.isFinite))||fuel.length!==points.length||!fuel.every(x=>Number.isFinite(x)&&x>=0&&x<=1)||pitch.length!==3||!pitch.every(x=>Number.isFinite(x)&&x>0)||!Number.isFinite(mass)||mass<=0)throw Error('Complete finite remaining material required');
- const lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];let remaining=0;
- points.forEach((p,i)=>{if(fuel[i]<=LOG_RESIDUE+LOG_MATERIAL_EPSILON)return;remaining+=fuel[i];for(let k=0;k<3;k++){lo[k]=Math.min(lo[k],p[k]-pitch[k]/2);hi[k]=Math.max(hi[k],p[k]+pitch[k]/2);}});
+ const lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];let remaining=0,alive=0;
+ points.forEach((p,i)=>{if(fuel[i]<=LOG_RESIDUE+LOG_MATERIAL_EPSILON)return;remaining+=fuel[i];alive++;for(let k=0;k<3;k++){lo[k]=Math.min(lo[k],p[k]-pitch[k]/2);hi[k]=Math.max(hi[k],p[k]+pitch[k]/2);}});
  if(!remaining)return null;
- if(bounds)for(let k=0;k<3;k++){lo[k]=Math.max(lo[k],bounds.min[k]);hi[k]=Math.min(hi[k],bounds.max[k]);}
+ if(bounds)for(let k=0;k<3;k++){lo[k]=alive===points.length?bounds.min[k]:Math.max(lo[k],bounds.min[k]);hi[k]=alive===points.length?bounds.max[k]:Math.min(hi[k],bounds.max[k]);}
  if(lo.some((v,k)=>v>=hi[k]))return null;
  const currentMass=mass*remaining/points.length,halfExtents=lo.map((v,k)=>(hi[k]-v)/2);
  return {mass:currentMass,center:lo.map((v,k)=>(hi[k]+v)/2),halfExtents,inverseInertia:halfExtents.map((_,k)=>3/(currentMass*(halfExtents[(k+1)%3]**2+halfExtents[(k+2)%3]**2)))};
@@ -42,7 +42,7 @@ export function burnInitialJointPenalties({masses,halfExtents,timeStep,linearSti
 
 // Provisional isotropic material, not a calibrated wood species. Units are
 // meters, kilograms, seconds and pascals; elasticity remains in the source graph.
-export const BURN_MATERIAL=Object.freeze({tension:3e6,compression:12e6,shear:2.4e6,charStrength:.1,density:500});
+export const BURN_MATERIAL=Object.freeze({tension:1.5e6,compression:6e6,shear:1.2e6,charStrength:.001,density:500});
 export function checkedBurnMaterial(material=BURN_MATERIAL){
  if(!['tension','compression','shear','density'].every(k=>Number.isFinite(material[k])&&material[k]>0)
   ||!Number.isFinite(material.charStrength)||material.charStrength<=0||material.charStrength>1)throw Error('Finite positive material strengths/density and residual char strength in (0,1] required');
@@ -69,7 +69,7 @@ export function burnConnectionResponse({area,fraction,char,normal,force,torque},
  const stresses={tension:Math.max(0,-axial/remainingArea+bending/sectionModulus),
   compression:Math.max(0,axial/remainingArea+bending/sectionModulus),
   shear:4*transverse/(3*remainingArea)+Math.abs(twist)/(2*sectionModulus)};
- const strengthFactor=1-char*(1-material.charStrength),ratios=Object.fromEntries(Object.entries(stresses).map(([k,v])=>[k,v/(material[k]*strengthFactor)]));
+ const unburned=1-char,strengthFactor=material.charStrength+(1-material.charStrength)*unburned**4,ratios=Object.fromEntries(Object.entries(stresses).map(([k,v])=>[k,v/(material[k]*strengthFactor)]));
  const mode=Object.keys(ratios).reduce((a,b)=>ratios[b]>ratios[a]?b:a),utilization=ratios[mode];
  return {broken:utilization>1,reason:utilization>1?mode:null,utilization,ratios,stresses,remainingArea,sectionModulus,strengthFactor};
 }

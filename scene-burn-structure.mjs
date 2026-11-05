@@ -33,7 +33,7 @@ export function createSceneBurnStructure({renderer,field,parent,workerFactory=ur
   generation++;pending=null;release();error=null;status='off';
  }
  return {configure(value){if(disposed||enabled===(value===true))return;enabled=value===true;return sync();},
-  setRequired(value){required=value===true;return sync();},present,encode:encoder=>gpu?.encode(encoder),
+  setRequired(value){required=value===true;return sync();},present,encode:encoder=>gpu?.encode(encoder),reset:()=>gpu?.reset(),
   read:()=>({enabled,required,status,error,...(gpu?.read()??{})}),
   snapshot:()=>gpu?.snapshot()??null,
   resident:()=>gpu?.resident()??null,

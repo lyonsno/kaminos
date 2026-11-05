@@ -32,3 +32,15 @@ assert.deepEqual(observed,[1,2,3,3,4],'Cached binding consumes each frame/versio
 const storage=device.createBuffer({size:16,usage:0});
 batchCoarseCompute(renderer,()=>{binding=device.createBindGroup({layout:{},entries:[{binding:0,resource:{buffer:storage}}]});device.queue.writeBuffer(storage,0,new Uint32Array([9,0,0,0]));emit();device.queue.writeBuffer(storage,0,new Uint32Array([10,0,0,0]));emit();});
 assert.deepEqual(observed.slice(-2),[9,10],'Storage writes preserve their position between dispatches');
+
+// Repeated solver steps with the same uniform offsets must reuse cached bind groups instead of allocating per step.
+let bindGroupCreations=0,stepUniform,stepBinding;
+const countingCreate=device.createBindGroup;
+device.createBindGroup=function(d){bindGroupCreations++;return countingCreate.call(this,d);};
+const runStep=v=>batchCoarseCompute(renderer,()=>{if(!stepUniform){stepUniform=device.createBuffer({size:16,usage:64});stepBinding=device.createBindGroup({layout:{},entries:[{binding:0,resource:{buffer:stepUniform}}]});}device.queue.writeBuffer(stepUniform,0,new Uint32Array([v,0,0,0]));const group={};backend.beginCompute(group);const pass=backend.get(group).passEncoderGPU;pass.setBindGroup(0,stepBinding);pass.dispatchWorkgroups(1);backend.finishCompute(group);});
+runStep(11);
+bindGroupCreations=0;
+runStep(12);
+assert.equal(bindGroupCreations,0,'Subsequent steps with identical uniform layout must reuse cached bind groups');
+assert.deepEqual(observed.slice(-2),[11,12],'Reused bind group still sees updated per-step uniform data');
+device.createBindGroup=countingCreate;

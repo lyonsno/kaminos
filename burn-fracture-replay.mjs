@@ -63,16 +63,16 @@ export function packBurnFractureSurface(prepared){
  }return {arrays,owners,caps,faces};
 }
 
-export function createBurnFractureSurface({renderer,prepared,materials,field,dynamics,stateIdentity='retained-native-material-observation'}){
+export function createBurnFractureSurface({renderer,prepared,materials,field,dynamics,stateIdentity='retained-native-material-observation',surfaceCutout=true}){
  const {arrays,owners,caps,faces}=packBurnFractureSurface(prepared);
  const cap=new THREE.MeshStandardMaterial({color:0x18120d,roughness:.75}),original=[...materials];original[prepared.capMaterial]=cap;
- const {bounds}=field.residentState(),bindings=original.map(material=>createBurnMaterial({renderer,original:material,bounds,settings:{heat:0,char:0,reaction:0},stateNode:field.stateNode,stateIdentity,presenceNode:field.stateNode.w}));
+ const {bounds}=field.residentState(),bindings=original.map(material=>createBurnMaterial({renderer,original:material,bounds,settings:{heat:0,char:0,reaction:0},stateNode:field.stateNode,stateIdentity,presenceNode:surfaceCutout?field.stateNode.w:null}));
  const {textureLoad,ivec2,attribute,mat4,mat3,vec4,positionGeometry,normalGeometry,normalLocal,Fn}=THREE.TSL,region=attribute('burnPiece','float').toInt(),connection=attribute('burnCap','float').toInt();
  const pose=mat4(...[0,1,2,3].map(col=>textureLoad(dynamics.wrapper,ivec2(col,region))));
  const alive=textureLoad(dynamics.wrapper,ivec2(0,connection.sub(1).max(0).add(prepared.cells.length))).x;
  for(const binding of bindings){binding.material.positionNode=Fn(()=>{normalLocal.assign(mat3(pose).mul(normalGeometry));return pose.mul(vec4(positionGeometry,1)).xyz;})();binding.material.maskNode=connection.equal(0).or(alive.lessThan(.5));}
  const mesh=createCoarseSurfaceMesh(arrays,bindings.map(b=>b.material));mesh.geometry.setAttribute('burnPiece',new THREE.Float32BufferAttribute(owners,1));mesh.geometry.setAttribute('burnCap',new THREE.Float32BufferAttribute(caps,1));mesh.frustumCulled=false;mesh.castShadow=false;mesh.name='Burned material regions';mesh.raycast=()=>{};
  const picker=createBurnFracturePicker({field,dynamics,mesh,arrays,owners,caps,regions:prepared.cells.length});
- return {mesh,bindings,pick:picker.pick,read:()=>({exteriorTriangles:prepared.receipt.sourceTriangles,renderedTriangles:faces,regions:prepared.cells.length,pose:'resident-matrix-texture',stateIdentity,capVisibility:'resident-broken-connection',runtimeReadbacks:0,picking:picker.read(),lighting:'ordinary-surface-no-dynamic-shadow-proxy'}),
+ return {mesh,bindings,pick:picker.pick,read:()=>({exteriorTriangles:prepared.receipt.sourceTriangles,renderedTriangles:faces,regions:prepared.cells.length,pose:'resident-matrix-texture',stateIdentity,capVisibility:'resident-broken-connection',surfaceCutout:Boolean(surfaceCutout),runtimeReadbacks:0,picking:picker.read(),lighting:'ordinary-surface-no-dynamic-shadow-proxy'}),
   dispose(){picker.dispose();mesh.removeFromParent();mesh.geometry.dispose();for(const b of bindings)b.dispose();cap.dispose();}};
 }

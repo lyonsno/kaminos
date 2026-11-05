@@ -19,6 +19,6 @@ fn finiteConsumption(old:LogCell,raw:LogCell)->LogCell{
  next.burn.y=select(remaining,residue,remaining<=residue+0.000001);
  next.burn.z=max(0.0,old.burn.y-next.burn.y);
  if(!materialPresent(old.burn.y)){next.burn=vec4<f32>(old.burn.x,old.burn.y,0,0);next.material.z=0.0;}
- next.material.y=max(next.material.y,1.0-next.burn.y);
+ next.material.y=max(next.material.y,clamp((1.0-next.burn.y)/(1.0-residue)*2.0,0.0,1.0));
  return next;
 }`;

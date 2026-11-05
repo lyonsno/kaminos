@@ -7,7 +7,12 @@ export function collectFractureSurface(root){
   if(!mesh.isMesh)return;if(mesh.isSkinnedMesh||mesh.isInstancedMesh||mesh.morphTargetInfluences?.length)throw Error('Coarse fracture requires static ordinary triangle meshes');
   meshes.push(mesh);const g=mesh.geometry,p=g.getAttribute('position'),n=g.getAttribute('normal'),uv=g.getAttribute('uv'),ix=g.getIndex(),count=ix?.count??p.count,base=positions.length/3,matrix=new Matrix4().multiplyMatrices(inverse,mesh.matrixWorld),normal=new Matrix3().getNormalMatrix(matrix);
   if(count%3)throw Error('Source triangle attributes are incomplete');
-  for(let i=0;i<p.count;i++){positions.push(...new Vector3().fromBufferAttribute(p,i).applyMatrix4(matrix).toArray());normals.push(...(n?new Vector3().fromBufferAttribute(n,i).applyNormalMatrix(normal).toArray():[0,0,0]));uvs.push(uv?uv.getX(i):0,uv?uv.getY(i):0);}
+  const vTmp=new Vector3();
+  for(let i=0;i<p.count;i++){
+   vTmp.fromBufferAttribute(p,i).applyMatrix4(matrix);positions.push(vTmp.x,vTmp.y,vTmp.z);
+   if(n){vTmp.fromBufferAttribute(n,i).applyNormalMatrix(normal);normals.push(vTmp.x,vTmp.y,vTmp.z);}else normals.push(0,0,0);
+   uvs.push(uv?uv.getX(i):0,uv?uv.getY(i):0);
+  }
   for(let f=0;f<count/3;f++){for(let c=0;c<3;c++)indices.push(base+(ix?ix.getX(f*3+c):f*3+c));const group=g.groups.find(x=>f*3>=x.start&&f*3<x.start+x.count);const m=Array.isArray(mesh.material)?mesh.material[group?.materialIndex??0]:mesh.material;faceMaterial.push(materialId(m));}
  });
  if(!indices.length)throw Error('No static triangle surface');

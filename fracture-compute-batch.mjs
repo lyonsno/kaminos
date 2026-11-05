@@ -14,7 +14,7 @@ export function batchCoarseCompute(renderer, action) {
    if(buffer.usage&GPUBufferUsage.UNIFORM){let s=shadows.get(buffer);if(!s){s={bytes:new Uint8Array(buffer.size),version:0};shadows.set(buffer,s);}s.bytes.set(bytes,offset);s.version++;}
    return bytes;
   };
-  capture={descriptors,shadows,track};captures.set(device,capture);
+  capture={descriptors,shadows,track,uniform:null,bindings:new WeakMap()};captures.set(device,capture);
  }
  const begin=backend.beginCompute,finish=backend.finishCompute,write=queue.writeBuffer,submit=queue.submit,create=device.createBindGroup;
  device.createBindGroup=function(desc){const group=create.call(device,desc);capture.descriptors.set(group,{...desc,entries:desc.entries.map(e=>({...e,resource:e.resource?.buffer?{...e.resource}:e.resource}))});return group;};
@@ -41,20 +41,20 @@ export function batchCoarseCompute(renderer, action) {
  try{
   const value=action();if(value?.then)throw Error('Fracture compute action must be synchronous');if(groups.size)throw Error('Unfinished compute group');
   const createUpload=(size,usage,label)=>{if(!size)return null;const buffer=device.createBuffer({size,usage,mappedAtCreation:true,label});owned.push(buffer);return buffer;};
-  const uniform=createUpload(uniformBytes,GPUBufferUsage.UNIFORM,'Fracture immutable per-dispatch uniforms');
-  if(uniform){const mapped=new Uint8Array(uniform.getMappedRange());for(const versions of snapshots.values())for(const snap of versions.values())mapped.set(snap.bytes,snap.offset);uniform.unmap();}
+  if(uniformBytes>(capture.uniform?.size??0)){capture.uniform?.destroy();capture.uniform=device.createBuffer({size:Math.max(uniformBytes,65536),usage:GPUBufferUsage.UNIFORM|(GPUBufferUsage.COPY_DST??8),label:'Fracture immutable per-dispatch uniforms'});capture.bindings=new WeakMap();}
+  const uniform=capture.uniform;
+  if(uniformBytes){const staging=new Uint8Array(uniformBytes);for(const versions of snapshots.values())for(const snap of versions.values())staging.set(snap.bytes,snap.offset);write.call(queue,uniform,0,staging);}
   const upload=createUpload(uploadBytes,GPUBufferUsage.COPY_SRC,'Fracture ordered storage uploads');
   if(upload){const mapped=new Uint8Array(upload.getMappedRange());for(const op of operations)if(op.copy)mapped.set(op.copy,op.offset);upload.unmap();}
   // Preserve native buffers for consumers outside the batch and the next step.
   for(const buffer of dirtyUniforms)write.call(queue,buffer,0,capture.shadows.get(buffer).bytes);
   const encoder=device.createCommandEncoder({label:'Fracture shared compute passes'});let pass=null;
-  const bindings=new Map();
   for(const op of operations){
    if(op.copy){if(pass){pass.end();pass=null;}encoder.copyBufferToBuffer(upload,op.offset,op.buffer,op.bufferOffset,op.copy.byteLength);continue;}
    if(!pass){pass=encoder.beginComputePass();}
    for(const c of op.commands){const args=[...c.args];if(c.method==='setBindGroup'){
-    let bySignature=bindings.get(args[1]);if(!bySignature){bySignature=new Map();bindings.set(args[1],bySignature);}const key=c.uniforms.map(s=>s?.offset??'-').join(',');let group=bySignature.get(key);
-    if(!group){group=device.createBindGroup({...c.descriptor,entries:c.descriptor.entries.map((entry,i)=>c.uniforms[i]?{...entry,resource:{...entry.resource,buffer:uniform,offset:c.uniforms[i].offset+(entry.resource.offset??0),size:entry.resource.size??entry.resource.buffer.size-(entry.resource.offset??0)}}:entry)});bySignature.set(key,group);}args[1]=group;
+    let bySignature=capture.bindings.get(args[1]);if(!bySignature){bySignature=new Map();capture.bindings.set(args[1],bySignature);}const key=c.uniforms.map(s=>s?.offset??'-').join(',');let group=bySignature.get(key);
+    if(!group){group=create.call(device,{...c.descriptor,entries:c.descriptor.entries.map((entry,i)=>c.uniforms[i]?{...entry,resource:{...entry.resource,buffer:uniform,offset:c.uniforms[i].offset+(entry.resource.offset??0),size:entry.resource.size??entry.resource.buffer.size-(entry.resource.offset??0)}}:entry)});bySignature.set(key,group);}args[1]=group;
    }pass[c.method](...args);}
   }
   if(pass)pass.end();submit.call(queue,[encoder.finish()]);

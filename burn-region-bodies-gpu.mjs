@@ -27,17 +27,19 @@ fn rotate(q:vec4f,v:vec3f)->vec3f{return v+2.0*cross(q.xyz,cross(q.xyz,v)+q.w*v)
   shape[i*3u+1u]=vec4f(boxes[i].yzw,1);
   return;
  }
- var lo=vec3f(1e30);var hi=vec3f(-1e30);var fuel=0.0;
+ var lo=vec3f(1e30);var hi=vec3f(-1e30);var fuel=0.0;var alive=0u;
  for(var s=span.x;s<span.x+span.y;s++){
   let cell=samples[s];let retained=material[cell].burn.y;
   if(retained<=${LOG_RESIDUE+LOG_MATERIAL_EPSILON}){continue;}
   let c=vec3u(cell%p.grid.x,(cell/p.grid.x)%p.grid.y,cell/(p.grid.x*p.grid.y));
   let center=p.lo.xyz+(vec3f(c)+.5)*p.pitch.xyz;
-  lo=min(lo,center-p.pitch.xyz*.5);hi=max(hi,center+p.pitch.xyz*.5);fuel+=retained;
+  lo=min(lo,center-p.pitch.xyz*.5);hi=max(hi,center+p.pitch.xyz*.5);fuel+=retained;alive++;
  }
  // Voxel occupancy is conservative. It cannot grow the authored piece or
- // introduce a cold overlap with a support that the original surface cleared.
- lo=max(lo,envelopes[i*2u].xyz);hi=min(hi,envelopes[i*2u+1u].xyz);
+ // introduce a cold overlap with a support that the original surface cleared;
+ // while no cell in the region has disintegrated, keep the original envelope.
+ if(alive==span.y){lo=envelopes[i*2u].xyz;hi=envelopes[i*2u+1u].xyz;}
+ else{lo=max(lo,envelopes[i*2u].xyz);hi=min(hi,envelopes[i*2u+1u].xyz);}
  if(fuel>0.0&&all(hi>lo)){shape[i*3u]=vec4f((lo+hi)*.5,rest[i].w*fuel/f32(span.y));shape[i*3u+1u]=vec4f((hi-lo)*.5,1);}
  else{shape[i*3u]=vec4f(rest[i].xyz,0);shape[i*3u+1u]=vec4f(0);}
 }
@@ -45,7 +47,7 @@ fn rotate(q:vec4f,v:vec3f)->vec3f{return v+2.0*cross(q.xyz,cross(q.xyz,v)+q.w*v)
  let i=id.x;if(i>=p.grid.w){return;}let current=shape[i*3u];let half=shape[i*3u+1u].xyz;
  let delta=current.xyz-rest[i].xyz;let q=normalize(rotations[i]);let worldDelta=rotate(q,delta);
  let inverse=select(0.0,1.0/max(current.w,1e-30),current.w>0.0);
- let changed=any(delta!=vec3f(0))||any(boxes[i].yzw!=half)||positions[i].w!=inverse;
+ let changed=any(delta!=vec3f(0))||any(boxes[i].yzw!=half)||(positions[i].w>0.0)!=(inverse>0.0);
  shape[i*3u+2u]=vec4f(delta,select(0.0,1.0,changed));
  positions[i]=vec4f(positions[i].xyz+worldDelta,inverse);
  velocities[i]=vec4f(velocities[i].xyz+cross(angular[i].xyz,worldDelta),velocities[i].w);

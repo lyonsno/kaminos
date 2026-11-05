@@ -18,10 +18,10 @@ fn reduce(@builtin(global_invocation_id) id:vec3u){
  for(var s=span.x;s<span.x+span.y;s++){
   let sample=samples[s];let fuel=cells[sample.cell].burn.y;
   let retained=sample.area*select(0.0,clamp((fuel-${LOG_RESIDUE})/(1.0-${LOG_RESIDUE}),0.0,1.0),fuel>${LOG_RESIDUE}+${LOG_MATERIAL_EPSILON});
-  area+=sample.area;remaining+=retained;charArea+=retained*clamp(cells[sample.cell].material.y,0.0,1.0);
+  area+=sample.area;remaining+=retained;charArea+=(sample.area-retained)+retained*clamp(cells[sample.cell].material.y,0.0,1.0);
  }
  var value=vec4f(0.0);if(area>0.0){value=vec4f(remaining/area,remaining,area,1.0);}
- var char=0.0;if(remaining>0.0){char=charArea/remaining;}
+ var char=0.0;if(remaining>0.0){char=charArea/area;}
  sections[i]=value;damage[i]=vec4f(char,0,0,0);textureStore(image,vec2i(i32(i),0),value);
 }`;
 
@@ -39,7 +39,7 @@ export async function createBurnStructureGpu({renderer,field,prepared,mapping,so
   for(let i=0;i<mapping.cells.length;i++){u[i*2]=mapping.cells[i];f[i*2+1]=mapping.areas[i];}
   const samples=upload('Section to original material cells',new Uint8Array(samplesData));
   const output=own(device.createBuffer({label:'Remaining load-bearing sections',size:Math.max(1,count)*16,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST}));
-  const damage=own(device.createBuffer({label:'Remaining section char damage',size:Math.max(1,count)*16,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC}));
+  const damage=own(device.createBuffer({label:'Remaining section char damage',size:Math.max(1,count)*16,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST}));
   const texture=own(device.createTexture({label:'Remaining section preview',size:[Math.max(1,count),1],format:'rgba32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST}));
   wrapper=new THREE.ExternalTexture(texture);wrapper.type=THREE.FloatType;wrapper.format=THREE.RGBAFormat;wrapper.colorSpace=THREE.NoColorSpace;wrapper.minFilter=wrapper.magFilter=THREE.NearestFilter;
   const geometry=new THREE.CylinderGeometry(.004,.004,1,5),material=new THREE.MeshBasicNodeMaterial({depthTest:false,depthWrite:false});
@@ -57,7 +57,8 @@ export async function createBurnStructureGpu({renderer,field,prepared,mapping,so
     const pass=encoder.beginComputePass({label:'Burn material remaining at structural sections'});pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.ceil(count/64));pass.end();steps++;
   }
   const initialEncoder=device.createCommandEncoder({label:'Current material structural sections'});encode(initialEncoder);device.queue.submit([initialEncoder.finish()]);
-  return {overlay,encode,
+  function reset(){if(disposed)throw Error('Burn structure is disposed');device.queue.writeTexture({texture},cold,{bytesPerRow:Math.max(1,count)*16},[Math.max(1,count),1]);device.queue.writeBuffer(output,0,cold);device.queue.writeBuffer(damage,0,new Float32Array(Math.max(1,count)*4));steps=0;}
+  return {overlay,encode,reset,
    resident:()=>({device,buffer:output,damageBuffer:damage,count,mapping,prepared,sourceMaterials}),
    read:()=>({identity:BURN_STRUCTURE_IDENTITY,status:disposed?'disposed':'resident',steps,regions:prepared.cells.length,connections:count,source:'original-resident-fuel-and-char',charModel:'remaining-area-weighted-material-damage',runtimeReadbacks:0,receipt:mapping.receipt}),
    async snapshot(){if(disposed)throw Error('Burn structure is disposed');if(!count)return {identity:BURN_STRUCTURE_IDENTITY,sections:[]};

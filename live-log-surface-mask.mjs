@@ -14,28 +14,41 @@ export function createLogSurfaceMask(geometry,bounds,grid,{filled=false}={}) {
   const start=geometry.drawRange.start,end=Math.min(count,start+geometry.drawRange.count);
   const clamp=value=>Math.max(0,Math.min(grid-1,value));
   for(let offset=start;offset+2<end;offset+=3){
-    for(const [vertex,delta] of [[triangle.a,0],[triangle.b,1],[triangle.c,2]]){
-      vertex.fromBufferAttribute(position,indices?indices.getX(offset+delta):offset+delta);
-      [localTriangle.a,localTriangle.b,localTriangle.c][delta].copy(vertex);
-      vertex.sub(bounds.min).multiply(scale);
-      if(![vertex.x,vertex.y,vertex.z].every(Number.isFinite))throw Error('Nonfinite log triangle');
-    }
+    const i0=indices?indices.getX(offset):offset,i1=indices?indices.getX(offset+1):offset+1,i2=indices?indices.getX(offset+2):offset+2;
+    localTriangle.a.fromBufferAttribute(position,i0);
+    localTriangle.b.fromBufferAttribute(position,i1);
+    localTriangle.c.fromBufferAttribute(position,i2);
+    triangle.a.copy(localTriangle.a).sub(bounds.min).multiply(scale);
+    triangle.b.copy(localTriangle.b).sub(bounds.min).multiply(scale);
+    triangle.c.copy(localTriangle.c).sub(bounds.min).multiply(scale);
+    if(!Number.isFinite(triangle.a.x+triangle.a.y+triangle.a.z+triangle.b.x+triangle.b.y+triangle.b.z+triangle.c.x+triangle.c.y+triangle.c.z))throw Error('Nonfinite log triangle');
+    localTriangle.getNormal(normal);if(normal.lengthSq()===0)continue;
+    const lMinX=Math.min(localTriangle.a.x,localTriangle.b.x,localTriangle.c.x),lMinY=Math.min(localTriangle.a.y,localTriangle.b.y,localTriangle.c.y),lMinZ=Math.min(localTriangle.a.z,localTriangle.b.z,localTriangle.c.z);
+    const lMaxX=Math.max(localTriangle.a.x,localTriangle.b.x,localTriangle.c.x),lMaxY=Math.max(localTriangle.a.y,localTriangle.b.y,localTriangle.c.y),lMaxZ=Math.max(localTriangle.a.z,localTriangle.b.z,localTriangle.c.z);
     lo.copy(triangle.a).min(triangle.b).min(triangle.c);hi.copy(triangle.a).max(triangle.b).max(triangle.c);
-    for(let z=clamp(Math.floor(lo.z-1e-6));z<=clamp(Math.floor(hi.z+1e-6));z++)
-      for(let y=clamp(Math.floor(lo.y-1e-6));y<=clamp(Math.floor(hi.y+1e-6));y++)
-        for(let x=clamp(Math.floor(lo.x-1e-6));x<=clamp(Math.floor(hi.x+1e-6));x++){
-          const index=x+grid*(y+grid*z);
+    const z0=clamp(Math.floor(lo.z-1e-6)),z1=clamp(Math.floor(hi.z+1e-6)),y0=clamp(Math.floor(lo.y-1e-6)),y1=clamp(Math.floor(hi.y+1e-6)),x0=clamp(Math.floor(lo.x-1e-6)),x1=clamp(Math.floor(hi.x+1e-6));
+    for(let z=z0;z<=z1;z++){
+      const cz=(z+.5)/scale.z+bounds.min.z,dz=cz<lMinZ?lMinZ-cz:cz>lMaxZ?cz-lMaxZ:0;
+      for(let y=y0;y<=y1;y++){
+        const cy=(y+.5)/scale.y+bounds.min.y,dy=cy<lMinY?lMinY-cy:cy>lMaxY?cy-lMaxY:0,dyz2=dy*dy+dz*dz;
+        for(let x=x0;x<=x1;x++){
+          const index=x+grid*(y+grid*z),cx=(x+.5)/scale.x+bounds.min.x,dx=cx<lMinX?lMinX-cx:cx>lMaxX?cx-lMaxX:0;
+          if(mask[index]&&(dx*dx+dyz2)*(1-1e-12)>=distances[index]*(1+1e-12))continue;
           box.min.set(x,y,z);box.max.set(x+1,y+1,z+1);
           if(!box.intersectsTriangle(triangle))continue;
-          localTriangle.getNormal(normal);if(normal.lengthSq()===0)continue;
           mask[index]=1;
-          centre.set(x+.5,y+.5,z+.5).divide(scale).add(bounds.min);
+          centre.set(cx,cy,cz);
           localTriangle.closestPointToPoint(centre,point);
           const distance=point.distanceToSquared(centre);
           if(distance<distances[index]){
-            distances[index]=distance;samples.set([...point.toArray(),1,...normal.toArray(),0],index*8);
+            distances[index]=distance;
+            const base=index*8;
+            samples[base]=point.x;samples[base+1]=point.y;samples[base+2]=point.z;samples[base+3]=1;
+            samples[base+4]=normal.x;samples[base+5]=normal.y;samples[base+6]=normal.z;samples[base+7]=0;
           }
         }
+      }
+    }
   }
   if(!mask.some(Boolean))throw Error('Log surface has no intersecting thermal cells');
   if(filled){

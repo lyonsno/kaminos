@@ -26,8 +26,8 @@ const FACETS_WGSL=`fn burnFacets(p: vec3<f32>, n: vec3<f32>) -> vec4<f32> {
   var plane=p.xy;
   if(normal.x>normal.y && normal.x>normal.z){plane=p.zy;}
   else if(normal.y>normal.z){plane=p.xz;}
-  let warp=vec2<f32>(sin(plane.y*13.0),sin(plane.x*11.0))*0.12;
-  return burnCells(plane*vec2<f32>(8.0,13.0)+warp);
+  let warp=vec2<f32>(sin(plane.y*19.0+plane.x*7.0),sin(plane.x*17.0-plane.y*9.0))*0.09;
+  return burnCells(plane*vec2<f32>(18.0,28.0)+warp);
 }`;
 export const BURN_SURFACE_WGSL=`fn burnSurface(p: vec3<f32>, facets: vec4<f32>, controls: vec3<f32>, metalProfile: f32, clock: f32) -> vec4<f32> {
   let irregular=sin(p.y*15.0+p.z*10.0)*0.035+sin(p.z*27.0)*0.012;
@@ -35,11 +35,11 @@ export const BURN_SURFACE_WGSL=`fn burnSurface(p: vec3<f32>, facets: vec4<f32>, 
   let heat=controls.x*exposure;
   let damage=controls.y*exposure*(1.0-metalProfile);
   let reaction=controls.z*exposure*(1.0-metalProfile);
-  let hot=max(0.0,(heat-0.55)/0.45);
-  let pulse=0.5+0.5*sin(clock*2.1+facets.w);
-  let patches=smoothstep(0.25,0.8,pulse);
-  let activity=mix(0.62,mix(0.12,1.25,patches),reaction);
-  let ember=hot*hot*mix(facets.x*damage,1.0,metalProfile)*activity;
+  let hot=smoothstep(0.42,0.95,heat);
+  let pulse=0.5+0.5*sin(clock*1.8+facets.w);
+  let bed=mix(0.18*smoothstep(0.08,0.65,damage),0.55,reaction*(0.75+0.25*pulse));
+  let grain=mix(0.94,1.06,facets.x*pulse);
+  let ember=hot*hot*mix(bed*grain,1.0,metalProfile);
   return vec4<f32>(heat,damage,ember,reaction);
 }`;
 const ROTATE_WGSL=`fn burnRotate(n: vec3<f32>, axis: vec3<f32>, angle: f32) -> vec3<f32> {
@@ -60,11 +60,15 @@ const facetsNode=THREE.TSL.wgslFn(FACETS_WGSL,[cellsNode]);
 const surfaceNode=THREE.TSL.wgslFn(BURN_SURFACE_WGSL);
 const liveSurfaceNode=THREE.TSL.wgslFn(`fn burnLiveSurface(state: vec4<f32>, facets: vec4<f32>, clock: f32) -> vec4<f32> {
   let heat=clamp(state.x,0.0,1.0);let damage=clamp(state.y,0.0,1.0);
-  let reaction=clamp(state.z,0.0,1.0);
-  let hot=max(0.0,(heat-0.55)/0.45);
-  let pulse=0.5+0.5*sin(clock*2.1+facets.w);
-  let activity=mix(0.62,mix(0.12,1.25,smoothstep(0.25,0.8,pulse)),reaction);
-  return vec4<f32>(heat,damage,hot*hot*facets.x*damage*activity,reaction);
+  let reaction=clamp(state.z,0.0,1.0);let presence=clamp(state.w,0.0,1.0);
+  let hot=smoothstep(0.42,0.95,heat);
+  let charBed=smoothstep(0.08,0.65,damage);
+  let erosionRim=(1.0-smoothstep(0.55,0.95,presence))*step(0.05,presence);
+  let front=clamp(reaction*1.1+erosionRim*0.45,0.0,1.0);
+  let pulse=0.5+0.5*sin(clock*1.7+facets.w);
+  let grain=mix(0.94,1.06,facets.x*pulse);
+  let ember=hot*hot*mix(0.18*charBed,0.55,front)*grain;
+  return vec4<f32>(heat,damage,ember,reaction);
 }`);
 const rotateNode=THREE.TSL.wgslFn(ROTATE_WGSL);
 const facetNormalNode=THREE.TSL.wgslFn(NORMAL_WGSL,[rotateNode]);
@@ -73,7 +77,7 @@ export function createBurnMaterial({renderer,original,bounds,settings,stateNode=
   if(!['partial','whole'].includes(coverage))throw Error('Invalid burn coverage');
   const {uniform,float,vec3,positionLocal,normalLocal,materialNormal,materialColor,materialRoughness,materialMetalness,mix,transformNormalToView,smoothstep}=THREE.TSL;
   const config=checkedBurnControls(settings);
-  const appearanceSelectable=Boolean(stateNode&&presenceNode);
+  const appearanceSelectable=Boolean(stateNode);
   const appearanceMix=uniform(1);
   const glow=uniform(1),kelvinPerHeat=uniform(SURFACE_KELVIN_PER_HEAT);
   let thermal=null;
@@ -89,8 +93,8 @@ export function createBurnMaterial({renderer,original,bounds,settings,stateNode=
   const material=cloneSceneRadianceMaterial(renderer.library,original);
   if(presenceNode){material.opacityNode=presenceNode;material.alphaTest=.5;}
   // Char alters reflection and local shading normals; it never moves geometry.
-  const scorch=smoothstep(.015,.5,sample.y),carbon=smoothstep(.18,.9,sample.y);
-  const crust=smoothstep(.4,.95,sample.y);
+  const scorch=smoothstep(.005,.25,sample.y),carbon=smoothstep(.08,.6,sample.y);
+  const crust=smoothstep(.2,.8,sample.y);
   const scorched=mix(materialColor.rgb,materialColor.rgb.mul(vec3(.18,.09,.035)),scorch);
   const recess=facets.x.mul(crust).mul(.12).oneMinus();
   material.colorNode=scorched.mul(mix(float(1),float(.045),carbon)).mul(recess);
@@ -99,15 +103,15 @@ export function createBurnMaterial({renderer,original,bounds,settings,stateNode=
   const delta=transformNormalToView(tilted).normalize().sub(transformNormalToView(normalLocal).normalize());
   material.normalNode=materialNormal.add(delta).normalize();
   material.metalnessNode=materialMetalness.mul(sample.y.oneMinus()).max(profile);
-  const redToOrange=mix(vec3(.7,.008,.001),vec3(1,.12,.008),smoothstep(.55,.88,sample.x));
-  const hotColor=mix(redToOrange,vec3(1,.42,.055),smoothstep(.88,1,sample.x));
-  material.emissiveNode=hotColor.mul(sample.z.mul(5));
+  const redToOrange=mix(vec3(.7,.008,.001),vec3(1,.12,.008),smoothstep(.45,.85,sample.x));
+  const hotColor=mix(redToOrange,vec3(1,.42,.055),smoothstep(.85,1,sample.x));
+  const facetEmber=hotColor.mul(sample.z.mul(.45));
+  material.emissiveNode=facetEmber;
   if(appearanceSelectable){
-    if(!stateNode||!presenceNode)throw Error('Incineration appearance requires resident heat and material coverage');
     thermal=createSurfaceThermalRadiance(stateNode.x.mul(LIVE_LOG_HEAT_TO_FLUID_HEAT),kelvinPerHeat);
-    // Sinter's scorch, facets, roughness and authored normal maps remain the
-    // material response. Only incandescence changes, from resident temperature.
-    material.emissiveNode=thermal.node.mul(glow).mul(float(.88).add(facets.x.mul(crust).mul(.12)));
+    // Sinter's scorch, facets, roughness, normal maps and active facet ember glow
+    // compose with Planck thermal radiance from resident temperature.
+    material.emissiveNode=thermal.node.mul(sample.z.mul(.25)).add(facetEmber).mul(glow);
   }
   // Diagnostic emission is unlit data; the beauty response stays unchanged.
   const diagnostic=mix(vec3(sample.y),vec3(sample.x,0,0),inspection.greaterThan(1.5));

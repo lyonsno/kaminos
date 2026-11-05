@@ -10,7 +10,7 @@ const gas={descriptor:{device:'device'},begin:()=>events.push('begin'),resolve:(
 const burning=createSceneBurning({objects:()=>objects,retained:()=>retained,runtime:()=>runtime,createGas:async()=>gas,createBody:async entry=>{
   created.set(entry.id,(created.get(entry.id)||0)+1);
   let steps=0;
-  return {setMounted:value=>events.push(entry.id+':mounted:'+value),encodeGasSource:()=>events.push(entry.id+':gas'),encode:()=>steps++,afterSubmit:frame=>events.push(entry.id+':submitted:'+frame.dt),materialMask:()=>entry.id,read:()=>({steps}),dispose:()=>events.push(entry.id+':dispose')};
+  return {setMounted:value=>events.push(entry.id+':mounted:'+value),encodeGasSource:()=>events.push(entry.id+':gas'),encode:()=>steps++,afterSubmit:frame=>events.push(entry.id+':submitted:'+frame.dt),reset:()=>{steps=0;events.push(entry.id+':reset');},materialMask:()=>entry.id,read:()=>({steps}),dispose:()=>events.push(entry.id+':dispose')};
 }});
 const object=id=>({id,object:{},burnable:{enabled:true,material:'wood'}});
 objects=[object('a'),object('b')];await burning.sync();assert.equal(binds,0);assert.equal(created.size,0);
@@ -24,6 +24,9 @@ objects[0].burnable.enabled=false;await burning.sync();assert.equal(burning.read
 assert.ok(events.includes('a:dispose'));consumer.encode({},{});assert.equal(burning.read('b').state.steps,2);
 retained=[objects.pop()];await burning.sync();assert.equal(consumer,null);assert.equal(gasDisposals,1);assert.ok(!events.includes('b:dispose'));
 objects.push(retained.pop());await burning.sync();assert.equal(created.get('b'),1);assert.equal(burning.read('b').state.steps,2);
+assert.equal(typeof burning.reset,'function','Burnable objects need an in-place reset to healthy state');
+burning.reset('b');assert.equal(burning.read('b').state.steps,0,'Reset restores resident body state in place');assert.equal(created.get('b'),1,'Reset must not recreate the GPU burn body');
+assert.throws(()=>burning.reset('a'),/not resident/);
 retained=[{...objects[1],burnable:{enabled:true,material:'wood'}}];
 objects[1].burnable.enabled=false;await burning.sync();assert.ok(events.includes('b:dispose'));assert.equal(consumer,null);
 await burning.dispose();

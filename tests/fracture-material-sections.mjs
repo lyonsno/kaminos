@@ -32,3 +32,12 @@ const split=bisectFaces({positions:Float32Array.from(original.flat()),indices:Ui
 const descendants=Array.from({length:split.indices.length/3},(_,f)=>({leaf:{index:1},sourcePlane:sectionPlane,points:Array.from(split.indices.subarray(f*3,f*3+3),i=>Array.from(split.positions.subarray(i*3,i*3+3)))}));
 const restored=[...matchMaterialSections([{leaf:{index:0},sourcePlane:sectionPlane,points:original}],descendants).values()].reduce((sum,p)=>sum+p.area,0);
 assert.ok(Math.abs(restored-Math.sqrt(3)/2)<1e-7,'Float32 subdivision must preserve the shared source section');
+
+// Dense coplanar section with shared sourcePlane lineage must index by sourcePlane instead of scanning all coplanar BBoxes.
+let negPlaneReads=0;
+const densePlanes=Array.from({length:600},(_,i)=>({points:[[0,0,0],[1,0,0],[0,1,0]],id:i}));
+const densePos=densePlanes.flatMap((sp,i)=>[0,1].map(()=>({leaf:{index:i%8},sourcePlane:sp,points:[[0,0,0],[1,0,0],[0,1,0]]})));
+const denseNeg=densePlanes.flatMap((sp,i)=>[0,1].map(()=>({leaf:{index:(i+1)%8},get sourcePlane(){negPlaneReads++;return sp;},points:[[0,0,0],[1,0,0],[0,1,0]]})));
+const denseMatched=matchMaterialSections(densePos,denseNeg);
+assert.equal(denseMatched.size,8);
+assert.ok(negPlaneReads<=denseNeg.length*4,`Lineage-indexed section matching must be O(N) in sourcePlane reads, got ${negPlaneReads}`);

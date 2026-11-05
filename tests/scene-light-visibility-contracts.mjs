@@ -38,6 +38,17 @@ const many = Array.from({ length: 5000 }, (_, i) => tri(i + 1, i));
 const large = buildTriangleVisibility(many);
 assert.equal(large.triangleCount, 5000, 'does not truncate triangle input');
 assert.equal(large.trace([0, 0, 0], [0, 0, 1]).identity, 0);
+const dense = Array.from({ length: 50000 }, (_, i) => ({
+  a: [Math.sin(i), Math.cos(i), (i % 37) * 1e-2 + 1],
+  b: [Math.sin(i) + 0.01, Math.cos(i), (i % 37) * 1e-2 + 1],
+  c: [Math.sin(i), Math.cos(i) + 0.01, (i % 37) * 1e-2 + 1],
+  identity: i,
+}));
+const denseStart = performance.now();
+const densePacked = buildTriangleVisibility(dense).packGpu();
+const denseElapsed = performance.now() - denseStart;
+assert.equal(densePacked.triangleCount, 50000);
+assert.ok(denseElapsed < 400, `50k-triangle visibility BVH build+pack must stay fast (${denseElapsed.toFixed(1)}ms)`);
 assert.throws(() => buildTriangleVisibility([tri(NaN, 'bad')]), /finite/i);
 assert.throws(() => buildTriangleVisibility([{ ...tri(1, 'degenerate'), c: [0, -1, 1] }]), /degenerate/i);
 assert.throws(() => scene.trace([0, 0, 0], [0, 0, 1], { maxDistance: NaN }), /distance/i);

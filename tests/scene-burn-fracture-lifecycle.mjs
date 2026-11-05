@@ -10,15 +10,24 @@ function fixture(){
  const ground={center:[0,0,0],height:-1,radius:10,visible:true};
  const field={device:{},residentState:()=>({mesh,bounds:mesh.geometry.boundingBox,dimensions:[2,2,2],initial:new Uint32Array(8).fill(1),regionMotion:motion}),setRegionMotion:value=>{motion=value;}};
  const gate=deferred(),dynamics={matrices:{},wrapper:{},setSupport(){},setGravity(){},setContactsEnabled:value=>{contacts=value;},advance:()=>steps++,read:()=>({steps}),dispose:()=>disposed++};
+ const debrisMesh={visible:true},capsMesh={visible:true},updatedTargets=[];
+ const surfaceMaterial=new THREE.MeshStandardMaterial(),surfaceMesh=new THREE.Mesh(new THREE.BoxGeometry(),[surfaceMaterial]);
  const body=createSceneBurnFracture({renderer:{},field,parent,ground:()=>ground,materials:[material],
-  structure:{setRequired:value=>{required=value;},resident:()=>({prepared,sourceMaterials:[material]})},debris:{setRegionMotion(){}},
-  createDynamics:()=>gate.promise,createSurface:()=>({mesh:new THREE.Mesh(),bindings:[],pick:async()=>null,read:()=>({}),dispose(){viewDisposed++;this.mesh.removeFromParent();}})});
- return {body,mesh,parent,material,gate,dynamics,ground,read:()=>({required,motion,disposed,viewDisposed,steps,contacts})};
+  structure:{setRequired:value=>{required=value;},resident:()=>({prepared,sourceMaterials:[material]})},debris:{caps:capsMesh,debris:debrisMesh,setRegionMotion(){}},
+  createDynamics:()=>gate.promise,createSurface:()=>({mesh:surfaceMesh,bindings:[{setAppearance(){},update:(_s,displayed)=>updatedTargets.push(displayed)}],pick:async()=>null,read:()=>({}),dispose(){viewDisposed++;this.mesh.removeFromParent();}})});
+ return {body,mesh,parent,material,debrisMesh,capsMesh,surfaceMaterial,updatedTargets,gate,dynamics,ground,read:()=>({required,motion,disposed,viewDisposed,steps,contacts})};
 }
-const live=fixture(),pending=live.body.configure(true);await Promise.resolve();live.gate.resolve(live.dynamics);await pending;
+const live=fixture(),pending=live.body.configure(true);
+assert.equal(live.capsMesh.visible,false,'Cubic voxel interior caps must hide immediately when fracture is enabled, even while preparing');
+assert.equal(live.debrisMesh.visible,false,'Cubic voxel debris must hide immediately when fracture is enabled, even while preparing');
+await Promise.resolve();live.gate.resolve(live.dynamics);await pending;
 assert.equal(live.body.active,true);
 assert.equal(live.mesh.visible,true,'Replacing the presentation must retain the original collider registration');
 assert.equal(live.material.visible,false,'The original surface must not render over the posed replacement');
+assert.equal(live.capsMesh.visible,false,'Cubic voxel interior caps must hide while watertight fracture regions own presentation');
+assert.equal(live.debrisMesh.visible,false,'Cubic voxel debris must hide while fracture regions own collapse');
+live.body.update(1.5,{glow:1});
+assert.equal(live.updatedTargets.at(-1),live.surfaceMaterial,'Fracture surface update must forward displayed material clones');
 assert.equal(live.parent.children.length,1);assert.ok(live.read().motion);
 live.body.afterSubmit({dt:1/60});assert.equal(live.read().steps,1);
 live.ground.visible=false;live.body.afterSubmit({dt:1/60});assert.equal(live.read().contacts,false,'Hidden ground must not retain invisible mechanical support');
@@ -29,7 +38,7 @@ assert.equal(live.body.read().status,'failed');assert.match(live.body.read().err
 assert.equal(live.read().steps,3);assert.equal(live.read().disposed,0,'Failure retains the last physical state for inspection');
 assert.ok(live.read().motion);assert.equal(live.parent.children.length,1);
 live.body.afterSubmit({dt:1/60});assert.equal(live.read().steps,3);
-live.body.configure(false);assert.equal(live.material.visible,true);assert.equal(live.mesh.visible,true);assert.equal(live.read().required,false);
+live.body.configure(false);assert.equal(live.material.visible,true);assert.equal(live.capsMesh.visible,true);assert.equal(live.debrisMesh.visible,true);assert.equal(live.mesh.visible,true);assert.equal(live.read().required,false);
 assert.equal(live.read().motion,null);assert.equal(live.read().disposed,1);assert.equal(live.read().viewDisposed,1);
 live.body.dispose();assert.equal(live.read().disposed,1);
 const cancelled=fixture(),late=cancelled.body.configure(true);await Promise.resolve();cancelled.body.configure(false);cancelled.gate.resolve(cancelled.dynamics);await late;

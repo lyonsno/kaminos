@@ -29,13 +29,14 @@ export function createLocalSceneVisibility({readCoverage=residentLightCoverage}=
         if(coverage){const records=residentCellTriangles(coverage),result=buildTriangleVisibility(records).packGpu();for(let j=0;j<result.triangleCount;j++)result.triangles[j*12+3]=records[result.triangleIndices[j]].cell+1;cache.set(g,{key:keys[i],packed:result});builds++;return result;}
         const p=g.attributes.position,index=g.index,count=index?.count??p.count,records=[];
         if(count%3)throw Error('local visibility requires complete triangles');
-        const a=new THREE.Vector3(),b=new THREE.Vector3(),c=new THREE.Vector3(),cross=new THREE.Vector3(),edge=new THREE.Vector3();
         for(let j=0;j<count;j+=3){
-          a.fromBufferAttribute(p,index?index.getX(j):j);b.fromBufferAttribute(p,index?index.getX(j+1):j+1);c.fromBufferAttribute(p,index?index.getX(j+2):j+2);
-          const points=[a.toArray(),b.toArray(),c.toArray()];
-          if(!points.flat().every(Number.isFinite))throw Error('local visibility has nonfinite vertices');
-          if(cross.subVectors(b,a).cross(edge.subVectors(c,a)).lengthSq()===0)continue;
-          records.push({a:points[0],b:points[1],c:points[2]});
+          const i0=index?index.getX(j):j,i1=index?index.getX(j+1):j+1,i2=index?index.getX(j+2):j+2;
+          const ax=p.getX(i0),ay=p.getY(i0),az=p.getZ(i0),bx=p.getX(i1),by=p.getY(i1),bz=p.getZ(i1),cx=p.getX(i2),cy=p.getY(i2),cz=p.getZ(i2);
+          if(!Number.isFinite(ax+ay+az+bx+by+bz+cx+cy+cz))throw Error('local visibility has nonfinite vertices');
+          const ux=bx-ax,uy=by-ay,uz=bz-az,vx=cx-ax,vy=cy-ay,vz=cz-az;
+          const nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;
+          if(nx*nx+ny*ny+nz*nz===0)continue;
+          records.push({a:[ax,ay,az],b:[bx,by,bz],c:[cx,cy,cz]});
         }
         const result=buildTriangleVisibility(records).packGpu();cache.set(g,{key:keys[i],packed:result});builds++;return result;
       });

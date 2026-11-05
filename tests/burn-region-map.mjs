@@ -17,6 +17,9 @@ const sparse=core.mapBurnRegions(prepared,{...material,initial:Uint32Array.of(1,
 assert.deepEqual([...sparse.counts],[1,1]);
 assert.deepEqual([...sparse.cells],[0,7]);
 assert.deepEqual([...sparse.owners],[0,1,0,1,0,1,0,1],'Empty cells have valid ownership but cannot add mass');
+const subvoxel=core.mapBurnRegions(prepared,{...material,initial:Uint32Array.of(1,0,0,0,0,0,0,0)});
+assert.deepEqual([...subvoxel.counts],[1,1],'Every piece must map to at least its nearest occupied voxel so no piece hovers forever with span.y==0');
+assert.deepEqual([...subvoxel.cells],[0,0]);
 for(const bad of [{...material,dimensions:[2,3,2]},{...material,initial:[]},{...material,bounds:{min:[0,0,0],max:[0,1,1]}}])assert.throws(()=>core.mapBurnRegions(prepared,bad));
 assert.throws(()=>core.mapBurnRegions({...prepared,pieces:[]},material));
 assert.throws(()=>core.mapBurnRegions({...prepared,pieces:[{...prepared.pieces[0],index:9}]},material));

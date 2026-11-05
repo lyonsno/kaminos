@@ -8,7 +8,7 @@ struct Params {world:mat4x4f,domain:vec4f,lo:vec4f,size:vec4f,dims:vec4u}
 @group(0) @binding(3) var<storage,read> poses:array<mat4x4f>;
 @group(0) @binding(4) var<storage,read_write> mask:array<atomic<u32>>;
 fn separated(delta:vec3f,a:vec3f,b:vec3f,c:vec3f,axis:vec3f)->bool{
- let radius=abs(dot(a,axis))+abs(dot(b,axis))+abs(dot(c,axis))+.5*dot(abs(axis),vec3f(1));
+ let radius=abs(dot(a,axis))+abs(dot(b,axis))+abs(dot(c,axis));
  return abs(dot(delta,axis))>radius+1e-6*max(1.0,radius);
 }
 fn touches(delta:vec3f,a:vec3f,b:vec3f,c:vec3f)->bool{

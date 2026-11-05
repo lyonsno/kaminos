@@ -99,7 +99,7 @@ export async function createLogDebrisGpu({renderer,field,ground,onFrame=null,the
   if(thermalControls){
    for(const [target,heat]of [[material,vertexStage(position.w)],[capMaterial,vertexStage(live.x)]]){
     const thermal=createSurfaceThermalRadiance(heat.mul(LIVE_LOG_HEAT_TO_FLUID_HEAT),thermalControls.kelvinPerHeat);owned.push(thermal);
-    target.emissiveNode=THREE.TSL.mix(target.emissiveNode,thermal.node.mul(thermalControls.gain),thermalControls.weight);
+    target.emissiveNode=THREE.TSL.mix(target.emissiveNode,target.emissiveNode.add(thermal.node).mul(thermalControls.gain),thermalControls.weight);
    }
   }
   const caps=new THREE.InstancedMesh(geometry,capMaterial,count);caps.name='Exposed char interior';caps.frustumCulled=false;caps.matrixAutoUpdate=false;
@@ -111,11 +111,12 @@ export async function createLogDebrisGpu({renderer,field,ground,onFrame=null,the
   }
   function reset(){if(disposed)throw Error('Debris is disposed');device.queue.writeBuffer(particles,0,new Uint32Array(count*16));
    for(const texture of [positions,sizes])device.queue.writeTexture({texture},new Float32Array(count*4),{bytesPerRow:n*16},[n,n*n]);
+   if(regionMotion&&oldPoses){const e=device.createCommandEncoder();e.copyBufferToBuffer(regionMotion.matrices,0,oldPoses,0,regionMotion.count*64);device.queue.submit([e.finish()]);}
    mesh.updateWorldMatrix(true,false);previous.copy(mesh.matrixWorld);present();steps=0;
   }
   reset();
   unsubscribe=onFrame?.(present);
-  return {root,caps,particles,positions,sizes,count,
+  return {root,caps,debris,particles,positions,sizes,count,
    setRegionMotion(value){
     if(value===regionMotion)return;
     oldPoses?.destroy();ownerImage?.dispose();oldPoses=null;ownerImage=null;regionMotion=value;
