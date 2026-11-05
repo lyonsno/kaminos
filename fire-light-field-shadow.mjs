@@ -216,7 +216,14 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
     setQuality(value){
       if(!runtimeQuality)throw Error('runtime shadow quality unavailable');
       const next=validateRuntimeShadowQuality({resolution,blockerSamples,filterSamples,...value},renderer.backend?.device?.limits),strata=shadowStrata(next.filterSamples);
-      if(next.resolution!==resolution){target.setSize(next.resolution,next.resolution);resolutionNode.value=next.resolution;}
+      if(next.resolution!==resolution){
+        // This Three build's inherited RenderTarget.setSize updates image.width
+        // on the cube's image array, while GPU allocation reads each face.
+        for(const face of target.texture.image){face.width=next.resolution;face.height=next.resolution;}
+        target.setSize(next.resolution,next.resolution);
+        resolutionNode.value=next.resolution;
+        effective.value=0;status.effective=false;status.reason='resolution-changed';
+      }
       resolution=next.resolution;blockerSamples=next.blockerSamples;filterSamples=next.filterSamples;
       qualityNodes.blockerSamples.value=blockerSamples;qualityNodes.filterSamples.value=filterSamples;qualityNodes.bands.value=strata.bands;qualityNodes.sectors.value=strata.sectors;
       Object.assign(status,{resolution,blockerSamples,filterSamples});
