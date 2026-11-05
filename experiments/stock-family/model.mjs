@@ -1,3 +1,4 @@
+import {validateRestArc,unwrapRestArc} from './rest-arc.mjs';
 export const SOURCE_SHA='0d24383aa503956b927c7e9b0e52fcf6197a1c0928a0a465989b92fc9c458773';
 // Source-local Z is longitudinal. Authored bands surround observed feet and
 // mouths; these are not automatically inferred semantic segments.
@@ -35,6 +36,7 @@ export function validateRecipe(value){
 export function validateStockSource(source){
   if(!source||typeof source.url!=='string'||!source.url||!/^[a-f0-9]{64}$/.test(source.sha256))throw Error('Invalid stock source');
   if(source.fit&&!['x','y','z','-x','-y','-z'].includes(source.fit.axis))throw Error('Invalid source axis');
+  if(source.fit?.arc!==undefined)validateRestArc(source.fit.arc);
   validateProfile(source.profile);return structuredClone(source);
 }
 export const bandPercent=(profile,value)=>String(Number(((value-profile.min)/(profile.max-profile.min)*100).toFixed(4)));
@@ -58,13 +60,24 @@ export function replaceStockSource(recipe,source){
 }
 // A declared axis, centered unit longitudinal extent, and no inferred semantic
 // protection. Authored bands belong to this fitted source, never its predecessor.
-export function fitStockSource(positions,normals,axis){
+export function fitStockSource(positions,normals,axis,arc){
   const rotations={x:([x,y,z])=>[-z,y,x],y:([x,y,z])=>[x,-z,y],z:p=>p,
     '-x':([x,y,z])=>[z,y,-x],'-y':([x,y,z])=>[x,z,-y],'-z':([x,y,z])=>[-x,y,-z]};
   if(!rotations[axis])throw Error('Invalid source axis');
   if(!positions.length||positions.length%3||positions.length!==normals.length||!positions.every(Number.isFinite)||!normals.every(Number.isFinite))throw Error('Finite matching position and normal arrays required');
   const out=new Float32Array(positions.length),n=new Float32Array(normals.length),lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];
   for(let i=0;i<out.length;i+=3){const p=rotations[axis](Array.from(positions.subarray(i,i+3)));out.set(p,i);n.set(rotations[axis](Array.from(normals.subarray(i,i+3))),i);p.forEach((v,k)=>{lo[k]=Math.min(lo[k],v);hi[k]=Math.max(hi[k],v);});}
+  if(arc!==undefined){
+    const unwrapped=unwrapRestArc(out,n,arc),low=[Infinity,Infinity,Infinity],high=[-Infinity,-Infinity,-Infinity];
+    for(let i=0;i<out.length;i++){low[i%3]=Math.min(low[i%3],unwrapped.positions[i]);high[i%3]=Math.max(high[i%3],unwrapped.positions[i]);}
+    const extent=high[2]-low[2];if(!(extent>0)||!(high[0]>low[0]))throw Error('Source needs nonzero longitudinal and cross-section extent');
+    const referencePositions=out.slice(),referenceNormals=n.slice();
+    for(let i=0;i<out.length;i++){
+      referencePositions[i]=(out[i]-(lo[i%3]+hi[i%3])/2)/extent;
+      unwrapped.positions[i]=(unwrapped.positions[i]-(i%3===0?0:(low[i%3]+high[i%3])/2))/extent;
+    }
+    return {...unwrapped,referencePositions,referenceNormals,profile:{min:-.5,max:.5,xMin:Math.fround(low[0]/extent),xMax:Math.fround(high[0]/extent),locks:[]}};
+  }
   const extent=hi[2]-lo[2];if(!(extent>0)||!(hi[0]>lo[0]))throw Error('Source needs nonzero longitudinal and cross-section extent');
   for(let i=0;i<out.length;i++)out[i]=(out[i]-(lo[i%3]+hi[i%3])/2)/extent;
   return {positions:out,normals:n,profile:{min:-.5,max:.5,xMin:Math.fround((lo[0]-hi[0])/2/extent),xMax:Math.fround((hi[0]-lo[0])/2/extent),locks:[]}};
@@ -100,9 +113,13 @@ export function createStockWarp(profile,parameters){
     maxCurvature:Math.abs(k),protectedBands:locks.map(b=>[...b]),
     limitations:['UVs travel with the surface; texel scale changes in free spans.','Global self-intersection and fluid transport are not tested.']}};
 }
-export function deformStock(positions,normals,profile,parameters){
+export function deformStock(positions,normals,profile,parameters,restAxial){
   if(positions.length%3||positions.length!==normals.length||!positions.every(Number.isFinite)||!normals.every(Number.isFinite))throw Error('Finite matching position and normal arrays required');
+  if(restAxial&&(restAxial.length!==positions.length/3||!restAxial.every(v=>Number.isFinite(v)&&v>0)))throw Error('Positive matching rest strain required');
   const warp=createStockWarp(profile,parameters),out=new Float32Array(positions.length),n=new Float32Array(normals.length);
-  for(let i=0;i<positions.length;i+=3){const p=Array.from(positions.subarray(i,i+3));out.set(warp.point(p).position,i);n.set(warp.normal(Array.from(normals.subarray(i,i+3)),p),i);}
+  let min=Infinity,max=-Infinity;
+  for(let i=0;i<positions.length;i+=3){const p=Array.from(positions.subarray(i,i+3)),q=warp.point(p);out.set(q.position,i);n.set(warp.normal(Array.from(normals.subarray(i,i+3)),p),i);
+    const strain=q.axial/(restAxial?.[i/3]??1);min=Math.min(min,strain);max=Math.max(max,strain);}
+  if(restAxial){warp.metrics.minAxialStretch=min;warp.metrics.maxAxialStretch=max;}
   return {positions:out,normals:n,metrics:warp.metrics};
 }

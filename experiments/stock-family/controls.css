@@ -5,6 +5,8 @@
 .stock-family-controls input[type=checkbox] { width:auto; }
 .stock-family-controls details { margin:0!important; padding:8px 0!important; }
 .stock-family-controls details > label { display:grid; grid-template-columns:1fr 80px; gap:8px; align-items:center; }
+.stock-rest-arc > label { display:grid; grid-template-columns:1fr 90px; gap:8px; align-items:center; margin:6px 0; }
+.stock-family-controls details > label:has(select[aria-label="Source path"]) { grid-template-columns:1fr; margin:8px 0; }
 .stock-source-status { color:#e5b46a; overflow-wrap:anywhere; }
 .stock-source-status:empty { display:none; }
 .stock-source-identity { display:block; overflow-wrap:anywhere; color:#92969e; font-size:10px; margin-top:10px; }
