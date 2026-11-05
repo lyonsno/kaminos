@@ -1,6 +1,6 @@
-import {BufferGeometry,BufferAttribute,Box3,Vector3,Sphere,DataTexture,NearestFilter,DoubleSide,BackSide} from '../../lib/three.core.js';
+import {BufferGeometry,BufferAttribute,Box3,Vector3,Sphere,DataTexture,NearestFilter} from '../../lib/three.core.js';
 import {StorageBufferAttribute} from '../../lib/three.webgpu.js';
-import {storage,Fn,If,wgslFn,instanceIndex,uint,float,uniform,mix,attribute as tslAttribute,positionLocal,normalLocal,positionViewDirection,transformNormalToView,faceDirection} from '../../lib/three.tsl.js';
+import {storage,Fn,If,wgslFn,instanceIndex,uint,float,uniform,mix,attribute as tslAttribute,positionLocal,normalView,positionViewDirection} from '../../lib/three.tsl.js';
 import {terrainConfig,makeRidges,ROUTE} from './model.mjs';
 import {detailLattice,baseMaskTransform} from './lod.mjs';
 import {mesoAuthoringConfig,VIEW_MODES} from './formation.mjs';
@@ -164,35 +164,31 @@ const geoRockCrag=wgslFn(`fn hill_crag(rx:f32,bed:f32,rz:f32,phase:f32,seed:f32)
  return vec3<f32>(rib,cleft,facet);
 }`,[geoFbm3]);
 
-// Compact, sparsely occupied clasts. Geometry and pigment evaluate these exact
-// world-space sites. Support ends inside each footprint; there are no cell edges.
-const geoClasts=wgslFn(`fn hill_clasts(p:vec2<f32>,layerSeed:f32)->vec4<f32>{
+// Beveled 2D Voronoi talus boulders & scree cobbles for loose rock slopes:
+// Returns vec4(d1, edgeDist = d2-d1, beveledId, beveledTilt).
+const geoVoronoi2=wgslFn(`fn hill_vor2(p:vec2<f32>,layerSeed:f32)->vec4<f32>{
  let g=floor(p);let f=fract(p);
- var height=0.;var cover=0.;var gradient=vec2<f32>(0.);
+ var d1=8.;var d2=8.;var id=0.;var tilt=0.;
  for(var j=-1;j<=1;j++){
   for(var i=-1;i<=1;i++){
-   let o=vec2<f32>(f32(i),f32(j));let c=g+o;
-   let ha=hill_h3(vec3<f32>(c.x,c.y,layerSeed));
-   let hb=hill_h3(vec3<f32>(c.x+17.1,c.y+31.7,layerSeed*1.3+7.9));
-   let hc=hill_h3(vec3<f32>(c.x+53.3,c.y+11.9,layerSeed*1.7+19.3));
-   if(hc>.38){
-    let d=f-o-vec2<f32>(.16+.68*ha,.16+.68*hb);
-    let angle=6.2831853*hb;let ca=cos(angle);let sa=sin(angle);
-    let radius=.24+.14*ha;
-    let q=vec2<f32>(ca*d.x+sa*d.y,-sa*d.x+ca*d.y)/vec2<f32>(radius,radius*(.65+.30*hb));
-    let q2=q*q;let support=max(0.,1.-dot(q2,q2));
-    let h=support*support;
-    let stoneHeight=h*(.65+.35*hc);
-    if(stoneHeight>height){
-     height=stoneHeight;
-     let dq=-8.*support*q*q2*(.65+.35*hc)/vec2<f32>(radius,radius*(.65+.30*hb));
-     gradient=vec2<f32>(ca*dq.x-sa*dq.y,sa*dq.x+ca*dq.y);
-    }
-    cover=max(cover,smoothstep(0.,.16,h));
+   let o=vec2<f32>(f32(i),f32(j));
+   let c=g+o;
+   let hA=hill_h3(vec3<f32>(c.x,c.y,layerSeed));
+   let hB=hill_h3(vec3<f32>(c.x+17.1,c.y+31.7,layerSeed*1.3+7.9));
+   let hC=hill_h3(vec3<f32>(c.x+53.3,c.y+11.9,layerSeed*1.7+19.3));
+   let r=o+vec2<f32>(.16+.68*hA,.16+.68*hB)-f;
+   let d=sqrt(dot(r,r));
+   if(d<d1){
+    d2=d1;d1=d;id=hC;
+    tilt=r.x*(hA-.5)+r.y*(hB-.5);
+   }else if(d<d2){
+    d2=d;
    }
   }
  }
- return vec4<f32>(height,gradient,cover);
+ let edgeDist=max(0.,d2-d1);
+ let bevel=smoothstep(0.,.18,edgeDist);
+ return vec4<f32>(d1,edgeDist,bevel*(id-.5),bevel*tilt);
 }`,[geoHash3]);
 
 const formedColor=wgslFn(`fn hill_geological_color(x:f32,z:f32,bed:f32,soil:f32,disp:f32,nx:f32,ny:f32,nz:f32,tilt:f32,strike:f32,fold:f32,thickness:f32,seed:f32,stepStyle:f32,meso:f32,ledge:f32,crag:f32,cobble:f32,rill:f32,viewMode:f32)->vec4<f32>{
@@ -256,60 +252,94 @@ const formedColor=wgslFn(`fn hill_geological_color(x:f32,z:f32,bed:f32,soil:f32,
  return vec4<f32>(clamp(srgb*srgb*1.42,vec3<f32>(.02),vec3<f32>(.32)),outExp);
 }`,[geoFbm3,geoLedgeProfile,geoRockCrag]);
 
-// Pigment describes material, while scene lighting shades the actual relief.
-// Keep high frequency noise and fixed-light normal shading out of albedo.
+// Streamlined world-space 3D fragment lithology, discontinuous shelf undercuts,
+// conjugate rock fracture clefts, constitutive mineral cleavage, and Voronoi talus clasts.
 const fragFormedColor=wgslFn(`fn hill_frag_color(vColor:vec4<f32>,x:f32,y:f32,z:f32,nx:f32,ny:f32,nz:f32,tilt:f32,strike:f32,fold:f32,thickness:f32,seed:f32,stepStyle:f32,meso:f32,ledge:f32,crag:f32,cobble:f32,rill:f32,viewMode:f32,useFormed:f32)->vec4<f32>{
- if(useFormed<.5||viewMode>2.5||(viewMode>.5&&viewMode<1.5)||meso<=0.){return vec4<f32>(vColor.xyz,1.);}
+ if(useFormed<.5||(viewMode>.5&&viewMode<1.5)){return vec4<f32>(vColor.xyz,1.);}
+ if(meso<=0.&&viewMode<2.5){return vec4<f32>(vColor.xyz,1.);}
+ let eLedge=ledge;
+ let eCrag=select(crag,0.,viewMode>1.5&&viewMode<2.5);
  let eCob=select(cobble,0.,viewMode>1.5&&viewMode<2.5);
- let exposed=clamp(vColor.w,0.,1.);
+ let eRill=select(rill,0.,viewMode>1.5&&viewMode<2.5);
+ // Constitutive micro-cleavage and mineral grain are always active at full resolution (1.6x)
+ // so lowering the Outcrop & gully rill slider never makes the surface look blurry or unresolved.
+ let cGrain=select(1.6,0.,viewMode>1.5&&viewMode<2.5);
+ let rad=strike*.017453292519943295;let ca=cos(rad);let sa=sin(rad);let rx=x*ca+z*sa;let rz=-x*sa+z*ca;
+ let sStyle=clamp(stepStyle,0.,1.);
+ let dipScale=1.-.88*sStyle;
+ let warp=.36*hill_fbm3(vec3<f32>(rx*.55,y*.45,rz*.55+seed*.13));
+ let nWarp=hill_fbm3(vec3<f32>(rx*2.2,y*2.6,rz*2.2+seed*.3));
+ let lensMask=clamp(.45+.95*hill_fbm3(vec3<f32>(rx*.78-seed*.09,y*.42,rz*.78+seed*.15)),.08,1.);
+ let bedWeight=clamp(.20+.80*sStyle,.20,1.)*lensMask;
+ let phase=(y-dipScale*tilt*rx-dipScale*fold*warp+seed*.017)/thickness+.18*nWarp*(1.-.45*sStyle);
  let steep=clamp(1.-ny,0.,1.);
- let rad=strike*.017453292519943295;let rx=x*cos(rad)+z*sin(rad);
- let warp=.36*hill_fbm3(vec3<f32>(rx*.55,y*.45,z*.55+seed*.13));
- let phase=(y-(1.-.88*stepStyle)*(tilt*rx+fold*warp)+seed*.017)/thickness;
- // Modest bedding variation remains tied to geological orientation and depth.
- let bedding=.5+.5*sin(phase*6.2831853);
- let rockSrgb=mix(vec3<f32>(.285,.257,.216),vec3<f32>(.325,.285,.231),bedding*clamp(stepStyle,0.,1.));
- let rockLin=rockSrgb*rockSrgb*1.38;
- let ground=mix(vColor.xyz,rockLin,exposed);
- let c0=hill_clasts(vec2<f32>(x,z)*3.5,seed+5.3);
- let c1=hill_clasts(vec2<f32>(x,z)*9.8,seed+23.9);
- let pixelWidth=max(length(vec2<f32>(dpdx(x),dpdx(z))),length(vec2<f32>(dpdy(x),dpdy(z))));
- let g0=1.-smoothstep(.24/3.5,.48/3.5,pixelWidth);
- let g1=1.-smoothstep(.24/9.8,.48/9.8,pixelWidth);
- let talus=(1.-exposed)*smoothstep(.03,.24,steep)*(1.-smoothstep(.58,.85,steep));
- let stones=clamp(meso*eCob*talus*max(g0*c0.w,g1*c1.w),0.,.90);
- return vec4<f32>(mix(ground,rockLin,stones*.10),1.);
-}`,[geoFbm3,geoClasts]);
-
-// Exact analytic derivative of the quintic interpolant. This perturbs the
-// material normal in object space, without a screen-space Jacobian or fake sun.
-const geoNoiseGradient=wgslFn(`fn hill_noise_gradient(p:vec3<f32>)->vec3<f32>{
- let i=floor(p);let f=fract(p);
- let u=f*f*f*(f*(f*6.-vec3<f32>(15.))+vec3<f32>(10.));
- let du=30.*f*f*(f-vec3<f32>(1.))*(f-vec3<f32>(1.));
- let a=hill_h3(i);let b=hill_h3(i+vec3<f32>(1.,0.,0.));
- let c=hill_h3(i+vec3<f32>(0.,1.,0.));let d=hill_h3(i+vec3<f32>(1.,1.,0.));
- let e=hill_h3(i+vec3<f32>(0.,0.,1.));let h=hill_h3(i+vec3<f32>(1.,0.,1.));
- let k=hill_h3(i+vec3<f32>(0.,1.,1.));let l=hill_h3(i+vec3<f32>(1.,1.,1.));
- return du*vec3<f32>(mix(mix(b-a,d-c,u.y),mix(h-e,l-k,u.y),u.z),mix(mix(c-a,d-b,u.x),mix(k-e,l-h,u.x),u.z),mix(mix(e-a,h-b,u.x),mix(k-c,l-d,u.x),u.y));
-}`,[geoHash3]);
-const fragRockNormal=wgslFn(`fn hill_rock_normal(n:vec3<f32>,p:vec3<f32>,exposed:f32,meso:f32,crag:f32,cobble:f32,seed:f32,strike:f32,macroNy:f32,viewMode:f32,useFormed:f32)->vec3<f32>{
- if(useFormed<.5||viewMode>.5||meso<=0.){return n;}
- let ca=cos(strike*.0174532925);let sa=sin(strike*.0174532925);
- let r=vec3<f32>(p.x*ca+p.z*sa,p.y,-p.x*sa+p.z*ca);
- let pixelWidth=max(length(dpdx(p)),length(dpdy(p)));
- let g0=1.-smoothstep(.012,.028,pixelWidth);
- let g1=1.-smoothstep(.004,.010,pixelWidth);
- let slope=crag*exposed*(g0*.0045*vec3<f32>(22.,34.,22.)*hill_noise_gradient(r*vec3<f32>(22.,34.,22.)+vec3<f32>(seed*.13,7.3,11.9))+g1*.0010*vec3<f32>(68.,91.,68.)*hill_noise_gradient(r*vec3<f32>(68.,91.,68.)+vec3<f32>(17.3,seed*.17,31.7)));
- var gradient=vec3<f32>(ca*slope.x-sa*slope.z,slope.y,sa*slope.x+ca*slope.z);
- let c0=hill_clasts(p.xz*3.5,seed+5.3);let c1=hill_clasts(p.xz*9.8,seed+23.9);
- let steep=clamp(1.-macroNy,0.,1.);
- let talus=(1.-exposed)*smoothstep(.03,.24,steep)*(1.-smoothstep(.58,.85,steep));
- let clastSlope=talus*cobble*(g0*.012*3.5*c0.yz+g1*.004*9.8*c1.yz);
- gradient+=vec3<f32>(clastSlope.x,0.,clastSlope.y);
- let tangent=gradient-n*dot(n,gradient);
- return normalize(n-meso*tangent);
-}`,[geoNoiseGradient,geoClasts]);
+ let rawExp=clamp(vColor.w,0.,1.);
+ let crag0=hill_crag(rx*1.8,y*1.5,rz*1.8,phase,seed);
+ let crag1=hill_crag(rx*6.8,y*5.6,rz*6.8,phase*2.618,seed+17.3);
+ let crag2=hill_crag(rx*24.,y*20.,rz*24.,phase*6.854,seed+41.9);
+ let fragOutcrop=smoothstep(.24,.66,rawExp+.18*(1.-sStyle)*nWarp+.10*crag0.x+.08*eRill*nWarp*smoothstep(.08,.28,steep));
+ let exposed=mix(rawExp,fragOutcrop,.76*(1.-sStyle));
+ let cliffWall=smoothstep(.10,.34,steep)*exposed;
+ let l0=hill_ledge(phase);
+ let l1=hill_ledge(phase*1.618034+.14*nWarp);
+ let l2=hill_ledge(phase*4.236068-.10*nWarp);
+ let talusBand=clamp((1.-exposed)*smoothstep(.03,.24,steep)+smoothstep(.15,.58,l0.x*bedWeight)*smoothstep(.12,.48,steep)*(1.-smoothstep(.58,.85,steep)),0.,1.);
+ let grain0=hill_fbm3(vec3<f32>(rx*28.,y*38.,rz*28.))*cGrain;
+ let grain1=hill_fbm3(vec3<f32>(rx*110.,y*145.,rz*110.))*cGrain;
+ let aperiodicBand=.5+.32*sin(phase*6.2831853)+.18*sin(phase*3.883222+.9);
+ let ledgeMix=clamp(.5+(.42*l0.x+.24*l1.x+.14*l2.x*cGrain)*bedWeight,0.,1.);
+ let stratMix=clamp(mix(.5+(aperiodicBand-.5)*bedWeight,ledgeMix,.68*sStyle)+eCrag*(.16*crag0.x+.11*crag1.x+.07*crag2.x)+.07*grain0+.04*grain1,0.,1.);
+ let darkRock=vec3<f32>(.20,.168,.134);
+ let warmOchre=vec3<f32>(.29,.235,.174);
+ let buffSand=vec3<f32>(.365,.305,.232);
+ let greyCrag=vec3<f32>(.25,.238,.218);
+ var rockSrgb=mix(darkRock,mix(warmOchre,buffSand,smoothstep(.48,.86,stratMix)),stratMix);
+ rockSrgb=mix(rockSrgb,greyCrag,clamp((1.-sStyle)*.44+.22*crag0.x,0.,.68));
+ let cleft=clamp(eCrag*(.52*crag0.y+.38*crag1.y+.26*crag2.y),0.,1.)*cliffWall;
+ let undercut=clamp(eLedge*(.55*l0.y+.35*l1.y+.20*l2.y)*bedWeight,0.,1.)*cliffWall;
+ rockSrgb=rockSrgb*(1.+eCrag*(.14*crag0.x+.10*crag1.x+.07*crag2.x)+.07*grain0+.05*grain1)*(1.-.42*cleft-.34*undercut);
+ // Irregular 3D Voronoi talus boulders & cobbles on toe slopes and benches
+ let c0=hill_vor2(vec2<f32>(x*4.4+.14*nWarp,z*4.4-.14*nWarp),seed+5.3);
+ let c1=hill_vor2(vec2<f32>(x*16.+.06*grain0,z*16.-.06*grain0),seed+23.9);
+ let dome0=clamp(1.-c0.x*c0.x*1.35,0.,1.)*smoothstep(.01,.15,c0.y)*clamp(c0.z+.38,0.,1.);
+ let dome1=clamp(1.-c1.x*c1.x*1.48,0.,1.)*smoothstep(.01,.14,c1.y)*clamp(c1.z+.38,0.,1.);
+ let cobbleDome=(dome0+.72*dome1)*eCob;
+ // Micro-ledge & rock-facet normal perturbation
+ let dFacetX=eCrag*(crag0.z*1.15+crag1.z*.90+crag2.z*.65)+grain0*.45+grain1*.32;
+ let dFacetZ=eCrag*(-crag0.z*.90+crag1.z*.72-crag2.z*.52)+grain0*.38-grain1*.28;
+ let dLedgeY=eLedge*(l0.z*1.05+l1.z*.75+l2.z*.45)*bedWeight-.75*undercut;
+ let dCobX=eCob*(c0.w*1.55+c1.w*1.15)+grain0*.28;
+ let dCobZ=eCob*(-c0.w*1.35+c1.w*.95)-grain1*.28;
+ let rillCut=eRill*(1.-exposed)*smoothstep(.03,.28,steep)*nWarp*.35;
+ let pnx=nx+meso*(cliffWall*(.58*dFacetX*ca-.42*dFacetZ*sa)+talusBand*.58*dCobX+(1.-cliffWall)*(.18*grain0+rillCut));
+ let pny=ny+meso*(cliffWall*.62*dLedgeY+talusBand*.48*cobbleDome);
+ let pnz=nz+meso*(cliffWall*(.58*dFacetX*sa+.42*dFacetZ*ca)+talusBand*.58*dCobZ+(1.-cliffWall)*(.18*grain1-rillCut));
+ let pNorm=normalize(vec3<f32>(pnx,max(-.12,pny),pnz));
+ let baseNorm=normalize(vec3<f32>(nx,max(.08,ny),nz));
+ let sunDir=normalize(vec3<f32>(.52,.68,.51));
+ let fillDir=normalize(vec3<f32>(-.48,.55,.68));
+ if(viewMode>2.5){
+  let simRock=clamp(vColor.x*(.38+.62*smoothstep(.04,.34,steep)),0.,1.);
+  let simSoil=clamp(vColor.y*1.15,0.,1.)*(1.-.55*simRock);
+  let fragProc=clamp(meso*(cliffWall*(.38*eLedge*abs(l0.x+.5*l1.x)*bedWeight+.48*cleft)+talusBand*.55*cobbleDome+(1.-cliffWall)*.22*abs(grain0)),0.,1.);
+  let procAmp=clamp(vColor.z*1.5+.48*fragProc,0.,1.);
+  let cRock=vec3<f32>(.40,.06,.02)*simRock*(1.-.52*procAmp);
+  let cSoil=vec3<f32>(.02,.34,.06)*simSoil*(1.-.52*procAmp);
+  let cProc=vec3<f32>(.02,.20,.44)*procAmp;
+  let pShade=clamp(.52+.38*dot(pNorm,sunDir)+.14*dot(pNorm,fillDir),.32,1.08);
+  let provLin=clamp((vec3<f32>(.012,.015,.02)+cRock+cSoil+cProc)*pShade,vec3<f32>(0.),vec3<f32>(.65));
+  return vec4<f32>(provLin,1.);
+ }
+ let dSun=(dot(pNorm,sunDir)-dot(baseNorm,sunDir))*1.45;
+ let dFill=(dot(pNorm,fillDir)-dot(baseNorm,fillDir))*.75;
+ let microShade=clamp(1.+dSun+dFill,0.62,1.26);
+ let rockLin=clamp(rockSrgb*rockSrgb*1.38,vec3<f32>(.025),vec3<f32>(.28));
+ // Preserve the rock hierarchy and geometric clasts without painting every
+ // nearest-site cell tan or outlining the cells with green substrate.
+ let groundLin=vColor.xyz*(1.+.10*grain0+.07*grain1);
+ let finalLin=mix(groundLin,rockLin,exposed)*microShade;
+ return vec4<f32>(clamp(finalLin,vec3<f32>(.015),vec3<f32>(.34)),1.);
+}`,[geoFbm3,geoLedgeProfile,geoRockCrag,geoVoronoi2]);
 
 const zoomCellKernel=wgslFn(`fn hill_cell_xy(ix:u32,iz:u32,n:u32,state:ptr<storage,array<vec4<f32>>,read_write>)->vec2<f32>{
  let c=(*state)[iz*n+ix].xy;
@@ -435,16 +465,22 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
   let rawRockVert=ledgeStep+buttress;
   let rockVert=mix(rawRockVert,max(0.,rawRockVert),inCollar);
   let ledgeUp=meso*wPatch*cliffMask*rockVert;
-  // Filter the smallest clast minor diameter (.24 radius * .65 aspect * 2),
-  // rather than the much larger site-cell spacing.
-  let gCob0=smoothstep(ds*5.2,ds*8.8,.312/3.5);
-  let gCob1=smoothstep(ds*5.2,ds*8.8,.312/9.8);
-  let gCob2=smoothstep(ds*5.2,ds*8.8,.312/24.);
+  // Smooth C1 paraboloid-domed 3D Voronoi talus boulders & cobbles (zero conical tips)
+  let gCob0=smoothstep(ds*5.2,ds*8.8,.28);
+  let gCob1=smoothstep(ds*5.2,ds*8.8,.10);
+  let gCob2=smoothstep(ds*5.2,ds*8.8,.042);
   let benchTread=clamp(.5+.55*sLedge0,0.,1.)*smoothstep(.20,2.4,rawSlope)*(1.-smoothstep(2.0,3.6,rawSlope));
   let screeZone=clamp(smoothstep(.001,.022,rawSoil)*smoothstep(.05,1.45,rawSlope)*(1.-smoothstep(1.2,2.4,rawSlope))+.55*benchTread,0.,1.);
-  let stone0=hill_clasts(vec2<f32>(wx,wz)*3.5,seed+5.3).x;
-  let stone1=hill_clasts(vec2<f32>(wx,wz)*9.8,seed+23.9).x;
-  let stone2=hill_clasts(vec2<f32>(wx,wz)*24.,seed+61.7).x;
+  let c0=hill_vor2(vec2<f32>(wx*3.5+.08*nWarp,wz*3.5-.08*nWarp),seed+5.3);
+  let c1=hill_vor2(vec2<f32>(wx*9.8+.04*rib1,wz*9.8-.04*rib1),seed+23.9);
+  let c2=hill_vor2(vec2<f32>(wx*24.+.02*rib2,wz*24.-.02*rib2),seed+61.7);
+  let r0Sq=c0.x*c0.x;let r1Sq=c1.x*c1.x;let r2Sq=c2.x*c2.x;
+  let dome0=clamp(1.-r0Sq*1.35,0.,1.);
+  let dome1=clamp(1.-r1Sq*1.45,0.,1.);
+  let dome2=clamp(1.-r2Sq*1.55,0.,1.);
+  let stone0=dome0*dome0*smoothstep(.04,.24,c0.y)*clamp(c0.z+.35,0.,1.);
+  let stone1=dome1*dome1*smoothstep(.04,.22,c1.y)*clamp(c1.z+.35,0.,1.);
+  let stone2=dome2*dome2*smoothstep(.04,.20,c2.y)*clamp(c2.z+.35,0.,1.);
   let cobbleH=meso*eCob*wPatch*screeZone*(gCob0*.034*stone0+gCob1*.014*stone1+gCob2*.006*stone2);
   cobbleOut=cobbleH;
   let rawBench=eCrag*(.018*rib0+.007*rib1+.0028*rib2+.001*rib3);
@@ -458,7 +494,7 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
  }
  (*metaBuf)[v]=vec4<f32>(py-rawSoil,max(0.,rawSoil-cobbleOut*2.2),dispOut,rawSlope);
  return vec4<f32>(px,py,pz,1.);
-}`,[zoomCellKernel,geoFbm3,geoLedgeProfile,geoRockCrag,geoClasts]);
+}`,[zoomCellKernel,geoFbm3,geoLedgeProfile,geoRockCrag,geoVoronoi2]);
 
 const zoomNormKernel=wgslFn(`fn hill_zoom_norm(v:u32,zn:u32,tilt:f32,strike:f32,fold:f32,thickness:f32,seed:f32,stepStyle:f32,meso:f32,useFormed:f32,posBuf:ptr<storage,array<vec4<f32>>,read_write>,metaBuf:ptr<storage,array<vec4<f32>>,read_write>)->vec4<f32>{
  let xi=v%zn;let zi=v/zn;
@@ -650,12 +686,7 @@ export function createTerrainGPU(geometry,input={}){
   material.roughness=.96;
   material.specularIntensity=.16;
   const macro=tslAttribute('hillMacroNormal','vec4'),surface=tslAttribute('hillSurface','vec4');
-  const detailNormal=fragRockNormal({n:normalLocal.normalize(),p:positionLocal,exposed:tslAttribute('color','vec4').w,meso:geoMeso,crag:mesoCrag,cobble:mesoCobble,seed:geoSeed,strike:geoStrike,macroNy:macro.y,viewMode:viewModeUniform,useFormed});
-  const viewNormal=transformNormalToView(detailNormal);
-  // Match the pinned renderer's side rule; faceDirection also exists in the
-  // older Node-side Three used by the lightweight experiment tests.
-  const facingNormal=material.side===DoubleSide?viewNormal.mul(faceDirection):material.side===BackSide?viewNormal.mul(-1):viewNormal;
-  material.normalNode=fragSafeNormal({nv:facingNormal,vd:positionViewDirection});
+  material.normalNode=fragSafeNormal({nv:normalView,vd:positionViewDirection});
   material.colorNode=fragFormedColor({vColor:tslAttribute('color','vec4'),x:positionLocal.x,y:surface.x.add(surface.y),z:positionLocal.z,nx:macro.x,ny:macro.y,nz:macro.z,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,ledge:mesoLedge,crag:mesoCrag,cobble:mesoCobble,rill:mesoRill,viewMode:viewModeUniform,useFormed});
   return material;
  };
