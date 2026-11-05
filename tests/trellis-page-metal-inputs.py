@@ -97,6 +97,22 @@ def run(args):
             self.assertNotEqual(run.returncode,0,name+' must fail before staging a different displayed mesh')
             self.assertEqual(self.report()['phase'],'retained-input-admission')
             self.assertFalse((self.out/'checkpoints').exists())
+    def test_changed_display_envelope_fails_before_staging(self):
+        blob=self.input.read_bytes();jl=struct.unpack_from('<I',blob,12)[0]
+        original=json.loads(blob[20:20+jl]);binary=blob[28+jl:]
+        for name in ('points', 'translated', 'empty-scene'):
+            with self.subTest(name=name):
+                doc=json.loads(json.dumps(original))
+                if name=='points':doc['meshes'][0]['primitives'][0]['mode']=0
+                elif name=='translated':doc['nodes'][0]['matrix'][12]=25
+                else:doc['scenes'][0]['nodes']=[]
+                raw=json.dumps(doc,separators=(',',':')).encode();raw+=b' '*((-len(raw))%4)
+                payload=struct.pack('<II',len(raw),0x4e4f534a)+raw+struct.pack('<II',len(binary),0x004e4942)+binary
+                file=self.root/(name+'.glb');file.write_bytes(struct.pack('<III',0x46546c67,2,12+len(payload))+payload)
+                run=self.invoke(name,input_file=file)
+                self.assertNotEqual(run.returncode,0,name+' must fail before staging a different displayed surface')
+                self.assertEqual(self.report()['phase'],'retained-input-admission')
+                self.assertFalse((self.out/'checkpoints').exists())
     def test_wrong_source_fails_before_retained_input_staging(self):
         run=self.invoke(revision='0'*40);self.assertNotEqual(run.returncode,0)
         r=self.report();self.assertEqual(r['phase'],'source-admission');self.assertFalse((self.out/'checkpoints').exists())
