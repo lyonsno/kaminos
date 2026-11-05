@@ -43,6 +43,7 @@ export { resolveDisplayReconstruction } from './volume-display-reconstruction.mj
 import { SOOT_BURNOUT_WGSL, resolvePhysicsAppearance, physicsAppearanceUniformValues } from './volume-physics-appearance.mjs';
 import { WAVELET_TURBULENCE_WGSL, WAVELET_TURBULENCE_IDENTITY, resolveWaveletTurbulence, waveletTurbulenceUniformValues, waveletOctaveUniformValues, velocityBandEnergies } from './volume-wavelet-turbulence.mjs';
 import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
+import { createThermalSubmission } from './volume-thermal-submission.mjs';
 import { createSceneVolumeTransport } from './scene-volume-transport.mjs';
 import { GRID_HEIGHT_MAX_RATIO, resolveGridHeight, gridHeightForShape, raymarchDomainBox } from './volume-grid-shape.mjs';
 export { GRID_HEIGHT_AUTO_RATIO, GRID_HEIGHT_MIN_RATIO, GRID_HEIGHT_MAX_RATIO, GRID_HEIGHT_DERIVED_LATTICE_WIDTHS, resolveGridHeight, gridHeightStep, gridHeightForShape, raymarchDomainBox, raymarchBoxHitModel } from './volume-grid-shape.mjs';
@@ -12398,6 +12399,9 @@ export function createKaminosVolumePrototype({
   let currentQuench = 0;
   let simulationPaused = false;
   let gpuThermalConsumer = null;
+  const thermalSubmissions=createThermalSubmission();
+  const finishVolumeEncoder=encoder=>thermalSubmissions.finish(encoder);
+  const submitVolumeCommands=(commands,submit=list=>device.queue.submit(list))=>thermalSubmissions.submit(commands,submit);
   let thermalFluidGeneration = 0;
   let sceneSolidGpu = null;
   let sceneSolidGpuSupportKey = null;
@@ -13373,7 +13377,7 @@ export function createKaminosVolumePrototype({
         }
         if(sceneSolidRevisionKey===maskKey)return;
         const encoder=device.createCommandEncoder({label:'scene solid GPU rebuild'});
-        sceneSolidGpu.encode(encoder);device.queue.submit([encoder.finish()]);
+        sceneSolidGpu.encode(encoder);submitVolumeCommands([finishVolumeEncoder(encoder)]);
         sceneSolidRevisionKey=maskKey;
         state.sceneSolidGeometryBuilds=(state.sceneSolidGeometryBuilds||0)+geometry.builds;
         state.sceneCollision={requested:true,effective:'mesh-voxel-solid',backend:'gpu',sourceId,reason:null,
@@ -13871,7 +13875,7 @@ export function createKaminosVolumePrototype({
     });
     const encoder = device.createCommandEncoder({ label: 'kaminos liquid-fire contact consumer witness readback' });
     encoder.copyBufferToBuffer(liquidFireContactStatsBuffer, 0, readback, 0, LIQUID_FIRE_CONTACT_STATS_WORDS * 4);
-    device.queue.submit([encoder.finish()]);
+    submitVolumeCommands([finishVolumeEncoder(encoder)]);
     await readback.mapAsync(GPUMapMode.READ);
     const words = new Uint32Array(readback.getMappedRange()).slice();
     readback.unmap();
@@ -17829,7 +17833,10 @@ export function createKaminosVolumePrototype({
       dt:resolveTimeStepConfig(controlsSnapshot).effective.dtScale/60,backtraceScale:resolveTimeStepConfig(controlsSnapshot).effective.backtraceScale,
       transform:{translate:[...productTransform.translate],scale:productTransform.scale}};
   }
-  function encodeGpuThermalConsumer(encoder){gpuThermalConsumer?.encode(encoder,thermalGpuFrame());}
+  function encodeGpuThermalConsumer(encoder){
+    const continuation=gpuThermalConsumer?.encode(encoder,thermalGpuFrame());
+    if(continuation)thermalSubmissions.record(encoder,continuation);
+  }
 
   let pressureResidualCopySolver = null;
   // The heat-release context the probed numbers came from, taken at copy time:
@@ -18609,7 +18616,7 @@ export function createKaminosVolumePrototype({
       }
       encoder.resolveQuerySet(querySet, 0, queryCount, resolveBuffer, 0);
       encoder.copyBufferToBuffer(resolveBuffer, 0, readbackBuffer, 0, queryCount * 8);
-      device.queue.submit([encoder.finish()]);
+      submitVolumeCommands([finishVolumeEncoder(encoder)]);
       await readbackBuffer.mapAsync(GPUMapMode.READ);
       const timestamps = new BigUint64Array(readbackBuffer.getMappedRange().slice(0));
       readbackBuffer.unmap();
@@ -18674,7 +18681,7 @@ export function createKaminosVolumePrototype({
         if (step === steps - 1) {
           encoder.copyBufferToBuffer(resolveBuffer, 0, readbackBuffer, 0, steps * 256);
         }
-        device.queue.submit([encoder.finish()]);
+        submitVolumeCommands([finishVolumeEncoder(encoder)]);
       }
       await readbackBuffer.mapAsync(GPUMapMode.READ);
       const padded = new BigUint64Array(readbackBuffer.getMappedRange().slice(0));
@@ -19903,7 +19910,7 @@ export function createKaminosVolumePrototype({
       });
       encoder.resolveQuerySet(querySet, 0, queryCount, resolveBuffer, 0);
       encoder.copyBufferToBuffer(resolveBuffer, 0, readbackBuffer, 0, queryCount * 8);
-      device.queue.submit([encoder.finish()]);
+      submitVolumeCommands([finishVolumeEncoder(encoder)]);
       await readbackBuffer.mapAsync(GPUMapMode.READ);
       const timestamps = new BigUint64Array(readbackBuffer.getMappedRange().slice(0));
       readbackBuffer.unmap();
@@ -20052,7 +20059,7 @@ export function createKaminosVolumePrototype({
         BOUNDARY_SPLAT_INSTANCE_TARGET_COUNT * BOUNDARY_SPLAT_INSTANCE_TIER_GROUP_STRIDE_BYTES,
       );
     }
-    device.queue.submit([encoder.finish()]);
+    submitVolumeCommands([finishVolumeEncoder(encoder)]);
     await readback.mapAsync(GPUMapMode.READ);
     if (tierReadback) await tierReadback.mapAsync(GPUMapMode.READ);
     const drawState = new Uint32Array(readback.getMappedRange());
@@ -20242,7 +20249,7 @@ export function createKaminosVolumePrototype({
     try {
       const encoder = device.createCommandEncoder({ label: `kaminos ${BOUNDARY_SPLAT_FEATURE_CAPTURE_IDENTITY} witness encoder` });
       encoder.copyBufferToBuffer(boundarySplatFeatureBuffer, 0, readback, 0, captureBytes);
-      device.queue.submit([encoder.finish()]);
+      submitVolumeCommands([finishVolumeEncoder(encoder)]);
       await readback.mapAsync(GPUMapMode.READ);
       const values = new Float32Array(readback.getMappedRange()).slice();
       readback.unmap();
@@ -20287,7 +20294,7 @@ export function createKaminosVolumePrototype({
       const encoder = device.createCommandEncoder({ label: 'kaminos boundary splat supervision readback encoder' });
       encoder.copyBufferToBuffer(boundarySplatBuffer, 0, candidateReadback, 0, candidateBytes);
       encoder.copyBufferToBuffer(boundarySplatFeatureBuffer, 0, featureReadback, 0, featureBytes);
-      device.queue.submit([encoder.finish()]);
+      submitVolumeCommands([finishVolumeEncoder(encoder)]);
       await Promise.all([
         candidateReadback.mapAsync(GPUMapMode.READ),
         featureReadback.mapAsync(GPUMapMode.READ),
@@ -20343,7 +20350,7 @@ export function createKaminosVolumePrototype({
       force: true,
       explicitSplatConsumer: BOUNDARY_SPLAT_FOOTPRINT_AUDIT_CONSUMER,
     });
-    device.queue.submit([materializeEncoder.finish()]);
+    submitVolumeCommands([finishVolumeEncoder(materializeEncoder)]);
     if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
     if (pressureResidualCopyPending) await resolvePressureResidualProbe();
     if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
@@ -20377,7 +20384,7 @@ export function createKaminosVolumePrototype({
         force: true,
         explicitSplatConsumer: BOUNDARY_SPLAT_FOOTPRINT_AUDIT_CONSUMER,
       });
-      device.queue.submit([retryEncoder.finish()]);
+      submitVolumeCommands([finishVolumeEncoder(retryEncoder)]);
       if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
       if (pressureResidualCopyPending) await resolvePressureResidualProbe();
       if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
@@ -20395,7 +20402,7 @@ export function createKaminosVolumePrototype({
     try {
       const encoder = device.createCommandEncoder({ label: 'kaminos boundary splat footprint audit encoder' });
       encoder.copyBufferToBuffer(boundarySplatBuffer, 0, readback, 0, byteLength);
-      device.queue.submit([encoder.finish()]);
+      submitVolumeCommands([finishVolumeEncoder(encoder)]);
       await readback.mapAsync(GPUMapMode.READ);
       const values = new Float32Array(readback.getMappedRange()).slice();
       readback.unmap();
@@ -20874,7 +20881,7 @@ export function createKaminosVolumePrototype({
     try {
       const encoder = device.createCommandEncoder({ label: `${label} encoder` });
       encoder.copyBufferToBuffer(sourceBuffer, 0, readback, 0, byteLength);
-      device.queue.submit([encoder.finish()]);
+      submitVolumeCommands([finishVolumeEncoder(encoder)]);
       await readback.mapAsync(GPUMapMode.READ);
       const bytes = new Uint8Array(readback.getMappedRange()).slice();
       readback.unmap();
@@ -21226,7 +21233,7 @@ export function createKaminosVolumePrototype({
           if(!current||sourceFrame!==state.frameCount||sourceStep!==state.simStepCount)throw new Error('Native scene transport frame expired');
           if(!input?.encoder)throw new Error('Native scene transport requires the host encoder');
           const lean=emissiveRaymarchAdmission().eligible&&debugRaymarchShaderSpecialization!=='force-full';
-          const optical=resolveOpticalStepping(debugOpticalStepping,{emissive:lean,exterior:state.worldSmoke?.effective==='one-way-world-field',explicit:debugOpticalSteppingExplicit});
+          const optical=resolveOpticalStepping(debugOpticalStepping,{emissive:lean,exterior:state.worldSmoke?.effective==='one-way-world-field'&&debugOpticalStepping.value<4,explicit:debugOpticalSteppingExplicit});
           let code=WGSL,lighting=null;
           if(distributedGroup) {
             if(distributedFrame?.generation!==sceneVolumeSource?.describe().generation)throw new Error('Native scene transport lighting is stale');
@@ -21263,16 +21270,16 @@ export function createKaminosVolumePrototype({
     if (boundarySplatRequested() || browserResidualCanApply() || productFrameOwner !== 'prototype') {
       throw new Error('shared-scene-source-first-experiment-requires-ordinary-raymarch');
     }
-    const submit=commands => foregroundService
-        ? foregroundService.submit(commands, {metadata:{renderer:'scene-source-preparation',simStepCount:state.simStepCount}})
-        : device.queue.submit(commands);
+    const submit=commands => submitVolumeCommands(commands, list=>foregroundService
+        ? foregroundService.submit(list, {metadata:{renderer:'scene-source-preparation',simStepCount:state.simStepCount}})
+        : device.queue.submit(list));
     const createEncoder=()=>device.createCommandEncoder({label:'same-source scene volume presentation'});
     let next;
     if(sceneSourceFrameConsumer) {
-      next=prepareSceneSourceFrame({encoder,encode:encodeSharedSceneSource,submit,consume:sceneSourceFrameConsumer,
+      next=prepareSceneSourceFrame({encoder,finish:finishVolumeEncoder,encode:encodeSharedSceneSource,submit,consume:sceneSourceFrameConsumer,
         renderHost:renderSceneTransportHost,createEncoder});
     } else {
-      submit([encoder.finish()]);renderSceneTransportHost();next=createEncoder();
+      submit([finishVolumeEncoder(encoder)]);renderSceneTransportHost();next=createEncoder();
     }
     sceneSourcePreparedEncoders.add(next);
     if (scenePointFrame) scenePointFrame.hostDepthEffective = true;
@@ -21517,7 +21524,7 @@ export function createKaminosVolumePrototype({
         specialization:{...state.raymarchShaderSpecialization},incidentLight:{...state.physicalColor.incidentLight},
         uniforms:Array.from(uniforms),controls:structuredClone(controlsSnapshot)};
       encoder.copyBufferToBuffer(rows,0,readback,0,plan.byteLength);
-      device.queue.submit([encoder.finish()]);
+      submitVolumeCommands([finishVolumeEncoder(encoder)]);
       await readback.mapAsync(GPUMapMode.READ);
       values=new Float32Array(readback.getMappedRange().slice(0));
       readback.unmap();
@@ -21576,7 +21583,7 @@ export function createKaminosVolumePrototype({
       };
       encoder.resolveQuerySet(query, 0, queryCount, resolved, 0);
       encoder.copyBufferToBuffer(resolved, 0, readback, 0, queryCount*8);
-      device.queue.submit([encoder.finish()]);
+      submitVolumeCommands([finishVolumeEncoder(encoder)]);
       await readback.mapAsync(GPUMapMode.READ);
       const times = new BigUint64Array(readback.getMappedRange().slice(0));
       readback.unmap();
@@ -21610,7 +21617,7 @@ export function createKaminosVolumePrototype({
       emissiveLightField.encode(encoder, currentFluid, { querySet: query, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 });
       encoder.resolveQuerySet(query,0,2,resolved,0);
       encoder.copyBufferToBuffer(resolved,0,readback,0,16);
-      device.queue.submit([encoder.finish()]);
+      submitVolumeCommands([finishVolumeEncoder(encoder)]);
       await readback.mapAsync(GPUMapMode.READ);
       const times = new BigUint64Array(readback.getMappedRange().slice(0));
       readback.unmap();
@@ -22022,8 +22029,8 @@ export function createKaminosVolumePrototype({
       if (!appearanceDecompositionActive()) {
       }
       encodeBoundarySplatTelemetry(encoder);
-      if (foregroundService) foregroundService.submit([encoder.finish()], {metadata: {renderer: 'ordinary-volume', simStepCount: state.simStepCount}});
-      else device.queue.submit([encoder.finish()]);
+      if (foregroundService) submitVolumeCommands([finishVolumeEncoder(encoder)], commands=>foregroundService.submit(commands, {metadata: {renderer: 'ordinary-volume', simStepCount: state.simStepCount}}));
+      else submitVolumeCommands([finishVolumeEncoder(encoder)]);
       if (boundarySplatTelemetryCopyPending) void resolveBoundarySplatTelemetry();
       if (pressureResidualCopyPending) void resolvePressureResidualProbe();
       state.frameCount += 1;
@@ -22131,7 +22138,7 @@ export function createKaminosVolumePrototype({
     const boundarySplatsEncoded = encodeBoundarySplats(encoder, {
       explicitSplatConsumer: FULL_FIELD_DEBUG_EXPORT_SPLAT_CONSUMER,
     });
-    device.queue.submit([encoder.finish()]);
+    submitVolumeCommands([finishVolumeEncoder(encoder)]);
     if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
     return {
       identity: 'frozen-field-derived-buffer-materialization-v0',
@@ -22186,7 +22193,7 @@ export function createKaminosVolumePrototype({
     encoder.copyBufferToBuffer(frontBuffers[currentFront], 0, frontReadback, 0, frontBytes);
     encoder.copyBufferToBuffer(boundarySidecarBuffer, 0, boundaryReadback, 0, boundaryBytes);
     encoder.copyBufferToBuffer(boundarySplatDrawBuffer, 0, boundarySplatDrawReadback, 0, 32);
-    device.queue.submit([encoder.finish()]);
+    submitVolumeCommands([finishVolumeEncoder(encoder)]);
     await Promise.all([
       fluidReadback.mapAsync(GPUMapMode.READ),
       frontReadback.mapAsync(GPUMapMode.READ),
@@ -22220,7 +22227,7 @@ export function createKaminosVolumePrototype({
       });
       const splatEncoder = device.createCommandEncoder({ label: 'kaminos effective boundary-splat export readback encoder' });
       splatEncoder.copyBufferToBuffer(boundarySplatBuffer, 0, boundarySplatReadback, 0, boundarySplatBytes);
-      device.queue.submit([splatEncoder.finish()]);
+      submitVolumeCommands([finishVolumeEncoder(splatEncoder)]);
       await boundarySplatReadback.mapAsync(GPUMapMode.READ);
       boundarySplats = new Float32Array(boundarySplatReadback.getMappedRange()).slice();
       boundarySplatReadback.unmap();
@@ -22638,7 +22645,7 @@ export function createKaminosVolumePrototype({
       updateUniforms(startTimeMs + step * timeStepMs);
       const encoder = device.createCommandEncoder({ label: `kaminos imported receiver step ${step + 1}/${requestedSteps}` });
       encodeSim(encoder);
-      device.queue.submit([encoder.finish()]);
+      submitVolumeCommands([finishVolumeEncoder(encoder)]);
       state.frameCount += 1;
     }
     const importedAdvance = {
@@ -22777,7 +22784,7 @@ export function createKaminosVolumePrototype({
 
   async function readNonRidgeOpticalCaptureHeader(readback, encoder, label) {
     encoder.copyBufferToBuffer(nonRidgeOpticalCaptureHeaderBuffer, 0, readback, 0, 16);
-    device.queue.submit([encoder.finish()]);
+    submitVolumeCommands([finishVolumeEncoder(encoder)]);
     await readback.mapAsync(GPUMapMode.READ);
     const header = new Uint32Array(readback.getMappedRange().slice(0));
     readback.unmap();
@@ -23002,7 +23009,7 @@ export function createKaminosVolumePrototype({
           LIVE_COMPLETE_FLAME_COEFFICIENT_STRIDE_BYTES,
         );
       }
-      device.queue.submit([encoder.finish()]);
+      submitVolumeCommands([finishVolumeEncoder(encoder)]);
       await readback.mapAsync(GPUMapMode.READ);
       const mapped = readback.getMappedRange();
       const header = new Uint32Array(mapped, 0, 4);
@@ -23182,7 +23189,7 @@ export function createKaminosVolumePrototype({
     try {
       const encoder = device.createCommandEncoder({ label: `kaminos ${NONRIDGE_OPTICAL_CAPTURE_IDENTITY} exact rows copy` });
       encoder.copyBufferToBuffer(nonRidgeOpticalCaptureRowBuffer, 0, readback, 0, byteLength);
-      device.queue.submit([encoder.finish()]);
+      submitVolumeCommands([finishVolumeEncoder(encoder)]);
       await readback.mapAsync(GPUMapMode.READ);
       const values = new Float32Array(readback.getMappedRange().slice(0));
       readback.unmap();
@@ -24039,7 +24046,7 @@ export function createKaminosVolumePrototype({
     const encoder = device.createCommandEncoder({ label: 'kaminos fluid simReadback encoder' });
     encoder.copyBufferToBuffer(fluidBuffers[currentFluid], 0, readback, 0, fluidBufferBytes(gridSize));
     encoder.copyBufferToBuffer(frontBuffers[currentFront], 0, frontReadback, 0, frontFieldBufferBytes(gridSize));
-    device.queue.submit([encoder.finish()]);
+    submitVolumeCommands([finishVolumeEncoder(encoder)]);
     await Promise.all([
       readback.mapAsync(GPUMapMode.READ),
       frontReadback.mapAsync(GPUMapMode.READ),
@@ -25144,7 +25151,7 @@ export function createKaminosVolumePrototype({
       { buffer, bytesPerRow, rowsPerImage: height },
       { width, height, depthOrArrayLayers: 1 }
     );
-    device.queue.submit([encoder.finish()]);
+    submitVolumeCommands([finishVolumeEncoder(encoder)]);
     await buffer.mapAsync(GPUMapMode.READ);
     const data = new Uint8Array(buffer.getMappedRange());
     const rgba = new Uint8Array(width * height * bytesPerPixel);
@@ -25388,7 +25395,7 @@ export function createKaminosVolumePrototype({
       );
       encoder.resolveQuerySet(querySet, 0, queryCount, queryResolve, 0);
       encoder.copyBufferToBuffer(queryResolve, 0, queryReadback, 0, queryCount * 8);
-      device.queue.submit([encoder.finish()]);
+      submitVolumeCommands([finishVolumeEncoder(encoder)]);
       await queryReadback.mapAsync(GPUMapMode.READ);
       const timestamps = new BigUint64Array(queryReadback.getMappedRange().slice(0));
       queryReadback.unmap();
@@ -25564,7 +25571,7 @@ export function createKaminosVolumePrototype({
           textureSize,
         );
       }
-      device.queue.submit([encoder.finish()]);
+      submitVolumeCommands([finishVolumeEncoder(encoder)]);
       const validationError = await device.popErrorScope();
       errorScopeOpen = false;
       if (validationError) {
@@ -25683,7 +25690,7 @@ export function createKaminosVolumePrototype({
       { buffer: readback, bytesPerRow, rowsPerImage: state.height },
       { width: state.width, height: state.height, depthOrArrayLayers: 1 },
     );
-    device.queue.submit([encoder.finish()]);
+    submitVolumeCommands([finishVolumeEncoder(encoder)]);
     await readback.mapAsync(GPUMapMode.READ);
     const words = new Uint16Array(readback.getMappedRange());
     const wordsPerRow = bytesPerRow / Uint16Array.BYTES_PER_ELEMENT;
@@ -25747,7 +25754,7 @@ export function createKaminosVolumePrototype({
       { buffer: readback, bytesPerRow, rowsPerImage: state.height },
       { width: state.width, height: state.height, depthOrArrayLayers: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS },
     );
-    device.queue.submit([encoder.finish()]);
+    submitVolumeCommands([finishVolumeEncoder(encoder)]);
     await readback.mapAsync(GPUMapMode.READ);
     const words = new Uint16Array(readback.getMappedRange());
     const wordsPerRow = bytesPerRow / Uint16Array.BYTES_PER_ELEMENT;
@@ -25832,7 +25839,7 @@ export function createKaminosVolumePrototype({
       { buffer: readback, bytesPerRow, rowsPerImage: state.height },
       { width: state.width, height: state.height, depthOrArrayLayers: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS },
     );
-    device.queue.submit([encoder.finish()]);
+    submitVolumeCommands([finishVolumeEncoder(encoder)]);
     await readback.mapAsync(GPUMapMode.READ);
     const mapped = readback.getMappedRange();
     const mappedBytes = new Uint8Array(mapped);
@@ -26144,7 +26151,7 @@ export function createKaminosVolumePrototype({
       { buffer, bytesPerRow, rowsPerImage: state.height },
       { width: state.width, height: state.height, depthOrArrayLayers: 1 }
     );
-    device.queue.submit([encoder.finish()]);
+    submitVolumeCommands([finishVolumeEncoder(encoder)]);
     if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
     if (pressureResidualCopyPending) await resolvePressureResidualProbe();
     if (['matched-presentation-v0', BOUNDARY_SPLAT_OPTICAL_MODE].includes(state.boundarySplatPresentationReceipt?.effectiveMode)
@@ -27180,7 +27187,7 @@ export function createKaminosVolumePrototype({
       encoder.resolveQuerySet(timingQuerySet, 0, nextTimestampIndex, timingResolveBuffer, 0);
       encoder.copyBufferToBuffer(timingResolveBuffer, 0, timingReadbackBuffer, 0, nextTimestampIndex * 8);
     }
-    device.queue.submit([encoder.finish()]);
+    submitVolumeCommands([finishVolumeEncoder(encoder)]);
     const validationError = await device.popErrorScope();
     if (validationError) {
       readback?.destroy();
@@ -27507,7 +27514,7 @@ export function createKaminosVolumePrototype({
       if (options.includeRgba === true) {
         pendingCanvasReadback = enqueueCanvasReadback(encoder, finalPresentationTexture, state.width, state.height);
       }
-      device.queue.submit([encoder.finish()]);
+      submitVolumeCommands([finishVolumeEncoder(encoder)]);
       raymarchApplied = raymarchEncoded;
       splatApplied = splatEncoded;
       if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
@@ -27582,7 +27589,7 @@ export function createKaminosVolumePrototype({
           pendingCanvasReadback?.buffer.destroy();
           pendingCanvasReadback = enqueueCanvasReadback(retryEncoder, retryTexture, state.width, state.height);
         }
-        device.queue.submit([retryEncoder.finish()]);
+        submitVolumeCommands([finishVolumeEncoder(retryEncoder)]);
         boundarySplatCapacityRetryCount += 1;
         raymarchEncoded = raymarchEncoded || retryRaymarchEncoded;
         splatEncoded = retrySplatEncoded;
@@ -27766,7 +27773,7 @@ export function createKaminosVolumePrototype({
       updateUniforms(now);
       const encoder = device.createCommandEncoder({ label: `kaminos deterministic replay step ${step + 1}/${steps}` });
       encodeSim(encoder);
-      device.queue.submit([encoder.finish()]);
+      submitVolumeCommands([finishVolumeEncoder(encoder)]);
       state.frameCount += 1;
     }
     if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
@@ -27966,6 +27973,7 @@ export function createKaminosVolumePrototype({
   }
 
   function encodeCallerProductFrame({ commandEncoder, colorView, sceneDepthView, depthView, now = performance.now() }) {
+    if(gpuThermalConsumer?.requiresSubmittedSteps)throw Error('Live fracture requires the volume-owned submission route');
     if (productFrameOwner !== 'caller') throw new Error('encode-product-frame-requires-caller-frame-owner');
     if (!device || !state.active) throw new Error('product-frame-not-initialized');
     if (!commandEncoder || !colorView || !sceneDepthView || !depthView) {
@@ -28931,7 +28939,7 @@ export function createKaminosVolumePrototype({
       try {
         const encoder = device.createCommandEncoder({ label: 'kaminos fluid band stats' });
         encoder.copyBufferToBuffer(fluidBuffers[currentFluid], 0, staging, 0, bytes);
-        device.queue.submit([encoder.finish()]);
+        submitVolumeCommands([finishVolumeEncoder(encoder)]);
         await staging.mapAsync(GPUMapMode.READ);
         const values = new Float32Array(staging.getMappedRange().slice(0));
         staging.unmap();
@@ -28954,7 +28962,7 @@ export function createKaminosVolumePrototype({
       try {
         const encoder = device.createCommandEncoder({ label: 'kaminos wavelet band energy' });
         encoder.copyBufferToBuffer(fluidBuffers[currentFluid], 0, staging, 0, bytes);
-        device.queue.submit([encoder.finish()]);
+        submitVolumeCommands([finishVolumeEncoder(encoder)]);
         await staging.mapAsync(GPUMapMode.READ);
         const values = new Float32Array(staging.getMappedRange().slice(0));
         staging.unmap();
@@ -29044,7 +29052,7 @@ export function createKaminosVolumePrototype({
         const encoder = device.createCommandEncoder({ label: 'kaminos reactant fields copy' });
         encoder.copyBufferToBuffer(fluidBuffers[currentFluid], 0, fluidStaging, 0, fluidBytes);
         if (reactantSidecarFull) encoder.copyTextureToBuffer({ texture: reactantTextures[currentFluid] }, { buffer: reactantStaging, bytesPerRow: paddedRow, rowsPerImage: gridHeight }, [gridSize, gridHeight, gridSize]);
-        device.queue.submit([encoder.finish()]);
+        submitVolumeCommands([finishVolumeEncoder(encoder)]);
         await Promise.all([fluidStaging.mapAsync(GPUMapMode.READ), reactantStaging.mapAsync(GPUMapMode.READ)]);
         const fluid = new Uint8Array(fluidStaging.getMappedRange()).slice();
         const padded = new Float32Array(reactantStaging.getMappedRange());
@@ -29086,7 +29094,7 @@ export function createKaminosVolumePrototype({
         encoder.copyBufferToBuffer(fluidBuffers[currentFluid], 0, staging, 0, bytes);
         const frontStaging = device.createBuffer({ label: 'kaminos front nan census staging', size: frontFieldBufferBytes(gridSize), usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
         encoder.copyBufferToBuffer(frontBuffers[currentFront], 0, frontStaging, 0, frontFieldBufferBytes(gridSize));
-        device.queue.submit([encoder.finish()]);
+        submitVolumeCommands([finishVolumeEncoder(encoder)]);
         await staging.mapAsync(GPUMapMode.READ);
         await frontStaging.mapAsync(GPUMapMode.READ);
         const data = new Float32Array(staging.getMappedRange());
@@ -29145,7 +29153,7 @@ export function createKaminosVolumePrototype({
         const encoder = device.createCommandEncoder({ label: 'kaminos shell census copy' });
         encoder.copyBufferToBuffer(fluidBuffers[currentFluid], 0, staging, 0, bytes);
         encoder.copyBufferToBuffer(frontBuffers[currentFront], 0, frontStaging, 0, frontFieldBufferBytes(gridSize));
-        device.queue.submit([encoder.finish()]);
+        submitVolumeCommands([finishVolumeEncoder(encoder)]);
         await staging.mapAsync(GPUMapMode.READ);
         await frontStaging.mapAsync(GPUMapMode.READ);
         const data = new Float32Array(staging.getMappedRange());

@@ -21,6 +21,7 @@ import {
 } from '../trellis-surfels.mjs';
 import {createGiProxyRegistry} from '../scene-gi-proxies.mjs';
 import {createFireShadowCasters} from '../fire-shadow-casters.mjs';
+import {registerPresentedSurface} from '../scene-presented-surface.mjs';
 
 const sha = text => createHash('sha256').update(text).digest('hex');
 
@@ -337,6 +338,17 @@ test('createSceneBeautyLodController caches resident rungs, never blanks while l
   const wrapper = root.children.find(c => c.userData?.kaminosBeautyLodProxy);
   assert.ok(wrapper?.visible, 'beauty LOD wrapper is mounted and visible on root');
   assert.equal(wrapper.children.length, 2, 'beauty LOD wrapper includes primary rung + 1 repetition copy');
+
+  const posedMesh = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial());
+  const releasePose = registerPresentedSurface(heroMesh, {mesh: posedMesh, pick: async () => null});
+  heroMesh.material.visible = false;
+  const statePosed = controller.update(farCamera, {viewportHeight: 1080});
+  assert.equal(statePosed.objects[0].displayedTier, 'hero', 'A live posed surface must not be replaced by an intact static LOD');
+  assert.equal(wrapper.parent, null, 'The stale static proxy is unmounted while the posed surface owns presentation');
+  assert.equal(heroMesh.material.visible, false, 'Returning the authored registration does not re-enable its superseded draw material');
+  releasePose();heroMesh.material.visible = true;
+  const stateReleased = controller.update(farCamera, {viewportHeight: 1080});
+  assert.notEqual(stateReleased.objects[0].displayedTier, 'hero', 'Ordinary LOD selection resumes after the posed surface is released');
 
   // Move camera close (z = 1.2) -> switches immediately back to 'hero', then back to z = 20 -> reuses resident rung without re-fetching!
   const nearCamera = makeCamera({z: 1.2, fov: 50});

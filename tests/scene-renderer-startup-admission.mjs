@@ -14,13 +14,15 @@ const composition={schema:'kaminos.stationary-flame-composition.v1',flame:{prese
 function fixture({matching=false,missing=false,ordinary=false}={}){
  const events=[];let release;
  const response=new Promise(resolve=>release=resolve);
- const c={URLSearchParams,Symbol,Promise,compositionRestoreUrl,readOwnerExperimentAddress,
+ const c={URL,URLSearchParams,Symbol,Promise,compositionRestoreUrl,readOwnerExperimentAddress,
   location:{origin:'http://localhost',hash:ordinary?'':'#scene=chosen.kaminos.json&workspace=workbench',search:matching?'?settings_preset='+preset:'',replace:url=>events.push(['redirect',url])},
   fetch:()=>{events.push(['fetch']);return response;},planSceneRestore:()=>({composition}),
   sceneDocument:{holdRestore(){events.push(['hold']);}},setInfo(){},document:{},
   grInit(){},initKaminosFingerFluidBenchRoute(){},initKaminosFingerJuiceHostRoute(){},
   initScene:()=>{events.push(['viewer']);return Promise.resolve();},settleStartupVeil:(_document,promise)=>promise,
  };
+ c.location.href=c.location.origin+'/'+c.location.search+c.location.hash;
+ c.history={replaceState(_state,_title,url){Object.assign(c.location,{href:url.href,hash:url.hash,search:url.search});}};
  vm.runInNewContext(code,c);c.initialization.catch(()=>{});
  return {events,c,release:()=>release({ok:!missing,json:async()=>({version:8})})};
 }

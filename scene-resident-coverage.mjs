@@ -20,13 +20,22 @@ export function validateResidentLightCoverage(mesh,binding){
 // conservative BVH encloses every cell that can survive the burn.
 export function residentCellTriangles(value){
   const n=value.dimensions[0],size=value.bounds.getSize(new THREE.Vector3()).divideScalar(n),records=[];
+  const sx=size.x,sy=size.y,sz=size.z,minX=value.bounds.min.x,minY=value.bounds.min.y,minZ=value.bounds.min.z;
   const cube=new THREE.BoxGeometry(1,1,1),p=cube.attributes.position,index=cube.index;
+  const triOff=new Float64Array(index.count*3);
+  for(let k=0;k<index.count;k++){const vi=index.getX(k);triOff[k*3]=p.getX(vi)*sx;triOff[k*3+1]=p.getY(vi)*sy;triOff[k*3+2]=p.getZ(vi)*sz;}
+  cube.dispose();
   for(let cell=0;cell<value.initial.length;cell++)if(value.initial[cell]){
-    const center=new THREE.Vector3(cell%n+.5,Math.floor(cell/n)%n+.5,Math.floor(cell/(n*n))+.5).multiply(size).add(value.bounds.min);
+    const cx=(cell%n+.5)*sx+minX,cy=(Math.floor(cell/n)%n+.5)*sy+minY,cz=(Math.floor(cell/(n*n))+.5)*sz+minZ;
     for(let at=0;at<index.count;at+=3){
-      const points=[0,1,2].map(j=>new THREE.Vector3().fromBufferAttribute(p,index.getX(at+j)).multiply(size).add(center).toArray());
-      records.push({a:points[0],b:points[1],c:points[2],cell});
+      const o0=at*3,o1=o0+3,o2=o0+6;
+      records.push({
+        a:[cx+triOff[o0],cy+triOff[o0+1],cz+triOff[o0+2]],
+        b:[cx+triOff[o1],cy+triOff[o1+1],cz+triOff[o1+2]],
+        c:[cx+triOff[o2],cy+triOff[o2+1],cz+triOff[o2+2]],
+        cell,
+      });
     }
   }
-  cube.dispose();return records;
+  return records;
 }

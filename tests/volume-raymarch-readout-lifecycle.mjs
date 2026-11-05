@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import {volumeSubmissionContext} from './helpers/volume-submission.mjs';
 const source=fs.readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
 const frame=source.slice(source.indexOf('  function renderOrdinaryFrame('),source.indexOf('  function pumpLookLabFrozenFrame('));
 const invalidate=source.match(/  function invalidateRaymarchReadouts\([^]*?\n  \}/)?.[0]||'function invalidateRaymarchReadouts() {}';
@@ -37,6 +38,7 @@ for(const route of ['residual','splats','proxy'])test('leaving ordinary beauty f
     selectiveHeadLiveExactPause:null,recordVolumeFrameTiming:noop,requestAnimationFrame:()=>1,render:noop,cancelAnimationFrame:noop,
     canvas:{classList:{remove:noop}},emitStatus:noop,
   });
+  Object.assign(context,volumeSubmissionContext(context.device));
   vm.runInContext(invalidate+'\n'+prepare+'\n'+frame+'\nrenderOrdinaryFrame(1);',context);
   assert.equal(state.error,undefined,'the chosen branch must successfully submit');assert.equal(state.frameCount,2);
   assert.equal(state.rayStepTelemetry.active,false);assert.equal(visible,false);

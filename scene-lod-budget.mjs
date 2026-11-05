@@ -19,6 +19,7 @@
 //    and evaluate screen footprint at their closest in-frustum instance.
 
 import {readSurfelGLBExtension, attachStoredSurfelLevels} from './trellis-surfels.mjs';
+import {presentedSurface} from './scene-presented-surface.mjs';
 
 const digestHex = async bytes =>
   Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('');
@@ -1459,7 +1460,9 @@ export function createSceneBeautyLodController({
           copyWorldMat.multiplyMatrices(root.matrixWorld, rep.matrix);
           instanceBoxes.push(new THREE.Box3().copy(entry.localBox).applyMatrix4(copyWorldMat));
         }
-        const pinned = pinnedSet.has(root) || pinnedSet.has(entry.id);
+        let posed = false;
+        root.traverse(node => { if (presentedSurface(node)) posed = true; });
+        const pinned = posed || pinnedSet.has(root) || pinnedSet.has(entry.id);
         candidates.push({
           id: entry.id,
           root,
