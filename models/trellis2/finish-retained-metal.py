@@ -82,8 +82,10 @@ def read_page_reconstruction(file, expected_sha256, grid_size):
     scenes, nodes = doc['scenes'], doc['nodes']
     basis = [1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1]
     if (type(scene_id) is not int or not 0 <= scene_id < len(scenes)
-            or scenes[scene_id].get('nodes') != [0] or not nodes
-            or nodes[0].get('mesh') != 0 or nodes[0].get('matrix') != basis
+            or scenes[scene_id].get('nodes') != [0]
+            or type(scenes[scene_id]['nodes'][0]) is not int or not nodes
+            or type(nodes[0].get('mesh')) is not int or nodes[0].get('mesh') != 0
+            or nodes[0].get('matrix') != basis
             or nodes[0].get('children') or doc.get('animations')
             or any(key in nodes[0] for key in ('translation', 'rotation', 'scale', 'skin', 'weights'))
             or nodes[0].get('extensions')):
