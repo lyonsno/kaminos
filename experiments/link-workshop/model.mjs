@@ -10,7 +10,7 @@ export function checkedMechanism(m){
   else if(!Number.isFinite(n.length)||n.length<=1e-6||!point(n.angles))throw Error('Positive link length and finite angles required');
  }
  for(const n of m.nodes)if(n.layer!==undefined&&!Number.isFinite(n.layer))throw Error('Finite body layer required');
- for(const p of m.pistons){for(const k of ['aOffset','bOffset'])if(p[k]!==undefined&&!point(p[k]))throw Error('Finite body-local piston offset required');if(p.z!==undefined&&!Number.isFinite(p.z))throw Error('Finite piston layer required');}
+ for(const p of m.pistons){if(p.hinge!==undefined&&(typeof p.hinge!=='boolean'||p.hinge&&(!p.aOffset||!p.bOffset||m.nodes[p.b]?.parent!==p.a)))throw Error('Hinge cylinder needs adjacent bodies and two local mounts');for(const k of ['aBaseZ','bBaseZ'])if(p[k]!==undefined&&!Number.isFinite(p[k]))throw Error('Finite actuator seating required');for(const k of ['aOffset','bOffset'])if(p[k]!==undefined&&!point(p[k]))throw Error('Finite body-local piston offset required');if(p.z!==undefined&&!Number.isFinite(p.z))throw Error('Finite piston layer required');}
  const pairs=new Set();for(const p of m.pistons){if(![p.a,p.b].every(i=>Number.isInteger(i)&&i>=0&&i<m.nodes.length)||p.a===p.b)throw Error('Piston needs distinct existing joints');const key=[p.a,p.b].sort((a,b)=>a-b).join(':');if(pairs.has(key))throw Error('Piston already connected');pairs.add(key);}
  if(m.phase!==undefined&&!Number.isFinite(m.phase))throw Error('Finite cycle phase required');
  const mounts=new Map();for(const mount of m.mounts??[]){

@@ -39,3 +39,16 @@ console.log('Surface seams preserve actuator positions and authored poses');
  const a=addSurfaceActuators(next.recipe,next.geometry,2);assert.equal(a.recipe.pistons.length,3);const b=addSurfaceActuators(a.recipe,a.geometry,2);assert.equal(b.recipe.pistons.length,3,'Explicit cylinder construction is repeatable without duplicates');assert.doesNotThrow(()=>checkedBodyGeometry(a.recipe,a.geometry));
  const dead={schema:'kaminos.links.v1',nodes:[{parent:null,point:[0,0]},{parent:0,length:1,angles:[0,0]},{parent:1,length:1,angles:[-.3,.3]}],pistons:[{a:1,b:2,aOffset:[.2,0],bOffset:[.5,0],hinge:true}],period:3};assert.equal(actuatorReport(dead)[0].deadCenter,true,'Short excursions can cross dead centre');
 }
+{
+ const {createSceneRecordOperations}=await import('../scene-record-operations.mjs');const {mechanismObject}=await import('../experiments/link-workshop/record.mjs');
+ const root=mechanismObject(next.recipe,next.geometry),records=createSceneRecordOperations({readers:{transform:o=>({position:o.position.toArray(),rotation:[o.rotation.x,o.rotation.y,o.rotation.z],scale:o.scale.toArray()}),materials:()=>null}});
+ const record=records.serialize({id:'surface',type:'pbr',source:'kaminos:link-mechanism',object:root});let restored;
+ await createSceneRecordOperations({loaders:{constructed:o=>(restored=o)}}).load(record);assert.deepEqual(restored.userData.linkMechanism,next.recipe);assert.deepEqual(restored.userData.linkGeometry,next.geometry,'Normal scene save/load retains clipped surfaces');
+}
+{
+ const {default:workshop}=await import('../experiments/link-workshop.experiment.mjs');let added=0,ensured=0,remembered;
+ const runtime={read:()=>({objectId:'kept'}),operations:{frame(){},mode(){}}},object={userData:{linkMechanism:next.recipe}},service={add:async(recipe,{geometry})=>{added++;assert.equal(geometry,next.geometry);return runtime;},ensure:async root=>{ensured++;assert.equal(root,object);return runtime;}};
+ const host={controls:{document:{defaultView:{kaminosMechanisms:service,kaminosSelection:{read:()=>({activeId:'kept'})}}}},scene:{objects:()=>[{id:'kept',object}],select(){}}};
+ await workshop.create({host,inputs:{recipe:next.recipe,bodies:next.geometry},updateInputs:v=>remembered=v});assert.equal(added,1);assert.deepEqual(remembered,{objectId:'kept'});
+ await workshop.create({host,inputs:remembered});assert.equal(ensured,1);assert.equal(added,1,'Saved experiment adopts its restored mechanism without adding a fixture');
+}
