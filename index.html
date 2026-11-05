@@ -2589,6 +2589,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <button type="button" role="menuitem" data-scene-add="water-volume">Water volume</button>
         <button type="button" role="menuitem" data-scene-add="water-emitter">Water emitter</button>
         <button type="button" role="menuitem" data-scene-add="flame-emitter">Flame</button>
+        <button type="button" role="menuitem" data-scene-add="ring-burner">Ring burner</button>
       </div>
     </div>
   </nav>
@@ -3513,6 +3514,7 @@ import { checkedSceneLightRecord } from './scene-spot-light.mjs';
 
 import {checkedPose} from './scene-edit-session.mjs';
 import {createAuthoringAssets,installAuthoringAssets} from './authoring-assets.mjs';
+import {planRingBurner,planBurnerBodyReplacement} from './ring-burner.mjs';
 import {createSf3dAuthoringGeneration} from './authoring-generation.mjs';
 import {createTrellisAuthoringGeneration,installMeshModelChoice,withExpressSnapshot} from './authoring-trellis-generation.mjs';
 import {createTrellisPageAuthoringGeneration,prepareImageForTrellis,describeTrellisInput} from './authoring-trellis-page.mjs';
@@ -6497,6 +6499,9 @@ function syncAssemblyPresentation() {
       const signature=JSON.stringify(outlets.map(entry=>[entry.id,sceneObjectDisplayLabel(entry)]));
       if(choice.dataset.options!==signature){choice.replaceChildren(...outlets.map(entry=>{const option=document.createElement('option');option.value=entry.id;option.textContent=sceneObjectDisplayLabel(entry);return option;}));choice.dataset.options=signature;}
       choice.value=selectedFlameControlEntry()?.id??'';choice.closest('label').hidden=!outlets.length;
+      const body=group.objectIds.map(id=>workingScene.find(id)).find(entry=>group.assembly.roles[entry?.id]==='body');
+      document.getElementById('assembly-body-name').textContent=body?sceneObjectDisplayLabel(body):'No body';
+      document.getElementById('assembly-body-change').hidden=group.assembly.kind!=='burner'||!body;
     }
   }
   const heading=document.querySelector('#selected-flame-properties h2');if(heading)heading.textContent=group?.assembly?'Outlet properties':'Selected Flame';
@@ -7433,6 +7438,7 @@ sceneAddMenuPopup.addEventListener('click', event => {
     addLocalLiquidEmitter().catch(error => setInfo(`Could not add Water Emitter: ${error.message}`));
   }
   if(action.dataset.sceneAdd==='flame-emitter')openFirstFlameFieldDialog().catch(error=>setInfo(error.message));
+  if(action.dataset.sceneAdd==='ring-burner')addRingBurner().catch(error=>setInfo(error.message));
 });
 document.getElementById('scene-mesh-file').onchange=async event=>{
   const file=event.target.files[0];event.target.value='';if(!file)return;
@@ -23372,8 +23378,8 @@ async function addFirstFlameField(presetId,{signal,lightingRoute={}}={}) {
   setInfo(clamped.length?`Added flame from the saved basin, clamped to range (${clamped.map(clamp=>clamp.message).join('; ')}). Move its source; Undo removes the field.`:'Added flame from the saved basin. Move its source; Undo removes the field.');
   return FLAME_EMITTER_ID;
 }
-async function openFirstFlameFieldDialog() {
-  if(activeSceneComposition)return addFirstFlameField();
+async function openFirstFlameFieldDialog({afterAdd=null,title='Add Flame'}={}) {
+  if(activeSceneComposition){const id=await addFirstFlameField();return afterAdd?afterAdd(id):id;}
   assertSceneConstructionAvailable();
   const response=await fetch('/api/volume-settings-presets',{cache:'no-store'}),index=await response.json();
   if(!response.ok)throw Error(index.error||'Basin library unavailable');
@@ -23382,6 +23388,7 @@ async function openFirstFlameFieldDialog() {
   const request=new AbortController();let pendingAdd=false;
   dialog.id='scene-first-flame-dialog';
   dialog.innerHTML='<form method="dialog"><h2>Add Flame</h2><p>Choose a saved immersed-source basin. Its settings initialize the fire; the current scene and camera stay in place.</p><label>Fire basin <select id="scene-first-flame-basin"></select></label><p role="status"></p><button type="button" class="btn">Add Flame</button><button value="cancel" class="btn">Cancel</button></form>';
+  dialog.querySelector('h2').textContent=title;
   const select=dialog.querySelector('select');
   const prompt=document.createElement('option');prompt.value='';prompt.textContent='Choose an immersed-source basin…';select.append(prompt);
   for(const entry of index.entries){const option=document.createElement('option');option.value=entry.presetId;option.textContent=entry.label||entry.presetId;select.append(option);}
@@ -23390,7 +23397,7 @@ async function openFirstFlameFieldDialog() {
   dialog.querySelector('[type="button"]').onclick=async event=>{
     if(pendingAdd||request.signal.aborted)return;
     event.target.disabled=true;select.disabled=true;pendingAdd=true;
-    try{await addFirstFlameField(select.value,{signal:request.signal});if(!request.signal.aborted)dialog.close();}
+    try{const id=await addFirstFlameField(select.value,{signal:request.signal});if(afterAdd)await afterAdd(id);if(!request.signal.aborted)dialog.close();}
     catch(error){if(!request.signal.aborted)dialog.querySelector('[role="status"]').textContent=error.message;}
     finally{pendingAdd=false;if(!request.signal.aborted){select.disabled=false;event.target.disabled=!select.value;}}
   };
@@ -27775,11 +27782,12 @@ function installSceneConstruction() {
   relations.after(groupPanel);
   document.getElementById('group-make-assembly').onclick=()=>{try{const group=selectedSceneGroupEntry();setSceneAssembly(group.id,assemblyForMembers(group.objectIds.map(id=>workingScene.find(id)),viewportDisplay.hiddenIds));}catch(error){setInfo(error.message);}};
   const assemblyPanel=document.createElement('section');assemblyPanel.id='selected-assembly-properties';assemblyPanel.hidden=true;
-  assemblyPanel.innerHTML='<h3>Burner</h3><p id="assembly-mode-hint"></p><label class="slider-row"><span>Outlet</span><select class="transform-input" id="assembly-outlet"></select></label>';
+  assemblyPanel.innerHTML='<h3>Burner</h3><p id="assembly-mode-hint"></p><label class="slider-row"><span>Outlet</span><select class="transform-input" id="assembly-outlet"></select></label><div class="slider-row"><span>Body</span><span id="assembly-body-name"></span><button type="button" class="btn" id="assembly-body-change">Choose mesh…</button></div>';
   document.getElementById('selected-flame-properties').before(assemblyPanel);
+  document.getElementById('assembly-body-change').onclick=()=>openBurnerBodyDialog(workingScene.activeGroupId).catch(error=>setInfo(error.message));
   document.getElementById('assembly-outlet').onchange=event=>{authoringControlSessions.forEach(session=>session.commit());assemblyOutletChoices.set(workingScene.activeGroupId,event.target.value);updateAuthoringPropertySelection();};
   const modeLabel=document.createElement('span');modeLabel.id='assembly-edit-mode';modeLabel.hidden=true;modeLabel.style.cssText='padding:6px 12px;color:#ffca77';document.getElementById('transform-bar').append(modeLabel);
-  window.kaminosSceneAuthoring={addAsh:addAuthoredAsh,addFlameEmitter:addFirstFlameField,addWaterEmitter:addLocalLiquidEmitter,addLight:addSceneSpotLight,read:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),activeFieldId:workingScene.activeFieldId}),setFireSettings:editOwnedFireSettings,setAssembly:setSceneAssembly,addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
+  window.kaminosSceneAuthoring={addRingBurner,setBurnerBody,addAsh:addAuthoredAsh,addFlameEmitter:addFirstFlameField,addWaterEmitter:addLocalLiquidEmitter,addLight:addSceneSpotLight,read:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),activeFieldId:workingScene.activeFieldId}),setFireSettings:editOwnedFireSettings,setAssembly:setSceneAssembly,addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
     setRepetition:(id,value)=>setSceneRepetition(id,value),repetitionState:sceneRepetitionState,makeCopiesEditable:makeSceneRepetitionReal,
     setWaterCollision:setObjectWaterCollision,
     setCollision:(id,value)=>{assertSceneConstructionAvailable();if(!activeSceneComposition)throw Error('Fire & smoke is not mounted');const target=ensureObjectCollisionTarget(id);return edits.apply(target,typeof value==='boolean'?{domainId:'flame-field',enabled:value}:value,'Set Fire & smoke obstacle');},
@@ -28317,6 +28325,50 @@ function addBurnerObject(kind) {
   },kind==='burner-assembly'?'Add burner assembly':kind==='burner-bed'?'Add burner bed':'Add flame source');
   if(kind==='burner-assembly')setActiveSceneGroup(selectedId);else setActiveSceneObject(selectedId);
   return selectedId;
+}
+async function addRingBurner({mesh=null,reuseSourceId=null}={}) {
+  assertSceneConstructionAvailable();
+  if(!activeSceneComposition)return openFirstFlameFieldDialog({title:'Add Ring burner',afterAdd:id=>addRingBurner({mesh,reuseSourceId:id})});
+  requirePluralFlameSourceRuntime();
+  const primary=primaryAuthoredFlameSource();
+  if(!primary)throw Error('Add a flame source before creating the ring burner');
+  const template=serializeSceneObject(primary);
+  const next=planRingBurner(readSelectionMembership(),{groupId:makeSceneObjectId('ring-burner'),bodyId:makeSceneObjectId('mesh'),outletId:reuseSourceId||makeSceneObjectId('flame-source'),template,pose:flameEmitterPose,mesh,reuseSource:!!reuseSourceId});
+  await scenePlacementTools.edits.applySettled('@selection-membership',next,'Add ring burner');
+  return workingScene.activeGroupId;
+}
+async function setBurnerBody(groupId,mesh) {
+  assertSceneConstructionAvailable();
+  const group=workingScene.groups.find(row=>row.id===groupId&&row.assembly?.kind==='burner');
+  if(!group)throw Error('Select a burner assembly');
+  const oldBodyId=group.objectIds.find(id=>group.assembly.roles[id]==='body');
+  const next=planBurnerBodyReplacement(readSelectionMembership(),{groupId,oldBodyId,bodyId:makeSceneObjectId('mesh'),mesh});
+  await scenePlacementTools.edits.applySettled('@selection-membership',next,'Change burner body');
+  return next.groups.find(row=>row.id===groupId).objectIds.find(id=>id!==oldBodyId&&next.groups.find(row=>row.id===groupId).assembly.roles[id]==='body');
+}
+async function openBurnerBodyDialog(groupId) {
+  assertSceneConstructionAvailable();
+  const dialog=document.createElement('dialog');dialog.id='burner-body-dialog';
+  dialog.innerHTML='<form method="dialog"><h2>Burner body</h2><p>The outlet keeps its position and settings. Tab edits the body placement.</p><label>Collection <select id="burner-body-collection"></select></label><label>Mesh <select id="burner-body-mesh"></select></label><p role="status"></p><button type="button" class="btn" id="burner-body-apply">Use mesh</button><button value="cancel" class="btn">Cancel</button></form>';
+  const collection=dialog.querySelector('#burner-body-collection'),choice=dialog.querySelector('#burner-body-mesh'),apply=dialog.querySelector('#burner-body-apply'),status=dialog.querySelector('[role="status"]');
+  let entries=[],ticket=0,closed=false;
+  const load=async()=>{const current=++ticket;apply.disabled=true;status.textContent='Loading meshes…';
+    try{const root=collection.value,response=await fetch('/api/authoring-assets?'+new URLSearchParams({collection:root})),catalog=await response.json();
+      if(closed||current!==ticket)return;if(!response.ok||catalog.schema!=='kaminos.authoring-assets.v1'||catalog.collection!==root)throw Error(catalog.error||'Mesh library unavailable');
+      entries=catalog.entries.filter(entry=>entry.kind==='mesh'&&entry.visibility?.status!=='withheld');choice.replaceChildren();
+      const fallback=document.createElement('option');fallback.value='';fallback.textContent='Procedural annular housing';choice.append(fallback);
+      entries.forEach((entry,index)=>{const option=document.createElement('option');option.value=String(index);option.textContent=entry.label||entry.name;choice.append(option);});status.textContent=entries.length?'':'No saved meshes in this collection.';apply.disabled=false;
+    }catch(error){if(!closed&&current===ticket)status.textContent=error.message;}};
+  collection.onchange=load;
+  apply.onclick=async()=>{apply.disabled=true;collection.disabled=true;choice.disabled=true;
+    try{await setBurnerBody(groupId,choice.value===''?null:entries[Number(choice.value)]);dialog.close();}
+    catch(error){status.textContent=error.message;}
+    finally{apply.disabled=false;collection.disabled=false;choice.disabled=false;}};
+  dialog.addEventListener('close',()=>{closed=true;ticket++;dialog.remove();},{once:true});document.body.append(dialog);dialog.showModal();
+  try{const response=await fetch('/api/roots'),roots=await response.json();if(!response.ok)throw Error('Asset collections unavailable');if(closed)return;
+    for(const id of ['generated-meshes','trellis2mlx','greenroom','pixal3d'])if(roots[id]?.exists){const option=document.createElement('option');option.value=id;option.textContent=roots[id].label||id;collection.append(option);}
+    await load();
+  }catch(error){if(!closed)status.textContent=error.message;}
 }
 function migrateLegacyBurner(recipe) {
   const bed=newBedRecord(recipe,bedPoseBelowSource());mountProceduralMesh(bed);
