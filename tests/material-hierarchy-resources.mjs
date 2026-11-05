@@ -9,7 +9,7 @@ const flush=()=>new Promise(resolve=>setImmediate(resolve));
 // This fake checks ownership/dispatch, not WebGPU shader conformance. The
 // native witness separately exercises the shaders and real buffer mapping.
 function fixture(options={}){
- const buffers=[],groups=[],passes=[];let hold=false;const maps=[];
+ const buffers=[],groups=[],passes=[],textureWrites=[];let hold=false;const maps=[];
  const device={limits:{maxTextureDimension2D:16384,maxStorageBufferBindingSize:2**28,maxBufferSize:2**28,maxComputeWorkgroupsPerDimension:65535},
   createBuffer(spec){const b={...spec,data:new ArrayBuffer(spec.size),destroyed:false,mapState:'unmapped',
    async mapAsync(){assert.equal(this.destroyed,false);assert.equal(this.mapState,'unmapped');this.mapState='pending';if(hold)await new Promise(resolve=>maps.push(resolve));assert.equal(this.destroyed,false);this.mapState='mapped';},
@@ -17,15 +17,15 @@ function fixture(options={}){
   createTexture:spec=>({...spec,createView:()=>({label:spec.label}),destroy(){}}),
   createShaderModule:x=>x,createComputePipeline:x=>({...x,getBindGroupLayout:index=>({name:x.label,index})}),
   createBindGroup(spec){groups.push(spec);return spec;},
-  queue:{writeTexture(){},writeBuffer(b,offset,data){new Uint8Array(b.data).set(new Uint8Array(data.buffer??data,data.byteOffset??0,data.byteLength),offset);},submit(){},onSubmittedWorkDone:async()=>{}},
+  queue:{writeTexture(target,data){textureWrites.push({target,data:data.slice()});},writeBuffer(b,offset,data){new Uint8Array(b.data).set(new Uint8Array(data.buffer??data,data.byteOffset??0,data.byteLength),offset);},submit(){},onSubmittedWorkDone:async()=>{}},
  };
  const encoder=()=>({beginComputePass({label}){const pass={label,groups:[]};passes.push(pass);return {setPipeline(){},setBindGroup(i,g){pass.groups[i]=g;},dispatchWorkgroups(x,y=1,z=1){pass.count=x*y*z;if(label==='measureBricks'){const b=pass.groups[1].entries.find(e=>e.binding===5).resource.buffer;new Float32Array(b.data).fill(.5);}},end(){}};},copyBufferToBuffer(src,so,dst,offset,bytes){assert.equal(dst.destroyed,false);assert.equal(dst.mapState,'unmapped','never copy into an in-flight/mapped readback');new Uint8Array(dst.data,offset,bytes).set(new Uint8Array(src.data,so,bytes));}});
  device.createCommandEncoder=()=>({...encoder(),finish(){return {};}});
  const world=Object.fromEntries([0,1,2,4,5].map(k=>[k,{buffer:device.createBuffer({label:`world${k}`,size:16})}]));
  for(const k of [8,9,10,11,14,15,16])world[k]={texture:k};
  const hierarchy=createMaterialHierarchyGPU(device,{materialDims:[8,4,4],materialPitch:1,min:[0,0,0],max:[8,4,4]},'',{budget:0,...options});
- const step=()=>hierarchy.encode(encoder(),world,1);
- return {hierarchy,world,buffers,groups,passes,step,hold(){hold=true;},release(){hold=false;for(const r of maps.splice(0))r();}};
+ const step=(sources)=>hierarchy.encode(encoder(),world,1,sources);
+ return {hierarchy,world,buffers,groups,passes,textureWrites,step,hold(){hold=true;},release(){hold=false;for(const r of maps.splice(0))r();}};
 }
 test('stable topology reuses demand staging and both ping-pong binding variants',async()=>{
  const f=fixture();try{
@@ -99,4 +99,21 @@ test('camera receives current resident leaves without replacing conservative den
   assert.equal(f.passes.filter(p=>p.label==='exportBricks').length,2,'dense conservative export remains in place');
   const old=r.gas;f.step();assert.notEqual(f.hierarchy.renderResources().gas,old,'camera follows current ping-pong');
  }finally{f.hierarchy.destroy();await flush();}
+});
+
+test('changing source supply updates deposition without re-planning unchanged support',async()=>{
+ const f=fixture({budget:8,maxDetail:2});let demandReads=0,heat=1;
+ const supports=[{lo:[0,0,0],hi:[1,1,1],get heat(){demandReads++;return heat;},fuel:1}];
+ const parcel=rate=>({lo:[0,0,0],hi:[1,1,1],rate,fuel:1,heat:1,relax:.5,velocity:[0,1,0]});
+ try{
+  f.hold();f.step({supports,parcels:[parcel(1)]});await flush();
+  const before=f.hierarchy.read(),writes=f.textureWrites.length,first=f.textureWrites.at(-1).data;
+  demandReads=0;f.step({supports,parcels:[parcel(2)]});
+  assert.equal(demandReads,1,'unchanged support is serialized once; varying rates cannot rerun allocation');
+  assert.equal(f.hierarchy.read().revision,before.revision);
+  assert.equal(f.textureWrites.length,writes+1,'new supply must still reach the GPU');
+  assert.notDeepEqual(f.textureWrites.at(-1).data,first,'source deposition cannot retain the old rate');
+  heat=2;demandReads=0;f.step({supports,parcels:[parcel(2)]});
+  assert.ok(demandReads>1,'changed birth demand must still re-plan');
+ }finally{f.release();await flush();f.hierarchy.destroy();await flush();}
 });

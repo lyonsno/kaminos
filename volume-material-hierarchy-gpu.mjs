@@ -236,9 +236,9 @@ export function createMaterialHierarchyGPU(device,plan,worldCode,options={}){
   encode(encoder,world,backtraceScale=0,sources={parcels:[],supports:[]}){
    transportClock+=Math.abs(backtraceScale);
    if(destroyed)throw Error('Material hierarchy disposed');
-   const key=JSON.stringify(sources);if(key!==sourceKey){pending=true;sourceKey=key;}
+   const supportKey=JSON.stringify(sources.supports??[]);if(supportKey!==sourceKey){pending=true;sourceKey=supportKey;}
    if(pending||!initialized)stage(encoder,world,sources);
-   const uploadKey=key+':'+revision;
+   const uploadKey=JSON.stringify(sources.parcels??[])+':'+revision;
    if(sourceUploadKey!==uploadKey){sourceView=sourceAtlas.upload(depositHierarchySources(sources.parcels,lastPlan.nodes,storage.capacity,plan));sourceUploadKey=uploadKey;}
    world={...world,18:sourceView};
    dispatch(encoder,'advanceBricks',lastPlan.leaves.length,world,[[0,storage.meta],[1,storage.fields[current]],[2,storage.fields[1-current]],[3,lists.leaves],[6,params]]);
