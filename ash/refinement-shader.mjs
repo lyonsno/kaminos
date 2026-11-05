@@ -65,7 +65,12 @@ fn offer(i:u32,j:u32,axis:u32,area:f32)->f32 {
  let ma=mass[i];let mb=mass[j];
  let pa=pressure(a);let pb=pressure(b);
  if(solid[i]!=0u||solid[j]!=0u||pa>0.0||pb>0.0){
-  if(solid[i]!=0u&&solid[j]!=0u){return 0.0;}
+  if(solid[i]==1u||solid[j]==1u){return 0.0;}
+  if(solid[i]==2u&&solid[j]==2u){
+   let amount=0.5*area*(ma/va-mb/vb);
+   if(amount>=0.0){return min(amount,min(ma,vb-mb));}
+   return -min(-amount,min(mb,va-ma));
+  }
   if(solid[i]!=0u||pa>pb+1e-5){return min(ma*area/f32(a.size*a.size),(vb-mb)*area/f32(b.size*b.size));}
   if(solid[j]!=0u||pb>pa+1e-5){return -min(mb*area/f32(b.size*b.size),(va-ma)*area/f32(a.size*a.size));}
   return 0.0;

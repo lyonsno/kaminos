@@ -5,10 +5,11 @@ import assert from 'node:assert/strict';
 import {verifyAuthoringServer} from '../scene-authoring-witness-identity.mjs';
 import {fluidBrowserLaunch} from '../finger-fluid-browser-launch.mjs';
 const args=new Map();for(let i=2;i<process.argv.length;i+=2)args.set(process.argv[i],process.argv[i+1]);
-const out=resolve(args.get('--out')),repo=resolve(args.get('--repo')),origin=args.get('--url');mkdirSync(out,{recursive:true});
-const report={status:'running',phase:'source',requested:{repo,origin},errors:[],consoleErrors:[],frames:[]};
+const out=resolve(args.get('--out')),origin=args.get('--url');mkdirSync(out,{recursive:true});let repo;
+const report={status:'running',phase:'arguments',requested:{repo:args.get('--repo'),origin},errors:[],consoleErrors:[],frames:[]};
 const save=()=>writeFileSync(out+'/report.json',JSON.stringify(report,null,2));save();let browser,page;
 try{
+ assert.ok(args.get('--repo'),'--repo required');assert.ok(origin,'--url required');repo=resolve(args.get('--repo'));report.phase='source';save();
  report.identity=await verifyAuthoringServer({origin,repoRoot:repo});report.sources={};
  for(const name of ['index.html','ash/refinement-gpu.mjs','ash/refinement-shader.mjs','ash/refinement-surface.mjs','ash/refinement-wgsl.mjs','ash/scene-object.mjs','ash/refinement-controls.mjs','tools/ash-refinement-native-witness.mjs']){
   const remote=await fetch(new URL(name,origin));assert.ok(remote.ok);const hash=b=>createHash('sha256').update(b).digest('hex');
@@ -35,11 +36,21 @@ try{
  report.initial=await page.evaluate(id=>({ash:window.kaminosAsh.read(id),gi:window.kaminosSceneGIDebugState()}),id);
  assert.equal(report.initial.ash.runtime.backend,'webgpu-coarse-fine-ash');assert.equal(report.initial.gi.effectiveMode,'combined');
  await capture('01-refined-layer');const before=await snapshot('before',id);
- report.phase='moving-object';save();
+ report.phase='moving-object';save();await page.evaluate(source=>window.kaminosAsh.setSource(source,{enabled:false}),source);
  for(const x of [-.64,-.48,-.32,-.16,0,.16,.32,.48,.64])await page.evaluate(async({id,box,x})=>{window.kaminosSetSceneObjectTransform(box,{position:[x,.12,.35]});await window.kaminosAsh.advance(id,2);},{id,box,x});
  const moved=await snapshot('moved',id);assert.notDeepEqual(moved.ash.checkpoint.values,before.ash.checkpoint.values);assert.ok(Math.abs(moved.ash.checkpoint.retainedVolume-moved.ash.checkpoint.volume)<1e-5);
  await capture('02-moving-box');
- report.phase='sources';save();
+ const embedded=await page.evaluate(id=>window.kaminosAsh.diagnostics(id,{fields:true}),id);
+ const inside=values=>values.values.reduce((sum,m,i)=>sum+(values.solid[i]===2?m:0),0);
+ const initialOverlap=inside(embedded);
+ assert.ok(initialOverlap>0,'moving solid must actually overlap previously deposited material');
+ await page.evaluate(id=>window.kaminosAsh.advance(id,48),id);
+ const evacuated=await page.evaluate(id=>window.kaminosAsh.diagnostics(id,{fields:true}),id);
+ report.evacuation={before:initialOverlap,after:inside(evacuated)};
+ assert.ok(report.evacuation.after<report.evacuation.before*.95,'embedded material must escape a stationary moved solid');
+ const evacuationState=await snapshot('evacuated',id);
+ assert.ok(Math.abs(evacuationState.ash.checkpoint.retainedVolume-before.ash.checkpoint.retainedVolume)<1e-5,'contact conserves material without source emission');
+ report.phase='sources';save();await page.evaluate(source=>window.kaminosAsh.setSource(source,{enabled:true}),source);
  await page.evaluate(async id=>{for(let i=0;i<48;i++)await window.kaminosAsh.advance(id,1);},id);
  const emitted=await snapshot('emitted',id);assert.ok(emitted.ash.checkpoint.volume>moved.ash.checkpoint.volume);report.emittedVolume=emitted.ash.checkpoint.volume-moved.ash.checkpoint.volume;
  await capture('03-deposition');
@@ -65,4 +76,4 @@ try{
  assert.deepEqual(report.errors,[]);assert.deepEqual(report.consoleErrors,[]);
  report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack??error);if(page){report.lastText=await page.locator('body').innerText().catch(String);await page.screenshot({path:out+'/failed.png'}).catch(()=>{});}process.exitCode=1;}
-finally{await browser?.close();report.browserClosed=true;save();console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,report:out+'/report.json'}));}
+finally{try{await browser?.close();report.browserClosed=true;}catch(error){report.cleanupError=String(error);report.status='failed';report.browserClosed=false;process.exitCode=1;}finally{save();console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,report:out+'/report.json'}));}}
