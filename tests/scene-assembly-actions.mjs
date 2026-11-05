@@ -61,8 +61,17 @@ test('membership restoration selects without cancelling its own edit; ordinary s
 });
 test('the page membership adapter marks both nonempty and empty restored selection as internal',()=>{
  const calls=[],c={createSceneMembershipBatch:options=>({select:options.select}),workingScene:{},sceneMembership:{},
-  isReloadableSceneObjectRecord(){},applyCompoundSceneRecord(){},clearActiveSceneObjectSelection(){calls.push({ids:[],id:null});},serializeSceneGroups(){},ensureGroupTarget(){},createSceneGroupForObjects(){},restoreCompoundSceneContext(){},detachSelectionMember(){},canDuplicateObject(){},makeSceneObjectId(){},
+  isReloadableSceneObjectRecord(){},applyCompoundSceneRecord(){},clearActiveSceneObjectSelection(options){calls.push({ids:[],id:null,options});},serializeSceneGroups(){},ensureGroupTarget(){},createSceneGroupForObjects(){},restoreCompoundSceneContext(){},detachSelectionMember(){},canDuplicateObject(){},makeSceneObjectId(){},
   setSceneSelection:(ids,id,options)=>calls.push({ids,id,options})};
  vm.runInNewContext(grab('createPageSceneMembershipBatch'),c);const batch=c.createPageSceneMembershipBatch();batch.select(['body'],'body');batch.select([],null);
  assert.deepEqual(calls.map(c=>c.options?.fromHistory),[true,true]);assert.deepEqual(calls.map(c=>c.ids.length),[1,0]);
+});
+
+test('internal empty selection retains normal presentation cleanup without gesture cancellation',()=>{
+ let interrupts=0,exits=0,hidden=0;
+ const c={window:{},workingScene:{clearSelection(){}},updateSelectionFeedback(){},burnerGraphWriting:false,scenePlacementTools:{selectionChanged(){interrupts++;}},
+  splatCorrectionMode:{},exitSplatCorrectionMode(){exits++;},currentMesh:{},renderSceneObjectList(){},updateTransformInspector(){},transformControls:{detach(){},visible:true},
+  document:{getElementById:()=>({classList:{remove(){hidden++;}}})}};
+ vm.runInNewContext(grab('clearActiveSceneObjectSelection'),c);c.clearActiveSceneObjectSelection({fromHistory:true});assert.equal(interrupts,0);assert.equal(exits,1);assert.equal(hidden,1);assert.equal(c.currentMesh,null);assert.equal(c.transformControls.visible,false);
+ c.clearActiveSceneObjectSelection();assert.equal(interrupts,1,'ordinary clear still interrupts');
 });

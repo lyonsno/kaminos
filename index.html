@@ -7113,11 +7113,11 @@ function renderSceneObjectList() {
   });
 }
 
-function clearActiveSceneObjectSelection() {
+function clearActiveSceneObjectSelection({fromHistory=false}={}) {
   window.kaminosPendingSurfacePick=null;
   if(window.kaminosPolyEdit?.active())window.kaminosPolyEdit.exit();
   workingScene.clearSelection();updateSelectionFeedback();
-  if (!burnerGraphWriting) scenePlacementTools?.selectionChanged();
+  if (!fromHistory&&!burnerGraphWriting) scenePlacementTools?.selectionChanged();
   if (splatCorrectionMode) exitSplatCorrectionMode({ revert: false, silent: true });
   currentMesh = null;
   renderSceneObjectList();
@@ -27969,7 +27969,7 @@ function createPageSceneMembershipBatch(){
       check(value){normalizeFlameDomainTranslation(value.domain);normalizeFlameDomainScale(value.domainScale??1);if(value.domainFollowSource!==undefined&&typeof value.domainFollowSource!=='boolean')throw Error('Domain follow-source must be Boolean');},
       restore:restoreCompoundSceneContext,
     },
-    select:(ids,id)=>setSceneSelection(ids,id,{fromHistory:true}),
+    select:(ids,id)=>ids.length?setSceneSelection(ids,id,{fromHistory:true}):clearActiveSceneObjectSelection({fromHistory:true}),
     detach:detachSelectionMember,
     duplicate:{supported:canDuplicateObject,object:id=>duplicateSceneObject(id,{deferRecord:true}),groupId:()=>makeSceneObjectId('group')},
     changed(){renderSceneObjectList();updateTransformInspector();window._kaminosDirty?.();},
@@ -28333,6 +28333,8 @@ async function addRingBurner({mesh=null,reuseSourceId=null}={}) {
   const primary=primaryAuthoredFlameSource();
   const template=primary?serializeSceneObject(primary):{type:FLAME_EMITTER_TYPE,source:FLAME_EMITTER_SOURCE,emission:{domainId:FIRE_DOMAIN_ID,settings:Object.fromEntries(Object.entries(readVolumeSettingsValues().domControls).filter(([id])=>fireControlOwner(id)==='source'))}};
   const next=planRingBurner(readSelectionMembership(),{groupId:makeSceneObjectId('ring-burner'),bodyId:makeSceneObjectId('mesh'),outletId:reuseSourceId||makeSceneObjectId('flame-source'),template,pose:flameEmitterPose,mesh,reuseSource:!!reuseSourceId});
+  // Retire the previous component owner before the new membership edit begins.
+  sceneComponents?.exit();
   await scenePlacementTools.edits.applySettled('@selection-membership',next,'Add ring burner');
   return workingScene.activeGroupId;
 }
@@ -28342,6 +28344,7 @@ async function setBurnerBody(groupId,mesh) {
   if(!group)throw Error('Select a burner assembly');
   const oldBodyId=group.objectIds.find(id=>group.assembly.roles[id]==='body');
   const next=planBurnerBodyReplacement(readSelectionMembership(),{groupId,oldBodyId,bodyId:makeSceneObjectId('mesh'),mesh});
+  sceneComponents?.exit();
   await scenePlacementTools.edits.applySettled('@selection-membership',next,'Change burner body');
   return next.groups.find(row=>row.id===groupId).objectIds.find(id=>id!==oldBodyId&&next.groups.find(row=>row.id===groupId).assembly.roles[id]==='body');
 }
