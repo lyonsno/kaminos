@@ -218,7 +218,8 @@ export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
         const materialRevision=filter?.revision??null;
         const texChanged=m.materialTexture!==(filter?.texture??null)||m.boundaryCapTexture!==(boundaryCap?.texture??null);
         const capChanged=m.boundaryCapTexture!==(boundaryCap?.texture??null)||m.boundaryCapKey!==boundaryCapKey;
-        const matChanged=m.materialTexture!==(filter?.texture??null)||m.materialRevision!==materialRevision;
+        const materialMatrixKey=filter?JSON.stringify(filter.matrix):null;
+        const matChanged=m.materialTexture!==(filter?.texture??null)||m.materialRevision!==materialRevision||m.materialMatrixKey!==materialMatrixKey;
         if(texChanged){
           destroyGroup(m.base);m.base=makeGroup(m,dummy,0,null,filter,boundaryCap);m.materialTexture=filter?.texture??null;m.boundaryCapTexture=boundaryCap?.texture??null;pending=true;
         }
@@ -228,7 +229,7 @@ export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
           if(boundaryCap){f.set([...boundaryCap.origin,boundaryCap.step,...boundaryCap.boundsMin,0,...boundaryCap.boundsMax,0],16);u[29]=1;}
           device.queue.writeBuffer(m.base.materialUniform,0,data);
         }
-        if(matChanged){m.materialRevision=materialRevision;pending=true;}
+        if(matChanged){m.materialRevision=materialRevision;m.materialMatrixKey=materialMatrixKey;pending=true;}
         if(capChanged){m.boundaryCapKey=boundaryCapKey;m.dirty=true;pending=true;}
         m.base.floats.set([...transform.translate,transform.scale],16);device.queue.writeBuffer(m.base.uniform,0,m.base.values);
         if(m.revision===member.revision){if(capChanged)builds++;continue;}
@@ -239,7 +240,7 @@ export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
       }
       for(const [id,m] of objects)if(!seen.has(id)){destroyMember(m);objects.delete(id);pending=true;}
       const nextWallKey=JSON.stringify(wallCells);if(nextWallKey!==wallKey){wallKey=nextWallKey;pending=true;}
-      key=JSON.stringify(members.map(m=>[m.id,m.revision,objects.get(m.id).materialRevision,objects.get(m.id).boundaryCapKey]));
+      key=JSON.stringify(members.map(m=>[m.id,m.revision,objects.get(m.id).materialRevision,objects.get(m.id).materialMatrixKey,objects.get(m.id).boundaryCapKey]));
       current={backend:'gpu',key,revision:key,builds,triangleCount:members.reduce((n,m)=>n+m.triangleCount,0),members:members.map(m=>({id:m.id,triangleCount:m.triangleCount})),wallCells};
       return current;
     },

@@ -13,7 +13,9 @@ const ctx={createAuthoredWaterFeature:o=>(options=o,{}),localLiquidEmitterRecord
  viewportDisplay:display,sceneVisibilityContext:()=>scene,localLiquidEmitterState:()=>({emitters:[]}),sceneViewerPaused:null,
  setInfo:no,refreshAuthoredWaterSamplingPreviews:no,setAuthoredWaterPreviewVisible:no};
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-vm.runInNewContext(html.slice(html.indexOf('const waterFeature = createAuthoredWaterFeature('),html.indexOf('let sceneRepetitionController=')),ctx);
+const start=html.indexOf('const waterFeature = createAuthoredWaterFeature('),end=html.indexOf('\n});',start)+4;
+assert.ok(start>=0&&end>start,'actual page water feature installation is present');
+vm.runInNewContext(html.slice(start,end),ctx);
 const feature=createAuthoredWaterFeature({...options,services:()=>({}),refresh:no,
  loadHost:async()=>({createAuthoredWaterHost:async opts=>{inputs=opts.emitters;return {setEmitters:no,setPaused(v){this.paused=v;},state:()=>({mode:'finite_drop'}),dispose:no};}})});
 feature.setup={};await feature.recover(false);

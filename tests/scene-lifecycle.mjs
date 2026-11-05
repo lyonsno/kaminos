@@ -131,3 +131,24 @@ test('a preview suspension superseded by clear cannot park the replacement scene
  f.adapters.context.retire=async()=>{};await f.lifecycle.replace([{id:'new'}]);finish();
  assert.equal(await pending,false);assert.equal(f.state.isSuspended,false);assert.deepEqual(f.state.objects.map(r=>r.id),['new']);
 });
+
+test('replacement can present loaded geometry before constructing a deferred domain, without completing admission',async()=>{
+ const f=fixture();let release;
+ const gate=new Promise(resolve=>release=resolve),events=[];
+ f.adapters.context.beforeLoad=async(record)=>{if(record.id==='ash'){events.push(['preview',f.state.objects.map(row=>row.id)]);await gate;}};
+ f.adapters.records.load=async record=>{events.push(['construct',record.id]);return f.add(record.id).object;};
+ let done=false;const id=f.state.loads.begin(),pending=f.lifecycle.replace([{id:'geometry'},{id:'ash'}],{loadRequestId:id}).then(value=>{done=true;return value;});
+ await new Promise(r=>setImmediate(r));
+ assert.deepEqual(events,[['construct','geometry'],['preview',['geometry']]],'geometry presentation precedes deferred-domain construction');
+ assert.equal(done,false,'presenting geometry is not whole-scene completion');
+ release();assert.equal(await pending,true);assert.deepEqual(f.state.objects.map(row=>row.id),['geometry','ash']);
+});
+
+test('replacement superseded during its geometry presentation cannot construct the old domain',async()=>{
+ const f=fixture();let release;const gate=new Promise(resolve=>release=resolve);
+ f.adapters.context.beforeLoad=record=>record.id==='old-ash'?gate:undefined;
+ const old=f.state.loads.begin(),pending=f.lifecycle.replace([{id:'geometry'},{id:'old-ash'}],{loadRequestId:old});
+ await new Promise(r=>setImmediate(r));
+ const current=f.state.loads.begin();await f.lifecycle.replace([{id:'new'}],{loadRequestId:current});release();
+ assert.equal(await pending,false);assert.deepEqual(f.state.objects.map(row=>row.id),['new']);
+});

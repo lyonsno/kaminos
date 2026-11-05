@@ -232,6 +232,21 @@ test('review WO1: createAshCollisionRecords substitutes cellSize-matched stunt-d
 
 
 
+test('a checkpoint retries exact original colliders after an adaptive collider mismatch and retains that source',async()=>{
+ const original=new Mesh(new BoxGeometry(),new MeshBasicMaterial()),proxy=new Mesh(new BoxGeometry(.5,.5,.5),new MeshBasicMaterial());
+ const saved={schema:'kaminos.tiled-ash.v1',values:[.25,.75],steps:3522};let sceneRecords,restored,ticks=0;const attempts=[];
+ const object=await createAshSceneObject({record:{...record(),ash:{...record().ash,checkpoint:saved}},readObjects:()=>[{id:'mesh',type:'glb',object:original}],resolveObstacle:()=>proxy,createPatch:async options=>{sceneRecords=options.sceneRecords;return {root:new Group(),syncScene(){},restore(state){const geometry=sceneRecords()[0].object.geometry;attempts.push(geometry);if(geometry!==original.geometry)throw Object.assign(Error('Checkpoint scene geometry or poses differ; restore the scene first'),{code:'ASH_CHECKPOINT_COLLISION_MISMATCH'});restored=structuredClone(state);},step(){assert.equal(sceneRecords()[0].object.geometry,original.geometry);ticks++;},read:()=>({steps:saved.steps+ticks}),dispose(){}};}});
+ try{await object.initialize();assert.deepEqual(attempts,[proxy.geometry,original.geometry]);assert.deepEqual(restored,saved);assert.equal(object.read().pendingRestore,false);assert.equal(object.read().collisionSource,'checkpoint-original');object.tick(1000);assert.equal(ticks,1);await object.initialize();assert.equal(attempts.length,2);}finally{object.dispose();for(const m of [original,proxy]){m.geometry.dispose();m.material.dispose();}}
+});
+
+test('checkpoint recovery still rejects changed original geometry and unrelated checkpoint failures',async()=>{
+ for(const code of ['ASH_CHECKPOINT_COLLISION_MISMATCH','INVALID_CHECKPOINT']){
+  const original=new Mesh(new BoxGeometry(),new MeshBasicMaterial());let attempts=0;
+  const object=await createAshSceneObject({record:{...record(),ash:{...record().ash,checkpoint:{schema:'kaminos.tiled-ash.v1'}}},readObjects:()=>[{id:'mesh',type:'glb',object:original}],resolveObstacle:()=>original,createPatch:async()=>({root:new Group(),syncScene(){},restore(){attempts++;throw Object.assign(Error('refused'),{code});},step(){throw Error('must not step');},read:()=>({}),dispose(){}})});
+  try{await assert.rejects(object.initialize(),/refused/);assert.equal(attempts,code==='ASH_CHECKPOINT_COLLISION_MISMATCH'?2:1);assert.equal(object.read().pendingRestore,true);assert.equal(object.tick(1000),false);}finally{object.dispose();original.geometry.dispose();original.material.dispose();}
+ }
+});
+
 test('collision records isolate ash from viewport camera beauty LOD proxies',()=>{
  const ashRoot=new Group();
  const entryRoot=new Group();
@@ -587,3 +602,42 @@ test('ash source and field inspectors ignore mid-typing empty/decimal strings, c
 
 
 
+
+test('ash collision retains GLB node coordinates when display rungs bake their transforms',async()=>{
+ const source=new Group(),hero=new Mesh(new BoxGeometry(1,2,1,50,50,50),new MeshBasicMaterial());source.add(hero);
+ const sha='e'.repeat(64);let originalGeometry;
+ const controller=createSceneBeautyLodController({THREE,scene:new Group(),giProxies:{get:()=>({state:'resolved',levels:kilnLevels}),whenIdle:async()=>{}},
+  fetchBytes:async()=>new Uint8Array([1]),digest:async()=>sha,
+  parseGlb:async()=>{const r=new Group(),m=new Mesh(new BoxGeometry(1,2,3),new MeshBasicMaterial());m.rotation.x=-Math.PI/2;r.add(m);originalGeometry=m.geometry.clone();return r;}});
+ try{
+  await controller.prepareCollision([source],{cellSize:.02});
+  const collision=controller.resolveCollisionRung(source,{cellSize:.02}).root;
+  const cm=collision.children[0],display=controller.getResidentRung(source,sha).root.children[0];
+  assert.deepEqual(Array.from(cm.geometry.attributes.position.array),Array.from(originalGeometry.attributes.position.array),'collision preserves raw GLB vertex identity');
+  assert.ok(Math.abs(cm.rotation.x+Math.PI/2)<1e-12,'collision retains original node rotation');
+  assert.ok(Math.abs(display.rotation.x)<1e-12,'display continues to bake rotation');
+  assert.notEqual(cm.geometry,display.geometry,'display warps cannot mutate checkpoint collision geometry');
+  const records=createAshCollisionRecords(new Group(),()=>[{id:'kiln',type:'glb',object:source}],{getCellSize:()=>.02,resolveCollisionRung:(r,o)=>controller.resolveCollisionRung(r,o)})();
+  assert.equal(records.length,1);assert.ok(Math.abs(records[0].object.matrix.elements[6]+1)<1e-12,'raw node transform reaches field collision');
+  const positions=m=>{m.updateWorldMatrix(true,false);return Array.from({length:m.geometry.attributes.position.count},(_,i)=>new THREE.Vector3().fromBufferAttribute(m.geometry.attributes.position,i).applyMatrix4(m.matrixWorld).toArray()).flat();};
+  const close=(a,b,message)=>assert.ok(a.every((v,i)=>Math.abs(v-b[i])<1e-6),message);
+  const baseDisplay=positions(display),baseCollision=positions(cm);
+  close(baseDisplay,baseCollision,'initial display and collision agree in root coordinates');
+  source.userData.kaminosVertexWarp=values=>Float32Array.from(values,(v,i)=>v+(i%3===0?.6:0));
+  source.userData.kaminosVertexWarpRevision=1;
+  controller.resolveCollisionRung(source,{cellSize:.02});
+  const warpedDisplay=positions(display),warpedCollision=positions(cm);
+  assert.notDeepEqual(warpedDisplay,baseDisplay,'display responds to active warp');
+  assert.notDeepEqual(warpedCollision,baseCollision,'collision responds to active warp');
+  close(warpedDisplay,warpedCollision,'active warp agrees across coordinate representations');
+  delete source.userData.kaminosVertexWarp;source.userData.kaminosVertexWarpRevision=2;
+  controller.resolveCollisionRung(source,{cellSize:.02});
+  const restoredDisplay=positions(display),restoredCollision=positions(cm);
+  close(restoredDisplay,baseDisplay,'display returns to its baseline');
+  close(restoredCollision,baseCollision,'collision returns to its baseline after warp removal');
+  assert.notDeepEqual(restoredCollision,warpedCollision,'removal must change collision from preceding warped stage');
+  close(restoredDisplay,restoredCollision,'removed warp agrees across coordinate representations');
+  assert.notEqual(cm.geometry.userData,display.geometry.userData,'mutable geometry bookkeeping is independent');
+
+ }finally{controller.dispose();originalGeometry?.dispose();hero.geometry.dispose();hero.material.dispose();}
+});

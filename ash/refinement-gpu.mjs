@@ -17,7 +17,7 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
   const p=createRefinementLayout({cellSize,bounds,tileSize,refinement});
   const arena=refinementArena(p);
   const owned=[],attributes=[],colliders=[];
-  let mesh,wire,fall,fineCollision,disposed=false,steps=0,seededVolume=0,readbacks=0,lastContact=null;
+  let mesh,wire,fall,fineCollision,disposed=false,steps=0,seededVolume=0,readbacks=0,lastContact=null,restoredCollision=null;
   let sliding=checkedSliding(initialSliding);
   function buffer(label,size,extra=0) {
     if(size>device.limits.maxBufferSize||size>device.limits.maxStorageBufferBindingSize)throw Error(`Refined ash ${label} exceeds effective GPU capacity`);
@@ -84,9 +84,9 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
     if(sceneRecords) {
       for(const region of p.regions)colliders.push(createAshSceneSolids({device,layout:region.layout,collision:solid.buffer,headers,collisionOffset:region.offset*4,headersOffset:region.tileOffset*32,samplingCellSize:p.adaptive?p.cellSize:region.layout.cellSize,adaptive:p.adaptive?{layout:p,arena:work.buffer}:null}));
     }
-    function syncCollision() {
+    function syncCollision(checkpointIdentity=restoredCollision) {
       const records=sceneRecords?.()??[];let changed=false;
-      for(const collider of colliders)if(collider.update(records))changed=true;
+      for(const [region,collider]of colliders.entries()){const prefix=`${region}/`;const local=Array.isArray(checkpointIdentity)?checkpointIdentity.filter(row=>row.key?.startsWith(prefix)).map(row=>({...row,key:row.key.slice(prefix.length)})):null;if(collider.update(records,{checkpointIdentity:local}))changed=true;}
       return changed;
     }
     if(p.adaptive&&colliders.length)fineCollision=createAdaptiveCollision({device,p,arena:work.buffer,collision:solid.buffer,headers,shapes:colliders[0]});
@@ -212,18 +212,18 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
         return {schema:p.adaptive?'kaminos.adaptive-ash.v1':'kaminos.refined-ash.v1',residency:state.residency,layout:p,collisionIdentity:collisionIdentity(),values:Array.from(state.values),pendingTiles:p.tileRecords.flatMap((_,i)=>state.headers[i*8]?[i]:[]),steps,sliding:{...sliding},lastContact,seededVolume,volume:seededVolume+fall.read().requestedVolume,retainedVolume:retained(state.values,air),falling:air};
       },
       restore(state,{allowCollisionUpgrade=false}={}) {
-        check();syncCollision();
+        check();syncCollision(state?.collisionIdentity);
         const view=p.adaptive?adaptiveView(p,state?.residency):p;
         if(state?.schema!==(p.adaptive?'kaminos.adaptive-ash.v1':'kaminos.refined-ash.v1')||JSON.stringify(state.layout)!==JSON.stringify(p)||!Array.isArray(state.values)||state.values.length!==p.count||state.values.some((value,i)=>!Number.isFinite(value)||value<0||value>refinementCell(view,i).size**3+1e-6||(!refinementCell(view,i).owned&&value!==0)))throw Error('Invalid refined ash checkpoint');
         const exactCollision=JSON.stringify(state.collisionIdentity)===JSON.stringify(collisionIdentity());
-        if(!exactCollision&&!(allowCollisionUpgrade&&sameAshCollisionPoses(state.collisionIdentity,collisionIdentity())))throw Error('Checkpoint scene geometry or poses differ; restore the scene first');
+        if(!exactCollision&&!(allowCollisionUpgrade&&sameAshCollisionPoses(state.collisionIdentity,collisionIdentity())))throw Object.assign(Error('Checkpoint scene geometry or poses differ; restore the scene first'),{code:'ASH_CHECKPOINT_COLLISION_MISMATCH'});
         fall.validate(state.falling);const values=Float32Array.from(state.values);
         const actual=retained(values,state.falling),introduced=state.seededVolume+state.falling.requestedVolume;
         if(!Number.isFinite(state.volume)||state.volume<0||!Number.isFinite(state.seededVolume)||state.seededVolume<0||!Number.isFinite(state.retainedVolume)||Math.abs(state.retainedVolume-actual)>Math.max(1e-9,actual*1e-4)||!Number.isFinite(introduced)||Math.abs(actual-introduced)>Math.max(1e-9,introduced*1e-4)||Math.abs(state.volume-introduced)>1e-8)throw Error('Checkpoint volume differs from retained material');
         if(!(state.lastContact===null||Array.isArray(state.lastContact)&&state.lastContact.length===4&&state.lastContact.every(Number.isFinite)&&state.lastContact[3]>0))throw Error('Invalid refined ash contact');
         if(!Array.isArray(state.pendingTiles)||state.pendingTiles.some(i=>!Number.isSafeInteger(i)||i<0||i>=p.tiles.count)||!Number.isSafeInteger(state.steps)||state.steps<0)throw Error('Invalid refined ash continuation');
         if(p.adaptive){const a=p.adaptiveArena;device.queue.writeBuffer(work.buffer,a.state*4,new Uint32Array(16));device.queue.writeBuffer(work.buffer,a.map*4,Uint32Array.from(view.residency.map));device.queue.writeBuffer(work.buffer,a.slots*4,Uint32Array.from(view.residency.slots));device.queue.writeBuffer(work.buffer,a.flags*4,Uint32Array.from(view.residency.slots,n=>n?2:0));}
-        sliding=checkedSliding(state.sliding);parameters();upload(values,exactCollision?new Set(state.pendingTiles):null);fall.restore(state.falling);steps=state.steps;seededVolume=state.seededVolume;lastContact=state.lastContact?.slice()??null;
+        restoredCollision=state.collisionIdentity;sliding=checkedSliding(state.sliding);parameters();upload(values,exactCollision?new Set(state.pendingTiles):null);fall.restore(state.falling);steps=state.steps;seededVolume=state.seededVolume;lastContact=state.lastContact?.slice()??null;
         if(p.adaptive){const e=device.createCommandEncoder();dispatch(e,'adaptive_recount',Math.ceil(p.pool.pages/64));device.queue.submit([e.finish()]);}
       },
       read:()=>({backend:p.adaptive?'webgpu-adaptive-ash':'webgpu-coarse-fine-ash',surface:'joined-cached-refined-faces',surfaceMode:'refined',layout:p,steps,volume:seededVolume+fall.read().requestedVolume,falling:fall.read(),sliding:{...sliding},sceneCollision:{route:'regional-cached-collision',members:colliders.flatMap(c=>c.read().members),allocatedBytes:colliders.reduce((sum,c)=>sum+c.read().allocatedBytes,0)},runtimeReadbacks:0,explicitReadbacks:readbacks,allocatedBytes:owned.reduce((sum,b)=>sum+b.size,0)+attributes.reduce((sum,a)=>sum+a.array.byteLength,0)+(fineCollision?.read().allocatedBytes??0)+fall.read().allocatedBytes+colliders.reduce((sum,c)=>sum+c.read().allocatedBytes,0),allocationMeaning:p.adaptive?'resident coarse covering and reusable fine pool; occupied fine history pinned':'resident coarse volume and explicit fine regions, including cached surface capacity',boundary:'single material owner and conservative coarse-fine exchange',lastContact}),

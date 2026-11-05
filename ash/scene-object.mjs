@@ -83,6 +83,35 @@ export function createAshCollisionRecords(root,readObjects,{getCellSize=()=>0.04
   }return result;
  };
 }
+function createLegacyAshCollisionRecords(root,readObjects,{resolveObstacle=null}={}){
+ const proxies=new WeakMap(),inverse=new Matrix4();
+ return ()=>{
+  root.updateWorldMatrix(true,false);if(Math.abs(root.matrixWorld.determinant())<1e-12)throw Error('Ash field transform must be invertible');inverse.copy(root.matrixWorld).invert();const result=[];
+  const cellSize=root.userData?.kaminosSceneObject?.ash?.cellSize??0.04;
+  for(const entry of readObjects()){
+   if(entry.type===ASH_OBJECT_TYPE||!['glb','pbr','procedural-mesh','burner-bed','brazier-room'].includes(entry.type))continue;
+   const restoreBeauty=entry.object.userData?.kaminosBeautyLodRestore?.();
+   try{
+    entry.object.updateWorldMatrix(true,true);
+    const sourceObj=typeof resolveObstacle==='function'?resolveObstacle(entry,{voxelSize:cellSize}):entry.object;
+    if(!sourceObj)continue;
+    let index=0;
+    sourceObj.traverse(mesh=>{
+     const part=index++;if(!mesh.isMesh)return;
+     for(let node=mesh;node;node=node.parent)if(!node.visible||node.userData?.kaminosBeautyLodProxy||node.userData?.kaminosEditorOnly||node.userData?.kaminosEditorHelper)return;
+     if(mesh.isSkinnedMesh||mesh.isInstancedMesh||mesh.morphTargetInfluences?.some(x=>x!==0))throw Error(`Ash needs rigid triangles: ${entry.label||entry.id}`);
+     let proxy=proxies.get(mesh);if(!proxy){proxy=new Mesh(mesh.geometry,mesh.material);proxy.matrixAutoUpdate=false;proxies.set(mesh,proxy);}
+     proxy.geometry=mesh.geometry;proxy.material=mesh.material;proxy.name=mesh.name;
+     proxy.matrix.multiplyMatrices(inverse,mesh.matrixWorld);proxy.updateMatrixWorld(true);
+     result.push({id:entry.id,key:`${entry.id}:${part}`,object:proxy});
+    });
+   }finally{
+    restoreBeauty?.();
+   }
+  }return result;
+ };
+}
+
 export async function createAshSceneObject({record:raw,renderer,readObjects,readSources=()=>[],lodController=null,resolveObstacle=null,onError=()=>{},createPatch=async options=>options.refinement?(await import('./refinement-gpu.mjs')).createGpuRefinedAsh(options):(await import('./tile-gpu.mjs')).createGpuTiledAsh(options)}){
  const record=checkedAshRecord(raw),root=new Group();root.name=record.label||'Ash';
  root.position.fromArray(record.transform?.position??[0,0,0]);root.rotation.set(...(record.transform?.rotation??[0,0,0]));root.scale.fromArray(record.transform?.scale??[1,1,1]);
@@ -106,7 +135,10 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,read
  };rebuildFineGuides();
  const emitter=new Mesh(new TorusGeometry(1,.018,6,48),new MeshStandardMaterial({color:0x8abdb2,roughness:.8}));emitter.rotation.x=Math.PI/2;emitter.userData.kaminosEditorHelper=true;root.add(emitter);
  const sync=()=>{guide.position.y=settings.height/2;emitter.position.fromArray(settings.sourcePosition);emitter.scale.setScalar(Math.max(settings.spread,.01));root.userData.kaminosSceneObject={...(root.userData.kaminosSceneObject??record),ash:settings};};sync();
- const collisionRecords=createAshCollisionRecords(root,readObjects,{resolveObstacle,getCellSize:()=>settings.cellSize,resolveCollisionRung:(obj,opts)=>lodController?.resolveCollisionRung?.(obj,opts)??null});
+ let collisionSource='adaptive';
+ const adaptiveCollisionRecords=createAshCollisionRecords(root,readObjects,{getCellSize:()=>settings.cellSize,resolveCollisionRung:(obj,opts)=>lodController?.resolveCollisionRung?.(obj,opts)??null,resolveObstacle});
+ const originalCollisionRecords=createLegacyAshCollisionRecords(root,readObjects);
+ const collisionRecords=()=>collisionSource==='checkpoint-original'?originalCollisionRecords():adaptiveCollisionRecords();
  const prepareCollision=cellSize=>lodController?.prepareCollision?.(readObjects().filter(e=>e.type!==ASH_OBJECT_TYPE&&ASH_COLLIDER_TYPES.includes(e.type)).map(e=>e?.object).filter(Boolean),{cellSize});
  const check=()=>{if(disposed)throw Error('Ash object disposed');if(busy)throw Error('Ash operation in progress');};
  const source=()=>({position:[...settings.sourcePosition],rate:settings.emitting?settings.rate:0,spread:settings.spread,dt:1/30,sources:[...readSources(),...(settings.fallout?[{position:[0,settings.height,0],spread:0,rate:settings.rate,halfExtents:[settings.width/2,settings.depth/2]}]:[])]});
@@ -120,10 +152,29 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,read
  try{patch=await build(settings);root.add(patch.root);}
  catch(error){dispose();throw error;}
  const api={root,
-  async initialize(){if(initialized)return;return locked(async()=>{await prepareCollision(settings.cellSize);patch.syncScene();if(pendingRestore){patch.restore(pendingRestore,{allowCollisionUpgrade:true});pendingRestore=null;}else if(settings.initialDepth>0)await patch.deposit({blanketDepth:settings.initialDepth,groundOnly:true});patch.setSliding?.({variation:settings.slideVariation,scale:settings.slideScale,release:settings.slideRelease});initialized=true;});},
-  tick(timestamp,{active=true,selected=false}={}){
+  async initialize(){if(initialized)return;return locked(async()=>{
+   await prepareCollision(settings.cellSize);patch.syncScene();
+   if(pendingRestore){
+    try{patch.restore(pendingRestore);}
+    catch(error){
+     if(error.code!=='ASH_CHECKPOINT_COLLISION_MISMATCH'||(!lodController&&typeof resolveObstacle!=='function'))throw error;
+     // Older checkpoints can name original triangles even when the current
+     // scene selects a collision LOD. The same strict identity and material
+     // checks must pass against the original before retaining that source.
+     collisionSource='checkpoint-original';
+     try{patch.restore(pendingRestore);}catch(originalError){collisionSource='adaptive';throw originalError;}
+    }
+    pendingRestore=null;
+   }else if(settings.initialDepth>0)await patch.deposit({blanketDepth:settings.initialDepth,groundOnly:true});
+   patch.setSliding?.({variation:settings.slideVariation,scale:settings.slideScale,release:settings.slideRelease});initialized=true;
+  });},
+  due(timestamp,{active=true}={}){
+   return !(disposed||busy||!initialized||pendingRestore||!active||settings.paused)&&(lastTick===null||timestamp-lastTick>=1000/30);
+  },
+  tick(timestamp,{active=true,selected=false,advance=true}={}){
    guide.visible=selected;fineGuides.visible=selected;patch.setShowRefinement?.(showRefinement&&selected);emitter.visible=selected&&settings.emitting;
    if(disposed||busy||!initialized||pendingRestore||!active||settings.paused){lastTick=null;return false;}
+   if(!advance)return false;
    if(lastTick!==null&&timestamp-lastTick<1000/30)return false;lastTick=timestamp;
    try{patch.step(null,source());if(failure){failure=null;onError(null);}return true;}catch(error){const changed=failure!==error.message;failure=error.message;if(changed)onError(failure);return false;}
   },
@@ -146,7 +197,7 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,read
   burst(volume){check();patch.burst(volume);},
   advance(steps=1){check();if(!Number.isSafeInteger(steps)||steps<1)throw Error('Ash steps must be a positive integer');for(let i=0;i<steps;i++)patch.step(null,source());},
   diagnostics:options=>locked(()=>patch.diagnostics(options)),
-  read:()=>({id:record.id,settings:{...settings,checkpoint:undefined},showRefinement,pendingRestore:!!pendingRestore,busy,failure,disposed,runtime:patch.read()}),
+  read:()=>({id:record.id,settings:{...settings,checkpoint:undefined},showRefinement,collisionSource,pendingRestore:!!pendingRestore,busy,failure,disposed,runtime:patch.read()}),
   dispose,
  };
  root.userData.disposeAshObject=dispose;return api;

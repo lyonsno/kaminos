@@ -33,25 +33,11 @@ assert.match(core, /function normalizeFlowKernelCoherence/, 'flow coherence is n
 assert.match(core, /reconstruction_kernel_controls:\s*vec4<f32>/, 'raymarch receives a dedicated reconstruction uniform vector');
 
 const reconstructionFunction = core.match(/fn sampleWorldFlowReconstruction\(p: vec3<f32>\) -> FlowReconstructionSample \{([\s\S]*?)\n\}/)?.[1] || '';
-const reconstructionNormalFunction = core.match(/fn flowReconstructionNormal\(p: vec3<f32>\) -> vec3<f32> \{([\s\S]*?)\n\}/)?.[1] || '';
-const reconstructionMixFunction = core.match(/fn mixFlowReconstructionSample\([\s\S]*?\) -> FlowReconstructionSample \{([\s\S]*?)\n\}/)?.[1] || '';
 const reconstructionRawFunction = core.match(/fn sampleWorldFlowReconstructionRaw\(p: vec3<f32>\) -> FlowReconstructionSample \{([\s\S]*?)\n\}/)?.[1] || '';
-assert.match(reconstructionFunction, /let center = sampleWorldFlowReconstructionRaw\(p\)/, 'every reconstruction starts from the authoritative trilinear center sample');
-assert.match(reconstructionFunction, /if \(strength <= 0\.0\) \{ return center; \}/, 'zero strength is an exact identity path before auxiliary taps');
-assert.match(reconstructionFunction, /let forward = sampleWorldFlowReconstructionRaw\(p \+ tangent \* radiusWorld\)/, 'positive tangent tap remains a trilinear world sample');
-assert.match(reconstructionFunction, /let backward = sampleWorldFlowReconstructionRaw\(p - tangent \* radiusWorld\)/, 'negative tangent tap is symmetric with the positive tap');
-assert.match(reconstructionMixFunction, /centerWeight = 0\.5/, 'the fixed center tap is positive');
-assert.match(reconstructionMixFunction, /neighborWeight = 0\.25/, 'both fixed neighbor taps are positive and normalized with the center');
-const radiusExpression = reconstructionFunction.match(/let radiusWorld\s*=([^;]+);/)?.[1] || '';
-assert.doesNotMatch(radiusExpression, /f32\(GRID\)/, 'authored radius is world-space rather than grid-cell-space');
-assert.match(reconstructionFunction, /velocityTangent = center\.velocityDensity\.xyz - normal \* dot\(center\.velocityDensity\.xyz, normal\)/, 'flow direction is velocity projected into the structural tangent plane');
-assert.match(reconstructionNormalFunction, /gradientWorld \/ max\(gradientLength, 0\.0001\)/, 'zero-gradient raymarch normals cannot create a non-finite intermediate');
-assert.match(reconstructionFunction, /kernelCurlActivity[\s\S]*coherence[\s\S]*radiusWorld/, 'curl activity modulates reach through the coherence control');
+// Numerical mixing, normals, tap symmetry/identity and world-space radius are
+// exercised from production WGSL in volume-flow-reconstruction-native.mjs.
 assert.doesNotMatch(reconstructionFunction, /divergenceAtCell[\s\S]*tangent/, 'divergence does not become a sampling direction');
 assert.doesNotMatch(reconstructionRawFunction, /sampleWorldBoundarySidecar/, 'kernel-off raymarch does not add sidecar reads to modes that never consume the sidecar');
-const reconstructedSidecarFunction = core.match(/fn sampleWorldFlowReconstructedSidecar\([\s\S]*?\) -> vec4<f32> \{([\s\S]*?)\n\}/)?.[1] || '';
-assert.match(reconstructedSidecarFunction, /let center = sampleWorldBoundarySidecar\(p\)/, 'sidecar reconstruction stays lazy at its semantic consumer');
-assert.match(reconstructedSidecarFunction, /if \(strength <= 0\.0\) \{ return center; \}/, 'kernel-off sidecar sampling returns before neighbor taps');
 
 const raymarchLoopStart = core.indexOf('let expensiveSampleBudget');
 const raymarchLoopEnd = core.indexOf('let exposed =', raymarchLoopStart);

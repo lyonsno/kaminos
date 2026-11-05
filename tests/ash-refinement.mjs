@@ -136,3 +136,8 @@ test('ground-only refined layers do not seed tops of elevated solid plates',()=>
  const all=seedRefinedLayer(p,solid,{blanketDepth:1,groundOnly:false},initial);
  assert.ok(all.some((v,i)=>v>0&&refinementCell(p,i).coord[1]>=4));
 });
+
+test('refined checkpoint collision mismatch carries the native strict-recovery code',async()=>{
+ const patch=await smallRefined(storageRenderer());
+ try{const state=await patch.snapshot();state.collisionIdentity=[{key:'0/missing',geometry:'saved',matrix:[]}];assert.throws(()=>patch.restore(state),error=>error.code==='ASH_CHECKPOINT_COLLISION_MISMATCH');}finally{patch.dispose();}
+});

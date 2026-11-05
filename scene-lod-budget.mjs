@@ -1327,11 +1327,20 @@ export function createSceneBeautyLodController({
     const gen = entry.generation;
     const url = level.source ?? `/api/read?root=generated-meshes&path=${sha}.glb`;
     const task = (async () => {
-      let rungRoot = null;
+      let rungRoot = null, collisionRoot = null;
       try {
         const bytes = await fetchBytes(url);
         if (await digest(bytes) !== sha) throw Error(`beauty LOD content mismatch for ${sha}`);
         rungRoot = await parseGlb(bytes);
+        // Display baking changes vertex identity. Keep the source node frame
+        // for saved ash collisions, with independently owned geometry/material.
+        collisionRoot = cloneBorrowedRung(THREE, rungRoot);
+        collisionRoot.traverse(m => {if(m.isMesh){m.geometry=m.geometry.clone();
+          // BufferGeometry.copy shares userData in the bundled Three build.
+          // Warp bases contain coordinates specific to this source frame.
+          m.geometry.userData={...m.geometry.userData};
+          delete m.geometry.userData.kaminosWarpBase;delete m.geometry.userData.kaminosWarpApplied;
+          m.material=Array.isArray(m.material)?m.material.map(x=>x.clone()):m.material.clone();}});
         bakeRungMeshesToRootSpace(THREE, rungRoot);
         rungRoot.traverse(m => {
           if (m.isMesh) {
@@ -1341,20 +1350,22 @@ export function createSceneBeautyLodController({
           }
         });
         if (disposed || entries.get(root) !== entry || entry.generation !== gen) {
-          disposeTree(rungRoot);
-          rungRoot = null;
+          disposeTree(rungRoot);disposeTree(collisionRoot);
+          rungRoot = collisionRoot = null;
           return;
         }
         if (typeof entry.warpFn === 'function') {
           const warpRes = applyRootVertexWarpToRung(THREE, rungRoot, entry.warpFn, {bounds: entry.unwarpedBounds});
+          applyRootVertexWarpToRung(THREE, collisionRoot, entry.warpFn, {bounds: entry.unwarpedBounds});
           if (warpRes.texelStretch > entry.texelStretch) entry.texelStretch = warpRes.texelStretch;
         }
         const releaseLighting = surfaceLighting?.registerProxyRoot?.(rungRoot) ?? null;
-        entry.rungs.set(sha, {sha, faces: level.faces, root: rungRoot, releaseLighting, warpFn: entry.warpFn, warpRevision: entry.warpRevision});
-        rungRoot = null;
+        entry.rungs.set(sha, {sha, faces: level.faces, root: rungRoot, collisionRoot, releaseLighting, warpFn: entry.warpFn, warpRevision: entry.warpRevision});
+        rungRoot = collisionRoot = null;
         onUpdate?.();
       } catch {
         if (rungRoot) disposeTree(rungRoot);
+        if (collisionRoot) disposeTree(collisionRoot);
       } finally {
         entry.inFlight.delete(sha);
         pendingLoads.delete(task);
@@ -1403,6 +1414,7 @@ export function createSceneBeautyLodController({
     for (const r of entry.rungs.values()) {
       r.releaseLighting?.();
       disposeTree(r.root);
+      disposeTree(r.collisionRoot);
     }
     entry.rungs.clear();
     entry.inFlight.clear();
@@ -1450,6 +1462,7 @@ export function createSceneBeautyLodController({
         entry.texelStretch = texelStretch;
         for (const rungRecord of entry.rungs.values()) {
           const warpRes = applyRootVertexWarpToRung(THREE, rungRecord.root, curWarpFn, {bounds: entry.unwarpedBounds});
+          applyRootVertexWarpToRung(THREE, rungRecord.collisionRoot, curWarpFn, {bounds: entry.unwarpedBounds});
           if (warpRes.texelStretch > entry.texelStretch) entry.texelStretch = warpRes.texelStretch;
           rungRecord.warpFn = curWarpFn;
           rungRecord.warpRevision = curWarpRev;
@@ -1690,12 +1703,12 @@ export function createSceneBeautyLodController({
       ensureRungLoaded(root, entry, choice.level);
       if (entry.rungs.has(choice.tier)) {
         const rec = entry.rungs.get(choice.tier);
-        return {tier: choice.tier, sha: choice.tier, faces: rec.faces, root: rec.root, worldError: choice.worldError};
+        return {tier: choice.tier, sha: choice.tier, faces: rec.faces, root: rec.collisionRoot, worldError: choice.worldError};
       }
       for (const cand of choice.admissible ?? []) {
         if (entry.rungs.has(cand.tier)) {
           const rec = entry.rungs.get(cand.tier);
-          return {tier: cand.tier, sha: cand.tier, faces: rec.faces, root: rec.root, worldError: cand.worldError};
+          return {tier: cand.tier, sha: cand.tier, faces: rec.faces, root: rec.collisionRoot, worldError: cand.worldError};
         }
       }
       if (entry.inFlight.size > 0) return {pending: true};
