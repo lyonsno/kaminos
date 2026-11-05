@@ -4319,25 +4319,6 @@ const waterFeature = createAuthoredWaterFeature({
   report:setInfo,
 });
 const simFrameCoordinator = createSimFrameCoordinator();
-let lastPlannedSceneFrame = -1;
-function ensureSimFramePlan(frameNowMs = performance.now()) {
-  const existing = simFrameCoordinator.read().lastPlan;
-  if (existing && (lastPlannedSceneFrame === sceneFrameCount || Math.abs(frameNowMs - existing.nowMs) < 1)) return existing;
-  lastPlannedSceneFrame = sceneFrameCount;
-  const waterState = waterFeature.host?.state?.();
-  let ashActive = false, ashDue = false;
-  for (const entry of workingScene.objects) {
-    const ash = authoredAsh.get(entry.id); if (!ash) continue;
-    const active = isSceneItemVisible(entry.id) && entry.object.parent !== null && sceneViewerPaused !== true;
-    if (active) { ashActive = true; if (ash.due?.(frameNowMs, { active }) ?? true) ashDue = true; }
-  }
-  return simFrameCoordinator.planFrame({
-    nowMs: frameNowMs,
-    flame: { active: Boolean(volumePrototype?.isActive?.() && isSceneItemVisible('flame-field') && sceneViewerPaused !== true) },
-    water: { active: Boolean(waterFeature.active && isSceneItemVisible('water-field')), pending: Boolean(waterState?.solver?.pending), backlogSeconds: waterState?.clock?.backlogSeconds },
-    ash: { active: ashActive, due: ashDue },
-  });
-}
 window.kaminosSimFrameCoordinator = () => simFrameCoordinator.read();
 
 let sceneRepetitionController=null,sceneRepetitionInspector=null;
@@ -12075,6 +12056,25 @@ async function initScene() {
     prepare:()=>{syncViewportRendererSize();camera.updateMatrixWorld();fireLightFieldPass?.update();},
   });
   let sceneFrameCount = 0;
+  let lastPlannedSceneFrame = -1;
+  function ensureSimFramePlan(frameNowMs = performance.now()) {
+    const existing = simFrameCoordinator.read().lastPlan;
+    if (existing && (lastPlannedSceneFrame === sceneFrameCount || Math.abs(frameNowMs - existing.nowMs) < 1)) return existing;
+    lastPlannedSceneFrame = sceneFrameCount;
+    const waterState = waterFeature.host?.state?.();
+    let ashActive = false, ashDue = false;
+    for (const entry of workingScene.objects) {
+      const ash = authoredAsh.get(entry.id); if (!ash) continue;
+      const active = isSceneItemVisible(entry.id) && entry.object.parent !== null && sceneViewerPaused !== true;
+      if (active) { ashActive = true; if (ash.due?.(frameNowMs, { active }) ?? true) ashDue = true; }
+    }
+    return simFrameCoordinator.planFrame({
+      nowMs: frameNowMs,
+      flame: { active: Boolean(volumePrototype?.isActive?.() && isSceneItemVisible('flame-field') && sceneViewerPaused !== true) },
+      water: { active: Boolean(waterFeature.active && isSceneItemVisible('water-field')), pending: Boolean(waterState?.solver?.pending), backlogSeconds: waterState?.clock?.backlogSeconds },
+      ash: { active: ashActive, due: ashDue },
+    });
+  }
   ordinarySceneDepthProvider = () => {
     if (deviceRecoveryHeld() || !ordinaryDepthEnabled) return null;
     if (!sharedGpu?.device) throw new Error('ordinary-scene-depth-shared-device-unavailable');
