@@ -421,6 +421,16 @@ test('interactive queries use the displayed mesh for picking and a resident coar
   const [hit] = visibleSceneIntersections({raycaster, roots: query, camera, viewport: {width: 800, height: 600}});
   assert.equal(hit.point.z, 0.5, 'the repeated rung is hit in world space');
   assert.equal(controller.interactiveOwner(hit.object), root);
+  const rung=controller.listResidentRungs(root)[0].root;
+  const sourceMesh=rung.children[0];
+  sourceMesh.geometry.translate(-5,0,0);sourceMesh.position.x=5;sourceMesh.updateMatrix();
+  const converted=visibleSceneIntersections({raycaster,roots:controller.interactiveRoots([root],{matchDisplay:true}),camera,viewport:{width:800,height:600}});
+  assert.equal(converted.length>0,true,'a warmed query cache follows the burn consumer coordinate conversion');
+  assert.equal(converted[0].point.z,0.5);
+  sourceMesh.geometry.translate(5,0,0);sourceMesh.position.x=0;sourceMesh.updateMatrix();
+  const restored=visibleSceneIntersections({raycaster,roots:controller.interactiveRoots([root],{matchDisplay:true}),camera,viewport:{width:800,height:600}});
+  assert.equal(restored.length>0,true,'burn disposal restores the query hierarchy too');
+
   assert.equal(navigationPivot(camera, new THREE.Vector3(), new THREE.Vector2(), controller.interactiveRoots([root])).point.z, 0.5);
   assert.equal(hero.visible, true);
   assert.equal(repeat.visible, true);

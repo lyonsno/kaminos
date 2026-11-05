@@ -3073,6 +3073,12 @@ def should_auto_prepare_mesh_lods(sha, glb_bytes, role=None):
         return False
     if not isinstance(doc, dict):
         return False
+    surfel_extension = 'KAMINOS_trellis_surfels'
+    nodes = doc.get('nodes') if isinstance(doc.get('nodes'), list) else []
+    if (surfel_extension in (doc.get('extensionsUsed') or []) or
+            surfel_extension in (doc.get('extensions') or {}) or
+            any(isinstance(node, dict) and surfel_extension in (node.get('extensions') or {}) for node in nodes)):
+        return False
     extras = doc.get('extras')
     if isinstance(extras, dict):
         if 'lodNormalMap' in extras or isinstance(extras.get('trellisReconstruction'), dict):
@@ -3180,8 +3186,13 @@ def enqueue_mesh_lod_prepare(sha, server_port=None):
         _MESH_LOD_PREPARE_QUEUE.append((sha, port))
         if not _MESH_LOD_PREPARE_WORKER_STARTED:
             _MESH_LOD_PREPARE_WORKER_STARTED = True
-            t = threading.Thread(target=_mesh_lod_prepare_worker, name='kaminos-lod-prepare', daemon=True)
-            t.start()
+            try:
+                t = threading.Thread(target=_mesh_lod_prepare_worker, name='kaminos-lod-prepare', daemon=True)
+                t.start()
+            except Exception:
+                _MESH_LOD_PREPARE_WORKER_STARTED = False
+                _MESH_LOD_PREPARE_QUEUE.remove((sha, port))
+                raise
         return True
 
 
@@ -5398,10 +5409,14 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         except OSError as error:
             self.send_json({"error": str(error), "phase": "mesh-persistence"}, 500)
             return
-        if should_auto_prepare_mesh_lods(digest, content, role=role):
-            enqueue_mesh_lod_prepare(digest, server_port=self.server.server_address[1])
-        self.send_json({"schema": "kaminos.generated-mesh.v0", "sha256": digest,
-                        "bytes": length, "source": f"/api/read?root=generated-meshes&path={digest}.glb"})
+        receipt = {"schema": "kaminos.generated-mesh.v0", "sha256": digest,
+                   "bytes": length, "source": f"/api/read?root=generated-meshes&path={digest}.glb"}
+        try:
+            if should_auto_prepare_mesh_lods(digest, content, role=role):
+                enqueue_mesh_lod_prepare(digest, server_port=self.server.server_address[1])
+        except Exception as error:
+            receipt["lodPreparation"] = {"status": "failed", "phase": "mesh-lod-preparation", "error": str(error)}
+        self.send_json(receipt)
 
     def handle_ingest_splat(self, params):
         """Write a dropped PLY/SPZ into the experimental splat inbox."""

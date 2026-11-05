@@ -789,8 +789,12 @@ export function selectAshCollisionLod(levels = [], {
   return {...chosen, admissible};
 }
 
-function cloneBorrowedRung(THREE, node) {
-  const copy = node.isMesh ? new THREE.Mesh(node.geometry, node.userData?.kaminosOriginalMaterial ?? node.material) : new THREE.Group();
+function cloneBorrowedRung(THREE, node, existing = null) {
+  const copy = existing ?? (node.isMesh ? new THREE.Mesh() : new THREE.Group());
+  if(node.isMesh){
+    copy.geometry=node.geometry;
+    copy.material=node.userData?.kaminosOriginalMaterial ?? node.material;
+  }
   copy.name = node.name;
   copy.layers.mask = node.layers.mask;
   copy.position.copy(node.position);
@@ -801,7 +805,13 @@ function cloneBorrowedRung(THREE, node) {
   copy.visible = node.visible;
   copy.castShadow = node.castShadow;
   copy.receiveShadow = node.receiveShadow;
-  for (const child of node.children) copy.add(cloneBorrowedRung(THREE, child));
+  const children=node.children.map((child,i)=>{
+    const prior=copy.children[i];
+    const reusable=prior && Boolean(prior.isMesh)===Boolean(child.isMesh)?prior:null;
+    return cloneBorrowedRung(THREE,child,reusable);
+  });
+  copy.clear();
+  for(const child of children)copy.add(child);
   return copy;
 }
 
@@ -1490,6 +1500,7 @@ export function createSceneBeautyLodController({
         copies.set(source, proxy);
         interactiveOwners.set(proxy, root);
       }
+      cloneBorrowedRung(THREE, source, proxy.children[0]);
       while (proxy.children.length > repetitions.length + 1) proxy.remove(proxy.children.at(-1));
       while (proxy.children.length < repetitions.length + 1) {
         const repeat = new THREE.Group();
@@ -1498,6 +1509,7 @@ export function createSceneBeautyLodController({
         proxy.add(repeat);
       }
       for (const [i, repeat] of repetitions.entries()) {
+        cloneBorrowedRung(THREE, source, proxy.children[i + 1].children[0]);
         if (repeat.matrixAutoUpdate) repeat.updateMatrix();
         proxy.children[i + 1].matrix.copy(repeat.matrix);
       }

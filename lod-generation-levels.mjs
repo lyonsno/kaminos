@@ -210,7 +210,7 @@ export async function prepareGenerationLevels({decode = null, materialFields = n
       const stored = await receipt(ingest);
       if (!ingest.ok) { report.failedTier = tier.target; throw Error(`ingest failed for ${tier.target} (HTTP ${ingest.status}): ${JSON.stringify(stored)}`); }
       if (stored.sha256 !== digest) { report.failedTier = tier.target; throw Error(`ingest receipt for ${tier.target} does not name the stored bytes ${digest}: ${JSON.stringify(stored).slice(0, 300)}`); }
-      const level = {sha256: digest, faces: tier.faces, ...(typeof tier.target === 'number' ? {targetFaces: tier.target} : {}), route: tier.route,
+      let level = {sha256: digest, faces: tier.faces, ...(typeof tier.target === 'number' ? {targetFaces: tier.target} : {}), route: tier.route,
         ...(tier.textureSize !== undefined ? {textureSize: tier.textureSize} : {}),
         ...(tier.mergeFactor !== undefined ? {mergeFactor: tier.mergeFactor, resolution: tier.resolution, representation: tier.representation} : {}),
         ...(tier.closed !== undefined ? {closed: tier.closed} : {}),
@@ -218,6 +218,11 @@ export async function prepareGenerationLevels({decode = null, materialFields = n
         frameDrift: tier.frameDrift, error: tier.error,
         ...(tier.errorAgainstRawDecode ? {errorAgainstRawDecode: tier.errorAgainstRawDecode} : {}),
         ...(tier.normalMap ? {normalMap: tier.normalMap} : {})};
+      const previous = existingLevels.find(existing => existing.sha256 === digest);
+      if (previous) {
+        const {source: readUrl, ...record} = previous;
+        level = record;
+      }
       let register, registered;
       // A request or response lost in transport leaves the outcome unknown: stored, maybe registered.
       try { register = await fetch(`${server}/api/mesh-lods`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({source, level, supersede: replace})});
