@@ -73,6 +73,25 @@ test('observed base-Qwen root embedding declaration is supported without admitti
   const matching = structuredClone(manifest); matching.config.text_config.tie_word_embeddings = false;
   assert.equal(qwen35ModelLayout(matching).projections.size, 17);
 });
+test('observed FP32 A_log is admitted and uploaded without precision conversion', async () => {
+  const captured=JSON.parse(fs.readFileSync(new URL('./fixtures/qwen35/base-qwen-a-log.json',import.meta.url)));
+  const source=captured.tensors['model.layers.0.linear_attn.A_log'];
+  assert.equal(source.dtype,'F32');assert.deepEqual(source.shape,[32]);
+  const bytes=Buffer.from(source.hex,'hex');assert.equal(bytes.length,source.bytes);assert.equal(createHash('sha256').update(bytes).digest('hex'),source.sha256);
+  // Four actual source values exercise the small host-lifecycle geometry.
+  const raw=Uint8Array.from(bytes.subarray(0,16)),values=new Float32Array(raw.buffer);
+  const {manifest,fetchImpl:baseFetch}=fixture(),name='model.layers.0.linear_attn.A_log';
+  manifest.tensors[name]={file:'observed-alog.bin',offset:0,shape:[4],dtype:source.dtype,bytes:raw.length,sha256:createHash('sha256').update(raw).digest('hex')};
+  assert.equal(qwen35ModelLayout(manifest).vectors.get(name).dtype,'F32');
+  for(const mutate of [r=>r.dtype='U32',r=>r.dtype='F16',r=>r.bytes=8,r=>r.shape=[8]]){
+    const bad=structuredClone(manifest);mutate(bad.tensors[name]);assert.throws(()=>qwen35ModelLayout(bad),/A_log/);
+  }
+  const unrelated=structuredClone(manifest);unrelated.tensors['model.norm.weight'].dtype='F32';assert.throws(()=>qwen35ModelLayout(unrelated),/model.norm/);
+  const {device}=deviceFixture(),writes=new Map();device.queue.writeBuffer=(buffer,offset,data)=>{writes.set(buffer,Array.from(data));};
+  const model=new Qwen35TextModel(device,manifest,{control:{runDuty:f=>f()}});
+  const fetchImpl=url=>new URL(url).pathname.endsWith('/observed-alog.bin')?new Response(raw,{status:206,headers:{'content-range':`bytes 0-${raw.length-1}/${raw.length+1}`}}):baseFetch(url);
+  try{await model.load('http://fixture/',{fetchImpl});assert.deepEqual(writes.get(model.vectors.get(name)),Array.from(values));assert.deepEqual(writes.get(model.vectors.get('model.layers.0.linear_attn.joined')).slice(0,4),Array.from(values));}finally{await model.destroy();}
+});
 test('request validation precedes allocation and model teardown preserves borrowed device/control', async () => {
   const { manifest, fetchImpl } = fixture(), { device, buffers } = deviceFixture(), control = createWebGpuInferenceControl({ queue: device.queue });
   const model = new Qwen35TextModel(device, manifest, { control }); await model.load('http://localhost/model/', { fetchImpl });

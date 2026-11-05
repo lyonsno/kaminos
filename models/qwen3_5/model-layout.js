@@ -23,7 +23,11 @@ export function qwen35ModelLayout(manifest) {
     projections.set(name, { name, rows, columns, group: 64, weight: tensor(name + '.weight', [rows, columns / 8], 'U32'),
       scales: tensor(name + '.scales', [rows, columns / 64], 'BF16'), biases: tensor(name + '.biases', [rows, columns / 64], 'BF16') });
   }
-  function vector(name, shape) { vectors.set(name, tensor(name, shape, 'BF16')); }
+  function vector(name, shape, dtypes = ['BF16']) {
+    const dtype = tensors?.[name]?.dtype;
+    if (!dtypes.includes(dtype)) throw new Error(`missing or incompatible tensor ${name}`);
+    vectors.set(name, tensor(name, shape, dtype));
+  }
   const c = config, deltaWidth = 2 * c.linearKeyHeads * c.linearKeyDim + c.linearValueHeads * c.linearValueDim;
   linear('model.embed_tokens', c.vocabSize, c.hiddenSize); linear('lm_head', c.vocabSize, c.hiddenSize);
   vector('model.norm.weight', [c.hiddenSize]);
@@ -38,7 +42,7 @@ export function qwen35ModelLayout(manifest) {
       linear(root + '.linear_attn.in_proj_a', c.linearValueHeads, c.hiddenSize); linear(root + '.linear_attn.in_proj_b', c.linearValueHeads, c.hiddenSize);
       linear(root + '.linear_attn.out_proj', c.hiddenSize, c.linearValueHeads * c.linearValueDim);
       vector(root + '.linear_attn.conv1d.weight', [deltaWidth, c.convKernel, 1]);
-      vector(root + '.linear_attn.A_log', [c.linearValueHeads]); vector(root + '.linear_attn.dt_bias', [c.linearValueHeads]);
+      vector(root + '.linear_attn.A_log', [c.linearValueHeads], ['BF16', 'F32']); vector(root + '.linear_attn.dt_bias', [c.linearValueHeads]);
       vector(root + '.linear_attn.norm.weight', [c.linearValueDim]);
     } else {
       linear(root + '.self_attn.q_proj', 2 * c.queryHeads * c.headDim, c.hiddenSize);
