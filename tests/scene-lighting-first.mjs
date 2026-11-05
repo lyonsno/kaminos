@@ -10,18 +10,19 @@ import * as THREE from '../lib/three.core.js';
 const page=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const a=page.indexOf('async function loadSceneObjects('),b=page.indexOf('\nfunction writeAuthoredCameraView',a);
 assert.ok(a>=0&&b>a);
-function fixture(compile=async()=>{}){
+function fixture(compile=async()=>{}, {fire=false,match=false}={}){
  const scene=createWorkingScene(),events=[];
  const lifecycle=createSceneLifecycle({scene,roots:{detach(){},dispose(){}},
   records:{load:async record=>{events.push('construct:'+record.id);const object=new THREE.Group();scene.put({...record,object});return object;},restore(){}},
   groups:{restore:groups=>scene.setGroups(groups)},selection:{object:id=>scene.select(id?[id]:[],id),group(){}},
   context:{loaded:()=>events.push('water/ash initialization')},
  });
- const context=vm.createContext({sceneLifecycle:lifecycle,activeSceneComposition:null,authoredFlamePresent:false,
+ const context=vm.createContext({sceneLifecycle:lifecycle,activeSceneComposition:null,authoredFlamePresent:fire,
   ASH_OBJECT_TYPE:'retained-ash',ASH_SOURCE_TYPE:'ash-source',sceneLoadRequests:scene.loads,
   sceneGeometryPreview:{present:async()=>events.push('neutral'),presentLighting:async()=>{events.push('lit');return true;}},
   sceneLightingPreparation:{request:async()=>{events.push('compile');await compile();}},
   viewportDisplay:{hiddenIds:[]},sceneVisibilityContext:()=>({objects:scene.objects,groups:scene.groups}),itemVisible:()=>true,
+  document:{getElementById:()=>({checked:match})},setInfo:text=>events.push('status:'+text),
  });
  vm.runInContext(page.slice(a,b),context);
  return {scene,events,load:context.loadSceneObjects};
@@ -32,6 +33,16 @@ test('the actual page adapter restores and presents lighting before ash construc
  assert.equal(await f.load(records,'mesh',[],null,{},id,()=>f.events.push('saved lighting')),true);
  assert.deepEqual(f.events,['construct:mesh','construct:spot','neutral','saved lighting','compile','lit','construct:ash','water/ash initialization']);
  assert.deepEqual(f.scene.objects.map(row=>row.id),records.map(row=>row.id));
+});
+test('saved fire-camera matching keeps useful neutral geometry while lighting settings restore before domains',async()=>{
+ const f=fixture(async()=>{}, {fire:true,match:true}),id=f.scene.loads.begin();
+ assert.equal(await f.load([{id:'mesh'},{id:'ash',type:'retained-ash'}],null,[],null,null,id,()=>f.events.push('saved lighting')),true);
+ assert.deepEqual(f.events,['construct:mesh','neutral','saved lighting','status:Scene lighting restored · geometry preview · restoring ash, fire and water…','construct:ash','water/ash initialization']);
+});
+test('fire scenes with an ordinary camera can present ordinary lighting before the deferred producers',async()=>{
+ const f=fixture(async()=>{}, {fire:true,match:false}),id=f.scene.loads.begin();
+ await f.load([{id:'mesh'},{id:'ash',type:'retained-ash'}],null,[],null,null,id,()=>f.events.push('saved lighting'));
+ assert.ok(f.events.indexOf('lit')<f.events.indexOf('construct:ash'));assert.equal(f.events.filter(x=>x==='lit').length,1);
 });
 test('supersession during the real adapter lighting preparation cannot draw or start old domains',async()=>{
  let release;const gate=new Promise(resolve=>release=resolve),f=fixture(()=>gate),id=f.scene.loads.begin();

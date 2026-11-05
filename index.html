@@ -26865,6 +26865,13 @@ async function loadSceneObjects(records, activeId, groups = [], activeGroupId = 
       await sceneGeometryPreview?.present(loadRequestId,{isVisible});
       if(!current()||!prepareLighting)return;
       await prepareLighting();if(!current())return;
+      // The matched display camera belongs to the pending fire producer.
+      // Keep readable geometry until it restores, rather than drawing an
+      // independent-camera frame over the preview (dark fire-lit rooms vanish).
+      if(authoredFlamePresent&&document.getElementById('rendering-match-flame-camera').checked){
+        setInfo('Scene lighting restored · geometry preview · restoring ash, fire and water…');
+        return;
+      }
       await sceneLightingPreparation?.request(()=>{});if(!current())return;
       await sceneGeometryPreview?.presentLighting(loadRequestId,{isVisible});
     },
