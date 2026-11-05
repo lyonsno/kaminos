@@ -76,8 +76,23 @@ def read_page_reconstruction(file, expected_sha256, grid_size):
     faces = read(raw['decode']['triangles'], '<u4', 3)
     attrs = read(material['features'], '<f4', 6)
     coords = read(material['coordinates'], '<i4', 3)
-    # The raw mesh must be the same one the viewable GLB actually displays.
-    primitive = doc['meshes'][0]['primitives'][0]
+    # The codec displays source coordinates through its fixed (x,z,-y) basis.
+    # Accessor identity alone cannot establish that this is the displayed surface.
+    scene_id = doc.get('scene', 0)
+    scenes, nodes = doc['scenes'], doc['nodes']
+    basis = [1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1]
+    if (type(scene_id) is not int or not 0 <= scene_id < len(scenes)
+            or scenes[scene_id].get('nodes') != [0] or not nodes
+            or nodes[0].get('mesh') != 0 or nodes[0].get('matrix') != basis
+            or nodes[0].get('children') or doc.get('animations')
+            or any(key in nodes[0] for key in ('translation', 'rotation', 'scale', 'skin', 'weights'))
+            or nodes[0].get('extensions')):
+        raise ValueError('supported page reconstruction scene and source basis required')
+    primitives = doc['meshes'][0]['primitives']
+    if (len(primitives) != 1 or primitives[0].get('mode', 4) != 4
+            or primitives[0].get('targets') or primitives[0].get('extensions')):
+        raise ValueError('one displayed page triangle surface required')
+    primitive = primitives[0]
     for accessor_id, view_id, component, shape, count in (
             (primitive['attributes']['POSITION'], raw['decode']['vertices'], 5126, 'VEC3', len(vertices)),
             (primitive['indices'], raw['decode']['triangles'], 5125, 'SCALAR', faces.size)):
