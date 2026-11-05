@@ -46,11 +46,19 @@ export function divideSurface({recipe,geometry,joint,cuts}){
  }finally{disposeGeometry(source);panels.forEach(disposeGeometry);fresh.defs.forEach(d=>disposeGeometry(d.object));}
 }
 
+const actuatorReports=new WeakMap();
 export function actuatorReport(recipe){
- const rows=[];for(const [index,p]of recipe.pistons.entries()){
-  if(!p.hinge)continue;let lo=Infinity,hi=0,minArm=Infinity,lastSign=0,crossed=false;for(let i=0;i<=100;i++){const f=frames(recipe,i/100),a=pistonMountPoint(recipe,f,p.a,p.aOffset),b=pistonMountPoint(recipe,f,p.b,p.bOffset),h=f[recipe.nodes[p.b].parent].point,dx=b[0]-a[0],dy=b[1]-a[1],d=Math.hypot(dx,dy),arm=((b[0]-h[0])*dy-(b[1]-h[1])*dx)/(d||1);lo=Math.min(lo,d);hi=Math.max(hi,d);minArm=Math.min(minArm,Math.abs(arm));const sign=Math.sign(arm);if(lastSign&&sign!==lastSign)crossed=true;lastSign=sign;}
-  rows.push({index,minLength:lo,maxLength:hi,minMomentArm:minArm,deadCenter:crossed||minArm<.005,method:'101 uniform pose samples; clearance unverified'});
- }return rows;
+ // This report describes the authored cycle, not the displayed frame. Recipes
+ // can be edited in place, so identity alone is insufficient for invalidation.
+ const key=JSON.stringify([recipe.nodes,recipe.pistons]),cached=actuatorReports.get(recipe);
+ if(cached?.key===key)return cached.rows;
+ const hinges=recipe.pistons.flatMap((p,index)=>p.hinge?[{p,index,lo:Infinity,hi:0,minArm:Infinity,lastSign:0,crossed:false}]:[]);
+ if(hinges.length)for(let i=0;i<=100;i++){
+  const f=frames(recipe,i/100);
+  for(const row of hinges){const {p}=row,a=pistonMountPoint(recipe,f,p.a,p.aOffset),b=pistonMountPoint(recipe,f,p.b,p.bOffset),h=f[recipe.nodes[p.b].parent].point,dx=b[0]-a[0],dy=b[1]-a[1],d=Math.hypot(dx,dy),arm=((b[0]-h[0])*dy-(b[1]-h[1])*dx)/(d||1);row.lo=Math.min(row.lo,d);row.hi=Math.max(row.hi,d);row.minArm=Math.min(row.minArm,Math.abs(arm));const sign=Math.sign(arm);if(row.lastSign&&sign!==row.lastSign)row.crossed=true;row.lastSign=sign;}
+ }
+ const rows=Object.freeze(hinges.map(r=>Object.freeze({index:r.index,minLength:r.lo,maxLength:r.hi,minMomentArm:r.minArm,deadCenter:r.crossed||r.minArm<.005,method:'101 uniform pose samples; clearance unverified'})));
+ actuatorReports.set(recipe,{key,rows});return rows;
 }
 export function closestSurfacePatch(geometry,id,position){
  const item=geometry.bodies.find(b=>b.id===id);if(!item)throw Error('Missing mounting body');const root=loader.parse(item.object),query=new T.Vector3(...position),best=new T.Vector3(),triangle=new T.Triangle();let distance=Infinity;
