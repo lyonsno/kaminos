@@ -84,7 +84,7 @@ test('actual scene load reaches camera, postprocessing and file publication with
   getVolumePrimitiveState:()=>({schema:'kaminos.volume-primitives.v0',primitives:[]}),flameDomainTranslation:[0,0,0],flameDomainScale:1,flameDomainFollowSource:true,
   planSceneRestore,assertSceneObjectsReloadable(){},isCompositionAuthoring:()=>false,viewportDisplay:{},activeSceneComposition:null,
   FLAME_EMITTER_TYPE:'flame-emitter',FLAME_EMITTER_ID:'flame-emitter',PROCEDURAL_MESH_TYPE:'procedural-mesh',volumePrototype:null,
-  flameEmitterPose:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},setAnnularBurner(){},setInfo:text=>info.push(text),setFlameDomainTranslation(){},loadSceneObjects:async(rows,_active,_groups,_group,_water,_request,prepareLighting)=>{for(const row of rows)c.mountSceneSpotLight(row);await prepareLighting();lighting.push('domains');return true;},
+  flameEmitterPose:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},setAnnularBurner(){},setInfo:text=>info.push(text),setFlameDomainTranslation(){},loadSceneObjects:async(rows,_active,_groups,_group,_water,_request,_startupLodHint,prepareLighting)=>{for(const row of rows)c.mountSceneSpotLight(row);await prepareLighting();lighting.push('domains');return true;},
   applyFlameEmitterPose(){},setVolumePrimitivesState(){},location:{search:''},URLSearchParams,
   camera:new THREE.PerspectiveCamera(),controls:{target:new THREE.Vector3(),update(){}},setSceneGIControls:value=>lighting.push(['GI',value]),autoCalibrateSceneGIFromScene:()=>lighting.push('calibrate'),saveSettings(){},removeBackdrop(){},
   document:{getElementById:()=>({style:{}})},sceneCameras:null,cameraViews:null,sceneNavigation:null,cameraAuthoring:null,localLiquidFailure:null});

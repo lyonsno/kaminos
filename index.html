@@ -28691,8 +28691,7 @@ function restoreSavedSceneLighting(data) {
   // Apply postprocessing
   restoreFireRendering(document,data.postprocessing?.fireLighting);
   sceneBloom.set(checkedSceneBloom(data.postprocessing?.bloom??{}));bloomControls?.sync();
-  // Scenes without a saved GI record use defaults, independent of prior tuning.
-  setSceneGIControls(data.postprocessing?.sceneGI ?? {});
+  // GI already restores before coarse preparation. Preserve that stage here.
   if (data.postprocessing) {
     const ao = data.postprocessing.ao;
     if (ao) {sceneAO.restoreDocument(ao);saveSettings();}

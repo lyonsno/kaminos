@@ -207,3 +207,19 @@ test('superseding lighting presentation cannot construct the old deferred field 
  const current=f.state.loads.begin();await f.lifecycle.replace([{id:'new'}],{loadRequestId:current});release();
  assert.equal(await pending,false);assert.deepEqual(f.state.objects.map(row=>row.id),['new']);
 });
+
+test('prepared assets span the lighting barrier and deferred construction, then release once',async()=>{
+ const f=fixture(),events=[],batch={released:false};
+ f.adapters.records.prepare=async rows=>{events.push('prepare');assert.deepEqual(rows.map(r=>r.id),['ash','geometry']);return batch;};
+ f.adapters.records.load=async(record,_id,prepared)=>{assert.equal(prepared,batch);assert.equal(batch.released,false);events.push(record.id);return f.add(record.id).object;};
+ f.adapters.records.releasePrepared=prepared=>{assert.equal(prepared,batch);assert.equal(batch.released,false);batch.released=true;events.push('release');};
+ await f.lifecycle.replace([{id:'ash'},{id:'geometry'}],{deferRecord:r=>r.id==='ash',beforeDeferred:()=>{assert.equal(batch.released,false);events.push('lighting');}});
+ assert.deepEqual(events,['prepare','geometry','lighting','ash','release']);assert.deepEqual(f.state.objects.map(r=>r.id),['ash','geometry']);
+});
+test('prepared assets release after lighting refusal without constructing a deferred domain',async()=>{
+ const f=fixture(),events=[],batch={};f.adapters.records.prepare=async()=>batch;
+ f.adapters.records.load=async(record,_id,prepared)=>{assert.equal(prepared,batch);events.push(record.id);return f.add(record.id).object;};
+ f.adapters.records.releasePrepared=prepared=>{assert.equal(prepared,batch);events.push('release');};
+ await assert.rejects(f.lifecycle.replace([{id:'ash'},{id:'geometry'}],{deferRecord:r=>r.id==='ash',beforeDeferred:()=>{throw Error('lighting refused');}}),/lighting refused/);
+ assert.deepEqual(events,['geometry','release']);assert.equal(f.state.objects.length,0);
+});
