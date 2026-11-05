@@ -30,6 +30,10 @@ export function refinementVertexWGSL(p, arena) {
  if(above!=0xffffffffu){capped=(*solid)[above]!=0u||(*density)[above]>0.0001;}
  var corner=vec4<f32>(top,1.0,0.0,0.0);
  if(!capped){corner=ash_refined_corner(vec2<i32>(round(point.xz)),top,density,solid);}
+ // Apply the field edge treatment to subsurface walls as well as top faces.
+ let edge=min(min(point.x,f32(ASH_FINE_DIMS.x)-point.x),min(point.z,f32(ASH_FINE_DIMS.z)-point.z));
+ let span=clamp(f32(min(ASH_FINE_DIMS.x,ASH_FINE_DIMS.z))*0.04,1.5,8.0);
+ corner.y=min(corner.y,clamp(0.22+0.78*edge/span,0.0,1.0));
  if(face==3u||(!capped&&uv.y>0.5&&abs(point.y-top)<0.00001)){point.y=corner.x;}
  var normal=vec3<f32>(0.0);normal[face/2u]=select(-1.0,1.0,face%2u==1u);
  let gradient=vec3<f32>(corner.z,1.0,corner.w);
