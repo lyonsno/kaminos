@@ -82,6 +82,8 @@ export async function compileSceneLighting(renderer, passes, {live=false,visibil
 export function createLightingPreparation({compile,liveCompile,hold,recover,onStatus=()=>{}}) {
   let task=null,revision=0,completed=0,compiling=false,external=false,held=false,error=null;
   const changes=[],disposals=[];
+  let rendererTask=Promise.resolve();
+  const withRenderer=operation=>{const next=rendererTask.then(operation);rendererTask=next.catch(()=>{});return next;};
   let exclusive=!liveCompile;
   let drain;
   const state=()=>({held,compiling,pending:completed!==revision,error,revision,completed});
@@ -102,8 +104,10 @@ export function createLightingPreparation({compile,liveCompile,hold,recover,onSt
       while(completed!==revision){
         await drain; // A live edit can acquire an exclusive hold during its compile.
         const current=revision;
-        for(const apply of changes.splice(0))await apply();
-        await (exclusive||external?compile:liveCompile)({isCurrent:()=>revision===current});
+        await withRenderer(async()=>{
+          for(const apply of changes.splice(0))await apply();
+          await (exclusive||external?compile:liveCompile)({isCurrent:()=>revision===current});
+        });
         completed=current;
       }
           for(const dispose of disposals.splice(0))dispose();
@@ -112,6 +116,6 @@ export function createLightingPreparation({compile,liveCompile,hold,recover,onSt
     task.catch(()=>{}); // UI callers surface failure through onStatus.
     return task;
   }
-  return {request,state,deferDisposal:dispose=>disposals.push(dispose),retry:()=>recover?.()??request(),whenIdle:()=>task??(error?Promise.reject(Error(error)):Promise.resolve()),
+  return {request,state,withRenderer,deferDisposal:dispose=>disposals.push(dispose),retry:()=>recover?.()??request(),whenIdle:()=>task??(error?Promise.reject(Error(error)):Promise.resolve()),
     setExternalHold(value){external=Boolean(value);const result=syncHold();publish();return result;}};
 }

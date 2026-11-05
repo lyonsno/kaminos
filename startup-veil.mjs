@@ -7,12 +7,15 @@ export const FAILED_CLASS = 'kaminos-startup-failed';
 
 /** Lift the veil when startup settles; a failure stays visible and is rethrown. */
 export async function settleStartupVeil(document, startup) {
+  let status = 'workspace-visible';
   try {
     return await startup;
   } catch (error) {
+    status = 'failed';
     document.body.classList.add(FAILED_CLASS);
     throw error;
   } finally {
+    document.defaultView?.kaminosStartup?.finish(status);
     document.body.classList.remove(STARTING_CLASS);
     document.getElementById('kaminos-startup-veil')?.remove();
   }

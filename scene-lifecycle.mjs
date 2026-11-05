@@ -30,6 +30,7 @@ export function createSceneLifecycle({scene,roots,records,groups,selection,conte
     const loaded=[];
     try{
       for(const record of values){
+        if(context.beforeLoad){await context.beforeLoad(record,loadRequestId);if(!current(loadRequestId))return false;}
         const object=await records.load(record,loadRequestId);
         if(!current(loadRequestId))return false;
         const entry=scene.find(record.id);

@@ -37,7 +37,7 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
   const gridGroups=Math.ceil(config.gridCells/64),gridX=Math.min(gridGroups,dispatchLimit),gridY=Math.ceil(gridGroups/gridX);
   if(gridY>dispatchLimit)throw Error('MLS grid exceeds effective two-dimensional dispatch capacity');
   const buffer=(size,usage,label)=>{const b=device.createBuffer({size,usage,label});owned.push(b);return b;};
-  const U=GPUBufferUsage,clock=createMlsClock(config.dt),plan=createMlsEmissionPlan(config);
+  const U=GPUBufferUsage,clock=createMlsClock(config.dt,{maxSubstepsPerBatch:config.maxSubstepsPerBatch,maxBacklogSeconds:config.maxBacklogSeconds}),plan=createMlsEmissionPlan(config);
   const timer=createWebGpuGpuTimer({device,queue:device.queue,options:profile}),timingBatches=[];
   let support=null;
   let live=validateMlsPacket(packet),paused=false,pending=false,failure=null,disposed=false,time=0,pendingCompletion=Promise.resolve();
@@ -170,10 +170,10 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
       setSceneColliders(records){if(!support)throw Error('MLS scene support was not installed');if(support.update(records)){kernels[2].group=kernels[2].refresh();update.group=update.refresh();}return support.read();},
       setPacket(packet){live=validateMlsPacket(packet);},
       setPaused(value){clock.observe(now(),paused);paused=Boolean(value);},
-      advance(nowMs=now(),epochMs=Date.now()){
+      advance(nowMs=now(),epochMs=Date.now(),options={}){
         if(disposed||failure)throw Error(failure||'MLS solver disposed');
         clock.observe(nowMs,paused);if(pending||paused)return false;
-        const steps=clock.advance(nowMs,paused);return steps?execute(steps,epochMs):false;
+        const steps=clock.advance(nowMs,paused,options?.maxSteps);return steps?execute(steps,epochMs):false;
       },
       async advanceTo(target,epochMs){
         if(disposed||failure)throw Error(failure||'MLS solver disposed');
