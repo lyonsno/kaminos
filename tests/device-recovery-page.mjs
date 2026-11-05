@@ -10,7 +10,7 @@ function fixture({loading=false,fail=false,present=true}={}){
  const volume=()=>({isActive:()=>true,debugState:()=>({simulationPaused:false}),retireLostDevice:no,setActive:async()=>{},dispose:async()=>{},setSceneCompositionPresentation:no,relocateOrdinaryDomain:no,setVolumePrimitives:no,setSimulationPaused:no});
  const ctx={console,URLSearchParams,Error,deviceRecovery:null,createDeviceRecovery:o=>(hooks=o,{}),renderer:renderer({destroy:no}),
  volumePrototype:volume(),flameFeature:{present,setActive:async()=>{if(fail)throw Error('late activation failure');}},activeSceneComposition:null,
- waterFeature:{host:null,paused:false,setup:{},isLoading:()=>loading,restart(){events.push('water-retire');this.host=null;},async recover(){this.host={device:ctx.renderer.backend.device};return true;}},
+ waterFeature:{host:null,paused:false,setup:{},recoveryRequested:loading,isLoading:()=>loading,restart(){events.push('water-retire');this.host=null;},async recover(){this.host={device:ctx.renderer.backend.device};return true;}},
  environmentLoader:{invalidateResources:no},transportPrototype:null,authoredWaterFlameTransportActive:false,authoredFlameHDRActive:false,frameComposition:{setForegroundServiceActive:no},
  authoredAsh:new Map(),workingScene:{objects:[]},compositionModule:null,fingerFluidPyroCompositionRequested:()=>false,
  samHostContext:{inferenceSession:{close:async()=>events.push('sam-close')}},samHostConfig:{mounted:true},samHostDeviceRequirements:()=>{},samImageToolsPromise:null,
@@ -41,5 +41,13 @@ function fixture({loading=false,fail=false,present=true}={}){
 }
 {
  const f=fixture({present:false});await f.hooks.stop();await f.run();assert.deepEqual(f.routes,[[]],'cleared flame must not restore URL lighting');
+}
+{
+ const f=fixture();
+ // The ordinary frame error path has already retired the failed runtime.
+ f.ctx.waterFeature.recoveryRequested=true;
+ assert.equal(f.ctx.waterFeature.host,null);assert.equal(f.ctx.waterFeature.isLoading(),false);
+ await f.hooks.stop();await f.run();
+ assert(f.ctx.waterFeature.host,'requested water must restart even if its failed runtime was retired before loss notification');
 }
 console.log('page recovery preserves passive SAM, pending water and live lighting; cleans failed candidates and collision textures');

@@ -12240,7 +12240,7 @@ async function initScene() {
   deviceRecovery=createDeviceRecovery({device:renderer.backend.device,
     stop(){
       recoverySimulation??={flame:!!volumePrototype,active:!!volumePrototype?.isActive(),paused:!!volumePrototype?.debugState().simulationPaused,
-        water:!!waterFeature.host||waterFeature.isLoading(),waterPaused:waterFeature.paused,
+        water:waterFeature.recoveryRequested,waterPaused:waterFeature.paused,
         flamePresent:flameFeature.present||!!activeSceneComposition,
         flameRoute:Object.fromEntries([...fireLightFieldRouteParams(),...Object.entries(fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()))])};
       environmentLoader.invalidateResources();

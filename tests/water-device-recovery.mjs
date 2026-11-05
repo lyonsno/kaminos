@@ -17,3 +17,17 @@ console.log('Water restarts on the replacement device, retaining play/pause');
  loadHost:async()=>({createAuthoredWaterHost:async options=>{inputs=options.emitters;return {setEmitters(){},setPaused(v){this.paused=v;},state:()=>({mode:'finite_drop'}),dispose(){}};}})});
  f.setup={};await f.recover(false);assert.deepEqual(inputs,enabled,'recovery must not reseed hidden emitters');assert.equal(f.paused,false);assert.equal(f.host.paused,true,'hidden water stays GPU-paused without changing authored pause');
 }
+{
+ // A readback can reject before GPUDevice.lost is delivered. Losing the
+ // disposable host must not erase the authored choice to run this water.
+ await feature.release();feature.setPaused(true);
+ feature.fail(new Error('readback aborted before loss delivery'));
+ assert.equal(feature.host,null);
+ assert.equal(feature.recoveryRequested,true,'failed host must retain the request to run water');
+ assert.equal(feature.paused,true);
+ feature.restart(feature.setup);device=4;
+ if(feature.recoveryRequested)await feature.recover(feature.paused);
+ assert.equal(feature.host.device,4);assert.equal(feature.paused,true);
+ feature.reset();assert.equal(feature.recoveryRequested,false,'explicit reset keeps initial preview across loss');
+ await feature.release();feature.clear();assert.equal(feature.recoveryRequested,false,'removed water must not reappear');
+}
