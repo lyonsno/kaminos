@@ -1,8 +1,52 @@
 // kaminos-test: node
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGpuTiledAsh} from '../ash/tile-gpu.mjs';
+import {createGpuTiledAsh,tileShader} from '../ash/tile-gpu.mjs';
+import {patchLayout} from '../ash/gpu-plan.mjs';
 // Local validation only: fake storage never executes WGSL or supplies GPU evidence.
+test('tileShader culls all bottom faces, subsurface top faces, and sloped run merges, and unifies corner height and perimeter cover',async()=>{
+ const code=tileShader(patchLayout({cellSize:0.016,bounds:{min:[0,0,0],max:[1,1,1]},tileSize:16}));
+ assert.match(code,/flat_top\(c\)/,'run-merging on top faces must require a flat 3x3 interior neighborhood so sloped edges never tear horizontal T-junction slits');
+ assert.match(code,/flat_run_width\(/,'top-face run merging coalesces 2D width x depth rectangles across coplanar tile rows');
+ assert.match(code,/\(\(width-1u\)\+\(depth-1u\)\*B\)\*V\*6u/,'2D top-face rectangles pack width and depth into the single u32 face record');
+ assert.match(code,/abs\(dq-d0\)>0\.005/,'flat_top merges coplanar fractional top blankets within tight 0.005 fill tolerance for 2D rectangles');
+ const B=16,coalesce2D=mask=>{
+  const runW=(x,z)=>{if(!mask(x,z)||(x>0&&mask(x-1,z)))return 0;let w=1;while(x+w<B&&mask(x+w,z))w++;return w;};
+  const rects=[];
+  for(let z=0;z<B;z++)for(let x=0;x<B;x++){
+   if(!mask(x,z))continue;
+   const w=runW(x,z);if(w===0)continue;
+   if(z>0&&runW(x,z-1)===w)continue;
+   let d=1;while(z+d<B&&runW(x,z+d)===w)d++;
+   rects.push({x,z,w,d});
+  }
+  return rects;
+ };
+ assert.deepEqual(coalesce2D(()=>true),[{x:0,z:0,w:16,d:16}],'uniform 16x16 flat tile coalesces into 1 single 16x16 quad');
+ for(const mask of [(x,z)=>(x+z)%3!==0,(x,z)=>x>=2&&x<13&&z>=3&&z<11,(x,z)=>((x*7+z*13)&3)!==1]){
+  const rects=coalesce2D(mask),covered=Array.from({length:B*B},()=>0);
+  for(const {x,z,w,d} of rects)for(let dz=0;dz<d;dz++)for(let dx=0;dx<w;dx++)covered[(z+dz)*B+(x+dx)]++;
+  for(let z=0;z<B;z++)for(let x=0;x<B;x++)assert.equal(covered[z*B+x],mask(x,z)?1:0,'2D rectangle coalescing partitions flat_top cells with zero overlap or gaps');
+ }
+ assert.match(code,/if\(any\(c>=p\.dims\.xyz\)\|\|face==2u\)\{return vec2<f32>\(-1\);\}/,'all downward bottom faces must be culled including on elevated colliders');
+ assert.match(code,/if\(face==3u\)\{/,'top faces must only emit at the true top of each column stack, never on subsurface layers with a < 1.0 under upper ash');
+ assert.match(code,/if\(!capAbove\)\{return vec2<f32>\(-1\);\}/,'uncapped cells must omit redundant vertical side quads');
+ globalThis.GPUBufferUsage={STORAGE:1,COPY_SRC:2,COPY_DST:4,INDIRECT:8,UNIFORM:16,MAP_READ:32};globalThis.GPUShaderStage={COMPUTE:4};
+ const attributes=new Map();
+ const device={limits:{maxStorageBufferBindingSize:1e7,maxBufferSize:1e7,maxComputeWorkgroupsPerDimension:65535},
+  createBuffer:({size})=>({size,destroy(){}}),queue:{writeBuffer(){},submit(){}},
+  createShaderModule:()=>({getCompilationInfo:async()=>({messages:[]})}),createBindGroupLayout:()=>({}),createPipelineLayout:()=>({}),createComputePipelineAsync:async()=>({}),createBindGroup:()=>({}),
+  createCommandEncoder:()=>({beginComputePass:()=>({setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},dispatchWorkgroupsIndirect(){},end(){}}),copyBufferToBuffer(){},finish(){return {};}})};
+ const backend={device,isWebGPUBackend:true,createStorageAttribute:a=>attributes.set(a,{buffer:device.createBuffer({size:a.array.byteLength})}),createIndirectStorageAttribute:a=>attributes.set(a,{buffer:device.createBuffer({size:a.array.byteLength})}),get:a=>attributes.get(a),destroyAttribute:a=>attributes.delete(a)};
+ const patch=await createGpuTiledAsh({renderer:{backend},cellSize:1,bounds:{min:[0,0,0],max:[1,2,1]},solid:new Uint8Array(2),tileSize:1});
+ try{
+  assert.equal(patch.root.castShadow,false,'ash sheet omits shadow-map double pass and static-light caster conflicts');
+  assert.equal(patch.root.receiveShadow,true,'ash sheet still receives scene shadows');
+  assert.equal(patch.root.material.transparent,false,'ash material stays in opaque MRT/GI pass');
+  assert.equal(patch.root.material.alphaTest,0.5,'ash material discards etched perimeter pixels via alphaTest');
+  assert.ok(patch.root.material.opacityNode,'ash material wires perimeter opacity etching node');
+ }finally{patch.dispose();}
+});
 test('tiled restore rejects material loss and ledger disagreement before any upload',async()=>{
  globalThis.GPUBufferUsage={STORAGE:1,COPY_SRC:2,COPY_DST:4,INDIRECT:8,UNIFORM:16,MAP_READ:32};globalThis.GPUShaderStage={COMPUTE:4};
  const writes=[],attributes=new Map();
@@ -19,4 +63,36 @@ test('tiled restore rejects material loss and ledger disagreement before any upl
   assert.throws(()=>patch.restore({...state,values:[1,0],volume:2}),/volume|material|ledger/i);assert.equal(writes.length,before);
   patch.restore({...state,values:[1,0]});assert.ok(writes.length>before);assert.equal(patch.read().volume,1);
  }finally{patch.dispose();}
+});
+import {Mesh,BoxGeometry,MeshBasicMaterial} from '../lib/three.core.js';
+test('tiled restore rejects moved or missing colliders by default, while allowCollisionUpgrade admits proxy-collapsed colliders at identical poses',async()=>{
+ globalThis.GPUBufferUsage={STORAGE:1,COPY_SRC:2,COPY_DST:4,INDIRECT:8,UNIFORM:16,MAP_READ:32};globalThis.GPUTextureUsage={TEXTURE_BINDING:1,STORAGE_BINDING:2,COPY_SRC:4,COPY_DST:8};globalThis.GPUShaderStage={COMPUTE:4};
+ const attributes=new Map();
+ const device={limits:{maxTextureDimension3D:256,maxStorageBufferBindingSize:1e7,maxBufferSize:1e7,maxComputeWorkgroupsPerDimension:65535},
+  createBuffer:({size})=>({size,destroy(){}}),createTexture:()=>({createView:()=>({}),destroy(){}}),queue:{writeBuffer(){},submit(){}},
+  createShaderModule:()=>({getCompilationInfo:async()=>({messages:[]})}),createBindGroupLayout:()=>({}),createPipelineLayout:()=>({}),createComputePipeline:()=>({}),createComputePipelineAsync:async()=>({}),createBindGroup:()=>({}),
+  createCommandEncoder:()=>({clearBuffer(){},copyTextureToTexture(){},beginComputePass:()=>({setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},dispatchWorkgroupsIndirect(){},end(){}}),copyBufferToBuffer(){},finish(){return {};}})};
+ const backend={device,isWebGPUBackend:true,createStorageAttribute:a=>attributes.set(a,{buffer:device.createBuffer({size:a.array.byteLength})}),createIndirectStorageAttribute:a=>attributes.set(a,{buffer:device.createBuffer({size:a.array.byteLength})}),get:a=>attributes.get(a),destroyAttribute:a=>attributes.delete(a)};
+ const m=new Mesh(new BoxGeometry(.4,.4,.4),new MeshBasicMaterial());m.position.set(.5,.5,.5);m.updateMatrixWorld(true);
+ const patch=await createGpuTiledAsh({renderer:{backend},cellSize:1,bounds:{min:[0,0,0],max:[1,2,1]},solid:new Uint8Array(2),tileSize:1,sceneRecords:()=>[{id:'burner',key:'burner:0',object:m}]});
+ try{
+  patch.syncScene();
+  const current=patch.read().sceneCollision.members;
+  const legacySavedCollision=[
+   {key:'burner:0',geometry:'old-part-0:24:36:16',matrix:current[0].matrix},
+   {key:'burner:1',geometry:'old-part-1:120:360:16',matrix:current[0].matrix},
+  ];
+  const state={schema:'kaminos.tiled-ash.v1',collisionIdentity:legacySavedCollision,layout:patch.layout,values:[1,0],pendingTiles:[],steps:5,seededVolume:1,volume:1,retainedVolume:1,lastContact:null,
+   falling:{schema:'kaminos.ash-fall.v1',capacity:1,particles:Array(8).fill(0),state:[0,0,0,0],queuedVolume:0,requestedVolume:0}};
+  assert.throws(()=>patch.restore(state),/scene geometry or poses differ/i,'strict restore rejects changed collider sub-meshes');
+  assert.doesNotThrow(()=>patch.restore(state,{allowCollisionUpgrade:true}),'scene-load restore admits proxy-collapsed collider at identical object pose');
+  const movedMatrix=[...current[0].matrix];movedMatrix[12]+=2;
+  const movedState={...state,collisionIdentity:[{key:'burner:0',geometry:'old-part-0:24:36:16',matrix:movedMatrix}]};
+  assert.throws(()=>patch.restore(movedState,{allowCollisionUpgrade:true}),/scene geometry or poses differ/i,'moved pose still rejected even with allowCollisionUpgrade');
+  const addedState={...state,collisionIdentity:[...legacySavedCollision,{key:'other:0',geometry:'box:24:36:16',matrix:current[0].matrix}]};
+  assert.throws(()=>patch.restore(addedState,{allowCollisionUpgrade:true}),/scene geometry or poses differ/i,'added/removed collider object ID still rejected');
+  const secondPose=[...current[0].matrix];secondPose[12]+=1.5;
+  const missingPlacementState={...state,collisionIdentity:[...legacySavedCollision,{key:'burner:2',geometry:'old-part-2:24:36:16',matrix:secondPose}]};
+  assert.throws(()=>patch.restore(missingPlacementState,{allowCollisionUpgrade:true}),/scene geometry or poses differ/i,'missing saved placement pose for same collider ID is rejected');
+ }finally{patch.dispose();m.geometry.dispose();m.material.dispose();}
 });

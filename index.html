@@ -4176,6 +4176,14 @@ const sceneGiProxies = createGiProxyRegistry({
   })).parseAsync(bytes, '')).scene,
 });
 let sceneBeautyLods = null;
+const ensureSceneBeautyLods = () => (sceneBeautyLods ??= createSceneBeautyLodController({
+  THREE,
+  scene,
+  giProxies: sceneGiProxies,
+  surfaceLighting: { registerProxyRoot: root => window.__kaminosSurfaceLighting?.registerProxyRoot?.(root) ?? null },
+  parseGlb: async bytes => (await new GLTFLoader().parseAsync(bytes, '')).scene,
+  onUpdate: () => window._kaminosDirty?.(),
+}));
 window.kaminosSceneLodBudget = {
   read: () => sceneBeautyLods?.read() ?? null,
   setSettings: patch => { const res = sceneBeautyLods?.setSettings(patch) ?? null; if (typeof syncSceneLodReadout === 'function') syncSceneLodReadout(); window._kaminosDirty?.(); return res; },
@@ -4192,6 +4200,8 @@ window.kaminosSceneLodBudget = {
   },
   update: () => sceneBeautyLods?.update(camera, currentBeautyFrameOptions()) ?? null,
   whenIdle: () => Promise.all([sceneBeautyLods?.whenIdle() ?? Promise.resolve(), sceneColliderCollection.whenIdle()]),
+  resolveCollisionRung: (root, options) => ensureSceneBeautyLods().resolveCollisionRung(root, options),
+  prepareCollision: (roots, options) => ensureSceneBeautyLods().prepareCollision(roots, options),
   allocateBeauty: allocateSceneBeautyLods,
   allocateShadow: allocateShadowCasterLods,
   allocateColliders: allocateColliderLods,
@@ -12083,6 +12093,7 @@ async function initScene() {
     updateSelectionFeedback();
     updateAnnularBurnerFrame(t0);
     fireLightFieldPass?.renderShadows();
+    ensureSceneBeautyLods();
     sceneExposureControls?.sync();
     let matchedCameraEffective=false;
     if(sceneEmissiveCamera && (sceneGISettings.mode === 'gtao' || sceneGISettings.view === 'scene')) {
@@ -26168,6 +26179,8 @@ async function importSceneMesh(file,{generation:origin=null,label=null,assetOrig
   autoPreparedLodSources.add(digest);
   await showGLB(receipt.source,{clear:false,arrival:'append',isCurrent:()=>generation===workingScene.generation&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying&&!authoringBusy,metadata:{id,type:'glb',source:receipt.source,fileName:file.name,label:label||file.name.replace(/\.glb$/i,''),generation:origin,assetOrigin:assetOrigin?{...assetOrigin,sha256:digest}:null}});
   try{await recordSceneObjectInsertion(id);}catch(error){if(!alreadyPrepared)autoPreparedLodSources.delete(digest);removeSceneObjectInternal(id,{recordHistory:false});throw error;}
+  const importedEntry=workingScene.objects.find(o=>o.id===id),activeAsh=workingScene.objects.find(o=>o.type===ASH_OBJECT_TYPE);
+  if(importedEntry?.object&&activeAsh)await ensureSceneBeautyLods()?.prepareCollision?.([importedEntry.object],{cellSize:activeAsh.ash?.cellSize??0.04});
   if(!alreadyPrepared){
     window.kaminosGiProxies?.prepare?.(digest,{heroGLB:new Uint8Array(bytes.slice(0)),input:file.name,route:origin?.route||'imported-glb'}).then(report=>{
       window.__kaminosLastGenerationLevels={source:digest,...report};
@@ -26387,7 +26400,7 @@ async function makeSceneRepetitionReal(id){
 async function mountAuthoredAsh(record,{activate=true,loadRequestId=null}={}) {
  const arrival=workingScene.arrival();
  if(loadRequestId===null&&typeof sceneColliderCollection!=='undefined')await sceneColliderCollection.prepare?.(workingScene.objects,{...(typeof currentColliderLodOptions==='function'?currentColliderLodOptions():{}),ashCellSize:record.ash?.cellSize??0.04});
- const ash=await createAshSceneObject({record,renderer,readObjects:()=>workingScene.objects,readSources:()=>readAshSources(record.id),resolveObstacle:typeof sceneColliderCollection!=='undefined'?(entry,opts)=>sceneColliderCollection.resolveObstacle(entry,opts):null,onError:message=>{setInfo(message?'Ash stopped: '+message:'Ash resumed after scene correction');ashInspector?.sync();}});
+ const ash=await createAshSceneObject({record,renderer,readObjects:()=>workingScene.objects,readSources:()=>readAshSources(record.id),lodController:ensureSceneBeautyLods(),resolveObstacle:typeof sceneColliderCollection!=='undefined'?(entry,opts)=>sceneColliderCollection.resolveObstacle(entry,opts):null,onError:message=>{setInfo(message?'Ash stopped: '+message:'Ash resumed after scene correction');ashInspector?.sync();}});
  if(!arrival.isCurrent()||(loadRequestId!==null&&!sceneLoadRequests.isCurrent(loadRequestId))){ash.dispose();throw Error('Ash scene load superseded');}
  try{scene.add(ash.root);authoredAsh.set(record.id,ash);registerSceneObject(ash.root,record,{activate});if(loadRequestId===null)await ash.initialize();return ash.root;}
  catch(error){if(workingScene.find(record.id))removeSceneObjectInternal(record.id,{recordHistory:false});else{authoredAsh.delete(record.id);ash.dispose();}throw error;}
@@ -26446,9 +26459,9 @@ function installAuthoredAsh(){
  const selected=()=>selectedSceneObjectEntry()?.type===ASH_OBJECT_TYPE?workingScene.activeObjectId:null;
  const get=id=>{const ash=authoredAsh.get(id);if(!ash)throw Error('Select an ash object');return ash;};
  const write=(id,patch)=>{const result=get(id).set(patch);const entry=workingScene.objects.find(row=>row.id===id);entry.ash=entry.object.userData.kaminosSceneObject.ash;window._kaminosDirty?.();sceneDocument.authoringChanged();ashInspector?.sync();return result;};
- const config=id=>{const {checkpoint,width,depth,height,cellSize,initialDepth,...settings}=get(id).read().settings;return settings;};
+ const config=id=>{const {checkpoint,width,depth,height,cellSize,initialDepth,refinement,...settings}=get(id).read().settings;return settings;};
  const target=id=>{get(id);const key=`@ash-settings:${id}`;
-  if(!ashEditTargets.has(key)){scenePlacementTools.edits.register(key,{read:()=>config(id),check:value=>{const {checkpoint,...settings}=checkedAshSettings({...get(id).read().settings,...value,checkpoint:null});const {width,depth,height,cellSize,initialDepth,...editable}=settings;return editable;},write:value=>write(id,value)});ashEditTargets.add(key);}
+  if(!ashEditTargets.has(key)){scenePlacementTools.edits.register(key,{read:()=>config(id),check:value=>{const {checkpoint,...settings}=checkedAshSettings({...get(id).read().settings,...value,checkpoint:null});const {width,depth,height,cellSize,initialDepth,refinement,...editable}=settings;return editable;},write:value=>write(id,value)});ashEditTargets.add(key);}
   return key;
  };
  const set=(id,patch)=>{const key=target(id),edits=scenePlacementTools.edits,value={...config(id),...patch};if(edits.state().active?.id===key)return edits.preview(value);assertSceneConstructionAvailable();return edits.apply(key,value,'Edit ash');};
@@ -26467,7 +26480,11 @@ function installAuthoredAsh(){
  ashSourceInspector=installAshSourceInspector({document,anchor:document.getElementById('selected-ash-properties'),selected:()=>selectedSceneObjectEntry()?.type===ASH_SOURCE_TYPE?workingScene.activeObjectId:null,read:sourceRead,set:sourceSet,selectField:id=>setActiveSceneObject(sourceRead(id).settings.fieldId),edits:scenePlacementTools.edits,target:sourceTarget,ownHistory:session=>authoringControlSessions.push(session),error:setInfo});
  workbenchSceneFrames.onFrame(({timestampMs})=>{
   for(const entry of workingScene.objects){const ash=authoredAsh.get(entry.id);if(!ash)continue;
-   if(ash.tick(timestampMs,{active:isSceneItemVisible(entry.id)&&entry.object.parent!==null&&sceneViewerPaused!==true,selected:workingScene.activeObjectId===entry.id})){window._kaminosDirty?.();}
+   const isSelected=workingScene.activeObjectId===entry.id;
+   if(ash.tick(timestampMs,{active:isSceneItemVisible(entry.id)&&entry.object.parent!==null&&sceneViewerPaused!==true,selected:isSelected})){
+    if(isSelected&&!scenePlacementTools.edits.state().active)ashInspector?.sync();
+    window._kaminosDirty?.();
+   }
   }
  });
 }
@@ -26661,9 +26678,9 @@ function updateSelectionFeedback(){
   selectionFeedback?.suspend(selectionCaptureSuspended||!viewportDisplay.overlays||!viewportDisplay.outlines||!!sceneComponents?.ownsTransforms());
   const ids=new Set(sceneSelectionMembers());
   const activeIds=workingScene.activeGroupId?workingScene.groups.find(g=>g.id===workingScene.activeGroupId)?.objectIds||[]:[workingScene.activeObjectId];
-  selectionFeedback?.update(workingScene.objects.filter(entry=>isSceneItemVisible(entry.id)&&ids.has(entry.id)&&entry.type!=='splat'&&entry.type!=='light'&&entry.type!==CAMERA_TYPE&&entry.type!==FLAME_EMITTER_TYPE&&entry.type!==LOCAL_LIQUID_EMITTER_TYPE),activeIds);
+  selectionFeedback?.update(workingScene.objects.filter(entry=>isSceneItemVisible(entry.id)&&ids.has(entry.id)&&entry.type!=='splat'&&entry.type!=='light'&&entry.type!==CAMERA_TYPE&&entry.type!==FLAME_EMITTER_TYPE&&entry.type!==LOCAL_LIQUID_EMITTER_TYPE&&entry.type!==ASH_OBJECT_TYPE),activeIds);
   for(const [id,box] of selectionBoxes)if(!ids.has(id)){box.removeFromParent();box.geometry.dispose();box.material.dispose();selectionBoxes.delete(id);}
-  for(const id of ids){const entry=workingScene.objects.find(o=>o.id===id);if(!entry)continue;
+  for(const id of ids){const entry=workingScene.objects.find(o=>o.id===id);if(!entry||entry.type===ASH_OBJECT_TYPE)continue;
     let box=selectionBoxes.get(id);if(!box){box=new THREE.BoxHelper(entry.object);box.userData.kaminosEditorHelper=true;box.userData.kaminosEditorOnly=true;box.material.depthTest=false;box.renderOrder=1001;scene.add(box);selectionBoxes.set(id,box);}
     box.object=entry.object;box.update();box.material.color.set(id===workingScene.activeObjectId||workingScene.activeGroupId&&workingScene.groups.find(g=>g.id===workingScene.activeGroupId)?.objectIds.includes(id)?0xffc66d:0xe78932);
     styleHelperLines(box,{width:viewportDisplay.outlineWidth,opacity:viewportDisplay.outlineOpacity});

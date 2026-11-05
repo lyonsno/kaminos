@@ -1,6 +1,7 @@
 import {releaseAshAttributes} from './gpu-disposal.mjs';
 import * as THREE from '../lib/three.webgpu.js';
 import {ashAirAdmissionWGSL} from './scan-wgsl.mjs';
+import {refinementAddressWGSL} from './refinement-wgsl.mjs';
 import {fallingLayout,sourceSettings,fallingGroupState} from './fall-plan.mjs';
 const SHADER=`
 struct Parcel {position:vec4<f32>,velocity:vec4<f32>}
@@ -16,7 +17,7 @@ fn random(seed:u32)->f32{var h=seed;h=(h^(h>>16u))*0x7feb352du;h=(h^(h>>15u))*0x
 fn index(c:vec3<u32>)->u32{return c.x+p.dims.x*(c.y+p.dims.y*c.z);}
 fn take_budget()->f32{
  loop{let old=atomicLoad(&state[0]);let available=bitcast<f32>(old);if(available<=0.0){return 0.0;}
- let taken=min(available,8.0);let result=atomicCompareExchangeWeak(&state[0],old,bitcast<u32>(available-taken));if(result.exchanged){return taken;}}
+ let taken=min(available,clamp(available*(1.0/64.0),0.25,8.0));let result=atomicCompareExchangeWeak(&state[0],old,bitcast<u32>(available-taken));if(result.exchanged){return taken;}}
 }
 fn put(i:u32,amount:f32)->f32{
  loop{let old=atomicLoad(&density[i]);let available=1.0-bitcast<f32>(old);if(available<=0.0){return 0.0;}
@@ -28,21 +29,32 @@ fn put(i:u32,amount:f32)->f32{
 }
 @compute @workgroup_size(64) fn fall(@builtin(global_invocation_id) gid:vec3<u32>){
  let i=gid.x;if(i>=p.dims.w){return;}var parcel=parcels[i];var amount=parcel.position.w;
+ let dt=p.clock.x;let cell=p.origin.w;
+ let low=p.origin.xz+vec2<f32>(cell*.5);let high=p.origin.xz+vec2<f32>(p.dims.xz)*cell-vec2<f32>(cell*.5);
  if(amount==0.0){
   amount=take_budget();if(amount==0.0){return;}let seed=i+atomicLoad(&state[2])*747796405u;
   var source=p.source;var extent=vec2<f32>(0);
   let choice=random(seed+67u);for(var j=0u;j<u32(p.clock.z);j++){if(choice<ash_source_row(j*2u+1u).x){source=ash_source_row(j*2u);extent=ash_source_row(j*2u+1u).yz;break;}}
-  let angle=random(seed)*6.2831853;let r=sqrt(random(seed+13u))*source.w;
-  var offset=vec3<f32>(cos(angle)*r,random(seed+27u)*p.origin.w,sin(angle)*r);
-  if(extent.x>0.0){offset.x=(random(seed+71u)*2.0-1.0)*extent.x;offset.z=(random(seed+73u)*2.0-1.0)*extent.y;}
-  parcel.position=vec4<f32>(source.xyz+offset,amount);
+  var spawnXZ=clamp(source.xz,low,high);
+  if(extent.x>0.0){
+   let boxLo=max(low,source.xz-extent);let boxHi=min(high,source.xz+extent);
+   spawnXZ=mix(boxLo,boxHi,vec2<f32>(random(seed+71u),random(seed+73u)));
+  }else{
+   let boxLo=max(low,source.xz-vec2<f32>(source.w));let boxHi=min(high,source.xz+vec2<f32>(source.w));
+   var found=false;
+   for(var attempt=0u;attempt<8u;attempt++){
+    let s=seed+attempt*197u;let angle=random(s)*6.2831853;let r=sqrt(random(s+13u))*source.w;
+    let cand=source.xz+vec2<f32>(cos(angle)*r,sin(angle)*r);
+    if(all(cand>=low)&&all(cand<=high)){spawnXZ=cand;found=true;break;}
+   }
+   if(!found){spawnXZ=mix(boxLo,boxHi,vec2<f32>(random(seed+71u),random(seed+73u)));}
+  }
+  parcel.position=vec4<f32>(spawnXZ.x,source.y+random(seed+27u)*cell,spawnXZ.y,amount);
   parcel.velocity=vec4<f32>((random(seed+31u)-.5)*.10,-.08,(random(seed+43u)-.5)*.10,0.0);
  }
- let dt=p.clock.x;let cell=p.origin.w;
  var pos=parcel.position.xyz;var velocity=parcel.velocity.xyz;
  velocity.y=max(-.8,velocity.y-2.0*dt);velocity=vec3<f32>(velocity.x*exp(-dt*2.0),velocity.y,velocity.z*exp(-dt*2.0));
  var nextPosition=pos+velocity*dt;
- let low=p.origin.xz+vec2<f32>(cell*.5);let high=p.origin.xz+vec2<f32>(p.dims.xz)*cell-vec2<f32>(cell*.5);
  let clipped=clamp(nextPosition.xz,low,high);nextPosition=vec3<f32>(clipped.x,nextPosition.y,clipped.y);
  if(p.contact.w>0.0&&distance(nextPosition,p.contact.xyz)<p.contact.w+cell*.3){
   let d=nextPosition-p.contact.xyz;let n=select(vec3<f32>(0,1,0),normalize(d),dot(d,d)>1e-12);
@@ -59,10 +71,31 @@ fn put(i:u32,amount:f32)->f32{
  }
  if(hit){
   hitCell.x=clamp(hitCell.x,0,i32(p.dims.x)-1);hitCell.z=clamp(hitCell.z,0,i32(p.dims.z)-1);
-  for(var y=max(0,hitCell.y);y<i32(p.dims.y)&&amount>0.0;y++){
+  let y0=max(0,hitCell.y);
+  if(y0<i32(p.dims.y)){
+   let j0=index(vec3<u32>(u32(hitCell.x),u32(y0),u32(hitCell.z)));
+   if(solid[j0]==0u){amount-=put(j0,min(amount,0.32));}
+   for(var dz=-1;dz<=1;dz++){for(var dx=-1;dx<=1;dx++){
+    if((dx==0)==(dz==0)||amount<=0.0){continue;}
+    let nx=hitCell.x+dx;let nz=hitCell.z+dz;
+    if(nx<0||nz<0||nx>=i32(p.dims.x)||nz>=i32(p.dims.z)){continue;}
+    let nj=index(vec3<u32>(u32(nx),u32(y0),u32(nz)));
+    if(solid[nj]!=0u){continue;}
+    var supported=y0==0;
+    if(!supported){let bj=index(vec3<u32>(u32(nx),u32(y0-1),u32(nz)));supported=solid[bj]!=0u||bitcast<f32>(atomicLoad(&density[bj]))>0.1;}
+    if(supported){amount-=put(nj,min(amount,0.17));}
+   }}
+  }
+  for(var y=y0;y<i32(p.dims.y)&&amount>0.0;y++){
    let j=index(vec3<u32>(u32(hitCell.x),u32(y),u32(hitCell.z)));if(solid[j]!=0u){continue;}amount-=put(j,amount);
   }
-  if(amount>0.0){nextPosition=vec3<f32>(nextPosition.x,p.origin.y+f32(p.dims.y)*cell+cell*.5,nextPosition.z);velocity=vec3<f32>(0);}
+  if(amount>0.0){
+   let bounceSeed=i+atomicLoad(&state[2])*747796405u+u32(hitCell.x)*374761393u+u32(hitCell.z)*668265263u;
+   let bounceAngle=random(bounceSeed)*6.2831853;let dir=vec2<f32>(cos(bounceAngle),sin(bounceAngle));
+   let deflected=clamp(nextPosition.xz+dir*(cell*2.0),low,high);
+   nextPosition=vec3<f32>(deflected.x,p.origin.y+f32(p.dims.y)*cell+cell*.5,deflected.y);
+   velocity=vec3<f32>(dir.x*.4,-.2,dir.y*.4);
+  }
  }
  parcel.position=vec4<f32>(nextPosition,max(0.0,amount));parcel.velocity=vec4<f32>(velocity,0);parcels[i]=parcel;
  if(amount>0.0){atomicAdd(&state[1],1u);}
@@ -77,6 +110,12 @@ export async function createGpuAshFall({renderer,layout,density,collision,wake,t
 
  let root,geometry,material;try{
  let code=SHADER;
+ if(layout.refinement){
+  code=code.replace('fn index(c:vec3<u32>)->u32{return c.x+p.dims.x*(c.y+p.dims.y*c.z);}',refinementAddressWGSL(layout));
+  code=code.replace('let available=1.0-bitcast<f32>(old);','let available=ash_capacity(i)-bitcast<f32>(old);');
+  code=code.replace('let next=min(1.0,bitcast<f32>(old)+amount);','let next=min(ash_capacity(i),bitcast<f32>(old)+amount);');
+ }
+
  if(tiled){
   const tiles=layout.tiles,groups=Math.ceil(capacity/64);
   visibleAttr=new THREE.StorageBufferAttribute(new Uint32Array(capacity),1);drawAttr=new THREE.IndirectStorageBufferAttribute(new Uint32Array([24,0,0,0,0]),1);extraAttrs.push(visibleAttr,drawAttr);
@@ -88,6 +127,12 @@ export async function createGpuAshFall({renderer,layout,density,collision,wake,t
 fn wake_cell(i:u32){let c=vec3<u32>(i%p.dims.x,(i/p.dims.x)%p.dims.y,i/(p.dims.x*p.dims.y));let b=c/${tiles.width}u;let t=b.x+${tiles.dims[0]}u*(b.y+${tiles.dims[1]}u*b.z);atomicStore(&tiles[t*8u],1u);atomicStore(&tiles[t*8u+2u],1u);
  for(var axis=0u;axis<3u;axis++){for(var side=0u;side<2u;side++){var q=vec3<i32>(c);q[axis]+=select(-1,1,side==1u);if(all(q>=vec3<i32>(0))&&all(q<vec3<i32>(p.dims.xyz))){let n=vec3<u32>(q)/${tiles.width}u;let j=n.x+${tiles.dims[0]}u*(n.y+${tiles.dims[1]}u*n.z);atomicStore(&tiles[j*8u+2u],1u);}}}}
 @compute @workgroup_size(1) fn prepare_fall(){`);
+  if(layout.refinement){
+   const first=code.indexOf('fn wake_cell(i:u32)');
+   const last=code.indexOf('@compute @workgroup_size(1) fn prepare_fall()',first);
+   code=code.slice(0,first)+`fn wake_cell(i:u32){let t=ash_cell(i).tile;atomicStore(&tiles[t*8u],1u);atomicStore(&tiles[t*8u+2u],1u);}
+`+code.slice(last);
+  }
   code=code.replace('@group(0) @binding(4) var<storage,read_write> wake:array<atomic<u32>>;','').replace('atomicStore(&wake[3],1u);','wake_cell(i);');
   const prepareStart=code.indexOf('@compute @workgroup_size(1) fn prepare_fall(){');
   const prepareEnd=code.indexOf('@compute @workgroup_size(64) fn fall(',prepareStart);
@@ -105,7 +150,7 @@ fn wake_cell(i:u32){let c=vec3<u32>(i%p.dims.x,(i/p.dims.x)%p.dims.y,i/(p.dims.x
  // Two vec4 values per parcel: position/remaining mass, then velocity.
  const {storage,instanceIndex,positionGeometry,vec3}=THREE.TSL;
  const particleId=tiled?storage(visibleAttr,'uint',capacity).toReadOnly().element(instanceIndex):instanceIndex;
- const positions=storage(attr,'vec4',capacity*2).toReadOnly().element(particleId.mul(2));
+ const positions=storage(attr,'vec4',capacity*2).toReadOnly().element(particleId.mul(2)).toVar('ash_parcel_pos');
  geometry=new THREE.OctahedronGeometry(1,0);
  material=new THREE.MeshStandardNodeMaterial({color:0xc6bfb3,roughness:1});
  material.positionNode=positionGeometry.mul(positions.w.greaterThan(0).select(layout.cellSize*.36,0)).add(positions.xyz);

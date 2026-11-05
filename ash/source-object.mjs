@@ -20,6 +20,7 @@ export function sourceInField(entry,field){
  const position=field.root.worldToLocal(entry.object.getWorldPosition(new Vector3())).toArray(),size=field.read().settings;
  const worldScale=entry.object.getWorldScale(new Vector3()),fieldScale=field.root.getWorldScale(new Vector3());
  const spread=s.spread*Math.max(Math.abs(worldScale.x/fieldScale.x),Math.abs(worldScale.z/fieldScale.z));
- const inside=position[1]>=0&&Math.abs(position[0])+spread<=size.width/2&&Math.abs(position[2])+spread<=size.depth/2;
+ const dx=Math.max(0,Math.abs(position[0])-size.width/2),dz=Math.max(0,Math.abs(position[2])-size.depth/2);
+ const inside=position[1]>=0&&size.width>0&&size.depth>0&&dx*dx+dz*dz<=spread*spread;
  return {inside,position,spread,rate:s.enabled&&inside?s.rate:0};
 }
