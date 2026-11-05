@@ -1,7 +1,8 @@
 # Independent geometry and surface detail
 
-The beauty controller selects geometry using projected geometric deviation and
-the scene face budget. Texture density no longer forces a more detailed mesh.
+For levels with compatible appearance products, the beauty controller selects
+geometry using projected geometric deviation and the scene face budget. Texture
+density no longer forces a more detailed mesh for those levels.
 Compatible appearance variants are chosen separately from projected texel size
 and `textureBudgetBytes`. The default texture budget is unlimited; this renderer
 does not expose a trustworthy automatic device-memory allowance. A caller may
@@ -66,8 +67,9 @@ bytes separately; a nonblank transition may temporarily exceed its target budget
 This is RGBA8 mip-chain accounting for these PNG products, not a physical device
 heap measurement. Unknown legacy/compressed texture cost remains unmeasured.
 
-Legacy levels without appearance products retain their existing maps and expose
-only that available texture choice. Preparing appearance upgrades those levels
+Legacy levels without appearance products retain their existing bundled maps,
+texture-blur refinement guard and available texture choice. Once compatible
+appearance products are prepared, their geometry selection becomes independent. Preparing appearance upgrades those levels
 without changing their geometry records. Existing complete legacy ladders do not
 silently trigger a bulk appearance rebuild. The `lod-detail` Workbench experiment
 loads a stored mesh into the ordinary editor for orbit/zoom and native inspector

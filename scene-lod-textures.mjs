@@ -1,9 +1,10 @@
 // Geometry-independent texture selection and owned appearance residency. Byte
 // costs describe RGBA8 mip chains for the supported PNG products, not total
 // renderer/device memory (render targets, environments and other owners differ).
+import {sceneRadianceMaterialChain} from './scene-radiance.mjs';
 import {digestBytes,geometrySignature,textureInfo} from './lod-textures.mjs';
 const MAPS=['map','normalMap','roughnessMap','metalnessMap','aoMap','emissiveMap','alphaMap','bumpMap','displacementMap','lightMap'];
-const meshes=root=>{const out=[];function visit(m){if(m!==root&&(m.userData?.kaminosBeautyLodProxy||m.userData?.kaminosRepetitionCopy||m.userData?.kaminosEditorHelper||m.userData?.kaminosEditorOnly))return;if(m.isMesh)out.push(m);for(const child of m.children??[])visit(child);}visit(root);return out;};
+const meshes=(root,includeRepetitions=false)=>{const out=[];function visit(m){if(m!==root&&(m.userData?.kaminosBeautyLodProxy||(!includeRepetitions&&m.userData?.kaminosRepetitionCopy)||m.userData?.kaminosEditorHelper||m.userData?.kaminosEditorOnly))return;if(m.isMesh)out.push(m);for(const child of m.children??[])visit(child);}visit(root);return out;};
 const materials=m=>Array.isArray(m)?m:[m];
 const textureSet=bindings=>new Set(bindings.flat(2).flatMap(m=>MAPS.map(k=>m?.[k])).filter(t=>t?.isTexture));
 const releaseTextures=(textures,{close=false}={})=>{const images=new Set();for(const t of textures){t.dispose?.();if(close&&t.source?.data)images.add(t.source.data);}for(const image of images)image.close?.();};
@@ -36,12 +37,27 @@ export function allocateTextureLods(candidates=[],{textureBudgetBytes=Infinity,m
 
 function bindings(root){return meshes(root).map(m=>materials(m.userData?.kaminosOriginalMaterial??m.material).map(mat=>Object.fromEntries(MAPS.map(k=>[k,mat?.[k]??null]))));}
 function applyBindings(root,maps){
-  const targets=meshes(root);if(targets.length!==maps.length)throw Error('Appearance mesh layout does not match the displayed geometry');
-  for(let i=0;i<targets.length;i++){
-    const target=targets[i];
-    for(const group of [materials(target.userData?.kaminosOriginalMaterial??target.material),materials(target.material)]){
-      if(group.length!==maps[i].length)throw Error('Appearance material slots do not match the displayed geometry');
-      for(let j=0;j<group.length;j++)if(group[j]){for(const key of MAPS)group[j][key]=maps[i][j][key];group[j].needsUpdate=true;}
+  const targets=meshes(root);
+  if(targets.length!==maps.length)throw Error('Appearance mesh layout does not match the displayed geometry');
+  const groups=targets.map(target=>[materials(target.userData?.kaminosOriginalMaterial??target.material),materials(target.material)]);
+  // Validate the entire binding operation before changing any live material.
+  for(let i=0;i<groups.length;i++)for(const group of groups[i])if(group.length!==maps[i].length)throw Error('Appearance material slots do not match the displayed geometry');
+  const owners=new Map();
+  const assign=(material,values)=>{
+    for(const owner of sceneRadianceMaterialChain(material)){
+      for(const key of MAPS)owner[key]=values[key];
+      owner.needsUpdate=true;owners.set(owner,values);
+    }
+  };
+  for(let i=0;i<groups.length;i++)for(const group of groups[i])for(let j=0;j<group.length;j++)if(group[j])assign(group[j],maps[i][j]);
+  // Ordinary hero repetitions can hold separate lighting clones. Their source
+  // chain identifies the corresponding primary material without replacing the
+  // clone or assuming that a stable material UUID means its maps are unchanged.
+  const primary=new Set(targets);
+  for(const mesh of meshes(root,true))if(!primary.has(mesh)){
+    for(const material of [...materials(mesh.userData?.kaminosOriginalMaterial),...materials(mesh.material)]){
+      const values=sceneRadianceMaterialChain(material).map(owner=>owners.get(owner)).find(Boolean);
+      if(values)assign(material,values);
     }
   }
 }
