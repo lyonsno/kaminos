@@ -59,9 +59,10 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
       saving=true;refresh();
       try{const saved=await saveFamilyAsset({recipe:exported(),name,...(!copy&&library?{id:library.id,revision:library.revision}:{})});if(!disposed){
         library=saved;
-        const retained=new Map([saved.recipe.source,...(saved.recipe.sources??[])].map(s=>[s.sha256,s]));
+        const retained=new Map([saved.recipe.source,...(saved.recipe.sources??[]),...(saved.recipe.supports??[]).map(s=>s.source)].map(s=>[s.sha256,s]));
         const retain=s=>{const local=retained.get(s.sha256);return local?{...s,url:local.url,...(local.originUrl?{originUrl:local.originUrl}:{})}:s;};
-        recipe={...recipe,source:retain(recipe.source),...(recipe.sources?{sources:recipe.sources.map(retain)}:{})};
+        recipe={...recipe,source:retain(recipe.source),...(recipe.sources?{sources:recipe.sources.map(retain)}:{}),...(recipe.supports?{supports:recipe.supports.map(s=>({...s,source:retain(s.source)}))}:{})};
+        for(const support of supports)support.value.source=retain(support.value.source);
         updateInputs({assetSource:familyAssetSource(saved.id)});
       }return saved;}
       finally{saving=false;refresh();}
