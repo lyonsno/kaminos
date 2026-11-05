@@ -4235,6 +4235,7 @@ async function loadPreparedLod(level,{untextured=false}={}){
 }
 const sceneGiProxies = createGiProxyRegistry({THREE,loadLevel:level=>loadPreparedLod(level,{untextured:true}),parseGlb:parseGiProxyGlb});
 let sceneAssetPreparationActive=false,sceneAssetPreparationOwner=null;
+function setSceneAssetPreparationActive(value){sceneAssetPreparationActive=value;sceneBeautyLods?.setPreparation(value);}
 let sceneArrivalState={phase:'idle',coarseObjects:0,expectedCoarseObjects:0};
 window.kaminosSceneArrivalState=()=>({...sceneArrivalState,sourcePreparation:fullSceneAssetPool.state(),lodPreparation:sceneLodAssetPool.state()});
 let sceneBeautyLods = null;
@@ -4344,7 +4345,7 @@ let authoredWaterControls=null;
 
 
 let sceneLightingPreparation=null;
-let sceneGeometryPreview=null;
+let sceneGeometryPreview=null,presentSceneCoarseFrame=null;
 
 let sceneViewerPaused = null;
 
@@ -11720,6 +11721,19 @@ async function initScene() {
     isCurrent:id=>sceneLoadRequests.isCurrent(id)&&!deviceRecoveryHeld(),isVisible:isSceneItemVisible,
     waitForLighting:()=>sceneLightingPreparation.whenIdle(),withRenderer:sceneLightingPreparation.withRenderer,
     onStatus:state=>{if(!state.active)return;if(state.error)setInfo('Geometry preview unavailable; scene restoration continues');else if(state.phase==='geometry-visible')setInfo('Geometry preview · restoring ash, fire and lighting…');}});
+  // Restore holds remain in force for automatic frames. This explicit coarse
+  // frame borrows the existing lighting renderer only for its current request.
+  presentSceneCoarseFrame=async requestId=>{
+    const current=()=>sceneLoadRequests.isCurrent(requestId)&&sceneArrivalState.phase==='coarse'&&!deviceRecoveryHeld();
+    await sceneLightingPreparation.whenIdle();
+    if(!current())return false;
+    return sceneLightingPreparation.withRenderer(async()=>{
+      if(!current())return false;
+      syncViewportRendererSize();camera.updateMatrixWorld();scene.updateMatrixWorld(true);
+      const before=sceneFrameCount;drawSceneFrame();
+      return current()&&sceneFrameCount>before;
+    });
+  };
   window.kaminosSceneLoadPresentation=()=>({document:sceneDocument.state(),preview:sceneGeometryPreview.read()});
   let activeSceneDepth = prePassDepth;
   selectionFeedback=createSelectionFeedback(camera);
@@ -13474,16 +13488,21 @@ function stageSceneLowLodStandIns(records, loadRequestId = null,groups=[]) {
 function sceneLodContext(records,groups=workingScene.groups){return lodPreparationContext({groups,camera:readAuthoredCameraView(),viewport:[renderer.domElement.width,renderer.domElement.height],settings:sceneBeautyLods?.read()??null,objects:records});}
 async function prepareSavedSceneAssets(records,requestId,setup){
   const current=()=>requestId==null||sceneLoadRequests.isCurrent(requestId);
-  const owner={requestId};sceneAssetPreparationOwner=owner;sceneAssetPreparationActive=false;
+  const owner={requestId};sceneAssetPreparationOwner=owner;setSceneAssetPreparationActive(false);
   sceneArrivalState={phase:'coarse',expectedCoarseObjects:records.filter(record=>resolveEarlyLowLodMeshSha(record)).length,coarseObjects:0};
   await stageSceneLowLodStandIns(records,requestId,setup?.startupGroups??[]);
   if(!current())throw Error('Scene load superseded');
   sceneArrivalState.coarseObjects=[...activeSceneStandIns.values()].filter(row=>row.root).length;
   // Let the complete small scene paint before source decoding competes for the main thread.
-  await sceneLightingPreparation?.whenIdle();window._kaminosDirty?.();await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);
+  await sceneLightingPreparation?.whenIdle();window._kaminosDirty?.();
+  let presented=await presentSceneCoarseFrame?.(requestId);
+  await new Promise(requestAnimationFrame);
+  if(presented)presented=await presentSceneCoarseFrame(requestId);
+  await new Promise(requestAnimationFrame);
   if(!current())throw Error('Scene load superseded');
-  window.dispatchEvent(new CustomEvent('kaminos-scene-coarse-ready',{detail:{...sceneArrivalState}}));
-  sceneAssetPreparationActive=true;sceneArrivalState.phase='sources';
+  sceneArrivalState.coarsePresented=presented===true;
+  if(presented)window.dispatchEvent(new CustomEvent('kaminos-scene-coarse-ready',{detail:{...sceneArrivalState}}));
+  setSceneAssetPreparationActive(true);sceneArrivalState.phase='sources';
   const context=sceneLodContext(records,setup?.startupGroups??[]);
   const hints=cachedLodPreparation(setup?.startupLodHint,context);
   sceneArrivalState.hintContext=context;sceneArrivalState.savedHintContext=setup?.startupLodHint?.context??null;
@@ -13500,11 +13519,11 @@ async function prepareSavedSceneAssets(records,requestId,setup){
   const batch=outcomes[0].status==='fulfilled'?outcomes[0].value:null;
   const releaseSeeds=()=>{for(const rows of seeds.values())for(const row of rows)disposePreparedAsset(row.root);seeds.clear();};
   if(!batch||!current()){
-    batch?.dispose();releaseSeeds();if(sceneAssetPreparationOwner===owner){sceneAssetPreparationActive=false;sceneArrivalState.phase=current()?'failed':'superseded';}
+    batch?.dispose();releaseSeeds();if(sceneAssetPreparationOwner===owner){setSceneAssetPreparationActive(false);sceneArrivalState.phase=current()?'failed':'superseded';}
     throw outcomes[0].status==='rejected'?outcomes[0].reason:Error('Scene load superseded');
   }
   sceneArrivalState.phase='publishing';
-  return {take(id){const asset=batch.take(id),levels=seeds.get(id);if(asset&&levels){seedInitialBeautyLevels(asset.scene,levels);seeds.delete(id);}return asset;},dispose(){batch.dispose();releaseSeeds();if(sceneAssetPreparationOwner===owner){sceneAssetPreparationActive=false;sceneArrivalState.phase='published';window._kaminosDirty?.();}}};
+  return {take(id){const asset=batch.take(id),levels=seeds.get(id);if(asset&&levels){seedInitialBeautyLevels(asset.scene,levels);seeds.delete(id);}return asset;},dispose(){batch.dispose();releaseSeeds();if(sceneAssetPreparationOwner===owner){setSceneAssetPreparationActive(false);sceneArrivalState.phase='published';window._kaminosDirty?.();}}};
 }
 
 function prestageAdmittedSceneCameraAndProxies(admittedScene) {

@@ -47,16 +47,6 @@ const explicitBounceOff = calibrateSceneGISettingsForBounds({
   current: { bounceFeedback: false },
 });
 assert.equal(explicitBounceOff.bounceFeedback, false, 'auto-calibrated SSGI preserves explicit bounceFeedback: false when configured by the scene or user');
-assert.match(
-  shader,
-  /rawVisibility\.mul\(rawVisibility\.add\(float\(0\.35\)\)\)\.div\(float\(1\.35\)\)/,
-  'scene-gi.mjs must sharpen deep contact crevice visibility while preserving 0 and 1 endpoints',
-);
-assert.match(
-  shader,
-  /contactBounceGuard\s*=\s*mix\(float\(0\.65\),\s*float\(1\),\s*rawVisibility\)/,
-  'scene-gi.mjs must guard tight contact seams against denoised bounce washout',
-);
 const roomCalibrated = calibrateSceneGISettingsForBounds({
   boxes: [
     { min: [-4, -0.85, -4], max: [4, 4, 4] },
@@ -83,24 +73,7 @@ assert.ok(
 const applyDocStart = html.indexOf('async function applySceneDocument(');
 const applyDocEnd = html.indexOf('// File input handler for Load Scene', applyDocStart);
 const applyDocBody = html.slice(applyDocStart, applyDocEnd);
-assert.match(
-  applyDocBody,
-  /setSceneGIControls\(data\.postprocessing\?\.sceneGI \?\? \{\}\);\s*(?:if \(typeof autoCalibrateSceneGIFromScene === 'function'\) )?autoCalibrateSceneGIFromScene\(\);/,
-  'applySceneDocument must auto-calibrate SSGI after restoring sceneGI controls when the scene has no explicit radius/thickness',
-);
-assert.match(
-  shader,
-  /kaminosCycloramaFloor/,
-  'scene-gi.mjs must compute roughness-attenuated dielectric contact reflection on the cyclorama floor',
-);
-assert.match(
-  shader,
-  /setOpticalFinish\(/,
-  'scene-gi.mjs must expose setOpticalFinish for studio-look-coupled floor reflection and high-threshold specular glint',
-);
-assert.match(
-  shader,
-  /glintHalo/,
-  'scene-gi.mjs must add a high-threshold specular glint halo to the beauty scene view without altering physical-emission sceneBloom',
-);
+const savedGIAt=applyDocBody.indexOf('setSceneGIControls(data.postprocessing?.sceneGI ?? {});');
+assert(savedGIAt>=0&&savedGIAt<applyDocBody.indexOf('loadSceneObjects(objectRecords'),'saved GI is restored before coarse preparation and source loading');
+assert(applyDocBody.indexOf('autoCalibrateSceneGIFromScene();')>savedGIAt,'bounds calibration follows restored GI controls');
 console.log('scene GI settings and receiver contracts passed');

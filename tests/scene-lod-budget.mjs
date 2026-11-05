@@ -1852,3 +1852,19 @@ test('coarse arrival remains visible during batch preparation and while the sele
  controller.setPreparation(false);state=controller.update(camera,{viewportHeight:500});assert.equal(state.objects[0].displayedTier,low);assert.equal(requests,1);assert.equal(hero.visible,false,'no hero flash while refinement is pending');
  finish(new THREE.Group().add(new THREE.Mesh(new THREE.PlaneGeometry(1,1,2,1),new THREE.MeshStandardMaterial())));await controller.whenIdle();state=controller.update(camera,{viewportHeight:500});assert.equal(state.objects[0].displayedTier,fine);controller.dispose();
 });
+
+test('seeded arrival rungs retain source-frame collision geometry and bake display geometry under transformed heroes',()=>{
+ const scene=new THREE.Scene(),root=new THREE.Group();root.userData.kaminosSceneObject={id:'seeded',type:'glb'};
+ root.position.set(2,3,4);root.scale.set(2,3,4);root.add(new THREE.Mesh(new THREE.BoxGeometry(1,2,3,2,2,2),new THREE.MeshStandardMaterial()));scene.add(root);
+ const seed=new THREE.Group(),mesh=new THREE.Mesh(new THREE.BoxGeometry(1,3,2),new THREE.MeshStandardMaterial());mesh.rotation.x=-Math.PI/2;seed.add(mesh);
+ const sha='d'.repeat(64),levels=[{sha,faces:12,closed:true,error:{relative:{p95:0,max:0}}}];
+ seedInitialBeautyLevels(root,[{sha,faces:12,root:seed}]);
+ const controller=createSceneBeautyLodController({THREE,scene,giProxies:{list:()=>[{root,levels}],get:()=>({state:'loaded',levels})},settings:{faceBudget:1000,texelWeight:0}});
+ controller.setPreparation(true);controller.update(makeCamera({z:20}),{viewportHeight:500});
+ const resident=controller.getResidentRung(root,sha);assert(resident.collisionRoot,'seeded rung must supply the collision consumer');
+ assert(Math.abs(mesh.rotation.x)<1e-9,'display seed node transform is baked to root space');
+ const collisionMesh=resident.collisionRoot.children[0];assert(Math.abs(collisionMesh.rotation.x+Math.PI/2)<1e-9,'collision seed retains source node frame');
+ assert.notEqual(collisionMesh.geometry,mesh.geometry,'display baking cannot mutate the collision geometry');
+ assert.equal(controller.resolveCollisionRung(root,{cellSize:.04}).root,resident.collisionRoot);
+ controller.dispose();
+});

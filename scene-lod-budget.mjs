@@ -1334,17 +1334,9 @@ export function createSceneBeautyLodController({
     };
   }
 
-  function ensureRungLoaded(root, entry, level) {
-    const sha = level?.sha ?? level?.sha256;
-    if (!sha || entry.rungs.has(sha) || entry.inFlight.has(sha)) return;
-    entry.inFlight.add(sha);
-    const gen = entry.generation;
-    const url = level.source ?? `/api/read?root=generated-meshes&path=${sha}.glb`;
-    const task = (async () => {
-      let rungRoot = null, collisionRoot = null;
-      try {
-        if(loadLevel)rungRoot=await loadLevel(level);
-        else{const bytes=await fetchBytes(url);if(await digest(bytes)!==sha)throw Error(`beauty LOD content mismatch for ${sha}`);rungRoot=await parseGlb(bytes);}
+  function createResidentRung(entry,level,rungRoot){
+    let collisionRoot=null;
+    try{
         // Display baking changes vertex identity. Keep the source node frame
         // for saved ash collisions, with independently owned geometry/material.
         collisionRoot = cloneBorrowedRung(THREE, rungRoot);
@@ -1362,18 +1354,33 @@ export function createSceneBeautyLodController({
             m.userData.kaminosOriginalMaterial = m.material;
           }
         });
-        if (disposed || entries.get(root) !== entry || entry.generation !== gen) {
-          disposeTree(rungRoot);disposeTree(collisionRoot);
-          rungRoot = collisionRoot = null;
-          return;
-        }
         if (typeof entry.warpFn === 'function') {
           const warpRes = applyRootVertexWarpToRung(THREE, rungRoot, entry.warpFn, {bounds: entry.unwarpedBounds});
           applyRootVertexWarpToRung(THREE, collisionRoot, entry.warpFn, {bounds: entry.unwarpedBounds});
           if (warpRes.texelStretch > entry.texelStretch) entry.texelStretch = warpRes.texelStretch;
         }
         const releaseLighting = surfaceLighting?.registerProxyRoot?.(rungRoot) ?? null;
-        entry.rungs.set(sha, {sha, faces: level.faces, root: rungRoot, collisionRoot, releaseLighting, warpFn: entry.warpFn, warpRevision: entry.warpRevision});
+      return {sha:level.sha??level.sha256,faces:level.faces,root:rungRoot,collisionRoot,releaseLighting,warpFn:entry.warpFn,warpRevision:entry.warpRevision};
+    }catch(error){disposeTree(collisionRoot);throw error;}
+  }
+
+  function ensureRungLoaded(root, entry, level) {
+    const sha = level?.sha ?? level?.sha256;
+    if (!sha || entry.rungs.has(sha) || entry.inFlight.has(sha)) return;
+    entry.inFlight.add(sha);
+    const gen = entry.generation;
+    const url = level.source ?? `/api/read?root=generated-meshes&path=${sha}.glb`;
+    const task = (async () => {
+      let rungRoot = null, collisionRoot = null;
+      try {
+        if(loadLevel)rungRoot=await loadLevel(level);
+        else{const bytes=await fetchBytes(url);if(await digest(bytes)!==sha)throw Error(`beauty LOD content mismatch for ${sha}`);rungRoot=await parseGlb(bytes);}
+        if (disposed || entries.get(root) !== entry || entry.generation !== gen) {
+          disposeTree(rungRoot);disposeTree(collisionRoot);
+          rungRoot = collisionRoot = null;
+          return;
+        }
+        entry.rungs.set(sha,createResidentRung(entry,level,rungRoot));
         rungRoot = collisionRoot = null;
         onUpdate?.();
       } catch {
@@ -1463,10 +1470,10 @@ export function createSceneBeautyLodController({
       };
       const initial=initialBeautyLevels.get(root);initialBeautyLevels.delete(root);
       for(const level of initial??[]){
-        level.root.traverse(node=>{if(node.isMesh){node.castShadow=true;node.receiveShadow=true;node.userData.kaminosOriginalMaterial=node.material;}});
-        entry.rungs.set(level.sha,{...level,releaseLighting:surfaceLighting?.registerProxyRoot?.(level.root)??null,warpFn:null,warpRevision:0});
+        try{entry.rungs.set(level.sha,createResidentRung(entry,level,level.root));}
+        catch{disposeTree(level.root);}
       }
-      if(initial?.length)entry.displayedTier=initial[0].sha;
+      if(initial?.length&&entry.rungs.has(initial[0].sha))entry.displayedTier=initial[0].sha;
       entries.set(root, entry);
     } else {
       const curWarpFn = typeof root.userData?.kaminosVertexWarp === 'function' ? root.userData.kaminosVertexWarp : null;

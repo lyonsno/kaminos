@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import * as THREE from '../lib/three.core.js';
 import * as assetArrival from '../asset-arrival.mjs';
+import {createCoarseRepetition} from '../scene-lod-startup.mjs';
 import {
   ASSET_ARRIVAL_TARGET_DIAGONAL,
   assetArrivalViewDirection,
@@ -508,16 +509,16 @@ test('geometry-first arrival promotes camera placement and 500-face low-LOD prox
   const initStart = html.indexOf('async function initScene()');
   const initEnd = html.indexOf('async function loadEnvironment(', initStart);
   const initBody = html.slice(initStart, initEnd);
-  assert.match(initBody, /updateStartupVeil\(document,\s*['"]Requesting WebGPU device['"]\)/);
-  assert.match(initBody, /updateStartupVeil\(document,\s*['"]Initializing WebGPU renderer['"]\)/);
-  assert.match(initBody, /updateStartupVeil\(document,\s*['"]Building lighting & GI pipeline['"]\)/);
+  assert.match(initBody, /kaminosStartup\?\.phase\(['"]Requesting WebGPU device['"]\)/);
+  assert.match(initBody, /kaminosStartup\?\.phase\(['"]Initializing renderer['"]\)/);
+  assert.match(initBody, /kaminosStartup\?\.phase\(['"]Building lighting & GI pipeline['"]\)/);
 
   // 2. applySceneDocument applies camera and stages 500-face proxy stand-ins BEFORE loadSceneObjects
   const applyDocStart = html.indexOf('async function applySceneDocument(');
   const applyDocEnd = html.indexOf('document.getElementById(\'scene-file-input\')', applyDocStart);
   const applyDocBody = html.slice(applyDocStart, applyDocEnd);
   const earlyCameraIdx = applyDocBody.indexOf('applySceneCameraView(data.camera)');
-  const stageProxiesIdx = applyDocBody.indexOf('stageSceneLowLodStandIns(objectRecords, loadRequestId)');
+  const stageProxiesIdx = applyDocBody.indexOf('stageSceneLowLodStandIns(objectRecords, loadRequestId,');
   const loadObjectsIdx = applyDocBody.indexOf('loadSceneObjects(objectRecords');
   assert.ok(earlyCameraIdx > 0 && earlyCameraIdx < loadObjectsIdx, 'applySceneDocument must place the camera before awaiting loadSceneObjects');
   assert.ok(stageProxiesIdx > 0 && stageProxiesIdx < loadObjectsIdx, 'applySceneDocument must stage 500-face low-LOD stand-ins before awaiting loadSceneObjects');
@@ -567,6 +568,8 @@ test('low-LOD proxy stand-in helpers stage, adopt, frame, and dispose stand-ins 
 
   const context = {
     THREE,
+    createCoarseRepetition,
+    loadPreparedLod:async level=>(await new FakeGLTFLoader().parseAsync(new ArrayBuffer(16),'')).scene,
     Map,
     Set,
     Array,
@@ -606,7 +609,7 @@ test('low-LOD proxy stand-in helpers stage, adopt, frame, and dispose stand-ins 
         return {
           ok: true,
           json: async () => ({
-            choice: { faces: 500, source: `/api/read?root=generated-meshes&path=${shaA}.lods/closed-remesh-f500.glb` },
+            choice: { sha256:shaA,faces: 500, source: `/api/read?root=generated-meshes&path=${shaA}.lods/closed-remesh-f500.glb` },
           }),
         };
       }
