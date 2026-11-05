@@ -27865,7 +27865,8 @@ sceneInitialization.then(async () => {
     }
     const sceneFile = startupSceneFile;
     if (!sceneFile) return;
-    await loadSceneFile(new File([JSON.stringify(admission.data)], sceneFile), { sceneFile, mounted: true });
+    const restored = await loadSceneFile(new File([JSON.stringify(admission.data)], sceneFile), { sceneFile, mounted: true });
+    if (restored?.ok === false) throw new Error(restored.error || 'Starting scene restoration did not complete');
     // The ordinary loader reports some refusals in the UI and returns without
     // throwing. Its effective completion flag still governs owner admission.
     if (sceneDocument.state().blocked) throw new Error('Starting scene restoration did not complete');
@@ -27897,7 +27898,11 @@ sceneInitialization.then(async () => {
     });
   }, error => {
     rejectWorkbenchViewerReady(error);
-    window.kaminosWorkbenchExperimentError=error.message;setInfo('Experiments unavailable: '+error.message);
+    if (startupRestoreRequested) {
+      window.kaminosSceneRestoreError=error.message;
+    } else {
+      window.kaminosWorkbenchExperimentError=error.message;setInfo('Experiments unavailable: '+error.message);
+    }
   });
   initKaminosMotionAgencyRoute();
   initWorldChambersRoute();
