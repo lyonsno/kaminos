@@ -3,7 +3,7 @@ import {resolveAuthoredWaterSampling} from './authored-water-drop.mjs';
 
 // The application lends scene/render services. This feature owns only its water
 // runtime and authored setup; factory disposal must preserve those borrowed services.
-export function createAuthoredWaterFeature({services,emitters,enabledEmitters=emitters,runtimeEmitters=emitters,
+export function createAuthoredWaterFeature({services,emitters,enabledEmitters=emitters,recoveryEmitters=enabledEmitters,runtimeEmitters=emitters,
   visible=()=>true,viewerPaused=()=>null,preview=()=>{},refresh=()=>{},report=()=>{},
   loadHost=()=>import('./authored-water-host.mjs'),
   loadExperiment=async options=>{
@@ -23,7 +23,7 @@ export function createAuthoredWaterFeature({services,emitters,enabledEmitters=em
   if(!experiment)recoveryRequested=true;
   const ticket={generation,request:++request};
   const isCurrent=()=>ticket.generation===generation&&(admitted===ticket||ticket.request===request);
-  const inputs={setup:structuredClone(experiment??setup),emitters:experiment?[]:structuredClone(((replace||recovery)?enabledEmitters:emitters)())};
+  const inputs={setup:structuredClone(experiment??setup),emitters:experiment?[]:structuredClone((recovery?recoveryEmitters:replace?enabledEmitters:emitters)())};
   if(replace&&!experiment&&!inputs.emitters.length)throw Error('Show a water emitter before releasing water');
   const run=async()=>{
    let candidate=null,published=false;

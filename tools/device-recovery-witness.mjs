@@ -4,7 +4,7 @@ import {spawn,execFileSync} from 'node:child_process';
 import net from 'node:net';
 import path from 'node:path';
 import assert from 'node:assert/strict';
-const [out,route]=process.argv.slice(2),water=route==='water',presetFile=water?null:route;assert(out,'output directory required');
+const [out,route]=process.argv.slice(2),water=route==='water'||route==='water-hidden',hiddenWater=route==='water-hidden',presetFile=water?null:route;assert(out,'output directory required');
 const root=process.cwd(),report={status:'running',phase:'launch',root,commit:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),errors:[],events:[],observations:[]};
 await fs.mkdir(out,{recursive:true});const save=()=>fs.writeFile(out+'/report.json',JSON.stringify(report,null,2));await save();
 let server,context,page;
@@ -41,10 +41,17 @@ try{
  report.phase='before';report.before=await page.evaluate(async()=>({experiment:window.kaminosWorkbenchExperiments.state().id?await window.kaminosWorkbenchExperiments.read():null,objects:window.kaminosSceneAuthoring.read(),edits:window.kaminosSceneEdits.state(),sameEdits:window.__recoveryEdits===window.kaminosSceneEdits,flame:window.__kaminosVolumePrototype?.debugState(),water:window.kaminosWaterSources.read(),recovery:window.kaminosDeviceRecovery.state(),gi:window.kaminosSceneGIDebugState()}));await page.screenshot({path:out+'/before.png'});await save();
  for(let i=1;i<=2;i++){
   report.phase='loss-'+i;await save();
+  if(hiddenWater)await page.evaluate(()=>window.kaminosViewportSettings.set({hiddenIds:['water-field']}));
   const framesBefore=await page.evaluate(()=>window.kaminosSceneGIDebugState().sceneFrames);
   await page.evaluate(()=>{window.__recoveryWitnessCanvas??=document.getElementById('kaminos-host-renderer-canvas');window.kaminosLoseDevice();});
   await page.waitForFunction(i=>{const s=window.kaminosDeviceRecovery.state();if(s.phase==='failed')throw Error(s.error);return s.phase==='active'&&s.recoveries===i;},i);
   await page.waitForFunction(()=>window.kaminosDeviceRecovery.state().phase==='active');
+  if(hiddenWater){
+   const hidden=await page.evaluate(()=>({water:window.kaminosWaterSources.read(),display:window.kaminosViewportSettings.read()}));
+   assert(hidden.display.hiddenIds.includes('water-field'));assert.equal(hidden.water.runtime.particleCount,report.before.water.runtime.particleCount,'hidden field must retain its restart particles');
+   (report.hiddenRecoveries??=[]).push(hidden);
+   await page.evaluate(()=>window.kaminosViewportSettings.set({hiddenIds:[]}));
+  }
   const restarted=await page.evaluate(()=>({flame:window.__kaminosVolumePrototype?.debugState().frameCount??0,water:window.kaminosWaterSources.read().runtime?.step??0}));
   await page.waitForFunction(({preset,water,start})=>(!preset||window.__kaminosVolumePrototype.debugState().frameCount>start.flame)&&(!water||window.kaminosWaterSources.read().runtime.step>start.water),{preset:!!presetFile,water,start:restarted});
   await page.waitForTimeout(1000);

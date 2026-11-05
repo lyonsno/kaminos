@@ -4309,6 +4309,7 @@ const waterFeature = createAuthoredWaterFeature({
     getDisplayPolicy:()=>getLocalLiquidDisplayPolicy?.(),decorateOutput:output=>selectionFeedback.output(output)}),
   emitters:localLiquidEmitterRecords,
   enabledEmitters:()=>localLiquidEmitterRecords().filter(record=>isSceneItemVisible(record.id)),
+  recoveryEmitters:()=>localLiquidEmitterRecords().filter(record=>itemVisible(record.id,viewportDisplay.hiddenIds.filter(id=>id!=='water-field'),sceneVisibilityContext())),
   runtimeEmitters:()=>localLiquidEmitterState().emitters,
   visible:()=>isSceneItemVisible('water-field'),viewerPaused:()=>sceneViewerPaused,
   preview:visible=>{refreshAuthoredWaterSamplingPreviews();setAuthoredWaterPreviewVisible(visible);},
