@@ -1,3 +1,4 @@
+import {createConvexBodyContacts} from './fracture-convex-contact.mjs';
 import {batchCoarseCompute} from './fracture-compute-batch.mjs';
 import {buildIgnoredPairTable,createContactTopologyReset} from './fracture-contact-cache.mjs';
 import * as THREE from './lib/three.core.js';
@@ -13,18 +14,20 @@ const faceNormals=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]].map(value
 export async function createCoarseFractureDynamics(fixture, renderer) {
   if(!renderer.backend.isWebGPUBackend)throw new Error('GPU collapse requires a native WebGPU renderer');
   const {cells,bonds,config,dimensions,floorY}=fixture;
+  const useConvexContacts=config.collisions==='all'&&cells.every(cell=>cell.collisionHull);
   const restFrame=config.elasticModulus?coarseRestFrame(fixture):{origin:[0,0,0],cells,bonds,floorY};
   const origin=restFrame.origin,solverCells=restFrame.cells,solverBonds=restFrame.bonds;
   const {dx,dy,dz}=dimensions,device=renderer.backend.device,n=cells.length+1;
   const degree=cells.map(()=>0);for(const b of bonds){degree[b.a]++;degree[b.b]++;}
   const jointCapacity=Math.max(8,...degree.map(n=>n+1));
   if(cells.length===0)throw new Error('GPU arch requires occupied cells');
-  let engine,contactReset,disposed=false;
+  let engine,contactReset,bodyContacts,disposed=false;
   const ownedBuffers=[];
   const acquire=descriptor=>{const buffer=device.createBuffer(descriptor);ownedBuffers.push(buffer);return buffer;};
   function dispose(){if(disposed)return;disposed=true;const errors=[];
     for(const buffer of ownedBuffers)try{buffer.destroy();}catch(error){errors.push(error);}
     try{contactReset?.dispose();}catch(error){errors.push(error);}
+    try{bodyContacts?.dispose();}catch(error){errors.push(error);}
     try{engine?.dispose(renderer);}catch(error){errors.push(error);}
     if(errors.length)throw new AggregateError(errors,'GPU arch resource cleanup failed');
   }
@@ -34,12 +37,12 @@ export async function createCoarseFractureDynamics(fixture, renderer) {
     enableBvhBuild:false,maxJointsPerBodySolver:jointCapacity,maxPairsPerBodyBroadphase:n-1,maxContactsPerBodySolver:(n-1)*4,
     pairManifoldSlots:4,avbdFriction:config.friction,avbdPenaltyDecayGamma:1});
   engine.setAvbdPreventPenetratingNormalDropout(config.preventPenetratingNormalDropout);
-  for(const cell of solverCells)engine.addBody({position:cell.position,halfExtents:cell.halfExtents,mass:cell.mass,friction:config.friction,collisionGroup:1,collisionMask:config.collisions==='none'?0:config.collisions==='floor-only'?2:3});
+  for(const cell of solverCells)engine.addBody({position:cell.position,halfExtents:cell.halfExtents,mass:cell.mass,friction:config.friction,collisionGroup:1,collisionMask:config.collisions==='none'?0:(useConvexContacts||config.collisions==='floor-only')?2:3});
   engine.addBody({position:[0,restFrame.floorY-.2,0],halfExtents:[100,.2,100],mass:0,friction:config.friction,collisionGroup:2,collisionMask:1});
   for(const bond of solverBonds){const j=engine.addFixedJoint(bond.a,bond.b,bond.anchorA,bond.anchorB,bond.linearStiffness??config.stiffness,true),data=engine.jointRecordsData,arm=Math.max(data[j*44+7],1);
     data[j*44+16]=bond.linearStiffness??config.stiffness;data[j*44+17]=bond.rotationalStiffness===undefined?config.stiffness:bond.rotationalStiffness/(arm*arm);
   }
-  const ignoredPairs=buildIgnoredPairTable(solverCells,solverBonds,engine.pairIgnoredBitsOffset);
+  const ignoredPairs=useConvexContacts?{pairs:[],data:new Float32Array(16)}:buildIgnoredPairTable(solverCells,solverBonds,engine.pairIgnoredBitsOffset);
   for(const pair of ignoredPairs.pairs)engine.setPairCollisionIgnored(pair.i,pair.j,true);
   for(const cell of solverCells){const j=engine.addSphericalJoint(null,cell.index,cell.position,[0,0,0],config.gripStiffness,false);engine.setInitialJointActive(j,false);}
   const counts=cells.map(()=>0);for(const bond of bonds){counts[bond.a]++;counts[bond.b]++;}
@@ -65,6 +68,10 @@ export async function createCoarseFractureDynamics(fixture, renderer) {
   const group=device.createBindGroup({layout,entries:resources.map((buffer,binding)=>({binding,resource:{buffer}}))});
   const contactState=engine.getContactRenderBuffers();
   contactReset=await createContactTopologyReset(device,{joints:resident('joints'),damage:buffers.damage,contacts:renderer.backend.get(contactState.pairContacts).buffer,parameters:buffers.parameters,positions:resident('positions'),quaternions:resident('quaternions'),pairActivity:renderer.backend.get(contactState.pairActivity).buffer,ignoredPairs,bodies:cells.length,bonds:bonds.length,contactCount:contactState.maxPairContacts});
+  if(useConvexContacts){
+    bodyContacts=await createConvexBodyContacts(device,{cells:solverCells,bonds:solverBonds,positions:resident('positions'),quaternions:resident('quaternions'),contacts:renderer.backend.get(contactState.pairContacts).buffer,joints:resident('joints'),friction:config.friction});
+    engine.setBodyContactGenerator(bodyContacts);
+  }
   let stepIndex=1,observedStep=0,epoch=0,hand=null,gripGeneration=0,bindRequest=null,residentHandIntent=false,observedResidentHand=null;
   const events=[],samples=[];
   const state={bodies:cells.map(cell=>({...cell,position:xyz(cell.position),rest:xyz(cell.position),quaternion:{x:0,y:0,z:0,w:1},velocity:{x:0,y:0,z:0},angularVelocity:{x:0,y:0,z:0}})),
@@ -122,7 +129,7 @@ export async function createCoarseFractureDynamics(fixture, renderer) {
       hand:hand?{index:hand.index,indices:hand.members.map(member=>member.index),weights:hand.members.map(member=>member.weight),radius:config.gripRadius,layers:hand.layers,normal:hand.normal,contactSurface:hand.contactSurface,localPoint:{...hand.localPoint},target:{...hand.target},force:{...hand.force}}:observedResidentHand,
       bodies:state.bodies.map(body=>({...body,component:graph.labels[body.index],stress:Math.max(0,...state.bonds.filter(bond=>bond.alive&&(bond.a===body.index||bond.b===body.index)).map(bond=>bond.stress))})),
       bonds:state.bonds.map(bond=>({...bond,normal:xyz(bond.normal),anchorA:xyz(bond.anchorA),anchorB:xyz(bond.anchorB)})),broken:state.bonds.filter(bond=>!bond.alive).length,components:graph.components,events:events.map(event=>({...event})),samples:samples.map(sample=>({...sample})),
-      residency:{bodyPose:'gpu-authoritative',connectivity:'gpu-authoritative',collision:config.collisions??'disabled-for-supported-pull-comparison',consumer:'resident-pose-surface-and-bond-visibility',ordinaryStateReadbacks:0,allPairsCapacity:engine.maxCandidatePairs,allPairsRequired:n*(n-1)/2,contactsPerBody:(n-1)*4,jointsPerBody:jointCapacity,substeps:engine.getSubsteps(),preventPenetratingNormalDropout:engine.getAvbdPreventPenetratingNormalDropout(),stats:engine.getStats()}};},
+      residency:{contactShape:bodyContacts?'complete-source-convex-hulls':'legacy-boxes',contactShapeBytes:bodyContacts?.packedBytes??0,bodyPose:'gpu-authoritative',connectivity:'gpu-authoritative',collision:config.collisions??'disabled-for-supported-pull-comparison',consumer:'resident-pose-surface-and-bond-visibility',ordinaryStateReadbacks:0,allPairsCapacity:engine.maxCandidatePairs,allPairsRequired:n*(n-1)/2,contactsPerBody:(n-1)*4,jointsPerBody:jointCapacity,substeps:engine.getSubsteps(),preventPenetratingNormalDropout:engine.getAvbdPreventPenetratingNormalDropout(),stats:engine.getStats()}};},
     readSolverDiagnostics:async()=>{
       const words=Array.from(new Uint32Array(await renderer.getArrayBufferAsync(engine.bodyConstraintCountsAttr)));
       const bodyConstraints=words.slice(0,cells.length).map((word,index)=>({index,word,count:word&65535,color:(word>>>16)&255}));

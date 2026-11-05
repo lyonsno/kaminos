@@ -1,8 +1,15 @@
 // Preserve compute order and per-dispatch uniform values while sharing passes.
 // All renderer/device hooks are scoped to this synchronous engine submission.
 const captures = new WeakMap();
+const activeBatches = new WeakMap();
+export function encodeCoarseExternalCompute(renderer,encode){
+ const device=renderer.backend.device,active=activeBatches.get(device);
+ if(active){if(active.groups.size)throw Error('External compute cannot interrupt an unfinished native group');active.operations.push({external:encode});return;}
+ const encoder=device.createCommandEncoder({label:'Material contact work'});encode(encoder);device.queue.submit([encoder.finish()]);
+}
 export function batchCoarseCompute(renderer, action) {
  const backend=renderer.backend,device=backend.device,queue=device.queue;
+ if(activeBatches.has(device))throw Error('Nested fracture compute batches are unsupported');
  if(backend.trackTimestamp)throw Error('Fracture compute batching requires timestamp tracking disabled');
  let capture=captures.get(device);
  if(!capture){
@@ -56,6 +63,7 @@ export function batchCoarseCompute(renderer, action) {
  };
  queue.writeBuffer=function(buffer,bufferOffset,data,dataOffset=0,size){const copy=capture.track(buffer,bufferOffset,data,dataOffset,size);if(buffer.usage&GPUBufferUsage.UNIFORM){dirtyUniforms.add(buffer);return;}if(copy.byteLength%4||bufferOffset%4)throw Error('Unaligned storage upload');operations.push({buffer,bufferOffset,copy,offset:uploadBytes});uploadBytes+=copy.byteLength;};
  queue.submit=()=>{throw Error('Unexpected GPU submission inside fracture batch');};
+ activeBatches.set(device,{operations,groups});
  try{
   const value=action();if(value?.then)throw Error('Fracture compute action must be synchronous');if(groups.size)throw Error('Unfinished compute group');
   const copyDst=GPUBufferUsage.COPY_DST??8;
@@ -81,6 +89,7 @@ export function batchCoarseCompute(renderer, action) {
   for(const buffer of dirtyUniforms)write.call(queue,buffer,0,capture.shadows.get(buffer).bytes);
   const encoder=device.createCommandEncoder({label:'Fracture shared compute passes'});let pass=null;
   for(const op of operations){
+   if(op.external){if(pass){pass.end();pass=null;}op.external(encoder);continue;}
    if(op.copy){if(pass){pass.end();pass=null;}encoder.copyBufferToBuffer(capture.uploadBuffer,op.offset,op.buffer,op.bufferOffset,op.copy.byteLength);continue;}
    if(!pass){pass=encoder.beginComputePass();}
    for(const c of op.commands){const args=[...c.args];if(c.method==='setBindGroup'){
@@ -90,5 +99,5 @@ export function batchCoarseCompute(renderer, action) {
   }
   if(pass)pass.end();submit.call(queue,[encoder.finish()]);
   return value;
- }finally{device.createBindGroup=create;backend.beginCompute=begin;backend.finishCompute=finish;queue.writeBuffer=write;queue.submit=submit;}
+ }finally{activeBatches.delete(device);device.createBindGroup=create;backend.beginCompute=begin;backend.finishCompute=finish;queue.writeBuffer=write;queue.submit=submit;}
 }

@@ -1,3 +1,4 @@
+import {materialContactShape} from './fracture-contact-shape.mjs';
 import {bisectFaces,extractFaces,capPlanarOpenings,sectionSegments,sectionLoops,sectionCap} from './poly-mesh-edit.mjs';
 import {ShapeUtils,Vector2} from './lib/three.core.js';
 import {matchMaterialSections} from './fracture-material-sections.mjs';
@@ -149,7 +150,7 @@ export function prepareWholeFracture(source,view,{cellExtent,strength=3000000,gr
   const p=triangle(leaf.arrays,f),center=[0,1,2].map(k=>(p[0][k]+p[1][k]+p[2][k])/3);candidates.sort((x,y)=>insideDistance(center,leaves[x.b.a===leaf.index?x.b.b:x.b.a])-insideDistance(center,leaves[y.b.a===leaf.index?y.b.b:y.b.a]));leaf.faceBonds[f]=candidates[0].index;
  }}
  const maxVolume=Math.max(...leaves.map(l=>l.volume)),substantial=leaves.filter(l=>l.volume>=maxVolume*.1),support=substantial.reduce((a,b)=>a.bounds.min[1]<b.bounds.min[1]?a:b);
- const cells=leaves.map(l=>({index:l.index,id:'cell:'+l.index,part:l.part,pinned:l===support,position:l.center,halfExtents:l.halfExtents,mass:l===support?0:l.volume,volume:l.volume,column:0,row:0,layer:0}));
+ const cells=leaves.map(l=>({index:l.index,id:'cell:'+l.index,part:l.part,pinned:l===support,position:l.center,halfExtents:l.halfExtents,collisionHull:materialContactShape(l.arrays,l.center,l.halfExtents),mass:l===support?0:l.volume,volume:l.volume,column:0,row:0,layer:0}));
  for(const bond of bonds){const length=Math.max(Math.hypot(...sub(cells[bond.a].position,cells[bond.b].position)),extent*Number.EPSILON);bond.materialLength=length;bond.linearStiffness=elasticModulus*bond.area/length;bond.rotationalStiffness=elasticModulus*bond.area*bond.area/(4*Math.PI*length);}
  const exteriorAreaAfter=leaves.reduce((sum,l)=>sum+materialMeasure(l.arrays,f=>l.faceInterfaces[f]===0).area,0);
  if(Math.abs(exteriorAreaAfter-total.area)>total.area*1e-5)throw Error('Whole-object partition lost original exterior area');

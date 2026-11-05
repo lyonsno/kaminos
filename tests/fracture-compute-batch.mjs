@@ -54,3 +54,17 @@ runIterativeStep();
 assert.deepEqual(observed.slice(-4),[11,12,11,12],'Second step observes exact per-dispatch values');
 assert.equal(createdBuffers,0,'Steady-state steps must reuse persistent uniform/upload buffers');
 assert.equal(createdBindGroups,0,'Steady-state steps must reuse cached bind groups across frames');
+
+// A raw material contact pass must remain ordered inside the same engine batch.
+// Before the bridge, the generator submitted its own encoder and was rejected.
+const batchAPI=await import(process.env.FRACTURE_BATCH_TEST_MODULE??'../fracture-compute-batch.mjs');
+const external=batchAPI.encodeCoarseExternalCompute??((renderer,encode)=>{const encoder=renderer.backend.device.createCommandEncoder();encode(encoder);renderer.backend.device.queue.submit([encoder.finish()]);});
+const externalSource=device.createBuffer({size:16,usage:0});
+device.queue.writeBuffer(externalSource,0,new Uint32Array([29,0,0,0]));
+batchCoarseCompute(renderer,()=>{
+ binding=device.createBindGroup({layout:{},entries:[{binding:0,resource:{buffer:storage}}]});
+ device.queue.writeBuffer(storage,0,new Uint32Array([19,0,0,0]));emit();
+ external(renderer,encoder=>encoder.copyBufferToBuffer(externalSource,0,storage,0,16));emit();
+});
+assert.deepEqual(observed.slice(-2),[19,29],'Raw contact work retains order between native solve dispatches');
+assert.equal(device.queue.submit,originalSubmit,'External pass bridge restores the submission hook');
