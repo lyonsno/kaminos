@@ -34,12 +34,12 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
   function update(item,value){
     assertLive(item);item.value={...item.value,...validateParameters(value)};item.error=null;
     try{
-      const result=deformStock(sourceGeometry.attributes.position.array,sourceGeometry.attributes.normal.array,recipe.source.profile,item.value);
+      const result=deformStock(sourceGeometry.attributes.position.array,sourceGeometry.attributes.normal.array,recipe.source.profile,item.value,sourceGeometry.attributes.stockRestAxial?.array);
       item.mesh.geometry.attributes.position.array.set(result.positions);item.mesh.geometry.attributes.normal.array.set(result.normals);
       item.mesh.geometry.attributes.position.needsUpdate=true;item.mesh.geometry.attributes.normal.needsUpdate=true;
       item.mesh.geometry.computeBoundingBox();item.mesh.geometry.computeBoundingSphere();item.metrics=result.metrics;item.mesh.visible=true;item.invalid.visible=false;
       const warp=createStockWarp(recipe.source.profile,item.value),colors=new Float32Array(result.positions.length);
-      for(let i=0;i<colors.length;i+=3){const s=warp.point(Array.from(sourceGeometry.attributes.position.array.subarray(i,i+3))).axial;
+      for(let i=0;i<colors.length;i+=3){const s=warp.point(Array.from(sourceGeometry.attributes.position.array.subarray(i,i+3))).axial/(sourceGeometry.attributes.stockRestAxial?.array[i/3]??1);
         const magnitude=Math.min(1,Math.abs(Math.log2(s))/3);colors.set(s>=1?[.15+.85*magnitude,.65-.4*magnitude,.65-.55*magnitude]:[.15+.4*magnitude,.65-.4*magnitude,.65+.35*magnitude],i);}
       item.mesh.geometry.setAttribute('color',new BufferAttribute(colors,3));
     }catch(e){item.error=e.message;item.metrics=null;item.mesh.visible=false;item.invalid.visible=true;}
@@ -79,7 +79,8 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
         if(disposed||request!==sourceRequest)throw Error('Source request superseded');
         if(!intact()||edits.state().active||edits.state().replaying)throw Error('Finish the current edit before replacing its source');
         const next=replaceStockSource(recipe,loaded.source);
-        const replacements=[reference,...items.map(i=>i.asset)].map(()=>({geometry:loaded.geometry.clone(),material:cloneStockMaterial(loaded.material)}));
+        const replacements=[reference,...items.map(i=>i.asset)].map((_,index)=>({geometry:(index===0?loaded.referenceGeometry??loaded.geometry:loaded.geometry).clone(),material:cloneStockMaterial(loaded.material)}));
+        loaded.referenceGeometry?.dispose();
         edits.discard(entry=>stockHistoryReferences(entry,new Set([sourceTarget,...items.map(i=>i.target)])));
         const oldGeometry=sourceGeometry,oldMaterial=sourceMaterial;
         recipe=next;sourceGeometry=loaded.geometry;sourceMaterial=loaded.material;loaded=null;
@@ -91,7 +92,7 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
         }
         oldGeometry.dispose();disposeStockMaterial(oldMaterial);for(const item of items)update(item,params(item));
         record({kind:'stock-family.source',phase:'applied',effective:structuredClone(recipe.source)});return read();
-      }finally{if(loaded){loaded.geometry.dispose();disposeStockMaterial(loaded.material);}if(request===sourceRequest){sourceBusy=false;refresh();}}
+      }finally{if(loaded){loaded.referenceGeometry?.dispose();loaded.geometry.dispose();disposeStockMaterial(loaded.material);}if(request===sourceRequest){sourceBusy=false;refresh();}}
     },
     bands({locks}){const profile=validateProfile({...recipe.source.profile,locks:structuredClone(locks)});edits.apply(sourceTarget,profile,'Protect source bands');return read();},
     set({id,...change}){const item=items.find(i=>i.value.id===id);if(!item)throw Error('Unknown stock member');assertLive(item);
@@ -109,7 +110,7 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
   try{
     if(!edits||!host.controls.mountObject)throw Error('Native object editing host required');
     const loaded=await loadStockSource(recipe.source);sourceGeometry=loaded.geometry;sourceMaterial=loaded.material;
-    const root=new Group();root.name='Source reference';root.add(new Mesh(sourceGeometry.clone(),cloneStockMaterial(sourceMaterial)));root.position.set(-3,.15,-1.7);putPose(root,recipe.referencePose);
+    const root=new Group();root.name='Source reference';root.add(new Mesh(loaded.referenceGeometry??sourceGeometry.clone(),cloneStockMaterial(sourceMaterial)));root.position.set(-3,.15,-1.7);putPose(root,recipe.referencePose);
     reference=await session.attach(root,{owned:true,metadata:{label:root.name,source:'kaminos:stock-family'}});
     watchRemoval(reference);
     for(const [index,value] of recipe.variants.entries()){
@@ -152,11 +153,26 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
     const fitting=document.createElement('details'),fittingTitle=document.createElement('summary');fittingTitle.textContent='Source fitting';fitting.append(fittingTitle);common.append(fitting);
     const axisLabel=document.createElement('label'),axis=document.createElement('select');axisLabel.textContent='Length axis';axis.className='transform-input';axis.setAttribute('aria-label','Source length axis');
     for(const value of ['z','x','y','-z','-x','-y']){const option=document.createElement('option');option.value=value;option.textContent=value.toUpperCase();axis.append(option);}axisLabel.append(axis);fitting.append(axisLabel);
-    axis.onchange=()=>{axis.blur();chooseSource({...recipe.source,fit:{axis:axis.value}},true);};
+    axis.onchange=()=>{axis.blur();chooseSource({...recipe.source,fit:{...recipe.source.fit,axis:axis.value}},true);};
+    const pathLabel=document.createElement('label'),pathMode=document.createElement('select');pathLabel.textContent='Source path';pathMode.className='transform-input';pathMode.setAttribute('aria-label','Source path');
+    for(const [value,text]of [['straight','Straight'],['arc','Arc with tangent legs']]){const option=document.createElement('option');option.value=value;option.textContent=text;pathMode.append(option);}pathLabel.append(pathMode);fitting.append(pathLabel);
+    const arcFields=document.createElement('div'),arcInputs={};arcFields.className='stock-rest-arc';fitting.append(arcFields);
+    for(const [key,label]of [['x','Center X'],['z','Center Z'],['radius','Radius'],['start','Start degrees'],['sweep','Sweep degrees']]){
+      const row=document.createElement('label'),input=document.createElement('input');row.textContent=label;input.type='number';input.step='any';input.className='transform-input';input.setAttribute('aria-label','Rest arc '+label);row.append(input);arcFields.append(row);arcInputs[key]=input;
+    }
+    pathMode.onchange=()=>{arcFields.hidden=pathMode.value!=='arc';};
+    const applyPath=document.createElement('button');applyPath.className='btn';applyPath.textContent='Apply source path';fitting.append(applyPath);
+    applyPath.onclick=async()=>{try{
+      let arc;if(pathMode.value==='arc'){
+        const values=Object.fromEntries(Object.entries(arcInputs).map(([k,input])=>{if(!input.value.trim()||!Number.isFinite(Number(input.value)))throw Error('Enter finite rest arc values');return [k,Number(input.value)];}));
+        arc={center:[values.x,values.z],radius:values.radius,start:values.start,sweep:values.sweep};
+      }
+      await chooseSource({...recipe.source,fit:{axis:axis.value,...(arc?{arc}:{})}},true);
+    }catch(e){sourceStatus.textContent=e.message;}};
     const bandTitle=document.createElement('h4');bandTitle.textContent='Protected bands (%)';const bands=document.createElement('div');bands.className='stock-source-bands';fitting.append(bandTitle,bands);
     const addBand=document.createElement('button'),applyBands=document.createElement('button');addBand.className=applyBands.className='btn';addBand.textContent='Add protected band';applyBands.textContent='Apply bands';fitting.append(addBand,applyBands);
     const sourceIdentity=document.createElement('output');sourceIdentity.className='stock-source-identity';fitting.append(sourceIdentity);
-    let sourceKey='',bandKey='',bandDraft=[];
+    let sourceKey='',bandKey='',pathKey='',bandDraft=[];
     addBand.onclick=()=>{try{const p=recipe.source.profile,locks=bandsFromPercent(p,bandDraft),points=[p.min,...locks.flat(),p.max],gaps=[];for(let i=0;i<points.length;i+=2)if(points[i+1]>points[i])gaps.push([points[i],points[i+1]]);gaps.sort((a,b)=>(b[1]-b[0])-(a[1]-a[0]));const gap=gaps[0];if(!gap)return;bandDraft=[...locks,[gap[0],gap[0]+(gap[1]-gap[0])*.1]].sort((a,b)=>a[0]-b[0]).map(b=>b.map(v=>bandPercent(p,v)));renderBands();sourceStatus.textContent='';}catch(e){sourceStatus.textContent=e.message;}};
     applyBands.onclick=async()=>{try{await invoke('bands',{locks:bandsFromPercent(recipe.source.profile,bandDraft)});sourceStatus.textContent='';bandKey='';refresh();}catch(e){sourceStatus.textContent=e.message;}};
     function renderBands(){
@@ -169,6 +185,12 @@ export default {id:'stock-family',title:'Stockroom - adaptable trough',async cre
       const sources=recipe.sources??[recipe.source],key=JSON.stringify(sources.map(s=>[s.sha256,s.label]));
       if(key!==sourceKey){sourceKey=key;sourceSelect.replaceChildren();for(const s of sources){const option=document.createElement('option');option.value=s.sha256;option.textContent=s.label??(s.sha256===DEFAULT_RECIPE.source.sha256?'Steel trough':s.sha256.slice(0,12));sourceSelect.append(option);}}
       sourceSelect.value=recipe.source.sha256;sourceSelect.disabled=sourceBusy;importButton.disabled=sourceBusy;axis.disabled=sourceBusy;axis.value=recipe.source.fit?.axis??'z';
+      applyPath.disabled=sourceBusy;
+      const nextPathKey=JSON.stringify([recipe.source.sha256,recipe.source.fit]);if(nextPathKey!==pathKey){
+        pathKey=nextPathKey;const arc=recipe.source.fit?.arc;pathMode.value=arc?'arc':'straight';arcFields.hidden=!arc;
+        const values=arc?{x:arc.center[0],z:arc.center[1],radius:arc.radius,start:arc.start,sweep:arc.sweep}:{x:0,z:0,radius:.3,start:-70,sweep:140};
+        for(const [key,value]of Object.entries(values))arcInputs[key].value=value;
+      }
       sourceIdentity.textContent=recipe.source.sha256;sourceIdentity.title=recipe.source.url;
       const profile=recipe.source.profile,nextKey=JSON.stringify([recipe.source.sha256,profile]);if(nextKey===bandKey)return;bandKey=nextKey;bandDraft=profile.locks.map(b=>b.map(v=>bandPercent(profile,v)));renderBands();sourceStatus.textContent='';
     }
