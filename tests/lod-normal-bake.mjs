@@ -193,3 +193,15 @@ test('decode face normals: a flat edge between oppositely wound coplanar faces n
   assert.ok(n && degrees(unit(n), [0, 0, 1]) < 1e-5, `${n}`);
   assert.match(sampler.method, /face geometric normal.*averaged over the texel footprint/);
 });
+
+test('readGLBWorldMesh accepts Uint8Array subarrays with non-zero byteOffset and matches ArrayBuffer output', () => {
+  const ab = squareGLB();
+  const padded = new Uint8Array(ab.byteLength + 14);
+  padded.set(new Uint8Array(ab), 7);
+  const sub = padded.subarray(7, 7 + ab.byteLength);
+  const fromAb = readGLBWorldMesh(ab);
+  const fromSub = readGLBWorldMesh(sub);
+  assert.deepEqual([...fromSub.vertices], [...fromAb.vertices]);
+  assert.deepEqual([...fromSub.faces], [...fromAb.faces]);
+  assert.deepEqual([...fromSub.normals], [...fromSub.normals]);
+});
