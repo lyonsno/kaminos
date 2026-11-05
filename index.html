@@ -3031,7 +3031,7 @@ import {installAshSourceInspector} from './ash/source-controls.mjs';
 import {installAshInspector,askAshSetup} from './ash/scene-controls.mjs';
 import {createSceneLifecycle} from './scene-lifecycle.mjs';
 import {createPreparedAssetPool,disposePreparedAsset,releasePreparedRoot,prepareSceneAssetBatch} from './scene-asset-preparation.mjs';
-import {lodPreparationContext,captureLodPreparation,cachedLodPreparation} from './scene-lod-startup.mjs';
+import {lodPreparationContext,captureLodPreparation,cachedLodPreparation,createCoarseRepetition} from './scene-lod-startup.mjs';
 import { createSceneObjectPublicationGuard, publishSceneObjectIfCurrent } from './scene-object-publication.mjs';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig, emitterCompilerControls } from './volume-core.js';
 import { pressureResolutionPlan } from './volume-pressure-resolution.mjs';
@@ -13316,6 +13316,8 @@ const lowLodStandInBytesCache = new Map();
 const activeSceneStandIns = new Map();
 const settledSceneStandInIds = new Set();
 let activeSceneStandInRequestId = null;
+let coarseSceneGroups=[];
+const coarseRepetition=createCoarseRepetition({previews:()=>[...activeSceneStandIns.values()],groups:()=>coarseSceneGroups});
 
 function ensureSceneLoadingStandInGroup() {
   if (typeof scene === 'undefined' || !scene) return null;
@@ -13363,6 +13365,7 @@ function removeSceneLowLodStandIn(recordId, { markSettled = true } = {}) {
   if (!entry) return false;
   activeSceneStandIns.delete(recordId);
   if (entry.root) {
+    coarseRepetition.clear(entry.root);
     entry.root.removeFromParent();
     disposeObjectTree(entry.root);
     entry.root = null;
@@ -13382,7 +13385,8 @@ function clearSceneLowLodStandIns(matchRequestId = undefined) {
   }
 }
 
-function stageSceneLowLodStandIns(records, loadRequestId = null) {
+function stageSceneLowLodStandIns(records, loadRequestId = null,groups=[]) {
+  coarseSceneGroups=groups;
   if (!Array.isArray(records) || !records.length || typeof fetch !== 'function' || typeof GLTFLoader !== 'function') return;
   const adoptingPrestage = activeSceneStandInRequestId === null && loadRequestId !== null;
   if (!adoptingPrestage && activeSceneStandInRequestId !== loadRequestId) {
@@ -13408,7 +13412,7 @@ function stageSceneLowLodStandIns(records, loadRequestId = null) {
       continue;
     }
     if (existing) removeSceneLowLodStandIn(record.id, { markSettled: false });
-    const placeholder = { id: record.id, root: null, sha, loadRequestId };
+    const placeholder = { id: record.id, record, root: null, sha, loadRequestId };
     activeSceneStandIns.set(record.id, placeholder);
     placeholder.promise=(async()=>{
       const prepared=await loadSceneLowLodStandIn(sha);
@@ -13455,9 +13459,10 @@ function stageSceneLowLodStandIns(records, loadRequestId = null) {
         }
         placeholder.root = proxyRoot;
         group.add(proxyRoot);
+        coarseRepetition.sync();
         window._kaminosDirty?.();
       } catch {
-        proxyRoot.removeFromParent();disposeObjectTree(proxyRoot);placeholder.root=null;
+        coarseRepetition.clear(proxyRoot);proxyRoot.removeFromParent();disposeObjectTree(proxyRoot);placeholder.root=null;
         if (activeSceneStandIns.get(record.id) === placeholder) activeSceneStandIns.delete(record.id);
       }
     })();
@@ -13466,12 +13471,12 @@ function stageSceneLowLodStandIns(records, loadRequestId = null) {
   return Promise.all(preparations);
 }
 
-function sceneLodContext(records){return lodPreparationContext({camera:readAuthoredCameraView(),viewport:[renderer.domElement.width,renderer.domElement.height],settings:sceneBeautyLods?.read()??null,objects:records});}
+function sceneLodContext(records,groups=workingScene.groups){return lodPreparationContext({groups,camera:readAuthoredCameraView(),viewport:[renderer.domElement.width,renderer.domElement.height],settings:sceneBeautyLods?.read()??null,objects:records});}
 async function prepareSavedSceneAssets(records,requestId,setup){
   const current=()=>requestId==null||sceneLoadRequests.isCurrent(requestId);
   const owner={requestId};sceneAssetPreparationOwner=owner;sceneAssetPreparationActive=false;
   sceneArrivalState={phase:'coarse',expectedCoarseObjects:records.filter(record=>resolveEarlyLowLodMeshSha(record)).length,coarseObjects:0};
-  await stageSceneLowLodStandIns(records,requestId);
+  await stageSceneLowLodStandIns(records,requestId,setup?.startupGroups??[]);
   if(!current())throw Error('Scene load superseded');
   sceneArrivalState.coarseObjects=[...activeSceneStandIns.values()].filter(row=>row.root).length;
   // Let the complete small scene paint before source decoding competes for the main thread.
@@ -13479,7 +13484,9 @@ async function prepareSavedSceneAssets(records,requestId,setup){
   if(!current())throw Error('Scene load superseded');
   window.dispatchEvent(new CustomEvent('kaminos-scene-coarse-ready',{detail:{...sceneArrivalState}}));
   sceneAssetPreparationActive=true;sceneArrivalState.phase='sources';
-  const hints=cachedLodPreparation(setup?.startupLodHint,sceneLodContext(records));
+  const context=sceneLodContext(records,setup?.startupGroups??[]);
+  const hints=cachedLodPreparation(setup?.startupLodHint,context);
+  sceneArrivalState.hintContext=context;sceneArrivalState.savedHintContext=setup?.startupLodHint?.context??null;
   sceneArrivalState.cachedHints=hints.size;
   const seeds=new Map();
   const seedWork=Promise.allSettled(records.filter(row=>row.type==='glb').map(async record=>{
@@ -13511,7 +13518,7 @@ function prestageAdmittedSceneCameraAndProxies(admittedScene) {
     groundPlane.material.roughness = Number.isFinite(env.ground.roughness) ? env.ground.roughness : 0.65;
   }
   if (Array.isArray(admittedScene.plan?.objects) && admittedScene.plan.objects.length > 0) {
-    stageSceneLowLodStandIns(admittedScene.plan.objects, null);
+    stageSceneLowLodStandIns(admittedScene.plan.objects, null,admittedScene.plan.groups??[]);
   }
 }
 
@@ -26806,7 +26813,7 @@ function restoreLoadedSceneRecord(entry,record){
   if(record.groupId)setSceneObjectGroupId(entry,record.groupId);
 }
 async function loadSceneObjects(records, activeId, groups = [], activeGroupId = null, liquidSetup = null, loadRequestId = null,startupLodHint=null) {
-  return sceneLifecycle.replace(records,{activeId,groups,activeGroupId,setup:{water:liquidSetup,flame:{composition:activeSceneComposition,sourcePresent:authoredFlamePresent},startupLodHint},loadRequestId});
+  return sceneLifecycle.replace(records,{activeId,groups,activeGroupId,setup:{water:liquidSetup,flame:{composition:activeSceneComposition,sourcePresent:authoredFlamePresent},startupLodHint,startupGroups:groups},loadRequestId});
 }
 
 function writeAuthoredCameraView(view){
@@ -28665,7 +28672,7 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
     applySceneCameraView(data.camera);
   }
   if (typeof stageSceneLowLodStandIns === 'function') {
-    stageSceneLowLodStandIns(objectRecords, loadRequestId);
+    stageSceneLowLodStandIns(objectRecords, loadRequestId,restorePlan.groups);
   }
 
   // Restore the lighting recipe now; maps load independently of scene objects.
