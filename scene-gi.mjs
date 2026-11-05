@@ -190,6 +190,8 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
       effect.useScreenSpaceSampling.value = next.screenSpaceSampling;
       effect.useLinearThickness.value = next.linearThickness;
       effect.backfaceLighting.value = next.backfaceLighting;
+      effect.useMipSampling.value = next.mipSampling;
+      effect.usePerspectiveReconstruction.value = next.perspectiveReconstruction;
       if(Object.keys(next).some(key=>next[key]!==estimator[key]))history.reset('estimator-parameters');
       for(const pair of filters.values())for(const {filter} of [pair.ao,pair.gi])for(const key of ['depthPhi','normalPhi','lumaPhi'])filter[key].value=next[key];
       estimator = next;
@@ -231,7 +233,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
       for(let i=0;i<bytes.length;i+=16384)chunks.push(String.fromCharCode(...bytes.subarray(i,i+16384)));
       return {kind,source:kind==='surface'?'opaque-source-flame-irradiance':kind==='receiving'?'receiving':kind==='incoming'&&settings.temporal?'temporal-result':'current-estimate',estimatorFrames:frames,historyFrames:history.frames,view:settings.view,width:target.width,height:target.height,format:data instanceof Float32Array?'rgba32f-little-endian':'rgba16f-little-endian',base64:btoa(chunks.join('')),stats:{sum,max,nonzero,finite,...(kind==='surface'?{covered}:{})}};
     },
-    debugState:()=>({identity:'three-ssilvb-scene-gi-v1',...settings,estimator:{...estimator},frames,
+    debugState:()=>({identity:'three-ssilvb-scene-gi-v1',...settings,estimator:{...estimator},optimizations:effect.getOptimizationState(),frames,
       history:{enabled:settings.temporal,frames:history.frames,valid:history.valid.value,resetReason:history.resetReason,bytesPerPixel:64,weight:history.weight.value,...history.state()},source:'opaque-linear-lit-surfaces',receiver:'opaque-physical-material-diffuse',
       feedback:{requested:settings.bounceFeedback,effective:history.feedback.value,source:'previous-unboosted-irradiance',checkpointBytesPerPixel:history.convergence.checkpoint?16:0,validation:'previous-depth-and-world-normal',gainApplied:false},
       resolution:[effect._ssgiRenderTarget.width,effect._ssgiRenderTarget.height],
