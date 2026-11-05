@@ -57,13 +57,19 @@ export function chooseFineCoverage(input,options={}) {
  if(headroomRequested&&sourceCenter)add([frame.translate[0]+offset[0],sourceCenter[1],frame.translate[2]+offset[2]],true);
  const strongest=db.reduce((best,b)=>b.weight>(best?.weight??0)?b:best,null);if(strongest)add(center(strongest));
  let best=frame.translate,bestScore=current,bestDistance=0,bestHeadroom=currentHeadroom;
+ let preferred=frame.translate,preferredScore=current,preferredError=currentHeadroom,preferredDistance=0;
  for(const t of candidates){
   const s=score(t),h=headroomError(t),distance=t.reduce((sum,x,a)=>sum+(x-frame.translate[a])**2,0);
+  if(headroomRequested&&s>=current-1e-9&&(h<preferredError-1e-9||(Math.abs(h-preferredError)<1e-9&&(s>preferredScore+1e-9||Math.abs(s-preferredScore)<1e-9&&distance<preferredDistance)))){preferred=t;preferredScore=s;preferredError=h;preferredDistance=distance;}
   const equalCoverage=Math.abs(s-bestScore)<1e-9;
   if(s>bestScore+1e-9||(equalCoverage&&(headroomRequested&&h<bestHeadroom-1e-9||(!headroomRequested||Math.abs(h-bestHeadroom)<1e-9)&&distance<bestDistance))){best=t;bestScore=s;bestDistance=distance;bestHeadroom=h;}
  }
- const total=all.reduce((s,b)=>s+b.weight,0),gain=bestScore-current;
- const headroomMove=headroomRequested&&Math.abs(gain)<1e-9&&bestHeadroom<currentHeadroom-1e-9;
+ const total=all.reduce((s,b)=>s+b.weight,0);
+ // Hysteresis gates ordinary coverage movement. An explicit Headroom edit
+ // keeps its own nondegrading candidate if that ordinary move is rejected.
+ const headroomMove=headroomRequested&&bestScore-current<=o.hysteresis*total+1e-9&&preferredError<currentHeadroom-1e-9;
+ if(headroomMove){best=preferred;bestScore=preferredScore;}
+ const gain=bestScore-current;
  if(gain>o.hysteresis*total+1e-9||headroomMove){result.target={translate:best,scale:frame.scale};if(headroomMove)result.cause='headroom-edit';}else best=frame.translate;
  if(input.headroomPending===true)result.headroomPending=!sb.length||headroomError(best)>pitch/(2*extent[1])+1e-9;
  const lo=best.map((x,a)=>x-frame.scale+extent[a]*o.margin),hi=lo.map((x,a)=>x+extent[a]*(1-2*o.margin));

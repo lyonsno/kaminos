@@ -110,3 +110,25 @@ test('saving with the allocation panel open does not serialize its temporary ref
  } finally {await instance.dispose();}
  assert.equal(scene.children.length,0,'closing the editor removes its display-only guides');
 });
+test('the allocation panel preserves an unfocused Headroom scrub through refresh and commits its value',async()=>{
+ class Element extends EventTarget{
+  constructor(){super();this.children=[];this.dataset={};this.style={};const names=new Set();this.classList={add:n=>names.add(n),remove:n=>names.delete(n),contains:n=>names.has(n)};}
+  append(...children){this.children.push(...children);}
+  setAttribute(){}
+  querySelectorAll(selector){const key={'[data-setting]':'setting','[data-toggle]':'toggle','[data-coverage]':'coverage'}[selector];return this.children.flatMap(c=>typeof c==='object'?[...(Object.hasOwn(c.dataset??{},key)?[c]:[]),...(c.querySelectorAll?.(selector)??[])]:[]);}
+ }
+ const document={activeElement:null,defaultView:{},createElement:()=>new Element(),createTextNode:text=>text};
+ let frame,coverage={mode:'sources',margin:.15,headroom:.5,lookahead:0,interval:.25,activityWeight:1,hysteresis:.05};
+ const host={volume:{ready:Promise.resolve()},controls:{document,installNumberDrag:()=>({dispose(){}})},
+  scene:{open:async()=>({attach:async()=>({id:'overlay'}),onFrame:f=>{frame=f;return()=>{};},dispose:async()=>{},redraw(){}})},
+  fire:{adaptiveMaterial:{read:()=>({enabled:false,options:{budget:0,spread:1,maxDetail:2,persistence:1,lookahead:1,weights:{reaction:1,mixing:1,thermal:1,smoke:1}}}),adopt(){}},coverage:{read:()=>({options:coverage,status:'holding',moves:0,checks:1}),set:patch=>{coverage={...coverage,...patch};}}}};
+ const instance=await experiment.create({host,record(){},updateInputs(){}}),root=new Element();
+ try{
+  instance.mount({root,document,invoke:async(name,arg)=>instance.operations[name](arg)});
+  const control=root.querySelectorAll('[data-coverage]').find(el=>el.dataset.coverage==='headroom');
+  assert.equal(control.value,'0.5');control.classList.add('scrubbing');control.value='0.54';frame();
+  assert.equal(control.value,'0.54','frame refresh must preserve the held pointer edit even without focus');
+  control.classList.remove('scrubbing');control.dispatchEvent(new Event('change'));await Promise.resolve();
+  assert.equal(coverage.headroom,.54);frame();assert.equal(control.value,'0.54');
+ }finally{await instance.dispose();}
+});

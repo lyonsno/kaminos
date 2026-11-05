@@ -54,6 +54,14 @@ test('sub-cell headroom edits settle and re-enabling coverage checks immediately
  assert.equal(r.target,null);assert.equal(r.headroomPending,false);
  c.release();assert.equal(c.due(edited,.26),true);
 });
+test('a sub-threshold coverage gain cannot strand a feasible Headroom edit',()=>{
+ const c=new FineCoverageController(),i=input([{id:'one',lo:[.50625,-.1,-.1],hi:[.70625,.1,.1],weight:1}]);
+ const before=c.update(i,opts,0),edited={...opts,headroom:.5},r=c.update(i,edited,.25);
+ assert.ok(r.target,'a nondegrading Headroom placement must survive ordinary movement hysteresis');
+ assert.equal(r.target.translate[1],-1);assert.equal(r.cause,'headroom-edit');assert.ok(r.sourceCoverage>=before.sourceCoverage);
+ assert.ok(r.gain<opts.hysteresis,'this case exercises the explicit Headroom path');
+ c.accept(r.target,.25);assert.equal(c.update({...i,frame:r.target},edited,.5).target,null);
+});
 test('fixed World bounds contain every proposed Fine box',()=>{
  const r=chooseFineCoverage(input([box('one',[10,10,0])]),opts);
  if(r.target){const t=r.target.translate;assert.ok(t[0]<=3);assert.ok(t[1]<=9);}
