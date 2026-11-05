@@ -40,6 +40,9 @@ test('actual combined setter rejects history values without changing allocation 
  const p=makePrototype({raymarchMode:'history',historyInfluence:1,historyWindow:1});
  try{
   p.configureAdaptiveMaterial({budget:1,maxDetail:2});
+  // Initialize the ordinary setter's effective-mode readout before comparing;
+  // the uninitialized factory readout still contains its legacy 0.65 seed.
+  p.setControls({historyWindow:1});
   const beforeAllocation=structuredClone(p.adaptiveMaterialState().requested);
   const before=p.debugState();
   assert.throws(()=>p.setControls({adaptiveMaterial:null,raymarchMode:'fixed',historyWindow:1.5}),/History/);
