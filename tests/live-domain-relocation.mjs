@@ -36,7 +36,7 @@ const preview = html.match(/function writeFlameDomainPreview\(value\) \{[\s\S]*?
 let moves = 0, sources = 0;
 const ui = {flameDomainDraft: null, checkedFlameDomainPose: x => x, refreshFlameDomainPreview() {},
   domainTransformForPose: p => ({translation: p.position, scale: p.scale[0]}),
-  flameDomainTranslation: [0, 0, 0], flameDomainScale: 1, flameEmitterPose: {}, authoredFlamePresent: false,
+  flameDomainTranslation: [0, 0, 0], flameDomainScale: 1, flameEmitterPose: {}, authoredFlamePresent: true,
   volumePrototype: {relocateOrdinaryDomain() {}}, applyFlameEmitterPose() {},
   window: {__kaminosVolumeEmitterReceipt: {effective: {family: 'disk'}}},
   setFlameDomainTranslation() { moves++; return true; }, writeAuthoredFlameEmitterPose() { sources++; },
