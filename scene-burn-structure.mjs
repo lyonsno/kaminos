@@ -13,7 +13,8 @@ export function createSceneBurnStructure({renderer,field,parent,workerFactory=ur
     rejectPending=reject;const current=workerFactory(new URL('./burn-structure.worker.mjs',import.meta.url));worker=current;
     current.onmessage=({data})=>{current.terminate();if(worker===current)worker=null;rejectPending=null;data.error?reject(Error(data.error)):resolve(data);};
     current.onerror=e=>{current.terminate();if(worker===current)worker=null;rejectPending=null;reject(Error(e.message));};
-    current.postMessage({source,material});
+    const detail=new URLSearchParams(globalThis.location?.hash?.slice(1)??'').get('burn_fracture_detail')??new URLSearchParams(globalThis.location?.search??'').get('burn_fracture_detail');
+    current.postMessage({source,material,detail:detail==='1'});
    });
    if(disposed||token!==generation)return;
    status='compiling';const candidate=await gpuFactory({renderer,field,...result,sourceMaterials});

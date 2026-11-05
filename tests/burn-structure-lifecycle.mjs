@@ -8,6 +8,7 @@ const field={residentState:()=>({mesh,bounds:mesh.geometry.boundingBox,dimension
 const structure=createSceneBurnStructure({renderer:{},field,parent,workerFactory:()=>{starts++;return {terminate(){stops++;},postMessage(data){payload=data;}};}});
 await structure.configure(false);assert.equal(starts,0);
 const pending=structure.configure(true);assert.equal(starts,1);assert.equal(structure.read().status,'preparing');assert.equal(payload.material.initial.length,64);
+assert.equal(payload.detail,false,'Ordinary preparation preserves the accepted coarse baseline');
 await structure.configure(true);assert.equal(starts,1,'A frame sync must not repeat structural preparation');
 await structure.configure(false);await pending;assert.equal(structure.read().status,'off');assert.equal(stops,1);assert.equal(parent.children.length,0);
 const late=structure.configure(true);structure.dispose();await late;assert.equal(structure.read().status,'disposed');assert.equal(stops,2);
@@ -25,3 +26,10 @@ await live.configure(false);assert.equal(resident.overlay.visible,false);assert.
 assert.equal(live.resident().buffer,'sections');assert.equal(prepared,1);
 await live.setRequired(false);assert.equal(released,1);assert.equal(live.resident(),null);
 live.dispose();assert.equal(released,1);
+
+const previousLocation=globalThis.location;
+try{
+ globalThis.location={hash:'#burn_fracture_detail=1',search:''};let detailedPayload;
+ const detailed=createSceneBurnStructure({renderer:{},field,parent,workerFactory:()=>({terminate(){},postMessage:data=>detailedPayload=data})});
+ const task=detailed.setRequired(true);assert.equal(detailedPayload.detail,true);detailed.dispose();await task;
+}finally{if(previousLocation===undefined)delete globalThis.location;else globalThis.location=previousLocation;}

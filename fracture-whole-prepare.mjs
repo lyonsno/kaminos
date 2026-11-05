@@ -77,11 +77,13 @@ function addCaps(leaf,triangles,id,normal,material,planes){
  leaf.arrays={positions:P,normals:N,uvs:U,indices:I,faceMaterial:M};leaf.faceInterfaces=O;leaf.faceSectionPlanes=S;
 }
 
-export function prepareWholeFracture(source,view,{cellExtent,strength=3000000,gravity=9.81,elasticModulus=1e10}={}){
+export function prepareWholeFracture(source,view,{cellExtent,targetPieces=null,cutVariation=0,strength=3000000,gravity=9.81,elasticModulus=1e10}={}){
  const faceCount=source.indices.length/3;
  if(!view?.labels||view.labels.length!==faceCount)throw Error('Every original triangle requires a detected part owner');
  const total=materialMeasure(source),extent=Math.max(...sub(total.max,total.min));cellExtent??=extent/4;
  if(!(cellExtent>0&&Number.isFinite(cellExtent)))throw Error('Positive finite coarse cell extent required');
+ if(targetPieces!==null&&(!Number.isSafeInteger(targetPieces)||targetPieces<1))throw Error('Positive integer piece target required');
+ if(!Number.isFinite(cutVariation)||cutVariation<0||cutVariation>1)throw Error('Cut variation must be between zero and one');
  const capMaterial=Math.max(0,...new Set(source.faceMaterial??[0]))+1;
  if(capMaterial>255)throw Error('No material slot available for fracture interiors');
  const parts=new Map(),interfaces=new Map(),diagnostics={uncappedAttachments:[],unsplitRegions:[],inferredAttachments:[],stitchedSections:[],windingSections:[],sectionCoverage:[]};let nextInterface=1;
@@ -98,7 +100,13 @@ export function prepareWholeFracture(source,view,{cellExtent,strength=3000000,gr
   addCaps(parts.get(a),cap.triangles,id,normal,capMaterial,capPlanes);addCaps(parts.get(b),cap.triangles.map(t=>[t[0],t[2],t[1]]),-id,normal.map(v=>-v),capMaterial,capPlanes);
   if(cap.openEdges||!cap.triangles.length)diagnostics.uncappedAttachments.push({id,openEdges:cap.openEdges,capTriangles:cap.triangles.length});
  }
- const leaves=[];
+ const leaves=[],pending=[];
+ const spanOf=leaf=>Math.max(...sub(leaf.bounds.max,leaf.bounds.min));
+ const signedHash=seed=>{let x=Math.imul(seed+1,0x45d9f3b);x=Math.imul(x^(x>>>16),0x45d9f3b);return ((x^(x>>>16))>>>0)/0xffffffff*2-1;};
+ function schedule(leaf){
+  if(targetPieces===null)subdivide(leaf);
+  else {leaf.bounds=materialMeasure(leaf.arrays);pending.push(leaf);}
+ }
  function pushLeaf(leaf){
   const nFaces=leaf.arrays.indices.length/3,P=leaf.arrays.positions,I=leaf.arrays.indices;
   if(nFaces>1)for(const axis of [0,1,2]){
@@ -122,9 +130,14 @@ export function prepareWholeFracture(source,view,{cellExtent,strength=3000000,gr
  }
  function subdivide(leaf){
   const bounds=materialMeasure(leaf.arrays),spans=sub(bounds.max,bounds.min),axes=[0,1,2].sort((a,b)=>spans[b]-spans[a]);leaf.bounds=bounds;
+  // Stop splitting, not representing material. Separate input islands still
+  // retain independent bodies even when they exceed the geometric target.
+  if(targetPieces!==null&&leaves.length+pending.length+1>=targetPieces){pushLeaf(leaf);return;}
   if(spans[axes[0]]<=cellExtent*(1+1e-6)){pushLeaf(leaf);return;}
   for(const axis of axes){if(spans[axis]<=cellExtent*(1+1e-6))continue;
-   const normal=[0,0,0];normal[axis]=1;const center=bounds.min.map((v,k)=>(v+bounds.max[k])/2),plane={point:center,normal},mask=new Uint8Array(leaf.arrays.indices.length/3).fill(1),cut=bisectFaces(leaf.arrays,mask,plane);
+   const seed=nextInterface*4+axis,normal=unit([0,1,2].map(k=>k===axis?1:cutVariation===0?0:signedHash(seed+k+1)*.16*cutVariation));
+   const center=bounds.min.map((v,k)=>(v+bounds.max[k])/2);center[axis]+=signedHash(seed+4)*spans[axis]*.08*cutVariation;
+   const plane={point:center,normal},mask=new Uint8Array(leaf.arrays.indices.length/3).fill(1),cut=bisectFaces(leaf.arrays,mask,plane);
    const extracted=extractFaces(cut.arrays,Uint8Array.from(cut.side,x=>Number(x<0)));
    const mapFaces=faces=>{const fi=new Int32Array(faces.length),fp=new Array(faces.length);for(let i=0;i<faces.length;i++){const sf=cut.sourceFace[faces[i]];fi[i]=leaf.faceInterfaces[sf];fp[i]=leaf.faceSectionPlanes[sf];}return {fi,fp};};
    const m0=mapFaces(extracted.partFaces),m1=mapFaces(extracted.restFaces);
@@ -160,18 +173,19 @@ export function prepareWholeFracture(source,view,{cellExtent,strength=3000000,gr
      diagnostics.windingSections.push({part:leaf.part,axis,grid:complete.grid});
     }
    }
-   if(!shared.length){if(noCrossings){raw.forEach(child=>subdivide({...child,part:leaf.part}));return;}continue;}
+   if(!shared.length){if(noCrossings){raw.forEach(child=>schedule({...child,part:leaf.part}));return;}continue;}
    const sharedPlanes=shared.map(points=>({points}));
    const children=raw.map((child,i)=>{const side=i===0?-1:1;
     addCaps(child,side===-1?shared:shared.map(t=>[t[0],t[2],t[1]]),side===-1?nextInterface:-nextInterface,normal.map(v=>-side*v),capMaterial,sharedPlanes);
     return {...child,part:leaf.part};
    });
    interfaces.set(nextInterface,{id:nextInterface,normal,kind:'internal',parts:[leaf.part,leaf.part]});nextInterface++;
-   children.forEach(subdivide);return;
+   children.forEach(schedule);return;
   }
   diagnostics.unsplitRegions.push({part:leaf.part,spans,reason:'No closed material section on the candidate coarse planes'});pushLeaf(leaf);
  }
- for(const leaf of parts.values())subdivide(leaf);
+ for(const leaf of parts.values())schedule(leaf);
+ while(pending.length){pending.sort((a,b)=>spanOf(b)-spanOf(a));subdivide(pending.shift());}
  // Keep imported topology winding while constructing successive cuts. Orient
  // only the final rendered interiors, after their remaining cuts are complete.
  for(const leaf of leaves)for(let f=0;f<leaf.faceInterfaces.length;f++){
@@ -224,5 +238,5 @@ export function prepareWholeFracture(source,view,{cellExtent,strength=3000000,gr
  if(Math.abs(exteriorAreaAfter-total.area)>total.area*1e-5)throw Error('Whole-object partition lost original exterior area');
  return {route:WHOLE_FRACTURE_ROUTE,pieces:leaves,bonds,cells,capMaterial,dimensions:{dx:cellExtent,dy:cellExtent,dz:cellExtent},floorY:total.min[1]-extent*.02,
   config:{elasticModulus,gravity,timeStep:1/60,substeps:1,solverIterations:8,stiffness:10000,strength,friction:.5,gripStiffness:100000,gripRadius:0,initialJointPenalty:10000,gravityRampSeconds:0,preventPenetratingNormalDropout:true,collisions:'floor-only'},
-  receipt:{sourceTriangles:faceCount,sourceParts:sourceLabels.length,sourceCoverage:sourceLabels.map(part=>({part,triangles:Array.from(view.labels).filter(x=>x===part).length,cells:leaves.filter(l=>l.part===part).length})),exteriorAreaBefore:total.area,exteriorAreaAfter,cellExtent,supportCell:support.index,massModel:'local-origin-surface-integral-with-area-thickness-floor',sectionMatching:'shared-cap-lineage-polygon-intersection',diagnostics,claim:'All detected surface parts have live coarse material; clipped textured exterior, approximate box inertia and inferred near-component attachments; floor collisions'}};
+  receipt:{sourceTriangles:faceCount,sourceParts:sourceLabels.length,sourceCoverage:sourceLabels.map(part=>({part,triangles:Array.from(view.labels).filter(x=>x===part).length,cells:leaves.filter(l=>l.part===part).length})),exteriorAreaBefore:total.area,exteriorAreaAfter,cellExtent,targetPieces,cutVariation,pieceTargetScope:'geometric subdivision; disconnected material is retained',supportCell:support.index,massModel:'local-origin-surface-integral-with-area-thickness-floor',sectionMatching:'shared-cap-lineage-polygon-intersection',diagnostics,claim:'All detected surface parts have live coarse material; clipped textured exterior, approximate box inertia and inferred near-component attachments; floor collisions'}};
 }
