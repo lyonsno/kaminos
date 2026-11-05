@@ -2015,3 +2015,27 @@ test('legacy levels retain their blur guard until compatible appearance choices 
   const prepared={...legacy,textureSet:{variants:[{sha256:sha('sharp-flat'),textureSize:4096}]}};
   assert.equal(selectFootprintTier([prepared],{heroFaces:100000,worldBox,camera,viewportHeight:1080}).selected.faces,2);
 });
+
+test('mixed prepared and legacy rungs keep texture penalties with legacy geometry',()=>{
+  const camera=makeCamera({z:1.5}),worldBox={min:[-.5,-.5,-.1],max:[.5,.5,.1]};
+  const legacy={sha:sha('mixed-legacy'),faces:1000,textureSize:64,error:{relative:{p95:0,max:0,mean:0}}};
+  const prepared={sha:sha('mixed-prepared'),faces:2,textureSize:64,error:{relative:{p95:0,max:0,mean:0}},textureSet:{variants:[{sha256:sha('mixed-maps'),textureSize:4096}]}};
+  const options={heroFaces:100000,worldBox,camera,viewportHeight:1080};
+  for(const activeTier of [null,'hero',legacy.sha,prepared.sha]){
+    const selected=selectFootprintTier([legacy,prepared],{...options,activeTier});
+    assert.equal(selected.selected.id,prepared.sha,'legacy blur must not force triangles on a prepared coarse rung');
+    assert.equal(selected.rungs[1].pixelError>1.5,true,'the legacy blur guard remains effective');
+    assert.equal(selected.rungs[2].pixelError,0,'prepared zero-error geometry has no bundled-map penalty');
+    const allocated=allocateSceneBeautyLods([{id:'panel',...options,levels:[legacy,prepared],activeTier}],{camera,viewportHeight:1080,faceBudget:2000});
+    assert.equal(allocated.allocations.panel.tier,prepared.sha);
+    assert.equal(allocated.allocations.panel.footprintTier,prepared.sha);
+    assert.equal(allocated.totalFaces,2);assert.equal(allocated.withinBudget,true);
+  }
+  const geometricLegacy={...legacy,error:{relative:{p95:.01,max:.01,mean:.01}}};
+  const geometric=selectFootprintTier([geometricLegacy,prepared],options);
+  assert.equal(geometric.selected.id,'hero','preparation does not discard a finer rung geometric-error floor');
+  assert.equal(geometric.rungs[2].geomPixelError,geometric.rungs[1].geomPixelError);
+  assert.equal(geometric.rungs[2].pixelError,geometric.rungs[2].geomPixelError);
+  const finePrepared={...prepared,faces:1000},coarseLegacy={...legacy,faces:2};
+  assert.equal(selectFootprintTier([finePrepared,coarseLegacy],options).selected.id,finePrepared.sha,'unprepared coarse geometry retains its own blur guard');
+});
