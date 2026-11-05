@@ -75,7 +75,7 @@ export function forwardCompositionHash(target, sourceHash, sourceSearch = '') {
   if (workspace !== null) hash.set('workspace',workspace);
   const forwarded = new URLSearchParams();
   for (const [key, value] of hash) {
-    if (['workspace', 'authoring', 'scene', 'note', 'experiment', 'experiment_inputs', 'composition_module_url', 'volume_collision', 'burn_fracture_cutout', 'rendering_source_xyz', 'rendering_source_gain', 'rendering_surface_gain', 'rendering_surface_scattering', 'rendering_receiver_spacing', 'rendering_angular_pattern', 'rendering_directions', 'rendering_match_camera'].includes(key)
+    if (['workspace', 'authoring', 'scene', 'note', 'experiment', 'experiment_inputs', 'composition_module_url', 'volume_collision', 'burn_fracture_cutout', 'burn_fracture_detail', 'rendering_source_xyz', 'rendering_source_gain', 'rendering_surface_gain', 'rendering_surface_scattering', 'rendering_receiver_spacing', 'rendering_angular_pattern', 'rendering_directions', 'rendering_match_camera'].includes(key)
       || key.startsWith('volume_light_field')) forwarded.set(key, value);
   }
   url.hash = forwarded.toString();
