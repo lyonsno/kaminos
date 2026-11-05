@@ -372,3 +372,29 @@ test('choosing adapter rank while disabled preserves base-model cache and report
  const state=await model.createState({capacity:4});const result=await model.setDeltaMode({enabled:false,rank:3});assert.equal(result.rank,3);assert.equal(model.delta.rank,3);assert.equal(result.reset,false);assert.equal(state.closed,false);
  }finally{await model.destroy();}
 });
+
+function deltaFixture(model){
+ model.manifest.source={baseRole:'qwen',sourceRevision:'source',configSha256:'config'};
+ const manifest={schema:'kaminos.qwen35-delta.v1',complete:true,maxRank:3,qwenRevision:'source',baseConfigSha256:'config',projections:{},exact:{}},blobs=new Map();
+ function row(shape){const raw=new Uint8Array(shape.reduce((a,b)=>a*b,1)*4),file=`delta-${blobs.size}.bin`;blobs.set(file,raw);return{file,shape,dtype:'F32',offset:0,bytes:raw.length,sha256:createHash('sha256').update(raw).digest('hex')};}
+ for(const[name,e]of model.layout.projections)manifest.projections[name]={a:row([3,e.columns]),b:row([e.rows,3])};
+ for(const[name,e]of model.layout.vectors)manifest.exact[name]=row(e.shape);
+ return{manifest,fetchImpl:async url=>{const raw=blobs.get(new URL(url).pathname.split('/').at(-1));return new Response(raw,{status:206,headers:{'content-range':`bytes 0-${raw.length-1}/${raw.length+1}`}});}};
+}
+test('cancel and destroy withdraw a parked adapter upload without resuming the borrowed control',async()=>{
+ for(const action of ['cancel','destroy']){
+  const{manifest,fetchImpl}=fixture(),{device,buffers}=deviceFixture(),control=createWebGpuInferenceControl({queue:device.queue}),model=new Qwen35TextModel(device,manifest,{control}),abort=new AbortController();let work,close,result;
+  try{
+   await model.load('http://localhost/model/',{fetchImpl});const delta=deltaFixture(model);await control.pause();
+   let entered;const parked=new Promise(r=>entered=r),runDuty=control.runDuty.bind(control);model.control={runDuty:(...args)=>{entered();return runDuty(...args);}};
+   work=model.loadDelta(delta.manifest,'http://localhost/adapter/',{fetchImpl:delta.fetchImpl,signal:abort.signal}).then(()=>{result='loaded';},e=>{result=e;});await parked;
+   if(action==='cancel')abort.abort('cancel adapter');else close=model.destroy();
+   await new Promise(setImmediate);await new Promise(setImmediate);
+   const settled=result?.name==='AbortError',loading=model.loading,status=control.snapshot().status;
+   // Cleanup permits the original broken implementation to unwind after observation.
+   await control.resume();await work;await close;
+   assert.equal(settled,true,`${action} must settle while admission stays parked`);assert.equal(loading,false);assert.equal(status,'paused');
+  }finally{await control.resume();await work;await close;await model.destroy();await control.close();}
+  assert.ok(buffers.every(b=>b.destroyed));
+ }
+});

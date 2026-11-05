@@ -28,3 +28,23 @@ test('editing a loaded system instruction applies on New conversation without an
  await h.api.reset();assert.equal(h.resets.length,1);assert.equal(h.resets[0].systemPrompt,'new instruction');
  assert.equal(h.loads(),1);assert.equal(h.api.runtime,model);assert.equal(h.elements.get('system').disabled,false);
 });
+
+test('every saved turn retains its model mode and source through later switches and unload',async()=>{
+ for(const finish of ['complete','stopped','failed','complete-handback-failed']){
+  const h=harness();await h.api.load();const rt=h.api.runtime;
+  Object.assign(rt.identity,{backend:'webgpu',manifestSha256:'base-package',source:{revision:'base-source'},delta:{enabled:false,rank:256,maxRank:256}});rt.model.delta={...rt.identity.delta};
+  rt.model.setDeltaMode=async({enabled,rank})=>{Object.assign(rt.model.delta,{enabled,rank});return{enabled,rank,reset:true};};
+  const expected=structuredClone(rt.identity);
+  if(finish==='stopped'||finish==='failed')rt.chat.send=async()=>{throw Object.assign(Error('interrupted'),{name:finish==='stopped'?'AbortError':'Error'});};
+  if(finish==='complete-handback-failed')h.fail();
+  if(finish==='complete')await h.api.send('before');else await assert.rejects(h.api.send('before'));
+  await h.api.setMode({enabled:true,rank:64});rt.identity.source.revision='later-source';await h.api.unload();
+  const record=h.api.snapshot().history[0];assert.equal(record.status,finish);assert.deepEqual(record.modelIdentity,expected);
+ }
+});
+
+test('choosing a disabled adapter rank preserves the current base conversation',async()=>{
+ const h=harness();await h.api.load();const rt=h.api.runtime;
+ rt.identity.delta={enabled:false,rank:256,maxRank:256};rt.model.delta={...rt.identity.delta};rt.model.setDeltaMode=async({enabled,rank})=>{Object.assign(rt.model.delta,{enabled,rank});return{enabled,rank,reset:false};};
+ await h.api.send('retain this');await h.api.setMode({enabled:false,rank:64});assert.equal(h.resets.length,0);assert.equal(rt.identity.delta.rank,64);
+});

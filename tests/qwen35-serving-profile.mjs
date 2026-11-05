@@ -193,3 +193,9 @@ test('delta evidence rejects wrong mode, rank, and source identity', async()=>{
  contract.adjudicateDeltaSelection(actual,requested,meta);
  for(const change of [r=>r.enabled=false,r=>r.rank=64,r=>delete r.manifestSha256]){const r={...actual};change(r);assert.throws(()=>contract.adjudicateDeltaSelection(r,requested,meta),/delta/);}
 });
+
+test('adapter execution identity excludes every ordinary DeltaNet dispatch',async()=>{
+ const adapter=await import('../models/qwen3_5/delta-adapter.js');assert.equal(typeof adapter.isDeltaAdapterDispatch,'function','adapter arithmetic requires its own dispatch identity');
+ for(const name of ['delta-conv','delta-prepare','delta-recurrent','delta-norm','affine','delta-custom'])assert.equal(adapter.isDeltaAdapterDispatch(name),false,name);
+ for(const name of ['delta-embedding','delta-gemm','delta-gemm-add'])assert.equal(adapter.isDeltaAdapterDispatch(name),true,name);
+});

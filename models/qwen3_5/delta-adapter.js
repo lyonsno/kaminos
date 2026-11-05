@@ -22,7 +22,7 @@ export function deltaLayout(manifest,model){
  return manifest;
 }
 function parts(rows,width,limit){const n=Math.floor(limit/(width*4));if(!n)throw Error('delta row exceeds binding capacity');const out=[];for(let i=0;i<rows;i+=n)out.push({rowStart:i,rows:Math.min(n,rows-i)});return out;}
-export async function loadDelta(model,manifest,baseUrl,{fetchImpl=fetch,signal,onProgress}={}){
+export async function loadDelta(model,manifest,baseUrl,{fetchImpl=fetch,signal,onProgress}={},admit){
  if(model.closed||!model.loaded||model.loading||model.active||model.delta)throw Error('model cannot load adapter in its current state');
  deltaLayout(manifest,model);
  model.loading=true;model.loadingDone=new Promise(r=>model.finishLoading=r);
@@ -30,7 +30,7 @@ export async function loadDelta(model,manifest,baseUrl,{fetchImpl=fetch,signal,o
  const owned=new Set(),projections=new Map(),exact=new Map(),enabledVectors=new Map(model.vectors);
  const get=row=>fetchTensor(baseUrl,row,{fetchImpl,signal});
  const upload=data=>model.upload(data,owned);
- const duty=work=>model.control.runDuty(async()=>{if(signal.aborted)throw Object.assign(Error('adapter load aborted'),{name:'AbortError'});await work();await model.device.queue.onSubmittedWorkDone();});
+ const duty=work=>admit(model.control,signal,async()=>{if(signal.aborted)throw Object.assign(Error('adapter load aborted'),{name:'AbortError'});await work();await model.device.queue.onSubmittedWorkDone();});
  try{
   let completed=0;const total=Object.keys(manifest.projections).length+Object.keys(manifest.exact).length;
   for(const [name,row]of Object.entries(manifest.projections)){
@@ -84,3 +84,5 @@ export const deltaEmbeddingShader=()=>`struct P{tokens:u32,dim:u32,start:u32,row
 @group(0) @binding(3)var<storage,read_write>output:array<f32>;
 @group(0) @binding(4)var<uniform>p:P;
 @compute @workgroup_size(256)fn main(@builtin(global_invocation_id)g:vec3<u32>){let d=g.x;let t=g.y;if(d>=p.dim||t>=p.tokens){return;}let id=ids[t];if(id<p.start||id>=p.start+p.rows){return;}var v=0.0;for(var r=0u;r<p.rank;r++){v=fma(b[(id-p.start)*p.stride+r],a[r*p.dim+d],v);}output[t*p.dim+d]+=v;}`;
+
+export const isDeltaAdapterDispatch=name=>['delta-embedding','delta-gemm','delta-gemm-add'].includes(name);

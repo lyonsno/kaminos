@@ -221,7 +221,7 @@ export class Qwen35TextModel {
     } catch (error) { await this.device.queue.onSubmittedWorkDone().catch(() => {}); for (const b of this.owned) b.destroy(); this.owned.clear(); this.weights.clear(); this.vectors.clear(); throw error; }
     finally { this.loading = false; this.finishLoading(); }
   }
-  loadDelta(manifest,baseUrl,options) { return loadDelta(this,manifest,baseUrl,options); }
+  loadDelta(manifest,baseUrl,options) { return loadDelta(this,manifest,baseUrl,options,admit); }
   setDeltaMode(options) { return setDeltaMode(this,options); }
   async embed(input,hidden,tokens,ctx) {
     for (const part of this.weights.get('model.embed_tokens').slices) await this.dispatch('embedding', embeddingShader, [input, part.weight, part.scales, part.biases, hidden], new Uint32Array([tokens, this.config.hiddenSize, part.rowStart, part.rows]), [Math.ceil(this.config.hiddenSize / 256), tokens, 1], ctx);
