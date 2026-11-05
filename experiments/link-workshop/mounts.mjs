@@ -19,7 +19,8 @@ function mountAttachmentBase(target,source,a,t,scale,unhinged=false){
  const angle=unhinged?0:hingeAngle(a,t);if(!angle)return base;
  const w0=base.clone().multiply(frameMatrix(a.offset)),p0=new T.Vector3(),q0=new T.Quaternion();w0.decompose(p0,q0,new T.Vector3());
  const seat=p0.add(new T.Vector3(...source.position).multiply(scale).applyQuaternion(q0));
- const normal=new T.Vector3(0,0,1).applyQuaternion(targetQ),spin=new T.Matrix4().makeRotationAxis(normal,angle);
+ const aq=targetQ.clone().multiply(new T.Quaternion().setFromEuler(new T.Euler(...(a.axle?.rotation??[0,0,0]))));seat.add(new T.Vector3(...(a.axle?.position??[0,0,0])).applyQuaternion(targetQ));
+ const normal=new T.Vector3(0,0,1).applyQuaternion(aq),spin=new T.Matrix4().makeRotationAxis(normal,angle);
  return new T.Matrix4().makeTranslation(seat.x,seat.y,seat.z).multiply(spin).multiply(new T.Matrix4().makeTranslation(-seat.x,-seat.y,-seat.z)).multiply(base);
 }
 export function attachmentBase(root,model,a,t,entries,scaleOverride,{unhinged=false}={}){
@@ -49,4 +50,10 @@ export function previewMountMatrix(root,model,id,t,entries){
  }
  function resolve(mid){const m=model.mounts.find(m=>m.id===mid);if(!m)throw Error('Unknown preview mount');const owner=m.owner.joint!==undefined?jointMatrix(root,model,m.owner.joint,t):ownerWorld(m.owner.objectId),p=new T.Vector3(...m.position).applyMatrix4(owner),q=new T.Quaternion(),scale=new T.Vector3();owner.decompose(new T.Vector3(),q,scale);q.normalize().multiply(new T.Quaternion().setFromEuler(new T.Euler(...m.rotation)));return new T.Matrix4().compose(p,q,new T.Vector3(1,1,1));}
  return resolve(id);
+}
+
+// Axle frame is independent of the mating face; offsets are in receiving-frame units.
+export function hingeWorldFrame(root,model,a,t,entries){
+ const target=previewMountMatrix(root,model,a.targetMount,t,entries),source=model.mounts.find(m=>m.id===a.sourceMount),scale=new T.Vector3(...a.offset.scale),world=mountAttachmentBase(target,source,a,t,scale,true).multiply(frameMatrix(a.offset)),p=new T.Vector3(),q=new T.Quaternion();world.decompose(p,q,new T.Vector3());p.add(new T.Vector3(...source.position).multiply(scale).applyQuaternion(q));
+ const tq=new T.Quaternion().setFromRotationMatrix(target);p.add(new T.Vector3(...(a.axle?.position??[0,0,0])).applyQuaternion(tq));q.copy(tq).multiply(new T.Quaternion().setFromEuler(new T.Euler(...(a.axle?.rotation??[0,0,0]))));return new T.Matrix4().compose(p,q,new T.Vector3(1,1,1));
 }

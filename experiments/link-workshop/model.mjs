@@ -1,3 +1,4 @@
+import {checkedHardware} from './hinge-primitives.mjs';
 // Planar rooted forests. Each edge is a rigid link; angles are relative to its parent.
 const copy=x=>structuredClone(x),point=p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite);
 export function emptyMechanism(){return {schema:'kaminos.links.v1',nodes:[],pistons:[],period:3};}
@@ -24,6 +25,8 @@ export function checkedMechanism(m){
   for(const key of ['position','rotation','scale'])if(!Array.isArray(a.offset?.[key])||a.offset[key].length!==3||!a.offset[key].every(Number.isFinite))throw Error('Attachment requires a finite frame');
   if(a.offset.scale.some(x=>x===0))throw Error('Attachment scale must be nonzero');
   if(a.hinge!==undefined&&(!a.targetMount||!point(a.hinge)))throw Error('Hinged attachment requires two mounts and finite Pose A/B angles');
+  if(a.hardware!==undefined){if(!a.hinge)throw Error('Hinge hardware requires a hinge');checkedHardware(a.hardware);}
+  if(a.axle!==undefined){if(!a.hinge||!['position','rotation'].every(k=>Array.isArray(a.axle[k])&&a.axle[k].length===3&&a.axle[k].every(Number.isFinite)))throw Error('Finite hinge axle frame required');}
   ids.add(a.objectId);
  }
  return copy(m);
