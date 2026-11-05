@@ -50,6 +50,8 @@ struct WorldRenderParams {dimsPitch:vec4<f32>,loMode:vec4<f32>,rootsCount:vec4<u
 @group(3) @binding(6) var<storage,read> worldRenderWork:array<u32>;
 @group(3) @binding(7) var<uniform> wr:WorldRenderParams;
 @group(3) @binding(8) var worldRenderOutput:texture_storage_3d<rgba32float,write>;
+fn worldRenderHierarchy()->bool{return(u32(wr.loMode.w)&1u)!=0u;}
+fn worldRenderSmokeOnly()->bool{return(u32(wr.loMode.w)&4u)!=0u;}
 fn worldRenderLeaf(q:vec3<f32>)->u32{
  let root=vec3<u32>(floor(q/4.0));var slot=root.x+wr.rootsCount.x*(root.y+wr.rootsCount.y*root.z);
  for(var depth=0u;depth<16u;depth++){
@@ -65,7 +67,7 @@ fn worldRenderLeaf(q:vec3<f32>)->u32{
 }
 fn worldRenderRaw(q:vec3<f32>)->WorldRenderGas{
  if(any(q<vec3<f32>(0))||any(q>=wr.dimsPitch.xyz)){return WorldRenderGas(vec4<f32>(0),vec4<f32>(0));}
- if(wr.loMode.w<.5){let c=vec3<u32>(floor(q));let d=vec3<u32>(wr.dimsPitch.xyz);return worldRenderGas[c.x+d.x*(c.y+d.y*c.z)];}
+ if(!worldRenderHierarchy()){let c=vec3<u32>(floor(q));let d=vec3<u32>(wr.dimsPitch.xyz);return worldRenderGas[c.x+d.x*(c.y+d.y*c.z)];}
  let slot=worldRenderLeaf(q);let n=worldRenderBricks[slot];let p=wr.loMode.xyz+q*wr.dimsPitch.w;
  let c=vec3<u32>(clamp(floor((p-n.loPitch.xyz)/n.loPitch.w),vec3<f32>(0),vec3<f32>(3)));
  return worldRenderGas[slot*64u+c.x+4u*(c.y+4u*c.z)];
@@ -78,18 +80,19 @@ fn writeWorldAtlas(index:u32,value:vec4<f32>){
  seatGridShape();
  let index=group.x+group.y*groups.x;if(index>=wr.rootsCount.w){return;}
  var slot=index;var n:WorldRenderBrick;
- if(wr.loMode.w>.5){slot=worldRenderWork[index];n=worldRenderBricks[slot];n.loPitch=vec4<f32>((n.loPitch.xyz-wr.loMode.xyz)/wr.dimsPitch.w,n.loPitch.w/wr.dimsPitch.w);}
+ if(worldRenderHierarchy()){slot=worldRenderWork[index];n=worldRenderBricks[slot];n.loPitch=vec4<f32>((n.loPitch.xyz-wr.loMode.xyz)/wr.dimsPitch.w,n.loPitch.w/wr.dimsPitch.w);}
  else{let root=vec3<u32>(slot%wr.rootsCount.x,(slot/wr.rootsCount.x)%wr.rootsCount.y,slot/(wr.rootsCount.x*wr.rootsCount.y));n.loPitch=vec4<f32>(vec3<f32>(root)*4.0,1);n.children0=vec4<u32>(0xffffffffu);n.children1=n.children0;}
  let start=slot*WORLD_RENDER_STRIDE;
  if(local==0u){writeWorldAtlas(start,n.loPitch);writeWorldAtlas(start+1u,vec4<f32>(n.children0+vec4<u32>(1)));writeWorldAtlas(start+2u,vec4<f32>(n.children1+vec4<u32>(1)));}
  if(n.children0.x!=0xffffffffu){return;}
+ let fire=select(1.0,0.0,worldRenderSmokeOnly()||u.open_world_boundary.y>0.5);
  for(var i=local;i<216u;i+=64u){
   let c=vec3<u32>(i%6u,(i/6u)%6u,i/36u);let q=n.loPitch.xyz+(vec3<f32>(c)-.5)*n.loPitch.w;
   var r:WorldRenderGas;
-  if(wr.loMode.w>.5 && all(c>=vec3<u32>(1)) && all(c<=vec3<u32>(4)) && all(q<wr.dimsPitch.xyz)){
+  if(worldRenderHierarchy() && all(c>=vec3<u32>(1)) && all(c<=vec3<u32>(4)) && all(q<wr.dimsPitch.xyz)){
    let inner=c-vec3<u32>(1);r=worldRenderGas[slot*64u+inner.x+4u*(inner.y+4u*inner.z)];
   }else{r=worldRenderRaw(q);}
-  let medium=regionSmokeMaterial(vec4<f32>(r.a.xyz,r.b.x),r.b.yzw,1,1);
+  let medium=regionSmokeMaterial(vec4<f32>(r.a.xyz,r.b.x),r.b.yzw,1,fire);
   writeWorldAtlas(start+3u+i,vec4<f32>(medium.emission,medium.absorption+medium.scattering));
  }
 }
@@ -105,11 +108,11 @@ export function createWorldRenderField(device,module,uniformBuffer) {
  const retire=t=>queueMicrotask(()=>device.queue.onSubmittedWorkDone().then(()=>t.destroy()));
  return {
   get view(){return view;},
-  encode(encoder,source,materialKey){
+  encode(encoder,source,materialKey,{worldSmokeOnly=false}={}){
    if(!source){receipt={effective:'inactive'};last=null;return false;}
    const {plan,gas,hierarchy,steps}=source;const roots=plan.materialDims.map(n=>Math.ceil(n/4));
    const count=hierarchy?.nodeCount??roots.reduce((a,b)=>a*b,1),nextCapacity=hierarchy?.capacity??count;
-   const key=JSON.stringify([steps,hierarchy?.steps,hierarchy?.revision,plan,materialKey]);
+   const key=JSON.stringify([steps,hierarchy?.steps,hierarchy?.revision,plan,materialKey,worldSmokeOnly]);
    if(last===key&&resources[0]===gas&&resources[1]===(hierarchy?.nodes??dummy))return false;
    let changed=false;
    if(capacity!==nextCapacity){
@@ -127,10 +130,11 @@ export function createWorldRenderField(device,module,uniformBuffer) {
     if(next[1]!==resources[1]||next[2]!==resources[2]||next[3]!==resources[3])bindings=new WeakMap();
     group3=bindings.get(gas)??device.createBindGroup({layout:pipeline.getBindGroupLayout(3),entries:[...next.slice(0,3).map((buffer,i)=>({binding:4+i,resource:{buffer}})),{binding:7,resource:{buffer:params}},{binding:8,resource:view}]});bindings.set(gas,group3);resources=next;
    }
-   const data=new ArrayBuffer(48);new Float32Array(data).set([...plan.materialDims,plan.materialPitch,...plan.min,hierarchy?1:0]);new Uint32Array(data).set([...roots,count],8);device.queue.writeBuffer(params,0,data);
+   const mode=(hierarchy?1:0)+(worldSmokeOnly?4:0);
+   const data=new ArrayBuffer(48);new Float32Array(data).set([...plan.materialDims,plan.materialPitch,...plan.min,mode]);new Uint32Array(data).set([...roots,count],8);device.queue.writeBuffer(params,0,data);
    const pass=encoder.beginComputePass({label:'World optical brick preparation'});pass.setPipeline(pipeline);for(const [i,g] of [group0,empty1,empty2,group3].entries())pass.setBindGroup(i,g);
    const x=Math.min(count,device.limits.maxComputeWorkgroupsPerDimension);pass.dispatchWorkgroups(x,Math.ceil(count/x));pass.end();last=key;builds++;
-   receipt={effective:hierarchy?'resident-leaf-optics':'dense-cell-optics',materialDims:[...plan.materialDims],sourceSteps:steps,sourceRevision:hierarchy?.revision??null,builds,capacity,nodeCount:count,leafCount:hierarchy?.leafCount??count,bytes:texture.width*texture.height*texture.depthOrArrayLayers*16,reconstruction:'linear-optical-leaf-centres-with-neighbor-halo',denseExportUnchanged:true};
+   receipt={effective:hierarchy?'resident-leaf-optics':'dense-cell-optics',smokeOnly:Boolean(worldSmokeOnly),materialDims:[...plan.materialDims],sourceSteps:steps,sourceRevision:hierarchy?.revision??null,builds,capacity,nodeCount:count,leafCount:hierarchy?.leafCount??count,bytes:texture.width*texture.height*texture.depthOrArrayLayers*16,reconstruction:'linear-optical-leaf-centres-with-neighbor-halo',denseExportUnchanged:true};
    return changed;
   },
   read(){return {...receipt};},

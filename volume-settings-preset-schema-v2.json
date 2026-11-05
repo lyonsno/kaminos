@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 171,
+  "controlCount": 174,
   "controls": [
     {
       "key": "volume-fine-velocity",
@@ -1302,6 +1302,45 @@
       "additiveDefault": 64,
       "additiveLineage": "world-calibration",
       "additiveSinceControlCount": 4
+    },
+    {
+      "key": "volume-world-emissive",
+      "param": "volume_world_emissive",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "additiveDefault": "on",
+      "additiveLineage": "world-calibration",
+      "additiveSinceControlCount": 5,
+      "allowedValues": [
+        "on",
+        "off"
+      ]
+    },
+    {
+      "key": "volume-fast-bypass",
+      "param": "volume_fast_bypass",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "additiveDefault": "off",
+      "additiveLineage": "world-calibration",
+      "additiveSinceControlCount": 6,
+      "allowedValues": [
+        "off",
+        "on"
+      ]
+    },
+    {
+      "key": "volume-velocity-wavelet",
+      "param": "volume_velocity_wavelet",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "additiveDefault": "off",
+      "additiveLineage": "world-calibration",
+      "additiveSinceControlCount": 7,
+      "allowedValues": [
+        "off",
+        "on"
+      ]
     }
   ],
   "retiredControls": [

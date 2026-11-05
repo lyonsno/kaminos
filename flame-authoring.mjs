@@ -137,7 +137,7 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-pressure-resolution','Pressure grid (experimental)'],
   ] },
   { name:'World smoke', view:'quality', open:true, scope:'World-anchored field with one-way outward coupling. Material, velocity and pressure detail are independent.', fields:[
-    ['volume-world-smoke','World smoke'], ['volume-world-smoke-flow','Flow width'], ['volume-world-smoke-material','Material width'], ['volume-world-smoke-extent','Extent / fine width'],
+    ['volume-world-smoke','World smoke'], ['volume-world-emissive','World emissive material'], ['volume-world-smoke-flow','Flow width'], ['volume-world-smoke-material','Material width'], ['volume-world-smoke-extent','Extent / fine width'],
     ['volume-world-smoke-pressure','Pressure width (0 = flow)'], ['volume-world-smoke-iterations','Pressure iterations'],
     ['volume-world-smoke-transition','Momentum collar (experimental)'],
   ] },
@@ -169,6 +169,7 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-wavelet-turbulence','Wavelet turbulence'], ['volume-wavelet-octaves','Octaves'],
     ['volume-wavelet-strength','Detail strength'],
     ['volume-wavelet-octave1-weight','Four-cell octave weight'], ['volume-wavelet-octave2-weight','Two-cell octave weight'],
+    ['volume-velocity-wavelet','Separated velocity wavelet'],
   ] },
   { name:'Display reconstruction', view:'look', open:true, fields:[
     ['volume-display-reconstruction','Reconstruction'], ['volume-display-grid-scale','Display grid scale'],
@@ -214,6 +215,7 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-pressure-solver','Pressure solver'], ['volume-projection','Projection'],
     ['volume-advection-scheme','Advection'],
     ['volume-common-gas-transport','Common gas transport'], ['volume-velocity-staggering','Velocity sampling'],
+    ['volume-fast-bypass','Fast empty-air bypass'],
   ] },
   { name:'Diagnostics', view:'quality', fields:[
     ['volume-reaction-live-view','Field view'], ['volume-boundary-sidecar-view','Structure view'],

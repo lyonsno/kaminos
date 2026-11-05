@@ -30,6 +30,11 @@ test('same-state reuse, actual current gas, topology and material changes govern
  assert.equal(f.field.encode({},{...f.source},[1,2]),false);
  const groups=f.groups.length;f.source.steps++;f.encode();assert.equal(f.groups.length,groups,'same buffers reuse bindings');
  f.field.encode({beginComputePass(){return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};}},f.source,[2,2]);assert.equal(f.field.read().builds,6,'material change refreshes held field');
+ assert.equal(f.field.read().smokeOnly,false);
+ f.field.encode({beginComputePass(){return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};}},f.source,[2,2],{worldSmokeOnly:true});
+ assert.equal(f.field.read().builds,7,'toggling worldSmokeOnly refreshes held field');
+ assert.equal(f.field.read().smokeOnly,true);
+ assert.equal(new Float32Array(f.writes.at(-1)[2])[7],5,'hierarchy (1) | worldSmokeOnly (4) packed into loMode.w');
  f.field.destroy();
 });
 test('resize retires the old atlas after submission and inactive state cannot claim refined output',async()=>{

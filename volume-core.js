@@ -1,4 +1,4 @@
-import {resolveWorldCalibration,calibrationSignature,calibrationWaveletLattice,WORLD_CALIBRATION_WGSL} from './volume-world-calibration.mjs';
+import {resolveWorldCalibration,calibrationSignature,calibrationWaveletLattice,WORLD_CALIBRATION_WGSL,resolveSimulationLevers} from './volume-world-calibration.mjs';
 import {WORLD_RENDER_WGSL,createWorldRenderField} from './volume-world-render.mjs';
 import {sourceCoverageBounds} from './volume-fine-coverage.mjs';
 import {checkedWorldFrame} from './volume-world-frame.mjs';
@@ -3950,6 +3950,18 @@ fn openWorldBoundary() -> bool {
   return u.open_world_boundary.x > 0.5;
 }
 
+fn worldSmokeOnlyOn() -> bool {
+  return u.open_world_boundary.y > 0.5;
+}
+
+fn fastBypassOn() -> bool {
+  return u.open_world_boundary.z > 0.5;
+}
+
+fn velocityWaveletOn() -> bool {
+  return u.open_world_boundary.w > 0.5;
+}
+
 fn joinedLowerFace(c: vec3<i32>, axis: u32) -> f32 {
   let b = (axis + 1u) % 3u;
   let d = (axis + 2u) % 3u;
@@ -4186,7 +4198,7 @@ fn waveletCorrection(foot: vec3<f32>, transported: vec3<f32>, coordA: vec3<f32>,
 // material lattice. Synthesis changes the shared scalar characteristic, never
 // the stored coarse velocity or its pressure RHS. Both transport passes use it.
 fn materialTransportVelocity(cell:vec3<f32>,resolved:vec3<f32>)->vec3<f32>{
- if(!MATERIAL_ONLY||!waveletOn()){return resolved;}
+ if(!MATERIAL_ONLY||!waveletOn()||velocityWaveletOn()){return resolved;}
  let atlas=vec3<i32>(textureDimensions(waveletCoordSrc));
  let dims=vec3<i32>(atlas.xy,atlas.z/2);
  let ratio=f32(GRID)/f32(dims.x);
@@ -6852,6 +6864,16 @@ fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
   let centreVelocity = centreVelocityAt(vec3<i32>(gid));
   let advectVelocity = materialTransportVelocity(cell, centreVelocity);
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * dynamicsBacktraceScale());
+  if (MATERIAL_ONLY && fastBypassOn() && u.emissive_physics.x > 0.5) {
+    let m1 = sampleFluidSlotInflowWith(backCell, 1u, true);
+    if (m1.x + m1.y + m1.z + m1.w <= 1e-5) {
+      fluidPredict[base] = vec4<f32>(advectVelocity, u.reactant_combustion_c.z);
+      fluidPredict[base + 1u] = vec4<f32>(0.0);
+      fluidPredict[base + 2u] = vec4<f32>(0.0);
+      if (!compactAppearanceOn()) { fluidPredict[base + 3u] = vec4<f32>(0.0); }
+      return;
+    }
+  }
   let predOx = select(0.0, sampleReactantOxidizer(backCell), !VELOCITY_ONLY && reactantLawOn() && u.transport_controls.x > 2.5);
   if (compactAppearanceOn()) {
     // Stored form: three slots predicted, slot 3 untouched.
@@ -6967,6 +6989,40 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   }
   let macCormack = u.transport_controls.x > 1.5;
   let macCormackScalars = u.transport_controls.x > 2.5;
+  let bypassSourceBand = smoothstep(-0.25, -0.06, p.y - u.primitive_source.y) * (1.0 - smoothstep(0.92, 1.32, p.y - u.primitive_source.y));
+  let bypassSourceRadial = length(p.xz - u.primitive_source.xz);
+  let bypassOutsidePrimitive = u.emissive_physics.x > 0.5 || bypassSourceBand <= 1e-5 || bypassSourceRadial > 3.5 * max(scaledSourceRadius, scaledSmokeSourceRadius);
+  if (MATERIAL_ONLY && fastBypassOn() && bypassOutsidePrimitive && immersedWeight <= 0.0 && immersedTarget <= 0.0 && immersedSlabWeight <= 0.0 && !(cellI.y == 0 && u.inflow_aperture.x > 0.5) && u.scene_controls.x <= 0.5 && u.oracle_activity_controls.x <= 0.5 && !(u.reactant_combustion_d.z > 0.5) && idx != 0u && quenchSrc[idx] == 0u && !(reactantLawOn() && all(textureDimensions(residentGasSource) == vec3<u32>(GRID, GRID_Y, GRID)))) {
+    let bI = vec3<i32>(clampCell(vec3<i32>(floor(backCell))));
+    let c1 = readSlot(cellI, 1u);
+    let c2 = readSlot(cellI, 2u);
+    let m1 = sampleFluidSlotMasked(backCell, 1u);
+    let nxp = readSlot(vec3<i32>(clampCell(bI + vec3<i32>(1, 0, 0))), 1u);
+    let nxm = readSlot(vec3<i32>(clampCell(bI + vec3<i32>(-1, 0, 0))), 1u);
+    let nyp = readSlot(vec3<i32>(clampCell(bI + vec3<i32>(0, 1, 0))), 1u);
+    let nym = readSlot(vec3<i32>(clampCell(bI + vec3<i32>(0, -1, 0))), 1u);
+    let nzp = readSlot(vec3<i32>(clampCell(bI + vec3<i32>(0, 0, 1))), 1u);
+    let nzm = readSlot(vec3<i32>(clampCell(bI + vec3<i32>(0, 0, -1))), 1u);
+    let neighborMass = c1.x + c1.y + c1.z + c2.x + m1.x + m1.y + m1.z
+      + nxp.x + nxp.y + nxp.z + nxm.x + nxm.y + nxm.z
+      + nyp.x + nyp.y + nyp.z + nym.x + nym.y + nym.z
+      + nzp.x + nzp.y + nzp.z + nzm.x + nzm.y + nzm.z;
+    if (neighborMass <= 1e-5) {
+      fluidDst[base] = vec4<f32>(prev.xyz, 0.0);
+      fluidDst[base + 1u] = vec4<f32>(0.0);
+      fluidDst[base + 2u] = vec4<f32>(0.0);
+      if (!compactAppearanceOn()) {
+        fluidDst[base + 3u] = vec4<f32>(0.0);
+      }
+      frontDst[idx] = 0.0;
+      quenchDst[idx] = 0u;
+      textureStore(burnRate, cellI, vec4<f32>(0.0));
+      if (reactantLawOn()) {
+        textureStore(reactantDst, cellI, vec4<f32>(u.reactant_combustion_c.z, 0.0, 0.0, 0.0));
+      }
+      return;
+    }
+  }
   // Shared characteristic for gas-carried state (Sexy Fireman's common-gas
   // switch, same uniform slot); MacCormack implies it. Forces, sources,
   // reactions, decays, pressure and optics are unchanged by the scheme.
@@ -7302,6 +7358,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // under the staggered reading (like confinement); the fold below scales it
   // by the time step with every other increment.
   if (waveletOn() && !VELOCITY_ONLY) { vel = vel + waveletCorrection(backCell, velTransported, waveletCoordA, waveletCoordB, timeStep); }
+  if (waveletOn() && VELOCITY_ONLY && velocityWaveletOn()) { vel = vel + waveletCorrection(backCell, velTransported, waveletCoordA, waveletCoordB, timeStep); }
   vel = vel + oracleActivityCurl * calibrationConfinementGain();
   vel = vel + oracleActivityConfinement * calibrationConfinementGain() * (0.22 + smoke * 0.24 + heat * 0.32 + flame * 0.20);
   vel = vel + detailForce * VELOCITY_UNIT_SCALE * calibrationCellGain();
@@ -7383,7 +7440,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     heat = burn.z;
     reactantBurned = burn.w;
   }
-  let reactantFreshBurnRate = reactantBurned / max(timeStep, 1e-6);
+  var reactantFreshBurnRate = reactantBurned / max(timeStep, 1e-6);
   let smokeFromHeat = select(heatToSmokeConversion(heat, fuel, p.y), u.reactant_combustion_b.z * reactantFreshBurnRate, reactantOn);
   let columnSmokeBirth = source * 0.46 + emberRing * 0.13;
   let flameDirectSmokeBirthGain = (0.18);
@@ -7685,22 +7742,25 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let materialWallFade = select(max(1.0 - smoothstep(0.86, 1.0, materialWall), clamp(immersedSlabWeight, 0.0, 1.0)), 1.0, joinedBoundary() || openWorldBoundary());
   let materialHeatTopFade = select(heatTopFade, 1.0, reactantOn);
   let materialSmokeTopFade = select(smokeTopFade, 1.0, reactantOn);
+  let worldSmokeOnlyFlameEnvelope = select(1.0, fineFlameContainmentEnvelope(p, expandedTopY), worldSmokeOnlyOn() && (joinedBoundary() || openWorldBoundary()));
   smoke = smoke * stepRate(mix(0.42, 1.0, materialWallFade) * mix(0.72, 1.0, materialSmokeTopFade));
-  heat = heat * stepRate(mix(0.30, 1.0, materialWallFade) * mix(0.16, 1.0, materialHeatTopFade));
-  fuel = fuel * stepRate(mix(0.20, 1.0, materialWallFade) * mix(0.58, 1.0, materialHeatTopFade));
+  heat = min(heat * stepRate(mix(0.30, 1.0, materialWallFade) * mix(0.16, 1.0, materialHeatTopFade)), mix(0.28, 2.4, worldSmokeOnlyFlameEnvelope));
+  fuel = fuel * stepRate(mix(0.20, 1.0, materialWallFade) * mix(0.58, 1.0, materialHeatTopFade)) * worldSmokeOnlyFlameEnvelope;
+  reactantFreshBurnRate = reactantFreshBurnRate * worldSmokeOnlyFlameEnvelope;
   // Reactant law: the side and floor sponge regions are ambient air, so the
   // oxidizer relaxes toward ambient at the fuel's sponge rate there.
   oxidizer = u.reactant_combustion_c.z - (u.reactant_combustion_c.z - oxidizer) * stepRate(mix(0.20, 1.0, materialWallFade) * mix(0.58, 1.0, materialHeatTopFade));
   materialDetail = materialDetail * stepRate(mix(0.22, 1.0, wallFade));
-  flame = flame * stepRate(mix(0.12, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade));
-  ember = ember * stepRate(mix(0.18, 1.0, wallFade) * mix(0.16, 1.0, smokeTopFade));
-  flameDetail = flameDetail * stepRate(mix(0.10, 1.0, wallFade));
-  combustionFront = combustionFront * stepRate(mix(0.10, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade));
-  combustionFrontTopology = combustionFrontTopology * stepRate(mix(0.10, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade));
+  flame = flame * stepRate(mix(0.12, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade)) * worldSmokeOnlyFlameEnvelope;
+  ember = ember * stepRate(mix(0.18, 1.0, wallFade) * mix(0.16, 1.0, smokeTopFade)) * worldSmokeOnlyFlameEnvelope;
+  flameDetail = flameDetail * stepRate(mix(0.10, 1.0, wallFade)) * worldSmokeOnlyFlameEnvelope;
+  visibleFireCarrier = flameDetail;
+  combustionFront = combustionFront * stepRate(mix(0.10, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade)) * worldSmokeOnlyFlameEnvelope;
+  combustionFrontTopology = combustionFrontTopology * stepRate(mix(0.10, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade)) * worldSmokeOnlyFlameEnvelope;
   microSmoke = microSmoke * stepRate(mix(0.20, 1.0, wallFade) * mix(0.50, 1.0, smokeTopFade));
   interfaceShred = interfaceShred * stepRate(mix(0.18, 1.0, wallFade));
-  fireLick = fireLick * stepRate(mix(0.10, 1.0, wallFade) * mix(0.10, 1.0, fireTopFade));
-  emberFleck = emberFleck * stepRate(mix(0.15, 1.0, wallFade));
+  fireLick = fireLick * stepRate(mix(0.10, 1.0, wallFade) * mix(0.10, 1.0, fireTopFade)) * worldSmokeOnlyFlameEnvelope;
+  emberFleck = emberFleck * stepRate(mix(0.15, 1.0, wallFade)) * worldSmokeOnlyFlameEnvelope;
   // The quench field spreads to neighbours only while a liquid is bound with
   // transfer enabled (the host packs the flag); otherwise the six reads are
   // skipped and a wetted cell only decays.
@@ -11749,7 +11809,12 @@ export function createKaminosVolumePrototype({
   // All fluid bind groups include the optical texture, including compute passes
   // which do not sample it. Replace it before encoding any fine-grid commands.
   function prepareWorldSmoke() {
+    const simLevers=resolveSimulationLevers(controlsSnapshot);
+    state.simulationLevers=simLevers;
     uniforms[OPEN_WORLD_UNIFORM_OFFSET]=0;
+    uniforms[OPEN_WORLD_UNIFORM_OFFSET+1]=simLevers.worldSmokeOnly?1:0;
+    uniforms[OPEN_WORLD_UNIFORM_OFFSET+2]=simLevers.fastBypassEnabled?1:0;
+    uniforms[OPEN_WORLD_UNIFORM_OFFSET+3]=simLevers.velocityWaveletEnabled?1:0;
     state.openWorldBoundary={effective:'legacy-boundaries',reason:'world-field-off-or-unadmitted'};
     device.queue.writeBuffer(uniformBuffer,OPEN_WORLD_UNIFORM_OFFSET*4,uniforms.subarray(OPEN_WORLD_UNIFORM_OFFSET,OPEN_WORLD_UNIFORM_OFFSET+4));
     const requested=controlsSnapshot.worldSmoke==='on';
@@ -11765,6 +11830,9 @@ export function createKaminosVolumePrototype({
     const open=resolvePressureSolverConfig(controlsSnapshot).effective.solver===PRESSURE_SOLVER_CONVERGED
       && controlsSnapshot.emitterSourceLaw===IMMERSED_SOURCE_LAW && !state.joinedBoundary?.admitted;
     uniforms[OPEN_WORLD_UNIFORM_OFFSET]=open?1:0;
+    uniforms[OPEN_WORLD_UNIFORM_OFFSET+1]=simLevers.worldSmokeOnly?1:0;
+    uniforms[OPEN_WORLD_UNIFORM_OFFSET+2]=simLevers.fastBypassEnabled?1:0;
+    uniforms[OPEN_WORLD_UNIFORM_OFFSET+3]=simLevers.velocityWaveletEnabled?1:0;
     state.openWorldBoundary={effective:open?'ambient-pressure-open-faces':'legacy-boundaries',reason:open?null:'requires-converged-immersed-nonjoined',feedback:'one-way',material:'clean-ambient-inflow',momentum:'still-ambient-inflow-interior-outflow'};
     device.queue.writeBuffer(uniformBuffer,OPEN_WORLD_UNIFORM_OFFSET*4,uniforms.subarray(OPEN_WORLD_UNIFORM_OFFSET,OPEN_WORLD_UNIFORM_OFFSET+4));
     const key=JSON.stringify(plan);
@@ -11808,7 +11876,8 @@ export function createKaminosVolumePrototype({
     const time=resolveTimeStepConfig(controlsSnapshot).effective;
     const physics=resolvePhysicsAppearance(controlsSnapshot,{reactantAdmitted:true,emissiveRouteEffective:true});
     const sources=immersedCollectionPrepared?compileWorldSourceParcels(immersedCollectionPrepared,{grid:gridSize,gridHeight,transform:productTransform,anchor:worldSmoke.anchor}):{parcels:[],supports:[],count:0};
-    const input={sources,fineBuffer:fluidBuffers[currentFluid],reactionTexture:reactantTextures[currentFluid],fineDims:[gridSize,gridHeight,gridSize],fineVelocityMode:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode,transform:productTransform,time,reactant:state.reactantCombustion,physics,calibration:controlsSnapshot,wind:{strength:uniforms[53],angle:uniforms[54],height:uniforms[55],speed:time.dynamicsSpeed}};
+    const simLevers=resolveSimulationLevers(controlsSnapshot);
+    const input={sources,fineBuffer:fluidBuffers[currentFluid],reactionTexture:reactantTextures[currentFluid],fineDims:[gridSize,gridHeight,gridSize],fineVelocityMode:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode,transform:productTransform,time,reactant:state.reactantCombustion,physics,calibration:controlsSnapshot,wind:{strength:uniforms[53],angle:uniforms[54],height:uniforms[55],speed:time.dynamicsSpeed},worldSmokeOnly:simLevers.worldSmokeOnly};
     let intermediateState={effective:'off'};
     if(intermediateFlow){
       let middleSolids;
@@ -16813,6 +16882,11 @@ export function createKaminosVolumePrototype({
     uniforms.set(joinedBoundaryUniformValues(state.joinedBoundary, state.joinedGhosts.bound ? { bound: true, ...joinedGhostGeometry, generation: state.joinedGhosts.generation } : null), JOINED_BOUNDARY_UNIFORM_OFFSET);
     const waveletTurbulence = resolveWaveletTurbulence(controlsSnapshot);
     state.waveletTurbulence = waveletTurbulence;
+    const simulationLevers = resolveSimulationLevers(controlsSnapshot);
+    state.simulationLevers = simulationLevers;
+    uniforms[OPEN_WORLD_UNIFORM_OFFSET + 1] = simulationLevers.worldSmokeOnly ? 1 : 0;
+    uniforms[OPEN_WORLD_UNIFORM_OFFSET + 2] = simulationLevers.fastBypassEnabled ? 1 : 0;
+    uniforms[OPEN_WORLD_UNIFORM_OFFSET + 3] = simulationLevers.velocityWaveletEnabled ? 1 : 0;
     uniforms.set(waveletTurbulenceUniformValues(waveletTurbulence, { simStepCount: state.simStepCount }), WAVELET_TURBULENCE_UNIFORM_OFFSET);
     uniforms.set(waveletOctaveUniformValues(waveletTurbulence), WAVELET_TURBULENCE_UNIFORM_OFFSET + 4);
     if (ensureWaveletCoordinates(waveletTurbulence.effective.admitted && !(Number(controlsSnapshot.fineVelocity)>0 && Number(controlsSnapshot.fineVelocity)!==gridSize))) {
@@ -17703,7 +17777,8 @@ export function createKaminosVolumePrototype({
     u.set(immersedSourceUniformValues(state.immersedSource,plan),IMMERSED_SOURCE_UNIFORM_OFFSET);
     device.queue.writeBuffer(fineVelocity.uniform,0,u);
     state.fineGrid.residentBytes=fineVelocity.residentBytes;
-    state.fineGrid.turbulence={placement:'material-characteristic',coordinateDims:plan.velocityDims,detailDims:plan.materialDims,velocityFeedback:false,active:!!state.waveletTurbulence?.effective?.admitted};
+    const velocityWavelet=Boolean(state.simulationLevers?.velocityWaveletEnabled);
+    state.fineGrid.turbulence={placement:velocityWavelet?'velocity-characteristic':'material-characteristic',coordinateDims:plan.velocityDims,detailDims:velocityWavelet?plan.velocityDims:plan.materialDims,velocityFeedback:velocityWavelet,active:!!state.waveletTurbulence?.effective?.admitted};
     return fineVelocity;
   }
   function encodeFineVelocity(encoder,owner,transport,timing){
@@ -21177,7 +21252,8 @@ export function createKaminosVolumePrototype({
   }
 
   function prepareVolumeRenderResources(encoder, displayTimestampWrites = null) {
-    const worldRenderChanged=worldRenderField.encode(encoder,state.worldSmoke?.effective==='one-way-world-field'?worldSmoke.renderResources():null,[uniforms[23],...uniforms.subarray(368,376),...uniforms.subarray(EMISSIVE_UNIFORM_OFFSET,EMISSIVE_UNIFORM_OFFSET+20),...uniforms.subarray(REACTANT_COMBUSTION_UNIFORM_OFFSET,REACTANT_COMBUSTION_UNIFORM_OFFSET+16)]);
+    const simLevers=resolveSimulationLevers(controlsSnapshot);
+    const worldRenderChanged=worldRenderField.encode(encoder,state.worldSmoke?.effective==='one-way-world-field'?worldSmoke.renderResources():null,[uniforms[23],...uniforms.subarray(368,376),...uniforms.subarray(EMISSIVE_UNIFORM_OFFSET,EMISSIVE_UNIFORM_OFFSET+20),...uniforms.subarray(REACTANT_COMBUSTION_UNIFORM_OFFSET,REACTANT_COMBUSTION_UNIFORM_OFFSET+16)],{worldSmokeOnly:simLevers.worldSmokeOnly});
     state.worldRenderField=worldRenderField.read();
     if(state.displayReconstruction)state.displayReconstruction.outerFields=state.worldRenderField.effective;
     if(worldRenderChanged)rebuildFluidBindGroups();

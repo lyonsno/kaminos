@@ -19,6 +19,27 @@ export const WORLD_CALIBRATION_FIELDS=[
  {key:'calibrationMaterialCells',id:'volume-calibration-material-cells',param:'volume_calibration_material_cells',value:64,label:'Reference material cells',description:'Saved when capturing current tuning. Interprets existing cell-unit coefficients; changing actual grid detail never changes this reference.',type:'number'},
  {key:'calibrationVelocityCells',id:'volume-calibration-velocity-cells',param:'volume_calibration_velocity_cells',value:64,label:'Reference velocity cells',description:'Saved reference for wavelet wavelengths and calibrated confinement. Actual velocity resolution remains independently adjustable.',type:'number'},
 ];
+export const SIMULATION_LEVER_FIELDS=[
+ {key:'worldEmissive',id:'volume-world-emissive',param:'volume_world_emissive',value:'on',label:'World emissive material',description:'On transports and renders incandescent reaction moments on the coarse World grid. Off keeps the coarse World grid smoke-only (skipping coarse reaction, thermal-moment transport, layer-1 optical writes and Planck emission) while containing Fine flame inside the Fine boundary.',type:'select-one'},
+ {key:'fastBypass',id:'volume-fast-bypass',param:'volume_fast_bypass',value:'off',label:'Fast empty-air bypass',description:'On fast-bypasses cold ambient air cells in the Fine material update (skipping MacCormack reversals, 6-neighbor reactant Laplacians, interface gradients and carrier synthesis when the cell, backtrace foot and neighbors are empty) and trims unused medium-seed interpolations.',type:'select-one'},
+ {key:'velocityWavelet',id:'volume-velocity-wavelet',param:'volume_velocity_wavelet',value:'off',label:'Separated velocity wavelet',description:'On keeps energy-deficit-gated wavelet turbulence active on the separated coarse Fine velocity solve before pressure projection, instead of suppressing velocity-step wavelet injection when Fine velocity is coarser than Fine material.',type:'select-one'},
+];
+export function resolveSimulationLevers(c={}){
+ const worldEmissive=c.worldEmissive??'on';
+ const fastBypass=c.fastBypass??'off';
+ const velocityWavelet=c.velocityWavelet??'off';
+ if(!['on','off'].includes(worldEmissive))throw Error(`Invalid worldEmissive lever: ${worldEmissive}`);
+ if(!['off','on'].includes(fastBypass))throw Error(`Invalid fastBypass lever: ${fastBypass}`);
+ if(!['off','on'].includes(velocityWavelet))throw Error(`Invalid velocityWavelet lever: ${velocityWavelet}`);
+ return {
+  worldEmissive,
+  worldSmokeOnly:worldEmissive==='off',
+  fastBypass,
+  fastBypassEnabled:fastBypass==='on',
+  velocityWavelet,
+  velocityWaveletEnabled:velocityWavelet==='on',
+ };
+}
 export const WORLD_CALIBRATION_WGSL=/* wgsl */`
 fn calibrationCellGain()->f32{return u.world_calibration.x;}
 fn calibrationConfinementGain()->f32{
@@ -32,10 +53,15 @@ fn calibrationNoiseCoordinate(cell:vec3<f32>)->vec3<f32>{
 }
 `;
 export function readWorldCalibrationControls(controls){
- return Object.fromEntries(WORLD_CALIBRATION_FIELDS.map(f=>{
+ const out=Object.fromEntries(WORLD_CALIBRATION_FIELDS.map(f=>{
   const d=controls[f.id];if(!d)throw Error(`Missing calibration control ${f.id}`);
   const value=d.rawValue??d.value;return [f.key,f.type==='select-one'?value:Number(value)];
  }));
+ for(const f of SIMULATION_LEVER_FIELDS){
+  const d=controls[f.id];
+  if(d)out[f.key]=String(d.rawValue??d.value);
+ }
+ return out;
 }
 
 // Both texture initializers and the shader reset use this same world-anchored

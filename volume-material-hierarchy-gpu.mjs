@@ -35,6 +35,7 @@ fn nearestPlane(p:vec3<f32>,history:bool)->Gas{
 fn hierarchyPlane(p:vec3<f32>,history:bool)->Gas{
  let slot=leafAt(p);if(slot==0xffffffffu){return Gas(vec4<f32>(0,0,0,select(u.reactant_combustion_c.z,0.0,history)),vec4<f32>(0));}
  let n=bricks[slot];let q=(p-n.loPitch.xyz)/n.loPitch.w-.5;let base=floor(q);let f=fract(q);var a=vec4<f32>(0);var b=vec4<f32>(0);
+ let smokeOnly=worldSmokeOnly();
  for(var z=0;z<2;z++){for(var y=0;y<2;y++){for(var x=0;x<2;x++){
   let pos=n.loPitch.xyz+(base+vec3<f32>(f32(x),f32(y),f32(z))+.5)*n.loPitch.w;
   // Most corners stay inside the leaf we already located. Recompute the cell
@@ -44,7 +45,7 @@ fn hierarchyPlane(p:vec3<f32>,history:bool)->Gas{
   if(all(cell>=vec3<f32>(0))&&all(cell<vec3<f32>(4))&&all(pos>=u.materialLo.xyz)&&all(pos<u.materialLo.xyz+u.material.xyz*u.material.w)){
    value=hin[slot*64u+localIndex(vec3<u32>(floor(cell)))+select(0u,arrayLength(&hin)/2u,history)];
   }else{value=nearestPlane(pos,history);}
-  let w=select(1.0-f,f,vec3<bool>(x==1,y==1,z==1));a+=value.a*w.x*w.y*w.z;b+=value.b*w.x*w.y*w.z;
+  let w=select(1.0-f,f,vec3<bool>(x==1,y==1,z==1));a+=value.a*w.x*w.y*w.z;if(!smokeOnly){b+=value.b*w.x*w.y*w.z;}
  }}}return Gas(a,b);
 }
 fn hierarchyGas(p:vec3<f32>)->Gas{return hierarchyPlane(p,false);}
@@ -77,7 +78,23 @@ fn hierarchyHistory(p:vec3<f32>)->Gas{return hierarchyPlane(p,true);}
   let back=clipped(p,p-velocity(p)*u.time.y);var history=hierarchyGas(back);
   if(fraction>0.0){history=exteriorHistory(history,hierarchyHistory(back),p,back,n.loPitch.w);}
   r=suppliedGas(gasScale(history,1.0/(1.0-fraction)),supplyTexel(materialSupply,2u*(slot*64u+l))/(1.0-fraction));
-  if(reactantLawOn()){
+  if(worldSmokeOnly()){
+   if(reactantLawOn()){
+    let dt=u.time.x;
+    let w=min(.16,max(0.0,u.reactant_combustion_a.w*dt*pow(u.material.w/n.loPitch.w,2.0)));
+    if(w>0.0){
+     var neighbors=vec2<f32>(0);
+     for(var a=0u;a<3u;a++){
+      let off=vec3<f32>(axis(a))*n.loPitch.w;neighbors+=hierarchyGas(clipped(p,p+off)).a.xy+hierarchyGas(clipped(p,p-off)).a.xy;
+     }
+     r.a=vec4<f32>(max(vec2<f32>(0),r.a.xy*(1.0-6.0*w)+neighbors*w),0.0,0.0);
+    }
+    let nextHeat=r.a.y*reactantCoolingSurvival(dt);
+    let nextSoot=r.a.x*reactantSootSurvival(dt)*sootBurnoutSurvival(nextHeat,1.0,dt);
+    r.a=vec4<f32>(select(0.0,nextSoot,nextSoot>1e-6),select(0.0,nextHeat,nextHeat>1e-5),0.0,0.0);
+   }else{r.a=vec4<f32>(r.a.x*pow(.990,u.time.x),r.a.y*pow(.982,u.time.x),0.0,0.0);}
+   r.b=vec4<f32>(0.0);
+  }else if(reactantLawOn()){
    let dt=u.time.x;
    let w=min(.16,max(0.0,u.reactant_combustion_a.w*dt*pow(u.material.w/n.loPitch.w,2.0)));
    if(w>0.0){
@@ -106,10 +123,11 @@ fn hierarchyHistory(p:vec3<f32>)->Gas{return hierarchyPlane(p,true);}
 }
 @compute @workgroup_size(64) fn restrictBricks(@builtin(workgroup_id) group:vec3<u32>,@builtin(num_workgroups) groups:vec3<u32>,@builtin(local_invocation_index) l:u32){
  let index=group.x+group.y*groups.x;if(index>=arrayLength(&work)){return;}let slot=work[index];let n=bricks[slot];let c=localCell(l);var a=vec4<f32>(0);var b=vec4<f32>(0);var ownedA=vec4<f32>(0);var ownedB=vec4<f32>(0);
+ let smokeOnly=worldSmokeOnly();
  for(var z=0u;z<2u;z++){for(var y=0u;y<2u;y++){for(var x=0u;x<2u;x++){
   let q=2u*c+vec3<u32>(x,y,z);let oct=q/4u;let child=childSlot(n,oct.x+2u*(oct.y+2u*oct.z));
-  let r=hout[child*64u+localIndex(q%4u)];a+=r.a*.125;b+=r.b*.125;
-  let owned=hout[arrayLength(&hout)/2u+child*64u+localIndex(q%4u)];ownedA+=owned.a*.125;ownedB+=owned.b*.125;
+  let r=hout[child*64u+localIndex(q%4u)];a+=r.a*.125;if(!smokeOnly){b+=r.b*.125;}
+  let owned=hout[arrayLength(&hout)/2u+child*64u+localIndex(q%4u)];ownedA+=owned.a*.125;if(!smokeOnly){ownedB+=owned.b*.125;}
  }}}hout[slot*64u+l]=Gas(a,b);hout[arrayLength(&hout)/2u+slot*64u+l]=Gas(ownedA,ownedB);
 }
 @compute @workgroup_size(4,4,4) fn exportBricks(@builtin(global_invocation_id) gid:vec3<u32>){
@@ -121,7 +139,7 @@ fn hierarchyHistory(p:vec3<f32>)->Gas{return hierarchyPlane(p,true);}
  gout[idx(c,u.material.xyz)]=r;
  gout[u32(u.material.x*u.material.y*u.material.z)+idx(c,u.material.xyz)]=hin[arrayLength(&hin)/2u+slot*64u+localIndex(gid%4u)];
  textureStore(optical,c,vec4<f32>(r.a.xyz,r.b.x));
- textureStore(optical,c+vec3<i32>(0,0,i32(u.material.z)),vec4<f32>(r.b.yzw,0));
+ if(!worldSmokeOnly()){textureStore(optical,c+vec3<i32>(0,0,i32(u.material.z)),vec4<f32>(r.b.yzw,0));}
  if(u.pressureControl.z>.5){textureStore(exportedGas,c,r.a);}
 }
 var<workgroup> signal:array<vec4<f32>,64>;
@@ -130,10 +148,11 @@ var<workgroup> motionMax:array<vec4<f32>,64>;
 @compute @workgroup_size(64) fn measureBricks(@builtin(workgroup_id) group:vec3<u32>,@builtin(num_workgroups) groups:vec3<u32>,@builtin(local_invocation_index) l:u32){
  let index=group.x+group.y*groups.x;if(index>=arrayLength(&work)){return;}let slot=work[index];let n=bricks[slot];let p=n.loPitch.xyz+(vec3<f32>(localCell(l))+.5)*n.loPitch.w;let r=hin[slot*64u+l];
  var grad=vec4<f32>(0);var opportunity=0.0;
+ let smokeOnly=worldSmokeOnly();
  for(var a=0u;a<3u;a++){
   let off=vec3<f32>(axis(a))*n.loPitch.w;let plus=hierarchyGas(p+off).a;let minus=hierarchyGas(p-off).a;
   grad+=abs(plus-minus)/(2.0*n.loPitch.w);
-  opportunity=max(opportunity,min(max(plus.z,minus.z),max(plus.w,minus.w)/max(u.reactant_combustion_b.x,1e-6))*smoothstep(.1,.3,max(plus.y,minus.y)));
+  if(!smokeOnly){opportunity=max(opportunity,min(max(plus.z,minus.z),max(plus.w,minus.w)/max(u.reactant_combustion_b.x,1e-6))*smoothstep(.1,.3,max(plus.y,minus.y)));}
  }
  // Fixed material/physical units; no frame-maximum normalization.
  signal[l]=vec4<f32>(r.b.x/.04,opportunity,grad.y,grad.x);

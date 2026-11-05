@@ -1,4 +1,4 @@
-import {WORLD_CALIBRATION_FIELDS} from './volume-world-calibration.mjs';
+import {WORLD_CALIBRATION_FIELDS,SIMULATION_LEVER_FIELDS} from './volume-world-calibration.mjs';
 import {volumeControlTooltip,INTERMEDIATE_GRID_MODE_DESCRIPTIONS} from './volume-control-descriptions.mjs';
 import {installRelativeNumberDrag} from './scene-control-history.mjs';
 import {GRID_TUNING_GROUPS,GRID_TUNING_FIELDS,gridTuningSummary,intermediateCoverageChoices} from './volume-grid-tuning.mjs';
@@ -23,12 +23,21 @@ export function createGridTuningInspector({document,host,read,validate,apply,liv
   toggle.title=WORLD_CALIBRATION_FIELDS[0].description;
   width.id='grid-calibration-width';width.type='number';width.step='any';width.min='0';width.setAttribute('aria-label','Simulation world scale');width.title=WORLD_CALIBRATION_FIELDS[1].description;
   capture.type='button';capture.id='grid-calibration-capture';capture.title='Keep the current force, source and mixing tuning as the reference, enable compensation, and save its material and velocity cell counts. Later grid changes keep that reference.';
-  const row=element('label','grid-editor-shape');row.append(element('span',null,'Simulation world scale'),toggle,width,capture);area.append(row,description);panel.append(area);
+  const row=element('label','grid-editor-shape');row.append(element('span',null,'Simulation world scale'),toggle,width,capture);
+  const leverRow=element('div','grid-editor-shape');leverRow.id='grid-calibration-levers';
+  const leverSelects=new Map();
+  for(const f of SIMULATION_LEVER_FIELDS){
+   const s=element('select','transform-input');s.id=`grid-lever-${f.key}`;s.dataset.controlId=f.id;s.setAttribute('aria-label',f.label);s.title=f.description;
+   for(const [val,lbl] of [['on',`${f.label}: On`],['off',`${f.label}: Off`]]){const o=element('option',null,lbl);o.value=val;s.append(o);}
+   s.addEventListener('change',()=>act(()=>calibration.set({[f.key]:s.value})));
+   leverSelects.set(f.key,s);leverRow.append(s);
+  }
+  area.append(row,leverRow,description);panel.append(area);
   const act=fn=>{try{fn();syncCalibration();}catch(e){status.textContent=e.message;}};
   toggle.addEventListener('change',()=>act(()=>toggle.value==='world'&&read().calibrationMode!=='world'?calibration.capture():calibration.set({calibrationMode:toggle.value})));
-  width.addEventListener('input',()=>{if(width.value!==''&&Number(width.value)>0&&Number.isFinite(Number(width.value)))act(()=>calibration.set({simulationWorldScale:Number(width.value)},{preview:true}));});
+  width.addEventListener('input',()=>{if(width.value!==''&&Number(width.value)>0&&Number(width.value)<Infinity)act(()=>calibration.set({simulationWorldScale:Number(width.value)},{preview:true}));});
   capture.onclick=()=>act(()=>calibration.capture());
-  syncCalibration=()=>{const c=read();if(document.activeElement!==toggle)toggle.value=c.calibrationMode??'legacy';if(document.activeElement!==width)width.value=String(c.simulationWorldScale??2);width.disabled=c.calibrationMode!=='world';description.textContent=c.calibrationMode==='world'?`World calibration · reference material ${c.calibrationMaterialCells}, velocity ${c.calibrationVelocityCells}. Coverage and grid detail do not redefine this scale. Coarser grids still lose motion and mixing detail; an inlet thinner than a velocity cell can also transfer less momentum.`:'Legacy tuning follows cell size. Use current tuning as reference to try independent world scale without changing its starting coefficients.';};
+  syncCalibration=()=>{const c=read();if(document.activeElement!==toggle)toggle.value=c.calibrationMode??'legacy';if(document.activeElement!==width)width.value=String(c.simulationWorldScale??2);width.disabled=c.calibrationMode!=='world';for(const f of SIMULATION_LEVER_FIELDS){const s=leverSelects.get(f.key);if(s&&document.activeElement!==s)s.value=String(c[f.key]??f.value);}description.textContent=c.calibrationMode==='world'?`World calibration · reference material ${c.calibrationMaterialCells}, velocity ${c.calibrationVelocityCells}. Coverage and grid detail do not redefine this scale. Coarser grids still lose motion and mixing detail; an inlet thinner than a velocity cell can also transfer less momentum.`:'Legacy tuning follows cell size. Use current tuning as reference to try independent world scale without changing its starting coefficients.';};
   calibrationDrag=installNumberDrag({input:width,grip:width,step:.01});
   calibrationHistory=bindLiveField?.(width,'Tune simulation world scale');
   width.title=WORLD_CALIBRATION_FIELDS[1].description+' Drag to adjust; click to type.';

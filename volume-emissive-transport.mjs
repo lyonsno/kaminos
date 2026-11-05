@@ -232,6 +232,20 @@ fn sceneEmissiveMaterialAt(p: vec3<f32>) -> EmissiveMaterial {
   // raymarch presentation chooses to show smoke. Suppression is consumer-local.
   return emissiveMaterial(r,coverage,1.0);
 }
+fn fastEmissiveMaterialAt(p: vec3<f32>, smokeVisible: f32) -> EmissiveMaterial {
+  if (u.open_world_boundary.z > 0.5 && u.emissive_physics.x > 0.5) {
+    var r: FlowReconstructionSample;
+    r.material = sampleWorldMaterial(p);
+    r.freshBurn = sampleWorldReactantBurn(p);
+    if (r.material.x <= 1e-6 && r.freshBurn <= 1e-6) {
+      return EmissiveMaterial(vec3<f32>(0.0), 0.0, 0.0);
+    }
+    return physicsEmissiveMaterial(r, smokeVisible);
+  }
+  let r = sampleWorldFlowReconstructionRaw(p);
+  let coverage = liveBoundarySupportAt(p, max(u.topology_shell_carriers,vec4<f32>(0.0)));
+  return emissiveMaterial(r, coverage, smokeVisible);
+}
 fn emissiveCamera(rgb: vec3<f32>) -> vec3<f32> {
   let balanced = vec3<f32>(dot(u.emissive_white_r.xyz,rgb),dot(u.emissive_white_g.xyz,rgb),dot(u.emissive_white_b.xyz,rgb));
   if (u.reserved_render_controls.z > 0.5) { return agxDisplay(balanced, u.physical_display.y); }
@@ -271,10 +285,7 @@ fn seedEmissiveLight(@builtin(global_invocation_id) c: vec3<u32>) {
   for(var k=0u;k<8u;k++) {
     let offset = (vec3<f32>(f32(k&1u),f32((k>>1u)&1u),f32((k>>2u)&1u))+vec3<f32>(0.5))*0.5;
     let p = (vec3<f32>(c)+offset)*(2.0/f32(LIGHT_GRID))-vec3<f32>(1.0);
-    let r = sampleWorldFlowReconstructionRaw(p);
-    let support = liveBoundarySupportAt(p, max(u.topology_shell_carriers,vec4<f32>(0.0)));
-    let coverage = support;
-    let medium = emissiveMaterial(r,coverage,1.0-u.boundary_fire_display.z);
+    let medium = fastEmissiveMaterialAt(p, 1.0-u.boundary_fire_display.z);
     coefficients += vec4<f32>(medium.emission,medium.absorption+medium.scattering)*0.125;
   }
   emissiveCoefficientsDst[lightIndex(c)] = coefficients;

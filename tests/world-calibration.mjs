@@ -129,6 +129,60 @@ test('initial wavelet coordinates use the authored wavelength on independent vel
 });
 
 import {checkCalibrationState} from '../tools/world-calibration-check.mjs';
+import * as calibrationModule from '../volume-world-calibration.mjs';
+test('independent simulation levers toggle world emissive material, empty-air fast bypass and separated velocity wavelet',()=>{
+ assert.equal(typeof calibrationModule.resolveSimulationLevers,'function');
+ const defaults=calibrationModule.resolveSimulationLevers({});
+ assert.deepEqual(defaults,{
+  worldEmissive:'on',
+  worldSmokeOnly:false,
+  fastBypass:'off',
+  fastBypassEnabled:false,
+  velocityWavelet:'off',
+  velocityWaveletEnabled:false
+ });
+ const active=calibrationModule.resolveSimulationLevers({worldEmissive:'off',fastBypass:'on',velocityWavelet:'on'});
+ assert.deepEqual(active,{
+  worldEmissive:'off',
+  worldSmokeOnly:true,
+  fastBypass:'on',
+  fastBypassEnabled:true,
+  velocityWavelet:'on',
+  velocityWaveletEnabled:true
+ });
+ assert.throws(()=>calibrationModule.resolveSimulationLevers({worldEmissive:'maybe'}),/worldEmissive/);
+ assert.throws(()=>calibrationModule.resolveSimulationLevers({fastBypass:'maybe'}),/fastBypass/);
+ assert.throws(()=>calibrationModule.resolveSimulationLevers({velocityWavelet:'maybe'}),/velocityWavelet/);
+ const schema=JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json',import.meta.url)));
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const authoring=readFileSync(new URL('../flame-authoring.mjs',import.meta.url),'utf8');
+ const gridUi=readFileSync(new URL('../volume-grid-tuning-ui.mjs',import.meta.url),'utf8');
+ for(const id of ['volume-world-emissive','volume-fast-bypass','volume-velocity-wavelet']){
+  assert.ok(schema.controls.some(c=>c.key===id),`schema missing ${id}`);
+  assert.ok(html.includes(`id="${id}"`),`DOM missing ${id}`);
+  assert.ok(authoring.includes(`'${id}'`),`Flame Inspector missing ${id}`);
+  assert.ok(calibrationModule.SIMULATION_LEVER_FIELDS.some(f=>f.id===id),`SIMULATION_LEVER_FIELDS missing ${id}`);
+ }
+ assert.match(gridUi,/SIMULATION_LEVER_FIELDS/);
+ const core=readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
+ const worldSmoke=readFileSync(new URL('../volume-world-smoke.mjs',import.meta.url),'utf8');
+ const hierarchy=readFileSync(new URL('../volume-material-hierarchy-gpu.mjs',import.meta.url),'utf8');
+ const worldOptics=readFileSync(new URL('../volume-world-smoke-optics.mjs',import.meta.url),'utf8');
+ const worldRender=readFileSync(new URL('../volume-world-render.mjs',import.meta.url),'utf8');
+ const emissiveTransport=readFileSync(new URL('../volume-emissive-transport.mjs',import.meta.url),'utf8');
+ const sceneSource=readFileSync(new URL('../scene-volume-source.mjs',import.meta.url),'utf8');
+ assert.match(core,/fn worldSmokeOnlyOn\(\) -> bool \{\s*return u\.open_world_boundary\.y > 0\.5;\s*\}/);
+ assert.match(core,/fn fastBypassOn\(\) -> bool \{\s*return u\.open_world_boundary\.z > 0\.5;\s*\}/);
+ assert.match(core,/fn velocityWaveletOn\(\) -> bool \{\s*return u\.open_world_boundary\.w > 0\.5;\s*\}/);
+ assert.match(core,/if \(waveletOn\(\) && VELOCITY_ONLY && velocityWaveletOn\(\)\) \{ vel = vel \+ waveletCorrection\(backCell, velTransported, waveletCoordA, waveletCoordB, timeStep\); \}/);
+ assert.match(core,/if\(!MATERIAL_ONLY\|\|!waveletOn\(\)\|\|velocityWaveletOn\(\)\)\{return resolved;\}/);
+ assert.match(worldSmoke,/fn worldSmokeOnly\(\)->bool\{return u\.pressureControl\.w>0\.5;\}/);
+ assert.match(hierarchy,/let smokeOnly=worldSmokeOnly\(\);/);
+ assert.match(worldOptics,/fn fineFlameContainmentEnvelope\(/);
+ assert.match(worldRender,/fn worldRenderSmokeOnly\(\)->bool\{return\(u32\(wr\.loMode\.w\)&4u\)!=0u;\}/);
+ assert.match(emissiveTransport,/fn fastEmissiveMaterialAt\(/);
+ assert.match(sceneSource,/fastEmissiveMaterialAt\(/);
+});
 test('native check rejects fallback, stale references and missing state',()=>{
  const expected={width:2,materialCells:32,velocityCells:16,dims:[48,48,48],velocityDims:[24,24,24]};
  const baseline={step:10,worldSteps:10,adaptive:{steps:10}};
