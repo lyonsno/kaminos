@@ -22,7 +22,7 @@ import { RAY_START_WGSL, createRayStartTexture } from './volume-ray-start.mjs';
 import { leanEmissiveRaymarchAdmission, RAYMARCH_NEIGHBORHOOD_WGSL, FLAME_GUIDANCE_WGSL } from './volume-raymarch-sampling.mjs';
 import { OPTICAL_TRACE_IDENTITY, traceChunkPlan, validateTraceRows, createOpticalCaptureOwner } from './volume-optical-trace.mjs';
 import { raymarchAdaptivity, opticalSteppingConfig, resolveOpticalStepping, OPTICAL_STEPPING_WGSL } from './volume-optical-native.mjs';
-import { createRayStepTelemetry } from './volume-ray-step-telemetry.mjs';
+import { createRayStepTelemetry, createRayStepPipelineVariants } from './volume-ray-step-telemetry.mjs';
 import { createRayAllocationHistory, HISTORY_ALLOCATION_WGSL } from './volume-history-allocation.mjs';
 import { frameCadenceSummary } from './volume-frame-timing.mjs';
 import { applyPreviewQualityCaps } from './preview-quality.mjs';
@@ -11948,6 +11948,7 @@ export function createKaminosVolumePrototype({
   let debugRaymarchShaderSpecialization = 'auto';
   let debugOpticalStepping = opticalSteppingConfig({mode:controlsSnapshot.raymarchMode??'numerical',tolerance:controlsSnapshot.opticalTolerance??0.001});
   let rayStepTelemetry = null;
+  let rayStepPipelineVariants = null;
   let rayAllocationHistory = null;
   let rayStepTelemetryCanvas = null;
   let debugOpticalSteppingExplicit = false;
@@ -15322,6 +15323,7 @@ export function createKaminosVolumePrototype({
     }
     state.gpuInitStage = 'device';
     rayStepTelemetry = createRayStepTelemetry(device);
+    rayStepPipelineVariants = createRayStepPipelineVariants(device);
     rayAllocationHistory = createRayAllocationHistory(device);
     rayStepTelemetry.setCanvas(rayStepTelemetryCanvas);
     rayStartNoiseTexture = await createRayStartTexture(device);
@@ -21569,8 +21571,8 @@ export function createKaminosVolumePrototype({
       &&!nonRidgeOpticalCaptureSession&&!nonRidgeSourceBasisCaptureSession&&productFrameOwner==='prototype';
     if(rayStepTelemetry.ensure(state.width,state.height,controlsSnapshot.rayStepTelemetry===true,
       {supported:telemetrySupported,reason:'requires-ordinary-emissive-beauty',allowResize:false}))rebuildFluidBindGroups();
-    state.rayStepTelemetry=rayStepTelemetry.read();
-    const opticalConstants = {OPTICAL_STEP_MODE:optical.value,RAY_STEP_STATS:rayStepTelemetry.active};
+    const statisticsRequested=rayStepTelemetry.active;
+    const opticalConstants = {OPTICAL_STEP_MODE:optical.value,RAY_STEP_STATS:false};
     state.opticalStepping = { ...optical, effective: optical.mode,
       adaptivity:raymarchAdaptivity(optical.mode,controlsSnapshot.adaptiveRays),
       source:'native-emissive-material-and-current-incident-light', fullRay:optical.mode !== 'current',
@@ -21598,11 +21600,11 @@ export function createKaminosVolumePrototype({
       state.opticalStepping.fullRay=true;
       rebuildFluidBindGroups();
     }else{rayAllocationHistory.reset();}
-    const opticalKey = `:${transparentCanvas ? 1 : 0}:${optical.mode}:stats=${rayStepTelemetry.active}`;
+    const opticalKey = `:${transparentCanvas ? 1 : 0}:${optical.mode}:stats=false`;
     if ((optical.mode !== 'current'||rayStepTelemetry.active) && !multisampled && !scenePointBindGroup && !distributedGroup) {
       const key = `${targetPipeline === readbackPipeline}${opticalKey}`;
       if (!opticalSteppingPipelines.has(key)) {
-        opticalSteppingPipelines.set(key,device.createRenderPipeline({label:'experimental optical stepping',
+        opticalSteppingPipelines.set(key,rayStepPipelineVariants.create({label:'experimental optical stepping',
           layout:productRaymarchPipelineLayout,
           vertex:{module:shader,entryPoint:'vs'},fragment:{module:shader,entryPoint:'fs',
             constants:{TRANSPARENT_CANVAS:transparentCanvas?1:0,LEAN_EMISSIVE_RAYMARCH:true,...opticalConstants},
@@ -21624,7 +21626,7 @@ export function createKaminosVolumePrototype({
              depth = min(depth, textureLoad(productSceneDepth, pixel, sample));
            }`),
         });
-        ordinaryDepthPipelines.set(depthKey,device.createRenderPipeline({
+        ordinaryDepthPipelines.set(depthKey,rayStepPipelineVariants.create({
           label:'ordinary emissive raymarch with MSAA scene-depth clipping',layout:ordinaryMultisamplePipelineLayout,
           vertex:{module:ordinaryMultisampleShader,entryPoint:'vs'},
           fragment:{module:ordinaryMultisampleShader,entryPoint:'fs',
@@ -21658,7 +21660,7 @@ export function createKaminosVolumePrototype({
           scenePointShaders.set(multisampled, entry);
         }
         const { module, layout } = entry;
-        scenePointPipelines.set(key,device.createRenderPipeline({label:'shared point light smoke consumer',layout,
+        scenePointPipelines.set(key,rayStepPipelineVariants.create({label:'shared point light smoke consumer',layout,
           vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',
             constants:{TRANSPARENT_CANVAS:transparentCanvas?1:0,LEAN_STOCK_RAYMARCH:false,LEAN_EMISSIVE_RAYMARCH: selectEmissive,...opticalConstants},
             targets:[{format:targetPipeline === readbackPipeline?'rgba8unorm':format}]},primitive:{topology:'triangle-list'}}));
@@ -21686,12 +21688,18 @@ export function createKaminosVolumePrototype({
           distributedShaders.set(multisampled, entry);
         }
         const { module, layout } = entry;
-        distributedPipelines.set(key,device.createRenderPipeline({label:'distributed flame scene smoke',layout,
+        distributedPipelines.set(key,rayStepPipelineVariants.create({label:'distributed flame scene smoke',layout,
           vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',constants:{TRANSPARENT_CANVAS:transparentCanvas?1:0,LEAN_STOCK_RAYMARCH:false,LEAN_EMISSIVE_RAYMARCH: selectEmissive,OPTICAL_TRACE_CAPTURE:Boolean(options.opticalTrace),...opticalConstants},
           targets:[{format:targetPipeline===readbackPipeline?'rgba8unorm':format}]},primitive:{topology:'triangle-list'}}));
       }
       drawPipeline=distributedPipelines.get(key);
     }
+    if(statisticsRequested){
+      const variant=rayStepPipelineVariants.select(drawPipeline);
+      drawPipeline=variant.pipeline;
+      if(!variant.active)rayStepTelemetry.deferDraw(variant.reason,variant.error);
+    }
+    state.rayStepTelemetry=rayStepTelemetry.read();
     if (uniforms[368] > 1.5) {
       if (!sceneSourcePreparedEncoders.has(encoder)) encodeSharedSceneSource(encoder);
       if(distributedGroup) {
