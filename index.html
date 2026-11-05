@@ -2936,6 +2936,7 @@ import {createViewportRecording} from './viewport-recording.mjs';
 import {createRecordingSink} from './recording-mp4.mjs';
 import {installRenderOutput} from './render-output-ui.mjs';
 import { settleStartupVeil } from './startup-veil.mjs';
+import {createSceneLoadingGeometry} from './scene-loading-geometry.mjs';
 import { createEnvironmentLoader } from './scene-environment-loader.mjs';
 import {createDeviceRecovery} from './scene-device-recovery.mjs';
 window.kaminosStartup?.phase('Preparing application');
@@ -4295,6 +4296,7 @@ let authoredWaterControls=null;
 
 
 let sceneLightingPreparation=null;
+let sceneGeometryPreview=null;
 
 let sceneViewerPaused = null;
 
@@ -4306,7 +4308,7 @@ function createPageSceneDocumentSession(options = {}) {
     post:body=>fetch('/api/save-scene',{method:'POST',headers:{'Content-Type':'application/json'},body}),
     readAddress:()=>({origin:location.origin,workspace:authoringWorkspace?.state().mode??null,owner:readOwnerExperimentAddress(location)}),
     restoreUrl:(data,filename,address)=>compositionRestoreUrl(data.composition,filename,address.origin,address.workspace,address.owner),
-    apply:async(...args)=>{try{return await applySceneDocument(...args);}finally{window._kaminosDirty?.();}},
+    apply:async(...args)=>{let complete=false;try{const result=await applySceneDocument(...args);complete=result!==false;return result;}finally{sceneGeometryPreview?.finish(args[2].requestId,complete);window._kaminosDirty?.();}},
     requiresNavigation:(plan,{mounted})=>(plan.composition||isCompositionAuthoring())&&!mounted,
     navigate:url=>location.assign(url),
     assertSupported:plan=>{if(plan.objects.filter(record=>record.type===FLAME_EMITTER_TYPE).length>1&&volumePrototype&&typeof volumePrototype.setImmersedSources!=='function')throw Error('This flame runtime does not yet support multiple authored sources');},
@@ -11530,6 +11532,11 @@ async function initScene() {
   window.kaminosCompileSceneLighting=change=>sceneLightingPreparation.request(change);
   window.kaminosSceneLightingPreparation={state:sceneLightingPreparation.state,whenIdle:sceneLightingPreparation.whenIdle,retry:sceneLightingPreparation.retry};
   document.querySelector('#scene-lighting-preparation-status button').onclick=()=>{sceneLightingPreparation.retry()?.catch(()=>{});};
+  sceneGeometryPreview=createSceneLoadingGeometry({THREE,renderer,camera,readObjects:()=>workingScene.objects,
+    isCurrent:id=>sceneLoadRequests.isCurrent(id)&&!deviceRecoveryHeld(),isVisible:isSceneItemVisible,
+    waitForLighting:()=>sceneLightingPreparation.whenIdle(),
+    onStatus:state=>{if(!state.active)return;if(state.error)setInfo('Geometry preview unavailable; scene restoration continues');else if(state.phase==='geometry-visible')setInfo('Geometry preview · restoring ash, fire and lighting…');}});
+  window.kaminosSceneLoadPresentation=()=>({document:sceneDocument.state(),preview:sceneGeometryPreview.read()});
   let activeSceneDepth = prePassDepth;
   selectionFeedback=createSelectionFeedback(camera);
   window.kaminosSelectionFeedbackState=()=>selectionFeedback.state();
@@ -11834,7 +11841,7 @@ async function initScene() {
     object: id => sceneComponents?.resolve(id)?.object??(id==='@water-domain'?waterDomainEditObject():id==='@flame-domain'?flameDomainEditObject():id==='@selection-transform'?selectionTransformProxy():id?.startsWith('@group:') ? groupProxy(workingScene.groups.find(group=>`@group:${group.id}`===id)) : workingScene.objects.find(item => item.id === id)?.object),
     refresh: () => { updateTransformInspector(); markDirty(); },
     allowed: () => !viewPie?.state() && !greenroomPreviewIsActive() && !splatCorrectionMode && !polyEdit?.active(),
-    busy: () => authoringBusy||sceneLightingPreparation?.state().compiling,
+    busy: () => authoringBusy||sceneLightingPreparation?.state().compiling||sceneDocument.state().phase==='applying',
     viewHeld: () => vantageCaptureHeld ? 'The agent sub is taking a picture' : null,
     frameSelected: window.kaminosFrameSelected,
     captureContext: id => id==='@flame-domain'?flameDomainFollowSource:id==='@selection-transform'||id === FLAME_EMITTER_ID || id?.startsWith('@group:') || id?.startsWith('@assembly:') ? [...flameDomainTranslation] : null,
@@ -12670,7 +12677,7 @@ function createPageSceneLifecycle(){
     groups:{restore:setSceneGroupsFromRecords},
     selection:{set:setSceneSelection,object:setActiveSceneObject,group:setActiveSceneGroup},
     context:{retire:retireSceneFlame,beforeClear:clearSceneEditingState,clearDomains:clearSceneDomains,clearTransient:clearSceneTransient,cleared:projectClearedScene,
-      beginLoad:setup=>{waterFeature.setup=setup.water;activeSceneComposition=setup.flame.composition;authoredFlamePresent=setup.flame.sourcePresent;volumePrototype?.setSceneCompositionPresentation?.(Boolean(activeSceneComposition));},loaded:async setup=>{if(setup.water)await mountLocalLiquidHost();for(const entry of workingScene.objects)if(entry.type===ASH_OBJECT_TYPE){if(typeof sceneColliderCollection!=='undefined')await sceneColliderCollection.prepare?.(workingScene.objects,{...(typeof currentColliderLodOptions==='function'?currentColliderLodOptions():{}),ashCellSize:entry.ash?.cellSize??0.04});await authoredAsh.get(entry.id).initialize();}},
+      beginLoad:setup=>{waterFeature.setup=setup.water;activeSceneComposition=setup.flame.composition;authoredFlamePresent=setup.flame.sourcePresent;volumePrototype?.setSceneCompositionPresentation?.(Boolean(activeSceneComposition));},beforeLoad:(record,requestId)=>record.type===ASH_OBJECT_TYPE?sceneGeometryPreview?.present(requestId):undefined,loaded:async(setup,requestId)=>{await sceneGeometryPreview?.present(requestId);if(setup.water)await mountLocalLiquidHost();for(const entry of workingScene.objects)if(entry.type===ASH_OBJECT_TYPE){if(typeof sceneColliderCollection!=='undefined')await sceneColliderCollection.prepare?.(workingScene.objects,{...(typeof currentColliderLodOptions==='function'?currentColliderLodOptions():{}),ashCellSize:entry.ash?.cellSize??0.04});await authoredAsh.get(entry.id).initialize();}},
       capturePreview:()=>({flamePresent:flameFeature.present,flameRoute:Object.fromEntries([...fireLightFieldRouteParams(),...Object.entries(fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()))]),activeSceneFieldId:workingScene.activeFieldId,documentSession:sceneDocument.snapshot(),volumePrimitives:getVolumePrimitiveState(),modelSourceUrl,modelSourceType,glbFileName}),
       previewDetached(){
         currentMesh=null;setVolumePrimitivesState({schema:VOLUME_PRIMITIVE_SCHEMA,primitives:[]});
@@ -12683,6 +12690,7 @@ function createPageSceneLifecycle(){
   });
 }
 async function retireSceneFlame(){
+  await sceneGeometryPreview?.whenIdle();
   await flameFeature.clear();
   // A consumer waiting for an encoded flame frame cannot own an ordinary
   // scene after its producer retires. Release it before replacing inputs.
@@ -27531,6 +27539,19 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
 
   }
 
+  // Geometry can be presented before domain construction; use the saved
+  // viewpoint now, also preserving subsequent LOD screen-footprint allocation.
+  if (data.camera) {
+    camera.position.fromArray(data.camera.position);
+    controls.target.fromArray(data.camera.target);
+    camera.up.fromArray(Array.isArray(data.camera.up) && data.camera.up.length === 3 ? data.camera.up : [0, 1, 0]);
+    if (Number.isFinite(data.camera.near) && data.camera.near > 0) camera.near = data.camera.near;
+    if (Number.isFinite(data.camera.far) && data.camera.far > camera.near) camera.far = data.camera.far;
+    if (data.camera.fov) camera.fov = data.camera.fov;
+    camera.updateProjectionMatrix();
+    controls.update();
+  }
+  sceneGeometryPreview?.begin(loadRequestId);
   const restoredFlame=objectRecords.find(record=>record.id===FLAME_EMITTER_ID)??objectRecords.find(record=>record.type===FLAME_EMITTER_TYPE);
   setFlameDomainTranslation(restorePlan.flameDomainTranslation || [0, 0, 0],restorePlan.flameDomainScale);
   flameDomainFollowSource=restorePlan.flameDomainFollowSource;
@@ -27572,18 +27593,6 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
   // rebuild its GPU field and invalidate textures held by the lighting pass.
   if (!activeSceneComposition || JSON.stringify(getVolumePrimitiveState()) !== JSON.stringify(restorePlan.volumePrimitives)) {
     setVolumePrimitivesState(restorePlan.volumePrimitives);
-  }
-  // Seed the saved camera before pre-staging beauty LODs so screen-footprint
-  // allocation matches the restored viewpoint before the flame starts.
-  if (data.camera) {
-    camera.position.fromArray(data.camera.position);
-    controls.target.fromArray(data.camera.target);
-    camera.up.fromArray(Array.isArray(data.camera.up) && data.camera.up.length === 3 ? data.camera.up : [0, 1, 0]);
-    if (Number.isFinite(data.camera.near) && data.camera.near > 0) camera.near = data.camera.near;
-    if (Number.isFinite(data.camera.far) && data.camera.far > camera.near) camera.far = data.camera.far;
-    if (data.camera.fov) camera.fov = data.camera.fov;
-    camera.updateProjectionMatrix();
-    controls.update();
   }
   if (activeSceneComposition && typeof window.__kaminosSceneRadiance?.prepareShadowCasters === 'function') {
     const pose = typeof acceptedFlameDomainPose === 'function' ? (flameDomainDraft || acceptedFlameDomainPose()) : null;
