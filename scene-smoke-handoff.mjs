@@ -1,3 +1,7 @@
+export function normalizeSmokeHandoffMargin(value){
+ const margin=Number(value);
+ return Number.isFinite(margin)&&margin>0?Math.min(.60,Math.max(.05,margin)):0;
+}
 // Shared rounded Fine support for material and incident-light ownership. A
 // missing authored margin keeps the existing cell-width boundary policy.
 export const FINE_SMOKE_HANDOFF_WGSL=`

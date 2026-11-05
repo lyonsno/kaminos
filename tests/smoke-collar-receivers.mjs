@@ -66,3 +66,20 @@ rounded.destroy();
 
 const functions=[...(WORLD_SMOKE_OPTICS_WGSL+COMPOSED_SMOKE_WGSL).matchAll(/\bfn\s+(\w+)\s*\(/g)].map(m=>m[1]);
 assert.deepEqual(functions.filter((name,i)=>functions.indexOf(name)!==i),[],'assembled camera fragments must have distinct module-scope declarations');
+for(const fineReceiverGrid of [1,2]){
+ const low=createExteriorSmokeLight(device,{grid:2,refinement:1});
+ assert.doesNotThrow(()=>low.encode(far,{geometry,revision:1,worldGeometry:false,directions:4,gain:1,fineReceiverGrid}), 'valid low receiver grids retain every donor when the removable core is empty');
+ low.destroy();
+}
+let mutableWorld={...world,handoffMargin:.36};
+const cameraUniform=device.createBuffer({label:'live physical handoff',size:80});
+const changing=createSceneVolumeSource({device,module:{},uniformBuffer:{},fluidBuffers:[{}],frontBuffers:[{}],getReactantTextures:()=>[device.createTexture()],grid:4,gridY:8,getWorldSmoke:()=>mutableWorld,worldRenderUniform:cameraUniform});
+changing.encode(device.createCommandEncoder(),0,1);
+assert.ok(Math.abs(writes.get('live physical handoff')[9]-.36)<1e-6);
+for(const value of [undefined,0]){
+ if(value===undefined)delete mutableWorld.handoffMargin;else mutableWorld.handoffMargin=value;
+ changing.encode(device.createCommandEncoder(),0,2);
+ assert.equal(writes.get('live physical handoff')[9],0,'removed or zero optional margin restores the physical cell-width law');
+ assert.equal(changing.describe().exterior.handoffMargin,0,'effective published law agrees with the physical camera uniform');
+}
+changing.destroy();

@@ -1,4 +1,4 @@
-import {FINE_SMOKE_HANDOFF_WGSL} from './scene-smoke-handoff.mjs';
+import {FINE_SMOKE_HANDOFF_WGSL,normalizeSmokeHandoffMargin} from './scene-smoke-handoff.mjs';
 export function buildSmokeReconstructionCells(geometry, dimensions) {
   if (!Array.isArray(dimensions) || dimensions.length !== 3 || !dimensions.every(n=>Number.isInteger(n)&&n>0)) throw new Error('positive smoke dimensions required');
   const {triangles, triangleCount} = geometry;
@@ -53,8 +53,7 @@ export function createDistributedSmokeBindings(device) {
       const e=region?.smokeReconstruction;
       if(region&&(region.generation!==frame.generation||region.frame!==frame.frame||e?.identity!=='prepared-planar-support-v4'||!e.texture||!e.masks||!e.planes||!(e.staticPreparations>0)||!(e.updates>0)||!e.localMin||!e.localMax))throw Error('exterior lighting requires current same-generation reconstruction resources');
     }
-    const margin=Number(frame.handoffMargin??exterior?.handoffMargin);
-    const handoffMargin=Number.isFinite(margin)&&margin>0?Math.min(.60,Math.max(.05,margin)):0;
+    const handoffMargin=normalizeSmokeHandoffMargin(frame.handoffMargin??exterior?.handoffMargin);
     const data=[...(e?[...e.localMin,2/r.coarseDimensions[0],...e.localMax,1+handoffMargin]:Array(8).fill(0)),
       ...(m?[...m.localMin,(m.localMax[0]-m.localMin[0])/m.coarseDimensions[0],...m.localMax,1]:Array(8).fill(0))];
     // Pack masks followed by plane words into one storage binding. This keeps

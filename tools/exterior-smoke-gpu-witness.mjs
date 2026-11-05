@@ -64,6 +64,11 @@ try{
     const frame=regional.encode(source,{geometry,revision:1,worldGeometry:false,directions:4,gain:1});
     const again=regional.encode(source,{geometry,revision:1,worldGeometry:false,directions:4,gain:1});
     independent={requested:layout,effective:frame.middle.smokeReconstruction.coarseDimensions,bounds:[frame.middle.smokeReconstruction.localMin,frame.middle.smokeReconstruction.localMax],builds:[frame.builds,again.builds],generation:frame.middle.generation};
+    independent.low=[];
+    for(const fineReceiverGrid of [1,2]){
+     const low=regional.encode(source,{geometry,revision:1,worldGeometry:false,directions:4,gain:1,fineReceiverGrid});
+     independent.low.push({grid:fineReceiverGrid,active:low.middle.activeVolumeReceivers,allocated:low.middle.allocatedVolumeReceivers});
+    }
    }finally{regional.destroy();}
    const overlapOptions={geometry,receivers:[],volumeGrid:16,sourceDimensions:dimensions,directions:4,smokeRefinement:1,angularPattern:'source',receiverBounds:{lo:[-2,-2,-2],hi:[2,6,2]}};
    const baseline=createVolumeGather(device,overlapOptions);
@@ -110,6 +115,8 @@ try{
     const encode=async()=>{const e=device.createCommandEncoder();producer.encode(e,0,1);device.queue.submit([e.finish()]);return producer.readback();};
     seed=await encode();
     world.handoffMargin=.36;seed.rounded=await encode();
+    delete world.handoffMargin;seed.restored=await encode();
+    world.handoffMargin=0;seed.zero=await encode();
     world=null;device.queue.writeBuffer(worldUniform,0,new Float32Array(8));
     seed.off=await encode();
    }finally{producer.destroy();uniform.destroy();worldUniform.destroy();fluid.destroy();raw.destroy();reactant.destroy();}
@@ -151,6 +158,7 @@ try{
  });await save();
  assert.equal(report.signal.validation,null);assert.deepEqual(report.signal.errors,[]);assert.deepEqual(report.errors,[]);
  assert.ok(!report.signal.compilation.some(m=>m.type==='error'),JSON.stringify(report.signal.compilation));
+ for(const low of report.signal.independent.low)assert.equal(low.active,low.allocated,'empty low-grid core retains every receiver');
  assert.deepEqual(report.signal.independent.effective,[6,12,8]);
  assert.deepEqual(report.signal.independent.builds,[2,2]);
  assert.deepEqual(report.signal.independent.bounds,[[-1.5,-1,-2],[1.5,5,2]]);
@@ -169,6 +177,8 @@ try{
  assert.ok(report.signal.bottom[12]<20&&report.signal.bottom[12]>19,'inside bottom blend samples both fields');
  const seed=report.signal.seed;
  assert.deepEqual(seed.dimensions,[4,8,4]);
+ assert.deepEqual(seed.restored.values,seed.values,'removing rounded margin restores legacy physical law');
+ assert.deepEqual(seed.zero.values,seed.values,'zero margin selects the same legacy law');
  assert.ok(seed.values.every(Number.isFinite)&&seed.values.length===512);
  // Each Fine cell averages eight physical samples. Compare to the camera's
  // established smooth boundary ownership with constant raw World material.

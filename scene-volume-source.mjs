@@ -1,3 +1,4 @@
+import {normalizeSmokeHandoffMargin} from './scene-smoke-handoff.mjs';
 // Opt-in experiment input, not a replacement for the accepted fire atlas or
 // smoke transport. Coefficients use volume-local inverse-length units and
 // relative linear RGB, before either consumer's camera transform.
@@ -138,7 +139,7 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
     for(const [name,r] of exteriorResources)if(!world||(name==='middle'&&!world.middle)){r.texture.destroy();exteriorResources.delete(name);}
     if(!world)return;
     exterior=encodeRegion(encoder,world,'world');
-    if(Number.isFinite(world.handoffMargin))exterior.handoffMargin=world.handoffMargin;
+    exterior.handoffMargin=normalizeSmokeHandoffMargin(world.handoffMargin);
     exterior.middle=world.middle?encodeRegion(encoder,world.middle,'middle'):null;
   }
   const invalidateOptical = () => {if (optical) optical.generation = null;};
@@ -148,7 +149,7 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
       const world=getWorldSmoke();
       // This optional authored value is also the camera's physical ownership
       // parameter. Publish and seed from the same value in this queued frame.
-      if(Number.isFinite(world?.handoffMargin))device.queue.writeBuffer(worldRenderUniform,36,new Float32Array([Math.min(.60,Math.max(.05,world.handoffMargin))]));
+      device.queue.writeBuffer(worldRenderUniform,36,new Float32Array([normalizeSmokeHandoffMargin(world?.handoffMargin)]));
       if (getReactantTextures() !== boundTextures||(world?.texture??emptyWorld)!==boundWorld||(world?.middle?.texture??emptyWorld)!==boundMiddle) inputs = buildInputs();
       if (!Number.isInteger(index) || !inputs[index]) throw new Error('invalid scene source index');
       worldTransform=validateSceneSourceTransform(transform);

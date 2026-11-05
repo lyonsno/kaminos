@@ -1,3 +1,4 @@
+import {normalizeSmokeHandoffMargin} from './scene-smoke-handoff.mjs';
 import {createVolumeGather} from './scene-volume-gather.mjs';
 
 // Receiver coverage is independent of material allocation and Fine source
@@ -23,11 +24,12 @@ export function createExteriorSmokeLight(device,{grid=8,refinement=4,receiverCov
       const frames={};
       const near=nearCoverage??medium.middle;
       const fineHi=source.dimensions.map(n=>-1+2*n/source.dimensions[0]);
-      const margin=Number.isFinite(medium.handoffMargin)?Math.min(.60,Math.max(.05,medium.handoffMargin)):null;
+      const margin=normalizeSmokeHandoffMargin(medium.handoffMargin)||null;
       const cellBlend=2/fineReceiverGrid;
       const xz=margin!==null?.02+Math.max(.04,.4/.36*margin):cellBlend;
       const top=margin!==null?(.02+Math.max(.04,.26/.36*margin))*(fineHi[1]+1):cellBlend;
-      const fineCore={lo:[-1+xz,-1+cellBlend,-1+xz],hi:[1-xz,fineHi[1]-top,1-xz],blendWidth:0};
+      const core={lo:[-1+xz,-1+cellBlend,-1+xz],hi:[1-xz,fineHi[1]-top,1-xz],blendWidth:0};
+      const fineCore=core.hi.every((v,a)=>v>core.lo[a])?core:null;
       for(const [name,region] of [['world',medium],['middle',near]]){
         if(!region)continue;
         // Keep cubic receiver cells and exact physical coverage. In particular,
@@ -53,7 +55,7 @@ export function createExteriorSmokeLight(device,{grid=8,refinement=4,receiverCov
           extinction:{generation:medium.generation,method:'region-split-midpoint-trilinear',stepLength:(medium.localMax[0]-medium.localMin[0])/grid,fineInterval:'physical-blend-in-fine-source',overlap:'camera-two-middle-material-cells'},
           exteriorEmission:false,approximation:'coarse-receivers-and-exterior-medium; fine-source-emission-only'};
       }
-      return {...frames.world,builds,...(Number.isFinite(medium.handoffMargin)?{handoffMargin:medium.handoffMargin}:{}),middle:frames.middle??null};
+      return {...frames.world,builds,handoffMargin:normalizeSmokeHandoffMargin(medium.handoffMargin),middle:frames.middle??null};
     },
     destroy(){for(const {gather} of regions.values())gather.destroy();regions.clear();},
   };
