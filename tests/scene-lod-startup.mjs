@@ -6,3 +6,11 @@ const key=lodPreparationContext(input),sha='a'.repeat(64),hint=captureLodPrepara
 for(const patch of [{viewport:[2000,1800]},{camera:{position:[4,5,6]}},{settings:{faceBudget:100000}},{objects:[{...input.objects[0],source:'hero-b'}]}])assert.equal(cachedLodPreparation(hint,lodPreparationContext({...input,...patch})).size,0);
 assert.equal(cachedLodPreparation({...hint,extra:'compatible'},key).size,1);assert.equal(cachedLodPreparation({...hint,levels:[{id:'x',sha:'bad'}]},key).size,0);assert.equal(cachedLodPreparation(null,key).size,0);
 console.log('Saved LOD preparation is portable, additive, and invalidated by view, budget or asset changes');
+const repeated={...input,objects:[{...input.objects[0],repetition:{mode:'line',count:3}}]};
+assert.notEqual(lodPreparationContext(repeated),key,'repetition changes must invalidate the download allocation hint');
+const {createCoarseRepetition}=await import('../scene-lod-startup.mjs');
+const THREE=await import('../lib/three.core.js');
+const root=new THREE.Group().add(new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshStandardMaterial()));
+const reps=createCoarseRepetition({previews:()=>[{root,record:{id:'a',type:'glb',repetition:{mode:'line',count:3}}}],groups:()=>[{id:'g',objectIds:['a'],transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},repetition:{mode:'line',count:2}}]});
+reps.sync();assert.equal(root.children.filter(row=>row.userData.kaminosRepetitionCopy).length,5,'coarse view retains object and group repetition');reps.clear(root);assert.equal(root.children.length,1);
+console.log('Coarse proxies exercise the existing object/group repetition owner');
