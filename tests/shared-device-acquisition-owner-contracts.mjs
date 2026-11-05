@@ -59,11 +59,11 @@ await requestKaminosSharedWebGpuDevice({adapter});
 assert.equal(nativeRequests, 1, 'ordinary acquisition is unchanged when no guard is supplied');
 console.log('shared-device acquisition owner contracts passed');
 
-for(const feature of ['texture-compression-bc','texture-compression-etc2','texture-compression-astc']){
+for(const feature of ['texture-compression-bc','texture-compression-etc2','texture-compression-astc','float32-filterable']){
   const features=new Set(['timestamp-query',feature]);
   const compressed=await requestKaminosSharedWebGpuDevice({adapter:{...adapter,features,
     async requestDevice(descriptor){observedDescriptor=descriptor;return {...device,features};}}});
-  assert.ok(observedDescriptor.requiredFeatures.includes(feature),'supported mesh compression must be enabled on the shared device');
+  assert.ok(observedDescriptor.requiredFeatures.includes(feature),'supported scene texture sampling features must be enabled on the shared device');
   assert.ok(compressed.device.features.has(feature));
   await assert.rejects(requestKaminosSharedWebGpuDevice({adapter:{...adapter,features},
     acquireDevice:async()=>({...device,features:new Set(['timestamp-query'])})}),/effective device feature/);

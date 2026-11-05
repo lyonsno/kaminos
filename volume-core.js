@@ -1551,8 +1551,9 @@ export async function requestKaminosSharedWebGpuDevice({
   const features = new Set(hostFeatures);
   if (adapter.features?.has?.('timestamp-query')) features.add('timestamp-query');
   // GPU-compressed mesh textures remain compressed only when the shared device
-  // enables a format the adapter supports. Unsupported devices retain RGBA.
-  for(const feature of ['texture-compression-bc','texture-compression-etc2','texture-compression-astc']) {
+  // enables a format the adapter supports. Float filtering enables scene GI
+  // source pyramids when supported; unsupported devices keep the base-level path.
+  for(const feature of ['texture-compression-bc','texture-compression-etc2','texture-compression-astc','float32-filterable']) {
     if(adapter.features?.has?.(feature))features.add(feature);
   }
   for (const feature of features) {
