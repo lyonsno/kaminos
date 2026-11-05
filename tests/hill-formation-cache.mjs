@@ -32,7 +32,9 @@ test('GPU consumer refuses mismatched grids and reports the actual formed source
  assert.equal(typeof gpu.stepGeology,'function','GPU terrain must expose all-GPU geological stepping');
  const zFar=gpu.setCameraFocus({target:[0,1.2,0],distance:14}).zoomDetail;
  const zNear=gpu.setCameraFocus({target:[.8,1.5,-.6],distance:.5}).zoomDetail;
- assert.ok(zFar.enabled&&zFar.triangles>=70000,'zoom detail patch must provide >=70k camera-centered triangles');
+ assert.equal(zFar.enabled,false,'overview must keep the coarse surface without a coincident detail patch');
+ assert.equal(zFar.inactiveReason,'outside-detail-range');
+ assert.ok(zNear.enabled&&zNear.triangles>=70000,'active close detail must provide >=70k camera-centered triangles');
  assert.ok(zNear.focusRadius<zFar.focusRadius*.2&&zNear.vertexSpacing<.006,`zoom detail spacing must scale down continuously to millimeter scale on close-up zoom (far=${zFar.vertexSpacing}, near=${zNear.vertexSpacing})`);
  const zMidA=gpu.setCameraFocus({target:[0,1.2,0],position:[0,1.6,1.5]}).zoomDetail;
  const zMidB=gpu.setCameraFocus({target:[0,1.2,0],position:[0,1.6,1.54]}).zoomDetail;

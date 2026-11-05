@@ -1,6 +1,6 @@
 import {BufferGeometry,BufferAttribute,Box3,Vector3,Sphere,DataTexture,NearestFilter} from '../../lib/three.core.js';
 import {StorageBufferAttribute} from '../../lib/three.webgpu.js';
-import {storage,Fn,wgslFn,instanceIndex,uint,float,uniform,mix,attribute as tslAttribute,positionLocal,normalView,positionViewDirection} from '../../lib/three.tsl.js';
+import {storage,Fn,If,wgslFn,instanceIndex,uint,float,uniform,mix,attribute as tslAttribute,positionLocal,normalView,positionViewDirection} from '../../lib/three.tsl.js';
 import {terrainConfig,makeRidges,ROUTE} from './model.mjs';
 import {detailLattice,baseMaskTransform} from './lod.mjs';
 import {mesoAuthoringConfig,VIEW_MODES} from './formation.mjs';
@@ -374,7 +374,7 @@ const basePosKernel=wgslFn(`fn hill_base_pos(v:u32,n:u32,x:f32,y:f32,z:f32,fx:f3
 
 // Camera-centered height relief on the fixed macro triangles. Smooth source
 // gradients guide material placement; they do not replace the macro geometry.
-const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f32,length:f32,fx:f32,fz:f32,fr:f32,gridX:f32,gridZ:f32,stepX:f32,stepZ:f32,camX:f32,camY:f32,camZ:f32,tilt:f32,strike:f32,fold:f32,thickness:f32,seed:f32,stepStyle:f32,meso:f32,ledge:f32,crag:f32,cobble:f32,rill:f32,viewMode:f32,useFormed:f32,state:ptr<storage,array<vec4<f32>>,read_write>,metaBuf:ptr<storage,array<vec4<f32>>,read_write>)->vec4<f32>{
+const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f32,length:f32,fx:f32,fz:f32,fr:f32,filterSpacing:f32,gridX:f32,gridZ:f32,stepX:f32,stepZ:f32,camX:f32,camY:f32,camZ:f32,tilt:f32,strike:f32,fold:f32,thickness:f32,seed:f32,stepStyle:f32,meso:f32,ledge:f32,crag:f32,cobble:f32,rill:f32,viewMode:f32,useFormed:f32,state:ptr<storage,array<vec4<f32>>,read_write>,metaBuf:ptr<storage,array<vec4<f32>>,read_write>)->vec4<f32>{
  let xi=v%zn;let zi=v/zn;
  // Dyadic subdivision preserves every coarse triangle edge and diagonal.
  // Re-centering translates an integer number of cells; shared vertices stay put.
@@ -422,7 +422,7 @@ const zoomSurfaceKernel=wgslFn(`fn hill_zoom_surface(v:u32,zn:u32,n:u32,width:f3
  var dispOut=0.;
  if(useFormed>.5&&meso>0.&&wPatch>0.&&!isSimOnly){
   // Conservative continuous spacing bound across allocation-level changes.
-  let dsLocal=4.*fr/f32(zn-2u);
+  let dsLocal=filterSpacing;
   let dCam=vec3<f32>(wx-camX,bed+rawSoil-camY,wz-camZ);
   let distToCam=sqrt(dot(dCam,dCam));
   let ds=max(dsLocal,.0042*distToCam);
@@ -554,8 +554,9 @@ export function createTerrainGPU(geometry,input={}){
  zoomGeometry.setAttribute('hillMacroNormal',zoomMacroNormals);zoomGeometry.setAttribute('hillSurface',zoomSurfaceFields);
  zoomGeometry.setAttribute('position',zoomPositions);zoomGeometry.setAttribute('normal',zoomNormals);zoomGeometry.setAttribute('color',zoomColors);
  const zoomPosNode=storage(zoomPositions,'vec4',zoomCount),zoomNormNode=storage(zoomNormals,'vec4',zoomCount),zoomColNode=storage(zoomColors,'vec4',zoomCount),zoomMetaNode=storage(zoomMetaAttr,'vec4',zoomCount);
- let latticeRefines=true;
- const gridX=uniform(0),gridZ=uniform(0),stepX=uniform(config.width/(zoomN-1)),stepZ=uniform(config.length/(zoomN-1));
+ const initialGrid=detailLattice(config,{x:0,z:0,radius:3.2},zoomN);
+ let latticeRefines=initialGrid.refining;
+ const gridX=uniform(initialGrid.center[0]),gridZ=uniform(initialGrid.center[1]),stepX=uniform(initialGrid.spacing[0]),stepZ=uniform(initialGrid.spacing[1]),filterSpacing=uniform(initialGrid.filterSpacing);
  const focusX=uniform(0),focusZ=uniform(0),focusRadius=uniform(3.2),zoomEnabled=uniform(1),camX=uniform(10.2),camY=uniform(8.2),camZ=uniform(12.8);
 
  const initializers=states.map(state=>Fn(()=>{state.element(instanceIndex).assign(mix(init({v:instanceIndex,n:uint(n),width:float(config.width),length:float(config.length),soil,ridges:ridgeNode}),formedNode.element(instanceIndex),useFormed));})().compute(count));
@@ -580,7 +581,7 @@ export function createTerrainGPU(geometry,input={}){
  })().compute(count));
  const zoomPosPublisher=Fn(()=>{
   const v=instanceIndex;
-  zoomPosNode.element(v).assign(zoomSurfaceKernel({v,zn:uint(zoomN),n:uint(n),width:float(config.width),length:float(config.length),fx:focusX,fz:focusZ,fr:focusRadius,gridX,gridZ,stepX,stepZ,camX,camY,camZ,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,ledge:mesoLedge,crag:mesoCrag,cobble:mesoCobble,rill:mesoRill,viewMode:viewModeUniform,useFormed,state:displayState,metaBuf:zoomMetaNode}));
+  zoomPosNode.element(v).assign(zoomSurfaceKernel({v,zn:uint(zoomN),n:uint(n),width:float(config.width),length:float(config.length),fx:focusX,fz:focusZ,fr:focusRadius,filterSpacing,gridX,gridZ,stepX,stepZ,camX,camY,camZ,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,ledge:mesoLedge,crag:mesoCrag,cobble:mesoCobble,rill:mesoRill,viewMode:viewModeUniform,useFormed,state:displayState,metaBuf:zoomMetaNode}));
  })().compute(zoomCount);
  const zoomNormPublisher=Fn(()=>{
   const v=instanceIndex,norm=zoomNormKernel({v,zn:uint(zoomN),tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,useFormed,posBuf:zoomPosNode,metaBuf:zoomMetaNode}),p=zoomPosNode.element(v);
@@ -591,6 +592,12 @@ export function createTerrainGPU(geometry,input={}){
   zoomColNode.element(v).assign(sample(colorNode));
   zoomMacroNode.element(v).assign(sample(normalNode));
   zoomSurfaceNode.element(v).assign(sample(displayState));
+  // Attribution is a diagnostic view: retain the actual detail displacement
+  // rather than copying the coarse field's zero geometric contribution.
+  If(viewModeUniform.greaterThan(2.5),()=>{
+   const m=zoomMetaNode.element(v);
+   zoomColNode.element(v).assign(formedColor({x:p.x,z:p.z,bed:m.x,soil:m.y,disp:m.z,nx:norm.x,ny:norm.y,nz:norm.z,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,ledge:mesoLedge,crag:mesoCrag,cobble:mesoCobble,rill:mesoRill,viewMode:viewModeUniform}));
+  });
  })().compute(zoomCount);
  nodes.push(...initializers,...solvers.flat(),...geologySolvers.flat(),...interpolators,...publishers,zoomPosPublisher,zoomNormPublisher);
 
@@ -661,7 +668,7 @@ export function createTerrainGPU(geometry,input={}){
   const cz=Math.max(-maxZ,Math.min(maxZ,tz));
   if(zoomEnabled.value!==en||Math.abs(focusX.value-cx)>1e-4||Math.abs(focusZ.value-cz)>1e-4||Math.abs(focusRadius.value-r)>1e-4||Math.abs(camX.value-px)>1e-4||Math.abs(camY.value-py)>1e-4||Math.abs(camZ.value-pz)>1e-4){
    const grid=detailLattice(config,{x:cx,z:cz,radius:r},zoomN);
-   latticeRefines=grid.refining;gridX.value=grid.center[0];gridZ.value=grid.center[1];stepX.value=grid.spacing[0];stepZ.value=grid.spacing[1];
+   latticeRefines=grid.refining;filterSpacing.value=grid.filterSpacing;gridX.value=grid.center[0];gridZ.value=grid.center[1];stepX.value=grid.spacing[0];stepZ.value=grid.spacing[1];
    zoomEnabled.value=en;focusX.value=cx;focusZ.value=cz;focusRadius.value=r;camX.value=px;camY.value=py;camZ.value=pz;pendingZoom=true;pendingPresentation=true;
   }
   return read();
@@ -673,7 +680,7 @@ export function createTerrainGPU(geometry,input={}){
  function regenerate(patch={}){const next=terrainConfig({...config,...patch});for(const key of ['resolution','width','length'])if(next[key]!==config[key])throw Error('Grid changes require a new simulator instance');config=next;formationProvenance=null;useFormed.value=0;ridges=makeRidges(config);ridgeAttribute.array.set(ridges.flatMap(e=>[...e.a,...e.b]));ridgeAttribute.needsUpdate=true;soil.value=config.soil;initialized=false;steps=0;preparationSteps=0;seconds=0;generation++;if(renderer)flush(renderer);return read();}
  function read(){
   const avgSpacing=(2*focusRadius.value)/(zoomN-1);
-  return{route:ROUTE,backend:renderer?'webgpu':'unbound',initialized,config:{...config},generation,steps,preparationSteps,seconds,stateIndex:index,readbackInRuntime:false,error,viewMode:activeViewMode,mesoAuthoring:{...mesoState},liveUpdateMs:lastLiveUpdateMs,representation:{kind:'height-material-grid',samples:count,triangles:(n-1)**2*2,bytes:attributes.reduce((s,a)=>s+a.array.byteLength,0),fields:['substrate_height','loose_depth','vertical_velocity','actor_memory']},zoomDetail:{enabled:Boolean(zoomEnabled.value>.5&&focusRadius.value<3.30&&latticeRefines),inactiveReason:zoomEnabled.value<.5?'disabled':focusRadius.value>=3.30?'outside-detail-range':!latticeRefines?'source-already-finer-than-patch':null,resolution:zoomN,samples:zoomCount,triangles:(zoomN-1)**2*2,focusX:focusX.value,focusZ:focusZ.value,focusRadius:focusRadius.value,vertexSpacing:Math.max(stepX.value,stepZ.value),meanVertexSpacing:avgSpacing,lattice:{center:[gridX.value,gridZ.value],spacing:[stepX.value,stepZ.value],kind:'world-aligned-dyadic'},cameraEye:[camX.value,camY.value,camZ.value]},capabilities:{initialConditions:true,prepare:true,advance:true,gpuGeology:true,arbitraryZoom3D:true,liveMesoAuthoring:true,provenanceInspector:true,gpuSurface:true,actorHistoryIngress:false,fluidCoupling:false,cpuSurfaceQueries:false},provenance:formationProvenance??{seed:config.seed,layout:config.layout},clock:{dt:.05,displayAlpha:alpha.value,authority:'submitted_gpu_steps'},surfaceSelection:'scene-object-row; exact surface picking unavailable'};
+  return{route:ROUTE,backend:renderer?'webgpu':'unbound',initialized,config:{...config},generation,steps,preparationSteps,seconds,stateIndex:index,readbackInRuntime:false,error,viewMode:activeViewMode,mesoAuthoring:{...mesoState},liveUpdateMs:lastLiveUpdateMs,representation:{kind:'height-material-grid',samples:count,triangles:(n-1)**2*2,bytes:attributes.reduce((s,a)=>s+a.array.byteLength,0),fields:['substrate_height','loose_depth','vertical_velocity','actor_memory']},zoomDetail:{enabled:Boolean(zoomEnabled.value>.5&&focusRadius.value<3.30&&latticeRefines),inactiveReason:zoomEnabled.value<.5?'disabled':focusRadius.value>=3.30?'outside-detail-range':!latticeRefines?'source-already-finer-than-patch':null,resolution:zoomN,samples:zoomCount,triangles:(zoomN-1)**2*2,focusX:focusX.value,focusZ:focusZ.value,focusRadius:focusRadius.value,vertexSpacing:Math.max(stepX.value,stepZ.value),meanVertexSpacing:avgSpacing,lattice:{center:[gridX.value,gridZ.value],spacing:[stepX.value,stepZ.value],kind:'world-aligned-dyadic',filterSpacing:filterSpacing.value},cameraEye:[camX.value,camY.value,camZ.value]},capabilities:{initialConditions:true,prepare:true,advance:true,gpuGeology:true,arbitraryZoom3D:true,liveMesoAuthoring:true,provenanceInspector:true,gpuSurface:true,actorHistoryIngress:false,fluidCoupling:false,cpuSurfaceQueries:false},provenance:formationProvenance??{seed:config.seed,layout:config.layout},clock:{dt:.05,displayAlpha:alpha.value,authority:'submitted_gpu_steps'},surfaceSelection:'scene-object-row; exact surface picking unavailable'};
  }
  const applyFragShader=material=>{
   material.vertexColors=false;

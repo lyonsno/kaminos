@@ -10,7 +10,8 @@ export function detailLattice(config,{x,z,radius},resolution=193){
  const level=Math.max(0,requestedLevel);
  const spacing=coarse.map(v=>v/2**level);
  const center=[x,z].map((v,i)=>{const origin=-[config.width,config.length][i]/2;return origin+Math.round((v-origin)/spacing[i])*spacing[i];});
- return {level,spacing,center,refining:requestedLevel>=0};
+ const filterSpacing=4*radius/(resolution-2)*Math.max(...coarse)/Math.min(...coarse);
+ return {level,spacing,center,filterSpacing,refining:requestedLevel>=0};
 }
 
 // The center texel of a clamped 3x3 nearest-filtered alpha map is the hole;

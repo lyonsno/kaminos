@@ -61,3 +61,16 @@ test('a patch coarser than the source does not claim to refine or cut out that s
  assert.equal(detailLattice({...config,width:1,length:1},{x:.2,z:.2,radius:3.2}).refining,false);
  assert.equal(detailLattice(config,{x:0,z:0,radius:.8}).refining,true);
 });
+test('the continuous relief filter covers both axes on elongated and transposed terrain',()=>{
+ for(const [width,length]of [[8,9],[8,80],[80,8]]){
+  const c={...config,width,length};
+  const transition=(193-2)*Math.min(width,length)/192/16;
+  for(const radius of [.36,transition*(1-1e-6),transition*(1+1e-6)]){
+   const g=detailLattice(c,{x:.13,z:-.17,radius});
+   assert.ok(g.filterSpacing>=Math.max(...g.spacing),'filter must bound the larger actual axis spacing');
+  }
+  const before=detailLattice(c,{x:0,z:0,radius:transition*(1-1e-6)}),after=detailLattice(c,{x:0,z:0,radius:transition*(1+1e-6)});
+  assert.notEqual(before.level,after.level);
+  assert.ok(Math.abs(after.filterSpacing/before.filterSpacing-1)<3e-6,'filter must stay continuous across allocation changes');
+ }
+});
