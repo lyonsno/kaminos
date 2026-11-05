@@ -2347,6 +2347,20 @@
       "additiveDefault": 0.001
     },
     {
+      "key": "volume-history-influence",
+      "param": "volume_history_influence",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 1
+    },
+    {
+      "key": "volume-history-window",
+      "param": "volume_history_window",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 1
+    },
+    {
       "key": "volume-ray-step-telemetry",
       "param": "volume_ray_step_telemetry",
       "tagName": "INPUT",

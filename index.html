@@ -1929,6 +1929,14 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <label class="slider-label" for="volume-optical-tolerance">Tolerance</label>
       <input id="volume-optical-tolerance" type="number" step="any" min="0" value="0.001" data-authoring-drag-step="0.0001" data-volume-settings-role="renderer">
     </div>
+    <div class="slider-row">
+      <label class="slider-label" for="volume-history-influence">History influence</label>
+      <input id="volume-history-influence" type="number" step="0.1" min="0" value="1" data-authoring-drag-step="0.1" data-volume-settings-role="renderer" title="Guided + history only. 1 preserves the current weighting. 0 uses the joins-only proposal. Larger values favor previously important regions; all samples still evaluate fresh material.">
+    </div>
+    <div class="slider-row">
+      <label class="slider-label" for="volume-history-window">History window (frames)</label>
+      <input id="volume-history-window" type="number" step="1" min="1" value="1" data-authoring-drag-step="1" data-volume-settings-role="renderer" title="Effective memory in rendered frames, not simulation steps. 1 remembers the previous draw only. Larger windows decay old importance exponentially (e-fold time = window minus 1); no hard age cutoff or color reuse. Uses the same two buffers plus one carry pass per history cell.">
+    </div>
     <output id="volume-raymarch-status" class="flame-scope" role="status">Awaiting renderer</output>
     <div class="slider-row">
       <label class="slider-label" for="volume-ray-step-telemetry">Ray statistics</label>
@@ -2964,6 +2972,7 @@ let adaptiveMaterialSettingsAuthored=false;
 import { worldSmokeOverlayGeometry } from './volume-world-smoke-optics.mjs';
 import { createFlameWorkbench } from './flame-workbench.mjs';
 import { opticalSteppingConfig } from './volume-optical-native.mjs';
+import { rayHistorySettings } from './volume-history-allocation.mjs';
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
 import {createAuthoredWaterFeature} from './authored-water-feature.mjs';
@@ -18701,6 +18710,8 @@ function readVolumeControls({quality=viewportDisplay.quality,document=globalThis
     toneMapping: document.getElementById('volume-tone-mapping').value,
     raymarchMode: document.getElementById('volume-raymarch-mode').value,
     opticalTolerance: Number(document.getElementById('volume-optical-tolerance').value),
+    historyInfluence: Number(document.getElementById('volume-history-influence').value),
+    historyWindow: Number(document.getElementById('volume-history-window').value),
     rayStepTelemetry: document.getElementById('volume-ray-step-telemetry').checked,
     rayStartNoise: document.getElementById('volume-ray-start-noise').checked,
     rayNoiseAnimated: document.getElementById('volume-ray-noise-animated').checked,
@@ -19013,6 +19024,7 @@ function supersedeVolumeRebuildHolds() {
 function updateVolumeControlLabels() {
   const c = readVolumeControls();
   document.getElementById('volume-optical-tolerance').disabled=c.raymarchMode!=='numerical';
+  for(const id of ['volume-history-influence','volume-history-window'])document.getElementById(id).disabled=c.raymarchMode!=='history';
   for(const id of ['volume-occupancy-skip','volume-occupancy-threshold'])document.getElementById(id).disabled=false;
   document.getElementById('volume-flame-priority').disabled=c.raymarchMode!=='numerical';
   document.getElementById('volume-ray-noise-animated').disabled=!c.rayStartNoise;
@@ -20190,6 +20202,8 @@ async function initKaminosVolumeRoute() {
   for (const [id, param] of [
     ['volume-raymarch-mode', 'volume_raymarch_mode'],
     ['volume-optical-tolerance', 'volume_optical_tolerance'],
+    ['volume-history-influence', 'volume_history_influence'],
+    ['volume-history-window', 'volume_history_window'],
     ['volume-ray-step-telemetry', 'volume_ray_step_telemetry'],
     ['volume-ray-noise-animated', 'volume_ray_noise_animated'],
     ['volume-quadrature-jitter', 'volume_quadrature_jitter'],
@@ -20568,6 +20582,8 @@ async function initKaminosVolumeRoute() {
     'volume-tone-mapping',
     'volume-raymarch-mode',
     'volume-optical-tolerance',
+    'volume-history-influence',
+    'volume-history-window',
     'volume-ray-step-telemetry',
     'volume-ray-start-noise',
     'volume-ray-noise-animated',
@@ -20682,7 +20698,7 @@ async function initKaminosVolumeRoute() {
     control.addEventListener('blur', confirm);
   }
 
-  for (const id of ['volume-scene', 'volume-resolution', 'emitter-assay-family', 'volume-artistic-swirl', 'volume-phased-sway', 'volume-swirl-jostle', 'volume-fine-breakup-localization', 'volume-density', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-occupancy-skip', 'volume-occupancy-threshold', 'volume-fire-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-residual-mode', 'volume-residual-model-url', 'volume-residual-strength', 'volume-residual-feature-debug', 'volume-input-radius', 'volume-flow-rate', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-fire-lock', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  for (const id of ['volume-scene', 'volume-resolution', 'emitter-assay-family', 'volume-artistic-swirl', 'volume-phased-sway', 'volume-swirl-jostle', 'volume-fine-breakup-localization', 'volume-density', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-history-influence', 'volume-history-window', 'volume-occupancy-skip', 'volume-occupancy-threshold', 'volume-fire-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-residual-mode', 'volume-residual-model-url', 'volume-residual-strength', 'volume-residual-feature-debug', 'volume-input-radius', 'volume-flow-rate', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-fire-lock', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id)?.addEventListener('input', syncControls);
     document.getElementById(id)?.addEventListener('change', syncControls);
   }
@@ -21992,6 +22008,10 @@ function flameSettingsStateProblems(state) {
       tolerance:Number(state.rendererControls['volume-optical-tolerance'].rawValue??state.rendererControls['volume-optical-tolerance'].value)});}
     catch(error){problems.push({id:'volume-optical-tolerance',message:error.message});}
   }
+  try{rayHistorySettings({
+    influence:Number(state.rendererControls?.['volume-history-influence']?.rawValue??state.rendererControls?.['volume-history-influence']?.value??1),
+    window:Number(state.rendererControls?.['volume-history-window']?.rawValue??state.rendererControls?.['volume-history-window']?.value??1)});}
+  catch(error){problems.push({id:'volume-history-window',message:error.message});}
   return problems;
 }
 // Values outside a control's range, and an immersed radius below its positive
@@ -22258,7 +22278,7 @@ function installAuthoringParameterEditing() {
       else if(!Number.isFinite(state.value)||(control.min!==''&&state.value<Number(control.min))||(control.max!==''&&state.value>Number(control.max)))throw Error('Parameter is outside its supported range');
       const gridKey={'volume-velocity-staggering':'velocityStaggering','volume-pressure-solver':'pressureSolver'}[control.id];
       if(gridKey)volumePrototype?.validateGridControls({[gridKey]:state.value});
-      if(['volume-immersed-radius','volume-emitter-source-law','volume-optical-tolerance'].includes(control.id)) {
+      if(['volume-immersed-radius','volume-emitter-source-law','volume-optical-tolerance','volume-history-influence','volume-history-window'].includes(control.id)) {
         const next=flameSettingsState();
         const axis=Object.hasOwn(next.rendererControls,control.id)?'rendererControls':'domControls';
         next[axis][control.id]={...next[axis][control.id],value:state.value,rawValue:String(state.value)};
@@ -22289,7 +22309,7 @@ function installAuthoringParameterEditing() {
       control.addEventListener('input',validateGridPreview,true);
       control.addEventListener('change',validateGridPreview,true);
     }
-    if(['volume-immersed-radius','volume-emitter-source-law','volume-optical-tolerance'].includes(control.id)) {
+    if(['volume-immersed-radius','volume-emitter-source-law','volume-optical-tolerance','volume-history-influence','volume-history-window'].includes(control.id)) {
       // DOM listener exceptions cannot reject dispatchEvent in the caller.
       // Refuse an invalid aperture before the live runtime handlers see it.
       const validatePreview=event=>{

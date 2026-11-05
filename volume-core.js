@@ -24,7 +24,7 @@ import { leanEmissiveRaymarchAdmission, RAYMARCH_NEIGHBORHOOD_WGSL, FLAME_GUIDAN
 import { OPTICAL_TRACE_IDENTITY, traceChunkPlan, validateTraceRows, createOpticalCaptureOwner } from './volume-optical-trace.mjs';
 import { raymarchAdaptivity, emptySpaceThreshold, opticalSteppingConfig, resolveOpticalStepping, OPTICAL_STEPPING_WGSL } from './volume-optical-native.mjs';
 import { createRayStepTelemetry } from './volume-ray-step-telemetry.mjs';
-import { createRayAllocationHistory, HISTORY_ALLOCATION_WGSL } from './volume-history-allocation.mjs';
+import { createRayAllocationHistory, rayHistorySettings, HISTORY_ALLOCATION_WGSL } from './volume-history-allocation.mjs';
 import { frameCadenceSummary } from './volume-frame-timing.mjs';
 import { applyPreviewQualityCaps } from './preview-quality.mjs';
 import { REACTANT_COMBUSTION_WGSL, REACTANT_COMBUSTION_UNIFORM_FLOATS, REACTANT_COMBUSTION_IDENTITY, REACTANT_MODEL, resolveReactantCombustionConfig, reactantCombustionUniformValues } from './volume-reactant-combustion.mjs';
@@ -21377,10 +21377,10 @@ export function createKaminosVolumePrototype({
         throw Error('fixed-count allocation requires ordinary joined emissive beauty');
       }
       const map=worldSmokeMapping(worldSmoke.plan,worldSmoke.anchor,productTransform);
-      const {occupancySkip,occupancyThreshold,...guidanceControls}=controlsSnapshot;
+      const {occupancySkip,occupancyThreshold,historyInfluence,historyWindow,...guidanceControls}=controlsSnapshot;
       const identity=JSON.stringify([guidanceControls,productTransform,worldSmokeKey,intermediateKey]);
       state.opticalStepping.allocation=rayAllocationHistory.prepare(encoder,
-        {min:map.renderMin,max:map.renderMax,dims:worldSmoke.plan.materialDims},identity,state.simStepCount,{freeze:rayAllocationHistoryFrozen});
+        {min:map.renderMin,max:map.renderMax,dims:worldSmoke.plan.materialDims},identity,state.simStepCount,{freeze:rayAllocationHistoryFrozen,influence:controlsSnapshot.historyInfluence,window:optical.mode==='history'?controlsSnapshot.historyWindow:1});
       state.opticalStepping.guidance='uniform-positive-coverage + known-blend-bands + previous-march-spatial-importance';
       state.opticalStepping.fullRay=true;
       rebuildFluidBindGroups();
@@ -28246,6 +28246,7 @@ export function createKaminosVolumePrototype({
           tolerance:next.opticalTolerance??controlsSnapshot.opticalTolerance??0.001});
         debugOpticalStepping=config;debugOpticalSteppingExplicit=false;
       }
+      rayHistorySettings({influence:Object.hasOwn(next,'historyInfluence')?next.historyInfluence:controlsSnapshot.historyInfluence,window:Object.hasOwn(next,'historyWindow')?next.historyWindow:controlsSnapshot.historyWindow});
       const previousGrid = gridSize;
       const previousBoundarySplatTelemetryControlSignature = boundarySplatTelemetryControlSignature(controlsSnapshot);
       const previousCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);

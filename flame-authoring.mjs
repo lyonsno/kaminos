@@ -128,9 +128,9 @@ export const FLAME_PROPERTY_GROUPS = [
   {name:'Fine coverage',view:'quality',scope:'Move fixed-size Fine coverage around sources and evolving fire. World bounds stay fixed. Manual box edits hold following until a source or policy changes.',fields:FINE_COVERAGE_FIELDS.map(field=>[field.id,field.label])},
   {name:'Adaptive material',view:'quality',scope:'Allocation follows fire throughout the world field. Settings are saved with scenes and basins.',fields:ADAPTIVE_MATERIAL_FIELDS.map(field=>[field.id,field.label])},
   { name:'Ray marching', view:'quality', open:true, fields:[
-    ['volume-raymarch-mode','Ray marcher'], ['volume-optical-tolerance','Tolerance'], ['volume-ray-step-telemetry','Ray statistics'],
+    ['volume-raymarch-mode','Ray marcher'], ['volume-history-influence','History influence'], ['volume-history-window','History window (frames)'], ['volume-optical-tolerance','Tolerance'], ['volume-ray-step-telemetry','Ray statistics'],
     ['volume-steps','Ray count'],
-    ['volume-occupancy-skip','Empty-space acceleration'], ['volume-occupancy-threshold','Empty-space threshold'],
+    ['volume-occupancy-skip','Ray empty-space skip'], ['volume-occupancy-threshold','Empty-space threshold'],
     ['volume-ray-start-noise','Blue noise'], ['volume-ray-noise-animated','Animate noise'], ['volume-quadrature-jitter','Interior jitter'],
     ['volume-flame-priority','Flame priority'], ['volume-render-scale','Screen resolution (%)'],
     ['volume-pressure-resolution','Pressure grid (experimental)'],

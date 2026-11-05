@@ -48,14 +48,39 @@ export function historyAllocationGeometry({min,max,dims}){
   return {min:[...min],max:[...max],dims:[...dims],pitch,cells,bytes:cells*4};
 }
 
+export function rayHistorySettings({influence=1,window=1}={}){
+  if(!Number.isFinite(influence)||influence<0||!Number.isFinite(Math.fround(36*influence))||(influence>0&&Math.fround(influence)===0))throw Error('History influence must be nonnegative and finite on the GPU');
+  if(!Number.isSafeInteger(window)||window<1||!Number.isFinite(Math.fround(window)))throw Error('History window must be a positive integer frame count');
+  // An effective, exponentially decaying window, not a hard-age cutoff.
+  // Window 1 keeps exactly the accepted previous-draw-only behavior.
+  const retention=window===1?0:Math.fround(Math.exp(-1/(window-1)));
+  if(retention>=1)throw Error('History window is too long to decay in GPU precision');
+  return {influence,window,retention};
+}
+
+const GUIDANCE_GEOMETRY_WGSL='struct RayGuidanceGeometry { loPitch:vec4<f32>, dimsCells:vec4<u32>, controls:vec4<f32> }';
+export const HISTORY_CARRY_WGSL=/* wgsl */`
+${GUIDANCE_GEOMETRY_WGSL}
+@group(0) @binding(0) var<storage,read_write> data:array<atomic<u32>>;
+@group(0) @binding(1) var<uniform> geometry:RayGuidanceGeometry;
+@compute @workgroup_size(256) fn carryHistory(@builtin(global_invocation_id) id:vec3<u32>){
+ let cells=geometry.dimsCells.x*geometry.dimsCells.y*geometry.dimsCells.z;
+ if(id.x>=cells){return;}
+ let previous=cells-geometry.dimsCells.w+id.x;
+ let score=u32(floor(f32(atomicLoad(&data[previous]))*geometry.controls.y));
+ atomicStore(&data[geometry.dimsCells.w+id.x],score);
+}`;
+
 export function createRayAllocationHistory(device){
   const usage=GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC;
   let buffer=device.createBuffer({label:'inactive ray guidance',size:8,usage});
   // Immutable per-bank uniforms also support multiple draws in one encoder.
-  const uniforms=[0,1].map(()=>device.createBuffer({label:'ray guidance geometry',size:32,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST}));
+  const uniforms=[0,1].map(()=>device.createBuffer({label:'ray guidance geometry',size:48,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST}));
+  let settings=rayHistorySettings(),carryPipeline=null;
   let geometry=null,key=null,index=0,frames=0,lastStep=null,resetReason='cold-start',frozen=false;
   function reset(){key=null;frames=0;resetReason='explicit-reset';}
-  function prepare(encoder,request,identity,step,{freeze=false}={}){
+  function prepare(encoder,request,identity,step,{freeze=false,...options}={}){
+    settings=rayHistorySettings(options);
     const next=historyAllocationGeometry(request);
     if(next.bytes*2>Math.min(device.limits.maxBufferSize,device.limits.maxStorageBufferBindingSize))throw Error('ray guidance exceeds device storage limits');
     const nextKey=JSON.stringify([next,identity]);
@@ -68,19 +93,30 @@ export function createRayAllocationHistory(device){
         buffer=device.createBuffer({label:'two-bank last-march spatial guidance',size:next.bytes*2,usage});
       }
       encoder.clearBuffer(buffer);
-      for(let bank=0;bank<2;bank++){
-        const data=new ArrayBuffer(32);new Float32Array(data).set([...next.min,next.pitch]);
-        new Uint32Array(data,16).set([...next.dims,bank*next.cells]);device.queue.writeBuffer(uniforms[bank],0,data);
-      }
       geometry=next;key=nextKey;frames=0;index=0;
     }
-    if(freeze&&frames>0){lastStep=step;frozen=true;return read();}
-    frozen=freeze;lastStep=step;index=1-index;encoder.clearBuffer(buffer,index*geometry.bytes,geometry.bytes);frames++;
+    const held=freeze&&frames>0;
+    if(!held){index=1-index;frames++;}
+    const data=new ArrayBuffer(48);new Float32Array(data).set([...next.min,next.pitch]);
+    new Uint32Array(data,16).set([...next.dims,index*next.cells]);
+    new Float32Array(data,32).set([settings.influence,settings.retention,settings.window,0]);
+    device.queue.writeBuffer(uniforms[index],0,data);
+    if(!held){
+      if(settings.retention>0){
+        carryPipeline??=device.createComputePipeline({label:'decay ray importance',layout:'auto',compute:{module:device.createShaderModule({code:HISTORY_CARRY_WGSL}),entryPoint:'carryHistory'}});
+        const pass=encoder.beginComputePass({label:'carry decaying ray importance'});pass.setPipeline(carryPipeline);
+        pass.setBindGroup(0,device.createBindGroup({layout:carryPipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer}},{binding:1,resource:{buffer:uniforms[index]}}]}));
+        pass.dispatchWorkgroups(Math.ceil(geometry.cells/256));pass.end();
+      }else encoder.clearBuffer(buffer,index*geometry.bytes,geometry.bytes);
+    }
+    frozen=freeze;lastStep=step;
     return read();
   }
-  function read(){return {frames,frozen,historyFrames:frames>1?1:0,resetReason,geometry,
+  function read(){return {frames,frozen,historyFrames:Math.min(Math.max(0,frames-1),settings.window),resetReason,geometry,...settings,
     previousOffset:geometry?(1-index)*geometry.bytes:0,observationsOffset:geometry?index*geometry.bytes:0,
-    representation:'previous-draw-spatial-importance-max',prediction:'one-cell-neighborhood; no velocity advection',
+    representation:settings.window===1?'previous-draw-spatial-importance-max':'exponentially-decaying-spatial-importance-max',
+    windowUnit:'rendered draws',windowMeaning:'effective decay window; no hard age cutoff',
+    extraWork:settings.retention>0?'one history-cell carry pass per draw':'bank clear only',prediction:'one-cell-neighborhood; no velocity advection',
     freshCoverage:'one uniform-distance observation per ray; remaining observations guided',colorReuse:false};}
   async function sample(){
     if(!geometry||frames<1)throw Error('ray allocation history has no executed draw');
@@ -99,7 +135,7 @@ export function createRayAllocationHistory(device){
 
 export const HISTORY_ALLOCATION_WGSL=/* wgsl */`
 @group(0) @binding(39) var<storage,read_write> rayGuidanceData:array<atomic<u32>>;
-struct RayGuidanceGeometry { loPitch:vec4<f32>, dimsCells:vec4<u32> }
+${GUIDANCE_GEOMETRY_WGSL}
 @group(0) @binding(37) var<uniform> rayGuidance:RayGuidanceGeometry;
 fn guidanceCell(p:vec3<f32>)->vec3<i32>{return clamp(vec3<i32>(floor((p-rayGuidance.loPitch.xyz)/rayGuidance.loPitch.w)),vec3<i32>(0),vec3<i32>(rayGuidance.dimsCells.xyz)-1);}
 fn guidanceIndex(c:vec3<i32>)->u32{return u32(c.x)+rayGuidance.dimsCells.x*(u32(c.y)+rayGuidance.dimsCells.y*u32(c.z));}
@@ -135,7 +171,7 @@ fn joinProposal(p:vec3<f32>)->f32{
 fn guidanceWeight(p:vec3<f32>)->f32{
   var weight=1.0;
   let insideFine=worldInsideFine(p);
-  if(OPTICAL_STEP_MODE==5u){
+  if(OPTICAL_STEP_MODE==5u||(OPTICAL_STEP_MODE==6u&&rayGuidance.controls.x<1.0)){
     var exteriorBase=0.25;
     if(!insideFine&&worldRender.atlas.x>0.5){
       var n=vec4<f32>(0);let b=worldResidentLeafBounds(p,&n);
@@ -145,7 +181,8 @@ fn guidanceWeight(p:vec3<f32>)->f32{
   }
   if(OPTICAL_STEP_MODE==6u){
     let hist=previousGuidance(p);
-    weight=select(0.05,0.65,insideFine)+4.0*joinProposal(p)+36.0*hist;
+    let base=select(0.05,0.65,insideFine)+4.0*joinProposal(p);
+    weight=mix(weight,base,min(1.0,rayGuidance.controls.x))+36.0*rayGuidance.controls.x*hist;
   }
   return weight;
 }
@@ -159,7 +196,7 @@ fn guidanceBoxStop(ro:vec3<f32>,rd:vec3<f32>,lo:vec3<f32>,hi:vec3<f32>,t:f32,sto
 fn guidanceStop(ro:vec3<f32>,rd:vec3<f32>,t:f32,end:f32)->f32{
   if(OPTICAL_STEP_MODE==4u){return end;}
   var stop=end;
-  if(OPTICAL_STEP_MODE==6u){
+  if(OPTICAL_STEP_MODE==6u&&rayGuidance.controls.x>0.0){
     // Midpoint-owned cells avoid a face-roundoff stall for either ray direction.
     let p=ro+rd*t;let c=guidanceCell(p+rd*rayGuidance.loPitch.w*.0001);
     let low=rayGuidance.loPitch.xyz+vec3<f32>(c)*rayGuidance.loPitch.w;
