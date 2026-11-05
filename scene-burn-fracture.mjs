@@ -29,9 +29,9 @@ export function createSceneBurnFracture({renderer,field,structure,debris,parent,
   status='compiling';candidate=await createDynamics({renderer,...local,sections,field,regionMapping:mapping,finiteSupports:[current.support],gravity:current.gravity});
   if(disposed||token!==generation){candidate.dispose();return;}
   const cutoutParam=new URLSearchParams(globalThis.location?.hash?.slice(1)??'').get('burn_fracture_cutout')??new URLSearchParams(globalThis.location?.search??'').get('burn_fracture_cutout');
-  const surfaceCutout=cutoutParam!=='0';
+  const surfaceCutout=cutoutParam==='1';
   view=createSurface({renderer,prepared,materials:sections.sourceMaterials?.map(sceneRadianceSourceMaterial)??materials,field,dynamics:candidate,stateIdentity:LIVE_LOG_HEAT_IDENTITY,surfaceCutout});
-  view.mesh.matrixAutoUpdate=false;view.mesh.userData.kaminosEditorHelper=true;
+  view.mesh.matrixAutoUpdate=false;
   field.setRegionMotion({device:field.device,count:prepared.cells.length,owners:mapping.owners,matrices:candidate.matrices,wrapper:candidate.wrapper});
   debris.setRegionMotion(field.residentState().regionMotion);
   dynamics=candidate;surface=view;parent.add(surface.mesh);

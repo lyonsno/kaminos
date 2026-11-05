@@ -149,7 +149,7 @@ export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame,k
     debris=await createLogDebrisGpu({renderer,field,ground:ground(),onFrame,thermalControls:bindings[0]?.thermalControls});
     releases.push(bindResidentLightCoverage(debris.caps,coverage));debris.caps.castShadow=true;
     // Detached fragments remain world-space presentation, never a separately editable object.
-    debris.root.userData.kaminosEditorHelper=true;scene.add(debris.root);
+    scene.add(debris.root);
     structure=createSceneBurnStructure({renderer,field,parent:debris.root});
     void structure.configure(entry.burnable.structure===true);
     fracture=createSceneBurnFracture({renderer,field,structure,debris,parent:debris.root,ground,materials:Array.isArray(original)?original:[original]});
