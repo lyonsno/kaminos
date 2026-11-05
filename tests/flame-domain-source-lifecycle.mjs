@@ -33,5 +33,5 @@ test('source-free field retains and reconstructs its own bounds for preview/canc
  assert.ok(c.flameDomainGuide,'source-free reopening reconstructs the field outline');assert.equal(c.flameDomainGuide.visible,true);
  assert.deepEqual(c.flameDomainGuide.box.min.toArray(),[-1.3,-2,-1.5]);
  c.writeFlameDomainPreview({position:[0,1,0],rotation:[0,0,0],scale:[2,2,2]});assert.deepEqual(c.flameDomainGuide.box.min.toArray(),[-2,-3,-2]);
- c.flameDomainDraft=null;c.refreshFlameDomainPreview();assert.deepEqual(c.flameDomainGuide.box.min.toArray(),[-1.3,-2,-1.5]);
+ c.writeFlameDomainPreview({position:[.2,1,0],rotation:[0,0,0],scale:[1.5,1.5,1.5]});c.flameDomainDraft=null;c.refreshFlameDomainPreview();assert.deepEqual(c.flameDomainGuide.box.min.toArray(),[-1.3,-2,-1.5]);
 });

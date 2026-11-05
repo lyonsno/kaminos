@@ -1,4 +1,7 @@
 // kaminos-test: node
+import {WORLD_CALIBRATION_FIELDS,SIMULATION_LEVER_FIELDS,readWorldCalibrationControls as readCalibration,resolveWorldCalibration,resolveSimulationLevers} from '../volume-world-calibration.mjs';
+const readWorldCalibrationControls=controls=>readCalibration({...Object.fromEntries([...WORLD_CALIBRATION_FIELDS,...SIMULATION_LEVER_FIELDS].map(f=>[f.id,{value:f.value}])),...controls});
+// kaminos-test: node
 import {GRID_TUNING_FIELDS} from '../volume-grid-tuning.mjs';
 import {readAdaptiveMaterialControls,ADAPTIVE_MATERIAL_FIELDS} from '../volume-adaptive-material-controls.mjs';
 import test from 'node:test';
@@ -91,7 +94,7 @@ test('whole-settings check clamps apertures outside the scaled source contract a
   const grab=name=>html.slice(html.indexOf(`function ${name}(`)).split('\n}')[0]+'\n}';
   let current;const controls={'volume-emitter-source-law':{tagName:'SELECT',options:[{value:'immersed-source'}]},'volume-immersed-radius':{tagName:'INPUT',type:'range',min:'.02',max:'.5'}};
   Object.assign(controls,Object.fromEntries(ADAPTIVE_MATERIAL_FIELDS.map(f=>[f.id,{tagName:'INPUT',type:f.type}])));
-  const context=vm.createContext({GRID_TUNING_FIELDS,readAdaptiveMaterialControls,document:{getElementById:id=>controls[id]},flameSettingsState:()=>current,normalizeFlameEmitterPose,immersedControlsForFlamePose,immersedRadiusClamp,flamePoseToDomain,flameDomainTranslation:[0,0,0],flameDomainScale:1,flameEmitterPose:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},authoredFlamePresent:true,VOLUME_RETIRED_APERTURE_PATTERNS:[]});
+  const context=vm.createContext({readWorldCalibrationControls,resolveWorldCalibration,resolveSimulationLevers,GRID_TUNING_FIELDS,readAdaptiveMaterialControls,document:{getElementById:id=>controls[id]},flameSettingsState:()=>current,normalizeFlameEmitterPose,immersedControlsForFlamePose,immersedRadiusClamp,flamePoseToDomain,flameDomainTranslation:[0,0,0],flameDomainScale:1,flameEmitterPose:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},authoredFlamePresent:true,VOLUME_RETIRED_APERTURE_PATTERNS:[]});
   vm.runInContext(grab('flameSettingsStateProblems')+'\n'+grab('flameSettingsStateClamps')+'\n'+grab('checkFlameSettingsState')+'\nthis.check=checkFlameSettingsState;this.clamps=flameSettingsStateClamps;',context);
   for(const [scale,valid,outside,applied] of [[.8,.5,.02,.02],[2,.2,.3,null],[1,.2,135.764753512356,null]]){
     current={domControls:{...Object.fromEntries(ADAPTIVE_MATERIAL_FIELDS.map(f=>[f.id,{value:f.value}])), 'volume-emitter-source-law':{value:'immersed-source'},'volume-immersed-radius':{value:valid}},rendererControls:{},presentationControls:{},sourcePose:{position:[0,0,0],rotation:[0,0,0],scale:[scale,scale,scale]}};

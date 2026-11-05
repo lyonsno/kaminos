@@ -83,6 +83,7 @@ fn sourceMomentum(c:vec3<i32>,a:u32,prior:f32)->f32{
 
 // Live World deposition uploads compact parcels; recipient-cell overlap and
 // accumulation stay on the GPU. The CPU rasterizers above are offline oracles.
+const sourceAtlasPipelines=new WeakMap();
 export function createGPUWorldSourceAtlas(device,{dims,min,pitch},label){
  const U=GPUBufferUsage,T=GPUTextureUsage,owned=new Set();
  const make=(name,size,usage)=>{const b=device.createBuffer({label:name,size,usage});owned.add(b);return b;};
@@ -92,7 +93,8 @@ export function createGPUWorldSourceAtlas(device,{dims,min,pitch},label){
  const empty=device.createTexture({label:label+' empty',size:[2,1],format:'rgba32float',usage:T.TEXTURE_BINDING}),emptyView=empty.createView();
  const cells=dims.reduce((a,b)=>a*b,1),width=Math.min(device.limits.maxTextureDimension2D,cells*2),height=Math.ceil(cells*2/width);
  if(height>device.limits.maxTextureDimension2D)throw Error('World source atlas exceeds GPU texture limits');
- const module=device.createShaderModule({label:label+' GPU deposition',code:`
+ let pipeline=sourceAtlasPipelines.get(device);
+ if(!pipeline){const module=device.createShaderModule({label:label+' GPU deposition',code:`
  struct Parcel {loRate:vec4<f32>,hiFuel:vec4<f32>,velocityRelax:vec4<f32>,heat:vec4<f32>}
  struct Params {dims:vec4<u32>,originPitch:vec4<f32>,counts:vec4<u32>}
  @group(0) @binding(0) var<uniform> p:Params;
@@ -105,7 +107,7 @@ export function createGPUWorldSourceAtlas(device,{dims,min,pitch},label){
   for(var i=0u;i<select(arrayLength(&parcels),actualCount[0],p.dims.w>0u);i++){let s=parcels[i];let f=max(vec3<f32>(0),min(hi,s.hiFuel.xyz)-max(lo,s.loRate.xyz))/p.originPitch.w;let v=f.x*f.y*f.z;let q=s.loRate.w*v;let r=s.velocityRelax.w*v;a+=vec4<f32>(q,q*s.hiFuel.w,q*s.heat.x,0);b+=vec4<f32>(s.velocityRelax.xyz*r,r);}
   let index=2u*(c.x+p.dims.x*(c.y+p.dims.y*c.z));let d=textureDimensions(output);textureStore(output,vec2<i32>(i32(index%d.x),i32(index/d.x)),a);textureStore(output,vec2<i32>(i32((index+1u)%d.x),i32((index+1u)/d.x)),b);
  }`});
- const pipeline=device.createComputePipeline({label:label+' GPU deposition',layout:'auto',compute:{module,entryPoint:'deposit'}});
+ pipeline=device.createComputePipeline({label:label+' GPU deposition',layout:'auto',compute:{module,entryPoint:'deposit'}});sourceAtlasPipelines.set(device,pipeline);}
  const params=new ArrayBuffer(48);new Uint32Array(params).set([...dims,0]);new Float32Array(params).set([...min,pitch],4);
  function ensureTarget(){if(!texture){texture=device.createTexture({label,size:[width,height],format:'rgba32float',usage:T.TEXTURE_BINDING|T.STORAGE_BINDING});view=texture.createView();}}
  return {encode(encoder,parcels){

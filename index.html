@@ -5745,7 +5745,7 @@ function writeFlameDomainPreview(value) {
   const previous=[...flameDomainTranslation],previousScale=flameDomainScale;
   if(!volumePrototype?.relocateOrdinaryDomain || !applyFlameEmitterPose)throw Error('The flame simulation is not mounted');
   if(authoredFlamePresent&&window.__kaminosVolumeEmitterReceipt?.requested?.sourceLaw==='immersed-source')immersedControlsForFlamePose(window.__kaminosVolumeEmitterReceipt.requested,flamePoseToDomain(flameEmitterPose,next.translation,next.scale),false);
-  const analytic=window.__kaminosVolumeEmitterReceipt?.effective?.family!=='cluster';
+  const analytic=authoredFlamePresent&&window.__kaminosVolumeEmitterReceipt?.effective?.family!=='cluster';
   try {if(setFlameDomainTranslation(next.translation,next.scale)&&analytic)writeAuthoredFlameEmitterPose(flameEmitterPose);}
   catch(error){setFlameDomainTranslation(previous,previousScale);if(analytic)writeAuthoredFlameEmitterPose(flameEmitterPose);throw error;}
   flameDomainDraft=pose;refreshFlameDomainPreview();

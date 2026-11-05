@@ -15,7 +15,10 @@ export const INTERMEDIATE_GRID_MODE_DESCRIPTIONS = Object.freeze({
   on: 'Flow bridge: adds an automatically sized velocity and pressure grid around Fine, using material from the World grid. The Intermediate coverage, material, velocity, pressure and iteration fields are unused in this mode.',
   fields: 'Own fields: gives Intermediate its own material, velocity and pressure grids, pressure iterations and coverage. It transports and reacts material from Fine before feeding World.',
 });
+import {WORLD_CALIBRATION_FIELDS,SIMULATION_LEVER_FIELDS} from './volume-world-calibration.mjs';
+import {FINE_COVERAGE_FIELDS} from './volume-fine-coverage-controls.mjs';
 export const VOLUME_CONTROL_DESCRIPTIONS = Object.freeze({
+  ...Object.fromEntries([...FINE_COVERAGE_FIELDS,...WORLD_CALIBRATION_FIELDS,...SIMULATION_LEVER_FIELDS].map(f=>[f.id,{kind:'quality',activeWhen:'Following enabled',tooltip:f.description}])),
   'volume-fine-velocity': {kind:'quality',activeWhen:'always',tooltip:'Velocity cells across Fine. 0 follows material detail; a lower value solves motion more cheaply while material retains its own resolution. Independent velocity requires converged pressure and staggered face forces.'},
   'volume-fine-pressure': {kind:'quality',activeWhen:'always',tooltip:'Pressure cells across Fine. 0 follows velocity detail. Coarser pressure reduces projection work but can leave smaller flow features less corrected. Pressure iterations are tuned separately.'},
   'volume-pressure-resolution': {kind:'quality',activeWhen:'Explicit Fine pressure is 0',tooltip:'Legacy pressure-grid choice: Off uses the original solve, Equal separates pressure at velocity resolution, Half uses half that width. An explicit Fine pressure width takes precedence.'},

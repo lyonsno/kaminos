@@ -29694,7 +29694,7 @@ export function createKaminosVolumePrototype({
       frameTexture?.destroy();
       rayStartNoiseTexture?.destroy();
       worldRenderField?.destroy();worldRenderField=null;
-      worldOpticalFallback?.destroy();worldRenderUniform?.destroy();
+      worldOpticalFallback?.destroy();
       rayAllocationHistory?.dispose();
       ordinarySceneDepthFallback?.destroy();
       boundarySplatHdrTexture?.destroy();

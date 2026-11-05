@@ -28,11 +28,15 @@ struct ResidentRemap {source:vec4<u32>,loPitch:vec4<f32>}
 }
 `;
 
+const residentPipelineCaches=new WeakMap();
+
 export function createResidentMaterialHierarchyGPU(device,plan,code,initialOptions){
  let options=validateAllocation(initialOptions),active=null,bank=0,current=0,steps=0,destroyed=false;
  let headerObservation=null,topologyObservation=null,demandObservation=null,observing=false,observeTopology=false,observeDemand=false,observeHeader=false,error=null,lastBacktrace=0,transportClock=0;
  const observationBuffers=new Set();
- const resources=new Set(),pipelines=new Map(),groups=new Map();
+ let byCode=residentPipelineCaches.get(device);if(!byCode){byCode=new Map();residentPipelineCaches.set(device,byCode);}
+ const cached=byCode.get(code)??{pipelines:new Map(),modules:null};byCode.set(code,cached);
+ const resources=new Set(),pipelines=cached.pipelines,groups=new Map();
  let diagnostics={levels:[],bricks:[]};
  function setTopology(value){topologyObservation=value;const nodes=value.nodes;diagnostics={levels:[...new Set(nodes.map(n=>n.level))].map(level=>({level,bricks:nodes.filter(n=>n.level===level&&!n.children).length})),bricks:nodes.filter(n=>!n.children).map(n=>({key:n.key,level:n.level,min:n.lo,width:n.pitch*4}))};}
  const usage=GPUBufferUsage,texUsage=GPUTextureUsage,S=usage.STORAGE,D=usage.COPY_DST,C=usage.COPY_SRC;
@@ -46,7 +50,7 @@ export function createResidentMaterialHierarchyGPU(device,plan,code,initialOptio
  device.queue.writeBuffer(hierarchyParams,0,new Float32Array([...roots,plan.materialPitch,...plan.min,0,0,0,0,0]));
  let supportBuffer=buffer('GPU source support descriptors',48),parcelBuffer=buffer('GPU source parcel descriptors',64),supportKey=null,parcelKey=null,supportCount=0,parcelCount=0;
  const cpuSourceCount=buffer('CPU-reference source count',16);let uploadedCount=-1;
- const simulationModule=device.createShaderModule({label:'resident material simulation',code}),sourceModule=device.createShaderModule({label:'resident material source deposition',code:SOURCE_WGSL}),remapModule=device.createShaderModule({label:'resident material remapping',code:REMAP_WGSL});
+ const [simulationModule,sourceModule,remapModule]=cached.modules??=(['resident material simulation','resident material source deposition','resident material remapping'].map((label,i)=>device.createShaderModule({label,code:[code,SOURCE_WGSL,REMAP_WGSL][i]})));
  const dummyNodes=buffer('GPU allocation initial topology',64),dummyState=buffer('GPU allocation initial state',64),dummyDemand=buffer('GPU allocation initial demand',48);
  const pipeline=(key,module,entryPoint,constants)=>{if(!pipelines.has(key))pipelines.set(key,device.createComputePipeline({label:entryPoint,layout:'auto',compute:{module,entryPoint,...(constants?{constants}:{})}}));return pipelines.get(key);};
  function group(key,p,index,entries){if(!groups.has(p))groups.set(p,new Map());const byIndex=groups.get(p);if(!byIndex.has(index))byIndex.set(index,{next:new WeakMap()});let node=byIndex.get(index);for(const e of entries){const object=e.resource.buffer??e.resource;if(!node.next.has(object))node.next.set(object,new Map());const variants=node.next.get(object),range=e.resource.buffer?`${e.resource.offset??0}:${e.resource.size??'all'}`:'';if(!variants.has(range))variants.set(range,{next:new WeakMap()});node=variants.get(range);}return node.group??=device.createBindGroup({layout:p.getBindGroupLayout(index),entries});}
@@ -107,6 +111,6 @@ export function createResidentMaterialHierarchyGPU(device,plan,code,initialOptio
   coverageDemand(){observeDemand=true;return demandObservation?{status:'measured',...demandObservation}:{status:'awaiting-measurement',boxes:[]};},
   async snapshot(){if(!active)return null;const s=active,which=bank,at=steps,a=s.state[which].size,b=s.nodes[which].size,c=s.fields[current].size,copy=buffer('explicit resident snapshot',a+b+c,D|usage.MAP_READ),e=device.createCommandEncoder();e.copyBufferToBuffer(s.state[which],0,copy,0,a);e.copyBufferToBuffer(s.nodes[which],0,copy,a,b);e.copyBufferToBuffer(s.fields[current],0,copy,a+b,c);device.queue.submit([e.finish()]);try{await copy.mapAsync(GPUMapMode.READ);const bytes=copy.getMappedRange(),u=new Uint32Array(bytes),f=new Float32Array(bytes),nodes=[];for(let i=0;i<u[0];i++){const slot=u[u[8]+i],j=a/4+slot*16,level=u[j+13],pitch=f[j+3],lo=Array.from(f.subarray(j,j+3)),c=lo.map((x,k)=>Math.round((x-plan.min[k])/(4*pitch)));nodes.push({key:`${level}:${c.join(':')}`,slot,level,c,lo,pitch,childSlots:u[j+4]===0xffffffff?null:Array.from(u.subarray(j+4,j+12))});}const bySlot=new Map(nodes.map(n=>[n.slot,n]));for(const n of nodes)n.children=n.childSlots?.map(i=>bySlot.get(i).key)??null;headerObservation={allocatedBricks:u[0],leafBricks:u[1],revision:u[2],steps:at,observedAt:performance.now()/1000};observedStep=at;setTopology({nodes,revision:u[2],steps:at});return{nodes,steps:at,revision:u[2],dims:plan.materialDims,pitch:plan.materialPitch,values:Array.from(f.subarray((a+b)/4,(a+b+c/2)/4)),ownedValues:Array.from(f.subarray((a+b+c/2)/4))};}finally{destroyOne(copy);}},
   read(){const cap=active?.capacity??capacity(options);return{identity:'pooled-material-hierarchy-v1',allocationBackend:'gpu-resident',options:structuredClone(options),baseDims:plan.materialDims,steps,revision:headerObservation?.revision??null,allocatedBricks:headerObservation?.allocatedBricks??null,leafBricks:headerObservation?.leafBricks??null,capacity:cap,estimatedCellWork:headerObservation?headerObservation.allocatedBricks*64:null,materialBytes:cap*4096*3,demandRoute:'GPU-resident-prediction-and-refinement',predictionTransportInterval:lastBacktrace,renderMaterialDims:plan.materialDims,error,observation:headerObservation?{status:'observed',steps:observedStep,ageSteps:steps-observedStep}:{status:'not-requested'},levels:diagnostics.levels,bricks:diagnostics.bricks};},
-  destroy(){destroyed=true;for(const r of [...resources])if(!observationBuffers.has(r))destroyOne(r);groups.clear();pipelines.clear();}
+  destroy(){destroyed=true;for(const r of [...resources])if(!observationBuffers.has(r))destroyOne(r);groups.clear();}
  };
 }
