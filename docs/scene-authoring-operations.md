@@ -78,6 +78,34 @@ Presets is a separate operation: Burner setup applies an annular mesh plus the c
 
 Scene version 7 stores procedural shape/material data, common group frames and light data on ordinary records. Version 6 bed/assembly records and older composition recipes migrate on read; Save writes the current document. Legacy environment rim light settings migrate into light records. Explicit flame-source absence from version 6 onward survives reopening. Scene files reference external GLBs as before; dynamics restart from authored settings.
 
+## Ring burners
+
+**Add → Ring burner** creates an ordinary burner assembly with an independent
+ring flame outlet and a procedural annular housing. A scene without fire first
+uses the existing saved-basin chooser. Select the burner as a whole to move,
+rotate, scale or duplicate it; **Tab** enters the existing component Edit Mode.
+The selected assembly's **Body → Choose mesh…** opens the saved mesh collections,
+including generated GLBs. Any available GLB in those collections can supply the
+body; withheld assets remain unavailable.
+
+A body change keeps the previous body's world pose, the outlet's position and
+settings, other members, and explicit obstacle participation. Mesh units and
+origins vary: use Tab to adjust the housing or outlet relative to each other.
+A reconstructed hole or fitting does not create an inferred emission port or
+collision support. Changing a body that is explicitly a fire obstacle changes
+that obstacle's geometry. Existing analytical water-support limits still apply.
+The change is one ordinary history action; Undo/Redo and scene saving retain the
+chosen mesh source and assembly membership.
+
+Agents use `await kaminosSceneAuthoring.addRingBurner({mesh})` in a mounted fire
+scene and `await kaminosSceneAuthoring.setBurnerBody(groupId, mesh)` for the same
+operations. `mesh` is an available mesh entry from the existing asset catalogue,
+with `kind: "mesh"`, retained `source`, and optional `name`, `label`, generation
+and origin metadata. Passing `null` chooses the procedural housing. To start
+headlessly without fire, first call the existing `addFlameEmitter(presetId)` with
+a chosen saved immersed-source basin, then add the ring. The interactive Add
+path uses that same first-flame operation through its chooser.
+
 ## Viewport interaction
 
 Scene hierarchy rows select on one click. Double-click a name (or use F2 on a focused row) to rename; Enter or blur accepts, Escape cancels. The existing × removal and Add actions continue to use their scene operations. Add is for creation/import; the header Assets button opens the full Workbench browser.
