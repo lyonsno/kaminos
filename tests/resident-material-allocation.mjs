@@ -23,8 +23,8 @@ test('Fine-follow observations convert simulated displacement to wall-clock seco
   h.coverageDemand();now.value=1100;h.encode(f.encoder,f.world,1);await new Promise(setImmediate);
   const demand=h.coverageDemand(),rate=10;
   assert.ok(Math.abs(demand.boxes[0].motionMax[0]-2*rate)<1e-9,'one transport unit in 0.1 s means ten transport units per wall second');
-  const input={frame:{translate:[2,2,2],scale:1},dims:[8,8,8],world:{lo:[-10,-10,-10],hi:[20,20,20]},sources:[],demand:demand.boxes},options={mode:'fire',margin:0,lookahead:.3,hysteresis:0};
-  const actual=chooseFineCoverage(input,options),expected=chooseFineCoverage({...input,demand:demand.boxes.map(b=>({...b,motionMax:[20,0,0]}))},options);
+  const input={frame:{translate:[0,0,0],scale:1},dims:[8,8,8],world:{lo:[-10,-10,-10],hi:[20,20,20]},sources:[],demand:demand.boxes.map(b=>({...b,lo:[-.1,-.1,-.1],hi:[.1,.1,.1]}))},options={mode:'fire',margin:0,lookahead:.3,hysteresis:0};
+  const actual=chooseFineCoverage(input,options),expected=chooseFineCoverage({...input,demand:input.demand.map(b=>({...b,motionMax:[20,0,0]}))},options);
   assert.deepEqual(actual.target,expected.target,'the existing seconds-based coverage consumer receives the converted bounds');assert.ok(actual.target.translate[0]>2);
  }finally{h.destroy();globalThis.performance=originalNow;}
 });
