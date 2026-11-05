@@ -5,6 +5,7 @@ import * as THREE from './lib/three.core.js';
 import {ArchGpuEngine,ENGINE_REVISION} from './lib/fracture/rigid-engine.js';
 import {ARCH_GPU_KERNELS} from './fracture-coarse-kernels.mjs';
 import {coarseRestFrame} from './fracture-coarse-rest-frame.mjs';
+import {coarseInitialJointPenalties} from './fracture-coarse-penalties.mjs';
 export const ARCH_GPU_ROUTE='kaminos.fracture.coarse-cohesive.webgpu.v1';
 const xyz=values=>({x:values[0],y:values[1],z:values[2]});
 const v=value=>new THREE.Vector3(value.x,value.y,value.z),q=value=>new THREE.Quaternion(value.x,value.y,value.z,value.w);
@@ -47,7 +48,11 @@ export async function createCoarseFractureDynamics(fixture, renderer) {
   for(const cell of solverCells){const j=engine.addSphericalJoint(null,cell.index,cell.position,[0,0,0],config.gripStiffness,false);engine.setInitialJointActive(j,false);}
   const counts=cells.map(()=>0);for(const bond of bonds){counts[bond.a]++;counts[bond.b]++;}
   if(counts.some(count=>count+1>jointCapacity))throw new Error('Material graph exceeds allocated joint-per-body capacity');
-  for(let j=0;j<bonds.length;j++){const data=engine.jointRecordsData;for(let axis=0;axis<3;axis++){data[j*44+36+axis]=config.elasticModulus?data[j*44+16]:Math.min(config.initialJointPenalty,data[j*44+16]);data[j*44+40+axis]=config.elasticModulus?data[j*44+17]:Math.min(config.initialJointPenalty,data[j*44+17]);}}
+  for(let j=0;j<bonds.length;j++){
+    const data=engine.jointRecordsData,bond=solverBonds[j];
+    const initial=config.elasticModulus?coarseInitialJointPenalties({masses:[solverCells[bond.a].mass,solverCells[bond.b].mass],halfExtents:[solverCells[bond.a].halfExtents,solverCells[bond.b].halfExtents],timeStep:config.timeStep/config.substeps,linearStiffness:data[j*44+16],rotationalStiffness:data[j*44+17],torqueArm:Math.max(data[j*44+7],1)}):null;
+    for(let axis=0;axis<3;axis++){data[j*44+36+axis]=initial?.linear??Math.min(config.initialJointPenalty,data[j*44+16]);data[j*44+40+axis]=initial?.angular[axis]??Math.min(config.initialJointPenalty,data[j*44+17]);}
+  }
   const gravityScale=step=>config.gravityRampSeconds===0?1:Math.min(1,step*config.timeStep/config.gravityRampSeconds);
   engine.setGravity([0,0,0]);
   batchCoarseCompute(renderer,()=>engine.step(config.timeStep,renderer));
