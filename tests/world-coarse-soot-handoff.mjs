@@ -43,6 +43,13 @@ test('coarse soot transport dilutes peaks by default without creating net mass a
   assert.ok(clumpedPeak > peakSoot, `expected negative diffusion to clump peaks (${clumpedPeak} <= ${peakSoot})`);
   assert.ok(drainedValley < valleySoot, `expected negative diffusion to drain valleys (${drainedValley} >= ${valleySoot})`);
 
+  // Zero-dt dispatches (e.g. world-fine-handoff conservation probe) must be exact identity for clumping and boundary sponging (R1).
+  assert.equal(worldSmoke.coarseSootClump(peakSoot, -0.15, 0.0, 0.35), peakSoot, 'dt=0 must not dilute soot');
+  assert.equal(worldSmoke.coarseSootClump(peakSoot, -0.15, 0.0, -0.5), peakSoot, 'dt=0 must not clump soot');
+  assert.equal(worldSmoke.worldBoundarySpongeSurvival([3.8, 3.8, 3.8], [-4, -4, -4], [4, 4, 4], 0.0), 1, 'dt=0 must not sponge boundary material');
+  assert.match(worldSmoke.WORLD_SMOKE_SHARED_WGSL, /if\(dt<=0\.0\|\|abs\(diffusion\)<=1e-6\)\{return s;\}/);
+  assert.match(worldSmoke.WORLD_SMOKE_SHARED_WGSL, /if\(dt<=0\.0\|\|strength<=0\.0\)\{return 1\.0;\}/);
+
   // Both coarse material solvers must use coarseSootClump(r.a.x, lapA.x, dt, u.dissipation.y).
   assert.match(worldSmoke.WORLD_SMOKE_SHARED_WGSL, /fn coarseSootClump\(/);
   assert.match(worldSmoke.WORLD_SMOKE_WGSL, /coarseSootClump\(r\.a\.x,\s*lapA\.x,\s*dt,\s*u\.dissipation\.y\)/);
@@ -172,10 +179,10 @@ test('smoke-only coarse World grid packs 4 subcell extinctions per texel (WORLD_
   assert.match(advanceFn, /worldSmokeDissipationSurvival\(r\.a\.x,\s*dt,\s*u\.dissipation\.x\)/);
   assert.match(advanceFn, /worldBoundarySpongeSurvival\(p,\s*dt\)/);
 
-  // measureBricks keeps raw soot out of mixing (signal.y) so diluted smoke bricks can coarsen.
+  // measureBricks keeps raw soot out of mixing (signal.y) while weighting hot flame/shear in reaction/mixing (signal.xy).
   assert.match(
     materialHierarchy.MATERIAL_HIERARCHY_WGSL,
-    /signal\[l\]=vec4<f32>\(0\.0,0\.0,grad\.y,grad\.x\+0\.35\*r\.a\.x\);/,
+    /signal\[l\]=vec4<f32>\(max\(0\.0,r\.a\.y-0\.45\)\*grad\.y,r\.a\.y\*grad\.x,grad\.y,grad\.x\+0\.35\*r\.a\.x\);/,
   );
 
   assert.equal(typeof worldOptics.fineFlameContainmentEnvelope, 'function');
@@ -189,11 +196,20 @@ test('smoke-only coarse World grid packs 4 subcell extinctions per texel (WORLD_
   assert.equal(worldOptics.fineFlameContainmentEnvelope([0, 2.92, 0], 3), 0, 'Flame emission is sponged to 0 before the Fine ceiling');
   assert.equal(worldOptics.fineFlameContainmentEnvelope([0.97, 1.0, 0], 3, 0.22, 0.20, 0), 1, 'Zero sponge strength disables Fine containment');
 
-  assert.match(core, /let spongedFuel = fuel \* \(1\.0 - collarSurvival\);/);
-  assert.match(core, /smoke = smoke \+ spongedFuel \* select\(/);
+  // R2: worldSmokeBlend applies fineFlameContainmentEnvelope to near.emission before !worldSmokeOn() and weight <= 1e-4 early returns.
+  assert.match(
+    worldOptics.WORLD_SMOKE_OPTICS_WGSL,
+    /let spongeEmission=u\.reactant_combustion_a\.x>0\.5&&u\.open_world_boundary\.w>0\.0&&worldRender\.overlayControls\.x<0\.5;\s*if\(spongeEmission\)\{\s*near\.emission\*=fineFlameContainmentEnvelope\(p,top\);\s*\}\s*if\(!worldSmokeOn\(\)/,
+  );
+  // Fuel is sponged once before reactantBurn (preSpongedFuel) and not double-sponged after reactantBurn.
+  assert.match(core, /let preSpongedFuel = fuel \* \(1\.0 - preBurnSurvival\);/);
+  assert.doesNotMatch(core, /let spongedFuel = fuel \* \(1\.0 - collarSurvival\);/);
   assert.match(core, /reactantFreshBurnRate = reactantFreshBurnRate \* collarSurvival;/);
   assert.match(core, /let warmBuoyancyCap = 450\.0 \/ max\(u\.emissive_physics\.y, 800\.0\);/);
+  // R3: seedEmissiveLight and seedSceneVolumeSource both apply fineFlameContainmentEnvelope and fineIncidentEnvelope tracks handoffMargin.
   assert.match(EMISSIVE_TRANSPORT_WGSL, /fineFlameContainmentEnvelope\(p,\s*top\)/);
+  assert.match(SCENE_VOLUME_SOURCE_WGSL, /fineFlameContainmentEnvelope\(p,\s*top\)/);
+  assert.match(COMPOSED_SMOKE_WGSL, /exteriorCoverage\.hiEnabled\.w-1\.0/);
 });
 
 test('boundary sponging, dissipation, handoff, and World sub-grid detail are promoted to explicit authoring controls', () => {

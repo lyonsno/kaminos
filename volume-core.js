@@ -7688,11 +7688,6 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     let flameContain = fineFlameContainmentEnvelope(p, expandedTopY);
     if (flameContain < 0.9999) {
       let collarSurvival = stepRate(mix(0.06, 1.0, flameContain)) * flameContain;
-      let spongedFuel = fuel * (1.0 - collarSurvival);
-      fuel = fuel * collarSurvival;
-      // Convert sponged unburned fuel into cold soot so boundary burnout feeds the smoke plume.
-      let burnoutYield = clamp(select(0.10, u.display_interpolation.w, u.viewport_steps_density.x > 0.0), 0.0, 1.0);
-      smoke = smoke + spongedFuel * select(0.18, u.reactant_combustion_b.z * burnoutYield, reactantOn);
       reactantFreshBurnRate = reactantFreshBurnRate * collarSurvival;
       // Cool incandescent excess heat down to a warm non-glowing buoyancy ceiling (~750 K)
       // so the rising plume keeps its upward thermal buoyancy without glowing outside Fine.
@@ -21142,7 +21137,7 @@ export function createKaminosVolumePrototype({
         const map=worldSmokeMapping(worldSmoke.plan,worldSmoke.anchor,productTransform);
         const middleMap=intermediateFlow?.exportFields?worldSmokeMapping(intermediateFlow.plan,intermediateFlow.anchor,productTransform):null;
         const middle=middleMap?{texture:intermediateFlow.optical,dimensions:intermediateFlow.plan.materialDims,localMin:middleMap.renderMin,localMax:middleMap.renderMax}:null;
-        return {texture:worldSmoke.optical,dimensions:worldSmoke.plan.materialDims,localMin:map.renderMin,localMax:map.renderMax,middle};
+        return {texture:worldSmoke.optical,dimensions:worldSmoke.plan.materialDims,localMin:map.renderMin,localMax:map.renderMax,handoffMargin:Math.min(0.60,Math.max(0.05,Number(controlsSnapshot.handoffMargin??0.36))),middle};
       },
       grid: EMISSIVE_LIGHT_GRID, gridY: EMISSIVE_LIGHT_GRID * gridHeight / gridSize, fluidGrid: gridSize, fluidGridY: gridHeight});
     sceneVolumeSource.encode(encoder, currentFluid, state.frameCount,productTransform);

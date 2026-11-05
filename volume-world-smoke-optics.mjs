@@ -279,7 +279,11 @@ fn worldPointSupportAndStep(p:vec3<f32>,rd:vec3<f32>,pitch:f32,middleInterval:bo
 }
 fn worldSmokeBlend(p:vec3<f32>,fine:EmissiveMaterial,smokeVisible:f32,fireVisible:f32)->EmissiveMaterial{
  let top=2.0*f32(GRID_Y)/f32(GRID)-1.0;
- let near=worldSmokeDiagnostic(fine,false);
+ var near=worldSmokeDiagnostic(fine,false);
+ let spongeEmission=u.reactant_combustion_a.x>0.5&&u.open_world_boundary.w>0.0&&worldRender.overlayControls.x<0.5;
+ if(spongeEmission){
+  near.emission*=fineFlameContainmentEnvelope(p,top);
+ }
  if(!worldSmokeOn()||any(p<worldRender.loPitch.xyz)||any(p>worldRender.hiEnabled.xyz)){return near;}
  let weight=select(
   1.0-smoothstep(0.0,min(.5,worldRender.loPitch.w),min(min(1.0-abs(p.x),1.0-abs(p.z)),min(p.y+1.0,top-p.y))),
@@ -288,7 +292,7 @@ fn worldSmokeBlend(p:vec3<f32>,fine:EmissiveMaterial,smokeVisible:f32,fireVisibl
  );
  if(weight<=1e-4){return near;}
  let coarse=worldSmokeDiagnostic(worldSmokeMaterial(p,smokeVisible,fireVisible),true);
- let flameKeep=select(1.0-weight,fineFlameContainmentEnvelope(p,top),u.reactant_combustion_a.x>0.5&&worldRender.overlayControls.x<0.5);
+ let flameKeep=select(1.0-weight,1.0,spongeEmission);
  return EmissiveMaterial(near.emission*flameKeep+coarse.emission*weight,mix(near.absorption,coarse.absorption,weight),mix(near.scattering,coarse.scattering,weight));
 }
 `;

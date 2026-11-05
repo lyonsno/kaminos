@@ -95,7 +95,7 @@ fn hierarchyHistory(p:vec3<f32>)->Gas{return hierarchyPlane(p,true);}
    let rawSoot=coarseSootClump(r.a.x,lapA.x,dt,u.dissipation.y)*reactantSootSurvival(dt)*sootBurnoutSurvival(nextHeat,1.0,dt)*worldSmokeDissipationSurvival(r.a.x,dt,u.dissipation.x)*sponge;
    let nextSoot=select(0.0,rawSoot,rawSoot>=1e-4);
    r=Gas(vec4<f32>(nextSoot,select(0.0,nextHeat,nextHeat>=1e-4),0.0,0.0),vec4<f32>(0.0));
-  }else{let dt=u.time.x;let sponge=worldBoundarySpongeSurvival(p,dt);let cooling=pow(.982,dt)*sponge;let survival=pow(.990,dt)*worldSmokeDissipationSurvival(r.a.x,dt,u.dissipation.x)*sponge;r=Gas(vec4<f32>(select(0.0,r.a.x*survival,r.a.x*survival>=1e-4),select(0.0,r.a.y*cooling,r.a.y*cooling>=1e-4),0.0,0.0),vec4<f32>(0.0));}
+  }else{let dt=u.time.x;let cutoff=select(0.0,1e-4,dt>0.0);let sponge=worldBoundarySpongeSurvival(p,dt);let cooling=pow(.982,dt)*sponge;let survival=pow(.990,dt)*worldSmokeDissipationSurvival(r.a.x,dt,u.dissipation.x)*sponge;r=Gas(vec4<f32>(select(0.0,r.a.x*survival,r.a.x*survival>=cutoff),select(0.0,r.a.y*cooling,r.a.y*cooling>=cutoff),select(0.0,r.a.z*survival,r.a.z*survival>=cutoff),0.0),vec4<f32>(0.0));}
   r=gasAdd(gasScale(r,1.0-fraction),owned);
  }
  if(u.bridgeMaterial.w>0.0){let weight=bridgeWeight(p);if(weight>0.0){let upstream=bridgeMaterialSample(p);r=Gas(mix(r.a,upstream.a,weight),vec4<f32>(0));owned=Gas(mix(owned.a,upstream.a*fraction,weight),vec4<f32>(0));}}
@@ -132,7 +132,7 @@ var<workgroup> motionMax:array<vec4<f32>,64>;
   grad+=abs(plus-minus)/(2.0*n.loPitch.w);
  }
  // Fixed material/physical units; no frame-maximum normalization.
- signal[l]=vec4<f32>(0.0,0.0,grad.y,grad.x+0.35*r.a.x);
+ signal[l]=vec4<f32>(max(0.0,r.a.y-0.45)*grad.y,r.a.y*grad.x,grad.y,grad.x+0.35*r.a.x);
  motionMin[l]=vec4<f32>(velocity(p),0);motionMax[l]=motionMin[l];workgroupBarrier();
  for(var stride=32u;stride>0u;stride/=2u){if(l<stride){signal[l]+=signal[l+stride];motionMin[l]=min(motionMin[l],motionMin[l+stride]);motionMax[l]=max(motionMax[l],motionMax[l+stride]);}workgroupBarrier();}
  // Compact work order omits parents and unused pool slots from readback.

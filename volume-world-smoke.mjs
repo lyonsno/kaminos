@@ -83,9 +83,11 @@ export function worldWindAcceleration({strength=0,angle=0,height=0,speed=1,fineW
 export function coarseSootClump(soot,lapSoot,dt,diffusion=0.35){
  const s=Math.max(0,Number(soot)||0);
  if(s<=0)return 0;
- const lap=Number(lapSoot)||0;
- const step=Math.min(2,Math.max(0.25,Math.max(Number(dt)||0,0)*4));
+ const rawDt=Number(dt??0.25);
  const diff=Math.min(1,Math.max(-1,Number(diffusion??0.35)));
+ if(rawDt<=0||Math.abs(diff)<=1e-6)return s;
+ const lap=Number(lapSoot)||0;
+ const step=Math.min(2,Math.max(0,rawDt*4));
  if(diff>=0){
   const delta=Math.max(-0.35*s,Math.min(0.35*s,0.12*diff*step*lap));
   return Math.max(0,s+delta);
@@ -103,6 +105,27 @@ export function worldSmokeDissipationSurvival(soot,dt,dissipationRate=0.035){
  const t=Math.min(1,Math.max(0,(Math.max(0,Number(soot)||0)-0.01)/(0.12-0.01)));
  const wispyBoost=1+1.2*(1-t*t*(3-2*t));
  return Math.exp(-rate*wispyBoost*step);
+}
+
+export function worldBoundarySpongeSurvival(p,lo=[-4,-4,-4],hi=[4,4,4],dt=0.25,options={}){
+ const rawDt=Number(dt??0.25);
+ const hm=Math.min(0.5,Math.max(0,Number(options.horizontal??0.18)));
+ const vm=Math.min(0.5,Math.max(0,Number(options.vertical??0.20)));
+ const strength=Math.min(1,Math.max(0,Number(options.strength??0.85)));
+ if(rawDt<=0||strength<=0||(hm<=1e-5&&vm<=1e-5))return 1;
+ const halfXZ=Math.max((hi[0]-lo[0])*0.5,1e-6);
+ const cx=(lo[0]+hi[0])*0.5,cz=(lo[2]+hi[2])*0.5;
+ const ax=Math.abs(p[0]-cx)/halfXZ,az=Math.abs(p[2]-cz)/halfXZ;
+ const ay=Math.min(1,Math.max(0,(p[1]-lo[1])/Math.max(hi[1]-lo[1],1e-6)));
+ const rx=hm>1e-5?Math.min(1,Math.max(0,(ax-(1-hm))/hm)):0;
+ const rz=hm>1e-5?Math.min(1,Math.max(0,(az-(1-hm))/hm)):0;
+ const ry=vm>1e-5?Math.min(1,Math.max(0,(ay-(1-vm))/vm)):0;
+ const r=Math.min(1,Math.hypot(rx,ry,rz));
+ const collar=r*r*(3-2*r);
+ if(collar<=1e-5)return 1;
+ const step=Math.min(4,Math.max(0,rawDt*4));
+ const base=Math.max(0,1-0.88*strength*collar)*Math.max(0,1-0.65*strength*collar*collar);
+ return Math.pow(base,step);
 }
 
 export function fineDonorEnvelope(p,top=3,margin=0.36){
@@ -205,8 +228,9 @@ fn priorFineDonorWeight(p:vec3<f32>,pitch:f32)->f32{
 fn coarseSootClump(soot:f32,lapSoot:f32,dt:f32,diffusion:f32)->f32{
  let s=max(0.0,soot);
  if(s<=0.0){return 0.0;}
- let step=clamp(max(dt,0.0)*4.0,0.25,2.0);
  let diff=clamp(select(0.35,diffusion,u.sponge.w>0.5),-1.0,1.0);
+ if(dt<=0.0||abs(diffusion)<=1e-6){return s;}
+ let step=clamp(dt*4.0,0.0,2.0);
  if(diff>=0.0){
   let delta=clamp(0.12*diff*step*lapSoot,-0.35*s,0.35*s);
   return max(0.0,s+delta);
@@ -228,7 +252,8 @@ fn worldBoundarySpongeSurvival(p:vec3<f32>,dt:f32)->f32{
  let hm=clamp(select(0.18,u.sponge.x,configured),0.0,0.5);
  let vm=clamp(select(0.20,u.sponge.y,configured),0.0,0.5);
  let strength=clamp(select(0.85,u.sponge.z,configured),0.0,1.0);
- if(strength<=0.0||(hm<=1e-5&&vm<=1e-5)){return 1.0;}
+ if(dt<=0.0||strength<=0.0){return 1.0;}
+ if(hm<=1e-5&&vm<=1e-5){return 1.0;}
  let lo=u.materialLo.xyz;
  let hi=lo+u.material.xyz*u.material.w;
  let halfXZ=max((hi.x-lo.x)*0.5,1e-6);
@@ -241,8 +266,10 @@ fn worldBoundarySpongeSurvival(p:vec3<f32>,dt:f32)->f32{
  let ry=select(0.0,clamp((ay-(1.0-vm))/max(vm,1e-5),0.0,1.0),vm>1e-5);
  let r=clamp(length(vec3<f32>(rx,ry,rz)),0.0,1.0);
  let collar=r*r*(3.0-2.0*r);
- let step=max(dt,0.25);
- return pow(max(0.0,1.0-0.88*strength*collar),step)*(1.0-0.65*strength*collar*collar);
+ if(collar<=1e-5){return 1.0;}
+ let step=clamp(dt*4.0,0.0,4.0);
+ let base=max(0.0,1.0-0.88*strength*collar)*max(0.0,1.0-0.65*strength*collar*collar);
+ return pow(base,step);
 }
 // Semi-Lagrangian cell reconstruction: the transported prior Fine portion and
 // exterior portion each occupy their own subvolume. Only the part now covered
@@ -315,13 +342,13 @@ fn fineGasAt(p:vec3<f32>,pitch:f32)->Gas{
  let radius=.5*pitch/u.mapping.w*u.near.x*.5;
  let lo=max(vec3<f32>(0),center-vec3<f32>(radius));
  let hi=min(u.near.xyz,center+vec3<f32>(radius));
- var sootHeat=vec2<f32>(0);var total=0.0;var peakSoot=0.0;
+ var sootHeat=vec3<f32>(0);var total=0.0;var peakSoot=0.0;
  for(var z=i32(floor(lo.z));z<i32(ceil(hi.z));z++){
  for(var y=i32(floor(lo.y));y<i32(ceil(hi.y));y++){
  for(var x=i32(floor(lo.x));x<i32(ceil(hi.x));x++){
   let c=vec3<i32>(x,y,z);let f=vec3<f32>(c);
   let overlap=max(vec3<f32>(0),min(f+1.0,hi)-max(f,lo));let w=overlap.x*overlap.y*overlap.z;
-  let m=max(fine[4u*idx(c,u.near.xyz)+1u].xy,vec2<f32>(0));
+  let m=max(fine[4u*idx(c,u.near.xyz)+1u].xyz,vec3<f32>(0));
   if(w>0.0){peakSoot=max(peakSoot,m.x);}
   sootHeat+=m*w;total+=w;
  }}}
@@ -330,7 +357,7 @@ fn fineGasAt(p:vec3<f32>,pitch:f32)->Gas{
  if(reactantLawOn()&&u.time.x>0.0&&avg.x>1e-5&&sootBoost>0.0){
   avg.x=mix(avg.x,max(avg.x,peakSoot*0.75),sootBoost);
  }
- return Gas(vec4<f32>(avg,0.0,0.0),vec4<f32>(0.0));
+ return Gas(vec4<f32>(avg.xy,select(avg.z,0.0,reactantLawOn()),0.0),vec4<f32>(0.0));
 }
 fn fineGas(p:vec3<f32>)->Gas{return fineGasAt(p,u.material.w);}
 fn axis(a:u32)->vec3<i32>{var v=vec3<i32>(0);v[a]=1;return v;}
@@ -512,7 +539,7 @@ fn storeMaterial(c:vec3<i32>,i:u32,p:vec3<f32>,value:Gas,contribution:Gas){
    let rawSoot=coarseSootClump(r.a.x,lapA.x,dt,u.dissipation.y)*reactantSootSurvival(dt)*sootBurnoutSurvival(nextHeat,1.0,dt)*worldSmokeDissipationSurvival(r.a.x,dt,u.dissipation.x)*sponge;
    let nextSoot=select(0.0,rawSoot,rawSoot>=1e-4);
    r=Gas(vec4<f32>(nextSoot,select(0.0,nextHeat,nextHeat>=1e-4),0.0,0.0),vec4<f32>(0.0));
- }else{let dt=u.time.x;let sponge=worldBoundarySpongeSurvival(p,dt);let cooling=pow(.982,dt)*sponge;let survival=pow(.990,dt)*worldSmokeDissipationSurvival(r.a.x,dt,u.dissipation.x)*sponge;r=Gas(vec4<f32>(select(0.0,r.a.x*survival,r.a.x*survival>=1e-4),select(0.0,r.a.y*cooling,r.a.y*cooling>=1e-4),0.0,0.0),vec4<f32>(0.0));}
+ }else{let dt=u.time.x;let cutoff=select(0.0,1e-4,dt>0.0);let sponge=worldBoundarySpongeSurvival(p,dt);let cooling=pow(.982,dt)*sponge;let survival=pow(.990,dt)*worldSmokeDissipationSurvival(r.a.x,dt,u.dissipation.x)*sponge;r=Gas(vec4<f32>(select(0.0,r.a.x*survival,r.a.x*survival>=cutoff),select(0.0,r.a.y*cooling,r.a.y*cooling>=cutoff),select(0.0,r.a.z*survival,r.a.z*survival>=cutoff),0.0),vec4<f32>(0.0));}
  storeMaterial(c,i,p,gasAdd(gasScale(r,1.0-fraction),owned),owned);
 }
 `;

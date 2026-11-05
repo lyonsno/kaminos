@@ -116,6 +116,7 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
     for(const [name,r] of exteriorResources)if(!world||(name==='middle'&&!world.middle)){r.texture.destroy();exteriorResources.delete(name);}
     if(!world)return;
     exterior=encodeRegion(encoder,world,'world');
+    if(Number.isFinite(world.handoffMargin))exterior.handoffMargin=world.handoffMargin;
     exterior.middle=world.middle?encodeRegion(encoder,world.middle,'middle'):null;
   }
   const invalidateOptical = () => {if (optical) optical.generation = null;};
@@ -231,12 +232,16 @@ fn seedSceneMiddleMedium(@builtin(global_invocation_id) c:vec3<u32>){
 fn seedSceneVolumeSource(@builtin(global_invocation_id) c: vec3<u32>) {
   seatGridShape();
   if (any(c >= vec3<u32>(SCENE_SOURCE_GRID, SCENE_SOURCE_GRID_Y, SCENE_SOURCE_GRID))) { return; }
+  let top = 2.0 * f32(GRID_Y) / f32(GRID) - 1.0;
   var coefficients = vec4<f32>(0.0);
   var scattering=0.0;
   for (var k=0u; k<8u; k++) {
     let offset = (vec3<f32>(f32(k&1u),f32((k>>1u)&1u),f32((k>>2u)&1u))+vec3<f32>(0.5))*0.5;
     let p = (vec3<f32>(c)+offset)*(2.0/f32(SCENE_SOURCE_GRID))-vec3<f32>(1.0);
-    let medium = sceneEmissiveMaterialAt(p);
+    var medium = sceneEmissiveMaterialAt(p);
+    if (u.reactant_combustion_a.x > 0.5 && u.open_world_boundary.w > 0.0) {
+      medium.emission *= fineFlameContainmentEnvelope(p, top);
+    }
     coefficients += vec4<f32>(medium.emission, medium.absorption + medium.scattering)*0.125;
     scattering+=medium.scattering*0.125;
   }

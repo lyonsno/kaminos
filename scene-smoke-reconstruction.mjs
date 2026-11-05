@@ -52,7 +52,9 @@ export function createDistributedSmokeBindings(device) {
       const e=region?.smokeReconstruction;
       if(region&&(region.generation!==frame.generation||region.frame!==frame.frame||e?.identity!=='prepared-planar-support-v4'||!e.texture||!e.masks||!e.planes||!(e.staticPreparations>0)||!(e.updates>0)||!e.localMin||!e.localMax))throw Error('exterior lighting requires current same-generation reconstruction resources');
     }
-    const data=[...(e?[...e.localMin,2/r.coarseDimensions[0],...e.localMax,1]:Array(8).fill(0)),
+    const handoffMargin=Number.isFinite(Number(frame.handoffMargin??exterior?.handoffMargin))
+      ?Math.min(0.60,Math.max(0.05,Number(frame.handoffMargin??exterior?.handoffMargin))):0;
+    const data=[...(e?[...e.localMin,2/r.coarseDimensions[0],...e.localMax,1+handoffMargin]:Array(8).fill(0)),
       ...(m?[...m.localMin,(m.localMax[0]-m.localMin[0])/m.coarseDimensions[0],...m.localMax,1]:Array(8).fill(0))];
     // Pack masks followed by plane words into one storage binding. This keeps
     // the guided camera plus distributed lighting within the native ten slots.
@@ -169,9 +171,14 @@ fn regionalMeanIncident(p:vec3<f32>)->vec3<f32>{
 }
 fn fineIncidentEnvelope(p:vec3<f32>,top:f32)->f32{
   let spanY=max(top+1.0,2.0);
-  let rx=clamp((abs(p.x)-0.58)/0.40,0.0,1.0);
-  let rz=clamp((abs(p.z)-0.58)/0.40,0.0,1.0);
-  let ry=clamp((p.y-(-1.0+0.72*spanY))/(0.26*spanY),0.0,1.0);
+  let margin=clamp(select(0.36,exteriorCoverage.hiEnabled.w-1.0,exteriorCoverage.hiEnabled.w>1.0001),0.05,0.60);
+  let widthH=max(margin*(0.40/0.36),0.04);
+  let startH=clamp(0.98-widthH,0.20,0.94);
+  let widthY=max(margin*(0.26/0.36),0.04);
+  let startY=clamp(0.98-widthY,0.25,0.94);
+  let rx=clamp((abs(p.x)-startH)/widthH,0.0,1.0);
+  let rz=clamp((abs(p.z)-startH)/widthH,0.0,1.0);
+  let ry=clamp((p.y-(-1.0+startY*spanY))/(widthY*spanY),0.0,1.0);
   let r=clamp(length(vec3<f32>(rx,ry,rz)),0.0,1.0);
   return 1.0-r*r*(3.0-2.0*r);
 }
