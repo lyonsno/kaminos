@@ -484,6 +484,23 @@ def run_switchable_evaluation(
             if "rank" in m_spec and m_spec["rank"] is not None:
                 if isinstance(m_spec["rank"], bool) or not isinstance(m_spec["rank"], int) or m_spec["rank"] < 0:
                     raise ValueError(f"modes[{idx}].rank must be a non-negative integer, got {m_spec['rank']!r}")
+            if "prefill_enabled" in m_spec and m_spec["prefill_enabled"] is not None:
+                _require_bool(m_spec["prefill_enabled"], f"modes[{idx}].prefill_enabled")
+            if "prefill_rank" in m_spec and m_spec["prefill_rank"] is not None:
+                if (
+                    isinstance(m_spec["prefill_rank"], bool)
+                    or not isinstance(m_spec["prefill_rank"], int)
+                    or m_spec["prefill_rank"] < 0
+                ):
+                    raise ValueError(
+                        f"modes[{idx}].prefill_rank must be a non-negative integer, got {m_spec['prefill_rank']!r}"
+                    )
+            if "split_point" in m_spec and m_spec["split_point"] is not None:
+                if m_spec["split_point"] not in ("before_last_prompt_token", "after_token_1"):
+                    raise ValueError(
+                        f"modes[{idx}].split_point must be 'before_last_prompt_token' or 'after_token_1', "
+                        f"got {m_spec['split_point']!r}"
+                    )
         if not isinstance(cases, list) or len(cases) == 0:
             raise ValueError("cases must be a non-empty list of prompt evaluation cases")
         for idx, c_spec in enumerate(cases):
@@ -607,12 +624,23 @@ def run_switchable_evaluation(
             )
         report["attach_seconds"] = round(time.monotonic() - attach_t0, 4)
         report["effective_model_semantics"] = controller.effective_model_semantics
+        report["vision_tower_invariant"] = bool(getattr(controller, "vision_tower_invariant", False))
         report["wrapped_module_count"] = len(controller._wrapped_modules)
         report["exact_swap_count"] = len(controller._exact_array_swaps)
         report["attached_lowrank_count"] = controller.attached_lowrank_count
         report["attached_exact_count"] = controller.attached_exact_count
         report["last_trustworthy_evidence"] = "attaching-adapter"
         _atomic_write_json(report_path, report)
+
+        prepare_inputs_fn = getattr(getattr(mlx_vlm_mod, "utils", None), "prepare_inputs", None)
+        if prepare_inputs_fn is None:
+            try:
+                from mlx_vlm.utils import prepare_inputs as prepare_inputs_fn
+            except Exception:
+                prepare_inputs_fn = None
+
+        vision_feature_cache: Dict[Any, Any] = {}
+        prepared_inputs_cache: Dict[Any, Dict[str, Any]] = {}
 
         tokenizer = processor.tokenizer
         stop_ids = [tokenizer.convert_tokens_to_ids(t) for t in ("<|im_end|>", "<|endoftext|>")]
@@ -625,11 +653,27 @@ def run_switchable_evaluation(
             mode_name = mode_spec["name"]
             enabled = _require_bool(mode_spec["enabled"], f"mode({mode_name}).enabled")
             rank = int(mode_spec.get("rank", controller.max_rank))
+            has_split = (
+                ("prefill_enabled" in mode_spec and mode_spec["prefill_enabled"] is not None)
+                or ("prefill_rank" in mode_spec and mode_spec["prefill_rank"] is not None)
+                or ("split_point" in mode_spec and mode_spec["split_point"] is not None)
+            )
+            prefill_enabled = (
+                _require_bool(mode_spec.get("prefill_enabled", enabled), f"mode({mode_name}).prefill_enabled")
+                if has_split
+                else enabled
+            )
+            prefill_rank = (
+                int(mode_spec.get("prefill_rank", rank if prefill_enabled else 0))
+                if has_split
+                else (rank if enabled else 0)
+            )
+            split_point = str(mode_spec.get("split_point") or "before_last_prompt_token") if has_split else None
 
             report["failure_phase"] = f"switching:{mode_name}"
             _atomic_write_json(report_path, report)
             sw_t0 = time.monotonic()
-            sw_res = controller.set_mode(enabled=enabled, rank=rank)
+            sw_res = controller.set_mode(enabled=prefill_enabled, rank=prefill_rank)
             sw_ms = round((time.monotonic() - sw_t0) * 1000.0, 3)
             bound_epoch = controller.state_epoch
 
@@ -641,6 +685,11 @@ def run_switchable_evaluation(
 
                 report["failure_phase"] = f"generating:{mode_name}:{case_id}"
                 _atomic_write_json(report_path, report)
+                if has_split and (controller.enabled != prefill_enabled or controller.active_rank != prefill_rank):
+                    sw_t0 = time.monotonic()
+                    sw_res = controller.set_mode(enabled=prefill_enabled, rank=prefill_rank)
+                    sw_ms = round((time.monotonic() - sw_t0) * 1000.0, 3)
+                    bound_epoch = controller.state_epoch
                 controller.assert_cache_epoch(bound_epoch)
                 if hasattr(controller, "_reset_caches_and_model_state"):
                     controller._reset_caches_and_model_state()
@@ -669,21 +718,126 @@ def run_switchable_evaluation(
                     messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
                 )
 
+                prep: Optional[Dict[str, Any]] = None
+                vision_cache_hit: Optional[bool] = None
+                vision_encode_ms: Optional[float] = None
+                extra_stream_kwargs: Dict[str, Any] = {}
+
+                can_use_vision_cache = (
+                    bool(images)
+                    and bool(getattr(controller, "vision_tower_invariant", False))
+                    and getattr(model, "vision_tower", None) is not None
+                    and callable(prepare_inputs_fn)
+                )
+                if can_use_vision_cache:
+                    img_cache_key = tuple(
+                        (
+                            str(p),
+                            hashlib.sha256(Path(p).read_bytes()).hexdigest() if Path(p).is_file() else "",
+                        )
+                        for p in images
+                    )
+                    prep_key = (img_cache_key, formatted)
+                    if prep_key in prepared_inputs_cache:
+                        prep = prepared_inputs_cache[prep_key]
+                    else:
+                        prep = prepare_inputs_fn(
+                            processor,
+                            images=images,
+                            prompts=formatted,
+                            image_token_index=getattr(getattr(model, "config", None), "image_token_index", None),
+                        )
+                        prepared_inputs_cache[prep_key] = prep
+
+                    if img_cache_key in vision_feature_cache:
+                        cached_img_features = vision_feature_cache[img_cache_key]
+                        vision_cache_hit = True
+                        vision_encode_ms = 0.0
+                    else:
+                        vt_t0 = time.monotonic()
+                        vt_dtype = model.vision_tower.patch_embed.proj.weight.dtype
+                        pv_cast = prep["pixel_values"].astype(vt_dtype)
+                        if hasattr(mx, "eval"):
+                            mx.eval(pv_cast)
+                        vt_out = model.vision_tower(pv_cast, prep.get("image_grid_thw"))
+                        cached_img_features = vt_out[0] if isinstance(vt_out, (tuple, list)) else vt_out
+                        if hasattr(mx, "eval"):
+                            mx.eval(cached_img_features)
+                        vision_encode_ms = round((time.monotonic() - vt_t0) * 1000.0, 3)
+                        vision_feature_cache[img_cache_key] = cached_img_features
+                        vision_cache_hit = False
+
+                    extra_stream_kwargs["input_ids"] = prep.get("input_ids")
+                    extra_stream_kwargs["pixel_values"] = prep.get("pixel_values")
+                    extra_stream_kwargs["mask"] = prep.get("attention_mask")
+                    extra_stream_kwargs["image_grid_thw"] = prep.get("image_grid_thw")
+                    extra_stream_kwargs["cached_image_features"] = cached_img_features
+                elif has_split and split_point == "before_last_prompt_token" and callable(prepare_inputs_fn):
+                    prep = prepare_inputs_fn(
+                        processor,
+                        images=images or None,
+                        prompts=formatted,
+                        image_token_index=getattr(getattr(model, "config", None), "image_token_index", None),
+                    )
+                    extra_stream_kwargs["input_ids"] = prep.get("input_ids")
+                    if prep.get("pixel_values") is not None:
+                        extra_stream_kwargs["pixel_values"] = prep.get("pixel_values")
+                    if prep.get("attention_mask") is not None:
+                        extra_stream_kwargs["mask"] = prep.get("attention_mask")
+                    if prep.get("image_grid_thw") is not None:
+                        extra_stream_kwargs["image_grid_thw"] = prep.get("image_grid_thw")
+
+                split_swap_ms: Optional[float] = None
+                split_swapped_done = False
+                active_sw_res = sw_res
+
+                if has_split and split_point == "before_last_prompt_token":
+                    if prep is not None and prep.get("input_ids") is not None:
+                        n_prompt_toks = int(prep["input_ids"].shape[1])
+                    elif hasattr(tokenizer, "encode") and callable(tokenizer.encode):
+                        n_prompt_toks = len(tokenizer.encode(formatted))
+                    else:
+                        n_prompt_toks = 2
+                    if n_prompt_toks < 2:
+                        raise RuntimeError(
+                            f"Split mode {mode_name!r} ('before_last_prompt_token') requires at least 2 prompt tokens, "
+                            f"got {n_prompt_toks}"
+                        )
+
+                    def _on_prompt_checkpoint(_processed_tokens: int, _cache: Any) -> None:
+                        nonlocal split_swap_ms, split_swapped_done, active_sw_res
+                        if not split_swapped_done:
+                            t_sp = time.monotonic()
+                            active_sw_res = controller.set_mode(enabled=enabled, rank=rank, preserve_cache=True)
+                            split_swap_ms = round((time.monotonic() - t_sp) * 1000.0, 3)
+                            split_swapped_done = True
+
+                    extra_stream_kwargs["prompt_cache_checkpoint"] = _on_prompt_checkpoint
+                    extra_stream_kwargs["prompt_cache_checkpoint_len"] = n_prompt_toks - 1
+
                 gen_t0 = time.monotonic()
                 last_progress_write = 0.0
                 text_out = ""
                 final_chunk = None
                 try:
-                    for chunk in stream_generate(
-                        model,
-                        processor,
-                        formatted,
-                        image=images or None,
-                        **sampling,
-                        logits_processors=logits_procs,
+                    for chunk_idx, chunk in enumerate(
+                        stream_generate(
+                            model,
+                            processor,
+                            formatted,
+                            image=None if can_use_vision_cache else (images or None),
+                            **sampling,
+                            logits_processors=logits_procs,
+                            **extra_stream_kwargs,
+                        )
                     ):
                         text_out += chunk.text
                         final_chunk = chunk
+                        if has_split and split_point == "after_token_1" and chunk_idx == 0 and not split_swapped_done:
+                            t_sp = time.monotonic()
+                            active_sw_res = controller.set_mode(enabled=enabled, rank=rank, preserve_cache=True)
+                            split_swap_ms = round((time.monotonic() - t_sp) * 1000.0, 3)
+                            split_swapped_done = True
                         now_m = time.monotonic()
                         if last_progress_write == 0.0 or (now_m - last_progress_write) >= 0.5:
                             report["current_stream_progress"] = {
@@ -703,15 +857,20 @@ def run_switchable_evaluation(
                             }
                             _atomic_write_json(report_path, report)
                             last_progress_write = now_m
+                    if has_split and not split_swapped_done:
+                        raise RuntimeError(
+                            f"Split mode {mode_name!r} ({split_point}) failed to execute adapter transition "
+                            f"during generation for case {case_id!r}"
+                        )
                 except BaseException as stream_exc:
                     gen_s = round(time.monotonic() - gen_t0, 4)
                     failed_obs = {
                         "mode": mode_name,
-                        "enabled": sw_res["enabled"],
-                        "rank": sw_res["rank"],
-                        "state_epoch": sw_res["state_epoch"],
+                        "enabled": active_sw_res["enabled"],
+                        "rank": active_sw_res["rank"],
+                        "state_epoch": active_sw_res["state_epoch"],
                         "reset_performed_on_mode_entry": sw_res["reset_performed"],
-                        "effective_model_semantics": sw_res["effective_model_semantics"],
+                        "effective_model_semantics": active_sw_res["effective_model_semantics"],
                         "switch_ms": sw_ms,
                         "case_id": case_id,
                         "task": task,
@@ -738,6 +897,14 @@ def run_switchable_evaluation(
                         "accepted": False,
                         "stream_error": str(stream_exc),
                     }
+                    if vision_cache_hit is not None:
+                        failed_obs["vision_cache_hit"] = vision_cache_hit
+                        failed_obs["vision_encode_ms"] = vision_encode_ms
+                    if has_split:
+                        failed_obs["prefill_enabled"] = prefill_enabled
+                        failed_obs["prefill_rank"] = prefill_rank
+                        failed_obs["split_point"] = split_point
+                        failed_obs["split_swap_ms"] = split_swap_ms
                     report["attempted_observations"].append(failed_obs)
                     _atomic_write_json(report_path, report)
                     raise
@@ -748,11 +915,11 @@ def run_switchable_evaluation(
                 gen_s = round(time.monotonic() - gen_t0, 4)
                 obs = {
                     "mode": mode_name,
-                    "enabled": sw_res["enabled"],
-                    "rank": sw_res["rank"],
-                    "state_epoch": sw_res["state_epoch"],
+                    "enabled": active_sw_res["enabled"],
+                    "rank": active_sw_res["rank"],
+                    "state_epoch": active_sw_res["state_epoch"],
                     "reset_performed_on_mode_entry": sw_res["reset_performed"],
-                    "effective_model_semantics": sw_res["effective_model_semantics"],
+                    "effective_model_semantics": active_sw_res["effective_model_semantics"],
                     "switch_ms": sw_ms,
                     "case_id": case_id,
                     "task": task,
@@ -778,6 +945,14 @@ def run_switchable_evaluation(
                     "finish_reason": _resolve_finish_reason(final_chunk, stop_ids, sampling["max_tokens"]),
                     "accepted": False,
                 }
+                if vision_cache_hit is not None:
+                    obs["vision_cache_hit"] = vision_cache_hit
+                    obs["vision_encode_ms"] = vision_encode_ms
+                if has_split:
+                    obs["prefill_enabled"] = prefill_enabled
+                    obs["prefill_rank"] = prefill_rank
+                    obs["split_point"] = split_point
+                    obs["split_swap_ms"] = split_swap_ms
                 if case.get("reference_output"):
                     obs["word_jaccard_vs_reference"] = _word_jaccard(obs["output"], case["reference_output"])
 

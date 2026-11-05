@@ -355,8 +355,12 @@ class MLXSwitchableDeltaController:
         self._wrapped_modules: List[Tuple[Any, str, Any, Any, bool]] = []
         self.attached_exact_count: int = 0
         self.attached_lowrank_count: int = 0
+        self.vision_tower_invariant: bool = True
 
         for grp, shard_info in self.manifest["shards"].items():
+            for t_key in shard_info.get("tensor_stats", {}).keys():
+                if "vision_tower" in t_key or ".visual." in t_key:
+                    self.vision_tower_invariant = False
             if grp == "exact_small" and not include_exact_small:
                 continue
             if grp == "vocab_embed_lm_head" and not include_vocab:
@@ -688,9 +692,11 @@ class MLXSwitchableDeltaController:
                 f"bound_epoch={bound_epoch} != state_epoch={self.state_epoch}"
             )
 
-    def set_mode(self, enabled: bool, rank: int = 64) -> Dict[str, Any]:
+    def set_mode(self, enabled: bool, rank: int = 64, preserve_cache: bool = False) -> Dict[str, Any]:
         if not isinstance(enabled, bool):
             raise ValueError(f"enabled must be a boolean, got {enabled!r}")
+        if not isinstance(preserve_cache, bool):
+            raise ValueError(f"preserve_cache must be a boolean, got {preserve_cache!r}")
         if isinstance(rank, bool) or not isinstance(rank, int) or rank < 0:
             raise ValueError(f"rank must be a non-negative integer, got {rank!r}")
         target_rank = min(rank, self.max_rank) if enabled else 0
@@ -703,7 +709,8 @@ class MLXSwitchableDeltaController:
         self.active_rank = target_rank
         self._sync_module_wrappers()
 
-        if changed:
+        reset_performed = bool(changed and not preserve_cache)
+        if reset_performed:
             self.state_epoch += 1
             self._reset_caches_and_model_state()
             if hasattr(self._mx, "clear_cache"):
@@ -713,7 +720,8 @@ class MLXSwitchableDeltaController:
             "enabled": self.enabled,
             "rank": self.active_rank,
             "state_epoch": self.state_epoch,
-            "reset_performed": changed,
+            "reset_performed": reset_performed,
+            "preserve_cache": preserve_cache,
             "effective_model_semantics": self.effective_model_semantics,
         }
 

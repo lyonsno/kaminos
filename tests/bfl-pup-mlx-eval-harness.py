@@ -1298,6 +1298,18 @@ class TestMLXSwitchableEvalHarness(unittest.TestCase):
                 self.assertIs(fake_model.language_model.model.layers[0].self_attn.q_proj, orig_q_proj)
                 self.assertIs(fake_model.language_model.model.embed_tokens, orig_embed)
 
+                # 7. Vision tower invariance flag and preserve_cache=True hot-swap semantics
+                self.assertTrue(ctrl.vision_tower_invariant)
+                fake_cache = {"kv": "cached_state"}
+                ctrl.attach_cache(fake_cache)
+                epoch_before = ctrl.state_epoch
+                sw_pres = ctrl.set_mode(enabled=True, rank=2, preserve_cache=True)
+                self.assertTrue(sw_pres["preserve_cache"])
+                self.assertFalse(sw_pres["reset_performed"])
+                self.assertEqual(ctrl.state_epoch, epoch_before)
+                self.assertEqual(fake_cache, {"kv": "cached_state"})
+                self.assertIsNot(fake_model.language_model.model.layers[0].self_attn.q_proj, orig_q_proj)
+
     def test_r4_02_rejects_outdated_mlx_vlm_runtime_and_torchless_provenance_check(self):
         import hashlib
         import struct
@@ -1456,6 +1468,345 @@ class TestMLXSwitchableEvalHarness(unittest.TestCase):
             self.assertEqual(rep_data["failure_phase"], "backend-validation")
             self.assertEqual(rep_data["mlx_version"], "0.32.0")
             self.assertEqual(rep_data["mlx_vlm_version"], "0.6.3")
+
+    def test_r4_03_vision_feature_cache_and_split_prefill_decode_harness(self):
+        import hashlib
+        import struct
+        import sys
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock, patch
+        import numpy as np
+        from evaluate_switchable_mlx import run_switchable_evaluation
+
+        def write_raw_bf16_safetensors(path: Path, tensors_f32: dict):
+            header = {}
+            payloads = []
+            offset = 0
+            for k, arr in tensors_f32.items():
+                arr_f32 = np.asarray(arr, dtype=np.float32)
+                u16 = (arr_f32.view(np.uint32) >> 16).astype("<u2")
+                raw = u16.tobytes()
+                header[k] = {
+                    "dtype": "BF16",
+                    "shape": list(arr_f32.shape),
+                    "data_offsets": [offset, offset + len(raw)],
+                }
+                payloads.append(raw)
+                offset += len(raw)
+            hdr_bytes = json.dumps(header, separators=(",", ":")).encode("utf-8")
+            with path.open("wb") as fh:
+                fh.write(struct.pack("<Q", len(hdr_bytes)))
+                fh.write(hdr_bytes)
+                for p in payloads:
+                    fh.write(p)
+            return hashlib.sha256(hdr_bytes).hexdigest(), hashlib.sha256(path.read_bytes()).hexdigest()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            adapter_dir = root / "adapter"
+            shards_dir = adapter_dir / "shards"
+            shards_dir.mkdir(parents=True)
+
+            exact_sf = shards_dir / "exact_small.safetensors"
+            write_raw_bf16_safetensors(
+                exact_sf,
+                {
+                    "model.language_model.norm.weight.bfl": np.full((8,), 1.0, dtype=np.float32),
+                    "model.language_model.norm.weight.delta": np.full((8,), 0.25, dtype=np.float32),
+                    "model.language_model.norm.weight.qwen": np.full((8,), 0.75, dtype=np.float32),
+                },
+            )
+            lr_sf = shards_dir / "layers_00_03.safetensors"
+            write_raw_bf16_safetensors(
+                lr_sf,
+                {
+                    "model.language_model.layers.0.self_attn.q_proj.weight.lora_A": np.ones((2, 8), dtype=np.float32),
+                    "model.language_model.layers.0.self_attn.q_proj.weight.lora_B": np.ones((8, 2), dtype=np.float32),
+                },
+            )
+
+            model_dir = root / "qwen-model"
+            model_dir.mkdir()
+            (model_dir / "config.json").write_text(json.dumps({"model_type": "qwen3_5"}))
+            (model_dir / "README.md").write_text("base_model: Qwen/Qwen3.5-9B\n")
+            (model_dir / "system_prompts.json").write_text(json.dumps({"t2i": "sys t2i", "i2i": "sys i2i"}))
+
+            img_path = root / "ref.jpg"
+            img_path.write_bytes(b"fake-jpeg-bytes-1234")
+
+            model_sf = model_dir / "model.safetensors"
+            m_hdr_sha, m_file_sha = write_raw_bf16_safetensors(
+                model_sf,
+                {"language_model.model.norm.weight": np.full((8,), 1.75, dtype=np.float32)},
+            )
+
+            manifest = {
+                "schema": "kaminos.bfl-pup-delta-manifest.v1",
+                "complete": True,
+                "max_rank": 4,
+                "min_lora_dim": 8,
+                "expected_shard_groups": ["exact_small", "layers_00_03"],
+                "expected_exact_count": 1,
+                "expected_lowrank_count": 1,
+                "sources": {
+                    "qwen_header_digests": {"model.safetensors": m_hdr_sha},
+                    "qwen_file_digests": {"model.safetensors": m_file_sha},
+                },
+                "shards": {
+                    "exact_small": {
+                        "file": "shards/exact_small.safetensors",
+                        "sha256": hashlib.sha256(exact_sf.read_bytes()).hexdigest(),
+                        "size_bytes": exact_sf.stat().st_size,
+                        "expected_keys": ["model.language_model.norm.weight"],
+                        "tensor_stats": {"model.language_model.norm.weight": {"mode": "exact", "shape": [8]}},
+                    },
+                    "layers_00_03": {
+                        "file": "shards/layers_00_03.safetensors",
+                        "sha256": hashlib.sha256(lr_sf.read_bytes()).hexdigest(),
+                        "size_bytes": lr_sf.stat().st_size,
+                        "expected_keys": ["model.language_model.layers.0.self_attn.q_proj.weight"],
+                        "tensor_stats": {
+                            "model.language_model.layers.0.self_attn.q_proj.weight": {
+                                "mode": "lowrank_svd",
+                                "shape": [8, 8],
+                                "rank": 4,
+                            }
+                        },
+                    },
+                },
+            }
+            (adapter_dir / "manifest.json").write_text(json.dumps(manifest))
+
+            vision_encode_calls = []
+
+            class FakeVisionTower:
+                def __init__(self):
+                    self.patch_embed = SimpleNamespace(proj=SimpleNamespace(weight=SimpleNamespace(dtype="bf16")))
+
+                def __call__(self, pv, grid_thw):
+                    vision_encode_calls.append((pv, grid_thw))
+                    return SimpleNamespace(nbytes=4096, shape=(16, 8)), None
+
+            fake_model = SimpleNamespace(
+                config=SimpleNamespace(image_token_index=151655),
+                vision_tower=FakeVisionTower(),
+                language_model=SimpleNamespace(_position_ids="pos", _rope_deltas="rope"),
+            )
+            fake_processor = SimpleNamespace(
+                apply_chat_template=lambda msgs, **kw: "formatted_multimodal",
+                tokenizer=SimpleNamespace(
+                    apply_chat_template=lambda msgs, **kw: "formatted_text",
+                    convert_tokens_to_ids=lambda t: 151645,
+                    stopping_criteria=None,
+                ),
+            )
+
+            mode_transitions = []
+
+            class FakeController:
+                def __init__(self, model, adir, base_role="qwen", allow_bfl_residual_approx=False):
+                    self.model = model
+                    self.max_rank = 4
+                    self.attached_lowrank_count = 1
+                    self.attached_exact_count = 1
+                    self._wrapped_modules = [1]
+                    self._exact_array_swaps = [1]
+                    self.effective_model_semantics = "qwen_resident_exact_target"
+                    self.vision_tower_invariant = True
+                    self.state_epoch = 0
+                    self.enabled = False
+                    self.active_rank = 0
+
+                def set_mode(self, enabled: bool, rank: int = 4, preserve_cache: bool = False):
+                    mode_transitions.append((enabled, rank, preserve_cache))
+                    self.enabled = enabled
+                    self.active_rank = rank if enabled else 0
+                    if not preserve_cache:
+                        self.state_epoch += 1
+                    return {
+                        "enabled": self.enabled,
+                        "rank": self.active_rank,
+                        "state_epoch": self.state_epoch,
+                        "reset_performed": not preserve_cache,
+                        "preserve_cache": preserve_cache,
+                        "effective_model_semantics": self.effective_model_semantics,
+                    }
+
+                def assert_cache_epoch(self, ep):
+                    if ep != self.state_epoch:
+                        raise RuntimeError("epoch mismatch")
+
+                def _reset_caches_and_model_state(self):
+                    pass
+
+            stream_calls = []
+
+            def fake_stream_generate(model, processor, formatted, image=None, **kwargs):
+                cb = kwargs.get("prompt_cache_checkpoint")
+                cb_len = kwargs.get("prompt_cache_checkpoint_len")
+                mode_at_prefill = (fake_ctrl_ref[0].enabled, fake_ctrl_ref[0].active_rank)
+                if callable(cb) and cb_len is not None:
+                    cb(cb_len, ["fake_cache"])
+                mode_at_decode = (fake_ctrl_ref[0].enabled, fake_ctrl_ref[0].active_rank)
+                stream_calls.append(
+                    {
+                        "cached_image_features": kwargs.get("cached_image_features"),
+                        "mode_at_prefill": mode_at_prefill,
+                        "mode_at_decode": mode_at_decode,
+                    }
+                )
+                yield SimpleNamespace(
+                    text="Blue enamel kettle caption.",
+                    token=151645,
+                    prompt_tokens=12,
+                    generation_tokens=5,
+                    prompt_tps=500.0,
+                    generation_tps=65.0,
+                    peak_memory=8.5,
+                    finish_reason="stop",
+                )
+
+            fake_ctrl_ref = []
+            orig_init = FakeController.__init__
+
+            def tracking_init(self_c, *a, **kw):
+                orig_init(self_c, *a, **kw)
+                fake_ctrl_ref.append(self_c)
+
+            FakeController.__init__ = tracking_init
+
+            def fake_prepare_inputs(proc, images=None, prompts=None, **kw):
+                return {
+                    "input_ids": SimpleNamespace(shape=(1, 12)),
+                    "pixel_values": SimpleNamespace(astype=lambda dt: "cast_pv"),
+                    "attention_mask": "mask",
+                    "image_grid_thw": "grid_thw",
+                }
+
+            fake_mx = SimpleNamespace(
+                metal=SimpleNamespace(is_available=lambda: True),
+                gpu="gpu",
+                set_default_device=lambda d: None,
+                set_cache_limit=lambda l: None,
+                set_wired_limit=lambda l: 0,
+                clear_cache=lambda: None,
+                eval=lambda *a: None,
+            )
+            fake_mlx_vlm = SimpleNamespace(
+                load=lambda p, strict=True: (fake_model, fake_processor),
+                stream_generate=fake_stream_generate,
+                utils=SimpleNamespace(prepare_inputs=fake_prepare_inputs),
+            )
+
+            report_out = root / "split_and_vision_cache_report.json"
+            with patch.dict(
+                sys.modules,
+                {
+                    "mlx": SimpleNamespace(core=fake_mx),
+                    "mlx.core": fake_mx,
+                    "mlx_vlm": fake_mlx_vlm,
+                    "mlx_vlm.utils": fake_mlx_vlm.utils,
+                },
+            ):
+                with patch("mlx_switchable_adapter.MLXSwitchableDeltaController", FakeController):
+                    rep = run_switchable_evaluation(
+                        model_dir=model_dir,
+                        adapter_dir=adapter_dir,
+                        report_path=report_out,
+                        base_role="qwen",
+                        modes=[
+                            {"name": "off", "enabled": False, "rank": 0},
+                            {
+                                "name": "cheat_r4_prefill_off_decode",
+                                "prefill_enabled": True,
+                                "prefill_rank": 4,
+                                "enabled": False,
+                                "rank": 0,
+                                "split_point": "before_last_prompt_token",
+                            },
+                        ],
+                        cases=[
+                            {
+                                "id": "i2i_kettle",
+                                "task": "i2i",
+                                "prompt": "Make it blue.",
+                                "images": [str(img_path)],
+                            }
+                        ],
+                    )
+
+            self.assertEqual(rep["status"], "complete")
+            # 1. Vision tower was called ONLY ONCE across the 2 modes; 2nd mode got a vision_cache_hit!
+            self.assertEqual(len(vision_encode_calls), 1)
+            self.assertFalse(rep["observations"][0]["vision_cache_hit"])
+            self.assertTrue(rep["observations"][1]["vision_cache_hit"])
+            self.assertIsNotNone(stream_calls[0]["cached_image_features"])
+            self.assertIs(stream_calls[0]["cached_image_features"], stream_calls[1]["cached_image_features"])
+
+            # 2. Split mode ran prefill in (True, 4) and hot-swapped to (False, 0) with preserve_cache=True before decode!
+            self.assertEqual(stream_calls[1]["mode_at_prefill"], (True, 4))
+            self.assertEqual(stream_calls[1]["mode_at_decode"], (False, 0))
+            self.assertEqual(rep["observations"][1]["prefill_enabled"], True)
+            self.assertEqual(rep["observations"][1]["prefill_rank"], 4)
+            self.assertEqual(rep["observations"][1]["enabled"], False)
+            self.assertEqual(rep["observations"][1]["rank"], 0)
+            self.assertEqual(rep["observations"][1]["split_point"], "before_last_prompt_token")
+            self.assertTrue(any(t == (False, 0, True) for t in mode_transitions))
+
+            # 3. False-closure guard: if a backend ignores prompt_cache_checkpoint in split mode, fail loud!
+            def broken_stream_generate(model, processor, formatted, image=None, **kwargs):
+                yield SimpleNamespace(
+                    text="Un-swapped caption.",
+                    token=151645,
+                    prompt_tokens=12,
+                    generation_tokens=3,
+                    prompt_tps=500.0,
+                    generation_tps=65.0,
+                    peak_memory=8.5,
+                    finish_reason="stop",
+                )
+
+            fake_mlx_vlm.stream_generate = broken_stream_generate
+            broken_report_out = root / "broken_split_report.json"
+            with patch.dict(
+                sys.modules,
+                {
+                    "mlx": SimpleNamespace(core=fake_mx),
+                    "mlx.core": fake_mx,
+                    "mlx_vlm": fake_mlx_vlm,
+                    "mlx_vlm.utils": fake_mlx_vlm.utils,
+                },
+            ):
+                with patch("mlx_switchable_adapter.MLXSwitchableDeltaController", FakeController):
+                    with self.assertRaisesRegex(RuntimeError, "failed to execute adapter transition"):
+                        run_switchable_evaluation(
+                            model_dir=model_dir,
+                            adapter_dir=adapter_dir,
+                            report_path=broken_report_out,
+                            base_role="qwen",
+                            modes=[
+                                {
+                                    "name": "cheat_r4_prefill_off_decode",
+                                    "prefill_enabled": True,
+                                    "prefill_rank": 4,
+                                    "enabled": False,
+                                    "rank": 0,
+                                    "split_point": "before_last_prompt_token",
+                                }
+                            ],
+                            cases=[
+                                {
+                                    "id": "i2i_kettle",
+                                    "task": "i2i",
+                                    "prompt": "Make it blue.",
+                                    "images": [str(img_path)],
+                                }
+                            ],
+                        )
+            broken_rep = json.loads(broken_report_out.read_text())
+            self.assertEqual(broken_rep["status"], "failed")
+            self.assertEqual(len(broken_rep["attempted_observations"]), 1)
+            self.assertFalse(broken_rep["attempted_observations"][0]["accepted"])
 
 
 if __name__ == "__main__":
