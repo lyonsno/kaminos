@@ -30,6 +30,7 @@ export function createCastingTransfer({write,arrive=()=>{}}){
    const next={position,rotation:[rotation.x,rotation.y,rotation.z],scale:a.scale.map((v,i)=>v+(b.scale[i]-v)*u)};
    write(t===1?structuredClone(b):next);if(t===1){state.moving=false;arrive();}
   },
+  translate(delta){if(!Array.isArray(delta)||delta.length!==3||!delta.every(Number.isFinite))throw Error('Transfer translation needs three finite coordinates');if(state)for(const p of [state.from,state.to])p.position=p.position.map((v,i)=>v+delta[i]);},
   cancel(){if(state)state.moving=false;},read:()=>state?structuredClone(state):null,
  };
 }

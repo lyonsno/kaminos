@@ -9,8 +9,9 @@ export default {id:'generation-arrival',title:'Generate · arrival study',async 
  const session=await host.scene.open(),study=await createStudy({host,inputs,record});
  let stopFrame,disposed=false,anchored=false,lastPlacement=null,offset=[0,0,0],slider,status,pausedByExit=false;
  const liveIds=()=>[...ids,...[study.read().pieceId].filter(Boolean)];
+ const shift=delta=>{host.scene.translateArrivalStage(liveIds(),delta);study.operations.translateStage?.(delta);};
  const present=amount=>{
-  if((amount===0||amount===null)&&anchored){host.scene.translateArrivalStage(liveIds(),offset.map(v=>-v));offset=[0,0,0];anchored=false;}
+  if((amount===0||amount===null)&&anchored){shift(offset.map(v=>-v));offset=[0,0,0];anchored=false;}
   host.scene.arrivalPresentation.set(amount===null?null:[...host.scene.objects().map(row=>[row.id,(ids.has(row.id)||row.id===study.read().pieceId||row.id==='flame-field')?amount:1-amount]),['water-field',amount]]);
   if(slider)slider.value=String(amount??0);
   if(status)status.textContent=amount===null?'Closed':`${Math.round(amount*100)}% arrival · schematic visibility blend`;
@@ -20,7 +21,7 @@ export default {id:'generation-arrival',title:'Generate · arrival study',async 
   const box=new THREE.Box3();for(const row of rows){row.object.updateWorldMatrix(true,true);box.expandByObject(row.object);}
   const sphere=box.getBoundingSphere(new THREE.Sphere()),view=session.readView(),canvas=host.scene.renderer().domElement;
   const placement=arrivalTranslation({view:{...view,aspect:canvas.clientWidth/canvas.clientHeight},center:sphere.center.toArray(),radius:sphere.radius});
-  host.scene.translateArrivalStage(liveIds(),placement.translation);offset=[...placement.translation];
+  shift(placement.translation);offset=[...placement.translation];
   anchored=true;lastPlacement={...placement,view};record({kind:'generation-arrival.place',phase:'applied',effective:lastPlacement});
  };
  const arrival=createGenerationArrival({duration:inputs.duration??2.5,present,place});

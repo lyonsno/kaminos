@@ -8,6 +8,7 @@ import {stageLetterCastings,createCastingTransfer,castingPickupPose} from '../ca
 
 export default {id:'stage-casting',title:'Workshop · casting to fire',async create({host,inputs={},record},createPourStudy=pourStudy.create){
  const doc=host.controls.document,app=doc.defaultView,author=app.kaminosSceneAuthoring;
+ let operationEpoch=0,suspended=false;
  let cycleRequest=0,cycle=null,fillMeasurement=null,fillQuery=null,fillIdentity=null,lastFill=null,lastFillStep=-Infinity,fillTarget=.8;
  const study=await createPourStudy({host,inputs,record}),session=await host.scene.open();
  let flame,closed=false,pending=Promise.resolve(),pieceId=null,cursor=0,sourceRecipe=null,burnStart=null,ignitionSeconds=2,transferSeconds=4,phase='At the mold',status,updateButtons=()=>{},cleanup=()=>{},createdFire=false;
@@ -37,24 +38,27 @@ export default {id:'stage-casting',title:'Workshop · casting to fire',async cre
  };
  adopt();
  const active=()=>{if(closed)throw Error('Casting workshop is closed');};
- const read=()=>({cycle:cycle?.read(),fill:lastFill,fillTarget,phase,pieceId,cursor,transfer:transfer.read(),carriage:carriage.read(),carrierId:carrierEntry()?.id,ignitionSeconds,transferSeconds,igniting:burnStart!==null,combustion:pieceId?author.burningState(pieceId):null,study:study.read(),fidelity:'Authored solid inserts and joint kinematics; existing thermal combustion. Liquid solidification is not simulated.',firePrepared:!!flame});
+ const read=()=>({suspended,cycle:cycle?.read(),fill:lastFill,fillTarget,phase,pieceId,cursor,transfer:transfer.read(),carriage:carriage.read(),carrierId:carrierEntry()?.id,ignitionSeconds,transferSeconds,igniting:burnStart!==null,combustion:pieceId?author.burningState(pieceId):null,study:study.read(),fidelity:'Authored solid inserts and joint kinematics; existing thermal combustion. Liquid solidification is not simulated.',firePrepared:!!flame});
  const refresh=()=>{if(status)status.textContent=(cycle?.read().running?'Cycle · '+cycle.read().phase+(lastFill&&cycle.read().phase==='filling'?' · '+Math.round(lastFill.regions[cursor%lastFill.regions.length].fraction*100)+'% / '+Math.round(fillTarget*100)+'%':''):cycle?.read().error??phase)+(pieceId&&author.burningState(pieceId).status!=='resident'?' · '+author.burningState(pieceId).status:'');updateButtons();};
  const transfer=createCastingTransfer({write:p=>{const root=object(pieceId);if(!root)throw Error('The travelling casting was removed');root.position.fromArray(p.position);root.rotation.set(...p.rotation);root.scale.fromArray(p.scale);root.updateMatrixWorld(true);session.redraw();},arrive:()=>{phase=transferDestination;host.scene.refreshPresentation({id:pieceId,root:object(pieceId)});record({kind:'casting.arrive',effective:{pieceId,pose:pose(object(pieceId))}});refresh();}});
- const serial=fn=>arg=>{const task=pending.then(()=>{active();if(app.kaminosPolyEdit?.read().editing)app.kaminosPolyEdit.exit();return fn(arg);});pending=task.catch(()=>{});return task;};
- async function prepare(){
+ const current=epoch=>{active();if(suspended||epoch!==operationEpoch)throw Error('Workshop suspended · operation cancelled');};
+ const serial=fn=>arg=>{const epoch=operationEpoch;const task=pending.then(()=>{current(epoch);if(app.kaminosPolyEdit?.read().editing)app.kaminosPolyEdit.exit();return fn(arg,epoch);});pending=task.catch(()=>{});return task;};
+ async function prepare(epoch=operationEpoch){
+  current(epoch);
   if(flame)return;
   const k=kiln();if(!k)throw Error('Choose a kiln object for this workshop');
   flame=await host.flame.open();
+  if(suspended||epoch!==operationEpoch){flame.setPaused(true);throw Error('Workshop suspended · operation cancelled');}
   if(!flame.read().scene.objects.some(o=>o.id==='flame-field')){
    const artifact=await fetch('/artifacts/inference-kiln/study.json').then(r=>{if(!r.ok)throw Error('Kiln basin recipe unavailable');return r.json();});
-   await host.fire.add(inputs.basinId??artifact.sourceBasinId);createdFire=true;host.fire.setEnabled(false);flame.setPaused(true);
+   current(epoch);await host.fire.add(inputs.basinId??artifact.sourceBasinId);createdFire=true;host.fire.setEnabled(false);flame.setPaused(true);
    flame.setControls({'volume-resolution':32,'volume-steps':8,'volume-render-scale':.5,'volume-look-freeze':1});
    k.updateWorldMatrix(true,false);
    const inlet=k.localToWorld(new THREE.Vector3(0,-.05,.28));
    host.scene.setTransform('flame-emitter',{position:inlet.toArray(),rotation:[0,0,0],scale:[1,1,1]});
    app.kaminosFlameDomain.set({position:inlet.clone().add(new THREE.Vector3(0,1.5,0)).toArray(),scale:[1,1,1]});
   }
-  phase='Burner prepared · release a letter';refresh();
+  current(epoch);phase='Burner prepared · release a letter';refresh();
  }
  async function unmold(expectedFillIdentity=null){
    adopt();if(pieceId&&object(pieceId))throw Error('Remove the current casting before lifting the next letter');
@@ -98,9 +102,10 @@ export default {id:'stage-casting',title:'Workshop · casting to fire',async cre
  }
  let resumeFire=false;
  const operations={...study.operations,read,
-  async suspend(){await operations.stopCycle();if(flame){resumeFire=!flame.read().paused;flame.setPaused(true);}return read();},
-  resume(){if(resumeFire&&flame)flame.setPaused(false);resumeFire=false;return read();},
-  prepare:serial(async()=>{try{await prepare();return read();}catch(e){flame=null;throw e;}}),
+  async suspend(){if(!suspended){suspended=true;operationEpoch++;resumeFire=!!flame&&!flame.read().paused;}await operations.stopCycle();if(flame)flame.setPaused(true);return read();},
+  resume(){suspended=false;if(resumeFire&&flame)flame.setPaused(false);resumeFire=false;return read();},
+  translateStage(delta){transfer.translate(delta);return read();},
+  prepare:serial(async(_,epoch)=>{try{await prepare(epoch);return read();}catch(e){flame=null;throw e;}}),
   unmold:serial(async expectedFillIdentity=>{await unmold(expectedFillIdentity);return read();}),
   release:serial(async()=>{
    if(carrierEntry()?.object.userData.linkMechanism?.castingCarrier?.pickupMount)throw Error('Use Unmold and Carry with this loader');
@@ -122,10 +127,10 @@ export default {id:'stage-casting',title:'Workshop · casting to fire',async cre
    const {runtime}=await carrier();await detachCasting();
    startCarriage(runtime,0,null);phase='Casting set down · loader returning';refresh();return read();
   }),
-  ignite:serial(async()=>{
+  ignite:serial(async(_,epoch)=>{
    adopt();if(!pieceId||!object(pieceId))throw Error('Release a letter first');if(transfer.read()?.moving||carriage.read()?.moving)throw Error('Let the letter arrive before ignition');
-   if(!flame){try{await prepare();}catch(e){flame=null;throw e;}}
-   phase='Preparing burnable material';refresh();await author.settleCombustion();active();
+   if(!flame){try{await prepare(epoch);}catch(e){flame=null;throw e;}}
+   phase='Preparing burnable material';refresh();await author.settleCombustion();current(epoch);
    const state=author.burningState(pieceId);if(state.status!=='resident')throw Error(state.error??'Burnable material has not attached to the fire runtime');
    // elapsed comes from the resident thermal consumer, so pausing or slow
    // simulation does not silently shorten the dose.
