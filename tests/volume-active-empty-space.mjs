@@ -43,3 +43,22 @@ test('uniform fallback advance retains its declared Fine interval end',()=>{
  const beforeAdvance=core.slice(core.indexOf('    let smoke = select(legacySmoke'),core.indexOf('    let rayStepOpacity'));
  assert.match(beforeAdvance,/let fineSegmentEnd\s*=\s*select\(endT, min\(endT, nearHit.y\), worldActive\)/);
 });
+
+test('zero panels preserve jittered supported probes and transfer independently of executed work',async()=>{
+ const {runInNewContext}=await import('node:vm');
+ const dimension=core.match(/opticalStepPositionJittered\(&opticalStep, rayNoiseSample\(in.pos.xy, u.occupancy_controls.y, ([^)]+)\)\)/)[1].replace(/(\d+)u/g,'$1');
+ const virtual=core.match(/quadratureProbes\s*\+=\s*([^;]+);/)?.[1]?.replace(/(\d+)u/g,'$1').replaceAll('opticalStep.mask','mask')??'0';
+ const dim=(logical,executed)=>runInNewContext(dimension,{quadratureProbes:logical,rayMaterialSamples:executed});
+ const noise=d=>{const x=Math.floor((Math.fround(d*.754877666)%1)*128),y=Math.floor((Math.fround(d*.569840296)%1)*128);return ((x*17+y*31)%256+.5)/256;};
+ const compose=(a,b)=>[a[0]+a[1]*b[0],a[1]*b[1]];
+ for(const mode of ['fixed','numerical'])for(const mask of [0,1]){
+  const missing=mask===0?5:4;const before=20;
+  const skipped=runInNewContext(virtual,{mask,select:(a,b,c)=>c?b:a});
+  let offLogical=before+missing,onLogical=before+skipped,offExecuted=before+missing,onExecuted=before;
+  const positions=(logical,executed)=>[0,.25+.5*noise(dim(logical,executed)),1,1.25+.5*noise(dim(logical+2,executed+2)),2];
+  const off=positions(offLogical,offExecuted),on=positions(onLogical,onExecuted);
+  assert.deepEqual(on,off,`${mode}: removing a zero panel's ${missing} evaluations cannot resample supported material`);
+  const transfer=points=>points.slice(1).reduce((out,t,i)=>{const l=points[i],h=t-l;const emission=((1+l*l)+(1+t*t))*.5,sigma=((.1+l*l*l)+(.1+t*t*t))*.5;return compose(out,[emission*(1-Math.exp(-sigma*h))/sigma,Math.exp(-sigma*h)]);},[0,1]);
+  assert.deepEqual(transfer(on),transfer(off),mode+' preserves the supported optical integral');assert.ok(onExecuted<offExecuted);
+ }
+});

@@ -8134,6 +8134,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
   var expensiveSamples = 0u;
   var rayMaterialSamples = 0u;
   var allocatedSamples = 0u;
+  var quadratureProbes = 0u;
   var traversalSteps = 0u;
   var guidedRay:GuidedRay;
   if(guided){guidedRay=guidedRayInit(ro,rd,max(startT,sceneDepthStartT),endT);}
@@ -8175,7 +8176,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
       t = opticalStepPosition(opticalStep);
       let probeIndex = opticalStepIndex(opticalStep.mask);
       if (u.reserved_render_controls.w > 0.5 && u.occupancy_controls.w > 0.5 && (probeIndex == 1u || probeIndex == 3u)) {
-        t = opticalStepPositionJittered(&opticalStep, rayNoiseSample(in.pos.xy, u.occupancy_controls.y, rayMaterialSamples + 1u));
+        t = opticalStepPositionJittered(&opticalStep, rayNoiseSample(in.pos.xy, u.occupancy_controls.y, quadratureProbes + 1u));
       }
     }
     if(LEAN_EMISSIVE_RAYMARCH&&!fullGridCapture&&!opticalTrace&&u.occupancy_controls.x>0.0){
@@ -8183,10 +8184,14 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
         allocatedSamples++; continue;
       }
       if(opticalStepping&&opticalStep.mask<=1u&&(opticalStep.mask==0u||all(abs(opticalStep.probes[0])<=vec4<f32>(u.empty_space_controls.x*clamp(u.occupancy_controls.x,0.0,1.0))))&&emptyOpticalInterval(ro,rd,opticalStep.origin+opticalStep.cursor,opticalStep.origin+opticalStep.cursor+opticalStep.width,t,worldActive,nearHit,middleHit)){
+        // Retain the probe/noise identities of evaluated zero panels, while
+        // rayMaterialSamples counts only work that really executes.
+        quadratureProbes += select(4u,5u,opticalStep.mask==0u);
         opticalStepSkipEmpty(&opticalStep);continue;
       }
     }
     if(guided){allocatedSamples++;}
+    if(opticalStepping){quadratureProbes++;}
     traversalSteps = traversalSteps + 1u;
     let sampleIndex = expensiveSamples;
     if (opticalTrace) {
