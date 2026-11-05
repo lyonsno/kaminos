@@ -45,6 +45,14 @@ SHADER_HERDER_STRICT_METAL=1 npm test -- --only tests/shader-herder-production.m
 
 The bridge's own fallback tests deliberately simulate the sandbox restriction; run them without strict mode. Production coverage currently includes extracted immersed-source WGSL, optical emission/transmittance composition and the actual Fine-grid restriction/momentum/prolongation witness. The joined-step and World-tree tests on the older integration branch require their simulation stack; these checks do not establish that stack's current-main integration or rendered appearance.
 
+The flow reconstruction pilot replaces twelve math-wording assertions in `tests/volume-flow-reconstruction-kernel-contracts.mjs` with three numerical tests in `tests/volume-flow-reconstruction-native.mjs`. Run both through the ordinary runner:
+
+```sh
+SHADER_HERDER_STRICT_METAL=1 npm test -- --only tests/volume-flow-reconstruction-kernel-contracts.mjs,tests/volume-flow-reconstruction-native.mjs
+```
+
+The native tests extract the renderer's actual sample struct and mixing, normal, reconstruction and sidecar functions. Controlled fields expose lane mixing/clamping, finite gradient normals, tangent direction, symmetric tap locations, radius/coherence and kernel-off tap counts. Each test includes a valid WGSL mutation whose numerical result must fail its oracle. Remaining source checks cover UI, admission and receipt wiring. The controlled fields isolate arithmetic and sampling policy; they do not exercise renderer texture bindings, trilinear interpolation or rendered appearance. Compiler-only fallback validates the evaluation bodies and pipelines, including the controls, while explicitly withholding numerical authority.
+
 ## Warnings
 
 Warnings report something worth fixing that should not stop anyone's work. They never fail a run or change its exit code. The report lists them in `warnings`, each with its source (`python-dependencies`, `test`, `run-ledger`, `sandbox` or `runner`), the test that wrote it if any, and the message; the summary prints each one once, after the counts line. A test emits one by writing a line that begins `kaminos-test-warning: ` to stdout or stderr, for example `console.log('kaminos-test-warning: no WebGPU adapter, skipped the GPU leg')`. The line stays in the test's log and is left out of its failure signature, so a test that warns keeps the signature it would have without the warning.
