@@ -102,7 +102,8 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
   function cancel() {
     if (!active) return false;
     assertAvailable();
-    get(active.id);
+    // Live control handlers can leave a value that commit cannot validate.
+    // Restore the accepted history without admitting that rejected value again.
     put(active.id, restoreHistory(active.id,active.historyBefore??active.before));
     active = null;
     notify();

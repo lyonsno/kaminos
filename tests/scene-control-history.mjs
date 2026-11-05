@@ -145,6 +145,25 @@ test('a change rejected by the shared edit gate is rolled back and reported', ()
   assert.equal(f.edits.state().undoCount, 0);
 });
 
+test('invalid live flame settings release history ownership after commit refusal', () => {
+  let failure;
+  const f = fixture(undefined, error => { failure = error; });
+  const before = structuredClone(f.value);
+  f.control.fire('pointerdown', { button: 0 });
+  f.value.flow = NaN;
+  f.control.fire('change');
+  assert.deepEqual(f.value, before);
+  assert.match(failure.message, /finite/);
+  assert.equal(f.edits.state().active, null, 'saving and other edits must no longer see a live edit');
+  assert.equal(f.history.state().pending, false);
+  f.control.fire('pointerdown', { button: 0 });
+  f.value.flow = 2;
+  f.control.fire('change');
+  assert.equal(f.edits.state().undoCount, 1);
+  f.edits.undo();
+  assert.deepEqual(f.value, before);
+});
+
 test('parameter preview occupies the shared edit session until commit and repeated typing starts a new gesture', () => {
   const f = fixture();
   f.control.fire('pointerdown', {button:0});

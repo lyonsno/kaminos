@@ -48,6 +48,30 @@ test('failed preview leaves the current gesture recoverable and no-op commit cre
   assert.equal(edits.state().undoCount, 0);
 });
 
+test('cancel restores accepted settings after live handlers leave an invalid value', () => {
+  let value = { budget: 1 };
+  const edits = createSceneEdits({ read: () => null, write() {} });
+  edits.register('@flame-settings', {
+    read: () => clone(value),
+    write: next => { value = clone(next); },
+    check: next => {
+      if (!Number.isFinite(next.budget) || next.budget < 0) throw Error('Invalid allocation budget');
+      return clone(next);
+    },
+  });
+  edits.begin('@flame-settings');
+  // Control handlers update live state directly before history commits it.
+  value.budget = -1;
+  assert.throws(() => edits.commit(), /Invalid allocation budget/);
+  assert.equal(edits.cancel(), true);
+  assert.deepEqual(value, { budget: 1 });
+  assert.deepEqual(edits.state(), { active: null, undoCount: 0, redoCount: 0, replaying: false });
+  edits.apply('@flame-settings', { budget: 2 });
+  assert.equal(edits.state().undoCount, 1, 'the next edit remains usable');
+  edits.undo();
+  assert.deepEqual(value, { budget: 1 });
+});
+
 test('applied membership edits can restore a missing object and wait for asynchronous writes', async () => {
   let member = null;
   const edits = createSceneEdits({ read: () => null, write: () => {} });
