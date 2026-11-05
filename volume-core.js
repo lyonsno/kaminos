@@ -2697,7 +2697,7 @@ export function immersedPlainWeightSum(effective, { grid, gridHeight }) {
   return sum;
 }
 export function immersedSourceWeights(effective, { grid, gridHeight, unbounded=false }) {
-  const c = effective.centreCells, n = effective.direction, r = effective.radiusCells, h = effective.thickness / 2;
+  const c = effective.centreCells, n = effective.direction, r = effective.radiusCells, h = Math.max(0.5, effective.thickness / 2);
   const reach = Math.ceil(Math.max(r, h) + 1.5);
   const cells = []; let sum = 0;
   const smooth = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
@@ -2744,7 +2744,7 @@ export function createImmersedSourceWeightCache() {
 // No wall cell carries source weight, so the wall never masks supply (IS-03).
 export const IMMERSED_BACK_WALL_CELLS = 2;
 export function immersedBackWallCells(effective, { grid, gridHeight }) {
-  const c = effective.centreCells, n = effective.direction, r = effective.radiusCells + 0.5, half = effective.thickness / 2 + 0.5;
+  const c = effective.centreCells, n = effective.direction, r = effective.radiusCells + 0.5, half = Math.max(0.5, effective.thickness / 2) + 0.5;
   const depth = effective.backWall?.thicknessCells ?? IMMERSED_BACK_WALL_CELLS;
   const reach = Math.ceil(Math.max(r, half + depth) + 1);
   const cells = [];
@@ -2876,7 +2876,7 @@ export function immersedSourceUniformValues(config, { materialPerVelocity = 1 } 
   return [
     1, ...e.centreCells.map(v => v / materialPerVelocity),
     e.direction[0], e.direction[1], e.direction[2], e.radiusCells / materialPerVelocity,
-    e.thickness / materialPerVelocity, e.speed, e.fuel, e.temperature,
+    Math.max(1, e.thickness / materialPerVelocity), e.speed, e.fuel, e.temperature,
     e.momentumGain, e.capPerCell, e.fluxRequested / e.normaliser, 0,
     e.basis.e1[0], e.basis.e1[1], e.basis.e1[2], e.inletDynamics?.turbulence ?? 0,
     e.pattern && e.pattern.kind !== 'shape' ? 1 : 0, materialPerVelocity, 0, 0,
@@ -5335,7 +5335,7 @@ fn immersedSourceWeight(cellCenter: vec3<f32>) -> f32 {
   let n = immersedDirection();
   let along = dot(d, n);
   let radial = length(d - along * n);
-  let halfThickness = 0.5 * u.immersed_source_c.x;
+  let halfThickness = max(0.5, 0.5 * u.immersed_source_c.x);
   let radius = u.immersed_source_b.w;
   // Edges ascend: Metal leaves smoothstep with reversed edges undefined.
   return (1.0 - smoothstep(halfThickness - 0.5, halfThickness + 0.5, abs(along))) * (1.0 - smoothstep(radius - 0.5, radius + 0.5, radial));

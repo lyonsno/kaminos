@@ -2,7 +2,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {worldWindAcceleration} from '../volume-world-smoke.mjs';
-import {resolveImmersedSourceConfig} from '../volume-core.js';
+import {resolveImmersedSourceConfig,immersedSourceWeights,immersedBackWallCells,immersedSourceUniformValues} from '../volume-core.js';
+import {IMMERSED_COLLECTION_WGSL} from '../volume-immersed-source-collection-wgsl.mjs';
 import {resolveReactantCombustionConfig} from '../volume-reactant-combustion.mjs';
 const reference={calibrationMode:'world',simulationWorldScale:2,calibrationMaterialCells:48,calibrationVelocityCells:24};
 const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-8,`${a} != ${b}`);
@@ -19,6 +20,22 @@ test('physical inlet velocity, thickness and requested volume flux survive chang
   close(c.effective.speed*h,.08*2/48);close(c.effective.thickness*h,1.5*2/48);
   close(c.effective.fullFlux*h**3,.08*2/48*Math.PI*.2**2);
  }
+});
+test('underresolved immersed inlet slabs maintain at least one-cell Partition-of-Unity velocity coupling without overlapping back walls',()=>{
+ const ref64={calibrationMode:'world',simulationWorldScale:2,calibrationMaterialCells:64,calibrationVelocityCells:32};
+ for(const [material,velocity,scale] of [[64,32,1],[32,16,1],[64,32,2],[96,48,1]]){
+  const c=resolveImmersedSourceConfig({...ref64,simulationDomainScale:scale,emitterSourceLaw:'immersed-source',pressureSolver:'converged-open-top',pressureSolverIterations:12,immersedSpeed:.08,immersedThickness:1.5,immersedRadius:.2/scale,immersedBackWall:1},{grid:material,gridHeight:material,worldSource:true});
+  const e=c.effective,ratio=material/velocity;
+  const packed=immersedSourceUniformValues(c,{materialPerVelocity:ratio});
+  assert.ok(packed[8]>=1,`velocity-lattice slab thickness must be >= 1 cell, got ${packed[8]}`);
+  const v={...e,centreCells:e.centreCells.map(x=>x/ratio),radiusCells:e.radiusCells/ratio,thickness:e.thickness/ratio};
+  const weights=immersedSourceWeights(v,{grid:velocity,gridHeight:velocity});
+  const peak=Math.max(...weights.cells.map(cell=>cell.w));
+  assert.ok(peak>=0.5,`coarsened velocity inlet peak weight collapsed to ${peak} at M${material}/V${velocity} scale=${scale}`);
+  const wall=new Set(immersedBackWallCells(v,{grid:velocity,gridHeight:velocity}).map(w=>`${w.x},${w.y},${w.z}`));
+  for(const cell of weights.cells)assert.equal(wall.has(`${cell.x},${cell.y},${cell.z}`),false,'back wall must not mask positive source weight');
+ }
+ assert.match(IMMERSED_COLLECTION_WGSL,/let thickness\s*=\s*max\(1\.0,\s*c\.x\s*\/\s*materialPerCell\);/);
 });
 test('physical diffusivity stays fixed as coverage changes and time conversion remains explicit',()=>{
  for(const grid of [24,48,64])for(const scale of [1,2]){
