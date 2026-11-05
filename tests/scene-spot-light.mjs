@@ -77,7 +77,7 @@ test('complete parameter installation has no dependency on an obsolete rim synch
  assert.deepEqual(Array.from(c.authoringParameterTargets.keys()),['@scene-gi','@burner-controls']);assert.equal(typeof c.window.kaminosAuthoringParameters.set,'function');
 });
 test('actual scene load reaches camera, postprocessing and file publication without rim adapters',async()=>{
- const c=context(),info=[];
+ const c=context(),info=[];c.readFineCoverageSettings=()=>({mode:'off'});c.FineCoverageController=class{};c.fineCoverageController={release(){}};c.fineCoverageStatus={status:'off'};
  const data=buildSceneDocument({objects:[record()],camera:{position:[7,8,9],target:[1,2,3],up:[0,1,0],near:.2,far:100,fov:45},postprocessing:{ao:{enabled:true,intensity:1.75}}});
  Object.assign(c,{authoringBusy:false,vantageCaptureHeld:false,scenePlacementTools:null,
   sceneLoadRequests:{begin:()=>1,isCurrent:()=>true,awaitStage:async(id,promise)=>({current:true,value:await promise})},currentSceneFile:'previous',sceneSaveBlockedByFailedRestore:false,

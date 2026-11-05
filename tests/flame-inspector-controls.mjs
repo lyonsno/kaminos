@@ -75,7 +75,7 @@ test('actual inspector synchronization follows effective fallback and marks unma
   const resolved=optical.resolveOpticalStepping(optical.opticalSteppingConfig({mode:'numerical'}),{emissive:true,exterior:true});
   const fallback={...resolved,effective:resolved.mode}; // Runtime publishes the effective mode after resolution.
   for(const [requested,receipt,expected] of [
-    ['numerical',fallback,{value:'0.35',disabled:false,label:'Adaptive rays'}],
+    ['numerical',fallback,{value:'1',disabled:true,label:'Adaptive steps'}],
     ['history',fallback,{value:'',disabled:true,label:'Adaptivity'}],
     ['history',{requested:'history',effective:'history'},{value:'1',disabled:true,label:'Adaptive placement'}],
   ]) {

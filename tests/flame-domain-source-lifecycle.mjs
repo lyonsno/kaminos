@@ -2,6 +2,7 @@
 import {resolveSceneMembershipTopology} from '../scene-membership-history.mjs';
 import {sceneContext,runInSceneContext,composePageMembershipBatch} from './helpers/scene-context.mjs';
 import assert from 'node:assert/strict';
+import {createSceneEdits} from '../scene-edit-session.mjs';
 import test from 'node:test';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -32,6 +33,8 @@ test('source-free field retains and reconstructs its own bounds for preview/canc
  c.scene.remove(c.flameDomainGuide);c.flameDomainGuide=null;c.flameDomainTranslation=[.2,-.5,0];c.flameDomainScale=1.5;c.ensureAuthoredFlameEmitter();
  assert.ok(c.flameDomainGuide,'source-free reopening reconstructs the field outline');assert.equal(c.flameDomainGuide.visible,true);
  assert.deepEqual(c.flameDomainGuide.box.min.toArray(),[-1.3,-2,-1.5]);
- c.writeFlameDomainPreview({position:[0,1,0],rotation:[0,0,0],scale:[2,2,2]});assert.deepEqual(c.flameDomainGuide.box.min.toArray(),[-2,-3,-2]);
- c.flameDomainDraft=null;c.refreshFlameDomainPreview();assert.deepEqual(c.flameDomainGuide.box.min.toArray(),[-1.3,-2,-1.5]);
+ const edits=createSceneEdits({read(){},write(){}});
+ edits.register('@flame-domain',{read:()=>c.flameDomainDraft||c.acceptedFlameDomainPose(),write:c.writeFlameDomainPreview,check:c.checkedFlameDomainPose});
+ edits.begin('@flame-domain');edits.preview({position:[0,1,0],rotation:[0,0,0],scale:[2,2,2]});assert.deepEqual(c.flameDomainGuide.box.min.toArray(),[-2,-3,-2]);
+ edits.cancel();c.flameDomainDraft=null;c.refreshFlameDomainPreview();assert.deepEqual(c.flameDomainGuide.box.min.toArray(),[-1.3,-2,-1.5]);
 });

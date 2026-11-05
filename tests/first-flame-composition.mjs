@@ -14,7 +14,7 @@ const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 
 test('capture completion refreshes the visible reduced caster diagnostics once',()=>{
   let statusKey='',syncs=0;
-  const state={casters:{level:'5k',targets:0,captureTriangles:0}},window={__kaminosSceneRadiance:{debugState:()=>state}},settings={sync(){syncs++;}},fireShadowSceneRoute=()=>({});
+  const state={casters:{level:'5k',targets:0,captureTriangles:0}},window={__kaminosSceneRadiance:{debugState:()=>state}},settings={sync(){syncs++;},syncCaptureStatus(current){assert.equal(current,state);}},fireShadowSceneRoute=()=>({});
   const start=source.indexOf('syncStatus(state){'),end=source.indexOf('\n        }};',start);
   const syncStatus=eval('({'+source.slice(start,end)+'}}).syncStatus');
   syncStatus({status:'submitted-awaiting-presentation'});assert.equal(syncs,1);

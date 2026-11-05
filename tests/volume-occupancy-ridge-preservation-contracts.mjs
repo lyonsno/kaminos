@@ -31,7 +31,12 @@ function assertOccupancyRidgeContract(source) {
   const worldArm = balancedWgslBlock(allRaymarch, 'if(worldActive && !fineRayInterval){', { label: 'World transfer arm' });
   assert.match(worldArm, /color\s*\+=\s*trans\s*\*\s*\(medium\.emission\s*\+\s*scatteredSource\)\s*\*\s*emissionIntegral\(sigma,ds\);\s*trans\s*\*=\s*exp\(-sigma\*ds\);\s*t\s*\+=\s*ds;\s*continue;/,
     'World transfer consumes emission, scattering and extinction before continuing');
-  for (const arm of [opticalStepArm, opticalTraceArm, worldArm]) {
+  // World now also supports the nested optical integrator. Its internal
+  // continuation follows the same transfer update as the Fine optical arm.
+  const worldOpticalArm = balancedWgslBlock(worldArm, 'if(opticalStepping){');
+  assert.match(worldOpticalArm, /opticalStepObserveWithTolerance\(&opticalStep,vec4<f32>\(medium\.emission\+scatteredSource,sigma\),u\.reserved_render_controls\.y\);\s*color=opticalStep\.transfer\.xyz;trans=opticalStep\.transfer\.w;continue;/);
+  assert.equal((worldOpticalArm.match(/\bcontinue\s*;/g) || []).length, 1);
+  for (const arm of [opticalStepArm, opticalTraceArm, worldArm.replace(worldOpticalArm, '')]) {
     assert.equal((arm.match(/\bcontinue\s*;/g) || []).length, 1,
       'each optical arm has one continuation after consumption');
   }

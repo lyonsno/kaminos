@@ -50,7 +50,7 @@ test('the shader builds the characteristic from the two-face mean when staggered
   assert.match(predictor, /let advectVelocity = materialTransportVelocity\(cell, centreVelocity\);/);
   const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('let macCormack = u.transport_controls.x > 1.5;'));
   assert.match(main, /let centreVelocity = centreVelocityAt\(cellI\);/);
-  assert.match(main, /let advectVelocity = materialTransportVelocity\(cell, centreVelocity\);/);
+  assert.match(main, /let advectVelocity = select\(materialTransportVelocity\(cell, centreVelocity\), fluidPredict\[base\]\.xyz, MATERIAL_ONLY && u\.transport_controls\.x > 1\.5\);/);
   // The carried velocity is sampled at the plain foot: destination face and
   // sampler offset cancel (a −½ per-component sample offset flipped the lean to +x).
   assert.doesNotMatch(source, /sampleCarriedVelocity|samplePredictVelocity/, 'no per-component sample offset');
@@ -108,7 +108,7 @@ test('staggered: the main kernel separates the force increment and the face-forc
   assert.match(source, /\{ binding: 22, visibility: GPUShaderStage\.FRAGMENT \| GPUShaderStage\.COMPUTE, storageTexture: \{ access: 'read-write', format: 'r32float', viewDimension: '3d' \} \}/, 'fluid layout carries the force texture');
   assert.match(source, /const planes = waveletSidecarFull \? 9 : 3;[\s\S]*?size: \[gridSize, gridHeight, gridSize \* planes\],/, 'three components along depth');
   const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('\nfn ', source.indexOf('\nfn cs(@builtin') + 10));
-  assert.match(main, /let forceIncrement = \(vel - velTransported \+ centredForce \* \(VELOCITY_UNIT_SCALE - 1\.0\)\) \* timeStep;/);
+  assert.match(main, /let forceIncrement = \(vel - velTransported \+ centredForce \* \(VELOCITY_UNIT_SCALE \* calibrationCellGain\(\) - 1\.0\)\) \* timeStep;/);
   assert.match(main, /var centredForce = vec3<f32>\(0\.0\);/);
   const pass = source.slice(source.indexOf('fn csFaceForces('), source.indexOf('\n}\n', source.indexOf('fn csFaceForces(')));
   assert.match(pass, /let here = vec3<f32>\(forceDeltaLoad\(c, 0\), forceDeltaLoad\(c, 1\), forceDeltaLoad\(c, 2\)\);/);
@@ -165,7 +165,7 @@ test('face-force fold model: bound once, centred forces averaged, velocity effec
   assert.match(main, /centredForce = centredForce \+ thermalBuoyancyForce\(/, 'buoyancy is centred');
   assert.match(main, /centredForce = centredForce \+ windDirection \* windStrength/, 'wind is centred');
   for (const term of ['confinement', 'shredForce']) assert.doesNotMatch(main, new RegExp(`centredForce = centredForce [+] ${term};`), `${term} stays local`);
-  assert.match(main, /let centredIncrement = centredForce \* timeStep \* VELOCITY_UNIT_SCALE;\s*forceDeltaStore\(cellI, centredIncrement\);\s*vel = velTransported \+ forceIncrement - centredIncrement;/);
+  assert.match(main, /let centredIncrement = centredForce \* timeStep \* VELOCITY_UNIT_SCALE \* calibrationCellGain\(\);\s*forceDeltaStore\(cellI, centredIncrement\);\s*vel = velTransported \+ forceIncrement - centredIncrement;/);
   assert.match(main, /fluidDst\[base\] = vec4<f32>\(select\(select\(boundVelocity\(vel\), vel, faceForcesOn\(\)\),prev.xyz,MATERIAL_ONLY\), 0\.0\);/, 'the bound waits for the face pass under the staggered reading');
   assert.match(main, /if \(sceneSolidAt\(cellI\)\) \{\s*forceDeltaStore\(cellI, vec3<f32>\(0\.0\)\);/, 'solids write a zero increment');
   const pass = source.slice(source.indexOf('fn csFaceForces('), source.indexOf('\n}\n', source.indexOf('fn csFaceForces(')));

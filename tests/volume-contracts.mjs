@@ -302,7 +302,7 @@ assert.match(core, /encodeBoundarySidecar/, 'Render loop encodes the boundary si
 assert.match(core, /async function sampleFrame\([^)]*\)[\s\S]*encodeBoundarySidecar\(encoder(?:,[^)]*)?\)[\s\S]*encodeDraw\(encoder, frameTexture\.createView\(\), 'kaminos volume one-off readback pass'/, 'sampleFrame readback bakes the boundary sidecar before drawing evidence frames');
 assert.match(core, /sampleWorldBoundarySidecar/, 'Raymarch samples the baked boundary sidecar');
 assert.match(core, /boundarySidecarStepFootprintWidth/, 'Boundary-fire path compensates sheet width for ray step footprint');
-const boundaryFireBranch = core.match(/if \(boundarySurfaceMode > 0\.5\) \{[\s\S]*?let boundaryGradientGate/);
+const boundaryFireBranch = core.match(/if \(boundarySurfaceMode > 0\.5 && \(!LEAN_EMISSIVE_RAYMARCH \|\| !displayReconstructionActive\(\)\)\) \{[\s\S]*?let boundaryGradientGate/);
 assert.ok(boundaryFireBranch, 'Boundary-fire shader branch is discoverable for sidecar source contracts');
 const bakedOnlyBranch = boundaryFireBranch[0].match(/if \(boundarySidecarSource > 0\.5 && boundarySidecarSource <= 1\.5\) \{([\s\S]*?)\} else \{/);
 assert.ok(bakedOnlyBranch, 'Baked sidecar mode has a distinct branch from live/mix');
@@ -1176,7 +1176,7 @@ assert.doesNotMatch(core, /let flameFireSurvival = mix\(1\.0, smoothstep\(0\.001
 assert.match(core, /flameFireTopFade/, 'tall-plume fire uses a named fire top fade instead of inheriting the old low heat ceiling');
 assert.match(core, /flameHeatTopFade/, 'tall-plume heat uses a named heat top fade separate from fire survival');
 assert.doesNotMatch(core, /let heatTopFade = 1\.0 - smoothstep\(mix\(0\.42, 0\.62, plumeHeight01\), 0\.960, p\.y\);/, 'tall-plume flame cutoff must not be directly owned by the old low heat top fade');
-assert.match(core, /flame = flame \* stepRate\(mix\(0\.12, 1\.0, wallFade\) \* mix\(0\.08, 1\.0, fireTopFade\)\);/, 'visible flame must use the fire-specific top fade');
+assert.match(core, /flame = flame \* stepRate\(mix\(0\.12, 1\.0, wallFade\) \* mix\(0\.08, 1\.0, fireTopFade\)\) \* worldSmokeOnlyFlameEnvelope;/, 'visible flame must use the fire-specific top fade');
 assert.match(core, /fuelMean/, 'sim readback reports mean fuel evidence');
 assert.match(core, /reactionMean/, 'sim readback reports fuel/heat reaction evidence');
 assert.match(core, /fuelConsumptionMean/, 'sim readback reports reaction fuel consumption evidence');

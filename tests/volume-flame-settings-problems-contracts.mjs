@@ -1,3 +1,4 @@
+import {WORLD_CALIBRATION_FIELDS,readWorldCalibrationControls,resolveWorldCalibration,resolveSimulationLevers} from '../volume-world-calibration.mjs';
 import {GRID_TUNING_FIELDS} from '../volume-grid-tuning.mjs';
 import {readAdaptiveMaterialControls,ADAPTIVE_MATERIAL_FIELDS} from '../volume-adaptive-material-controls.mjs';
 import assert from 'node:assert/strict';
@@ -32,14 +33,14 @@ const controls = {
   'volume-density': { tagName: 'INPUT', type: 'range', min: '0', max: '2' },
   'volume-render-scale': { tagName: 'INPUT', type: 'range', min: '0.1', max: '0.3' },
 };
-Object.assign(controls,Object.fromEntries(ADAPTIVE_MATERIAL_FIELDS.map(f=>[f.id,{tagName:'INPUT',type:f.type}])));
+Object.assign(controls,Object.fromEntries([...ADAPTIVE_MATERIAL_FIELDS,...WORLD_CALIBRATION_FIELDS].map(f=>[f.id,{tagName:'INPUT',type:f.type}])));
 const state = (dom, smoke = 'on') => ({
-  domControls: Object.fromEntries(Object.entries({...Object.fromEntries(ADAPTIVE_MATERIAL_FIELDS.map(f=>[f.id,f.value])),...dom}).map(([id, value]) => [id, { value }])),
+  domControls: Object.fromEntries(Object.entries({...Object.fromEntries([...ADAPTIVE_MATERIAL_FIELDS,...WORLD_CALIBRATION_FIELDS].map(f=>[f.id,f.value])),...dom}).map(([id, value]) => [id, { value }])),
   rendererControls: {},
   presentationControls: { 'raymarch-smoke-presentation': { value: smoke } },
 });
 let current = state({ 'volume-reaction-live-view': 'shell', 'volume-emitter-aperture-pattern': 'shape', 'volume-density': 1, 'volume-render-scale': 1 });
-const context = vm.createContext({GRID_TUNING_FIELDS,readAdaptiveMaterialControls,
+const context = vm.createContext({GRID_TUNING_FIELDS,readWorldCalibrationControls,resolveWorldCalibration,resolveSimulationLevers,readAdaptiveMaterialControls,
   document: { getElementById: id => controls[id] || null },
   flameSettingsState: () => current,
   VOLUME_RETIRED_APERTURE_PATTERNS: ['concentric', 'spiral'],

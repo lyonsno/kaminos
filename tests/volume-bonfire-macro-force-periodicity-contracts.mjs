@@ -59,7 +59,7 @@ function assertBonfireMacroForceBoundary(source) {
   );
 
   assert.doesNotMatch(source, /let bonfireUpperDepinchBand|let bonfireNonWindCenteringForce|vel = vel \\+ bonfireReferenceConfinement/, 'retired Bonfire forces stay absent');
-  assert.match(source, /vel = vel \+ confinement;/, 'transported vorticity confinement remains active');
+  assert.match(source, /vel = vel \+ confinement \* calibrationConfinementGain\(\);/, 'transported vorticity confinement remains active');
   assert.match(source, /thermalBuoyancyForce\(/, 'thermal buoyancy remains active');
 
   assert.match(

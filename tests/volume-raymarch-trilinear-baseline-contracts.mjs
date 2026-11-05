@@ -74,8 +74,8 @@ const supportAdmission = traversal.slice(
   traversal.indexOf('var directSupport:'),
   traversal.indexOf('var reconstructed: FlowReconstructionSample;'),
 );
-const displayAdmission = /if \(displayReconstructionActive\(\) && \(opticalStepping \|\| guided\)\) \{\s*directSupport = 1\.0;\s*\} else if/;
-assert.match(supportAdmission, displayAdmission, 'display support bypass requires both the explicit cache and optical stepping');
+const displayAdmission = /if \(displayReconstructionActive\(\)\) \{\s*directSupport = 1\.0;\s*\} else if/;
+assert.match(supportAdmission, displayAdmission, 'display support bypass requires the explicit reconstructed cache');
 const baselineAdmission = supportAdmission.replace(displayAdmission, 'if')
   .replace('!worldActive && !displayReconstructionActive() && !opticalStepping && !fullGridCapture && !opticalTrace', '!fullGridCapture');
 assert.match(supportAdmission, /if \(!worldActive && !displayReconstructionActive\(\) && !opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0\.0001\)/,
@@ -88,7 +88,7 @@ assert.match(
 const sampleBranch = traversal.slice(
   traversal.indexOf('var reconstructed: FlowReconstructionSample;'),
 ).replace(/\/\/[^\n]*/g, '');
-const displaySample = /if \(displayReconstructionActive\(\) && \(opticalStepping \|\| guided\)\) \{\s*\} else if/;
+const displaySample = /if \(displayReconstructionActive\(\)\) \{\s*\} else if/;
 assert.match(sampleBranch, displaySample, 'only the explicit prepared-field arm omits raw reconstruction');
 assert.match(
   sampleBranch.replace(displaySample, 'if'),
@@ -102,8 +102,8 @@ assertRaymarchTrilinearAuthority(core);
 const falseClosureMutations = [
   [
     'display support enabled outside its explicit mode',
-    source => source.replace('if (displayReconstructionActive() && (opticalStepping || guided))', 'if (true)'),
-    /display support bypass requires both/,
+    source => source.replace('if (displayReconstructionActive()) {\n      directSupport = 1.0;', 'if (true) {\n      directSupport = 1.0;'),
+    /display support bypass requires the explicit reconstructed cache/,
   ],
   [
     'renamed hash added to first-sample startT',
@@ -130,7 +130,7 @@ const falseClosureMutations = [
     source => source
       .replace('    var directSupport: f32;', '    /*\n    var directSupport: f32;')
       .replace('    var reconstructed: FlowReconstructionSample;', '    */\n    let directSupport = directCellOpticalSupport(p);\n    let effectiveSupport = select(directSupport, 1.0, flowKernelReconstructionActive);\n    if (!fullGridCapture && effectiveSupport <= 0.0001) { continue; }\n    var reconstructed: FlowReconstructionSample;'),
-    /display support bypass requires both|only explicit comparison\/capture modes bypass production support admission|one live direct-support skip must own admission before sampling/,
+    /display support bypass requires the explicit reconstructed cache|only explicit comparison\/capture modes bypass production support admission|one live direct-support skip must own admission before sampling/,
   ],
   [
     'renamed first-sample hash helper',

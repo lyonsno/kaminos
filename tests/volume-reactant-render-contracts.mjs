@@ -63,6 +63,6 @@ test('every pipeline that reaches the emission function can see the sidecar: fra
   assert.match(source, /createEmissiveLightField\(device, shader, uniformBuffer, fluidBuffers, frontBuffers, \(\) => reactantTextures\)/);
   assert.match(sceneSource, /getReactantTextures/, 'the scene-source seed takes the sidecar the same way');
   assert.match(sceneSource, /\{binding: 23, resource: textures\[i\]\.createView\(\{dimension: '3d'\}\)\}/);
-  assert.match(sceneSource, /if \(getReactantTextures\(\) !== boundTextures\) inputs = buildInputs\(\);/);
+  assert.match(sceneSource, /if \(getReactantTextures\(\) !== boundTextures\|\|\(world\?\.texture\?\?emptyWorld\)!==boundWorld\|\|\(world\?\.middle\?\.texture\?\?emptyWorld\)!==boundMiddle\|\|\(world\?\.renderView\?\?emptyWorldView\)!==boundRenderView\) inputs = buildInputs\(\);/);
   assert.match(source, /createSceneVolumeSource\(\{device, module: shader, uniformBuffer, fluidBuffers, frontBuffers, getReactantTextures: \(\) => reactantTextures,/);
 });

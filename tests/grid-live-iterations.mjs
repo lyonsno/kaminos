@@ -14,7 +14,7 @@ function fixture(){
  const noop=()=>{};
  const ctx={readAdaptiveMaterialControls,window:{},GRID_TUNING_FIELDS:[['pressureSolverIterations',id]],document:{getElementById:key=>key===id?control:null},volumePrototype:{validateGridControls:noop,setRaymarchSmokePresentationMode:mode=>({effectiveMode:mode})},supersedeVolumeRebuildHolds:noop,setVolumeControlValue:noop,updateVolumeControlLabels:noop,applyFlameEmitterPose:()=>applied.push(Number(control.value)),flameEmitterPose:{},syncRaymarchSmokePresentationControls:noop,volumeSettingsPresetControlValuesEqual,buildVolumeSettingsPreset:read,syncBurnerControls:noop,refreshVolumeReadout:noop,recordFlameSettingsProblems:noop,flameInspector:null,checkFlameSettingsState:x=>x};
  vm.createContext(ctx);vm.runInContext(range+'\n'+writer+'\nvar live='+live+';',ctx);
- const edits=createSceneEdits({read:()=>({}),write:noop}),flame=createFlameAuthoring({edits,read,write:ctx.writeFlameSettingsState,check:x=>x});ctx.window.kaminosFlameAuthoring=flame;
+ const edits=createSceneEdits({read:()=>({}),write:noop}),flame=createFlameAuthoring({edits,read,write:ctx.writeFlameSettingsState,check:x=>x});ctx.window.kaminosFlameAuthoring=flame;ctx.scenePlacementTools={edits};
  return{control,applied,edits,flame,live:ctx.live};
 }
 test('production live writer rolls back backing-range substitution inside the current gesture',()=>{
