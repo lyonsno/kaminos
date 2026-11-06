@@ -167,6 +167,7 @@ class ExperimentStore:
         if action!='finish-job':raise ValueError('Unknown run operation')
         state=payload.get('status')
         if state not in ('succeeded','failed','stopped'):raise ValueError('Invalid job completion')
+        if state=='succeeded' and not isinstance(payload.get('result'),dict):raise ValueError('Successful job needs a saved result record')
         if job.get('attempt')!=attempt:raise Conflict('Completion belongs to another attempt')
         if job['status']!='running':
             if job['status']==state and (state!='succeeded' or job.get('result',{}).get('source')==payload.get('result',{}).get('source')):return
@@ -175,14 +176,20 @@ class ExperimentStore:
             result=payload.get('result')
             if not isinstance(result,dict):raise ValueError('Successful job needs a saved result')
             member=self._members([{**result,'group':run['title']}])[0]
-            p=self.inspect(member['source']).get('provenance',{});snapshot=run['sources'][job['sourceIndex']];before=snapshot['provenance']
+            p=self.inspect(member['source']).get('provenance');snapshot=run['sources'][job['sourceIndex']];before=snapshot['provenance']
+            if not isinstance(p,dict):raise ValueError('Saved result has no generation metadata')
+            iteration=p.get('iteration')
+            if not isinstance(iteration,dict) or not isinstance(iteration.get('parent'),dict):raise ValueError('Saved result needs its recorded recipe parent')
             expected={'experimentId':doc['id'],'runId':run_id,'jobId':job['id'],'attempt':attempt}
-            if p.get('variation')!=expected or p.get('seed')!=job['seed'] or p.get('iteration',{}).get('parent',{}).get('source')!=snapshot['source']:raise ValueError('Saved result does not belong to this run attempt')
+            if p.get('variation')!=expected or p.get('seed')!=job['seed'] or iteration['parent'].get('source')!=snapshot['source']:raise ValueError('Saved result does not belong to this run attempt')
             def preserves(expected,actual):
                 if isinstance(expected,dict):return isinstance(actual,dict) and all(key in actual and preserves(value,actual[key]) for key,value in expected.items())
                 return expected==actual
             for key in ('prompt','model','width','height','weightsLevel','reference','source','sampling','lora'):
                 if not preserves(before.get(key),p.get(key)):raise ValueError('Saved result changed a fixed recipe field: '+key)
+            def text_length(recipe):
+                return 'model' if recipe.get('model') in ('flux3','FLUX.3 Image Klein') else recipe.get('textLength') or 'fit16'
+            if text_length(p)!=text_length(before):raise ValueError('Saved result changed a fixed recipe field: textLength')
             if p.get('author')!=run['author']:raise ValueError('Saved result author differs from the run')
             job['result']={'source':member['source'],'name':member['name']}
             if not any(m['source']==member['source'] for m in doc['members']):doc['members'].append(member)

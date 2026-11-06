@@ -117,3 +117,8 @@ test('working selection survives inspection and refresh; shift range includes av
  current.members[1].availability='missing';await c.open('burners');assert.deepEqual(c.read().selection,['/image.png','/four.png']);
  c.clearSelection();assert.deepEqual(c.read().selection,[]);
 });
+
+test('grouped run outputs have one normal presentation while ancestry retains every image',()=>{
+ const d=doc('burners');d.members.push({source:'/result.png',availability:'available',entry:{kind:'image',source:'/result.png'}});d.runs=[{jobs:[{result:{source:'/result.png'}}]}];
+ assert.deepEqual(experimentModule.imageExperimentGalleryMembers(d).map(m=>m.source),['/image.png']);assert.equal(experimentModule.imageExperimentGalleryMembers(d,{branchView:true}).length,2);assert.equal(d.members.length,2);
+});

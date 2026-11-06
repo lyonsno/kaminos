@@ -1,6 +1,6 @@
 # kaminos-test: python
 """Exercise the actual native catalogue/store HTTP boundary without inference."""
-import base64, hashlib, json, sys, tempfile, unittest
+import base64, hashlib, json, sys, tempfile, unittest, struct, zlib
 from pathlib import Path
 from threading import Thread
 from unittest.mock import patch
@@ -70,6 +70,41 @@ class ExperimentsHttp(unittest.TestCase):
             status,doc=self.call({'action':'retry-run','id':'gloves','runId':'seed-study','jobIds':['0:1']});self.assertEqual(status,200,doc)
             self.assertEqual([j['status'] for j in doc['runs'][0]['jobs']],['succeeded','queued'])
         self.assertEqual(json.loads((self.directory/'experiments/gloves.json').read_text())['runs'][0]['sources'][0]['provenance'],provenance)
+
+    def write_recipe(self,name,provenance):
+        png=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==')
+        data=b'kaminos:image-generation'+bytes(5)+json.dumps(provenance).encode()
+        chunk=struct.pack('>I',len(data))+b'iTXt'+data+struct.pack('>I',zlib.crc32(b'iTXt'+data))
+        (self.directory/name).write_bytes(png[:-12]+chunk+png[-12:])
+        return '/api/read?root=experiment-test&path='+name
+    def actual_run(self,text_length='fit'):
+        p={'schema':'kaminos.image-generation.v1','model':'FLUX.2 [klein] 4B','prompt':'A rack','seed':5,'width':256,'height':256,'weightsLevel':'4-bit'}
+        if text_length is not None:p['textLength']=text_length
+        self.write_recipe('glove.png',p);self.create()
+        author={'kind':'agent','id':'hotwet','label':'Hotwet'}
+        status,doc=self.call({'action':'create-run','id':'gloves','runId':'real-png','title':'Seed check','sources':[self.source],'seeds':[41],'author':author});self.assertEqual(status,200,doc)
+        status,doc=self.call({'action':'claim-job','id':'gloves','runId':'real-png','jobId':'0:0','attempt':'one'});self.assertEqual(status,200,doc)
+        result={**p,'author':author,'seed':41,'variation':{'experimentId':'gloves','runId':'real-png','jobId':'0:0','attempt':'one'},'iteration':{'parent':{'source':self.source}}}
+        return result
+    def finish_actual(self,result):
+        source=self.write_recipe('result.png',result)
+        return self.call({'action':'finish-job','id':'gloves','runId':'real-png','jobId':'0:0','attempt':'one','status':'succeeded','result':{'source':source,'name':'Result'}})
+    def test_actual_png_boundary_rejects_changed_effective_text_length_and_keeps_attempt(self):
+        result=self.actual_run();result['textLength']='fit16'
+        status,value=self.finish_actual(result);self.assertEqual(status,400,value)
+        doc=self.call(query='?id=gloves')[1];self.assertEqual(len(doc['members']),1);self.assertEqual(doc['runs'][0]['jobs'][0]['status'],'running')
+    def test_legacy_missing_text_length_accepts_effective_fit16(self):
+        result=self.actual_run(None);result['textLength']='fit16'
+        status,value=self.finish_actual(result);self.assertEqual(status,200,value)
+    def test_null_iteration_in_actual_png_has_structured_error_and_preserves_state(self):
+        result=self.actual_run();result['iteration']=None
+        status,value=self.finish_actual(result);self.assertEqual(status,400,value)
+        self.assertIn('error',value);doc=self.call(query='?id=gloves')[1];self.assertEqual(len(doc['members']),1);self.assertEqual(doc['runs'][0]['jobs'][0]['status'],'running')
+    def test_null_result_on_idempotent_completion_is_a_client_error(self):
+        result=self.actual_run();status,value=self.finish_actual(result);self.assertEqual(status,200,value)
+        status,value=self.call({'action':'finish-job','id':'gloves','runId':'real-png','jobId':'0:0','attempt':'one','status':'succeeded','result':None})
+        self.assertEqual(status,400,value);self.assertIn('error',value)
+        self.assertEqual(len(self.call(query='?id=gloves')[1]['members']),2)
 
     def test_catalogue_is_a_native_persistent_experiment_collection(self):
         status,value=self.call()

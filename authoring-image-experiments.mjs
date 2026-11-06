@@ -13,6 +13,7 @@ export function imageExperimentBranches(members){
  for(const source of nodes.keys())if(!seen.has(source))walk(source,'cycle');
  return rows;
 }
+export function imageExperimentGalleryMembers(doc,{branchView=false}={}){const owned=new Set((doc.runs??[]).flatMap(run=>run.jobs.flatMap(job=>job.result?[job.result.source]:[])));return branchView?doc.members:doc.members.filter(member=>!owned.has(member.source));}
 const authorLabel=author=>author?`${author.kind==='person'?'● Person':'◆ Agent'} · ${author.label||author.id}`:'Imported · author not recorded';
 export async function experimentRequest(path,body){
  const response=await fetch(path,{cache:'no-store',...(body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{})});
@@ -74,8 +75,8 @@ export function installImageExperiments({document,controller,assets,assetsUI,his
  const start=button('New recipe',async()=>{const doc=controller.read().document;recipe.joinExperiment({id:doc.id,title:doc.title});await assetsUI.open('generate',{refresh:false});by('asset-prompt').focus();});start.id='asset-experiment-new-recipe';
  bar.append(back,title,meta,branches,start,details,refresh);host.append(bar,description,status);
  const body=node('div',null,'experiment-body'),grid=node('div',null,'experiment-groups'),inspector=node('aside',null,'experiment-selection');
- const runsHost=node('section');host.append(runsHost);const runsUI=runs?.install(runsHost);
- body.append(grid,inspector);host.append(body);by('asset-browse').append(host);
+ const runsHost=node('section'),main=node('div',null,'experiment-main');const runsUI=runs?.install(runsHost);main.append(runsHost,grid);
+ body.append(main,inspector);host.append(body);by('asset-browse').append(host);
  const newButton=button('New experiment',()=>showForm(false));newButton.id='asset-experiment-new';by('asset-browse-header').append(newButton);
  const form=node('form');form.id='asset-experiment-form';form.hidden=true;
  const name=node('input');name.placeholder='Experiment name';name.required=true;name.setAttribute('aria-label','Experiment name');
@@ -123,7 +124,7 @@ export function installImageExperiments({document,controller,assets,assetsUI,his
   branches.setAttribute('aria-pressed',String(branchView));
   const key=JSON.stringify([doc.id,doc.revision,branchView,doc.members]);
   if(key!==painting){painting=key;grid.replaceChildren();const groups=new Map();
-   for(const row of imageExperimentBranches(doc.members)){const m=row.member,group=branchView?'Experiment branches':m.role==='reference'?'References':m.group||'Results';if(!groups.has(group))groups.set(group,[]);groups.get(group).push(row);}
+   for(const row of imageExperimentBranches(imageExperimentGalleryMembers(doc,{branchView}))){const m=row.member,group=branchView?'Experiment branches':m.role==='reference'?'References':m.group||'Results';if(!groups.has(group))groups.set(group,[]);groups.get(group).push(row);}
    if(!groups.size)grid.append(node('p','Start with New recipe, or select an image in Assets and use Add to experiment.','asset-help'));
    for(const [name,members]of groups){const section=node('section',null,'experiment-group'),heading=node('h3',name),cards=node('div',null,branchView?'experiment-grid is-branches':'experiment-grid');section.append(heading,cards);grid.append(section);
     for(const row of members){const m=row.member,card=button('',()=>controller.select(m.source));card.className='experiment-image';card.dataset.source=m.source;card.setAttribute('style',branchView?`--branch-depth:${row.depth}`:'');card.disabled=!available(m);

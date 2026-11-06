@@ -58,7 +58,7 @@ export function installImageVariationRuns({document,host,controller,executor,req
  const action=(label,fn)=>{const b=node('button',label);b.type='button';b.onclick=()=>Promise.resolve().then(fn).catch(error=>{feedback.textContent=error.message;onError(error);});return b;};
  const feedback=node('p');feedback.setAttribute('role','status');feedback.className='asset-help';
  const toolbar=node('div');toolbar.className='experiment-selection-toolbar';toolbar.id='asset-experiment-selection-toolbar';const selectedLabel=node('strong');
- let draft=null,compare=false,paint=null,runPaint=null;
+ let draft=null,compare=false,paint=null,runPaint=null;const expansion=new Map();
  const composer=node('section');composer.id='asset-variation-composer';composer.className='experiment-composer';composer.hidden=true;
  const name=node('input');name.id='asset-variation-name';name.setAttribute('aria-label','Run name');
  const seeds=node('input');seeds.id='asset-variation-seeds';seeds.setAttribute('aria-label','Seeds, separated by commas');
@@ -102,10 +102,10 @@ export function installImageVariationRuns({document,host,controller,executor,req
   if(key!==paint){paint=key;comparisons.replaceChildren();for(const source of state.selection){const m=doc.members.find(m=>m.source===source);if(m?.availability!=='available')continue;const figure=node('figure'),img=node('img');img.src=m.preview;img.alt=m.name;figure.append(img,node('figcaption',m.name));comparisons.append(figure);}}
   const pending=imageState().pending;
   const next=JSON.stringify([doc.id,doc.runs,doc.members.map(m=>[m.source,m.availability]),executor.read(),!!pending]);
-  if(next===runPaint)return;runPaint=next;runs.replaceChildren();
+  if(next===runPaint)return;for(const section of runs.querySelectorAll('[data-run-key]'))expansion.set(section.dataset.runKey,section.open);runPaint=next;runs.replaceChildren();
   if(!doc.runs?.length)return;runs.append(node('h3','Runs'));
   for(const run of [...doc.runs].reverse()){
-   const section=node('details');section.className='experiment-run';section.open=true;
+   const section=node('details');section.className='experiment-run';const runKey=doc.id+':'+run.id;section.dataset.runKey=runKey;section.open=expansion.get(runKey)??run.id===doc.runs.at(-1).id;section.ontoggle=()=>expansion.set(runKey,section.open);
    const completed=run.jobs.filter(j=>j.status==='succeeded').length;section.append(node('summary',`${run.title} · ${completed}/${run.jobs.length} saved · ${run.author.label}`));
    const actions=node('div');actions.className='experiment-run-actions';
    const active=run.jobs.some(j=>j.status==='running');
