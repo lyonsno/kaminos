@@ -1061,7 +1061,8 @@
       "allowedValues": [
         "authored",
         "compact-3",
-        "shred-only"
+        "shred-only",
+        "no-activity"
       ],
       "additiveSinceControlCount": 256
     },

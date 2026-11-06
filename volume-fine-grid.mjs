@@ -17,6 +17,7 @@ export const FINE_GRID_TRANSFER_WGSL=/* wgsl */`
 struct Shape { material:vec4<u32>, velocity:vec4<u32>, ratio:vec4<f32> };
 override GENERAL_TRANSFER:bool=false;
 override SHRED_ONLY:bool=false;
+override NO_ACTIVITY:bool=false;
 ${TRANSFER_GEOMETRY_WGSL}
 @group(0) @binding(0) var<uniform> s:Shape;
 @group(0) @binding(1) var<storage,read_write> fine:array<vec4<f32>>;
@@ -67,7 +68,7 @@ fn restrictGeneral(c:vec3<u32>){
   let p=vec3<i32>(x,y,z);let o=transferOverlap(p,lo,hi);let w=o.x*o.y*o.z;if(w<=0.0){continue;}weightSum+=w;
   let blocked=solid(p);mask=max(mask,select(0u,1u,blocked));if(blocked){continue;}fluidWeight+=w;
   let fi=idx(vec3<u32>(p),s.material.xyz);
-  if(SHRED_ONLY){a+=vec4<f32>(fine[fi*4u+1u].xyz,0.0)*w;d.y+=fine[fi*4u+3u].y*w;}
+  if(SHRED_ONLY){a+=vec4<f32>(fine[fi*4u+1u].xyz,0.0)*w;if(!NO_ACTIVITY){d.y+=fine[fi*4u+3u].y*w;}}
   else{a+=fine[fi*4u+1u]*w;b+=fine[fi*4u+2u]*w;d+=fine[fi*4u+3u]*w;front+=fineFront[fi]*w;}
   wet+=f32(fineQuench[fi])*w;
   if(textureDimensions(fineReactant).x==s.material.x){react+=textureLoad(fineReactant,p,0)*w;}
@@ -89,7 +90,7 @@ fn restrictScalars(@builtin(global_invocation_id) c:vec3<u32>){
   mask=max(mask,select(0u,1u,blocked));
   if(!blocked){
    fluidWeight+=weight;
-  if(SHRED_ONLY){a+=vec4<f32>(fine[fi*4u+1u].xyz,0.0)*weight;d.y+=fine[fi*4u+3u].y*weight;}
+  if(SHRED_ONLY){a+=vec4<f32>(fine[fi*4u+1u].xyz,0.0)*weight;if(!NO_ACTIVITY){d.y+=fine[fi*4u+3u].y*weight;}}
   else{a+=fine[fi*4u+1u]*weight;b+=fine[fi*4u+2u]*weight;d+=fine[fi*4u+3u]*weight;front+=fineFront[fi]*weight;}
    wet+=f32(fineQuench[fi])*weight;
    if(textureDimensions(fineReactant).x==s.material.x){react+=textureLoad(fineReactant,vec3<i32>(p),0)*weight;}
@@ -177,13 +178,14 @@ export function createFineVelocityGrid(device,plan,uniformBytes,waveletFrame={})
   cached.byGeneral.set(general,entry);
  }
  const pipelines={...entry.base},restrictions=entry.restrictions;
- let activeShredOnly=false;
+ let activeShredOnly=false,activeNoActivity=false;
  let current=0,seed=true,bindings,prior=[];
- function prepare(f,{shredOnly=activeShredOnly}={}) {
-  activeShredOnly=shredOnly;
-  if(!restrictions.has(shredOnly))restrictions.set(shredOnly,device.createComputePipeline({label:'fine Shred-only restriction',layout:'auto',compute:{module:cached.module,entryPoint:'restrictScalars',constants:{GENERAL_TRANSFER:general,SHRED_ONLY:shredOnly}}}));
-  pipelines.restrictScalars=restrictions.get(shredOnly);
-  const resources=[f.fluid,f.front,f.quench,f.solid,f.reactant,f.burn,f.lower,f.prior,current,shredOnly];
+ function prepare(f,{shredOnly=activeShredOnly,noActivity=activeNoActivity}={}) {
+  activeShredOnly=shredOnly;activeNoActivity=noActivity;
+  const key=JSON.stringify([shredOnly,noActivity]);
+  if(!restrictions.has(key))restrictions.set(key,device.createComputePipeline({label:'fine activity restriction',layout:'auto',compute:{module:cached.module,entryPoint:'restrictScalars',constants:{GENERAL_TRANSFER:general,SHRED_ONLY:shredOnly,NO_ACTIVITY:noActivity}}}));
+  pipelines.restrictScalars=restrictions.get(key);
+  const resources=[f.fluid,f.front,f.quench,f.solid,f.reactant,f.burn,f.lower,f.prior,current,shredOnly,noActivity];
   if(bindings&&resources.every((v,i)=>v===prior[i]))return;
   prior=resources;
   const bs=[shape,f.fluid,fluid[current],fluid[current],f.front,front[0],f.quench,quench[0]];

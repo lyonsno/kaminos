@@ -2274,7 +2274,7 @@ export function resolveJoinedBoundary({ requested = false, sourceLaw = null, pre
 // pooled ratios ([flame, shred, front] weights; negatives from the fit dropped).
 // The flag rides the last borrowed reactant lane (d.w). `authored` is the
 // existing model, bit for bit.
-export const APPEARANCE_MODELS = Object.freeze(['authored', 'compact-3', 'shred-only']);
+export const APPEARANCE_MODELS = Object.freeze(['authored', 'compact-3', 'shred-only', 'no-activity']);
 export const COMPACT_CARRIER_RATIOS = Object.freeze({
   ember: [0.575, 0.016, 0.229], flameDetail: [0.866, 0, 0.110], fireLick: [1.258, 0.068, 0.214],
   emberFleck: [0.111, 0.050, 2.744], microSmoke: [0, 0, 0],
@@ -2286,12 +2286,12 @@ export function resolveAppearanceModel(requested = 'authored', {reactant = false
   const known = APPEARANCE_MODELS.includes(requested);
   const reason = !known ? 'unknown-appearance-model'
     : requested !== 'authored' && !reactant ? `${requested}-requires-the-reactant-law`
-    : requested === 'shred-only' && !physics ? 'shred-only-requires-physics-appearance' : null;
+    : ['shred-only', 'no-activity'].includes(requested) && !physics ? `${requested}-requires-physics-appearance` : null;
   const effective = reason ? 'authored' : requested;
   return {requested, effective, reason,
-    storedCarriers: effective === 'shred-only' ? ['interfaceShred']
+    storedCarriers: effective === 'no-activity' ? [] : effective === 'shred-only' ? ['interfaceShred']
       : effective === 'compact-3' ? ['flame', 'interfaceShred', 'combustionFront', 'materialDetail'] : null,
-    transportedSlots: effective === 'shred-only' ? [0, 1, 3] : effective === 'compact-3' ? [0, 1, 2] : [0, 1, 2, 3],
+    transportedSlots: effective === 'no-activity' ? [0, 1] : effective === 'shred-only' ? [0, 1, 3] : effective === 'compact-3' ? [0, 1, 2] : [0, 1, 2, 3],
     storedSlots: effective === 'compact-3' ? 3 : 4};
 }
 export function gridShapeUniformValues({ grid, gridHeight, irradianceGrid, irradianceGridHeight, sceneSourceGrid, sceneSourceGridHeight }) {
@@ -3761,6 +3761,7 @@ override SEPARATED_PRESSURE: bool = false;
 override MATERIAL_ONLY: bool = false;
 override VELOCITY_ONLY: bool = false;
 override SHRED_ONLY: bool = false;
+override NO_ACTIVITY: bool = false;
 override VELOCITY_UNIT_SCALE: f32 = 1.0;
 const SLOTS_PER_CELL: u32 = 4u;
 const MAX_EXTERNAL_EMITTERS_WGSL: u32 = 32u;
@@ -6906,7 +6907,8 @@ fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (SHRED_ONLY) {
     if (!MATERIAL_ONLY) { fluidPredict[base] = sampleFluidSlotInflow(backCell, 0u); }
     fluidPredict[base + 1u] = vec4<f32>(sampleFluidSlotInflow(backCell, 1u).xyz, 0.0);
-    fluidPredict[base + 3u] = vec4<f32>(0.0, sampleFluidSlotInflow(backCell, 3u).y, 0.0, 0.0);
+    fluidPredict[base + 3u] = vec4<f32>(0.0);
+    if (!NO_ACTIVITY) { fluidPredict[base + 3u] = vec4<f32>(0.0, sampleFluidSlotInflow(backCell, 3u).y, 0.0, 0.0); }
     return;
   }
   if (!VELOCITY_ONLY && fastBypassOn() && u.emissive_physics.x > 0.5) {
@@ -7100,14 +7102,14 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
     if (macCormackScalars) {
       material = vec4<f32>(macCormackSlot(cellI, idx, backCell, forwardCell, 1u).xyz, 0.0);
-      microLayer = vec4<f32>(0.0, macCormackSlot(cellI, idx, backCell, forwardCell, 3u).y, 0.0, 0.0);
+      if (!NO_ACTIVITY) { microLayer = vec4<f32>(0.0, macCormackSlot(cellI, idx, backCell, forwardCell, 3u).y, 0.0, 0.0); }
     } else {
       material = vec4<f32>(sampleFluidSlotMasked(backCell, 1u).xyz, 0.0);
       if (!macCormack && !commonGasTransport) {
         let localMaterial = readSlot(cellI, 1u);
         material = vec4<f32>(thermalAdvection(cell, advectVelocity, speed, localMaterial.y, thermalAdvectionRiseDirection).xyz, 0.0);
       }
-      microLayer = vec4<f32>(0.0, sampleFluidSlotMasked(backCell, 3u).y, 0.0, 0.0);
+      if (!NO_ACTIVITY) { microLayer = vec4<f32>(0.0, sampleFluidSlotMasked(backCell, 3u).y, 0.0, 0.0); }
     }
   } else if (macCormack) {
     let forwardCell = sceneClipCharacteristic(cell, cell + advectVelocity * backtraceScale);
@@ -7172,7 +7174,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   var flameDetail = visibleFireCarrier;
   var combustionFront = fireLayer.w * stepRate(0.930);
   var microSmoke = microLayer.x * stepRate(0.972);
-  var interfaceShred = microLayer.y * stepRate(0.948);
+  var interfaceShred = 0.0;
+  if (!NO_ACTIVITY) { interfaceShred = microLayer.y * stepRate(0.948); }
   var fireLick = microLayer.z * stepRate(0.902);
   var emberFleck = microLayer.w * stepRate(0.934);
   if (reactantOn) {
@@ -7202,7 +7205,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     flameDetail = visibleFireCarrier;
     combustionFront = mix(combustionFront, 0.0, inflowFraction);
     microSmoke = mix(microSmoke, 0.0, inflowFraction);
-    interfaceShred = mix(interfaceShred, 0.0, inflowFraction);
+    if (!NO_ACTIVITY) { interfaceShred = mix(interfaceShred, 0.0, inflowFraction); }
     fireLick = mix(fireLick, 0.0, inflowFraction);
     emberFleck = mix(emberFleck, 0.0, inflowFraction);
     combustionFrontTopology = mix(combustionFrontTopology, 0.0, inflowFraction);
@@ -7221,7 +7224,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     flameDetail = visibleFireCarrier;
     combustionFront = mix(combustionFront, 0.0, immersedEntry);
     microSmoke = mix(microSmoke, 0.0, immersedEntry);
-    interfaceShred = mix(interfaceShred, 0.0, immersedEntry);
+    if (!NO_ACTIVITY) { interfaceShred = mix(interfaceShred, 0.0, immersedEntry); }
     fireLick = mix(fireLick, 0.0, immersedEntry);
     emberFleck = mix(emberFleck, 0.0, immersedEntry);
     combustionFrontTopology = mix(combustionFrontTopology, 0.0, immersedEntry);
@@ -7241,10 +7244,13 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (SHRED_ONLY) {
     // One activity memory. No auxiliary-flame/source-envelope network is
     // evaluated in this pipeline specialization. Chemistry stays the same.
-    let priorBurn = textureLoad(reactantSrc, cellI, 0).y;
-    let reaction = 1.0 - exp(-max(priorBurn, 0.0) / max(u.reactant_combustion_d.x, 1e-6));
+    var reaction = 0.0;
     var interfaceEnergy = 0.0;
-    if (shredOperatorGain > 0.0) { interfaceEnergy = length(materialInterfaceGradient(cellI)); }
+    if (!NO_ACTIVITY) {
+      let priorBurn = textureLoad(reactantSrc, cellI, 0).y;
+      reaction = 1.0 - exp(-max(priorBurn, 0.0) / max(u.reactant_combustion_d.x, 1e-6));
+      if (shredOperatorGain > 0.0) { interfaceEnergy = length(materialInterfaceGradient(cellI)); }
+    }
     if (!MATERIAL_ONLY) {
       let confinementMode = u.reserved_source_extension_0.y;
       if (confinementMode < 0.5) {
@@ -7253,7 +7259,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
         vel += vorticityConfinement(cellI, u.reserved_source_extension_0.z);
       }
       if (waveletOn() && !VELOCITY_ONLY) { vel += waveletCorrection(backCell, velTransported, waveletCoordA, waveletCoordB, timeStep); }
-      if (shredOperatorGain > 0.0 && u.artistic_motion_controls.z > 0.5 && u.detail_force_isolation.z > 0.5) {
+      if (!NO_ACTIVITY && shredOperatorGain > 0.0 && u.artistic_motion_controls.z > 0.5 && u.detail_force_isolation.z > 0.5) {
         vel += interfaceShreddingForce(cellI, shredOperatorGain, heat, smoke, reaction, interfaceShred) * VELOCITY_UNIT_SCALE;
       }
       let heatExpansion = thermalExpansionForce(cellI, heat, select(u.reserved_source_extension_0.w, 0.048 + curl * 0.019, confinementMode < 0.5));
@@ -7293,8 +7299,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     fuel = burn.x; oxidizer = burn.y; heat = burn.z;
     reactantFreshBurnRate = burn.w / max(timeStep, 1e-6);
     smoke = smoke + u.reactant_combustion_b.z * reactantFreshBurnRate * timeStep;
-    let freshReaction = 1.0 - exp(-reactantFreshBurnRate / max(u.reactant_combustion_d.x, 1e-6));
-    interfaceShred = max(interfaceShred, interfaceEnergy * shredOperatorGain * (smoke * 0.54 + heat * 0.38 + freshReaction * 0.32 + immersedTarget * 0.30) * 1.72);
+    if (!NO_ACTIVITY) {
+      let freshReaction = 1.0 - exp(-reactantFreshBurnRate / max(u.reactant_combustion_d.x, 1e-6));
+      interfaceShred = max(interfaceShred, interfaceEnergy * shredOperatorGain * (smoke * 0.54 + heat * 0.38 + freshReaction * 0.32 + immersedTarget * 0.30) * 1.72);
+    }
     textureStore(burnRate, cellI, vec4<f32>(u.heat_release.x * reactantFreshBurnRate + immersedTarget + residentDivergence, 0.0, 0.0, 0.0));
   } else {
   let sourceCenter = p - u.primitive_source.xyz;
@@ -7902,7 +7910,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   fireLick = fireLick * stepRate(mix(0.10, 1.0, wallFade) * mix(0.10, 1.0, fireTopFade)) * worldSmokeOnlyFlameEnvelope;
   emberFleck = emberFleck * stepRate(mix(0.15, 1.0, wallFade)) * worldSmokeOnlyFlameEnvelope;
   }
-  interfaceShred = interfaceShred * stepRate(mix(0.18, 1.0, wallFade));
+  if (!NO_ACTIVITY) { interfaceShred = interfaceShred * stepRate(mix(0.18, 1.0, wallFade)); }
   // The quench field spreads to neighbours only while a liquid is bound with
   // transfer enabled (the host packs the flag); otherwise the six reads are
   // skipped and a wetted cell only decays.
@@ -17587,9 +17595,10 @@ export function createKaminosVolumePrototype({
     const pressureProjectionReadStrategy = spatialPressureEnabled ? PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE : PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER;
     const simPassesPerFrame = 1;
     const fireLickOperatorGain = fireLickOperatorGainFromAmount(controlsSnapshot.fireLicks);
-    const shredOnly = state.appearanceModel?.effective === 'shred-only';
+    const noActivity = state.appearanceModel?.effective === 'no-activity';
+    const shredOnly = state.appearanceModel?.effective === 'shred-only' || noActivity;
     const fireLickBreakupEnabled = !shredOnly && fireLickOperatorGain > FIRE_LICK_BREAKUP_BYPASS_THRESHOLD;
-    const mainFluidKernelStrategy = shredOnly ? 'reactant-one-field-shred-specialized-v0' : fireLickBreakupEnabled
+    const mainFluidKernelStrategy = noActivity ? 'reactant-no-activity-specialized-v0' : shredOnly ? 'reactant-one-field-shred-specialized-v0' : fireLickBreakupEnabled
       ? MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP
       : MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS;
     const fireLickBreakupEvaluationsPerCell = fireLickBreakupEnabled ? 1 : 0;
@@ -17888,7 +17897,7 @@ export function createKaminosVolumePrototype({
   }
 
   function simulationPipeline(entryPoint, constants = {}) {
-    const specialized = {...constants, SHRED_ONLY: state.appearanceModel?.effective === 'shred-only'};
+    const specialized = {...constants, SHRED_ONLY: state.appearanceModel?.effective === 'shred-only' || state.appearanceModel?.effective === 'no-activity', NO_ACTIVITY: state.appearanceModel?.effective === 'no-activity'};
     const role = constants.VELOCITY_ONLY ? 'velocity' : constants.MATERIAL_ONLY ? 'material' : 'combined';
     state.simulationPipelines ??= {};
     state.simulationPipelines[`${entryPoint}:${role}`] = {entryPoint, constants: specialized};
@@ -18066,7 +18075,7 @@ export function createKaminosVolumePrototype({
     return fineVelocity;
   }
   function encodeFineVelocity(encoder,owner,transport,timing){
-    owner.prepare(fineTransferInputs(),{shredOnly:state.appearanceModel?.effective==='shred-only'});owner.encode(encoder,'restrictScalars',timing?{querySet:timing.querySet,beginningOfPassWriteIndex:timing.beginningOfPassWriteIndex}:undefined);
+    owner.prepare(fineTransferInputs(),{shredOnly:['shred-only','no-activity'].includes(state.appearanceModel?.effective),noActivity:state.appearanceModel?.effective==='no-activity'});owner.encode(encoder,'restrictScalars',timing?{querySet:timing.querySet,beginningOfPassWriteIndex:timing.beginningOfPassWriteIndex}:undefined);
     const i=owner.current;
     const group=createFluidRenderBindGroup({label:'independent fine velocity',uniformsBuffer:owner.uniform,fluidRead:owner.fluid[i],fluidWrite:owner.fluid[1-i],frontRead:owner.front[0],frontWrite:owner.front[1],quenchRead:owner.quench[0],quenchWrite:owner.quench[1],reactantRead:owner.reactant[0],reactantWrite:owner.reactant[1],waveletRead:owner.wavelet[i],waveletWrite:owner.wavelet[1-i],solidView:owner.solid.createView(),expansionTexture:owner.burn,lowerFaceTexture:owner.lower,forceTexture:owner.force,captureRows:nonRidgeOpticalCaptureRowBuffer});
     const run=entry=>{const p=encoder.beginComputePass({label:'independent fine '+entry});p.setPipeline(entry==='cs'||entry==='csTransportPredict'?simulationPipeline(entry,{VELOCITY_ONLY:true,VELOCITY_UNIT_SCALE:1/owner.plan.materialPerVelocity}):owner.pipelines[entry]);p.setBindGroup(0,group);p.setBindGroup(3,owner.predictGroup);p.dispatchWorkgroups(...owner.plan.velocityDims.map(n=>Math.ceil(n/4)));p.end();};

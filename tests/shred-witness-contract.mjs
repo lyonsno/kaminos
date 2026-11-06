@@ -14,3 +14,12 @@ for(const bad of [
   {...good,field:[]}, {...good,field:[...good.field.slice(0,15),NaN]},
   {...good,field:good.field.map((v,i)=>i===8?1:v)},
 ]) assert.throws(()=>validateShredWitness(bad,{mode:'shred-only',steps:3}));
+
+const inactive={...good,state:{...good.state,appearanceModel:{requested:'no-activity',effective:'no-activity'},
+  simulationPipelines:{'cs:combined':{constants:{SHRED_ONLY:true,NO_ACTIVITY:true}}}},field:good.field.map((v,i)=>i===13?0:v)};
+assert.doesNotThrow(()=>validateShredWitness(inactive,{mode:'no-activity',steps:3}));
+for(const bad of [
+  {...inactive,field:good.field},
+  {...inactive,state:{...inactive.state,simulationPipelines:{'cs:combined':{constants:{SHRED_ONLY:true,NO_ACTIVITY:false}}}}},
+  {...inactive,front:[1]},
+]) assert.throws(()=>validateShredWitness(bad,{mode:'no-activity',steps:3}));
