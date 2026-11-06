@@ -1,3 +1,4 @@
+import {resolveMlsMaterial} from './mls-material.mjs';
 import {createSceneLiquidSupport,SCENE_LIQUID_COLLIDER_WGSL,SCENE_LIQUID_SUPPORT_BINDINGS_WGSL} from './scene-liquid-support.mjs';
 import {mlsConfig,MLS_ROUTE,MLS_SOURCE,createMlsClock,createMlsEmissionPlan,validateMlsPacket} from './mls-juice-contract.mjs';
 import {createWebGpuGpuTimer} from './webgpu-inference-kit/src/gpu-timing.js';
@@ -28,7 +29,7 @@ const boundaryFor=(config,sceneSupport)=>`
     }
 }`;
 
-export async function createMlsJuiceSolver({device,setup,packet,initialParticles=null,sceneColliders=null,profile=false,now=()=>performance.now()}) {
+export async function createMlsJuiceSolver({device,setup,packet,initialParticles=null,sceneColliders=null,profile=false,onBatchComplete=null,now=()=>performance.now()}) {
   const config=mlsConfig(setup),owned=[];
   for(const size of [config.capacity*80,config.gridCells*16]){
     if(size>(device.limits?.maxStorageBufferBindingSize??Infinity)||size>(device.limits?.maxBufferSize??Infinity))throw Error('MLS domain exceeds effective device buffer limits');
@@ -39,7 +40,9 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
   const buffer=(size,usage,label)=>{const b=device.createBuffer({size,usage,label});owned.push(b);return b;};
   const U=GPUBufferUsage,clock=createMlsClock(config.dt,{maxSubstepsPerBatch:config.maxSubstepsPerBatch,maxBacklogSeconds:config.maxBacklogSeconds}),plan=createMlsEmissionPlan(config);
   const timer=createWebGpuGpuTimer({device,queue:device.queue,options:profile}),timingBatches=[];
-  let support=null;
+
+  let support=null,pendingMaterial=null;
+  let activeMaterial={stiffness:config.stiffness,viscosity:config.viscosity,materialUnits:config.materialUnits};
   let live=validateMlsPacket(packet),paused=false,pending=false,failure=null,disposed=false,time=0,pendingCompletion=Promise.resolve();
   let population=null;const cadence={completedBatches:0,completedStep:0,lastBatchSteps:0,lastBatchWallMs:0,lastCompletionIntervalMs:null};let lastCompletedAt=null;
   if(initialParticles&&(!(initialParticles instanceof Float32Array)||initialParticles.length%20||initialParticles.length>config.capacity*20||!initialParticles.every(Number.isFinite)))throw Error('Invalid native MLS initial population');
@@ -55,7 +58,8 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
   const dt=uniform(new Float32Array([config.dt*config.modelSecondsPerSecond,0,0,0]),'MLS model dt');
   const obstacle=uniform(new Float32Array(config.obstacle?[...config.obstacle.center.map((x,i)=>(x-config.min[i])/config.cell),config.obstacle.radius/config.cell]:[0,0,0,-1]),'MLS prescribed sphere');
   const domain=uniform(new Float32Array([...config.min,config.cell]),'MLS world mapping');
-  const resources=[particles,cells,box,count,densities,dt,obstacle,domain];
+  const material=uniform(new Float32Array([config.stiffness,config.restDensity,config.viscosity,0]),'MLS live material');
+  const resources=[particles,cells,box,count,densities,dt,obstacle,domain,material];
   const make=async(code,entry,bindings,constants={})=>{
     const module=device.createShaderModule({label:`MLS ${entry}`,code});
     const messages=(await module.getCompilationInfo()).messages.filter(m=>m.type==='error');
@@ -74,6 +78,13 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
       if(!code.includes('position: vec3f,')||!code.includes('if (id.x < numParticles) {'))throw Error('MLS pinned kernel layout changed');
       code=code.replace('position: vec3f,','position: vec3f, life: f32,')
         .replace('if (id.x < numParticles) {','if (id.x < numParticles) {\n        if(particles[id.x].life<=0.){return;}');
+      if(name==='p2g_2'){
+        for(const [key,component] of [['stiffness','x'],['restDensity','y'],['dynamicViscosity','z']]){
+          if(!code.includes(`override ${key}: f32;`))throw Error('MLS pinned material declaration changed');
+          code=code.replace(`override ${key}: f32;`,'').replace(new RegExp(`\\b${key}\\b`,'g'),`material.${component}`);
+        }
+        code='@group(0) @binding(6) var<uniform> material:vec4f;\n'+code;
+      }
       if(name==='g2p'){
         const end=code.indexOf('        particles[id.x].position = vec3f(');
         if(end<0)throw Error('MLS pinned G2P boundary changed');
@@ -83,8 +94,8 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
       }
       const common={fixedPointMultiplierInverse:1/65536};
       kernels.push(await make(code,name,name==='p2g_1'?[[0,0],[1,1],[2,2],[3,3]]:
-        name==='p2g_2'?[[0,0],[1,1],[2,2],[3,3],[4,4],[5,5]]:[[0,0],[1,1],[2,2],[3,2],[4,3],[5,5],[6,6],...(support?[[7,7]]:[])] ,
-      name==='p2g_1'?{fixedPointMultiplier:65536}:name==='p2g_2'?{...common,fixedPointMultiplier:65536,stiffness:config.stiffness,restDensity:config.restDensity,dynamicViscosity:config.viscosity}:{...common,physicalDt:config.dt}));
+        name==='p2g_2'?[[0,0],[1,1],[2,2],[3,3],[4,4],[5,5],[6,8]]:[[0,0],[1,1],[2,2],[3,2],[4,3],[5,5],[6,6],...(support?[[7,7]]:[])] ,
+      name==='p2g_1'?{fixedPointMultiplier:65536}:name==='p2g_2'?{...common,fixedPointMultiplier:65536}:{...common,physicalDt:config.dt}));
     }
     const update=await make((support?SCENE_LIQUID_SUPPORT_BINDINGS_WGSL+SCENE_LIQUID_COLLIDER_WGSL+`@group(0) @binding(7) var<uniform> domain:vec4f;`:'')+`
       struct Cell{vx:i32,vy:i32,vz:i32,mass:i32}
@@ -123,10 +134,11 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
         @compute @workgroup_size(64) fn census(@builtin(global_invocation_id) id:vec3u){
           if(id.x*20u+3u>=arrayLength(&particleWords)||particleWords[id.x*20u+3u]<=0.){return;}
           atomicAdd(&occupancy[0],1u);atomicOr(&occupancy[1u+id.x/32u],1u<<(id.x%32u));
-        }`,'census',[[0,0],[1,8]]);
+        }`,'census',[[0,0],[1,9]]);
     }
     const dispatch=(encoder,kernel,n,timestampWrites)=>{const pass=encoder.beginComputePass(timestampWrites?{timestampWrites}:undefined);pass.setPipeline(kernel.pipeline);pass.setBindGroup(0,kernel.group);if(kernel===update)pass.dispatchWorkgroups(gridX,gridY);else pass.dispatchWorkgroups(Math.ceil(n/64));pass.end();};
     const execute=(steps,epochMs)=>{
+        if(pendingMaterial){activeMaterial=pendingMaterial;pendingMaterial=null;device.queue.writeBuffer(material,0,new Float32Array([activeMaterial.stiffness,config.restDensity,activeMaterial.viscosity,0]));}
         const startedAt=now(),startTime=time,injections=[];
         for(let i=0;i<steps;i++){
           const births=plan.step(live,time,epochMs);injections.push(births);time+=config.dt;
@@ -163,10 +175,16 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
           const completedAt=now();cadence.completedBatches++;cadence.completedStep=submittedStep;cadence.lastBatchSteps=steps;
           if(timing)timing.submitToCompletionMs=completedAt-submittedAt;
           cadence.lastBatchWallMs=completedAt-startedAt;cadence.lastCompletionIntervalMs=lastCompletedAt===null?null:completedAt-lastCompletedAt;lastCompletedAt=completedAt;
-        }).catch(e=>{if(!disposed)failure=String(e);}).finally(()=>{pending=false;upload?.destroy();});
+        }).catch(e=>{if(!disposed)failure=String(e);}).finally(()=>{
+          pending=false;upload?.destroy();
+          // Queue order and the single-flight gate stay intact. Let the owner
+          // consume elapsed time immediately instead of waiting for another draw.
+          if(!disposed&&!failure)try{onBatchComplete?.();}catch(error){failure=String(error);}
+        });
         return true;
     };
     return {config,particles,
+      setMaterial(mlsMaterial){if(disposed)throw Error('MLS solver disposed');const next=resolveMlsMaterial({cell:config.cell,modelSecondsPerSecond:config.modelSecondsPerSecond,restDensity:config.restDensity,mlsMaterial,viscosity:mlsMaterial==null?setup?.viscosity:undefined});pendingMaterial=JSON.stringify(next)===JSON.stringify(activeMaterial)?null:next;return next.materialUnits;},
       setSceneColliders(records){if(!support)throw Error('MLS scene support was not installed');if(support.update(records)){kernels[2].group=kernels[2].refresh();update.group=update.refresh();}return support.read();},
       setPacket(packet){live=validateMlsPacket(packet);},
       setPaused(value){clock.observe(now(),paused);paused=Boolean(value);},
@@ -191,7 +209,7 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
         domain:{gridDimensions:[...config.dimensions],cellSize:config.cell,originWorld:[...config.min],boundsWorld:structuredClone(config.bounds)},
         modelTimeScale:config.modelSecondsPerSecond,clock:{...clock.read(),completedStep:cadence.completedStep},pending,failure,liveInlets:plan.read(time),
         emissionLaw:'unchanged_packet_distal_axis; strength_as_world_meters_per_second; packet_lifetime_seconds',
-        material:{restDensity:config.restDensity,stiffness:config.stiffness,viscosity:config.viscosity,surfaceTension:false},
+        material:{restDensity:config.restDensity,stiffness:activeMaterial.stiffness,viscosity:activeMaterial.viscosity,surfaceTension:false,world:{...activeMaterial.materialUnits},pressureCourantNumber:activeMaterial.materialUnits.pressureWaveSpeed*config.dt/config.cell},pendingMaterial:pendingMaterial?{...pendingMaterial.materialUnits}:null,
         collision:support?support.read():{route:'axis_aligned_domain_and_prescribed_sphere_not_arbitrary_scene'},initialParticleCount:initialParticles?.length/20||0}),
       async snapshot(){
         if(disposed)throw Error('MLS solver disposed');

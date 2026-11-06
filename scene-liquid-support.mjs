@@ -1,7 +1,7 @@
 import {Vector3,Euler,Quaternion,Matrix4} from './lib/three.core.js';
 import {checkedGeometry} from './scene-geometry.mjs';
 export const SCENE_LIQUID_SUPPORT_ROUTE='kaminos/fluid/authored-primitive-support-v0';
-export const canCollideWithWater=record=>record?.type==='procedural-mesh'&&['plane','sphere','bowl','box'].includes(record.geometry?.kind);
+export const canCollideWithWater=record=>record?.type==='procedural-mesh'&&['plane','sphere','bowl','box','funnel'].includes(record.geometry?.kind);
 export function sceneLiquidCollider(record) {
  if(!canCollideWithWater(record)||record.waterCollision===false)return null;
  const {kind,parameters:p}=checkedGeometry(record.geometry);
@@ -23,6 +23,11 @@ export function sceneLiquidDistance(c,world) {
   distance=length+Math.min(Math.max(...delta),0);
   if(length>0)normal=outside.map((v,i)=>v/length*(q[i]<0?-1:1));
   else{const axis=delta.indexOf(Math.max(...delta));normal=q.map((v,i)=>i===axis?(v<0?-1:1):0);}
+ }else if(c.kind==='funnel'){
+  const radial=Math.hypot(q[0],q[2]),dr=c.parameters.topRadius-c.parameters.bottomRadius,h=c.parameters.height;
+  const x=radial-c.parameters.bottomRadius,y=q[1]+h/2,t=Math.max(0,Math.min(1,(x*dr+y*h)/(dr*dr+h*h)));
+  const dx=x-t*dr,dy=y-t*h,len=Math.hypot(dx,dy),nx=len>1e-10?dx/len:h/Math.hypot(dr,h),ny=len>1e-10?dy/len:-dr/Math.hypot(dr,h);
+  distance=len-c.parameters.thickness/2;normal=[nx*(radial>1e-10?q[0]/radial:1),ny,nx*(radial>1e-10?q[2]/radial:0)];
  }else if(c.kind==='sphere'){distance=r-c.parameters.radius;normal=radial;}
  else if(c.kind==='bowl'){
   const wall=Math.abs(r-c.parameters.radius)-c.parameters.thickness/2;
@@ -37,7 +42,7 @@ export function sceneLiquidDistance(c,world) {
 export function packSceneLiquidColliders(colliders) {
  const result=new Float32Array(colliders.length*20);
  colliders.forEach((c,i)=>result.set([
-  ['sphere','plane','bowl','box'].indexOf(c.kind),c.parameters.radius??0,c.parameters.width??0,c.parameters.depth??0,
+  ['sphere','plane','bowl','box','funnel'].indexOf(c.kind),c.parameters.radius??c.parameters.bottomRadius??0,c.parameters.width??c.parameters.topRadius??0,c.parameters.depth??c.parameters.height??0,
   ...c.position,c.scale,...c.axes[0],c.parameters.thickness??0,...c.axes[1],c.parameters.height??0,...c.axes[2],0,
  ],i*20));return result;
 }
@@ -72,7 +77,13 @@ fn sceneColliderFrame(p:vec3<f32>,i:u32)->vec4<f32>{
  let v=(p-pose.xyz)/pose.w;let q=vec3<f32>(dot(v,ax.xyz),dot(v,ay),dot(v,az));
  let r=length(q);var n=vec3<f32>(0,1,0);if(r>1e-10){n=q/r;}
  var d=r-kind.y;
- if(kind.x>2.5){
+ if(kind.x>3.5){
+  let radial=length(q.xz);let segment=vec2<f32>(kind.z-kind.y,kind.w);let offset=vec2<f32>(radial-kind.y,q.y+kind.w*.5);
+  let t=clamp(dot(offset,segment)/dot(segment,segment),0.,1.);let delta=offset-t*segment;let len=length(delta);
+  var normal2=vec2<f32>(segment.y,-segment.x)/length(segment);if(len>1e-10){normal2=delta/len;}
+  var direction=vec2<f32>(1,0);if(radial>1e-10){direction=q.xz/radial;}
+  d=len-ax.w*.5;n=vec3<f32>(normal2.x*direction.x,normal2.y,normal2.x*direction.y);
+ }else if(kind.x>2.5){
   let delta=abs(q)-vec3<f32>(kind.z,heightAxis.w,kind.w)*.5;let outside=max(delta,vec3<f32>(0));let len=length(outside);
   d=len+min(max(max(delta.x,delta.y),delta.z),0.0);
   let direction=select(vec3<f32>(1),vec3<f32>(-1),q<vec3<f32>(0));

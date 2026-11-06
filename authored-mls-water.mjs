@@ -8,6 +8,17 @@ import {mlsConfig,MLS_ROUTE,validateMlsPacket} from './mls-juice-contract.mjs';
 export function authoredMlsCellSize(records,options={}){
  return records.some(r=>r.localLiquidEmitter?.mode==='finite_drop')?resolveAuthoredWaterSampling(records,options).spacing*Math.cbrt(3):.05;
 }
+// Inspector uses the same conversion as the solver without allocating particles.
+export function authoredMlsMaterial(records,options={}){
+ return mlsConfig({cellSize:authoredMlsCellSize(records,options),mlsMaterial:options.mlsMaterial}).materialUnits;
+}
+// Scene membership and native transforms can change resolution outside the
+// material editor. Keep those scenes inspectable and repairable; construction
+// still uses the strict conversion above and never clamps requested values.
+export function inspectAuthoredMlsMaterial(records,options={}){
+ try{return {...authoredMlsMaterial(records,options),executable:true,error:null};}
+ catch(error){return {...options.mlsMaterial,parameterization:options.mlsMaterial?'world':'legacy_grid',executable:false,error:error.message};}
+}
 export function authoredMlsParticleVolume(cellSize=.05){return cellSize**3/3;}
 export function canonicalAuthoredWaterFlowRecords(records,setup={}){
  const particleVolume=authoredMlsParticleVolume(authoredMlsCellSize(records,setup));
@@ -26,6 +37,15 @@ export function authoredMlsInlets(records,epochMs=Date.now(),generation=1,cellSi
  return validateMlsPacket({packet_id:`authored-mls-${generation}`,route_identity:MLS_ROUTE,authority:{simulation_safe:true},timestamp_ms:epochMs,emitters});
 }
 
+// Shared by allocation and the editor guide; computes no particle buffers.
+export function authoredMlsDomain(records,options={}){
+ const sampling=resolveAuthoredWaterSampling(records,options),cellSize=authoredMlsCellSize(records,options);
+ const bounds=sampling.container??sampling.worldBounds;
+ const solver={cellSize,gridSize:bounds.max.map((v,i)=>Math.ceil((v-bounds.min[i])/cellSize)+5),
+  originWorld:bounds.min.map(v=>v-2*cellSize),boundaryWalls:sampling.container!==null};
+ return {...solver,boundsWorld:mlsConfig(solver).bounds};
+}
+
 export function authoredMlsSetup(records,options={}){
  authoredMlsInlets(records.filter(r=>r.localLiquidEmitter?.mode!=='finite_drop'));
  const finite=records.filter(r=>r.localLiquidEmitter.mode==='finite_drop');
@@ -38,13 +58,9 @@ export function authoredMlsSetup(records,options={}){
  const capacity=initialCount+(hasFlow?(options.particleCount??12000):0);
  // One unit of mass per sample, at the producer's rest density of three samples
 // per grid cell. Deriving cell width from authored spacing preserves that law.
- const cell=authoredMlsCellSize(records,options);
- const bounds=structuredClone(sampling.container??sampling.worldBounds);
- const gridSize=bounds.max.map((v,i)=>Math.ceil((v-bounds.min[i])/cell)+5);
- const originWorld=bounds.min.map(v=>v-2*cell);
- const solver={particleCount:capacity||options.particleCount||12000,cellSize:cell,gridSize,originWorld,
-  maxSubstepsPerBatch:options.maxSubstepsPerBatch??12,maxBacklogSeconds:options.maxBacklogSeconds??(24/240),
-  boundaryWalls:sampling.container!==null,obstacle:null,trackPopulation:true};
+ const {boundsWorld,...domain}=authoredMlsDomain(records,options),cell=domain.cellSize;
+ const solver={particleCount:capacity||options.particleCount||12000,...domain,
+  maxSubstepsPerBatch:options.maxSubstepsPerBatch??12,maxBacklogSeconds:options.maxBacklogSeconds??(24/240),obstacle:null,trackPopulation:true,...(options.mlsMaterial!=null?{mlsMaterial:structuredClone(options.mlsMaterial)}:{})};
  const config=mlsConfig(solver),initialParticles=new Float32Array(initialCount*20);let slot=0;
  for(const d of drops){
   const rotation=new Euler(...d.record.transform.rotation),origin=new Vector3(...d.record.transform.position);

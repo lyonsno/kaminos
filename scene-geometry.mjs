@@ -6,7 +6,7 @@ export const proceduralMeshRecordDomain={type:PROCEDURAL_MESH_TYPE,check:checked
  fields:r=>({geometry:r.geometry,surface:r.surface,...(r.waterCollision===false?{waterCollision:false}:{})}),
  reloadable:r=>{checkedProceduralMesh(r);return true;},load:(r,loaders,options)=>loaders.procedural(r,options)};
 export const ANNULAR_SURFACE_KEYS=['bedColor','rimColor','glowColor','glow','coolingSeconds'];
-export const GEOMETRY_DEFAULTS={box:{width:1,height:1,depth:1},plane:{width:2,depth:2},sphere:{radius:.5},bowl:{radius:.7,thickness:.08},cylinder:{radius:.5,height:1}};
+export const GEOMETRY_DEFAULTS={box:{width:1,height:1,depth:1},plane:{width:2,depth:2},sphere:{radius:.5},bowl:{radius:.7,thickness:.08},cylinder:{radius:.5,height:1},funnel:{bottomRadius:.2,topRadius:.6,height:.6,thickness:.06}};
 export function checkedGeometry(value) {
  if(!value || typeof value!=='object')throw Error('Geometry data is required');
  if(value.kind==='annular'){const parameters=normalizeBurner(value.parameters);for(const key of [...ANNULAR_SURFACE_KEYS,'fieldBinding'])delete parameters[key];return {kind:'annular',parameters};}
@@ -14,6 +14,7 @@ export function checkedGeometry(value) {
  const parameters={...defaults,...value.parameters};
  for(const key of Object.keys(defaults))if(!(typeof parameters[key]==='number' && Number.isFinite(parameters[key]) && parameters[key]>0))throw Error(`Geometry ${key} must be positive`);
  if(value.kind==='bowl'&&parameters.thickness>=2*parameters.radius)throw Error('Bowl thickness must be less than its diameter');
+ if(value.kind==='funnel'&&parameters.thickness>=2*Math.min(parameters.bottomRadius,parameters.topRadius))throw Error('Funnel thickness must leave both mouths open');
  return {kind:value.kind,parameters};
 }
 export function checkedProceduralMesh(raw) {
@@ -42,6 +43,14 @@ export function createProceduralMesh(THREE,mergeGeometries,geometry,surface={}) 
   for(let i=0;i<inner.attributes.normal.count;i++)for(const axis of ['X','Y','Z'])inner.attributes.normal['set'+axis](i,-inner.attributes.normal['get'+axis](i));
   const rim=new THREE.RingGeometry(p.radius-p.thickness/2,p.radius+p.thickness/2,48);rim.rotateX(-Math.PI/2);
   shape=mergeGeometries([outer,inner,rim],false);outer.dispose();inner.dispose();rim.dispose();
+ }
+ if(kind==='funnel'){
+  // Revolve the same rounded segment used by analytical collision. The two
+  // open lips have semicircular cross sections, with no hidden end caps.
+  const dr=p.topRadius-p.bottomRadius,angle=Math.atan2(-dr,p.height),points=[];
+  for(const [r,y,start] of [[p.topRadius,p.height/2,angle],[p.bottomRadius,-p.height/2,angle+Math.PI]])
+   for(let i=0;i<=16;i++){const a=start+i*Math.PI/16;points.push(new THREE.Vector2(r+Math.cos(a)*p.thickness/2,y+Math.sin(a)*p.thickness/2));}
+  points.push(points[0].clone());shape=new THREE.LatheGeometry(points,64);
  }
  if(kind==='cylinder')shape=new THREE.CylinderGeometry(p.radius,p.radius,p.height,32);
  const material=new THREE.MeshStandardMaterial({color:surface.color||'#92979c',roughness:surface.roughness??.55,metalness:surface.metalness??.05,side:kind==='plane'?THREE.DoubleSide:THREE.FrontSide});
