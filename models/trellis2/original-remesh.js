@@ -64,7 +64,7 @@ export function createOriginalRemeshPostprocess({device,resolution=512,band=1,pr
         effectiveRoute:ORIGINAL_REMESH_ROUTE,execution:'app-device-WebGPU/module-worker',settings,targetFaces,inputVertices,inputFaces,outputVertices:vertices.length/3,outputFaces:triangles.length/3,
         operationTrace:trace,prefill:bvh.prefill,reducer:reduced.reducer,modelCalls:0,elapsedSeconds:(performance.now()-started)/1000,
         parityReference:'TRELLIS.2 5565d240 / TRELLIS2MLX cumesh/metal_remeshing.py',
-        parityLimit:'Native prefill traversal and CuMesh parallel reducer differ; equidistant projection uses lowest original face id rather than native BVH traversal order'}}};
+        parityLimit:'Native perimeter arithmetic is not certified bit-identical; CuMesh parallel reducer differs; equidistant projection uses lowest original face id rather than native BVH traversal order'}}};
     }catch(error){dispose();throw error;}
   };
   // Material baking must project texel positions onto the original filled

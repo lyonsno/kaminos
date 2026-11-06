@@ -17,3 +17,10 @@ test('prefill fan agrees with the observed native Metal edge orientation',()=>{
   assert.deepEqual([...out.vertices],observed.outputVertices.flat());
   assert.deepEqual([...out.triangles],observed.outputTriangles.flat());
 });
+
+const junctions=JSON.parse(readFileSync(new URL('./fixtures/trellis-original-remesh-prefill-metal.json',import.meta.url)));
+for(const observed of junctions.cases)test('native boundary component contract: '+observed.name,()=>{
+  const out=prefillRemeshHoles(Float32Array.from(observed.inputVertices.flat()),Uint32Array.from(observed.inputTriangles.flat()),observed.maxPerimeter);
+  assert.deepEqual([...out.vertices],observed.outputVertices.flat());
+  assert.deepEqual([...out.triangles],observed.outputTriangles.flat());
+});
