@@ -132,7 +132,11 @@ fn edgeContacts(a:u32,b:u32,axis:Axis)->Candidates{
 @compute @workgroup_size(64)
 fn generate(@builtin(global_invocation_id) id:vec3u){
  let pair=id.x;if(pair>=PAIRS){return;}
- var b=u32(floor((1.0+sqrt(1.0+8.0*f32(pair)))*0.5));if(b*(b-1u)/2u>pair){b--;}
+ // Native f32 sqrt can round to either side of an exact triangular boundary.
+ // Correct its estimate with integer inequalities before indexing any body.
+ var b=u32(floor((1.0+sqrt(1.0+8.0*f32(pair)))*0.5));
+ while(b*(b-1u)/2u>pair){b--;}
+ while(b*(b+1u)/2u<=pair){b++;}
  let a=pair-b*(b-1u)/2u;
  if(!eligible(pair,a,b)||positions[a].w+positions[b].w==0.0){clear(pair,a,b);return;}
  let ha=shape[a*4u+2u].xyz;let hb=shape[b*4u+2u].xyz;

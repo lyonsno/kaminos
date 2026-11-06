@@ -82,7 +82,8 @@ try{
    {name:'parallel-bond-still-holds',count:2,bonds:[{a:0,b:1},{a:0,b:1}],alive:[0,1]},
    {name:'parallel-bonds-both-broken',count:2,bonds:[{a:0,b:1},{a:0,b:1}],alive:[0,0]},
    {name:'folded-connected-material',count:3,bonds:[{a:0,b:1},{a:1,b:2}],alive:[1,1],far:true},
-   {name:'collinear-polygon-boundary',count:2,bonds:[],alive:[],collinear:true}
+   {name:'collinear-polygon-boundary',count:2,bonds:[],alive:[],collinear:true},
+   {name:'triangular-index-boundaries',count:75,bonds:[],alive:[],pairIdentity:true}
   ]){
    const cells=Array.from({length:spec.count},(_,index)=>({index,position:[spec.far?index*4:index*.01,0,0],halfExtents:[1,1,1],collisionHull:boxContactShape([1,1,1])}));
    if(spec.collinear)for(const cell of cells){const h=cell.collisionHull;cell.collisionHull={...h,vertices:Float32Array.from([...h.vertices,-1,-1,0]),faces:[[0,8,4,6,2],...h.faces.slice(1)]};}
@@ -93,7 +94,7 @@ try{
    const read=device.createBuffer({size:contacts.size,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
    try{
     stage.encode(renderer);const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(contacts,0,read,0,contacts.size);device.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);const data=new Float32Array(read.getMappedRange());
-    topologyCases.push({name:spec.name,expected:contactEligibility(contactTopology(cells,spec.bonds),spec.alive),observed:Array.from({length:pairCount},(_,pair)=>data[pair*4*36+2]>0),finite:Array.from(data).every(Number.isFinite),...(spec.collinear?{contactRows:Array.from(data)}:{})});
+    topologyCases.push({name:spec.name,expected:contactEligibility(contactTopology(cells,spec.bonds),spec.alive),observed:Array.from({length:pairCount},(_,pair)=>data[pair*4*36+2]>0),finite:Array.from(data).every(Number.isFinite),...(spec.collinear||spec.pairIdentity?{contactRows:Array.from(data)}:{}),...(spec.pairIdentity?{expectedPairs:contactTopology(cells,spec.bonds).pairs.map(p=>[p.i,p.j]),contactPairs:Array.from({length:pairCount},(_,pair)=>Array.from({length:4},(_,slot)=>Array.from(data.slice((pair*4+slot)*36,(pair*4+slot)*36+2))))}:{})});
    }finally{read.destroy();stage.dispose();buffers.forEach(b=>b.destroy());}
   }
   const freeSteps=async(model,count)=>{let maps=0;const originalMap=GPUBuffer.prototype.mapAsync;GPUBuffer.prototype.mapAsync=function(){maps++;throw Error('Live fixed stepping attempted readback');};try{for(let i=0;i<count;i++)model.step();}finally{GPUBuffer.prototype.mapAsync=originalMap;}return maps;};
@@ -131,7 +132,7 @@ try{
  assert.ok(report.result.legacy.peakPenetration>.02,'Legacy control must expose material crossing at the oblique attachment');
  assert.ok(report.result.candidate.peakPenetration<.02,`Oblique cut must support contact without first passing through its neighbor: peak=${report.result.candidate.peakPenetration}`);
  assert.equal(report.result.rotated.liveMaps,0);assert.ok(report.result.rotated.peakPenetration<.02,'Rotated resident quaternions must preserve the same material contact');
- for(const row of report.result.topologyCases){assert.deepEqual(row.observed,row.expected,row.name+' must use actual full live topology');assert.equal(row.finite,true,row.name+' must produce finite native contact records');}
+ for(const row of report.result.topologyCases){assert.deepEqual(row.observed,row.expected,row.name+' must use actual full live topology');assert.equal(row.finite,true,row.name+' must produce finite native contact records');if(row.expectedPairs)for(let p=0;p<row.expectedPairs.length;p++)for(const pair of row.contactPairs[p])assert.deepEqual(pair,row.expectedPairs[p],'Every native row must retain its distinct triangular pair identity');}
  assert.equal(report.result.unloaded.liveMaps,0);assert.equal(report.result.unloaded.broken,0);assert.ok(report.result.unloaded.maxDisplacement<.005);
  for(const row of report.result.floor){assert.equal(row.liveMaps,0);assert.ok(Math.abs(row.position.y-.5)<.02,'Native floor must support body');assert.ok(Math.abs(row.velocity.y)<.1,'Resting floor body must not launch');}
  assert.deepEqual(report.result.floor[0].position,report.result.floor[1].position,'External body contact hook must preserve native floor behavior');
