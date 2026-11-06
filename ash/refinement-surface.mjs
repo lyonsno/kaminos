@@ -3,8 +3,7 @@ import {refinementAddressWGSL} from './refinement-wgsl.mjs';
 // Both levels reconstruct corners at the same finest-grid positions. Coarse
 // top faces are subdivided there as well, including their shared boundary edge.
 export function refinementVertexWGSL(p, arena) {
-  let code = `${refinementFaceLookupWGSL(p,arena)}
-fn ash_refined_vertex(rank:u32,uv:vec2<f32>,soft:f32,density:ptr<storage,array<f32>,read>,solid:ptr<storage,array<u32>,read>,faces:ptr<storage,array<u32>,read>,arena:ptr<storage,array<u32>,read>)->vec4<f32>{
+  let code = `fn ash_refined_vertex(rank:u32,uv:vec2<f32>,soft:f32,density:ptr<storage,array<f32>,read>,solid:ptr<storage,array<u32>,read>,faces:ptr<storage,array<u32>,read>,arena:ptr<storage,array<u32>,read>)->vec4<f32>{
  let address=ash_refined_face_code(rank,faces,arena);let tile=address.x;let code=address.y;
  let local=code/24u;let face=(code%24u)/4u;let sub=code%4u;
  let i=ash_tile_cell(tile,local);let c=ash_cell(i);let size=f32(c.size);
@@ -44,6 +43,7 @@ fn ash_refined_vertex(rank:u32,uv:vec2<f32>,soft:f32,density:ptr<storage,array<f
  return vec4<f32>(vec3<f32>(${p.origin.join(',')})+point*${p.cellSize.toFixed(12)},f32(cover+256u*(nx+256u*nz)));
 }
 
+${refinementFaceLookupWGSL(p,arena)}
 ${refinementAddressWGSL(p)}
 fn ash_refined_height(x:i32,z:i32,reference:f32,density:ptr<storage,array<f32>,read>,solid:ptr<storage,array<u32>,read>)->f32{
  if(x<0||z<0||x>=i32(ASH_FINE_DIMS.x)||z>=i32(ASH_FINE_DIMS.z)){return -1000000.0;}

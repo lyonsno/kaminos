@@ -2,6 +2,8 @@
 import assert from 'node:assert/strict';
 import {createRefinementLayout} from '../ash/refinement-plan.mjs';
 import {refinementArena} from '../ash/refinement-shader.mjs';
+import {refinementVertexWGSL} from '../ash/refinement-surface.mjs';
+import {TSL,WGSLNodeBuilder} from '../lib/three.webgpu.js';
 
 const input={cellSize:.025,bounds:{min:[0,0,0],max:[12.8,2.4,6.4]},refinement:{ratio:2,mode:'adaptive',fineFraction:.125}};
 const p=createRefinementLayout(input),before=structuredClone(p);
@@ -16,4 +18,8 @@ assert.deepEqual(legacy.words,compact.words,'derived encoding preserves adaptive
 const tiny=createRefinementLayout({cellSize:1,bounds:{min:[0,0,0],max:[2,2,2]},refinement:{ratio:2,mode:'adaptive',fineCapacity:1}});
 assert.ok(refinementArena(tiny,{surfaceEncoding:'auto'}).surfaceCache.words<=tiny.faceWords,'automatic choice never increases surface reservation');
 assert.throws(()=>refinementArena(p,{surfaceEncoding:'invented'}),/encoding/i);
+for(const arena of [legacy,compact]){
+ const call=TSL.wgslFn(refinementVertexWGSL(p,arena))({});
+ assert.equal(call.getNodeType(new WGSLNodeBuilder(null,{})),'vec4','Three must select the physical vertex entry, not its address helper');
+}
 console.log('surface storage bounds and physical checkpoint identity pass');
