@@ -1,8 +1,8 @@
 // kaminos-test: node
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {withKaminosGpu} from '../tools/shader-herder.mjs';
-import {createIntegralEdgeGuide} from '../volume-integral-edge-guide.mjs';
+import {withKaminosGpu,evalWgslBatch} from '../tools/shader-herder.mjs';
+import {createIntegralEdgeGuide,INTEGRAL_IMAGE_EDGE_WEIGHT_WGSL} from '../volume-integral-edge-guide.mjs';
 
 test('image edge guide rejects pixel checkerboard gradients and retains coherent light and smoke contours',async()=>{
  await withKaminosGpu(async({device:d})=>{
@@ -23,5 +23,13 @@ test('image edge guide rejects pixel checkerboard gradients and retains coherent
    const boundary=await draw(()=>[4,4,4,.5],x=>x<5?3:10);assert.ok(boundary.every(x=>Math.abs(x)<1e-6),'opaque depth masking must not invent a gradient in constant light');
    assert.deepEqual(await draw(()=>[0,0,0,1]),[0,0,0,0]);
   }finally{g.dispose();raw.destroy();depth.destroy();}
+ });
+});
+
+
+test('image protection strength bounds attenuation even for an extremely strong edge',async()=>{
+ await withKaminosGpu(async ctx=>{
+  const r=await evalWgslBatch(ctx,{preamble:INTEGRAL_IMAGE_EDGE_WEIGHT_WGSL,argTypes:['f32'],returnType:'f32',body:'return integralImageEdgeWeight(vec4<f32>(100),vec4<f32>(100),vec2<f32>(10),arg0);',inputs:[[0],[.001],[.1],[1]]});
+  assert.equal(r[0],1);assert.ok(Math.abs(r[1]-.999)<1e-6);assert.ok(Math.abs(r[2]-.9)<1e-6);assert.equal(r[3],0);
  });
 });

@@ -2566,6 +2566,13 @@
         "samples",
         "image"
       ]
+    },
+    {
+      "key": "volume-reconstruction-image-edge",
+      "param": "volume_reconstruction_image_edge",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 1
     }
   ],
   "presentationControls": [

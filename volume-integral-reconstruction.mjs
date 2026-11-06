@@ -8,10 +8,10 @@ export function integralReconstructionSettings(c={}) {
   if(!['off','spatial','temporal','combined'].includes(mode))throw Error('Reconstruction mode is unknown');
   const edges=c.reconstructionEdges??'samples';
   if(!['off','samples','image'].includes(edges))throw Error('Reconstruction edge guide is unknown');
-  const values={reconstructionSpatial:.6,reconstructionRadius:1,reconstructionWindow:8,reconstructionResponse:1,reconstructionEdge:2};
+  const values={reconstructionSpatial:.6,reconstructionRadius:1,reconstructionWindow:8,reconstructionResponse:1,reconstructionEdge:2,reconstructionImageEdge:1};
   for(const k of Object.keys(values)) {
     const v=c[k]??values[k];
-    if(typeof v!=='number'||!Number.isFinite(v)||!Number.isFinite(Math.fround(v))||v<0||(k==='reconstructionSpatial'&&v>1)||(k==='reconstructionWindow'&&v<1))throw Error(`Reconstruction invalid ${k}`);
+    if(typeof v!=='number'||!Number.isFinite(v)||!Number.isFinite(Math.fround(v))||v<0||(['reconstructionSpatial','reconstructionImageEdge'].includes(k)&&v>1)||(k==='reconstructionWindow'&&v<1))throw Error(`Reconstruction invalid ${k}`);
     values[k]=v;
   }
   if(c.reconstructionFresh!==undefined&&typeof c.reconstructionFresh!=='boolean')throw Error('Reconstruction fresh samples must be boolean');
@@ -140,10 +140,10 @@ export function createIntegralReconstruction(device,{transparent=false}={}) {
     presentModule ||= device.createShaderModule({label:'linear integral presentation',code:INTEGRAL_PRESENT_WGSL});
     if(!pipelines.has(format))pipelines.set(format,device.createRenderPipeline({label:'reconstructed volume presentation',layout:'auto',vertex:{module:presentModule,entryPoint:'vs'},fragment:{module:presentModule,entryPoint:'present',constants:{TRANSPARENT_CANVAS:transparent},targets:[{format}]},primitive:{topology:'triangle-list'}}));
     const spatial=['spatial','combined'].includes(c.integralReconstruction),temporal=['temporal','combined'].includes(c.integralReconstruction);
-    edgeActive=spatial&&c.reconstructionSpatial>0&&c.reconstructionRadius>0&&c.reconstructionEdge>0&&c.reconstructionEdges==='image';edgeBuilt=false;
+    edgeActive=spatial&&c.reconstructionSpatial>0&&c.reconstructionRadius>0&&c.reconstructionImageEdge>0&&c.reconstructionEdges==='image';edgeBuilt=false;
     if(edgeActive){imageEdges ||=createIntegralEdgeGuide(device);if(edgeEpoch!==rawEpoch){imageEdges.encode(encoder,textures[0],textures[1]);edgeEpoch=rawEpoch;edgeBuilt=true;}}
     const edgeMode=edgeActive?2:spatial&&c.reconstructionEdges==='samples'?1:0;
-    device.queue.writeBuffer(options,0,new Float32Array([spatial?c.reconstructionSpatial:0,c.reconstructionRadius,c.reconstructionEdge,0,temporal?Math.min(c.retention,age/(age+1)):0,age>0?1:0,c.reconstructionResponse,0,edgeMode,0,0,0]));
+    device.queue.writeBuffer(options,0,new Float32Array([spatial?c.reconstructionSpatial:0,c.reconstructionRadius,c.reconstructionEdges==='image'?c.reconstructionImageEdge:c.reconstructionEdge,0,temporal?Math.min(c.retention,age/(age+1)):0,age>0?1:0,c.reconstructionResponse,0,edgeMode,0,0,0]));
     device.queue.writeBuffer(camera,0,cameraValues);
     const entries=[textures[0],textures[1],textures[2+previousIndex],textures[4+previousIndex],output,moments].map((t,binding)=>({binding,resource:t.createView()}));
     entries.push({binding:6,resource:{buffer:options}},{binding:7,resource:(imageEdges?.texture??emptyEdges).createView()},{binding:8,resource:edgeSampler});

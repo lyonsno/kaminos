@@ -2,7 +2,7 @@
 export const RECONSTRUCTION_FILTER_CONTROLS=Object.freeze({
  reconstructionSpatial:'volume-reconstruction-spatial',reconstructionRadius:'volume-reconstruction-radius',
  reconstructionWindow:'volume-reconstruction-window',reconstructionResponse:'volume-reconstruction-response',
- reconstructionEdge:'volume-reconstruction-edge',reconstructionEdges:'volume-reconstruction-edges',
+ reconstructionEdge:'volume-reconstruction-edge',reconstructionImageEdge:'volume-reconstruction-image-edge',reconstructionEdges:'volume-reconstruction-edges',
 });
 export function reconstructionSourceChanges(before,after){
  return [...new Set([...Object.keys(before),...Object.keys(after)])].filter(k=>!Object.hasOwn(RECONSTRUCTION_FILTER_CONTROLS,k)&&JSON.stringify(before[k])!==JSON.stringify(after[k]));
@@ -27,6 +27,6 @@ export function syncReconstructionFilterAvailability(document,mode,controls){
  const spatial=mode==='spatial'||mode==='combined',temporal=mode==='temporal'||mode==='combined';
  const availability={reconstructionSpatial:spatial,reconstructionRadius:spatial||temporal,reconstructionWindow:temporal,
   reconstructionResponse:temporal&&controls.reconstructionWindow>1&&controls.reconstructionRadius>0,
-  reconstructionEdges:spatial,reconstructionEdge:spatial&&controls.reconstructionEdges!=='off'};
+  reconstructionEdges:spatial,reconstructionEdge:spatial&&controls.reconstructionEdges==='samples',reconstructionImageEdge:spatial&&controls.reconstructionEdges==='image'};
  for(const [key,enabled] of Object.entries(availability)){const e=document.getElementById(RECONSTRUCTION_FILTER_CONTROLS[key]);if(e)e.disabled=!enabled;}
 }
