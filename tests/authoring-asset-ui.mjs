@@ -136,3 +136,11 @@ test('a skipped thumbnail whose card was filtered out can be queued again when i
 test('the selected preview can be enlarged and changing selection closes and clears it',()=>{
  const f=fixture(async()=>null);f.state.selected={kind:'image',name:'Reference',source:'reference.png',size:4096};f.ui.render(f.state);f.doc.getElementById('asset-preview-enlarge').onclick();assert.equal(f.doc.getElementById('asset-preview-dialog').open,true);assert.equal(f.doc.getElementById('asset-preview-full').src,'reference.png');f.state.selected=null;f.ui.render(f.state);assert.equal(f.doc.getElementById('asset-preview-dialog').open,false);assert.equal(f.doc.getElementById('asset-preview-full').getAttribute('src'),null);
 });
+
+test('Workbench uses the same visible previews and generation controls as Authoring',async()=>{
+ const calls=[];const f=fixture(async entry=>{calls.push(entry.source);return 'preview';});
+ f.doc.body.dataset.workspace='workbench';f.state.entries=[{kind:'mesh',name:'part.glb',source:'part'}];f.ui.open('browse');
+ const card=f.doc.getElementById('asset-entries').children[0];f.observer().fire(card);await tick();await tick();assert.deepEqual(calls,['part']);assert.equal(card.dataset.previewState,'rendered');
+ Object.assign(f.generation,{status:'running',canStop:true});f.ui.close();const header=f.doc.getElementById('authoring-generation-header');assert.equal(header.hidden,false);
+ f.doc.getElementById('generation-header-show').onclick();assert.equal(f.doc.body.dataset.workspace,'workbench');assert.deepEqual(f.ui.state(),{open:true,mode:'generate'});assert.equal(header.hidden,true);f.ui.close();assert.equal(header.hidden,false);
+});

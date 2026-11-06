@@ -204,7 +204,13 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
     return true;
   }
   header.querySelectorAll('[data-workspace-mode]').forEach(button => button.addEventListener('click', () => setMode(button.dataset.workspaceMode)));
-  header.querySelectorAll('[data-workbench-tab]').forEach(button => button.addEventListener('click', () => { if(mode==='authoring'&&document.defaultView.kaminosAssets)document.defaultView.kaminosAssets.open(button.dataset.workbenchTab==='generate'?'generate':'browse');else if(setMode('workbench'))openWorkbenchTab(button.dataset.workbenchTab); }));
+  header.querySelectorAll('[data-workbench-tab]').forEach(button => button.addEventListener('click', () => {
+    const assets=document.defaultView.kaminosAssets;
+    if(assets){
+      const next=button.dataset.workbenchTab==='generate'?'generate':'browse',panel=assets.panel();
+      if(panel.open&&panel.mode===next)assets.close();else assets.open(next);
+    }else if(setMode('workbench'))openWorkbenchTab(button.dataset.workbenchTab);
+  }));
   inspector.querySelectorAll('[data-inspector-context]').forEach(button => button.addEventListener('click', () => setContext(button.dataset.inspectorContext)));
   byId('authoring-frame').onclick = () => { document.defaultView.kaminosFrameSelected?.(); byId('authoring-frame').blur(); };
   for (const action of ['undo', 'redo']) byId(`authoring-${action}`).onclick = () => {
