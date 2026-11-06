@@ -96,3 +96,14 @@ test('editing a filter knob keeps the selected held view when the ordinary mode 
   context.next={integralReconstruction:'spatial'};context.effectiveNext={...base,integralReconstruction:'spatial'};
   vm.runInNewContext(block,context);assert.equal(context.integralEvaluation.view,'spatial');assert.equal(context.state.integralEvaluation.view,'spatial');
 });
+
+test('direct smoke and diagnostic presentation changes retire old integral sources',()=>{
+  const p=prototype({integralReconstruction:'combined'});
+  try {
+    for(const [method,mode] of [['setRaymarchSmokePresentationMode','off'],['setAppearanceDecompositionMode','structural-a'],['setBoundarySplatPresentationMode','matched-presentation-v0']]) {
+      const before=p.debugState().integralSourceGeneration;
+      p[method](mode);assert.ok(p.debugState().integralSourceGeneration>before,method+' must retire old source');
+      const after=p.debugState().integralSourceGeneration;p[method](mode);assert.equal(p.debugState().integralSourceGeneration,after,'same effective presentation keeps its source');
+    }
+  }finally{p.dispose();}
+});

@@ -11794,7 +11794,7 @@ export function createKaminosVolumePrototype({
   let integralEncodedForFrame=false;
   state.integralSourceGeneration=0;
   state.integralReconstruction={requested:controlsSnapshot.integralReconstruction??'off',effective:'off',reason:'awaiting-presentation',frames:0};
-  function integralSceneIdentity(){return JSON.stringify([productTransform,volumePresentationModeEffective,state.integralSourceGeneration,worldSmokeKey,intermediateKey]);}
+  function integralSceneIdentity(){return JSON.stringify([productTransform,volumePresentationModeEffective,raymarchSmokePresentationEffectiveMode(),appearanceDecompositionModeEffective,boundarySplatPresentationModeEffective,state.integralSourceGeneration,worldSmokeKey,intermediateKey]);}
   function integralViewIdentity(){return JSON.stringify([camera.position.toArray(),camera.quaternion.toArray(),Array.from(camera.projectionMatrix.elements)]);}
   function endIntegralEvaluation(reason='resumed') {
     if(integralEvaluation){simulationPaused=integralEvaluation.wasPaused;state.simulationPaused=simulationPaused;}
@@ -16018,6 +16018,7 @@ export function createKaminosVolumePrototype({
 
   function setBoundarySplatPresentationMode(value) {
     const request = normalizeBoundarySplatPresentationMode(value);
+    if(request.requested!==boundarySplatPresentationModeEffective)invalidateIntegralReconstruction('splat-presentation-changed',{source:true});
     boundarySplatPresentationModeRequestedRaw = request.requestedRaw;
     boundarySplatPresentationModeRequested = request.requested;
     boundarySplatPresentationModeEffective = request.requested;
@@ -16038,6 +16039,7 @@ export function createKaminosVolumePrototype({
 
   function setAppearanceDecompositionMode(value) {
     const request = normalizeAppearanceDecompositionMode(value);
+    if(request.requested!==appearanceDecompositionModeEffective)invalidateIntegralReconstruction('appearance-presentation-changed',{source:true});
     appearanceDecompositionModeRequestedRaw = request.requestedRaw;
     appearanceDecompositionModeRequested = request.requested;
     appearanceDecompositionModeEffective = request.requested;
@@ -16184,10 +16186,12 @@ export function createKaminosVolumePrototype({
 
   function setRaymarchSmokePresentationMode(value) {
     const request = normalizeRaymarchSmokePresentationMode(value);
+    const previousEffective=raymarchSmokePresentationEffectiveMode();
     raymarchSmokePresentationModeRequestedRaw = request.requestedRaw;
     raymarchSmokePresentationModeRequested = request.requested;
     raymarchSmokePresentationModeFallbackReason = request.fallbackReason;
     const effectiveMode = raymarchSmokePresentationEffectiveMode();
+    if(effectiveMode!==previousEffective)invalidateIntegralReconstruction('smoke-presentation-changed',{source:true});
     const targetIdentity = effectiveMode === 'off'
       ? RAYMARCH_SMOKE_PRESENTATION_OFF_IDENTITY
       : RAYMARCH_SMOKE_PRESENTATION_ON_IDENTITY;
