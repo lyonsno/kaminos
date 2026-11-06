@@ -603,6 +603,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 .flame-grid-tuning h3 { font-size: 14px; margin: 12px 0 6px; }
 #grid-tuning-status[data-state="invalid"] { color: #ffb584; }
 #grid-tuning-status[data-state="draft"] { color: #f0d486; }
+
 </style>
 <link rel="stylesheet" href="./authoring-workspace.css">
 <link rel="stylesheet" href="./volume-grid-tuning.css">
@@ -3547,7 +3548,8 @@ import {createInferenceKilnPreview} from './inference-kiln-preview.mjs';
 import {installGenerateLayout} from './authoring-generate-layout.mjs';
 import {createImageIterationHistory,installImageIterationHistory} from './authoring-image-history.mjs';
 import {createImageRecipeIteration,installImageRecipeStatus} from './authoring-image-recipe.mjs';
-import {createImageExperiments,installImageExperiments} from './authoring-image-experiments.mjs';
+import {createImageRunExecutor,installImageVariationRuns} from './authoring-image-runs.mjs';
+import {createImageExperiments,installImageExperiments,experimentRequest} from './authoring-image-experiments.mjs';
 import {installBrowseLayout} from './authoring-browse-layout.mjs';
 import {createAppFrameSource} from './app-frame-source.mjs';
 import {createSceneFrameComposition} from './scene-frame-composition.mjs';
@@ -29783,7 +29785,8 @@ function setupAuthoringAssets(){
     authoringImageHistory.record(entry);authoringAssets.select(entry);authoringImageHistory.useReference(entry.source);
     await authoringAssetsUI.open('generate',{refresh:false});editHistoryImage(entry);authoringGenerateLayout.compare(true);
   }});
-  imageExperimentsUI=installImageExperiments({document,controller:imageExperiments,assets:authoringAssets,assetsUI:authoringAssetsUI,history:authoringImageHistory,layout:authoringGenerateLayout,recipe:recipeIteration,busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy()});
+  const imageRunExecutor=createImageRunExecutor({request:experimentRequest,generate:async request=>{try{return await authoringImageGenerator.run(request);}catch(error){if(authoringImageGenerator.read().pending)error.pendingImage=true;throw error;}},stopGeneration:()=>authoringImageGenerator.stop(),busy:()=>authoringImageGenerator.busy()||!!authoringImageGenerator.read().pending||authoringPromptExpansion.busy()||meshBusy('sf3d')||meshBusy('trellisPage'),changed:()=>imageExperimentsUI?.render()});
+  imageExperimentsUI=installImageExperiments({runs:{install:host=>installImageVariationRuns({document,host,controller:imageExperiments,executor:imageRunExecutor,request:experimentRequest,pageAuthor:async()=>{const config=await loadStartupRuntimeConfig();return config.imageGenerationAuthor;},imageState:()=>authoringImageGenerator.read(),retrySaving:()=>authoringImageGenerator.retryPersistence()})},document,controller:imageExperiments,assets:authoringAssets,assetsUI:authoringAssetsUI,history:authoringImageHistory,layout:authoringGenerateLayout,recipe:recipeIteration,busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy()});
   authoringImageHistoryUI=installImageIterationHistory({document,history:authoringImageHistory,assets:authoringAssets,layout:authoringGenerateLayout,busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy()||recipeIteration.read().opening,
     onEdit:editHistoryImage,
     onRecall:entry=>recipeIteration.recall(entry)});
@@ -29791,8 +29794,9 @@ function setupAuthoringAssets(){
   loadStartupRuntimeConfig().then(config=>authoringPromptUI.configureDefault(config.pup?.keepLoadedDefault===true)).catch(error=>console.warn('Prompt residency default unavailable',error));
   window.kaminosAssets={...authoringAssets,open:mode=>authoringAssetsUI.open(mode),close:()=>authoringAssetsUI.close(),panel:()=>authoringAssetsUI.state(),imageHistory:authoringImageHistory,showHistoryImage:source=>authoringImageHistoryUI.show(source),compareImages:value=>authoringGenerateLayout.compare(value),images:authoringImageGenerator,imageRecipe:recipeIteration,generateImage:options=>authoringImageUI.run(options),imageRequest:()=>authoringImageUI.readRequest(),
     openImageRecipe:entry=>recipeIteration.open(entry),
-    experiments:{...imageExperiments,open:id=>imageExperimentsUI.open(id)},
+    experiments:{...imageExperiments,open:id=>imageExperimentsUI.open(id),runs:imageRunExecutor},
     promptExpansion:authoringPromptExpansion,expandPrompt:()=>authoringPromptUI.expand(),generationFlame:authoringGenerateLayout.ceremony};
+  addEventListener('pagehide',()=>{const active=imageRunExecutor.read();if(active){authoringImageGenerator.stop();navigator.sendBeacon?.('/api/image-experiments',new Blob([JSON.stringify({action:'stop-run',id:active.experimentId,runId:active.runId})],{type:'application/json'}));}});
   const experimentParams=new URLSearchParams(location.search);
   if(experimentParams.has('image_experiment'))imageExperimentsUI.open(experimentParams.get('image_experiment')).catch(error=>{document.getElementById('asset-status').textContent=error.message;});
   else if(experimentParams.get('asset_collection')==='image-experiments')authoringAssetsUI.open('browse').then(()=>authoringAssets.browse('image-experiments'));

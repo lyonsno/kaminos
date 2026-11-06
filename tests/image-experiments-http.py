@@ -40,6 +40,37 @@ class ExperimentsHttp(unittest.TestCase):
         status,value=self.call({'action':'create','id':'gloves','title':'Glove flight','description':'Direct versus expanded','agent':{'id':'ghost','label':'Ghost'},'members':[{'source':self.source,'name':'Glove','group':'Direct','role':'result'}]})
         self.assertEqual(status,200,value)
         return value
+    def test_saved_seed_run_freezes_inputs_and_fences_duplicate_execution(self):
+        self.create()
+        from unittest.mock import patch
+        original=serve.image_experiment_store
+        provenance={'schema':'kaminos.image-generation.v1','model':'FLUX.3 Image Klein','prompt':'A rack','seed':5,'width':512,'height':512,'weightsLevel':'4-bit','lora':None}
+        from image_experiments import ExperimentStore
+        def inspect(source):
+            if source==self.source:return {'kind':'image','name':'Rack','source':source,'provenance':provenance}
+            return {'kind':'image','name':'Result','source':source,'provenance':result}
+        with patch.object(serve,'image_experiment_store',lambda:ExperimentStore(self.directory/'experiments',inspect)):
+            payload={'action':'create-run','id':'gloves','runId':'seed-study','title':'Rack seeds','sources':[self.source],'seeds':[41,42],'author':{'kind':'person','id':'noah','label':'Noah'}}
+            status,doc=self.call(payload);self.assertEqual(status,200,doc)
+            run=doc['runs'][0];self.assertEqual([j['seed'] for j in run['jobs']],[41,42]);self.assertEqual(run['sources'][0]['provenance'],provenance)
+            self.assertEqual(self.call(payload)[1]['runs'],doc['runs'],'retrying submission must not duplicate a run')
+            status,claimed=self.call({'action':'claim-job','id':'gloves','runId':'seed-study','jobId':'0:0','attempt':'first'})
+            self.assertEqual(status,200,claimed)
+            self.assertEqual(self.call({'action':'claim-job','id':'gloves','runId':'seed-study','jobId':'0:0','attempt':'other'})[0],409)
+            result={**provenance,'author':payload['author'],'seed':41,'iteration':{'parent':{'source':self.source}},'variation':{'experimentId':'gloves','runId':'seed-study','jobId':'0:0','attempt':'first'}}
+            body={'action':'finish-job','id':'gloves','runId':'seed-study','jobId':'0:0','attempt':'wrong','status':'succeeded','result':{'source':'/result.png','name':'Result'}}
+            self.assertEqual(self.call(body)[0],409,'stale attempt cannot publish success')
+            body['attempt']='first';status,doc=self.call(body);self.assertEqual(status,200,doc)
+            self.assertEqual(doc['runs'][0]['jobs'][0]['status'],'succeeded');self.assertEqual(len(doc['members']),2)
+            self.assertEqual(self.call(body)[0],200,'completion retry after a lost HTTP response is idempotent')
+            status,doc=self.call({'action':'stop-run','id':'gloves','runId':'seed-study'});self.assertEqual(status,200,doc)
+            self.assertEqual([j['status'] for j in doc['runs'][0]['jobs']],['succeeded','stopped'])
+            self.assertEqual(self.call({'action':'claim-job','id':'gloves','runId':'seed-study','jobId':'0:0','attempt':'new'})[0],409)
+            self.assertEqual(self.call({'action':'retry-run','id':'gloves','runId':'seed-study','jobIds':['0:0']})[0],409)
+            status,doc=self.call({'action':'retry-run','id':'gloves','runId':'seed-study','jobIds':['0:1']});self.assertEqual(status,200,doc)
+            self.assertEqual([j['status'] for j in doc['runs'][0]['jobs']],['succeeded','queued'])
+        self.assertEqual(json.loads((self.directory/'experiments/gloves.json').read_text())['runs'][0]['sources'][0]['provenance'],provenance)
+
     def test_catalogue_is_a_native_persistent_experiment_collection(self):
         status,value=self.call()
         self.assertEqual(status,200,'Native experiment catalogue is missing; an external sheet is not the browser')

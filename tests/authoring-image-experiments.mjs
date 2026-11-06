@@ -106,3 +106,14 @@ test('presenting an explicit recipe preserves its own collection or independence
   assert.equal(live.parent?.source,'/incoming.png','presenting must not replace an explicitly restored recipe with the collection on screen');assert.deepEqual(live.experiment,experiment);assert.equal(request.iteration.parent.source,'/incoming.png');assert.deepEqual(request.iteration.parentCompletion,p.completion);assert.deepEqual(request.expectedModel.sampling,p.sampling);assert.equal(request.expectedModel.lora,null);assert.deepEqual(opened,live);
  }
 });
+
+test('working selection survives inspection and refresh; shift range includes available images only',async()=>{
+ const current=doc('burners');current.members.push({source:'/two.png',availability:'available',entry:{kind:'image',source:'/two.png'}},{source:'/held.png',availability:'withheld',entry:{kind:'image'}},{source:'/four.png',availability:'available',entry:{kind:'image',source:'/four.png'}});
+ const c=createImageExperiments({request:async()=>structuredClone(current)});await c.open('burners');
+ assert.equal(typeof c.toggleSelected,'function','experiment needs independent working selection');
+ c.toggleSelected('/image.png');c.select('/two.png');assert.deepEqual(c.read().selection,['/image.png']);
+ c.toggleSelected('/four.png',{range:true});assert.deepEqual(c.read().selection,['/image.png','/two.png','/four.png']);
+ await c.open('burners');assert.equal(c.read().selected,'/two.png');assert.deepEqual(c.read().selection,['/image.png','/two.png','/four.png']);
+ current.members[1].availability='missing';await c.open('burners');assert.deepEqual(c.read().selection,['/image.png','/four.png']);
+ c.clearSelection();assert.deepEqual(c.read().selection,[]);
+});

@@ -590,6 +590,28 @@ body[data-workspace=authoring].has-assets-panel:has(#authoring-assets[data-exper
 .experiment-author{color:var(--accent,#dbc184);font-weight:600}
 .experiment-parent{opacity:.8}
 .experiment-grid.is-branches{display:flex;flex-direction:column;gap:10px}
-#authoring-assets .experiment-grid.is-branches .experiment-image{display:grid;grid-template-columns:128px minmax(0,1fr);gap:5px 12px;text-align:left;margin-inline-start:calc(var(--branch-depth,0) * 24px);width:calc(100% - var(--branch-depth,0) * 24px);border-inline-start:3px solid #6b6250}
+#authoring-assets .experiment-grid.is-branches .experiment-image{display:grid;grid-template-columns:128px minmax(0,1fr);gap:5px 12px;text-align:left;width:100%;border-inline-start:3px solid #6b6250}
 .experiment-grid.is-branches .experiment-image img{grid-column:1;grid-row:1 / span 5;width:128px;height:128px;object-fit:contain}
 .experiment-grid.is-branches .experiment-image :not(img){grid-column:2}
+
+.experiment-card { position:relative; min-width:0; }
+.experiment-card > input { position:absolute; z-index:2; top:8px; left:8px; width:20px; height:20px; accent-color:#d7b36b; }
+.experiment-card > .experiment-image { width:100%; height:100%; box-sizing:border-box; }
+.experiment-grid.is-branches > .experiment-card { margin-left:calc(var(--branch-depth,0) * 24px); }
+.experiment-selection-toolbar,.experiment-run-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:12px 0; }
+.experiment-composer { border:1px solid #b69a66; border-radius:10px; padding:16px; margin:12px 0; background:#24272a; }
+.experiment-composer label { display:block; margin:10px 0; }
+.experiment-composer input { width:min(600px,95%); display:block; margin-top:6px; padding:8px; box-sizing:border-box; }
+.experiment-plan-rows { display:grid; gap:8px; margin:12px 0; }
+.experiment-plan-rows p { white-space:pre-wrap; overflow-wrap:anywhere; }
+.experiment-compare { display:flex; overflow-x:auto; gap:14px; padding-bottom:10px; }
+.experiment-compare figure { min-width:220px; flex:1; margin:0; }
+.experiment-compare img { width:100%; max-height:360px; object-fit:contain; }
+.experiment-run { border:1px solid #494d50; border-radius:8px; margin:12px 0; padding:12px; }
+.experiment-run > summary { cursor:pointer; font-weight:600; }
+.experiment-run-scroll { overflow-x:auto; }
+.experiment-run-grid { border-collapse:collapse; width:100%; }
+.experiment-run-grid th,.experiment-run-grid td { padding:8px; border:1px solid #494d50; min-width:160px; vertical-align:top; text-align:left; }
+.experiment-run-grid button { display:block; padding:0; width:100%; }
+.experiment-run-grid img { display:block; width:100%; max-height:280px; object-fit:contain; }
+

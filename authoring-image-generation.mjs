@@ -279,7 +279,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       if(!active||!state.canStop||abort.signal.aborted)return false;
       abort.abort(new DOMException('Image generation stopped by operator','AbortError'));set({canStop:false,status:'stopping',progress:'Stopping… waiting for the current GPU work to settle.'});return true;
     },
-    async run({prompt,seed,size=512,level='4-bit',aspect='square',model='flux2',reference=null,promptExpansion=null,iteration=null,experiment=null,expectedModel=null,textLength='fit16',author=null}){
+    async run({prompt,seed,size=512,level='4-bit',aspect='square',model='flux2',reference=null,promptExpansion=null,iteration=null,experiment=null,expectedModel=null,textLength='fit16',author=null,variation=null}){
       if(active)throw Error('Image generation is already running');
       if(pendingImage)throw Error('Save the generated image before generating another');
       const text=String(prompt||'').trim();if(!text)throw Error('Describe the image to generate');
@@ -347,6 +347,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         // Completed pixels win a stop race; they are saved like any other result.
         phase='persistence';
         const provenance={schema:'kaminos.image-generation.v1',route:routeId,model:spec.name,prompt:text,seed,width:image.width,height:image.height,weights:base,aspect,weightsLevel:level,transformer:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,timings:image.timings,elapsed:timing(),...(image.sampling?{completion:structuredClone(image.sampling)}:{}),...(promptExpansion?{promptExpansion:structuredClone(promptExpansion)}:{})};
+        if(variation)provenance.variation=structuredClone(variation);
         if(runAuthor)provenance.author=structuredClone(runAuthor);
         provenance.lora=pipeline.ditManifest?.lora?structuredClone(pipeline.ditManifest.lora):null;
         if(reference)provenance.reference=structuredClone(reference.provenance);

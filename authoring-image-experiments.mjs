@@ -1,3 +1,4 @@
+export {imageVariationPlan,imageVariationRequest,createImageRunExecutor} from './authoring-image-runs.mjs';
 import {assetWithheld} from './authoring-assets.mjs';
 
 const copy=value=>structuredClone(value);
@@ -18,7 +19,7 @@ export async function experimentRequest(path,body){
  const result=await response.json();if(!response.ok)throw Error(result.error||`Experiment HTTP ${response.status}`);return result;
 }
 export function createImageExperiments({request=experimentRequest,openRecipe,openImageEditor,changed=()=>{}}){
- let state={document:null,selected:null,loading:false,error:null},ticket=0;
+ let state={document:null,selected:null,selection:[],loading:false,error:null},ticket=0,anchor=null;
  const publish=()=>changed();
  const check=doc=>{if(doc?.schema!=='kaminos.image-experiment.v1'||!Array.isArray(doc.members))throw Error('Unsupported experiment document');return doc;};
  const member=source=>{const m=state.document?.members.find(m=>m.source===source);if(!available(m))throw Error('Choose an available experiment image');return m;};
@@ -29,14 +30,17 @@ export function createImageExperiments({request=experimentRequest,openRecipe,ope
    if(doc.id!==id)throw Error('The returned experiment does not match the requested collection');
    if(own!==ticket)return null;
    const selected=doc.id===state.document?.id&&doc.members.some(m=>m.source===state.selected)?state.selected:null;
-   state={document:doc,selected,loading:false,error:null};publish();return copy(doc);
+   const selection=doc.id===state.document?.id?state.selection.filter(source=>available(doc.members.find(m=>m.source===source))):[];
+   state={document:doc,selected,selection,loading:false,error:null};publish();return copy(doc);
   }catch(error){if(own===ticket){state.loading=false;state.error=error.message;publish();}throw error;}
  }
  const api={
   read:()=>copy(state),branches:()=>copy(imageExperimentBranches(state.document?.members??[])),open,
-  close(){++ticket;state={document:null,selected:null,loading:false,error:null};publish();},
+  close(){++ticket;state={document:null,selected:null,selection:[],loading:false,error:null};publish();},
   select(source){member(source);state.selected=source;publish();},
   deselect(){state.selected=null;publish();},
+  toggleSelected(source,{range=false}={}){member(source);const members=state.document.members;let sources=[source];if(range&&anchor&&members.some(m=>m.source===anchor)){const a=members.findIndex(m=>m.source===anchor),b=members.findIndex(m=>m.source===source);sources=members.slice(Math.min(a,b),Math.max(a,b)+1).filter(available).map(m=>m.source);}const selected=new Set(state.selection);if(range)for(const id of sources)selected.add(id);else if(selected.has(source))selected.delete(source);else selected.add(source);state.selection=members.filter(m=>selected.has(m.source)).map(m=>m.source);anchor=source;publish();},
+  clearSelection(){state.selection=[];anchor=null;publish();},
   async edit(source=state.selected){const m=copy(member(source));await openRecipe(m.entry);return m.entry;},
   async editImage(source=state.selected){const m=copy(member(source));if(!openImageEditor)throw Error('Image editing is unavailable');await openImageEditor(m.entry);return m.entry;},
   async create({title,description='',agent,members=[]}){const doc=check(await request('/api/image-experiments',{action:'create',title,description,agent,members}));return open(doc.id);},
@@ -46,13 +50,14 @@ export function createImageExperiments({request=experimentRequest,openRecipe,ope
    // The run's captured recipe owns the destination, never whichever collection
    // happens to be on screen when asynchronous inference finishes.
    if(!provenance.experiment)return null;
+   if(provenance.variation){const v=provenance.variation;const doc=check(await request('/api/image-experiments',{action:'finish-job',id:v.experimentId,runId:v.runId,jobId:v.jobId,attempt:v.attempt,status:'succeeded',result:{source:entry.source,name:entry.name}}));if(state.document?.id===doc.id)await open(doc.id);return doc;}
    return api.add(provenance.experiment.id,[{source:entry.source,name:entry.name,group:'Iterations',role:'result'}]);
   },
  };
  return api;
 }
 
-export function installImageExperiments({document,controller,assets,assetsUI,history,layout,recipe,busy=()=>false}){
+export function installImageExperiments({document,controller,assets,assetsUI,history,layout,recipe,busy=()=>false,runs=null}){
  const by=id=>document.getElementById(id),view=document.defaultView;
  const node=(tag,text,className)=>{const e=document.createElement(tag);if(text!=null)e.textContent=text;if(className)e.className=className;return e;};
  const button=(text,action)=>{const e=node('button',text);e.type='button';e.onclick=()=>run(action);return e;};
@@ -68,6 +73,7 @@ export function installImageExperiments({document,controller,assets,assetsUI,his
  const start=button('New recipe',async()=>{const doc=controller.read().document;recipe.joinExperiment({id:doc.id,title:doc.title});await assetsUI.open('generate',{refresh:false});by('asset-prompt').focus();});start.id='asset-experiment-new-recipe';
  bar.append(back,title,meta,branches,start,details,refresh);host.append(bar,description,status);
  const body=node('div',null,'experiment-body'),grid=node('div',null,'experiment-groups'),inspector=node('aside',null,'experiment-selection');
+ const runsHost=node('section');host.append(runsHost);const runsUI=runs?.install(runsHost);
  body.append(grid,inspector);host.append(body);by('asset-browse').append(host);
  const newButton=button('New experiment',()=>showForm(false));newButton.id='asset-experiment-new';by('asset-browse-header').append(newButton);
  const form=node('form');form.id='asset-experiment-form';form.hidden=true;
@@ -111,6 +117,7 @@ export function installImageExperiments({document,controller,assets,assetsUI,his
   const membership=recipe.read().experiment??doc;returnBar.hidden=!membership;returnButton.textContent=membership?`← Back to ${membership.title}`:'Back to experiment';
   addBar.hidden=assets.read().selected?.kind!=='image'||assetWithheld(assets.read().selected);if(!addBar.hidden&&!addOptionsLoaded){addOptionsLoaded=true;loadOptions().catch(()=>{addOptionsLoaded=false;});}
   if(!doc)return;
+  runsUI?.render();
   title.textContent=doc.title;description.textContent=doc.description;meta.textContent=`${doc.members.length} ${doc.members.length===1?'image':'images'}${doc.agent?' · '+doc.agent.label:''}`;start.disabled=busy();
   branches.setAttribute('aria-pressed',String(branchView));
   const key=JSON.stringify([doc.id,doc.revision,branchView,doc.members]);
@@ -120,10 +127,11 @@ export function installImageExperiments({document,controller,assets,assetsUI,his
    for(const [name,members]of groups){const section=node('section',null,'experiment-group'),heading=node('h3',name),cards=node('div',null,branchView?'experiment-grid is-branches':'experiment-grid');section.append(heading,cards);grid.append(section);
     for(const row of members){const m=row.member,card=button('',()=>controller.select(m.source));card.className='experiment-image';card.dataset.source=m.source;card.setAttribute('style',branchView?`--branch-depth:${row.depth}`:'');card.disabled=!available(m);
      if(available(m)){const img=node('img');img.src=m.preview;img.alt=m.name;img.loading='lazy';card.append(img);}else card.append(node('div',m.availability==='withheld'?'Awaiting review':'Image unavailable','experiment-placeholder'));
-     card.append(node('strong',m.name),node('small',available(m)?captions(m):m.error||m.entry?.visibility?.reason));card.append(node('small',authorLabel(row.author),'experiment-author'));if(row.parent)card.append(node('small',`${row.operation==='image-edit'?'Image edit':'Branch'} of ${row.parent.name||row.parent.source}${row.parentAvailable?'':' · parent outside this collection'}`,'experiment-parent'));if(row.issue)card.append(node('small','Lineage cycle recorded · inspect parent links','asset-help'));cards.append(card);
+     card.append(node('strong',m.name),node('small',available(m)?captions(m):m.error||m.entry?.visibility?.reason));card.append(node('small',authorLabel(row.author),'experiment-author'));if(row.parent)card.append(node('small',`${row.operation==='image-edit'?'Image edit':'Branch'} of ${row.parent.name||row.parent.source}${row.parentAvailable?'':' · parent outside this collection'}`,'experiment-parent'));if(row.issue)card.append(node('small','Lineage cycle recorded · inspect parent links','asset-help'));const wrapper=node('div',null,'experiment-card');wrapper.style?.setProperty('--branch-depth',String(row.depth));const check=node('input');check.type='checkbox';check.dataset.checkSource=m.source;check.setAttribute('aria-label',`Select ${m.name} for variations`);check.disabled=!available(m);check.onclick=event=>controller.toggleSelected(m.source,{range:event.shiftKey});wrapper.append(check,card);cards.append(wrapper);
     }
    }
   }
+  for(const check of grid.querySelectorAll('[data-check-source]'))check.checked=s.selection.includes(check.dataset.checkSource);
   for(const card of grid.querySelectorAll('[data-source]'))card.setAttribute('aria-pressed',String(card.dataset.source===s.selected));
   const selected=doc.members.find(m=>m.source===s.selected),nextDetail=JSON.stringify([doc.id,doc.revision,s.selected,busy(),doc.members]);
   inspector.hidden=!selected;body.classList.toggle('has-selection',!!selected);
@@ -131,7 +139,8 @@ export function installImageExperiments({document,controller,assets,assetsUI,his
    const close=button('×',()=>controller.deselect());close.setAttribute('aria-label','Close image details');
    inspector.append(close,node('h3',selected.name),node('p',authorLabel(selected.entry?.provenance?.author),'experiment-author'));const parent=selected.entry?.provenance?.iteration?.parent;if(parent){const parentMember=doc.members.find(m=>m.source===parent.source);inspector.append(node('p',`Branched from ${parent.name||parent.source}`));if(available(parentMember))inspector.append(button('Go to parent',()=>controller.select(parent.source)));}if(available(selected)){const img=node('img');img.src=selected.preview;img.alt=selected.name;inspector.append(img);}
    const edit=button('Edit recipe & rerun',async()=>{if(busy())throw Error('Finish the current generation first');await controller.edit(selected.source);});edit.disabled=!selected.entry?.provenance||!available(selected);edit.id='asset-experiment-edit';const actionStatus=node('p',null,'asset-help');actionStatus.id='asset-experiment-action-status';actionStatus.setAttribute('role','status');inspector.append(edit,actionStatus,node('p',captions(selected),'asset-help'));
-   const editImage=button('Edit this image',async()=>{if(busy())throw Error('Finish the current generation first');await controller.editImage(selected.source);});editImage.id='asset-experiment-edit-image';editImage.disabled=busy()||!available(selected);inspector.append(editImage);
+   if(runsUI){const vary=button('Variations…',()=>runsUI.compose());vary.id='asset-experiment-vary';inspector.append(vary);}
+   const editImage=button('Use image as reference',async()=>{if(busy())throw Error('Finish the current generation first');await controller.editImage(selected.source);});editImage.id='asset-experiment-edit-image';editImage.disabled=busy()||!available(selected);inspector.append(editImage);
    const compare=node('select');compare.setAttribute('aria-label','Compare this image with');const placeholder=node('option','Compare with…');placeholder.value='';compare.append(placeholder);
    for(const m of doc.members.filter(m=>m.source!==selected.source&&available(m))){const option=node('option',`${m.group} · ${m.name}`);option.value=m.source;compare.append(option);}
    compare.onchange=()=>run(async()=>{if(!compare.value)return;const current=controller.read().document;const members=current?.id===doc.id?[selected.source,compare.value].map(source=>current.members.find(m=>m.source===source)):[];if(members.length!==2||!members.every(available))throw Error('Choose available images from the current experiment');const [chosen,other]=members;history.record(other.entry);history.record(chosen.entry);assets.select(chosen.entry);await assetsUI.open('generate',{refresh:false});layout.compare(true);history.compare(other.source);});inspector.append(compare);

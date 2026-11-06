@@ -163,9 +163,10 @@ test('a recalled FLUX.3 recipe refuses a different loaded source or sampler befo
 test('a rerun persists its separate recipe parent and changes inside the saved PNG',async()=>{
  const h=harness(),iteration={parent:{source:'/glove.png',name:'Glove'},changes:[{field:'prompt',before:'leather glove',after:'knitted glove'}]};
  const experiment={id:'glove-flight',title:'Glove flight'};
- await h.service.run({prompt:'knitted glove',seed:7009,size:256,iteration,experiment});
+ const variation={experimentId:experiment.id,runId:'seed-study',jobId:'0:0',attempt:'attempt'};
+ await h.service.run({prompt:'knitted glove',seed:7009,size:256,iteration,experiment,variation});
  const p=module.readPngProvenance(new Uint8Array(await h.delivered[0].file.arrayBuffer()));
- assert.deepEqual(p.iteration,iteration);assert.deepEqual(p.experiment,experiment);assert.equal(p.reference,undefined,'a recipe parent is not image conditioning');
+ assert.deepEqual(p.variation,variation);assert.deepEqual(p.iteration,iteration);assert.deepEqual(p.experiment,experiment);assert.equal(p.reference,undefined,'a recipe parent is not image conditioning');
 });
 
 test('the actual pipeline factory selects Flux3Pipeline for FLUX.3',async()=>{
