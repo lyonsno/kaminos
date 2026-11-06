@@ -57,7 +57,9 @@ export function normalizeLocalLiquidEmitter(value, pose = null) {
   if(Object.hasOwn(value,'volumeRate')&&(!Number.isFinite(value.volumeRate)||value.volumeRate<0))throw Error('Water volume flow must be nonnegative');
   const flow=Object.hasOwn(value,'volumeRate')?{volumeRate:value.volumeRate}:{};
   if(value.aimAt!=null&&(typeof value.aimAt!=='string'||!value.aimAt.trim()))throw Error('Water aimAt requires a scene object ID or null');
-  const aim=value.aimAt?{aimAt:value.aimAt}:{};
+  // Native edit targets merge patches. Retain an explicit null so clearing a
+  // relationship survives both check/preview merges and history replay.
+  const aim=Object.hasOwn(value,'aimAt')?{aimAt:value.aimAt??null}:{};
   if(mode==='finite_drop'){
     if(pose)normalizeLocalLiquidEmitterPose(pose);
     return {schema:LOCAL_LIQUID_EMITTER_SCHEMA,baseRadius:value.baseRadius??.08,strength:value.strength??1.15,rate:value.rate??1200,mode,...retention,...flow,...activation,drop:normalizeAuthoredWaterDrop(value.drop)};
@@ -94,6 +96,7 @@ function normalizeLocalLiquidSetupCore(value) {
     if(!Number.isSafeInteger(value[key]) || value[key]<1)throw Error(`Invalid local liquid ${key}`);
   }
   const quality={};
+  if(Object.hasOwn(value,'cellSize')&&value.cellSize===null)quality.cellSize=null;
   for(const key of ['cellSize','timeStepSeconds','viscosity','stiffness'])if(value[key]!=null){
     if(!Number.isFinite(value[key])||(key==='viscosity'||key==='stiffness'?value[key]<0:value[key]<=0))throw Error(`Invalid water ${key}`);
     quality[key]=value[key];
