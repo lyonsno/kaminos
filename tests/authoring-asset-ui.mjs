@@ -1,5 +1,5 @@
 // kaminos-test: node
-import {createAuthoringAssets} from '../authoring-assets.mjs';
+import {createAuthoringAssets,assetPaneHeight} from '../authoring-assets.mjs';
 import test from'node:test';import assert from'node:assert/strict';import{readFileSync}from'node:fs';
 class Element{
  constructor(tag,doc){this.tagName=tag;this.doc=doc;this.children=[];this.dataset={};this.attributes={};this.value='';this.title='';this.hidden=false;this.connected=true;this.style={};this.listeners={};this.classList={toggle(){},add(){},remove(){}};}
@@ -143,4 +143,12 @@ test('Workbench uses the same visible previews and generation controls as Author
  const card=f.doc.getElementById('asset-entries').children[0];f.observer().fire(card);await tick();await tick();assert.deepEqual(calls,['part']);assert.equal(card.dataset.previewState,'rendered');
  Object.assign(f.generation,{status:'running',canStop:true});f.ui.close();const header=f.doc.getElementById('authoring-generation-header');assert.equal(header.hidden,false);
  f.doc.getElementById('generation-header-show').onclick();assert.equal(f.doc.body.dataset.workspace,'workbench');assert.deepEqual(f.ui.state(),{open:true,mode:'generate'});assert.equal(header.hidden,true);f.ui.close();assert.equal(header.hidden,false);
+});
+
+test('pane resize reserves the actual Workbench instrument and inspector rows',()=>{
+ assert.equal(assetPaneHeight(400,1000,true,500),278);
+ assert.equal(assetPaneHeight(260,800,true,400),178);
+ assert.equal(assetPaneHeight(260,600,true,190),188);
+ assert.equal(assetPaneHeight(400,1000,false,0),400);
+ assert.equal(assetPaneHeight(400,1000,true),400,'legacy Authoring reservation is preserved');
 });

@@ -242,16 +242,16 @@ export function installAuthoringAssets({document,controller,edits}) {
   return {render,close,open(next='browse'){panel.hidden=false;document.body.classList.add('has-assets-panel');setMode(next);return next==='generate'&&controller.read().selected?.kind==='image'?Promise.resolve(true):action(()=>controller.ensure?controller.ensure():controller.refresh());},state:()=>({open:!panel.hidden,mode})};
 }
 
-export function assetPaneHeight(value,height,narrow=false){return Math.max(160,Math.min(value,Math.max(160,height-42-180-(narrow?180:0))));}
+export function assetPaneHeight(value,height,narrow=false,extraRows=narrow?180:0){return Math.max(160,Math.min(value,Math.max(160,height-42-180-extraRows)));}
 export function installAssetPaneResize({document,panel}){
  const handle=panel.querySelector('#asset-resize'),view=document.defaultView;let preferred=null,drag=null;
- const apply=()=>{if(preferred===null)return;const height=assetPaneHeight(preferred,document.body.clientHeight,view.innerWidth<=800);document.body.style.setProperty('--authoring-assets-height',`${height}px`);handle.setAttribute('aria-valuenow',String(Math.round(height)));};
+ const apply=()=>{if(preferred===null)return;const viewportHeight=document.body.clientHeight,narrow=view.innerWidth<=800,extraRows=document.body.dataset.workspace==='workbench'?(view.innerWidth<=540?viewportHeight*.5:narrow?190:0):(narrow?180:0);const height=assetPaneHeight(preferred,viewportHeight,narrow,extraRows);document.body.style.setProperty('--authoring-assets-height',`${height}px`);handle.setAttribute('aria-valuenow',String(Math.round(height)));};
  const set=value=>{preferred=value;apply();};
  handle.addEventListener('pointerdown',event=>{if(event.button!==0)return;event.preventDefault();drag={y:event.clientY,height:panel.getBoundingClientRect().height,before:preferred};handle.setPointerCapture(event.pointerId);});
  handle.addEventListener('pointermove',event=>{if(drag)set(drag.height+drag.y-event.clientY);});
  handle.addEventListener('pointerup',event=>{drag=null;if(handle.hasPointerCapture(event.pointerId))handle.releasePointerCapture(event.pointerId);});
  handle.addEventListener('pointercancel',()=>{if(drag){preferred=drag.before;drag=null;if(preferred===null)document.body.style.removeProperty('--authoring-assets-height');else apply();}});
  handle.addEventListener('keydown',event=>{if(['ArrowUp','ArrowDown'].includes(event.key)){event.preventDefault();set(panel.getBoundingClientRect().height+(event.key==='ArrowUp'?20:-20));}});
- view.addEventListener('resize',apply);
+ view.addEventListener('resize',apply);document.addEventListener('kaminos-workspace-change',apply);
  return {height:()=>panel.getBoundingClientRect().height};
 }
