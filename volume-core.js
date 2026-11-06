@@ -21476,6 +21476,18 @@ export function createKaminosVolumePrototype({
     return {source: sceneVolumeSource.describe(), medium: sceneVolumeSource.opticalDepthField(), simStepCount: state.simStepCount};
   }
 
+  function prepareFixedCountAllocation(encoder,optical) {
+    if(optical.value<4){rayAllocationHistory.reset();return;}
+    if(!worldSmoke||state.worldSmoke?.effective!=='one-way-world-field')throw Error('fixed-count allocation requires ordinary joined emissive beauty');
+    const map=worldSmokeMapping(worldSmoke.plan,worldSmoke.anchor,productTransform);
+    const identity=JSON.stringify([controlsSnapshot,productTransform,worldSmokeKey,intermediateKey]);
+    state.opticalStepping.allocation=rayAllocationHistory.prepare(encoder,
+      {min:map.renderMin,max:map.renderMax,dims:worldSmoke.plan.materialDims},identity,state.simStepCount);
+    state.opticalStepping.guidance='uniform-positive-coverage + known-blend-bands + previous-march-spatial-importance';
+    state.opticalStepping.fullRay=true;
+    rebuildFluidBindGroups();
+  }
+
   function renderSceneTransportHost() {
     if (!sceneTransportConsumer) return updateOrdinarySceneDepth();
     if (uniforms[368] !== 2 || appearanceDecompositionActive() || boundarySplatRequested() || browserResidualCanApply()) {
@@ -21500,6 +21512,7 @@ export function createKaminosVolumePrototype({
             quadratureJitterRequested:controlsSnapshot.quadratureJitter!==false,
             quadratureJitter:optical.mode!=='current'&&uniforms[47]>0.5&&uniforms[43]>0.5,
             guidance:'coverage-and-active-law-lookahead; guide reads excluded from material-sample counts' };
+          prepareFixedCountAllocation(input.encoder,optical);
           if (state.worldSmoke?.raymarch) {
             const mode=optical.mode;
             state.worldSmoke.raymarch={...state.worldSmoke.raymarch,effectiveMode:mode,
@@ -21622,18 +21635,8 @@ export function createKaminosVolumePrototype({
         reference:mode==='current'?'160-steps-adaptive-off-half-cell':null};
     }
     device.queue.writeBuffer(worldRenderUniform,80,new Float32Array([state.worldRenderField.effective==='inactive'?0:1,...(state.worldRenderField.materialDims??[0,0,0])]));
-    if(optical.value>=4){
-      if(!worldSmoke||state.worldSmoke?.effective!=='one-way-world-field'||options.bindGroup||sceneTransportConsumer){
-        throw Error('fixed-count allocation requires ordinary joined emissive beauty');
-      }
-      const map=worldSmokeMapping(worldSmoke.plan,worldSmoke.anchor,productTransform);
-      const identity=JSON.stringify([controlsSnapshot,productTransform,worldSmokeKey,intermediateKey]);
-      state.opticalStepping.allocation=rayAllocationHistory.prepare(encoder,
-        {min:map.renderMin,max:map.renderMax,dims:worldSmoke.plan.materialDims},identity,state.simStepCount);
-      state.opticalStepping.guidance='uniform-positive-coverage + known-blend-bands + previous-march-spatial-importance';
-      state.opticalStepping.fullRay=true;
-      rebuildFluidBindGroups();
-    }else{rayAllocationHistory.reset();}
+    if(optical.value>=4&&(options.bindGroup||sceneTransportConsumer))throw Error('fixed-count allocation requires ordinary joined emissive beauty');
+    prepareFixedCountAllocation(encoder,optical);
     const opticalKey = `:${transparentCanvas ? 1 : 0}:${optical.mode}:stats=${rayStepTelemetry.active}`;
     if ((optical.mode !== 'current'||rayStepTelemetry.active) && !multisampled && !scenePointBindGroup && !distributedGroup) {
       const key = `${targetPipeline === readbackPipeline}${opticalKey}`;

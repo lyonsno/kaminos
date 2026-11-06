@@ -36,7 +36,7 @@ const preview = html.match(/function writeFlameDomainPreview\(value\) \{[\s\S]*?
 let moves = 0, sources = 0;
 const ui = {flameDomainDraft: null, checkedFlameDomainPose: x => x, refreshFlameDomainPreview() {},
   domainTransformForPose: p => ({translation: p.position, scale: p.scale[0]}),
-  flameDomainTranslation: [0, 0, 0], flameDomainScale: 1, flameEmitterPose: {}, authoredFlamePresent: false,
+  flameDomainTranslation: [0, 0, 0], flameDomainScale: 1, flameEmitterPose: {}, authoredFlamePresent: true,
   volumePrototype: {relocateOrdinaryDomain() {}}, applyFlameEmitterPose() {},
   window: {__kaminosVolumeEmitterReceipt: {effective: {family: 'disk'}}},
   setFlameDomainTranslation() { moves++; return true; }, writeAuthoredFlameEmitterPose() { sources++; },
@@ -44,6 +44,7 @@ const ui = {flameDomainDraft: null, checkedFlameDomainPose: x => x, refreshFlame
 vm.runInNewContext(`${preview}; writeFlameDomainPreview({position:[.2,0,0],scale:[1,1,1]});`, ui);
 assert.equal(moves, 1, 'preview must move live coverage during the gesture');
 assert.equal(sources, 1, 'source coordinates must follow the preview transform');
+ui.authoredFlamePresent=false;vm.runInNewContext(`${preview}; writeFlameDomainPreview({position:[.4,0,0],scale:[1,1,1]});`,ui);assert.equal(moves,2);assert.equal(sources,1,'source-free coverage movement must not recreate or update an emitter');
 
 // Moving coverage while a diagnostic map is in flight must retire its result
 // without stranding the map guard or replacing a still-mapped buffer.

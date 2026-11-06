@@ -58,20 +58,32 @@ test('World readout follows this draw resolution rather than the invalidated pri
  assert.ok(source.indexOf(block)>source.indexOf('    state.opticalStepping = { ...optical, effective: optical.mode,'),'receipt follows effective route resolution');
 });
 
-test('native scene transport retains joined World admission for fixed-count marcher modes',async()=>{
+test('shared transport initializes, advances and invalidates actual spatial guidance before binding',async()=>{
  const {opticalSteppingConfig,resolveOpticalStepping,raymarchAdaptivity}=await import('../volume-optical-native.mjs');
+ const {createRayAllocationHistory}=await import('../volume-history-allocation.mjs');
+ globalThis.GPUBufferUsage??={STORAGE:128,COPY_DST:8,COPY_SRC:4,UNIFORM:64};
  const start=source.indexOf('  function renderSceneTransportHost('),body=source.slice(start,source.indexOf('\n  function ',start+3));
+ const helperStart=source.indexOf('  function prepareFixedCountAllocation('),helper=helperStart<0?'':source.slice(helperStart,source.indexOf('\n  function ',helperStart+3));
  for(const mode of ['budgeted','joins','history']){
-  const state={frameCount:1,simStepCount:2,renderScale:1,worldSmoke:{effective:'one-way-world-field',raymarch:{}}},uniforms=new Float32Array(512);uniforms[368]=2;let constants;
-  const context=vm.createContext({state,uniforms,sceneTransportConsumer:({encode})=>encode({encoder:{}}),
+  const writes=[],device={limits:{maxBufferSize:1e8,maxStorageBufferBindingSize:1e8},createBuffer:d=>({...d,destroy(){}}),queue:{writeBuffer:(buffer,offset,data)=>writes.push({buffer,offset,bytes:data.byteLength})}},rayAllocationHistory=createRayAllocationHistory(device);
+  const encoder={clearBuffer(){}},state={frameCount:1,simStepCount:2,renderScale:1,worldSmoke:{effective:'one-way-world-field',raymarch:{}}},uniforms=new Float32Array(512);uniforms[368]=2;let constants,rebuilds=0;
+  const context=vm.createContext({state,uniforms,rayAllocationHistory,worldSmoke:{plan:{},anchor:{}},worldSmokeKey:'world',intermediateKey:null,
+   worldSmokeMapping:(_p,_a,t)=>({renderMin:t.translate.map(v=>v-1),renderMax:t.translate.map(v=>v+1)}),
+   sceneTransportConsumer:({encode})=>encode({encoder}),
    appearanceDecompositionActive:()=>false,boundarySplatRequested:()=>false,browserResidualCanApply:()=>false,
    camera:{isPerspectiveCamera:true,getWorldDirection:()=>({toArray:()=>[0,0,-1]})},THREE:{Vector3:class{}},updateOrdinarySceneDepth:()=>null,
    emissiveRaymarchAdmission:()=>({eligible:true}),debugRaymarchShaderSpecialization:'auto',debugOpticalStepping:opticalSteppingConfig({mode}),debugOpticalSteppingExplicit:false,
    resolveOpticalStepping,raymarchAdaptivity,controlsSnapshot:{adaptiveRays:.65},sceneTransportLightEncoders:{has:()=>true},WGSL:'',distributedGroup:null,emissiveLightField:null,scenePointBindGroup:null,
-   sceneTransport:null,createSceneVolumeTransport:()=>({encode(input){constants=input.constants;return {};}}),device:{},stateSource:null,bindGroupLayout:{},fluidBindGroup:()=>({}),
-   productTransform:{translate:[0,0,0],scale:1},currentFluid:0});
-  vm.runInContext(body+'\nrenderSceneTransportHost();',context);
-  assert.equal(constants.OPTICAL_STEP_MODE,opticalSteppingConfig({mode}).value);
-  assert.equal(state.sceneTransport.stepping,mode);assert.equal(state.worldSmoke.raymarch.effectiveMode,mode);
+   sceneTransport:null,createSceneVolumeTransport:()=>({encode(input){constants=input.constants;assert.ok(rayAllocationHistory.read().geometry,'guidance geometry must exist when the actual transport binds');return {};}}),device,stateSource:null,bindGroupLayout:{},
+   rebuildFluidBindGroups(){rebuilds++;},fluidBindGroup:()=>({}),productTransform:{translate:[0,0,0],scale:1},currentFluid:0});
+  context.worldSmoke.plan.materialDims=[8,8,8];
+  vm.runInContext(helper+'\n'+body+'\nrenderSceneTransportHost();',context);
+  assert.equal(constants.OPTICAL_STEP_MODE,opticalSteppingConfig({mode}).value);assert.equal(state.sceneTransport.stepping,mode);
+  const first=rayAllocationHistory.read();assert.equal(first.frames,1);assert.equal(first.historyFrames,0);assert.equal(writes.length,2);assert.equal(rebuilds,1);
+  vm.runInContext('state.frameCount++;state.simStepCount++;renderSceneTransportHost();',context);
+  const second=rayAllocationHistory.read();assert.equal(second.frames,2);assert.equal(second.historyFrames,1);assert.equal(second.previousOffset,first.observationsOffset);assert.equal(rebuilds,2);
+  context.productTransform.translate=[1,0,0];vm.runInContext('state.frameCount++;renderSceneTransportHost();',context);
+  const moved=rayAllocationHistory.read();assert.equal(moved.frames,1);assert.equal(moved.historyFrames,0);assert.deepEqual(moved.geometry.min,[0,-1,-1]);assert.equal(writes.length,4);assert.equal(rebuilds,3);
+  rayAllocationHistory.dispose();
  }
 });
