@@ -3008,6 +3008,7 @@ import {createSceneBloom,checkedSceneBloom} from './scene-bloom.mjs';
 import {createSceneFlameHDR} from './scene-flame-hdr.mjs';
 import {bloom} from './scene-bloom-node.mjs';
 import {installSceneBloomControls} from './scene-bloom-controls.mjs';
+import {installSceneReflectionControls} from './scene-reflection-controls.mjs';
 import { pass, mrt, normalView, positionViewDirection, vec2, vec3, vec4, mix, float, uniform, texture, pmremTexture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, screenUV, builtinAOContext, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix, Fn, agxToneMapping } from 'three/tsl';
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { createSceneGI } from './scene-gi.mjs';
@@ -11735,8 +11736,10 @@ async function initScene() {
     float(1).add(aoIntensity.sub(1).max(0).mul(float(1).sub(aoVisibility))));
   scenePass.contextNode = builtinAOContext(aoOutput);
   const lightingWorkParams=new URLSearchParams(location.search);
-  const sceneGI = createSceneGI(scene,camera,aoIntensity,{filterImplementation:lightingWorkParams.get('lighting_filter')==='separate'?'separate':'shared',surfaceReuse:lightingWorkParams.get('lighting_surface_reuse')!=='0',sourceComparison:lightingWorkParams.get('experiment')==='gi-source-study'});
+  const sceneGI = createSceneGI(scene,camera,aoIntensity,{renderer,reflections:{enabled:lightingWorkParams.get('scene_reflections')==='1'},filterImplementation:lightingWorkParams.get('lighting_filter')==='separate'?'separate':'shared',surfaceReuse:lightingWorkParams.get('lighting_surface_reuse')!=='0',sourceComparison:lightingWorkParams.get('experiment')==='gi-source-study'});
   activeSceneGI = sceneGI;
+  const reflectionSceneSetup=scenePass.setup;
+  scenePass.setup=function(builder){if(sceneGI.reflections.settings.enabled)sceneGI.reflections.result.build(builder);return reflectionSceneSetup.call(this,builder);};
   if (typeof syncArrivalStudioLighting === 'function') syncArrivalStudioLighting();
   window.kaminosGISourceComparison=sceneGI.sourceComparison;
   window.__kaminosSurfaceLighting=sceneGI.surfaceLighting;
@@ -11805,6 +11808,10 @@ async function initScene() {
   let sceneEmissionSource=null,sceneFlameHDR=null;
   sceneBloom=createSceneBloom({bloom,convertToTexture,vec4,initial:{enabled:lightingWorkParams.get('scene_bloom')==='1',composeFlame:lightingWorkParams.get('scene_bloom')==='1'},rebuild:()=>rebuildSceneGIOutput(),redraw:()=>markDirty()});
   const bloomHost=document.createElement('section');bloomHost.id='scene-bloom-controls';document.getElementById('rendering-fire-controls').before(bloomHost);
+  const reflectionHost=document.createElement('section');reflectionHost.id='scene-reflection-controls';document.getElementById('scene-gi-refinement-status').after(reflectionHost);
+  let reflectionControls=null;
+  const writeReflections=value=>{sceneGI.reflections.setSettings(value);scenePass.contextNode=THREE.TSL.context({...builtinAOContext(aoOutput).getFlowContextData(),sceneReflectionLighting:sceneGI.reflections.settings.enabled?sceneGI.reflections.lightingContext:null});scenePass.needsUpdate=true;rebuildSceneGIOutput();markDirty();};
+  window.kaminosSceneReflections={read:()=>({...sceneGI.reflections.state(),settings:{...sceneGI.reflections.settings},effective:sceneGI.reflections.settings.enabled&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene')}),set(value){if(reflectionControls)reflectionControls.set(value);else writeReflections(value);return this.read();},reset:reason=>sceneGI.reflections.reset(reason)};
   window.kaminosSceneBloom={read:()=>({...sceneBloom.read(),effective:sceneBloom.read().settings.enabled&&sceneBloom.read().settings.radius>0&&sceneBloom.read().settings.strength>0&&!waterFeature.host&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene'),flameComposition:{...sceneFlameHDR?.read(),effective:authoredFlameHDRActive&&sceneFlameHDR?.read().effective===true}}),set(settings){bloomControls.set(settings);return this.read();}};
   function rebuildSceneGIOutput() {
     const combined = sceneGISettings.mode === 'combined';
@@ -11820,7 +11827,7 @@ async function initScene() {
       sceneEmissionSource=beauty.getTextureNode('emissive');
     }
     activeSceneDepth = combined ? sceneGI.depth : prePassDepth;
-    const graphKey = `${sceneGI.debugState().filterImplementation}:${sceneGISettings.mode}:${sceneGISettings.denoise>0}:${sceneGISettings.temporal}:${isFireLightFieldRoute()}:${fireLightFieldRouteParams().get('volume_light_field_distributed')==='1'}:${sceneBloom.read().settings.enabled&&sceneBloom.read().settings.radius>0&&sceneBloom.read().settings.strength>0&&!diagnostic}`;
+    const graphKey = `${sceneGI.debugState().filterImplementation}:${sceneGISettings.mode}:${sceneGISettings.denoise>0}:${sceneGISettings.temporal}:${sceneGI.reflections.settings.enabled}:${isFireLightFieldRoute()}:${fireLightFieldRouteParams().get('volume_light_field_distributed')==='1'}:${sceneBloom.read().settings.enabled&&sceneBloom.read().settings.radius>0&&sceneBloom.read().settings.strength>0&&!diagnostic}`;
     const cached = giOutputGraphs.get(graphKey);
     if (cached) {
       ({rawSceneOutput,outlinedSceneOutput,outlinedCameraOutput,sceneEmissiveCamera,fireLightFieldPass} = cached);
@@ -11867,6 +11874,7 @@ async function initScene() {
   };
   sceneGI.setSettings(sceneGISettings);
   sceneGI.setEstimatorSettings(sceneGISettings.estimator);
+  scenePass.contextNode=THREE.TSL.context({...builtinAOContext(aoOutput).getFlowContextData(),sceneReflectionLighting:sceneGI.reflections.settings.enabled?sceneGI.reflections.lightingContext:null});
   rebuildSceneGIOutput();
   getLocalLiquidDisplayPolicy=()=>({rawOutput:rawSceneOutput,cameraState:sceneEmissiveCamera&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene')?sceneEmissiveCamera.debugState():{effective:false}});
   window.kaminosRefreshSceneGIOutput=rebuildSceneGIOutput;
@@ -12178,6 +12186,8 @@ async function initScene() {
   scenePlacementTools.edits.subscribe(state=>{if(!state.active)for(const field of upgradedRangeFields)field.scrub.stop();});
   bloomControls=installSceneBloomControls({document,host:bloomHost,edits:scenePlacementTools.edits,read:()=>sceneBloom.read().settings,write:value=>sceneBloom.set(value)});
   authoringControlSessions.push(bloomControls);scenePlacementTools.addHistoryScope(bloomHost);
+  reflectionControls=installSceneReflectionControls({document,host:reflectionHost,edits:scenePlacementTools.edits,read:()=>({...sceneGI.reflections.settings}),write:writeReflections});
+  authoringControlSessions.push(reflectionControls);scenePlacementTools.addHistoryScope(reflectionHost);
   window.kaminosSceneEdits = scenePlacementTools.edits;
   window.kaminosPlacementDebugState = scenePlacementTools.state;
   await volumeCockpitLayoutReady;
@@ -14137,6 +14147,7 @@ async function installOwnerWorkbenchEntry() {
     select:()=>window.selectSceneObject(primaryAuthoredFlameSource()?.id),setVisible:visible=>{volumePrototype.canvasElement().style.opacity=visible?'1':'0';window._kaminosDirty?.();}},
   atmosphere:{async open(settings){await workbenchViewerReady;await ownerVolumeReady;const {createAshAtmosphere}=await import('./ash/atmosphere-gpu.mjs');return createAshAtmosphere({scene,camera,renderer,volume:{sharedAshAtmosphere:()=>structuredClone(sceneAshAtmosphereSettings),setSharedAshAtmosphere(value){sceneAshAtmosphereSettings=structuredClone(value);volumePrototype?.setSharedAshAtmosphere(value);}},groundY:groundPlane.position.y,settings});}},
   rendering:{gi:value=>setSceneGIControls(value),readGI:()=>({...sceneGISettings}),
+    reflections:value=>window.kaminosSceneReflections.set(value),readReflections:()=>window.kaminosSceneReflections.read(),
     openGISourceComparison:(root,candidates)=>{if(!window.kaminosGISourceComparison)throw Error('Open this comparison with ?experiment=gi-source-study');return window.kaminosGISourceComparison.open(root,candidates);},
     readFireLighting:()=>window.kaminosFireLightFieldDebugState(),muteFireLighting:value=>window.kaminosFireLightFieldSetWitnessMute(value)},
   flame:{async open(){await workbenchViewerReady;return openFlameWorkbench();}}};

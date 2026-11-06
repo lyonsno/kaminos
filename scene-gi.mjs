@@ -7,8 +7,9 @@ import SceneSurfaceLighting from './scene-surface-lighting.mjs';
 import {createGISourceComparison} from './scene-gi-source-comparison.mjs';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { resolveSceneGISettings, resolveSceneGIEstimatorSettings, sceneGIReceives } from './scene-gi-settings.mjs';
+import SceneReflections from './scene-reflections.mjs';
 
-export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,filterImplementation='shared',surfaceReuse=true,sourceComparison=false}={}) {
+export function createSceneGI(scene, camera, aoIntensity, {renderer=null,reflections={},receiveWeight=()=>1,filterImplementation='shared',surfaceReuse=true,sourceComparison=false}={}) {
   if(!['shared','separate'].includes(filterImplementation))throw Error('Unknown lighting filter implementation');
   // The screen-space field samples one depth/normal per pixel on both device routes.
   // Keep MSAA on the receiving beauty pass, not on the GI source attachments.
@@ -16,7 +17,10 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
   source.name = 'SSGI opaque linear source';
   source.transparent = false;
   const visibleNormal = normalView.dot(positionViewDirection).lessThan(0).select(normalView.negate(),normalView);
-  source.setMRT(mrt({output, normal:visibleNormal}));
+  const reflectionNormal=Fn(([],{material})=>vec4(visibleNormal,
+    material?.isMeshStandardMaterial||material?.isMeshStandardNodeMaterial?roughness:float(1)))();
+  source.contextNode=context({sceneReflectionLighting:null});
+  source.setMRT(mrt({output, normal:reflectionNormal}));
   const surfaceLighting=new SceneSurfaceLighting(source,camera,{enabled:surfaceReuse});
   const depth = source.getTextureNode('depth');
   const normal = source.getTextureNode('normal');
@@ -37,7 +41,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
   const bounceProbe=new URLSearchParams(globalThis.location?.search??'').get('gi_bounce_probe')==='1';
   const probeDiffuseResponse=Fn(([],{material})=>vec4(sceneGIReceives(material)?diffuseColor.rgb.clamp(0,1)
     .mul(metalness.oneMinus().clamp(0,1)).mul(receiveWeight(material)):vec3(0),1))();
-  source.setMRT(mrt({output:feedbackOutput,normal:visibleNormal,...(bounceProbe?{probeDiffuseResponse}:{})}));
+  source.setMRT(mrt({output:feedbackOutput,normal:reflectionNormal,...(bounceProbe?{probeDiffuseResponse}:{})}));
   if(bounceProbe)source.getTextureNode('probeDiffuseResponse');
   const comparison=sourceComparison?createGISourceComparison(scene,camera,source,visibleNormal,reason=>history.reset(reason),surfaceLighting):null;
   if(comparison)comparison.source.setMRT(mrt({output:feedbackOutput,normal:visibleNormal}));
@@ -54,6 +58,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
   // Different scheduling graphs make Off an actual bypass. Keep compiled routes
   // alive across toggles because Three bindings can still reference their RTs.
   const routes = new Map();
+  const reflectionField=renderer?new SceneReflections(source,camera,renderer,reflections):null;
   const filterFrames = {ao:0,gi:0};
   const filterKey=temporal=>`${filterImplementation}:${temporal}`;
   function filterPair(temporal) {
@@ -80,7 +85,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
   }
   function route() {
     const filtered=settings.denoise>0;
-    const key=`${filterImplementation}:${filtered}:${settings.temporal}`;
+    const key=`${filterImplementation}:${filtered}:${settings.temporal}:${reflectionField?.settings.enabled??false}`;
     if(routes.has(key))return routes.get(key);
     const pair=filtered?filterPair(settings.temporal):null;
     const aoInput=filtered?pair.ao.node:settings.temporal?history.getAONode():rawAO;
@@ -94,6 +99,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
     beauty.name='SSGI material receiving '+(filtered?'filtered':'raw');
     beauty.contextNode=context({
       sceneSurfaceLighting:surfaceLighting,
+      sceneReflectionLighting:reflectionField?.settings.enabled?reflectionField.lightingContext:null,
       ...builtinAOContext(ao).getFlowContextData(),
     });
     // Export the final receiving radiance as the MRT output itself. Three's
@@ -118,6 +124,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
     beauty.setup=function(builder) {
       // Building only the selected producers excludes filter dispatches in raw mode.
       aoInput.build(builder);giInput.build(builder);
+      if(reflectionField?.settings.enabled)reflectionField.result.build(builder);
       return setup.call(this,builder);
     };
     const aoView=vec4(visibility,visibility,visibility,1);
@@ -149,14 +156,14 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
   const update = effect.updateBefore;
   effect.updateBefore = function(frame) { update.call(this,frame); frames++; };
   return {
-    depth, source, surfaceLighting, sourceComparison:comparison,
+    depth, source, surfaceLighting, sourceComparison:comparison,reflections:reflectionField,
     dispose(){
       for(const route of routes.values())route.beauty.dispose();
       for(const pair of filters.values()){
         if(pair.shared)pair.shared.dispose();
         else for(const item of [pair.ao,pair.gi])item.filter.dispose();
       }
-      routes.clear();filters.clear();history.dispose();effect.dispose();source.dispose();
+      routes.clear();filters.clear();reflectionField?.dispose();history.dispose();effect.dispose();source.dispose();
     },
     setFilterImplementation(value){if(!['shared','separate'].includes(value))throw Error('Unknown lighting filter implementation');filterImplementation=value;},
     get beauty() { return route().beauty; },
