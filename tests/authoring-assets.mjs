@@ -91,3 +91,12 @@ test('revisiting a cached collection publishes existing entries before refresh a
  assert.equal(c.read().entries.length,1,'cached cards stay usable during refresh');assert.equal(c.read().selected?.source,entry.source);assert.equal(c.read().listRevision,revision,'refresh does not remount identical cards');
  gate.resolve({schema:'kaminos.authoring-assets.v1',collection:'generated-meshes',entries:[entry]});await refresh;assert.equal(c.read().listRevision,revision);
 });
+
+test('selection made during a cached refresh survives the arriving catalog',async()=>{
+ const a={kind:'mesh',source:'/api/read?root=generated-meshes&path=a.glb',name:'a.glb'},b={...a,source:'/api/read?root=generated-meshes&path=b.glb',name:'b.glb'};let pending=null;
+ const c=createAuthoringAssets({request:async()=>pending||{schema:'kaminos.authoring-assets.v1',collection:'generated-meshes',entries:[a,b]}});await c.browse();c.select(a);const gate=deferred();pending=gate.promise;const task=c.browse();c.select(b);gate.resolve({schema:'kaminos.authoring-assets.v1',collection:'generated-meshes',entries:[a,b]});await task;assert.equal(c.read().selected.source,b.source);
+});
+test('a failed catalog refresh clears selection as well as entries and cannot add it',async()=>{
+ const a={kind:'mesh',source:'/api/read?root=generated-meshes&path=a.glb',name:'a.glb'};let broken=false,adds=0;
+ const c=createAuthoringAssets({request:async()=>{if(broken)throw Error('Invalid asset visibility hold list');return{schema:'kaminos.authoring-assets.v1',collection:'generated-meshes',entries:[a]};},addMesh:async()=>adds++});await c.browse();c.select(a);broken=true;await c.browse();assert.equal(c.read().selected,null);await assert.rejects(c.add(),/Choose/);assert.equal(adds,0);
+});

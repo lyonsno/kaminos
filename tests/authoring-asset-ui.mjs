@@ -11,7 +11,7 @@ class Element{
  querySelector(id){if(id.startsWith('#'))return this.doc.getElementById(id.slice(1));return this.children.find(e=>e.tagName===id)||null;}
  querySelectorAll(selector){if(selector==='[data-assets-mode]')return this.modes||[];const all=this.children.flatMap(e=>[e,...e.querySelectorAll(selector)]);return selector==='.asset-entry'?all.filter(e=>e.className==='asset-entry'):all;}
  setAttribute(key,value){this.attributes[key]=value;}getAttribute(key){return this.attributes[key]??null;}removeAttribute(key){delete this.attributes[key];}
- addEventListener(type,fn){this.listeners[type]=fn;}dispatch(type){this.listeners[type]?.();}contains(){return false;}get isConnected(){return this.connected;}getBoundingClientRect(){return{height:300};}
+ addEventListener(type,fn){this.listeners[type]=fn;}dispatch(type){this.listeners[type]?.();}contains(){return false;}get isConnected(){return this.connected;}getBoundingClientRect(){return{height:300};}showModal(){this.open=true;}close(){this.open=false;}
 }
 function fixture(thumbnails,providedController=null){
  const ids=new Map();let observer;
@@ -19,7 +19,7 @@ function fixture(thumbnails,providedController=null){
  const source=readFileSync(new URL('../authoring-assets.mjs',import.meta.url),'utf8').replaceAll('export ','').replaceAll("import('./authoring-asset-previews.mjs')","getPreview()");const install=new Function('getPreview',source+'\nreturn installAuthoringAssets;')(()=>Promise.resolve({meshThumbnail:thumbnails}));
  const state={roots:[{id:'greenroom'}],root:'greenroom',path:'',catalog:true,listRevision:1,entries:[],results:[],warnings:[],unavailableCount:0};
  const generation={status:'idle'};let stops=0;const controller=providedController||{read:()=>state,generation:()=>generation,refresh:async()=>{},select(){},stop(){stops++;}};const ui=install({document:doc,controller,edits:{state:()=>({active:null})}});
- return{doc,state,ui,generation,stops:()=>stops,observer:()=>observer,mode:mode=>doc.body.children[0].modes.find(e=>e.dataset.assetsMode===mode).onclick()};
+ return{doc,state,ui,generation,stops:()=>stops,observer:()=>observer,mode:mode=>doc.getElementById('authoring-assets').modes.find(e=>e.dataset.assetsMode===mode).onclick()};
 }
 const tick=()=>new Promise(r=>setImmediate(r));
 test('held image and mesh cards remain named without thumbnails, preview work or selected-image requests',async()=>{
@@ -125,4 +125,14 @@ test('a late selected preview cannot replace the current selection or expose a h
  let release;const gate=new Promise(r=>release=r),f=fixture(()=>gate);f.ui.open('browse');f.state.selected={kind:'mesh',source:'old',name:'old.glb'};f.ui.render(f.state);await tick();
  f.state.selected={kind:'mesh',source:'held',name:'Held',visibility:{status:'withheld',reason:'Awaiting review'}};f.ui.render(f.state);release('old-preview');await tick();await tick();
  assert.equal(f.doc.getElementById('asset-image').getAttribute('src'),null);assert.equal(f.doc.getElementById('asset-image').hidden,true);
+});
+
+test('a skipped thumbnail whose card was filtered out can be queued again when its cached card returns',async()=>{
+ let release;const gate=new Promise(r=>release=r),calls=[];const {createAssetPreviewQueue}=await import('../asset-preview-queue.mjs');
+ const thumbnail=createAssetPreviewQueue(async e=>{calls.push(e.source);if(e.source==='a')await gate;return e.source;}).thumbnail;
+ const f=fixture(thumbnail);f.state.entries=[{kind:'mesh',name:'a.glb',source:'a'},{kind:'mesh',name:'b.glb',source:'b'}];f.ui.open('browse');const [a,b]=f.doc.getElementById('asset-entries').children;f.observer().fire(a);f.observer().fire(b);await tick();f.doc.getElementById('asset-filter').value='a.glb';f.ui.render(f.state);release();await tick();await tick();f.doc.getElementById('asset-filter').value='';f.ui.render(f.state);f.observer().fire(b);await tick();await tick();assert.deepEqual(calls,['a','b']);assert.equal(b.dataset.previewState,'rendered');
+});
+
+test('the selected preview can be enlarged and changing selection closes and clears it',()=>{
+ const f=fixture(async()=>null);f.state.selected={kind:'image',name:'Reference',source:'reference.png',size:4096};f.ui.render(f.state);f.doc.getElementById('asset-preview-enlarge').onclick();assert.equal(f.doc.getElementById('asset-preview-dialog').open,true);assert.equal(f.doc.getElementById('asset-preview-full').src,'reference.png');f.state.selected=null;f.ui.render(f.state);assert.equal(f.doc.getElementById('asset-preview-dialog').open,false);assert.equal(f.doc.getElementById('asset-preview-full').getAttribute('src'),null);
 });
