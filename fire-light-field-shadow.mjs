@@ -115,7 +115,7 @@ export function renderFireShadowCube({renderer,scene,cubeCamera,material,far,cas
   }
 }
 
-export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNode,normalNode,requested=false,resolution=512,sourceRadius=()=>Math.sqrt(11),sourceSizeNode=null,shadowSoftness=0,shadowSampling='fixed',shadowEdgeFilter=false,filterCoordinates,screenAligned=true,sharedPreparation=true,blockerSamples=9,filterSamples=16,filterPattern=null,runtimeQuality=false,sourceIdentity='live-gpu-emission-centroid'}) {
+export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNode,normalNode,requested=false,resolution=512,sourceRadius=()=>Math.sqrt(11),sourceSizeNode=null,shadowSoftness=0,shadowSampling='fixed',shadowEdgeFilter=false,filterCoordinates,screenAligned=true,sharedPreparation=true,blockerSamples=9,filterSamples=16,filterPattern=null,runtimeQuality=false,sourceIdentity='live-gpu-emission-centroid',depthLookup=null}) {
   (runtimeQuality?validateRuntimeShadowQuality:validateShadowQuality)({resolution,blockerSamples,filterSamples},renderer.backend?.device?.limits);
   if(!Number.isInteger(resolution)||resolution<=0) throw new Error('fire-shadow-resolution-must-be-positive-integer');
   filterPattern??=runtimeQuality?{count:filterSamples,route:'runtime-arithmetic',reason:null,bytes:0,node:null}:createShadowFilterPattern(filterSamples,renderer.backend?.device?.limits);
@@ -144,7 +144,7 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
   // consumer supplies its retained capture anchor, not the newer live centroid.
   material.vertexNode=cameraProjectionMatrix.mul(cameraViewMatrix).mul(vec4(positionWorld.sub(sourceNode),1));
   material.fragmentNode=vec4(vec3(positionWorld.sub(sourceNode).length()),1);
-  const sampleDepth=ray=>{
+  const sampleCube=ray=>{
   // Explicit LOD is necessary inside spatially divergent source branches.
   // These radial depth cubes have exactly one mip level.
   const shadowSample=cubeTexture(target.texture,ray).level(0);
@@ -155,6 +155,9 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
     ?vec3(uvNode.x.negate(),uvNode.yz):uvNode;
   return shadowSample.r;
   };
+  // Resolve the optional bank only during graph building, after all captures
+  // have been constructed and the mount has checked their capabilities.
+  const sampleDepth=ray=>depthLookup?THREE.TSL.Fn(()=>depthLookup(ray,()=>sampleCube(ray)))():sampleCube(ray);
   // The selected-source path supplies a dynamic source and depth lookup, but
   // consumes the same receiver law and live filter-quality uniforms.
   const receiver=({source=sourceNode,size=sourceSizeNode,depth=sampleDepth,differential,strength=enabled.mul(effective)}={})=>{
@@ -185,7 +188,7 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
     batchRenderer:sharedPreparation?renderer:null,
     batchScene:scene,
     prepareSampling(){filterDifferential?.toStack();},
-    receiverSampling:{sampleDepth,filterDifferential,strength:enabled.mul(effective)},
+    receiverSampling:{sampleDepth,filterDifferential,strength:enabled.mul(effective),depthLookup},
     receiverVisibility(options){return receiver(options).visibility;},
     setSampling(value){validateShadowSampling(value);complementary.value=value==='complementary';status.shadowSampling=value;},
     visibility,visibilityAt,

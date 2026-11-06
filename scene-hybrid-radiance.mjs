@@ -1,4 +1,5 @@
 import {createShadowCaptureSchedule,createShadowSourceSnapshots,validateShadowCaptureBudget} from './fire-shadow-cadence.mjs';
+import {createFireShadowBank,shadowBankPlan} from './fire-shadow-bank.mjs';
 import {normalizeNearSmokeBox,nearSmokeBoxCoverage,admitNearSmokeBox} from './scene-near-smoke-box.mjs';
 export {authoredSourceRegions} from './scene-source-regions.mjs';
 import * as THREE from './lib/three.webgpu.js';
@@ -55,9 +56,10 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   let comparison=validateShadowComparison(shadowComparison);
   const worldCellSize=uniform(comparison.worldCellSize);
   const casterScene=createFireShadowCasters({scene,enabled:surfaceEnabled});
-  let points,external,lights,irradiance,prepareSurfaceSampling,smokeShadow,shadowSources,shadowExternal,captureSchedule,selectedEvaluationAvailable=false;
+  let points,external,lights,irradiance,prepareSurfaceSampling,smokeShadow,shadowSources,shadowExternal,captureSchedule,selectedEvaluationAvailable=false,shadowBank=null,shadowBankFallback=null;
   let sourceDomain=sceneSourceDomain(),builtDomain=null,sourceRadius=Math.sqrt(11);
   function buildPoints(count){
+  let pointBank=null;
   const sharedPreparation=comparison.implementation==='shared';
   const filterPattern=sharedPreparation?{count:filterSamples,bytes:0,route:'runtime-arithmetic',reason:null,node:null}:{count:filterSamples,bytes:0,route:'arithmetic',reason:'legacy-comparison',node:null};
   const grain=comparison.grain==='ordered'?null:shadowGrainNode(comparison.grain==='world'?receiverPosition.div(worldCellSize):vec3(screenCoordinate.xy,0),THREE.TSL,comparison.grain==='screen-animated'?THREE.TSL.frameId:null);
@@ -77,14 +79,18 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     const captureTransform=uniform(new THREE.Vector4(0,0,0,1));
     const capturePosition=textureLoad(shadowExternal,ivec2(i,0)).xyz.mul(captureTransform.w).add(captureTransform.xyz);
     const filterCoordinates=grain?.coordinates??paired.select(vec2(screenCoordinate.x.div(2).floor(),screenCoordinate.y),screenCoordinate.xy);
-    const shadow=createShadow({renderer,scene,sourceNode:capturePosition,sourceIdentity:'retained-gpu-solid-shadow-anchor',receiverNode:receiverPosition,normalNode:normalWorld,requested:true,resolution:shadowResolution,sourceRadius:()=>translation.value.length()+scale.value*sourceRadius,sourceSizeNode:region.w.max(0).sqrt().mul(scale),shadowSoftness,shadowSampling,shadowEdgeFilter,filterCoordinates,screenAligned:comparison.grain!=='world',sharedPreparation,blockerSamples,filterSamples,filterPattern,runtimeQuality:true});
+    const depthLookup=(ray,fallback)=>pointBank?pointBank.sampleDepth(i,ray):fallback();
+    const shadow=createShadow({renderer,scene,sourceNode:capturePosition,sourceIdentity:'retained-gpu-solid-shadow-anchor',receiverNode:receiverPosition,normalNode:normalWorld,requested:true,resolution:shadowResolution,sourceRadius:()=>translation.value.length()+scale.value*sourceRadius,sourceSizeNode:region.w.max(0).sqrt().mul(scale),shadowSoftness,shadowSampling,shadowEdgeFilter,filterCoordinates,screenAligned:comparison.grain!=='world',sharedPreparation,blockerSamples,filterSamples,filterPattern,runtimeQuality:true,depthLookup});
     // Source coefficients use volume-local lengths. Express distance there;
     // scaling the object should not silently scale its radiometric brightness.
     const delta=position.sub(receiverPosition).div(scale),distance2=delta.dot(delta);
     const direction=delta.div(distance2.sqrt().max(1e-6));
     const medium=smokeShadow?smokeShadow.visibility(region.xyz,receiverPosition.sub(translation).div(scale),i):THREE.TSL.float(1);
-    return {shadow,captureTransform,irradiance:energy.div(distance2.add(region.w)).mul(normalWorld.dot(direction).max(0)).mul(shadow.visibility).mul(medium)};
+    return {shadow,captureTransform,depthLookup,irradiance:energy.div(distance2.add(region.w)).mul(normalWorld.dot(direction).max(0)).mul(shadow.visibility).mul(medium)};
   });
+  const compatible=lights.every(l=>l.shadow.receiverSampling?.depthLookup===l.depthLookup&&typeof l.shadow.resource==='function');
+  pointBank=compatible?createFireShadowBank({renderer,count,resolution:shadowResolution}):null;
+  shadowBank=pointBank;shadowBankFallback=pointBank?null:compatible?(shadowBankPlan({count,resolution:shadowResolution},device.limits).reason??'renderer-without-array-texture-support'):'shadow-factory-without-bank-interface';
   const currentLights=lights;
   // Keep separate captures, but select their data before expensive filtering.
   // Only the texture lookup switches between maps; PCSS arithmetic is shared.
@@ -98,7 +104,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       strength.assign(currentLights[i].shadow.receiverSampling.strength);
     });
     const source=textureLoad(shadowExternal,ivec2(index,0)).xyz.mul(transform.w).add(transform.xyz);
-    const depth=ray=>Fn(()=>{
+    const depth=pointBank?ray=>pointBank.sampleDepth(index,ray):ray=>Fn(()=>{
       const value=float(0).toVar();
       for(let i=0;i<count;i++)If(index.equal(i),()=>value.assign(currentLights[i].shadow.receiverSampling.sampleDepth(ray)));
       return value;
@@ -143,7 +149,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     return sum.mul(surfaceGain);
   })();
   }
-  function releasePoints(){for(const light of lights)light.shadow.dispose();smokeShadow?.dispose(renderer);delete renderer.backend.get(external).texture;external.dispose();delete renderer.backend.get(shadowExternal).texture;shadowExternal.dispose();shadowSources.destroy();points.destroy();}
+  function releasePoints(){shadowBank?.dispose();shadowBank=null;for(const light of lights)light.shadow.dispose();smokeShadow?.dispose(renderer);delete renderer.backend.get(external).texture;external.dispose();delete renderer.backend.get(shadowExternal).texture;shadowExternal.dispose();shadowSources.destroy();points.destroy();}
   buildPoints(pointCount);
   const originals=new Map(),localVisibility=createLocalSceneVisibility();let gather=null,geometryRevision=null,frame=null,disposed=false,valid=false;
   let gain=1,sourceSoftness=0,surfaceScattering=false,smokeMode='distributed',angularPattern='fixed',angularRotation=0,retainComparisons=false;
@@ -264,6 +270,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         const selected=plan.indices.map(i=>{lights[i].captureTransform.value.set(...sourceTransform.translate,sourceTransform.scale);return lights[i].shadow;});
         if(comparison.implementation==='shared')renderFireShadowBatch({scene,shadows:selected,casterScene,flameBox});
         else casterScene.withCapture(()=>{for(const shadow of selected)shadow.render();},{flameBox});
+        shadowBank?.copyCompleted(plan.indices,lights.map(l=>l.shadow));
         solidShadowCapture=captureSchedule.commit(plan,{generation:field.source.generation,frame:field.source.frame});
       }
       frame={...frame,exterior,pointRegions:reduction,smokeShadow:medium,solidShadowCapture,surfaceTransport:status.surfaceTransport,previewStale:false};
@@ -331,7 +338,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       if(next.resolution===shadowResolution&&next.blockerSamples===blockerSamples&&next.filterSamples===filterSamples)return;
       shadowResolution=next.resolution;blockerSamples=next.blockerSamples;filterSamples=next.filterSamples;
       Object.assign(status,{shadowResolution,blockerSamples,filterSamples});
-      if(lights.every(light=>typeof light.shadow.setQuality==='function')){for(const light of lights)light.shadow.setQuality(next);valid=false;}
+      if(lights.every(light=>typeof light.shadow.setQuality==='function')){for(const light of lights)light.shadow.setQuality(next);shadowBank?.setResolution(next.resolution);valid=false;}
       else requestRebuild();
     },
     whenRebuilt(){return rebuildTask??(status.error?Promise.reject(Error(status.error)):Promise.resolve());},
@@ -348,7 +355,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     // Host restores these controls for both routes. Record but never pretend
     // they affect point surfaces; the prototype UI marks them inapplicable.
     setReceiverSpacing(value){status.receiverSpacingRequested=value;},setSurfaceReconstruction(value){status.surfaceReconstructionRequested=value;},setEditing(){},
-    debugState(){const captures=valid&&surfaceEnabled?frame?.solidShadowCapture:null;return {...status,shadowCaptureBudget,nearBox:normalizeNearSmokeBox(nearBox),smokeEnvironmentBlur,angularPattern,angularRotation,shadowEdgeFilter,surfaceEnabled,smokeShadowSteps,smokeShadowResolution,smokeShadowFilter,smokeShadowFilterAngle,smokeShadowFilterTaps,smokeShadowMediumResolution,smokeShadowWork:smokeShadowWork({steps:smokeShadowSteps,resolution:smokeShadowResolution,filter:smokeShadowFilter,angleDegrees:smokeShadowFilterAngle,tapsPerAxis:smokeShadowFilterTaps,count:pointCount}),mediumExtinction:smokeShadowSteps?'radial-prefix-atlas':'omitted',shadowCasterLevel:casterScene.debugState().level,casters:casterScene.debugState(),shadowImplementation:comparison.implementation,shadowGrain:comparison.grain,shadowWorldCellSize:comparison.worldCellSize,pointSampling,pointEvaluationBudget,sourceEvaluationImplementation:pointEvaluationBudget&&selectedEvaluationAvailable?'shared-selected-filter':'per-source-filter',pointSelection:pointEvaluationBudget?'cyclic-complementary':pointSampling,evaluatedPointCount:surfaceEnabled?sourceEvaluationCount(pointCount,pointEvaluationBudget,pointSampling):0,capturedPointCount:captures?.refreshedCount??0,residentShadowCount:captures?.residentCount??0,solidShadowCapture:captures,gain,sourceTransform,sourceSoftness,smokeMode,surfaceScattering,surfaceGain:surfaceGain.value,frame,shadows:lights.map(l=>l.shadow.debugState())};},
+    debugState(){const captures=valid&&surfaceEnabled?frame?.solidShadowCapture:null;return {...status,shadowBank:shadowBank?.debugState()??{strategy:'individual-cubes',reason:shadowBankFallback},shadowCaptureBudget,nearBox:normalizeNearSmokeBox(nearBox),smokeEnvironmentBlur,angularPattern,angularRotation,shadowEdgeFilter,surfaceEnabled,smokeShadowSteps,smokeShadowResolution,smokeShadowFilter,smokeShadowFilterAngle,smokeShadowFilterTaps,smokeShadowMediumResolution,smokeShadowWork:smokeShadowWork({steps:smokeShadowSteps,resolution:smokeShadowResolution,filter:smokeShadowFilter,angleDegrees:smokeShadowFilterAngle,tapsPerAxis:smokeShadowFilterTaps,count:pointCount}),mediumExtinction:smokeShadowSteps?'radial-prefix-atlas':'omitted',shadowCasterLevel:casterScene.debugState().level,casters:casterScene.debugState(),shadowImplementation:comparison.implementation,shadowGrain:comparison.grain,shadowWorldCellSize:comparison.worldCellSize,pointSampling,pointEvaluationBudget,sourceEvaluationImplementation:pointEvaluationBudget&&selectedEvaluationAvailable?'shared-selected-filter':'per-source-filter',pointSelection:pointEvaluationBudget?'cyclic-complementary':pointSampling,evaluatedPointCount:surfaceEnabled?sourceEvaluationCount(pointCount,pointEvaluationBudget,pointSampling):0,capturedPointCount:captures?.refreshedCount??0,residentShadowCount:captures?.residentCount??0,solidShadowCapture:captures,gain,sourceTransform,sourceSoftness,smokeMode,surfaceScattering,surfaceGain:surfaceGain.value,frame,shadows:lights.map(l=>l.shadow.debugState())};},
     canRender(){const source=prototype.sceneVolumeSourceField();return !disposed&&valid&&source.status==='encoded'&&source.generation===frame?.generation&&source.frame===frame?.frame;},
     readback(options){if(!gather)throw new Error('hybrid not encoded');return gather.readback(options);},
     async readShadowCaptureOrigins(){
