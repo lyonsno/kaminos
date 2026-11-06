@@ -171,6 +171,22 @@ export async function createTrellisSharedHost({appGpu,sharedGpu,host,prototype,s
         withForeground(phase,work){
           throwIfStopped(signal);return frameRun.withForeground(phase,work);
         },
+        async withGpuDuty(phase,work){
+          throwIfStopped(signal);
+          if(typeof work!=='function')throw TypeError('GPU duty work must be a function');
+          const job=enqueue({jobId:runId+':finishing:'+(++readSequence),execute:async invocation=>{
+            const duty=await runtime.prepareCommandDutyAtBoundary({phase,kind:'compute',metadata:{operation:'original-remesh'}},invocation);
+            let encoded=false;
+            try{
+              throwIfStopped(signal);const result=await work(()=>{runtime.settleCommandDuty(duty,{status:'encoded'});encoded=true;});
+              if(!encoded)throw Error('finishing GPU duty did not encode its command');
+              await runtime.yieldToBrowser({reason:phase+'.post-submit'},invocation);return result;
+            }catch(error){if(!encoded)runtime.settleCommandDuty(duty,{status:'failed-before-encode',error});throw error;}
+          }});
+          const terminal=await job.completion;
+          if(terminal.status!=='succeeded'){const error=Error(terminal.failure?.message??'TRELLIS finishing '+terminal.status);error.name=terminal.failure?.name??'Error';throw error;}
+          return terminal.output;
+        },
         finish(){
           if(finishing)return finishing;
           state.status='settling';

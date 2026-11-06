@@ -8,6 +8,7 @@
 import {simplifyMesh} from './mesh-simplify.js';
 import {loadSimplifier} from './wasm-simplify.js';
 import {admitSignal,abortError,runFinishingWorker} from './finishing-worker.js';
+import {createOriginalRemeshPostprocess} from './original-remesh.js';
 
 export const MESH_POSTPROCESS_ROUTE='Trellis2MLX/surface-preserving/browser-port-of-fast-simplify-first';
 
@@ -400,7 +401,9 @@ export function cleanupAndSimplifyPreservingSurface(vertices,faces,{targetFaces,
 // thread. Either way the input arrays are copied, never detached from the caller.
 // simplifier: 'auto' (Wasm where relaxed-SIMD multiply-adds fuse, else the JS
 // port) or 'js'; the receipt records which one ran.
-export function createBrowserMeshPostprocess({targetFaces,keepLargest=false,WorkerClass,signal,onProgress,simplifier='auto'}={}){
+export function createBrowserMeshPostprocess({targetFaces,keepLargest=false,WorkerClass,signal,onProgress,simplifier='auto',mode='surface-preserving',...remesh}={}){
+  if(!['surface-preserving','original-remesh'].includes(mode))throw TypeError('unknown TRELLIS finishing mode '+mode);
+  if(mode==='original-remesh')return createOriginalRemeshPostprocess({targetFaces,WorkerClass,signal,onProgress,simplifier,...remesh});
   if(!Number.isSafeInteger(targetFaces)||targetFaces<1)throw RangeError('positive caller-selected targetFaces required');
   if(onProgress!==undefined&&typeof onProgress!=='function')throw TypeError('onProgress must be a function');
   if(simplifier!=='auto'&&simplifier!=='js')throw TypeError("simplifier must be 'auto' or 'js'");
