@@ -66,6 +66,18 @@ class ProfileCorrespondence(unittest.TestCase):
 
 
 class ProfileProducerReports(unittest.TestCase):
+    def valid_plan(self,root):
+        inner=np.array([[-.8,0],[0,-.8],[.8,0]])
+        outer=np.array([[-1,0],[0,-1],[1,0]])
+        segments=np.concatenate([np.stack([inner[:-1],inner[1:]],axis=1),np.stack([outer[:-1],outer[1:]],axis=1)])
+        section=dict(station=0,observed=True,evidence=dict(opening=dict(center=[0,0]),segments=segments.tolist(),innerSegments=[0,1],outerSegments=[2,3]))
+        observed=root/'observed.json'
+        observed.write_text(json.dumps(dict(ok=True,phase='complete',normalizer={},ellipseFitter={},parts=[dict(name='Synthetic U',source={},profile={},sections=[section])])))
+        identity=lambda p:dict(path=str(p),sha256=hashlib.sha256(p.read_bytes()).hexdigest())
+        runtime=identity(ROOT/'tools/stock-source-frame.mjs')
+        runtime['modules']=[identity(ROOT/'experiments/stock-family'/str(name+'.mjs')) for name in ['model','rest-arc','section','profile','mouths']]
+        return dict(observations=str(observed),stations=[0],parameters=[0,.5,1],rimInset=.01,nominal=dict(center=[0,0],innerRadius=.8,outerRadius=1),runtimeValidator=runtime)
+
     def invoke(self,plan,root):
         path=root/'plan.json';path.write_text(json.dumps(plan))
         report=root/'report.json';report.write_text(json.dumps(dict(ok=True,phase='complete')))
@@ -111,6 +123,33 @@ class ProfileProducerReports(unittest.TestCase):
             report=self.invoke(plan,root)
             self.assertEqual(report['phase'],'consumer-validation:Synthetic U')
             self.assertEqual(report['parts'][0]['consumerValidation']['stdout'],'')
+
+    def test_one_coordinate_center_cannot_broadcast_into_authored_geometry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);plan=self.valid_plan(root)
+            plan['nominal']['center']=[.1]
+            report=self.invoke(plan,root)
+            self.assertIn('nominal',report['error'].lower())
+
+    def test_each_selected_surface_is_required_and_has_valid_identities(self):
+        for selection in [[],[0,0],[-1],[4],[True],[.5]]:
+            with self.subTest(selection=selection),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory);plan=self.valid_plan(root)
+                observed=Path(plan['observations']);value=json.loads(observed.read_text())
+                value['parts'][0]['sections'][0]['evidence']['innerSegments']=selection
+                observed.write_text(json.dumps(value))
+                report=self.invoke(plan,root)
+                self.assertIn('surface',report['error'].lower())
+
+    def test_actual_consumer_accepts_complete_selected_surfaces(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);plan=self.valid_plan(root)
+            path=root/'plan.json';path.write_text(json.dumps(plan));report=root/'report.json'
+            run=subprocess.run([sys.executable,str(ROOT/'tools/stock_profile_recovery.py'),'--plan',str(path),'--report',str(report)],capture_output=True,text=True)
+            self.assertEqual(run.returncode,0,run.stderr)
+            value=json.loads(report.read_text())
+            self.assertTrue(value['ok'])
+            self.assertEqual(set(value['parts'][0]['sections'][0]['profileFit']['features']['roles']),{'inner','outer'})
 
 
 if __name__=='__main__':unittest.main()

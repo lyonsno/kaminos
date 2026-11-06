@@ -1,5 +1,16 @@
 """Fit a displacement field from explicit generated/authored section features."""
 
+def validate_nominal(value):
+    import math
+    finite=lambda v:type(v) in (int,float) and math.isfinite(v)
+    center=value.get('center') if isinstance(value,dict) else None
+    if not isinstance(center,list) or len(center)!=2 or not all(map(finite,center)):
+        raise ValueError('Nominal center requires exactly two finite coordinates')
+    inner,outer=value.get('innerRadius'),value.get('outerRadius')
+    if not finite(inner) or not finite(outer) or not 0<inner<outer:
+        raise ValueError('Invalid nominal profile radii')
+    return value
+
 def fit_profile_field(points,targets):
     import numpy as np
     points,targets=np.asarray(points,dtype=float),np.asarray(targets,dtype=float)
@@ -36,11 +47,18 @@ def evaluate_field(field,points):
 
 def section_features(section,nominal,parameters,rim_inset=0,minimum_separation=0):
     import numpy as np
+    validate_nominal(nominal)
     origin=np.array(section['evidence']['opening']['center'],dtype=float)
     if not np.isfinite(rim_inset) or rim_inset<0:raise ValueError('Finite nonnegative rim inset required')
     if not np.isfinite(minimum_separation) or minimum_separation<0:raise ValueError('Finite nonnegative feature separation required')
     origin[1]-=rim_inset
     lines=np.array(section['evidence']['segments'])
+    if lines.ndim!=3 or lines.shape[1:]!=(2,2) or not len(lines) or not np.isfinite(lines).all():
+        raise ValueError('Finite observed surface segments are required')
+    for role in ['inner','outer']:
+        ids=section['evidence'].get(role+'Segments')
+        if not isinstance(ids,list) or not ids or any(type(i) is not int or not 0<=i<len(lines) for i in ids) or len(set(ids))!=len(ids):
+            raise ValueError('Nonempty distinct valid '+role+' surface segment identities are required')
     edges=lines[:,1]-lines[:,0];start=lines[:,0]-origin
     precision=np.finfo(np.float32).eps*max(float(abs(lines).max()),1.)
     cross=lambda a,b:a[...,0]*b[...,1]-a[...,1]*b[...,0]
@@ -94,8 +112,8 @@ def main():
         if original.get('ok') is not True or original.get('phase')!='complete' or not original.get('parts'):raise ValueError('Complete observed source sections are required')
         parameters=np.array(plan['parameters'],dtype=float)
         if parameters.ndim!=1 or len(parameters)<3 or not np.isfinite(parameters).all() or parameters[0]!=0 or parameters[-1]!=1 or np.any(np.diff(parameters)<=0):raise ValueError('Ordered authored profile parameters from zero to one required')
-        nominal=plan['nominal']
-        if not np.isfinite([*nominal['center'],nominal['innerRadius'],nominal['outerRadius']]).all() or not 0<nominal['innerRadius']<nominal['outerRadius']:raise ValueError('Invalid nominal profile')
+        report['phase']='plan-validation'
+        nominal=validate_nominal(plan['nominal'])
         runtime=plan['runtimeValidator']
         for item in [runtime,*runtime['modules']]:
             if digest(item['path'])!=item['sha256']:raise ValueError('Runtime validator identity mismatch')
