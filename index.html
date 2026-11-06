@@ -27947,7 +27947,7 @@ function installSceneConstruction() {
   groupPanel.innerHTML='<h3 id="group-kind-label">Group</h3><p id="group-mode-hint">Its frame places all members together. Select a member to edit its own data.</p><button type="button" class="btn" id="group-make-assembly">Make assembly</button><button type="button" class="btn" id="group-duplicate">Duplicate · Shift D</button><button type="button" class="btn" id="object-ungroup">Ungroup</button>';
   relations.after(groupPanel);
   const meshBurnerPanel=document.createElement('section');meshBurnerPanel.id='selected-mesh-burner';meshBurnerPanel.hidden=true;
-  meshBurnerPanel.innerHTML='<h3>Burner</h3><button class="btn" type="button" id="object-make-burner">Make burner…</button>';relations.after(meshBurnerPanel);
+  meshBurnerPanel.innerHTML='<h3>Burner</h3><button class="btn" type="button" id="object-make-burner">Make burner…</button>';relations.append(meshBurnerPanel);
   document.getElementById('object-make-burner').onclick=()=>openMeshBurnerDialog(workingScene.activeObjectId).catch(error=>setInfo(error.message));
   document.getElementById('group-make-assembly').onclick=()=>{try{const group=selectedSceneGroupEntry();setSceneAssembly(group.id,assemblyForMembers(group.objectIds.map(id=>workingScene.find(id)),viewportDisplay.hiddenIds));}catch(error){setInfo(error.message);}};
   const assemblyPanel=document.createElement('section');assemblyPanel.id='selected-assembly-properties';assemblyPanel.hidden=true;
