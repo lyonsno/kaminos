@@ -28500,7 +28500,7 @@ async function makeMeshBurner(bodyId,{kind='nozzle',outlet=null,reuseSourceId=nu
   const entry=workingScene.find(bodyId);if(!entry?.object)throw Error('Choose a placed burner housing');
   const box=new THREE.Box3().setFromObject(entry.object,true);
   const snapshot=sceneMembershipBatch.capture();
-  const template=authoredFlameSourceRecords().find(row=>row.id===reuseSourceId)??authoredFlameSourceRecords()[0];
+  const template=authoredFlameSourceRecords().find(row=>row.id===reuseSourceId)??authoredFlameSourceRecords()[0]??{type:FLAME_EMITTER_TYPE,source:FLAME_EMITTER_SOURCE,emissionEnabled:true,emission:{domainId:FIRE_DOMAIN_ID,settings:Object.fromEntries(Object.entries(readVolumeSettingsValues().domControls).filter(([id])=>fireControlOwner(id)==='source'))}};
   if(reuseSourceId&&(!template||template.id!==reuseSourceId||snapshot.groups.some(g=>g.assembly&&g.objectIds.includes(reuseSourceId))))throw Error('The new flame source is no longer available for this burner');
   const sourceId=reuseSourceId??makeSceneObjectId('flame-source'),groupId=makeSceneObjectId('burner');
   const next=meshBurnerPlan({scene:snapshot,bodyId,template,kind,bounds:{min:box.min.toArray(),max:box.max.toArray()},sourceId,groupId,outlet,reuseSourceId});
@@ -28524,7 +28524,7 @@ async function openMeshBurnerDialog(bodyId){
     }catch(error){if(!request.signal.aborted)status.textContent=error.message;}
     finally{busy=false;if(!request.signal.aborted){kind.disabled=false;basin.disabled=false;button.disabled=!activeSceneComposition&&!basin.value;}}
   };
-  const cancel=()=>request.abort();dialog.querySelector('[value="cancel"]').onclick=cancel;dialog.addEventListener('cancel',cancel);dialog.addEventListener('close',()=>{cancel();dialog.remove();},{once:true});document.body.append(dialog);dialog.showModal();
+  const cancel=()=>{request.abort();if(busy&&scenePlacementTools.edits.state().active?.id==='@first-flame-field')scenePlacementTools.edits.cancel();};dialog.querySelector('[value="cancel"]').onclick=cancel;dialog.addEventListener('cancel',cancel);dialog.addEventListener('close',()=>{cancel();dialog.remove();},{once:true});document.body.append(dialog);dialog.showModal();
   if(needsBasin){try{const response=await fetch('/api/volume-settings-presets',{cache:'no-store',signal:request.signal}),index=await response.json();if(!response.ok)throw Error(index.error||'Basin library unavailable');validateVolumeSettingsPresetIndex(index);for(const item of index.entries){const option=document.createElement('option');option.value=item.presetId;option.textContent=item.label||item.presetId;basin.append(option);}}catch(error){if(!request.signal.aborted)status.textContent=error.message;}}
 }
 function migrateLegacyBurner(recipe) {

@@ -22,3 +22,11 @@ test('authored outlet frames remain explicit and invalid profiles do not mutate 
  const next=burners.meshBurnerPlan(options),outlet=next.objects.find(o=>o.id==='outlet');assert.deepEqual(outlet.transform.position,[.2,.3,.1]);assert.deepEqual(outlet.transform.rotation,[0,0,-Math.PI/2]);
  assert.throws(()=>burners.meshBurnerPlan({...options,kind:'guess-mouth'}),/kind/i);assert.deepEqual(scene,before);
 });
+
+test('a retained fire composition with no active sources supplies its owned source template',async()=>{
+ const {readFileSync}=await import('node:fs'),{runInNewContext}=await import('node:vm');const html=readFileSync(new URL('../index.html',import.meta.url),'utf8'),a=html.indexOf('async function makeMeshBurner('),z=html.indexOf('async function openMeshBurnerDialog(',a);
+ let saved;const scene={objects:[body],groups:[],selection:{ids:['body'],activeId:'body'}};
+ const context={assertSceneConstructionAvailable(){},activeSceneComposition:{flame:{presetId:'retained-basin'}},workingScene:{find:()=>({object:{}})},THREE:{Box3:class{constructor(){this.min={toArray:()=>[-.5,-.1,-.2]};this.max={toArray:()=>[.5,.1,.2]};}setFromObject(){return this;}}},sceneMembershipBatch:{capture:()=>structuredClone(scene)},authoredFlameSourceRecords:()=>[],readVolumeSettingsValues:()=>({domControls:{...settings,'volume-resolution':d('volume-resolution',32)}}),fireControlOwner:id=>id==='volume-resolution'?'domain':'source',FIRE_DOMAIN_ID:'flame-field',FLAME_EMITTER_TYPE:'flame-emitter',FLAME_EMITTER_SOURCE:'kaminos:analytic-flame',makeSceneObjectId:prefix=>prefix,meshBurnerPlan:burners.meshBurnerPlan,scenePlacementTools:{edits:{applySettled:async(_,value)=>{saved=value;}}},setInfo(){},structuredClone};
+ await runInNewContext(html.slice(a,z)+';makeMeshBurner("body",{kind:"rack"})',context);
+ const result=saved.objects.find(o=>o.type==='flame-emitter');assert.equal(result.emission.settings['volume-immersed-fuel'].value,.56);assert.equal(result.emission.settings['volume-resolution'],undefined);assert.equal(saved.groups[0].assembly.kind,'burner');
+});
