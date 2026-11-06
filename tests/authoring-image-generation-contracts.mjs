@@ -445,3 +445,11 @@ test('the kiln gets the exact admitted prompt and model request before async loa
  const request=h.service.read().request;assert.equal(request.prompt,'engraved bronze lantern');assert.equal(request.width,256);assert.equal(request.seed,42);assert.match(request.id,/^kaminos-flux2-klein:/);
  gate.resolve();await run;assert.equal(h.generations[0].prompt,request.prompt);assert.equal(h.service.read().request.id,request.id);
 });
+
+test('recorded adapter absence rejects an added adapter before inference, and new plain outputs record absence',async()=>{
+ const adapted=harness({modelWeights:async()=>'/flux3-weights'});
+ await assert.rejects(adapted.service.run({model:'flux3',prompt:'rack',seed:614,size:256,expectedModel:{lora:null}}),/recipe.*adapter|recipe.*lora/i);
+ assert.equal(adapted.generations.length,0);
+ const plain=harness();await plain.service.run({model:'flux2',prompt:'rack',seed:614,size:256});
+ assert.equal(plain.delivered[0].provenance.lora,null);
+});

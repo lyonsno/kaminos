@@ -10,6 +10,7 @@ export function imageGenerationRecipe(p){
  if(p?.schema!=='kaminos.image-generation.v1')throw Error('No supported generation recipe is recorded in this image.');
  const model=Object.keys(AUTHORING_IMAGE_MODELS).find(key=>p.model===key||p.model===AUTHORING_IMAGE_MODELS[key].name);
  if(!model)throw Error(`Unsupported recipe model: ${p.model??'not recorded'}`);
+ if(model==='flux3'&&!Object.hasOwn(p,'lora'))throw Error('This older recipe has no recorded adapter presence. Use Edit this image to start a fresh recipe with the current model package.');
  if(typeof p.prompt!=='string'||!p.prompt.trim())throw Error('The recipe has no recorded prompt.');
  if(!Number.isSafeInteger(p.seed)||p.seed<0)throw Error('The recipe has no supported recorded seed.');
  const size=Math.max(p.width,p.height),aspect=p.aspect??KLEIN_ASPECTS.find(a=>{const d=kleinImageDimensions(size,a);return d.width===p.width&&d.height===p.height;});
@@ -73,7 +74,7 @@ export function createImageRecipeIteration({history,assets,readControls,applyCon
    if(opening)throw Error('Wait for the image recipe to finish opening.');
    if(!parent)return experiment?{...request,experiment:clone(experiment)}:request;
    const p=parent.provenance,sameModel=request.model===baseline.model;
-   const expectedModel=sameModel?Object.fromEntries(['source','sampling','lora'].filter(k=>p[k]!=null).map(k=>[k,clone(p[k])])):null;
+   const expectedModel=sameModel?Object.fromEntries(['source','sampling','lora'].filter(k=>Object.hasOwn(p,k)&&p[k]!==undefined).map(k=>[k,clone(p[k])])):null;
    return {...request,...(experiment?{experiment:clone(experiment)}:{}),...(sameModel&&baseline.model==='flux2'?{textLength:baseline.textLength}:{}),
     ...(expectedModel&&Object.keys(expectedModel).length?{expectedModel}:{}),
     iteration:{parent:{source:parent.source,name:parent.name},changes:imageRecipeChanges(baseline,request)}};

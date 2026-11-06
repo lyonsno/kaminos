@@ -175,6 +175,7 @@ const errorIdentity=value=>({name:typeof value?.name==='string'?value.name:'Erro
 // package metadata remains compatible; a missing or different recorded value does not.
 function assertRecipeModel(expected,pipeline){
  if(!expected)return;
+ if(Object.hasOwn(expected,'lora')&&!!expected.lora!==!!pipeline.ditManifest?.lora)throw Error('Recorded recipe adapter presence differs from the loaded model package. Select the original package before replaying this recipe.');
  const actual={source:pipeline.ditManifest?.source,sampling:pipeline.sampling,lora:pipeline.ditManifest?.lora};
  const fields={source:['repo','revision','subfolder'],sampling:['steps','shift'],lora:['sha256','strength']};
  for(const [kind,keys]of Object.entries(fields))for(const key of keys){
@@ -340,6 +341,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         // Completed pixels win a stop race; they are saved like any other result.
         phase='persistence';
         const provenance={schema:'kaminos.image-generation.v1',route:routeId,model:spec.name,prompt:text,seed,width:image.width,height:image.height,weights:base,aspect,weightsLevel:level,transformer:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,timings:image.timings,elapsed:timing(),...(image.sampling?{completion:structuredClone(image.sampling)}:{}),...(promptExpansion?{promptExpansion:structuredClone(promptExpansion)}:{})};
+        provenance.lora=pipeline.ditManifest?.lora?structuredClone(pipeline.ditManifest.lora):null;
         if(reference)provenance.reference=structuredClone(reference.provenance);
         if(iteration)provenance.iteration=iteration;
         if(experiment)provenance.experiment=structuredClone(experiment);

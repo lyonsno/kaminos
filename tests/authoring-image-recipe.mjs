@@ -92,3 +92,11 @@ test('entering Generate from an experiment preserves its existing recipe but dro
  h.c.joinExperiment({id:'other',title:'Other flight'},{preserveRecipe:true});
  assert.equal(h.c.read().parent,null);assert.equal(h.c.decorate(h.get()).experiment.id,'other');
 });
+
+test('explicit adapter absence survives decoration; older unknown FLUX3 adapter state cannot promise replay',()=>{
+ const h=harness();h.c.recall(entry('/plain.png',{...p,lora:null}));
+ assert.equal(h.c.decorate(h.get()).expectedModel.lora,null);
+ const legacy={...p};delete legacy.lora;
+ assert.throws(()=>h.c.recall(entry('/legacy.png',legacy)),/adapter.*recorded|recorded.*adapter/i);
+ assert.equal(h.c.read().parent.source,'/plain.png');
+});

@@ -111,7 +111,7 @@ export function installImageExperiments({document,controller,assets,assetsUI,his
    }
   }
   for(const card of grid.querySelectorAll('[data-source]'))card.setAttribute('aria-pressed',String(card.dataset.source===s.selected));
-  const selected=doc.members.find(m=>m.source===s.selected),nextDetail=JSON.stringify([doc.id,doc.revision,s.selected]);
+  const selected=doc.members.find(m=>m.source===s.selected),nextDetail=JSON.stringify([doc.id,doc.revision,s.selected,busy(),doc.members]);
   inspector.hidden=!selected;body.classList.toggle('has-selection',!!selected);
   if(nextDetail!==detailKey){detailKey=nextDetail;inspector.replaceChildren();if(selected){
    const close=button('×',()=>controller.deselect());close.setAttribute('aria-label','Close image details');
@@ -120,7 +120,7 @@ export function installImageExperiments({document,controller,assets,assetsUI,his
    const editImage=button('Edit this image',async()=>{if(busy())throw Error('Finish the current generation first');await controller.editImage(selected.source);});editImage.id='asset-experiment-edit-image';editImage.disabled=busy()||!available(selected);inspector.append(editImage);
    const compare=node('select');compare.setAttribute('aria-label','Compare this image with');const placeholder=node('option','Compare with…');placeholder.value='';compare.append(placeholder);
    for(const m of doc.members.filter(m=>m.source!==selected.source&&available(m))){const option=node('option',`${m.group} · ${m.name}`);option.value=m.source;compare.append(option);}
-   compare.onchange=()=>run(async()=>{if(!compare.value)return;const other=doc.members.find(m=>m.source===compare.value);history.record(other.entry);history.record(selected.entry);assets.select(selected.entry);await assetsUI.open('generate',{refresh:false});layout.compare(true);history.compare(other.source);});inspector.append(compare);
+   compare.onchange=()=>run(async()=>{if(!compare.value)return;const current=controller.read().document;const members=current?.id===doc.id?[selected.source,compare.value].map(source=>current.members.find(m=>m.source===source)):[];if(members.length!==2||!members.every(available))throw Error('Choose available images from the current experiment');const [chosen,other]=members;history.record(other.entry);history.record(chosen.entry);assets.select(chosen.entry);await assetsUI.open('generate',{refresh:false});layout.compare(true);history.compare(other.source);});inspector.append(compare);
    const p=selected.entry?.provenance;
    if(p){const fields=[['Your request',p.promptExpansion?.request?.prompt||p.prompt],['Expanded prompt',p.promptExpansion?.expandedPrompt],['Submitted prompt',p.prompt],['Changes from parent',p.iteration?.changes.map(c=>`${c.field}: ${c.before??'none'} → ${c.after??'none'}`).join('\n')],['Parent',p.iteration?.parent?.name]];
     for(const [label,value]of fields){if(!value)continue;const d=node('details'),summary=node('summary',label),text=node('p',value);d.append(summary,text);if(label==='Your request')d.open=true;inspector.append(d);}

@@ -8,6 +8,8 @@
 
 **Edit this image** uses the selected experiment member as the reference for a fresh instruction and retains the experiment destination. It also works for conditioning plates without generation metadata and for older early-decoded images whose exact recipe cannot be restored. **Edit recipe & rerun** continues to require a supported recorded recipe; it does not silently replace an unsupported sampler with current defaults.
 
+New saved images explicitly record adapter presence, including no adapter. An older FLUX.3 image lacking that record remains usable for comparison and fresh image edits, but exact recipe replay asks for a fresh recipe rather than assuming the currently mounted adapter is the original.
+
 Direct links use `?workspace=authoring&asset_collection=image-experiments` for the library and `?workspace=authoring&image_experiment=<id>` for a collection. They open native Browse without adding image planes to the scene.
 
 The UI and agents use the same `/api/image-experiments` endpoint: GET lists collections, GET with `id` reads one, and POST accepts `create`, `update`, or `add`. Each collection is one `kaminos.image-experiment.v1` JSON document under `KAMINOS_IMAGE_EXPERIMENTS_DIR` (default: the shared assets directory’s `image-experiments` subdirectory). Writes merge membership under a lock and replace the document atomically. Metadata updates carry its `revision`. Members retain local asset sources, names, groups and `reference`/`result` roles; display metadata is read from the actual saved PNG, with the existing asset visibility holds applied. A missing image keeps its membership and shows as unavailable.
