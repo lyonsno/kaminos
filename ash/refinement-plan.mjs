@@ -7,6 +7,13 @@ const inside = (q, low, high) => q.every((v, axis) => v >= low[axis] && v < high
 const linear = (c, dims) => c[0] + dims[0] * (c[1] + dims[1] * c[2]);
 const coordinates = (i, dims) => [i % dims[0], Math.floor(i / dims[0]) % dims[1], Math.floor(i / (dims[0] * dims[1]))];
 
+export function refinementSurfaceCache(p,surfaceEncoding='auto'){
+  if(!['auto','face-records','cell-masks'].includes(surfaceEncoding))throw Error('Invalid ash surface encoding');
+  const maskWords=p.tiles.count*p.tiles.cellsPerTile*2;
+  const encoding=surfaceEncoding==='auto'?(maskWords<p.faceWords?'cell-masks':'face-records'):surfaceEncoding;
+  return {encoding,words:encoding==='cell-masks'?maskWords:p.faceWords};
+}
+
 // Resolution changes only storage and ownership. All material quantities use
 // the volume of one finest cell, including coarse cells whose capacity is eight.
 export function createRefinementLayout({cellSize, bounds, tileSize = 16, refinement}) {
