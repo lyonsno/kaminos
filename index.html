@@ -3533,6 +3533,7 @@ import { checkedSceneLightRecord } from './scene-spot-light.mjs';
 
 import {checkedPose} from './scene-edit-session.mjs';
 import {createAuthoringAssets,installAuthoringAssets} from './authoring-assets.mjs';
+import {readAssetBytes} from './asset-input-preparation.mjs';
 import {createSf3dAuthoringGeneration} from './authoring-generation.mjs';
 import {createTrellisAuthoringGeneration,installMeshModelChoice,withExpressSnapshot} from './authoring-trellis-generation.mjs';
 import {createTrellisPageAuthoringGeneration,prepareImageForTrellis,describeTrellisInput} from './authoring-trellis-page.mjs';
@@ -13721,13 +13722,9 @@ window.kaminosLoadingStandIns = {
 };
 
 async function showGLB(file, options = {}) {
-  await sceneLightingPreparation?.whenIdle();
-  const cleared = shouldClearSceneForImport(options);
-  if (cleared&&!await clearScene()) return null;
-  const arrival = resolveAssetArrivalMode({ arrival: options.arrival, normalize: options.normalize, cleared });
-  const loadToken = workingScene.generation;
+  let loadToken = workingScene.generation;
   const isBlob = typeof file !== 'string';
-  const url = isBlob ? URL.createObjectURL(file) : file;
+  const url = isBlob ? file.name : file;
   const assetMetadata = {...(options.metadata || {})};
   const assetSource = assetMetadata.source ?? (isBlob ? file.name : file);
   let resolvedUrlName = isBlob ? (file?.name || 'object.glb') : String(file);
@@ -13742,10 +13739,32 @@ async function showGLB(file, options = {}) {
   if (file && file.name) glbFileName = file.name;
   modelSourceUrl = isBlob ? file.name : file;
   modelSourceType = 'glb';
+  const telemetryOp = options.telemetryOp || (typeof loadingTelemetry !== 'undefined'
+    ? loadingTelemetry.start('asset', { label: telemetryLabel, phase: 'reading-file' })
+    : null);
+  const readAbort = new AbortController();
+  const inputBytes = options.preparedAsset ? null : (options.inputBytes
+    ? Promise.resolve(options.inputBytes)
+    : readAssetBytes(file,{signal:readAbort.signal,progress:bytes=>{
+        if(loadToken===workingScene.generation&&options.isCurrent?.()!==false)loadingTelemetry?.progress('asset',{label:telemetryLabel,phase:'downloading',token:telemetryOp?.token,...bytes});
+      }}));
+  // Observe read failures immediately even if renderer preparation is still pending.
+  inputBytes?.catch(()=>{});
+  let cleared=false;
+  try {
+    await sceneLightingPreparation?.whenIdle();
+    if(loadToken!==workingScene.generation||options.isCurrent?.()===false)throw Error('stale async GLB load ignored');
+    cleared = shouldClearSceneForImport(options);
+    if(cleared&&!await clearScene()){readAbort.abort();loadingTelemetry?.cancel?.('asset',{token:telemetryOp?.token});return null;}
+    loadToken=workingScene.generation;
+  } catch(error) {
+    readAbort.abort();
+    if(loadToken!==workingScene.generation||options.isCurrent?.()===false)loadingTelemetry?.cancel?.('asset',{token:telemetryOp?.token});
+    else loadingTelemetry?.fail('asset',error,{token:telemetryOp?.token});
+    throw error;
+  }
+  const arrival = resolveAssetArrivalMode({arrival:options.arrival,normalize:options.normalize,cleared});
   const loader = new GLTFLoader();
-  const telemetryOp = typeof loadingTelemetry !== 'undefined'
-    ? loadingTelemetry.start('asset', { label: telemetryLabel, phase: 'downloading' })
-    : null;
   let heroSettled = false;
   const releaseEarlyStandIn = typeof mountSingleAssetLowLodStandIn === 'function'
     ? mountSingleAssetLowLodStandIn({
@@ -13760,9 +13779,9 @@ async function showGLB(file, options = {}) {
     const onLoad=gltf=>{
       heroSettled = true;
       const earlyStandIn = releaseEarlyStandIn?.() ?? null;
-	    if (isBlob) URL.revokeObjectURL(url);
+
       if (typeof loadingTelemetry !== 'undefined') {
-        loadingTelemetry.progress('asset', { label: telemetryLabel, phase: 'preparing-materials' });
+        loadingTelemetry.progress('asset', { label: telemetryLabel, phase: 'preparing-materials',token:telemetryOp?.token });
       }
 	    glbSourceScene = gltf.scene;
 	    const model = gltf.scene;
@@ -13836,7 +13855,7 @@ async function showGLB(file, options = {}) {
           frameAssetArrival(model);
         }
       }
-      if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.complete('asset');
+      if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.complete('asset',{token:telemetryOp?.token});
       setInfo('GLB Inspector — orbit to inspect | use toolbar to fix orientation');
       resolve(options.returnAsset ? {
         id: registeredAsset?.id ?? null,
@@ -13847,28 +13866,23 @@ async function showGLB(file, options = {}) {
         arrival,
       } : model);
     };
-    const onProgress=xhr=>{
-      if (typeof loadingTelemetry !== 'undefined' && xhr && (Number.isFinite(xhr.loaded) || Number.isFinite(xhr.total))) {
-        loadingTelemetry.progress('asset', {
-          label: telemetryLabel,
-          phase: 'downloading',
-          loadedBytes: xhr.loaded,
-          totalBytes: xhr.total,
-        });
-      }
-    };
     const onError=err=>{
       heroSettled = true;
       releaseEarlyStandIn?.();
-      if (isBlob) URL.revokeObjectURL(url);
-      if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.fail('asset', err);
+
+      if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.fail('asset', err,{token:telemetryOp?.token});
       setInfo('Failed to load GLB: ' + (err.message || 'unknown error'));
       reject(err);
     };
     if(options.preparedAsset)Promise.resolve(options.preparedAsset).then(onLoad).catch(onError);
-    else loader.load(url,onLoad,onProgress,onError);
+    else inputBytes.then(bytes=>{
+      if(loadToken!==workingScene.generation||options.isCurrent?.()===false)throw Error('stale async GLB load ignored');
+      loadingTelemetry?.progress('asset',{label:telemetryLabel,phase:'decoding',token:telemetryOp?.token});
+      return loader.parseAsync(bytes,isBlob?'':url.slice(0,url.lastIndexOf('/')+1));
+    }).then(onLoad).catch(onError);
   });
 }
+
 
 // Scene-session owners borrow this loader; membership, placement and stale-load
 // admission remain the ordinary application's operations. Existing imports keep
@@ -27485,9 +27499,13 @@ function duplicateSceneGroup(id,options={}) {
 }
 function duplicateSceneSelection(id,options={}){if(workingScene.selection.ids.length>1||assemblyEditing?.scope())return duplicateSelectedSceneObjects(options);return workingScene.groups.some(g=>g.id===id)?duplicateSceneGroup(id,{interactive:options.interactive===true}):duplicateSceneObject(id,{interactive:options.interactive===true});}
 
-async function importSceneMesh(file,{generation:origin=null,label=null,assetOrigin=null}={}) {
+async function importSceneMesh(file,{generation:origin=null,label=null,assetOrigin=null,bytes:preparedBytes=null,telemetryOp=null}={}) {
   assertSceneConstructionAvailable();if(!file?.name?.toLowerCase().endsWith('.glb'))throw Error('Choose a binary GLB mesh');
-  const generation=workingScene.generation,bytes=await file.arrayBuffer();
+  const generation=workingScene.generation;
+  const operation=telemetryOp||loadingTelemetry.start('asset',{label:label||file.name,phase:'reading-file'});
+  try{
+  const bytes=preparedBytes||await file.arrayBuffer();
+  loadingTelemetry.progress('asset',{phase:'storing-file',token:operation.token});
   const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
   const response=await fetch('/api/ingest-mesh?role=client-prepares-lods',{method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:bytes});
   const receipt=await response.json();if(!response.ok)throw Error(receipt.error||'Mesh storage failed');
@@ -27496,7 +27514,7 @@ async function importSceneMesh(file,{generation:origin=null,label=null,assetOrig
   const id=makeSceneObjectId('mesh'),target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
   const alreadyPrepared=window.__kaminosLastGenerationLevels?.source===digest||autoPreparedLodSources.has(digest);
   autoPreparedLodSources.add(digest);
-  await showGLB(receipt.source,{clear:false,arrival:'append',isCurrent:()=>generation===workingScene.generation&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying&&!authoringBusy,metadata:{id,type:'glb',source:receipt.source,fileName:file.name,label:label||file.name.replace(/\.glb$/i,''),generation:origin,assetOrigin:assetOrigin?{...assetOrigin,sha256:digest}:null}});
+  await showGLB(receipt.source,{clear:false,inputBytes:bytes,telemetryOp:operation,arrival:'append',isCurrent:()=>generation===workingScene.generation&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying&&!authoringBusy,metadata:{id,type:'glb',source:receipt.source,fileName:file.name,label:label||file.name.replace(/\.glb$/i,''),generation:origin,assetOrigin:assetOrigin?{...assetOrigin,sha256:digest}:null}});
   try{await recordSceneObjectInsertion(id);}catch(error){if(!alreadyPrepared)autoPreparedLodSources.delete(digest);removeSceneObjectInternal(id,{recordHistory:false});throw error;}
   const importedEntry=workingScene.objects.find(o=>o.id===id),activeAsh=workingScene.objects.find(o=>o.type===ASH_OBJECT_TYPE);
   if(importedEntry?.object&&activeAsh)await ensureSceneBeautyLods()?.prepareCollision?.([importedEntry.object],{cellSize:activeAsh.ash?.cellSize??0.04});
@@ -27507,6 +27525,7 @@ async function importSceneMesh(file,{generation:origin=null,label=null,assetOrig
     }).catch(()=>{});
   }
   setInfo(`Imported ${file.name}`);return id;
+  }catch(error){loadingTelemetry.fail('asset',error,{token:operation.token});throw error;}
 }
 const meshDataTargets=new Set();
 const colliderEditTargets=new Set();
@@ -29642,8 +29661,11 @@ function setupAuthoringAssets(){
         catch(error){if(workingScene.objects.some(e=>e.id===id))removeSceneObjectInternal(id,{recordHistory:false});else{room.root.removeFromParent();room.dispose();}throw error;}
       }
       if(entry.file)return importSceneMesh(entry.file);
-      const response=await fetch(entry.source);if(!response.ok)throw Error(`Mesh source HTTP ${response.status}`);
-      return importSceneMesh(new File([await response.arrayBuffer()],entry.name||'asset.glb',{type:'model/gltf-binary'}),{generation:entry.generation||null,label:entry.label,assetOrigin:entry.assetOrigin||null});
+      const telemetryOp=loadingTelemetry.start('asset',{label:entry.label||entry.name,phase:'downloading'});
+      try{
+        const bytes=await readAssetBytes(entry.source,{progress:progress=>loadingTelemetry.progress('asset',{...progress,token:telemetryOp.token})});
+        return await importSceneMesh(new File([bytes],entry.name||'asset.glb',{type:'model/gltf-binary'}),{bytes,telemetryOp,generation:entry.generation||null,label:entry.label,assetOrigin:entry.assetOrigin||null});
+      }catch(error){loadingTelemetry.fail('asset',error,{token:telemetryOp.token});throw error;}
     }});
   authoringAssetsUI=installAuthoringAssets({document,controller:authoringAssets,edits:scenePlacementTools.edits});redraw=()=>{authoringMeshModel?.render();authoringAssetsUI.render(authoringAssets.read());authoringImageHistoryUI?.render();authoringImageUI?.render();authoringPromptUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render();};
   authoringMeshModel=installMeshModelChoice({document,busy:()=>meshBusy('sf3d')||meshBusy('trellis')||meshBusy('trellisPage')||authoringTrellisPageGenerator?.busy()===true,changed:()=>{if(authoringMeshModel?.value()==='trellis')trellis();if(authoringMeshModel?.value()==='trellis-page')trellisPage();redraw();},trellisState:()=>authoringTrellisGenerator?.read()||null});

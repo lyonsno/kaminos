@@ -532,6 +532,10 @@ function formatElapsedSeconds(ms) {
 }
 
 const PHASE_LABELS = Object.freeze({
+  'reading-file':'Reading asset',
+  decoding:'Decoding geometry',
+  'storing-file':'Storing asset',
+  'waiting-lighting':'Waiting for lighting',
   downloading: 'Downloading',
   parsing: 'Parsing geometry',
   'preparing-materials': 'Preparing materials & textures',
@@ -635,9 +639,10 @@ export function createLoadingTelemetryTracker({
       const state = notify(t);
       return { ...state, token };
     },
-    progress(id, { label, phase, loadedBytes, totalBytes, now } = {}) {
+    progress(id, { label, phase, loadedBytes, totalBytes, token = null, now } = {}) {
       const t = nowMs(now);
       const existing = operations.get(id);
+      if(token!=null&&existing?.token!==token)return read(t);
       if (!existing) {
         return this.start(id, { label: label || id, phase: phase || 'downloading', loadedBytes, totalBytes, now: t });
       }
@@ -648,9 +653,10 @@ export function createLoadingTelemetryTracker({
       existing.lastProgressAtMs = t;
       return notify(t);
     },
-    complete(id, { now } = {}) {
+    complete(id, { token = null, now } = {}) {
       const t = nowMs(now);
       const existing = operations.get(id);
+      if(token!=null&&existing?.token!==token)return read(t);
       if (existing) {
         const receipt = {
           id: existing.id,
@@ -677,9 +683,10 @@ export function createLoadingTelemetryTracker({
       }
       return notify(t);
     },
-    fail(id, error, { now } = {}) {
+    fail(id, error, { token = null, now } = {}) {
       const t = nowMs(now);
       const existing = operations.get(id);
+      if(token!=null&&existing?.token!==token)return read(t);
       lastFailed = {
         id,
         label: existing?.label ?? id,
