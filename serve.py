@@ -2084,12 +2084,14 @@ def read_runtime_volume_settings_preset(layers, preset_ref, schema=None):
         value = lambda key: _settings_preset_descriptor_value(controls.get(key, {}))
         supported_source = value("volume-emitter-source-law") in ("inflow-boundary", "immersed-source") and value("emitter-assay-family") != "cluster"
         shared_transport = value("volume-advection-scheme") in ("maccormack", "maccormack-velocity") or value("volume-common-gas-transport") is True
+        pressure_source = (value("volume-pressure-solver") == "converged-open-top"
+                           and float(value("volume-projection")) > 0.001)
         if (_settings_preset_descriptor_value(law) == "reactant-v0"
                 and "volume-reaction-law" not in added
                 and not any(entry.get("id") == "volume-reaction-law" for entry in replaced)
-                and supported_source and shared_transport):
+                and supported_source and shared_transport and pressure_source):
             return document
-        reason = "The basin uses retired combustion or a source/transport configuration that cannot feed Reactant combustion"
+        reason = "The basin uses retired combustion or a source/transport/pressure configuration that cannot feed Reactant combustion"
     except (OSError, ValueError, json.JSONDecodeError) as error:
         reason = str(error)
     source = json.loads((ROOT / "artifacts/default-basin/reactant-preview-source.json").read_text())

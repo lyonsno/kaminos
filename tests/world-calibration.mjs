@@ -13,6 +13,31 @@ test('world wind is independent of Fine cell count and coverage at a fixed autho
   close(acceleration[0],.024*2/48);
  }
 });
+
+test('independent simulation levers toggle world emissive material, empty-air fast bypass and separated velocity wavelet',()=>{
+ assert.equal(typeof calibrationModule.resolveSimulationLevers,'function');
+ const defaults=calibrationModule.resolveSimulationLevers({});
+ assert.deepEqual(defaults,{
+  worldEmissive:'on',
+  worldSmokeOnly:false,
+  fastBypass:'off',
+  fastBypassEnabled:false,
+  velocityWavelet:'off',
+  velocityWaveletEnabled:false
+ });
+ const active=calibrationModule.resolveSimulationLevers({worldEmissive:'off',fastBypass:'on',velocityWavelet:'on'});
+ assert.deepEqual(active,{
+  worldEmissive:'off',
+  worldSmokeOnly:true,
+  fastBypass:'on',
+  fastBypassEnabled:true,
+  velocityWavelet:'on',
+  velocityWaveletEnabled:true
+ });
+ assert.throws(()=>calibrationModule.resolveSimulationLevers({worldEmissive:'maybe'}),/worldEmissive/);
+ assert.throws(()=>calibrationModule.resolveSimulationLevers({fastBypass:'maybe'}),/fastBypass/);
+ assert.throws(()=>calibrationModule.resolveSimulationLevers({velocityWavelet:'maybe'}),/velocityWavelet/);
+});
 test('physical inlet velocity, thickness and requested volume flux survive changes of grid and coverage',()=>{
  for(const grid of [24,48,64])for(const scale of [1,2]){
   const c=resolveImmersedSourceConfig({...reference,simulationDomainScale:scale,emitterSourceLaw:'immersed-source',pressureSolver:'converged-open-top',pressureSolverIterations:12,immersedSpeed:.08,immersedThickness:1.5,immersedRadius:.2/scale},{grid,gridHeight:grid,worldSource:true});

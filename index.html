@@ -28882,7 +28882,7 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
       return response.json();
     })());
     if(!schemaStage.current)return false;
-    const restored=runtimeFireSettings(restorePlan.fireSettings,schemaStage.value);
+    const restored=runtimeFireSettings(restorePlan.fireSettings,schemaStage.value,{pressureIterations:volumePressureConfigForMode(restorePlan.fireSettings.domControls?.['volume-pressure-mode']?.value,DEFAULT_VOLUME_SCENE).pressureIterations});
     if(restored.settings){
       writeFlameSettingsState(flameSettingsState(restored.settings,activeVolumeSettingsPresetReceipt));
     }else{

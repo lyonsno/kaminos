@@ -158,13 +158,14 @@ export function projectFireSettingsToSchema(settings,rawSchema){
 
 // Scene loading may degrade to a preview; strict projection remains available
 // for source validation and editing without silently repairing authored state.
-export function runtimeFireSettings(settings,schema){
+export function runtimeFireSettings(settings,schema,{pressureIterations}={}){
  try{
   if(settings?.domControls?.['volume-reaction-law']?.value!=='reactant-v0')throw Error('Saved scene uses pre-Reactant combustion');
   const projected=projectFireSettingsToSchema(settings,schema);
   const value=id=>projected.domControls[id]?.rawValue??projected.domControls[id]?.value;
   if(!['inflow-boundary','immersed-source'].includes(value('volume-emitter-source-law'))||value('emitter-assay-family')==='cluster')throw Error('Saved source cannot feed Reactant combustion');
   if(!['maccormack','maccormack-velocity'].includes(value('volume-advection-scheme'))&&value('volume-common-gas-transport')!==true)throw Error('Saved transport separates fuel and oxidizer characteristics');
+  if(value('volume-pressure-solver')!=='converged-open-top'||!(Number(value('volume-projection'))>0.001)||(pressureIterations!==undefined&&!(Number(pressureIterations)>=0.5)))throw Error('Saved source requires dispatched converged open-top pressure projection');
   const activity=projected.domControls['volume-appearance-model'];
   activity.value='shred-only';if(Object.hasOwn(activity,'rawValue'))activity.rawValue='shred-only';
   for(const [axis,entries]of [['domControls',schema.controls],['rendererControls',schema.rendererControls],['presentationControls',schema.presentationControls]])for(const entry of entries??[]){

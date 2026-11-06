@@ -3,7 +3,7 @@ import test from 'node:test';import assert from 'node:assert/strict';import vm f
 import * as fire from '../scene-fire-domain.mjs';
 import {createSceneLoadRequests} from '../scene-load-generation.mjs';
 import {resolveReactantCombustionConfig} from '../volume-reactant-combustion.mjs';
-import {resolveTransportConfig} from '../volume-core.js';
+import {resolveTransportConfig,resolveImmersedSourceConfig,resolveInflowBoundaryConfig} from '../volume-core.js';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8'),schema=JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json',import.meta.url)));
 const start=html.indexOf('  if(restorePlan.fireSettings) {'),end=html.indexOf('  if (legacyBurner',start);assert.ok(start>=0&&end>start);
 const additions=['volume-reaction-law','volume-reactant-mixing-time','volume-reactant-cooling-time','volume-physical-kelvin-per-heat','volume-physical-soot-burnout-rate','volume-physical-soot-burnout-kelvin','volume-appearance-model','volume-wavelet-turbulence','volume-wavelet-octaves','volume-wavelet-strength','volume-wavelet-octave1-weight','volume-wavelet-octave2-weight','volume-pressure-resolution','volume-reactant-soot-yield'];
@@ -23,7 +23,7 @@ function oldSettings(){return{domControls:Object.fromEntries(schema.controls.fil
 for(const damaged of [false,true])test(`${damaged?'damaged':'old'} embedded fire state loads a warning-bearing preview instead of rejecting the scene`,async()=>{
  const saved=damaged?{}:oldSettings();if(!damaged)saved.domControls['volume-immersed-fuel'].value=.789012345;const before=structuredClone(saved);let written;const sceneLoadRequests=createSceneLoadRequests(),loadRequestId=sceneLoadRequests.begin();
  const fallback={domControls:{'volume-immersed-fuel':{value:.25}},source:{presetId:'preview',runtimeFallback:{}}};let warned;
- const context=vm.createContext({volumePrototype:null,flameSettingsState:s=>s,sceneLoadRequests,loadRequestId,restorePlan:{fireSettings:saved},flameEmitterPose:{position:[1,2,3]},activeVolumeSettingsPresetReceipt:null,runtimeFireSettings:fire.runtimeFireSettings,projectFireSettingsToSchema:fire.projectFireSettingsToSchema,fetch:async()=>({ok:true,json:async()=>schema}),loadAuthoredFlameBasin:async(id,options)=>{assert.equal(id,'@reactant-preview');assert.equal(options.sourceSize,'current');return structuredClone(fallback);},console:{warn:value=>warned=value},setInfo:()=>{},writeFlameSettingsState:state=>written=state});
+ const context=vm.createContext({volumePrototype:null,DEFAULT_VOLUME_SCENE:'flame',volumePressureConfigForMode:()=>({pressureIterations:2}),flameSettingsState:s=>s,sceneLoadRequests,loadRequestId,restorePlan:{fireSettings:saved},flameEmitterPose:{position:[1,2,3]},activeVolumeSettingsPresetReceipt:null,runtimeFireSettings:fire.runtimeFireSettings,projectFireSettingsToSchema:fire.projectFireSettingsToSchema,fetch:async()=>({ok:true,json:async()=>schema}),loadAuthoredFlameBasin:async(id,options)=>{assert.equal(id,'@reactant-preview');assert.equal(options.sourceSize,'current');return structuredClone(fallback);},console:{warn:value=>warned=value},setInfo:()=>{},writeFlameSettingsState:state=>written=state});
  await vm.runInContext('(async()=>{'+html.slice(start,end)+'})()',context);
  assert.equal(written.domControls['volume-immersed-fuel'].value,.25);
  assert.match(warned,/SAVED FIRE REPLACED/);assert.equal(written.source.runtimeFallback.warning,warned);
@@ -61,6 +61,8 @@ test('runtime scene settings preserve current Reactant values but identify obsol
  projected.domControls['emitter-assay-family'].value='wick';
  projected.domControls['volume-appearance-model'].value='shred-only';
  projected.domControls['volume-advection-scheme'].value='maccormack';
+ projected.domControls['volume-pressure-solver'].value='converged-open-top';
+ projected.domControls['volume-projection'].value=1;
  const current=fire.runtimeFireSettings(projected,schema);
  assert.equal(current.reason,null);assert.deepEqual(current.settings,projected);
  for(const change of [s=>s.domControls['volume-reaction-law'].value='authored',s=>delete s.domControls['volume-reaction-law'],s=>delete s.domControls['volume-pressure-solver'],s=>s.domControls['volume-emitter-source-law'].value='legacy-volume',s=>{s.domControls['volume-advection-scheme'].value='legacy';s.domControls['volume-common-gas-transport'].value=false;}]){
@@ -70,4 +72,25 @@ test('runtime scene settings preserve current Reactant values but identify obsol
  const transport=resolveTransportConfig({advectionScheme:'legacy',commonGasTransport:false});
  const rejected=resolveReactantCombustionConfig({reactionLaw:'reactant-v0',emitterSourceLaw:'immersed-source'},{transportCommonCharacteristic:transport.effective.commonCharacteristic});
  assert.equal(rejected.effective.reason,'reactant-law-requires-common-gas-transport');
+});
+
+test('runtime scene pressure admission agrees with production source and combustion resolvers',()=>{
+ const {settings}=JSON.parse(readFileSync(new URL('./fixtures/fire-scene-816e82aa1.json',import.meta.url)));
+ const current=fire.projectFireSettingsToSchema(settings,schema);
+ for(const [id,value] of Object.entries({'volume-reaction-law':'reactant-v0','volume-emitter-source-law':'immersed-source','emitter-assay-family':'wick','volume-advection-scheme':'maccormack','volume-pressure-solver':'converged-open-top','volume-projection':1}))current.domControls[id].value=value;
+ const cases=[{pressureSolver:'legacy'},{pressureSolver:'converged'},{projection:0},{projection:.001},{pressureIterations:0},{pressureSolver:'converged-open-top',projection:1,pressureIterations:2}];
+ for(const patch of cases){
+  const controls={emitterSourceLaw:'immersed-source',pressureSolver:'converged-open-top',projection:1,...patch};
+  const immersed=resolveImmersedSourceConfig(controls,{grid:32}).effective;
+  const inflow=resolveInflowBoundaryConfig(controls,{sourceLaw:'inflow-boundary',family:'wick',inflow:{apertureKind:'disc',center:[0,0],sideAxis:[1,0],ringRadius:0,bandHalfWidth:.2,halfLength:0,inletVelocity:.1,fuelFraction:.5,inletTemperature:1}},{grid:32}).effective;
+  const combustion=resolveReactantCombustionConfig({reactionLaw:'reactant-v0',emitterSourceLaw:'immersed-source'},{sourceAdmitted:immersed.admitted,transportCommonCharacteristic:true}).effective;
+  assert.equal(immersed.admitted,inflow.admitted);assert.equal(combustion.admitted,immersed.admitted);
+  for(const law of ['immersed-source','inflow-boundary']){
+   const saved=structuredClone(current);saved.domControls['volume-emitter-source-law'].value=law;
+   if(Object.hasOwn(patch,'pressureSolver'))saved.domControls['volume-pressure-solver'].value=patch.pressureSolver;
+   if(Object.hasOwn(patch,'projection'))saved.domControls['volume-projection'].value=patch.projection;
+   const result=fire.runtimeFireSettings(saved,schema,{pressureIterations:patch.pressureIterations});
+   assert.equal(!!result.settings,immersed.admitted,JSON.stringify({law,patch,reason:result.reason}));
+  }
+ }
 });
