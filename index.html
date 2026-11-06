@@ -19451,11 +19451,11 @@ const integralGuideCaptions={
 function syncIntegralGuideControls(s){
  const value=volumePrototype.integralGuideDisplay(),available=s.integralReconstruction?.frames>0&&s.integralReconstruction.effective!=='off';
  const view=document.getElementById('integral-guide-view'),gain=document.getElementById('integral-guide-gain');
- view.disabled=!available;gain.disabled=!available||value.view==='beauty';view.value=value.view;gain.value=String(value.gain);
+ view.disabled=false;gain.disabled=!available||value.view==='beauty';view.value=value.view;gain.value=String(value.gain);
  let label=document.getElementById('integral-guide-label');
  if(!label){label=document.createElement('div');label.id='integral-guide-label';document.getElementById('viewport').append(label);}
- label.hidden=!available||value.view==='beauty';
- label.textContent=`Optical guide · ${integralGuideCaptions[value.view]??''} Display gain ${value.gain}×. ${s.integralEvaluation?.active?'Held input.':'Live input.'}`;
+ label.hidden=value.view==='beauty';
+ label.textContent=available?`Optical guide · ${integralGuideCaptions[value.view]??''} Display gain ${value.gain}×. ${s.integralEvaluation?.active?'Held input.':'Live input.'}`:`Requested guide unavailable · ${s.integralReconstruction?.reason??'waiting for a reconstructed draw'}. A previous image may remain until a fresh draw. Beauty is available in Guide inspection.`;
 }
 for(const id of ['integral-guide-view','integral-guide-gain'])document.getElementById(id).addEventListener('change',()=>{
  try{volumePrototype.setIntegralGuideDisplay({view:document.getElementById('integral-guide-view').value,gain:Number(document.getElementById('integral-guide-gain').value)});refreshVolumeReadout();window._kaminosDirty?.();}
