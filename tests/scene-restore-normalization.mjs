@@ -8,7 +8,7 @@ function savedAsh() {
   return {version:SCENE_VERSION,objects:[{
     id:'ash',type:'retained-ash',source:'kaminos:retained-ash',
     transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},
-    ash:{...defaultAshSettings(),checkpoint:{schema:'kaminos.tiled-ash.v1',values:[1,2,3]}},
+    ash:{...defaultAshSettings(),refinement:null,checkpoint:{schema:'kaminos.tiled-ash.v1',values:[1,2,3]}},
   }]};
 }
 

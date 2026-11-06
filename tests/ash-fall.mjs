@@ -25,27 +25,4 @@ test('mass includes airborne parcels and pending source rather than deleting blo
  assert.ok(Math.abs(retainedVolume({density:cells,parcels,pendingUnits:3,cellSize:.1})-.007)<1e-15);
  assert.throws(()=>retainedVolume({density:cells,parcels,pendingUnits:-1,cellSize:.1}),/mass/);
 });
-import {createGpuAshFall} from '../ash/fall-gpu.mjs';
-import * as THREE from '../lib/three.webgpu.js';
-test('fall compute shader samples overhanging source rings inside field bounds and deflects ceiling-blocked parcels horizontally',async()=>{
- globalThis.GPUBufferUsage={STORAGE:1,COPY_SRC:2,COPY_DST:4,UNIFORM:8,INDIRECT:16,MAP_READ:32};
- globalThis.GPUShaderStage={COMPUTE:1};
- let compiledCode='';
- const device={
-  limits:{maxStorageBufferBindingSize:134217728,maxBufferSize:268435456},
-  createBuffer:({size})=>({size,destroy(){}}),
-  createShaderModule:({code})=>{compiledCode=code;return {getCompilationInfo:async()=>({messages:[]})};},
-  createBindGroupLayout:()=>({}),
-  createPipelineLayout:()=>({}),
-  createComputePipelineAsync:async()=>({}),
-  createBindGroup:()=>({}),
-  queue:{writeBuffer(){},submit(){}},
- };
- const renderer={backend:{device,createStorageAttribute(){},createIndirectStorageAttribute(){},get:()=>({buffer:{size:64,destroy(){}}}),destroyAttribute(){}}};
- const fall=await createGpuAshFall({renderer,layout:patch,density:{},collision:{},wake:{}});
- assert.match(compiledCode,/for\(var attempt=0u;attempt<8u;attempt\+\+\)/,'overhanging circular source must rejection-sample within field bounds');
- assert.doesNotMatch(compiledCode,/if\(amount>0\.0\)\{nextPosition=vec3<f32>\(nextPosition\.x,p\.origin\.y\+f32\(p\.dims\.y\)\*cell\+cell\*\.5,nextPosition\.z\);velocity=vec3<f32>\(0\);\}/,'ceiling-blocked parcel must deflect horizontally rather than freezing at the same xz with zero velocity');
- assert.match(compiledCode,/clamp\(available\*\(1\.0\/64\.0\),0\.25,8\.0\)/,'take_budget must emit fine parcel quanta rather than greedy 8-voxel globs');
- assert.match(compiledCode,/for\(var dz=-1;dz<=1;dz\+\+\)/,'impact deposition must feather across the 3x3 supported horizontal footprint before stacking vertically');
- fall.dispose();
-});
+// Production transport numerics are exercised in ash-transport-surface-native.mjs.

@@ -53,7 +53,7 @@ try{
  report.phase='save-reopen';save();report.saved=await page.evaluate(()=>window.saveSceneAs({result:true}));assert.ok(report.saved.ok,JSON.stringify(report.saved));
  await page.goto(report.saved.url);await page.waitForFunction(id=>window.kaminosAsh&&window.kaminosSceneObjectDebugState().some(e=>e.id===id)&&window.kaminosAsh.read(id).runtime.backend==='webgpu-adaptive-ash',id);
  const reopened=await snapshot('reopened',id);assert.deepEqual(reopened.residency,emitted.residency);assert.deepEqual(reopened.values,emitted.values);assert.deepEqual(reopened.falling,emitted.falling);
- await page.evaluate(id=>window.selectSceneObject(id),id);const details=page.locator('#selected-ash-properties details').filter({has:page.getByText('Adaptive detail',{exact:true})});await details.evaluate(e=>e.open=true);
+ await page.evaluate(id=>window.selectSceneObject(id),id);const details=page.locator('#selected-ash-properties [data-ash-refinement-controls]');await details.evaluate(e=>e.open=true);
  assert.equal(await page.locator('[data-ash-refinement-mode]').inputValue(),'adaptive');await page.locator('[data-ash-refinement-mode]').scrollIntoViewIfNeeded();await capture('04a-automatic-detail-controls');await page.locator('[data-ash-inspect-residency]').click();await page.waitForFunction(()=>document.querySelector('[data-ash-residency]')?.textContent.includes('fine bricks'));
  await capture('04-reopened-native-inspector');
  report.final=await page.evaluate(id=>window.kaminosAsh.read(id),id);assert.equal(report.final.failure,null);assert.deepEqual(report.errors,[]);assert.deepEqual(report.consoleErrors,[]);report.status='passed';report.phase='complete';

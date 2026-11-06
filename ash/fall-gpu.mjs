@@ -154,7 +154,7 @@ fn wake_cell(i:u32){let c=vec3<u32>(i%p.dims.x,(i/p.dims.x)%p.dims.y,i/(p.dims.x
  geometry=new THREE.OctahedronGeometry(1,0);
  material=new THREE.MeshStandardNodeMaterial({color:0xc6bfb3,roughness:1});
  material.positionNode=positionGeometry.mul(positions.w.greaterThan(0).select(layout.cellSize*.36,0)).add(positions.xyz);
- if(tiled)geometry.setIndirect(drawAttr);root=tiled?new THREE.Mesh(geometry,material):new THREE.InstancedMesh(geometry,material,capacity);root.name='Airborne ash';root.frustumCulled=false;root.castShadow=false;
+ if(tiled)geometry.setIndirect(drawAttr);root=tiled?new THREE.Mesh(geometry,material):new THREE.InstancedMesh(geometry,material,capacity);root.name='Airborne ash';root.userData.kaminosAODepthUnsupported=true;root.frustumCulled=false;root.castShadow=false;
  return {root,description,
   request(volume){if(!Number.isFinite(volume)||volume<=0)throw Error('Invalid ash burst volume');if(!Number.isFinite(requestedVolume+volume))throw Error('Ash source volume exceeds numeric range');if(!Number.isFinite(Math.fround((queuedVolume+volume)/layout.cellSize**3)))throw Error('Ash source budget exceeds GPU float capacity');queuedVolume+=volume;requestedVolume+=volume;},
   encode(encoder,{position,spread,dt=1/30,rate=0,sources=[],contact=null,timestampWrites}={}){

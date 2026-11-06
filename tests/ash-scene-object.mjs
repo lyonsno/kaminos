@@ -538,11 +538,12 @@ test('ash source and field inspectors ignore mid-typing empty/decimal strings, c
    return [];
   },
  };
+ const refinementDetails=[];
  const doc2=Object.assign(new FakeControl('document'),{
   activeElement:null,defaultView:new FakeControl('window'),
   createElement:tag=>{
    if(tag==='section')return fieldPanel;
-   const c=new FakeControl(tag);c.ownerDocument=doc2;
+   const c=new FakeControl(tag);c.ownerDocument=doc2;if(tag==='details')refinementDetails.push(c);
    if(tag==='input'){
     const ds={};
     Object.defineProperty(c,'dataset',{get:()=>ds});
@@ -561,6 +562,7 @@ test('ash source and field inspectors ignore mid-typing empty/decimal strings, c
   regrid:async(_id,nextCell)=>{regriddedTo=nextCell;ashSettings=checkedAshSettings({...ashSettings,cellSize:nextCell,checkpoint:null});},
   cover:async()=>{},burst:async()=>{},changed(){},error:msg=>{fieldError=msg;},
  });
+ assert.ok(refinementDetails.some(e=>'ashRefinementControls' in e.dataset),'refinement controls expose a stable inspector selector');
  assert.equal(ashInputs.get('rate').min,'0','field fallout rate input must clamp scrubs at min=0');
  assert.equal(ashInputs.get('spread').min,'0','field source spread input must clamp scrubs at min=0');
  doc2.activeElement=ashInputs.get('rate');

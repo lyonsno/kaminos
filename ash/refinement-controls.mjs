@@ -1,7 +1,7 @@
 import {installRelativeNumberDrag} from '../scene-control-history.mjs';
 
 export function installAshRefinementControls({document,panel,anchor}) {
-  const group=document.createElement('details');
+  const group=document.createElement('details');group.dataset.ashRefinementControls='';
   const title=document.createElement('summary');title.textContent='Adaptive detail';group.append(title);
   const label=document.createElement('label');label.className='slider-row';label.textContent='Use local fine resolution';
   const enabled=document.createElement('input');enabled.type='checkbox';label.append(enabled);group.append(label);

@@ -115,7 +115,7 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
     material.normalNode=transformNormalToView(normal({packed:vertexState.w}).toVarying('ash_refined_normal'));
     material.opacityNode=opacity({cover:cover({packed:vertexState.w}).toVarying('ash_refined_cover'),point:vertexState.xyz.toVarying('ash_refined_world'),origin:vec3(...p.origin),size:THREE.TSL.float(cellSize)});
     const geometry=new THREE.PlaneGeometry(1,1);geometry.setIndirect(draw.attribute);
-    mesh=new THREE.Mesh(geometry,material);mesh.name='Coarse and fine retained ash';mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=true;mesh.add(fall.root);
+    mesh=new THREE.Mesh(geometry,material);mesh.name='Coarse and fine retained ash';mesh.userData.kaminosAODepthUnsupported=true;mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=true;mesh.add(fall.root);
     if(p.adaptive){
       const geometry=new THREE.BoxGeometry(1,1,1),drawFine=attribute(new Uint32Array([72,p.pool.capacity,0,0,0]),true);geometry.setIndirect(drawFine.attribute);
       const position=THREE.TSL.wgslFn(`fn adaptive_ash_brick(slot:u32,point:vec3<f32>,map:ptr<storage,array<u32>,read>)->vec3<f32>{

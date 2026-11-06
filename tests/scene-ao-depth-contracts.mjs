@@ -92,13 +92,13 @@ node.updateBefore({renderer});
 assert.equal(usedOverride,surfaceDepth,'a reconstructed surface must supply its actual pixel depth instead of fullscreen quad depth');
 assert.equal(scene.overrideMaterial,originalOverride);assert.equal(depthMaterial.side,0);
 
-// GPU procedural carrier meshes (indirect draw or custom positionNode without kaminosAODepthMaterial) must be skipped
+// Only explicitly unsupported carriers are omitted; a position node alone is valid.
 let proceduralDraws=0;
 renderer.render=function(activeScene,activeCamera){
-  this.callback({geometry:{indirect:true},userData:{}},activeScene,activeCamera,{},{side:2},{},{},{},'depth');
+  this.callback({geometry:{indirect:true},userData:{kaminosAODepthUnsupported:true}},activeScene,activeCamera,{},{side:2},{},{},{},'depth');
   this.callback({geometry:{},userData:{}},activeScene,activeCamera,{},{side:2,positionNode:{}},{},{},{},'depth');
 };
 renderer.renderObject=function(){proceduralDraws++;};
 node.updateBefore({renderer});
-assert.equal(proceduralDraws,0,'AO depth pass must skip indirect/positionNode procedural carrier meshes lacking kaminosAODepthMaterial');
+assert.equal(proceduralDraws,1,'AO depth skips explicit unsupported carriers and retains other GPU-positioned surfaces');
 renderer.render=beforeRender;renderer.renderObject=beforeDraw;

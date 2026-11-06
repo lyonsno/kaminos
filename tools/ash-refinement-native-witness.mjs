@@ -66,7 +66,7 @@ try{
  await capture('04-reopened');
  report.phase='inspector-reset';save();
  await page.evaluate(id=>{window.selectSceneObject(id);window.kaminosViewportSettings.set({overlays:true,gizmos:true});},id);
- const detail=page.locator('#selected-ash-properties details').filter({has:page.getByText('Coarse and fine regions',{exact:true})});await detail.evaluate(e=>e.open=true);
+ const detail=page.locator('#selected-ash-properties [data-ash-refinement-controls]');await detail.evaluate(e=>e.open=true);
  await page.locator('[data-ash-cell]').click();await page.locator('[data-ash-cell]').fill('.032');await page.locator('[data-ash-cell]').press('Tab');await page.locator('[data-ash-regrid]').click();
  await page.waitForFunction(id=>window.kaminosAsh.read(id).settings.cellSize===.032&&!window.kaminosAsh.read(id).busy,id);
  report.reset=await page.evaluate(({id,source})=>({ash:window.kaminosAsh.read(id),source:window.kaminosAsh.readSource(source)}),{id,source});assert.equal(report.reset.ash.runtime.volume,0);assert.equal(report.reset.source.settings.fieldId,id);assert.equal(report.reset.ash.settings.refinement.ratio,2);
