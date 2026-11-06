@@ -19,7 +19,7 @@ const fnBody = name => { const at = source.indexOf(`fn ${name}(`); return source
 // the existing model.
 
 test('the compact expansion is one law with the pooled coefficients, applied to the carrier slots at every sampler', () => {
-  assert.deepEqual(core.APPEARANCE_MODELS, ['authored', 'compact-3', 'shred-only']);
+  assert.deepEqual(core.APPEARANCE_MODELS, ['authored', 'compact-3', 'shred-only', 'no-activity']);
   assert.deepEqual(core.COMPACT_CARRIER_RATIOS, {
     ember: [0.575, 0.016, 0.229], flameDetail: [0.866, 0, 0.110], fireLick: [1.258, 0.068, 0.214],
     emberFleck: [0.111, 0.050, 2.744], microSmoke: [0, 0, 0],
@@ -88,7 +88,7 @@ test('the cockpit carries the Appearance model select; saved basins load on auth
   assert.match(index, /appearanceModel: document\.getElementById\('volume-appearance-model'\)\.value \|\| 'authored',/);
   assert.match(index, /id="volume-appearance-model-state"/);
   const control = schema.controls.find(c => c.key === 'volume-appearance-model');
-  assert.deepEqual(control, { key: 'volume-appearance-model', param: 'volume_appearance_model', tagName: 'SELECT', type: 'select-one', additiveDefault: 'authored', allowedValues: ['authored', 'compact-3', 'shred-only'], additiveSinceControlCount: 256 });
+  assert.deepEqual(control, { key: 'volume-appearance-model', param: 'volume_appearance_model', tagName: 'SELECT', type: 'select-one', additiveDefault: 'authored', allowedValues: ['authored', 'compact-3', 'shred-only', 'no-activity'], additiveSinceControlCount: 256 });
   assert.equal(schema.controlCount, schema.controls.length);
   assert.equal(core.resolveAppearanceModel('compact-3').effective, 'authored');
   assert.equal(core.resolveAppearanceModel('compact-3').reason, 'compact-3-requires-the-reactant-law');

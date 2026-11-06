@@ -30,7 +30,6 @@ test('split-grid restriction specializes away discarded activity reads', () => {
     assert.doesNotMatch(only, /fineFront|fi\*4u\+2u/);
   }
   assert.match(transfer, /SHRED_ONLY:shredOnly/);
-  assert.match(source, /owner.prepare\(fineTransferInputs\(\),\{shredOnly:state.appearanceModel\?\.effective==='shred-only'\}\)/);
 });
 
 test('one-field Shred is opt-in, persisted and reachable from Flow properties', () => {

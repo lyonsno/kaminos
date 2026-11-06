@@ -92,7 +92,8 @@ try {
     'volume-fine-velocity':0,'volume-appearance-model':'authored'};
   await invoke('setControls',report.controls);
   assert.equal((await page.evaluate(()=>window.kaminosLocalLiquidState())).mounted,false,'water must not be mounted');
-  const arms = [{mode:'authored',split:false},{mode:'shred-only',split:false},{mode:'shred-only',split:true},{mode:'authored',split:true}];
+  const arms = process.env.SHRED_ARMS ? JSON.parse(process.env.SHRED_ARMS) : [{mode:'authored',split:false},{mode:'shred-only',split:false},{mode:'shred-only',split:true},{mode:'authored',split:true}];
+  report.requestedArms=arms;
   for (const arm of arms) {
     const label = arm.mode+(arm.split?'-split':'-combined'); report.phase = label; await save();
     await invoke('setControls',{'volume-appearance-model':arm.mode,'volume-fine-velocity':arm.split?16:0});

@@ -2268,6 +2268,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <option value="authored">Legacy activity network</option>
         <option value="compact-3">Compact (three carriers)</option>
         <option value="shred-only">Shred only (one activity field)</option>
+        <option value="no-activity">No activity fields</option>
       </select>
       <span class="slider-val" id="volume-appearance-model-val">authored</span>
     </div>
@@ -20697,10 +20698,12 @@ function refreshVolumeReadout() {
   syncVolumeViewerPlay(s);
   const appearance = s.appearanceModel;
   for (const id of ['volume-microdetail','volume-fire-licks','volume-swirl-jostle','volume-fine-breakup-localization','volume-fire-scale']) {
-    document.getElementById(id).disabled = appearance?.effective === 'shred-only';
+    document.getElementById(id).disabled = ['shred-only','no-activity'].includes(appearance?.effective);
   }
+  document.getElementById('volume-interface-shred').disabled = appearance?.effective === 'no-activity';
   document.getElementById('volume-appearance-model-state').textContent = appearance?.reason
     ? `${appearance.requested}: ${appearance.reason}; running ${appearance.effective}`
+    : appearance?.effective === 'no-activity' ? 'No activity fields: physical solver, no transported stirring memory'
     : appearance?.effective === 'shred-only' ? 'Shred only: physical interface + one transported activity field'
     : !appearance || appearance.effective !== 'compact-3'
     ? 'authored · nine carriers + front field stored'
