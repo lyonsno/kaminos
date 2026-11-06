@@ -1,5 +1,6 @@
 // kaminos-test: node
 import test from 'node:test';
+import {FineCoverageController} from '../volume-fine-coverage.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -8,7 +9,7 @@ import {checkedSceneLightRecord} from '../scene-spot-light.mjs';
 import {sceneContext,composePageDocumentSession} from './helpers/scene-context.mjs';
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 function context(){
- const c=sceneContext({THREE,checkedSceneLightRecord,scene:new THREE.Scene(),rimLight:new THREE.SpotLight(),RIM_LIGHT_ID:'@rim-light',viewportHelpersVisible:true,window:{},
+ const c=sceneContext({FineCoverageController,fineCoverageController:null,fineCoverageStatus:null,THREE,checkedSceneLightRecord,scene:new THREE.Scene(),rimLight:new THREE.SpotLight(),RIM_LIGHT_ID:'@rim-light',viewportHelpersVisible:true,window:{},
   applySceneObjectTransformState(object,pose){object.position.fromArray(pose.position);object.rotation.set(...pose.rotation);object.scale.fromArray(pose.scale);}});
  const start=html.indexOf('const sceneSpotLights=new Map();'),end=html.indexOf('function groupPivotPose(',start);
  vm.runInContext(html.slice(start,end),c);return c;
@@ -92,5 +93,5 @@ test('actual scene load reaches camera, postprocessing and file publication with
  c.window.kaminosViewportSettings={set(){}};
  const a=html.indexOf('async function loadSceneFile('),b=html.indexOf('// File input handler for Load Scene',a);
  vm.runInContext(html.slice(a,b),c);await c.loadSceneFile({text:async()=>JSON.stringify(data)},{sceneFile:'lights.kaminos.json'});
- assert.equal(c.sceneDocument.state().filename,'lights.kaminos.json');assert.equal(c.sceneDocument.state().blocked,false);assert.deepEqual(c.camera.position.toArray(),[7,8,9]);assert.equal(c.sceneAO.read().intensity,1.75);assert.match(info.at(-1),/Scene loaded: 1 object/);assert.equal(c.window.kaminosSceneLightState()[0].id,'@rim-light');
+ assert.equal(c.sceneDocument.state().filename,'lights.kaminos.json',JSON.stringify(info));assert.equal(c.sceneDocument.state().blocked,false);assert.deepEqual(c.camera.position.toArray(),[7,8,9]);assert.equal(c.sceneAO.read().intensity,1.75);assert.match(info.at(-1),/Scene loaded: 1 object/);assert.equal(c.window.kaminosSceneLightState()[0].id,'@rim-light');
 });

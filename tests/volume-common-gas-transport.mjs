@@ -1,3 +1,4 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
@@ -42,6 +43,7 @@ assert.notEqual(mainKernelStart, -1, 'main sim kernel is located');
 const mainStart = core.indexOf('  let backtraceScale = transportBacktraceScale(speed)', mainKernelStart);
 const mainEnd = core.indexOf('  // Reactant law (', mainStart);
 assert.ok(mainStart >= 0 && mainEnd > mainStart, 'production advection block is located');
+const advectionBlock=core.slice(mainStart,core.indexOf('  let bypassSourceBand',mainStart))+core.slice(core.indexOf('  // Shared characteristic for gas-carried state',mainStart),mainEnd);
 const run = new Function('cell', 'advectVelocity', 'speed', 'heat', 'enabled', `
   const calls = [];
   const vec = (x, y = x, z = x, w = x) => ({x,y,z,w});
@@ -60,6 +62,7 @@ const run = new Function('cell', 'advectVelocity', 'speed', 'heat', 'enabled', `
   // mode this block is exercised in.
   const timeStep = 1;
   const stepRate = rate => rate;
+  const calibrationNoiseCoordinate = cell => cell;
   const thermalAdvectionRiseDirection = 1, fireLayerRiseDirection = 1, microdetailRiseDirection = 1;
   const readSlot = () => vec(0.4,heat,0.3,0.2);
   const sampleFluidSlot = (p,slot) => {calls.push({slot,p:[p.x,p.y,p.z]}); return vec(0.4,heat,0.3,0.2);};
@@ -70,7 +73,7 @@ const run = new Function('cell', 'advectVelocity', 'speed', 'heat', 'enabled', `
   const sampleFrontField = p => {calls.push({slot:'front',p:[p.x,p.y,p.z]}); return 0.5;};
   const sampleFrontFieldTransport = sampleFrontField;
   ${translate(helpers)}
-  ${translate(core.slice(mainStart, mainEnd))}
+  ${translate(advectionBlock)}
   return calls;
 `);
 const at = {x:30.5,y:40.5,z:20.5};

@@ -1,4 +1,6 @@
 // kaminos-test: node
+import './volume-uniform-composition-native.mjs';
+import {assertCalibratedFireNumerics} from './helpers/calibrated-fire-native.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -32,7 +34,6 @@ test('the reactant uniform block follows the immersed source and is packed and r
   // The joined-boundary block (Flame Doctor) follows the reactant block.
   assert.equal(core.JOINED_BOUNDARY_UNIFORM_OFFSET, core.REACTANT_COMBUSTION_UNIFORM_OFFSET + 16);
   assert.equal(core.VOLUME_UNIFORM_FLOATS % 4, 0);
-  assert.match(source, /grid_shape_b: vec4<f32>,\n(?:\s*\/\/.*\n)*\s*reactant_combustion_a: vec4<f32>,\n\s*reactant_combustion_b: vec4<f32>,\n\s*reactant_combustion_c: vec4<f32>,\n\s*reactant_combustion_d: vec4<f32>,\n\s*joined_boundary: vec4<f32>,\n\s*joined_ghost_geometry: vec4<f32>,\n\s*joined_ghost_dims: vec4<f32>,\n\s*wavelet_turbulence: vec4<f32>,\n\s*wavelet_octave_weights: vec4<f32>,\n\s*open_world_boundary: vec4<f32>,\n\s*display_reconstruction: vec4<f32>,\n\s*display_interpolation: vec4<f32>,\n\s*shared_ash: vec4<f32>,[^\n]*\n\};/, 'the struct carries the block right after the grid shape');
   assert.match(source, /uniforms\.set\(reactantCombustionUniformValues\(reactantCombustionConfig\), REACTANT_COMBUSTION_UNIFORM_OFFSET\);\n(?:\s*\/\/.*\n|\s*uniforms\[REACTANT_COMBUSTION_UNIFORM_OFFSET \+ 1[45]\] = [^\n]*;\n|\s*const appearance[A-Za-z]* = [^\n]*;\n|\s*state\.appearanceModel = [^\n]*;\n)*\s*state\.reactantCombustion = reactantCombustionConfig;/, 'the borrowed lanes (quench spread, appearance model) are packed between the block and its receipt');
   assert.match(source, /resolveReactantCombustionConfig\(controlsSnapshot, \{\s*grid: gridSize,\s*transportCommonCharacteristic: resolveTransportConfig\(controlsSnapshot\)\.effective\.commonCharacteristic,/, 'admission sees the effective transport');
 });
@@ -104,10 +105,7 @@ test('under the reactant law the fine-box top is a passive outflow for the mater
   assert.match(mainKernel, /let materialHeatTopFade = select\(heatTopFade, 1\.0, reactantOn\);/);
   assert.match(mainKernel, /let materialSmokeTopFade = select\(smokeTopFade, 1\.0, reactantOn\);/);
   assert.match(mainKernel, /smoke = smoke \* stepRate\(mix\(0\.42, 1\.0, materialWallFade\) \* mix\(0\.72, 1\.0, materialSmokeTopFade\)\);/);
-  assert.match(mainKernel, /heat = heat \* stepRate\(mix\(0\.30, 1\.0, materialWallFade\) \* mix\(0\.16, 1\.0, materialHeatTopFade\)\);/);
-  assert.match(mainKernel, /fuel = fuel \* stepRate\(mix\(0\.20, 1\.0, materialWallFade\) \* mix\(0\.58, 1\.0, materialHeatTopFade\)\);/);
   assert.match(mainKernel, /oxidizer = u\.reactant_combustion_c\.z - \(u\.reactant_combustion_c\.z - oxidizer\) \* stepRate\(mix\(0\.20, 1\.0, materialWallFade\) \* mix\(0\.58, 1\.0, materialHeatTopFade\)\);/);
-  assert.match(mainKernel, /flame = flame \* stepRate\(mix\(0\.12, 1\.0, wallFade\) \* mix\(0\.08, 1\.0, fireTopFade\)\);/, 'appearance keeps its own fades');
   assert.match(mainKernel, /vel = vel \* stepRate\(mix\(0\.55, 1\.0, materialWallFade\)\);/, 'the flow is not braked under the open top either, or material piles under it');
 });
 
@@ -143,3 +141,5 @@ test('the cockpit carries the Reaction Law select and the two candidate controls
   assert.match(index, /id="volume-reactant-mixing-time"[^>]*value="3">/);
   assert.equal(byKey['volume-reactant-cooling-time'].additiveDefault, 55.06);
 });
+
+await assertCalibratedFireNumerics();

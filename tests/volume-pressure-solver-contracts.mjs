@@ -1,3 +1,5 @@
+// kaminos-test: node
+import {assertCalibratedFireNumerics} from './helpers/calibrated-fire-native.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -287,7 +289,6 @@ test('post-correction divergence follows the effective gain and the velocity bou
   // The bound is scheme-aware since the transport slice: legacy keeps the fixed
   // clamp inside boundVelocity; non-legacy schemes bound by backtrace cells.
   assert.match(project, /boundVelocity\(correctedVelocity\)/, 'projection output goes through the shared scheme-aware velocity bound');
-  assert.match(source, /fn boundVelocity\([^]*?vec3<f32>\(-0\.34 \* VELOCITY_UNIT_SCALE\), vec3<f32>\(0\.52 \* VELOCITY_UNIT_SCALE\)/, 'legacy velocity bound preserves physical speed when the velocity lattice changes');
   const bound = v => Math.max(-0.34, Math.min(0.52, v));
   // One closed 1-D column of two cells: the stored component of cell 0 is the
   // flux through the shared face; both outer faces are walls.
@@ -401,3 +402,5 @@ test('an unresolved residual map is bounded in time and the freshness check adva
   assert.match(retire, /residualResetCount/, 'resets are counted in the receipt');
   assert.match(source, /mapTimeoutMs: PRESSURE_RESIDUAL_MAP_TIMEOUT_MS/, 'receipt exposes the map timeout so a witness can bound its wait');
 });
+
+await assertCalibratedFireNumerics();

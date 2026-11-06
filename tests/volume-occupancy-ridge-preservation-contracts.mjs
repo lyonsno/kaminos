@@ -1,3 +1,4 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -31,7 +32,8 @@ function assertOccupancyRidgeContract(source) {
   const worldArm = balancedWgslBlock(allRaymarch, 'if(worldActive && !fineRayInterval){', { label: 'World transfer arm' });
   assert.match(worldArm, /color\s*\+=\s*trans\s*\*\s*\(medium\.emission\s*\+\s*scatteredSource\)\s*\*\s*emissionIntegral\(sigma,ds\);\s*trans\s*\*=\s*exp\(-sigma\*ds\);\s*t\s*\+=\s*ds;\s*continue;/,
     'World transfer consumes emission, scattering and extinction before continuing');
-  for (const arm of [opticalStepArm, opticalTraceArm, worldArm]) {
+  const ordinaryWorldArm=worldArm.replace(balancedWgslBlock(worldArm,'if(opticalStepping){'), '');
+  for (const arm of [opticalStepArm, opticalTraceArm, ordinaryWorldArm]) {
     assert.equal((arm.match(/\bcontinue\s*;/g) || []).length, 1,
       'each optical arm has one continuation after consumption');
   }

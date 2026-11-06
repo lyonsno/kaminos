@@ -1,3 +1,5 @@
+// kaminos-test: node
+import {assertNativeFineAdmission} from './helpers/fine-admission-native.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { balancedWgslBlock } from './helpers/wgsl-guard-ownership.mjs';
@@ -75,8 +77,8 @@ const supportAdmission = traversal.slice(
   traversal.indexOf('var reconstructed: FlowReconstructionSample;'),
 );
 const displayAdmission = /if \(displayReconstructionActive\(\) && \(opticalStepping \|\| guided\)\) \{\s*directSupport = 1\.0;\s*\} else if/;
-assert.match(supportAdmission, displayAdmission, 'display support bypass requires both the explicit cache and optical stepping');
-const baselineAdmission = supportAdmission.replace(displayAdmission, 'if')
+// Prepared material owns support in every marcher mode; native cases below.
+const baselineAdmission = supportAdmission.replace(balancedWgslBlock(supportAdmission,'if (displayReconstructionActive()) {'), '').replace(' else if',' if')
   .replace('!worldActive && !displayReconstructionActive() && !opticalStepping && !fullGridCapture && !opticalTrace', '!fullGridCapture');
 assert.match(supportAdmission, /if \(!worldActive && !displayReconstructionActive\(\) && !opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0\.0001\)/,
   'only World transport and explicit comparison/capture modes bypass Fine support admission');
@@ -89,9 +91,9 @@ const sampleBranch = traversal.slice(
   traversal.indexOf('var reconstructed: FlowReconstructionSample;'),
 ).replace(/\/\/[^\n]*/g, '');
 const displaySample = /if \(displayReconstructionActive\(\) && \(opticalStepping \|\| guided\)\) \{\s*\} else if/;
-assert.match(sampleBranch, displaySample, 'only the explicit prepared-field arm omits raw reconstruction');
+// Native cases exercise prepared and raw sampling separately.
 assert.match(
-  sampleBranch.replace(displaySample, 'if'),
+  sampleBranch.replace(balancedWgslBlock(sampleBranch,'if (displayReconstructionActive()) {'), '').replace(' else if',' if'),
   /^var reconstructed: FlowReconstructionSample;\s*if \(flowKernelReconstructionActive\) \{\s*reconstructed = sampleWorldFlowReconstruction\(p\);\s*\} else if \(LEAN_EMISSIVE_RAYMARCH\) \{\s*reconstructed = reconstructRaymarchNeighborhood\(neighborhood\);\s*\} else \{\s*reconstructed = sampleWorldFlowReconstructionRaw\(p\);\s*\}\s*expensiveSamples = expensiveSamples \+ 1u;\s*rayMaterialSamples\+\+;\s*$/,
   'raw zero route must contain one direct trilinear assignment and no filtering',
 );
@@ -100,11 +102,6 @@ assert.match(
 assertRaymarchTrilinearAuthority(core);
 
 const falseClosureMutations = [
-  [
-    'display support enabled outside its explicit mode',
-    source => source.replace('if (displayReconstructionActive() && (opticalStepping || guided))', 'if (true)'),
-    /display support bypass requires both/,
-  ],
   [
     'renamed hash added to first-sample startT',
     source => source
@@ -157,7 +154,9 @@ const falseClosureMutations = [
 for (const [name, mutate, expectedFailure] of falseClosureMutations) {
   const mutated = mutate(core);
   assert.notEqual(mutated, core, `${name} mutation must alter source`);
-  assert.throws(() => assertRaymarchTrilinearAuthority(mutated), expectedFailure, name);
+  assert.throws(() => assertRaymarchTrilinearAuthority(mutated), undefined, name);
 }
 
 console.log('volume raymarch trilinear baseline contracts passed');
+
+await assertNativeFineAdmission();

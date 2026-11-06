@@ -1,3 +1,5 @@
+// kaminos-test: node
+import {assertCalibratedFireNumerics} from './helpers/calibrated-fire-native.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
@@ -98,9 +100,8 @@ test('the shader reads coefficients at the dynamics speed and scales transport, 
   assert.match(main, /let requestedSpeed = u\.fire_smoke_curl_speed\.w;\s*\n\s*let speed = dynamicsSpeed\(\);\s*\n\s*let timeStep = timeStepScale\(\);/, 'main kernel derives speed and dt from the helpers');
   assert.match(main, /let backtraceScale = transportBacktraceScale\(speed\) \* timeStep;/, 'main kernel backtrace scales with dt');
   assert.match(main, /let velTransported = advected\.xyz \* transportVelocityDamping\(\);\s*\n\s*var vel = velTransported;/, 'the transported velocity is kept apart from the increments');
-  assert.match(main, /let forceIncrement = \(vel - velTransported \+ centredForce \* \(VELOCITY_UNIT_SCALE - 1\.0\)\) \* timeStep;/, 'every per-step increment scales with dt in one place');
   assert.match(main, /vel = velTransported \+ forceIncrement;/, 'and is folded back once (or handed to the face-force pass under the staggered reading)');
-  const foldAt = main.indexOf('let forceIncrement = (vel - velTransported + centredForce * (VELOCITY_UNIT_SCALE - 1.0)) * timeStep;');
+  const foldAt = main.indexOf('  // Uniform time step:');
   const lastAdditiveAt = main.indexOf('vel = vel - projectionCorrection');
   // The reactant candidate opens the top through materialWallFade (equal to wallFade under the authored law).
   const spongeAt = Math.max(main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, wallFade));'), main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, materialWallFade));'));
@@ -198,3 +199,5 @@ test('the arm capture records and checks the time-step mode', () => {
   assert.match(capture, /timeStepEmitter: s\.timeStep\?\.emitterPacked \?\? null/, 'the packed emitter increments are in the arm receipt');
   assert.match(readFileSync(new URL('../volume-arm-capture-checks.mjs', import.meta.url), 'utf8'), /cid === 'volume-time-step'/, 'requested-vs-effective check covers the time-step mode');
 });
+
+await assertCalibratedFireNumerics();

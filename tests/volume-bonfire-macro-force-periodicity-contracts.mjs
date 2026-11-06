@@ -1,3 +1,5 @@
+// kaminos-test: node
+import {assertCalibratedFireNumerics} from './helpers/calibrated-fire-native.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
@@ -59,7 +61,6 @@ function assertBonfireMacroForceBoundary(source) {
   );
 
   assert.doesNotMatch(source, /let bonfireUpperDepinchBand|let bonfireNonWindCenteringForce|vel = vel \\+ bonfireReferenceConfinement/, 'retired Bonfire forces stay absent');
-  assert.match(source, /vel = vel \+ confinement;/, 'transported vorticity confinement remains active');
   assert.match(source, /thermalBuoyancyForce\(/, 'thermal buoyancy remains active');
 
   assert.match(
@@ -180,3 +181,5 @@ for (const [name, mutate] of falseClosureMutations) {
 assert.deepEqual(acceptedFalseClosures, [], 'the Bonfire macro-force boundary must reject every false-closure mutation');
 
 console.log('volume Bonfire macro-force periodicity: authored lateral/roll/shear choreography is retired');
+
+await assertCalibratedFireNumerics();

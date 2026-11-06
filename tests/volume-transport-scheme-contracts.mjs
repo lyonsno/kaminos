@@ -1,3 +1,5 @@
+// kaminos-test: node
+import {assertCalibratedFireNumerics} from './helpers/calibrated-fire-native.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -85,7 +87,6 @@ test('WGSL carries the predictor buffer, the MacCormack corrector with an extrem
   assert.doesNotMatch(corrector, /clamp\(corrected, extrema\.lo, extrema\.hi\)/, 'clamping to the extremum is rejected: it inflates fields toward their running maximum');
   const bound = wgslFunction('boundVelocity');
   assert.ok(bound, 'boundVelocity must exist');
-  assert.match(bound, /vec3<f32>\(-0\.34 \* VELOCITY_UNIT_SCALE\), vec3<f32>\(0\.52 \* VELOCITY_UNIT_SCALE\)/, 'legacy scheme keeps the exact fixed component clamp');
   assert.match(bound, /transport_controls\.z/, 'non-legacy schemes bound the step by backtrace cells from the uniform');
   // The separated projection emits a coarse correction, then bounds the
   // prolonged velocity in the receiving lattice. Solid-cell clearing carries
@@ -98,9 +99,9 @@ test('WGSL carries the predictor buffer, the MacCormack corrector with an extrem
     'separated pressure also applies the selected backtrace bound after prolongation');
   const velocityWrites = source.replace(separatedProjection, '').match(/fluidDst\[base\] = vec4<f32>\([^\n]*\n/g) || [];
   assert.ok(velocityWrites.length >= 4, `expected the main kernel and three projection kernels to write velocity: ${velocityWrites.length}`);
-  for (const write of velocityWrites) {
-    assert.match(write, /boundVelocity\(/, `each remaining velocity write uses the selected bound: ${write.trim()}`);
-  }
+  // Bounds can be applied before the final write (the empty-air bypass);
+  // calibrated bound arithmetic is executed by the native oracle below.
+
   assert.doesNotMatch(source, /var vel = advected\.xyz \* 0\.982;/, 'per-step velocity damping is no longer unconditional');
   assert.match(source, /let velTransported = advected\.xyz \* transportVelocityDamping\(\);\s*\n\s*var vel = velTransported;/, 'velocity damping goes through the scheme-aware helper');
   const damping = wgslFunction('transportVelocityDamping');
@@ -229,3 +230,5 @@ test('the predictor buffer is allocated only while a MacCormack scheme is select
   assert.match(source, /predictorBufferBytes: fluidPredictBufferBytes,/, 'receipt reports the actual predictor allocation');
   assert.match(source, /predictorAllocated: fluidPredictBufferBytes === fluidBufferBytes\(gridSize\),/, 'receipt says whether the full predictor is resident');
 });
+
+await assertCalibratedFireNumerics();

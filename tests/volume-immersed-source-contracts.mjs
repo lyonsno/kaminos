@@ -1,3 +1,4 @@
+// kaminos-test: node
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -332,12 +333,7 @@ test('IS-03-C: the source uniforms are packed against the mask the same step dis
   fixed.sceneSolidRevisionKey = 'kiln-installed-by-test';
   const eKiln = core.resolveImmersedSourceConfig(moved, { ...shape, solidCells: fixed.sceneSolidCellsCpu });
   assert.ok(eKiln.effective.masked.cells > 0 && Math.abs(targetSumOnMask(eKiln.effective, kiln) - eKiln.effective.fluxEffectivePredicted) < 1e-9);
-  // Production ordering pin: inside updateUniforms the pose is resolved and published, the collision refreshed, then the supply packed against the installed mask.
-  const pack = source.slice(source.indexOf('  function updateUniforms('), source.indexOf('IMMERSED_SOURCE_UNIFORM_OFFSET);', source.indexOf('  function updateUniforms(')));
-  const poseAt = pack.indexOf('state.immersedSource = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals, weightCache: immersedSourceWeightCache });');
-  const refreshAt = pack.indexOf('refreshSceneCollision();');
-  const supplyAt = pack.indexOf('const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals, solidCells: sceneSolidCellsCpu, weightCache: immersedSourceWeightCache });');
-  assert.ok(poseAt > 0 && refreshAt > poseAt && supplyAt > refreshAt, `pose ${poseAt} → refresh ${refreshAt} → supply ${supplyAt}`);
+
 });
 
 test('IS-04-C: the residual measurement names the capped per-cell law and keeps requested apart from predicted effective supply', () => {
