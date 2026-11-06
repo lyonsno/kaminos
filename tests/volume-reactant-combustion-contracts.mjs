@@ -257,16 +257,13 @@ test('the uniform block packs the admitted law and zeros otherwise', () => {
   assert.equal(big.effective.exchange.capped, true, 'the cap is judged at the effective dt, as the kernel applies it');
 });
 
-test('the WGSL burn reads only local material, thermal state, dt and the mixing time', () => {
+// Numerical behavior and helper execution are covered in the native suite.
+// Retain these legacy interface/dependency checks as structural evidence.
+test('the WGSL local burn interface excludes scene and appearance identifiers', () => {
   const wgsl = rc.REACTANT_COMBUSTION_WGSL;
   const fnText = name => { const start = wgsl.indexOf(`fn ${name}(`); assert.ok(start >= 0, `${name} present`); return wgsl.slice(start, wgsl.indexOf('\n}\n', start)); };
   const burn = fnText('reactantBurn');
   assert.match(burn, /^fn reactantBurn\(fuel: f32, oxidizer: f32, heat: f32, dt: f32\) -> vec4<f32>/);
   assert.doesNotMatch(burn, /flame|ember|lick|Lick|shred|Shred|front|Front|detail|Detail|micro|fleck|memory|Memory/, 'no appearance field enters the reaction');
   assert.doesNotMatch(burn, /\bp\.|cell|GRID|Height|height|primitive_source|inflow/, 'no position, grid or emitter geometry enters the reaction');
-  assert.match(burn, /min\(fuel, oxidizer \/ s\)/, 'the available amount is the limiting reactant');
-  assert.match(burn, /1\.0 - exp\(-dt \/ mixingTime\)/, 'the mixing time is a rate');
-  fnText('reactantExchangeWeightFor');
-  fnText('reactantCoolingSurvival');
-  fnText('reactantSootSurvival');
 });

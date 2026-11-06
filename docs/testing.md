@@ -32,7 +32,7 @@ For WGSL work, read [Testing WGSL behavior](wgsl-testing/README.md) first. New s
 Run the shader checks through the normal runner:
 
 ```sh
-npm test -- --only tests/shader-herder-resolution.mjs,tests/shader-herder-bridge.mjs,tests/shader-herder-production.mjs,tests/fine-grid-witness-contract.mjs
+npm test -- --only tests/shader-herder-resolution.mjs,tests/shader-herder-bridge.mjs,tests/shader-herder-production.mjs,tests/volume-flow-reconstruction-native.mjs,tests/volume-reactant-combustion-native.mjs,tests/fine-grid-witness-contract.mjs
 ```
 
 The bridge requires an Apple hardware adapter. When a macOS Seatbelt sandbox specifically blocks Metal shared-event creation, it can run Dawn's null backend for compilation and pipeline validation, with a warning that numerical execution was unavailable. Other adapter or validation failures remain errors. `shader-herder-evidence:` records in each test's log identify the effective package entry, adapter, route and evidence authority. They distinguish `hardware` from `compiler-only`.
@@ -42,10 +42,10 @@ Fallback requires nonblank WGSL and at least one declared compute `entryPoint` w
 Require hardware numerical execution for the production checks with:
 
 ```sh
-SHADER_HERDER_STRICT_METAL=1 npm test -- --only tests/shader-herder-production.mjs,tests/fine-grid-witness-contract.mjs
+SHADER_HERDER_STRICT_METAL=1 npm test -- --only tests/shader-herder-production.mjs,tests/volume-flow-reconstruction-native.mjs,tests/volume-reactant-combustion-native.mjs,tests/fine-grid-witness-contract.mjs
 ```
 
-The bridge's own fallback tests deliberately simulate the sandbox restriction; run them without strict mode. Production coverage currently includes extracted immersed-source WGSL, optical emission/transmittance composition and the actual Fine-grid restriction/momentum/prolongation witness. The joined-step and World-tree tests on the older integration branch require their simulation stack; these checks do not establish that stack's current-main integration or rendered appearance.
+The bridge's own fallback tests deliberately simulate the sandbox restriction; run them without strict mode. Production coverage includes extracted immersed-source WGSL, optical emission/transmittance composition, flow reconstruction, local reactant burn/rate helpers and the actual Fine-grid restriction/momentum/prolongation witness. Local reaction tests use the production uniform packer and reject valid WGSL energy, oxidizer-consumption and time-rate faults; they do not establish the material kernel's texture bindings or soot/expansion writeback. The joined-step and World-tree tests on the older integration branch require their simulation stack; these checks do not establish that stack's current-main integration or rendered appearance.
 
 The flow reconstruction pilot replaces twelve math-wording assertions in `tests/volume-flow-reconstruction-kernel-contracts.mjs` with three numerical tests in `tests/volume-flow-reconstruction-native.mjs`. Run both through the ordinary runner:
 
