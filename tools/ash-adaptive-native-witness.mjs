@@ -40,7 +40,7 @@ try{
  if(report.requested.levels===3){assert.equal(before.schema,'kaminos.adaptive-ash.v2');assert.equal(before.layout.cellSize,.02);assert.ok(before.residency.detail.slots.some(Boolean),'live collider and view inputs must allocate third-level physical cells');report.effectiveLevels=3;}else report.effectiveLevels=2;
  await capture('01-automatic-collider-detail');await page.evaluate(id=>window.kaminosAsh.showRefinement(id,true),id);await capture('01b-gpu-fine-bricks');await page.evaluate(id=>window.kaminosAsh.showRefinement(id,false),id);
  report.phase='moving-contact';save();await page.evaluate(()=>{const original=GPUBuffer.prototype.mapAsync;window.__ashRestoreMap=()=>GPUBuffer.prototype.mapAsync=original;window.__ashLiveMaps=0;GPUBuffer.prototype.mapAsync=function(...args){window.__ashLiveMaps++;return original.apply(this,args);};});
- await page.evaluate(async({id,box,target})=>{window.kaminosSetSceneObjectTransform(box,{position:[target,.175,target]});window.kaminosAsh.advance(id,4);},{id,box,target});
+ await page.evaluate(async({id,box,target})=>{window.kaminosSetSceneObjectTransform(box,{position:[target,.175,target],...(target===.95?{rotation:[0,.31,0]}:{})});window.kaminosAsh.advance(id,4);},{id,box,target});
  report.liveMaps=await page.evaluate(()=>{window.__ashRestoreMap();return window.__ashLiveMaps;});assert.equal(report.liveMaps,0,'live allocation/contact must not map GPU state to CPU');
  const moved=await snapshot('moved',id);
  const oldPages=before.residency.map.flatMap((slot,page)=>slot?[page]:[]),newPages=moved.residency.map.flatMap((slot,page)=>slot&&!before.residency.map[page]?[page]:[]);
