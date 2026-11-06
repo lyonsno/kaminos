@@ -11,6 +11,40 @@ import sys
 import traceback
 
 
+def observed_opening(lines, precision):
+    import numpy as np
+    edges=lines[:,1]-lines[:,0]
+    levels=np.unique(lines[:,:,1])
+    candidates=[]
+    for y in (levels[:-1]+levels[1:])/2:
+        crossing=(lines[:,0,1]>y)!=(lines[:,1,1]>y)
+        t=(y-lines[crossing,0,1])/edges[crossing,1]
+        hits=np.sort(lines[crossing,0,0]+t*edges[crossing,0])
+        # Alternating material intervals leave the air gaps between the walls.
+        if len(hits)%2:continue
+        for i in range(1,len(hits)-2,2):
+            width=hits[i+1]-hits[i]
+            if width<=precision:continue
+            x=(hits[i+1]+hits[i])/2
+            crossing=(lines[:,0,0]>x)!=(lines[:,1,0]>x)
+            t=(x-lines[crossing,0,0])/edges[crossing,0]
+            vertical=lines[crossing,0,1]+t*edges[crossing,1]
+            if np.any(vertical>y+precision):continue
+            below=np.sort(vertical[vertical<y-precision])
+            below=below[np.r_[True,np.diff(below)>precision]] if len(below) else below
+            if len(below)<2:continue
+            depth=y-below[-1]
+            # This observer is for a bowl-like U carrier, not shallow surface
+            # dents. A half-round opening has depth/width 1/2; require at least
+            # half that observable depth before assigning the bowl identity.
+            if depth<width/4:continue
+            candidates.append(dict(center=[float(x),float(y)],width=float(width),
+                depth=float(depth),minimumDepthWidthRatio=.25,
+                walls=[float(v) for v in hits[i-1:i+3]],bottomHits=below.tolist()))
+    if not candidates:raise ValueError('No observed upward opening between two channel walls')
+    return max(candidates,key=lambda c:(c['width'],c['center'][1]))
+
+
 def observe_section(lines, ellipse_fit, station):
     import numpy as np
     lines=np.asarray(lines,dtype=float)
@@ -20,9 +54,10 @@ def observe_section(lines, ellipse_fit, station):
         if lines.ndim!=3 or lines.shape[1:]!=(2,2) or not len(lines) or not np.isfinite(lines).all():
             raise ValueError('Finite observed section segments are required')
         points=lines.reshape(-1,2)
-        center=np.array([(points[:,0].min()+points[:,0].max())/2,points[:,1].max()])
         precision=np.finfo(np.float32).eps*max(float(np.abs(points).max()),1.)
-        evidence['openingPrior']=center.tolist()
+        opening=observed_opening(lines,precision)
+        evidence['opening']=opening
+        center=np.array(opening['center'])
         start=lines[:,0]-center
         edges=lines[:,1]-lines[:,0]
         cross=lambda a,b:a[...,0]*b[...,1]-a[...,1]*b[...,0]
