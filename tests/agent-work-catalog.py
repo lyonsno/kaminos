@@ -7,6 +7,51 @@ import authoring_asset_catalog as catalog
 from authoring_asset_catalog import read_catalog
 
 class AgentWork(unittest.TestCase):
+ def fixture(self,queue,*,manifest=True):
+  folder=queue/'done/observed';folder.mkdir(parents=True);output=queue/'outputs';output.mkdir()
+  (output/'frame.png').write_bytes(b'image')
+  (folder/'request.json').write_text(json.dumps({'job_id':'observed','agent_id':'image-agent'}))
+  (folder/'receipt.json').write_text(json.dumps({'job_id':'observed','job_type':'command','status':'done','exit_code':0,'output_dir':str(output)}))
+  if manifest:(output/'metadata.json').write_text(json.dumps({'job_id':'observed','output_files':['frame.png']}))
+  holds=queue/'holds.json';holds.write_text(json.dumps({'schema':'kaminos.asset-visibility-holds.v1','holds':[]}))
+  return folder,output,holds
+
+ def read(self,queue):
+  return read_catalog('agent-work',roots={'greenroom':queue},image_entries=lambda:[],origins=lambda _:None,output_resolver=Path,label=str)
+
+ def test_manifest_asset_reuses_its_current_file_status(self):
+  with tempfile.TemporaryDirectory() as tmp:
+   queue=Path(tmp).resolve();folder,output,holds=self.fixture(queue);asset=output/'frame.png'
+   stats=[];resolutions=[];original_stat=Path.stat;original_resolve=Path.resolve
+   def stat(path,*args,**kwargs):
+    stats.append(path);return original_stat(path,*args,**kwargs)
+   def resolve(path,*args,**kwargs):
+    resolutions.append(path);return original_resolve(path,*args,**kwargs)
+   with patch.object(catalog,'HOLDS_PATH',holds),patch.object(Path,'stat',stat),patch.object(Path,'resolve',resolve):result=self.read(queue)
+   self.assertEqual(result['warnings'],[]);self.assertEqual(len(result['entries']),1)
+   self.assertEqual(result['entries'][0]['size'],len(b'image'))
+   # Path.resolve may itself stat once on some supported Python versions.
+   self.assertLessEqual(stats.count(asset),2,'one current asset status must serve type, row and hold admission')
+   self.assertEqual(resolutions.count(asset),1,'canonical asset confinement needs only one path resolution')
+   self.assertEqual(stats.count(folder),0,'directory enumeration already supplies the job-directory type')
+
+ def test_recursive_discovery_avoids_nonasset_status_and_keeps_refresh_fresh(self):
+  with tempfile.TemporaryDirectory() as tmp:
+   queue=Path(tmp).resolve();_,output,holds=self.fixture(queue,manifest=False)
+   nested=output/'nested';nested.mkdir();(nested/'detail.png').write_bytes(b'detail')
+   notes=nested/'notes.txt';notes.write_text('not an asset');(output/'directory.png').mkdir()
+   stats=[];original=Path.stat
+   def stat(path,*args,**kwargs):stats.append(path);return original(path,*args,**kwargs)
+   with patch.object(catalog,'HOLDS_PATH',holds):
+    with patch.object(Path,'stat',stat):first=self.read(queue)
+    self.assertEqual({e['name'] for e in first['entries']},{'frame.png','detail.png'})
+    self.assertEqual(first['warnings'],[])
+    self.assertNotIn(notes,stats,'unsupported files need no file-status query')
+    (output/'frame.png').write_bytes(b'changed pixels');(nested/'new.glb').write_bytes(b'mesh')
+    second=self.read(queue)
+   self.assertEqual({e['name'] for e in second['entries']},{'frame.png','detail.png','new.glb'})
+   self.assertEqual(next(e['size'] for e in second['entries'] if e['name']=='frame.png'),len(b'changed pixels'))
+
  def test_named_agent_outputs_and_evidence_preserve_sources(self):
   with tempfile.TemporaryDirectory() as tmp:
    queue=Path(tmp)
