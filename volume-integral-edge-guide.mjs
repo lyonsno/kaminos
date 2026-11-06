@@ -11,10 +11,11 @@ export const INTEGRAL_EDGE_GUIDE_WGSL=/* wgsl */`
 @group(0) @binding(1) var depth:texture_2d<f32>;
 @group(0) @binding(2) var gradients:texture_storage_2d<rgba32float,write>;
 ${INTEGRAL_SIGNAL_WGSL}
+override GUIDE_SCALE:u32=1u;
 @compute @workgroup_size(8,8)
 fn edges(@builtin(global_invocation_id) id:vec3<u32>){
- let size=textureDimensions(raw);if(any(id.xy>=size)){return;}
- let p=vec2<i32>(id.xy);let z=textureLoad(depth,p,0).x;
+ let size=textureDimensions(raw);if(any(id.xy>=textureDimensions(gradients))){return;}
+ let p=min(vec2<i32>(id.xy*GUIDE_SCALE+vec2<u32>(GUIDE_SCALE/2u)),vec2<i32>(size)-1);let z=textureLoad(depth,p,0).x;
  let blur=array<f32,5>(1,4,6,4,1);let derivative=array<f32,5>(-1,-2,0,2,1);
  var total=vec2<f32>(0.0);var weight=0.0;
  var dx=vec2<f32>(0.0);var dy=vec2<f32>(0.0);var wx=0.0;var wy=0.0;
@@ -30,7 +31,7 @@ fn edges(@builtin(global_invocation_id) id:vec3<u32>){
  // Quotient-rule normalization: masked or clipped support cannot invent an
  // edge in a constant signal. The factor two gives unit slope on a ramp.
  let gx=2.0*(dx-mean*wx)/weight;let gy=2.0*(dy-mean*wy)/weight;
- textureStore(gradients,p,vec4<f32>(gx.x,gy.x,gx.y,gy.y));
+ textureStore(gradients,vec2<i32>(id.xy),vec4<f32>(gx.x,gy.x,gx.y,gy.y));
 }
 `;
 export const INTEGRAL_IMAGE_EDGE_WEIGHT_WGSL=/* wgsl */`
@@ -42,21 +43,24 @@ fn integralImageEdgeWeight(a:vec4<f32>,b:vec4<f32>,offset:vec2<f32>,strength:f32
  return mix(1.0,exp(-dot(change,change)),clamp(strength,0.0,1.0));
 }
 `;
-export function createIntegralEdgeGuide(device){
+export function createIntegralEdgeGuide(device,{scale=2,format='rgba16float'}={}){
+ if(!Number.isSafeInteger(scale)||scale<1)throw Error('Image edge guide scale must be a positive integer');
+ if(!['rgba16float','rgba32float'].includes(format))throw Error('Image edge guide format is unsupported');
  let texture=null,pipeline=null;
  return {
   encode(encoder,raw,depth,timestampWrites){
    if(raw.width!==depth.width||raw.height!==depth.height)throw Error('Image edge guide requires matching raw/depth dimensions');
-   if(!texture||texture.width!==raw.width||texture.height!==raw.height){
-    texture?.destroy();texture=device.createTexture({label:'integral image edge gradients',size:[raw.width,raw.height],format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.COPY_SRC});
+   const width=Math.ceil(raw.width/scale),height=Math.ceil(raw.height/scale);
+   if(!texture||texture.width!==width||texture.height!==height){
+    texture?.destroy();texture=device.createTexture({label:'integral image edge gradients',size:[width,height],format,usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.COPY_SRC});
    }
-   pipeline ||=device.createComputePipeline({label:'smoothed integral image edges',layout:'auto',compute:{module:device.createShaderModule({code:INTEGRAL_EDGE_GUIDE_WGSL}),entryPoint:'edges'}});
+   pipeline ||=device.createComputePipeline({label:'smoothed integral image edges',layout:'auto',compute:{module:device.createShaderModule({code:INTEGRAL_EDGE_GUIDE_WGSL.replace('rgba32float',format)}),entryPoint:'edges',constants:{GUIDE_SCALE:scale}}});
    const pass=encoder.beginComputePass({label:'integral image edge guide',...(timestampWrites?{timestampWrites}:{})});pass.setPipeline(pipeline);
    pass.setBindGroup(0,device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[raw,depth,texture].map((t,binding)=>({binding,resource:t.createView()}))}));
-   pass.dispatchWorkgroups(Math.ceil(raw.width/8),Math.ceil(raw.height/8));pass.end();return texture;
+   pass.dispatchWorkgroups(Math.ceil(width/8),Math.ceil(height/8));pass.end();return texture;
   },
   get texture(){return texture;},
-  describe(){return {width:texture?.width??0,height:texture?.height??0,bytes:texture?texture.width*texture.height*16:0,footprint:'5x5-binomial-derivative-log-light-and-opacity',format:'rgba32float'};},
+  describe(){return {width:texture?.width??0,height:texture?.height??0,bytes:texture?texture.width*texture.height*(format==='rgba16float'?8:16):0,footprint:'5x5-binomial-derivative-log-light-and-opacity',format,scale};},
   dispose(){texture?.destroy();texture=null;}
  };
 }
