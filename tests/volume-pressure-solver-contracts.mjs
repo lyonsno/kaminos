@@ -56,25 +56,21 @@ test('converged kernels exist and drop the legacy damping and material-weighted 
   const sweep = wgslFunction('pressureRedBlackSweep');
   assert.ok(sweep, 'red-black sweep helper must exist');
   assert.doesNotMatch(sweep, /0\.985/, 'converged sweep must not damp pressure');
-  assert.match(sweep, /& 1u\) != parity/, 'sweep must gate on cell parity so in-place updates are race-free');
+  // Parity, non-cubic indexing, boundary reads, warm-start preservation and
+  // numerical projection are exercised by volume-pressure-native.mjs.
   const project = wgslFunction('csProjectPressureConverged');
   assert.ok(project, 'converged projection kernel must exist');
   assert.doesNotMatch(project, /activeMaterial/, 'converged projection must not weight the correction by material');
   assert.doesNotMatch(project, /mix\(0\.62, 0\.94/, 'converged projection must not use the legacy scene gain');
   assert.match(project, /pressureNeighborRead/, 'converged projection reads pressure through the boundary-aware helper');
-  assert.match(project, /pressureNeighborRead\(c \+ vec3<i32>\(1, 0, 0\)\) - pressureHere/, 'converged projection uses the forward gradient, the adjoint of the compact divergence');
-  assert.doesNotMatch(project, /\* 0\.5;/, 'converged projection must not use the legacy 2h central gradient');
   const warm = wgslFunction('csDivergencePressureWarm');
-  assert.match(warm, /pressureDst\[idx\]\.y/, 'divergence refresh keeps the previous pressure as the warm start');
   assert.match(warm, /divergenceCompactAtCell/, 'converged solve targets the compact divergence its Laplacian can actually zero');
   const compact = wgslFunction('divergenceCompactAtCell');
   assert.match(compact, /compactFaceVelocity\(c, 0u\) - compactFaceVelocity\(c - vec3<i32>\(1, 0, 0\), 0u\)/, 'compact divergence is the backward face-flux difference per axis');
   const face = wgslFunction('compactFaceVelocity');
   assert.match(face, /if \(c\[axis\] < 0\) \{\s*if \(joinedBoundary\(\) \|\| openWorldBoundary\(\)\) \{ return joinedLowerFace\(c, axis\); \}\s*if \(axis == 1u\) \{\s*return inflowFaceVelocity\(c\);\s*\}\s*return 0\.0;/, 'without an admitted joined/open world, the ghost face below the first cell carries no flux, except the floor face inside an inflow aperture (emitter law inflow-boundary), which carries the prescribed inflow');
   assert.match(face, /axis == 1u && pressureSolverOpenTop\(\)/, 'only the open top lets the last cell\'s upper face carry flux');
-  assert.match(project, /if \(c\.y >= i32\(GRID_Y\) - 1 && !pressureSolverOpenTop\(\) && !openWorldBoundary\(\)\)/, 'closed top zeroes the top-face flux unless the world boundary is admitted');
   const neighbor = wgslFunction('pressureNeighborInPlace');
-  assert.match(neighbor, /c\.y >= i32\(GRID_Y\)/, 'open-top boundary zeroes pressure above the top face of the tall domain');
 });
 
 test('the production sweep update converges a small Poisson problem far beyond the legacy pass count', () => {
