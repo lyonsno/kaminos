@@ -1,5 +1,6 @@
 import {Group, Mesh, BufferGeometry, BufferAttribute, MeshNormalMaterial, DoubleSide, Sprite, SpriteMaterial, CanvasTexture, Line, LineBasicMaterial, SphereGeometry, MeshBasicMaterial, SRGBColorSpace} from '../lib/three.core.js';
 import {validateExport,validateReplay,frameAtTime,ballisticArc} from './hand-replay-contract.mjs';
+import {createCameraComparison} from './hand-replay-camera-view.mjs';
 import {displayScales,validateGuide,validateMoment,deformationTrace,loopTime} from './hand-replay-guide.mjs';
 export default {
  id:'hand-replay',title:'Recorded hand / direction comparison',
@@ -18,20 +19,24 @@ export default {
   if(guide&&pair.some(i=>i<0))throw Error('guided comparison requires original and trained models');
   const scene=await host.scene.open();const objects=[];let data,images=[],index=0,playing=false,time=0,lastTick=null,finger=4,commonOrigin=true,loading=false,disposed=false,error=null,token=0;
   let status,preview,playButton,sequenceSelect,scrub,fingerSelect,originSelect,momentSelect,question,scaleSelect,teacherToggle,arcToggle,sourceSelect,tracePanel;
+  let cameraComparison,viewMode='spatial',viewModeChosen=false,viewSelect,projectionNote,overlayOpacity=.55,sourceTitle,traceMetric='segment',traceSelect;
   let moment=null,scaleMode='predicted',showTeachers=!guide,showArcs=!guide,sourceMode='crop',trace=null,sourceSprite,sourceCanvas,sourceTexture;
   const reference=pair[0];
   const visibleModels=()=>catalog.models.filter((m,i)=>!guide||showTeachers||pair.includes(i)).map(m=>m.id);
   const scales=()=>data?displayScales(data.frames[index].hands,reference,scaleMode):[];
-  const rebuildTrace=()=>{trace=guide&&data?deformationTrace(data,moment?.start??0,moment?.end??data.frames.length-1,finger,pair):null;};
-  const read=()=>({moment:moment?.id??null,scaleMode,visibleModels:visibleModels(),displayScales:scales(),trace:trace?{...trace,cursorFrame:index}:null,sourceMode,showArcs,source:'saved_camera_samples',inference:'precomputed',sequence:data?.label??null,frame:index,captureId:data?.frames[index]?.captureId??null,timeMs:time,playing,loading,error,finger,commonOrigin,models:data?.models.map(({id,label,checkpointSha256})=>({id,label,checkpointSha256}))??[],displayed:data?.frames[index]?.hands.map(h=>({status:h.status,reason:h.reason??null,fallback:h.fallback??false})),view:scene.readView(),fluid:false});
+  const rebuildTrace=()=>{trace=guide&&data?deformationTrace(data,moment?.start??0,moment?.end??data.frames.length-1,finger,pair,traceMetric):null;};
+  const read=()=>({viewMode,projection:cameraComparison?.read(index)??{available:false},overlayOpacity,moment:moment?.id??null,scaleMode,visibleModels:visibleModels(),displayScales:scales(),trace:trace?{...trace,cursorFrame:index}:null,sourceMode,showArcs,source:'saved_camera_samples',inference:'precomputed',sequence:data?.label??null,frame:index,captureId:data?.frames[index]?.captureId??null,timeMs:time,playing,loading,error,finger,commonOrigin,models:data?.models.map(({id,label,checkpointSha256})=>({id,label,checkpointSha256}))??[],displayed:data?.frames[index]?.hands.map(h=>({status:h.status,reason:h.reason??null,fallback:h.fallback??false})),view:scene.readView(),fluid:false});
   const sync=()=>{
    if(status)status.dataset.recordedFrame=String(index);
    if(status)status.textContent=error?error:loading?'Loading recorded sequence…':`${index+1}/${data?.frames.length??0} · ${(time/1000).toFixed(2)} s · recorded timing · ${data?.frames[index]?.hands.map((h,i)=>`${data.models[i].label}: ${h.status}${h.fallback?' (manual fallback crop)':''}`).join(' · ')??''}`;
    if(guide&&status&&!error&&!loading){const alerts=data?.frames[index]?.hands.flatMap((h,i)=>visibleModels().includes(data.models[i].id)&&(h.status!=='observed'||h.fallback||scales()[i]===null)?[`${data.models[i].label}: ${h.status!=='observed'?h.status:h.fallback?'manual fallback crop':'display scale unavailable'}`]:[])??[];status.textContent=`Frame ${index+1}/${data?.frames.length??0} · ${(time/1000).toFixed(2)} s · saved recording${alerts.length?' · '+alerts.join(' · '):''}`;}
    if(momentSelect)momentSelect.value=moment?.id??'';
    if(question)question.textContent=moment?.question??'Explore the saved recording.';
-   if(scaleSelect)scaleSelect.value=scaleMode;
+   if(scaleSelect){scaleSelect.value=scaleMode;scaleSelect.disabled=viewMode!=='spatial';}
    if(sourceSelect)sourceSelect.value=sourceMode;
+   if(viewSelect)viewSelect.value=viewMode;
+   if(traceSelect)traceSelect.value=traceMetric;
+   if(projectionNote){const p=cameraComparison?.read(index);projectionNote.textContent=p?.available?`Cyan / orange: each model only. Purple: overlap. This is disagreement, not ground-truth error. Camera is estimated; MobRecon placement is fitted to its own landmarks. Raw palm width retains size changes.${viewMode==='time'?` Time runs into depth: ${p.pairedFrames}/${p.totalFrames} paired slices. Orbit to inspect.`:''}`:`Recorded-camera view unavailable: ${p?.reason??'no metadata'}`;}
    if(teacherToggle)teacherToggle.checked=showTeachers;
    if(arcToggle)arcToggle.checked=showArcs;
    if(fingerSelect)fingerSelect.value=String(finger);
@@ -57,14 +62,16 @@ export default {
     sourceCanvas=document.createElement('canvas');sourceCanvas.width=640;sourceCanvas.height=640;sourceTexture=new CanvasTexture(sourceCanvas);sourceTexture.colorSpace=SRGBColorSpace;
     sourceSprite=new Sprite(new SpriteMaterial({map:sourceTexture,depthTest:false,toneMapped:false}));sourceSprite.position.set(-2.5,4.8,0);sourceSprite.scale.set(1.8,1.8,1);
     await scene.attach(sourceSprite,{owned:true,metadata:{label:'Recorded camera image',type:'recorded-camera'}});
-    const title=new Sprite(new SpriteMaterial({map:labelTexture('Recorded camera'),depthTest:false}));title.position.set(-2.5,6,0);title.scale.set(1.8,.225,1);await scene.attach(title,{owned:true,metadata:{label:'Recorded camera label'}});
+    const title=sourceTitle=new Sprite(new SpriteMaterial({map:labelTexture('Recorded camera'),depthTest:false}));title.position.set(-2.5,6,0);title.scale.set(1.8,.225,1);await scene.attach(title,{owned:true,metadata:{label:'Recorded camera label'}});
    }
   };
   const draw=()=>{
    if(!data)return;const row=data.frames[index],display=scales();
+   cameraComparison?.draw(index,viewMode,sourceMode,overlayOpacity);
+   if(sourceSprite)sourceSprite.visible=sourceTitle.visible=viewMode==='spatial';
    for(let i=0;i<objects.length;i++){
     const o=objects[i],h=row.hands[i];
-    o.root.visible=!guide||showTeachers||pair.includes(i);
+    o.root.visible=viewMode==='spatial'&&(!guide||showTeachers||pair.includes(i));
     if(guide){const p=pair.indexOf(i);o.root.scale.setScalar(7);o.root.position.set(p>=0?(p===0?-.7:1.3):(i%2?1.3:-.7),p>=0?4:1,0);o.label.scale.set(.27,.034,1);}
     o.mesh.visible=h.status==='observed'&&display[i]!==null;o.arc.visible=o.landing.visible=o.mesh.visible&&showArcs;
     if(!o.mesh.visible)continue;
@@ -99,27 +106,32 @@ export default {
     if(disposed||ticket!==token)return read();
     if(selectedMoment)validateMoment(selectedMoment,next);
     moment=selectedMoment;if(moment)finger=moment.finger;
-    data=next;images=loaded;if(sequenceSelect)sequenceSelect.value=String(n);index=moment?.frame??0;time=data.frames[index].timeMs;lastTick=null;rebuildTrace();draw();record({kind:'hand-replay.load',phase:'applied',effective:read()});
-   }catch(e){if(disposed||ticket!==token)return;data=null;images=[];trace=null;if(tracePanel)tracePanel.textContent='Comparison unavailable';if(sourceCanvas){sourceCanvas.getContext('2d').clearRect(0,0,640,640);sourceTexture.needsUpdate=true;}for(const o of objects)o.mesh.visible=o.arc.visible=o.landing.visible=false;if(preview)preview.removeAttribute('src');scene.redraw();error=String(e);throw e;}finally{if(ticket===token){loading=false;sync();}}
+    data=next;images=loaded;
+    const support=cameraComparison.load(next,loaded,pair);
+    if(!viewModeChosen){viewMode=support.available?'camera':'spatial';traceMetric=support.available?'palmWidth':'segment';}
+    else if(viewMode!=='spatial'&&!support.available)throw Error(support.reason);
+    if(sequenceSelect)sequenceSelect.value=String(n);index=moment?.frame??0;time=data.frames[index].timeMs;lastTick=null;rebuildTrace();draw();record({kind:'hand-replay.load',phase:'applied',effective:read()});
+   }catch(e){if(disposed||ticket!==token)return;data=null;images=[];cameraComparison?.clear();trace=null;if(tracePanel)tracePanel.textContent='Comparison unavailable';if(sourceCanvas){sourceCanvas.getContext('2d').clearRect(0,0,640,640);sourceTexture.needsUpdate=true;}for(const o of objects)o.mesh.visible=o.arc.visible=o.landing.visible=false;if(preview)preview.removeAttribute('src');scene.redraw();error=String(e);throw e;}finally{if(ticket===token){loading=false;sync();}}
    return read();
   };
   const seek=value=>{if(loading||!data)throw Error('sequence unavailable');const n=Number(value);if(!Number.isInteger(n)||n<0||n>=data.frames.length)throw Error('frame out of range');playing=false;if(moment&&(n<moment.start||n>moment.end)){moment=null;rebuildTrace();}index=n;time=data.frames[n].timeMs;draw();return read();};
   const toggle=()=>{if(loading||!data)throw Error('sequence unavailable');if(!playing&&index===(moment?.end??data.frames.length-1)){index=moment?.start??0;time=data.frames[index].timeMs;draw();}playing=!playing;lastTick=null;sync();return read();};
   const pause=()=>{playing=false;lastTick=null;sync();return read();};
-  const frame=()=>scene.setView(guide?{position:[-.4,showTeachers?3.8:4.9,showTeachers?13:10],target:[-.4,showTeachers?3.8:4.9,0]}:{position:[0,4.7,12],target:[0,4.7,0]});
+  const frame=()=>scene.setView(viewMode==='camera'?{position:[0,4.8,11.4],target:[0,4.8,0]}:viewMode==='time'?{position:[5,7.5,10],target:[0,4.6,-1.5]}:guide?{position:[-.4,showTeachers?3.8:4.9,showTeachers?13:10],target:[-.4,showTeachers?3.8:4.9,0]}:{position:[0,4.7,12],target:[0,4.7,0]});
   const setMoment=async id=>{const m=guide?.moments.find(m=>m.id===id);if(!m)throw Error('unknown comparison moment');const result=await load(m.sequence,m);frame();return result;};
   const drawTrace=()=>{
    if(!tracePanel||!trace)return;const a=data.frames[trace.start].timeMs,b=data.frames[trace.end].timeMs;
-   const values=trace.series.flatMap(s=>s.points.map(p=>p.percent).filter(v=>v!==null));const lo=Math.min(95,...values),hi=Math.max(105,...values);
-   const x=t=>10+(t-a)/Math.max(1,b-a)*300,y=v=>110-(v-lo)/(hi-lo)*90;
+   const plot=p=>traceMetric==='palmWidth'?p.value:p.percent;
+   const values=trace.series.flatMap(s=>s.points.map(plot).filter(v=>v!==null));const lo=Math.min(traceMetric==='palmWidth'?Infinity:95,...values),hi=Math.max(traceMetric==='palmWidth'?-Infinity:105,...values);
+   const x=t=>10+(t-a)/Math.max(1,b-a)*300,y=v=>110-(v-lo)/Math.max(1e-9,hi-lo)*90;
    const colors=['#55c7ff','#ffb875'];let drawing='';
-   trace.series.forEach((s,i)=>{let path='',joined=false;for(const p of s.points){if(p.percent===null){joined=false;continue;}path+=(joined?'L':'M')+x(p.timeMs)+','+y(p.percent);joined=true;}drawing+=`<path d="${path}" fill="none" stroke="${colors[i]}" stroke-width="2"/>`;});
+   trace.series.forEach((s,i)=>{let path='',joined=false;for(const p of s.points){if(plot(p)===null){joined=false;continue;}path+=(joined?'L':'M')+x(p.timeMs)+','+y(plot(p));joined=true;}drawing+=`<path d="${path}" fill="none" stroke="${colors[i]}" stroke-width="2"/>`;});
    drawing+=`<line x1="${x(data.frames[index].timeMs)}" x2="${x(data.frames[index].timeMs)}" y1="10" y2="120" stroke="white"/>`;
-   const names=['Thumb','Index','Middle','Ring','Pinky'];tracePanel.innerHTML=`<strong>${names[finger]} · first segment length</strong><div>Relative to palm width; each line’s median = 100%.</div><svg viewBox="0 0 320 130" style="width:100%;background:#17202b;cursor:crosshair" aria-label="Finger deformation trace">${drawing}</svg><div><span style="color:${colors[0]}">Left</span> / <span style="color:${colors[1]}">Right</span> variation: ${trace.series.map(s=>s.rangePercent===null?'unavailable':s.rangePercent.toFixed(1)+'%').join(' / ')}</div><small>Click trace to seek. Changing geometry is not a correctness score.</small>`;
+   const names=['Thumb','Index','Middle','Ring','Pinky'];tracePanel.innerHTML=`<strong>${traceMetric==='palmWidth'?'Palm width · raw millimeters':names[finger]+' · first segment length'}</strong><div>${traceMetric==='palmWidth'?'Distance between index and pinky MCP joints, before camera placement.':'Relative to palm width; each line’s median = 100%.'}</div><svg viewBox="0 0 320 130" style="width:100%;background:#17202b;cursor:crosshair" aria-label="Finger deformation trace">${drawing}</svg><div><span style="color:${colors[0]}">Left</span> / <span style="color:${colors[1]}">Right</span> ${traceMetric==='palmWidth'?'now':'variation'}: ${trace.series.map(s=>traceMetric==='palmWidth'?(s.points[index-trace.start]?.value?.toFixed(1)??'unavailable')+' mm':s.rangePercent===null?'unavailable':s.rangePercent.toFixed(1)+'%').join(' / ')}</div><small>Click trace to seek. Changing geometry is not a correctness score.</small>`;
    const svg=tracePanel.querySelector?.('svg');if(svg)svg.onclick=e=>{const box=svg.getBoundingClientRect(),u=Math.max(0,Math.min(1,((e.clientX-box.left)/box.width*320-10)/300));seek(Math.min(trace.end,Math.max(trace.start,frameAtTime(data.frames,a+u*(b-a)))));};
   };
   let unsubscribe;
-  try{await makeObjects();document.defaultView.kaminosSelection?.clear();frame();if(guide)await setMoment(inputs.moment??guide.moments[0].id);else await load(0);if(inputs.frame!==undefined)seek(inputs.frame);unsubscribe=scene.onFrame(({timestampMs})=>{
+  try{await makeObjects();cameraComparison=await createCameraComparison(scene,document,labelTexture);document.defaultView.kaminosSelection?.clear();frame();if(guide)await setMoment(inputs.moment??guide.moments[0].id);else {await load(0);frame();}if(inputs.frame!==undefined)seek(inputs.frame);unsubscribe=scene.onFrame(({timestampMs})=>{
    if(!playing||loading){lastTick=null;return;}if(lastTick===null){lastTick=timestampMs;return;}
    time+=Math.max(0,timestampMs-lastTick);lastTick=timestampMs;
    if(moment?.loop)time=loopTime(data.frames,moment.start,moment.end,time);
@@ -127,7 +139,7 @@ export default {
    const next=Math.min(moment?.end??data.frames.length-1,frameAtTime(data.frames,time));
    if(next!==index){index=next;draw();}else sync();
   });}catch(e){await scene.dispose();throw e;}
-  return {read,operations:{load,seek,toggle,pause,frame,setMoment,setScaleMode(value){if(!['predicted','palm'].includes(value))throw Error('invalid scale mode');scaleMode=value;draw();record({kind:'hand-replay.scale',effective:read()});return read();},setTeachers(value){showTeachers=!!value;draw();frame();return read();},setArcs(value){showArcs=!!value;draw();return read();},setSource(value){if(!['crop','full'].includes(value))throw Error('invalid camera view');sourceMode=value;draw();return read();},setFinger(value){const n=Number(value);if(!Number.isInteger(n)||n<0||n>4)throw Error('invalid finger');finger=n;rebuildTrace();draw();return read();},setOrigin(value){if(!['shared','tip'].includes(value))throw Error('invalid origin');commonOrigin=value==='shared';draw();return read();}},
+  return {read,operations:{setTraceMetric(value){if(!['segment','palmWidth'].includes(value))throw Error('invalid trace metric');traceMetric=value;rebuildTrace();draw();return read();},load,seek,toggle,pause,frame,setMoment,setViewMode(value){if(!['spatial','camera','time'].includes(value))throw Error('invalid view mode');if(value!=='spatial'&&!cameraComparison.support().available)throw Error(cameraComparison.support().reason);viewMode=value;viewModeChosen=true;draw();frame();record({kind:'hand-replay.view',effective:read()});return read();},setOverlayOpacity(value){const n=Number(value);if(!Number.isFinite(n)||n<0||n>1)throw Error('invalid overlay opacity');overlayOpacity=n;draw();return read();},setScaleMode(value){if(!['predicted','palm'].includes(value))throw Error('invalid scale mode');scaleMode=value;draw();record({kind:'hand-replay.scale',effective:read()});return read();},setTeachers(value){showTeachers=!!value;draw();frame();return read();},setArcs(value){showArcs=!!value;draw();return read();},setSource(value){if(!['crop','full'].includes(value))throw Error('invalid camera view');sourceMode=value;draw();return read();},setFinger(value){const n=Number(value);if(!Number.isInteger(n)||n<0||n>4)throw Error('invalid finger');finger=n;rebuildTrace();draw();return read();},setOrigin(value){if(!['shared','tip'].includes(value))throw Error('invalid origin');commonOrigin=value==='shared';draw();return read();}},
    mount({root,document,invoke}){
     const intro=document.createElement('p');intro.textContent='Same saved motion, precomputed models. Wrist aligned; equal scale. The arc follows the final finger segment at 1 m/s under gravity. Orbit the scene to inspect depth.';
     const limits=document.createElement('p');limits.textContent=catalog.limit;limits.style.fontSize='12px';
@@ -138,6 +150,9 @@ export default {
     scrub=document.createElement('input');scrub.type='range';scrub.min='0';scrub.step='1';scrub.setAttribute('aria-label','Recorded frame');scrub.oninput=()=>call('seek',scrub.value);
     fingerSelect=document.createElement('select');fingerSelect.setAttribute('aria-label','Launch finger');['Thumb','Index','Middle','Ring','Pinky'].forEach((s,i)=>{const o=document.createElement('option');o.value=i;o.textContent=s;fingerSelect.append(o);});fingerSelect.value=String(finger);fingerSelect.onchange=()=>call('setFinger',fingerSelect.value);
     originSelect=document.createElement('select');originSelect.setAttribute('aria-label','Launch origin');for(const [value,text]of [['shared','Shared origin · direction only'],['tip','Fingertip origin · position + direction']]){const o=document.createElement('option');o.value=value;o.textContent=text;originSelect.append(o);}originSelect.onchange=()=>call('setOrigin',originSelect.value);
+    viewSelect=document.createElement('select');viewSelect.setAttribute('aria-label','Comparison view');for(const [value,text]of [['camera','Recorded camera · silhouettes'],['spatial','Free 3D shape'],['time','Disagreement through time']]){const option=document.createElement('option');option.value=value;option.textContent=text;viewSelect.append(option);}viewSelect.onchange=()=>call('setViewMode',viewSelect.value);
+    projectionNote=document.createElement('small');projectionNote.style.cssText='display:block;font-size:12px;line-height:1.5';
+    const opacityLabel=document.createElement('label');opacityLabel.textContent='Silhouette opacity ';const opacityInput=document.createElement('input');opacityInput.type='number';opacityInput.min='0';opacityInput.max='1';opacityInput.step='.05';opacityInput.value=String(overlayOpacity);opacityInput.style.width='75px';opacityInput.oninput=()=>call('setOverlayOpacity',opacityInput.value);opacityLabel.append(opacityInput);host.controls.installNumberDrag?.({input:opacityInput,step:.05});root.append(viewSelect,opacityLabel,projectionNote);
     const frameButton=document.createElement('button');frameButton.textContent='Frame comparison';frameButton.onclick=()=>call('frame');status=document.createElement('div');status.setAttribute('role','status');status.style.overflowWrap='anywhere';
     if(guide){
      momentSelect=document.createElement('select');momentSelect.setAttribute('aria-label','Comparison moment');
@@ -147,14 +162,15 @@ export default {
      scaleSelect=document.createElement('select');scaleSelect.setAttribute('aria-label','Hand display size');for(const [value,text]of [['predicted','As predicted'],['palm','Same palm width']]){const o=document.createElement('option');o.value=value;o.textContent=text;scaleSelect.append(o);}scaleSelect.onchange=()=>call('setScaleMode',scaleSelect.value);
      const sizeNote=document.createElement('small');sizeNote.textContent='Same palm width rescales each frame for shape comparison. Saved predictions and the trace stay unchanged.';
      sourceSelect=document.createElement('select');sourceSelect.setAttribute('aria-label','Camera view');for(const [value,text]of [['crop','Hand crop'],['full','Full camera view']]){const o=document.createElement('option');o.value=value;o.textContent=text;sourceSelect.append(o);}sourceSelect.onchange=()=>call('setSource',sourceSelect.value);
+     traceSelect=document.createElement('select');traceSelect.setAttribute('aria-label','Geometry trace');for(const [value,text]of [['palmWidth','Palm width · raw mm'],['segment','Selected segment / palm']]){const o=document.createElement('option');o.value=value;o.textContent=text;traceSelect.append(o);}traceSelect.onchange=()=>call('setTraceMetric',traceSelect.value);
      tracePanel=document.createElement('div');tracePanel.style.cssText='font-size:12px;line-height:1.5;margin:12px 0';
      const more=document.createElement('details'),heading=document.createElement('summary');heading.textContent='Teachers, trajectories and recording details';more.append(heading);
      const checkbox=(label,op)=>{const wrap=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.onchange=()=>call(op,input.checked);wrap.append(input,document.createTextNode?document.createTextNode(label):label);more.append(wrap);return input;};
      teacherToggle=checkbox('Show teachers','setTeachers');arcToggle=checkbox('Show fingertip trajectories','setArcs');
      more.append(sequenceSelect,fingerSelect,originSelect,frameButton,limits);
-     preview.style.display='none';root.append(momentSelect,question,scaleSelect,sizeNote,sourceSelect,playButton,scrub,status,tracePanel,more,preview);
+     preview.style.display='none';root.append(momentSelect,question,scaleSelect,sizeNote,sourceSelect,playButton,scrub,status,traceSelect,tracePanel,more,preview);
     }else root.append(intro,limits,sequenceSelect,preview,playButton,scrub,fingerSelect,originSelect,frameButton,status);draw();sync();
-   },async dispose(){disposed=true;token++;playing=false;unsubscribe?.();await scene.dispose();images=[];}
+   },async dispose(){disposed=true;token++;playing=false;unsubscribe?.();cameraComparison?.dispose();await scene.dispose();images=[];}
   };
  }
 };
