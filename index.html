@@ -2866,6 +2866,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
           <div class="field"><label for="scene-gi-mipSampling" title="Use coarser depth and lighting farther along each search. Compare fine contact detail when enabling.">Coarse distant samples</label><input id="scene-gi-mipSampling" type="checkbox"></div>
           <div class="field"><label for="scene-gi-perspectiveReconstruction" title="Use equivalent camera-specific perspective arithmetic in the lighting search.">Fast perspective reconstruction</label><input id="scene-gi-perspectiveReconstruction" type="checkbox"></div>
           <div class="field"><label for="scene-gi-linearThickness" title="Scale thickness with distance from the camera.">Depth-scaled thickness</label><input id="scene-gi-linearThickness" type="checkbox"></div>
+          <div class="field"><label for="scene-gi-aoContrast" title="Exponent on SSGI AO visibility. One preserves the estimator; larger values deepen occlusion. Final AO strength is a separate control.">AO contrast (exponent)</label><input id="scene-gi-aoContrast" type="number" min="0" step="0.1" value="1"></div>
           <div class="field"><label for="scene-gi-depthPhi" title="Larger values allow filtering across larger depth differences.">Depth tolerance</label><input id="scene-gi-depthPhi" type="number" min="0.001" step="0.01" value="0.1"></div>
           <div class="field"><label for="scene-gi-normalPhi" title="Larger values more strongly preserve boundaries between different surface directions.">Normal edge strength</label><input id="scene-gi-normalPhi" type="number" min="0.01" step="0.1" value="5"></div>
           <div class="field"><label for="scene-gi-lumaPhi" title="Larger values allow filtering across larger brightness differences.">Brightness tolerance</label><input id="scene-gi-lumaPhi" type="number" min="0.01" step="0.1" value="5"></div>
@@ -2979,7 +2980,7 @@ import {waterDomainPose,checkedWaterDomainPose,waterDomainSampling} from './auth
 import {authoredMlsCellSize,authoredMlsParticleVolume} from './authored-mls-water.mjs';
 import {createSimFrameCoordinator} from './mls-juice-contract.mjs';
 import { loadStartupRuntimeConfig } from './runtime-config-once.mjs';
-import {createUserPreferences,sceneDefaultsFromDocument,sceneDefaultsApplyToLocation,newSceneDocument} from './user-preferences.mjs';
+import {createUserPreferences,sceneDefaultsFromDocument,resolveStartupSceneDefaults,newSceneDocument} from './user-preferences.mjs';
 import {installUserPreferences} from './user-preferences-ui.mjs';
 import {captureStill,createOutputProfiles} from './render-output.mjs';
 import {createViewportRecording} from './viewport-recording.mjs';
@@ -10773,7 +10774,8 @@ function saveSettings() {
 }
 
 function restoreSettings() {
-  if(startupPreferences?.sceneDefaults)return startupPreferences.sceneDefaults.environment?.name;
+  const defaults=resolveStartupSceneDefaults(startupPreferences,location.href).defaults;
+  if(defaults)return defaults.environment?.name;
   let settings;
   try { settings = JSON.parse(localStorage.getItem(KAMINOS_SETTINGS_KEY)); } catch {}
   if (!settings) return;
@@ -29159,6 +29161,8 @@ sceneInitialization.then(async () => {
     void refreshVolumeSettingsPresetList();
   }
   await startupPreferencesLoaded;
+  const startupDefaults=resolveStartupSceneDefaults(startupPreferences,location.href);
+  let startupDefaultsSkipReason=null;
   initEnvButtons();
   loadDemoButtons();
   factorySceneDocument=buildSceneData();
@@ -29170,13 +29174,14 @@ sceneInitialization.then(async () => {
     input.dispatchEvent(new Event('change',{bubbles:true}));
   };
   const preferencesSaved=value=>{startupPreferences=value;applyNavigationPreference(value);if(value.studioLook&&!workingScene.objects.length){arrivalLightingState.lookId=value.studioLook;syncArrivalStudioLighting();}};
-  preferencesUI=installUserPreferences({document,controller:userPreferences,readScene:()=>buildSceneData(),readFactory:()=>sceneDefaultsFromDocument(factorySceneDocument),onSaved:preferencesSaved,onApplyLook:lookId=>{void applyStudioLookToCurrentScene(lookId,{promoteRig:true});}});
+  preferencesUI=installUserPreferences({document,controller:userPreferences,readScene:()=>buildSceneData(),readFactory:()=>sceneDefaultsFromDocument(factorySceneDocument),installNumberDrag:installRelativeNumberDrag,onSaved:preferencesSaved,onApplyLook:lookId=>{void applyStudioLookToCurrentScene(lookId,{promoteRig:true});}});
   window.kaminosPreferences={open:()=>preferencesUI.open(),close:()=>preferencesUI.close(),
     read:()=>userPreferences.state(),load:()=>userPreferences.load(),
     save:async value=>{const saved=await userPreferences.save({...value,startupConfigured:true});preferencesSaved(saved);return saved;},
     applyStudioLook:(lookId,options)=>applyStudioLookToCurrentScene(lookId,options),
     capture:()=>sceneDefaultsFromDocument(buildSceneData()),
-    startup:()=>({settled:preferencesStartupSettled,usesDefaults:sceneDefaultsApplied})};
+    defaults:(profile='agent')=>resolveStartupSceneDefaults(userPreferences.state().receipt?.preferences??startupPreferences,'/?defaults='+encodeURIComponent(profile)),
+    startup:()=>({settled:preferencesStartupSettled,usesDefaults:sceneDefaultsApplied,requested:startupDefaults.requested,effective:sceneDefaultsApplied?startupDefaults.effective:null,reason:!preferencesStartupSettled?'startup-pending':startupDefaultsSkipReason??startupDefaults.reason})};
   const requestedStudioLook = typeof resolveStudioLookFromSearch === 'function' ? resolveStudioLookFromSearch(window.location.search) : null;
   if(startupPreferences&&startupPreferences.startupConfigured!==false&&userPreferences.state().receipt?.revision!=null){applyNavigationPreference(startupPreferences);if(startupPreferences.studioLook&&typeof arrivalLightingState!=='undefined'){arrivalLightingState.lookId=startupPreferences.studioLook;if(typeof syncArrivalStudioLighting==='function')syncArrivalStudioLighting();}}
   if (requestedStudioLook && typeof arrivalLightingState !== 'undefined') {
@@ -29200,11 +29205,15 @@ sceneInitialization.then(async () => {
     && !kaminosMeshAssetRouteFromSearch(startupAssetParams) && !kaminosSplatAssetRouteFromSearch(startupAssetParams)
     ? loadKaminosImageAssetRoute(startupImageRoute) : null;
   const environmentLoaded = loadEnvironment(admittedEnvironment?.name || initialEnvironment || 'studio').then(async () => {
-    if(startupPreferences?.sceneDefaults&&sceneDefaultsApplyToLocation(location.href)&&!workingScene.objects.length&&!scenePlacementTools.state().undoCount&&!scenePlacementTools.state().active) {
-      const blank=newSceneDocument(factorySceneDocument,startupPreferences.sceneDefaults);
+    if(startupDefaults.defaults&&!workingScene.objects.length&&!scenePlacementTools.state().undoCount&&!scenePlacementTools.state().active) {
+      const blank=newSceneDocument(factorySceneDocument,startupDefaults.defaults);
       await loadSceneFile(new File([JSON.stringify(blank)],'Untitled.kaminos.json'),{mounted:true,emptySettings:true});
       if(sceneDocument.state().blocked)throw Error('Default scene settings did not finish loading');
-      sceneDefaultsApplied=true;setInfo('New scene · your saved defaults');
+      sceneDefaultsApplied=true;setInfo('New scene · '+(startupDefaults.effective==='agent'?'agent defaults':'your saved defaults'));
+    } else if(startupDefaults.defaults){
+      startupDefaultsSkipReason='existing-scene-work';
+    } else if(startupDefaults.requested==='agent'&&startupDefaults.reason==='explicit-scene-input'){
+      setInfo('Agent defaults bypassed · explicit scene or asset settings take precedence');
     }
 
     const params = new URLSearchParams(window.location.search);
@@ -29258,7 +29267,7 @@ sceneInitialization.then(async () => {
     }
     if (params.get('sam') === '1' && !imageRoute) setActiveTab('masks');
   });
-  environmentLoaded.then(()=>{preferencesStartupSettled=true;},()=>{preferencesStartupSettled=true;});
+  environmentLoaded.then(()=>{preferencesStartupSettled=true;},()=>{preferencesStartupSettled=true;startupDefaultsSkipReason='startup-failed';});
   const volumeLoaded = startupSceneAdmission.then(admission => {
     if (admission === startupSceneRedirect) return null;
     const fireBoot = fireAtBoot(new URLSearchParams(location.search), startupSceneHash);

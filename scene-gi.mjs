@@ -190,6 +190,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
       effect.useScreenSpaceSampling.value = next.screenSpaceSampling;
       effect.useLinearThickness.value = next.linearThickness;
       effect.backfaceLighting.value = next.backfaceLighting;
+      effect.aoIntensity.value = next.aoContrast;
       effect.useMipSampling.value = next.mipSampling;
       effect.usePerspectiveReconstruction.value = next.perspectiveReconstruction;
       if(Object.keys(next).some(key=>next[key]!==estimator[key]))history.reset('estimator-parameters');

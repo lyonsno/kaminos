@@ -27,11 +27,12 @@ export function sceneGIReceives(material) {
 }
 
 export function resolveSceneGIEstimatorSettings(value = {}) {
-  const settings = {expFactor:2,screenSpaceSampling:false,linearThickness:false,backfaceLighting:.2,depthPhi:.1,normalPhi:5,lumaPhi:5,mipSampling:false,perspectiveReconstruction:false};
+  const settings = {expFactor:2,screenSpaceSampling:false,linearThickness:false,backfaceLighting:.2,aoContrast:1,depthPhi:.1,normalPhi:5,lumaPhi:5,mipSampling:false,perspectiveReconstruction:false};
   for (const key of Object.keys(settings)) if (Object.hasOwn(value,key)) settings[key]=value[key];
   for (const key of ['expFactor','depthPhi','normalPhi','lumaPhi']) {
     if (!Number.isFinite(settings[key]) || settings[key] <= 0) throw new Error(`Invalid scene GI ${key}`);
   }
+  if (!Number.isFinite(settings.aoContrast) || settings.aoContrast < 0) throw new Error('Invalid scene GI AO contrast');
   if (!Number.isFinite(settings.backfaceLighting) || settings.backfaceLighting < 0) throw new Error('Invalid scene GI backfaceLighting');
   for (const key of ['screenSpaceSampling','linearThickness','mipSampling','perspectiveReconstruction']) if (typeof settings[key] !== 'boolean') throw new Error(`Invalid scene GI ${key}`);
   return settings;

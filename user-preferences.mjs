@@ -51,11 +51,24 @@ export function checkedPreferences(raw){
  if(Object.hasOwn(raw,'startupConfigured')&&typeof raw.startupConfigured!=='boolean')throw Error('Invalid startup preference state');
  if(![null,'trackpad','mouse'].includes(raw.navigationInput??null))throw Error('Invalid navigation preference');
  if(raw.studioLook!=null&&!Object.hasOwn(STUDIO_LOOK_LIBRARY,raw.studioLook))throw Error('Invalid Studio look preference');
- return {...copy(raw),...(Object.hasOwn(raw,'inferenceKiln')?{inferenceKiln:checkedKilnSelection(raw.inferenceKiln)}:{}),...(Object.hasOwn(raw,'studioLook')?{studioLook:raw.studioLook??null}:{}),navigationInput:raw.navigationInput??null,sceneDefaults:checkedSceneDefaults(raw.sceneDefaults??null)};
+ return {...copy(raw),...(Object.hasOwn(raw,'inferenceKiln')?{inferenceKiln:checkedKilnSelection(raw.inferenceKiln)}:{}),...(Object.hasOwn(raw,'studioLook')?{studioLook:raw.studioLook??null}:{}),navigationInput:raw.navigationInput??null,sceneDefaults:checkedSceneDefaults(raw.sceneDefaults??null),agentSceneDefaults:checkedSceneDefaults(raw.agentSceneDefaults??null)};
 }
 export function sceneDefaultsApplyToLocation(value){
  const url=new URL(value,'http://localhost');
  return [...url.searchParams,...new URLSearchParams(url.hash.slice(1))].every(([key])=>['workspace','authoring'].includes(key));
+}
+// An agent opts into its authored defaults explicitly. Experiment setup still
+// runs afterward; a saved scene or asset address always owns its own settings.
+export function resolveStartupSceneDefaults(preferences,location='/'){
+ const url=new URL(location,'http://localhost'),params=[...url.searchParams,...new URLSearchParams(url.hash.slice(1))];
+ const profiles=params.filter(([key])=>key==='defaults').map(([,value])=>value);
+ if(profiles.some(value=>!['scene','agent'].includes(value))||new Set(profiles).size>1)throw Error('Choose scene or agent as the defaults profile');
+ const requested=profiles[0]??'scene';
+ const allowed=['workspace','authoring',...(profiles.length?['defaults']:[]),...(requested==='agent'?['experiment','experiment_inputs']:[])];
+ if(params.some(([key])=>!allowed.includes(key)))return {requested,effective:null,reason:'explicit-scene-input',defaults:null};
+ const own=requested==='agent'?preferences?.agentSceneDefaults:null;
+ const defaults=checkedSceneDefaults(own??preferences?.sceneDefaults??null);
+ return {requested,effective:defaults?(own?'agent':'scene'):null,reason:defaults?(requested==='agent'&&!own?'agent-inherits-scene':'saved-defaults'):'unconfigured',defaults};
 }
 export function newSceneDocument(factory,defaults){
  const document=copy(factory),value=checkedSceneDefaults(defaults);

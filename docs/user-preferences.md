@@ -36,3 +36,48 @@ Writes use a shared file lock and atomic replacement.
 The UI and callers use the same validation and storage operation. Startup
 applies settings through the ordinary scene loader before an owner consumer
 enters the scene; it skips default reconstruction if editing has already begun.
+
+Preferences has two editing targets: **New scenes** and **Agent runs**. Agent
+runs inherit New scenes until **Use new-scene defaults for agents** is unchecked
+or **Use current scene settings** authors an agent default. Both targets save in
+one revision-protected document; `agentSceneDefaults` is a settings object, or
+null to inherit `sceneDefaults`. There is no separate agent profile file.
+Navigation and the Studio look library selection remain app-wide preferences.
+
+The lighting section exposes the complete current SSGI state, including
+resolution, slices/steps, spatial filtering, temporal refinement, further
+bounces, estimator sampling options and depth/normal/brightness filter edges.
+**AO strength** controls final receiving occlusion and applies to both lighting
+modes. **AO contrast (exponent)** controls SSGI's own visibility exponent;
+one preserves the original estimate, and larger values deepen occlusion.
+Radius, thickness, slices and steps are shared AO/GI search parameters. The
+GTAO-only radius, scale, thickness and falloff appear only when GTAO is selected.
+They do not control SSGI. Numeric fields use the ordinary drag-or-type interaction.
+
+**Automatic scene scale** omits SSGI radius and thickness from the selected
+settings template, allowing scene calibration to choose them. It is selected
+for a new factory template. Capturing the current scene preserves all other
+lighting values and retains this scale choice. Turn automatic scale off to
+save explicit world-space radius/thickness values. No factory quality defaults
+are changed by capturing or saving a template.
+
+Agents opt in with `defaults=agent` on an ordinary empty-scene or Workbench
+address. For example:
+
+```text
+/?workspace=workbench&defaults=agent&experiment=material-study&experiment_inputs=%7B%22roughness%22%3A0.8%7D
+```
+
+This restores the authored agent settings through the ordinary scene loader
+before the experiment opens. The experiment then owns any explicit settings
+it applies. Ordinary experiment URLs retain their existing startup behavior.
+Saved scene, asset, fire and other explicit scene inputs bypass the defaults,
+even if `defaults=agent` is present. This avoids replacing an authored scene's
+lighting recipe. The Preferences footer offers **Open an agent scene** while
+editing Agent runs.
+
+`window.kaminosPreferences.defaults('agent')` returns the selected settings and
+inheritance decision without applying them. `startup()` reports `requested`,
+`effective`, `usesDefaults`, `settled` and `reason`; an existing-object/edit guard
+or a failed startup cannot claim that the selected settings applied. `capture()`
+continues returning the actual complete scene settings without saving anything.

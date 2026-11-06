@@ -31,11 +31,12 @@ def validate_preferences(value):
             raise ValueError('Choose a saved kiln scene')
         if not isinstance(kiln.get('promptObjectId'), str) or not kiln['promptObjectId'].strip():
             raise ValueError('Choose the kiln prompt lettering')
-    defaults = value.get('sceneDefaults')
-    if defaults is not None and not isinstance(defaults, dict):
-        raise ValueError('Scene defaults must be a settings object')
-    if defaults and any(key in defaults for key in ('objects','groups','composition','localLiquid','selectionIds','activeObjectId','activeFieldId','sceneId','cameraViews','volumePrimitives')):
-        raise ValueError('Scene defaults contain scene membership or simulation identity')
+    for key in ('sceneDefaults', 'agentSceneDefaults'):
+        defaults = value.get(key)
+        if defaults is not None and not isinstance(defaults, dict):
+            raise ValueError(f'{key} must be a settings object')
+        if defaults and any(name in defaults for name in ('objects','groups','composition','localLiquid','selectionIds','activeObjectId','activeFieldId','sceneId','cameraViews','volumePrimitives')):
+            raise ValueError(f'{key} contains scene membership or simulation identity')
     # Reject NaN/Infinity instead of producing a document the browser cannot read.
     json.dumps(value, allow_nan=False)
     return value
