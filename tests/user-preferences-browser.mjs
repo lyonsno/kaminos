@@ -3,20 +3,20 @@
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const [origin,out,expectedRoot,playwrightModule,executable,baselineUI]=process.argv.slice(2);
-assert.ok(origin&&out&&expectedRoot&&playwrightModule&&executable,'origin out repo-root playwright-module independent-browser [baseline-ui]');
-await fs.mkdir(out,{recursive:true});
-const profile=await fs.mkdtemp(out+'/browser-');
-const report={status:'running',phase:'launch',origin,expectedRoot,executable,profile,baselineUI,errors:[]};let browser;
+const report={status:'running',phase:'arguments',origin,expectedRoot,executable,baselineUI,errors:[]};let browser,profile;
 const seed={schema:'kaminos.preferences.v1',sceneDefaults:{environment:{name:'studio',exposure:1},postprocessing:{sceneGI:{resolutionScale:.1,slices:1,steps:3}}},agentSceneDefaults:null,navigationInput:null,startupConfigured:true};
 try{
- report.runtime=await(await fetch(origin+'/api/runtime-config')).json();assert.equal(report.runtime.source.repoRoot,expectedRoot);
+ assert.ok(origin&&out&&expectedRoot&&playwrightModule&&executable,'origin out repo-root playwright-module independent-browser [baseline-ui]');
+ report.phase='output-setup';await fs.mkdir(out,{recursive:true});await fs.writeFile(out+'/preferences-browser-report.json',JSON.stringify(report,null,2));
+ report.phase='profile-setup';profile=await fs.mkdtemp(out+'/browser-');report.profile=profile;
+ report.phase='runtime-admission';report.runtime=await(await fetch(origin+'/api/runtime-config')).json();assert.equal(report.runtime.source.repoRoot,expectedRoot);
  // Only run against an explicitly isolated preference store.
  const initial=await(await fetch(origin+'/api/preferences')).json();report.storePath=initial.storePath;
  assert.ok(initial.storePath.startsWith(out+'/'),'browser conformance must not replace operator preferences');
  const seeded=await fetch(origin+'/api/preferences',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:initial.revision,preferences:seed})});assert.equal(seeded.status,200);
- const {chromium}=await import(playwrightModule);
- browser=await chromium.launchPersistentContext(profile,{headless:true,executablePath:executable,viewport:{width:1040,height:800},args:['--use-mock-keychain','--password-store=basic','--enable-unsafe-webgpu','--use-angle=metal']});
- const page=browser.pages()[0];page.setDefaultTimeout(0);page.on('pageerror',error=>{report.errors.push(String(error));console.error('PAGE',String(error));});
+ report.phase='browser-import';const {chromium}=await import(playwrightModule);
+ report.phase='browser-launch';browser=await chromium.launchPersistentContext(profile,{headless:true,executablePath:executable,viewport:{width:1040,height:800},args:['--use-mock-keychain','--password-store=basic','--enable-unsafe-webgpu','--use-angle=metal']});
+ const page=browser.pages()[0];page.setDefaultTimeout(0);await page.addInitScript(()=>{const original=window.fetch;window.__preferenceSaveRequests=[];window.fetch=function(url,options){const result=original.call(this,url,options);if(String(url).endsWith('/api/preferences')&&options?.method==='POST')window.__preferenceSaveRequests.push(result);return result;};});page.on('pageerror',error=>{report.errors.push(String(error));console.error('PAGE',String(error));});
  if(baselineUI)await page.route('**/user-preferences-ui.mjs',async route=>route.fulfill({contentType:'text/javascript',body:await fs.readFile(baselineUI,'utf8')}));
  report.phase='open';console.log('Opening actual preferences');await page.goto(origin+'/#workspace=authoring');await page.waitForFunction(()=>window.kaminosPreferences?.startup().settled);
  await page.keyboard.press('Meta+,');await page.waitForFunction(()=>document.querySelector('#kaminos-preferences')?.open&&document.querySelector('#preferences-save')?.disabled===false);
@@ -35,6 +35,18 @@ try{
  await write('postprocessing.sceneGI.mode','combined');assert.equal(await pathInput('postprocessing.ao.radius').isVisible(),false);
  assert.equal(await pathInput('postprocessing.sceneGI.estimator.aoContrast').isVisible(),true);
  await write('postprocessing.sceneGI.estimator.aoContrast',-1);assert.equal(await pathInput('postprocessing.sceneGI.estimator.aoContrast').evaluate(node=>node.validity.valid),false);await write('postprocessing.sceneGI.estimator.aoContrast',1.35);
+ // Invalid and unfinished numeric drafts remain invalid after the scrubber blurs read-only.
+ report.phase='invalid-save';report.refusals=[];
+ for(const [path,text,restore] of [['postprocessing.sceneGI.estimator.aoContrast','-1',1.35],['postprocessing.sceneGI.steps','',6],['postprocessing.dof.focus','11',2.5]]){
+  const revision=await page.evaluate(()=>window.kaminosPreferences.read().receipt.revision);
+  const count=await page.evaluate(()=>window.__preferenceSaveRequests.length);
+  await write(path,text);await page.locator('#preferences-save').click();
+  await page.evaluate(()=>Promise.all(window.__preferenceSaveRequests));
+  const postsAfter=await page.evaluate(()=>window.__preferenceSaveRequests.length);report.refusals.push({path,text,revision,postsBefore:count,postsAfter,displayed:await pathInput(path).inputValue()});
+  assert.equal(postsAfter,count,'invalid visible '+path+' must not issue a save after blur');
+  assert.equal(await page.evaluate(()=>window.kaminosPreferences.read().receipt.revision),revision);
+  assert.equal(await pathInput(path).inputValue(),text);await write(path,restore);
+ }
  // Automatic scale preserves the tune while leaving each scene's world scale to calibration.
  await page.locator('#preference-auto-scene-scale').check();delete gi.radius;delete gi.thickness;
  await page.locator('#preferences-save').click();await page.waitForFunction(()=>document.querySelector('#preferences-status')?.textContent.startsWith('Saved new-scene'));
@@ -50,8 +62,15 @@ try{
  report.phase='agent-consumer';console.log('Exercising Workbench consumer');await page.goto(origin+'/?defaults=agent&workspace=workbench&experiment=material-study&experiment_inputs='+encodeURIComponent(JSON.stringify({roughness:.8})));
  await page.waitForFunction(()=>window.kaminosPreferences?.startup().settled&&window.kaminosWorkbenchExperiments?.state().id==='material-study');
  report.startup=await page.evaluate(()=>window.kaminosPreferences.startup());report.effective=await page.evaluate(()=>window.kaminosSceneGIDebugState());report.experiment=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
- assert.equal(report.startup.usesDefaults,true);assert.equal(report.startup.effective,'agent');assert.equal(report.effective.resolutionScale,.1);assert.equal(report.effective.steps,6);assert.equal(report.effective.slices,2);assert.equal(report.effective.estimator.aoContrast,1.35);assert.equal(report.experiment.roughness,.8);
+ assert.equal(report.startup.usesDefaults,true);assert.equal(report.startup.effective,'agent');assert.equal(report.effective.resolutionScale,.1);assert.equal(report.effective.steps,6);assert.equal(report.effective.slices,2);assert.equal(report.effective.estimator.aoContrast,1.35);assert.equal(report.experiment.roughness,.8);assert.ok(report.effective.autoCalibrated&&Number.isFinite(report.effective.autoCalibrated.radius)&&Number.isFinite(report.effective.autoCalibrated.thickness),'Workbench attachment must trigger automatic scene scale');assert.notEqual(report.effective.radius,20);assert.notEqual(report.effective.thickness,7);
  assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack||error);process.exitCode=1;}
-finally{await fs.writeFile(out+'/preferences-browser-report.json',JSON.stringify(report,null,2));await browser?.close();await fs.rm(profile,{recursive:true,force:true});}
+finally{
+ try{await browser?.close();if(profile)await fs.rm(profile,{recursive:true,force:true});}
+ catch(error){report.status='failed';report.cleanupError=String(error);process.exitCode=1;}
+ // A writable output destination receives a failure even before launch. Cleanup
+ // has already run if writing the report itself fails.
+ if(out)try{await fs.mkdir(out,{recursive:true});await fs.writeFile(out+'/preferences-browser-report.json',JSON.stringify(report,null,2));}
+ catch(error){console.error('Witness report could not be written:',String(error));process.exitCode=1;}
+}
 console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,errors:report.errors}));

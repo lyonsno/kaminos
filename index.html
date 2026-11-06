@@ -7505,6 +7505,12 @@ document.addEventListener('keydown', event => {
   }
 });
 
+function registerWorkbenchSceneObject(object, metadata) {
+  const record=registerSceneObject(object,metadata);
+  autoCalibrateSceneGIFromScene();
+  return record;
+}
+
 function registerSceneObject(object, metadata = {}, {activate = true} = {}) {
   const id = String(metadata.id || makeSceneObjectId(metadata.type || 'object'));
   const sceneTransform = metadata.type === 'splat'
@@ -12298,7 +12304,7 @@ async function initScene() {
   const sceneResourceConsumers=()=>[scene,...workingScene.retainedObjects().map(row=>row.object),...workingScene.suspendedObjects().map(row=>row.object)];
   workbenchSceneHost=createWorkbenchSceneHost({scene,camera,controls,resourceConsumers:sceneResourceConsumers,
     loadAsset:(file,options)=>window.kaminosWorkbenchLoadAsset(file,options),
-    registerObject:registerSceneObject,findObject:root=>workingScene.findRoot(root)??workingScene.suspendedObjects().find(row=>row.object===root),
+    registerObject:registerWorkbenchSceneObject,findObject:root=>workingScene.findRoot(root)??workingScene.suspendedObjects().find(row=>row.object===root),
     removeObject:handle=>sceneMembership.removeOwned(handle,
       root=>disposeOwnedSceneTree(root,sceneResourceConsumers(),[scene.environment,scene.background])),
     redraw:()=>window._kaminosDirty?.(),onFrame:workbenchSceneFrames.onFrame,

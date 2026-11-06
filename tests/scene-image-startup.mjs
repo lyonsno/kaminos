@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
+import {resolveStartupSceneDefaults} from '../user-preferences.mjs';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const start=html.indexOf('  // An image plane is unlit'),end=html.indexOf('  environmentLoaded.then(',start);
 assert.ok(start>=0&&end>start);
@@ -13,7 +14,7 @@ function run(search='?image_root=images&image_path=one.png'){
  const route={effectiveUrl:'/api/read?root=images&path=one.png',fileName:'one.png'};
  const c={URLSearchParams,location:{search,hash:'',href:'http://localhost/'+search},window:{location:{search}},
   initialEnvironment:'studio',admittedEnvironment:null,loadEnvironment:()=>{calls.push('environment');return environment.promise;},
-  startupPreferences:null,kaminosImageAssetRouteFromSearch:p=>p.has('image_path')?route:null,
+  startupPreferences:null,startupDefaults:resolveStartupSceneDefaults(null,'http://localhost/'+search),kaminosImageAssetRouteFromSearch:p=>p.has('image_path')?route:null,
   kaminosMeshAssetRouteFromSearch:()=>null,kaminosSplatAssetRouteFromSearch:()=>null,
   loadKaminosImageAssetRoute:()=>{calls.push('image');return image.promise;},setInfo:()=>{},
   greenroomImportSplat:async()=>calls.push('legacy-splat'),console,
