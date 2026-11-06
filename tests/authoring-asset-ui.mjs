@@ -168,3 +168,10 @@ test('expanding matching Agent Work groups does not request a full catalog copy 
  const controller={read:options=>{if(options?.selectionOnly)return {selected:state.selected};fullReads++;return state;},generation:()=>({status:'idle'}),refresh:async()=>{}};
  const f=fixture(async()=>null,controller);fullReads=0;f.doc.getElementById('asset-filter').value='agent';f.ui.render(state);assert.equal(fullReads,0,'groups only need the current selected entry');assert.equal(f.doc.getElementById('asset-entries').children.length,2);
 });
+
+test('a queued toggle from a replaced agent group cannot restore an old visible card after a hold',()=>{
+ const f=fixture(async()=>null),entry={kind:'image',root:'agent-work',path:'image.png',label:'Before review',name:'image.png',source:'/api/job-output?job_id=one&file=image.png',agent:{id:'alpha',label:'Alpha'}};
+ f.state.root='agent-work';f.state.entries=[entry];f.state.listRevision++;f.ui.open('browse');const old=f.doc.getElementById('asset-entries').children[0];old.open=true;
+ f.state.entries=[{...entry,visibility:{status:'withheld',reason:'Awaiting review'}}];f.state.listRevision++;f.ui.render(f.state);const current=f.doc.getElementById('asset-entries').children[0];old.dispatch('toggle');current.open=true;current.dispatch('toggle');
+ const card=current.children[1].children[0];assert.equal(card.dataset.visibility,'withheld');assert.equal(card.children.filter(e=>e.tagName==='img').length,0,'late old group work must not bypass the new hold');
+});

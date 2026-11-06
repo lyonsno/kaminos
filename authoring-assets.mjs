@@ -186,7 +186,7 @@ export function installAuthoringAssets({document,controller,edits}) {
           const populate=()=>{if(!detail.open||populated)return;populated=true;const selected=controller.read({selectionOnly:true}).selected;grid.replaceChildren(...items.map(entry=>{
             const button=makeButton(entry,selected),subtitle=button.querySelector('small');subtitle.textContent=(entry.kind==='mesh'?'Mesh · GLB':entry.kind==='surface'?'Fitted surface splats':'Image')+' · '+(entry.outputClass==='witness'?'Evidence':entry.outputClass==='generated'?'Generated':'Output');return button;
           }));armPreviews();};
-          detail.addEventListener('toggle',()=>{if(detail.open)expandedAgents.add(id);else expandedAgents.delete(id);populate();});
+          detail.addEventListener('toggle',()=>{if(!detail.isConnected||agentGroups.get(id)?.detail!==detail)return;if(detail.open)expandedAgents.add(id);else expandedAgents.delete(id);populate();});
           group={detail,populate};agentGroups.set(id,group);
         }
         group.detail.open=!!query||expandedAgents.has(id);group.populate();return group.detail;
