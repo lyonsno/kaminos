@@ -1,7 +1,8 @@
 import {cubeCoordinates,CUBE_COORDINATES_WGSL} from './fire-cube-coordinates.mjs';
 import * as THREE from './lib/three.webgpu.js';
 import {createShadowMedium,validateShadowMediumResolution,shadowMediumPlan} from './scene-shadow-medium.mjs';
-import {sceneLightingDomain,integrateSceneMediumSegment} from './scene-volume-source.mjs';
+import {EXTERIOR_MEDIUM_WGSL} from './scene-exterior-medium.mjs';
+import {sceneTransportDomain,sceneLightingDomain,integrateSceneMediumSegment} from './scene-volume-source.mjs';
 
 export function smokeShadowPlan({resolution=16,steps=16,count=4}={},limits={}){
   for(const [key,value] of Object.entries({resolution,steps,count}))
@@ -118,8 +119,10 @@ export function createFireSmokeShadow(device,{points,resolution=16,steps=16,coun
   };
   let quality={resolution,steps,filter,angleDegrees,tapsPerAxis,mediumResolution},plan=validate(quality),gpu=null;
   const params=device.createBuffer({label:'smoke shadow atlas layout',size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
-  const mediumDomain=device.createBuffer({label:'smoke shadow medium domain',size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+  const mediumDomain=device.createBuffer({label:'smoke shadow medium domain',size:48,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
   const filterParams=device.createBuffer({label:'smoke shadow angular filter quality',size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+  const exteriorParams=device.createBuffer({label:'smoke shadow exterior domains',size:64,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+  const emptyExterior=device.createTexture({label:'empty exterior shadow medium',dimension:'3d',size:[1,1,1],format:'r32float',usage:GPUTextureUsage.TEXTURE_BINDING});
   const {pipeline,filterPipeline}=deviceCache;
   let outputGpu=null;
   const external=managed?new THREE.StorageTexture(...plan.size):new THREE.ExternalTexture();
@@ -162,7 +165,7 @@ export function createFireSmokeShadow(device,{points,resolution=16,steps=16,coun
     encode(field,reduction){
       metadata=null;if(!quality.steps)return null;
       if(disposed||field.status!=='encoded'||!field.texture||reduction?.generation!==field.generation||reduction?.frame!==field.frame||reduction.count!==count)throw Error('smoke shadow requires matching current field and point reduction');
-      const domain=sceneLightingDomain(field);lastDimensions=[...field.dimensions];lo.value.set(...domain.lo);hi.value.set(...domain.hi);
+      const fineDomain=sceneLightingDomain(field),domain=sceneTransportDomain(field);lastDimensions=[...field.dimensions];lo.value.set(...domain.lo);hi.value.set(...domain.hi);
       const encoder=device.createCommandEncoder({label:'current smoke shadow prefixes'});
       let input=field.texture,activePipeline=pipeline,prepared=null;
       if(quality.mediumResolution){
@@ -175,18 +178,25 @@ export function createFireSmokeShadow(device,{points,resolution=16,steps=16,coun
           }
         }
         activePipeline=preparedPipeline;
-        device.queue.writeBuffer(mediumDomain,0,new Float32Array([...domain.hi,0]));
+
         if(filteredMedium)mediumSampler??=(deviceCache.mediumSampler??=device.createSampler({minFilter:'linear',magFilter:'linear',mipmapFilter:'nearest',addressModeU:'clamp-to-edge',addressModeV:'clamp-to-edge',addressModeW:'clamp-to-edge'}));
       }
-      if(bound!==input){group=device.createBindGroup({layout:activePipeline.getBindGroupLayout(0),entries:[{binding:0,resource:input.createView()},{binding:1,resource:points.createView()},{binding:2,resource:(quality.filter?gpu:outputGpu).createView()},{binding:3,resource:{buffer:params}},...(prepared?[{binding:4,resource:{buffer:mediumDomain}},...(filteredMedium?[{binding:5,resource:mediumSampler}]:[])]:[])]});bound=input;}
+      const exterior=field.exterior,middle=exterior?.middle;
+      const exteriorValues=new Float32Array(16);
+      if(exterior){exteriorValues.set([...exterior.localMin,(exterior.localMax[0]-exterior.localMin[0])/exterior.dimensions[0],...exterior.localMax,1]);
+       if(middle){if(middle.status!=='encoded'||middle.generation!==field.generation||middle.frame!==field.frame)throw Error('smoke shadow requires current Middle medium');const pitch=(middle.localMax[0]-middle.localMin[0])/middle.dimensions[0];exteriorValues.set([...middle.localMin,pitch,...middle.localMax,pitch*2],8);}}
+      device.queue.writeBuffer(exteriorParams,0,exteriorValues);
+      device.queue.writeBuffer(mediumDomain,0,new Float32Array([...fineDomain.hi,0,...domain.lo,0,...domain.hi,0]));
+      // Region textures may be rebuilt independently of Fine's texture.
+      {group=device.createBindGroup({layout:activePipeline.getBindGroupLayout(0),entries:[{binding:0,resource:input.createView()},{binding:1,resource:points.createView()},{binding:2,resource:(quality.filter?gpu:outputGpu).createView()},{binding:3,resource:{buffer:params}},{binding:4,resource:{buffer:mediumDomain}},...(prepared&&filteredMedium?[{binding:5,resource:mediumSampler}]:[]),{binding:22,resource:(exterior?.texture??emptyExterior).createView()},{binding:23,resource:{buffer:exteriorParams}},{binding:24,resource:(middle?.texture??emptyExterior).createView()}]});bound=input;}
       const pass=encoder.beginComputePass({label:'live smoke shadow prefix integration'});
       pass.setPipeline(activePipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.ceil(quality.resolution/8),Math.ceil(quality.resolution/8),count*6);pass.end();
       if(quality.filter){const pass=encoder.beginComputePass({label:'current smoke directional filter'});pass.setPipeline(filterPipeline);pass.setBindGroup(0,filterGroup);pass.dispatchWorkgroups(Math.ceil(quality.resolution/8),Math.ceil(quality.resolution/8),count*6*plan.groups);pass.end();}
       device.queue.submit([encoder.finish()]);if(prepared)medium.commit();
-      metadata={identity:'gpu-radial-smoke-optical-depth-v1',generation:field.generation,frame:field.frame,...plan,coefficientSource:prepared?'prepared-volume-average-extinction':'raw-live-emission-extinction-alpha',medium:prepared?{...prepared.metadata,sampling:filteredMedium?'hardware-trilinear':'manual-trilinear'}:{mode:'raw',resolution:field.dimensions[0],dimensions:[...field.dimensions],sourceGeneration:field.generation,sourceFrame:field.frame,sampling:'nearest-cell'},sampling:'clipped-radial-midpoint',receiverSampling:'angular-bilinear-radial-linear',directionFilter:quality.filter?(quality.angleDegrees===null?'binomial-3x3-transmission':'angular-tent-transmission'):'off',angleDegrees:quality.angleDegrees,tapsPerAxis:quality.tapsPerAxis,work:smokeShadowWork({...quality,count}),lengthSpace:'volume-local'};return {...metadata};
+      metadata={identity:'gpu-radial-smoke-optical-depth-v1',generation:field.generation,frame:field.frame,...plan,coefficientSource:prepared?'prepared-volume-average-extinction':'raw-live-emission-extinction-alpha',medium:prepared?{...prepared.metadata,sampling:filteredMedium?'hardware-trilinear':'manual-trilinear'}:{mode:'raw',resolution:field.dimensions[0],dimensions:[...field.dimensions],sourceGeneration:field.generation,sourceFrame:field.frame,sampling:'nearest-cell'},sampling:'clipped-radial-midpoint',receiverSampling:'angular-bilinear-radial-linear',directionFilter:quality.filter?(quality.angleDegrees===null?'binomial-3x3-transmission':'angular-tent-transmission'):'off',angleDegrees:quality.angleDegrees,tapsPerAxis:quality.tapsPerAxis,work:smokeShadowWork({...quality,count}),exterior:exterior?{generation:exterior.generation,frame:exterior.frame,dimensions:[...exterior.dimensions],localMin:[...exterior.localMin],localMax:[...exterior.localMax],middle:Boolean(middle)}:null,lengthSpace:'volume-local'};return {...metadata};
     },
     debugState(){return metadata?{...metadata}:null;},
-    dispose(owner=renderer){disposed=true;metadata=null;if(!managed&&owner)delete owner.backend.get(external).texture;external.dispose();gpu.destroy();if(!managed)outputGpu.destroy();params.destroy();filterParams.destroy();mediumDomain.destroy();medium.destroy();},
+    dispose(owner=renderer){disposed=true;metadata=null;if(!managed&&owner)delete owner.backend.get(external).texture;external.dispose();gpu.destroy();if(!managed)outputGpu.destroy();params.destroy();filterParams.destroy();mediumDomain.destroy();exteriorParams.destroy();emptyExterior.destroy();medium.destroy();},
   };
 }
 
@@ -215,7 +225,13 @@ export function smokeShadowIntegrationWGSL({prepared=false,filterable=false}={})
 @group(0) @binding(1) var points:texture_2d<f32>;
 @group(0) @binding(2) var output:texture_storage_2d<rgba16float,write>;
 @group(0) @binding(3) var<uniform> atlas:vec4<u32>;
-${prepared?'@group(0) @binding(4) var<uniform> mediumExtent:vec4<f32>;':''}
+struct ShadowDomain {fineHi:vec4<f32>,lo:vec4<f32>,hi:vec4<f32>}
+@group(0) @binding(4) var<uniform> mediumExtent:ShadowDomain;
+fn sourceDomainHi()->vec3<f32>{return mediumExtent.fineHi.xyz;}
+fn interval(p:vec3<f32>,d:vec3<f32>,lo:vec3<f32>,hi:vec3<f32>,limit:f32)->vec2<f32>{
+ var start=0.0;var end=limit;for(var a=0u;a<3u;a++){if(abs(d[a])<1e-20){if(p[a]<lo[a]||p[a]>hi[a]){end=-1.0;}}else{let x=(lo[a]-p[a])/d[a];let y=(hi[a]-p[a])/d[a];start=max(start,min(x,y));end=min(end,max(x,y));}}return vec2<f32>(start,end);
+}
+${EXTERIOR_MEDIUM_WGSL}
 ${prepared&&filterable?'@group(0) @binding(5) var densitySampler:sampler;':''}
 ${CUBE_DIRECTION_WGSL}
 fn readDensity(p:vec3<f32>,lo:vec3<f32>,hi:vec3<f32>,dims:vec3<u32>,pitch:f32)->f32{${read}}
@@ -225,8 +241,8 @@ fn integrate(@builtin(global_invocation_id) id:vec3<u32>){
  if(id.x>=resolution||id.y>=resolution||id.z>=atlas.z*6u){return;}
  let source=textureLoad(points,vec2<i32>(i32(id.z/6u),0),0).xyz;
  let dims=textureDimensions(coefficients);let pitch=2.0/f32(dims.x);
- let lo=vec3<f32>(-1);let hi=${prepared?"mediumExtent.xyz":"lo+vec3<f32>(dims)*pitch"};
- let far=length(max(abs(source-lo),abs(source-hi)));
+ let lo=vec3<f32>(-1);let hi=mediumExtent.fineHi.xyz;
+ let far=length(max(abs(source-mediumExtent.lo.xyz),abs(source-mediumExtent.hi.xyz)));
  let ray=direction(id.z%6u,(vec2<f32>(id.xy)+vec2<f32>(.5))/f32(resolution));
  var start=0.0;var end=far;
  for(var axis=0u;axis<3u;axis++){
@@ -241,6 +257,7 @@ fn integrate(@builtin(global_invocation_id) id:vec3<u32>){
     let p=source+ray*(a+b)*.5;
     tau+=max(0.0,readDensity(p,lo,hi,dims,pitch))*(b-a);
    }
+   tau+=exteriorOpticalDepth(source+ray*f32(i)*ds,ray,ds);
   }
   // The half-float cache saturates only at its representable opaque endpoint,
   // avoiding infinity interpolation (inf * 0) at an exact prefix boundary.

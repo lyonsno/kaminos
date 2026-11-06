@@ -78,10 +78,10 @@ fn uniformSourcePdf(p:vec3<f32>,d:vec3<f32>)->f32 {
   if(span.y<=span.x){return 0.0;}
   return (span.y-span.x)*(span.y*span.y+span.y*span.x+span.x*span.x)/(3.0*extent.x*extent.y*extent.z);
 }
-fn integrateCells(p:vec3<f32>,d:vec3<f32>,limit:f32)->vec3<f32> {
+fn integrateCellsTransfer(p:vec3<f32>,d:vec3<f32>,limit:f32)->vec4<f32> {
   let lo=vec3<f32>(-1.0);let hi=sourceDomainHi();
   let span=interval(p,d,lo,hi,limit);
-  if(span.y<=span.x){return vec3<f32>(0.0);}
+  if(span.y<=span.x){return vec4<f32>(0,0,0,1);}
   let dims=vec3<i32>(textureDimensions(coefficients));
   let pitch=(hi-lo)/vec3<f32>(dims);
   let u=(p+d*span.x-lo)/pitch;
@@ -106,8 +106,10 @@ fn integrateCells(p:vec3<f32>,d:vec3<f32>,limit:f32)->vec3<f32> {
     for(var a=0u;a<3u;a++){if(crossing[a]<=end){cell[a]+=step[a];}}
     t=max(t,end);
   }
-  return radiance;
+  return vec4<f32>(radiance,transmission);
 }
+fn integrateCells(p:vec3<f32>,d:vec3<f32>,limit:f32)->vec3<f32>{return integrateCellsTransfer(p,d,limit).rgb;}
+
 `;
 export const SOURCE_AWARE_WGSL=SOURCE_AWARE_BODY_WGSL+`
 fn sourcePdf(p:vec3<f32>,d:vec3<f32>)->f32 {return uniformSourcePdf(p,d);}

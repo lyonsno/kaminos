@@ -33,6 +33,16 @@ export function sceneLightingDomain(field) {
   return domain;
 }
 
+// Receiver and capture support is Fine plus the active World optical volume.
+// Middle refines World inside these bounds; it does not extend World ownership.
+export function sceneTransportDomain(field){
+  const fine=sceneLightingDomain(field),world=field.exterior;
+  if(!world)return fine;
+  if(world.status!=='encoded'||world.generation!==field.generation||world.frame!==field.frame)throw Error('transport requires current exterior generation and frame');
+  if(![world.localMin,world.localMax].every(v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite))||world.localMax.some((v,a)=>v<=world.localMin[a]))throw Error('transport requires ordered exterior bounds');
+  return {...fine,lo:fine.lo.map((v,a)=>Math.min(v,world.localMin[a])),hi:fine.hi.map((v,a)=>Math.max(v,world.localMax[a]))};
+}
+
 export function validateScenePointSource(source) {
   if (!Array.isArray(source?.position) || source.position.length !== 3 || !source.position.every(Number.isFinite)) throw new Error('scene source position must be finite XYZ');
   if (!Array.isArray(source?.intensity) || source.intensity.length !== 3 || !source.intensity.every(x=>Number.isFinite(x)&&x>=0)) throw new Error('scene source intensity must be nonnegative finite linear RGB');
@@ -133,29 +143,30 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
     let r=exteriorResources.get(name);
     const key=region.dimensions.join(',');
     if(!r||r.key!==key){
-      r?.texture.destroy();
+      r?.texture.destroy();r?.emissionTexture.destroy();
+      const emissionTexture=device.createTexture({label:`physical ${name} emission and extinction`,dimension:'3d',size:region.dimensions,format:'rgba32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});
       const texture=device.createTexture({label:`physical ${name} smoke extinction`,dimension:'3d',size:region.dimensions,format:'r32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});
       let extPipeline=cachedPipelines.exterior.get(name);
       if(!extPipeline){
         extPipeline=device.createComputePipeline({label:`encode ${name} smoke extinction`,layout:'auto',compute:{module,entryPoint:name==='middle'?'seedSceneMiddleMedium':'seedSceneExteriorMedium'}});
         cachedPipelines.exterior.set(name,extPipeline);
       }
-      r={key,texture,pipeline:extPipeline};exteriorResources.set(name,r);
+      r={key,texture,emissionTexture,pipeline:extPipeline};exteriorResources.set(name,r);
     }
     const renderView=region.renderView??emptyWorldView;
     if(r.input!==region.texture||(name==='world'&&r.renderView!==renderView)){
       r.group=device.createBindGroup({layout:r.pipeline.getBindGroupLayout(0),entries:[
         {binding:0,resource:{buffer:uniformBuffer}},{binding:name==='middle'?35:20,resource:region.texture.createView()},{binding:21,resource:{buffer:worldRenderUniform}},...(name==='world'?[{binding:40,resource:renderView}]:[])]});
-      r.output=device.createBindGroup({layout:r.pipeline.getBindGroupLayout(3),entries:[{binding:6,resource:r.texture.createView()}]});r.input=region.texture;r.renderView=renderView;
+      r.output=device.createBindGroup({layout:r.pipeline.getBindGroupLayout(3),entries:[{binding:6,resource:r.texture.createView()},{binding:7,resource:r.emissionTexture.createView()}]});r.input=region.texture;r.renderView=renderView;
     }
     const pass=encoder.beginComputePass({label:`current ${name} physical extinction`});
     pass.setPipeline(r.pipeline);pass.setBindGroup(0,r.group);pass.setBindGroup(3,r.output);pass.dispatchWorkgroups(...region.dimensions.map(n=>Math.ceil(n/4)));pass.end();
-    return {status:'encoded',identity:`${name}-smoke-physical-extinction-v1`,texture:r.texture,dimensions:[...region.dimensions],localMin:[...region.localMin],localMax:[...region.localMax],generation,frame,coefficientLengthSpace:'volume-local',exteriorEmission:false};
+    return {status:'encoded',identity:`${name}-smoke-physical-extinction-v1`,texture:r.texture,emissionTexture:r.emissionTexture,dimensions:[...region.dimensions],localMin:[...region.localMin],localMax:[...region.localMax],generation,frame,coefficientLengthSpace:'volume-local',exteriorEmission:true};
   }
   function encodeExterior(encoder){
     exterior=null;
     const world=getWorldSmoke();
-    for(const [name,r] of exteriorResources)if(!world||(name==='middle'&&!world.middle)){r.texture.destroy();exteriorResources.delete(name);}
+    for(const [name,r] of exteriorResources)if(!world||(name==='middle'&&!world.middle)){r.texture.destroy();r.emissionTexture.destroy();exteriorResources.delete(name);}
     if(!world)return;
     exterior=encodeRegion(encoder,world,'world');
     exterior.handoffMargin=normalizeSmokeHandoffMargin(world.handoffMargin);
@@ -249,28 +260,33 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
       worldTransform:validateSceneSourceTransform(worldTransform),texture: status === 'encoded' ? texture : null,scatteringTexture:status==='encoded'?scatteringTexture:null,
       exterior:status==='encoded'?exterior:null,
       scatteringChannels:['smoke-scattering-coefficient'],scatteringGeneration:status==='encoded'?generation:null};},
-    destroy() {emptyWorld.destroy();if(ownWorldUniform)worldRenderUniform.destroy();for(const r of exteriorResources.values())r.texture.destroy();exteriorResources.clear();texture.destroy();scatteringTexture.destroy(); optical?.depth.destroy(); optical?.params.destroy(); status = 'destroyed'; reason = 'destroyed';},
+    destroy() {emptyWorld.destroy();if(ownWorldUniform)worldRenderUniform.destroy();for(const r of exteriorResources.values()){r.texture.destroy();r.emissionTexture.destroy();}exteriorResources.clear();texture.destroy();scatteringTexture.destroy(); optical?.depth.destroy(); optical?.params.destroy(); status = 'destroyed'; reason = 'destroyed';},
   };
 }
 
 export const SCENE_VOLUME_SOURCE_WGSL = /* wgsl */`
 @group(3) @binding(6) var sceneExteriorOut:texture_storage_3d<r32float,write>;
+@group(3) @binding(7) var sceneExteriorEmissionOut:texture_storage_3d<rgba32float,write>;
 @compute @workgroup_size(4,4,4)
 fn seedSceneExteriorMedium(@builtin(global_invocation_id) c:vec3<u32>){
   seatGridShape();
   let dims=textureDimensions(sceneExteriorOut);if(any(c>=dims)){return;}
   let p=worldRender.loPitch.xyz+(vec3<f32>(c)+.5)*worldRender.loPitch.w;
   // Same physical law as the camera, before optional diagnostic tinting.
-  let medium=worldSmokeFarMaterial(p,1.0,0.0);
+  let medium=worldSmokeFarMaterial(p,1.0,1.0);
   textureStore(sceneExteriorOut,vec3<i32>(c),vec4<f32>(medium.absorption+medium.scattering,0,0,0));
+  textureStore(sceneExteriorEmissionOut,vec3<i32>(c),vec4<f32>(medium.emission,medium.absorption+medium.scattering));
 }
 @compute @workgroup_size(4,4,4)
 fn seedSceneMiddleMedium(@builtin(global_invocation_id) c:vec3<u32>){
   seatGridShape();
   let dims=textureDimensions(sceneExteriorOut);if(any(c>=dims)){return;}
   let p=worldRender.middleLoPitch.xyz+(vec3<f32>(c)+.5)*worldRender.middleLoPitch.w;
-  let medium=regionSmokeMaterial(regionSmokeSample(middleOptical,p,worldRender.middleLoPitch,0),vec3<f32>(0.0),1.0,0.0);
+  let raw=regionSmokeSample(middleOptical,p,worldRender.middleLoPitch,0);
+  let moments=regionSmokeSample(middleOptical,p,worldRender.middleLoPitch,1).xyz;
+  let medium=regionSmokeMaterial(raw,moments,1.0,1.0);
   textureStore(sceneExteriorOut,vec3<i32>(c),vec4<f32>(medium.absorption+medium.scattering,0,0,0));
+  textureStore(sceneExteriorEmissionOut,vec3<i32>(c),vec4<f32>(medium.emission,medium.absorption+medium.scattering));
 }
 @group(3) @binding(4) var sceneSourceOut: texture_storage_3d<rgba32float, write>;
 @group(3) @binding(5) var sceneScatteringOut: texture_storage_3d<r32float, write>;

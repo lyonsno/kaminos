@@ -32,3 +32,9 @@ Actual device capacity, same-frame resource identity, complete cube initializati
 The source partition has a fixed binary topology for a chosen source count. GPU scans update region moments, axes and split coordinates; it is not a new scene-geometry BVH build each frame. Source resolution reduces work inside those scans and the material seed. The number of tree levels and dispatch overhead remain, so an8×cell reduction is not an8×whole-frame speed claim.
 
 Receiver selection divergence is a separate cost. A source texture array helps small evaluation budgets but can regress all-source evaluation. Cube storage itself is small at64–128px; refreshing a cube still rasterizes six views of the caster geometry. Controls and evidence must distinguish resident count, captures per frame and evaluations per pixel.
+
+## Physical coverage
+
+Distributed incident light has a Fine receiver grid, a coarse receiver grid over the entire active World volume, and optional bounded receiver refinement around Fine. These represent receivers. Every one integrates Fine, Middle and World emission using the physical material law. The Fine source already contains the camera handoff blend; outer transport excludes that interval and blends Middle against World outside it. Retained surface sources reduce the same physical domain, excluding duplicate overlapping representations. Solid captures cover the union of Fine and World; radial smoke shadows include both regions. World emissivity off suppresses exterior emission while retaining its extinction.
+
+The exposed Lighting emission resolution currently controls the Fine source. Exterior source textures follow their material grids; independent exterior emission resolution remains a tuning control to expose. Full World receiver width and directions, integration spacing and reconstruction refinement also remain the defaults listed above. Coverage does not imply that these choices are tuned or affordable in every scene.

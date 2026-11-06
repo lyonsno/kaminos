@@ -1,3 +1,4 @@
+import {createEmissionCellReducer} from './scene-emission-cells.mjs';
 import {reduceSpatialRegions,createSpatialReducer} from './scene-spatial-point-regions.mjs';
 // Every source cell contributes. Spatial regions adapt across X/Y/Z; legacy
 // height partitions remain available for comparisons. No serving CPU readback.
@@ -111,12 +112,16 @@ export function createPointRegions(device,{count=4,partition='vertical'}={}) {
   const spatial=partition==='spatial'?createSpatialReducer(device,count,texture):null;
   const pipeline=spatial?null:device.createComputePipeline({label:'all-cell source to surface points',layout:'auto',compute:{module:device.createShaderModule({code:adaptive?ENERGY_ROWS_WGSL:POINT_REGIONS_WGSL}),entryPoint:'reduce'}});
   const finish=adaptive?device.createComputePipeline({label:'equal-energy surface points',layout:'auto',compute:{module:device.createShaderModule({code:ENERGY_REGIONS_WGSL}),entryPoint:'reduce'}}):null;
-  let sourceTexture=null,group=null,metadata=null,disposed=false,rows=null,rowHeight=0,finishGroup=null;
+  let sourceTexture=null,group=null,metadata=null,disposed=false,rows=null,rowHeight=0,finishGroup=null,emissionCells=null;
   return {texture,count,
     encode(field){
       if(disposed||field.status!=='encoded'||!field.texture)throw new Error('point reduction requires current encoded source');
       pointRegionPlan(field.dimensions,spatial?1:count);
       if(!Number.isFinite(field.gain)||field.gain<0)throw new Error('point reduction requires nonnegative gain');
+      if(spatial&&field.exterior?.emissionTexture){
+        emissionCells??=createEmissionCellReducer(device,count,texture);
+        metadata={identity:'all-region-physical-point-regions-v1',partition,count,generation:field.generation,frame:field.frame,gain:field.gain,...emissionCells.encode(field)};return {...metadata};
+      }
       if(spatial){
         spatial.encode(field);metadata={identity:'all-cell-spatial-point-regions-v1',partition,count,generation:field.generation,frame:field.frame,gain:field.gain,sourceCells:field.dimensions.reduce((a,b)=>a*b,1)};return {...metadata};
       }
@@ -144,6 +149,6 @@ export function createPointRegions(device,{count=4,partition='vertical'}={}) {
         return {...identity,regions:Array.from({length:count},(_,i)=>({position:Array.from(values.slice(i*4,i*4+3)),radiusSquared:values[i*4+3],energy:Array.from(values.slice(bytesPerRow/4+i*4,bytesPerRow/4+i*4+3))}))};
       }finally{buffer.destroy();}
     },
-    destroy(){disposed=true;metadata=null;texture.destroy();params.destroy();rows?.destroy();spatial?.destroy();},
+    destroy(){disposed=true;metadata=null;texture.destroy();params.destroy();rows?.destroy();spatial?.destroy();emissionCells?.destroy();},
   };
 }

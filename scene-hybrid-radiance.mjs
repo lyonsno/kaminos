@@ -8,7 +8,7 @@ import {createFireLightFieldShadow,renderFireShadowBatch} from './fire-light-fie
 import {createLocalSceneVisibility} from './scene-local-visibility.mjs';
 import {createVolumeGather,volumeGatherPlan,lightingDirections} from './scene-volume-gather.mjs';
 import {createPointRegions} from './scene-point-regions.mjs';
-import {validateSceneSourceTransform,sceneSourceDomain,sceneLightingDomain,DEFAULT_SCENE_SOURCE_GRID,validateSceneSourceGrid} from './scene-volume-source.mjs';
+import {validateSceneSourceTransform,sceneSourceDomain,sceneLightingDomain,sceneTransportDomain,DEFAULT_SCENE_SOURCE_GRID,validateSceneSourceGrid} from './scene-volume-source.mjs';
 import {deriveSourceGuide} from './scene-source-guide.mjs';
 import {validateSourceSoftness} from './scene-source-softening.mjs';
 import {validateShadowSampling,validateShadowComparison,shadowGrainNode} from './fire-shadow-sampling.mjs';
@@ -234,7 +234,8 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       sourceTransform=validateSceneSourceTransform(field.source.worldTransform);
       sourceDomain=sceneLightingDomain(field.source);
       const domainKey=JSON.stringify(sourceDomain.hi);
-      sourceRadius=Math.hypot(...sourceDomain.hi.map((x,a)=>Math.max(Math.abs(x),Math.abs(sourceDomain.lo[a]))));
+      const transportDomain=sceneTransportDomain(field.source);
+      sourceRadius=Math.hypot(...transportDomain.hi.map((x,a)=>Math.max(Math.abs(x),Math.abs(transportDomain.lo[a]))));
       translation.value.set(...sourceTransform.translate);scale.value=sourceTransform.scale;
       installAllMaterials();
       const flameBox={min:sourceDomain.lo.map((v,a)=>v*sourceTransform.scale+sourceTransform.translate[a]),max:sourceDomain.hi.map((v,a)=>v*sourceTransform.scale+sourceTransform.translate[a])};
@@ -267,7 +268,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         // Pose motion and evolving resident occupancy deliberately age with the
         // cubes. Structural/material-layout edits and changed resources reset
         // the bank. The view camera is absent from this world-space identity.
-        const captureKey=JSON.stringify([snapshot.solidRevision??revision,sourceDomain.dimensions,sourceTransform,shadowResolution,casterScene.debugState().level]);
+        const captureKey=JSON.stringify([snapshot.solidRevision??revision,sourceDomain.dimensions,transportDomain.lo,transportDomain.hi,sourceTransform,shadowResolution,casterScene.debugState().level]);
         const plan=captureSchedule.begin(captureKey);
         shadowSources.capture(plan.indices);
         const selected=plan.indices.map(i=>{lights[i].captureTransform.value.set(...sourceTransform.translate,sourceTransform.scale);return lights[i].shadow;});

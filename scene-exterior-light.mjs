@@ -54,7 +54,7 @@ export function createExteriorSmokeLight(device,{grid=8,refinement=4,receiverCov
         const frame=gather.encode(source,{gain,sourceSoftness,environment,sceneLights});
         frames[name]={texture:gather.smoke,...frame,coverage:name==='middle'&&nearCoverage?'independent-near-receivers':`${name}-material-bounds`,builds,
           extinction:{generation:medium.generation,method:'region-split-midpoint-trilinear',stepLength:(medium.localMax[0]-medium.localMin[0])/grid,fineInterval:'physical-blend-in-fine-source',overlap:'camera-two-middle-material-cells'},
-          exteriorEmission:false,approximation:'coarse-receivers-and-exterior-medium; fine-source-emission-only'};
+          exteriorEmission:Boolean(medium.emissionTexture),approximation:'fine-and-exterior-physical-emission; independent-receiver-grids'};
       }
       return {...frames.world,builds,handoffMargin:normalizeSmokeHandoffMargin(medium.handoffMargin),middle:frames.middle??null};
     },

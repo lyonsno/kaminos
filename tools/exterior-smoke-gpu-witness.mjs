@@ -121,7 +121,9 @@ try{
    const producer=createSceneVolumeSource({device,module:seedModule,uniformBuffer:uniform,fluidBuffers:[fluid],frontBuffers:[fluid],getReactantTextures:()=>[reactant],grid:4,gridY:8,getWorldSmoke:()=>world,worldRenderUniform:worldUniform});
    let seed;
    try{
-    const encode=async()=>{const e=device.createCommandEncoder();producer.encode(e,0,1);device.queue.submit([e.finish()]);return producer.readback();};
+    const encode=async()=>{const e=device.createCommandEncoder();producer.encode(e,0,1);device.queue.submit([e.finish()]);const result=await producer.readback();const region=producer.describe().exterior;
+     if(region){const dims=region.dimensions,row=Math.ceil(dims[0]*16/256)*256,buffer=device.createBuffer({size:row*dims[1]*dims[2],usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});try{const e=device.createCommandEncoder();e.copyTextureToBuffer({texture:region.emissionTexture},{buffer,bytesPerRow:row,rowsPerImage:dims[1]},dims);device.queue.submit([e.finish()]);await buffer.mapAsync(GPUMapMode.READ);const data=new Float32Array(buffer.getMappedRange()),values=[];for(let z=0;z<dims[2];z++)for(let y=0;y<dims[1];y++)values.push(...data.slice((z*dims[1]+y)*row/4,(z*dims[1]+y)*row/4+dims[0]*4));result.exterior={dimensions:dims,values,exteriorEmission:region.exteriorEmission};}finally{buffer.destroy();}}
+     return result;};
     seed=await encode();
     world.handoffMargin=.36;seed.rounded=await encode();
     delete world.handoffMargin;seed.restored=await encode();
@@ -190,6 +192,12 @@ try{
  for(let i=0;i<3;i++)assert.ok(Math.abs(report.signal.bottom[i*4]-20)<.001,'bottom incident join must approach the exterior field continuously');
  assert.ok(report.signal.bottom[12]<20&&report.signal.bottom[12]>19,'inside bottom blend samples both fields');
  const seed=report.signal.seed;
+ assert.ok(seed.exterior.exteriorEmission);assert.ok(seed.exterior.values.some((v,i)=>i%4!==3&&v>0),'World producer exports current radiance');
+ assert.ok(seed.resident.exterior.values.some((v,i)=>i%4!==3&&v>20),'adaptive resident radiance reaches exterior source');
+ assert.ok(seed.smokeOnly.exterior.values.every((v,i)=>i%4===3||v===0),'World smoke-only option suppresses source emission');
+ assert.ok(seed.smokeOnly.exterior.values.some((v,i)=>i%4===3&&v>0),'smoke-only World retains extinction');
+ assert.equal(seed.off.exterior,undefined);
+
  assert.deepEqual(seed.dimensions,[4,8,4]);
  assert.deepEqual(seed.restored.values,seed.values,'removing rounded margin restores legacy physical law');
  assert.deepEqual(seed.zero.values,seed.values,'zero margin selects the same legacy law');
