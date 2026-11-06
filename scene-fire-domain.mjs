@@ -155,3 +155,22 @@ export function projectFireSettingsToSchema(settings,rawSchema){
  }
  return result;
 }
+
+// Scene loading may degrade to a preview; strict projection remains available
+// for source validation and editing without silently repairing authored state.
+export function runtimeFireSettings(settings,schema){
+ try{
+  if(settings?.domControls?.['volume-reaction-law']?.value!=='reactant-v0')throw Error('Saved scene uses pre-Reactant combustion');
+  const projected=projectFireSettingsToSchema(settings,schema);
+  const value=id=>projected.domControls[id]?.rawValue??projected.domControls[id]?.value;
+  if(!['inflow-boundary','immersed-source'].includes(value('volume-emitter-source-law'))||value('emitter-assay-family')==='cluster')throw Error('Saved source cannot feed Reactant combustion');
+  const activity=projected.domControls['volume-appearance-model'];
+  activity.value='shred-only';if(Object.hasOwn(activity,'rawValue'))activity.rawValue='shred-only';
+  for(const [axis,entries]of [['domControls',schema.controls],['rendererControls',schema.rendererControls],['presentationControls',schema.presentationControls]])for(const entry of entries??[]){
+   const descriptor=projected[axis][entry.key],v=descriptor.rawValue??descriptor.value;
+   if(entry.allowedValues&&!entry.allowedValues.includes(v))throw Error(`Unsupported saved fire setting ${entry.key}: ${v}`);
+   if(['range','number'].includes(entry.type)&&!Number.isFinite(Number(v)))throw Error(`Nonfinite saved fire setting ${entry.key}`);
+  }
+  return {settings:projected,reason:null};
+ }catch(error){return {settings:null,reason:error.message};}
+}

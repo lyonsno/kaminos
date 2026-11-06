@@ -2994,7 +2994,7 @@ import { resolveSceneGIControlState, calibrateSceneGISettingsForBounds } from '.
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import {collisionVoxelInstances,createGpuCollisionVoxelMesh} from './scene-collision-debug.mjs';
-import {authorFireObjects,fireControlOwner,FIRE_DOMAIN_ID,projectFireSettingsToSchema,checkedFireSourceRecord,flameSourceInputs} from './scene-fire-domain.mjs';
+import {authorFireObjects,fireControlOwner,FIRE_DOMAIN_ID,projectFireSettingsToSchema,runtimeFireSettings,checkedFireSourceRecord,flameSourceInputs} from './scene-fire-domain.mjs';
 import { createFlameAuthoring, createFlameInspector, flameControlDisplayValue, portableFlamePreset, flamePresetRadius, flamePresetForLocalControls } from './flame-authoring.mjs';
 import { GRID_TUNING_FIELDS } from './volume-grid-tuning.mjs';
 import { REGION_CONTROL_FIELDS } from './volume-region-controls.mjs';
@@ -28882,8 +28882,17 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
       return response.json();
     })());
     if(!schemaStage.current)return false;
-    const fireSettings=projectFireSettingsToSchema(restorePlan.fireSettings,schemaStage.value);
-    writeFlameSettingsState(flameSettingsState(fireSettings,activeVolumeSettingsPresetReceipt));
+    const restored=runtimeFireSettings(restorePlan.fireSettings,schemaStage.value);
+    if(restored.settings){
+      writeFlameSettingsState(flameSettingsState(restored.settings,activeVolumeSettingsPresetReceipt));
+    }else{
+      const fallbackStage=await sceneLoadRequests.awaitStage(loadRequestId,loadAuthoredFlameBasin('@reactant-preview',{sourceSize:'current'}));
+      if(!fallbackStage.current)return false;
+      const fallback=fallbackStage.value;
+      const warning=`SAVED FIRE REPLACED: ${restored.reason}. Loaded cheap Reactant preview; scene objects and emitter pose are preserved. Original saved file is unchanged.`;
+      fallback.source.runtimeFallback={...fallback.source.runtimeFallback,reason:restored.reason,warning};
+      console.warn(warning);setInfo(warning);writeFlameSettingsState(fallback);
+    }
     adaptiveMaterialSettingsAuthored=Object.hasOwn(restorePlan.fireSettings.domControls,'volume-adaptive-material');
   }
 

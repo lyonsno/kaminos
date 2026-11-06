@@ -69,7 +69,7 @@ try {
   assert.ok(report.executable?.includes('Google Chrome for Testing'), 'independent browser required');
   const {chromium} = await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE));
   browser = await chromium.launchPersistentContext(out+'/profile',{executablePath:report.executable,headless:true,
-    args:['--use-mock-keychain','--password-store=basic','--enable-unsafe-webgpu'],viewport:{width:1100,height:820}});
+    args:['--use-mock-keychain','--password-store=basic','--enable-unsafe-webgpu','--remote-debugging-port=0'],viewport:{width:1100,height:820}});
   page = browser.pages()[0]; page.setDefaultTimeout(0); page.setDefaultNavigationTimeout(0);
   let rejectFatal; const fatal = new Promise((_,reject)=>{rejectFatal=reject;}); fatal.catch(()=>{});
   const step = p => Promise.race([p,fatal]);
@@ -80,6 +80,8 @@ try {
     if (isShredWitnessFatalConsole(m.text())) rejectFatal(Error(m.text()));
   }});
   report.phase = 'load'; await save(); await step(page.goto(report.url,{waitUntil:'domcontentloaded'}));
+  report.startup=await page.evaluate(()=>window.kaminosStartup?.read());await save();
+  await page.screenshot({path:out+'/startup.png'});
   await step(page.waitForFunction(()=>window.kaminosWorkbenchExperimentError || window.__kaminosVolumePrototype?.debugState().error ||
     (window.kaminosWorkbenchExperiments?.state().id==='flame' && window.__kaminosVolumePrototype?.debugState().active)));
   report.initial = await page.evaluate(()=>({experiment:window.kaminosWorkbenchExperiments?.state(),
