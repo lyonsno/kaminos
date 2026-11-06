@@ -3001,6 +3001,7 @@ import {createSceneMembershipOperations, membershipEditTargetId as sceneMembersh
 import {createSceneMembershipBatch} from './scene-membership-batch.mjs';
 import {createSceneLifecycle} from './scene-lifecycle.mjs';
 import { createSceneObjectPublicationGuard, publishSceneObjectIfCurrent } from './scene-object-publication.mjs';
+import {createReconstructionControlLock} from './volume-reconstruction-pause.mjs';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig, emitterCompilerControls } from './volume-core.js';
 import { pressureResolutionPlan } from './volume-pressure-resolution.mjs';
 import { fineGridPlan } from './volume-fine-grid.mjs';
@@ -3733,6 +3734,7 @@ let authoringBusy = false;
 // Set while the agent vantage borrows the viewport camera for a picture.
 let vantageCaptureHeld = false;
 let reconstructionEvaluationHeld = null;
+const reconstructionControlLock=createReconstructionControlLock(document);
 let volumePrototype = null;
 let sceneBurning = null;
 const flameFeature=createAuthoredFlameFeature({runtime:()=>volumePrototype,composed:()=>!!activeSceneComposition,visible:()=>isSceneItemVisible('flame-field')});
@@ -19221,6 +19223,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-canonical-body-balance-val').textContent = c.canonicalBodyBalance.toFixed(2);
   syncVolumeCockpitControlVisibility(document);
   syncRayBudgetGamutFromControls();
+  reconstructionControlLock.sync(!!volumePrototype?.debugState?.().integralEvaluation?.active);
 }
 
 function paintVolumePyroDynamicAtlas(detail) {
@@ -19402,7 +19405,7 @@ function syncPhysicsAppearanceCockpit(physics) {
 }
 function sceneViewerPlaybackState(s=volumePrototype?.debugState?.()) {
   const fire=!!s?.active,water=!!waterFeature.host;
-  const firePaused=Number(document.getElementById('volume-look-freeze')?.value)>=0.5;
+  const firePaused=Number(document.getElementById('volume-look-freeze')?.value)>=0.5||s?.integralEvaluation?.active===true;
   return {present:fire||water,paused:!(fire&&!firePaused||water&&!waterFeature.paused)};
 }
 function syncVolumeViewerPlay(s) {
@@ -19427,6 +19430,7 @@ function releaseReconstructionEvaluationCamera() {
   controls.enabled=reconstructionEvaluationHeld.enabled;
   controls.enableDamping=reconstructionEvaluationHeld.damping;
   reconstructionEvaluationHeld=null;
+  reconstructionControlLock.sync(false);
 }
 document.getElementById('volume-reconstruction-pause').addEventListener('click',()=>{
   try {
@@ -19461,20 +19465,22 @@ function refreshVolumeReadout() {
   pause.setAttribute('aria-pressed',String(!!evaluation));
   pause.disabled=!evaluation&&(!reconstruction?.frames||reconstruction.effective==='off');
   for(const button of document.querySelectorAll('[data-integral-view]')) {
-    button.disabled=!evaluation;
+    button.disabled=!evaluation||s.integralEvaluation.valid===false;
     button.setAttribute('aria-pressed',String(!!evaluation&&button.dataset.integralView===(s.integralEvaluation.view??reconstruction?.evaluation?.view??reconstruction.effective)));
   }
   document.getElementById('volume-reconstruction-status').textContent=evaluation
-    ? `Camera + samples held · sim ${s.integralEvaluation.simulationStep} · ${s.integralEvaluation.previousDraws} prior draws since reset · compare without advancing history${s.integralEvaluation.previousDraws===0?' · no prior history yet':''}`
+    ? s.integralEvaluation.valid===false?`Comparison invalidated: ${s.integralEvaluation.reason} · physics stays paused · Resume to collect new samples`:`Camera + samples held · sim ${s.integralEvaluation.simulationStep} · ${s.integralEvaluation.previousDraws} prior draws since reset · only reconstruction knobs can change; Resume unlocks sampling and simulation${s.integralEvaluation.previousDraws===0?' · no prior history yet':''}`
     : reconstruction?.effective&&reconstruction.effective!=='off'
       ? `${reconstruction.effective} · ${reconstruction.frames} draws since reset · ${reconstruction.simulationStepChanges??0} sim-step changes · ${reconstruction.sameStepDraws??0} draws at this step · camera or settings changes reset${reconstruction.freshSampling?' · jitter advances while physics is paused':''}`
       : reconstruction?.requested&&reconstruction.requested!=='off'?`Unavailable · ${String(reconstruction.reason||'awaiting frame').replaceAll('-',' ')}`:'Raw image · no image history retained';
-  document.getElementById('volume-ray-step-stats').hidden=!!evaluation;
+  document.getElementById('volume-ray-step-stats').hidden=!!evaluation||!s.controls.rayStepTelemetry;
   const telemetry=s.rayStepTelemetry;
   document.getElementById('volume-ray-step-status').textContent=telemetry?.active?'GPU · material samples':
     telemetry?.requested?`Unavailable · ${String(telemetry.reason||'awaiting frame').replaceAll('-',' ')}`:'Awaiting frame';
   syncKilnCollisionControl(s.sceneCollision);
+  reconstructionControlLock.sync(!!evaluation);
   flameInspector?.sync();
+  reconstructionControlLock.sync(!!evaluation);
   syncVolumeCockpitModeAvailability(document, readVolumeControls(), s.physicalColor);
 
   renderVolumeEmitterReceipt(window.__kaminosVolumeEmitterReceipt);

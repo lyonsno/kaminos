@@ -25,6 +25,7 @@ import { OPTICAL_TRACE_IDENTITY, traceChunkPlan, validateTraceRows, createOptica
 import { raymarchAdaptivity, emptySpaceThreshold, opticalSteppingConfig, resolveOpticalStepping, OPTICAL_STEPPING_WGSL } from './volume-optical-native.mjs';
 import { createRayStepTelemetry } from './volume-ray-step-telemetry.mjs';
 import {createIntegralReconstruction,integralReconstructionSettings} from './volume-integral-reconstruction.mjs';
+import {reconstructionSourceChanges} from './volume-reconstruction-pause.mjs';
 import { createRayAllocationHistory, rayHistorySettings, HISTORY_ALLOCATION_WGSL } from './volume-history-allocation.mjs';
 import { frameCadenceSummary } from './volume-frame-timing.mjs';
 import { applyPreviewQualityCaps } from './preview-quality.mjs';
@@ -11796,13 +11797,15 @@ export function createKaminosVolumePrototype({
   state.integralReconstruction={requested:controlsSnapshot.integralReconstruction??'off',effective:'off',reason:'awaiting-presentation',frames:0};
   function integralSceneIdentity(){return JSON.stringify([productTransform,volumePresentationModeEffective,raymarchSmokePresentationEffectiveMode(),appearanceDecompositionModeEffective,boundarySplatPresentationModeEffective,state.integralSourceGeneration,worldSmokeKey,intermediateKey]);}
   function integralViewIdentity(){return JSON.stringify([camera.position.toArray(),camera.quaternion.toArray(),Array.from(camera.projectionMatrix.elements)]);}
+  function assertIntegralSourceEditable(reason){if(integralEvaluation)throw Error('Resume history comparison before changing '+reason);}
   function endIntegralEvaluation(reason='resumed') {
     if(integralEvaluation){simulationPaused=integralEvaluation.wasPaused;state.simulationPaused=simulationPaused;}
     integralEvaluation=null;integralReconstruction?.endEvaluation();
     state.integralEvaluation={active:false,reason};
   }
   function invalidateIntegralReconstruction(reason,{source=false,release=false}={}) {
-    endIntegralEvaluation(reason);
+    if(integralEvaluation){integralEvaluation.invalidReason=reason;state.integralEvaluation={...state.integralEvaluation,active:true,valid:false,reason};simulationPaused=true;state.simulationPaused=true;}
+    else endIntegralEvaluation(reason);
     if(source)state.integralSourceGeneration++;
     if(release)integralReconstruction?.disable(reason);else integralReconstruction?.reset(reason);
     integralEncodedForFrame=false;
@@ -16018,7 +16021,7 @@ export function createKaminosVolumePrototype({
 
   function setBoundarySplatPresentationMode(value) {
     const request = normalizeBoundarySplatPresentationMode(value);
-    if(request.requested!==boundarySplatPresentationModeEffective)invalidateIntegralReconstruction('splat-presentation-changed',{source:true});
+    if(request.requested!==boundarySplatPresentationModeEffective){assertIntegralSourceEditable('splat presentation');invalidateIntegralReconstruction('splat-presentation-changed',{source:true});}
     boundarySplatPresentationModeRequestedRaw = request.requestedRaw;
     boundarySplatPresentationModeRequested = request.requested;
     boundarySplatPresentationModeEffective = request.requested;
@@ -16039,7 +16042,7 @@ export function createKaminosVolumePrototype({
 
   function setAppearanceDecompositionMode(value) {
     const request = normalizeAppearanceDecompositionMode(value);
-    if(request.requested!==appearanceDecompositionModeEffective)invalidateIntegralReconstruction('appearance-presentation-changed',{source:true});
+    if(request.requested!==appearanceDecompositionModeEffective){assertIntegralSourceEditable('appearance presentation');invalidateIntegralReconstruction('appearance-presentation-changed',{source:true});}
     appearanceDecompositionModeRequestedRaw = request.requestedRaw;
     appearanceDecompositionModeRequested = request.requested;
     appearanceDecompositionModeEffective = request.requested;
@@ -16187,6 +16190,8 @@ export function createKaminosVolumePrototype({
   function setRaymarchSmokePresentationMode(value) {
     const request = normalizeRaymarchSmokePresentationMode(value);
     const previousEffective=raymarchSmokePresentationEffectiveMode();
+    const requestedEffective=volumePresentationModeEffective==='intrinsic'||appearanceDecompositionActive()?'off':request.requested;
+    if(requestedEffective!==previousEffective)assertIntegralSourceEditable('smoke presentation');
     raymarchSmokePresentationModeRequestedRaw = request.requestedRaw;
     raymarchSmokePresentationModeRequested = request.requested;
     raymarchSmokePresentationModeFallbackReason = request.fallbackReason;
@@ -16237,7 +16242,7 @@ export function createKaminosVolumePrototype({
 
   function setVolumePresentationMode(value) {
     const request = normalizeVolumePresentationMode(value);
-    if(request.requested!==volumePresentationModeEffective)invalidateIntegralReconstruction('presentation-mode-changed',{source:true});
+    if(request.requested!==volumePresentationModeEffective){assertIntegralSourceEditable('volume presentation');invalidateIntegralReconstruction('presentation-mode-changed',{source:true});}
     volumePresentationModeRequestedRaw = request.requestedRaw;
     volumePresentationModeRequested = request.requested;
     volumePresentationModeEffective = request.requested;
@@ -21942,16 +21947,21 @@ export function createKaminosVolumePrototype({
       if(!integralEvaluation)controls?.update?.();
       if(integralEvaluation) {
         if(integralViewIdentity()!==integralEvaluation.camera||integralSceneIdentity()!==integralEvaluation.source||!integralReconstruction.describe().evaluation) {
-          endIntegralEvaluation('camera-or-source-changed');
-        } else {
-          const encoder=device.createCommandEncoder({label:'held reconstruction comparison'});
-          state.integralReconstruction=integralReconstruction.encodeEvaluation(encoder,context.getCurrentTexture().createView(),format,integralCameraValues,
-            {...controlsSnapshot,integralReconstruction:integralEvaluation.view});
-          if(foregroundService)foregroundService.submit([encoder.finish()],{metadata:{renderer:'held-integral-comparison',simStepCount:state.simStepCount}});
-          else device.queue.submit([encoder.finish()]);
-          return {status:'submitted',renderer:'held-integral-comparison',frameCount:state.frameCount,simStepCount:state.simStepCount,atMs:now,
-            authority:'pinned-raw-and-incoming-history-no-new-simulation-or-ray-samples'};
+          integralEvaluation.invalidReason ||= 'camera-or-source-changed';
         }
+        if(integralEvaluation.invalidReason){
+          const notify=state.integralEvaluation.valid!==false;
+          state.integralEvaluation={...state.integralEvaluation,active:true,valid:false,reason:integralEvaluation.invalidReason};
+          if(notify)emitStatus({phase:'held-comparison-invalid',reason:integralEvaluation.invalidReason});
+          return {status:'held-comparison-invalid',reason:integralEvaluation.invalidReason,simStepCount:state.simStepCount};
+        }
+        const encoder=device.createCommandEncoder({label:'held reconstruction comparison'});
+        state.integralReconstruction=integralReconstruction.encodeEvaluation(encoder,context.getCurrentTexture().createView(),format,integralCameraValues,
+          {...controlsSnapshot,integralReconstruction:integralEvaluation.view});
+        if(foregroundService)foregroundService.submit([encoder.finish()],{metadata:{renderer:'held-integral-comparison',simStepCount:state.simStepCount}});
+        else device.queue.submit([encoder.finish()]);
+        return {status:'submitted',renderer:'held-integral-comparison',frameCount:state.frameCount,simStepCount:state.simStepCount,atMs:now,
+          authority:'pinned-raw-and-incoming-history-no-new-simulation-or-ray-samples'};
       }
       updateUniforms(now);
       let encoder = device.createCommandEncoder({ label: 'kaminos compute fluid frame' });
@@ -28214,6 +28224,7 @@ export function createKaminosVolumePrototype({
       const next = [...translation];
       if (scale === productTransform.scale && next.every((value, index) => value === productTransform.translate[index])) return false;
       const normalizedPrimitives = localPrimitives.map(normalizePrimitiveRecord);
+      assertIntegralSourceEditable('domain position');
       invalidateIntegralReconstruction('domain-relocated',{source:true});
       if (device && !pendingDomainRemap) pendingDomainRemap = structuredClone(productTransform);
       state.residualFieldGeneration = (state.residualFieldGeneration || 0) + 1;
@@ -28264,6 +28275,7 @@ export function createKaminosVolumePrototype({
       return state.proxyPacing;
     },
     setCanvasPresentationSuppressed(suppressed) {
+      if((suppressed===true)!==canvasPresentationSuppressed)assertIntegralSourceEditable('canvas presentation');
       canvasPresentationSuppressed = suppressed === true;
       invalidateIntegralReconstruction(canvasPresentationSuppressed?'canvas-presentation-suppressed':'canvas-presentation-resumed',{release:true});
       return canvasPresentationSuppressed;
@@ -28317,11 +28329,17 @@ export function createKaminosVolumePrototype({
       integralReconstructionSettings({...controlsSnapshot,...next});
       rayHistorySettings({influence:Object.hasOwn(next,'historyInfluence')?next.historyInfluence:controlsSnapshot.historyInfluence,window:Object.hasOwn(next,'historyWindow')?next.historyWindow:controlsSnapshot.historyWindow});
       if(Object.hasOwn(next,'occupancyThreshold'))emptySpaceThreshold(next.occupancyThreshold);
+      const controlRetirement=stripRetiredRaymarchControls({...controlsSnapshot,...next});
+      const effectiveNext=applyRuntimeQualityControls(controlRetirement.controls);
+      const integralChanges=reconstructionSourceChanges(controlsSnapshot,effectiveNext);
+      if(integralChanges.length)assertIntegralSourceEditable(integralChanges.join(', '));
       rayStepTelemetry?.invalidate();
       resolveDisplayReconstruction({...controlsSnapshot,...next});
       resolveWorldCalibration({...controlsSnapshot,...next},{grid:Number(next.resolution??gridSize),scale:productTransform.scale});
       // Reject incompatible dimensions before mutating controls or destroying GPU fields.
       this.validateGridControls(next);
+      if(Object.hasOwn(next,'adaptiveMaterial')&&next.adaptiveMaterial!==null)validateAllocation(next.adaptiveMaterial);
+      if(integralChanges.length)invalidateIntegralReconstruction('render-or-simulation-settings-changed',{source:true});
       if(Object.hasOwn(next,'adaptiveMaterial')) {
         const requested=next.adaptiveMaterial===null?null:validateAllocation(next.adaptiveMaterial);
         if(JSON.stringify(requested)!==JSON.stringify(adaptiveMaterialOptions))this.configureAdaptiveMaterial(requested);
@@ -28331,17 +28349,11 @@ export function createKaminosVolumePrototype({
           tolerance:next.opticalTolerance??controlsSnapshot.opticalTolerance??0.001});
         debugOpticalStepping=config;debugOpticalSteppingExplicit=false;
       }
-      const controlRetirement = stripRetiredRaymarchControls({ ...controlsSnapshot, ...next });
-      const effectiveNext=applyRuntimeQualityControls(controlRetirement.controls);
-      if(integralEvaluation) {
-        const filterKeys=new Set(['integralReconstruction','reconstructionSpatial','reconstructionRadius','reconstructionWindow','reconstructionResponse','reconstructionEdge','reconstructionFresh']);
-        if(Object.keys(effectiveNext).some(k=>!filterKeys.has(k)&&JSON.stringify(effectiveNext[k])!==JSON.stringify(controlsSnapshot[k])))endIntegralEvaluation('render-or-simulation-settings-changed');
-        else if(Object.hasOwn(next,'integralReconstruction')&&next.integralReconstruction!==controlsSnapshot.integralReconstruction){integralEvaluation.view=next.integralReconstruction;state.integralEvaluation.view=next.integralReconstruction;}
-      }
       const previousGrid = gridSize;
       const previousBoundarySplatTelemetryControlSignature = boundarySplatTelemetryControlSignature(controlsSnapshot);
       const previousCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
       controlsSnapshot = effectiveNext;
+      state.integralReconstruction.requested=controlsSnapshot.integralReconstruction??'off';
       state.retiredRaymarchControls = updateRetiredRaymarchControlReceipt(
         state.retiredRaymarchControls,
         controlRetirement.retiredRaymarchControls,
@@ -28508,6 +28520,7 @@ export function createKaminosVolumePrototype({
       pumpLookLabFrozenFrame();
     },
     setVolumePrimitives(next) {
+      assertIntegralSourceEditable('volume sources');
       invalidateIntegralReconstruction('volume-primitive-change',{source:true});
       const incoming = Array.isArray(next) ? next : [];
       volumePrimitives = incoming.map(normalizePrimitiveRecord);
@@ -28773,6 +28786,7 @@ export function createKaminosVolumePrototype({
       };
     },
     setSimulationPaused(paused) {
+      if(paused!==true)assertIntegralSourceEditable('simulation playback');
       simulationPaused = paused === true;
       state.simulationPaused = simulationPaused;
       return {
@@ -29134,6 +29148,7 @@ export function createKaminosVolumePrototype({
     },
     configureAdaptiveMaterial(options) {
       const requested=options===null?null:validateAllocation({...adaptiveMaterialOptions,...options,weights:{...adaptiveMaterialOptions?.weights,...options?.weights}});
+      if(JSON.stringify(requested)!==JSON.stringify(adaptiveMaterialOptions))assertIntegralSourceEditable('adaptive material');
       const effective=worldSmoke?.configureAdaptiveMaterial(requested)??null;
       adaptiveMaterialOptions=requested;adaptiveMaterialError=null;
       return {requested,effective,status:worldSmoke?'configured':'awaiting-world-field'};
@@ -29148,7 +29163,7 @@ export function createKaminosVolumePrototype({
     },
     adaptiveMaterialState(){return {requested:adaptiveMaterialOptions,effective:worldSmoke?.adaptiveMaterialState()??null,error:adaptiveMaterialError};},
     worldFrame(){const anchor=worldFrameRestore!==undefined?worldFrameRestore:worldSmoke?.anchor;return anchor?{translate:[...anchor.translate],scale:anchor.scale,referenceDims:[...(worldReferenceDims??[gridSize,gridHeight,gridSize])]}:null;},
-    restoreWorldFrame(value){const frame=checkedWorldFrame(value);invalidateIntegralReconstruction('world-frame-restored',{source:true});worldFrameRestore=frame?{translate:frame.translate,scale:frame.scale}:null;worldReferenceDims=frame?.referenceDims??null;worldSmokeKey=null;return frame;},
+    restoreWorldFrame(value){const frame=checkedWorldFrame(value);assertIntegralSourceEditable('World frame');invalidateIntegralReconstruction('world-frame-restored',{source:true});worldFrameRestore=frame?{translate:frame.translate,scale:frame.scale}:null;worldReferenceDims=frame?.referenceDims??null;worldSmokeKey=null;return frame;},
     async adaptiveMaterialSnapshot(){const owner=worldSmoke;if(!owner)throw Error('World field is absent');const identity={anchor:structuredClone(owner.anchor),worldSteps:state.worldSmoke?.steps};const snapshot=await owner.adaptiveMaterialSnapshot();if(owner!==worldSmoke)throw Error('World material snapshot became stale');if(!snapshot)throw Error('Adaptive material is absent');return {...snapshot,...identity};},
     setWorldSmokeOverlay(mode) {
       if(!['off','bounds','contributions'].includes(mode))throw Error('Unknown world smoke overlay');
@@ -29164,7 +29179,7 @@ export function createKaminosVolumePrototype({
         const pin=integralReconstruction.beginEvaluation();
         integralEvaluation={wasPaused:simulationPaused,camera:integralViewIdentity(),source:integralSceneIdentity(),view:controlsSnapshot.integralReconstruction};
         simulationPaused=true;state.simulationPaused=true;
-        state.integralEvaluation={active:true,simulationStep:state.simStepCount,draws:pin.frames,previousDraws:pin.previousDraws};
+        state.integralEvaluation={active:true,valid:true,simulationStep:state.simStepCount,draws:pin.frames,previousDraws:pin.previousDraws};
       }
       return {...state.integralEvaluation};
     },

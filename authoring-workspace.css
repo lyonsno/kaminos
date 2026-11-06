@@ -508,3 +508,10 @@ body[data-workspace=authoring].has-assets-panel:has(#asset-generate[data-image-e
 #volume-reconstruction-comparison .btn { margin:0; padding:6px 8px; }
 #volume-reconstruction-comparison .btn[aria-pressed=true] { color:#fff; background:#4d4535; border-color:#ac9464; }
 #volume-reconstruction-comparison .btn:disabled { opacity:.45; cursor:default; }
+
+/* Disabled settings are visibly unavailable, including drag-number labels. */
+#authoring-inspector :is(input,select,button):disabled,
+#volume-viewer-play:disabled,
+[data-reconstruction-locked=true] { opacity:.4; cursor:not-allowed; filter:saturate(0); }
+#authoring-inspector .reconstruction-locked .slider-label,
+#authoring-inspector .slider-row:has(input:disabled,select:disabled) .slider-label { opacity:.45; cursor:not-allowed; }

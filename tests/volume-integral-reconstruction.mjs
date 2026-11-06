@@ -85,18 +85,6 @@ test('presentation and domain changes invalidate image history before another dr
   }finally{p.dispose();}
 });
 
-test('editing a filter knob keeps the selected held view when the ordinary mode is unchanged',async()=>{
-  const fs=await import('node:fs');const vm=await import('node:vm');
-  const s=fs.readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
-  const start=s.indexOf('      if(integralEvaluation) {',s.indexOf('    setControls(next) {'));
-  const block=s.slice(start,s.indexOf('      const previousGrid =',start));
-  const base={integralReconstruction:'combined',reconstructionRadius:1};
-  const context={integralEvaluation:{view:'temporal'},controlsSnapshot:base,next:{...base,reconstructionRadius:2},effectiveNext:{...base,reconstructionRadius:2},state:{integralEvaluation:{view:'temporal'}},endIntegralEvaluation(){throw Error('Filter knobs must preserve the held inputs');}};
-  vm.runInNewContext(block,context);assert.equal(context.integralEvaluation.view,'temporal');
-  context.next={integralReconstruction:'spatial'};context.effectiveNext={...base,integralReconstruction:'spatial'};
-  vm.runInNewContext(block,context);assert.equal(context.integralEvaluation.view,'spatial');assert.equal(context.state.integralEvaluation.view,'spatial');
-});
-
 test('direct smoke and diagnostic presentation changes retire old integral sources',()=>{
   const p=prototype({integralReconstruction:'combined'});
   try {
@@ -106,4 +94,11 @@ test('direct smoke and diagnostic presentation changes retire old integral sourc
       const after=p.debugState().integralSourceGeneration;p[method](mode);assert.equal(p.debugState().integralSourceGeneration,after,'same effective presentation keeps its source');
     }
   }finally{p.dispose();}
+});
+
+test('an effective source control edit invalidates old history before immediate admission',()=>{
+ const p=prototype({integralReconstruction:'combined',raySteps:2});try{
+  const before=p.debugState().integralSourceGeneration;p.setControls({raySteps:3});assert.ok(p.debugState().integralSourceGeneration>before);
+  const source=p.debugState().integralSourceGeneration;p.setControls({reconstructionRadius:2});assert.equal(p.debugState().integralSourceGeneration,source);
+ }finally{p.dispose();}
 });
