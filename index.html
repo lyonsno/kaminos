@@ -28137,7 +28137,7 @@ function createPageSceneMembershipBatch(){
       check(value){normalizeFlameDomainTranslation(value.domain);normalizeFlameDomainScale(value.domainScale??1);if(value.domainFollowSource!==undefined&&typeof value.domainFollowSource!=='boolean')throw Error('Domain follow-source must be Boolean');},
       restore:restoreCompoundSceneContext,
     },
-    select:(ids,id)=>ids.length?setSceneSelection(ids,id):clearActiveSceneObjectSelection(),
+    select:(ids,id)=>{const prior=burnerGraphWriting;burnerGraphWriting=true;try{return ids.length?setSceneSelection(ids,id):clearActiveSceneObjectSelection();}finally{burnerGraphWriting=prior;}},
     detach:detachSelectionMember,
     duplicate:{supported:canDuplicateObject,object:id=>duplicateSceneObject(id,{deferRecord:true}),groupId:()=>makeSceneObjectId('group')},
     changed(){renderSceneObjectList();updateTransformInspector();window._kaminosDirty?.();},
