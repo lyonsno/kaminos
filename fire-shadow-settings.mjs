@@ -35,7 +35,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
       const value=(control,next)=>{if(control&&(force||shown.get(control)!==String(next))){control.value=String(next);shown.set(control,String(next));}};
       const state=read();
       const medium=win.__kaminosSceneRadiance?.debugState();
-      for(const {key,number} of lightControls)value(number,medium?.[key]??(key==='smokeEnvironmentBlur'||key==='pointEvaluationBudget'||key==='shadowCaptureBudget'?0:16));
+      for(const {key,number} of lightControls)value(number,medium?.[key]??(key==='sourceGrid'?32:key==='smokeEnvironmentBlur'||key==='pointEvaluationBudget'||key==='shadowCaptureBudget'?0:16));
       syncCaptureStatus(medium);
       const near=normalizeNearSmokeBox(medium?.nearBox);
       if(nearSwitch)nearSwitch.checked=near.enabled;
@@ -97,6 +97,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
         setShadowCaptureBudget(value){validateShadowCaptureBudget(value);source().setShadowCaptureBudget(value);requestedCaptureBudget=value;persist();sync();session.redraw();const effective=read();record({kind:'fire-shadow.capture-budget',requested:value,effective});return effective;},
         setPointEvaluationBudget(value){validateSourceEvaluationBudget(value);source().setPointEvaluationBudget(value);requestedBudget=value;persist();sync();session.redraw();const effective=read();record({kind:'fire-shadow.source-budget',requested:value,effective});return effective;},
         setNearBox(value){source().setNearBox(value);sync();session.redraw();const effective=source().debugState().nearBox;record({kind:'fire-shadow.near-box',requested:value,effective});return effective;},
+        setSourceGrid(value){source().setSourceGrid(value);sync();session.redraw();record({kind:'fire-shadow.emission-grid',effective:value});return read();},
         setLightGrid(value){source().setLightGrid(value);sync();session.redraw();record({kind:'fire-shadow.light-grid',effective:value});return read();},
         setSmokeEnvironmentBlur(value){source().setSmokeEnvironmentBlur(value);sync();session.redraw();record({kind:'fire-shadow.smoke-environment-blur',effective:value});return source().debugState();},
         setShadowEdgeFilter(value){source().setShadowEdgeFilter(value);sync();session.redraw();record({kind:'fire-shadow.edge-filter',effective:value});return read();},
@@ -164,6 +165,10 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
         for(const [value,text]of [['original','Original geometry'],['10k','10k triangles — reduced caster'],['5k','5k triangles — reduced caster']]){const option=document.createElement('option');option.value=value;option.textContent=text;casterSelector.append(option);}
         casterSelector.addEventListener('change',()=>invoke('setCasterLevel',casterSelector.value).catch(failed));
         casterStatus=document.createElement('div');casterStatus.setAttribute('aria-live','polite');casterLabel.append(casterSelector);panel.append(casterLabel,casterStatus);
+        const sourceRow=document.createElement('label');sourceRow.textContent='Lighting emission resolution';
+        sourceRow.title='Source cells across the Fine width, independent of simulation and smoke receiver resolution. Lower values reduce material sampling and the spatial reduction used to derive every retained light source. Height follows the box aspect. Source count stays unchanged.';
+        const sourceInput=document.createElement('input');sourceInput.type='number';sourceInput.min='1';sourceInput.step='1';sourceInput.setAttribute('aria-label','Lighting emission resolution');
+        sourceInput.addEventListener('change',()=>invoke('setSourceGrid',Number(sourceInput.value)).catch(failed));sourceRow.append(sourceInput);panel.append(sourceRow);lightControls.push({key:'sourceGrid',number:sourceInput});numberScrubs.push(installRenderingNumberControl(sourceInput,installNumberDrag));
         const gridRow=document.createElement('label');gridRow.textContent='Smoke light receiver resolution';
         gridRow.title='Independent lighting samples across the domain width. Material and flow resolution stay independent. Height follows the domain aspect.';
         const gridInput=document.createElement('input');gridInput.type='number';gridInput.min='1';gridInput.step='1';gridInput.setAttribute('aria-label','Smoke light receiver resolution');

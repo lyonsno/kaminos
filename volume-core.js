@@ -46,7 +46,7 @@ import { DISPLAY_RECONSTRUCTION_WGSL, createDisplayReconstruction, resolveDispla
 export { resolveDisplayReconstruction } from './volume-display-reconstruction.mjs';
 import { SOOT_BURNOUT_WGSL, resolvePhysicsAppearance, physicsAppearanceUniformValues } from './volume-physics-appearance.mjs';
 import { WAVELET_TURBULENCE_WGSL, WAVELET_TURBULENCE_IDENTITY, resolveWaveletTurbulence, waveletTurbulenceUniformValues, waveletOctaveUniformValues, velocityBandEnergies } from './volume-wavelet-turbulence.mjs';
-import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
+import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame, DEFAULT_SCENE_SOURCE_GRID, sceneSourceGridPlan } from './scene-volume-source.mjs';
 import { createSceneVolumeTransport } from './scene-volume-transport.mjs';
 import { GRID_HEIGHT_MAX_RATIO, resolveGridHeight, gridHeightForShape, raymarchDomainBox } from './volume-grid-shape.mjs';
 export { GRID_HEIGHT_AUTO_RATIO, GRID_HEIGHT_MIN_RATIO, GRID_HEIGHT_MAX_RATIO, GRID_HEIGHT_DERIVED_LATTICE_WIDTHS, resolveGridHeight, gridHeightStep, gridHeightForShape, raymarchDomainBox, raymarchBoxHitModel } from './volume-grid-shape.mjs';
@@ -12150,6 +12150,7 @@ export function createKaminosVolumePrototype({
   // The draw that last dispatched the emissive seed (review GR-02).
   let emissiveSeedProducer = null;
   let sceneVolumeSource = null;
+  let sceneSourceGrid = DEFAULT_SCENE_SOURCE_GRID;
   let sceneVolumeSourceRequested = false;
   let sceneTransportConsumer = null;
   let sceneTransport = null;
@@ -17075,7 +17076,7 @@ export function createKaminosVolumePrototype({
       Object.assign(state.immersedSources,{preparedRevision:immersedCollectionRevision,preparedStep:state.simStepCount,sources:sources.map(({id,config,worldSource})=>({id,config:structuredClone(config),worldSource:!!worldSource})),overlapLaw:'sum-local-capped-supply; bounded-supply-weighted-mixture; union-relaxation-weighted-momentum',aggregateSupplyCap:null,mixtureEntryCap:1});
     }
     uniforms.set(immersedSourceUniformValues(immersedSourceConfig), IMMERSED_SOURCE_UNIFORM_OFFSET);
-    uniforms.set(gridShapeUniformValues({ grid: gridSize, gridHeight, irradianceGrid: irradianceGridSize, irradianceGridHeight: gridHeightForSize(irradianceGridSize), sceneSourceGrid: EMISSIVE_LIGHT_GRID, sceneSourceGridHeight: gridHeightForSize(EMISSIVE_LIGHT_GRID) }), GRID_SHAPE_UNIFORM_OFFSET);
+    uniforms.set(gridShapeUniformValues({ grid: gridSize, gridHeight, irradianceGrid: irradianceGridSize, irradianceGridHeight: gridHeightForSize(irradianceGridSize), sceneSourceGrid, sceneSourceGridHeight: gridHeightForSize(sceneSourceGrid) }), GRID_SHAPE_UNIFORM_OFFSET);
     state.immersedSource = immersedSourceConfig;
     if(sceneSolidGpu&&immersedSourceConfig.effective.admitted){
       state.immersedSource.effective.supplyPredictionAuthority='unmasked-projection-gpu-solid-field';
@@ -21436,7 +21437,7 @@ export function createKaminosVolumePrototype({
         const middle=middleMap?{texture:intermediateFlow.optical,dimensions:intermediateFlow.plan.materialDims,localMin:middleMap.renderMin,localMax:middleMap.renderMax}:null;
         return {texture:worldSmoke.optical,dimensions:worldSmoke.plan.materialDims,localMin:map.renderMin,localMax:map.renderMax,renderView:worldRenderField.view,middle};
       },
-      grid: EMISSIVE_LIGHT_GRID, gridY: EMISSIVE_LIGHT_GRID * gridHeight / gridSize, fluidGrid: gridSize, fluidGridY: gridHeight});
+      grid: sceneSourceGrid, gridY: sceneSourceGridPlan(sceneSourceGrid,[gridSize,gridHeight,gridSize],device.limits).dimensions[1], fluidGrid: gridSize, fluidGridY: gridHeight});
     sceneVolumeSource.encode(encoder, currentFluid, state.frameCount,productTransform);
     if (sceneMediumSource) sceneVolumeSource.encodeOpticalDepth(encoder, sceneMediumSource.position, sceneMediumSource.stepLength);
     return {source: sceneVolumeSource.describe(), medium: sceneVolumeSource.opticalDepthField(), simStepCount: state.simStepCount};
@@ -29546,6 +29547,14 @@ export function createKaminosVolumePrototype({
       if (!sceneVolumeSourceRequested) {sceneVolumeSource?.destroy(); sceneVolumeSource = null;}
       return {requested: sceneVolumeSourceRequested};
     },
+    setSceneSourceGrid(value) {
+      const plan=sceneSourceGridPlan(value,[gridSize,gridHeight,gridSize],device?.limits);
+      if(value!==sceneSourceGrid){
+        sceneVolumeSource?.destroy();sceneVolumeSource=null;
+        sceneSourceGrid=value;distributedFrame=null;distributedGroup=null;
+      }
+      return plan;
+    },
     setSceneSourceFrameConsumer(consumer) {
       if (consumer !== null && typeof consumer !== 'function') throw new Error('scene source consumer must be a function or null');
       if (consumer && (productFrameOwner !== 'prototype' || typeof getSceneDepth !== 'function')) {
@@ -29584,7 +29593,7 @@ export function createKaminosVolumePrototype({
       distributedFrame=input;
     },
     sceneVolumeSourceField() {
-      return {requested: sceneVolumeSourceRequested, ...(sceneVolumeSource?.describe() || {status: 'unbuilt', texture: null})};
+      return {requested: sceneVolumeSourceRequested, requestedGrid:sceneSourceGrid, ...(sceneVolumeSource?.describe() || {status: 'unbuilt', texture: null})};
     },
     sharedAshAtmosphere(){return structuredClone(sharedAsh);},
     setSharedAshAtmosphere(value){const next=atmosphereSettings(value);const displayColor=value.displayColor??next.color;if(!Array.isArray(displayColor)||displayColor.length!==3||displayColor.some(x=>!Number.isFinite(x)||x<0))throw Error('Invalid shared ash display color');sharedAsh={density:next.density,color:next.color,displayColor:[...displayColor]};return this.sharedAshAtmosphere();},

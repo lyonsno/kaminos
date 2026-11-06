@@ -93,3 +93,7 @@ document.defaultView.__kaminosSceneRadiance.setNearBox=value=>{state={...state,n
 await nativeSettings.operations.setNearBox({enabled:false});assert.equal(state.nearBox.enabled,false);
 await nativeSettings.operations.setNearBox({enabled:true,directions:12});assert.equal(state.nearBox.directions,12);
 assert(nativeControls.find(v=>v.attrs['aria-label']==='Near light width multiplier'));
+
+document.defaultView.__kaminosSceneRadiance.setSourceGrid=value=>{state={...state,sourceGrid:value};};
+await nativeSettings.operations.setSourceGrid(16);assert.equal(state.sourceGrid,16);
+assert(nativeControls.find(v=>v.attrs['aria-label']==='Lighting emission resolution'),'ordinary inspector exposes emission input independently of smoke receivers');

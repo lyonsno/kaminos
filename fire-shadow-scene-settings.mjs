@@ -1,3 +1,4 @@
+import {validateSceneSourceGrid} from './scene-volume-source.mjs';
 import {normalizeNearSmokeBox} from './scene-near-smoke-box.mjs';
 import {validateShadowCaptureBudget} from './fire-shadow-cadence.mjs';
 import {validateShadowMediumResolution} from './scene-shadow-medium.mjs';
@@ -19,6 +20,7 @@ export function readFireShadowSceneSettings(params) {
   const points=number('points',4),pointSampling=params.get(prefix+'point_sampling')??'all';
   validateSourceQuadrature(points,pointSampling);
   const smoke={};
+  if(params.has(prefix+'source_grid'))smoke.sourceGrid=validateSceneSourceGrid(number('source_grid',32));
   if(params.has(prefix+'shadow_capture_budget'))smoke.shadowCaptureBudget=validateShadowCaptureBudget(number('shadow_capture_budget',0));
   if(params.has(prefix+'near_box')){try{smoke.nearBox=normalizeNearSmokeBox(JSON.parse(params.get(prefix+'near_box')));}catch(error){throw Error('Invalid near light box: '+error.message);}}
   if(params.has(prefix+'smoke_shadow_medium_grid'))smoke.smokeShadowMediumResolution=validateShadowMediumResolution(number('smoke_shadow_medium_grid',0));
@@ -60,6 +62,7 @@ export function fireShadowSceneRoute(state) {
   if(state.smokeShadowMediumResolution!==undefined)values.smoke_shadow_medium_grid=validateShadowMediumResolution(state.smokeShadowMediumResolution);
   if(state.smokeShadowFilterTaps!==undefined)values.smoke_shadow_filter_taps=state.smokeShadowFilterTaps;
   if(state.nearBox!==undefined)values.near_box=JSON.stringify(normalizeNearSmokeBox(state.nearBox));
+  if(state.sourceGrid!==undefined)values.source_grid=validateSceneSourceGrid(state.sourceGrid);
   if(state.volumeGrid!==undefined)values.light_grid=state.volumeGrid;
   if(state.directions!==undefined)values.light_directions=state.directions;
   if(state.smokeEnvironmentBlur!==undefined)values.smoke_environment_blur=validateSmokeEnvironmentBlur(state.smokeEnvironmentBlur);

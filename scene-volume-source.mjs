@@ -1,4 +1,20 @@
 import {normalizeSmokeHandoffMargin} from './scene-smoke-handoff.mjs';
+export const DEFAULT_SCENE_SOURCE_GRID=32;
+export function validateSceneSourceGrid(value){
+  if(!Number.isSafeInteger(value)||value<1)throw Error('lighting emission resolution must be a positive integer');
+  return value;
+}
+export function sceneSourceGridPlan(resolution,fluidDimensions,limits={}){
+  validateSceneSourceGrid(resolution);sceneSourceDomain(fluidDimensions);
+  const height=resolution*fluidDimensions[1]/fluidDimensions[0];
+  if(!Number.isSafeInteger(height)||height<1)throw Error('lighting emission resolution must preserve the box aspect with whole cubic cells');
+  const dimensions=[resolution,height,resolution],limit=limits.maxTextureDimension3D??Infinity;
+  if(dimensions.some(n=>n>limit))throw Error(`lighting emission dimensions exceed device texture limit ${limit}`);
+  const dispatch=dimensions.map(n=>Math.ceil(n/4));
+  if(dispatch.some(n=>n>(limits.maxComputeWorkgroupsPerDimension??Infinity)))throw Error('lighting emission dispatch exceeds device capacity');
+  const cells=dimensions.reduce((n,v)=>n*v,1);
+  return {resolution,dimensions,cells,materialSamples:cells*8,bytes:cells*20,dispatch};
+}
 // Opt-in experiment input, not a replacement for the accepted fire atlas or
 // smoke transport. Coefficients use volume-local inverse-length units and
 // relative linear RGB, before either consumer's camera transform.

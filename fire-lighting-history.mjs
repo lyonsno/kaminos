@@ -1,7 +1,7 @@
 // One scene-history target per meaningful setting. Targets outlive renderer
 // mounts and resolve the current consumer when replayed.
 export function createFireLightingHistory({edits,getSource,sync=()=>{}}) {
-  const scalar={setShadowCaptureBudget:'shadowCaptureBudget',setPointEvaluationBudget:'pointEvaluationBudget',setLightGrid:'volumeGrid',
+  const scalar={setShadowCaptureBudget:'shadowCaptureBudget',setPointEvaluationBudget:'pointEvaluationBudget',setLightGrid:'volumeGrid',setSourceGrid:'sourceGrid',
     setSmokeEnvironmentBlur:'smokeEnvironmentBlur',setShadowEdgeFilter:'shadowEdgeFilter',
     setSurfaceEnabled:'surfaceEnabled',setCasterLevel:'shadowCasterLevel',
     setSampling:'shadowSampling',setSoftness:'shadowSoftness',setDirections:'directions',
