@@ -1,6 +1,6 @@
 // A view of the admitted prompt in an independently reconstructed authored kiln.
 // The source text and the progressive image stay with their existing owners.
-export function installGenerationFlame({document,slot,createRenderer}){
+export function installGenerationFlame({document,slot,createRenderer,enabled=true}){
  const tile=document.createElement('div');tile.className='generation-flame';tile.hidden=true;
  const volume=document.createElement('div');volume.className='generation-flame-volume';
  const status=document.createElement('span');status.className='generation-flame-status';status.setAttribute('role','status');
@@ -14,14 +14,14 @@ export function installGenerationFlame({document,slot,createRenderer}){
   const generation=epoch;
   lifecycle=lifecycle.catch(()=>{}).then(async()=>{
    if(generation!==epoch)return;
-   if(disposed||!visible){if(renderer){await renderer.setActive(false);if(disposed||!running){await renderer.dispose();renderer=null;}}if(!renderer)renderedKey=null;return;}
+   if(disposed||!enabled||!visible){if(renderer){await renderer.setActive(false);if(disposed||!enabled||!running){await renderer.dispose();renderer=null;}}if(!renderer)renderedKey=null;return;}
    if(renderer&&renderedKey!==key){await renderer.setActive(false);await renderer.dispose();renderer=null;}
    if(!renderer&&!running&&!allowCold)return;
    if(!renderer){
     refreshPending=false;startup=new AbortController();status.textContent='Loading kiln…';
     try{
      const value=await createRenderer(volume,{signal:startup.signal,prompt:running?(request?.prompt??draft()):draft(),request:running?request:null});
-     if(disposed||generation!==epoch||!visible){await value.dispose();return;}
+     if(disposed||!enabled||generation!==epoch||!visible){await value.dispose();return;}
      renderer=value;renderedKey=key;lastError=null;
     }catch(error){if(error.name!=='AbortError'){lastError=error.message;status.textContent=`Kiln unavailable: ${lastError}`;tile.dataset.state='unavailable';}return;}
    }
@@ -39,9 +39,10 @@ export function installGenerationFlame({document,slot,createRenderer}){
   if(changed){if(!active){allowCold=refreshPending;if(refreshPending)renderedKey=null;refreshPending=false;epoch++;abort();}sync();}
  }
  return {render,
-  setVisible(value){if(visible===!!value)return lifecycle;visible=!!value;if(visible)allowCold=true;tile.hidden=!visible;return sync();},
+  setEnabled(value){if(enabled===!!value)return lifecycle;enabled=!!value;epoch++;abort();allowCold=true;tile.hidden=!visible||!enabled;return sync();},
+  setVisible(value){if(visible===!!value)return lifecycle;visible=!!value;if(visible)allowCold=true;tile.hidden=!visible||!enabled;return sync();},
   refresh(){allowCold=true;if(running){refreshPending=true;return lifecycle;}renderedKey=null;return sync({refresh:true});},
-  read:()=>({running,error:lastError,visible,renderer:renderer?.debugState?.()??null}),
+  read:()=>({enabled,running,error:lastError,visible,renderer:renderer?.debugState?.()??null}),
   async dispose(){disposed=true;visible=false;epoch++;abort();await sync();tile.remove();},
  };
 }
