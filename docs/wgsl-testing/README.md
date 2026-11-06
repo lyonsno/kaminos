@@ -67,8 +67,9 @@ pipeline or scene witness when those are the behavior being tested.
 
 In the shop, the managed pre-commit hook rejects new direct source-text assertion
 syntax against staged shader sources. It recognizes ESM imports of directly
-exported immutable shader-text constants, constant direct Node file reads with
-literal paths, and inline string or regex checks on those values. Standard Node
+exported string/template constants whose names end in `WGSL`,
+`shaderSource`/`shader_source` or `shaderCode`/`shader_code`, constant direct Node
+file reads with literal paths, and inline string or regex checks on those values. Standard Node
 assertions and standard `expect` text, equality, length and truth matchers are
 covered. It reads Git objects and executes neither repository code nor lint
 configuration.
