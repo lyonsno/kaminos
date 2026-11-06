@@ -3698,6 +3698,7 @@ window.kaminosViewportSettings={
  read:()=>({...viewportDisplay}),
  set(patch={}) {
   const next=checkedViewportDisplay({...viewportDisplay,...patch});
+  if(volumePrototype?.isIntegralEvaluationHeld?.()&&JSON.stringify(next)!==JSON.stringify(viewportDisplay))throw Error('Resume history comparison before changing viewport presentation');
   const visibilityChanged=JSON.stringify(next.hiddenIds)!==JSON.stringify(viewportDisplay.hiddenIds);
   if(next.gizmos!==viewportGizmosVisible)scenePlacementTools?.finish(false);
   viewportDisplay=next;viewportGizmosVisible=next.gizmos;viewportBoundsVisible=next.overlays&&next.bounds;viewportHelpersVisible=next.overlays&&next.helpers;
@@ -19491,9 +19492,6 @@ function refreshVolumeReadout() {
   document.getElementById('volume-ray-step-status').textContent=telemetry?.active?'GPU · material samples':
     telemetry?.requested?`Unavailable · ${String(telemetry.reason||'awaiting frame').replaceAll('-',' ')}`:'Awaiting frame';
   syncKilnCollisionControl(s.sceneCollision);
-  reconstructionControlLock.sync(!!evaluation);
-  flameInspector?.sync();
-  reconstructionControlLock.sync(!!evaluation);
   syncVolumeCockpitModeAvailability(document, readVolumeControls(), s.physicalColor);
 
   renderVolumeEmitterReceipt(window.__kaminosVolumeEmitterReceipt);
@@ -19624,6 +19622,11 @@ function refreshVolumeReadout() {
   paintVolumePyroDynamicAtlas(pyroDetail);
   document.getElementById('volume-toggle').textContent = s.active ? 'Disable' : 'Enable';
   document.getElementById('volume-toggle').classList.toggle('active', !!s.active);
+  // Route availability and all readout helpers run before the held-source lock.
+  syncReconstructionFilterAvailability(document,filterView,s.controls);
+  reconstructionControlLock.sync(!!evaluation);
+  flameInspector?.sync();
+  reconstructionControlLock.sync(!!evaluation);
 }
 window.__kaminosRefreshVolumeReadout = refreshVolumeReadout;
 

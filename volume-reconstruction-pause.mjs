@@ -9,7 +9,7 @@ export function reconstructionSourceChanges(before,after){
 }
 export function createReconstructionControlLock(document){
  const saved=new Map(),allowed=new Set([...Object.values(RECONSTRUCTION_FILTER_CONTROLS),'volume-reconstruction-pause']);
- const selector='input[id^="volume-"],select[id^="volume-"],button[id^="volume-"],[data-authoring-alias],#emitter-assay-family,#shared-flame-domain-properties input,#shared-flame-domain-properties select,[data-volume-presentation-mode],[data-raymarch-smoke-presentation],#grid-tuning-open,#flame-basin-apply';
+ const selector='input[id^="volume-"],select[id^="volume-"],button[id^="volume-"],[data-authoring-alias],#emitter-assay-family,#shared-flame-domain-properties input,#shared-flame-domain-properties select,[data-volume-presentation-mode],[data-raymarch-smoke-presentation],#grid-tuning-open,#flame-basin-apply,[data-reconstruction-source],.viewport-fire [data-fire],.viewport-quality [data-quality],.viewport-water [data-water],.viewport-shading [data-shading]';
  const reason='Resume history comparison to change sampling, simulation or presentation.';
  return {
   sync(held){

@@ -29171,6 +29171,7 @@ export function createKaminosVolumePrototype({
       if(device&&worldRenderUniform)device.queue.writeBuffer(worldRenderUniform,32,new Float32Array([mode==='contributions'?1:0,0,0,0]));
       return mode;
     },
+    isIntegralEvaluationHeld(){return !!integralEvaluation;},
     beginIntegralEvaluation() {
       if(!state.active||!integralReconstruction||!integralCameraValues||state.integralReconstruction?.effective==='off')throw Error('Enable Temporal or Combined and collect rendered history before pausing a comparison');
       if(selectiveHeadLiveExactPause)throw Error('Finish the pending frame capture before comparing history');
