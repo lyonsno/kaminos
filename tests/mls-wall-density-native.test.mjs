@@ -8,9 +8,10 @@ const wall=(axis=0)=>({id:'wall-'+axis,type:'procedural-mesh',geometry:{kind:'bo
 // Eight equal quadrature masses per grid cell give uniform density8. Confined
 // half-spaces and their intersections have an independently known uniform fill.
 // Execute the complete production solver, not a second density implementation.
-async function run(device,{corner=false,copies=1,colliders=[wall()],fault=false,checkEdits=false}={}){
+async function run(device,{corner=false,rotated=false,copies=1,colliders=[wall()],fault=false,checkEdits=false}={}){
+ if(rotated){const n=Math.SQRT1_2;colliders=[{...wall(),geometry:{kind:'box',parameters:{width:8,height:40,depth:80}},transform:{position:[8.05-4*n,12,8.05-4*n],rotation:[0,-Math.PI/4,0],scale:[1,1,1]}}];}
  const positions=[];
- for(let x=8;x<18;x++)for(let y=6;y<18;y++)for(let z=corner?8:6;z<18;z++)for(let n=0;n<copies;n++)for(let a=0;a<2;a++)for(let b=0;b<2;b++)for(let c=0;c<2;c++)positions.push([x+.25+a*.5,y+.25+b*.5,z+.25+c*.5]);
+ for(let x=rotated?4:8;x<(rotated?20:18);x++)for(let y=6;y<18;y++)for(let z=rotated?4:corner?8:6;z<(rotated?20:18);z++)for(let n=0;n<copies;n++)for(let a=0;a<2;a++)for(let b=0;b<2;b++)for(let c=0;c<2;c++){const p=[x+.25+a*.5,y+.25+b*.5,z+.25+c*.5];if(!rotated||p[0]+p[2]>16.1)positions.push(p);}
  const initial=new Float32Array(positions.length*20);positions.forEach((p,i)=>{initial.set(p,i*20);initial[i*20+3]=100;});
  const setup={particleCount:positions.length,gridSize:24,cellSize:1,originWorld:[0,0,0],boundaryWalls:false,obstacle:null,trackPopulation:false,mlsMaterial:{pressureWaveSpeed:0,kinematicViscosity:0}};
  const captured=new Map();let buffers=0,pipelines=0;
@@ -28,10 +29,10 @@ async function run(device,{corner=false,copies=1,colliders=[wall()],fault=false,
   const e=device.createCommandEncoder();e.copyBufferToBuffer(captured.get('MLS density'),0,readback,0,positions.length*4);device.queue.submit([e.finish()]);await readback.mapAsync(GPUMapMode.READ);
   const density=new Float32Array(readback.getMappedRange()).slice();readback.unmap();
   const at=(x,y,z)=>density[positions.findIndex(p=>p[0]===x&&p[1]===y&&p[2]===z)];
-  return {bulk:at(12.25,12.25,12.25),boundary:at(8.25,12.25,corner?8.25:12.25),free:at(17.75,12.25,12.25)};
+  return {bulk:at(rotated?14.25:12.25,12.25,rotated?14.25:12.25),boundary:at(8.25,12.25,corner||rotated?8.25:12.25),free:at(rotated?19.75:17.75,12.25,rotated?14.25:12.25)};
  }
  try{
-  await solver.advanceTo(1);const values=await densities();console.log(JSON.stringify({corner,copies,colliders:colliders?.length??null,fault,...values}));
+  await solver.advanceTo(1);const values=await densities();console.log(JSON.stringify({corner,rotated,copies,colliders:colliders?.length??null,fault,...values}));
   if(checkEdits){
    assert.equal(solver.read().densityBoundary.generation,1);
    const allocations={buffers,pipelines};device.queue.writeBuffer(solver.particles,0,initial);await solver.advanceTo(2);
@@ -54,6 +55,7 @@ const saved=globalThis.fetch;globalThis.fetch=async url=>({ok:true,text:()=>fs.r
 try{await withKaminosGpu(async({device})=>{
  uniform(await run(device,{checkEdits:true}));
  uniform(await run(device,{corner:true,colliders:[wall(),wall(2)]}));
+ uniform(await run(device,{rotated:true}));
  uniform(await run(device,{copies:2}),2);
  const open=await run(device,{colliders:[]});assert.equal(open.boundary,open.free);assert.ok(open.boundary<8*.85);
  const unbounded=await run(device,{colliders:null});assert.deepEqual(unbounded,open,'no-solid and unbounded pressure estimates agree');
