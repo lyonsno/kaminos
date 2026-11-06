@@ -1411,6 +1411,12 @@ def read_volume_settings_preset(store_path, preset_ref, schema=None):
     if document.get("identity") != VOLUME_SETTINGS_PRESET_ARTIFACT_IDENTITY or document.get("presetId") != preset_id:
         raise ValueError("volume settings preset artifact identity mismatch")
     raw_payload = document.get("preset") or {}
+    if not isinstance(raw_payload, dict):
+        raise ValueError("volume settings preset payload is not a JSON object")
+    for axis in ("domControls", "rendererControls", "presentationControls"):
+        values = raw_payload.get(axis)
+        if values is not None and (not isinstance(values, dict) or any(not isinstance(value, dict) for value in values.values())):
+            raise ValueError(f"volume settings preset payload has invalid {axis}")
     if (
         document.get("schemaIdentity") != schema.get("identity")
         or document.get("controlCount") != raw_payload.get("controlCount")
@@ -2077,12 +2083,13 @@ def read_runtime_volume_settings_preset(layers, preset_ref, schema=None):
         controls = document["preset"].get("domControls") or {}
         value = lambda key: _settings_preset_descriptor_value(controls.get(key, {}))
         supported_source = value("volume-emitter-source-law") in ("inflow-boundary", "immersed-source") and value("emitter-assay-family") != "cluster"
+        shared_transport = value("volume-advection-scheme") in ("maccormack", "maccormack-velocity") or value("volume-common-gas-transport") is True
         if (_settings_preset_descriptor_value(law) == "reactant-v0"
                 and "volume-reaction-law" not in added
                 and not any(entry.get("id") == "volume-reaction-law" for entry in replaced)
-                and supported_source):
+                and supported_source and shared_transport):
             return document
-        reason = "The basin uses a retired pre-Reactant combustion model or unsupported source"
+        reason = "The basin uses retired combustion or a source/transport configuration that cannot feed Reactant combustion"
     except (OSError, ValueError, json.JSONDecodeError) as error:
         reason = str(error)
     source = json.loads((ROOT / "artifacts/default-basin/reactant-preview-source.json").read_text())

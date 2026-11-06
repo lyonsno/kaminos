@@ -7004,9 +7004,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     if (!MATERIAL_ONLY) {
       let confinementMode = u.reserved_source_extension_0.y;
       if (confinementMode < 0.5) {
-        vel += vorticityConfinement(cellI, 0.034 + curl * 0.044) * (0.35 + smoke * 0.34 + heat * 0.52);
+        vel += vorticityConfinement(cellI, 0.034 + curl * 0.044) * (0.35 + smoke * 0.34 + heat * 0.52) * calibrationConfinementGain();
       } else if (confinementMode < 1.5) {
-        vel += vorticityConfinement(cellI, u.reserved_source_extension_0.z);
+        vel += vorticityConfinement(cellI, u.reserved_source_extension_0.z) * calibrationConfinementGain();
       }
       if (waveletOn() && !VELOCITY_ONLY) { vel += waveletCorrection(backCell, velTransported, waveletCoordA, waveletCoordB, timeStep); }
       if (shredOperatorGain > 0.0 && u.artistic_motion_controls.z > 0.5 && u.detail_force_isolation.z > 0.5) {
@@ -7024,10 +7024,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
         let delta = clamp((prev.xz - advected.xz) * clamp((smoke + heat) * 0.16 + curl * 0.022, 0.0, 0.24), vec2<f32>(-0.006 * VELOCITY_UNIT_SCALE), vec2<f32>(0.006 * VELOCITY_UNIT_SCALE));
         vel += vec3<f32>(delta.x, 0.0, delta.y);
       }
-      let increment = (vel - velTransported + centredForce * (VELOCITY_UNIT_SCALE - 1.0)) * timeStep;
+      let increment = (vel - velTransported + centredForce * (VELOCITY_UNIT_SCALE * calibrationCellGain() - 1.0)) * timeStep;
       vel = velTransported + increment;
       if (faceForcesOn()) {
-        let centredIncrement = centredForce * timeStep * VELOCITY_UNIT_SCALE;
+        let centredIncrement = centredForce * timeStep * VELOCITY_UNIT_SCALE * calibrationCellGain();
         forceDeltaStore(cellI, centredIncrement);
         vel -= centredIncrement;
       }

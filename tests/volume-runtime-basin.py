@@ -45,6 +45,9 @@ with tempfile.TemporaryDirectory() as directory:
     result = serve.read_runtime_volume_settings_preset(layers, saved["presetId"], schema)
     assert result["presetId"] == saved["presetId"]
     assert "runtimeFallback" not in result, "current Reactant settings must not be replaced"
+    unsupported = stored(layers, **{"volume-advection-scheme": "legacy", "volume-common-gas-transport": False})
+    result = serve.read_runtime_volume_settings_preset(layers, unsupported["presetId"], schema)
+    assert result.get("runtimeFallback"), "separate gas characteristics cannot feed Reactant combustion"
     # A Reactant label alone is insufficient: old source laws cannot feed it.
     invalid = stored(layers, **{"volume-emitter-source-law": "legacy-volume"})
     result = serve.read_runtime_volume_settings_preset(layers, invalid["presetId"], schema)

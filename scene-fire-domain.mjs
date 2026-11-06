@@ -164,6 +164,7 @@ export function runtimeFireSettings(settings,schema){
   const projected=projectFireSettingsToSchema(settings,schema);
   const value=id=>projected.domControls[id]?.rawValue??projected.domControls[id]?.value;
   if(!['inflow-boundary','immersed-source'].includes(value('volume-emitter-source-law'))||value('emitter-assay-family')==='cluster')throw Error('Saved source cannot feed Reactant combustion');
+  if(!['maccormack','maccormack-velocity'].includes(value('volume-advection-scheme'))&&value('volume-common-gas-transport')!==true)throw Error('Saved transport separates fuel and oxidizer characteristics');
   const activity=projected.domControls['volume-appearance-model'];
   activity.value='shred-only';if(Object.hasOwn(activity,'rawValue'))activity.rawValue='shred-only';
   for(const [axis,entries]of [['domControls',schema.controls],['rendererControls',schema.rendererControls],['presentationControls',schema.presentationControls]])for(const entry of entries??[]){

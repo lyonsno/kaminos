@@ -2,6 +2,8 @@
 import test from 'node:test';import assert from 'node:assert/strict';import vm from 'node:vm';import{readFileSync}from'node:fs';
 import * as fire from '../scene-fire-domain.mjs';
 import {createSceneLoadRequests} from '../scene-load-generation.mjs';
+import {resolveReactantCombustionConfig} from '../volume-reactant-combustion.mjs';
+import {resolveTransportConfig} from '../volume-core.js';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8'),schema=JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json',import.meta.url)));
 const start=html.indexOf('  if(restorePlan.fireSettings) {'),end=html.indexOf('  if (legacyBurner',start);assert.ok(start>=0&&end>start);
 const additions=['volume-reaction-law','volume-reactant-mixing-time','volume-reactant-cooling-time','volume-physical-kelvin-per-heat','volume-physical-soot-burnout-rate','volume-physical-soot-burnout-kelvin','volume-appearance-model','volume-wavelet-turbulence','volume-wavelet-octaves','volume-wavelet-strength','volume-wavelet-octave1-weight','volume-wavelet-octave2-weight','volume-pressure-resolution','volume-reactant-soot-yield'];
@@ -58,10 +60,14 @@ test('runtime scene settings preserve current Reactant values but identify obsol
  projected.domControls['volume-emitter-source-law'].value='immersed-source';
  projected.domControls['emitter-assay-family'].value='wick';
  projected.domControls['volume-appearance-model'].value='shred-only';
+ projected.domControls['volume-advection-scheme'].value='maccormack';
  const current=fire.runtimeFireSettings(projected,schema);
  assert.equal(current.reason,null);assert.deepEqual(current.settings,projected);
- for(const change of [s=>s.domControls['volume-reaction-law'].value='authored',s=>delete s.domControls['volume-reaction-law'],s=>delete s.domControls['volume-pressure-solver'],s=>s.domControls['volume-emitter-source-law'].value='legacy-volume']){
+ for(const change of [s=>s.domControls['volume-reaction-law'].value='authored',s=>delete s.domControls['volume-reaction-law'],s=>delete s.domControls['volume-pressure-solver'],s=>s.domControls['volume-emitter-source-law'].value='legacy-volume',s=>{s.domControls['volume-advection-scheme'].value='legacy';s.domControls['volume-common-gas-transport'].value=false;}]){
   const old=structuredClone(projected);change(old);const before=structuredClone(old);
   const result=fire.runtimeFireSettings(old,schema);assert.equal(result.settings,null);assert.ok(result.reason);assert.deepEqual(old,before);
  }
+ const transport=resolveTransportConfig({advectionScheme:'legacy',commonGasTransport:false});
+ const rejected=resolveReactantCombustionConfig({reactionLaw:'reactant-v0',emitterSourceLaw:'immersed-source'},{transportCommonCharacteristic:transport.effective.commonCharacteristic});
+ assert.equal(rejected.effective.reason,'reactant-law-requires-common-gas-transport');
 });
