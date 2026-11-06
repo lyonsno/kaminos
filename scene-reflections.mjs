@@ -11,6 +11,7 @@ export function resolveReflectionSettings(value={}){
  if(result.resolutionScale>1||result.roughnessCutoff>1)throw Error('Reflection scale and roughness cutoff must be at most one');
  if(!Number.isSafeInteger(result.steps)||result.steps<1||result.steps>4294967295)throw Error('Reflection steps must be a positive u32 integer');
  if(!Number.isFinite(result.historyWeight)||result.historyWeight<0||result.historyWeight>=1)throw Error('Reflection history weight must be in [0,1)');
+ if(Math.fround(result.historyWeight)>=1)throw Error('Reflection history weight must remain below one at float32 precision');
  return result;
 }
 
@@ -68,18 +69,18 @@ export default class SceneReflections extends Node{
  setSettings(value){
   const next=resolveReflectionSettings({...this.settings,...value});
   if(JSON.stringify(next)!==JSON.stringify(this.settings))this.reset('settings');
-  this.settings=next;this.distance.value=next.maxDistance;this.thickness.value=next.thickness;this.steps.value=next.steps;this.cutoff.value=next.roughnessCutoff;this.historyWeight.value=next.temporal?next.historyWeight:0;
+  this.settings=next;this.distance.value=next.maxDistance;this.thickness.value=next.thickness;this.steps.value=next.steps;this.cutoff.value=next.roughnessCutoff;this.historyWeight.value=next.temporal?Math.fround(next.historyWeight):0;
   this.requestFrames();
   return this.state();
  }
  // Let the initial image's temporal weight fall below 1%, then return to
  // host idle. This is a finite history tail, not a variance-convergence claim.
- requestFrames(){const s=this.settings;this.pendingHistoryFrames=s?.enabled&&s.temporal&&s.historyWeight>0?1+Math.ceil(Math.log(.01)/Math.log(s.historyWeight)):0;}
+ requestFrames(){const s=this.settings,w=this.historyWeight.value;this.pendingHistoryFrames=s?.enabled&&s.temporal&&w>0?1+Math.ceil(Math.log(.01)/Math.log(w)):0;}
  needsFrame(){return this.syncSupport().effective&&this.settings.temporal&&this.pendingHistoryFrames>0;}
  reset(reason='scene-change'){this.valid.value=false;this.resetReason=reason;this.requestFrames();}
  state(){const support=this.syncSupport();return {...this.settings,...support,route:'kaminos-screen-reflection-radiance-v1',frames:this.frames,resolution:this.size.value.toArray(),valid:this.valid.value,resetReason:this.resetReason,
   materialResponse:'existing-physical-base-specular-once',worldGeometry:false,history:'stationary-camera-geometry-validated-neighborhood-clamped',samplesPerTracingPixel:1,
-  sourceFiltering:'visible-GGX-pdf-footprint-mips',sourcePyramidFrames:this.radianceFrames,sourcePyramidResolution:[this.radiance.width,this.radiance.height],pendingHistoryFrames:this.pendingHistoryFrames,historyRemainderTarget:.01};}
+  sourceFiltering:'visible-GGX-pdf-footprint-mips',sourcePyramidFrames:this.radianceFrames,sourcePyramidResolution:[this.radiance.width,this.radiance.height],pendingHistoryFrames:this.pendingHistoryFrames,historyRemainderTarget:.01,effectiveHistoryWeight:this.historyWeight.value};}
  forSurface(){
   return Fn(()=>{
    const result=vec4(0).toVar();

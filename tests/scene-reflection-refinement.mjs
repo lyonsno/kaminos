@@ -40,3 +40,15 @@ test('projection suspension bypasses refinement and perspective restoration requ
   view.setOrthographic(false);assert.equal(gi.needsHistoryFrame(),true);
  }finally{gi.dispose();}
 });
+
+test('history weights must retain attenuation in the actual float32 uniform',()=>{
+ const renderer={library:new StandardNodeLibrary()},gi=createSceneGI(new Scene(),new PerspectiveCamera(),TSL.uniform(0),{renderer,reflections:{enabled:true}});
+ try{
+  assert.throws(()=>gi.reflections.setSettings({historyWeight:0.9999999999999999}),/float32/);
+  assert.equal(gi.reflections.settings.historyWeight,.85,'an unrepresentable edit preserves the prior settings');
+  gi.reflections.setSettings({historyWeight:1-Math.pow(2,-24)});
+  const high=gi.reflections.state();assert.ok(Number.isSafeInteger(high.pendingHistoryFrames));assert.ok(high.pendingHistoryFrames-1<high.pendingHistoryFrames);assert.equal(high.effectiveHistoryWeight,Math.fround(high.historyWeight));
+  gi.reflections.setSettings({historyWeight:1e-50});assert.equal(gi.reflections.state().effectiveHistoryWeight,0);assert.equal(gi.reflections.state().pendingHistoryFrames,0);
+  gi.reflections.setSettings({historyWeight:.85});assert.equal(gi.reflections.state().effectiveHistoryWeight,new Float32Array([.85])[0]);assert.equal(gi.reflections.state().pendingHistoryFrames,30);
+ }finally{gi.dispose();}
+});
