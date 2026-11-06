@@ -11790,10 +11790,17 @@ export function createKaminosVolumePrototype({
   let debugOpticalStepping = opticalSteppingConfig({mode:controlsSnapshot.raymarchMode??'numerical',tolerance:controlsSnapshot.opticalTolerance??0.001});
   let rayStepTelemetry = null;
   let integralReconstruction=null, reconstructionSample=0;
+  let integralEvaluation=null, integralCameraValues=null, integralCameraSignature=null;
   let integralEncodedForFrame=false;
   state.integralSourceGeneration=0;
   state.integralReconstruction={requested:controlsSnapshot.integralReconstruction??'off',effective:'off',reason:'awaiting-presentation',frames:0};
+  function endIntegralEvaluation(reason='resumed') {
+    if(integralEvaluation){simulationPaused=integralEvaluation.wasPaused;state.simulationPaused=simulationPaused;}
+    integralEvaluation=null;integralReconstruction?.endEvaluation();
+    state.integralEvaluation={active:false,reason};
+  }
   function invalidateIntegralReconstruction(reason,{source=false,release=false}={}) {
+    endIntegralEvaluation(reason);
     if(source)state.integralSourceGeneration++;
     if(release)integralReconstruction?.disable(reason);else integralReconstruction?.reset(reason);
     integralEncodedForFrame=false;
@@ -21359,6 +21366,7 @@ export function createKaminosVolumePrototype({
   }
 
   function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
+    if(integralEvaluation)throw Error('Held integral comparison must use the evaluation presentation route');
     prepareVolumeRenderResources(encoder, options.displayTimestampWrites);
     if (sceneSourceFrameConsumer && !sceneSourcePreparedEncoders.has(encoder)) {
       throw new Error('shared-scene-source-frame-not-prepared');
@@ -21546,6 +21554,7 @@ export function createKaminosVolumePrototype({
     if(reconstruct) {
       const cameraValues=new Float32Array([...emissiveWhiteMatrix[0],0,...emissiveWhiteMatrix[1],0,...emissiveWhiteMatrix[2],0,
         0,uniforms[373],uniforms[374],0,0,0,uniforms[46],0]);
+      integralCameraValues=cameraValues;integralCameraSignature=cameraSignature();
       state.integralReconstruction=integralReconstruction.encode(encoder,view,targetPipeline===readbackPipeline?'rgba8unorm':format,cameraValues);
       integralEncodedForFrame=true;
       state.integralReconstruction.sourceGeneration=state.integralSourceGeneration;
@@ -21924,6 +21933,19 @@ export function createKaminosVolumePrototype({
       invalidateRaymarchReadouts('presentation-without-instrumented-raymarch');
       const cpuStart = performance.now();
       controls?.update?.();
+      if(integralEvaluation) {
+        if(cameraSignature()!==integralEvaluation.camera||!integralReconstruction.describe().evaluation) {
+          endIntegralEvaluation('camera-or-source-changed');
+        } else {
+          const encoder=device.createCommandEncoder({label:'held reconstruction comparison'});
+          state.integralReconstruction=integralReconstruction.encodeEvaluation(encoder,context.getCurrentTexture().createView(),format,integralCameraValues,
+            {...controlsSnapshot,integralReconstruction:integralEvaluation.view});
+          if(foregroundService)foregroundService.submit([encoder.finish()],{metadata:{renderer:'held-integral-comparison',simStepCount:state.simStepCount}});
+          else device.queue.submit([encoder.finish()]);
+          return {status:'submitted',renderer:'held-integral-comparison',frameCount:state.frameCount,simStepCount:state.simStepCount,atMs:now,
+            authority:'pinned-raw-and-incoming-history-no-new-simulation-or-ray-samples'};
+        }
+      }
       updateUniforms(now);
       let encoder = device.createCommandEncoder({ label: 'kaminos compute fluid frame' });
       let liveCoefficientEncoded = false;
@@ -28301,6 +28323,11 @@ export function createKaminosVolumePrototype({
           tolerance:next.opticalTolerance??controlsSnapshot.opticalTolerance??0.001});
         debugOpticalStepping=config;debugOpticalSteppingExplicit=false;
       }
+      if(integralEvaluation) {
+        const filterKeys=new Set(['integralReconstruction','reconstructionSpatial','reconstructionRadius','reconstructionWindow','reconstructionResponse','reconstructionEdge','reconstructionFresh']);
+        if(Object.keys(next).some(k=>!filterKeys.has(k)&&JSON.stringify(next[k])!==JSON.stringify(controlsSnapshot[k])))endIntegralEvaluation('render-or-simulation-settings-changed');
+        else if(Object.hasOwn(next,'integralReconstruction'))integralEvaluation.view=next.integralReconstruction;
+      }
       const previousGrid = gridSize;
       const previousBoundarySplatTelemetryControlSignature = boundarySplatTelemetryControlSignature(controlsSnapshot);
       const previousCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
@@ -29120,8 +29147,27 @@ export function createKaminosVolumePrototype({
       if(device&&worldRenderUniform)device.queue.writeBuffer(worldRenderUniform,32,new Float32Array([mode==='contributions'?1:0,0,0,0]));
       return mode;
     },
+    beginIntegralEvaluation() {
+      if(!state.active||!integralReconstruction||!integralCameraValues||state.integralReconstruction?.effective==='off')throw Error('Enable Temporal or Combined and collect rendered history before pausing a comparison');
+      if(selectiveHeadLiveExactPause)throw Error('Finish the pending frame capture before comparing history');
+      if(cameraSignature()!==integralCameraSignature)throw Error('Wait for a draw from this camera before comparing history');
+      if(!integralEvaluation) {
+        const pin=integralReconstruction.beginEvaluation();
+        integralEvaluation={wasPaused:simulationPaused,camera:cameraSignature(),view:controlsSnapshot.integralReconstruction};
+        simulationPaused=true;state.simulationPaused=true;
+        state.integralEvaluation={active:true,simulationStep:state.simStepCount,draws:pin.frames,previousDraws:pin.previousDraws};
+      }
+      return {...state.integralEvaluation};
+    },
+    setIntegralEvaluationView(mode) {
+      integralReconstructionSettings({...controlsSnapshot,integralReconstruction:mode});
+      if(!integralEvaluation)throw Error('Pause a history comparison first');
+      integralEvaluation.view=mode;state.integralEvaluation={...state.integralEvaluation,view:mode};
+      return {...state.integralEvaluation};
+    },
+    endIntegralEvaluation() {endIntegralEvaluation();return {...state.integralEvaluation};},
     async sampleIntegralReconstruction() {
-      if(!selectiveHeadLiveCapturePaused)throw Error('Integral readback requires held capture');
+      if(!selectiveHeadLiveCapturePaused&&!integralEvaluation)throw Error('Integral readback requires held capture');
       if(!integralReconstruction||state.integralReconstruction?.effective==='off')return {available:false,state:state.integralReconstruction};
       return integralReconstruction.sample();
     },

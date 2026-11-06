@@ -1934,16 +1934,25 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <input id="volume-history-influence" type="number" step="0.1" min="0" value="1" data-authoring-drag-step="0.1" data-volume-settings-role="renderer" title="Guided + history only. 1 preserves the current weighting. 0 uses the joins-only proposal. Larger values favor previously important regions; all samples still evaluate fresh material.">
     </div>
     <div class="slider-row">
-      <label class="slider-label" for="volume-history-window">History window (frames)</label>
+      <label class="slider-label" for="volume-history-window">Importance memory (draws)</label>
       <input id="volume-history-window" type="number" step="1" min="1" value="1" data-authoring-drag-step="1" data-volume-settings-role="renderer" title="Effective memory in rendered frames, not simulation steps. 1 remembers the previous draw only. Larger windows decay old importance exponentially (e-fold time = window minus 1); no hard age cutoff or color reuse. Uses the same two buffers plus one carry pass per history cell.">
     </div>
     <div class="slider-row" title="Filters linear integrated light and transmission before the camera curve. Raw keeps the existing path. Camera motion resets image memory; moving flames use current-neighborhood rejection. Independent from importance history and 3D display smoothing."><label class="slider-label" for="volume-integral-reconstruction">Image reconstruction</label><select id="volume-integral-reconstruction" data-volume-settings-role="renderer"><option value="off">Raw</option><option value="spatial">Spatial</option><option value="temporal">Temporal</option><option value="combined">Spatial + temporal</option></select></div>
     <div class="slider-row" title="Amount of local noise-aware smoothing. 0 disables spatial blending; 1 allows the strongest blending. A small floor also smooths persistent grid quantization."><label class="slider-label" for="volume-reconstruction-spatial">Spatial smoothing</label><input id="volume-reconstruction-spatial" type="number" min="0" max="1" step="0.1" value="0.6" data-authoring-drag-step="0.1" data-volume-settings-role="renderer"></div>
-    <div class="slider-row" title="Radius of the fixed nine-tap footprint in rendered pixels, before CSS upscaling. Wider costs the same number of taps but trades more detail for smoothness."><label class="slider-label" for="volume-reconstruction-radius">Blur radius (px)</label><input id="volume-reconstruction-radius" type="number" min="0" step="0.1" value="1" data-authoring-drag-step="0.1" data-volume-settings-role="renderer"></div>
-    <div class="slider-row" title="Effective maximum memory in rendered draws. 1 uses only the current draw. Larger values permit more reuse; motion and camera changes can shorten it. This is image history, independent of the marcher importance window."><label class="slider-label" for="volume-reconstruction-window">Image memory (frames)</label><input id="volume-reconstruction-window" type="number" min="1" step="1" value="8" data-authoring-drag-step="1" data-volume-settings-role="renderer"></div>
+    <div class="slider-row" title="Radius in rendered pixels before CSS upscaling. A contiguous footprint covers intervening pixels; fractional changes are smooth. Wider trades detail and more texture reads for blur: radius 1 uses 9 taps, radius 2 uses 25, radius 3 uses 49."><label class="slider-label" for="volume-reconstruction-radius">Blur radius (px)</label><input id="volume-reconstruction-radius" type="number" min="0" step="0.1" value="1" data-authoring-drag-step="0.1" data-volume-settings-role="renderer"></div>
+    <div class="slider-row" title="Effective maximum memory in rendered draws. 1 uses only the current draw. Larger values permit more reuse; motion and camera changes can shorten it. This is image history, independent of the marcher importance window."><label class="slider-label" for="volume-reconstruction-window">Image memory (draws)</label><input id="volume-reconstruction-window" type="number" min="1" step="1" value="8" data-authoring-drag-step="1" data-volume-settings-role="renderer"></div>
     <div class="slider-row" title="How quickly changed light or smoke rejects old image history. Higher responds faster and retains more noise; 0 allows maximum reuse subject to neighborhood clamping. Camera changes always reset."><label class="slider-label" for="volume-reconstruction-response">Motion response</label><input id="volume-reconstruction-response" type="number" min="0" step="0.1" value="1" data-authoring-drag-step="0.1" data-volume-settings-role="renderer"></div>
     <div class="slider-row" title="Protection against mixing unlike light/transmission across neighboring pixels. Higher preserves edges and more noise; 0 allows the most blur. Opaque geometry depth boundaries are protected separately."><label class="slider-label" for="volume-reconstruction-edge">Edge protection</label><input id="volume-reconstruction-edge" type="number" min="0" step="0.1" value="2" data-authoring-drag-step="0.1" data-volume-settings-role="renderer"></div>
-    <div class="slider-row" title="Advance sampling phases independently of frozen physics while image reconstruction is enabled. Turning this off follows the existing noise animation setting."><label class="slider-label" for="volume-reconstruction-fresh">Fresh samples while paused</label><input id="volume-reconstruction-fresh" type="checkbox" checked data-volume-settings-role="renderer"></div>
+    <div class="slider-row" title="Changes sampling jitter while physics is paused. Off follows Animate noise; image history still updates on every rendered draw. Identical samples cannot average away noise. Use Pause history comparison to hold the samples, camera and incoming history for A/B."><label class="slider-label" for="volume-reconstruction-fresh">Animate samples while paused</label><input id="volume-reconstruction-fresh" type="checkbox" checked data-volume-settings-role="renderer"></div>
+    <div id="volume-reconstruction-comparison" class="flame-scope">
+      <button id="volume-reconstruction-pause" type="button" title="Holds physics, camera, last raw samples and the history entering that draw. Comparisons do not collect more samples. Enable Temporal or Combined first.">Pause history comparison</button>
+      <div role="group" aria-label="Held reconstruction comparison">
+        <button type="button" data-integral-view="off" disabled>Raw</button>
+        <button type="button" data-integral-view="spatial" disabled>Spatial</button>
+        <button type="button" data-integral-view="temporal" disabled>Temporal</button>
+        <button type="button" data-integral-view="combined" disabled>Spatial + temporal</button>
+      </div>
+    </div>
     <output id="volume-reconstruction-status" class="flame-scope" role="status">Raw image</output>
     <output id="volume-raymarch-status" class="flame-scope" role="status">Awaiting renderer</output>
     <div class="slider-row">
@@ -2018,13 +2027,13 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-flame-priority-val">0.00</span>
     </div>
     <div class="slider-row">
-      <span class="slider-label" title="Advances through conservatively empty native-support cells; supported reconstructed samples are always evaluated and composited.">Empty-Space Acceleration</span>
+      <span class="slider-label" title="Adds an interval-bound traversal before material evaluation. Positive material cutoff discards weak intervals and can expose World cells. Speedup depends on the scene; World samples already bypass exactly empty leaves.">Ray interval culling</span>
       <input type="range" id="volume-occupancy-skip" min="0" max="1" step="0.05" value="0.35">
       <span class="slider-val" id="volume-occupancy-skip-val">0.35</span>
     </div>
     <div class="slider-row">
-      <label class="slider-label" for="volume-occupancy-threshold">Empty-space threshold</label>
-      <input type="number" id="volume-occupancy-threshold" min="0" step="0.0001" value="0" data-volume-settings-role="renderer" title="Skip complete intervals certified empty by prepared optical bounds. Zero preserves exactly empty support. Positive values permit weak-material error; raw Fine is exact-zero only. Applies to every retained marcher.">
+      <label class="slider-label" for="volume-occupancy-threshold">Material cutoff (lossy)</label>
+      <input type="number" id="volume-occupancy-threshold" min="0" step="0.0001" value="0" data-volume-settings-role="renderer" title="Whole-interval cutoff = Ray interval culling amount × this value. Zero requires exactly empty support. Positive values discard weak emission/extinction, can expose World cells, and are not a bound on final image error. Raw Fine remains exact-zero only.">
     </div>
     <div class="slider-row">
       <span class="slider-label">Render Scale</span>
@@ -3723,6 +3732,7 @@ let activeSceneComposition = null;
 let authoringBusy = false;
 // Set while the agent vantage borrows the viewport camera for a picture.
 let vantageCaptureHeld = false;
+let reconstructionEvaluationHeld = null;
 let volumePrototype = null;
 let sceneBurning = null;
 const flameFeature=createAuthoredFlameFeature({runtime:()=>volumePrototype,composed:()=>!!activeSceneComposition,visible:()=>isSceneItemVisible('flame-field')});
@@ -6715,6 +6725,7 @@ window.kaminosCameraDebugState = function() {
 };
 window.kaminosSetCameraDebugPose = function(pose = {}) {
   if (!camera || !controls) throw new Error('Kaminos camera debug pose unavailable before viewport initialization');
+  if(reconstructionEvaluationHeld)throw Error('Resume the history comparison to move the camera');
   if (Array.isArray(pose.position) && pose.position.length === 3) camera.position.fromArray(pose.position);
   if (Array.isArray(pose.target) && pose.target.length === 3) controls.target.fromArray(pose.target);
   controls.update();
@@ -11555,7 +11566,7 @@ async function initScene() {
     navigationHook:{viewChange:()=>sceneCameras?.leave({continueFromCamera:true}),frameBounds:()=>sceneCameras?.frameBounds(),begin:mode=>sceneCameras?.beginNavigation(mode)??false,changed:()=>sceneCameras?.navigationChanged(),end:cancel=>sceneCameras?.endNavigation(cancel),wheelEnd:()=>sceneCameras?.wheelEnd(),frameLayout:()=>sceneCameras?.frameLayout(),restoreFrameLayout:value=>sceneCameras?.restoreFrameLayout(value),pan:(dx,dy)=>sceneCameras?.panFrame(dx,dy),zoom:factor=>sceneCameras?.zoomFrame(factor)},
     frameAll: () => { const framed = frameObjects(sceneObjectsForFraming(workingScene.objects.filter(entry=>isSceneItemVisible(entry.id))), camera, controls); if (framed) markDirty(); return framed; },
     frameSelected: () => { const framed = frameAuthoredSelection(); if (framed) markDirty(); return framed; },
-    blocked: () => !!viewPie?.state() || authoringBusy || vantageCaptureHeld || scenePlacementTools?.edits.state().active?.id==='@viewport-lens' || transformGizmoDragging || transformControls.dragging || splatCorrectionMode !== null,
+    blocked: () => !!viewPie?.state() || authoringBusy || vantageCaptureHeld || !!reconstructionEvaluationHeld || scenePlacementTools?.edits.state().active?.id==='@viewport-lens' || transformGizmoDragging || transformControls.dragging || splatCorrectionMode !== null,
     inputMode: () => navigationInput.value,
     status: updateNavigationHint,
   });
@@ -11569,6 +11580,7 @@ async function initScene() {
   window.kaminosNavigationState = navigation.state;
   window.kaminosNavigationIndexState = navigation.indexState;
   window.kaminosFrameSelected = () => {
+    if(reconstructionEvaluationHeld){setInfo('Resume the history comparison to move the camera');return false;}
     if (vantageCaptureHeld) { setInfo('The agent sub is taking a picture'); return false; }
     const changed = frameAuthoredSelection(); if (changed) markDirty(); return changed;
   };
@@ -11696,7 +11708,7 @@ async function initScene() {
   viewProjection=createViewProjection({camera,target:()=>controls.target});
   window.kaminosViewProjection={state:()=>viewProjection.state(),read:()=>({...viewProjection.state(),position:camera.position.toArray(),target:controls.target.toArray(),near:camera.near,far:camera.far,projection:[...camera.projectionMatrix.elements]}),setOrthographic:(on,options)=>viewProjection.setOrthographic(on,options),toggle:()=>viewProjection.toggle()};
   const cameraViewAction=id=>{if(id==='camera'){viewProjection.setOrthographic(false);sceneCameras.toggle();return;}if(id==='selected'){sceneCameras.leave();window.kaminosFrameSelected();return;}sceneCameras.leave();navigation.axis(id);viewProjection.setOrthographic(true,{auto:true});};
-  viewPie=installViewPie({document,viewport:viewportEl,invoke:cameraViewAction,allowed:()=>!authoringBusy&&!vantageCaptureHeld&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying,onError:error=>setInfo(error.message)});
+  viewPie=installViewPie({document,viewport:viewportEl,invoke:cameraViewAction,allowed:()=>!authoringBusy&&!vantageCaptureHeld&&!reconstructionEvaluationHeld&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying,onError:error=>setInfo(error.message)});
   // Polygon Edit Mode (Tab) on the selected mesh object; the object tools above yield to it through polyEdit.active().
   sceneComponents=createSceneComponentEdit({selected:()=>workingScene.selection.ids.length===1?workingScene.selection.activeId:null,cancel:()=>scenePlacementTools.finish(false),refresh:()=>{const entry=selectedPlacementEntry();currentMesh=entry?.object??null;if(currentMesh)attachViewportGizmo(currentMesh);else transformControls.detach();updateTransformInspector();markDirty();}});
   polyEdit=installPolyEditMode({document,viewport:viewportEl,canvas:renderer.domElement,camera,setInfo,gizmo:transformControls,ownerComponents:sceneComponents,
@@ -11763,7 +11775,7 @@ async function initScene() {
       ];return result;
     }});
 
-  document.addEventListener('keydown',event=>{if(event.defaultPrevented||event.repeat||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||authoringBusy||vantageCaptureHeld)return;if(event.code==='Numpad5'){event.preventDefault();event.stopImmediatePropagation();viewProjection.toggle();return;}if(event.code==='Numpad0'){event.preventDefault();event.stopImmediatePropagation();try{if((event.ctrlKey||event.metaKey)&&event.altKey)sceneCameras.align();else if(event.ctrlKey||event.metaKey){sceneCameras.setActive(selectedSceneObjectEntry()?.id);sceneCameras.enter();}else sceneCameras.toggle();}catch(error){setInfo(error.message);}}},true);
+  document.addEventListener('keydown',event=>{if(event.defaultPrevented||event.repeat||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||authoringBusy||vantageCaptureHeld||reconstructionEvaluationHeld)return;if(event.code==='Numpad5'){event.preventDefault();event.stopImmediatePropagation();viewProjection.toggle();return;}if(event.code==='Numpad0'){event.preventDefault();event.stopImmediatePropagation();try{if((event.ctrlKey||event.metaKey)&&event.altKey)sceneCameras.align();else if(event.ctrlKey||event.metaKey){sceneCameras.setActive(selectedSceneObjectEntry()?.id);sceneCameras.enter();}else sceneCameras.toggle();}catch(error){setInfo(error.message);}}},true);
   scenePlacementTools.addHistoryScope(document.getElementById('authoring-camera-properties'));
   scenePlacementTools.addHistoryScope(document.getElementById('authoring-viewport-settings'));
   controls.addEventListener('change',()=>cameraViewsPanel.refresh());
@@ -11941,7 +11953,7 @@ async function initScene() {
     // Outside any render: a quality change resizes render targets.
     syncViewportQuality(syncViewportRendererSize);
     if(recordingExtent)needsRender=true;
-    controls.update();
+    if(!reconstructionEvaluationHeld)controls.update();
     const refinement = sceneGI.historyStatus();
     const refinementText = !refinement ? '' : refinement.checkFailure
       ? 'GI refinement paused: noise check failed. Toggle Refine still scenes to retry.'
@@ -19410,6 +19422,29 @@ document.getElementById('volume-viewer-play')?.addEventListener('click',()=>{
   sceneViewerPaused=paused;
   syncVolumeViewerPlay();window._kaminosDirty?.();
 });
+function releaseReconstructionEvaluationCamera() {
+  if(!reconstructionEvaluationHeld)return;
+  controls.enabled=reconstructionEvaluationHeld.enabled;
+  controls.enableDamping=reconstructionEvaluationHeld.damping;
+  reconstructionEvaluationHeld=null;
+}
+document.getElementById('volume-reconstruction-pause').addEventListener('click',()=>{
+  try {
+    if(reconstructionEvaluationHeld){volumePrototype?.endIntegralEvaluation();releaseReconstructionEvaluationCamera();}
+    else {
+      if(!volumePrototype)throw Error('Start the flame before comparing history');
+      sceneNavigation?.cancel();
+      const prior={enabled:controls.enabled,damping:controls.enableDamping};
+      volumePrototype.beginIntegralEvaluation();
+      reconstructionEvaluationHeld=prior;controls.enabled=false;controls.enableDamping=false;
+    }
+    refreshVolumeReadout();window._kaminosDirty?.();
+  }catch(error){setInfo(error.message);}
+});
+for(const button of document.querySelectorAll('[data-integral-view]'))button.addEventListener('click',()=>{
+  try{volumePrototype.setIntegralEvaluationView(button.dataset.integralView);refreshVolumeReadout();window._kaminosDirty?.();}
+  catch(error){setInfo(error.message);}
+});
 function refreshVolumeReadout() {
   if (!volumePrototype) return;
   const s = volumePrototype.debugState();
@@ -19419,9 +19454,21 @@ function refreshVolumeReadout() {
   document.getElementById('volume-raymarch-status').textContent=!stepping||stepping.requested!==requested?'Awaiting renderer':
     `${modeNames[stepping.effective]||'Unavailable'}${stepping.reason?` · ${stepping.reason.replaceAll('-',' ')}`:''}`;
   const reconstruction=s.integralReconstruction;
-  document.getElementById('volume-reconstruction-status').textContent=reconstruction?.effective&&reconstruction.effective!=='off'
-    ? `${reconstruction.effective} · ${reconstruction.frames} draws · camera motion resets memory${reconstruction.freshSampling?' · fresh samples while paused':''}`
-    : reconstruction?.requested&&reconstruction.requested!=='off'?`Unavailable · ${String(reconstruction.reason||'awaiting frame').replaceAll('-',' ')}`:'Raw image';
+  const evaluation=s.integralEvaluation?.active;
+  if(reconstructionEvaluationHeld&&!evaluation)releaseReconstructionEvaluationCamera();
+  const pause=document.getElementById('volume-reconstruction-pause');
+  pause.textContent=evaluation?'Resume history comparison':'Pause history comparison';
+  pause.setAttribute('aria-pressed',String(!!evaluation));
+  pause.disabled=!evaluation&&(!reconstruction?.frames||reconstruction.effective==='off');
+  for(const button of document.querySelectorAll('[data-integral-view]')) {
+    button.disabled=!evaluation;
+    button.setAttribute('aria-pressed',String(!!evaluation&&button.dataset.integralView===(reconstruction?.evaluation?.view??s.integralEvaluation.view??reconstruction.effective)));
+  }
+  document.getElementById('volume-reconstruction-status').textContent=evaluation
+    ? `Camera + samples held · sim ${s.integralEvaluation.simulationStep} · ${s.integralEvaluation.previousDraws} prior draws · compare without advancing history${s.integralEvaluation.previousDraws===0?' · no prior history yet':''}`
+    : reconstruction?.effective&&reconstruction.effective!=='off'
+      ? `${reconstruction.effective} · ${reconstruction.frames} draws since reset · ${reconstruction.simulationStepChanges??0} sim-step changes · ${reconstruction.sameStepDraws??0} draws at this step · camera or settings changes reset${reconstruction.freshSampling?' · jitter advances while physics is paused':''}`
+      : reconstruction?.requested&&reconstruction.requested!=='off'?`Unavailable · ${String(reconstruction.reason||'awaiting frame').replaceAll('-',' ')}`:'Raw image · no image history retained';
   const telemetry=s.rayStepTelemetry;
   document.getElementById('volume-ray-step-status').textContent=telemetry?.active?'GPU · material samples':
     telemetry?.requested?`Unavailable · ${String(telemetry.reason||'awaiting frame').replaceAll('-',' ')}`:'Awaiting frame';

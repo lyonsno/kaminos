@@ -50,3 +50,59 @@ test('actual GPU image banks smooth linear light AND transmission, retain noise,
     }finally{h.dispose();target.destroy();}
   });
 });
+
+
+test('evaluation holds one raw draw and its incoming history across all four views',async()=>{
+  await withKaminosGpu(async ctx=>{
+    const d=ctx.device,h=createIntegralReconstruction(d);
+    const camera=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,.6,0,0,0,0,0]);
+    const target=d.createTexture({size:[3,3],format:'rgba8unorm',usage:GPUTextureUsage.RENDER_ATTACHMENT});
+    const c={integralReconstruction:'combined',reconstructionSpatial:1,reconstructionEdge:0,reconstructionResponse:0};
+    const draw=async(values,step)=>{
+      const e=d.createCommandEncoder();h.prepare(3,3,c,'fixed-camera',step);
+      d.queue.writeTexture({texture:h.raw},new Float32Array(values.flat()),{bytesPerRow:48},[3,3]);
+      d.queue.writeTexture({texture:h.guide},new Float32Array(9).fill(10),{bytesPerRow:12},[3,3]);
+      h.encode(e,target.createView(),'rgba8unorm',camera);d.queue.submit([e.finish()]);await d.queue.onSubmittedWorkDone();
+    };
+    try {
+      const previous=Array.from({length:9},(_,i)=>i===4?[3,2,1,.2]:[1,1,1,.8]);
+      const current=previous.map((v,i)=>i===4?[1,1,1,.8]:[3,2,1,.2]);
+      await draw(previous,10);await draw(current,11);
+      const before=await h.sample();const pin=h.beginEvaluation();assert.equal(pin.frames,2);assert.equal(pin.previousDraws,1);
+      const values={};
+      for(const mode of ['off','spatial','temporal','combined','temporal']) {
+        const e=d.createCommandEncoder();const state=h.encodeEvaluation(e,target.createView(),'rgba8unorm',camera,{...c,integralReconstruction:mode});d.queue.submit([e.finish()]);
+        const sample=await h.sample();assert.equal(state.frames,2);assert.equal(sample.state.frames,2);
+        assert.deepEqual(sample.raw,before.raw);assert.equal(state.evaluation.previousDraws,1);
+        const pixel=Array.from(sample.filtered.slice(16,20));
+        if(values[mode])assert.deepEqual(pixel,values[mode],'view order must not accumulate the pinned input');
+        values[mode]=pixel;
+      }
+      assert.deepEqual(values.off.map(x=>+x.toFixed(4)),[1,1,1,.8]);
+      assert.ok(values.temporal[0]>values.off[0]+.2,'previous draw remains available');
+      assert.ok(values.spatial[0]>values.off[0]+.1);assert.notDeepEqual(values.combined,values.spatial);
+      h.endEvaluation();const after=await h.sample();assert.deepEqual(after.filtered,before.filtered);assert.deepEqual(after.moments,before.moments);
+      assert.equal(after.state.frames,2);assert.equal(after.state.simulationStepChanges,1);
+      h.reset('changed-source');assert.throws(()=>h.beginEvaluation(),/rendered history/);
+    }finally{h.dispose();target.destroy();}
+  });
+});
+
+test('spatial radius covers intervening pixels instead of preserving a checkerboard sublattice',async()=>{
+  await withKaminosGpu(async ctx=>{
+    const d=ctx.device,h=createIntegralReconstruction(d),size=7;
+    const target=d.createTexture({size:[size,size],format:'rgba8unorm',usage:GPUTextureUsage.RENDER_ATTACHMENT});
+    const camera=new Float32Array(20),pixels=new Float32Array(size*size*4);
+    for(let y=0;y<size;y++)for(let x=0;x<size;x++)pixels.set((x+y)%2?[2,1,.5,.4]:[0,0,0,1],(y*size+x)*4);
+    const draw=async radius=>{
+      const e=d.createCommandEncoder();h.prepare(size,size,{integralReconstruction:'spatial',reconstructionSpatial:1,reconstructionEdge:0,reconstructionRadius:radius},`radius-${radius}`,1);
+      d.queue.writeTexture({texture:h.raw},pixels,{bytesPerRow:size*16},[size,size]);
+      d.queue.writeTexture({texture:h.guide},new Float32Array(size*size).fill(10),{bytesPerRow:size*4},[size,size]);
+      h.encode(e,target.createView(),'rgba8unorm',camera);d.queue.submit([e.finish()]);return (await h.sample()).filtered[(3*size+3)*4];
+    };
+    try {
+      assert.ok(await draw(2)>.05,'a radius-two blur must see the bright intervening pixels');
+      const a=await draw(.49),b=await draw(.51);assert.ok(a>.01);assert.ok(Math.abs(b-a)<.02,'fractional radius changes continuously');
+    }finally{h.dispose();target.destroy();}
+  });
+});

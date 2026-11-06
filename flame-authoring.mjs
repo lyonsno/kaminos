@@ -128,9 +128,9 @@ export const FLAME_PROPERTY_GROUPS = [
   {name:'Fine coverage',view:'quality',scope:'Move fixed-size Fine coverage around sources and evolving fire. World bounds stay fixed. Manual box edits hold following until a source or policy changes.',fields:FINE_COVERAGE_FIELDS.map(field=>[field.id,field.label])},
   {name:'Adaptive material',view:'quality',scope:'Allocation follows fire throughout the world field. Settings are saved with scenes and basins.',fields:ADAPTIVE_MATERIAL_FIELDS.map(field=>[field.id,field.label])},
   { name:'Ray marching', view:'quality', open:true, fields:[
-    ['volume-raymarch-mode','Ray marcher'], ['volume-history-influence','History influence'], ['volume-history-window','History window (frames)'], ['volume-integral-reconstruction','Image reconstruction'], ['volume-reconstruction-spatial','Spatial smoothing'], ['volume-reconstruction-radius','Blur radius (px)'], ['volume-reconstruction-window','Image memory (frames)'], ['volume-reconstruction-response','Motion response'], ['volume-reconstruction-edge','Edge protection'], ['volume-reconstruction-fresh','Fresh samples while paused'], ['volume-optical-tolerance','Tolerance'], ['volume-ray-step-telemetry','Ray statistics'],
+    ['volume-raymarch-mode','Ray marcher'], ['volume-history-influence','History influence'], ['volume-history-window','Importance memory (draws)'], ['volume-integral-reconstruction','Image reconstruction'], ['volume-reconstruction-spatial','Spatial smoothing'], ['volume-reconstruction-radius','Blur radius (px)'], ['volume-reconstruction-window','Image memory (draws)'], ['volume-reconstruction-response','Motion response'], ['volume-reconstruction-edge','Edge protection'], ['volume-reconstruction-fresh','Animate samples while paused'], ['volume-optical-tolerance','Tolerance'], ['volume-ray-step-telemetry','Ray statistics'],
     ['volume-steps','Ray count'],
-    ['volume-occupancy-skip','Ray empty-space skip'], ['volume-occupancy-threshold','Empty-space threshold'],
+    ['volume-occupancy-skip','Ray interval culling'], ['volume-occupancy-threshold','Material cutoff (lossy)'],
     ['volume-ray-start-noise','Blue noise'], ['volume-ray-noise-animated','Animate noise'], ['volume-quadrature-jitter','Interior jitter'],
     ['volume-flame-priority','Flame priority'], ['volume-render-scale','Screen resolution (%)'],
     ['volume-pressure-resolution','Pressure grid (experimental)'],
@@ -214,7 +214,7 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-pressure-solver','Pressure solver'], ['volume-projection','Projection'],
     ['volume-advection-scheme','Advection'],
     ['volume-common-gas-transport','Common gas transport'], ['volume-velocity-staggering','Velocity sampling'],
-    ['volume-fast-bypass','Fast empty-air bypass'],
+    ['volume-fast-bypass','Skip empty Fine updates'],
   ] },
   { name:'Diagnostics', view:'quality', fields:[
     ['volume-reaction-live-view','Field view'], ['volume-boundary-sidecar-view','Structure view'],
@@ -412,7 +412,7 @@ export function createFlameInspector({ document, host, gridTuning, sharedHost = 
     if(group.name==='Domain & simulation')section.append(pressureStatus);
     if(group.name==='World smoke')section.append(worldStatus,overlayRow,overlayStatus);
     if(group.name==='Combustion')section.append(appearanceStatus);
-    if(group.name==='Ray marching')section.append(byId('volume-raymarch-status'),byId('volume-ray-step-stats'));
+    if(group.name==='Ray marching')section.append(byId('volume-reconstruction-comparison'),byId('volume-reconstruction-status'),byId('volume-raymarch-status'),byId('volume-ray-step-stats'));
     (group.quick||group.scope==='emitter'?host:panels.get(group.view)).append(section);
     sections.push({section,group,rows:sectionRows,open:!!group.open});
   }

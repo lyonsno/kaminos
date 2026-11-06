@@ -52,17 +52,20 @@ fn reconstruct(@builtin(global_invocation_id) id:vec3<u32>) {
   var lo=center;var hi=center;var total=center;var weights=1.0;
   var signalSum=signal;var signalSquare=signal*signal;var neighbors=1.0;
   let depth=textureLoad(guide,p,0).x;
-  // Fixed nine-tap footprint. Radius changes the footprint, not the tap count.
+  // A contiguous tent footprint includes intervening pixels at every radius.
+  // Fractional radii add outer weights continuously instead of rounding offsets.
   // Depth gating prevents a filter across opaque scene geometry boundaries.
-  for(var y=-1;y<=1;y++){for(var x=-1;x<=1;x++){
+  let extent=i32(ceil(options.spatial.y));
+  for(var y=-extent;y<=extent;y++){for(var x=-extent;x<=extent;x++){
     if(x==0&&y==0){continue;}
-    let q=clamp(p+vec2<i32>(round(vec2<f32>(f32(x),f32(y))*options.spatial.y)),vec2<i32>(0),vec2<i32>(size)-1);
+    let footprint=(1.0-abs(f32(x))/(options.spatial.y+1.0))*(1.0-abs(f32(y))/(options.spatial.y+1.0));
+    let q=clamp(p+vec2<i32>(x,y),vec2<i32>(0),vec2<i32>(size)-1);
     let v=textureLoad(raw,q,0);let d=textureLoad(guide,q,0).x;
     let sameDepth=abs(d-depth)<=.01*max(1.0,min(abs(depth),abs(d)));
     if(!sameDepth){continue;}
     lo=min(lo,v);hi=max(hi,v);
-    let neighborSignal=integralSignal(v);signalSum+=neighborSignal;signalSquare+=neighborSignal*neighborSignal;neighbors+=1.0;
-    let w=integralEdgeWeight(signal,neighborSignal,variance,options.spatial.z)*exp(-.5*f32(x*x+y*y));
+    let neighborSignal=integralSignal(v);signalSum+=neighborSignal*footprint;signalSquare+=neighborSignal*neighborSignal*footprint;neighbors+=footprint;
+    let w=integralEdgeWeight(signal,neighborSignal,variance,options.spatial.z)*footprint;
     total+=v*w;weights+=w;
   }}
   let relativeNoise=dot(variance,vec2<f32>(1.0))/(.0025+dot(signal,signal));
@@ -107,18 +110,39 @@ ${EMISSIVE_CAMERA_WGSL}
 
 export function createIntegralReconstruction(device,{transparent=false}={}) {
   let textures=[],key='',index=0,frames=0,identity=null,lastStep=null,resetReason='new-history',config=null;
+  let stepChanges=0,sameStepDraws=0,evaluation=null;
   let filter=null,presentModule=null;const pipelines=new Map();
   const options=device.createBuffer({label:'integral reconstruction settings',size:32,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
   const camera=device.createBuffer({label:'integral reconstruction camera',size:80,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
-  const reset=reason=>{frames=0;resetReason=reason;};
+  const endEvaluation=()=>{if(evaluation)for(const t of evaluation.textures)t.destroy();evaluation=null;};
+  const reset=reason=>{endEvaluation();frames=0;lastStep=null;stepChanges=0;sameStepDraws=0;resetReason=reason;};
   const describe=()=>({requested:config?.integralReconstruction??'off',effective:config?.integralReconstruction??'off',frames,resetReason,
-    format:'linear-radiance-transmission-rgba32float',bytes:textures.reduce((a,t)=>a+t.width*t.height*(t.format==='r32float'?4:16),0),
+    clock:'rendered-draws',simulationStep:lastStep,simulationStepChanges:stepChanges,sameStepDraws,
+    evaluation:evaluation?{active:true,view:evaluation.view,previousDraws:frames-1,simulationStep:lastStep}:null,
+    format:'linear-radiance-transmission-rgba32float',bytes:[...textures,...(evaluation?.textures??[])].reduce((a,t)=>a+t.width*t.height*(t.format==='r32float'?4:16),0),
     motion:'camera-reset-current-neighborhood-clamp',passes:config?.integralReconstruction==='off'?0:2});
+  const make=(width,height,format)=>device.createTexture({label:'linear integral reconstruction',size:[width,height],format,
+    usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC|GPUTextureUsage.COPY_DST|GPUTextureUsage.RENDER_ATTACHMENT|(format==='r32float'?0:GPUTextureUsage.STORAGE_BINDING)});
+  function encodeFilter(encoder,view,format,cameraValues,c,previousIndex,output,moments,age) {
+    filter ||= device.createComputePipeline({label:'noise-aware linear integral reconstruction',layout:'auto',compute:{module:device.createShaderModule({code:INTEGRAL_FILTER_WGSL}),entryPoint:'reconstruct'}});
+    presentModule ||= device.createShaderModule({label:'linear integral presentation',code:INTEGRAL_PRESENT_WGSL});
+    if(!pipelines.has(format))pipelines.set(format,device.createRenderPipeline({label:'reconstructed volume presentation',layout:'auto',vertex:{module:presentModule,entryPoint:'vs'},fragment:{module:presentModule,entryPoint:'present',constants:{TRANSPARENT_CANVAS:transparent},targets:[{format}]},primitive:{topology:'triangle-list'}}));
+    const spatial=['spatial','combined'].includes(c.integralReconstruction),temporal=['temporal','combined'].includes(c.integralReconstruction);
+    device.queue.writeBuffer(options,0,new Float32Array([spatial?c.reconstructionSpatial:0,c.reconstructionRadius,c.reconstructionEdge,0,temporal?Math.min(c.retention,age/(age+1)):0,age>0?1:0,c.reconstructionResponse,0]));
+    device.queue.writeBuffer(camera,0,cameraValues);
+    const entries=[textures[0],textures[1],textures[2+previousIndex],textures[4+previousIndex],output,moments].map((t,binding)=>({binding,resource:t.createView()}));
+    entries.push({binding:6,resource:{buffer:options}});
+    const compute=encoder.beginComputePass({label:'reconstruct linear light and transmission'});compute.setPipeline(filter);
+    compute.setBindGroup(0,device.createBindGroup({layout:filter.getBindGroupLayout(0),entries}));compute.dispatchWorkgroups(Math.ceil(textures[0].width/8),Math.ceil(textures[0].height/8));compute.end();
+    const pipeline=pipelines.get(format),pass=encoder.beginRenderPass({label:'present reconstructed integral',colorAttachments:[{view,loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}]});
+    pass.setPipeline(pipeline);pass.setBindGroup(0,device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:output.createView()},{binding:1,resource:{buffer:camera}}]}));pass.draw(3);pass.end();
+  }
   return {
-    reset,
+    reset,endEvaluation,
     disable(reason='disabled'){reset(reason);for(const t of textures)t.destroy();textures=[];key='';},
     describe,
     prepare(width,height,controls,sourceIdentity,step) {
+      if(evaluation)throw Error('End integral evaluation before collecting another draw');
       config=integralReconstructionSettings(controls);
       if(config.integralReconstruction==='off'){reset('disabled');return null;}
       if(Math.max(width,height)>device.limits.maxTextureDimension2D)throw Error('Reconstruction dimensions exceed GPU texture capacity');
@@ -126,42 +150,46 @@ export function createIntegralReconstruction(device,{transparent=false}={}) {
       const nextKey=`${width}x${height}`;
       if(key!==nextKey) {
         for(const t of textures)t.destroy();
-        const make=format=>device.createTexture({label:'linear integral reconstruction',size:[width,height],format,
-          usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC|GPUTextureUsage.COPY_DST|(format==='r32float'?GPUTextureUsage.RENDER_ATTACHMENT:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.STORAGE_BINDING)});
-        textures=[make('rgba32float'),make('r32float'),make('rgba32float'),make('rgba32float'),make('rgba32float'),make('rgba32float')];key=nextKey;reset('resize');
+        textures=['rgba32float','r32float','rgba32float','rgba32float','rgba32float','rgba32float'].map(f=>make(width,height,f));key=nextKey;reset('resize');
       }
       if(sourceIdentity!==identity){identity=sourceIdentity;reset('camera-or-render-settings-change');}
-      if(lastStep!==null&&(step<lastStep||step>lastStep+1))reset('simulation-discontinuity');lastStep=step;
+      if(lastStep!==null&&(step<lastStep||step>lastStep+1))reset('simulation-discontinuity');
+      if(lastStep!==null&&lastStep!==step){stepChanges++;sameStepDraws=0;}
+      lastStep=step;
       return [{view:textures[0].createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:1}},
         {view:textures[1].createView(),loadOp:'clear',storeOp:'store',clearValue:{r:1e6,g:0,b:0,a:0}}];
     },
     encode(encoder,view,format,cameraValues) {
-      filter ||= device.createComputePipeline({label:'noise-aware linear integral reconstruction',layout:'auto',compute:{module:device.createShaderModule({code:INTEGRAL_FILTER_WGSL}),entryPoint:'reconstruct'}});
-      presentModule ||= device.createShaderModule({label:'linear integral presentation',code:INTEGRAL_PRESENT_WGSL});
-      if(!pipelines.has(format))pipelines.set(format,device.createRenderPipeline({label:'reconstructed volume presentation',layout:'auto',vertex:{module:presentModule,entryPoint:'vs'},fragment:{module:presentModule,entryPoint:'present',constants:{TRANSPARENT_CANVAS:transparent},targets:[{format}]},primitive:{topology:'triangle-list'}}));
-      const next=1-index,c=config,spatial=['spatial','combined'].includes(c.integralReconstruction),temporal=['temporal','combined'].includes(c.integralReconstruction);
-      device.queue.writeBuffer(options,0,new Float32Array([spatial?c.reconstructionSpatial:0,c.reconstructionRadius,c.reconstructionEdge,0,temporal?Math.min(c.retention,frames/(frames+1)):0,frames>0?1:0,c.reconstructionResponse,0]));
-      device.queue.writeBuffer(camera,0,cameraValues);
-      const entries=[textures[0],textures[1],textures[2+index],textures[4+index],textures[2+next],textures[4+next]].map((t,binding)=>({binding,resource:t.createView()}));
-      entries.push({binding:6,resource:{buffer:options}});
-      const compute=encoder.beginComputePass({label:'reconstruct linear light and transmission'});compute.setPipeline(filter);
-      compute.setBindGroup(0,device.createBindGroup({layout:filter.getBindGroupLayout(0),entries}));compute.dispatchWorkgroups(Math.ceil(textures[0].width/8),Math.ceil(textures[0].height/8));compute.end();
-      const pipeline=pipelines.get(format),pass=encoder.beginRenderPass({label:'present reconstructed integral',colorAttachments:[{view,loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}]});
-      pass.setPipeline(pipeline);pass.setBindGroup(0,device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:textures[2+next].createView()},{binding:1,resource:{buffer:camera}}]}));pass.draw(3);pass.end();
-      index=next;frames++;return describe();
+      if(evaluation)throw Error('End integral evaluation before collecting another draw');
+      const next=1-index;
+      encodeFilter(encoder,view,format,cameraValues,config,index,textures[2+next],textures[4+next],frames);
+      index=next;frames++;sameStepDraws++;return describe();
     },
-    get raw(){return textures[0];},get guide(){return textures[1];},get output(){return textures[2+index];},get moments(){return textures[4+index];},
+    beginEvaluation() {
+      if(!frames)throw Error('Evaluation needs rendered history; enable Temporal or Combined and collect draws first');
+      if(!evaluation)evaluation={view:config.integralReconstruction,textures:[make(textures[0].width,textures[0].height,'rgba32float'),make(textures[0].width,textures[0].height,'rgba32float')],rendered:false};
+      return {...describe(),previousDraws:frames-1};
+    },
+    encodeEvaluation(encoder,view,format,cameraValues,controls) {
+      if(!evaluation)throw Error('Integral evaluation is not held');
+      const c=integralReconstructionSettings(controls);
+      if(c.reconstructionRadius>device.limits.maxTextureDimension2D)throw Error('Reconstruction radius exceeds GPU texture capacity');
+      encodeFilter(encoder,view,format,cameraValues,c,1-index,...evaluation.textures,frames-1);
+      evaluation.view=c.integralReconstruction;evaluation.rendered=true;return describe();
+    },
+    get raw(){return textures[0];},get guide(){return textures[1];},get output(){return evaluation?.rendered?evaluation.textures[0]:textures[2+index];},get moments(){return evaluation?.rendered?evaluation.textures[1]:textures[4+index];},
     async sample() {
       if(!textures.length||!frames)return {available:false,state:describe()};
       const width=textures[0].width,height=textures[0].height,row=Math.ceil(width*16/256)*256;
-      const buffers=[0,2+index,4+index].map(()=>device.createBuffer({size:row*height,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ}));
+      const sources=[textures[0],this.output,this.moments];
+      const buffers=sources.map(()=>device.createBuffer({size:row*height,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ}));
       try {
-        const e=device.createCommandEncoder();[0,2+index,4+index].forEach((n,i)=>e.copyTextureToBuffer({texture:textures[n]},{buffer:buffers[i],bytesPerRow:row},[width,height]));
+        const e=device.createCommandEncoder();sources.forEach((texture,i)=>e.copyTextureToBuffer({texture},{buffer:buffers[i],bytesPerRow:row},[width,height]));
         device.queue.submit([e.finish()]);await Promise.all(buffers.map(b=>b.mapAsync(GPUMapMode.READ)));
         const arrays=buffers.map(b=>{const raw=new Float32Array(b.getMappedRange()),out=new Float32Array(width*height*4);for(let y=0;y<height;y++)out.set(raw.subarray(y*row/4,y*row/4+width*4),y*width*4);return out;});
         return {available:true,width,height,state:describe(),raw:arrays[0],filtered:arrays[1],moments:arrays[2]};
       }finally{for(const b of buffers){b.unmap();b.destroy();}}
     },
-    dispose(){for(const t of textures)t.destroy();textures=[];options.destroy();camera.destroy();}
+    dispose(){endEvaluation();for(const t of textures)t.destroy();textures=[];options.destroy();camera.destroy();}
   };
 }
