@@ -44,6 +44,7 @@ class PreferencesServing(unittest.TestCase):
                     for settings in (
                         {'postprocessing': {'sceneGI': {'estimator': {'aoContrast': -1}}}},
                         {'postprocessing': {'sceneGI': {'steps': 0}}},
+                        {'postprocessing': {'sceneGI': {'steps': 10**400}}},
                         {'postprocessing': {'sceneGI': {'slices': 1.5}}},
                         {'postprocessing': {'sceneGI': {'temporal': 'true'}}},
                         {'postprocessing': {'sceneGI': {'estimator': {'depthPhi': 0}}}},

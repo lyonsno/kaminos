@@ -26,8 +26,11 @@ def _numbers(value, names, *, minimum=0, positive=False, maximum=None, integer=F
         if name not in value:
             continue
         number = value[name]
-        if (isinstance(number, bool) or not isinstance(number, (int, float)) or not math.isfinite(number)
-                or number < minimum or positive and number == minimum
+        try:
+            finite = not isinstance(number, bool) and isinstance(number, (int, float)) and math.isfinite(number)
+        except OverflowError:
+            finite = False  # JSON integers outside the consumer's numeric range.
+        if (not finite or number < minimum or positive and number == minimum
                 or maximum is not None and number > maximum or integer and number != int(number)):
             raise ValueError(f'Invalid preference {name}')
 

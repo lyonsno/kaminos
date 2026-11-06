@@ -1,4 +1,4 @@
-import {checkedPreferences,checkedSceneDefaults,sceneDefaultsFromDocument,SCENE_DEFAULT_RANGES} from './user-preferences.mjs';
+import {checkedPreferences,checkedSceneDefaults,sceneDefaultsFromDocument,SCENE_DEFAULT_RANGES,quantizeSceneDefaultDrag} from './user-preferences.mjs';
 import {resolveSceneGIControlState} from './scene-gi-settings.mjs';
 import {DEFAULT_STUDIO_LOOK_ID,STUDIO_LOOK_LIBRARY,resolveStudioLook} from './asset-arrival.mjs';
 const copy=value=>structuredClone(value),get=(object,path)=>path.split('.').reduce((o,k)=>o?.[k],object);
@@ -25,6 +25,7 @@ export function installUserPreferences({document,controller,readScene,readFactor
   else{const range=SCENE_DEFAULT_RANGES[path];input.type=type;input.step=range?.step??(['postprocessing.sceneGI.slices','postprocessing.sceneGI.steps'].includes(path)?1:'any');for(const [key,value] of Object.entries({min:range?.min??min,max:range?.max??max}))if(value!==undefined&&value!=='')input[key]=String(value);}
   input.addEventListener('input',()=>{
    if(!draft||busy)return;
+   if(input.type==='number'&&input.classList.contains('scrubbing'))input.value=String(quantizeSceneDefaultDrag(path,Number(input.value)));
    input.setCustomValidity('');pendingInvalid.delete(input);
    if(input.type==='number'&&(!input.value.trim()||!input.validity.valid)){
     const message=input.value.trim()?input.validationMessage:'Enter a finite number for '+label;

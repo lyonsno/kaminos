@@ -15,6 +15,14 @@ export const SCENE_DEFAULT_RANGES={
  'postprocessing.dof.maxblur':{label:'Depth of field maximum blur',min:0,max:.05,step:.001},
  backdropBrightness:{label:'Backdrop brightness',min:.1,max:2,step:.05},
 };
+// Only the legacy fixed-step consumers need snapping during relative drags.
+// Unrestricted numeric consumers keep the helper's full fractional result.
+export function quantizeSceneDefaultDrag(path,value){
+ const range=SCENE_DEFAULT_RANGES[path];if(!range||!Number.isFinite(value))return value;
+ const ticks=Math.round((value-range.min)/range.step);
+ const places=Math.max(...[range.min,range.step].map(number=>(String(number).split('.')[1]??'').length));
+ return Number(Math.max(range.min,Math.min(range.max,range.min+ticks*range.step)).toFixed(places));
+}
 const membership=['objects','groups','composition','localLiquid','selectionIds','activeObjectId','activeFieldId','sceneId','cameraViews','volumePrimitives'];
 function finiteTree(value){if(typeof value==='number'&&!Number.isFinite(value))throw Error('Preferences need finite numbers');if(value&&typeof value==='object')for(const item of Object.values(value))finiteTree(item);}
 export function checkedSceneDefaults(raw){

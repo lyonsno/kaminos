@@ -35,9 +35,22 @@ try{
  await write('postprocessing.sceneGI.mode','combined');assert.equal(await pathInput('postprocessing.ao.radius').isVisible(),false);
  assert.equal(await pathInput('postprocessing.sceneGI.estimator.aoContrast').isVisible(),true);
  await write('postprocessing.sceneGI.estimator.aoContrast',-1);assert.equal(await pathInput('postprocessing.sceneGI.estimator.aoContrast').evaluate(node=>node.validity.valid),false);await write('postprocessing.sceneGI.estimator.aoContrast',1.35);
+ // Exercise the ordinary numeric interaction, including Shift fine motion.
+ report.phase='fixed-step-drags';report.fixedDrags=[];const fixedExpected={};
+ for(const [path,min,max,step]of [['postprocessing.dof.focus',.5,10,.1],['postprocessing.dof.aperture',.0001,.01,.0001],['postprocessing.dof.maxblur',0,.05,.001],['backdropBrightness',.1,2,.05]]){
+  const input=pathInput(path);
+  for(const fine of [false,true]){
+   await input.scrollIntoViewIfNeeded();await page.locator('#preferences-save').focus();const box=await input.boundingBox(),x=box.x+box.width/2,y=box.y+box.height/2;
+   await page.mouse.move(x,y);if(fine)await page.keyboard.down('Shift');
+   await page.mouse.down();await page.mouse.move(x+10,y);await page.mouse.up();if(fine)await page.keyboard.up('Shift');
+   const value=Number(await input.inputValue()),ticks=(value-min)/step;report.fixedDrags.push({path,fine,value});
+   assert.ok(value>=min&&value<=max&&Math.abs(ticks-Math.round(ticks))<1e-7,'released drag must stay on the admitted lattice: '+path+'='+value);
+  }
+  fixedExpected[path]=await input.inputValue();
+ }
  // Invalid and unfinished numeric drafts remain invalid after the scrubber blurs read-only.
  report.phase='invalid-save';report.refusals=[];
- for(const [path,text,restore] of [['postprocessing.sceneGI.estimator.aoContrast','-1',1.35],['postprocessing.sceneGI.steps','',6],['postprocessing.dof.focus','11',2.5]]){
+ for(const [path,text,restore] of [['postprocessing.sceneGI.estimator.aoContrast','-1',1.35],['postprocessing.sceneGI.steps','',6],['postprocessing.dof.focus','11',Number(fixedExpected['postprocessing.dof.focus'])]]){
   const revision=await page.evaluate(()=>window.kaminosPreferences.read().receipt.revision);
   const count=await page.evaluate(()=>window.__preferenceSaveRequests.length);
   await write(path,text);await page.locator('#preferences-save').click();
@@ -55,6 +68,7 @@ try{
  assert.equal(report.saved.agentSceneDefaults.postprocessing.ao.radius,7.123);assert.equal(report.saved.sceneDefaults.postprocessing.sceneGI.slices,1,'agent edits must not change ordinary defaults');
  report.phase='reopen';console.log('Reopening saved preferences');await page.evaluate(()=>window.kaminosPreferences.close());await page.keyboard.press('Meta+,');await page.waitForFunction(()=>document.querySelector('#preferences-save')?.disabled===false);
  for(const [key,value]of Object.entries(gi))if(key==='estimator'){for(const [name,item]of Object.entries(value))assert.equal(await pathInput('postprocessing.sceneGI.estimator.'+name).evaluate(node=>node.type==='checkbox'?node.checked:node.value),typeof item==='boolean'?item:String(item));}else assert.equal(await pathInput('postprocessing.sceneGI.'+key).evaluate(node=>node.type==='checkbox'?node.checked:node.value),typeof value==='boolean'?value:String(value));
+ for(const [path,value]of Object.entries(fixedExpected))assert.equal(await pathInput(path).inputValue(),value,'scrubbed value must survive Save/reopen: '+path);
  assert.equal(await page.locator('#preference-auto-scene-scale').isChecked(),true);
  const misplaced=await page.locator('#kaminos-preferences .authoring-number-wrap').evaluateAll(wrappers=>wrappers.filter(wrapper=>{const input=wrapper.querySelector('input').getBoundingClientRect(),display=wrapper.querySelector('.authoring-number-display').getBoundingClientRect();return input.width>0&&(display.left<input.left-1||display.right>input.right+1);}).length);assert.equal(misplaced,0,'numeric readouts must stay inside their input hit targets');
  await page.locator('[data-preference-path="postprocessing.sceneGI.steps"]').scrollIntoViewIfNeeded();await page.screenshot({path:out+'/preferences-agent.png'});
