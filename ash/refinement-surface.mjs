@@ -3,11 +3,10 @@ import {refinementAddressWGSL} from './refinement-wgsl.mjs';
 // Both levels reconstruct corners at the same finest-grid positions. Coarse
 // top faces are subdivided there as well, including their shared boundary edge.
 export function refinementVertexWGSL(p, arena) {
-  let code = `fn ash_refined_vertex(rank:u32,uv:vec2<f32>,soft:f32,density:ptr<storage,array<f32>,read>,solid:ptr<storage,array<u32>,read>,faces:ptr<storage,array<u32>,read>,arena:ptr<storage,array<u32>,read>)->vec4<f32>{
- var low=0u;var high=ASH_TILE_COUNT;
- loop{if(low>=high){break;}let mid=(low+high)/2u;if((*arena)[${arena.prefix}u+mid+1u]<=rank){low=mid+1u;}else{high=mid;}}
- let tile=low;let slot=rank-(*arena)[${arena.prefix}u+tile];
- let code=(*faces)[(*arena)[tile*8u+4u]+slot];let local=code/24u;let face=(code%24u)/4u;let sub=code%4u;
+  let code = `${refinementFaceLookupWGSL(p,arena)}
+fn ash_refined_vertex(rank:u32,uv:vec2<f32>,soft:f32,density:ptr<storage,array<f32>,read>,solid:ptr<storage,array<u32>,read>,faces:ptr<storage,array<u32>,read>,arena:ptr<storage,array<u32>,read>)->vec4<f32>{
+ let address=ash_refined_face_code(rank,faces,arena);let tile=address.x;let code=address.y;
+ let local=code/24u;let face=(code%24u)/4u;let sub=code%4u;
  let i=ash_tile_cell(tile,local);let c=ash_cell(i);let size=f32(c.size);
  let shape=ash_face_shape(i,face);let width=size/f32(shape.x);let height=size/f32(shape.y);
  let u=f32(sub%shape.x)*width;let v=f32(sub/shape.x)*height;
@@ -44,6 +43,7 @@ export function refinementVertexWGSL(p, arena) {
  let cover=u32(round(corner.y*255.0));
  return vec4<f32>(vec3<f32>(${p.origin.join(',')})+point*${p.cellSize.toFixed(12)},f32(cover+256u*(nx+256u*nz)));
 }
+
 ${refinementAddressWGSL(p)}
 fn ash_refined_height(x:i32,z:i32,reference:f32,density:ptr<storage,array<f32>,read>,solid:ptr<storage,array<u32>,read>)->f32{
  if(x<0||z<0||x>=i32(ASH_FINE_DIMS.x)||z>=i32(ASH_FINE_DIMS.z)){return -1000000.0;}
@@ -94,6 +94,25 @@ fn ash_refined_corner(q:vec2<i32>,reference:f32,density:ptr<storage,array<f32>,r
     code=passMap(before)+dynamic+passMap(after);
   }
   return code;
+}
+
+// The physical face code is identical for both derived encodings. Checkpoints
+// store material and ownership, so changing this cache needs no state migration.
+export function refinementFaceLookupWGSL(p,arena){
+ const lookup=arena.surfaceCache?.encoding==='cell-masks'?`
+ let base=tile*${p.tiles.cellsPerTile*2}u;var lo=0u;var hi=${p.tiles.cellsPerTile}u;
+ loop{if(lo>=hi){break;}let mid=(lo+hi)/2u;if((*faces)[base+mid*2u+1u]<=slot){lo=mid+1u;}else{hi=mid;}}
+ var before=0u;if(lo>0u){before=(*faces)[base+(lo-1u)*2u+1u];}
+ var mask=(*faces)[base+lo*2u];
+ for(var n=0u;n<slot-before;n++){mask&=mask-1u;}
+ let code=lo*24u+firstTrailingBit(mask);`:`let code=(*faces)[(*arena)[tile*8u+4u]+slot];`;
+ return `fn ash_refined_face_code(rank:u32,faces:ptr<storage,array<u32>,read>,arena:ptr<storage,array<u32>,read>)->vec2<u32>{
+ var low=0u;var high=${p.tiles.count}u;
+ loop{if(low>=high){break;}let mid=(low+high)/2u;if((*arena)[${arena.prefix}u+mid+1u]<=rank){low=mid+1u;}else{high=mid;}}
+ let tile=low;let slot=rank-(*arena)[${arena.prefix}u+tile];
+ ${lookup}
+ return vec2<u32>(tile,code);
+}`;
 }
 
 export const refinementNormalWGSL = `fn ash_refined_normal(packed:f32)->vec3<f32>{
