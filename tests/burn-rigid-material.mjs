@@ -31,6 +31,9 @@ await withKaminosGpu(async({device})=>{
   assert.equal(burned.matrices[16],0,'Consumed region disappears through the existing resident presentation ABI');
   material[13]=1;device.queue.writeBuffer(resident,0,material);dynamics.reset();const reset=await dynamics.snapshot();
   assert.equal(reset.state.steps,0);assert.deepEqual(reset.alive,[true,true]);
+  assert.deepEqual([reset.islandLinks[0],reset.islandLinks[4],reset.islandLinks[8]],[0,0,0],'Reset diagnostics must describe the restored connected material before another physics advance');
+  assert.equal(reset.islands[3],3,'Reset compound mass must include all restored regions');
+  assert.deepEqual(reset.islands.slice(4,12),new Array(8).fill(0),'Reset compound velocities must not describe the prior falling fragments');
   for(let i=0;i<3;i++)assert.equal(reset.positions[i*4+1],i-1);
   dynamics.setContactsEnabled(false);dynamics.advance(.2);const free=await dynamics.snapshot();assert.ok(free.velocities[1]<-1,'Contact toggle releases the whole connected assembly');
   assert.deepEqual(free.alive,[true,true],'No mechanical stress estimate may break a cold connection');

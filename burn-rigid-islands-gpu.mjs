@@ -94,8 +94,10 @@ export async function createBurnRigidIslandsGpu({device,positions,rotations,velo
   const indices={connect:[0,5,8,9],aggregate:[0,1,2,3,4,5,6,9],findContacts:[0,1,4,5,6,7,9,10],solve:[5,6,7,9,10],publish:[0,1,2,3,5,6,9]},stages={};
   for(const [entryPoint,bindings]of Object.entries(indices)){const pipeline=await device.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint}});const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:bindings.map(binding=>({binding,resource:{buffer:buffers[binding]}}))});stages[entryPoint]={pipeline,group};}
   const validation=await device.popErrorScope();validationScope=false;if(validation)throw Error(validation.message);
+  const encodeStage=(encoder,name)=>{const stage=stages[name],count=name==='connect'?1:name==='findContacts'?bodies*supports.length:bodies;if(!count)return;const pass=encoder.beginComputePass({label:'Burn rigid '+name});pass.setPipeline(stage.pipeline);pass.setBindGroup(0,stage.group);pass.dispatchWorkgroups(name==='connect'?1:Math.ceil(count/64));pass.end();};
   return {links,islands,contacts,
-   encode(encoder){if(disposed)throw Error('Rigid burning material disposed');for(const [name,stage]of Object.entries(stages)){const count=name==='connect'?1:name==='findContacts'?bodies*supports.length:bodies;if(!count)continue;const pass=encoder.beginComputePass({label:'Burn rigid '+name});pass.setPipeline(stage.pipeline);pass.setBindGroup(0,stage.group);pass.dispatchWorkgroups(name==='connect'?1:Math.ceil(count/64));pass.end();}},
+   encodeTopology(encoder){if(disposed)throw Error('Rigid burning material disposed');encodeStage(encoder,'connect');encodeStage(encoder,'aggregate');},
+   encode(encoder){if(disposed)throw Error('Rigid burning material disposed');for(const name of Object.keys(stages))encodeStage(encoder,name);},
    setGravity(next){if(next?.length!==3||!next.every(Number.isFinite))throw Error('Finite gravity required');f.set(next,4);uploadParams();},
    setContactsEnabled(value){if(typeof value!=='boolean')throw Error('Boolean contact state required');enabled=value;u[2]=value?supports.length:0;uploadParams();},
    setSupport(index,support){if(!Number.isInteger(index)||index<0||index>=supports.length)throw Error('Unknown rigid support');supports[index]=support;uploadSupports();},

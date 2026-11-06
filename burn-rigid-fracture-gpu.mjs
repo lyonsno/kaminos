@@ -28,7 +28,7 @@ export async function createBurnRigidFractureGpu({renderer,prepared,sections,fin
   motion=await createBurnRigidIslandsGpu({device,positions:buffers.positions,rotations:buffers.rotations,velocities:buffers.velocities,angular:buffers.angular,boxes:buffers.boxes,joints:buffers.joints,bodies:n,bonds:m,supports:finiteSupports.map(localSupport),gravity,timeStep:h/substeps,iterations:prepared.config.solverIterations});
   liveBodies=await createBurnRegionBodiesGpu({device,field,mapping:regionMapping,envelopes:prepared.cells.map(c=>({min:c.position.map((v,k)=>v-c.halfExtents[k]),max:c.position.map((v,k)=>v+c.halfExtents[k])})),rest:buffers.rest,positions:buffers.positions,rotations:buffers.rotations,boxes:buffers.boxes,inertia,velocities:buffers.velocities,angular:buffers.angular,joints:buffers.joints,contacts:emptyContacts});
   const dispatch=(encoder,name)=>{const stage=stages[name],pass=encoder.beginComputePass({label:'Burn rigid '+name});pass.setPipeline(stage.pipeline);pass.setBindGroup(0,stage.group);pass.dispatchWorkgroups(Math.ceil((name==='weaken'?m:n+m)/64));pass.end();};
-  function presentMaterial(){const encoder=device.createCommandEncoder();liveBodies.encode(encoder);dispatch(encoder,'weaken');dispatch(encoder,'present');device.queue.submit([encoder.finish()]);}
+  function presentMaterial(){const encoder=device.createCommandEncoder();liveBodies.encode(encoder);dispatch(encoder,'weaken');motion.encodeTopology(encoder);dispatch(encoder,'present');device.queue.submit([encoder.finish()]);}
   presentMaterial();
   return {texture,wrapper,matrices,
    setGravity(value){motion.setGravity(value);gravity=[...value];},
