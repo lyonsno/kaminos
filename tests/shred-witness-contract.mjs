@@ -1,9 +1,13 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
-import {validateShredWitness} from '../tools/shred-witness-contract.mjs';
+import {spawnSync} from 'node:child_process';
+import {mkdtempSync,readFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {validateShredWitness,parseShredArms} from '../tools/shred-witness-contract.mjs';
 const good={state:{backend:'WebGPU:apple',effectiveRoute:'native-3d-compute-fluid-raymarch-v0',
   appearanceModel:{requested:'shred-only',effective:'shred-only'},
-  simulationPipelines:{'cs:combined':{constants:{SHRED_ONLY:true}}}},
+  simulationPipelines:{'cs:combined':{constants:{SHRED_ONLY:true,NO_ACTIVITY:false}}}},
   replay:{ok:true,requestedSteps:3,completedSteps:3},field:[0,0,0,0,1,1,1,0,0,0,0,0,0,.5,0,0]};
 assert.doesNotThrow(()=>validateShredWitness(good, {mode:'shred-only',steps:3}));
 for(const bad of [
@@ -23,3 +27,18 @@ for(const bad of [
   {...inactive,state:{...inactive.state,simulationPipelines:{'cs:combined':{constants:{SHRED_ONLY:true,NO_ACTIVITY:false}}}}},
   {...inactive,front:[1]},
 ]) assert.throws(()=>validateShredWitness(bad,{mode:'no-activity',steps:3}));
+
+assert.throws(()=>parseShredArms('[]'),/nonempty/);
+const out=mkdtempSync(join(tmpdir(),'shred-empty-arms-'));
+const run=spawnSync(process.execPath,['scripts/check-shred-only.mjs',process.cwd(),'unused-scene','unused-offer',out],{env:{...process.env,SHRED_ARMS:'[]'},encoding:'utf8'});
+assert.equal(run.status,1,run.stderr);
+const failure=JSON.parse(readFileSync(join(out,'report.json'),'utf8'));
+assert.equal(failure.ok,false);
+assert.match(failure.error,/nonempty array/);
+assert.equal(failure.phase,'source');
+assert.equal(failure.origin,undefined);
+for(const split of [false,true])for(const role of split?['material','velocity']:['combined']){
+ const pipelines=Object.fromEntries((split?['material','velocity']:['combined']).map(r=>['cs:'+r,{constants:{SHRED_ONLY:true,NO_ACTIVITY:r===role}}]));
+ const wrong={...good,state:{...good.state,simulationPipelines:pipelines}};
+ assert.throws(()=>validateShredWitness(wrong,{mode:'shred-only',steps:3,split}),/activity pipeline/);
+}

@@ -1,5 +1,12 @@
 import assert from 'node:assert/strict';
 
+export function parseShredArms(raw) {
+  const arms=raw === undefined ? [{mode:'authored',split:false},{mode:'shred-only',split:false},{mode:'shred-only',split:true},{mode:'authored',split:true}] : JSON.parse(raw);
+  assert.ok(Array.isArray(arms)&&arms.length>0,'comparison arms must be a nonempty array');
+  for(const arm of arms)assert.ok(arm&&['authored','compact-3','shred-only','no-activity'].includes(arm.mode)&&typeof arm.split==='boolean','invalid comparison arm');
+  return arms;
+}
+
 export function validateShredWitness({state, replay, field, front}, {mode, steps, cells, split = false}) {
   assert.equal(state.backend, 'WebGPU:apple', 'native Apple GPU required');
   assert.equal(state.effectiveRoute, 'native-3d-compute-fluid-raymarch-v0');
@@ -10,7 +17,7 @@ export function validateShredWitness({state, replay, field, front}, {mode, steps
   assert.equal(replay.completedSteps, steps, 'partial simulation replay');
   for (const role of split ? ['material', 'velocity'] : ['combined']) {
     assert.equal(state.simulationPipelines?.[`cs:${role}`]?.constants.SHRED_ONLY, ['shred-only','no-activity'].includes(mode), 'wrong pipeline specialization');
-    if (mode === 'no-activity') assert.equal(state.simulationPipelines?.[`cs:${role}`]?.constants.NO_ACTIVITY,true,'activity pipeline still enabled');
+    assert.equal(state.simulationPipelines?.[`cs:${role}`]?.constants.NO_ACTIVITY,mode==='no-activity','wrong activity pipeline specialization');
   }
   assert.ok(field.length > 0 && field.length % 16 === 0, 'missing fluid field');
   if (cells !== undefined) assert.equal(field.length, cells * 16, 'incomplete fluid field');

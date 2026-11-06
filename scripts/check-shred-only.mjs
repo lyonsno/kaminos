@@ -5,7 +5,7 @@ import {spawn, execFileSync} from 'node:child_process';
 import {once} from 'node:events';
 import net from 'node:net';
 import {pathToFileURL} from 'node:url';
-import {validateShredWitness} from '../tools/shred-witness-contract.mjs';
+import {validateShredWitness,parseShredArms} from '../tools/shred-witness-contract.mjs';
 
 const [root, sourceScene, sourceOffer, out] = process.argv.slice(2);
 assert.ok(root && sourceScene && sourceOffer && out, 'root scene offer-report output required');
@@ -22,6 +22,8 @@ const save = () => {
 let browser, page, server;
 try {
   await save();
+  const arms = parseShredArms(process.env.SHRED_ARMS);
+  report.requestedArms=arms;
   report.head = execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
   report.dirty = execFileSync('git',['status','--porcelain'],{cwd:root,encoding:'utf8'});
   report.sourceDiff = execFileSync('git',['diff','--binary','HEAD'],{cwd:root,encoding:'utf8'});
@@ -92,8 +94,6 @@ try {
     'volume-fine-velocity':0,'volume-appearance-model':'authored'};
   await invoke('setControls',report.controls);
   assert.equal((await page.evaluate(()=>window.kaminosLocalLiquidState())).mounted,false,'water must not be mounted');
-  const arms = process.env.SHRED_ARMS ? JSON.parse(process.env.SHRED_ARMS) : [{mode:'authored',split:false},{mode:'shred-only',split:false},{mode:'shred-only',split:true},{mode:'authored',split:true}];
-  report.requestedArms=arms;
   for (const arm of arms) {
     const label = arm.mode+(arm.split?'-split':'-combined'); report.phase = label; await save();
     await invoke('setControls',{'volume-appearance-model':arm.mode,'volume-fine-velocity':arm.split?16:0});
@@ -132,6 +132,7 @@ try {
       assert.equal(timing.status,'sampled',timing.reason); assert.equal(timing.validSimSteps,32);
     }
   }
+  assert.equal(report.arms.length,arms.length,'incomplete comparison arms');
   report.ok=true;report.phase='complete';
 } catch (error) {
   report.error=String(error.stack); process.exitCode=1;

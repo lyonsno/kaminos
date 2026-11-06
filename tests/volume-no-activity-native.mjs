@@ -6,10 +6,10 @@ import {evalWgslBatch,extractWgslFunction,withKaminosGpu} from '../tools/shader-
 
 const source=readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
 const predictor=extractWgslFunction(source,'csTransportPredict').replace('@builtin(global_invocation_id) ','');
-function evaluation(noActivity, kernel=predictor) {
-  return {argTypes:['u32'],returnType:'vec4<f32>',inputs:[[0]],
+function evaluation(noActivity, materialOnly=false, kernel=predictor) {
+  return {argTypes:['u32'],returnType:'vec4<f32>',inputs:[[0],[1]],
     preamble:`const GRID=1u; const GRID_Y=1u; const SLOTS_PER_CELL=4u;
-      const SHRED_ONLY=true; const NO_ACTIVITY=${noActivity}; const MATERIAL_ONLY=false; const VELOCITY_ONLY=false;
+      const SHRED_ONLY=true; const NO_ACTIVITY=${noActivity}; const MATERIAL_ONLY=${materialOnly}; const VELOCITY_ONLY=false;
       struct Controls { fire_smoke_curl_speed:vec4<f32>, scene_controls:vec4<f32>, emissive_physics:vec4<f32>, reactant_combustion_c:vec4<f32>, transport_controls:vec4<f32> }
       var<private> u:Controls;
       var<private> fluidSrc:array<vec4<f32>,4>;
@@ -29,16 +29,18 @@ function evaluation(noActivity, kernel=predictor) {
       fn reactantLawOn()->bool{return true;}
       fn sampleReactantOxidizer(c:vec3<f32>)->f32{return 1.0;}
       ${kernel}`,
-    body:`calls=vec4<f32>(0);fluidPredict[3]=vec4<f32>(99);
+    body:`u.transport_controls.x=3.0;calls=vec4<f32>(0);fluidPredict[3]=vec4<f32>(99);
       csTransportPredict(vec3<u32>(0));
-      return vec4<f32>(calls.x,calls.y,calls.w,fluidPredict[3].y);`};
+      return vec4<f32>(calls.x,calls.y,calls.w,select(fluidPredict[3].y,fluidPredict[0].w,arg0==1u));`};
 }
 test('production predictor skips activity sampling and clears stale activity in no-activity mode',async()=>{
   await withKaminosGpu(async ctx=>{
-    assert.deepEqual(await evalWgslBatch(ctx,evaluation(false)),[[1,1,1,3]]);
-    assert.deepEqual(await evalWgslBatch(ctx,evaluation(true)),[[1,1,0,0]]);
+    assert.deepEqual(await evalWgslBatch(ctx,evaluation(false)),[[1,1,1,3],[1,1,1,1]]);
+    assert.deepEqual(await evalWgslBatch(ctx,evaluation(true)),[[1,1,0,0],[1,1,0,1]]);
+    assert.deepEqual(await evalWgslBatch(ctx,evaluation(false,true)),[[0,1,1,3],[0,1,1,1]]);
+    assert.deepEqual(await evalWgslBatch(ctx,evaluation(true,true)),[[0,1,0,0],[0,1,0,1]]);
     // Valid WGSL fault: accidentally executing the retained Shred path must fail numerically.
     const wrong=await evalWgslBatch(ctx,evaluation(false));
-    assert.throws(()=>assert.deepEqual(wrong,[[1,1,0,0]]));
+    assert.throws(()=>assert.deepEqual(wrong,[[1,1,0,0],[1,1,0,1]]));
   });
 });

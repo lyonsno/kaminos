@@ -6904,8 +6904,11 @@ fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
   let centreVelocity = centreVelocityAt(vec3<i32>(gid));
   let advectVelocity = materialTransportVelocity(cell, centreVelocity);
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * dynamicsBacktraceScale());
+  let predOx = select(0.0, sampleReactantOxidizer(backCell), !VELOCITY_ONLY && reactantLawOn() && u.transport_controls.x > 2.5);
   if (SHRED_ONLY) {
-    if (!MATERIAL_ONLY) { fluidPredict[base] = sampleFluidSlotInflow(backCell, 0u); }
+    var predictedVelocity = advectVelocity;
+    if (!MATERIAL_ONLY) { predictedVelocity = sampleFluidSlotInflow(backCell, 0u).xyz; }
+    fluidPredict[base] = vec4<f32>(predictedVelocity, predOx);
     fluidPredict[base + 1u] = vec4<f32>(sampleFluidSlotInflow(backCell, 1u).xyz, 0.0);
     fluidPredict[base + 3u] = vec4<f32>(0.0);
     if (!NO_ACTIVITY) { fluidPredict[base + 3u] = vec4<f32>(0.0, sampleFluidSlotInflow(backCell, 3u).y, 0.0, 0.0); }
@@ -6921,7 +6924,6 @@ fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
       return;
     }
   }
-  let predOx = select(0.0, sampleReactantOxidizer(backCell), !VELOCITY_ONLY && reactantLawOn() && u.transport_controls.x > 2.5);
   if (compactAppearanceOn()) {
     // Stored form: three slots predicted, slot 3 untouched.
     fluidPredict[base] = vec4<f32>(select(sampleFluidSlotInflowWith(backCell, 0u, true).xyz, advectVelocity, MATERIAL_ONLY), predOx);
@@ -7259,8 +7261,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
         vel += vorticityConfinement(cellI, u.reserved_source_extension_0.z);
       }
       if (waveletOn() && !VELOCITY_ONLY) { vel += waveletCorrection(backCell, velTransported, waveletCoordA, waveletCoordB, timeStep); }
-      if (!NO_ACTIVITY && shredOperatorGain > 0.0 && u.artistic_motion_controls.z > 0.5 && u.detail_force_isolation.z > 0.5) {
-        vel += interfaceShreddingForce(cellI, shredOperatorGain, heat, smoke, reaction, interfaceShred) * VELOCITY_UNIT_SCALE;
+      if (!NO_ACTIVITY) {
+        if (shredOperatorGain > 0.0 && u.artistic_motion_controls.z > 0.5 && u.detail_force_isolation.z > 0.5) {
+          vel += interfaceShreddingForce(cellI, shredOperatorGain, heat, smoke, reaction, interfaceShred) * VELOCITY_UNIT_SCALE;
+        }
       }
       let heatExpansion = thermalExpansionForce(cellI, heat, select(u.reserved_source_extension_0.w, 0.048 + curl * 0.019, confinementMode < 0.5));
       let externalVelocity = applyExternalEmitterInjection(externalEmitterInfluence(p)).velocity.xyz * (0.18 + speed * 0.036);
