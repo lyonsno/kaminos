@@ -56,6 +56,18 @@ class ObservedOpenSection(unittest.TestCase):
         self.assertIn('error',result)
         np.testing.assert_array_equal(result['evidence']['segments'],lines)
 
+    def test_actual_terminal_fragment_cannot_reach_the_fitter(self):
+        fixture=json.loads((ROOT/'tests/fixtures/stock-section-terminal-fragment.json').read_text())
+        calls=[]
+        def fitter(lines,radius):
+            calls.append(lines)
+            return measured_ellipse(lines,radius)
+        result=module.observe_section(fixture['segments'],fitter,fixture['station'])
+        self.assertFalse(result['observed'],'A bottom sliver is not an observed channel')
+        self.assertEqual(calls,[],'Opening correspondence must precede ellipse fitting')
+        self.assertIn('opening',result['error'].lower())
+        np.testing.assert_array_equal(result['evidence']['segments'],fixture['segments'])
+
     def test_support_detour_does_not_become_the_outer_bowl(self):
         lines=channel()
         left,right=lines[48+20,0],lines[48+27,1]
