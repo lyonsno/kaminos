@@ -6,7 +6,7 @@ import {refinementArena,refinementShader} from '../ash/refinement-shader.mjs';
 import {withKaminosGpu,withGpuErrorScopes} from '../tools/shader-herder.mjs';
 const p=createRefinementLayout({cellSize:.04,bounds:{min:[0,0,0],max:[.64,.32,.64]},refinement:{ratio:2,mode:'adaptive',levels:3,fineCapacity:4,detailCapacity:1}}),a=refinementArena(p,{surfaceEncoding:'cell-masks'}),m=p.adaptiveArena,d=m.detail;
 const primary=['adaptive_reset','adaptive_release','adaptive_count_direct','adaptive_reclaim_halo','adaptive_allocate_detail','adaptive_allocate_halo','adaptive_prolong'];
-const extra=['detail_reset','detail_release','detail_max_priority','detail_count_priority','detail_reclaim_lower','detail_allocate_high','detail_allocate_medium','detail_allocate_low','detail_prolong','detail_collision_list','detail_collision_args'];
+const extra=['detail_reset','detail_requests','detail_release','detail_max_priority','detail_count_priority','detail_reclaim_lower','detail_allocate_highest','detail_allocate_high','detail_allocate_medium','detail_allocate_low','detail_prolong','detail_collision_list','detail_collision_args'];
 const names=[...primary,...extra,'reset','admit','clear_wake','pack_dispatch','limit_flux','gather_flux','commit_mass','admit_surface','build_surface','prefix_surface','finish_surface','draw_prefix'];
 const code=refinementShader(p,a);
 await withKaminosGpu(async ctx=>{

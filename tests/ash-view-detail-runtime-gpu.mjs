@@ -30,7 +30,7 @@ await withKaminosGpu(async ctx=>{
    assert.ok(support>0,'finest collision stamp must contain real receiving geometry');
    await patch.deposit({blanketDepth:.04,groundOnly:true});
    patch.burst(.002);for(let i=0;i<32;i++)patch.step(null,{position:[.17,.5,.18],rate:0,spread:.035,dt:1/30});
-   const saved=await patch.snapshot();assert.equal(saved.schema,'kaminos.adaptive-ash.v2');assert.ok(Math.abs(saved.volume-saved.retainedVolume)<1e-5);
+   const saved=await patch.snapshot();const savedView={...patch.layout,residency:saved.residency};const dustOnRail=saved.values.reduce((sum,value,i)=>{const c=refinementCell(savedView,i);return sum+(i>=patch.layout.detailPool.offset&&c.owned&&c.coord[1]*patch.layout.cellSize>=.29?value:0);},0);assert.ok(dustOnRail>0,'falling material must actually dust the elevated finest receiving surfaces');assert.equal(saved.schema,'kaminos.adaptive-ash.v2');assert.ok(Math.abs(saved.volume-saved.retainedVolume)<1e-5);
    const pinned=saved.residency.detail.slots.flatMap((page,slot)=>page&&saved.values.slice(patch.layout.detailPool.offset+slot*512,patch.layout.detailPool.offset+(slot+1)*512).some(v=>v>0)?[page-1]:[]);
    assert.ok(pinned.length>0,'fixture must deposit fine history before moving geometry');
    pipe.position.x+=.24;rail.position.x+=.18;view={...view,viewport:[100,100]};patch.step();
@@ -40,7 +40,7 @@ await withKaminosGpu(async ctx=>{
    for(const key of ['layout','residency','values','falling','volume','retainedVolume','steps'])assert.deepEqual(roundtrip[key],moved[key],key);
    const bad=structuredClone(moved);bad.residency.map.fill(0);bad.residency.slots.fill(0);assert.throws(()=>reopened.restore(bad),/parent|balance/i);
    assert.equal((await patch.diagnostics()).stats.surfaceOverflow,0);
-   console.log(JSON.stringify({route:'production shared-device runtime; compute and collision, no browser drawing',middle:initial.residency.slots.filter(Boolean).length,finest:initial.residency.detail.slots.filter(Boolean).length,fineSupport:support,preserved:pinned.length,allocatedBytes:patch.read().allocatedBytes,ledger:roundtrip.retainedVolume}));
+   console.log(JSON.stringify({route:'production shared-device runtime; compute and collision, no browser drawing',middle:initial.residency.slots.filter(Boolean).length,finest:initial.residency.detail.slots.filter(Boolean).length,fineSupport:support,dustOnRail,preserved:pinned.length,allocatedBytes:patch.read().allocatedBytes,ledger:roundtrip.retainedVolume}));
   }finally{reopened?.dispose();patch?.dispose();for(const mesh of [pipe,rail]){mesh.geometry.dispose();mesh.material.dispose();}}
  });
 });

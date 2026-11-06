@@ -33,14 +33,14 @@ try{
   window.kaminosAsh.setSource(source,{enabled:false});
   window.__kaminosSetSceneCameraFrame([2.9,2.3,3.4],[0,.1,0]);window.selectSceneObject(id);window.kaminosViewportSettings.set({overlays:false,gizmos:false});return {box,shelf,id,source};
  },{fraction:Number(args.get('--fine-fraction')??.5),levels:report.requested.levels});
- const {id,box,source}=report.objects;
+ const {id,box,source}=report.objects;const target=report.requested.levels===3?.95:.55;
  report.initial=await page.evaluate(id=>({ash:window.kaminosAsh.read(id),gi:window.kaminosSceneGIDebugState()}),id);
  assert.equal(report.initial.ash.runtime.backend,'webgpu-adaptive-ash');assert.equal(report.initial.gi.effectiveMode,'combined');assert.equal(report.initial.ash.runtime.runtimeReadbacks,0);
  const before=await snapshot('before',id);assert.ok(before.residency.slots.some(Boolean),'collider shape must generate actual fine residency');assert.ok(before.values.some(v=>v>0));
  if(report.requested.levels===3){assert.equal(before.schema,'kaminos.adaptive-ash.v2');assert.equal(before.layout.cellSize,.02);assert.ok(before.residency.detail.slots.some(Boolean),'live collider and view inputs must allocate third-level physical cells');report.effectiveLevels=3;}else report.effectiveLevels=2;
  await capture('01-automatic-collider-detail');await page.evaluate(id=>window.kaminosAsh.showRefinement(id,true),id);await capture('01b-gpu-fine-bricks');await page.evaluate(id=>window.kaminosAsh.showRefinement(id,false),id);
  report.phase='moving-contact';save();await page.evaluate(()=>{const original=GPUBuffer.prototype.mapAsync;window.__ashRestoreMap=()=>GPUBuffer.prototype.mapAsync=original;window.__ashLiveMaps=0;GPUBuffer.prototype.mapAsync=function(...args){window.__ashLiveMaps++;return original.apply(this,args);};});
- await page.evaluate(async({id,box})=>{window.kaminosSetSceneObjectTransform(box,{position:[.55,.175,.55]});window.kaminosAsh.advance(id,4);},{id,box});
+ await page.evaluate(async({id,box,target})=>{window.kaminosSetSceneObjectTransform(box,{position:[target,.175,target]});window.kaminosAsh.advance(id,4);},{id,box,target});
  report.liveMaps=await page.evaluate(()=>{window.__ashRestoreMap();return window.__ashLiveMaps;});assert.equal(report.liveMaps,0,'live allocation/contact must not map GPU state to CPU');
  const moved=await snapshot('moved',id);
  const oldPages=before.residency.map.flatMap((slot,page)=>slot?[page]:[]),newPages=moved.residency.map.flatMap((slot,page)=>slot&&!before.residency.map[page]?[page]:[]);
@@ -53,7 +53,7 @@ try{
  report.movement={oldPages:oldPages.length,newPages:newPages.length,preservedOccupied:occupiedPages.length};
  report.contact=await page.evaluate(id=>window.kaminosAsh.diagnostics(id,{fields:true}),id);writeFileSync(out+'/contact.json',JSON.stringify(report.contact));assert.equal(report.contact.stats.surfaceOverflow,0);
  await capture('02-moved-collider-and-history');
- report.phase='falling-source';save();await page.evaluate(source=>{window.kaminosAsh.setSource(source,{enabled:true});window.kaminosSetSceneObjectTransform(source,{position:[.55,.6,.55]});},source);await page.evaluate(id=>{window.kaminosAsh.burst(id,.025);window.kaminosAsh.advance(id,48);},id);
+ report.phase='falling-source';save();await page.evaluate(({source,target})=>{window.kaminosAsh.setSource(source,{enabled:true});window.kaminosSetSceneObjectTransform(source,{position:[target,.6,target]});},{source,target});await page.evaluate(id=>{window.kaminosAsh.burst(id,.025);window.kaminosAsh.advance(id,48);},id);
  const emitted=await snapshot('emitted',id);assert.ok(emitted.volume>moved.volume);const deposited=s=>s.values.reduce((a,b)=>a+b,0)*s.layout.cellSize**3;report.sourceMaterial={introduced:emitted.volume-moved.volume,depositedGain:deposited(emitted)-deposited(moved)};assert.ok(report.sourceMaterial.depositedGain>emitted.layout.cellSize**3,'source must actually add retained field material, not only airborne or pending volume');assert.ok(Math.abs(emitted.retainedVolume-emitted.volume)<1e-5);await capture('03-live-fallout');
  report.phase='save-reopen';save();report.saved=await page.evaluate(()=>window.saveSceneAs({result:true}));assert.ok(report.saved.ok,JSON.stringify(report.saved));
  await page.goto(report.saved.url);await page.waitForFunction(id=>window.kaminosAsh&&window.kaminosSceneObjectDebugState().some(e=>e.id===id)&&window.kaminosAsh.read(id).runtime.backend==='webgpu-adaptive-ash',id);
