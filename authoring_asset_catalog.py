@@ -8,6 +8,22 @@ COLLECTIONS = {'generated-meshes','image-inbox','greenroom','trellis2mlx','pixal
 IMAGE_SUFFIXES = {'.png','.jpg','.jpeg','.webp'}
 HOLDS_PATH = Path(__file__).with_name('asset-visibility-holds.json')
 
+# One parsed record per path, validated against current filesystem identity on
+# every use. Refresh still discovers all files; changed/malformed records never
+# fall back to an older cached value.
+_RECORDS = {}
+def read_catalog_record(path):
+    path=Path(path).resolve()
+    def identity():
+        stat=path.stat()
+        return stat.st_dev,stat.st_ino,stat.st_size,stat.st_mtime_ns,stat.st_ctime_ns
+    before=identity();cached=_RECORDS.get(path)
+    if cached and cached[0]==before:return cached[1]
+    value=json.loads(path.read_text())
+    if identity()!=before:raise OSError('Asset metadata changed while reading')
+    _RECORDS[path]=(before,value)
+    return value
+
 def source_key(source):
     url=urlsplit(source)
     return url.path,tuple(sorted(parse_qsl(url.query)))
@@ -24,7 +40,7 @@ def content_digest(path,size,mtime_ns,ctime_ns):
 
 def visibility_holds():
     # A missing/broken hold list fails the catalog request, never silently exposes it.
-    manifest=json.loads(HOLDS_PATH.read_text())
+    manifest=read_catalog_record(HOLDS_PATH)
     if not isinstance(manifest,dict) or manifest.get('schema')!='kaminos.asset-visibility-holds.v1' or not isinstance(manifest.get('holds'),list):
         raise ValueError('Invalid asset visibility hold list')
     sources={};digests={};sizes=set()
@@ -95,13 +111,13 @@ def read_catalog(collection, *, roots, image_entries, origins, output_resolver, 
             receipt_path=directory/'receipt.json'
             if not directory.is_dir() or not receipt_path.is_file():continue
             try:
-                receipt=json.loads(receipt_path.read_text())
+                receipt=read_catalog_record(receipt_path)
                 if not isinstance(receipt,dict):raise ValueError('Generator receipt must be a JSON object')
                 if receipt.get('status')!='done' or receipt.get('exit_code')!=0 or (collection=='greenroom' and not generator_receipt(receipt)):continue
                 if receipt.get('job_id')!=directory.name:raise ValueError('Receipt identity differs from its job directory')
                 agent=None;output_class=None
                 if collection=='agent-work':
-                    request=json.loads((directory/'request.json').read_text())
+                    request=read_catalog_record(directory/'request.json')
                     if not isinstance(request,dict) or request.get('job_id')!=directory.name:raise ValueError('Request identity differs from its job directory')
                     identity=request.get('agent_id')
                     if not isinstance(identity,str) or not identity.strip():continue
@@ -112,7 +128,7 @@ def read_catalog(collection, *, roots, image_entries, origins, output_resolver, 
                 output=output_resolver(receipt.get('output_dir'))
                 if output is None:raise ValueError('Recorded outputs are outside serving roots')
                 output=Path(output).resolve()
-                metadata_path=output/'metadata.json';metadata=json.loads(metadata_path.read_text()) if metadata_path.is_file() else {}
+                metadata_path=output/'metadata.json';metadata=read_catalog_record(metadata_path) if metadata_path.is_file() else {}
                 if not isinstance(metadata,dict):raise ValueError('Generator output metadata must be a JSON object')
                 if metadata.get('job_id') not in (None,directory.name):
                     # A later run owns these same paths; do not misattribute its bytes.
@@ -146,7 +162,7 @@ def read_catalog(collection, *, roots, image_entries, origins, output_resolver, 
             generation=None;title=None;preview=None
             if asset_kind(path)=='surface':
                 try:
-                    manifest=json.loads(path.read_text())
+                    manifest=read_catalog_record(path)
                     if not isinstance(manifest,dict) or manifest.get('schema')!='kaminos.surface-fields-asset.v1' or not isinstance(manifest.get('name'),str) or not manifest['name'].strip():raise ValueError('Invalid surface asset manifest')
                     title=manifest['name']
                     image=(path.parent/manifest.get('preview','')).resolve()

@@ -74,4 +74,20 @@ class SurfaceAssets(unittest.TestCase):
    entries=[e for e in result['entries'] if e['kind']=='surface']
    self.assertEqual(len(entries),1,'native surface bundle must appear as a reusable asset');self.assertEqual(entries[0]['label'],'Two-brazier corridor');self.assertIn('preview.png',entries[0]['preview'])
 
+
+class WarmCatalog(unittest.TestCase):
+ def test_unchanged_metadata_is_read_once_and_changed_or_broken_metadata_is_not_reused(self):
+  with tempfile.TemporaryDirectory() as temporary:
+   root=Path(temporary).resolve();job=root/'done'/'observed';job.mkdir(parents=True);output=root/'outputs';output.mkdir();(output/'mesh.glb').write_bytes(b'mesh')
+   receipt=job/'receipt.json';receipt.write_text(json.dumps({'job_id':'observed','job_type':'trellis2mlx','status':'done','exit_code':0,'output_dir':str(output)}));metadata=output/'metadata.json';metadata.write_text(json.dumps({'job_id':'observed','name':'First','output_files':['mesh.glb']}))
+   reads=[];original=Path.read_text
+   def counted(path,*args,**kwargs):
+    if path in (receipt,metadata):reads.append(path)
+    return original(path,*args,**kwargs)
+   def read():return catalog.read_catalog('greenroom',roots={'greenroom':root},image_entries=lambda:[],origins=lambda _:None,output_resolver=lambda _:output,label=lambda x:x)
+   with patch.object(Path,'read_text',counted):
+    self.assertEqual(read()['entries'][0]['label'],'First · mesh.glb');self.assertEqual(read()['entries'][0]['label'],'First · mesh.glb');self.assertEqual(reads.count(metadata),1,'warm browsing must reuse unchanged parsed metadata')
+    metadata.write_text(json.dumps({'job_id':'observed','name':'Second','output_files':['mesh.glb']}));self.assertEqual(read()['entries'][0]['label'],'Second · mesh.glb')
+    metadata.write_text('{broken');result=read();self.assertEqual(result['entries'],[]);self.assertEqual(len(result['warnings']),1)
+
 if __name__=='__main__':unittest.main()

@@ -503,3 +503,12 @@ body[data-workspace=authoring].has-assets-panel:has(#asset-generate[data-image-e
 .asset-agent-group > summary { cursor:pointer; font-weight:600; padding:4px 2px 12px; }
 .asset-agent-group > summary > small { float:right; color:var(--text-muted,#989da8); font-weight:400; margin-left:16px; }
 .asset-agent-entries { display:grid; grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:10px; }
+
+/* Browse selection has room for an actual object preview and source details. */
+#asset-detail{flex-basis:clamp(240px,28vw,360px);overflow:auto;}
+#asset-detail #asset-image{flex:0 0 auto;width:100%;height:auto;min-height:130px;max-height:none;aspect-ratio:1;object-fit:contain;}
+#asset-facts{color:#aeb6b9;font-size:11px;line-height:1.5;overflow-wrap:anywhere;}
+#asset-preview-status{color:#aeb6b9;font-size:11px;}
+#asset-preview-status:empty{display:none;}
+#authoring-assets .asset-entry{content-visibility:auto;contain-intrinsic-size:auto 140px;}
+@media(max-width:800px){#asset-detail{flex-basis:42%;}#asset-detail #asset-image{min-height:100px;}#asset-facts{font-size:10px;}}

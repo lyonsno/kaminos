@@ -16,7 +16,7 @@ class Element{
 function fixture(thumbnails,providedController=null){
  const ids=new Map();let observer;
  const doc={ids,createElement:tag=>new Element(tag,doc),getElementById:id=>ids.get(id),activeElement:null,addEventListener(){},defaultView:{innerWidth:1500,addEventListener(){},IntersectionObserver:class{constructor(fn){this.fn=fn;this.watched=new Set();observer=this;}observe(e){this.watched.add(e);}unobserve(e){this.watched.delete(e);}disconnect(){this.watched.clear();}fire(e){if(this.watched.has(e))this.fn([{target:e,isIntersecting:true}]);}}}};doc.body=new Element('body',doc);doc.body.clientHeight=1050;doc.body.classList={add(){},remove(){}};doc.body.style={setProperty(){},removeProperty(){}};ids.set('authoring-header',new Element('header',doc));
- const source=readFileSync(new URL('../authoring-assets.mjs',import.meta.url),'utf8').replaceAll('export ','').replace("import('./authoring-asset-previews.mjs')","getPreview()");const install=new Function('getPreview',source+'\nreturn installAuthoringAssets;')(()=>Promise.resolve({meshThumbnail:thumbnails}));
+ const source=readFileSync(new URL('../authoring-assets.mjs',import.meta.url),'utf8').replaceAll('export ','').replaceAll("import('./authoring-asset-previews.mjs')","getPreview()");const install=new Function('getPreview',source+'\nreturn installAuthoringAssets;')(()=>Promise.resolve({meshThumbnail:thumbnails}));
  const state={roots:[{id:'greenroom'}],root:'greenroom',path:'',catalog:true,listRevision:1,entries:[],results:[],warnings:[],unavailableCount:0};
  const generation={status:'idle'};let stops=0;const controller=providedController||{read:()=>state,generation:()=>generation,refresh:async()=>{},select(){},stop(){stops++;}};const ui=install({document:doc,controller,edits:{state:()=>({active:null})}});
  return{doc,state,ui,generation,stops:()=>stops,observer:()=>observer,mode:mode=>doc.body.children[0].modes.find(e=>e.dataset.assetsMode===mode).onclick()};
@@ -45,8 +45,8 @@ test('unavailable historical results remain explained beside available or empty 
 });
 test('actual preview queue and UI recover the same skipped card after Generate returns to Browse',async()=>{
  let release;const gate=new Promise(r=>release=r),loads=[];
- const queueSource=readFileSync(new URL('../authoring-asset-previews.mjs',import.meta.url),'utf8').split('export function meshThumbnail')[1];
- const thumbnail=new Function('preview',`let tail=Promise.resolve();const cache=new Map();function meshThumbnail${queueSource};return meshThumbnail;`)(async entry=>{loads.push(entry.source);if(entry.source==='a')await gate;return 'actual-provider-result';});
+ const {createAssetPreviewQueue}=await import('../asset-preview-queue.mjs');
+ const thumbnail=createAssetPreviewQueue(async entry=>{loads.push(entry.source);if(entry.source==='a')await gate;return 'actual-provider-result';}).thumbnail;
  const f=fixture(thumbnail);f.state.entries=[{kind:'mesh',name:'a.glb',source:'a'},{kind:'mesh',name:'b.glb',source:'b'}];f.ui.open('browse');const [a,b]=f.doc.getElementById('asset-entries').children;f.observer().fire(a);f.observer().fire(b);await tick();f.mode('generate');release();await tick();await tick();f.mode('browse');f.observer().fire(b);await tick();await tick();assert.deepEqual(loads,['a','b']);assert.equal(b.dataset.previewState,'rendered');
 });
 
@@ -105,4 +105,24 @@ test('expanding another agent uses the current canonical selected source',()=>{
  group.open=false;group.dispatch('toggle');f.state.listRevision++;f.state.selected=null;f.ui.render(structuredClone(f.state));f.state.selected=b;
  const own=f.doc.getElementById('asset-entries').children[1];own.open=true;own.dispatch('toggle');
  assert.equal(own.children[1].children[0].getAttribute('aria-pressed'),'true');
+});
+
+test('selecting a mesh uses its preview and adds useful file details',()=>{
+ const f=fixture(async()=>null);f.state.selected={kind:'mesh',name:'kiln.glb',label:'Kiln',size:2048,producer:'TRELLIS',source:'/api/read?root=generated-meshes&path=kiln.glb',preview:'/api/read?root=generated-meshes&path=kiln.png'};
+ f.ui.render(f.state);assert.equal(f.doc.getElementById('asset-image').hidden,false);assert.equal(f.doc.getElementById('asset-image').src,f.state.selected.preview);
+ assert.match(f.doc.getElementById('asset-facts').textContent,/2.*KB/);assert.match(f.doc.getElementById('asset-facts').textContent,/TRELLIS/);
+});
+test('a repeated search reuses existing cards and filtering does not recreate them',()=>{
+ const f=fixture(async()=>null);f.state.entries=[{kind:'image',name:'kiln.png',label:'Kiln',source:'kiln'},{kind:'image',name:'chair.png',label:'Chair',source:'chair'}];f.ui.open('browse');
+ const container=f.doc.getElementById('asset-entries'),kiln=container.children[0];f.doc.getElementById('asset-filter').value='kiln';f.ui.render(f.state);assert.equal(container.children[0],kiln,'search keeps the existing card/thumbnail');
+});
+
+test('a selected mesh without a sidecar gets a detail preview even when its tile was never visible',async()=>{
+ let calls=0;const f=fixture(async()=>{calls++;return 'mesh-detail';});f.ui.open('browse');f.state.selected={kind:'mesh',source:'unseen',name:'unseen.glb'};f.ui.render(f.state);await tick();await tick();assert.equal(calls,1);assert.equal(f.doc.getElementById('asset-image').src,'mesh-detail');
+});
+
+test('a late selected preview cannot replace the current selection or expose a held selection',async()=>{
+ let release;const gate=new Promise(r=>release=r),f=fixture(()=>gate);f.ui.open('browse');f.state.selected={kind:'mesh',source:'old',name:'old.glb'};f.ui.render(f.state);await tick();
+ f.state.selected={kind:'mesh',source:'held',name:'Held',visibility:{status:'withheld',reason:'Awaiting review'}};f.ui.render(f.state);release('old-preview');await tick();await tick();
+ assert.equal(f.doc.getElementById('asset-image').getAttribute('src'),null);assert.equal(f.doc.getElementById('asset-image').hidden,true);
 });

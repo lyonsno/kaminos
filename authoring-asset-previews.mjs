@@ -4,11 +4,11 @@ import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {AssetKTX2Loader as KTX2Loader} from './asset-ktx2-loader.mjs';
 import {configureAssetTextures} from './asset-texture-support.mjs';
 import {thumbnailDistance} from './authoring-browse-layout.mjs';
-let renderer,initializing,tail=Promise.resolve();
-const cache=new Map();
-async function preview(entry){
- if(!initializing){renderer=new THREE.WebGPURenderer({forceWebGL:true,alpha:false,antialias:true});renderer.setSize(192,192);renderer.setPixelRatio(1);renderer.toneMapping=THREE.ACESFilmicToneMapping;initializing=renderer.init();}
- await initializing;
+import {createAssetPreviewQueue} from './asset-preview-queue.mjs';
+let renderer,initializing;
+async function preview(entry,size){
+ if(!initializing){renderer=new THREE.WebGPURenderer({forceWebGL:true,alpha:false,antialias:true});renderer.setSize(size,size);renderer.setPixelRatio(1);renderer.toneMapping=THREE.ACESFilmicToneMapping;initializing=renderer.init();}
+ await initializing;renderer.setSize(size,size);
  const model=(await configureAssetTextures(new GLTFLoader(),renderer,()=>new KTX2Loader()).loadAsync(entry.source)).scene;
  try{
   let meshes=0;model.traverse(object=>{if(object.isMesh)meshes++;});model.updateMatrixWorld(true);
@@ -24,13 +24,6 @@ async function preview(entry){
   const disposed=new Set();model.traverse(object=>{object.geometry?.dispose();for(const material of Array.isArray(object.material)?object.material:[object.material])if(material){for(const value of Object.values(material))if(value?.isTexture&&!disposed.has(value)){disposed.add(value);value.dispose();}material.dispose();}});
  }
 }
-export function meshThumbnail(entry,isCurrent=()=>true){
- if(entry.visibility?.status==='withheld')return Promise.resolve(null);
- const key=JSON.stringify([entry.source,entry.mtime,entry.size]);
- const existing=cache.get(key);if(existing){existing.checks?.add(isCurrent);return existing.promise;}
- const record={checks:new Set([isCurrent]),promise:null};
- // Serial rendering owns one context; queued work for closed/removed cards is
- // skipped. Every catalog entry remains available regardless of preview state.
- const result=tail.then(()=>{const wanted=[...record.checks].some(check=>check());record.checks=null;if(!wanted){cache.delete(key);return null;}return preview(entry);});
- record.promise=result;tail=result.catch(()=>{});cache.set(key,record);result.catch(()=>{if(cache.get(key)===record)cache.delete(key);});return result;
-}
+const queue=createAssetPreviewQueue(preview);
+export const meshThumbnail=queue.thumbnail;
+export const meshPreview=queue.detail;

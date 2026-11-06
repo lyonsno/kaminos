@@ -82,3 +82,12 @@ test('page surface arrival uses current scene generation and rolls back failed i
  pending=null;context.recordImportedSceneObject=async()=>{throw Error('history unavailable');};
  await assert.rejects(add(entry),/history unavailable/);assert.equal(workingScene.objects.length,0);assert.equal(disposed,2);
 });
+
+test('revisiting a cached collection publishes existing entries before refresh and preserves an unchanged list revision',async()=>{
+ const entry={kind:'mesh',source:'/api/read?root=generated-meshes&path=a.glb',name:'a.glb',label:'A'};let pending=null;
+ const c=createAuthoringAssets({request:async()=>pending||{schema:'kaminos.authoring-assets.v1',collection:'generated-meshes',entries:[entry]}});
+ await c.browse();c.select(c.read().entries[0]);const revision=c.read().listRevision;
+ const gate=deferred();pending=gate.promise;const refresh=c.browse();
+ assert.equal(c.read().entries.length,1,'cached cards stay usable during refresh');assert.equal(c.read().selected?.source,entry.source);assert.equal(c.read().listRevision,revision,'refresh does not remount identical cards');
+ gate.resolve({schema:'kaminos.authoring-assets.v1',collection:'generated-meshes',entries:[entry]});await refresh;assert.equal(c.read().listRevision,revision);
+});

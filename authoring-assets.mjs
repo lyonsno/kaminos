@@ -1,3 +1,7 @@
+export function assetFacts(entry){
+ const size=Number.isFinite(entry.size)?(entry.size>=1048576?`${(entry.size/1048576).toFixed(1)} MB`:`${(entry.size/1024).toFixed(1)} KB`):null;
+ return [entry.kind==='mesh'?'Mesh · GLB':entry.kind==='surface'?'Fitted surface splats':'Image',size,entry.producer||entry.generation?.model||entry.generation?.route,entry.mtime?new Date(entry.mtime*1000).toLocaleString():null,entry.name,entry.path].filter(Boolean).join(' · ');
+}
 export const assetKind = name => /\.surface\.json$/i.test(name) ? 'surface' : /\.glb$/i.test(name) ? 'mesh' : /\.(png|jpe?g|webp)$/i.test(name) ? 'image' : null;
 export const assetWithheld = entry => entry?.visibility?.status==='withheld';
 const requireVisible = entry => {if(assetWithheld(entry))throw Error(entry.visibility.reason || 'Asset awaiting further review.');};
@@ -10,6 +14,7 @@ export function createAuthoringAssets({request, addMesh, uploadImage, prepareIma
   let state = {roots:[], root:'generated-meshes', path:'', entries:[], selected:null, preparation:null, loading:false, adding:false, error:null, results:[]};
   let preparationTicket=0,preparationAbort=null,preparationPromise=null;
   let navigation = 0,revision=0;
+  const catalogCache=new Map();
   const publish = () => changed(copy(state));
   const get = async url => {const value = await request(url); if(value.error)throw Error(value.error);return value;};
   function clearPreparation(){preparationTicket++;preparationAbort?.abort(new DOMException('Image selection changed','AbortError'));preparationAbort=null;preparationPromise=null;state.preparation=null;}
@@ -30,7 +35,9 @@ export function createAuthoringAssets({request, addMesh, uploadImage, prepareIma
   }
   async function browse(root = state.root, path = '') {
     const ticket = ++navigation;
-    clearPreparation();state = {...state, root, path:collections.has(root)?'':path, catalog:collections.has(root), selected:null, entries:[],warnings:[],listRevision:++revision,loading:true,error:null};publish();
+    const cacheKey=JSON.stringify([root,collections.has(root)?'':path]),cached=catalogCache.get(cacheKey);
+    const selected=state.root===root&&state.path===(collections.has(root)?'':path)?state.selected:null;
+    clearPreparation();state = {...state, root, path:collections.has(root)?'':path, catalog:collections.has(root), selected:cached?selected:null, entries:cached?.entries||[],warnings:cached?.warnings||[],unavailableCount:cached?.unavailableCount||0,listRevision:cached?.listRevision??++revision,loading:true,error:null,cached:!!cached};publish();
     try {
       const result = await get(collections.has(root)?`/api/authoring-assets?${new URLSearchParams({collection:root})}`:`/api/browse?${new URLSearchParams({root,path})}`);
       if(ticket !== navigation)return false;
@@ -45,13 +52,18 @@ export function createAuthoringAssets({request, addMesh, uploadImage, prepareIma
         label:nameForSource(assetSource(root,[path,entry.name].filter(Boolean).join('/'))) || entry.metadata?.name || (entry.generation?entry.display?.title:null) || (/^[a-f0-9]{64}\.glb$/i.test(entry.name)?`Saved mesh · ${entry.name.slice(0,8)}`:entry.display?.title || entry.name)}));
       }
 
-      state.listRevision=++revision;
+      const signature=JSON.stringify([state.entries,state.warnings,state.unavailableCount]);
+      state.listRevision=cached?.signature===signature?cached.listRevision:++revision;
+      state.selected=selected?state.entries.find(entry=>(entry.source||entry.path)===(selected.source||selected.path))||null:null;
+      state.cached=false;
+      catalogCache.set(cacheKey,{entries:state.entries,warnings:state.warnings,unavailableCount:state.unavailableCount,listRevision:state.listRevision,signature});
     } catch(error) {if(ticket===navigation){state.entries=[];state.listRevision=++revision;state.error=error.message;}}
     finally {if(ticket===navigation){state.loading=false;publish();}}
     return !state.error;
   }
   return {
     read:()=>copy(state), browse, prepare,
+    ensure(){return state.roots.length?browse(state.root,state.path):this.refresh();},
     async refresh() {
       try {
         const roots = await get('/api/roots');
@@ -113,17 +125,19 @@ export function installAuthoringAssets({document,controller,edits}) {
     <nav><button type="button" data-assets-mode="browse">Browse</button><button type="button" data-assets-mode="generate">Generate</button></nav>
     <div class="asset-content"><div id="asset-browse"><div class="asset-folder-controls"><button type="button" id="asset-up" aria-label="Parent folder">↑</button><select id="asset-root" aria-label="Asset location"></select><button type="button" id="asset-refresh" aria-label="Refresh assets">↻</button></div><div id="asset-path"></div><input id="asset-filter" type="search" placeholder="Search assets…" aria-label="Search this asset collection"><div id="asset-entries"></div></div>
     <div id="asset-generate" hidden><p>Image → textured mesh · Stable Fast 3D</p><p class="asset-help">Choose an image from Browse or open a local image. Its background is removed before generation; your scene stays in place.</p><div id="asset-preparation-status" role="status"></div><button type="button" id="asset-prepare" hidden>Prepare image</button><button type="button" id="asset-run">Generate mesh</button><button type="button" id="asset-recover" hidden>Retry saving result</button><div id="asset-results"></div></div>
-    <div id="asset-detail" hidden><div id="asset-hold-notice" hidden><b aria-hidden="true">×</b><strong>TOP SECRET</strong><p>Hostile to eyesight.<br>Awaiting further review.</p></div><img id="asset-image" alt="Selected source image" hidden><strong id="asset-name"></strong><div id="asset-source"></div></div>
+    <div id="asset-detail" hidden><div id="asset-hold-notice" hidden><b aria-hidden="true">×</b><strong>TOP SECRET</strong><p>Hostile to eyesight.<br>Awaiting further review.</p></div><img id="asset-image" alt="Selected source image" hidden><div id="asset-preview-status" role="status"></div><strong id="asset-name"></strong><div id="asset-source"></div><div id="asset-facts"></div></div>
     </div><div id="asset-generation" hidden><div class="asset-generation-line"><span id="asset-generation-status" role="status"></span><span id="asset-percent"></span><button type="button" id="asset-stop">Stop</button></div><progress id="asset-progress" max="100" aria-label="Generation stage progress"></progress></div><div class="asset-browser-status"><span id="asset-loading" class="asset-loading-spinner" aria-hidden="true" hidden></span><div id="asset-status" role="status"></div></div><footer><button type="button" id="asset-file-open">Open file…</button><input id="asset-file" type="file" accept=".glb,.png,.jpg,.jpeg,.webp" hidden><div class="asset-selected-actions"><button type="button" id="asset-add" hidden>Add to scene</button><button type="button" id="asset-use-image" hidden>Use for generation</button></div></footer>`;
-  document.body.append(panel);installAssetPaneResize({document,panel});const byId=id=>document.getElementById(id);let mode='browse',listKey=null,rootsKey=null;const expandedAgents=new Set();
+  document.body.append(panel);installAssetPaneResize({document,panel});const byId=id=>document.getElementById(id);let mode='browse',listKey=null,rootsKey=null,searchKey=null,entries=[],searchRows=[];const cards=new Map();const expandedAgents=new Set();
   const runHeader=document.createElement('div');runHeader.id='authoring-generation-header';runHeader.hidden=true;runHeader.innerHTML='<button type="button" id="generation-header-show" title="Show generation"><span id="generation-header-status"></span></button><button type="button" id="generation-header-stop">Stop</button>';byId('authoring-header')?.append(runHeader);const runById=id=>runHeader.querySelector('#'+id);
-  const previews=new Map();let previewModule;const observer=new document.defaultView.IntersectionObserver(rows=>{for(const row of rows){if(!row.isIntersecting)continue;observer.unobserve(row.target);const entry=previews.get(row.target);if(!entry)continue;row.target.dataset.previewState='loading';(previewModule ||= import('./authoring-asset-previews.mjs')).then(module=>module.meshThumbnail(entry,()=>row.target.isConnected&&!panel.hidden&&mode==='browse'&&document.body.dataset.workspace!=='workbench')).then(source=>{if(!row.target.isConnected)return;if(!source){row.target.dataset.previewState='skipped';armPreviews();return;}const img=document.createElement('img');img.src=source;img.alt=entry.label || entry.name;row.target.prepend(img);row.target.dataset.previewState='rendered';}).catch(()=>{if(row.target.isConnected){row.target.dataset.previewState='unavailable';row.target.title+=' · Mesh preview unavailable';}});}}, {root:panel});
+  const previews=new Map();let previewModule;const observer=new document.defaultView.IntersectionObserver(rows=>{for(const row of rows){if(!row.isIntersecting)continue;observer.unobserve(row.target);const entry=previews.get(row.target);if(!entry)continue;row.target.dataset.previewState='loading';(previewModule ||= import('./authoring-asset-previews.mjs')).then(module=>module.meshThumbnail(entry,()=>row.target.isConnected&&!panel.hidden&&mode==='browse'&&document.body.dataset.workspace!=='workbench'&&!assetAdding)).then(source=>{if(!row.target.isConnected)return;if(!source){row.target.dataset.previewState='skipped';armPreviews();return;}const img=document.createElement('img');img.src=source;img.alt=entry.label || entry.name;row.target.prepend(img);row.target.dataset.previewState='rendered';}).catch(()=>{if(row.target.isConnected){row.target.dataset.previewState='unavailable';row.target.title+=' · Mesh preview unavailable';}});}}, {root:panel});
   function armPreviews(){if(panel.hidden||mode!=='browse'||document.body.dataset.workspace==='workbench')return;for(const [button] of previews)if(!['loading','rendered','unavailable'].includes(button.dataset.previewState))observer.observe(button);}
   const labels={'generated-meshes':'Saved assets',trellis2mlx:'Trellis outputs',pixal3d:'Pixal outputs','image-inbox':'Source images',greenroom:'Generator outputs','agent-work':'Agent work',assets:'Assets',scratch:'Scratch'};
   const action=fn=>Promise.resolve().then(fn).catch(error=>{byId('asset-status').textContent=error.message;});
   function close(){if(panel.contains(document.activeElement))document.activeElement.blur();panel.hidden=true;document.body.classList.remove('has-assets-panel');render(controller.read());}
   function setMode(next){mode=next;byId('asset-browse').hidden=mode!=='browse';byId('asset-generate').hidden=mode!=='generate';panel.querySelectorAll('[data-assets-mode]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.assetsMode===mode)));render(controller.read());}
+  let detailKey=null,detailTicket=0,assetAdding=false;
   function render(state) {
+    assetAdding=!!state.adding;
     if(!runHeader.isConnected)byId('authoring-header')?.append(runHeader);
     byId('asset-loading').hidden=!state.loading;panel.setAttribute('aria-busy',String(!!state.loading));
     const roots=byId('asset-root'),nextRoots=state.roots.map(root=>root.id).join('|');if(nextRoots!==rootsKey){roots.replaceChildren(...state.roots.map(root=>{const o=document.createElement('option');o.value=root.id;o.textContent=labels[root.id]||root.id;return o;}));rootsKey=nextRoots;}roots.value=state.root;
@@ -131,18 +145,25 @@ export function installAuthoringAssets({document,controller,edits}) {
     const agentWork=state.root==='agent-work';
     byId('asset-filter').placeholder=agentWork?'Find an agent…':'Search assets…';
     byId('asset-filter').setAttribute('aria-label',agentWork?'Filter agent work by agent name':'Search this asset collection');
-    const query=byId('asset-filter').value.toLowerCase(),entries=state.entries.filter(e=>(agentWork?`${e.agent?.id||''} ${e.agent?.label||''}`:`${e.name} ${e.label}`).toLowerCase().includes(query));
-    const nextList=JSON.stringify([state.root,state.path,state.listRevision,query]);
-    if(nextList!==listKey){listKey=nextList;observer.disconnect();previews.clear();
+    const query=byId('asset-filter').value.toLowerCase();
+    const nextList=JSON.stringify([state.root,state.path,state.listRevision]);
+    if(nextList!==listKey){listKey=nextList;searchKey=null;observer.disconnect();previews.clear();cards.clear();
+      searchRows=state.entries.map(entry=>({entry,text:(agentWork?`${entry.agent?.id||''} ${entry.agent?.label||''}`:`${entry.name} ${entry.label}`).toLowerCase()}));
+    }
+    const nextSearch=JSON.stringify([nextList,query]);
+    if(nextSearch!==searchKey){searchKey=nextSearch;entries=searchRows.filter(row=>row.text.includes(query)).map(row=>row.entry);
+    observer.disconnect();
+
     const makeButton=(entry,selected=state.selected)=>{
+      const key=entry.source||entry.path;if(cards.has(key))return cards.get(key);
       const button=document.createElement('button');button.type='button';button.className='asset-entry';button.dataset.assetPath=entry.source||entry.path;button.title=entry.path;
       if(assetWithheld(entry)){button.dataset.visibility='withheld';const cover=document.createElement('div');cover.className='asset-hold-cover';const cross=document.createElement('b');cross.textContent='×';cross.setAttribute('aria-hidden','true');const stamp=document.createElement('strong');stamp.textContent='TOP SECRET';const notice=document.createElement('p');notice.textContent=entry.visibility.reason;cover.append(cross,stamp,notice);button.append(cover);}
       else if(entry.kind==='image'||entry.preview){const img=document.createElement('img');img.loading='lazy';img.src=entry.preview || entry.source || assetSource(entry.root,entry.path);img.alt='';button.append(img);}
       const title=document.createElement('span');title.textContent=(entry.kind==='folder'?'▸ ':entry.kind==='mesh'?'◇ ':'')+entry.label;button.append(title);const subtitle=document.createElement('small');subtitle.textContent=entry.kind==='mesh'?'Mesh · GLB':entry.kind==='surface'?'Fitted surface splats':entry.kind==='image'?'Image':'';button.append(subtitle);
       button.setAttribute('aria-pressed',String(!!selected&&(selected.source||selected.path)===(entry.source||entry.path)));
       button.onclick=()=>action(()=>entry.kind==='folder'?controller.browse(entry.root,entry.path):controller.select(entry));
-      if(entry.kind==='mesh'&&!assetWithheld(entry))previews.set(button,entry);
-      return button;
+      if(entry.kind==='mesh'&&!entry.preview&&!assetWithheld(entry))previews.set(button,entry);
+      cards.set(key,button);return button;
     };
     const container=byId('asset-entries');container.classList.toggle('asset-agent-groups',agentWork);
     if(agentWork){
@@ -163,14 +184,28 @@ export function installAuthoringAssets({document,controller,edits}) {
     }
     armPreviews();
     for(const button of byId('asset-entries').querySelectorAll('.asset-entry'))button.setAttribute('aria-pressed',String((state.selected?.source||state.selected?.path)===button.dataset.assetPath));
-    byId('asset-status').textContent=state.loading?'Loading assets…':state.error || (state.warnings?.length?`${state.warnings.length} output records could not be read.`:entries.length?'':`No assets in this collection`);
+    byId('asset-status').textContent=state.adding?'Adding asset to scene…':state.loading?(state.cached?'Updating cached assets…':'Loading assets…'):state.error || (state.warnings?.length?`${state.warnings.length} output records could not be read.`:entries.length?'':`No assets in this collection`);
     if(!state.loading&&!state.error&&state.unavailableCount)byId('asset-status').textContent+=(byId('asset-status').textContent?' · ':'')+`${state.unavailableCount} historical output records are unavailable.`;
     const selected=state.selected,withheld=assetWithheld(selected);byId('asset-hold-notice').hidden=!withheld;byId('asset-detail').hidden=!selected;byId('asset-add').hidden=withheld||!['mesh','surface'].includes(selected?.kind);byId('asset-use-image').hidden=withheld||selected?.kind!=='image';byId('asset-add').disabled=state.adding;
     if(selected){byId('asset-name').textContent=selected.label || selected.name;byId('asset-name').title=selected.label || selected.name;byId('asset-source').textContent=selected.root?(labels[selected.root]||selected.root):selected.generation?'Generated in this session':'Local file';byId('asset-source').title=selected.source || selected.path || '';}
     const preparation=state.preparation;
     const usedInput=mode==='generate'&&controller.preparesInput?.()&&selected?.kind==='image'?usedInputPreviewFor(controller.generation().inputPreview,selected.source || assetSource(selected.root,selected.path)):null;
     const selfPreparing=mode==='generate'&&controller.preparesInput?.();
-    byId('asset-image').hidden=withheld||selected?.kind!=='image';if(withheld||selected?.kind!=='image')byId('asset-image').removeAttribute('src');if(selected?.kind==='image'&&!withheld){const source=usedInput||(mode==='generate'&&!selfPreparing&&preparation?.status==='complete'?preparation.value.prepared.source:selected.source || assetSource(selected.root,selected.path));if(byId('asset-image').getAttribute('src')!==source)byId('asset-image').src=source;byId('asset-image').alt=usedInput?'The input this generation is using (prepared in this page)':mode==='generate'&&preparation?.status==='complete'?'Prepared generation input':'Original source image';}
+    const image=byId('asset-image'),previewStatus=byId('asset-preview-status');
+    const source=withheld?null:usedInput||(mode==='generate'&&!selfPreparing&&preparation?.status==='complete'?preparation.value.prepared.source:selected?.preview||(selected?.kind==='image'?(selected.source||assetSource(selected.root,selected.path)):null));
+    const nextDetail=JSON.stringify([panel.hidden,mode,selected?.source,selected?.path,selected?.mtime,selected?.size,source,withheld]);
+    if(nextDetail!==detailKey){detailKey=nextDetail;const ticket=++detailTicket;image.hidden=!source;image.removeAttribute('src');previewStatus.textContent='';
+      image.onload=()=>{if(ticket===detailTicket){previewStatus.textContent='';if(selected?.kind==='image'&&image.naturalWidth)byId('asset-facts').textContent=assetFacts(selected)+` · ${image.naturalWidth} × ${image.naturalHeight}`;}};
+      image.onerror=()=>{if(ticket===detailTicket){image.hidden=true;previewStatus.textContent='Preview unavailable';}};
+      if(source){image.src=source;image.alt=usedInput?'The input this generation is using (prepared in this page)':selected.label||selected.name||'Selected asset';}
+      else if(selected?.kind==='mesh'&&!withheld&&!panel.hidden&&mode==='browse'){
+        previewStatus.textContent='Preparing preview…';
+        (previewModule ||= import('./authoring-asset-previews.mjs')).then(module=>(module.meshPreview||module.meshThumbnail)(selected,()=>ticket===detailTicket&&!panel.hidden))
+          .then(source=>{if(ticket!==detailTicket)return;if(source){image.src=source;image.alt=selected.label||selected.name;image.hidden=false;previewStatus.textContent='';}else previewStatus.textContent='Preview unavailable';})
+          .catch(()=>{if(ticket===detailTicket)previewStatus.textContent='Preview unavailable';});
+      }
+      byId('asset-facts').textContent=selected&&!withheld?assetFacts(selected):'';
+    }
     // A self-preparing model's own account of its input wins over any server preparation it does not use.
     byId('asset-preparation-status').textContent=(selfPreparing&&selected?.kind==='image')?usedInputStatusFor(controller.generation().inputPreview,selected.source || assetSource(selected.root,selected.path)):preparation?.error||(preparation?.status==='complete'?(preparation.value.route==='input-alpha'?'Existing transparency retained.':'Background removed.')+' This is the image generation will use.':preparation?.status==='preparing'?'Removing background…':preparation?.status==='stopped'?'Image preparation stopped.':selected?.kind==='image'?'Prepare this image to preview the generation input.':'');
     byId('asset-prepare').hidden=withheld||selected?.kind!=='image'||['preparing','complete'].includes(preparation?.status);
@@ -198,7 +233,7 @@ export function installAuthoringAssets({document,controller,edits}) {
   byId('asset-recover').onclick=()=>action(()=>controller.recover());
   byId('asset-file-open').onclick=()=>byId('asset-file').click();byId('asset-file').onchange=event=>action(async()=>{const file=event.target.files[0];if(file)await controller.upload(file);event.target.value='';});
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!panel.hidden&&!edits.state().active){close();event.preventDefault();}});
-  return {render,close,open(next='browse'){panel.hidden=false;document.body.classList.add('has-assets-panel');setMode(next);return next==='generate'&&controller.read().selected?.kind==='image'?Promise.resolve(true):action(()=>controller.refresh());},state:()=>({open:!panel.hidden,mode})};
+  return {render,close,open(next='browse'){panel.hidden=false;document.body.classList.add('has-assets-panel');setMode(next);return next==='generate'&&controller.read().selected?.kind==='image'?Promise.resolve(true):action(()=>controller.ensure?controller.ensure():controller.refresh());},state:()=>({open:!panel.hidden,mode})};
 }
 
 export function assetPaneHeight(value,height,narrow=false){return Math.max(160,Math.min(value,Math.max(160,height-42-180-(narrow?180:0))));}
