@@ -86,16 +86,18 @@ with TemporaryDirectory() as directory:
     control.pop("rawValue", None)
     own, store_id = arrange(Path(directory), library_artifact=json.dumps(tampered))
     reply, status = post({"store": store_id, "name": "carousel.kaminos.json"})
-    assert status == 400, (reply, status)
+    assert status == 200, (reply, status)
     assert not (own / "basins" / "presets" / OBSERVED.name).exists(), "a tampered basin is never copied"
-    assert "content hash mismatch" in reply["error"], reply
+    assert reply["basin"]["status"] == "runtime-fallback", reply
+    assert "content hash mismatch" in reply["basin"]["warning"], reply
 
 # 4. Nowhere on the machine: the import refuses and says where it looked.
 with TemporaryDirectory() as directory:
     own, store_id = arrange(Path(directory))
     reply, status = post({"store": store_id, "name": "carousel.kaminos.json"})
-    assert status == 400, (reply, status)
-    assert "not found" in reply["error"] and "basins" in reply["error"], reply
+    assert status == 200, (reply, status)
+    assert reply["basin"]["status"] == "runtime-fallback", reply
+    assert "not found" in reply["basin"]["warning"], reply
 
 # 5. A corrupt copy beside the scene does not block the verified library copy.
 with TemporaryDirectory() as directory:

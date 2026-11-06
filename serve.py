@@ -5885,8 +5885,11 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         try:
             basin = scene_library_import_basin(document, store)
         except (OSError, ValueError) as error:
-            self.send_json({'error': f'Could not retain the scene fire basin: {error}'}, 400)
-            return
+            basin = {
+                'kind': 'basin', 'status': 'runtime-fallback',
+                'presetId': ((document.get('composition') or {}).get('flame') or {}).get('presetId'),
+                'warning': f'Could not retain the historical fire basin: {error}. The scene will use a cheap Reactant preview; the source basin was not modified.',
+            }
         try:
             dependencies = [scene_library_import_dependency(obj.get("source"), store)
                             for obj in document.get("objects") or [] if isinstance(obj, dict) and str(obj.get("source") or "").startswith("/api/read?")]

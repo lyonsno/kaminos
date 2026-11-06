@@ -1845,16 +1845,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <input type="checkbox" id="volume-common-gas-transport" data-volume-settings-param="volume_common_gas_transport">
       <span class="slider-val" id="volume-common-gas-transport-val">legacy split</span>
     </div>
-    <div class="slider-row" data-volume-visual-cost-knob="procedural-excitation">
-      <span class="slider-label">Swirl jostle</span>
-      <input type="range" id="volume-swirl-jostle" data-volume-settings-param="volume_swirl_jostle" min="0" max="2" step="any" value="1">
-      <span class="slider-val" id="volume-swirl-jostle-val">1.00</span>
-    </div>
-    <div class="slider-row" data-volume-visual-cost-knob="procedural-excitation">
-      <span class="slider-label">Swirl jostle focus</span>
-      <input type="range" id="volume-fine-breakup-localization" data-volume-settings-param="volume_fine_breakup_localization" min="0" max="1" step="0.01" value="0">
-      <span class="slider-val" id="volume-fine-breakup-localization-val">0.00 broad</span>
-    </div>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
       <span class="slider-label">Soot display gain</span>
       <input type="range" id="volume-density" min="0.35" max="12" step="0.05" value="4.2">
@@ -1866,19 +1856,9 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-curl-val">2.65</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="transport-detail">
-      <span class="slider-label">Microdetail</span>
-      <input type="range" id="volume-microdetail" min="0" max="2.5" step="0.05" value="2.5">
-      <span class="slider-val" id="volume-microdetail-val">2.50</span>
-    </div>
-    <div class="slider-row" data-volume-visual-cost-knob="transport-detail">
       <span class="slider-label">Shred</span>
       <input type="range" id="volume-interface-shred" min="0" max="10" step="0.05" value="2.5">
       <span class="slider-val" id="volume-interface-shred-val">2.50</span>
-    </div>
-    <div class="slider-row" data-volume-visual-cost-knob="branch-threshold">
-      <span class="slider-label">Fire Licks</span>
-      <input type="range" id="volume-fire-licks" min="0" max="10" step="0.05" value="1.65">
-      <span class="slider-val" id="volume-fire-licks-val">1.65</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="projection-pass-gate">
       <span class="slider-label">Projection</span>
@@ -1889,11 +1869,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-label">Speed</span>
       <input type="range" id="volume-speed" min="0.1" max="5" step="0.05" value="5">
       <span class="slider-val" id="volume-speed-val">5.00</span>
-    </div>
-    <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
-      <span class="slider-label">Emitter Scale</span>
-      <input type="range" id="volume-fire-scale" min="0.35" max="1.3" step="0.01" value="0.86">
-      <span class="slider-val" id="volume-fire-scale-val">0.86</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
       <span class="slider-label">Plume Height</span>
@@ -19906,8 +19881,8 @@ function readVolumeControls({quality=viewportDisplay.quality,document=globalThis
     // The procedural-force switches were retired 2026-10-22: Microdetail and
     // Shred are their own switches; Swirl jostle sets the fine force's strength.
     proceduralDetailForces: true,
-    swirlJostle: parseFloat(document.getElementById('volume-swirl-jostle').value),
-    fineBreakupLocalization: parseFloat(document.getElementById('volume-fine-breakup-localization').value),
+    swirlJostle: 0,
+    fineBreakupLocalization: 0,
     commonGasTransport: document.getElementById('volume-common-gas-transport').checked,
     volumeExposure: 1,
     density: parseFloat(document.getElementById('volume-density').value),
@@ -19917,15 +19892,15 @@ function readVolumeControls({quality=viewportDisplay.quality,document=globalThis
     glow: 1.15,
     smoke: 2.8, // retired 2026-10-21: no effect under the Physics law
     curl: parseFloat(document.getElementById('volume-curl').value),
-    microdetail: parseFloat(document.getElementById('volume-microdetail').value),
+    microdetail: 0,
     interfaceShred: parseFloat(document.getElementById('volume-interface-shred').value),
-    fireLicks: parseFloat(document.getElementById('volume-fire-licks').value),
+    fireLicks: 0,
     projection: parseFloat(document.getElementById('volume-projection').value),
     speed: parseFloat(document.getElementById('volume-speed').value),
     raySteps: parseFloat(document.getElementById('volume-steps').value),
     adaptiveRays: parseFloat(document.getElementById('volume-adaptive-rays').value),
     occupancySkip: parseFloat(document.getElementById('volume-occupancy-skip').value),
-    fireScale: parseFloat(document.getElementById('volume-fire-scale').value),
+    fireScale: 1,
     detailScale: 1.75, // retired 2026-10-21: the single Flame simulator fixes the detail frequency
     plumeHeight: parseFloat(document.getElementById('volume-plume-height').value),
     windStrength: parseFloat(document.getElementById('volume-wind-strength').value),
@@ -20300,8 +20275,6 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-scene-val').textContent = 'Flame';
   document.getElementById('volume-artistic-swirl-val').textContent = c.artisticSwirl ? 'on' : 'off';
   document.getElementById('volume-phased-sway-val').textContent = c.phasedSway ? 'on' : 'off';
-  document.getElementById('volume-swirl-jostle-val').textContent = c.swirlJostle.toFixed(2);
-  document.getElementById('volume-fine-breakup-localization-val').textContent = `${c.fineBreakupLocalization.toFixed(2)}${c.fineBreakupLocalization === 0 ? ' broad' : ' localized'}`;
   {
     const transportConfig = resolveTransportConfig(c);
     document.getElementById('volume-common-gas-transport-val').textContent = transportConfig.effective.commonCharacteristic
@@ -20310,9 +20283,7 @@ function updateVolumeControlLabels() {
   }
   document.getElementById('volume-density-val').textContent = c.density.toFixed(2);
   document.getElementById('volume-curl-val').textContent = c.curl.toFixed(2);
-  document.getElementById('volume-microdetail-val').textContent = c.microdetail.toFixed(2);
   document.getElementById('volume-interface-shred-val').textContent = c.interfaceShred.toFixed(2);
-  document.getElementById('volume-fire-licks-val').textContent = c.fireLicks.toFixed(2);
   document.getElementById('volume-projection-val').textContent = c.projection.toFixed(2);
   document.getElementById('volume-speed-val').textContent = c.speed.toFixed(2);
   document.getElementById('volume-steps-val').textContent = String(c.raySteps | 0);
@@ -20320,7 +20291,6 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-flame-priority-val').textContent = c.flamePriority.toFixed(2);
   document.getElementById('volume-adaptive-rays-val').textContent = c.adaptiveRays.toFixed(2);
   document.getElementById('volume-occupancy-skip-val').textContent = c.occupancySkip.toFixed(2);
-  document.getElementById('volume-fire-scale-val').textContent = c.fireScale.toFixed(2);
   document.getElementById('volume-plume-height-val').textContent = c.plumeHeight.toFixed(2);
   document.getElementById('volume-wind-strength-val').textContent = c.windStrength.toFixed(2);
   document.getElementById('volume-wind-angle-val').textContent = formatVolumeWindDirection(c.windAngle);
@@ -20704,21 +20674,15 @@ function refreshVolumeReadout() {
   }
   syncVolumeViewerPlay(s);
   const appearance = s.appearanceModel;
-  for (const id of ['volume-microdetail','volume-fire-licks','volume-swirl-jostle','volume-fine-breakup-localization','volume-fire-scale']) {
-    document.getElementById(id).disabled = appearance?.effective === 'shred-only';
-  }
   document.getElementById('volume-appearance-model-state').textContent = appearance?.reason
     ? `${appearance.requested}: ${appearance.reason}; running ${appearance.effective}`
-    : appearance?.effective === 'shred-only' ? 'Shred only: physical interface + one transported activity field'
-    : !appearance || appearance.effective !== 'compact-3'
-    ? 'authored · nine carriers + front field stored'
-    : 'compact · flame, interface shred, combustion front stored; six rebuilt at read';
+    : 'Shred: physical interface + one transported activity field';
   const reactant = s.reactantCombustion;
   document.getElementById('volume-reaction-law-state').textContent = !reactant || reactant.requested.law !== 'reactant-v0'
-    ? 'authored'
+    ? 'Reactant state unavailable'
     : (reactant.effective.admitted
-      ? `reactant candidate · mixing ${reactant.effective.mixingTimeSteps.toFixed(1)} · cooling ${reactant.effective.coolingTimeSteps.toFixed(0)} · exchange ${reactant.effective.exchange.effective.toFixed(3)}/step${reactant.effective.exchange.capped ? ' (CAPPED)' : ''}`
-      : `reactant candidate — NOT ADMITTED (${reactant.effective.reason}); the authored law runs`);
+      ? `Reactant · mixing ${reactant.effective.mixingTimeSteps.toFixed(1)} · cooling ${reactant.effective.coolingTimeSteps.toFixed(0)} · exchange ${reactant.effective.exchange.effective.toFixed(3)}/step${reactant.effective.exchange.capped ? ' (CAPPED)' : ''}`
+      : `Reactant unavailable (${reactant.effective.reason})`);
   const staggering = s.velocityStaggering;
   document.getElementById('volume-velocity-staggering-state').textContent = !staggering || staggering.requested.mode !== 'staggered'
     ? 'collocated'
@@ -21282,10 +21246,6 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_speed') && Number.isFinite(routeSpeed)) {
     document.getElementById('volume-speed').value = String(Math.max(0.1, Math.min(5, routeSpeed)));
   }
-  const routeMicrodetail = Number(params.get('volume_microdetail'));
-  if (params.has('volume_microdetail') && Number.isFinite(routeMicrodetail)) {
-    document.getElementById('volume-microdetail').value = String(Math.max(0, Math.min(2.5, routeMicrodetail)));
-  }
   const routeCurl = Number(params.get('volume_curl'));
   if (params.has('volume_curl') && Number.isFinite(routeCurl)) {
     document.getElementById('volume-curl').value = String(Math.max(0, Math.min(5, routeCurl)));
@@ -21293,10 +21253,6 @@ async function initKaminosVolumeRoute() {
   const routeInterfaceShred = Number(params.get('volume_interface_shred'));
   if (params.has('volume_interface_shred') && Number.isFinite(routeInterfaceShred)) {
     document.getElementById('volume-interface-shred').value = String(Math.max(0, Math.min(10, routeInterfaceShred)));
-  }
-  const routeFireLicks = Number(params.get('volume_fire_licks'));
-  if (params.has('volume_fire_licks') && Number.isFinite(routeFireLicks)) {
-    document.getElementById('volume-fire-licks').value = String(Math.max(0, Math.min(10, routeFireLicks)));
   }
   const routeRadiance = Number(params.get('volume_radiance'));
   const routeGlow = Number(params.get('volume_glow'));
@@ -21435,10 +21391,6 @@ async function initKaminosVolumeRoute() {
   const routeOccupancySkip = Number(params.get('volume_occupancy_skip'));
   if (params.has('volume_occupancy_skip') && Number.isFinite(routeOccupancySkip)) {
     document.getElementById('volume-occupancy-skip').value = String(Math.max(0, Math.min(1, routeOccupancySkip)));
-  }
-  const routeFireScale = Number(params.get('volume_fire_scale'));
-  if (params.has('volume_fire_scale') && Number.isFinite(routeFireScale)) {
-    document.getElementById('volume-fire-scale').value = String(Math.max(0.35, Math.min(1.3, routeFireScale)));
   }
   const routePlumeHeight = Number(params.get('volume_plume_height'));
   if (params.has('volume_plume_height') && Number.isFinite(routePlumeHeight)) {

@@ -67,8 +67,7 @@ fn restrictGeneral(c:vec3<u32>){
   let p=vec3<i32>(x,y,z);let o=transferOverlap(p,lo,hi);let w=o.x*o.y*o.z;if(w<=0.0){continue;}weightSum+=w;
   let blocked=solid(p);mask=max(mask,select(0u,1u,blocked));if(blocked){continue;}fluidWeight+=w;
   let fi=idx(vec3<u32>(p),s.material.xyz);
-  if(SHRED_ONLY){a+=vec4<f32>(fine[fi*4u+1u].xyz,0.0)*w;d.y+=fine[fi*4u+3u].y*w;}
-  else{a+=fine[fi*4u+1u]*w;b+=fine[fi*4u+2u]*w;d+=fine[fi*4u+3u]*w;front+=fineFront[fi]*w;}
+  a+=vec4<f32>(fine[fi*4u+1u].xyz,0.0)*w;d.y+=fine[fi*4u+3u].y*w;
   wet+=f32(fineQuench[fi])*w;
   if(textureDimensions(fineReactant).x==s.material.x){react+=textureLoad(fineReactant,p,0)*w;}
  }}}
@@ -89,8 +88,7 @@ fn restrictScalars(@builtin(global_invocation_id) c:vec3<u32>){
   mask=max(mask,select(0u,1u,blocked));
   if(!blocked){
    fluidWeight+=weight;
-  if(SHRED_ONLY){a+=vec4<f32>(fine[fi*4u+1u].xyz,0.0)*weight;d.y+=fine[fi*4u+3u].y*weight;}
-  else{a+=fine[fi*4u+1u]*weight;b+=fine[fi*4u+2u]*weight;d+=fine[fi*4u+3u]*weight;front+=fineFront[fi]*weight;}
+  a+=vec4<f32>(fine[fi*4u+1u].xyz,0.0)*weight;d.y+=fine[fi*4u+3u].y*weight;
    wet+=f32(fineQuench[fi])*weight;
    if(textureDimensions(fineReactant).x==s.material.x){react+=textureLoad(fineReactant,vec3<i32>(p),0)*weight;}
   }

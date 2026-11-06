@@ -2269,16 +2269,13 @@ export function resolveJoinedBoundary({ requested = false, sourceLaw = null, pre
   if (!immersedAdmitted) return { requested: true, admitted: false, reason: `joined-boundary-needs-admitted-immersed-source:${immersedReason ?? 'unknown'}` };
   return { requested: true, admitted: true, reason: null };
 }
-// Appearance model (compression study, 2026-10-13). `compact-3` stores three
-// appearance carriers and rebuilds the other six at the slot samplers by these
-// pooled ratios ([flame, shred, front] weights; negatives from the fit dropped).
-// The flag rides the last borrowed reactant lane (d.w). `authored` is the
-// existing model, bit for bit.
+// One retained activity field. Keep the four-slot storage layout compatible
+// with split grids and consumers; dropped carrier lanes are zero.
 export const APPEARANCE_MODELS = Object.freeze(['shred-only']);
 export function appearanceModelUniformValue(model) {
   return 0;
 }
-export function resolveAppearanceModel(requested = 'shred-only', {reactant = false, physics = false} = {}) {
+export function resolveAppearanceModel(requested = 'shred-only') {
   return {requested,effective:'shred-only',reason:requested==='shred-only'?null:'retired-activity-model-using-shred',
     storedCarriers:['interfaceShred'],transportedSlots:[0,1,3],storedSlots:4};
 }
@@ -4415,7 +4412,7 @@ fn slotIndex(c: vec3<i32>, slot: u32) -> u32 {
 // per-cell traffic is three slots. With stored = true the read is the raw
 // load: the transport predictor uses it to carry the stored form forward.
 fn readSlotWith(c: vec3<i32>, slot: u32, stored: bool) -> vec4<f32> {
-  
+
   return fluidSrc[slotIndex(c, slot)];
 }
 
@@ -4662,7 +4659,7 @@ fn openWorldAmbient(p: vec3<f32>, slot: u32, sample: vec4<f32>) -> vec4<f32> {
 }
 
 fn readPredictSlot(c: vec3<i32>, slot: u32) -> vec4<f32> {
-  
+
   return fluidPredict[slotIndex(c, slot)];
 }
 
@@ -5608,10 +5605,10 @@ fn csProjectPressure(@builtin(global_invocation_id) gid: vec3<u32>) {
   let correctedVelocity = velocityDensity.xyz - pressureGradient * projectionGain;
   fluidDst[base] = vec4<f32>(boundVelocity(correctedVelocity), density);
   fluidDst[base + 1u] = material;
-  
+
     fluidDst[base + 2u] = fireLayer;
     fluidDst[base + 3u] = microLayer;
-  
+
 }
 
 @compute @workgroup_size(4, 4, 4)
@@ -5641,10 +5638,10 @@ fn csProjectPressureTiered(@builtin(global_invocation_id) gid: vec3<u32>) {
   let correctedVelocity = velocityDensity.xyz - pressureGradient * projectionGain;
   fluidDst[base] = vec4<f32>(boundVelocity(correctedVelocity), density);
   fluidDst[base + 1u] = material;
-  
+
     fluidDst[base + 2u] = fireLayer;
     fluidDst[base + 3u] = microLayer;
-  
+
 }
 
 // Converged pressure solver. Same 7-point Laplacian and wide-stencil divergence
@@ -6000,7 +5997,7 @@ fn materialInterfaceGradient(c: vec3<i32>) -> vec3<f32> {
       shredPhysicalInterface(c + vec3<i32>(0, 1, 0)) - shredPhysicalInterface(c - vec3<i32>(0, 1, 0)),
       shredPhysicalInterface(c + vec3<i32>(0, 0, 1)) - shredPhysicalInterface(c - vec3<i32>(0, 0, 1))
     );
-  
+
 }
 
 fn combustionFrontGradient(c: vec3<i32>) -> vec3<f32> {
@@ -6703,12 +6700,6 @@ fn csIrradianceAnalytic(@builtin(local_invocation_index) tid: u32) {
   }
 }
 
-// Appearance relayout: run once by the host when the effective appearance
-// model changes, before the first step under the new model. Reads the stored
-// form the previous model left and writes the form the new model reads. The
-// expansion carries the dropped carriers into the authored layout; the compact
-// direction keeps flame, shred and front and leaves slot 3 untouched.
-
 @compute @workgroup_size(4, 4, 4)
 fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
   seatGridShape();
@@ -6792,11 +6783,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let flameTransportedDetailFrequency = (1.0);
   let plumeRiseScale = mix(0.82, 1.58, plumeHeight01);
   let sourceScaleCompensation = mix(1.22, 0.94, smoothstep(0.35, 1.30, fireScale));
-  let microAmount = clamp(u.grid_overlay_debug.y, 0.0, 2.5);
   let shredAmount = clamp(u.grid_overlay_debug.z, 0.0, 10.0);
-  let fireLickAmount = clamp(u.grid_overlay_debug.w, 0.0, 10.0);
   let shredOperatorGain = shredAmount * (0.80 + shredAmount * 0.080);
-  let fireLickOperatorGain = fireLickAmount * (0.82 + fireLickAmount * 0.110);
   let detailDomain = vec3<f32>(flameTransportedDetailFrequency, mix(1.0, 1.18, plumeHeight01), flameTransportedDetailFrequency);
   let windStrength = clamp(u.scene_controls.y, 0.0, 1.5);
   let windAngle = u.scene_controls.z;
@@ -6890,7 +6878,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   var material = vec4<f32>(0.0);
   var fireLayer = vec4<f32>(0.0);
   var microLayer = vec4<f32>(0.0);
-  
+
     let forwardCell = sceneClipCharacteristic(cell, cell + advectVelocity * backtraceScale);
     if (!MATERIAL_ONLY) {
       if (macCormack) { advected = macCormackSlot(cellI, idx, backCell, forwardCell, 0u); }
@@ -6907,14 +6895,13 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       }
       microLayer = vec4<f32>(0.0, sampleFluidSlotMasked(backCell, 3u).y, 0.0, 0.0);
     }
-  
+
   var combustionFrontTopology = 0.0;
-  
+
 
   // Reactant law (volume-reactant-combustion.mjs): the oxidizer rides the
   // fuel's characteristic and scheme, then one named exchange (an eddy
   // diffusivity, unity Lewis number) acts alike on fuel, oxidizer and heat.
-  // Nothing in these blocks runs under the authored law.
   let reactantOn = reactantLawOn();
   var oxidizer = u.reactant_combustion_c.z;
   if (reactantOn) {
@@ -7012,7 +6999,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   }
   let residentDivergence=residentRate/transportBacktraceScale(dynamicsSpeed());
   var reactantFreshBurnRate = 0.0;
-  
+
     // One activity memory. No auxiliary-flame/source-envelope network is
     // evaluated in this pipeline specialization. Chemistry stays the same.
     let priorBurn = textureLoad(reactantSrc, cellI, 0).y;
@@ -7070,7 +7057,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     let freshReaction = 1.0 - exp(-reactantFreshBurnRate / max(u.reactant_combustion_d.x, 1e-6));
     interfaceShred = max(interfaceShred, interfaceEnergy * shredOperatorGain * (smoke * 0.54 + heat * 0.38 + freshReaction * 0.32 + immersedTarget * 0.30) * 1.72);
     textureStore(burnRate, cellI, vec4<f32>(u.heat_release.x * reactantFreshBurnRate + immersedTarget + residentDivergence, 0.0, 0.0, 0.0));
-  
+
 
   // Keep the original lower and side walls, but move the upper fade to the
   // expanded domain ceiling. The old symmetric abs(y) wall would suppress
@@ -7113,7 +7100,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // oxidizer relaxes toward ambient at the fuel's sponge rate there.
   oxidizer = u.reactant_combustion_c.z - (u.reactant_combustion_c.z - oxidizer) * stepRate(mix(0.20, 1.0, materialWallFade) * mix(0.58, 1.0, materialHeatTopFade));
   // Retired activity sponge.
-  
+
   interfaceShred = interfaceShred * stepRate(mix(0.18, 1.0, wallFade));
   // The quench field spreads to neighbours only while a liquid is bound with
   // transfer enabled (the host packs the flag); otherwise the six reads are
@@ -7166,7 +7153,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   heat = heat * stepRate(1.0 - localQuenchSuppression * 0.025);
   fuel = fuel * stepRate(1.0 - localQuenchSuppression * 0.030);
   // Retired activity quenching.
-  
+
   // Physics appearance: soot burns out where it is hot and meets oxygen
   // (volume-physics-appearance.mjs); exactly 1 at rate 0.
   if (reactantOn) {
@@ -7183,10 +7170,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   fluidDst[base + 1u] = vec4<f32>(clamp(smoke, 0.0, 2.2), clamp(heat, 0.0, 2.4), clamp(fuel, 0.0, 1.8), clamp(materialDetail, 0.0, 1.8));
   // compact-3 stores flame, interface shred and combustion front only; the rest
   // is rebuilt at the slot samplers (expandCompactCarriers).
-  
+
     fluidDst[base + 2u] = vec4<f32>(0.0);
     fluidDst[base + 3u] = vec4<f32>(0.0, clamp(interfaceShred, 0.0, 1.8), 0.0, 0.0);
-  
+
   frontDst[idx] = 0.0;
   if (reactantOn) {
     textureStore(reactantDst, cellI, vec4<f32>(clamp(oxidizer, 0.0, 2.0), reactantFreshBurnRate, 0.0, 0.0));
@@ -9412,7 +9399,7 @@ fn boundarySplatClampCell(cell: vec3<i32>) -> vec3<u32> {
 
 fn boundarySplatReadSlot(cell: vec3<i32>, slot: u32) -> vec4<f32> {
   let base = boundarySplatCellIndex(boundarySplatClampCell(cell)) * SLOTS_PER_CELL;
-  
+
   return fluid[base + slot];
 }
 
@@ -16759,13 +16746,10 @@ export function createKaminosVolumePrototype({
     const tallPlumePressureTierStrategyValue = spatialPressureEnabled ? tierPlan.strategy : TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE;
     const pressureProjectionReadStrategy = spatialPressureEnabled ? PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE : PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER;
     const simPassesPerFrame = 1;
-    const fireLickOperatorGain = fireLickOperatorGainFromAmount(controlsSnapshot.fireLicks);
-    const shredOnly = state.appearanceModel?.effective === 'shred-only';
-    const fireLickBreakupEnabled = !shredOnly && fireLickOperatorGain > FIRE_LICK_BREAKUP_BYPASS_THRESHOLD;
-    const mainFluidKernelStrategy = shredOnly ? 'reactant-one-field-shred-specialized-v0' : fireLickBreakupEnabled
-      ? MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP
-      : MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS;
-    const fireLickBreakupEvaluationsPerCell = fireLickBreakupEnabled ? 1 : 0;
+    const fireLickOperatorGain = 0;
+    const fireLickBreakupEnabled = false;
+    const mainFluidKernelStrategy = 'reactant-one-field-shred-specialized-v0';
+    const fireLickBreakupEvaluationsPerCell = 0;
     const mainFluidLocalProjectionStrategy = MAIN_FLUID_LOCAL_PROJECTION_STRATEGY_STAGED_PRESSURE_ONLY;
     const mainFluidLocalProjectionDivergenceEvaluationsPerCell = 0;
     const bonfireCombustionFieldActive = scene === 'bonfire_plume';

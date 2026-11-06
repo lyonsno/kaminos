@@ -1,8 +1,7 @@
 import {resolveWorldCalibration} from './volume-world-calibration.mjs';
-// Reactant-driven combustion (candidate v0, 2026-10-12).
+// Reactant-driven combustion.
 //
-// One local material process replaces the authored tall-plume reaction when
-// the Reaction Law select asks for it: fuel and oxidizer that share a cell
+// One local material process: fuel and oxidizer that share a cell
 // burn when the cell's thermal state is in or above the ignition band, at a
 // rate set by one mixing time. The single burned amount b owns every
 // consequence: fuel loses b, oxidizer loses s·b, the thermal state gains Q·b,
@@ -22,7 +21,7 @@ import {resolveWorldCalibration} from './volume-world-calibration.mjs';
 // timeStep; dt = 1 at the reference Speed under the uniform step). Fuel: the
 // existing fuel channel (the inflow stream carries Fuel Fraction). Oxidizer:
 // normalised so ambient air is 1. Thermal state: the existing dimensionless
-// heat channel (Kelvin is only a renderer calibration of it). Soot: the
+// heat channel (the Kelvin conversion also governs soot burnout). Soot: the
 // existing smoke channel's optical units.
 //
 // The existing solver stores velocity in cells per step, so a diffusivity fixed
@@ -44,7 +43,7 @@ export const REACTANT_MODEL = Object.freeze({
     time: 'reference steps: dt = timeStep, 1 at the reference Speed under the uniform step',
     fuel: 'existing fuel channel; the inflow stream carries Fuel Fraction',
     oxidizer: 'normalised oxidizer: ambient air = 1',
-    thermal: 'existing dimensionless heat channel; Kelvin is a renderer calibration',
+    thermal: 'dimensionless heat channel; Kelvin conversion governs emission and soot burnout',
     soot: 'existing smoke channel optical units',
   }),
   ambientOxidizer: 1,
