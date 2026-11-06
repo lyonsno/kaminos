@@ -32,6 +32,11 @@ export function resolveAuthoredWaterSampling(records,setup={}){
   return sum+(drop.width*scale)**3;
  },0);
  if(!Number.isFinite(volume))throw Error('Requested water volume is not representable');
+ if(setup.cellSize!=null){
+  if(!Number.isFinite(setup.cellSize)||setup.cellSize<=0)throw Error('Water cell size must be positive and finite');
+  const spacing=setup.cellSize/Math.cbrt(3);
+  return {...sampling,spacing,particleTarget:volume?Math.max(1,volume/spacing**3):sampling.particleTarget??13824};
+ }
  // Legacy spacing seeds its equivalent target without changing that resolution.
  // Once saved, spacing is a derived cache; the target and current volume govern.
  if(sampling.particleTarget===undefined)return {...sampling,particleTarget:volume?Math.max(1,volume/sampling.spacing**3):13824};

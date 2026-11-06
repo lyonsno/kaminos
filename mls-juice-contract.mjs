@@ -26,7 +26,9 @@ export function mlsConfig(setup={}) {
   const dimensions=gridDimensions(grid),gridCells=dimensions.reduce((n,v)=>n*v,1);
   if(!Number.isFinite(cell)||cell<=0)throw Error('Invalid MLS cell size');
   if(!Number.isFinite(viscosity)||viscosity<0)throw Error('Invalid MLS viscosity');
-  const dt=1/240;
+  const dt=setup.timeStepSeconds??1/240,stiffness=setup.stiffness??50;
+  if(!Number.isFinite(dt)||dt<=0)throw Error('Invalid MLS physical timestep');
+  if(!Number.isFinite(stiffness)||stiffness<0)throw Error('Invalid MLS stiffness');
   const maxSubstepsPerBatch=setup.maxSubstepsPerBatch??24;
   if(maxSubstepsPerBatch!==Infinity&&(!Number.isSafeInteger(maxSubstepsPerBatch)||maxSubstepsPerBatch<1))throw Error('Invalid MLS max substeps per batch');
   const maxBacklogSeconds=setup.maxBacklogSeconds??(Number.isFinite(maxSubstepsPerBatch)?Math.max(24,maxSubstepsPerBatch*2)*dt:Infinity);
@@ -37,7 +39,7 @@ export function mlsConfig(setup={}) {
   return {capacity,grid,dimensions,gridCells,cell,min,
     bounds:{min:min.map(v=>v+2*cell),max:min.map((v,i)=>v+(dimensions[i]-3)*cell)},dt,
     maxSubstepsPerBatch,maxBacklogSeconds,
-    modelSecondsPerSecond:Math.sqrt(9.81/(.4*cell)),restDensity:3,stiffness:50,viscosity,
+    modelSecondsPerSecond:Math.sqrt(9.81/(.4*cell)),restDensity:3,stiffness,viscosity,
     particleRadius:cell*.65,obstacle,boundaryWalls:setup.boundaryWalls!==false};
 }
 
@@ -101,7 +103,7 @@ export function createSimFrameCoordinator({
     const waterReady=waterActive&&!water?.pending;
     const accruedSeconds=lastFrameDurationMs>0?lastFrameDurationMs/1000:0;
     const effectiveBacklogSeconds=water?.backlogSeconds===undefined?Infinity:water.backlogSeconds+accruedSeconds;
-    const waterNeedsStep=waterReady&&effectiveBacklogSeconds+1e-10>=1/240;
+    const waterNeedsStep=waterReady&&effectiveBacklogSeconds+1e-10>=(water?.dt??1/240);
     const ashActive=Boolean(ash?.active);
     const ashReady=ashActive&&ash?.due!==false;
     const activeCount=(flameActive?1:0)+(waterActive?1:0)+(ashActive?1:0);
@@ -128,6 +130,12 @@ export function createSimFrameCoordinator({
       }else{
         waterMaxSteps=lastFrameDurationMs>1000/25?waterContendedMaxSubsteps:waterSteadyContendedMaxSubsteps;
       }
+    }
+    // An authored work budget is an explicit operator choice. Keep the
+    // cooperative legacy budget when no such choice was made.
+    if(water.requestedMaxSteps!=null){
+      if(!Number.isSafeInteger(water.requestedMaxSteps)||water.requestedMaxSteps<1)throw Error('Invalid requested water step budget');
+      waterMaxSteps=water.requestedMaxSteps;
     }
     if(waterActive){if(waterAdvance)waterFramesAdmitted++;else if(waterNeedsStep)waterFramesDeferred++;}
     if(ashActive){if(ashAdvance)ashFramesAdmitted++;else if(ashReady)ashFramesDeferred++;}

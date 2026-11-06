@@ -84,7 +84,6 @@ test('partial authored transform patches merge into the accepted pose before ape
   assert.deepEqual(mergeAndValidate({ schema: 'kaminos.local-liquid-emitter.v1', baseRadius: 0.08, strength: 1.15, rate: 1200 }, current, {
     position: [0.2, 0.45, -1.3],
   }), { position: [0.2, 0.45, -1.3], rotation: [0.24, 0, 0], scale: [1, 1, 1] });
-  assert.throws(() => mergeAndValidate({ schema: 'kaminos.local-liquid-emitter.v1', baseRadius: 0.08, strength: 1.15, rate: 1200 }, current, {
-    scale: [3, 3, 3],
-  }), /aperture must stay between/);
+  assert.doesNotThrow(() => mergeAndValidate({ schema: 'kaminos.local-liquid-emitter.v1', baseRadius: 0.08, strength: 1.15, rate: 1200 }, current, {scale:[3,3,3]}));
+  assert.throws(() => mergeAndValidate({schema:'kaminos.local-liquid-emitter.v1',baseRadius:.08,strength:1.15,rate:1200},current,{scale:[-1,-1,-1]}),/positive uniform scale/);
 });

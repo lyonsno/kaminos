@@ -43,12 +43,21 @@ export function normalizeLocalLiquidEmitter(value, pose = null) {
   if (!value || value.schema !== LOCAL_LIQUID_EMITTER_SCHEMA) throw Error('Unsupported local liquid emitter settings');
   const mode=value.mode??'continuous';
   if(!['continuous','finite_drop'].includes(mode))throw Error('Unknown water source mode');
+  const flowMode=value.flowMode??'independent';
+  if(!['independent','speed','flow'].includes(flowMode))throw Error('Invalid water flow mode');
+  if(mode==='continuous'&&flowMode!=='independent'){
+    const radius=value.baseRadius*(pose?.scale?.[0]??1),area=Math.PI*radius**2;
+    if(!Number.isFinite(area)||area<=0)throw Error('Water aperture area must be positive and finite');
+    value=flowMode==='speed'?{...value,volumeRate:area*value.strength}:{...value,strength:value.volumeRate/area};
+  }
   if(Object.hasOwn(value,'emissionEnabled')&&typeof value.emissionEnabled!=='boolean')throw Error('Water emissionEnabled must be Boolean');
   const activation=Object.hasOwn(value,'emissionEnabled')?{emissionEnabled:value.emissionEnabled}:{};
   if(value.lifetimeSeconds!=null&&(!Number.isFinite(value.lifetimeSeconds)||value.lifetimeSeconds<=0))throw Error('Water lifetime must be positive or disabled');
   const retention=Object.hasOwn(value,'lifetimeSeconds')?{lifetimeSeconds:value.lifetimeSeconds}:{};
   if(Object.hasOwn(value,'volumeRate')&&(!Number.isFinite(value.volumeRate)||value.volumeRate<0))throw Error('Water volume flow must be nonnegative');
   const flow=Object.hasOwn(value,'volumeRate')?{volumeRate:value.volumeRate}:{};
+  if(value.aimAt!=null&&(typeof value.aimAt!=='string'||!value.aimAt.trim()))throw Error('Water aimAt requires a scene object ID or null');
+  const aim=value.aimAt?{aimAt:value.aimAt}:{};
   if(mode==='finite_drop'){
     if(pose)normalizeLocalLiquidEmitterPose(pose);
     return {schema:LOCAL_LIQUID_EMITTER_SCHEMA,baseRadius:value.baseRadius??.08,strength:value.strength??1.15,rate:value.rate??1200,mode,...retention,...flow,...activation,drop:normalizeAuthoredWaterDrop(value.drop)};
@@ -56,15 +65,15 @@ export function normalizeLocalLiquidEmitter(value, pose = null) {
   for (const key of ['baseRadius','strength','rate']) {
     if (!Number.isFinite(value[key])) throw Error(`Invalid local liquid emitter ${key}`);
   }
-  if (value.baseRadius < .035 || value.baseRadius > .18) throw Error('Local liquid emitter baseRadius must be between 0.035 and 0.18');
-  if (value.strength < .25 || value.strength > 2.6) throw Error('Local liquid emitter strength must be between 0.25 and 2.6');
+  if (value.baseRadius <= 0) throw Error('Local liquid emitter baseRadius must be positive');
+  if (value.strength < 0) throw Error('Local liquid emitter strength must be nonnegative');
   if (value.rate < 0) throw Error('Invalid local liquid emitter rate');
   if (pose) {
     const checked=normalizeLocalLiquidEmitterPose(pose);
     const radius=value.baseRadius*checked.scale[0];
-    if (radius < .035 || radius > .18) throw Error('Water emitter aperture must stay between 0.035 and 0.18');
+    if (!Number.isFinite(radius)||radius<=0) throw Error('Water emitter aperture must be positive and finite');
   }
-  return {schema:LOCAL_LIQUID_EMITTER_SCHEMA,baseRadius:value.baseRadius,strength:value.strength,rate:value.rate,...retention,...flow,...activation,...(Object.hasOwn(value,'mode')?{mode}: {})};
+  return {schema:LOCAL_LIQUID_EMITTER_SCHEMA,baseRadius:value.baseRadius,strength:value.strength,rate:value.rate,...retention,...flow,...activation,...aim,...(Object.hasOwn(value,'flowMode')?{flowMode}:{}),...(Object.hasOwn(value,'mode')?{mode}: {})};
 }
 
 function normalizeLegacySetup(value) {
@@ -84,7 +93,16 @@ function normalizeLocalLiquidSetupCore(value) {
   for(const key of ['particleCount','densityIterations']) {
     if(!Number.isSafeInteger(value[key]) || value[key]<1)throw Error(`Invalid local liquid ${key}`);
   }
-  return {schema:LOCAL_LIQUID_SCHEMA,support:value.support,particleCount:value.particleCount,densityIterations:value.densityIterations,
+  const quality={};
+  for(const key of ['cellSize','timeStepSeconds','viscosity','stiffness'])if(value[key]!=null){
+    if(!Number.isFinite(value[key])||(key==='viscosity'||key==='stiffness'?value[key]<0:value[key]<=0))throw Error(`Invalid water ${key}`);
+    quality[key]=value[key];
+  }
+  for(const key of ['stepSubsteps','maxSubstepsPerBatch'])if(value[key]!=null){
+    if(!Number.isSafeInteger(value[key])||value[key]<1)throw Error(`Invalid water ${key}`);quality[key]=value[key];
+  }
+  if(value.timePolicy!=null){if(!['complete','realtime'].includes(value.timePolicy))throw Error('Invalid water timePolicy');quality.timePolicy=value.timePolicy;}
+  return {schema:LOCAL_LIQUID_SCHEMA,support:value.support,particleCount:value.particleCount,densityIterations:value.densityIterations,...quality,
     showSupportGeometry:value.showSupportGeometry??true,...(value.waterSampling?{waterSampling:normalizeAuthoredWaterSampling(value.waterSampling)}:{})};
 }
 

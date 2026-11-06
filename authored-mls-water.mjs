@@ -6,6 +6,7 @@ import {mlsConfig,MLS_ROUTE,validateMlsPacket} from './mls-juice-contract.mjs';
 // Source objects retain their authored units. The old PBF adapter's radius and
 // speed divisors are deliberately absent from this engine's world-unit packet.
 export function authoredMlsCellSize(records,options={}){
+ if(options.cellSize!=null){if(!Number.isFinite(options.cellSize)||options.cellSize<=0)throw Error('Water cell size must be positive and finite');return options.cellSize;}
  return records.some(r=>r.localLiquidEmitter?.mode==='finite_drop')?resolveAuthoredWaterSampling(records,options).spacing*Math.cbrt(3):.05;
 }
 export function authoredMlsParticleVolume(cellSize=.05){return cellSize**3/3;}
@@ -43,7 +44,8 @@ export function authoredMlsSetup(records,options={}){
  const gridSize=bounds.max.map((v,i)=>Math.ceil((v-bounds.min[i])/cell)+5);
  const originWorld=bounds.min.map(v=>v-2*cell);
  const solver={particleCount:capacity||options.particleCount||12000,cellSize:cell,gridSize,originWorld,
-  maxSubstepsPerBatch:options.maxSubstepsPerBatch??12,maxBacklogSeconds:options.maxBacklogSeconds??(24/240),
+  ...Object.fromEntries(['timeStepSeconds','viscosity','stiffness'].filter(key=>options[key]!=null).map(key=>[key,options[key]])),
+  maxSubstepsPerBatch:options.maxSubstepsPerBatch??12,maxBacklogSeconds:options.timePolicy==='complete'?Infinity:options.maxBacklogSeconds??Math.max(24,(options.maxSubstepsPerBatch??12)*2)*(options.timeStepSeconds??1/240),
   boundaryWalls:sampling.container!==null,obstacle:null,trackPopulation:true};
  const config=mlsConfig(solver),initialParticles=new Float32Array(initialCount*20);let slot=0;
  for(const d of drops){
