@@ -30,9 +30,8 @@ import {resolveWorldCalibration} from './volume-world-calibration.mjs';
 // reports both the domain value and the per-step cell weight.
 
 export const REACTANT_COMBUSTION_IDENTITY = 'kaminos.volume.reactant-combustion.v0';
-export const REACTION_LAW_AUTHORED = 'authored-tall-plume';
 export const REACTION_LAW_REACTANT = 'reactant-v0';
-export const REACTION_LAWS = Object.freeze([REACTION_LAW_AUTHORED, REACTION_LAW_REACTANT]);
+export const REACTION_LAWS = Object.freeze([REACTION_LAW_REACTANT]);
 export const REACTANT_COMBUSTION_UNIFORM_FLOATS = 16;
 // Explicit 6-neighbour exchange is monotone while the per-neighbour weight is
 // at most 1/6; the effective weight is capped just inside that and the receipt
@@ -291,7 +290,7 @@ function resolveModel(overrides) {
 
 export function resolveReactantCombustionConfig(controls = {}, options = {}) {
   const grid = Number.isFinite(options.grid) ? options.grid : 32;
-  const lawRequested = REACTION_LAWS.includes(controls.reactionLaw) ? controls.reactionLaw : REACTION_LAW_AUTHORED;
+  const lawRequested = controls.reactionLaw ?? REACTION_LAW_REACTANT;
   const [mixLo, mixHi] = REACTANT_CONTROL_RANGES.mixingTimeSteps;
   const [coolLo, coolHi] = REACTANT_CONTROL_RANGES.coolingTimeSteps;
   const mixingTimeSteps = clamp(finiteOr(controls.reactantMixingTime, REACTANT_CONTROL_DEFAULTS.mixingTimeSteps), mixLo, mixHi);
@@ -311,8 +310,8 @@ export function resolveReactantCombustionConfig(controls = {}, options = {}) {
     sootYield: finiteOr(controls.reactantSootYield, REACTANT_CONTROL_DEFAULTS.sootYield),
     modelOverrides: overridden.length ? Object.fromEntries(overridden.map(key => [key, Number(controls.reactantModelOverrides[key])])) : null,
   };
-  const off = reason => ({ identity: REACTANT_COMBUSTION_IDENTITY, requested, effective: { admitted: false, reason, law: REACTION_LAW_AUTHORED } });
-  if (lawRequested !== REACTION_LAW_REACTANT) return off('reaction-law-is-authored');
+  const off = reason => ({ identity: REACTANT_COMBUSTION_IDENTITY, requested, effective: { admitted: false, reason, law: null } });
+  if (lawRequested !== REACTION_LAW_REACTANT) return off('retired-reaction-law-requires-runtime-basin-fallback');
   if (!['inflow-boundary', 'immersed-source'].includes(requested.emitterSourceLaw)) return off('reactant-law-requires-inflow-or-immersed-source');
   // The oxidizer rides the fuel's characteristic, which exists only under the
   // common-gas (or MacCormack) transport; legacy per-layer lifts would carry

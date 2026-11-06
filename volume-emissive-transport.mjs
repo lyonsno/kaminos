@@ -190,49 +190,7 @@ fn physicsEmissiveMaterial(r: FlowReconstructionSample, smokeVisible: f32) -> Em
   return EmissiveMaterial(thermal + gas, absorbing * smokeVisible, scattering);
 }
 fn emissiveMaterial(r: FlowReconstructionSample, coverage: f32, smokeVisible: f32) -> EmissiveMaterial {
-  if (u.emissive_physics.x > 0.5) { return physicsEmissiveMaterial(r, smokeVisible); }
-  let m = max(r.material, vec4<f32>(0.0));
-  let f = max(r.fireLayer, vec4<f32>(0.0));
-  let d = max(r.microLayer, vec4<f32>(0.0));
-  // The simulation transports heat in material.y. Flame, ember, flame-detail
-  // and lick carriers describe appearance/support, not additional heat units.
-  // Summing them reheated cold detail and flattened temperature distinctions.
-  // Kelvin remains a renderer calibration of this dimensionless heat field.
-  let transported = u.emissive_material.w > 0.5;
-  // Reactant law: raw soot and burn-rate reaction light; the thermal glow is
-  // the same temperature mapping of transported heat under both laws.
-  let reactant = u.reactant_combustion_a.x > 0.5;
-  let energy = emissiveHeatSource(m, f, d, transported);
-  let activity = 1.0-exp(-energy*1.6);
-  // Mode 2's temperature is the hot ceiling, and spread is cooling below it.
-  // Brightness therefore cannot hide a much hotter, unlabelled half-spread.
-  let hotKelvin = u.physical_fire.y - (1.0-activity)*u.physical_fire.z;
-  let kelvin = mix(800.0, max(800.0, hotKelvin), smoothstep(0.003, 0.10, energy));
-  let sootYield = max(0.0, u.boundary_fire_color.y);
-  // Mode 2 has one named smoke coefficient scale; the old Smoke slider was
-  // a multiplier for a separately painted radiance/alpha path, not this material.
-  // Under the reactant law the soot drawn is the raw smoke channel, the same
-  // quantity that crosses to the exterior; the authored fold keeps its look.
-  let smokeAmount = select(m.x+d.x*0.50+m.w*0.08, m.x, reactant) * max(0.0, u.viewport_steps_density.w);
-  // Boundary coverage locates the material; it is not itself a supply of soot.
-  // Use the transported soot proxy without a positive density floor. The
-  // clean reaction spectrum can still emit where this thermal population is zero.
-  let hotSoot = emissiveSootPopulation(coverage, sootYield, u.physical_fire.w, smokeAmount, transported);
-  let smokeExtinction = smokeAmount * u.emissive_material.x * smokeVisible;
-  let scattering = smokeExtinction * u.emissive_material.y;
-  let absorption = hotSoot + smokeExtinction-scattering;
-  // Reaction light is tied to fresh fuel at the thin reaction interface. Soot
-  // suppresses it locally; there is no normalized blue term over the warm body.
-  let front = smoothstep(0.001,0.12,r.frontTopology+f.w*0.5+d.z*0.08);
-  let freshFuel = smoothstep(0.008,0.20,m.z);
-  // Reactant law: fresh reaction light disappears when fresh reaction does; fuel
-  // that has not met air, or has used its air up, emits none.
-  let burnLight = reactionLightFromBurn(r.freshBurn, u.reactant_combustion_d.x);
-  let reactionDrive = select(front*freshFuel, burnLight, reactant);
-  let clean = max(0.0,coverage)*reactionDrive*exp(-sootYield*smokeAmount*4.0-hotSoot*2.0);
-  let gas = vec3<f32>(${REACTION_RGB.join(',')}) * clean * u.physical_display.x;
-  let emission = hotSoot*thermalRadiance(kelvin) + gas;
-  return EmissiveMaterial(emission, absorption, scattering);
+  return physicsEmissiveMaterial(r, smokeVisible);
 }
 fn sceneEmissiveMaterialAt(p: vec3<f32>) -> EmissiveMaterial {
   let r = sampleWorldFlowReconstructionRaw(p);

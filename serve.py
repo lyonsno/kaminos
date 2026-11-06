@@ -2066,6 +2066,60 @@ def read_volume_settings_preset_layered(layers, preset_ref, schema=None):
     raise FileNotFoundError(f"volume settings preset not found in any basin store: {requested}")
 
 
+def read_runtime_volume_settings_preset(layers, preset_ref, schema=None):
+    """Substitute an explicit, ephemeral preview; never rewrite historical work."""
+    schema = _load_volume_settings_preset_schema(schema)
+    try:
+        document = read_volume_settings_preset_layered(layers, preset_ref, schema)
+        law = (document["preset"].get("domControls") or {}).get("volume-reaction-law", {})
+        added = (document.get("schemaProjection") or {}).get("defaultsApplied") or []
+        replaced = (document.get("schemaProjection") or {}).get("unsupportedValuesDefaulted") or []
+        if (_settings_preset_descriptor_value(law) == "reactant-v0"
+                and "volume-reaction-law" not in added
+                and not any(entry.get("id") == "volume-reaction-law" for entry in replaced)):
+            return document
+        reason = "The basin uses a retired pre-Reactant combustion model"
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        reason = str(error)
+    source = json.loads((ROOT / "artifacts/default-basin/reactant-preview-source.json").read_text())
+    payload, projection = normalize_volume_settings_preset_payload(source["preset"], schema, tolerate_foreign_controls=True)
+    controls = payload["domControls"]
+    overrides = {
+        "volume-reaction-law": "reactant-v0", "volume-appearance-model": "shred-only",
+        "volume-resolution": "32", "volume-steps": 8, "volume-render-scale": 0.4,
+        "volume-fine-velocity": "0", "volume-fine-pressure": "0",
+        "volume-world-smoke": "off", "volume-world-smoke-intermediate": "off",
+        "volume-adaptive-material": False,
+    }
+    route = urlparse(payload["route"])
+    params = dict(parse_qsl(route.query, keep_blank_values=True))
+    for key, value in overrides.items():
+        if key not in controls:
+            continue
+        descriptor = controls[key]
+        descriptor.pop("rawValue", None)
+        descriptor["value"] = value
+        params[descriptor["param"]] = _settings_preset_route_value(value)
+    payload["route"] = route._replace(query=urlencode(params)).geturl()
+    validate_volume_settings_preset_payload(payload, schema)
+    content_hash = _volume_settings_content_hash(payload, schema)
+    effective = f"vsp-{content_hash}"
+    warning = f"BASIN REPLACED: {preset_ref}: {reason}. Loaded cheap Reactant preview instead; the historical look is not reproduced. Original basin is unchanged."
+    return {
+        "identity": VOLUME_SETTINGS_PRESET_ARTIFACT_IDENTITY,
+        "schemaIdentity": schema["identity"], "presetId": effective,
+        "contentHash": f"sha256:{content_hash}", "controlCount": payload["controlCount"],
+        "preset": payload, "label": "Reactant preview (historical basin fallback)",
+        "requestedPresetRef": str(preset_ref), "schemaProjection": projection,
+        "runtimeFallback": {
+            "identity": "kaminos.volume.runtime-basin-fallback.v1",
+            "requestedPresetRef": str(preset_ref), "effectivePresetId": effective,
+            "sourcePresetId": source["presetId"], "reason": reason, "warning": warning,
+            "historicalLookPreserved": False, "sourceModified": False,
+        },
+    }
+
+
 def list_volume_settings_presets_layered(layers, schema=None):
     schema = _load_volume_settings_preset_schema(schema)
     listings = [(role, list_volume_settings_presets(store, schema)) for role, store in layers]
@@ -5038,7 +5092,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
     def handle_volume_settings_preset_get(self, query):
         preset_ref = (query.get("id") or query.get("preset") or [""])[0]
         try:
-            document = read_volume_settings_preset_layered(
+            reader = read_runtime_volume_settings_preset if (query.get("runtime") or [""])[0] == "1" else read_volume_settings_preset_layered
+            document = reader(
                 volume_settings_store_layers(VOLUME_SETTINGS_STORE, SHARED_BASIN_STORE), preset_ref
             )
         except FileNotFoundError as error:

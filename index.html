@@ -2238,40 +2238,37 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="slider-row">
       <span class="slider-label">Reaction law</span>
       <select id="volume-reaction-law" class="select-input" data-volume-settings-param="volume_reaction_law">
-        <option value="authored-tall-plume">Authored (tall plume)</option>
-        <option value="reactant-v0">Reactant candidate</option>
+        <option value="reactant-v0">Reactant</option>
       </select>
-      <span class="slider-val" id="volume-reaction-law-val">authored-tall-plume</span>
+      <span class="slider-val" id="volume-reaction-law-val">reactant-v0</span>
     </div>
-    <span class="slider-help">Authored keeps the existing tall-plume reaction. Reactant candidate replaces it with one local burn: fuel and oxidizer (ambient air carries oxidizer; the inlet stream brings fuel at Fuel Fraction and no oxidizer) burn where they share a cell and the heat is in or above the ignition band, and that one burned amount sets the fuel and oxidizer loss, the heat release, the soot (smoke) made and the Heat release expansion. Contact comes from the flow plus one named neighbour exchange; nothing depends on height in the box. Fire Licks and Interface Shred are not drawn; under Authored, Fire Licks also speeds the authored burn. Inflow or immersed source and shared gas transport (Common gas transport, or MacCormack) only; otherwise the receipt says NOT ADMITTED. Saved basins load on Authored.</span>
+<span class="slider-help">Fuel and oxygen burn together where the gas is hot enough; that burn determines fuel and oxygen loss, heat, soot production and expansion.</span>
     <div class="slider-row">
       <span class="slider-label">Mixing time</span>
       <input type="range" id="volume-reactant-mixing-time" data-volume-settings-param="volume_reactant_mixing_time" min="0.01" max="30" step="any" value="3">
       <span class="slider-val" id="volume-reactant-mixing-time-val">3.0</span>
     </div>
-    <span class="slider-help">Reactant candidate: how quickly fuel and air that already share a cell and are hot enough burn, in reference steps (each step burns 1 − e^(−dt/time) of what can burn). Shorter makes a thinner, brighter flame front; longer lets fuel travel further before it burns. It does not bring fuel and air together: the flow and the neighbour exchange do.</span>
+    <span class="slider-help">Reactant: how quickly fuel and air that already share a cell and are hot enough burn, in reference steps (each step burns 1 − e^(−dt/time) of what can burn). Shorter makes a thinner, brighter flame front; longer lets fuel travel further before it burns. It does not bring fuel and air together: the flow and the neighbour exchange do.</span>
     <div class="slider-row">
       <span class="slider-label">Cooling time</span>
       <input type="range" id="volume-reactant-cooling-time" data-volume-settings-param="volume_reactant_cooling_time" min="5" max="300" step="any" value="55.06">
       <span class="slider-val" id="volume-reactant-cooling-time-val">55</span>
     </div>
-    <span class="slider-help">Reactant candidate: how quickly heat fades, in reference steps (heat keeps e^(−dt/time) per step). 55 matches the authored cooling. Longer keeps burned gas hot and glowing further up and keeps neighbouring fuel above ignition; shorter lets the flame starve itself of heat.</span>
+    <span class="slider-help">Reactant: how quickly heat fades, in reference steps (heat keeps e^(−dt/time) per step). 55 matches the authored cooling. Longer keeps burned gas hot and glowing further up and keeps neighbouring fuel above ignition; shorter lets the flame starve itself of heat.</span>
     <div class="slider-row">
       <span class="slider-label">Soot yield</span>
       <input type="range" id="volume-reactant-soot-yield" data-volume-settings-param="volume_reactant_soot_yield" min="0" max="6" step="any" value="2">
       <span class="slider-val" id="volume-reactant-soot-yield-val">2.00</span>
     </div>
-    <span class="slider-help">Reactant candidate: soot made per unit of fuel burned, in the simulation (2 is the model default; older basins without this control load with 2). It changes how much soot exists, so smoke amount, darkness, glow and shadowing all follow; it does not change the heat released. 0 burns clean.</span>
+    <span class="slider-help">Reactant: soot made per unit of fuel burned, in the simulation (2 is the model default; older basins without this control load with 2). It changes how much soot exists, so smoke amount, darkness, glow and shadowing all follow; it does not change the heat released. 0 burns clean.</span>
     <div class="slider-row">
       <span class="slider-label">Appearance model</span>
       <select id="volume-appearance-model" class="select-input" data-volume-settings-param="volume_appearance_model">
-        <option value="authored">Legacy activity network</option>
-        <option value="compact-3">Compact (three carriers)</option>
         <option value="shred-only">Shred only (one activity field)</option>
       </select>
-      <span class="slider-val" id="volume-appearance-model-val">authored</span>
+      <span class="slider-val" id="volume-appearance-model-val">shred-only</span>
     </div>
-    <span class="slider-help">A/B of the appearance state. Authored stores nine appearance channels per cell (flame, ember, flame detail, combustion front, micro smoke, interface shred, fire lick, ember fleck, material detail) plus a separate front field. Compact stores three (flame, interface shred, combustion front) and rebuilds the other six wherever they are read, by fixed ratios fitted on the saved basin; the Physics look draws none of these channels, so the choice shows mainly in motion, where detail forces read them, and in the Old adaptive ray marcher&rsquo;s step choice. Compact needs the Reactant reaction law; otherwise Authored runs. Known limit: the separate front field is approximated by one ratio of the stored front. Saved basins load on Authored.</span>
+    <span class="slider-help">Shred adds interface-localized stirring with one transported memory. Its force is zero at Shred 0.</span>
     <div class="slider-row">
       <span class="slider-label">Solver Sweeps</span>
       <input type="range" id="volume-pressure-solver-iterations" min="4" max="240" step="4" value="60" data-volume-settings-param="volume_pressure_solver_iterations">
@@ -17650,7 +17647,7 @@ const TALL_PLUME_OPERATOR_PRESETS = {
 
 // Bare kaminos_volume_smoke routes boot into this committed basin export
 // (grid 64, cheap ray budget). The ruffles tall preset stays available by name.
-const DEFAULT_VOLUME_SMOKE_BASIN_URL = './artifacts/default-basin/cheap-blast-furnace.json';
+const DEFAULT_VOLUME_SMOKE_BASIN_URL = '/api/volume-settings-preset?runtime=1&id=%40reactant-preview';
 
 const CANONICAL_VOLUME_MACRO_PRESETS = {
   macro_foothold_0621: {
@@ -18727,6 +18724,8 @@ function describeFlameSettingsProblems() {
   if (clamps.length) parts.push(`Clamped to range: ${clamps.map(clamp => clamp.message).join('; ')}`);
   const basin = window.__kaminosFlameBasinClampReport;
   if (basin?.clamps?.length) parts.push(`Basin ${basin.label} was clamped to range: ${basin.clamps.map(clamp => clamp.message).join('; ')}`);
+  const fallback=window.__kaminosVolumeSettingsPresetReceipt?.runtimeFallback;
+  if(fallback?.warning)parts.push(fallback.warning);
   const sceneMigration = window.__kaminosVolumeSettingsPresetReceipt?.serverProjection?.sceneMigration
     || volumeSceneReceipt(document.getElementById('volume-scene')?.dataset.volumeSceneRequest);
   if (sceneMigration?.migrated) parts.push(sceneMigration.migrationNote);
@@ -20189,11 +20188,11 @@ function readVolumeControls({quality=viewportDisplay.quality,document=globalThis
     adaptiveMaterial: adaptiveMaterialRuntimeControls(),
     ...Object.fromEntries([...WORLD_CALIBRATION_FIELDS,...SIMULATION_LEVER_FIELDS].map(f=>[f.key,f.type==='select-one'?document.getElementById(f.id).value:Number(document.getElementById(f.id).value)])),
     heatReleaseExpansion: parseFloat(document.getElementById('volume-heat-release-expansion').value),
-    reactionLaw: document.getElementById('volume-reaction-law').value || 'authored-tall-plume',
+    reactionLaw: 'reactant-v0',
     reactantMixingTime: parseFloat(document.getElementById('volume-reactant-mixing-time').value),
     reactantCoolingTime: parseFloat(document.getElementById('volume-reactant-cooling-time').value),
     reactantSootYield: parseFloat(document.getElementById('volume-reactant-soot-yield').value),
-    appearanceModel: document.getElementById('volume-appearance-model').value || 'authored',
+    appearanceModel: 'shred-only',
     velocityStaggering: document.getElementById('volume-velocity-staggering').value || 'collocated',
     immersedCentreX: parseFloat(document.getElementById('volume-immersed-centre-x').value),
     immersedCentreY: parseFloat(document.getElementById('volume-immersed-centre-y').value),
@@ -20896,17 +20895,23 @@ async function admitVolumeSettingsPresetRoute(params) {
   const requestedPresetId = params.get('settings_preset');
   const requestedAuthority = params.get('settings_preset_authority');
   if (!requestedPresetId && !requestedAuthority) return null;
-  if (!requestedPresetId || requestedAuthority !== 'shared-volume-settings-preset-v2') {
+  if (!requestedPresetId || !['shared-volume-settings-preset-v2','runtime-reactant-preview-v1'].includes(requestedAuthority)) {
     throw new Error('settings preset route identity or authority is incomplete');
   }
   const [artifactResponse, schemaResponse] = await Promise.all([
-    fetch(`/api/volume-settings-preset?id=${encodeURIComponent(requestedPresetId)}`, { cache: 'no-store' }),
+    fetch(`/api/volume-settings-preset?runtime=1&id=${encodeURIComponent(requestedPresetId)}`, { cache: 'no-store' }),
     fetch('/volume-settings-preset-schema-v2.json', { cache: 'no-store' }),
   ]);
   const [artifact, schema] = await Promise.all([artifactResponse.json(), schemaResponse.json()]);
   if (!artifactResponse.ok) throw new Error(artifact.error || `settings preset lookup failed: ${artifactResponse.status}`);
   if (!schemaResponse.ok) throw new Error(`settings preset schema lookup failed: ${schemaResponse.status}`);
   const receipt = validateVolumeSettingsPresetDocument(artifact, requestedPresetId, schema);
+  if(receipt.runtimeFallback){
+    for(const key of [...params.keys()])if(key.startsWith('volume_')&&!key.startsWith('volume_light_field'))params.delete(key);
+    for(const [key,value] of receipt.routeEntries)params.set(key,value);
+    params.set('settings_preset_authority',receipt.sourcePresetAuthority);
+    console.warn(receipt.runtimeFallback.warning);setInfo(receipt.runtimeFallback.warning);
+  }
   validateVolumeSettingsPresetTarget(receipt, params);
   adaptiveMaterialSettingsAuthored=hasAuthoredAdaptiveMaterial(receipt);
   activeVolumeSettingsPresetReceipt = receipt;
@@ -23263,7 +23268,7 @@ function flameSettingsState(preset=readVolumeSettingsValues(),source=activeVolum
     sourcePose:flameEmitterPose});
   // The applied controls may be remapped below; the immutable source receipt
   // must remain separate even when its preset shares the input control graph.
-  state.source=source ? structuredClone({presetId:source.presetId,label:source.label,preset:source.preset,...(source.serverProjection?{serverProjection:source.serverProjection}:{}),...(source.sourceSizeRecovery?{sourceSizeRecovery:source.sourceSizeRecovery}:{})}) : null;
+  state.source=source ? structuredClone({presetId:source.presetId,label:source.label,preset:source.preset,...(source.runtimeFallback?{runtimeFallback:source.runtimeFallback}:{}),...(source.serverProjection?{serverProjection:source.serverProjection}:{}),...(source.sourceSizeRecovery?{sourceSizeRecovery:source.sourceSizeRecovery}:{})}) : null;
   state.volumeSceneRequested=source?.serverProjection?.sceneMigration?.requested
     ?? (arguments.length ? DEFAULT_VOLUME_SCENE : document.getElementById('volume-scene').dataset.volumeSceneRequest || DEFAULT_VOLUME_SCENE);
   // Applying a look preset keeps the source where the author put it. Its feed
@@ -23435,14 +23440,15 @@ function installFlameAuthoring() {
 
 async function loadAuthoredFlameBasin(id,options={}) {
   loadAuthoredFlameBasin.schemaPromise ||= fetch('/volume-settings-preset-schema-v2.json',{cache:'no-store'}).then(async r=>{const s=await r.json();if(!r.ok)throw Error(s.error||'Basin lookup failed');return s;}).catch(e=>{loadAuthoredFlameBasin.schemaPromise=null;throw e;});
-  const [artifactResponse,schema]=await Promise.all([fetch(`/api/volume-settings-preset?id=${encodeURIComponent(id)}`,{cache:'no-store'}),loadAuthoredFlameBasin.schemaPromise]);
+  const [artifactResponse,schema]=await Promise.all([fetch(`/api/volume-settings-preset?runtime=1&id=${encodeURIComponent(id)}`,{cache:'no-store'}),loadAuthoredFlameBasin.schemaPromise]);
   const artifact=await artifactResponse.json();
   if(!artifactResponse.ok)throw Error(artifact.error||'Basin lookup failed');
   const receipt=validateVolumeSettingsPresetDocument(artifact,id,schema);
   if(receipt.preset.domControls['emitter-assay-family'].value==='cluster')throw Error('Cluster basins have no placeable flame source; use Workbench for that route');
   // Operator, 2026-10-18: values outside a control's range do not ban a basin;
   // they are clamped before the write and the page says which.
-  const state=flameSettingsState(receipt.preset,receipt,options);
+  if(receipt.runtimeFallback){console.warn(receipt.runtimeFallback.warning);setInfo(receipt.runtimeFallback.warning);}
+  const state=flameSettingsState(receipt.preset,receipt,receipt.runtimeFallback?{...options,sourceSize:'current'}:options);
   const clamps=flameSettingsStateClamps(state);
   window.__kaminosFlameBasinClamps=Object.freeze(clamps);
   // Named in the flame warning until another basin replaces it.
