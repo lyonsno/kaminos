@@ -1,3 +1,4 @@
+// Upstream CuMesh MIT notice: vendor/original-remesh/LICENSE.
 // MtlMesh::fill_holes: fill short boundary components with a vertex at the
 // mean of edge midpoints, then append one fan triangle per boundary edge.
 // This is prefill only; no component removal, welding or normal repair.
