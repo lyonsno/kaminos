@@ -1,8 +1,8 @@
-import {Node,RenderTarget,NodeMaterial,QuadMesh,HalfFloatType,FloatType,RedFormat,NearestFilter,Vector2,Matrix4,RendererUtils,TSL} from './lib/three.webgpu.js';
+import {Node,RenderTarget,NodeMaterial,QuadMesh,HalfFloatType,FloatType,RedFormat,NearestFilter,LinearFilter,LinearMipmapLinearFilter,Vector2,Matrix4,RendererUtils,TSL} from './lib/three.webgpu.js';
 import {fullscreenGraphContext} from './lib/addons/tsl/display/FullscreenGraphContext.js';
 import {SCENE_REFLECTION_QUERY_WGSL} from './scene-reflection-query.mjs';
 import {installSceneReflectionLighting} from './scene-reflection-lighting.mjs';
-const {Fn,NodeUpdateType,uniform,texture,passTexture,context,uv,screenUV,vec2,vec3,vec4,float,wgsl,wgslFn,If,outputStruct,property,getViewPosition,positionView,normalView,positionViewDirection,roughness,dot,abs,max,mix,pow,exp,floor}=TSL;
+const {Fn,NodeUpdateType,uniform,texture,sampler,passTexture,context,uv,screenUV,vec2,vec3,vec4,float,wgsl,wgslFn,If,outputStruct,property,getViewPosition,positionView,normalView,positionViewDirection,roughness,dot,abs,max,mix,pow,exp,floor}=TSL;
 
 export function resolveReflectionSettings(value={}){
  const result={enabled:false,resolutionScale:.5,steps:64,maxDistance:50,thickness:.15,roughnessCutoff:.95,temporal:true,historyWeight:.85,...value};
@@ -14,8 +14,8 @@ export function resolveReflectionSettings(value={}){
  return result;
 }
 
-const sample=wgslFn(`fn reflectionSampleEntry(coords:vec2<f32>,depthMap:texture_depth_2d,colorMap:texture_2d<f32>,normalMap:texture_2d<f32>,projection:mat4x4<f32>,inverseProjection:mat4x4<f32>,maxDistance:f32,thickness:f32,nearPlane:f32,steps:u32,frame:u32,roughnessCutoff:f32)->vec4<f32>{
- return sampleSceneReflection(coords,depthMap,colorMap,normalMap,projection,inverseProjection,maxDistance,thickness,nearPlane,steps,frame,roughnessCutoff);
+const sample=wgslFn(`fn reflectionSampleEntry(coords:vec2<f32>,depthMap:texture_depth_2d,colorMap:texture_2d<f32>,colorSampler:sampler,normalMap:texture_2d<f32>,projection:mat4x4<f32>,inverseProjection:mat4x4<f32>,maxDistance:f32,thickness:f32,nearPlane:f32,steps:u32,frame:u32,roughnessCutoff:f32)->vec4<f32>{
+ return sampleSceneReflection(coords,depthMap,colorMap,colorSampler,normalMap,projection,inverseProjection,maxDistance,thickness,nearPlane,steps,frame,roughnessCutoff);
 }`,[wgsl(SCENE_REFLECTION_QUERY_WGSL)]);
 
 export default class SceneReflections extends Node{
@@ -30,6 +30,10 @@ export default class SceneReflections extends Node{
   this.projection=uniform(camera.projectionMatrix);this.inverseProjection=uniform(camera.projectionMatrixInverse);this.near=uniform(camera.near);
   this.distance=uniform(50);this.thickness=uniform(.15);this.steps=uniform(64,'uint');this.cutoff=uniform(.95);this.historyWeight=uniform(.85);
   this.depth=source.getTextureNode('depth');this.normal=source.getTextureNode('normal');this.color=source.getTextureNode('output');
+  this.radiance=new RenderTarget(1,1,{type:HalfFloatType,depthBuffer:false,minFilter:LinearMipmapLinearFilter,magFilter:LinearFilter,generateMipmaps:true});
+  this.radiance.texture.name='SSR foreground HDR source pyramid';
+  this.filteredColor=texture(this.radiance.texture);this.radianceFrames=0;
+  this.radianceMaterial=new NodeMaterial();this.radianceMaterial.name='Reflection HDR source pyramid';this.radianceQuad=new QuadMesh(this.radianceMaterial);
   this.raw=new RenderTarget(1,1,{type:HalfFloatType,depthBuffer:false,minFilter:NearestFilter,magFilter:NearestFilter});this.raw.texture.name='SSR current incident radiance and coverage';
   this.targets=Array.from({length:2},()=>{
    const target=new RenderTarget(1,1,{count:3,depthBuffer:false,minFilter:NearestFilter,magFilter:NearestFilter});
@@ -69,7 +73,8 @@ export default class SceneReflections extends Node{
  }
  reset(reason='scene-change'){this.valid.value=false;this.resetReason=reason;}
  state(){const support=this.syncSupport();return {...this.settings,...support,route:'kaminos-screen-reflection-radiance-v1',frames:this.frames,resolution:this.size.value.toArray(),valid:this.valid.value,resetReason:this.resetReason,
-  materialResponse:'existing-physical-base-specular-once',worldGeometry:false,history:'stationary-camera-geometry-validated-neighborhood-clamped',samplesPerTracingPixel:1};}
+  materialResponse:'existing-physical-base-specular-once',worldGeometry:false,history:'stationary-camera-geometry-validated-neighborhood-clamped',samplesPerTracingPixel:1,
+  sourceFiltering:'visible-GGX-pdf-footprint-mips',sourcePyramidFrames:this.radianceFrames,sourcePyramidResolution:[this.radiance.width,this.radiance.height]};}
  forSurface(){
   return Fn(()=>{
    const result=vec4(0).toVar();
@@ -96,8 +101,11 @@ export default class SceneReflections extends Node{
   const graph=fullscreenGraphContext(this._graph,builder,this.version);
   if(graph===this._graph)return this.result;
   const shared={...graph.shared,sceneReflectionLighting:null};
+  this.radianceMaterial.contextNode=context(shared);
+  const covered=float(this.depth.sample(uv()).r.lessThan(1));
+  this.radianceMaterial.fragmentNode=vec4(this.color.sample(uv()).rgb.mul(covered),covered);
   this.traceMaterial.contextNode=context(shared);
-  this.traceMaterial.fragmentNode=sample({coords:uv(),depthMap:this.depth,colorMap:this.color,normalMap:this.normal,projection:this.projection,inverseProjection:this.inverseProjection,maxDistance:this.distance,thickness:this.thickness,nearPlane:this.near,steps:this.steps,frame:this.frame,roughnessCutoff:this.cutoff});
+  this.traceMaterial.fragmentNode=sample({coords:uv(),depthMap:this.depth,colorMap:this.filteredColor,colorSampler:sampler(this.filteredColor),normalMap:this.normal,projection:this.projection,inverseProjection:this.inverseProjection,maxDistance:this.distance,thickness:this.thickness,nearPlane:this.near,steps:this.steps,frame:this.frame,roughnessCutoff:this.cutoff});
   const resolved=property('vec4'),surface=property('vec4'),metricDepth=property('float');
   this.filterMaterial.contextNode=context(shared);
   this.filterMaterial.colorNode=Fn(()=>{
@@ -125,7 +133,7 @@ export default class SceneReflections extends Node{
    return vec4(0);
   })();
   this.filterMaterial.outputNode=outputStruct(resolved,surface,metricDepth);
-  this.traceMaterial.needsUpdate=this.filterMaterial.needsUpdate=true;this._graph=graph;return this.result;
+  this.radianceMaterial.needsUpdate=this.traceMaterial.needsUpdate=this.filterMaterial.needsUpdate=true;this._graph=graph;return this.result;
  }
  updateBefore(frame){
   this.setRenderer(frame.renderer);
@@ -137,6 +145,8 @@ export default class SceneReflections extends Node{
    if(w!==this.size.value.x||h!==this.size.value.y){this.raw.setSize(w,h);for(const t of this.targets)t.setSize(w,h);this.size.value.set(w,h);this.reset('resize');}
    if(!this.camera.matrixWorld.equals(this.previousCamera)||!this.camera.projectionMatrix.equals(this.previousProjection))this.reset('camera');
    this.near.value=this.camera.near;this.frame.value=this.frames;
+   this.radiance.setSize(this.source.renderTarget.width,this.source.renderTarget.height);
+   renderer.setRenderTarget(this.radiance);this.radianceQuad.render(renderer);this.radianceFrames++;
    renderer.setRenderTarget(this.raw);this.traceQuad.render(renderer);
    const target=this.targets[this.writeIndex];renderer.setRenderTarget(target);this.filterQuad.render(renderer);
    this.result.value=target.textures[0];this.surface.value=target.textures[1];this.surfaceDepth.value=target.textures[2];
@@ -145,5 +155,5 @@ export default class SceneReflections extends Node{
    this.previousCamera.copy(this.camera.matrixWorld);this.previousProjection.copy(this.camera.projectionMatrix);
   }finally{RendererUtils.restoreRendererState(renderer,state);}
  }
- dispose(){super.dispose();this.releaseLighting();this.raw.dispose();for(const t of this.targets)t.dispose();this.traceMaterial.dispose();this.filterMaterial.dispose();}
+ dispose(){super.dispose();this.releaseLighting();this.radiance.dispose();this.radianceMaterial.dispose();this.raw.dispose();for(const t of this.targets)t.dispose();this.traceMaterial.dispose();this.filterMaterial.dispose();}
 }

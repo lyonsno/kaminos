@@ -49,6 +49,37 @@ window.reflectionAssay={
    return {stats:{metalPixels,metalTransportPeak,metalFullPeak,emissivePixels,emissiveError,diffusePixels,diffusePeak,unlitPixels,unlitError,fullReferenceError},full,transport,ordinary,normal};
   }finally{light.removeFromParent();referencePipeline.dispose();reference.dispose();for(const mesh of [matte,unlit]){mesh.removeFromParent();mesh.geometry.dispose();mesh.material.dispose();}}
  },
+ async studyShadow(){
+  const {default:study}=await import('../experiments/reflection-study.experiment.mjs');
+  const oldEnv=scene.environment,oldCamera=camera.clone(),oldShadows=renderer.shadowMap.enabled;let root;
+  const session={attach:async value=>{root=value;scene.add(root);return {id:'shadow-study',root};},setView(){},dispose:async()=>root?.removeFromParent()};
+  const instance=await study.create({host:{scene:{open:async()=>session},rendering:{readReflections:()=>({settings:{enabled:true}}),reflections:()=>{}}},inputs:{},record(){},updateInputs(){}});
+  const ground=root.getObjectByName('Reflective ground'),block=root.getObjectByName('Warm reflected block');
+  root.getObjectByName('Cool reflected block').visible=false;root.getObjectByName('Curved silver receiver').visible=false;
+  block.position.set(0,.76,-2);block.material.emissiveIntensity=0;block.material.color.set(0);
+  ground.material.metalness=1;ground.material.roughness=.08;
+  const light=new THREE.DirectionalLight(0xffffff,6);light.position.set(0,2,-4);light.castShadow=true;light.shadow.camera.left=-5;light.shadow.camera.right=5;light.shadow.camera.top=5;light.shadow.camera.bottom=-5;light.shadow.camera.near=.1;light.shadow.camera.far=20;scene.add(light);
+  floor.visible=false;box.visible=false;scene.environment=null;renderer.shadowMap.enabled=true;camera.position.set(0,2,4);camera.lookAt(0,0,0);camera.updateMatrixWorld();
+  try{
+   const records={};const point=new THREE.Vector3(0,.01,0).project(camera),px=Math.round((point.x*.5+.5)*W),py=Math.round((.5-point.y*.5)*H);
+   for(const [name,visible]of [['open',false],['blocked',true]]){block.visible=visible;light.shadow.needsUpdate=true;const frame=await this.render(false);let peak=0;for(let y=py-2;y<=py+2;y++)for(let x=px-2;x<=px+2;x++)for(let c=0;c<3;c++)peak=Math.max(peak,frame.pixels[(y*W+x)*4+c]);records[name]={peak,pixels:frame.pixels};}
+   return {...records,probe:[px,py],castShadow:block.castShadow,receiveShadow:ground.receiveShadow};
+  }finally{await instance.dispose();root.traverse(o=>{if(o.isMesh){o.geometry.dispose();o.material.dispose();}});light.removeFromParent();light.dispose();floor.visible=box.visible=true;scene.environment=oldEnv;renderer.shadowMap.enabled=oldShadows;camera.copy(oldCamera);camera.updateMatrixWorld();gi.reflections.reset('shadow-study-disposed');}
+ },
+ async glossySource(){
+  const hotspot=new THREE.Mesh(new THREE.PlaneGeometry(.06,.06),new THREE.MeshBasicMaterial({color:new THREE.Color(4096,4096,4096)}));hotspot.position.set(0,.9,.355);scene.add(hotspot);
+  const read=async target=>Array.from(await renderer.readRenderTargetPixelsAsync(target,0,0,target.width,target.height),THREE.DataUtils.fromHalfFloat);
+  const results={};
+  try{
+   for(const [name,scale]of [['small',1],['broad',12]]){
+    hotspot.scale.setScalar(scale);gi.reflections.reset('glossy-source-'+name);await this.render(true,.35);
+    const source=await read(gi.source.renderTarget),frames=[];let peak=0;
+    for(let i=0;i<12;i++){pipeline.render();await renderer.backend.device.queue.onSubmittedWorkDone();const raw=await read(gi.reflections.raw);let maximum=0;for(let j=0;j<raw.length;j+=4)maximum=Math.max(maximum,raw[j],raw[j+1],raw[j+2]);peak=Math.max(peak,maximum);frames.push({frame:gi.reflections.frames,maximum,raw});}
+    let sourcePeak=0;for(let j=0;j<source.length;j+=4)sourcePeak=Math.max(sourcePeak,source[j],source[j+1],source[j+2]);results[name]={sourcePeak,peak,frames,source};
+   }
+   return results;
+  }finally{hotspot.removeFromParent();hotspot.geometry.dispose();hotspot.material.dispose();gi.reflections.reset('glossy-source-disposed');}
+ },
  async render(enabled,roughness=.05){
   floor.material.roughness=roughness;gi.reflections?.setSettings({enabled});
   pipeline.outputNode=gi.output();pipeline.needsUpdate=true;

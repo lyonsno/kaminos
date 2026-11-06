@@ -5,12 +5,12 @@ export default{
  async create({host,inputs,record,updateInputs}){
   const session=await host.scene.open(),before=host.rendering.readReflections().settings,root=new Group();root.name='Glossy reflection study';
   const initial=checked(inputs.roughness??.22),surface=new MeshStandardMaterial({color:0x777d83,roughness:initial,metalness:.55});
-  const floor=new Mesh(new PlaneGeometry(8,8),surface);floor.rotation.x=-Math.PI/2;floor.position.y=.01;floor.name='Reflective ground';root.add(floor);
+  const floor=new Mesh(new PlaneGeometry(8,8),surface);floor.rotation.x=-Math.PI/2;floor.position.y=.01;floor.name='Reflective ground';floor.receiveShadow=true;root.add(floor);
   for(const [x,color]of [[-1,0xff4617],[1,0x16a8ff]]){
    const material=new MeshStandardMaterial({color,roughness:.25,emissive:color,emissiveIntensity:.7});
-   const box=new Mesh(new BoxGeometry(.65,1.5,.65),material);box.position.set(x,.76,-.8);box.name=x<0?'Warm reflected block':'Cool reflected block';root.add(box);
+   const box=new Mesh(new BoxGeometry(.65,1.5,.65),material);box.position.set(x,.76,-.8);box.name=x<0?'Warm reflected block':'Cool reflected block';box.castShadow=box.receiveShadow=true;root.add(box);
   }
-  const ball=new Mesh(new SphereGeometry(.65,48,32),new MeshStandardMaterial({color:0xd6e1e9,roughness:.12,metalness:.95}));ball.position.set(.15,.66,.65);ball.name='Curved silver receiver';root.add(ball);
+  const ball=new Mesh(new SphereGeometry(.65,48,32),new MeshStandardMaterial({color:0xd6e1e9,roughness:.12,metalness:.95}));ball.position.set(.15,.66,.65);ball.name='Curved silver receiver';ball.castShadow=ball.receiveShadow=true;root.add(ball);
   let asset,enabledInput,roughnessInput,drag;
   try{asset=await session.attach(root,{owned:true,metadata:{label:root.name,source:'experiment:reflection-study',type:'experiment'}});host.rendering.reflections({enabled:inputs.enabled??true});session.setView(inputs.view??{position:[4,3,5],target:[0,.5,0]});}
   catch(error){await session.dispose();throw error;}

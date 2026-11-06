@@ -44,6 +44,17 @@ try{
  assert.ok(transport.stats.diffusePixels>20&&transport.stats.diffusePeak>.01,'diffuse lighting remains in GI transport');
  assert.ok(transport.stats.unlitPixels>20&&transport.stats.unlitError<.001,'unlit source materials retain their radiance');
  assert.ok(transport.stats.fullReferenceError<.002,'full HDR source preserves ordinary physical lighting');
+ report.phase='glossy-source';await publish();
+ const glossy=await page.evaluate(()=>window.reflectionAssay.glossySource());
+ await fs.writeFile(path.join(out,'glossy-source.json'),JSON.stringify(glossy));report.glossySource=Object.fromEntries(Object.entries(glossy).map(([key,value])=>[key,{sourcePeak:value.sourcePeak,peak:value.peak}]));
+ assert.ok(glossy.small.sourcePeak>=4000&&glossy.broad.sourcePeak>=4000,'full HDR sources retain small and broad bright emitters');
+ assert.ok(glossy.small.peak<glossy.small.sourcePeak*.125,'glossy ray footprints must filter isolated sub-footprint HDR highlights');
+ assert.ok(glossy.broad.peak>glossy.broad.sourcePeak*.25,'broad bright reflections must survive without an HDR clamp');
+ report.phase='study-light-visibility';await publish();
+ const shadow=await page.evaluate(()=>window.reflectionAssay.studyShadow());
+ await fs.writeFile(path.join(out,'study-shadow.json'),JSON.stringify(shadow));report.studyShadow={open:shadow.open.peak,blocked:shadow.blocked.peak,probe:shadow.probe,castShadow:shadow.castShadow,receiveShadow:shadow.receiveShadow};
+ assert.ok(shadow.open.peak>1,'unblocked direct specular must be visible');
+ assert.ok(shadow.blocked.peak<shadow.open.peak*.05,'the actual study block must occlude direct-light specular at the reflected-light alignment');
  const frames={};
  for(const enabled of [false,true]){
   report.phase=enabled?'reflecting':'baseline';await publish();frames[enabled?'on':'off']=await page.evaluate(x=>window.reflectionAssay.render(x),enabled);
