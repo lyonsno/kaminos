@@ -235,6 +235,24 @@ class Preparation(unittest.TestCase):
             run.assert_not_called()
             self.assertEqual(state['status'],'failed','zero exit without a producer report is still incomplete')
 
+    def test_malformed_terminal_documents_preserve_the_http_catalog(self):
+        self.beauty();self.appearance()
+        queue=self.root/'queue';directory=queue/'done'/'job';directory.mkdir(parents=True)
+        state_dir=self.root/'.lod-prepare-reports'/self.source;state_dir.mkdir(parents=True)
+        report_path=state_dir/'report.json'
+        (state_dir/'state.json').write_text(json.dumps({'source':self.source,'profile':'surface-detail-v1','queueDir':str(queue),'jobId':'job','reportPath':str(report_path)}))
+        valid_receipt={'job_id':'job','status':'done','exit_code':0}
+        for receipt,report in [(valid_receipt,{'phase':'done'}),(None,{'phase':'done'}),(valid_receipt,[]),(False,{'phase':'done'}),(valid_receipt,'bad')]:
+            (directory/'receipt.json').write_text(json.dumps(receipt));report_path.write_text(json.dumps(report))
+            for route in ['client','auto']:
+                with self.subTest(receipt=receipt,report=report,route=route):
+                    payload=self.get('&prepare='+route)
+                    self.assertEqual(len(payload['levels']),5)
+                    self.assertFalse(payload['prepareQueued'])
+                    self.assertEqual(payload['prepareState']['status'],'done' if isinstance(receipt,dict) and isinstance(report,dict) else 'failed')
+                    if not isinstance(receipt,dict) or not isinstance(report,dict):
+                        self.assertEqual(payload['prepareState']['phase'],'observation')
+
 
 if __name__ == '__main__':
     unittest.main()

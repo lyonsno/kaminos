@@ -3203,6 +3203,8 @@ def mesh_lod_prepare_persisted_state(sha):
         receipt = json.loads(receipt_path.read_text()) if receipt_path else {}
         report_path = Path(state['reportPath'])
         report = json.loads(report_path.read_text()) if report_path.is_file() else {}
+        if not isinstance(receipt, dict) or not isinstance(report, dict):
+            raise ValueError('Terminal receipt and producer report must be objects')
         coverage = mesh_lod_preparation_status(sha)
         complete = (receipt.get('job_id') == job and receipt.get('status') == 'done' and receipt.get('exit_code') == 0
                     and report.get('phase') == 'done' and not report.get('error') and coverage['complete'])
@@ -3307,6 +3309,8 @@ def _default_mesh_lod_prepare_runner(sha, server_port):
     env = {**os.environ, 'PATH': f"/opt/homebrew/bin:{os.environ.get('PATH', '')}"}
     proc = subprocess.run(cmd, cwd=str(ROOT), env=env, capture_output=True, text=True)
     report = json.loads(report_path.read_text()) if report_path.is_file() else {}
+    if not isinstance(report, dict):
+        raise ValueError('Producer report must be an object')
     coverage = mesh_lod_preparation_status(sha)
     complete = proc.returncode == 0 and report.get('phase') == 'done' and not report.get('error') and coverage['complete']
     return {
