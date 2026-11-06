@@ -67,18 +67,24 @@ export function trimeshVertexNormals(positions,faces){
 
 // The whole UV step on plain arrays: shared by the calling thread and
 // wasm-xatlas-worker.js so both paths run the same code.
-export async function finishUVSurface(inputVertices,inputTriangles){
+export async function finishUVSurface(inputVertices,inputTriangles,{normalMode='post-uv'}={}){
+  validateNormalMode(normalMode);
   const mesh={vertices:inputVertices,triangles:inputTriangles};
+    const originalNormals=normalMode==='source-original'?originalVertexNormals(inputVertices,inputTriangles):null;
     const {uvs:su,xref,faces:sf,charts,width,height}=await unwrapWithXatlas(mesh.vertices,mesh.triangles);
     if(sf.length!==mesh.triangles.length)throw Error('xatlas changed the face count');
     const nv=xref.length,sv=new Float32Array(nv*3);
     for(let i=0;i<nv;i++)for(let a=0;a<3;a++)sv[i*3+a]=mesh.vertices[xref[i]*3+a];
     // Source normal basis: export frame (x, z, -y), normals mapped back as (x, -z, y).
-    const exported=new Float64Array(nv*3);
-    for(let i=0;i<nv;i++){exported[i*3]=sv[i*3];exported[i*3+1]=sv[i*3+2];exported[i*3+2]=-sv[i*3+1];}
-    const world=trimeshVertexNormals(exported,sf),sn=new Float32Array(nv*3);
+    const exported=originalNormals?null:new Float64Array(nv*3);
+    if(exported)for(let i=0;i<nv;i++){exported[i*3]=sv[i*3];exported[i*3+1]=sv[i*3+2];exported[i*3+2]=-sv[i*3+1];}
+    const world=originalNormals?null:trimeshVertexNormals(exported,sf),sn=new Float32Array(nv*3);
     let zeroNormals=0;
-    for(let i=0;i<nv;i++){sn[i*3]=world[i*3];sn[i*3+1]=-world[i*3+2];sn[i*3+2]=world[i*3+1];if(!world[i*3]&&!world[i*3+1]&&!world[i*3+2])zeroNormals++;}
+    for(let i=0;i<nv;i++){
+      if(originalNormals)sn.set(originalNormals.subarray(xref[i]*3,xref[i]*3+3),i*3);
+      else{sn[i*3]=world[i*3];sn[i*3+1]=-world[i*3+2];sn[i*3+2]=world[i*3+1];}
+      if(!sn[i*3]&&!sn[i*3+1]&&!sn[i*3+2])zeroNormals++;
+    }
     if(!su.every(v=>Number.isFinite(v)&&v>=0&&v<=1))throw Error('finite bounded xatlas UVs required');
     const n=sf.length,vertices=new Float32Array(n*3),normals=new Float32Array(n*3),uvs=new Float32Array(n*2),triangles=new Uint32Array(n);
     for(let i=0;i<n;i++){
@@ -108,7 +114,8 @@ export async function finishUVSurface(inputVertices,inputTriangles){
 // wasm-xatlas-worker.js; Stop (signal) terminates it with AbortError. On the
 // calling thread the Wasm call cannot be interrupted, so Stop is honoured
 // before and after it.
-export function createWasmXatlasUnwrapper({WorkerClass,signal}={}){
+export function createWasmXatlasUnwrapper({WorkerClass,signal,normalMode='post-uv'}={}){
+  validateNormalMode(normalMode);
   if(WorkerClass!==undefined&&typeof WorkerClass!=='function')throw TypeError('WorkerClass must be a Worker constructor');
   admitSignal(signal);
   return async mesh=>{
@@ -116,11 +123,11 @@ export function createWasmXatlasUnwrapper({WorkerClass,signal}={}){
     if(WorkerClass){
       const vertices=Float32Array.from(mesh.vertices),triangles=Uint32Array.from(mesh.triangles);
       const d=await runFinishingWorker({WorkerClass,url:new URL('./wasm-xatlas-worker.js',import.meta.url),signal,label:'UV',
-        message:{vertices:vertices.buffer,triangles:triangles.buffer},transfer:[vertices.buffer,triangles.buffer]});
+        message:{vertices:vertices.buffer,triangles:triangles.buffer,normalMode},transfer:[vertices.buffer,triangles.buffer]});
       r={vertices:new Float32Array(d.vertices),triangles:new Uint32Array(d.triangles),normals:new Float32Array(d.normals),uvs:new Float32Array(d.uvs),info:d.info};
     }else{
       if(signal?.aborted)throw abortError(signal);
-      r=await finishUVSurface(mesh.vertices,mesh.triangles);
+      r=await finishUVSurface(mesh.vertices,mesh.triangles,{normalMode});
       if(signal?.aborted)throw abortError(signal);
     }
     for(let i=0;i<r.triangles.length;i++)for(let a=0;a<3;a++)
@@ -130,9 +137,32 @@ export function createWasmXatlasUnwrapper({WorkerClass,signal}={}){
       uvMetadata:{route:WASM_XATLAS_ROUTE,execution:WorkerClass?'module-worker':'caller-thread',xatlasVersion:'0.0.11',
         build:'vendor/xatlas (Emscripten 6.0.12, single-threaded)',
         sourceComparison:'same algorithm and options as source xatlas; atlas not byte-identical to the native wheel',
-        normalBasis:{rule:'source-resume-export/Trimesh-post-UV (JS port)',frame:'model-local',zeroNormals:info.zeroNormals},
+        normalBasis:{rule:normalMode==='source-original'?'CuMesh area-weighted pre-UV':'source-resume-export/Trimesh-post-UV (JS port)',frame:'model-local',zeroNormals:info.zeroNormals},
         fixWinding:false,maxIterations:0,charts:info.charts,atlasSize:info.atlasSize,indexedVertices:info.indexedVertices,reservedStripFraction:.1,
         repairedFaces:info.repairedFaces,grid:info.grid,orderedTrianglePositionsUnchanged:true,deindexedForIndependentFaceUV:true,
         elapsedSeconds:(performance.now()-started)/1000}};
   };
+}
+
+function validateNormalMode(mode){if(mode!=='post-uv'&&mode!=='source-original')throw RangeError('unknown UV normal mode '+mode);}
+
+// CuMesh geometry.metal: sum unnormalized face crosses on the reduced shared
+// mesh, normalize once, then transfer through xatlas xref. F32 accumulation in
+// face order; native adjacency order/rsqrt are not a bit-identity promise.
+export function originalVertexNormals(positions,faces){
+  const r=Math.fround,n=new Float32Array(positions.length),first=new Float32Array(positions.length),seen=new Uint8Array(positions.length/3);
+  for(let f=0;f<faces.length;f+=3){
+    const a=faces[f]*3,b=faces[f+1]*3,c=faces[f+2]*3;
+    const x=r(positions[b]-positions[a]),y=r(positions[b+1]-positions[a+1]),z=r(positions[b+2]-positions[a+2]);
+    const u=r(positions[c]-positions[a]),v=r(positions[c+1]-positions[a+1]),w=r(positions[c+2]-positions[a+2]);
+    const nx=r(r(y*w)-r(z*v)),ny=r(r(z*u)-r(x*w)),nz=r(r(x*v)-r(y*u));
+    for(let k=0;k<3;k++){const i=faces[f+k],j=i*3;n[j]=r(n[j]+nx);n[j+1]=r(n[j+1]+ny);n[j+2]=r(n[j+2]+nz);
+      if(!seen[i]){seen[i]=1;first.set([nx,ny,nz],j);}}
+  }
+  for(let j=0;j<n.length;j+=3){
+    const inv=r(1/Math.sqrt(r(r(r(n[j]*n[j])+r(n[j+1]*n[j+1]))+r(n[j+2]*n[j+2]))));
+    const x=r(n[j]*inv),y=r(n[j+1]*inv),z=r(n[j+2]*inv);
+    if(Number.isNaN(x))n.set(first.subarray(j,j+3),j);else n.set([x,y,z],j);
+  }
+  return n;
 }

@@ -1,8 +1,7 @@
 import {buildRemeshBVH} from './original-remesh-bvh.js';
 import {prefillRemeshHoles} from './original-remesh-prefill.js';
 import {initialCells,gridPoints,refineCells,cornerTable,contourTopology} from './original-remesh-grid.js';
-import {simplifyMesh} from './mesh-simplify.js';
-import {loadSimplifier} from './wasm-simplify.js';
+import {reducerTopology,compactReduction} from './original-remesh-simplify-topology.js';
 let settings,coords,level;
 self.onmessage=async({data})=>{
   const {id,operation}=data;
@@ -21,12 +20,13 @@ self.onmessage=async({data})=>{
     }else if(operation==='topology'){
       const mesh=contourTopology(coords,new Float32Array(data.dual),new Int32Array(data.intersections),settings);
       result={vertices:mesh.vertices.buffer,triangles:mesh.triangles.buffer};
-    }else if(operation==='reduce'){
+    }else if(operation==='reduce-prepare'){
       const v=new Float32Array(data.vertices),t=new Uint32Array(data.triangles);
-      const {engine,route,reason}=await loadSimplifier({prefer:data.simplifier??'auto'});
-      const reduced=t.length/3<=data.targetFaces?{points:v,triangles:t}:simplifyMesh(v,t,{targetReduction:1-data.targetFaces/(t.length/3),engine:engine??undefined});
-      result={vertices:Float32Array.from(reduced.points).buffer,triangles:Uint32Array.from(reduced.triangles).buffer,
-        reducer:{route,reason:reason??null,sourceLimit:'Browser fast-simplification QEM; not native CuMesh parallel QEM',inputFaces:t.length/3,outputFaces:reduced.triangles.length/3}};
+      const topology=reducerTopology(v,t);
+      result={...topology,vertices:v.buffer,triangles:t.buffer};
+    }else if(operation==='reduce-compact'){
+      const reduced=compactReduction(new Float32Array(data.vertices),new Uint32Array(data.triangles),new Uint32Array(data.flags));
+      result={vertices:reduced.vertices.buffer,triangles:reduced.triangles.buffer};
     }else throw Error('unknown original remesh worker operation '+operation);
     // One transfer per backing buffer, including typed BVH arrays.
     const message={id,ok:true,...result};for(const [k,v] of Object.entries(message))if(ArrayBuffer.isView(v))message[k]=v.buffer;

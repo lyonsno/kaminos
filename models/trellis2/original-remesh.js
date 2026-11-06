@@ -1,10 +1,11 @@
 import {remeshSettings} from './original-remesh-grid.js';
 import {createRemeshGpu} from './original-remesh-gpu.js';
+import {reduceCuMeshSurface} from './original-remesh-simplify.js';
 import {validateRemeshSurface} from './original-remesh-bvh.js';
 import {admitSignal,abortError} from './finishing-worker.js';
 export const ORIGINAL_REMESH_ROUTE='TRELLIS.2/original-narrow-band-dc/WebGPU';
 
-export function createOriginalRemeshPostprocess({device,resolution=512,band=1,projectBack=0,targetFaces,WorkerClass=globalThis.Worker,signal,onProgress=()=>{},simplifier='auto',onReconstruction}={}){
+export function createOriginalRemeshPostprocess({device,resolution=512,band=1,projectBack=0,targetFaces,WorkerClass=globalThis.Worker,signal,onProgress=()=>{},onReconstruction}={}){
   if(!device?.createBuffer||!device.queue)throw TypeError('original remesh requires the app GPU device');
   if(typeof WorkerClass!=='function')throw TypeError('original remesh requires a module Worker');
   if(!Number.isSafeInteger(targetFaces)||targetFaces<1)throw RangeError('positive caller-selected targetFaces required');
@@ -57,14 +58,15 @@ export function createOriginalRemeshPostprocess({device,resolution=512,band=1,pr
       // reducer can change it. Observer errors are failures, never dropped data.
       if(onReconstruction)await onReconstruction({vertices:vertices.slice(),triangles:triangles.slice(),settings,trace:[...trace]});
       onProgress({kind:'original-remesh-reduce',faces:triangles.length/3});
-      const reduced=await request('reduce',{vertices:vertices.buffer,triangles:triangles.buffer,targetFaces,simplifier});
-      vertices=new Float32Array(reduced.vertices);triangles=new Uint32Array(reduced.triangles);validateRemeshSurface(vertices,triangles);
+      const reduced=await reduceCuMeshSurface(vertices,triangles,{targetFaces,device,request,signal,onProgress,withGpu});
+      vertices=reduced.vertices;triangles=reduced.triangles;
+      validateRemeshSurface(vertices,triangles);
       worker.terminate();worker=null;
       return {...mesh,vertices,triangles,metadata:{...mesh.metadata,postprocess:{schema:'trellis2.mesh-postprocess.v0',status:'succeeded',requestedMode:'original-remesh',
         effectiveRoute:ORIGINAL_REMESH_ROUTE,execution:'app-device-WebGPU/module-worker',settings,targetFaces,inputVertices,inputFaces,outputVertices:vertices.length/3,outputFaces:triangles.length/3,
         operationTrace:trace,prefill:bvh.prefill,reducer:reduced.reducer,modelCalls:0,elapsedSeconds:(performance.now()-started)/1000,
         parityReference:'TRELLIS.2 5565d240 / TRELLIS2MLX cumesh/metal_remeshing.py',
-        parityLimit:'Native perimeter arithmetic is not certified bit-identical; CuMesh parallel reducer differs; equidistant projection uses lowest original face id rather than native BVH traversal order'}}};
+        parityLimit:'Native perimeter/reducer arithmetic and adjacency accumulation order are not certified bit-identical; equidistant projection uses lowest original face id rather than native BVH traversal order'}}};
     }catch(error){dispose();throw error;}
   };
   // Material baking must project texel positions onto the original filled
