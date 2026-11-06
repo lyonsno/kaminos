@@ -66,6 +66,19 @@ function restoreRaycast(mesh) {
   originalRaycasts.delete(mesh);
 }
 
+function navigationIndexMatches(geometry, entry) {
+  const position=geometry.getAttribute('position'),index=geometry.index;
+  return entry.position===position && entry.index===index &&
+    entry.positionVersion===position?.version && entry.indexVersion===index?.version;
+}
+
+function discardNavigationIndex(geometry, entry) {
+  depthIndexes.delete(geometry);
+  entry.status='invalidated';
+  geometry.boundsTree=null;
+  for(const mesh of entry.meshes)restoreRaycast(mesh);
+}
+
 export function prepareNavigationGeometry(root) {
   const pending = [];
   root.traverse(object => {
@@ -74,15 +87,15 @@ export function prepareNavigationGeometry(root) {
     const geometry = object.geometry;
     if (!geometry?.getAttribute('position') || geometry.getAttribute('position').isInterleavedBufferAttribute) return;
     let entry = depthIndexes.get(geometry);
-    if (entry?.status === 'failed') {
-      depthIndexes.delete(geometry);
+    if (entry && (entry.status === 'failed' || !navigationIndexMatches(geometry, entry))) {
+      discardNavigationIndex(geometry, entry);
       entry = null;
     }
     if (!entry) {
       const position = geometry.getAttribute('position');
       const index = geometry.index;
       const positionVersion = position.version, indexVersion = index?.version;
-      entry = {status: 'building', meshes: new Set(), promise: null, error: null};
+      entry = {status: 'building', meshes: new Set(), promise: null, error: null, position, index, positionVersion, indexVersion};
       depthIndexes.set(geometry, entry);
       entry.promise = buildNavigationIndex(geometry).then(result => {
         if (depthIndexes.get(geometry) !== entry) return false;
@@ -96,6 +109,8 @@ export function prepareNavigationGeometry(root) {
           tree = MeshBVH.deserialize(result, geometry, {setIndex: false});
         }
         geometry.boundsTree = tree;
+        entry.index = geometry.index;
+        entry.indexVersion = geometry.index?.version;
         entry.status = 'indexed';
         for (const mesh of entry.meshes) useIndexedRaycast(mesh);
         return true;
@@ -119,10 +134,7 @@ export function invalidateNavigationGeometry(root) {
     const geometry = object.geometry;
     const entry = depthIndexes.get(geometry);
     if (!entry) return;
-    depthIndexes.delete(geometry);
-    entry.status = 'invalidated';
-    geometry.boundsTree = null;
-    for (const mesh of entry.meshes) restoreRaycast(mesh);
+    discardNavigationIndex(geometry, entry);
   });
   return prepareNavigationGeometry(root);
 }
@@ -160,10 +172,22 @@ export function navigationPivot(camera, target, ndc, roots, {retainedPivot = tar
       if (o.isMesh && o.layers.test(camera.layers)) {
         const materials = Array.isArray(o.material) ? o.material : [o.material];
         if (!materials.some(material => material?.visible && (!material.transparent || material.opacity > 0))) return;
-        const state = depthIndexes.get(o.geometry)?.status;
+        let index = depthIndexes.get(o.geometry);
+        if(index?.status==='indexed' && !navigationIndexMatches(o.geometry,index)){
+          discardNavigationIndex(o.geometry,index);
+          void prepareNavigationGeometry(o);
+          index=depthIndexes.get(o.geometry);
+        }
+        const state = index?.status;
         if (state === 'building') indexing = true;
         else if (state === 'failed') failed = true;
-        else meshes.add(o);
+        else {
+          if (state === 'indexed') {
+            index.meshes.add(o);
+            useIndexedRaycast(o);
+          }
+          meshes.add(o);
+        }
       }
     });
   }

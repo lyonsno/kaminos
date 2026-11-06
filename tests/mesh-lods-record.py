@@ -10,9 +10,11 @@ import http.client
 import json
 from pathlib import Path
 import struct
+import subprocess
 import sys
 import tempfile
 import threading
+from unittest.mock import patch
 from http.server import ThreadingHTTPServer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -215,6 +217,159 @@ with tempfile.TemporaryDirectory() as directory:
         read_bytes2 = read_resp2.read()
         conn.close()
         assert read_resp2.status == 200 and read_bytes2 == nested_bytes
+        # Verified content-addressed <sha256>.glb reads return immutable Cache-Control + ETag and honor If-None-Match -> 304.
+        assert read_resp2.getheader('Cache-Control') == 'public, max-age=31536000, immutable', read_resp2.getheader('Cache-Control')
+        assert read_resp2.getheader('ETag') == f'"{nested_sha}"', read_resp2.getheader('ETag')
+        conn = http.client.HTTPConnection(*server.server_address)
+        conn.request('GET', f'/api/read?root=generated-meshes&path={nested_sha}.glb', headers={'If-None-Match': f'"{nested_sha}"'})
+        not_mod = conn.getresponse()
+        not_mod_bytes = not_mod.read()
+        conn.close()
+        assert not_mod.status == 304 and not_mod_bytes == b'', (not_mod.status, len(not_mod_bytes))
+        assert not_mod.getheader('ETag') == f'"{nested_sha}"'
+        # Non-hash named paths keep Cache-Control: no-store.
+        conn = http.client.HTTPConnection(*server.server_address)
+        conn.request('GET', '/api/read?root=generated-meshes&path=named-trellis-kiln.glb')
+        named_resp = conn.getresponse()
+        named_resp.read()
+        conn.close()
+        assert named_resp.status == 200 and named_resp.getheader('Cache-Control') == 'no-store', named_resp.getheader('Cache-Control')
+
+        # Auto-prepare classification and deduplicated queue contract:
+        def mesh_glb(tag, extras=None, extensions=None, has_mesh=True):
+            doc = {'asset': {'version': '2.0', 'generator': tag}}
+            if has_mesh:
+                doc['meshes'] = [{'primitives': [{'attributes': {'POSITION': 0}, 'mode': 4}]}]
+            if extras is not None:
+                doc['extras'] = extras
+            if extensions is not None:
+                doc['extensions'] = extensions
+            raw = json.dumps(doc).encode()
+            raw += b' ' * (-len(raw) % 4)
+            return b'glTF' + struct.pack('<II', 2, 20 + len(raw)) + struct.pack('<II', len(raw), 0x4e4f534a) + raw
+
+        hero_mesh_bytes = mesh_glb('auto-hero')
+        hero_mesh_sha = hashlib.sha256(hero_mesh_bytes).hexdigest()
+        tier_mesh_bytes = mesh_glb('auto-tier', extras={'lodNormalMap': {'textureSize': 256}})
+        tier_mesh_sha = hashlib.sha256(tier_mesh_bytes).hexdigest()
+        surfel_only_bytes = mesh_glb('auto-surfel', extensions={'KAMINOS_trellis_surfels': {'count': 10}}, has_mesh=False)
+        surfel_only_sha = hashlib.sha256(surfel_only_bytes).hexdigest()
+
+        assert serve.should_auto_prepare_mesh_lods(hero_mesh_sha, hero_mesh_bytes) is True
+        assert serve.should_auto_prepare_mesh_lods(hero_mesh_sha, hero_mesh_bytes, role='lod-tier') is False
+        assert serve.should_auto_prepare_mesh_lods(hero_mesh_sha, hero_mesh_bytes, role='client-prepares-lods') is False
+        assert serve.should_auto_prepare_mesh_lods(tier_mesh_sha, tier_mesh_bytes) is False
+        assert serve.should_auto_prepare_mesh_lods(surfel_only_sha, surfel_only_bytes) is False
+        actual_surfel = subprocess.check_output(['node', '--input-type=module', '-e', '''
+import {buildSurfelField,encodeSurfelGLB} from './trellis-surfels.mjs';
+const coordinates=new Int32Array([1,1,1]);
+const field=buildSurfelField({resolution:4,vertices:new Float32Array([-.125,-.125,-.125]),
+  triangles:new Uint32Array(),geometryCoordinates:coordinates,
+  material:{resolution:4,coordinates,features:new Float32Array([0,0,0,-1,1,1])}});
+process.stdout.write(Buffer.from(encodeSurfelGLB(field,{fallbackFactor:1})));
+'''], cwd=Path(__file__).resolve().parents[1])
+        actual_surfel_sha = hashlib.sha256(actual_surfel).hexdigest()
+        actual_doc = json.loads(actual_surfel[20:20 + int.from_bytes(actual_surfel[12:16], 'little')])
+        assert actual_doc['meshes'][0]['primitives'][0]['attributes']['POSITION'] == 0
+        assert serve.should_auto_prepare_mesh_lods(actual_surfel_sha, actual_surfel) is False, 'actual surfel fallback triangles are not a mesh hero'
+
+        assert serve.should_auto_prepare_mesh_lods(stored['l500'], hero_mesh_bytes) is False, 'registered tier sha is excluded'
+        assert serve.should_auto_prepare_mesh_lods(hero, hero_mesh_bytes) is True, 'an incomplete sidecar still needs preparation'
+        assert serve.should_auto_prepare_mesh_lods(hero_mesh_sha, mesh_glb('raw', extras={'trellisReconstruction': {'schema': 'kaminos.trellis-reconstruction.v1'}})) is False
+
+        prepared_calls = []
+        gate = threading.Event()
+        def stub_runner(sha_to_prep, port):
+            prepared_calls.append((sha_to_prep, port))
+            gate.wait(timeout=2.0)
+            return {'status': 'done', 'returncode': 0}
+
+        old_runner = getattr(serve, '_MESH_LOD_PREPARE_RUNNER', None)
+        serve._MESH_LOD_PREPARE_RUNNER = stub_runner
+        try:
+            assert request('POST', '/api/ingest-mesh', actual_surfel)[0] == 200
+            assert serve.mesh_lod_prepare_queue_state()['active'] != actual_surfel_sha
+            # Ingesting with ?role=lod-tier does NOT enqueue auto-prepare:
+            assert request('POST', '/api/ingest-mesh?role=lod-tier', hero_mesh_bytes)[0] == 200
+            qstate = serve.mesh_lod_prepare_queue_state()
+            assert hero_mesh_sha not in qstate['queued'] and qstate['active'] != hero_mesh_sha
+            assert request('POST', '/api/ingest-mesh?role=client-prepares-lods', hero_mesh_bytes)[0] == 200
+            assert request('GET', f'/api/mesh-lods?source={hero_mesh_sha}&prepare=client')[0] == 200
+            assert serve.mesh_lod_prepare_queue_state()['active'] != hero_mesh_sha
+            # The normal ingest route, rather than a direct queue call, starts the worker.
+            assert request('POST', '/api/ingest-mesh', hero_mesh_bytes)[0] == 200
+            assert serve.enqueue_mesh_lod_prepare(hero_mesh_sha, server_port=server.server_address[1]) is False, 'deduplicated while active/queued'
+            status, payload = request('GET', f'/api/mesh-lods?source={hero_mesh_sha}&prepare=client')
+            assert status == 200 and payload['prepareQueued'] is True, payload
+            gate.set()
+            for _ in range(50):
+                if serve.mesh_lod_prepare_queue_state()['completed'].get(hero_mesh_sha):
+                    break
+                import time as _t; _t.sleep(0.02)
+            assert prepared_calls == [(hero_mesh_sha, server.server_address[1])], prepared_calls
+        finally:
+            gate.set()
+            serve._MESH_LOD_PREPARE_RUNNER = old_runner
+        for _ in range(100):
+            if not serve._MESH_LOD_PREPARE_WORKER_STARTED:
+                break
+            _t.sleep(.01)
+        assert not serve._MESH_LOD_PREPARE_WORKER_STARTED
+        original_start = threading.Thread.start
+        def fail_lod_start(thread):
+            if thread.name == 'kaminos-lod-prepare':
+                raise RuntimeError('worker startup failed')
+            return original_start(thread)
+
+        for failure in ('corrupt-sidecar', 'sidecar-io', 'worker-start'):
+            content = mesh_glb(failure)
+            digest = hashlib.sha256(content).hexdigest()
+            if failure == 'corrupt-sidecar':
+                (root / f'.{digest}.glb.lods.json').write_text('{not json')
+                context = patch.object(serve, '_MESH_LOD_PREPARE_RUNNER', old_runner)
+            elif failure == 'sidecar-io':
+                context = patch.object(serve, 'read_mesh_lod_set', side_effect=OSError('sidecar unavailable'))
+            else:
+                context = patch.object(threading.Thread, 'start', new=fail_lod_start)
+            with context:
+                try:
+                    status, receipt = request('POST', '/api/ingest-mesh', content)
+                except http.client.RemoteDisconnected:
+                    raise AssertionError(f'{failure} lost the receipt after mesh storage') from None
+            assert status == 200 and receipt['sha256'] == digest, (failure, receipt)
+            assert receipt['lodPreparation']['status'] == 'failed', (failure, receipt)
+            assert receipt['lodPreparation']['phase'] == 'mesh-lod-preparation'
+            assert (root / f'{digest}.glb').read_bytes() == content
+            assert not serve._MESH_LOD_PREPARE_WORKER_STARTED
+            assert digest not in serve.mesh_lod_prepare_queue_state()['queued']
+        content = mesh_glb('get-worker-start')
+        digest = hashlib.sha256(content).hexdigest()
+        assert request('POST', '/api/ingest-mesh?role=client-prepares-lods', content)[0] == 200
+        assert request('POST', '/api/mesh-lods', {'source': digest, 'level': level('l500', 500)})[0] == 200
+        with patch.object(threading.Thread, 'start', new=fail_lod_start):
+            try:
+                status, payload = request('GET', f'/api/mesh-lods?source={digest}')
+            except http.client.RemoteDisconnected:
+                raise AssertionError('GET worker startup failure lost the existing level-set response') from None
+        assert status == 200 and payload['source'] == digest
+        assert [row['sha256'] for row in payload['levels']] == [stored['l500']]
+        assert payload['lodPreparation']['status'] == 'failed'
+        assert payload['prepareQueued'] is False
+        assert digest not in serve.mesh_lod_prepare_queue_state()['queued']
+        assert not serve._MESH_LOD_PREPARE_WORKER_STARTED
+        retried = threading.Event()
+        def retry_runner(source, port):
+            assert source == digest
+            retried.set()
+            return {'status': 'done', 'returncode': 0}
+        with patch.object(serve, '_MESH_LOD_PREPARE_RUNNER', retry_runner):
+            assert request('GET', f'/api/mesh-lods?source={digest}')[0] == 200
+            assert retried.wait(2), 'a failed optional startup remains retryable'
+            for _ in range(100):
+                if not serve._MESH_LOD_PREPARE_WORKER_STARTED:
+                    break
+                _t.sleep(.01)
+        assert not serve._MESH_LOD_PREPARE_WORKER_STARTED
     finally:
         server.shutdown()
         server.server_close()

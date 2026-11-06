@@ -46,7 +46,7 @@ test('from an in-memory decode and fields to published, registered levels throug
     return new Response('unexpected', {status: 500});
   };
   const phases = [];
-  const report = await prepareGenerationLevels({decode: {vertices, triangles}, materialFields: {features: new Float32Array(features), coordinates: new Int32Array(coordinates), resolution: 4},
+  const report = await prepareGenerationLevels({textureLevels: false,decode: {vertices, triangles}, materialFields: {features: new Float32Array(features), coordinates: new Int32Array(coordinates), resolution: 4},
     source, heroGLB: heroGLB(), fetch, THREE, MeshBVH, finish: finishTrellisMesh, unwrapMesh: createWasmXatlasUnwrapper(), WorkerClass: NodeTrellisUVWorker,
     targets: [200], input: 'in-memory test decode', onPhase: r => phases.push(r.phase)});
   assert.equal(report.phase, 'done', report.error?.message);
@@ -64,14 +64,14 @@ test('a failure leaves the report at its phase with the error, and nothing is st
   const THREE = await import('three'), {MeshBVH} = await import('three-mesh-bvh'), {prepareGenerationLevels} = await import('../lod-generation-levels.mjs');
   const calls = [], fetch = async (url, init = {}) => { calls.push(`${init.method || 'GET'} ${url.split('?')[0]}`);
     return new Response(JSON.stringify({levels: [{sha256: 'b'.repeat(64), faces: 200, route: 'closed-remesh+projection+trellis-simplify'}]}), {headers: {'Content-Type': 'application/json'}}); };
-  const report = await prepareGenerationLevels({decode: {vertices: new Float32Array(9), triangles: new Uint32Array([0, 1, 2])}, materialFields: {}, source: 'a'.repeat(64),
+  const report = await prepareGenerationLevels({textureLevels: false,decode: {vertices: new Float32Array(9), triangles: new Uint32Array([0, 1, 2])}, materialFields: {}, source: 'a'.repeat(64),
     heroGLB: heroGLB(), fetch, THREE, MeshBVH, finish: () => {}, targets: [200]});
   assert.equal(report.phase, 'preflight'); assert.match(report.error.message, /already registered/);
   assert.ok(!calls.some(c => c.startsWith('POST')));
 });
 
 // Review M1/N1/N2: publication counts only with receipts that name what was stored and registered.
-async function publishWith({ingest, register, targets = [200]}) {
+async function publishWith({ingest, register, targets = [200], existingLevels = [], completeMissing = false, replace = false}) {
   const THREE = await import('three'), {MeshBVH} = await import('three-mesh-bvh'), {prepareGenerationLevels} = await import('../lod-generation-levels.mjs');
   const {finishTrellisMesh} = await import('../models/trellis2/trellis-material.js');
   const {createWasmXatlasUnwrapper} = await import('../models/trellis2/wasm-xatlas.js');
@@ -81,19 +81,41 @@ async function publishWith({ingest, register, targets = [200]}) {
   const calls = [], json = value => new Response(JSON.stringify(value), {headers: {'Content-Type': 'application/json'}});
   const fetch = async (url, init = {}) => {
     calls.push(`${init.method || 'GET'} ${url.split('?')[0]}`);
-    if (url.startsWith('/api/mesh-lods') && !init.method) return json({levels: []});
+    if (url.startsWith('/api/mesh-lods') && !init.method) return json({levels: existingLevels});
     if (url.startsWith('/api/ingest-mesh')) return ingest(new Uint8Array(await new Response(init.body).arrayBuffer()), json);
     if (url.startsWith('/api/mesh-lods')) return register(JSON.parse(init.body), json);
     return new Response('unexpected', {status: 500});
   };
-  const report = await prepareGenerationLevels({decode: {vertices: new Float32Array([0,0,0, 1,0,0, 0,1,0]), triangles: new Uint32Array([0,1,2])},
+  const report = await prepareGenerationLevels({textureLevels: false,decode: {vertices: new Float32Array([0,0,0, 1,0,0, 0,1,0]), triangles: new Uint32Array([0,1,2])},
     materialFields: {features: new Float32Array(features), coordinates: new Int32Array(coordinates), resolution: 4}, source: 'a'.repeat(64), heroGLB: heroGLB(), fetch,
-    THREE, MeshBVH, finish: finishTrellisMesh, unwrapMesh: createWasmXatlasUnwrapper(), WorkerClass: NodeTrellisUVWorker, targets});
+    THREE, MeshBVH, finish: finishTrellisMesh, unwrapMesh: createWasmXatlasUnwrapper(), WorkerClass: NodeTrellisUVWorker, targets, completeMissing, replace});
   return {report, calls};
 }
 const html = () => new Response('<html>fallback</html>', {status: 200, headers: {'Content-Type': 'text/html'}});
 const goodIngest = (bytes, json) => json({schema: 'kaminos.generated-mesh.v0', sha256: hex(bytes), bytes: bytes.length});
 const goodRegister = (body, json) => json({schema: 'kaminos.lod-set.v0', source: body.source, level: body.level, retired: []});
+
+test('automatic completion fills missing targets while retaining already published off-target rungs', async () => {
+  const existingLevels = [{sha256:'b'.repeat(64), faces:1350, targetFaces:1000, route:'closed-remesh+projection+trellis-simplify'}];
+  const {report} = await publishWith({ingest:goodIngest, register:goodRegister, targets:[1000,200], existingLevels, completeMissing:true});
+  assert.equal(report.phase,'done', report.error?.message);
+  assert.deepEqual(report.tiers.map(level=>level.target),[200]);
+  assert.equal(report.tiers[0].targetFaces,200);
+  const complete = await publishWith({ingest:goodIngest, register:goodRegister, targets:[1000], existingLevels, completeMissing:true});
+  assert.equal(complete.report.phase,'done');
+  assert.equal(complete.calls.some(call=>call.startsWith('POST')),false);
+});
+
+test('rebaking identical bytes preserves legacy immutable registration metadata',async()=>{
+  const first=await publishWith({ingest:goodIngest,register:goodRegister});
+  const {target,bytes,timing,targetFaces,...legacy}=first.report.tiers[0];
+  const repeat=await publishWith({ingest:goodIngest,existingLevels:[legacy],replace:true,
+    register:(body,json)=>{
+      assert.deepEqual(body.level,legacy,'same stored bytes retain their original immutable record');
+      return goodRegister(body,json);
+    }});
+  assert.equal(repeat.report.phase,'done',repeat.report.error?.message);
+});
 
 test('review M1: an ingest success without a receipt naming the stored bytes is not publication', async () => {
   for (const ingest of [() => html(), (bytes, json) => json({sha256: 'f'.repeat(64)}), (bytes, json) => json({})]) {
@@ -144,7 +166,7 @@ test('raw-decode reference: no hero, error and normal maps from the decode, regi
     if (url.startsWith('/api/mesh-lods')) { const body = JSON.parse(init.body); registrations.push(body); return goodRegister(body, json); }
     return new Response('unexpected', {status: 500}); };
   const vertices = new Float32Array([0,0,0, 1,0,0, 0,1,0]), triangles = new Uint32Array([0,1,2]);
-  const report = await prepareGenerationLevels({decode: {vertices, triangles}, materialFields: {features: new Float32Array(features), coordinates: new Int32Array(coordinates), resolution: 4},
+  const report = await prepareGenerationLevels({textureLevels: false,decode: {vertices, triangles}, materialFields: {features: new Float32Array(features), coordinates: new Int32Array(coordinates), resolution: 4},
     source: surfelSha, reference: 'raw-decode', fetch, THREE, MeshBVH, finish: finishTrellisMesh, unwrapMesh: createWasmXatlasUnwrapper(), WorkerClass: NodeTrellisUVWorker, targets: [200]});
   assert.equal(report.phase, 'done', report.error?.message);
   assert.ok(!calls.some(c => c.includes('/api/read')), 'no hero is read');
@@ -161,9 +183,9 @@ test('raw-decode reference refuses a hero, and an unknown reference is refused',
   const THREE = await import('three'), {MeshBVH} = await import('three-mesh-bvh'), {prepareGenerationLevels} = await import('../lod-generation-levels.mjs');
   const base = {decode: {vertices: new Float32Array(9), triangles: new Uint32Array([0, 1, 2])}, materialFields: {}, source: 'c'.repeat(64), THREE, MeshBVH, finish: () => {}, targets: [200],
     fetch: async () => { throw Error('no request expected'); }};
-  const withHero = await prepareGenerationLevels({...base, reference: 'raw-decode', heroGLB: heroGLB()});
+  const withHero = await prepareGenerationLevels({textureLevels: false,...base, reference: 'raw-decode', heroGLB: heroGLB()});
   assert.match(withHero.error.message, /raw-decode reference takes no hero/);
-  const unknown = await prepareGenerationLevels({...base, reference: 'surfels'});
+  const unknown = await prepareGenerationLevels({textureLevels: false,...base, reference: 'surfels'});
   assert.match(unknown.error.message, /reference must be one of hero, raw-decode/);
 });
 
@@ -172,7 +194,7 @@ test('the module declares the references it accepts, and that declaration is wha
   assert.deepEqual(mod.GENERATION_LEVEL_REFERENCES, ['hero', 'raw-decode']);
   assert.ok(Object.isFrozen(mod.GENERATION_LEVEL_REFERENCES));
   const THREE = await import('three'), {MeshBVH} = await import('three-mesh-bvh');
-  const report = await mod.prepareGenerationLevels({decode: {vertices: new Float32Array(9), triangles: new Uint32Array([0, 1, 2])}, materialFields: {}, source: 'c'.repeat(64),
+  const report = await mod.prepareGenerationLevels({textureLevels: false,decode: {vertices: new Float32Array(9), triangles: new Uint32Array([0, 1, 2])}, materialFields: {}, source: 'c'.repeat(64),
     THREE, MeshBVH, finish: () => {}, targets: [200], reference: 'surfels', fetch: async () => { throw Error('no request expected'); }});
   assert.match(report.error.message, /reference must be one of hero, raw-decode/);
 });
@@ -204,7 +226,7 @@ test('surfelFactors builds, measures and registers merged surfel levels with her
     if (url.startsWith('/api/mesh-lods')) { const body = JSON.parse(init.body); registered.push(body); return goodRegister(body, json); }
     return new Response('unexpected', {status: 500});
   };
-  const report = await prepareGenerationLevels({decode: {vertices, triangles, coordinates: new Int32Array(coords.flat())}, materialFields, source: 'd'.repeat(64), heroGLB: hero.buffer,
+  const report = await prepareGenerationLevels({textureLevels: false,decode: {vertices, triangles, coordinates: new Int32Array(coords.flat())}, materialFields, source: 'd'.repeat(64), heroGLB: hero.buffer,
     fetch, THREE, MeshBVH, finish: () => {}, targets: [], surfelFactors: [2, 4]});
   assert.equal(report.phase, 'done', report.error?.message);
   assert.equal(registered.length, 2);
@@ -230,10 +252,10 @@ test('surfelFactors builds, measures and registers merged surfel levels with her
     if (url.startsWith('/api/mesh-lods')) return goodRegister(JSON.parse(init.body), json);
     return new Response('unexpected', {status: 500});
   };
-  const repA = await prepareGenerationLevels({decode: {vertices, triangles, coordinates: new Int32Array(coords.flat())},
+  const repA = await prepareGenerationLevels({textureLevels: false,decode: {vertices, triangles, coordinates: new Int32Array(coords.flat())},
     materialFields: {resolution, coordinates: new Int32Array(coords.flat()), features: unshuffledFeatures},
     source: 'd'.repeat(64), heroGLB: hero.buffer, fetch: makeFetch(storedA), THREE, MeshBVH, finish: () => {}, targets: [], surfelFactors: [1]});
-  const repB = await prepareGenerationLevels({decode: {vertices, triangles, coordinates: new Int32Array(coords.flat())},
+  const repB = await prepareGenerationLevels({textureLevels: false,decode: {vertices, triangles, coordinates: new Int32Array(coords.flat())},
     materialFields: {resolution, coordinates: supersetCoords, features: supersetFeatures},
     source: 'd'.repeat(64), heroGLB: hero.buffer, fetch: makeFetch(storedB), THREE, MeshBVH, finish: () => {}, targets: [], surfelFactors: [1]});
   assert.equal(repA.phase, 'done', repA.error?.message);
@@ -243,7 +265,7 @@ test('surfelFactors builds, measures and registers merged surfel levels with her
   assert.deepEqual([...extB.field.cells], [...extA.field.cells]);
   assert.deepEqual([...extB.field.offsets], [...extA.field.offsets]);
   assert.deepEqual([...extB.field.color], [...extA.field.color]);
-  const missingCoords = await prepareGenerationLevels({decode: {vertices, triangles}, materialFields, source: 'd'.repeat(64), heroGLB: hero.buffer,
+  const missingCoords = await prepareGenerationLevels({textureLevels: false,decode: {vertices, triangles}, materialFields, source: 'd'.repeat(64), heroGLB: hero.buffer,
     fetch: makeFetch([]), THREE, MeshBVH, finish: () => {}, targets: [], surfelFactors: [2]});
   assert.notEqual(missingCoords.phase, 'done');
   assert.match(missingCoords.error.message, /decode\.coordinates/);
@@ -260,9 +282,9 @@ test('arbitrary GLB (no decode or materialFields): remeshes, bakes PBR textures 
   const bakeMod = fs.readFileSync(new URL('../lod-mesh-bake.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(bakeMod, /from ['"]node:|require\(|\bprocess\.|\bBuffer\b|import\(['"]node:/);
 
-  // Build an arbitrary GLB with identity node matrix (not TRELLIS -90 deg X), embedded 4x4 PNG baseColor and metallicRoughness textures, UV0 and vertex normals.
-  const basePng = new Uint8Array(await encodeTrellisTexturePNG({pixels: new Uint8Array(16 * 4).map((_, i) => [40, 180, 90, 255][i % 4]), width: 4, height: 4}));
-  const mrPng = new Uint8Array(await encodeTrellisTexturePNG({pixels: new Uint8Array(16 * 4).map((_, i) => [0, 140, 60, 255][i % 4]), width: 4, height: 4}));
+  // Build an arbitrary GLB with identity node matrix (not TRELLIS -90 deg X), embedded 32x32 PNG baseColor and metallicRoughness textures, UV0 and vertex normals.
+  const basePng = new Uint8Array(await encodeTrellisTexturePNG({pixels: new Uint8Array(32 * 32 * 4).map((_, i) => [40, 180, 90, 255][i % 4]), width: 32, height: 32}));
+  const mrPng = new Uint8Array(await encodeTrellisTexturePNG({pixels: new Uint8Array(32 * 32 * 4).map((_, i) => [0, 140, 60, 255][i % 4]), width: 32, height: 32}));
   const pos = new Float32Array([0,0,0, 1,0,0, 1,1,0, 0,1,0]);
   const nrm = new Float32Array([0,0,1, 0,0,1, 0,0,1, 0,0,1]);
   const uv = new Float32Array([0,0, 1,0, 1,1, 0,1]);
@@ -293,11 +315,12 @@ test('arbitrary GLB (no decode or materialFields): remeshes, bakes PBR textures 
   dv.setUint32(12, tl, true); dv.setUint32(16, 0x4e4f534a, true); glb.fill(32, 20, 20 + tl); glb.set(text, 20);
   dv.setUint32(20 + tl, bin.length, true); dv.setUint32(24 + tl, 0x004e4942, true); glb.set(bin, 28 + tl);
 
-  const source = 'e'.repeat(64), stored = [], registered = [], json = value => new Response(JSON.stringify(value), {headers: {'Content-Type': 'application/json'}});
+  const source = createHash('sha256').update(glb).digest('hex'), stored = [], registered = [], textureSets = {}, json = value => new Response(JSON.stringify(value), {headers: {'Content-Type': 'application/json'}});
   const fetch = async (url, init = {}) => {
-    if (url.startsWith('/api/mesh-lods') && !init.method) return json({levels: []});
-    if (url.startsWith('/api/read')) return new Response(glb.buffer);
+    if (url.startsWith('/api/mesh-lods') && !init.method) return json({source, levels: registered.map(r=>r.level), textureSets});
+    if (url.startsWith('/api/read')) {const id=new URL(url,'http://local').searchParams.get('path')?.slice(0,-4);return new Response(id===source?glb:stored.find(b=>createHash('sha256').update(b).digest('hex')===id));}
     if (url.startsWith('/api/ingest-mesh')) { const bytes = new Uint8Array(await new Response(init.body).arrayBuffer()); stored.push(bytes); return goodIngest(bytes, json); }
+    if (url.startsWith('/api/mesh-lod-textures')) {const body=JSON.parse(init.body);const textureSet={geometry:body.geometry,variants:body.variants};textureSets[body.geometry]=textureSet;return json({source,geometry:body.geometry,textureSet});}
     if (url.startsWith('/api/mesh-lods')) { const body = JSON.parse(init.body); registered.push(body); return goodRegister(body, json); }
     return new Response('unexpected', {status: 500});
   };
@@ -306,6 +329,8 @@ test('arbitrary GLB (no decode or materialFields): remeshes, bakes PBR textures 
     unwrapMesh: createWasmXatlasUnwrapper(), WorkerClass: NodeTrellisUVWorker, targets: [200], textureSizeFor: () => 32,
   });
   assert.equal(report.phase, 'done', report.error?.message);
+  assert.equal(report.appearance.status,'complete');
+  assert.equal(report.appearance.geometries.length,2,'default generation prepares appearance for the hero and new geometry');
   assert.equal(report.raw.fromHeroGLB, true);
   assert.equal(report.tiers.length, 1);
   const tier = report.tiers[0];

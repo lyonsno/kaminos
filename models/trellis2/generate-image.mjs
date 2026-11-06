@@ -11,6 +11,12 @@ import {fluidBrowserLaunch} from '../../finger-fluid-browser-launch.mjs';
 import {gitSourceIdentity} from './source-attestation.mjs';
 import {validateMetalFinishing} from './metal-remesh-finishing.mjs';
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
+// Operator hold, 2026-11-05: this front door runs the isolated diagnostic witness,
+// not the shared cooperative application. Retained finishing does not run it.
+export function assertIsolatedAssetGenerationAllowed(){
+  throw Object.assign(Error('Isolated TRELLIS asset generation is held; use MLX until the cooperative application route is restored and exercised.'),
+    {code:'TRELLIS_ISOLATED_ASSET_ROUTE_HELD'});
+}
 export function validateLocalGenerationConfig(c){
   if(c?.schema!=='trellis2.local-generation-config.v0')throw Error('identified TRELLIS local generation config required');
   for(const key of ['repoRoot','checkpointBase','python','memoryPython','sourceRoot','chrome','greenroomBin','queueDir'])
@@ -91,6 +97,10 @@ export async function generateImage(values){
   let monitor;
   await persist();
   try{
+    if(!values['native-root']){
+      report.phase='route-policy';report.backend={modelFamily:'TRELLIS 2',requestedRuntime:'browser-webgpu',runtime:null};
+      assertIsolatedAssetGenerationAllowed();
+    }
     const configRaw=await fs.readFile(values.config),c=validateLocalGenerationConfig(JSON.parse(configRaw));
     if(values['expected-config-sha256']&&sha(configRaw)!==values['expected-config-sha256'])throw Error('generation config changed while queued');
     const ownRoot=path.resolve(fileURLToPath(new URL('../../',import.meta.url)));

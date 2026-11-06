@@ -30,7 +30,11 @@ test('a TRELLIS mesh object gets its 1000-face tier by default, loaded but never
   assert.deepEqual(h.levels.map(l=>l.faces),[5000,1000,500]);
   assert.equal(h.error.reference.kind,'hero');assert.equal(h.error.units,'fraction of the hero bounding-box diagonal');assert.equal(h.error.relative.p95,.0072);
   assert.equal(h.proxyRoot,loaded[0]);assert.equal(h.proxyRoot.parent,null,'never in the scene graph');assert.equal(root.children.length,0,'no child added to the object');
-  assert.match(calls[0],/\/api\/mesh-lods\?source=a{64}&faces=1000/);
+  const route=new URL(calls[0],'http://kaminos.local');
+  assert.equal(route.pathname,'/api/mesh-lods');
+  assert.equal(route.searchParams.get('source'),HERO);
+  assert.equal(route.searchParams.get('faces'),'1000');
+  assert.equal(route.searchParams.get('prepare'),'client');
   assert.equal(registry.get(root),h);
 });
 
@@ -73,7 +77,9 @@ test('a surfels-only asset with raw-decode tiers registered under its own assetS
   const h=await registry.attach(root);
   assert.equal(h.state,'loaded');assert.equal(h.representation,'surfels');assert.equal(h.assetSha,SURF);assert.equal(h.heroSha,null);
   assert.equal(h.effective.faces,1000);assert.equal(h.proxyRoot,loaded[0]);assert.equal(h.surfels.coarsest,16);
-  assert.match(calls[0],new RegExp(`/api/mesh-lods\\?source=${SURF}&faces=1000`));
+  const route=new URL(calls[0],'http://kaminos.local');
+  assert.equal(route.searchParams.get('source'),SURF);
+  assert.equal(route.searchParams.get('faces'),'1000');
 });
 
 test('objects with no TRELLIS tiers say why, and nothing is loaded',async()=>{
@@ -224,8 +230,8 @@ test('applyGiProxySetting auto-prepares missing tiers once per heroSha and LOD r
     select: async () => ({state: 'no-tiers', heroSha: HERO, assetSha: HERO}),
     disable() {},
   };
-  const fn = new Function('sceneGiProxies', 'syncSceneDataInspector', 'window', 'setInfo', 'autoPreparedLodSources', `${snippet}; return applyGiProxySetting;`)(
-    sceneGiProxies, () => {}, window, () => {}, autoPreparedLodSources
+  const fn = new Function('sceneGiProxies', 'syncSceneDataInspector', 'window', 'setInfo', 'autoPreparedLodSources', 'prepareSceneNavigationRoot', `${snippet}; return applyGiProxySetting;`)(
+    sceneGiProxies, () => {}, window, () => {}, autoPreparedLodSources, () => {}
   );
   const entry = {id: 'kiln-1', label: 'Kiln', giProxy: {enabled: true, selection: {faces: 1000}}, object: {}};
   await fn(entry);
@@ -247,3 +253,87 @@ test('applyGiProxySetting auto-prepares missing tiers once per heroSha and LOD r
 });
 
 
+
+test('disabling a shadow proxy can retain its level catalog without releasing automatic beauty consumers', async () => {
+  const {registry, loaded} = world();
+  const {root} = sceneObject(heroSource);
+  const initial = await registry.attach(root);
+  let releases = 0;
+  registry.onRelease(() => releases++);
+  const disabled = await registry.disable(root, {retainLevels: true});
+  assert.equal(disabled?.state, 'disabled');
+  assert.equal(disabled.proxyRoot, null);
+  assert.deepEqual(disabled.levels, initial.levels, 'automatic beauty retains the source ladder');
+  assert.equal(loaded.length, 1, 'catalog retrieval never loads another proxy mesh');
+  assert.equal(releases, 0, 'shadow opt-out does not release other LOD consumers');
+  registry.release(root);
+  assert.equal(releases, 1, 'object removal still releases all consumers');
+});
+
+test('a saved shadow opt-out resolves levels for beauty without fetching or parsing proxy geometry', async () => {
+  const {registry, loaded, calls} = world();
+  const {root} = sceneObject(heroSource);
+  const disabled = await registry.disable(root, {retainLevels: true});
+  assert.equal(disabled?.state, 'disabled');
+  assert.deepEqual(disabled.levels.map(level => level.faces), [5000, 1000, 500]);
+  assert.equal(loaded.length, 0);
+  assert.equal(calls.length, 1);
+  assert.equal(registry.get(root).proxyRoot, null);
+});
+
+
+test('a cold shadow opt-out exposes catalog retrieval failure without loading geometry', async () => {
+  const {root} = sceneObject(heroSource);
+  const registry = createGiProxyRegistry({THREE,
+    fetchJson: async () => { throw Error('catalog unavailable'); },
+    fetchBytes: async () => { throw Error('proxy geometry must remain unloaded'); },
+    parseGlb: async () => { throw Error('proxy geometry must remain unloaded'); },
+  });
+  await registry.disable(root, {retainLevels: true});
+  assert.equal(registry.get(root).state, 'failed');
+  assert.equal(registry.get(root).failure, 'catalog unavailable');
+  assert.equal(registry.get(root).proxyRoot, null);
+});
+
+test('the actual page source refresh publishes new levels to shadow opt-outs and retains them through a failed refresh', async () => {
+  const vm = await import('node:vm');
+  const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  let levels = [TIERS[2]], available = true, releases = 0;
+  const {root} = sceneObject(heroSource);
+  const registry = createGiProxyRegistry({THREE,
+    fetchJson: async () => {
+      if (!available) throw Error('catalog unavailable');
+      return {source: HERO, levels, choice: levels[0]};
+    },
+    fetchBytes: async () => { throw Error('disabled shadows must not load proxy geometry'); },
+    parseGlb: async () => { throw Error('disabled shadows must not parse proxy geometry'); },
+  });
+  registry.onRelease(() => releases++);
+  const entry = {id: 'refresh-kiln', type: 'glb', source: heroSource, object: root,
+    giProxy: {enabled: false, selection: {faces: 1000}}, label: 'Kiln'};
+  const context = vm.createContext({Promise, workingScene: {objects: [entry]}, sceneGiProxies: registry,
+    autoPreparedLodSources: new Set(), sceneColliderCollection: null, sceneBurning: null,
+    syncSceneDataInspector() {}, prepareSceneNavigationRoot() {},
+    window: {kaminosFireLightingSettings: {sync() {}}, _kaminosDirty() {}},
+  });
+  const refreshStart = html.indexOf('const refreshSceneObjectsForLodSource = async source => {');
+  const refreshEnd = html.indexOf('\nwindow.__kaminosRefreshLodSource', refreshStart);
+  const applyStart = html.indexOf('function applyGiProxySetting(entry)');
+  const applyEnd = html.indexOf('\nfunction writeObjectGiProxy(', applyStart);
+  assert.ok(refreshStart >= 0 && refreshEnd > refreshStart && applyStart >= 0 && applyEnd > applyStart);
+  vm.runInContext(html.slice(refreshStart, refreshEnd) + '\n' + html.slice(applyStart, applyEnd) +
+    '\nglobalThis.refresh = refreshSceneObjectsForLodSource;', context);
+  await context.applyGiProxySetting(entry);
+  assert.deepEqual(registry.get(root).levels.map(level => level.faces), [500]);
+  levels = [TIERS[0], TIERS[2]];
+  await context.refresh(HERO);
+  assert.deepEqual(registry.get(root).levels.map(level => level.faces), [5000, 500], 'completed preparation must publish its new ladder');
+  available = false;
+  await context.refresh(HERO);
+  assert.deepEqual(registry.get(root).levels.map(level => level.faces), [5000, 500], 'failed refresh preserves the last usable catalog');
+  assert.equal(registry.get(root).state, 'disabled');
+  assert.equal(registry.get(root).catalogFailure, 'catalog unavailable');
+  assert.equal(registry.get(root).proxyRoot, null);
+  assert.equal(releases, 0, 'refresh never releases resident beauty consumers');
+  registry.clear();
+});

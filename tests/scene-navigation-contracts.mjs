@@ -50,7 +50,7 @@ test('depth samples unselected transformed visible triangles; empty space retain
 });
 test('ground is visible but cannot set authored-mesh navigation depth',()=>{
  const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
- const roots=source.slice(source.indexOf('    roots: () => [...workingScene.objects.filter('),source.indexOf('    occluders:',source.indexOf('    roots: () => [...workingScene.objects.filter(')));
+ const roots=source.slice(source.indexOf('    roots: () => interactiveSceneRoots([...workingScene.objects.filter('),source.indexOf('    occluders:',source.indexOf('    roots: () => interactiveSceneRoots([...workingScene.objects.filter(')));
  assert.ok(roots.includes("workingScene.objects.filter(entry => isSceneItemVisible(entry.id) && entry.type !== 'splat' && entry.type!=='light' && entry.type!==CAMERA_TYPE)"));
  assert.ok(!roots.includes('groundPlane'),'ground belongs in the rendered scene, not the navigation depth candidates');
  assert.ok(source.includes('occluders: () => groundPlane ? [groundPlane] : []'));
@@ -78,6 +78,34 @@ test('prepared dense geometry keeps exact surface depth without changing the ren
  const actual=navigationPivot(c,target,new THREE.Vector2(),[root]);
  near(actual.point,expected.point);
  assert.equal(actual.source,'mesh-surface');
+});
+test('new repetition meshes reuse their shared navigation tree and release it on invalidation',async()=>{
+ const c=cameraAt(),target=new THREE.Vector3();
+ const first=new THREE.Mesh(new THREE.PlaneGeometry(2,2),new THREE.MeshBasicMaterial());
+ await prepareNavigationGeometry(first);
+ const repeated=new THREE.Mesh(first.geometry,first.material);
+ navigationPivot(c,target,new THREE.Vector2(),[repeated]);
+ assert.equal(repeated.raycast===first.raycast,true,'new mesh instances bind the existing geometry index');
+ await invalidateNavigationGeometry(first);
+ assert.equal(repeated.raycast===THREE.Mesh.prototype.raycast,true,'invalidating shared geometry restores every borrowed instance');
+});
+test('shared geometry indexes track burn-coordinate and vertex-warp revisions',async()=>{
+ const c=cameraAt(),target=new THREE.Vector3();
+ const mesh=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshBasicMaterial());
+ await prepareNavigationGeometry(mesh);
+ const before=mesh.geometry.boundsTree;
+ mesh.geometry.translate(-3,0,0);
+ mesh.position.x=3;
+ await prepareNavigationGeometry(mesh);
+ assert.equal(mesh.geometry.boundsTree===before,false,'burn-coordinate conversion rebuilds the old tree');
+ assert.equal(navigationPivot(c,target,new THREE.Vector2(),[mesh]).source,'mesh-surface');
+ const burnTree=mesh.geometry.boundsTree;
+ mesh.geometry.translate(4,0,0);
+ c.position.x=4;c.lookAt(4,0,0);c.updateMatrixWorld(true);
+ navigationPivot(c,target,new THREE.Vector2(),[mesh]);
+ await prepareNavigationGeometry(mesh);
+ assert.equal(mesh.geometry.boundsTree===burnTree,false,'a query rejects an index from before a vertex warp');
+ assert.equal(navigationPivot(c,new THREE.Vector3(4,0,0),new THREE.Vector2(),[mesh]).source,'mesh-surface');
 });
 test('a winding edit invalidates the old surface index before rebuilding',async()=>{
  const c=cameraAt(),target=new THREE.Vector3(),mesh=new THREE.Mesh(new THREE.PlaneGeometry(2,2),new THREE.MeshBasicMaterial());

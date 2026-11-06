@@ -23,6 +23,8 @@ import {
 import {createGiProxyRegistry} from '../scene-gi-proxies.mjs';
 import {createFireShadowCasters} from '../fire-shadow-casters.mjs';
 import {registerPresentedSurface} from '../scene-presented-surface.mjs';
+import {visibleSceneIntersections} from '../scene-visible-picking.mjs';
+import {navigationPivot} from '../scene-navigation.mjs';
 
 const sha = text => createHash('sha256').update(text).digest('hex');
 
@@ -376,6 +378,75 @@ test('createSceneBeautyLodController caches resident rungs, never blanks while l
   assert.equal(lightingReleased.size, 2, 'released primary and repetition copy surfaceLighting registrations on disposal');
   assert.equal(heroMesh.visible, true, 'restores hero visibility when released');
   casters.dispose();
+});
+
+test('interactive queries use the displayed mesh for picking and a resident coarse rung for navigation', async () => {
+  const scene = new THREE.Scene();
+  const parent = new THREE.Group();
+  const root = new THREE.Group();
+  const hero = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2, 20, 20, 20), new THREE.MeshBasicMaterial());
+  root.userData.kaminosSceneObject = {id: 'asset'};
+  parent.position.x = 2;
+  root.add(hero);
+  parent.add(root);
+  scene.add(parent);
+  const repeat = new THREE.Group();
+  repeat.userData.kaminosRepetitionCopy = true;
+  repeat.position.x = -2;
+  repeat.add(new THREE.Mesh(hero.geometry, hero.material));
+  root.add(repeat);
+
+  const coarse = {...SAMPLE_LEVELS[3], faces: 1000};
+  const makeRung = () => {
+    const group = new THREE.Group();
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(2, 2, 1), hero.material));
+    return group;
+  };
+  const handle = {root, representation: 'mesh', levels: [coarse], proxyRoot: makeRung(), effective: {faces: 1000}};
+  const controller = createSceneBeautyLodController({
+    THREE, scene,
+    giProxies: {list: () => [handle], get: () => handle},
+    fetchBytes: async () => new ArrayBuffer(0),
+    digest: async () => coarse.sha,
+    parseGlb: async () => makeRung(),
+    settings: {faceBudget: 2000, maxPixelError: 100},
+  });
+  const camera = makeCamera({z: 8});
+  assert.deepEqual(controller.interactiveRoots([root], {matchDisplay: true}), [root]);
+  assert.notEqual(controller.interactiveRoots([root])[0], root, 'uses the GI rung while beauty is cold');
+  await controller.prepareFrame(camera);
+  const query = controller.interactiveRoots([root], {matchDisplay: true});
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+  const [hit] = visibleSceneIntersections({raycaster, roots: query, camera, viewport: {width: 800, height: 600}});
+  assert.equal(hit.point.z, 0.5, 'the repeated rung is hit in world space');
+  assert.equal(controller.interactiveOwner(hit.object), root);
+  const rung=controller.listResidentRungs(root)[0].root;
+  const sourceMesh=rung.children[0];
+  sourceMesh.geometry.translate(-5,0,0);sourceMesh.position.x=5;sourceMesh.updateMatrix();
+  const converted=visibleSceneIntersections({raycaster,roots:controller.interactiveRoots([root],{matchDisplay:true}),camera,viewport:{width:800,height:600}});
+  assert.equal(converted.length>0,true,'a warmed query cache follows the burn consumer coordinate conversion');
+  assert.equal(converted[0].point.z,0.5);
+  sourceMesh.geometry.translate(5,0,0);sourceMesh.position.x=0;sourceMesh.updateMatrix();
+  const restored=visibleSceneIntersections({raycaster,roots:controller.interactiveRoots([root],{matchDisplay:true}),camera,viewport:{width:800,height:600}});
+  assert.equal(restored.length>0,true,'burn disposal restores the query hierarchy too');
+
+  assert.equal(navigationPivot(camera, new THREE.Vector3(), new THREE.Vector2(), controller.interactiveRoots([root])).point.z, 0.5);
+  assert.equal(hero.visible, true);
+  assert.equal(repeat.visible, true);
+  assert.equal(root.children.length, 2, 'queries leave the authored scene graph alone');
+  assert.deepEqual(controller.interactiveRoots([root], {pinnedObjects: new Set(['asset'])}), [root]);
+  parent.visible = false;
+  assert.deepEqual(controller.interactiveRoots([root]), [root], 'an invisible ancestor cannot be bypassed');
+  parent.visible = true;
+  root.userData.kaminosVertexWarpRevision = 1;
+  assert.deepEqual(controller.interactiveRoots([root]), [root], 'a rung from before a deformation is stale');
+  delete root.userData.kaminosVertexWarpRevision;
+  controller.setSettings({enabled: false});
+  assert.deepEqual(controller.interactiveRoots([root]), [root]);
+  controller.setSettings({enabled: true});
+  controller.dispose();
+  assert.equal(controller.interactiveRoots([root])[0] === root, true, 'disposed controllers release the interactive route');
 });
 
 test('attachStoredSurfelLevels upgrades x4 to hero normals and adds x8 and x16 levels to SurfelChunk', () => {
@@ -1378,16 +1449,15 @@ test('Kiln side-pipe drop vs. beam crack-seal: footprint and budget allocators p
   assert.equal(beamFoot.selected.faces, 500, 'at z = 5.5m, beam coarsens all the way to 500 faces by screen footprint');
   assert.equal(kilnFoot.selected.faces, 25000, 'at z = 5.5m, kiln stays at 25,000 faces by screen footprint');
 
-  // At close range (z = 1.8m) where both want high detail:
-  // 1) Under a 320,000-face budget (combined hero faces = 287,407 + 97,670 = 385,077 > 320,000),
-  //    allocateSceneBeautyLods demotes the 97,670-face beam to 25,000 faces while keeping the 287,407-face kiln on hero!
+  // Existing unprepared levels retain the previous blur guard while appearance products are unavailable.
+  // At this close view a 320k budget demotes the beam to 25k while retaining the hero kiln.
   const closeCam = makeCamera({z: 1.8, fov: 50});
   const heroStepBudget = allocateSceneBeautyLods([
     {id: 'kiln', heroFaces: 287407, levels: realKilnLevels, worldBox: unitBox, worldDiag: diag},
     {id: 'beam', heroFaces: 97670, levels: realBeamLevels, worldBox: unitBox, worldDiag: diag},
   ], {camera: closeCam, viewportHeight: 1080, maxPixelError: 1.5, faceBudget: 320000});
   assert.equal(heroStepBudget.withinBudget, true);
-  assert.equal(heroStepBudget.allocations.beam.faces, 25000, '320k budget demotes the 97,670-face beam to 25,000 faces first');
+  assert.equal(heroStepBudget.allocations.beam.faces, 25000, 'legacy beam retains its previous blur guard until appearance is prepared');
   assert.equal(heroStepBudget.allocations.kiln.tier, 'hero', '320k budget keeps the 287,407-face kiln on hero');
 
   // 2) Under a tight 10,500-face budget, it demotes the beam all the way to 500 faces while keeping the kiln at 10,000 faces:
@@ -1443,7 +1513,7 @@ test('Kiln side-pipe drop vs. beam crack-seal: footprint and budget allocators p
     worldDiag: diag,
     camera: makeCamera({z: 4.2, fov: 50}),
     viewportHeight: 1080,
-    maxPixelError: 1.5,
+    maxPixelError: 1.5, texelWeight: 0.5, // explicit legacy combined diagnostic
   });
   assert.equal(beamAt4p2.selected.faces, 5000, 'M2: at z = 4.2m where 1,000-face tier exceeds 1.5px, selectFootprintTier selects 5,000 faces (never skipping to 500 faces)');
   const beamAt2p1 = selectFootprintTier(realBeamLevels, {
@@ -1452,7 +1522,7 @@ test('Kiln side-pipe drop vs. beam crack-seal: footprint and budget allocators p
     worldDiag: diag,
     camera: makeCamera({z: 2.1, fov: 50}),
     viewportHeight: 1080,
-    maxPixelError: 1.5,
+    maxPixelError: 1.5, texelWeight: 0.5, // compatibility coverage for combined diagnostic
   });
   assert.equal(beamAt2p1.selected.faces, 25000, 'M2/M3: at z = 2.1m, selectFootprintTier reaches the 25,000-face tier on realBeamLevels once surface-crack inflation is removed');
   const beamGeomAt1p6 = selectFootprintTier(realBeamLevels, {
@@ -1867,4 +1937,105 @@ test('seeded arrival rungs retain source-frame collision geometry and bake displ
  assert.notEqual(collisionMesh.geometry,mesh.geometry,'display baking cannot mutate the collision geometry');
  assert.equal(controller.resolveCollisionRung(root,{cellSize:.04}).root,resident.collisionRoot);
  controller.dispose();
+});
+
+test('automatic beauty retains its displayed rung when shadow proxies are disabled, including saved opt-outs', async () => {
+  const bytes = new TextEncoder().encode('independent-beauty-rung').buffer;
+  const tierSha = createHash('sha256').update(new Uint8Array(bytes)).digest('hex');
+  const level = {sha256: tierSha, faces: 12, source: `/api/read?root=generated-meshes&path=${tierSha}.glb`};
+  const source = 'e'.repeat(64);
+  const scene = new THREE.Scene();
+  const root = new THREE.Group();
+  root.userData.kaminosSceneObject = {id: 'independent-beauty', source: `/api/read?root=generated-meshes&path=${source}.glb`};
+  root.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1, 10, 10, 10), new THREE.MeshStandardMaterial()));
+  scene.add(root);
+  const makeRung = () => new THREE.Group().add(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial()));
+  let catalogAvailable = true;
+  const registry = createGiProxyRegistry({THREE,
+    fetchJson: async () => {
+      if (!catalogAvailable) throw Error('level endpoint unavailable');
+      return {source, levels: [level], choice: level};
+    },
+    fetchBytes: async () => bytes,
+    parseGlb: async () => makeRung(),
+  });
+  let beautyLoads = 0;
+  const controller = createSceneBeautyLodController({THREE, scene, giProxies: registry,
+    settings: {faceBudget: 100}, fetchBytes: async () => { beautyLoads++; return bytes; }, parseGlb: async () => makeRung(),
+  });
+  const camera = makeCamera({z: 1.5});
+  await registry.attach(root);
+  await controller.prepareFrame(camera);
+  const before = controller.state();
+  const resident = controller.getResidentRung(root, tierSha);
+  assert.equal(before.objects[0].displayedTier, tierSha);
+  catalogAvailable = false;
+  await registry.disable(root, {retainLevels: true});
+  await controller.prepareFrame(camera);
+  assert.equal(controller.state().objects[0]?.displayedTier, tierSha, 'shadow opt-out must not restore the hero in the viewport');
+  assert.equal(controller.state().totalFaces, before.totalFaces);
+  assert.equal(controller.getResidentRung(root, tierSha), resident, 'resident beauty geometry stays cached');
+  assert.equal(beautyLoads, 1);
+  controller.borrowFrame(camera);
+  assert.equal(root.children[0].visible, false, 'cached beauty still draws when the endpoint is unavailable');
+  controller.restoreAllHeroes();
+  catalogAvailable = true;
+  registry.release(root);
+  await registry.disable(root, {retainLevels: true});
+  await controller.prepareFrame(camera);
+  assert.equal(controller.state().objects[0]?.displayedTier, tierSha, 'a saved shadow opt-out also participates in automatic beauty');
+  controller.dispose();
+  registry.clear();
+});
+
+test('the beauty readout identifies a reduction forced by the scene face budget', async () => {
+  const {formatLodBudgetReadout} = await import('../scene-lod-budget.mjs');
+  const readout = formatLodBudgetReadout({objectId: 'kiln', beautyState: {
+    enabled: true, totalFaces: 25000, faceBudget: 150000,
+    objects: [{id: 'kiln', displayedTier: 'coarse', faces: 25000, pixelError: 20, demotedByBudget: true}],
+  }});
+  assert.match(readout.beautyText, /reduced to fit scene budget/i);
+});
+
+test('a flat surface with coarse textures does not demand more triangles', () => {
+  const camera = makeCamera({z: 1.5});
+  const result = selectFootprintTier([{sha: sha('flat-panel'), faces: 2, textureSize: 64, textureSet: {variants:[{textureSize:4096}]},
+    error: {relative: {p95: 0, max: 0, mean: 0}}}], {
+    heroFaces: 100000, worldBox: {min: [-.5,-.5,-.1], max: [.5,.5,.1]}, camera,
+    viewportHeight: 1080, maxPixelError: 1.5,
+  });
+  assert.equal(result.selected.faces, 2, 'texture magnification must be resolved by appearance, not by buying more faces');
+});
+
+
+test('legacy levels retain their blur guard until compatible appearance choices arrive',()=>{
+  const camera=makeCamera({z:1.5}),worldBox={min:[-.5,-.5,-.1],max:[.5,.5,.1]};
+  const legacy={sha:sha('legacy-flat'),faces:2,textureSize:64,error:{relative:{p95:0,max:0,mean:0}}};
+  assert.equal(selectFootprintTier([legacy],{heroFaces:100000,worldBox,camera,viewportHeight:1080}).selected.id,'hero');
+  const prepared={...legacy,textureSet:{variants:[{sha256:sha('sharp-flat'),textureSize:4096}]}};
+  assert.equal(selectFootprintTier([prepared],{heroFaces:100000,worldBox,camera,viewportHeight:1080}).selected.faces,2);
+});
+
+test('mixed prepared and legacy rungs keep texture penalties with legacy geometry',()=>{
+  const camera=makeCamera({z:1.5}),worldBox={min:[-.5,-.5,-.1],max:[.5,.5,.1]};
+  const legacy={sha:sha('mixed-legacy'),faces:1000,textureSize:64,error:{relative:{p95:0,max:0,mean:0}}};
+  const prepared={sha:sha('mixed-prepared'),faces:2,textureSize:64,error:{relative:{p95:0,max:0,mean:0}},textureSet:{variants:[{sha256:sha('mixed-maps'),textureSize:4096}]}};
+  const options={heroFaces:100000,worldBox,camera,viewportHeight:1080};
+  for(const activeTier of [null,'hero',legacy.sha,prepared.sha]){
+    const selected=selectFootprintTier([legacy,prepared],{...options,activeTier});
+    assert.equal(selected.selected.id,prepared.sha,'legacy blur must not force triangles on a prepared coarse rung');
+    assert.equal(selected.rungs[1].pixelError>1.5,true,'the legacy blur guard remains effective');
+    assert.equal(selected.rungs[2].pixelError,0,'prepared zero-error geometry has no bundled-map penalty');
+    const allocated=allocateSceneBeautyLods([{id:'panel',...options,levels:[legacy,prepared],activeTier}],{camera,viewportHeight:1080,faceBudget:2000});
+    assert.equal(allocated.allocations.panel.tier,prepared.sha);
+    assert.equal(allocated.allocations.panel.footprintTier,prepared.sha);
+    assert.equal(allocated.totalFaces,2);assert.equal(allocated.withinBudget,true);
+  }
+  const geometricLegacy={...legacy,error:{relative:{p95:.01,max:.01,mean:.01}}};
+  const geometric=selectFootprintTier([geometricLegacy,prepared],options);
+  assert.equal(geometric.selected.id,'hero','preparation does not discard a finer rung geometric-error floor');
+  assert.equal(geometric.rungs[2].geomPixelError,geometric.rungs[1].geomPixelError);
+  assert.equal(geometric.rungs[2].pixelError,geometric.rungs[2].geomPixelError);
+  const finePrepared={...prepared,faces:1000},coarseLegacy={...legacy,faces:2};
+  assert.equal(selectFootprintTier([finePrepared,coarseLegacy],options).selected.id,finePrepared.sha,'unprepared coarse geometry retains its own blur guard');
 });

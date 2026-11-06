@@ -122,14 +122,16 @@ export function remeshLevel({vertices: V, faces: F}, target, {closestPoint, over
       surface[idx(Math.round((r*V[a]+p*V[b]+q*V[c]-o[0])/h), Math.round((r*V[a+1]+p*V[b+1]+q*V[c+1]-o[1])/h), Math.round((r*V[a+2]+p*V[b+2]+q*V[c+2]-o[2])/h))] = 1;
     }
   }
-  const outside = new Uint8Array(nn), stack = [0]; outside[0] = 1;
-  while (stack.length) {
-    const m = stack.pop(), i = m % N[0], j = Math.floor(m / N[0]) % N[1], k = Math.floor(m / (N[0] * N[1]));
-    for (const [di, dj, dk] of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]]) {
-      const x = i+di, y = j+dj, z = k+dk;
-      if (x < 0 || y < 0 || z < 0 || x >= N[0] || y >= N[1] || z >= N[2]) continue;
-      const q = idx(x, y, z); if (!outside[q] && !surface[q]) { outside[q] = 1; stack.push(q); }
-    }
+  const outside = new Uint8Array(nn), stack = new Int32Array(nn), N0 = N[0], N1 = N[1], N2 = N[2], N01 = N0 * N1;
+  let sp = 0; outside[0] = 1; stack[sp++] = 0;
+  while (sp > 0) {
+    const m = stack[--sp], i = m % N0, rem = (m - i) / N0, j = rem % N1, k = (rem - j) / N1;
+    if (i + 1 < N0) { const q = m + 1; if (!outside[q] && !surface[q]) { outside[q] = 1; stack[sp++] = q; } }
+    if (i > 0) { const q = m - 1; if (!outside[q] && !surface[q]) { outside[q] = 1; stack[sp++] = q; } }
+    if (j + 1 < N1) { const q = m + N0; if (!outside[q] && !surface[q]) { outside[q] = 1; stack[sp++] = q; } }
+    if (j > 0) { const q = m - N0; if (!outside[q] && !surface[q]) { outside[q] = 1; stack[sp++] = q; } }
+    if (k + 1 < N2) { const q = m + N01; if (!outside[q] && !surface[q]) { outside[q] = 1; stack[sp++] = q; } }
+    if (k > 0) { const q = m - N01; if (!outside[q] && !surface[q]) { outside[q] = 1; stack[sp++] = q; } }
   }
   const solid = m => !outside[m];
   const cidx = (i, j, k) => (k * (N[1]-1) + j) * (N[0]-1) + i, cellVert = new Int32Array((N[0]-1) * (N[1]-1) * (N[2]-1)).fill(-1), verts = [];
@@ -199,12 +201,22 @@ export function dedupCorners({positions, normals, uvs}) {
 // closed remesh projected onto the raw TRELLIS surface, then the caller's TRELLIS finisher
 // (finishTrellisMesh) unwraps it and bakes PBR textures from the same material field.
 // closestPoint projects onto the raw surface (for example a three-mesh-bvh query over it).
+// purpose:'beauty' instead simplifies the existing surface; it does not rebuild a closed grid.
 export async function prepareLowTiers({mesh, materialFields, bakeMaterial, closestPoint, finish, unwrapMesh, WorkerClass,
-  targets = [25000, 10000, 5000, 1000, 500], textureSizeFor = target => target >= 25000 ? 1024 : target >= 5000 ? 512 : 256, provenance = {}, compact = true, measure = null}) {
+  targets = [25000, 10000, 5000, 1000, 500], textureSizeFor = null, purpose = null, provenance = {}, compact = true, measure = null}) {
   if (typeof finish !== 'function') throw TypeError('TRELLIS finisher (finishTrellisMesh) required');
+  if(purpose!==null&&purpose!=='beauty')throw Error('purpose must be beauty when specified');
+  textureSizeFor??=target=>purpose==='beauty'?2048:target>=25000?1024:target>=5000?512:256;
+  // UV seams are attribute splits, not holes in the underlying source surface.
+  let surface={vertices:mesh.vertices,faces:mesh.triangles};
+  if(purpose==='beauty'){
+    const positions=new Float32Array(mesh.triangles.length*3);
+    for(let i=0;i<mesh.triangles.length;i++)positions.set(mesh.vertices.subarray(mesh.triangles[i]*3,mesh.triangles[i]*3+3),i*3);
+    const welded=dedupCorners({positions});surface={vertices:welded.positions,faces:Uint32Array.from(welded.indices)};
+  }
   const tiers = [];
   for (const target of targets) {
-    const level = remeshLevel({vertices: mesh.vertices, faces: mesh.triangles}, target, {closestPoint});
+    const level = purpose==='beauty'?reduceLevel(surface,target):remeshLevel(surface, target, {closestPoint});
     const census = edgeCensus(level.vertices, level.faces), textureSize = textureSizeFor(target);
     const finished = await finish({vertices: level.vertices.slice(), triangles: level.faces.slice(), metadata: {lod: {target, route: level.route}}},
       {WorkerClass, unwrapMesh, textureSize, materialFields, ...(bakeMaterial ? {bakeMaterial} : {}), provenance: {...provenance, lod: {target, route: level.route, grid: level.grid, cell: level.cell}}});
@@ -214,7 +226,7 @@ export async function prepareLowTiers({mesh, materialFields, bakeMaterial, close
       reference: measure.reference ?? null}) : null;
     const glb = compact ? compactTrellisGLB(finished.glb, {dropTimings: true}) : finished.glb;
     const timing = {uvSeconds: glb.timings?.['extras.trellis.uv.elapsedSeconds'] ?? finished.mesh?.uvMetadata?.elapsedSeconds ?? null, ...(glb.timings ? {dropped: glb.timings} : {})};
-    tiers.push({target, error, timing, glb, compacted: compact, faces: level.faces.length / 3, route: level.route, textureSize,
+    tiers.push({target, ...(purpose?{purpose}:{}), error, timing, glb, compacted: compact, faces: level.faces.length / 3, route: level.route, textureSize,
       closed: census.boundaryEdges === 0, boundaryEdges: census.boundaryEdges, nonManifoldEdges: census.nonManifoldEdges, grid: level.grid});
   }
   return tiers;
@@ -290,22 +302,28 @@ export function compactTrellisGLB(glb, {dropTimings = false} = {}) {
 export function measureGeometricError({source, level, closestSource, closestLevel, samples = 20000, seed = 1, reference = null}) {
   let state = seed >>> 0 || 1;
   const random = () => { state ^= state << 13; state >>>= 0; state ^= state >>> 17; state ^= state << 5; state >>>= 0; return state / 4294967296; };
-  const faceNormal = (V, F, t) => { const a = F[t*3]*3, b = F[t*3+1]*3, c = F[t*3+2]*3;
-    const ux = V[b]-V[a], uy = V[b+1]-V[a+1], uz = V[b+2]-V[a+2], wx = V[c]-V[a], wy = V[c+1]-V[a+1], wz = V[c+2]-V[a+2];
-    const x = uy*wz-uz*wy, y = uz*wx-ux*wz, z = ux*wy-uy*wx, l = Math.hypot(x, y, z); return {area: l / 2, n: l ? [x/l, y/l, z/l] : [0, 0, 0]}; };
   function direction(from, to) {
-    const {vertices: V, faces: F} = from, n = F.length / 3, cumulative = new Float64Array(n), normals = [];
+    const {vertices: V, faces: F} = from, n = F.length / 3, cumulative = new Float64Array(n);
     let total = 0;
-    for (let t = 0; t < n; t++) { const fn = faceNormal(V, F, t); total += fn.area; cumulative[t] = total; normals.push(fn.n); }
+    for (let t = 0; t < n; t++) {
+      const a = F[t*3]*3, b = F[t*3+1]*3, c = F[t*3+2]*3;
+      const ux = V[b]-V[a], uy = V[b+1]-V[a+1], uz = V[b+2]-V[a+2], wx = V[c]-V[a], wy = V[c+1]-V[a+1], wz = V[c+2]-V[a+2];
+      total += Math.hypot(uy*wz-uz*wy, uz*wx-ux*wz, ux*wy-uy*wx) / 2;
+      cumulative[t] = total;
+    }
     const distances = new Float64Array(samples), angles = new Float64Array(samples);
     for (let s = 0; s < samples; s++) {
       const target = random() * total; let lo = 0, hi = n - 1;
       while (lo < hi) { const mid = (lo + hi) >> 1; if (cumulative[mid] < target) lo = mid + 1; else hi = mid; }
       let u = random(), v = random(); if (u + v > 1) { u = 1 - u; v = 1 - v; }
       const a = F[lo*3]*3, b = F[lo*3+1]*3, c = F[lo*3+2]*3, w = 1 - u - v;
-      const p = [0, 1, 2].map(k => w*V[a+k] + u*V[b+k] + v*V[c+k]), hit = to(p[0], p[1], p[2]);
-      distances[s] = Math.hypot(hit.point[0]-p[0], hit.point[1]-p[1], hit.point[2]-p[2]);
-      const m = normals[lo], d = Math.min(1, Math.abs(m[0]*hit.normal[0] + m[1]*hit.normal[1] + m[2]*hit.normal[2]));
+      const px = w*V[a] + u*V[b] + v*V[c], py = w*V[a+1] + u*V[b+1] + v*V[c+1], pz = w*V[a+2] + u*V[b+2] + v*V[c+2];
+      const hit = to(px, py, pz);
+      distances[s] = Math.hypot(hit.point[0]-px, hit.point[1]-py, hit.point[2]-pz);
+      const ux = V[b]-V[a], uy = V[b+1]-V[a+1], uz = V[b+2]-V[a+2], wx = V[c]-V[a], wy = V[c+1]-V[a+1], wz = V[c+2]-V[a+2];
+      const nx = uy*wz-uz*wy, ny = uz*wx-ux*wz, nz = ux*wy-uy*wx, l = Math.hypot(nx, ny, nz);
+      const mx = l ? nx/l : 0, my = l ? ny/l : 0, mz = l ? nz/l : 0;
+      const d = Math.min(1, Math.abs(mx*hit.normal[0] + my*hit.normal[1] + mz*hit.normal[2]));
       angles[s] = Math.acos(d) * 180 / Math.PI;
     }
     return {distances, angles};
@@ -355,21 +373,34 @@ export function glbNodeWorldMatrices(json) {
 
 // World-space triangles of a GLB, with world shading normals when every primitive carries float
 // normals (otherwise normals is null).
-export function readGLBWorldMesh(glb) {
-  const view = new DataView(glb);
+export function readGLBWorldMesh(input) {
+  const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+  const buf = bytes.buffer, bufOffset = bytes.byteOffset;
+  const view = new DataView(buf, bufOffset, bytes.byteLength);
   if (view.getUint32(0, true) !== 0x46546c67) throw Error('not a GLB');
-  const jsonLength = view.getUint32(12, true), json = JSON.parse(new TextDecoder().decode(new Uint8Array(glb, 20, jsonLength)));
-  const binStart = 28 + jsonLength;
+  const jsonLength = view.getUint32(12, true), json = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, bufOffset + 20, jsonLength)));
+  const binStart = bufOffset + 28 + jsonLength;
   const read = (index, width) => {
     const a = json.accessors[index]; if (a.sparse) throw Error('sparse accessors are not read');
     const bv = json.bufferViews[a.bufferView], T = {5126: Float32Array, 5125: Uint32Array, 5123: Uint16Array, 5122: Int16Array, 5121: Uint8Array, 5120: Int8Array}[a.componentType];
     if (!T) throw Error(`unsupported component type ${a.componentType}`);
-    const stride = bv.byteStride || width * T.BYTES_PER_ELEMENT, base = binStart + (bv.byteOffset || 0) + (a.byteOffset || 0), out = new T(a.count * width);
-    for (let i = 0; i < a.count; i++) out.set(new T(glb.slice(base + i * stride, base + i * stride + width * T.BYTES_PER_ELEMENT)), i * width);
+    const elemBytes = width * T.BYTES_PER_ELEMENT, stride = bv.byteStride || elemBytes;
+    const base = binStart + (bv.byteOffset || 0) + (a.byteOffset || 0), total = a.count * width;
+    if (stride === elemBytes) {
+      if (base % T.BYTES_PER_ELEMENT === 0) return {array: new T(buf, base, total), componentType: a.componentType};
+      const out = new T(total);
+      new Uint8Array(out.buffer).set(new Uint8Array(buf, base, total * T.BYTES_PER_ELEMENT));
+      return {array: out, componentType: a.componentType};
+    }
+    const out = new T(total), outBytes = new Uint8Array(out.buffer), srcBytes = new Uint8Array(buf);
+    for (let i = 0; i < a.count; i++) {
+      const s = base + i * stride, d = i * elemBytes;
+      for (let b = 0; b < elemBytes; b++) outBytes[d + b] = srcBytes[s + b];
+    }
     return {array: out, componentType: a.componentType};
   };
-  const vertices = [], faces = [];
-  let normals = [];
+  const vChunks = [], fChunks = [], nChunks = [];
+  let totalV = 0, totalF = 0, hasNormals = true;
   for (const [index, world] of glbNodeWorldMatrices(json)) {
     const node = json.nodes[index];
     if (node.mesh !== undefined) for (const primitive of json.meshes[node.mesh].primitives) {
@@ -377,18 +408,52 @@ export function readGLBWorldMesh(glb) {
       if (primitive.extensions?.KHR_draco_mesh_compression) throw Error('compressed primitives are not read');
       const p = read(primitive.attributes.POSITION, 3);
       if (p.componentType !== 5126) throw Error('float positions required (quantized positions are not read)');
-      const base = vertices.length / 3;
-      for (let i = 0; i < p.array.length; i += 3) { const [x, y, z] = [p.array[i], p.array[i+1], p.array[i+2]];
-        vertices.push(world[0]*x + world[4]*y + world[8]*z + world[12], world[1]*x + world[5]*y + world[9]*z + world[13], world[2]*x + world[6]*y + world[10]*z + world[14]); }
-      const ix = primitive.indices !== undefined ? read(primitive.indices, 1).array : Uint32Array.from({length: p.array.length / 3}, (_, i) => i);
-      for (const i of ix) faces.push(base + i);
-      const n = normals && primitive.attributes.NORMAL !== undefined ? read(primitive.attributes.NORMAL, 3) : null;
-      if (!n || n.componentType !== 5126) { normals = null; continue; }
-      const nm = normalMatrixOf(world);
-      for (let i = 0; i < n.array.length; i += 3) { const [x, y, z] = [n.array[i], n.array[i+1], n.array[i+2]];
-        const w = [nm[0]*x + nm[3]*y + nm[6]*z, nm[1]*x + nm[4]*y + nm[7]*z, nm[2]*x + nm[5]*y + nm[8]*z], l = Math.hypot(...w) || 1;
-        normals.push(w[0] / l, w[1] / l, w[2] / l); }
+      const pArr = p.array, vOut = new Float32Array(pArr.length);
+      const w0 = world[0], w1 = world[1], w2 = world[2], w4 = world[4], w5 = world[5], w6 = world[6];
+      const w8 = world[8], w9 = world[9], w10 = world[10], w12 = world[12], w13 = world[13], w14 = world[14];
+      for (let i = 0; i < pArr.length; i += 3) {
+        const x = pArr[i], y = pArr[i+1], z = pArr[i+2];
+        vOut[i] = w0*x + w4*y + w8*z + w12;
+        vOut[i+1] = w1*x + w5*y + w9*z + w13;
+        vOut[i+2] = w2*x + w6*y + w10*z + w14;
+      }
+      const base = totalV / 3;
+      vChunks.push(vOut);
+      totalV += vOut.length;
+      if (primitive.indices !== undefined) {
+        const ix = read(primitive.indices, 1).array, fOut = new Uint32Array(ix.length);
+        for (let i = 0; i < ix.length; i++) fOut[i] = base + ix[i];
+        fChunks.push(fOut);
+        totalF += fOut.length;
+      } else {
+        const count = pArr.length / 3, fOut = new Uint32Array(count);
+        for (let i = 0; i < count; i++) fOut[i] = base + i;
+        fChunks.push(fOut);
+        totalF += count;
+      }
+      const n = hasNormals && primitive.attributes.NORMAL !== undefined ? read(primitive.attributes.NORMAL, 3) : null;
+      if (!n || n.componentType !== 5126) { hasNormals = false; continue; }
+      const nm = normalMatrixOf(world), nArr = n.array, nOut = new Float32Array(nArr.length);
+      const nm0 = nm[0], nm1 = nm[1], nm2 = nm[2], nm3 = nm[3], nm4 = nm[4], nm5 = nm[5], nm6 = nm[6], nm7 = nm[7], nm8 = nm[8];
+      for (let i = 0; i < nArr.length; i += 3) {
+        const x = nArr[i], y = nArr[i+1], z = nArr[i+2];
+        const wx = nm0*x + nm3*y + nm6*z, wy = nm1*x + nm4*y + nm7*z, wz = nm2*x + nm5*y + nm8*z;
+        const l = Math.hypot(wx, wy, wz) || 1;
+        nOut[i] = wx / l; nOut[i+1] = wy / l; nOut[i+2] = wz / l;
+      }
+      nChunks.push(nOut);
     }
   }
-  return {vertices: Float32Array.from(vertices), faces: Uint32Array.from(faces), normals: normals && Float32Array.from(normals)};
+  const merge = (chunks, T, total) => {
+    if (chunks.length === 1) return chunks[0];
+    const out = new T(total);
+    let at = 0;
+    for (const c of chunks) { out.set(c, at); at += c.length; }
+    return out;
+  };
+  return {
+    vertices: merge(vChunks, Float32Array, totalV),
+    faces: merge(fChunks, Uint32Array, totalF),
+    normals: hasNormals ? merge(nChunks, Float32Array, totalV) : null,
+  };
 }
