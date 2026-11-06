@@ -1,6 +1,11 @@
 # kaminos-test: python
 import importlib.util
+import hashlib
+import json
 from pathlib import Path
+import subprocess
+import sys
+import tempfile
 import unittest
 import numpy as np
 
@@ -58,6 +63,54 @@ class ProfileCorrespondence(unittest.TestCase):
         self.assertEqual(len(features['points']),3)
         self.assertEqual(len(features['raw']),6)
         self.assertTrue(all(not r['outerResolved'] and len(r['distances'])==2 for r in features['rays']))
+
+
+class ProfileProducerReports(unittest.TestCase):
+    def invoke(self,plan,root):
+        path=root/'plan.json';path.write_text(json.dumps(plan))
+        report=root/'report.json';report.write_text(json.dumps(dict(ok=True,phase='complete')))
+        run=subprocess.run([sys.executable,str(ROOT/'tools/stock_profile_recovery.py'),'--plan',str(path),'--report',str(report)],capture_output=True,text=True)
+        value=json.loads(report.read_text())
+        self.assertNotEqual(run.returncode,0)
+        self.assertFalse(value['ok'],'A failed run must replace stale success')
+        self.assertTrue(value.get('error') or value['phase']!='complete')
+        return value
+
+    def test_missing_observations_still_replace_stale_success(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            report=self.invoke(dict(observations=str(root/'missing.json')),root)
+            self.assertEqual(report['phase'],'load')
+
+    def test_incomplete_observations_are_not_a_fit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);observed=root/'observed.json'
+            observed.write_text(json.dumps(dict(ok=False,phase='observe',parts=[])))
+            report=self.invoke(dict(observations=str(observed)),root)
+            self.assertIn('Complete observed source',report['error'])
+
+    def test_wrong_runtime_identity_refuses_before_fit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);observed=root/'observed.json';runtime=root/'runtime.mjs'
+            observed.write_text(json.dumps(dict(ok=True,phase='complete',parts=[{}])))
+            runtime.write_text('throw Error("must not execute mismatched runtime");')
+            plan=dict(observations=str(observed),parameters=[0,.5,1],nominal=dict(center=[0,0],innerRadius=.8,outerRadius=1),runtimeValidator=dict(path=str(runtime),sha256='0'*64,modules=[]))
+            report=self.invoke(plan,root)
+            self.assertIn('Runtime validator identity mismatch',report['error'])
+
+    def test_empty_runtime_output_cannot_validate_a_fit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);observed=root/'observed.json';runtime=root/'runtime.mjs'
+            runtime.write_text('process.exit(0);')
+            inner=np.array([[-.8,0],[0,-.8],[.8,0]])
+            outer=np.array([[-1,0],[0,-1],[1,0]])
+            segments=np.concatenate([np.stack([inner[:-1],inner[1:]],axis=1),np.stack([outer[:-1],outer[1:]],axis=1)])
+            section=dict(station=0,observed=True,evidence=dict(opening=dict(center=[0,0]),segments=segments.tolist(),innerSegments=[0,1],outerSegments=[2,3]))
+            observed.write_text(json.dumps(dict(ok=True,phase='complete',normalizer={},ellipseFitter={},parts=[dict(name='Synthetic U',source={},profile={},sections=[section])])))
+            plan=dict(observations=str(observed),stations=[0],parameters=[0,.5,1],rimInset=.01,nominal=dict(center=[0,0],innerRadius=.8,outerRadius=1),runtimeValidator=dict(path=str(runtime),sha256=hashlib.sha256(runtime.read_bytes()).hexdigest(),modules=[]))
+            report=self.invoke(plan,root)
+            self.assertEqual(report['phase'],'consumer-validation:Synthetic U')
+            self.assertEqual(report['parts'][0]['consumerValidation']['stdout'],'')
 
 
 if __name__=='__main__':unittest.main()

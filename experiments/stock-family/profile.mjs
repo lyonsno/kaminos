@@ -58,8 +58,10 @@ export function recoverStockProfile(value,recovery){
     const p=positions.subarray(i,i+3),z=p[2];
     if(recovery.outside!=='hold'&&(z<recovery.observations[0].station-1e-7||z>recovery.observations.at(-1).station+1e-7))throw Error('Source geometry is outside observed profile stations');
     const {position,columns:c}=profilePoint(p,recovery),cof=[cross(c[1],c[2]),cross(c[2],c[0]),cross(c[0],c[1])],det=dot(c[0],cof[0]);
-    if(!position.every(Number.isFinite)||!Number.isFinite(det)||det<=0)throw Error('Profile correction reverses or collapses the surface Jacobian');
+    if(!position.every(v=>Number.isFinite(Math.fround(v))))throw Error('Profile correction is not representable as finite float32 geometry');
+    if(!Number.isFinite(det)||det<=0)throw Error('Profile correction reverses or collapses the surface Jacobian');
     const n=[0,1,2].map(k=>(cof[0][k]*normals[i]+cof[1][k]*normals[i+1]+cof[2][k]*normals[i+2])/det),length=Math.hypot(...n);
+    if(!n.every(Number.isFinite)||!Number.isFinite(length))throw Error('Profile correction produces nonfinite normals');
     out.set(position,i);normal.set(length?n.map(v=>v/length):n,i);
     min=Math.min(min,det);max=Math.max(max,det);lo=Math.min(lo,position[0]);hi=Math.max(hi,position[0]);
   }

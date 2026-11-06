@@ -22,6 +22,8 @@ assert.throws(()=>recoverStockSection(surface([],[]),recovery),/nonempty|matchin
 assert.throws(()=>recoverStockSection(surface([1,0,1],[1,0,0]),recovery),/outside observed/i);
 assert.throws(()=>recoverStockSection(source,{...recovery,observations:[{station:0,field:{...field,weights:[]}}]}),/matching|field/i);
 assert.ok(recoverStockSection(surface([1,0,1],[1,0,0]),{...recovery,outside:'hold'}).sectionRecovery.minJacobianDeterminant>0);
+const overflow={...recovery,observations:[{station:0,field:{...field,centers:[],weights:[],affine:[[1e100,0],[0,0],[0,0]]}}]};
+assert.throws(()=>recoverStockSection(source,overflow),/finite|float32|represent/i,'Finite double precision must not become an infinite mesh position');
 
 const translated={...recovery,outside:'hold',observations:[{station:0,field:{...field,centers:[],weights:[],affine:[[.2,0],[0,0],[0,0]]}}]};
 const framed=JSON.parse(execFileSync(process.execPath,[new URL('../tools/stock-source-frame.mjs',import.meta.url).pathname],{input:JSON.stringify({
