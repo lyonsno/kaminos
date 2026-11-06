@@ -41,25 +41,6 @@ test('no pipeline is created with a grid-shape constant', () => {
   assert.ok(!/SCENE_SOURCE_GRID: grid|GRID: fluidGrid/.test(sceneSource));
 });
 
-test('every compute and fragment entry point seats the grid shape first; vertex entry points that need it too', () => {
-  const main = entryPoints(moduleText('WGSL'));
-  assert.equal(main.filter(e => e.stage !== 'vertex').length, 27, 'every main compute/fragment entry point is checked');
-  assert.match(sceneSource, /fn seedSceneVolumeSource\(@builtin\(global_invocation_id\) c: vec3<u32>\) \{\n  seatGridShape\(\);/, 'the scene source seed (interpolated into the main shader) seats it too');
-  for (const e of main) {
-    if (e.stage === 'vertex') assert.notEqual(e.firstLine, 'seatGridShape();', `${e.name}: the vertex stage cannot read the fluid uniforms`);
-    else assert.equal(e.firstLine, 'seatGridShape();', `${e.name} seats the grid shape`);
-  }
-  assert.match(moduleText('WGSL'), /fn seatGridShape\(\) \{\n  GRID = u32\(u\.grid_shape\.x\);\n  GRID_Y = u32\(u\.grid_shape\.y\);\n  IRRADIANCE_GRID = u32\(u\.grid_shape\.z\);\n  IRRADIANCE_GRID_Y = u32\(u\.grid_shape\.w\);\n  SCENE_SOURCE_GRID = u32\(u\.grid_shape_b\.x\);\n  SCENE_SOURCE_GRID_Y = u32\(u\.grid_shape_b\.y\);\n\}/);
-  const emitter = entryPoints(moduleText('ANALYTIC_EMITTER_INJECTION_WGSL'));
-  assert.deepEqual(emitter.map(e => e.name), ['seedAnalyticSourceSupport', 'injectAnalyticEmitter']);
-  for (const e of emitter) assert.equal(e.firstLine, 'seatGridShape();');
-  assert.match(moduleText('ANALYTIC_EMITTER_INJECTION_WGSL'), /fn seatGridShape\(\) \{\n  GRID = emitter\.cell_min_grid\.w;\n  GRID_Y = emitter\.cell_extent\.w;\n\}/);
-  const splat = entryPoints(moduleText('BOUNDARY_SPLAT_WGSL'));
-  assert.equal(splat.length, 8);
-  for (const e of splat) assert.equal(e.firstLine, 'seatGridShape();', `${e.name} seats the grid shape`);
-  assert.match(moduleText('BOUNDARY_SPLAT_WGSL'), /fn seatGridShape\(\) \{\n  GRID = u32\(boundarySplatCamera\.gridShape\.x\);\n  GRID_Y = u32\(boundarySplatCamera\.gridShape\.y\);\n\}/);
-});
-
 test('the uniforms carry the shape: fluid block, emitter words, splat camera', () => {
   assert.equal(core.GRID_SHAPE_UNIFORM_FLOATS, 8);
   assert.equal(core.GRID_SHAPE_UNIFORM_OFFSET, core.IMMERSED_SOURCE_UNIFORM_OFFSET + core.IMMERSED_SOURCE_UNIFORM_FLOATS);

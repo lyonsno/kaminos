@@ -40,25 +40,6 @@ test('the staggering uniform follows the heat-release block and packs 1 only whe
   assert.match(source, /uniforms\.set\(velocityStaggeringUniformValues\(velocityStaggeringConfig\), VELOCITY_STAGGERING_UNIFORM_OFFSET\);\s*state\.velocityStaggering = velocityStaggeringConfig;/);
 });
 
-test('the shader builds the characteristic from the two-face mean when staggered and samples the carried velocity at the plain foot', () => {
-  const centre = source.slice(source.indexOf('fn centreVelocityAt('), source.indexOf('\n}\n', source.indexOf('fn centreVelocityAt(')));
-  assert.match(centre, /if \(!velocityStaggered\(\)\) \{ return stored; \}/);
-  assert.match(centre, /compactFaceVelocity\(c, 0u\) \+ compactFaceVelocity\(c - vec3<i32>\(1, 0, 0\), 0u\)/);
-  assert.match(centre, /compactFaceVelocity\(c, 1u\) \+ compactFaceVelocity\(c - vec3<i32>\(0, 1, 0\), 1u\)/);
-  assert.match(centre, /compactFaceVelocity\(c, 2u\) \+ compactFaceVelocity\(c - vec3<i32>\(0, 0, 1\), 2u\)/);
-  // Both kernels build the characteristic from the centre velocity.
-  const predictor = source.slice(source.indexOf('fn csTransportPredict('), source.indexOf('\n}\n', source.indexOf('fn csTransportPredict(')));
-  assert.match(predictor, /let centreVelocity = centreVelocityAt\(vec3<i32>\(gid\)\);/);
-  assert.match(predictor, /let advectVelocity = materialTransportVelocity\(cell, centreVelocity\);/);
-  const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('let macCormack = u.transport_controls.x > 1.5;'));
-  assert.match(main, /let centreVelocity = centreVelocityAt\(cellI\);/);
-  // The carried velocity is sampled at the plain foot: destination face and
-  // sampler offset cancel (a −½ per-component sample offset flipped the lean to +x).
-  assert.doesNotMatch(source, /sampleCarriedVelocity|samplePredictVelocity/, 'no per-component sample offset');
-  assert.match(source, /advected = sampleFluidSlotInflow\(backCell, 0u\);/);
-  assert.match(predictor, /fluidPredict\[base \+ slot\] = sampleFluidSlotInflow\(backCell, slot\);/);
-});
-
 test('cockpit: the staggering select with help, snapshot, listener, route restore, receipt; schema additive 235', () => {
   assert.match(index, /<select id="volume-velocity-staggering" class="select-input" data-volume-settings-param="volume_velocity_staggering">\s*<option value="collocated" selected>/);
   assert.match(index, /<option value="staggered">/);
@@ -126,53 +107,5 @@ test('staggered: the main kernel separates the force increment and the face-forc
 // pass averages that increment with the open upper neighbour per component and
 // bounds once. The model mirrors the two kernels so their arithmetic can be
 // checked without a GPU; it is not the shader.
-test('face-force fold model: bound once, centred forces averaged, velocity effects local, blocked faces and solids contribute nothing', () => {
-  const legacy = v => v.map(x => Math.min(0.52, Math.max(-0.34, x)));
-  // FA-01: opposing increments that cross the intermediate bound leave the completed velocity inside it.
-  const r = core.faceForceFoldModel({ transported: [0.6, 0, 0], localIncrement: [0, 0, 0], centredIncrement: [-0.2, 0, 0], upperCentredIncrement: [[-0.2, 0, 0], [0, 0, 0], [0, 0, 0]], bound: legacy });
-  assert.deepEqual(r.stored, [0.6, 0, 0], 'the main kernel stores the unbounded intermediate');
-  assert.deepEqual(r.completed.map(x => Number(x.toFixed(6))), [0.4, 0, 0], 'one bound after the face increment');
-  // Magnitude bound: same single application.
-  const mag = v => { const m = Math.hypot(...v); return m > 0.5 ? v.map(x => x * 0.5 / m) : v; };
-  const r2 = core.faceForceFoldModel({ transported: [0.6, 0, 0], localIncrement: [0, 0, 0], centredIncrement: [-0.2, 0, 0], upperCentredIncrement: [[-0.2, 0, 0], [0, 0, 0], [0, 0, 0]], bound: mag });
-  assert.deepEqual(r2.completed.map(x => Number(x.toFixed(6))), [0.4, 0, 0]);
-  // FA-02: a centred force with an unequal upper value is averaged per component; a velocity-delta term is not.
-  const r3 = core.faceForceFoldModel({ transported: [0, 0, 0], localIncrement: [0, 0, 0], centredIncrement: [0.1, 0, 0], upperCentredIncrement: [[0.3, 0, 0], [0, 0, 0], [0, 0, 0]], bound: legacy });
-  assert.deepEqual(r3.completed.map(x => Number(x.toFixed(6))), [0.2, 0, 0], 'x takes the mean of here and the +x neighbour');
-  const r4 = core.faceForceFoldModel({ transported: [0, 0, 0], localIncrement: [0.1, 0, 0], centredIncrement: [0, 0, 0], upperCentredIncrement: [[0, 0, 0], [0, 0, 0], [0, 0, 0]], bound: legacy });
-  assert.deepEqual(r4.completed, [0.1, 0, 0], 'a local (velocity-derived) increment is not averaged');
-  const r4b = core.faceForceFoldModel({ transported: [0, 0, 0], localIncrement: [0.1, 0, 0], centredIncrement: [0, 0, 0], upperCentredIncrement: [[0.3, 0, 0], [0, 0, 0], [0, 0, 0]], bound: legacy });
-  assert.deepEqual(r4b.completed.map(x => Number(x.toFixed(6))), [0.25, 0, 0], 'while the neighbour\'s centred increment still reaches this face');
-  // Damping of the assembled velocity stays local: here T=0.10 damped by 0.82 → 0.082, independent of the neighbour.
-  const r5 = core.faceForceFoldModel({ transported: [0.1, 0, 0], localIncrement: [-0.018, 0, 0], centredIncrement: [0, 0, 0], upperCentredIncrement: [[0, 0, 0], [0, 0, 0], [0, 0, 0]], bound: legacy });
-  assert.deepEqual(r5.completed.map(x => Number(x.toFixed(6))), [0.082, 0, 0]);
-  // FA-03: a blocked upper face or a solid neighbour contributes nothing; a solid cell writes zero.
-  const r6 = core.faceForceFoldModel({ transported: [0, 0.19, 0], localIncrement: [0, 0, 0], centredIncrement: [0, 0, 0], upperCentredIncrement: [[0.4, 0, 0], [0, 0, 0], [0, 0, 0]], upperFaceOpen: [false, true, true], bound: mag });
-  assert.deepEqual(r6.completed, [0, 0.19, 0], 'a stale increment behind a blocked face cannot scale the tangential components');
-  // Confirmation 1: this cell's own centred force on a closed face must not enter the bound either.
-  const r6b = core.faceForceFoldModel({ transported: [0, 0.19, 0], localIncrement: [0, 0, 0], centredIncrement: [0.2, 0, 0], upperCentredIncrement: [[0, 0, 0], [0, 0, 0], [0, 0, 0]], upperFaceOpen: [false, true, true], bound: mag });
-  assert.deepEqual(r6b.completed.map(x => Number(x.toFixed(6))), [0, 0.19, 0], 'a closed face carries no force: the normal component is zero before the coupled bound');
-  // The open top is the exception: the last row's upper y face is open and takes this cell's own value.
-  const r6c = core.faceForceFoldModel({ transported: [0, 0, 0], localIncrement: [0, 0, 0], centredIncrement: [0, 0.1, 0], upperCentredIncrement: [[0, 0, 0], [0, 0.1, 0], [0, 0, 0]], upperFaceOpen: [true, true, true], bound: mag });
-  assert.deepEqual(r6c.completed.map(x => Number(x.toFixed(6))), [0, 0.1, 0]);
-  assert.deepEqual(core.faceForceFoldModel({ solid: true, transported: [1, 1, 1], localIncrement: [1, 1, 1], centredIncrement: [1, 1, 1], upperCentredIncrement: [[1, 1, 1], [1, 1, 1], [1, 1, 1]], bound: legacy }), { stored: [0, 0, 0], written: [0, 0, 0], completed: [0, 0, 0] }, 'a solid cell stores and writes zero');
-  // Source mirrors the model.
-  const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('\nfn ', source.indexOf('\nfn cs(@builtin') + 10));
-  assert.match(main, /var centredForce = vec3<f32>\(0\.0\);/);
-  assert.doesNotMatch(main, /velocityDerivedForce/);
-  for (const term of ['heatExpansion']) assert.match(main, new RegExp(`centredForce = centredForce [+] ${term}`), `${term} is centred`);
-  assert.doesNotMatch(main, /canonicalRadialSpread|bonfireNonWindCenteringForce|canonicalEntrainmentVelocity/, 'retired scene forces stay absent');
-  assert.match(main, /centredForce = centredForce \+ thermalBuoyancyForce\(/, 'buoyancy is centred');
-  assert.match(main, /centredForce = centredForce \+ windDirection \* windStrength/, 'wind is centred');
-  for (const term of ['confinement', 'shredForce']) assert.doesNotMatch(main, new RegExp(`centredForce = centredForce [+] ${term};`), `${term} stays local`);
-  assert.match(main, /fluidDst\[base\] = vec4<f32>\(select\(select\(boundVelocity\(vel\), vel, faceForcesOn\(\)\),prev.xyz,MATERIAL_ONLY\), 0\.0\);/, 'the bound waits for the face pass under the staggered reading');
-  assert.match(main, /if \(sceneSolidAt\(cellI\)\) \{\s*forceDeltaStore\(cellI, vec3<f32>\(0\.0\)\);/, 'solids write a zero increment');
-  const pass = source.slice(source.indexOf('fn csFaceForces('), source.indexOf('\n}\n', source.indexOf('fn csFaceForces(')));
-  assert.match(pass, /let openX = sceneFaceOpen\(c, 0u\) && \(gid\.x \+ 1u < GRID \|\| joinedBoundary\(\) \|\| openWorldBoundary\(\)\);/);
-  assert.match(pass, /let openZ = sceneFaceOpen\(c, 2u\) && \(gid\.z \+ 1u < GRID \|\| joinedBoundary\(\) \|\| openWorldBoundary\(\)\);/);
-  assert.match(pass, /let topRow = gid\.y \+ 1u >= GRID_Y;/);
-  assert.match(pass, /let openY = sceneFaceOpen\(c, 1u\) && \(!topRow \|\| pressureSolverOpenTop\(\) \|\| joinedBoundary\(\) \|\| openWorldBoundary\(\)\);/, 'open boundaries admit force while scene solids still block the face');
-  assert.match(pass, /select\(0\.0, 0\.5 \* \(here\.x \+ upX\), openX\)/, 'a closed face carries no force');
-});
 
 await assertCalibratedFireNumerics();

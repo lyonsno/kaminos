@@ -158,14 +158,6 @@ fn emissionIntegral(sigma: f32, ds: f32) -> f32 {
   if (tau < 0.001) { return ds*(1.0-tau*0.5+tau*tau/6.0); }
   return (1.0-exp(-tau))/sigma;
 }
-fn emissiveHeatSource(m: vec4<f32>, f: vec4<f32>, d: vec4<f32>, transported: bool) -> f32 {
-  if (!transported) { return m.y*0.65 + f.x + f.y*0.35 + f.z*0.40 + d.z*0.55; }
-  return m.y;
-}
-fn emissiveSootPopulation(coverage: f32, sootYield: f32, strength: f32, smokeAmount: f32, transported: bool) -> f32 {
-  if (!transported) { return max(0.0, coverage) * sootYield * strength * (0.35+smokeAmount*0.65); }
-  return max(0.0, coverage) * sootYield * strength * smokeAmount;
-}
 // Reaction light from the fresh burn rate: 1 - 1/e at one appearance burn
 // reference (the reactant model's normalisation, not chemistry).
 fn reactionLightFromBurn(freshBurn: f32, reference: f32) -> f32 {

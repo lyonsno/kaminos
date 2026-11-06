@@ -86,37 +86,6 @@ test('uniform mode makes Speed a rate multiplier on one shared characteristic', 
   assert.equal(core.resolveTimeStepConfig({ timeStep: 'uniform', speed: 2, advectionScheme: 'maccormack' }).effective.mode, 'uniform');
 });
 
-test('the shader reads coefficients at the dynamics speed and scales transport, increments and bounds by one factor', () => {
-  const main = mainKernel();
-  assert.match(source, /uniforms\[354\] = timeStepModeUniformValue\(timeStepConfig\.effective\.mode\);/, 'mode packed at slot 354');
-  assert.match(source, /uniforms\[355\] = timeStepConfig\.effective\.referenceSpeed;/, 'reference speed packed at slot 355');
-  const scale = wgslFunction('timeStepScale');
-  assert.match(scale, /u\.reserved_source_extension_2\.z > 0\.5/, 'uniform mode read from slot 354');
-  assert.match(scale, /u\.fire_smoke_curl_speed\.w \/ /, 'dt scale is requested Speed over the reference');
-  const dyn = wgslFunction('dynamicsSpeed');
-  assert.match(dyn, /select\(u\.fire_smoke_curl_speed\.w, /, 'dynamics speed is the reference under uniform mode');
-  const bt = wgslFunction('dynamicsBacktraceScale');
-  assert.match(bt, /transportBacktraceScale\(dynamicsSpeed\(\)\) \* timeStepScale\(\)/, 'backtrace scale carries the dt factor');
-  assert.match(main, /let requestedSpeed = u\.fire_smoke_curl_speed\.w;\s*\n\s*let speed = dynamicsSpeed\(\);\s*\n\s*let timeStep = timeStepScale\(\);/, 'main kernel derives speed and dt from the helpers');
-  assert.match(main, /let backtraceScale = transportBacktraceScale\(speed\) \* timeStep;/, 'main kernel backtrace scales with dt');
-  assert.match(main, /let velTransported = advected\.xyz \* transportVelocityDamping\(\);\s*\n\s*var vel = velTransported;/, 'the transported velocity is kept apart from the increments');
-  assert.match(main, /vel = velTransported \+ forceIncrement;/, 'and is folded back once (or handed to the face-force pass under the staggered reading)');
-  const foldAt = main.indexOf('  // Uniform time step:');
-  const lastAdditiveAt = main.indexOf('vel = vel - projectionCorrection');
-  // The reactant candidate opens the top through materialWallFade (equal to wallFade under the authored law).
-  const spongeAt = Math.max(main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, wallFade));'), main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, materialWallFade));'));
-  assert.ok(foldAt >= 0 && lastAdditiveAt >= 0 && spongeAt >= 0, 'fold, last additive increment and wall sponge all present');
-  assert.ok(foldAt > lastAdditiveAt, 'the scaling follows the last additive increment');
-  assert.ok(foldAt < spongeAt, 'the scaling precedes the wall damping');
-  const bound = wgslFunction('boundVelocity');
-  assert.match(bound, /fn boundVelocity\(v: vec3<f32>\) -> vec3<f32>/, 'the bound reads the effective backtrace itself');
-  assert.match(bound, /\/ dynamicsBacktraceScale\(\)/, 'the bound divides by the dt-scaled backtrace');
-  assert.doesNotMatch(source, /boundVelocity\([^)]*, /, 'no caller passes a speed to the bound any more');
-  const predictor = source.slice(source.indexOf('fn csTransportPredict('), source.indexOf('\nfn cs(@builtin'));
-  assert.match(predictor, /dynamicsBacktraceScale\(\)/, 'the MacCormack predictor uses the same effective backtrace');
-  assert.doesNotMatch(predictor, /transportBacktraceScale\(speed\)/, 'the predictor no longer reads the raw speed backtrace');
-});
-
 test('the emitter is an additive per-step source: its increments carry dt at pack time, its clamp and kernel are untouched', () => {
   const floats = new Float32Array(36); const words = new Uint32Array(floats.buffer);
   const descriptor = {

@@ -34,8 +34,6 @@ import { InletPerturbationField, StochasticSignalSet, resolveInletDynamicsConfig
 import {
   detailForceContributionMask,
   detailForceContributionReceipt,
-  fineBreakupSupportReceipt,
-  normalizeFineBreakupLocalization,
 } from './volume-detail-force-isolation.mjs';
 import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
 import { countEmitterChemicalSupport, packSolidTextureRows, sceneSolidRevision, trianglesFromSceneObject, voxelizeTriangleSolid, createSceneSolidGeometryCache } from './volume-scene-solid.mjs';
@@ -16198,7 +16196,7 @@ export function createKaminosVolumePrototype({
     uniforms[346] = confinementConfig.effective.confinementAmount;
     uniforms[347] = confinementConfig.effective.thermalExpansionAmount;
     uniforms.set(detailForceContributionMask(controlsSnapshot), 348);
-    uniforms[352] = normalizeFineBreakupLocalization(controlsSnapshot.fineBreakupLocalization);
+    uniforms[352] = 0;
     uniforms[353] = controlsSnapshot.commonGasTransport === true ? 1 : 0;
     const pressureSolverConfig = resolvePressureSolverConfig(controlsSnapshot);
     uniforms[356] = pressureSolverConfig.effective.solver === PRESSURE_SOLVER_CONVERGED ? 1 : 0;
@@ -16493,7 +16491,6 @@ export function createKaminosVolumePrototype({
     state.phasedSway = uniforms[365] >= 0.5;
     state.proceduralDetailForces = uniforms[366] >= 0.5;
     state.detailForceIsolation = detailForceContributionReceipt({ ...controlsSnapshot, volumeScene: state.volumeScene });
-    state.fineBreakupSupport = fineBreakupSupportReceipt(controlsSnapshot);
     state.gasTransport = {
       identity: 'common-gas-transport-v0',
       requested: controlsSnapshot.commonGasTransport === true ? 'common-gas' : 'legacy-split',
@@ -27696,7 +27693,6 @@ export function createKaminosVolumePrototype({
       state.phasedSway = controlsSnapshot.phasedSway !== false;
       state.proceduralDetailForces = controlsSnapshot.proceduralDetailForces !== false;
       state.detailForceIsolation = detailForceContributionReceipt({ ...controlsSnapshot, volumeScene: state.volumeScene });
-      state.fineBreakupSupport = fineBreakupSupportReceipt(controlsSnapshot);
       state.proceduralTransportSlip = false;
       state.microdetailTransportSlipRetirementIdentity = MICRODETAIL_TRANSPORT_SLIP_RETIREMENT_IDENTITY;
       state.fixedSourceDephase = controlsSnapshot.fixedSourceDephase !== false;
