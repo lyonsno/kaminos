@@ -9,11 +9,18 @@ export function createBrowserMaterialBaker({WorkerClass,signal,projectPositions,
   if(WorkerClass!==undefined&&typeof WorkerClass!=='function')throw TypeError('WorkerClass must be a Worker constructor');
   admitSignal(signal);
   if(projectPositions!==undefined&&typeof projectPositions!=='function')throw TypeError('original surface projector must be a function');
+  const project=async positions=>{
+    const result=await projectPositions(positions);
+    if(signal?.aborted)throw abortError(signal);
+    if(!(result instanceof Float32Array)||result.length!==positions.length||!result.every(Number.isFinite))
+      throw Error('complete finite original-surface sample positions required');
+    return result;
+  };
   const tag=(textures,execution)=>({...textures,metadata:{...textures.metadata,execution}});
   if(!WorkerClass)return async input=>{
     // Synchronous on this thread: Stop is honoured before and after, not mid-call.
     if(signal?.aborted)throw abortError(signal);
-    const samplePositions=projectPositions?await projectPositions(trellisMaterialBakePositions(input)):undefined;
+    const samplePositions=projectPositions?await project(trellisMaterialBakePositions(input)):undefined;
     const textures=bakeTrellisMaterialTextures({...input,...(samplePositions?{samplePositions}:{})});
     if(signal?.aborted)throw abortError(signal);
     return tag(textures,'caller-thread');
@@ -25,9 +32,7 @@ export function createBrowserMaterialBaker({WorkerClass,signal,projectPositions,
       const rasterArrays={vertices:arrays.vertices.slice(),triangles:arrays.triangles.slice(),uvs:arrays.uvs.slice()};
       const positions=await withCpu('original-remesh-texel-raster',()=>runFinishingWorker({WorkerClass,url:new URL('./material-bake-worker.js',import.meta.url),signal,label:'original surface texel positions',
         message:{operation:'positions',...Object.fromEntries(Object.entries(rasterArrays).map(([k,v])=>[k,v.buffer])),textureSize},transfer:Object.values(rasterArrays).map(v=>v.buffer)}));
-      arrays.samplePositions=await projectPositions(new Float32Array(positions.positions));
-      if(!(arrays.samplePositions instanceof Float32Array)||arrays.samplePositions.length!==positions.positions.byteLength/4||!arrays.samplePositions.every(Number.isFinite))
-        throw Error('complete finite original-surface sample positions required');
+      arrays.samplePositions=await project(new Float32Array(positions.positions));
     }
     const data=await withCpu('trellis-texture-bake',()=>runFinishingWorker({WorkerClass,url:new URL('./material-bake-worker.js',import.meta.url),signal,label:'texture bake',
       message:{...Object.fromEntries(Object.entries(arrays).map(([k,v])=>[k,v.buffer])),resolution,textureSize},
