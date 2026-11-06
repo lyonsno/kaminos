@@ -25,6 +25,7 @@ export default class SceneReflections extends Node{
   // Context hashing traverses Node values. A non-Node token scopes material
   // integration without embedding this producer's feedback textures in it.
   this.lightingContext=new (class ReflectionLightingContext {})();
+  this.available=uniform(false);
   this.updateBeforeType=NodeUpdateType.FRAME;this.frames=0;this.valid=uniform(false);this.frame=uniform(0,'uint');this.size=uniform(new Vector2(1,1));
   this.projection=uniform(camera.projectionMatrix);this.inverseProjection=uniform(camera.projectionMatrixInverse);this.near=uniform(camera.near);
   this.distance=uniform(50);this.thickness=uniform(.15);this.steps=uniform(64,'uint');this.cutoff=uniform(.95);this.historyWeight=uniform(.85);
@@ -45,20 +46,34 @@ export default class SceneReflections extends Node{
   this.filterMaterial=new NodeMaterial();this.filterMaterial.name='Reflection geometry filter and history';this.filterQuad=new QuadMesh(this.filterMaterial);
   this.previousCamera=new Matrix4();this.previousProjection=new Matrix4();this.resetReason='initial';
   this.settings=resolveReflectionSettings(settings);this.setSettings(this.settings);
-  this.releaseLighting=installSceneReflectionLighting(renderer,this);
+  this.setRenderer(renderer);
+ }
+ setRenderer(renderer){
+  if(this.renderer===renderer&&this.releaseLighting)return;
+  const previous=this.releaseLighting;
+  this.renderer=renderer;this.releaseLighting=installSceneReflectionLighting(renderer,this);
+  previous?.();if(previous)this.reset('device-replaced');this.syncSupport();
+ }
+ syncSupport(){
+  const reason=!this.camera.isPerspectiveCamera?'perspective-camera-required':this.renderer.logarithmicDepthBuffer?'conventional-depth-required':null;
+  const active=this.settings.enabled&&!reason;
+  if(this._supportInitialized&&this.available.value!==active)this.reset(reason??'reflection-route-restored');
+  this.available.value=active;this._supportInitialized=true;
+  return {effective:active,supported:!reason,suspensionReason:this.settings.enabled?reason:null};
  }
  setSettings(value){
   const next=resolveReflectionSettings({...this.settings,...value});
-  if(next.enabled&&!this.camera.isPerspectiveCamera)throw Error('Scene reflections currently require a perspective camera');
   if(JSON.stringify(next)!==JSON.stringify(this.settings))this.reset('settings');
   this.settings=next;this.distance.value=next.maxDistance;this.thickness.value=next.thickness;this.steps.value=next.steps;this.cutoff.value=next.roughnessCutoff;this.historyWeight.value=next.temporal?next.historyWeight:0;
   return this.state();
  }
  reset(reason='scene-change'){this.valid.value=false;this.resetReason=reason;}
- state(){return {...this.settings,route:'kaminos-screen-reflection-radiance-v1',frames:this.frames,resolution:this.size.value.toArray(),valid:this.valid.value,resetReason:this.resetReason,
+ state(){const support=this.syncSupport();return {...this.settings,...support,route:'kaminos-screen-reflection-radiance-v1',frames:this.frames,resolution:this.size.value.toArray(),valid:this.valid.value,resetReason:this.resetReason,
   materialResponse:'existing-physical-base-specular-once',worldGeometry:false,history:'stationary-camera-geometry-validated-neighborhood-clamped',samplesPerTracingPixel:1};}
  forSurface(){
   return Fn(()=>{
+   const result=vec4(0).toVar();
+   If(this.available,()=>{
    const coords=screenUV,grid=coords.mul(this.size).sub(.5),base=floor(grid),fraction=grid.sub(base);
    const n=normalView.dot(positionViewDirection).lessThan(0).select(normalView.negate(),normalView);
    const sum=vec4(0).toVar(),total=float(0).toVar();
@@ -70,11 +85,13 @@ export default class SceneReflections extends Node{
     const w=spatial.mul(geometry).mul(exp(abs(nr.a.sub(roughness)).mul(-32)));
     sum.addAssign(this.result.sample(q).mul(w));total.addAssign(w);
    }
-   return sum.div(total.max(.00001));
+   result.assign(sum.div(total.max(.00001)));
+   });
+   return result;
   })();
  }
  setup(builder){
-  if(builder.renderer.logarithmicDepthBuffer)throw Error('Scene reflections require conventional camera depth');
+  this.setRenderer(builder.renderer);
   this.color.build(builder);this.depth.build(builder);this.normal.build(builder);
   const graph=fullscreenGraphContext(this._graph,builder,this.version);
   if(graph===this._graph)return this.result;
@@ -111,6 +128,8 @@ export default class SceneReflections extends Node{
   this.traceMaterial.needsUpdate=this.filterMaterial.needsUpdate=true;this._graph=graph;return this.result;
  }
  updateBefore(frame){
+  this.setRenderer(frame.renderer);
+  if(!this.syncSupport().effective)return;
   frame.updateBeforeNode(this.source);
   const {renderer}=frame,state=RendererUtils.resetRendererState(renderer);
   try{

@@ -1,7 +1,8 @@
 // Hook only this renderer's converted physical materials. The source pass has
 // no reflection context: scene radiance cannot recursively sample itself.
 export function installSceneReflectionLighting(renderer,owner){
- const library=renderer.library,previous=library.fromMaterial,wrapped=new Map();
+ const library=renderer.library,previous=library.fromMaterial,wrapped=new WeakMap(),live=new Set();
+ const collected=new FinalizationRegistry(ref=>live.delete(ref));
  function fromMaterial(material){
   const node=previous.call(this,material);
   if(!node?.isMeshStandardNodeMaterial||wrapped.has(node))return node;
@@ -20,12 +21,17 @@ export function installSceneReflectionLighting(renderer,owner){
    return model;
   };
   node.setupLightingModel=replacement;wrapped.set(node,{original,replacement});
+  const ref=new WeakRef(node);live.add(ref);collected.register(node,ref,ref);
   return node;
  }
  library.fromMaterial=fromMaterial;
  return()=>{
   if(library.fromMaterial===fromMaterial)library.fromMaterial=previous;
-  for(const [node,{original,replacement}]of wrapped)if(node.setupLightingModel===replacement)node.setupLightingModel=original;
-  wrapped.clear();
+  for(const ref of live){
+   const node=ref.deref(),entry=node&&wrapped.get(node);
+   if(entry&&node.setupLightingModel===entry.replacement)node.setupLightingModel=entry.original;
+   collected.unregister(ref);
+  }
+  live.clear();
  };
 }

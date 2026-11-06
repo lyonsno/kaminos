@@ -4,12 +4,14 @@
 <script type="module">
 import * as THREE from 'three/webgpu';
 import {createSceneGI} from '../scene-gi.mjs';
+import {createViewProjection} from '../view-projection.mjs';
 THREE.Node.captureStackTrace=true;
-const W=256,H=192,renderer=new THREE.WebGPURenderer({antialias:false});
+const W=256,H=192;let renderer=new THREE.WebGPURenderer({antialias:false});
 try {
 await renderer.init();renderer.setPixelRatio(1);renderer.setSize(W,H);renderer.toneMapping=THREE.NoToneMapping;document.body.append(renderer.domElement);
 const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(50,W/H,.1,30);
 camera.position.set(2,2,4);camera.lookAt(0,.5,0);camera.updateMatrixWorld();
+const projection=createViewProjection({camera,target:()=>new THREE.Vector3(0,.5,0)});
 const data=new Uint8Array(16*8*4);for(let i=0;i<data.length;i+=4){data[i]=data[i+1]=data[i+2]=32;data[i+3]=255;}
 const env=new THREE.DataTexture(data,16,8);env.mapping=THREE.EquirectangularReflectionMapping;env.needsUpdate=true;scene.environment=env;
 const floor=new THREE.Mesh(new THREE.PlaneGeometry(10,10),new THREE.MeshStandardMaterial({color:0xffffff,metalness:1,roughness:.05}));floor.rotation.x=-Math.PI/2;scene.add(floor);
@@ -28,6 +30,15 @@ window.reflectionAssay={
   return {pixels,state:gi.reflections?.state()??{enabled:false,route:'missing'},gi:gi.debugState()};
  },
  setObjectVisible(value){box.visible=value;gi.reflections?.reset('object-visibility');},
+ setOrthographic(value){projection.setOrthographic(value);return gi.reflections.state();},
+ async replaceRenderer(){
+  const canvas=renderer.domElement;renderer.dispose();
+  renderer=new THREE.WebGPURenderer({canvas,antialias:false});await renderer.init();
+  renderer.setPixelRatio(1);renderer.setSize(W,H);renderer.toneMapping=THREE.NoToneMapping;
+  gi.reflections.setRenderer(renderer);gi.resetHistory('device-replaced');
+  pipeline.renderer=renderer;pipeline.needsUpdate=true;
+  return gi.reflections.state();
+ },
  dispose(){pipeline.dispose();gi.dispose();renderer.dispose();}
 };
 window.assayLoaded=true;
