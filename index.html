@@ -1945,6 +1945,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="slider-row" title="Off retains the unprotected Spatial fill. Raw samples is the previous noise-sensitive gate. Image contours queries a cached half-resolution gradient of smoothed integrated light and opacity; it adds one pass only when protection is nonzero."><label class="slider-label" for="volume-reconstruction-edges">Edge guide</label><select id="volume-reconstruction-edges" data-volume-settings-role="renderer"><option value="off">Off</option><option value="samples" selected>Raw samples (legacy)</option><option value="image">Image contours</option></select></div>
     <div class="slider-row" title="Image contours only. 0–1 directly bounds how much a detected contour can reduce neighbor weight. .001 removes at most .1%; 1 permits full protection."><label class="slider-label" for="volume-reconstruction-image-edge">Image edge protection</label><input id="volume-reconstruction-image-edge" type="number" min="0" max="1" step="0.05" value="1" data-authoring-drag-step="0.05" data-volume-settings-role="renderer"></div>
     <div class="slider-row" title="Raw samples only: the previous exponential contrast gain. Small values can still reject high-contrast sampling noise. Image contours has its own bounded protection control. Scene-depth boundaries remain protected in every mode."><label class="slider-label" for="volume-reconstruction-edge">Raw-sample edge gain</label><input id="volume-reconstruction-edge" type="number" min="0" step="0.1" value="2" data-authoring-drag-step="0.1" data-volume-settings-role="renderer"></div>
+    <div class="slider-row" title="Inspect the current production guide without changing the held raw samples or reconstruction history. Contours use the same half-resolution gradients queried by Image contours. Rejection previews show tent-weighted neighbor reduction, not missing-material probability."><label class="slider-label" for="integral-guide-view">Guide inspection</label><select id="integral-guide-view"><option value="beauty">Beauty</option><option value="contours">Contours · red light / cyan opacity</option><option value="light">Light contours</option><option value="opacity">Opacity contours</option><option value="image-rejection">Image rejection · white blocks</option><option value="depth-rejection">Depth rejection · magenta blocks</option></select></div>
+    <div class="slider-row" title="Display contrast only. Contours show 1-exp(-gain × normalized gradient); rejection views show gain × rejected neighbor fraction, clamped to white. This never changes filtering or flame brightness."><label class="slider-label" for="integral-guide-gain">Guide display gain</label><input id="integral-guide-gain" type="number" min="0.001" step="0.25" value="1" data-authoring-drag-step="0.25"></div>
     <div class="slider-row" title="Changes sampling jitter while physics is paused. Off follows Animate noise; image history still updates on every rendered draw. Identical samples cannot average away noise. Use Pause history comparison to hold the samples, camera and incoming history for A/B."><label class="slider-label" for="volume-reconstruction-fresh">Animate samples while paused</label><input id="volume-reconstruction-fresh" type="checkbox" checked data-volume-settings-role="renderer"></div>
     <div id="volume-reconstruction-comparison" class="flame-scope">
       <button id="volume-reconstruction-pause" class="btn" type="button" title="Holds physics, camera, last raw samples and the history entering that draw. Comparisons do not collect more samples. Enable Temporal or Combined first.">Pause history comparison</button>
@@ -19439,6 +19441,26 @@ function releaseReconstructionEvaluationCamera() {
   reconstructionEvaluationHeld=null;
   reconstructionControlLock.sync(false);
 }
+const integralGuideCaptions={
+ contours:'Red = integrated-light gradient; cyan = opacity gradient; white = both.',
+ light:'White = stronger integrated-light gradient (normalized by 0.25).',
+ opacity:'White = stronger opacity gradient (normalized by 0.1).',
+ 'image-rejection':'White = neighbor weight that Image contours would reject at the current radius/strength, even when Edge guide is Off. Depth-rejected neighbors excluded. Spatial amount is not included.',
+ 'depth-rejection':'Magenta = neighbor weight rejected by opaque scene-depth discontinuity. This is independent of Image contours.'
+};
+function syncIntegralGuideControls(s){
+ const value=volumePrototype.integralGuideDisplay(),available=s.integralReconstruction?.frames>0&&s.integralReconstruction.effective!=='off';
+ const view=document.getElementById('integral-guide-view'),gain=document.getElementById('integral-guide-gain');
+ view.disabled=!available;gain.disabled=!available||value.view==='beauty';view.value=value.view;gain.value=String(value.gain);
+ let label=document.getElementById('integral-guide-label');
+ if(!label){label=document.createElement('div');label.id='integral-guide-label';document.getElementById('viewport').append(label);}
+ label.hidden=!available||value.view==='beauty';
+ label.textContent=`Optical guide · ${integralGuideCaptions[value.view]??''} Display gain ${value.gain}×. ${s.integralEvaluation?.active?'Held input.':'Live input.'}`;
+}
+for(const id of ['integral-guide-view','integral-guide-gain'])document.getElementById(id).addEventListener('change',()=>{
+ try{volumePrototype.setIntegralGuideDisplay({view:document.getElementById('integral-guide-view').value,gain:Number(document.getElementById('integral-guide-gain').value)});refreshVolumeReadout();window._kaminosDirty?.();}
+ catch(error){setInfo(error.message);refreshVolumeReadout();}
+});
 document.getElementById('volume-reconstruction-pause').addEventListener('click',()=>{
   try {
     if(reconstructionEvaluationHeld){volumePrototype?.endIntegralEvaluation();releaseReconstructionEvaluationCamera();}
@@ -19622,6 +19644,7 @@ function refreshVolumeReadout() {
   paintVolumePyroDynamicAtlas(pyroDetail);
   document.getElementById('volume-toggle').textContent = s.active ? 'Disable' : 'Enable';
   document.getElementById('volume-toggle').classList.toggle('active', !!s.active);
+  syncIntegralGuideControls(s);
   // Route availability and all readout helpers run before the held-source lock.
   syncReconstructionFilterAvailability(document,filterView,s.controls);
   reconstructionControlLock.sync(!!evaluation);

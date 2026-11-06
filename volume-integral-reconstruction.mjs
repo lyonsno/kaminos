@@ -1,3 +1,4 @@
+import {createIntegralGuideDisplay,integralGuideDisplaySettings} from './volume-integral-guide-display.mjs';
 import {createIntegralEdgeGuide,INTEGRAL_SIGNAL_WGSL,INTEGRAL_IMAGE_EDGE_WEIGHT_WGSL} from './volume-integral-edge-guide.mjs';
 import {AGX_WGSL} from './volume-agx.mjs';
 import {EMISSIVE_CAMERA_WGSL} from './volume-emissive-transport.mjs';
@@ -120,6 +121,7 @@ export function createIntegralReconstruction(device,{transparent=false}={}) {
   let textures=[],key='',index=0,frames=0,identity=null,lastStep=null,resetReason='new-history',config=null;
   let stepChanges=0,sameStepDraws=0,evaluation=null;
   let imageEdges=null,rawEpoch=0,edgeEpoch=-1,edgeActive=false,edgeBuilt=false;
+  let guideDisplay=null,guideDisplayConfig=integralGuideDisplaySettings();
   const emptyEdges=device.createTexture({label:'inactive edge guide',size:[1,1],format:'rgba16float',usage:GPUTextureUsage.TEXTURE_BINDING});
   const edgeSampler=device.createSampler({minFilter:'linear',magFilter:'linear',addressModeU:'clamp-to-edge',addressModeV:'clamp-to-edge'});
   let filter=null,presentModule=null;const pipelines=new Map();
@@ -130,7 +132,8 @@ export function createIntegralReconstruction(device,{transparent=false}={}) {
   const describe=()=>({requested:config?.integralReconstruction??'off',effective:config?.integralReconstruction??'off',frames,resetReason,
     clock:'rendered-draws',simulationStep:lastStep,simulationStepChanges:stepChanges,sameStepDraws,
     evaluation:evaluation?{active:true,view:evaluation.view,previousDraws:frames-1,simulationStep:lastStep}:null,
-    edgeGuide:{active:edgeActive,builtThisDraw:edgeBuilt,...imageEdges?.describe()},
+    guideDisplay:{...guideDisplayConfig},
+    edgeGuide:{active:edgeActive,current:edgeEpoch===rawEpoch,builtThisDraw:edgeBuilt,...imageEdges?.describe()},
     format:'linear-radiance-transmission-rgba32float',bytes:[...textures,...(evaluation?.textures??[])].reduce((a,t)=>a+t.width*t.height*(t.format==='r32float'?4:16),0)+(imageEdges?.describe().bytes??0),
     motion:'camera-reset-current-neighborhood-clamp',passes:config?.integralReconstruction==='off'?0:2+(edgeBuilt?1:0)});
   const make=(width,height,format)=>device.createTexture({label:'linear integral reconstruction',size:[width,height],format,
@@ -141,7 +144,8 @@ export function createIntegralReconstruction(device,{transparent=false}={}) {
     if(!pipelines.has(format))pipelines.set(format,device.createRenderPipeline({label:'reconstructed volume presentation',layout:'auto',vertex:{module:presentModule,entryPoint:'vs'},fragment:{module:presentModule,entryPoint:'present',constants:{TRANSPARENT_CANVAS:transparent},targets:[{format}]},primitive:{topology:'triangle-list'}}));
     const spatial=['spatial','combined'].includes(c.integralReconstruction),temporal=['temporal','combined'].includes(c.integralReconstruction);
     edgeActive=spatial&&c.reconstructionSpatial>0&&c.reconstructionRadius>0&&c.reconstructionImageEdge>0&&c.reconstructionEdges==='image';edgeBuilt=false;
-    if(edgeActive){imageEdges ||=createIntegralEdgeGuide(device);if(edgeEpoch!==rawEpoch){imageEdges.encode(encoder,textures[0],textures[1]);edgeEpoch=rawEpoch;edgeBuilt=true;}}
+    const diagnosticNeedsEdges=guideDisplayConfig.view!=='beauty'&&guideDisplayConfig.view!=='depth-rejection';
+    if(edgeActive||diagnosticNeedsEdges){imageEdges ||=createIntegralEdgeGuide(device);if(edgeEpoch!==rawEpoch){imageEdges.encode(encoder,textures[0],textures[1]);edgeEpoch=rawEpoch;edgeBuilt=true;}}
     const edgeMode=edgeActive?2:spatial&&c.reconstructionEdges==='samples'?1:0;
     device.queue.writeBuffer(options,0,new Float32Array([spatial?c.reconstructionSpatial:0,c.reconstructionRadius,c.reconstructionEdges==='image'?c.reconstructionImageEdge:c.reconstructionEdge,0,temporal?Math.min(c.retention,age/(age+1)):0,age>0?1:0,c.reconstructionResponse,0,edgeMode,0,0,0]));
     device.queue.writeBuffer(camera,0,cameraValues);
@@ -149,11 +153,16 @@ export function createIntegralReconstruction(device,{transparent=false}={}) {
     entries.push({binding:6,resource:{buffer:options}},{binding:7,resource:(imageEdges?.texture??emptyEdges).createView()},{binding:8,resource:edgeSampler});
     const compute=encoder.beginComputePass({label:'reconstruct linear light and transmission'});compute.setPipeline(filter);
     compute.setBindGroup(0,device.createBindGroup({layout:filter.getBindGroupLayout(0),entries}));compute.dispatchWorkgroups(Math.ceil(textures[0].width/8),Math.ceil(textures[0].height/8));compute.end();
+    if(guideDisplayConfig.view!=='beauty'){
+      guideDisplay ||=createIntegralGuideDisplay(device);
+      guideDisplay.encode(encoder,view,format,{edges:imageEdges?.texture??emptyEdges,depth:textures[1],display:guideDisplayConfig,radius:c.reconstructionRadius,strength:c.reconstructionImageEdge});return;
+    }
     const pipeline=pipelines.get(format),pass=encoder.beginRenderPass({label:'present reconstructed integral',colorAttachments:[{view,loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}]});
     pass.setPipeline(pipeline);pass.setBindGroup(0,device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:output.createView()},{binding:1,resource:{buffer:camera}}]}));pass.draw(3);pass.end();
   }
   return {
     reset,endEvaluation,
+    setGuideDisplay(next){guideDisplayConfig=integralGuideDisplaySettings({...guideDisplayConfig,...next});return {...guideDisplayConfig};},
     disable(reason='disabled'){reset(reason);imageEdges?.dispose();imageEdges=null;for(const t of textures)t.destroy();textures=[];key='';},
     describe,
     prepare(width,height,controls,sourceIdentity,step) {
@@ -193,6 +202,22 @@ export function createIntegralReconstruction(device,{transparent=false}={}) {
       evaluation.view=c.integralReconstruction;evaluation.rendered=true;return describe();
     },
     get raw(){return textures[0];},get guide(){return textures[1];},get output(){return evaluation?.rendered?evaluation.textures[0]:textures[2+index];},get moments(){return evaluation?.rendered?evaluation.textures[1]:textures[4+index];},
+    async sampleGuides(){
+      if(!frames||!imageEdges?.texture||edgeEpoch!==rawEpoch)return {available:false,reason:'No current image guide; display a contour view and collect a draw',state:describe()};
+      const epoch=rawEpoch,keyBefore=key,depthTexture=textures[1],edgeTexture=imageEdges.texture;
+      const read=async(texture,components,bytesPerComponent)=>{
+        const width=texture.width,height=texture.height,row=Math.ceil(width*components*bytesPerComponent/256)*256;
+        const b=device.createBuffer({size:row*height,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+        try{const e=device.createCommandEncoder();e.copyTextureToBuffer({texture},{buffer:b,bytesPerRow:row},[width,height]);device.queue.submit([e.finish()]);await b.mapAsync(GPUMapMode.READ);
+          const data=bytesPerComponent===4?new Float32Array(b.getMappedRange()):new Uint16Array(b.getMappedRange());const values=new Float32Array(width*height*components);
+          const half=x=>{const sign=(x&32768)?-1:1,exp=(x>>>10)&31,m=x&1023;return exp===0?sign*m*2**-24:exp===31?(m?NaN:sign*Infinity):sign*(1+m/1024)*2**(exp-15);};
+          for(let y=0;y<height;y++)for(let x=0;x<width*components;x++){const v=data[y*row/bytesPerComponent+x];values[y*width*components+x]=bytesPerComponent===4?v:half(v);}return values;
+        }finally{b.unmap();b.destroy();}
+      };
+      const [gradients,depth]=await Promise.all([read(edgeTexture,4,2),read(depthTexture,1,4)]);
+      if(!frames||epoch!==rawEpoch||edgeEpoch!==epoch||keyBefore!==key)throw Error('Guide readback source changed');
+      return {available:true,width:edgeTexture.width,height:edgeTexture.height,sourceWidth:depthTexture.width,sourceHeight:depthTexture.height,components:['light.dx','light.dy','opacity.dx','opacity.dy'],gradients,depth,rawEpoch:epoch,state:describe()};
+    },
     async sample() {
       if(!textures.length||!frames)return {available:false,state:describe()};
       const width=textures[0].width,height=textures[0].height,row=Math.ceil(width*16/256)*256;
@@ -205,6 +230,6 @@ export function createIntegralReconstruction(device,{transparent=false}={}) {
         return {available:true,width,height,state:describe(),raw:arrays[0],filtered:arrays[1],moments:arrays[2]};
       }finally{for(const b of buffers){b.unmap();b.destroy();}}
     },
-    dispose(){endEvaluation();imageEdges?.dispose();emptyEdges.destroy();for(const t of textures)t.destroy();textures=[];options.destroy();camera.destroy();}
+    dispose(){endEvaluation();guideDisplay?.dispose();imageEdges?.dispose();emptyEdges.destroy();for(const t of textures)t.destroy();textures=[];options.destroy();camera.destroy();}
   };
 }

@@ -102,3 +102,7 @@ test('an effective source control edit invalidates old history before immediate 
   const source=p.debugState().integralSourceGeneration;p.setControls({reconstructionRadius:2});assert.equal(p.debugState().integralSourceGeneration,source);
  }finally{p.dispose();}
 });
+
+test('guide display is transient presentation state and invalid edits retain its prior value',()=>{
+ const p=prototype({integralReconstruction:'combined'});try{const generation=p.debugState().integralSourceGeneration;assert.deepEqual(p.setIntegralGuideDisplay({view:'light',gain:2}),{view:'light',gain:2});assert.equal(p.debugState().integralSourceGeneration,generation);assert.throws(()=>p.setIntegralGuideDisplay({gain:Infinity}));assert.deepEqual(p.integralGuideDisplay(),{view:'light',gain:2});}finally{p.dispose();}
+});

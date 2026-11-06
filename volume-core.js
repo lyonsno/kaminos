@@ -24,6 +24,7 @@ import { leanEmissiveRaymarchAdmission, RAYMARCH_NEIGHBORHOOD_WGSL, FLAME_GUIDAN
 import { OPTICAL_TRACE_IDENTITY, traceChunkPlan, validateTraceRows, createOpticalCaptureOwner } from './volume-optical-trace.mjs';
 import { raymarchAdaptivity, emptySpaceThreshold, opticalSteppingConfig, resolveOpticalStepping, OPTICAL_STEPPING_WGSL } from './volume-optical-native.mjs';
 import { createRayStepTelemetry } from './volume-ray-step-telemetry.mjs';
+import {integralGuideDisplaySettings} from './volume-integral-guide-display.mjs';
 import {createIntegralReconstruction,integralReconstructionSettings} from './volume-integral-reconstruction.mjs';
 import {reconstructionSourceChanges} from './volume-reconstruction-pause.mjs';
 import { createRayAllocationHistory, rayHistorySettings, HISTORY_ALLOCATION_WGSL } from './volume-history-allocation.mjs';
@@ -11791,6 +11792,7 @@ export function createKaminosVolumePrototype({
   let debugOpticalStepping = opticalSteppingConfig({mode:controlsSnapshot.raymarchMode??'numerical',tolerance:controlsSnapshot.opticalTolerance??0.001});
   let rayStepTelemetry = null;
   let integralReconstruction=null, reconstructionSample=0;
+  let integralGuideDisplay=integralGuideDisplaySettings();
   let integralEvaluation=null, integralCameraValues=null, integralCameraSignature=null, integralSceneSignature=null;
   let integralEncodedForFrame=false;
   state.integralSourceGeneration=0;
@@ -15165,6 +15167,7 @@ export function createKaminosVolumePrototype({
     rayStepTelemetry = createRayStepTelemetry(device);
     rayAllocationHistory = createRayAllocationHistory(device);
     integralReconstruction=createIntegralReconstruction(device,{transparent:transparentCanvas});
+    integralReconstruction.setGuideDisplay(integralGuideDisplay);
     rayStepTelemetry.setCanvas(rayStepTelemetryCanvas);
     rayStartNoiseTexture = await createRayStartTexture(device);
     worldOpticalFallback=device.createTexture({label:'disabled world smoke',size:[1,1,1],dimension:'3d',format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING});
@@ -29170,6 +29173,16 @@ export function createKaminosVolumePrototype({
       worldSmokeOverlay=mode;
       if(device&&worldRenderUniform)device.queue.writeBuffer(worldRenderUniform,32,new Float32Array([mode==='contributions'?1:0,0,0,0]));
       return mode;
+    },
+    setIntegralGuideDisplay(next){
+      integralGuideDisplay=integralGuideDisplaySettings({...integralGuideDisplay,...next});
+      integralReconstruction?.setGuideDisplay(integralGuideDisplay);return {...integralGuideDisplay};
+    },
+    integralGuideDisplay(){return {...integralGuideDisplay};},
+    async sampleIntegralGuide(){
+      if(!selectiveHeadLiveCapturePaused&&!integralEvaluation)throw Error('Guide readback requires held capture or comparison');
+      if(!integralReconstruction)return {available:false,reason:'Reconstruction unavailable'};
+      return integralReconstruction.sampleGuides();
     },
     isIntegralEvaluationHeld(){return !!integralEvaluation;},
     beginIntegralEvaluation() {
