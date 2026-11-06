@@ -1,3 +1,4 @@
+import {createMlsWallDensity,applyMlsWallDensity} from './mls-wall-density.mjs';
 import {resolveMlsMaterial} from './mls-material.mjs';
 import {createSceneLiquidSupport,SCENE_LIQUID_COLLIDER_WGSL,SCENE_LIQUID_SUPPORT_BINDINGS_WGSL} from './scene-liquid-support.mjs';
 import {mlsConfig,MLS_ROUTE,MLS_SOURCE,createMlsClock,createMlsEmissionPlan,validateMlsPacket} from './mls-juice-contract.mjs';
@@ -41,7 +42,7 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
   const U=GPUBufferUsage,clock=createMlsClock(config.dt,{maxSubstepsPerBatch:config.maxSubstepsPerBatch,maxBacklogSeconds:config.maxBacklogSeconds}),plan=createMlsEmissionPlan(config);
   const timer=createWebGpuGpuTimer({device,queue:device.queue,options:profile}),timingBatches=[];
 
-  let support=null,pendingMaterial=null;
+  let support=null,wallDensity=null,pendingMaterial=null;
   let activeMaterial={stiffness:config.stiffness,viscosity:config.viscosity,materialUnits:config.materialUnits};
   let live=validateMlsPacket(packet),paused=false,pending=false,failure=null,disposed=false,time=0,pendingCompletion=Promise.resolve();
   let population=null;const cadence={completedBatches:0,completedStep:0,lastBatchSteps:0,lastBatchWallMs:0,lastCompletionIntervalMs:null};let lastCompletedAt=null;
@@ -70,6 +71,8 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
   };
   try {
     if(sceneColliders)support=createSceneLiquidSupport(device,sceneColliders);
+    wallDensity=await createMlsWallDensity({device,config,support,box,obstacle,domain});
+    const wallDensityIndex=wallDensity?resources.push(wallDensity.buffer)-1:null;
     const kernels=[];
     for(const name of ['p2g_1','p2g_2','g2p']){
       const response=await fetch(new URL(`./vendor/splash-mls-mpm/${name}.wgsl`,import.meta.url));
@@ -79,6 +82,7 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
       code=code.replace('position: vec3f,','position: vec3f, life: f32,')
         .replace('if (id.x < numParticles) {','if (id.x < numParticles) {\n        if(particles[id.x].life<=0.){return;}');
       if(name==='p2g_2'){
+        if(wallDensity)code=applyMlsWallDensity(code);
         for(const [key,component] of [['stiffness','x'],['restDensity','y'],['dynamicViscosity','z']]){
           if(!code.includes(`override ${key}: f32;`))throw Error('MLS pinned material declaration changed');
           code=code.replace(`override ${key}: f32;`,'').replace(new RegExp(`\\b${key}\\b`,'g'),`material.${component}`);
@@ -94,7 +98,7 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
       }
       const common={fixedPointMultiplierInverse:1/65536};
       kernels.push(await make(code,name,name==='p2g_1'?[[0,0],[1,1],[2,2],[3,3]]:
-        name==='p2g_2'?[[0,0],[1,1],[2,2],[3,3],[4,4],[5,5],[6,8]]:[[0,0],[1,1],[2,2],[3,2],[4,3],[5,5],[6,6],...(support?[[7,7]]:[])] ,
+        name==='p2g_2'?[[0,0],[1,1],[2,2],[3,3],[4,4],[5,5],[6,8],...(wallDensity?[[14,wallDensityIndex]]:[])]:[[0,0],[1,1],[2,2],[3,2],[4,3],[5,5],[6,6],...(support?[[7,7]]:[])] ,
       name==='p2g_1'?{fixedPointMultiplier:65536}:name==='p2g_2'?{...common,fixedPointMultiplier:65536}:{...common,physicalDt:config.dt}));
     }
     const update=await make((support?SCENE_LIQUID_SUPPORT_BINDINGS_WGSL+SCENE_LIQUID_COLLIDER_WGSL+`@group(0) @binding(7) var<uniform> domain:vec4f;`:'')+`
@@ -127,14 +131,14 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
     if(setup?.trackPopulation){
       census=buffer(censusWords*4,U.STORAGE|U.COPY_SRC|U.COPY_DST,'MLS live population and occupancy');
       censusReadback=buffer(censusWords*4,U.COPY_DST|U.MAP_READ,'MLS completed population readback');
-      resources.push(census);
+      const censusIndex=resources.push(census)-1;
       censusKernel=await make(`
         @group(0) @binding(0) var<storage,read> particleWords:array<f32>;
         @group(0) @binding(1) var<storage,read_write> occupancy:array<atomic<u32>>;
         @compute @workgroup_size(64) fn census(@builtin(global_invocation_id) id:vec3u){
           if(id.x*20u+3u>=arrayLength(&particleWords)||particleWords[id.x*20u+3u]<=0.){return;}
           atomicAdd(&occupancy[0],1u);atomicOr(&occupancy[1u+id.x/32u],1u<<(id.x%32u));
-        }`,'census',[[0,0],[1,9]]);
+        }`,'census',[[0,0],[1,censusIndex]]);
     }
     const dispatch=(encoder,kernel,n,timestampWrites)=>{const pass=encoder.beginComputePass(timestampWrites?{timestampWrites}:undefined);pass.setPipeline(kernel.pipeline);pass.setBindGroup(0,kernel.group);if(kernel===update)pass.dispatchWorkgroups(gridX,gridY);else pass.dispatchWorkgroups(Math.ceil(n/64));pass.end();};
     const execute=(steps,epochMs)=>{
@@ -151,6 +155,7 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
         const token=timer.begin(),timing=profile?{steps,startTime,cpuEncodeMs:null,submitToCompletionMs:null,gpuMs:null,gpuStatus:token?'pending':timer.summary.status==='active'?'untimed':timer.summary.status}:null;
         if(timing){timingBatches.push(timing);if(token)token.listeners.push(t=>{timing.gpuMs=t.ms;timing.gpuStatus=t.status;});}
         const encoder=device.createCommandEncoder({label:`MLS ${steps} physical substeps from ${startTime}`});let source=0,index=0;
+        wallDensity?.encode(encoder);
         for(const births of injections){
           for(const b of births){encoder.copyBufferToBuffer(upload,source,particles,b.slot*80,80);source+=80;}
           encoder.clearBuffer(cells);
@@ -185,7 +190,7 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
     };
     return {config,particles,
       setMaterial(mlsMaterial){if(disposed)throw Error('MLS solver disposed');const next=resolveMlsMaterial({cell:config.cell,modelSecondsPerSecond:config.modelSecondsPerSecond,restDensity:config.restDensity,mlsMaterial,viscosity:mlsMaterial==null?setup?.viscosity:undefined});pendingMaterial=JSON.stringify(next)===JSON.stringify(activeMaterial)?null:next;return next.materialUnits;},
-      setSceneColliders(records){if(!support)throw Error('MLS scene support was not installed');if(support.update(records)){kernels[2].group=kernels[2].refresh();update.group=update.refresh();}return support.read();},
+      setSceneColliders(records){if(!support)throw Error('MLS scene support was not installed');if(support.update(records)){wallDensity?.refresh();kernels[2].group=kernels[2].refresh();update.group=update.refresh();}return support.read();},
       setPacket(packet){live=validateMlsPacket(packet);},
       setPaused(value){clock.observe(now(),paused);paused=Boolean(value);},
       advance(nowMs=now(),epochMs=Date.now(),options={}){
@@ -209,6 +214,7 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
         domain:{gridDimensions:[...config.dimensions],cellSize:config.cell,originWorld:[...config.min],boundsWorld:structuredClone(config.bounds)},
         modelTimeScale:config.modelSecondsPerSecond,clock:{...clock.read(),completedStep:cadence.completedStep},pending,failure,liveInlets:plan.read(time),
         emissionLaw:'unchanged_packet_distal_axis; strength_as_world_meters_per_second; packet_lifetime_seconds',
+        densityBoundary:wallDensity?wallDensity.read():{route:'unbounded_kernel'},
         material:{restDensity:config.restDensity,stiffness:activeMaterial.stiffness,viscosity:activeMaterial.viscosity,surfaceTension:false,world:{...activeMaterial.materialUnits},pressureCourantNumber:activeMaterial.materialUnits.pressureWaveSpeed*config.dt/config.cell},pendingMaterial:pendingMaterial?{...pendingMaterial.materialUnits}:null,
         collision:support?support.read():{route:'axis_aligned_domain_and_prescribed_sphere_not_arbitrary_scene'},initialParticleCount:initialParticles?.length/20||0}),
       async snapshot(){
@@ -218,7 +224,7 @@ export async function createMlsJuiceSolver({device,setup,packet,initialParticles
           await readback.mapAsync(GPUMapMode.READ);return new Float32Array(readback.getMappedRange()).slice();
         }finally{readback.destroy();}
       },
-      dispose(){if(disposed)return;disposed=true;timer.destroy();support?.dispose();for(const b of owned)b.destroy();}
+      dispose(){if(disposed)return;disposed=true;timer.destroy();wallDensity?.dispose();support?.dispose();for(const b of owned)b.destroy();}
     };
-  }catch(error){timer.destroy();support?.dispose();for(const b of owned)b.destroy();throw error;}
+  }catch(error){timer.destroy();wallDensity?.dispose();support?.dispose();for(const b of owned)b.destroy();throw error;}
 }
