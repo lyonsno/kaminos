@@ -5,14 +5,14 @@ import {createProceduralMesh} from './scene-geometry.mjs';
 
 // One retained native scene session; the application continues owning the view,
 // renderer, inference and document. There are no simulation/readback operations.
-export function installMountedGenerationWorkshop({document,THREE,mergeGeometries,loadGlb,host,camera,readView,selection,setSelection,find,applyMaterials,warm,mounted=()=>{},redraw}) {
+export function installMountedGenerationWorkshop({document,THREE,mergeGeometries,loadGlb,host,camera,readView,selection,setSelection,find,applyMaterials,warm,mounted=()=>{},changed=()=>{},redraw}) {
  const ids=new Set();let handles=[],savedSelection=null,memberOwner=null;
  const card=document.createElement('div');card.id='mounted-generation-workshop';card.hidden=true;
  card.style.cssText='position:absolute;z-index:12;top:82px;right:18px;display:flex;gap:12px;align-items:center;padding:9px 12px;border:1px solid #646260;border-radius:8px;background:#202528ed;color:#ead5ad;pointer-events:auto;font:14px system-ui';
  const status=document.createElement('span'),back=document.createElement('button');back.type='button';back.textContent='Return to scene';
  back.title='Withdraw the workshop. An active generation continues; use Stop to cancel it.';card.append(status,back);
  const viewport=document.getElementById('viewport');viewport.append(card);
- function update(state){card.hidden=!state.wanted&&['unprepared','preparing','closed','disposed'].includes(state.phase);card.style.display=card.hidden?'none':'flex';status.textContent=state.error?`Workshop unavailable · ${state.error}`:state.phase==='preparing'||state.phase==='unprepared'?'Preparing workshop…':'Generation workshop';redraw();}
+ function update(state){card.hidden=!state.wanted&&['unprepared','preparing','closed','disposed'].includes(state.phase);card.style.display=card.hidden?'none':'flex';status.textContent=state.error?`Workshop unavailable · ${state.error}`:state.phase==='preparing'||state.phase==='unprepared'?'Preparing workshop…':'Generation workshop';changed(state);redraw();}
  const controller=createMountedGenerationWorkshop({onFrame:callback=>host.onFrame(callback),changed:update,
   async acquire({signal}){
    const session=host.open();const acquired=[],materials=new Map(),frame=new THREE.Group();let placed=false;

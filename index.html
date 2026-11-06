@@ -12330,7 +12330,7 @@ async function initScene() {
     host:{open:()=>workbenchSceneHost.open(),onFrame:workbenchSceneFrames.onFrame},camera,
     readView:()=>({position:camera.position.toArray(),target:controls.target.toArray(),fov:camera.fov,zoom:camera.zoom}),
     selection:()=>workingScene.selection,setSelection:setSceneSelection,find:id=>workingScene.objects.some(row=>row.id===id)||workingScene.groups.some(row=>'@group:'+row.id===id),
-    applyMaterials:applyMaterialStateToObject,mounted:(handle,instance)=>{if(instance)proceduralMeshes.set(handle.id,instance);},redraw:()=>window._kaminosDirty?.(),
+    changed:()=>renderSceneObjectList(),applyMaterials:applyMaterialStateToObject,mounted:(handle,instance)=>{if(instance)proceduralMeshes.set(handle.id,instance);},redraw:()=>window._kaminosDirty?.(),
     warm:roots=>sceneLightingPreparation.withRenderer(async()=>{try{for(const root of roots)root.visible=true;await renderer.compileAsync(scene,camera);}finally{for(const root of roots)root.visible=false;}}),
   });
   window.kaminosGenerationWorkshop=generationWorkshop;

@@ -19,10 +19,11 @@ export function createMountedGenerationWorkshop({acquire,onFrame,changed=()=>{},
     stage=result;
     arrival=createGenerationArrival({duration,place:()=>stage.place(),present:value=>stage?.present(value??0)});
     stop=onFrame(({deltaSeconds})=>{
+     const wasVisible=arrival.read().amount>0;
      arrival.advance(deltaSeconds);
      const {amount,direction}=arrival.read();
      const next=direction>0?'entering':direction<0?'leaving':amount===1?'open':'closed';
-     if(next!==phase){phase=next;publish();}
+     if(next!==phase||wasVisible!==(amount>0)){phase=next;publish();}
     });
     phase='closed';if(wanted)begin();else publish();
    }catch(cause){if(token===epoch&&!closed){phase='error';error=cause.message;publish();}}

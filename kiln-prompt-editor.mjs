@@ -13,7 +13,7 @@ export function promptPlaneTransform({camera,object,width:vw,height:vh,textHeigh
  const screen=new Matrix4().set(vw/2,0,0,vw/2,0,-vh/2,0,vh/2,0,0,1,0,0,0,0,1).multiply(clip);
  return `matrix3d(${screen.elements.join(',')})`;
 }
-export function installKilnPromptEditor({document,viewport,input,camera,object,onChange=()=>{},onPresentation=()=>{},onError=()=>{}}){
+export function installKilnPromptEditor({document,viewport,input,camera,object,presentation=object,onScroll=()=>{},onChange=()=>{},onPresentation=()=>{},onError=()=>{}}){
  const layer=document.createElement('div');layer.className='kiln-prompt-plane';viewport.append(layer);
  const home=input.parentNode,after=input.nextSibling,priorStyle=input.getAttribute('style'),priorPlaceholder=input.placeholder;
  layer.append(input);input.classList.add('kiln-prompt-input');input.placeholder='Describe your image…';input.wrap='soft';
@@ -24,7 +24,7 @@ export function installKilnPromptEditor({document,viewport,input,camera,object,o
   if(disposed)return;const rect={width:viewport.clientWidth,height:viewport.clientHeight};
   input.style.transform=promptPlaneTransform({camera,object,width:rect.width,height:rect.height,textHeight:height});
  }
- function present(){const editing=!burning||document.activeElement===input;layer.dataset.editing=String(editing);input.style.color=editing?'#b8b2a8':'transparent';input.style.opacity=editing?'1':'0';object.visible=!editing;if(presented!==editing){presented=editing;onPresentation();}}
+ function present(){const editing=!burning||document.activeElement===input;layer.dataset.editing=String(editing);input.style.color=editing?'#b8b2a8':'transparent';input.style.opacity=editing?'1':'0';presentation.visible=!editing;if(presented!==editing){presented=editing;onPresentation();}}
  function sync(){
   height=KILN_PROMPT_WINDOW_HEIGHT;const scroll=input.scrollTop;input.style.cssText=typography+`height:${height}px;min-height:0;max-height:none;position:absolute;left:0;top:0;transform-origin:0 0;resize:none;background:transparent;border-radius:0;box-shadow:none;overflow:auto;scrollbar-width:thin;outline:none;caret-color:#ffcd8d;text-shadow:0 1px 2px #000,0 0 5px #0008;`;
   input.scrollTop=scroll;position();present();
@@ -51,7 +51,7 @@ export function installKilnPromptEditor({document,viewport,input,camera,object,o
  const keepTyping=event=>event.stopPropagation();
  for(const type of ['pointerdown','pointerup','click','dblclick','wheel'])input.addEventListener(type,keepTyping);
 
- input.addEventListener('selectionchange',revealCaret);input.addEventListener('keyup',revealCaret);
+ input.addEventListener('scroll',onScroll);input.addEventListener('selectionchange',revealCaret);input.addEventListener('keyup',revealCaret);
  input.addEventListener('input',edit);input.addEventListener('focus',focus);input.addEventListener('blur',present);
  // Existing callers sometimes set .value before dispatching/redrawing. Keep
  // their original element and native setter; the consumer calls sync on render.
@@ -65,6 +65,6 @@ export function installKilnPromptEditor({document,viewport,input,camera,object,o
    try{await image.decode();canvas.getContext('2d').drawImage(image,0,0);return canvas;}catch(error){onError(error);throw error;}
   },
   read:()=>({width,height,contentHeight:measure(input.value),scrollTop:input.scrollTop,text:input.value,editing:!burning||document.activeElement===input,transform:input.style.transform}),
-  dispose(){if(disposed)return;disposed=true;observer.disconnect();document.defaultView.cancelAnimationFrame(caretFrame);input.removeEventListener('selectionchange',revealCaret);input.removeEventListener('keyup',revealCaret);input.removeEventListener('input',edit);input.removeEventListener('focus',focus);input.removeEventListener('blur',present);for(const type of ['pointerdown','pointerup','click','dblclick','wheel'])input.removeEventListener(type,keepTyping);input.classList.remove('kiln-prompt-input');if(priorStyle===null)input.removeAttribute('style');else input.setAttribute('style',priorStyle);input.placeholder=priorPlaceholder;if(after?.parentNode===home)home.insertBefore(input,after);else home.append(input);mirror.remove();layer.remove();object.visible=true;},
+  dispose(){if(disposed)return;disposed=true;observer.disconnect();document.defaultView.cancelAnimationFrame(caretFrame);input.removeEventListener('scroll',onScroll);input.removeEventListener('selectionchange',revealCaret);input.removeEventListener('keyup',revealCaret);input.removeEventListener('input',edit);input.removeEventListener('focus',focus);input.removeEventListener('blur',present);for(const type of ['pointerdown','pointerup','click','dblclick','wheel'])input.removeEventListener(type,keepTyping);input.classList.remove('kiln-prompt-input');if(priorStyle===null)input.removeAttribute('style');else input.setAttribute('style',priorStyle);input.placeholder=priorPlaceholder;if(after?.parentNode===home)home.insertBefore(input,after);else home.append(input);mirror.remove();layer.remove();presentation.visible=true;},
  };
 }
