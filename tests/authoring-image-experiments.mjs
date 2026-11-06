@@ -137,4 +137,8 @@ test('composed gallery and run matrix select deliberate visible cohorts without 
  source.onclick({shiftKey:false});later.onclick({shiftKey:true});assert.deepEqual(c.read().selection,['/source','/later'],'gallery range excludes outputs represented separately');
  c.clearSelection();const matrixChecks=nodes.filter(n=>n.dataset?.checkSource==='/r1'||n.dataset?.checkSource==='/r2');assert.ok(matrixChecks.length>=2,'saved result cells need native selection controls');
  const one=matrixChecks.findLast(n=>n.dataset.checkSource==='/r1'),two=matrixChecks.findLast(n=>n.dataset.checkSource==='/r2');one.onclick({shiftKey:false});two.onclick({shiftKey:true});assert.deepEqual(c.read().selection,['/r1','/r2']);assert.equal(c.read().selected,null,'cohort selection stays separate from inspection');
+ current.members=[member('/a1'),member('/b1'),member('/a2')];current.members.forEach((m,i)=>m.group=i===1?'B':'A');current.runs=[];current.revision++;c.accept(current);c.clearSelection();
+ const check=id=>nodes.findLast(n=>n.dataset?.checkSource===id);
+ check('/a1').onclick({shiftKey:false});check('/a2').onclick({shiftKey:true});assert.deepEqual(c.read().selection,['/a1','/a2'],'group A is contiguous on screen');
+ c.clearSelection();check('/a1').onclick({shiftKey:false});check('/b1').onclick({shiftKey:true});assert.deepEqual(c.read().selection,['/a1','/b1','/a2'],'range through both displayed groups includes all three, stored in canonical order');
 });
