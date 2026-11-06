@@ -21436,7 +21436,7 @@ export function createKaminosVolumePrototype({
         throw Error('fixed-count allocation requires ordinary joined emissive beauty');
       }
       const map=worldSmokeMapping(worldSmoke.plan,worldSmoke.anchor,productTransform);
-      const {occupancySkip,occupancyThreshold,historyInfluence,historyWindow,integralReconstruction:reconstructionMode,reconstructionSpatial,reconstructionRadius,reconstructionWindow,reconstructionResponse,reconstructionEdge,reconstructionFresh,retention,...guidanceControls}=controlsSnapshot;
+      const {occupancySkip,occupancyThreshold,historyInfluence,historyWindow,integralReconstruction:reconstructionMode,reconstructionSpatial,reconstructionRadius,reconstructionWindow,reconstructionResponse,reconstructionEdge,reconstructionEdges,reconstructionFresh,retention,...guidanceControls}=controlsSnapshot;
       const identity=JSON.stringify([guidanceControls,productTransform,worldSmokeKey,intermediateKey]);
       state.opticalStepping.allocation=rayAllocationHistory.prepare(encoder,
         {min:map.renderMin,max:map.renderMax,dims:worldSmoke.plan.materialDims},identity,state.simStepCount,{freeze:rayAllocationHistoryFrozen,influence:controlsSnapshot.historyInfluence,window:optical.mode==='history'?controlsSnapshot.historyWindow:1});

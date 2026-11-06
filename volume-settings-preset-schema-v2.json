@@ -2554,6 +2554,18 @@
       "tagName": "INPUT",
       "type": "checkbox",
       "additiveDefault": true
+    },
+    {
+      "key": "volume-reconstruction-edges",
+      "param": "volume_reconstruction_edges",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "additiveDefault": "samples",
+      "allowedValues": [
+        "off",
+        "samples",
+        "image"
+      ]
     }
   ],
   "presentationControls": [

@@ -22,3 +22,11 @@ export function createReconstructionControlLock(document){
   },
  };
 }
+
+export function syncReconstructionFilterAvailability(document,mode,controls){
+ const spatial=mode==='spatial'||mode==='combined',temporal=mode==='temporal'||mode==='combined';
+ const availability={reconstructionSpatial:spatial,reconstructionRadius:spatial||temporal,reconstructionWindow:temporal,
+  reconstructionResponse:temporal&&controls.reconstructionWindow>1&&controls.reconstructionRadius>0,
+  reconstructionEdges:spatial,reconstructionEdge:spatial&&controls.reconstructionEdges!=='off'};
+ for(const [key,enabled] of Object.entries(availability)){const e=document.getElementById(RECONSTRUCTION_FILTER_CONTROLS[key]);if(e)e.disabled=!enabled;}
+}

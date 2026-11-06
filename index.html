@@ -1939,10 +1939,11 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </div>
     <div class="slider-row" title="Filters linear integrated light and transmission before the camera curve. Raw keeps the existing path. Camera motion resets image memory; moving flames use current-neighborhood rejection. Independent from importance history and 3D display smoothing."><label class="slider-label" for="volume-integral-reconstruction">Image reconstruction</label><select id="volume-integral-reconstruction" data-volume-settings-role="renderer"><option value="off">Raw</option><option value="spatial">Spatial</option><option value="temporal">Temporal</option><option value="combined">Spatial + temporal</option></select></div>
     <div class="slider-row" title="Amount of local noise-aware smoothing. 0 disables spatial blending; 1 allows the strongest blending. A small floor also smooths persistent grid quantization."><label class="slider-label" for="volume-reconstruction-spatial">Spatial smoothing</label><input id="volume-reconstruction-spatial" type="number" min="0" max="1" step="0.1" value="0.6" data-authoring-drag-step="0.1" data-volume-settings-role="renderer"></div>
-    <div class="slider-row" title="Radius in rendered pixels before CSS upscaling. A contiguous footprint covers intervening pixels; fractional changes are smooth. Wider trades detail and more texture reads for blur: radius 1 uses 9 taps, radius 2 uses 25, radius 3 uses 49."><label class="slider-label" for="volume-reconstruction-radius">Blur radius (px)</label><input id="volume-reconstruction-radius" type="number" min="0" step="0.1" value="1" data-authoring-drag-step="0.1" data-volume-settings-role="renderer"></div>
+    <div class="slider-row" title="Neighborhood radius in rendered pixels: controls Spatial blur and Temporal history clamping. Radius 0 prevents temporal color reuse. A contiguous footprint covers intervening pixels; fractional changes are smooth. Wider trades detail and more texture reads for blur: radius 1 uses 9 taps, radius 2 uses 25, radius 3 uses 49."><label class="slider-label" for="volume-reconstruction-radius">Blur radius (px)</label><input id="volume-reconstruction-radius" type="number" min="0" step="0.1" value="1" data-authoring-drag-step="0.1" data-volume-settings-role="renderer"></div>
     <div class="slider-row" title="Effective maximum memory in rendered draws. 1 uses only the current draw. Larger values permit more reuse; motion and camera changes can shorten it. This is image history, independent of the marcher importance window."><label class="slider-label" for="volume-reconstruction-window">Image memory (draws)</label><input id="volume-reconstruction-window" type="number" min="1" step="1" value="8" data-authoring-drag-step="1" data-volume-settings-role="renderer"></div>
-    <div class="slider-row" title="How quickly changed light or smoke rejects old image history. Higher responds faster and retains more noise; 0 allows maximum reuse subject to neighborhood clamping. Camera changes always reset."><label class="slider-label" for="volume-reconstruction-response">Motion response</label><input id="volume-reconstruction-response" type="number" min="0" step="0.1" value="1" data-authoring-drag-step="0.1" data-volume-settings-role="renderer"></div>
-    <div class="slider-row" title="Protection against mixing unlike light/transmission across neighboring pixels. Higher preserves edges and more noise; 0 allows the most blur. Opaque geometry depth boundaries are protected separately."><label class="slider-label" for="volume-reconstruction-edge">Edge protection</label><input id="volume-reconstruction-edge" type="number" min="0" step="0.1" value="2" data-authoring-drag-step="0.1" data-volume-settings-role="renderer"></div>
+    <div class="slider-row" title="Rejects history when the current pixel signal differs from its recent statistics. This is brightness/opacity rejection, not motion tracking. 0 permits the most reuse; noisy two-ray pixels can also trigger it. Radius 0 clamps history to the current pixel and prevents color reuse."><label class="slider-label" for="volume-reconstruction-response">History rejection</label><input id="volume-reconstruction-response" type="number" min="0" step="0.1" value="1" data-authoring-drag-step="0.1" data-volume-settings-role="renderer"></div>
+    <div class="slider-row" title="Off retains the unprotected Spatial fill. Raw samples is the previous noise-sensitive gate. Image contours queries a cached half-resolution gradient of smoothed integrated light and opacity; it adds one pass only when protection is nonzero."><label class="slider-label" for="volume-reconstruction-edges">Edge guide</label><select id="volume-reconstruction-edges" data-volume-settings-role="renderer"><option value="off">Off</option><option value="samples" selected>Raw samples (legacy)</option><option value="image">Image contours</option></select></div>
+    <div class="slider-row" title="Image contours: 0–1 bounds how much neighbor weight the cached guide can remove; .001 removes at most .1%. Raw samples: the legacy exponential contrast gain, which can classify sampling noise as an edge. Off ignores this value. Scene-depth boundaries remain protected."><label class="slider-label" for="volume-reconstruction-edge">Edge protection</label><input id="volume-reconstruction-edge" type="number" min="0" step="0.1" value="2" data-authoring-drag-step="0.1" data-volume-settings-role="renderer"></div>
     <div class="slider-row" title="Changes sampling jitter while physics is paused. Off follows Animate noise; image history still updates on every rendered draw. Identical samples cannot average away noise. Use Pause history comparison to hold the samples, camera and incoming history for A/B."><label class="slider-label" for="volume-reconstruction-fresh">Animate samples while paused</label><input id="volume-reconstruction-fresh" type="checkbox" checked data-volume-settings-role="renderer"></div>
     <div id="volume-reconstruction-comparison" class="flame-scope">
       <button id="volume-reconstruction-pause" class="btn" type="button" title="Holds physics, camera, last raw samples and the history entering that draw. Comparisons do not collect more samples. Enable Temporal or Combined first.">Pause history comparison</button>
@@ -3001,7 +3002,7 @@ import {createSceneMembershipOperations, membershipEditTargetId as sceneMembersh
 import {createSceneMembershipBatch} from './scene-membership-batch.mjs';
 import {createSceneLifecycle} from './scene-lifecycle.mjs';
 import { createSceneObjectPublicationGuard, publishSceneObjectIfCurrent } from './scene-object-publication.mjs';
-import {createReconstructionControlLock} from './volume-reconstruction-pause.mjs';
+import {createReconstructionControlLock,syncReconstructionFilterAvailability} from './volume-reconstruction-pause.mjs';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig, emitterCompilerControls } from './volume-core.js';
 import { pressureResolutionPlan } from './volume-pressure-resolution.mjs';
 import { fineGridPlan } from './volume-fine-grid.mjs';
@@ -18740,6 +18741,7 @@ function readVolumeControls({quality=viewportDisplay.quality,document=globalThis
     reconstructionRadius: Number(document.getElementById('volume-reconstruction-radius').value),
     reconstructionWindow: Number(document.getElementById('volume-reconstruction-window').value),
     reconstructionResponse: Number(document.getElementById('volume-reconstruction-response').value),
+    reconstructionEdges: document.getElementById('volume-reconstruction-edges').value,
     reconstructionEdge: Number(document.getElementById('volume-reconstruction-edge').value),
 
     rayStepTelemetry: document.getElementById('volume-ray-step-telemetry').checked,
@@ -19060,6 +19062,11 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-flame-priority').disabled=c.raymarchMode!=='numerical';
   document.getElementById('volume-ray-noise-animated').disabled=!c.rayStartNoise;
   document.getElementById('volume-quadrature-jitter').disabled=!c.rayStartNoise;
+  if(['temporal','combined'].includes(filterView)){
+    const age=evaluation?s.integralEvaluation.previousDraws:Math.max(0,(reconstruction.frames??1)-1);
+    const maxReuse=Math.min(1-1/s.controls.reconstructionWindow,age/(age+1));
+    document.getElementById('volume-reconstruction-status').textContent+=s.controls.reconstructionRadius===0?' · radius 0 prevents history color reuse':` · history weight ≤${Math.round(maxReuse*100)}% before rejection/clamping`;
+  }
   document.getElementById('volume-ray-step-stats').hidden=!c.rayStepTelemetry;
   for(const id of ['volume-display-grid-scale','volume-display-alignment','volume-emission-interpolation','volume-smoke-interpolation','volume-emission-smoothing','volume-smoke-smoothing'])
     document.getElementById(id).disabled=c.displayReconstruction==='off';
@@ -19223,7 +19230,9 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-canonical-body-balance-val').textContent = c.canonicalBodyBalance.toFixed(2);
   syncVolumeCockpitControlVisibility(document);
   syncRayBudgetGamutFromControls();
-  reconstructionControlLock.sync(!!volumePrototype?.debugState?.().integralEvaluation?.active);
+  const heldState=volumePrototype?.debugState?.();
+  syncReconstructionFilterAvailability(document,heldState?.integralEvaluation?.active?heldState.integralEvaluation.view??c.integralReconstruction:c.integralReconstruction,c);
+  reconstructionControlLock.sync(!!heldState?.integralEvaluation?.active);
 }
 
 function paintVolumePyroDynamicAtlas(detail) {
@@ -19459,6 +19468,8 @@ function refreshVolumeReadout() {
   document.getElementById('volume-raymarch-status').textContent=evaluation?'History comparison · no new ray samples':!stepping||stepping.requested!==requested?'Awaiting renderer':
     `${modeNames[stepping.effective]||'Unavailable'}${stepping.reason?` · ${stepping.reason.replaceAll('-',' ')}`:''}`;
   const reconstruction=s.integralReconstruction;
+  const filterView=evaluation?s.integralEvaluation.view??reconstruction.evaluation?.view??s.controls.integralReconstruction:s.controls.integralReconstruction;
+  syncReconstructionFilterAvailability(document,filterView,s.controls);
   if(reconstructionEvaluationHeld&&!evaluation)releaseReconstructionEvaluationCamera();
   const pause=document.getElementById('volume-reconstruction-pause');
   pause.textContent=evaluation?'Resume history comparison':'Pause history comparison';
@@ -20286,6 +20297,7 @@ async function initKaminosVolumeRoute() {
     ['volume-reconstruction-window', 'volume_reconstruction_window'],
     ['volume-reconstruction-response', 'volume_reconstruction_response'],
     ['volume-reconstruction-edge', 'volume_reconstruction_edge'],
+    ['volume-reconstruction-edges', 'volume_reconstruction_edges'],
 
     ['volume-ray-step-telemetry', 'volume_ray_step_telemetry'],
     ['volume-ray-noise-animated', 'volume_ray_noise_animated'],
@@ -20674,6 +20686,7 @@ async function initKaminosVolumeRoute() {
     'volume-reconstruction-window',
     'volume-reconstruction-response',
     'volume-reconstruction-edge',
+    'volume-reconstruction-edges',
 
     'volume-ray-step-telemetry',
     'volume-ray-start-noise',
@@ -20789,7 +20802,7 @@ async function initKaminosVolumeRoute() {
     control.addEventListener('blur', confirm);
   }
 
-  for (const id of ['volume-scene', 'volume-resolution', 'emitter-assay-family', 'volume-artistic-swirl', 'volume-phased-sway', 'volume-swirl-jostle', 'volume-fine-breakup-localization', 'volume-density', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-history-influence', 'volume-history-window', 'volume-reconstruction-fresh', 'volume-integral-reconstruction', 'volume-reconstruction-spatial', 'volume-reconstruction-radius', 'volume-reconstruction-window', 'volume-reconstruction-response', 'volume-reconstruction-edge', 'volume-occupancy-skip', 'volume-occupancy-threshold', 'volume-fire-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-residual-mode', 'volume-residual-model-url', 'volume-residual-strength', 'volume-residual-feature-debug', 'volume-input-radius', 'volume-flow-rate', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-fire-lock', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  for (const id of ['volume-scene', 'volume-resolution', 'emitter-assay-family', 'volume-artistic-swirl', 'volume-phased-sway', 'volume-swirl-jostle', 'volume-fine-breakup-localization', 'volume-density', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-history-influence', 'volume-history-window', 'volume-reconstruction-fresh', 'volume-integral-reconstruction', 'volume-reconstruction-spatial', 'volume-reconstruction-radius', 'volume-reconstruction-window', 'volume-reconstruction-response', 'volume-reconstruction-edge', 'volume-reconstruction-edges', 'volume-occupancy-skip', 'volume-occupancy-threshold', 'volume-fire-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-residual-mode', 'volume-residual-model-url', 'volume-residual-strength', 'volume-residual-feature-debug', 'volume-input-radius', 'volume-flow-rate', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-fire-lock', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id)?.addEventListener('input', syncControls);
     document.getElementById(id)?.addEventListener('change', syncControls);
   }

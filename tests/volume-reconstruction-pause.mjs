@@ -15,3 +15,11 @@ test('disabled availability is visible, repeated synchronization is stable and r
  assert.equal(count.disabled,true);assert.equal(count.dataset.reconstructionLocked,'true');assert.match(count.title,/Resume/);assert.equal(radius.disabled,false);assert.equal(play.disabled,true);assert.equal(resume.disabled,false);
  lock.sync(true);lock.sync(false);assert.equal(count.disabled,false);assert.equal(count.title,'original');assert.equal(unavailable.disabled,true);assert.equal(play.disabled,false);assert.equal(count.dataset.reconstructionLocked,undefined);
 });
+test('only controls that affect the selected comparison view remain enabled',async()=>{
+ const {syncReconstructionFilterAvailability,RECONSTRUCTION_FILTER_CONTROLS}=await import('../volume-reconstruction-pause.mjs');
+ const fields=Object.fromEntries(Object.values(RECONSTRUCTION_FILTER_CONTROLS).map(id=>[id,{disabled:false}])),document={getElementById:id=>fields[id]};
+ syncReconstructionFilterAvailability(document,'spatial',{reconstructionWindow:3,reconstructionRadius:1,reconstructionEdges:'off'});
+ assert.equal(fields['volume-reconstruction-window'].disabled,true);assert.equal(fields['volume-reconstruction-edge'].disabled,true);assert.equal(fields['volume-reconstruction-radius'].disabled,false);
+ syncReconstructionFilterAvailability(document,'temporal',{reconstructionWindow:1,reconstructionRadius:1,reconstructionEdges:'image'});
+ assert.equal(fields['volume-reconstruction-window'].disabled,false);assert.equal(fields['volume-reconstruction-response'].disabled,true);assert.equal(fields['volume-reconstruction-edges'].disabled,true);
+});

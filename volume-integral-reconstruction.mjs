@@ -1,3 +1,4 @@
+import {createIntegralEdgeGuide,INTEGRAL_SIGNAL_WGSL,INTEGRAL_IMAGE_EDGE_WEIGHT_WGSL} from './volume-integral-edge-guide.mjs';
 import {AGX_WGSL} from './volume-agx.mjs';
 import {EMISSIVE_CAMERA_WGSL} from './volume-emissive-transport.mjs';
 
@@ -5,6 +6,8 @@ import {EMISSIVE_CAMERA_WGSL} from './volume-emissive-transport.mjs';
 export function integralReconstructionSettings(c={}) {
   const mode=c.integralReconstruction??'off';
   if(!['off','spatial','temporal','combined'].includes(mode))throw Error('Reconstruction mode is unknown');
+  const edges=c.reconstructionEdges??'samples';
+  if(!['off','samples','image'].includes(edges))throw Error('Reconstruction edge guide is unknown');
   const values={reconstructionSpatial:.6,reconstructionRadius:1,reconstructionWindow:8,reconstructionResponse:1,reconstructionEdge:2};
   for(const k of Object.keys(values)) {
     const v=c[k]??values[k];
@@ -14,13 +17,12 @@ export function integralReconstructionSettings(c={}) {
   if(c.reconstructionFresh!==undefined&&typeof c.reconstructionFresh!=='boolean')throw Error('Reconstruction fresh samples must be boolean');
   const retention=Math.fround(1-1/values.reconstructionWindow);
   if(retention>=1)throw Error('Reconstruction window exceeds f32 memory precision');
-  return {integralReconstruction:mode,...values,reconstructionFresh:c.reconstructionFresh??true,retention};
+  return {integralReconstruction:mode,reconstructionEdges:edges,...values,reconstructionFresh:c.reconstructionFresh??true,retention};
 }
 
 export const INTEGRAL_FILTER_FUNCTIONS_WGSL=/* wgsl */`
-fn integralSignal(v:vec4<f32>)->vec2<f32> {
-  return vec2<f32>(log(1.0+dot(max(v.rgb,vec3<f32>(0.0)),vec3<f32>(.2126,.7152,.0722))),1.0-clamp(v.a,0.0,1.0));
-}
+${INTEGRAL_SIGNAL_WGSL}
+${INTEGRAL_IMAGE_EDGE_WEIGHT_WGSL}
 fn integralVariance(m:vec4<f32>)->vec2<f32>{return max(vec2<f32>(0.0),m.zw-m.xy*m.xy);}
 fn integralEdgeWeight(a:vec2<f32>,b:vec2<f32>,noise:vec2<f32>,protection:f32)->f32 {
   let d=(a-b)/sqrt(vec2<f32>(.0025)+noise);
@@ -33,7 +35,7 @@ fn integralReuse(current:vec2<f32>,previous:vec2<f32>,variance:vec2<f32>,respons
 `;
 
 export const INTEGRAL_FILTER_WGSL=/* wgsl */`
-struct Options { spatial:vec4<f32>, temporal:vec4<f32> }
+struct Options { spatial:vec4<f32>, temporal:vec4<f32>, edges:vec4<f32> }
 @group(0) @binding(0) var raw:texture_2d<f32>;
 @group(0) @binding(1) var guide:texture_2d<f32>;
 @group(0) @binding(2) var previous:texture_2d<f32>;
@@ -41,7 +43,10 @@ struct Options { spatial:vec4<f32>, temporal:vec4<f32> }
 @group(0) @binding(4) var output:texture_storage_2d<rgba32float,write>;
 @group(0) @binding(5) var nextMoments:texture_storage_2d<rgba32float,write>;
 @group(0) @binding(6) var<uniform> options:Options;
+@group(0) @binding(7) var imageEdges:texture_2d<f32>;
+@group(0) @binding(8) var imageEdgeSampler:sampler;
 ${INTEGRAL_FILTER_FUNCTIONS_WGSL}
+fn imageGradient(p:vec2<i32>)->vec4<f32>{return textureSampleLevel(imageEdges,imageEdgeSampler,vec2<f32>(p)/(2.0*vec2<f32>(textureDimensions(imageEdges))),0.0);}
 @compute @workgroup_size(8,8)
 fn reconstruct(@builtin(global_invocation_id) id:vec3<u32>) {
   let size=textureDimensions(raw);if(any(id.xy>=size)){return;}
@@ -65,7 +70,10 @@ fn reconstruct(@builtin(global_invocation_id) id:vec3<u32>) {
     if(!sameDepth){continue;}
     lo=min(lo,v);hi=max(hi,v);
     let neighborSignal=integralSignal(v);signalSum+=neighborSignal*footprint;signalSquare+=neighborSignal*neighborSignal*footprint;neighbors+=footprint;
-    let w=integralEdgeWeight(signal,neighborSignal,variance,options.spatial.z)*footprint;
+    var edgeWeight=1.0;
+    if(options.edges.x>1.5){edgeWeight=integralImageEdgeWeight(imageGradient(p),imageGradient(q),vec2<f32>(q-p),options.spatial.z);}
+    else if(options.edges.x>.5){edgeWeight=integralEdgeWeight(signal,neighborSignal,variance,options.spatial.z);}
+    let w=edgeWeight*footprint;
     total+=v*w;weights+=w;
   }}
   let relativeNoise=dot(variance,vec2<f32>(1.0))/(.0025+dot(signal,signal));
@@ -111,16 +119,20 @@ ${EMISSIVE_CAMERA_WGSL}
 export function createIntegralReconstruction(device,{transparent=false}={}) {
   let textures=[],key='',index=0,frames=0,identity=null,lastStep=null,resetReason='new-history',config=null;
   let stepChanges=0,sameStepDraws=0,evaluation=null;
+  let imageEdges=null,rawEpoch=0,edgeEpoch=-1,edgeActive=false,edgeBuilt=false;
+  const emptyEdges=device.createTexture({label:'inactive edge guide',size:[1,1],format:'rgba16float',usage:GPUTextureUsage.TEXTURE_BINDING});
+  const edgeSampler=device.createSampler({minFilter:'linear',magFilter:'linear',addressModeU:'clamp-to-edge',addressModeV:'clamp-to-edge'});
   let filter=null,presentModule=null;const pipelines=new Map();
-  const options=device.createBuffer({label:'integral reconstruction settings',size:32,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+  const options=device.createBuffer({label:'integral reconstruction settings',size:48,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
   const camera=device.createBuffer({label:'integral reconstruction camera',size:80,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
   const endEvaluation=()=>{if(evaluation)for(const t of evaluation.textures)t.destroy();evaluation=null;};
-  const reset=reason=>{endEvaluation();frames=0;lastStep=null;stepChanges=0;sameStepDraws=0;resetReason=reason;};
+  const reset=reason=>{endEvaluation();frames=0;lastStep=null;stepChanges=0;sameStepDraws=0;resetReason=reason;edgeEpoch=-1;edgeActive=false;};
   const describe=()=>({requested:config?.integralReconstruction??'off',effective:config?.integralReconstruction??'off',frames,resetReason,
     clock:'rendered-draws',simulationStep:lastStep,simulationStepChanges:stepChanges,sameStepDraws,
     evaluation:evaluation?{active:true,view:evaluation.view,previousDraws:frames-1,simulationStep:lastStep}:null,
-    format:'linear-radiance-transmission-rgba32float',bytes:[...textures,...(evaluation?.textures??[])].reduce((a,t)=>a+t.width*t.height*(t.format==='r32float'?4:16),0),
-    motion:'camera-reset-current-neighborhood-clamp',passes:config?.integralReconstruction==='off'?0:2});
+    edgeGuide:{active:edgeActive,builtThisDraw:edgeBuilt,...imageEdges?.describe()},
+    format:'linear-radiance-transmission-rgba32float',bytes:[...textures,...(evaluation?.textures??[])].reduce((a,t)=>a+t.width*t.height*(t.format==='r32float'?4:16),0)+(imageEdges?.describe().bytes??0),
+    motion:'camera-reset-current-neighborhood-clamp',passes:config?.integralReconstruction==='off'?0:2+(edgeBuilt?1:0)});
   const make=(width,height,format)=>device.createTexture({label:'linear integral reconstruction',size:[width,height],format,
     usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC|GPUTextureUsage.COPY_DST|GPUTextureUsage.RENDER_ATTACHMENT|(format==='r32float'?0:GPUTextureUsage.STORAGE_BINDING)});
   function encodeFilter(encoder,view,format,cameraValues,c,previousIndex,output,moments,age) {
@@ -128,10 +140,13 @@ export function createIntegralReconstruction(device,{transparent=false}={}) {
     presentModule ||= device.createShaderModule({label:'linear integral presentation',code:INTEGRAL_PRESENT_WGSL});
     if(!pipelines.has(format))pipelines.set(format,device.createRenderPipeline({label:'reconstructed volume presentation',layout:'auto',vertex:{module:presentModule,entryPoint:'vs'},fragment:{module:presentModule,entryPoint:'present',constants:{TRANSPARENT_CANVAS:transparent},targets:[{format}]},primitive:{topology:'triangle-list'}}));
     const spatial=['spatial','combined'].includes(c.integralReconstruction),temporal=['temporal','combined'].includes(c.integralReconstruction);
-    device.queue.writeBuffer(options,0,new Float32Array([spatial?c.reconstructionSpatial:0,c.reconstructionRadius,c.reconstructionEdge,0,temporal?Math.min(c.retention,age/(age+1)):0,age>0?1:0,c.reconstructionResponse,0]));
+    edgeActive=spatial&&c.reconstructionSpatial>0&&c.reconstructionRadius>0&&c.reconstructionEdge>0&&c.reconstructionEdges==='image';edgeBuilt=false;
+    if(edgeActive){imageEdges ||=createIntegralEdgeGuide(device);if(edgeEpoch!==rawEpoch){imageEdges.encode(encoder,textures[0],textures[1]);edgeEpoch=rawEpoch;edgeBuilt=true;}}
+    const edgeMode=edgeActive?2:spatial&&c.reconstructionEdges==='samples'?1:0;
+    device.queue.writeBuffer(options,0,new Float32Array([spatial?c.reconstructionSpatial:0,c.reconstructionRadius,c.reconstructionEdge,0,temporal?Math.min(c.retention,age/(age+1)):0,age>0?1:0,c.reconstructionResponse,0,edgeMode,0,0,0]));
     device.queue.writeBuffer(camera,0,cameraValues);
     const entries=[textures[0],textures[1],textures[2+previousIndex],textures[4+previousIndex],output,moments].map((t,binding)=>({binding,resource:t.createView()}));
-    entries.push({binding:6,resource:{buffer:options}});
+    entries.push({binding:6,resource:{buffer:options}},{binding:7,resource:(imageEdges?.texture??emptyEdges).createView()},{binding:8,resource:edgeSampler});
     const compute=encoder.beginComputePass({label:'reconstruct linear light and transmission'});compute.setPipeline(filter);
     compute.setBindGroup(0,device.createBindGroup({layout:filter.getBindGroupLayout(0),entries}));compute.dispatchWorkgroups(Math.ceil(textures[0].width/8),Math.ceil(textures[0].height/8));compute.end();
     const pipeline=pipelines.get(format),pass=encoder.beginRenderPass({label:'present reconstructed integral',colorAttachments:[{view,loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}]});
@@ -139,7 +154,7 @@ export function createIntegralReconstruction(device,{transparent=false}={}) {
   }
   return {
     reset,endEvaluation,
-    disable(reason='disabled'){reset(reason);for(const t of textures)t.destroy();textures=[];key='';},
+    disable(reason='disabled'){reset(reason);imageEdges?.dispose();imageEdges=null;for(const t of textures)t.destroy();textures=[];key='';},
     describe,
     prepare(width,height,controls,sourceIdentity,step) {
       if(evaluation)throw Error('End integral evaluation before collecting another draw');
@@ -161,7 +176,7 @@ export function createIntegralReconstruction(device,{transparent=false}={}) {
     },
     encode(encoder,view,format,cameraValues) {
       if(evaluation)throw Error('End integral evaluation before collecting another draw');
-      const next=1-index;
+      const next=1-index;rawEpoch++;
       encodeFilter(encoder,view,format,cameraValues,config,index,textures[2+next],textures[4+next],frames);
       index=next;frames++;sameStepDraws++;return describe();
     },
@@ -190,6 +205,6 @@ export function createIntegralReconstruction(device,{transparent=false}={}) {
         return {available:true,width,height,state:describe(),raw:arrays[0],filtered:arrays[1],moments:arrays[2]};
       }finally{for(const b of buffers){b.unmap();b.destroy();}}
     },
-    dispose(){endEvaluation();for(const t of textures)t.destroy();textures=[];options.destroy();camera.destroy();}
+    dispose(){endEvaluation();imageEdges?.dispose();emptyEdges.destroy();for(const t of textures)t.destroy();textures=[];options.destroy();camera.destroy();}
   };
 }

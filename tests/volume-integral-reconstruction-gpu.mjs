@@ -106,3 +106,24 @@ test('spatial radius covers intervening pixels instead of preserving a checkerbo
     }finally{h.dispose();target.destroy();}
   });
 });
+
+test('cached image contours preserve coherent edges without treating a checkerboard as protected structure',async()=>{
+ await withKaminosGpu(async({device:d})=>{
+  const n=11,h=createIntegralReconstruction(d),camera=new Float32Array(20),target=d.createTexture({size:[n,n],format:'rgba8unorm',usage:GPUTextureUsage.RENDER_ATTACHMENT});
+  async function draw(pixel,edgeMode){
+   const values=new Float32Array(n*n*4);for(let y=0;y<n;y++)for(let x=0;x<n;x++)values.set(pixel(x,y),(y*n+x)*4);
+   h.prepare(n,n,{integralReconstruction:'spatial',reconstructionSpatial:1,reconstructionEdge:1,reconstructionEdges:edgeMode},'fixture-'+edgeMode,1);
+   d.queue.writeTexture({texture:h.raw},values,{bytesPerRow:n*16},[n,n]);d.queue.writeTexture({texture:h.guide},new Float32Array(n*n).fill(10),{bytesPerRow:n*4},[n,n]);
+   const e=d.createCommandEncoder();h.encode(e,target.createView(),'rgba8unorm',camera);d.queue.submit([e.finish()]);return await h.sample();
+  }
+  try{
+   const noise=(x,y)=>(x+y)%2?[4,4,4,.5]:[0,0,0,.5],i=(5*n+5)*4;
+   const image=await draw(noise,'image');assert.ok(image.filtered[i]>.1,'image guide must let Spatial fill high-frequency misses');
+   const samples=await draw(noise,'samples');assert.ok(samples.filtered[i]<.01);
+   const off=await draw(noise,'off');assert.ok(Math.abs(image.filtered[i]-off.filtered[i])<.02);
+   const step=x=>x<5?[0,0,0,1]:[4,4,4,1];const unprotected=await draw(step,'off'),protectedImage=await draw(step,'image');assert.ok(protectedImage.filtered[i]>unprotected.filtered[i]+.1,'coherent light boundary is protected');
+   h.beginEvaluation();const c={integralReconstruction:'spatial',reconstructionSpatial:1,reconstructionEdge:1,reconstructionEdges:'image'};
+   const e=d.createCommandEncoder();h.encodeEvaluation(e,target.createView(),'rgba8unorm',camera,c);d.queue.submit([e.finish()]);assert.equal(h.describe().edgeGuide.builtThisDraw,false,'held guide is reused');
+  }finally{h.dispose();target.destroy();}
+ });
+});
