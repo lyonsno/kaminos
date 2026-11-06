@@ -28893,7 +28893,7 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
       fallback.source.runtimeFallback={...fallback.source.runtimeFallback,reason:restored.reason,warning};
       console.warn(warning);setInfo(warning);writeFlameSettingsState(fallback);
     }
-    adaptiveMaterialSettingsAuthored=Object.hasOwn(restorePlan.fireSettings.domControls,'volume-adaptive-material');
+    adaptiveMaterialSettingsAuthored=!!restored.settings&&Object.hasOwn(restored.settings.domControls,'volume-adaptive-material');
   }
 
   volumePrototype?.restoreWorldFrame?.(restorePlan.flameWorldFrame??null);
