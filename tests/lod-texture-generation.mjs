@@ -11,6 +11,17 @@ const mesh={vertices:new Float32Array([0,0,0,1,0,0,0,1,0]),triangles:new Uint32A
 async function asset(size){return encodeTrellisPbrGLB(mesh,{textures:{width:size,height:size,alphaMode:'OPAQUE',baseColor:new Uint8Array(size*size*4).fill(255),metallicRoughness:new Uint8Array(size*size*4).fill(127)}});}
 const response=(body,ok=true)=>({ok,json:async()=>body});
 
+test('registered missing immutable products cannot be skipped into a done report',async()=>{
+  const missing='b'.repeat(64),source='a'.repeat(64);
+  for(const kind of ['geometry','appearance']){
+    const report=await prepareGenerationLevels({source,targets:[200],beautyTargets:[],completeMissing:true,textureLevels:false,
+      fetch:async()=>response({source,levels:[{sha256:missing,faces:1,targetFaces:200,route:'closed-remesh+projection+trellis-simplify'}],
+        preparation:{complete:false,missingFiles:[missing]}})});
+    assert.notEqual(report.phase,'done',kind+' missing bytes must not be reported as completed');
+    assert.match(report.error?.message??'',/restore.*immutable/i);
+  }
+});
+
 test('existing levels gain separately registered texture choices without remeshing or changing their UVs',async()=>{
   const hero=await asset(4),base=await asset(2),source=await digestBytes(hero),geometry=await digestBytes(base),files=new Map([[source,hero],[geometry,base]]);
   const catalog={source,levels:[{sha256:geometry,faces:1,route:'fixture',textureSize:2}],textureSets:{}};

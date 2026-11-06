@@ -214,19 +214,21 @@ test('named .glb files in generated-meshes resolve through /api/mesh-lods and ad
   assert.equal(namedUntiered.assetSha, HERO);
 });
 
-test('queued quality preparation does not block a usable asset and refreshes it after completion',async()=>{
+for(const state of ['loaded','no-tiers','disabled'])test(`queued quality preparation preserves ${state} arrival without duplicate client ownership`,async()=>{
   const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
   const start=html.indexOf('function applyGiProxySetting(entry){'),end=html.indexOf('\nfunction writeObjectGiProxy(',start);
   const entry={id:'existing',giProxy:{enabled:true,selection:{faces:1000}},object:{}};
-  const h={state:'loaded',heroSha:HERO,levels:TIERS,prepareQueued:true};
+  const h={state,heroSha:HERO,levels:state==='loaded'?TIERS:[],prepareQueued:true};
   let release,refreshes=0,selections=0;const gate=new Promise(resolve=>{release=resolve;});
   const registry={select:async()=>++selections===1?h:{...h,prepareQueued:false},whenPrepared:()=>gate};
-  const win={_kaminosDirty(){},kaminosFireLightingSettings:{sync(){}},__kaminosRefreshLodSource:async source=>{assert.equal(source,HERO);refreshes++;}};
+  let clientPrepares=0;
+  const win={kaminosGiProxies:{prepare:async()=>{clientPrepares++;}},_kaminosDirty(){},kaminosFireLightingSettings:{sync(){}},__kaminosRefreshLodSource:async source=>{assert.equal(source,HERO);refreshes++;}};
   const apply=new Function('sceneGiProxies','syncSceneDataInspector','window','setInfo','autoPreparedLodSources','prepareSceneNavigationRoot','workingScene',html.slice(start,end)+';return applyGiProxySetting;')(registry,()=>{},win,()=>{},new Set(),()=>{},{objects:[entry]});
   let result;
   try{result=await Promise.race([apply(entry),new Promise(resolve=>setImmediate(()=>resolve('blocked')))]);}
   finally{release({...h,prepareQueued:false});}
   assert.equal(result,h,'available geometry must return before the queued quality job finishes');
+  assert.equal(clientPrepares,0,'server pending ownership must suppress the client fallback');
   await new Promise(resolve=>setImmediate(resolve));
   assert.equal(refreshes,1);
 });

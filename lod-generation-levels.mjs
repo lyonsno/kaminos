@@ -74,7 +74,10 @@ export async function prepareGenerationLevels({decode = null, materialFields = n
     phase('preflight');
     const existing = await fetch(`${server}/api/mesh-lods?source=${source}&prepare=client${purpose==='beauty'?'&purpose=beauty':''}`);
     if (!existing.ok) throw Error(`cannot read existing levels (HTTP ${existing.status})`);
-    const existingLevels = (await existing.json()).levels;
+    const catalog = await existing.json();
+    if(catalog.preparation?.missingFiles?.length)
+      throw Error(`Restore missing immutable mesh/appearance products before preparation: ${catalog.preparation.missingFiles.join(', ')}`);
+    const existingLevels = catalog.levels;
     const slotTaken = faces => existingLevels.find(l => l.route === meshRoute && l.faces === faces);
     const surfelSlotTaken = factor => existingLevels.find(l => l.route === SURFEL_TIER_ROUTE && l.mergeFactor === factor);
     if (completeMissing && !replace) {

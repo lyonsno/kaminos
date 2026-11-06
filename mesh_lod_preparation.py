@@ -25,9 +25,20 @@ def source_description(source):
         binary = 28 + size
         faces = 0
         nodes = doc.get('nodes', [])
-        # Same node ownership as glbNodeWorldMatrices: each mesh-bearing node
-        # contributes its primitives, including repeated uses of a mesh.
-        mesh_ids = [n['mesh'] for n in nodes if 'mesh' in n] if nodes else range(len(doc.get('meshes', [])))
+        # Match glbNodeWorldMatrices: only nodes reachable from the selected
+        # scene contribute; a node occurs once even when listed by two roots.
+        scenes = doc.get('scenes', [])
+        scene = doc.get('scene', 0)
+        roots = scenes[scene].get('nodes') if 0 <= scene < len(scenes) else None
+        pending = list(range(len(nodes))) if roots is None else list(roots)
+        reachable = set()
+        while pending:
+            index = pending.pop()
+            if index in reachable:
+                continue
+            reachable.add(index)
+            pending.extend(nodes[index].get('children', []))
+        mesh_ids = [nodes[i]['mesh'] for i in reachable if 'mesh' in nodes[i]]
         for index in mesh_ids:
             for primitive in doc['meshes'][index].get('primitives', []):
                 if primitive.get('mode', 4) != 4:
@@ -60,6 +71,14 @@ def source_description(source):
 
 
 def preparation_status(record, description):
+    texture_sets = record.get('textureSets', {})
+    if not isinstance(texture_sets, dict):
+        raise ValueError('textureSets must be an object')
+    for group in texture_sets.values():
+        if not isinstance(group, dict) or not isinstance(group.get('variants', []), list):
+            raise ValueError('Each texture set must be an object with an array of variants')
+        if any(not isinstance(v, dict) for v in group.get('variants', [])):
+            raise ValueError('Each texture variant must be an object')
     shared = [r for r in record['levels'] if r.get('route') == SHARED_ROUTE]
     legacy_complete = len(shared) >= len(TARGETS) and all('targetFaces' not in r for r in shared)
     missing = sorted(TARGETS - {r.get('targetFaces', r['faces']) for r in shared}, reverse=True) if not legacy_complete else []
@@ -70,7 +89,7 @@ def preparation_status(record, description):
                                    if not r.get('mergeFactor') and not r.get('representation') and not str(r.get('route', '')).startswith('trellis-surfels')]
     appearance = []
     for sha in dict.fromkeys(geometry):
-        registered = record.get('textureSets', {}).get(sha, {}).get('variants', [])
+        registered = texture_sets.get(sha, {}).get('variants', [])
         needed = [size for size in description['textureSizes'] if not any(v.get('textureSize') == size for v in registered)]
         if needed:
             appearance.append({'geometry': sha, 'sizes': needed})

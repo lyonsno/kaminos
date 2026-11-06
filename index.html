@@ -27594,7 +27594,7 @@ function applyGiProxySetting(entry){
     }
     syncSceneDataInspector();window.kaminosFireLightingSettings?.sync?.();window._kaminosDirty?.();
     const source=h?.heroSha;
-    if((h?.state==='no-tiers'||(h?.state==='disabled'&&!h.levels?.length))&&source&&!autoPreparedLodSources.has(source)&&window.__kaminosLastGenerationLevels?.source!==source){
+    if(!h?.prepareQueued&&(h?.state==='no-tiers'||(h?.state==='disabled'&&!h.levels?.length))&&source&&!autoPreparedLodSources.has(source)&&window.__kaminosLastGenerationLevels?.source!==source){
       autoPreparedLodSources.add(source);
       window.__kaminosLastGenerationLevels={source,phase:'running'};
       window.__kaminosLastGenerationLevelsPromise=Promise.resolve().then(()=>window.kaminosGiProxies?.prepare?.(source,{completeMissing:true,input:entry.label||entry.fileName||source,route:entry.generation?.route||'auto-arrival-lod'})).then(report=>{

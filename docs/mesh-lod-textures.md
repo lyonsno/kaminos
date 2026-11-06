@@ -59,11 +59,15 @@ its status remains explicit.
 
 When Greenroom is configured (including the installed default), server
 preparation submits one command job per source and profile. A shared on-disk
-submission record deduplicates pending jobs across servers. The recorded
+submission record deduplicates pending jobs across servers. Each eligible arrival
+is submitted immediately, and GET observes persisted queue state after a server
+restart. The recorded
 server endpoint must remain available for that queued job's storage calls.
 The command checks its committed source revision before importing preparation
 code. Receipt success, the terminal preparation report and current coverage
-are separate requirements for completion. Failed jobs retain their evidence;
+are separate requirements for completion. A registered product whose immutable file is missing stops preparation with an
+explicit restoration error; metadata alone cannot establish completion.
+Failed jobs retain their evidence;
 an explicit `submit_mesh_lod_prepare(..., retry=True)` or an admitted rerun of
 the offline CLI can retry. A machine without Greenroom keeps its existing
 local offline runner. Raw job/state reports are under the chosen mesh store's
