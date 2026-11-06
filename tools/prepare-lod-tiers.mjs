@@ -36,6 +36,16 @@ try {
   if ((!targets.length && !surfelFactors.length && !beautyTargets?.length) || !targets.every(t => Number.isSafeInteger(t) && t > 0) || (beautyTargets && !beautyTargets.every(t => Number.isSafeInteger(t) && t > 0)) || !surfelFactors.every(k => Number.isSafeInteger(k) && k > 0))
     throw Error('--targets / --surfel-factors must be positive integers');
   save();
+  if(args.has('--expected-commit')){
+    report.phase='source-preflight';save();
+    const {execFileSync}=await import('node:child_process');
+    const root=new URL('../',import.meta.url);
+    const cwd=(await import('node:url')).fileURLToPath(root);
+    const commit=execFileSync('git',['rev-parse','HEAD'],{cwd,encoding:'utf8'}).trim();
+    const dirty=execFileSync('git',['status','--porcelain','--untracked-files=normal'],{cwd,encoding:'utf8'}).trim();
+    report.sourceIdentity={repoRoot:cwd,commit,dirty:Boolean(dirty)};
+    if(commit!==args.get('--expected-commit')||dirty)throw Error('Queued preparation source revision is different or dirty');
+  }
   // Loaded here so a missing dependency still ends in a written failure report.
   report.phase = 'load-modules'; save();
   const THREE = await import(process.env.KAMINOS_LOD_THREE_MODULE || 'three');

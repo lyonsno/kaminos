@@ -4270,7 +4270,9 @@ async function loadPreparedLod(level,{untextured=false}={}){
     return untextured?parseGiProxyGlb(bytes):(await new GLTFLoader().parseAsync(bytes,'')).scene;
   });
 }
-const sceneGiProxies = createGiProxyRegistry({THREE,loadLevel:level=>loadPreparedLod(level,{untextured:true}),parseGlb:parseGiProxyGlb});
+const autoPreparedLodSources = new Set(), inFlightLodPrepares = new Map();
+const sceneGiProxies = createGiProxyRegistry({THREE,loadLevel:level=>loadPreparedLod(level,{untextured:true}),parseGlb:parseGiProxyGlb,
+  ownsPreparation:(_root,base)=>autoPreparedLodSources.has(base.heroSha??base.assetSha)||inFlightLodPrepares.has(base.heroSha??base.assetSha)});
 let sceneAssetPreparationActive=false,sceneAssetPreparationOwner=null;
 function setSceneAssetPreparationActive(value){sceneAssetPreparationActive=value;sceneBeautyLods?.setPreparation(value);}
 let sceneArrivalState={phase:'idle',coarseObjects:0,expectedCoarseObjects:0};
@@ -4313,7 +4315,6 @@ window.kaminosSceneLodBudget = {
   bakeRungMeshesToRootSpace,
   formatLodBudgetReadout,
 };
-const autoPreparedLodSources = new Set(), inFlightLodPrepares = new Map();
 const refreshSceneObjectsForLodSource = async source => {
   if (typeof workingScene === 'undefined') return;
   await Promise.all(workingScene.objects.map(obj => {
@@ -27585,9 +27586,11 @@ function applyGiProxySetting(entry){
     :sceneGiProxies.disable(entry.object,{retainLevels:true});
   return Promise.resolve(pending).then(async h=>{
     if(h?.prepareQueued&&!h.catalogFailure){
-      await sceneGiProxies.whenPrepared(entry.object);
-      if(!workingScene.objects.includes(entry))return null;
-      return applyGiProxySetting(entry);
+      // Preparation may wait behind other admitted work. Arrival and the
+      // existing representation remain usable while the catalog is upgraded.
+      void sceneGiProxies.whenPrepared(entry.object).then(prepared=>{
+        if(prepared&&workingScene.objects.includes(entry))return window.__kaminosRefreshLodSource?.(prepared.heroSha??prepared.assetSha);
+      }).catch(()=>null);
     }
     syncSceneDataInspector();window.kaminosFireLightingSettings?.sync?.();window._kaminosDirty?.();
     const source=h?.heroSha;

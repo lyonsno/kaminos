@@ -34,10 +34,40 @@ the beauty geometry and its dependencies. The HTTP `beautyLevels` field is
 the shared-plus-beauty catalog; the on-disk field contains only restricted
 records.
 
-Existing complete ladders are not silently rebuilt. Offline callers can add
-only the intermediate with `--targets none --beauty-targets 100000` on
+Existing geometry is retained when preparation fills missing products.
+Offline callers can add only the intermediate with `--targets none --beauty-targets 100000` on
 `tools/prepare-lod-tiers.mjs`; `--beauty-targets none` preserves proxy-only
 preparation. Source/target identity makes completed preparation reusable.
+
+Stored mesh arrival and ordinary ingestion use the `surface-detail-v1`
+preparation profile. `GET /api/mesh-lods` reports additive `preparation`
+coverage: missing shared targets, a missing 100k beauty target when the source
+is larger, and missing source-sized appearance variants for each geometry.
+The source and image headers determine these requirements; a small or
+untextured source needs no unnecessary intermediate or appearance products.
+The source-size pyramid uses the same existing 256-pixel floor as appearance
+preparation. Catalog coverage also checks that registered dependency files
+exist. It does not rehash every immutable product during scene loading.
+
+Ordinary stored-mesh queries enroll missing products in background preparation.
+`prepare=client` observes without enrollment, including generation/import calls
+that already own their preparation. Existing usable geometry remains visible
+while queued work completes, then the live catalog refreshes. Repeated
+preparation preserves registered geometry and reuses completed appearance.
+Partial or unsupported preparation retains the existing source and products;
+its status remains explicit.
+
+When Greenroom is configured (including the installed default), server
+preparation submits one command job per source and profile. A shared on-disk
+submission record deduplicates pending jobs across servers. The recorded
+server endpoint must remain available for that queued job's storage calls.
+The command checks its committed source revision before importing preparation
+code. Receipt success, the terminal preparation report and current coverage
+are separate requirements for completion. Failed jobs retain their evidence;
+an explicit `submit_mesh_lod_prepare(..., retry=True)` or an admitted rerun of
+the offline CLI can retry. A machine without Greenroom keeps its existing
+local offline runner. Raw job/state reports are under the chosen mesh store's
+`.lod-prepare-reports/` directory.
 
 `prepareMeshTextureLevels` in `lod-texture-generation.mjs` prepares appearance for
 stored geometry. `prepareGenerationLevels` invokes it after publishing new mesh
@@ -97,10 +127,11 @@ bytes separately; a nonblank transition may temporarily exceed its target budget
 This is RGBA8 mip-chain accounting for these PNG products, not a physical device
 heap measurement. Unknown legacy/compressed texture cost remains unmeasured.
 
-Legacy levels without appearance products retain their existing bundled maps,
+Legacy levels awaiting appearance products retain their existing bundled maps,
 texture-blur refinement guard and available texture choice. Once compatible
 appearance products are prepared, their geometry selection becomes independent. Preparing appearance upgrades those levels
-without changing their geometry records. Existing complete legacy ladders do not
-silently trigger a bulk appearance rebuild. The `lod-detail` Workbench experiment
+without changing their geometry records. Loading one legacy asset enrolls that
+asset's missing products; catalog browsing does not start a library-wide bake.
+The `lod-detail` Workbench experiment
 loads a stored mesh into the ordinary editor for orbit/zoom and native inspector
 budget edits. Its agent operations use the same scene detail controller.
