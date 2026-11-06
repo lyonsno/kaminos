@@ -66,7 +66,13 @@ export function composeDeviceRequirements(...requirements){
 // adapter has f16). Always an object: requestKaminosSharedWebGpuDevice refuses a
 // callback that yields null, which would cost ordinary authoring its shared device.
 export function sharedDeviceHostRequirements({sam=null}={}){
-  return async adapter=>composeDeviceRequirements(sam?await sam(adapter):null,kleinDeviceRequirements(adapter))??{};
+  return async adapter=>{
+    // GI transport, retained surface lighting and optional probe attachments
+    // share this device. Request its actual capacity; this allocates no targets.
+    const colorBytes=Number(adapter?.limits?.maxColorAttachmentBytesPerSample);
+    const rendering=Number.isSafeInteger(colorBytes)&&colorBytes>0?{requiredLimits:{maxColorAttachmentBytesPerSample:colorBytes}}:null;
+    return composeDeviceRequirements(sam?await sam(adapter):null,kleinDeviceRequirements(adapter),rendering)??{};
+  };
 }
 
 export function kleinImageName(prompt,seed,model='flux2'){

@@ -21,6 +21,13 @@ test('device requirements compose upward for max limits, downward for alignments
  assert.equal(composeDeviceRequirements(null,undefined),null);
 });
 
+test('shared rendering admits the adapter color-attachment capacity for GI transport and diagnostics',async()=>{
+ for(const capacity of [32,64,128]){
+  const requirements=await module.sharedDeviceHostRequirements()({features:new Set(),limits:{maxColorAttachmentBytesPerSample:capacity}});
+  assert.equal(requirements.requiredLimits?.maxColorAttachmentBytesPerSample,capacity,'request actual attachment capacity without allocating it');
+ }
+});
+
 test('image names carry the prompt and seed and stay inside the image inbox name rules',()=>{
  assert.equal(kleinImageName('A weathered bronze lantern, studio light!',42),'klein-a-weathered-bronze-lantern-studio-light-s42.png');
  assert.match(kleinImageName('x'.repeat(400),7),/^klein-x{1,80}-s7\.png$/);

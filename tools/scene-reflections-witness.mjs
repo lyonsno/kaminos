@@ -35,6 +35,15 @@ try{
  assert.equal(await page.evaluate(()=>window.assayFailure),undefined);
  report.adapter=await page.evaluate(async()=>{const adapter=await navigator.gpu.requestAdapter();return {...adapter.info.toJSON?.(),vendor:adapter.info.vendor,architecture:adapter.info.architecture};});
  assert.equal(report.adapter.vendor,'apple');
+ report.phase='transport-source';await publish();
+ const transport=await page.evaluate(()=>window.reflectionAssay.transport());
+ await fs.writeFile(path.join(out,'transport.json'),JSON.stringify(transport));report.transport=transport.stats;
+ assert.ok(transport.stats.metalPixels>20&&transport.stats.metalFullPeak>.01,'reflective surfaces remain bright in the full HDR source');
+ assert.ok(transport.stats.metalTransportPeak<.0001,'camera-view metallic specular must not enter diffuse GI transport');
+ assert.ok(transport.stats.emissivePixels>20&&transport.stats.emissiveError<.01,'emission remains in GI transport');
+ assert.ok(transport.stats.diffusePixels>20&&transport.stats.diffusePeak>.01,'diffuse lighting remains in GI transport');
+ assert.ok(transport.stats.unlitPixels>20&&transport.stats.unlitError<.001,'unlit source materials retain their radiance');
+ assert.ok(transport.stats.fullReferenceError<.002,'full HDR source preserves ordinary physical lighting');
  const frames={};
  for(const enabled of [false,true]){
   report.phase=enabled?'reflecting':'baseline';await publish();frames[enabled?'on':'off']=await page.evaluate(x=>window.reflectionAssay.render(x),enabled);
