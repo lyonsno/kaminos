@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {createWorkingScene} from '../working-scene.mjs';
+import {createLoadingTelemetryTracker} from '../asset-arrival.mjs';
 
 const source=fs.readFileSync(process.env.KAMINOS_LOADER_TEST_INDEX || new URL('../index.html',import.meta.url),'utf8');
 const body=source.slice(source.indexOf('async function showGLB('),source.indexOf('// --- OBJ Inspector ---'));
@@ -13,11 +14,11 @@ function loader(){
  const loadStarted=new Promise(resolve=>{announceLoad=resolve;});
  const root={userData:{},traverse(fn){fn({isMesh:false});}};
  const clip={name:'Accepted motion'}, clips=[clip];
- const context={sceneLightingPreparation:null,URL,console,workbenchViewerReady:Promise.resolve(),workingScene:createWorkingScene(),glbFileName:'previous.glb',modelSourceUrl:null,
+ const context={sceneLightingPreparation:null,URL,console,AbortController,loadingTelemetry:createLoadingTelemetryTracker(),readAssetBytes:async url=>new TextEncoder().encode(url).buffer,workbenchViewerReady:Promise.resolve(),workingScene:createWorkingScene(),glbFileName:'previous.glb',modelSourceUrl:null,
   shouldClearSceneForImport:options=>options.clear!==false,
   clearScene(){throw Error('Workbench append must preserve the existing scene');},
   resolveAssetArrivalMode:()=> 'append',applyAssetArrival:()=>({}),
-  GLTFLoader:class{load(url,success,_progress,error){loads.push({url,success,error});announceLoad();}},
+  GLTFLoader:class{parseAsync(bytes){return new Promise((success,error)=>{loads.push({url:new TextDecoder().decode(bytes),success,error});announceLoad();});}},
   greenroomPreviewIsActive:()=>false,disposeObjectTree:object=>disposed.push(object),
   scene:{add:object=>added.push(object)},sceneNavigation:null,transformControls:null,
   registerSceneObject(object,metadata){const row={...metadata,id:'registered-asset'+(registered.length?'-'+registered.length:''),object};object.userData.kaminosSceneObject={...metadata,id:row.id};registered.push(row);return row;},
@@ -46,7 +47,7 @@ test('Workbench asset receipt preserves real root, clips and registered source i
 test('late asset from closed owner is disposed before scene registration',async()=>{
  const f=loader();let current=true;
  const pending=f.context.showGLB('/retained/body.glb',{clear:false,returnAsset:true,isCurrent:()=>current});
- current=false;await f.loadStarted;f.loads[0].success({scene:f.root,animations:f.clips});
+ await f.loadStarted;current=false;f.loads[0].success({scene:f.root,animations:f.clips});
  await assert.rejects(pending,/stale async GLB/);
  assert.equal(f.added.length,0);assert.equal(f.registered.length,0);assert.deepEqual(f.disposed,[f.root]);
 });
