@@ -118,7 +118,7 @@ export function createGridTuningInspector({document,host,read,validate,apply,liv
   status.textContent=stale?'Applied grids changed elsewhere. Discard this draft to load them.':error?`${error}. Applied simulation retained.`:dirty?'Draft compatible · Apply to rebuild changed dimensions':'Applied grids';
   status.dataset.state=error||stale?'invalid':dirty?'draft':'applied';applyButton.disabled=!dirty||!!error||stale||applying;reset.disabled=!dirty;draw(plan);
  }
- function sync(){if(applying)return;if(dirty&&baseline){const current=pick(read());for(const [key] of GRID_TUNING_FIELDS)if(key.endsWith('Iterations')&&current[key]!==baseline[key]){if(draft[key]===baseline[key])draft[key]=current[key];baseline[key]=current[key];}}if(!dirty){baseline=pick(read());draft={...baseline};physicalReach=Number(baseline.worldSmokeTransition??0)*Number(baseline.worldSmokeExtent??3)/Number(baseline.worldSmokeFlow??16);}refresh();}
+ function sync(){if(applying||panel.hidden)return;if(dirty&&baseline){const current=pick(read());for(const [key] of GRID_TUNING_FIELDS)if(key.endsWith('Iterations')&&current[key]!==baseline[key]){if(draft[key]===baseline[key])draft[key]=current[key];baseline[key]=current[key];}}if(!dirty){baseline=pick(read());draft={...baseline};physicalReach=Number(baseline.worldSmokeTransition??0)*Number(baseline.worldSmokeExtent??3)/Number(baseline.worldSmokeFlow??16);}refresh();}
  function open(){panel.hidden=false;sync();fields.get('resolution').focus?.();}
  function hide(){for(const binding of bindings)binding.commit?.();panel.hidden=true;openButton.focus?.();}
  reset.onclick=()=>{dirty=false;for(const input of fields.values())if(document.activeElement===input)input.blur?.();sync();};
