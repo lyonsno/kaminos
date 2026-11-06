@@ -11,3 +11,24 @@ assert.throws(()=>sceneSourceGridPlan(16,[64,128,64],{maxTextureDimension3D:16})
 assert.throws(()=>sceneSourceGridPlan(1,[32,48,32],limits),/box aspect/);
 assert.throws(()=>sceneSourceGridPlan(16,[64,128,64],{...limits,maxComputeWorkgroupsPerDimension:4}),/dispatch/);
 console.log('PASS independent lighting emission dimensions and actual allocation capacity');
+
+// EMISSION-01: an admitted source width remains part of domain admission.
+const {createKaminosVolumePrototype}=await import('../volume-core.js');
+const stub=()=>new Proxy(function(){},{
+ get(target,key){if(key===Symbol.toPrimitive)return()=>0;if(key==='then')return undefined;return target[key]??(target[key]=stub());},
+ set(target,key,value){target[key]=value;return true;},apply(){return stub();},construct(){return stub();}
+});
+globalThis.document=stub();globalThis.window=stub();globalThis.requestAnimationFrame=()=>0;
+globalThis.ResizeObserver=class{observe(){}disconnect(){}};
+const prototype=createKaminosVolumePrototype({THREE:stub(),viewport:stub(),camera:stub(),controls:stub(),getControls:()=>({resolution:64}),onStatus:()=>{}});
+prototype.setSceneSourceGrid(8);
+const before=prototype.debugState(),sourceBefore=prototype.sceneVolumeSourceField();
+assert.throws(()=>prototype.validateGridControls({gridHeightRatio:2.0625}),/lighting emission resolution 8.*box aspect/);
+assert.throws(()=>prototype.setControls({gridHeightRatio:2.0625}),/lighting emission resolution 8.*box aspect/);
+assert.deepEqual(prototype.debugState().simGridDimensions,before.simGridDimensions,'rejected height preserves effective domain');
+assert.deepEqual(prototype.debugState().gridHeight,before.gridHeight,'rejected height preserves admitted receipt');
+assert.deepEqual(prototype.sceneVolumeSourceField(),sourceBefore,'source request and resource remain unchanged');
+prototype.setControls({gridHeightRatio:2.125});
+assert.deepEqual(prototype.debugState().simGridDimensions,[64,136,64]);
+assert.deepEqual(prototype.setSceneSourceGrid(8).dimensions,[8,17,8]);
+console.log('PASS source width participates in domain preflight and compatible edits still work');

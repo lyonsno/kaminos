@@ -28441,6 +28441,8 @@ export function createKaminosVolumePrototype({
       const candidate={...controlsSnapshot,...next};
       // Match the runtime's existing fine-width normalization.
       const plan=gridTuningPlan(candidate,device?.limits,{joined:state.joinedBoundary?.admitted===true});
+      try { sceneSourceGridPlan(sceneSourceGrid,plan.fine.materialDims,device?.limits); }
+      catch(error) { throw new Error(`lighting emission resolution ${sceneSourceGrid}: ${error.message}; choose a compatible height or emission resolution`); }
       if(plan.fine.materialPerVelocity!==1) {
         if(resolvePressureSolverConfig(candidate).effective.solver!=='converged')throw Error('Independent fine velocity requires converged pressure');
         if(candidate.emitterSourceLaw==='inflow-boundary')throw Error('Independent fine velocity does not yet admit floor inflow');
