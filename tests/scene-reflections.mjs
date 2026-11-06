@@ -67,3 +67,13 @@ test('physical lighting integration is scoped to the selected receiver context',
  assert.equal(material.setupLightingModel({context:{sceneReflectionLighting:owner.lightingContext}}).indirectSpecular,indirect,'camera opaque surface cannot shade a transparent receiver');
  release();assert.equal(library.fromMaterial,previous);assert.equal(material.setupLightingModel,original);
 });
+
+test('glossy capture admission rejects repeated reflection and pyramid frames',async()=>{
+ const {assertGlossySourceEvidence}=await import('../tools/scene-reflections-witness-contracts.mjs');
+ const arm=()=>({sourcePeak:4096,peak:256,before:{frame:20,pyramid:20},frames:Array.from({length:12},(_,i)=>({frame:21+i,pyramid:21+i}))});
+ const valid={small:arm(),broad:{...arm(),peak:4096}};assert.doesNotThrow(()=>assertGlossySourceEvidence(valid));
+ const cached=structuredClone(valid);cached.small.frames=Array(12).fill(cached.small.frames[0]);
+ assert.throws(()=>assertGlossySourceEvidence(cached),/fresh reflection frame/);
+ const stalePyramid=structuredClone(valid);stalePyramid.small.frames[1].pyramid--;
+ assert.throws(()=>assertGlossySourceEvidence(stalePyramid),/fresh source-pyramid frame/);
+});
