@@ -44,6 +44,15 @@ tests. Contact the owner only when you change existing behavior they rely on,
 or need something from them you can't do yourself; a tested change that
 merges cleanly speaks for itself.
 
+## Generated Part Authoring
+
+The shared authored-carrier, generated-surface and shape-recovery work is mapped
+in [`docs/generated-part-authoring.md`](docs/generated-part-authoring.md).
+It locates existing registration, known-feature correction, body-appearance
+return and Stockroom machinery, including exact branch status and the missing
+compositions. It is an implementation map, not a claim that these stages are
+already one integrated main-branch API.
+
 ## Physical Behavior And Fidelity
 
 [Τύραννος: Noah, 2026-10-25, Codex thread
