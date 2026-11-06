@@ -6,7 +6,8 @@ import { extractWgslFunction, withGpuErrorScopes, withKaminosGpu } from '../tool
 
 // Production pressure functions and entrypoints are intact. The fixture supplies
 // uniform/storage declarations and disables joined inflow, expansion and material
-// transport. This tests the separated pressure path, not the full scene ABI.
+// transport. Solves use separated pressure; boundary cases also use full
+// projection. Neither fixture establishes the full scene ABI.
 const source = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 const entries = ['csDivergencePressureWarm', 'csPressureRedBlackEven', 'csPressureRedBlackOdd', 'csProjectPressureConverged'];
 const functions = ['seatGridShape', 'index3', 'clampCell', 'insideGrid', 'sceneSolidEnabled', 'sceneSolidAt',
@@ -186,6 +187,34 @@ test('production pressure dispatch converges closed/open-top and obstructed fiel
       console.log(`pressure-native-result: ${JSON.stringify(metrics)}`);
     }
   }, { wgslSources: declarations(code) });
+});
+
+const wallRule = `if (c.y >= i32(GRID_Y) - 1 && !pressureSolverOpenTop() && !openWorldBoundary()) {
+    correctedVelocity.y = select(0.0, velocityDensity.y, SEPARATED_PRESSURE);
+  }`;
+assert.equal(code.split(wallRule).length, 2, 'unique wall fault target');
+const fullProjectionCode = code.replace('const SEPARATED_PRESSURE = true;', 'const SEPARATED_PRESSURE = false;');
+const missingWallRule = fullProjectionCode.replace(wallRule, '');
+function checkTopFlux(result, openTop, separated = false) {
+  for (const [i, c] of coords.entries()) {
+    const expected = (openTop || separated) && c[1] === dims[1] - 1 ? Math.fround(0.27) : 0;
+    assert.equal(result.fluid[i * 16 + 1], expected, 'closed-wall flux enforcement');
+  }
+}
+test('projection closes incoming top-wall flux while open-top and separated passes preserve it at zero gain', async () => {
+  await withKaminosGpu(async ctx => {
+    for (const separated of [false, true]) for (const openTop of [false, true]) {
+      const f = fixture(openTop);
+      f.fluid.fill(0);
+      coords.forEach((c, i) => { if (c[1] === dims[1] - 1) f.fluid[i * 16 + 1] = 0.27; });
+      checkTopFlux(await dispatch(ctx, f, { text: separated ? code : fullProjectionCode, sweeps: 0, gain: 0 }), openTop, separated);
+      if (!openTop && !separated) {
+        const faulty = await dispatch(ctx, f, { text: missingWallRule, sweeps: 0, gain: 0 });
+        assert.throws(() => checkTopFlux(faulty, false), error => error.code === 'ERR_ASSERTION'
+          && error.message.startsWith('closed-wall flux enforcement'));
+      }
+    }
+  }, { wgslSources: [code, fullProjectionCode, missingWallRule].flatMap(declarations) });
 });
 
 test('numerical pressure oracle rejects valid RHS-sign and non-cubic-stride faults', async () => {
