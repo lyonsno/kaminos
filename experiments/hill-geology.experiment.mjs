@@ -253,7 +253,7 @@ export default {
     status.textContent=error??(pending?`Forming ${tiles.length}-tile territory · `+pending.step+' / '+pending.total+(pending.partial?' · partial visible':''):(formed?`${tiles.length} tiles · ${Math.round(formed.bytes/1024)} KiB · ${formed.cache} · zoom ${(zd.vertexSpacing*1000).toFixed(1)}mm · live GPU ${gState.liveUpdateMs}ms`+(formed.warning?' · '+formed.warning:''):''));
    };sync();this._cleanup=()=>clearTimeout(timer);
   },
-  async dispose(){if(disposed)return;disposed=true;epoch++;restoreStudioLights();job?.cancel();this._cleanup?.();unsubscribe?.();sync=()=>{};gpu.dispose();seamGeo.dispose();seamMat.dispose();await session.dispose();if(globalThis.window?.kaminosHillGeology===diagnostic)delete window.kaminosHillGeology;}
+  async dispose(){if(disposed)return;disposed=true;epoch++;restoreStudioLights();job?.cancel();this._cleanup?.();unsubscribe?.();sync=()=>{};rocks.dispose();gpu.dispose();seamGeo.dispose();seamMat.dispose();await session.dispose();if(globalThis.window?.kaminosHillGeology===diagnostic)delete window.kaminosHillGeology;}
   };
  }
 };
