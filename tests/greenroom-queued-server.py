@@ -18,7 +18,12 @@ class QueuedAdmission(unittest.TestCase):
         def run(argv, **kwargs):
             self.argv = argv
             return SimpleNamespace(returncode=code, stdout=json.dumps(response), stderr='unsupported admission' if code else '')
-        scope = dict(json=json, os=os, Path=Path, re=re, subprocess=SimpleNamespace(run=run))
+        self.groupLookups=[]
+        def getpgid(pid):
+            self.groupLookups.append(pid)
+            if pid!=123:raise AssertionError('unexpected holder identity')
+            return 456
+        scope = dict(json=json, os=SimpleNamespace(getpgid=getpgid), Path=Path, re=re, subprocess=SimpleNamespace(run=run))
         exec(compile(ast.Module(body=[node], type_ignores=[]), str(source), 'exec'), scope)
         return scope['greenroom_page_lease']({'action':action, 'runId':'run1', 'route':'fixture/prompt'},
             greenroom_bin='/fixture/cli', queue_dir='/fixture/queue', server_pid=123, repo_root='/fixture/kaminos')
@@ -30,6 +35,8 @@ class QueuedAdmission(unittest.TestCase):
         self.assertIn('/fixture/kaminos', self.argv)
         self.assertIn('123', self.argv)
         self.assertIn('fixture/prompt', self.argv)
+        self.assertEqual(self.groupLookups,[123])
+        self.assertEqual(self.argv[self.argv.index('--process-group')+1],'456')
 
     def test_stale_or_missing_cli_capability_fails_instead_of_waiting_forever(self):
         with self.assertRaisesRegex(RuntimeError, 'unsupported admission'):
