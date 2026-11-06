@@ -144,16 +144,6 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
   // consumer supplies its retained capture anchor, not the newer live centroid.
   material.vertexNode=cameraProjectionMatrix.mul(cameraViewMatrix).mul(vec4(positionWorld.sub(sourceNode),1));
   material.fragmentNode=vec4(vec3(positionWorld.sub(sourceNode).length()),1);
-  const sourceDistance=receiverNode.sub(sourceNode).length();
-  const towardsSource=sourceNode.sub(receiverNode);
-  const faceSign=mix(float(-1),float(1),step(float(0),normalNode.dot(towardsSource)));
-  // Offset along the receiver plane's light-facing normal by one cube texel.
-  // Radial-only bias fails on a floor viewed by the light at grazing angles.
-  const receiverOffset=normalNode.mul(faceSign).mul(sourceDistance.mul(float(2).div(resolutionNode)).max(.001));
-  const delta=receiverNode.add(receiverOffset).sub(sourceNode),distance=delta.length();
-  const direction=delta.div(distance.max(.00001));
-  // Bias follows the radial texel footprint, not viewer depth or light gain.
-  const bias=distance.mul(float(2).div(resolutionNode)).max(.001);
   const sampleDepth=ray=>{
   // Explicit LOD is necessary inside spatially divergent source branches.
   // These radial depth cubes have exactly one mip level.
@@ -165,10 +155,21 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
     ?vec3(uvNode.x.negate(),uvNode.yz):uvNode;
   return shadowSample.r;
   };
-  const shadowDistance=sampleDepth(direction),hardVisibility=step(distance.sub(bias),shadowDistance);
-  const filterDifferential=screenAligned?THREE.TSL.dFdx(direction).toVar():null;
-  const filtered=sourceSizeNode===null?hardVisibility:radialSoftVisibility({sampleDepth,delta,normal:normalNode,distance,bias,sourceRadius:sourceSizeNode,softness,hardVisibility,complementary,filterCoordinates,filterDifferential,screenAligned,blockerSamples,filterSamples,filterPattern,edgeFilter,resolution:resolutionNode,runtimeQuality:qualityNodes});
-  const visibility=mix(float(1),filtered,enabled.mul(effective));
+  // The selected-source path supplies a dynamic source and depth lookup, but
+  // consumes the same receiver law and live filter-quality uniforms.
+  const receiver=({source=sourceNode,size=sourceSizeNode,depth=sampleDepth,differential,strength=enabled.mul(effective)}={})=>{
+    const sourceDistance=receiverNode.sub(source).length(),towardsSource=source.sub(receiverNode);
+    const faceSign=mix(float(-1),float(1),step(float(0),normalNode.dot(towardsSource)));
+    // Offset along the light-facing receiver plane by one radial cube texel.
+    const offset=normalNode.mul(faceSign).mul(sourceDistance.mul(float(2).div(resolutionNode)).max(.001));
+    const delta=receiverNode.add(offset).sub(source),distance=delta.length(),direction=delta.div(distance.max(.00001));
+    const bias=distance.mul(float(2).div(resolutionNode)).max(.001),shadowDistance=depth(direction);
+    const hardVisibility=step(distance.sub(bias),shadowDistance);
+    const filterDifferential=differential??(screenAligned?THREE.TSL.dFdx(direction).toVar():null);
+    const filtered=size===null?hardVisibility:radialSoftVisibility({sampleDepth:depth,delta,normal:normalNode,distance,bias,sourceRadius:size,softness,hardVisibility,complementary,filterCoordinates,filterDifferential,screenAligned,blockerSamples,filterSamples,filterPattern,edgeFilter,resolution:resolutionNode,runtimeQuality:qualityNodes});
+    return {delta,distance,bias,shadowDistance,filterDifferential,visibility:mix(float(1),filtered,strength)};
+  };
+  const {delta,distance,bias,shadowDistance,filterDifferential,visibility}=receiver();
   // Hard visibility of the same cube from any world point (no screen
   // derivatives), for world-point light probes such as creature senses.
   const visibilityAt=(pointNode,pointNormalNode)=>{
@@ -184,6 +185,8 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
     batchRenderer:sharedPreparation?renderer:null,
     batchScene:scene,
     prepareSampling(){filterDifferential?.toStack();},
+    receiverSampling:{sampleDepth,filterDifferential,strength:enabled.mul(effective)},
+    receiverVisibility(options){return receiver(options).visibility;},
     setSampling(value){validateShadowSampling(value);complementary.value=value==='complementary';status.shadowSampling=value;},
     visibility,visibilityAt,
     resource() {

@@ -55,7 +55,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   let comparison=validateShadowComparison(shadowComparison);
   const worldCellSize=uniform(comparison.worldCellSize);
   const casterScene=createFireShadowCasters({scene,enabled:surfaceEnabled});
-  let points,external,lights,irradiance,prepareSurfaceSampling,smokeShadow,shadowSources,shadowExternal,captureSchedule;
+  let points,external,lights,irradiance,prepareSurfaceSampling,smokeShadow,shadowSources,shadowExternal,captureSchedule,selectedEvaluationAvailable=false;
   let sourceDomain=sceneSourceDomain(),builtDomain=null,sourceRadius=Math.sqrt(11);
   function buildPoints(count){
   const sharedPreparation=comparison.implementation==='shared';
@@ -86,6 +86,30 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     return {shadow,captureTransform,irradiance:energy.div(distance2.add(region.w)).mul(normalWorld.dot(direction).max(0)).mul(shadow.visibility).mul(medium)};
   });
   const currentLights=lights;
+  // Keep separate captures, but select their data before expensive filtering.
+  // Only the texture lookup switches between maps; PCSS arithmetic is shared.
+  const sharedSelected=currentLights.every(l=>l.shadow.receiverSampling&&l.shadow.receiverVisibility)?index=>Fn(()=>{
+    const {float,vec4}=THREE.TSL;
+    const region=textureLoad(external,ivec2(index,0)),energy=textureLoad(external,ivec2(index,1)).rgb;
+    const transform=vec4(0).toVar(),differential=vec3(0).toVar(),strength=float(0).toVar();
+    for(let i=0;i<count;i++)If(index.equal(i),()=>{
+      transform.assign(currentLights[i].captureTransform);
+      differential.assign(currentLights[i].shadow.receiverSampling.filterDifferential??vec3(0));
+      strength.assign(currentLights[i].shadow.receiverSampling.strength);
+    });
+    const source=textureLoad(shadowExternal,ivec2(index,0)).xyz.mul(transform.w).add(transform.xyz);
+    const depth=ray=>Fn(()=>{
+      const value=float(0).toVar();
+      for(let i=0;i<count;i++)If(index.equal(i),()=>value.assign(currentLights[i].shadow.receiverSampling.sampleDepth(ray)));
+      return value;
+    })();
+    const visibility=currentLights[0].shadow.receiverVisibility({source,size:region.w.max(0).sqrt().mul(scale),depth,differential,strength});
+    const delta=region.xyz.mul(scale).add(translation).sub(receiverPosition).div(scale),distance2=delta.dot(delta);
+    const direction=delta.div(distance2.sqrt().max(1e-6));
+    const medium=smokeShadow?smokeShadow.visibility(region.xyz,receiverPosition.sub(translation).div(scale),index):float(1);
+    return energy.div(distance2.add(region.w)).mul(normalWorld.dot(direction).max(0)).mul(visibility).mul(medium);
+  })():null;
+  selectedEvaluationAvailable=Boolean(sharedSelected);
   prepareSurfaceSampling=()=>{
     grain?.bits.toStack();
     // Derivatives must be evaluated in uniform flow, before source selection.
@@ -99,13 +123,22 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       const firstPair=grain?.firstPair??screenCoordinate.x.floor().add(screenCoordinate.y.floor()).mod(2).lessThan(1);
       const legacyWeight=count===4?paired.select(2,1):THREE.TSL.float(1);
       const weight=budgeted.select(THREE.TSL.float(count).div(evaluatedSources),legacyWeight).toVar();
-      // Share each source's shadow/filter body across all evaluation modes.
-      // Separate budget/all/pair branches duplicated those large shader graphs.
-      for(let i=0;i<count;i++){
-        const withinBudget=THREE.TSL.int(i).sub(phase).add(count).mod(count).lessThan(evaluatedSources);
-        const legacySelected=count===4?paired.not().or(i%2===0?firstPair:firstPair.not()):THREE.TSL.bool(true);
-        If(budgeted.select(withinBudget,legacySelected),()=>sum.addAssign(currentLights[i].irradiance.mul(weight)));
-      }
+      const separate=()=>{
+        for(let i=0;i<count;i++){
+          const withinBudget=THREE.TSL.int(i).sub(phase).add(count).mod(count).lessThan(evaluatedSources);
+          const legacySelected=count===4?paired.not().or(i%2===0?firstPair:firstPair.not()):THREE.TSL.bool(true);
+          If(budgeted.select(withinBudget,legacySelected),()=>sum.addAssign(currentLights[i].irradiance.mul(weight)));
+        }
+      };
+      if(sharedSelected)If(budgeted,()=>{
+        // Visit the cyclic subset in the same ascending order as the original
+        // unrolled sum, including a subset that wraps past the last source.
+        const wrapped=phase.add(evaluatedSources).sub(count).max(0).toVar();
+        THREE.TSL.Loop({start:THREE.TSL.int(0),end:evaluatedSources,type:'int',condition:'<'},({i})=>{
+          const index=i.lessThan(wrapped).select(i,phase.add(i).sub(wrapped)).toVar();
+          sum.addAssign(sharedSelected(index).mul(weight));
+        });
+      }).Else(separate);else separate();
     });
     return sum.mul(surfaceGain);
   })();
@@ -315,7 +348,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     // Host restores these controls for both routes. Record but never pretend
     // they affect point surfaces; the prototype UI marks them inapplicable.
     setReceiverSpacing(value){status.receiverSpacingRequested=value;},setSurfaceReconstruction(value){status.surfaceReconstructionRequested=value;},setEditing(){},
-    debugState(){const captures=valid&&surfaceEnabled?frame?.solidShadowCapture:null;return {...status,shadowCaptureBudget,nearBox:normalizeNearSmokeBox(nearBox),smokeEnvironmentBlur,angularPattern,angularRotation,shadowEdgeFilter,surfaceEnabled,smokeShadowSteps,smokeShadowResolution,smokeShadowFilter,smokeShadowFilterAngle,smokeShadowFilterTaps,smokeShadowMediumResolution,smokeShadowWork:smokeShadowWork({steps:smokeShadowSteps,resolution:smokeShadowResolution,filter:smokeShadowFilter,angleDegrees:smokeShadowFilterAngle,tapsPerAxis:smokeShadowFilterTaps,count:pointCount}),mediumExtinction:smokeShadowSteps?'radial-prefix-atlas':'omitted',shadowCasterLevel:casterScene.debugState().level,casters:casterScene.debugState(),shadowImplementation:comparison.implementation,shadowGrain:comparison.grain,shadowWorldCellSize:comparison.worldCellSize,pointSampling,pointEvaluationBudget,pointSelection:pointEvaluationBudget?'cyclic-complementary':pointSampling,evaluatedPointCount:surfaceEnabled?sourceEvaluationCount(pointCount,pointEvaluationBudget,pointSampling):0,capturedPointCount:captures?.refreshedCount??0,residentShadowCount:captures?.residentCount??0,solidShadowCapture:captures,gain,sourceTransform,sourceSoftness,smokeMode,surfaceScattering,surfaceGain:surfaceGain.value,frame,shadows:lights.map(l=>l.shadow.debugState())};},
+    debugState(){const captures=valid&&surfaceEnabled?frame?.solidShadowCapture:null;return {...status,shadowCaptureBudget,nearBox:normalizeNearSmokeBox(nearBox),smokeEnvironmentBlur,angularPattern,angularRotation,shadowEdgeFilter,surfaceEnabled,smokeShadowSteps,smokeShadowResolution,smokeShadowFilter,smokeShadowFilterAngle,smokeShadowFilterTaps,smokeShadowMediumResolution,smokeShadowWork:smokeShadowWork({steps:smokeShadowSteps,resolution:smokeShadowResolution,filter:smokeShadowFilter,angleDegrees:smokeShadowFilterAngle,tapsPerAxis:smokeShadowFilterTaps,count:pointCount}),mediumExtinction:smokeShadowSteps?'radial-prefix-atlas':'omitted',shadowCasterLevel:casterScene.debugState().level,casters:casterScene.debugState(),shadowImplementation:comparison.implementation,shadowGrain:comparison.grain,shadowWorldCellSize:comparison.worldCellSize,pointSampling,pointEvaluationBudget,sourceEvaluationImplementation:pointEvaluationBudget&&selectedEvaluationAvailable?'shared-selected-filter':'per-source-filter',pointSelection:pointEvaluationBudget?'cyclic-complementary':pointSampling,evaluatedPointCount:surfaceEnabled?sourceEvaluationCount(pointCount,pointEvaluationBudget,pointSampling):0,capturedPointCount:captures?.refreshedCount??0,residentShadowCount:captures?.residentCount??0,solidShadowCapture:captures,gain,sourceTransform,sourceSoftness,smokeMode,surfaceScattering,surfaceGain:surfaceGain.value,frame,shadows:lights.map(l=>l.shadow.debugState())};},
     canRender(){const source=prototype.sceneVolumeSourceField();return !disposed&&valid&&source.status==='encoded'&&source.generation===frame?.generation&&source.frame===frame?.frame;},
     readback(options){if(!gather)throw new Error('hybrid not encoded');return gather.readback(options);},
     async readShadowCaptureOrigins(){
