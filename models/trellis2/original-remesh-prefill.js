@@ -13,14 +13,25 @@ export function prefillRemeshHoles(vertices,triangles,maxPerimeter=.03){
       for(const v of [a,b]){if(!adjacent.has(v))adjacent.set(v,[]);adjacent.get(v).push(index);}}
     i=j;
   }
-  const visited=new Uint8Array(boundary.length),loops=[];let ambiguous=0;
-  for(let start=0;start<boundary.length;start++){
-    if(visited[start])continue;const todo=[start],component=[];visited[start]=1;let closed=true,perimeter=0;
-    while(todo.length){const id=todo.pop();component.push(id);const [a,b]=boundary[id];
+  // Native components join boundary edges only through degree-two vertices.
+  // Two closed loops may touch at a higher-degree vertex without becoming one
+  // component. At each endpoint a loop needs another edge in its own component.
+  const parent=Uint32Array.from({length:boundary.length},(_,i)=>i);
+  const root=id=>{while(parent[id]!==id){parent[id]=parent[parent[id]];id=parent[id];}return id;};
+  for(const around of adjacent.values())if(around.length===2){
+    const a=root(around[0]),b=root(around[1]);parent[Math.max(a,b)]=Math.min(a,b);
+  }
+  const components=new Map(),loops=[];let ambiguous=0;
+  for(let id=0;id<boundary.length;id++){
+    const component=root(id);if(!components.has(component))components.set(component,[]);components.get(component).push(id);
+  }
+  for(const [component,ids] of components){
+    let closed=true,perimeter=0;
+    for(const id of ids){const [a,b]=boundary[id];
       perimeter+=Math.hypot(vertices[a*3]-vertices[b*3],vertices[a*3+1]-vertices[b*3+1],vertices[a*3+2]-vertices[b*3+2]);
-      for(const v of [a,b]){const around=adjacent.get(v);if(around.length!==2)closed=false;for(const e of around)if(!visited[e]){visited[e]=1;todo.push(e);}}
+      for(const v of [a,b])if(!adjacent.get(v).some(e=>e!==id&&root(e)===component))closed=false;
     }
-    if(!closed){ambiguous++;continue;}if(perimeter<=maxPerimeter)loops.push(component.sort((a,b)=>a-b));
+    if(!closed){ambiguous++;continue;}if(perimeter<=maxPerimeter)loops.push(ids);
   }
   const outV=new Float32Array(vertices.length+loops.length*3),outF=new Uint32Array(triangles.length+loops.reduce((n,l)=>n+l.length*3,0));
   outV.set(vertices);outF.set(triangles);p=triangles.length;
@@ -30,6 +41,6 @@ export function prefillRemeshHoles(vertices,triangles,maxPerimeter=.03){
     for(const e of loop){const [a,b]=boundary[e];outF.set([b,a,nv+i],p);p+=3;}
   });
   return {vertices:outV,triangles:outF,receipt:{maxPerimeter,filledLoops:loops.length,boundaryEdges:boundary.length,ambiguousComponents:ambiguous,
-    route:'boundary midpoint fan; closed degree-two boundary components; ascending edge order',
-    sourceLimit:'Native connected-loop traversal/reduction order is not asserted identical'}};
+    route:'boundary midpoint fan; manifold-connected closed loops; ascending edge order',
+    sourceLimit:'Native perimeter arithmetic near the threshold is not asserted bit-identical'}};
 }
