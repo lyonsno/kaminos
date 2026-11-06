@@ -59,6 +59,8 @@ def section_features(section,nominal,parameters,rim_inset=0,minimum_separation=0
         ids=section['evidence'].get(role+'Segments')
         if not isinstance(ids,list) or not ids or any(type(i) is not int or not 0<=i<len(lines) for i in ids) or len(set(ids))!=len(ids):
             raise ValueError('Nonempty distinct valid '+role+' surface segment identities are required')
+    if set(section['evidence']['innerSegments'])&set(section['evidence']['outerSegments']):
+        raise ValueError('Inner and outer surface segment identities conflict')
     edges=lines[:,1]-lines[:,0];start=lines[:,0]-origin
     precision=np.finfo(np.float32).eps*max(float(abs(lines).max()),1.)
     cross=lambda a,b:a[...,0]*b[...,1]-a[...,1]*b[...,0]

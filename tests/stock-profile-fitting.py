@@ -132,7 +132,7 @@ class ProfileProducerReports(unittest.TestCase):
             self.assertIn('nominal',report['error'].lower())
 
     def test_each_selected_surface_is_required_and_has_valid_identities(self):
-        for selection in [[],[0,0],[-1],[4],[True],[.5]]:
+        for selection in [[],[0,0],[-1],[4],[True],[.5],[2]]:
             with self.subTest(selection=selection),tempfile.TemporaryDirectory() as directory:
                 root=Path(directory);plan=self.valid_plan(root)
                 observed=Path(plan['observations']);value=json.loads(observed.read_text())
