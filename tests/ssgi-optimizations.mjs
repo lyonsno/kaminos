@@ -25,6 +25,16 @@ effect._sourcePyramid.updateBefore({renderer:{}});
 assert.equal(effect._sourcePyramid.frames,0);
 effect.useMipSampling.value=true;
 assert.equal(effect.getOptimizationState().mipSampling.effective,false,'request alone cannot claim effective mips');
+// Requested render-target mip allocation follows the levels the estimator reads.
+effect._sourcePyramid.setSize?.(936,858);
+assert.equal(effect._sourcePyramid.target.textures[0].mipmaps.length,5,'Source pyramid must allocate level0 through consumed level4, not unread tail levels');
+for(const [width,height,count] of [[1,1,1],[3,2,2],[16,8,5],[858,936,5]]){
+ effect._sourcePyramid.setSize(width,height);
+ for(const map of effect._sourcePyramid.target.textures){
+  assert.equal(map.mipmaps.length,count);
+  for(const [level,mip] of map.mipmaps.entries())assert.deepEqual(mip,{width:Math.max(1,width>>level),height:Math.max(1,height>>level)});
+ }
+}
 effect.dispose();
 
 const {updateSSGIPerspectiveParameters}=await import('../lib/addons/tsl/display/SSGIProjection.js');

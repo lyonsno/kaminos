@@ -24,6 +24,7 @@ try{
  const flags=['--use-mock-keychain','--password-store=basic','--enable-unsafe-webgpu','--use-angle=metal','--enable-webgpu-developer-features'];report.browser={executable,flags,viewport};
  browser=await chromium.launchPersistentContext(profile,{executablePath:executable,headless:true,viewport,deviceScaleFactor:1,args:flags});report.browser.version=browser.browser()?.version();page=browser.pages()[0];page.setDefaultTimeout(0);
  page.on('pageerror',e=>report.errors.push(String(e)));page.on('console',m=>{if(m.type()==='error')report.consoleErrors.push(m.text());});
+ if(manifest.sourcePyramidOverride){const bytes=await fs.readFile(manifest.sourcePyramidOverride);report.sourceOverride={path:manifest.sourcePyramidOverride,sha256:createHash('sha256').update(bytes).digest('hex')};await page.route('**/lib/addons/tsl/display/SSGISourcePyramid.js',route=>route.fulfill({contentType:'text/javascript',body:bytes}));}
  await page.exposeFunction('__costGpuError',message=>report.errors.push(message));
  await page.addInitScript(installGiCostDeviceCapture);
  report.phase='load';await save();
@@ -44,7 +45,7 @@ try{
    window._kaminosDirty();const before=window.kaminosSceneGIDebugState();let frame;const start=performance.now();
    const timing=await window.__costTimer.measure(()=>{frame=window.__kaminosRenderSceneForInspection();});
    const completionWallMs=performance.now()-start,after=window.kaminosSceneGIDebugState();
-   return {backend:window.kaminosWorkbenchSceneState().rendererBackend,before,after,frame,...timing,completionWallMs};
+   const canvas=document.getElementById('kaminos-host-renderer-canvas');return {backend:window.kaminosWorkbenchSceneState().rendererBackend,backing:[canvas.width,canvas.height],before,after,frame,...timing,completionWallMs};
   });
   for(let round=0;round<manifest.rounds;round++){
    const order=round%2?[...cases].reverse():cases;
@@ -53,7 +54,25 @@ try{
     await page.evaluate(values=>{for(const [key,value] of Object.entries(values)){if(key==='id')continue;const control=document.getElementById('scene-gi-'+key);if(!control)throw Error('Unknown GI control '+key);if(control.type==='checkbox')control.checked=value;else control.value=String(value);control.dispatchEvent(new Event(control.type==='number'?'input':'change',{bubbles:true}));}},expected);
     for(let i=0;i<warmup;i++){const record=await draw();summarizeGiCostFrame(record,expected);}
     for(let i=0;i<samples;i++){const record=await draw();record.summary=summarizeGiCostFrame(record,expected);entry.records.push(record);await save();}
-    entry.state=entry.records.at(-1).after;await page.screenshot({path:path.join(out,`round-${round}-${expected.id}.png`)});await save();
+    entry.state=entry.records.at(-1).after;
+    if(manifest.captureGI&&expected.id==='parity'){
+     entry.native=[];
+     for(const kind of ['estimate','receiving']){const data=await page.evaluate(kind=>window.kaminosSceneGIReadback(kind),kind);const bytes=Buffer.from(data.base64,'base64');delete data.base64;const file=`round-${round}-${expected.id}-${kind}.raw`;await fs.writeFile(path.join(out,file),bytes);entry.native.push({...data,file,bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')});}
+     const mips=await page.evaluate(async()=>{
+      const device=window.__costDevices[0],state=window.kaminosSceneGIDebugState(),[width,height]=state.optimizations.mipSampling.resolution,result=[];
+      for(const label of ['SSGI mip depth','SSGI mip radiance','SSGI mip normal']){
+       const texture=window.__costTextures.filter(t=>t.label===label&&t.width===width&&t.height===height).at(-1);if(!texture)throw Error('Missing live pyramid '+label);
+       for(let level=0;level<=state.optimizations.mipSampling.maxSampleLevel;level++){
+        const w=Math.max(1,width>>level),h=Math.max(1,height>>level),bpp=texture.format==='r32float'?4:8,stride=Math.ceil(w*bpp/256)*256;
+        const buffer=device.createBuffer({size:stride*h,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+        try{const encoder=device.createCommandEncoder();encoder.copyTextureToBuffer({texture,mipLevel:level},{buffer,bytesPerRow:stride},{width:w,height:h});device.queue.submit([encoder.finish()]);await buffer.mapAsync(GPUMapMode.READ);const bytes=new Uint8Array(buffer.getMappedRange()),chunks=[];for(let i=0;i<bytes.length;i+=16384)chunks.push(String.fromCharCode(...bytes.subarray(i,i+16384)));result.push({label,level,width:w,height:h,format:texture.format,bytesPerRow:stride,allocatedLevels:texture.mipLevelCount,base64:btoa(chunks.join(''))});}
+        finally{buffer.unmap();buffer.destroy();}
+       }
+      }return result;
+     });
+     for(const data of mips){const bytes=Buffer.from(data.base64,'base64');delete data.base64;const file=`round-${round}-${expected.id}-${data.label.replaceAll(' ','-')}-${data.level}.raw`;await fs.writeFile(path.join(out,file),bytes);entry.native.push({...data,file,bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')});}
+    }
+    await page.screenshot({path:path.join(out,`round-${round}-${expected.id}.png`)});await save();
     assert.deepEqual(report.errors,[]);assert.deepEqual(report.consoleErrors,[]);
    }
   }

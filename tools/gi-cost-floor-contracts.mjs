@@ -10,7 +10,8 @@ export function summarizeGiCostFrame(record, expected) {
   if(mipDelta!==(expected.mipSampling?1:0))throw Error('Source pyramid freshness differs');
   if(expected.temporal&&after.history?.frames!==before.history?.frames+1)throw Error('Missing fresh history');
   if(after.filterFrames?.ao-before.filterFrames?.ao!==(expected.denoise>0?1:0))throw Error('Filter scheduling differs');
-  if(!Array.isArray(after.resolution)||after.resolution.length!==2||after.resolution.some(n=>!Number.isSafeInteger(n)||n<=0))throw Error('Missing estimator extent');
+  if(!Array.isArray(record.backing)||record.backing.length!==2||record.backing.some(n=>!Number.isSafeInteger(n)||n<=0))throw Error('Missing actual backing extent');
+  if(!Array.isArray(after.resolution)||after.resolution.length!==2||after.resolution.some((n,i)=>n!==Math.max(1,Math.round(record.backing[i]*expected.resolutionScale))))throw Error('Wrong effective estimator extent');
   if(!passes?.length)throw Error('Missing GPU passes');
   const intervals=passes.map(pass=>{
     if(!Array.isArray(pass.timestamps)||pass.timestamps.length!==2||!pass.timestamps.every(t=>typeof t==='string'&&/^\d+$/.test(t)))throw Error('Invalid GPU timestamp');
@@ -26,10 +27,10 @@ export function summarizeGiCostFrame(record, expected) {
 // Runs before each navigation, including the Workbench witness's about:blank.
 export function installGiCostDeviceCapture(scope=globalThis){
  if(!scope.GPUAdapter)return false;
- const request=scope.GPUAdapter.prototype.requestDevice;scope.__costDevices=[];scope.__costViews=new WeakMap();
+ const request=scope.GPUAdapter.prototype.requestDevice;scope.__costDevices=[];scope.__costViews=new WeakMap();scope.__costTextures=[];
  scope.GPUAdapter.prototype.requestDevice=async function(...args){
   const device=await request.apply(this,args);scope.__costDevices.push(device);device.addEventListener('uncapturederror',e=>scope.__costGpuError(e.error.message));
-  const create=device.createTexture;device.createTexture=function(descriptor){const texture=create.call(this,descriptor),view=texture.createView;texture.createView=function(desc={}){const result=view.call(this,desc);scope.__costViews.set(result,{label:()=>texture.label,width:texture.width,height:texture.height,format:texture.format,mipLevels:texture.mipLevelCount,baseMipLevel:desc.baseMipLevel??0});return result;};return texture;};
+  const create=device.createTexture;device.createTexture=function(descriptor){const texture=create.call(this,descriptor),view=texture.createView;scope.__costTextures.push(texture);texture.createView=function(desc={}){const result=view.call(this,desc);scope.__costViews.set(result,{label:()=>texture.label,width:texture.width,height:texture.height,format:texture.format,mipLevels:texture.mipLevelCount,baseMipLevel:desc.baseMipLevel??0});return result;};return texture;};
   return device;
  };
  return true;
