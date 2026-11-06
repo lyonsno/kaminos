@@ -8,6 +8,19 @@ test('native selection opens the recorded member through the ordinary recipe ope
  await c.open('gloves');c.select('/image.png');await c.edit();assert.equal(calls[0].experiment.id,'gloves');
  assert.throws(()=>c.select('/absent.png'),/available/);c.deselect();assert.equal(c.read().selected,null);
 });
+test('an experiment reference or early-decoded result can start an image edit without pretending to replay its recipe',async()=>{
+ const document=doc('burners'),calls=[];
+ document.members.push({source:'/soft-reference.png',role:'reference',availability:'available',entry:{kind:'image',source:'/soft-reference.png',experiment:{id:'burners',title:'Burners'}}});
+ document.members[0].entry.provenance={completion:{earlyDecoded:true}};
+ const c=createImageExperiments({request:async()=>document,openImageEditor:async entry=>calls.push(entry),openRecipe:async()=>{throw Error('Recipe recall must stay separate');}});
+ await c.open('burners');
+ await c.editImage('/soft-reference.png');
+ c.select('/image.png');await c.editImage();
+ assert.deepEqual(calls.map(entry=>entry.source),['/soft-reference.png','/image.png']);
+ assert.ok(calls.every(entry=>entry.experiment.id==='burners'));
+ assert.equal(calls[1].provenance.completion.earlyDecoded,true,'keep the original provenance intact');
+ await assert.rejects(c.editImage('/missing.png'),/available/);
+});
 test('the run snapshot owns destination even while another experiment is browsed',async()=>{
  const writes=[],c=createImageExperiments({request:async(url,payload)=>{
   if(payload){writes.push(payload);return doc(payload.id);}return doc(new URL(url,'http://localhost').searchParams.get('id'));

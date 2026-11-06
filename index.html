@@ -29760,10 +29760,14 @@ function setupAuthoringAssets(){
   },imageState:()=>authoringImageGenerator.read(),selected:()=>authoringAssets.read().selected,trellisSettings:()=>trellisAvailability?.settings||null,queueLine:()=>authoringMeshModel?.value()==='trellis'?authoringTrellisGenerator?.read().queueLine||'':''});redraw();
   recipeIteration=createImageRecipeIteration({history:authoringImageHistory,assets:authoringAssets,readControls:()=>authoringImageUI.readRequest(),applyControls:r=>authoringImageUI.applyRecipe(r),recallPrompt:p=>authoringPromptUI.recall(p),resetPrompt:()=>authoringPromptUI.reset(),busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy()||!!authoringImageGenerator.read().pending,changed:()=>redraw()});
   recipeStatus=installImageRecipeStatus({document,iteration:recipeIteration,busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy()});
-  imageExperiments=createImageExperiments({changed:()=>imageExperimentsUI?.render(),openRecipe:async entry=>{await authoringAssetsUI.open('generate');return recipeIteration.open(entry);}});
+  const editHistoryImage=entry=>{recipeIteration.editImage(entry);document.getElementById('asset-prompt').value='';document.getElementById('asset-use-reference').checked=true;redraw();document.getElementById('asset-prompt').focus();};
+  imageExperiments=createImageExperiments({changed:()=>imageExperimentsUI?.render(),openRecipe:async entry=>{await authoringAssetsUI.open('generate');return recipeIteration.open(entry);},openImageEditor:async entry=>{
+    authoringImageHistory.record(entry);authoringAssets.select(entry);authoringImageHistory.useReference(entry.source);
+    await authoringAssetsUI.open('generate',{refresh:false});editHistoryImage(entry);authoringGenerateLayout.compare(true);
+  }});
   imageExperimentsUI=installImageExperiments({document,controller:imageExperiments,assets:authoringAssets,assetsUI:authoringAssetsUI,history:authoringImageHistory,layout:authoringGenerateLayout,recipe:recipeIteration,busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy()});
   authoringImageHistoryUI=installImageIterationHistory({document,history:authoringImageHistory,assets:authoringAssets,layout:authoringGenerateLayout,busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy()||recipeIteration.read().opening,
-    onEdit:entry=>{recipeIteration.editImage(entry);document.getElementById('asset-prompt').value='';document.getElementById('asset-use-reference').checked=true;redraw();document.getElementById('asset-prompt').focus();},
+    onEdit:editHistoryImage,
     onRecall:entry=>recipeIteration.recall(entry)});
   const restoreHistory=authoringImageHistory.read().viewed;if(restoreHistory&&!authoringAssets.read().selected)authoringAssets.select(restoreHistory);
   loadStartupRuntimeConfig().then(config=>authoringPromptUI.configureDefault(config.pup?.keepLoadedDefault===true)).catch(error=>console.warn('Prompt residency default unavailable',error));

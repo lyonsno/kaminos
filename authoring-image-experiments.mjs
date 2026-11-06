@@ -6,7 +6,7 @@ export async function experimentRequest(path,body){
  const response=await fetch(path,{cache:'no-store',...(body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{})});
  const result=await response.json();if(!response.ok)throw Error(result.error||`Experiment HTTP ${response.status}`);return result;
 }
-export function createImageExperiments({request=experimentRequest,openRecipe,changed=()=>{}}){
+export function createImageExperiments({request=experimentRequest,openRecipe,openImageEditor,changed=()=>{}}){
  let state={document:null,selected:null,loading:false,error:null},ticket=0;
  const publish=()=>changed();
  const check=doc=>{if(doc?.schema!=='kaminos.image-experiment.v1'||!Array.isArray(doc.members))throw Error('Unsupported experiment document');return doc;};
@@ -27,6 +27,7 @@ export function createImageExperiments({request=experimentRequest,openRecipe,cha
   select(source){member(source);state.selected=source;publish();},
   deselect(){state.selected=null;publish();},
   async edit(source=state.selected){const m=copy(member(source));await openRecipe(m.entry);return m.entry;},
+  async editImage(source=state.selected){const m=copy(member(source));if(!openImageEditor)throw Error('Image editing is unavailable');await openImageEditor(m.entry);return m.entry;},
   async create({title,description='',agent,members=[]}){const doc=check(await request('/api/image-experiments',{action:'create',title,description,agent,members}));return open(doc.id);},
   async update({title,description}){const doc=state.document;if(!doc)throw Error('Open an experiment first');await request('/api/image-experiments',{action:'update',id:doc.id,revision:doc.revision,title,description});return open(doc.id);},
   async add(id,members){const doc=check(await request('/api/image-experiments',{action:'add',id,members}));if(state.document?.id===id)await open(id);return doc;},
@@ -116,6 +117,7 @@ export function installImageExperiments({document,controller,assets,assetsUI,his
    const close=button('×',()=>controller.deselect());close.setAttribute('aria-label','Close image details');
    inspector.append(close,node('h3',selected.name));if(available(selected)){const img=node('img');img.src=selected.preview;img.alt=selected.name;inspector.append(img);}
    const edit=button('Edit recipe & rerun',async()=>{if(busy())throw Error('Finish the current generation first');await controller.edit(selected.source);});edit.disabled=!selected.entry?.provenance||!available(selected);edit.id='asset-experiment-edit';inspector.append(edit,node('p',captions(selected),'asset-help'));
+   const editImage=button('Edit this image',async()=>{if(busy())throw Error('Finish the current generation first');await controller.editImage(selected.source);});editImage.id='asset-experiment-edit-image';editImage.disabled=busy()||!available(selected);inspector.append(editImage);
    const compare=node('select');compare.setAttribute('aria-label','Compare this image with');const placeholder=node('option','Compare with…');placeholder.value='';compare.append(placeholder);
    for(const m of doc.members.filter(m=>m.source!==selected.source&&available(m))){const option=node('option',`${m.group} · ${m.name}`);option.value=m.source;compare.append(option);}
    compare.onchange=()=>run(async()=>{if(!compare.value)return;const other=doc.members.find(m=>m.source===compare.value);history.record(other.entry);history.record(selected.entry);assets.select(selected.entry);await assetsUI.open('generate',{refresh:false});layout.compare(true);history.compare(other.source);});inspector.append(compare);
