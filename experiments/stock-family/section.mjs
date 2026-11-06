@@ -1,9 +1,11 @@
+import {recoverStockProfile,validateProfileRecovery} from './profile.mjs';
 const finiteVector=(v,n)=>Array.isArray(v)&&v.length===n&&v.every(Number.isFinite);
 const transformed=(m,v)=>[m[0]*v[0]+m[1]*v[1],m[2]*v[0]+m[3]*v[1]];
 const dot=(a,b)=>a.reduce((sum,v,i)=>sum+v*b[i],0);
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
 
 export function validateSectionRecovery(value){
+  if(value?.schema==='kaminos.stock-profile.v1')return validateProfileRecovery(value);
   if(value?.schema!=='kaminos.stock-section.v1'||!Array.isArray(value.observations)||!value.observations.length)
     throw Error('Measured section observations are required');
   const target=value.nominal;
@@ -53,6 +55,7 @@ export function sectionPoint(point,recovery){
 }
 
 export function recoverStockSection(value,recovery){
+  if(recovery?.schema==='kaminos.stock-profile.v1')return recoverStockProfile(value,recovery);
   validateSectionRecovery(recovery);
   const positions=value.positions,normals=value.normals,out=new Float32Array(positions.length),normal=new Float32Array(normals.length);
   let lo=Infinity,hi=-Infinity,minDeterminant=Infinity,maxDeterminant=-Infinity;
