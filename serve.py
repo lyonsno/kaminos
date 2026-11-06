@@ -3204,7 +3204,7 @@ def greenroom_page_lease(payload, *, greenroom_bin, queue_dir, server_pid, repo_
         args = [action, "--lease-id", lease_id]
         if action == "queued-claim":
             args += ["--owner", "kaminos-page", "--agent-id", f"kaminos-page:{run_id}",
-                     "--repo-root", str(repo_root), "--pid", str(server_pid), "--process-group", str(os.getpgid(server_pid)),
+                     "--repo-root", str(repo_root), "--pid", str(server_pid),
                      "--effective-route", str(payload.get("route") or "kaminos-page"),
                      "--backend", "webgpu", "--device", "apple-gpu", "--profile", "interactive-generation",
                      "--ttl-seconds", str(ttl_seconds)]
@@ -3225,7 +3225,7 @@ def greenroom_page_lease(payload, *, greenroom_bin, queue_dir, server_pid, repo_
             raise ValueError("a lease claim needs the run id")
         lease_id = f"kaminos-page-{run_id}"
         done = cli("claim", "--lease-id", lease_id, "--owner", "kaminos-page", "--agent-id", f"kaminos-page:{run_id}",
-                   "--repo-root", str(repo_root), "--pid", str(server_pid), "--process-group", str(os.getpgid(server_pid)), "--effective-route", str(payload.get("route") or "kaminos-page"),
+                   "--repo-root", str(repo_root), "--pid", str(server_pid), "--effective-route", str(payload.get("route") or "kaminos-page"),
                    "--backend", "webgpu", "--device", "apple-gpu", "--profile", "interactive-generation", "--ttl-seconds", str(ttl_seconds))
         if done.returncode == 0:
             return {"status": "held", "leaseId": lease_id, "ttlSeconds": ttl_seconds}
