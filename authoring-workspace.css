@@ -529,3 +529,15 @@ body[data-workspace=authoring].has-assets-panel:has(#asset-generate[data-image-e
 }
 
 @media(min-width:801px){body.has-authoring-workspace[data-workspace=workbench].has-assets-panel:has(#asset-browse:not([hidden])):has(#asset-detail:not([hidden])){--asset-workbench-default:clamp(400px,46vh,540px);}}
+
+/* Main-view generation keeps its existing controls beside the native prompt. */
+.mounted-generation-actions { position:absolute; z-index:13; top:82px; left:18px; max-width:calc(100% - 36px); padding:8px; border:1px solid #646260; border-radius:8px; background:#202528ed; color:#ead5ad; }
+.mounted-generation-actions[hidden] { display:none; }
+.mounted-generation-actions .asset-text-image-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:0; }
+.mounted-generation-actions button,.mounted-generation-actions select { font:13px system-ui; padding:7px 10px; border:1px solid #77716a; border-radius:5px; background:#303436; color:inherit; }
+.mounted-generation-actions button:disabled { opacity:.5; }
+#viewport .generation-flame-volume { display:none; }
+#viewport .generation-flame-status { position:static; display:block; }
+#asset-generate:not([hidden]) { grid-template-rows:minmax(160px,1fr) auto; overflow:auto; }
+#asset-image-history:has(#asset-history-strip:empty) #asset-history-strip { display:none; }
+#asset-image-history:has(#asset-history-strip:empty) .asset-history-actions { display:none; }

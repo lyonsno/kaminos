@@ -20,7 +20,7 @@ export function generationComparisonView({selected,comparison,preparedSource=nul
   right:generationImageView({selected,preparedSource,showSegmented:prepared,preview}),label:prepared?'Segmented images':'Original images'};
 }
 
-export function installGenerateLayout({document,trellisSettings=()=>null,queueLine=()=>'',openMasks=null,selected=()=>null,imageState=()=>null,createFlame=null,history=null,kiln=null}){
+export function installGenerateLayout({document,trellisSettings=()=>null,queueLine=()=>'',openMasks=null,selected=()=>null,imageState=()=>null,createFlame=null,history=null,kiln=null,mountedCeremony=null,promptControls=null}){
 
   const pane=document.getElementById('asset-generate');if(!pane)throw Error('Generate panel is missing');
   const byId=id=>document.getElementById(id);
@@ -52,12 +52,13 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   for(const id of ['asset-text-run','asset-text-decode','asset-text-stop','asset-text-retry']){const control=image.querySelector('#'+id);if(control)imageActions.append(control);}
   const imageSize=image.querySelector('#asset-image-size')?.closest('label');if(imageSize)imageActions.append(imageSize);
   if(imageOptions)imageOptions.before(imageActions,kilnPanel);else image.append(imageActions,kilnPanel);
-  const ceremony=createFlame?installGenerationFlame({document,slot:kilnView,createRenderer:createFlame}):null;
+  if(mountedCeremony){kilnPanel.remove();promptControls?.append(imageActions);}
+  const ceremony=mountedCeremony??(createFlame?installGenerationFlame({document,slot:kilnView,createRenderer:createFlame}):null);
   kilnChoose.onclick=async()=>{try{if(await kiln?.choose()){syncKiln();await ceremony?.refresh();kilnStatus.textContent='';}}catch(error){kilnStatus.textContent=error.message;}};
-  kiln?.load().then(syncKiln).catch(error=>{kilnStatus.textContent=error.message;});syncKiln();
-  const observer=ceremony&&new document.defaultView.IntersectionObserver(entries=>{ceremony.setVisible(entries.some(entry=>entry.isIntersecting));});observer?.observe(kilnView);
-  image.querySelector('#asset-prompt')?.addEventListener('change',()=>{if(!ceremony?.read().running)ceremony?.refresh();});
-  document.defaultView.addEventListener('focus',async()=>{try{const before=kiln?.read(),next=await kiln?.load();if(JSON.stringify([before?.selection,before?.document])!==JSON.stringify([next?.selection,next?.document]))await ceremony?.refresh();syncKiln();}catch(error){kilnStatus.textContent=error.message;}});
+  (!mountedCeremony?kiln?.load():Promise.resolve()).then(syncKiln).catch(error=>{kilnStatus.textContent=error.message;});syncKiln();
+  const observer=!mountedCeremony&&ceremony&&new document.defaultView.IntersectionObserver(entries=>{ceremony.setVisible(entries.some(entry=>entry.isIntersecting));});observer?.observe?.(kilnView);
+  (!mountedCeremony?image.querySelector('#asset-prompt'):null)?.addEventListener('change',()=>{if(!ceremony?.read().running)ceremony?.refresh();});
+  document.defaultView.addEventListener('focus',async()=>{if(mountedCeremony)return;try{const before=kiln?.read(),next=await kiln?.load();if(JSON.stringify([before?.selection,before?.document])!==JSON.stringify([next?.selection,next?.document]))await ceremony?.refresh();syncKiln();}catch(error){kilnStatus.textContent=error.message;}});
   const pair=document.createElement('div');pair.id='asset-image-comparison';pair.className='asset-image-pair';
   const inputFrame=document.createElement('div');inputFrame.className='asset-image-view asset-compare-input';inputFrame.hidden=true;const inputPreview=document.createElement('img');inputPreview.id='asset-compare-source';inputPreview.alt='Comparison input';inputFrame.append(inputPreview);
   const blink=document.createElement('img');blink.id='asset-compare-blink';blink.hidden=true;blink.alt='Comparison input';frame.append(blink);pair.append(inputFrame,frame);

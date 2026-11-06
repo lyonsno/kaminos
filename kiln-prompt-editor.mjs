@@ -1,0 +1,70 @@
+import {Matrix4} from './lib/three.core.js';
+// One browser text layout for editing and for the glyph mask consumed by the
+// existing solid/thermal constructor. No per-character picking or custom undo.
+export const KILN_PROMPT_WINDOW_HEIGHT=520;
+const width=1024;
+const typography='box-sizing:border-box;width:1024px;margin:0;border:0;padding:20px 60px;font:500 64px Georgia;line-height:80px;letter-spacing:normal;text-align:center;white-space:pre-wrap;overflow-wrap:break-word;word-break:normal;tab-size:8;';
+const escape=value=>value.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+export function promptPlaneTransform({camera,object,width:vw,height:vh,textHeight}){
+ camera.updateMatrixWorld();object.updateWorldMatrix(true,false);
+ const local=new Matrix4().makeTranslation(-1,textHeight/width,.018);
+ local.multiply(new Matrix4().makeScale(2/width,-2/width,1));
+ const clip=new Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse).multiply(object.matrixWorld).multiply(local);
+ const screen=new Matrix4().set(vw/2,0,0,vw/2,0,-vh/2,0,vh/2,0,0,1,0,0,0,0,1).multiply(clip);
+ return `matrix3d(${screen.elements.join(',')})`;
+}
+export function installKilnPromptEditor({document,viewport,input,camera,object,onChange=()=>{},onPresentation=()=>{},onError=()=>{}}){
+ const layer=document.createElement('div');layer.className='kiln-prompt-plane';viewport.append(layer);
+ const home=input.parentNode,after=input.nextSibling,priorStyle=input.getAttribute('style'),priorPlaceholder=input.placeholder;
+ layer.append(input);input.classList.add('kiln-prompt-input');input.placeholder='Describe your image…';input.wrap='soft';
+ const mirror=document.createElement('div');mirror.setAttribute('aria-hidden','true');mirror.style.cssText=typography+'position:fixed;left:-100000px;top:0;visibility:hidden;';document.body.append(mirror);
+ let height=KILN_PROMPT_WINDOW_HEIGHT,burning=false,disposed=false,presented=null,caretFrame=0;
+ function measure(value){mirror.textContent=value+'\u200b';return Math.max(180,mirror.scrollHeight);}
+ function position(){
+  if(disposed)return;const rect={width:viewport.clientWidth,height:viewport.clientHeight};
+  input.style.transform=promptPlaneTransform({camera,object,width:rect.width,height:rect.height,textHeight:height});
+ }
+ function present(){const editing=!burning||document.activeElement===input;layer.dataset.editing=String(editing);input.style.color=editing?'#b8b2a8':'transparent';input.style.opacity=editing?'1':'0';object.visible=!editing;if(presented!==editing){presented=editing;onPresentation();}}
+ function sync(){
+  height=KILN_PROMPT_WINDOW_HEIGHT;const scroll=input.scrollTop;input.style.cssText=typography+`height:${height}px;min-height:0;max-height:none;position:absolute;left:0;top:0;transform-origin:0 0;resize:none;background:transparent;border-radius:0;box-shadow:none;overflow:auto;scrollbar-width:thin;outline:none;caret-color:#ffcd8d;text-shadow:0 1px 2px #000,0 0 5px #0008;`;
+  input.scrollTop=scroll;position();present();
+ }
+ // Measure the native caret using the same transformed typography. This runs
+ // on editing/selection events, never on the simulation or render hot path.
+ function revealCaret(){
+  if(caretFrame||disposed||document.activeElement!==input)return;
+  caretFrame=document.defaultView.requestAnimationFrame(()=>{
+   caretFrame=0;if(disposed||document.activeElement!==input)return;
+   const probe=document.createElement('div'),marker=document.createElement('span');
+   probe.style.cssText=input.style.cssText+'visibility:hidden;pointer-events:none;';
+   probe.setAttribute('aria-hidden','true');
+   const at=input.selectionDirection==='backward'?input.selectionStart:input.selectionEnd;
+   marker.textContent='\u200b';
+   probe.append(document.createTextNode(input.value.slice(0,at)),marker,document.createTextNode(input.value.slice(at)||'\u200b'));
+   layer.append(probe);probe.scrollTop=input.scrollTop;probe.scrollLeft=input.scrollLeft;
+   const rect=marker.getBoundingClientRect().toJSON();probe.remove();
+   input.dispatchEvent(new document.defaultView.CustomEvent('kiln-caret',{bubbles:true,detail:rect}));
+  });
+ }
+ const edit=()=>{sync();onChange(input.value);revealCaret();};
+ const focus=()=>{present();revealCaret();};
+ const keepTyping=event=>event.stopPropagation();
+ for(const type of ['pointerdown','pointerup','click','dblclick','wheel'])input.addEventListener(type,keepTyping);
+
+ input.addEventListener('selectionchange',revealCaret);input.addEventListener('keyup',revealCaret);
+ input.addEventListener('input',edit);input.addEventListener('focus',focus);input.addEventListener('blur',present);
+ // Existing callers sometimes set .value before dispatching/redrawing. Keep
+ // their original element and native setter; the consumer calls sync on render.
+ const observer=new document.defaultView.ResizeObserver(position);observer.observe(viewport);
+ sync();
+ return {sync,position,setBurning(value){burning=!!value;present();},
+  async rasterize(value){
+   await document.fonts.ready;const h=measure(value),canvas=document.createElement('canvas');canvas.width=width;canvas.height=h;
+   const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${h}"><foreignObject width="${width}" height="${h}"><div xmlns="http://www.w3.org/1999/xhtml" style="${typography}color:white;">${escape(value)}</div></foreignObject></svg>`;
+   const image=new document.defaultView.Image();image.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+   try{await image.decode();canvas.getContext('2d').drawImage(image,0,0);return canvas;}catch(error){onError(error);throw error;}
+  },
+  read:()=>({width,height,contentHeight:measure(input.value),scrollTop:input.scrollTop,text:input.value,editing:!burning||document.activeElement===input,transform:input.style.transform}),
+  dispose(){if(disposed)return;disposed=true;observer.disconnect();document.defaultView.cancelAnimationFrame(caretFrame);input.removeEventListener('selectionchange',revealCaret);input.removeEventListener('keyup',revealCaret);input.removeEventListener('input',edit);input.removeEventListener('focus',focus);input.removeEventListener('blur',present);for(const type of ['pointerdown','pointerup','click','dblclick','wheel'])input.removeEventListener(type,keepTyping);input.classList.remove('kiln-prompt-input');if(priorStyle===null)input.removeAttribute('style');else input.setAttribute('style',priorStyle);input.placeholder=priorPlaceholder;if(after?.parentNode===home)home.insertBefore(input,after);else home.append(input);mirror.remove();layer.remove();object.visible=true;},
+ };
+}
