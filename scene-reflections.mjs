@@ -26,7 +26,7 @@ export default class SceneReflections extends Node{
   // integration without embedding this producer's feedback textures in it.
   this.lightingContext=new (class ReflectionLightingContext {})();
   this.available=uniform(false);
-  this.updateBeforeType=NodeUpdateType.FRAME;this.frames=0;this.valid=uniform(false);this.frame=uniform(0,'uint');this.size=uniform(new Vector2(1,1));
+  this.updateBeforeType=NodeUpdateType.FRAME;this.frames=0;this.pendingHistoryFrames=0;this.valid=uniform(false);this.frame=uniform(0,'uint');this.size=uniform(new Vector2(1,1));
   this.projection=uniform(camera.projectionMatrix);this.inverseProjection=uniform(camera.projectionMatrixInverse);this.near=uniform(camera.near);
   this.distance=uniform(50);this.thickness=uniform(.15);this.steps=uniform(64,'uint');this.cutoff=uniform(.95);this.historyWeight=uniform(.85);
   this.depth=source.getTextureNode('depth');this.normal=source.getTextureNode('normal');this.color=source.getTextureNode('output');
@@ -69,12 +69,17 @@ export default class SceneReflections extends Node{
   const next=resolveReflectionSettings({...this.settings,...value});
   if(JSON.stringify(next)!==JSON.stringify(this.settings))this.reset('settings');
   this.settings=next;this.distance.value=next.maxDistance;this.thickness.value=next.thickness;this.steps.value=next.steps;this.cutoff.value=next.roughnessCutoff;this.historyWeight.value=next.temporal?next.historyWeight:0;
+  this.requestFrames();
   return this.state();
  }
- reset(reason='scene-change'){this.valid.value=false;this.resetReason=reason;}
+ // Let the initial image's temporal weight fall below 1%, then return to
+ // host idle. This is a finite history tail, not a variance-convergence claim.
+ requestFrames(){const s=this.settings;this.pendingHistoryFrames=s?.enabled&&s.temporal&&s.historyWeight>0?1+Math.ceil(Math.log(.01)/Math.log(s.historyWeight)):0;}
+ needsFrame(){return this.syncSupport().effective&&this.settings.temporal&&this.pendingHistoryFrames>0;}
+ reset(reason='scene-change'){this.valid.value=false;this.resetReason=reason;this.requestFrames();}
  state(){const support=this.syncSupport();return {...this.settings,...support,route:'kaminos-screen-reflection-radiance-v1',frames:this.frames,resolution:this.size.value.toArray(),valid:this.valid.value,resetReason:this.resetReason,
   materialResponse:'existing-physical-base-specular-once',worldGeometry:false,history:'stationary-camera-geometry-validated-neighborhood-clamped',samplesPerTracingPixel:1,
-  sourceFiltering:'visible-GGX-pdf-footprint-mips',sourcePyramidFrames:this.radianceFrames,sourcePyramidResolution:[this.radiance.width,this.radiance.height]};}
+  sourceFiltering:'visible-GGX-pdf-footprint-mips',sourcePyramidFrames:this.radianceFrames,sourcePyramidResolution:[this.radiance.width,this.radiance.height],pendingHistoryFrames:this.pendingHistoryFrames,historyRemainderTarget:.01};}
  forSurface(){
   return Fn(()=>{
    const result=vec4(0).toVar();
@@ -151,7 +156,7 @@ export default class SceneReflections extends Node{
    const target=this.targets[this.writeIndex];renderer.setRenderTarget(target);this.filterQuad.render(renderer);
    this.result.value=target.textures[0];this.surface.value=target.textures[1];this.surfaceDepth.value=target.textures[2];
    this.oldColor.value=target.textures[0];this.oldNormal.value=target.textures[1];this.oldDepth.value=target.textures[2];
-   this.writeIndex=1-this.writeIndex;this.valid.value=true;this.frames++;
+   this.writeIndex=1-this.writeIndex;this.valid.value=true;this.frames++;this.pendingHistoryFrames=Math.max(0,this.pendingHistoryFrames-1);
    this.previousCamera.copy(this.camera.matrixWorld);this.previousProjection.copy(this.camera.projectionMatrix);
   }finally{RendererUtils.restoreRendererState(renderer,state);}
  }

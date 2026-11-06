@@ -240,8 +240,8 @@ export function createSceneGI(scene, camera, aoIntensity, {renderer=null,reflect
       }
       return { ...opticalFinish };
     },
-    requestHistoryFrames(){if(settings.mode==='combined'&&settings.temporal)history.requestFrames();},
-    needsHistoryFrame:()=>settings.mode==='combined'&&settings.temporal&&history.needsFrame(),
+    requestHistoryFrames(){reflectionField?.requestFrames();if(settings.mode==='combined'&&settings.temporal)history.requestFrames();},
+    needsHistoryFrame:()=>Boolean(reflectionField?.needsFrame())||(settings.mode==='combined'&&settings.temporal&&history.needsFrame()),
     historyStatus:()=>settings.mode==='combined'&&settings.temporal&&settings.temporalRefine?history.state():null,
     resetHistory(reason) { history.reset(reason); },
     async readback(renderer,kind='incoming') {
