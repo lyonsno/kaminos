@@ -45,9 +45,9 @@ export function installMountedGenerationWorkshop({document,THREE,mergeGeometries
     memberOwner=async(root,metadata)=>{
      signal.throwIfAborted();root.visible=false;root.userData.kaminosMountedWorkshop=true;
      const handle=await session.attach(root,{owned:true,metadata:{...metadata,collision:null}});ids.add(handle.id);acquired.push(handle);
-     frame.add(root);return handle;
+     frame.add(root);await warm([root]);signal.throwIfAborted();root.visible=controller.read().amount>0;return handle;
     };
-    function restoreSelection(){if(!savedSelection)return;const previous=savedSelection;savedSelection=null,memberOwner=null;const available=previous.ids.filter(id=>find(id));setSelection(available,available.includes(previous.activeId)?previous.activeId:available.at(-1)??null);}
+    function restoreSelection(){if(!savedSelection)return;const previous=savedSelection;savedSelection=null;const available=previous.ids.filter(id=>find(id));setSelection(available,available.includes(previous.activeId)?previous.activeId:available.at(-1)??null);}
     return {get ids(){return acquired.map(h=>h.id);},
      place(){
       savedSelection=structuredClone(selection());
