@@ -19062,11 +19062,6 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-flame-priority').disabled=c.raymarchMode!=='numerical';
   document.getElementById('volume-ray-noise-animated').disabled=!c.rayStartNoise;
   document.getElementById('volume-quadrature-jitter').disabled=!c.rayStartNoise;
-  if(['temporal','combined'].includes(filterView)){
-    const age=evaluation?s.integralEvaluation.previousDraws:Math.max(0,(reconstruction.frames??1)-1);
-    const maxReuse=Math.min(1-1/s.controls.reconstructionWindow,age/(age+1));
-    document.getElementById('volume-reconstruction-status').textContent+=s.controls.reconstructionRadius===0?' · radius 0 prevents history color reuse':` · history weight ≤${Math.round(maxReuse*100)}% before rejection/clamping`;
-  }
   document.getElementById('volume-ray-step-stats').hidden=!c.rayStepTelemetry;
   for(const id of ['volume-display-grid-scale','volume-display-alignment','volume-emission-interpolation','volume-smoke-interpolation','volume-emission-smoothing','volume-smoke-smoothing'])
     document.getElementById(id).disabled=c.displayReconstruction==='off';
@@ -19484,6 +19479,11 @@ function refreshVolumeReadout() {
     : reconstruction?.effective&&reconstruction.effective!=='off'
       ? `${reconstruction.effective} · ${reconstruction.frames} draws since reset · ${reconstruction.simulationStepChanges??0} sim-step changes · ${reconstruction.sameStepDraws??0} draws at this step · camera or settings changes reset${reconstruction.freshSampling?' · jitter advances while physics is paused':''}`
       : reconstruction?.requested&&reconstruction.requested!=='off'?`Unavailable · ${String(reconstruction.reason||'awaiting frame').replaceAll('-',' ')}`:'Raw image · no image history retained';
+  if(['temporal','combined'].includes(filterView)){
+    const age=evaluation?s.integralEvaluation.previousDraws:Math.max(0,(reconstruction.frames??1)-1);
+    const maxReuse=Math.min(1-1/s.controls.reconstructionWindow,age/(age+1));
+    document.getElementById('volume-reconstruction-status').textContent+=s.controls.reconstructionRadius===0?' · radius 0 prevents history color reuse':` · history weight ≤${Math.round(maxReuse*100)}% before rejection/clamping`;
+  }
   document.getElementById('volume-ray-step-stats').hidden=!!evaluation||!s.controls.rayStepTelemetry;
   const telemetry=s.rayStepTelemetry;
   document.getElementById('volume-ray-step-status').textContent=telemetry?.active?'GPU · material samples':
