@@ -615,3 +615,5 @@ body[data-workspace=authoring].has-assets-panel:has(#authoring-assets[data-exper
 .experiment-run-grid button { display:block; padding:0; width:100%; }
 .experiment-run-grid img { display:block; width:100%; max-height:280px; object-fit:contain; }
 .experiment-composer input { color:#e5e6e7; background:#1b1e20; border:1px solid #575c60; border-radius:5px; }
+.experiment-run-grid { table-layout:fixed; }
+.experiment-run-grid th,.experiment-run-grid td { overflow-wrap:anywhere; }
