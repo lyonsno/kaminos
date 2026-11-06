@@ -589,6 +589,6 @@ body[data-workspace=authoring].has-assets-panel:has(#authoring-assets[data-exper
 .experiment-author{color:var(--accent,#dbc184);font-weight:600}
 .experiment-parent{opacity:.8}
 .experiment-grid.is-branches{display:flex;flex-direction:column;gap:10px}
-.experiment-grid.is-branches .experiment-image{display:grid;grid-template-columns:128px minmax(0,1fr);gap:5px 12px;text-align:left;margin-inline-start:calc(var(--branch-depth,0) * 24px);width:calc(100% - var(--branch-depth,0) * 24px);border-inline-start:3px solid #6b6250}
+#authoring-assets .experiment-grid.is-branches .experiment-image{display:grid;grid-template-columns:128px minmax(0,1fr);gap:5px 12px;text-align:left;margin-inline-start:calc(var(--branch-depth,0) * 24px);width:calc(100% - var(--branch-depth,0) * 24px);border-inline-start:3px solid #6b6250}
 .experiment-grid.is-branches .experiment-image img{grid-column:1;grid-row:1 / span 5;width:128px;height:128px;object-fit:contain}
 .experiment-grid.is-branches .experiment-image :not(img){grid-column:2}
