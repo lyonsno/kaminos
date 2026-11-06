@@ -7,18 +7,20 @@ export function prefillRemeshHoles(vertices,triangles,maxPerimeter=.03){
   if(!Number.isSafeInteger(nv*nv))throw RangeError('original remesh edge keys exceed exact integer capacity');
   const key=(a,b)=>Math.min(a,b)*nv+Math.max(a,b);let p=0;
   for(let i=0;i<triangles.length;i+=3){const [a,b,c]=triangles.subarray(i,i+3);edges[p++]=key(a,b);edges[p++]=key(b,c);edges[p++]=key(c,a);}
-  edges.sort();const boundary=[],adjacent=new Map();
+  edges.sort();const boundary=[],adjacent=new Map(),nonManifold=new Uint8Array(nv);
   for(let i=0;i<edges.length;){let j=i+1;while(j<edges.length&&edges[j]===edges[i])j++;
     if(j-i===1){const a=Math.floor(edges[i]/nv),b=edges[i]%nv,index=boundary.length;boundary.push([a,b]);
       for(const v of [a,b]){if(!adjacent.has(v))adjacent.set(v,[]);adjacent.get(v).push(index);}}
+    else if(j-i>2){nonManifold[Math.floor(edges[i]/nv)]=1;nonManifold[edges[i]%nv]=1;}
     i=j;
   }
-  // Native components join boundary edges only through degree-two vertices.
+  // Native components join boundary edges only through manifold degree-two
+  // vertices: an interior edge with >2 incident faces also excludes a vertex.
   // Two closed loops may touch at a higher-degree vertex without becoming one
   // component. At each endpoint a loop needs another edge in its own component.
   const parent=Uint32Array.from({length:boundary.length},(_,i)=>i);
   const root=id=>{while(parent[id]!==id){parent[id]=parent[parent[id]];id=parent[id];}return id;};
-  for(const around of adjacent.values())if(around.length===2){
+  for(const [vertex,around] of adjacent)if(around.length===2&&!nonManifold[vertex]){
     const a=root(around[0]),b=root(around[1]);parent[Math.max(a,b)]=Math.min(a,b);
   }
   const components=new Map(),loops=[];let ambiguous=0;
