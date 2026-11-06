@@ -3101,11 +3101,6 @@ function pyroFireModeValue(value) {
   return 1;
 }
 
-function fireLickOperatorGainFromAmount(value) {
-  const amount = clampFinite(value, 0, 10, 0);
-  return amount * (0.82 + amount * 0.110);
-}
-
 function defaultPressureIterationsForScene(value) {
   return 2;
 }
@@ -16386,10 +16381,7 @@ export function createKaminosVolumePrototype({
       emissiveRouteEffective: physicalColorEffective && physicalColorMode === 2,
     });
     state.physicsAppearance = physicsAppearance;
-    state.appearanceModel = {...resolveAppearanceModel(String(controlsSnapshot.appearanceModel ?? 'authored'), {
-      reactant: reactantCombustionConfig.effective.admitted === true,
-      physics: physicsAppearance.effective.render,
-    }), layout: fluidLayoutInForce};
+    state.appearanceModel = {...resolveAppearanceModel(String(controlsSnapshot.appearanceModel ?? 'shred-only')), layout: fluidLayoutInForce};
     uniforms[REACTANT_COMBUSTION_UNIFORM_OFFSET + 15] = appearanceModelUniformValue(state.appearanceModel.effective);
     const displayRequest = resolveDisplayReconstruction(controlsSnapshot);
     const displaySupported = emissiveRaymarchAdmission().eligible && debugRaymarchShaderSpecialization !== 'force-full' && physicsAppearance.effective.render
@@ -17200,7 +17192,7 @@ export function createKaminosVolumePrototype({
     return fineVelocity;
   }
   function encodeFineVelocity(encoder,owner,transport,timing){
-    owner.prepare(fineTransferInputs(),{shredOnly:state.appearanceModel?.effective==='shred-only'});owner.encode(encoder,'restrictScalars',timing?{querySet:timing.querySet,beginningOfPassWriteIndex:timing.beginningOfPassWriteIndex}:undefined);
+    owner.prepare(fineTransferInputs());owner.encode(encoder,'restrictScalars',timing?{querySet:timing.querySet,beginningOfPassWriteIndex:timing.beginningOfPassWriteIndex}:undefined);
     const i=owner.current;
     const group=createFluidRenderBindGroup({label:'independent fine velocity',uniformsBuffer:owner.uniform,fluidRead:owner.fluid[i],fluidWrite:owner.fluid[1-i],frontRead:owner.front[0],frontWrite:owner.front[1],quenchRead:owner.quench[0],quenchWrite:owner.quench[1],reactantRead:owner.reactant[0],reactantWrite:owner.reactant[1],waveletRead:owner.wavelet[i],waveletWrite:owner.wavelet[1-i],solidView:owner.solid.createView(),expansionTexture:owner.burn,lowerFaceTexture:owner.lower,forceTexture:owner.force,captureRows:nonRidgeOpticalCaptureRowBuffer});
     const run=entry=>{const p=encoder.beginComputePass({label:'independent fine '+entry});p.setPipeline(entry==='cs'||entry==='csTransportPredict'?simulationPipeline(entry,{VELOCITY_ONLY:true,VELOCITY_UNIT_SCALE:1/owner.plan.materialPerVelocity}):owner.pipelines[entry]);p.setBindGroup(0,group);p.setBindGroup(3,owner.predictGroup);p.dispatchWorkgroups(...owner.plan.velocityDims.map(n=>Math.ceil(n/4)));p.end();};

@@ -3,7 +3,7 @@
 basin library even when this server runs a private store without the shared
 library. Basins are content-addressed: only the verified artifact is copied
 into this server's own store; aliases stay untouched, and a tampered or
-absent basin still refuses the import with a clear reason.
+absent basin warns and permits a runtime Reactant preview without copying it.
 """
 
 import io
@@ -91,7 +91,7 @@ with TemporaryDirectory() as directory:
     assert reply["basin"]["status"] == "runtime-fallback", reply
     assert "content hash mismatch" in reply["basin"]["warning"], reply
 
-# 4. Nowhere on the machine: the import refuses and says where it looked.
+# 4. Nowhere on the machine: import the scene and report the unavailable basin.
 with TemporaryDirectory() as directory:
     own, store_id = arrange(Path(directory))
     reply, status = post({"store": store_id, "name": "carousel.kaminos.json"})

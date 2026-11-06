@@ -1,6 +1,9 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
-import {validateShredWitness} from '../tools/shred-witness-contract.mjs';
+import * as contract from '../tools/shred-witness-contract.mjs';
+const {validateShredWitness}=contract;
+assert.equal(contract.isShredWitnessFatalConsole?.('THREE.TSL: Invalid generated code, expected a "vec3".'),true,'console-only compiler failure must terminate the witness');
+assert.equal(contract.isShredWitnessFatalConsole?.('THREE.TSL: Deprecated API warning'),false);
 const good={state:{backend:'WebGPU:apple',effectiveRoute:'native-3d-compute-fluid-raymarch-v0',
   appearanceModel:{requested:'shred-only',effective:'shred-only'},
   simulationPipelines:{'cs:combined':{constants:{SHRED_ONLY:true}}}},

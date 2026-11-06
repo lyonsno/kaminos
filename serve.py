@@ -2074,11 +2074,15 @@ def read_runtime_volume_settings_preset(layers, preset_ref, schema=None):
         law = (document["preset"].get("domControls") or {}).get("volume-reaction-law", {})
         added = (document.get("schemaProjection") or {}).get("defaultsApplied") or []
         replaced = (document.get("schemaProjection") or {}).get("unsupportedValuesDefaulted") or []
+        controls = document["preset"].get("domControls") or {}
+        value = lambda key: _settings_preset_descriptor_value(controls.get(key, {}))
+        supported_source = value("volume-emitter-source-law") in ("inflow-boundary", "immersed-source") and value("emitter-assay-family") != "cluster"
         if (_settings_preset_descriptor_value(law) == "reactant-v0"
                 and "volume-reaction-law" not in added
-                and not any(entry.get("id") == "volume-reaction-law" for entry in replaced)):
+                and not any(entry.get("id") == "volume-reaction-law" for entry in replaced)
+                and supported_source):
             return document
-        reason = "The basin uses a retired pre-Reactant combustion model"
+        reason = "The basin uses a retired pre-Reactant combustion model or unsupported source"
     except (OSError, ValueError, json.JSONDecodeError) as error:
         reason = str(error)
     source = json.loads((ROOT / "artifacts/default-basin/reactant-preview-source.json").read_text())
@@ -2104,12 +2108,15 @@ def read_runtime_volume_settings_preset(layers, preset_ref, schema=None):
     validate_volume_settings_preset_payload(payload, schema)
     content_hash = _volume_settings_content_hash(payload, schema)
     effective = f"vsp-{content_hash}"
-    warning = f"BASIN REPLACED: {preset_ref}: {reason}. Loaded cheap Reactant preview instead; the historical look is not reproduced. Original basin is unchanged."
+    builtin = preset_ref == "@reactant-preview"
+    if builtin:
+        reason = "No saved basin selected"
+    warning = "Built-in cheap Reactant preview (no saved basin selected)." if builtin else f"BASIN REPLACED: {preset_ref}: {reason}. Loaded cheap Reactant preview instead; the historical look is not reproduced. Original basin is unchanged."
     return {
         "identity": VOLUME_SETTINGS_PRESET_ARTIFACT_IDENTITY,
         "schemaIdentity": schema["identity"], "presetId": effective,
         "contentHash": f"sha256:{content_hash}", "controlCount": payload["controlCount"],
-        "preset": payload, "label": "Reactant preview (historical basin fallback)",
+        "preset": payload, "label": "Reactant preview" if builtin else "Reactant preview (historical basin fallback)",
         "requestedPresetRef": str(preset_ref), "schemaProjection": projection,
         "runtimeFallback": {
             "identity": "kaminos.volume.runtime-basin-fallback.v1",
