@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {createBrowserMeshPostprocess} from '../models/trellis2/mesh-cleanup.js';
 import {prefillRemeshHoles} from '../models/trellis2/original-remesh-prefill.js';
 import {readFileSync} from 'node:fs';
+import {NodeTrellisUVWorker} from '../models/trellis2/node-uv-worker.mjs';
 
 test('an explicit source remesh request cannot silently become simplify-first without an app device',()=>{
   assert.throws(()=>createBrowserMeshPostprocess({targetFaces:2000,mode:'original-remesh'}),/original remesh.*GPU device/i);
@@ -23,4 +24,19 @@ for(const observed of junctions.cases)test('native boundary component contract: 
   const out=prefillRemeshHoles(Float32Array.from(observed.inputVertices.flat()),Uint32Array.from(observed.inputTriangles.flat()),observed.maxPerimeter);
   assert.deepEqual([...out.vertices],observed.outputVertices.flat());
   assert.deepEqual([...out.triangles],observed.outputTriangles.flat());
+});
+
+test('shipped prefill worker preserves each observed complete native surface',async()=>{
+  for(const observed of junctions.cases){
+    const worker=new NodeTrellisUVWorker(new URL('../models/trellis2/original-remesh-worker.js',import.meta.url));
+    try{
+      const output=await new Promise((resolve,reject)=>{
+        worker.onmessage=({data})=>data.id===1&&data.ok===true?resolve(data):reject(Error(data.error??'worker identity mismatch'));
+        worker.onerror=event=>reject(Error(event.message));worker.onmessageerror=()=>reject(Error('worker decoding failed'));
+        worker.postMessage({id:1,operation:'initialize',settings:{resolution:8},vertices:Float32Array.from(observed.inputVertices.flat()).buffer,triangles:Uint32Array.from(observed.inputTriangles.flat()).buffer});
+      });
+      assert.deepEqual([...new Float32Array(output.vertices)],observed.outputVertices.flat(),observed.name);
+      assert.deepEqual([...new Uint32Array(output.triangles)],observed.outputTriangles.flat(),observed.name);
+    }finally{await worker.terminate();}
+  }
 });
