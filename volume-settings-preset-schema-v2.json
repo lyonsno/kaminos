@@ -869,7 +869,8 @@
       "key": "volume-adaptive-rays",
       "param": "volume_adaptive_rays",
       "tagName": "INPUT",
-      "type": "range"
+      "type": "range",
+      "additiveDefault": 0.65
     },
     {
       "key": "volume-occupancy-skip",
