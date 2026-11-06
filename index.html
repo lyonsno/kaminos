@@ -3529,6 +3529,8 @@ import {createSceneEnvironmentState} from './scene-environment-state.mjs';
 import {ENVIRONMENT_CONTROL_FIELDS,environmentLegacySettings,bindSceneEnvironmentControls} from './scene-environment-controls.mjs';
 import {installOwnerExperimentEntry,readOwnerExperimentAddress,writeOwnerExperimentAddress} from './owner-experiment-entry.mjs';
 import {createInvestigationEntry} from './investigation-entry.mjs';
+import {registerSceneObjectPoseHistory} from './scene-object-pose-history.mjs';
+import {mountedWorldPose,mountedLocalPose,createMountedSelectionHistory} from './mounted-workshop-pose.mjs';
 import {createMountedWorkshopMembership} from './mounted-workshop-membership.mjs';
 import {installMountedGenerationWorkshop} from './mounted-generation-workshop-page.mjs';
 import {createWorkbenchFrameService,createWorkbenchSceneHost,disposeOwnedSceneTree} from './workbench-scene-host.mjs';
@@ -12101,7 +12103,7 @@ async function initScene() {
     camera,
     controls,
     gizmo: transformControls,
-    selected: () => selectedPlacementEntry()?.id || null,
+    selected: () => !sceneComponents?.ownsTransforms()&&selectedSceneObjectEntry()?.object.userData.kaminosMountedWorkshop?'@selection-transform':selectedPlacementEntry()?.id || null,
     prepare:()=>{if(!sceneComponents?.ownsTransforms()&&workingScene.selection.ids.length&&!workingScene.selection.ids.some(id=>id==='flame-field'||id==='water-field'))selectionTransforms?.prepare();},
     overlaysVisible:()=>viewportDisplay.overlays&&!selectionCaptureSuspended,
     viewReference:id=>{const state=sceneCameras?.state();return state?.mode==='camera'&&id===state.activeId?{point:controls.target.toArray(),screen:[state.frame.x+state.frame.width/2,state.frame.y+state.frame.height/2]}:null;},
@@ -28014,7 +28016,7 @@ function sceneSelectionMembers(ids=workingScene.selection.ids){return [...new Se
 function selectionRootState(id){
   if(id.startsWith('@group:')){const group=workingScene.groups.find(g=>g.id===id.slice(7));if(!group)throw Error('Selected group is absent');return groupEditState(group);}
   const entry=workingScene.objects.find(o=>o.id===id);if(!entry)throw Error(`Selected object ${id} is absent`);
-  return entry.type==='splat'?splatSceneTransformState(entry):sceneObjectTransformState(entry.object);
+  return entry.object.userData.kaminosMountedWorkshop?mountedWorldPose(entry.object):entry.type==='splat'?splatSceneTransformState(entry):sceneObjectTransformState(entry.object);
 }
 function checkSelectionRoot(id,state){
   if(id.startsWith('@group:')){
@@ -28031,7 +28033,7 @@ function checkSelectionRoot(id,state){
   if(entry.type===LOCAL_LIQUID_EMITTER_TYPE)normalizeLocalLiquidEmitter(entry.localLiquidEmitter,state);
 }
 function selectionTransformProxy(){
-  if(!selectionProxy){selectionProxy=new THREE.Group();selectionProxy.userData.kaminosEditorHelper=true;scene.add(selectionProxy);}
+  if(!selectionProxy){selectionProxy=new THREE.Group();selectionProxy.userData.kaminosEditorHelper=true;scene.add(selectionProxy);registerSceneObjectPoseHistory(selectionProxy,createMountedSelectionHistory(id=>workingScene.objects.find(row=>row.id===id)?.object));}
   if(selectionTransforms&&!transformControls?.dragging){const pose=selectionTransforms.pose();if(pose)applySceneObjectTransformState(selectionProxy,pose);}
   selectionProxy.userData.kaminosSceneObject={label:`${workingScene.selection.ids.length} selected`};selectionProxy.updateMatrixWorld(true);return selectionProxy;
 }
@@ -28127,7 +28129,7 @@ function setupSelectionHistory(){
 function setupSelectionTransforms(){
   setupSelectionHistory();
   selectionTransforms=createSelectionTransformTarget({edits:scenePlacementTools.edits,selection:()=>workingScene.selection,groups:()=>workingScene.groups,preferences:()=>transformPreferences,
-    read:selectionRootState,write:applyAuthoredScenePose,check:checkSelectionRoot,changed:pose=>{if(selectionProxy)applySceneObjectTransformState(selectionProxy,pose);updateSelectionFeedback();}});
+    read:selectionRootState,write:(id,value)=>{const root=workingScene.objects.find(row=>row.id===id)?.object;return applyAuthoredScenePose(id,root?.userData.kaminosMountedWorkshop?mountedLocalPose(root,value):value);},check:checkSelectionRoot,changed:pose=>{if(selectionProxy)applySceneObjectTransformState(selectionProxy,pose);updateSelectionFeedback();}});
   sceneMembershipBatch.attachHistory(scenePlacementTools.edits);
   window.kaminosSelection={duplicate:duplicateSelectedSceneObjects,remove:removeSelectedSceneObjects,group:groupSelectedObjects,ungroup:ungroupSelectedObjects,read:readSceneSelection,
     set:(ids,activeId)=>sceneSelectionHistory.set(ids,activeId),all:()=>assemblyEditing?.scope()?sceneSelectionHistory.set(assemblyEditing.scope().objectIds):sceneSelectionHistory.set([...workingScene.groups.filter(g=>isSceneItemVisible('@group:'+g.id)).map(g=>'@group:'+g.id),...workingScene.objects.filter(o=>isSceneItemVisible(o.id)).map(o=>o.id)]),clear:()=>sceneSelectionHistory.set([],null),
