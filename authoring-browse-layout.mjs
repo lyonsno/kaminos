@@ -39,18 +39,17 @@ export function installBrowseLayout({document,controller,inScene=()=>new Set(),o
   if(controls)controls.hidden=true;
   // Masks on the selected image (SAM); a saved cutout comes back selected.
   const masks=document.createElement('button');masks.type='button';masks.id='asset-open-masks';masks.textContent='Masks…';masks.hidden=true;
-  masks.onclick=()=>{const selected=controller.read().selected;if(selected?.kind==='image'&&selected.visibility?.status!=='withheld')openMasks?.(selected);};
+  masks.onclick=()=>{const selected=controller.read({selectionOnly:true}).selected;if(selected?.kind==='image'&&selected.visibility?.status!=='withheld')openMasks?.(selected);};
   byId('asset-use-image')?.before(masks);
   let chipKey=null;
   // Double-click: a mesh goes into the scene, an image goes to Generate.
   byId('asset-entries').addEventListener('dblclick',event=>{
     const button=event.target.closest('.asset-entry');if(!button)return;
-    const selected=controller.read().selected;if(!selected||selected.visibility?.status==='withheld')return;
+    const selected=controller.read({selectionOnly:true}).selected;if(!selected||selected.visibility?.status==='withheld')return;
     if(['mesh','surface'].includes(selected.kind))controller.add().catch(()=>{});
     else if(selected.kind==='image')open('generate');
   });
-  function render(){
-    const state=controller.read();
+  function render(state=controller.read()){
     const key=state.roots.map(r=>r.id).join('|')+'#'+state.root;
     if(key!==chipKey){
       chipKey=key;
