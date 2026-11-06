@@ -18,7 +18,7 @@ export async function createCameraComparison(scene,document,labelTexture){
   if(pair.length!==2||pair.some(i=>i<0))return {available:false,reason:'camera comparison requires two identified models'};
   const observed=data.frames.flatMap(f=>pair.map(i=>f.hands[i])).filter(h=>h.status==='observed');
   if(!observed.length)return {available:false,reason:'no observed predictions'};
-  if(data.frames.some(f=>pair.some(i=>f.hands[i].status==='observed'&&f.hands[i].camera?.sourceCaptureId!==f.captureId)))return {available:false,reason:'camera capture identity mismatch'};
+  if(data.frames.some(f=>pair.some(i=>f.hands[i].status==='observed'&&f.hands[i].camera&&f.hands[i].camera.sourceCaptureId!==f.captureId)))return {available:false,reason:'camera capture identity mismatch'};
   const bad=observed.map(projectionSupport).find(s=>!s.available);if(bad)return bad;
   const size=observed[0].camera.imageSize;if(observed.some(h=>h.camera.imageSize.some((v,k)=>v!==size[k])))return {available:false,reason:'source camera image sizes disagree'};
   if(images.some(im=>(im.naturalWidth??im.width)!==size[0]||(im.naturalHeight??im.height)!==size[1]))return {available:false,reason:'source camera metadata does not match recorded image size'};
@@ -32,7 +32,7 @@ export async function createCameraComparison(scene,document,labelTexture){
   const p=projectHand(h),c=canvas(),ctx=c.getContext('2d');ctx.fillStyle='white';
   for(const face of faces){const points=face.map(i=>point(p.vertices[i]));ctx.beginPath();ctx.moveTo(...points[0]);ctx.lineTo(...points[1]);ctx.lineTo(...points[2]);ctx.closePath();ctx.fill();}
   const pixels=ctx.getImageData(0,0,N,N).data,mask=new Uint8Array(N*N);for(let i=0;i<mask.length;i++)mask[i]=pixels[i*4+3]>0?255:0;
-  return {canvas:c,mask,projected:p};
+  return {canvas:c,mask,projected:p,pixels:mask.reduce((sum,v)=>sum+(v?1:0),0)};
  };
  const frame=index=>{
   if(cache.has(index))return cache.get(index);
@@ -52,9 +52,9 @@ export async function createCameraComparison(scene,document,labelTexture){
    cards.forEach(c=>photo(c.canvas.getContext('2d'),images[index]));setLabel(cards[0],'Recorded camera');
    for(let k=0;k<2;k++){
     const c=cards[k+1],ctx=c.canvas.getContext('2d'),h=f.hands[pair[k]];setLabel(c,data.models[pair[k]].label);
-    if(r.masks[k]){
+    if(r.masks[k]?.pixels){
      const colored=canvas(),cc=colored.getContext('2d');cc.drawImage(r.masks[k].canvas,0,0);cc.globalCompositeOperation='source-in';cc.fillStyle=k?'#ff963c':'#2dbeff';cc.fillRect(0,0,N,N);ctx.globalAlpha=opacity;ctx.drawImage(colored,0,0);ctx.globalAlpha=1;
-    }else warning(ctx,h.reason??'not observed');
+    }else warning(ctx,r.masks[k]?'Projected mesh is outside view':h.reason??'not observed');
    }
    const dc=cards[3].canvas.getContext('2d');setLabel(cards[3],'Silhouette disagreement');if(r.diff){dc.globalAlpha=.9;dc.drawImage(r.differenceCanvas,0,0);dc.globalAlpha=1;}else warning(dc,'Both predictions are required');
    for(const c of cards)c.texture.needsUpdate=true;
@@ -66,5 +66,5 @@ export async function createCameraComparison(scene,document,labelTexture){
   }
   for(const p of planes)p.sprite.material.opacity=p.index===index?.85:.12;
  };
- return {load(next,nextImages,nextPair){data=next;images=nextImages;pair=nextPair;updateBox();const s=support();setLabel(cards[0],'Recorded camera');return s;},draw,support,read(index){const s=support();return {...s,box,counts:s.available?frame(index).diff?.counts??null:null,comparison:'model disagreement, not ground-truth error',placement:'native camera where supplied; fitted translation where explicitly declared',pairedFrames:s.available?data.frames.filter(f=>pair.every(i=>f.hands[i]?.status==='observed')).length:0,totalFrames:data?.frames.length??0,timeAxis:'recorded elapsed seconds into depth; missing comparisons omitted'};},clear(){root.visible=false;data=null;reset();},dispose(){reset();cards.forEach(disposeTexture);}};
+ return {load(next,nextImages,nextPair){data=next;images=nextImages;pair=nextPair;updateBox();const s=support();setLabel(cards[0],'Recorded camera');return s;},draw,support,read(index){const s=support();return {...s,box,counts:s.available?frame(index).diff?.counts??null:null,projectedPixels:s.available?frame(index).masks.map(m=>m?.pixels??null):[],comparison:'model disagreement, not ground-truth error',placement:'native camera where supplied; fitted translation where explicitly declared',pairedFrames:s.available?data.frames.filter(f=>pair.every(i=>f.hands[i]?.status==='observed')).length:0,totalFrames:data?.frames.length??0,timeAxis:'recorded elapsed seconds into depth; missing comparisons omitted'};},clear(){root.visible=false;data=null;reset();},dispose(){reset();cards.forEach(disposeTexture);}};
 }
