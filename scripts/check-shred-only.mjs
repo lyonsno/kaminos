@@ -80,8 +80,14 @@ try {
     if (isShredWitnessFatalConsole(m.text())) rejectFatal(Error(m.text()));
   }});
   report.phase = 'load'; await save(); await step(page.goto(report.url,{waitUntil:'domcontentloaded'}));
-  report.startup=await page.evaluate(()=>window.kaminosStartup?.read());await save();
-  await page.screenshot({path:out+'/startup.png'});
+  try{
+    report.startup=await page.evaluate(()=>window.kaminosStartup?.read());
+    await page.screenshot({path:out+'/startup.png'});
+  }catch(error){
+    if(!/Execution context was destroyed|navigation/i.test(error.message))throw error;
+    report.startupCapture={status:'navigation-pending',reason:error.message};
+  }
+  await save();
   await step(page.waitForFunction(()=>window.kaminosWorkbenchExperimentError || window.__kaminosVolumePrototype?.debugState().error ||
     (window.kaminosWorkbenchExperiments?.state().id==='flame' && window.__kaminosVolumePrototype?.debugState().active)));
   report.initial = await page.evaluate(()=>({experiment:window.kaminosWorkbenchExperiments?.state(),
