@@ -73,3 +73,12 @@ test('waiting operation exposes queue position and skip choice to the retained p
 test('prompt availability reports the selected package diagnosis',()=>{
  assert.throws(()=>prompt.authoringPromptWeightRoot({modelAvailability:{pup:{status:'unavailable',reason:'Missing decoder payload on this installation'}}}),/Missing decoder payload/);
 });
+
+test('GPU context loss retains the complete request and streamed text and retries with a fresh provider',async()=>{
+ let created=0,disposed=0;const failure=Error("Failed to execute 'mapAsync' on 'GPUBuffer': A valid external Instance reference no longer exists.");
+ const c=prompt.createAuthoringPromptExpansion({createHelper:async()=>{const attempt=++created;return {async expand(options){options.onText('retained draft');if(attempt===1)throw failure;return {text:'finished',partial:false};},async dispose(){disposed++;}};}});
+ const request={prompt:'Open the top slot',model:'flux3',reference:{kind:'image',source:'/rack.png'}};
+ await assert.rejects(c.expand(request),/Instance reference/);
+ assert.equal(c.read().failure.code,'gpu-context-lost');assert.equal(c.read().failure.message,failure.message);assert.equal(c.read().request.reference.source,'/rack.png');assert.equal(c.read().draft,'retained draft');assert.match(c.read().error,/fresh worker|new worker/i);
+ await c.expand(request);assert.equal(created,2);assert.equal(c.read().status,'complete');assert.equal(c.read().failure,null);assert.ok(disposed>=2);
+});

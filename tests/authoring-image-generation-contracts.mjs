@@ -453,3 +453,10 @@ test('recorded adapter absence rejects an added adapter before inference, and ne
  const plain=harness();await plain.service.run({model:'flux2',prompt:'rack',seed:614,size:256});
  assert.equal(plain.delivered[0].provenance.lora,null);
 });
+
+test('generation preserves explicit human or agent attribution and never substitutes the recipe parent author',async()=>{
+ const author={kind:'person',id:'noah',label:'Noah'};const h=harness();await h.service.run({prompt:'rack',seed:42,size:256,author});
+ assert.deepEqual(h.delivered[0].provenance.author,author);
+ const agent={kind:'agent',id:'design-agent',label:'Design Agent'};await h.service.run({prompt:'rack',seed:43,size:256,author:agent});assert.deepEqual(h.delivered[1].provenance.author,agent);
+ await assert.rejects(h.service.run({prompt:'rack',seed:44,size:256,author:{kind:'person',label:'Noah'}}),/author|identity/i);
+});

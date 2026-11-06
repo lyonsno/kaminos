@@ -471,6 +471,19 @@ def test_splat_asset_correction_roundtrips_as_sidecar_metadata():
             BROWSE_ROOTS.update(previous_browse)
 
 
+def test_runtime_config_image_author_matches_page_notes_identity():
+    previous = os.environ.get("KAMINOS_NOTES_PAGE_AUTHOR")
+    os.environ["KAMINOS_NOTES_PAGE_AUTHOR"] = "Operator Example"
+    try:
+        config = serve.runtime_config()
+    finally:
+        if previous is None:
+            os.environ.pop("KAMINOS_NOTES_PAGE_AUTHOR", None)
+        else:
+            os.environ["KAMINOS_NOTES_PAGE_AUTHOR"] = previous
+    assert config["imageGenerationAuthor"] == {"kind": "person", "id": "operator-example", "label": "operator-example"}
+
+
 def test_runtime_config_exposes_hybrid_overlay_module_url_env():
     previous = os.environ.get("KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL")
     os.environ["KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"] = "http://127.0.0.1:5174/src/splatOverlay.ts"
@@ -685,6 +698,7 @@ if __name__ == "__main__":
     test_splat_asset_index_allows_pointer_symlinks_inside_declared_roots()
     test_splat_asset_ingest_writes_only_to_experimental_inbox()
     test_splat_asset_correction_roundtrips_as_sidecar_metadata()
+    test_runtime_config_image_author_matches_page_notes_identity()
     test_runtime_config_exposes_hybrid_overlay_module_url_env()
     test_pipeline_manifest_endpoint_payload_is_route_identified()
     test_image_asset_index_declares_local_image_roots()

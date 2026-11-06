@@ -1,6 +1,7 @@
 // kaminos-test: node
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as experimentModule from '../authoring-image-experiments.mjs';
 import {createImageExperiments,installImageExperiments} from '../authoring-image-experiments.mjs';
 const doc=(id='gloves')=>({schema:'kaminos.image-experiment.v1',id,title:id,revision:1,members:[{source:'/image.png',availability:'available',entry:{source:'/image.png',kind:'image',experiment:{id,title:id}}}]});
 test('native selection opens the recorded member through the ordinary recipe operation',async()=>{
@@ -67,4 +68,19 @@ test('same-revision refresh removes restricted details and stale comparison hand
   }
   await oldCompare.onchange();assert.deepEqual(calls,[],'a detached stale comparison must not copy either restricted member into history');
  }
+});
+
+test('shared branch rows preserve people, agents, external parents and every member without following cycles',()=>{
+ assert.equal(typeof experimentModule.imageExperimentBranches,'function');
+ const member=(source,parent,author)=>({source,name:source,availability:'available',entry:{source,provenance:{...(parent?{iteration:{parent:{source:parent},operation:'recipe-rerun',changes:[{field:'seed',before:1,after:2}]}}:{}),...(author?{author}:{})}}});
+ const human={kind:'person',id:'noah',label:'Noah'},agent={kind:'agent',id:'design-agent',label:'Design Agent'};
+ const members=[member('/child','/root',human),member('/sibling','/root',agent),member('/root'),member('/outside','/elsewhere',agent),member('/cycle-a','/cycle-b'),member('/cycle-b','/cycle-a')];
+ const rows=experimentModule.imageExperimentBranches(members);
+ assert.equal(rows.length,members.length);assert.equal(new Set(rows.map(r=>r.member.source)).size,members.length);
+ const child=rows.find(r=>r.member.source==='/child');assert.equal(child.depth,1);assert.deepEqual(child.author,human);assert.equal(child.parent.source,'/root');
+ assert.equal(rows.find(r=>r.member.source==='/sibling').author.kind,'agent');
+ assert.equal(rows.find(r=>r.member.source==='/outside').parentAvailable,false);
+ assert.equal(rows.find(r=>r.member.source==='/root').author,null,'collection owner must not impersonate an unrecorded author');
+ assert.ok(rows.some(r=>r.issue==='cycle'));
+ assert.deepEqual(members[0].entry.provenance.author,human);
 });

@@ -183,6 +183,12 @@ function assertRecipeModel(expected,pipeline){
  }
 }
 
+export function checkedImageAuthor(author){
+ if(author==null)return null;
+ if(!['person','agent'].includes(author.kind)||typeof author.id!=='string'||!author.id.trim()||typeof author.label!=='string'||!author.label.trim())throw Error('Image author needs a person/agent kind, identity and label');
+ return {kind:author.kind,id:author.id.trim(),label:author.label.trim()};
+}
+
 export function createKleinAuthoringImageGeneration({context,deliver,weights,
   kit=()=>import('./webgpu-inference-kit/src/core.js'),
   createPipeline=createAuthoringImagePipeline,
@@ -273,11 +279,11 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       if(!active||!state.canStop||abort.signal.aborted)return false;
       abort.abort(new DOMException('Image generation stopped by operator','AbortError'));set({canStop:false,status:'stopping',progress:'Stopping… waiting for the current GPU work to settle.'});return true;
     },
-    async run({prompt,seed,size=512,level='4-bit',aspect='square',model='flux2',reference=null,promptExpansion=null,iteration=null,experiment=null,expectedModel=null,textLength='fit16'}){
+    async run({prompt,seed,size=512,level='4-bit',aspect='square',model='flux2',reference=null,promptExpansion=null,iteration=null,experiment=null,expectedModel=null,textLength='fit16',author=null}){
       if(active)throw Error('Image generation is already running');
       if(pendingImage)throw Error('Save the generated image before generating another');
       const text=String(prompt||'').trim();if(!text)throw Error('Describe the image to generate');
-      const spec=imageModel(model);
+      const spec=imageModel(model),runAuthor=checkedImageAuthor(author);
       if(!Number.isSafeInteger(seed)||seed<0)throw Error('Seed must be a nonnegative safe integer');
       if(!['fit','fit16'].includes(textLength))throw Error('Unsupported prompt length setting');
       iteration=iteration?structuredClone(iteration):null;expectedModel=expectedModel?structuredClone(expectedModel):null;
@@ -341,6 +347,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         // Completed pixels win a stop race; they are saved like any other result.
         phase='persistence';
         const provenance={schema:'kaminos.image-generation.v1',route:routeId,model:spec.name,prompt:text,seed,width:image.width,height:image.height,weights:base,aspect,weightsLevel:level,transformer:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,timings:image.timings,elapsed:timing(),...(image.sampling?{completion:structuredClone(image.sampling)}:{}),...(promptExpansion?{promptExpansion:structuredClone(promptExpansion)}:{})};
+        if(runAuthor)provenance.author=structuredClone(runAuthor);
         provenance.lora=pipeline.ditManifest?.lora?structuredClone(pipeline.ditManifest.lora):null;
         if(reference)provenance.reference=structuredClone(reference.provenance);
         if(iteration)provenance.iteration=iteration;
@@ -375,10 +382,10 @@ export function imageGenerationTimeLabel(timing,status){
   return `${label} ${seconds(timing.generationMs)}${timing.loadMs>=1000?` · model load ${seconds(timing.loadMs)}`:''}`;
 }
 
-export function installKleinImageGeneration({document,controller,assets,meshBusy:meshBusyOption=null,promptExpansion=null,promptProvenance=()=>null,reference=()=>assets.read().selected,decorateRequest=r=>r}){
+export function installKleinImageGeneration({document,controller,assets,meshBusy:meshBusyOption=null,promptExpansion=null,promptProvenance=()=>null,reference=()=>assets.read().selected,decorateRequest=r=>r,pageAuthor=async()=>null}){
   const container=document.getElementById('asset-generate');if(!container)throw Error('Generate panel is missing');
   const section=document.createElement('section');section.id='asset-text-image';
-  section.innerHTML=`<p>Text → image · Klein</p><label>Model <select id="asset-image-model" aria-label="Image model"><option value="flux2">FLUX.2 Klein 4B</option><option value="flux3">FLUX.3 Image Klein (local)</option></select></label><textarea id="asset-prompt" rows="2" spellcheck="true" placeholder="One object, e.g. a weathered bronze lantern" aria-label="Image prompt"></textarea>
+  section.innerHTML=`<p>Text → image · Klein</p><p id="asset-image-author" class="asset-help">Resolving page author…</p><label>Model <select id="asset-image-model" aria-label="Image model"><option value="flux2">FLUX.2 Klein 4B</option><option value="flux3">FLUX.3 Image Klein (local)</option></select></label><textarea id="asset-prompt" rows="2" spellcheck="true" placeholder="One object, e.g. a weathered bronze lantern" aria-label="Image prompt"></textarea>
     <label id="asset-reference-control" hidden><input type="checkbox" id="asset-use-reference"> Use reference image <span id="asset-reference-name"></span></label>
     <div class="asset-text-image-actions"><button type="button" id="asset-text-run">Generate image</button><label>Size <select id="asset-image-size" aria-label="Image size"><option value="256">256 (fastest)</option><option value="384">384</option><option value="512" selected>512</option><option value="768">768 (slower)</option><option value="1024">1024 (slowest)</option></select></label><label>Shape <select id="asset-image-aspect" aria-label="Image shape"><option value="square" selected>Square</option><option value="landscape">Landscape 16:9</option><option value="portrait">Portrait 9:16</option></select></label><label>Weights <select id="asset-image-level" aria-label="Transformer weights"><option value="4-bit" selected>4-bit (full)</option><option value="3-bit">3-bit</option><option value="2-bit">2-bit (jankiest)</option></select></label><label>Seed <input id="asset-seed" type="number" min="0" step="1" aria-label="Seed"></label><button type="button" id="asset-reseed" title="New seed" aria-label="New seed">⟳</button><button type="button" id="asset-text-decode" hidden>Decode now</button><button type="button" id="asset-text-stop" hidden>Stop</button><button type="button" id="asset-text-retry" hidden>Retry saving image</button></div>
     <div id="asset-image-timing" hidden></div><div id="asset-text-status" role="status"></div><progress id="asset-text-progress" max="100" aria-label="Image generation progress" hidden></progress>`;
@@ -428,15 +435,17 @@ export function installKleinImageGeneration({document,controller,assets,meshBusy
     const selected=reference();
     return {promptExpansion:promptProvenance(),reference:useReference?selected:null,model:byId('asset-image-model').value,prompt:byId('asset-prompt').value,seed,size:Number(byId('asset-image-size').value),level:byId('asset-image-level').value,aspect:byId('asset-image-aspect').value};
   };
-  const run=async()=>{
+  const run=async({author={kind:'agent',id:'unidentified-agent',label:'Unidentified agent'}}={})=>{
     try{
       if(byId('asset-use-reference').checked&&reference()?.kind!=='image')throw Error('Choose a source image in Browse or Open file first.');
-      const request=decorateRequest(readRequest()),autoSeed=byId('asset-seed-auto').checked;
+      const request={...decorateRequest(readRequest()),author:checkedImageAuthor(author)},autoSeed=byId('asset-seed-auto').checked;
       const entry=await controller.run(request);if(entry&&autoSeed)reseed();return entry;
     }catch(error){byId('asset-text-status').textContent=error.message;throw error;}
   };
-  byId('asset-text-run').onclick=()=>run().catch(()=>{});
-  byId('asset-prompt').addEventListener('keydown',event=>{if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();if(!byId('asset-text-run').disabled)run().catch(()=>{});}});
+  const pageRun=async()=>{const author=checkedImageAuthor(await pageAuthor());if(!author)throw Error('Page author is unavailable; reload before generating');return run({author});};
+  Promise.resolve(pageAuthor()).then(author=>{byId('asset-image-author').textContent=author?`Results attributed to You · ${author.label}`:'Page author unavailable';}).catch(error=>{byId('asset-image-author').textContent=error.message;});
+  byId('asset-text-run').onclick=()=>pageRun().catch(error=>{byId('asset-text-status').textContent=error.message;});
+  byId('asset-prompt').addEventListener('keydown',event=>{if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();if(!byId('asset-text-run').disabled)pageRun().catch(error=>{byId('asset-text-status').textContent=error.message;});}});
   const applyRecipe=r=>{
     byId('asset-image-model').value=r.model;byId('asset-image-model').dispatchEvent(new document.defaultView.Event('change'));
     for(const [id,value]of [['asset-prompt',r.prompt],['asset-seed',r.seed],['asset-image-size',r.size],['asset-image-aspect',r.aspect],['asset-image-level',r.level]])byId(id).value=String(value);

@@ -2,6 +2,17 @@ import {assetWithheld} from './authoring-assets.mjs';
 
 const copy=value=>structuredClone(value);
 const available=m=>m?.availability==='available'&&m.entry&&!assetWithheld(m.entry);
+// A projection of shared saved PNG lineage, never inferred from collection ownership.
+export function imageExperimentBranches(members){
+ const nodes=new Map(members.map(member=>{const p=member.entry?.provenance,parent=p?.iteration?.parent??(p?.reference?{source:p.reference.source,name:p.reference.name}:null);return [member.source,{member,parent,author:p?.author??null,operation:p?.iteration?.operation??(p?.iteration?'recipe-rerun':parent?'image-conditioned':'import'),children:[]}];}));
+ for(const [source,n]of nodes){if(n.parent?.source!==source&&nodes.has(n.parent?.source))nodes.get(n.parent.source).children.push(source);}
+ const rows=[],seen=new Set();
+ const walk=(source,issue=null)=>{const stack=[{source,depth:0,issue}];while(stack.length){const entry=stack.pop();if(seen.has(entry.source))continue;seen.add(entry.source);const n=nodes.get(entry.source);rows.push({...n,depth:entry.depth,issue:entry.issue,parentAvailable:!!n.parent&&nodes.has(n.parent.source)});for(const child of [...n.children].reverse())stack.push({source:child,depth:entry.depth+1,issue:null});}};
+ for(const [source,n]of nodes)if(!nodes.has(n.parent?.source))walk(source);
+ for(const source of nodes.keys())if(!seen.has(source))walk(source,'cycle');
+ return rows;
+}
+const authorLabel=author=>author?`${author.kind==='person'?'● Person':'◆ Agent'} · ${author.label||author.id}`:'Imported · author not recorded';
 export async function experimentRequest(path,body){
  const response=await fetch(path,{cache:'no-store',...(body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{})});
  const result=await response.json();if(!response.ok)throw Error(result.error||`Experiment HTTP ${response.status}`);return result;
@@ -22,7 +33,7 @@ export function createImageExperiments({request=experimentRequest,openRecipe,ope
   }catch(error){if(own===ticket){state.loading=false;state.error=error.message;publish();}throw error;}
  }
  const api={
-  read:()=>copy(state),open,
+  read:()=>copy(state),branches:()=>copy(imageExperimentBranches(state.document?.members??[])),open,
   close(){++ticket;state={document:null,selected:null,loading:false,error:null};publish();},
   select(source){member(source);state.selected=source;publish();},
   deselect(){state.selected=null;publish();},
@@ -50,10 +61,12 @@ export function installImageExperiments({document,controller,assets,assetsUI,his
  const bar=node('div',null,'experiment-heading');
  const back=button('← Experiments',async()=>{controller.close();await assets.browse('image-experiments');address(null);});
  const title=node('h2'),description=node('p'),meta=node('span',null,'asset-help');
+ let branchView=new URL(view.location.href).searchParams.get('experiment_view')==='branches';
+ const branches=button('Branches',()=>{branchView=!branchView;painting=null;const url=new URL(view.location.href);if(branchView)url.searchParams.set('experiment_view','branches');else url.searchParams.delete('experiment_view');view.history.replaceState(null,'',url);render();});branches.id='asset-experiment-branches';
  const refresh=button('Refresh',()=>controller.open(controller.read().document.id));
  const details=button('Edit details',()=>showForm(true));
  const start=button('New recipe',async()=>{const doc=controller.read().document;recipe.joinExperiment({id:doc.id,title:doc.title});await assetsUI.open('generate',{refresh:false});by('asset-prompt').focus();});start.id='asset-experiment-new-recipe';
- bar.append(back,title,meta,start,details,refresh);host.append(bar,description,status);
+ bar.append(back,title,meta,branches,start,details,refresh);host.append(bar,description,status);
  const body=node('div',null,'experiment-body'),grid=node('div',null,'experiment-groups'),inspector=node('aside',null,'experiment-selection');
  body.append(grid,inspector);host.append(body);by('asset-browse').append(host);
  const newButton=button('New experiment',()=>showForm(false));newButton.id='asset-experiment-new';by('asset-browse-header').append(newButton);
@@ -99,14 +112,15 @@ export function installImageExperiments({document,controller,assets,assetsUI,his
   addBar.hidden=assets.read().selected?.kind!=='image'||assetWithheld(assets.read().selected);if(!addBar.hidden&&!addOptionsLoaded){addOptionsLoaded=true;loadOptions().catch(()=>{addOptionsLoaded=false;});}
   if(!doc)return;
   title.textContent=doc.title;description.textContent=doc.description;meta.textContent=`${doc.members.length} ${doc.members.length===1?'image':'images'}${doc.agent?' · '+doc.agent.label:''}`;start.disabled=busy();
-  const key=JSON.stringify([doc.id,doc.revision,doc.members.map(m=>[m.source,m.availability])]);
+  branches.setAttribute('aria-pressed',String(branchView));
+  const key=JSON.stringify([doc.id,doc.revision,branchView,doc.members]);
   if(key!==painting){painting=key;grid.replaceChildren();const groups=new Map();
-   for(const m of doc.members){const group=m.role==='reference'?'References':m.group||'Results';if(!groups.has(group))groups.set(group,[]);groups.get(group).push(m);}
+   for(const row of imageExperimentBranches(doc.members)){const m=row.member,group=branchView?'Experiment branches':m.role==='reference'?'References':m.group||'Results';if(!groups.has(group))groups.set(group,[]);groups.get(group).push(row);}
    if(!groups.size)grid.append(node('p','Start with New recipe, or select an image in Assets and use Add to experiment.','asset-help'));
-   for(const [name,members]of groups){const section=node('section',null,'experiment-group'),heading=node('h3',name),cards=node('div',null,'experiment-grid');section.append(heading,cards);grid.append(section);
-    for(const m of members){const card=button('',()=>controller.select(m.source));card.className='experiment-image';card.dataset.source=m.source;card.disabled=!available(m);
+   for(const [name,members]of groups){const section=node('section',null,'experiment-group'),heading=node('h3',name),cards=node('div',null,branchView?'experiment-grid is-branches':'experiment-grid');section.append(heading,cards);grid.append(section);
+    for(const row of members){const m=row.member,card=button('',()=>controller.select(m.source));card.className='experiment-image';card.dataset.source=m.source;card.setAttribute('style',branchView?`--branch-depth:${row.depth}`:'');card.disabled=!available(m);
      if(available(m)){const img=node('img');img.src=m.preview;img.alt=m.name;img.loading='lazy';card.append(img);}else card.append(node('div',m.availability==='withheld'?'Awaiting review':'Image unavailable','experiment-placeholder'));
-     card.append(node('strong',m.name),node('small',available(m)?captions(m):m.error||m.entry?.visibility?.reason));cards.append(card);
+     card.append(node('strong',m.name),node('small',available(m)?captions(m):m.error||m.entry?.visibility?.reason));card.append(node('small',authorLabel(row.author),'experiment-author'));if(row.parent)card.append(node('small',`${row.operation==='image-edit'?'Image edit':'Branch'} of ${row.parent.name||row.parent.source}${row.parentAvailable?'':' · parent outside this collection'}`,'experiment-parent'));if(row.issue)card.append(node('small','Lineage cycle recorded · inspect parent links','asset-help'));cards.append(card);
     }
    }
   }
@@ -115,7 +129,7 @@ export function installImageExperiments({document,controller,assets,assetsUI,his
   inspector.hidden=!selected;body.classList.toggle('has-selection',!!selected);
   if(nextDetail!==detailKey){detailKey=nextDetail;inspector.replaceChildren();if(selected){
    const close=button('×',()=>controller.deselect());close.setAttribute('aria-label','Close image details');
-   inspector.append(close,node('h3',selected.name));if(available(selected)){const img=node('img');img.src=selected.preview;img.alt=selected.name;inspector.append(img);}
+   inspector.append(close,node('h3',selected.name),node('p',authorLabel(selected.entry?.provenance?.author),'experiment-author'));const parent=selected.entry?.provenance?.iteration?.parent;if(parent){const parentMember=doc.members.find(m=>m.source===parent.source);inspector.append(node('p',`Branched from ${parent.name||parent.source}`));if(available(parentMember))inspector.append(button('Go to parent',()=>controller.select(parent.source)));}if(available(selected)){const img=node('img');img.src=selected.preview;img.alt=selected.name;inspector.append(img);}
    const edit=button('Edit recipe & rerun',async()=>{if(busy())throw Error('Finish the current generation first');await controller.edit(selected.source);});edit.disabled=!selected.entry?.provenance||!available(selected);edit.id='asset-experiment-edit';inspector.append(edit,node('p',captions(selected),'asset-help'));
    const editImage=button('Edit this image',async()=>{if(busy())throw Error('Finish the current generation first');await controller.editImage(selected.source);});editImage.id='asset-experiment-edit-image';editImage.disabled=busy()||!available(selected);inspector.append(editImage);
    const compare=node('select');compare.setAttribute('aria-label','Compare this image with');const placeholder=node('option','Compare with…');placeholder.value='';compare.append(placeholder);

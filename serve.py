@@ -2678,6 +2678,8 @@ PIPELINE_WITNESS_PATH = ROOT / "pipeline-witness.mjs"
 
 def runtime_config():
     """Return runtime-only browser defaults for this dev server instance."""
+    from kaminos_notes import default_page_author
+    page_author = default_page_author()
     module_url = (
         os.environ.get(HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV)
         or os.environ.get(HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV_LEGACY)
@@ -2686,6 +2688,7 @@ def runtime_config():
     return {
         "schema": "kaminos.runtime-config.v0",
         "hybridSplatOverlayModuleUrl": module_url or None,
+        "imageGenerationAuthor": {"kind":"person", "id":page_author, "label":page_author},
         **MODEL_INSTALLATIONS.browser_config(),
         "imagePreparation": IMAGE_PREPARATION_INSTALLATION.availability(),
         "volumeBasinSessionStore": str(VOLUME_BASIN_SESSION_STORE),

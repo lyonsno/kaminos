@@ -100,3 +100,10 @@ test('explicit adapter absence survives decoration; older unknown FLUX3 adapter 
  assert.throws(()=>h.c.recall(entry('/legacy.png',legacy)),/adapter.*recorded|recorded.*adapter/i);
  assert.equal(h.c.read().parent.source,'/plain.png');
 });
+
+test('fresh reference edits retain an image parent separately from exact recipe recall',()=>{
+ const h=harness();h.c.editImage({...entry('/plate.png',null),experiment:{id:'burners',title:'Burners'}});h.set({prompt:'Cut a visible slot',seed:42});
+ assert.equal(h.c.read().parent,null,'a raw plate does not pretend to have a recalled recipe');
+ const request=h.c.decorate(h.get());assert.equal(request.iteration.parent.source,'/plate.png');assert.equal(request.iteration.operation,'image-edit');assert.equal(request.experiment.id,'burners');
+ h.c.clear();assert.equal(h.c.decorate(h.get()).iteration,undefined);
+});

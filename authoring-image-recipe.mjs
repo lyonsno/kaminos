@@ -36,8 +36,8 @@ export function imageRecipeChanges(before,after){
 // Reading another image never implicitly changes the active recipe parent.
 export function createImageRecipeIteration({history,assets,readControls,applyControls,recallPrompt=()=>{},resetPrompt=()=>{},changed=()=>{},busy=()=>false,
  fetchBytes=async source=>{const r=await fetch(source);if(!r.ok)throw Error(`Image recipe HTTP ${r.status}`);return new Uint8Array(await r.arrayBuffer());}}){
- let parent=null,baseline=null,error=null,opening=false,ticket=0,experiment=null;
- const read=()=>({parent:parent?{source:parent.source,name:parent.name}:null,experiment:clone(experiment),error,opening,changes:baseline?imageRecipeChanges(baseline,readControls()):[]});
+ let parent=null,imageParent=null,baseline=null,error=null,opening=false,ticket=0,experiment=null;
+ const read=()=>({imageParent:imageParent?{source:imageParent.source,name:imageParent.name}:null,parent:parent?{source:parent.source,name:parent.name}:null,experiment:clone(experiment),error,opening,changes:baseline?imageRecipeChanges(baseline,readControls()):[]});
  const requireIdle=()=>{if(busy())throw Error('Finish the current generation before opening another recipe.');};
  function recall(entry){
   requireIdle();++ticket;opening=false;
@@ -51,14 +51,14 @@ export function createImageRecipeIteration({history,assets,readControls,applyCon
    }
    const saved=history.record({...entry,source:sourceOf(entry)});assets.select(saved);
    applyControls(request);recallPrompt(entry.provenance);
-   parent=clone(saved);baseline=request;experiment=clone(entry.experiment??entry.provenance.experiment??null);error=null;changed();return read();
+   parent=clone(saved);imageParent=null;baseline=request;experiment=clone(entry.experiment??entry.provenance.experiment??null);error=null;changed();return read();
   }catch(e){error=e.message;changed();throw e;}
  }
  return {
   read,recall,
-  clear(){requireIdle();resetPrompt();++ticket;opening=false;parent=null;baseline=null;experiment=null;error=null;changed();},
+  clear(){requireIdle();resetPrompt();++ticket;opening=false;parent=null;imageParent=null;baseline=null;experiment=null;error=null;changed();},
   joinExperiment(value,{preserveRecipe=false}={}){requireIdle();if(!value?.id||!value?.title)throw Error('Choose a saved experiment');if(!preserveRecipe||experiment?.id!==value.id)this.clear();experiment=clone(value);changed();},
-  editImage(entry){const destination=entry?.experiment??entry?.provenance?.experiment??experiment;this.clear();if(destination)this.joinExperiment(destination);},
+  editImage(entry){const destination=entry?.experiment??entry?.provenance?.experiment??experiment;this.clear();if(destination)this.joinExperiment(destination);imageParent=clone(entry);changed();},
   async open(entry){
    requireIdle();const own=++ticket;opening=true;error=null;changed();
    try{
@@ -72,12 +72,12 @@ export function createImageRecipeIteration({history,assets,readControls,applyCon
   },
   decorate(request){
    if(opening)throw Error('Wait for the image recipe to finish opening.');
-   if(!parent)return experiment?{...request,experiment:clone(experiment)}:request;
+   if(!parent){const result=experiment?{...request,experiment:clone(experiment)}:request;return imageParent?{...result,iteration:{operation:'image-edit',parent:{source:sourceOf(imageParent),name:imageParent.name},changes:[{field:'prompt',before:imageParent.provenance?.prompt??null,after:request.prompt}]}}:result;}
    const p=parent.provenance,sameModel=request.model===baseline.model;
    const expectedModel=sameModel?Object.fromEntries(['source','sampling','lora'].filter(k=>Object.hasOwn(p,k)&&p[k]!==undefined).map(k=>[k,clone(p[k])])):null;
    return {...request,...(experiment?{experiment:clone(experiment)}:{}),...(sameModel&&baseline.model==='flux2'?{textLength:baseline.textLength}:{}),
     ...(expectedModel&&Object.keys(expectedModel).length?{expectedModel}:{}),
-    iteration:{parent:{source:parent.source,name:parent.name},changes:imageRecipeChanges(baseline,request)}};
+    iteration:{operation:'recipe-rerun',parent:{source:parent.source,name:parent.name},changes:imageRecipeChanges(baseline,request)}};
   },
  };
 }
