@@ -1945,16 +1945,16 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="slider-row" title="Protection against mixing unlike light/transmission across neighboring pixels. Higher preserves edges and more noise; 0 allows the most blur. Opaque geometry depth boundaries are protected separately."><label class="slider-label" for="volume-reconstruction-edge">Edge protection</label><input id="volume-reconstruction-edge" type="number" min="0" step="0.1" value="2" data-authoring-drag-step="0.1" data-volume-settings-role="renderer"></div>
     <div class="slider-row" title="Changes sampling jitter while physics is paused. Off follows Animate noise; image history still updates on every rendered draw. Identical samples cannot average away noise. Use Pause history comparison to hold the samples, camera and incoming history for A/B."><label class="slider-label" for="volume-reconstruction-fresh">Animate samples while paused</label><input id="volume-reconstruction-fresh" type="checkbox" checked data-volume-settings-role="renderer"></div>
     <div id="volume-reconstruction-comparison" class="flame-scope">
-      <button id="volume-reconstruction-pause" type="button" title="Holds physics, camera, last raw samples and the history entering that draw. Comparisons do not collect more samples. Enable Temporal or Combined first.">Pause history comparison</button>
+      <button id="volume-reconstruction-pause" class="btn" type="button" title="Holds physics, camera, last raw samples and the history entering that draw. Comparisons do not collect more samples. Enable Temporal or Combined first.">Pause history comparison</button>
       <div role="group" aria-label="Held reconstruction comparison">
-        <button type="button" data-integral-view="off" disabled>Raw</button>
-        <button type="button" data-integral-view="spatial" disabled>Spatial</button>
-        <button type="button" data-integral-view="temporal" disabled>Temporal</button>
-        <button type="button" data-integral-view="combined" disabled>Spatial + temporal</button>
+        <button type="button" class="btn" data-integral-view="off" disabled>Raw</button>
+        <button type="button" class="btn" data-integral-view="spatial" disabled>Spatial</button>
+        <button type="button" class="btn" data-integral-view="temporal" disabled>Temporal</button>
+        <button type="button" class="btn" data-integral-view="combined" disabled>Spatial + temporal</button>
       </div>
     </div>
-    <output id="volume-reconstruction-status" class="flame-scope" role="status">Raw image</output>
-    <output id="volume-raymarch-status" class="flame-scope" role="status">Awaiting renderer</output>
+    <p id="volume-reconstruction-status" class="flame-scope" role="status">Raw image</p>
+    <p id="volume-raymarch-status" class="flame-scope" role="status">Awaiting renderer</p>
     <div class="slider-row">
       <label class="slider-label" for="volume-ray-step-telemetry">Ray statistics</label>
       <input id="volume-ray-step-telemetry" type="checkbox" data-volume-settings-role="renderer">
@@ -11949,7 +11949,7 @@ async function initScene() {
   function animate() {
     requestAnimationFrame(animate);
     if(outputCaptureExtent)return;
-    if(sceneLightingPreparation?.state().held){controls.update();return;}
+    if(sceneLightingPreparation?.state().held){if(!reconstructionEvaluationHeld)controls.update();return;}
     // Outside any render: a quality change resizes render targets.
     syncViewportQuality(syncViewportRendererSize);
     if(recordingExtent)needsRender=true;
@@ -19436,7 +19436,7 @@ document.getElementById('volume-reconstruction-pause').addEventListener('click',
       sceneNavigation?.cancel();
       const prior={enabled:controls.enabled,damping:controls.enableDamping};
       volumePrototype.beginIntegralEvaluation();
-      reconstructionEvaluationHeld=prior;controls.enabled=false;controls.enableDamping=false;
+      reconstructionEvaluationHeld=prior;controls.enabled=false;
     }
     refreshVolumeReadout();window._kaminosDirty?.();
   }catch(error){setInfo(error.message);}
@@ -19449,12 +19449,12 @@ function refreshVolumeReadout() {
   if (!volumePrototype) return;
   const s = volumePrototype.debugState();
   const stepping=s.opticalStepping;
+  const evaluation=s.integralEvaluation?.active;
   const requested=document.getElementById('volume-raymarch-mode').value;
   const modeNames={numerical:'Adaptive',fixed:'Fixed quadrature reference',budgeted:'Fixed evaluation count',joins:'Guided count',history:'Guided count + history','fallback-fixed':'Uniform fallback'};
-  document.getElementById('volume-raymarch-status').textContent=!stepping||stepping.requested!==requested?'Awaiting renderer':
+  document.getElementById('volume-raymarch-status').textContent=evaluation?'History comparison · no new ray samples':!stepping||stepping.requested!==requested?'Awaiting renderer':
     `${modeNames[stepping.effective]||'Unavailable'}${stepping.reason?` · ${stepping.reason.replaceAll('-',' ')}`:''}`;
   const reconstruction=s.integralReconstruction;
-  const evaluation=s.integralEvaluation?.active;
   if(reconstructionEvaluationHeld&&!evaluation)releaseReconstructionEvaluationCamera();
   const pause=document.getElementById('volume-reconstruction-pause');
   pause.textContent=evaluation?'Resume history comparison':'Pause history comparison';
@@ -19462,10 +19462,10 @@ function refreshVolumeReadout() {
   pause.disabled=!evaluation&&(!reconstruction?.frames||reconstruction.effective==='off');
   for(const button of document.querySelectorAll('[data-integral-view]')) {
     button.disabled=!evaluation;
-    button.setAttribute('aria-pressed',String(!!evaluation&&button.dataset.integralView===(reconstruction?.evaluation?.view??s.integralEvaluation.view??reconstruction.effective)));
+    button.setAttribute('aria-pressed',String(!!evaluation&&button.dataset.integralView===(s.integralEvaluation.view??reconstruction?.evaluation?.view??reconstruction.effective)));
   }
   document.getElementById('volume-reconstruction-status').textContent=evaluation
-    ? `Camera + samples held · sim ${s.integralEvaluation.simulationStep} · ${s.integralEvaluation.previousDraws} prior draws · compare without advancing history${s.integralEvaluation.previousDraws===0?' · no prior history yet':''}`
+    ? `Camera + samples held · sim ${s.integralEvaluation.simulationStep} · ${s.integralEvaluation.previousDraws} prior draws since reset · compare without advancing history${s.integralEvaluation.previousDraws===0?' · no prior history yet':''}`
     : reconstruction?.effective&&reconstruction.effective!=='off'
       ? `${reconstruction.effective} · ${reconstruction.frames} draws since reset · ${reconstruction.simulationStepChanges??0} sim-step changes · ${reconstruction.sameStepDraws??0} draws at this step · camera or settings changes reset${reconstruction.freshSampling?' · jitter advances while physics is paused':''}`
       : reconstruction?.requested&&reconstruction.requested!=='off'?`Unavailable · ${String(reconstruction.reason||'awaiting frame').replaceAll('-',' ')}`:'Raw image · no image history retained';

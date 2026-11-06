@@ -503,3 +503,8 @@ body[data-workspace=authoring].has-assets-panel:has(#asset-generate[data-image-e
 .asset-agent-group > summary { cursor:pointer; font-weight:600; padding:4px 2px 12px; }
 .asset-agent-group > summary > small { float:right; color:var(--text-muted,#989da8); font-weight:400; margin-left:16px; }
 .asset-agent-entries { display:grid; grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:10px; }
+
+#volume-reconstruction-comparison > [role=group] { display:flex; flex-wrap:wrap; gap:4px; margin-top:5px; }
+#volume-reconstruction-comparison .btn { margin:0; padding:6px 8px; }
+#volume-reconstruction-comparison .btn[aria-pressed=true] { color:#fff; background:#4d4535; border-color:#ac9464; }
+#volume-reconstruction-comparison .btn:disabled { opacity:.45; cursor:default; }

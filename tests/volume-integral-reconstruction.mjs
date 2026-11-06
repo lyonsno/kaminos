@@ -71,3 +71,16 @@ test('same-plan World restoration invalidates the actual source without a Fine o
     assert.equal(p.debugState().integralSourceGeneration,generation,'invalid frame rejects before changing history');
   }finally{p.dispose();}
 });
+
+test('presentation and domain changes invalidate image history before another draw can be pinned',()=>{
+  const p=prototype({integralReconstruction:'combined'});
+  try {
+    let generation=p.debugState().integralSourceGeneration;
+    p.setVolumePresentationMode('intrinsic');assert.ok(p.debugState().integralSourceGeneration>generation);assert.equal(p.debugState().integralReconstruction.frames,0);
+    generation=p.debugState().integralSourceGeneration;
+    p.relocateOrdinaryDomain([.1,0,0]);assert.ok(p.debugState().integralSourceGeneration>generation);assert.equal(p.debugState().integralReconstruction.frames,0);
+    generation=p.debugState().integralSourceGeneration;
+    assert.equal(p.relocateOrdinaryDomain([.1,0,0]),false);assert.equal(p.debugState().integralSourceGeneration,generation);
+    assert.throws(()=>p.relocateOrdinaryDomain([NaN,0,0]));assert.equal(p.debugState().integralSourceGeneration,generation);
+  }finally{p.dispose();}
+});

@@ -11790,10 +11790,12 @@ export function createKaminosVolumePrototype({
   let debugOpticalStepping = opticalSteppingConfig({mode:controlsSnapshot.raymarchMode??'numerical',tolerance:controlsSnapshot.opticalTolerance??0.001});
   let rayStepTelemetry = null;
   let integralReconstruction=null, reconstructionSample=0;
-  let integralEvaluation=null, integralCameraValues=null, integralCameraSignature=null;
+  let integralEvaluation=null, integralCameraValues=null, integralCameraSignature=null, integralSceneSignature=null;
   let integralEncodedForFrame=false;
   state.integralSourceGeneration=0;
   state.integralReconstruction={requested:controlsSnapshot.integralReconstruction??'off',effective:'off',reason:'awaiting-presentation',frames:0};
+  function integralSceneIdentity(){return JSON.stringify([productTransform,volumePresentationModeEffective,state.integralSourceGeneration,worldSmokeKey,intermediateKey]);}
+  function integralViewIdentity(){return JSON.stringify([camera.position.toArray(),camera.quaternion.toArray(),Array.from(camera.projectionMatrix.elements)]);}
   function endIntegralEvaluation(reason='resumed') {
     if(integralEvaluation){simulationPaused=integralEvaluation.wasPaused;state.simulationPaused=simulationPaused;}
     integralEvaluation=null;integralReconstruction?.endEvaluation();
@@ -16231,6 +16233,7 @@ export function createKaminosVolumePrototype({
 
   function setVolumePresentationMode(value) {
     const request = normalizeVolumePresentationMode(value);
+    if(request.requested!==volumePresentationModeEffective)invalidateIntegralReconstruction('presentation-mode-changed',{source:true});
     volumePresentationModeRequestedRaw = request.requestedRaw;
     volumePresentationModeRequested = request.requested;
     volumePresentationModeEffective = request.requested;
@@ -21554,7 +21557,7 @@ export function createKaminosVolumePrototype({
     if(reconstruct) {
       const cameraValues=new Float32Array([...emissiveWhiteMatrix[0],0,...emissiveWhiteMatrix[1],0,...emissiveWhiteMatrix[2],0,
         0,uniforms[373],uniforms[374],0,0,0,uniforms[46],0]);
-      integralCameraValues=cameraValues;integralCameraSignature=cameraSignature();
+      integralCameraValues=cameraValues;integralCameraSignature=integralViewIdentity();integralSceneSignature=integralSceneIdentity();
       state.integralReconstruction=integralReconstruction.encode(encoder,view,targetPipeline===readbackPipeline?'rgba8unorm':format,cameraValues);
       integralEncodedForFrame=true;
       state.integralReconstruction.sourceGeneration=state.integralSourceGeneration;
@@ -21932,9 +21935,9 @@ export function createKaminosVolumePrototype({
     try {
       invalidateRaymarchReadouts('presentation-without-instrumented-raymarch');
       const cpuStart = performance.now();
-      controls?.update?.();
+      if(!integralEvaluation)controls?.update?.();
       if(integralEvaluation) {
-        if(cameraSignature()!==integralEvaluation.camera||!integralReconstruction.describe().evaluation) {
+        if(integralViewIdentity()!==integralEvaluation.camera||integralSceneIdentity()!==integralEvaluation.source||!integralReconstruction.describe().evaluation) {
           endIntegralEvaluation('camera-or-source-changed');
         } else {
           const encoder=device.createCommandEncoder({label:'held reconstruction comparison'});
@@ -28207,6 +28210,7 @@ export function createKaminosVolumePrototype({
       const next = [...translation];
       if (scale === productTransform.scale && next.every((value, index) => value === productTransform.translate[index])) return false;
       const normalizedPrimitives = localPrimitives.map(normalizePrimitiveRecord);
+      invalidateIntegralReconstruction('domain-relocated',{source:true});
       if (device && !pendingDomainRemap) pendingDomainRemap = structuredClone(productTransform);
       state.residualFieldGeneration = (state.residualFieldGeneration || 0) + 1;
       lastResidualPartials = null;
@@ -28323,16 +28327,17 @@ export function createKaminosVolumePrototype({
           tolerance:next.opticalTolerance??controlsSnapshot.opticalTolerance??0.001});
         debugOpticalStepping=config;debugOpticalSteppingExplicit=false;
       }
+      const controlRetirement = stripRetiredRaymarchControls({ ...controlsSnapshot, ...next });
+      const effectiveNext=applyRuntimeQualityControls(controlRetirement.controls);
       if(integralEvaluation) {
         const filterKeys=new Set(['integralReconstruction','reconstructionSpatial','reconstructionRadius','reconstructionWindow','reconstructionResponse','reconstructionEdge','reconstructionFresh']);
-        if(Object.keys(next).some(k=>!filterKeys.has(k)&&JSON.stringify(next[k])!==JSON.stringify(controlsSnapshot[k])))endIntegralEvaluation('render-or-simulation-settings-changed');
+        if(Object.keys(effectiveNext).some(k=>!filterKeys.has(k)&&JSON.stringify(effectiveNext[k])!==JSON.stringify(controlsSnapshot[k])))endIntegralEvaluation('render-or-simulation-settings-changed');
         else if(Object.hasOwn(next,'integralReconstruction'))integralEvaluation.view=next.integralReconstruction;
       }
       const previousGrid = gridSize;
       const previousBoundarySplatTelemetryControlSignature = boundarySplatTelemetryControlSignature(controlsSnapshot);
       const previousCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
-      const controlRetirement = stripRetiredRaymarchControls({ ...controlsSnapshot, ...next });
-      controlsSnapshot = applyRuntimeQualityControls(controlRetirement.controls);
+      controlsSnapshot = effectiveNext;
       state.retiredRaymarchControls = updateRetiredRaymarchControlReceipt(
         state.retiredRaymarchControls,
         controlRetirement.retiredRaymarchControls,
@@ -29150,10 +29155,10 @@ export function createKaminosVolumePrototype({
     beginIntegralEvaluation() {
       if(!state.active||!integralReconstruction||!integralCameraValues||state.integralReconstruction?.effective==='off')throw Error('Enable Temporal or Combined and collect rendered history before pausing a comparison');
       if(selectiveHeadLiveExactPause)throw Error('Finish the pending frame capture before comparing history');
-      if(cameraSignature()!==integralCameraSignature)throw Error('Wait for a draw from this camera before comparing history');
+      if(integralViewIdentity()!==integralCameraSignature||integralSceneIdentity()!==integralSceneSignature)throw Error('Wait for a fresh draw from this camera and source before comparing history');
       if(!integralEvaluation) {
         const pin=integralReconstruction.beginEvaluation();
-        integralEvaluation={wasPaused:simulationPaused,camera:cameraSignature(),view:controlsSnapshot.integralReconstruction};
+        integralEvaluation={wasPaused:simulationPaused,camera:integralViewIdentity(),source:integralSceneIdentity(),view:controlsSnapshot.integralReconstruction};
         simulationPaused=true;state.simulationPaused=true;
         state.integralEvaluation={active:true,simulationStep:state.simStepCount,draws:pin.frames,previousDraws:pin.previousDraws};
       }
