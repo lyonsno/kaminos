@@ -30,7 +30,7 @@ export function createMountedGenerationWorkshop({acquire,onFrame,changed=()=>{},
    return read();})();
    return pending;
   },
-  enter(){if(closed)return;wanted=true;if(stage&&arrival.read().direction!==1&&arrival.read().amount!==1)begin();else publish();return read();},
+  enter(){if(closed)return;wanted=true;if(stage&&arrival.read().direction!==1&&(arrival.read().amount!==1||arrival.read().direction<0))begin();else publish();return read();},
   exit(){wanted=false;if(arrival){arrival.exit();phase='leaving';}publish();return read();},
   async reset(){
    ++epoch;wanted=false;abort?.abort();stop?.();stop=null;

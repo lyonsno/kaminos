@@ -3529,6 +3529,7 @@ import {createSceneEnvironmentState} from './scene-environment-state.mjs';
 import {ENVIRONMENT_CONTROL_FIELDS,environmentLegacySettings,bindSceneEnvironmentControls} from './scene-environment-controls.mjs';
 import {installOwnerExperimentEntry,readOwnerExperimentAddress,writeOwnerExperimentAddress} from './owner-experiment-entry.mjs';
 import {createInvestigationEntry} from './investigation-entry.mjs';
+import {createMountedWorkshopMembership} from './mounted-workshop-membership.mjs';
 import {installMountedGenerationWorkshop} from './mounted-generation-workshop-page.mjs';
 import {createWorkbenchFrameService,createWorkbenchSceneHost,disposeOwnedSceneTree} from './workbench-scene-host.mjs';
 import { checkedSceneLightRecord } from './scene-spot-light.mjs';
@@ -3647,7 +3648,7 @@ function viewportVisibilityObjects(){
  return [...workingScene.objects,...Array.from(sceneSpotLights,([id,{light}])=>({id,object:light})),...Array.from(activeSceneStandIns.values()).filter(entry=>entry.root).map(entry=>({id:entry.id,object:entry.root}))];
 }
 function sceneVisibilityContext(){return {objects:[...workingScene.objects,...Array.from(activeSceneStandIns.values(),entry=>entry.record)],groups:[...workingScene.groups,...coarseSceneGroups],fields:[...(activeSceneComposition?[{id:'flame-field'}]:[]),...(waterFeature.setup?[{id:'water-field'}]:[])]};}
-function isSceneItemVisible(id){return itemVisible(id,viewportDisplay.hiddenIds,sceneVisibilityContext());}
+function isSceneItemVisible(id){return (!generationWorkshop?.owns(id)||generationWorkshop.read().amount>0)&&itemVisible(id,viewportDisplay.hiddenIds,sceneVisibilityContext());}
 function isSceneItemEditable(id) {
   const scope=assemblyEditing?.scope();
   return isSceneItemVisible(id)||!!(scope?.objectIds.includes(id)&&scope.assembly.roles[id]==='collision');
@@ -10626,6 +10627,7 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
 };
 
 function createPageSceneMembershipOperations() {
+  const workshopParents=createMountedWorkshopMembership();
   return createSceneMembershipOperations({
     scene:workingScene,selectionScope:()=>assemblyEditing?.scope()?.objectIds??null,
     records:{serialize:entry=>serializeSceneObject(ashMembershipEntry(entry)),reloadable:isReloadableSceneObjectRecord,load:(record,options)=>addSceneObjectFromSource(record,null,options)},
@@ -10634,12 +10636,12 @@ function createPageSceneMembershipOperations() {
         const pending=applyGiProxySetting(entry);
         if(!pending)prepareSceneNavigationRoot(entry.object);
       },
-      attach(entry){setSceneObjectMounted(entry,true);if(!entry.giProxy?.enabled)prepareSceneNavigationRoot(entry.object);sceneDocument.authoringChanged();},
+      attach(entry){workshopParents.attach(entry,row=>setSceneObjectMounted(row,true));if(entry.object.userData.kaminosMountedWorkshop)entry.object.visible=(generationWorkshop?.read().amount??0)>0;else if(!entry.giProxy?.enabled)prepareSceneNavigationRoot(entry.object);sceneDocument.authoringChanged();},
       detach(entry){
         if(hybridSplatOverlayState.objectId===entry.id)stopHybridSplatOverlay({silent:true});
         if(splatCorrectionMode?.objectId===entry.id)exitSplatCorrectionMode({revert:false,silent:true});
         if(transformControls&&currentMesh===entry.object){transformControls.detach();transformControls.visible=false;}
-        scene.remove(entry.object);sceneGiProxies.release(entry.object);
+        workshopParents.detach(entry);sceneGiProxies.release(entry.object);
       },
       restore(entry,record){
         applySceneObjectTransformState(entry.object,record.transform);
