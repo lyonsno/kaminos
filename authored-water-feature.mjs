@@ -36,7 +36,10 @@ export function createAuthoredWaterFeature({services,emitters,enabledEmitters=em
     }
     if(!isCurrent())throw superseded();
     if(!candidate){if(replace)throw Error('Water replacement did not create an available host');return false;}
-    if(!replace)candidate.setEmitters(runtimeEmitters());
+    // Startup may have captured a pressed emitter before the operator released
+    // it or moved its target. Publish current inlet state before the host lands;
+    // runtime synchronization does not need a new authored edit to be admitted.
+    if(!experiment)candidate.setEmitters(runtimeEmitters());
     const nextPaused=experiment?true:replace?false:candidate.state().mode==='finite_drop'?true:viewerPaused()??paused;
     candidate.setPaused(nextPaused||(!replace&&!visible()));
     if(!isCurrent())throw superseded();

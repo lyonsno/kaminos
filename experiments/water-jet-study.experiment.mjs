@@ -15,12 +15,8 @@ export default {
   async function squirt(pressed){
    triggerRequested=pressed;
    if(pressed){if(held)return read();await water.commitEdits();if(!triggerRequested)return read();held=new Map(app.read().objects.filter(row=>row.type==='local-liquid-emitter'&&row.localLiquidEmitter?.mode!=='finite_drop').map(row=>[row.id,row.localLiquidEmitter.emissionEnabled!==false]));
-    const sourceIds=[...held.keys()];for(const id of sourceIds)water.edit(id,{emissionEnabled:true});
-    if(!water.read().runtime){await water.release();
-     // Release may complete while the host is mounting from its input snapshot.
-     // Reconcile the mounted inlets with the current authored emission switches.
-     for(const id of sourceIds){const row=app.read().objects.find(row=>row.id===id);if(row)water.edit(id,{emissionEnabled:row.localLiquidEmitter.emissionEnabled!==false});}
-    }else if(water.read().runtime.paused)water.pause();
+    for(const id of held.keys())water.edit(id,{emissionEnabled:true});
+    if(!water.read().runtime)await water.release();else if(water.read().runtime.paused)water.pause();
    }else if(held){const previous=held;held=null;for(const [id,enabled]of previous)if(app.read().objects.some(row=>row.id===id))water.edit(id,{emissionEnabled:enabled});}
    const effective=read();record({kind:'water-jet.squirt',phase:pressed?'pressed':'released',effective});return effective;
   }
