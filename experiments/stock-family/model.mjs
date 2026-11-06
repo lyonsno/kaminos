@@ -1,5 +1,6 @@
 import {validateRestArc,unwrapRestArc} from './rest-arc.mjs';
 import {stockMouths} from './mouths.mjs';
+import {recoverStockSection} from './section.mjs';
 export {stockMouths,stockMouthFrame,alignStockMouth,stockMouthGap} from './mouths.mjs';
 export const SOURCE_SHA='0d24383aa503956b927c7e9b0e52fcf6197a1c0928a0a465989b92fc9c458773';
 // Source-local Z is longitudinal. Authored bands surround observed feet and
@@ -68,7 +69,8 @@ export function replaceStockSource(recipe,source){
 }
 // A declared axis, centered unit longitudinal extent, and no inferred semantic
 // protection. Authored bands belong to this fitted source, never its predecessor.
-export function fitStockSource(positions,normals,axis,arc){
+export function fitStockSource(positions,normals,axis,arc,sectionRecovery){
+  const finish=value=>sectionRecovery===undefined?value:recoverStockSection(value,sectionRecovery);
   const rotations={x:([x,y,z])=>[-z,y,x],y:([x,y,z])=>[x,-z,y],z:p=>p,
     '-x':([x,y,z])=>[z,y,-x],'-y':([x,y,z])=>[x,z,-y],'-z':([x,y,z])=>[-x,y,-z]};
   if(!rotations[axis])throw Error('Invalid source axis');
@@ -85,11 +87,11 @@ export function fitStockSource(positions,normals,axis,arc){
       unwrapped.positions[i]=(unwrapped.positions[i]-(i%3===0?0:(low[i%3]+high[i%3])/2))/extent;
     }
     const middle=(low[2]+high[2])/2,restCurve=[Math.max(-.5,-middle/extent),Math.min(.5,(arc.radius*arc.sweep*Math.PI/180-middle)/extent)];
-    return {...unwrapped,referencePositions,referenceNormals,restCurve:restCurve[0]<restCurve[1]?restCurve:null,profile:{min:-.5,max:.5,xMin:Math.fround(low[0]/extent),xMax:Math.fround(high[0]/extent),locks:[]}};
+    return finish({...unwrapped,referencePositions,referenceNormals,restCurve:restCurve[0]<restCurve[1]?restCurve:null,profile:{min:-.5,max:.5,xMin:Math.fround(low[0]/extent),xMax:Math.fround(high[0]/extent),locks:[]}});
   }
   const extent=hi[2]-lo[2];if(!(extent>0)||!(hi[0]>lo[0]))throw Error('Source needs nonzero longitudinal and cross-section extent');
   for(let i=0;i<out.length;i++)out[i]=(out[i]-(lo[i%3]+hi[i%3])/2)/extent;
-  return {positions:out,normals:n,profile:{min:-.5,max:.5,xMin:Math.fround((lo[0]-hi[0])/2/extent),xMax:Math.fround((hi[0]-lo[0])/2/extent),locks:[]}};
+  return finish({positions:out,normals:n,profile:{min:-.5,max:.5,xMin:Math.fround((lo[0]-hi[0])/2/extent),xMax:Math.fround((hi[0]-lo[0])/2/extent),locks:[]}});
 }
 export function createStockWarp(profile,parameters,restCurve=null){
   const p=validateProfile(profile),v=validateParameters(parameters),angle=v.bend*Math.PI/180;
