@@ -91,3 +91,18 @@ test('a recipe-opening failure is visible beside the selected action',async()=>{
  await c.open('burners');c.select('/image.png');await document.getElementById('asset-experiment-edit').onclick();
  const feedback=document.getElementById('asset-experiment-action-status');assert.ok(feedback,'selected recipe needs visible action feedback');assert.match(feedback.textContent,/Recorded model is unsupported/);
 });
+
+test('presenting an explicit recipe preserves its own collection or independence instead of inheriting the viewed collection',async()=>{
+ const {createImageRecipeIteration}=await import('../authoring-image-recipe.mjs');const {createImageIterationHistory}=await import('../authoring-image-history.mjs');const {withPngProvenance}=await import('../authoring-image-generation.mjs');
+ for(const experiment of [{id:'destination',title:'Destination'},null]){
+  const {document}=dom(),listeners=new Map();document.addEventListener=(name,handler)=>listeners.set(name,handler);
+  let controls={},ui;const assets={read:()=>({root:'image-experiments',selected:null}),select(){}};
+  const p={schema:'kaminos.image-generation.v1',model:'FLUX.3 Image Klein',prompt:'Recorded object',seed:37,width:256,height:256,weightsLevel:'4-bit',lora:null,source:{repo:'test-source',revision:'recorded'},sampling:{steps:16,shift:3},completion:{earlyDecoded:true,stepsCompleted:3,stepsRequested:16}};
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==','base64'),bytes=new Uint8Array(await(await withPngProvenance(new Blob([png]),p)).arrayBuffer());
+  const recipe=createImageRecipeIteration({history:createImageIterationHistory({}),assets,readControls:()=>controls,applyControls:r=>controls=r,fetchBytes:async()=>bytes,onOpened:()=>listeners.get('kaminos-assets-mode-change')({detail:{mode:'generate'}})});
+  const c=createImageExperiments({request:async()=>doc('viewed'),changed:()=>ui?.render()});
+  ui=installImageExperiments({document,controller:c,assets,assetsUI:{open:async()=>{}},history:{},layout:{},recipe});await c.open('viewed');
+  const opened=await recipe.open({kind:'image',source:'/incoming.png',name:'Incoming',...(experiment?{experiment}:{})}),live=recipe.read(),request=recipe.decorate(controls);
+  assert.equal(live.parent?.source,'/incoming.png','presenting must not replace an explicitly restored recipe with the collection on screen');assert.deepEqual(live.experiment,experiment);assert.equal(request.iteration.parent.source,'/incoming.png');assert.deepEqual(request.iteration.parentCompletion,p.completion);assert.deepEqual(request.expectedModel.sampling,p.sampling);assert.equal(request.expectedModel.lora,null);assert.deepEqual(opened,live);
+ }
+});

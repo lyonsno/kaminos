@@ -67,7 +67,7 @@ export function createImageRecipeIteration({history,assets,readControls,applyCon
     if(own!==ticket)throw Error('Image recipe opening was superseded.');
     const provenance=readPngProvenance(bytes);
     if(!provenance)throw Error('This image has no saved generation metadata. Its recipe has not been restored.');
-    const state=recall({...entry,source:sourceOf(entry),provenance});await onOpened(state);return state;
+    const state=recall({...entry,source:sourceOf(entry),provenance});await onOpened(state);return read();
    }catch(e){if(own===ticket){opening=false;error=e.message;changed();}throw e;}
   },
   decorate(request){

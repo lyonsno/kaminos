@@ -98,7 +98,7 @@ export function installImageExperiments({document,controller,assets,assetsUI,his
  async function open(id){await assetsUI.open('browse',{refresh:false});if(!await assets.refresh({browse:false}))throw Error(assets.read().error||'Asset collections are unavailable');await assets.browse('image-experiments');const doc=await controller.open(id);if(doc)address(id);return doc;}
  document.addEventListener('kaminos-assets-mode-change',event=>{
   const doc=controller.read().document;
-  if(event.detail.mode==='generate'&&doc&&!busy())run(()=>recipe.joinExperiment({id:doc.id,title:doc.title},{preserveRecipe:true}));
+  if(event.detail.mode==='generate'&&doc&&!busy()){const draft=recipe.read();if(!draft.parent&&!draft.imageParent)run(()=>recipe.joinExperiment({id:doc.id,title:doc.title},{preserveRecipe:true}));}
  });
  function render(){
   const s=controller.read(),doc=s.document,root=assets.read().root;
