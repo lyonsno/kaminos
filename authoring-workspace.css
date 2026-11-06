@@ -547,6 +547,7 @@ body[data-workspace=authoring].has-assets-panel:has(#authoring-assets[data-exper
 .asset-experiment-card img{height:190px!important;object-fit:contain;background:#292b2d;}
 .asset-experiment-card>p{font-size:12px;color:#a9adb0;white-space:normal;margin:4px 0;}
 .asset-agent-entries .asset-experiment-card{grid-column:span 2;}
+#asset-browse[data-experiment-open=true]{overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;}
 #asset-browse[data-experiment-open=true]>#asset-entries,#asset-browse[data-experiment-open=true]>#asset-browse-header>#asset-filter,#asset-browse[data-experiment-open=true]>#asset-browse-header>#asset-path{display:none;}
 #authoring-assets:has(#asset-browse[data-experiment-open=true]:not([hidden])) #asset-detail{display:none;}
 #authoring-assets:has(#asset-browse[data-experiment-open=true]:not([hidden]))>.asset-content{grid-template-columns:minmax(0,1fr);}
