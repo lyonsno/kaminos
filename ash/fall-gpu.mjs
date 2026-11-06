@@ -110,6 +110,9 @@ export async function createGpuAshFall({renderer,layout,density,collision,wake,t
 
  let root,geometry,material;try{
  let code=SHADER;
+ if(layout.detailPool){
+  code=code.replace('0.25,8.0',`2.0,${description.parcelUnits.toFixed(1)}`).replace('random(seed+27u)*cell','random(seed+27u)*cell*2.0');
+ }
  if(layout.refinement){
   code=code.replace('fn index(c:vec3<u32>)->u32{return c.x+p.dims.x*(c.y+p.dims.y*c.z);}',refinementAddressWGSL(layout,layout.adaptive?{load:i=>`atomicLoad(&groupData[${Math.ceil(description.capacity/64)*3+4}u+(${i})-${layout.adaptiveArena.map}u])`}:undefined));
   code=code.replace('let available=1.0-bitcast<f32>(old);','let available=ash_capacity(i)-bitcast<f32>(old);');
@@ -153,7 +156,7 @@ fn wake_cell(i:u32){let c=vec3<u32>(i%p.dims.x,(i/p.dims.x)%p.dims.y,i/(p.dims.x
  const positions=storage(attr,'vec4',capacity*2).toReadOnly().element(particleId.mul(2)).toVar('ash_parcel_pos');
  geometry=new THREE.OctahedronGeometry(1,0);
  material=new THREE.MeshStandardNodeMaterial({color:0xc6bfb3,roughness:1});
- material.positionNode=positionGeometry.mul(positions.w.greaterThan(0).select(layout.cellSize*.36,0)).add(positions.xyz);
+ material.positionNode=positionGeometry.mul(positions.w.greaterThan(0).select((layout.requestedCellSize??layout.cellSize)*.36,0)).add(positions.xyz);
  if(tiled)geometry.setIndirect(drawAttr);root=tiled?new THREE.Mesh(geometry,material):new THREE.InstancedMesh(geometry,material,capacity);root.name='Airborne ash';root.userData.kaminosAODepthUnsupported=true;root.frustumCulled=false;root.castShadow=false;
  return {root,description,
   request(volume){if(!Number.isFinite(volume)||volume<=0)throw Error('Invalid ash burst volume');if(!Number.isFinite(requestedVolume+volume))throw Error('Ash source volume exceeds numeric range');if(!Number.isFinite(Math.fround((queuedVolume+volume)/layout.cellSize**3)))throw Error('Ash source budget exceeds GPU float capacity');queuedVolume+=volume;requestedVolume+=volume;},

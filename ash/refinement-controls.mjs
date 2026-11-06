@@ -6,11 +6,13 @@ export function installAshRefinementControls({document,panel,anchor}) {
   const label=document.createElement('label');label.className='slider-row';label.textContent='Use local fine resolution';
   const enabled=document.createElement('input');enabled.type='checkbox';label.append(enabled);group.append(label);
   const description=document.createElement('p');description.className='hint';
-  description.textContent='Collider detail places fine bricks automatically. The background uses twice the cell width. Fine deposits remain detailed after objects move. A full pool keeps new demand coarse. Reset applies capacity edits and clears ash.';group.append(description);
+  description.textContent='Collider detail places fine bricks automatically. The background uses twice the cell width. Extra detail halves that fine pitch at visible collider features. Both levels retain deposited history after objects move. A full pool keeps new demand coarse. Reset applies capacity edits and clears ash.';group.append(description);
   const mode=document.createElement('select');mode.className='transform-input';mode.dataset.ashRefinementMode='';
   for(const [value,text] of [['adaptive','Automatic · collider detail'],['fixed','Fixed regions · debugging']]){const o=document.createElement('option');o.value=value;o.textContent=text;mode.append(o);}group.append(mode);
   const budgetRow=document.createElement('label');budgetRow.className='slider-row';budgetRow.textContent='Fine capacity (% of field)';
   const budget=document.createElement('input');budget.className='transform-input';budget.type='number';budget.min='0';budget.max='100';budget.step='any';budget.dataset.ashFineCapacity='';budgetRow.append(budget);group.append(budgetRow);
+  const closeRow=document.createElement('label');closeRow.className='slider-row';closeRow.textContent='Extra detail near the camera';
+  const close=document.createElement('input');close.type='checkbox';close.dataset.ashViewDetail='';closeRow.append(close);group.append(closeRow);
   const body=document.createElement('div');group.append(body);
   const select=document.createElement('select');select.className='transform-input';body.append(select);
   const inputs=[];
@@ -30,7 +32,7 @@ export function installAshRefinementControls({document,panel,anchor}) {
     return {min:[-settings.width/2,0,-settings.depth/2],max:[settings.width/2,height,settings.depth/2]};
   }
   function display() {
-    body.hidden=!enabled.checked||mode.value==='adaptive';mode.hidden=!enabled.checked;budgetRow.hidden=!enabled.checked||mode.value!=='adaptive';
+    body.hidden=!enabled.checked||mode.value==='adaptive';mode.hidden=!enabled.checked;budgetRow.hidden=!enabled.checked||mode.value!=='adaptive';closeRow.hidden=budgetRow.hidden;
     select.replaceChildren(...regions.map((_,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent=`Fine region ${i+1}`;return option;}));
     select.value=String(active);remove.disabled=regions.length===0;
     for(const {side,axis,input}of inputs){input.disabled=!regions.length;input.value=String(regions[active]?.[side][axis]??0);}
@@ -53,11 +55,11 @@ export function installAshRefinementControls({document,panel,anchor}) {
       settings=nextSettings;const nextVersion=JSON.stringify(settings.refinement??null);
       if(id===nextId&&version===nextVersion)return;
       id=nextId;version=nextVersion;enabled.checked=!!settings.refinement;mode.value=settings.refinement?.mode==='adaptive'?'adaptive':'fixed';budget.value=String((settings.refinement?.fineFraction??.125)*100);
-      regions=structuredClone(settings.refinement?.regions??[]);active=0;display();
+      close.checked=settings.refinement?.levels===3;regions=structuredClone(settings.refinement?.regions??[]);active=0;display();
     },
     read(nextSettings) {
       if(!enabled.checked)return null;
-      if(mode.value==='adaptive'){const fineFraction=budget.valueAsNumber/100;if(!Number.isFinite(fineFraction)||fineFraction<=0||fineFraction>1)throw Error('Fine capacity must lie between 0 and 100 percent');return {ratio:2,mode:'adaptive',fineFraction};}
+      if(mode.value==='adaptive'){const fineFraction=budget.valueAsNumber/100;if(!Number.isFinite(fineFraction)||fineFraction<=0||fineFraction>1)throw Error('Fine capacity must lie between 0 and 100 percent');return {ratio:2,mode:'adaptive',fineFraction,...(close.checked?{levels:3}:{})};}
       const h=nextSettings.cellSize*2;
       const origin=[-nextSettings.width/2,0,-nextSettings.depth/2];
       const extents=[nextSettings.width,nextSettings.height,nextSettings.depth];

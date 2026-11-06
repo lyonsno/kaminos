@@ -7,6 +7,7 @@ import {refinementVertexWGSL} from '../ash/refinement-surface.mjs';
 import {withKaminosGpu,withGpuErrorScopes} from '../tools/shader-herder.mjs';
 
 const inputs=[
+ {cellSize:.1,bounds:{min:[0,0,0],max:[1.6,.8,1.6]},refinement:{ratio:2,mode:'adaptive',levels:3,fineCapacity:4,detailCapacity:1}},
  {cellSize:1,bounds:{min:[0,0,0],max:[12,8,8]},tileSize:4,refinement:{ratio:2,regions:[{min:[2,0,2],max:[6,8,6]}]}},
  {cellSize:.1,bounds:{min:[0,0,0],max:[2.4,.8,.8]},refinement:{ratio:2,mode:'adaptive',fineCapacity:2}},
 ];
@@ -18,8 +19,8 @@ await withKaminosGpu(async ctx=>{
    const make=(size,extra=0)=>{const b=device.createBuffer({size,usage:U.STORAGE|U.COPY_SRC|U.COPY_DST|extra});owned.push(b);return b;};
    const read=async b=>{const r=device.createBuffer({size:b.size,usage:U.COPY_DST|U.MAP_READ});try{const e=device.createCommandEncoder();e.copyBufferToBuffer(b,0,r,0,b.size);device.queue.submit([e.finish()]);await r.mapAsync(M.READ);return r.getMappedRange().slice(0);}finally{r.unmap();r.destroy();}};
    try{
-    const bs=[make(p.count*4),make(p.count*4),make(p.count*4),make(p.count*8),make(p.tiles.count*32),make(a.words.byteLength),make(a.surfaceCache.words*4),make(64,U.UNIFORM)];
-    if(residency){a.words.set(residency.map,p.adaptiveArena.map);a.words.set(residency.slots,p.adaptiveArena.slots);}
+    const bs=[make(p.count*4),make(p.count*4),make(p.count*4),make(p.count*8),make(p.tiles.count*32),make(a.words.byteLength),make(a.surfaceCache.words*4),make(p.detailPool?144:64,U.UNIFORM)];
+    if(residency){a.words.set(residency.map,p.adaptiveArena.map);a.words.set(residency.slots,p.adaptiveArena.slots);if(p.detailPool){a.words.set(residency.detail.map,p.adaptiveArena.detail.map);a.words.set(residency.detail.slots,p.adaptiveArena.detail.slots);}}
     device.queue.writeBuffer(bs[0],0,values);device.queue.writeBuffer(bs[2],0,solid);device.queue.writeBuffer(bs[5],0,a.words);
     const flags=new Uint32Array(p.tiles.count*8);for(let t=0;t<p.tiles.count;t++)flags[t*8+2]=1;device.queue.writeBuffer(bs[4],0,flags);
     let code=refinementShader(p,a);
@@ -54,6 +55,7 @@ await withKaminosGpu(async ctx=>{
   for(const input of inputs){
    const p=createRefinementLayout(input);let residency=null;
    if(p.adaptive){residency={map:Array(p.pool.pages).fill(0),slots:[1,p.pool.pages]};residency.map[0]=1;residency.map[p.pool.pages-1]=2;}
+   if(p.detailPool){residency={map:Array.from({length:p.pool.pages},(_,i)=>i+1),slots:Array.from({length:p.pool.capacity},(_,i)=>i+1),detail:{map:Array(p.detailPool.pages).fill(0),slots:[1]}};residency.detail.map[0]=1;}
    const view=residency?adaptiveView(p,residency):p;
    const mass=Float32Array.from({length:p.count},(_,i)=>{const c=refinementCell(view,i);return !c.owned||((i*17+3)%7===0)?0:c.size**3*(.15+((i*23)%11)/15);});
    const solid=Uint32Array.from({length:p.count},(_,i)=>i%19===0?2:0);for(let i=0;i<p.count;i++)if(solid[i])mass[i]=0;

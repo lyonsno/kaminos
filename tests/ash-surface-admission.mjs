@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {Group} from '../lib/three.core.js';
 import {createAshSceneObject} from '../ash/scene-object.mjs';
 import {defaultAshSettings} from '../ash/scene-record.mjs';
-const settings={...defaultAshSettings(),width:12.8,depth:6.4,height:2.4,cellSize:.025,initialDepth:0};
+const settings={...defaultAshSettings(),width:12.8,depth:6.4,height:2.4,cellSize:.025,initialDepth:0,refinement:{ratio:2,mode:'adaptive',fineFraction:.125}};
 const record=ash=>({id:'capacity-field',type:'retained-ash',source:'kaminos:retained-ash',transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},ash});
 const renderer=limit=>({backend:{device:{limits:{maxStorageBufferBindingSize:limit,maxBufferSize:limit}}}});
 // Declared limits exercise the real admission caller. A construction sentinel
