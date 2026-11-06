@@ -107,3 +107,12 @@ test('fresh reference edits retain an image parent separately from exact recipe 
  const request=h.c.decorate(h.get());assert.equal(request.iteration.parent.source,'/plate.png');assert.equal(request.iteration.operation,'image-edit');assert.equal(request.experiment.id,'burners');
  h.c.clear();assert.equal(h.c.decorate(h.get()).iteration,undefined);
 });
+
+test('a fresh image parent outside a collection is visible and clearable through the ordinary status control',()=>{
+ const h=harness();h.c.editImage(entry('/raw.png',null));
+ const nodes=new Map(),node=()=>({hidden:false,dataset:{},append(){},after(){},setAttribute(){},addEventListener(){},querySelector(){return node();}}),get=id=>{if(!nodes.has(id))nodes.set(id,node());return nodes.get(id);};
+ const document={createElement:tag=>{const e=node();Object.defineProperty(e,'id',{set(id){nodes.set(id,e);}});return e;},getElementById:get};
+ const ui=recipe.installImageRecipeStatus({document,iteration:h.c});
+ assert.equal(get('asset-recipe').hidden,false);assert.equal(get('asset-generate').dataset.recipeActive,'true');assert.match(get('asset-recipe-status').textContent,/image.*Glove|Glove.*image/i);assert.equal(get('asset-recipe-clear').hidden,false);
+ get('asset-recipe-clear').onclick();ui.render();assert.equal(h.c.decorate(h.get()).iteration,undefined);assert.equal(get('asset-recipe').hidden,true);
+});

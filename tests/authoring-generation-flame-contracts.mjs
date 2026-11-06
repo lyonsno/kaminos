@@ -54,3 +54,19 @@ test('disabling during asynchronous kiln setup aborts and disposes the late rend
  finish({setActive:async value=>{if(value)starts++;},dispose:async()=>disposed++,debugState:()=>({})});await disabled;
  assert.equal(starts,0);assert.equal(disposed,1);await flame.dispose();
 });
+
+test('the actual kiln checkbox still disables active and pending renderers when preferences cannot be written',async()=>{
+ const {installGenerateLayout}=await import('../authoring-generate-layout.mjs');
+ for(const pending of [false,true]){
+  const nodes=new Map(),node=()=>({children:[],childNodes:[],dataset:{},style:{},hidden:false,value:'',textContent:'',classList:{toggle(){}},append(...c){this.children.push(...c);},prepend(){},before(){},after(){},remove(){},insertBefore(){},replaceChildren(...c){this.children=c;},setAttribute(){},getAttribute(){return null;},removeAttribute(){},addEventListener(){},querySelectorAll(){return [];},querySelector(s){return s.startsWith('#')?get(s.slice(1)):null;},closest(){return this;},getBoundingClientRect(){return {width:300,height:200};}});
+  const get=id=>{if(id==='asset-text-image')return null;if(!nodes.has(id))nodes.set(id,node());return nodes.get(id);};
+  const document={getElementById:get,createElement:()=>{const e=node();Object.defineProperty(e,'id',{set(id){nodes.set(id,e);}});return e;},createTextNode:node,defaultView:{localStorage:{getItem:key=>key==='kaminos.generate-kiln.v1'?'{"disabled":false}':null,setItem(){throw Error('QuotaExceededError');}},addEventListener(){},IntersectionObserver:class{observe(){}}}};
+  let finish,signal,disposed=0,active=false;const resource={async setActive(v){active=v;},async dispose(){disposed++;},debugState:()=>({active})};
+  const layout=installGenerateLayout({document,createFlame:async(_slot,options)=>{signal=options.signal;return pending?new Promise(r=>finish=r):resource;}});
+  layout.ceremony.render({status:'running',request:{id:'current'}});const visible=layout.ceremony.setVisible(true);await tick();
+  get('asset-kiln-disabled').checked=true;const change=get('asset-kiln-disabled').onchange();
+  assert.equal(layout.ceremony.read().enabled,false,'storage failure must not skip the operator choice');assert.equal(signal.aborted,true);
+  if(pending)finish(resource);await change;await visible;
+  assert.equal(active,false);assert.equal(disposed,1);await layout.ceremony.dispose();
+ }
+});

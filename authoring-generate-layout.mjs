@@ -58,7 +58,12 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   const kilnToggleLabel=document.createElement('label');kilnToggleLabel.append(kilnToggle,document.createTextNode('Disable inference kiln'));kilnTools.prepend(kilnToggleLabel);
   kilnView.hidden=kilnDisabled;kilnChoose.disabled=kilnDisabled;
   const ceremony=createFlame?installGenerationFlame({document,slot:kilnView,createRenderer:createFlame,enabled:!kilnDisabled}):null;
-  kilnToggle.onchange=async()=>{kilnDisabled=kilnToggle.checked;kilnView.hidden=kilnDisabled;kilnChoose.disabled=kilnDisabled;try{document.defaultView.localStorage.setItem(kilnPreference,JSON.stringify({disabled:kilnDisabled}));await ceremony?.setEnabled(!kilnDisabled);if(!kilnDisabled){await kiln?.load();syncKiln();}}catch(error){kilnStatus.textContent=error.message;}};
+  kilnToggle.onchange=async()=>{
+    kilnDisabled=kilnToggle.checked;kilnView.hidden=kilnDisabled;kilnChoose.disabled=kilnDisabled;
+    let preferenceError='';try{document.defaultView.localStorage.setItem(kilnPreference,JSON.stringify({disabled:kilnDisabled}));}catch(error){preferenceError=`Kiln preference not saved: ${error.message}`;}
+    try{await ceremony?.setEnabled(!kilnDisabled);if(!kilnDisabled){await kiln?.load();syncKiln();}kilnStatus.textContent=preferenceError;}
+    catch(error){kilnStatus.textContent=[preferenceError,error.message].filter(Boolean).join(' · ');}
+  };
   kilnChoose.onclick=async()=>{if(kilnDisabled)return;try{if(await kiln?.choose()){syncKiln();await ceremony?.refresh();kilnStatus.textContent='';}}catch(error){kilnStatus.textContent=error.message;}};
   if(!kilnDisabled)kiln?.load().then(syncKiln).catch(error=>{kilnStatus.textContent=error.message;});syncKiln();
   const observer=ceremony&&new document.defaultView.IntersectionObserver(entries=>{ceremony.setVisible(entries.some(entry=>entry.isIntersecting));});observer?.observe(kilnView);

@@ -90,11 +90,11 @@ export function installImageRecipeStatus({document,iteration,busy=()=>false}){
  document.getElementById('asset-step-image').querySelector('h3').after(host);
  const labels={prompt:'prompt',seed:'seed',size:'size',aspect:'shape',level:'weight precision',model:'model',reference:'reference image'};
  function render(){
-  const state=iteration.read();host.hidden=!state.parent&&!state.experiment&&!state.error&&!state.opening;
-  document.getElementById('asset-generate').dataset.recipeActive=String(!!(state.parent||state.experiment));
-  status.textContent=state.error|| (state.opening?'Opening saved recipe…':state.parent?`Recipe from ${state.parent.name||'selected image'} · ${state.changes.length?'Changed: '+state.changes.map(c=>labels[c.field]).join(', '):'Recorded settings restored. Seed stays fixed until you change it.'}`:state.experiment?`New results will join ${state.experiment.title}.`:'');
-  reset.hidden=!state.parent&&!state.experiment;reset.disabled=busy()||state.opening;
-  reset.textContent=state.experiment?'Leave experiment':'Clear recipe';
+  const state=iteration.read();host.hidden=!state.parent&&!state.imageParent&&!state.experiment&&!state.error&&!state.opening;
+  document.getElementById('asset-generate').dataset.recipeActive=String(!!(state.parent||state.imageParent||state.experiment));
+  status.textContent=state.error|| (state.opening?'Opening saved recipe…':state.parent?`Recipe from ${state.parent.name||'selected image'} · ${state.changes.length?'Changed: '+state.changes.map(c=>labels[c.field]).join(', '):'Recorded settings restored. Seed stays fixed until you change it.'}`:state.imageParent?`Image edit from ${state.imageParent.name||'selected image'} · clear this parent to start independently.`:state.experiment?`New results will join ${state.experiment.title}.`:'');
+  reset.hidden=!state.parent&&!state.imageParent&&!state.experiment;reset.disabled=busy()||state.opening;
+  reset.textContent=state.experiment?'Leave experiment':state.imageParent?'Clear image parent':'Clear recipe';
  }
  for(const id of ['asset-prompt','asset-seed','asset-image-size','asset-image-aspect','asset-image-level','asset-image-model','asset-use-reference']){
   document.getElementById(id).addEventListener('input',render);document.getElementById(id).addEventListener('change',render);
