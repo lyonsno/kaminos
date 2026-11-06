@@ -4,6 +4,7 @@ import {spatialRegionTree} from './scene-spatial-point-regions.mjs';
 // source already contains its physical handoff blend. Outside Fine, Middle
 // replaces World by the camera's two-cell weight, rather than adding to it.
 export function emissionRegionPlan(field,limits={}){
+ if(field.exteriorGain!==undefined&&(!Number.isFinite(field.exteriorGain)||field.exteriorGain<0))throw Error('exterior emission gain must be nonnegative finite');
  const fine={texture:field.texture,dimensions:field.dimensions,localMin:field.localMin??[-1,-1,-1],localMax:field.localMax??field.dimensions.map(n=>-1+2*n/field.dimensions[0]),role:0};
  const regions=[fine];
  const world=field.exterior;
@@ -40,6 +41,7 @@ export function createEmissionCellReducer(device,count,output){
    const bytes=new ArrayBuffer(160),f=new Float32Array(bytes),u=new Uint32Array(bytes);
    f.set([...r.localMin,0,...r.localMax,0,...fine.localMin,0,...fine.localMax,0,...(middle?[...middle.localMin,0,...middle.localMax,2*(middle.localMax[0]-middle.localMin[0])/middle.dimensions[0]]:Array(8).fill(0))]);
    f.set([...(world?.localMin??fine.localMin),0,...(world?.localMax??fine.localMax),0],32);
+   f[3]=r.role===0?field.gain:(field.exteriorGain??field.gain);
    u.set([...r.dimensions,r.offset,r.role,middle?1:0,0,0],24);device.queue.writeBuffer(row.params,0,bytes);
    if(row.texture!==r.texture){row.group=device.createBindGroup({layout:compiled.seed.getBindGroupLayout(0),entries:[{binding:0,resource:r.texture.createView()},{binding:1,resource:{buffer:cells}},{binding:2,resource:{buffer:row.params}}]});row.texture=r.texture;}
    const p=encoder.beginComputePass({label:'physical source ownership '+r.role});p.setPipeline(compiled.seed);p.setBindGroup(0,row.group);p.dispatchWorkgroups(Math.ceil(r.count/64));p.end();
@@ -69,7 +71,7 @@ fn seed(@builtin(global_invocation_id) id:vec3<u32>){
   if(s.role.x>0u){if(any(p<s.worldLo.xyz)||any(p>=s.worldHi.xyz)){w=0.0;}else if(all(p>=s.fineLo.xyz)&&all(p<s.fineHi.xyz)){w=0.0;}else if(s.role.y>0u){let edge=min(p-s.middleLo.xyz,s.middleHi.xyz-p);let mid=smoothstep(0.0,s.middleHi.w,min(edge.x,min(edge.y,edge.z)));w=select(1.0-mid,mid,s.role.x==2u);}else if(s.role.x==2u){w=0.0;}}
   weight+=w*.125;moment+=p*w*.125;
  }
- let rgb=max(textureLoad(source,vec3<i32>(c),0).rgb,vec3<f32>(0))*pitch.x*pitch.y*pitch.z*weight;
+ let rgb=max(textureLoad(source,vec3<i32>(c),0).rgb,vec3<f32>(0))*pitch.x*pitch.y*pitch.z*weight*s.lo.w;
  let center=select(s.lo.xyz+(vec3<f32>(c)+.5)*pitch,moment/max(weight,1e-30),weight>0.0);
  outputCells[s.dimsOffset.w+id.x]=Cell(vec4<f32>(rgb,rgb.x+rgb.y+rgb.z),vec4<f32>(center,dot(pitch,pitch)/12.0));
 }
@@ -86,7 +88,7 @@ var<workgroup> sums:array<Moments,64>;
 @compute @workgroup_size(64)
 fn scan(@builtin(local_invocation_index) lane:u32,@builtin(workgroup_id) group:vec3<u32>){
  let id=indices[params.dispatch.x+group.y];var r=regions[id];if(params.dispatch.y==0u){r.lo=vec4<f32>(params.lo.xyz,1);r.hi=vec4<f32>(params.hi.xyz,r.hi.w);}var m:Moments;
- for(var i=group.x*64u+lane;i<params.dispatch.z;i+=1024u){let c=cells[i];let p=c.position.xyz;if(any(p<r.lo.xyz)||any(p>=r.hi.xyz)){continue;}let rgb=c.energy.rgb*params.policy.x*r.lo.w;let w=rgb.x+rgb.y+rgb.z;m.energy+=vec4<f32>(rgb,w);m.first+=vec4<f32>(p*w,0);m.second+=vec4<f32>((p*p+vec3<f32>(c.position.w/3.0))*w,0);}
+ for(var i=group.x*64u+lane;i<params.dispatch.z;i+=1024u){let c=cells[i];let p=c.position.xyz;if(any(p<r.lo.xyz)||any(p>=r.hi.xyz)){continue;}let rgb=c.energy.rgb*r.lo.w;let w=rgb.x+rgb.y+rgb.z;m.energy+=vec4<f32>(rgb,w);m.first+=vec4<f32>(p*w,0);m.second+=vec4<f32>((p*p+vec3<f32>(c.position.w/3.0))*w,0);}
  sums[lane]=m;workgroupBarrier();for(var stride=32u;stride>0u;stride/=2u){if(lane<stride){sums[lane].energy+=sums[lane+stride].energy;sums[lane].first+=sums[lane+stride].first;sums[lane].second+=sums[lane+stride].second;}workgroupBarrier();}if(lane==0u){partials[id*16u+group.x]=sums[0];}
 }
 @compute @workgroup_size(1)

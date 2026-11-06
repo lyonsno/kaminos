@@ -137,8 +137,13 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
   const angularStates=new Map();let retainComparisons=false,visibilityPreparations=0,preparedRayDirections=0,lastPreparedDirections=0;
   let softening=null,softeningDimensions=null,reconstruction=null,scatteredSource=null,scatterInputs=null;
   let lastField=null,lastLightingTexture=null,lastOptions=null,lastMetadata=null;
-  let transportDomain=domain;
+  let transportDomain=domain,cacheFieldTexture=null;
   const family=()=>JSON.stringify([transportDomain.lo,transportDomain.hi])+':'+angularPattern+':'+angularRotation+':'+(angularPattern==='guided'?JSON.stringify([sourceGuide.lo,sourceGuide.hi]):angularPattern==='regions'?JSON.stringify(sourceRegions):'');
+  const geometryCacheEntries=(directionBuffer,distances)=>[
+    ...[nodes,triangles,receiverBuffer,directionBuffer,distances].map((b,binding)=>({binding,resource:{buffer:b}})),
+    ...(angularPattern==='regions'?[...guideEntries(),{binding:5,resource:cacheFieldTexture.createView()},...(exteriorMedium?[{binding:23,resource:{buffer:exteriorParams}}]:[])]:[]),
+    ...(['blue','importance'].includes(angularPattern)?[{binding:18,resource:samplingNoise.createView()}]:[]),
+  ];
   function angularState() {
     if(['blue','importance'].includes(angularPattern)&&!samplingNoise?.createView)throw Error('blue-noise smoke lighting requires the shared sampling atlas');
     const key=family()+directions;
@@ -185,7 +190,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
         cache=device.createComputePipeline({label:'cache static solid ray intersections',layout:'auto',compute:{module,entryPoint:'cacheGeometry',constants:{CACHE_START:cacheStart}}});
         compiled.cacheByStart.set(cacheStart,cache);
       }
-      const cacheGroup=device.createBindGroup({layout:cache.getBindGroupLayout(0),entries:[...[nodes,triangles,receiverBuffer,directionBuffer,distances].map((b,binding)=>({binding,resource:{buffer:b}})),...(angularPattern==='regions'?guideEntries():[]),...(['blue','importance'].includes(angularPattern)?[{binding:18,resource:samplingNoise.createView()}]:[])]});
+      const cacheGroup=device.createBindGroup({layout:cache.getBindGroupLayout(0),entries:geometryCacheEntries(directionBuffer,distances)});
       let fullCache=cache;
       if(prefix){
         fullCache=compiled.cacheByStart.get(0);
@@ -194,7 +199,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
           compiled.cacheByStart.set(0,fullCache);
         }
       }
-      const fullCacheGroup=prefix?device.createBindGroup({layout:fullCache.getBindGroupLayout(0),entries:[...[nodes,triangles,receiverBuffer,directionBuffer,distances].map((b,binding)=>({binding,resource:{buffer:b}})),...(angularPattern==='regions'?guideEntries():[]),...(['blue','importance'].includes(angularPattern)?[{binding:18,resource:samplingNoise.createView()}]:[])]}):cacheGroup;
+      const fullCacheGroup=prefix?device.createBindGroup({layout:fullCache.getBindGroupLayout(0),entries:geometryCacheEntries(directionBuffer,distances)}):cacheGroup;
       const environmentCacheGroup=environmentCache?device.createBindGroup({layout:environmentCache.getBindGroupLayout(0),entries:[
         {binding:0,resource:{buffer:nodes}},{binding:1,resource:{buffer:triangles}},{binding:2,resource:{buffer:receiverBuffer}},
         {binding:12,resource:{buffer:environmentParams}},{binding:13,resource:{buffer:environmentDirections}},{binding:14,resource:{buffer:environmentHits}}]}):null;
@@ -203,7 +208,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
       const importance=importanceScores?(compiled.importance??=device.createComputePipeline({label:'prepare cached angular importance',layout:'auto',compute:{module,entryPoint:'prepareImportance'}})):null;
       const importanceEntries=importanceScores?[{binding:20,resource:{buffer:importanceScores}},{binding:21,resource:{buffer:importanceCdf}}]:[];
       const importanceGroup=importance?device.createBindGroup({layout:importance.getBindGroupLayout(0),entries:importanceEntries}):null;
-      const state={importance,importanceGroup,importanceEntries,owned,directionBuffer,distances,cache,cacheGroup,fullCache,fullCacheGroup,gather,gatherVolume,environmentCache,environmentCacheGroup,environmentDirections,environmentHits,environmentCount:directions,environmentCacheBuilt:false,family:family(),capacity:bankDirections,requestedDirections:directions,prefix,sourceTexture:null,gatherGroup:null,cacheBuilt:false};
+      const state={cacheFieldTexture,importance,importanceGroup,importanceEntries,owned,directionBuffer,distances,cache,cacheGroup,fullCache,fullCacheGroup,gather,gatherVolume,environmentCache,environmentCacheGroup,environmentDirections,environmentHits,environmentCount:directions,environmentCacheBuilt:false,family:family(),capacity:bankDirections,requestedDirections:directions,prefix,sourceTexture:null,gatherGroup:null,cacheBuilt:false};
       angularStates.set(key,state);
       if(!retainComparisons)pruneComparisons();
       return state;
@@ -238,6 +243,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
     setRetainComparisons(value){retainComparisons=!!value;if(!retainComparisons)pruneComparisons();},
     encode(field,{gain=1,stepLength=2/field.dimensions[0],smokeEnabled=true,sourceSoftness=0,surfaceReconstruction=0,surfaceScattering=false,environment=null,sceneLights,samplingFrame=field.frame}={}) {
       if(field.status!=='encoded'||!field.texture) throw new Error('distributed gather needs current raw emission/extinction');
+      cacheFieldTexture=field.texture;
       const exterior=exteriorMedium?field.exterior:null;
       const middle=exterior?.middle;
       if(exterior?.emissionTexture){
@@ -281,6 +287,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
         sceneLightKey=null;
       }
       const state=angularState();
+      if(angularPattern==='regions'&&state.cacheFieldTexture!==cacheFieldTexture){state.cacheGroup=device.createBindGroup({layout:state.cache.getBindGroupLayout(0),entries:geometryCacheEntries(state.directionBuffer,state.distances)});state.fullCacheGroup=device.createBindGroup({layout:state.fullCache.getBindGroupLayout(0),entries:geometryCacheEntries(state.directionBuffer,state.distances)});state.cacheFieldTexture=cacheFieldTexture;}
       device.queue.writeBuffer(noiseParams,0,new Float32Array([samplingFrame%32,0,0,0]));
       if(sourcePattern()&&environment&&state.environmentCount!==directions){
         // Progressive flame samples may reuse a larger cache, but a uniform
@@ -372,7 +379,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
     },
     transportSource(){
       if(!lastField)throw new Error('transport source requires current encoded gather');
-      return {...lastField,texture:lastOptions.surfaceScattering?scatteredSource.texture:lastLightingTexture,gain:lastOptions.surfaceScattering?1:lastOptions.gain};
+      return {...lastField,texture:lastOptions.surfaceScattering?scatteredSource.texture:lastLightingTexture,gain:lastOptions.surfaceScattering?1:lastOptions.gain,exteriorGain:lastOptions.gain};
     },
     destroy(){lastField=null;reproject?.destroy();for(const state of angularStates.values())for(const b of state.owned)b.destroy();angularStates.clear();softening?.destroy();scatteredSource?.destroy();reconstruction?.destroy();preparedSmoke.destroy();for(const b of resources)b.destroy();surface.destroy();surfaceBack.destroy();smoke.destroy();darkEnvironment.destroy();darkExterior.destroy();sceneLightBuffer.destroy();sceneLightHits.destroy();},
     async inspectRayInputs(ids){

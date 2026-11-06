@@ -16,13 +16,13 @@ try{
  report.commit=execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim();
  report.executable=process.env.CHROME_EXECUTABLE;
  assert.ok(report.executable&&!report.executable.includes('/Applications/Google Chrome.app/'),'independent test browser required');
- server=http.createServer(async(req,res)=>{try{
+ report.phase='server-bind';await save();server=http.createServer(async(req,res)=>{try{
   const name=decodeURIComponent(new URL(req.url,'http://localhost').pathname);
   if(name==='/'){res.setHeader('Content-Type','text/html');res.end('<!doctype html><title>Exterior GPU conformance</title>');return;}
   const file=path.resolve(repo,'.'+name);if(!file.startsWith(path.resolve(repo)+'/'))throw Error('outside checkout');
   res.setHeader('Content-Type','text/javascript');res.end(await fs.readFile(file));
  }catch{res.statusCode=404;res.end();}});
- await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',()=>{server.off('error',reject);resolve();});});
  const {chromium}=await import(process.env.PLAYWRIGHT_MODULE);
  browser=await chromium.launchPersistentContext(path.join(out,'profile'),{executablePath:report.executable,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal','--use-mock-keychain','--password-store=basic']});
  const page=await browser.newPage();page.on('pageerror',e=>report.errors.push(String(e)));
@@ -240,5 +240,5 @@ try{
  assert.deepEqual(r.coarse,b.coarse,'removing middle restores the unattenuated field');
  report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack??error);process.exitCode=1;}
-finally{await browser?.close();if(server)await new Promise(resolve=>server.close(resolve));await save();}
+finally{report.cleanupErrors=[];try{await browser?.close();}catch(error){report.cleanupErrors.push(String(error));report.status='failed';process.exitCode=1;}try{if(server?.listening)await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));}catch(error){report.cleanupErrors.push(String(error));report.status='failed';process.exitCode=1;}await save();}
 console.log(JSON.stringify({status:report.status,phase:report.phase,out,error:report.error}));
