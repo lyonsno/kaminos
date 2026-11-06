@@ -2,7 +2,7 @@
 export function adaptiveOffsets(p,start){
  const map=start,slots=map+p.pool.pages,demand=slots+p.pool.capacity,flags=demand+p.pool.pages,free=flags+p.pool.capacity,collision=free+p.pool.capacity,state=collision+p.pool.capacity,args=state+16;
  const result={map,slots,demand,flags,free,collision,state,args,end:args+4};
- if(p.detailPool){result.detail=adaptiveOffsets({pool:p.detailPool},result.end);result.end=result.detail.end;}
+ if(p.detailPool){result.detail=adaptiveOffsets({pool:p.detailPool},result.end);result.detail.requests=result.detail.end;result.detail.end+=p.detailPool.pages;result.end=result.detail.end;}
  return result;
 }
 const u3=a=>`vec3<u32>(${a.map(n=>n+'u')})`;

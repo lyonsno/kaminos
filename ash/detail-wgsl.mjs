@@ -27,8 +27,8 @@ fn dp_supports_middle(page:u32)->bool{
  return false;
 }
 fn dp_score(page:u32)->u32{
- if(dp_load(${d.demand}u+page)==0u){return 0u;}
- if(params.view.w==0.0){return 2u;}
+ let request=dp_load(${d.requests}u+page);if(request==0u){return 0u;}
+ if(params.view.w==0.0){return min(request,3u);}
  let point=O+(vec3<f32>(dp_coords(page)*DP_WIDTH)+vec3<f32>(4.0))*H;
  let clip=params.fieldClip*vec4<f32>(point,1.0);
  if(clip.w<=0.0){return 0u;}
@@ -41,7 +41,7 @@ fn dp_score(page:u32)->u32{
  let padding=pixels*4.0/max(min(params.view.x,params.view.y),1.0)*2.0;
  if(any(abs(clip.xy/clip.w)>vec2<f32>(1.0+padding))||clip.z< -clip.w||clip.z>clip.w){return 0u;}
  let ratio=pixels/max(params.view.z,1e-6);
- if(ratio<1.0){return 0u;}if(ratio>=4.0){return 3u;}if(ratio>=2.0){return 2u;}return 1u;
+ if(ratio<1.0){return 0u;}if(request<4u){return request;}return select(3u,4u,ratio>=4.0);
 }
 fn dp_dirty(page:u32){
  atomicStore(&arena[${a.state+8}u],1u);
@@ -54,7 +54,17 @@ fn dp_dirty(page:u32){
 @compute @workgroup_size(1) fn detail_reset(){
  let enabled=params.clock.y!=0u||params.clock.z!=0u||dp_load(${a.state+6}u)>0u||dp_load(${d.state+8}u)!=0u;
  if(enabled){for(var n=0u;n<16u;n++){atomicStore(&arena[${d.state}u+n],0u);}}
+ atomicStore(&arena[${d.state+12}u],select(0u,1u,params.clock.y!=0u||dp_load(${a.state+6}u)>0u));
  atomicStore(&arena[${d.state+8}u],0u);atomicStore(&arena[${d.state+6}u],0u);atomicStore(&arena[${d.state+7}u],select(0u,1u,enabled));
+}
+@compute @workgroup_size(64) fn detail_requests(@builtin(global_invocation_id) id:vec3<u32>){
+ let page=id.x;if(page>=${pool.pages}u||dp_load(${d.state+12}u)==0u){return;}let c=vec3<i32>(dp_coords(page));var request=0u;
+ for(var z=-1;z<=1;z++){for(var y=-1;y<=1;y++){for(var x=-1;x<=1;x++){
+  let q=c+vec3<i32>(x,y,z);if(any(q<vec3<i32>(0))||any(q>=vec3<i32>(DP_DIMS))){continue;}
+  if(dp_load(${d.demand}u+dp_index(vec3<u32>(q)))>0u){request=max(request,select(1u,2u,x==0&&y== -1&&z==0));}
+ }}}
+ if(dp_load(${d.demand}u+page)>0u){request=4u;}
+ atomicStore(&arena[${d.requests}u+page],request);
 }
 @compute @workgroup_size(64) fn detail_release(@builtin(global_invocation_id) id:vec3<u32>){
  let slot=id.x;if(slot>=${pool.capacity}u||dp_load(${d.state+7}u)==0u){return;}let page=dp_load(${d.slots}u+slot);
@@ -89,6 +99,7 @@ fn dp_allocate(page:u32,priority:u32){
  let slot=dp_take();if(slot==0xffffffffu){atomicAdd(&arena[${d.state+4}u],1u);return;}
  atomicStore(&arena[${d.slots}u+slot],page+1u);atomicStore(&arena[${d.map}u+page],slot+1u);atomicStore(&arena[${d.flags}u+slot],3u);atomicAdd(&arena[${d.state+2}u],1u);
 }
+@compute @workgroup_size(64) fn detail_allocate_highest(@builtin(global_invocation_id) id:vec3<u32>){dp_allocate(id.x,4u);}
 @compute @workgroup_size(64) fn detail_allocate_high(@builtin(global_invocation_id) id:vec3<u32>){dp_allocate(id.x,3u);}
 @compute @workgroup_size(64) fn detail_allocate_medium(@builtin(global_invocation_id) id:vec3<u32>){dp_allocate(id.x,2u);}
 @compute @workgroup_size(64) fn detail_allocate_low(@builtin(global_invocation_id) id:vec3<u32>){dp_allocate(id.x,1u);}

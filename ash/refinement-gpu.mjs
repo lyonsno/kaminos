@@ -63,7 +63,7 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
     if(errors.length)throw Error(errors.map(m=>`${m.lineNum}: ${m.message}`).join('; '));
     const layout=device.createBindGroupLayout({entries:Array.from({length:8},(_,binding)=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:binding===7?'uniform':binding===2?'read-only-storage':'storage'}}))});
     const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]});
-    const names=[...(p.adaptive?['adaptive_reset','adaptive_release','adaptive_count_direct','adaptive_reclaim_halo','adaptive_allocate_detail','adaptive_allocate_halo','adaptive_prolong','adaptive_collision_list','adaptive_collision_args','adaptive_recount']:[]),...(p.detailPool?['detail_reset','detail_release','detail_max_priority','detail_count_priority','detail_reclaim_lower','detail_allocate_high','detail_allocate_medium','detail_allocate_low','detail_prolong','detail_collision_list','detail_collision_args','detail_recount']:[]),'reset','admit','clear_wake','pack_dispatch','limit_flux','gather_flux','commit_mass','admit_surface','build_surface',...(arena.surfaceCache.encoding==='cell-masks'?['prefix_surface']:[]),'finish_surface','draw_prefix','wake_all'];
+    const names=[...(p.adaptive?['adaptive_reset','adaptive_release','adaptive_count_direct','adaptive_reclaim_halo','adaptive_allocate_detail','adaptive_allocate_halo','adaptive_prolong','adaptive_collision_list','adaptive_collision_args','adaptive_recount']:[]),...(p.detailPool?['detail_reset','detail_requests','detail_release','detail_max_priority','detail_count_priority','detail_reclaim_lower','detail_allocate_highest','detail_allocate_high','detail_allocate_medium','detail_allocate_low','detail_prolong','detail_collision_list','detail_collision_args','detail_recount']:[]),'reset','admit','clear_wake','pack_dispatch','limit_flux','gather_flux','commit_mass','admit_surface','build_surface',...(arena.surfaceCache.encoding==='cell-masks'?['prefix_surface']:[]),'finish_surface','draw_prefix','wake_all'];
     const pipelines=Object.fromEntries(await Promise.all(names.map(async name=>[name,await device.createComputePipelineAsync({label:'refined ash '+name,layout:pipelineLayout,compute:{module,entryPoint:name}})])));
     const group=device.createBindGroup({layout,entries:[mass.buffer,next,solid.buffer,limits,headers,work.buffer,faces.buffer,uniform].map((b,binding)=>({binding,resource:{buffer:b}}))});
     function dispatch(encoder,name,count=1,indirect=null) {
@@ -114,9 +114,9 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
       dispatch(encoder,'adaptive_prolong',Math.ceil(p.pool.capacity/64));dispatch(encoder,'adaptive_collision_list',Math.ceil(p.pool.capacity/64));dispatch(encoder,'adaptive_collision_args');
       fineCollision?.encode(encoder);
       if(p.detailPool){
-        dispatch(encoder,'detail_reset');dispatch(encoder,'detail_release',Math.ceil(p.detailPool.capacity/64));
+        dispatch(encoder,'detail_reset');dispatch(encoder,'detail_requests',Math.ceil(p.detailPool.pages/64));dispatch(encoder,'detail_release',Math.ceil(p.detailPool.capacity/64));
         dispatch(encoder,'detail_max_priority',Math.ceil(p.detailPool.pages/64));dispatch(encoder,'detail_count_priority',Math.ceil(p.detailPool.pages/64));dispatch(encoder,'detail_reclaim_lower',Math.ceil(p.detailPool.capacity/64));
-        for(const priority of ['high','medium','low'])dispatch(encoder,'detail_allocate_'+priority,Math.ceil(p.detailPool.pages/64));
+        for(const priority of ['highest','high','medium','low'])dispatch(encoder,'detail_allocate_'+priority,Math.ceil(p.detailPool.pages/64));
         dispatch(encoder,'detail_prolong',Math.ceil(p.detailPool.capacity/64));dispatch(encoder,'detail_collision_list',Math.ceil(p.detailPool.capacity/64));dispatch(encoder,'detail_collision_args');detailCollision?.encode(encoder);
       }
     }
