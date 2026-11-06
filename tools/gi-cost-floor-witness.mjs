@@ -34,9 +34,9 @@ try{
   report.device=await page.evaluate(async()=>{
    if(window.__costDevices.length!==1)throw Error('Ambiguous actual shared device');
    const d=window.__costDevices[0];if(!d.features.has('timestamp-query'))throw Error('timestamp-query unavailable');
-   const create=d.createCommandEncoder;d.createCommandEncoder=function(...args){const encoder=create.apply(this,args),begin=encoder.beginRenderPass;encoder.beginRenderPass=function(desc){const attachments=desc.colorAttachments.map(a=>{if(!a)return null;const meta=window.__costViews.get(a.view);return meta?{...meta,label:meta.label()}:null;});return begin.call(this,{...desc,label:JSON.stringify({original:desc.label??null,attachments})});};return encoder;};
+   const create=d.createCommandEncoder;window.__costTimer=(await import('/tools/ash-pass-timer.mjs')).installAshPassTimer(d);const timed=d.createCommandEncoder;d.createCommandEncoder=function(...args){const encoder=timed.apply(this,args),begin=encoder.beginRenderPass;encoder.beginRenderPass=function(desc){const attachments=desc.colorAttachments.map(a=>{if(!a)return null;const meta=window.__costViews.get(a.view);return meta?{...meta,label:meta.label()}:null;});return begin.call(this,{...desc,label:JSON.stringify({original:desc.label??null,attachments})});};return encoder;};
    window.__costRestoreEncoder=()=>{d.createCommandEncoder=create;};
-   window.__costTimer=(await import('/tools/ash-pass-timer.mjs')).installAshPassTimer(d);window.__costRelease=window.__kaminosBeginSceneInspection();
+   window.__costRelease=window.__kaminosBeginSceneInspection();
    return {features:[...d.features],limits:{maxTextureDimension2D:d.limits.maxTextureDimension2D},adapter:window.kaminosWorkbenchSceneState().adapter};
   });await save();
   const draw=()=>page.evaluate(async()=>{
