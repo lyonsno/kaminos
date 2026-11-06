@@ -20,18 +20,20 @@ function boundaryDistances(neighbors,inside,faces,width){
 }
 // Undirected minimum cut. Iterative augmenting paths avoid dependence on the
 // JavaScript call stack when a long fitting produces a deep residual path.
+// Packed adjacency preserves incident-edge order and float64 residuals without
+// allocating an object for every directed edge.
 export function minimumSurfaceCut(n,edges,source=0,sink=1){
- const g=Array.from({length:n},()=>[]);
- for(const [a,b,w]of edges){const x={to:b,c:w,rev:g[b].length},y={to:a,c:w,rev:g[a].length};g[a].push(x);g[b].push(y);}
- const level=new Int32Array(n),next=new Int32Array(n),queue=new Int32Array(n);let flow=0;
- const bfs=()=>{level.fill(-1);level[source]=0;queue[0]=source;let h=0,t=1;while(h<t){const a=queue[h++];for(const e of g[a])if(e.c>0&&level[e.to]<0){level[e.to]=level[a]+1;queue[t++]=e.to;}}return level[sink]>=0;};
- // A level path visits each node at most once; reuse its storage across augmentations.
- const nodes=new Int32Array(n),path=new Int32Array(n),capacity=new Float64Array(n);
- const send=()=>{let depth=0;nodes[0]=source;capacity[0]=Infinity;while(depth>=0){const a=nodes[depth];if(a===sink){const amount=capacity[depth];for(let i=0;i<depth;i++){const e=g[nodes[i]][path[i]];e.c=Math.max(0,e.c-amount);g[e.to][e.rev].c+=amount;}return amount;}
-  let found=false;for(;next[a]<g[a].length;next[a]++){const e=g[a][next[a]];if(e.c>0&&level[e.to]===level[a]+1){path[depth]=next[a];capacity[depth+1]=Math.min(capacity[depth],e.c);nodes[++depth]=e.to;found=true;break;}}
+ const offsets=new Uint32Array(n+1);for(const [a,b]of edges){offsets[a+1]++;offsets[b+1]++;}for(let i=1;i<=n;i++)offsets[i]+=offsets[i-1];
+ const cursor=offsets.slice(0,n),to=new Uint32Array(edges.length*2),reverse=new Uint32Array(edges.length*2),residual=new Float64Array(edges.length*2);
+ for(const [a,b,w]of edges){const x=cursor[a]++,y=cursor[b]++;to[x]=b;to[y]=a;reverse[x]=y;reverse[y]=x;residual[x]=residual[y]=w;}
+ const level=new Int32Array(n),next=new Uint32Array(n),queue=new Uint32Array(n);let flow=0;
+ const bfs=()=>{level.fill(-1);level[source]=0;queue[0]=source;let h=0,t=1;while(h<t){const a=queue[h++];for(let e=offsets[a];e<offsets[a+1];e++)if(residual[e]>0&&level[to[e]]<0){level[to[e]]=level[a]+1;queue[t++]=to[e];}}return level[sink]>=0;};
+ const nodes=new Uint32Array(n),path=new Uint32Array(n),capacity=new Float64Array(n);
+ const send=()=>{let depth=0;nodes[0]=source;capacity[0]=Infinity;while(depth>=0){const a=nodes[depth];if(a===sink){const amount=capacity[depth];for(let i=0;i<depth;i++){const e=path[i];residual[e]=Math.max(0,residual[e]-amount);residual[reverse[e]]+=amount;}return amount;}
+  let found=false;for(;next[a]<offsets[a+1];next[a]++){const e=next[a],b=to[e];if(residual[e]>0&&level[b]===level[a]+1){path[depth]=e;capacity[depth+1]=Math.min(capacity[depth],residual[e]);nodes[++depth]=b;found=true;break;}}
   if(!found){level[a]=-1;depth--;if(depth>=0)next[nodes[depth]]++;}
  }return 0;};
- while(bfs()){next.fill(0);let value;while((value=send())>0)flow+=value;}
+ while(bfs()){next.set(offsets.subarray(0,n));let value;while((value=send())>0)flow+=value;}
  return {flow,inside:Uint8Array.from(level,v=>v>=0)};
 }
 export function refineAttachmentBoundary(graph,input,{reach}={}){
