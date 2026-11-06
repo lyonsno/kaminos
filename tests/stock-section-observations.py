@@ -37,6 +37,37 @@ def measured_ellipse(lines,target_radius):
 
 
 class ObservedOpenSection(unittest.TestCase):
+    def test_invalid_plan_geometry_has_a_durable_plan_failure(self):
+        cases=[([.2,-.2],.15,'strictly ordered'),([0,float('nan')],.15,'finite'),([0,.2],.1,'nominal')]
+        for stations,outer,message in cases:
+            with self.subTest(stations=stations,outer=outer),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory)
+                plan=root/'plan.json'
+                plan.write_text(json.dumps(dict(nominal=dict(center=[0,0],innerRadius=.14,outerRadius=outer),
+                    sources=[dict(name='channel',stations=stations)])))
+                report=root/'report.json'
+                process=subprocess.run([sys.executable,str(ROOT/'tools/stock_section_recovery.py'),
+                    '--plan',str(plan),'--report',str(report)],capture_output=True,text=True)
+                self.assertNotEqual(process.returncode,0)
+                value=json.loads(report.read_text())
+                self.assertFalse(value['ok'])
+                self.assertEqual(value['phase'],'plan-validation')
+                self.assertIn(message,value['error'].lower())
+
+    def test_source_frame_exposes_the_actual_recovery_validator(self):
+        descriptor=dict(schema='kaminos.stock-section.v1',nominal=dict(center=[0,0],innerRadius=.14,outerRadius=.15),
+            observations=[dict(station=0,inner=dict(center=[0,0],linear=[1,0,0,1]),outer=dict(center=[0,0],linear=[1,0,0,1]))])
+        def run(value):
+            return subprocess.run(['node',str(ROOT/'tools/stock-source-frame.mjs')],
+                input=json.dumps(dict(operation='validate-section',recovery=value)),capture_output=True,text=True)
+        valid=run(descriptor)
+        self.assertEqual(valid.returncode,0,valid.stderr)
+        self.assertTrue(json.loads(valid.stdout)['valid'])
+        descriptor['nominal']['outerRadius']=.1
+        invalid=run(descriptor)
+        self.assertNotEqual(invalid.returncode,0)
+        self.assertIn('Positive ordered nominal',invalid.stderr)
+
     def test_distinct_inner_outer_observations_and_retained_lines(self):
         lines=channel()
         result=module.observe_section(lines,measured_ellipse,.2)
@@ -84,7 +115,8 @@ class ObservedOpenSection(unittest.TestCase):
             runtime=root/'fitter.py'
             runtime.write_text('')
             plan=root/'plan.json'
-            plan.write_text(json.dumps(dict(ellipseFitter=dict(path=str(runtime),sha256='0'*64))))
+            plan.write_text(json.dumps(dict(ellipseFitter=dict(path=str(runtime),sha256='0'*64),
+                nominal=dict(center=[0,0],innerRadius=.14,outerRadius=.15),sources=[dict(stations=[0,.2])])) )
             report=root/'report.json'
             report.write_text('{"ok":true,"phase":"complete"}')
             process=subprocess.run([sys.executable,str(ROOT/'tools/stock_section_recovery.py'),
