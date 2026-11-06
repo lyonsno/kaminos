@@ -19455,6 +19455,8 @@ function syncIntegralGuideControls(s){
  let label=document.getElementById('integral-guide-label');
  if(!label){label=document.createElement('div');label.id='integral-guide-label';document.getElementById('viewport').append(label);}
  label.hidden=value.view==='beauty';
+ const toolbar=document.getElementById('authoring-viewport-tools');
+ label.style.top=`${(toolbar?.getClientRects().length?toolbar.offsetTop+toolbar.offsetHeight:0)+12}px`;
  label.textContent=available?`Optical guide · ${integralGuideCaptions[value.view]??''} Display gain ${value.gain}×. ${s.integralEvaluation?.active?'Held input.':'Live input.'}`:`Requested guide unavailable · ${s.integralReconstruction?.reason??'waiting for a reconstructed draw'}. A previous image may remain until a fresh draw. Beauty is available in Guide inspection.`;
 }
 for(const id of ['integral-guide-view','integral-guide-gain'])document.getElementById(id).addEventListener('change',()=>{
