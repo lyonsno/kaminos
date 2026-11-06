@@ -142,6 +142,19 @@ test('refined checkpoint collision mismatch carries the native strict-recovery c
  try{const state=await patch.snapshot();state.collisionIdentity=[{key:'0/missing',geometry:'saved',matrix:[]}];assert.throws(()=>patch.restore(state),error=>error.code==='ASH_CHECKPOINT_COLLISION_MISMATCH');}finally{patch.dispose();}
 });
 
+test('surface cache encoding preserves physical checkpoints in both directions',async()=>{
+ const options={cellSize:.1,bounds:{min:[0,0,0],max:[.8,.8,.8]},refinement:{ratio:2,mode:'adaptive',fineCapacity:1}};
+ const records=await createGpuRefinedAsh({...options,renderer:storageRenderer(),surfaceEncoding:'face-records'});
+ const masks=await createGpuRefinedAsh({...options,renderer:storageRenderer(),surfaceEncoding:'cell-masks'});
+ try{
+  await records.deposit({blanketDepth:.1,groundOnly:true});const old=await records.snapshot();masks.restore(old);
+  const compact=await masks.snapshot();for(const key of ['layout','residency','values','falling','volume','retainedVolume','steps'])assert.deepEqual(compact[key],old[key],key);
+  records.restore(compact);const roundtrip=await records.snapshot();assert.deepEqual(roundtrip,old);
+  assert.equal(masks.read().surfaceCache.allocatedBytes,masks.layout.tiles.count*masks.layout.tiles.cellsPerTile*8);
+  assert.equal(records.read().surfaceCache.encoding,'face-records');
+ }finally{records.dispose();masks.dispose();}
+});
+
 
 test('rejected adaptive checkpoint preserves different current maps, density and continuation',async()=>{
  const renderer=storageRenderer(),patch=await createGpuRefinedAsh({renderer,cellSize:.1,bounds:{min:[0,0,0],max:[.8,.8,.8]},refinement:{ratio:2,mode:'adaptive',fineCapacity:1}});
