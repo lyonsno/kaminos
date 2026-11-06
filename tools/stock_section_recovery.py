@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import math
 from pathlib import Path
 import shutil
 import subprocess
@@ -117,6 +118,23 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def validate_plan(plan):
+    finite=lambda x:isinstance(x,(int,float)) and not isinstance(x,bool) and math.isfinite(x)
+    nominal=plan.get('nominal',{})
+    center=nominal.get('center')
+    inner,outer=nominal.get('innerRadius'),nominal.get('outerRadius')
+    if not isinstance(center,list) or len(center)!=2 or not all(map(finite,center)) or not finite(inner) or not finite(outer) or not 0<inner<outer:
+        raise ValueError('Positive ordered nominal radii and finite center are required')
+    sources=plan.get('sources')
+    if not isinstance(sources,list) or not sources:raise ValueError('Nonempty source plans are required')
+    for source in sources:
+        stations=source.get('stations')
+        if not isinstance(stations,list) or not stations or not all(map(finite,stations)):
+            raise ValueError('Nonempty finite section stations are required')
+        if any(a>=b for a,b in zip(stations,stations[1:])):
+            raise ValueError('Section stations must be strictly ordered')
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--plan',type=Path,required=True)
@@ -132,6 +150,8 @@ def main():
         plan=json.loads(args.plan.read_text())
         report.update(planSha256=digest(args.plan),sourceSha256=digest(__file__),
                       python=sys.executable,numpy=np.__version__)
+        report['phase']='plan-validation'
+        validate_plan(plan)
         report['phase']='runtime-identity'
         runtime=plan['ellipseFitter']
         actual=digest(runtime['path'])
@@ -181,6 +201,11 @@ def main():
             if observed:
                 row['recovery']=dict(schema='kaminos.stock-section.v1',nominal=plan['nominal'],
                     observations=[dict(station=s['station'],inner=s['inner'],outer=s['outer']) for s in observed])
+                report['phase']='consumer-validation:'+part['name']
+                checked=subprocess.run([node,normalizer['path']],input=json.dumps(dict(operation='validate-section',recovery=row['recovery'])),text=True,capture_output=True)
+                row['consumerValidation']=dict(returncode=checked.returncode,stdout=checked.stdout,stderr=checked.stderr)
+                if checked.returncode or json.loads(checked.stdout).get('valid') is not True:
+                    raise ValueError('Runtime rejected the produced section descriptor')
             save()
         report['phase']='source-postflight'
         for item in [runtime,normalizer,*plan['normalizationModules']]:
