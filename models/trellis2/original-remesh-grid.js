@@ -1,3 +1,4 @@
+// Upstream CuMesh MIT notice: vendor/original-remesh/LICENSE.
 // Sparse topology from TRELLIS.2 5565d240 / CuMesh's narrow-band DC route
 // (MIT), as carried by TRELLIS2MLX's cumesh/metal_remeshing.py. Grid axes are
 // source xyz; no display-coordinate conversion belongs in reconstruction.

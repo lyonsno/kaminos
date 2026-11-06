@@ -1,3 +1,4 @@
+// Upstream CuMesh MIT notice: vendor/original-remesh/LICENSE.
 // Closest-point geometry and narrow-band DC kernels for the original finisher.
 // Traversal uses preorder escape links: there is no fixed traversal stack and
 // therefore no silent loss of deep BVH subtrees (the old Metal failure mode).
