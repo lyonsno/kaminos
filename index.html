@@ -7380,7 +7380,7 @@ function updateWaterAimConstraints(){
   if(!isSceneItemVisible(entry.id)||!viewportDisplay.helpers||!viewportDisplay.emitters)continue;
   const geometry=new THREE.BufferGeometry().setFromPoints([transform.position,aim.target].map(p=>new THREE.Vector3(...p)));
   const line=new THREE.Line(geometry,new THREE.LineDashedMaterial({color:0xe6bd67,dashSize:.035,gapSize:.02,depthTest:false,transparent:true,opacity:.65}));line.computeLineDistances();line.userData.kaminosEditorHelper=true;line.raycast=()=>{};waterAimGuides.add(line);
-  const speed=entry.localLiquidEmitter.strength;if(speed>0){const duration=new THREE.Vector3(...transform.position).distanceTo(new THREE.Vector3(...aim.target))/speed;
+  const speed=normalizeLocalLiquidEmitter(entry.localLiquidEmitter,transform).strength;if(speed>0){const duration=new THREE.Vector3(...transform.position).distanceTo(new THREE.Vector3(...aim.target))/speed;
    const arc=new THREE.Line(new THREE.BufferGeometry().setFromPoints(waterBallisticPreview(transform.position,aim.rotation,speed,duration).map(p=>new THREE.Vector3(...p))),new THREE.LineBasicMaterial({color:0x71d2db,transparent:true,opacity:.65}));arc.userData.kaminosEditorHelper=true;arc.raycast=()=>{};waterAimGuides.add(arc);}
  }
 }
@@ -13954,10 +13954,13 @@ function applyAuthoredWaterSettings(id,patch){
   patch={...patch,volumeRate:patch.rate*authoredMlsParticleVolume(cell)};
  }
  const target='@authored-water:'+id;
- if(!waterSettingTargets.has(target)){scenePlacementTools.edits.register(target,{read:()=>structuredClone(workingScene.objects.find(r=>r.id===id).localLiquidEmitter),check:value=>normalizeLocalLiquidEmitter(value,sceneObjectTransformState(workingScene.objects.find(r=>r.id===id).object)),write:value=>{
-  replaceAuthoredWaterSettings(id,value);
- }});waterSettingTargets.add(target);}
- return scenePlacementTools.edits.apply(target,normalizeLocalLiquidEmitter({...row.localLiquidEmitter,...patch},sceneObjectTransformState(row.object)),'Edit initial water');
+ if(!waterSettingTargets.has(target)){const entry=()=>workingScene.objects.find(r=>r.id===id);
+  scenePlacementTools.edits.register(target,{
+   read:()=>({settings:structuredClone(entry().localLiquidEmitter),rotation:entry().object.rotation.toArray().slice(0,3)}),
+   check:value=>{if(!Array.isArray(value.rotation)||value.rotation.length!==3||!value.rotation.every(Number.isFinite))throw Error('Water orientation requires three finite numbers');return {settings:normalizeLocalLiquidEmitter(value.settings,sceneObjectTransformState(entry().object)),rotation:[...value.rotation]};},
+   write:value=>{entry().object.rotation.fromArray(value.rotation);replaceAuthoredWaterSettings(id,value.settings);},
+  });waterSettingTargets.add(target);}
+ return scenePlacementTools.edits.apply(target,{settings:normalizeLocalLiquidEmitter({...row.localLiquidEmitter,...patch},sceneObjectTransformState(row.object)),rotation:row.object.rotation.toArray().slice(0,3)},'Edit water source');
 }
 function replaceAuthoredWaterSettings(id,value,prepared=null,{deferSync=false}={}){
   const entry=workingScene.objects.find(r=>r.id===id),pose=sceneObjectTransformState(entry.object),checked=normalizeLocalLiquidEmitter(value,pose);
