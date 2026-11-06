@@ -84,3 +84,15 @@ test('presentation and domain changes invalidate image history before another dr
     assert.throws(()=>p.relocateOrdinaryDomain([NaN,0,0]));assert.equal(p.debugState().integralSourceGeneration,generation);
   }finally{p.dispose();}
 });
+
+test('editing a filter knob keeps the selected held view when the ordinary mode is unchanged',async()=>{
+  const fs=await import('node:fs');const vm=await import('node:vm');
+  const s=fs.readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
+  const start=s.indexOf('      if(integralEvaluation) {',s.indexOf('    setControls(next) {'));
+  const block=s.slice(start,s.indexOf('      const previousGrid =',start));
+  const base={integralReconstruction:'combined',reconstructionRadius:1};
+  const context={integralEvaluation:{view:'temporal'},controlsSnapshot:base,next:{...base,reconstructionRadius:2},effectiveNext:{...base,reconstructionRadius:2},state:{integralEvaluation:{view:'temporal'}},endIntegralEvaluation(){throw Error('Filter knobs must preserve the held inputs');}};
+  vm.runInNewContext(block,context);assert.equal(context.integralEvaluation.view,'temporal');
+  context.next={integralReconstruction:'spatial'};context.effectiveNext={...base,integralReconstruction:'spatial'};
+  vm.runInNewContext(block,context);assert.equal(context.integralEvaluation.view,'spatial');assert.equal(context.state.integralEvaluation.view,'spatial');
+});

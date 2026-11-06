@@ -28332,7 +28332,7 @@ export function createKaminosVolumePrototype({
       if(integralEvaluation) {
         const filterKeys=new Set(['integralReconstruction','reconstructionSpatial','reconstructionRadius','reconstructionWindow','reconstructionResponse','reconstructionEdge','reconstructionFresh']);
         if(Object.keys(effectiveNext).some(k=>!filterKeys.has(k)&&JSON.stringify(effectiveNext[k])!==JSON.stringify(controlsSnapshot[k])))endIntegralEvaluation('render-or-simulation-settings-changed');
-        else if(Object.hasOwn(next,'integralReconstruction'))integralEvaluation.view=next.integralReconstruction;
+        else if(Object.hasOwn(next,'integralReconstruction')&&next.integralReconstruction!==controlsSnapshot.integralReconstruction){integralEvaluation.view=next.integralReconstruction;state.integralEvaluation.view=next.integralReconstruction;}
       }
       const previousGrid = gridSize;
       const previousBoundarySplatTelemetryControlSignature = boundarySplatTelemetryControlSignature(controlsSnapshot);

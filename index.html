@@ -19469,6 +19469,7 @@ function refreshVolumeReadout() {
     : reconstruction?.effective&&reconstruction.effective!=='off'
       ? `${reconstruction.effective} · ${reconstruction.frames} draws since reset · ${reconstruction.simulationStepChanges??0} sim-step changes · ${reconstruction.sameStepDraws??0} draws at this step · camera or settings changes reset${reconstruction.freshSampling?' · jitter advances while physics is paused':''}`
       : reconstruction?.requested&&reconstruction.requested!=='off'?`Unavailable · ${String(reconstruction.reason||'awaiting frame').replaceAll('-',' ')}`:'Raw image · no image history retained';
+  document.getElementById('volume-ray-step-stats').hidden=!!evaluation;
   const telemetry=s.rayStepTelemetry;
   document.getElementById('volume-ray-step-status').textContent=telemetry?.active?'GPU · material samples':
     telemetry?.requested?`Unavailable · ${String(telemetry.reason||'awaiting frame').replaceAll('-',' ')}`:'Awaiting frame';

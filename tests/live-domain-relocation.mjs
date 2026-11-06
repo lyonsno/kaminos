@@ -10,7 +10,7 @@ const source = fs.readFileSync(new URL('../volume-core.js', import.meta.url), 'u
 const method = source.match(/    relocateOrdinaryDomain\([\s\S]*?\n    },/)[0].replace(/,$/, '');
 let rebuilds = 0;
 const context = {
-  followingDomain: null, productFrameOwner: 'prototype', device: {}, gridSize: 32,
+  invalidateIntegralReconstruction(){}, followingDomain: null, productFrameOwner: 'prototype', device: {}, gridSize: 32,
   productTransform: {translate: [0, 0, 0], scale: 1}, volumePrimitives: [],
   state: {}, pendingDomainRemap: null, structuredClone, lastResidualPartials: null,
   normalizePrimitiveRecord: x => x, publishVolumePrimitiveState() {}, getPrimitiveSource() {},
