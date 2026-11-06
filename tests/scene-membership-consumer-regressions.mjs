@@ -12,6 +12,8 @@ import {canCollideWithFire,checkedObjectCollision} from '../scene-collider.mjs';
 import * as THREE from '../lib/three.core.js';
 import {checkedProceduralMesh, createProceduralMesh, PROCEDURAL_MESH_TYPE} from '../scene-geometry.mjs';
 import {isReloadableSceneObjectRecord} from '../scene-persistence-core.js';
+import {releasePreparedRoot} from '../scene-asset-preparation.mjs';
+import {releaseInitialBeautyLevels} from '../scene-lod-budget.mjs';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const disposeStart = html.indexOf('function disposeObjectTree(');
@@ -35,7 +37,7 @@ function makeSceneContext({reloadObject = () => ({}), reloadableType = 'glb'} = 
   };
   // VM remains only for the unrelated page presenter and mesh repair callers.
   // Membership operations themselves are imported and run outside that context.
-  const context = vm.createContext({structuredClone,workingScene,scene,currentMesh:null,sceneBurning:null,
+  const context = vm.createContext({structuredClone,workingScene,scene,currentMesh:null,sceneBurning:null,releasePreparedRoot,releaseInitialBeautyLevels,
     window:{_kaminosDirty(){}},setInfo(){},renderSceneObjectList(){},sceneNavigation:{invalidate(){}},
     applyMaterialStateToObject(){},applySceneObjectTransformState(){},
   });

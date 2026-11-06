@@ -7,7 +7,8 @@ export function applySceneEnvironmentBackground(scene,environment,map){
  if(environment?.showBackground&&map){
   let state=states.get(scene);if(!state){state={contrast:uniform(1)};states.set(scene,state);}
   if(scene.background!==map||!scene.backgroundNode){const graded=pmremTexture(map).rgb.max(0).div(.18).pow(state.contrast.max(1)).mul(.18);scene.backgroundNode=mix(vec3(.18),graded,state.contrast.min(1));}
-  scene.background=map;scene.backgroundBlurriness=environment.backgroundBlur;scene.backgroundIntensity=environment.backgroundBrightness;state.contrast.value=environment.backgroundContrast;scene.backgroundRotation=scene.environmentRotation;
+  const intensityScale=Number.isFinite(environment.intensity)?environment.intensity:1;
+  scene.background=map;scene.backgroundBlurriness=environment.backgroundBlur;scene.backgroundIntensity=environment.backgroundBrightness*intensityScale;state.contrast.value=environment.backgroundContrast;scene.backgroundRotation=scene.environmentRotation;
   return {mode:'environment',rotation:scene.backgroundRotation.y,blur:scene.backgroundBlurriness,brightness:scene.backgroundIntensity,contrast:state.contrast.value};
  }
  scene.backgroundNode=null;scene.background=new Color(0x0a0a0a);scene.backgroundBlurriness=0;return {mode:'solid',color:'0a0a0a'};

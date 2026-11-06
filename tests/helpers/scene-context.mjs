@@ -18,6 +18,8 @@ import {planSceneRestore} from '../../scene-persistence-core.js';
 import {compositionRestoreUrl,savedSceneLocation} from '../../scene-authoring.mjs';
 import {readOwnerExperimentAddress} from '../../owner-experiment-entry.mjs';
 import {readFileSync} from 'node:fs';
+import {releasePreparedRoot} from '../../scene-asset-preparation.mjs';
+import {releaseInitialBeautyLevels} from '../../scene-lod-budget.mjs';
 
 const page=readFileSync(new URL('../../index.html',import.meta.url),'utf8');
 const recordStart=page.indexOf('const sceneRecords = createSceneRecordOperations(');
@@ -79,6 +81,13 @@ export function sceneContext(context, options) {
   context.selectedFlameControlEntry??=()=>context.selectedSceneObjectEntry?.()??(context.workingScene?.activeObjectId?{id:context.workingScene.activeObjectId,type:'flame-emitter'}:null);
   context.sceneLightingPreparation ??= null;
   context.sceneGeometryPreview ??= null;
+  context.sceneArrivalState ??= {coarsePresented:false};
+  context.activeSceneStandIns ??= new Map();context.coarseSceneGroups ??= [];
+  // These domain fixtures do not download assets. Preparation and resource
+  // lifetime are exercised by the real pool/lifecycle tests and native scene.
+  context.prepareSavedSceneAssets ??= async()=>null;
+  context.releasePreparedRoot ??= releasePreparedRoot;
+  context.releaseInitialBeautyLevels ??= releaseInitialBeautyLevels;
   // Domain fixtures do not prepare GPU environments; loading behavior has its own tests.
   context.environmentLoader ??= {holdFull:()=>()=>{},releaseFull(){}};
   context.requestAnimationFrame ??= fn=>fn();

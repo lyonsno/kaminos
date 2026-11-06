@@ -27,13 +27,13 @@ export function sceneGIReceives(material) {
 }
 
 export function resolveSceneGIEstimatorSettings(value = {}) {
-  const settings = {expFactor:2,screenSpaceSampling:false,linearThickness:false,backfaceLighting:.2,depthPhi:.1,normalPhi:5,lumaPhi:5};
+  const settings = {expFactor:2,screenSpaceSampling:false,linearThickness:false,backfaceLighting:.2,depthPhi:.1,normalPhi:5,lumaPhi:5,mipSampling:false,perspectiveReconstruction:false};
   for (const key of Object.keys(settings)) if (Object.hasOwn(value,key)) settings[key]=value[key];
   for (const key of ['expFactor','depthPhi','normalPhi','lumaPhi']) {
     if (!Number.isFinite(settings[key]) || settings[key] <= 0) throw new Error(`Invalid scene GI ${key}`);
   }
   if (!Number.isFinite(settings.backfaceLighting) || settings.backfaceLighting < 0) throw new Error('Invalid scene GI backfaceLighting');
-  for (const key of ['screenSpaceSampling','linearThickness']) if (typeof settings[key] !== 'boolean') throw new Error(`Invalid scene GI ${key}`);
+  for (const key of ['screenSpaceSampling','linearThickness','mipSampling','perspectiveReconstruction']) if (typeof settings[key] !== 'boolean') throw new Error(`Invalid scene GI ${key}`);
   return settings;
 }
 
@@ -72,5 +72,8 @@ export function calibrateSceneGISettingsForBounds({ boxes = [], cameraDistance =
   const radius = Math.round(Math.max(0.25, Math.min(25, rawRadius)) * 100) / 100;
   const rawThickness = 0.14 * medianDiagonal;
   const thickness = Math.round(Math.max(0.08, Math.min(Math.min(2.5, radius * 0.45), rawThickness)) * 100) / 100;
-  return resolveSceneGIControlState({ ...base, radius, thickness });
+  const bounceFeedback = Object.hasOwn(current, 'bounceFeedback')
+    ? Boolean(current.bounceFeedback) && base.temporal !== false
+    : base.temporal !== false;
+  return resolveSceneGIControlState({ ...base, radius, thickness, bounceFeedback });
 }

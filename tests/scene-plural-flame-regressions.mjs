@@ -33,7 +33,7 @@ test('actual deletion and membership Undo/Redo preserve a surviving source with 
  await edits.redo();assert.equal(h.sceneObjects.length,1);assert.equal(h.sceneObjects[0].emission.settings['volume-immersed-fuel'].value,.8);
 });
 test('refusing a plural restore preserves the complete current scene and usable save state',async()=>{
- const stop=html.indexOf('  setFlameDomainTranslation(restorePlan.flameDomainTranslation',html.indexOf('async function loadSceneFile('));
+ const stop=html.indexOf('  await retireSceneFlame();',html.indexOf('async function loadSceneFile('));
  const start=html.indexOf('async function loadSceneFile(');const prefix=html.slice(start,stop)+'\n}';const mutations=[];
  const original={name:'existing',route:{}},objects=[{id:'kept'}];const h={authoringBusy:false,vantageCaptureHeld:false,scenePlacementTools:null,sceneRecords:{assertReloadable(){}},sceneLoadRequests:{begin:()=>1,isCurrent:()=>true},currentSceneFile:'existing.json',getVolumePrimitiveState:()=>[],flameDomainTranslation:[0,0,0],flameDomainScale:1,flameDomainFollowSource:false,sceneSaveBlockedByFailedRestore:false,planSceneRestore:()=>({objects:[{id:'a',type:'flame-emitter'},{id:'b',type:'flame-emitter'}],composition:{name:'incoming',route:{}},flameSourcePresent:true}),assertSceneObjectsReloadable(){},isCompositionAuthoring:()=>true,window:{kaminosViewportSettings:{set:()=>mutations.push('display')},__kaminosVolumeEmitterReceipt:{effective:{family:'ring'}}},viewportDisplay:{},activeSceneComposition:original,sceneObjects:objects,FLAME_EMITTER_TYPE:'flame-emitter',FLAME_EMITTER_ID:'flame-emitter',setAnnularBurner:()=>mutations.push('burner'),setRimLight:()=>mutations.push('rim'),setInfo(){},volumePrototype:{},requirePluralFlameSourceRuntime:()=>{throw Error('This flame runtime does not yet support multiple authored sources');}};
  sceneContext(h);vm.runInContext(prefix,h);await assert.doesNotReject(()=>h.loadSceneFile({text:async()=>JSON.stringify({})},{mounted:true}));assert.deepEqual(mutations,[]);assert.equal(h.activeSceneComposition,original);assert.equal(h.sceneObjects,objects);assert.equal(h.sceneDocument.state().filename,'existing.json');assert.equal(h.sceneDocument.state().blocked,false);
@@ -121,7 +121,7 @@ test('shared parameter history writes let the inspector choose its selected-sour
 });
 
 test('restoring a plural flame composition from an ordinary page without a booted flame runtime navigates or boots the runtime before checking plural source support',async()=>{
- const stop=html.indexOf('  setFlameDomainTranslation(restorePlan.flameDomainTranslation',html.indexOf('async function loadSceneFile('));
+ const stop=html.indexOf('  await retireSceneFlame();',html.indexOf('async function loadSceneFile('));
  const start=html.indexOf('async function loadSceneFile(');const prefix=html.slice(start,stop)+'\n  return true;\n}';
  const composition={schema:'kaminos.stationary-flame-composition.v1',flame:{presetId:'vsp-'+'a'.repeat(64),label:'Two braziers',stationary:true},route:{volume_light_field:'1'},lightGainStops:0};
  const plan=()=>({objects:[{id:'a',type:'flame-emitter'},{id:'b',type:'flame-emitter'}],composition,flameSourcePresent:true});

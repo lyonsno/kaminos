@@ -10,6 +10,7 @@ import {
   allocateSceneBeautyLods,
   allocateShadowCasterLods,
   createSceneBeautyLodController,
+  seedInitialBeautyLevels,
 } from '../scene-lod-budget.mjs';
 import {
   buildSurfelField,
@@ -1492,6 +1493,17 @@ test('Kiln side-pipe drop vs. beam crack-seal: footprint and budget allocators p
   const kilnPxZeroTail = screenPixelError(realKilnLevels[3], {worldBox: unitBox, worldDiag: diag, camera: cam, viewportHeight: 1080, tailWeight: 0});
   const kilnPxDefaultTail = screenPixelError(realKilnLevels[3], {worldBox: unitBox, worldDiag: diag, camera: cam, viewportHeight: 1080});
   assert.ok(kilnPxDefaultTail > kilnPxZeroTail, 'N1: tailWeight forwards through screenPixelError');
+
+  const defaultCtrl = createSceneBeautyLodController({THREE, scene: new THREE.Scene(), giProxies: null, parseGlb: async () => new THREE.Group()});
+  const defaultBudget = defaultCtrl.read().faceBudget;
+  assert.ok(defaultBudget >= 300000, `default beauty faceBudget (${defaultBudget}) must accommodate a single 287,407-face hero kiln at closeup`);
+  const singleHeroClose = allocateSceneBeautyLods(
+    [{id: 'kiln', heroFaces: 287407, levels: realKilnLevels, worldBox: unitBox, worldDiag: diag}],
+    {camera: closeCam, viewportHeight: 1080, maxPixelError: 1.5, faceBudget: defaultBudget},
+  );
+  assert.equal(singleHeroClose.allocations.kiln.tier, 'hero', 'single 287,407-face hero kiln stays on hero at closeup under default beauty faceBudget');
+  assert.equal(singleHeroClose.allocations.kiln.demotedByBudget, false);
+  defaultCtrl.dispose();
 });
 
 test('prepareCapture settles demoted shadow caster tiers before frame 1 and borrowFrame scopes beauty LOD visibility', async () => {
@@ -1830,3 +1842,29 @@ test('bakeRungMeshesToRootSpace aligns Z-up GLB node transforms to hero local bo
 
 
 
+
+test('coarse arrival remains visible during batch preparation and while the selected rung loads',async()=>{
+ const scene=new THREE.Scene(),root=new THREE.Group(),hero=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshStandardMaterial());root.add(hero);scene.add(root);root.userData.kaminosSceneObject={id:'arrival',type:'glb',source:'/api/read?root=generated-meshes&path='+('a'.repeat(64))+'.glb'};
+ const low='b'.repeat(64),fine='c'.repeat(64),coarse=new THREE.Group().add(new THREE.Mesh(new THREE.PlaneGeometry(),new THREE.MeshStandardMaterial()));
+ seedInitialBeautyLevels(root,[{sha:low,faces:2,root:coarse}]);let finish,requests=0;
+ const controller=createSceneBeautyLodController({THREE,scene,giProxies:{list:()=>[{root,levels:[{sha:low,faces:2,error:{relative:{p95:.3}}},{sha:fine,faces:4,error:{relative:{p95:0}}}]}]},loadLevel:async()=>{requests++;return new Promise(resolve=>finish=resolve);},settings:{faceBudget:10,texelWeight:0}});
+ const camera=makeCamera({z:4});controller.setPreparation(true);let state=controller.update(camera,{viewportHeight:500});assert.equal(state.totalFaces,2,'preparation counts the actual coarse display');assert.equal(state.objects[0].displayedTier,low);assert.equal(hero.visible,false);assert.equal(requests,0,'partial scene must not request intermediate allocations');
+ controller.setPreparation(false);state=controller.update(camera,{viewportHeight:500});assert.equal(state.objects[0].displayedTier,low);assert.equal(requests,1);assert.equal(hero.visible,false,'no hero flash while refinement is pending');
+ finish(new THREE.Group().add(new THREE.Mesh(new THREE.PlaneGeometry(1,1,2,1),new THREE.MeshStandardMaterial())));await controller.whenIdle();state=controller.update(camera,{viewportHeight:500});assert.equal(state.objects[0].displayedTier,fine);controller.dispose();
+});
+
+test('seeded arrival rungs retain source-frame collision geometry and bake display geometry under transformed heroes',()=>{
+ const scene=new THREE.Scene(),root=new THREE.Group();root.userData.kaminosSceneObject={id:'seeded',type:'glb'};
+ root.position.set(2,3,4);root.scale.set(2,3,4);root.add(new THREE.Mesh(new THREE.BoxGeometry(1,2,3,2,2,2),new THREE.MeshStandardMaterial()));scene.add(root);
+ const seed=new THREE.Group(),mesh=new THREE.Mesh(new THREE.BoxGeometry(1,3,2),new THREE.MeshStandardMaterial());mesh.rotation.x=-Math.PI/2;seed.add(mesh);
+ const sha='d'.repeat(64),levels=[{sha,faces:12,closed:true,error:{relative:{p95:0,max:0}}}];
+ seedInitialBeautyLevels(root,[{sha,faces:12,root:seed}]);
+ const controller=createSceneBeautyLodController({THREE,scene,giProxies:{list:()=>[{root,levels}],get:()=>({state:'loaded',levels})},settings:{faceBudget:1000,texelWeight:0}});
+ controller.setPreparation(true);controller.update(makeCamera({z:20}),{viewportHeight:500});
+ const resident=controller.getResidentRung(root,sha);assert(resident.collisionRoot,'seeded rung must supply the collision consumer');
+ assert(Math.abs(mesh.rotation.x)<1e-9,'display seed node transform is baked to root space');
+ const collisionMesh=resident.collisionRoot.children[0];assert(Math.abs(collisionMesh.rotation.x+Math.PI/2)<1e-9,'collision seed retains source node frame');
+ assert.notEqual(collisionMesh.geometry,mesh.geometry,'display baking cannot mutate the collision geometry');
+ assert.equal(controller.resolveCollisionRung(root,{cellSize:.04}).root,resident.collisionRoot);
+ controller.dispose();
+});

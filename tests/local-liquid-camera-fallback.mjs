@@ -19,7 +19,8 @@ for(const matching of [true,false])for(const mountTransform of [true,false])for(
   if(!hasCameraSetter)delete host.setSceneCamera;
   const fields={'rendering-match-flame-camera':{checked:matching},'rendering-camera-status':{textContent:''}};
   runInNewContext(production,{
-    sceneBeautyLods:{withFrame:(_camera,_options,draw)=>draw()},camera:{},renderer:{domElement:{height:640}},polyEdit:null,sceneComponents:null,outputCaptureExtent:null,recordingFrameSink:null,fireLightFieldPass:null,sceneExposureControls:null,authoredWaterControls:null,sharedWorkbench:null,sceneGISettings:{mode:'gtao',view:'scene'},
+    sceneAssetPreparationActive:false,
+    sceneBeautyLods:{setPreparation(){},withFrame:(_camera,_options,draw)=>draw()},camera:{},renderer:{domElement:{height:640}},polyEdit:null,sceneComponents:null,outputCaptureExtent:null,recordingFrameSink:null,fireLightFieldPass:null,sceneExposureControls:null,authoredWaterControls:null,sharedWorkbench:null,sceneGISettings:{mode:'gtao',view:'scene'},
     document:{getElementById:id=>fields[id]},window:{__kaminosVolumePrototype:{emissiveCameraState:()=>({})}},
     sceneEmissiveCamera:{update:()=>({effective:matching,toneMapping:'agx',whiteBalanceKelvin:6500,exposureEV:0})},
     applySceneEmissiveCamera,renderPipeline:pipeline,outlinedSceneOutput:raw,outlinedCameraOutput:matched,

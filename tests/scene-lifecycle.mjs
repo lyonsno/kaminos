@@ -152,3 +152,12 @@ test('replacement superseded during its geometry presentation cannot construct t
  const current=f.state.loads.begin();await f.lifecycle.replace([{id:'new'}],{loadRequestId:current});release();
  assert.equal(await pending,false);assert.deepEqual(f.state.objects.map(row=>row.id),['new']);
 });
+
+test('scene preparation finishes before ordered publication and is released after use',async()=>{
+ const f=fixture(),events=[];let release;const prepared=new Promise(resolve=>release=resolve);
+ f.adapters.records.prepare=async records=>{events.push('prepare');await prepared;return records.map(row=>row.id);};
+ const load=f.adapters.records.load;f.adapters.records.load=(record,id,batch)=>{events.push(record.id);assert.deepEqual(batch,['a','b']);return load(record,id);};
+ f.adapters.records.releasePrepared=batch=>{assert.deepEqual(batch,['a','b']);events.push('release');};
+ const pending=f.lifecycle.replace([{id:'a'},{id:'b'}]);await new Promise(setImmediate);
+ assert.deepEqual(events,['prepare'],'full records must wait for the complete coarse preparation phase');release();assert.equal(await pending,true);assert.deepEqual(events,['prepare','a','b','release']);
+});

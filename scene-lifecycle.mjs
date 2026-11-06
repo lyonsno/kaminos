@@ -27,11 +27,13 @@ export function createSceneLifecycle({scene,roots,records,groups,selection,conte
     if(!current(loadRequestId))return false;
     if(!await clear({loadRequestId,setup}))return false;
     context.beginLoad?.(setup);
-    const loaded=[];
+    const loaded=[];let prepared;
     try{
+      prepared=await records.prepare?.(values,loadRequestId,setup);
+      if(!current(loadRequestId))return false;
       for(const record of values){
         if(context.beforeLoad){await context.beforeLoad(record,loadRequestId);if(!current(loadRequestId))return false;}
-        const object=await records.load(record,loadRequestId);
+        const object=await records.load(record,loadRequestId,prepared);
         if(!current(loadRequestId))return false;
         const entry=scene.find(record.id);
         if(!entry||entry.object!==object)throw Error(`Scene object "${record.id}" did not publish its loaded identity`);
@@ -44,6 +46,7 @@ export function createSceneLifecycle({scene,roots,records,groups,selection,conte
       else selection.object(activeId&&loaded.includes(activeId)?activeId:loaded.at(-1));
       return true;
     }catch(error){if(!current(loadRequestId))return false;await clear({loadRequestId});throw error;}
+    finally{await records.releasePrepared?.(prepared);}
   }
   function capturePreview(){return context.capturePreview?.()??{};}
   async function previewTransition(change){

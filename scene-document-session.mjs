@@ -61,9 +61,14 @@ export function createSceneDocumentSession({
     let data, plan;
     try {
       const address = structuredClone(readAddress());
-      const text = await file.text();
-      if (!current(id)) return {ok:false, stale:true};
-      try { data = JSON.parse(text); } catch { throw Error('Invalid scene file'); }
+      if (typeof file.json === 'function') {
+        data = await file.json();
+        if (!current(id)) return {ok:false, stale:true};
+      } else {
+        const text = await file.text();
+        if (!current(id)) return {ok:false, stale:true};
+        try { data = JSON.parse(text); } catch { throw Error('Invalid scene file'); }
+      }
       try { plan = certify(data, {allowEmpty:emptySettings}); }
       catch (error) { throw Error(`Invalid scene format: ${error.message || error}`); }
       assertSupported(plan);

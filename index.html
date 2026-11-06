@@ -257,6 +257,18 @@ canvas { display: block; }
 #env-loading { position: absolute; top: 12px; left: 12px; max-width: calc(100% - 24px); box-sizing: border-box; padding: 6px 9px; border-radius: 4px; background: #181818cc; color: #ddd; font-size: 12px; font-family: 'SF Mono', monospace; pointer-events: none; }
 
 #authoring-viewport-tools #env-loading { position: static; max-width: 100%; padding: 3px 6px; font-size: 10px; }
+#viewport-studio-look-pill { display: inline-flex; align-items: center; gap: 5px; margin-left: 4px; padding: 1px 7px; border: 1px solid #393d46; border-radius: 999px; background: #202329; font-size: 10px !important; color: #b8c0cc; line-height: 1; }
+#viewport-studio-look-pill select { background: transparent; color: #e6ebf2; border: 0; padding: 2px 1px; font-size: 10px; cursor: pointer; outline: none; }
+#loading-telemetry-pill { position: absolute; top: 74px; left: 50%; transform: translateX(-50%); z-index: 40; display: flex; flex-direction: column; gap: 4px; min-width: 240px; max-width: min(520px, calc(100% - 32px)); padding: 6px 14px; border-radius: 999px; background: rgba(18, 21, 27, 0.92); backdrop-filter: blur(8px); border: 1px solid rgba(110, 145, 195, 0.42); color: #eef3fb; font: 10.5px/1.35 'SF Mono', 'Fira Code', monospace; pointer-events: none; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.48); }
+#loading-telemetry-text { color: #eef3fb !important; font-weight: 500; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#loading-telemetry-pill[hidden] { display: none !important; }
+#loading-telemetry-pill[data-stalled="true"] { border-color: rgba(240, 168, 68, 0.85); background: rgba(38, 26, 14, 0.94); color: #ffd494; }
+#loading-telemetry-pill[data-stalled="true"] #loading-telemetry-text { color: #ffd494 !important; }
+#loading-telemetry-pill[data-failed="true"] { border-color: rgba(235, 95, 95, 0.85); background: rgba(42, 18, 18, 0.94); color: #ffb8b8; }
+#loading-telemetry-pill[data-failed="true"] #loading-telemetry-text { color: #ffb8b8 !important; }
+#loading-telemetry-track { width: 100%; height: 2px; border-radius: 2px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+#loading-telemetry-bar { width: 25%; height: 100%; background: #6ea8fe; transition: width 0.12s ease-out; }
+#loading-telemetry-pill[data-stalled="true"] #loading-telemetry-bar { background: #f0a844; }
 
 /* Exposure slider */
 .slider-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; user-select: none; -webkit-user-select: none; }
@@ -861,8 +873,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <input type="range" id="exposure-slider" min="0.2" max="4" step="0.1" value="1.1">
       <span class="slider-val" id="exposure-val">1.1</span>
     </div>
-    <label class="import-mode" id="scene-match-flame-camera-row"><input type="checkbox" id="rendering-match-flame-camera"><span>Match flame camera</span></label>
-    <p class="slider-help" id="rendering-camera-status" hidden></p>
     <div class="slider-row">
       <span class="slider-label">Env Intensity</span>
       <input type="range" id="env-intensity-slider" min="0" max="5" step="0.1" value="0.7">
@@ -905,12 +915,25 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         </label>
       </div>
       <div class="slider-row" style="margin-top: 4px;">
+        <span class="slider-label">Studio look</span>
+        <select id="arrival-studio-look-select" class="select-input" title="Choose a studio look preset (also available in Cmd+, Preferences)">
+          <option value="sculptural-studio">Sculptural Studio</option>
+          <option value="obsidian-stage">Obsidian Stage</option>
+          <option value="warm-gallery">Warm Gallery</option>
+          <option value="technical-daylight">Technical Daylight</option>
+        </select>
+      </div>
+      <div class="slider-row" style="margin-top: 4px;">
         <label style="font-size: 10px; color: #aaa; display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Optional: inspect arrived mesh albedo, roughness, and metalness to tune key/rim light balance and exposure">
           <input type="checkbox" id="arrival-material-tuning-toggle"> Material-Aware Arrival Tuning
         </label>
       </div>
       <div id="arrival-material-tuning-status" role="status" style="font-size: 10px; color: #888; margin: 4px 0 6px; line-height: 1.35;">Studio rig active · Material tuning off</div>
-      <button type="button" class="btn" id="arrival-studio-lights-promote" title="Convert the startup key and rim lights into editable Spot Light objects in Scene Objects">Promote Studio Lights to Scene</button>
+      <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+        <button type="button" class="btn" id="arrival-studio-lights-promote" style="flex: 1 1 auto;" title="Materialize the arrival key and rim lights into the @studio-light-rig Kaminos scene group">Make Rig Scene Object</button>
+        <button type="button" class="btn" id="arrival-studio-lights-grab" style="flex: 1 1 auto;" title="One-click: materialize the Arrival Studio Rig and immediately drag it in the viewport">Grab Rig (G)</button>
+        <button type="button" class="btn" id="arrival-studio-lights-orbit" style="flex: 1 1 auto;" title="One-click: materialize the Arrival Studio Rig and immediately orbit it around the object">Orbit Rig (R)</button>
+      </div>
     </div>
 
     </section>
@@ -2605,6 +2628,10 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div id="volume-stage-b-producer-label"></div>
   </div>
   <div id="env-loading">Loading environment...</div>
+  <div id="loading-telemetry-pill" role="status" aria-live="polite" hidden>
+    <span id="loading-telemetry-text"></span>
+    <div id="loading-telemetry-track"><div id="loading-telemetry-bar"></div></div>
+  </div>
   <div id="hybrid-splat-overlay-host" aria-hidden="true"></div>
   <div id="hybrid-splat-viewport-controls" hidden>
     <div class="hybrid-splat-viewport-actions">
@@ -2836,6 +2863,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
           <div class="field"><label for="scene-gi-temporalWeight" title="Previous-frame fraction while the scene changes. Stationary scenes progressively accumulate fresh samples until the estimated noise is low.">History blend</label><input id="scene-gi-temporalWeight" type="number" min="0" max="0.99" step="0.01" value="0.9"></div>
           <div class="field"><label for="scene-gi-expFactor" title="Larger values concentrate samples nearer the receiving surface; sample count stays the same.">Sample concentration</label><input id="scene-gi-expFactor" type="number" min="0.01" step="0.05" value="2"></div>
           <div class="field"><label for="scene-gi-screenSpaceSampling" title="Use a radius measured in screen space rather than world space.">Screen-space radius</label><input id="scene-gi-screenSpaceSampling" type="checkbox"></div>
+          <div class="field"><label for="scene-gi-mipSampling" title="Use coarser depth and lighting farther along each search. Compare fine contact detail when enabling.">Coarse distant samples</label><input id="scene-gi-mipSampling" type="checkbox"></div>
+          <div class="field"><label for="scene-gi-perspectiveReconstruction" title="Use equivalent camera-specific perspective arithmetic in the lighting search.">Fast perspective reconstruction</label><input id="scene-gi-perspectiveReconstruction" type="checkbox"></div>
           <div class="field"><label for="scene-gi-linearThickness" title="Scale thickness with distance from the camera.">Depth-scaled thickness</label><input id="scene-gi-linearThickness" type="checkbox"></div>
           <div class="field"><label for="scene-gi-depthPhi" title="Larger values allow filtering across larger depth differences.">Depth tolerance</label><input id="scene-gi-depthPhi" type="number" min="0.001" step="0.01" value="0.1"></div>
           <div class="field"><label for="scene-gi-normalPhi" title="Larger values more strongly preserve boundaries between different surface directions.">Normal edge strength</label><input id="scene-gi-normalPhi" type="number" min="0.01" step="0.1" value="5"></div>
@@ -2886,6 +2915,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <p class="rendering-description" id="rendering-angular-cache">First visit prepares visibility. Retention uses extra GPU memory; geometry edits invalidate every set. Only the selected set runs each frame.</p>
         <div class="slider-row"><label class="slider-label" for="rendering-source-softness">Lighting source softness</label><input type="range" id="rendering-source-softness" min="0" max="16" step="1" value="0"><span class="slider-val" id="rendering-source-softness-value">0</span></div>
         <p class="rendering-description">Artistic lighting-source redistribution. Zero is unfiltered. Spreading emission while keeping extinction fixed can increase escaped light and reduce flicker; this is not brightness-neutral reconstruction. Visible flame and saved settings are unchanged.</p>
+        <label class="import-mode" id="scene-match-flame-camera-row"><input type="checkbox" id="rendering-match-flame-camera" checked><span>Match flame camera</span></label>
+        <p class="slider-help" id="rendering-camera-status" hidden></p>
         <label for="rendering-smoke-solver">Smoke illumination</label><select id="rendering-smoke-solver"><option value="distributed">Distributed · geometry-visible, full height</option><option value="legacy">Legacy comparison · lower cube, no solid visibility</option></select>
         <div class="slider-row"><label class="slider-label" for="rendering-surface-reconstruction">Surface reconstruction</label><input type="range" id="rendering-surface-reconstruction" min="0" max="32" step="2" value="0"><span class="slider-val" id="rendering-surface-reconstruction-value">0</span></div>
         <p class="rendering-description">Experimental same-frame mesh smoothing passes. Follows triangle connectivity and stops across sharp normal changes; split vertices remain split. No temporal history. Does not alter smoke or the visible flame. Zero bypasses reconstruction.</p>
@@ -3018,6 +3049,8 @@ import {ASH_SOURCE_TYPE,checkedAshSource,createAshSourceObject,sourceInField} fr
 import {installAshSourceInspector} from './ash/source-controls.mjs';
 import {installAshInspector,askAshSetup} from './ash/scene-controls.mjs';
 import {createSceneLifecycle} from './scene-lifecycle.mjs';
+import {createPreparedAssetPool,disposePreparedAsset,releasePreparedRoot,prepareSceneAssetBatch} from './scene-asset-preparation.mjs';
+import {lodPreparationContext,captureLodPreparation,cachedLodPreparation,createCoarseRepetition} from './scene-lod-startup.mjs';
 import { createSceneObjectPublicationGuard, publishSceneObjectIfCurrent } from './scene-object-publication.mjs';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig, emitterCompilerControls } from './volume-core.js';
 import { pressureResolutionPlan } from './volume-pressure-resolution.mjs';
@@ -3440,7 +3473,7 @@ import {configureAssetTextures} from './asset-texture-support.mjs';
 import {loadBrazierRoom} from './brazier-room.mjs';
 import { trellisSurfelsGLTFPlugin, configureSurfelRendering } from './trellis-surfels.mjs';
 import { createGiProxyRegistry } from './scene-gi-proxies.mjs';
-import { createSceneBeautyLodController, allocateSceneBeautyLods, allocateShadowCasterLods, allocateColliderLods, screenPixelError, selectFootprintTier, voxelSolidError, selectColliderTier, bakeRungMeshesToRootSpace, formatLodBudgetReadout } from './scene-lod-budget.mjs';
+import { seedInitialBeautyLevels, releaseInitialBeautyLevels, createSceneBeautyLodController, allocateSceneBeautyLods, allocateShadowCasterLods, allocateColliderLods, screenPixelError, selectFootprintTier, voxelSolidError, selectColliderTier, bakeRungMeshesToRootSpace, formatLodBudgetReadout } from './scene-lod-budget.mjs';
 import { giProxySettingFor, checkedGiProxySetting, canHaveGiProxy, GI_PROXY_FACE_TIERS, giProxySettingFromControls } from './scene-gi-proxy-settings.mjs';
 // Every GLB this page loads understands TRELLIS surfel assets (trellis-surfels.mjs); other GLBs are unaffected.
 class GLTFLoader extends ThreeGLTFLoader { constructor(manager) { super(manager); this.register(trellisSurfelsGLTFPlugin(THREE)); configureAssetTextures(this,renderer,()=>new KTX2Loader(manager)); } }
@@ -3456,7 +3489,7 @@ import {createSceneBurnBody,originalBurnMaterial} from './scene-burn-body.mjs';
 import {createLogGasSourceGpu} from './live-log-gas-source.mjs';
 import { installSceneNavigation } from './scene-navigation.mjs';
 import { frameBox, frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
-import { appendArrivalPivot, arrivalObstacleBoxes, assetArrivalFramingWindow, chooseAppendAnchor, computeAssetArrivalFraming, computeAssetArrivalPlacement, inspectArrivalMaterialProfile, planArrivalStudioLights, resolveAssetArrivalMode } from './asset-arrival.mjs';
+import { DEFAULT_STUDIO_LOOK_ID, STUDIO_LOOK_LIBRARY, appendArrivalPivot, arrivalObstacleBoxes, assetArrivalFramingWindow, chooseAppendAnchor, computeAssetArrivalFraming, computeAssetArrivalPlacement, createLoadingTelemetryTracker, extractGeneratedMeshSha, inspectArrivalMaterialProfile, planArrivalStudioLights, prepareArrivedMeshMaterials, resolveAssetArrivalMode, resolveEarlyLowLodMeshSha, resolveStudioLook, resolveStudioLookFromSearch } from './asset-arrival.mjs';
 import { promptForFileName, sanitizeFileStem } from './scene-file-names.mjs';
 import { exportCloneInWorld } from './scene-export.mjs';
 import { pickSavedScene } from './scene-load-picker.mjs';
@@ -3608,9 +3641,9 @@ function restoreVisibilitySelection(ids,activeId){
  try{return setSceneSelection(ids,activeId);}finally{burnerGraphWriting=previous;}
 }
 function viewportVisibilityObjects(){
- return [...workingScene.objects,...Array.from(sceneSpotLights,([id,{light}])=>({id,object:light}))];
+ return [...workingScene.objects,...Array.from(sceneSpotLights,([id,{light}])=>({id,object:light})),...Array.from(activeSceneStandIns.values()).filter(entry=>entry.root).map(entry=>({id:entry.id,object:entry.root}))];
 }
-function sceneVisibilityContext(){return {objects:workingScene.objects,groups:workingScene.groups,fields:[...(activeSceneComposition?[{id:'flame-field'}]:[]),...(waterFeature.setup?[{id:'water-field'}]:[])]};}
+function sceneVisibilityContext(){return {objects:[...workingScene.objects,...Array.from(activeSceneStandIns.values(),entry=>entry.record)],groups:[...workingScene.groups,...coarseSceneGroups],fields:[...(activeSceneComposition?[{id:'flame-field'}]:[]),...(waterFeature.setup?[{id:'water-field'}]:[])]};}
 function isSceneItemVisible(id){return itemVisible(id,viewportDisplay.hiddenIds,sceneVisibilityContext());}
 function isSceneItemEditable(id) {
   const scope=assemblyEditing?.scope();
@@ -3757,6 +3790,7 @@ window.kaminosViewportSettings={
 };
 
 let scenePlacementTools = null;
+let activeSceneGI = null;
 let polyEdit = null, viewProjection = null;
 let sceneControlHistory = null;
 const authoringControlSessions = [];
@@ -4182,17 +4216,16 @@ const sceneRecords = createSceneRecordOperations({
     async pbr(record,{activate}){const files=await loadDemoFiles(record.source);if(!files)throw Error(`Scene object "${record.fileName||record.id}" demo source "${record.source}" is not readable`);return handleFiles(files,{clear:false,activate,metadata:record});},
     image:(record,{activate})=>showImagePlane(record.source,{clear:false,activate,metadata:record}),
     splat:(record,{activate,loadRequestId})=>greenroomImportSplat(record.source,record.fileName||'splat.ply',{title:record.label||record.fileName||'Splat',raw_name:record.fileName||record.source},{clear:false,activate,metadata:record,isCurrent:loadRequestId===null?undefined:()=>sceneLoadRequests.isCurrent(loadRequestId)}),
-    async glb(record,{activate}){const object=await showGLB(record.source,{clear:false,activate,normalize:false,metadata:record});const leveling=normalizeArrivalLeveling(record.arrivalLeveling);if(leveling)object.userData.kaminosLeveling=leveling;return object;},
+    async glb(record,{activate,loadRequestId,preparedAsset}){const object=await showGLB(record.source,{clear:false,activate,normalize:false,metadata:record,preparedAsset,isCurrent:loadRequestId==null?undefined:()=>sceneLoadRequests.isCurrent(loadRequestId)});const leveling=normalizeArrivalLeveling(record.arrivalLeveling);if(leveling)object.userData.kaminosLeveling=leveling;return object;},
   },
 });
 
 let sceneNavigation = null;
 // GI proxy handles (scene-gi-proxies.mjs): a stored low tier of each TRELLIS object's hero, loaded off the frame
 // loop and never in the scene. The GI renderer reads them via window.kaminosGiProxies; pass policy is its own.
-// Strip unused texture/image bindings so GI/shadow proxy tiers never decode or revoke 1024x1024 PNG blob textures.
-const sceneGiProxies = createGiProxyRegistry({
-  THREE,
-  parseGlb: async bytes => (await new GLTFLoader().register(parser => ({
+const fullSceneAssetPool=createPreparedAssetPool({load:source=>new GLTFLoader().loadAsync(source)});
+const sceneLodAssetPool=createPreparedAssetPool();
+const parseGiProxyGlb=async bytes => (await new GLTFLoader().register(parser => ({
     name: 'KaminosUntexturedGiProxy',
     beforeRoot() {
       delete parser.json.textures;
@@ -4207,15 +4240,32 @@ const sceneGiProxies = createGiProxyRegistry({
         }
       }
     },
-  })).parseAsync(bytes, '')).scene,
-});
+  })).parseAsync(bytes, '')).scene;
+async function loadPreparedLod(level,{untextured=false}={}){
+  const sha=level.sha256??level.sha;
+  if(typeof sha!=='string'||!/^([a-f0-9]{64})$/.test(sha))throw Error('LOD source requires its content identity');
+  return sceneLodAssetPool.acquire((untextured?'gi:':'')+sha,async()=>{
+    const response=await fetch(level.source??('/api/read?root=generated-meshes&path='+sha+'.glb'));
+    if(!response.ok)throw Error('LOD source HTTP '+response.status);
+    const bytes=await response.arrayBuffer();
+    const actual=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),byte=>byte.toString(16).padStart(2,'0')).join('');
+    if(actual!==sha)throw Error('LOD content does not match its identity');
+    return untextured?parseGiProxyGlb(bytes):(await new GLTFLoader().parseAsync(bytes,'')).scene;
+  });
+}
+const sceneGiProxies = createGiProxyRegistry({THREE,loadLevel:level=>loadPreparedLod(level,{untextured:true}),parseGlb:parseGiProxyGlb});
+let sceneAssetPreparationActive=false,sceneAssetPreparationOwner=null;
+function setSceneAssetPreparationActive(value){sceneAssetPreparationActive=value;sceneBeautyLods?.setPreparation(value);}
+let sceneArrivalState={phase:'idle',coarseObjects:0,expectedCoarseObjects:0};
+window.kaminosSceneArrivalState=()=>({...sceneArrivalState,sourcePreparation:fullSceneAssetPool.state(),lodPreparation:sceneLodAssetPool.state()});
 let sceneBeautyLods = null;
 const ensureSceneBeautyLods = () => (sceneBeautyLods ??= createSceneBeautyLodController({
   THREE,
   scene,
   giProxies: sceneGiProxies,
   surfaceLighting: { registerProxyRoot: root => window.__kaminosSurfaceLighting?.registerProxyRoot?.(root) ?? null },
-  parseGlb: async bytes => (await new GLTFLoader().parseAsync(bytes, '')).scene,
+  loadLevel:async level=>{const root=await loadPreparedLod(level);prepareArrivedMeshMaterials(root,{maxAnisotropy:16});return root;},
+  parseGlb: async bytes => {const root=(await new GLTFLoader().parseAsync(bytes, '')).scene;prepareArrivedMeshMaterials(root,{maxAnisotropy:16});return root;},
   onUpdate: () => window._kaminosDirty?.(),
 }));
 window.kaminosSceneLodBudget = {
@@ -4315,7 +4365,7 @@ let authoredWaterControls=null;
 
 
 let sceneLightingPreparation=null;
-let sceneGeometryPreview=null;
+let sceneGeometryPreview=null,presentSceneCoarseFrame=null;
 
 let sceneViewerPaused = null;
 
@@ -5412,6 +5462,7 @@ function sceneObjectMetadataFor(object) {
 }
 
 function disposeObjectTree(object) {
+  releasePreparedRoot(object);releaseInitialBeautyLevels(object);
   if(object.userData?.disposeAshObject){object.userData.disposeAshObject();for(const [id,ash] of authoredAsh)if(ash.root===object)authoredAsh.delete(id);return;}
   sceneBurning?.forget(object);
   for(const child of [...(object.children||[])])if(child.userData?.kaminosRepetitionCopy)object.remove(child);
@@ -7043,7 +7094,24 @@ function renderSceneObjectList() {
       if (record) rows.push(renderSceneObjectRow(record, { grouped: row.depth > 0, outline: row }));
     }
   }
+  if (workingScene.objects.length > 0 && !workingScene.groups.some(g => g.id === '@studio-light-rig') && (studioKeyLight?.visible || studioRimLight?.visible)) {
+    const lookLabel = arrivalLightingState?.plan?.lookLabel || 'Sculptural Studio';
+    rows.push(`<div class="scene-group-row" data-arrival-studio-rig="true" role="button" tabindex="0" title="Click to select Arrival Studio Rig in the viewport"><span>${sceneOutlineGlyph('light')}<strong>Arrival Studio Rig</strong> <span class="scene-object-meta">(${escapeHtml(lookLabel)} · Key + Rim)</span></span><span class="scene-object-actions"><span class="scene-object-chip">arrival rig</span></span></div>`);
+  }
   list.innerHTML = rows.join('');
+  list.querySelectorAll('[data-arrival-studio-rig="true"]').forEach(row => {
+    const selectRig = () => {
+      try { promoteArrivalStudioLightsToScene({ groupRig: true, select: 'rig', recordHistory: false }); } catch (error) { setInfo(error.message); }
+    };
+    row.addEventListener('click', selectRig);
+    row.addEventListener('keydown', event => {
+      if (event.target !== row) return;
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        selectRig();
+      }
+    });
+  });
   list.querySelectorAll('[data-scene-visibility-id]').forEach(button=>button.addEventListener('click',event=>{event.stopPropagation();const id=button.dataset.sceneVisibilityId;try{window.kaminosSceneVisibility.set(id,!isSceneItemVisible(id));list.querySelector(`[data-scene-visibility-id="${CSS.escape(id)}"]`)?.focus();}catch(error){setInfo(error.message);}}));
   list.querySelectorAll('[data-outline-toggle]').forEach(button => button.addEventListener('click', event => {
     event.stopPropagation();
@@ -7679,6 +7747,9 @@ function applyAuthoredScenePose(id, transform = {}) {
   if (!entry) throw new Error(`Scene object "${id}" was not found`);
   if(entry.type===CAMERA_TYPE){mountAuthoredCamera({...serializeSceneObject(entry),transform});}
   else if (entry.type==='light') {
+    if (typeof arrivalLightingState !== 'undefined' && (id === '@studio-key-light' || id === '@studio-rim-light')) {
+      arrivalLightingState.rigTransformEdited = true;
+    }
     mountSceneSpotLight({...serializeSceneObject(entry),transform});
   } else if (entry.type === FLAME_EMITTER_TYPE) {
     writeAuthoredFlameEmitterPose(transform,id);
@@ -10545,7 +10616,16 @@ function createPageSceneMembershipOperations() {
       [ASH_OBJECT_TYPE]:{retainRoot:true},
       glb:{retainRoot:true},
       light:{retainRoot:true,
-        detached(entry){setSceneObjectMounted(entry,false);},
+        detached(entry){
+          const b=sceneSpotLights.get(entry.id);
+          setSceneObjectMounted(entry,false);
+          if(b?.reusedStudioLight){
+            b.marker.removeFromParent();
+            sceneSpotLights.delete(entry.id);
+            scene.add(b.light,b.light.target);
+            if(typeof syncArrivalStudioLighting==='function')syncArrivalStudioLighting();
+          }
+        },
         attach:(_entry,snapshot)=>mountSceneSpotLight(snapshot.record),
         dispose:entry=>disposeSceneSpotLight(entry.id),
       },
@@ -10770,9 +10850,70 @@ const environmentLoader = createEnvironmentLoader({
     el.textContent = state.pending
       ? `${label} · ${state.quality === 'preview' ? 'preview lighting · full detail loading…' : 'lighting loading…'}`
       : `${label} · ${state.quality === 'preview' ? 'preview lighting' : 'neutral fallback'} · full map unavailable; select environment to retry`;
+    if (typeof loadingTelemetry !== 'undefined') {
+      if (state.pending) {
+        loadingTelemetry.progress('environment', { label: `${label} HDR`, phase: 'environment-hdr' });
+      } else {
+        loadingTelemetry.complete('environment');
+      }
+    }
   },
 });
 window.kaminosEnvironmentLoading = {state: environmentLoader.read, whenSettled: environmentLoader.whenSettled};
+
+let loadingTelemetryHideTimer = null;
+let loadingTelemetryTickInterval = null;
+const loadingTelemetry = createLoadingTelemetryTracker({
+  stallThresholdMs: 5000,
+  onChange(state) {
+    const pill = document.getElementById('loading-telemetry-pill');
+    const textEl = document.getElementById('loading-telemetry-text');
+    const barEl = document.getElementById('loading-telemetry-bar');
+    if (!pill || !textEl || !barEl) return;
+    if (state.active) {
+      if (loadingTelemetryHideTimer) {
+        clearTimeout(loadingTelemetryHideTimer);
+        loadingTelemetryHideTimer = null;
+      }
+      pill.hidden = false;
+      pill.dataset.stalled = String(Boolean(state.stalled));
+      pill.dataset.failed = 'false';
+      textEl.textContent = state.summary;
+      const ratio = state.primary?.progressRatio;
+      barEl.style.width = ratio !== null && ratio !== undefined ? `${Math.max(6, Math.round(ratio * 100))}%` : '35%';
+      if (!loadingTelemetryTickInterval) {
+        loadingTelemetryTickInterval = setInterval(() => {
+          if (!loadingTelemetry.read().active) {
+            clearInterval(loadingTelemetryTickInterval);
+            loadingTelemetryTickInterval = null;
+            return;
+          }
+          loadingTelemetry.tick();
+        }, 250);
+      }
+    } else if (state.lastFailed) {
+      pill.hidden = false;
+      pill.dataset.stalled = 'false';
+      pill.dataset.failed = 'true';
+      textEl.textContent = state.summary;
+      barEl.style.width = '100%';
+    } else if (state.lastCompleted) {
+      pill.dataset.stalled = 'false';
+      pill.dataset.failed = 'false';
+      textEl.textContent = `✓ Loaded ${state.lastCompleted.label} (${(state.lastCompleted.durationMs / 1000).toFixed(1)}s)`;
+      barEl.style.width = '100%';
+      if (!loadingTelemetryHideTimer) {
+        loadingTelemetryHideTimer = setTimeout(() => {
+          pill.hidden = true;
+          loadingTelemetryHideTimer = null;
+        }, 900);
+      }
+    } else {
+      pill.hidden = true;
+    }
+  },
+});
+window.kaminosLoadingTelemetry = loadingTelemetry;
 
 // --- Three.js Setup ---
 let samHostContext = null;
@@ -11323,6 +11464,7 @@ async function initScene() {
   }
   window.kaminosStartup?.phase('Requesting GPU device');
   window.__kaminosCompositionSetup.phase = 'shared-device-acquisition';
+  window.kaminosStartup?.phase('Requesting WebGPU device');
   try {
     sharedGpu = await requestKaminosSharedWebGpuDevice({
       bufferRequirements: combinedRequirements,
@@ -11378,6 +11520,7 @@ async function initScene() {
   await renderer.init();
   window.kaminosStartup?.phase('Building workspace');
   console.log('WebGPU renderer initialized, backend:', renderer.backend?.constructor?.name || 'unknown');
+  window.kaminosStartup?.phase('Building lighting & GI pipeline');
 
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
@@ -11419,6 +11562,7 @@ async function initScene() {
   groundMat.blendSrcAlpha = THREE.OneFactor;
   groundMat.blendDstAlpha = THREE.OneMinusSrcAlphaFactor;
   groundMat.opacityNode = THREE.TSL.smoothstep(THREE.TSL.float(5.0), THREE.TSL.float(1.65), THREE.TSL.positionLocal.xy.length());
+  groundMat.userData = { ...groundMat.userData, kaminosCycloramaFloor: true };
   groundPlane = new THREE.Mesh(groundGeo, groundMat);
   groundPlane.rotation.x = -Math.PI / 2;
   groundPlane.position.y = -0.85;
@@ -11556,6 +11700,8 @@ async function initScene() {
   scenePass.contextNode = builtinAOContext(aoOutput);
   const lightingWorkParams=new URLSearchParams(location.search);
   const sceneGI = createSceneGI(scene,camera,aoIntensity,{filterImplementation:lightingWorkParams.get('lighting_filter')==='separate'?'separate':'shared',surfaceReuse:lightingWorkParams.get('lighting_surface_reuse')!=='0',sourceComparison:lightingWorkParams.get('experiment')==='gi-source-study'});
+  activeSceneGI = sceneGI;
+  if (typeof syncArrivalStudioLighting === 'function') syncArrivalStudioLighting();
   window.kaminosGISourceComparison=sceneGI.sourceComparison;
   window.__kaminosSurfaceLighting=sceneGI.surfaceLighting;
   sceneBeautyLods ??= createSceneBeautyLodController({
@@ -11563,7 +11709,8 @@ async function initScene() {
     scene,
     giProxies: sceneGiProxies,
     surfaceLighting: { registerProxyRoot: root => window.__kaminosSurfaceLighting?.registerProxyRoot?.(root) ?? null },
-    parseGlb: async bytes => (await new GLTFLoader().parseAsync(bytes, '')).scene,
+  loadLevel:async level=>{const root=await loadPreparedLod(level);prepareArrivedMeshMaterials(root,{maxAnisotropy:16});return root;},
+    parseGlb: async bytes => {const root=(await new GLTFLoader().parseAsync(bytes, '')).scene;prepareArrivedMeshMaterials(root,{maxAnisotropy:16});return root;},
     onUpdate: () => { if (typeof syncSceneLodReadout === 'function') syncSceneLodReadout(); window._kaminosDirty?.(); },
   });
   const borrowViewportAndBeautyVisibility = () => {
@@ -11581,6 +11728,11 @@ async function initScene() {
       node.hidden=!state.pending&&!state.error;
       node.querySelector('span').textContent=state.error?`Lighting preparation failed: ${state.error}`:(state.held?'Preparing lighting — previous frame shown':'Preparing lighting — scene remains live');
       node.querySelector('button').hidden=!state.error;
+      if (typeof loadingTelemetry !== 'undefined') {
+        if (state.error) loadingTelemetry.fail('lighting-compile', state.error);
+        else if (state.pending) loadingTelemetry.progress('lighting-compile', { label: 'WebGPU lighting', phase: 'compiling-shaders' });
+        else loadingTelemetry.complete('lighting-compile');
+      }
       if(!state.held)window._kaminosDirty?.();
     },
   });
@@ -11591,6 +11743,19 @@ async function initScene() {
     isCurrent:id=>sceneLoadRequests.isCurrent(id)&&!deviceRecoveryHeld(),isVisible:isSceneItemVisible,
     waitForLighting:()=>sceneLightingPreparation.whenIdle(),withRenderer:sceneLightingPreparation.withRenderer,
     onStatus:state=>{if(!state.active)return;if(state.error)setInfo('Geometry preview unavailable; scene restoration continues');else if(state.phase==='geometry-visible')setInfo('Geometry preview · restoring ash, fire and lighting…');}});
+  // Restore holds remain in force for automatic frames. This explicit coarse
+  // frame borrows the existing lighting renderer only for its current request.
+  presentSceneCoarseFrame=async requestId=>{
+    const current=()=>sceneLoadRequests.isCurrent(requestId)&&sceneArrivalState.phase==='coarse'&&!deviceRecoveryHeld();
+    await sceneLightingPreparation.whenIdle();
+    if(!current())return false;
+    return sceneLightingPreparation.withRenderer(async()=>{
+      if(!current())return false;
+      syncViewportRendererSize();camera.updateMatrixWorld();scene.updateMatrixWorld(true);
+      const before=sceneFrameCount;drawSceneFrame();
+      return current()&&sceneFrameCount>before;
+    });
+  };
   window.kaminosSceneLoadPresentation=()=>({document:sceneDocument.state(),preview:sceneGeometryPreview.read()});
   let activeSceneDepth = prePassDepth;
   selectionFeedback=createSelectionFeedback(camera);
@@ -11921,6 +12086,11 @@ async function initScene() {
     write: restoreBurnerControlHistoryState,
     check: checkedBurnerControlHistoryState,
   });
+  scenePlacementTools.edits.register('@studio-look-switch', {
+    read: () => captureStudioLookSwitchSnapshot(),
+    check: value => checkStudioLookSwitchSnapshot(value),
+    write: value => restoreStudioLookSwitchSnapshot(value),
+  });
   setupSelectionTransforms();
   scenePlacementTools.edits.register('@local-liquid-support-display',{
     read:()=>({visible:waterFeature.setup?.showSupportGeometry??false}),
@@ -12193,6 +12363,7 @@ async function initScene() {
     updateSelectionFeedback();
     updateAnnularBurnerFrame(t0);
     fireLightFieldPass?.renderShadows();
+    sceneBeautyLods?.setPreparation(sceneAssetPreparationActive);
     sceneExposureControls?.sync();
     let matchedCameraEffective=false;
     if(sceneEmissiveCamera && (sceneGISettings.mode === 'gtao' || sceneGISettings.view === 'scene')) {
@@ -12653,12 +12824,28 @@ function applyEnvironmentParameters(value=sceneEnvironment.read()) {
   const activeDelta = typeof arrivalLightingState !== 'undefined' && arrivalLightingState?.materialTuningEnabled && arrivalLightingState?.plan?.environmentDelta
     ? arrivalLightingState.plan.environmentDelta
     : { exposureScale: 1, envIntensityScale: 1, envRotationOffset: 0 };
-  renderer.toneMappingExposure=value.exposure * activeDelta.exposureScale;
+  const matchedFlameEv = (typeof window === 'undefined' || !window.__kaminosVolumePrototype) && document.getElementById('rendering-match-flame-camera')?.checked
+    ? Number(document.getElementById('volume-physical-exposure')?.value)
+    : 0;
+  const matchedEvScale = Number.isFinite(matchedFlameEv) && matchedFlameEv !== 0 ? 2 ** matchedFlameEv : 1;
+  renderer.toneMappingExposure=value.exposure * activeDelta.exposureScale * matchedEvScale;
   scene.environmentIntensity=value.intensity * activeDelta.envIntensityScale;
   scene.environmentRotation=new THREE.Euler(0,value.rotation + activeDelta.envRotationOffset,0);
-  for(const {object} of workingScene.objects)object.traverse(child=>{
-    for(const material of [].concat(child.material||[]))material.envMapIntensity=scene.environmentIntensity;
-  });
+  const tunedMaterials = typeof prepareArrivedMeshMaterials === 'function' && typeof arrivalLightingState !== 'undefined' && Boolean(arrivalLightingState?.materialTuningEnabled);
+  for(const {object,type} of workingScene.objects){
+    if(tunedMaterials && object && type !== 'light' && type !== 'camera'){
+      prepareArrivedMeshMaterials(object,{
+        maxAnisotropy:renderer?.capabilities?.getMaxAnisotropy?.()||16,
+        materialTuning:true,
+        materialProfile:arrivalLightingState.materialProfile,
+        baseEnvMapIntensity:value.intensity,
+      });
+    } else if (object?.traverse) {
+      object.traverse(child=>{
+        for(const material of [].concat(child.material||[]))material.envMapIntensity=scene.environmentIntensity;
+      });
+    }
+  }
   sceneExposureControls?.sync();updateBackground();window._kaminosDirty?.();
 }
 
@@ -12715,10 +12902,19 @@ function applyEnvMap(envMap, intensity) {
   updateBackground();
 
   // Update all materials in scene to use envMap
-  workingScene.objects.forEach(({ object }) => {
+  const tunedMaterials = typeof prepareArrivedMeshMaterials === 'function' && typeof arrivalLightingState !== 'undefined' && Boolean(arrivalLightingState?.materialTuningEnabled);
+  workingScene.objects.forEach(({ object, type }) => {
+    if (tunedMaterials && object && type !== 'light' && type !== 'camera') {
+      prepareArrivedMeshMaterials(object, {
+        maxAnisotropy: typeof renderer !== 'undefined' ? (renderer?.capabilities?.getMaxAnisotropy?.() || 16) : 16,
+        materialTuning: true,
+        materialProfile: arrivalLightingState.materialProfile,
+        baseEnvMapIntensity: intensity,
+      });
+    }
     object.traverse(child => {
       for (const material of [].concat(child.material || [])) {
-        material.envMapIntensity = effectiveIntensity;
+        if (!tunedMaterials) material.envMapIntensity = effectiveIntensity;
         material.needsUpdate = true;
       }
     });
@@ -12730,11 +12926,20 @@ function applyEnvMap(envMap, intensity) {
 function createPageSceneLifecycle(){
   return createSceneLifecycle({scene:workingScene,
     roots:{detach:entry=>scene.remove(entry.object),dispose:disposeObjectTree,mount:setSceneObjectMounted},
-    records:{load:(record,requestId)=>addSceneObjectFromSource(record,requestId,{activate:false}),restore:restoreLoadedSceneRecord},
+    records:{prepare:prepareSavedSceneAssets,releasePrepared:batch=>batch?.dispose(),load:(record,requestId,batch)=>addSceneObjectFromSource(record,requestId,{activate:false,preparedAsset:batch?.take(record.id)}),restore:restoreLoadedSceneRecord},
     groups:{restore:setSceneGroupsFromRecords},
     selection:{set:setSceneSelection,object:setActiveSceneObject,group:setActiveSceneGroup},
     context:{retire:retireSceneFlame,beforeClear:clearSceneEditingState,clearDomains:clearSceneDomains,clearTransient:clearSceneTransient,cleared:projectClearedScene,
-      beginLoad:setup=>{waterFeature.setup=setup.water;activeSceneComposition=setup.flame.composition;authoredFlamePresent=setup.flame.sourcePresent;volumePrototype?.setSceneCompositionPresentation?.(Boolean(activeSceneComposition));},beforeLoad:(record,requestId)=>record.type===ASH_OBJECT_TYPE?sceneGeometryPreview?.present(requestId):undefined,loaded:async(setup,requestId)=>{await sceneGeometryPreview?.present(requestId);if(setup.water)await mountLocalLiquidHost();for(const entry of workingScene.objects)if(entry.type===ASH_OBJECT_TYPE){if(typeof sceneColliderCollection!=='undefined')await sceneColliderCollection.prepare?.(workingScene.objects,{...(typeof currentColliderLodOptions==='function'?currentColliderLodOptions():{}),ashCellSize:entry.ash?.cellSize??0.04});await authoredAsh.get(entry.id).initialize();}},
+      beginLoad:setup=>{waterFeature.setup=setup.water;activeSceneComposition=setup.flame.composition;authoredFlamePresent=setup.flame.sourcePresent;volumePrototype?.setSceneCompositionPresentation?.(Boolean(activeSceneComposition));},beforeLoad:(record,requestId)=>record.type===ASH_OBJECT_TYPE?sceneGeometryPreview?.present(requestId):undefined,
+      loaded:async(setup,requestId)=>{
+        const waitingForDomains=setup.water||setup.flame.sourcePresent||workingScene.objects.some(entry=>entry.type===ASH_OBJECT_TYPE);
+        // Preserve a textured coarse frame through static refinement. An empty
+        // draw (no eligible or successfully loaded stand-ins) still needs its fallback.
+        const hasCoarseGeometry=sceneArrivalState.coarsePresented&&sceneArrivalState.coarseObjects>0;
+        if(!hasCoarseGeometry||waitingForDomains)await sceneGeometryPreview?.present(requestId);
+        if(setup.water)await mountLocalLiquidHost();
+        for(const entry of workingScene.objects)if(entry.type===ASH_OBJECT_TYPE){if(typeof sceneColliderCollection!=='undefined')await sceneColliderCollection.prepare?.(workingScene.objects,{...(typeof currentColliderLodOptions==='function'?currentColliderLodOptions():{}),ashCellSize:entry.ash?.cellSize??0.04});await authoredAsh.get(entry.id).initialize();}
+      },
       capturePreview:()=>({flamePresent:flameFeature.present,flameRoute:Object.fromEntries([...fireLightFieldRouteParams(),...Object.entries(fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()))]),activeSceneFieldId:workingScene.activeFieldId,documentSession:sceneDocument.snapshot(),volumePrimitives:getVolumePrimitiveState(),modelSourceUrl,modelSourceType,glbFileName}),
       previewDetached(){
         currentMesh=null;setVolumePrimitivesState({schema:VOLUME_PRIMITIVE_SCHEMA,primitives:[]});
@@ -12802,6 +13007,10 @@ function clearSceneDomains(setup=null){
     arrivalLightingState.bounds = null;
     arrivalLightingState.materialProfile = inspectArrivalMaterialProfile([]);
     arrivalLightingState.promotedIds = [];
+    arrivalLightingState.promotedGroupId = null;
+    arrivalLightingState.rigTransformEdited = false;
+    arrivalLightingState.sceneKind = 'static-asset';
+    arrivalLightingState.studioLightsEnabled = true;
   }
   if (typeof syncArrivalStudioLighting === 'function') syncArrivalStudioLighting();
 }
@@ -12814,6 +13023,9 @@ function clearSceneTransient(registeredObjects){
   if (currentMesh && !registeredObjects.has(currentMesh)) {
     scene.remove(currentMesh);
     disposeObjectTree(currentMesh);
+  }
+  if (typeof clearSceneLowLodStandIns === 'function' && (activeSceneStandInRequestId === null || (typeof sceneLoadRequests !== 'undefined' && !sceneLoadRequests.isCurrent(activeSceneStandInRequestId)))) {
+    clearSceneLowLodStandIns();
   }
 }
 function projectClearedScene(){
@@ -13146,6 +13358,323 @@ function frameAssetArrival(object) {
   return true;
 }
 
+let sceneLoadingStandInGroup = null;
+const lowLodStandInBytesCache = new Map();
+const activeSceneStandIns = new Map();
+const settledSceneStandInIds = new Set();
+let activeSceneStandInRequestId = null;
+let coarseSceneGroups=[];
+const coarseRepetition=createCoarseRepetition({previews:()=>[...activeSceneStandIns.values()],groups:()=>coarseSceneGroups});
+
+function ensureSceneLoadingStandInGroup() {
+  if (typeof scene === 'undefined' || !scene) return null;
+  if (!sceneLoadingStandInGroup) {
+    sceneLoadingStandInGroup = new THREE.Group();
+    sceneLoadingStandInGroup.name = 'KaminosLoadingStandIns';
+    sceneLoadingStandInGroup.userData.kaminosBeautyLodProxy = true;
+    sceneLoadingStandInGroup.userData.kaminosLoadingStandIn = true;
+  }
+  if (sceneLoadingStandInGroup.parent !== scene) {
+    scene.add(sceneLoadingStandInGroup);
+  }
+  return sceneLoadingStandInGroup;
+}
+
+async function loadSceneLowLodStandIn(sha){
+  if(!sha||typeof fetch!=='function')return null;
+  let pending=lowLodStandInBytesCache.get(sha);
+  if(!pending){
+    pending=fetch('/api/mesh-lods?source='+encodeURIComponent(sha)+'&faces=500').then(async response=>{if(!response.ok)throw Error('LOD metadata HTTP '+response.status);return response.json();});
+    lowLodStandInBytesCache.set(sha,pending);
+    pending.finally(()=>{if(lowLodStandInBytesCache.get(sha)===pending)lowLodStandInBytesCache.delete(sha);}).catch(()=>{});
+  }
+  try{const meta=await pending;if(!meta.choice)return null;return {root:await loadPreparedLod(meta.choice),level:meta.choice,levels:meta.levels??[]};}catch{return null;}
+}
+
+function applySceneCameraView(cameraData) {
+  if (!cameraData || typeof camera === 'undefined' || !camera || typeof controls === 'undefined' || !controls) return false;
+  if (Array.isArray(cameraData.position) && cameraData.position.length === 3) camera.position.fromArray(cameraData.position);
+  if (Array.isArray(cameraData.target) && cameraData.target.length === 3) controls.target.fromArray(cameraData.target);
+  camera.up.fromArray(Array.isArray(cameraData.up) && cameraData.up.length === 3 ? cameraData.up : [0, 1, 0]);
+  if (Number.isFinite(cameraData.near) && cameraData.near > 0) camera.near = cameraData.near;
+  if (Number.isFinite(cameraData.far) && cameraData.far > camera.near) camera.far = cameraData.far;
+  if (cameraData.fov) camera.fov = cameraData.fov;
+  camera.updateProjectionMatrix();
+  if (typeof sceneNavigation !== 'undefined' && sceneNavigation?.resetView) sceneNavigation.resetView();
+  else controls.update();
+  window._kaminosDirty?.();
+  return true;
+}
+
+function removeSceneLowLodStandIn(recordId, { markSettled = true } = {}) {
+  if (markSettled && recordId) settledSceneStandInIds.add(recordId);
+  const entry = activeSceneStandIns.get(recordId);
+  if (!entry) return false;
+  activeSceneStandIns.delete(recordId);
+  if (entry.root) {
+    coarseRepetition.clear(entry.root);
+    entry.root.removeFromParent();
+    disposeObjectTree(entry.root);
+    entry.root = null;
+    window._kaminosDirty?.();
+  }
+  return true;
+}
+
+function clearSceneLowLodStandIns(matchRequestId = undefined) {
+  if (matchRequestId !== undefined && activeSceneStandInRequestId !== null && activeSceneStandInRequestId !== matchRequestId) {
+    return;
+  }
+  activeSceneStandInRequestId = null;
+  coarseSceneGroups=[];
+  settledSceneStandInIds.clear();
+  for (const id of [...activeSceneStandIns.keys()]) {
+    removeSceneLowLodStandIn(id, { markSettled: false });
+  }
+}
+
+function stageSceneLowLodStandIns(records, loadRequestId = null,groups=[]) {
+  coarseSceneGroups=groups;
+  if (!Array.isArray(records) || !records.length || typeof fetch !== 'function' || typeof GLTFLoader !== 'function') return;
+  const adoptingPrestage = activeSceneStandInRequestId === null && loadRequestId !== null;
+  if (!adoptingPrestage && activeSceneStandInRequestId !== loadRequestId) {
+    settledSceneStandInIds.clear();
+    for (const id of [...activeSceneStandIns.keys()]) {
+      removeSceneLowLodStandIn(id, { markSettled: false });
+    }
+  }
+  const nextIds = new Set(records.map(r => r?.id).filter(Boolean));
+  for (const [id] of [...activeSceneStandIns.entries()]) {
+    if (!nextIds.has(id)) removeSceneLowLodStandIn(id, { markSettled: false });
+  }
+  activeSceneStandInRequestId = loadRequestId;
+  const preparations=[];
+  for (const record of records) {
+    if (!record?.id || settledSceneStandInIds.has(record.id)) continue;
+    const sha = typeof resolveEarlyLowLodMeshSha === 'function' ? resolveEarlyLowLodMeshSha(record) : null;
+    if (!sha) continue;
+    const existing = activeSceneStandIns.get(record.id);
+    if (existing && (existing.loadRequestId === null || existing.loadRequestId === loadRequestId) && existing.sha === sha) {
+      existing.loadRequestId = loadRequestId;
+      preparations.push(existing.promise);
+      continue;
+    }
+    if (existing) removeSceneLowLodStandIn(record.id, { markSettled: false });
+    const placeholder = { id: record.id, record, root: null, sha, loadRequestId };
+    activeSceneStandIns.set(record.id, placeholder);
+    placeholder.promise=(async()=>{
+      const prepared=await loadSceneLowLodStandIn(sha);
+      if(!prepared)return;
+      const proxyRoot=prepared.root;
+      if(activeSceneStandIns.get(record.id)!==placeholder){disposeObjectTree(proxyRoot);return;}
+      placeholder.level=prepared.level;placeholder.levels=prepared.levels;
+      if (placeholder.loadRequestId !== null && typeof sceneLoadRequests !== 'undefined' && !sceneLoadRequests.isCurrent(placeholder.loadRequestId)) {
+        activeSceneStandIns.delete(record.id);disposeObjectTree(proxyRoot);
+        return;
+      }
+      if (settledSceneStandInIds.has(record.id)) {
+        activeSceneStandIns.delete(record.id);disposeObjectTree(proxyRoot);
+        return;
+      }
+      try {
+
+        if (activeSceneStandIns.get(record.id) !== placeholder || settledSceneStandInIds.has(record.id)) {
+          disposeObjectTree(proxyRoot);
+          activeSceneStandIns.delete(record.id);
+          return;
+        }
+        const group = ensureSceneLoadingStandInGroup();
+        if (!group) {
+          disposeObjectTree(proxyRoot);
+          activeSceneStandIns.delete(record.id);
+          return;
+        }
+        const envIntensity = typeof sceneEnvironment !== 'undefined' ? sceneEnvironment.read().intensity : 1;
+        proxyRoot.traverse(child => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+            for (const mat of [].concat(child.material || [])) {
+              if (mat) mat.envMapIntensity = envIntensity;
+            }
+          }
+        });
+        if (record.transform && typeof applySceneObjectTransformState === 'function') {
+          applySceneObjectTransformState(proxyRoot, record.transform);
+        }
+        if (record.materials && typeof applyMaterialStateToObject === 'function') {
+          applyMaterialStateToObject(proxyRoot, record.materials);
+        }
+        placeholder.root = proxyRoot;
+        group.add(proxyRoot);
+        coarseRepetition.sync();
+        window._kaminosDirty?.();
+      } catch {
+        coarseRepetition.clear(proxyRoot);proxyRoot.removeFromParent();disposeObjectTree(proxyRoot);placeholder.root=null;
+        if (activeSceneStandIns.get(record.id) === placeholder) activeSceneStandIns.delete(record.id);
+      }
+    })();
+    preparations.push(placeholder.promise);
+  }
+  return Promise.all(preparations);
+}
+
+function sceneLodContext(records,groups=workingScene.groups){return lodPreparationContext({groups,camera:readAuthoredCameraView(),viewport:[renderer.domElement.width,renderer.domElement.height],settings:sceneBeautyLods?.read()??null,objects:records});}
+async function prepareSavedSceneAssets(records,requestId,setup){
+  const current=()=>requestId==null||sceneLoadRequests.isCurrent(requestId);
+  const owner={requestId};sceneAssetPreparationOwner=owner;setSceneAssetPreparationActive(false);
+  sceneArrivalState={phase:'coarse',expectedCoarseObjects:records.filter(record=>resolveEarlyLowLodMeshSha(record)).length,coarseObjects:0};
+  await stageSceneLowLodStandIns(records,requestId,setup?.startupGroups??[]);
+  if(!current())throw Error('Scene load superseded');
+  sceneArrivalState.coarseObjects=[...activeSceneStandIns.values()].filter(row=>row.root).length;
+  // Let the complete small scene paint before source decoding competes for the main thread.
+  await sceneLightingPreparation?.whenIdle();window._kaminosDirty?.();
+  let presented=await presentSceneCoarseFrame?.(requestId);
+  await new Promise(requestAnimationFrame);
+  if(presented)presented=await presentSceneCoarseFrame(requestId);
+  await new Promise(requestAnimationFrame);
+  if(!current())throw Error('Scene load superseded');
+  sceneArrivalState.coarsePresented=presented===true;
+  if(presented)window.dispatchEvent(new CustomEvent('kaminos-scene-coarse-ready',{detail:{...sceneArrivalState}}));
+  setSceneAssetPreparationActive(true);sceneArrivalState.phase='sources';
+  const context=sceneLodContext(records,setup?.startupGroups??[]);
+  const hints=cachedLodPreparation(setup?.startupLodHint,context);
+  sceneArrivalState.hintContext=context;sceneArrivalState.savedHintContext=setup?.startupLodHint?.context??null;
+  sceneArrivalState.cachedHints=hints.size;
+  const seeds=new Map();
+  const seedWork=Promise.allSettled(records.filter(row=>row.type==='glb').map(async record=>{
+    const preview=activeSceneStandIns.get(record.id);if(!preview?.level)return;
+    const levels=[preview.level],warm=(preview.levels??[]).find(level=>level.sha256===hints.get(record.id)&&!level.mergeFactor);
+    if(warm&&warm.sha256!==preview.level.sha256)levels.push(warm);
+    const rows=[];seeds.set(record.id,rows);
+    for(const level of levels){let root;try{root=await loadPreparedLod(level);prepareArrivedMeshMaterials(root,{maxAnisotropy:16});rows.push({sha:level.sha256,faces:level.faces,root});}catch{if(root)disposePreparedAsset(root);}}
+  }));
+  const outcomes=await Promise.allSettled([prepareSceneAssetBatch(records,{acquire:source=>fullSceneAssetPool.acquire(source),isCurrent:current}),seedWork]);
+  const batch=outcomes[0].status==='fulfilled'?outcomes[0].value:null;
+  const releaseSeeds=()=>{for(const rows of seeds.values())for(const row of rows)disposePreparedAsset(row.root);seeds.clear();};
+  if(!batch||!current()){
+    batch?.dispose();releaseSeeds();if(sceneAssetPreparationOwner===owner){setSceneAssetPreparationActive(false);sceneArrivalState.phase=current()?'failed':'superseded';}
+    throw outcomes[0].status==='rejected'?outcomes[0].reason:Error('Scene load superseded');
+  }
+  sceneArrivalState.phase='publishing';
+  return {take(id){const asset=batch.take(id),levels=seeds.get(id);if(asset&&levels){seedInitialBeautyLevels(asset.scene,levels);seeds.delete(id);}return asset;},dispose(){batch.dispose();releaseSeeds();if(sceneAssetPreparationOwner===owner){setSceneAssetPreparationActive(false);sceneArrivalState.phase='published';window._kaminosDirty?.();}}};
+}
+
+function prestageAdmittedSceneCameraAndProxies(admittedScene) {
+  if (!admittedScene || typeof admittedScene !== 'object' || !admittedScene.data) return;
+  if (admittedScene.data.camera) applySceneCameraView(admittedScene.data.camera);
+  const env = admittedScene.data.environment;
+  if (env?.ground && typeof groundPlane !== 'undefined' && groundPlane) {
+    groundPlane.visible = env.ground.visible ?? true;
+    groundPlane.position.y = Number.isFinite(env.ground.height) ? env.ground.height : -0.85;
+    groundPlane.material.color.set(env.ground.color ?? '#808080');
+    groundPlane.material.roughness = Number.isFinite(env.ground.roughness) ? env.ground.roughness : 0.65;
+  }
+  if (Array.isArray(admittedScene.plan?.objects) && admittedScene.plan.objects.length > 0) {
+    stageSceneLowLodStandIns(admittedScene.plan.objects, null,admittedScene.plan.groups??[]);
+  }
+}
+
+function mountSingleAssetLowLodStandIn({ url, isBlob, arrival, assetMetadata, isCurrent }) {
+  if (isBlob || typeof fetch !== 'function' || typeof GLTFLoader !== 'function') return null;
+  if (assetMetadata?.id && activeSceneStandIns.has(assetMetadata.id)) return null;
+  const sha = typeof resolveEarlyLowLodMeshSha === 'function'
+    ? (resolveEarlyLowLodMeshSha(assetMetadata) || resolveEarlyLowLodMeshSha(url))
+    : null;
+  if (!sha) return null;
+  let released = false;
+  let standInRoot = null;
+  let framed = false;
+  let framedCameraPos = null;
+  let framedTarget = null;
+  void (async () => {
+    const prepared=await loadSceneLowLodStandIn(sha);
+    if(!prepared)return;
+    const proxyRoot=prepared.root;
+    if(released||(typeof isCurrent==='function'&&!isCurrent())){disposeObjectTree(proxyRoot);return;}
+    try {
+
+      if (released || (typeof isCurrent === 'function' && !isCurrent())) {
+        disposeObjectTree(proxyRoot);
+        return;
+      }
+      const group = ensureSceneLoadingStandInGroup();
+      if (!group) {
+        disposeObjectTree(proxyRoot);
+        return;
+      }
+      const envIntensity = typeof sceneEnvironment !== 'undefined' ? sceneEnvironment.read().intensity : 1;
+      const maxAniso = typeof renderer !== 'undefined' ? (renderer?.capabilities?.getMaxAnisotropy?.() || 16) : 16;
+      if (typeof prepareArrivedMeshMaterials === 'function') {
+        prepareArrivedMeshMaterials(proxyRoot, {
+          maxAnisotropy: maxAniso,
+          materialTuning: false,
+          baseEnvMapIntensity: envIntensity,
+        });
+      }
+      const placement = applyAssetArrival(proxyRoot, arrival);
+      proxyRoot.traverse(child => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+      if (typeof prepareArrivedMeshMaterials === 'function') {
+        prepareArrivedMeshMaterials(proxyRoot, {
+          maxAnisotropy: maxAniso,
+          materialTuning: typeof arrivalLightingState !== 'undefined' ? arrivalLightingState.materialTuningEnabled : false,
+          materialProfile: typeof arrivalLightingState !== 'undefined' ? arrivalLightingState.materialProfile : null,
+          baseEnvMapIntensity: envIntensity,
+        });
+      }
+      if (!arrival && assetMetadata?.transform && typeof applySceneObjectTransformState === 'function') {
+        applySceneObjectTransformState(proxyRoot, assetMetadata.transform);
+      }
+      standInRoot = proxyRoot;
+      group.add(proxyRoot);
+      if (arrival === 'fresh' && placement) {
+        framed = frameAssetArrival(proxyRoot);
+        if (framed && camera && controls) {
+          framedCameraPos = camera.position.toArray();
+          framedTarget = controls.target.toArray();
+        }
+      }
+      window._kaminosDirty?.();
+    } catch {proxyRoot.removeFromParent();disposeObjectTree(proxyRoot);standInRoot=null;}
+  })();
+  return () => {
+    released = true;
+    const wasFramed = framed;
+    let cameraMovedSinceFrame = false;
+    if (wasFramed && framedCameraPos && framedTarget && camera && controls) {
+      const posNow = camera.position.toArray();
+      const targetNow = controls.target.toArray();
+      const distSq = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+      cameraMovedSinceFrame = distSq(posNow, framedCameraPos) > 1e-5 || distSq(targetNow, framedTarget) > 1e-5;
+    }
+    if (standInRoot) {
+      standInRoot.removeFromParent();
+      disposeObjectTree(standInRoot);
+      standInRoot = null;
+      window._kaminosDirty?.();
+    }
+    return { framed: wasFramed, cameraMovedSinceFrame };
+  };
+}
+
+window.kaminosLoadingStandIns = {
+  state: () => ({
+    requestId: activeSceneStandInRequestId,
+    stagedCount: activeSceneStandIns.size,
+    mountedCount: [...activeSceneStandIns.values()].filter(e => Boolean(e.root)).length,
+    groupChildren: sceneLoadingStandInGroup?.children?.length ?? 0,
+    heroObjectCount: typeof workingScene !== 'undefined' && Array.isArray(workingScene.objects) ? workingScene.objects.length : 0,
+    cameraPosition: typeof camera !== 'undefined' && camera ? camera.position.toArray() : null,
+    cameraTarget: typeof controls !== 'undefined' && controls ? controls.target.toArray() : null,
+    arrivalBounds: typeof arrivalLightingState !== 'undefined' ? arrivalLightingState.bounds : null,
+  }),
+};
+
 async function showGLB(file, options = {}) {
   await sceneLightingPreparation?.whenIdle();
   const cleared = shouldClearSceneForImport(options);
@@ -13156,34 +13685,80 @@ async function showGLB(file, options = {}) {
   const url = isBlob ? URL.createObjectURL(file) : file;
   const assetMetadata = {...(options.metadata || {})};
   const assetSource = assetMetadata.source ?? (isBlob ? file.name : file);
-  const assetFileName = assetMetadata.fileName ?? file?.name ?? (isBlob ? 'object.glb' : String(file).split('/').pop());
+  let resolvedUrlName = isBlob ? (file?.name || 'object.glb') : String(file);
+  if (!isBlob && resolvedUrlName.includes('path=')) {
+    try {
+      const pathParam = new URL(resolvedUrlName, window.location?.origin || 'http://127.0.0.1').searchParams.get('path');
+      if (pathParam) resolvedUrlName = pathParam;
+    } catch {}
+  }
+  const assetFileName = assetMetadata.fileName ?? file?.name ?? (isBlob ? 'object.glb' : resolvedUrlName.split('/').pop());
+  const telemetryLabel = assetMetadata.label || assetFileName;
   if (file && file.name) glbFileName = file.name;
   modelSourceUrl = isBlob ? file.name : file;
   modelSourceType = 'glb';
   const loader = new GLTFLoader();
+  const telemetryOp = typeof loadingTelemetry !== 'undefined'
+    ? loadingTelemetry.start('asset', { label: telemetryLabel, phase: 'downloading' })
+    : null;
+  let heroSettled = false;
+  const releaseEarlyStandIn = typeof mountSingleAssetLowLodStandIn === 'function'
+    ? mountSingleAssetLowLodStandIn({
+        url,
+        isBlob,
+        arrival,
+        assetMetadata,
+        isCurrent: () => !heroSettled && loadToken === workingScene.generation && options.isCurrent?.() !== false && !(greenroomPreviewIsActive() && options.register !== false),
+      })
+    : null;
 	return new Promise((resolve, reject) => {
-	  loader.load(url, gltf => {
+    const onLoad=gltf=>{
+      heroSettled = true;
+      const earlyStandIn = releaseEarlyStandIn?.() ?? null;
 	    if (isBlob) URL.revokeObjectURL(url);
+      if (typeof loadingTelemetry !== 'undefined') {
+        loadingTelemetry.progress('asset', { label: telemetryLabel, phase: 'preparing-materials' });
+      }
 	    glbSourceScene = gltf.scene;
 	    const model = gltf.scene;
       const stalePreviewLoad = options.register === false
         && options.previewGeneration !== undefined
         && greenroomPreviewState?.previewGeneration !== options.previewGeneration;
       if (loadToken !== workingScene.generation || stalePreviewLoad || options.isCurrent?.()===false || (greenroomPreviewIsActive() && options.register !== false)) {
+        if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.cancel?.('asset', { token: telemetryOp?.token });
         disposeObjectTree(model);
         reject(new Error('stale async GLB load ignored'));
         return;
+      }
+      const envIntensity = typeof sceneEnvironment !== 'undefined' ? sceneEnvironment.read().intensity : 1;
+      const maxAniso = typeof renderer !== 'undefined' ? (renderer?.capabilities?.getMaxAnisotropy?.() || 16) : 16;
+      if (typeof prepareArrivedMeshMaterials === 'function') {
+        prepareArrivedMeshMaterials(model, {
+          maxAnisotropy: maxAniso,
+          materialTuning: false,
+          baseEnvMapIntensity: envIntensity,
+        });
       }
       const arrivalPlacement = applyAssetArrival(model, arrival);
       model.traverse(child => {
         if (child.isMesh) {
           child.castShadow = true;
           child.receiveShadow = true;
-          if (child.material) {
-            child.material.envMapIntensity = sceneEnvironment.read().intensity;
+          if (child.material && typeof prepareArrivedMeshMaterials !== 'function') {
+            for (const mat of [].concat(child.material)) {
+              if (mat) mat.envMapIntensity = envIntensity;
+            }
           }
         }
       });
+      if (typeof prepareArrivedMeshMaterials === 'function') {
+        prepareArrivedMeshMaterials(model, {
+          maxAnisotropy: maxAniso,
+          materialTuning: typeof arrivalLightingState !== 'undefined' ? arrivalLightingState.materialTuningEnabled : false,
+          materialProfile: typeof arrivalLightingState !== 'undefined' ? arrivalLightingState.materialProfile : null,
+          baseEnvMapIntensity: envIntensity,
+        });
+      }
       scene.add(model);
       let registeredAsset = null;
       if (options.register === false) {
@@ -13209,7 +13784,14 @@ async function showGLB(file, options = {}) {
         }, {activate:options.activate!==false});
       }
       if(options.activate!==false)document.getElementById('transform-bar').classList.add('visible');
-      if (arrival === 'fresh' && arrivalPlacement) frameAssetArrival(model);
+      if (arrival === 'fresh' && arrivalPlacement) {
+        if (earlyStandIn?.framed && earlyStandIn.cameraMovedSinceFrame && typeof syncArrivalLightingAndGI === 'function') {
+          syncArrivalLightingAndGI(model);
+        } else {
+          frameAssetArrival(model);
+        }
+      }
+      if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.complete('asset');
       setInfo('GLB Inspector — orbit to inspect | use toolbar to fix orientation');
       resolve(options.returnAsset ? {
         id: registeredAsset?.id ?? null,
@@ -13219,11 +13801,27 @@ async function showGLB(file, options = {}) {
         fileName: assetFileName,
         arrival,
       } : model);
-    }, undefined, (err) => {
+    };
+    const onProgress=xhr=>{
+      if (typeof loadingTelemetry !== 'undefined' && xhr && (Number.isFinite(xhr.loaded) || Number.isFinite(xhr.total))) {
+        loadingTelemetry.progress('asset', {
+          label: telemetryLabel,
+          phase: 'downloading',
+          loadedBytes: xhr.loaded,
+          totalBytes: xhr.total,
+        });
+      }
+    };
+    const onError=err=>{
+      heroSettled = true;
+      releaseEarlyStandIn?.();
       if (isBlob) URL.revokeObjectURL(url);
+      if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.fail('asset', err);
       setInfo('Failed to load GLB: ' + (err.message || 'unknown error'));
       reject(err);
-    });
+    };
+    if(options.preparedAsset)Promise.resolve(options.preparedAsset).then(onLoad).catch(onError);
+    else loader.load(url,onLoad,onProgress,onError);
   });
 }
 
@@ -13552,11 +14150,20 @@ async function showOBJ(objFile, mtlFile, options = {}) {
 
   const objLoader = new OBJLoader();
   if (materials) objLoader.setMaterials(materials);
+  const objLabel = options.metadata?.fileName ?? glbFileName ?? 'object.obj';
+  if (typeof loadingTelemetry !== 'undefined') {
+    loadingTelemetry.start('asset', { label: objLabel, phase: 'downloading' });
+  }
 
   return new Promise((resolve, reject) => {
     objLoader.load(objUrl, obj => {
       URL.revokeObjectURL(objUrl);
+      if (typeof loadingTelemetry !== 'undefined') {
+        loadingTelemetry.progress('asset', { label: objLabel, phase: 'preparing-materials' });
+      }
       glbSourceScene = obj;
+      const envIntensity = typeof sceneEnvironment !== 'undefined' ? sceneEnvironment.read().intensity : 1;
+      const maxAniso = typeof renderer !== 'undefined' ? (renderer?.capabilities?.getMaxAnisotropy?.() || 16) : 16;
       obj.traverse(child => {
         if (child.isMesh) {
           child.castShadow = true;
@@ -13567,14 +14174,35 @@ async function showOBJ(objFile, mtlFile, options = {}) {
               color: 0xcccccc,
               roughness: 0.5,
               metalness: 0.0,
-              envMapIntensity: sceneEnvironment.read().intensity,
+              envMapIntensity: 1.0,
             });
-          } else if (child.material) {
-            child.material.envMapIntensity = sceneEnvironment.read().intensity;
           }
         }
       });
+      if (typeof prepareArrivedMeshMaterials === 'function') {
+        prepareArrivedMeshMaterials(obj, {
+          maxAnisotropy: maxAniso,
+          materialTuning: false,
+          baseEnvMapIntensity: envIntensity,
+        });
+      } else {
+        obj.traverse(child => {
+          if (child.isMesh && child.material) {
+            for (const mat of [].concat(child.material)) {
+              if (mat) mat.envMapIntensity = envIntensity;
+            }
+          }
+        });
+      }
       const arrivalPlacement = applyAssetArrival(obj, arrival);
+      if (typeof prepareArrivedMeshMaterials === 'function') {
+        prepareArrivedMeshMaterials(obj, {
+          maxAnisotropy: maxAniso,
+          materialTuning: typeof arrivalLightingState !== 'undefined' ? arrivalLightingState.materialTuningEnabled : false,
+          materialProfile: typeof arrivalLightingState !== 'undefined' ? arrivalLightingState.materialProfile : null,
+          baseEnvMapIntensity: envIntensity,
+        });
+      }
       scene.add(obj);
       registerSceneObject(obj, {
         ...(options.metadata || {}),
@@ -13584,10 +14212,21 @@ async function showOBJ(objFile, mtlFile, options = {}) {
       });
       document.getElementById('transform-bar').classList.add('visible');
       if (arrival === 'fresh' && arrivalPlacement) frameAssetArrival(obj);
+      if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.complete('asset');
       setInfo('OBJ Inspector — orbit to inspect | use toolbar to fix orientation');
       resolve(obj);
-    }, undefined, (err) => {
+    }, xhr => {
+      if (typeof loadingTelemetry !== 'undefined' && xhr && (Number.isFinite(xhr.loaded) || Number.isFinite(xhr.total))) {
+        loadingTelemetry.progress('asset', {
+          label: objLabel,
+          phase: 'downloading',
+          loadedBytes: xhr.loaded,
+          totalBytes: xhr.total,
+        });
+      }
+    }, (err) => {
       URL.revokeObjectURL(objUrl);
+      if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.fail('asset', err);
       setInfo('Failed to load OBJ: ' + (err.message || 'unknown error'));
       reject(err);
     });
@@ -23007,7 +23646,7 @@ sceneExposureControls=bindSceneExposureControls({
   exposure:document.getElementById('exposure-slider'),flame:document.getElementById('volume-physical-exposure'),
   match:document.getElementById('rendering-match-flame-camera'),label:document.getElementById('scene-exposure-label'),output:document.getElementById('exposure-val'),
   readIndependent:()=>sceneEnvironment.read().exposure,
-  writeIndependent:value=>{sceneEnvironment.patch({exposure:value});saveSettings();},redraw:()=>window._kaminosDirty?.(),
+  writeIndependent:value=>{sceneEnvironment.patch({exposure:value});saveSettings();},redraw:()=>{if(!window.__kaminosVolumePrototype)applyEnvironmentParameters();window._kaminosDirty?.();},
 });
 
 bindSceneEnvironmentControls({state:sceneEnvironment,document,onAccepted:saveSettings,onError:error=>setInfo(error.message)});
@@ -23025,14 +23664,19 @@ document.getElementById('scene-gi-panel').append(document.getElementById('scene-
 installRenderingNumberControls(document.getElementById('rendering-panel-content'));
 installRenderingNumberControls(document.getElementById('scene-ao-panel'));
 let studioKeyLight = null, studioRimLight = null;
-let sceneGIManuallyConfigured = false, sceneGIAutoCalibrationState = null;
+let sceneGIManuallyConfigured = false, sceneGIBounceManuallyConfigured = false, sceneGIAutoCalibrationState = null;
+let syncingArrivalStudioLighting = false;
 const arrivalLightingState = {
+  sceneKind: 'static-asset',
+  lookId: DEFAULT_STUDIO_LOOK_ID,
   studioLightsEnabled: true,
   materialTuningEnabled: false,
   bounds: null,
   materialProfile: inspectArrivalMaterialProfile([]),
   plan: null,
   promotedIds: [],
+  promotedGroupId: null,
+  rigTransformEdited: false,
 };
 
 function applySpotRecordToThreeLight(light, record, enabled) {
@@ -23044,10 +23688,15 @@ function applySpotRecordToThreeLight(light, record, enabled) {
   light.angle = THREE.MathUtils.degToRad(record.light.angle);
   light.penumbra = record.light.penumbra;
   light.position.fromArray(record.transform.position);
+  const effectiveAim = Math.max(0.5, (record.light.aimDistance || 4) * (record.transform.scale?.[2] ?? 1));
   const direction = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(...record.transform.rotation));
-  light.target.position.copy(light.position).addScaledVector(direction, record.light.aimDistance * (record.transform.scale?.[2] ?? 1));
+  light.target.position.copy(light.position).addScaledVector(direction, effectiveAim);
   light.target.updateMatrixWorld();
-  light.shadow?.camera?.updateProjectionMatrix?.();
+  if (light.shadow?.camera) {
+    light.shadow.camera.near = Math.max(0.1, Math.min(0.5, effectiveAim * 0.12));
+    light.shadow.camera.far = Math.max(8, effectiveAim * 3.0);
+    light.shadow.camera.updateProjectionMatrix?.();
+  }
   return wasVisible !== light.visible;
 }
 
@@ -23057,9 +23706,9 @@ function installStartupStudioLights(targetScene) {
     const light = new THREE.SpotLight();
     light.name = name;
     light.castShadow = true;
-    light.shadow.mapSize.set(1024, 1024);
-    light.shadow.bias = -0.0001;
-    light.shadow.normalBias = 0.02;
+    light.shadow.mapSize.set(2048, 2048);
+    light.shadow.bias = -0.00005;
+    light.shadow.normalBias = 0.004;
     return light;
   };
   studioKeyLight = makeSpot('Startup studio key light');
@@ -23151,33 +23800,89 @@ function extractObjectMaterialSamples(object) {
   return samples;
 }
 
-function syncArrivalStudioLighting() {
+function syncArrivalStudioLighting({ syncPromoted = false } = {}) {
   const groundY = groundPlane ? groundPlane.position.y : -0.85;
   const plan = planArrivalStudioLights({
     bounds: arrivalLightingState.bounds,
     groundY,
     materialProfile: arrivalLightingState.materialProfile,
     materialTuning: arrivalLightingState.materialTuningEnabled,
+    lookId: arrivalLightingState.lookId,
   });
   arrivalLightingState.plan = plan;
+  const activeLook = resolveStudioLook(plan.lookId);
+  if (typeof activeSceneGI !== 'undefined' && activeSceneGI?.setOpticalFinish && activeLook.opticalFinish) {
+    activeSceneGI.setOpticalFinish(activeLook.opticalFinish);
+  }
+  const lookSelect = document.getElementById('arrival-studio-look-select');
+  if (lookSelect && lookSelect.value !== plan.lookId) lookSelect.value = plan.lookId;
+  const viewportLookSelect = document.getElementById('viewport-studio-look-select');
+  if (viewportLookSelect && viewportLookSelect.value !== plan.lookId) viewportLookSelect.value = plan.lookId;
+  const toggleEl = document.getElementById('arrival-studio-lights-toggle');
+  if (toggleEl && toggleEl.checked !== arrivalLightingState.studioLightsEnabled) toggleEl.checked = arrivalLightingState.studioLightsEnabled;
   const hasPromotedOrSavedLights = typeof sceneSpotLights !== 'undefined' && sceneSpotLights.size > 0;
+  const hasNonStudioSpotLights = typeof sceneSpotLights !== 'undefined' &&
+    Array.from(sceneSpotLights.keys()).some(id => id !== '@studio-key-light' && id !== '@studio-rim-light');
   const routeAllowsStudioRig = typeof isFireLightFieldRoute === 'function' ? !isFireLightFieldRoute() : true;
-  const activeStageRig = arrivalLightingState.studioLightsEnabled && routeAllowsStudioRig && !hasPromotedOrSavedLights;
+  const activeStageRig = arrivalLightingState.studioLightsEnabled && routeAllowsStudioRig && !hasPromotedOrSavedLights && !hasNonStudioSpotLights;
   const [keyRecord, rimRecord] = plan.lights;
-  const keyChanged = applySpotRecordToThreeLight(studioKeyLight, keyRecord, activeStageRig);
-  const rimChanged = applySpotRecordToThreeLight(studioRimLight, rimRecord, activeStageRig);
+  let keyChanged = false, rimChanged = false;
+  if (typeof sceneSpotLights === 'undefined' || !sceneSpotLights.has('@studio-key-light')) {
+    keyChanged = applySpotRecordToThreeLight(studioKeyLight, keyRecord, activeStageRig);
+  }
+  if (typeof sceneSpotLights === 'undefined' || !sceneSpotLights.has('@studio-rim-light')) {
+    rimChanged = applySpotRecordToThreeLight(studioRimLight, rimRecord, activeStageRig);
+  }
   if (keyChanged || rimChanged) sceneLightingPreparation?.request();
+
+  if (syncPromoted && !syncingArrivalStudioLighting && typeof workingScene !== 'undefined') {
+    syncingArrivalStudioLighting = true;
+    try {
+      for (const planned of plan.lights) {
+        const existing = workingScene.objects.find(o => o.id === planned.id && o.type === 'light');
+        if (!existing) continue;
+        const currentRecord = typeof serializeSceneObject === 'function' ? serializeSceneObject(existing) : existing;
+        const nextTransform = arrivalLightingState.rigTransformEdited ? currentRecord.transform : planned.transform;
+        const nextLight = {
+          ...currentRecord.light,
+          ...planned.light,
+          enabled: Boolean(arrivalLightingState.studioLightsEnabled),
+        };
+        mountSceneSpotLight({ ...currentRecord, transform: nextTransform, light: nextLight });
+      }
+      if (!arrivalLightingState.rigTransformEdited) {
+        const rigGroup = workingScene.groups?.find(g => g.id === '@studio-light-rig');
+        if (rigGroup) {
+          const rigPivot = { position: [...plan.target], rotation: [0, 0, 0], scale: [1, 1, 1] };
+          workingScene.updateGroup('@studio-light-rig', { transform: rigPivot });
+          if (typeof groupProxy === 'function') applySceneObjectTransformState(groupProxy(rigGroup), rigPivot);
+        }
+      }
+    } finally {
+      syncingArrivalStudioLighting = false;
+    }
+  }
 
   if (renderer && scene && typeof sceneEnvironment !== 'undefined') {
     const env = sceneEnvironment.read();
     const delta = plan.environmentDelta;
-    renderer.toneMappingExposure = env.exposure * delta.exposureScale;
+    const matchedFlameEv = (typeof window === 'undefined' || !window.__kaminosVolumePrototype) && document.getElementById('rendering-match-flame-camera')?.checked
+      ? Number(document.getElementById('volume-physical-exposure')?.value)
+      : 0;
+    const matchedEvScale = Number.isFinite(matchedFlameEv) && matchedFlameEv !== 0 ? 2 ** matchedFlameEv : 1;
+    renderer.toneMappingExposure = env.exposure * delta.exposureScale * matchedEvScale;
     scene.environmentIntensity = env.intensity * delta.envIntensityScale;
     scene.environmentRotation = new THREE.Euler(0, env.rotation + delta.envRotationOffset, 0);
+    sceneExposureControls?.sync();
+    const maxAniso = renderer?.capabilities?.getMaxAnisotropy?.() || 16;
     if (typeof workingScene !== 'undefined') {
-      for (const { object } of workingScene.objects) {
-        object?.traverse?.(child => {
-          for (const material of [].concat(child.material || [])) material.envMapIntensity = scene.environmentIntensity;
+      for (const { object, type } of workingScene.objects) {
+        if (!object || type === 'light' || type === 'camera') continue;
+        prepareArrivedMeshMaterials(object, {
+          maxAnisotropy: maxAniso,
+          materialTuning: arrivalLightingState.materialTuningEnabled,
+          materialProfile: arrivalLightingState.materialProfile,
+          baseEnvMapIntensity: env.intensity,
         });
       }
     }
@@ -23190,7 +23895,7 @@ function syncArrivalStudioLighting() {
     const rimI = Math.round(rimRecord.light.intensity);
     const rigLabel = hasPromotedOrSavedLights
       ? 'Scene spot lights active'
-      : (activeStageRig ? `Key ${keyI} / Rim ${rimI}` : 'Studio rig off');
+      : (activeStageRig ? `${plan.lookLabel} · Key ${keyI} / Rim ${rimI}` : `Studio rig off (${arrivalLightingState.sceneKind})`);
     const tuningLabel = arrivalLightingState.materialTuningEnabled
       ? `Tuning ON (${p.kind}, lum ${p.meanLuminance.toFixed(2)}, rough ${p.meanRoughness.toFixed(2)}, metal ${p.meanMetalness.toFixed(2)}, exp ×${plan.environmentDelta.exposureScale.toFixed(2)})`
       : `Tuning OFF (${p.sampleCount ? `${p.kind} detected` : 'default profile'})`;
@@ -23221,14 +23926,18 @@ function autoCalibrateSceneGIFromScene(extraObject = null) {
   }
   if (!boxes.length) return null;
   const cameraDistance = camera && controls ? camera.position.distanceTo(controls.target) : null;
+  const currentForCalibration = sceneGIBounceManuallyConfigured
+    ? sceneGISettings
+    : (() => { const { bounceFeedback: _omit, ...rest } = sceneGISettings || {}; return rest; })();
   const calibrated = calibrateSceneGISettingsForBounds({
     boxes,
     cameraDistance,
-    current: sceneGISettings,
+    current: currentForCalibration,
   });
   sceneGIAutoCalibrationState = {
     radius: calibrated.radius,
     thickness: calibrated.thickness,
+    bounceFeedback: calibrated.bounceFeedback,
     cameraDistance: cameraDistance ? Math.round(cameraDistance * 1000) / 1000 : null,
     boxCount: boxes.length,
   };
@@ -23241,6 +23950,9 @@ function recordAssetArrivalLightingAndGI(object, mode) {
   object.updateWorldMatrix(true, true);
   const box = new THREE.Box3().setFromObject(object, true);
   if (mode === 'fresh') {
+    arrivalLightingState.sceneKind = 'static-asset';
+    arrivalLightingState.studioLightsEnabled = true;
+    arrivalLightingState.rigTransformEdited = false;
     if (!box.isEmpty()) {
       arrivalLightingState.bounds = { min: box.min.toArray(), max: box.max.toArray() };
     }
@@ -23248,8 +23960,34 @@ function recordAssetArrivalLightingAndGI(object, mode) {
     if (samples.length) {
       arrivalLightingState.materialProfile = inspectArrivalMaterialProfile(samples);
     }
+    const activeLook = resolveStudioLook(arrivalLightingState.lookId);
+    const lookGround = activeLook.environment?.ground;
+    if (groundPlane && lookGround) {
+      groundPlane.visible = lookGround.visible ?? true;
+      groundPlane.material.color.set(lookGround.color ?? '#ece9e2');
+      groundPlane.material.roughness = Number.isFinite(lookGround.roughness) ? lookGround.roughness : 0.78;
+      const visEl = document.getElementById('composition-ground-visible');
+      if (visEl) visEl.checked = groundPlane.visible;
+      const cEl = document.getElementById('composition-ground-color');
+      if (cEl) cEl.value = '#' + groundPlane.material.color.getHexString();
+      const rEl = document.getElementById('composition-ground-roughness');
+      if (rEl) rEl.value = String(groundPlane.material.roughness);
+      const rvEl = document.getElementById('composition-ground-roughness-value');
+      if (rvEl) rvEl.value = String(groundPlane.material.roughness);
+    }
+    if (typeof sceneEnvironment !== 'undefined' && activeLook.environment) {
+      const prevName = sceneEnvironment.read().name;
+      sceneEnvironment.restoreDocument({
+        ...activeLook.environment,
+        recipes: sceneEnvironment.read().recipes,
+      });
+      if (typeof loadEnvironment === 'function' && prevName !== activeLook.environment.name) {
+        void loadEnvironment(activeLook.environment.name, { remember: false });
+      }
+    }
     sceneGIManuallyConfigured = false;
-    syncArrivalStudioLighting();
+    sceneGIBounceManuallyConfigured = false;
+    syncArrivalStudioLighting({ syncPromoted: true });
   } else if (mode === 'append') {
     if (!box.isEmpty()) {
       if (arrivalLightingState.bounds) {
@@ -23262,12 +24000,12 @@ function recordAssetArrivalLightingAndGI(object, mode) {
         arrivalLightingState.bounds = { min: box.min.toArray(), max: box.max.toArray() };
       }
     }
-    syncArrivalStudioLighting();
+    syncArrivalStudioLighting({ syncPromoted: true });
     queueMicrotask(() => autoCalibrateSceneGIFromScene(object));
   }
 }
 
-function refreshArrivalLightingFromWorkingScene() {
+function refreshArrivalLightingFromWorkingScene({syncPromoted=false}={}) {
   const union = new THREE.Box3();
   const allSamples = [];
   if (typeof workingScene !== 'undefined') {
@@ -23282,7 +24020,7 @@ function refreshArrivalLightingFromWorkingScene() {
   }
   arrivalLightingState.bounds = union.isEmpty() ? null : { min: union.min.toArray(), max: union.max.toArray() };
   arrivalLightingState.materialProfile = inspectArrivalMaterialProfile(allSamples);
-  syncArrivalStudioLighting();
+  syncArrivalStudioLighting({ syncPromoted });
 }
 
 function syncArrivalLightingAndGI(object) {
@@ -23290,29 +24028,323 @@ function syncArrivalLightingAndGI(object) {
   autoCalibrateSceneGIFromScene(object);
 }
 
-function promoteArrivalStudioLightsToScene() {
+function promoteArrivalStudioLightsToScene({ groupRig = true, select = 'rig', startDrag = null, recordHistory = !startDrag } = {}) {
   if (typeof assertSceneConstructionAvailable === 'function') assertSceneConstructionAvailable();
   const plan = syncArrivalStudioLighting();
   const ids = [];
+  const rigId = '@studio-light-rig';
+  const rigPivot = { position: [...plan.target], rotation: [0, 0, 0], scale: [1, 1, 1] };
+  const canBatchHistory = Boolean(
+    recordHistory &&
+    groupRig &&
+    scenePlacementTools?.edits &&
+    !scenePlacementTools.edits.state().active &&
+    typeof checkSelectionMembership === 'function' &&
+    typeof readSelectionMembership === 'function'
+  );
+  const hadAllLights = typeof workingScene !== 'undefined' && plan.lights.every(r => workingScene.objects.some(o => o.id === r.id && o.type === 'light'));
+  const hadRigGroup = typeof workingScene !== 'undefined' && workingScene.groups.some(g => g.id === rigId);
+  const beforeMembership = canBatchHistory && (!hadAllLights || !hadRigGroup)
+    ? checkSelectionMembership(readSelectionMembership())
+    : null;
   for (const record of plan.lights) {
     if (typeof workingScene !== 'undefined' && workingScene.objects.some(o => o.id === record.id && o.type === 'light')) {
       ids.push(record.id);
       continue;
     }
     const target = typeof ensureSceneObjectMembershipTarget === 'function' ? ensureSceneObjectMembershipTarget(record.id) : null;
-    if (target && scenePlacementTools?.edits) scenePlacementTools.edits.assertCanRecordApplied(target);
+    if (recordHistory && !beforeMembership && target && scenePlacementTools?.edits) {
+      scenePlacementTools.edits.assertCanRecordApplied(target);
+    }
     mountSceneSpotLight({ ...record, createdAt: new Date().toISOString() });
-    if (typeof recordSceneObjectInsertion === 'function' && scenePlacementTools?.edits) {
+    if (beforeMembership && typeof sceneMembership !== 'undefined') {
+      sceneMembership.retainForHistory(record.id, '@selection-membership');
+    } else if (recordHistory && typeof recordSceneObjectInsertion === 'function' && scenePlacementTools?.edits) {
       recordSceneObjectInsertion(record.id);
     }
     ids.push(record.id);
   }
   arrivalLightingState.promotedIds = ids;
-  if (ids.length && typeof setActiveSceneObject === 'function') setActiveSceneObject(ids[0]);
+  if (groupRig && ids.length && typeof createSceneGroupForObjects === 'function') {
+    const existingGroup = typeof workingScene !== 'undefined' ? workingScene.groups.find(g => g.id === rigId) : null;
+    const effectivePivot = arrivalLightingState.rigTransformEdited && existingGroup?.transform ? existingGroup.transform : rigPivot;
+    createSceneGroupForObjects(ids, 'Arrival Studio Rig', {
+      id: rigId,
+      source: 'kaminos:arrival-studio-rig',
+      transform: effectivePivot,
+      select: false,
+    });
+    if (!arrivalLightingState.rigTransformEdited && typeof workingScene !== 'undefined') {
+      const grp = workingScene.groups.find(g => g.id === rigId);
+      if (grp) {
+        workingScene.updateGroup(rigId, { transform: rigPivot });
+        if (typeof groupProxy === 'function') applySceneObjectTransformState(groupProxy(grp), rigPivot);
+      }
+    }
+    arrivalLightingState.promotedGroupId = rigId;
+  }
+  if (select === 'rig' && arrivalLightingState.promotedGroupId && typeof setActiveSceneGroup === 'function') {
+    setActiveSceneGroup(arrivalLightingState.promotedGroupId);
+  } else if (select && ids.includes(select) && typeof setActiveSceneObject === 'function') {
+    setActiveSceneObject(select);
+  } else if (ids.length && typeof setActiveSceneObject === 'function') {
+    setActiveSceneObject(ids[0]);
+  }
+  if (beforeMembership) {
+    scenePlacementTools.edits.recordApplied('@selection-membership', beforeMembership, readSelectionMembership(), 'Create Arrival Studio Rig');
+  }
+  const dragOp = startDrag === 'move' ? 'translate' : startDrag;
+  if (typeof setGizmoMode === 'function') {
+    setGizmoMode(dragOp === 'rotate' ? 'rotate' : 'translate');
+  }
+  if (dragOp === 'translate' || dragOp === 'rotate') {
+    scenePlacementTools?.start(dragOp);
+  }
   syncArrivalStudioLighting();
   renderSceneObjectList?.();
   updateTransformInspector?.();
   return ids;
+}
+
+function grabArrivalStudioRig(operation = 'translate') {
+  const op = operation === 'rotate' ? 'rotate' : 'translate';
+  promoteArrivalStudioLightsToScene({ groupRig: true, select: 'rig', startDrag: op, recordHistory: false });
+  return arrivalLightingState.promotedGroupId || arrivalLightingState.promotedIds[0] || null;
+}
+
+function captureStudioLookSwitchSnapshot() {
+  const studioLightRecords = {};
+  if (typeof workingScene !== 'undefined') {
+    for (const id of ['@studio-key-light', '@studio-rim-light']) {
+      const entry = workingScene.objects.find(o => o.id === id && o.type === 'light');
+      if (entry) {
+        studioLightRecords[id] = structuredClone(
+          typeof serializeSceneObject === 'function'
+            ? serializeSceneObject(entry)
+            : {
+                id: entry.id,
+                type: 'light',
+                label: entry.label,
+                groupId: entry.groupId ?? null,
+                transform: entry.transform,
+                light: entry.light,
+                createdAt: entry.createdAt,
+              },
+        );
+      }
+    }
+  }
+  const rigGroupEntry =
+    typeof workingScene !== 'undefined' ? workingScene.groups?.find(g => g.id === '@studio-light-rig') : null;
+  return {
+    arrival: {
+      sceneKind: arrivalLightingState.sceneKind,
+      lookId: arrivalLightingState.lookId,
+      studioLightsEnabled: Boolean(arrivalLightingState.studioLightsEnabled),
+      materialTuningEnabled: Boolean(arrivalLightingState.materialTuningEnabled),
+      rigTransformEdited: Boolean(arrivalLightingState.rigTransformEdited),
+      promotedIds: [...arrivalLightingState.promotedIds],
+      promotedGroupId: arrivalLightingState.promotedGroupId ?? null,
+      bounds: structuredClone(arrivalLightingState.bounds),
+      materialProfile: structuredClone(arrivalLightingState.materialProfile),
+    },
+    environment: typeof sceneEnvironment !== 'undefined' ? structuredClone(sceneEnvironment.read()) : null,
+    ground: groundPlane
+      ? {
+          visible: Boolean(groundPlane.visible),
+          height: Math.round(Number(groundPlane.position.y) * 1000) / 1000,
+          color: '#' + groundPlane.material.color.getHexString(),
+          roughness: Math.round(Number(groundPlane.material.roughness) * 1000) / 1000,
+        }
+      : null,
+    gi: {
+      settings: structuredClone(sceneGISettings),
+      manuallyConfigured: Boolean(sceneGIManuallyConfigured),
+      bounceManuallyConfigured: Boolean(sceneGIBounceManuallyConfigured),
+      autoCalibrationState: structuredClone(sceneGIAutoCalibrationState),
+    },
+    rigMembership: {
+      lights: studioLightRecords,
+      rigGroup: rigGroupEntry
+        ? structuredClone({
+            id: rigGroupEntry.id,
+            label: rigGroupEntry.label,
+            type: rigGroupEntry.type,
+            source: rigGroupEntry.source,
+            transform: rigGroupEntry.transform,
+            objectIds: [...(rigGroupEntry.objectIds || [])],
+          })
+        : null,
+      selection: typeof workingScene !== 'undefined' ? structuredClone(workingScene.selection) : null,
+    },
+  };
+}
+
+function checkStudioLookSwitchSnapshot(value) {
+  if (!value || typeof value !== 'object' || !value.arrival || typeof value.arrival.lookId !== 'string') {
+    throw new Error('Invalid Studio Look history snapshot');
+  }
+  resolveStudioLook(value.arrival.lookId);
+  return structuredClone(value);
+}
+
+async function restoreStudioLookSwitchSnapshot(snapshot) {
+  const checked = checkStudioLookSwitchSnapshot(snapshot);
+  const { arrival, environment, ground, gi, rigMembership } = checked;
+  arrivalLightingState.sceneKind = arrival.sceneKind ?? 'static-asset';
+  arrivalLightingState.lookId = arrival.lookId ?? DEFAULT_STUDIO_LOOK_ID;
+  arrivalLightingState.studioLightsEnabled = Boolean(arrival.studioLightsEnabled);
+  arrivalLightingState.materialTuningEnabled = Boolean(arrival.materialTuningEnabled);
+  arrivalLightingState.rigTransformEdited = Boolean(arrival.rigTransformEdited);
+  arrivalLightingState.promotedIds = Array.isArray(arrival.promotedIds) ? [...arrival.promotedIds] : [];
+  arrivalLightingState.promotedGroupId = arrival.promotedGroupId ?? null;
+  arrivalLightingState.bounds = structuredClone(arrival.bounds ?? null);
+  if (arrival.materialProfile) arrivalLightingState.materialProfile = structuredClone(arrival.materialProfile);
+
+  if (environment && typeof sceneEnvironment !== 'undefined') {
+    sceneEnvironment.restoreDocument(environment);
+    await loadEnvironment(environment.name, { remember: true });
+  }
+  if (ground && groundPlane) {
+    groundPlane.visible = Boolean(ground.visible);
+    groundPlane.position.y = Number.isFinite(ground.height) ? ground.height : -0.85;
+    groundPlane.material.color.set(ground.color ?? '#808080');
+    groundPlane.material.roughness = Number.isFinite(ground.roughness) ? ground.roughness : 0.65;
+    const visEl = document.getElementById('composition-ground-visible');
+    if (visEl) visEl.checked = groundPlane.visible;
+    const hEl = document.getElementById('composition-ground-height');
+    if (hEl) hEl.value = String(groundPlane.position.y);
+    const cEl = document.getElementById('composition-ground-color');
+    if (cEl) cEl.value = '#' + groundPlane.material.color.getHexString();
+    const rEl = document.getElementById('composition-ground-roughness');
+    if (rEl) rEl.value = String(groundPlane.material.roughness);
+    const rvEl = document.getElementById('composition-ground-roughness-value');
+    if (rvEl) rvEl.value = String(groundPlane.material.roughness);
+  }
+  if (rigMembership && typeof workingScene !== 'undefined') {
+    syncingArrivalStudioLighting = true;
+    try {
+      for (const id of ['@studio-key-light', '@studio-rim-light']) {
+        const savedRecord = rigMembership.lights?.[id];
+        const existsNow = workingScene.objects.some(o => o.id === id && o.type === 'light');
+        if (savedRecord) {
+          mountSceneSpotLight(structuredClone(savedRecord));
+        } else if (existsNow) {
+          removeSceneObjectInternal(id, { recordHistory: false });
+        }
+      }
+      if (rigMembership.rigGroup && typeof createSceneGroupForObjects === 'function') {
+        const grpSpec = rigMembership.rigGroup;
+        createSceneGroupForObjects(
+          grpSpec.objectIds || ['@studio-key-light', '@studio-rim-light'],
+          grpSpec.label || 'Arrival Studio Rig',
+          {
+            id: grpSpec.id || '@studio-light-rig',
+            source: grpSpec.source || 'kaminos:arrival-studio-rig',
+            transform: grpSpec.transform,
+            select: false,
+          },
+        );
+        const grp = workingScene.groups.find(g => g.id === (grpSpec.id || '@studio-light-rig'));
+        if (grp && grpSpec.transform) {
+          workingScene.updateGroup(grp.id, { transform: grpSpec.transform });
+          if (typeof groupProxy === 'function') applySceneObjectTransformState(groupProxy(grp), grpSpec.transform);
+        }
+      } else if (typeof pruneSceneGroups === 'function') {
+        pruneSceneGroups();
+      }
+      if (rigMembership.selection) {
+        const validIds = new Set([
+          ...workingScene.objects.map(o => o.id),
+          ...workingScene.groups.map(g => `@group:${g.id}`),
+          ...(activeSceneComposition ? ['flame-field'] : []),
+          ...(waterFeature?.setup ? ['water-field'] : []),
+        ]);
+        const nextIds = (rigMembership.selection.ids || []).filter(id => validIds.has(id));
+        const nextActive = validIds.has(rigMembership.selection.activeId)
+          ? rigMembership.selection.activeId
+          : (nextIds.at(-1) ?? null);
+        if (nextIds.length) setSceneSelection(nextIds, nextActive);
+        else clearActiveSceneObjectSelection?.();
+      }
+    } finally {
+      syncingArrivalStudioLighting = false;
+    }
+  }
+  if (gi) {
+    sceneGIManuallyConfigured = Boolean(gi.manuallyConfigured);
+    sceneGIBounceManuallyConfigured = Boolean(gi.bounceManuallyConfigured);
+    sceneGIAutoCalibrationState = structuredClone(gi.autoCalibrationState ?? null);
+    if (gi.settings) setSceneGIControls(gi.settings, { autoCalibrated: true });
+  }
+  const tuningToggle = document.getElementById('arrival-material-tuning-toggle');
+  if (tuningToggle) tuningToggle.checked = arrivalLightingState.materialTuningEnabled;
+  syncArrivalStudioLighting({ syncPromoted: false });
+  if (typeof sceneLightingPreparation !== 'undefined') await sceneLightingPreparation?.whenIdle?.();
+  renderSceneObjectList?.();
+  updateTransformInspector?.();
+  window._kaminosDirty?.();
+}
+
+async function applyStudioLookToCurrentScene(
+  lookId = arrivalLightingState.lookId,
+  { promoteRig = typeof workingScene !== 'undefined' && workingScene.objects.length > 0, recordHistory = true } = {},
+) {
+  const look = resolveStudioLook(lookId);
+  const beforeSnapshot = recordHistory && scenePlacementTools?.edits ? captureStudioLookSwitchSnapshot() : null;
+  arrivalLightingState.lookId = look.id;
+  arrivalLightingState.studioLightsEnabled = true;
+  arrivalLightingState.rigTransformEdited = false;
+  const env = look.environment;
+  if (typeof sceneEnvironment !== 'undefined') {
+    sceneEnvironment.restoreDocument({
+      ...env,
+      recipes: sceneEnvironment.read().recipes,
+    });
+    await loadEnvironment(env.name, { remember: true });
+  }
+  if (groundPlane && env.ground) {
+    groundPlane.visible = env.ground.visible ?? true;
+    groundPlane.position.y = Number.isFinite(env.ground.height) ? env.ground.height : -0.85;
+    groundPlane.material.color.set(env.ground.color ?? '#ece9e2');
+    groundPlane.material.roughness = Number.isFinite(env.ground.roughness) ? env.ground.roughness : 0.78;
+    const visEl = document.getElementById('composition-ground-visible');
+    if (visEl) visEl.checked = groundPlane.visible;
+    const hEl = document.getElementById('composition-ground-height');
+    if (hEl) hEl.value = String(groundPlane.position.y);
+    const cEl = document.getElementById('composition-ground-color');
+    if (cEl) cEl.value = '#' + groundPlane.material.color.getHexString();
+    const rEl = document.getElementById('composition-ground-roughness');
+    if (rEl) rEl.value = String(groundPlane.material.roughness);
+    const rvEl = document.getElementById('composition-ground-roughness-value');
+    if (rvEl) rvEl.value = String(groundPlane.material.roughness);
+  }
+  refreshArrivalLightingFromWorkingScene({syncPromoted:true});
+  if (promoteRig) {
+    if (typeof sceneLightingPreparation !== 'undefined') await sceneLightingPreparation?.whenIdle?.();
+    promoteArrivalStudioLightsToScene({ groupRig: true, select: 'rig', recordHistory: false });
+  }
+  sceneGIManuallyConfigured = false;
+  sceneGIBounceManuallyConfigured = false;
+  autoCalibrateSceneGIFromScene();
+  if (typeof sceneLightingPreparation !== 'undefined') await sceneLightingPreparation?.whenIdle?.();
+  if (
+    beforeSnapshot &&
+    scenePlacementTools?.edits &&
+    !scenePlacementTools.edits.state().active &&
+    !scenePlacementTools.edits.state().replaying
+  ) {
+    const afterSnapshot = captureStudioLookSwitchSnapshot();
+    scenePlacementTools?.edits?.recordApplied(
+      '@studio-look-switch',
+      beforeSnapshot,
+      afterSnapshot,
+      `Apply Studio look: ${look.label}`,
+    );
+  }
+  renderSceneObjectList?.();
+  setInfo(`Studio look applied: ${look.label} · Cmd/Ctrl+Z to undo`);
+  return look;
 }
 
 function readSceneGIControls() { return structuredClone(sceneGISettings); }
@@ -23324,6 +24356,11 @@ function setSceneGIControls(value, {preserveInput=null, autoCalibrated=false}={}
     } else if (!preserveInput) {
       sceneGIManuallyConfigured = explicitRadiusOrThickness && (value.radius !== sceneGIAutoCalibrationState?.radius || value.thickness !== sceneGIAutoCalibrationState?.thickness);
       if (!explicitRadiusOrThickness) sceneGIAutoCalibrationState = null;
+    }
+    if (preserveInput && preserveInput.id === 'scene-gi-bounceFeedback') {
+      sceneGIBounceManuallyConfigured = true;
+    } else if (!preserveInput && Object.hasOwn(value, 'bounceFeedback')) {
+      sceneGIBounceManuallyConfigured = true;
     }
   }
   const settings = resolveSceneGIControlState(value);
@@ -23359,53 +24396,105 @@ for (const key of [...Object.keys(sceneGISettings).filter(key=>key!=='estimator'
   // Finish incomplete/invalid text on commit using the last accepted state.
   control.addEventListener('change',()=>setSceneGIControls(sceneGISettings));
 }
-setSceneGIControls(sceneGISettings);
+setSceneGIControls(sceneGISettings, { autoCalibrated: true });
 document.getElementById('arrival-studio-lights-toggle')?.addEventListener('change', event => {
   arrivalLightingState.studioLightsEnabled = Boolean(event.target.checked);
-  syncArrivalStudioLighting();
+  syncArrivalStudioLighting({ syncPromoted: true });
+  renderSceneObjectList?.();
+});
+document.getElementById('arrival-studio-look-select')?.addEventListener('change', event => {
+  const nextLook = event.target.value;
+  event.target.blur?.();
+  void applyStudioLookToCurrentScene(nextLook);
 });
 document.getElementById('arrival-material-tuning-toggle')?.addEventListener('change', event => {
   arrivalLightingState.materialTuningEnabled = Boolean(event.target.checked);
-  syncArrivalStudioLighting();
+  syncArrivalStudioLighting({ syncPromoted: true });
 });
 document.getElementById('arrival-studio-lights-promote')?.addEventListener('click', () => {
   try {
-    promoteArrivalStudioLightsToScene();
+    promoteArrivalStudioLightsToScene({ groupRig: true, select: 'rig' });
+  } catch (error) {
+    setInfo(error.message);
+  }
+});
+document.getElementById('arrival-studio-lights-grab')?.addEventListener('click', () => {
+  try {
+    grabArrivalStudioRig('translate');
+  } catch (error) {
+    setInfo(error.message);
+  }
+});
+document.getElementById('arrival-studio-lights-orbit')?.addEventListener('click', () => {
+  try {
+    grabArrivalStudioRig('rotate');
   } catch (error) {
     setInfo(error.message);
   }
 });
 window.kaminosArrivalLighting = {
-  read: () => ({
-    studioLightsEnabled: arrivalLightingState.studioLightsEnabled,
-    materialTuningEnabled: arrivalLightingState.materialTuningEnabled,
-    bounds: structuredClone(arrivalLightingState.bounds),
-    materialProfile: structuredClone(arrivalLightingState.materialProfile),
-    plan: structuredClone(arrivalLightingState.plan),
-    promotedIds: [...arrivalLightingState.promotedIds],
-    stageLightsVisible: Boolean(studioKeyLight?.visible || studioRimLight?.visible),
-    autoCalibratedGI: structuredClone(sceneGIAutoCalibrationState),
-  }),
+  read: () => {
+    const textureAnisotropies = [];
+    if (typeof workingScene !== 'undefined') {
+      for (const entry of workingScene.objects) {
+        entry.object?.traverse?.(child => {
+          if (child.isMesh && child.material?.map) {
+            textureAnisotropies.push(child.material.map.anisotropy);
+          }
+        });
+      }
+    }
+    return {
+      sceneKind: arrivalLightingState.sceneKind,
+      lookId: arrivalLightingState.lookId,
+      studioLightsEnabled: arrivalLightingState.studioLightsEnabled,
+      materialTuningEnabled: arrivalLightingState.materialTuningEnabled,
+      bounds: structuredClone(arrivalLightingState.bounds),
+      materialProfile: structuredClone(arrivalLightingState.materialProfile),
+      plan: structuredClone(arrivalLightingState.plan),
+      promotedIds: [...arrivalLightingState.promotedIds],
+      promotedGroupId: arrivalLightingState.promotedGroupId,
+      rigTransformEdited: arrivalLightingState.rigTransformEdited,
+      stageLightsVisible: Boolean((studioKeyLight?.visible && studioKeyLight?.parent === scene) || (studioRimLight?.visible && studioRimLight?.parent === scene)),
+      stageLightsParented: Boolean(studioKeyLight?.parent === scene && studioRimLight?.parent === scene),
+      autoCalibratedGI: structuredClone(sceneGIAutoCalibrationState),
+      rigInGroups: Boolean(typeof workingScene !== 'undefined' && workingScene.groups?.some(g => g.id === '@studio-light-rig')),
+      spotLightIds: typeof workingScene !== 'undefined' ? workingScene.objects.filter(o => o.type === 'light').map(o => o.id) : [],
+      editsState: scenePlacementTools?.edits?.state?.() ?? null,
+      environment: typeof sceneEnvironment !== 'undefined' ? structuredClone(sceneEnvironment.read()) : null,
+      textureAnisotropies,
+    };
+  },
   setStudioLights(enabled) {
     arrivalLightingState.studioLightsEnabled = Boolean(enabled);
     const toggle = document.getElementById('arrival-studio-lights-toggle');
     if (toggle) toggle.checked = arrivalLightingState.studioLightsEnabled;
-    syncArrivalStudioLighting();
+    syncArrivalStudioLighting({ syncPromoted: true });
+    renderSceneObjectList?.();
     return this.read();
   },
   setMaterialTuning(enabled) {
     arrivalLightingState.materialTuningEnabled = Boolean(enabled);
     const toggle = document.getElementById('arrival-material-tuning-toggle');
     if (toggle) toggle.checked = arrivalLightingState.materialTuningEnabled;
-    syncArrivalStudioLighting();
+    syncArrivalStudioLighting({ syncPromoted: true });
     return this.read();
   },
-  promoteToSceneObjects() {
-    promoteArrivalStudioLightsToScene();
+  promoteToSceneObjects(options = {}) {
+    promoteArrivalStudioLightsToScene(options);
+    return this.read();
+  },
+  grabRig(operation = 'translate') {
+    grabArrivalStudioRig(operation);
+    return this.read();
+  },
+  async applyStudioLook(lookId, options = {}) {
+    await applyStudioLookToCurrentScene(lookId, options);
     return this.read();
   },
   calibrateGI() {
     sceneGIManuallyConfigured = false;
+    sceneGIBounceManuallyConfigured = false;
     autoCalibrateSceneGIFromScene();
     return this.read();
   },
@@ -24937,7 +26026,17 @@ async function greenroomImportSplat(url, fileName, display, options = {}) {
       },
     };
   }
-  const preview = await createSplatSceneObjectPreview({ url, fileName, display, metadata });
+  const splatLabel = display?.title || fileName || 'Splat';
+  const splatTelemetryOp = typeof loadingTelemetry !== 'undefined'
+    ? loadingTelemetry.start('asset', { label: splatLabel, phase: 'downloading' })
+    : null;
+  let preview;
+  try {
+    preview = await createSplatSceneObjectPreview({ url, fileName, display, metadata });
+  } catch (err) {
+    if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.fail('asset', err);
+    throw err;
+  }
   const object = preview.object;
   const splat = {
     ...metadata.splat,
@@ -24964,7 +26063,10 @@ async function greenroomImportSplat(url, fileName, display, options = {}) {
       }, {activate:options.activate!==false});
     },
   });
-  if (!published) return null;
+  if (!published) {
+    if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.cancel?.('asset', { token: splatTelemetryOp?.token });
+    return null;
+  }
   applySplatCorrectionToRecord(record, splat.correction);
   if(options.activate!==false){
     currentMesh = object;
@@ -24976,6 +26078,7 @@ async function greenroomImportSplat(url, fileName, display, options = {}) {
     document.getElementById('transform-bar').classList.add('visible');
   }
   buildRenderHandoffV0(record);
+  if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.complete('asset');
   setInfo(`Greenroom splat import: ${display?.title || fileName}`);
   return object;
 }
@@ -25791,8 +26894,8 @@ function readNumberControl(id, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-async function addSceneObjectFromSource(record, loadRequestId = null, {activate = true} = {}) {
-  return sceneRecords.load(record,{loadRequestId,activate});
+async function addSceneObjectFromSource(record, loadRequestId = null, {activate = true,preparedAsset} = {}) {
+  return sceneRecords.load(record,{loadRequestId,activate,preparedAsset});
 }
 
 function assertSceneObjectsReloadable(records) {
@@ -25806,10 +26909,11 @@ function restoreLoadedSceneRecord(entry,record){
     else applySceneObjectTransformState(entry.object,record.transform);
   }
   applyMaterialStateToObject(entry.object,record.materials);
+  if (typeof removeSceneLowLodStandIn === 'function') removeSceneLowLodStandIn(record.id);
   if(record.groupId)setSceneObjectGroupId(entry,record.groupId);
 }
-async function loadSceneObjects(records, activeId, groups = [], activeGroupId = null, liquidSetup = null, loadRequestId = null) {
-  return sceneLifecycle.replace(records,{activeId,groups,activeGroupId,setup:{water:liquidSetup,flame:{composition:activeSceneComposition,sourcePresent:authoredFlamePresent}},loadRequestId});
+async function loadSceneObjects(records, activeId, groups = [], activeGroupId = null, liquidSetup = null, loadRequestId = null,startupLodHint=null) {
+  return sceneLifecycle.replace(records,{activeId,groups,activeGroupId,setup:{water:liquidSetup,flame:{composition:activeSceneComposition,sourcePresent:authoredFlamePresent},startupLodHint,startupGroups:groups},loadRequestId});
 }
 
 function writeAuthoredCameraView(view){
@@ -25909,6 +27013,7 @@ function buildSceneData(capture = null) {
     backdrop: !!backdropMesh,
     backdropBrightness: backdropMesh ? parseFloat(document.getElementById('backdrop-brightness').value) : undefined,
   });
+  data.lodPreparation=captureLodPreparation(sceneLodContext(objects),sceneBeautyLods?.state());
   data.label = document.getElementById('composition-label').value.trim() || 'Untitled composition';
   return data;
 }
@@ -26151,19 +27256,30 @@ const sceneSpotLights=new Map();
 window.kaminosSceneLightState=()=>Array.from(sceneSpotLights,([id,{light,marker}])=>({id,parentIsScene:light.parent===scene,markerIsScene:marker.parent===scene,visible:light.visible,power:light.intensity,position:light.position.toArray(),target:light.target.position.toArray()}));
 function mountSceneSpotLight(raw) {
   const record=checkedSceneLightRecord(raw);let entry=workingScene.objects.find(o=>o.id===record.id),binding=sceneSpotLights.get(record.id);
+  const reusedStudioLight = !binding
+    ? (record.id === '@studio-key-light' && typeof studioKeyLight !== 'undefined' ? studioKeyLight
+      : record.id === '@studio-rim-light' && typeof studioRimLight !== 'undefined' ? studioRimLight : null)
+    : null;
+  const priorVisible = reusedStudioLight ? reusedStudioLight.visible : binding?.light?.visible;
   if(!binding){
-    const light=new THREE.SpotLight();
-    light.castShadow=true;light.shadow.mapSize.set(1024,1024);light.shadow.bias=-.0001;light.shadow.normalBias=.02;
+    const light=reusedStudioLight||new THREE.SpotLight();
+    light.castShadow=true;light.shadow.mapSize.set(2048,2048);light.shadow.bias=-.00005;light.shadow.normalBias=.004;
     const points=[0,0,0,0,0,-.5,-.12,0,-.3,.12,0,-.3,0,-.12,-.3,0,.12,-.3];
     const marker=new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute(points,3)),new THREE.LineBasicMaterial({color:0xffc66d}));
-    marker.userData.kaminosEditorOnly=true;binding={light,marker};sceneSpotLights.set(record.id,binding);scene.add(light,light.target,marker);
+    marker.userData.kaminosEditorOnly=true;binding={light,marker,reusedStudioLight:Boolean(reusedStudioLight)};sceneSpotLights.set(record.id,binding);
+    scene.add(light,light.target,marker);
+  } else {
+    scene.add(binding.light,binding.light.target,binding.marker);
   }
   const {light,marker}=binding;
-  const topologyChanged=!entry||light.visible!==record.light.enabled;
+  const topologyChanged=(!entry&&!reusedStudioLight)||priorVisible!==record.light.enabled;
   applySceneObjectTransformState(marker,record.transform);marker.visible=record.light.enabled&&viewportHelpersVisible;
   light.visible=record.light.enabled;light.color.set(record.light.color);light.intensity=record.light.intensity;light.angle=THREE.MathUtils.degToRad(record.light.angle);light.penumbra=record.light.penumbra;
   light.position.fromArray(record.transform.position);
-  const direction=new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(...record.transform.rotation));light.target.position.copy(light.position).addScaledVector(direction,record.light.aimDistance*record.transform.scale[2]);
+  const effectiveAim=Math.max(0.5,record.light.aimDistance*record.transform.scale[2]);
+  const direction=new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(...record.transform.rotation));light.target.position.copy(light.position).addScaledVector(direction,effectiveAim);
+  light.shadow.camera.near=Math.max(0.1,Math.min(0.5,effectiveAim*0.12));
+  light.shadow.camera.far=Math.max(8,effectiveAim*3);
   light.shadow.camera.updateProjectionMatrix();
   if(!entry){entry={...record,object:marker};sceneMembership.admit(entry);}else {const {id,object,...properties}=record;Object.assign(entry,properties);}
   marker.userData.kaminosSceneObject={...record};
@@ -26174,9 +27290,14 @@ function mountSceneSpotLight(raw) {
 function disposeSceneSpotLight(id) {
   const binding=sceneSpotLights.get(id);if(!binding)return;
   binding.marker.removeFromParent();binding.marker.geometry.dispose();binding.marker.material.dispose();
+  sceneSpotLights.delete(id);
+  if(binding.reusedStudioLight){
+    scene.add(binding.light,binding.light.target);
+    if (typeof syncArrivalStudioLighting === 'function') syncArrivalStudioLighting();
+    return;
+  }
   binding.light.removeFromParent();binding.light.target.removeFromParent();
   if(sceneLightingPreparation)sceneLightingPreparation.deferDisposal(()=>binding.light.dispose?.());else binding.light.dispose?.();
-  sceneSpotLights.delete(id);
   if (typeof syncArrivalStudioLighting === 'function') syncArrivalStudioLighting();
   sceneLightingPreparation?.request();
 }
@@ -27137,6 +28258,9 @@ function ensureGroupTarget(group) {
 }
 function writeGroupPose(id,value) {
   const group=workingScene.groups.find(group=>group.id===id);if(!group)throw Error('Group is absent');
+  if (typeof arrivalLightingState !== 'undefined' && id === '@studio-light-rig') {
+    arrivalLightingState.rigTransformEdited = true;
+  }
   const before=groupEditState(group),next=checkedGroupPose(value);
   const members=moveGroupMembers(value.frame||before.frame,next,value.members||before.members);
   if(Object.keys(members).sort().join()!==[...group.objectIds].sort().join())throw Error('Group membership changed during placement');
@@ -27639,6 +28763,19 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
   setAnnularBurner(null);
 
   setInfo('Loading scene...');
+  const sceneTelemetryLabel = data.label || sceneFile || 'Scene';
+  const sceneTelemetryOp = typeof loadingTelemetry !== 'undefined' && objectRecords.length > 0
+    ? loadingTelemetry.start('scene', { label: `${sceneTelemetryLabel} (${objectRecords.length} objects)`, phase: 'downloading' })
+    : null;
+  try {
+  if (data.camera && typeof applySceneCameraView === 'function') {
+    applySceneCameraView(data.camera);
+  }
+  // The downloading proxy uses the saved scene's GI recipe too.
+  setSceneGIControls(data.postprocessing?.sceneGI ?? {});
+  if (typeof stageSceneLowLodStandIns === 'function') {
+    stageSceneLowLodStandIns(objectRecords, loadRequestId,restorePlan.groups);
+  }
 
   // Restore the lighting recipe now; maps load independently of scene objects.
   if (data.environment) {
@@ -27679,7 +28816,7 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
   flameDomainFollowSource=restorePlan.flameDomainFollowSource;
   fineCoverageController=new FineCoverageController();fineCoverageStatus={status:'awaiting-scene'};
   try {
-    const loadStage = await sceneLoadRequests.awaitStage(loadRequestId, loadSceneObjects(objectRecords, restorePlan.activeObjectId, restorePlan.groups, restorePlan.activeGroupId, restorePlan.localLiquid, loadRequestId));
+    const loadStage = await sceneLoadRequests.awaitStage(loadRequestId, loadSceneObjects(objectRecords, restorePlan.activeObjectId, restorePlan.groups, restorePlan.activeGroupId, restorePlan.localLiquid, loadRequestId,data.lodPreparation));
     if (!loadStage.current || !loadStage.value || !sceneLoadRequests.isCurrent(loadRequestId)) return false;
   } catch (e) {
     if (!sceneLoadRequests.isCurrent(loadRequestId)) return false;
@@ -27755,9 +28892,15 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
   // Apply postprocessing
   restoreFireRendering(document,data.postprocessing?.fireLighting);
   sceneBloom.set(checkedSceneBloom(data.postprocessing?.bloom??{}));bloomControls?.sync();
-  // Scenes without a saved GI record use defaults, independent of prior tuning.
-  setSceneGIControls(data.postprocessing?.sceneGI ?? {});
   if (typeof autoCalibrateSceneGIFromScene === 'function') autoCalibrateSceneGIFromScene();
+  if (typeof arrivalLightingState !== 'undefined') {
+    if (Array.isArray(data?.objects) && data.objects.length > 0) {
+      arrivalLightingState.sceneKind = 'authored-scene';
+      arrivalLightingState.studioLightsEnabled = false;
+    } else {
+      arrivalLightingState.sceneKind = 'static-asset';
+    }
+  }
   if (typeof refreshArrivalLightingFromWorkingScene === 'function') refreshArrivalLightingFromWorkingScene();
   if (data.postprocessing) {
     const ao = data.postprocessing.ao;
@@ -27815,7 +28958,14 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
   } else {
     setInfo(waterFeature.failure ? `Scene loaded; water host unavailable: ${waterFeature.failure}` : 'Volume scene loaded');
   }
+  if (sceneTelemetryOp && typeof loadingTelemetry !== 'undefined') loadingTelemetry.complete('scene');
   return true;
+  } finally {
+    if (typeof clearSceneLowLodStandIns === 'function') clearSceneLowLodStandIns(loadRequestId);
+    if (sceneTelemetryOp && typeof loadingTelemetry !== 'undefined' && loadingTelemetry.read().operations.some(op => op.id === 'scene')) {
+      loadingTelemetry.cancel('scene', { token: sceneTelemetryOp.token });
+    }
+  }
 }
 
 // File input handler for Load Scene
@@ -27940,17 +29090,29 @@ sceneInitialization.then(async () => {
     input.value=value.navigationInput??(/Mac/i.test(navigator.userAgentData?.platform||navigator.platform)?'trackpad':'mouse');
     input.dispatchEvent(new Event('change',{bubbles:true}));
   };
-  const preferencesSaved=value=>{startupPreferences=value;applyNavigationPreference(value);};
-  preferencesUI=installUserPreferences({document,controller:userPreferences,readScene:()=>buildSceneData(),readFactory:()=>sceneDefaultsFromDocument(factorySceneDocument),onSaved:preferencesSaved});
+  const preferencesSaved=value=>{startupPreferences=value;applyNavigationPreference(value);if(value.studioLook&&!workingScene.objects.length){arrivalLightingState.lookId=value.studioLook;syncArrivalStudioLighting();}};
+  preferencesUI=installUserPreferences({document,controller:userPreferences,readScene:()=>buildSceneData(),readFactory:()=>sceneDefaultsFromDocument(factorySceneDocument),onSaved:preferencesSaved,onApplyLook:lookId=>{void applyStudioLookToCurrentScene(lookId,{promoteRig:true});}});
   window.kaminosPreferences={open:()=>preferencesUI.open(),close:()=>preferencesUI.close(),
     read:()=>userPreferences.state(),load:()=>userPreferences.load(),
     save:async value=>{const saved=await userPreferences.save({...value,startupConfigured:true});preferencesSaved(saved);return saved;},
+    applyStudioLook:(lookId,options)=>applyStudioLookToCurrentScene(lookId,options),
     capture:()=>sceneDefaultsFromDocument(buildSceneData()),
     startup:()=>({settled:preferencesStartupSettled,usesDefaults:sceneDefaultsApplied})};
-  if(startupPreferences&&startupPreferences.startupConfigured!==false&&userPreferences.state().receipt?.revision!=null)applyNavigationPreference(startupPreferences);
-  const initialEnvironment = restoreSettings();
-  const admittedEnvironment = (await startupSceneAdmission).data?.environment;
+  const requestedStudioLook = typeof resolveStudioLookFromSearch === 'function' ? resolveStudioLookFromSearch(window.location.search) : null;
+  if(startupPreferences&&startupPreferences.startupConfigured!==false&&userPreferences.state().receipt?.revision!=null){applyNavigationPreference(startupPreferences);if(startupPreferences.studioLook&&typeof arrivalLightingState!=='undefined'){arrivalLightingState.lookId=startupPreferences.studioLook;if(typeof syncArrivalStudioLighting==='function')syncArrivalStudioLighting();}}
+  if (requestedStudioLook && typeof arrivalLightingState !== 'undefined') {
+    arrivalLightingState.lookId = requestedStudioLook;
+    if (typeof syncArrivalStudioLighting === 'function') syncArrivalStudioLighting();
+  }
+  const initialEnvironment = requestedStudioLook && typeof resolveStudioLook === 'function'
+    ? resolveStudioLook(requestedStudioLook).environment.name
+    : restoreSettings();
+  const admittedScene = await startupSceneAdmission;
+  const admittedEnvironment = admittedScene?.data?.environment;
   if (admittedEnvironment) sceneEnvironment.restoreDocument(admittedEnvironment);
+  if (typeof prestageAdmittedSceneCameraAndProxies === 'function') {
+    prestageAdmittedSceneCameraAndProxies(admittedScene);
+  }
   // An image plane is unlit and can appear while the HDR environment downloads.
   // Combined asset routes keep their ordered replacement behavior below.
   const startupAssetParams = new URLSearchParams(window.location.search);
@@ -28012,6 +29174,9 @@ sceneInitialization.then(async () => {
       await (earlyImageLoaded ?? loadKaminosImageAssetRoute(imageRoute));
       if (params.get('sam') === '1') await window.kaminosOpenImageMasks(imageRoute.effectiveUrl, { fileName: imageRoute.fileName });
     }
+    if (typeof requestedStudioLook !== 'undefined' && requestedStudioLook) {
+      await applyStudioLookToCurrentScene(requestedStudioLook, { promoteRig: false, recordHistory: false });
+    }
     if (params.get('sam') === '1' && !imageRoute) setActiveTab('masks');
   });
   environmentLoaded.then(()=>{preferencesStartupSettled=true;},()=>{preferencesStartupSettled=true;});
@@ -28040,7 +29205,7 @@ sceneInitialization.then(async () => {
     }
     const sceneFile = startupSceneFile;
     if (!sceneFile) return;
-    const restored = await loadSceneFile({name:sceneFile,text:()=>startupSceneText}, { sceneFile, mounted: true });
+    const restored = await loadSceneFile({name:sceneFile,json:()=>startupSceneData,text:()=>startupSceneText}, { sceneFile, mounted: true });
     if (restored?.ok === false) throw new Error(restored.error || 'Starting scene restoration did not complete');
     // The ordinary loader reports some refusals in the UI and returns without
     // throwing. Its effective completion flag still governs owner admission.

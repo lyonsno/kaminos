@@ -223,6 +223,203 @@ function eulerXYZFromMinusZToDirection([dx, dy, dz]) {
   return [rx, ry, rz];
 }
 
+export const DEFAULT_STUDIO_LOOK_ID = 'sculptural-studio';
+
+export const STUDIO_LOOK_LIBRARY = Object.freeze({
+  'sculptural-studio': Object.freeze({
+    id: 'sculptural-studio',
+    label: 'Sculptural Studio',
+    description: 'Warm three-quarter key and cool grazing rim on a neutral cyclorama',
+    environment: Object.freeze({
+      name: 'studio',
+      exposure: 1.15,
+      intensity: 1.15,
+      rotation: 0,
+      showBackground: true,
+      backgroundBlur: 0.55,
+      backgroundBrightness: 0.62,
+      backgroundContrast: 1.05,
+      ground: Object.freeze({ visible: true, height: -0.85, color: '#e6e2da', roughness: 0.78 }),
+    }),
+    opticalFinish: Object.freeze({ floorReflection: 0.28, glintStrength: 0.16, glintThreshold: 1.35 }),
+    keyLight: Object.freeze({ azimuthDeg: -34, elevationDeg: 42, distanceScale: 4.2, color: '#fff1e0', intensity: 95, angle: 62, penumbra: 0.9 }),
+    rimLight: Object.freeze({ azimuthDeg: 148, elevationDeg: 28, distanceScale: 4.4, color: '#cfe2ff', intensity: 58, angle: 66, penumbra: 0.92 }),
+  }),
+  'obsidian-stage': Object.freeze({
+    id: 'obsidian-stage',
+    label: 'Obsidian Stage',
+    description: 'High-contrast dark stage with warm amber key and crisp icy rim',
+    environment: Object.freeze({
+      name: 'studio',
+      exposure: 1.08,
+      intensity: 0.95,
+      rotation: 0.45,
+      showBackground: true,
+      backgroundBlur: 0.65,
+      backgroundBrightness: 0.34,
+      backgroundContrast: 1.14,
+      ground: Object.freeze({ visible: true, height: -0.85, color: '#26282d', roughness: 0.58 }),
+    }),
+    opticalFinish: Object.freeze({ floorReflection: 0.58, glintStrength: 0.24, glintThreshold: 1.2 }),
+    keyLight: Object.freeze({ azimuthDeg: -38, elevationDeg: 38, distanceScale: 4.1, color: '#ffe4c4', intensity: 118, angle: 54, penumbra: 0.88 }),
+    rimLight: Object.freeze({ azimuthDeg: 142, elevationDeg: 24, distanceScale: 4.2, color: '#9ecbff', intensity: 82, angle: 58, penumbra: 0.9 }),
+  }),
+  'warm-gallery': Object.freeze({
+    id: 'warm-gallery',
+    label: 'Warm Gallery',
+    description: 'Golden-hour gallery key with soft warm limestone floor',
+    environment: Object.freeze({
+      name: 'sunset',
+      exposure: 1.12,
+      intensity: 1.08,
+      rotation: 0.2,
+      showBackground: true,
+      backgroundBlur: 0.58,
+      backgroundBrightness: 0.76,
+      backgroundContrast: 1.06,
+      ground: Object.freeze({ visible: true, height: -0.85, color: '#eee5d8', roughness: 0.82 }),
+    }),
+    opticalFinish: Object.freeze({ floorReflection: 0.22, glintStrength: 0.14, glintThreshold: 1.4 }),
+    keyLight: Object.freeze({ azimuthDeg: -28, elevationDeg: 36, distanceScale: 4.3, color: '#ffe6c7', intensity: 102, angle: 64, penumbra: 0.92 }),
+    rimLight: Object.freeze({ azimuthDeg: 154, elevationDeg: 32, distanceScale: 4.5, color: '#d8e6ff', intensity: 52, angle: 68, penumbra: 0.94 }),
+  }),
+  'technical-daylight': Object.freeze({
+    id: 'technical-daylight',
+    label: 'Technical Daylight',
+    description: 'Crisp neutral inspection light with balanced fill',
+    environment: Object.freeze({
+      name: 'courtyard',
+      exposure: 1.1,
+      intensity: 1.12,
+      rotation: 0,
+      showBackground: true,
+      backgroundBlur: 0.6,
+      backgroundBrightness: 0.82,
+      backgroundContrast: 1.02,
+      ground: Object.freeze({ visible: true, height: -0.85, color: '#e4e6e9', roughness: 0.74 }),
+    }),
+    opticalFinish: Object.freeze({ floorReflection: 0.10, glintStrength: 0.08, glintThreshold: 1.6 }),
+    keyLight: Object.freeze({ azimuthDeg: -32, elevationDeg: 46, distanceScale: 4.2, color: '#ffffff', intensity: 88, angle: 64, penumbra: 0.88 }),
+    rimLight: Object.freeze({ azimuthDeg: 146, elevationDeg: 34, distanceScale: 4.4, color: '#e2eeff', intensity: 64, angle: 66, penumbra: 0.9 }),
+  }),
+});
+
+export function resolveStudioLook(lookId = DEFAULT_STUDIO_LOOK_ID) {
+  if (lookId == null || lookId === '') return STUDIO_LOOK_LIBRARY[DEFAULT_STUDIO_LOOK_ID];
+  const look = STUDIO_LOOK_LIBRARY[lookId];
+  if (!look) throw new Error(`Unknown Studio look: ${lookId}`);
+  return look;
+}
+
+export function resolveStudioLookFromSearch(search = '') {
+  const params = new URLSearchParams(typeof search === 'string' ? search : '');
+  const requested = params.get('look')?.trim();
+  if (!requested || !Object.prototype.hasOwnProperty.call(STUDIO_LOOK_LIBRARY, requested)) return null;
+  return requested;
+}
+
+export const ARRIVAL_TEXTURE_SLOTS = Object.freeze([
+  'map',
+  'normalMap',
+  'roughnessMap',
+  'metalnessMap',
+  'aoMap',
+  'emissiveMap',
+  'bumpMap',
+  'clearcoatMap',
+  'clearcoatRoughnessMap',
+  'clearcoatNormalMap',
+  'specularIntensityMap',
+  'specularColorMap',
+]);
+
+// Upgrade arrived mesh textures to hardware anisotropic filtering (up to 16x)
+// so oblique brick, roof plate, and brushed metal textures stay sharp at grazing
+// angles, and reversibly apply/restore surface micro-roughness polish when
+// optional material-aware arrival tuning is toggled.
+export function prepareArrivedMeshMaterials(
+  root,
+  { maxAnisotropy = 16, materialTuning = false, materialProfile = null, baseEnvMapIntensity = null } = {},
+) {
+  const targetAnisotropy = Math.max(1, Math.min(16, Math.floor(Number(maxAnisotropy) || 16)));
+  const profileKind = materialProfile?.kind ?? 'balanced';
+  let materialsVisited = 0;
+  let texturesUpdated = 0;
+  let materialsPolished = 0;
+  const seenMaterials = new Set();
+  const seenTextures = new Set();
+
+  root?.traverse?.(child => {
+    if (!child?.isMesh || !child.material) return;
+    const materials = Array.isArray(child.material) ? child.material : [child.material];
+    for (const material of materials) {
+      if (!material || typeof material !== 'object' || seenMaterials.has(material)) continue;
+      seenMaterials.add(material);
+      materialsVisited += 1;
+
+      for (const slot of ARRIVAL_TEXTURE_SLOTS) {
+        const tex = material[slot];
+        if (!tex || typeof tex !== 'object') continue;
+        if ((tex.anisotropy ?? 1) < targetAnisotropy) {
+          tex.anisotropy = targetAnisotropy;
+          tex.needsUpdate = true;
+        }
+        if (!seenTextures.has(tex)) {
+          seenTextures.add(tex);
+          texturesUpdated += 1;
+        }
+      }
+
+      material.userData ??= {};
+      if (!material.userData.kaminosArrivalOriginal) {
+        material.userData.kaminosArrivalOriginal = {
+          roughness: typeof material.roughness === 'number' ? material.roughness : null,
+          metalness: typeof material.metalness === 'number' ? material.metalness : null,
+          envMapIntensity: typeof material.envMapIntensity === 'number' ? material.envMapIntensity : 1,
+        };
+      }
+      const orig = material.userData.kaminosArrivalOriginal;
+      const envBase = (Number.isFinite(baseEnvMapIntensity) ? baseEnvMapIntensity : 1) * (orig.envMapIntensity ?? 1);
+      if (typeof orig.roughness !== 'number') continue;
+
+      if (!materialTuning) {
+        material.roughness = orig.roughness;
+        if (typeof material.envMapIntensity === 'number' || orig.envMapIntensity != null) {
+          material.envMapIntensity = Math.round(envBase * 1000) / 1000;
+        }
+        continue;
+      }
+
+      const metal = orig.metalness ?? 0;
+      let nextRoughness = orig.roughness;
+      let nextEnvIntensity = envBase;
+      if (profileKind === 'dark-metallic' || metal >= 0.45) {
+        nextRoughness = Math.max(0.12, orig.roughness * 0.88);
+        nextEnvIntensity = envBase * 1.15;
+      } else if (profileKind === 'specular-metallic') {
+        nextRoughness = Math.max(0.1, orig.roughness * 0.92);
+        nextEnvIntensity = envBase * 1.08;
+      } else if (profileKind === 'bright-matte') {
+        nextRoughness = Math.min(0.95, Math.max(orig.roughness, 0.62));
+        nextEnvIntensity = envBase * 0.92;
+      } else if (!material.roughnessMap && orig.roughness >= 0.45 && orig.roughness <= 0.78) {
+        nextRoughness = orig.roughness * 0.9;
+        nextEnvIntensity = envBase * 1.06;
+      }
+      material.roughness = Math.round(nextRoughness * 1000) / 1000;
+      material.envMapIntensity = Math.round(nextEnvIntensity * 1000) / 1000;
+      materialsPolished += 1;
+    }
+  });
+
+  return {
+    maxAnisotropy: targetAnisotropy,
+    materialsVisited,
+    texturesUpdated,
+    materialsPolished,
+  };
+}
+
 // Plan a two-light studio rig (warm three-quarter Key + cool grazing Rim)
 // scaled and aimed at the arriving asset's bounds, with optional material-aware
 // tuning adjustments for dark-metallic, specular-metallic, bright-matte, or balanced surfaces.
@@ -231,7 +428,9 @@ export function planArrivalStudioLights({
   groundY = -0.85,
   materialProfile = null,
   materialTuning = false,
+  lookId = DEFAULT_STUDIO_LOOK_ID,
 } = {}) {
+  const look = resolveStudioLook(lookId);
   const min = Array.isArray(bounds?.min) && bounds.min.length === 3 ? bounds.min : [-0.58, groundY, -0.58];
   const max = Array.isArray(bounds?.max) && bounds.max.length === 3 ? bounds.max : [0.58, groundY + 1.15, 0.58];
   const diagonal = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]) || ASSET_ARRIVAL_TARGET_DIAGONAL;
@@ -279,35 +478,40 @@ export function planArrivalStudioLights({
   };
 
   const distanceScale = scaleFactor * scaleFactor;
+  const keySpec = look.keyLight;
+  const rimSpec = look.rimLight;
   const keyRecord = buildSpotRecord({
     id: '@studio-key-light',
     label: 'Studio key light',
     role: 'key',
-    azimuthDeg: -34,
-    elevationDeg: 42,
-    distance: 4.2 * scaleFactor,
-    color: '#fff1e0',
-    intensity: 95 * distanceScale * activeTuning.keyMultiplier,
-    angle: 62,
-    penumbra: 0.9,
+    azimuthDeg: keySpec.azimuthDeg,
+    elevationDeg: keySpec.elevationDeg,
+    distance: keySpec.distanceScale * scaleFactor,
+    color: keySpec.color,
+    intensity: keySpec.intensity * distanceScale * activeTuning.keyMultiplier,
+    angle: keySpec.angle,
+    penumbra: keySpec.penumbra,
   });
   const rimRecord = buildSpotRecord({
     id: '@studio-rim-light',
     label: 'Studio rim light',
     role: 'rim',
-    azimuthDeg: 148,
-    elevationDeg: 28,
-    distance: 4.4 * scaleFactor,
-    color: '#cfe2ff',
-    intensity: 58 * distanceScale * activeTuning.rimMultiplier,
-    angle: 66,
-    penumbra: 0.92,
+    azimuthDeg: rimSpec.azimuthDeg,
+    elevationDeg: rimSpec.elevationDeg,
+    distance: rimSpec.distanceScale * scaleFactor,
+    color: rimSpec.color,
+    intensity: rimSpec.intensity * distanceScale * activeTuning.rimMultiplier,
+    angle: rimSpec.angle,
+    penumbra: rimSpec.penumbra,
   });
 
   return {
+    lookId: look.id,
+    lookLabel: look.label,
     target,
     profileKind,
     materialTuning: Boolean(materialTuning),
+    opticalFinish: look.opticalFinish,
     environmentDelta: {
       exposureScale: activeTuning.exposureScale,
       envIntensityScale: activeTuning.envIntensityScale,
@@ -315,4 +519,208 @@ export function planArrivalStudioLights({
     },
     lights: [keyRecord, rimRecord],
   };
+}
+
+function formatMegabytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes < 0) return '0.0 MB';
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatElapsedSeconds(ms) {
+  if (!Number.isFinite(ms) || ms <= 0) return '0.0s';
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+const PHASE_LABELS = Object.freeze({
+  downloading: 'Downloading',
+  parsing: 'Parsing geometry',
+  'preparing-materials': 'Preparing materials & textures',
+  'compiling-shaders': 'Compiling WebGPU shaders',
+  'environment-hdr': 'Loading HDR environment',
+  'applying-look': 'Applying Studio look',
+});
+
+export function createLoadingTelemetryTracker({
+  stallThresholdMs = 5000,
+  onChange = null,
+} = {}) {
+  const operations = new Map();
+  let lastCompleted = null;
+  const lastCompletedById = {};
+  let lastFailed = null;
+  const nowMs = customNow => (Number.isFinite(customNow) ? customNow : Date.now());
+
+  function buildItemSnapshot(item, currentNow) {
+    const elapsedMs = Math.max(0, currentNow - item.startedAtMs);
+    const silentMs = Math.max(0, currentNow - item.lastProgressAtMs);
+    const stalled = silentMs >= stallThresholdMs;
+    const progressRatio =
+      Number.isFinite(item.totalBytes) && item.totalBytes > 0 && Number.isFinite(item.loadedBytes)
+        ? Math.max(0, Math.min(1, item.loadedBytes / item.totalBytes))
+        : null;
+    const phaseText = PHASE_LABELS[item.phase] || item.phase || 'Loading';
+    let detail = phaseText;
+    if (progressRatio !== null) {
+      const pct = Math.round(progressRatio * 100);
+      detail = `${phaseText} ${(item.loadedBytes / (1024 * 1024)).toFixed(1)} / ${formatMegabytes(item.totalBytes)} (${pct}%)`;
+    } else if (Number.isFinite(item.loadedBytes) && item.loadedBytes > 0) {
+      detail = `${phaseText} ${formatMegabytes(item.loadedBytes)}`;
+    }
+    const elapsedText = formatElapsedSeconds(elapsedMs);
+    const summary = stalled
+      ? `⚠ Stalled (${formatElapsedSeconds(silentMs)} no progress) · ${item.label} · ${detail} · ${elapsedText}`
+      : `${item.label} · ${detail} · ${elapsedText}`;
+    return {
+      id: item.id,
+      label: item.label,
+      phase: item.phase,
+      loadedBytes: item.loadedBytes,
+      totalBytes: item.totalBytes,
+      progressRatio,
+      startedAtMs: item.startedAtMs,
+      lastProgressAtMs: item.lastProgressAtMs,
+      elapsedMs,
+      silentMs,
+      stalled,
+      summary,
+    };
+  }
+
+  function read(customNow) {
+    const t = nowMs(customNow);
+    const list = Array.from(operations.values()).map(item => buildItemSnapshot(item, t));
+    // Prioritize asset or stalled operations first
+    list.sort((a, b) => {
+      if (a.stalled !== b.stalled) return a.stalled ? -1 : 1;
+      const aPriority = a.id === 'asset' ? 0 : a.id === 'look-switch' ? 1 : 2;
+      const bPriority = b.id === 'asset' ? 0 : b.id === 'look-switch' ? 1 : 2;
+      return aPriority - bPriority;
+    });
+    const primary = list[0] ?? null;
+    return {
+      active: list.length > 0,
+      stalled: list.some(item => item.stalled),
+      primary,
+      operations: list,
+      summary: primary ? primary.summary : (lastFailed ? `Failed · ${lastFailed.label}: ${lastFailed.error}` : ''),
+      lastCompleted: lastCompleted ? { ...lastCompleted } : null,
+      lastCompletedById: { ...lastCompletedById },
+      lastFailed: lastFailed ? { ...lastFailed } : null,
+    };
+  }
+
+  function notify(customNow) {
+    const state = read(customNow);
+    onChange?.(state);
+    return state;
+  }
+
+  let nextToken = 0;
+
+  return {
+    start(id, { label = id, phase = 'downloading', loadedBytes = 0, totalBytes = 0, now } = {}) {
+      const t = nowMs(now);
+      const token = ++nextToken;
+      operations.set(id, {
+        id,
+        token,
+        label,
+        phase,
+        loadedBytes: Number.isFinite(loadedBytes) ? loadedBytes : 0,
+        totalBytes: Number.isFinite(totalBytes) ? totalBytes : 0,
+        startedAtMs: t,
+        lastProgressAtMs: t,
+      });
+      lastFailed = null;
+      const state = notify(t);
+      return { ...state, token };
+    },
+    progress(id, { label, phase, loadedBytes, totalBytes, now } = {}) {
+      const t = nowMs(now);
+      const existing = operations.get(id);
+      if (!existing) {
+        return this.start(id, { label: label || id, phase: phase || 'downloading', loadedBytes, totalBytes, now: t });
+      }
+      if (label !== undefined) existing.label = label;
+      if (phase !== undefined) existing.phase = phase;
+      if (Number.isFinite(loadedBytes)) existing.loadedBytes = loadedBytes;
+      if (Number.isFinite(totalBytes)) existing.totalBytes = totalBytes;
+      existing.lastProgressAtMs = t;
+      return notify(t);
+    },
+    complete(id, { now } = {}) {
+      const t = nowMs(now);
+      const existing = operations.get(id);
+      if (existing) {
+        const receipt = {
+          id: existing.id,
+          label: existing.label,
+          phase: 'settled',
+          loadedBytes: existing.loadedBytes,
+          totalBytes: existing.totalBytes,
+          durationMs: Math.max(0, t - existing.startedAtMs),
+          completedAtMs: t,
+        };
+        lastCompletedById[existing.id] = receipt;
+        if (existing.id === 'asset' || !lastCompletedById.asset || t - lastCompletedById.asset.completedAtMs > 4000) {
+          lastCompleted = receipt;
+        }
+        operations.delete(id);
+      }
+      return notify(t);
+    },
+    cancel(id, { token = null, now } = {}) {
+      const t = nowMs(now);
+      const existing = operations.get(id);
+      if (existing && (token == null || existing.token === token)) {
+        operations.delete(id);
+      }
+      return notify(t);
+    },
+    fail(id, error, { now } = {}) {
+      const t = nowMs(now);
+      const existing = operations.get(id);
+      lastFailed = {
+        id,
+        label: existing?.label ?? id,
+        error: String(error?.message || error || 'unknown error'),
+        failedAtMs: t,
+      };
+      operations.delete(id);
+      return notify(t);
+    },
+    read,
+    tick(now) {
+      return notify(now);
+    },
+  };
+}
+
+/**
+ * Extract the 64-hex SHA256 from a generated-meshes `/api/read` URL or raw SHA string.
+ */
+export function extractGeneratedMeshSha(source) {
+  if (typeof source !== 'string') return null;
+  const trimmed = source.trim();
+  if (/^[a-f0-9]{64}$/i.test(trimmed)) return trimmed.toLowerCase();
+  try {
+    const u = new URL(trimmed, 'http://kaminos.local');
+    if (u.pathname !== '/api/read' || u.searchParams.get('root') !== 'generated-meshes') return null;
+    const m = /^([a-f0-9]{64})\.glb$/i.exec(u.searchParams.get('path') ?? '');
+    return m ? m[1].toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve the hero mesh SHA256 for a URL or scene object record (including surfel records
+ * whose `generation.meshSha256` points to the stored hero mesh pyramid).
+ */
+export function resolveEarlyLowLodMeshSha(sourceOrRecord) {
+  if (!sourceOrRecord) return null;
+  if (typeof sourceOrRecord === 'string') return extractGeneratedMeshSha(sourceOrRecord);
+  const heroSha = extractGeneratedMeshSha(sourceOrRecord.generation?.meshSha256);
+  const directSha = extractGeneratedMeshSha(sourceOrRecord.source);
+  return heroSha || directSha;
 }

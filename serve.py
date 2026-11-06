@@ -4100,6 +4100,12 @@ def record_job_output_event(event):
 
 
 class KaminosHandler(http.server.SimpleHTTPRequestHandler):
+    def handle_one_request(self):
+        # APIs retain their close-delimited HTTP/1.0 behavior, including streams.
+        # A prior static response may have kept this socket alive.
+        self.protocol_version = "HTTP/1.0"
+        return super().handle_one_request()
+
     def refuse_sf3d_source(self, target):
         if Path(target).resolve() != (ROOT / "lib/sf3d/weights.bin").resolve():
             return False
@@ -4122,6 +4128,12 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         # aliases and symlinks; refuse before SimpleHTTP opens the source.
         if self.refuse_sf3d_source(self.translate_path(self.path)):
             return None
+        # SimpleHTTP supplies file lengths and the bodyless HEAD/304 rules.
+        # Reuse those connections across the application module graph while
+        # preserving no-store freshness and explicit client close requests.
+        if self.request_version == "HTTP/1.1" and self.headers.get("Connection", "").lower() != "close":
+            self.protocol_version = "HTTP/1.1"
+            self.close_connection = False
         return super().send_head()
 
     def translate_path(self, path):

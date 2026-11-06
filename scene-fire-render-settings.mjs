@@ -1,6 +1,6 @@
 import {validateSourceSoftness} from './scene-source-softening.mjs';
 // Display and transported-light settings belong to the ordinary scene document.
-export const FIRE_RENDER_DEFAULTS=Object.freeze({'rendering-match-flame-camera':false,'rendering-surface-gain':0,'rendering-surface-scattering':true,'rendering-source-softness':0,'rendering-smoke-solver':'distributed','rendering-angular-samples':24,'rendering-angular-pattern':'fixed'});
+export const FIRE_RENDER_DEFAULTS=Object.freeze({'rendering-match-flame-camera':true,'rendering-surface-gain':0,'rendering-surface-scattering':true,'rendering-source-softness':0,'rendering-smoke-solver':'distributed','rendering-angular-samples':24,'rendering-angular-pattern':'fixed'});
 export function checkedFireRendering(value={}){
  const next={...FIRE_RENDER_DEFAULTS,...value};
  for(const id of ['rendering-match-flame-camera','rendering-surface-scattering'])if(typeof next[id]!=='boolean')throw Error('Invalid flame rendering '+id);
