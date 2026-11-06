@@ -113,7 +113,7 @@ function createLegacyAshCollisionRecords(root,readObjects,{resolveObstacle=null}
  };
 }
 
-export async function createAshSceneObject({record:raw,renderer,readObjects,readSources=()=>[],lodController=null,resolveObstacle=null,onError=()=>{},createPatch=async options=>options.refinement?(await import('./refinement-gpu.mjs')).createGpuRefinedAsh(options):(await import('./tile-gpu.mjs')).createGpuTiledAsh(options)}){
+export async function createAshSceneObject({record:raw,renderer,readObjects,readSources=()=>[],camera=null,lodController=null,resolveObstacle=null,onError=()=>{},createPatch=async options=>options.refinement?(await import('./refinement-gpu.mjs')).createGpuRefinedAsh(options):(await import('./tile-gpu.mjs')).createGpuTiledAsh(options)}){
  const record=checkedAshRecord(raw),root=new Group();root.name=record.label||'Ash';
  root.position.fromArray(record.transform?.position??[0,0,0]);root.rotation.set(...(record.transform?.rotation??[0,0,0]));root.scale.fromArray(record.transform?.scale??[1,1,1]);
  let settings=record.ash,patch=null,busy=false,disposed=false,pendingRestore=settings.checkpoint,initialized=false,lastTick=null,failure=null,showRefinement=false;
@@ -138,7 +138,7 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,read
  const emitter=new Mesh(new TorusGeometry(1,.018,6,48),new MeshStandardMaterial({color:0x8abdb2,roughness:.8}));emitter.rotation.x=Math.PI/2;emitter.userData.kaminosEditorHelper=true;root.add(emitter);
  const sync=()=>{guide.position.y=settings.height/2;emitter.position.fromArray(settings.sourcePosition);emitter.scale.setScalar(Math.max(settings.spread,.01));root.userData.kaminosSceneObject={...(root.userData.kaminosSceneObject??record),ash:settings};};sync();
  let collisionSource='adaptive';
- const adaptiveCollisionRecords=createAshCollisionRecords(root,readObjects,{getCellSize:()=>settings.cellSize,resolveCollisionRung:(obj,opts)=>lodController?.resolveCollisionRung?.(obj,opts)??null,resolveObstacle});
+ const adaptiveCollisionRecords=createAshCollisionRecords(root,readObjects,{getCellSize:()=>settings.cellSize/(settings.refinement?.levels===3?2:1),resolveCollisionRung:(obj,opts)=>lodController?.resolveCollisionRung?.(obj,opts)??null,resolveObstacle});
  const originalCollisionRecords=createLegacyAshCollisionRecords(root,readObjects);
  const collisionRecords=()=>collisionSource==='checkpoint-original'?originalCollisionRecords():adaptiveCollisionRecords();
  const prepareCollision=cellSize=>lodController?.prepareCollision?.(readObjects().filter(e=>e.type!==ASH_OBJECT_TYPE&&ASH_COLLIDER_TYPES.includes(e.type)).map(e=>e?.object).filter(Boolean),{cellSize});
@@ -146,8 +146,10 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,read
  const source=()=>({position:[...settings.sourcePosition],rate:settings.emitting?settings.rate:0,spread:settings.spread,dt:1/30,sources:[...readSources(),...(settings.fallout?[{position:[0,settings.height,0],spread:0,rate:settings.rate,halfExtents:[settings.width/2,settings.depth/2]}]:[])]});
  const locked=async fn=>{check();busy=true;try{return await fn();}finally{busy=false;}};
  function dispose(){if(disposed)return;disposed=true;patch?.dispose();for(const child of fineGuides.children)child.geometry.dispose();fineMaterial.dispose();guide.geometry.dispose();guide.material.dispose();emitter.geometry.dispose();emitter.material.dispose();root.removeFromParent();}
+ const fieldClip=new Matrix4(),viewport=new Vector2();
+ const projection=()=>{if(!camera)return null;root.updateWorldMatrix(true,false);camera.updateWorldMatrix(true,false);fieldClip.copy(camera.projectionMatrix).multiply(camera.matrixWorldInverse).multiply(root.matrixWorld);renderer.getDrawingBufferSize(viewport);return {matrix:fieldClip.toArray(),viewport:viewport.toArray(),targetPixels:3};};
  async function build(s){const layout=checkedLayout(s);let candidate;
-  try{candidate=await createPatch({renderer,cellSize:layout.cellSize,bounds:layout.bounds,solid:s.refinement?undefined:new Uint8Array(layout.count),tileSize:16,refinement:s.refinement,sceneRecords:collisionRecords,surfaceMode:'runs',sliding:{variation:s.slideVariation,scale:s.slideScale,release:s.slideRelease}});
+  try{candidate=await createPatch({renderer,cellSize:s.cellSize,bounds:layout.bounds,solid:s.refinement?undefined:new Uint8Array(layout.count),tileSize:16,refinement:s.refinement,readView:projection,sceneRecords:collisionRecords,surfaceMode:'runs',sliding:{variation:s.slideVariation,scale:s.slideScale,release:s.slideRelease}});
    candidate.setSoftNormals?.(s.softNormals);return candidate;
   }catch(error){candidate?.dispose();throw error;}
  }
@@ -155,7 +157,7 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,read
  catch(error){dispose();throw error;}
  const api={root,
   async initialize(){if(initialized)return;return locked(async()=>{
-   await prepareCollision(settings.cellSize);patch.syncScene();
+   await prepareCollision(settings.cellSize/(settings.refinement?.levels===3?2:1));patch.syncScene();
    if(pendingRestore){
     try{patch.restore(pendingRestore);}
     catch(error){
@@ -188,7 +190,7 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,read
   regrid(cellSizeOrPatch){return locked(async()=>{
    const patchInput=cellSizeOrPatch&&typeof cellSizeOrPatch==='object'?cellSizeOrPatch:{cellSize:cellSizeOrPatch};
    const next=checkedAshSettings({...settings,...patchInput,initialDepth:0,checkpoint:null}),prevSettings=settings;let candidate;
-   try{candidate=await build(next);await prepareCollision(next.cellSize);if(disposed)throw Error('Ash object disposed during regrid');settings=next;candidate.syncScene();}
+   try{candidate=await build(next);await prepareCollision(next.cellSize/(next.refinement?.levels===3?2:1));if(disposed)throw Error('Ash object disposed during regrid');settings=next;candidate.syncScene();}
    catch(error){settings=prevSettings;candidate?.dispose();throw error;}
    if(next.width!==prevSettings.width||next.depth!==prevSettings.depth||next.height!==prevSettings.height){guide.geometry.dispose();guide.geometry=buildGuide(next);}
    const previous=patch;patch=candidate;pendingRestore=null;initialized=true;lastTick=null;failure=null;

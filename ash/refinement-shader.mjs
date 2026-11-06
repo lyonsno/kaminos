@@ -1,3 +1,4 @@
+import {detailTopologyWGSL} from './detail-wgsl.mjs';
 import {adaptiveOffsets,adaptiveTopologyWGSL} from './adaptive-wgsl.mjs';
 import {refinementAddressWGSL} from './refinement-wgsl.mjs';
 import {slidingWGSL} from './sliding.mjs';
@@ -38,7 +39,7 @@ const SURFACE:u32=${arena.surface}u;
 const STATS:u32=${arena.stats}u;
 const PREFIX:u32=${arena.prefix}u;
 const NEIGHBORS:u32=${arena.neighbors}u;
-struct Params {contact:vec4<f32>,previous:vec4<f32>,sliding:vec4<f32>,clock:vec4<u32>}
+struct Params {contact:vec4<f32>,previous:vec4<f32>,sliding:vec4<f32>,clock:vec4<u32>${p.detailPool?",fieldClip:mat4x4<f32>,view:vec4<f32>":""}}
 @group(0) @binding(0) var<storage,read_write> mass:array<f32>;
 @group(0) @binding(1) var<storage,read_write> nextMass:array<f32>;
 @group(0) @binding(2) var<storage,read> solid:array<u32>;
@@ -235,7 +236,13 @@ fn face_band(i:u32,face:u32,sub:u32,shape:vec2<u32>)->vec2<f32> {
 `+code.slice(end);
     code=code.replaceAll('word(tile*8u)==0xffffffffu','ash_tile_cell(tile,0u)==0xffffffffu');
     code=code.replace('if(nextMass[i]!=mass[i]){mark_cell(i);',`if(nextMass[i]!=mass[i]){if(i>=AP_OFFSET&&nextMass[i]==0.0&&mass[i]>0.0){atomicStore(&arena[${arena.adaptive.state+8}u],1u);}mark_cell(i);`);
+    if(p.detailPool)code=code.replace('mark_cell(i);atomicAdd',`if(i>=DP_OFFSET&&nextMass[i]==0.0&&mass[i]>0.0){atomicStore(&arena[${arena.adaptive.detail.state+8}u],1u);}mark_cell(i);atomicAdd`);
     code+=adaptiveTopologyWGSL(p,arena.adaptive);
+    if(p.detailPool)code+=detailTopologyWGSL(p,arena.adaptive);
+  }
+  if(p.detailPool){
+    code=code.replace('atomicStore(&headers[tile*8u+3u],0u);','atomicStore(&headers[tile*8u+3u],0u);atomicStore(&headers[tile*8u+6u],0u);');
+    code=code.replace('let c=ash_cell(i);\n  for(var face=', 'let c=ash_cell(i);if(mass[i]>0.0){atomicAdd(&headers[tile*8u+6u],1u); }\n  for(var face=');
   }
   if(arena.surfaceCache?.encoding==='cell-masks'){
     const start=code.indexOf('@compute @workgroup_size(64) fn build_surface(');
@@ -256,27 +263,28 @@ fn face_band(i:u32,face:u32,sub:u32,shape:vec2<u32>)->vec2<f32> {
  faces[(tile*V+local)*2u]=mask;
 }
 var<workgroup> ashFaceCounts:array<u32,64>;
+${p.detailPool?"var<workgroup> ashOccupiedCounts:array<u32,64>;":""}
 @compute @workgroup_size(64) fn prefix_surface(@builtin(workgroup_id) w:vec3<u32>,@builtin(local_invocation_id) l:vec3<u32>){
  let group=w.x+w.y*ROW;let rank=group/G;
  // Reuse the dirty-surface indirect arguments; only one group per tile scans.
  let admitted=rank<word(STATS+1u)&&group%G==0u;
  var tile=0u;if(admitted){tile=word(SURFACE+rank);}
- let chunk=(V+63u)/64u;var sum=0u;
+ let chunk=(V+63u)/64u;var sum=0u;${p.detailPool?"var occupied=0u;":""}
  for(var n=0u;n<chunk;n++){
   let local=l.x*chunk+n;if(local<V&&admitted){
-   let address=(tile*V+local)*2u;sum+=countOneBits(faces[address]);faces[address+1u]=sum;
+   let address=(tile*V+local)*2u;${p.detailPool?"let i=ash_tile_cell(tile,local);if(i!=0xffffffffu&&ash_cell(i).owned&&mass[i]>0.0){occupied++;}":""}sum+=countOneBits(faces[address]);faces[address+1u]=sum;
   }
  }
- ashFaceCounts[l.x]=sum;workgroupBarrier();
+ ashFaceCounts[l.x]=sum;${p.detailPool?"ashOccupiedCounts[l.x]=occupied;":""}workgroupBarrier();
  for(var offset=1u;offset<64u;offset*=2u){
-  var before=0u;if(l.x>=offset){before=ashFaceCounts[l.x-offset];}
-  workgroupBarrier();ashFaceCounts[l.x]+=before;workgroupBarrier();
+  var before=0u;if(l.x>=offset){before=ashFaceCounts[l.x-offset];}${p.detailPool?"var priorOccupied=0u;if(l.x>=offset){priorOccupied=ashOccupiedCounts[l.x-offset];}":""}
+  workgroupBarrier();ashFaceCounts[l.x]+=before;${p.detailPool?"ashOccupiedCounts[l.x]+=priorOccupied;":""}workgroupBarrier();
  }
  var before=0u;if(l.x>0u){before=ashFaceCounts[l.x-1u];}
  for(var n=0u;n<chunk;n++){
   let local=l.x*chunk+n;if(local<V&&admitted){faces[(tile*V+local)*2u+1u]+=before;}
  }
- if(l.x==63u&&admitted){atomicStore(&headers[tile*8u+3u],ashFaceCounts[63u]);}
+ if(l.x==63u&&admitted){atomicStore(&headers[tile*8u+3u],ashFaceCounts[63u]);${p.detailPool?"atomicStore(&headers[tile*8u+6u],ashOccupiedCounts[63u]);":""}}
 }
 `+code.slice(end);
   }
