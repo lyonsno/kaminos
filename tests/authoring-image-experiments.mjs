@@ -84,3 +84,10 @@ test('shared branch rows preserve people, agents, external parents and every mem
  assert.ok(rows.some(r=>r.issue==='cycle'));
  assert.deepEqual(members[0].entry.provenance.author,human);
 });
+
+test('a recipe-opening failure is visible beside the selected action',async()=>{
+ const {document}=dom();let ui;const c=createImageExperiments({request:async()=>doc('burners'),openRecipe:async()=>{throw Error('Recorded model is unsupported');},changed:()=>ui?.render()});
+ ui=installImageExperiments({document,controller:c,assets:{read:()=>({root:'image-experiments',selected:null})},assetsUI:{open:async()=>{}},history:{},layout:{},recipe:{read:()=>({})}});
+ await c.open('burners');c.select('/image.png');await document.getElementById('asset-experiment-edit').onclick();
+ const feedback=document.getElementById('asset-experiment-action-status');assert.ok(feedback,'selected recipe needs visible action feedback');assert.match(feedback.textContent,/Recorded model is unsupported/);
+});

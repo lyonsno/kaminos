@@ -4,8 +4,9 @@ import {assetSource,assetWithheld} from './authoring-assets.mjs';
 const sourceOf=e=>e?.source||(e?.root&&e?.path?assetSource(e.root,e.path):null);
 const clone=x=>structuredClone(x);
 
-// Reuse the actual Generate controls. Refuse a recipe they cannot represent;
-// do not make a default value masquerade as the original experiment.
+// Restore supported recorded inputs for editing in the actual Generate controls.
+// Prior completion belongs to the parent result, not the next run; missing inputs
+// must not be replaced by defaults masquerading as recorded settings.
 export function imageGenerationRecipe(p){
  if(p?.schema!=='kaminos.image-generation.v1')throw Error('No supported generation recipe is recorded in this image.');
  const model=Object.keys(AUTHORING_IMAGE_MODELS).find(key=>p.model===key||p.model===AUTHORING_IMAGE_MODELS[key].name);
@@ -18,7 +19,6 @@ export function imageGenerationRecipe(p){
  if(!KLEIN_IMAGE_SIZES.includes(size)||!KLEIN_ASPECTS.includes(aspect)||d.width!==p.width||d.height!==p.height)throw Error(`Unsupported recipe dimensions: ${p.width} × ${p.height}`);
  if(!AUTHORING_IMAGE_MODELS[model].levels.includes(p.weightsLevel))throw Error(`Unsupported or missing recorded recipe weight precision: ${p.weightsLevel??'not recorded'}`);
  if(p.reference&&!sourceOf(p.reference))throw Error('The recipe reference image has no recorded source.');
- if(p.completion?.earlyDecoded||p.completion?.partial)throw Error('This recipe was decoded early; its partial stopping point cannot be replayed by these controls.');
  const textLength=model==='flux3'?'model':p.textLength??'fit16';
  if(model==='flux2'&&!['fit','fit16'].includes(textLength))throw Error(`Unsupported recipe prompt length: ${textLength}`);
  return {model,prompt:p.prompt,seed:p.seed,size,aspect,level:p.weightsLevel,reference:p.reference?{...clone(p.reference),source:sourceOf(p.reference),kind:'image'}:null,textLength};
@@ -35,9 +35,9 @@ export function imageRecipeChanges(before,after){
 // The same operation serves the history button, a saved-image link and agents.
 // Reading another image never implicitly changes the active recipe parent.
 export function createImageRecipeIteration({history,assets,readControls,applyControls,recallPrompt=()=>{},resetPrompt=()=>{},changed=()=>{},busy=()=>false,
- fetchBytes=async source=>{const r=await fetch(source);if(!r.ok)throw Error(`Image recipe HTTP ${r.status}`);return new Uint8Array(await r.arrayBuffer());}}){
+ onOpened=async()=>{},fetchBytes=async source=>{const r=await fetch(source);if(!r.ok)throw Error(`Image recipe HTTP ${r.status}`);return new Uint8Array(await r.arrayBuffer());}}){
  let parent=null,imageParent=null,baseline=null,error=null,opening=false,ticket=0,experiment=null;
- const read=()=>({imageParent:imageParent?{source:imageParent.source,name:imageParent.name}:null,parent:parent?{source:parent.source,name:parent.name}:null,experiment:clone(experiment),error,opening,changes:baseline?imageRecipeChanges(baseline,readControls()):[]});
+ const read=()=>({imageParent:imageParent?{source:imageParent.source,name:imageParent.name}:null,parent:parent?{source:parent.source,name:parent.name}:null,experiment:clone(experiment),completion:clone(parent?.provenance?.completion??null),error,opening,changes:baseline?imageRecipeChanges(baseline,readControls()):[]});
  const requireIdle=()=>{if(busy())throw Error('Finish the current generation before opening another recipe.');};
  function recall(entry){
   requireIdle();++ticket;opening=false;
@@ -67,7 +67,7 @@ export function createImageRecipeIteration({history,assets,readControls,applyCon
     if(own!==ticket)throw Error('Image recipe opening was superseded.');
     const provenance=readPngProvenance(bytes);
     if(!provenance)throw Error('This image has no saved generation metadata. Its recipe has not been restored.');
-    return recall({...entry,source:sourceOf(entry),provenance});
+    const state=recall({...entry,source:sourceOf(entry),provenance});await onOpened(state);return state;
    }catch(e){if(own===ticket){opening=false;error=e.message;changed();}throw e;}
   },
   decorate(request){
@@ -77,7 +77,7 @@ export function createImageRecipeIteration({history,assets,readControls,applyCon
    const expectedModel=sameModel?Object.fromEntries(['source','sampling','lora'].filter(k=>Object.hasOwn(p,k)&&p[k]!==undefined).map(k=>[k,clone(p[k])])):null;
    return {...request,...(experiment?{experiment:clone(experiment)}:{}),...(sameModel&&baseline.model==='flux2'?{textLength:baseline.textLength}:{}),
     ...(expectedModel&&Object.keys(expectedModel).length?{expectedModel}:{}),
-    iteration:{operation:'recipe-rerun',parent:{source:parent.source,name:parent.name},changes:imageRecipeChanges(baseline,request)}};
+    iteration:{operation:'recipe-rerun',...(p.completion?{parentCompletion:clone(p.completion)}:{}),parent:{source:parent.source,name:parent.name},changes:imageRecipeChanges(baseline,request)}};
   },
  };
 }
@@ -93,6 +93,7 @@ export function installImageRecipeStatus({document,iteration,busy=()=>false}){
   const state=iteration.read();host.hidden=!state.parent&&!state.imageParent&&!state.experiment&&!state.error&&!state.opening;
   document.getElementById('asset-generate').dataset.recipeActive=String(!!(state.parent||state.imageParent||state.experiment));
   status.textContent=state.error|| (state.opening?'Opening saved recipe…':state.parent?`Recipe from ${state.parent.name||'selected image'} · ${state.changes.length?'Changed: '+state.changes.map(c=>labels[c.field]).join(', '):'Recorded settings restored. Seed stays fixed until you change it.'}`:state.imageParent?`Image edit from ${state.imageParent.name||'selected image'} · clear this parent to start independently.`:state.experiment?`New results will join ${state.experiment.title}.`:'');
+  if(!state.error&&(state.completion?.earlyDecoded||state.completion?.partial)){const c=state.completion,steps=Number.isInteger(c.stepsCompleted)&&Number.isInteger(c.stepsRequested)?` after ${c.stepsCompleted} of ${c.stepsRequested} steps`:'';status.textContent+=` Previous image decoded early${steps}. A new run uses the full recorded schedule.`;}
   reset.hidden=!state.parent&&!state.imageParent&&!state.experiment;reset.disabled=busy()||state.opening;
   reset.textContent=state.experiment?'Leave experiment':state.imageParent?'Clear image parent':'Clear recipe';
  }

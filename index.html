@@ -29758,10 +29758,10 @@ function setupAuthoringAssets(){
     let app;while(!(app=await appGpuHost())){signal.throwIfAborted();await new Promise(resolve=>requestAnimationFrame(resolve));}signal.throwIfAborted();
     return createInferenceKilnPreview({viewport,document,recipe,prompt,request,settings,rendering,sharedGpu,app,signal,loadGlb:source=>new GLTFLoader().loadAsync(source).then(gltf=>gltf.scene),environment:HDR_ENVS[recipe.document.environment?.name]});
   },imageState:()=>authoringImageGenerator.read(),selected:()=>authoringAssets.read().selected,trellisSettings:()=>trellisAvailability?.settings||null,queueLine:()=>authoringMeshModel?.value()==='trellis'?authoringTrellisGenerator?.read().queueLine||'':''});redraw();
-  recipeIteration=createImageRecipeIteration({history:authoringImageHistory,assets:authoringAssets,readControls:()=>authoringImageUI.readRequest(),applyControls:r=>authoringImageUI.applyRecipe(r),recallPrompt:p=>authoringPromptUI.recall(p),resetPrompt:()=>authoringPromptUI.reset(),busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy()||!!authoringImageGenerator.read().pending,changed:()=>redraw()});
+  recipeIteration=createImageRecipeIteration({history:authoringImageHistory,assets:authoringAssets,onOpened:async()=>{await authoringAssetsUI.open('generate',{refresh:false});document.getElementById('asset-generate').scrollTop=0;document.getElementById('asset-step-image').scrollTop=0;},readControls:()=>authoringImageUI.readRequest(),applyControls:r=>authoringImageUI.applyRecipe(r),recallPrompt:p=>authoringPromptUI.recall(p),resetPrompt:()=>authoringPromptUI.reset(),busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy()||!!authoringImageGenerator.read().pending,changed:()=>redraw()});
   recipeStatus=installImageRecipeStatus({document,iteration:recipeIteration,busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy()});
   const editHistoryImage=entry=>{recipeIteration.editImage(entry);document.getElementById('asset-prompt').value='';document.getElementById('asset-use-reference').checked=true;redraw();document.getElementById('asset-prompt').focus();};
-  imageExperiments=createImageExperiments({changed:()=>imageExperimentsUI?.render(),openRecipe:async entry=>{await authoringAssetsUI.open('generate');return recipeIteration.open(entry);},openImageEditor:async entry=>{
+  imageExperiments=createImageExperiments({changed:()=>imageExperimentsUI?.render(),openRecipe:entry=>recipeIteration.open(entry),openImageEditor:async entry=>{
     authoringImageHistory.record(entry);authoringAssets.select(entry);authoringImageHistory.useReference(entry.source);
     await authoringAssetsUI.open('generate',{refresh:false});editHistoryImage(entry);authoringGenerateLayout.compare(true);
   }});
@@ -29772,7 +29772,7 @@ function setupAuthoringAssets(){
   const restoreHistory=authoringImageHistory.read().viewed;if(restoreHistory&&!authoringAssets.read().selected)authoringAssets.select(restoreHistory);
   loadStartupRuntimeConfig().then(config=>authoringPromptUI.configureDefault(config.pup?.keepLoadedDefault===true)).catch(error=>console.warn('Prompt residency default unavailable',error));
   window.kaminosAssets={...authoringAssets,open:mode=>authoringAssetsUI.open(mode),close:()=>authoringAssetsUI.close(),panel:()=>authoringAssetsUI.state(),imageHistory:authoringImageHistory,showHistoryImage:source=>authoringImageHistoryUI.show(source),compareImages:value=>authoringGenerateLayout.compare(value),images:authoringImageGenerator,imageRecipe:recipeIteration,generateImage:options=>authoringImageUI.run(options),imageRequest:()=>authoringImageUI.readRequest(),
-    openImageRecipe:async entry=>{await authoringAssetsUI.open('generate');return recipeIteration.open(entry);},
+    openImageRecipe:entry=>recipeIteration.open(entry),
     experiments:{...imageExperiments,open:id=>imageExperimentsUI.open(id)},
     promptExpansion:authoringPromptExpansion,expandPrompt:()=>authoringPromptUI.expand(),generationFlame:authoringGenerateLayout.ceremony};
   const experimentParams=new URLSearchParams(location.search);

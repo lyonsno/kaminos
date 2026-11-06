@@ -27,7 +27,7 @@ test('recall restores the complete supported recipe and preserves its independen
 });
 test('unsupported and missing recipe settings leave the current recipe and controls intact',()=>{
  const h=harness();h.c.recall(entry());const before=structuredClone(h.get());
- for(const patch of [{model:'another model'},{width:640,height:640},{weightsLevel:undefined},{seed:undefined},{seed:-1},{aspect:'portrait'},{reference:{name:'missing source'}},{completion:{earlyDecoded:true,stepsCompleted:2,stepsRequested:4}}]){
+ for(const patch of [{model:'another model'},{width:640,height:640},{weightsLevel:undefined},{seed:undefined},{seed:-1},{aspect:'portrait'},{reference:{name:'missing source'}}]){
   assert.throws(()=>h.c.recall(entry('/bad.png',{...p,...patch})),/recipe|recorded|supported|partial/i);
   assert.deepEqual(h.get(),before);assert.equal(h.c.read().parent.source,'/glove.png');
  }
@@ -115,4 +115,20 @@ test('a fresh image parent outside a collection is visible and clearable through
  const ui=recipe.installImageRecipeStatus({document,iteration:h.c});
  assert.equal(get('asset-recipe').hidden,false);assert.equal(get('asset-generate').dataset.recipeActive,'true');assert.match(get('asset-recipe-status').textContent,/image.*Glove|Glove.*image/i);assert.equal(get('asset-recipe-clear').hidden,false);
  get('asset-recipe-clear').onclick();ui.render();assert.equal(h.c.decorate(h.get()).iteration,undefined);assert.equal(get('asset-recipe').hidden,true);
+});
+
+test('an early-decoded result restores editable inputs and retains its prior completion without promising the old stopping point',()=>{
+ const h=harness(),completion={earlyDecoded:true,stepsCompleted:3,stepsRequested:4};
+ h.c.recall(entry('/preview.png',{...p,completion}));
+ assert.equal(h.get().prompt,p.prompt);assert.equal(h.get().seed,p.seed);assert.deepEqual(h.c.read().completion,completion);
+ const nodes=new Map(),node=()=>({hidden:false,dataset:{},append(){},after(){},setAttribute(){},addEventListener(){},querySelector(){return node();}}),get=id=>{if(!nodes.has(id))nodes.set(id,node());return nodes.get(id);};
+ const document={createElement:()=>{const e=node();Object.defineProperty(e,'id',{set(id){nodes.set(id,e);}});return e;},getElementById:get};recipe.installImageRecipeStatus({document,iteration:h.c});assert.match(get('asset-recipe-status').textContent,/3 of 4/);assert.match(get('asset-recipe-status').textContent,/full recorded schedule/);
+ const request=h.c.decorate(h.get());assert.deepEqual(request.iteration.parentCompletion,completion);assert.deepEqual(request.expectedModel.sampling,p.sampling);assert.equal(request.completion,undefined,'the old stopping point must not silently control the new run');
+});
+test('opening presents the recipe only after validated controls and lineage are restored; rejected reads never present',async()=>{
+ const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==','base64');
+ const bytes=new Uint8Array(await(await withPngProvenance(new Blob([png]),p)).arrayBuffer());let value=bytes,presented=[];
+ const h=harness({fetchBytes:async()=>value,onOpened:state=>presented.push({state,controls:structuredClone(h.get())})});
+ await h.c.open(entry('/valid.png'));assert.equal(presented.length,1);assert.equal(presented[0].controls.prompt,p.prompt);assert.equal(presented[0].state.parent.source,'/valid.png');
+ value=png;await assert.rejects(h.c.open(entry('/raw.png')),/metadata/);assert.equal(presented.length,1,'a missing recipe cannot open an empty Generate page');assert.equal(h.c.read().parent.source,'/valid.png');
 });
