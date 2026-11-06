@@ -15,6 +15,14 @@ export const SCENE_DEFAULT_RANGES={
  'postprocessing.dof.maxblur':{label:'Depth of field maximum blur',min:0,max:.05,step:.001},
  backdropBrightness:{label:'Backdrop brightness',min:.1,max:2,step:.05},
 };
+// Only the legacy fixed-step consumers need snapping during relative drags.
+// Unrestricted numeric consumers keep the helper's full fractional result.
+export function quantizeSceneDefaultDrag(path,value){
+ const range=SCENE_DEFAULT_RANGES[path];if(!range||!Number.isFinite(value))return value;
+ const ticks=Math.round((value-range.min)/range.step);
+ const places=Math.max(...[range.min,range.step].map(number=>(String(number).split('.')[1]??'').length));
+ return Number(Math.max(range.min,Math.min(range.max,range.min+ticks*range.step)).toFixed(places));
+}
 const membership=['objects','groups','composition','localLiquid','selectionIds','activeObjectId','activeFieldId','sceneId','cameraViews','volumePrimitives'];
 function finiteTree(value){if(typeof value==='number'&&!Number.isFinite(value))throw Error('Preferences need finite numbers');if(value&&typeof value==='object')for(const item of Object.values(value))finiteTree(item);}
 export function checkedSceneDefaults(raw){
@@ -51,11 +59,24 @@ export function checkedPreferences(raw){
  if(Object.hasOwn(raw,'startupConfigured')&&typeof raw.startupConfigured!=='boolean')throw Error('Invalid startup preference state');
  if(![null,'trackpad','mouse'].includes(raw.navigationInput??null))throw Error('Invalid navigation preference');
  if(raw.studioLook!=null&&!Object.hasOwn(STUDIO_LOOK_LIBRARY,raw.studioLook))throw Error('Invalid Studio look preference');
- return {...copy(raw),...(Object.hasOwn(raw,'inferenceKiln')?{inferenceKiln:checkedKilnSelection(raw.inferenceKiln)}:{}),...(Object.hasOwn(raw,'studioLook')?{studioLook:raw.studioLook??null}:{}),navigationInput:raw.navigationInput??null,sceneDefaults:checkedSceneDefaults(raw.sceneDefaults??null)};
+ return {...copy(raw),...(Object.hasOwn(raw,'inferenceKiln')?{inferenceKiln:checkedKilnSelection(raw.inferenceKiln)}:{}),...(Object.hasOwn(raw,'studioLook')?{studioLook:raw.studioLook??null}:{}),navigationInput:raw.navigationInput??null,sceneDefaults:checkedSceneDefaults(raw.sceneDefaults??null),agentSceneDefaults:checkedSceneDefaults(raw.agentSceneDefaults??null)};
 }
 export function sceneDefaultsApplyToLocation(value){
  const url=new URL(value,'http://localhost');
  return [...url.searchParams,...new URLSearchParams(url.hash.slice(1))].every(([key])=>['workspace','authoring'].includes(key));
+}
+// An agent opts into its authored defaults explicitly. Experiment setup still
+// runs afterward; a saved scene or asset address always owns its own settings.
+export function resolveStartupSceneDefaults(preferences,location='/'){
+ const url=new URL(location,'http://localhost'),params=[...url.searchParams,...new URLSearchParams(url.hash.slice(1))];
+ const profiles=params.filter(([key])=>key==='defaults').map(([,value])=>value);
+ if(profiles.some(value=>!['scene','agent'].includes(value))||new Set(profiles).size>1)throw Error('Choose scene or agent as the defaults profile');
+ const requested=profiles[0]??'scene';
+ const allowed=['workspace','authoring',...(profiles.length?['defaults']:[]),...(requested==='agent'?['experiment','experiment_inputs']:[])];
+ if(params.some(([key])=>!allowed.includes(key)))return {requested,effective:null,reason:'explicit-scene-input',defaults:null};
+ const own=requested==='agent'?preferences?.agentSceneDefaults:null;
+ const defaults=checkedSceneDefaults(own??preferences?.sceneDefaults??null);
+ return {requested,effective:defaults?(own?'agent':'scene'):null,reason:defaults?(requested==='agent'&&!own?'agent-inherits-scene':'saved-defaults'):'unconfigured',defaults};
 }
 export function newSceneDocument(factory,defaults){
  const document=copy(factory),value=checkedSceneDefaults(defaults);

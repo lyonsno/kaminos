@@ -106,6 +106,14 @@ test('automatic completion fills missing targets while retaining already publish
   assert.equal(complete.calls.some(call=>call.startsWith('POST')),false);
 });
 
+test('completion retains a five-rung legacy ladder whose actual face counts missed a target',async()=>{
+  const existingLevels=[25000,10000,4998,1000,500].map((faces,i)=>({sha256:String(i+1).repeat(64),faces,route:'closed-remesh+projection+trellis-simplify'}));
+  const {report,calls}=await publishWith({ingest:goodIngest,register:goodRegister,targets:[25000,10000,5000,1000,500],existingLevels,completeMissing:true});
+  assert.equal(report.phase,'done',report.error?.message);
+  assert.equal(report.tiers.length,0,'legacy actual counts are retained instead of rebuilding the 4998-face rung');
+  assert.ok(!calls.some(c=>c.startsWith('POST')));
+});
+
 test('rebaking identical bytes preserves legacy immutable registration metadata',async()=>{
   const first=await publishWith({ingest:goodIngest,register:goodRegister});
   const {target,bytes,timing,targetFaces,...legacy}=first.report.tiers[0];

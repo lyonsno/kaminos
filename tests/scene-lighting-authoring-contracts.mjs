@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import { test } from 'node:test';
 import {createEnvironmentLoader} from '../scene-environment-loader.mjs';
 import {bindSceneExposureControls} from '../scene-emissive-camera.mjs';
+import {resolveStartupSceneDefaults} from '../user-preferences.mjs';
 
 import {createSceneEnvironmentState,normalizeEnvironmentRecipe} from '../scene-environment-state.mjs';
 import {bindSceneEnvironmentControls,environmentLegacySettings} from '../scene-environment-controls.mjs';
@@ -20,7 +21,7 @@ function environmentContext({ storage = new Map(), startup = false, load = async
     return elements.get(id);
   }};
   const scene = { environmentRotation: { y: 0 }, environmentIntensity: 1 };
-  const context = sceneContext({ createUserPreferences:()=>({load:async()=>null}),environmentLegacySettings,document, scene, sceneObjects: [],
+  const context = sceneContext({ createUserPreferences:()=>({load:async()=>null}),resolveStartupSceneDefaults,environmentLegacySettings,document, scene, sceneObjects: [],
     HDR_ENVS: { studio: { url:'studio.hdr', exposure: 1.5, intensity: 1 }, warehouse: { url:'warehouse.hdr', exposure: 0.7, intensity: 0.5 } },
     environmentLoadToken: 0, currentEnvMap: null,
     renderer: { toneMappingExposure: 1 }, sceneExposureControls: null, THREE: { Euler: class { constructor(x,y,z) { Object.assign(this,{x,y,z}); } } },

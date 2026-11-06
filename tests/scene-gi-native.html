@@ -26,6 +26,24 @@ const pipeline=new THREE.RenderPipeline(renderer);pipeline.outputNode=gi.output(
 const frames=async()=>{for(let i=0;i<3;i++){pipeline.render();await renderer.backend.device.queue.onSubmittedWorkDone();}};
 const read=async()=>Array.from(await renderer.readRenderTargetPixelsAsync(gi.beauty.renderTarget,0,0,800,600),THREE.DataUtils.fromHalfFloat);
 window.giAssay={
+  async aoContrastComparison(){
+    renderer.setSize(240,180);camera.aspect=4/3;camera.updateProjectionMatrix();
+    gi.setSettings({mode:'combined',view:'ao',radius:4,thickness:.5,slices:2,steps:6,denoise:0,resolutionScale:.5,temporal:false});
+    pipeline.outputNode=gi.output();pipeline.needsUpdate=true;
+    const target=new THREE.RenderTarget(240,180,{type:THREE.HalfFloatType});
+    const results=[];
+    try{
+      for(const contrast of [1,2]){
+        gi.setEstimatorSettings({aoContrast:contrast});
+        renderer.setRenderTarget(target);await frames();renderer.setRenderTarget(null);
+        const ao=await renderer.readRenderTargetPixelsAsync(target,0,0,240,180);
+        let sum=0,occluded=0,finite=true;
+        for(let i=0;i<ao.length;i+=4){const value=THREE.DataUtils.fromHalfFloat(ao[i]);sum+=value;finite&&=Number.isFinite(value);if(value<.99)occluded++;}
+        results.push({contrast,ao:{sum,occluded,finite},gi:(await gi.readback(renderer,'estimate')).stats,effective:gi.debugState().estimator});
+      }
+      return results;
+    }finally{renderer.setRenderTarget(null);target.dispose();}
+  },
   state:()=>({rendererSamples:renderer.samples,...gi.debugState()}),
   emissionAttachment() {
     const beauty=gi.beauty;

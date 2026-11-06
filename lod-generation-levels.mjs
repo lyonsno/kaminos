@@ -31,6 +31,7 @@ export async function prepareGenerationLevels({decode = null, materialFields = n
   THREE, MeshBVH, finish, unwrapMesh, WorkerClass, targets = [25000, 10000, 5000, 1000, 500], surfelFactors = [], textureSizeFor, replace = false, completeMissing = false, normalMaps = true, input = null, route = null,
   reference = 'hero', textureLevels = true, purpose = null, beautyTargets = null, report = {}, onPhase = () => {}}) {
   beautyTargets??=purpose===null&&reference==='hero'&&targets.includes(25000)?[100000]:[];
+  const prepareTextures=textureLevels&&reference==='hero'&&Boolean(targets.length||beautyTargets.length);
   const meshRoute=purpose==='beauty'?BEAUTY_TIER_ROUTE:LOW_TIER_ROUTE;
   const fromHeroGLB = !decode;
   const hasSurfelGLB = Boolean(surfelGLB || surfelSource);
@@ -61,7 +62,7 @@ export async function prepareGenerationLevels({decode = null, materialFields = n
       report.tiers.push(...report.beauty.tiers);
     };
     const prepareAppearance=async()=>{
-      if(textureLevels&&reference==='hero'&&report.tiers.some(t=>typeof t.target==='number')){
+      if(prepareTextures){
         phase('appearance');report.appearance={};
         await prepareMeshTextureLevels({source,server,fetch,THREE,MeshBVH,heroGLB,report:report.appearance,onPhase:()=>onPhase(report)});
         if(report.appearance.error)throw Error(report.appearance.error.message);
@@ -73,13 +74,20 @@ export async function prepareGenerationLevels({decode = null, materialFields = n
     phase('preflight');
     const existing = await fetch(`${server}/api/mesh-lods?source=${source}&prepare=client${purpose==='beauty'?'&purpose=beauty':''}`);
     if (!existing.ok) throw Error(`cannot read existing levels (HTTP ${existing.status})`);
-    const existingLevels = (await existing.json()).levels;
+    const catalog = await existing.json();
+    if(catalog.preparation?.missingFiles?.length)
+      throw Error(`Restore missing immutable mesh/appearance products before preparation: ${catalog.preparation.missingFiles.join(', ')}`);
+    const existingLevels = catalog.levels;
     const slotTaken = faces => existingLevels.find(l => l.route === meshRoute && l.faces === faces);
     const surfelSlotTaken = factor => existingLevels.find(l => l.route === SURFEL_TIER_ROUTE && l.mergeFactor === factor);
     if (completeMissing && !replace) {
       report.requestedTargets = [...targets];
+      const legacyTargets=[25000,10000,5000,1000,500];
+      const meshLevels=existingLevels.filter(level=>level.route===meshRoute);
+      const legacyComplete=purpose===null&&meshLevels.length>=legacyTargets.length&&meshLevels.every(level=>level.targetFaces===undefined);
       targets = targets.filter(target => !existingLevels.some(level =>
-        level.route === meshRoute && (level.targetFaces ?? level.faces) === target));
+        level.route === meshRoute && (level.targetFaces ?? level.faces) === target)
+        && !(legacyComplete&&legacyTargets.includes(target)));
       surfelFactors = surfelFactors.filter(factor => !surfelSlotTaken(factor));
       if (!targets.length && !surfelFactors.length) {
         await prepareBeauty();await prepareAppearance();
