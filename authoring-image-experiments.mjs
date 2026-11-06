@@ -38,6 +38,7 @@ export function createImageExperiments({request=experimentRequest,openRecipe,ope
   read:()=>copy(state),branches:()=>copy(imageExperimentBranches(state.document?.members??[])),open,
   close(){++ticket;state={document:null,selected:null,selection:[],loading:false,error:null};publish();},
   select(source){member(source);state.selected=source;publish();},
+  accept(doc){check(doc);if(state.document?.id===doc.id&&doc.revision>=state.document.revision){state.document=copy(doc);state.selection=state.selection.filter(source=>available(doc.members.find(m=>m.source===source)));publish();}},
   deselect(){state.selected=null;publish();},
   toggleSelected(source,{range=false}={}){member(source);const members=state.document.members;let sources=[source];if(range&&anchor&&members.some(m=>m.source===anchor)){const a=members.findIndex(m=>m.source===anchor),b=members.findIndex(m=>m.source===source);sources=members.slice(Math.min(a,b),Math.max(a,b)+1).filter(available).map(m=>m.source);}const selected=new Set(state.selection);if(range)for(const id of sources)selected.add(id);else if(selected.has(source))selected.delete(source);else selected.add(source);state.selection=members.filter(m=>selected.has(m.source)).map(m=>m.source);anchor=source;publish();},
   clearSelection(){state.selection=[];anchor=null;publish();},

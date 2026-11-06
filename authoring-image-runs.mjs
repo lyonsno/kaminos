@@ -18,7 +18,7 @@ export function createImageRunExecutor({request,generate,stopGeneration=()=>{},b
  let active=null,stopRequested=false;
  const publish=()=>changed();
  const read=()=>copy(active);
- const post=async(id,body)=>{const doc=await request('/api/image-experiments',{id,...body});publish();return doc;};
+ const post=async(id,body)=>{const doc=await request('/api/image-experiments',{id,...body});changed(copy(doc));return doc;};
  return {read,busy:()=>!!active,
   async stop(){if(!active)return;stopRequested=true;await post(active.experimentId,{action:'stop-run',runId:active.runId});stopGeneration();},
   async execute(experimentId,runId){
@@ -32,7 +32,7 @@ export function createImageRunExecutor({request,generate,stopGeneration=()=>{},b
      if(stopRequested||run.stopRequested)break;if(planned.status!=='queued')continue;
      const attempt=crypto.randomUUID();
      doc=await post(experimentId,{action:'claim-job',runId,jobId:planned.id,attempt});run=doc.runs.find(r=>r.id===runId);
-     const job=run.jobs.find(j=>j.id===planned.id);active={experimentId,runId,jobId:job.id};publish();
+     const job=run.jobs.find(j=>j.id===planned.id);if(stopRequested||run.stopRequested){doc=await post(experimentId,{action:'finish-job',runId,jobId:job.id,attempt,status:'stopped',error:'Run stopped before inference'});break;}active={experimentId,runId,jobId:job.id};publish();
      try{
       const result=await generate(imageVariationRequest({experiment:doc,run,job}));
       if(!result){doc=await post(experimentId,{action:'finish-job',runId,jobId:job.id,attempt,status:'stopped',error:'Generation stopped'});stopRequested=true;await post(experimentId,{action:'stop-run',runId});}
@@ -64,7 +64,7 @@ export function installImageVariationRuns({document,host,controller,executor,req
  const seeds=node('input');seeds.id='asset-variation-seeds';seeds.setAttribute('aria-label','Seeds, separated by commas');
  const nameLabel=node('label','Run name ');nameLabel.append(name);const seedsLabel=node('label','Seeds ');seedsLabel.append(seeds);
  const summary=node('p');summary.id='asset-variation-summary';const rows=node('div');rows.className='experiment-plan-rows';
- const submit=action('Save & run',async()=>{
+ const savePlan=async(start)=>{
   updatePlan();if(!draft||draft.plan.rows.some(row=>row.error))throw Error('Every selected source needs a supported recipe before this run can start.');
   if(executor.busy())throw Error('Finish the current run first.');
   const author=await pageAuthor();const runId=crypto.randomUUID();
@@ -72,8 +72,9 @@ export function installImageVariationRuns({document,host,controller,executor,req
   // Revalidate the canonical snapshots read by the store, before any GPU work.
   const run=doc.runs.find(r=>r.id===runId),plan=imageVariationPlan({experiment:doc,sources:run.sources,seeds:run.seeds});
   if(plan.rows.some(row=>row.error))throw Error('Saved run includes an unsupported recipe. No generation started.');
-  composer.hidden=true;await controller.open(doc.id);await executor.execute(doc.id,runId);await controller.open(doc.id);
- });submit.id='asset-variation-submit';
+  composer.hidden=true;await controller.open(doc.id);if(start){await executor.execute(doc.id,runId);await controller.open(doc.id);}
+ };
+ const submit=action('Save & run',()=>savePlan(true));submit.id='asset-variation-submit';const saveOnly=action('Save plan',()=>savePlan(false));saveOnly.id='asset-variation-save';
  function updatePlan(){
   try{
    if(!draft)return;const raw=seeds.value.split(/[\s,]+/).filter(Boolean);if(raw.some(s=>!/^\d+$/.test(s)))throw Error('Seeds must be nonnegative integers, separated by commas.');
@@ -81,11 +82,11 @@ export function installImageVariationRuns({document,host,controller,executor,req
    summary.textContent=`${plan.rows.length} ${plan.rows.length===1?'recipe':'recipes'} × ${plan.seeds.length} seeds = ${plan.count} images. Only the seed changes. Prompts and original references stay with each recipe.`;
    rows.replaceChildren();for(const row of plan.rows){const line=node('details'),heading=node('summary',row.name);line.append(heading);
     if(row.error)line.append(node('p',row.error));else{const r=row.request;line.append(node('p',`${r.model} · ${r.size}px · ${r.level} · ${r.reference?'Original reference: '+r.reference.name:'Text only'}`),node('p',r.prompt));if(row.completion?.earlyDecoded||row.completion?.partial)line.append(node('p',`Parent decoded after ${row.completion.stepsCompleted??'?'} of ${row.completion.stepsRequested??'?'} steps. New images use the full recorded schedule; comparison with this parent also changes completion.`));}rows.append(line);}
-   submit.disabled=plan.rows.some(row=>row.error)||executor.busy();
-  }catch(error){summary.textContent=error.message;submit.disabled=true;}
+   submit.disabled=saveOnly.disabled=plan.rows.some(row=>row.error)||executor.busy();
+  }catch(error){summary.textContent=error.message;submit.disabled=saveOnly.disabled=true;}
  }
  seeds.oninput=updatePlan;name.oninput=()=>{if(draft)draft.plan.title=name.value;};
- composer.append(node('h3','Seed variations'),nameLabel,seedsLabel,summary,rows,submit,action('Cancel',()=>{composer.hidden=true;draft=null;}));
+ composer.append(node('h3','Seed variations'),nameLabel,seedsLabel,summary,rows,submit,saveOnly,action('Cancel',()=>{composer.hidden=true;draft=null;}));
  function compose(){const state=controller.read(),doc=state.document;const chosen=state.selection.length?state.selection:state.selected?[state.selected]:[];if(!chosen.length)throw Error('Select one or more source recipes.');draft={experiment:{id:doc.id,title:doc.title},sources:chosen.map(source=>{const m=doc.members.find(m=>m.source===source);return {source:m.source,name:m.name,provenance:copy(m.entry?.provenance)};})};name.value=`${doc.title} — seed variation`;seeds.value=Array.from({length:4},()=>Math.floor(Math.random()*1e9)).join(', ');composer.hidden=false;updatePlan();name.focus();}
  toolbar.append(selectedLabel,action('Variations…',compose),action('Compare selected',()=>{compare=!compare;paint=null;render();}),action('Clear selection',()=>controller.clearSelection()));
  const comparisons=node('section');comparisons.className='experiment-compare';comparisons.hidden=true;
@@ -114,7 +115,7 @@ export function installImageVariationRuns({document,host,controller,executor,req
    if(pending?.provenance?.variation?.runId===run.id)actions.append(action('Retry saving image',async()=>{await retrySaving();await controller.open(doc.id);}));
    if(active&&!executor.busy())actions.append(node('p','An image is active in another page, or its completion is unconfirmed. Refresh to read its saved state.'));
    section.append(actions);const scroller=node('div');scroller.className='experiment-run-scroll';const table=node('table');table.className='experiment-run-grid';const head=node('tr');head.append(node('th','Source recipe'));for(const seed of run.seeds)head.append(node('th',`Seed ${seed}`));table.append(head);
-   run.sources.forEach((source,index)=>{const row=node('tr'),label=node('th',source.name);row.append(label);for(const seed of run.seeds){const job=run.jobs.find(j=>j.sourceIndex===index&&j.seed===seed),cell=node('td');cell.dataset.jobId=job.id;cell.append(node('small',job.status));
+   run.sources.forEach((source,index)=>{const row=node('tr'),label=node('th',source.name);if(source.availability==='available'){const img=node('img');img.src=source.source;img.alt=source.name;label.append(img);}row.append(label);for(const seed of run.seeds){const job=run.jobs.find(j=>j.sourceIndex===index&&j.seed===seed),cell=node('td');cell.dataset.jobId=job.id;cell.append(node('small',job.status));
     if(job.result){const m=doc.members.find(m=>m.source===job.result.source);if(m?.availability==='available'){const b=action('',()=>controller.select(m.source));const img=node('img');img.src=m.preview;img.alt=m.name;b.append(img);cell.append(b);}else cell.append(node('p','Saved image unavailable'));}
     if(job.error)cell.append(node('p',job.error));row.append(cell);}table.append(row);});scroller.append(table);section.append(scroller);runs.append(section);
   }

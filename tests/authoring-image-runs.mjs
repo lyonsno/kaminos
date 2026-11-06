@@ -32,3 +32,9 @@ test('persistence failure with retained pixels leaves the attempt active for ret
  const executor=experiments.createImageRunExecutor({request,generate:async()=>{throw Object.assign(Error('disk full'),{pendingImage:true});}});
  await assert.rejects(executor.execute('burners','r'),/disk full/);assert.deepEqual(writes,['claim-job']);assert.deepEqual(run.jobs.map(j=>j.status),['running','queued']);assert.equal(executor.busy(),false);
 });
+
+test('Stop while a claim is settling prevents the newly claimed image from starting',async()=>{
+ const run={id:'r',title:'Seeds',sources:[source],seeds:[41],author:{kind:'agent',id:'hotwet',label:'Hotwet'},jobs:[{id:'0:0',sourceIndex:0,seed:41,status:'queued'}]},doc={id:'burners',title:'Burners',runs:[run]};let executor,generated=0;
+ const request=async(url,body)=>{if(body?.action==='claim-job'){run.jobs[0].status='running';run.jobs[0].attempt=body.attempt;await executor.stop();}if(body?.action==='stop-run')run.stopRequested=true;if(body?.action==='finish-job')run.jobs[0].status=body.status;return structuredClone(doc);};
+ executor=experiments.createImageRunExecutor({request,generate:async()=>{generated++;return null;}});await executor.execute('burners','r');assert.equal(generated,0);assert.equal(run.jobs[0].status,'stopped');
+});
