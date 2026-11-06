@@ -20398,8 +20398,6 @@ async function initKaminosVolumeRoute() {
     if (volumeCanvasElement) volumeCanvasElement.style.background = 'transparent';
   }
   window.__kaminosVolumePrototype = volumePrototype;
-  const guideParams=new URLSearchParams(window.location.hash.slice(1));
-  if(guideParams.has('guide_view'))volumePrototype.setIntegralGuideDisplay({view:guideParams.get('guide_view'),gain:Number(guideParams.get('guide_gain')??1)});
   volumePrototype.setRayStepTelemetryCanvas(document.getElementById('volume-ray-step-display'));
   if (fireLightFieldRouteParams().get('volume_light_field_optical_preview') === '1') {
     import('./volume-optical-native.mjs').then(({installOpticalSteppingPreview}) => {
