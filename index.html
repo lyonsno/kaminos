@@ -27809,19 +27809,20 @@ function installAuthoredAsh(){
  const selected=()=>selectedSceneObjectEntry()?.type===ASH_OBJECT_TYPE?workingScene.activeObjectId:null;
  const get=id=>{const ash=authoredAsh.get(id);if(!ash)throw Error('Select an ash object');return ash;};
  const write=(id,patch)=>{const result=get(id).set(patch);const entry=workingScene.objects.find(row=>row.id===id);entry.ash=entry.object.userData.kaminosSceneObject.ash;window._kaminosDirty?.();sceneDocument.authoringChanged();ashInspector?.sync();return result;};
- const config=id=>{const {checkpoint,width,depth,height,cellSize,initialDepth,...settings}=get(id).read().settings;return settings;};
+ const config=id=>{const {checkpoint,width,depth,height,cellSize,initialDepth,refinement,...settings}=get(id).read().settings;return settings;};
  const target=id=>{get(id);const key=`@ash-settings:${id}`;
-  if(!ashEditTargets.has(key)){scenePlacementTools.edits.register(key,{read:()=>config(id),check:value=>{const {checkpoint,...settings}=checkedAshSettings({...get(id).read().settings,...value,checkpoint:null});const {width,depth,height,cellSize,initialDepth,...editable}=settings;return editable;},write:value=>write(id,value)});ashEditTargets.add(key);}
+  if(!ashEditTargets.has(key)){scenePlacementTools.edits.register(key,{read:()=>config(id),check:value=>{const {checkpoint,...settings}=checkedAshSettings({...get(id).read().settings,...value,checkpoint:null});const {width,depth,height,cellSize,initialDepth,refinement,...editable}=settings;return editable;},write:value=>write(id,value)});ashEditTargets.add(key);}
   return key;
  };
  const set=(id,patch)=>{const key=target(id),edits=scenePlacementTools.edits,value={...config(id),...patch};if(edits.state().active?.id===key)return edits.preview(value);assertSceneConstructionAvailable();return edits.apply(key,value,'Edit ash');};
  const mutate=async(id,fn)=>{assertSceneConstructionAvailable();await fn(get(id));sceneDocument.authoringChanged();window._kaminosDirty?.();ashInspector?.sync();};
  window.kaminosAsh={add:addAuthoredAsh,addSource:addAuthoredAshSource,read:id=>get(id).read(),set,
+  showRefinement:(id,value)=>get(id).setShowRefinement(value),
   regrid:(id,cellSize)=>mutate(id,async ash=>{await ash.regrid(cellSize);const entry=workingScene.find(id);if(entry)entry.ash=ash.root.userData.kaminosSceneObject.ash;}),
   cover:(id,depth=.04)=>mutate(id,ash=>ash.cover(depth)),burst:(id,volume=.02)=>mutate(id,ash=>ash.burst(volume)),
   advance:(id,steps=1)=>mutate(id,ash=>ash.advance(steps)),diagnostics:(id,options)=>get(id).diagnostics(options),
   snapshot:async id=>{await captureAuthoredAsh();return serializeSceneObject(workingScene.objects.find(row=>row.id===id));}};
- ashInspector=installAshInspector({document,anchor:document.getElementById('authoring-type-anchor')||document.getElementById('selected-flame-properties'),selected,edits:scenePlacementTools.edits,target,ownHistory:session=>authoringControlSessions.push(session),read:window.kaminosAsh.read,edit:set,regrid:window.kaminosAsh.regrid,cover:window.kaminosAsh.cover,burst:window.kaminosAsh.burst,changed:()=>window._kaminosDirty?.(),error:setInfo});
+ ashInspector=installAshInspector({document,anchor:document.getElementById('authoring-type-anchor')||document.getElementById('selected-flame-properties'),selected,edits:scenePlacementTools.edits,target,ownHistory:session=>authoringControlSessions.push(session),read:window.kaminosAsh.read,edit:set,regrid:window.kaminosAsh.regrid,cover:window.kaminosAsh.cover,burst:window.kaminosAsh.burst,diagnostics:window.kaminosAsh.diagnostics,showRefinement:window.kaminosAsh.showRefinement,changed:()=>window._kaminosDirty?.(),error:setInfo});
  const sourceEntry=id=>{const e=workingScene.find(id);if(e?.type!==ASH_SOURCE_TYPE)throw Error('Select an ash source');return e;};
  const sourceRead=id=>{const e=sourceEntry(id),settings=checkedAshSource(e.object.userData.kaminosSceneObject.ashSource),f=workingScene.find(settings.fieldId),field=f&&authoredAsh.get(settings.fieldId);return {settings,fields:workingScene.objects.filter(e=>e.type===ASH_OBJECT_TYPE).map(e=>({id:e.id,label:e.label})),fieldExists:!!field,status:!field?'Field missing · choose a receiving field below':!sourceInField(e,field).inside?'Outside field · move the source or field to reconnect':`${field.read().settings.paused?'Field paused':settings.enabled?'Emitting':'Source paused'} · ${f.label}`};};
  const sourceTarget=id=>{sourceEntry(id);const key=`@ash-source:${id}`;if(!ashEditTargets.has(key)){scenePlacementTools.edits.register(key,{read:()=>sourceRead(id).settings,check:checkedAshSource,write:value=>{const e=sourceEntry(id);e.ashSource=checkedAshSource(value);e.object.userData.kaminosSceneObject.ashSource=e.ashSource;e.object.userData.syncAshSource();window._kaminosDirty?.();sceneDocument.authoringChanged();ashSourceInspector?.sync();}});ashEditTargets.add(key);}return key;};
@@ -27831,7 +27832,11 @@ function installAuthoredAsh(){
  workbenchSceneFrames.onFrame(({timestampMs})=>{
   const ashAdvance=typeof simFrameCoordinator!=='undefined'?simFrameCoordinator?.read()?.lastPlan?.ash?.advance!==false:true;
   for(const entry of workingScene.objects){const ash=authoredAsh.get(entry.id);if(!ash)continue;
-   if(ash.tick(timestampMs,{active:isSceneItemVisible(entry.id)&&entry.object.parent!==null&&sceneViewerPaused!==true,selected:workingScene.activeObjectId===entry.id,advance:ashAdvance})){window._kaminosDirty?.();}
+   const isSelected=workingScene.activeObjectId===entry.id;
+   if(ash.tick(timestampMs,{active:isSceneItemVisible(entry.id)&&entry.object.parent!==null&&sceneViewerPaused!==true,selected:isSelected,advance:ashAdvance})){
+    if(isSelected&&!scenePlacementTools.edits.state().active)ashInspector?.sync();
+    window._kaminosDirty?.();
+   }
   }
  });
 }
@@ -28030,9 +28035,9 @@ function updateSelectionFeedback(){
   selectionFeedback?.suspend(selectionCaptureSuspended||!viewportDisplay.overlays||!viewportDisplay.outlines||!!sceneComponents?.ownsTransforms());
   const ids=new Set(sceneSelectionMembers());
   const activeIds=workingScene.activeGroupId?workingScene.groups.find(g=>g.id===workingScene.activeGroupId)?.objectIds||[]:[workingScene.activeObjectId];
-  selectionFeedback?.update(workingScene.objects.filter(entry=>isSceneItemVisible(entry.id)&&ids.has(entry.id)&&entry.type!=='splat'&&entry.type!=='light'&&entry.type!==CAMERA_TYPE&&entry.type!==FLAME_EMITTER_TYPE&&entry.type!==LOCAL_LIQUID_EMITTER_TYPE),activeIds);
+  selectionFeedback?.update(workingScene.objects.filter(entry=>isSceneItemVisible(entry.id)&&ids.has(entry.id)&&entry.type!=='splat'&&entry.type!=='light'&&entry.type!==CAMERA_TYPE&&entry.type!==FLAME_EMITTER_TYPE&&entry.type!==LOCAL_LIQUID_EMITTER_TYPE&&entry.type!==ASH_OBJECT_TYPE),activeIds);
   for(const [id,box] of selectionBoxes)if(!ids.has(id)){box.removeFromParent();box.geometry.dispose();box.material.dispose();selectionBoxes.delete(id);}
-  for(const id of ids){const entry=workingScene.objects.find(o=>o.id===id);if(!entry)continue;
+  for(const id of ids){const entry=workingScene.objects.find(o=>o.id===id);if(!entry||entry.type===ASH_OBJECT_TYPE)continue;
     let box=selectionBoxes.get(id);if(!box){box=new THREE.BoxHelper(entry.object);box.userData.kaminosEditorHelper=true;box.userData.kaminosEditorOnly=true;box.material.depthTest=false;box.renderOrder=1001;scene.add(box);selectionBoxes.set(id,box);}
     box.object=entry.object;box.update();box.material.color.set(id===workingScene.activeObjectId||workingScene.activeGroupId&&workingScene.groups.find(g=>g.id===workingScene.activeGroupId)?.objectIds.includes(id)?0xffc66d:0xe78932);
     styleHelperLines(box,{width:viewportDisplay.outlineWidth,opacity:viewportDisplay.outlineOpacity});

@@ -89,6 +89,24 @@ test('world-space source follows transforms and refuses out-of-field coverage wi
  const inside=sourceInField({object},field);assert.deepEqual(inside.position,[0,.5,0]);assert.equal(inside.spread,.1);assert.equal(inside.rate,.02);
  object.position.x=10;const outside=sourceInField({object},field);assert.equal(outside.inside,false);assert.equal(outside.rate,0);assert.equal(outside.position[0],4);
 });
+test('sourceInField admits scaled source rings that overhang a rectangular field while rejecting disjoint or below-floor sources',()=>{
+ const root=new Group();root.position.set(2.309182668730249,-1.95,-0.2367197010769714);root.scale.setScalar(5.046666666666667);
+ const object=new Group();object.position.set(1.897474636895314,18.338303706449858,4.069049708211216);object.scale.setScalar(52.51621652130349);
+ object.userData.kaminosSceneObject={ashSource:{fieldId:'ash-shrine',enabled:true,rate:0.003829296875,spread:0.24}};
+ const field={root,read:()=>({settings:{width:7.04,depth:3.84,height:1.6}})};
+ const shrine=sourceInField({object},field);
+ assert.ok(shrine.spread>1.92,'shrine source spread in field coordinates exceeds half-depth 1.92');
+ assert.equal(shrine.inside,true,'source centered over field whose ring overhangs depth must remain connected');
+ assert.equal(shrine.rate,0.003829296875,'connected overhanging source must emit at its authored rate');
+ object.position.set(100,18.338,100);
+ const disjoint=sourceInField({object},field);
+ assert.equal(disjoint.inside,false,'source disk completely outside field bounds must be rejected');
+ assert.equal(disjoint.rate,0);
+ object.position.set(2.309,-5.0,-0.237);
+ const below=sourceInField({object},field);
+ assert.equal(below.inside,false,'source below field floor must be rejected');
+ assert.equal(below.rate,0);
+});
 
 import {sourceSettings} from '../ash/fall-plan.mjs';
 test('field fallout remains valid on one-cell and two-cell authored extents',async()=>{
@@ -438,8 +456,9 @@ test('annular burner procedural meshes collapse 29 beauty sub-meshes into a sing
 import {installAshSourceInspector} from '../ash/source-controls.mjs';
 import {installAshInspector} from '../ash/scene-controls.mjs';
 import {checkedAshSource} from '../ash/source-object.mjs';
+import {setMaxListeners} from 'node:events';
 import {checkedAshSettings} from '../ash/scene-record.mjs';
-test('ash source and field inspectors ignore mid-typing empty/decimal strings, clamp non-negative scrubs, and clear stale errors on valid input',()=>{
+test('ash source and field inspectors ignore mid-typing empty/decimal strings, clamp non-negative scrubs, and clear stale errors on valid input',async()=>{
  class FakeControl extends EventTarget {
   constructor(tag='input',props={}){
    super();this.tagName=tag.toUpperCase();this.style={};this.dataset={};this.classList={add(){},remove(){},toggle(){}};
@@ -498,6 +517,7 @@ test('ash source and field inspectors ignore mid-typing empty/decimal strings, c
  const emitInput=new FakeControl('input',{type:'checkbox',dataset:{ashKey:'emitting'}});
  for(const c of [pausedInput,falloutInput,softInput,emitInput])ashInputs.set(c.dataset.ashKey,c);
  const fieldPanel={
+  append(){},
   hidden:true,innerHTML:'',
   querySelector:sel=>{
    if(sel==='[data-ash-cell]')return cellSizeInput;
@@ -531,13 +551,15 @@ test('ash source and field inspectors ignore mid-typing empty/decimal strings, c
    return c;
   },
  });
+ setMaxListeners(20,doc2,doc2.defaultView);
  for(const c of [cellSizeInput,layerInput,volumeInput,pausedInput,falloutInput,softInput,emitInput])c.ownerDocument=doc2;
- let ashSettings=checkedAshSettings(record().ash),fieldError=null;
- installAshInspector({
+ let ashSettings=checkedAshSettings({...record().ash,cellSize:0.016}),fieldError=null,regriddedTo=null;
+ const inspector=installAshInspector({
   document:doc2,anchor:{after(){}},selected:()=>'ash-1',edits:{subscribe(){}},target:()=>'@ash-settings:ash-1',ownHistory(){},
-  read:()=>({settings:ashSettings,busy:false,failure:null,runtime:{steps:0,volume:0,allocatedBytes:0}}),
+  read:()=>({settings:ashSettings,busy:false,failure:null,runtime:{steps:10,volume:0.05,allocatedBytes:1048576}}),
   edit:(_id,patch)=>{ashSettings=checkedAshSettings({...ashSettings,...patch,checkpoint:null});},
-  regrid:async()=>{},cover:async()=>{},burst:async()=>{},changed(){},error:msg=>{fieldError=msg;},
+  regrid:async(_id,nextCell)=>{regriddedTo=nextCell;ashSettings=checkedAshSettings({...ashSettings,cellSize:nextCell,checkpoint:null});},
+  cover:async()=>{},burst:async()=>{},changed(){},error:msg=>{fieldError=msg;},
  });
  assert.equal(ashInputs.get('rate').min,'0','field fallout rate input must clamp scrubs at min=0');
  assert.equal(ashInputs.get('spread').min,'0','field source spread input must clamp scrubs at min=0');
@@ -545,7 +567,41 @@ test('ash source and field inspectors ignore mid-typing empty/decimal strings, c
  ashInputs.get('rate').value='';ashInputs.get('rate').fire('input');
  assert.equal(ashSettings.rate,0.008,'clearing field rate input mid-typing must not overwrite rate with 0 or throw');
  assert.equal(fieldError,null);
+
+ // Verify live tick sync() does not overwrite staged cellSize or dimensions between mousedown (blur) and click on Reset
+ inspector.sync();
+ assert.equal(cellSizeInput.value,'0.016');
+ doc2.activeElement=cellSizeInput;
+ cellSizeInput.value='0.02';
+ // mousedown on Reset at cell width moves focus off cellSizeInput before mouseup fires onclick
+ doc2.activeElement=regridBtn;
+ inspector.sync();
+ assert.equal(cellSizeInput.value,'0.02','live status sync must not clobber staged cell width back to 0.016 before regrid click completes');
+ await regridBtn.onclick();
+ assert.equal(regriddedTo?.cellSize??regriddedTo,0.02,'Reset at cell width must apply the staged 0.02 cell width');
+
+ // Verify createAshSceneObject.regrid supports resizing width, depth, and height after creation and updates guide geometry
+ const resizeObj=await createAshSceneObject({
+  record:record(),renderer:{backend:{device:{limits:{maxStorageBufferBindingSize:1e9,maxBufferSize:1e9}}}},
+  readObjects:()=>[],createPatch:async opts=>({
+   root:new Group(),layout:{cellSize:opts.cellSize,bounds:opts.bounds,dims:[10,10,10],count:1000,tiles:{count:1,cellsPerTile:4096}},
+   syncScene(){},setSliding(){},setSoftNormals(){},step(){},deposit:async()=>{},burst(){},
+   read:()=>({steps:0,volume:0,retainedVolume:0,allocatedBytes:1024,layout:{cellSize:opts.cellSize,bounds:opts.bounds,dims:[10,10,10],count:1000,tiles:{count:1,cellsPerTile:4096}}}),
+   dispose(){},
+  }),
+ });
+ await resizeObj.initialize();
+ const resizedState=await resizeObj.regrid({width:6.4,depth:4.8,height:2.4,cellSize:0.04});
+ assert.equal(resizedState.settings.width,6.4,'regrid updates field width after creation');
+ assert.equal(resizedState.settings.depth,4.8,'regrid updates field depth after creation');
+ assert.equal(resizedState.settings.height,2.4,'regrid updates field height after creation');
+ const guideChild=resizeObj.root.children.find(c=>c.isLineSegments);
+ assert.equal(guideChild.position.y,1.2,'guide wireframe height center updates to height/2');
+ resizeObj.dispose();
 });
+
+
+
 
 test('ash collision retains GLB node coordinates when display rungs bake their transforms',async()=>{
  const source=new Group(),hero=new Mesh(new BoxGeometry(1,2,1,50,50,50),new MeshBasicMaterial());source.add(hero);

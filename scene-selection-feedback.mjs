@@ -31,7 +31,7 @@ function createSelectionMaskProxies(maskScene,{selected,active,pairs=[],camera=n
     for(const entry of entries)entry.object.traverse(source=>{
       const presentation=presentedSurface(source);
       if(presentation)meshes.push({source:presentation.mesh,owner:source,id:entry.id,root:entry.object,presentation});
-      else if(source.isMesh&&!source.isSkinnedMesh&&!source.userData.kaminosEditorHelper&&!source.userData.kaminosEditorOnly)meshes.push({source,id:entry.id,root:entry.object});
+      else if(source.isMesh&&!source.isSkinnedMesh&&!source.geometry?.indirect&&!source.material?.positionNode&&!source.userData.kaminosEditorHelper&&!source.userData.kaminosEditorOnly)meshes.push({source,id:entry.id,root:entry.object});
     });
     if(next.length!==roots.length||next.some((object,i)=>object!==roots[i])||meshes.length!==pairs.length||meshes.some((mesh,i)=>mesh.source!==pairs[i].source||mesh.id!==pairs[i].id)){
       for(const pair of pairs)for(const material of pair.owned??[])material.dispose();

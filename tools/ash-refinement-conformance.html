@@ -1,0 +1,91 @@
+<!doctype html><meta charset="utf-8"><title>Refined ash kernel conformance</title>
+<script type="importmap">{"imports":{"three":"../lib/three.webgpu.js","three/webgpu":"../lib/three.webgpu.js","three/tsl":"../lib/three.tsl.js","three/addons/":"../node_modules/three/examples/jsm/"}}</script>
+<link rel="icon" href="data:,">
+<canvas id="surface" width="640" height="480"></canvas>
+<script type="module">
+import * as THREE from '../lib/three.webgpu.js';
+import {createGpuRefinedAsh} from '../ash/refinement-gpu.mjs';
+import {refinementCell,refinementIndex,referenceRefinementStep} from '../ash/refinement-plan.mjs';
+import {refinementVertexWGSL} from '../ash/refinement-surface.mjs';
+import {refinementArena} from '../ash/refinement-shader.mjs';
+window.runRefinedAsh=async(mode="random")=>{
+ const renderer=new THREE.WebGPURenderer({canvas:document.querySelector('canvas'),antialias:false});
+ await renderer.init();
+ if(!renderer.backend.isWebGPUBackend)throw Error('Expected actual WebGPU backend');
+ const failures=[];renderer.backend.device.addEventListener('uncapturederror',event=>failures.push(event.error.message));
+ let patch;
+ try{
+  patch=await createGpuRefinedAsh({renderer,cellSize:.1,bounds:{min:[-.8,0,-.8],max:[.8,.8,.8]},tileSize:4,refinement:{ratio:2,regions:[{min:[-.4,0,-.4],max:[.4,.4,.4]}]}});
+  const initial=await patch.snapshot();
+  // Execute the production vertex function for a shared top/side edge.
+  const p=patch.layout,a=refinementArena(p),i=refinementIndex(p,[4,0,4]);
+  const c=refinementCell(p,i),r=p.regions[1],native=i-r.offset;
+  const nc=[native%r.layout.dims[0],Math.floor(native/r.layout.dims[0])%r.layout.dims[1],Math.floor(native/(r.layout.dims[0]*r.layout.dims[1]))];
+  const local=nc[0]%p.tiles.width+p.tiles.width*(nc[1]%p.tiles.width+p.tiles.width*(nc[2]%p.tiles.width));
+  const vm=new Float32Array(p.count);vm[i]=.8;vm[refinementIndex(p,[5,0,4])]=.2;
+  const vf=new Uint32Array(p.faceWords);vf[a.words[c.tile*8+4]]=local*24+12;vf[a.words[c.tile*8+4]+1]=local*24+4;
+  for(let t=0;t<=p.tiles.count;t++)a.words[a.prefix+t]=t>c.tile?2:0;
+  const d=renderer.backend.device,owned=[];
+  try{
+   const arrays=[vm,new Uint32Array(p.count),vf,a.words,new Float32Array(8)];
+   const buffers=arrays.map(array=>{const b=d.createBuffer({size:array.byteLength,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST});owned.push(b);d.queue.writeBuffer(b,0,array);return b;});
+   const code=refinementVertexWGSL(p,a)+`
+@group(0) @binding(0) var<storage,read> vm:array<f32>;
+@group(0) @binding(1) var<storage,read> vs:array<u32>;
+@group(0) @binding(2) var<storage,read> vf:array<u32>;
+@group(0) @binding(3) var<storage,read> va:array<u32>;
+@group(0) @binding(4) var<storage,read_write> result:array<vec4<f32>>;
+@compute @workgroup_size(1) fn main(){result[0]=ash_refined_vertex(0u,vec2<f32>(1.0),0.0,&vm,&vs,&vf,&va);result[1]=ash_refined_vertex(1u,vec2<f32>(1.0),0.0,&vm,&vs,&vf,&va);}`;
+   const module=d.createShaderModule({code});const pipe=await d.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint:'main'}});
+   const group=d.createBindGroup({layout:pipe.getBindGroupLayout(0),entries:buffers.map((buffer,binding)=>({binding,resource:{buffer}}))});
+   const read=d.createBuffer({size:32,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});owned.push(read);
+   const e=d.createCommandEncoder(),pass=e.beginComputePass();pass.setPipeline(pipe);pass.setBindGroup(0,group);pass.dispatchWorkgroups(1);pass.end();e.copyBufferToBuffer(buffers[4],0,read,0,32);d.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);
+   const v=new Float32Array(read.getMappedRange().slice(0));read.unmap();
+   if(Math.abs(v[1]-v[5])>1e-6)throw Error('Shared top/side edge is disconnected: '+v[1]+' vs '+v[5]);
+  }finally{for(const b of owned)b.destroy();}
+  let seed=38283;
+  const values=Float32Array.from({length:patch.layout.count},(_,i)=>{
+   const c=refinementCell(patch.layout,i);if(!c.owned)return 0;
+   seed=(Math.imul(seed,1664525)+1013904223)>>>0;
+   return (seed/4294967296)*c.size**3*.8;
+  });
+  const volume=values.reduce((sum,v)=>sum+v,0)*patch.layout.cellSize**3;
+  const before={...initial,values:Array.from(values),seededVolume:volume,volume,retainedVolume:volume,pendingTiles:patch.layout.tileRecords.map((_,i)=>i)};
+  patch.restore(before);
+  let expected=values,maximumError=0;const comparisons=[];
+  for(let step=0;step<12;step++){
+   expected=referenceRefinementStep(patch.layout,expected);
+   patch.step();const current=await patch.snapshot();
+   const error=Math.max(...expected.map((v,i)=>Math.abs(v-current.values[i])));
+   comparisons.push({step,error,retainedVolume:current.retainedVolume});maximumError=Math.max(maximumError,error);
+  }
+  let after=await patch.snapshot();
+  if(maximumError>1e-5)throw Error('GPU/reference mass mismatch '+maximumError);
+  if(Math.abs(after.retainedVolume-volume)>1e-6)throw Error('GPU mass conservation failed');
+  const rejected=structuredClone(after);rejected.values.findIndex((v,i)=>{if(v>0){rejected.values[i]=0;return true;}return false;});
+  let rejection=null;try{patch.restore(rejected);}catch(error){rejection=error.message;}
+  if(!rejection)throw Error('Material-losing checkpoint accepted');
+  const preserved=await patch.snapshot();
+  if(JSON.stringify(preserved.values)!==JSON.stringify(after.values))throw Error('Rejected checkpoint changed material');
+  let blanket=null;
+  if(mode==='blanket'){
+   patch.restore(initial);await patch.deposit({blanketDepth:.1});const start=await patch.snapshot();
+   for(let step=0;step<8;step++)patch.step();after=await patch.snapshot();
+   const error=Math.max(...after.values.map((v,i)=>Math.abs(v-start.values[i])));
+   if(error>1e-6)throw Error('Flat blanket changed at refinement boundary '+error);
+   blanket={error,volume:after.retainedVolume};
+  }
+  const diagnostics=await patch.diagnostics({fields:true});
+  if(mode==='blanket'&&diagnostics.stats.activeTiles!==0)throw Error('Settled blanket did not sleep');
+  if(diagnostics.stats.surfaceOverflow)throw Error('Surface cache overflow');
+  const scene=new THREE.Scene();scene.background=new THREE.Color(0x28353d);
+  scene.add(new THREE.HemisphereLight(0xffffff,0x303030,3));scene.add(patch.root);
+  const camera=new THREE.PerspectiveCamera(45,640/480,.01,100);camera.position.set(1.7,1.8,2.5);camera.lookAt(0,.2,0);
+  renderer.setSize(640,480,false);await renderer.renderAsync(scene,camera);
+  await renderer.backend.device.queue.onSubmittedWorkDone();
+  const result={backend:patch.read().backend,device:renderer.backend.device.adapterInfo??null,layout:patch.layout,before,after,expected:Array.from(expected),maximumError,comparisons,rejection,blanket,diagnostics,failures};
+  window.refinedResult=result;
+  return result;
+ }finally{patch?.dispose();renderer.dispose();}
+};
+</script>
