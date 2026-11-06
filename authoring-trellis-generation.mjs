@@ -146,11 +146,17 @@ export function installMeshModelChoice({document,initial='sf3d',busy=()=>false,c
   const express=document.createElement('label');express.id='asset-express-row';
   express.innerHTML='<input type="checkbox" id="asset-express"> Express <small>quick lane in the GPU queue</small>';
   label.after(express);const box=express.querySelector('input');
+  const finishing=document.createElement('label');finishing.id='asset-trellis-finishing-row';
+  finishing.innerHTML='<span>Surface finishing</span> <select id="asset-trellis-finishing" aria-label="Surface finishing"><option value="surface-preserving">Preserve detail</option><option value="original-remesh">Rebuild surface</option></select>';
+  express.after(finishing);const finishChoice=finishing.querySelector('select');
+  try{const saved=storage?.getItem('kaminos.trellis.page-finishing');if(['surface-preserving','original-remesh'].includes(saved))finishChoice.value=saved;}catch{}
+  finishChoice.onchange=()=>{try{storage?.setItem('kaminos.trellis.page-finishing',finishChoice.value);}catch{}changed(select.value);};
   let stored=null;try{stored=storage?.getItem('kaminos.trellis.express');}catch{}
   let wanted=stored!=='off';box.checked=wanted;
   box.onchange=()=>{wanted=box.checked;try{storage?.setItem('kaminos.trellis.express',wanted?'on':'off');}catch{}changed(select.value);};
   function render(){
     select.disabled=busy();const p=heading();if(p)p.textContent=MESH_MODELS[select.value].detail;
+    finishing.hidden=select.value!=='trellis-page';finishChoice.disabled=busy();
     const t=trellisState();express.hidden=select.value!=='trellis';
     const eligible=t?.expressEligible===true;box.disabled=busy()||!eligible;
     // Shown as off while the queue will not take it; the saved choice returns when it will.
@@ -160,5 +166,5 @@ export function installMeshModelChoice({document,initial='sf3d',busy=()=>false,c
   }
   select.onchange=()=>{render();changed(select.value);};
   render();
-  return {value:()=>select.value,express:()=>wanted&&!box.disabled&&box.checked,render};
+  return {value:()=>select.value,finishing:()=>finishChoice.value,express:()=>wanted&&!box.disabled&&box.checked,render};
 }
