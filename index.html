@@ -29515,7 +29515,7 @@ function setupAuthoringAssets(){
     try{
       const result=await runTrellisInPage({appGpu,manifest:pack.manifest,fetchTensor:pack.fetchTensor,pixelValues,highResolutionPixelValues,signal,onPhase,scheduling,decoderActivationStorage:'f16',finishMesh:finishMesh!==false,textureSize,
         // Stop reaches the finishing providers too (cleanup and UV in workers where supported).
-        finishing:{postprocessMesh,bakeMaterial,unwrapMesh:createWasmXatlasUnwrapper({WorkerClass:Worker,signal})},
+        finishing:{postprocessMesh,bakeMaterial,unwrapMesh:createWasmXatlasUnwrapper({WorkerClass:Worker,signal,normalMode:finishingMode==='original-remesh'?'source-original':'post-uv'})},
         provenance:{checkpointManifestSha256:pack.manifestSha256,
           input:image?`alpha image prepared in the page: ${image.source}`:pixels==='package'?'checkpoint package prepared pixels (Python-prepared stand-in), not a selected image':'caller-prepared pixels'}});
       const generation={schema:'kaminos.asset-generation.v1',runId,route:result.route,target:'this-page',
