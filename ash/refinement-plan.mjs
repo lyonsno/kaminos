@@ -148,11 +148,12 @@ export function refinementNeighbors(p, i) {
     const first = refinementIndex(p, q);
     if (first < 0) continue;
     const finer = refinementCell(p, first).size < c.size;
-    const samples = finer ? c.size : 1;
+    const side = Math.min(c.size, refinementCell(p, first).size);
+    const samples = finer ? c.size / side : 1;
     for (let v = 0; v < samples; v++) for (let u = 0; u < samples; u++) {
-      const point = [...q]; point[tangent[0]] += u; point[tangent[1]] += v;
+      const point = [...q]; point[tangent[0]] += u * side; point[tangent[1]] += v * side;
       const j = refinementIndex(p, point);
-      result.push({index: j, axis, area: finer ? 1 : Math.min(c.size, refinementCell(p, j).size) ** 2});
+      result.push({index: j, axis, area: Math.min(c.size, refinementCell(p, j).size) ** 2});
     }
   }
   return result;

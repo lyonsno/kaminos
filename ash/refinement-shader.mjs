@@ -103,13 +103,13 @@ fn exchange_sum(i:u32,apply:bool)->vec2<f32> {
   q[axis]+=select(-1,i32(c.size),face%2u==1u);
   let first=ash_locate(q);if(first==0xffffffffu){continue;}
   let neighbor=ash_cell(first);let finer=neighbor.size<c.size;
-  let count=select(1u,c.size,finer);
+  let side=min(c.size,neighbor.size);let count=select(1u,c.size/side,finer);
   let tangent0=select(0u,1u,axis==0u);let tangent1=select(2u,1u,axis==2u);
   for(var v=0u;v<count;v++){for(var u=0u;u<count;u++){
-   var point=q;point[tangent0]+=i32(u);point[tangent1]+=i32(v);
+   var point=q;point[tangent0]+=i32(u*side);point[tangent1]+=i32(v*side);
    let j=ash_locate(point);if(j==0xffffffffu){continue;}
    if(atomicLoad(&headers[ash_cell(j).tile*8u+1u])==0u){continue;}
-   let side=min(c.size,ash_cell(j).size);let area=select(f32(side*side),1.0,finer);
+   let patchSide=min(c.size,ash_cell(j).size);let area=f32(patchSide*patchSide);
    var amount=offer(i,j,axis,area);
    if(apply){
     if(amount>0.0){amount*=min(limits[i].x,limits[j].y);}else{amount*=min(limits[i].y,limits[j].x);}
