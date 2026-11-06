@@ -1,6 +1,6 @@
 import {BufferGeometry,BufferAttribute,Box3,Vector3,Sphere,DataTexture,NearestFilter} from '../../lib/three.core.js';
 import {StorageBufferAttribute} from '../../lib/three.webgpu.js';
-import {storage,Fn,If,wgslFn,instanceIndex,uint,float,uniform,mix,attribute as tslAttribute,positionLocal,normalView,positionViewDirection} from '../../lib/three.tsl.js';
+import {storage,Fn,If,wgslFn,instanceIndex,uint,float,uniform,mix,vec4,attribute as tslAttribute,positionLocal,normalView,positionViewDirection} from '../../lib/three.tsl.js';
 import {terrainConfig,makeRidges,ROUTE} from './model.mjs';
 import {detailLattice,baseMaskTransform} from './lod.mjs';
 import {mesoAuthoringConfig,VIEW_MODES} from './formation.mjs';
@@ -681,6 +681,7 @@ export function createTerrainGPU(geometry,input={}){
   const avgSpacing=(2*focusRadius.value)/(zoomN-1);
   return{route:ROUTE,backend:renderer?'webgpu':'unbound',initialized,config:{...config},generation,steps,preparationSteps,seconds,stateIndex:index,readbackInRuntime:false,error,viewMode:activeViewMode,mesoAuthoring:{...mesoState},liveUpdateMs:lastLiveUpdateMs,representation:{kind:'height-material-grid',samples:count,triangles:(n-1)**2*2,bytes:attributes.reduce((s,a)=>s+a.array.byteLength,0),fields:['substrate_height','loose_depth','vertical_velocity','actor_memory']},zoomDetail:{enabled:Boolean(zoomEnabled.value>.5&&focusRadius.value<3.30&&latticeRefines),inactiveReason:zoomEnabled.value<.5?'disabled':focusRadius.value>=3.30?'outside-detail-range':!latticeRefines?'source-already-finer-than-patch':null,resolution:zoomN,samples:zoomCount,triangles:(zoomN-1)**2*2,focusX:focusX.value,focusZ:focusZ.value,focusRadius:focusRadius.value,vertexSpacing:Math.max(stepX.value,stepZ.value),meanVertexSpacing:avgSpacing,lattice:{center:[gridX.value,gridZ.value],spacing:[stepX.value,stepZ.value],kind:'world-aligned-dyadic',filterSpacing:filterSpacing.value},cameraEye:[camX.value,camY.value,camZ.value]},capabilities:{initialConditions:true,prepare:true,advance:true,gpuGeology:true,arbitraryZoom3D:true,liveMesoAuthoring:true,provenanceInspector:true,gpuSurface:true,actorHistoryIngress:false,fluidCoupling:false,cpuSurfaceQueries:false},provenance:formationProvenance??{seed:config.seed,layout:config.layout},clock:{dt:.05,displayAlpha:alpha.value,authority:'submitted_gpu_steps'},surfaceSelection:'scene-object-row; exact surface picking unavailable'};
  }
+ const plainMaterial=uniform(0);
  const applyFragShader=material=>{
   material.vertexColors=false;
   material.roughness=.96;
@@ -688,6 +689,8 @@ export function createTerrainGPU(geometry,input={}){
   const macro=tslAttribute('hillMacroNormal','vec4'),surface=tslAttribute('hillSurface','vec4');
   material.normalNode=fragSafeNormal({nv:normalView,vd:positionViewDirection});
   material.colorNode=fragFormedColor({vColor:tslAttribute('color','vec4'),x:positionLocal.x,y:surface.x.add(surface.y),z:positionLocal.z,nx:macro.x,ny:macro.y,nz:macro.z,tilt:geoTilt,strike:geoStrike,fold:geoFold,thickness:geoThickness,seed:geoSeed,stepStyle:geoStepStyle,meso:geoMeso,ledge:mesoLedge,crag:mesoCrag,cobble:mesoCobble,rill:mesoRill,viewMode:viewModeUniform,useFormed});
+  // Same clay albedo as the explicit mesh; lighting must explain the shape.
+  material.colorNode=mix(material.colorNode,vec4(.434153636,.356400144,.258182853,1),plainMaterial);
   return material;
  };
  const decorateBaseMaterial=material=>{
@@ -699,6 +702,7 @@ export function createTerrainGPU(geometry,input={}){
  return{bind,flush,advance,stepGeology,setMesoAuthoring,setViewMode,setCameraFocus,configure,regenerate,read,zoomGeometry,
   decorateMaterial:decorateBaseMaterial,
   decorateZoomMaterial:applyFragShader,
+  setPlainMaterial(value){if(typeof value!=='boolean')throw Error('Boolean plain material required');plainMaterial.value=value?1:0;},
   loadFormation(result){
    if(result.config.resolution!==n||result.config.width!==config.width||result.config.length!==config.length)throw Error('Formation grid does not match GPU terrain');
    if(!(result.state instanceof Float32Array)||result.state.length!==count*4||!result.state.every(Number.isFinite))throw Error('Complete finite formed state required');
