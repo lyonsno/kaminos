@@ -5,6 +5,7 @@ import {ARCH_GPU_KERNELS} from './fracture-coarse-kernels.mjs';
 import {BURN_FRACTURE_IDENTITY,checkBurnFractureInput,checkedBurnMaterial,checkedBurnSupport,burnInitialJointPenalties} from './burn-fracture-core.mjs';
 import {createBurnRegionBodiesGpu} from './burn-region-bodies-gpu.mjs';
 import {batchCoarseCompute} from './fracture-compute-batch.mjs';
+import {createBurnRigidFractureGpu} from './burn-rigid-fracture-gpu.mjs';
 
 export const BURN_STRESS_WGSL=`
 fn burnStress(area:f32,normal:vec3f,force:vec3f,torque:vec3f)->vec3f {
@@ -88,6 +89,7 @@ export async function createBurnFractureGpu({renderer,prepared,sections,supports
  if(gravity.length!==3||!gravity.every(Number.isFinite))throw Error('Finite gravity required');
  if(regionMasses.length!==prepared.cells.length||!regionMasses.every(m=>Number.isFinite(m)&&m>=0))throw Error('Finite nonnegative current region masses required');
  if(field&&(!regionMapping||supports.length||field.device!==device))throw Error('Live material requires same-device region mapping and physical contact instead of pinned pieces');
+ if(field)return createBurnRigidFractureGpu({renderer,prepared,sections,finiteSupports,material,regionMasses,gravity,field,regionMapping,presentationCode:BURN_FRACTURE_WGSL});
  const n=prepared.cells.length,m=prepared.bonds.length,owned=[],restFrame=coarseRestFrame(prepared),h=prepared.config.timeStep;
  let engine,wrapper,liveBodies,disposed=false,steps=0,seconds=0,remainder=0,contactsEnabled=true;
  const own=x=>{owned.push(x);return x;};
