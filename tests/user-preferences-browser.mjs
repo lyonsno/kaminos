@@ -2,11 +2,12 @@
 // Arguments keep the host, evidence and runtime explicit.
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
-const [origin,out,expectedRoot,playwrightModule,executable,baselineUI]=process.argv.slice(2);
-const report={status:'running',phase:'arguments',origin,expectedRoot,executable,baselineUI,errors:[]};let browser,profile;
+import {createHash} from 'node:crypto';
+const [origin,out,expectedRoot,playwrightModule,executable,baselineUI,shaderOverride]=process.argv.slice(2);
+const report={status:'running',phase:'arguments',origin,expectedRoot,executable,baselineUI,shaderOverride:shaderOverride||null,errors:[],shaderErrors:[],consoleErrors:[]};let browser,profile;
 const seed={schema:'kaminos.preferences.v1',sceneDefaults:{environment:{name:'studio',exposure:1},postprocessing:{sceneGI:{resolutionScale:.1,slices:1,steps:3}}},agentSceneDefaults:null,navigationInput:null,startupConfigured:true};
 try{
- assert.ok(origin&&out&&expectedRoot&&playwrightModule&&executable,'origin out repo-root playwright-module independent-browser [baseline-ui]');
+ assert.ok(origin&&out&&expectedRoot&&playwrightModule&&executable,'origin out repo-root playwright-module independent-browser [baseline-ui] [baseline-shader]');
  report.phase='output-setup';await fs.mkdir(out,{recursive:true});await fs.writeFile(out+'/preferences-browser-report.json',JSON.stringify(report,null,2));
  report.phase='profile-setup';profile=await fs.mkdtemp(out+'/browser-');report.profile=profile;
  report.phase='runtime-admission';report.runtime=await(await fetch(origin+'/api/runtime-config')).json();assert.equal(report.runtime.source.repoRoot,expectedRoot);
@@ -16,9 +17,10 @@ try{
  const seeded=await fetch(origin+'/api/preferences',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:initial.revision,preferences:seed})});assert.equal(seeded.status,200);
  report.phase='browser-import';const {chromium}=await import(playwrightModule);
  report.phase='browser-launch';browser=await chromium.launchPersistentContext(profile,{headless:true,executablePath:executable,viewport:{width:1040,height:800},args:['--use-mock-keychain','--password-store=basic','--enable-unsafe-webgpu','--use-angle=metal']});
- const page=browser.pages()[0];page.setDefaultTimeout(0);await page.addInitScript(()=>{const original=window.fetch;window.__preferenceSaveRequests=[];window.fetch=function(url,options){const result=original.call(this,url,options);if(String(url).endsWith('/api/preferences')&&options?.method==='POST')window.__preferenceSaveRequests.push(result);return result;};});page.on('pageerror',error=>{report.errors.push(String(error));console.error('PAGE',String(error));});
+ const page=browser.pages()[0];page.setDefaultTimeout(0);page.on('console',message=>{if(message.type()==='error'){const value=message.text();report.consoleErrors.push(value);if(value.includes('THREE.TSL')||value.includes('GPUValidationError')||value.includes('Error while parsing WGSL')||value.includes('Error while validating WGSL'))report.shaderErrors.push(value);}});await page.addInitScript(()=>{const original=window.fetch;window.__preferenceSaveRequests=[];window.fetch=function(url,options){const result=original.call(this,url,options);if(String(url).endsWith('/api/preferences')&&options?.method==='POST')window.__preferenceSaveRequests.push(result);return result;};});page.on('pageerror',error=>{report.errors.push(String(error));console.error('PAGE',String(error));});
  if(baselineUI)await page.route('**/user-preferences-ui.mjs',async route=>route.fulfill({contentType:'text/javascript',body:await fs.readFile(baselineUI,'utf8')}));
- report.phase='open';console.log('Opening actual preferences');await page.goto(origin+'/#workspace=authoring');await page.waitForFunction(()=>window.kaminosPreferences?.startup().settled);
+ if(shaderOverride){const body=await fs.readFile(shaderOverride,'utf8');report.shaderOverrideSha256=createHash('sha256').update(body).digest('hex');await page.route('**/lib/addons/tsl/display/SSGINode.js',async route=>route.fulfill({contentType:'text/javascript',body}));}
+ report.phase='open';console.log('Opening actual preferences');await page.goto(origin+'/#workspace=authoring');await page.waitForFunction(()=>window.kaminosPreferences?.startup().settled);assert.deepEqual(report.shaderErrors,[],'SSGI compiler diagnostics must be absent');
  await page.keyboard.press('Meta+,');await page.waitForFunction(()=>document.querySelector('#kaminos-preferences')?.open&&document.querySelector('#preferences-save')?.disabled===false);
  assert.equal(await page.locator('#preference-default-target').count(),1,'Preferences must offer the agent default authoring target');
  report.phase='author';console.log('Authoring agent defaults');await page.locator('#preference-default-target').selectOption('agentSceneDefaults');
@@ -77,7 +79,7 @@ try{
  await page.waitForFunction(()=>window.kaminosPreferences?.startup().settled&&window.kaminosWorkbenchExperiments?.state().id==='material-study');
  report.startup=await page.evaluate(()=>window.kaminosPreferences.startup());report.effective=await page.evaluate(()=>window.kaminosSceneGIDebugState());report.experiment=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
  assert.equal(report.startup.usesDefaults,true);assert.equal(report.startup.effective,'agent');assert.equal(report.effective.resolutionScale,.1);assert.equal(report.effective.steps,6);assert.equal(report.effective.slices,2);assert.equal(report.effective.estimator.aoContrast,1.35);assert.equal(report.experiment.roughness,.8);assert.ok(report.effective.autoCalibrated&&Number.isFinite(report.effective.autoCalibrated.radius)&&Number.isFinite(report.effective.autoCalibrated.thickness),'Workbench attachment must trigger automatic scene scale');assert.notEqual(report.effective.radius,20);assert.notEqual(report.effective.thickness,7);
- assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';
+ assert.deepEqual(report.errors,[]);assert.deepEqual(report.shaderErrors,[],'SSGI compiler diagnostics must be absent');report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack||error);process.exitCode=1;}
 finally{
  try{await browser?.close();if(profile)await fs.rm(profile,{recursive:true,force:true});}
