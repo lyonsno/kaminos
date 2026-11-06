@@ -174,7 +174,7 @@ test('Review N4: index.html wires window.kaminosGiProxies.prepare and importScen
   assert.match(html, /prepare:\s*async\s*\(rootOrSha,\s*options\s*=\s*\{\}\)\s*=>/, 'window.kaminosGiProxies exposes prepare(rootOrSha, options)');
   const importStart = html.indexOf('async function importSceneMesh(');
   assert.ok(importStart > 0);
-  const importBody = html.slice(importStart, importStart + 2500);
+  const importBody = html.slice(importStart, html.indexOf('const meshDataTargets=', importStart));
   assert.match(importBody, /window\.kaminosGiProxies\?\.prepare\?\.\(digest,\s*\{heroGLB:/, 'importSceneMesh triggers background GI proxy tier preparation on imported GLBs');
 });
 

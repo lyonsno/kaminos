@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {createLoadingTelemetryTracker} from '../asset-arrival.mjs';
 import {PROMPT_RELIEF_SOURCE} from '../inference-kiln-record.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -64,13 +65,13 @@ for(const group of [false,true])test(`source reconstruction preserves ${group?'g
 for(const type of ['image','pbr','glb','splat'])test(`${type} source loader preserves selection through its production registration path`,async()=>{
  const {context,workingScene,calls}=fixture(),current=context.currentMesh;context.PROMPT_RELIEF_SOURCE=PROMPT_RELIEF_SOURCE;
  const documentEffects=[];
- Object.assign(context,{shouldClearSceneForImport:()=>false,greenroomPreviewIsActive:()=>false,
+ Object.assign(context,{AbortController,loadingTelemetry:createLoadingTelemetryTracker(),readAssetBytes:async()=>new ArrayBuffer(12),shouldClearSceneForImport:()=>false,greenroomPreviewIsActive:()=>false,
   sceneEnvironment:createSceneEnvironmentState({presets:{studio:{exposure:1.5,intensity:2.75}}}),
   loadTexture:async()=>Object.assign(new THREE.Texture(),{image:{width:8,height:4}}),
   loadDemoFiles:async()=>[{name:'albedo.png'}],updateReceiptPanel(){},loadedFiles:{},receipt:null,
   modelSourceUrl:null,modelSourceType:null,glbFileName:null,glbSourceScene:null,
   resolveAssetArrivalMode:()=>null,applyAssetArrival:()=>null,normalizeArrivalLeveling:()=>null,
-  GLTFLoader:class {load(_url,done){done({scene:new THREE.Group(),animations:[]});}},
+  GLTFLoader:class {async parseAsync(){return{scene:new THREE.Group(),animations:[]};}},
   document:{getElementById:()=>({value:'1',classList:{add:value=>documentEffects.push(value)}})},
   createSceneObjectPublicationGuard:()=>()=>true,
   publishSceneObjectIfCurrent:({object,publish})=>{publish(object);return true;},
