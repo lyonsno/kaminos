@@ -108,7 +108,10 @@ fn traceSceneReflection(
       let p = reflectionViewPosition(hitUV, d, inverseProjection);
       let penetration = p.z - z;
       let n = textureLoad(normalMap, hitPixel, 0).xyz;
-      if (d < 1.0 && penetration >= 0.0 && penetration <= thickness && dot(n, direction) < 0.0 && length(p - origin) > thickness * 0.25) {
+      // Origin exclusion follows the normal offset, independently of the
+      // penetration tolerance. Thick depth slabs must not erase contact hits.
+      let originExclusion = max(0.002, abs(origin.z) * 0.0002);
+      if (d < 1.0 && penetration >= 0.0 && penetration <= thickness && dot(n, direction) < 0.0 && length(p - origin) > originExclusion) {
         let edge = min(min(hitUV.x, hitUV.y), min(1.0 - hitUV.x, 1.0 - hitUV.y));
         let level = min(reflectionSourceLevel(view, normal, direction, roughness, p, normalize(n),
           length(p - origin), projection, textureDimensions(colorMap)), f32(textureNumLevels(colorMap) - 1u));

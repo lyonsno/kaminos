@@ -51,8 +51,8 @@ window.reflectionAssay={
  },
  async studyShadow(){
   const {default:study}=await import('../experiments/reflection-study.experiment.mjs');
-  const oldEnv=scene.environment,oldCamera=camera.clone(),oldShadows=renderer.shadowMap.enabled;let root;
-  const session={attach:async value=>{root=value;scene.add(root);return {id:'shadow-study',root};},setView(){},dispose:async()=>root?.removeFromParent()};
+  const oldEnv=scene.environment,oldCamera=camera.clone(),oldShadows=renderer.shadowMap.enabled,root=new THREE.Group();scene.add(root);
+  const session={attach:async value=>{root.add(value);return {id:value.uuid,root:value};},setView(){},dispose:async()=>root.removeFromParent()};
   const instance=await study.create({host:{scene:{open:async()=>session},rendering:{readReflections:()=>({settings:{enabled:true}}),reflections:()=>{}}},inputs:{},record(){},updateInputs(){}});
   const ground=root.getObjectByName('Reflective ground'),block=root.getObjectByName('Warm reflected block');
   root.getObjectByName('Cool reflected block').visible=false;root.getObjectByName('Curved silver receiver').visible=false;
