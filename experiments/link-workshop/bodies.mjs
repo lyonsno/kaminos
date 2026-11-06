@@ -127,7 +127,7 @@ export function createBodyView(root){
   }
   root.updateMatrixWorld(true);
  }
- function manifest(){return {schema:'kaminos.assembly-bodies.v1',bodies:[...bodies.values()].map(b=>({id:b.id,kind:b.kind,geometryKey:b.geometryKey,frame:'body-local; rigid pose only',position:b.object.position.toArray(),quaternion:b.object.quaternion.toArray()})),replacements:replacements.size,travel:construction?.travels??[],warnings:(construction?.travels??[]).flatMap((p,i)=>p.rod>p.min? [`Piston ${i+1}: requested travel puts the rod through the rear of the barrel at retraction.`]:[])};}
+ function manifest(){return {schema:'kaminos.assembly-bodies.v1',bodies:[...bodies.values()].map(b=>({id:b.id,kind:b.kind,geometryKey:b.geometryKey,replacement:replacements.has(b.id),frame:'body-local; rigid pose only',position:b.object.position.toArray(),quaternion:b.object.quaternion.toArray()})),replacements:replacements.size,travel:construction?.travels??[],warnings:(construction?.travels??[]).flatMap((p,i)=>p.rod>p.min? [`Piston ${i+1}: requested travel puts the rod through the rear of the barrel at retraction.`]:[])};}
  function exportBodies(ids=null){return {schema:'kaminos.assembly-geometry.v1',bodies:[...bodies.values()].filter(b=>!ids||ids.has(b.id)).map(b=>{const clone=b.object.clone(true);clone.position.set(0,0,0);clone.quaternion.identity();clone.scale.set(1,1,1);clone.updateMatrix();return {id:b.id,geometryKey:b.geometryKey,object:clone.toJSON()};})};}
  function importBodies(packet){
   if(packet?.schema!=='kaminos.assembly-geometry.v1'||!Array.isArray(packet.bodies)||!packet.bodies.length)throw Error('Choose an assembly geometry package');

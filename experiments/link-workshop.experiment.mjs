@@ -43,8 +43,17 @@ export async function createMechanismController({host,inputs={},record=()=>{}}){
  const guideRead=()=>guide?{objectId:guide.asset.id,cells:guide.packet.cells.length,method:guide.packet.method,currentRecipe:JSON.stringify(model)===JSON.stringify(guide.packet.recipe),currentGeometry:guide.geometryRevision===geometryRevision,sourceTransform:guide.sourceTransform,placement:guide.mesh.matrixWorld.toArray()}:null;
  function guidance(){return connectionGuide({model,editing,playing,mode,tool,start:pistonStart,hover:hoverJoint});}
  const read=()=>({surfaceDraft:surfaceTool?.state(),selectedBody,actuators:structuredClone(actuatorReport(model)),anatomy:showAnatomy,mirror:mirror?.state(),constructionGuide:guidance(),motionSpace:guideRead(),objectId:asset.id,recipe:structuredClone(model),bodies:view.bodyManifest(),mode,tool,selected,editing,playing,cycle,fraction:t,points:evaluate(model,t),pistonStart,selectedMount,selectedPiston,connectionStart,selectedConnection,editingConnection,seatingPreview,connectionDraft,showOverlays,mountStatus,view:session.readView(),motion:'authored joint kinematics; pistons follow attachment distance'});
- function syncGeometry(){const g=view.replacementState();if(g?.bodies?.length)root.userData.linkGeometry=g;else delete root.userData.linkGeometry;}
- function restoreGeometry(packet){if(!packet)return;const keys=new Map(view.bodyManifest().bodies.map(b=>[b.id,b.geometryKey]));geometryRevision++;view.setBodies({...packet,bodies:packet.bodies.filter(b=>keys.get(b.id)===b.geometryKey)});syncGeometry();}
+ const emptyGeometry={schema:'kaminos.assembly-geometry.v1',bodies:[]};
+ const currentGeometryRef=()=>history.rememberGeometry(root.userData.linkGeometry??emptyGeometry);
+ let geometrySources=new Map(history.geometry(currentGeometryRef()).bodies.map(b=>[b.id,b.object]));
+ function syncGeometry(){const g=view.replacementState();if(g?.bodies?.length)root.userData.linkGeometry=g;else delete root.userData.linkGeometry;geometrySources=new Map(history.geometry(currentGeometryRef()).bodies.map(b=>[b.id,b.object]));}
+ function restoreGeometry(value){
+  if(!value)return;const packet=history.geometry(typeof value==='string'?value:history.rememberGeometry(value)),live=view.bodyManifest().bodies,keys=new Map(live.map(b=>[b.id,b])),bodies=packet.bodies.filter(b=>keys.get(b.id)?.geometryKey===b.geometryKey),wanted=new Set(bodies.map(b=>b.id)),extra=live.some(b=>b.replacement&&!wanted.has(b.id)),missing=bodies.filter(b=>!keys.get(b.id)?.replacement||geometrySources.get(b.id)!==b.object);
+  if(extra)view.setBodies({schema:packet.schema,bodies});else if(missing.length)view.importBodies({schema:packet.schema,bodies:missing});
+  if(extra||missing.length)geometryRevision++;
+  geometrySources=new Map(bodies.map(b=>[b.id,b.object]));
+  if(bodies.length)root.userData.linkGeometry=history.geometry(history.rememberGeometry(bodies.length===packet.bodies.length?packet:{schema:packet.schema,bodies}));else delete root.userData.linkGeometry;
+ }
  function updateGuides(){
   const g=guidance(),active=editing&&!playing,draw=active&&mode==='build'&&tool==='draw',markers=view.markers();
   let from=null,to=null,states=g.targets;
@@ -92,17 +101,17 @@ export async function createMechanismController({host,inputs={},record=()=>{}}){
  function handleRead(joint=selected,requestedMode=mode){
   const f=frames(model,requestedMode==='B'?1:0)[joint];if(!f)throw Error('Choose an existing joint');
   root.updateWorldMatrix(true,false);const position=new T.Vector3(...f.point,0).applyMatrix4(root.matrixWorld),q=root.getWorldQuaternion(new T.Quaternion()).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),f.angle)),e=new T.Euler().setFromQuaternion(q);
-  return {recipe:structuredClone(model),geometry:view.replacementState(),joint,mode:requestedMode,position:position.toArray(),rotation:[e.x,e.y,e.z],scale:[model.nodes[joint].length??1,1,1]};
+  return {recipe:structuredClone(model),geometryRef:currentGeometryRef(),joint,mode:requestedMode,position:position.toArray(),rotation:[e.x,e.y,e.z],scale:[model.nodes[joint].length??1,1,1]};
  }
- target=history.register('joint',{read:handleRead,readForReplay:v=>handleRead(v.joint,v.mode),check:v=>{if(playing)throw Error('Stop playback to edit joints');checkedMechanism(v.recipe);if(!v.recipe.nodes[v.joint]||!['position','rotation','scale'].every(k=>Array.isArray(v[k])&&v[k].length===3&&v[k].every(Number.isFinite)))throw Error('Finite joint transform required');return structuredClone(v);},write:v=>{
+ target=history.register('joint',{read:handleRead,readForReplay:v=>handleRead(v.joint,v.mode),check:v=>{if(playing)throw Error('Stop playback to edit joints');checkedMechanism(v.recipe);if(v.geometryRef!==undefined)history.geometry(v.geometryRef);if(!v.recipe.nodes[v.joint]||!['position','rotation','scale'].every(k=>Array.isArray(v[k])&&v[k].length===3&&v[k].every(Number.isFinite)))throw Error('Finite joint transform required');return structuredClone(v);},write:v=>{
   resetPose();selected=v.joint;const base=v.recipe,n=base.nodes[selected],f=frames(base,v.mode==='B'?1:0)[selected];root.updateWorldMatrix(true,false);const p=new T.Vector3(...v.position).applyMatrix4(root.matrixWorld.clone().invert());
   model=checkedMechanism(base);
-  if(!edits.state().active){update();restoreGeometry(v.geometry);session.redraw();refresh();return;}
+  if(!edits.state().active){update();restoreGeometry(v.geometryRef??v.geometry);session.redraw();refresh();return;}
   const oldWorld=new T.Vector3(...f.point,0).applyMatrix4(root.matrixWorld),moved=oldWorld.distanceTo(new T.Vector3(...v.position))>1e-7;
   const resized=v.mode==='build'&&n.parent!==null&&Math.abs(v.scale[0]-n.length)>1e-7;
   if(moved&&!resized)model=moveJoint(base,selected,[p.x,p.y],v.mode);
   else if(n.parent!==null){const q=new T.Quaternion().setFromEuler(new T.Euler(...v.rotation)).premultiply(root.getWorldQuaternion(new T.Quaternion()).invert()),e=new T.Euler().setFromQuaternion(q),parent=frames(base,v.mode==='B'?1:0)[n.parent],length=v.mode==='build'?v.scale[0]:n.length;model=moveJoint(base,selected,[parent.point[0]+Math.cos(e.z)*length,parent.point[1]+Math.sin(e.z)*length],v.mode);}
-  update();restoreGeometry(v.geometry);session.redraw();refresh();
+  update();restoreGeometry(v.geometryRef??v.geometry);session.redraw();refresh();
  }});
 
  function mountRead(id=selectedMount){const m=model.mounts?.find(m=>m.id===id);if(!m)throw Error('Choose a mount');return {recipe:structuredClone(model),mount:id,...matrixFrame(mountMatrix(root,model,id,t,objects()))};}
