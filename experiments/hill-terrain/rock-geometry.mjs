@@ -130,7 +130,7 @@ fn rock_ray(origin:vec3<f32>,direction:vec3<f32>,planes:ptr<storage,array<vec4<f
   else if(i.entry.w<nearest.w){nearest=i.entry;}
  }
  if(outer.w>=0.){
-  for(var pass=0u;pass<arrayLength(blocks);pass++){
+  for(var sweep=0u;sweep<arrayLength(blocks);sweep++){
    let previous=outer.w;
    for(var b=0u;b<arrayLength(blocks);b++){
     let i=rock_interval(origin,dir,(*blocks)[b],planes);
