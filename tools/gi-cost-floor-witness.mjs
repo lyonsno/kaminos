@@ -6,7 +6,7 @@ import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {visualWork} from '../visual-work.mjs';
 import {verifyAuthoringServer} from '../scene-authoring-witness-identity.mjs';
-import {summarizeGiCostFrame} from './gi-cost-floor-contracts.mjs';
+import {summarizeGiCostFrame,installGiCostDeviceCapture} from './gi-cost-floor-contracts.mjs';
 const [manifestPath]=process.argv.slice(2);
 const manifest=JSON.parse(await fs.readFile(manifestPath,'utf8'));
 const {out,repoRoot,origin,sceneFile,cases,samples,warmup,expectedCommit,executable,playwrightModule,viewport}=manifest;
@@ -25,14 +25,7 @@ try{
  browser=await chromium.launchPersistentContext(profile,{executablePath:executable,headless:true,viewport,deviceScaleFactor:1,args:flags});report.browser.version=browser.browser()?.version();page=browser.pages()[0];page.setDefaultTimeout(0);
  page.on('pageerror',e=>report.errors.push(String(e)));page.on('console',m=>{if(m.type()==='error')report.consoleErrors.push(m.text());});
  await page.exposeFunction('__costGpuError',message=>report.errors.push(message));
- await page.addInitScript(()=>{
-  const request=GPUAdapter.prototype.requestDevice;window.__costDevices=[];window.__costViews=new WeakMap();
-  GPUAdapter.prototype.requestDevice=async function(...args){
-   const device=await request.apply(this,args);window.__costDevices.push(device);device.addEventListener('uncapturederror',e=>window.__costGpuError(e.error.message));
-   const create=device.createTexture;device.createTexture=function(descriptor){const texture=create.call(this,descriptor),view=texture.createView;texture.createView=function(desc={}){const result=view.call(this,desc);window.__costViews.set(result,{label:()=>texture.label,width:texture.width,height:texture.height,format:texture.format,mipLevels:texture.mipLevelCount,baseMipLevel:desc.baseMipLevel??0});return result;};return texture;};
-   return device;
-  };
- });
+ await page.addInitScript(installGiCostDeviceCapture);
  report.phase='load';await save();
  report.consumer=await visualWork({page,origin,repoRoot,sceneFile,out:path.join(out,'consumer'),workspace:'authoring',exercise:async({document})=>{
   assert.equal(document.composition,null,'This assay excludes live simulation');

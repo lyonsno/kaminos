@@ -22,3 +22,15 @@ export function summarizeGiCostFrame(record, expected) {
   if(span<=0n)throw Error('Unresolved zero-duration GPU span');
   return {gpuSpanMs:Number(span)/1e6,gpuUnionMs:Number(union)/1e6,passDurationSumMs:Number(sum)/1e6,passCount:passes.length};
 }
+
+// Runs before each navigation, including the Workbench witness's about:blank.
+export function installGiCostDeviceCapture(scope=globalThis){
+ if(!scope.GPUAdapter)return false;
+ const request=scope.GPUAdapter.prototype.requestDevice;scope.__costDevices=[];scope.__costViews=new WeakMap();
+ scope.GPUAdapter.prototype.requestDevice=async function(...args){
+  const device=await request.apply(this,args);scope.__costDevices.push(device);device.addEventListener('uncapturederror',e=>scope.__costGpuError(e.error.message));
+  const create=device.createTexture;device.createTexture=function(descriptor){const texture=create.call(this,descriptor),view=texture.createView;texture.createView=function(desc={}){const result=view.call(this,desc);scope.__costViews.set(result,{label:()=>texture.label,width:texture.width,height:texture.height,format:texture.format,mipLevels:texture.mipLevelCount,baseMipLevel:desc.baseMipLevel??0});return result;};return texture;};
+  return device;
+ };
+ return true;
+}
