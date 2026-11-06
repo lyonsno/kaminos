@@ -101,7 +101,7 @@ export function installImageVariationRuns({document,host,controller,executor,req
   comparisons.hidden=!compare||!state.selection.length;
   if(key!==paint){paint=key;comparisons.replaceChildren();for(const source of state.selection){const m=doc.members.find(m=>m.source===source);if(m?.availability!=='available')continue;const figure=node('figure'),img=node('img');img.src=m.preview;img.alt=m.name;figure.append(img,node('figcaption',m.name));comparisons.append(figure);}}
   const pending=imageState().pending;
-  const next=JSON.stringify([doc.id,doc.runs,doc.members.map(m=>[m.source,m.availability]),executor.read(),!!pending]);
+  const next=JSON.stringify([doc.id,doc.runs,doc.members.map(m=>[m.source,m.availability]),executor.read(),!!pending,state.selection]);
   if(next===runPaint)return;for(const section of runs.querySelectorAll('[data-run-key]'))expansion.set(section.dataset.runKey,section.open);runPaint=next;runs.replaceChildren();
   if(!doc.runs?.length)return;runs.append(node('h3','Runs'));
   for(const run of [...doc.runs].reverse()){
@@ -116,7 +116,7 @@ export function installImageVariationRuns({document,host,controller,executor,req
    if(active&&!executor.busy())actions.append(node('p','An image is active in another page, or its completion is unconfirmed. Refresh to read its saved state.'));
    section.append(actions);const scroller=node('div');scroller.className='experiment-run-scroll';const table=node('table');table.className='experiment-run-grid';const head=node('tr');head.append(node('th','Source recipe'));for(const seed of run.seeds)head.append(node('th',`Seed ${seed}`));table.append(head);
    run.sources.forEach((source,index)=>{const row=node('tr'),label=node('th',source.name);if(source.availability==='available'){const img=node('img');img.src=source.source;img.alt=source.name;label.append(img);}row.append(label);for(const seed of run.seeds){const job=run.jobs.find(j=>j.sourceIndex===index&&j.seed===seed),cell=node('td');cell.dataset.jobId=job.id;cell.append(node('small',job.status));
-    if(job.result){const m=doc.members.find(m=>m.source===job.result.source);if(m?.availability==='available'){const b=action('',()=>controller.select(m.source));const img=node('img');img.src=m.preview;img.alt=m.name;b.append(img);cell.append(b);}else cell.append(node('p','Saved image unavailable'));}
+    if(job.result){const m=doc.members.find(m=>m.source===job.result.source);if(m?.availability==='available'){const b=action('',()=>controller.select(m.source));const img=node('img');img.src=m.preview;img.alt=m.name;b.append(img);const check=node('input');check.type='checkbox';check.dataset.checkSource=m.source;check.setAttribute('aria-label',`Select ${m.name} for variations`);check.checked=state.selection.includes(m.source);check.onclick=event=>controller.toggleSelected(m.source,{range:event.shiftKey,scope:run.sources.flatMap((_,i)=>run.seeds.map(seed=>run.jobs.find(j=>j.sourceIndex===i&&j.seed===seed)?.result?.source)).filter(source=>doc.members.some(m=>m.source===source&&m.availability==='available'))});cell.append(check,b);}else cell.append(node('p','Saved image unavailable'));}
     if(job.error)cell.append(node('p',job.error));row.append(cell);}table.append(row);});scroller.append(table);section.append(scroller);runs.append(section);
   }
  }
