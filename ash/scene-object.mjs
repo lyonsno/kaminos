@@ -3,6 +3,7 @@ import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {normalizeBurner,annularBurnerCasterKey,createAnnularBurnerCaster} from '../annular-burner.mjs';
 import {checkedAshRecord,checkedAshSettings,ashObjectLayout,ASH_OBJECT_TYPE} from './scene-record.mjs';
 import {selectAshCollisionLod,applyRootVertexWarpToRung} from '../scene-lod-budget.mjs';
+import {refinementSurfaceCache} from './refinement-plan.mjs';
 
 export {selectAshCollisionLod};
 
@@ -118,7 +119,8 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,read
  let settings=record.ash,patch=null,busy=false,disposed=false,pendingRestore=settings.checkpoint,initialized=false,lastTick=null,failure=null,showRefinement=false;
  const device=renderer?.backend?.device;
  function checkedLayout(s){const layout=ashObjectLayout(s);
-  if(device)for(const bytes of [layout.count*4,(layout.faceWords??layout.tiles.count*layout.tiles.cellsPerTile*6)*4])if(bytes>device.limits.maxStorageBufferBindingSize||bytes>device.limits.maxBufferSize)throw Error('Ash field exceeds effective GPU capacity; increase cell width or reduce field dimensions');
+  const surfaceWords=s.refinement?refinementSurfaceCache(layout).words:layout.tiles.count*layout.tiles.cellsPerTile*6;
+  if(device)for(const bytes of [layout.count*4,surfaceWords*4])if(bytes>device.limits.maxStorageBufferBindingSize||bytes>device.limits.maxBufferSize)throw Error('Ash field exceeds effective GPU capacity; increase cell width or reduce field dimensions');
   return layout;
  }
  checkedLayout(settings);

@@ -1,12 +1,10 @@
 import {adaptiveOffsets,adaptiveTopologyWGSL} from './adaptive-wgsl.mjs';
 import {refinementAddressWGSL} from './refinement-wgsl.mjs';
 import {slidingWGSL} from './sliding.mjs';
+import {refinementSurfaceCache} from './refinement-plan.mjs';
 
 export function refinementArena(p,{surfaceEncoding='face-records'}={}) {
-  if(!['auto','face-records','cell-masks'].includes(surfaceEncoding))throw Error('Invalid ash surface encoding');
-  const maskWords=p.tiles.count*p.tiles.cellsPerTile*2;
-  const encoding=surfaceEncoding==='auto'?(maskWords<p.faceWords?'cell-masks':'face-records'):surfaceEncoding;
-  const surfaceCache={encoding,words:encoding==='cell-masks'?maskWords:p.faceWords};
+  const surfaceCache=refinementSurfaceCache(p,surfaceEncoding);
   const meta = 0;
   const neighbors = p.tiles.count * 8;
   const active = neighbors + p.tileNeighbors.length;
