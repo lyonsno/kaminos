@@ -3044,6 +3044,7 @@ import {createSceneRecordOperations} from './scene-record-operations.mjs';
 import {createSceneDocumentSession} from './scene-document-session.mjs';
 import {createSceneMembershipOperations, membershipEditTargetId as sceneMembershipTargetId} from './scene-membership-operations.mjs';
 import {createSceneMembershipBatch} from './scene-membership-batch.mjs';
+import {meshBurnerPlan} from './burner-assembly.mjs';
 import {ASH_OBJECT_TYPE,ASH_OBJECT_SOURCE,defaultAshSettings,checkedAshSettings,checkedAshPose} from './ash/scene-record.mjs';
 import {ashMembershipEntry} from './ash/history-record.mjs';
 import {createAshSceneObject} from './ash/scene-object.mjs';
@@ -27671,6 +27672,7 @@ function syncSceneDataInspector() {
   const lightPanel=document.getElementById('selected-spot-properties');lightPanel.hidden=entry?.type!=='light';if(!lightPanel.hidden)for(const input of lightPanel.querySelectorAll('[data-light-param]')){const value=entry.light[input.dataset.lightParam];if(input.type==='checkbox')input.checked=value;else if(document.activeElement!==input||!scenePlacementTools.edits.state().active)input.value=value;}
   primitive.hidden=entry?.type!==PROCEDURAL_MESH_TYPE||entry.geometry?.kind==='annular';
   const relations=document.getElementById('selected-object-relations');relations.hidden=!entry;
+  const makeBurner=document.getElementById('selected-mesh-burner');if(makeBurner)makeBurner.hidden=!entry||!['glb','procedural-mesh','pbr'].includes(entry.type)||workingScene.groups.some(g=>g.assembly&&g.objectIds.includes(entry.id));
   const duplicate=document.getElementById('object-duplicate');duplicate.disabled=!canDuplicateObject(entry);
   const collisionPanel=document.getElementById('selected-collision-properties');
   if(collisionPanel){collisionPanel.hidden=!canCollideWithFire(entry)||!activeSceneComposition;document.getElementById('object-fire-collision').checked=entry?.collision?.enabled===true;document.getElementById('object-fire-collision-status').textContent=!entry?.collision?.enabled?'Enable to use this object as an obstacle.':isAuthoredKilnCollisionRoute()?'Collision updates on the next simulation step.':'Scene collisions are off in Fire & smoke.';}
@@ -27944,13 +27946,16 @@ function installSceneConstruction() {
   const groupPanel=document.createElement('section');groupPanel.id='selected-group-properties';groupPanel.hidden=true;
   groupPanel.innerHTML='<h3 id="group-kind-label">Group</h3><p id="group-mode-hint">Its frame places all members together. Select a member to edit its own data.</p><button type="button" class="btn" id="group-make-assembly">Make assembly</button><button type="button" class="btn" id="group-duplicate">Duplicate · Shift D</button><button type="button" class="btn" id="object-ungroup">Ungroup</button>';
   relations.after(groupPanel);
+  const meshBurnerPanel=document.createElement('section');meshBurnerPanel.id='selected-mesh-burner';meshBurnerPanel.hidden=true;
+  meshBurnerPanel.innerHTML='<h3>Burner</h3><button class="btn" type="button" id="object-make-burner">Make burner…</button>';relations.after(meshBurnerPanel);
+  document.getElementById('object-make-burner').onclick=()=>openMeshBurnerDialog(workingScene.activeObjectId).catch(error=>setInfo(error.message));
   document.getElementById('group-make-assembly').onclick=()=>{try{const group=selectedSceneGroupEntry();setSceneAssembly(group.id,assemblyForMembers(group.objectIds.map(id=>workingScene.find(id)),viewportDisplay.hiddenIds));}catch(error){setInfo(error.message);}};
   const assemblyPanel=document.createElement('section');assemblyPanel.id='selected-assembly-properties';assemblyPanel.hidden=true;
   assemblyPanel.innerHTML='<h3>Burner</h3><p id="assembly-mode-hint"></p><label class="slider-row"><span>Outlet</span><select class="transform-input" id="assembly-outlet"></select></label>';
   document.getElementById('selected-flame-properties').before(assemblyPanel);
   document.getElementById('assembly-outlet').onchange=event=>{authoringControlSessions.forEach(session=>session.commit());assemblyOutletChoices.set(workingScene.activeGroupId,event.target.value);updateAuthoringPropertySelection();};
   const modeLabel=document.createElement('span');modeLabel.id='assembly-edit-mode';modeLabel.hidden=true;modeLabel.style.cssText='padding:6px 12px;color:#ffca77';document.getElementById('transform-bar').append(modeLabel);
-  window.kaminosSceneAuthoring={addAsh:addAuthoredAsh,addFlameEmitter:addFirstFlameField,addWaterEmitter:addLocalLiquidEmitter,addLight:addSceneSpotLight,read:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),activeFieldId:workingScene.activeFieldId}),setFireSettings:editOwnedFireSettings,setAssembly:setSceneAssembly,addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
+  window.kaminosSceneAuthoring={makeBurner:makeMeshBurner,addAsh:addAuthoredAsh,addFlameEmitter:addFirstFlameField,addWaterEmitter:addLocalLiquidEmitter,addLight:addSceneSpotLight,read:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),activeFieldId:workingScene.activeFieldId}),setFireSettings:editOwnedFireSettings,setAssembly:setSceneAssembly,addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
     setRepetition:(id,value)=>setSceneRepetition(id,value),repetitionState:sceneRepetitionState,makeCopiesEditable:makeSceneRepetitionReal,
     setWaterCollision:setObjectWaterCollision,
     setCollision:(id,value)=>{assertSceneConstructionAvailable();if(!activeSceneComposition)throw Error('Fire & smoke is not mounted');const target=ensureObjectCollisionTarget(id);return edits.apply(target,typeof value==='boolean'?{domainId:'flame-field',enabled:value}:value,'Set Fire & smoke obstacle');},
@@ -28488,6 +28493,39 @@ function addBurnerObject(kind) {
   },kind==='burner-assembly'?'Add burner assembly':kind==='burner-bed'?'Add burner bed':'Add flame source');
   if(kind==='burner-assembly')setActiveSceneGroup(selectedId);else setActiveSceneObject(selectedId);
   return selectedId;
+}
+async function makeMeshBurner(bodyId,{kind='nozzle',outlet=null,reuseSourceId=null}={}) {
+  assertSceneConstructionAvailable();
+  if(!activeSceneComposition)throw Error('Add Fire & smoke and choose an immersed-source basin first');
+  const entry=workingScene.find(bodyId);if(!entry?.object)throw Error('Choose a placed burner housing');
+  const box=new THREE.Box3().setFromObject(entry.object,true);
+  const snapshot=sceneMembershipBatch.capture();
+  const template=authoredFlameSourceRecords().find(row=>row.id===reuseSourceId)??authoredFlameSourceRecords()[0];
+  if(reuseSourceId&&(!template||template.id!==reuseSourceId||snapshot.groups.some(g=>g.assembly&&g.objectIds.includes(reuseSourceId))))throw Error('The new flame source is no longer available for this burner');
+  const sourceId=reuseSourceId??makeSceneObjectId('flame-source'),groupId=makeSceneObjectId('burner');
+  const next=meshBurnerPlan({scene:snapshot,bodyId,template,kind,bounds:{min:box.min.toArray(),max:box.max.toArray()},sourceId,groupId,outlet,reuseSourceId});
+  await scenePlacementTools.edits.applySettled('@selection-membership',next,'Make '+kind+' burner');
+  setInfo('Burner created · Tab edits the housing and outlet. Aim and size the outlet at the mouth.');
+  return {groupId,bodyId,sourceId};
+}
+async function openMeshBurnerDialog(bodyId){
+  assertSceneConstructionAvailable();
+  const entry=workingScene.find(bodyId);if(!entry)throw Error('Choose a placed burner housing');
+  const dialog=document.createElement('dialog');dialog.id='mesh-burner-dialog';
+  dialog.innerHTML='<form method="dialog"><h2>Make burner</h2><p>The selected mesh is the housing. Add an editable outlet, then use Tab to position it at the opening.</p><label>Outlet layout <select id="mesh-burner-kind"><option value="rack">Rack · slot</option><option value="ring">Ring · jets</option><option value="nozzle">Nozzle</option></select></label><label id="mesh-burner-basin-label">Fire basin <select id="mesh-burner-basin"><option value="">Choose an immersed-source basin…</option></select></label><p>The initial outlet faces upward above the housing. Its pose and aperture remain editable.</p><p role="status"></p><button type="button" class="btn">Make burner</button><button value="cancel" class="btn">Cancel</button></form>';
+  const basin=dialog.querySelector('#mesh-burner-basin'),kind=dialog.querySelector('#mesh-burner-kind'),button=dialog.querySelector('[type="button"]'),status=dialog.querySelector('[role="status"]');
+  const needsBasin=!activeSceneComposition,request=new AbortController();let busy=false,reuseSourceId=null;
+  dialog.querySelector('#mesh-burner-basin-label').hidden=!needsBasin;button.disabled=needsBasin;
+  basin.onchange=()=>{button.disabled=busy||!activeSceneComposition&&!basin.value;};
+  button.onclick=async()=>{if(busy||request.signal.aborted)return;busy=true;button.disabled=true;kind.disabled=true;basin.disabled=true;
+    try{
+      if(!activeSceneComposition){reuseSourceId=await addFirstFlameField(basin.value,{signal:request.signal});request.signal.throwIfAborted();}
+      await makeMeshBurner(bodyId,{kind:kind.value,reuseSourceId});if(!request.signal.aborted)dialog.close();
+    }catch(error){if(!request.signal.aborted)status.textContent=error.message;}
+    finally{busy=false;if(!request.signal.aborted){kind.disabled=false;basin.disabled=false;button.disabled=!activeSceneComposition&&!basin.value;}}
+  };
+  const cancel=()=>request.abort();dialog.querySelector('[value="cancel"]').onclick=cancel;dialog.addEventListener('cancel',cancel);dialog.addEventListener('close',()=>{cancel();dialog.remove();},{once:true});document.body.append(dialog);dialog.showModal();
+  if(needsBasin){try{const response=await fetch('/api/volume-settings-presets',{cache:'no-store',signal:request.signal}),index=await response.json();if(!response.ok)throw Error(index.error||'Basin library unavailable');validateVolumeSettingsPresetIndex(index);for(const item of index.entries){const option=document.createElement('option');option.value=item.presetId;option.textContent=item.label||item.presetId;basin.append(option);}}catch(error){if(!request.signal.aborted)status.textContent=error.message;}}
 }
 function migrateLegacyBurner(recipe) {
   const bed=newBedRecord(recipe,bedPoseBelowSource());mountProceduralMesh(bed);
