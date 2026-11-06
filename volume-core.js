@@ -24,7 +24,7 @@ import { RAY_START_WGSL, createRayStartTexture } from './volume-ray-start.mjs';
 import { leanEmissiveRaymarchAdmission, RAYMARCH_NEIGHBORHOOD_WGSL, FLAME_GUIDANCE_WGSL } from './volume-raymarch-sampling.mjs';
 import { OPTICAL_TRACE_IDENTITY, traceChunkPlan, validateTraceRows, createOpticalCaptureOwner } from './volume-optical-trace.mjs';
 import { raymarchAdaptivity, opticalSteppingConfig, resolveOpticalStepping, OPTICAL_STEPPING_WGSL } from './volume-optical-native.mjs';
-import { createRayStepTelemetry } from './volume-ray-step-telemetry.mjs';
+import { createRayStepTelemetry, createRayStepPipelineVariants } from './volume-ray-step-telemetry.mjs';
 import { createRayAllocationHistory, HISTORY_ALLOCATION_WGSL } from './volume-history-allocation.mjs';
 import { frameCadenceSummary } from './volume-frame-timing.mjs';
 import { applyPreviewQualityCaps } from './preview-quality.mjs';
@@ -48,7 +48,7 @@ import { DISPLAY_RECONSTRUCTION_WGSL, createDisplayReconstruction, resolveDispla
 export { resolveDisplayReconstruction } from './volume-display-reconstruction.mjs';
 import { SOOT_BURNOUT_WGSL, resolvePhysicsAppearance, physicsAppearanceUniformValues } from './volume-physics-appearance.mjs';
 import { WAVELET_TURBULENCE_WGSL, WAVELET_TURBULENCE_IDENTITY, resolveWaveletTurbulence, waveletTurbulenceUniformValues, waveletOctaveUniformValues, velocityBandEnergies } from './volume-wavelet-turbulence.mjs';
-import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
+import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame, DEFAULT_SCENE_SOURCE_GRID, sceneSourceGridPlan } from './scene-volume-source.mjs';
 import { createThermalSubmission } from './volume-thermal-submission.mjs';
 import { createSceneVolumeTransport } from './scene-volume-transport.mjs';
 import { GRID_HEIGHT_MAX_RATIO, resolveGridHeight, gridHeightForShape, raymarchDomainBox } from './volume-grid-shape.mjs';
@@ -6904,7 +6904,10 @@ fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
   let advectVelocity = materialTransportVelocity(cell, centreVelocity);
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * dynamicsBacktraceScale());
   if (SHRED_ONLY) {
-    if (!MATERIAL_ONLY) { fluidPredict[base] = sampleFluidSlotInflow(backCell, 0u); }
+    // The material-only corrector reuses this characteristic; scalar
+    // MacCormack also reuses .w for oxidizer, including in Shred mode.
+    let predOx = select(0.0, sampleReactantOxidizer(backCell), !VELOCITY_ONLY && reactantLawOn() && u.transport_controls.x > 2.5);
+    fluidPredict[base] = vec4<f32>(select(sampleFluidSlotInflow(backCell, 0u).xyz, advectVelocity, MATERIAL_ONLY), predOx);
     fluidPredict[base + 1u] = vec4<f32>(sampleFluidSlotInflow(backCell, 1u).xyz, 0.0);
     fluidPredict[base + 3u] = vec4<f32>(0.0, sampleFluidSlotInflow(backCell, 3u).y, 0.0, 0.0);
     return;
@@ -11985,6 +11988,7 @@ export function createKaminosVolumePrototype({
   let debugRaymarchShaderSpecialization = 'auto';
   let debugOpticalStepping = opticalSteppingConfig({mode:controlsSnapshot.raymarchMode??'numerical',tolerance:controlsSnapshot.opticalTolerance??0.001});
   let rayStepTelemetry = null;
+  let rayStepPipelineVariants = null;
   let rayAllocationHistory = null;
   let rayStepTelemetryCanvas = null;
   let debugOpticalSteppingExplicit = false;
@@ -12188,6 +12192,7 @@ export function createKaminosVolumePrototype({
   // The draw that last dispatched the emissive seed (review GR-02).
   let emissiveSeedProducer = null;
   let sceneVolumeSource = null;
+  let sceneSourceGrid = DEFAULT_SCENE_SOURCE_GRID;
   let sceneVolumeSourceRequested = false;
   let sceneTransportConsumer = null;
   let sceneTransport = null;
@@ -14680,7 +14685,7 @@ export function createKaminosVolumePrototype({
     const transparencyKey = transparentCanvas ? 1 : 0;
     let renderPipelines = fluidRenderPipelines.get(transparencyKey);
     if (!renderPipelines) {
-      const makePipeline = (targetFormat, label, constants = renderPipelineConstants) => device.createRenderPipeline({
+      const makePipeline = (targetFormat, label, constants = renderPipelineConstants) => rayStepPipelineVariants.create({
         label,
         layout: productRaymarchPipelineLayout,
         vertex: { module: shader, entryPoint: 'vs' },
@@ -15353,6 +15358,7 @@ export function createKaminosVolumePrototype({
     }
     state.gpuInitStage = 'device';
     rayStepTelemetry = createRayStepTelemetry(device);
+    rayStepPipelineVariants = createRayStepPipelineVariants(device);
     rayAllocationHistory = createRayAllocationHistory(device);
     rayStepTelemetry.setCanvas(rayStepTelemetryCanvas);
     rayStartNoiseTexture = await createRayStartTexture(device);
@@ -17105,7 +17111,7 @@ export function createKaminosVolumePrototype({
       Object.assign(state.immersedSources,{backend:'gpu-resident-source',preparedRevision:immersedCollectionRevision,preparedStep:state.simStepCount,sources:sources.map(({id,config,worldSource})=>({id,config:structuredClone(config),worldSource:!!worldSource})),overlapLaw:'sum-local-capped-supply; bounded-supply-weighted-mixture; union-relaxation-weighted-momentum',aggregateSupplyCap:null,mixtureEntryCap:1});
     }
     uniforms.set(immersedSourceUniformValues(immersedSourceConfig), IMMERSED_SOURCE_UNIFORM_OFFSET);
-    uniforms.set(gridShapeUniformValues({ grid: gridSize, gridHeight, irradianceGrid: irradianceGridSize, irradianceGridHeight: gridHeightForSize(irradianceGridSize), sceneSourceGrid: EMISSIVE_LIGHT_GRID, sceneSourceGridHeight: gridHeightForSize(EMISSIVE_LIGHT_GRID) }), GRID_SHAPE_UNIFORM_OFFSET);
+    uniforms.set(gridShapeUniformValues({ grid: gridSize, gridHeight, irradianceGrid: irradianceGridSize, irradianceGridHeight: gridHeightForSize(irradianceGridSize), sceneSourceGrid, sceneSourceGridHeight: gridHeightForSize(sceneSourceGrid) }), GRID_SHAPE_UNIFORM_OFFSET);
     state.immersedSource = immersedSourceConfig;
     if(sceneSolidGpu&&immersedSourceConfig.effective.admitted){
       state.immersedSource.effective.supplyPredictionAuthority='gpu-unmeasured-solid-masked-at-injection';
@@ -21468,9 +21474,9 @@ export function createKaminosVolumePrototype({
         const map=worldSmokeMapping(worldSmoke.plan,worldSmoke.anchor,productTransform);
         const middleMap=intermediateFlow?.exportFields?worldSmokeMapping(intermediateFlow.plan,intermediateFlow.anchor,productTransform):null;
         const middle=middleMap?{texture:intermediateFlow.optical,dimensions:intermediateFlow.plan.materialDims,localMin:middleMap.renderMin,localMax:middleMap.renderMax}:null;
-        return {texture:worldSmoke.optical,dimensions:worldSmoke.plan.materialDims,localMin:map.renderMin,localMax:map.renderMax,middle};
+        return {texture:worldSmoke.optical,dimensions:worldSmoke.plan.materialDims,localMin:map.renderMin,localMax:map.renderMax,renderView:worldRenderField.view,middle};
       },
-      grid: EMISSIVE_LIGHT_GRID, gridY: EMISSIVE_LIGHT_GRID * gridHeight / gridSize, fluidGrid: gridSize, fluidGridY: gridHeight});
+      grid: sceneSourceGrid, gridY: sceneSourceGridPlan(sceneSourceGrid,[gridSize,gridHeight,gridSize],device.limits).dimensions[1], fluidGrid: gridSize, fluidGridY: gridHeight});
     sceneVolumeSource.encode(encoder, currentFluid, state.frameCount,productTransform);
     if (sceneMediumSource) sceneVolumeSource.encodeOpticalDepth(encoder, sceneMediumSource.position, sceneMediumSource.stepLength);
     return {source: sceneVolumeSource.describe(), medium: sceneVolumeSource.opticalDepthField(), simStepCount: state.simStepCount};
@@ -21618,8 +21624,8 @@ export function createKaminosVolumePrototype({
       &&!nonRidgeOpticalCaptureSession&&!nonRidgeSourceBasisCaptureSession&&productFrameOwner==='prototype';
     if(rayStepTelemetry.ensure(state.width,state.height,controlsSnapshot.rayStepTelemetry===true,
       {supported:telemetrySupported,reason:'requires-ordinary-emissive-beauty',allowResize:false}))rebuildFluidBindGroups();
-    state.rayStepTelemetry=rayStepTelemetry.read();
-    const opticalConstants = {OPTICAL_STEP_MODE:optical.value,RAY_STEP_STATS:rayStepTelemetry.active};
+    const statisticsRequested=rayStepTelemetry.active;
+    const opticalConstants = {OPTICAL_STEP_MODE:optical.value,RAY_STEP_STATS:false};
     state.opticalStepping = { ...optical, effective: optical.mode,
       adaptivity:raymarchAdaptivity(optical.mode,controlsSnapshot.adaptiveRays),
       source:'native-emissive-material-and-current-incident-light', fullRay:optical.mode !== 'current',
@@ -21637,11 +21643,11 @@ export function createKaminosVolumePrototype({
     device.queue.writeBuffer(worldRenderUniform,80,new Float32Array([state.worldRenderField.effective==='inactive'?0:1,...(state.worldRenderField.materialDims??[0,0,0])]));
     if(optical.value>=4&&(options.bindGroup||sceneTransportConsumer))throw Error('fixed-count allocation requires ordinary joined emissive beauty');
     prepareFixedCountAllocation(encoder,optical);
-    const opticalKey = `:${transparentCanvas ? 1 : 0}:${optical.mode}:stats=${rayStepTelemetry.active}`;
-    if ((optical.mode !== 'current'||rayStepTelemetry.active) && !multisampled && !scenePointBindGroup && !distributedGroup) {
+    const opticalKey = `:${transparentCanvas ? 1 : 0}:${optical.mode}:stats=false`;
+    if (optical.mode !== 'current' && !multisampled && !scenePointBindGroup && !distributedGroup) {
       const key = `${targetPipeline === readbackPipeline}${opticalKey}`;
       if (!opticalSteppingPipelines.has(key)) {
-        opticalSteppingPipelines.set(key,device.createRenderPipeline({label:'experimental optical stepping',
+        opticalSteppingPipelines.set(key,rayStepPipelineVariants.create({label:'experimental optical stepping',
           layout:productRaymarchPipelineLayout,
           vertex:{module:shader,entryPoint:'vs'},fragment:{module:shader,entryPoint:'fs',
             constants:{TRANSPARENT_CANVAS:transparentCanvas?1:0,LEAN_EMISSIVE_RAYMARCH:true,...opticalConstants},
@@ -21663,7 +21669,7 @@ export function createKaminosVolumePrototype({
              depth = min(depth, textureLoad(productSceneDepth, pixel, sample));
            }`),
         });
-        ordinaryDepthPipelines.set(depthKey,device.createRenderPipeline({
+        ordinaryDepthPipelines.set(depthKey,rayStepPipelineVariants.create({
           label:'ordinary emissive raymarch with MSAA scene-depth clipping',layout:ordinaryMultisamplePipelineLayout,
           vertex:{module:ordinaryMultisampleShader,entryPoint:'vs'},
           fragment:{module:ordinaryMultisampleShader,entryPoint:'fs',
@@ -21697,7 +21703,7 @@ export function createKaminosVolumePrototype({
           scenePointShaders.set(multisampled, entry);
         }
         const { module, layout } = entry;
-        scenePointPipelines.set(key,device.createRenderPipeline({label:'shared point light smoke consumer',layout,
+        scenePointPipelines.set(key,rayStepPipelineVariants.create({label:'shared point light smoke consumer',layout,
           vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',
             constants:{TRANSPARENT_CANVAS:transparentCanvas?1:0,LEAN_STOCK_RAYMARCH:false,LEAN_EMISSIVE_RAYMARCH: selectEmissive,...opticalConstants},
             targets:[{format:targetPipeline === readbackPipeline?'rgba8unorm':format}]},primitive:{topology:'triangle-list'}}));
@@ -21725,12 +21731,18 @@ export function createKaminosVolumePrototype({
           distributedShaders.set(multisampled, entry);
         }
         const { module, layout } = entry;
-        distributedPipelines.set(key,device.createRenderPipeline({label:'distributed flame scene smoke',layout,
+        distributedPipelines.set(key,rayStepPipelineVariants.create({label:'distributed flame scene smoke',layout,
           vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',constants:{TRANSPARENT_CANVAS:transparentCanvas?1:0,LEAN_STOCK_RAYMARCH:false,LEAN_EMISSIVE_RAYMARCH: selectEmissive,OPTICAL_TRACE_CAPTURE:Boolean(options.opticalTrace),...opticalConstants},
           targets:[{format:targetPipeline===readbackPipeline?'rgba8unorm':format}]},primitive:{topology:'triangle-list'}}));
       }
       drawPipeline=distributedPipelines.get(key);
     }
+    if(statisticsRequested){
+      const variant=rayStepPipelineVariants.select(drawPipeline);
+      drawPipeline=variant.pipeline;
+      if(!variant.active)rayStepTelemetry.deferDraw(variant.reason,variant.error);
+    }
+    state.rayStepTelemetry=rayStepTelemetry.read();
     if (uniforms[368] > 1.5) {
       if (!sceneSourcePreparedEncoders.has(encoder)) encodeSharedSceneSource(encoder);
       if(distributedGroup) {
@@ -28472,6 +28484,8 @@ export function createKaminosVolumePrototype({
       const candidate={...controlsSnapshot,...next};
       // Match the runtime's existing fine-width normalization.
       const plan=gridTuningPlan(candidate,device?.limits,{joined:state.joinedBoundary?.admitted===true});
+      try { sceneSourceGridPlan(sceneSourceGrid,plan.fine.materialDims,device?.limits); }
+      catch(error) { throw new Error(`lighting emission resolution ${sceneSourceGrid}: ${error.message}; choose a compatible height or emission resolution`); }
       if(plan.fine.materialPerVelocity!==1) {
         if(resolvePressureSolverConfig(candidate).effective.solver!=='converged')throw Error('Independent fine velocity requires converged pressure');
         if(candidate.emitterSourceLaw==='inflow-boundary')throw Error('Independent fine velocity does not yet admit floor inflow');
@@ -29580,6 +29594,14 @@ export function createKaminosVolumePrototype({
       if (!sceneVolumeSourceRequested) {sceneVolumeSource?.destroy(); sceneVolumeSource = null;}
       return {requested: sceneVolumeSourceRequested};
     },
+    setSceneSourceGrid(value) {
+      const plan=sceneSourceGridPlan(value,[gridSize,gridHeight,gridSize],device?.limits);
+      if(value!==sceneSourceGrid){
+        sceneVolumeSource?.destroy();sceneVolumeSource=null;
+        sceneSourceGrid=value;distributedFrame=null;distributedGroup=null;
+      }
+      return plan;
+    },
     setSceneSourceFrameConsumer(consumer) {
       if (consumer !== null && typeof consumer !== 'function') throw new Error('scene source consumer must be a function or null');
       if (consumer && (productFrameOwner !== 'prototype' || typeof getSceneDepth !== 'function')) {
@@ -29618,7 +29640,7 @@ export function createKaminosVolumePrototype({
       distributedFrame=input;
     },
     sceneVolumeSourceField() {
-      return {requested: sceneVolumeSourceRequested, ...(sceneVolumeSource?.describe() || {status: 'unbuilt', texture: null})};
+      return {requested: sceneVolumeSourceRequested, requestedGrid:sceneSourceGrid, ...(sceneVolumeSource?.describe() || {status: 'unbuilt', texture: null})};
     },
     sharedAshAtmosphere(){return structuredClone(sharedAsh);},
     setSharedAshAtmosphere(value){const next=atmosphereSettings(value);const displayColor=value.displayColor??next.color;if(!Array.isArray(displayColor)||displayColor.length!==3||displayColor.some(x=>!Number.isFinite(x)||x<0))throw Error('Invalid shared ash display color');sharedAsh={density:next.density,color:next.color,displayColor:[...displayColor]};return this.sharedAshAtmosphere();},

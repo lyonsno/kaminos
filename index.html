@@ -12507,6 +12507,7 @@ async function initScene() {
     viewProjection?.update();
     syncAuthoredWaterFlameTransport();
     const frameNowMs=performance.now();
+    updateAutomaticFineCoverage(frameNowMs/1000);
     if(typeof ensureSimFramePlan==='function')ensureSimFramePlan(frameNowMs);
     updateAutomaticFineCoverage(frameNowMs/1000);
     workbenchSceneFrames.tick(frameNowMs);
@@ -21065,6 +21066,7 @@ async function mountSceneRadianceRoute(params) {
         let statusKey='';
         window.kaminosFireLightingSettings={...settings,invoke,syncStatus(state){
           const current=window.__kaminosSceneRadiance?.debugState();
+          settings.syncCaptureStatus(current);
           const key=JSON.stringify([state.status,fireShadowSceneRoute(current),state.error,current?.casters]);
           if(key!==statusKey){statusKey=key;settings.sync();}
         }};

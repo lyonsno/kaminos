@@ -7,7 +7,7 @@ const original=immersedSourceUniformValues(config);
 const coarse=immersedSourceUniformValues(config,{materialPerVelocity:2});
 assert.deepEqual(coarse.slice(1,4),[24,8,16],'Emitter physical centre survives velocity resolution change');
 assert.equal(coarse[7],original[7]/2);
-assert.equal(coarse[8],original[8]/2);
+assert.equal(coarse[8],Math.max(1,original[8]/2),'coarsened inlet keeps at least one velocity cell of coupling');
 assert.equal(coarse[21],2,'Pattern lookup converts velocity cells back to the material texture lattice');
 for(const i of [0,4,5,6,9,10,11,12,13,14,16,17,18,19,20])assert.equal(coarse[i],original[i]);
 const weights=immersedSourceWeights({...config.effective,centreCells:coarse.slice(1,4),radiusCells:coarse[7],thickness:coarse[8]},{grid:32,gridHeight:64});

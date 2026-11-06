@@ -60,7 +60,6 @@ test('material predictor caches oxidizer and turbulent characteristic while opti
  const predOx=code.slice(code.indexOf('fn reactantPredictedOxidizer('),code.indexOf('fn sampleReactantPredicted('));
  assert.match(predOx,/fluidPredict\[slotIndex\(c, 0u\)\]\.w/);
  assert.doesNotMatch(predOx,/sampleReactantOxidizer/);
- assert.match(sceneSource,/regionSmokeMaterial\(worldSmokeSample\(p\),vec3<f32>\(0\.0\),1\.0,0\.0\)/);
  assert.match(sceneSource,/regionSmokeMaterial\(regionSmokeSample\(middleOptical,p,worldRender\.middleLoPitch,0\),vec3<f32>\(0\.0\),1\.0,0\.0\)/);
  assert.match(worldOptics,/if\(fireVisible>0\.0&&u\.emissive_physics\.x>\.5&&raw\.x>1e-5&&moments\.x>1e-6\)/);
 });

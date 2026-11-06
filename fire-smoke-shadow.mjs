@@ -1,3 +1,4 @@
+import {cubeCoordinates,CUBE_COORDINATES_WGSL} from './fire-cube-coordinates.mjs';
 import * as THREE from './lib/three.webgpu.js';
 import {createShadowMedium,validateShadowMediumResolution,shadowMediumPlan} from './scene-shadow-medium.mjs';
 import {sceneLightingDomain,integrateSceneMediumSegment} from './scene-volume-source.mjs';
@@ -84,22 +85,7 @@ export function filterSmokeDirectionReference({face,x,y,resolution,read,angleDeg
   return minimum-Math.log(taps.reduce((sum,t)=>sum+t.weight*Math.exp(minimum-t.tau),0));
 }
 
-const CUBE_COORDINATES_WGSL=/* wgsl */`
-fn smokeCubeUV(d:vec3<f32>)->vec3<f32>{
- let a=abs(d);var face=0.0;var uv=vec2<f32>(0);
- if(a.x>=a.y && a.x>=a.z){
-  if(d.x>=0.0){face=0.0;uv=vec2<f32>(-d.z,-d.y)/a.x;}
-  else {face=1.0;uv=vec2<f32>(d.z,-d.y)/a.x;}
- }else if(a.y>=a.z){
-  if(d.y>=0.0){face=2.0;uv=vec2<f32>(d.x,d.z)/a.y;}
-  else {face=3.0;uv=vec2<f32>(d.x,-d.z)/a.y;}
- }else{
-  if(d.z>=0.0){face=4.0;uv=vec2<f32>(d.x,-d.y)/a.z;}
-  else {face=5.0;uv=vec2<f32>(-d.x,-d.y)/a.z;}
- }
- return vec3<f32>(uv*.5+vec2<f32>(.5),face);
-}`;
-const cubeCoordinates=THREE.TSL.wgslFn(CUBE_COORDINATES_WGSL);
+
 
 const fireSmokeShadowCache=new WeakMap();
 // Per-light radial optical-depth prefixes, not an opaque first-hit depth.
@@ -168,7 +154,8 @@ export function createFireSmokeShadow(device,{points,resolution=16,steps=16,coun
         const ray=distance.greaterThan(0).select(delta.div(distance.max(1e-20)),vec3(1,0,0)),cube=cubeCoordinates(ray);
         const uv=cube.xy.clamp(float(.5).div(layout.x),float(1).sub(float(.5).div(layout.x)));
         const x=distance.div(far).mul(layout.y).clamp(0,layout.y),base=x.floor();
-        const read=endpoint=>{const n=endpoint.sub(1).max(0).min(layout.y.sub(1)),coord=vec2(cube.z.add(index*6).add(uv.x).div(layout.z.mul(6)),n.div(4).floor().add(uv.y).div(layout.w));return texture(external,coord).level(0).element(int(n.mod(4)));};
+        const sourceFace=typeof index==='number'?index*6:float(index).mul(6);
+        const read=endpoint=>{const n=endpoint.sub(1).max(0).min(layout.y.sub(1)),coord=vec2(cube.z.add(sourceFace).add(uv.x).div(layout.z.mul(6)),n.div(4).floor().add(uv.y).div(layout.w));return texture(external,coord).level(0).element(int(n.mod(4)));};
         const before=float(0).toVar();If(base.greaterThan(0),()=>before.assign(read(base)));result.assign(mix(before,read(base.add(1)),x.sub(base)).negate().exp());
       });return result;
     })();},

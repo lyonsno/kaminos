@@ -39,7 +39,7 @@ for(const enabled of [true,false]) {
     fingerFluidPyroCompositionRequested:()=>false,isKaminosVolumeSmokeRoute:()=>false,
     isSceneItemVisible:()=>true,isAuthoredKilnCollisionRoute:()=>false,volumeBridge:null,fireLightFieldPass:null,waterFeature:{active:false},
     foregroundServiceActive:false,sceneRenderedForVolume:false,needsRender:true,idleFrames:0,IDLE_THRESHOLD:3,
-    syncAuthoredWaterFlameTransport(){},syncViewportQuality(){},syncViewportRendererSize(){},fireProxySync:null,
+    updateAutomaticFineCoverage(){},syncAuthoredWaterFlameTransport(){},syncViewportQuality(){},syncViewportRendererSize(){},fireProxySync:null,
     sceneGI:{historyStatus:()=>null,needsHistoryFrame:()=>enabled&&remaining>0,requestHistoryFrames(){if(enabled)remaining=45;}},
     renderSceneFrame(){draws++;remaining--;},
   };

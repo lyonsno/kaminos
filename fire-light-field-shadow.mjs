@@ -1,4 +1,5 @@
 import * as THREE from './lib/three.webgpu.js';
+export {createShadowCaptureSchedule,createShadowSourceSnapshots} from './fire-shadow-cadence.mjs';
 import {radialSoftVisibility,createShadowFilterPattern} from './fire-shadow-filter.mjs';
 import {validateShadowQuality,validateRuntimeShadowQuality,shadowStrata} from './fire-shadow-quality.mjs';
 import {validateShadowSampling} from './fire-shadow-sampling.mjs';
@@ -51,8 +52,8 @@ function prepareShadowScene(scene) {
   return {scene,casters,extent,triangleCount:casters.reduce((sum,m)=>sum+(m.geometry.index?.count??m.geometry.attributes.position.count)/3,0)};
 }
 
-// Synchronous and frame-local: reuse preparation, never reuse old captures or
-// let a retained snapshot authorize a later frame's geometry.
+// Synchronous and frame-local preparation for the selected whole cubes. The
+// cadence owner may retain completed targets, never this preparation object.
 export function renderFireShadowBatch({scene,shadows,casterScene=null,flameBox=null,RendererUtils=THREE.RendererUtils}) {
   if(casterScene)return casterScene.withCapture(()=>renderFireShadowBatch({scene,shadows,RendererUtils}),{flameBox});
   if(shadows.some(shadow=>shadow.batchScene&&shadow.batchScene!==scene))throw Error('fire-shadow-inactive-or-foreign-batch');
@@ -114,7 +115,7 @@ export function renderFireShadowCube({renderer,scene,cubeCamera,material,far,cas
   }
 }
 
-export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNode,normalNode,requested=false,resolution=512,sourceRadius=()=>Math.sqrt(11),sourceSizeNode=null,shadowSoftness=0,shadowSampling='fixed',shadowEdgeFilter=false,filterCoordinates,screenAligned=true,sharedPreparation=true,blockerSamples=9,filterSamples=16,filterPattern=null,runtimeQuality=false}) {
+export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNode,normalNode,requested=false,resolution=512,sourceRadius=()=>Math.sqrt(11),sourceSizeNode=null,shadowSoftness=0,shadowSampling='fixed',shadowEdgeFilter=false,filterCoordinates,screenAligned=true,sharedPreparation=true,blockerSamples=9,filterSamples=16,filterPattern=null,runtimeQuality=false,sourceIdentity='live-gpu-emission-centroid',depthLookup=null}) {
   (runtimeQuality?validateRuntimeShadowQuality:validateShadowQuality)({resolution,blockerSamples,filterSamples},renderer.backend?.device?.limits);
   if(!Number.isInteger(resolution)||resolution<=0) throw new Error('fire-shadow-resolution-must-be-positive-integer');
   filterPattern??=runtimeQuality?{count:filterSamples,route:'runtime-arithmetic',reason:null,bytes:0,node:null}:createShadowFilterPattern(filterSamples,renderer.backend?.device?.limits);
@@ -132,28 +133,18 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
     minFilter:THREE.NearestFilter,magFilter:THREE.NearestFilter,
     generateMipmaps:false,depthBuffer:true,
   });
-  target.texture.name='Live emission centroid kiln radial shadow';
+  target.texture.name='Fire source solid radial shadow';
   target.texture.colorSpace=THREE.NoColorSpace;
   const cubeCamera=new THREE.CubeCamera(.005,100,target);
   const material=new THREE.NodeMaterial();
   const coverageMaterials=new Map();
   material.name='Fire light radial depth from GPU centroid';
   material.blending=THREE.NoBlending;material.toneMapped=false;
-  // Native WebGPU cube rotations; source translation is GPU-resident and is
-  // identical to the receiver's live far-field source. No CPU centroid lag.
+  // Capture and solid-visibility lookup share one GPU source node. A staggered
+  // consumer supplies its retained capture anchor, not the newer live centroid.
   material.vertexNode=cameraProjectionMatrix.mul(cameraViewMatrix).mul(vec4(positionWorld.sub(sourceNode),1));
   material.fragmentNode=vec4(vec3(positionWorld.sub(sourceNode).length()),1);
-  const sourceDistance=receiverNode.sub(sourceNode).length();
-  const towardsSource=sourceNode.sub(receiverNode);
-  const faceSign=mix(float(-1),float(1),step(float(0),normalNode.dot(towardsSource)));
-  // Offset along the receiver plane's light-facing normal by one cube texel.
-  // Radial-only bias fails on a floor viewed by the light at grazing angles.
-  const receiverOffset=normalNode.mul(faceSign).mul(sourceDistance.mul(float(2).div(resolutionNode)).max(.001));
-  const delta=receiverNode.add(receiverOffset).sub(sourceNode),distance=delta.length();
-  const direction=delta.div(distance.max(.00001));
-  // Bias follows the radial texel footprint, not viewer depth or light gain.
-  const bias=distance.mul(float(2).div(resolutionNode)).max(.001);
-  const sampleDepth=ray=>{
+  const sampleCube=ray=>{
   // Explicit LOD is necessary inside spatially divergent source branches.
   // These radial depth cubes have exactly one mip level.
   const shadowSample=cubeTexture(target.texture,ray).level(0);
@@ -164,10 +155,24 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
     ?vec3(uvNode.x.negate(),uvNode.yz):uvNode;
   return shadowSample.r;
   };
-  const shadowDistance=sampleDepth(direction),hardVisibility=step(distance.sub(bias),shadowDistance);
-  const filterDifferential=screenAligned?THREE.TSL.dFdx(direction).toVar():null;
-  const filtered=sourceSizeNode===null?hardVisibility:radialSoftVisibility({sampleDepth,delta,normal:normalNode,distance,bias,sourceRadius:sourceSizeNode,softness,hardVisibility,complementary,filterCoordinates,filterDifferential,screenAligned,blockerSamples,filterSamples,filterPattern,edgeFilter,resolution:resolutionNode,runtimeQuality:qualityNodes});
-  const visibility=mix(float(1),filtered,enabled.mul(effective));
+  // Resolve the optional bank only during graph building, after all captures
+  // have been constructed and the mount has checked their capabilities.
+  const sampleDepth=ray=>depthLookup?THREE.TSL.Fn(()=>depthLookup(ray,()=>sampleCube(ray)))():sampleCube(ray);
+  // The selected-source path supplies a dynamic source and depth lookup, but
+  // consumes the same receiver law and live filter-quality uniforms.
+  const receiver=({source=sourceNode,size=sourceSizeNode,depth=sampleDepth,differential,strength=enabled.mul(effective)}={})=>{
+    const sourceDistance=receiverNode.sub(source).length(),towardsSource=source.sub(receiverNode);
+    const faceSign=mix(float(-1),float(1),step(float(0),normalNode.dot(towardsSource)));
+    // Offset along the light-facing receiver plane by one radial cube texel.
+    const offset=normalNode.mul(faceSign).mul(sourceDistance.mul(float(2).div(resolutionNode)).max(.001));
+    const delta=receiverNode.add(offset).sub(source),distance=delta.length(),direction=delta.div(distance.max(.00001));
+    const bias=distance.mul(float(2).div(resolutionNode)).max(.001),shadowDistance=depth(direction);
+    const hardVisibility=step(distance.sub(bias),shadowDistance);
+    const filterDifferential=differential??(screenAligned?THREE.TSL.dFdx(direction).toVar():null);
+    const filtered=size===null?hardVisibility:radialSoftVisibility({sampleDepth:depth,delta,normal:normalNode,distance,bias,sourceRadius:size,softness,hardVisibility,complementary,filterCoordinates,filterDifferential,screenAligned,blockerSamples,filterSamples,filterPattern,edgeFilter,resolution:resolutionNode,runtimeQuality:qualityNodes});
+    return {delta,distance,bias,shadowDistance,filterDifferential,visibility:mix(float(1),filtered,strength)};
+  };
+  const {delta,distance,bias,shadowDistance,filterDifferential,visibility}=receiver();
   // Hard visibility of the same cube from any world point (no screen
   // derivatives), for world-point light probes such as creature senses.
   const visibilityAt=(pointNode,pointNormalNode)=>{
@@ -178,11 +183,13 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
     const hard=step(pointDistance.sub(pointDistance.mul(float(2).div(resolutionNode)).max(.001)),radial);
     return mix(float(1),hard,enabled.mul(effective));
   };
-  const status={identity:'gpu-centroid-cube-fire-visibility-v0',requested,effective:false,reason:'not-rendered',resolution,source:'live-gpu-emission-centroid',approximation:'single-center-opaque-static-mesh',renderCount:0,shadowEdgeFilter,filter:sourceSizeNode===null||shadowSoftness===0?'hard':'radial-pcss',shadowSoftness,shadowSampling,blockerSamples,filterSamples};
+  const status={identity:'gpu-centroid-cube-fire-visibility-v0',requested,effective:false,reason:'not-rendered',resolution,source:sourceIdentity,approximation:'single-center-opaque-static-mesh',renderCount:0,shadowEdgeFilter,filter:sourceSizeNode===null||shadowSoftness===0?'hard':'radial-pcss',shadowSoftness,shadowSampling,blockerSamples,filterSamples};
   return {
     batchRenderer:sharedPreparation?renderer:null,
     batchScene:scene,
     prepareSampling(){filterDifferential?.toStack();},
+    receiverSampling:{sampleDepth,filterDifferential,strength:enabled.mul(effective),depthLookup},
+    receiverVisibility(options){return receiver(options).visibility;},
     setSampling(value){validateShadowSampling(value);complementary.value=value==='complementary';status.shadowSampling=value;},
     visibility,visibilityAt,
     resource() {
@@ -215,7 +222,14 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
     setQuality(value){
       if(!runtimeQuality)throw Error('runtime shadow quality unavailable');
       const next=validateRuntimeShadowQuality({resolution,blockerSamples,filterSamples,...value},renderer.backend?.device?.limits),strata=shadowStrata(next.filterSamples);
-      if(next.resolution!==resolution){target.setSize(next.resolution,next.resolution);resolutionNode.value=next.resolution;}
+      if(next.resolution!==resolution){
+        // This Three build's inherited RenderTarget.setSize updates image.width
+        // on the cube's image array, while GPU allocation reads each face.
+        for(const face of target.texture.image){face.width=next.resolution;face.height=next.resolution;}
+        target.setSize(next.resolution,next.resolution);
+        resolutionNode.value=next.resolution;
+        effective.value=0;status.effective=false;status.reason='resolution-changed';
+      }
       resolution=next.resolution;blockerSamples=next.blockerSamples;filterSamples=next.filterSamples;
       qualityNodes.blockerSamples.value=blockerSamples;qualityNodes.filterSamples.value=filterSamples;qualityNodes.bands.value=strata.bands;qualityNodes.sectors.value=strata.sectors;
       Object.assign(status,{resolution,blockerSamples,filterSamples});

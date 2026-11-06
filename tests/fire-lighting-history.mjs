@@ -18,3 +18,8 @@ const past=edits.state().undoCount;await assert.rejects(history.run('setPointEva
 current=make();await edits.undo();assert.equal(current.state.smokeShadowMediumResolution,16);await edits.undo();assert.equal(current.state.pointEvaluationBudget,4);
 let release;settle=new Promise(resolve=>release=resolve);const pending=history.run('setPointEvaluationBudget',1);await Promise.resolve();assert(edits.isSettling());assert.equal(edits.state().undoCount,0);release();await pending;assert.equal(edits.state().undoCount,1);assert(syncs>0);
 console.log('PASS fire settings history restores live values, patches independent quality, rejects invalid edits and follows remounted consumers');
+
+current=make();current.state.sourceGrid=32;current.setSourceGrid=function(n){if(!Number.isInteger(n)||n<1)throw Error('invalid emission resolution');this.state.sourceGrid=n;};
+const gridEdits=createSceneEdits({read:()=>null,write(){}}),gridHistory=createFireLightingHistory({edits:gridEdits,getSource:()=>current});
+await gridHistory.run('setSourceGrid',16);assert.equal(current.state.sourceGrid,16);await gridEdits.undo();assert.equal(current.state.sourceGrid,32);await gridEdits.redo();assert.equal(current.state.sourceGrid,16);
+await assert.rejects(gridHistory.run('setSourceGrid',0),/emission resolution/);assert.equal(current.state.sourceGrid,16);

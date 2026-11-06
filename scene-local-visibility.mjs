@@ -10,7 +10,7 @@ export function createLocalSceneVisibility({readCoverage=residentLightCoverage}=
   const cache=new WeakMap(),ids=new WeakMap();let serial=0,previous='',packed=null,builds=0;
   const id=value=>{if(!value)return null;if(!ids.has(value))ids.set(value,++serial);return ids.get(value);};
   return {snapshot(scene){
-    staticSceneGeometryRevision(scene,{exclude:m=>!!readCoverage(m)});
+    const solidMaterials=staticSceneGeometryRevision(scene,{exclude:m=>!!readCoverage(m),transforms:false});
     const meshes=[],coverageByMesh=new Map(),seenCoverages=new Set();
     scene.traverseVisible(m=>{if(m.isMesh&&m.castShadow){const binding=readCoverage(m);if(binding){const value=validateResidentLightCoverage(m,binding);if((binding.owner!==m&&!m.userData?.kaminosBeautyLodBurnProxy)||seenCoverages.has(binding))return;seenCoverages.add(binding);coverageByMesh.set(m,value);}meshes.push(m);}});
     const coverage=[...coverageByMesh.values()][0]??null;
@@ -55,6 +55,6 @@ export function createLocalSceneVisibility({readCoverage=residentLightCoverage}=
     }else packed.matrices=matrices;
     packed.coverage=coverage;
     packed.coverages=packed.coverageRanges.map(({owner,...range})=>({...coverageByMesh.get(meshes[owner]),...range}));
-    return {geometry:packed,revision,localBuilds:builds,meshCount:meshes.length};
+    return {geometry:packed,revision,solidRevision:JSON.stringify([revision,solidMaterials]),localBuilds:builds,meshCount:meshes.length};
   }};
 }

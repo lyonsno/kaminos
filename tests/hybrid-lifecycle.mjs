@@ -13,7 +13,7 @@ const device={limits:{maxUniformBufferBindingSize:65536,maxStorageBufferBindingS
  queue:{writeBuffer(buffer,offset,data){uploads.push([buffer.label,new Float32Array(data)]);},submit(){}},
  createBuffer({label}){return {label,destroy(){}};},createTexture(){return {createView(){return {};},destroy(){}};},
  createShaderModule(){return {};},createComputePipeline(descriptor){pipelines.push(descriptor.label);return pipeline;},createBindGroup({entries}){const source=entries.find(e=>e.binding===5)?.resource?.source;if(source===failSource&&source)throw Error('injected source binding failure');return {source};},
- createCommandEncoder(){return {beginComputePass({label}={}){passes.push(label);if(label===failPass)throw Error('injected preparation failure');return {setPipeline(){},setBindGroup(_,group){if(label==='live distributed flame transport')consumedSources.push(group.source);},dispatchWorkgroups(){},end(){}};},finish(){return {};}};}};
+ createCommandEncoder(){return {copyTextureToTexture(){},beginComputePass({label}={}){passes.push(label);if(label===failPass)throw Error('injected preparation failure');return {setPipeline(){},setBindGroup(_,group){if(label==='live distributed flame transport')consumedSources.push(group.source);},dispatchWorkgroups(){},end(){}};},finish(){return {};}};}};
 let consume,hostFrame;
 const field={source:{status:'encoded',texture:{createView(){return {source:'A'};}},dimensions:[4,8,4],localMax:[1,3,1],generation:1,frame:1}};
 const prototype={setSceneMediumSource(){},setSceneSourceFrameConsumer(fn){consume=fn;},setSceneDistributedLightFrame(frame){hostFrame=frame;},sceneVolumeSourceField:()=>field.source};
@@ -23,7 +23,7 @@ const mesh=new THREE.Mesh(geometry,material);mesh.castShadow=true;scene.add(mesh
 const patterns=[],batches=[];
 let compileRelease,compileCalls=0,held=false;
 const rebuild={hold(value){held=value;},compile(){compileCalls++;return new Promise(resolve=>compileRelease=resolve);}};
-const mount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,smokeRefinement:1,pointCount:2,createShadow:({filterPattern})=>{patterns.push(filterPattern);return {visibility:THREE.TSL.float(1),render(batch){batches.push(batch);},debugState:()=>({fixture:true}),dispose(){}};}});
+const mount=mountDistributedSceneRadiance({renderer,scene,prototype,device,nearBox:{enabled:false},volumeGrid:2,smokeRefinement:1,pointCount:2,createShadow:({filterPattern})=>{patterns.push(filterPattern);return {visibility:THREE.TSL.float(1),render(batch){batches.push(batch);},debugState:()=>({fixture:true}),dispose(){}};}});
 assert.equal(typeof mount.setSmokeShadowQuality,'function','live surface lighting must expose independent smoke transport quality');
 assert.equal(patterns[0].route,'runtime-arithmetic');assert.equal(patterns[0],patterns[1],'sources must share the same uniform node, not duplicate buffers');
 assert.equal(typeof mount.setSurfaceEnabled,'function');
@@ -197,6 +197,21 @@ device.limits.maxStorageBufferBindingSize=bindingLimit;device.limits.maxComputeW
 assert.throws(()=>mount.setLightGrid(8),/dispatch/);assert.equal(mount.debugState().volumeGrid,4);assert.equal(mount.canRender(),true);
 device.limits.maxComputeWorkgroupsPerDimension=dispatchLimit;
 mount.setLightGrid(2);consume(field);
+// Near construction uses exterior refinement4, independently of Fine refinement1.
+const nearBefore=mount.debugState().nearBox,nearFrame=hostFrame;
+assert.throws(()=>mount.setNearBox({enabled:true,grid:24,directions:8}),/prepared smoke.*capacity/,'Near admission must use its actual refinement before state changes');
+assert.deepEqual(mount.debugState().nearBox,nearBefore);assert.equal(hostFrame,nearFrame);assert.equal(mount.canRender(),true);
+// Explicit owner coverage must remain authoritative after the next live frame.
+field.source.exterior={status:'encoded',texture:device.createTexture(),dimensions:[8,16,8],localMin:[-3,-3,-3],localMax:[3,9,3],generation:field.source.generation,frame:field.source.frame};
+mount.setNearBox({enabled:true,grid:4,directions:8,extent:[1.5,1.5,1.5]});
+consume(field);assert.deepEqual(hostFrame.exterior.middle.smokeReconstruction.localMin,[-1.5,-1,-1.5]);
+mount.setExteriorReceiverCoverage({lo:[-2,-1,-2],hi:[2,6,2],pitch:.5});
+consume(field);assert.deepEqual(hostFrame.exterior.middle.smokeReconstruction.localMin,[-2,-1,-2],'explicit live coverage survives prepare');
+mount.setExteriorReceiverCoverage(null);consume(field);
+assert.deepEqual(hostFrame.exterior.middle.smokeReconstruction.localMin,[-1.5,-1,-1.5],'clearing override restores authored near box');
+mount.setNearBox({enabled:false});consume(field);assert.equal(hostFrame.exterior.middle,null);
+field.source.exterior=null;consume(field);
+
 mesh.material.color.setHex(0xff0000);mount.dispose();assert.equal(mesh.material.color.getHex(),0xff0000);assert.equal(mesh.geometry,geometry);assert.equal(mount.canRender(),false);assert.equal(hostFrame,null);
 const asyncMount=mountDistributedSceneRadiance({renderer,scene,prototype,device,rebuild,volumeGrid:2,smokeRefinement:1,createShadow:()=>({visibility:THREE.TSL.float(1),render(){},debugState:()=>({}),dispose(){}})});
 consume(field);
@@ -310,4 +325,3 @@ try{
   scene.remove(surfelHolder);
   delete globalThis.window;
 }
-

@@ -97,7 +97,8 @@ test('WGSL carries the predictor buffer, the MacCormack corrector with an extrem
     'separated pressure applies the legacy bound after prolongation in the receiving lattice units');
   assert.match(pressureTransfer, /if\(magnitude>shape\.bounds\.y\) \{ velocity\*=shape\.bounds\.y\/magnitude; \}/,
     'separated pressure also applies the selected backtrace bound after prolongation');
-  const velocityWrites = source.replace(separatedProjection, '').match(/fluidDst\[base\] = vec4<f32>\([^\n]*\n/g) || [];
+  const bypassWrite = 'fluidDst[base] = vec4<f32>(bypassVel, 0.0);';
+  const velocityWrites = source.replace(separatedProjection, '').replace(bypassWrite, '').match(/fluidDst\[base\] = vec4<f32>\([^\n]*\n/g) || [];
   assert.ok(velocityWrites.length >= 4, `expected the main kernel and three projection kernels to write velocity: ${velocityWrites.length}`);
   // Bounds can be applied before the final write (the empty-air bypass);
   // calibrated bound arithmetic is executed by the native oracle below.

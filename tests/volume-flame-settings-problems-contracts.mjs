@@ -34,9 +34,9 @@ const controls = {
   'volume-density': { tagName: 'INPUT', type: 'range', min: '0', max: '2' },
   'volume-render-scale': { tagName: 'INPUT', type: 'range', min: '0.1', max: '0.3' },
 };
-Object.assign(controls,Object.fromEntries(ADAPTIVE_MATERIAL_FIELDS.map(f=>[f.id,{tagName:'INPUT',type:f.type}])));
+Object.assign(controls,Object.fromEntries([...ADAPTIVE_MATERIAL_FIELDS,...WORLD_CALIBRATION_FIELDS].map(f=>[f.id,{tagName:'INPUT',type:f.type}])));
 const state = (dom, smoke = 'on') => ({
-  domControls: Object.fromEntries(Object.entries({...Object.fromEntries(ADAPTIVE_MATERIAL_FIELDS.map(f=>[f.id,f.value])),...dom}).map(([id, value]) => [id, { value }])),
+  domControls: Object.fromEntries(Object.entries({...Object.fromEntries([...ADAPTIVE_MATERIAL_FIELDS,...WORLD_CALIBRATION_FIELDS].map(f=>[f.id,f.value])),...dom}).map(([id, value]) => [id, { value }])),
   rendererControls: {},
   presentationControls: { 'raymarch-smoke-presentation': { value: smoke } },
 });

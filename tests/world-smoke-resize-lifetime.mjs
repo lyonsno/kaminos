@@ -6,7 +6,7 @@ import vm from 'node:vm';
 import {worldSmokePlan,worldSmokeMapping} from '../volume-world-smoke.mjs';
 import {resolveWorldRegions} from '../volume-region-controls.mjs';
 import {resolveSimulationLevers} from '../volume-world-calibration.mjs';
-import {WORLD_CALIBRATION_UNIFORM_OFFSET} from '../volume-core.js';
+import {WORLD_CALIBRATION_UNIFORM_OFFSET,VOLUME_UNIFORM_FLOATS} from '../volume-core.js';
 import {pressureResolutionPlan} from '../volume-pressure-resolution.mjs';
 const source=fs.readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
 function grab(name){const start=source.indexOf(`  function ${name}(`);return start<0?'':source.slice(start,source.indexOf('\n  }',start)+4);}
@@ -14,8 +14,8 @@ test('world resize never destroys a texture referenced by the pending fine frame
   const textures=[],bound=[],anchor={translate:[0,0,0],scale:1};
   const createWorldSmoke=(_device,plan)=>{const optical={destroyed:false};textures.push(optical);return {optical,anchor,encode(){return {flowDims:plan.flowDims,materialDims:plan.materialDims};},destroy(){optical.destroyed=true;}};};
   const oldPlan=worldSmokePlan({flow:16,material:32,extent:3,fineHeightRatio:2});
-  const ctx={worldFrameRestore:undefined,worldReferenceDims:null,pendingWorldSeed:false,immersedCollectionPrepared:null,adaptiveMaterialOptions:null,adaptiveMaterialError:null,intermediateFlow:null,intermediateSolidProducer:null,intermediateKey:null,worldSmoke:createWorldSmoke(null,oldPlan),worldSmokeKey:JSON.stringify(oldPlan),worldSolidProducer:{destroy(){}},worldRenderUniform:{},
-    controlsSnapshot:{worldSmoke:'on',worldSmokeFlow:16,worldSmokeMaterial:32,worldSmokeExtent:4},uniforms:new Float32Array(512),uniformBuffer:{},OPEN_WORLD_UNIFORM_OFFSET:472,
+  const ctx={resolveSimulationLevers,WORLD_CALIBRATION_UNIFORM_OFFSET,worldFrameRestore:undefined,worldReferenceDims:null,pendingWorldSeed:false,immersedCollectionPrepared:null,adaptiveMaterialOptions:null,adaptiveMaterialError:null,intermediateFlow:null,intermediateSolidProducer:null,intermediateKey:null,worldSmoke:createWorldSmoke(null,oldPlan),worldSmokeKey:JSON.stringify(oldPlan),worldSolidProducer:{destroy(){}},worldRenderUniform:{},
+    controlsSnapshot:{worldSmoke:'on',worldSmokeFlow:16,worldSmokeMaterial:32,worldSmokeExtent:4},uniforms:new Float32Array(VOLUME_UNIFORM_FLOATS),uniformBuffer:{},OPEN_WORLD_UNIFORM_OFFSET:472,
     resolvePressureSolverConfig:()=>({effective:{solver:'converged'}}),PRESSURE_SOLVER_CONVERGED:'converged',IMMERSED_SOURCE_LAW:'immersed-source',
     refreshWorldRenderMapping(){},encodeDomainRemap(){},encodeFollowingDomain(){},encodeGpuThermalConsumer(){},gpuThermalConsumer:null,prepareFineVelocity(){return null;},
     state:{reactantCombustion:{effective:{admitted:true}},simStepCount:1},gridSize:32,gridHeight:64,
@@ -39,8 +39,8 @@ test('world resize never destroys a texture referenced by the pending fine frame
 test('separated pressure rebinds resized world optical and emitter collection textures',()=>{
   let optical={destroyed:false};const bound=[];
   const owner={key:'32:64:32:2:material',uniform:{},before:{},after:{},solid:{createView:()=>({})},burn:{},write:{},read:{},residentBytes:0,prepare(){},encode(){}};
-  const ctx={pressureResolutionPlan,gridSize:32,gridHeight:64,controlsSnapshot:{pressureResolution:'half'},state:{simStepCount:1},separatedPressure:owner,
-    separatedPressureProjectPipeline:{},uniforms:new Float32Array(512),GRID_SHAPE_UNIFORM_OFFSET:0,OPEN_WORLD_UNIFORM_OFFSET:472,joinedLowerFaceTexture:{},device:{queue:{writeBuffer(){}}},
+  const ctx={resolveSimulationLevers,WORLD_CALIBRATION_UNIFORM_OFFSET,pressureResolutionPlan,gridSize:32,gridHeight:64,controlsSnapshot:{pressureResolution:'half'},state:{simStepCount:1},separatedPressure:owner,
+    separatedPressureProjectPipeline:{},uniforms:new Float32Array(VOLUME_UNIFORM_FLOATS),GRID_SHAPE_UNIFORM_OFFSET:0,OPEN_WORLD_UNIFORM_OFFSET:472,joinedLowerFaceTexture:{},device:{queue:{writeBuffer(){}}},
     sceneSolidTexture:{width:32},reactantTextures:[{},{}],frontBuffers:[{},{}],burnRateTexture:{},worldSmoke:{optical},worldOpticalFallback:{},intermediateFlow:null,
     nonRidgeOpticalCaptureRowBuffer:{},sceneSolidTextureView:{},fluidBuffers:[{}],currentFluid:0,immersedCollectionTexture:{destroyed:false},
     createFluidRenderBindGroup:()=>({textures:[ctx.worldSmoke.optical,ctx.immersedCollectionTexture]}),resolveTransportConfig:()=>({effective:{scheme:'maccormack'}}),resolveTimeStepConfig:()=>({effective:{backtraceScale:1}}),TRANSPORT_MAX_BACKTRACE_CELLS:1,
@@ -67,9 +67,9 @@ test('separated pressure rebinds resized world optical and emitter collection te
 });
 
 test('world resize keeps ordinary transport available when adaptive capacity is no longer admitted',()=>{
-  const ctx={worldFrameRestore:undefined,worldReferenceDims:null,pendingWorldSeed:false,immersedCollectionPrepared:null,adaptiveMaterialOptions:{budget:100},adaptiveMaterialError:null,worldSmoke:null,worldSmokeKey:null,worldSolidProducer:null,
+  const ctx={resolveSimulationLevers,WORLD_CALIBRATION_UNIFORM_OFFSET,worldFrameRestore:undefined,worldReferenceDims:null,pendingWorldSeed:false,immersedCollectionPrepared:null,adaptiveMaterialOptions:{budget:100},adaptiveMaterialError:null,worldSmoke:null,worldSmokeKey:null,worldSolidProducer:null,
     intermediateFlow:null,intermediateSolidProducer:null,intermediateKey:null,worldRenderUniform:{},
-    controlsSnapshot:{worldSmoke:'on',worldSmokeFlow:8,worldSmokeMaterial:16,worldSmokeExtent:3},uniforms:new Float32Array(512),uniformBuffer:{},OPEN_WORLD_UNIFORM_OFFSET:472,
+    controlsSnapshot:{worldSmoke:'on',worldSmokeFlow:8,worldSmokeMaterial:16,worldSmokeExtent:3},uniforms:new Float32Array(VOLUME_UNIFORM_FLOATS),uniformBuffer:{},OPEN_WORLD_UNIFORM_OFFSET:472,
     state:{reactantCombustion:{effective:{admitted:true}}},gridSize:32,gridHeight:64,
     device:{queue:{writeBuffer(){}}},resolveWorldRegions,productTransform:{translate:[0,0,0],scale:1},
     resolvePressureSolverConfig:()=>({effective:{solver:'converged'}}),PRESSURE_SOLVER_CONVERGED:'converged',IMMERSED_SOURCE_LAW:'immersed-source',
@@ -84,9 +84,9 @@ test('world resize keeps ordinary transport available when adaptive capacity is 
 
 test('Fine height changes do not resize the existing world envelope',()=>{
  let allocations=0;
- const ctx={worldFrameRestore:undefined,worldReferenceDims:null,pendingWorldSeed:false,immersedCollectionPrepared:null,adaptiveMaterialOptions:null,adaptiveMaterialError:null,worldSmoke:null,worldSmokeKey:null,worldFrameRestore:undefined,worldReferenceDims:null,worldSolidProducer:null,
+ const ctx={resolveSimulationLevers,WORLD_CALIBRATION_UNIFORM_OFFSET,worldFrameRestore:undefined,worldReferenceDims:null,pendingWorldSeed:false,immersedCollectionPrepared:null,adaptiveMaterialOptions:null,adaptiveMaterialError:null,worldSmoke:null,worldSmokeKey:null,worldFrameRestore:undefined,worldReferenceDims:null,worldSolidProducer:null,
   intermediateFlow:null,intermediateSolidProducer:null,intermediateKey:null,worldRenderUniform:{},
-  controlsSnapshot:{worldSmoke:'on',worldSmokeFlow:8,worldSmokeMaterial:16,worldSmokeExtent:3},uniforms:new Float32Array(512),uniformBuffer:{},OPEN_WORLD_UNIFORM_OFFSET:472,
+  controlsSnapshot:{worldSmoke:'on',worldSmokeFlow:8,worldSmokeMaterial:16,worldSmokeExtent:3},uniforms:new Float32Array(VOLUME_UNIFORM_FLOATS),uniformBuffer:{},OPEN_WORLD_UNIFORM_OFFSET:472,
   state:{reactantCombustion:{effective:{admitted:true}}},gridSize:32,gridHeight:64,
   device:{queue:{writeBuffer(){}}},resolveWorldRegions,productTransform:{translate:[0,0,0],scale:1},
   resolvePressureSolverConfig:()=>({effective:{solver:'converged'}}),PRESSURE_SOLVER_CONVERGED:'converged',IMMERSED_SOURCE_LAW:'immersed-source',
@@ -103,8 +103,8 @@ test('Fine height changes do not resize the existing world envelope',()=>{
 test('separated pressure follows display allocation rebuilds without rebuilding unchanged frames',()=>{
   let optical={destroyed:false};const bound=[];
   const owner={key:'32:64:32:2:material',uniform:{},before:{},after:{},solid:{createView:()=>({})},burn:{},write:{},read:{},residentBytes:0,prepare(){},encode(){}};
-  const ctx={immersedCollectionTexture:{},displayReconstruction:{texture:optical},bindGroupLayout:{},uniformBuffer:{},externalEmitterBuffer:{},oracleActivityCueBuffer:{},nonRidgeOpticalCaptureHeaderBuffer:{},quenchBuffers:[{},{}],boundarySidecarBuffer:{},bindGroups:[],boundarySplatLiveCompleteFlameCoefficientBuffer:null,liveCompleteFlameCoefficientWriteBindGroups:[],gridShapeLabel:()=>'32x64x32',waveletTextures:[{},{}],pressureResolutionPlan,gridSize:32,gridHeight:64,controlsSnapshot:{pressureResolution:'half'},state:{simStepCount:1},separatedPressure:owner,
-    separatedPressureProjectPipeline:{},uniforms:new Float32Array(512),GRID_SHAPE_UNIFORM_OFFSET:0,OPEN_WORLD_UNIFORM_OFFSET:472,joinedLowerFaceTexture:{},device:{queue:{writeBuffer(){}}},
+  const ctx={resolveSimulationLevers,WORLD_CALIBRATION_UNIFORM_OFFSET,immersedCollectionTexture:{},displayReconstruction:{texture:optical},bindGroupLayout:{},uniformBuffer:{},externalEmitterBuffer:{},oracleActivityCueBuffer:{},nonRidgeOpticalCaptureHeaderBuffer:{},quenchBuffers:[{},{}],boundarySidecarBuffer:{},bindGroups:[],boundarySplatLiveCompleteFlameCoefficientBuffer:null,liveCompleteFlameCoefficientWriteBindGroups:[],gridShapeLabel:()=>'32x64x32',waveletTextures:[{},{}],pressureResolutionPlan,gridSize:32,gridHeight:64,controlsSnapshot:{pressureResolution:'half'},state:{simStepCount:1},separatedPressure:owner,
+    separatedPressureProjectPipeline:{},uniforms:new Float32Array(VOLUME_UNIFORM_FLOATS),GRID_SHAPE_UNIFORM_OFFSET:0,OPEN_WORLD_UNIFORM_OFFSET:472,joinedLowerFaceTexture:{},device:{queue:{writeBuffer(){}}},
     sceneSolidTexture:{width:32},reactantTextures:[{},{}],frontBuffers:[{},{}],burnRateTexture:{},worldSmoke:{optical},worldOpticalFallback:{},intermediateFlow:null,
     nonRidgeOpticalCaptureRowBuffer:{},sceneSolidTextureView:{},fluidBuffers:[{},{}],currentFluid:0,
     createFluidRenderBindGroup:()=>({texture:ctx.displayReconstruction.texture}),resolveTransportConfig:()=>({effective:{scheme:'maccormack'}}),resolveTimeStepConfig:()=>({effective:{backtraceScale:1}}),TRANSPORT_MAX_BACKTRACE_CELLS:1,

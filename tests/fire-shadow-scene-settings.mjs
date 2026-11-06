@@ -42,3 +42,9 @@ assert.equal(readFireShadowSceneSettings(new URLSearchParams({volume_light_field
 assert.throws(()=>readFireShadowSceneSettings(new URLSearchParams({volume_light_field_hybrid_smoke_shadow_medium_grid:'-1'})),/resolution/);
 
 assert.equal(readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,angularPattern:"importance"}))).angularPattern,"importance");
+
+const sourceRoute=fireShadowSceneRoute({...state,sourceGrid:16});
+assert.equal(readFireShadowSceneSettings(new URLSearchParams(sourceRoute)).sourceGrid,16,'lighting emission resolution must survive ordinary scene save/load independently of receiver resolution');
+
+for(const sourceGrid of [8,16,24,32])assert.equal(readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,sourceGrid}))).sourceGrid,sourceGrid);
+for(const value of ['0','-1','1.5','NaN'])assert.throws(()=>readFireShadowSceneSettings(new URLSearchParams({volume_light_field_hybrid_source_grid:value})),/emission resolution/);

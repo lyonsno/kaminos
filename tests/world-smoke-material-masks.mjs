@@ -1,11 +1,13 @@
 // kaminos-test: node
 import test from 'node:test';
+import {resolveSimulationLevers} from '../volume-world-calibration.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 const source=fs.readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
 const start=source.indexOf('  function encodeWorldSmoke(');
-const body=source.slice(start,source.indexOf('\n  }',start)+4);
+const mappingStart=source.indexOf('  function refreshWorldRenderMapping(');
+const body=source.slice(start,source.indexOf('\n  }',start)+4)+'\n'+source.slice(mappingStart,source.indexOf('\n  }',mappingStart)+4);
 test('world collision receives current remaining-material masks, including their removal',()=>{
   const mask={objectId:'burning-log',revision:17,texture:{}},calls=[];
   let masks=[mask];

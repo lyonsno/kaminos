@@ -127,7 +127,7 @@ const falseClosureMutations = [
     source => source
       .replace('    var directSupport: f32;', '    /*\n    var directSupport: f32;')
       .replace('    var reconstructed: FlowReconstructionSample;', '    */\n    let directSupport = directCellOpticalSupport(p);\n    let effectiveSupport = select(directSupport, 1.0, flowKernelReconstructionActive);\n    if (!fullGridCapture && effectiveSupport <= 0.0001) { continue; }\n    var reconstructed: FlowReconstructionSample;'),
-    /display support bypass requires both|only explicit comparison\/capture modes bypass production support admission|one live direct-support skip must own admission before sampling/,
+    /display support bypass requires the explicit reconstructed cache|only explicit comparison\/capture modes bypass production support admission|one live direct-support skip must own admission before sampling/,
   ],
   [
     'renamed first-sample hash helper',

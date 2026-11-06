@@ -20,15 +20,15 @@ ${extractWgslFunction(core, 'immersedSourceWeight')}
 test('production immersed source has full centre weight, antialiased slab edge and zero outside support', async () => {
   const options = {
     preamble,
-    argTypes: ['f32'],
+    argTypes: ['f32', 'f32'],
     returnType: 'f32',
     body: `
       u.immersed_source_a = vec4<f32>(1.0, 0.0, 0.0, 0.0);
       u.immersed_source_b = vec4<f32>(0.0, 1.0, 0.0, 10.0);
-      u.immersed_source_c = vec4<f32>(1.5, 0.0, 0.0, 0.0);
+      u.immersed_source_c = vec4<f32>(arg1, 0.0, 0.0, 0.0);
       return immersedSourceWeight(vec3<f32>(0.0, arg0, 0.0));
     `,
-    inputs: [[0], [0.5], [1.25]],
+    inputs: [[0,1.5], [0.5,1.5], [1.25,1.5], [0,0.5], [0.5,0.5], [1,0.5]],
   };
   await withKaminosGpu(async (ctx) => {
     assert.deepEqual(await evalWgslBatch(ctx, options), [1, 0.84375, 0]);
@@ -39,7 +39,7 @@ test('production immersed source has full centre weight, antialiased slab edge a
       'let halfThickness = max(0.5, 0.5 * u.immersed_source_c.x);',
       'let halfThickness = 0.0;');
     assert.notEqual(broken, preamble);
-    assert.notDeepEqual(await evalWgslBatch(ctx, { ...options, preamble: broken }), [1, 0.84375, 0]);
+    assert.notDeepEqual(await evalWgslBatch(ctx, { ...options, preamble: broken }), [1, 0.84375, 0, 1, 0.5, 0]);
   }, { wgslSources: [{ label: 'production-immersed-source',
     code: `${preamble}\n@compute @workgroup_size(1) fn main() { _ = immersedSourceWeight(vec3<f32>(0.0)); }`,
     entryPoint: 'main' }] });

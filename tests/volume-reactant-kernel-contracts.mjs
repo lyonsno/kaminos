@@ -101,6 +101,7 @@ test('under the reactant law the volumetric emitter births no heat or fuel: supp
 });
 
 test('under the reactant law the fine-box top is a passive outflow for the material: no sponge, no oxygen source at the top', () => {
+  assert.match(mainKernel, /let worldSmokeOnlyFlameEnvelope = select\(1\.0, fineFlameContainmentEnvelope\(p, expandedTopY\), worldSmokeOnlyOn\(\) && \(joinedBoundary\(\) \|\| openWorldBoundary\(\)\)\);/, 'containment is inactive outside joined smoke-only World; the open-top sponge remains separate');
   assert.match(mainKernel, /let materialVerticalWall = select\(verticalWall, mix\(-p\.y, -1\.0, floorExempt\), reactantOn\);/, 'the top drops out of the material wall sponge');
   assert.match(mainKernel, /let materialHeatTopFade = select\(heatTopFade, 1\.0, reactantOn\);/);
   assert.match(mainKernel, /let materialSmokeTopFade = select\(smokeTopFade, 1\.0, reactantOn\);/);

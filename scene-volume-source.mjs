@@ -1,3 +1,20 @@
+import {normalizeSmokeHandoffMargin} from './scene-smoke-handoff.mjs';
+export const DEFAULT_SCENE_SOURCE_GRID=32;
+export function validateSceneSourceGrid(value){
+  if(!Number.isSafeInteger(value)||value<1)throw Error('lighting emission resolution must be a positive integer');
+  return value;
+}
+export function sceneSourceGridPlan(resolution,fluidDimensions,limits={}){
+  validateSceneSourceGrid(resolution);sceneSourceDomain(fluidDimensions);
+  const height=resolution*fluidDimensions[1]/fluidDimensions[0];
+  if(!Number.isSafeInteger(height)||height<1)throw Error('lighting emission resolution must preserve the box aspect with whole cubic cells');
+  const dimensions=[resolution,height,resolution],limit=limits.maxTextureDimension3D??Infinity;
+  if(dimensions.some(n=>n>limit))throw Error(`lighting emission dimensions exceed device texture limit ${limit}`);
+  const dispatch=dimensions.map(n=>Math.ceil(n/4));
+  if(dispatch.some(n=>n>(limits.maxComputeWorkgroupsPerDimension??Infinity)))throw Error('lighting emission dispatch exceeds device capacity');
+  const cells=dimensions.reduce((n,v)=>n*v,1);
+  return {resolution,dimensions,cells,materialSamples:cells*8,bytes:cells*20,dispatch};
+}
 // Opt-in experiment input, not a replacement for the accepted fire atlas or
 // smoke transport. Coefficients use volume-local inverse-length units and
 // relative linear RGB, before either consumer's camera transform.
@@ -87,15 +104,23 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
     byModule.set(module, cachedPipelines);
   }
   const pipeline = cachedPipelines.seed;
+  const emptyWorld=device.createTexture({label:'disabled physical World material',dimension:'3d',size:[1,1,2],format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING});
+  const ownWorldUniform=!worldRenderUniform;
+  worldRenderUniform??=device.createBuffer({label:'disabled World render geometry',size:96,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+
   // The seed reaches sceneEmissiveMaterialAt, which reads the reactant sidecar
   // (fresh burn); the sidecar is reallocated when the reaction law changes.
-  let boundTextures = null;
+  const emptyWorldView=emptyWorld.createView();
+  let boundTextures = null, boundWorld=null,boundMiddle=null,boundRenderView=null;
   const buildInputs = () => {
     const textures = getReactantTextures();
     boundTextures = textures;
+    const world=getWorldSmoke();boundWorld=world?.texture??emptyWorld;boundMiddle=world?.middle?.texture??emptyWorld;boundRenderView=world?.renderView??emptyWorldView;
     return fluidBuffers.map((buffer, i) => device.createBindGroup({layout: pipeline.getBindGroupLayout(0),
       entries: [...[[0, uniformBuffer], [1, buffer], [7, frontBuffers[i]]].map(([binding, buffer]) => ({binding, resource: {buffer}})),
-        {binding: 23, resource: textures[i].createView({dimension: '3d'})}]}));
+        {binding: 23, resource: textures[i].createView({dimension: '3d'})},
+        {binding:20,resource:boundWorld.createView()},{binding:21,resource:{buffer:worldRenderUniform}},
+        {binding:35,resource:boundMiddle.createView()},{binding:40,resource:boundRenderView}]}));
   };
   let inputs = buildInputs();
   const output = device.createBindGroup({layout: pipeline.getBindGroupLayout(3), entries: [{binding: 4, resource: texture.createView()},{binding:5,resource:scatteringTexture.createView()}]});
@@ -117,10 +142,11 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
       }
       r={key,texture,pipeline:extPipeline};exteriorResources.set(name,r);
     }
-    if(r.input!==region.texture){
+    const renderView=region.renderView??emptyWorldView;
+    if(r.input!==region.texture||(name==='world'&&r.renderView!==renderView)){
       r.group=device.createBindGroup({layout:r.pipeline.getBindGroupLayout(0),entries:[
-        {binding:0,resource:{buffer:uniformBuffer}},{binding:name==='middle'?35:20,resource:region.texture.createView()},{binding:21,resource:{buffer:worldRenderUniform}}]});
-      r.output=device.createBindGroup({layout:r.pipeline.getBindGroupLayout(3),entries:[{binding:6,resource:r.texture.createView()}]});r.input=region.texture;
+        {binding:0,resource:{buffer:uniformBuffer}},{binding:name==='middle'?35:20,resource:region.texture.createView()},{binding:21,resource:{buffer:worldRenderUniform}},...(name==='world'?[{binding:40,resource:renderView}]:[])]});
+      r.output=device.createBindGroup({layout:r.pipeline.getBindGroupLayout(3),entries:[{binding:6,resource:r.texture.createView()}]});r.input=region.texture;r.renderView=renderView;
     }
     const pass=encoder.beginComputePass({label:`current ${name} physical extinction`});
     pass.setPipeline(r.pipeline);pass.setBindGroup(0,r.group);pass.setBindGroup(3,r.output);pass.dispatchWorkgroups(...region.dimensions.map(n=>Math.ceil(n/4)));pass.end();
@@ -132,13 +158,18 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
     for(const [name,r] of exteriorResources)if(!world||(name==='middle'&&!world.middle)){r.texture.destroy();exteriorResources.delete(name);}
     if(!world)return;
     exterior=encodeRegion(encoder,world,'world');
+    exterior.handoffMargin=normalizeSmokeHandoffMargin(world.handoffMargin);
     exterior.middle=world.middle?encodeRegion(encoder,world.middle,'middle'):null;
   }
   const invalidateOptical = () => {if (optical) optical.generation = null;};
   return {
     encode(encoder, index, currentFrame,transform) {
       if (status === 'destroyed') throw new Error('scene source destroyed');
-      if (getReactantTextures() !== boundTextures) inputs = buildInputs();
+      const world=getWorldSmoke();
+      // This optional authored value is also the camera's physical ownership
+      // parameter. Publish and seed from the same value in this queued frame.
+      device.queue.writeBuffer(worldRenderUniform,36,new Float32Array([normalizeSmokeHandoffMargin(world?.handoffMargin)]));
+      if (getReactantTextures() !== boundTextures||(world?.texture??emptyWorld)!==boundWorld||(world?.middle?.texture??emptyWorld)!==boundMiddle||(world?.renderView??emptyWorldView)!==boundRenderView) inputs = buildInputs();
       if (!Number.isInteger(index) || !inputs[index]) throw new Error('invalid scene source index');
       worldTransform=validateSceneSourceTransform(transform);
       status = 'unbuilt'; reason = 'encoding';
@@ -218,7 +249,7 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
       worldTransform:validateSceneSourceTransform(worldTransform),texture: status === 'encoded' ? texture : null,scatteringTexture:status==='encoded'?scatteringTexture:null,
       exterior:status==='encoded'?exterior:null,
       scatteringChannels:['smoke-scattering-coefficient'],scatteringGeneration:status==='encoded'?generation:null};},
-    destroy() {for(const r of exteriorResources.values())r.texture.destroy();exteriorResources.clear();texture.destroy();scatteringTexture.destroy(); optical?.depth.destroy(); optical?.params.destroy(); status = 'destroyed'; reason = 'destroyed';},
+    destroy() {emptyWorld.destroy();if(ownWorldUniform)worldRenderUniform.destroy();for(const r of exteriorResources.values())r.texture.destroy();exteriorResources.clear();texture.destroy();scatteringTexture.destroy(); optical?.depth.destroy(); optical?.params.destroy(); status = 'destroyed'; reason = 'destroyed';},
   };
 }
 
@@ -230,7 +261,7 @@ fn seedSceneExteriorMedium(@builtin(global_invocation_id) c:vec3<u32>){
   let dims=textureDimensions(sceneExteriorOut);if(any(c>=dims)){return;}
   let p=worldRender.loPitch.xyz+(vec3<f32>(c)+.5)*worldRender.loPitch.w;
   // Same physical law as the camera, before optional diagnostic tinting.
-  let medium=regionSmokeMaterial(worldSmokeSample(p),vec3<f32>(0.0),1.0,0.0);
+  let medium=worldSmokeFarMaterial(p,1.0,0.0);
   textureStore(sceneExteriorOut,vec3<i32>(c),vec4<f32>(medium.absorption+medium.scattering,0,0,0));
 }
 @compute @workgroup_size(4,4,4)
@@ -255,6 +286,8 @@ fn seedSceneVolumeSource(@builtin(global_invocation_id) c: vec3<u32>) {
     var medium: EmissiveMaterial;
     if (u.open_world_boundary.z > 0.5) { medium = fastEmissiveMaterialAt(p, 1.0); }
     else { medium = sceneEmissiveMaterialAt(p); }
+    medium=worldSmokePhysicalBlend(p,medium,1.0,1.0);
+
     coefficients += vec4<f32>(medium.emission, medium.absorption + medium.scattering)*0.125;
     scattering+=medium.scattering*0.125;
   }

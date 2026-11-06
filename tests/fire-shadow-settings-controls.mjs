@@ -86,3 +86,14 @@ budgetControl.value='0';await budgetControl.listeners.change();assert.equal(stat
 const densityControl=nativeControls.find(v=>v.attrs['aria-label']==='Smoke-shadow density grid (0 = raw)');assert(densityControl);
 document.defaultView.__kaminosSceneRadiance.setSmokeShadowQuality=value=>{state={...state,smokeShadowMediumResolution:value.mediumResolution};};
 densityControl.value='16';await densityControl.listeners.change();assert.equal(state.smokeShadowMediumResolution,16);assert.equal(densityControl.value,'16');
+
+const nearToggle=nativeControls.find(v=>v.attrs['aria-label']==='Use near smoke light box');
+assert(nearToggle,'ordinary lighting exposes the bounded near-box comparison');
+document.defaultView.__kaminosSceneRadiance.setNearBox=value=>{state={...state,nearBox:{enabled:true,grid:8,directions:24,extent:[1.5,1.5,1.5],...state.nearBox,...value}};};
+await nativeSettings.operations.setNearBox({enabled:false});assert.equal(state.nearBox.enabled,false);
+await nativeSettings.operations.setNearBox({enabled:true,directions:12});assert.equal(state.nearBox.directions,12);
+assert(nativeControls.find(v=>v.attrs['aria-label']==='Near light width multiplier'));
+
+document.defaultView.__kaminosSceneRadiance.setSourceGrid=value=>{state={...state,sourceGrid:value};};
+await nativeSettings.operations.setSourceGrid(16);assert.equal(state.sourceGrid,16);
+assert(nativeControls.find(v=>v.attrs['aria-label']==='Lighting emission resolution'),'ordinary inspector exposes emission input independently of smoke receivers');

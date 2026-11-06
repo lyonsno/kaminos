@@ -207,7 +207,7 @@ test('dispose keeps the world geometry buffer alive through fluid cleanup',async
   let destroyed=false,writes=0;
   f.scope.worldRenderUniform={destroy(){destroyed=true;}};
   f.scope.device.queue.writeBuffer=buffer=>{assert.equal(destroyed,false,'fluid cleanup writes world geometry before its buffer is destroyed');assert.equal(buffer,f.scope.worldRenderUniform);writes++;};
-  for(const key of ['fineVelocity','worldSmoke','worldSolidProducer'])f.scope[key]=null;
+  for(const key of ['domainRemapper','pendingDomainRemap','fineVelocity','worldSmoke','worldSolidProducer'])f.scope[key]=null;
   f.scope.simulationVariants=new Map();
   f.scope.retireIntermediateFlow=()=>{};
   // Execute the production cleanup prefix containing the world-geometry write;
