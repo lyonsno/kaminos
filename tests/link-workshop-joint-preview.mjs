@@ -1,5 +1,6 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
 import * as T from '../lib/three.core.js';
 import {createMechanismController} from '../experiments/link-workshop.experiment.mjs';
 import {createSceneEdits,transformPose} from '../scene-edit-session.mjs';
@@ -35,3 +36,23 @@ try{
  runtime=await createMechanismController({host,inputs:{root}});edits.redo();assert.deepEqual(runtime.read().recipe,after);assert.equal(meshes()[0].material.color.getHex(),0xab1234);
 }finally{T.ObjectLoader.prototype.parse=parse;edits.clear();await runtime.dispose();}
 console.log('Native joint previews retain geometry and compact history survives controller reconstruction');
+
+// Replay the operator's saved three-panel/three-cylinder construction, rather
+// than a piston-free link. Rotating must never resize its rigid panel bodies.
+{
+ const saved=JSON.parse(await fs.readFile(new URL('../scenes/Mechanism_2026-11-05_13-43-42_ef6123a706f440d7a5615d104a86084a.kaminos.json',import.meta.url)));
+ root=new T.Group();root.userData.linkMechanism=saved.objects[0].mechanism;scene.add(root);entries.length=0;entries.push({id:'mechanism',object:root});
+ runtime=await createMechanismController({host,inputs:{root}});
+ const packet=runtime.operations.exportBodies();packet.bodies=packet.bodies.filter(b=>b.id.startsWith('link:'));await runtime.operations.importBodies(packet);
+ const panels=new Map(packet.bodies.map(b=>[b.id,runtime.read().bodies.bodies.find(v=>v.id===b.id).geometryKey]));
+ let parses=0;const parse=T.ObjectLoader.prototype.parse;T.ObjectLoader.prototype.parse=function(...args){parses++;return parse.apply(this,args);};
+ try{
+  for(const [joint,amount]of [[1,12],[1,8],[2,12],[3,-20]]){
+   runtime.operations.select({joint});const h=adapter.target(),base=h.read(),lengths=base.recipe.nodes.map(n=>n.length);
+   edits.begin(h.id);for(const fraction of [.25,.5,1])edits.preview({...base,...transformPose(base,{operation:'rotate',axis:'z',amount:amount*Math.PI/180*fraction})});edits.commit();
+   assert.deepEqual(runtime.read().recipe.nodes.map(n=>n.length),lengths,'Native rotation preserves exact authored lengths');
+   for(const [id,key]of panels){const actual=runtime.read().bodies.bodies.find(b=>b.id===id);assert.equal(actual.geometryKey,key);assert.equal(actual.replacement,true,'Rotation retains each returned door panel');}
+  }
+  assert.equal(parses,0,'Repeated rigid panel rotations do not decode returned meshes');
+ }finally{T.ObjectLoader.prototype.parse=parse;edits.clear();await runtime.dispose();}
+}

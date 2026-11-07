@@ -47,21 +47,22 @@ export function bodyLayout(recipe){
  return {layers,pistonZ,joints};
 }
 
-export function constructBodies(value){
+export function constructBodies(value,reuse=new Map()){
  const recipe=checkedMechanism(value),defs=[],{layers,pistonZ,joints}=bodyLayout(recipe);
  const holes=recipe.nodes.map((n,i)=>Math.min(bore,...recipe.nodes.flatMap((c,j)=>(j===i||c.parent===i)&&c.parent!==null?[c.length/6]:[])));
- const add=(id,kind,parameters,build,pose)=>{const object=new T.Group();object.name=id;object.userData.assemblyBody={id,kind,parameters,frame:'local XY links, local Z hinges, local X piston travel'};build(object);defs.push({id,kind,geometryKey:JSON.stringify([kind,parameters]),object,pose});};
+ const add=(id,kind,parameters,build,pose,geometryKey=JSON.stringify([kind,parameters]))=>{const prior=reuse.get(id);let object=prior?.geometryKey===geometryKey?prior.object:null;if(!object){object=new T.Group();object.name=id;object.userData.assemblyBody={id,kind,parameters,frame:'local XY links, local Z hinges, local X piston travel'};build(object);}defs.push({id,kind,geometryKey,object,pose});};
  recipe.nodes.forEach((n,i)=>{
-  if(n.parent===null)add(`anchor:${i}`,'anchor',[.5,.5,.18],g=>box(g,[.5,.5,.18],[0,0,-.16],0x374653),f=>({position:[...f[i].point,0],angle:0}));
-  else add(`link:${i}`,'link',[n.length,thickness,eye,holes[n.parent],holes[i]],g=>plate(g,n.length,[holes[n.parent],holes[i]]),f=>({position:[...f[n.parent].point,layers[i]],angle:f[i].angle}));
-  const owner=defs.at(-1);const baseZ=n.parent===null?0:layers[i];
+  const kind=n.parent===null?'anchor':'link',parameters=n.parent===null?[.5,.5,.18]:[n.length,thickness,eye,holes[n.parent],holes[i]],hinges=recipe.pistons.filter(p=>p.hinge&&(p.a===i||p.b===i)),baseKey=JSON.stringify([kind,parameters]),geometryKey=hinges.length?JSON.stringify([baseKey,hinges]):baseKey;
+  const baseZ=n.parent===null?0:layers[i];
+  add(`${kind}:${i}`,kind,parameters,object=>{
+   if(n.parent===null)box(object,[.5,.5,.18],[0,0,-.16],0x374653);else plate(object,n.length,[holes[n.parent],holes[i]]);
   for(const [j,p]of recipe.pistons.entries())for(const end of ['a','b'])if(p.hinge&&p[end]===i){const at=p[end+'Offset'],rx=Math.max(0,Math.min(n.length??0,at[0])),z=(p.z??pistonZ+j*pitch)-baseZ,seat=p[end+'BaseZ']??0;
-   const shape=new T.Shape();shape.moveTo(rx-.09,0);shape.lineTo(at[0],at[1]);shape.lineTo(rx+.09,0);shape.closePath();const geo=new T.ExtrudeGeometry(shape,{depth:.12,bevelEnabled:false});geo.translate(0,0,-.06);const horn=mesh(owner.object,geo,0xc9a875);horn.position.z=seat;horn.name='Hinge horn';horn.userData.surfaceDrive=true;
-   if(p[end+'Seat']){const from=new T.Vector3(...p[end+'Seat']),to=new T.Vector3(rx,0,seat),direction=to.clone().sub(from),length=direction.length();if(length>1e-6){const support=mesh(owner.object,new T.CylinderGeometry(.065,.065,length+.12,16),0xc9a875);support.position.copy(from).add(to).multiplyScalar(.5);support.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),direction.normalize());support.name='Panel-to-horn support';support.userData.surfaceDrive=true;}}
+   const shape=new T.Shape();shape.moveTo(rx-.09,0);shape.lineTo(at[0],at[1]);shape.lineTo(rx+.09,0);shape.closePath();const geo=new T.ExtrudeGeometry(shape,{depth:.12,bevelEnabled:false});geo.translate(0,0,-.06);const horn=mesh(object,geo,0xc9a875);horn.position.z=seat;horn.name='Hinge horn';horn.userData.surfaceDrive=true;
+   if(p[end+'Seat']){const from=new T.Vector3(...p[end+'Seat']),to=new T.Vector3(rx,0,seat),direction=to.clone().sub(from),length=direction.length();if(length>1e-6){const support=mesh(object,new T.CylinderGeometry(.065,.065,length+.12,16),0xc9a875);support.position.copy(from).add(to).multiplyScalar(.5);support.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),direction.normalize());support.name='Panel-to-horn support';support.userData.surfaceDrive=true;}}
 
-   const pin=cylinder(owner.object,.055,Math.abs(z-seat)+.18,[...at,(z+seat)/2],0xc9a875);pin.name='Actuator mount pin';pin.userData.surfaceDrive=true;
+   const pin=cylinder(object,.055,Math.abs(z-seat)+.18,[...at,(z+seat)/2],0xc9a875);pin.name='Actuator mount pin';pin.userData.surfaceDrive=true;
   }
-  if(recipe.pistons.some(p=>p.hinge&&(p.a===i||p.b===i)))owner.geometryKey=JSON.stringify([owner.geometryKey,recipe.pistons.filter(p=>p.hinge&&(p.a===i||p.b===i))]);
+  },n.parent===null?f=>({position:[...f[i].point,0],angle:0}):f=>({position:[...f[n.parent].point,layers[i]],angle:f[i].angle}),geometryKey);
   const {low,high}=joints[i];
   add(`pin:${i}`,'pin',[low,high,holes[i]],g=>{cylinder(g,holes[i]*.94,high-low,[0,0,(high+low)/2],0xc9a875);for(const z of [low-.025,high+.025])cylinder(g,.105,.05,[0,0,z],0xc9a875);},f=>({position:[...f[i].point,0],angle:f[i].angle}));
  });
@@ -117,8 +118,8 @@ export function createBodyView(root){
  function update(m,t,selectedPiston=null){
   const next=JSON.stringify([m.nodes,m.pistons]);
   if(next!==key){
-   const fresh=constructBodies(m),old=new Map(bodies);bodies.clear();
-   for(const def of fresh.defs){const prior=old.get(def.id);if(prior&&prior.geometryKey===def.geometryKey){release(def.object);def.object=prior.object;old.delete(def.id);}else{root.add(def.object);replacements.delete(def.id);}bodies.set(def.id,def);}
+   const fresh=constructBodies(m,bodies),old=new Map(bodies);bodies.clear();
+   for(const def of fresh.defs){const prior=old.get(def.id);if(prior&&prior.object===def.object){old.delete(def.id);}else{root.add(def.object);replacements.delete(def.id);}bodies.set(def.id,def);}
    for(const d of old.values()){release(d.object);if(!bodies.has(d.id))replacements.delete(d.id);}construction=fresh;key=next;
   }
   const f=frames(m,t);for(const b of bodies.values()){
