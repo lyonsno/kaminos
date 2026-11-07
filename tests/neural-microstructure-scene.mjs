@@ -1,11 +1,23 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
-import {Raycaster,Vector3} from '../lib/three.webgpu.js';
+import {Raycaster,Vector3,Box3,PerspectiveCamera} from '../lib/three.webgpu.js';
+import {prepareNavigationGeometry} from '../scene-navigation.mjs';
+import {visibleSceneIntersections} from '../scene-visible-picking.mjs';
 import {packMicrostructure} from '../neural-microstructure-core.mjs';
 import {createMicrostructureControl} from '../neural-microstructure.mjs';
+import experiment from '../experiments/trellis-microstructure.experiment.mjs';
+let opened=false;
+await assert.rejects(experiment.create({host:{scene:{open(){opened=true;throw Error('Should not open');}}},inputs:{source:'/unused/',mode:'bad'}}),/Mode/);
+assert.equal(opened,false,'Invalid activation must not attach a scene');
 const field=packMicrostructure(new Float32Array([0,0,0,0,0,1,.2,.8,.4,0,.8,1]),{radius:.1,cellSize:.5,sourceIds:new Uint32Array([123])});
 assert.throws(()=>createMicrostructureControl({...field,sourceIds:undefined}),/source ID/,'Scene picking must retain source identity');
 const control=createMicrostructureControl(field);
+const precise=new Box3().setFromObject(control.root,true);
+assert.ok(precise.max.x<.11&&precise.min.x>-.11,'Precise scene bounds must not include template vertices');
+assert.ok(control.root.sceneGeometry?.getAttribute('position'),'Native grounding needs actual surface positions');
+await prepareNavigationGeometry(control.root);
+const misses=await visibleSceneIntersections({raycaster:new Raycaster(new Vector3(.7,.7,2),new Vector3(0,0,-1)),roots:[control.root],camera:new PerspectiveCamera(),viewport:{width:800,height:600}});
+assert.equal(misses.length,0,'Native navigation must not re-enable template-box picking');
 control.root.position.set(.2,.3,.4);control.root.scale.set(1.5,.8,2);control.root.rotation.set(.3,.4,.1);control.root.updateMatrixWorld(true);
 const world=control.root.localToWorld(new Vector3()),origin=control.root.localToWorld(new Vector3(0,0,1)),direction=world.clone().sub(origin).normalize();
 const raycaster=new Raycaster(origin,direction),hits=[];control.root.raycast(raycaster,hits);

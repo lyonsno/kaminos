@@ -1,5 +1,5 @@
-import {Group,Mesh,Box3,Sphere,Matrix4,Ray,Vector3,BoxGeometry,PlaneGeometry,InstancedBufferGeometry,InstancedBufferAttribute,InstancedInterleavedBuffer,InterleavedBufferAttribute,StorageBufferAttribute,BackSide,DoubleSide,MeshPhysicalNodeMaterial,MeshBasicNodeMaterial} from './lib/three.webgpu.js';
-import {wgslFn,storage,attribute,varying,vec3,vec4,float,uv,positionGeometry,positionView,positionViewDirection,modelWorldMatrix,modelWorldMatrixInverse,cameraViewMatrix,cameraWorldMatrix,cameraProjectionMatrix,cameraProjectionMatrixInverse,screenUV,getViewPosition,transformNormalToView,faceDirection} from './lib/three.tsl.js';
+import {TSL,Group,InstancedMesh,BufferGeometry,BufferAttribute,Box3,Sphere,Matrix4,Ray,Vector3,IntType,BoxGeometry,PlaneGeometry,InstancedBufferGeometry,InstancedBufferAttribute,InstancedInterleavedBuffer,InterleavedBufferAttribute,StorageBufferAttribute,BackSide,DoubleSide,MeshPhysicalNodeMaterial,MeshBasicNodeMaterial} from './lib/three.webgpu.js';
+const {wgslFn,storage,attribute,varying,vec3,vec4,float,uv,positionGeometry,positionView,positionViewDirection,modelWorldMatrix,modelWorldMatrixInverse,cameraViewMatrix,cameraWorldMatrix,cameraProjectionMatrix,cameraProjectionMatrixInverse,screenUV,getViewPosition,transformNormalToView,faceDirection}=TSL;
 import {MICRO_DISC_WGSL,MICRO_NEAREST_WGSL,traceMicrostructure} from './neural-microstructure-core.mjs';
 
 const disc=wgslFn(MICRO_DISC_WGSL),nearest=wgslFn(MICRO_NEAREST_WGSL,[disc]);
@@ -17,6 +17,22 @@ const instanced=base=>{
   for(const key of ['position','normal','uv'])geometry.setAttribute(key,base.attributes[key].clone());
   base.dispose();return geometry;
 };
+function surfaceProxy(rows,radius){
+  // An inscribed polygon per actual disc supplies native grounding/geometry
+  // consumers with surface, not the shader's unit template or filled boxes.
+  const count=rows.length/12,positions=new Float32Array(count*18),indices=new Uint32Array(count*12);
+  for(let i=0;i<count;i++){
+    const o=i*12,n=new Vector3(...rows.subarray(o+3,o+6)).normalize(),u=new Vector3().crossVectors(n,Math.abs(n.z)<.9?new Vector3(0,0,1):new Vector3(0,1,0)).normalize(),v=new Vector3().crossVectors(n,u),points=[];
+    for(let axis=0;axis<3;axis++)for(const sign of [-1,1]){
+      const p=new Vector3().setComponent(axis,sign).addScaledVector(n,-sign*n.getComponent(axis));if(p.lengthSq()<1e-12)p.copy(u).multiplyScalar(sign);else p.normalize();
+      points.push({p,angle:Math.atan2(p.dot(v),p.dot(u))});
+    }
+    points.sort((a,b)=>a.angle-b.angle);
+    for(let j=0;j<6;j++)for(let a=0;a<3;a++)positions[i*18+j*3+a]=rows[o+a]+radius*points[j].p.getComponent(a);
+    for(let j=0;j<4;j++)indices.set([i*6,i*6+j+1,i*6+j+2],i*12+j*3);
+  }
+  const geometry=new BufferGeometry();geometry.setAttribute('position',new BufferAttribute(positions,3));geometry.setIndex(new BufferAttribute(indices,1));geometry.computeBoundingBox();return geometry;
+}
 function fineDiscs(rows,radius,label){
   const geometry=instanced(new PlaneGeometry(2,2)),count=rows.length/12;
   geometry.instanceCount=count;
@@ -40,7 +56,7 @@ function fineDiscs(rows,radius,label){
   material.normalNode=varying(transformNormalToView(attribute('microNormal','vec3'))).normalize().mul(faceDirection);
   material.colorNode=attribute('microColor','vec3');material.metalnessNode=attribute('microParams','vec2').x;material.roughnessNode=attribute('microParams','vec2').y;
   const d=uv().mul(2).sub(1);material.maskNode=d.dot(d).lessThanEqual(1).and(attribute('microOpacity','float').greaterThan(0));
-  const mesh=new Mesh(geometry,material);mesh.name=label;mesh.frustumCulled=false;return mesh;
+  const mesh=new InstancedMesh(geometry,material,count);mesh.name=label;mesh.frustumCulled=false;return mesh;
 }
 
 export function createMicrostructureControl(field){
@@ -50,7 +66,7 @@ export function createMicrostructureControl(field){
   const root=new Group();root.name='TRELLIS microstructure control';
   const fine=fineDiscs(field.rows,field.radius,'Fine source discs');
   const coarseRows=new Float32Array(field.carrierCount*12);
-  const geometry=instanced(new BoxGeometry(2,2,2)),centers=new Float32Array(field.carrierCount*3),extents=new Float32Array(field.carrierCount*3),ranges=new Float32Array(field.carrierCount*2);
+  const geometry=instanced(new BoxGeometry(2,2,2)),centers=new Float32Array(field.carrierCount*3),extents=new Float32Array(field.carrierCount*3),ranges=new Uint32Array(field.carrierCount*2);
   geometry.instanceCount=field.carrierCount;
   for(let i=0;i<field.carrierCount;i++){
     const h=i*8,start=field.carriers[h+6],count=field.carriers[h+7];
@@ -59,14 +75,14 @@ export function createMicrostructureControl(field){
     for(let j=start;j<start+count;j++)for(let a=0;a<12;a++)coarseRows[i*12+a]+=field.rows[j*12+a]/count;
     if(Math.hypot(...coarseRows.subarray(i*12+3,i*12+6))<1e-8)coarseRows[i*12+5]=1;
   }
-  for(const [name,array,size]of [['microCenter',centers,3],['microExtent',extents,3],['microRange',ranges,2]])geometry.setAttribute(name,new InstancedBufferAttribute(array,size));
+  for(const [name,array,size]of [['microCenter',centers,3],['microExtent',extents,3],['microRange',ranges,2]]){const attribute=new InstancedBufferAttribute(array,size);if(array instanceof Uint32Array)attribute.gpuType=IntType;geometry.setAttribute(name,attribute);}
   const coarse=fineDiscs(coarseRows,field.cellSize*.8,'Averaged coarse discs');
   const data=field.rows.slice();for(let i=0;i<field.count;i++)for(let a=6;a<9;a++)data[i*12+a]=linear(data[i*12+a]);
   const buffer=new StorageBufferAttribute(data,4),rows=storage(buffer,'vec4',data.length/4).toReadOnly();
-  const range=varying(attribute('microRange','vec2'));
+  const range=varying(attribute('microRange','uvec2')).setInterpolation('flat');
   const localAt=depth=>modelWorldMatrixInverse.mul(cameraWorldMatrix.mul(vec4(getViewPosition(screenUV,depth,cameraProjectionMatrixInverse),1))).xyz;
   const ro=localAt(float(0)),rd=localAt(float(1)).sub(ro).normalize();
-  const hit=nearest({ro,rd,r:float(field.radius),start:range.x.toUint(),count:range.y.toUint(),rows}).toVar();
+  const hit=nearest({ro,rd,r:float(field.radius),start:range.x,count:range.y,rows}).toVar();
   const index=hit.y.max(0).toUint(),a=rows.element(index.mul(3)),b=rows.element(index.mul(3).add(1)),c=rows.element(index.mul(3).add(2));
   const world=modelWorldMatrix.mul(vec4(ro.add(rd.mul(hit.x)),1)).xyz,view=cameraViewMatrix.mul(vec4(world,1)).xyz;
   const clip=cameraProjectionMatrix.mul(vec4(view,1)),valid=hit.x.greaterThanEqual(0);
@@ -75,15 +91,15 @@ export function createMicrostructureControl(field){
   material.positionNode=attribute('microCenter','vec3').add(positionGeometry.mul(attribute('microExtent','vec3')));
   material.microWorld=world;material.microPosition=view;material.maskNode=valid;material.depthNode=clip.z.div(clip.w);
   // Disc normals face the viewing ray, not the arbitrary carrier box face.
-  material.normalNode=normal.mul(normal.dot(view.negate()).greaterThanEqual(0).select(1,-1));
+  const viewRay=cameraViewMatrix.mul(modelWorldMatrix.mul(vec4(rd,0))).xyz;
+  material.normalNode=normal.mul(normal.dot(viewRay).lessThanEqual(0).select(1,-1));
   material.colorNode=vec3(b.zw,c.x);material.metalnessNode=c.y.clamp(0,1);material.roughnessNode=c.z.clamp(.04,1);
-  const carrier=new Mesh(geometry,material);carrier.name='Coarse carriers with exact fine depth';carrier.frustumCulled=false;
+  const carrier=new InstancedMesh(geometry,material,field.carrierCount);carrier.name='Coarse carriers with exact fine depth';carrier.frustumCulled=false;
   const aoMaterial=new MeshBasicNodeMaterial({side:BackSide});aoMaterial.positionNode=material.positionNode;aoMaterial.maskNode=valid;aoMaterial.depthNode=material.depthNode;aoMaterial.colorNode=vec4(view.z.negate(),0,0,1);aoMaterial.toneMapped=false;carrier.userData.kaminosAODepthMaterial=aoMaterial;
   root.add(fine,coarse,carrier);let mode='carrier',disposed=false,lastRenderer=null;
   carrier.onBeforeRender=renderer=>{lastRenderer=renderer;};
-  const bounds=new Box3();
-  for(let i=0;i<field.carrierCount;i++){bounds.expandByPoint(new Vector3(...field.carriers.subarray(i*8,i*8+3)));bounds.expandByPoint(new Vector3(...field.carriers.subarray(i*8+3,i*8+6)));}
-  for(const mesh of [fine,coarse,carrier]){mesh.geometry.boundingBox=bounds.clone();mesh.geometry.boundingSphere=bounds.getBoundingSphere(new Sphere());mesh.raycast=()=>{};}
+  const fineProxy=surfaceProxy(field.rows,field.radius),coarseProxy=surfaceProxy(coarseRows,field.cellSize*.8);
+  for(const mesh of [fine,coarse,carrier])mesh.raycast=()=>{};
   root.userData.raycastsAsWhole=true;
   const coarseIds=Uint32Array.from({length:field.carrierCount},(_,i)=>i);
   root.raycast=(raycaster,hits)=>{
@@ -93,7 +109,7 @@ export function createMicrostructureControl(field){
     const point=ray.at(hit.t,new Vector3()).applyMatrix4(root.matrixWorld),distance=point.distanceTo(raycaster.ray.origin);
     if(distance>=raycaster.near&&distance<=raycaster.far)hits.push({object:root,point,distance,index:hit.sourceId});
   };
-  const setMode=value=>{if(!['fine','coarse','carrier'].includes(value))throw Error('Mode must be fine, coarse or carrier');mode=value;fine.visible=mode==='fine';coarse.visible=mode==='coarse';carrier.visible=mode==='carrier';};
+  const setMode=value=>{if(!['fine','coarse','carrier'].includes(value))throw Error('Mode must be fine, coarse or carrier');mode=value;fine.visible=mode==='fine';coarse.visible=mode==='coarse';carrier.visible=mode==='carrier';root.sceneGeometry=mode==='coarse'?coarseProxy:fineProxy;const bounds=root.sceneGeometry.boundingBox;for(const mesh of [fine,coarse,carrier]){mesh.boundingBox=bounds.clone();mesh.boundingSphere=bounds.getBoundingSphere(new Sphere());mesh.geometry.boundingBox=bounds.clone();mesh.geometry.boundingSphere=mesh.boundingSphere.clone();}};
   setMode(mode);
-  return {root,setMode,read:()=>({mode,sourceDiscs:field.count,carriers:field.carrierCount,maxChildren:field.maxChildren,radius:field.radius,cellSize:field.cellSize,neural:false,coveragePolicy:'binary-disc-support',sourceAlpha:field.alpha,opacityPolicy:'raw-preserved; binary geometry control, not optical alpha parity',sourcePayloadBytes:field.rows.byteLength,carrierBytes:field.carriers.byteLength}),dispose(){if(disposed)return;disposed=true;for(const mesh of [fine,coarse,carrier]){mesh.geometry.dispose();mesh.material.dispose();}aoMaterial.dispose();lastRenderer?._attributes?.delete(buffer);root.clear();}};
+  return {root,setMode,read:()=>({mode,localBounds:{min:root.sceneGeometry.boundingBox.min.toArray(),max:root.sceneGeometry.boundingBox.max.toArray()},sourceDiscs:field.count,carriers:field.carrierCount,maxChildren:field.maxChildren,radius:field.radius,cellSize:field.cellSize,neural:false,coveragePolicy:'binary-disc-support',sourceAlpha:field.alpha,opacityPolicy:'raw-preserved; binary geometry control, not optical alpha parity',sourcePayloadBytes:field.rows.byteLength,carrierBytes:field.carriers.byteLength}),dispose(){if(disposed)return;disposed=true;for(const mesh of [fine,coarse,carrier]){mesh.dispose();mesh.geometry.dispose();mesh.material.dispose();}fineProxy.dispose();coarseProxy.dispose();aoMaterial.dispose();lastRenderer?._attributes?.delete(buffer);root.clear();}};
 }

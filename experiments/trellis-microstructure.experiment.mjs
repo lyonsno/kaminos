@@ -3,6 +3,7 @@ import {createMicrostructureControl} from '../neural-microstructure.mjs';
 export default {
   id:'trellis-microstructure',title:'TRELLIS microstructure',
   async create({host,inputs,record}){
+    const mode=inputs.mode??'carrier';if(!['fine','coarse','carrier'].includes(mode))throw Error('Mode must be fine, coarse or carrier');
     const url=inputs.source;
     if(typeof url!=='string'||!url)throw Error('A prepared microstructure source URL is required');
     const sourceFile=name=>{const base=new URL(url,location.href);if(base.pathname==='/api/read'){base.searchParams.set('path',(base.searchParams.get('path')??'')+name);return base;}return new URL(name,base);};
@@ -27,7 +28,7 @@ export default {
     const read=()=>({...control.read(),source:url,sourceSHA256:meta.sourceSHA256,regionYUp:meta.regionYUp,objectId:asset.id,view:session.readView()});
     let select;
     const frame=()=>session.setView({position:[.22,.34,.25],target:[0,.2,0]});
-    frame();control.setMode(inputs.mode??'carrier');
+    frame();control.setMode(mode);
     return {read,operations:{
       mode(value){control.setMode(value);if(select)select.value=value;session.redraw();const effective=read();record({kind:'microstructure.mode',phase:'applied',target:asset.id,requested:value,effective});return effective;},
       frame(){const effective=frame();record({kind:'microstructure.view',phase:'applied',target:asset.id,effective});return effective;},
