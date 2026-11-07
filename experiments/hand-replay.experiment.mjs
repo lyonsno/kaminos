@@ -1,5 +1,6 @@
 import {Group, Mesh, BufferGeometry, BufferAttribute, MeshNormalMaterial, DoubleSide, Sprite, SpriteMaterial, CanvasTexture, Line, LineBasicMaterial, SphereGeometry, MeshBasicMaterial, SRGBColorSpace} from '../lib/three.core.js';
 import {validateExport,validateReplay,frameAtTime,ballisticArc} from './hand-replay-contract.mjs';
+import {createHandInspection,mountInspectionControls} from './hand-replay-inspection.mjs';
 import {createCameraComparison} from './hand-replay-camera-view.mjs';
 import {displayScales,validateGuide,validateMoment,deformationTrace,loopTime} from './hand-replay-guide.mjs';
 export default {
@@ -19,14 +20,15 @@ export default {
   if(guide&&pair.some(i=>i<0))throw Error('guided comparison requires original and trained models');
   const scene=await host.scene.open();const objects=[];let data,images=[],index=0,playing=false,time=0,lastTick=null,finger=4,commonOrigin=true,loading=false,disposed=false,error=null,token=0;
   let status,preview,playButton,sequenceSelect,scrub,fingerSelect,originSelect,momentSelect,question,scaleSelect,teacherToggle,arcToggle,sourceSelect,tracePanel;
-  let cameraComparison,viewMode='spatial',viewModeChosen=false,requestedViewMode=null,viewSelect,projectionNote,overlayOpacity=.55,sourceTitle,traceMetric='segment',traceSelect;
-  let moment=null,scaleMode='predicted',showTeachers=!guide,showArcs=!guide,sourceMode='crop',trace=null,sourceSprite,sourceCanvas,sourceTexture;
+  let inspection,inspectionControls,cameraComparison,viewMode='spatial',viewModeChosen=false,requestedViewMode=null,viewSelect,projectionNote,overlayOpacity=.55,sourceTitle,traceMetric='segment',traceSelect;
+  let moment=null,scaleMode='predicted',showTeachers=inputs.showTeachers??!guide,showArcs=!guide,sourceMode='crop',trace=null,sourceSprite,sourceCanvas,sourceTexture;
   const reference=pair[0];
   const visibleModels=()=>catalog.models.filter((m,i)=>!guide||showTeachers||pair.includes(i)).map(m=>m.id);
   const scales=()=>data?displayScales(data.frames[index].hands,reference,scaleMode):[];
   const rebuildTrace=()=>{trace=guide&&data?deformationTrace(data,moment?.start??0,moment?.end??data.frames.length-1,finger,pair,traceMetric):null;};
-  const read=()=>({viewMode,requestedViewMode:requestedViewMode??'auto',projection:cameraComparison?.read(index)??{available:false},overlayOpacity,moment:moment?.id??null,scaleMode,visibleModels:visibleModels(),displayScales:scales(),trace:trace?{...trace,cursorFrame:index}:null,sourceMode,showArcs,source:'saved_camera_samples',inference:'precomputed',sequence:data?.label??null,frame:index,captureId:data?.frames[index]?.captureId??null,timeMs:time,playing,loading,error,finger,commonOrigin,models:data?.models.map(({id,label,checkpointSha256})=>({id,label,checkpointSha256}))??[],displayed:data?.frames[index]?.hands.map(h=>({status:h.status,reason:h.reason??null,fallback:h.fallback??false})),view:scene.readView(),fluid:false});
+  const read=()=>({inspection:inspection?.read()??null,viewMode,requestedViewMode:requestedViewMode??'auto',projection:cameraComparison?.read(index)??{available:false},overlayOpacity,moment:moment?.id??null,scaleMode,visibleModels:visibleModels(),displayScales:scales(),trace:trace?{...trace,cursorFrame:index}:null,sourceMode,showArcs,source:'saved_camera_samples',inference:'precomputed',sequence:data?.label??null,frame:index,captureId:data?.frames[index]?.captureId??null,timeMs:time,playing,loading,error,finger,commonOrigin,models:data?.models.map(({id,label,checkpointSha256})=>({id,label,checkpointSha256}))??[],displayed:data?.frames[index]?.hands.map(h=>({status:h.status,reason:h.reason??null,fallback:h.fallback??false})),view:scene.readView(),fluid:false});
   const sync=()=>{
+   inspectionControls?.sync();
    if(status)status.dataset.recordedFrame=String(index);
    if(status)status.textContent=error?error:loading?'Loading recorded sequence…':`${index+1}/${data?.frames.length??0} · ${(time/1000).toFixed(2)} s · recorded timing · ${data?.frames[index]?.hands.map((h,i)=>`${data.models[i].label}: ${h.status}${h.fallback?' (manual fallback crop)':''}`).join(' · ')??''}`;
    if(guide&&status&&!error&&!loading){const alerts=data?.frames[index]?.hands.flatMap((h,i)=>visibleModels().includes(data.models[i].id)&&(h.status!=='observed'||h.fallback||scales()[i]===null)?[`${data.models[i].label}: ${h.status!=='observed'?h.status:h.fallback?'manual fallback crop':'display scale unavailable'}`]:[])??[];status.textContent=`Frame ${index+1}/${data?.frames.length??0} · ${(time/1000).toFixed(2)} s · saved recording${alerts.length?' · '+alerts.join(' · '):''}`;}
@@ -68,6 +70,7 @@ export default {
   const draw=()=>{
    if(!data)return;const row=data.frames[index],display=scales();
    cameraComparison?.draw(index,viewMode,sourceMode,overlayOpacity);
+   inspection?.draw(index,viewMode==='inspection',sourceMode,visibleModels());
    if(sourceSprite)sourceSprite.visible=sourceTitle.visible=viewMode==='spatial';
    for(let i=0;i<objects.length;i++){
     const o=objects[i],h=row.hands[i];
@@ -107,17 +110,17 @@ export default {
     if(selectedMoment)validateMoment(selectedMoment,next);
     moment=selectedMoment;if(moment)finger=moment.finger;
     data=next;images=loaded;
-    const support=cameraComparison.load(next,loaded,pair);
-    if(!viewModeChosen){viewMode=support.available?'camera':'spatial';traceMetric=support.available?'palmWidth':'segment';}
+    const support=cameraComparison.load(next,loaded,pair);inspection.load(next,loaded);
+    if(!viewModeChosen){viewMode=support.available?(inputs.viewMode==='inspection'?'inspection':'camera'):'spatial';traceMetric=support.available?'palmWidth':'segment';}
     else viewMode=support.available?requestedViewMode:'spatial';
     if(sequenceSelect)sequenceSelect.value=String(n);index=moment?.frame??0;time=data.frames[index].timeMs;lastTick=null;rebuildTrace();draw();record({kind:'hand-replay.load',phase:'applied',effective:read()});
-   }catch(e){if(disposed||ticket!==token)return;data=null;images=[];cameraComparison?.clear();trace=null;if(tracePanel)tracePanel.textContent='Comparison unavailable';if(sourceCanvas){sourceCanvas.getContext('2d').clearRect(0,0,640,640);sourceTexture.needsUpdate=true;}for(const o of objects)o.mesh.visible=o.arc.visible=o.landing.visible=false;if(preview)preview.removeAttribute('src');scene.redraw();error=String(e);throw e;}finally{if(ticket===token){loading=false;sync();}}
+   }catch(e){if(disposed||ticket!==token)return;data=null;images=[];cameraComparison?.clear();inspection?.clear();trace=null;if(tracePanel)tracePanel.textContent='Comparison unavailable';if(sourceCanvas){sourceCanvas.getContext('2d').clearRect(0,0,640,640);sourceTexture.needsUpdate=true;}for(const o of objects)o.mesh.visible=o.arc.visible=o.landing.visible=false;if(preview)preview.removeAttribute('src');scene.redraw();error=String(e);throw e;}finally{if(ticket===token){loading=false;sync();}}
    return read();
   };
   const seek=value=>{if(loading||!data)throw Error('sequence unavailable');const n=Number(value);if(!Number.isInteger(n)||n<0||n>=data.frames.length)throw Error('frame out of range');playing=false;if(moment&&(n<moment.start||n>moment.end)){moment=null;rebuildTrace();}index=n;time=data.frames[n].timeMs;draw();return read();};
   const toggle=()=>{if(loading||!data)throw Error('sequence unavailable');if(!playing&&index===(moment?.end??data.frames.length-1)){index=moment?.start??0;time=data.frames[index].timeMs;draw();}playing=!playing;lastTick=null;sync();return read();};
   const pause=()=>{playing=false;lastTick=null;sync();return read();};
-  const frame=()=>scene.setView(viewMode==='camera'?{position:[0,4.8,11.4],target:[0,4.8,0]}:viewMode==='time'?{position:[5,7.5,10],target:[0,4.6,-1.5]}:guide?{position:[-.4,showTeachers?3.8:4.9,showTeachers?13:10],target:[-.4,showTeachers?3.8:4.9,0]}:{position:[0,4.7,12],target:[0,4.7,0]});
+  const frame=()=>scene.setView(viewMode==='camera'?{position:[0,4.8,11.4],target:[0,4.8,0]}:viewMode==='inspection'?{position:[1,6,catalog.models.length>2?15:10],target:[0,4.7,0],fov:40}:viewMode==='time'?{position:[5,7.5,10],target:[0,4.6,-1.5]}:guide?{position:[-.4,showTeachers?3.8:4.9,showTeachers?13:10],target:[-.4,showTeachers?3.8:4.9,0]}:{position:[0,4.7,12],target:[0,4.7,0]});
   const setMoment=async id=>{const m=guide?.moments.find(m=>m.id===id);if(!m)throw Error('unknown comparison moment');const result=await load(m.sequence,m);frame();return result;};
   const drawTrace=()=>{
    if(!tracePanel||!trace)return;const a=data.frames[trace.start].timeMs,b=data.frames[trace.end].timeMs;
@@ -131,7 +134,7 @@ export default {
    const svg=tracePanel.querySelector?.('svg');if(svg)svg.onclick=e=>{const box=svg.getBoundingClientRect(),u=Math.max(0,Math.min(1,((e.clientX-box.left)/box.width*320-10)/300));seek(Math.min(trace.end,Math.max(trace.start,frameAtTime(data.frames,a+u*(b-a)))));};
   };
   let unsubscribe;
-  try{await makeObjects();cameraComparison=await createCameraComparison(scene,document,labelTexture);document.defaultView.kaminosSelection?.clear();frame();if(guide)await setMoment(inputs.moment??guide.moments[0].id);else {await load(0);frame();}if(inputs.frame!==undefined)seek(inputs.frame);unsubscribe=scene.onFrame(({timestampMs})=>{
+  try{await makeObjects();cameraComparison=await createCameraComparison(scene,document,labelTexture);inspection=await createHandInspection(scene,document,catalog.models,labelTexture);document.defaultView.kaminosSelection?.clear();frame();if(guide)await setMoment(inputs.moment??guide.moments[0].id);else {await load(0);frame();}if(inputs.frame!==undefined)seek(inputs.frame);unsubscribe=scene.onFrame(({timestampMs})=>{
    if(!playing||loading){lastTick=null;return;}if(lastTick===null){lastTick=timestampMs;return;}
    time+=Math.max(0,timestampMs-lastTick);lastTick=timestampMs;
    if(moment?.loop)time=loopTime(data.frames,moment.start,moment.end,time);
@@ -139,8 +142,9 @@ export default {
    const next=Math.min(moment?.end??data.frames.length-1,frameAtTime(data.frames,time));
    if(next!==index){index=next;draw();}else sync();
   });}catch(e){await scene.dispose();throw e;}
-  return {read,operations:{setTraceMetric(value){if(!['segment','palmWidth'].includes(value))throw Error('invalid trace metric');traceMetric=value;rebuildTrace();draw();return read();},load,seek,toggle,pause,frame,setMoment,setViewMode(value){if(!['spatial','camera','time'].includes(value))throw Error('invalid view mode');if(value!=='spatial'&&!cameraComparison.support().available)throw Error(cameraComparison.support().reason);viewMode=value;requestedViewMode=value;viewModeChosen=true;draw();frame();record({kind:'hand-replay.view',effective:read()});return read();},setOverlayOpacity(value){const n=Number(value);if(!Number.isFinite(n)||n<0||n>1)throw Error('invalid overlay opacity');overlayOpacity=n;draw();return read();},setScaleMode(value){if(!['predicted','palm'].includes(value))throw Error('invalid scale mode');scaleMode=value;draw();record({kind:'hand-replay.scale',effective:read()});return read();},setTeachers(value){showTeachers=!!value;draw();frame();return read();},setArcs(value){showArcs=!!value;draw();return read();},setSource(value){if(!['crop','full'].includes(value))throw Error('invalid camera view');sourceMode=value;draw();return read();},setFinger(value){const n=Number(value);if(!Number.isInteger(n)||n<0||n>4)throw Error('invalid finger');finger=n;rebuildTrace();draw();return read();},setOrigin(value){if(!['shared','tip'].includes(value))throw Error('invalid origin');commonOrigin=value==='shared';draw();return read();}},
+  return {read,operations:{setProjectionLocked(value){inspection.lock(value);draw();record({kind:'hand-replay.lock',effective:read()});return read();},rotateHands(value){inspection.rotate(value);draw();record({kind:'hand-replay.rotate',effective:read()});return read();},snapHands(){inspection.reset();draw();record({kind:'hand-replay.snap-all',effective:read()});return read();},snapHand(value){inspection.reset(value);draw();record({kind:'hand-replay.snap',model:value,effective:read()});return read();},setMeshFrozen(value){inspection.freeze(value);draw();record({kind:'hand-replay.hold',effective:read()});return read();},setTraceMetric(value){if(!['segment','palmWidth'].includes(value))throw Error('invalid trace metric');traceMetric=value;rebuildTrace();draw();return read();},load,seek,toggle,pause,frame,setMoment,setViewMode(value){if(!['spatial','camera','time','inspection'].includes(value))throw Error('invalid view mode');if(value!=='spatial'&&!cameraComparison.support().available)throw Error(cameraComparison.support().reason);viewMode=value;requestedViewMode=value;viewModeChosen=true;draw();frame();record({kind:'hand-replay.view',effective:read()});return read();},setOverlayOpacity(value){const n=Number(value);if(!Number.isFinite(n)||n<0||n>1)throw Error('invalid overlay opacity');overlayOpacity=n;draw();return read();},setScaleMode(value){if(!['predicted','palm'].includes(value))throw Error('invalid scale mode');scaleMode=value;draw();record({kind:'hand-replay.scale',effective:read()});return read();},setTeachers(value){showTeachers=!!value;draw();frame();return read();},setArcs(value){showArcs=!!value;draw();return read();},setSource(value){if(!['crop','full'].includes(value))throw Error('invalid camera view');sourceMode=value;draw();return read();},setFinger(value){const n=Number(value);if(!Number.isInteger(n)||n<0||n>4)throw Error('invalid finger');finger=n;rebuildTrace();draw();return read();},setOrigin(value){if(!['shared','tip'].includes(value))throw Error('invalid origin');commonOrigin=value==='shared';draw();return read();}},
    mount({root,document,invoke}){
+    inspectionControls=mountInspectionControls(document,invoke,read);
     const intro=document.createElement('p');intro.textContent='Same saved motion, precomputed models. Wrist aligned; equal scale. The arc follows the final finger segment at 1 m/s under gravity. Orbit the scene to inspect depth.';
     const limits=document.createElement('p');limits.textContent=catalog.limit;limits.style.fontSize='12px';
     preview=document.createElement('img');preview.alt='Exact recorded camera frame';preview.style.cssText='width:100%;display:block';
@@ -150,7 +154,7 @@ export default {
     scrub=document.createElement('input');scrub.type='range';scrub.min='0';scrub.step='1';scrub.setAttribute('aria-label','Recorded frame');scrub.oninput=()=>call('seek',scrub.value);
     fingerSelect=document.createElement('select');fingerSelect.setAttribute('aria-label','Launch finger');['Thumb','Index','Middle','Ring','Pinky'].forEach((s,i)=>{const o=document.createElement('option');o.value=i;o.textContent=s;fingerSelect.append(o);});fingerSelect.value=String(finger);fingerSelect.onchange=()=>call('setFinger',fingerSelect.value);
     originSelect=document.createElement('select');originSelect.setAttribute('aria-label','Launch origin');for(const [value,text]of [['shared','Shared origin · direction only'],['tip','Fingertip origin · position + direction']]){const o=document.createElement('option');o.value=value;o.textContent=text;originSelect.append(o);}originSelect.onchange=()=>call('setOrigin',originSelect.value);
-    viewSelect=document.createElement('select');viewSelect.setAttribute('aria-label','Comparison view');for(const [value,text]of [['camera','Recorded camera · silhouettes'],['spatial','Free 3D shape'],['time','Disagreement through time']]){const option=document.createElement('option');option.value=value;option.textContent=text;viewSelect.append(option);}viewSelect.onchange=()=>call('setViewMode',viewSelect.value);
+    viewSelect=document.createElement('select');viewSelect.setAttribute('aria-label','Comparison view');for(const [value,text]of [['inspection','Meshes + camera planes'],['camera','Recorded camera · silhouettes'],['spatial','Free 3D shape'],['time','Disagreement through time']]){const option=document.createElement('option');option.value=value;option.textContent=text;viewSelect.append(option);}viewSelect.onchange=()=>call('setViewMode',viewSelect.value);
     projectionNote=document.createElement('small');projectionNote.style.cssText='display:block;font-size:12px;line-height:1.5';
     const opacityLabel=document.createElement('label');opacityLabel.textContent='Silhouette opacity ';const opacityInput=document.createElement('input');opacityInput.type='number';opacityInput.min='0';opacityInput.max='1';opacityInput.step='.05';opacityInput.value=String(overlayOpacity);opacityInput.style.width='75px';opacityInput.oninput=()=>call('setOverlayOpacity',opacityInput.value);opacityLabel.append(opacityInput);host.controls.installNumberDrag?.({input:opacityInput,step:.05});root.append(viewSelect,opacityLabel,projectionNote);
     const frameButton=document.createElement('button');frameButton.textContent='Frame comparison';frameButton.onclick=()=>call('frame');status=document.createElement('div');status.setAttribute('role','status');status.style.overflowWrap='anywhere';
@@ -170,7 +174,7 @@ export default {
      more.append(sequenceSelect,fingerSelect,originSelect,frameButton,limits);
      preview.style.display='none';root.append(momentSelect,question,scaleSelect,sizeNote,sourceSelect,playButton,scrub,status,traceSelect,tracePanel,more,preview);
     }else root.append(intro,limits,sequenceSelect,preview,playButton,scrub,fingerSelect,originSelect,frameButton,status);draw();sync();
-   },async dispose(){disposed=true;token++;playing=false;unsubscribe?.();cameraComparison?.dispose();await scene.dispose();images=[];}
+   },async dispose(){disposed=true;token++;playing=false;unsubscribe?.();cameraComparison?.dispose();inspectionControls?.dispose();inspection?.dispose();await scene.dispose();images=[];}
   };
  }
 };

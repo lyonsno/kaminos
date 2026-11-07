@@ -1,0 +1,7 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import {sourceStageGeometry} from '../experiments/hand-replay-inspection.mjs';
+const vertices=Array.from({length:778},(_,i)=>[(i%13)*.002,(i%17)*.003,(i%7)*.002]);const camera={schema:'hand-state.source-camera.v1',basis:'opencv_x_right_y_down_z_forward',imageSize:[224,224],intrinsics:[500,490,112,112],translation:[.01,.02,.4],method:'observed dataset camera'};const h={status:'observed',vertices,joints:vertices.slice(0,21),camera};const box=[47,47,177,177],g=sourceStageGeometry(h,box);const world=(i)=>Array.from(g.positions.slice(i*3,i*3+3)).map((x,k)=>x+g.wrist[k]);
+const distance=(a,b)=>Math.hypot(...a.map((x,k)=>x-b[k]));assert(Math.abs(distance(world(5),world(90))/distance(vertices[5],vertices[90])-g.scale)<1e-5,'preserve Euclidean shape with a single uniform scale');
+for(const i of [0,5,90,777]){const p=world(i),c=g.sourceCamera,t=-c[2]/(p[2]-c[2]),hit=p.map((v,k)=>c[k]+t*(v-c[k]));const v=vertices[i].map((x,k)=>x+camera.translation[k]);const uv=[500*v[0]/v[2]+112,490*v[1]/v[2]+112];const expected=[(uv[0]-112)/130*g.planeSize[0],-(uv[1]-112)/130*g.planeSize[1]];assert(Math.abs(hit[0]-expected[0])<1e-6);assert(Math.abs(hit[1]-expected[1])<1e-6);assert(p[2]>0,'photo plane must be behind every vertex');}
+assert.deepEqual(h.vertices,vertices);console.log('camera-plane projection and undistorted stage geometry passed');
