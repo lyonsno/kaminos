@@ -1,5 +1,6 @@
 // kaminos-test: node
 import vm from 'node:vm';
+import { createHandFpsMeter } from '../demos/hand-mesh/fps.js';
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const elements = new Map();
@@ -7,7 +8,7 @@ const element = id => { if (!elements.has(id)) elements.set(id, { value: '', fil
 let finishSave;
 const save = new Promise(resolve => { finishSave = resolve; });
 const context = vm.createContext({ document: { getElementById: element }, indexedDB: {},
-  createModelStore: () => ({ put: () => save }), readLocalModels: async () => ({}), __route: {}, console });
+  createHandFpsMeter, createModelStore: () => ({ put: () => save }), readLocalModels: async () => ({}), __route: {}, console });
 let source = await fs.readFile(new URL('../demos/hand-mesh/main.js', import.meta.url), 'utf8');
 source = source.replace(/^import .*;$/gm, '').replace(/^initialize\(\)\.catch\(.*$/m, '');
 vm.runInContext(source, context);

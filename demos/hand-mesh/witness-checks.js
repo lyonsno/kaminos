@@ -9,8 +9,10 @@ export function verifyHandDemoReport(report, expectedRoot) {
   if (loaded?.application?.api !== 'kaminos.hand-mesh-app.v0' || !loaded.application.loaded || loaded.application.admission !== 'whole-operation-fifo' || loaded.application.ownership?.device !== 'borrowed') failures.push('missing or wrong hand application lifecycle');
   const live = report.steps?.find(row => row.name === 'live')?.state;
   if (!(live?.received > 0 && live.running && live.visible)) failures.push('no displayed live mesh');
+  if (!(Number.isFinite(live?.fps?.fps) && live.fps.fps > 0 && live.fps.frames >= 2 && live.fps.state === 'tracking')) failures.push('missing or invalid live hand FPS');
   const miss = report.steps?.find(row => row.name === 'miss')?.state;
   if (!(miss?.misses > 0 && miss.presentation === 'no-hand' && !miss.visible && miss.lastTimings?.mobreconMs === 0)) failures.push('miss did not skip reconstruction');
+  if (!(miss?.fps?.fps === 0 && miss.fps.state === 'no-hand')) failures.push('miss retains stale hand FPS');
   const required = ['reacquire', 'stop', 'reload', 'restart', 'cancel-pending', 'camera-failure', 'mobile'];
   if (!report.setup) required.push('invalid-import', 'corrupt-import');
   for (const name of required) if (!report.steps?.some(row => row.name === name)) failures.push(`missing step ${name}`);
@@ -23,6 +25,7 @@ export function verifyHandDemoReport(report, expectedRoot) {
   }
   const stopped = report.steps?.find(row => row.name === 'stop')?.state;
   if (stopped?.running || stopped?.cameraState !== 'off' || stopped?.visible) failures.push('camera/mesh not stopped');
+  if (!(stopped?.fps?.fps === null && stopped.fps.state === 'stopped' && stopped.fps.timings === null)) failures.push('stopped camera retains stale FPS');
   if (report.errors?.length || report.error) failures.push('browser/witness errors');
   if (!report.browserClosed) failures.push('browser did not close');
   return failures;

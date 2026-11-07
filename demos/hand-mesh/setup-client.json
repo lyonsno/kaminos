@@ -2,12 +2,16 @@
   "schema": "kaminos.hand-demo-client.v1",
   "files": [
     {
+      "path": "demos/hand-mesh/fps.js",
+      "sha256": "cc6f116ef1493527cdfa6b2ec2f0fb1c536fc69834147b8a1abd49fbc3552fd8"
+    },
+    {
       "path": "demos/hand-mesh/index.html",
-      "sha256": "11d64595676c61be62d75aa79cf5b161e91c19c1ca292fa01bfe82b1da8206b2"
+      "sha256": "ab422af2750cebcdf7e350fb9340f417154faa83e1f02e9e1a7fded1e96e40dd"
     },
     {
       "path": "demos/hand-mesh/main.js",
-      "sha256": "5cbe61dc6c9f8b8d4a268f9035b79a0e1b72e5446279363232134bd5dff713a4"
+      "sha256": "8fef5c3d4c1a3d661a21a6445c0c1e51498cd4f8af03a96a376199e7eb054c64"
     },
     {
       "path": "demos/hand-mesh/model-files.js",
@@ -15,7 +19,7 @@
     },
     {
       "path": "demos/hand-mesh/style.css",
-      "sha256": "32f11a3f9573963736db8b6a9941a9dda4e49f66a98cb137097a8892fd2b760e"
+      "sha256": "37f6e2ee9a7d4528baed6ef3ce284b4c57c7b4c0daf3a4c20c6d2f2651d9a89c"
     },
     {
       "path": "lib/three.core.js",

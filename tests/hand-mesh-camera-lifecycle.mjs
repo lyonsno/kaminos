@@ -1,5 +1,6 @@
 // kaminos-test: node
 import vm from 'node:vm';
+import { createHandFpsMeter } from '../demos/hand-mesh/fps.js';
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 
@@ -16,7 +17,7 @@ Object.assign(element('camera'), { videoWidth: 640, videoHeight: 480, async play
   requestVideoFrameCallback(fn) { const id = ++nextCallback; callbacks.set(id, fn); return id; }, cancelVideoFrameCallback(id) { callbacks.delete(id); } });
 const context = vm.createContext({ document: { getElementById: element }, indexedDB: {}, createModelStore: () => ({}),
   navigator: { mediaDevices: { async getUserMedia() { const track = { readyState: 'live', stop() { this.readyState = 'ended'; } }; const stream = { getTracks: () => [track], getVideoTracks: () => [track] }; streams.push(stream); return stream; } } },
-  __route: route, console,
+  __route: route, console, createHandFpsMeter, performance, requestAnimationFrame: () => 1, cancelAnimationFrame() {},
 });
 let source = await fs.readFile(new URL('../demos/hand-mesh/main.js', import.meta.url), 'utf8');
 source = source.replace(/^import .*;$/gm, '').replace(/^initialize\(\)\.catch\(.*$/m, '');

@@ -1,5 +1,6 @@
 import { WebGPURenderer, Scene, PerspectiveCamera, Mesh, BufferGeometry, BufferAttribute, MeshNormalMaterial, DoubleSide } from '../../lib/three.webgpu.js';
 import { createHandMeshApp } from '../../models/mobrecon/hand-mesh-app.js';
+import { createHandFpsMeter } from './fps.js';
 import { readLocalModels, readServedModels, createModelStore } from './model-files.js';
 
 const $ = id => document.getElementById(id);
@@ -7,6 +8,24 @@ const video = $('camera'), view = $('viewer'), store = createModelStore(indexedD
 let renderer, scene, camera, mesh, route;
 let stream = null, running = false, starting = false, loading = false, importing = false, ticket = 0, callback, flight = null, disposed = false;
 let received = 0, misses = 0, last = null, error = null, source = null, presentation = 'camera-off';
+const fpsMeter = createHandFpsMeter();
+let meterFrame;
+const setText = (id, text) => { const node = $(id); if (node.textContent !== text) node.textContent = text; };
+function paintMeter() {
+  const sample = fpsMeter.read(performance.now());
+  setText('hand-fps', sample.fps === null ? '—' : sample.fps.toFixed(1));
+  const ms = value => value === null || value === undefined ? '—' : value.toFixed(1);
+  setText('hand-timing', sample.timings ? `Detect ${ms(sample.timings.detectorMs)} ms · Mesh ${ms(sample.timings.mobreconMs)} ms` : 'New meshes / sec');
+  setText('hand-model', route?.identity?.mobrecon?.decoder === 'dsconv' ? 'DSConv' : route?.identity?.mobrecon?.decoder === 'spiralconv' ? 'SpiralConv' : 'WebGPU');
+}
+function animateMeter() {
+  paintMeter();
+  if (running && !disposed) meterFrame = requestAnimationFrame(animateMeter);
+}
+function stopMeter() {
+  cancelAnimationFrame(meterFrame); meterFrame = undefined;
+  fpsMeter.stop(); paintMeter();
+}
 const status = text => { $('status').textContent = text; };
 const draw = () => { if (renderer && !disposed) renderer.render(scene, camera); };
 function empty(text, state = 'camera-off') {
@@ -34,7 +53,7 @@ function present(result) {
 }
 async function stop() {
   const current = ++ticket;
-  running = false; starting = false;
+  running = false; starting = false; stopMeter();
   if (callback !== undefined) video.cancelVideoFrameCallback(callback);
   stream?.getTracks().forEach(track => track.stop()); stream = null; video.srcObject = null;
   empty('Your hand will appear here.'); buttons();
@@ -52,10 +71,12 @@ function schedule(current) {
       last = result;
       if (!result.hasHand) { misses++; empty('No hand detected. Bring your hand into view.', 'no-hand'); status('Looking for your hand…'); }
       else { received++; present(result); status('Move your fingers, then turn your hand.'); }
+      fpsMeter.record({ now: performance.now(), frameId: result.input?.frameId ?? null, hasHand: result.hasHand, timings: result.timings });
+      paintMeter();
     })().catch(cause => {
       if (current !== ticket || disposed) return;
       error = String(cause?.message ?? cause);
-      running = false; starting = false; ticket++;
+      running = false; starting = false; ticket++; stopMeter();
       stream?.getTracks().forEach(track => track.stop()); stream = null; video.srcObject = null;
       empty('Camera stopped. Try again.'); status(error); buttons();
     }).finally(() => { if (flight === currentFlight) flight = null; schedule(current); });
@@ -73,7 +94,7 @@ async function start() {
     if (current !== ticket || disposed) { acquired.getTracks().forEach(track => track.stop()); return; }
     stream = acquired; video.srcObject = stream; await video.play();
     if (current !== ticket || disposed) return;
-    running = true; received = 0; misses = 0; last = null;
+    running = true; fpsMeter.start(); animateMeter(); received = 0; misses = 0; last = null;
     empty('Looking for your hand…', 'no-hand'); status('Looking for your hand…'); schedule(current);
   } catch (cause) {
     if (current === ticket && !disposed) {
@@ -94,7 +115,7 @@ async function install(models, origin) {
       onProgress: event => status(`Loading ${event.model === 'mobrecon' ? 'hand reconstruction' : 'hand detection'}…`) });
     if (disposed) { await nextRoute.destroy(); return; }
     await route?.destroy();
-    route = nextRoute; source = origin; nextRoute = null;
+    route = nextRoute; source = origin; nextRoute = null; paintMeter();
     mesh.geometry.setIndex(Array.from(route.faces)); mesh.geometry.computeBoundingSphere();
     $('frame').disabled = false;
     $('setup-title').textContent = 'Your models are loaded.';
@@ -139,9 +160,9 @@ async function initialize() {
   };
   window.handMeshDemo = { read: () => ({ running, starting, loading, importing, received, misses, presentation, error, source, visible: mesh.visible,
     threshold: Number($('threshold').value), handedness: $('hand').value, identity: route?.identity ?? null, application: route?.snapshot() ?? null, viewerBackend: renderer.backend.isWebGPUBackend ? 'webgpu' : 'fallback',
-    lastAcquisition: last?.acquisition ?? null, lastTimings: last?.timings ?? null, cameraState: stream?.getVideoTracks()[0]?.readyState ?? 'off' }) };
+    fps: fpsMeter.read(performance.now()), lastAcquisition: last?.acquisition ?? null, lastTimings: last?.timings ?? null, cameraState: stream?.getVideoTracks()[0]?.readyState ?? 'off' }) };
   addEventListener('pagehide', () => {
-    disposed = true; ticket++; running = false;
+    disposed = true; ticket++; running = false; stopMeter();
     stream?.getTracks().forEach(track => track.stop()); stream = null;
     if (callback !== undefined) video.cancelVideoFrameCallback(callback);
     observer.disconnect();

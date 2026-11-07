@@ -2,7 +2,7 @@
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 const root = new URL('../../', import.meta.url);
-const paths = ['demos/hand-mesh/index.html', 'demos/hand-mesh/style.css', 'demos/hand-mesh/main.js', 'demos/hand-mesh/model-files.js',
+const paths = ['demos/hand-mesh/index.html', 'demos/hand-mesh/style.css', 'demos/hand-mesh/main.js', 'demos/hand-mesh/model-files.js', 'demos/hand-mesh/fps.js',
   'models/mobrecon/portable_pack.py', 'models/mobrecon/OPENMESH-LICENSE.txt', 'models/mobrecon/fixtures/tensor-shapes.json', 'models/wilor-hand-detector/pack-weights.py',
   'lib/three.core.js', 'lib/three.webgpu.js', 'lib/three.tsl.js', 'webgpu-inference-kit/LICENSE'];
 async function include(directory) {

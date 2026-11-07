@@ -1,0 +1,37 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import { createHandFpsMeter } from '../demos/hand-mesh/fps.js';
+
+const meter = createHandFpsMeter();
+assert.equal(meter.read(0).fps, null);
+meter.start();
+meter.record({ now: 100, frameId: 1, hasHand: true, timings: { detectorMs: 20, mobreconMs: 5 } });
+assert.equal(meter.read(100).fps, null, 'one result cannot establish a delivered interval');
+meter.record({ now: 150, frameId: 2, hasHand: true, timings: { detectorMs: 21, mobreconMs: 4 } });
+assert.equal(meter.read(150).fps, 20);
+assert.deepEqual(meter.read(150).timings, { detectorMs: 21, mobreconMs: 4 });
+assert.equal(meter.read(350).fps, 5, 'a stalled model must not retain its last fast FPS');
+meter.record({ now: 360, frameId: 2, hasHand: true });
+assert.equal(meter.read(360).frames, 2, 'a repeated camera frame cannot count as a new mesh');
+meter.record({ now: 400, frameId: 3, hasHand: false, timings: { detectorMs: 12, mobreconMs: 0 } });
+assert.equal(meter.read(400).fps, 0);
+assert.equal(meter.read(400).state, 'no-hand');
+assert.equal(meter.read(400).timings.mobreconMs, 0);
+meter.record({ now: 500, frameId: 4, hasHand: true });
+assert.equal(meter.read(500).fps, null, 'reacquisition starts a new sequence');
+meter.record({ now: 525, frameId: 5, hasHand: true });
+assert.equal(meter.read(525).fps, 40);
+meter.stop();
+assert.equal(meter.read(530).fps, null);
+assert.equal(meter.read(530).state, 'stopped');
+assert.equal(meter.read(530).timings, null, 'stopped timings cannot look live');
+meter.start();
+assert.equal(meter.read(600).frames, 0);
+assert.equal(meter.read(600).fps, null);
+meter.record({ now: 600, frameId: 1, hasHand: true });
+meter.record({ now: 600, frameId: 2, hasHand: true });
+assert.equal(meter.read(600).fps, null, 'zero-length intervals do not imply infinite FPS');
+meter.record({ now: 650, frameId: 3, hasHand: true, timings: { detectorMs: NaN, mobreconMs: Infinity } });
+assert.equal(meter.read(650).fps, 20);
+assert.deepEqual(meter.read(650).timings, { detectorMs: null, mobreconMs: null });
+console.log('hand FPS measures fresh deliveries and clears miss/stop/stall state');

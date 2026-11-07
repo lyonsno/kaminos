@@ -5,9 +5,9 @@ import { verifyVideoResponse } from '../demos/hand-mesh/witness-input.js';
 const root = '/owned/tree';
 const identity = { backend: 'webgpu-local', mobrecon: { backend: 'webgpu-local', bundleSha256: 'a' }, detector: { backend: 'webgpu-local', bundleSha256: 'b' } };
 const report = { runtime: { source: { repoRoot: root, commit: 'source-revision' } }, input: { kind: 'retained-camera-video', sha256: 'input-hash' }, playback: { sha256: 'input-hash', verifiedBlob: true, byteLength: 100 }, errors: [], browserClosed: true, steps: [
-  { name: 'import', state: { identity, viewerBackend: 'webgpu', application: { api: 'kaminos.hand-mesh-app.v0', loaded: true, admission: 'whole-operation-fifo', ownership: { device: 'borrowed' } } } }, { name: 'live', state: { received: 3, running: true, visible: true } },
-  { name: 'miss', state: { misses: 2, presentation: 'no-hand', visible: false, lastTimings: { mobreconMs: 0 } } },
-  { name: 'stop', state: { running: false, cameraState: 'off', visible: false } }, { name: 'reload', state: { source: 'browser-storage' } },
+  { name: 'import', state: { identity, viewerBackend: 'webgpu', application: { api: 'kaminos.hand-mesh-app.v0', loaded: true, admission: 'whole-operation-fifo', ownership: { device: 'borrowed' } } } }, { name: 'live', state: { received: 3, running: true, visible: true, fps: { fps: 20, state: 'tracking', frames: 3 } } },
+  { name: 'miss', state: { misses: 2, presentation: 'no-hand', visible: false, lastTimings: { mobreconMs: 0 }, fps: { fps: 0, state: 'no-hand' } } },
+  { name: 'stop', state: { running: false, cameraState: 'off', visible: false, fps: { fps: null, state: 'stopped', timings: null } } }, { name: 'reload', state: { source: 'browser-storage' } },
   ...['reacquire', 'restart', 'cancel-pending', 'invalid-import', 'corrupt-import', 'camera-failure', 'mobile'].map(name => ({ name })),
 ] };
 assert.deepEqual(verifyHandDemoReport(report, root), []);
@@ -41,4 +41,9 @@ console.log('hand demo witness false-closure controls passed');
 for (const mutate of [r => delete r.steps[0].state.application, r => r.steps[0].state.application.loaded = false, r => r.steps[0].state.application.admission = 'direct']) {
   const bad = structuredClone(report); mutate(bad);
   assert.ok(verifyHandDemoReport(bad, root).length, 'a legacy or missing application route must not pass application adoption evidence');
+}
+
+for (const mutate of [r => delete r.steps[1].state.fps, r => r.steps[1].state.fps.fps = NaN, r => r.steps[1].state.fps.frames = 1, r => r.steps[2].state.fps.fps = 20, r => r.steps[3].state.fps.fps = 20]) {
+  const bad = structuredClone(report); mutate(bad);
+  assert.ok(verifyHandDemoReport(bad, root).some(s => s.includes('FPS')), 'missing, stale or fabricated FPS evidence must fail');
 }
