@@ -22,9 +22,9 @@ const positionVersion=line.geometry.attributes.position.version;tool.refresh(tru
 root.updateWorldMatrix(true,true);assert.ok(edges.matrix.equals(root.matrixWorld.clone().invert().multiply(mesh.matrixWorld)),'Retained edges follow the actual selected mesh');
 root.position.x=3;body.position.y=1;tool.refresh(true);root.updateWorldMatrix(true,true);assert.ok(edges.matrix.equals(root.matrixWorld.clone().invert().multiply(mesh.matrixWorld)),'External mesh/root transforms update the edge placement');
 tool.refresh(false);assert.equal(overlay.visible,false);tool.refresh(true);assert.equal(canvases,1,'Toggling anatomy reuses its resources');
-selected=0;tool.refresh(true);assert.ok(!overlay.children.includes(edges),'Selecting another body releases old selection edges');
-assert.equal(released,2,'Only the old edge geometry/material are released');
-selected=1;tool.refresh(true);const replacement=new T.BoxGeometry(3,.2,.2),priorEdges=overlay.children.find(o=>o.isLineSegments);mesh.geometry=replacement;tool.refresh(true);assert.notEqual(overlay.children.find(o=>o.isLineSegments).geometry,priorEdges.geometry,'Replacing source geometry refreshes its edges');
+selected=0;tool.refresh(true);assert.ok(overlay.children.includes(edges)&&!edges.visible,'Unselected live body retains hidden cached edges');
+assert.equal(released,0,'Changing selection must not dispose reusable edges');
+selected=1;tool.refresh(true);assert.equal(overlay.children.find(o=>o.isLineSegments),edges,'Returning to a selected mesh reuses its edge extraction');const replacement=new T.BoxGeometry(3,.2,.2),priorEdges=overlay.children.find(o=>o.isLineSegments);mesh.geometry=replacement;tool.refresh(true);assert.notEqual(overlay.children.find(o=>o.isLineSegments).geometry,priorEdges.geometry,'Replacing source geometry refreshes its edges');
 await tool.dispose();assert.ok(!overlay.parent);assert.ok(released>2,'Closing releases retained resources');mesh.geometry.dispose();mesh.material.dispose();
 
 const first=actuatorReport(model);assert.strictEqual(actuatorReport(model),first,'Unchanged authored motion reuses its whole-cycle analysis');

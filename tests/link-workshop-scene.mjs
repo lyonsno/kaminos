@@ -58,3 +58,10 @@ console.log('Attachment placement, native offset editing, moving assembly, body-
   display.mechanism.nodes[2].length-=.1;assert.equal(records.reloadable(display),true,'Corrected content can be validated again');
  }finally{T.ObjectLoader.prototype.parse=parse;}
 }
+
+// Removing the last returned shell must clear stale scene-registration metadata.
+{
+ const old=structuredClone(capturedWithBodies),object=mechanismObject(branched,old.geometry);object.userData.kaminosSceneObject=old;delete object.userData.linkGeometry;
+ const serializer=createSceneRecordOperations({readers:{transform:()=>({position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}),materials:()=>null}}),saved=serializer.serialize({...old,object});
+ assert.equal(saved.geometry,undefined,'An absent live shell must override the original scene record');assert.equal(serializer.reloadable(saved),true);
+}

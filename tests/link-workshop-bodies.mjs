@@ -52,3 +52,10 @@ const existing=fastRoot.children[0];fast.setBodies({schema:'kaminos.assembly-geo
  const dispatch=T.EventDispatcher.prototype.dispatchEvent;let discarded=0;T.EventDispatcher.prototype.dispatchEvent=function(event){if(event.type==='dispose'&&(this.isBufferGeometry||this.isMaterial))discarded++;return dispatch.call(this,event);};
  try{recipe.nodes[1].angles=[.2,1.2];view.update(recipe,0,1,false);assert.equal(discarded,0,'Rigid pose edit must not build and throw away matching bodies');root.traverse(o=>{if(o.geometry)assert.ok(geometry.has(o.geometry));for(const m of Array.isArray(o.material)?o.material:[o.material])if(m)assert.ok(materials.has(m));});}finally{T.EventDispatcher.prototype.dispatchEvent=dispatch;view.dispose();}
 }
+
+{
+ const view=createMechanismView(new T.Group());view.update(m,0,1,false);const packet=view.exportBodies();view.importBodies(packet);
+ const survivor=view.bodyMeshes('link:2')[0];view.clearReplacements(['link:1']);
+ assert.equal(view.bodyManifest().bodies.find(b=>b.id==='link:1').replacement,false);
+ assert.equal(view.bodyManifest().replacements,packet.bodies.length-1);assert.equal(view.bodyMeshes('link:2')[0],survivor,'Dropping one shell retains every unaffected rendered mesh');view.dispose();
+}

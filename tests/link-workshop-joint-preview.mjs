@@ -43,16 +43,26 @@ console.log('Native joint previews retain geometry and compact history survives 
  const saved=JSON.parse(await fs.readFile(new URL('./fixtures/link-workshop-operator-kiln.json',import.meta.url)));
  root=new T.Group();root.userData.linkMechanism=saved;scene.add(root);entries.length=0;entries.push({id:'mechanism',object:root});
  runtime=await createMechanismController({host,inputs:{root}});
- const packet=runtime.operations.exportBodies();packet.bodies=packet.bodies.filter(b=>b.id.startsWith('link:'));await runtime.operations.importBodies(packet);
- const panels=new Map(packet.bodies.map(b=>[b.id,runtime.read().bodies.bodies.find(v=>v.id===b.id).geometryKey]));
+ const packet=runtime.operations.exportBodies();await runtime.operations.importBodies(packet);
+ const panels=new Map(packet.bodies.filter(b=>b.id.startsWith('link:')).map(b=>[b.id,runtime.read().bodies.bodies.find(v=>v.id===b.id).geometryKey]));
  let parses=0;const parse=T.ObjectLoader.prototype.parse;T.ObjectLoader.prototype.parse=function(...args){parses++;return parse.apply(this,args);};
  try{
+  for(const mode of ['build','B'])for(const joint of [1,2,3]){
+   runtime.operations.mode({value:mode});runtime.operations.select({joint});const h=adapter.target(),base=h.read();
+   edits.begin(h.id);edits.preview(base);edits.cancel();assert.deepEqual(runtime.read().recipe,base.recipe,'Entering and cancelling a modal transform restores exact recipe values');assert.equal(runtime.read().bodies.replacements,packet.bodies.length,'No-op modal entry/cancel retains every returned body');
+   edits.begin(h.id);edits.preview({...base,...transformPose(base,{operation:'rotate',axis:'z',amount:.25})});edits.cancel();assert.deepEqual(runtime.read().recipe,base.recipe,'Cancel restores exact angles without quaternion roundoff');assert.equal(runtime.read().bodies.replacements,packet.bodies.length);
+  }
+  let exports=0;const serialize=T.Object3D.prototype.toJSON;T.Object3D.prototype.toJSON=function(...args){exports++;return serialize.apply(this,args);};parses=0;
+  try{runtime.operations.period({seconds:4});edits.undo();edits.redo();assert.equal(exports,0,'Playback-speed history must not serialize unchanged meshes');assert.equal(parses,0,'Playback-speed history must not decode unchanged meshes');}finally{T.Object3D.prototype.toJSON=serialize;}
+  runtime.operations.mount({joint:2});const mount=adapter.target(),mountBase=mount.read();
+  for(const amount of [0,.13]){edits.begin(mount.id);edits.preview({...mountBase,...transformPose(mountBase,{operation:'rotate',axis:'z',amount})});edits.cancel();assert.deepEqual(runtime.read().recipe,mountBase.recipe,'Cancel restores exact mount frames');}
+  runtime.operations.mode({value:'build'});runtime.operations.select({joint:1});parses=0;
   for(const [joint,amount]of [[1,12],[1,8],[2,12],[3,-20]]){
    runtime.operations.select({joint});const h=adapter.target(),base=h.read(),lengths=base.recipe.nodes.map(n=>n.length);
    edits.begin(h.id);for(const fraction of [.25,.5,1])edits.preview({...base,...transformPose(base,{operation:'rotate',axis:'z',amount:amount*Math.PI/180*fraction})});edits.commit();
    assert.deepEqual(runtime.read().recipe.nodes.map(n=>n.length),lengths,'Native rotation preserves exact authored lengths');
    for(const [id,key]of panels){const actual=runtime.read().bodies.bodies.find(b=>b.id===id);assert.equal(actual.geometryKey,key);assert.equal(actual.replacement,true,'Rotation retains each returned door panel');}
   }
-  assert.equal(parses,0,'Repeated rigid panel rotations do not decode returned meshes');
+  assert.ok(runtime.read().bodies.bodies.filter(b=>b.kind==='link').every(b=>b.replacement));
  }finally{T.ObjectLoader.prototype.parse=parse;edits.clear();await runtime.dispose();}
 }

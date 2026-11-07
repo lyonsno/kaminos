@@ -42,10 +42,10 @@ export function createSurfaceTool({root,view,host,win,session,relatedAssets,ensu
    }
    prune(lines,keepLines);prune(labels,keepLabels);
   }
-  const meshes=selected>=0?view.bodyMeshes(`link:${selected}`):[];prune(edges,new Set(meshes));root.updateWorldMatrix(true,true);const inverse=root.matrixWorld.clone().invert();
+  const meshes=selected>=0?view.bodyMeshes(`link:${selected}`):[];prune(edges,new Set(view.bodyMeshes()));for(const [mesh,record]of edges)record.object.visible=meshes.includes(mesh);root.updateWorldMatrix(true,true);const inverse=root.matrixWorld.clone().invert();
   for(const mesh of meshes){const g=mesh.geometry,revision=[g.attributes.position,g.attributes.position.version,g.index,g.index?.version],prior=edges.get(mesh);let record=prior;
    if(!record||record.geometry!==g||record.revision.some((v,i)=>v!==revision[i])){release(record?.object);const object=new T.LineSegments(new T.EdgesGeometry(g,30),new T.LineBasicMaterial({color:0xffd385,transparent:true,opacity:.65,depthTest:false}));object.matrixAutoUpdate=false;object.raycast=()=>{};overlay.add(object);record={object,geometry:g,revision};edges.set(mesh,record);}
-   record.object.matrix.copy(inverse).multiply(mesh.matrixWorld);
+   record.object.visible=true;record.object.matrix.copy(inverse).multiply(mesh.matrixWorld);
   }
  }
  return {preview,clear,state,values,setCut,refresh,async dispose(){closed=true;await clear();prune(lines,new Set());prune(labels,new Set());prune(edges,new Set());overlay.removeFromParent();}};

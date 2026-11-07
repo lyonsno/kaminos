@@ -114,8 +114,9 @@ export function remapBodyGeometry(before,after,geometry,{removedNode=null,remove
  return {schema:'kaminos.assembly-geometry.v1',bodies};
 }
 export function createBodyView(root){
- let construction=null,key=null;const bodies=new Map(),replacements=new Set();
+ let construction=null,key=null,lastArgs;const bodies=new Map(),replacements=new Set();
  function update(m,t,selectedPiston=null){
+  lastArgs=[m,t,selectedPiston];
   const next=JSON.stringify([m.nodes,m.pistons]);
   if(next!==key){
    const fresh=constructBodies(m,bodies),old=new Map(bodies);bodies.clear();
@@ -128,6 +129,12 @@ export function createBodyView(root){
   }
   root.updateMatrixWorld(true);
  }
+ function clearReplacements(ids){
+  const drop=new Set(ids.filter(id=>replacements.has(id)));if(!drop.size)return;
+  const keep=new Map([...bodies].filter(([id])=>!drop.has(id))),fresh=constructBodies(lastArgs[0],keep);
+  for(const def of fresh.defs){if(drop.has(def.id)){release(bodies.get(def.id).object);root.add(def.object);replacements.delete(def.id);}bodies.set(def.id,def);}
+  construction=fresh;update(...lastArgs);
+ }
  function manifest(){return {schema:'kaminos.assembly-bodies.v1',bodies:[...bodies.values()].map(b=>({id:b.id,kind:b.kind,geometryKey:b.geometryKey,replacement:replacements.has(b.id),frame:'body-local; rigid pose only',position:b.object.position.toArray(),quaternion:b.object.quaternion.toArray()})),replacements:replacements.size,travel:construction?.travels??[],warnings:(construction?.travels??[]).flatMap((p,i)=>p.rod>p.min? [`Piston ${i+1}: requested travel puts the rod through the rear of the barrel at retraction.`]:[])};}
  function exportBodies(ids=null){return {schema:'kaminos.assembly-geometry.v1',bodies:[...bodies.values()].filter(b=>!ids||ids.has(b.id)).map(b=>{const clone=b.object.clone(true);clone.position.set(0,0,0);clone.quaternion.identity();clone.scale.set(1,1,1);clone.updateMatrix();return {id:b.id,geometryKey:b.geometryKey,object:clone.toJSON()};})};}
  function importBodies(packet){
@@ -139,5 +146,5 @@ export function createBodyView(root){
  function bodyMeshes(id=null,names=null){const out=[];for(const b of bodies.values())if(!id||b.id===id)b.object.traverse(o=>{if(o.isMesh&&(!names||names.includes(o.name)))out.push(o);});return out;}
  function pistonMeshes(){const out=[];for(const b of bodies.values())if(/^piston:\d+:/.test(b.id))b.object.traverse(o=>{if(o.isMesh)out.push(o);});return out;}
  function bodySelection(mesh){for(const b of bodies.values()){let o=mesh;while(o){if(o===b.object){const part=mesh.userData.copyPart;return part?{id:b.id,names:bodyMeshes(b.id).filter(m=>m.userData.copyPart===part).map(m=>m.name)}:{id:b.id};}o=o.parent;}}throw Error('Choose an assembly body');}
- return {update,manifest,exportBodies,importBodies,bodyMeshes,pistonMeshes,bodySelection,replacementState(){return exportBodies(replacements);},dispose(){for(const b of bodies.values())release(b.object);bodies.clear();}};
+ return {update,manifest,exportBodies,importBodies,clearReplacements,bodyMeshes,pistonMeshes,bodySelection,replacementState(){return exportBodies(replacements);},dispose(){for(const b of bodies.values())release(b.object);bodies.clear();}};
 }
