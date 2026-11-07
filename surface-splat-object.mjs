@@ -23,6 +23,10 @@ class SurfaceSplatObject extends Group{
  }
  copy(source,recursive=true){
   super.copy(source,false);this.mount(source.sourceProxy,source.payload,source.splats.read());
+  // Loader/editor shadow flags are applied to the mounted proxy, after the
+  // detached template was read. Carry those effective flags into each copy.
+  const originals=[];source.proxy.traverse(n=>{if(n.isMesh)originals.push(n);});let index=0;
+  this.proxy.traverse(n=>{if(n.isMesh){const original=originals[index++];n.castShadow=original.castShadow;n.receiveShadow=original.receiveShadow;}});
   if(recursive)for(const child of source.children)if(child!==source.proxy&&child!==source.splats.root)this.add(child.clone());return this;
  }
  raycast(raycaster,hits){
