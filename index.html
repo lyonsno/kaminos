@@ -29522,7 +29522,7 @@ function setupAuthoringAssets(){
   // Browser U2Net for opaque photos: the shop-hosted package (immutable revision, sha-checked on load).
   const U2NET_PACKAGE_URL='https://huggingface.co/BasinShapers/u2net-webgpu/resolve/f4f82a54b6e8d7ffd4321005dbff1cb03198c78b/f32/';
   let u2netRunner=null;
-  const trellisPageRunInner=async({pixels,highResolutionPixels,image,label='TRELLIS page',signal,onPhase,onInput,finishMesh=true,textureSize=1024,scheduling,finishingMode='surface-preserving'}={})=>{
+  const trellisPageRunInner=async({pixels,highResolutionPixels,image,label='TRELLIS page',signal,onPhase,onInput,finishMesh=true,textureSize=1024,scheduling,finishingMode='original-remesh'}={})=>{
     const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};
     const [{runTrellisInPage,createTrellisPageCheckpoints},{createBrowserMeshPostprocess},{createWasmXatlasUnwrapper}]=await Promise.all([
       import('./authoring-trellis-page.mjs'),import('./models/trellis2/mesh-cleanup.js'),import('./models/trellis2/wasm-xatlas.js')]);
@@ -29639,7 +29639,7 @@ function setupAuthoringAssets(){
     const saved=await persistTrellisPageRun(out);
     const levels=options?.awaitLevels===false?null:await window.__kaminosLastGenerationLevelsPromise;
     return {...saved,...(levels?{levels}:{}),timing:out.timing};};
-  // The Generate drawer's "TRELLIS 2 · this page" target: the prepared cutout, on this page's GPU.
+  // The Generate drawer's TRELLIS 2 target: the prepared cutout, on this page's GPU.
   let trellisPageAvailability=null,authoringTrellisPageGenerator=null;
   const trellisPage=()=>{
     if(!authoringTrellisPageGenerator){
@@ -29649,7 +29649,7 @@ function setupAuthoringAssets(){
       }).catch(error=>{trellisPageAvailability={status:'unavailable',message:`TRELLIS availability: ${error.message}`};redraw();});
       authoringTrellisPageGenerator=createTrellisPageAuthoringGeneration({availability:()=>trellisPageAvailability,changed:()=>redraw(),
         blocked:()=>authoringImageGenerator?.busy()?'An image is generating. Generate the mesh when it is saved.':meshBusy('sf3d')?'Stable Fast 3D is generating.':meshBusy('trellis')?'TRELLIS is generating.':meshBusy('trellisPage')?'TRELLIS is generating on this page.':null,
-        runPage:options=>trellisPageRun({...options,finishingMode:document.getElementById('asset-trellis-finishing')?.value??'surface-preserving'}),persist:(glb,generation,label,extra)=>persistTrellisPageRun({glb,generation,label,...extra})});
+        runPage:trellisPageRun,persist:(glb,generation,label,extra)=>persistTrellisPageRun({glb,generation,label,...extra})});
     }
     return authoringTrellisPageGenerator;
   };
