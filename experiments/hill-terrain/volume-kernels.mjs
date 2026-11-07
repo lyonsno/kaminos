@@ -77,7 +77,7 @@ fn contact_velocity(point:vec3f,velocity:vec3f,mass:f32,margin:f32)->vec3f{
  if(id.x>=arrayLength(&cells)){return;}let mass=f32(atomicLoad(&cells[id.x].mass))/FP;if(mass<=0.){return;}
  let point=node_position(id.x);var v=vec3f(f32(atomicLoad(&cells[id.x].x)),f32(atomicLoad(&cells[id.x].y)),f32(atomicLoad(&cells[id.x].z)))/(FP*mass);
  v.y-=cfg.forces.y*cfg.forces.x;
- if(cfg.action.w>0.){let d=distance(point,cfg.action.xyz);v+=cfg.impulse.xyz*max(0.,1.-d/cfg.action.w);}
+ if(cfg.action.w>0.&&cfg.impulse.w<1.){let d=distance(point,cfg.action.xyz);v+=cfg.impulse.xyz*max(0.,1.-d/cfg.action.w);}
  // A prescribed growth boundary supplies displacement and its matching velocity.
  let r2=dot(point.xz,point.xz);let influence=exp(-r2/.75);let floor=cfg.drive.x*influence;
  if(point.y<floor+cfg.origin.w*.5&&v.y<cfg.drive.y*influence){v.y=cfg.drive.y*influence;}
@@ -135,7 +135,7 @@ fn contact_body(inputBody:Body,normal:vec3f,depth:f32,point:vec3f,supportVelocit
  }return b;
 }
 @compute @workgroup_size(1) fn kick(){
- if(cfg.impulse.w<1.){return;}let i=u32(cfg.impulse.w)-1u;if(i>=arrayLength(&bodies)||bodies[i].p.w==0.){return;}bodies[i].v=vec4f(bodies[i].v.xyz+cfg.impulse.xyz,0.);
+ if(cfg.impulse.w<1.){return;}let i=u32(cfg.impulse.w)-1u;if(i>=arrayLength(&bodies)||bodies[i].p.w==0.){return;}var b=bodies[i];b.v=vec4f(b.v.xyz+cfg.impulse.xyz,0.);if(cfg.action.w>0.){b.w=vec4f(b.w.xyz+inverse_inertia(b,cross(cfg.action.xyz-b.p.xyz,cfg.impulse.xyz/b.p.w)),0.);}bodies[i]=b;
 }
 @compute @workgroup_size(1) fn rigid(){
  for(var i=0u;i<arrayLength(&bodies);i++){
@@ -197,5 +197,23 @@ fn rot(q:vec4f,v:vec3f)->vec3f{return v+2.*cross(q.xyz,cross(q.xyz,v)+q.w*v);}
  if(id.x>=arrayLength(&localVertices)){return;}let b=bodies[vertexBodies[id.x]];let j=(id.x/3u)*3u;
  let a=localVertices[j].xyz;let c=localVertices[j+1u].xyz;let d=localVertices[j+2u].xyz;
  positions[id.x]=vec4f(b.p.xyz+rot(b.q,localVertices[id.x].xyz),1.);normals[id.x]=vec4f(rot(b.q,normalize(cross(c-a,d-a))),0.);
+}
+`;
+
+// Pointer queries use the current resident poses and source planes. Only this
+// 32-byte hit record is acquired; no soil or rigid-state snapshot is needed.
+export const ROCK_PICK_KERNEL=VOLUME_KERNELS+`
+@group(0) @binding(8) var<uniform> ray:array<vec4f,2>;
+@group(0) @binding(9) var<storage,read_write> hit:array<vec4f>;
+@compute @workgroup_size(1) fn pick_rock(){
+ var best=1e30;var index=0.;var free=0.;
+ for(var i=0u;i<arrayLength(&bodies);i++){
+  let b=bodies[i];let o=invrot(b.q,ray[0].xyz-b.p.xyz);let d=invrot(b.q,ray[1].xyz);var near=-1e30;var far=1e30;var miss=false;
+  for(var j=0u;j<b.shape.y;j++){let p=planes[b.shape.x+j];let den=dot(p.xyz,d);let gap=p.w-dot(p.xyz,o);
+   if(abs(den)<1e-8){if(gap<0.){miss=true;break;}}else{let t=gap/den;if(den<0.){near=max(near,t);}else{far=min(far,t);}}
+  }
+  let t=select(near,far,near<0.);if(!miss&&near<=far&&t>=0.&&t<best){best=t;index=f32(i+1u);free=select(0.,1.,b.p.w>0.);}
+ }
+ hit[0]=vec4f(index,best,free,0.);hit[1]=vec4f(ray[0].xyz+ray[1].xyz*select(0.,best,index>0.),0.);
 }
 `;
