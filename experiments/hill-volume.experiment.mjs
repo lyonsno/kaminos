@@ -7,14 +7,16 @@ import {createVolumeGPU} from './hill-terrain/volume-gpu.mjs';
 export default {
  id:'hill-volume',title:'Hill · rock and soil volumes',
  async create({host,inputs={},record=()=>{}}){
-  let model=makeVolumeSpecimen(inputs.config),solver=null,renderer=null,starting=null,playing=false,disposed=false,error=null,credit=0,advancing=false,generation=0,growthEnabled=false,operationTail=Promise.resolve(),queuedOperations=0;
+  let initialConfig={...(inputs.config??{})};
+  let model=makeVolumeSpecimen(initialConfig),solver=null,renderer=null,starting=null,playing=false,disposed=false,error=null,credit=0,advancing=false,generation=0,growthEnabled=false,operationTail=Promise.resolve(),queuedOperations=0;
+  let releaseRenderer;const rendererAvailable=new Promise(resolve=>{releaseRenderer=resolve;});
   const session=await host.scene.open(),root=new THREE.Group();root.name='Rock and soil volume specimen';
-  const settings={rock:7,weatherDepth:.025,growthRate:.025,pushRadius:.55,pushSpeed:1.5,pushX:-.7,pushY:.4,pushZ:1.0,...inputs.settings};
+  const settings={rock:7,weatherDepth:.025,growthRate:.025,pushRadius:.55,pushSpeed:1.5,pushX:-.7,pushY:.4,pushZ:1.0,rockPushX:0,rockPushY:0,rockPushZ:2,...inputs.settings};
   const floor=new THREE.Mesh(new THREE.BoxGeometry(4.8,.12,4.8),new MeshStandardNodeMaterial({color:0x575f4d,roughness:1}));floor.position.set(0,-.07,.5);floor.receiveShadow=true;root.add(floor);
-  let asset,renderObjects=[],attributes=[],nodes=[],status,playButton,growthToggle;
-  const read=()=>({id:'hill-volume',objectId:asset?.id,initialized:Boolean(solver),generation,playing,advancing,queuedOperations,growthEnabled,error,settings:{...settings},source:model.source,weatheredMass:model.weatheredMass,
+  let asset,renderObjects=[],attributes=[],nodes=[],status,playButton,growthToggle,contactToggle;
+  const read=()=>({id:'hill-volume',objectId:asset?.id,initialized:Boolean(solver),generation,playing,advancing,queuedOperations,growthEnabled,error,settings:{...settings},source:model.source,conditioning:model.conditioning,weatheredMass:model.weatheredMass,
    gpu:solver?.read()??null,view:session.readView(),continuation:'settings/initial configuration via recipe; evolved state via explicit snapshot',capabilities:{heightfieldInput:false,soilPlasticity:true,reciprocalSoilRock:true,representedJointRelease:true,newFracture:false,ecologicalSuccession:false}});
-  const sync=()=>{if(status)status.textContent=error?error:!solver?'Constructing material volume…':`${solver.read().particleCount.toLocaleString()} material samples · ${solver.read().seconds.toFixed(2)} s · ${playing?'running':'paused'}${advancing?' · computing':''}`;if(playButton)playButton.textContent=playing?'Pause':'Play';if(growthToggle)growthToggle.checked=growthEnabled;};
+  const sync=()=>{if(status)status.textContent=error?error:!solver?'Constructing material volume…':`${solver.read().particleCount.toLocaleString()} material samples · ${solver.read().seconds.toFixed(2)} s · ${playing?'running':'paused'}${advancing?' · computing':''}`;if(playButton)playButton.textContent=playing?'Pause':'Play';if(growthToggle)growthToggle.checked=growthEnabled;if(contactToggle)contactToggle.checked=model.config.conditionContacts;};
   function releaseDisplay(){for(const m of renderObjects){root.remove(m);m.geometry.dispose();m.material.dispose();}for(const n of nodes)n.dispose();if(renderer)for(const a of attributes)renderer._attributes.delete(a);renderObjects=[];attributes=[];nodes=[];}
   async function initialize(r){
    renderer=r;if(!r.backend?.isWebGPUBackend||!r.backend.device)throw Error('Volume specimen requires native host WebGPU');
@@ -27,7 +29,7 @@ export default {
    solver=await createVolumeGPU({device:r.backend.device,model,display:{soilPositions:soilP.raw,soilNormals:soilN.raw,rockPositions:rockP.raw,rockNormals:rockN.raw,indirect:indirect.raw}});
    if(disposed){solver.dispose();solver=null;return;}if(growthEnabled)solver.setDrive(settings.growthRate);sync();session.redraw();
   }
-  floor.onBeforeRender=r=>{if(disposed||starting||solver||error)return;starting=initialize(r).catch(e=>{error=e.message;playing=false;sync();session.redraw();});};
+  floor.onBeforeRender=r=>{if(disposed)return;renderer=r;releaseRenderer(r);if(starting||solver||error)return;starting=initialize(r).catch(e=>{error=e.message;playing=false;sync();session.redraw();});};
   try{asset=await session.attach(root,{owned:true,metadata:{label:root.name,source:'hill:direct-3d-material-volumes-v1',type:'experiment'}});}catch(e){floor.geometry.dispose();floor.material.dispose();await session.dispose();throw e;}
   const defaultView={position:[4.5,3.1,5.0],target:[0,.55,.45],fov:42};session.setView(inputs.view??defaultView);
   async function requireSolver(){await starting;if(!solver)throw Error(error||'Material source is not mounted');if(disposed)throw Error('Specimen disposed');return solver;}
@@ -43,20 +45,23 @@ export default {
    setSettings(patch){for(const [k,v] of Object.entries(patch)){if(!(k in settings)||!Number.isFinite(v))throw Error('Invalid specimen setting '+k);if(['weatherDepth','pushRadius'].includes(k)&&v<=0)throw Error(k+' must be positive');if(k==='rock'&&(!Number.isInteger(v)||!model.bodies[v]))throw Error('Choose an existing rock');}Object.assign(settings,patch);if(growthEnabled)solver?.setDrive(settings.growthRate);sync();record({kind:'hill-volume.settings',effective:{...settings}});return read();},
    async push(){const s=await requireSolver();if(advancing)await s.done();s.push({center:[settings.pushX,settings.pushY,settings.pushZ],radius:settings.pushRadius,velocity:[settings.pushSpeed,0,0]});record({kind:'hill-volume.impulse',settings:{...settings}});return runSteps(1);},
    async release(){const s=await requireSolver();if(advancing)await s.done();s.release(settings.rock);record({kind:'hill-volume.joint-release',rock:settings.rock});return read();},
+   async pushRock(){const s=await requireSolver();const velocity=[settings.rockPushX,settings.rockPushY,settings.rockPushZ];s.pushRock(settings.rock,velocity);record({kind:'hill-volume.rock-impulse',rock:settings.rock,velocity});return runSteps(1);},
    async setGrowth(value){if(typeof value!=='boolean')throw Error('Growth enabled must be boolean');const s=await requireSolver();growthEnabled=value;s.setDrive(value?settings.growthRate:0);sync();record({kind:'hill-volume.growth',rate:value?settings.growthRate:0});return read();},
    async weather(){playing=false;const s=await requireSolver();await s.done();await s.synchronizeModel();const result=weatherBody(model,settings.rock,settings.weatherDepth);s.dispose();solver=null;releaseDisplay();generation++;starting=initialize(renderer).catch(e=>{error=e.message;throw e;});await starting;record({kind:'hill-volume.weather',rock:settings.rock,depth:settings.weatherDepth,...result});sync();return{...read(),weathering:result};},
-   async reset(){playing=false;growthEnabled=false;if(solver){await solver.done();solver.dispose();solver=null;}model=makeVolumeSpecimen(inputs.config);releaseDisplay();generation++;credit=0;error=null;starting=initialize(renderer);await starting;sync();record({kind:'hill-volume.reset'});return read();},
+   async reset(){playing=false;growthEnabled=false;if(solver){await solver.done().catch(()=>{});solver.dispose();solver=null;}model=makeVolumeSpecimen(initialConfig);releaseDisplay();generation++;credit=0;error=null;starting=null;if(renderer){starting=initialize(renderer);await starting;}sync();session.redraw();record({kind:'hill-volume.reset'});return read();},
    frame(){session.setView(defaultView);session.redraw();return read();},
    async snapshot(){await operationTail;return(await requireSolver()).snapshot();},
    recipe(){return{config:model.config,settings:{...settings},view:session.readView()};},
    gpu(){if(!solver)throw Error('Material source not mounted');root.updateMatrixWorld(true);return{device:renderer.backend.device,...solver.resources,generation,coordinateSpace:'specimen-local',localToWorld:root.matrixWorld.toArray(),source:read().source};}
   };
+  const resetInitial=operations.reset;
+  operations.setInitialContacts=async value=>{if(typeof value!=='boolean')throw Error('Contact preparation must be boolean');initialConfig={...initialConfig,conditionContacts:value};const result=await resetInitial();record({kind:'hill-volume.initial-contact-preparation',value,conditioning:model.conditioning});return result;};
   // Human and agent actions share one order. Playback waits while an action
   // drains the prior physical batch; repeated clicks preserve every request.
-  for(const key of ['setPlaying','advance','push','release','setGrowth','weather','reset']){
+  for(const key of ['setPlaying','setSettings','advance','push','pushRock','release','setGrowth','weather','reset','setInitialContacts']){
    const fn=operations[key];operations[key]=(...args)=>{
-    queuedOperations++;if(['advance','weather','reset'].includes(key))playing=false;sync();
-    const task=operationTail.then(async()=>{await starting;await solver?.done();if(disposed)throw Error('Specimen disposed');return fn(...args);});
+    const requested=structuredClone(args);queuedOperations++;if(['advance','weather','reset','setInitialContacts'].includes(key))playing=false;sync();
+    const task=operationTail.then(async()=>{if(['reset','setInitialContacts'].includes(key)){await Promise.resolve(starting).catch(()=>{});await solver?.done().catch(()=>{});}else{await rendererAvailable;await starting;await solver?.done();}if(disposed)throw Error('Specimen disposed');return fn(...requested);});
     operationTail=task.catch(()=>{});return task.finally(()=>{queuedOperations--;sync();});
    };
   }
@@ -67,13 +72,14 @@ export default {
     status=document.createElement('p');status.setAttribute('role','status');panel.append(status);
     const button=(label,op,arg)=>{const b=document.createElement('button');b.textContent=label;b.type='button';b.addEventListener('click',()=>invoke(op,typeof arg==='function'?arg():arg).catch(e=>{error=e.message;sync();}));panel.append(b);return b;};
     playButton=button('Play','setPlaying',()=>!playing);button('Advance 0.1 s','advance',.1);button('Reset specimen','reset');button('Frame specimen','frame');
+    const prepLabel=document.createElement('label');contactToggle=document.createElement('input');contactToggle.type='checkbox';contactToggle.setAttribute('aria-label','Separate overlapping starting poses');contactToggle.addEventListener('change',()=>invoke('setInitialContacts',contactToggle.checked).catch(e=>{error=e.message;sync();}));prepLabel.append(contactToggle,document.createTextNode('Separate overlapping starting poses (resets)'));panel.append(prepLabel);
     const field=(key,label,step)=>{const l=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');grip.textContent=label;input.type='number';input.step='any';input.className='transform-input';input.value=String(settings[key]);input.setAttribute('aria-label',label);input.addEventListener('input',()=>{if(input.value.trim()&&Number.isFinite(Number(input.value)))invoke('setSettings',{[key]:Number(input.value)}).catch(e=>{error=e.message;sync();});});host.controls.installNumberDrag({input,grip,step});l.append(grip,input);panel.append(l);};
     const select=document.createElement('select');select.setAttribute('aria-label','Rock volume');model.bodies.forEach((b,i)=>{const o=document.createElement('option');o.value=i;o.textContent=b.id;select.append(o);});select.value=settings.rock;select.addEventListener('change',()=>invoke('setSettings',{rock:Number(select.value)}));panel.append(select);
-    button('Release selected joint','release');field('weatherDepth','Weathering depth',.005);button('Weather selected rock','weather');
+    button('Release selected joint','release');field('rockPushX','Rock velocity impulse X',.1);field('rockPushY','Rock velocity impulse Y',.1);field('rockPushZ','Rock velocity impulse Z',.1);button('Nudge released rock','pushRock');field('weatherDepth','Weathering depth',.005);button('Weather selected rock','weather');
     field('pushX','Push center X',.05);field('pushY','Push center Y',.05);field('pushZ','Push center Z',.05);field('pushRadius','Push radius',.05);field('pushSpeed','Push velocity X',.1);button('Push material','push');
     field('growthRate','Growth velocity',.005);const growth=document.createElement('label'),toggle=document.createElement('input');growthToggle=toggle;toggle.type='checkbox';toggle.setAttribute('aria-label','Prescribed growth');toggle.addEventListener('change',()=>invoke('setGrowth',toggle.checked).catch(e=>{error=e.message;sync();}));growth.append(toggle,document.createTextNode('Prescribed growth'));panel.append(growth);sync();
    },
-   async dispose(){disposed=true;playing=false;stopFrame();try{await operationTail;await starting;await solver?.done();}finally{solver?.dispose();releaseDisplay();floor.geometry.dispose();floor.material.dispose();await session.dispose();if(window.kaminosHillVolume===api)delete window.kaminosHillVolume;}}
+   async dispose(){disposed=true;playing=false;releaseRenderer(null);stopFrame();try{await operationTail;await Promise.resolve(starting).catch(()=>{});await solver?.done();}finally{solver?.dispose();releaseDisplay();floor.geometry.dispose();floor.material.dispose();await session.dispose();if(window.kaminosHillVolume===api)delete window.kaminosHillVolume;}}
   };
  }
 };

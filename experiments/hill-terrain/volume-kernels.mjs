@@ -16,6 +16,7 @@ struct Params { origin:vec4f, dims:vec4u, material:vec4f, forces:vec4f, action:v
 @group(0) @binding(4) var<storage,read> triangles:array<Triangle>;
 @group(0) @binding(5) var<storage,read_write> reactions:array<Reaction>;
 @group(0) @binding(6) var<uniform> cfg:Params;
+@group(0) @binding(7) var<storage,read> convexData:array<vec4f>;
 const FP:f32=1048576.;
 fn encode(v:f32)->i32{return i32(round(v*FP));}
 fn rot(q:vec4f,v:vec3f)->vec3f{return v+2.*cross(q.xyz,cross(q.xyz,v)+q.w*v);}
@@ -106,6 +107,36 @@ fn contact_velocity(point:vec3f,velocity:vec3f,mass:f32,margin:f32)->vec3f{
  // Retained local compaction/work memory is state, independent of pigment.
  p.memory.y+=cfg.forces.x*max(0.,-(C[0].x+C[1].y+C[2].z));particles[id.x]=p;
 }
+fn interval(b:Body,axis:vec3f)->vec2f{
+ var lo=1e30;var hi=-1e30;
+ for(var k=0u;k<u32(b.i1.w);k++){let p=b.p.xyz+rot(b.q,convexData[u32(b.i0.w)+k].xyz);let d=dot(p,axis);lo=min(lo,d);hi=max(hi,d);}return vec2f(lo,hi);
+}
+fn contact_axis(a:Body,b:Body,inputAxis:vec3f)->vec4f{
+ let len=length(inputAxis);if(len<1e-7){return vec4f(0.,0.,0.,1e30);}let axis=inputAxis/len;let A=interval(a,axis);let B=interval(b,axis);let left=A.y-B.x;let right=B.y-A.x;
+ if(left<=0.||right<=0.){return vec4f(0.,0.,0.,-1.);}return vec4f(select(axis,-axis,left<right),min(left,right));
+}
+fn convex_contact(a:Body,b:Body)->vec4f{
+ var best=vec4f(0.,0.,0.,1e30);
+ for(var k=0u;k<a.shape.y;k++){let c=contact_axis(a,b,rot(a.q,planes[a.shape.x+k].xyz));if(c.w<0.){return c;}if(c.w<best.w){best=c;}}
+ for(var k=0u;k<b.shape.y;k++){let c=contact_axis(a,b,rot(b.q,planes[b.shape.x+k].xyz));if(c.w<0.){return c;}if(c.w<best.w){best=c;}}
+ for(var i=0u;i<u32(a.size.w);i++){let edge=rot(a.q,convexData[u32(a.i2.w)+i].xyz);
+  for(var j=0u;j<u32(b.size.w);j++){let axis=cross(edge,rot(b.q,convexData[u32(b.i2.w)+j].xyz));let c=contact_axis(a,b,axis);if(c.w<0.){return c;}if(c.w<best.w){best=c;}}
+ }return best;
+}
+fn support_center(b:Body,n:vec3f)->vec3f{
+ let lo=interval(b,n).x;var sum=vec3f(0.);var count=0.;
+ for(var k=0u;k<u32(b.i1.w);k++){let p=b.p.xyz+rot(b.q,convexData[u32(b.i0.w)+k].xyz);if(dot(p,n)<lo+1e-5){sum+=p;count+=1.;}}return sum/max(count,1.);
+}
+fn contact_body(inputBody:Body,normal:vec3f,depth:f32,point:vec3f,supportVelocity:vec3f)->Body{
+ var b=inputBody;let arm=point-b.p.xyz;b.p=vec4f(b.p.xyz+normal*depth,b.p.w);let rel=b.v.xyz+cross(b.w.xyz,arm)-supportVelocity;let vn=dot(rel,normal);
+ if(vn<0.){let jn=-vn/(b.p.w+dot(normal,cross(inverse_inertia(b,cross(arm,normal)),arm)));var imp=normal*jn;let tang=rel-normal*vn;let speed=length(tang);
+  if(speed>1e-8){let t=tang/speed;let kt=b.p.w+dot(t,cross(inverse_inertia(b,cross(arm,t)),arm));imp-=t*min(cfg.forces.z*jn,speed/max(kt,1e-12));}
+  b.v=vec4f(b.v.xyz+imp*b.p.w,0.);b.w=vec4f(b.w.xyz+inverse_inertia(b,cross(arm,imp)),0.);
+ }return b;
+}
+@compute @workgroup_size(1) fn kick(){
+ if(cfg.impulse.w<1.){return;}let i=u32(cfg.impulse.w)-1u;if(i>=arrayLength(&bodies)||bodies[i].p.w==0.){return;}bodies[i].v=vec4f(bodies[i].v.xyz+cfg.impulse.xyz,0.);
+}
 @compute @workgroup_size(1) fn rigid(){
  for(var i=0u;i<arrayLength(&bodies);i++){
   var b=bodies[i];let J=vec3f(f32(atomicLoad(&reactions[i].x)),f32(atomicLoad(&reactions[i].y)),f32(atomicLoad(&reactions[i].z)))/FP;
@@ -119,21 +150,13 @@ fn contact_velocity(point:vec3f,velocity:vec3f,mass:f32,margin:f32)->vec3f{
   let det=dot(invI[0],cross(invI[1],invI[2]));let I=transpose(mat3x3f(cross(invI[1],invI[2]),cross(invI[2],invI[0]),cross(invI[0],invI[1])))*(1./det);
   b.w=vec4f(b.w.xyz+inverse_inertia(b,T)-rot(b.q,invI*cross(wl,I*wl))*dt,0.);
   b.p=vec4f(b.p.xyz+b.v.xyz*dt,b.p.w);let q=b.q;b.q=normalize(q+vec4f(cross(b.w.xyz,q.xyz)+q.w*b.w.xyz,-dot(b.w.xyz,q.xyz))*(dt*.5));
-  // Known convex fixture: vertex/face contact against anchored source solids.
-  // This does not claim general edge/edge or free-body pile contact.
-  for(var iteration=0u;iteration<3u;iteration++){
-   var deepest=0.;var normal=vec3f(0,1,0);var arm=vec3f(0.);
-   for(var j=0u;j<b.shape.w;j++){let tri=triangles[b.shape.z+j];let verts=array<vec3f,3>(tri.a.xyz,tri.b.xyz,tri.c.xyz);
-    for(var k=0u;k<3u;k++){let r=rot(b.q,verts[k]);let point=b.p.xyz+r;
-     if(-point.y>deepest){deepest=-point.y;normal=vec3f(0,1,0);arm=r;}
-     for(var other=0u;other<arrayLength(&bodies);other++){if(other==i||bodies[other].p.w>0.){continue;}let o=bodies[other];if(distance(point,o.p.xyz)>o.size.x){continue;}let f=solid_frame(point,o);if(-f.w>deepest){deepest=-f.w;normal=f.xyz;arm=r;}}
-    }
-   }
-   if(deepest<=0.){break;}b.p=vec4f(b.p.xyz+normal*deepest,b.p.w);let rel=b.v.xyz+cross(b.w.xyz,arm);let vn=dot(rel,normal);
-   if(vn<0.){let jn=-vn/(b.p.w+dot(normal,cross(inverse_inertia(b,cross(arm,normal)),arm)));var imp=normal*jn;let tang=rel-normal*vn;let speed=length(tang);
-    if(speed>1e-8){let t=tang/speed;let kt=b.p.w+dot(t,cross(inverse_inertia(b,cross(arm,t)),arm));imp-=t*min(cfg.forces.z*jn,speed/max(kt,1e-12));}
-    b.v=vec4f(b.v.xyz+imp*b.p.w,0.);b.w=vec4f(b.w.xyz+inverse_inertia(b,cross(arm,imp)),0.);
-   }
+  // Full convex SAT covers face/face and edge axes, including coplanar side
+  // boundaries where a penetrating-vertex test misses the supporting face.
+  let bottom=support_center(b,vec3f(0,1,0));let influence=exp(-dot(bottom.xz,bottom.xz)/.75);let floor=cfg.drive.x*influence;
+  if(bottom.y<floor){b=contact_body(b,vec3f(0,1,0),floor-bottom.y,bottom,vec3f(0.,cfg.drive.y*influence,0.));}
+  for(var other=0u;other<arrayLength(&bodies);other++){
+   if(other==i||bodies[other].p.w>0.){continue;}let o=bodies[other];if(distance(b.p.xyz,o.p.xyz)>b.size.x+o.size.x){continue;}
+   let c=convex_contact(b,o);if(c.w>0.&&c.w<1e29){let point=support_center(b,c.xyz);b=contact_body(b,c.xyz,c.w,point,o.v.xyz+cross(o.w.xyz,point-o.p.xyz));}
   }bodies[i]=b;
  }
 }
