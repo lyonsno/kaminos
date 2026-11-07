@@ -3219,12 +3219,12 @@ let compositionHost = null;
 // volume_* query parameters, so on basin routes the light field is enabled
 // the same way the composition-module seam is (#volume_light_field=1&...).
 // Hash entries override query entries.
-function fireLightFieldRouteParams() {
+function fireLightFieldRouteParams({includeMounted=true}={}) {
   const merged = new URLSearchParams(window.location.search);
   for (const [key, value] of new URLSearchParams(window.location.hash.replace(/^#/, ''))) {
     if (key.startsWith('volume_light_field')) merged.set(key, value);
   }
-  if(mountedFlameState&&!activeSceneComposition)for(const [key,value]of Object.entries(mountedFlameState.route))merged.set(key,value);
+  if(includeMounted&&mountedFlameState&&!activeSceneComposition)for(const [key,value]of Object.entries(mountedFlameState.route))merged.set(key,value);
   return resolveFlameLightingRoute(merged);
 }
 
@@ -27193,7 +27193,8 @@ function buildSceneData(capture = null) {
 }
 
 function isCompositionAuthoring() {
-  return new URLSearchParams(location.hash.slice(1)).get('authoring') === '1' || isFireLightFieldRoute();
+  // Temporary workshop runtime does not change the authored document kind.
+  return new URLSearchParams(location.hash.slice(1)).get('authoring') === '1' || isFireLightFieldRoute(fireLightFieldRouteParams({includeMounted:false}));
 }
 
 function compositionStatus(message, failed = false) {
