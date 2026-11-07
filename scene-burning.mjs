@@ -1,7 +1,7 @@
 // One fluid consumer gathers any number of independently owned material fields.
-export function createSceneBurning({objects,retained=()=>[],runtime,createBody,createGas,onError=()=>{},dirty=()=>{}}){
+export function createSceneBurning({objects,retained=()=>[],runtime,createBody,createGas,onError=()=>{},dirty=()=>{},yieldPreparation=()=>new Promise(resolve=>setTimeout(resolve,0))}){
   const bodies=new Map(),failures=new Map(),generations=new WeakMap();
-  let binding=null,pending=null,disposed=false,fault=null,resync=false;
+  let binding=null,pending=null,disposed=false,fault=null,resync=false,preparations=0;
   const mounted=entry=>objects().some(row=>row.id===entry.id&&row.object===entry.object&&row.burnable?.enabled);
   function active(){return [...bodies.values()].filter(row=>mounted(row.entry));}
   function release(){binding?.detach();binding?.gas.dispose();binding=null;}
@@ -24,7 +24,7 @@ export function createSceneBurning({objects,retained=()=>[],runtime,createBody,c
       release();fault=null;return;
     }
     // Merely checking Burnable must not boot a cold volume or start a fire.
-    if(!host||!contextState?.active||fault)return;
+    if(!host||(!contextState?.active&&preparations===0)||fault)return;
     if(!binding){
       const context=await host.borrowThermalGpuContext();
       if(disposed||host!==runtime())return;
@@ -50,6 +50,8 @@ export function createSceneBurning({objects,retained=()=>[],runtime,createBody,c
       if(!entry.burnable?.enabled||bodies.has(entry.object)||failures.has(entry.object))continue;
       try{
         const generation=generations.get(entry.object)??0;
+        if(preparations>0)await yieldPreparation();
+        if(disposed||!mounted(entry)||generation!==(generations.get(entry.object)??0))continue;
         const body=await createBody(entry);
         if(disposed||!mounted(entry)||generation!==(generations.get(entry.object)??0)){body.dispose();continue;}
         bodies.set(entry.object,{entry,body});dirty();
@@ -63,6 +65,9 @@ export function createSceneBurning({objects,retained=()=>[],runtime,createBody,c
     return pending;
   }
   return {sync,forget,
+    // Explicit owner preparation, ahead of admission. Ordinary Burnable edits
+    // still do not initialize a cold simulator or alter its activity/pause.
+    async prepare(){preparations++;try{await sync();}finally{preparations--;}},
     reset(id){const entry=objects().find(row=>row.id===id),row=entry&&bodies.get(entry.object);
       if(!row)throw Error('Burnable material is not resident');row.body.reset?.();dirty();return row.body.read();},
     setAppearance(id,value){const entry=objects().find(row=>row.id===id),row=entry&&bodies.get(entry.object);

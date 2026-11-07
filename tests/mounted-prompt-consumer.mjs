@@ -92,3 +92,8 @@ test('initial native writing window sits inside the authored kiln opening instea
   assert.ok(Math.abs(root.quaternion.dot(rotation))>1-1e-8,'writing plane faces the same direction as its kiln');
  }finally{consumer.dispose();}
 });
+
+test('the mounted lettering owns a stationary render aperture carried by its native pose',async()=>{
+ const f=fixture(),consumer=await createMountedGenerationPrompt({...f,signal:new AbortController().signal});
+ try{f.frameTick();const root=f.frame.children[0];assert.equal(root.isClippingGroup,true,'long solid lettering needs the same bounded opening as its native editor');assert.equal(root.clippingPlanes.length,2);}finally{consumer.dispose();}
+});
