@@ -14,3 +14,7 @@ const isolated={...cloud,positions:new Float32Array(cloud.positions),alpha:new F
 console.log('conditioning geometry, coverage and retained bytes pass');
 const {conditioningSourceName}=await import('../image-conditioning.mjs');
 assert.equal(conditioningSourceName({name:'Confirmed chrome rack with sculpted vents',source:'/api/read?root=image-inbox&path=stored%2Frack.png'}),'Confirmed chrome rack with sculpted vents.png','friendly catalogue names still need the actual image extension at preparation');
+// Background depth must not set the foreground object's softness scale.
+const rgba=new Uint8ClampedArray(36);rgba.set([255,255,255,255],16);const masked={width:3,height:3,data:rgba};
+const backgroundA={...geometry,depth:new Float32Array(9).fill(2)},backgroundB={...geometry,depth:new Float32Array(9).fill(200)};backgroundA.depth[4]=backgroundB.depth[4]=1;
+assert.deepEqual(conditioningCloud(backgroundA,masked).positions.slice(12,15),conditioningCloud(backgroundB,masked).positions.slice(12,15),'background must not alter normalized foreground depth');

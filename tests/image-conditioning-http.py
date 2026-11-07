@@ -17,13 +17,18 @@ class ConditioningHttp(unittest.TestCase):
    with urlopen(Request(self.url+path,data=body)) as r:return r.status,json.load(r)
   except HTTPError as e:return e.code,e.read()
  def body(self):
-  header=json.dumps({'schema':'kaminos.conditioning-geometry.v1','width':2,'height':2,'metadata':{'cacheKey':'a'*64,'source':{'source':'/api/read?root=image-inbox&path=test.png','sha256':'b'*64},'producerSha256':'c'*64,'route':{'status':'real'}}}).encode();return struct.pack('<I',len(header))+header+b'\0'*((-len(header))%4)+struct.pack('<16f',*([1]*16))
+  header=json.dumps({'schema':'kaminos.conditioning-geometry.v1','width':2,'height':2,'metadata':{'cacheKey':'a'*64,'source':{'source':'/api/read?root=image-inbox&path=test.png','sha256':'b'*64},'producerSha256':'c'*64,'preparation':{'prepared':{'source':'/api/read?root=image-preparations&path=cutout.png','sha256':'d'*64}},'route':{'effectiveRouteId':'moge.depth-normal.webgpu-local.v0','status':'real','runtimeEvidence':{'weights':'real','encoderFeatures':'backbone-gpu'}}}}).encode();return struct.pack('<I',len(header))+header+b'\0'*((-len(header))%4)+struct.pack('<16f',*([1]*16))
  def test_roundtrip_and_incomplete_refusal(self):
   body=self.body();status,entry=self.call('/api/image-conditioning',body);self.assertEqual(status,200,entry);self.assertEqual(entry['sha256'],hashlib.sha256(body).hexdigest());self.assertEqual((self.root/(entry['sha256']+'.bin')).read_bytes(),body)
   with urlopen(self.url+entry['source']) as r:self.assertEqual(r.read(),body,'native geometry consumer receives exact binary bytes')
   status,cached=self.call('/api/image-conditioning?key='+'a'*64);self.assertEqual(status,200);self.assertEqual(cached,entry)
   status,_=self.call('/api/image-conditioning',body[:-4]);self.assertEqual(status,400)
   status,again=self.call('/api/image-conditioning?key='+'a'*64);self.assertEqual(again,entry)
+ def test_missing_preparation_and_nonreal_route_are_refused(self):
+  body=self.body();n=struct.unpack_from('<I',body)[0];record=json.loads(body[4:4+n]);arrays=body[4+((n+3)//4)*4:]
+  for field in ['preparation','route']:
+   bad=json.loads(json.dumps(record));bad['metadata'].pop(field);head=json.dumps(bad).encode();raw=struct.pack('<I',len(head))+head+b'\0'*((-len(head))%4)+arrays;status,_=self.call('/api/image-conditioning',raw);self.assertEqual(status,400,field)
+  bad=json.loads(json.dumps(record));bad['metadata']['route']['status']='partial';head=json.dumps(bad).encode();raw=struct.pack('<I',len(head))+head+b'\0'*((-len(head))%4)+arrays;status,_=self.call('/api/image-conditioning',raw);self.assertEqual(status,400)
  def test_missing_cache_is_explicit(self):
   status,value=self.call('/api/image-conditioning?key='+'f'*64);self.assertEqual(status,200,value);self.assertIsNone(value)
 if __name__=='__main__':unittest.main()

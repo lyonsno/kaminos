@@ -9,8 +9,10 @@ export function conditioningSettings(value={}){
 }
 export function conditioningCloud({width,height,depth,normals},image){
  const count=width*height;if(!Number.isInteger(width)||!Number.isInteger(height)||width<2||height<2||depth?.length!==count||normals?.length!==count*3||image?.data?.length!==image.width*image.height*4)throw Error('Invalid conditioning geometry');
- const valid=Array.from(depth).filter(x=>Number.isFinite(x)&&x>0).sort((a,b)=>a-b);if(!valid.length)throw Error('No valid conditioning depth');
- const median=valid[Math.floor(valid.length/2)],positions=new Float32Array(count*3),colors=new Float32Array(count*3),normal=new Float32Array(count*3),alpha=new Float32Array(count);
+ const valid=[];let mass=0;
+ for(let i=0;i<count;i++){const x=i%width,y=Math.floor(i/width),src=(Math.min(image.height-1,Math.floor((y+.5)/height*image.height))*image.width+Math.min(image.width-1,Math.floor((x+.5)/width*image.width)))*4,a=image.data[src+3]/255;if(a>0&&Number.isFinite(depth[i])&&depth[i]>0){valid.push([depth[i],a]);mass+=a;}}
+ if(!mass)throw Error('No valid foreground depth');valid.sort((a,b)=>a[0]-b[0]);let accumulated=0,median=valid[0][0];for(const [d,a]of valid){accumulated+=a;if(accumulated>=mass/2){median=d;break;}}
+ const positions=new Float32Array(count*3),colors=new Float32Array(count*3),normal=new Float32Array(count*3),alpha=new Float32Array(count);
  for(let y=0;y<height;y++)for(let x=0;x<width;x++){
   const i=y*width+x,d=depth[i]/median,src=(Math.min(image.height-1,Math.floor((y+.5)/height*image.height))*image.width+Math.min(image.width-1,Math.floor((x+.5)/width*image.width)))*4;
   if(!Number.isFinite(d)||d<=0)continue;

@@ -20,6 +20,12 @@ def header(body):
  if not isinstance(meta,dict) or not isinstance(meta.get('source'),dict):raise ValueError('Conditioning source metadata required')
  for field in [meta.get('cacheKey'),meta.get('producerSha256'),meta['source'].get('sha256')]:digest(field)
  if not isinstance(meta['source'].get('source'),str) or not meta['source']['source'].startswith('/api/'):raise ValueError('Mounted conditioning source required')
+ prepared=meta.get('preparation',{}).get('prepared') if isinstance(meta.get('preparation'),dict) else None
+ if not isinstance(prepared,dict) or not isinstance(prepared.get('source'),str) or not prepared['source'].startswith('/api/read?root=image-preparations&path='):raise ValueError('Retained foreground preparation required')
+ digest(prepared.get('sha256'))
+ route=meta.get('route');evidence=route.get('runtimeEvidence',{}) if isinstance(route,dict) else {}
+ if not isinstance(evidence,dict):raise ValueError('Invalid MoGe runtime evidence')
+ if not isinstance(route,dict) or route.get('effectiveRouteId')!='moge.depth-normal.webgpu-local.v0' or route.get('status')!='real' or route.get('fallbackReason') or evidence.get('weights')!='real' or evidence.get('encoderFeatures')!='backbone-gpu':raise ValueError('Real source-image MoGe route required')
  depth=struct.iter_unpack('<f',body[offset:offset+w*h*4])
  if not any(math.isfinite(x[0]) and x[0]>0 for x in depth):raise ValueError('No valid conditioning depth')
  return value
