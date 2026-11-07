@@ -5,7 +5,7 @@
 import {createTrellisSparseFlowAdapter,createTrellisSparseFlowAdapterAsync} from './sparse-flow.js';
 import {createTrellisSparseSamplerAdapter} from './sparse-sampler.js';
 import {createTrellisSparseDecoderAdapter} from './sparse-decoder.js';
-import {createTrellisOccupancyCoordinatesAdapter} from './occupancy-coordinates.js';
+import {createTrellisOccupancyCoordinatesAdapter,readTrellisOccupancyPreview} from './occupancy-coordinates.js';
 import {createTrellisSLatFlowAdapter,createTrellisSLatFlowAdapterAsync} from './slat-flow.js';
 import {createTrellisSLatSamplerAdapter} from './slat-sampler.js';
 import {createTrellisSLatCascadeSupportAdapter,createTrellisSLatCascadeSupportAdapterAsync} from './slat-cascade.js';
@@ -38,8 +38,9 @@ function browserNoise(seed){
 // The live consumer of DINO's exact output. Only normalized image pixels and
 // checkpoint weights enter from CPU; no learned context crosses an artifact.
 export function createTrellisImageGenerationAdapter({route,pixelValues,highResolutionPixelValues,prefixWeights,loadLayerWeights,
-  dinoIdentity=null,models,loadModels,modelInputs,loadModel,meshResolution=1024,pipelineType='1024_cascade',seed=42,initialNoise={},onPhase,onNoiseInput}={}){
+  dinoIdentity=null,models,loadModels,modelInputs,loadModel,meshResolution=1024,pipelineType='1024_cascade',seed=42,initialNoise={},onPhase,onNoiseInput,onPreview,runId}={}){
   if(onNoiseInput!==undefined&&typeof onNoiseInput!=='function')throw TypeError('noise input observer must be a function');
+  if(onPreview!==undefined&&(typeof onPreview!=='function'||typeof runId!=='string'||!runId.trim()))throw TypeError('preview observer needs a function and caller-owned runId');
   const staged=loadModel!==undefined||modelInputs!==undefined;
   if(staged){
     if(typeof loadModel!=='function'||!modelInputs||models!==undefined||loadModels!==undefined)
@@ -72,7 +73,7 @@ export function createTrellisImageGenerationAdapter({route,pixelValues,highResol
         const checkpointModels=staged?modelInputs:models??await loadModels();
         generation=createTrellisGenerationFromConditioningAdapter({route,conditioningTensor:dino.conditioning,
           highResolutionConditioningTensor:highDino?.conditioning,
-          models:checkpointModels,...(staged?{loadModel}:{}),meshResolution,pipelineType,seed,initialNoise,onPhase:enter,onNoiseInput});
+          models:checkpointModels,...(staged?{loadModel}:{}),meshResolution,pipelineType,seed,initialNoise,onPhase:enter,onNoiseInput,onPreview,runId});
         const fields=await generation.run(invocation);
         result=Object.freeze({...fields,conditioning:dino.conditioning,dino,
           ...(highDino?{highResolutionConditioning:highDino.conditioning,highResolutionDino:highDino}:{})});state='completed';phase='completed';return result;
@@ -84,7 +85,7 @@ export function createTrellisImageGenerationAdapter({route,pixelValues,highResol
 }
 
 export function createTrellisGenerationFromConditioningAdapter({route,conditioningTensor,highResolutionConditioningTensor,models,loadModel,
-  meshResolution=1024,pipelineType='1024_cascade',seed=42,initialNoise={},onPhase,onNoiseInput}={}){
+  meshResolution=1024,pipelineType='1024_cascade',seed=42,initialNoise={},onPhase,onNoiseInput,onPreview,runId}={}){
   const runtime=route?.runtime,roles=generationRoles({pipelineType}),cascade=pipelineType==='1024_cascade';
   // Canonical source resolution is enforced by the input-package boundary;
   // this generic composition also supports smaller operation fixtures.
@@ -103,8 +104,9 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
     throw TypeError('source cascade requires the separate high-resolution model, not low-resolution weight reuse');
   if(onPhase!==undefined&&typeof onPhase!=='function')throw TypeError('phase observer must be a function');
   if(onNoiseInput!==undefined&&typeof onNoiseInput!=='function')throw TypeError('noise input observer must be a function');
+  if(onPreview!==undefined&&(typeof onPreview!=='function'||typeof runId!=='string'||!runId.trim()))throw TypeError('preview observer needs a function and caller-owned runId');
   const gaussian=browserNoise(seed),owned=new Set(),noiseInputs={},phases=[];
-  let state='new',phase='new',result,disposed=false,lastDecoder;
+  let state='new',phase='new',result,disposed=false,lastDecoder,coordinatePreviewBytes=0;
   const decode=(decoder,invocation)=>{lastDecoder=decoder;return decoder.run(invocation);};
   const own=a=>{owned.add(a);return a;},retire=async(...adapters)=>{
     await runtime.device?.queue?.onSubmittedWorkDone?.();
@@ -173,6 +175,15 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
           logitsTensor:occupancy.outputs.logits}));await coordinates.run(invocation);
         const lrCoordinates=await coordinates.coordinates(invocation),lrResolution=coordinates.plan.outputResolution;
         await retire(occupancy,sparseSampler,sparse);
+        if(onPreview){
+          const preview=await readTrellisOccupancyPreview({runtime,coordinates:lrCoordinates,plan:coordinates.plan,
+            runId,routeId:route.routeId,steps:sparseSampler.plan.steps.length,invocation});
+          coordinatePreviewBytes+=preview.coordinateBytesToCPU;
+          // Like the phase observer, delivery is awaited. A thrown/rejected observer
+          // fails this invocation before shape generation; consumers handle optional
+          // presentation failures locally. The snapshot outlives producer retirement.
+          await onPreview(preview);
+        }
         const lrFlow=await shapeFlow('lowResolutionShape',lrCoordinates),lr=await sampleShape('lowResolutionShape',lrFlow,'lowResolutionShape',invocation);
         // The decoder expands the latent coordinate grid, not the final mesh grid.
         let finalCoordinates=lrCoordinates,finalResolution=lrResolution,finalSample=lr.sample,sampledAdapters;
@@ -215,7 +226,7 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
             .map(role=>[role,Object.freeze([...stageConditioning(role).shape])]))),
           modelIdentities:Object.freeze(Object.fromEntries(roles.map(role=>[role,models[role].identity??null]))),
           phases:Object.freeze(phases.map(Object.freeze)),initialNoise:Object.freeze({...noiseInputs}),
-          featureBytesToCPUDuringServing:0,coordinateBytesToCPUDuringServing:0,
+          featureBytesToCPUDuringServing:0,coordinateBytesToCPUDuringServing:coordinatePreviewBytes,
           handoff:'resident learned geometry/material fields; post-model mesh/UV/PBR consumers outstanding',
           comparison:'browser generation; no assertion of matched MLX noise or model fidelity'});
         state='completed';phase='completed';return result;
