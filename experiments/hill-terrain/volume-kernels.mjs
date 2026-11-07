@@ -206,14 +206,14 @@ export const ROCK_PICK_KERNEL=VOLUME_KERNELS+`
 @group(0) @binding(8) var<uniform> ray:array<vec4f,2>;
 @group(0) @binding(9) var<storage,read_write> hit:array<vec4f>;
 @compute @workgroup_size(1) fn pick_rock(){
- var best=1e30;var index=0.;var free=0.;
+ var best=1e30;var index=0.;
  for(var i=0u;i<arrayLength(&bodies);i++){
   let b=bodies[i];let o=invrot(b.q,ray[0].xyz-b.p.xyz);let d=invrot(b.q,ray[1].xyz);var near=-1e30;var far=1e30;var miss=false;
   for(var j=0u;j<b.shape.y;j++){let p=planes[b.shape.x+j];let den=dot(p.xyz,d);let gap=p.w-dot(p.xyz,o);
    if(abs(den)<1e-8){if(gap<0.){miss=true;break;}}else{let t=gap/den;if(den<0.){near=max(near,t);}else{far=min(far,t);}}
   }
-  let t=select(near,far,near<0.);if(!miss&&near<=far&&t>=0.&&t<best){best=t;index=f32(i+1u);free=select(0.,1.,b.p.w>0.);}
+  let t=select(near,far,near<0.);if(!miss&&near<=far&&t>=0.&&t<best){best=t;index=f32(i+1u);}
  }
- hit[0]=vec4f(index,best,free,0.);hit[1]=vec4f(ray[0].xyz+ray[1].xyz*select(0.,best,index>0.),0.);
+ hit[0]=vec4f(index,best,0.,0.);if(index>0.){hit[0].z=bodies[u32(index)-1u].p.w;}hit[1]=vec4f(ray[0].xyz+ray[1].xyz*select(0.,best,index>0.),0.);
 }
 `;
