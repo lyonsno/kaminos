@@ -29479,7 +29479,7 @@ function setupAuthoringAssets(){
   // Browser U2Net for opaque photos: the shop-hosted package (immutable revision, sha-checked on load).
   const U2NET_PACKAGE_URL='https://huggingface.co/BasinShapers/u2net-webgpu/resolve/f4f82a54b6e8d7ffd4321005dbff1cb03198c78b/f32/';
   let u2netRunner=null;
-  const trellisPageRunInner=async({pixels,highResolutionPixels,image,label='TRELLIS page',signal,onPhase,onInput,finishMesh=true,textureSize=1024,scheduling,finishingMode='original-remesh'}={})=>{
+  const trellisPageRunInner=async({pixels,highResolutionPixels,image,label='TRELLIS page',signal,onPhase,onInput,onPreview,finishMesh=true,textureSize=1024,scheduling,finishingMode='original-remesh'}={})=>{
     const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};
     const [{runTrellisInPage,createTrellisPageCheckpoints},{createBrowserMeshPostprocess},{createWasmXatlasUnwrapper}]=await Promise.all([
       import('./authoring-trellis-page.mjs'),import('./models/trellis2/mesh-cleanup.js'),import('./models/trellis2/wasm-xatlas.js')]);
@@ -29528,7 +29528,7 @@ function setupAuthoringAssets(){
     const bakeMaterial=createBrowserMaterialBaker({WorkerClass:Worker,signal,projectPositions:postprocessMesh.projectMaterialPositions,
       withCpu:postprocessMesh.withCpu});
     try{
-      const result=await runTrellisInPage({appGpu,manifest:pack.manifest,fetchTensor:pack.fetchTensor,pixelValues,highResolutionPixelValues,signal,onPhase,scheduling,decoderActivationStorage:'f16',finishMesh:finishMesh!==false,textureSize,
+      const result=await runTrellisInPage({appGpu,manifest:pack.manifest,fetchTensor:pack.fetchTensor,pixelValues,highResolutionPixelValues,signal,onPhase,onPreview,scheduling,decoderActivationStorage:'f16',finishMesh:finishMesh!==false,textureSize,
         // Stop reaches the finishing providers too (cleanup and UV in workers where supported).
         finishing:{postprocessMesh,bakeMaterial,unwrapMesh:createWasmXatlasUnwrapper({WorkerClass:Worker,signal,normalMode:finishingMode==='original-remesh'?'source-original':'post-uv'})},
         provenance:{checkpointManifestSha256:pack.manifestSha256,
