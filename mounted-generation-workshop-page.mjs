@@ -29,7 +29,7 @@ export function installMountedGenerationWorkshop({document,THREE,mergeGeometries
      if(signal.aborted){root.traverse(n=>{n.geometry?.dispose();for(const m of [n.material].flat().filter(Boolean))m.dispose();});signal.throwIfAborted();}
      root.position.fromArray(record.transform.position);root.rotation.set(...record.transform.rotation);root.scale.fromArray(record.transform.scale);root.visible=false;
      root.userData.kaminosMountedWorkshop=true;applyMaterials(root,record.materials);
-     root.traverse(node=>{for(const material of [node.material].flat().filter(Boolean)){if(!materials.has(material))materials.set(material,material.opacity);material.transparent=true;}});
+     root.traverse(node=>{for(const material of [node.material].flat().filter(Boolean)){if(!materials.has(material))materials.set(material,{opacity:material.opacity,transparent:material.transparent});material.transparent=true;}});
      const handle=await session.attach(root,{owned:true,metadata:{...record,collision:null,waterCollision:false}});ids.add(handle.id);acquired.push(handle);mounted(handle,instance);
      // Yield between authored members, independently of the Generate click.
      await new Promise(resolve=>setTimeout(resolve,0));
@@ -59,7 +59,7 @@ export function installMountedGenerationWorkshop({document,THREE,mergeGeometries
      },
      present(amount){
       for(const h of acquired)h.root.visible=amount>0;
-      for(const h of acquired)h.root.traverse(node=>{for(const material of [node.material].flat().filter(Boolean)){if(!materials.has(material))materials.set(material,material.opacity);material.transparent=true;material.opacity=materials.get(material)*amount;}});
+      for(const h of acquired)h.root.traverse(node=>{for(const material of [node.material].flat().filter(Boolean)){if(!materials.has(material))materials.set(material,{opacity:material.opacity,transparent:material.transparent});const authored=materials.get(material),transparent=amount>0&&amount<1?true:authored.transparent;if(material.transparent!==transparent){material.transparent=transparent;material.needsUpdate=true;}material.opacity=authored.opacity*amount;}});
       if(amount===0&&placed){frame.position.set(0,0,0);frame.scale.setScalar(1);frame.updateMatrixWorld(true);placed=false;restoreSelection();}
       parts?.present?.(amount);
       redraw();

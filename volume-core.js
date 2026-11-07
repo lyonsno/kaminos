@@ -28973,8 +28973,8 @@ export function createKaminosVolumePrototype({
         authority: 'witness-owned-compute-pause-render-live-v0',
       };
     },
-    async borrowThermalGpuContext(){
-      await ensureGpu();return {device,dimensions:[gridSize,gridHeight,gridSize],ownership:'borrowed-device-no-destruction-authority'};
+    async borrowThermalGpuContext({prepareControls=false}={}){
+      await ensureGpu();if(prepareControls)updateUniforms(performance.now());return {device,dimensions:[gridSize,gridHeight,gridSize],ownership:'borrowed-device-no-destruction-authority'};
     },
     async bindFollowingDomain({getPosition,onTranslation}={}) {
       if(!device||productFrameOwner!=='prototype')throw Error('Following domain requires initialized ordinary fire');

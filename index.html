@@ -23559,7 +23559,7 @@ async function createMountedPromptFire({root,body,burning,signal}) {
     detach?.();detach=null;gas?.dispose();gas=null;
     if(mountedFlameState!==state)return;
     await flameFeature.setActive(false);await releaseSceneRadianceRoute();mountedFlameState=null;
-    if(host){host.setPresentationTransform(saved.frame?.presentationTransform??{translate:[0,0,0],scale:1});host.setSceneCompositionPresentation(false);host.setImmersedSources([]);host.setControls(saved.controls);host.setSimulationPaused(saved.paused);host.restoreWorldFrame(saved.world);}
+    if(host){if(saved.frame?.physicalTransform)host.relocateOrdinaryDomain(saved.frame.physicalTransform.translate,[],saved.frame.physicalTransform.scale);host.setPresentationTransform(saved.frame?.presentationTransform??{translate:[0,0,0],scale:1});host.setSceneCompositionPresentation(false);host.setImmersedSources([]);host.setControls(saved.controls);host.setSimulationPaused(saved.paused);host.restoreWorldFrame(saved.world);}
     window.kaminosOrdinaryDepthSetEnabled?.(saved.depth);window._kaminosDirty?.();
    };
    try{
@@ -23574,7 +23574,7 @@ async function createMountedPromptFire({root,body,burning,signal}) {
     // Borrowing prepares the native pipelines/grid while inactive. The shared
     // scene and device remain their original owners throughout.
     await new Promise(resolve=>requestAnimationFrame(resolve));
-    const context=await host.borrowThermalGpuContext();signal.throwIfAborted();
+    const context=await host.borrowThermalGpuContext({prepareControls:true});signal.throwIfAborted();
     gas=await createLogGasSourceGpu(context);
     const current=()=>burning()?body():null;
     detach=host.bindGpuThermalConsumer({device:context.device,gasSource:gas.descriptor,resizeGrid:d=>gas.resize(d),materialMasks:()=>current()?[current().materialMask()]:[],
