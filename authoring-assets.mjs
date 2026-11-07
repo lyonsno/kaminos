@@ -63,7 +63,8 @@ export function createAuthoringAssets({request, addMesh, uploadImage, prepareIma
     return !state.error;
   }
   return {
-    read:()=>copy(state), browse, prepare,
+    // Selection consumers must not clone every output just to read one entry.
+    read:options=>copy(options?.selectionOnly===true?{selected:state.selected}:state), browse, prepare,
     ensure(){return state.roots.length?browse(state.root,state.path):this.refresh();},
     async refresh() {
       try {
@@ -131,7 +132,7 @@ export function installAuthoringAssets({document,controller,edits}) {
   const previewDialog=document.createElement('dialog');previewDialog.id='asset-preview-dialog';
   previewDialog.innerHTML='<header><strong id="asset-preview-title"></strong><button type="button" id="asset-preview-close" aria-label="Close enlarged preview">Close</button></header><img id="asset-preview-full" alt=""><div id="asset-preview-facts"></div>';
   document.body.append(previewDialog);
-  document.body.append(panel);installAssetPaneResize({document,panel});const byId=id=>document.getElementById(id);let mode='browse',listKey=null,rootsKey=null,searchKey=null,entries=[],searchRows=[];const cards=new Map();const expandedAgents=new Set();
+  document.body.append(panel);installAssetPaneResize({document,panel});const byId=id=>document.getElementById(id);let mode='browse',listKey=null,rootsKey=null,searchKey=null,entries=[],searchRows=[];const cards=new Map(),agentGroups=new Map();const expandedAgents=new Set();let agentRows=[];
   const runHeader=document.createElement('div');runHeader.id='authoring-generation-header';runHeader.hidden=true;runHeader.innerHTML='<button type="button" id="generation-header-show" title="Show generation"><span id="generation-header-status"></span></button><button type="button" id="generation-header-stop">Stop</button>';byId('authoring-header')?.append(runHeader);const runById=id=>runHeader.querySelector('#'+id);
   const previews=new Map();let previewModule;const observer=new document.defaultView.IntersectionObserver(rows=>{for(const row of rows){if(!row.isIntersecting)continue;observer.unobserve(row.target);const entry=previews.get(row.target);if(!entry)continue;row.target.dataset.previewState='loading';(previewModule ||= import('./authoring-asset-previews.mjs')).then(module=>module.meshThumbnail(entry,()=>row.target.isConnected&&!panel.hidden&&mode==='browse'&&!assetAdding)).then(source=>{if(!source){row.target.dataset.previewState='skipped';if(row.target.isConnected)armPreviews();return;}const img=document.createElement('img');img.src=source;img.alt=entry.label || entry.name;row.target.prepend(img);row.target.dataset.previewState='rendered';}).catch(()=>{row.target.dataset.previewState='unavailable';row.target.title+=' · Mesh preview unavailable';});}}, {root:panel});
   function armPreviews(){if(panel.hidden||mode!=='browse')return;for(const [button] of previews)if(!['loading','rendered','unavailable'].includes(button.dataset.previewState))observer.observe(button);}
@@ -151,11 +152,14 @@ export function installAuthoringAssets({document,controller,edits}) {
     byId('asset-filter').setAttribute('aria-label',agentWork?'Filter agent work by agent name':'Search this asset collection');
     const query=byId('asset-filter').value.toLowerCase();
     const nextList=JSON.stringify([state.root,state.path,state.listRevision]);
-    if(nextList!==listKey){listKey=nextList;searchKey=null;observer.disconnect();previews.clear();cards.clear();
-      searchRows=state.entries.map(entry=>({entry,text:(agentWork?`${entry.agent?.id||''} ${entry.agent?.label||''}`:`${entry.name} ${entry.label}`).toLowerCase()}));
+    if(nextList!==listKey){listKey=nextList;searchKey=null;observer.disconnect();previews.clear();cards.clear();agentGroups.clear();
+      const groups=new Map();
+      if(agentWork)for(const entry of state.entries){if(!groups.has(entry.agent.id))groups.set(entry.agent.id,{id:entry.agent.id,items:[],text:`${entry.agent.id} ${entry.agent.label}`.toLowerCase()});groups.get(entry.agent.id).items.push(entry);}
+      agentRows=[...groups.values()];
+      searchRows=agentWork?[]:state.entries.map(entry=>({entry,text:`${entry.name} ${entry.label}`.toLowerCase()}));
     }
     const nextSearch=JSON.stringify([nextList,query]);
-    if(nextSearch!==searchKey){searchKey=nextSearch;entries=searchRows.filter(row=>row.text.includes(query)).map(row=>row.entry);
+    if(nextSearch!==searchKey){searchKey=nextSearch;const matchingAgents=agentWork?agentRows.filter(row=>row.text.includes(query)):[];entries=agentWork?matchingAgents.flatMap(row=>row.items):searchRows.filter(row=>row.text.includes(query)).map(row=>row.entry);
     observer.disconnect();
 
     const makeButton=(entry,selected=state.selected)=>{
@@ -171,18 +175,21 @@ export function installAuthoringAssets({document,controller,edits}) {
     };
     const container=byId('asset-entries');container.classList.toggle('asset-agent-groups',agentWork);
     if(agentWork){
-      const groups=new Map();
-      for(const entry of entries){if(!groups.has(entry.agent.id))groups.set(entry.agent.id,[]);groups.get(entry.agent.id).push(entry);}
-      container.replaceChildren(...[...groups].map(([id,items])=>{
-        const first=items[0],detail=document.createElement('details');detail.className='asset-agent-group';detail.open=!!query||expandedAgents.has(id);
-        const summary=document.createElement('summary');summary.textContent=`${first.agent.label} · ${items.length}`;
-        const date=document.createElement('small');date.textContent=new Date((first.producedAt||first.mtime)*1000).toLocaleString();summary.append(date);
-        const grid=document.createElement('div');grid.className='asset-agent-entries';detail.append(summary,grid);
-        let populated=false;
-        const populate=()=>{if(!detail.open||populated)return;populated=true;const selected=controller.read().selected;grid.replaceChildren(...items.map(entry=>{
-          const button=makeButton(entry,selected),subtitle=button.querySelector('small');subtitle.textContent+=' · '+(entry.outputClass==='witness'?'Evidence':entry.outputClass==='generated'?'Generated':'Output');return button;
-        }));armPreviews();};
-        detail.addEventListener('toggle',()=>{if(detail.open)expandedAgents.add(id);else expandedAgents.delete(id);populate();});populate();return detail;
+      container.replaceChildren(...matchingAgents.map(({id,items})=>{
+        let group=agentGroups.get(id);
+        if(!group){
+          const first=items[0],detail=document.createElement('details');detail.className='asset-agent-group';
+          const summary=document.createElement('summary');summary.textContent=`${first.agent.label} · ${items.length}`;
+          const date=document.createElement('small');date.textContent=new Date((first.producedAt||first.mtime)*1000).toLocaleString();summary.append(date);
+          const grid=document.createElement('div');grid.className='asset-agent-entries';detail.append(summary,grid);
+          let populated=false;
+          const populate=()=>{if(!detail.open||populated)return;populated=true;const selected=controller.read({selectionOnly:true}).selected;grid.replaceChildren(...items.map(entry=>{
+            const button=makeButton(entry,selected),subtitle=button.querySelector('small');subtitle.textContent=(entry.kind==='mesh'?'Mesh · GLB':entry.kind==='surface'?'Fitted surface splats':'Image')+' · '+(entry.outputClass==='witness'?'Evidence':entry.outputClass==='generated'?'Generated':'Output');return button;
+          }));armPreviews();};
+          detail.addEventListener('toggle',()=>{if(!detail.isConnected||agentGroups.get(id)?.detail!==detail)return;if(detail.open)expandedAgents.add(id);else expandedAgents.delete(id);populate();});
+          group={detail,populate};agentGroups.set(id,group);
+        }
+        group.detail.open=!!query||expandedAgents.has(id);group.populate();return group.detail;
       }));
     }else container.replaceChildren(...entries.map(entry=>makeButton(entry)));
     }
@@ -239,7 +246,7 @@ export function installAuthoringAssets({document,controller,edits}) {
   byId('asset-recover').onclick=()=>action(()=>controller.recover());
   byId('asset-file-open').onclick=()=>byId('asset-file').click();byId('asset-file').onchange=event=>action(async()=>{const file=event.target.files[0];if(file)await controller.upload(file);event.target.value='';});
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!panel.hidden&&!edits.state().active){close();event.preventDefault();}});
-  return {render,close,open(next='browse'){panel.hidden=false;document.body.classList.add('has-assets-panel');setMode(next);return next==='generate'&&controller.read().selected?.kind==='image'?Promise.resolve(true):action(()=>controller.ensure?controller.ensure():controller.refresh());},state:()=>({open:!panel.hidden,mode})};
+  return {render,close,open(next='browse'){panel.hidden=false;document.body.classList.add('has-assets-panel');setMode(next);return next==='generate'&&controller.read({selectionOnly:true}).selected?.kind==='image'?Promise.resolve(true):action(()=>controller.ensure?controller.ensure():controller.refresh());},state:()=>({open:!panel.hidden,mode})};
 }
 
 export function assetPaneHeight(value,height,narrow=false,extraRows=narrow?180:0){return Math.max(160,Math.min(value,Math.max(160,height-42-180-extraRows)));}

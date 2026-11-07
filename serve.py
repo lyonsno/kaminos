@@ -3042,9 +3042,15 @@ def mesh_lod_choice(source, faces=None, max_error=None, stat='max', route=None, 
     data = read_mesh_lod_set(source)
     levels = [{**l, 'source': '/api/read?' + urlencode({'root': 'generated-meshes', 'path': l['sha256'] + '.glb'})} for l in _mesh_lod_records(data)]
     levels.sort(key=lambda level: -level['faces'])
+    # Malformed optional appearance metadata must not discard usable geometry.
+    # Preparation reports the record error separately below.
+    texture_sets = data.get('textureSets', {})
+    texture_sets = {sha: group for sha, group in texture_sets.items() if isinstance(group, dict)
+                    and isinstance(group.get('variants', []), list)
+                    and all(isinstance(v, dict) for v in group.get('variants', []))} if isinstance(texture_sets, dict) else {}
     for level in levels:
-        if level['sha256'] in data.get('textureSets', {}):
-            level['textureSet'] = data['textureSets'][level['sha256']]
+        if level['sha256'] in texture_sets:
+            level['textureSet'] = texture_sets[level['sha256']]
     eligible = [l for l in levels if l.get('purpose') is None or l.get('purpose') == purpose == 'beauty']
     candidates = ([l for l in eligible if l.get('route') == route] if route is not None else
                   [l for l in eligible if l.get('representation') != 'trellis-surfels' and not str(l.get('route', '')).startswith('trellis-surfels')])
@@ -3059,7 +3065,7 @@ def mesh_lod_choice(source, faces=None, max_error=None, stat='max', route=None, 
             fitting = [l for l in measured if l['error']['relative'][stat] <= max_error]
             choice, within = (min(fitting, key=lambda l: l['faces']), True) if fitting else (max(measured, key=lambda l: l['faces']), False)
     result = {'schema': 'kaminos.lod-set.v0', 'source': data['source'], 'levels': eligible, 'beautyLevels': [l for l in levels if l.get('purpose') in (None, 'beauty')], 'choice': choice, 'withinBudget': within,
-              'retired': data.get('retired', []), 'textureSets': data.get('textureSets', {})}
+              'retired': data.get('retired', []), 'textureSets': texture_sets}
     if unmeasured is not None:
         result['unmeasured'] = unmeasured
     return result
@@ -3077,6 +3083,22 @@ def mesh_lod_targets_missing(sha):
     return bool(_MESH_LOD_TARGETS - {level.get('targetFaces', level['faces']) for level in levels})
 
 
+def mesh_lod_preparation_status(source, glb_bytes=None):
+    from mesh_lod_preparation import source_description, preparation_status
+    record = read_mesh_lod_set(source)
+    if glb_bytes is None:
+        glb_bytes = _generated_mesh_path_for_sha(Path(BROWSE_ROOTS['generated-meshes']).resolve(), record['source'])
+        if glb_bytes is None:
+            raise ValueError('Preparation source mesh is not stored')
+    status = preparation_status(record, source_description(glb_bytes))
+    dependencies = {level['sha256'] for level in _mesh_lod_records(record)}
+    dependencies.update(v['sha256'] for group in record.get('textureSets', {}).values() for v in group.get('variants', []))
+    root = Path(BROWSE_ROOTS['generated-meshes']).resolve()
+    status['missingFiles'] = sorted(sha for sha in dependencies if _generated_mesh_path_for_sha(root, sha) is None)
+    status['complete'] = status['complete'] and not status['missingFiles']
+    return status
+
+
 _MESH_LOD_PREPARE_LOCK = threading.Lock()
 _MESH_LOD_PREPARE_QUEUE = []
 _MESH_LOD_PREPARE_ACTIVE = None
@@ -3086,10 +3108,10 @@ _MESH_LOD_PREPARE_RUNNER = None
 
 
 def should_auto_prepare_mesh_lods(sha, glb_bytes, role=None):
-    """True when a stored GLB is a triangle-mesh hero without a .lods.json sidecar."""
+    """A mesh hero with missing geometry or independent appearance coverage."""
     if role in ('lod-tier', 'beauty-lod', 'client-prepares-lods') or not isinstance(sha, str) or not _SHA256_HEX.fullmatch(sha):
         return False
-    if not mesh_lod_targets_missing(sha) or sha in mesh_lod_level_index():
+    if sha in mesh_lod_level_index():
         return False
     if not isinstance(glb_bytes, (bytes, bytearray, memoryview)) or len(glb_bytes) < 20:
         return False
@@ -3147,10 +3169,132 @@ def should_auto_prepare_mesh_lods(sha, glb_bytes, role=None):
                 break
         if has_tri_position:
             break
-    return has_tri_position
+    if not has_tri_position:
+        return False
+    return not mesh_lod_preparation_status(sha, glb_bytes)['complete']
+
+
+def _mesh_lod_source_identity():
+    commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+    dirty = subprocess.check_output(['git', 'status', '--porcelain', '--untracked-files=normal'], cwd=ROOT, text=True).strip()
+    if dirty:
+        raise RuntimeError('Automatic preparation requires a committed source revision')
+    return commit
+
+
+def mesh_lod_prepare_persisted_state(sha):
+    """Observe the durable queue, including after a server restart. Never submit."""
+    path = Path(BROWSE_ROOTS['generated-meshes']).resolve() / '.lod-prepare-reports' / sha / 'state.json'
+    if not path.is_file():
+        return None
+    state = {'source': sha}
+    try:
+        state = json.loads(path.read_text())
+        if not isinstance(state, dict):
+            return {'source': sha, 'status': 'failed', 'phase': 'observation', 'error': 'Preparation state must be an object'}
+        if not state.get('jobId'):
+            return state
+        queue_dir, job = Path(state['queueDir']), state['jobId']
+        for phase in ('pending', 'deferred', 'running'):
+            if (queue_dir / phase / job).is_dir():
+                return {**state, 'status': 'running' if phase == 'running' else 'queued', 'phase': phase}
+        receipt_path = next((queue_dir / phase / job / 'receipt.json' for phase in ('done', 'failed', 'cancelled')
+                             if (queue_dir / phase / job / 'receipt.json').is_file()), None)
+        receipt = json.loads(receipt_path.read_text()) if receipt_path else {}
+        report_path = Path(state['reportPath'])
+        report = json.loads(report_path.read_text()) if report_path.is_file() else {}
+        if not isinstance(receipt, dict) or not isinstance(report, dict):
+            raise ValueError('Terminal receipt and producer report must be objects')
+        coverage = mesh_lod_preparation_status(sha)
+        complete = (receipt.get('job_id') == job and receipt.get('status') == 'done' and receipt.get('exit_code') == 0
+                    and report.get('phase') == 'done' and not report.get('error') and coverage['complete'])
+        return {**state, 'status': 'done' if complete else 'failed', 'phase': 'terminal',
+                'returncode': receipt.get('exit_code'), 'receiptPath': str(receipt_path) if receipt_path else None,
+                'preparation': coverage, 'effectiveRoute': 'greenroom-command',
+                **({} if complete else {'error': 'Queued job did not establish complete requested products; inspect report and receipt; explicit retry required'})}
+    except (ValueError, OSError, KeyError, TypeError, IndexError) as error:
+        return {**state, 'status': 'failed', 'phase': 'observation', 'error': str(error)}
+
+
+def submit_mesh_lod_prepare(sha, server_port=None, *, server_url=None, retry=False):
+    """Shared queued intake for mesh arrival and offline library upgrades."""
+    from mesh_lod_preparation import PROFILE
+    root = Path(BROWSE_ROOTS['generated-meshes']).resolve()
+    sha = _resolve_generated_mesh_source(sha)
+    directory = root / '.lod-prepare-reports' / sha
+    directory.mkdir(parents=True, exist_ok=True)
+    state_path = directory / 'state.json'
+    try:
+        config = greenroom_lease_config()
+        if config is None:
+            raise RuntimeError('No Greenroom is configured for queued mesh preparation; use the offline preparation CLI')
+    except Exception as error:
+        state_path.write_text(json.dumps({'source': sha, 'profile': PROFILE, 'status': 'failed', 'phase': 'queue-config', 'error': str(error)}) + '\n')
+        raise
+    queue_dir = Path(config['queueDir']).resolve()
+    with (directory / 'submission.lock').open('a+b') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        previous = json.loads(state_path.read_text()) if state_path.exists() else {}
+        if previous.get('profile') == PROFILE and previous.get('queueDir') == str(queue_dir) and previous.get('jobId'):
+            job = previous['jobId']
+            if any((queue_dir / phase / job).is_dir() for phase in ('pending', 'deferred', 'running')):
+                return previous
+            if not retry:
+                return mesh_lod_prepare_persisted_state(sha)
+        elif previous.get('profile') == PROFILE and previous.get('status') == 'failed' and not retry:
+            return previous
+        run_dir = directory / 'runs' / uuid.uuid4().hex
+        run_dir.mkdir(parents=True)
+        report_path = run_dir / 'report.json'
+        state = {'schema': 'kaminos.mesh-preparation-job.v1', 'profile': PROFILE, 'source': sha,
+                 'root': str(root), 'repoRoot': str(ROOT), 'queueDir': str(queue_dir),
+                 'server': server_url or f'http://127.0.0.1:{server_port or PORT}',
+                 'reportPath': str(report_path), 'phase': 'submission', 'status': 'submitting'}
+        try:
+            commit = _mesh_lod_source_identity()
+            argv = ['node', str(ROOT / 'tools/prepare-lod-tiers.mjs'), '--server', state['server'],
+                    '--source', sha, '--report', str(report_path), '--complete-missing', 'true', '--expected-commit', commit]
+            manifest = {'schema': 'gpu-greenroom.command.v1', 'agent_id': 'kaminos-lod-preparation',
+                        'repo_root': str(ROOT), 'cwd': str(ROOT), 'output_dir': str(run_dir),
+                        'route_identity': 'kaminos/mesh-preparation/' + PROFILE,
+                        'argv': argv, 'env': {'PATH': f"/opt/homebrew/bin:{os.environ.get('PATH', '')}"}, 'timeout': None}
+            manifest_path = run_dir / 'manifest.json'
+            manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
+            state.update(sourceCommit=commit, manifestPath=str(manifest_path), argv=argv)
+            (run_dir / 'start.json').write_text(json.dumps(state, indent=2) + '\n')
+            proc = subprocess.run([config['greenroomBin'], '--queue-dir', str(queue_dir), 'submit-command', '--manifest', str(manifest_path)],
+                                  capture_output=True, text=True)
+            if proc.returncode:
+                raise RuntimeError(proc.stderr or proc.stdout or 'Greenroom submission failed')
+            submitted = json.loads(proc.stdout)
+            job = submitted.get('job_id')
+            if not isinstance(job, str) or not job:
+                raise ValueError('Greenroom submission returned no job identity')
+            state.update(status='queued', phase='queued', jobId=job, submission=submitted)
+        except Exception as error:
+            state.update(status='failed', error=str(error))
+            raise
+        finally:
+            temporary = directory / ('.state-' + uuid.uuid4().hex + '.json')
+            temporary.write_text(json.dumps(state, indent=2) + '\n')
+            os.replace(temporary, state_path)
+            (run_dir / 'start.json').write_text(json.dumps(state, indent=2) + '\n')
+        return state
 
 
 def _default_mesh_lod_prepare_runner(sha, server_port):
+    config = greenroom_lease_config()
+    if config is not None:
+        state = submit_mesh_lod_prepare(sha, server_port)
+        if state['status'] == 'failed':
+            return state
+        with _MESH_LOD_PREPARE_LOCK:
+            _MESH_LOD_PREPARE_COMPLETED[sha] = state
+        queue_dir, job = Path(state['queueDir']), state['jobId']
+        while any((queue_dir / phase / job).is_dir() for phase in ('pending', 'deferred', 'running')):
+            # Passive server-thread observation; no model wake or execution lease.
+            time.sleep(1)
+        return mesh_lod_prepare_persisted_state(sha)
     report_dir = Path(BROWSE_ROOTS['generated-meshes']).resolve() / '.lod-prepare-reports'
     report_dir.mkdir(parents=True, exist_ok=True)
     report_path = report_dir / f'{sha[:16]}.json'
@@ -3164,10 +3308,17 @@ def _default_mesh_lod_prepare_runner(sha, server_port):
     ]
     env = {**os.environ, 'PATH': f"/opt/homebrew/bin:{os.environ.get('PATH', '')}"}
     proc = subprocess.run(cmd, cwd=str(ROOT), env=env, capture_output=True, text=True)
+    report = json.loads(report_path.read_text()) if report_path.is_file() else {}
+    if not isinstance(report, dict):
+        raise ValueError('Producer report must be an object')
+    coverage = mesh_lod_preparation_status(sha)
+    complete = proc.returncode == 0 and report.get('phase') == 'done' and not report.get('error') and coverage['complete']
     return {
-        'status': 'done' if proc.returncode == 0 else 'failed',
+        'status': 'done' if complete else 'failed',
         'returncode': proc.returncode,
         'reportPath': str(report_path),
+        'preparation': coverage,
+        **({} if complete else {'error': 'Local command did not establish complete requested products; inspect report'}),
     }
 
 
@@ -3205,15 +3356,22 @@ def mesh_lod_prepare_queue_state():
 
 
 def enqueue_mesh_lod_prepare(sha, server_port=None):
-    """Queue background 5-tier .lods.json preparation for `sha` if not already active/queued."""
+    """Admit missing preparation immediately; Greenroom owns scheduling/durability."""
     global _MESH_LOD_PREPARE_WORKER_STARTED
     if os.environ.get('KAMINOS_AUTO_PREPARE_LODS', '1').strip().lower() in ('0', 'false', 'no', 'off'):
         return False
     port = int(server_port or PORT)
+    if _MESH_LOD_PREPARE_RUNNER is None and greenroom_lease_config() is not None:
+        if mesh_lod_preparation_status(sha)['complete']:
+            return False
+        state = submit_mesh_lod_prepare(sha, port)
+        return state['status'] in ('queued', 'running')
     with _MESH_LOD_PREPARE_LOCK:
         if _MESH_LOD_PREPARE_ACTIVE == sha or any(item[0] == sha for item in _MESH_LOD_PREPARE_QUEUE):
             return False
-        if not mesh_lod_targets_missing(sha):
+        if _MESH_LOD_PREPARE_COMPLETED.get(sha, {}).get('status') == 'failed':
+            return False
+        if mesh_lod_preparation_status(sha)['complete']:
             return False
         _MESH_LOD_PREPARE_QUEUE.append((sha, port))
         if not _MESH_LOD_PREPARE_WORKER_STARTED:
@@ -4451,7 +4609,12 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 payload = mesh_lod_choice(query.get("source", [None])[0], int(faces) if faces is not None else None,
                                           float(max_error) if max_error is not None else None, query.get("stat", ["max"])[0],
                                           query.get("route", [None])[0], query.get("purpose", [None])[0])
-                if mesh_lod_targets_missing(payload["source"]) and query.get("prepare", [None])[0] != "client":
+                try:
+                    payload['preparation'] = mesh_lod_preparation_status(payload['source'])
+                except (ValueError, OSError, KeyError, IndexError, TypeError) as error:
+                    payload['preparation'] = {'schema': 'kaminos.mesh-preparation.v1', 'profile': 'surface-detail-v1',
+                                              'complete': False, 'status': 'unavailable', 'phase': 'mesh-preparation-record', 'error': str(error)}
+                if not payload['preparation']['complete'] and payload['preparation'].get('status') != 'unavailable' and query.get("prepare", [None])[0] != "client":
                     src_sha = payload.get("source")
                     root_dir = Path(BROWSE_ROOTS["generated-meshes"]).resolve()
                     glb_path = _generated_mesh_path_for_sha(root_dir, src_sha) if src_sha else None
@@ -4467,6 +4630,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                     payload['prepareQueued'] = (_MESH_LOD_PREPARE_ACTIVE == sha or
                                                 any(item[0] == sha for item in _MESH_LOD_PREPARE_QUEUE))
                     payload['prepareState'] = payload.get('lodPreparation') or _MESH_LOD_PREPARE_COMPLETED.get(sha)
+                persisted = mesh_lod_prepare_persisted_state(sha)
+                if persisted is not None:
+                    payload['prepareState'] = payload.get('lodPreparation') or persisted
+                    payload['prepareQueued'] = persisted.get('status') in ('queued', 'running')
                 self.send_json(payload)
             except MeshLodRecordError as error:
                 self.send_json({"error": str(error), "phase": "mesh-lods-record"}, 500)

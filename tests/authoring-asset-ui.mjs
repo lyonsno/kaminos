@@ -152,3 +152,26 @@ test('pane resize reserves the actual Workbench instrument and inspector rows',(
  assert.equal(assetPaneHeight(400,1000,false,0),400);
  assert.equal(assetPaneHeight(400,1000,true),400,'legacy Authoring reservation is preserved');
 });
+
+test('Agent Work name filtering reuses each agent heading and already populated tiles',()=>{
+ const f=fixture(async()=>null);const image=(owner,id)=>({kind:'image',root:'agent-work',path:id+'.png',label:id,name:id+'.png',source:'/api/job-output?job_id='+id+'&file=output.png',agent:{id:owner,label:'Agent '+owner},producedAt:2});
+ f.state.root='agent-work';f.state.entries=[image('alpha','one'),image('alpha','two'),image('beta','three')];f.state.listRevision++;f.ui.open('browse');
+ const container=f.doc.getElementById('asset-entries'),alpha=container.children[0],beta=container.children[1];assert.equal(alpha.children[1].children.length,0,'initially collapsed groups create no tiles');
+ f.doc.getElementById('asset-filter').value='alpha';f.ui.render(f.state);assert.equal(container.children[0],alpha,'search must keep the cached agent heading');assert.equal(container.children.length,1);const tile=alpha.children[1].children[0];assert.equal(alpha.children[1].children.length,2,'all matching outputs are available');
+ f.doc.getElementById('asset-filter').value='beta';f.ui.render(f.state);assert.equal(container.children[0],beta);
+ f.doc.getElementById('asset-filter').value='alpha';f.ui.render(f.state);assert.equal(container.children[0],alpha);assert.equal(alpha.children[1].children[0],tile);assert.equal(tile.querySelector('small').textContent,'Image · Output','cached tile subtitles must not accumulate suffixes');
+});
+
+test('expanding matching Agent Work groups does not request a full catalog copy per group',()=>{
+ const entries=['alpha','beta'].map(id=>({kind:'image',label:id,name:id+'.png',source:'/api/job-output?job_id='+id+'&file=output.png',agent:{id,label:'Agent '+id}}));
+ const state={roots:[],root:'agent-work',path:'',catalog:true,listRevision:1,entries,selected:null,results:[],warnings:[]};let fullReads=0;
+ const controller={read:options=>{if(options?.selectionOnly)return {selected:state.selected};fullReads++;return state;},generation:()=>({status:'idle'}),refresh:async()=>{}};
+ const f=fixture(async()=>null,controller);fullReads=0;f.doc.getElementById('asset-filter').value='agent';f.ui.render(state);assert.equal(fullReads,0,'groups only need the current selected entry');assert.equal(f.doc.getElementById('asset-entries').children.length,2);
+});
+
+test('a queued toggle from a replaced agent group cannot restore an old visible card after a hold',()=>{
+ const f=fixture(async()=>null),entry={kind:'image',root:'agent-work',path:'image.png',label:'Before review',name:'image.png',source:'/api/job-output?job_id=one&file=image.png',agent:{id:'alpha',label:'Alpha'}};
+ f.state.root='agent-work';f.state.entries=[entry];f.state.listRevision++;f.ui.open('browse');const old=f.doc.getElementById('asset-entries').children[0];old.open=true;
+ f.state.entries=[{...entry,visibility:{status:'withheld',reason:'Awaiting review'}}];f.state.listRevision++;f.ui.render(f.state);const current=f.doc.getElementById('asset-entries').children[0];old.dispatch('toggle');current.open=true;current.dispatch('toggle');
+ const card=current.children[1].children[0];assert.equal(card.dataset.visibility,'withheld');assert.equal(card.children.filter(e=>e.tagName==='img').length,0,'late old group work must not bypass the new hold');
+});

@@ -119,3 +119,15 @@ test('unknown scheduling refuses before the app run is admitted',async()=>{
  await assert.rejects(bridge.beginRun({runId:'bad-schedule',scheduling:'silent-fallback'}),/scheduling/);
  assert.equal(f.begins,0);await bridge.dispose();await f.close();
 });
+
+test('remeshing GPU duties service an actual scene frame before encoding and preserve Stop',async()=>{
+ for(const stopping of [false,true]){
+  const f=await fixture(),abort=new AbortController(),bridge=await createTrellisSharedHost({appGpu:f.appGpu});
+  const run=await bridge.beginRun({runId:'remesh-'+stopping,signal:abort.signal,scheduling:'per-duty-fence-task'});
+  const frame=f.foreground.request({requestId:'remesh-frame',run:ctx=>{if(stopping)abort.abort();ctx.submit([{kind:'scene-frame'}]);}});
+  const work=run.withGpuDuty('original-remesh-distance',async encoded=>{f.events.push('remesh-encoded');encoded();f.device.queue.submit([{kind:'remesh-submitted'}]);return 7;});
+  if(stopping){await assert.rejects(work,{name:'AbortError'});assert.ok(!f.events.includes('remesh-encoded'));}
+  else{assert.equal(await work,7);assert.ok(f.events.indexOf('scene-frame')<f.events.indexOf('remesh-encoded'));assert.equal(run.scheduling().gpuDrains,1);}
+  await frame.completion;await run.finish();await bridge.dispose();await f.close();
+ }
+});

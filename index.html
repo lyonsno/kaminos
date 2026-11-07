@@ -2866,6 +2866,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
           <div class="field"><label for="scene-gi-mipSampling" title="Use coarser depth and lighting farther along each search. Compare fine contact detail when enabling.">Coarse distant samples</label><input id="scene-gi-mipSampling" type="checkbox"></div>
           <div class="field"><label for="scene-gi-perspectiveReconstruction" title="Use equivalent camera-specific perspective arithmetic in the lighting search.">Fast perspective reconstruction</label><input id="scene-gi-perspectiveReconstruction" type="checkbox"></div>
           <div class="field"><label for="scene-gi-linearThickness" title="Scale thickness with distance from the camera.">Depth-scaled thickness</label><input id="scene-gi-linearThickness" type="checkbox"></div>
+          <div class="field"><label for="scene-gi-aoContrast" title="Exponent on SSGI AO visibility. One preserves the estimator; larger values deepen occlusion. Final AO strength is a separate control.">AO contrast (exponent)</label><input id="scene-gi-aoContrast" type="number" min="0" step="0.1" value="1"></div>
           <div class="field"><label for="scene-gi-depthPhi" title="Larger values allow filtering across larger depth differences.">Depth tolerance</label><input id="scene-gi-depthPhi" type="number" min="0.001" step="0.01" value="0.1"></div>
           <div class="field"><label for="scene-gi-normalPhi" title="Larger values more strongly preserve boundaries between different surface directions.">Normal edge strength</label><input id="scene-gi-normalPhi" type="number" min="0.01" step="0.1" value="5"></div>
           <div class="field"><label for="scene-gi-lumaPhi" title="Larger values allow filtering across larger brightness differences.">Brightness tolerance</label><input id="scene-gi-lumaPhi" type="number" min="0.01" step="0.1" value="5"></div>
@@ -2979,7 +2980,7 @@ import {waterDomainPose,checkedWaterDomainPose,waterDomainSampling} from './auth
 import {authoredMlsCellSize,authoredMlsParticleVolume} from './authored-mls-water.mjs';
 import {createSimFrameCoordinator} from './mls-juice-contract.mjs';
 import { loadStartupRuntimeConfig } from './runtime-config-once.mjs';
-import {createUserPreferences,sceneDefaultsFromDocument,sceneDefaultsApplyToLocation,newSceneDocument} from './user-preferences.mjs';
+import {createUserPreferences,sceneDefaultsFromDocument,resolveStartupSceneDefaults,newSceneDocument} from './user-preferences.mjs';
 import {installUserPreferences} from './user-preferences-ui.mjs';
 import {captureStill,createOutputProfiles} from './render-output.mjs';
 import {createViewportRecording} from './viewport-recording.mjs';
@@ -4270,7 +4271,9 @@ async function loadPreparedLod(level,{untextured=false}={}){
     return untextured?parseGiProxyGlb(bytes):(await new GLTFLoader().parseAsync(bytes,'')).scene;
   });
 }
-const sceneGiProxies = createGiProxyRegistry({THREE,loadLevel:level=>loadPreparedLod(level,{untextured:true}),parseGlb:parseGiProxyGlb});
+const autoPreparedLodSources = new Set(), inFlightLodPrepares = new Map();
+const sceneGiProxies = createGiProxyRegistry({THREE,loadLevel:level=>loadPreparedLod(level,{untextured:true}),parseGlb:parseGiProxyGlb,
+  ownsPreparation:(_root,base)=>autoPreparedLodSources.has(base.heroSha??base.assetSha)||inFlightLodPrepares.has(base.heroSha??base.assetSha)});
 let sceneAssetPreparationActive=false,sceneAssetPreparationOwner=null;
 function setSceneAssetPreparationActive(value){sceneAssetPreparationActive=value;sceneBeautyLods?.setPreparation(value);}
 let sceneArrivalState={phase:'idle',coarseObjects:0,expectedCoarseObjects:0};
@@ -4313,7 +4316,6 @@ window.kaminosSceneLodBudget = {
   bakeRungMeshesToRootSpace,
   formatLodBudgetReadout,
 };
-const autoPreparedLodSources = new Set(), inFlightLodPrepares = new Map();
 const refreshSceneObjectsForLodSource = async source => {
   if (typeof workingScene === 'undefined') return;
   await Promise.all(workingScene.objects.map(obj => {
@@ -7502,6 +7504,12 @@ document.addEventListener('keydown', event => {
     setSceneAddMenuOpen(true, { focus: true });
   }
 });
+
+function registerWorkbenchSceneObject(object, metadata) {
+  const record=registerSceneObject(object,metadata);
+  autoCalibrateSceneGIFromScene();
+  return record;
+}
 
 function registerSceneObject(object, metadata = {}, {activate = true} = {}) {
   const id = String(metadata.id || makeSceneObjectId(metadata.type || 'object'));
@@ -10772,7 +10780,8 @@ function saveSettings() {
 }
 
 function restoreSettings() {
-  if(startupPreferences?.sceneDefaults)return startupPreferences.sceneDefaults.environment?.name;
+  const defaults=resolveStartupSceneDefaults(startupPreferences,location.href).defaults;
+  if(defaults)return defaults.environment?.name;
   let settings;
   try { settings = JSON.parse(localStorage.getItem(KAMINOS_SETTINGS_KEY)); } catch {}
   if (!settings) return;
@@ -12295,7 +12304,7 @@ async function initScene() {
   const sceneResourceConsumers=()=>[scene,...workingScene.retainedObjects().map(row=>row.object),...workingScene.suspendedObjects().map(row=>row.object)];
   workbenchSceneHost=createWorkbenchSceneHost({scene,camera,controls,resourceConsumers:sceneResourceConsumers,
     loadAsset:(file,options)=>window.kaminosWorkbenchLoadAsset(file,options),
-    registerObject:registerSceneObject,findObject:root=>workingScene.findRoot(root)??workingScene.suspendedObjects().find(row=>row.object===root),
+    registerObject:registerWorkbenchSceneObject,findObject:root=>workingScene.findRoot(root)??workingScene.suspendedObjects().find(row=>row.object===root),
     removeObject:handle=>sceneMembership.removeOwned(handle,
       root=>disposeOwnedSceneTree(root,sceneResourceConsumers(),[scene.environment,scene.background])),
     redraw:()=>window._kaminosDirty?.(),onFrame:workbenchSceneFrames.onFrame,
@@ -27587,13 +27596,15 @@ function applyGiProxySetting(entry){
     :sceneGiProxies.disable(entry.object,{retainLevels:true});
   return Promise.resolve(pending).then(async h=>{
     if(h?.prepareQueued&&!h.catalogFailure){
-      await sceneGiProxies.whenPrepared(entry.object);
-      if(!workingScene.objects.includes(entry))return null;
-      return applyGiProxySetting(entry);
+      // Preparation may wait behind other admitted work. Arrival and the
+      // existing representation remain usable while the catalog is upgraded.
+      void sceneGiProxies.whenPrepared(entry.object).then(prepared=>{
+        if(prepared&&workingScene.objects.includes(entry))return window.__kaminosRefreshLodSource?.(prepared.heroSha??prepared.assetSha);
+      }).catch(()=>null);
     }
     syncSceneDataInspector();window.kaminosFireLightingSettings?.sync?.();window._kaminosDirty?.();
     const source=h?.heroSha;
-    if((h?.state==='no-tiers'||(h?.state==='disabled'&&!h.levels?.length))&&source&&!autoPreparedLodSources.has(source)&&window.__kaminosLastGenerationLevels?.source!==source){
+    if(!h?.prepareQueued&&(h?.state==='no-tiers'||(h?.state==='disabled'&&!h.levels?.length))&&source&&!autoPreparedLodSources.has(source)&&window.__kaminosLastGenerationLevels?.source!==source){
       autoPreparedLodSources.add(source);
       window.__kaminosLastGenerationLevels={source,phase:'running'};
       window.__kaminosLastGenerationLevelsPromise=Promise.resolve().then(()=>window.kaminosGiProxies?.prepare?.(source,{completeMissing:true,input:entry.label||entry.fileName||source,route:entry.generation?.route||'auto-arrival-lod'})).then(report=>{
@@ -29158,6 +29169,8 @@ sceneInitialization.then(async () => {
     void refreshVolumeSettingsPresetList();
   }
   await startupPreferencesLoaded;
+  const startupDefaults=resolveStartupSceneDefaults(startupPreferences,location.href);
+  let startupDefaultsSkipReason=null;
   initEnvButtons();
   loadDemoButtons();
   factorySceneDocument=buildSceneData();
@@ -29169,13 +29182,14 @@ sceneInitialization.then(async () => {
     input.dispatchEvent(new Event('change',{bubbles:true}));
   };
   const preferencesSaved=value=>{startupPreferences=value;applyNavigationPreference(value);if(value.studioLook&&!workingScene.objects.length){arrivalLightingState.lookId=value.studioLook;syncArrivalStudioLighting();}};
-  preferencesUI=installUserPreferences({document,controller:userPreferences,readScene:()=>buildSceneData(),readFactory:()=>sceneDefaultsFromDocument(factorySceneDocument),onSaved:preferencesSaved,onApplyLook:lookId=>{void applyStudioLookToCurrentScene(lookId,{promoteRig:true});}});
+  preferencesUI=installUserPreferences({document,controller:userPreferences,readScene:()=>buildSceneData(),readFactory:()=>sceneDefaultsFromDocument(factorySceneDocument),installNumberDrag:installRelativeNumberDrag,onSaved:preferencesSaved,onApplyLook:lookId=>{void applyStudioLookToCurrentScene(lookId,{promoteRig:true});}});
   window.kaminosPreferences={open:()=>preferencesUI.open(),close:()=>preferencesUI.close(),
     read:()=>userPreferences.state(),load:()=>userPreferences.load(),
     save:async value=>{const saved=await userPreferences.save({...value,startupConfigured:true});preferencesSaved(saved);return saved;},
     applyStudioLook:(lookId,options)=>applyStudioLookToCurrentScene(lookId,options),
     capture:()=>sceneDefaultsFromDocument(buildSceneData()),
-    startup:()=>({settled:preferencesStartupSettled,usesDefaults:sceneDefaultsApplied})};
+    defaults:(profile='agent')=>resolveStartupSceneDefaults(userPreferences.state().receipt?.preferences??startupPreferences,'/?defaults='+encodeURIComponent(profile)),
+    startup:()=>({settled:preferencesStartupSettled,usesDefaults:sceneDefaultsApplied,requested:startupDefaults.requested,effective:sceneDefaultsApplied?startupDefaults.effective:null,reason:!preferencesStartupSettled?'startup-pending':startupDefaultsSkipReason??startupDefaults.reason})};
   const requestedStudioLook = typeof resolveStudioLookFromSearch === 'function' ? resolveStudioLookFromSearch(window.location.search) : null;
   if(startupPreferences&&startupPreferences.startupConfigured!==false&&userPreferences.state().receipt?.revision!=null){applyNavigationPreference(startupPreferences);if(startupPreferences.studioLook&&typeof arrivalLightingState!=='undefined'){arrivalLightingState.lookId=startupPreferences.studioLook;if(typeof syncArrivalStudioLighting==='function')syncArrivalStudioLighting();}}
   if (requestedStudioLook && typeof arrivalLightingState !== 'undefined') {
@@ -29199,11 +29213,15 @@ sceneInitialization.then(async () => {
     && !kaminosMeshAssetRouteFromSearch(startupAssetParams) && !kaminosSplatAssetRouteFromSearch(startupAssetParams)
     ? loadKaminosImageAssetRoute(startupImageRoute) : null;
   const environmentLoaded = loadEnvironment(admittedEnvironment?.name || initialEnvironment || 'studio').then(async () => {
-    if(startupPreferences?.sceneDefaults&&sceneDefaultsApplyToLocation(location.href)&&!workingScene.objects.length&&!scenePlacementTools.state().undoCount&&!scenePlacementTools.state().active) {
-      const blank=newSceneDocument(factorySceneDocument,startupPreferences.sceneDefaults);
+    if(startupDefaults.defaults&&!workingScene.objects.length&&!scenePlacementTools.state().undoCount&&!scenePlacementTools.state().active) {
+      const blank=newSceneDocument(factorySceneDocument,startupDefaults.defaults);
       await loadSceneFile(new File([JSON.stringify(blank)],'Untitled.kaminos.json'),{mounted:true,emptySettings:true});
       if(sceneDocument.state().blocked)throw Error('Default scene settings did not finish loading');
-      sceneDefaultsApplied=true;setInfo('New scene · your saved defaults');
+      sceneDefaultsApplied=true;setInfo('New scene · '+(startupDefaults.effective==='agent'?'agent defaults':'your saved defaults'));
+    } else if(startupDefaults.defaults){
+      startupDefaultsSkipReason='existing-scene-work';
+    } else if(startupDefaults.requested==='agent'&&startupDefaults.reason==='explicit-scene-input'){
+      setInfo('Agent defaults bypassed · explicit scene or asset settings take precedence');
     }
 
     const params = new URLSearchParams(window.location.search);
@@ -29257,7 +29275,7 @@ sceneInitialization.then(async () => {
     }
     if (params.get('sam') === '1' && !imageRoute) setActiveTab('masks');
   });
-  environmentLoaded.then(()=>{preferencesStartupSettled=true;},()=>{preferencesStartupSettled=true;});
+  environmentLoaded.then(()=>{preferencesStartupSettled=true;},()=>{preferencesStartupSettled=true;startupDefaultsSkipReason='startup-failed';});
   const volumeLoaded = startupSceneAdmission.then(admission => {
     if (admission === startupSceneRedirect) return null;
     const fireBoot = fireAtBoot(new URLSearchParams(location.search), startupSceneHash);
@@ -29463,7 +29481,7 @@ function setupAuthoringAssets(){
   // Browser U2Net for opaque photos: the shop-hosted package (immutable revision, sha-checked on load).
   const U2NET_PACKAGE_URL='https://huggingface.co/BasinShapers/u2net-webgpu/resolve/f4f82a54b6e8d7ffd4321005dbff1cb03198c78b/f32/';
   let u2netRunner=null;
-  const trellisPageRunInner=async({pixels,highResolutionPixels,image,label='TRELLIS page',signal,onPhase,onInput,finishMesh=true,textureSize=1024,scheduling}={})=>{
+  const trellisPageRunInner=async({pixels,highResolutionPixels,image,label='TRELLIS page',signal,onPhase,onInput,finishMesh=true,textureSize=1024,scheduling,finishingMode='surface-preserving'}={})=>{
     const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};
     const [{runTrellisInPage,createTrellisPageCheckpoints},{createBrowserMeshPostprocess},{createWasmXatlasUnwrapper}]=await Promise.all([
       import('./authoring-trellis-page.mjs'),import('./models/trellis2/mesh-cleanup.js'),import('./models/trellis2/wasm-xatlas.js')]);
@@ -29506,15 +29524,20 @@ function setupAuthoringAssets(){
     // Caller pixels without an image are identified by their own bytes.
     imageSha256??=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',pixelValues)),b=>b.toString(16).padStart(2,'0')).join('');
     const runId=`authoring-trellis-page-${crypto.randomUUID()}`;
+    const postprocessMesh=createBrowserMeshPostprocess({targetFaces:200000,WorkerClass:Worker,signal,mode:finishingMode,
+      device:appGpu.device,resolution:needsHighConditioning?1024:512});
+    const {createBrowserMaterialBaker}=await import('./models/trellis2/material-bake.js');
+    const bakeMaterial=createBrowserMaterialBaker({WorkerClass:Worker,signal,projectPositions:postprocessMesh.projectMaterialPositions,
+      withCpu:postprocessMesh.withCpu});
     try{
       const result=await runTrellisInPage({appGpu,manifest:pack.manifest,fetchTensor:pack.fetchTensor,pixelValues,highResolutionPixelValues,signal,onPhase,scheduling,decoderActivationStorage:'f16',finishMesh:finishMesh!==false,textureSize,
         // Stop reaches the finishing providers too (cleanup and UV in workers where supported).
-        finishing:{postprocessMesh:createBrowserMeshPostprocess({targetFaces:200000,WorkerClass:Worker,signal}),unwrapMesh:createWasmXatlasUnwrapper({WorkerClass:Worker,signal})},
+        finishing:{postprocessMesh,bakeMaterial,unwrapMesh:createWasmXatlasUnwrapper({WorkerClass:Worker,signal,normalMode:finishingMode==='original-remesh'?'source-original':'post-uv'})},
         provenance:{checkpointManifestSha256:pack.manifestSha256,
           input:image?`alpha image prepared in the page: ${image.source}`:pixels==='package'?'checkpoint package prepared pixels (Python-prepared stand-in), not a selected image':'caller-prepared pixels'}});
       const generation={schema:'kaminos.asset-generation.v1',runId,route:result.route,target:'this-page',
         receiptValidation:result.receiptValidation,conditioningShapes:result.conditioningShapes,input:{sha256:imageSha256,pixels:image?'page-alpha-prepared':pixels==='package'?'checkpoint-package-prepared':'caller-prepared',source:image?.source??null,preparation,checkpointManifestSha256:pack.manifestSha256},decoderActivationStorage:'f16',
-        uv:result.uv,material:result.material,scheduling:result.timing?.scheduling};
+        meshFinishing:result.meshFinishing,uv:result.uv,material:result.material,scheduling:result.timing?.scheduling};
       return {glb:result.glb,generation,label,timing:result.timing,surfelGlb:result.surfelGlb??null,surfels:result.surfels??null,levelInputs:result.levelInputs??null};
     }catch(error){
       // Kept for a decoder-only replay: the run's own capture plus the exact input and settings.
@@ -29585,7 +29608,7 @@ function setupAuthoringAssets(){
       }).catch(error=>{trellisPageAvailability={status:'unavailable',message:`TRELLIS availability: ${error.message}`};redraw();});
       authoringTrellisPageGenerator=createTrellisPageAuthoringGeneration({availability:()=>trellisPageAvailability,changed:()=>redraw(),
         blocked:()=>authoringImageGenerator?.busy()?'An image is generating. Generate the mesh when it is saved.':meshBusy('sf3d')?'Stable Fast 3D is generating.':meshBusy('trellis')?'TRELLIS is generating.':meshBusy('trellisPage')?'TRELLIS is generating on this page.':null,
-        runPage:trellisPageRun,persist:(glb,generation,label,extra)=>persistTrellisPageRun({glb,generation,label,...extra})});
+        runPage:options=>trellisPageRun({...options,finishingMode:document.getElementById('asset-trellis-finishing')?.value??'surface-preserving'}),persist:(glb,generation,label,extra)=>persistTrellisPageRun({glb,generation,label,...extra})});
     }
     return authoringTrellisPageGenerator;
   };
@@ -29654,7 +29677,7 @@ function setupAuthoringAssets(){
     if(entry.visibility?.status==='withheld'||historyReads.has(source)||authoringImageHistory.read().viewed?.provenance)return;
     historyReads.add(source);fetch(source).then(async response=>{if(!response.ok)throw Error(`Image metadata HTTP ${response.status}`);const provenance=readPngProvenance(new Uint8Array(await response.arrayBuffer()));if(provenance)authoringImageHistory.annotate(source,{provenance});}).catch(error=>console.warn('Image history metadata unavailable',error));
   };
-  authoringAssets=createAuthoringAssets({request,prepareImage:createImagePreparation(),generator:generation,nameForSource:source=>workingScene.objects.find(entry=>entry.source===source)?.label,changed:state=>{syncImageHistory(state);authoringAssetsUI?.render(state);authoringImageHistoryUI?.render();authoringImageUI?.render();authoringPromptUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render();},
+  authoringAssets=createAuthoringAssets({request,prepareImage:createImagePreparation(),generator:generation,nameForSource:source=>workingScene.objects.find(entry=>entry.source===source)?.label,changed:state=>{syncImageHistory(state);authoringAssetsUI?.render(state);authoringImageHistoryUI?.render();authoringImageUI?.render();authoringPromptUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render(state);},
     uploadImage:async file=>{
       const response=await fetch('/api/ingest-image?'+new URLSearchParams({name:file.name}),{method:'POST',body:await file.arrayBuffer()});const value=await response.json();
       if(!response.ok||value.schema!=='kaminos.asset-ingest.v0'||value.kind!=='image'||!value.entry?.source)throw Error(value.error||'Image storage failed');return value.entry;
@@ -29674,7 +29697,7 @@ function setupAuthoringAssets(){
         return await importSceneMesh(new File([bytes],entry.name||'asset.glb',{type:'model/gltf-binary'}),{bytes,telemetryOp,generation:entry.generation||null,label:entry.label,assetOrigin:entry.assetOrigin||null});
       }catch(error){loadingTelemetry.fail('asset',error,{token:telemetryOp.token});throw error;}
     }});
-  authoringAssetsUI=installAuthoringAssets({document,controller:authoringAssets,edits:scenePlacementTools.edits});redraw=()=>{authoringMeshModel?.render();authoringAssetsUI.render(authoringAssets.read());authoringImageHistoryUI?.render();authoringImageUI?.render();authoringPromptUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render();};
+  authoringAssetsUI=installAuthoringAssets({document,controller:authoringAssets,edits:scenePlacementTools.edits});redraw=()=>{const state=authoringAssets.read();authoringMeshModel?.render();authoringAssetsUI.render(state);authoringImageHistoryUI?.render();authoringImageUI?.render();authoringPromptUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render(state);};
   authoringMeshModel=installMeshModelChoice({document,busy:()=>meshBusy('sf3d')||meshBusy('trellis')||meshBusy('trellisPage')||authoringTrellisPageGenerator?.busy()===true,changed:()=>{if(authoringMeshModel?.value()==='trellis')trellis();if(authoringMeshModel?.value()==='trellis-page')trellisPage();redraw();},trellisState:()=>authoringTrellisGenerator?.read()||null});
   authoringImageGenerator=createKleinAuthoringImageGeneration({
     context:()=>({sharedGpu,prototype:frameOwner(),host:compositionHost,handoff:foregroundHandoff()}),
@@ -29752,12 +29775,12 @@ function setupAuthoringAssets(){
     const rendering=checkedFireRendering(recipe.document.postprocessing?.fireLighting);
     let app;while(!(app=await appGpuHost())){signal.throwIfAborted();await new Promise(resolve=>requestAnimationFrame(resolve));}signal.throwIfAborted();
     return createInferenceKilnPreview({viewport,document,recipe,prompt,request,settings,rendering,sharedGpu,app,signal,loadGlb:source=>new GLTFLoader().loadAsync(source).then(gltf=>gltf.scene),environment:HDR_ENVS[recipe.document.environment?.name]});
-  },imageState:()=>authoringImageGenerator.read(),selected:()=>authoringAssets.read().selected,trellisSettings:()=>trellisAvailability?.settings||null,queueLine:()=>authoringMeshModel?.value()==='trellis'?authoringTrellisGenerator?.read().queueLine||'':''});redraw();
+  },imageState:()=>authoringImageGenerator.read(),selected:()=>authoringAssets.read({selectionOnly:true}).selected,trellisSettings:()=>trellisAvailability?.settings||null,queueLine:()=>authoringMeshModel?.value()==='trellis'?authoringTrellisGenerator?.read().queueLine||'':''});redraw();
   authoringImageHistoryUI=installImageIterationHistory({document,history:authoringImageHistory,assets:authoringAssets,layout:authoringGenerateLayout,busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy(),
     onEdit:()=>{authoringPromptUI.reset();document.getElementById('asset-prompt').value='';document.getElementById('asset-use-reference').checked=true;redraw();document.getElementById('asset-prompt').focus();},
     onRecall:entry=>{const p=entry.provenance;if(!p)return;const input=authoringImageHistory.read().entries.find(e=>e.source===p.reference?.source);if(input)authoringImageHistory.useReference(input.source);else if(p.reference?.source){authoringImageHistory.record({kind:'image',source:p.reference.source,name:p.reference.name||'Original reference'});authoringImageHistory.useReference(p.reference.source);authoringImageHistory.view(entry.source);authoringAssets.select(entry);}
       const model=/FLUX\.3/.test(p.model)?'flux3':'flux2';document.getElementById('asset-image-model').value=model;document.getElementById('asset-image-model').dispatchEvent(new Event('change'));document.getElementById('asset-use-reference').checked=!!p.reference;document.getElementById('asset-seed').value=String(p.seed);authoringPromptUI.recall(p);document.getElementById('asset-prompt').value=p.prompt;document.getElementById('asset-prompt').dispatchEvent(new Event('input'));redraw();}});
-  const restoreHistory=authoringImageHistory.read().viewed;if(restoreHistory&&!authoringAssets.read().selected)authoringAssets.select(restoreHistory);
+  const restoreHistory=authoringImageHistory.read().viewed;if(restoreHistory&&!authoringAssets.read({selectionOnly:true}).selected)authoringAssets.select(restoreHistory);
   loadStartupRuntimeConfig().then(config=>authoringPromptUI.configureDefault(config.pup?.keepLoadedDefault===true)).catch(error=>console.warn('Prompt residency default unavailable',error));
   window.kaminosAssets={...authoringAssets,open:mode=>authoringAssetsUI.open(mode),close:()=>authoringAssetsUI.close(),panel:()=>authoringAssetsUI.state(),imageHistory:authoringImageHistory,showHistoryImage:source=>authoringImageHistoryUI.show(source),compareImages:value=>authoringGenerateLayout.compare(value),images:authoringImageGenerator,promptExpansion:authoringPromptExpansion,expandPrompt:()=>authoringPromptUI.expand(),generationFlame:authoringGenerateLayout.ceremony};
 }

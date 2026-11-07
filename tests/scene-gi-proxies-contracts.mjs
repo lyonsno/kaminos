@@ -9,14 +9,14 @@ const HERO='a'.repeat(64),SURF='b'.repeat(64);
 const tierBytes=faces=>new TextEncoder().encode(`tier-${faces}`).buffer;
 const sha=b=>createHash('sha256').update(new Uint8Array(b)).digest('hex');
 const TIERS=[5000,1000,500].map(faces=>({faces,sha256:sha(tierBytes(faces)),closed:true,error:{schema:'kaminos.lod-geometric-error.v1',reference:{kind:'hero',sha256:HERO},relative:{p95:faces===1000?.0072:.004,max:.02,mean:.001}}}));
-function world({tiers=TIERS,corruptBytes=false}={}){
+function world({tiers=TIERS,corruptBytes=false,ownsPreparation=()=>false}={}){
   const calls=[],loaded=[];
   const fetchJson=async url=>{calls.push(url);const q=new URL(url,'http://k');const faces=Number(q.searchParams.get('faces'));
     const levels=q.searchParams.get('source')===HERO?tiers.map(t=>({...t,source:`/api/read?root=generated-meshes&path=${t.sha256}.glb`})):[];
     const fitting=levels.filter(l=>l.faces<=faces);return {schema:'kaminos.lod-set.v0',source:q.searchParams.get('source'),levels,choice:fitting[0]??levels.at(-1)??null,withinBudget:!!fitting.length};};
   const fetchBytes=async url=>{const s=new URL(url,'http://k').searchParams.get('path').slice(0,64);const t=tiers.find(t=>t.sha256===s);return corruptBytes?new ArrayBuffer(3):tierBytes(t.faces);};
   const parseGlb=async bytes=>{const g=new THREE.Group();const m=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial());g.add(m);g.userData.faces=new TextDecoder().decode(bytes);loaded.push(g);return g;};
-  return {calls,loaded,registry:createGiProxyRegistry({THREE,fetchJson,fetchBytes,parseGlb})};
+  return {calls,loaded,registry:createGiProxyRegistry({THREE,fetchJson,fetchBytes,parseGlb,ownsPreparation})};
 }
 function sceneObject(source,generation=null){const scene=new THREE.Scene(),root=new THREE.Group();root.position.set(1,2,3);root.scale.setScalar(1.6);
   root.userData.kaminosSceneObject={source,generation};scene.add(root);scene.updateMatrixWorld(true);return {scene,root};}
@@ -34,7 +34,7 @@ test('a TRELLIS mesh object gets its 1000-face tier by default, loaded but never
   assert.equal(route.pathname,'/api/mesh-lods');
   assert.equal(route.searchParams.get('source'),HERO);
   assert.equal(route.searchParams.get('faces'),'1000');
-  assert.equal(route.searchParams.get('prepare'),'client');
+  assert.equal(route.searchParams.get('prepare'),'auto','stored mesh arrival enrolls missing quality in background preparation');
   assert.equal(registry.get(root),h);
 });
 
@@ -42,6 +42,12 @@ test('placement puts the proxy exactly where the object draws, following later m
   const {registry}=world(),{scene,root}=sceneObject(heroSource);const h=await registry.attach(root);
   const p=h.placement(scene);assert.ok(p.equals(new THREE.Matrix4().copy(scene.matrixWorld).invert().multiply(root.matrixWorld)));
   root.position.x=9;const q=h.placement(scene);assert.ok(Math.abs(q.elements[12]-9)<1e-9,'recomputed from the current root, not cached');
+});
+
+test('client-owned generation or import preparation does not also enroll a server bake',async()=>{
+  const {registry,calls}=world({ownsPreparation:()=>true});
+  await registry.attach(sceneObject(heroSource).root);
+  assert.equal(new URL(calls[0],'http://local').searchParams.get('prepare'),'client');
 });
 
 test('the GI renderer can choose another tier by faces or by error; the newest choice wins',async()=>{
@@ -206,6 +212,25 @@ test('named .glb files in generated-meshes resolve through /api/mesh-lods and ad
   assert.equal(namedUntiered.state, 'no-tiers');
   assert.equal(namedUntiered.heroSha, HERO);
   assert.equal(namedUntiered.assetSha, HERO);
+});
+
+for(const state of ['loaded','no-tiers','disabled'])test(`queued quality preparation preserves ${state} arrival without duplicate client ownership`,async()=>{
+  const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
+  const start=html.indexOf('function applyGiProxySetting(entry){'),end=html.indexOf('\nfunction writeObjectGiProxy(',start);
+  const entry={id:'existing',giProxy:{enabled:true,selection:{faces:1000}},object:{}};
+  const h={state,heroSha:HERO,levels:state==='loaded'?TIERS:[],prepareQueued:true};
+  let release,refreshes=0,selections=0;const gate=new Promise(resolve=>{release=resolve;});
+  const registry={select:async()=>++selections===1?h:{...h,prepareQueued:false},whenPrepared:()=>gate};
+  let clientPrepares=0;
+  const win={kaminosGiProxies:{prepare:async()=>{clientPrepares++;}},_kaminosDirty(){},kaminosFireLightingSettings:{sync(){}},__kaminosRefreshLodSource:async source=>{assert.equal(source,HERO);refreshes++;}};
+  const apply=new Function('sceneGiProxies','syncSceneDataInspector','window','setInfo','autoPreparedLodSources','prepareSceneNavigationRoot','workingScene',html.slice(start,end)+';return applyGiProxySetting;')(registry,()=>{},win,()=>{},new Set(),()=>{},{objects:[entry]});
+  let result;
+  try{result=await Promise.race([apply(entry),new Promise(resolve=>setImmediate(()=>resolve('blocked')))]);}
+  finally{release({...h,prepareQueued:false});}
+  assert.equal(result,h,'available geometry must return before the queued quality job finishes');
+  assert.equal(clientPrepares,0,'server pending ownership must suppress the client fallback');
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(refreshes,1);
 });
 
 test('applyGiProxySetting auto-prepares missing tiers once per heroSha and LOD refresh preserves live burn bodies', async () => {

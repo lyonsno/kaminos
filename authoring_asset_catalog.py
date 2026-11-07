@@ -1,7 +1,8 @@
 """Authoring projection over existing asset and generator output records."""
-import hashlib,json,re,math
+import hashlib,json,re,math,os
 from functools import lru_cache
 from pathlib import Path
+from stat import S_ISREG
 from urllib.parse import urlencode,urlsplit,parse_qsl
 
 COLLECTIONS = {'generated-meshes','image-inbox','greenroom','trellis2mlx','pixal3d','agent-work'}
@@ -55,14 +56,16 @@ def visibility_holds():
             raise ValueError('Invalid asset visibility hold record')
         digests[hold['sha256']]=hold;sizes.add(hold['size'])
         for source in hold['sources']:sources[source_key(source)]=hold
-    def apply(entry,path):
+    def apply(entry,path,*,file_stat=None):
         hold=sources.get(source_key(entry['source']))
         if not hold:
             # Only candidate byte lengths need hashing. Cache by file identity so browsing
             # other collections finds renamed/copied aliases without rereading unchanged bytes.
             try:
-                path=path.resolve();stat=path.stat()
-                if stat.st_size in sizes:hold=digests.get(content_digest(path,stat.st_size,stat.st_mtime_ns,stat.st_ctime_ns))
+                stat=file_stat if file_stat is not None else path.stat()
+                if stat.st_size in sizes:
+                    path=path.resolve()
+                    hold=digests.get(content_digest(path,stat.st_size,stat.st_mtime_ns,stat.st_ctime_ns))
             except OSError:
                 entry['visibility']={'status':'withheld','reason':'Asset could not be checked. Awaiting further review.'}
                 return entry
@@ -90,16 +93,16 @@ def read_catalog(collection, *, roots, image_entries, origins, output_resolver, 
     if root is None or not Path(root).is_dir():raise FileNotFoundError('Asset collection is not mounted')
     root=Path(root).resolve();entries=[];warnings=[];unavailable=0;apply_hold=visibility_holds()
     def warn(identity,error):warnings.append({'source':str(identity),'reason':str(error)})
-    def append(path,source,*,name=None,title=None,job=None,generation=None,agent=None,output_class=None,preview=None):
+    def append(path,source,*,name=None,title=None,job=None,generation=None,agent=None,output_class=None,preview=None,file_stat=None):
         kind=asset_kind(path)
         if not kind:return
         if kind=='surface' and collection!='generated-meshes':return
-        stat=path.stat()
+        stat=file_stat if file_stat is not None else path.stat()
         entries.append(apply_hold({'id':source,'kind':kind,'root':collection,'path':path.relative_to(root).as_posix() if path.is_relative_to(root) else path.name,
             'name':name or path.name,'label':title or label(name or path.name), 'source':source,'size':stat.st_size,'mtime':stat.st_mtime,
             **({'jobId':job['job_id'],'producer':job.get('job_type'),'route':job.get('requested_route'),'assetOrigin':{'source':source,'jobId':job['job_id'],'producer':job.get('job_type'),'route':job.get('requested_route')}} if job else {}),
             **({'generation':generation} if generation else {}),**({'preview':preview} if preview else {}),
-            **({'agent':agent,'outputClass':output_class,'producedAt':job['finished_at'] if isinstance(job.get('finished_at'),(int,float)) and math.isfinite(job['finished_at']) else stat.st_mtime} if agent else {})},path))
+            **({'agent':agent,'outputClass':output_class,'producedAt':job['finished_at'] if isinstance(job.get('finished_at'),(int,float)) and math.isfinite(job['finished_at']) else stat.st_mtime} if agent else {})},path,file_stat=stat))
     if collection=='image-inbox':
         for entry in image_entries():
             if entry['root_id']!='image-inbox':continue
@@ -107,9 +110,13 @@ def read_catalog(collection, *, roots, image_entries, origins, output_resolver, 
             entries.append(apply_hold({**entry,'root':collection,'label':entry['name'],'id':entry['source']},path))
     elif collection in ('greenroom','agent-work'):
         done=root/'done'
-        for directory in sorted(done.iterdir()) if done.is_dir() else []:
+        if done.is_dir():
+            with os.scandir(done) as scan:directories=sorted(scan,key=lambda entry:entry.name)
+        else:directories=[]
+        for item in directories:
+            directory=Path(item.path)
             receipt_path=directory/'receipt.json'
-            if not directory.is_dir() or not receipt_path.is_file():continue
+            if not item.is_dir() or not receipt_path.is_file():continue
             try:
                 receipt=read_catalog_record(receipt_path)
                 if not isinstance(receipt,dict):raise ValueError('Generator receipt must be a JSON object')
@@ -134,7 +141,7 @@ def read_catalog(collection, *, roots, image_entries, origins, output_resolver, 
                     # A later run owns these same paths; do not misattribute its bytes.
                     continue
                 files=metadata.get('output_files')
-                if files is None:files=[path.relative_to(output).as_posix() for path in (output.rglob('*') if collection=='agent-work' else output.iterdir()) if path.is_file()]
+                if files is None:files=[path.relative_to(output).as_posix() for path in (output.rglob('*') if collection=='agent-work' else output.iterdir()) if asset_kind(path) and path.is_file()]
                 if not isinstance(files,list):raise ValueError('Generator output record must be a file list')
                 title=metadata.get('name') or metadata.get('input_name') or receipt.get('input_name') or receipt.get('input_path')
                 for filename in files:
@@ -143,12 +150,14 @@ def read_catalog(collection, *, roots, image_entries, origins, output_resolver, 
                     path=(output/filename).resolve()
                     if not path.is_relative_to(output) or any(p.startswith('.') for p in Path(filename).parts):
                         warn(directory.name,'Output path escapes its artifact directory');continue
-                    if not path.is_file():warn(directory.name,f'Recorded asset is missing: {filename}');continue
+                    try:file_stat=path.stat()
+                    except (FileNotFoundError,NotADirectoryError):warn(directory.name,f'Recorded asset is missing: {filename}');continue
+                    if not S_ISREG(file_stat.st_mode):warn(directory.name,f'Recorded asset is missing: {filename}');continue
                     source='/api/job-output?'+urlencode({'job_id':directory.name,'file':filename})
                     producer=str(receipt.get('job_type') or '') if receipt.get('job_type')!='command' else str(receipt.get('requested_route') or '')
                     family=next((value for prefix,value in [('trellis','Trellis'),('pixal','Pixal'),('sf3d','SF3D'),('mflux','Flux'),('flux','Flux'),('ideogram','Ideogram')] if producer.lower().startswith(prefix)), 'Generated')
                     name=label(title) if title else (label(filename) if Path(filename).stem.lower() not in ('asset','output','mesh') else f'{family} · {label(output.name)}')
-                    append(path,source,title=f'{name} · {label(filename)}' if title and Path(filename).stem not in ('output','asset') else name,job=receipt,agent=agent,output_class=output_class)
+                    append(path,source,title=f'{name} · {label(filename)}' if title and Path(filename).stem not in ('output','asset') else name,job=receipt,agent=agent,output_class=output_class,file_stat=file_stat)
             except (OSError,ValueError,TypeError,KeyError) as error:warn(directory.name,error)
     else:
         # Registered LOD levels are coarse stand-ins of another stored mesh, not assets of their own.

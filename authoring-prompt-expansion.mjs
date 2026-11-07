@@ -57,7 +57,7 @@ export function createAuthoringPromptExpansion({createHelper,changed=()=>{},bloc
  };
 }
 
-export function installAuthoringPromptExpansion({document,controller,assets,imageController,changed=()=>{},reference=()=>assets.read().selected}){
+export function installAuthoringPromptExpansion({document,controller,assets,imageController,changed=()=>{},reference=()=>assets.read({selectionOnly:true}).selected}){
  const byId=id=>document.getElementById(id),prompt=byId('asset-prompt');
  const root=document.createElement('div');root.className='asset-prompt-help';
  root.innerHTML=`<div class="asset-prompt-help-actions"><button type="button" id="asset-prompt-expand" title="BFL’s FLUX.3 prompt helper">Expand prompt</button><button type="button" id="asset-prompt-cancel" hidden>Cancel expansion</button><button type="button" id="asset-prompt-undo" hidden>Undo expansion</button></div><div id="asset-prompt-help-status" role="status" aria-live="polite"></div><textarea id="asset-prompt-draft" aria-label="Expanded prompt draft" rows="5" hidden></textarea><button type="button" id="asset-prompt-use" hidden>Use expanded prompt</button>`;

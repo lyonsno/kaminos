@@ -85,7 +85,7 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   const masks=document.createElement('button');masks.type='button';masks.id='asset-step-masks';masks.textContent='Masks…';masks.title='Cut out part of this image with SAM';
   masks.onclick=()=>{const image=selected();if(image?.kind==='image'&&image.visibility?.status!=='withheld')openMasks?.(image);};actions.append(masks);
   const controls=document.createElement('div');controls.className='asset-mesh-controls';
-  controls.append(...[byId('asset-mesh-model-row'),actions,byId('asset-express-row')].filter(Boolean));
+  controls.append(...[byId('asset-mesh-model-row'),byId('asset-trellis-finishing-row'),actions,byId('asset-express-row')].filter(Boolean));
   const input=document.createElement('div');input.className='asset-mesh-input';input.append(controls);
   mesh.append(input,sourceName,settings,queue,...[byId('asset-preparation-status')].filter(Boolean));
   heading?.remove();help?.remove();

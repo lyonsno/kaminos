@@ -3,6 +3,7 @@ import {test} from 'node:test';import {readFileSync} from 'node:fs';import vm fr
 import {planSceneRestore} from '../scene-persistence-core.js';
 import {createSceneAOState} from '../scene-ao-state.mjs';
 import {PREFERENCES_SCHEMA,SCENE_DEFAULT_RANGES,checkedPreferences,sceneDefaultsFromDocument,newSceneDocument,sceneDefaultsApplyToLocation,createUserPreferences} from '../user-preferences.mjs';
+import * as preferences from '../user-preferences.mjs';
 const blank=()=>({schema:'kaminos.scene.v1',version:10,objects:[{id:'a'}],sceneId:'old',camera:{position:[0,1,4],target:[0,0,0],up:[0,1,0],fov:50,near:.01,far:100},sceneCamera:{schema:'kaminos.scene-camera.v1',activeId:'camera-a',aspect:[16,9]},environment:{name:'studio',exposure:1},editorDisplay:{hiddenIds:['a']},postprocessing:{},composition:{flame:{presetId:'old'}},localLiquid:{particleCount:4096}});
 test('preference capture preserves values the accepted AO owner can restore exactly',()=>{
  const state=createSceneAOState();state.patch({intensity:.654321,radius:27.123456});
@@ -47,4 +48,32 @@ test('saved defaults use accepted AO semantics and retain fixed ranges for the u
  const uiText=readFileSync(new URL('../user-preferences-ui.mjs',import.meta.url),'utf8');
  assert.match(uiText,/preference-studio-look/,'Preferences UI must expose the Studio Look library selector');
  assert.match(uiText,/data-action="apply-look"/,'Preferences UI must offer switching the current scene over to the chosen Studio Look');
+});
+
+
+test('ordinary and agent defaults are separately validated settings in one additive preference document',()=>{
+ const scene=sceneDefaultsFromDocument(blank()),agent=structuredClone(scene);
+ agent.postprocessing.sceneGI={resolutionScale:.1,slices:2,steps:6,temporal:true,temporalRefine:true,bounceFeedback:true,estimator:{aoContrast:1.5,depthPhi:.01,normalPhi:5,lumaPhi:1,mipSampling:true,perspectiveReconstruction:true}};
+ const prefs=checkedPreferences({schema:PREFERENCES_SCHEMA,sceneDefaults:scene,agentSceneDefaults:agent,renderOutput:{future:true}});
+ assert.equal(prefs.agentSceneDefaults.postprocessing.sceneGI.estimator.aoContrast,1.5);
+ assert.equal(prefs.sceneDefaults.postprocessing.sceneGI,undefined);
+ assert.deepEqual(prefs.renderOutput,{future:true});
+ assert.equal(checkedPreferences({schema:PREFERENCES_SCHEMA}).agentSceneDefaults,null);
+ for(const bad of [[],{objects:[]},{postprocessing:{sceneGI:{estimator:{aoContrast:-1}}}}])assert.throws(()=>checkedPreferences({...prefs,agentSceneDefaults:bad}),/defaults|identity|contrast/i);
+});
+
+test('agent defaults are explicitly selected before Workbench entry and never replace explicit scene inputs',()=>{
+ const stored={schema:PREFERENCES_SCHEMA,sceneDefaults:{environment:{name:'studio',exposure:1}},agentSceneDefaults:{environment:{name:'studio',exposure:.4}}};
+ assert.equal(typeof preferences.resolveStartupSceneDefaults,'function','startup must expose a shared agent default selection operation');
+ const resolveStartupSceneDefaults=preferences.resolveStartupSceneDefaults;
+ const explicit=resolveStartupSceneDefaults(stored,'/?workspace=workbench&experiment=material-study&defaults=agent&experiment_inputs=%7B%22roughness%22%3A0.8%7D');
+ assert.equal(explicit.requested,'agent');assert.equal(explicit.effective,'agent');assert.equal(explicit.defaults.environment.exposure,.4);
+ const inherited=resolveStartupSceneDefaults({...stored,agentSceneDefaults:null},'/?defaults=agent');
+ assert.equal(inherited.effective,'scene');assert.equal(inherited.reason,'agent-inherits-scene');assert.equal(inherited.defaults.environment.exposure,1);
+ assert.equal(resolveStartupSceneDefaults(stored,'/').effective,'scene');
+ for(const url of ['/?defaults=agent#scene=saved.kaminos.json','/?defaults=agent&mesh=a.glb','/?defaults=agent&volume_light_field=1','/?defaults=agent&experiment=study&load=a.ply']){
+  const selection=resolveStartupSceneDefaults(stored,url);assert.equal(selection.defaults,null,url);assert.equal(selection.reason,'explicit-scene-input',url);
+ }
+ assert.equal(resolveStartupSceneDefaults(stored,'/?experiment=material-study').defaults,null,'ordinary experiment behavior stays explicit');
+ assert.throws(()=>resolveStartupSceneDefaults(stored,'/?defaults=typo'),/defaults profile/);
 });

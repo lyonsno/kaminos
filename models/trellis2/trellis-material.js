@@ -169,19 +169,27 @@ export function nearestCovered(mask,size){
   return seeds;
 }
 
-export function bakeTrellisMaterialTextures({vertices,triangles,uvs,textureSize=1024,...material}){
-  const sampler=materialSampler(material),{faces,bary}=rasterizeTrellisMaterialUV({vertices,triangles,uvs,textureSize}),
-    mask=new Uint8Array(faces.length);let coveredPixels=0;
-  for(let p=0;p<faces.length;p++)if(faces[p]>=0){mask[p]=1;coveredPixels++;}
-  if(!coveredPixels)throw Error('no covered UV pixels; no learned texture evidence');
-  const positions=new Float32Array(coveredPixels*3);let row=0;
-  for(let p=0;p<faces.length;p++)if(mask[p]){
+export function trellisMaterialBakePositions({vertices,triangles,uvs,textureSize=1024},raster){
+  const {faces,bary}=raster??rasterizeTrellisMaterialUV({vertices,triangles,uvs,textureSize});
+  let covered=0;for(const face of faces)if(face>=0)covered++;
+  const positions=new Float32Array(covered*3);let row=0;
+  for(let p=0;p<faces.length;p++)if(faces[p]>=0){
     const face=faces[p];for(let axis=0;axis<3;axis++)positions[row*3+axis]=f(f(f(bary[p*3]*vertices[triangles[face*3]*3+axis])+
       f(bary[p*3+1]*vertices[triangles[face*3+1]*3+axis]))+f(bary[p*3+2]*vertices[triangles[face*3+2]*3+axis]));row++;
   }
+  return positions;
+}
+export function bakeTrellisMaterialTextures({vertices,triangles,uvs,textureSize=1024,samplePositions,...material}){
+  const sampler=materialSampler(material),raster=rasterizeTrellisMaterialUV({vertices,triangles,uvs,textureSize}),{faces}=raster,
+    mask=new Uint8Array(faces.length);let coveredPixels=0;
+  for(let p=0;p<faces.length;p++)if(faces[p]>=0){mask[p]=1;coveredPixels++;}
+  if(!coveredPixels)throw Error('no covered UV pixels; no learned texture evidence');
+  if(samplePositions!==undefined&&(!(samplePositions instanceof Float32Array)||samplePositions.length!==coveredPixels*3||!samplePositions.every(Number.isFinite)))
+    throw Error('complete finite original-surface sample positions required');
+  const positions=samplePositions??trellisMaterialBakePositions({vertices,triangles,uvs,textureSize},raster);
   const sampled=sampler(positions),baseColor=new Uint8Array(faces.length*4),metallicRoughness=new Uint8Array(faces.length*4),
     byte=v=>Math.trunc(Math.max(0,Math.min(255,f(v*255))));
-  row=0;for(let p=0;p<faces.length;p++)if(mask[p]){
+  let row=0;for(let p=0;p<faces.length;p++)if(mask[p]){
     for(let c=0;c<3;c++)baseColor[p*4+c]=byte(sampled[row*6+c]);
     baseColor[p*4+3]=byte(sampled[row*6+5]);metallicRoughness[p*4+1]=byte(sampled[row*6+4]);
     metallicRoughness[p*4+2]=byte(sampled[row*6+3]);metallicRoughness[p*4+3]=255;row++;
@@ -193,7 +201,8 @@ export function bakeTrellisMaterialTextures({vertices,triangles,uvs,textureSize=
     metadata:{channels:'source decoded*.5+.5: RGB,metallic,roughness,alpha',sampling:'sparse trilinear/source-F32 boundaries; renormalize existing corners; nearest voxel center if zero support',
       nearestTie:'lowest source row',raster:'source NumPy CPU pixel centers/barycentrics; later face wins',
       extension:'Euclidean nearest covered pixel; earlier row/column tie; not OpenCV Telea',
-      qualityLimit:'Nearest extension can produce blocky seams; browser UV atlas differs from source xatlas.'}};
+      qualityLimit:'Nearest extension can produce blocky seams; browser UV atlas differs from source xatlas.',
+      positionTransfer:samplePositions?'caller-projected original surface':'unwrapped surface'}};
 }
 
 const crcTable=new Uint32Array(256);

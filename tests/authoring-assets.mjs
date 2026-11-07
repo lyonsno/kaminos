@@ -100,3 +100,10 @@ test('a failed catalog refresh clears selection as well as entries and cannot ad
  const a={kind:'mesh',source:'/api/read?root=generated-meshes&path=a.glb',name:'a.glb'};let broken=false,adds=0;
  const c=createAuthoringAssets({request:async()=>{if(broken)throw Error('Invalid asset visibility hold list');return{schema:'kaminos.authoring-assets.v1',collection:'generated-meshes',entries:[a]};},addMesh:async()=>adds++});await c.browse();c.select(a);broken=true;await c.browse();assert.equal(c.read().selected,null);await assert.rejects(c.add(),/Choose/);assert.equal(adds,0);
 });
+
+test('selection-only reads return a detached current selection without copying the catalog',async()=>{
+ const entry={kind:'image',name:'frame.png',source:'/api/job-output?job_id=one&file=frame.png',agent:{id:'one',label:'One'}};
+ const c=createAuthoringAssets({request:async()=>({schema:'kaminos.authoring-assets.v1',collection:'agent-work',entries:[entry]})});
+ await c.browse('agent-work');assert.deepEqual(c.read({selectionOnly:true}),{selected:null});c.select(entry);
+ const selection=c.read({selectionOnly:true});assert.deepEqual(Object.keys(selection),['selected']);assert.deepEqual(selection.selected,entry);selection.selected.agent.label='changed by caller';assert.equal(c.read({selectionOnly:true}).selected.agent.label,'One');assert.equal(c.read().entries.length,1,'ordinary reads retain the complete catalog');
+});

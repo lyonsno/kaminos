@@ -27,7 +27,7 @@ const disposeTree=root=>{if(!root)return;releasePreparedRoot(root);const seen=ne
     for(const a of Array.isArray(m.material)?m.material:[m.material]){if(!a||seen.has(a))continue;for(const v of Object.values(a))if(v?.isTexture)once(v);once(a);}});};
 
 export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await fetch(url);const j=await r.json();if(!r.ok)throw Error(j.error||`HTTP ${r.status}`);return j;},
-  fetchBytes=async url=>{const r=await fetch(url);if(!r.ok)throw Error(`HTTP ${r.status}`);return r.arrayBuffer();},parseGlb,loadLevel=null,digest=digestHex}){
+  fetchBytes=async url=>{const r=await fetch(url);if(!r.ok)throw Error(`HTTP ${r.status}`);return r.arrayBuffer();},parseGlb,loadLevel=null,digest=digestHex,ownsPreparation=()=>false}){
   // versions come from one sequence that never restarts, so a request from before a release, a clear or a newer
   // selection can never pass as current; owned is the proxy each root holds, apart from the handle snapshots.
   const handles=new Map(),versions=new Map(),owned=new Map(),releaseListeners=new Set(),inFlight=new Set();let sequence=0;
@@ -45,7 +45,7 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
     }
     return {representation:'mesh',assetSha,heroSha:assetSha};
   }
-  function resolve(root,selection,{enabled=true}={}){
+  function resolve(root,selection,{enabled=true,prepare=null}={}){
     const task=(async()=>{
       const version=++sequence;versions.set(root,version);
       const base={...describe(root),assetSource:root.userData?.kaminosSceneObject?.source,requested:{...selection},effective:null,levels:[],beautyLevels:[],error:null,frame:'trellis-source',proxyRoot:null,
@@ -59,7 +59,7 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
       if(base.state)return settle(base);
       handles.set(root,{...(handles.get(root)??base),state:enabled?'resolving':'disabled'});
       try{
-        const query=new URLSearchParams({source:base.heroSha??base.assetSha,prepare:'client'});
+        const query=new URLSearchParams({source:base.heroSha??base.assetSha,prepare:prepare??(base.representation==='mesh'&&!ownsPreparation(root,base)?'auto':'client')});
         if(selection.faces!=null)query.set('faces',String(selection.faces));
         if(selection.maxError!=null){query.set('maxError',String(selection.maxError));query.set('stat',selection.stat??'p95');}
         const set=await fetchJson(`/api/mesh-lods?${query}`);
@@ -84,7 +84,7 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
           ...(l.source?{source:l.source}:{}),
           ...(l.error?{error:l.error}:{}),
         }));
-        const extra={beautyLevels,heroTextureSet:set.textureSets?.[set.source]??null,...(surfelLevels.length?{surfelLevels}:{}),prepareQueued:set.prepareQueued===true,prepareState:set.prepareState??null};
+        const extra={beautyLevels,heroTextureSet:set.textureSets?.[set.source]??null,...(surfelLevels.length?{surfelLevels}:{}),preparation:set.preparation??null,prepareQueued:set.prepareQueued===true,prepareState:set.prepareState??null};
         if(!enabled)return settle({...base,levels,...extra,state:'disabled'});
         if(!set.choice)return settle({...base,levels,...extra,state:'no-tiers',reason:base.heroSha?'no stored tiers for this hero':'a surfels-only asset has no hero mesh to take tiers from'});
         const choice=set.choice;
@@ -117,7 +117,7 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
         await new Promise(resolve=>setTimeout(resolve,500));
         const state=await fetchJson('/api/mesh-lods?'+new URLSearchParams({source,prepare:'client'}));
         if(versions.get(root)!==version)return handles.get(root)??null;
-        if(!state.prepareQueued)return resolve(root,handle.requested,{enabled:handle.state!=='disabled'});
+        if(!state.prepareQueued)return resolve(root,handle.requested,{enabled:handle.state!=='disabled',prepare:'client'});
       }
       return handles.get(root)??null;
     },
