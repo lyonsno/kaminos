@@ -14,8 +14,10 @@ assert.throws(()=>packMicroField({...meta,output:['wrong',...meta.output.slice(1
 assert.throws(()=>packMicroField(meta,{...arrays,grid:new Float32Array(1)}),/grid/);
 const source={sourceSHA256:'original',carrierCount:1,radius:.1,files:Object.fromEntries(['rows.f32','carriers.f32','source-ids.u32'].map(name=>[name,{sha256:name}]))};
 const matching={...source,sourceFiles:source.files};assertMicroFieldSource(source,matching);
-const surface=createLearnedMicrostructure({...source,carriers:new Float32Array([0,0,0,1,1,1,0,1])},packMicroField({...meta,sourceSHA256:source.sourceSHA256,sourceFiles:source.files},arrays));
-assert.equal(surface.mesh.geometry.instanceCount,1,'Actual draw count must be finite, not InstancedBufferGeometry default Infinity');surface.dispose();
+const surface=createLearnedMicrostructure({...source,rows:new Float32Array([0,0,0,0,0,1,.2,.4,.6,.3,.8,1]),carriers:new Float32Array([0,0,0,1,1,1,0,1])},packMicroField({...meta,sourceSHA256:source.sourceSHA256,sourceFiles:source.files},arrays));
+assert.equal(surface.mesh.geometry.instanceCount,1,'Actual draw count must be finite, not InstancedBufferGeometry default Infinity');
+const clone=surface.mesh.material.clone();assert.equal(clone.microPosition,surface.mesh.material.microPosition);assert.equal(clone.microWorld,surface.mesh.material.microWorld);clone.dispose();
+surface.setAppearance('constant');assert.equal(surface.read().appearance,'coarse-source-average');assert.equal(surface.read().appearanceControlBytes,32);assert.throws(()=>surface.setAppearance('bad'),/Appearance/);surface.dispose();
 assert.throws(()=>assertMicroFieldSource(source,{...matching,sourceFiles:{...source.files,'carriers.f32':{sha256:'wrong-crop'}}}),/carriers.f32/,'A common original source must not excuse a different crop');
 assert.throws(()=>assertMicroFieldSource(source,{...matching,radius:.2}),/source/);
 assert.equal(microstructureFileURL('http://localhost/api/read?root=generated-meshes&path=model%2F','grid.f32').searchParams.get('path'),'model/grid.f32');

@@ -5,7 +5,7 @@ import {createLearnedMicrostructure} from '../neural-microstructure-learned.mjs'
 export default {
   id:'trellis-microstructure',title:'TRELLIS microstructure',
   async create({host,inputs,record}){
-    const modes=inputs.model?['fine','coarse','carrier','learned']:['fine','coarse','carrier'];
+    const modes=inputs.model?['fine','coarse','carrier','learned','learned-constant']:['fine','coarse','carrier'];
     const mode=inputs.mode??'carrier';if(!modes.includes(mode))throw Error('Mode must be fine, coarse or carrier, or learned with a model');
     const url=inputs.source;
     if(typeof url!=='string'||!url)throw Error('A prepared microstructure source URL is required');
@@ -27,14 +27,14 @@ export default {
     const control=createMicrostructureControl(field),learned=model?createLearnedMicrostructure(field,model):null;
     if(learned)control.root.add(learned.mesh);
     let currentMode=mode;
-    const setMode=value=>{if(!modes.includes(value))throw Error('Unknown surface mode');currentMode=value;control.setMode(value==='learned'?'fine':value);if(learned){learned.mesh.visible=value==='learned';if(value==='learned')for(const child of control.root.children)child.visible=child===learned.mesh;}};
+    const setMode=value=>{if(!modes.includes(value))throw Error('Unknown surface mode');currentMode=value;const isLearned=value==='learned'||value==='learned-constant';control.setMode(isLearned?'fine':value);if(learned){learned.setAppearance(value==='learned-constant'?'constant':'learned');learned.mesh.visible=isLearned;if(isLearned)for(const child of control.root.children)child.visible=child===learned.mesh;}};
     const session=await host.scene.open();let asset;
     // Position the small selected patch above the workbench floor; native
     // selection and transforms remain the owner of subsequent placement.
     control.root.position.y=.2;
     try{asset=await session.attach(control.root,{owned:true,metadata:{label:control.root.name,source:meta.sourceSHA256,type:'experiment'}});}
     catch(error){learned?.dispose();control.dispose();await session.dispose();throw error;}
-    const read=()=>({...control.read(),...(learned&&currentMode==='learned'?learned.read():{}),mode:currentMode,model:inputs.model??null,source:url,sourceSHA256:meta.sourceSHA256,regionYUp:meta.regionYUp,objectId:asset.id,view:session.readView()});
+    const read=()=>({...control.read(),...(learned&&currentMode.startsWith('learned')?learned.read():{}),mode:currentMode,model:inputs.model??null,source:url,sourceSHA256:meta.sourceSHA256,regionYUp:meta.regionYUp,objectId:asset.id,view:session.readView()});
     let select;
     const frame=()=>session.setView({position:[.22,.34,.25],target:[0,.2,0]});
     frame();setMode(mode);
@@ -43,7 +43,7 @@ export default {
       frame(){const effective=frame();record({kind:'microstructure.view',phase:'applied',target:asset.id,effective});return effective;},
     },mount({root,document,invoke}){
       const label=document.createElement('label');label.textContent='Surface ';select=document.createElement('select');select.setAttribute('aria-label','Surface representation');select.style.maxWidth='100%';
-      for(const [value,text]of [['fine','Fine discs'],['coarse','Coarse discs'],['carrier','Fine detail in coarse carriers'],...(learned?[['learned','Learned intrinsic field']]:[])]){const option=document.createElement('option');option.value=value;option.textContent=text;select.append(option);}
+      for(const [value,text]of [['fine','Fine discs'],['coarse','Coarse discs'],['carrier','Fine detail in coarse carriers'],...(learned?[['learned','Learned intrinsic field'],['learned-constant','Learned shape · coarse material']]:[])]){const option=document.createElement('option');option.value=value;option.textContent=text;select.append(option);}
       select.value=currentMode;select.addEventListener('change',()=>invoke('mode',select.value));label.append(select);
       const status=document.createElement('output');status.textContent=`${meta.count.toLocaleString()} fine samples · ${meta.carrierCount.toLocaleString()} carriers`;
       root.append(label,status);

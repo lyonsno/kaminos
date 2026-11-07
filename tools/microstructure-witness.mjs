@@ -4,12 +4,15 @@ import {createRequire} from 'node:module';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {assertMicrostructureServer} from './microstructure-witness-identity.mjs';
-const [server,source,browserPath,puppeteerRoot,output,model]=process.argv.slice(2);
+const [server,source,browserPath,puppeteerRoot,output,model,poseSelection]=process.argv.slice(2);
 if(!output)throw Error('Usage: node tools/microstructure-witness.mjs SERVER SOURCE BROWSER PUPPETEER_ROOT OUTPUT');
 fs.mkdirSync(output,{recursive:true});
 const report={ok:false,phase:'launch',server,source,model:model??null,browserPath,repoRoot:process.cwd(),errors:[],gpuErrors:[],failedResources:[],captures:[],claimCeiling:model?'Rendered learned-field comparison; completion is not a fidelity or performance pass':'Exact fine-payload control comparison'};
 let browser,page;
 try{
+  const poses=[['front',null],['reverse',[-.3,.38,-.32]],['grazing',[.36,.24,.07]],['orthographic',[-.3,.38,-.32]],['transformed',[.3,.38,.32]]];
+  const selected=poseSelection?poseSelection.split(','):poses.map(([name])=>name);
+  if(!selected.length||new Set(selected).size!==selected.length||selected.some(name=>!poses.some(([pose])=>pose===name)))throw Error('Unknown or duplicate requested pose');report.requestedPoses=selected;
   report.expectedImplementation={repoRoot:fs.realpathSync(process.cwd()),commit:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),branch:execFileSync('git',['branch','--show-current'],{encoding:'utf8'}).trim()};
   const runtime=await fetch(new URL('/api/runtime-config',server));if(!runtime.ok)throw Error(`Renderer identity HTTP ${runtime.status}`);
   report.effectiveImplementation=(await runtime.json()).source;
@@ -45,11 +48,11 @@ try{
   report.grounding=await page.evaluate(id=>{const read=()=>window.kaminosSceneObjectDebugState().find(r=>r.id===id).transform;const before=read(),ground=window.kaminosGroundDebugState();window.selectSceneObject(id);window.snapToGround();const after=read();window.kaminosSetSceneObjectTransform(id,before);return {before,after,ground};},report.state.objectId);
   assert.ok(Math.abs(report.grounding.after.position[1]+report.state.localBounds.min[1]-report.grounding.ground.height)<1e-5,'Snap Ground must use the actual floor and fine surface, not a unit template box');
   report.phase='render';
-  for(const [pose,position]of [['front',null],['reverse',[-.3,.38,-.32]],['grazing',[.36,.24,.07]],['orthographic',[-.3,.38,-.32]],['transformed',[.3,.38,.32]]]){
+  for(const [pose,position]of poses.filter(([name])=>selected.includes(name))){
     if(pose==='orthographic')await page.evaluate(()=>window.kaminosViewProjection.setOrthographic(true));
     if(pose==='transformed')await page.evaluate(id=>{window.kaminosViewProjection.setOrthographic(false);window.kaminosSetSceneObjectTransform(id,{position:[0,.2,0],rotation:[.12,.31,.07],scale:[1.1,.85,1.2]});},report.state.objectId);
     if(position)await page.evaluate(position=>window.__kaminosSetSceneCameraFrame(position,[0,.2,0]),position);
-    for(const mode of ['fine','coarse','carrier',...(model?['learned']:[])]){
+    for(const mode of ['fine','coarse','carrier',...(model?['learned','learned-constant']:[])]){
     if(mode==='coarse')await page.select('select[aria-label="Surface representation"]',mode);
     else await page.evaluate(mode=>window.kaminosWorkbenchExperiments.invoke('mode',mode),mode);
     const state=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
@@ -75,7 +78,7 @@ try{
     }
     const compare=await page.evaluate(()=>{
       const compare=(a,b)=>{let squared=0,changed=0,major=0,max=0;for(let i=0;i<a.length;i+=4){let m=0;for(let c=0;c<3;c++){const d=Math.abs(a[i+c]-b[i+c]);squared+=d*d;max=Math.max(max,d);m=Math.max(m,d);}if(m>0)changed++;if(m>8)major++;}return {rmse:Math.sqrt(squared/(a.length/4*3)),changedPixels:changed,majorPixels:major,max};};
-      return {carrier:compare(window.__microWitnessPixels.fine,window.__microWitnessPixels.carrier),coarse:compare(window.__microWitnessPixels.fine,window.__microWitnessPixels.coarse),...(window.__microWitnessPixels.learned?{learned:compare(window.__microWitnessPixels.fine,window.__microWitnessPixels.learned)}:{})};
+      return {carrier:compare(window.__microWitnessPixels.fine,window.__microWitnessPixels.carrier),coarse:compare(window.__microWitnessPixels.fine,window.__microWitnessPixels.coarse),...(window.__microWitnessPixels.learned?{learned:compare(window.__microWitnessPixels.fine,window.__microWitnessPixels.learned),learnedConstant:compare(window.__microWitnessPixels.fine,window.__microWitnessPixels['learned-constant'])}:{})};
     });
     (report.comparisons??=[]).push({pose,...compare});
     assert.ok(compare.coarse.majorPixels>1000,'Coarse negative control must visibly differ');
