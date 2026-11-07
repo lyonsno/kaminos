@@ -18,7 +18,7 @@ let server,context;
 const hash=data=>createHash('sha256').update(data).digest('hex');
 const writeField=async(name,array)=>{const bytes=Buffer.from(array.buffer,array.byteOffset,array.byteLength);await fs.writeFile(path.join(out,name),bytes);return {path:name,bytes:bytes.length,sha256:hash(bytes)};};
 try{
- report.source.files={};for(const name of ['volume-core.js','volume-temporal-material.mjs','volume-optical-sequence.mjs','volume-optical-preview.mjs','tools/fleshweaver-capture.mjs'])report.source.files[name]=hash(await fs.readFile(path.join(repo,name)));
+ report.source.files={};for(const name of ['volume-core.js','volume-temporal-material.mjs','volume-optical-color.mjs','volume-optical-sequence.mjs','volume-optical-preview.mjs','tools/fleshweaver-capture.mjs'])report.source.files[name]=hash(await fs.readFile(path.join(repo,name)));
  const presetBytes=await fs.readFile(args.preset),preset=JSON.parse(presetBytes);report.source.presetId=preset.presetId??preset.id??path.basename(args.preset,'.json');report.source.presetHash=hash(presetBytes);await fs.writeFile(path.join(out,'source-preset.json'),presetBytes);
  report.phase='server';await save();
  const log=await fs.open(path.join(out,'server.log'),'a');server=spawn('python3',['serve.py',args.port],{cwd:repo,stdio:['ignore',log.fd,log.fd]});await log.close();
@@ -89,7 +89,8 @@ try{
  }
  const manifest={schema:'kaminos.optical-sequence.v1',status:'captured',basis:'cie-xyz-d65',source:{...report.source,backend:report.replay.backend,simulation:report.replay},dimensions:d,bounds:frames[0].bounds,coarseDimensions,reconstructionDimensions:d,playbackFps:60/stride,frames:rows,reconstructions,reconstruction:{label:`Coarsened ${coarseDimensions.join('×')} → ${d.join('×')}; recorded base flow`,radius,iterations,relaxation:.3,model:'transport plus global per-channel power normalization; current positive XYZ/extinction block means fixed',limits:'Recorded optical-source reconstruction, not coarse-solver recovery. Base velocity excludes procedural wavelet perturbations. No scattering fit or live lookahead integration.'}};
  await fs.writeFile(path.join(out,'manifest.json'),JSON.stringify(manifest,null,2));report.errors=Object.fromEntries(Object.entries(errors).map(([mode,values])=>[mode,{perFrameMse:values,meanMse:values.reduce((a,b)=>a+b,0)/values.length}]));
- report.status='passed';report.phase='complete';report.manifest=path.join(out,'manifest.json');
+ report.executionChecks='passed';report.reconstructionBenefit={futureVsSingle:report.errors.future.meanMse/report.errors.single.meanMse,futureVsPastOnly:report.errors.future.meanMse/report.errors.forward.meanMse,verdict:report.errors.future.meanMse<report.errors.single.meanMse?'lower-reference-field-error':'higher-reference-field-error',visualJudgement:'pending-inspection'};
+ report.status='completed';report.phase='complete';report.manifest=path.join(out,'manifest.json');
 }catch(error){report.status='failed';report.error=String(error.stack??error);if(context){try{const page=context.pages()[0];report.lastPage={url:page.url(),text:await page.locator('body').innerText()};await page.screenshot({path:path.join(out,'failure.png')});}catch{}}process.exitCode=1;}
 finally{
  await context?.close();server?.kill('SIGTERM');report.finished=new Date().toISOString();await save();
