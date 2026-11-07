@@ -2,6 +2,7 @@ import {createMountedGenerationWorkshop,withoutMountedWorkshop} from './mounted-
 import {arrivalTranslation} from './generation-arrival.mjs';
 import {createStageMold} from './stage-mold.mjs';
 import {createProceduralMesh} from './scene-geometry.mjs';
+import {sceneRadianceMaterialChain} from './scene-radiance.mjs';
 
 // One retained native scene session; the application continues owning the view,
 // renderer, inference and document. There are no simulation/readback operations.
@@ -59,7 +60,21 @@ export function installMountedGenerationWorkshop({document,THREE,mergeGeometries
      },
      present(amount){
       for(const h of acquired)h.root.visible=amount>0;
-      for(const h of acquired)h.root.traverse(node=>{if(node.isMesh){if(!shadows.has(node))shadows.set(node,node.castShadow);node.castShadow=amount>0&&amount<1?false:shadows.get(node);}for(const material of [node.material].flat().filter(Boolean)){if(!materials.has(material))materials.set(material,{opacity:material.opacity,transparent:material.transparent});const authored=materials.get(material),transparent=amount>0&&amount<1?true:authored.transparent;if(material.transparent!==transparent){material.transparent=transparent;material.needsUpdate=true;}material.opacity=authored.opacity*amount;}});
+      for(const h of acquired)h.root.traverse(node=>{
+       if(node.isMesh){if(!shadows.has(node))shadows.set(node,node.castShadow);node.castShadow=amount>0&&amount<1?false:shadows.get(node);}
+       for(const material of [node.material].flat().filter(Boolean)){
+        // Lighting can wrap a material during arrival. Its copied opacity is
+        // presentation state; retain the authored state through that owner chain.
+        const chain=sceneRadianceMaterialChain(material),source=chain.at(-1);
+        const authored=chain.map(value=>materials.get(value)).find(Boolean)??{opacity:source.opacity,transparent:source.transparent};
+        for(const value of chain){
+         materials.set(value,authored);
+         const transparent=amount>0&&amount<1?true:authored.transparent;
+         if(value.transparent!==transparent){value.transparent=transparent;value.needsUpdate=true;}
+         value.opacity=authored.opacity*amount;
+        }
+       }
+      });
       if(amount===0&&placed){frame.position.set(0,0,0);frame.scale.setScalar(1);frame.updateMatrixWorld(true);placed=false;restoreSelection();}
       parts?.present?.(amount);
       redraw();
