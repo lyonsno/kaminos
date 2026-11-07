@@ -11,7 +11,7 @@ import {COMPOSITION_SCHEMA} from '../scene-authoring.mjs';
 // adapter. The baseline fails on the missing catalog, not a missing import.
 const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const start=source.indexOf('    async choose(){',source.indexOf('authoringGenerateLayout=installGenerateLayout'));
-const end=source.indexOf('\n  },createFlame:',start);assert.ok(start>0&&end>start);
+const end=source.indexOf('\n  },imageState:',start);assert.ok(start>0&&end>start);
 let chooseSavedSceneFromLibrary;
 if(source.includes("from './scene-library-client.mjs'"))({chooseSavedSceneFromLibrary}=await import('../scene-library-client.mjs'));
 test('Design in Workbench addresses its saved scene through the native startup hash',()=>{

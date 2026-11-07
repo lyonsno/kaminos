@@ -1,3 +1,4 @@
+import {createMountedWorkshopMembership} from '../../mounted-workshop-membership.mjs';
 import {ASH_OBJECT_TYPE} from '../../ash/scene-record.mjs';
 import {ASH_SOURCE_TYPE} from '../../ash/source-object.mjs';
 import {ashMembershipEntry} from '../../ash/history-record.mjs';
@@ -37,6 +38,10 @@ const interactionFunctions=['currentBeautyFrameOptions','interactiveSceneRoots',
 // while exercising extracted page consumers. Ownership/integration tests use
 // createWorkingScene itself; this double is not evidence for its invariants.
 export function sceneContext(context, options) {
+  context.createMountedWorkshopMembership??=createMountedWorkshopMembership;
+  // These domain fixtures exclude the temporary generation workshop/editor.
+  context.generationWorkshop??=null;context.authoringGenerateLayout??=null;
+  context.workbenchViewerReady??=Promise.resolve();
   context.ashMembershipEntry??=ashMembershipEntry;
   context.ASH_OBJECT_TYPE??=ASH_OBJECT_TYPE;context.ASH_SOURCE_TYPE??=ASH_SOURCE_TYPE;
   context.authoredAsh??=new Map();context.ashEditTargets??=new Set();

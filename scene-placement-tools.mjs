@@ -22,7 +22,7 @@ export function getPivotViewState(camera, point, width, height) {
 }
 
 export function installScenePlacementTools({
-  viewport, historyScope = null, camera, controls, gizmo, selected, read, write, object, refresh,
+  viewport, historyScope = null, camera, controls, gizmo, selected, read, write, object, refresh, spatialSelected=selected,
   allowed = () => true, busy = () => false, viewHeld = () => null, frameSelected = () => {},
   viewReference = () => null, overlaysVisible = () => true,
   settled = () => {}, captureContext = () => null, historyScopes = [], prepare=()=>{}, transformSettings=()=>({orientation:'world'}),localOrientation=()=>read(selected())?.rotation||[0,0,0],
@@ -111,10 +111,10 @@ export function installScenePlacementTools({
   function start(operation,completed=null) {
     // viewHeld() names another actor holding the viewport camera; a transform
     // started now would measure against a camera that is about to be restored.
-    if (!allowed() || busy() || viewHeld() || !selected()) return false;
+    if (!allowed() || busy() || viewHeld() || !spatialSelected()) return false;
     if (field) finish(true);
     if (!modal) {
-      if (!begin(selected(), 'Transform')) return false;
+      if (!begin(spatialSelected(), 'Transform')) return false;
       modal = { completed, axis: null, plane: false, frame: transformSettings().orientation || 'world', frameRotation: [...localOrientation()], numeric: '', snap: false, precise: false, prior: priorControls() };
     }
     // Operation changes are alternatives within one gesture. Always restart
@@ -145,7 +145,7 @@ export function installScenePlacementTools({
     if (!modal) return;
     const current = modal;
     const dx = lastPointer.x - current.anchor.x, dy = lastPointer.y - current.anchor.y;
-    const reference=viewReference(selected(),current.base);
+    const reference=viewReference(spatialSelected(),current.base);
     const pivot = new Vector3(...(reference?.point||current.base.position)), forward = viewAxis();
     let planeNormal = forward.clone(), axis = current.axis ? axisVector(current.axis, current.frame, current.frameRotation) : null;
     if (axis && !current.plane) {
@@ -191,9 +191,9 @@ export function installScenePlacementTools({
   function draw() {
     if (!hud.isConnected && !viewport.contains(hud)) return;
     camera.updateMatrixWorld(true);
-    const id = selected(), target = id ? object(id) : null, current = modal;
+    const id = spatialSelected(), target = id ? object(id) : null, current = modal;
     const label = target?.userData?.kaminosSceneObject?.label || id;
-    const authoredPose = id ? pose() : null;
+    const authoredPose = id ? read(id) : null;
     const reference=id?viewReference(id,authoredPose):null;
     const pivotState = reference?{state:'camera-frame',x:reference.screen[0],y:reference.screen[1]}:authoredPose ? getPivotViewState(camera, { x: authoredPose.position[0], y: authoredPose.position[1], z: authoredPose.position[2] }, viewport.clientWidth, viewport.clientHeight) : null;
     const pivotRecovery = edits.state().active
@@ -362,7 +362,7 @@ export function installScenePlacementTools({
   gizmo.addEventListener('mouseDown', () => {
     if (!allowed()) return;
     gizmoPrior = pointerOrigin?.prior || priorControls(); gizmoEditing = true;
-    if (!selected() || !begin(selected(), 'Gizmo transform')) finish(false);
+    if (!spatialSelected() || !begin(spatialSelected(), 'Gizmo transform')) finish(false);
   });
   gizmo.addEventListener('mouseUp', () => { if (gizmoEditing) { const prior = gizmoPrior; finish(true); queueMicrotask(() => restoreControls(prior)); } });
   draw();
