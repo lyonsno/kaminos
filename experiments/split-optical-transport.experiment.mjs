@@ -10,10 +10,10 @@ export default {
   const sync=()=>{if(disposed||!panel)return;const s=read();
    for(const el of panel.querySelectorAll('[data-optical]')){
     if(host.controls.document.activeElement!==el&&!el.classList.contains('scrubbing'))el.value=String(options[el.dataset.optical]);
-    el.disabled=s.held||(el.dataset.optical==='fresh'&&options.mode==='split');el.style.opacity=el.disabled?'.4':'1';
+    el.disabled=s.held||(el.dataset.optical==='fresh'&&options.mode==='split')||(['memory','opacityMemory','response','exploration','motion','footprint','depthSupport'].includes(el.dataset.optical)&&(options.mode==='split'||options.fresh===2));el.style.opacity=el.disabled?'.4':'1';
    }
    const e=s.effective;
-   status.textContent=error?`Unchanged: ${error}`:s.held?'Comparison holds its captured input. Resume the comparison to change retained contributions.':e?.effective&&e.effective!=='off'?`${e.freshEvaluations} fresh material evaluation${e.freshEvaluations===1?'':'s'} · 2 retained depth contributions · ${(e.bytes/1048576).toFixed(1)} MiB optical buffers. ${e.frames} draws. ${e.reset?'History reset for this camera/source.':''}`:`${options.mode==='off'?'Transport off.':'Select Fixed evaluations in the fire Quality inspector and enable the world field. '+(e?.reason??'Waiting for an ordinary flame draw.')}`;
+   status.textContent=error?`Unchanged: ${error}`:s.held?'Comparison holds its captured input. Resume the comparison to change retained contributions.':e?.effective&&e.effective!=='off'?`${e.freshEvaluations} fresh material evaluation${e.freshEvaluations===1?'':'s'} · ${e.effective==='full-refresh'?'full refresh · no temporal reuse':'2 retained depth contributions'} · ${(e.bytes/1048576).toFixed(1)} MiB optical buffers. ${e.frames} draws. ${e.reset?'History reset for this camera/source.':''}`:`${options.mode==='off'?'Transport off.':'Select Fixed evaluations in the fire Quality inspector and enable the world field. '+(e?.reason??'Waiting for an ordinary flame draw.')}`;
   };
   const operations={setOptions(patch){const next=splitIntegralSettings({...options,...patch});source().setSplitIntegral(next);options=next;error=null;updateInputs({optical:options});record({kind:'optical-transport.policy',options});sync();session.redraw();return read();},reset(){source().setSplitIntegral({mode:'off'});source().setSplitIntegral(options);session.redraw();return read();}};
   const stop=session.onFrame(sync);
@@ -26,11 +26,11 @@ export default {
     row.style.cssText='display:grid;grid-template-columns:1fr 9rem;align-items:center;gap:10px;margin:10px 0';el.style.width='100%';row.append(grip,el);root.append(row);
    };
    control('Optical contributions','mode',[['off','Off'],['split','Fresh split · 2 evaluations'],['transport','Retain + refresh']]);
-   control('Fresh evaluations','fresh',[[1,'1 per pixel'],[2,'2 per pixel']]);
+   control('Fresh evaluations','fresh',[[1,'1 per pixel'],[2,'2 · full refresh']]);
    control('Light lifetime (draws)','memory',null,.25);control('Opacity lifetime (draws)','opacityMemory',null,.25);
    control('Refresh response','response',null,.05);control('Exploration fraction','exploration',null,.05);
-   control('Flow transport','motion',null,.1);control('Anchor footprint (px)','footprint',null,.25);
-   const note=document.createElement('p');note.textContent='Fresh split recomposes the existing two-evaluation fixed march. Retain + refresh with one fresh evaluation explores new depths and rechecks old anchors. Response 1 replaces a rechecked observation immediately; lower values preserve it through weak refreshes. Lifetimes affect old observations only. Ordinary Spatial reconstruction can follow; Image temporal is a separate additional filter.';root.append(note);
+   control('Depth support (cells)','depthSupport',null,.25);control('Flow transport','motion',null,.1);control('Anchor footprint (px)','footprint',null,.25);
+   const note=document.createElement('p');note.textContent='Fresh split recomposes the existing two-evaluation fixed march. Retain + refresh with one fresh evaluation explores new depths and rechecks old anchors. Response 1 replaces a rechecked observation immediately; lower values preserve it through weak refreshes. Depth support bounds new observations in material-cell units; unobserved gaps stay transparent. Lifetimes affect old observations only. Two fresh evaluations fully replace both slots and disable temporal reuse. Ordinary Spatial reconstruction can follow; Image temporal is a separate additional filter.';root.append(note);
    status=document.createElement('p');status.setAttribute('role','status');status.style.cssText='font-size:12px;line-height:1.6;color:#b2c6d2';root.append(status);sync();
   },async dispose(){disposed=true;stop();drags.forEach(d=>d?.dispose?.());source()?.setSplitIntegral({mode:'off'});await session.dispose();}};
  }
