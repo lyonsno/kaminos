@@ -15,7 +15,7 @@ export function installMountedGenerationWorkshop({document,THREE,mergeGeometries
  function update(state){card.hidden=!state.wanted&&['unprepared','preparing','closed','disposed'].includes(state.phase);card.style.display=card.hidden?'none':'flex';status.textContent=state.error?`Workshop unavailable · ${state.error}`:state.phase==='preparing'||state.phase==='unprepared'?'Preparing workshop…':'Generation workshop';changed(state);redraw();}
  const controller=createMountedGenerationWorkshop({onFrame:callback=>host.onFrame(callback),changed:update,
   async acquire({signal}){
-   const session=host.open();const acquired=[],materials=new Map(),frame=new THREE.Group();let placed=false,parts=null;
+   const session=host.open();const acquired=[],materials=new Map(),shadows=new Map(),frame=new THREE.Group();let placed=false,parts=null;
    const release=async()=>{await parts?.dispose();memberOwner=null;for(const h of acquired)ids.delete(h.id);await session.dispose();for(const h of acquired)h.root.removeFromParent();frame.removeFromParent();};
    try{
     const response=await fetch('./assets/workshop/cold-stage.json',{signal});if(!response.ok)throw Error(`Workshop manifest ${response.status}`);
@@ -59,7 +59,7 @@ export function installMountedGenerationWorkshop({document,THREE,mergeGeometries
      },
      present(amount){
       for(const h of acquired)h.root.visible=amount>0;
-      for(const h of acquired)h.root.traverse(node=>{for(const material of [node.material].flat().filter(Boolean)){if(!materials.has(material))materials.set(material,{opacity:material.opacity,transparent:material.transparent});const authored=materials.get(material),transparent=amount>0&&amount<1?true:authored.transparent;if(material.transparent!==transparent){material.transparent=transparent;material.needsUpdate=true;}material.opacity=authored.opacity*amount;}});
+      for(const h of acquired)h.root.traverse(node=>{if(node.isMesh){if(!shadows.has(node))shadows.set(node,node.castShadow);node.castShadow=amount>0&&amount<1?false:shadows.get(node);}for(const material of [node.material].flat().filter(Boolean)){if(!materials.has(material))materials.set(material,{opacity:material.opacity,transparent:material.transparent});const authored=materials.get(material),transparent=amount>0&&amount<1?true:authored.transparent;if(material.transparent!==transparent){material.transparent=transparent;material.needsUpdate=true;}material.opacity=authored.opacity*amount;}});
       if(amount===0&&placed){frame.position.set(0,0,0);frame.scale.setScalar(1);frame.updateMatrixWorld(true);placed=false;restoreSelection();}
       parts?.present?.(amount);
       redraw();
