@@ -6,7 +6,8 @@ globalThis.GPUBufferUsage = { MAP_READ: 1, COPY_DST: 2 };
 globalThis.GPUMapMode = { READ: 1 };
 const counts = { created: 0, disposed: 0, staging: 0, destroyed: 0, unmapped: 0, released: 0 };
 let mode;
-const metadata = { schema: 'mobrecon.browser-weight-package.v0', status: 'succeeded', resources: [{ manifest: { modelId: 'fixture', bundle: { sha256: 'fixture' } } }] };
+let effectiveDecoder;
+const metadata = { schema: 'mobrecon.browser-weight-package.v0', status: 'succeeded', resources: [{ manifest: { modelId: 'mobrecon.densestack-spiralconv', bundle: { sha256: 'fixture' } } }] };
 const device = {
   queue: { submit() {} },
   createCommandEncoder() { return { copyBufferToBuffer() { if (mode === 'copy') throw Error('copy failed'); }, finish() { return {}; } }; },
@@ -21,7 +22,7 @@ const device = {
 };
 globalThis.__handLoadFixture = {
   defineWebGpuModelResourceManifest: value => value,
-  createMobReconNetwork() { counts.created++; return { dispatchCount: 1, dispose() { counts.disposed++; } }; },
+  createMobReconNetwork({ decoder }) { effectiveDecoder = decoder; counts.created++; return { dispatchCount: 1, dispose() { counts.disposed++; } }; },
   MOBRECON_LANDMARKS: 21, MOBRECON_VERTICES: 778,
   async readModelPackage() { return { metadata, source: {}, row: metadata.resources[0] }; },
 };
@@ -39,7 +40,10 @@ for (mode of ['invalid', 'map', 'range', 'copy']) {
 assert.deepEqual(failures, [], 'every post-construction failure must retire its network and staging');
 assert.equal(counts.unmapped, 2, 'only successful mappings are unmapped, including a range-copy failure');
 mode = 'valid';
+metadata.resources[0].manifest.modelId = 'mobrecon.densestack-dsconv';
 const loaded = await loadMobRecon({ route });
+assert.equal(effectiveDecoder, 'dsconv');
+assert.equal(loaded.identity.decoder, 'dsconv');
 assert.equal(loaded.faces.length, 1538 * 3);
 assert.equal(new Set(loaded.faces).size, 778);
 assert.equal(counts.created, counts.disposed + 1, 'successful retry stays resident');
@@ -47,5 +51,9 @@ loaded.release(); loaded.release();
 assert.equal(counts.created, counts.disposed);
 assert.equal(counts.released, counts.created);
 assert.equal(counts.staging, counts.destroyed);
+metadata.resources[0].manifest.modelId = 'unexpected';
+const leasesBefore = counts.released;
+await assert.rejects(loadMobRecon({ route }), /unsupported MobRecon model unexpected/);
+assert.equal(counts.released, leasesBefore + 1, 'unknown model releases its lease');
 delete globalThis.__handLoadFixture;
 console.log('Production MobRecon loader retires failed networks/readbacks and supports retry');

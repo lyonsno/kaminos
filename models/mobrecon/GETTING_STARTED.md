@@ -65,3 +65,17 @@ Pass `{ device }` to use your renderer's device, or `{ session, foreground }` to
 `pause`, `resume` and `stop` act at the boundaries before hand detection and reconstruction. Foreground requests can be serviced at those same boundaries and while paused. Each network's current compute pass is indivisible. `cooperative: false` keeps outer admission and cleanup but disables those cooperative control boundaries. Loading is separate; stopping inference waiting for loading does not cancel the shared load. `destroy()` stops new work, cancels pending work, waits for loading and active inference, then releases owned resources.
 
 The app exposes `device`, `session`, `foreground`, `route`, `identity`, `faces` and `snapshot()`. `route` remains the low-level producer for a host that already owns admission and settlement. Calling the application again from inside an admitted job on the same session would nest admission; use the low-level route in that case. The [shared application guide](../../webgpu-inference-kit/docs/model-applications.md) describes the renderer's foreground submission contract.
+
+## Efficient DSConv variant
+
+The application also accepts `mobrecon.densestack-dsconv` packages. The package's model ID selects depth-separable spiral convolution and appears as `identity.decoder: 'dsconv'`; the existing `mobrecon.densestack-spiralconv` package selects `spiralconv`. Both use the same normalized 128×128 crop, 778 vertices, 21 crop-space landmarks and topology. Each variant uses its own complete trained checkpoint, including backbone weights.
+
+For a local comparison, acquire `mobrecon_densestack_dsconv.pt` from the [upstream checkpoint folder](https://drive.google.com/drive/folders/1MIE0Jo01blG6RWo2trQbXlQ92tMOaLx_) and use the existing PyTorch packing environment with the pinned HandMesh source revision `3c87e958d4855f890e3884ec94bcfc0f99422c3d`:
+
+```sh
+python models/mobrecon/pack-weights.py --source /path/to/HandMesh --checkpoint /path/to/mobrecon_densestack_dsconv.pt --decoder dsconv --out /path/to/dsconv-package
+```
+
+The packer verifies the released DSConv checkpoint SHA-256 `b3c18c68acca9e41fe8ac06a3ffdb0ea5526b024f5f5cc3ede906c93cf3598d7` and source/topology identity. `export-reference.py` accepts the same `--decoder dsconv` option for source-reference parity. To import into the standalone demo, combine this package with an already prepared detector package using `demos/hand-mesh/prepare-local-models.mjs`; choose that new folder in the demo. Model terms apply to both variants.
+
+The one-command installer continues to acquire SpiralConv. Upstream recommends that checkpoint for freely captured real-world images. DSConv reduces decoder arithmetic and weight storage; compare reconstruction quality and measured browser latency on your workload before selecting it for an application.

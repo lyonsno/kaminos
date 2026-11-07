@@ -82,6 +82,10 @@ def folded_tensors(model, ran):
             add(f'{path}.weight', module.layer.weight)
             add(f'{path}.bias', module.layer.bias)
             consumed.update(id(p) for p in module.layer.parameters())
+        if type(module).__name__ == 'DSConv' and path in ran:
+            add(f'{path}.spatial_layer.weight', module.spatial_layer.weight)
+            add(f'{path}.channel_layer.weight', module.channel_layer.weight)
+            consumed.update(id(p) for p in module.parameters())
     add('decoder3d.upsample', model.decoder3d.upsample)
     consumed.add(id(model.decoder3d.upsample))
     unused = []
@@ -114,7 +118,7 @@ def topology_tensors(transforms, spirals):
     return out
 
 
-def write_bundle(out, resource_id, tensors, revision):
+def write_bundle(out, resource_id, tensors, revision, model_id=MODEL_ID):
     path = out / f'{resource_id}.bin'
     rows, offset = [], 0
     with path.open('wb') as f:
@@ -129,7 +133,7 @@ def write_bundle(out, resource_id, tensors, revision):
             offset = (offset + values.nbytes + ALIGN - 1) // ALIGN * ALIGN
         f.truncate(offset)
     return {'resourceId': resource_id, 'file': path.name,
-            'manifest': {'modelId': MODEL_ID, 'revision': revision,
+            'manifest': {'modelId': model_id, 'revision': revision,
                          'bundle': {'byteLength': path.stat().st_size, 'sha256': digest(path)},
                          'allocations': [{'allocationId': f'{resource_id}.0', 'byteOffset': 0, 'byteLength': offset,
                                           'usage': STORAGE_COPY, 'tensors': rows}]}}
@@ -139,16 +143,17 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--source', type=Path, required=True, help='HandMesh checkout at the pinned revision')
     p.add_argument('--checkpoint', type=Path, required=True)
+    p.add_argument('--decoder', choices=['spiralconv', 'dsconv'], default='spiralconv')
     p.add_argument('--out', type=Path, required=True)
     args = p.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     report = {'schema': SCHEMA, 'status': 'failed', 'phase': 'inputs', 'resources': []}
     start = time.perf_counter()
     try:
-        provenance = check_source(args.source, args.checkpoint)
+        provenance = check_source(args.source, args.checkpoint, args.decoder)
         report['provenance'] = provenance
         report['phase'] = 'model-load'
-        model, transforms, spirals = load_model(args.source, args.checkpoint)
+        model, transforms, spirals = load_model(args.source, args.checkpoint, args.decoder)
         report['phase'] = 'fold'
         weights, unused = folded_tensors(model, executed_modules(model))
         report['unusedByForward'] = sorted({name.rsplit('.', 2)[0] for name in unused})
@@ -160,7 +165,7 @@ def main():
                       tensorCount=len(weights) + len(topology),
                       parameterCount=int(sum(v.size for _, v in weights)))
         report['phase'] = 'bundle-write'
-        report['resources'].append(write_bundle(args.out, 'mobrecon', weights + topology, revision))
+        report['resources'].append(write_bundle(args.out, 'mobrecon', weights + topology, revision, f'mobrecon.densestack-{args.decoder}'))
         report['totalBytes'] = report['resources'][0]['manifest']['bundle']['byteLength']
         report['status'] = 'succeeded'
         report['phase'] = 'complete'

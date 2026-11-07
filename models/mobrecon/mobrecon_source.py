@@ -1,8 +1,8 @@
-"""Load MobRecon (DenseStack + SpiralConv) from the pinned HandMesh source.
+"""Load a released DenseStack MobRecon variant from the pinned HandMesh source.
 
 Construction matches the released real-world configuration the native live
 route uses: cmr.models.mobrecon_densestack.MobRecon with out_channels
-[32, 64, 128, 256], DSConv disabled, spiral length 9 and dilation 1, built from
+[32, 64, 128, 256], SpiralConv by default or explicit DSConv, spiral length 9 and dilation 1, built from
 the source's own template/transform.pkl and preprocess_spiral.
 """
 import hashlib
@@ -16,6 +16,7 @@ import numpy as np
 
 SOURCE_REVISION = '3c87e958d4855f890e3884ec94bcfc0f99422c3d'
 CHECKPOINT_SHA256 = '2b634114dadb324802c9e55a8b7a9236f0e7b476157ac0b175f0eb258d9d276c'
+DSCONV_CHECKPOINT_SHA256 = 'b3c18c68acca9e41fe8ac06a3ffdb0ea5526b024f5f5cc3ede906c93cf3598d7'
 TRANSFORM_SHA256 = '78877f06e9858bedd5fbca13692ccee25cfe09b6314e7ee3b3d0827c39979f3c'
 OUT_CHANNELS = [32, 64, 128, 256]
 SPIRAL_LENGTH = 9
@@ -30,7 +31,13 @@ def digest(path):
     return h.hexdigest()
 
 
-def check_source(upstream, checkpoint):
+def checkpoint_hash(decoder):
+    if decoder not in ('spiralconv', 'dsconv'):
+        raise ValueError(f'unsupported MobRecon decoder {decoder}')
+    return DSCONV_CHECKPOINT_SHA256 if decoder == 'dsconv' else CHECKPOINT_SHA256
+
+
+def check_source(upstream, checkpoint, decoder='spiralconv'):
     """Refuse a moved or dirty source, or a different checkpoint/topology."""
     upstream = Path(upstream).resolve()
     revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=upstream, text=True).strip()
@@ -38,13 +45,13 @@ def check_source(upstream, checkpoint):
     if revision != SOURCE_REVISION or dirty:
         raise ValueError(f'HandMesh source must be clean {SOURCE_REVISION}, found {revision}{" (dirty)" if dirty else ""}')
     checkpoint_sha = digest(checkpoint)
-    if checkpoint_sha != CHECKPOINT_SHA256:
-        raise ValueError(f'checkpoint sha256 {checkpoint_sha} is not the released DenseStack+SpiralConv checkpoint')
+    if checkpoint_sha != checkpoint_hash(decoder):
+        raise ValueError(f'checkpoint sha256 {checkpoint_sha} is not the released DenseStack+{decoder} checkpoint')
     transform_sha = digest(upstream / 'template/transform.pkl')
     if transform_sha != TRANSFORM_SHA256:
         raise ValueError(f'template/transform.pkl sha256 {transform_sha} does not match')
     return {'sourceRevision': revision, 'sourceRoot': str(upstream), 'checkpointSha256': checkpoint_sha,
-            'transformSha256': transform_sha}
+            'transformSha256': transform_sha, 'decoder': decoder}
 
 
 def load_transforms(upstream):
@@ -52,8 +59,9 @@ def load_transforms(upstream):
         return pickle.load(stream, encoding='latin1')
 
 
-def load_model(upstream, checkpoint):
+def load_model(upstream, checkpoint, decoder='spiralconv'):
     """Returns (model in eval mode, transforms, spirals as numpy [N_l, 9] per level)."""
+    checkpoint_hash(decoder)
     import torch
     upstream = Path(upstream).resolve()
     if str(upstream) not in sys.path:
@@ -67,7 +75,7 @@ def load_model(upstream, checkpoint):
         coo = transform.tocoo()
         up.append((torch.as_tensor(coo.row, dtype=torch.long), torch.as_tensor(coo.col, dtype=torch.long),
                    torch.as_tensor(coo.data, dtype=torch.float32)))
-    model = MobRecon(SimpleNamespace(out_channels=OUT_CHANNELS, dsconv=False), spirals, up)
+    model = MobRecon(SimpleNamespace(out_channels=OUT_CHANNELS, dsconv=decoder == 'dsconv'), spirals, up)
     state = torch.load(checkpoint, map_location='cpu', weights_only=True)
     model.load_state_dict(state.get('model_state_dict', state), strict=True)
     model.eval()

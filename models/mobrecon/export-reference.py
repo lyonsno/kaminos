@@ -25,7 +25,7 @@ from mobrecon_source import check_source, crop_rgb, digest, load_model, network_
 SCHEMA = 'mobrecon.reference.v0'
 INPUT_SCHEMA = 'mobrecon.reference-inputs.v0'
 BLOCK_TYPES = ('Sequential', 'mobile_unit', 'DenseBlock', 'DenseBlock2', 'DenseBlock2_noExpand', 'SenetBlock',
-               'DenseStack', 'DenseStack2', 'Reorg', 'AvgPool2d', 'Upsample', 'SpiralDeblock', 'SpiralConv')
+               'DenseStack', 'DenseStack2', 'Reorg', 'AvgPool2d', 'Upsample', 'SpiralDeblock', 'SpiralConv', 'DSConv')
 
 
 def write_tensor(folder, name, value, rows):
@@ -108,6 +108,7 @@ def main():
     p.add_argument('--source', type=Path, required=True, help='HandMesh checkout at the pinned revision')
     p.add_argument('--checkpoint', type=Path, required=True)
     p.add_argument('--inputs', type=Path, required=True, help=f'{INPUT_SCHEMA} JSON: cases of image, cropBox, handedness')
+    p.add_argument('--decoder', choices=['spiralconv', 'dsconv'], default='spiralconv')
     p.add_argument('--out', type=Path, required=True)
     args = p.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
@@ -118,12 +119,12 @@ def main():
         if spec.get('schema') != INPUT_SCHEMA or not spec.get('cases'):
             raise ValueError(f'{INPUT_SCHEMA} inputs with at least one case required')
         manifest['inputs'] = {'path': str(args.inputs.resolve()), 'sha256': digest(args.inputs)}
-        manifest['provenance'] = check_source(args.source, args.checkpoint)
+        manifest['provenance'] = check_source(args.source, args.checkpoint, args.decoder)
         manifest['phase'] = 'model-load'
         import cv2
         import torch
         torch.set_num_threads(1)
-        model, _, _ = load_model(args.source, args.checkpoint)
+        model, _, _ = load_model(args.source, args.checkpoint, args.decoder)
         manifest['runtime'] = {'backend': 'pytorch', 'device': 'cpu', 'dtype': 'f32', 'torch': torch.__version__,
                                'opencv': cv2.__version__, 'numpy': np.__version__, 'python': platform.python_version(),
                                'threads': 1}
