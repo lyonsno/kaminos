@@ -17,7 +17,7 @@ await withKaminosGpu(async ctx=>{
 @group(0) @binding(3) var<storage,read> directions:array<vec4<f32>>;
 @group(0) @binding(5) var coefficients:texture_3d<f32>;
 @group(0) @binding(8) var<uniform> settings:vec4<f32>;
-@group(0) @binding(27) var<storage,read> sourceBounds:array<vec4<u32>,2>;
+@group(0) @binding(27) var<uniform> sourceBounds:array<vec4<u32>,2>;
 @group(0) @binding(60) var<storage,read_write> output:array<vec4<f32>,2>;
 ${LIGHTING_INTERVAL_WGSL}
 ${lightingCellTraversalCode(SOURCE_AWARE_WGSL)}
@@ -32,7 +32,7 @@ ${FINE_LIGHTING_TRAVERSAL_WGSL}
    const layout=device.createBindGroupLayout({entries:[
     {binding:5,visibility:GPUShaderStage.COMPUTE,texture:{viewDimension:'3d',sampleType:'unfilterable-float'}},
     {binding:8,visibility:GPUShaderStage.COMPUTE,buffer:{type:'uniform'}},
-    {binding:27,visibility:GPUShaderStage.COMPUTE,buffer:{type:'read-only-storage'}},
+    {binding:27,visibility:GPUShaderStage.COMPUTE,buffer:{type:'uniform'}},
     {binding:60,visibility:GPUShaderStage.COMPUTE,buffer:{type:'storage'}},
    ]});
    const actual=await device.createComputePipelineAsync({layout:device.createPipelineLayout({bindGroupLayouts:[layout]}),compute:{module,entryPoint:'main'}});

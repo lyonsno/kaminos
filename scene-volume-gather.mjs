@@ -477,7 +477,7 @@ struct Receiver {position:vec4<f32>,normal:vec4<f32>}
 @group(0) @binding(6) var surfaceOut:texture_storage_2d<rgba32float,write>;
 @group(0) @binding(7) var smokeOut:texture_storage_3d<rgba32float,write>;
 @group(0) @binding(8) var<uniform> settings:vec4<f32>;
-@group(0) @binding(27) var<storage,read> sourceBounds:array<vec4<u32>,2>;
+@group(0) @binding(27) var<uniform> sourceBounds:array<vec4<u32>,2>;
 @group(0) @binding(9) var surfaceBackOut:texture_storage_2d<rgba32float,write>;
 @group(0) @binding(11) var environment:texture_2d<f32>;
 @group(0) @binding(12) var<uniform> environmentSettings:vec4<f32>;
