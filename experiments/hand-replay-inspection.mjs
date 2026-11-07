@@ -37,7 +37,7 @@ export async function createHandInspection(scene,document,models,labelTexture){
 }
 export function mountInspectionControls(document,invoke,read){
  const viewport=document.querySelector?.('#viewport');if(!viewport)return {sync(){},dispose(){}};
- const toolbar=document.createElement('div');toolbar.dataset.handInspection='toolbar';toolbar.style.cssText='position:absolute;z-index:15;top:18px;left:50%;transform:translateX(-50%);max-width:calc(100% - 36px);display:flex;flex-wrap:wrap;justify-content:center;gap:8px;padding:12px;border:1px solid #718391;border-radius:14px;background:#14202de8;box-shadow:0 8px 30px #0005;backdrop-filter:blur(12px)';
+ const toolbar=document.createElement('div');toolbar.dataset.handInspection='toolbar';toolbar.style.cssText='position:absolute;z-index:15;top:18px;left:50%;transform:translateX(-50%);width:780px;max-width:calc(100% - 36px);display:flex;flex-wrap:wrap;justify-content:center;gap:8px;padding:12px;border:1px solid #718391;border-radius:14px;background:#14202de8;box-shadow:0 8px 30px #0005;backdrop-filter:blur(12px)';
  const button=(text,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=text;b.style.cssText='padding:11px 16px;border:1px solid #8297a6;border-radius:8px;color:#f4f8ff;background:#30495c;font:600 14px system-ui;cursor:pointer';b.onclick=fn;toolbar.append(b);return b;};
  const call=(op,arg)=>Promise.resolve(invoke(op,arg)).catch(e=>{status.textContent=String(e);});
  const lock=button('Unlock hands',()=>call('setProjectionLocked',!read().inspection.locked));lock.style.background='#176c83';
