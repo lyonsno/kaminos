@@ -162,7 +162,7 @@ export async function readGLBLocalSurfaceAndMaterials(input) {
     return {array: out, width, count: a.count};
   };
 
-  const posChunks = [], uvChunks = [], colChunks = [], triChunks = [], matChunks = [], hasUVChunks = [];
+  const posChunks = [], uvChunks = [], colChunks = [], triChunks = [], matChunks = [], hasUVChunks = [], fieldChunks = [], hasFieldChunks = [];
   let vertexBase = 0;
   for (const [nodeIndex, world] of worlds) {
     const mesh = json.meshes?.[json.nodes[nodeIndex].mesh];
@@ -177,6 +177,11 @@ export async function readGLBLocalSurfaceAndMaterials(input) {
       if (posAcc.componentType !== 5126 || posAcc.type !== 'VEC3') throw Error('float32 VEC3 POSITION required');
       const rawPos = readAttr(primitive.attributes.POSITION, ['VEC3']).array;
       const count = rawPos.length / 3;
+      const hasField = primitive.attributes._KAMINOS_MATERIAL !== undefined;
+      const field = hasField ? readAttr(primitive.attributes._KAMINOS_MATERIAL, ['VEC2']) : null;
+      if (field && (field.count !== count || !field.array.every(v => Number.isFinite(v) && v >= 0 && v <= 1)))
+        throw Error('Invalid surface material field');
+      fieldChunks.push(field?.array ?? new Float32Array(count * 2));
       const localPos = new Float32Array(rawPos.length);
       // Map world (wx, wy, wz) -> TRELLIS local (wx, -wz, wy) so encodeTrellisGeometryGLB's
       // node[0].matrix [1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1] maps local (lx, ly, lz) -> world (wx, wy, wz).
@@ -218,6 +223,7 @@ export async function readGLBLocalSurfaceAndMaterials(input) {
       const faceCount = tris.length / 3;
       matChunks.push(new Int32Array(faceCount).fill(primitive.material ?? -1));
       hasUVChunks.push(new Uint8Array(faceCount).fill(hasUV ? 1 : 0));
+      hasFieldChunks.push(new Uint8Array(faceCount).fill(hasField ? 1 : 0));
       vertexBase += count;
     }
   }
@@ -236,6 +242,8 @@ export async function readGLBLocalSurfaceAndMaterials(input) {
     colors: concat(colChunks, Float32Array),
     faceMaterials: concat(matChunks, Int32Array),
     faceHasUV: concat(hasUVChunks, Uint8Array),
+    materialFields: concat(fieldChunks, Float32Array),
+    faceHasMaterialFields: concat(hasFieldChunks, Uint8Array),
     materials,
   };
 }
@@ -319,9 +327,14 @@ export function createGLBMeshMaterialBaker(surface, {THREE, MeshBVH, bvh = null}
       baseColor[p * 4 + 3] = 255;
 
       const texMR = mat.metallicRoughnessImage && hasUV ? sampleBilinear(mat.metallicRoughnessImage, u, v) : [0, 255, 255, 255];
+      // Raw-field attributes contain absolute PBR values, just as the loader's
+      // material nodes do. Mean glTF factors are only the portable fallback.
+      const fields = surface.materialFields, hasField = surface.faceHasMaterialFields?.[t] === 1;
+      const metallic = hasField ? 255 * (w0 * fields[i0 * 2] + w1 * fields[i1 * 2] + w2 * fields[i2 * 2]) : texMR[2] * mat.metallicFactor;
+      const roughness = hasField ? 255 * (w0 * fields[i0 * 2 + 1] + w1 * fields[i1 * 2 + 1] + w2 * fields[i2 * 2 + 1]) : texMR[1] * mat.roughnessFactor;
       metallicRoughness[p * 4] = 0;
-      metallicRoughness[p * 4 + 1] = clampByte(texMR[1] * mat.roughnessFactor);
-      metallicRoughness[p * 4 + 2] = clampByte(texMR[2] * mat.metallicFactor);
+      metallicRoughness[p * 4 + 1] = clampByte(roughness);
+      metallicRoughness[p * 4 + 2] = clampByte(metallic);
       metallicRoughness[p * 4 + 3] = 255;
     }
     if (!coveredPixels) throw Error('no covered UV pixels; cannot bake GLB material');

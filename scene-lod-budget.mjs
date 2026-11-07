@@ -135,8 +135,10 @@ function boxIntersectsFrustum(box, planes) {
 }
 
 const initialBeautyLevels=new WeakMap();
+const hasSurfaceSplats=root=>!!root?.getObjectByProperty?.('isSurfaceSplatObject',true);
 export function seedInitialBeautyLevels(root,levels){
   releaseInitialBeautyLevels(root);
+  if(hasSurfaceSplats(root)){for(const level of levels??[])disposeTree(level.root);return;}
   if(levels?.length)initialBeautyLevels.set(root,levels);
 }
 export function releaseInitialBeautyLevels(root){
@@ -1542,6 +1544,7 @@ export function createSceneBeautyLodController({
   }
 
   function interactiveRung(root, {matchDisplay, pinnedObjects, maxFaces = 10000}) {
+    if(hasSurfaceSplats(root))return null;
     const entry = entries.get(root);
     const id = root.userData?.kaminosSceneObject?.id;
     if (disposed || !config.enabled || !root.parent || pinnedObjects?.has(root) || pinnedObjects?.has(id)) return null;
@@ -1716,6 +1719,7 @@ export function createSceneBeautyLodController({
           }
           continue;
         }
+        if(handle.representation==='surface-splats')continue;
         entry = ensureEntry(root);
         if (handle.representation === 'surfels') {
           ensureSurfelLevelsLoaded(root, entry, handle);
@@ -1723,7 +1727,6 @@ export function createSceneBeautyLodController({
         }
         // These mesh tiers describe the explicit collision/GI proxy. They do
         // not approximate the visible splat field and cannot replace it.
-        if(handle.representation==='surface-splats')continue;
         const levels=handle.beautyLevels??handle.levels;
         if (!levels?.length) {
           if(config.enabled&&handle.state==='resolving')applyDisplayedRung(root,entry);
