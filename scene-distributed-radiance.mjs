@@ -22,7 +22,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   let surfaceReconstruction=0;
   let surfaceScattering=false;
   let receiverSpacing=0,builtReceiverSpacing=null,packedCache=null;
-  const surfaceGain=THREE.TSL.uniform(1);
+  const surfaceGain=THREE.TSL.uniform(1),sourceVisible=THREE.TSL.uniform(1);
   let sourceTransform=validateSceneSourceTransform();
   let sourceDomain=sceneSourceDomain();
   const attributeIds=new WeakMap();let nextAttributeId=0;
@@ -143,7 +143,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         const material=cloneSceneRadianceMaterial(renderer.library,original);
         const setup=material.setupMaterialLightings;
         const received=original.side===THREE.DoubleSide?visibleIrradiance:original.side===THREE.BackSide?backIrradiance:irradiance;
-        material.setupMaterialLightings=function(builder){return [...setup.call(this,builder),new THREE.IrradianceNode(received.mul(surfaceGain))];};
+        material.setupMaterialLightings=function(builder){return [...setup.call(this,builder),new THREE.IrradianceNode(received.mul(surfaceGain).mul(sourceVisible))];};
         return material;
       };
       row.converted=Array.isArray(row.material)?row.material.map(convert):convert(row.material);
@@ -225,7 +225,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     setAngularPattern(pattern,rotation=0){if(!['fixed','spatial','blue','source','guided','regions'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern and finite rotation required');angularPattern=pattern;angularRotation=rotation;},
     setRetainComparisons(value){retainComparisons=!!value;handle?.setRetainComparisons(retainComparisons);},
     setEditing(key,active){if(active){editing.add(key);rebuildAnnounced=false;}else if(editing.delete(key)&&!editing.size)editCommitted=true;},
-    debugState(){return {...status,smokeEnvironmentBlur,gain,receiverSpacingRequested:receiverSpacing,sourceTransform:validateSceneSourceTransform(sourceTransform),surfaceGain:surfaceGain.value,surfaceScattering,smokeMode,sourceSoftness,surfaceReconstruction,frame,display:'mesh and flame retain separate camera transforms'};},
+    debugState(){return {...status,sourceVisible:sourceVisible.value,smokeEnvironmentBlur,gain,receiverSpacingRequested:receiverSpacing,sourceTransform:validateSceneSourceTransform(sourceTransform),surfaceGain:surfaceGain.value,surfaceScattering,smokeMode,sourceSoftness,surfaceReconstruction,frame,display:'mesh and flame retain separate camera transforms'};},
     readback(){if(!handle)throw new Error('distributed receivers not built');return handle.readback();},
     inspectionMeshes(){return [...originals.keys()];},
     async inspectSurface({mesh,face,point,cameraPosition}){
@@ -259,7 +259,11 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       finally{if(paused)prototype.setSelectiveHeadLiveCapturePaused(!!before.selectiveHeadLiveCapturePaused);}
       return result;
     },
-    canRender(){return !disposed&&!status.error&&handle&&frame?.generation===prototype.sceneVolumeSourceField().generation;},
+    canRender(){
+      const source=prototype.sceneVolumeSourceField(),withdrawn=source.status==='inactive'&&source.reason==='volume-withdrawn';
+      sourceVisible.value=withdrawn?0:1;
+      return !disposed&&!status.error&&(withdrawn||!!(handle&&source.status==='encoded'&&frame?.generation===source.generation));
+    },
     dispose(){disposed=true;prototype.setSceneSourceFrameConsumer(null);retire();smokeEnvironment.dispose();},
   };
 }

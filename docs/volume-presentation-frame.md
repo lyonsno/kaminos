@@ -39,6 +39,10 @@ unavailable to lighting while retaining their allocations. The atlas receiver
 refreshes its world bounds without needing a new allocation generation. Source
 metadata includes `physicalTransform` for guided/regional authoring proposals;
 `worldTransform` remains the composed frame for optical receivers and geometry.
+Explicit withdrawal also keeps ordinary scene rendering available while zeroing
+the installed gas-lighting contribution. Ordinary material/environment lighting
+is retained; unavailable or stale active-source bindings still block presentation.
+Re-entry restores the existing current-source checks without recompilation.
 
 Rotation and nonuniform scale are not represented by this API. Moving a fine
 box through stationary world gas is still `relocateOrdinaryDomain`, with its

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {collisionVoxelInstances} from '../scene-collision-debug.mjs';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import {composeVolumePresentationTransform} from '../volume-presentation-frame.mjs';
 test('mask surface uses solver indexing and domain world transform, without inventing empty cells',()=>{
  const cells=new Uint8Array(4*8*4);cells[1+4*(2+8*3)]=1;
  const result=collisionVoxelInstances({cells,dimensions:[4,8,4],transform:{translate:[2,3,4],scale:2}});
@@ -16,6 +17,7 @@ test('debug reads installed mask, clears unavailable data, and isolates caller m
  const method=source.match(/    readSceneCollisionMask\([\s\S]*?\n    },/);
  assert.ok(method,'runtime must expose the installed collision mask');
  const ctx={sceneSolidRevisionKey:'r1',sceneSolidCellsCpu:new Uint8Array([1,0]),gridSize:1,gridHeight:2,productTransform:{translate:[1,2,3],scale:2},state:{sceneCollision:{effective:'mesh-voxel-solid'}},structuredClone};
+ ctx.presentationWorldTransform=()=>composeVolumePresentationTransform(ctx.productTransform);
  ctx.sceneSolidGpu=null;const runtime=vm.runInNewContext(`({${method[0].replace(/,$/,'')}})`,ctx);
  const result=runtime.readSceneCollisionMask();assert.deepEqual(Array.from(result.cells),[1,0]);result.cells[0]=0;assert.equal(ctx.sceneSolidCellsCpu[0],1);
  assert.equal(runtime.readSceneCollisionMask(result.revision),null);
@@ -25,6 +27,7 @@ test('incremental voxel read includes domain frame even when installed local mas
  const source=fs.readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
  const method=source.match(/    readSceneCollisionMask\([\s\S]*?\n    },/)[0];
  const ctx={sceneSolidRevisionKey:'wall',sceneSolidCellsCpu:new Uint8Array([1,0]),gridSize:1,gridHeight:2,productTransform:{translate:[0,0,0],scale:1},state:{sceneCollision:{effective:'emitter-back-wall'}},structuredClone};
+ ctx.presentationWorldTransform=()=>composeVolumePresentationTransform(ctx.productTransform);
  ctx.sceneSolidGpu=null;const api=vm.runInNewContext(`({${method.replace(/,$/,'')}})`,ctx),first=api.readSceneCollisionMask();
  ctx.productTransform.translate[0]=4;
  const moved=api.readSceneCollisionMask(first.revision);assert.ok(moved,'world movement must refresh the overlay');assert.equal(moved.transform.translate[0],4);

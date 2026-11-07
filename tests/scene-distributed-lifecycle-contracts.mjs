@@ -32,6 +32,14 @@ function fixture(castShadow=true) {
   return {mesh,mount,geometry,material,uploads,device,statuses,passes,copies,buffers,field,emitter,regions,prepare(){consume(field);}};
 }
 const selected=process.argv[2];
+if(!selected||selected==='withdrawal'){
+ const f=fixture();f.prepare();const source=f.field.source,material=f.mesh.material,before=f.passes.length;
+ f.field.source={status:'inactive',reason:'volume-withdrawn',generation:null};
+ assert.equal(f.mount.canRender(),true);assert.equal(f.mount.debugState().sourceVisible,0);
+ assert.equal(f.mesh.material,material);assert.equal(f.passes.length,before);
+ f.field.source=source;assert.equal(f.mount.canRender(),true);assert.equal(f.mount.debugState().sourceVisible,1);
+ f.mount.dispose();
+}
 if(!selected||selected==='domain'){
  const f=fixture();f.prepare();
  for(const ratio of [1,1.5,3,4,2]){
