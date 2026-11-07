@@ -1,0 +1,49 @@
+// Explicit diagnostic readback of the actual Workbench production kernels.
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
+const args=Object.fromEntries(process.argv.slice(2).reduce((a,v,i,all)=>i%2?a:[...a,[v.replace(/^--/,''),all[i+1]]],[]));
+if(!args.out)throw Error('--out required');const out=path.resolve(args.out);await fs.mkdir(out,{recursive:true});
+const report={status:'running',phase:'configuration',requested:args,performanceClaim:false,offlineReadback:true,errors:[],captures:[],closed:false};let context,page;
+const save=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));await save();
+try{
+ for(const k of ['root','url','browser','playwright'])if(!args[k])throw Error('--'+k+' required');
+ const browser=await fs.realpath(args.browser);if(/\/Google Chrome\.app\//i.test(browser))throw Error('Independent browser executable required');
+ report.browser=browser;report.source={head:execFileSync('git',['rev-parse','HEAD'],{cwd:args.root,encoding:'utf8'}).trim(),status:execFileSync('git',['status','--short'],{cwd:args.root,encoding:'utf8'}),files:{}};
+ const entry=await fetch(args.url);assert.ok(entry.ok);report.effectiveURL=entry.url;report.phase='source';await save();
+ for(const f of ['experiments/hill-volume.experiment.mjs','experiments/hill-terrain/volume-kernels.mjs','experiments/hill-terrain/volume-gpu.mjs','experiments/hill-terrain/volume-model.mjs','experiments/hill-terrain/soil-material.mjs','experiments/hill-terrain/rock-geometry.mjs']){
+  const local=await fs.readFile(path.join(args.root,f)),remote=await fetch(new URL('/'+f,entry.url));assert.ok(remote.ok,'Missing source '+f);assert.ok(local.equals(Buffer.from(await remote.arrayBuffer())),'Wrong served source '+f);report.source.files[f]=createHash('sha256').update(local).digest('hex');
+ }
+ report.phase='browser';await save();const {chromium}=await import(path.resolve(args.playwright)),profile=await fs.mkdtemp(path.join(out,'profile-'));report.profile=profile;
+ context=await chromium.launchPersistentContext(profile,{executablePath:browser,headless:true,viewport:{width:1440,height:1000},args:['--use-mock-keychain','--password-store=basic','--enable-unsafe-webgpu']});page=context.pages()[0];page.setDefaultTimeout(0);page.on('console',m=>{if(m.type()==='error'){report.errors.push(m.text());save();}});
+ const pageError=new Promise((_,reject)=>page.on('pageerror',e=>{report.errors.push(e.message);reject(e);}));
+ await page.goto(args.url);report.phase='mount';await save();
+ await Promise.race([page.waitForFunction(()=>window.kaminosHillVolume?.read().initialized||window.kaminosHillVolume?.read().error),pageError]);
+ const read=()=>page.evaluate(()=>window.kaminosHillVolume.read());report.initial=await read();assert.equal(report.initial.error,null);assert.equal(report.initial.gpu.backend,'webgpu');assert.equal(report.initial.source,'direct-3d-material-volumes-v1');assert.equal(report.initial.gpu.readbackInRuntime,false);
+ const capture=async name=>{await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));const state=await read();assert.equal(state.error,null);await page.screenshot({path:path.join(out,name+'.png')});report.captures.push({name,state});await save();};
+ const snapshot=async name=>{const s=await page.evaluate(async()=>{const s=await window.kaminosHillVolume.snapshot();return{identity:s.identity,particles:Array.from(s.particles),bodies:Array.from(s.bodies),indirect:Array.from(s.indirect)};});
+  for(const k of ['particles','bodies'])await fs.writeFile(path.join(out,name+'-'+k+'.f32'),Buffer.from(Float32Array.from(s[k]).buffer));await fs.writeFile(path.join(out,name+'-identity.json'),JSON.stringify({identity:s.identity,indirect:s.indirect},null,2));
+  assert.ok(s.particles.length>0&&s.particles.every(Number.isFinite));assert.ok(s.indirect[0]>0&&s.indirect[0]<=s.identity.maxSurfaceVertices&&s.indirect[0]%3===0,'Valid nonempty indirect soil surface');return s;};
+ await capture('initial');const initial=await snapshot('initial');report.initialSurfaceVertices=initial.indirect[0];
+ if(args.phase==='numerical'){
+  report.phase='soil-shader';await save();
+  report.material=await page.evaluate(async()=>{
+   const {SOIL_MATERIAL_WGSL}=await import('/experiments/hill-terrain/soil-material.mjs');const device=window.kaminosHillVolume.gpu().device;const result=device.createBuffer({size:64,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC}),read=device.createBuffer({size:64,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+   try{const code=SOIL_MATERIAL_WGSL+`@group(0) @binding(0) var<storage,read_write> result:array<vec4f>;
+    @compute @workgroup_size(1) fn test(){let Z=mat3x3f(vec3f(0.),vec3f(0.),vec3f(0.));let L=mat3x3f(0.,0.,0.,.02,0.,0.,0.,0.,0.);let elastic=soil_stress(1000.,Z,L,.01,12000.,5000.,.65);let yielding=soil_stress(100.,Z,L*5000.,.01,12000.,5000.,.65);let fluid=soil_stress(1000.,Z,L,.01,12000.,5000.,0.);result[0]=vec4f(elastic.pressure,elastic.deviator[1].x,yielding.deviator[1].x,fluid.deviator[1].x);}`;
+    const module=device.createShaderModule({code});const p=await device.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint:'test'}});const g=device.createBindGroup({layout:p.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:result}}]});const e=device.createCommandEncoder(),pass=e.beginComputePass();pass.setPipeline(p);pass.setBindGroup(0,g);pass.dispatchWorkgroups(1);pass.end();e.copyBufferToBuffer(result,0,read,0,64);device.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);return Array.from(new Float32Array(read.getMappedRange()).slice(0,4));
+   }finally{result.destroy();read.destroy();}
+  });assert.ok(Math.abs(report.material[1]-1)<1e-5);assert.ok(Math.abs(Math.SQRT2*report.material[2]-65)<1e-4);assert.equal(report.material[3],0,'Fluid-law negative control must fail soil shear retention');
+  report.phase='settling';await save();await page.evaluate(()=>window.kaminosHillVolume.advance(.15));const settled=await snapshot('settled');await capture('settled');
+  let changed=0,maxSpeed=0;for(let i=0;i<settled.particles.length;i+=36){changed=Math.max(changed,Math.hypot(...[0,1,2].map(k=>settled.particles[i+k]-initial.particles[i+k])));maxSpeed=Math.max(maxSpeed,Math.hypot(...settled.particles.slice(i+4,i+7)));}assert.ok(changed>.001);report.settling={maxDisplacement:changed,maxSpeed};
+  report.phase='impulse';await save();await page.getByRole('button',{name:'Push material',exact:true}).click();await page.evaluate(()=>window.kaminosHillVolume.advance(.10));await snapshot('pushed');await capture('pushed');
+  report.phase='joint-release';await save();await page.getByRole('button',{name:'Release selected joint',exact:true}).click();await page.evaluate(()=>window.kaminosHillVolume.advance(.15));const released=await snapshot('released');report.releasedDisplacement=Math.hypot(...[0,1,2].map(k=>released.bodies[7*40+k]-settled.bodies[7*40+k]));assert.ok(report.releasedDisplacement>1e-5);await capture('released');
+  report.phase='growth';await save();await page.getByLabel('Prescribed growth',{exact:true}).check();await page.evaluate(()=>window.kaminosHillVolume.advance(.15));await snapshot('grown');await capture('grown');assert.ok((await read()).gpu.drive.height>0);
+  report.phase='weather';await save();report.weathered=await page.evaluate(()=>window.kaminosHillVolume.weather());await snapshot('weathered');await capture('weathered');assert.ok(report.weathered.weathering.lostMass>0);assert.ok(report.weathered.gpu.particleCount>initial.particles.length/36);
+  report.phase='reconstruction';await save();const recipe=await page.evaluate(()=>window.kaminosHillVolume.recipe());await page.evaluate(async recipe=>{await window.kaminosWorkbenchExperiments.close();await window.kaminosWorkbenchExperiments.open('hill-volume',recipe);},recipe);await page.waitForFunction(()=>window.kaminosHillVolume?.read().initialized||window.kaminosHillVolume?.read().error);assert.equal((await read()).error,null);await capture('reopened');
+ }
+ report.final=await read();report.phase='dispose';await save();await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());assert.equal(await page.evaluate(()=>Boolean(window.kaminosHillVolume)),false);assert.equal(report.errors.length,0,'No hidden page or GPU errors');report.status='passed';report.phase='complete';
+}catch(e){report.status='failed';report.error=e.stack??String(e);process.exitCode=1;}
+finally{if(context){try{await context.close();report.closed=true;}catch(e){report.cleanupError=String(e);report.status='failed';process.exitCode=1;}}await save();console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,out,closed:report.closed}));}

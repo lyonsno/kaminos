@@ -3,7 +3,7 @@ import {SOIL_MATERIAL_WGSL} from './soil-material.mjs';
 // (vendor/splash-mls-mpm). SI mass/volume, frictional stress and reciprocal rigid
 // impulses are specimen-specific. Grid entries hold momentum, then velocity.
 export const VOLUME_KERNELS=SOIL_MATERIAL_WGSL+`
-struct Particle { p:vec4f, v:vec4f, C:mat3x3f, stress:mat3x3f, meta:vec4f }
+struct Particle { p:vec4f, v:vec4f, C:mat3x3f, stress:mat3x3f, memory:vec4f }
 struct Cell { x:atomic<i32>, y:atomic<i32>, z:atomic<i32>, mass:atomic<i32> }
 struct Body { p:vec4f,q:vec4f,v:vec4f,w:vec4f,i0:vec4f,i1:vec4f,i2:vec4f,shape:vec4u,size:vec4f,rest:vec4f }
 struct Triangle { a:vec4f,b:vec4f,c:vec4f }
@@ -64,7 +64,7 @@ fn contact_velocity(point:vec3f,velocity:vec3f,mass:f32,margin:f32)->vec3f{
 @compute @workgroup_size(64) fn p2g(@builtin(global_invocation_id) id:vec3u){
  if(id.x>=arrayLength(&particles)){return;}let p=particles[id.x];let X=(p.p.xyz-cfg.origin.xyz)/cfg.origin.w;
  let base=vec3i(floor(X-.5));let f=X-vec3f(base)-vec3f(1.);let W=weights(f);let h=cfg.origin.w;
- let stress=p.stress-mat3x3f(p.meta.x,0.,0.,0.,p.meta.x,0.,0.,0.,p.meta.x);
+ let stress=p.stress-mat3x3f(p.memory.x,0.,0.,0.,p.memory.x,0.,0.,0.,p.memory.x);
  let affine=p.p.w*p.C-cfg.forces.x*p.v.w*4./(h*h)*stress;
  for(var x=0;x<3;x++){for(var y=0;y<3;y++){for(var z=0;z<3;z++){
   let node=base+vec3i(x,y,z);if(!valid(node)){continue;}let weight=W[x].x*W[y].y*W[z].z;
@@ -93,7 +93,7 @@ fn contact_velocity(point:vec3f,velocity:vec3f,mass:f32,margin:f32)->vec3f{
   let nv=vec3f(f32(atomicLoad(&cells[i].x)),f32(atomicLoad(&cells[i].y)),f32(atomicLoad(&cells[i].z)))/FP;
   v+=weight*nv;let dist=(vec3f(node)-X)*h;C+=mat3x3f(nv*dist.x,nv*dist.y,nv*dist.z)*(4.*weight/(h*h));
  }}}
- let s=soil_stress(p.meta.x,p.stress,C,cfg.forces.x,cfg.material.x,cfg.material.y,cfg.material.z);p.meta.x=s.pressure;p.stress=s.deviator;p.C=C;
+ let s=soil_stress(p.memory.x,p.stress,C,cfg.forces.x,cfg.material.x,cfg.material.y,cfg.material.z);p.memory.x=s.pressure;p.stress=s.deviator;p.C=C;
  p.v=vec4f(v,p.v.w);p.p=vec4f(p.p.xyz+v*cfg.forces.x,p.p.w);
  // Particle correction closes the residual between grid contact and subcell
  // advection; its velocity impulse is also returned to the rigid body.
@@ -104,7 +104,7 @@ fn contact_velocity(point:vec3f,velocity:vec3f,mass:f32,margin:f32)->vec3f{
  let low=cfg.origin.xyz+vec3f(h*1.1);let high=cfg.origin.xyz+(vec3f(cfg.dims.xyz)-vec3f(2.1))*h;
  for(var k=0u;k<3u;k++){if(p.p[k]<low[k]){p.p[k]=low[k];p.v[k]=max(0.,p.v[k]);}if(p.p[k]>high[k]){p.p[k]=high[k];p.v[k]=min(0.,p.v[k]);}}
  // Retained local compaction/work memory is state, independent of pigment.
- p.meta.y+=cfg.forces.x*max(0.,-(C[0].x+C[1].y+C[2].z));particles[id.x]=p;
+ p.memory.y+=cfg.forces.x*max(0.,-(C[0].x+C[1].y+C[2].z));particles[id.x]=p;
 }
 @compute @workgroup_size(1) fn rigid(){
  for(var i=0u;i<arrayLength(&bodies);i++){
@@ -121,7 +121,7 @@ fn contact_velocity(point:vec3f,velocity:vec3f,mass:f32,margin:f32)->vec3f{
   b.p=vec4f(b.p.xyz+b.v.xyz*dt,b.p.w);let q=b.q;b.q=normalize(q+vec4f(cross(b.w.xyz,q.xyz)+q.w*b.w.xyz,-dot(b.w.xyz,q.xyz))*(dt*.5));
   // Known convex fixture: vertex/face contact against anchored source solids.
   // This does not claim general edge/edge or free-body pile contact.
-  for(var pass=0u;pass<3u;pass++){
+  for(var iteration=0u;iteration<3u;iteration++){
    var deepest=0.;var normal=vec3f(0,1,0);var arm=vec3f(0.);
    for(var j=0u;j<b.shape.w;j++){let tri=triangles[b.shape.z+j];let verts=array<vec3f,3>(tri.a.xyz,tri.b.xyz,tri.c.xyz);
     for(var k=0u;k<3u;k++){let r=rot(b.q,verts[k]);let point=b.p.xyz+r;
