@@ -44,7 +44,7 @@ export function authoredMlsSetup(records,options={}){
  const originWorld=bounds.min.map(v=>v-2*cell);
  const solver={particleCount:capacity||options.particleCount||12000,cellSize:cell,gridSize,originWorld,
   maxSubstepsPerBatch:options.maxSubstepsPerBatch??12,maxBacklogSeconds:options.maxBacklogSeconds??(24/240),
-  boundaryWalls:sampling.container!==null,obstacle:null,trackPopulation:true};
+  boundaryWalls:sampling.container!==null,obstacle:null,trackPopulation:options.trackPopulation??true};
  const config=mlsConfig(solver),initialParticles=new Float32Array(initialCount*20);let slot=0;
  for(const d of drops){
   const rotation=new Euler(...d.record.transform.rotation),origin=new Vector3(...d.record.transform.position);

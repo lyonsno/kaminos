@@ -1,3 +1,4 @@
+import {presentedMlsDomain} from './mls-presentation-frame.mjs';
 const cameraStruct=`struct Camera{view:mat4x4f,projection:mat4x4f,inverseProjection:mat4x4f,inverseView:mat4x4f,domain:vec4f,params:vec4f}
 @group(0) @binding(0) var<uniform> camera:Camera;`;
 const quad=`@vertex fn quad(@builtin(vertex_index) id:u32)->@builtin(position) vec4f{
@@ -96,16 +97,16 @@ export async function createMlsJuiceRenderer({device,solver,hostEnvironment=fals
     let depth,depthTest,thick,ping,filtered,depthView,depthTestView,thickView,pingView,filteredView,smoothGroup0,smoothGroup1;
     let lastSurfaceKey='',cachedSurfacePassesReused=0;
     return {
-      encode({encoder,hostCamera,environment=null,sceneColor,sceneDepth,target,width:fullWidth,height:fullHeight,beforeComposite=null,afterComposite=null}){
+      encode({encoder,hostCamera,environment=null,sceneColor,sceneDepth,target,width:fullWidth,height:fullHeight,beforeComposite=null,afterComposite=null,presentationFrame=null}){
         const w=Math.ceil(fullWidth*.7),h=Math.ceil(fullHeight*.7);
         if(w!==width||h!==height){for(const t of resources)t.destroy();resources.length=0;width=w;height=h;
           depth=texture('r32float');depthTest=texture('depth32float');thick=texture('r16float');ping=texture('r32float');filtered=texture('r32float');
           depthView=depth.createView();depthTestView=depthTest.createView();thickView=thick.createView();pingView=ping.createView();filteredView=filtered.createView();
           smoothGroup0=group(smoothing[0],[depthView]);smoothGroup1=group(smoothing[1],[pingView]);
           lastSurfaceKey='';}
-        const c=solver.config;hostCamera.updateMatrixWorld();
+        const c=solver.config,presented=presentedMlsDomain(c,presentationFrame);hostCamera.updateMatrixWorld();
         const cameraData=new Float32Array([...hostCamera.matrixWorldInverse.elements,...hostCamera.projectionMatrix.elements,
-          ...hostCamera.projectionMatrixInverse.elements,...hostCamera.matrixWorld.elements,...c.min,c.cell,width,height,c.particleRadius,hostCamera.far]);
+          ...hostCamera.projectionMatrixInverse.elements,...hostCamera.matrixWorld.elements,...presented.min,presented.cell,width,height,presented.particleRadius,hostCamera.far]);
         const solverStep=solver.read?.()?.clock?.step??-1;
         const surfaceKey=solverStep>=0?`${solverStep}:${cameraData.join(',')}`:'';
         function draw(pipeline,bind,view,clearValue,instances=1,test=null){

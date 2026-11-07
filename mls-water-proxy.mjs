@@ -1,3 +1,4 @@
+import {checkedMlsPresentationFrame,presentedMlsDomain} from './mls-presentation-frame.mjs';
 // Adapter for the shared proxy consumer. These are particle samples with an
 // explicit placeholder normal, not a reconstructed fluid interface claim.
 export async function createMlsWaterProxy(device,solver){
@@ -21,13 +22,13 @@ export async function createMlsWaterProxy(device,solver){
    }`});
   const pipeline=await device.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint:'proxy'}});
   const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[solver.particles,records,counters,world].map((buffer,binding)=>({binding,resource:{buffer}}))});
-  let tick=-1;
-  return {descriptor(){const step=solver.read().clock.step;if(step!==tick){
+  let tick=-1,frame=checkedMlsPresentationFrame();
+  return {setPresentationFrame(value){const next=checkedMlsPresentationFrame(value);if(JSON.stringify(next)===JSON.stringify(frame))return;frame=next;const p=presentedMlsDomain(c,frame);device.queue.writeBuffer(world,0,new Float32Array([...p.min,p.cell,c.modelSecondsPerSecond,p.particleRadius,0,0]));tick=-1;},descriptor(){const step=solver.read().clock.step;if(step!==tick){
     const encoder=device.createCommandEncoder({label:'MLS shared particle proxy'});encoder.clearBuffer(counters);
     const pass=encoder.beginComputePass();pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.ceil(c.capacity/64));pass.end();device.queue.submit([encoder.finish()]);tick=step;
    }
    return {schema:'kaminos.mls-particle-proxy.v1',device,recordsBuffer:records,countersBuffer:counters,capacity:c.capacity,recordFloats:20,recordBytes:80,counterBytes:16,activeCountCounterIndex:0,
-    fields:{positionId:0,velocityConfidence:4,normalCurvature:8,thicknessContactWetnessMaterial:12,stabilityAgeSource:16},visibleParticleRadius:c.particleRadius,writeTick:step,stepSeconds:c.dt,writeStage:'mls-particle-proxy-normal-up'};
+    fields:{positionId:0,velocityConfidence:4,normalCurvature:8,thicknessContactWetnessMaterial:12,stabilityAgeSource:16},visibleParticleRadius:c.particleRadius*frame.scale,writeTick:step,stepSeconds:c.dt,writeStage:'mls-particle-proxy-normal-up'};
   },dispose(){for(const b of owned)b.destroy();}};
  }catch(error){for(const b of owned)b.destroy();throw error;}
 }

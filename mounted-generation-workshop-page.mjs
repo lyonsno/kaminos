@@ -5,7 +5,7 @@ import {createProceduralMesh} from './scene-geometry.mjs';
 
 // One retained native scene session; the application continues owning the view,
 // renderer, inference and document. There are no simulation/readback operations.
-export function installMountedGenerationWorkshop({document,THREE,mergeGeometries,loadGlb,host,camera,readView,selection,setSelection,find,applyMaterials,warm,mounted=()=>{},changed=()=>{},redraw}) {
+export function installMountedGenerationWorkshop({document,THREE,mergeGeometries,loadGlb,host,camera,readView,selection,setSelection,find,applyMaterials,warm,mounted=()=>{},prepareParts=async()=>null,changed=()=>{},redraw}) {
  const ids=new Set();let handles=[],savedSelection=null,memberOwner=null;
  const card=document.createElement('div');card.id='mounted-generation-workshop';card.hidden=true;
  card.style.cssText='position:absolute;z-index:12;top:82px;right:18px;display:flex;gap:12px;align-items:center;padding:9px 12px;border:1px solid #646260;border-radius:8px;background:#202528ed;color:#ead5ad;pointer-events:auto;font:14px system-ui';
@@ -15,8 +15,8 @@ export function installMountedGenerationWorkshop({document,THREE,mergeGeometries
  function update(state){card.hidden=!state.wanted&&['unprepared','preparing','closed','disposed'].includes(state.phase);card.style.display=card.hidden?'none':'flex';status.textContent=state.error?`Workshop unavailable · ${state.error}`:state.phase==='preparing'||state.phase==='unprepared'?'Preparing workshop…':'Generation workshop';changed(state);redraw();}
  const controller=createMountedGenerationWorkshop({onFrame:callback=>host.onFrame(callback),changed:update,
   async acquire({signal}){
-   const session=host.open();const acquired=[],materials=new Map(),frame=new THREE.Group();let placed=false;
-   const release=async()=>{memberOwner=null;for(const h of acquired)ids.delete(h.id);await session.dispose();for(const h of acquired)h.root.removeFromParent();frame.removeFromParent();};
+   const session=host.open();const acquired=[],materials=new Map(),frame=new THREE.Group();let placed=false,parts=null;
+   const release=async()=>{await parts?.dispose();memberOwner=null;for(const h of acquired)ids.delete(h.id);await session.dispose();for(const h of acquired)h.root.removeFromParent();frame.removeFromParent();};
    try{
     const response=await fetch('./assets/workshop/cold-stage.json',{signal});if(!response.ok)throw Error(`Workshop manifest ${response.status}`);
     const recipe=await response.json();if(recipe.schema!=='kaminos.mounted-workshop.v1'||!Array.isArray(recipe.objects))throw Error('Unsupported workshop manifest');
@@ -47,6 +47,7 @@ export function installMountedGenerationWorkshop({document,THREE,mergeGeometries
      const handle=await session.attach(root,{owned:true,metadata:{...metadata,collision:null}});ids.add(handle.id);acquired.push(handle);
      frame.add(root);await warm([root]);signal.throwIfAborted();root.visible=controller.read().amount>0;return handle;
     };
+    parts=await prepareParts();signal.throwIfAborted();
     function restoreSelection(){if(!savedSelection)return;const previous=savedSelection;savedSelection=null;const available=previous.ids.filter(id=>find(id));setSelection(available,available.includes(previous.activeId)?previous.activeId:available.at(-1)??null);}
     return {get ids(){return acquired.map(h=>h.id);},
      place(){

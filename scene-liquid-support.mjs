@@ -1,10 +1,13 @@
 import {Vector3,Euler,Quaternion,Matrix4} from './lib/three.core.js';
 import {checkedGeometry} from './scene-geometry.mjs';
+import {STAGE_MOLD_SOURCE,checkedStageMold,stageMoldField,stageMoldDistance,stageMoldNormal} from './stage-mold.mjs';
 export const SCENE_LIQUID_SUPPORT_ROUTE='kaminos/fluid/authored-primitive-support-v0';
-export const canCollideWithWater=record=>record?.type==='procedural-mesh'&&['plane','sphere','bowl','box'].includes(record.geometry?.kind);
+export const canCollideWithWater=record=>record?.type==='procedural-mesh'&&['plane','sphere','bowl','box'].includes(record.geometry?.kind)||record?.source===STAGE_MOLD_SOURCE;
 export function sceneLiquidCollider(record) {
- if(!canCollideWithWater(record)||record.waterCollision===false)return null;
- const {kind,parameters:p}=checkedGeometry(record.geometry);
+ if(record?.waterCollision===false)return null;
+ const mold=record?.source===STAGE_MOLD_SOURCE;
+ if(!mold&&(record?.type!=='procedural-mesh'||!['plane','sphere','bowl','box'].includes(record.geometry?.kind)))return null;
+ const {kind,parameters:p}=mold?{kind:'stage-mold',parameters:checkedStageMold(record.stageMold??record.object?.userData.kaminosStageMold)}:checkedGeometry(record.geometry);
  let world;
  if(record.object){record.object.updateWorldMatrix(true,false);world=record.object.matrixWorld;}
  else world=new Matrix4().compose(new Vector3(...record.transform.position),new Quaternion().setFromEuler(new Euler(...record.transform.rotation)),new Vector3(...record.transform.scale));
@@ -18,7 +21,8 @@ export function sceneLiquidCollider(record) {
 export function sceneLiquidDistance(c,world) {
  const v=world.map((x,i)=>(x-c.position[i])/c.scale),q=c.axes.map(a=>a.reduce((s,x,i)=>s+x*v[i],0));
  const r=Math.hypot(...q),radial=r>1e-10?q.map(v=>v/r):[0,1,0];let distance,normal;
- if(c.kind==='box'){
+ if(c.kind==='stage-mold'){distance=stageMoldDistance(c.parameters,q);normal=stageMoldNormal(c.parameters,q);}
+ else if(c.kind==='box'){
   const delta=q.map((v,i)=>Math.abs(v)-[c.parameters.width,c.parameters.height,c.parameters.depth][i]/2),outside=delta.map(v=>Math.max(0,v)),length=Math.hypot(...outside);
   distance=length+Math.min(Math.max(...delta),0);
   if(length>0)normal=outside.map((v,i)=>v/length*(q[i]<0?-1:1));
@@ -37,9 +41,19 @@ export function sceneLiquidDistance(c,world) {
 export function packSceneLiquidColliders(colliders) {
  const result=new Float32Array(colliders.length*20);
  colliders.forEach((c,i)=>result.set([
-  ['sphere','plane','bowl','box'].indexOf(c.kind),c.parameters.radius??0,c.parameters.width??0,c.parameters.depth??0,
-  ...c.position,c.scale,...c.axes[0],c.parameters.thickness??0,...c.axes[1],c.parameters.height??0,...c.axes[2],0,
+  ['sphere','plane','bowl','box','stage-mold'].indexOf(c.kind),c.parameters.wallHeight??c.parameters.radius??0,c.parameters.rows?c.parameters.rows[0].length*c.parameters.pitch:c.parameters.width??0,c.parameters.rows?c.parameters.rows.length*c.parameters.pitch:c.parameters.depth??0,
+  ...c.position,c.scale,...c.axes[0],c.parameters.baseThickness??c.parameters.thickness??0,...c.axes[1],c.rasterOffset??c.parameters.height??0,...c.axes[2],c.parameters.pitch??0,
  ],i*20));return result;
+}
+export function packSceneLiquidTexture(colliders){
+ const molds=colliders.filter(c=>c.kind==='stage-mold');
+ const width=Math.max(5,...molds.map(c=>c.parameters.rows[0].length));
+ let height=Math.max(1,colliders.length);
+ const packed=colliders.map(c=>{if(c.kind!=='stage-mold')return c;const row={...c,rasterOffset:height};height+=c.parameters.rows.length;return row;});
+ const data=new Float32Array(width*height*4),headers=packSceneLiquidColliders(packed);
+ packed.forEach((c,i)=>{data.set(headers.subarray(i*20,i*20+20),i*width*4);if(c.kind==='stage-mold'){
+  const field=stageMoldField(c.parameters);for(let z=0;z<field.height;z++)for(let x=0;x<field.width;x++)data[((c.rasterOffset+z)*width+x)*4]=field.data[z*field.width+x];
+ }});return {width,height,data};
 }
 export function createSceneLiquidSupport(device,records=[]) {
  let texture=null,view=null,key=null,ids=[],generation=0,disposed=false;
@@ -47,10 +61,9 @@ export function createSceneLiquidSupport(device,records=[]) {
  function update(records){
   if(disposed)throw Error('Scene water support disposed');
   const colliders=records.flatMap(record=>[record,...(record.object?.children??[]).filter(object=>object.userData.kaminosRepetitionCopy).map((object,i)=>({...record,id:record.id+'@repetition:'+i,object}))]).map(sceneLiquidCollider).filter(Boolean),next=JSON.stringify(colliders);if(next===key)return false;
-  const height=Math.max(1,colliders.length);if(height>device.limits.maxTextureDimension2D)throw Error('Scene water colliders exceed the device texture extent');
-  const data=packSceneLiquidColliders(colliders);
-  if(!texture||texture.height!==height){const previous=texture;texture=device.createTexture({label:SCENE_LIQUID_SUPPORT_ROUTE,size:[5,height,1],format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});view=texture.createView({dimension:'2d-array'});previous?.destroy();}
-  device.queue.writeTexture({texture},colliders.length?data:new Float32Array(20),{bytesPerRow:80,rowsPerImage:height},[5,height,1]);
+  const {width,height,data}=packSceneLiquidTexture(colliders);if(Math.max(width,height)>device.limits.maxTextureDimension2D)throw Error('Scene water colliders exceed the device texture extent');
+  if(!texture||texture.width!==width||texture.height!==height){const previous=texture;texture=device.createTexture({label:SCENE_LIQUID_SUPPORT_ROUTE,size:[width,height,1],format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});view=texture.createView({dimension:'2d-array'});previous?.destroy();}
+  device.queue.writeTexture({texture},data,{bytesPerRow:width*16,rowsPerImage:height},[width,height,1]);
   device.queue.writeBuffer(paramsBuffer,0,new Uint32Array([colliders.length,0,0,0]));
   ids=colliders.map(c=>c.id);key=next;generation++;return true;
  }
@@ -63,17 +76,37 @@ export const SCENE_LIQUID_SUPPORT_BINDINGS_WGSL=`
 `;
 export const SCENE_LIQUID_COLLIDER_WGSL=`
 const analyticObstacleSupportEnabled: bool = false;
+fn moldBox2(p:vec2<f32>,half:vec2<f32>)->f32{let a=abs(p)-half;return min(max(a.x,a.y),0.0)+length(max(a,vec2<f32>(0)));}
+fn moldExtrude(d:f32,y:f32,lo:f32,hi:f32)->f32{let b=abs(y-(hi+lo)*.5)-(hi-lo)*.5;return min(max(d,b),0.0)+length(max(vec2<f32>(d,b),vec2<f32>(0)));}
+fn moldDistance(q:vec3<f32>,kind:vec4<f32>,base:f32,offset:i32,pitch:f32)->f32{
+ let dims=vec2<i32>(round(kind.zw/pitch));
+ let uv=clamp((q.xz+kind.zw*.5)/pitch-.5,vec2<f32>(0),vec2<f32>(dims-vec2<i32>(1)));
+ let a=vec2<i32>(floor(uv));let b=min(a+vec2<i32>(1),dims-vec2<i32>(1));let t=fract(uv);
+ let d00=textureLoad(sceneSupportSamples,vec2<i32>(a.x,a.y+offset),0,0).x;
+ let d10=textureLoad(sceneSupportSamples,vec2<i32>(b.x,a.y+offset),0,0).x;
+ let d01=textureLoad(sceneSupportSamples,vec2<i32>(a.x,b.y+offset),0,0).x;
+ let d11=textureLoad(sceneSupportSamples,vec2<i32>(b.x,b.y+offset),0,0).x;
+ let sd=mix(mix(d00,d10,t.x),mix(d01,d11,t.x),t.y);
+ let edge=moldBox2(q.xz,kind.zw*.5);
+ return min(moldExtrude(max(sd,edge),q.y,0.0,kind.y),moldExtrude(edge,q.y,-base,0.0));
+}
+
 fn sceneColliderFrame(p:vec3<f32>,i:u32)->vec4<f32>{
  let kind=textureLoad(sceneSupportSamples,vec2<i32>(0,i32(i)),0,0);
  let pose=textureLoad(sceneSupportSamples,vec2<i32>(1,i32(i)),0,0);
  let ax=textureLoad(sceneSupportSamples,vec2<i32>(2,i32(i)),0,0);
- let heightAxis=textureLoad(sceneSupportSamples,vec2<i32>(3,i32(i)),0,0);let ay=heightAxis.xyz;
- let az=textureLoad(sceneSupportSamples,vec2<i32>(4,i32(i)),0,0).xyz;
+ let ayData=textureLoad(sceneSupportSamples,vec2<i32>(3,i32(i)),0,0);let ay=ayData.xyz;
+ let azData=textureLoad(sceneSupportSamples,vec2<i32>(4,i32(i)),0,0);let az=azData.xyz;
  let v=(p-pose.xyz)/pose.w;let q=vec3<f32>(dot(v,ax.xyz),dot(v,ay),dot(v,az));
  let r=length(q);var n=vec3<f32>(0,1,0);if(r>1e-10){n=q/r;}
  var d=r-kind.y;
- if(kind.x>2.5){
-  let delta=abs(q)-vec3<f32>(kind.z,heightAxis.w,kind.w)*.5;let outside=max(delta,vec3<f32>(0));let len=length(outside);
+ if(kind.x>3.5){
+   let e=azData.w*.25;let off=i32(ayData.w);d=moldDistance(q,kind,ax.w,off,azData.w);
+   let ex=vec3<f32>(e,0,0);let ey=vec3<f32>(0,e,0);let ez=vec3<f32>(0,0,e);
+   let g=vec3<f32>(moldDistance(q+ex,kind,ax.w,off,azData.w)-moldDistance(q-ex,kind,ax.w,off,azData.w),moldDistance(q+ey,kind,ax.w,off,azData.w)-moldDistance(q-ey,kind,ax.w,off,azData.w),moldDistance(q+ez,kind,ax.w,off,azData.w)-moldDistance(q-ez,kind,ax.w,off,azData.w));
+   n=vec3<f32>(0,1,0);if(length(g)>azData.w*1e-5){n=normalize(g);}
+ }else if(kind.x>2.5){
+  let delta=abs(q)-vec3<f32>(kind.z,ayData.w,kind.w)*.5;let outside=max(delta,vec3<f32>(0));let len=length(outside);
   d=len+min(max(max(delta.x,delta.y),delta.z),0.0);
   let direction=select(vec3<f32>(1),vec3<f32>(-1),q<vec3<f32>(0));
   if(len>0.0){n=direction*outside/len;}

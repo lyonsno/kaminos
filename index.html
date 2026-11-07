@@ -3535,6 +3535,7 @@ import {createMountedWorkshopMembership} from './mounted-workshop-membership.mjs
 import {createMountedGenerationPrompt} from './mounted-generation-prompt.mjs';
 import {installGenerationFlame} from './authoring-generation-flame.mjs';
 import {installMountedGenerationWorkshop} from './mounted-generation-workshop-page.mjs';
+import {installMountedWorkshopWater} from './mounted-workshop-water-page.mjs';
 import {createWorkbenchFrameService,createWorkbenchSceneHost,disposeOwnedSceneTree} from './workbench-scene-host.mjs';
 import { checkedSceneLightRecord } from './scene-spot-light.mjs';
 
@@ -4436,7 +4437,8 @@ function createPageSceneDocumentSession(options = {}) {
 }
 const sceneDocument = createPageSceneDocumentSession();
 
-const waterFeature = createAuthoredWaterFeature({
+let waterFeature;
+const sceneWaterFeature = createAuthoredWaterFeature({
   services:()=>({renderer,scene,camera,pipeline:renderPipeline,device:sharedGpu?.device,
     readColliders:()=>workingScene.objects,redraw:()=>window._kaminosDirty?.(),
     getDisplayPolicy:()=>getLocalLiquidDisplayPolicy?.(),decorateOutput:output=>selectionFeedback.output(output)}),
@@ -4449,6 +4451,7 @@ const waterFeature = createAuthoredWaterFeature({
   refresh:()=>{authoredWaterControls?.refresh();refreshLocalLiquidPerformance();if(!waterFeature.host)sharedWorkbench?.update({source:waterFeature.setup?'Authored water sources':'Shared scene',status:waterFeature.setup?'Initial preview':'No water',clock:waterFeature.setup?'Release starts water':''});window._kaminosDirty?.();},
   report:setInfo,
 });
+waterFeature=sceneWaterFeature;
 const simFrameCoordinator = createSimFrameCoordinator();
 window.kaminosSimFrameCoordinator = () => simFrameCoordinator.read();
 
@@ -7351,7 +7354,7 @@ function handleViewportDoubleClick(event) {
 }
 
 function localLiquidEmitterRecords() {
-  return workingScene.objects.filter(entry => entry.type === LOCAL_LIQUID_EMITTER_TYPE).map(entry => ({
+  return workingScene.objects.filter(entry => entry.type === LOCAL_LIQUID_EMITTER_TYPE && (waterFeature!==sceneWaterFeature||!generationWorkshop?.owns(entry.id))).map(entry => ({
     id: entry.id,
     label: sceneObjectDisplayLabel(entry),
     type: entry.type,
@@ -12331,6 +12334,7 @@ async function initScene() {
     readView:()=>({position:camera.position.toArray(),target:controls.target.toArray(),fov:camera.fov,zoom:camera.zoom}),
     selection:()=>workingScene.selection,setSelection:setSceneSelection,find:id=>workingScene.objects.some(row=>row.id===id)||workingScene.groups.some(row=>'@group:'+row.id===id),
     changed:()=>renderSceneObjectList(),applyMaterials:applyMaterialStateToObject,mounted:(handle,instance)=>{if(instance)proceduralMeshes.set(handle.id,instance);},redraw:()=>window._kaminosDirty?.(),
+    prepareParts:async()=>{const water=await installMountedWorkshopWater({document,workshop:generationWorkshop,camera,onFrame:workbenchSceneFrames.onFrame,objects:()=>workingScene.objects,ordinaryFeature:sceneWaterFeature,selectFeature:feature=>{waterFeature=feature;window._kaminosDirty?.();},editSource:applyAuthoredWaterSettings,commitEdits:()=>window.kaminosWaterSources.commitEdits(),select:window.selectSceneObject,services:()=>({renderer,scene,camera,pipeline:renderPipeline,device:sharedGpu.device,redraw:()=>window._kaminosDirty?.(),getDisplayPolicy:()=>getLocalLiquidDisplayPolicy(),decorateOutput:output=>selectionFeedback.output(output),subscribeEdits:listener=>scenePlacementTools.edits.subscribe(listener)})});window.kaminosMountedWorkshopWater=water;return water;},
     warm:roots=>sceneLightingPreparation.withRenderer(async()=>{try{for(const root of roots)root.visible=true;await renderer.compileAsync(scene,camera);}finally{for(const root of roots)root.visible=false;}}),
   });
   window.kaminosGenerationWorkshop=generationWorkshop;
@@ -27065,7 +27069,7 @@ function buildSceneData(capture = null) {
     provenance,
     composition: activeSceneComposition,
     fireSettings: activeSceneComposition ? readVolumeSettingsValues() : null,
-    localLiquid: waterFeature.setup,
+    localLiquid: sceneWaterFeature.setup,
     capture,
     cameraViews:cameraViews?.read(),
     sceneCamera:sceneCameras?.read().settings,

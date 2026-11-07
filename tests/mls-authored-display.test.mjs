@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {checkedMlsPresentationFrame} from '../mls-presentation-frame.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -12,7 +13,7 @@ const decorateOutput=node=>({decorated:node});
 const renderer={backend:{get:()=>({texture:{createView:()=>({})}})},getRenderTarget:()=>target,setRenderTarget:t=>{target=t;},getRenderObjectFunction:()=>null,setRenderObjectFunction(){},getClearColor:()=>({}),getClearAlpha:()=>1,setClearColor(){},getDrawingBufferSize:()=>({x:100,y:100}),initRenderTarget(){},render(){},copyTextureToTexture(){}};
 const solver={config:{},read:()=>({clock:{step:0}}),setPacket(){},setSceneColliders(){},advance(){},dispose(){}};
 const device={addEventListener(){},removeEventListener(){},lost:new Promise(()=>{}),createCommandEncoder:()=>({finish:()=>({})}),queue:{submit(){}}};renderer.backend.device=device;
-const context={THREE,texture:()=>linear,positionView:{z:{negate:()=>0}},vec4:()=>({}),createSceneEmissiveCamera:()=>display,applySceneEmissiveCamera:(p,o,m,e)=>{p.outputNode=e?m:o;p.outputColorTransform=!e;},
+const context={checkedMlsPresentationFrame,THREE,texture:()=>linear,positionView:{z:{negate:()=>0}},vec4:()=>({}),createSceneEmissiveCamera:()=>display,applySceneEmissiveCamera:(p,o,m,e)=>{p.outputNode=e?m:o;p.outputColorTransform=!e;},
  createMlsJuiceSolver:async()=>solver,createMlsJuiceRenderer:async()=>({encode(){},read:()=>({}),dispose(){}}),createMlsWaterProxy:async()=>({dispose(){}}),
  createFluidSceneEnvironment:()=>({render(){},view:()=>({}),state:()=>({}),dispose(){}}),localLiquidPresentationPlan:()=>({}),MLS_ROUTE:'mls',MLS_SOURCE:'test',structuredClone,WeakMap,uniform(){},vec3(){},float(){},Fn(){},agxToneMapping(){}};
 vm.createContext(context);

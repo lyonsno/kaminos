@@ -1,3 +1,4 @@
+import {checkedMlsPresentationFrame} from './mls-presentation-frame.mjs';
 import * as THREE from './lib/three.webgpu.js';
 import {texture,vec4,positionView} from './lib/three.tsl.js';
 import {createFluidSceneEnvironment} from './fluid-scene-environment.mjs';
@@ -22,16 +23,18 @@ export async function createAuthoredMlsHost({renderer,scene,camera,pipeline,devi
  const depth=new THREE.RenderTarget(1,1,{type:THREE.FloatType,format:THREE.RedFormat,depthBuffer:true,minFilter:THREE.NearestFilter,magFilter:THREE.NearestFilter});
  const depthMaterial=new THREE.NodeMaterial();depthMaterial.fragmentNode=vec4(positionView.z.negate(),0,0,1);depthMaterial.blending=THREE.NoBlending;depthMaterial.toneMapped=false;
  const scenePasses=createLocalLiquidScenePasses({renderer,composedOutput:texture(output.texture),getDisplayPolicy,decorateOutput});
+ let presentationFrame=checkedMlsPresentationFrame();
  let frameCount=0,paused=false,disposed=false,failure=null,lastFrame=null,mode='full',sourceGeneration=1,records=structuredClone(emitters),pendingSetup=structuredClone(setup),proxyStepEvery=1;
  const gpuError=event=>{failure=event.error?.message??'MLS GPU error';};device.addEventListener('uncapturederror',gpuError);
  device.lost.then(info=>{if(!disposed)failure=info.message||'MLS device lost';});
  const native=target=>renderer.backend.get(target.texture).texture.createView();
  function publishInlets(){solver.setPacket(makePacket(records,Date.now(),sourceGeneration));}
  const state=()=>({requestedRoute:MLS_ROUTE,effectiveRoute:frameCount&&!failure?MLS_ROUTE:null,source:MLS_SOURCE,registered:true,mounted:!disposed,mode:initial.mode,sourceIds:[...new Set([...initial.sourceIds,...records.filter(r=>r.localLiquidEmitter.mode!=='finite_drop').map(r=>r.id)])],sourceGeneration,
-  frameCount,paused,presentation:mode,failure,lastFrame,clock:{...solver.read().clock,paused},setup:structuredClone(pendingSetup),solver:{...solver.read(),stepCount:solver.read().clock.step},surface:surface.read(),
+  frameCount,paused,presentationFrame:structuredClone(presentationFrame),presentation:mode,failure,lastFrame,clock:{...solver.read().clock,paused},setup:structuredClone(pendingSetup),solver:{...solver.read(),stepCount:solver.read().clock.step},surface:surface.read(),
   pendingSourceChanges:(initial.mode==='finite_drop'&&records.some(r=>r.localLiquidEmitter.mode==='continuous'))||JSON.stringify(records.filter(r=>r.localLiquidEmitter.mode==='finite_drop').map(({id,type,transform,localLiquidEmitter})=>({id,type,transform,localLiquidEmitter})))!==JSON.stringify(initial.sourceRecords.filter(r=>r.localLiquidEmitter.mode==='finite_drop'))||JSON.stringify(setup)!==JSON.stringify(pendingSetup),
   ...scenePasses.state(),...environment.state(),fallbackRoute:null});
  return {supportsVolumeTransport:true,get paused(){return paused;},get presentation(){return mode;},get proxyStepEvery(){return proxyStepEvery;},
+  setPresentationFrame(value){presentationFrame=checkedMlsPresentationFrame(value);proxy.setPresentationFrame?.(presentationFrame);return structuredClone(presentationFrame);},
   setPresentation(value){localLiquidPresentationPlan(value);mode=value;return mode;},
   setProxyStepEvery(value){if(!Number.isSafeInteger(value)||value<1)throw Error('Proxy step interval must be a positive integer');proxyStepEvery=value;return value;},
   setPaused(value){paused=Boolean(value);solver.setPaused(paused);return paused;},
@@ -67,7 +70,7 @@ export async function createAuthoredMlsHost({renderer,scene,camera,pipeline,devi
     scene.overrideMaterial=override;scene.background=background;renderer.setRenderObjectFunction(renderObject);renderer.setClearColor(clear,alpha);
     const encoder=device.createCommandEncoder({label:'Authored MLS shared frame'}),colorView=native(color),depthView=native(depth),outputView=native(output);
     const transport=[];
-    surface.encode({encoder,hostCamera:camera,environment:environment.view(),sceneColor:colorView,sceneDepth:depthView,target:outputView,width:size.x,height:size.y,
+    surface.encode({encoder,hostCamera:camera,presentationFrame,environment:environment.view(),sceneColor:colorView,sceneDepth:depthView,target:outputView,width:size.x,height:size.y,
      beforeComposite:({frontDepthView})=>{if(volumeTransport)transport.push(volumeTransport.encode({encoder,targetView:colorView,frontDepthView,sceneDepthView:depthView,foreground:false}));},
      afterComposite:({frontDepthView})=>{if(volumeTransport)transport.push(volumeTransport.encode({encoder,targetView:outputView,frontDepthView,sceneDepthView:depthView,foreground:true}));}});
     device.queue.submit([encoder.finish()]);renderer.setRenderTarget(target);scenePasses.presentation.render();frameCount++;
