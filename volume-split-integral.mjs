@@ -1,3 +1,4 @@
+import {HISTORY_ALLOCATION_WGSL} from './volume-history-allocation.mjs';
 // Two local optical observations, never two copies of a whole-chord integral.
 export function splitIntegralSettings(c={}) {
   const v={mode:'off',fresh:1,memory:6,opacityMemory:6,response:.5,exploration:.25,motion:1,footprint:2,depthSupport:2,...c};
@@ -35,13 +36,10 @@ override SPLIT_INTEGRAL:bool=false;
 struct SplitOptions {
  viewProj:mat4x4<f32>, size:vec4<u32>, policy:vec4<f32>, life:vec4<f32>,
  flow:vec4<f32>, worldLo:vec4<f32>, worldDims:vec4<f32>, worldMap:vec4<f32>,
- middleLo:vec4<f32>, middleDims:vec4<f32>, middleMap:vec4<f32>
+ middleLo:vec4<f32>, middleDims:vec4<f32>, middleMap:vec4<f32>, arenaOffsets:vec4<u32>
 }
 @group(3) @binding(0) var<uniform> splitOptions:SplitOptions;
-@group(3) @binding(1) var<storage,read> splitPrevious:array<SplitObservation>;
-@group(3) @binding(2) var<storage,read_write> splitCurrent:array<SplitObservation>;
-@group(3) @binding(3) var<storage,read> splitWorldFlow:array<vec4<f32>>;
-@group(3) @binding(4) var<storage,read> splitMiddleFlow:array<vec4<f32>>;
+@group(0) @binding(39) var<storage,read_write> splitArena:array<vec4<f32>>;
 ${SPLIT_OPTICAL_MATH_WGSL}
 struct SplitRay { kept:array<SplitObservation,2>, fresh:array<SplitObservation,2>, refreshSlot:i32, start:f32, end:f32 }
 fn splitProject(p:vec3<f32>)->vec3<f32>{let clip=splitOptions.viewProj*vec4<f32>(p,1);return vec3<f32>((clip.xy/clip.w*vec2<f32>(.5,-.5)+.5)*vec2<f32>(splitOptions.size.xy),clip.w);}
@@ -59,7 +57,7 @@ fn splitCoarseVelocity(p:vec3<f32>,middle:bool)->vec3<f32>{
    let c=clamp(base+vec3<i32>(x,y,z),vec3<i32>(0),vec3<i32>(dims.xyz)-1);
    let i=u32(c.x)+u32(dims.x)*(u32(c.y)+u32(dims.y)*u32(c.z));
    let w=select(1.0-f,f,vec3<bool>(x==1,y==1,z==1));
-   var v=0.0;if(middle){v=splitMiddleFlow[i][a];}else{v=splitWorldFlow[i][a];}
+   let flowOffset=select(splitOptions.arenaOffsets.z,splitOptions.arenaOffsets.w,middle);let v=splitArena[flowOffset+i][a];
    result[a]+=v*w.x*w.y*w.z;
   }}}
  }return result/map.w;
@@ -83,7 +81,7 @@ fn splitMove(s:SplitObservation)->SplitObservation{
 }
 fn splitLoad(pixel:vec2<f32>,slot:u32)->SplitObservation{
  var empty:SplitObservation;if(any(pixel<vec2<f32>(0))||any(pixel>=vec2<f32>(splitOptions.size.xy))){return empty;}
- let at=vec2<u32>(pixel);return splitPrevious[2u*(at.x+at.y*splitOptions.size.x)+slot];
+ let at=vec2<u32>(pixel);let i=splitOptions.arenaOffsets.x+3u*(2u*(at.x+at.y*splitOptions.size.x)+slot);return SplitObservation(splitArena[i],splitArena[i+1u],splitArena[i+2u]);
 }
 fn splitPull(pixel:vec2<f32>,slot:u32,ro:vec3<f32>,rd:vec3<f32>,start:f32,end:f32)->SplitObservation{
  var old=splitLoad(pixel,slot);if(old.anchor.w<=0){return old;}
@@ -140,7 +138,7 @@ fn splitFinish(r:SplitRay,pixel:u32,ro:vec3<f32>,rd:vec3<f32>)->vec4<f32>{
  }
  if(a.anchor.w<=0&&b.anchor.w>0){a=b;b=SplitObservation(vec4<f32>(0),vec4<f32>(0),vec4<f32>(0));}
  if(a.anchor.w>0&&b.anchor.w>0&&dot(a.anchor.xyz-ro,rd)>dot(b.anchor.xyz-ro,rd)){let t=a;a=b;b=t;}
- splitCurrent[2u*pixel]=a;splitCurrent[2u*pixel+1u]=b;
+ let address=splitOptions.arenaOffsets.y+6u*pixel;splitArena[address]=a.optical;splitArena[address+1u]=a.anchor;splitArena[address+2u]=a.support;splitArena[address+3u]=b.optical;splitArena[address+4u]=b.anchor;splitArena[address+5u]=b.support;
  if(a.anchor.w<=0){return vec4<f32>(0,0,0,1);}
  let da=dot(a.anchor.xyz-ro,rd);let db=dot(b.anchor.xyz-ro,rd);
  var boundary=(da+db)*.5;if(splitOptions.size.z==2u){boundary=(r.start+r.end)*.5;}
@@ -150,33 +148,38 @@ fn splitFinish(r:SplitRay,pixel:u32,ro:vec3<f32>,rd:vec3<f32>)->vec4<f32>{
 }
 `;
 
+export function splitArenaLayout(width,height,worldCells=0,middleCells=0){
+ for(const value of [width,height,worldCells,middleCells])if(!Number.isSafeInteger(value)||value<0)throw Error('Split arena dimensions must be nonnegative integers');
+ if(!width||!height)throw Error('Split arena requires a positive render target');
+ const bankBytes=width*height*96,historyBytes=bankBytes*2,flowBytes=(worldCells+middleCells)*16,bytes=historyBytes+flowBytes;
+ if(!Number.isSafeInteger(bytes)||bytes/16>=0x100000000)throw Error('Split arena exceeds u32 addressing');
+ return {bankBytes,historyBytes,flowBytes,bytes,worldOffset:historyBytes/16,middleOffset:historyBytes/16+worldCells};
+}
 export function createSplitIntegral(device) {
  const usage=GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC;
- const layout=device.createBindGroupLayout({label:'split local optical contributions',entries:[
-  {binding:0,visibility:GPUShaderStage.FRAGMENT,buffer:{type:'uniform'}},
-  {binding:1,visibility:GPUShaderStage.FRAGMENT,buffer:{type:'read-only-storage'}},
-  {binding:2,visibility:GPUShaderStage.FRAGMENT,buffer:{type:'storage'}},
-  {binding:3,visibility:GPUShaderStage.FRAGMENT,buffer:{type:'read-only-storage'}},
-  {binding:4,visibility:GPUShaderStage.FRAGMENT,buffer:{type:'read-only-storage'}}]});
+ // The ordinary Fixed-mode allocator never consumes importance history. Its
+ // existing binding39 carries the arena, keeping the composed stage at10slots.
+ const layout=device.createBindGroupLayout({label:'split optical policy',entries:[{binding:0,visibility:GPUShaderStage.FRAGMENT,buffer:{type:'uniform'}}]});
  const emptyLayout=device.createBindGroupLayout({entries:[]});
  const emptyGroup=device.createBindGroup({layout:emptyLayout,entries:[]});
  const uniform=device.createBuffer({label:'split optical transport policy',size:240,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
- const fallback=device.createBuffer({size:16,usage});
- let banks=[],key=null,index=0,frames=0,lastStep=0,config=splitIntegralSettings(),state={requested:'off',effective:'off',bytes:0};
- function retire(owned){if(!owned.length)return;
-  // encodeDraw submits synchronously before yielding. Defer the queue fence to
-  // that boundary, preserving earlier passes in the same unfinished encoder.
-  queueMicrotask(()=>{device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>owned.forEach(b=>b.destroy()));});
- }
- function disable(reason='off'){retire(banks);banks=[];key=null;frames=0;state={requested:config.mode,effective:'off',reason,bytes:0};return state;}
+ let arena=null,allocation=null,key=null,index=0,frames=0,lastStep=0,config=splitIntegralSettings(),state={requested:'off',effective:'off',bytes:0};
+ function retire(owned){if(!owned)return;queueMicrotask(()=>{device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>owned.destroy());});}
+ function disable(reason='off'){retire(arena);arena=null;allocation=null;key=null;frames=0;state={requested:config.mode,effective:'off',reason,bytes:0};return state;}
  function prepare(encoder,{width,height,settings,identity,step,viewProj,world,middle,backtrace,fineScale,staggered}) {
   config=splitIntegralSettings(settings);const fresh=config.mode==='split'?2:config.fresh;
-  const nextKey=JSON.stringify([width,height,identity]);let reset=key!==nextKey||step<lastStep;
-  const bytes=width*height*96;
-  if(bytes>Math.min(device.limits.maxBufferSize,device.limits.maxStorageBufferBindingSize))throw Error(`Split optical bank needs ${bytes} bytes; exceeds effective device binding capacity`);
-  if(!banks.length||banks[0].size!==bytes){retire(banks);banks=[0,1].map(()=>device.createBuffer({label:'two local optical contributions per pixel',size:bytes,usage}));reset=true;}
-  if(reset){banks.forEach(b=>encoder.clearBuffer(b));frames=0;index=0;}else index=1-index;
-  encoder.clearBuffer(banks[index]);
+  const cells=field=>field?field.plan.flowDims.reduce((a,b)=>a*b,1):0;
+  const next=splitArenaLayout(width,height,cells(world),cells(middle));
+  if(next.bytes>Math.min(device.limits.maxBufferSize,device.limits.maxStorageBufferBindingSize))throw Error(`Split optical arena needs ${next.bytes} bytes; exceeds effective device binding capacity`);
+  const nextKey=JSON.stringify([width,height,identity,next]);let reset=key!==nextKey||step<lastStep;
+  if(!arena||arena.size!==next.bytes){retire(arena);arena=device.createBuffer({label:'two local optical contributions per pixel',size:next.bytes,usage});reset=true;}
+  allocation=next;
+  if(reset){encoder.clearBuffer(arena,0,next.historyBytes);frames=0;index=0;}else index=1-index;
+  encoder.clearBuffer(arena,index*next.bankBytes,next.bankBytes);
+  // Small current coarse-flow snapshots share this storage binding. No CPU
+  // readback or extra material march is needed; existing flow buffers stay owned.
+  if(world)encoder.copyBufferToBuffer(world.velocity,0,arena,next.worldOffset*16,cells(world)*16);
+  if(middle)encoder.copyBufferToBuffer(middle.velocity,0,arena,next.middleOffset*16,cells(middle)*16);
   const stepDelta=reset?0:step-lastStep;const data=new ArrayBuffer(240),f=new Float32Array(data),u=new Uint32Array(data);
   f.set(viewProj);u.set([width,height,fresh,frames],16);
   f.set([config.mode==='transport'?2:1,config.exploration,config.response,config.motion],20);
@@ -184,16 +187,17 @@ export function createSplitIntegral(device) {
   f.set([stepDelta*backtrace,config.depthSupport,fineScale,staggered?1:0],28);
   const put=(field,offset)=>{if(!field){f.set([0,0,0,1,1,1,1,0,0,0,0,1],offset);return;}
    f.set([...field.plan.min,field.plan.flowPitch,...field.plan.flowDims,1,...field.map],offset);};
-  put(world,32);put(middle,44);device.queue.writeBuffer(uniform,0,data);
-  const group=device.createBindGroup({layout,entries:[{binding:0,resource:{buffer:uniform}},{binding:1,resource:{buffer:banks[1-index]}},{binding:2,resource:{buffer:banks[index]}},{binding:3,resource:{buffer:world?.velocity??fallback}},{binding:4,resource:{buffer:middle?.velocity??fallback}}]});
+  put(world,32);put(middle,44);u.set([(1-index)*next.bankBytes/16,index*next.bankBytes/16,next.worldOffset,next.middleOffset],56);device.queue.writeBuffer(uniform,0,data);
+  const group=device.createBindGroup({layout,entries:[{binding:0,resource:{buffer:uniform}}]});
   frames++;key=nextKey;lastStep=step;
-  state={requested:config.mode,effective:config.mode==='transport'&&fresh===2?'full-refresh':config.mode,retainedSlots:2,freshEvaluations:fresh,frames,step,stepDelta,reset,bytes:2*bytes,recordBytes:48,settings:config,
-   motion:'pull warped source anchors using current Fine/Middle/World velocity; camera changes reset',life:'independent exponential radiance/extinction lifetime in rendered draws',source:'local source coefficient including incident scattering, before prefix attenuation',intervals:fresh===2?'original equal-distance strata':'bounded source support; sorted nonoverlapping optical intervals',extraWork:'anchor reprojection and velocity queries; no additional material evaluation'};
+  state={requested:config.mode,effective:config.mode==='transport'&&fresh===2?'full-refresh':config.mode,retainedSlots:2,freshEvaluations:fresh,frames,step,stepDelta,reset,
+   width,height,pixels:width*height,bytes:next.bytes,historyBytes:next.historyBytes,flowBytes:next.flowBytes,recordBytes:48,storageBindings:1,storageSlot:39,recordAllocation:'dense-fire-render-target',settings:config,
+   motion:'pull warped source anchors using current Fine/Middle/World velocity; camera changes reset',life:'independent exponential radiance/extinction lifetime in rendered draws',source:'local source coefficient including incident scattering, before prefix attenuation',intervals:fresh===2?'original equal-distance strata':'bounded source support; sorted nonoverlapping optical intervals',extraWork:'anchor reprojection and velocity queries plus coarse flow buffer copies; no additional material evaluation'};
   return {group,state};
  }
- async function sample(){if(!frames)return {available:false,state};const epoch=frames,b=banks[index],read=device.createBuffer({size:b.size,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
-  try{const e=device.createCommandEncoder();e.copyBufferToBuffer(b,0,read,0,b.size);device.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);if(frames!==epoch||banks[index]!==b)throw Error('Split readback became stale');return {available:true,state,records:new Float32Array(read.getMappedRange().slice(0))};}finally{read.unmap();read.destroy();}}
- return {layout,emptyLayout,emptyGroup,prepare,disable,sample,reset(){key=null;},read:()=>state,dispose(){disable();uniform.destroy();fallback.destroy();}};
+ async function sample(){if(!frames)return {available:false,state};const epoch=frames,b=arena,offset=index*allocation.bankBytes,size=allocation.bankBytes,read=device.createBuffer({size,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+  try{const e=device.createCommandEncoder();e.copyBufferToBuffer(b,offset,read,0,size);device.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);if(frames!==epoch||arena!==b)throw Error('Split readback became stale');return {available:true,state,records:new Float32Array(read.getMappedRange().slice(0))};}finally{read.unmap();read.destroy();}}
+ return {layout,emptyLayout,emptyGroup,get buffer(){return arena;},prepare,disable,sample,reset(){key=null;},read:()=>state,dispose(){disable();uniform.destroy();}};
 }
 
 // WebGPU discovers resource use before constant branch elimination. Ordinary
@@ -209,4 +213,21 @@ fn splitSampleDepth(r:SplitRay,ro:vec3<f32>,rd:vec3<f32>,ordinary:f32)->f32{retu
 fn splitObserve(r:ptr<function,SplitRay>,index:u32,p:vec3<f32>,q:vec3<f32>,sigma:f32,depth:f32,lo:f32,hi:f32,pitch:f32){}
 fn splitFinish(r:SplitRay,pixel:u32,ro:vec3<f32>,rd:vec3<f32>)->vec4<f32>{return vec4<f32>(0,0,0,1);}
 `;
-export function splitOpticalShader(code,active=false){return active?code.replace(SPLIT_OPTICAL_OFF_WGSL,SPLIT_OPTICAL_WGSL):code;}
+// Same equal-distance placement and widths as mode4 of the ordinary allocator.
+// No spatial importance read/write is reached in this specialization.
+export const SPLIT_FIXED_ALLOCATION_WGSL=/* wgsl */`
+struct GuidedRay {start:f32,end:f32,left:f32,width:f32,intervalStart:f32}
+fn guidedRayInit(ro:vec3<f32>,rd:vec3<f32>,start:f32,end:f32)->GuidedRay{return GuidedRay(start,end,start,0,start);}
+fn guidedNext(s:ptr<function,GuidedRay>,ro:vec3<f32>,rd:vec3<f32>,index:u32,count:u32,phase:f32,freshPhase:f32)->f32{
+ let total=(*s).end-(*s).start;(*s).intervalStart=(*s).left;
+ let point=(*s).start+total*(f32(index)+phase)/f32(count);
+ var right=(*s).end;if(index+1u<count){right=(*s).start+total*f32(index+1u)/f32(count);}
+ (*s).width=max(0.0,right-(*s).left);(*s).left=right;return point;
+}
+fn recordRayGuidance(p:vec3<f32>,q:vec3<f32>,sigma:f32,trans:f32,ds:f32){}
+`;
+export function splitOpticalShader(code,active=false){
+ if(!active)return code;
+ if(!code.includes(HISTORY_ALLOCATION_WGSL)||!code.includes(SPLIT_OPTICAL_OFF_WGSL))throw Error('Split specialization requires ordinary allocation and resource-free hooks');
+ return code.replace(HISTORY_ALLOCATION_WGSL,SPLIT_FIXED_ALLOCATION_WGSL).replace(SPLIT_OPTICAL_OFF_WGSL,SPLIT_OPTICAL_WGSL);
+}

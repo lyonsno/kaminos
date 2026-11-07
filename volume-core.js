@@ -13246,7 +13246,7 @@ export function createKaminosVolumePrototype({
         { binding: 32, resource: waveletWrite.createView({ dimension: '3d' }) },
         { binding: 25, resource: rayStartNoiseTexture.createView() },
         { binding: 26, resource: { buffer: rayStepTelemetry.counterBuffer } },
-        { binding: 39, resource: { buffer: rayAllocationHistory.buffer } },
+        { binding: 39, resource: { buffer: splitIntegral?.buffer??rayAllocationHistory.buffer } },
         { binding: 37, resource: { buffer: rayAllocationHistory.uniform } },
         { binding: 38, resource: displayReconstruction.view },
         { binding: 40, resource: worldRenderField.view },
@@ -21430,7 +21430,8 @@ export function createKaminosVolumePrototype({
     state.integralReconstruction={requested:reconstructionRequested,effective:'off',reason:reconstructionRequested!=='off'?'requires-ordinary-emissive-beauty-without-debug-overlays':null};
     const entryPoint=reconstruct?'fsIntegral':'fs';
     const colorTargets=reconstruct?[{format:'rgba32float'},{format:'r32float'}]:[{format:targetPipeline===readbackPipeline?'rgba8unorm':format}];
-    const splitActive=splitSettings.mode!=='off'&&reconstructionSupported&&optical.value===4&&device.limits.maxStorageBuffersPerShaderStage>=14;
+    const splitBufferBefore=splitIntegral.buffer;
+    const splitActive=splitSettings.mode!=='off'&&reconstructionSupported&&optical.value===4&&device.limits.maxStorageBuffersPerShaderStage>=10;
     let splitGroup=null;
     if(splitActive){
       const field=owner=>owner?{...owner.remapResources(),map:worldSmokeMapping(owner.plan,owner.anchor,productTransform).fineToField}:null;
@@ -21441,7 +21442,8 @@ export function createKaminosVolumePrototype({
         backtrace:resolveTimeStepConfig(controlsSnapshot).effective.backtraceScale,fineScale:2/gridSize,
         staggered:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode==='staggered'});
       splitGroup=prepared.group;state.splitIntegral=prepared.state;
-    }else{state.splitIntegral=splitIntegral.disable(splitSettings.mode==='off'?'off':device.limits.maxStorageBuffersPerShaderStage<14?'requires-14-fragment-storage-buffers':'requires-Fixed-evaluations-ordinary-joined-emissive-beauty');state.splitIntegral.requested=splitSettings.mode;}
+    }else{state.splitIntegral=splitIntegral.disable(splitSettings.mode==='off'?'off':device.limits.maxStorageBuffersPerShaderStage<10?'requires-10-fragment-storage-buffers':'requires-Fixed-evaluations-ordinary-joined-emissive-beauty');state.splitIntegral.requested=splitSettings.mode;}
+    if(splitBufferBefore!==splitIntegral.buffer)rebuildFluidBindGroups();
     const opticalConstants = {OPTICAL_STEP_MODE:optical.value,RAY_STEP_STATS:rayStepTelemetry.active,SPLIT_INTEGRAL:splitActive};
     state.opticalStepping = { ...optical, effective: optical.mode,
       adaptivity:raymarchAdaptivity(optical.mode,controlsSnapshot.adaptiveRays),
