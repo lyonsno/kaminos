@@ -89,5 +89,9 @@ console.log('Native joint previews retain geometry and compact history survives 
   root.position.set(2,-1,.4);root.rotation.z=.37;root.scale.set(1.6,.8,1);root.updateMatrixWorld(true);runtime.operations.mode({value:'A'});runtime.operations.select({joint:3});const h=adapter.target(),base=h.read(),at=runtime.read().points[3],wanted=[at[0]+.2,at[1]+.4],world=new T.Vector3(...wanted,0).applyMatrix4(root.matrixWorld);
   edits.begin(h.id);edits.preview({...base,position:world.toArray()});const placed=runtime.read().points[3];assert.ok(Math.hypot(placed[0]-wanted[0],placed[1]-wanted[1])<1e-8,'Native world-space targets reach correctly through a translated, rotated, nonuniformly scaled assembly');edits.cancel();assert.deepEqual(runtime.read().recipe,base.recipe);
   const result=runtime.operations.reach({joint:3,point:[100,100],mode:'A'});assert.ok(result.reach.residual>100,'Headless reach reports the unreachable residual');for(const id of ['link:1','link:2','link:3'])assert.equal(result.bodies.bodies.find(b=>b.id===id).replacement,true);edits.undo();assert.equal(runtime.read().reach,null,'A replay invalidates the transient reach diagnostic');
+  for(const request of [{joint:2,point:[100,100],mode:'B'},{joint:1,point:[100,100],mode:'A'}]){
+   const before=runtime.read(),result=runtime.operations.reach(request);assert.ok(result.reach,'Explicit headless reach returns its result independently of UI selection or mode');assert.equal(result.reach.joint,request.joint);assert.equal(result.reach.mode,request.mode);assert.deepEqual(result.reach.target,request.point);assert.ok(result.reach.residual>100);assert.equal(result.selected,before.selected);assert.equal(result.mode,before.mode);assert.equal(runtime.read().reach,null,'The inspector still hides a diagnostic belonging to another selected joint/pose');edits.undo();assert.deepEqual(runtime.read().recipe,before.recipe);
+  }
+
  }finally{edits.clear();await runtime.dispose();}
 }
