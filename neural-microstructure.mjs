@@ -20,6 +20,8 @@ const instanced=base=>{
 function surfaceProxy(rows,radius){
   // An inscribed polygon per actual disc supplies native grounding/geometry
   // consumers with surface, not the shader's unit template or filled boxes.
+  const visible=[];for(let i=0;i<rows.length;i+=12)if(rows[i+11]>0)for(let j=0;j<12;j++)visible.push(rows[i+j]);
+  rows=new Float32Array(visible);
   const count=rows.length/12,positions=new Float32Array(count*18),indices=new Uint32Array(count*12);
   for(let i=0;i<count;i++){
     const o=i*12,n=new Vector3(...rows.subarray(o+3,o+6)).normalize(),u=new Vector3().crossVectors(n,Math.abs(n.z)<.9?new Vector3(0,0,1):new Vector3(0,1,0)).normalize(),v=new Vector3().crossVectors(n,u),points=[];
@@ -62,6 +64,7 @@ function fineDiscs(rows,radius,label){
 export function createMicrostructureControl(field){
   if(!(field.rows instanceof Float32Array)||field.rows.length!==field.count*12||!(field.carriers instanceof Float32Array)||field.carriers.length!==field.carrierCount*8||!(field.radius>0))throw Error('Invalid microstructure field');
   if(!(field.sourceIds instanceof Uint32Array)||field.sourceIds.length!==field.count)throw Error('Matching source IDs required for scene picking');
+  if(!field.rows.some((value,i)=>i%12===11&&value>0))throw Error('No visible support in source field');
   if(field.count>=2**24)throw Error('Float-carried row address exceeds exact integer capacity');
   const root=new Group();root.name='TRELLIS microstructure control';
   const fine=fineDiscs(field.rows,field.radius,'Fine source discs');

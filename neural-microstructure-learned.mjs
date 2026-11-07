@@ -31,6 +31,7 @@ export function createLearnedMicrostructure(field,model){
   assertMicroFieldSource(field,model.meta);
   const decode=wgslFn(microFieldWGSL(model)),ray=wgslFn(MICRO_FIELD_RAY_WGSL,[decode]);
   const base=new BoxGeometry(2,2,2),geometry=new InstancedBufferGeometry();geometry.index=base.index.clone();geometry.setAttribute('position',base.attributes.position.clone());geometry.setAttribute('normal',base.attributes.normal.clone());base.dispose();
+  geometry.instanceCount=field.carrierCount;
   const lo=new Float32Array(field.carrierCount*3),hi=lo.slice(),ids=Uint32Array.from({length:field.carrierCount},(_,i)=>i);
   for(let i=0;i<field.carrierCount;i++){lo.set(field.carriers.subarray(i*8,i*8+3),i*3);hi.set(field.carriers.subarray(i*8+3,i*8+6),i*3);}
   for(const [name,data,size]of [['fieldLo',lo,3],['fieldHi',hi,3],['fieldId',ids,1]]){const a=new InstancedBufferAttribute(data,size);if(data instanceof Uint32Array)a.gpuType=IntType;geometry.setAttribute(name,a);}

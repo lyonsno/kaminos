@@ -2,12 +2,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {createRequire} from 'node:module';
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
+import {assertMicrostructureServer} from './microstructure-witness-identity.mjs';
 const [server,source,browserPath,puppeteerRoot,output,model]=process.argv.slice(2);
 if(!output)throw Error('Usage: node tools/microstructure-witness.mjs SERVER SOURCE BROWSER PUPPETEER_ROOT OUTPUT');
 fs.mkdirSync(output,{recursive:true});
 const report={ok:false,phase:'launch',server,source,model:model??null,browserPath,repoRoot:process.cwd(),errors:[],gpuErrors:[],failedResources:[],captures:[],claimCeiling:model?'Rendered learned-field comparison; completion is not a fidelity or performance pass':'Exact fine-payload control comparison'};
 let browser,page;
 try{
+  report.expectedImplementation={repoRoot:fs.realpathSync(process.cwd()),commit:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),branch:execFileSync('git',['branch','--show-current'],{encoding:'utf8'}).trim()};
+  const runtime=await fetch(new URL('/api/runtime-config',server));if(!runtime.ok)throw Error(`Renderer identity HTTP ${runtime.status}`);
+  report.effectiveImplementation=(await runtime.json()).source;
+  assertMicrostructureServer(report.expectedImplementation,report.effectiveImplementation);
   const sourceReport=new URL(source,server);
   if(sourceReport.pathname==='/api/read')sourceReport.searchParams.set('path',(sourceReport.searchParams.get('path')??'')+'report.json');
   else sourceReport.pathname+='report.json';
@@ -74,6 +80,7 @@ try{
     assert.ok(compare.coarse.majorPixels>1000,'Coarse negative control must visibly differ');
     assert.ok(compare.carrier.majorPixels<compare.coarse.majorPixels*.1,'Carrier must preserve fine pixels substantially better than coarse merging');
   }
+  const terminalRuntime=await fetch(new URL('/api/runtime-config',server));if(!terminalRuntime.ok)throw Error('Renderer identity unavailable after captures');report.terminalImplementation=(await terminalRuntime.json()).source;assertMicrostructureServer(report.expectedImplementation,report.terminalImplementation);
   report.errors=report.errors.filter(e=>!e.includes('favicon.ico'));assert.equal(report.errors.length,0,report.errors.join('\n'));
   report.phase='complete';report.ok=true;
 }catch(error){report.error=String(error.stack??error);if(page)await page.screenshot({path:path.join(output,'failure.png')}).catch(()=>{});process.exitCode=1;}

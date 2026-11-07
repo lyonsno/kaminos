@@ -5,6 +5,7 @@ import {prepareNavigationGeometry} from '../scene-navigation.mjs';
 import {visibleSceneIntersections} from '../scene-visible-picking.mjs';
 import {packMicrostructure} from '../neural-microstructure-core.mjs';
 import {createMicrostructureControl} from '../neural-microstructure.mjs';
+import {snapGroundWorldDelta} from '../asset-resting-plane.mjs';
 import experiment from '../experiments/trellis-microstructure.experiment.mjs';
 let opened=false;
 await assert.rejects(experiment.create({host:{scene:{open(){opened=true;throw Error('Should not open');}}},inputs:{source:'/unused/',mode:'bad'}}),/Mode/);
@@ -27,3 +28,8 @@ for(const mesh of control.root.children)assert.ok(mesh.geometry.boundingBox.cont
 control.setMode('fine');assert.equal(control.read().mode,'fine');
 assert.throws(()=>control.setMode('unknown'),/Mode/);control.dispose();control.dispose();
 console.log('microstructure scene: source identity, native transformed picking, bounds and lifecycle passed');
+const invisibleOutlier=packMicrostructure(new Float32Array([0,0,0,0,0,1,.2,.8,.4,0,.8,1, 0,-10,0,0,0,1,.2,.8,.4,0,.8,0]),{radius:.1,cellSize:.5});
+const visible=createMicrostructureControl(invisibleOutlier),proxy=visible.root.sceneGeometry;
+const {delta}=snapGroundWorldDelta({points:proxy.attributes.position.array,triangles:proxy.index.array,groundY:0});
+assert.ok(Math.abs(delta.elements[13]-.1)<1e-5,'Transparent outlier must not determine actual grounding');visible.dispose();
+assert.throws(()=>createMicrostructureControl({...invisibleOutlier,rows:new Float32Array(invisibleOutlier.rows.map((v,i)=>i%12===11?0:v))}),/visible support/,'No visible support is an explicit empty-surface rejection');
