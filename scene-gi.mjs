@@ -5,6 +5,7 @@ import SceneGIHistory from './scene-gi-history.mjs';
 import SceneLightingFilter from './scene-lighting-filter.mjs';
 import SceneSurfaceLighting from './scene-surface-lighting.mjs';
 import {createGISourceComparison} from './scene-gi-source-comparison.mjs';
+import {createSourceFootprintControl} from './scene-gi-footprint.mjs';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { resolveSceneGISettings, resolveSceneGIEstimatorSettings, sceneGIReceives } from './scene-gi-settings.mjs';
 
@@ -25,6 +26,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
   effect.useScreenSpaceSampling.value = false;
   effect.giIntensity.value = 1;
   const history=new SceneGIHistory(effect.getAONode(),effect.getGINode(),depth,normal,camera);
+  const sourceFootprint=createSourceFootprintControl(effect,reason=>history.reset(reason));
   const feedbackOutput=Fn(([],{material})=>{
     if(!sceneGIReceives(material))return output;
     // Return reflected *unboosted* irradiance to transport. Artistic gain,
@@ -191,7 +193,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
       effect.useLinearThickness.value = next.linearThickness;
       effect.backfaceLighting.value = next.backfaceLighting;
       effect.aoIntensity.value = next.aoContrast;
-      effect.useMipSampling.value = next.mipSampling;
+      sourceFootprint.ordinary(next.mipSampling);
       effect.usePerspectiveReconstruction.value = next.perspectiveReconstruction;
       if(Object.keys(next).some(key=>next[key]!==estimator[key]))history.reset('estimator-parameters');
       for(const pair of filters.values())for(const {filter} of [pair.ao,pair.gi])for(const key of ['depthPhi','normalPhi','lumaPhi'])filter[key].value=next[key];
@@ -212,6 +214,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
       }
       return { ...opticalFinish };
     },
+    openSourceFootprint:()=>sourceFootprint.open(),
     requestHistoryFrames(){if(settings.mode==='combined'&&settings.temporal)history.requestFrames();},
     needsHistoryFrame:()=>settings.mode==='combined'&&settings.temporal&&history.needsFrame(),
     historyStatus:()=>settings.mode==='combined'&&settings.temporal&&settings.temporalRefine?history.state():null,
