@@ -20,6 +20,7 @@ import {createVolumeGather} from '../scene-volume-gather.mjs';
 import {createSpatialReducer} from '../scene-spatial-point-regions.mjs';
 import {createFireSmokeShadow} from '../fire-smoke-shadow.mjs';
 import {createShadowMedium} from '../scene-shadow-medium.mjs';
+import {createRayStepPipelineVariants} from '../volume-ray-step-telemetry.mjs';
 
 globalThis.GPUBufferUsage ??= {MAP_READ: 1, MAP_WRITE: 2, COPY_SRC: 4, COPY_DST: 8, INDEX: 16, VERTEX: 32, UNIFORM: 64, STORAGE: 128, INDIRECT: 256, QUERY_RESOLVE: 512};
 globalThis.GPUTextureUsage ??= {COPY_SRC: 1, COPY_DST: 2, TEXTURE_BINDING: 4, STORAGE_BINDING: 8, RENDER_ATTACHMENT: 16};
@@ -117,7 +118,8 @@ function fixture(){
   scenePointFrame:{generation:1},
   distributedFrame:{generation:1},
   optical:{mode:'current'},
-  rayStepTelemetry:{active:false},
+  rayStepTelemetry:{active:false,read:()=>({active:false})},
+  statisticsRequested:false,
   opticalConstants:{},
   options:{},
   fineVelocity:null,
@@ -161,6 +163,12 @@ function fixture(){
   FIRE_IRRADIANCE_ATLAS_IDENTITY:'atlas',
   state:{},
  };
+ // Production initializes this owner with each device before field allocation.
+ const variantsByDevice=new WeakMap();
+ Object.defineProperty(context,'rayStepPipelineVariants',{get(){
+  if(!variantsByDevice.has(context.device))variantsByDevice.set(context.device,createRayStepPipelineVariants(context.device));
+  return variantsByDevice.get(context.device);
+ }});
  // Imported shader/layout handles and label constants are opaque to this test.
  for(const name of protoDeclarations)if(!(name in context))context[name]=null;
  for(const m of block.matchAll(/\b(?:layout|module):\s*([a-zA-Z]\w*)/g))if(!context[m[1]])context[m[1]]={name:m[1]};
