@@ -1,13 +1,15 @@
 // A fixed, cached directional bank; history selects fresh current-state rays.
 // The estimator targets the bank's uniform mean, not continuous angular truth.
-export function importanceDistribution(scores){
+export function importanceDistribution(scores,exploration=.25){
+  if(!Number.isFinite(exploration)||exploration<=0||exploration>1)throw Error('importance exploration must be positive and at most one');
   if(!scores.length||scores.some(v=>!Number.isFinite(v)||v<0))throw Error('finite nonnegative importance scores required');
   const scale=scores.reduce((a,b)=>Math.max(a,b),0),scaled=scores.map(v=>scale?v/scale:0),sum=scaled.reduce((a,b)=>a+b,0);
-  return scaled.map(v=>sum?.25/scores.length+.75*v/sum:1/scores.length);
+  return scaled.map(v=>sum?exploration/scores.length+(1-exploration)*v/sum:1/scores.length);
 }
 export function importanceSelect(q,u){let sum=0;for(let i=0;i<q.length;i++){sum+=q[i];if(u<sum)return i;}return q.length-1;}
 export function importanceWeight(q,count,bank){return 1/(q*count*bank);}
 export const ANGULAR_IMPORTANCE_WGSL=/* wgsl */`
+@group(0) @binding(28) var<uniform> importanceSettings:vec4<f32>;
 @group(0) @binding(20) var<storage,read_write> importanceScores:array<f32>;
 @group(0) @binding(21) var<storage,read_write> importanceCdf:array<f32>;
 @compute @workgroup_size(64)
@@ -20,9 +22,9 @@ fn prepareImportance(@builtin(global_invocation_id) global:vec3<u32>){
  var cdf=0.0;
  for(var a=0u;a<DIRECTION_COUNT;a++){
   var q=1.0/f32(DIRECTION_COUNT);
-  if(sum>0.0){q=0.25/f32(DIRECTION_COUNT)+0.75*(importanceScores[start+a]/scale)/sum;}
+  if(sum>0.0){q=importanceSettings.x/f32(DIRECTION_COUNT)+(1.0-importanceSettings.x)*(importanceScores[start+a]/scale)/sum;}
   cdf+=q;importanceCdf[start+a]=select(cdf,1.0,a==DIRECTION_COUNT-1u);
-  importanceScores[start+a]*=0.98;
+  importanceScores[start+a]*=importanceSettings.y;
  }
 }
 fn selectImportance(receiver:u32,u:f32)->u32{
@@ -38,6 +40,6 @@ fn recordImportance(receiver:u32,a:u32,radiance:vec3<f32>){
  let index=receiver*DIRECTION_COUNT+a;
  // Scores are a proposal heuristic, never returned radiance or a cached estimate.
  let score=dot(min(max(radiance,vec3<f32>(0)),vec3<f32>(1e30)),vec3<f32>(0.2126,0.7152,0.0722));
- importanceScores[index]=mix(importanceScores[index],score,0.25);
+ importanceScores[index]=mix(importanceScores[index],score,importanceSettings.z);
 }
 `;

@@ -1,3 +1,4 @@
+import {normalizeLightingTransport} from './scene-lighting-quality.mjs';
 import {FINE_LIGHTING_TRAVERSAL_WGSL,lightingCellTraversalCode,LIGHTING_INTERVAL_WGSL} from './scene-lighting-traversal.mjs';
 import {createLightingSourceBounds} from './scene-source-bounds.mjs';
 import {createLightingComputePipeline,prepareLightingComputePipelines} from './scene-lighting-compute.mjs';
@@ -49,7 +50,7 @@ export function receiverDispatch(count,limit) {
 
 // Shared allocation-free admission for edits and construction. Direction caches
 // can dominate prepared reconstruction storage, especially at refinement one.
-export function volumeGatherPlan({volumeGrid=16,sourceDimensions=[volumeGrid,volumeGrid*2,volumeGrid],surfaceCount=0,directions=24,smokeRefinement=4,sceneLightCount=0,angularPattern='fixed',receiverBounds=null},limits){
+export function volumeGatherPlan({volumeGrid=16,sourceDimensions=[volumeGrid,volumeGrid*2,volumeGrid],surfaceCount=0,directions=24,smokeRefinement=4,sceneLightCount=0,angularPattern='fixed',receiverBounds=null,importanceBankMultiplier=2,importanceExploration=.25},limits){
   const domain=sceneSourceDomain(sourceDimensions),bounds=receiverBounds??domain;
   if(![bounds.lo,bounds.hi].every(v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite))||bounds.hi.some((v,a)=>v<=bounds.lo[a]))throw Error('finite ordered receiver bounds required');
   const receiverPitch=(bounds.hi[0]-bounds.lo[0])/volumeGrid;
@@ -59,9 +60,11 @@ export function volumeGatherPlan({volumeGrid=16,sourceDimensions=[volumeGrid,vol
   if(!Number.isSafeInteger(volumeGrid)||volumeGrid<1||!Number.isSafeInteger(height)||height<1||!Number.isSafeInteger(depth)||depth<1)throw Error('smoke receiver dimensions must exactly represent the source domain');
   if(![surfaceCount,sceneLightCount].every(n=>Number.isSafeInteger(n)&&n>=0))throw Error('nonnegative receiver and scene light counts required');
   if(!Number.isSafeInteger(directions)||directions<2||directions%2)throw Error('even angular sample count required');
+  normalizeLightingTransport({importanceBankMultiplier,importanceExploration});
+  if(angularPattern==='importance'&&Math.fround(1+importanceExploration/(directions*importanceBankMultiplier))===1)throw Error('Importance exploration is below float32 CDF resolution for this direction bank');
   const volumeDimensions=[volumeGrid,height,depth],volumeCount=volumeGrid*height*depth,total=surfaceCount+volumeCount;
   const prepared=preparedSmokePlan(volumeDimensions,smokeRefinement,limits);
-  const bankDirections=directions*(angularPattern==='importance'?2:1),importanceBytes=angularPattern==='importance'?total*bankDirections*8:0;
+  const bankDirections=directions*(angularPattern==='importance'?importanceBankMultiplier:1),importanceBytes=angularPattern==='importance'?total*bankDirections*8:0;
   for(const [name,size]of [['surface and smoke receivers',total*32],['distributed incident directions',bankDirections*16],['cached first solid distance per receiver ray',total*bankDirections*4],['importance scores and CDF (each)',importanceBytes/2],['scene-light first solid distances',volumeCount*sceneLightCount*4]]){
     if(!Number.isSafeInteger(size)||Math.max(16,size)>limits.maxStorageBufferBindingSize)throw Error(`${name} needs ${Math.max(16,size)} bytes; device supports ${limits.maxStorageBufferBindingSize}`);
   }
@@ -72,7 +75,7 @@ export function volumeGatherPlan({volumeGrid=16,sourceDimensions=[volumeGrid,vol
 }
 
 const volumeGatherShaderCache=new WeakMap();
-export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[],volumeGrid=16,sourceDimensions=[volumeGrid,volumeGrid*2,volumeGrid],directions=24,smokeRefinement=4,angularRotation=0,angularPattern='fixed',worldGeometry=false,samplingNoise=null,receiverBounds=null,exteriorMedium=false,exteriorIntegrationGrid=8,receiverExclusion=null,asynchronous=false}) {
+export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[],volumeGrid=16,sourceDimensions=[volumeGrid,volumeGrid*2,volumeGrid],directions=24,smokeRefinement=4,angularRotation=0,angularPattern='fixed',worldGeometry=false,samplingNoise=null,receiverBounds=null,exteriorMedium=false,exteriorIntegrationGrid=8,receiverExclusion=null,asynchronous=false,importancePolicy={}}) {
 
   if(worldGeometry&&receivers.length)throw new Error('world BVH mode requires smoke-only receivers');
   let deviceShaderCache=volumeGatherShaderCache.get(device);
@@ -80,7 +83,8 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
   lightingDirections(directions); // Validate before allocating shared resources.
   if(!Number.isFinite(exteriorIntegrationGrid)||exteriorIntegrationGrid<=0)throw Error('positive finite exterior integration grid required');
   const domain=sceneSourceDomain(sourceDimensions);
-  const {volumeDimensions,volumeCount,total,bounds,receiverPitch}=volumeGatherPlan({volumeGrid,sourceDimensions,receiverBounds,surfaceCount:receivers.length,directions,smokeRefinement,angularPattern},device.limits);
+  importancePolicy=normalizeLightingTransport(importancePolicy);
+  const {volumeDimensions,volumeCount,total,bounds,receiverPitch}=volumeGatherPlan({volumeGrid,sourceDimensions,receiverBounds,surfaceCount:receivers.length,directions,smokeRefinement,angularPattern,...importancePolicy},device.limits);
   const volumeHeight=volumeDimensions[1];
   const receiverValues=new Float32Array(total*8);
   if(receiverExclusion&&(![receiverExclusion.lo,receiverExclusion.hi].every(v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite))||receiverExclusion.hi.some((v,a)=>v<=receiverExclusion.lo[a])||!Number.isFinite(receiverExclusion.blendWidth)||receiverExclusion.blendWidth<0))throw Error('ordered receiver exclusion and nonnegative blend width required');
@@ -123,6 +127,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
   let sourceGuide=normalizeSourceGuide({lo:domain.lo,hi:domain.hi},domain),guideBuffer=null;
   let sourceRegions=normalizeSourceRegions([],domain),regionsBuffer=null;
   const guideData=()=>new Float32Array([...sourceGuide.lo,0,...sourceGuide.hi,0]);
+  const importanceParams=buffer('angular importance policy',new Float32Array(4),GPUBufferUsage.UNIFORM);
   const noiseParams=buffer('smoke light temporal phase',new Float32Array(4),GPUBufferUsage.UNIFORM);
   const noiseEntries=()=>['blue','importance'].includes(angularPattern)?[{binding:18,resource:samplingNoise.createView()},{binding:19,resource:{buffer:noiseParams}}]:[];
   const sourcePattern=()=>['source','guided','regions'].includes(angularPattern);
@@ -142,7 +147,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
   let softening=null,softeningDimensions=null,reconstruction=null,scatteredSource=null,scatteredBounds=null,scatterInputs=null;
   let lastField=null,lastLightingTexture=null,lastOptions=null,lastMetadata=null;
   let transportDomain=domain,cacheFieldTexture=null;
-  const family=()=>JSON.stringify([transportDomain.lo,transportDomain.hi])+':'+angularPattern+':'+angularRotation+':'+(angularPattern==='guided'?JSON.stringify([sourceGuide.lo,sourceGuide.hi]):angularPattern==='regions'?JSON.stringify(sourceRegions):'');
+  const family=()=>JSON.stringify([transportDomain.lo,transportDomain.hi])+':'+angularPattern+':'+angularRotation+':'+(angularPattern==='importance'?importancePolicy.importanceBankMultiplier:'')+':'+(angularPattern==='guided'?JSON.stringify([sourceGuide.lo,sourceGuide.hi]):angularPattern==='regions'?JSON.stringify(sourceRegions):'');
   const geometryCacheEntries=(directionBuffer,distances)=>[
     ...[nodes,triangles,receiverBuffer,directionBuffer,distances].map((b,binding)=>({binding,resource:{buffer:b}})),
     ...(angularPattern==='regions'?[...guideEntries(),{binding:5,resource:cacheFieldTexture.createView()},...(exteriorMedium?[{binding:23,resource:{buffer:exteriorParams}}]:[])]:[]),
@@ -183,7 +188,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
     if(angularStates.has(key))return angularStates.get(key);
     const owned=[];
     try {
-      const bankDirections=directions*(angularPattern==='importance'?2:1);
+      const bankDirections=directions*(angularPattern==='importance'?importancePolicy.importanceBankMultiplier:1);
       receiverDispatch(total*bankDirections,dispatchLimit);
       const prefix=sourcePattern()?[...angularStates.values()].find(s=>s.family===family()&&s.cacheBuilt):null;
       if(angularPattern==='guided'&&!guideBuffer)guideBuffer=buffer('source guide bounds',guideData(),GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_SRC);
@@ -213,7 +218,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
       const importanceScores=angularPattern==='importance'?buffer('recent angular contribution scores',new Float32Array(total*bankDirections),GPUBufferUsage.STORAGE,owned):null;
       const importanceCdf=angularPattern==='importance'?buffer('angular proposal CDF',new Float32Array(total*bankDirections),GPUBufferUsage.STORAGE,owned):null;
       const importance=importanceScores?(compiled.importance??=createLightingComputePipeline(device,{label:'prepare cached angular importance',layout:'auto',compute:{module,entryPoint:'prepareImportance'}},asynchronous)).get():null;
-      const importanceEntries=importanceScores?[{binding:20,resource:{buffer:importanceScores}},{binding:21,resource:{buffer:importanceCdf}}]:[];
+      const importanceEntries=importanceScores?[{binding:20,resource:{buffer:importanceScores}},{binding:21,resource:{buffer:importanceCdf}},{binding:28,resource:{buffer:importanceParams}}]:[];
       const importanceGroup=importance?device.createBindGroup({layout:importance.getBindGroupLayout(0),entries:importanceEntries}):null;
       const state={cacheFieldTexture,importance,importanceGroup,importanceEntries,owned,directionBuffer,distances,cache,cacheGroup,fullCache,fullCacheGroup,gather,gatherVolume,environmentCache,environmentCacheGroup,environmentDirections,environmentHits,environmentCount:directions,environmentCacheBuilt:false,family:family(),capacity:bankDirections,requestedDirections:directions,prefix,sourceTexture:null,gatherGroup:null,cacheBuilt:false};
       angularStates.set(key,state);
@@ -247,13 +252,19 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
     preparationPromise.catch(()=>{if(key===preparationKey)preparationKey=null;});return preparationPromise;
   }
   return {prepare,isPrepared:(field,options={})=>preparationComplete&&preparationKey===requestedPreparation(field,options.sourceSoftness??0),surface,surfaceBack,smoke,surfaceDimensions:[surfaceWidth,surfaceHeight],volumeDimensions,
+    setImportancePolicy(value){
+      if(['importanceBankMultiplier','importanceExploration','importanceHistoryDecay','importanceHistoryBlend'].every(k=>value[k]===undefined||value[k]===importancePolicy[k]))return;
+      const next=normalizeLightingTransport({...importancePolicy,...value});
+      volumeGatherPlan({volumeGrid,sourceDimensions,receiverBounds,surfaceCount:receivers.length,directions,smokeRefinement,angularPattern,...next},device.limits);
+      importancePolicy=next;
+    },
     setGeometryTransforms(value){geometryTransforms=value;},
-    setDirections(value){volumeGatherPlan({volumeGrid,sourceDimensions,receiverBounds,surfaceCount:receivers.length,directions:value,smokeRefinement,angularPattern},device.limits);directions=value;},
+    setDirections(value){volumeGatherPlan({volumeGrid,sourceDimensions,receiverBounds,surfaceCount:receivers.length,directions:value,smokeRefinement,angularPattern,...importancePolicy},device.limits);directions=value;},
     setAngularPattern(pattern,rotation=0){
       if(!['fixed','spatial','blue','source','guided','regions','importance'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern and finite rotation required');
       if(pattern===angularPattern&&rotation===angularRotation)return;
       if(['blue','importance'].includes(pattern)&&!samplingNoise?.createView)throw Error('blue-noise smoke lighting requires the shared sampling atlas');
-      volumeGatherPlan({volumeGrid,sourceDimensions,receiverBounds,surfaceCount:receivers.length,directions,smokeRefinement,angularPattern:pattern},device.limits);
+      volumeGatherPlan({volumeGrid,sourceDimensions,receiverBounds,surfaceCount:receivers.length,directions,smokeRefinement,angularPattern:pattern,...importancePolicy},device.limits);
       angularPattern=pattern;angularRotation=rotation;
       if(!retainComparisons)pruneComparisons();
     },
@@ -317,6 +328,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
       }
       const state=angularState();
       if(angularPattern==='regions'&&state.cacheFieldTexture!==cacheFieldTexture){state.cacheGroup=device.createBindGroup({layout:state.cache.getBindGroupLayout(0),entries:geometryCacheEntries(state.directionBuffer,state.distances)});state.fullCacheGroup=device.createBindGroup({layout:state.fullCache.getBindGroupLayout(0),entries:geometryCacheEntries(state.directionBuffer,state.distances)});state.cacheFieldTexture=cacheFieldTexture;}
+      if(state.importance)device.queue.writeBuffer(importanceParams,0,new Float32Array([importancePolicy.importanceExploration,importancePolicy.importanceHistoryDecay,importancePolicy.importanceHistoryBlend,0]));
       device.queue.writeBuffer(noiseParams,0,new Float32Array([samplingFrame%32,0,0,0]));
       if(sourcePattern()&&environment&&state.environmentCount!==directions){
         // Progressive flame samples may reuse a larger cache, but a uniform
@@ -394,11 +406,11 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
         state.prefix=null;
       }
       lastField=field;lastLightingTexture=lightingTexture;lastOptions={surfaceScattering,gain};
-      lastMetadata={generation:field.generation,frame:field.frame,sourceDomain:{lo:domain.lo.slice(),hi:domain.hi.slice()},emissionSupport:{lo:[...transportDomain.lo],hi:[...transportDomain.hi],exteriorEmission:Boolean(exterior?.emissionTexture)},surfaceReceivers:receivers.length,volumeReceivers:smokeEnabled?volumeCount:0,transportVolumeReceivers:smokeEnabled||surfaceScattering?volumeCount:0,allocatedVolumeReceivers:volumeCount,activeVolumeReceivers,skippedVolumeReceivers:volumeCount-activeVolumeReceivers,directions,stepLength,gain,traversal:{emptySkip,sourceBoundsReads:emptySkip?field.dimensions.reduce((a,b)=>a*b,1)*(surfaceScattering&&receivers.length?2:1):0,skip:'occupied-optical-source-AABB; midpoint lattice preserved',zeroTransmissionTermination:true},surfaceScattering:{enabled:surfaceScattering,orders:surfaceScattering?1:0,sourceGeneration:surfaceScattering?field.scatteringGeneration:null},sourceSoftness,sourceSoftening:softening?{...softening.metadata}:null,geometryTriangles:geometry.triangleCount,smokeReconstruction,
+      lastMetadata={generation:field.generation,frame:field.frame,sourceDomain:{lo:domain.lo.slice(),hi:domain.hi.slice()},emissionSupport:{lo:[...transportDomain.lo],hi:[...transportDomain.hi],exteriorEmission:Boolean(exterior?.emissionTexture)},surfaceReceivers:receivers.length,volumeReceivers:smokeEnabled?volumeCount:0,transportVolumeReceivers:smokeEnabled||surfaceScattering?volumeCount:0,allocatedVolumeReceivers:volumeCount,activeVolumeReceivers,skippedVolumeReceivers:volumeCount-activeVolumeReceivers,directions,stepLength,gain,sourceMaterialSamples:field.sampleCountPerCell??null,traversal:{emptySkip,sourceBoundsReads:emptySkip?field.dimensions.reduce((a,b)=>a*b,1)*(surfaceScattering&&receivers.length?2:1):0,skip:'occupied-optical-source-AABB; midpoint lattice preserved',zeroTransmissionTermination:true},surfaceScattering:{enabled:surfaceScattering,orders:surfaceScattering?1:0,sourceGeneration:surfaceScattering?field.scatteringGeneration:null},sourceSoftness,sourceSoftening:softening?{...softening.metadata}:null,geometryTriangles:geometry.triangleCount,smokeReconstruction,
         environment:environment?{...environment.metadata,enabled:true}:{enabled:false},
         sceneLights:{...punctual.metadata,visibilityPreparations:sceneLightPreparations},
         angularPattern,angularRotation,sampling:['blue','importance'].includes(angularPattern)?{atlas:'FAST-scalar-128x128x32',directionPhase:0,quadraturePhase:samplingFrame%32,visibility:'stable-angular-cache',temporalAngularResampling:false}:null,sourceGuide:angularPattern==='regions'?{regions:sourceRegions.map(g=>({...g})),counts:regionPlan(sourceRegions,directions,domain).counts,receiverPhases:'complementary-2x2x2-stable-block-shift',effective:sourceRegions.length===1&&sourceRegions[0].id==='@volume'?'full-volume-fallback':'multi-emitter-envelopes'}:angularPattern==='guided'?{...sourceGuide}:null,integration:sourcePattern()?'exact-cell':['blue','importance'].includes(angularPattern)?'blue-noise-stratified':'midpoint',samplingLaw:angularPattern==='importance'?'cached-bank-mixture-25pct-exploration-v1':angularPattern==='regions'?'multi-region-complementary-solid-angle-v1':angularPattern==='guided'?'emitter-envelope-mixture-solid-angle-v1':angularPattern==='source'?'progressive-volume-induced-solid-angle-v1':'uniform-sphere-v1',surfaceReconstruction:{passes:surfaceReconstruction,...reconstruction?.metadata},
-        importance:angularPattern==='importance'?{bankDirections:state.capacity,freshRaysPerReceiver:directions,exploration:.25,proposal:'recent-ray-contributions',cachedRadiance:false,scoreAndCdfBytes:total*state.capacity*8}:null,
+        importance:angularPattern==='importance'?{bankDirections:state.capacity,freshRaysPerReceiver:directions,exploration:importancePolicy.importanceExploration,historyDecay:importancePolicy.importanceHistoryDecay,historyBlend:importancePolicy.importanceHistoryBlend,proposal:'recent-ray-contributions',cachedRadiance:false,scoreAndCdfBytes:total*state.capacity*8}:null,
         angularCache:{retained:retainComparisons,counts:[...angularStates.values()].filter(s=>s.family===family()).map(s=>s.capacity),variants:[...angularStates.keys()],visibilityPreparations,preparedRayDirections,lastPreparedDirections,bytes:[...angularStates.values()].reduce((sum,s)=>sum+s.capacity*(total*4+16)+(s.importance?total*s.capacity*8:0),0)}};
       return lastMetadata;
       }catch(error){

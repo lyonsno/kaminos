@@ -113,20 +113,20 @@ export function createPointRegions(device,{count=4,partition='vertical',asynchro
   const pipeline=spatial?null:device.createComputePipeline({label:'all-cell source to surface points',layout:'auto',compute:{module:device.createShaderModule({code:adaptive?ENERGY_ROWS_WGSL:POINT_REGIONS_WGSL}),entryPoint:'reduce'}});
   const finish=adaptive?device.createComputePipeline({label:'equal-energy surface points',layout:'auto',compute:{module:device.createShaderModule({code:ENERGY_REGIONS_WGSL}),entryPoint:'reduce'}}):null;
   let sourceTexture=null,group=null,metadata=null,disposed=false,rows=null,rowHeight=0,finishGroup=null,emissionCells=null;
-  let preparedSourceMode=null;
+  let preparedSourceMode=null,sourcePolicy={sourceAxisPreference:.15,sourceSplitHysteresis:.75};
   const mode=field=>!!field.exterior?.emissionTexture;
   async function ready(field){
-    if(spatial){await spatial.ready();if(mode(field)){emissionCells??=createEmissionCellReducer(device,count,texture,{asynchronous});await emissionCells.ready();}}
+    if(spatial){await spatial.ready();if(mode(field)){emissionCells??=createEmissionCellReducer(device,count,texture,{asynchronous});emissionCells.setPolicy(sourcePolicy);await emissionCells.ready();}}
     preparedSourceMode=mode(field);
   }
-  return {texture,count,ready,isPrepared:field=>!asynchronous||preparedSourceMode===mode(field),
+  return {texture,count,ready,setSourcePolicy(value){sourcePolicy={...sourcePolicy,...value};spatial?.setPolicy(sourcePolicy);emissionCells?.setPolicy(sourcePolicy);},isPrepared:field=>!asynchronous||preparedSourceMode===mode(field),
     encode(field){
       if(disposed||field.status!=='encoded'||!field.texture)throw new Error('point reduction requires current encoded source');
       pointRegionPlan(field.dimensions,spatial?1:count);
       if(!Number.isFinite(field.gain)||field.gain<0)throw new Error('point reduction requires nonnegative gain');
       if(spatial&&field.exterior?.emissionTexture){
         emissionCells??=createEmissionCellReducer(device,count,texture,{asynchronous});
-        metadata={identity:'all-region-physical-point-regions-v1',partition,count,generation:field.generation,frame:field.frame,gain:field.gain,...emissionCells.encode(field)};return {...metadata};
+        metadata={identity:'all-region-physical-point-regions-v1',partition,count,generation:field.generation,frame:field.frame,gain:field.gain,...(emissionCells.setPolicy(sourcePolicy),emissionCells.encode(field))};return {...metadata};
       }
       if(spatial){
         spatial.encode(field);metadata={identity:'all-cell-spatial-point-regions-v1',partition,count,generation:field.generation,frame:field.frame,gain:field.gain,sourceCells:field.dimensions.reduce((a,b)=>a*b,1)};return {...metadata};

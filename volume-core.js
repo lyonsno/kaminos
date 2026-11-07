@@ -12193,6 +12193,7 @@ export function createKaminosVolumePrototype({
   let emissiveSeedProducer = null;
   let sceneVolumeSource = null;
   let sceneSourceGrid = DEFAULT_SCENE_SOURCE_GRID;
+  let sceneSourceSamplesPerAxis=2;
   let sceneVolumeSourceRequested = false;
   let sceneTransportConsumer = null;
   let sceneTransport = null;
@@ -21469,7 +21470,7 @@ export function createKaminosVolumePrototype({
       return null;
     }
     sceneVolumeSource ||= createSceneVolumeSource({device, module: shader, uniformBuffer, fluidBuffers, frontBuffers, getReactantTextures: () => reactantTextures,
-      worldRenderUniform,getWorldSmoke:()=>{
+      worldRenderUniform,samplesPerAxis:sceneSourceSamplesPerAxis,getWorldSmoke:()=>{
         if(!worldSmoke||state.worldSmoke?.effective!=='one-way-world-field')return null;
         const map=worldSmokeMapping(worldSmoke.plan,worldSmoke.anchor,productTransform);
         const middleMap=intermediateFlow?.exportFields?worldSmokeMapping(intermediateFlow.plan,intermediateFlow.anchor,productTransform):null;
@@ -29598,8 +29599,13 @@ export function createKaminosVolumePrototype({
       if (!sceneVolumeSourceRequested) {sceneVolumeSource?.destroy(); sceneVolumeSource = null;}
       return {requested: sceneVolumeSourceRequested};
     },
+    setSceneSourceSampling(value){
+      if(!Number.isSafeInteger(value)||value<1||value**3>0xffffffff)throw Error('Source quadrature requires a positive integer axis count fitting shader uint32 samples');
+      sceneVolumeSource?.setSampling(value);sceneSourceSamplesPerAxis=value;
+      return {samplesPerAxis:value,sampleCountPerCell:value**3};
+    },
     setSceneSourceGrid(value) {
-      const plan=sceneSourceGridPlan(value,[gridSize,gridHeight,gridSize],device?.limits);
+      const plan=sceneSourceGridPlan(value,[gridSize,gridHeight,gridSize],device?.limits,sceneSourceSamplesPerAxis);
       if(value!==sceneSourceGrid){
         sceneVolumeSource?.destroy();sceneVolumeSource=null;
         sceneSourceGrid=value;if(!sceneLightingSettingsPending){distributedFrame=null;distributedGroup=null;}

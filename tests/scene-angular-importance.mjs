@@ -17,3 +17,8 @@ assert.equal(plan.bankDirections,8);assert.equal(plan.importanceBytes,8*8*8);
 assert.throws(()=>volumeGatherPlan({volumeGrid:2,sourceDimensions:[2,2,2],directions:8,angularPattern:'importance',smokeRefinement:1},{...limits,maxStorageBufferBindingSize:300}),/distance|importance/);
 for(const bad of [[NaN],[-1],[Infinity]])assert.throws(()=>importanceDistribution(bad),/score/);
 console.log('PASS cached importance exploration, finite-bank weighting and allocation admission');
+
+assert.deepEqual(importanceDistribution([0,0,10,0],.5),[.125,.125,.625,.125]);
+assert.deepEqual(importanceDistribution([0,0,10,0],1),[.25,.25,.25,.25]);
+const larger=volumeGatherPlan({volumeGrid:2,sourceDimensions:[2,2,2],directions:4,angularPattern:'importance',smokeRefinement:1,importanceBankMultiplier:3},limits);assert.equal(larger.bankDirections,12);assert.equal(larger.importanceBytes,8*12*8);
+assert.throws(()=>volumeGatherPlan({volumeGrid:2,sourceDimensions:[2,2,2],directions:4,angularPattern:'importance',smokeRefinement:1,importanceExploration:1e-12},limits),/float32 CDF/);

@@ -1,3 +1,4 @@
+import {normalizeLightingTransport} from './scene-lighting-quality.mjs';
 import {createLightingComputePipeline,prepareLightingComputePipelines} from './scene-lighting-compute.mjs';
 // Emission-weighted, axis-aligned binary partition. Tree topology is fixed;
 // split axes and cell boundaries follow the source with hysteresis on the GPU.
@@ -31,7 +32,8 @@ export function reduceSpatialRegions(values,dims,count,gain=1){
 }
 
 const spatialReducerCache=new WeakMap();
-export function createSpatialReducer(device,count,texture,{asynchronous=false}={}){
+export function createSpatialReducer(device,count,texture,{asynchronous=false,sourceAxisPreference=.15,sourceSplitHysteresis=.75}={}){
+  let policy=normalizeLightingTransport({sourceAxisPreference,sourceSplitHysteresis});
   const tree=spatialRegionTree(count),shards=16,owned=[];
   const buffer=(label,size,usage=GPUBufferUsage.STORAGE)=>{const b=device.createBuffer({label,size,usage:usage|GPUBufferUsage.COPY_DST});owned.push(b);return b;};
   // lo.xyz / fractional energy, hi.xyz / previous axis, child indices / leaf
@@ -40,7 +42,7 @@ export function createSpatialReducer(device,count,texture,{asynchronous=false}={
   const data=new Float32Array(tree.nodes.length*16),words=new Uint32Array(data.buffer);
   tree.nodes.forEach((n,i)=>{words.set([n.left,n.right,n.budget,n.leaf],i*16+8);});
   const partials=buffer('parallel spatial emission moments',tree.nodes.length*shards*48);
-  const params=tree.levels.map((ids,i)=>{const b=buffer('spatial emission level '+i,32,GPUBufferUsage.UNIFORM);return b;});
+  const params=tree.levels.map((ids,i)=>{const b=buffer('spatial emission level '+i,48,GPUBufferUsage.UNIFORM);return b;});
   const ids=buffer('spatial emission level node indices',tree.nodes.length*4);
   device.queue.writeBuffer(ids,0,new Uint32Array(tree.levels.flat()));
   let cached=spatialReducerCache.get(device);
@@ -53,7 +55,7 @@ export function createSpatialReducer(device,count,texture,{asynchronous=false}={
   }
   const kernels=cached;
   let source=null,dimensions='',groups=[];
-  return {ready:()=>prepareLightingComputePipelines([kernels.scan,kernels.finish]),encode(field){
+  return {setPolicy(value){policy=normalizeLightingTransport({...policy,...value});},ready:()=>prepareLightingComputePipelines([kernels.scan,kernels.finish]),encode(field){
     const scan=kernels.scan.get(),finish=kernels.finish.get();
     const key=field.dimensions.join(',');
     if(dimensions!==key){device.queue.writeBuffer(state,0,data);dimensions=key;}
@@ -64,7 +66,7 @@ export function createSpatialReducer(device,count,texture,{asynchronous=false}={
     let offset=0;
     const encoder=device.createCommandEncoder({label:'spatial emission reduction'});
     tree.levels.forEach((level,i)=>{
-      const p=new ArrayBuffer(32),f=new Float32Array(p),u=new Uint32Array(p);f[0]=field.gain;u[1]=offset;f[2]=2/field.dimensions[0];u[3]=i;u.set(field.dimensions,4);device.queue.writeBuffer(params[i],0,p);offset+=level.length;
+      const p=new ArrayBuffer(48),f=new Float32Array(p),u=new Uint32Array(p);f[0]=field.gain;u[1]=offset;f[2]=2/field.dimensions[0];u[3]=i;u.set(field.dimensions,4);f.set([policy.sourceAxisPreference,policy.sourceSplitHysteresis,0,0],8);device.queue.writeBuffer(params[i],0,p);offset+=level.length;
       const a=encoder.beginComputePass();a.setPipeline(scan);a.setBindGroup(0,groups[i][0]);a.dispatchWorkgroups(shards,level.length);a.end();
       const b=encoder.beginComputePass();b.setPipeline(finish);b.setBindGroup(0,groups[i][1]);b.dispatchWorkgroups(level.length);b.end();
     });device.queue.submit([encoder.finish()]);
@@ -73,7 +75,7 @@ export function createSpatialReducer(device,count,texture,{asynchronous=false}={
 export const SPATIAL_REGIONS_WGSL=/* wgsl */`
 struct Region {lo:vec4<f32>,hi:vec4<f32>,tree:vec4<u32>,history:vec4<f32>}
 struct Moments {energy:vec4<f32>,first:vec4<f32>,second:vec4<f32>}
-struct Params {gain:f32,offset:u32,pitch:f32,level:u32,dims:vec4<u32>}
+struct Params {gain:f32,offset:u32,pitch:f32,level:u32,dims:vec4<u32>,policy:vec4<f32>}
 @group(0) @binding(0) var source:texture_3d<f32>;
 @group(0) @binding(1) var<storage,read_write> regions:array<Region>;
 @group(0) @binding(2) var<storage,read_write> partials:array<Moments>;
@@ -114,10 +116,10 @@ fn finish(@builtin(workgroup_id) group:vec3<u32>){
  if(axis==3u){left.lo.w*=f32(left.tree.z)/f32(r.tree.z);right.lo.w*=f32(right.tree.z)/f32(r.tree.z);}
  else{
   let oldAxis=u32(r.hi.w);
-  if(r.history.y>0.0&&r.hi[oldAxis]-r.lo[oldAxis]>1.0&&variance[oldAxis]*1.15>=variance[axis]){axis=oldAxis;}
+  if(r.history.y>0.0&&r.hi[oldAxis]-r.lo[oldAxis]>1.0&&variance[oldAxis]*(1.0+params.policy.x)>=variance[axis]){axis=oldAxis;}
   var center=(r.lo[axis]+r.hi[axis])*.5;if(w>0.0){center=(position[axis]+1.0)/params.pitch;}
   var cut=clamp(floor(center+.5),r.lo[axis]+1.0,r.hi[axis]-1.0);
-  if(r.history.y>0.0&&axis==oldAxis&&abs(center-r.history.x)<=.75){cut=clamp(r.history.x,r.lo[axis]+1.0,r.hi[axis]-1.0);}
+  if(r.history.y>0.0&&axis==oldAxis&&abs(center-r.history.x)<=params.policy.y){cut=clamp(r.history.x,r.lo[axis]+1.0,r.hi[axis]-1.0);}
   left.hi[axis]=cut;right.lo[axis]=cut;r.hi.w=f32(axis);r.history=vec4<f32>(cut,1,0,0);regions[id]=r;
  }
  regions[r.tree.x]=left;regions[r.tree.y]=right;

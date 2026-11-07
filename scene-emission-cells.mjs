@@ -1,3 +1,4 @@
+import {normalizeLightingTransport} from './scene-lighting-quality.mjs';
 import {createLightingComputePipeline,prepareLightingComputePipelines} from './scene-lighting-compute.mjs';
 import {spatialRegionTree} from './scene-spatial-point-regions.mjs';
 
@@ -23,7 +24,8 @@ export function emissionRegionPlan(field,limits={}){
  return {regions,count,bytes,lo,hi,pitch:(fine.localMax[0]-fine.localMin[0])/fine.dimensions[0]};
 }
 const cache=new WeakMap();
-export function createEmissionCellReducer(device,count,output,{asynchronous=false}={}){
+export function createEmissionCellReducer(device,count,output,{asynchronous=false,sourceAxisPreference=.15,sourceSplitHysteresis=.75}={}){
+ let policy=normalizeLightingTransport({sourceAxisPreference,sourceSplitHysteresis});
  const tree=spatialRegionTree(count),owned=[];
  const buffer=(label,size,usage=GPUBufferUsage.STORAGE)=>{const b=device.createBuffer({label,size,usage:usage|GPUBufferUsage.COPY_DST});owned.push(b);return b;};
  const state=buffer('all-region spatial emission tree',tree.nodes.length*64),partials=buffer('all-region emission moments',tree.nodes.length*16*48),ids=buffer('all-region emission levels',tree.nodes.length*4);
@@ -32,7 +34,7 @@ export function createEmissionCellReducer(device,count,output,{asynchronous=fals
  let compiled=cache.get(device);
  if(!compiled){const module=device.createShaderModule({label:'physical emission cells and spatial moments',code:EMISSION_CELLS_WGSL});compiled=Object.fromEntries(['seed','scan','finish'].map(entryPoint=>[entryPoint,createLightingComputePipeline(device,{label:'all-region emission '+entryPoint,layout:'auto',compute:{module,entryPoint}},asynchronous)]));cache.set(device,compiled);}
  let cells=null,cellCount=0,shape=null,seedRows=[],groups=null;
- return {ready:()=>prepareLightingComputePipelines(Object.values(compiled)),encode(field){
+ return {setPolicy(value){policy=normalizeLightingTransport({...policy,...value});},ready:()=>prepareLightingComputePipelines(Object.values(compiled)),encode(field){
   const plan=emissionRegionPlan(field,device.limits),key=JSON.stringify([plan.regions.map(r=>[r.dimensions,r.localMin,r.localMax,r.role]),plan.lo,plan.hi]);
   if(cellCount!==plan.count){cells?.destroy();cells=device.createBuffer({label:'all physical emission cells',size:plan.bytes,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC});cellCount=plan.count;groups=null;for(const r of seedRows)r.texture=null;}
   if(shape!==key){device.queue.writeBuffer(state,0,initial);shape=key;}
@@ -52,7 +54,7 @@ export function createEmissionCellReducer(device,count,output,{asynchronous=fals
    return [compiled.scan.get(),compiled.finish.get()].map((pipeline,i)=>device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:entries.filter(e=>i===0?e.binding!==8:e.binding!==3)}));
   });
   let offset=0;tree.levels.forEach((level,i)=>{
-   const bytes=new ArrayBuffer(64),f=new Float32Array(bytes),u=new Uint32Array(bytes);f.set([...plan.lo,0,...plan.hi,0]);u.set([offset,i,plan.count,0],8);f.set([field.gain,plan.pitch,0,0],12);device.queue.writeBuffer(levels[i],0,bytes);offset+=level.length;
+   const bytes=new ArrayBuffer(64),f=new Float32Array(bytes),u=new Uint32Array(bytes);f.set([...plan.lo,0,...plan.hi,0]);u.set([offset,i,plan.count,0],8);f.set([field.gain,plan.pitch,policy.sourceAxisPreference,policy.sourceSplitHysteresis],12);device.queue.writeBuffer(levels[i],0,bytes);offset+=level.length;
    const a=encoder.beginComputePass();a.setPipeline(compiled.scan.get());a.setBindGroup(0,groups[i][0]);a.dispatchWorkgroups(16,level.length);a.end();const b=encoder.beginComputePass();b.setPipeline(compiled.finish.get());b.setBindGroup(0,groups[i][1]);b.dispatchWorkgroups(level.length);b.end();
   });device.queue.submit([encoder.finish()]);return {sourceCells:plan.count,sourceRegions:plan.regions.map(r=>({role:['fine','world','middle'][r.role],dimensions:[...r.dimensions],localMin:[...r.localMin],localMax:[...r.localMax]})),emissionBounds:{lo:plan.lo,hi:plan.hi}};
  },destroy(){cells?.destroy();for(const b of owned)b.destroy();}};
@@ -100,9 +102,9 @@ fn finish(@builtin(workgroup_id) group:vec3<u32>){
  var axis=3u;for(var a=0u;a<3u;a++){if(r.hi[a]-r.lo[a]>params.policy.y){if(axis==3u){axis=a;}else if(variance[a]>variance[axis]){axis=a;}}}
  var left=regions[r.tree.x];var right=regions[r.tree.y];left.lo=r.lo;right.lo=r.lo;left.hi=vec4<f32>(r.hi.xyz,left.hi.w);right.hi=vec4<f32>(r.hi.xyz,right.hi.w);
  if(axis==3u){left.lo.w*=f32(left.tree.z)/f32(r.tree.z);right.lo.w*=f32(right.tree.z)/f32(r.tree.z);}else{
-  let old=u32(r.hi.w);if(r.history.y>0.0&&r.hi[old]-r.lo[old]>params.policy.y&&variance[old]*1.15>=variance[axis]){axis=old;}
+  let old=u32(r.hi.w);if(r.history.y>0.0&&r.hi[old]-r.lo[old]>params.policy.y&&variance[old]*(1.0+params.policy.z)>=variance[axis]){axis=old;}
   var center=(r.lo[axis]+r.hi[axis])*.5;if(w>0.0){center=position[axis];}let pad=params.policy.y*.5;var cut=clamp(floor(center/params.policy.y+.5)*params.policy.y,r.lo[axis]+pad,r.hi[axis]-pad);
-  if(r.history.y>0.0&&axis==old&&abs(center-r.history.x)<=.75*params.policy.y){cut=clamp(r.history.x,r.lo[axis]+pad,r.hi[axis]-pad);}left.hi[axis]=cut;right.lo[axis]=cut;r.hi.w=f32(axis);r.history=vec4<f32>(cut,1,0,0);regions[id]=r;
+  if(r.history.y>0.0&&axis==old&&abs(center-r.history.x)<=params.policy.w*params.policy.y){cut=clamp(r.history.x,r.lo[axis]+pad,r.hi[axis]-pad);}left.hi[axis]=cut;right.lo[axis]=cut;r.hi.w=f32(axis);r.history=vec4<f32>(cut,1,0,0);regions[id]=r;
  }regions[r.tree.x]=left;regions[r.tree.y]=right;
 }
 `;

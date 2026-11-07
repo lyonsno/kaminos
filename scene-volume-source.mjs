@@ -1,11 +1,12 @@
+import {normalizeLightingTransport} from './scene-lighting-quality.mjs';
 import {normalizeSmokeHandoffMargin} from './scene-smoke-handoff.mjs';
 export const DEFAULT_SCENE_SOURCE_GRID=32;
 export function validateSceneSourceGrid(value){
   if(!Number.isSafeInteger(value)||value<1)throw Error('lighting emission resolution must be a positive integer');
   return value;
 }
-export function sceneSourceGridPlan(resolution,fluidDimensions,limits={}){
-  validateSceneSourceGrid(resolution);sceneSourceDomain(fluidDimensions);
+export function sceneSourceGridPlan(resolution,fluidDimensions,limits={},samplesPerAxis=2){
+  validateSceneSourceGrid(resolution);sceneSourceDomain(fluidDimensions);normalizeLightingTransport({sourceSamplesPerAxis:samplesPerAxis});
   const height=resolution*fluidDimensions[1]/fluidDimensions[0];
   if(!Number.isSafeInteger(height)||height<1)throw Error('lighting emission resolution must preserve the box aspect with whole cubic cells');
   const dimensions=[resolution,height,resolution],limit=limits.maxTextureDimension3D??Infinity;
@@ -13,7 +14,7 @@ export function sceneSourceGridPlan(resolution,fluidDimensions,limits={}){
   const dispatch=dimensions.map(n=>Math.ceil(n/4));
   if(dispatch.some(n=>n>(limits.maxComputeWorkgroupsPerDimension??Infinity)))throw Error('lighting emission dispatch exceeds device capacity');
   const cells=dimensions.reduce((n,v)=>n*v,1);
-  return {resolution,dimensions,cells,materialSamples:cells*8,bytes:cells*20,dispatch};
+  return {resolution,dimensions,cells,materialSamples:cells*samplesPerAxis**3,bytes:cells*20,dispatch};
 }
 // Opt-in experiment input, not a replacement for the accepted fire atlas or
 // smoke transport. Coefficients use volume-local inverse-length units and
@@ -93,11 +94,14 @@ export function integrateSceneMediumSegment(field, source, receiver, stepLength)
 const sceneVolumeSourcePipelines = new WeakMap();
 const sceneOpticalDepthPipelines = new WeakMap();
 
-export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuffers, frontBuffers, getReactantTextures, grid, gridY, fluidGrid = grid, fluidGridY = gridY,getWorldSmoke=()=>null,worldRenderUniform=null}) {
+export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuffers, frontBuffers, getReactantTextures, grid, gridY, fluidGrid = grid, fluidGridY = gridY,getWorldSmoke=()=>null,worldRenderUniform=null,samplesPerAxis=2}) {
   for (const n of [grid, gridY, fluidGrid, fluidGridY]) {
     if (!Number.isInteger(n) || n <= 0) throw new Error('positive integer source dimensions required');
   }
   if (gridY / grid !== fluidGridY / fluidGrid) throw new Error('source and fluid domain aspect mismatch');
+  normalizeLightingTransport({sourceSamplesPerAxis:samplesPerAxis});
+  const sampling=device.createBuffer({label:'lighting source material quadrature',size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+  const updateSampling=()=>device.queue.writeBuffer(sampling,0,new Uint32Array([samplesPerAxis,0,0,0]));updateSampling();
   const texture = device.createTexture({label: 'raw live volume emission and extinction',
     dimension: '3d', size: [grid, gridY, grid], format: 'rgba32float',
     usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC});
@@ -133,7 +137,7 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
         {binding:35,resource:boundMiddle.createView()},{binding:40,resource:boundRenderView}]}));
   };
   let inputs = buildInputs();
-  const output = device.createBindGroup({layout: pipeline.getBindGroupLayout(3), entries: [{binding: 4, resource: texture.createView()},{binding:5,resource:scatteringTexture.createView()}]});
+  const output = device.createBindGroup({layout: pipeline.getBindGroupLayout(3), entries: [{binding: 4, resource: texture.createView()},{binding:5,resource:scatteringTexture.createView()},{binding:10,resource:{buffer:sampling}}]});
   let status = 'unbuilt', reason = 'not-encoded', frame = null, sourceIndex = null, generation = 0;
   let worldTransform=validateSceneSourceTransform();
   let optical = null;
@@ -174,6 +178,7 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
   }
   const invalidateOptical = () => {if (optical) optical.generation = null;};
   return {
+    setSampling(value){normalizeLightingTransport({sourceSamplesPerAxis:value});if(value===samplesPerAxis)return;samplesPerAxis=value;updateSampling();status='unbuilt';reason='material-quadrature-changed';invalidateOptical();},
     encode(encoder, index, currentFrame,transform) {
       if (status === 'destroyed') throw new Error('scene source destroyed');
       const world=getWorldSmoke();
@@ -256,11 +261,11 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
     describe() {return {identity: 'scene-volume-linear-emission-extinction-v0', status, reason, frame, sourceIndex, generation,
       dimensions: [grid, gridY, grid], localMin: [-1,-1,-1], localMax: [1, -1+2*gridY/grid, 1],
       channels: ['emission-r','emission-g','emission-b','extinction'], displayTransform: 'none',
-      coefficientLengthSpace: 'volume-local', sampleCountPerCell: 8, completionAuthority: false,
+      coefficientLengthSpace: 'volume-local', sampleCountPerCell: samplesPerAxis**3,samplesPerAxis, completionAuthority: false,
       worldTransform:validateSceneSourceTransform(worldTransform),texture: status === 'encoded' ? texture : null,scatteringTexture:status==='encoded'?scatteringTexture:null,
       exterior:status==='encoded'?exterior:null,
       scatteringChannels:['smoke-scattering-coefficient'],scatteringGeneration:status==='encoded'?generation:null};},
-    destroy() {emptyWorld.destroy();if(ownWorldUniform)worldRenderUniform.destroy();for(const r of exteriorResources.values()){r.texture.destroy();r.emissionTexture.destroy();}exteriorResources.clear();texture.destroy();scatteringTexture.destroy(); optical?.depth.destroy(); optical?.params.destroy(); status = 'destroyed'; reason = 'destroyed';},
+    destroy() {sampling.destroy();emptyWorld.destroy();if(ownWorldUniform)worldRenderUniform.destroy();for(const r of exteriorResources.values()){r.texture.destroy();r.emissionTexture.destroy();}exteriorResources.clear();texture.destroy();scatteringTexture.destroy(); optical?.depth.destroy(); optical?.params.destroy(); status = 'destroyed'; reason = 'destroyed';},
   };
 }
 
@@ -288,6 +293,7 @@ fn seedSceneMiddleMedium(@builtin(global_invocation_id) c:vec3<u32>){
   textureStore(sceneExteriorOut,vec3<i32>(c),vec4<f32>(medium.absorption+medium.scattering,0,0,0));
   textureStore(sceneExteriorEmissionOut,vec3<i32>(c),vec4<f32>(medium.emission,medium.absorption+medium.scattering));
 }
+@group(3) @binding(10) var<uniform> sceneSourceSampling:vec4<u32>;
 @group(3) @binding(4) var sceneSourceOut: texture_storage_3d<rgba32float, write>;
 @group(3) @binding(5) var sceneScatteringOut: texture_storage_3d<r32float, write>;
 @compute @workgroup_size(4,4,4)
@@ -296,16 +302,17 @@ fn seedSceneVolumeSource(@builtin(global_invocation_id) c: vec3<u32>) {
   if (any(c >= vec3<u32>(SCENE_SOURCE_GRID, SCENE_SOURCE_GRID_Y, SCENE_SOURCE_GRID))) { return; }
   var coefficients = vec4<f32>(0.0);
   var scattering=0.0;
-  for (var k=0u; k<8u; k++) {
-    let offset = (vec3<f32>(f32(k&1u),f32((k>>1u)&1u),f32((k>>2u)&1u))+vec3<f32>(0.5))*0.5;
+  let axis=sceneSourceSampling.x;let samples=axis*axis*axis;
+  for (var k=0u; k<samples; k++) {
+    let offset = (vec3<f32>(f32(k%axis),f32((k/axis)%axis),f32(k/(axis*axis)))+vec3<f32>(0.5))/f32(axis);
     let p = (vec3<f32>(c)+offset)*(2.0/f32(SCENE_SOURCE_GRID))-vec3<f32>(1.0);
     var medium: EmissiveMaterial;
     if (u.open_world_boundary.z > 0.5) { medium = fastEmissiveMaterialAt(p, 1.0); }
     else { medium = sceneEmissiveMaterialAt(p); }
     medium=worldSmokePhysicalBlend(p,medium,1.0,1.0);
 
-    coefficients += vec4<f32>(medium.emission, medium.absorption + medium.scattering)*0.125;
-    scattering+=medium.scattering*0.125;
+    coefficients += vec4<f32>(medium.emission, medium.absorption + medium.scattering)/f32(samples);
+    scattering+=medium.scattering/f32(samples);
   }
   textureStore(sceneSourceOut, vec3<i32>(c), coefficients);
   textureStore(sceneScatteringOut,vec3<i32>(c),vec4<f32>(scattering,0,0,0));

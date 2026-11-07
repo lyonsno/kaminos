@@ -31,3 +31,9 @@ await budgetHistory.run('setTransportQuality',{fineSteps:12,worldDirections:8});
 assert.equal(current.state.transportQuality.fineSteps,12);assert.equal(current.state.transportQuality.worldGrid,8);
 await budgetEdits.undo();assert.equal(current.state.transportQuality.fineSteps,0);
 await budgetEdits.redo();assert.equal(current.state.transportQuality.worldDirections,8);
+
+current.state.transportQuality.sourceSamplesPerAxis=2;
+await budgetHistory.run('setTransportQuality',{sourceSamplesPerAxis:1,sourceAxisPreference:.3,sourceSplitHysteresis:1,importanceBankMultiplier:3,importanceExploration:.5,importanceHistoryDecay:.9,importanceHistoryBlend:.1});
+assert.equal(current.state.transportQuality.sourceSamplesPerAxis,1);assert.equal(current.state.transportQuality.importanceBankMultiplier,3);
+await budgetEdits.undo();assert.equal(current.state.transportQuality.sourceSamplesPerAxis,2);
+await budgetEdits.redo();assert.equal(current.state.transportQuality.importanceHistoryBlend,.1);

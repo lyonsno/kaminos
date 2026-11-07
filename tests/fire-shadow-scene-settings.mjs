@@ -49,5 +49,5 @@ assert.equal(readFireShadowSceneSettings(new URLSearchParams(sourceRoute)).sourc
 for(const sourceGrid of [8,16,24,32])assert.equal(readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,sourceGrid}))).sourceGrid,sourceGrid);
 for(const value of ['0','-1','1.5','NaN'])assert.throws(()=>readFireShadowSceneSettings(new URLSearchParams({volume_light_field_hybrid_source_grid:value})),/emission resolution/);
 
-const transportQuality={emptySkip:true,shadowCutoff:0,fineSteps:12,worldSteps:6,worldGrid:10,worldDirections:8,fineRefinement:2,worldRefinement:3};
+const transportQuality={emptySkip:true,shadowCutoff:0,fineSteps:12,worldSteps:6,worldGrid:10,worldDirections:8,fineRefinement:2,worldRefinement:3,sourceSamplesPerAxis:1,sourceAxisPreference:.3,sourceSplitHysteresis:1.25,importanceBankMultiplier:3,importanceExploration:.5,importanceHistoryDecay:.9,importanceHistoryBlend:.1};
 assert.deepEqual(readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,transportQuality}))).transportQuality,transportQuality,'independent traversal and reconstruction budgets survive scene roundtrip');
