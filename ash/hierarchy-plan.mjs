@@ -8,6 +8,7 @@ export function createHierarchyLayout({cellSize,bounds,refinement}){
  const background=refinement.backgroundCellSize,budget=refinement.budgetMiB*1048576;
  if(!(cellSize>0&&Number.isFinite(cellSize)&&background>0&&Number.isFinite(background)&&budget>0&&Number.isFinite(budget)))throw Error('Invalid hierarchical ash precision or budget');
  if(refinement.targetPixels!==undefined&&(!(refinement.targetPixels>0)||!Number.isFinite(refinement.targetPixels)))throw Error('Invalid ash projected detail target');
+ if(refinement.airBudgetMiB!==undefined&&(!(refinement.airBudgetMiB>0)||!Number.isFinite(refinement.airBudgetMiB)))throw Error('Invalid airborne ash storage budget');
  const depth=Math.max(0,Math.ceil(Math.log2(background/cellSize)-1e-12)),scale=2**depth;
  const base=patchLayout({cellSize:background,bounds,tileSize:8}),roots=base.tiles.count;
  if(Math.max(...base.dims)*scale>2**24)throw Error('Requested ash precision exceeds float32 field-coordinate capacity');

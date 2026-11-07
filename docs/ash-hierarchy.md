@@ -12,14 +12,15 @@ coordinate capacity is refused explicitly. There is no three-level ceiling.
 
 **Material storage budget (MiB)** reserves one shared brick pool across all
 depths, plus the covering grid and its material/flux/surface/metadata buffers.
-Object-local collision caches and airborne transport have separate allocations;
+**Airborne storage budget (MiB)** independently bounds parcel, live-list and topology-copy storage. Parcels use finest-cell mass units; one impact coats only supported neighboring cells and keeps remaining mass airborne at the contact. Transport capacity exhaustion keeps emission pending instead of dropping it. Smaller air budgets can therefore limit deposition throughput. Old saves without this setting retain their original slot count.
+Object-local collision caches have separate allocations;
 the runtime reports them. A finer target does not reserve a finer covering grid
 or a full-world page map. Parent-relative child links cost storage only for
 covering tiles and pool capacity. These controls apply through the clearing
 reset, preserving placement and connected sources. Reset clears prior material.
 
-Cached collider occupancy requests refinement. Maximum-occupancy mip levels
-preserve thin-feature discovery between coarse point samples. Newly allocated
+Cached collider occupancy requests refinement. Minimum/maximum occupancy mip levels
+preserve thin-feature discovery between coarse point samples and distinguish mixed boundary support from fully occupied interiors. Newly allocated
 children receive their own collision stamps and can request further children.
 Receiving space accompanies geometry. Projected cell size prioritizes current
 visible demand; **Projected parent cell target (pixels)** sets that threshold.
@@ -30,7 +31,7 @@ material and column fill height; staged child links become visible only after
 that transfer. One physical owner supplies contact, transport, conservative
 exchange and surface drawing. Neighbors remain at most one level apart.
 Occupied history and supporting parents retain storage after geometry or camera
-motion. Empty unneeded bricks can be reused. Capacity refusal leaves existing
+motion. Empty unneeded bricks can be reused. Under geometry pressure, empty lower priority halo/receiving leaves may yield capacity; occupied history and balancing support cannot. Capacity refusal leaves existing
 material and its current resolution intact. There is no lossy history demotion.
 
 **Show fine bricks** draws live residency, colored by depth. Empty receiving
@@ -47,11 +48,11 @@ or releasing the saved topology during restoration. Old checkpoint schemas keep
 their existing routes. Their restore likewise preserves authoritative topology.
 
 The collider producer's existing cache/LOD precision still limits available
-geometry. These maximum-occupancy mips preserve what the cache contains; they do
+geometry. These occupancy bounds preserve what the cache contains; they do
 not recover triangles already discarded by simplification. No total frame-cost
 or production affordability claim follows from this implementation.
 
-Focused checks: `tests/ash-hierarchy.mjs`, `tests/ash-hierarchy-gpu.mjs`.
+Focused checks: `tests/ash-hierarchy.mjs`, `tests/ash-hierarchy-gpu.mjs`, `tests/ash-hierarchy-impact-gpu.mjs`.
 The production GPU check covers deep receiving support, actual fallout on an
 elevated rail, conserved material through motion, and checkpoint restoration.
 `tools/ash-hierarchy-native-witness.mjs` supplies the native pipe comparison at

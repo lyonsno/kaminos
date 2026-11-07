@@ -9,16 +9,15 @@ await withKaminosGpu(async ctx=>{
  const {device,GPUBufferUsage:U}=ctx,attributes=new Map();
  const renderer={backend:{isWebGPUBackend:true,device,createStorageAttribute(a){const buffer=device.createBuffer({size:a.array.byteLength,usage:U.STORAGE|U.COPY_SRC|U.COPY_DST|U.INDIRECT});device.queue.writeBuffer(buffer,0,a.array);attributes.set(a,{buffer});},createIndirectStorageAttribute(a){this.createStorageAttribute(a);},get:a=>attributes.get(a),destroyAttribute(a){attributes.get(a)?.buffer.destroy();attributes.delete(a);}}};
  const rail=new Mesh(new BoxGeometry(.12,.015,.015),new MeshBasicMaterial());rail.position.set(.13,.13,.13);
- const options={renderer,cellSize:.005,bounds:{min:[0,0,0],max:[.32,.32,.32]},refinement:{mode:'hierarchy',ratio:2,backgroundCellSize:.08,budgetMiB:2},sceneRecords:()=>[{id:'rail',object:rail}]};
+ const options={renderer,cellSize:.00125,bounds:{min:[0,0,0],max:[.32,.32,.32]},refinement:{mode:'hierarchy',ratio:2,backgroundCellSize:.08,budgetMiB:8,airBudgetMiB:1},sceneRecords:()=>[{id:'rail',object:rail}]};
  let patch,reopened;
  try{await withGpuErrorScopes(device,'arbitrary-depth physical ash',async()=>{
   patch=await createGpuRefinedAsh(options);patch.syncScene();
-  for(let n=0;n<patch.layout.hierarchy.depth*2;n++)patch.step();
   const initial=await patch.diagnostics({fields:true});
   console.log(JSON.stringify({hierarchy:initial.hierarchy}));
   assert.equal(patch.read().backend,'webgpu-hierarchical-ash');
   assert.ok(initial.hierarchy.resident>0,'real cached collider geometry must allocate children');
-  assert.ok(initial.hierarchy.deepest>=3,'allocation must descend beyond the old three-level route');
+  assert.ok(initial.hierarchy.deepest===patch.layout.hierarchy.depth,'allocation must reach the requested six refinement steps');
   const view={...patch.layout,residency:initial.residency};let finestSupport=0;
   for(let i=0;i<patch.layout.count;i++){const c=refinementCell(view,i);if(c.owned&&c.size===1&&initial.solid[i])finestSupport++;}
   assert.ok(finestSupport>0,'deepest cells must receive actual collision support');
@@ -33,6 +32,7 @@ await withKaminosGpu(async ctx=>{
   assert.equal(patch.read().runtimeReadbacks,0);
   reopened=await createGpuRefinedAsh(options);reopened.restore(moved);const roundtrip=await reopened.snapshot();
   for(const key of ['residency','values','volume','steps','falling'])assert.deepEqual(roundtrip[key],moved[key],key);
+  rail.position.x=2;for(let n=0;n<8;n++){patch.step();const history=await patch.snapshot();assert.ok(Math.abs(history.retainedVolume-saved.retainedVolume)<1e-7,'departed geometry retains balanced material history');}
   console.log(JSON.stringify({route:'production shared-device hierarchy',...initial.hierarchy,finestSupport,retained:moved.retainedVolume}));
  });}finally{reopened?.dispose();patch?.dispose();rail.geometry.dispose();rail.material.dispose();}
 });

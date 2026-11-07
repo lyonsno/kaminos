@@ -10,8 +10,8 @@ export function installAshRefinementControls({document,panel,anchor}) {
   const mode=document.createElement('select');mode.className='transform-input';mode.dataset.ashRefinementMode='';
   for(const [value,text] of [['hierarchy','Budgeted hierarchy · collider detail'],['adaptive','Two / three levels · legacy'],['fixed','Fixed regions · debugging']]){const o=document.createElement('option');o.value=value;o.textContent=text;mode.append(o);}group.append(mode);
   const hierarchyFields=document.createElement('div');group.append(hierarchyFields);const hierarchyInputs={};
-  for(const [key,text,value]of [['backgroundCellSize','Background cell width',.08],['budgetMiB','Material storage budget (MiB)',32],['targetPixels','Projected parent cell target (pixels)',3]]){
-    const row=document.createElement('label');row.className='slider-row';row.textContent=text;const input=document.createElement('input');input.type='number';input.step='any';input.min='0';input.className='transform-input';input.dataset.ashHierarchy=key;input.value=String(value);row.append(input);hierarchyFields.append(row);hierarchyInputs[key]=input;installRelativeNumberDrag({input,grip:input,step:key==='budgetMiB'?1:.001});
+  for(const [key,text,value]of [['backgroundCellSize','Background cell width',.08],['budgetMiB','Material storage budget (MiB)',32],['airBudgetMiB','Airborne storage budget (MiB)',4],['targetPixels','Projected parent cell target (pixels)',3]]){
+    const row=document.createElement('label');row.className='slider-row';row.textContent=text;const input=document.createElement('input');input.type='number';input.step='any';input.min='0';input.className='transform-input';input.dataset.ashHierarchy=key;input.value=String(value);row.append(input);hierarchyFields.append(row);hierarchyInputs[key]=input;installRelativeNumberDrag({input,grip:input,step:key.endsWith('MiB')?1:.001});
   }
   const budgetRow=document.createElement('label');budgetRow.className='slider-row';budgetRow.textContent='Fine capacity (% of field)';
   const budget=document.createElement('input');budget.className='transform-input';budget.type='number';budget.min='0';budget.max='100';budget.step='any';budget.dataset.ashFineCapacity='';budgetRow.append(budget);group.append(budgetRow);
@@ -60,12 +60,12 @@ export function installAshRefinementControls({document,panel,anchor}) {
       settings=nextSettings;const nextVersion=JSON.stringify(settings.refinement??null);
       if(id===nextId&&version===nextVersion)return;
       id=nextId;version=nextVersion;enabled.checked=!!settings.refinement;mode.value=['adaptive','hierarchy'].includes(settings.refinement?.mode)?settings.refinement.mode:'fixed';budget.value=String((settings.refinement?.fineFraction??.125)*100);
-      hierarchyInputs.backgroundCellSize.value=String(settings.refinement?.backgroundCellSize??settings.cellSize*2);hierarchyInputs.budgetMiB.value=String(settings.refinement?.budgetMiB??32);hierarchyInputs.targetPixels.value=String(settings.refinement?.targetPixels??3);
+      hierarchyInputs.backgroundCellSize.value=String(settings.refinement?.backgroundCellSize??settings.cellSize*2);hierarchyInputs.budgetMiB.value=String(settings.refinement?.budgetMiB??32);hierarchyInputs.airBudgetMiB.value=String(settings.refinement?.airBudgetMiB??(settings.refinement?.budgetMiB??32)/8);hierarchyInputs.targetPixels.value=String(settings.refinement?.targetPixels??3);
       close.checked=settings.refinement?.levels===3;regions=structuredClone(settings.refinement?.regions??[]);active=0;display();
     },
     read(nextSettings) {
       if(!enabled.checked)return null;
-      if(mode.value==='hierarchy')return {ratio:2,mode:'hierarchy',backgroundCellSize:hierarchyInputs.backgroundCellSize.valueAsNumber,budgetMiB:hierarchyInputs.budgetMiB.valueAsNumber,targetPixels:hierarchyInputs.targetPixels.valueAsNumber};
+      if(mode.value==='hierarchy')return {ratio:2,mode:'hierarchy',backgroundCellSize:hierarchyInputs.backgroundCellSize.valueAsNumber,budgetMiB:hierarchyInputs.budgetMiB.valueAsNumber,targetPixels:hierarchyInputs.targetPixels.valueAsNumber,airBudgetMiB:hierarchyInputs.airBudgetMiB.valueAsNumber};
       if(mode.value==='adaptive'){const fineFraction=budget.valueAsNumber/100;if(!Number.isFinite(fineFraction)||fineFraction<=0||fineFraction>1)throw Error('Fine capacity must lie between 0 and 100 percent');return {ratio:2,mode:'adaptive',fineFraction,...(close.checked?{levels:3}:{})};}
       const h=nextSettings.cellSize*2;
       const origin=[-nextSettings.width/2,0,-nextSettings.depth/2];

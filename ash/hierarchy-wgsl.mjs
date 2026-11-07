@@ -74,16 +74,30 @@ fn ht_neighbors(n:vec4<u32>){
  atomicStore(&arena[${a.state+7}u],select(0u,1u,enabled));atomicStore(&arena[${a.state+8}u],0u);
 }
 @compute @workgroup_size(64) fn hierarchy_dirty(@builtin(global_invocation_id) id:vec3<u32>){let t=id.x;if(t>=ASH_TILE_COUNT||ht_live(t)!=1u){return;}if(params.clock.y!=0u){atomicOr(&arena[${a.flags}u+t],2u);}}
+fn ht_supports_finer(t:u32)->bool{
+ let n=ht_node(t);
+ for(var z=-1;z<=2;z++){for(var y=-1;y<=2;y++){for(var x=-1;x<=2;x++){
+  let coord=vec3<i32>(x,y,z);var q=vec3<i32>(n.xyz);
+  for(var axis=0u;axis<3u;axis++){let v=coord[axis];q[axis]+=select(select((v*4+2)*i32(n.w),i32(n.w)*8,v==2),-1,v==-1);}
+  let i=ash_locate(q);if(i!=0xffffffffu&&ash_cell(i).size<n.w){return true;}
+ }}}return false;
+}
+@compute @workgroup_size(1) fn hierarchy_release_begin(){atomicStore(&arena[${a.state}u],0u);atomicStore(&arena[${a.state+9}u],HT_DEPTH);atomicStore(&arena[${a.state+12}u],0u);}
+@compute @workgroup_size(1) fn hierarchy_release_next(){let d=ht_load(${a.state+9}u);atomicStore(&arena[${a.state+9}u],select(0u,d-1u,d>0u));}
+@compute @workgroup_size(1) fn hierarchy_pressure_reset(){atomicStore(&arena[${a.state+11}u],0u);}
+@compute @workgroup_size(64) fn hierarchy_pressure(@builtin(global_invocation_id) id:vec3<u32>){let c=id.x;if(c<ASH_TILE_COUNT*8u&&ht_load(${a.state+7}u)!=0u&&ht_score(c)>=3u&&ht_load(${a.children}u+c)==0u){atomicStore(&arena[${a.state+11}u],1u);}}
+${[1,2].map(priority=>`@compute @workgroup_size(1) fn hierarchy_reclaim_${priority}(){atomicStore(&arena[${a.state}u],0u);atomicStore(&arena[${a.state+9}u],HT_DEPTH);atomicStore(&arena[${a.state+12}u],${priority}u);}`).join('\n')}
 @compute @workgroup_size(64) fn hierarchy_release(@builtin(global_invocation_id) id:vec3<u32>){
  let slot=id.x;if(slot>=HT_CAP||ht_load(${a.state+7}u)==0u){return;}let t=HT_ROOTS+slot;
- if(ht_live(t)==1u){var children=false;for(var o=0u;o<8u;o++){children=children||ht_load(${a.children}u+t*8u+o)!=0u;}
-  if(atomicLoad(&headers[t*8u+6u])>0u||children){atomicAdd(&arena[${a.state+5}u],1u);return;}
-  let parent=ht_load(${a.nodes}u+t*8u+5u)-1u;let octant=ht_load(${a.nodes}u+t*8u+6u);
-  if(ht_score(parent*8u+octant)>0u){return;}
-  let n=ht_node(t);atomicStore(&arena[${a.children}u+parent*8u+octant],0u);atomicStore(&arena[${a.nodes}u+t*8u+7u],0u);atomicStore(&headers[t*8u+3u],0u);ht_mark(parent);ht_neighbors(n);atomicAdd(&arena[${a.state+3}u],1u);
- }
- let rank=atomicAdd(&arena[${a.state}u],1u);atomicStore(&arena[${a.free}u+rank],slot);
+ if(ht_live(t)!=1u||ht_load(${a.nodes}u+t*8u+4u)!=ht_load(${a.state+9}u)){return;}
+ let cutoff=ht_load(${a.state+12}u);if(cutoff>0u&&ht_load(${a.state+11}u)==0u){return;}
+ var children=false;for(var o=0u;o<8u;o++){children=children||ht_load(${a.children}u+t*8u+o)!=0u;}
+ if(atomicLoad(&headers[t*8u+6u])>0u||children||ht_supports_finer(t)){atomicAdd(&arena[${a.state+5}u],1u);return;}
+ let parent=ht_load(${a.nodes}u+t*8u+5u)-1u;let octant=ht_load(${a.nodes}u+t*8u+6u);
+ if(ht_score(parent*8u+octant)>cutoff){return;}
+ let n=ht_node(t);atomicStore(&arena[${a.children}u+parent*8u+octant],0u);atomicStore(&arena[${a.nodes}u+t*8u+7u],0u);atomicStore(&headers[t*8u+3u],0u);ht_mark(parent);ht_neighbors(n);atomicAdd(&arena[${a.state+3}u],1u);
 }
+@compute @workgroup_size(64) fn hierarchy_free(@builtin(global_invocation_id) id:vec3<u32>){let slot=id.x;if(slot>=HT_CAP||ht_load(${a.state+7}u)==0u||ht_live(HT_ROOTS+slot)!=0u){return;}let rank=atomicAdd(&arena[${a.state}u],1u);atomicStore(&arena[${a.free}u+rank],slot);}
 fn ht_balanced(candidate:u32,request:bool)->bool{
  let n=ht_low(candidate);var balanced=true;
  for(var z=-1;z<=1;z++){for(var y=-1;y<=1;y++){for(var x=-1;x<=1;x++){
@@ -93,7 +107,7 @@ fn ht_balanced(candidate:u32,request:bool)->bool{
  }}}
  return balanced;
 }
-@compute @workgroup_size(64) fn hierarchy_balance(@builtin(global_invocation_id) id:vec3<u32>){let candidate=id.x;if(candidate>=ASH_TILE_COUNT*8u||ht_load(${a.state+7}u)==0u||ht_score(candidate)==0u){return;}_=ht_balanced(candidate,true);}
+@compute @workgroup_size(64) fn hierarchy_balance(@builtin(global_invocation_id) id:vec3<u32>){let candidate=id.x;if(candidate>=ASH_TILE_COUNT*8u||ht_load(${a.state+7}u)==0u||ht_score(candidate)<2u){return;}_=ht_balanced(candidate,true);}
 fn ht_take()->u32{loop{let n=ht_load(${a.state}u);if(n==0u){return 0xffffffffu;}let r=atomicCompareExchangeWeak(&arena[${a.state}u],n,n-1u);if(r.exchanged){return ht_load(${a.free}u+n-1u);}}}
 fn ht_allocate(candidate:u32,score:u32){
  if(candidate>=ASH_TILE_COUNT*8u||ht_load(${a.state+7}u)==0u||ht_score(candidate)!=score||ht_load(${a.children}u+candidate)!=0u){return;}

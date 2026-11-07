@@ -15,26 +15,26 @@ export function createHierarchyCollision({device,p,arena,collision,headers,shape
  ${shapes.burnerWGSL}
  fn job(w:vec3<u32>,lane:u32)->vec2<u32>{let g=w.x+w.y*ROW;let rank=g/8u;if(rank>=atomicLoad(&arena[${a.state+6}u])){return vec2<u32>(0xffffffffu);}let tile=atomicLoad(&arena[${a.collision}u+rank]);let local=(g%8u)*64u+lane;return vec2<u32>(ash_tile_cell(tile,local),local);}
  fn occupied(world:vec3<f32>)->bool{let point=(pose.inverse*vec4<f32>(world,1.0)).xyz;if(pose.tiles.z==1u){return burner_solid(point,pose.local.w,pose.burner0,pose.burner1);}let q=vec3<i32>(floor((point-pose.local.xyz)/pose.local.w));if(any(q<vec3<i32>(0))||any(q>=vec3<i32>(textureDimensions(shape)))){return false;}return textureLoad(shape,q,0).x!=0u;}
- fn overlaps(world:vec3<f32>,side:f32)->bool{
-  if(pose.tiles.z==1u){return occupied(world);}
+ fn occupancy_bounds(world:vec3<f32>,side:f32)->u32{
+  if(pose.tiles.z==1u){var covered=occupied(world);var full=true;for(var z=0u;z<2u;z++){for(var y=0u;y<2u;y++){for(var x=0u;x<2u;x++){let v=occupied(world+(vec3<f32>(f32(x),f32(y),f32(z))-.5)*side);covered=covered||v;full=full&&v;}}}return select(0u,1u,covered)|select(0u,2u,full);}
   let center=(pose.inverse*vec4<f32>(world,1.0)).xyz;let halfSide=side*.5;
   let extent=(abs(pose.inverse[0].xyz)+abs(pose.inverse[1].xyz)+abs(pose.inverse[2].xyz))*halfSide;
   let low=vec3<i32>(floor((center-extent-pose.local.xyz)/pose.local.w));let high=vec3<i32>(floor((center+extent-pose.local.xyz)/pose.local.w));let dims=vec3<i32>(textureDimensions(shape));
-  if(any(high<vec3<i32>(0))||any(low>=dims)){return false;}
+  if(any(high<vec3<i32>(0))||any(low>=dims)){return 0u;}
   let span=max(1.0,max(max(f32(high.x-low.x+1),f32(high.y-low.y+1)),f32(high.z-low.z+1)));
   let lod=min(u32(floor(log2(span))),textureNumLevels(shape)-1u);let d=vec3<i32>(textureDimensions(shape,i32(lod)));let divisor=i32(1u<<lod);
   let lo=clamp(max(low,vec3<i32>(0))/divisor,vec3<i32>(0),d-1);let hi=clamp(max(high,vec3<i32>(0))/divisor,vec3<i32>(0),d-1);
-  for(var z=lo.z;z<=hi.z;z++){for(var y=lo.y;y<=hi.y;y++){for(var x=lo.x;x<=hi.x;x++){if(textureLoad(shape,vec3<i32>(x,y,z),i32(lod)).x!=0u){return true;}}}}return false;
+  var anyOccupied=false;var full=all(low>=vec3<i32>(0))&&all(high<dims);for(var z=lo.z;z<=hi.z;z++){for(var y=lo.y;y<=hi.y;y++){for(var x=lo.x;x<=hi.x;x++){let v=textureLoad(shape,vec3<i32>(x,y,z),i32(lod)).x;anyOccupied=anyOccupied||v!=0u;full=full&&select(v!=0u,(v&0x80000000u)!=0u,lod>0u);}}}return select(0u,1u,anyOccupied)|select(0u,2u,full);
  }
  @compute @workgroup_size(64) fn clear_hierarchy(@builtin(workgroup_id) w:vec3<u32>,@builtin(local_invocation_id) l:vec3<u32>){
   let j=job(w,l.x);if(j.x==0xffffffffu){return;}let c=ash_cell(j.x);solid[j.x]=0u;
   if(j.y<8u){atomicStore(&arena[${a.demand}u+c.tile*8u+j.y],0u);}if(j.y==0u){atomicAnd(&arena[${a.flags}u+c.tile],0xfffffffdu);atomicStore(&headers[c.tile*8u],1u);atomicStore(&headers[c.tile*8u+2u],1u);}
  }
  @compute @workgroup_size(64) fn stamp_hierarchy(@builtin(workgroup_id) w:vec3<u32>,@builtin(local_invocation_id) l:vec3<u32>){
-  let j=job(w,l.x);if(j.x==0xffffffffu){return;}let c=ash_cell(j.x);if(c.size==0u){return;}let side=f32(c.size);let center=occupied(O+(vec3<f32>(c.lower)+vec3<f32>(side*.5))*H);var mask=0u;
-  for(var z=0u;z<2u;z++){for(var y=0u;y<2u;y++){for(var x=0u;x<2u;x++){if(overlaps(O+(vec3<f32>(c.lower)+(vec3<f32>(f32(x),f32(y),f32(z))+.5)*side*.5)*H,side*.5*H)){mask|=1u<<(x+2u*y+4u*z);}}}}
+  let j=job(w,l.x);if(j.x==0xffffffffu){return;}let c=ash_cell(j.x);if(c.size==0u){return;}let side=f32(c.size);let center=occupied(O+(vec3<f32>(c.lower)+vec3<f32>(side*.5))*H);var mask=0u;var fullMask=0u;
+  for(var z=0u;z<2u;z++){for(var y=0u;y<2u;y++){for(var x=0u;x<2u;x++){let bounds=occupancy_bounds(O+(vec3<f32>(c.lower)+(vec3<f32>(f32(x),f32(y),f32(z))+.5)*side*.5)*H,side*.5*H);let bit=1u<<(x+2u*y+4u*z);if((bounds&1u)!=0u){mask|=bit;}if((bounds&2u)!=0u){fullMask|=bit;}}}}
   if(mask!=0u||center){solid[j.x]=2u;}if(c.size<=1u){return;}let column=mask&5u;var differs=false;
-  for(var z=0u;z<2u;z++){for(var x=0u;x<2u;x++){if(((mask>>(x+4u*z))&5u)!=column){differs=true;}}}if(!differs&&!(mask!=0u&&!center)){return;}
+  for(var z=0u;z<2u;z++){for(var x=0u;x<2u;x++){if(((mask>>(x+4u*z))&5u)!=column){differs=true;}}}if(!differs&&!(mask!=0u&&(!center||fullMask!=255u))){return;}
   let octant=ht_child(c.tile,c.lower);atomicMax(&arena[${a.demand}u+c.tile*8u+octant],3u);
   let node=ht_node(c.tile);let low=node.xyz+vec3<u32>(octant%2u,(octant/2u)%2u,octant/4u)*node.w*4u;
   for(var z=-1;z<=1;z++){for(var y=-1;y<=1;y++){for(var x=-1;x<=1;x++){

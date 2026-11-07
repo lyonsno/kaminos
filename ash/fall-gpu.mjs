@@ -3,6 +3,7 @@ import * as THREE from '../lib/three.webgpu.js';
 import {ashAirAdmissionWGSL} from './scan-wgsl.mjs';
 import {refinementAddressWGSL} from './refinement-wgsl.mjs';
 import {fallingLayout,sourceSettings,fallingGroupState} from './fall-plan.mjs';
+import {hierarchyImpactWGSL} from './hierarchy-impact.mjs';
 const SHADER=`
 struct Parcel {position:vec4<f32>,velocity:vec4<f32>}
 struct Params {dims:vec4<u32>,origin:vec4<f32>,source:vec4<f32>,contact:vec4<f32>,clock:vec4<f32>}
@@ -113,7 +114,11 @@ export async function createGpuAshFall({renderer,layout,density,collision,wake,t
  if(layout.detailPool){
   code=code.replace('0.25,8.0',`2.0,${description.parcelUnits.toFixed(1)}`).replace('random(seed+27u)*cell','random(seed+27u)*cell*2.0');
  }
- if(layout.hierarchy)code=code.replace('0.25,8.0',`${(description.parcelUnits/32).toFixed(1)},${description.parcelUnits.toFixed(1)}`);
+ if(layout.hierarchy){
+  code=code.replace('hitCell=c+vec3<i32>(0,1,0);','hitCell=vec3<i32>(c.x,ash_cell(j).lower.y+i32(ash_cell(j).size),c.z);');
+  const start=code.indexOf(' if(hit){'),end=code.indexOf(' parcel.position=vec4<f32>(nextPosition',start);
+  code=code.slice(0,start)+hierarchyImpactWGSL+code.slice(end);
+ }
  if(layout.refinement){
   const mapStart=layout.hierarchy?layout.hierarchyArena.nodes:layout.adaptiveArena?.map;
   code=code.replace('fn index(c:vec3<u32>)->u32{return c.x+p.dims.x*(c.y+p.dims.y*c.z);}',refinementAddressWGSL(layout,layout.adaptive||layout.hierarchy?{load:i=>`atomicLoad(&groupData[${Math.ceil(description.capacity/64)*3+4}u+(${i})-${mapStart}u])`}:undefined));
@@ -158,7 +163,7 @@ fn wake_cell(i:u32){let c=vec3<u32>(i%p.dims.x,(i/p.dims.x)%p.dims.y,i/(p.dims.x
  const positions=storage(attr,'vec4',capacity*2).toReadOnly().element(particleId.mul(2)).toVar('ash_parcel_pos');
  geometry=new THREE.OctahedronGeometry(1,0);
  material=new THREE.MeshStandardNodeMaterial({color:0xc6bfb3,roughness:1});
- material.positionNode=positionGeometry.mul(positions.w.greaterThan(0).select((layout.requestedCellSize??layout.cellSize)*.36,0)).add(positions.xyz);
+ material.positionNode=positionGeometry.mul(positions.w.greaterThan(0).select((layout.hierarchy?layout.cellSize:(layout.requestedCellSize??layout.cellSize))*.36,0)).add(positions.xyz);
  if(tiled)geometry.setIndirect(drawAttr);root=tiled?new THREE.Mesh(geometry,material):new THREE.InstancedMesh(geometry,material,capacity);root.name='Airborne ash';root.userData.kaminosAODepthUnsupported=true;root.frustumCulled=false;root.castShadow=false;
  return {root,description,
   request(volume){if(!Number.isFinite(volume)||volume<=0)throw Error('Invalid ash burst volume');if(!Number.isFinite(requestedVolume+volume))throw Error('Ash source volume exceeds numeric range');if(!Number.isFinite(Math.fround((queuedVolume+volume)/layout.cellSize**3)))throw Error('Ash source budget exceeds GPU float capacity');queuedVolume+=volume;requestedVolume+=volume;},
