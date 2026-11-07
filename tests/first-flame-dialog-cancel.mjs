@@ -12,7 +12,7 @@ const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const start = source.indexOf('async function addFirstFlameField(');
 const end = source.indexOf('function installAuthoringParameterEditing()', start);
 
-function fixture({ holdActivation = false, coldBoot = false } = {}) {
+function fixture({ holdActivation = false, coldBoot = false, burner = false } = {}) {
   let field = { composition: null, settings: {}, sourcePresent: false, route: {} };
   let mountCount = 0, pending, releaseActivation, boot, bootCalls = 0, basinLoads = 0;
   const edits = createSceneEdits({ read: () => null, write: () => {} });
@@ -26,11 +26,11 @@ function fixture({ holdActivation = false, coldBoot = false } = {}) {
       }
     },
   });
-  const select = { value: '', append() {} }, button = {}, status = { textContent: '' };
+  const select = { value: '', append() {} }, kind={value:'rack'}, button = {}, status = { textContent: '' };
   const handlers = new Map();
   const dialog = {
     removed: false,
-    querySelector: selector => selector === 'select' ? select : selector === '[type="button"]' ? button : status,
+    querySelector: selector => ['select','#mesh-burner-basin'].includes(selector) ? select : selector==='#mesh-burner-kind'?kind:selector.includes('type="button"')?button:status,
     addEventListener: (type, callback) => handlers.set(type, callback),
     showModal() {}, remove() { this.removed = true; },
     close() { handlers.get('close')?.(); },
@@ -65,11 +65,12 @@ function fixture({ holdActivation = false, coldBoot = false } = {}) {
   const guardStart = source.indexOf('function assertSceneConstructionAvailable()');
   const guardEnd = source.indexOf('function checkedObjectData(', guardStart);
   sceneContext(context);
-  runInContext(source.slice(guardStart, guardEnd) + source.slice(start, end) + '\nglobalThis.openDialog = openFirstFlameFieldDialog;', context);
+  runInContext(source.slice(guardStart, guardEnd) + source.slice(start, end) + (burner?source.slice(source.indexOf('async function openMeshBurnerDialog('),source.indexOf('function migrateLegacyBurner(')):'') + '\nglobalThis.openDialog = '+(burner?'()=>openMeshBurnerDialog("housing")':'openFirstFlameFieldDialog')+';', context);
+  if(burner){context.workingScene={find:()=>({id:'housing'})};context.makeMeshBurner=async()=>{throw Error('Cancelled conversion must not start');};}
   return { context, dialog, button, select, status, edits, settings,
     read: () => field, mounts: () => mountCount, pending: () => pending,
     boot: () => boot, bootCalls: () => bootCalls, basinLoads: () => basinLoads,
-    releaseActivation: () => releaseActivation() };
+    releaseActivation: () => releaseActivation(),cancel:()=>handlers.get('cancel')?.() };
 }
 
 test('selection change and a second Add cannot steal cancellation from pending activation', async () => {
@@ -150,3 +151,8 @@ for (const lateBoot of ['resolve', 'reject']) {
     assert.equal(f.edits.state().undoCount, 1);
   });
 }
+
+for(const dismissal of ['close','cancel'])test('Make burner '+dismissal+' during first-basin activation leaves no abandoned field',async()=>{
+ const f=fixture({holdActivation:true,burner:true});await f.context.openDialog();f.select.value='saved-immersed-basin';const first=f.button.onclick();f.pending().resolve();await new Promise(setImmediate);assert.equal(f.edits.state().active.id,'@first-flame-field');
+ if(dismissal==='close')f.dialog.close();else f.cancel();f.releaseActivation();await first;assert.equal(f.read().sourcePresent,false);assert.equal(f.edits.state().undoCount,0);assert.equal(f.edits.state().active,null);
+});

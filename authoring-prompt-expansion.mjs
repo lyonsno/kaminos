@@ -13,7 +13,7 @@ export function promptExpansionMatches(request,current){
 // Application operation, independent of the provider's runtime/device ownership.
 // A provider expands {prompt,images,signal,onText} and disposes its own resources.
 export function createAuthoringPromptExpansion({createHelper,changed=()=>{},blocked=()=>null,clock=()=>performance.now(),keepLoaded=false}){
- let active=false,abort=null,bypass=null,helper=null,started=null,state={status:'idle',draft:'',request:null,result:null,error:null};
+ let active=false,abort=null,bypass=null,helper=null,started=null,state={status:'idle',draft:'',request:null,result:null,error:null,failure:null};
  const set=patch=>{if(Object.entries(patch).every(([key,value])=>Object.is(state[key],value)))return;state={...state,...patch};changed();};
  return {
   busy:()=>active,
@@ -21,7 +21,7 @@ export function createAuthoringPromptExpansion({createHelper,changed=()=>{},bloc
   async setKeepLoaded(value){if(active)throw Error('Finish the prompt expansion before changing residency.');keepLoaded=!!value;if(!keepLoaded){await helper?.dispose();helper=null;}changed();},
   async unload(){if(active)throw Error('Finish the prompt expansion before unloading.');await helper?.dispose();helper=null;changed();},
   async dispose(){if(active)abort.abort(Error('Prompt page closed.'));await helper?.dispose();helper=null;},
-  clear(){if(active)throw Error('Finish the prompt expansion first.');started=null;state={status:'idle',draft:'',request:null,result:null,error:null};changed();},
+  clear(){if(active)throw Error('Finish the prompt expansion first.');started=null;state={status:'idle',draft:'',request:null,result:null,error:null,failure:null};changed();},
   stop(){if(!active)return false;abort.abort(Error('Prompt expansion cancelled.'));set({status:'stopping'});return true;},
   runOutsideQueue(){if(!active||state.status!=='waiting')return false;bypass.abort(Error('Run outside queue selected.'));set({status:'leaving-queue',progress:'Leaving the queue…'});return true;},
   async expand({prompt,model='flux3',reference=null,admission='queue'}){
@@ -32,7 +32,7 @@ export function createAuthoringPromptExpansion({createHelper,changed=()=>{},bloc
    if(!['queue','outside'].includes(admission))throw Error('Choose queued or outside-queue execution');
    const request={prompt:String(prompt),model,reference:reference?structuredClone(reference):null,admission};
    active=true;abort=new AbortController();bypass=new AbortController();started=clock();
-   set({status:'loading',request,draft:'',result:null,error:null,elapsedMs:null,coordination:null,queue:null,progress:'Loading the prompt helper…'});
+   set({status:'loading',request,draft:'',result:null,error:null,failure:null,elapsedMs:null,coordination:null,queue:null,progress:'Loading the prompt helper…'});
    try{
     helper??=await createHelper({keepLoaded,onProgress:event=>set({status:'loading',...(event.phase==='unconfigured'?{coordination:'Shared GPU coordination is unavailable on this server.'}:event.phase==='outside-queue'?{coordination:'Running outside Greenroom by your choice.'}:{}),progress:event.phase==='resident'?'Using the loaded prompt helper…':'Loading the prompt helper…'}),
      onWait:wait=>set({status:'waiting',queue:wait,progress:`Greenroom queue${Number.isInteger(wait.position)?` · position ${wait.position}`:''}${wait.queueHeld?' · held by operator':''}${wait.paused?' · paused':''}${wait.heldBy?.length?' · GPU held by '+wait.heldBy.join(', '):''}`})});
@@ -46,7 +46,10 @@ export function createAuthoringPromptExpansion({createHelper,changed=()=>{},bloc
    }catch(error){
     try{await helper?.dispose();}catch(cleanup){error.cleanupError=String(cleanup.message||cleanup);}finally{helper=null;}
     const result=error.result||state.result;
-    set({status:abort.signal.aborted?'stopped':'failed',error:String(error.message||error),...(result?{result,draft:result.text}:{}),greenroomHandback:error.greenroomHandback});
+    const message=String(error.message||error),lostContext=/valid external Instance reference no longer exists|GPUDevice.*lost|\[Device\].*lost/i.test(message);
+    const failure={code:lostContext?'gpu-context-lost':'prompt-expansion-failed',message,stack:error.stack||null};
+    const recovery=lostContext?'The prompt helper lost its GPU context. Your request, reference and any draft are retained. Expand again to start a fresh worker.':message;
+    set({status:abort.signal.aborted?'stopped':'failed',failure,error:recovery,...(result?{result,draft:result.text}:{}),greenroomHandback:error.greenroomHandback});
     if(!abort.signal.aborted)throw error;
     return null;
    }finally{
@@ -60,7 +63,7 @@ export function createAuthoringPromptExpansion({createHelper,changed=()=>{},bloc
 export function installAuthoringPromptExpansion({document,controller,assets,imageController,changed=()=>{},reference=()=>assets.read({selectionOnly:true}).selected}){
  const byId=id=>document.getElementById(id),prompt=byId('asset-prompt');
  const root=document.createElement('div');root.className='asset-prompt-help';
- root.innerHTML=`<div class="asset-prompt-help-actions"><button type="button" id="asset-prompt-expand" title="BFL’s FLUX.3 prompt helper">Expand prompt</button><button type="button" id="asset-prompt-cancel" hidden>Cancel expansion</button><button type="button" id="asset-prompt-undo" hidden>Undo expansion</button></div><div id="asset-prompt-help-status" role="status" aria-live="polite"></div><textarea id="asset-prompt-draft" aria-label="Expanded prompt draft" rows="5" hidden></textarea><button type="button" id="asset-prompt-use" hidden>Use expanded prompt</button>`;
+ root.innerHTML=`<div class="asset-prompt-help-actions"><button type="button" id="asset-prompt-expand" title="BFL’s FLUX.3 prompt helper">Expand prompt</button><button type="button" id="asset-prompt-cancel" hidden>Cancel expansion</button><button type="button" id="asset-prompt-undo" hidden>Undo expansion</button></div><div id="asset-prompt-help-status" role="status" aria-live="polite"></div><details id="asset-prompt-failure" hidden><summary>Failure details</summary><pre id="asset-prompt-failure-detail"></pre></details><textarea id="asset-prompt-draft" aria-label="Expanded prompt draft" rows="5" hidden></textarea><button type="button" id="asset-prompt-use" hidden>Use expanded prompt</button>`;
  prompt.insertAdjacentElement('afterend',root);
  const admissionControls=document.createElement('div');admissionControls.className='asset-prompt-residency';
  admissionControls.innerHTML=`<label title="Start without waiting for Greenroom. This can overlap another job and share its GPU and memory."><input type="checkbox" id="asset-prompt-outside-queue"> Run outside queue</label><button type="button" id="asset-prompt-skip-queue" hidden title="Remove this expansion from the queue and start it alongside any current job">Run outside queue now</button>`;root.append(admissionControls);
@@ -91,12 +94,15 @@ export function installAuthoringPromptExpansion({document,controller,assets,imag
   const draft=byId('asset-prompt-draft');draft.hidden=!showDraft;draft.readOnly=busy;
   if(state.draft!==painted){draft.value=state.draft;painted=state.draft;}
   byId('asset-prompt-use').hidden=!showDraft||busy;byId('asset-prompt-use').disabled=!matches;
-  byId('asset-prompt-undo').hidden=!wasApplied||busy;
+  // Recalled PNG metadata has no live controller request, but still contains
+  // the original request that Undo should restore.
+  byId('asset-prompt-undo').hidden=!(applied&&prompt.value===applied.text&&promptExpansionMatches(applied.request,current()))||busy;
   let message=state.error||state.progress||'';
   if(showDraft&&!busy&&!matches)message='The selected image or model changed. Restore the original selection to use this expansion, or expand again.';
   if(state.coordination)message+=` · ${state.coordination}`;
   if(state.elapsedMs!==null)message+=` · ${(state.elapsedMs/1000).toFixed(1)} s${busy?' elapsed':''}`;
   byId('asset-prompt-help-status').textContent=message;
+  byId('asset-prompt-failure').hidden=!state.failure;byId('asset-prompt-failure-detail').textContent=state.failure?.stack||state.failure?.message||'';
   byId('asset-prompt-help-status').classList.toggle('error',state.status==='failed');
   if(state.status==='waiting'&&lastStatus!=='waiting')admissionControls.scrollIntoView?.({block:'nearest'});
   lastStatus=state.status;

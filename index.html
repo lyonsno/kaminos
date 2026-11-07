@@ -603,6 +603,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 .flame-grid-tuning h3 { font-size: 14px; margin: 12px 0 6px; }
 #grid-tuning-status[data-state="invalid"] { color: #ffb584; }
 #grid-tuning-status[data-state="draft"] { color: #f0d486; }
+
 </style>
 <link rel="stylesheet" href="./authoring-workspace.css">
 <link rel="stylesheet" href="./volume-grid-tuning.css">
@@ -3043,6 +3044,7 @@ import {createSceneRecordOperations} from './scene-record-operations.mjs';
 import {createSceneDocumentSession} from './scene-document-session.mjs';
 import {createSceneMembershipOperations, membershipEditTargetId as sceneMembershipTargetId} from './scene-membership-operations.mjs';
 import {createSceneMembershipBatch} from './scene-membership-batch.mjs';
+import {meshBurnerPlan} from './burner-assembly.mjs';
 import {ASH_OBJECT_TYPE,ASH_OBJECT_SOURCE,defaultAshSettings,checkedAshSettings,checkedAshPose} from './ash/scene-record.mjs';
 import {ashMembershipEntry} from './ash/history-record.mjs';
 import {createAshSceneObject} from './ash/scene-object.mjs';
@@ -3546,6 +3548,9 @@ import {defaultKilnRecipe} from './inference-kiln-default.mjs';
 import {createInferenceKilnPreview} from './inference-kiln-preview.mjs';
 import {installGenerateLayout} from './authoring-generate-layout.mjs';
 import {createImageIterationHistory,installImageIterationHistory} from './authoring-image-history.mjs';
+import {createImageRecipeIteration,installImageRecipeStatus} from './authoring-image-recipe.mjs';
+import {createImageRunExecutor,installImageVariationRuns} from './authoring-image-runs.mjs';
+import {createImageExperiments,installImageExperiments,experimentRequest} from './authoring-image-experiments.mjs';
 import {installBrowseLayout} from './authoring-browse-layout.mjs';
 import {createAppFrameSource} from './app-frame-source.mjs';
 import {createSceneFrameComposition} from './scene-frame-composition.mjs';
@@ -27667,6 +27672,7 @@ function syncSceneDataInspector() {
   const lightPanel=document.getElementById('selected-spot-properties');lightPanel.hidden=entry?.type!=='light';if(!lightPanel.hidden)for(const input of lightPanel.querySelectorAll('[data-light-param]')){const value=entry.light[input.dataset.lightParam];if(input.type==='checkbox')input.checked=value;else if(document.activeElement!==input||!scenePlacementTools.edits.state().active)input.value=value;}
   primitive.hidden=entry?.type!==PROCEDURAL_MESH_TYPE||entry.geometry?.kind==='annular';
   const relations=document.getElementById('selected-object-relations');relations.hidden=!entry;
+  const makeBurner=document.getElementById('selected-mesh-burner');if(makeBurner)makeBurner.hidden=!entry||!['glb','procedural-mesh','pbr'].includes(entry.type)||workingScene.groups.some(g=>g.assembly&&g.objectIds.includes(entry.id));
   const duplicate=document.getElementById('object-duplicate');duplicate.disabled=!canDuplicateObject(entry);
   const collisionPanel=document.getElementById('selected-collision-properties');
   if(collisionPanel){collisionPanel.hidden=!canCollideWithFire(entry)||!activeSceneComposition;document.getElementById('object-fire-collision').checked=entry?.collision?.enabled===true;document.getElementById('object-fire-collision-status').textContent=!entry?.collision?.enabled?'Enable to use this object as an obstacle.':isAuthoredKilnCollisionRoute()?'Collision updates on the next simulation step.':'Scene collisions are off in Fire & smoke.';}
@@ -27940,13 +27946,16 @@ function installSceneConstruction() {
   const groupPanel=document.createElement('section');groupPanel.id='selected-group-properties';groupPanel.hidden=true;
   groupPanel.innerHTML='<h3 id="group-kind-label">Group</h3><p id="group-mode-hint">Its frame places all members together. Select a member to edit its own data.</p><button type="button" class="btn" id="group-make-assembly">Make assembly</button><button type="button" class="btn" id="group-duplicate">Duplicate · Shift D</button><button type="button" class="btn" id="object-ungroup">Ungroup</button>';
   relations.after(groupPanel);
+  const meshBurnerPanel=document.createElement('section');meshBurnerPanel.id='selected-mesh-burner';meshBurnerPanel.hidden=true;
+  meshBurnerPanel.innerHTML='<h3>Burner</h3><button class="btn" type="button" id="object-make-burner">Make burner…</button>';relations.append(meshBurnerPanel);
+  document.getElementById('object-make-burner').onclick=()=>openMeshBurnerDialog(workingScene.activeObjectId).catch(error=>setInfo(error.message));
   document.getElementById('group-make-assembly').onclick=()=>{try{const group=selectedSceneGroupEntry();setSceneAssembly(group.id,assemblyForMembers(group.objectIds.map(id=>workingScene.find(id)),viewportDisplay.hiddenIds));}catch(error){setInfo(error.message);}};
   const assemblyPanel=document.createElement('section');assemblyPanel.id='selected-assembly-properties';assemblyPanel.hidden=true;
   assemblyPanel.innerHTML='<h3>Burner</h3><p id="assembly-mode-hint"></p><label class="slider-row"><span>Outlet</span><select class="transform-input" id="assembly-outlet"></select></label>';
   document.getElementById('selected-flame-properties').before(assemblyPanel);
   document.getElementById('assembly-outlet').onchange=event=>{authoringControlSessions.forEach(session=>session.commit());assemblyOutletChoices.set(workingScene.activeGroupId,event.target.value);updateAuthoringPropertySelection();};
   const modeLabel=document.createElement('span');modeLabel.id='assembly-edit-mode';modeLabel.hidden=true;modeLabel.style.cssText='padding:6px 12px;color:#ffca77';document.getElementById('transform-bar').append(modeLabel);
-  window.kaminosSceneAuthoring={addAsh:addAuthoredAsh,addFlameEmitter:addFirstFlameField,addWaterEmitter:addLocalLiquidEmitter,addLight:addSceneSpotLight,read:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),activeFieldId:workingScene.activeFieldId}),setFireSettings:editOwnedFireSettings,setAssembly:setSceneAssembly,addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
+  window.kaminosSceneAuthoring={makeBurner:makeMeshBurner,addAsh:addAuthoredAsh,addFlameEmitter:addFirstFlameField,addWaterEmitter:addLocalLiquidEmitter,addLight:addSceneSpotLight,read:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),activeFieldId:workingScene.activeFieldId}),setFireSettings:editOwnedFireSettings,setAssembly:setSceneAssembly,addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
     setRepetition:(id,value)=>setSceneRepetition(id,value),repetitionState:sceneRepetitionState,makeCopiesEditable:makeSceneRepetitionReal,
     setWaterCollision:setObjectWaterCollision,
     setCollision:(id,value)=>{assertSceneConstructionAvailable();if(!activeSceneComposition)throw Error('Fire & smoke is not mounted');const target=ensureObjectCollisionTarget(id);return edits.apply(target,typeof value==='boolean'?{domainId:'flame-field',enabled:value}:value,'Set Fire & smoke obstacle');},
@@ -28128,7 +28137,7 @@ function createPageSceneMembershipBatch(){
       check(value){normalizeFlameDomainTranslation(value.domain);normalizeFlameDomainScale(value.domainScale??1);if(value.domainFollowSource!==undefined&&typeof value.domainFollowSource!=='boolean')throw Error('Domain follow-source must be Boolean');},
       restore:restoreCompoundSceneContext,
     },
-    select:(ids,id)=>ids.length?setSceneSelection(ids,id):clearActiveSceneObjectSelection(),
+    select:(ids,id)=>{const prior=burnerGraphWriting;burnerGraphWriting=true;try{return ids.length?setSceneSelection(ids,id):clearActiveSceneObjectSelection();}finally{burnerGraphWriting=prior;}},
     detach:detachSelectionMember,
     duplicate:{supported:canDuplicateObject,object:id=>duplicateSceneObject(id,{deferRecord:true}),groupId:()=>makeSceneObjectId('group')},
     changed(){renderSceneObjectList();updateTransformInspector();window._kaminosDirty?.();},
@@ -28484,6 +28493,39 @@ function addBurnerObject(kind) {
   },kind==='burner-assembly'?'Add burner assembly':kind==='burner-bed'?'Add burner bed':'Add flame source');
   if(kind==='burner-assembly')setActiveSceneGroup(selectedId);else setActiveSceneObject(selectedId);
   return selectedId;
+}
+async function makeMeshBurner(bodyId,{kind='nozzle',outlet=null,reuseSourceId=null}={}) {
+  assertSceneConstructionAvailable();
+  if(!activeSceneComposition)throw Error('Add Fire & smoke and choose an immersed-source basin first');
+  const entry=workingScene.find(bodyId);if(!entry?.object)throw Error('Choose a placed burner housing');
+  const box=new THREE.Box3().setFromObject(entry.object,true);
+  const snapshot=sceneMembershipBatch.capture();
+  const template=authoredFlameSourceRecords().find(row=>row.id===reuseSourceId)??authoredFlameSourceRecords()[0]??{type:FLAME_EMITTER_TYPE,source:FLAME_EMITTER_SOURCE,emissionEnabled:true,emission:{domainId:FIRE_DOMAIN_ID,settings:Object.fromEntries(Object.entries(readVolumeSettingsValues().domControls).filter(([id])=>fireControlOwner(id)==='source'))}};
+  if(reuseSourceId&&(!template||template.id!==reuseSourceId||snapshot.groups.some(g=>g.assembly&&g.objectIds.includes(reuseSourceId))))throw Error('The new flame source is no longer available for this burner');
+  const sourceId=reuseSourceId??makeSceneObjectId('flame-source'),groupId=makeSceneObjectId('burner');
+  const next=meshBurnerPlan({scene:snapshot,bodyId,template,kind,bounds:{min:box.min.toArray(),max:box.max.toArray()},sourceId,groupId,outlet,reuseSourceId});
+  await scenePlacementTools.edits.applySettled('@selection-membership',next,'Make '+kind+' burner');
+  setInfo('Burner created · Tab edits the housing and outlet. Aim and size the outlet at the mouth.');
+  return {groupId,bodyId,sourceId};
+}
+async function openMeshBurnerDialog(bodyId){
+  assertSceneConstructionAvailable();
+  const entry=workingScene.find(bodyId);if(!entry)throw Error('Choose a placed burner housing');
+  const dialog=document.createElement('dialog');dialog.id='mesh-burner-dialog';
+  dialog.innerHTML='<form method="dialog"><h2>Make burner</h2><p>The selected mesh is the housing. Add an editable outlet, then use Tab to position it at the opening.</p><label>Outlet layout <select id="mesh-burner-kind"><option value="rack">Rack · slot</option><option value="ring">Ring · jets</option><option value="nozzle">Nozzle</option></select></label><label id="mesh-burner-basin-label">Fire basin <select id="mesh-burner-basin"><option value="">Choose an immersed-source basin…</option></select></label><p>The initial outlet faces upward above the housing. Its pose and aperture remain editable.</p><p role="status"></p><button type="button" class="btn">Make burner</button><button value="cancel" class="btn">Cancel</button></form>';
+  const basin=dialog.querySelector('#mesh-burner-basin'),kind=dialog.querySelector('#mesh-burner-kind'),button=dialog.querySelector('[type="button"]'),status=dialog.querySelector('[role="status"]');
+  const needsBasin=!activeSceneComposition,request=new AbortController();let busy=false,reuseSourceId=null;
+  dialog.querySelector('#mesh-burner-basin-label').hidden=!needsBasin;button.disabled=needsBasin;
+  basin.onchange=()=>{button.disabled=busy||!activeSceneComposition&&!basin.value;};
+  button.onclick=async()=>{if(busy||request.signal.aborted)return;busy=true;button.disabled=true;kind.disabled=true;basin.disabled=true;
+    try{
+      if(!activeSceneComposition){reuseSourceId=await addFirstFlameField(basin.value,{signal:request.signal});request.signal.throwIfAborted();}
+      await makeMeshBurner(bodyId,{kind:kind.value,reuseSourceId});if(!request.signal.aborted)dialog.close();
+    }catch(error){if(!request.signal.aborted)status.textContent=error.message;}
+    finally{busy=false;if(!request.signal.aborted){kind.disabled=false;basin.disabled=false;button.disabled=!activeSceneComposition&&!basin.value;}}
+  };
+  const cancel=()=>{request.abort();if(busy&&scenePlacementTools.edits.state().active?.id==='@first-flame-field')scenePlacementTools.edits.cancel();};dialog.querySelector('[value="cancel"]').onclick=cancel;dialog.addEventListener('cancel',cancel);dialog.addEventListener('close',()=>{cancel();dialog.remove();},{once:true});document.body.append(dialog);dialog.showModal();
+  if(needsBasin){try{const response=await fetch('/api/volume-settings-presets',{cache:'no-store',signal:request.signal}),index=await response.json();if(!response.ok)throw Error(index.error||'Basin library unavailable');validateVolumeSettingsPresetIndex(index);for(const item of index.entries){const option=document.createElement('option');option.value=item.presetId;option.textContent=item.label||item.presetId;basin.append(option);}}catch(error){if(!request.signal.aborted)status.textContent=error.message;}}
 }
 function migrateLegacyBurner(recipe) {
   const bed=newBedRecord(recipe,bedPoseBelowSource());mountProceduralMesh(bed);
@@ -29266,6 +29308,10 @@ sceneInitialization.then(async () => {
     const imageRoute = kaminosImageAssetRouteFromSearch(params);
     if (imageRoute) {
       await (earlyImageLoaded ?? loadKaminosImageAssetRoute(imageRoute));
+      if(params.get('image_action')==='iterate'){
+        try{await window.kaminosAssets.openImageRecipe({kind:'image',root:imageRoute.requestedRoot,path:imageRoute.requestedPath,source:imageRoute.effectiveUrl,name:params.get('image_name')||imageRoute.fileName});}
+        catch(error){setInfo('Image recipe: '+error.message);}
+      }
       if (params.get('sam') === '1') await window.kaminosOpenImageMasks(imageRoute.effectiveUrl, { fileName: imageRoute.fileName });
     }
     if (typeof requestedStudioLook !== 'undefined' && requestedStudioLook) {
@@ -29366,6 +29412,7 @@ sceneInitialization.then(async () => {
 
 function setupAuthoringAssets(){
   let redraw=()=>{};
+  let recipeIteration=null,recipeStatus=null,imageExperiments=null,imageExperimentsUI=null;
   // The frame owner models borrow frames from: the fire scene's volume prototype while it
   // renders, otherwise the ordinary scene itself, so Generate needs no fire scene. A fluid
   // route that booted but stayed inactive (a cancelled or refused Add > Flame) draws nothing.
@@ -29675,7 +29722,7 @@ function setupAuthoringAssets(){
     if(entry.visibility?.status==='withheld'||historyReads.has(source)||authoringImageHistory.read().viewed?.provenance)return;
     historyReads.add(source);fetch(source).then(async response=>{if(!response.ok)throw Error(`Image metadata HTTP ${response.status}`);const provenance=readPngProvenance(new Uint8Array(await response.arrayBuffer()));if(provenance)authoringImageHistory.annotate(source,{provenance});}).catch(error=>console.warn('Image history metadata unavailable',error));
   };
-  authoringAssets=createAuthoringAssets({request,prepareImage:createImagePreparation(),generator:generation,nameForSource:source=>workingScene.objects.find(entry=>entry.source===source)?.label,changed:state=>{syncImageHistory(state);authoringAssetsUI?.render(state);authoringImageHistoryUI?.render();authoringImageUI?.render();authoringPromptUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render(state);},
+  authoringAssets=createAuthoringAssets({request,prepareImage:createImagePreparation(),generator:generation,nameForSource:source=>workingScene.objects.find(entry=>entry.source===source)?.label,changed:state=>{syncImageHistory(state);authoringAssetsUI?.render(state);authoringImageHistoryUI?.render();authoringImageUI?.render();authoringPromptUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render(state);imageExperimentsUI?.render();},
     uploadImage:async file=>{
       const response=await fetch('/api/ingest-image?'+new URLSearchParams({name:file.name}),{method:'POST',body:await file.arrayBuffer()});const value=await response.json();
       if(!response.ok||value.schema!=='kaminos.asset-ingest.v0'||value.kind!=='image'||!value.entry?.source)throw Error(value.error||'Image storage failed');return value.entry;
@@ -29695,7 +29742,7 @@ function setupAuthoringAssets(){
         return await importSceneMesh(new File([bytes],entry.name||'asset.glb',{type:'model/gltf-binary'}),{bytes,telemetryOp,generation:entry.generation||null,label:entry.label,assetOrigin:entry.assetOrigin||null});
       }catch(error){loadingTelemetry.fail('asset',error,{token:telemetryOp.token});throw error;}
     }});
-  authoringAssetsUI=installAuthoringAssets({document,controller:authoringAssets,edits:scenePlacementTools.edits});redraw=()=>{const state=authoringAssets.read();authoringMeshModel?.render();authoringAssetsUI.render(state);authoringImageHistoryUI?.render();authoringImageUI?.render();authoringPromptUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render(state);};
+  authoringAssetsUI=installAuthoringAssets({document,controller:authoringAssets,edits:scenePlacementTools.edits,onExperiment:id=>imageExperimentsUI.open(id)});redraw=()=>{const state=authoringAssets.read();authoringMeshModel?.render();authoringAssetsUI.render(state);authoringImageHistoryUI?.render();authoringImageUI?.render();authoringPromptUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render(state);recipeStatus?.render();imageExperimentsUI?.render();};
   authoringMeshModel=installMeshModelChoice({document,busy:()=>meshBusy('sf3d')||meshBusy('trellis')||meshBusy('trellisPage')||authoringTrellisPageGenerator?.busy()===true,changed:()=>{if(authoringMeshModel?.value()==='trellis')trellis();if(authoringMeshModel?.value()==='trellis-page')trellisPage();redraw();},trellisState:()=>authoringTrellisGenerator?.read()||null});
   authoringImageGenerator=createKleinAuthoringImageGeneration({
     context:()=>({sharedGpu,prototype:frameOwner(),host:compositionHost,handoff:foregroundHandoff()}),
@@ -29703,7 +29750,7 @@ function setupAuthoringAssets(){
     // A locally mounted weight package (KAMINOS_KLEIN_WEIGHTS_ROOT) spares each port's
     // browser cache a 3 GB download; otherwise the published package is used.
     weights:async model=>{const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};return authoringImageWeightRoot(config,model);},
-    deliver:async (file,provenance)=>{const entry=await authoringAssets.upload(file);authoringImageHistory.record({...entry,kind:'image',provenance});authoringAssets.prepare().catch(error=>console.warn('Generated image preparation failed',error));return entry;},
+    deliver:async (file,provenance)=>{const entry=await authoringAssets.upload(file);authoringImageHistory.record({...entry,kind:'image',provenance});await imageExperiments?.recordResult(entry,provenance);if(provenance.iteration?.parent)authoringGenerateLayout.compare(true);authoringAssets.prepare().catch(error=>console.warn('Generated image preparation failed',error));return entry;},
     changed:()=>redraw(),
     blocked:()=>authoringPromptExpansion?.busy()?'A prompt is expanding.':compositionModule?'This scene has another inference/performance host. Use its existing generation controls.':meshBusy('trellisPage')?'TRELLIS is generating on this page.':null,
   });
@@ -29737,7 +29784,7 @@ function setupAuthoringAssets(){
     }});
   addEventListener('pagehide',()=>{authoringPromptExpansion?.dispose().catch(()=>{});const body=promptPageAdmission?{action:'withdraw-queued',runId:promptPageAdmission}:promptPageLease?{action:'release',leaseId:promptPageLease,reason:'Generate page closed'}:null;if(body)navigator.sendBeacon?.('/api/gpu-lease',new Blob([JSON.stringify(body)],{type:'application/json'}));});
   // TRELLIS runs in the GPU queue's own browser, so images can still be made meanwhile.
-  authoringImageUI=installKleinImageGeneration({document,controller:authoringImageGenerator,assets:authoringAssets,reference:()=>authoringImageHistory.reference(),promptExpansion:authoringPromptExpansion,promptProvenance:()=>authoringPromptUI?.provenance(),meshBusy:()=>meshBusy('sf3d')||meshBusy('trellisPage')});
+  authoringImageUI=installKleinImageGeneration({document,controller:authoringImageGenerator,assets:authoringAssets,reference:()=>authoringImageHistory.reference(),promptExpansion:authoringPromptExpansion,promptProvenance:()=>authoringPromptUI?.provenance(),decorateRequest:r=>recipeIteration?recipeIteration.decorate(r):r,pageAuthor:async()=>{const config=await loadStartupRuntimeConfig();return config.imageGenerationAuthor;},meshBusy:()=>meshBusy('sf3d')||meshBusy('trellisPage')});
   authoringPromptUI=installAuthoringPromptExpansion({document,controller:authoringPromptExpansion,assets:authoringAssets,reference:()=>authoringImageHistory.reference(),imageController:authoringImageGenerator,changed:()=>redraw()});
   const openMasks=entry=>window.kaminosOpenImageMasks(entry.source||`/api/read?${new URLSearchParams({root:entry.root,path:entry.path})}`,entry).catch(error=>console.warn('Masks unavailable',error));
   authoringBrowseLayout=installBrowseLayout({document,controller:authoringAssets,openMasks,inScene:()=>new Set(workingScene.objects.map(entry=>entry.source).filter(Boolean)),open:mode=>authoringAssetsUI.open(mode)});
@@ -29773,14 +29820,29 @@ function setupAuthoringAssets(){
     const rendering=checkedFireRendering(recipe.document.postprocessing?.fireLighting);
     let app;while(!(app=await appGpuHost())){signal.throwIfAborted();await new Promise(resolve=>requestAnimationFrame(resolve));}signal.throwIfAborted();
     return createInferenceKilnPreview({viewport,document,recipe,prompt,request,settings,rendering,sharedGpu,app,signal,loadGlb:source=>new GLTFLoader().loadAsync(source).then(gltf=>gltf.scene),environment:HDR_ENVS[recipe.document.environment?.name]});
-  },imageState:()=>authoringImageGenerator.read(),selected:()=>authoringAssets.read({selectionOnly:true}).selected,trellisSettings:()=>trellisAvailability?.settings||null,queueLine:()=>authoringMeshModel?.value()==='trellis'?authoringTrellisGenerator?.read().queueLine||'':''});redraw();
-  authoringImageHistoryUI=installImageIterationHistory({document,history:authoringImageHistory,assets:authoringAssets,layout:authoringGenerateLayout,busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy(),
-    onEdit:()=>{authoringPromptUI.reset();document.getElementById('asset-prompt').value='';document.getElementById('asset-use-reference').checked=true;redraw();document.getElementById('asset-prompt').focus();},
-    onRecall:entry=>{const p=entry.provenance;if(!p)return;const input=authoringImageHistory.read().entries.find(e=>e.source===p.reference?.source);if(input)authoringImageHistory.useReference(input.source);else if(p.reference?.source){authoringImageHistory.record({kind:'image',source:p.reference.source,name:p.reference.name||'Original reference'});authoringImageHistory.useReference(p.reference.source);authoringImageHistory.view(entry.source);authoringAssets.select(entry);}
-      const model=/FLUX\.3/.test(p.model)?'flux3':'flux2';document.getElementById('asset-image-model').value=model;document.getElementById('asset-image-model').dispatchEvent(new Event('change'));document.getElementById('asset-use-reference').checked=!!p.reference;document.getElementById('asset-seed').value=String(p.seed);authoringPromptUI.recall(p);document.getElementById('asset-prompt').value=p.prompt;document.getElementById('asset-prompt').dispatchEvent(new Event('input'));redraw();}});
-  const restoreHistory=authoringImageHistory.read().viewed;if(restoreHistory&&!authoringAssets.read({selectionOnly:true}).selected)authoringAssets.select(restoreHistory);
+  },imageState:()=>authoringImageGenerator.read(),selected:()=>authoringAssets.read().selected,trellisSettings:()=>trellisAvailability?.settings||null,queueLine:()=>authoringMeshModel?.value()==='trellis'?authoringTrellisGenerator?.read().queueLine||'':''});redraw();
+  recipeIteration=createImageRecipeIteration({history:authoringImageHistory,assets:authoringAssets,onOpened:async()=>{await authoringAssetsUI.open('generate',{refresh:false});document.getElementById('asset-generate').scrollTop=0;document.getElementById('asset-step-image').scrollTop=0;},readControls:()=>authoringImageUI.readRequest(),applyControls:r=>authoringImageUI.applyRecipe(r),recallPrompt:p=>authoringPromptUI.recall(p),resetPrompt:()=>authoringPromptUI.reset(),busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy()||!!authoringImageGenerator.read().pending,changed:()=>redraw()});
+  recipeStatus=installImageRecipeStatus({document,iteration:recipeIteration,busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy()});
+  const editHistoryImage=entry=>{recipeIteration.editImage(entry);document.getElementById('asset-prompt').value='';document.getElementById('asset-use-reference').checked=true;redraw();document.getElementById('asset-prompt').focus();};
+  imageExperiments=createImageExperiments({changed:()=>imageExperimentsUI?.render(),openRecipe:entry=>recipeIteration.open(entry),openImageEditor:async entry=>{
+    authoringImageHistory.record(entry);authoringAssets.select(entry);authoringImageHistory.useReference(entry.source);
+    await authoringAssetsUI.open('generate',{refresh:false});editHistoryImage(entry);authoringGenerateLayout.compare(true);
+  }});
+  const imageRunExecutor=createImageRunExecutor({request:experimentRequest,generate:async request=>{try{return await authoringImageGenerator.run(request);}catch(error){if(authoringImageGenerator.read().pending)error.pendingImage=true;throw error;}},stopGeneration:()=>authoringImageGenerator.stop(),busy:()=>authoringImageGenerator.busy()||!!authoringImageGenerator.read().pending||authoringPromptExpansion.busy()||meshBusy('sf3d')||meshBusy('trellisPage'),changed:doc=>{if(doc)imageExperiments.accept(doc);imageExperimentsUI?.render();}});
+  imageExperimentsUI=installImageExperiments({runs:{install:host=>installImageVariationRuns({document,host,controller:imageExperiments,executor:imageRunExecutor,request:experimentRequest,pageAuthor:async()=>{const config=await loadStartupRuntimeConfig();return config.imageGenerationAuthor;},imageState:()=>authoringImageGenerator.read(),retrySaving:()=>authoringImageGenerator.retryPersistence()})},document,controller:imageExperiments,assets:authoringAssets,assetsUI:authoringAssetsUI,history:authoringImageHistory,layout:authoringGenerateLayout,recipe:recipeIteration,busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy()});
+  authoringImageHistoryUI=installImageIterationHistory({document,history:authoringImageHistory,assets:authoringAssets,layout:authoringGenerateLayout,busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy()||recipeIteration.read().opening,
+    onEdit:editHistoryImage,
+    onRecall:entry=>recipeIteration.recall(entry)});
+  const restoreHistory=authoringImageHistory.read().viewed;if(restoreHistory&&!authoringAssets.read().selected)authoringAssets.select(restoreHistory);
   loadStartupRuntimeConfig().then(config=>authoringPromptUI.configureDefault(config.pup?.keepLoadedDefault===true)).catch(error=>console.warn('Prompt residency default unavailable',error));
-  window.kaminosAssets={...authoringAssets,open:mode=>authoringAssetsUI.open(mode),close:()=>authoringAssetsUI.close(),panel:()=>authoringAssetsUI.state(),imageHistory:authoringImageHistory,showHistoryImage:source=>authoringImageHistoryUI.show(source),compareImages:value=>authoringGenerateLayout.compare(value),images:authoringImageGenerator,promptExpansion:authoringPromptExpansion,expandPrompt:()=>authoringPromptUI.expand(),generationFlame:authoringGenerateLayout.ceremony};
+  window.kaminosAssets={...authoringAssets,open:mode=>authoringAssetsUI.open(mode),close:()=>authoringAssetsUI.close(),panel:()=>authoringAssetsUI.state(),imageHistory:authoringImageHistory,showHistoryImage:source=>authoringImageHistoryUI.show(source),compareImages:value=>authoringGenerateLayout.compare(value),images:authoringImageGenerator,imageRecipe:recipeIteration,generateImage:options=>authoringImageUI.run(options),imageRequest:()=>authoringImageUI.readRequest(),
+    openImageRecipe:entry=>recipeIteration.open(entry),
+    experiments:{...imageExperiments,open:id=>imageExperimentsUI.open(id),runs:imageRunExecutor},
+    promptExpansion:authoringPromptExpansion,expandPrompt:()=>authoringPromptUI.expand(),generationFlame:authoringGenerateLayout.ceremony};
+  addEventListener('pagehide',()=>{const active=imageRunExecutor.read();if(active){authoringImageGenerator.stop();navigator.sendBeacon?.('/api/image-experiments',new Blob([JSON.stringify({action:'stop-run',id:active.experimentId,runId:active.runId})],{type:'application/json'}));}});
+  const experimentParams=new URLSearchParams(location.search);
+  if(experimentParams.has('image_experiment'))imageExperimentsUI.open(experimentParams.get('image_experiment')).catch(error=>{document.getElementById('asset-status').textContent=error.message;});
+  else if(experimentParams.get('asset_collection')==='image-experiments')authoringAssetsUI.open('browse').then(()=>authoringAssets.browse('image-experiments'));
 }
 
 </script>

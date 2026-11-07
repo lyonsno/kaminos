@@ -107,3 +107,10 @@ test('selection-only reads return a detached current selection without copying t
  await c.browse('agent-work');assert.deepEqual(c.read({selectionOnly:true}),{selected:null});c.select(entry);
  const selection=c.read({selectionOnly:true});assert.deepEqual(Object.keys(selection),['selected']);assert.deepEqual(selection.selected,entry);selection.selected.agent.label='changed by caller';assert.equal(c.read({selectionOnly:true}).selected.agent.label,'One');assert.equal(c.read().entries.length,1,'ordinary reads retain the complete catalog');
 });
+test('loading collection choices for a direct experiment link does not fetch an unrelated catalogue',async()=>{
+ const requests=[],c=createAuthoringAssets({request:async url=>{requests.push(url);return url==='/api/roots'?{greenroom:{exists:true},'generated-meshes':{exists:true}}:{schema:'kaminos.authoring-assets.v1',collection:'generated-meshes',entries:[]};}});
+ assert.equal(await c.refresh({browse:false}),true);
+ assert.deepEqual(requests,['/api/roots']);
+ assert.ok(c.read().roots.some(r=>r.id==='agent-work'));
+ assert.ok(c.read().roots.some(r=>r.id==='image-experiments'));
+});
