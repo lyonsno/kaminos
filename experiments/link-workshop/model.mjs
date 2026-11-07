@@ -42,9 +42,46 @@ export function appendJoint(value,parent,p){
   if(!m.nodes[parent])throw Error('Unknown parent');const f=frames(m)[parent],dx=p[0]-f.point[0],dy=p[1]-f.point[1],length=Math.hypot(dx,dy);if(length<=1e-6)throw Error('Link needs nonzero length');const angle=Math.atan2(dy,dx)-f.angle;m.nodes.push({parent,length,angles:[angle,angle]});
  }return m;
 }
-export function moveJoint(value,id,p,mode){
+// Reach an endpoint by constructing feasible triangles from tip to anchor.
+// Each prefix can reach an annulus: max(0, 2*longest - sum) .. sum.
+// Intersect that annulus with the last link's circle, preferring the old elbow.
+// This is finite O(chain length), including straight/fully folded singularities.
+function reachChain(m,id,p,mode){
+ const pose=mode==='B'?1:0,f=frames(m,pose),chain=[];let root=id;
+ if(p.every((x,k)=>x===f[id].point[k]))return m;
+ while(m.nodes[root].parent!==null){chain.push(root);root=m.nodes[root].parent;}chain.reverse();
+ const origin=f[root].point,old=[[0,0],...chain.map(i=>f[i].point.map((x,k)=>x-origin[k]))],sums=[0],longest=[0];
+ for(const i of chain){sums.push(sums.at(-1)+m.nodes[i].length);longest.push(Math.max(longest.at(-1),m.nodes[i].length));}
+ const count=chain.length,total=sums[count],minimum=Math.max(0,2*longest[count]-total),wanted=p.map((x,k)=>x-origin[k]),distance=Math.hypot(...wanted);
+ if(!Number.isFinite(total)||!Number.isFinite(distance))throw Error('Chain extent exceeds numeric reach range');
+ const radius=Math.max(minimum,Math.min(total,distance)),fallback=old[count],fallbackLength=Math.hypot(...fallback),direction=distance?wanted.map(x=>x/distance):fallbackLength?fallback.map(x=>x/fallbackLength):[1,0];
+ const solved=Array(count+1);solved[0]=[0,0];solved[count]=direction.map(x=>x*radius);
+ for(let j=count;j>1;j--){
+  const end=solved[j],length=m.nodes[chain[j-1]].length,prior=old[j-1],back=prior.map((x,k)=>x-end[k]),backLength=Math.hypot(...back),oldBack=old[j-1].map((x,k)=>x-old[j][k]),oldBackLength=Math.hypot(...oldBack);
+  const unit=backLength?back.map(x=>x/backLength):oldBack.map(x=>x/oldBackLength);
+  let elbow=end.map((x,k)=>x+unit[k]*length);const r=Math.hypot(...elbow),lo=Math.max(0,2*longest[j-1]-sums[j-1]),hi=sums[j-1];
+  if(r<lo||r>hi){
+   const prefix=Math.max(lo,Math.min(hi,r)),d=Math.hypot(...end);
+   if(d===0)elbow=unit.map(x=>x*length);
+   else{
+    const u=end.map(x=>x/d),x=(prefix*prefix+d*d-length*length)/(2*d),h=Math.sqrt(Math.max(0,(prefix-x)*(prefix+x))),a=[u[0]*x-u[1]*h,u[1]*x+u[0]*h],b=[u[0]*x+u[1]*h,u[1]*x-u[0]*h];
+    elbow=Math.hypot(a[0]-prior[0],a[1]-prior[1])<=Math.hypot(b[0]-prior[0],b[1]-prior[1])?a:b;
+   }
+  }
+  solved[j-1]=elbow;
+ }
+ let parentAngle=0;
+ for(let j=1;j<=count;j++){
+  const n=m.nodes[chain[j-1]],world=Math.atan2(solved[j][1]-solved[j-1][1],solved[j][0]-solved[j-1][0]),raw=world-parentAngle,oldAngle=n.angles[pose],delta=Math.atan2(Math.sin(raw-oldAngle),Math.cos(raw-oldAngle));
+  if(mode==='build')n.angles=n.angles.map(a=>a+delta);else n.angles[pose]=oldAngle+delta;
+  parentAngle=world;
+ }
+ return m;
+}
+export function moveJoint(value,id,p,mode,{reach=false}={}){
  const m=checkedMechanism(value),n=m.nodes[id];if(!n||!point(p)||!['build','A','B'].includes(mode))throw Error('Joint, finite point and edit mode required');
  if(n.parent===null){if(mode!=='build')throw Error('Anchor is fixed; move it in Build');n.point=[...p];return m;}
+ if(reach)return reachChain(m,id,p,mode);
  const index=mode==='B'?1:0,f=frames(m,index)[n.parent],dx=p[0]-f.point[0],dy=p[1]-f.point[1];if(Math.hypot(dx,dy)<=1e-6)throw Error('Link needs nonzero length');
  const raw=Math.atan2(dy,dx)-f.angle,old=n.angles[index],angle=old+Math.atan2(Math.sin(raw-old),Math.cos(raw-old));
  if(mode==='build'){const delta=angle-n.angles[0];n.angles=n.angles.map(a=>a+delta);n.length=Math.hypot(dx,dy);}else n.angles[index]=angle;

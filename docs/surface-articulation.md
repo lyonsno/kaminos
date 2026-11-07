@@ -16,9 +16,25 @@ exactly on a seam, a tagged bracket straddling it, or a body already carrying
 child links requires an explicit edit before division. Other untagged geometry
 crossing a seam is intentionally cut. Source state is retained on refusal.
 
-New hinges start straight in both existing poses. Choose a panel and use R in
-Pose A or B to pose it; G turns it around its parent hinge. No fold destination
-or obstacle avoidance is inferred. The anatomy overlay highlights the selected
+New hinges start straight in both existing poses. Choose a panel and use R to
+turn its individual hinge. G reaches its distal joint through the ancestor chain,
+keeping the fixed anchor and every link length. The planar solve prefers the
+existing elbows when constructing a solution; siblings retain their authored
+local angles and follow shared ancestors normally. Pose A/B changes only that
+pose. Build shifts both poses by the same per-hinge adjustment, preserving each
+hinge's authored angular range. S in Build remains the explicit length edit;
+G no longer implicitly stretches a link and discards its panel geometry.
+
+Targets outside the chain's reachable annulus place the joint at the nearest
+reachable point; the inspector reports the residual. Out-of-plane targets are
+projected into the assembly XY plane and identified in the hint. Cancel and
+Undo/Redo use ordinary native history. The headless `reach({joint, point, mode})`
+operation uses the same solve and reports `reach.target`, `reach.reached` and
+`reach.residual`. Points are assembly-local XY. The existing `move` operation
+retains its explicit construction-edit contract. The solver constructs feasible
+prefix triangles in a finite pass; no iterative IK loop runs during dragging.
+No fold destination, collision avoidance, coupled actuator drive, joint limits,
+or force solution is inferred. The anatomy overlay highlights the selected
 body and displays joint axes and piston spans; Hospital's mount controls remain
 available. Save uses the ordinary scene mechanism record, geometry and history.
 Seam planes are disposable authoring guides; finish/cancel them before saving.

@@ -70,3 +70,24 @@ console.log('Native joint previews retain geometry and compact history survives 
   assert.ok(runtime.read().bodies.bodies.filter(b=>b.kind==='link').every(b=>b.replacement));
  }finally{T.ObjectLoader.prototype.parse=parse;edits.clear();await runtime.dispose();}
 }
+
+// Native Move must pose a retained rigid assembly in every authoring mode;
+// explicit Scale remains the separate construction-length operation.
+{
+ const saved=JSON.parse(await fs.readFile(new URL('./fixtures/link-workshop-operator-kiln.json',import.meta.url)));
+ root=new T.Group();root.userData.linkMechanism=saved;scene.add(root);entries.length=0;entries.push({id:'mechanism',object:root});runtime=await createMechanismController({host,inputs:{root}});
+ await runtime.operations.importBodies(runtime.operations.exportBodies());
+ try{for(const mode of ['build','A','B']){
+  runtime.operations.mode({value:mode});runtime.operations.select({joint:3});const h=adapter.target(),base=h.read();
+  edits.begin(h.id);edits.preview({...base,...transformPose(base,{operation:'translate',axis:'x',amount:.15})});
+  const moved=runtime.read();assert.deepEqual(moved.recipe.nodes.map(n=>n.length),base.recipe.nodes.map(n=>n.length),'Native Move preserves every rigid panel length in Build and poses');
+  for(const id of ['link:1','link:2','link:3'])assert.equal(moved.bodies.bodies.find(b=>b.id===id).replacement,true,'Native Move retains every returned door panel');
+  assert.notEqual(moved.recipe.nodes[1].angles[mode==='B'?1:0],base.recipe.nodes[1].angles[mode==='B'?1:0],'The distal native drag reaches through its ancestor hinges');
+  edits.cancel();assert.deepEqual(runtime.read().recipe,base.recipe);assert.equal(runtime.read().bodies.replacements,16);
+  edits.begin(h.id);edits.preview({...base,...transformPose(base,{operation:'translate',axis:'x',amount:.15})});edits.commit();const committed=runtime.read().recipe;edits.undo();assert.deepEqual(runtime.read().recipe,base.recipe);edits.redo();assert.deepEqual(runtime.read().recipe,committed);edits.undo();
+ }
+  root.position.set(2,-1,.4);root.rotation.z=.37;root.scale.set(1.6,.8,1);root.updateMatrixWorld(true);runtime.operations.mode({value:'A'});runtime.operations.select({joint:3});const h=adapter.target(),base=h.read(),at=runtime.read().points[3],wanted=[at[0]+.2,at[1]+.4],world=new T.Vector3(...wanted,0).applyMatrix4(root.matrixWorld);
+  edits.begin(h.id);edits.preview({...base,position:world.toArray()});const placed=runtime.read().points[3];assert.ok(Math.hypot(placed[0]-wanted[0],placed[1]-wanted[1])<1e-8,'Native world-space targets reach correctly through a translated, rotated, nonuniformly scaled assembly');edits.cancel();assert.deepEqual(runtime.read().recipe,base.recipe);
+  const result=runtime.operations.reach({joint:3,point:[100,100],mode:'A'});assert.ok(result.reach.residual>100,'Headless reach reports the unreachable residual');for(const id of ['link:1','link:2','link:3'])assert.equal(result.bodies.bodies.find(b=>b.id===id).replacement,true);edits.undo();assert.equal(runtime.read().reach,null,'A replay invalidates the transient reach diagnostic');
+ }finally{edits.clear();await runtime.dispose();}
+}
