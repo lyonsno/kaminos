@@ -3550,6 +3550,7 @@ import {installGenerateLayout} from './authoring-generate-layout.mjs';
 import {createImageIterationHistory,installImageIterationHistory} from './authoring-image-history.mjs';
 import {createImageRecipeIteration,installImageRecipeStatus} from './authoring-image-recipe.mjs';
 import {createImageRunExecutor,installImageVariationRuns} from './authoring-image-runs.mjs';
+import {installImageConditioning} from './authoring-image-conditioning.mjs';
 import {createImageExperiments,installImageExperiments,experimentRequest} from './authoring-image-experiments.mjs';
 import {installBrowseLayout} from './authoring-browse-layout.mjs';
 import {createAppFrameSource} from './app-frame-source.mjs';
@@ -29412,7 +29413,7 @@ sceneInitialization.then(async () => {
 
 function setupAuthoringAssets(){
   let redraw=()=>{};
-  let recipeIteration=null,recipeStatus=null,imageExperiments=null,imageExperimentsUI=null;
+  let recipeIteration=null,recipeStatus=null,imageExperiments=null,imageExperimentsUI=null,imageConditioning=null;
   // The frame owner models borrow frames from: the fire scene's volume prototype while it
   // renders, otherwise the ordinary scene itself, so Generate needs no fire scene. A fluid
   // route that booted but stayed inactive (a cancelled or refused Add > Flame) draws nothing.
@@ -29460,7 +29461,7 @@ function setupAuthoringAssets(){
   // Which mesh model is running, kept here: the services' own read() consults these
   // blocked() checks, so asking each other for status would recurse.
   let trellisAvailability=null;const meshRunning={sf3d:false,trellis:false,trellisPage:false};
-  const meshBusy=model=>meshRunning[model]||!!authoringPromptExpansion?.busy();
+  const meshBusy=model=>meshRunning[model]||!!authoringPromptExpansion?.busy()||!!imageConditioning?.busy();
   const tracked=(model,run)=>async input=>{meshRunning[model]=true;redraw();try{return await run(input);}finally{meshRunning[model]=false;redraw();}};
   // Stored GLB plus its generation origin, as the SF3D service persists its meshes.
   const persistGeneratedMesh=async(glb,generation,label,suffix,clientPreparesLods=false)=>{
@@ -29752,7 +29753,7 @@ function setupAuthoringAssets(){
     weights:async model=>{const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};return authoringImageWeightRoot(config,model);},
     deliver:async (file,provenance)=>{const entry=await authoringAssets.upload(file);authoringImageHistory.record({...entry,kind:'image',provenance});await imageExperiments?.recordResult(entry,provenance);if(provenance.iteration?.parent)authoringGenerateLayout.compare(true);authoringAssets.prepare().catch(error=>console.warn('Generated image preparation failed',error));return entry;},
     changed:()=>redraw(),
-    blocked:()=>authoringPromptExpansion?.busy()?'A prompt is expanding.':compositionModule?'This scene has another inference/performance host. Use its existing generation controls.':meshBusy('trellisPage')?'TRELLIS is generating on this page.':null,
+    blocked:()=>imageConditioning?.busy()?'Shape conditioning is recovering geometry.':authoringPromptExpansion?.busy()?'A prompt is expanding.':compositionModule?'This scene has another inference/performance host. Use its existing generation controls.':meshBusy('trellisPage')?'TRELLIS is generating on this page.':null,
   });
   let promptPageLease=null,promptPageAdmission=null,promptHandbackUnknown=false;
   const promptLeasePost=async body=>{
@@ -29764,7 +29765,7 @@ function setupAuthoringAssets(){
     return value;
   };
   authoringPromptExpansion=createAuthoringPromptExpansion({changed:()=>redraw(),
-    blocked:()=>authoringImageGenerator.busy()?'An image is generating.':authoringImageGenerator.read().pending?'Save the retained image first.':meshBusy('sf3d')||meshBusy('trellis')||meshBusy('trellisPage')?'A mesh is generating.':null,
+    blocked:()=>imageConditioning?.busy()?'Shape conditioning is recovering geometry.':authoringImageGenerator.busy()?'An image is generating.':authoringImageGenerator.read().pending?'Save the retained image first.':meshBusy('sf3d')||meshBusy('trellis')||meshBusy('trellisPage')?'A mesh is generating.':null,
     createHelper:async callbacks=>{
       if(promptHandbackUnknown)throw Error('Prompt GPU cleanup is unresolved. Recover its Greenroom lease before another run.');
       if(promptPageLease)await promptLeasePost({action:'release',leaseId:promptPageLease,reason:'retry settled prompt handback'});
@@ -29829,7 +29830,8 @@ function setupAuthoringAssets(){
     await authoringAssetsUI.open('generate',{refresh:false});editHistoryImage(entry);authoringGenerateLayout.compare(true);
   }});
   const imageRunExecutor=createImageRunExecutor({request:experimentRequest,generate:async request=>{try{return await authoringImageGenerator.run(request);}catch(error){if(authoringImageGenerator.read().pending)error.pendingImage=true;throw error;}},stopGeneration:()=>authoringImageGenerator.stop(),busy:()=>authoringImageGenerator.busy()||!!authoringImageGenerator.read().pending||authoringPromptExpansion.busy()||meshBusy('sf3d')||meshBusy('trellisPage'),changed:doc=>{if(doc)imageExperiments.accept(doc);imageExperimentsUI?.render();}});
-  imageExperimentsUI=installImageExperiments({runs:{install:host=>installImageVariationRuns({document,host,controller:imageExperiments,executor:imageRunExecutor,request:experimentRequest,pageAuthor:async()=>{const config=await loadStartupRuntimeConfig();return config.imageGenerationAuthor;},imageState:()=>authoringImageGenerator.read(),retrySaving:()=>authoringImageGenerator.retryPersistence()})},document,controller:imageExperiments,assets:authoringAssets,assetsUI:authoringAssetsUI,history:authoringImageHistory,layout:authoringGenerateLayout,recipe:recipeIteration,busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy()});
+  imageConditioning=installImageConditioning({document,assets:authoringAssets,experiments:imageExperiments,context:()=>({sharedGpu}),blocked:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy()||Object.values(meshRunning).some(Boolean)?'Finish the current model run first.':null,pageAuthor:async()=>(await loadStartupRuntimeConfig()).imageGenerationAuthor,openReference:async entry=>{authoringImageHistory.record(entry);authoringAssets.select(entry);authoringImageHistory.useReference(entry.source);await authoringAssetsUI.open('generate',{refresh:false});editHistoryImage(entry);authoringGenerateLayout.compare(true);}});
+  imageExperimentsUI=installImageExperiments({runs:{install:host=>installImageVariationRuns({document,host,controller:imageExperiments,executor:imageRunExecutor,request:experimentRequest,pageAuthor:async()=>{const config=await loadStartupRuntimeConfig();return config.imageGenerationAuthor;},imageState:()=>authoringImageGenerator.read(),retrySaving:()=>authoringImageGenerator.retryPersistence()})},conditioning:imageConditioning,document,controller:imageExperiments,assets:authoringAssets,assetsUI:authoringAssetsUI,history:authoringImageHistory,layout:authoringGenerateLayout,recipe:recipeIteration,busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy()});
   authoringImageHistoryUI=installImageIterationHistory({document,history:authoringImageHistory,assets:authoringAssets,layout:authoringGenerateLayout,busy:()=>authoringImageGenerator.busy()||authoringPromptExpansion.busy()||recipeIteration.read().opening,
     onEdit:editHistoryImage,
     onRecall:entry=>recipeIteration.recall(entry)});
@@ -29837,7 +29839,7 @@ function setupAuthoringAssets(){
   loadStartupRuntimeConfig().then(config=>authoringPromptUI.configureDefault(config.pup?.keepLoadedDefault===true)).catch(error=>console.warn('Prompt residency default unavailable',error));
   window.kaminosAssets={...authoringAssets,open:mode=>authoringAssetsUI.open(mode),close:()=>authoringAssetsUI.close(),panel:()=>authoringAssetsUI.state(),imageHistory:authoringImageHistory,showHistoryImage:source=>authoringImageHistoryUI.show(source),compareImages:value=>authoringGenerateLayout.compare(value),images:authoringImageGenerator,imageRecipe:recipeIteration,generateImage:options=>authoringImageUI.run(options),imageRequest:()=>authoringImageUI.readRequest(),
     openImageRecipe:entry=>recipeIteration.open(entry),
-    experiments:{...imageExperiments,open:id=>imageExperimentsUI.open(id),runs:imageRunExecutor},
+    conditioning:imageConditioning,experiments:{...imageExperiments,open:id=>imageExperimentsUI.open(id),runs:imageRunExecutor},
     promptExpansion:authoringPromptExpansion,expandPrompt:()=>authoringPromptUI.expand(),generationFlame:authoringGenerateLayout.ceremony};
   addEventListener('pagehide',()=>{const active=imageRunExecutor.read();if(active){authoringImageGenerator.stop();navigator.sendBeacon?.('/api/image-experiments',new Blob([JSON.stringify({action:'stop-run',id:active.experimentId,runId:active.runId})],{type:'application/json'}));}});
   const experimentParams=new URLSearchParams(location.search);

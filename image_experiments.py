@@ -48,7 +48,7 @@ def png_recipe(path, size, mtime_ns, ctime_ns):
             try:
                 language,translated,value=rest[2:].split(b'\0',2)
                 record=json.loads(value)
-                return record if isinstance(record,dict) and record.get('schema')=='kaminos.image-generation.v1' else None
+                return record if isinstance(record,dict) and record.get('schema') in ('kaminos.image-generation.v1','kaminos.image-conditioning.v1') else None
             except (ValueError,UnicodeDecodeError):return None
 
 class ExperimentStore:

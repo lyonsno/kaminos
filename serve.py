@@ -2604,6 +2604,7 @@ BROWSE_ROOTS = {
     "splat-production": KAMINOS_SPLAT_PRODUCTION_DIR,
     "image-inbox": KAMINOS_IMAGE_INBOX_DIR,
     "image-preparations": KAMINOS_IMAGE_PREPARATION_DIR,
+    "image-conditioning": Path(os.environ.get("KAMINOS_IMAGE_CONDITIONING_DIR", str(KAMINOS_ASSETS_DIR / "image-conditioning"))).expanduser(),
     "pipeline-runs": KAMINOS_PIPELINE_RUNS_DIR,
     "greenroom": Path(os.environ.get(
         "GPU_GREENROOM_DIR",
@@ -4624,7 +4625,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if self.mounted_package(parsed.path):
             return self.send_klein_weight(parsed.path)
-        if parsed.path == '/api/image-experiments':
+        if parsed.path == '/api/image-conditioning':
+            self.handle_image_conditioning(parse_qs(parsed.query))
+        elif parsed.path == '/api/image-experiments':
             self.handle_image_experiments(parse_qs(parsed.query))
         elif parsed.path == "/api/workbench-experiments":
             from workbench_experiments import discover_experiments, experiment_catalogue
@@ -4755,7 +4758,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path == '/api/image-experiments':
+        if parsed.path == '/api/image-conditioning':
+            self.handle_image_conditioning(parse_qs(parsed.query),write=True)
+        elif parsed.path == '/api/image-experiments':
             self.handle_image_experiments(parse_qs(parsed.query),write=True)
         elif parsed.path == '/api/preferences':
             self.handle_preferences(write=True)
@@ -5730,6 +5735,19 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             "kind": "splat",
             "entry": entry,
         })
+
+    def handle_image_conditioning(self,params,write=False):
+        from image_conditioning import save,load
+        try:
+            root=BROWSE_ROOTS['image-conditioning']
+            if write:
+                size=int(self.headers.get('Content-Length',0))
+                if size<=0:raise ValueError('Nonempty conditioning geometry required')
+                result=save(root,self.rfile.read(size))
+            else:result=load(root,params.get('key',[''])[0])
+            self.send_json(result)
+        except (ValueError,TypeError,KeyError) as error:self.send_json({'error':str(error)},400)
+        except OSError as error:self.send_json({'error':str(error),'phase':'conditioning-persistence'},500)
 
     def handle_image_experiments(self,params,write=False):
         from image_experiments import Conflict
