@@ -1,7 +1,7 @@
 export async function shoveProbe(device){
- const {createVolumeGPU}=await import('/experiments/hill-terrain/volume-gpu.mjs');
- const {volumeConfig,rockMoments,PARTICLE_WORDS}=await import('/experiments/hill-terrain/volume-model.mjs');
- const {buildConvexRock}=await import('/experiments/hill-terrain/rock-geometry.mjs');
+ const {createVolumeGPU}=await import(new URL('/experiments/hill-terrain/volume-gpu.mjs',location.href).href);
+ const {volumeConfig,rockMoments,PARTICLE_WORDS}=await import(new URL('/experiments/hill-terrain/volume-model.mjs',location.href).href);
+ const {buildConvexRock}=await import(new URL('/experiments/hill-terrain/rock-geometry.mjs',location.href).href);
  const solid=buildConvexRock([[1,0,0,.15],[-1,0,0,.15],[0,1,0,.15],[0,-1,0,.15],[0,0,1,.15],[0,0,-1,.15]]),m=rockMoments(solid),particles=new Float32Array(PARTICLE_WORDS);particles.set([.6,.2,.6,.01,0,0,0,.01/1600]);
  const body={id:'probe',bed:0,solid,mass:m.mass,volume:m.volume,inertia:m.inertia,position:[0,1.2,0],rotation:[0,0,0,1],velocity:[0,0,0],omega:[0,0,0],anchored:false};
  const solver=await createVolumeGPU({device,model:{source:'point-impulse-probe',config:volumeConfig({dimensions:[16,24,16],origin:[-.96,-.24,-.96],gravity:0}),particles,weatheredMass:0,bodies:[body]}});
