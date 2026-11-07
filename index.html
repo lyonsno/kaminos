@@ -14168,7 +14168,7 @@ async function installOwnerWorkbenchEntry() {
       writeAuthoredFlameEmitterPose(flameEmitterPose);refreshFlameDomainPreview();return volumePrimitivesInFlameDomain();
     }}),
   },
-  fire:{add:id=>window.kaminosSceneAuthoring.addFlameEmitter(id,{lightingRoute:Object.fromEntries([...fireLightFieldRouteParams()].filter(([key])=>key.startsWith('volume_light_field')||key==='volume_collision'))}),
+  fire:{add:id=>window.kaminosSceneAuthoring.addFlameEmitter(id,{lightingRoute:Object.fromEntries([...fireLightFieldRouteParams({includeMounted:false})].filter(([key])=>key.startsWith('volume_light_field')||key==='volume_collision'))}),
     setEnabled:enabled=>scenePlacementTools.edits.apply('@flame-source-enabled',{enabled},enabled?'Enable fire source':'Disable fire source'),
     read:()=>window.kaminosFlameEmitterState(),settings:()=>window.kaminosFlameAuthoring.read(),
     coverage:{read:readFineCoverageState,set:setFineCoverageSettings},
@@ -27263,7 +27263,7 @@ async function collectSceneComposition() {
     : (await saveVolumeSettingsPreset({ preset, sceneSnapshot:true, label:`${document.getElementById('composition-label').value.trim() || 'Scene'} · flame` })).effective;
   assertUnchanged();
   const route = {};
-  for (const [key, value] of fireLightFieldRouteParams()) {
+  for (const [key, value] of fireLightFieldRouteParams({includeMounted:false})) {
     if (key.startsWith('volume_light_field')) route[key] = value;
   }
   Object.assign(route,failedRecovery?Object.fromEntries(Object.entries(window.kaminosDeviceRecovery?.authoredFlameRoute()??{}).filter(([key])=>key.startsWith('volume_light_field'))):fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()));

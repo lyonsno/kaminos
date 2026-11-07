@@ -34,3 +34,26 @@ test('authored recovery and preview snapshots exclude the temporary flame route'
   assert.equal(route.volume_light_field,undefined,marker+' must retain authored route identity');
  }
 });
+
+// Execute the Workbench host's actual add callback. Reading before the async
+// withdrawal must still preserve the ordinary authored lighting choices.
+test('Workbench Add Flame does not inherit the temporary workshop recipe',async()=>{
+ const f=fixture('?workspace=workbench&volume_light_field_grid=64&volume_collision=off','#volume_light_field_shadows=0');
+ f.mountedFlameState.route={volume_light_field:'1',volume_light_field_grid:'16',volume_light_field_shadows:'1',volume_collision:'kiln'};
+ let received;
+ f.window.kaminosSceneAuthoring={addFlameEmitter:async(id,options)=>{received={id,options};return 'authored-source';}};
+ const begin=page.indexOf('fire:{add:')+'fire:{add:'.length,end=page.indexOf(',\n    setEnabled:',begin);
+ assert.ok(begin>0&&end>begin);
+ const add=vm.runInContext('('+page.slice(begin,end)+')',f);
+ assert.equal(await add('saved-basin'),'authored-source');
+ assert.equal(received.id,'saved-basin');
+ assert.deepEqual({...received.options.lightingRoute},{volume_light_field_grid:'64',volume_light_field_shadows:'0',volume_collision:'off'});
+});
+test('saved composition route excludes a borrowed workshop and retains authored lighting',()=>{
+ const f=fixture('?volume_light_field_grid=64','#volume_light_field_shadows=0');
+ f.mountedFlameState.route={volume_light_field:'1',volume_light_field_grid:'16',volume_light_field_shadows:'1'};
+ const begin=page.indexOf('async function collectSceneComposition()'),start=page.indexOf('  const route = {};',begin),end=page.indexOf('  Object.assign(route,',start);
+ assert.ok(begin>0&&start>begin&&end>start);
+ const route=vm.runInContext('(()=>{'+page.slice(start,end)+'return route;})()',f);
+ assert.deepEqual({...route},{volume_light_field_grid:'64',volume_light_field_shadows:'0'});
+});
