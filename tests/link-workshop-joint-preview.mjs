@@ -29,6 +29,10 @@ try{
  edits.begin(target.id);edits.preview({...base,...transformPose(base,{operation:'translate',axis:'x',amount:.4})});edits.commit();const after=runtime.read().recipe;
  edits.undo();assert.deepEqual(runtime.read().recipe,base.recipe);edits.redo();assert.deepEqual(runtime.read().recipe,after);assert.equal(meshes()[0],body);
  assert.equal(parses,0,'Commit and pose-only undo/redo keep the retained body');
+ // Numeric fields read the current target on each tick. Returning to the
+ // original length within one gesture must recover its starting appearance.
+ runtime.operations.mode({value:'build'});const scrubBase=adapter.target().read();edits.begin(target.id);
+ let scrub=adapter.target().read();scrub.scale[0]*=2;edits.preview(scrub);scrub=adapter.target().read();scrub.scale[0]=scrubBase.scale[0];edits.preview(scrub);assert.equal(meshes()[0].material.color.getHex(),0xab1234,'A numeric scrub returning to its original shape restores its starting shell');edits.cancel();runtime.operations.mode({value:'B'});
  // Undo must still resolve its geometry when the frame service has no controller.
  const savedRecipe=structuredClone(root.userData.linkMechanism),savedGeometry=structuredClone(root.userData.linkGeometry);
  entries.length=0;root.removeFromParent();await runtime.dispose();root=new T.Group();root.userData.linkMechanism=savedRecipe;root.userData.linkGeometry=savedGeometry;scene.add(root);entries.push({id:'mechanism',object:root});
