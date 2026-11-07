@@ -24,3 +24,10 @@ test('the mounted mold participates in actual water support',()=>{
  const collider=sceneLiquidCollider({id:'mold',type:'pbr',source:STAGE_MOLD_SOURCE,stageMold,transform:{position:[0,.25,0],rotation:[0,0,0],scale:[1,1,1]}});
  assert.equal(collider?.kind,'stage-mold','mold must not silently be absent from water collision');
 });
+test('material-frame rendering keeps optical thickness and depth tolerance in authored units',async()=>{
+ globalThis.GPUBufferUsage={UNIFORM:1,COPY_DST:2};globalThis.GPUTextureUsage={RENDER_ATTACHMENT:1,TEXTURE_BINDING:2};
+ const writes=[],pipeline={getBindGroupLayout:()=>({})};const device={queue:{writeBuffer:(b,o,d)=>writes.push(Array.from(d))},createBuffer:()=>({destroy(){}}),createShaderModule:()=>({getCompilationInfo:async()=>({messages:[]})}),createRenderPipelineAsync:async()=>pipeline,createBindGroup:()=>({}),createTexture:()=>({createView:()=>({}),destroy(){}})};
+ const surface=await createMlsJuiceRenderer({device,solver:{config:{min:[0,0,0],cell:.05,particleRadius:.02,capacity:1},particles:{},read:()=>({clock:{step:0}})}});
+ surface.encode({encoder:{beginRenderPass:()=>({setPipeline(){},setBindGroup(){},draw(){},end(){}})},hostCamera:new PerspectiveCamera(),width:10,height:10,sceneColor:{},sceneDepth:{},target:{},presentationFrame:{translation:[0,0,0],scale:.05}});
+ assert.equal(writes.at(-1).length,76,'the material must receive presentation scale as well as geometric radius');assert.ok(Math.abs(writes.at(-1)[72]-.05)<1e-7);surface.dispose();
+});

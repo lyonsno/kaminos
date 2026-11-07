@@ -1,5 +1,5 @@
-import {presentedMlsDomain} from './mls-presentation-frame.mjs';
-const cameraStruct=`struct Camera{view:mat4x4f,projection:mat4x4f,inverseProjection:mat4x4f,inverseView:mat4x4f,domain:vec4f,params:vec4f}
+import {checkedMlsPresentationFrame,presentedMlsDomain} from './mls-presentation-frame.mjs';
+const cameraStruct=`struct Camera{view:mat4x4f,projection:mat4x4f,inverseProjection:mat4x4f,inverseView:mat4x4f,domain:vec4f,params:vec4f,optics:vec4f}
 @group(0) @binding(0) var<uniform> camera:Camera;`;
 const quad=`@vertex fn quad(@builtin(vertex_index) id:u32)->@builtin(position) vec4f{
   let corners=array<vec2f,3>(vec2f(-1,-1),vec2f(3,-1),vec2f(-1,3));return vec4f(corners[id],0,1);
@@ -39,7 +39,11 @@ override horizontal:bool;
     sum+=weight*sample;weights+=weight;
   }return sum/max(weights,1e-6);
 }`;
-const compositeCode=cameraStruct+quad+`
+export const MLS_PRESENTATION_OPTICS_WGSL=`
+fn mlsPhysicalThickness(rendered:f32,presentationScale:f32)->f32{return rendered / presentationScale;}
+fn mlsOcclusionAllowance(presentationScale:f32)->f32{return .005 * presentationScale;}
+`;
+const compositeCode=cameraStruct+quad+MLS_PRESENTATION_OPTICS_WGSL+`
 @group(0) @binding(1) var front:texture_2d<f32>;
 @group(0) @binding(2) var thickness:texture_2d<f32>;
 @group(0) @binding(3) var sceneColor:texture_2d<f32>;
@@ -56,11 +60,11 @@ fn point(pixel:vec2i,center:f32)->vec3f{
   let colorSize=vec2i(textureDimensions(sceneColor));let pixel=vec2i(pos.xy);let uv=pos.xy/vec2f(colorSize);
   let size=vec2i(textureDimensions(front));let p=clamp(vec2i(uv*vec2f(size)),vec2i(0),size-1);
   let depth=textureLoad(front,p,0).x;let background=textureLoad(sceneColor,pixel,0);
-  if(depth>=camera.params.w||depth>textureLoad(sceneDepth,pixel,0).x+.005){return background;}
+  if(depth>=camera.params.w||depth>textureLoad(sceneDepth,pixel,0).x+mlsOcclusionAllowance(camera.optics.x)){return background;}
   let dx=point(p+vec2i(1,0),depth)-point(p-vec2i(1,0),depth);
   let dy=point(p+vec2i(0,1),depth)-point(p-vec2i(0,1),depth);
   var normal=normalize(cross(dx,dy));if(normal.z<0.){normal=-normal;}
-  let view=normalize(-eye(uv,depth));let amount=textureLoad(thickness,p,0).x;
+  let view=normalize(-eye(uv,depth));let amount=mlsPhysicalThickness(textureLoad(thickness,p,0).x,camera.optics.x);
   let refracted=clamp(pixel+vec2i(normal.xy*vec2f(1,-1)*amount*75.),vec2i(0),colorSize-1);
   let refractionPixel=select(refracted,pixel,textureLoad(sceneDepth,refracted,0).x<depth);
   let transmitted=textureLoad(sceneColor,refractionPixel,0).rgb*exp(-vec3f(3.,.65,.3)*amount);
@@ -72,7 +76,7 @@ fn point(pixel:vec2i,center:f32)->vec3f{
 }`;
 
 export async function createMlsJuiceRenderer({device,solver,hostEnvironment=false}) {
-  const camera=device.createBuffer({size:288,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST,label:'MLS real host camera'});
+  const camera=device.createBuffer({size:304,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST,label:'MLS real host camera'});
   const resources=[];let width=0,height=0;
   async function module(code){const m=device.createShaderModule({code});const errors=(await m.getCompilationInfo()).messages.filter(m=>m.type==='error');if(errors.length)throw Error(errors.map(m=>m.message).join('; '));return m;}
   try{
@@ -106,7 +110,7 @@ export async function createMlsJuiceRenderer({device,solver,hostEnvironment=fals
           lastSurfaceKey='';}
         const c=solver.config,presented=presentedMlsDomain(c,presentationFrame);hostCamera.updateMatrixWorld();
         const cameraData=new Float32Array([...hostCamera.matrixWorldInverse.elements,...hostCamera.projectionMatrix.elements,
-          ...hostCamera.projectionMatrixInverse.elements,...hostCamera.matrixWorld.elements,...presented.min,presented.cell,width,height,presented.particleRadius,hostCamera.far]);
+          ...hostCamera.projectionMatrixInverse.elements,...hostCamera.matrixWorld.elements,...presented.min,presented.cell,width,height,presented.particleRadius,hostCamera.far,checkedMlsPresentationFrame(presentationFrame).scale,0,0,0]);
         const solverStep=solver.read?.()?.clock?.step??-1;
         const surfaceKey=solverStep>=0?`${solverStep}:${cameraData.join(',')}`:'';
         function draw(pipeline,bind,view,clearValue,instances=1,test=null){

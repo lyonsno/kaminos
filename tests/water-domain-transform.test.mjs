@@ -4,11 +4,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import * as THREE from '../lib/three.core.js';
+import {presentWaterBounds} from '../mounted-water-domain.mjs';
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const grab=name=>{const start=html.indexOf(`function ${name}(`);assert.ok(start>=0,`missing ${name}`);return html.slice(start,html.indexOf('\n}',start)+2);};
 test('selecting the water field exposes its native placement target',()=>{
  const root=new THREE.Object3D(),c={sceneComponents:null,workingScene:{selection:{ids:['water-field']},activeFieldId:'water-field'},waterDomainEditObject:()=>root,selectedSceneGroupEntry:()=>null,selectedSceneObjectEntry:()=>null,GROUP_TYPE:'group'};
- vm.createContext(c);vm.runInContext(grab('selectedPlacementEntry'),c);
+ c.activeMountedWaterDomain??=()=>null;c.presentWaterBounds=presentWaterBounds;vm.createContext(c);vm.runInContext(grab('selectedPlacementEntry'),c);
  const target=c.selectedPlacementEntry();
  assert.equal(target?.id,'@water-domain','Water simulation must be editable with native Move/Scale');assert.equal(target.object,root);
 });
@@ -17,7 +18,7 @@ test('water guide follows authored bounds instead of the retired playground',()=
  waterDomainBounds:()=>bounds,acceptedWaterDomainPose:()=>({position:[2.5,4,5.5],rotation:[0,0,0],scale:[3,4,5]}),
  fingerFluidAnalyticalSupportGeometry:()=>({boundsMin:[-10,-10,-10],boundsMax:[10,10,10]}),
  transformControls:null,scene:new THREE.Scene(),isSceneItemVisible:()=>true,selectionCaptureSuspended:false,viewportHelpersVisible:true,viewportDisplay:{domains:true,domainOpacity:1},styleSimulationDomainGuide(){},styleHelperLines(){},applySceneObjectTransformState(){}};
- vm.createContext(c);vm.runInContext(grab('syncWaterDomainGuide'),c);c.syncWaterDomainGuide();
+ c.activeMountedWaterDomain??=()=>null;c.presentWaterBounds=presentWaterBounds;vm.createContext(c);vm.runInContext(grab('syncWaterDomainGuide'),c);c.syncWaterDomainGuide();
  assert.deepEqual(c.localLiquidDomainGuide.box.min.toArray(),bounds.min);assert.deepEqual(c.localLiquidDomainGuide.box.max.toArray(),bounds.max);
  bounds.min=[2,3,4];c.syncWaterDomainGuide();assert.deepEqual(c.localLiquidDomainGuide.box.min.toArray(),bounds.min,'already mounted guide must refresh');
 });
@@ -34,7 +35,7 @@ test('native pose history edits only bounds, preserving sources, sampling and ev
  const initial={...defaultLocalLiquidSetup(),waterSampling:sampling},running=authoredMlsSetup([source],initial),pending=[];
  const c={waterFeature:{setup:structuredClone(initial),host:{setSetup:value=>pending.push(structuredClone(value))}},localLiquidEmitterRecords:()=>[source],normalizeLocalLiquidSetup,resolveAuthoredWaterSampling,authoredMlsCellSize,waterDomainPose,checkedWaterDomainPose,waterDomainSampling,
  waterDomainProxy:null,syncWaterDomainGuide(){},authoredWaterControls:null,window:{},structuredClone};
- vm.createContext(c);vm.runInContext(['acceptedWaterDomainPose','checkWaterDomainPose','writeWaterDomainPose'].map(grab).join('\n'),c);
+ c.activeMountedWaterDomain??=()=>null;c.presentWaterBounds=presentWaterBounds;vm.createContext(c);vm.runInContext(['acceptedWaterDomainPose','checkWaterDomainPose','writeWaterDomainPose'].map(grab).join('\n'),c);
  const edits=createSceneEdits({read(){},write(){}});edits.register('@water-domain',{read:c.acceptedWaterDomainPose,write:c.writeWaterDomainPose,check:c.checkWaterDomainPose});
  edits.begin('@water-domain');edits.preview({position:[2,3,4],scale:[2,3,4]});edits.cancel();assert.deepEqual(c.waterFeature.setup,initial);
  edits.apply('@water-domain',{position:[.25,.6,0],scale:[2,1.5,3]});
