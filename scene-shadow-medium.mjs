@@ -1,3 +1,4 @@
+import {createLightingComputePipeline,prepareLightingComputePipelines} from './scene-lighting-compute.mjs';
 import {sceneLightingDomain,sceneSourceDomain} from './scene-volume-source.mjs';
 
 export function validateShadowMediumResolution(value=0){
@@ -40,29 +41,31 @@ export function sampleShadowMediumReference(field,p){
 }
 
 const shadowMediumPipelineCache=new WeakMap();
-export function createShadowMedium(device){
+export function createShadowMedium(device,{asynchronous=false}={}){
   let texture=null,pipeline=null,group=null,source=null,plan=null,signature=null,committed=null,pending=null,builds=0;
+  const kernel=()=>{
+    if(pipeline)return pipeline;
+    let cache=shadowMediumPipelineCache.get(device);if(!cache){cache=new Map();shadowMediumPipelineCache.set(device,cache);}
+    if(!cache.has(asynchronous))cache.set(asynchronous,createLightingComputePipeline(device,{label:'volume-average shadow extinction',layout:'auto',compute:{module:device.createShaderModule({code:SHADOW_MEDIUM_WGSL}),entryPoint:'prepareMedium'}},asynchronous));
+    return pipeline=cache.get(asynchronous);
+  };
   const same=(a,b)=>a&&b&&a.source===b.source&&a.generation===b.generation&&a.frame===b.frame&&a.signature===b.signature;
   return {
+    isPrepared(){const k=kernel();return !!k.pipeline&&!k.error;},
+    ready:()=>prepareLightingComputePipelines([kernel()]),
     encode(encoder,field,resolution){
       if(field.status!=='encoded'||!field.texture?.createView)throw Error('shadow medium requires current encoded extinction');
       const domain=sceneLightingDomain(field),nextPlan=shadowMediumPlan(field.dimensions,resolution,device.limits),nextSignature=JSON.stringify([field.dimensions,nextPlan.dimensions]);
-      if(!pipeline){
-        pipeline=shadowMediumPipelineCache.get(device);
-        if(!pipeline){
-          pipeline=device.createComputePipeline({label:'volume-average shadow extinction',layout:'auto',compute:{module:device.createShaderModule({code:SHADOW_MEDIUM_WGSL}),entryPoint:'prepareMedium'}});
-          shadowMediumPipelineCache.set(device,pipeline);
-        }
-      }
+      const current=kernel().get();
       if(signature!==nextSignature||source!==field.texture){
         const nextTexture=signature===nextSignature?texture:device.createTexture({label:'prepared coarse shadow extinction',dimension:'3d',size:nextPlan.dimensions,format:'r32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});
-        let nextGroup;try{nextGroup=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:field.texture.createView()},{binding:1,resource:nextTexture.createView()}]});}catch(error){if(nextTexture!==texture)nextTexture.destroy();throw error;}
+        let nextGroup;try{nextGroup=device.createBindGroup({layout:current.getBindGroupLayout(0),entries:[{binding:0,resource:field.texture.createView()},{binding:1,resource:nextTexture.createView()}]});}catch(error){if(nextTexture!==texture)nextTexture.destroy();throw error;}
         if(nextTexture!==texture){texture?.destroy();committed=null;}
         texture=nextTexture;group=nextGroup;source=field.texture;plan=nextPlan;signature=nextSignature;
       }
       const key={source:field.texture,generation:field.generation,frame:field.frame,signature};
       pending={...key,encoded:!same(committed,key)};
-      if(pending.encoded){const pass=encoder.beginComputePass({label:'prepare coarse smoke-shadow density'});pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(...plan.dispatch);pass.end();}
+      if(pending.encoded){const pass=encoder.beginComputePass({label:'prepare coarse smoke-shadow density'});pass.setPipeline(current);pass.setBindGroup(0,group);pass.dispatchWorkgroups(...plan.dispatch);pass.end();}
       return {texture,metadata:{mode:'prepared',resolution,dimensions:[...plan.dimensions],domain:{lo:[...domain.lo],hi:[...domain.hi]},format:'r32float',filter:'volume-overlap-average',bytes:plan.bytes,preparationSourceReads:pending.encoded?plan.sourceReads:0,sourceGeneration:field.generation,sourceFrame:field.frame,builds:builds+(pending.encoded?1:0),completionAuthority:false}};
     },
     commit(){if(pending){if(pending.encoded)builds++;committed=pending;pending=null;}},
