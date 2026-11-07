@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import {composeVolumePresentationTransform} from '../volume-presentation-frame.mjs';
 const source=fs.readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
 const start=source.indexOf('  function encodeWorldSmoke(');
 const body=source.slice(start,source.indexOf('\n  }',start)+4);
@@ -18,6 +19,7 @@ test('world collision receives current remaining-material masks, including their
     fluidBuffers:[{}],reactantTextures:[{}],currentFluid:0,gridSize:4,gridHeight:8,
     productTransform:{translate:[0,0,0],scale:1},worldSmokeMapping:()=>({renderMin:[0,0,0],renderMax:[1,1,1],renderPitch:1}),
     device:{queue:{writeBuffer(){}}},worldRenderUniform:{},uniforms:[],Float32Array};
+  Object.assign(ctx,{composeVolumePresentationTransform,presentationTransform:{translate:[0,0,0],scale:1}});
   vm.createContext(ctx);vm.runInContext(body,ctx);
   const plan={flowDims:[4,8,4],min:[-1,-1,-1],max:[1,3,1]};
   ctx.encodeWorldSmoke({},{world:plan});

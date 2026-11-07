@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 
 // The volume shader indexes fluid cells as x + y*GRID + z*GRID*GRID_Y over the
 // tall domain. GRID_Y used to be a pipeline-overridable constant, and any
@@ -35,12 +36,18 @@ for (const [expression, meaning] of [
 }
 
 // The fire light field publishes the coverage it actually has inside the tall box.
-const lightField = source.slice(source.indexOf('function fireIrradianceLightField()'));
-// Since the grid height control (report §34) the bounds come from the raymarch
-// domain box the camera samples, which spans y [-1, -1 + 2 gridHeight/gridSize].
-assert.match(lightField, /const domainBox = raymarchDomainBox\(gridSize, gridHeight\);/, 'light-field bounds derive from the raymarch domain box');
-assert.match(lightField, /worldMax: domainBox\.max\.map\(\(value, axis\) => value \* productTransform\.scale \+ productTransform\.translate\[axis\]\),\s*worldBoundsAuthority: 'full-volume-domain-equal-cell-pitch-v1'/,
-  'light-field bounds cover the full tall volume');
 const { raymarchDomainBox } = await import('../volume-grid-shape.mjs');
 assert.deepEqual(raymarchDomainBox(64, 128).max, [1, 3, 1], 'the auto box reaches y = 3');
+const start=source.indexOf('  function fireIrradianceLightField()');
+const lightField=source.slice(start,source.indexOf('\n  async function ',start));
+const transform={translate:[3,-2,7],scale:.0494};
+const context={state:{active:false},fireLightFieldRequested:()=>true,
+ irradianceGridSize:16,FIRE_IRRADIANCE_ATLAS_TILES_X:8,gridSize:64,gridHeight:128,raymarchDomainBox,
+ presentationWorldTransform:()=>transform,gridHeightForSize:g=>g*2,
+ FIRE_IRRADIANCE_ATLAS_IDENTITY:'atlas',FIRE_IRRADIANCE_LATTICE_IDENTITY:'lattice',FIRE_IRRADIANCE_PROPAGATION_IDENTITY:'propagation',
+ gpuInitialized:false,configuredSharedGpuContext:null,irradianceAtlasGeneration:1};
+const field=vm.runInNewContext(`${lightField};fireIrradianceLightField()`,context);
+assert.equal(field.worldBoundsAuthority,'full-volume-domain-equal-cell-pitch-v1');
+assert.deepEqual(Array.from(field.worldMin),[3-.0494,-2-.0494,7-.0494]);
+assert.deepEqual(Array.from(field.worldMax),[3+.0494,-2+3*.0494,7+.0494],'light bounds cover the displayed tall domain');
 console.log('volume tall-domain pipeline constants contracts passed');
