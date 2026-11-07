@@ -10,14 +10,14 @@ export default {
     if(!json.ok)throw Error(`Source report HTTP ${json.status}`);const meta=await json.json();
     if(meta.ok!==true||meta.schema!=='kaminos.microstructure-control.v1'||meta.colorEncoding!=='srgb')throw Error('Successful prepared sRGB microstructure field required');
     const arrays={};
-    for(const [name,Type]of [['rows.f32',Float32Array],['carriers.f32',Float32Array]]){
+    for(const [name,Type]of [['rows.f32',Float32Array],['carriers.f32',Float32Array],['source-ids.u32',Uint32Array]]){
       const response=await fetch(sourceFile(name));if(!response.ok)throw Error(`${name}: HTTP ${response.status}`);
       const bytes=await response.arrayBuffer(),expected=meta.files[name];
       const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
       if(bytes.byteLength!==expected.bytes||digest!==expected.sha256)throw Error(`${name}: source bytes differ from report`);
       arrays[name]=new Type(bytes);
     }
-    const control=createMicrostructureControl({...meta,rows:arrays['rows.f32'],carriers:arrays['carriers.f32']});
+    const control=createMicrostructureControl({...meta,rows:arrays['rows.f32'],carriers:arrays['carriers.f32'],sourceIds:arrays['source-ids.u32']});
     const session=await host.scene.open();let asset;
     // Position the small selected patch above the workbench floor; native
     // selection and transforms remain the owner of subsequent placement.

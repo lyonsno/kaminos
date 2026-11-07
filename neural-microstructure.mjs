@@ -45,6 +45,7 @@ function fineDiscs(rows,radius,label){
 
 export function createMicrostructureControl(field){
   if(!(field.rows instanceof Float32Array)||field.rows.length!==field.count*12||!(field.carriers instanceof Float32Array)||field.carriers.length!==field.carrierCount*8||!(field.radius>0))throw Error('Invalid microstructure field');
+  if(!(field.sourceIds instanceof Uint32Array)||field.sourceIds.length!==field.count)throw Error('Matching source IDs required for scene picking');
   if(field.count>=2**24)throw Error('Float-carried row address exceeds exact integer capacity');
   const root=new Group();root.name='TRELLIS microstructure control';
   const fine=fineDiscs(field.rows,field.radius,'Fine source discs');
@@ -84,9 +85,10 @@ export function createMicrostructureControl(field){
   for(let i=0;i<field.carrierCount;i++){bounds.expandByPoint(new Vector3(...field.carriers.subarray(i*8,i*8+3)));bounds.expandByPoint(new Vector3(...field.carriers.subarray(i*8+3,i*8+6)));}
   for(const mesh of [fine,coarse,carrier]){mesh.geometry.boundingBox=bounds.clone();mesh.geometry.boundingSphere=bounds.getBoundingSphere(new Sphere());mesh.raycast=()=>{};}
   root.userData.raycastsAsWhole=true;
+  const coarseIds=Uint32Array.from({length:field.carrierCount},(_,i)=>i);
   root.raycast=(raycaster,hits)=>{
     root.updateWorldMatrix(true,false);const inverse=new Matrix4().copy(root.matrixWorld).invert(),ray=new Ray().copy(raycaster.ray).applyMatrix4(inverse);
-    const source=mode==='coarse'?{rows:coarseRows,count:field.carrierCount,radius:field.cellSize*.8,sourceIds:Uint32Array.from({length:field.carrierCount},(_,i)=>i)}:field;
+    const source=mode==='coarse'?{rows:coarseRows,count:field.carrierCount,radius:field.cellSize*.8,sourceIds:coarseIds}:field;
     const hit=traceMicrostructure(source,ray.origin.toArray(),ray.direction.toArray());if(!hit)return;
     const point=ray.at(hit.t,new Vector3()).applyMatrix4(root.matrixWorld),distance=point.distanceTo(raycaster.ray.origin);
     if(distance>=raycaster.near&&distance<=raycaster.far)hits.push({object:root,point,distance,index:hit.sourceId});
