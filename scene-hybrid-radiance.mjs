@@ -284,7 +284,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     kernelTask.catch(()=>{});
   }
   function configureGather(target){
-    target.setImportancePolicy(transportQuality);target.setDirections(directions);target.setAngularPattern(angularPattern,angularRotation);target.setRetainComparisons(retainComparisons);
+    target.setConfiguration({directions,angularPattern,angularRotation,importancePolicy:transportQuality});target.setRetainComparisons(retainComparisons);
     if(angularPattern==='guided'){
       if(!getSourceGuide)throw Error('hybrid guided smoke requires authored source guide');
       target.setSourceGuide(deriveSourceGuide(getSourceGuide(),sourceTransform,sourceDomain));
@@ -450,7 +450,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     setSurfaceScattering(value){if(surfaceScattering!==!!value){armSettings();surfaceScattering=!!value;}},setSourceSoftness(value){const next=validateSourceSoftness(value);if(next!==sourceSoftness){armSettings();sourceSoftness=next;}},
     setSmokeMode(value){if(!['distributed','legacy'].includes(value))throw new Error('unknown smoke mode');smokeMode=value;},
     setDirections(value){volumeGatherPlan({volumeGrid,sourceDimensions:sourceDomain.dimensions,directions:value,smokeRefinement,angularPattern,...transportQuality,sceneLightCount:collectSceneSmokeLights(scene,sourceTransform).lights.length},device.limits);if(value===directions)return;armSettings();directions=value;status.directions=value;},
-    setAngularPattern(pattern,rotation=0){if(!['fixed','spatial','blue','source','guided','regions','importance'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern required');volumeGatherPlan({volumeGrid,sourceDimensions:sourceDomain.dimensions,directions,smokeRefinement,angularPattern:pattern,...transportQuality},device.limits);if(pattern===angularPattern&&rotation===angularRotation)return;armSettings();gather?.setAngularPattern(pattern,rotation);angularPattern=pattern;angularRotation=rotation;},
+    setAngularPattern(pattern,rotation=0){if(!['fixed','spatial','blue','source','guided','regions','importance'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern required');volumeGatherPlan({volumeGrid,sourceDimensions:sourceDomain.dimensions,directions,smokeRefinement,angularPattern:pattern,...transportQuality},device.limits);if(pattern===angularPattern&&rotation===angularRotation)return;armSettings();angularPattern=pattern;angularRotation=rotation;},
     setRetainComparisons(value){retainComparisons=!!value;},
     setShadowSoftness(value){if(!Number.isFinite(value)||value<0)throw Error('shadow softness must be finite and nonnegative');for(const light of lights)light.shadow.setSoftness(value);shadowSoftness=value;status.shadowSoftness=value;},
     setShadowSampling(value){validateShadowSampling(value);for(const light of lights)light.shadow.setSampling(value);shadowSampling=value;status.shadowSampling=value;},

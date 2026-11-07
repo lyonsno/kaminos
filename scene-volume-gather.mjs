@@ -251,23 +251,25 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
     preparationPromise=Promise.all([prepareLightingComputePipelines([compiled.sceneLightPipeline,compiled.gather,compiled.gatherVolume,compiled.environmentCache,compiled.importance,cache,full]),preparedSmoke.ready(),sourceBounds.ready(),reproject?.ready(),sourceSoftness?softening.ready():null]).then(()=>{if(key===preparationKey)preparationComplete=true;});
     preparationPromise.catch(()=>{if(key===preparationKey)preparationKey=null;});return preparationPromise;
   }
+  function setConfiguration(value={}){
+    const nextDirections=value.directions??directions,pattern=value.angularPattern??angularPattern,rotation=value.angularRotation??angularRotation;
+    const nextPolicy=normalizeLightingTransport({...importancePolicy,...value.importancePolicy});
+    if(!['fixed','spatial','blue','source','guided','regions','importance'].includes(pattern)||!Number.isFinite(rotation))throw Error('valid angular pattern and finite rotation required');
+    if(['blue','importance'].includes(pattern)&&!samplingNoise?.createView)throw Error('blue-noise smoke lighting requires the shared sampling atlas');
+    volumeGatherPlan({volumeGrid,sourceDimensions,receiverBounds,surfaceCount:receivers.length,directions:nextDirections,smokeRefinement,angularPattern:pattern,...nextPolicy},device.limits);
+    const changed=nextDirections!==directions||pattern!==angularPattern||rotation!==angularRotation||nextPolicy.importanceBankMultiplier!==importancePolicy.importanceBankMultiplier;
+    directions=nextDirections;angularPattern=pattern;angularRotation=rotation;importancePolicy=nextPolicy;
+    if(changed&&!retainComparisons)pruneComparisons();
+  }
   return {prepare,isPrepared:(field,options={})=>preparationComplete&&preparationKey===requestedPreparation(field,options.sourceSoftness??0),surface,surfaceBack,smoke,surfaceDimensions:[surfaceWidth,surfaceHeight],volumeDimensions,
+    setConfiguration,
     setImportancePolicy(value){
       if(['importanceBankMultiplier','importanceExploration','importanceHistoryDecay','importanceHistoryBlend'].every(k=>value[k]===undefined||value[k]===importancePolicy[k]))return;
-      const next=normalizeLightingTransport({...importancePolicy,...value});
-      volumeGatherPlan({volumeGrid,sourceDimensions,receiverBounds,surfaceCount:receivers.length,directions,smokeRefinement,angularPattern,...next},device.limits);
-      importancePolicy=next;
+      setConfiguration({importancePolicy:value});
     },
     setGeometryTransforms(value){geometryTransforms=value;},
-    setDirections(value){volumeGatherPlan({volumeGrid,sourceDimensions,receiverBounds,surfaceCount:receivers.length,directions:value,smokeRefinement,angularPattern,...importancePolicy},device.limits);directions=value;},
-    setAngularPattern(pattern,rotation=0){
-      if(!['fixed','spatial','blue','source','guided','regions','importance'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern and finite rotation required');
-      if(pattern===angularPattern&&rotation===angularRotation)return;
-      if(['blue','importance'].includes(pattern)&&!samplingNoise?.createView)throw Error('blue-noise smoke lighting requires the shared sampling atlas');
-      volumeGatherPlan({volumeGrid,sourceDimensions,receiverBounds,surfaceCount:receivers.length,directions,smokeRefinement,angularPattern:pattern,...importancePolicy},device.limits);
-      angularPattern=pattern;angularRotation=rotation;
-      if(!retainComparisons)pruneComparisons();
-    },
+    setDirections(value){setConfiguration({directions:value});},
+    setAngularPattern(pattern,rotation=0){setConfiguration({angularPattern:pattern,angularRotation:rotation});},
     setSourceRegions(value){
       const next=normalizeSourceRegions(value,domain),bytes=next.length*32;
       if(bytes>device.limits.maxStorageBufferBindingSize)throw Error(`source regions need ${bytes} bytes; device supports ${device.limits.maxStorageBufferBindingSize}`);
