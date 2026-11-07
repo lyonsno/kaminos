@@ -311,3 +311,17 @@ try{
   delete globalThis.window;
 }
 
+// Authored emitter controls stay physical while optical receivers use display coordinates.
+field.source.physicalTransform={translate:[0,0,0],scale:1};
+field.source.worldTransform={translate:[3,-2,7],scale:.0494};
+let regionTransform;
+const guided=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,smokeRefinement:1,pointCount:1,
+ getSourceGuide:()=>({position:[0,-.5,0],radius:.1,height:1,depth:.1}),
+ getSourceRegions(transform){regionTransform=transform;return [{id:'inlet',lo:[-.2,-.6,-.2],hi:[.2,.5,.2]}];},
+ createShadow:()=>({visibility:THREE.TSL.float(1),render(){},debugState:()=>({}),dispose(){}})});
+guided.setAngularPattern('guided');consume(field);
+assert.equal(guided.debugState().frame.sourceGuide.reason,null,'presentation must not displace the authored guide outside the local volume');
+guided.setAngularPattern('regions');consume(field);
+assert.deepEqual(regionTransform,field.source.physicalTransform,'regional proposals receive the authoring frame');
+guided.dispose();
+

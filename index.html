@@ -11406,12 +11406,12 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
         passState.farFieldIdentity = lightField.farFieldIdentity ?? null;
         atlasGrid.value = lightField.grid;
         atlasGridY.value = lightField.gridY;
-        fieldWorldMin.value.set(...lightField.worldMin);
-        fieldWorldMax.value.set(...lightField.worldMax);
-        fieldCellPitch.value = (lightField.worldMax[0] - lightField.worldMin[0]) / lightField.grid;
         atlasTilesX.value = lightField.tilesX;
         atlasTexelSize.value.set(1 / lightField.atlasWidth, 1 / lightField.atlasHeight);
       }
+      fieldWorldMin.value.set(...lightField.worldMin);
+      fieldWorldMax.value.set(...lightField.worldMax);
+      fieldCellPitch.value = (lightField.worldMax[0] - lightField.worldMin[0]) / lightField.grid;
       passState.effective = true;
       passState.reason = null;
       passState.sameDevice = true;

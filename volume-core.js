@@ -4,6 +4,7 @@ import {resolveWorldCalibration,calibrationSignature,calibrationWaveletLattice,W
 import {WORLD_RENDER_WGSL,createWorldRenderField} from './volume-world-render.mjs';
 import {sourceCoverageBounds} from './volume-fine-coverage.mjs';
 import {checkedWorldFrame} from './volume-world-frame.mjs';
+import {composeVolumePresentationTransform} from './volume-presentation-frame.mjs';
 import {validateAllocation} from './volume-material-hierarchy.mjs';
 import {gridTuningPlan} from './volume-grid-tuning.mjs';
 import {TRANSFER_GEOMETRY_WGSL} from './volume-grid-transfer.mjs';
@@ -48,7 +49,7 @@ import { DISPLAY_RECONSTRUCTION_WGSL, createDisplayReconstruction, resolveDispla
 export { resolveDisplayReconstruction } from './volume-display-reconstruction.mjs';
 import { SOOT_BURNOUT_WGSL, resolvePhysicsAppearance, physicsAppearanceUniformValues } from './volume-physics-appearance.mjs';
 import { WAVELET_TURBULENCE_WGSL, WAVELET_TURBULENCE_IDENTITY, resolveWaveletTurbulence, waveletTurbulenceUniformValues, waveletOctaveUniformValues, velocityBandEnergies } from './volume-wavelet-turbulence.mjs';
-import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
+import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame, validateSceneSourceTransform } from './scene-volume-source.mjs';
 import { createThermalSubmission } from './volume-thermal-submission.mjs';
 import { createSceneVolumeTransport } from './scene-volume-transport.mjs';
 import { GRID_HEIGHT_MAX_RATIO, resolveGridHeight, gridHeightForShape, raymarchDomainBox } from './volume-grid-shape.mjs';
@@ -11300,6 +11301,17 @@ export function createKaminosVolumePrototype({
       : [0, 0, 0],
     scale: Math.max(0.001, Number(externalProductTransform?.scale) || 1),
   };
+  let presentationTransform = validateSceneSourceTransform();
+  function presentationWorldTransform() {
+    return composeVolumePresentationTransform(productTransform,presentationTransform);
+  }
+  function presentationTransformReceipt() {
+    return {identity:'retained-volume-presentation-frame-v1',
+      physicalTransform:structuredClone(productTransform),
+      presentationTransform:structuredClone(presentationTransform),
+      worldTransform:presentationWorldTransform(),
+      simStepCount:state.simStepCount,simulationPaused:state.simulationPaused};
+  }
 
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
@@ -12093,7 +12105,7 @@ export function createKaminosVolumePrototype({
     const source=getSceneCollision?.();let solids,collisionSource=null;
     if(source?.requested&&source.object){
       const a=worldSmoke.anchor;
-      const produced=worldSolidProducer.update(source.objects||[{id:source.id,object:source.object}],{translate:a.translate,scale:a.scale*Number(controlsSnapshot.worldSmokeExtent||3)},{grid:plan.flowDims[0],gridHeight:plan.flowDims[1]},{materialMasks:gpuThermalConsumer?.materialMasks?.()??[]});
+      const produced=worldSolidProducer.update(source.objects||[{id:source.id,object:source.object}],composeVolumePresentationTransform({translate:a.translate,scale:a.scale*Number(controlsSnapshot.worldSmokeExtent||3)},presentationTransform),{grid:plan.flowDims[0],gridHeight:plan.flowDims[1]},{materialMasks:gpuThermalConsumer?.materialMasks?.()??[]});
       // An empty producer has no presentation dispatch. Never reuse its last
       // nonempty texture after the last collision object has been removed.
       if(produced.triangleCount>0){worldSolidProducer.encode(encoder);solids=worldSolidProducer.texture;collisionSource={revision:produced.revision,members:produced.members,backend:produced.backend};}
@@ -12109,7 +12121,7 @@ export function createKaminosVolumePrototype({
       let middleSolids;
       if(source?.requested&&source.object){
         const a=intermediateFlow.anchor,p=intermediateFlow.plan;
-        const produced=intermediateSolidProducer.update(source.objects||[{id:source.id,object:source.object}],{translate:a.translate,scale:a.scale*(-p.min[0])},{grid:p.flowDims[0],gridHeight:p.flowDims[1]},{materialMasks:gpuThermalConsumer?.materialMasks?.()??[]});
+        const produced=intermediateSolidProducer.update(source.objects||[{id:source.id,object:source.object}],composeVolumePresentationTransform({translate:a.translate,scale:a.scale*(-p.min[0])},presentationTransform),{grid:p.flowDims[0],gridHeight:p.flowDims[1]},{materialMasks:gpuThermalConsumer?.materialMasks?.()??[]});
         if(produced.triangleCount>0){intermediateSolidProducer.encode(encoder);middleSolids=intermediateSolidProducer.texture;}
       }
       const result=intermediateFlow.encode(encoder,{...input,iterations:regions.middleIterations,materialIndex:worldSmoke.materialResources().index,solids:middleSolids});
@@ -13583,7 +13595,7 @@ export function createKaminosVolumePrototype({
       const started = performance.now();
       if (typeof device.createComputePipeline === 'function' && !state.joinedBoundary?.admitted) {
         if(!sceneSolidGpu){sceneSolidGpu=createGpuSceneSolidProducer(device,{grid:gridSize,gridHeight});sceneSolidGpuSupportKey=null;}
-        const geometry=sceneSolidGpu.update(source.objects||[{id:sourceId,object:source.object}],productTransform,{grid:gridSize,gridHeight},{wallCells:backWall.cells,materialMasks:gpuThermalConsumer?.materialMasks?.()??[]});
+        const geometry=sceneSolidGpu.update(source.objects||[{id:sourceId,object:source.object}],presentationWorldTransform(),{grid:gridSize,gridHeight},{wallCells:backWall.cells,materialMasks:gpuThermalConsumer?.materialMasks?.()??[]});
         const supportKey=JSON.stringify([analyticEmitterDescriptorSignature,analyticEmitterDispatch.active,analyticEmitterDispatch.cellMin,analyticEmitterDispatch.cellExtent]);
         if(sceneSolidGpuSupportKey!==supportKey){
           if(analyticEmitterDispatch.active)analyticSourceSupportPipeline ??= createAnalyticSourceSupportPipeline(device, analyticEmitterInjectionShader);
@@ -13620,7 +13632,7 @@ export function createKaminosVolumePrototype({
         sceneSolidRevisionKey=null;installSceneSolidTexture();rebuildSceneSolidBindingViews();
       }
       sceneSolidGeometryCache ||= createSceneSolidGeometryCache({voxelize:voxelizeTriangleSolid});
-      const geometry = sceneSolidGeometryCache.update(source.objects || [{id:sourceId,object:source.object}],productTransform,{grid:gridSize,gridHeight});
+      const geometry = sceneSolidGeometryCache.update(source.objects || [{id:sourceId,object:source.object}],presentationWorldTransform(),{grid:gridSize,gridHeight});
       const {revision,field}=geometry;
       const geometryKey = JSON.stringify([sourceId,geometry.key]);
       state.sceneSolidGeometryBuilds = (state.sceneSolidGeometryBuilds || 0) + geometry.builds;
@@ -14043,6 +14055,7 @@ export function createKaminosVolumePrototype({
 
   function writeLiquidFireContactParams() {
     if (!device || !liquidFireContactDescriptor || !liquidFireContactParamsBuffer) return false;
+    const displayTransform=presentationWorldTransform();
     const sourcePrimitive = getPrimitiveSource();
     const sourceContactRadius = Math.max(0.12, sourcePrimitive.radius * 1.5);
     device.queue.writeBuffer(liquidFireContactParamsBuffer, 0, liquidFireContactConsumerParams({
@@ -14051,8 +14064,8 @@ export function createKaminosVolumePrototype({
       sourceFrameHash: liquidFireContactDescriptor.sourceFrameHash,
       sourceQuenchCenter: sourcePrimitive.position.map(value => value * 0.5 + 0.5),
       sourceQuenchRadius: sourceContactRadius,
-      receiverOffset: productTransform.translate.map(value => 0.5 - value * 0.5 / productTransform.scale),
-      receiverScale: [0.5, 0.5, 0.5].map(value => value / productTransform.scale),
+      receiverOffset: displayTransform.translate.map(value => 0.5 - value * 0.5 / displayTransform.scale),
+      receiverScale: [0.5, 0.5, 0.5].map(value => value / displayTransform.scale),
     }));
     state.liquidFireSourceContactRadius = sourceContactRadius;
     return true;
@@ -14109,6 +14122,7 @@ export function createKaminosVolumePrototype({
     readback.unmap();
     readback.destroy();
     const statusLabels = ['unset', 'applied', 'invalid-source-header', 'stale-source-tick', 'fresh-source-tick', 'fresh-no-exchange'];
+    const displayTransform=presentationWorldTransform();
     return {
       ok: words[1] === 1,
       schema: LIQUID_FIRE_CONTACT_CONSUMER_SCHEMA,
@@ -14143,8 +14157,8 @@ export function createKaminosVolumePrototype({
       sourcePilotEnabled,
       sourceFrameId: liquidFireContactDescriptor?.sourceFrameId || null,
       receiverTransformId: LIQUID_FIRE_CONTACT_RECEIVER_TRANSFORM_ID,
-      receiverScale: [0.5, 0.5, 0.5].map(value => value / productTransform.scale),
-      receiverOffset: productTransform.translate.map(value => 0.5 - value * 0.5 / productTransform.scale),
+      receiverScale: [0.5, 0.5, 0.5].map(value => value / displayTransform.scale),
+      receiverOffset: displayTransform.translate.map(value => 0.5 - value * 0.5 / displayTransform.scale),
       dispatchCount: state.liquidFireContactDispatchCount,
       transferEnabled: liquidFireContactTransferEnabled,
       transferGateReason: state.liquidFireContactTransferGateReason,
@@ -16589,15 +16603,16 @@ export function createKaminosVolumePrototype({
       state.lookFreezeTimeSeconds = null;
     }
     viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-    if (productFrameOwner === 'caller' || productTransform.translate.some(value => value !== 0) || productTransform.scale !== 1) {
-      productModelMatrix.makeScale(productTransform.scale, productTransform.scale, productTransform.scale);
-      productModelMatrix.setPosition(...productTransform.translate);
+    const displayTransform=presentationWorldTransform();
+    if (productFrameOwner === 'caller' || displayTransform.translate.some(value => value !== 0) || displayTransform.scale !== 1) {
+      productModelMatrix.makeScale(displayTransform.scale, displayTransform.scale, displayTransform.scale);
+      productModelMatrix.setPosition(...displayTransform.translate);
       productViewProj.multiplyMatrices(viewProj, productModelMatrix);
       invViewProj.copy(productViewProj).invert();
       productLocalCameraPosition.copy(camera.position);
-      productLocalCameraPosition.x = (productLocalCameraPosition.x - productTransform.translate[0]) / productTransform.scale;
-      productLocalCameraPosition.y = (productLocalCameraPosition.y - productTransform.translate[1]) / productTransform.scale;
-      productLocalCameraPosition.z = (productLocalCameraPosition.z - productTransform.translate[2]) / productTransform.scale;
+      productLocalCameraPosition.x = (productLocalCameraPosition.x - displayTransform.translate[0]) / displayTransform.scale;
+      productLocalCameraPosition.y = (productLocalCameraPosition.y - displayTransform.translate[1]) / displayTransform.scale;
+      productLocalCameraPosition.z = (productLocalCameraPosition.z - displayTransform.translate[2]) / displayTransform.scale;
     } else {
       invViewProj.copy(viewProj).invert();
       productLocalCameraPosition.copy(camera.position);
@@ -16667,7 +16682,7 @@ export function createKaminosVolumePrototype({
         persistentCohortRequested ? 1 : 0,
       ], 44);
       splatCamera.set([camera.position.x, camera.position.y, camera.position.z, 0], 48);
-      splatCamera.set([...productTransform.translate, productTransform.scale], 52);
+      splatCamera.set([...displayTransform.translate, displayTransform.scale], 52);
       splatCamera.set([gridSize, gridHeight, appearanceModelUniformValue(state.appearanceModel?.effective), 0], 56);
       state.fullSupportDepositionReceipt = {
         identity: 'full-support-deposition-runtime-receipt-v0',
@@ -18078,7 +18093,7 @@ export function createKaminosVolumePrototype({
   function thermalGpuFrame(){
     return {device,fluid:fluidBuffers[currentFluid],collision:sceneSolidTexture,dimensions:[gridSize,gridHeight,gridSize],simStepCount:state.simStepCount,allocationId:state.thermalFluidAllocationId,
       dt:resolveTimeStepConfig(controlsSnapshot).effective.dtScale/60,backtraceScale:resolveTimeStepConfig(controlsSnapshot).effective.backtraceScale,
-      transform:{translate:[...productTransform.translate],scale:productTransform.scale}};
+      transform:presentationWorldTransform(),physicalTransform:structuredClone(productTransform)};
   }
   function encodeGpuThermalConsumer(encoder){
     const continuation=gpuThermalConsumer?.encode(encoder,thermalGpuFrame());
@@ -18776,6 +18791,7 @@ export function createKaminosVolumePrototype({
     const atlasTilesY = Math.ceil(irradianceGridSize / FIRE_IRRADIANCE_ATLAS_TILES_X);
     // The bounds the camera actually samples (the raymarch box, report §34).
     const domainBox = raymarchDomainBox(gridSize, gridHeight);
+    const displayTransform=presentationWorldTransform();
     const base = {
       identity: FIRE_IRRADIANCE_ATLAS_IDENTITY,
       latticeIdentity: FIRE_IRRADIANCE_LATTICE_IDENTITY,
@@ -18789,10 +18805,10 @@ export function createKaminosVolumePrototype({
       atlasWidth: irradianceGridSize * FIRE_IRRADIANCE_ATLAS_TILES_X,
       atlasHeight: gridHeightForSize(irradianceGridSize) * atlasTilesY,
       gridY: gridHeightForSize(irradianceGridSize),
-      worldMin: domainBox.min.map((value, axis) => value * productTransform.scale + productTransform.translate[axis]),
-      worldMax: domainBox.max.map((value, axis) => value * productTransform.scale + productTransform.translate[axis]),
+      worldMin: domainBox.min.map((value, axis) => value * displayTransform.scale + displayTransform.translate[axis]),
+      worldMax: domainBox.max.map((value, axis) => value * displayTransform.scale + displayTransform.translate[axis]),
       worldBoundsAuthority: 'full-volume-domain-equal-cell-pitch-v1',
-      raymarchWorldMax: domainBox.max.map((value, axis) => value * productTransform.scale + productTransform.translate[axis]),
+      raymarchWorldMax: domainBox.max.map((value, axis) => value * displayTransform.scale + displayTransform.translate[axis]),
       generation: irradianceAtlasGeneration,
       builtFrame: state.fireLightFieldLastBuiltFrame ?? null,
       frameCount: state.fireLightFieldFrameCount || 0,
@@ -18801,6 +18817,9 @@ export function createKaminosVolumePrototype({
       fallbackAuthority: false,
       canvasAuthority: false,
     };
+    if (!state.active) {
+      return {...base,status:'inactive',reason:'volume-withdrawn',atlasTexture:null,metaTexture:null};
+    }
     if (!requested) {
       return { ...base, status: 'inactive', reason: 'fire-light-field-route-not-requested', atlasTexture: null, metaTexture: null };
     }
@@ -21471,9 +21490,9 @@ export function createKaminosVolumePrototype({
         return {texture:worldSmoke.optical,dimensions:worldSmoke.plan.materialDims,localMin:map.renderMin,localMax:map.renderMax,middle};
       },
       grid: EMISSIVE_LIGHT_GRID, gridY: EMISSIVE_LIGHT_GRID * gridHeight / gridSize, fluidGrid: gridSize, fluidGridY: gridHeight});
-    sceneVolumeSource.encode(encoder, currentFluid, state.frameCount,productTransform);
+    sceneVolumeSource.encode(encoder, currentFluid, state.frameCount,presentationWorldTransform());
     if (sceneMediumSource) sceneVolumeSource.encodeOpticalDepth(encoder, sceneMediumSource.position, sceneMediumSource.stepLength);
-    return {source: sceneVolumeSource.describe(), medium: sceneVolumeSource.opticalDepthField(), simStepCount: state.simStepCount};
+    return {source: {...sceneVolumeSource.describe(),physicalTransform:validateSceneSourceTransform(productTransform)}, medium: sceneVolumeSource.opticalDepthField(), simStepCount: state.simStepCount};
   }
 
   function prepareFixedCountAllocation(encoder,optical) {
@@ -21537,9 +21556,9 @@ export function createKaminosVolumePrototype({
           }
           sceneTransport ||= createSceneVolumeTransport(device);
           const receipt=sceneTransport.encode({...input,width:state.width,height:state.height,code,mainLayout:bindGroupLayout,mainGroup:fluidBindGroup(),lighting,
-            forwardScale:[...forward,productTransform.scale],constants:{LEAN_EMISSIVE_RAYMARCH:lean,OPTICAL_STEP_MODE:optical.value}});
+            forwardScale:[...forward,presentationWorldTransform().scale],constants:{LEAN_EMISSIVE_RAYMARCH:lean,OPTICAL_STEP_MODE:optical.value}});
           state.sceneTransport={...receipt,sourceFrame,sourceStep,sourceIndex:currentFluid,
-            worldTransform:{translate:[...productTransform.translate],scale:productTransform.scale},renderScale:state.renderScale,
+            worldTransform:presentationWorldTransform(),renderScale:state.renderScale,
             material:'native-emissive-transport-v2',lighting:distributedGroup?'distributed':scenePointBindGroup?'native-six-direction-plus-point':'native-six-direction',
             stepping:optical.mode,authority:'native-material-current-field-ordered-host-encoder'};
           return {...state.sceneTransport};
@@ -28355,11 +28374,23 @@ export function createKaminosVolumePrototype({
 
   return {
     sampleSharedTransmittanceContributions,
+    setPresentationTransform(transform) {
+      const next=validateSceneSourceTransform(transform);
+      composeVolumePresentationTransform(productTransform,next);
+      if(next.scale===presentationTransform.scale&&next.translate.every((x,a)=>x===presentationTransform.translate[a]))return presentationTransformReceipt();
+      presentationTransform=next;
+      sceneVolumeSource?.invalidate('presentation-frame-changed');
+      writeLiquidFireContactParams();
+      emitStatus({phase:'presentation-frame-changed'});
+      return presentationTransformReceipt();
+    },
+    presentationFrame() {return presentationTransformReceipt();},
     readSceneCollisionMask(knownRevision = undefined) {
-      const revision=JSON.stringify([sceneSolidRevisionKey,gridSize,gridHeight,productTransform.translate,productTransform.scale]);
+      const displayTransform=presentationWorldTransform();
+      const revision=JSON.stringify([sceneSolidRevisionKey,gridSize,gridHeight,displayTransform.translate,displayTransform.scale]);
       if(knownRevision === revision)return null;
       return {revision,cells:sceneSolidCellsCpu?.slice()??null,
-        dimensions:[gridSize,gridHeight,gridSize],transform:structuredClone(productTransform),
+        dimensions:[gridSize,gridHeight,gridSize],transform:displayTransform,
         runtime:structuredClone(state.sceneCollision),backend:sceneSolidGpu?'gpu':'cpu',texture:sceneSolidGpu?.texture??null,snapshotStatus:sceneSolidGpu?'gpu-resident':'available'};
     },
     async sampleSceneCollisionMask() {
@@ -29341,6 +29372,7 @@ export function createKaminosVolumePrototype({
         worldSmokeOverlay,
         ordinaryDomainTranslation: [...productTransform.translate],
         ordinaryDomainScale: productTransform.scale,
+        presentationFrame:presentationTransformReceipt(),
         coreEmitterSourceReceipt: state.coreEmitterSourceReceipt ? { ...state.coreEmitterSourceReceipt } : null,
         cameraSignature: cameraSignature(),
         boundarySplatInstanceConsumerReceipt: boundarySplatInstanceConsumerReceipt(),
@@ -29618,7 +29650,8 @@ export function createKaminosVolumePrototype({
       distributedFrame=input;
     },
     sceneVolumeSourceField() {
-      return {requested: sceneVolumeSourceRequested, ...(sceneVolumeSource?.describe() || {status: 'unbuilt', texture: null})};
+      if(!state.active)return {requested:sceneVolumeSourceRequested,status:'inactive',reason:'volume-withdrawn',generation:null,texture:null,scatteringTexture:null};
+      return {requested: sceneVolumeSourceRequested, ...(sceneVolumeSource?.describe() || {status: 'unbuilt', texture: null}),physicalTransform:validateSceneSourceTransform(productTransform)};
     },
     sharedAshAtmosphere(){return structuredClone(sharedAsh);},
     setSharedAshAtmosphere(value){const next=atmosphereSettings(value);const displayColor=value.displayColor??next.color;if(!Array.isArray(displayColor)||displayColor.length!==3||displayColor.some(x=>!Number.isFinite(x)||x<0))throw Error('Invalid shared ash display color');sharedAsh={density:next.density,color:next.color,displayColor:[...displayColor]};return this.sharedAshAtmosphere();},
@@ -29629,6 +29662,7 @@ export function createKaminosVolumePrototype({
       sceneVolumeSource?.invalidate('medium-source-changed');
     },
     sceneMediumOpticalDepthField() {
+      if(!state.active)return {status:'inactive',reason:'volume-withdrawn',generation:null,texture:null};
       return sceneVolumeSource?.opticalDepthField() || {status: 'unbuilt', texture: null};
     },
     async sampleSceneMediumOpticalDepth() {

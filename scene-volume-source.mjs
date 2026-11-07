@@ -36,6 +36,9 @@ export function validateSceneSourceTransform(value={translate:[0,0,0],scale:1}){
   return {translate:value.translate.slice(),scale:value.scale};
 }
 export function sceneSourceLocalPoint(point,transform){return point.map((x,a)=>(x-transform.translate[a])/transform.scale);}
+export function sceneSourceAuthoringTransform(source){
+  return validateSceneSourceTransform(source.physicalTransform??source.worldTransform);
+}
 
 // Offline reference only: never called by the interactive renderer.
 export function integrateSceneMediumSegment(field, source, receiver, stepLength) {

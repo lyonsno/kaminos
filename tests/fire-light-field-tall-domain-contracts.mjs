@@ -24,7 +24,7 @@ assert.match(field, /const domainBox = raymarchDomainBox\(gridSize, gridHeight\)
 const worldMaxExpression = field.match(/worldMax:\s*([^\n]+),\n/)?.[1];
 assert.ok(worldMaxExpression, 'producer publishes explicit full-height bounds');
 const { raymarchDomainBox } = await import('../volume-grid-shape.mjs');
-const worldMax = new Function('productTransform', 'domainBox', `return ${worldMaxExpression}`);
+const worldMax = new Function('displayTransform', 'domainBox', `return ${worldMaxExpression}`);
 assert.deepEqual(worldMax({ translate: [0, 0, 0], scale: 1 }, raymarchDomainBox(64, 128)), [1, 3, 1]);
 assert.deepEqual(worldMax({ translate: [2.3, -0.5, 4], scale: 1 }, raymarchDomainBox(64, 128)), [3.3, 2.5, 5],
   'full-height lighting follows the relocated simulation domain');
