@@ -3491,7 +3491,7 @@ import { installLegacyRangeFields } from './legacy-range-field.mjs';
 import { bindSceneHierarchyRows } from './scene-hierarchy-interaction.mjs';
 import { installAuthoringWorkspace } from './authoring-workspace.mjs';
 import {installSceneVisibility,sceneItemVisible as itemVisible,withViewportVisibility,withViewportVisibilityAsync,borrowViewportVisibility} from './scene-visibility.mjs';
-import {checkedRepetition,repetitionDefaults,repetitionMatrices,repetitionCount,withoutRepetitionCopies} from './scene-repetition.mjs';
+import {checkedRepetition,repetitionDefaults,repetitionMatrices,repetitionCount,withoutRepetitionCopies,disposeRepetitionCopy} from './scene-repetition.mjs';
 import {createSceneRepetitionController,canRepeatSceneObject} from './scene-repetition-controller.mjs';
 import {installRepetitionInspector} from './scene-repetition-inspector.mjs';
 import {createAuthoredFlameFeature} from './authored-flame-feature.mjs';
@@ -5487,7 +5487,7 @@ function disposeObjectTree(object) {
   releasePreparedRoot(object);releaseInitialBeautyLevels(object);
   if(object.userData?.disposeAshObject){object.userData.disposeAshObject();for(const [id,ash] of authoredAsh)if(ash.root===object)authoredAsh.delete(id);return;}
   sceneBurning?.forget(object);
-  for(const child of [...(object.children||[])])if(child.userData?.kaminosRepetitionCopy)object.remove(child);
+  for(const child of [...(object.children||[])])if(child.userData?.kaminosRepetitionCopy)disposeRepetitionCopy(child);
   if(object.userData?.disposeBrazierRoom){object.userData.disposeBrazierRoom();return;}
   object.traverse(child => {
     if(child.isSurfaceSplatObject)child.dispose();
