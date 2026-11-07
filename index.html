@@ -14137,7 +14137,11 @@ async function installOwnerWorkbenchEntry() {
     select:()=>window.selectSceneObject(primaryAuthoredFlameSource()?.id),setVisible:visible=>{volumePrototype.canvasElement().style.opacity=visible?'1':'0';window._kaminosDirty?.();}},
   atmosphere:{async open(settings){await workbenchViewerReady;await ownerVolumeReady;const {createAshAtmosphere}=await import('./ash/atmosphere-gpu.mjs');return createAshAtmosphere({scene,camera,renderer,volume:{sharedAshAtmosphere:()=>structuredClone(sceneAshAtmosphereSettings),setSharedAshAtmosphere(value){sceneAshAtmosphereSettings=structuredClone(value);volumePrototype?.setSharedAshAtmosphere(value);}},groundY:groundPlane.position.y,settings});}},
   rendering:{gi:value=>setSceneGIControls(value),readGI:()=>({...sceneGISettings}),
-    openGISourceFootprint:()=>sceneGI.openSourceFootprint(),
+    openGISourceFootprint:()=>{
+      const gi=activeSceneGI;if(!gi)throw Error('Scene GI is unavailable');
+      const handle=gi.openSourceFootprint(),current=()=>{if(activeSceneGI!==gi)throw Error('Renderer changed; reopen the source footprint experiment');};
+      return {read(){current();return handle.read();},set(value){current();return handle.set(value);},dispose:()=>handle.dispose()};
+    },
     openGISourceComparison:(root,candidates)=>{if(!window.kaminosGISourceComparison)throw Error('Open this comparison with ?experiment=gi-source-study');return window.kaminosGISourceComparison.open(root,candidates);},
     readFireLighting:()=>window.kaminosFireLightFieldDebugState(),muteFireLighting:value=>window.kaminosFireLightFieldSetWitnessMute(value)},
   flame:{async open(){await workbenchViewerReady;return openFlameWorkbench();}}};
