@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import * as THREE from '../lib/three.core.js';
 import * as assetArrival from '../asset-arrival.mjs';
 import {createCoarseRepetition} from '../scene-lod-startup.mjs';
+import {isSurfaceSplatResolve} from '../surface-splat-object.mjs';
 import {
   ASSET_ARRIVAL_TARGET_DIAGONAL,
   assetArrivalViewDirection,
@@ -569,6 +570,7 @@ test('low-LOD proxy stand-in helpers stage, adopt, frame, and dispose stand-ins 
   const context = {
     THREE,
     createCoarseRepetition,
+    isSurfaceSplatResolve,
     loadPreparedLod:async level=>(await new FakeGLTFLoader().parseAsync(new ArrayBuffer(16),'')).scene,
     Map,
     Set,
