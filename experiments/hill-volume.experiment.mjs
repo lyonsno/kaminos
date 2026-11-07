@@ -8,7 +8,7 @@ export default {
  id:'hill-volume',title:'Hill · rock and soil volumes',
  async create({host,inputs={},record=()=>{}}){
   let initialConfig={...(inputs.config??{})};
-  let model=makeVolumeSpecimen(initialConfig),solver=null,renderer=null,starting=null,playing=false,disposed=false,error=null,credit=0,advancing=false,generation=0,growthEnabled=false,shoveEnabled=true,shoveGesture=null,shoveResume=false,operationTail=Promise.resolve(),queuedOperations=0;
+  let model=makeVolumeSpecimen(initialConfig),solver=null,renderer=null,starting=null,playing=false,disposed=false,error=null,credit=0,advancing=false,generation=0,growthEnabled=false,shoveEnabled=true,shoveGesture=null,shoveResume=false,shoveAiming=false,shoveEpoch=0,operationTail=Promise.resolve(),queuedOperations=0;
   let releaseRenderer;const rendererAvailable=new Promise(resolve=>{releaseRenderer=resolve;});
   const session=await host.scene.open(),root=new THREE.Group();root.name='Rock and soil volume specimen';
   const settings={rock:7,weatherDepth:.025,growthRate:.025,pushRadius:.55,pushSpeed:1.5,pushX:-.7,pushY:.4,pushZ:1.0,rockPushX:0,rockPushY:0,rockPushZ:2,shoveGain:2,...inputs.settings};
@@ -45,9 +45,9 @@ export default {
    setSettings(patch){for(const [k,v] of Object.entries(patch)){if(!(k in settings)||!Number.isFinite(v))throw Error('Invalid specimen setting '+k);if(['weatherDepth','pushRadius','shoveGain'].includes(k)&&v<=0)throw Error(k+' must be positive');if(k==='rock'&&(!Number.isInteger(v)||!model.bodies[v]))throw Error('Choose an existing rock');}Object.assign(settings,patch);if(growthEnabled)solver?.setDrive(settings.growthRate);sync();record({kind:'hill-volume.settings',effective:{...settings}});return read();},
    async push(){const s=await requireSolver();if(advancing)await s.done();s.push({center:[settings.pushX,settings.pushY,settings.pushZ],radius:settings.pushRadius,velocity:[settings.pushSpeed,0,0]});record({kind:'hill-volume.impulse',settings:{...settings}});return runSteps(1);},
    async pickRock(ray){const s=await requireSolver();root.updateMatrixWorld(true);const inv=root.matrixWorld.clone().invert(),origin=new THREE.Vector3(...ray.origin).applyMatrix4(inv),direction=new THREE.Vector3(...ray.direction).transformDirection(inv);const hit=await s.pickRay(origin.toArray(),direction.toArray());return hit?{...hit,worldPoint:new THREE.Vector3(...hit.point).applyMatrix4(root.matrixWorld).toArray()}:null;},
-   async beginShove(ray){shoveResume=playing;playing=false;sync();return operations.pickRock(ray);},
-   async shove({hit,velocity}){const s=await requireSolver();root.updateMatrixWorld(true);const inv=root.matrixWorld.clone().invert(),zero=new THREE.Vector3(0,0,0).applyMatrix4(inv),v=new THREE.Vector3(...velocity).applyMatrix4(inv).sub(zero).toArray();s.pushRock(hit.rock,v,hit.point);const result=await runSteps(1);record({kind:'hill-volume.shove',rock:hit.rock,point:hit.point,velocity:v});playing=shoveResume;shoveResume=false;credit=0;sync();return result;},
-   async cancelShove(){playing=shoveResume;shoveResume=false;credit=0;sync();return read();},
+   async beginShove(ray){shoveResume=playing;shoveAiming=true;const epoch=++shoveEpoch;playing=false;sync();const hit=await operations.pickRock(ray);return hit?{...hit,epoch,generation}:null;},
+   async shove({hit,velocity}){if(!shoveAiming||hit.epoch!==shoveEpoch||hit.generation!==generation)throw Error('This shove was superseded; aim again');const s=await requireSolver();root.updateMatrixWorld(true);const inv=root.matrixWorld.clone().invert(),zero=new THREE.Vector3(0,0,0).applyMatrix4(inv),v=new THREE.Vector3(...velocity).applyMatrix4(inv).sub(zero).toArray();s.pushRock(hit.rock,v,hit.point);const result=await runSteps(1);record({kind:'hill-volume.shove',rock:hit.rock,point:hit.point,velocity:v});playing=shoveResume;shoveResume=false;shoveAiming=false;credit=0;sync();return result;},
+   async cancelShove(){if(shoveAiming){playing=shoveResume;shoveResume=false;shoveAiming=false;credit=0;sync();}return read();},
    setShoveEnabled(value){if(typeof value!=='boolean')throw Error('Shove enabled must be boolean');shoveEnabled=value;shoveGesture?.setEnabled(value);record({kind:'hill-volume.shove-enabled',value});return read();},
    async release(){const s=await requireSolver();if(advancing)await s.done();s.release(settings.rock);record({kind:'hill-volume.joint-release',rock:settings.rock});return read();},
    async pushRock(){const s=await requireSolver();const velocity=[settings.rockPushX,settings.rockPushY,settings.rockPushZ];s.pushRock(settings.rock,velocity);record({kind:'hill-volume.rock-impulse',rock:settings.rock,velocity});return runSteps(1);},
@@ -66,7 +66,7 @@ export default {
   for(const key of ['setPlaying','setSettings','advance','push','pushRock','release','setGrowth','weather','reset','setInitialContacts','beginShove','shove','cancelShove','setShoveEnabled']){
    const fn=operations[key];operations[key]=(...args)=>{
     const requested=structuredClone(args);queuedOperations++;if(['advance','weather','reset','setInitialContacts'].includes(key))playing=false;sync();
-    const task=operationTail.then(async()=>{if(['reset','setInitialContacts'].includes(key)){await Promise.resolve(starting).catch(()=>{});await solver?.done().catch(()=>{});}else{await rendererAvailable;await starting;await solver?.done();}if(disposed)throw Error('Specimen disposed');return fn(...requested);});
+    const task=operationTail.then(async()=>{if(['reset','setInitialContacts'].includes(key)){await Promise.resolve(starting).catch(()=>{});await solver?.done().catch(()=>{});}else{await rendererAvailable;await starting;await solver?.done();}if(disposed)throw Error('Specimen disposed');if(['reset','weather','setInitialContacts','setPlaying','advance','push','pushRock','release','setGrowth'].includes(key)){shoveAiming=false;shoveResume=false;shoveEpoch++;}return fn(...requested);});
     operationTail=task.catch(()=>{});return task.finally(()=>{queuedOperations--;sync();});
    };
   }

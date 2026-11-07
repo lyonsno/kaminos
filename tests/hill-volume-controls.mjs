@@ -34,3 +34,6 @@ test('Reset before first rendering defers initialization and can recover',async(
 test('queued material impulse retains its requested velocity before later edits',async()=>{
  const i=await instance();try{i.render();await i.value.operations.setPlaying(false);await Promise.all([i.value.operations.push(),i.value.operations.setSettings({pushSpeed:9})]);const gpu=i.value.operations.gpu();assert.equal(new Float32Array(gpu.params.bytes)[20],1.5);assert.equal(i.value.read().settings.pushSpeed,9);}finally{await i.value.dispose();}
 });
+test('Reset during aim supersedes the captured playback state',async()=>{
+ const i=await instance();try{i.render();await i.value.operations.setPlaying(true);await i.value.operations.beginShove({origin:[0,1,2],direction:[0,0,-1]});assert.equal(i.value.read().playing,false);await i.value.operations.reset();await i.value.operations.cancelShove();assert.equal(i.value.read().playing,false,'Cancelling a stale drag must not restart a reset specimen');}finally{await i.value.dispose();}
+});
