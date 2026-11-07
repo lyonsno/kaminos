@@ -12,3 +12,13 @@ export function normalizeLightingTransport(value={}){
   if(next.importanceExploration===0)throw Error('Positive importance exploration preserves support for previously unseen light');
   return next;
 }
+
+export function lightingSourceSampleWork(dimensions,samplesPerAxis){
+  normalizeLightingTransport({sourceSamplesPerAxis:samplesPerAxis});
+  if(dimensions==null)return null;
+  if(!Array.isArray(dimensions)||dimensions.length!==3||!dimensions.every(n=>Number.isSafeInteger(n)&&n>0))
+    throw Error('Source workload needs the actual positive integer XYZ dimensions');
+  const sourceCells=dimensions.reduce((n,value)=>n*BigInt(value),1n),samplesPerCell=samplesPerAxis**3;
+  return {dimensions:[...dimensions],samplesPerAxis,samplesPerCell,sourceCells:String(sourceCells),
+    materialSamples:String(sourceCells*BigInt(samplesPerCell)),relativeToDefault:samplesPerCell/8};
+}

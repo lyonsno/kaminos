@@ -12786,6 +12786,7 @@ export function createKaminosVolumePrototype({
       queueTimingAvailable: true,
     };
     const submittedAt = performance.now();
+    state.timing.queueProbeStartedAt=submittedAt;
     device.queue.onSubmittedWorkDone()
       .then(() => recordVolumeQueueTiming(submittedAt))
       .catch(error => {
@@ -22072,6 +22073,7 @@ export function createKaminosVolumePrototype({
 
   function setSceneLightingRebuildPending(pending, {presentRetained=false}={}) {
     sceneLightingRebuildPending = Boolean(pending);
+    state.lightingRebuildPending=sceneLightingRebuildPending;
     sceneLightingPresentationAllowed = pending && presentRetained;
     if (pending && !sceneLightingPresentationAllowed) { cancelAnimationFrame(raf); raf = 0; }
     else if (state.active && !selectiveHeadLiveCapturePaused && !foregroundPending && !raf) raf = requestAnimationFrame(render);
@@ -29592,7 +29594,7 @@ export function createKaminosVolumePrototype({
     sceneLightSamplingTexture(){return rayStartNoiseTexture;},
     sceneLightSamplingFrame(){return state.simStepCount;},
     fireIrradianceLightField,
-    setSceneLightingSettingsPending(value){sceneLightingSettingsPending=!!value;},
+    setSceneLightingSettingsPending(value){sceneLightingSettingsPending=!!value;state.lightingSettingsPending=sceneLightingSettingsPending;},
     setSceneLightingRebuildPending,
     setSceneVolumeSourceEnabled(enabled) {
       sceneVolumeSourceRequested = enabled === true;

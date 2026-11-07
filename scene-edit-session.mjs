@@ -61,7 +61,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
   const subscribe = listener => { listeners.add(listener); return () => listeners.delete(listener); };
 
   function begin(id, label = 'Transform') {
-    admit();
+    admit(id);
     assertAvailable();
     if (active) throw new Error('A scene edit is already active');
     const before=get(id);
@@ -71,7 +71,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
   }
 
   function preview(patch) {
-    admit();
+    admit(active?.id);
     assertAvailable();
     if (!active) throw new Error('No scene edit is active');
     const pose = check(active.id, { ...get(active.id), ...patch });
@@ -83,7 +83,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
   function commit() {
     if (!active) return false;
     if (active === settling) throw new Error('Wait for the scene operation to settle');
-    admit();
+    admit(active.id);
     assertAvailable();
     const after = get(active.id);
     const entry = { ...active, after, historyAfter:captureHistory(active.id,after) };
@@ -111,7 +111,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
   }
 
   function apply(id, patch, label = 'Transform') {
-    admit();
+    admit(id);
     assertAvailable();
     if (active) throw new Error('Finish the active scene edit first');
     const pose = check(id, { ...get(id), ...patch });
@@ -124,7 +124,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
   // Async construction commits only after its live consumer has settled.
   // Undo may cancel it; the cancelled operation retains no completed entry.
   async function applySettled(id, patch, label = 'Change') {
-    admit();assertAvailable();
+    admit(id);assertAvailable();
     if(active)throw new Error('Finish the active scene edit first');
     const pose=check(id,{...get(id),...patch});
     begin(id,label);
@@ -145,11 +145,11 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
   }
 
   function replay(from, to, key) {
-    admit();
+    const entry = from.at(-1);
+    admit(active?.id??entry?.id);
     assertAvailable();
     if(active===settling && active && key==='before')return cancel();
     if (active) throw new Error('Finish the active scene edit first');
-    const entry = from.at(-1);
     if (!entry) return false;
     const previous = get(entry.id,entry[key]);
     const next=restoreHistory(entry.id,entry[key==='before'?'historyBefore':'historyAfter']??entry[key]);
@@ -207,7 +207,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
   }
 
   function assertCanRecordApplied(id) {
-    admit();
+    admit(id);
     assertAvailable();
     if (active?.id === id) throw new Error('Finish the active edit on this target first');
     if (!targets.has(id)) throw new Error(`Scene edit target "${id}" is not registered`);

@@ -54,9 +54,9 @@ export function installScenePlacementTools({
     gizmo.getHelper().visible = prior.helper;
   };
   const edits = createSceneEdits({ read, write, settled, captureContext,history:id=>sceneObjectPoseHistory(object(id)),
-    changed: () => { refresh(); draw(); }, admit: () => {
+    changed: () => { refresh(); draw(); }, admit: id => {
     if (!allowed()) throw new Error('Finish preview or correction before editing placement');
-    if (busy()) throw new Error('Wait for the current authoring action before editing placement');
+    if (busy(id)) throw new Error('Wait for the current authoring action before editing placement');
   } });
   const state = () => ({
     ...edits.state(), gizmoEditing, gizmoDragging: gizmo.dragging, gizmoVisible: gizmo.getHelper().visible,

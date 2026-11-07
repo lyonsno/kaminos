@@ -3014,6 +3014,7 @@ import { createSceneGI } from './scene-gi.mjs';
 import { compileSceneLighting, createLightingPreparation } from './scene-lighting-compile.mjs';
 import { createFireShadowSettings } from './fire-shadow-settings.mjs';
 import {createFireLightingHistory} from './fire-lighting-history.mjs';
+import {frameSubmissionReadout} from './volume-frame-timing.mjs';
 import {createSceneAOState,bindSceneAOControls,AO_CONTROL_FIELDS} from './scene-ao-state.mjs';
 import { installRenderingNumberControls } from './rendering-number-controls.mjs';
 import { organizeFireRenderingPanel } from './fire-rendering-panel.mjs';
@@ -12126,7 +12127,8 @@ async function initScene() {
     object: id => sceneComponents?.resolve(id)?.object??(id==='@water-domain'?waterDomainEditObject():id==='@flame-domain'?flameDomainEditObject():id==='@selection-transform'?selectionTransformProxy():id?.startsWith('@group:') ? groupProxy(workingScene.groups.find(group=>`@group:${group.id}`===id)) : workingScene.objects.find(item => item.id === id)?.object),
     refresh: () => { updateTransformInspector(); markDirty(); },
     allowed: () => !viewPie?.state() && !greenroomPreviewIsActive() && !splatCorrectionMode && !polyEdit?.active(),
-    busy: () => authoringBusy||sceneLightingPreparation?.state().compiling||sceneDocument.state().phase==='applying',
+    busy: id => authoringBusy||sceneDocument.state().phase==='applying'||
+      (sceneLightingPreparation?.state().compiling&&!id?.startsWith('@fire-lighting:')),
     viewHeld: () => vantageCaptureHeld ? 'The agent sub is taking a picture' : null,
     frameSelected: window.kaminosFrameSelected,
     captureContext: id => id==='@flame-domain'?flameDomainFollowSource:id==='@selection-transform'||id === FLAME_EMITTER_ID || id?.startsWith('@group:') || id?.startsWith('@assembly:') ? [...flameDomainTranslation] : null,
@@ -12413,10 +12415,11 @@ async function initScene() {
     ordinaryDepthEnabled = Boolean(enabled); markDirty(); return ordinaryDepthEnabled;
   };
 
-  // FPS counter
+  // Submission cadence; the browser does not expose display-present FPS here.
   const fpsEl = document.getElementById('fps-counter');
-  let fpsFrames = 0;
   let fpsLast = performance.now();
+  let frameReadoutPrevious={now:fpsLast,sceneFrames:sceneFrameCount,volumeFrames:null};
+  fpsEl.title='CPU frame submissions, not displayed FPS. GPU queue values are completion-fence latency for the shared queue, not isolated GPU frame time.';
 
   function renderSceneFrame() { return frameComposition.render(); }
 
@@ -12496,13 +12499,10 @@ async function initScene() {
     if(recordingFrameSink&&(!activeSceneComposition||!isSceneItemVisible('flame-field')||!volumePrototype?.isActive()))recordingFrameSink();
     lastViewportShadingRender = {...shadingReceipt, sceneFrameCount};
     const frameMs = performance.now() - t0;
-    fpsFrames++;
-    const elapsed = performance.now() - fpsLast;
+    const readoutNow=performance.now(),elapsed=readoutNow-fpsLast;
     if (elapsed >= 500) {
-      const fps = (fpsFrames / elapsed * 1000).toFixed(0);
-      fpsEl.textContent = `${fps} app fps · ${frameMs.toFixed(1)}ms app CPU`;
-      fpsFrames = 0;
-      fpsLast = performance.now();
+      const readout=frameSubmissionReadout({previous:frameReadoutPrevious,now:readoutNow,sceneFrames:sceneFrameCount,cpuMs:frameMs,volume:volumePrototype?.debugState?.()});
+      fpsEl.textContent=readout.text;frameReadoutPrevious=readout.next;fpsLast=readoutNow;
     }
   }
 

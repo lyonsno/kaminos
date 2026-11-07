@@ -1,4 +1,4 @@
-import {normalizeLightingTransport} from './scene-lighting-quality.mjs';
+import {normalizeLightingTransport,lightingSourceSampleWork} from './scene-lighting-quality.mjs';
 import {validateShadowCaptureBudget} from './fire-shadow-cadence.mjs';
 import {normalizeNearSmokeBox} from './scene-near-smoke-box.mjs';
 import {validateShadowSampling,validateShadowComparison} from './fire-shadow-sampling.mjs';
@@ -18,6 +18,16 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
     let requestedPoints=inputs.points??null;
     let requestedPointSampling=inputs.pointSampling??'all';
     let requestedBudget=inputs.pointEvaluationBudget??null;
+    let sourceSampleInput,sourceSampleWork;
+    const syncSourceSampleWork=()=>{
+      if(!sourceSampleWork)return;
+      const state=win.__kaminosSceneRadiance?.debugState();
+      try{
+        const work=lightingSourceSampleWork(state?.sourceInput,Number(sourceSampleInput.value));
+        const draft=Number(sourceSampleInput.value)!==state?.transportQuality?.sourceSamplesPerAxis;
+        sourceSampleWork.textContent=work?`${draft?'Draft: ':''}${work.dimensions.join(' × ')} source cells × ${work.samplesPerCell.toLocaleString()} samples/cell = ${BigInt(work.materialSamples).toLocaleString()} material evaluations per lighting update · ${work.relativeToDefault.toLocaleString()}× the 2-per-axis default.`:'Awaiting live source dimensions.';
+      }catch{sourceSampleWork.textContent='Enter a valid integer to preview source sampling work.';}
+    };
     let requestedCaptureBudget=inputs.shadowCaptureBudget??null;
     if(requestedCaptureBudget!==null)validateShadowCaptureBudget(requestedCaptureBudget);
     if(requestedBudget!==null)validateSourceEvaluationBudget(requestedBudget);
@@ -40,6 +50,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
       const transport=normalizeLightingTransport(medium?.transportQuality);
       if(emptySkipSwitch)emptySkipSwitch.checked=transport.emptySkip;
       for(const {key,number}of transportControls)value(number,transport[key]);
+      syncSourceSampleWork();
       syncCaptureStatus(medium);
       const near=normalizeNearSmokeBox(medium?.nearBox);
       if(nearSwitch)nearSwitch.checked=near.enabled;
@@ -199,6 +210,11 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
           const number=document.createElement('input');number.type='number';number.min=String(min);number.step=step;number.setAttribute('aria-label',text);
           number.addEventListener('change',()=>invoke('setTransportQuality',{[key]:Number(number.value)}).catch(failed));
           transportControls.push({key,number});row.append(number);panel.append(row);numberScrubs.push(installRenderingNumberControl(number,installNumberDrag));
+          if(key==='sourceSamplesPerAxis'){
+            sourceSampleInput=number;sourceSampleWork=document.createElement('small');
+            sourceSampleWork.setAttribute('aria-label','Fine emission material sampling workload');row.append(sourceSampleWork);
+            number.addEventListener('input',syncSourceSampleWork);
+          }
         }
         const skipLabel=document.createElement('label');skipLabel.textContent='Skip empty lighting space';skipLabel.title='Build conservative occupied bounds from current emission and extinction, then skip empty ray segments. Preserves the midpoint sample lattice. Dense fields may benefit less; turn off to compare preparation cost.';
         emptySkipSwitch=document.createElement('input');emptySkipSwitch.type='checkbox';emptySkipSwitch.setAttribute('aria-label','Skip empty lighting space');emptySkipSwitch.addEventListener('change',()=>invoke('setTransportQuality',{emptySkip:emptySkipSwitch.checked}).catch(failed));skipLabel.append(emptySkipSwitch);panel.append(skipLabel);

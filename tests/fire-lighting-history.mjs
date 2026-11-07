@@ -16,7 +16,7 @@ await history.run('setQuadrature',{points:6,pointSampling:'all'});assert.equal(c
 const past=edits.state().undoCount;await assert.rejects(history.run('setPointEvaluationBudget',-1),/invalid budget/);assert.equal(edits.state().undoCount,past);assert.equal(edits.state().active,null);assert.equal(current.state.pointEvaluationBudget,2);
 // A renderer replacement must not leave history bound to its disposed instance.
 current=make();await edits.undo();assert.equal(current.state.smokeShadowMediumResolution,16);await edits.undo();assert.equal(current.state.pointEvaluationBudget,4);
-let release;settle=new Promise(resolve=>release=resolve);const pending=history.run('setPointEvaluationBudget',1);await Promise.resolve();assert(edits.isSettling());assert.equal(edits.state().undoCount,0);release();await pending;assert.equal(edits.state().undoCount,1);assert(syncs>0);
+let release;settle=new Promise(resolve=>release=resolve);const pending=history.run('setPointEvaluationBudget',1);await Promise.resolve();assert.equal(edits.isSettling(),false);assert.equal(edits.state().active,null);assert.equal(edits.state().undoCount,1);release();await pending;assert.equal(edits.state().undoCount,1);assert(syncs>0);
 console.log('PASS fire settings history restores live values, patches independent quality, rejects invalid edits and follows remounted consumers');
 
 current=make();current.state.sourceGrid=32;current.setSourceGrid=function(n){if(!Number.isInteger(n)||n<1)throw Error('invalid emission resolution');this.state.sourceGrid=n;};
