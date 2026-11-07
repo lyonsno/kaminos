@@ -42,3 +42,19 @@ assert.equal(restored.userData.linkGeometry?.bodies?.[0]?.id,'link:2','Scene rec
 const afterBranch=removeBranch(branched,1),remapped=remapBodyGeometry(branched,afterBranch,restored.userData.linkGeometry,{removedNode:1});
 assert.deepEqual(remapped.bodies.map(b=>b.id),['link:1'],'Surviving branch body IDs remap when an earlier branch is deleted');
 console.log('Attachment placement, native offset editing, moving assembly, body-geometry scene records, and branch-deletion remapping passed');
+
+// The live outliner asks the exact same reloadability question on every joint
+// selection. It must not parse/dispose every returned mesh again on a cache hit.
+{
+ const display=structuredClone(capturedWithBodies),body=display.geometry.bodies[0];
+ const group=new T.Group();group.add(new T.Mesh(new T.BoxGeometry(1,1,1).toNonIndexed(),new T.MeshBasicMaterial()));body.object=group.toJSON();
+ assert.equal(records.reloadable(display),true);const parse=T.ObjectLoader.prototype.parse;let parses=0;T.ObjectLoader.prototype.parse=function(...args){parses++;return parse.apply(this,args);};
+ try{
+  for(let i=0;i<4;i++)assert.equal(records.reloadable(display),true);
+  assert.equal(parses,0,'Repeated outliner checks must reuse exact-content geometry validation');
+  const positions=body.object.geometries[0].data.attributes.position.array,before=positions[0];positions[0]=NaN;
+  assert.equal(records.reloadable(display),false,'In-place vertex damage must invalidate the display validation');
+  positions[0]=before;display.mechanism.nodes[2].length+=.1;assert.equal(records.reloadable(display),false,'Recipe changes must invalidate geometry compatibility');
+  display.mechanism.nodes[2].length-=.1;assert.equal(records.reloadable(display),true,'Corrected content can be validated again');
+ }finally{T.ObjectLoader.prototype.parse=parse;}
+}
