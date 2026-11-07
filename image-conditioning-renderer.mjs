@@ -58,7 +58,7 @@ export function createConditioningRenderer(canvas){
   route:CONDITIONING_ROUTE,
   setCloud(value){cloud=value;for(const [i,key]of ['positions','colors','normals','alpha'].entries()){gl.bindBuffer(gl.ARRAY_BUFFER,buffers[i]);gl.bufferData(gl.ARRAY_BUFFER,value[key],gl.STATIC_DRAW);}},
   render(settings,{width=canvas.width,height=canvas.height}={}){
-   if(!cloud)throw Error('Load conditioning geometry first');const p=conditioningSettings(settings);if(!Number.isInteger(width)||!Number.isInteger(height)||width<1||height<1||Math.max(width,height)>gl.getParameter(gl.MAX_TEXTURE_SIZE))throw Error('Unsupported conditioning raster');
+   if(gl.isContextLost())throw Error('Conditioning preview context is lost');if(!cloud)throw Error('Load conditioning geometry first');const p=conditioningSettings(settings);if(!Number.isInteger(width)||!Number.isInteger(height)||width<1||height<1||Math.max(width,height)>gl.getParameter(gl.MAX_TEXTURE_SIZE))throw Error('Unsupported conditioning raster');
    canvas.width=width;canvas.height=height;gl.viewport(0,0,width,height);
    gl.bindTexture(gl.TEXTURE_2D,texture);if(size!==`${width}:${height}`){gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA16F,width,height,0,gl.RGBA,gl.HALF_FLOAT,null);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);size=`${width}:${height}`;}
    gl.bindFramebuffer(gl.FRAMEBUFFER,frame);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,texture,0);if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE)throw Error('Float accumulation framebuffer unavailable');
@@ -68,6 +68,6 @@ export function createConditioningRenderer(canvas){
    const error=gl.getError();if(error!==gl.NO_ERROR)throw Error(`Conditioning render GL error ${error}`);return {route:CONDITIONING_ROUTE,width,height,points:cloud.alpha.length,settings:p};
   },
   pixels(){const pixels=new Uint8Array(canvas.width*canvas.height*4);gl.readPixels(0,0,canvas.width,canvas.height,gl.RGBA,gl.UNSIGNED_BYTE,pixels);return pixels;},
-  dispose(){programs.forEach(x=>gl.deleteProgram(x));buffers.forEach(x=>gl.deleteBuffer(x));textures.forEach(x=>gl.deleteTexture(x));frames.forEach(x=>gl.deleteFramebuffer(x));vaos.forEach(x=>gl.deleteVertexArray(x));gl.getExtension('WEBGL_lose_context')?.loseContext();}
+  dispose(){programs.forEach(x=>gl.deleteProgram(x));buffers.forEach(x=>gl.deleteBuffer(x));textures.forEach(x=>gl.deleteTexture(x));frames.forEach(x=>gl.deleteFramebuffer(x));vaos.forEach(x=>gl.deleteVertexArray(x));}
  };
 }
