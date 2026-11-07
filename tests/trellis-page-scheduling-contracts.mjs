@@ -11,7 +11,9 @@ test('the actual page caller uses native-style finishing by default and forwards
   }:path.includes('mesh-cleanup')?{createBrowserMeshPostprocess:options=>{finishing=options;return async m=>m;}}:{createWasmXatlasUnwrapper:options=>{unwrapOptions=options;return async m=>m;}}};
  context.appGpuHost=async()=>({device});
  vm.runInNewContext(html.slice(a,b).replaceAll('import(','loadModule(')+'\nthis.run=trellisPageRunInner;',context);
- const result=await context.run({pixels:new Float32Array(512*512*3),scheduling:'per-duty-fence-task',textureSize:4096});
+ const onPreview=()=>{};
+ const result=await context.run({pixels:new Float32Array(512*512*3),scheduling:'per-duty-fence-task',textureSize:4096,onPreview});
+ assert.equal(received.onPreview,onPreview,'the public page caller must forward the model preview observer');
  assert.equal(received.scheduling,'per-duty-fence-task');assert.equal(received.textureSize,4096);assert.equal(result.generation.scheduling.kind,'per-duty-fence-task');assert.equal(result.generation.scheduling.gpuDrains,95);
  assert.equal(finishing.mode,'original-remesh');assert.equal(finishing.device,device);assert.equal(finishing.resolution,512);assert.equal(finishing.targetFaces,200000);
  assert.equal(unwrapOptions.normalMode,'source-original');

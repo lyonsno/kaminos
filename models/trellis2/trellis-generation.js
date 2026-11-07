@@ -1,7 +1,8 @@
 // Serving composition from the live image encoder's resident conditioning.
 // Model adapters below are the production kernels, not injectable model or
 // reference callbacks. Initial noise is CPU-authored input; learned fields
-// and coordinates stay resident. Mesh extraction/UV/PBR are later consumers.
+// and coordinates stay resident by default. An optional completed-occupancy
+// preview copies support coordinates only. Mesh extraction/UV/PBR are later consumers.
 import {createTrellisSparseFlowAdapter,createTrellisSparseFlowAdapterAsync} from './sparse-flow.js';
 import {createTrellisSparseSamplerAdapter} from './sparse-sampler.js';
 import {createTrellisSparseDecoderAdapter} from './sparse-decoder.js';
