@@ -27,13 +27,21 @@ export function cloneSceneRadianceMaterial(library, original) {
   return material;
 }
 
+export function createClearSceneMedium(){
+  const texture=new THREE.Data3DTexture(new Float32Array(1),1,1,1);
+  texture.format=THREE.RedFormat;texture.type=THREE.FloatType;
+  texture.minFilter=texture.magFilter=THREE.NearestFilter;
+  texture.generateMipmaps=false;texture.needsUpdate=true;
+  return texture;
+}
+
 // Private experiment mount: no authoring schema, persistence or new host API.
 // A shared device and the ordinary identity world/volume transform are required.
 export function mountSceneRadiance({renderer,scene,prototype,source:initial={position:[0,1.4,.7],intensity:[3,1,.2],stepLength:.03125}}) {
-  const {uniform,vec3,positionWorld,normalWorld,texture3D,cubeTexture,sampler,wgslFn}=THREE.TSL;
+  const {uniform,vec3,positionWorld,normalWorld,texture3D,cubeTexture,sampler,wgslFn,Fn,If}=THREE.TSL;
   let source=validateScenePointSource(initial);
   const position=uniform(new THREE.Vector3(...source.position));
-  const intensity=uniform(new THREE.Vector3(...source.intensity)),sourceVisible=uniform(1);
+  const intensity=uniform(new THREE.Vector3(...source.intensity)),mediumVisible=uniform(1);
   const shadow=createFireLightFieldShadow({renderer,scene,sourceNode:position,receiverNode:positionWorld,normalNode:normalWorld,requested:true});
   function wrapTau(texture=null,dimensions=[32,64,32]) {
     const external=new THREE.ExternalTexture(texture);
@@ -47,12 +55,19 @@ export function mountSceneRadiance({renderer,scene,prototype,source:initial={pos
   }
   let tauExternal=wrapTau();
   const tauNode=texture3D(tauExternal);
+  const clearMedium=createClearSceneMedium(),clearTauNode=texture3D(clearMedium);
   const cubeNode=cubeTexture(shadow.resource().colorTexture);
   const mediumFn=wgslFn(SCENE_MEDIUM_LOOKUP_WGSL);
   const transfer=wgslFn(SCENE_POINT_TRANSFER_WGSL,[mediumFn]);
-  const transported=transfer({tau:tauNode,radial:cubeNode,radialSampler:sampler(cubeNode),
-    source:position,intensity,receiver:positionWorld,normal:normalWorld,resolution:uniform(512)});
-  const irradiance=transported.mul(normalWorld.dot(position.sub(positionWorld).normalize()).max(0)).mul(sourceVisible);
+  const parameters={radial:cubeNode,radialSampler:sampler(cubeNode),
+    source:position,intensity,receiver:positionWorld,normal:normalWorld,resolution:uniform(512)};
+  const transported=Fn(()=>{
+    const result=vec3(0).toVar();
+    If(mediumVisible.greaterThan(0),()=>result.assign(transfer({...parameters,tau:tauNode})))
+      .Else(()=>result.assign(transfer({...parameters,tau:clearTauNode})));
+    return result;
+  })();
+  const irradiance=transported.mul(normalWorld.dot(position.sub(positionWorld).normalize()).max(0));
   const originals=new Map(), converted=new Map();
   const bindingEvidence=new Map();
   const updateBindings=renderer._bindings.updateForRender;
@@ -112,6 +127,11 @@ export function mountSceneRadiance({renderer,scene,prototype,source:initial={pos
       // bind group still reaches submission after the producer reset.
       for (const material of converted.values()) material.dispose();
     }
+    prepareIndependentLight();
+    lastFrame=prototype.setScenePointLightFrame({source,medium:field.medium,shadow:shadow.resource()});
+    status.status='source-bound-awaiting-host-depth';
+  }
+  function prepareIndependentLight(){
     scene.updateMatrixWorld(true);
     const key=[...source.position];
     scene.traverseVisible(object=>{
@@ -130,8 +150,6 @@ export function mountSceneRadiance({renderer,scene,prototype,source:initial={pos
     });
     const nextKey=JSON.stringify(key);
     if(nextKey!==visibilityKey) {shadow.render();visibilityKey=nextKey;}
-    lastFrame=prototype.setScenePointLightFrame({source,medium:field.medium,shadow:shadow.resource()});
-    status.status='source-bound-awaiting-host-depth';
   }
   prototype.setSceneMediumSource(source);
   prototype.setSceneSourceFrameConsumer(prepare);
@@ -147,12 +165,13 @@ export function mountSceneRadiance({renderer,scene,prototype,source:initial={pos
       }
       return {...source};
     },
-    debugState:()=>({...status,sourceVisible:sourceVisible.value,source:{...source},frame:prototype.scenePointLightFrame(),shadow:shadow.debugState(),
+    debugState:()=>({...status,mediumVisible:mediumVisible.value,source:{...source},frame:prototype.scenePointLightFrame(),shadow:shadow.debugState(),
       bindingEvidence:[...bindingEvidence],wrapper:{uuid:tauExternal.uuid,version:tauExternal.version}}),
     canRender() {
       const medium=prototype.sceneMediumOpticalDepthField();
       const withdrawn=medium.status==='inactive'&&medium.reason==='volume-withdrawn';
-      sourceVisible.value=withdrawn?0:1;
+      mediumVisible.value=withdrawn?0:1;
+      if(withdrawn&&!disposed)prepareIndependentLight();
       // The host RAF is independent of volume replay/reset. Never submit a
       // material using a borrowed texture after its producer has retired it.
       return !disposed && (withdrawn || (medium.status==='encoded' && medium.texture===tauExternal.sourceTexture
@@ -163,7 +182,7 @@ export function mountSceneRadiance({renderer,scene,prototype,source:initial={pos
       prototype.setScenePointLightFrame(null);prototype.setSceneSourceFrameConsumer(null);
       for(const [object,{original,replacement}] of originals) if(object.material===replacement) object.material=original;
       for(const material of converted.values()) material.dispose();
-      releaseTauWrapper();shadow.dispose();disposed=true;
+      releaseTauWrapper();clearMedium.dispose();shadow.dispose();disposed=true;
     },
   };
 }

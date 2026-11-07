@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.webgpu.js';
 import {cloneSceneRadianceMaterial} from '../scene-radiance.mjs';
+import * as radiance from '../scene-radiance.mjs';
 
 const library=new THREE.StandardNodeLibrary();
 for(const Material of [THREE.MeshStandardMaterial,THREE.MeshPhysicalMaterial]) {
@@ -22,3 +23,10 @@ for(const Material of [THREE.MeshStandardMaterial,THREE.MeshPhysicalMaterial]) {
   }
 }
 console.log('scene radiance material contracts passed');
+assert.equal(typeof radiance.createClearSceneMedium,'function','withdrawn point-light transport needs a retained zero-depth medium');
+const clear=radiance.createClearSceneMedium();
+assert.equal(clear.isData3DTexture,true);
+assert.deepEqual([clear.image.width,clear.image.height,clear.image.depth],[1,1,1]);
+assert.deepEqual(Array.from(clear.image.data),[0],'absent gas has zero optical depth, not zero independent point-light intensity');
+assert.equal(clear.format,THREE.RedFormat);assert.equal(clear.type,THREE.FloatType);
+clear.dispose();
