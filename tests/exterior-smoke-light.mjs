@@ -14,7 +14,7 @@ const device={limits:{maxStorageBufferBindingSize:1e9,maxTextureDimension2D:1024
  queue:{writeBuffer(b,offset,data){uploads.set(b.label,new Float32Array(data));},submit(){}},
  createBuffer({label}){return {label,destroy(){}};},createTexture(){return {createView(){return {};},destroy(){}};},
  createShaderModule(){return {};},createComputePipeline(){return {getBindGroupLayout(){return {};}};},createBindGroup(value){groups.push(value);return value;},
- createCommandEncoder(){return {beginComputePass(){return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};},finish(){return {};}};}};
+ createCommandEncoder(){return {copyBufferToBuffer(){},beginComputePass(){return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};},finish(){return {};}};}};
 const geometry={nodes:new Float32Array(12),triangles:new Float32Array(12),nodeCount:0,triangleCount:0};
 const source={status:'encoded',texture:device.createTexture(),dimensions:[4,8,4],generation:7,frame:9};
 const bounds={lo:[-3,-2,-4],hi:[3,10,2]};

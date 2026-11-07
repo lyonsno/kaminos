@@ -8,7 +8,7 @@ const passes=[];
 const device={limits:{maxStorageBufferBindingSize:1e9,maxTextureDimension2D:1024,maxTextureDimension3D:256,maxComputeWorkgroupsPerDimension:65535},
  queue:{writeBuffer(){},submit(){}},createBuffer(){return {destroy(){}};},createTexture(){return {createView(){return {};},destroy(){}};},
  createShaderModule(){return {};},createComputePipeline(){return {getBindGroupLayout(){return {};}};},createBindGroup(){return {};},
- createCommandEncoder(){return {beginComputePass({label}){passes.push(label);return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};},finish(){return {};}};}};
+ createCommandEncoder(){return {copyBufferToBuffer(){},beginComputePass({label}){passes.push(label);return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};},finish(){return {};}};}};
 const gather=createVolumeGather(device,{geometry:buildTriangleVisibility([]).packGpu(),receivers:[],volumeGrid:2,directions:8});
 const source={status:'encoded',texture:{createView(){return {};}},scatteringTexture:{createView(){return {};}},scatteringGeneration:1,generation:1,frame:7,dimensions:[4,8,4],localMax:[1,3,1]};
 const frame=gather.encode(source,{surfaceScattering:true,gain:3});

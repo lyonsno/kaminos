@@ -76,7 +76,7 @@ function fixture(){
  const device=()=>({
   limits:{maxStorageBufferBindingSize:2**30,maxBufferSize:2**30,maxComputeWorkgroupsPerDimension:65535,maxTextureDimension2D:8192,maxTextureDimension3D:2048},
   queue:{writeBuffer(){},writeTexture(){},submit(){},onSubmittedWorkDone:async()=>{}},
-  createCommandEncoder:()=>({beginComputePass:()=>({setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}}),finish:()=>({})}),
+  createCommandEncoder:()=>({copyBufferToBuffer(){},beginComputePass:()=>({setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}}),finish:()=>({})}),
   createShaderModule:make('shader'),
   createRenderPipeline:make('render'),
   createComputePipeline:make('compute'),

@@ -27,7 +27,7 @@ for(const ratio of [1,1.125,1.5,2,3,4]) {
     queue:{writeBuffer(buffer,offset,data){uploads.set(buffer.label,new Float32Array(data));},submit(){}},
     createBuffer:d=>({...d,destroy(){}}),createTexture:d=>{textures.push(d);return {createView:()=>({}),destroy(){}};},
     createShaderModule:d=>{modules.push(d);return d;},createComputePipeline:()=>pipeline,createBindGroup:()=>({}),
-    createCommandEncoder:()=>({beginComputePass:()=>({setPipeline(){},setBindGroup(){},dispatchWorkgroups(...n){dispatches.push(n);},end(){}}),finish:()=>({})})};
+    createCommandEncoder:()=>({copyBufferToBuffer(){},beginComputePass:()=>({setPipeline(){},setBindGroup(){},dispatchWorkgroups(...n){dispatches.push(n);},end(){}}),finish:()=>({})})};
   const gather=createVolumeGather(device,{geometry:{nodes:new Float32Array(12),triangles:new Float32Array(12),nodeCount:1,triangleCount:0},receivers:[],volumeGrid:16,smokeRefinement:1,sourceDimensions:dims});
   const field={status:'encoded',texture:{createView:()=>({})},dimensions:dims,localMin:domain.lo,localMax:domain.hi,generation:1,frame:1};
   const frame=gather.encode(field);
