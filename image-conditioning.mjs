@@ -19,13 +19,13 @@ export function conditioningCloud({width,height,depth,normals},image){
   alpha[i]=image.data[src+3]/255;
  }
  if(!alpha.some(x=>x>0))throw Error('No foreground coverage');
- return {width,height,aspect:image.width/image.height,positions,colors,normals:normal,alpha,projection:'source-pixel-rays-focal-height.v1'};
+ return {width,height,sourceWidth:image.width,sourceHeight:image.height,aspect:image.width/image.height,positions,colors,normals:normal,alpha,projection:'source-pixel-rays-focal-height.v1'};
 }
 // Spatial means move XYZ in camera space. Each occupied voxel contributes its
 // actual coverage mass; distant surfaces outside the smoothing scale stay apart.
 export function smoothConditioningCloud(cloud,form){
  if(!Number.isFinite(form)||form<0)throw Error('Invalid conditioning form');if(!form)return cloud;
- const scale=form/cloud.height,cells=new Map(),key=(x,y,z)=>`${x},${y},${z}`;
+ const scale=form/cloud.sourceHeight,cells=new Map(),key=(x,y,z)=>`${x},${y},${z}`;
  for(let i=0;i<cloud.alpha.length;i++){const mass=cloud.alpha[i];if(!mass)continue;const j=i*3,p=cloud.positions,x=Math.floor(p[j]/scale),y=Math.floor(p[j+1]/scale),z=Math.floor(p[j+2]/scale),k=key(x,y,z);let cell=cells.get(k);if(!cell)cells.set(k,cell=new Float64Array(7));cell[6]+=mass;for(let c=0;c<3;c++){cell[c]+=p[j+c]*mass;cell[c+3]+=cloud.normals[j+c]*mass;}}
  for(const cell of cells.values())for(let k=0;k<6;k++)cell[k]/=cell[6];
  const positions=new Float32Array(cloud.positions),normals=new Float32Array(cloud.normals);

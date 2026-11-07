@@ -8,6 +8,7 @@ layout(location=2) in vec3 normal;
 layout(location=3) in float coverage;
 uniform vec2 raster;
 uniform vec2 grid;
+uniform float sourceHeight;
 uniform float aspect;
 uniform float boundary;
 uniform float clay;
@@ -19,12 +20,13 @@ out float mass;
 void main(){
  vec2 corners[6]=vec2[6](vec2(-1,-1),vec2(1,-1),vec2(-1,1),vec2(-1,1),vec2(1,-1),vec2(1,1));
  vec2 corner=corners[gl_VertexID];
+ if(coverage<=0.0){gl_Position=vec4(2,2,0,1);gaussian=vec2(0);pigment=vec3(0);mass=0.0;return;}
  float z=max(position.z,0.000001);
- float sigma=(0.55+boundary)*raster.y/grid.y/z;
+ float sigma=(0.55*raster.y/grid.y+boundary*raster.y/sourceHeight)/z;
  vec2 center=vec2(position.x/z/aspect,-position.y/z)*2.0;
  gl_Position=vec4(center+corner*4.0*sigma*2.0/raster,0,1);
  gaussian=corner*4.0;
- float shade=0.35+0.65*max(0.0,dot(normalize(normal),normalize(vec3(-0.4,-0.5,-0.8))));
+ float shade=0.35+0.65*max(0.0,dot(normal/max(length(normal),0.000001),normalize(vec3(-0.4,-0.5,-0.8))));
  pigment=clamp((mix(color,vec3(0.65)*shade,clay)-0.5)*contrast+0.5,0.0,1.0);
  mass=coverage*density*(raster.x/grid.x)*(raster.y/grid.y)/(6.28318530718*sigma*sigma);
 }`;
@@ -61,7 +63,7 @@ export function createConditioningRenderer(canvas){
    gl.bindTexture(gl.TEXTURE_2D,texture);if(size!==`${width}:${height}`){gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA16F,width,height,0,gl.RGBA,gl.HALF_FLOAT,null);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);size=`${width}:${height}`;}
    gl.bindFramebuffer(gl.FRAMEBUFFER,frame);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,texture,0);if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE)throw Error('Float accumulation framebuffer unavailable');
    gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE);gl.useProgram(draw);gl.bindVertexArray(vao);
-   gl.uniform2f(uniform(draw,'raster'),width,height);gl.uniform2f(uniform(draw,'grid'),cloud.width,cloud.height);gl.uniform1f(uniform(draw,'aspect'),cloud.aspect);for(const key of ['boundary','clay','contrast','density'])gl.uniform1f(uniform(draw,key),p[key]);gl.drawArraysInstanced(gl.TRIANGLES,0,6,cloud.alpha.length);
+   gl.uniform2f(uniform(draw,'raster'),width,height);gl.uniform2f(uniform(draw,'grid'),cloud.width,cloud.height);gl.uniform1f(uniform(draw,'aspect'),cloud.aspect);gl.uniform1f(uniform(draw,'sourceHeight'),cloud.sourceHeight);for(const key of ['boundary','clay','contrast','density'])gl.uniform1f(uniform(draw,key),p[key]);gl.drawArraysInstanced(gl.TRIANGLES,0,6,cloud.alpha.length);
    gl.disable(gl.BLEND);gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.useProgram(finish);gl.bindVertexArray(null);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,texture);gl.uniform1i(uniform(finish,'accumulation'),0);gl.uniform3fv(uniform(finish,'background'),p.background);gl.drawArrays(gl.TRIANGLES,0,3);
    const error=gl.getError();if(error!==gl.NO_ERROR)throw Error(`Conditioning render GL error ${error}`);return {route:CONDITIONING_ROUTE,width,height,points:cloud.alpha.length,settings:p};
   },
