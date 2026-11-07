@@ -154,12 +154,20 @@ fn summarize() {
   textureStore(summary,vec2<i32>(0),peak);
 }`;
 
-export async function createLiveLogHeatGpu({renderer,mesh,bounds,surfaceGeometry=null,surfaceLod=null,disintegrate=false}) {
+export async function createLiveLogHeatGpu({renderer,mesh,bounds,surfaceGeometry=null,surfaceLod=null,disintegrate=false,surfaceMask:preparedMask=null}) {
   const device=renderer.backend.device;
   if(!device?.createComputePipelineAsync)throw Error('Live log requires WebGPU');
   const size=bounds.getSize(new THREE.Vector3());
   if(Math.min(size.x,size.y,size.z)<=0)throw Error('Live log requires volumetric mesh bounds');
-  const surfaceMask=createLogSurfaceMask(surfaceGeometry??mesh.geometry,bounds,LIVE_LOG_GRID,{filled:disintegrate});
+  // A worker may classify this exact geometry/bounds before activation. Reuse
+  // its resident material inputs; do not silently replace malformed preparation.
+  if(preparedMask!==null){
+    const cells=LIVE_LOG_GRID**3;
+    if(!(preparedMask instanceof Uint32Array)||preparedMask.length!==cells||!preparedMask.some(Boolean)||preparedMask.some(v=>v>1)
+      ||!(preparedMask.samples instanceof Float32Array)||preparedMask.samples.length!==cells*8||!preparedMask.samples.every(Number.isFinite)
+      ||(disintegrate&&(!(preparedMask.surface instanceof Uint32Array)||preparedMask.surface.length!==cells||!preparedMask.surface.some(Boolean)||preparedMask.surface.some((v,i)=>v>1||v>preparedMask[i]))))throw Error('Invalid prepared thermal surface mask');
+  }
+  const surfaceMask=preparedMask??createLogSurfaceMask(surfaceGeometry??mesh.geometry,bounds,LIVE_LOG_GRID,{filled:disintegrate});
   const summaryCellCount=surfaceMask.reduce((a,b)=>a+b,0);
   const owned=[];let disposed=false;
   try {
