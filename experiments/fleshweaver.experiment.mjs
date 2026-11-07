@@ -3,29 +3,32 @@ import {createOpticalPreview} from '../volume-optical-preview.mjs';
 
 export default {
  id:'fleshweaver',title:'Future Filament Fleshweaver',
- async create({host,inputs,record}){
+ async create({host,inputs,record,updateInputs}){
   if(!inputs.sequence)throw Error('Choose a retained optical sequence manifest');
   const url=new URL(inputs.sequence,host.controls.document.location.href).href;
   const sequence=await loadOpticalSequence(url);
   const names={native:'Captured reference',single:'Single frame',forward:'Carried from the past',future:'Past and future'};
-  let mode=inputs.mode??'future',index=0,view='beauty',playing=false,elapsed=0,gain=inputs.gain??1,sync=()=>{};
+  let mode=inputs.mode??'future',index=inputs.frame??0,view=inputs.opticalView??'beauty',playing=false,elapsed=0,gain=inputs.gain??1,sync=()=>{};
   if(!sequence.modes[mode])throw Error('Requested reconstruction unavailable');
+  if(!Number.isSafeInteger(index)||index<0||index>=sequence.frames.length)throw Error('Recorded frame outside sequence');
+  if(!['beauty','emission','extinction'].includes(view)||!Number.isFinite(gain)||gain<0)throw Error('Valid optical view and nonnegative gain required');
   if(Object.values(sequence.modes).some(frames=>frames.some(f=>f.dimensions.some((n,a)=>n!==sequence.frames[0].dimensions[a]))))throw Error('Comparison modes must use the captured reference dimensions');
   const session=await host.scene.open();
-  const preview=createOpticalPreview(sequence.modes[mode][0]);preview.setGain(gain);
+  const preview=createOpticalPreview(sequence.modes[mode][index]);preview.setGain(gain);preview.setView(view);
   let asset;
   try{asset=await session.attach(preview.mesh,{owned:true,metadata:{label:'Recorded flame reconstruction',source:url,type:'experiment'}});}catch(error){preview.dispose();await session.dispose();throw error;}
   const read=()=>({source:url,preset:sequence.manifest.source.presetId,sourceCommit:sequence.manifest.source.commit,objectId:asset.id,mode,frame:index,simulationStep:sequence.frames[index].time,frames:sequence.frames.length,view,playing,gain,route:'retained-optical-sequence; current-frame-emission-extinction; ordinary-shared-scene',reconstruction:sequence.manifest.reconstruction});
   const present=()=>{preview.setFrame(sequence.modes[mode][index]);session.redraw();sync();};
+  const remember=()=>updateInputs({...inputs,mode,frame:index,opticalView:view,gain});
   const setFrame=value=>{if(!Number.isSafeInteger(value)||value<0||value>=sequence.frames.length)throw Error('Recorded frame outside sequence');index=value;present();};
   const frameView=()=>session.setView(inputs.view??{position:[4,2.1,5],target:[0,1.3,0]});frameView();
   const stop=session.onFrame(({deltaSeconds})=>{if(!playing)return;elapsed+=deltaSeconds;const dt=1/(sequence.manifest.playbackFps??30);if(elapsed>=dt){const step=Math.floor(elapsed/dt);elapsed-=step*dt;setFrame((index+step)%sequence.frames.length);}});
   return {read,operations:{
-   setFrame(value){playing=false;setFrame(value);record({kind:'fleshweaver.frame',...read()});return read();},
-   setMode(value){if(!sequence.modes[value])throw Error('Requested reconstruction unavailable');mode=value;present();record({kind:'fleshweaver.mode',...read()});return read();},
-   setView(value){preview.setView(value);view=value;session.redraw();sync();record({kind:'fleshweaver.view',...read()});return read();},
+   setFrame(value){playing=false;setFrame(value);remember();record({kind:'fleshweaver.frame',...read()});return read();},
+   setMode(value){if(!sequence.modes[value])throw Error('Requested reconstruction unavailable');mode=value;present();remember();record({kind:'fleshweaver.mode',...read()});return read();},
+   setView(value){preview.setView(value);view=value;session.redraw();sync();remember();record({kind:'fleshweaver.view',...read()});return read();},
    setPlaying(value){if(typeof value!=='boolean')throw Error('Boolean playback state required');playing=value;elapsed=0;sync();record({kind:'fleshweaver.playback',...read()});return read();},
-   setGain(value){preview.setGain(value);gain=value;session.redraw();sync();record({kind:'fleshweaver.gain',...read()});return read();},
+   setGain(value){preview.setGain(value);gain=value;session.redraw();sync();remember();record({kind:'fleshweaver.gain',...read()});return read();},
    frame(){return frameView();},
   },mount({root,document,invoke}){
    const status=document.createElement('p');status.setAttribute('role','status');
