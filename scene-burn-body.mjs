@@ -14,7 +14,7 @@ import {createSceneBurnFracture} from './scene-burn-fracture.mjs';
 export const originalBurnMaterial=sceneRadianceSourceMaterial;
 
 // An object's material owns its state; it never switches sources, clocks or domains.
-export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame,kelvinPerHeat=()=>1600,beautyLods=null,resolveSurfaceGeometry=null}){
+export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame,kelvinPerHeat=()=>1600,beautyLods=null,resolveSurfaceGeometry=null,surfaceMask=null}){
   resolveBurnableTarget([entry],entry.id);
   const mesh=resolveBurnableHeroMesh(entry.object);
   const resolveBeautyLods=()=>typeof beautyLods==='function'?beautyLods():beautyLods;
@@ -62,10 +62,10 @@ export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame,k
       if(Math.abs(heroToRoot.elements[i]-identityMat.elements[i])>1e-7){heroIsRootSpace=false;break;}
     }
     mesh.geometry.computeBoundingBox();const bounds=mesh.geometry.boundingBox;
-    const resolvedSurface=typeof resolveSurfaceGeometry==='function'?await resolveSurfaceGeometry(entry,{mesh,bounds,grid:LIVE_LOG_GRID}):null;
+    const resolvedSurface=surfaceMask===null&&typeof resolveSurfaceGeometry==='function'?await resolveSurfaceGeometry(entry,{mesh,bounds,grid:LIVE_LOG_GRID}):null;
     const surfaceGeometry=resolvedSurface?.geometry??null;
     const surfaceLod=resolvedSurface?{tier:resolvedSurface.tier??'hero',faces:resolvedSurface.faces??null,heroFaces:resolvedSurface.heroFaces??null,voxelError:resolvedSurface.voxelError??0}:null;
-    field=await createLiveLogHeatGpu({renderer,mesh,bounds,surfaceGeometry,surfaceLod,disintegrate:true});
+    field=await createLiveLogHeatGpu({renderer,mesh,bounds,surfaceGeometry,surfaceLod,disintegrate:true,surfaceMask});
     const origList=Array.isArray(original)?original:[original];
     converted=origList.map(material=>{
       const binding=createBurnMaterial({renderer,original:material,bounds,settings:{heat:0,char:0,reaction:0},stateNode:field.stateNode,stateIdentity:LIVE_LOG_HEAT_IDENTITY,presenceNode:field.stateNode.w});
