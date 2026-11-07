@@ -244,7 +244,7 @@ fn face_band(i:u32,face:u32,sub:u32,shape:vec2<u32>)->vec2<f32> {
     if(p.adaptive)code+=adaptiveTopologyWGSL(p,arena.adaptive);
     if(p.detailPool)code+=detailTopologyWGSL(p,arena.adaptive);
     if(p.hierarchy){
-      code=code.replace('if(nextMass[i]!=mass[i]){mark_cell(i);',`if(nextMass[i]!=mass[i]){if(nextMass[i]==0.0&&mass[i]>0.0){atomicStore(&arena[${arena.hierarchy.state+8}u],1u);}mark_cell(i);`);
+      code=code.replace('if(nextMass[i]!=mass[i]){mark_cell(i);',`if(nextMass[i]!=mass[i]){if(nextMass[i]==0.0&&mass[i]>0.0){atomicMax(&arena[${arena.hierarchy.state+8}u],1u);}mark_cell(i);`);
       code=code.replace('f32(a.size*a.size*a.size)','(f32(a.size)*f32(a.size)*f32(a.size))').replace('f32(b.size*b.size*b.size)','(f32(b.size)*f32(b.size)*f32(b.size))');
       code=code.replaceAll('f32(a.size*a.size)','(f32(a.size)*f32(a.size))').replaceAll('f32(b.size*b.size)','(f32(b.size)*f32(b.size))');
       code+=hierarchyTopologyWGSL(p);

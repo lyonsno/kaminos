@@ -38,7 +38,7 @@ material and its current resolution intact. There is no lossy history demotion.
 space appears too. **Inspect fine residency** reads an explicit snapshot of
 depth counts, retained history, capacity refusals and missing balancing support.
 The counters describe the latest planning episode; repeated refusals need not
-represent distinct locations. Ordinary unchanged evolution uses cached state.
+represent distinct locations. Ordinary unchanged evolution sleeps topology planning. An emptied-material wake releases unneeded leaves without re-running full admission. New geometry, camera projection or remaining actionable demand can wake full planning. Prolongation uses GPU indirect dispatch and launches no cell work when there are no staged children. Existing receivers keep parent-octant demand when other colliders refresh; changed topology rechecks nearby cached geometry.
 
 `kaminos.hierarchical-ash.v1` checkpoints retain child links, node descriptors,
 material, pending work, parcels and the volume ledger. Restore validates unique
@@ -56,5 +56,5 @@ Focused checks: `tests/ash-hierarchy.mjs`, `tests/ash-hierarchy-gpu.mjs`, `tests
 The production GPU check covers deep receiving support, actual fallout on an
 elevated rail, conserved material through motion, and checkpoint restoration.
 `tools/ash-hierarchy-native-witness.mjs` supplies the native pipe comparison at
-fixed background/storage settings, captures and saved continuation. Caller-owned
+fixed background/storage ceilings, captures and saved continuation. It fences each production step through explicit offline diagnostics; these readbacks are evidence work, not the live simulation path. Caller parameters choose emission/settling step counts without an upper cap. Caller-owned
 output paths retain source identity, failures and console diagnostics.

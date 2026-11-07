@@ -67,7 +67,7 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
     const layout=device.createBindGroupLayout({entries:Array.from({length:8},(_,binding)=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:binding===7?'uniform':binding===2?'read-only-storage':'storage'}}))});
     const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]});
     const names=[...(p.adaptive?['adaptive_reset','adaptive_release','adaptive_count_direct','adaptive_reclaim_halo','adaptive_allocate_detail','adaptive_allocate_halo','adaptive_prolong','adaptive_collision_list','adaptive_collision_args','adaptive_recount']:[]),...(p.detailPool?['detail_reset','detail_requests','detail_release','detail_max_priority','detail_count_priority','detail_reclaim_lower','detail_allocate_highest','detail_allocate_high','detail_allocate_medium','detail_allocate_low','detail_prolong','detail_collision_list','detail_collision_args','detail_recount']:[]),'reset','admit','clear_wake','pack_dispatch','limit_flux','gather_flux','commit_mass','admit_surface','build_surface',...(arena.surfaceCache.encoding==='cell-masks'?['prefix_surface']:[]),'finish_surface','draw_prefix','wake_all'];
-    if(p.hierarchy)names.unshift('hierarchy_reset','hierarchy_dirty','hierarchy_release','hierarchy_release_begin','hierarchy_release_next','hierarchy_free','hierarchy_pressure_reset','hierarchy_pressure','hierarchy_reclaim_1','hierarchy_reclaim_2','hierarchy_balance',...['4','3','2','1'].map(n=>'hierarchy_allocate_'+n),'hierarchy_prolong','hierarchy_activate','hierarchy_collision_reset','hierarchy_collision_list','hierarchy_collision_args');
+    if(p.hierarchy)names.unshift('hierarchy_reset','hierarchy_dirty','hierarchy_release','hierarchy_release_begin','hierarchy_release_next','hierarchy_free','hierarchy_pressure_reset','hierarchy_pressure','hierarchy_reclaim_1','hierarchy_reclaim_2','hierarchy_reschedule','hierarchy_balance',...['4','3','2','1'].map(n=>'hierarchy_allocate_'+n),'hierarchy_prolong_args','hierarchy_prolong','hierarchy_activate','hierarchy_activate_done','hierarchy_collision_reset','hierarchy_collision_list','hierarchy_collision_args');
     const pipelines=Object.fromEntries(await Promise.all(names.map(async name=>[name,await device.createComputePipelineAsync({label:'refined ash '+name,layout:pipelineLayout,compute:{module,entryPoint:name}})])));
     const group=device.createBindGroup({layout,entries:[mass.buffer,next,solid.buffer,limits,headers,work.buffer,faces.buffer,uniform].map((b,binding)=>({binding,resource:{buffer:b}}))});
     function dispatch(encoder,name,count=1,indirect=null) {
@@ -117,16 +117,16 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
         dispatch(encoder,'hierarchy_reset');dispatch(encoder,'hierarchy_dirty',Math.ceil(p.tiles.count/64));
         const collision=()=>{dispatch(encoder,'hierarchy_collision_reset');dispatch(encoder,'hierarchy_collision_list',Math.ceil(p.tiles.count/64));dispatch(encoder,'hierarchy_collision_args');treeCollision?.encode(encoder);};
         const release=name=>{dispatch(encoder,name);for(let d=p.hierarchy.depth;d>0;d--){dispatch(encoder,'hierarchy_release',Math.ceil(p.hierarchy.capacity/64));dispatch(encoder,'hierarchy_release_next');}dispatch(encoder,'hierarchy_free',Math.ceil(p.hierarchy.capacity/64));};
-        const cascade=()=>{for(let depth=0;depth<p.hierarchy.depth*2+1;depth++){
+        const prolong=()=>{dispatch(encoder,'hierarchy_prolong_args');encoder.copyBufferToBuffer(work.buffer,p.hierarchyArena.args*4,activeArgs,0,12);dispatch(encoder,'hierarchy_prolong',0,activeArgs);dispatch(encoder,'hierarchy_activate',Math.ceil(p.hierarchy.capacity/64));dispatch(encoder,'hierarchy_activate_done');};
+        const cascade=(priorities=[4,3,2])=>{for(let depth=0;depth<p.hierarchy.depth*2+1;depth++){
           dispatch(encoder,'hierarchy_balance',Math.ceil(p.tiles.count*8/64));
-          for(const priority of [4,3,2])dispatch(encoder,'hierarchy_allocate_'+priority,Math.ceil(p.tiles.count*8/64));
-          dispatch(encoder,'hierarchy_prolong',p.hierarchy.capacity*8);
-          dispatch(encoder,'hierarchy_activate',Math.ceil(p.hierarchy.capacity/64));collision();
+          for(const priority of priorities)dispatch(encoder,'hierarchy_allocate_'+priority,Math.ceil(p.tiles.count*8/64));
+          prolong();collision();
         }};
         collision();release('hierarchy_release_begin');cascade();
-        for(const priority of [1,2]){dispatch(encoder,'hierarchy_pressure_reset');dispatch(encoder,'hierarchy_pressure',Math.ceil(p.tiles.count*8/64));release('hierarchy_reclaim_'+priority);cascade();}
-        dispatch(encoder,'hierarchy_allocate_1',Math.ceil(p.tiles.count*8/64));
-        dispatch(encoder,'hierarchy_prolong',p.hierarchy.capacity*8);dispatch(encoder,'hierarchy_activate',Math.ceil(p.hierarchy.capacity/64));collision();
+        for(const priority of [1,2]){dispatch(encoder,'hierarchy_pressure_reset');dispatch(encoder,'hierarchy_pressure',Math.ceil(p.tiles.count*8/64));release('hierarchy_reclaim_'+priority);cascade([4,3]);}
+        dispatch(encoder,'hierarchy_allocate_2',Math.ceil(p.tiles.count*8/64));dispatch(encoder,'hierarchy_allocate_1',Math.ceil(p.tiles.count*8/64));
+        prolong();collision();dispatch(encoder,'hierarchy_reschedule',Math.ceil(p.tiles.count*8/64));
         return;
       }
       if(!p.adaptive)return;
@@ -297,7 +297,7 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
         for(const [level,{pool,at}]of levels.entries()){
           const residency=level?view.residency.detail:view.residency;device.queue.writeBuffer(work.buffer,at.state*4,new Uint32Array(16));device.queue.writeBuffer(work.buffer,at.map*4,Uint32Array.from(residency.map));device.queue.writeBuffer(work.buffer,at.slots*4,Uint32Array.from(residency.slots));device.queue.writeBuffer(work.buffer,at.flags*4,Uint32Array.from(residency.slots,n=>n?2:0));
         }
-        if(p.hierarchy){const a=p.hierarchyArena;device.queue.writeBuffer(work.buffer,a.nodes*4,Uint32Array.from(view.residency.nodes));device.queue.writeBuffer(work.buffer,a.children*4,Uint32Array.from(view.residency.children));device.queue.writeBuffer(work.buffer,a.state*4,new Uint32Array(16));device.queue.writeBuffer(work.buffer,a.flags*4,new Uint32Array(p.tiles.count).fill(2));}
+        if(p.hierarchy){const a=p.hierarchyArena;device.queue.writeBuffer(work.buffer,a.nodes*4,Uint32Array.from(view.residency.nodes));device.queue.writeBuffer(work.buffer,a.children*4,Uint32Array.from(view.residency.children));const restoredState=new Uint32Array(16);restoredState[8]=2;device.queue.writeBuffer(work.buffer,a.state*4,restoredState);device.queue.writeBuffer(work.buffer,a.flags*4,new Uint32Array(p.tiles.count).fill(2));}
         restoredCollision=state.collisionIdentity;sliding=restoredSliding;parameters();upload(values,exactCollision?new Set(state.pendingTiles):null,view,false);fall.restore(state.falling);steps=state.steps;seededVolume=state.seededVolume;lastContact=state.lastContact?.slice()??null;
         if(p.hierarchy){const e=device.createCommandEncoder();dispatch(e,'hierarchy_collision_reset');dispatch(e,'hierarchy_collision_list',Math.ceil(p.tiles.count/64));dispatch(e,'hierarchy_collision_args');treeCollision?.encode(e);dispatch(e,'reset');surfaces(e);device.queue.submit([e.finish()]);}
         if(p.adaptive){const e=device.createCommandEncoder();dispatch(e,'adaptive_collision_list',Math.ceil(p.pool.capacity/64));dispatch(e,'adaptive_collision_args');fineCollision?.encode(e);if(p.detailPool){dispatch(e,'detail_collision_list',Math.ceil(p.detailPool.capacity/64));dispatch(e,'detail_collision_args');detailCollision?.encode(e);}dispatch(e,'reset');surfaces(e);dispatch(e,'adaptive_recount',Math.ceil(p.pool.pages/64));if(p.detailPool)dispatch(e,'detail_recount',Math.ceil(p.detailPool.pages/64));device.queue.submit([e.finish()]);}

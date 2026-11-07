@@ -28,7 +28,18 @@ try{
   r.phase=label;save();const id=await page.evaluate(async({cellSize,budget,background})=>{
    return window.kaminosAsh.add({width:.64,depth:.64,height:.4,cellSize,initialDepth:.006,paused:true,sourcePosition:[0,.36,0],spread:.22,emitting:true,rate:.0004,softNormals:true,slideVariation:.25,refinement:{ratio:2,mode:'hierarchy',backgroundCellSize:background,budgetMiB:budget,airBudgetMiB:budget/8,targetPixels:1}},[0,0,0]);
   },{cellSize,budget:Number(args.get('--budget')??32),background:Number(args.get('--background')??.08)});
-  await page.evaluate(id=>{window.selectSceneObject(id);window.kaminosAsh.advance(id,48);window.kaminosAsh.set(id,{emitting:false});window.kaminosAsh.advance(id,96);},id);
+  await page.evaluate(id=>window.selectSceneObject(id),id);
+  const emitSteps=Number(args.get('--emit-steps')??16),settleSteps=Number(args.get('--settle-steps')??32);
+  assert.ok([emitSteps,settleSteps].every(n=>Number.isSafeInteger(n)&&n>0),'step counts must be positive integers');
+  r.replay={emitSteps,settleSteps,fence:'explicit offline diagnostic read after each production step'};r.stepHistory??=[];
+  for(let n=0;n<emitSteps+settleSteps;n++){
+   r.phase=label+':step-'+n+':submit';save();await page.evaluate(id=>window.kaminosAsh.advance(id,1),id);
+   r.phase=label+':step-'+n+':fence';save();
+   const progress=await page.evaluate(async id=>{const d=await window.kaminosAsh.diagnostics(id),r=window.kaminosAsh.read(id);return{steps:r.runtime.steps,backend:r.runtime.backend,volume:r.runtime.volume,hierarchy:d.hierarchy,stats:d.stats};},id);
+   assert.equal(progress.steps,n+1,'each requested physical step must be effective');assert.equal(progress.backend,'webgpu-hierarchical-ash');r.stepHistory.push({label,n,...progress});save();
+   if(n===emitSteps-1)await page.evaluate(id=>window.kaminosAsh.set(id,{emitting:false}),id);
+  }
+  r.phase=label+':snapshot';save();
   const state=await page.evaluate(id=>window.kaminosAsh.snapshot(id),id);writeFileSync(out+'/'+label+'.kaminos-object.json',JSON.stringify(state));
   const diagnostic=await page.evaluate(id=>window.kaminosAsh.diagnostics(id),id);assert.ok(diagnostic.hierarchy.resident>0);assert.equal(diagnostic.stats.surfaceOverflow,0);assert.ok(state.ash.checkpoint.values.some(v=>v>0));assert.ok(Math.abs(state.ash.checkpoint.volume-state.ash.checkpoint.retainedVolume)<1e-6,'retain all supplied material');
   r[label]={id,hierarchy:diagnostic.hierarchy,runtime:await page.evaluate(id=>window.kaminosAsh.read(id).runtime,id),introduced:state.ash.checkpoint.volume,retained:state.ash.checkpoint.retainedVolume};await capture(label+'-deposited');
@@ -39,7 +50,7 @@ try{
    assert.ok(fineVolume>0,'actual elevated ash must reach the requested finest receiving cells');r.fine.finestElevatedVolume=fineVolume;await page.evaluate(id=>window.kaminosAsh.showRefinement(id,true),id);await capture('fine-bricks-by-depth');await page.evaluate(id=>window.kaminosAsh.showRefinement(id,false),id);
    const saved=await page.evaluate(()=>window.saveSceneAs({result:true}));assert.ok(saved.ok,JSON.stringify(saved));r.saved={ok:saved.ok,filename:saved.filename,url:saved.url};
    await page.goto(r.saved.url);await page.waitForFunction(id=>window.kaminosAsh&&window.kaminosSceneObjectDebugState().some(x=>x.id===id)&&!window.kaminosAsh.read(id).pendingRestore,id);
-   const reopened=await page.evaluate(id=>window.kaminosAsh.snapshot(id),id);for(const key of ['values','residency','falling','volume','steps'])assert.deepEqual(reopened.ash.checkpoint[key],state.ash.checkpoint[key],key);
+   await page.waitForFunction(()=>window.kaminosSceneLoadPresentation().document.phase!=='applying');await page.evaluate(()=>window.kaminosSceneLightingPreparation.whenIdle());const reopened=await page.evaluate(id=>window.kaminosAsh.snapshot(id),id);for(const key of ['values','residency','falling','volume','steps'])assert.deepEqual(reopened.ash.checkpoint[key],state.ash.checkpoint[key],key);
    await page.evaluate(id=>window.selectSceneObject(id),id);await page.locator('[data-ash-refinement-controls]').evaluate(e=>e.open=true);assert.equal(await page.locator('[data-ash-refinement-mode]').inputValue(),'hierarchy');await page.locator('[data-ash-hierarchy="budgetMiB"]').scrollIntoViewIfNeeded();await capture('reopened-native-controls');
   }else await page.evaluate(id=>window.removeSceneObject(id),id);
  }
