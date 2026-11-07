@@ -44,10 +44,10 @@ export default {
    const exposure=document.createElement('input');exposure.type='number';exposure.min=0;exposure.step='any';exposure.value=gain;exposure.setAttribute('aria-label','Shared comparison gain');exposure.className='transform-input';
    const gainInput=event=>{if(exposure.value!==''&&exposure.validity.valid)return act('setGain',Number(exposure.value));if(event.type==='change'){sync();status.textContent='Enter a finite comparison gain of zero or greater.';}};
    exposure.addEventListener('input',gainInput);exposure.addEventListener('change',gainInput);
-   exposure.addEventListener('blur',()=>queueMicrotask(()=>sync()));
+   exposure.addEventListener('blur',()=>queueMicrotask(()=>{exposure.value=String(gain);}));
    const gainLabel=document.createElement('label');gainLabel.textContent='Shared comparison gain ';gainLabel.append(exposure);host.controls.installNumberDrag({input:exposure,grip:gainLabel,step:.05});
    const stepInput=document.createElement('input');stepInput.type='number';stepInput.min=1;stepInput.step=1;stepInput.value=integrationSteps;stepInput.className='transform-input';stepInput.setAttribute('aria-label','Preview integration steps');
-   const stepChange=event=>{if(stepInput.value!==''&&stepInput.validity.valid)return act('setSteps',Number(stepInput.value));if(event.type==='change'){sync();status.textContent='Enter a positive whole preview step count.';}};stepInput.addEventListener('input',stepChange);stepInput.addEventListener('change',stepChange);stepInput.addEventListener('blur',()=>queueMicrotask(()=>sync()));
+   const stepChange=event=>{if(stepInput.value!==''&&stepInput.validity.valid)return act('setSteps',Number(stepInput.value));if(event.type==='change'){sync();status.textContent='Enter a positive whole preview step count.';}};stepInput.addEventListener('input',stepChange);stepInput.addEventListener('change',stepChange);stepInput.addEventListener('blur',()=>queueMicrotask(()=>{stepInput.value=String(integrationSteps);}));
    const stepLabel=document.createElement('label');stepLabel.textContent='Preview integration steps ';stepLabel.append(stepInput);host.controls.installNumberDrag({input:stepInput,grip:stepLabel,step:1});
    const frame=document.createElement('button');frame.type='button';frame.textContent='Frame flame';frame.addEventListener('click',()=>act('frame'));
    root.append(modes,play,timeline,views,gainLabel,stepLabel,frame,status);
