@@ -35,8 +35,8 @@ export default {
         sync=()=>{
           const state=read(),mip=state.optimizations.mipSampling;
           policy.value=state.mode;fields.value=state.allFields?'all':'light';
-          if(document.activeElement!==level)level.value=String(state.level);
-          if(document.activeElement!==bias)bias.value=String(state.detailBias);
+          if(document.activeElement!==level&&!level.classList.contains('scrubbing'))level.value=String(state.level);
+          if(document.activeElement!==bias&&!bias.classList.contains('scrubbing'))bias.value=String(state.detailBias);
           level.disabled=state.mode!=='fixed';bias.disabled=state.mode!=='distance';
           status.textContent=state.lighting.mode!=='combined'?'Combined GI is inactive.':mip.effective?
             `Source pyramid: ${mip.resolution.join(' × ')} · available mip ${mip.availableMaxLevel}. ${state.mode==='fixed'?`Selected mip ${Math.min(state.level,mip.availableMaxLevel)} · nominal ${2**Math.min(state.level,mip.availableMaxLevel)} × ${2**Math.min(state.level,mip.availableMaxLevel)} source pixels.`:'Footprint varies along each slice.'}`:
@@ -45,8 +45,19 @@ export default {
         };
         const change=patch=>invoke('set',patch).catch(error=>{sync();status.textContent=error.message;});
         policy.addEventListener('change',()=>change({mode:policy.value}));fields.addEventListener('change',()=>change({allFields:fields.value==='all'}));
-        level.addEventListener('change',()=>change({level:Number(level.value)}));bias.addEventListener('change',()=>change({detailBias:Number(bias.value)}));
-        drags=[host.controls.installNumberDrag({input:level,grip:levelGrip,step:1}),host.controls.installNumberDrag({input:bias,grip:biasGrip,step:.1})];
+        const numeric=(input,grip,key,step)=>{
+          let start=null;
+          const begin=()=>{start=read()[key];};
+          const update=()=>{if(input.value.trim()!=='')change({[key]:Number(input.value)});};
+          input.addEventListener('focus',begin);
+          input.addEventListener('input',update);input.addEventListener('change',update);
+          input.addEventListener('pointercancel',()=>{
+            if(start===null||disposed)return;
+            const value=start;start=null;input.value=String(value);change({[key]:value});
+          });
+          return host.controls.installNumberDrag({input,grip,step,onStart:begin,onEnd:()=>{start=null;}});
+        };
+        drags=[numeric(level,levelGrip,'level',1),numeric(bias,biasGrip,'detailBias',.1)];
         stopFrame=session.onFrame(()=>{const s=read(),m=s.optimizations.mipSampling;if(previous!==JSON.stringify([m.effective,m.availableMaxLevel,m.resolution,s.lighting.mode]))sync();});sync();
       },
       async dispose(){if(disposed)return;disposed=true;stopFrame?.();for(const drag of drags)drag?.dispose?.();control.dispose();
