@@ -10,6 +10,7 @@ export function createFireLightingHistory({edits,getSource,sync=()=>{}}) {
   const descriptors=Object.fromEntries(Object.entries(scalar).map(([name,key])=>[name,{
     read:s=>s[key],write:(source,value)=>source[methods[name]??name](value),
   }]));
+  descriptors.setTransportQuality={read:s=>s.transportQuality,write:(source,value)=>source.setTransportQuality(value),patch:true};
   descriptors.setNearBox={read:s=>s.nearBox,write:(source,value)=>source.setNearBox(value),patch:true};
   descriptors.setQuadrature={read:s=>({points:s.pointCount,pointSampling:s.pointSampling}),
     write:(source,v)=>source.setQuadrature(v.points,v.pointSampling)};

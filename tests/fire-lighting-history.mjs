@@ -23,3 +23,11 @@ current=make();current.state.sourceGrid=32;current.setSourceGrid=function(n){if(
 const gridEdits=createSceneEdits({read:()=>null,write(){}}),gridHistory=createFireLightingHistory({edits:gridEdits,getSource:()=>current});
 await gridHistory.run('setSourceGrid',16);assert.equal(current.state.sourceGrid,16);await gridEdits.undo();assert.equal(current.state.sourceGrid,32);await gridEdits.redo();assert.equal(current.state.sourceGrid,16);
 await assert.rejects(gridHistory.run('setSourceGrid',0),/emission resolution/);assert.equal(current.state.sourceGrid,16);
+
+current=make();current.state.transportQuality={fineSteps:0,worldSteps:8,worldGrid:8,worldDirections:0,fineRefinement:4,worldRefinement:4,emptySkip:true,shadowCutoff:0};
+current.setTransportQuality=function(value){this.state.transportQuality={...this.state.transportQuality,...value};};
+const budgetEdits=createSceneEdits({read:()=>null,write(){}}),budgetHistory=createFireLightingHistory({edits:budgetEdits,getSource:()=>current});
+await budgetHistory.run('setTransportQuality',{fineSteps:12,worldDirections:8});
+assert.equal(current.state.transportQuality.fineSteps,12);assert.equal(current.state.transportQuality.worldGrid,8);
+await budgetEdits.undo();assert.equal(current.state.transportQuality.fineSteps,0);
+await budgetEdits.redo();assert.equal(current.state.transportQuality.worldDirections,8);

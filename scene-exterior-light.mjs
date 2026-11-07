@@ -3,7 +3,7 @@ import {createVolumeGather} from './scene-volume-gather.mjs';
 
 // Receiver coverage is independent of material allocation and Fine source
 // coordinates. Source-directed quadrature covers the source inside Fine.
-export function createExteriorSmokeLight(device,{grid=8,refinement=4,receiverCoverage=null,beforeReplace=()=>{},asynchronous=false}={}){
+export function createExteriorSmokeLight(device,{grid=8,refinement=4,receiverCoverage=null,beforeReplace=()=>{},asynchronous=false,integrationGrid=grid,worldDirections=0}={}){
   function coverage(value){
     if(value===null)return null;
     if(![value?.lo,value?.hi].every(v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite))||value.hi.some((v,a)=>v<=value.lo[a]))throw Error('ordered finite receiver coverage required');
@@ -29,7 +29,7 @@ export function createExteriorSmokeLight(device,{grid=8,refinement=4,receiverCov
       const fineCore=core.hi.every((v,a)=>v>core.lo[a])?core:null;
       for(const [name,region] of [['world',medium],['middle',near]]){
         if(!region)continue;
-        const regionDirections=(name==='middle'?nearCoverage?.directions:null)??directions;
+        const regionDirections=(name==='middle'?nearCoverage?.directions:null)??(worldDirections||directions);
         // Keep cubic receiver cells and exact physical coverage. In particular,
         // the default middle region is 3 by 5 by 3, not the fine box's 2:1 shape.
         const dims=region.dimensions;
@@ -38,15 +38,16 @@ export function createExteriorSmokeLight(device,{grid=8,refinement=4,receiverCov
         const widthUnit=dims[0]/dims.reduce(gcd);
         const regionGrid=name==='middle'&&nearCoverage?dims[0]:Math.ceil(grid/widthUnit)*widthUnit;
         const exclude=name==='world'&&near?{lo:near.localMin,hi:near.localMax,blendWidth:nearCoverage?.pitch??(near.localMax[0]-near.localMin[0])/grid}:fineCore;
-        const key=JSON.stringify([revision,source.dimensions,region.localMin,region.localMax,regionGrid,exclude]);
+        const key=JSON.stringify([revision,source.dimensions,region.localMin,region.localMax,regionGrid,exclude,refinement,integrationGrid]);
         specs.push({name,key,regionGrid,regionDirections,region,exclude});
       }
       return specs;
   }
   function makeGather(source,spec,geometry,worldGeometry){return createVolumeGather(device,{geometry,receivers:[],volumeGrid:spec.regionGrid,sourceDimensions:source.dimensions,
-    receiverBounds:{lo:spec.region.localMin,hi:spec.region.localMax},smokeRefinement:refinement,directions:spec.regionDirections,angularPattern:'source',worldGeometry,exteriorMedium:true,exteriorIntegrationGrid:grid,receiverExclusion:spec.exclude,asynchronous});}
+    receiverBounds:{lo:spec.region.localMin,hi:spec.region.localMax},smokeRefinement:refinement,directions:spec.regionDirections,angularPattern:'source',worldGeometry,exteriorMedium:true,exteriorIntegrationGrid:integrationGrid,receiverExclusion:spec.exclude,asynchronous});}
   return {
     setReceiverCoverage(value){nearCoverage=coverage(value);},
+    setQuality(value){grid=value.worldGrid;refinement=value.worldRefinement;integrationGrid=value.worldSteps;worldDirections=value.worldDirections;},
     isPrepared(source,options){const specs=specifications(source,options);return specs.length===regions.size&&specs.every(spec=>{const current=regions.get(spec.name);return current?.key===spec.key&&current.gather.isPrepared(source,options);});},
     async prepare(source,options){
       const specs=specifications(source,options),candidates=new Map(),owned=[];
@@ -69,9 +70,9 @@ export function createExteriorSmokeLight(device,{grid=8,refinement=4,receiverCov
         const {name,key,regionDirections}=spec;let current=regions.get(name);
         if(current?.key!==key){const next=makeGather(source,spec,geometry,worldGeometry);beforeReplace();current?.gather.destroy();current={key,gather:next};regions.set(name,current);builds++;}
         const {gather}=current;if(worldGeometry)gather.setGeometryTransforms(geometry.matrices);gather.setDirections(regionDirections);
-        const frame=gather.encode(source,{gain,sourceSoftness,environment,sceneLights});
+        const frame=gather.encode(source,{emptySkip:options.emptySkip,gain,sourceSoftness,environment,sceneLights});
         frames[name]={texture:gather.smoke,...frame,coverage:name==='middle'&&nearCoverage?'independent-near-receivers':`${name}-material-bounds`,builds,
-          extinction:{generation:medium.generation,method:'region-split-midpoint-trilinear',stepLength:(medium.localMax[0]-medium.localMin[0])/grid,fineInterval:'physical-blend-in-fine-source',overlap:'camera-two-middle-material-cells'},
+          extinction:{generation:medium.generation,method:'region-split-midpoint-trilinear',stepLength:(medium.localMax[0]-medium.localMin[0])/integrationGrid,fineInterval:'physical-blend-in-fine-source',overlap:'camera-two-middle-material-cells'},
           exteriorEmission:Boolean(medium.emissionTexture),approximation:'fine-and-exterior-physical-emission; independent-receiver-grids'};
       }
       return {...frames.world,builds,handoffMargin:normalizeSmokeHandoffMargin(medium.handoffMargin),middle:frames.middle??null};

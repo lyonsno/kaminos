@@ -1,3 +1,4 @@
+import {normalizeLightingTransport} from './scene-lighting-quality.mjs';
 import {validateShadowCaptureBudget} from './fire-shadow-cadence.mjs';
 import {normalizeNearSmokeBox} from './scene-near-smoke-box.mjs';
 import {validateShadowSampling,validateShadowComparison} from './fire-shadow-sampling.mjs';
@@ -10,10 +11,10 @@ import {installRenderingNumberControl} from './rendering-number-controls.mjs';
 export function createFireShadowSettings({session,document,inputs={},record=()=>{},updateInputs=()=>{},applyInitial=true,installNumberDrag,diagnostics=false}) {
     const win=document.defaultView;
     let requested=validateShadowSampling(inputs.sampling??'complementary');
-    let selector,pointSelector,status,implementationSelector,grainSelector,cellInput,cellRow,retry,casterSelector,casterStatus,surfaceSwitch,smokeFilterSwitch,edgeSwitch,smokeWork,nearSwitch,nearStatus,captureWork;
+    let selector,pointSelector,status,implementationSelector,grainSelector,cellInput,cellRow,retry,casterSelector,casterStatus,surfaceSwitch,smokeFilterSwitch,edgeSwitch,smokeWork,nearSwitch,nearStatus,captureWork,emptySkipSwitch;
     let requestedComparison=inputs.shadowComparison===undefined?null:validateShadowComparison(inputs.shadowComparison);
     let requestedQuality=inputs.shadowQuality===undefined?null:validateShadowQuality(inputs.shadowQuality);
-    const qualityControls=[],lightControls=[],mediumControls=[],nearControls=[],numberScrubs=[];
+    const qualityControls=[],lightControls=[],mediumControls=[],nearControls=[],numberScrubs=[],transportControls=[];
     let requestedPoints=inputs.points??null;
     let requestedPointSampling=inputs.pointSampling??'all';
     let requestedBudget=inputs.pointEvaluationBudget??null;
@@ -36,6 +37,9 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
       const state=read();
       const medium=win.__kaminosSceneRadiance?.debugState();
       for(const {key,number} of lightControls)value(number,medium?.[key]??(key==='sourceGrid'?32:key==='smokeEnvironmentBlur'||key==='pointEvaluationBudget'||key==='shadowCaptureBudget'?0:16));
+      const transport=normalizeLightingTransport(medium?.transportQuality);
+      if(emptySkipSwitch)emptySkipSwitch.checked=transport.emptySkip;
+      for(const {key,number}of transportControls)value(number,transport[key]);
       syncCaptureStatus(medium);
       const near=normalizeNearSmokeBox(medium?.nearBox);
       if(nearSwitch)nearSwitch.checked=near.enabled;
@@ -97,6 +101,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
         setShadowCaptureBudget(value){validateShadowCaptureBudget(value);source().setShadowCaptureBudget(value);requestedCaptureBudget=value;persist();sync();session.redraw();const effective=read();record({kind:'fire-shadow.capture-budget',requested:value,effective});return effective;},
         setPointEvaluationBudget(value){validateSourceEvaluationBudget(value);source().setPointEvaluationBudget(value);requestedBudget=value;persist();sync();session.redraw();const effective=read();record({kind:'fire-shadow.source-budget',requested:value,effective});return effective;},
         setNearBox(value){source().setNearBox(value);sync();session.redraw();const effective=source().debugState().nearBox;record({kind:'fire-shadow.near-box',requested:value,effective});return effective;},
+        setTransportQuality(value){source().setTransportQuality(value);sync();session.redraw();record({kind:'fire-shadow.transport-quality',requested:value,effective:source().debugState().transportQuality});return source().debugState();},
         setSourceGrid(value){source().setSourceGrid(value);sync();session.redraw();record({kind:'fire-shadow.emission-grid',effective:value});return read();},
         setLightGrid(value){source().setLightGrid(value);sync();session.redraw();record({kind:'fire-shadow.light-grid',effective:value});return read();},
         setSmokeEnvironmentBlur(value){source().setSmokeEnvironmentBlur(value);sync();session.redraw();record({kind:'fire-shadow.smoke-environment-blur',effective:value});return source().debugState();},
@@ -173,6 +178,23 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
         gridRow.title='Independent lighting samples across the domain width. Material and flow resolution stay independent. Height follows the domain aspect.';
         const gridInput=document.createElement('input');gridInput.type='number';gridInput.min='1';gridInput.step='1';gridInput.setAttribute('aria-label','Smoke light receiver resolution');
         gridInput.addEventListener('change',()=>invoke('setLightGrid',Number(gridInput.value)).catch(failed));gridRow.append(gridInput);panel.append(gridRow);lightControls.push({key:'volumeGrid',number:gridInput});numberScrubs.push(installRenderingNumberControl(gridInput,installNumberDrag));
+        const transportHeading=document.createElement('h3');transportHeading.textContent='Lighting traversal & reconstruction';panel.append(transportHeading);
+        for(const [key,text,min,step,help]of [
+          ['shadowCutoff','Smoke-shadow visibility cutoff',0,'any','Zero integrates the full shadow prefix. A positive value stops density reads after transmission falls below this visibility budget; every later radial prefix remains filled.'],
+          ['fineSteps','Fine march samples across width',0,'1','Zero follows emission resolution. Independent midpoint traversal budget for sphere patterns; source-directed patterns retain exact cell traversal. This is separate from camera ray steps and smoke-shadow steps.'],
+          ['fineRefinement','Fine light reconstruction per axis',1,'1','Receiver lighting is reconstructed once per update. Prepared cells scale with receiver cells × this value cubed. Camera queries use the prepared field.'],
+          ['worldGrid','World smoke light receiver width',1,'1','Cubic receiver cells span the full World smoke domain. Independent of World simulation/material resolution and Fine receivers.'],
+          ['worldDirections','World light directions (0 inherits)',0,'2','Zero inherits the Fine lighting direction count. Local refinement keeps its own direction count.'],
+          ['worldSteps','Exterior march samples across width',1,'1','Independent integration budget across each exterior region width. This does not change source, material, receiver or camera resolution.'],
+          ['worldRefinement','Exterior light reconstruction per axis',1,'1','Prepared World and local receiver cells scale with receiver cells × this value cubed.']
+        ]){
+          const row=document.createElement('label');row.textContent=text;row.title=help;
+          const number=document.createElement('input');number.type='number';number.min=String(min);number.step=step;number.setAttribute('aria-label',text);
+          number.addEventListener('change',()=>invoke('setTransportQuality',{[key]:Number(number.value)}).catch(failed));
+          transportControls.push({key,number});row.append(number);panel.append(row);numberScrubs.push(installRenderingNumberControl(number,installNumberDrag));
+        }
+        const skipLabel=document.createElement('label');skipLabel.textContent='Skip empty lighting space';skipLabel.title='Build conservative occupied bounds from current emission and extinction, then skip empty ray segments. Preserves the midpoint sample lattice. Dense fields may benefit less; turn off to compare preparation cost.';
+        emptySkipSwitch=document.createElement('input');emptySkipSwitch.type='checkbox';emptySkipSwitch.setAttribute('aria-label','Skip empty lighting space');emptySkipSwitch.addEventListener('change',()=>invoke('setTransportQuality',{emptySkip:emptySkipSwitch.checked}).catch(failed));skipLabel.append(emptySkipSwitch);panel.append(skipLabel);
         const nearHeading=document.createElement('h3');nearHeading.textContent='Near smoke light box';panel.append(nearHeading);
         const nearLabel=document.createElement('label');nearLabel.textContent='Use near smoke light box';
         nearSwitch=document.createElement('input');nearSwitch.type='checkbox';nearSwitch.setAttribute('aria-label','Use near smoke light box');
