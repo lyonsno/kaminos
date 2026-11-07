@@ -9108,7 +9108,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
       var scatteredSource=vec3<f32>(0.0);
       if(medium.scattering>0.0){scatteredSource=medium.scattering * incidentAt(p);}
       let emission = medium.emission + scatteredSource;
-      if(SPLIT_INTEGRAL){splitObserve(&splitRay,allocatedSamples-1u,p,emission,sigma,t,guidedRay.intervalStart,guidedRay.left,select(2.0/f32(GRID),2.0/f32(textureDimensions(displayField).x),displayReconstructionActive()));}
+      if(SPLIT_INTEGRAL){splitObserve(&splitRay,allocatedSamples-1u,p,emission,sigma,t,guidedRay.intervalStart,guidedRay.left,2.0/f32(GRID));}
       if(guided){recordRayGuidance(p,emission,max(sigma,displaySupport*0.35*visibleSmokeAuthority),trans,localDt);}
       if (opticalStepping) {
         opticalStepObserveWithTolerance(&opticalStep, vec4<f32>(emission, sigma), u.reserved_render_controls.y);

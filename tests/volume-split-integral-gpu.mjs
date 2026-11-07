@@ -129,3 +129,17 @@ test('shared-slot fixed allocator keeps ordinary Fixed sample positions and repr
   result.forEach((v,i)=>{const [a,b,n,phase,index]=inputs[i],s=allocateRayStrata([{start:a,end:b,weight:1}],n,phase)[index];const expected=[s.sample,s.start,s.width,s.end];v.forEach((x,k)=>assert.ok(Math.abs(x-expected[k])<5e-6,JSON.stringify({input:inputs[i],actual:Array.from(v),expected})));});
  });
 });
+
+import {HISTORY_ALLOCATION_WGSL} from '../volume-history-allocation.mjs';
+import {extractWgslFunction} from '../tools/shader-herder.mjs';
+test('split Fixed allocation preserves the ordinary allocator float operations',async()=>{
+ const legacyStruct=`struct LegacyRay {cursor:f32,end:f32,mass:f32,total:f32,segmentEnd:f32,weight:f32,left:f32,width:f32,intervalStart:f32,start:f32,freshPoint:f32,candidate:f32,currentPoint:f32,guidedCount:u32,guidedIndex:u32,freshPending:u32}`;
+ const renames=s=>s.replaceAll('GuidedRay','LegacyRay').replaceAll('guidedRayInit','legacyInit').replaceAll('guidedNext','legacyNext').replaceAll('guidedQuantile','legacyQuantile').replaceAll('guidedCandidate','legacyCandidate').replaceAll('guidedPop','legacyPop');
+ const legacy=['guidedRayInit','guidedQuantile','guidedNext'].map(n=>renames(extractWgslFunction(HISTORY_ALLOCATION_WGSL,n))).join('\n');
+ const stubs=`override OPTICAL_STEP_MODE:u32=4u;fn guidanceStop(ro:vec3<f32>,rd:vec3<f32>,t:f32,end:f32)->f32{return end;}fn guidanceWeight(p:vec3<f32>)->f32{return 1.0;}fn legacyCandidate(s:ptr<function,LegacyRay>,ro:vec3<f32>,rd:vec3<f32>,phase:f32)->f32{return 0.0;}fn legacyPop(s:ptr<function,LegacyRay>,ro:vec3<f32>,rd:vec3<f32>,phase:f32)->f32{return 0.0;}`;
+ const inputs=[];for(const [a,b] of [[.127131,20.133111],[2.716231,19.668721],[.1,2.3]])for(const count of [1,2,3])for(const phase of [.123214,.5,.875])for(let i=0;i<count;i++)inputs.push([a,b,count,phase,i]);
+ await withKaminosGpu(async ctx=>{
+  const rows=await evalWgslBatch(ctx,{preamble:legacyStruct+stubs+legacy+SPLIT_FIXED_ALLOCATION_WGSL,argTypes:['f32','f32','u32','f32','u32'],returnType:'vec4<f32>',body:'var a=legacyInit(vec3<f32>(0),vec3<f32>(0,0,1),arg0,arg1);var b=guidedRayInit(vec3<f32>(0),vec3<f32>(0,0,1),arg0,arg1);var p=0.0;var q=0.0;for(var i=0u;i<=arg4;i++){p=legacyNext(&a,vec3<f32>(0),vec3<f32>(0,0,1),i,arg2,arg3,.5);q=guidedNext(&b,vec3<f32>(0),vec3<f32>(0,0,1),i,arg2,arg3,.5);}return vec4<f32>(p,q,a.width,b.width);',inputs});
+  rows.forEach((r,i)=>{assert.equal(r[0],r[1],JSON.stringify({input:inputs[i],positions:r}));assert.equal(r[2],r[3],JSON.stringify({input:inputs[i],widths:r}));});
+ });
+});

@@ -114,7 +114,7 @@ fn splitSampleDepth(r:SplitRay,ro:vec3<f32>,rd:vec3<f32>,ordinary:f32)->f32{
 }
 fn splitObserve(r:ptr<function,SplitRay>,index:u32,p:vec3<f32>,q:vec3<f32>,sigma:f32,depth:f32,lo:f32,hi:f32,pitch:f32){
  if(index<2u){
-  var support=vec4<f32>(lo-depth,hi-depth,1,0);
+  var support=vec4<f32>(lo-depth,hi-depth,hi-lo,0);
   if(splitOptions.size.z==1u){
    let extent=.5*pitch*splitOptions.flow.y;support.xy=vec2<f32>(max(lo-depth,-extent),min(hi-depth,extent));
    if((*r).refreshSlot>=0){support=(*r).kept[u32((*r).refreshSlot)].support;}
@@ -143,7 +143,7 @@ fn splitFinish(r:SplitRay,pixel:u32,ro:vec3<f32>,rd:vec3<f32>)->vec4<f32>{
  let da=dot(a.anchor.xyz-ro,rd);let db=dot(b.anchor.xyz-ro,rd);
  var boundary=(da+db)*.5;if(splitOptions.size.z==2u){boundary=(r.start+r.end)*.5;}
  let widths=splitWidths(vec2<f32>(da)+a.support.xy,vec2<f32>(db)+b.support.xy,boundary,r.start,r.end,b.anchor.w>0.0);
- let first=widths.x;let second=widths.y;
+ let first=select(widths.x,a.support.z,splitOptions.size.z==2u);let second=select(widths.y,b.support.z,splitOptions.size.z==2u);
  return splitCompose(splitTransfer(a,first,splitOptions.life.x,splitOptions.life.y),splitTransfer(b,second,splitOptions.life.x,splitOptions.life.y));
 }
 `;
@@ -216,13 +216,22 @@ fn splitFinish(r:SplitRay,pixel:u32,ro:vec3<f32>,rd:vec3<f32>)->vec4<f32>{return
 // Same equal-distance placement and widths as mode4 of the ordinary allocator.
 // No spatial importance read/write is reached in this specialization.
 export const SPLIT_FIXED_ALLOCATION_WGSL=/* wgsl */`
-struct GuidedRay {start:f32,end:f32,left:f32,width:f32,intervalStart:f32}
-fn guidedRayInit(ro:vec3<f32>,rd:vec3<f32>,start:f32,end:f32)->GuidedRay{return GuidedRay(start,end,start,0,start);}
+struct GuidedRay {cursor:f32,end:f32,mass:f32,total:f32,segmentEnd:f32,weight:f32,left:f32,width:f32,intervalStart:f32}
+fn guidedRayInit(ro:vec3<f32>,rd:vec3<f32>,start:f32,end:f32)->GuidedRay{
+ var s:GuidedRay;s.cursor=start;s.left=start;s.end=end;
+ var t=start;loop{if(t>=end){break;}let next=end;s.total+=(next-t)*1.0;t=next;}
+ s.segmentEnd=end;s.weight=1.0;return s;
+}
+fn splitFixedQuantile(s:ptr<function,GuidedRay>,mass:f32)->f32{
+ let remaining=max(0.0,mass-(*s).mass);
+ let position=min((*s).segmentEnd,(*s).cursor+remaining/(*s).weight);
+ (*s).mass=mass;(*s).cursor=position;return position;
+}
 fn guidedNext(s:ptr<function,GuidedRay>,ro:vec3<f32>,rd:vec3<f32>,index:u32,count:u32,phase:f32,freshPhase:f32)->f32{
- let total=(*s).end-(*s).start;(*s).intervalStart=(*s).left;
- let point=(*s).start+total*(f32(index)+phase)/f32(count);
- var right=(*s).end;if(index+1u<count){right=(*s).start+total*f32(index+1u)/f32(count);}
- (*s).width=max(0.0,right-(*s).left);(*s).left=right;return point;
+ (*s).intervalStart=(*s).left;
+ let sample=splitFixedQuantile(s,(*s).total*(f32(index)+phase)/f32(count));
+ var right=(*s).end;if(index+1u<count){right=splitFixedQuantile(s,(*s).total*f32(index+1u)/f32(count));}
+ (*s).width=max(0.0,right-(*s).left);(*s).left=right;return sample;
 }
 fn recordRayGuidance(p:vec3<f32>,q:vec3<f32>,sigma:f32,trans:f32,ds:f32){}
 `;
