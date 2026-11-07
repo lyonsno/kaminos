@@ -97,3 +97,11 @@ test('the mounted lettering owns a stationary render aperture carried by its nat
  const f=fixture(),consumer=await createMountedGenerationPrompt({...f,signal:new AbortController().signal});
  try{f.frameTick();const root=f.frame.children[0];assert.equal(root.isClippingGroup,true,'long solid lettering needs the same bounded opening as its native editor');assert.equal(root.clippingPlanes.length,2);}finally{consumer.dispose();}
 });
+
+test('admission reuses the prepared draft geometry without another full vertex-buffer clone',async()=>{
+ const f=fixture();f.input.value='ADMITTED';
+ const pending=createMountedGenerationPrompt({...f,prompt:'ADMITTED',signal:new AbortController().signal});await tick();const worker=f.worker();
+ worker.onmessage({data:{id:worker.last.id,attributes:{position:{array:new Float32Array([0,0,0,1,0,0,0,1,0]),itemSize:3,normalized:false}},groups:[],mask:{},samples:[],surface:[]}});
+ const consumer=await pending;
+ try{const mesh=f.frame.children[0].children[0],geometry=mesh.geometry;await consumer.prepare({prompt:'ADMITTED',request:{id:'real-request',prompt:'ADMITTED'}});assert.equal(mesh.geometry,geometry,'admitting the already prepared draft must retain its geometry');assert.equal(consumer.debugState().request,'real-request');}finally{consumer.dispose();}
+});

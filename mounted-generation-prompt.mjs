@@ -31,8 +31,13 @@ export async function createMountedGenerationPrompt({document,workshop,camera,on
   if(!next.prompt.trim()){prepared=null;mesh.visible=false;return;}
   const work=preparation.prepare(next.prompt);preparing=work;
   try{const result=await work;if(disposed||token!==serial)return;
-   const old=mesh.geometry;mesh.geometry=result.geometry.clone();old.dispose();
-   mesh.userData.kaminosPromptRelief=promptReliefMetadata(result.text,'composed');prepared=result;strip.prepare(result.height,admitted?admittedScroll:input.scrollTop);
+   // The worker already retained the draft. Admission changes ownership of the
+   // text, not its vertices: avoid copying the full relief again on Generate.
+   if(prepared!==result){
+    const old=mesh.geometry;mesh.geometry=result.geometry.clone();old.dispose();
+    mesh.userData.kaminosPromptRelief={...mesh.userData.kaminosPromptRelief,...promptReliefMetadata(result.text,'composed')};prepared=result;
+   }
+   strip.prepare(result.height,admitted?admittedScroll:input.scrollTop);
   }finally{if(preparing===work)preparing=null;changed();}
  }
  function dispose(){if(disposed)return;disposed=true;serial++;clearTimeout(timer);stop();preparation.dispose();editor.dispose();root.visible=false;}
