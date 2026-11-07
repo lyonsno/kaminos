@@ -21711,7 +21711,7 @@ export function createKaminosVolumePrototype({
       drawPipeline = scenePointPipelines.get(key);
     }
     if(distributedGroup) {
-      if(distributedFrame?.generation!==sceneVolumeSource?.describe().generation)throw new Error('distributed flame lighting is stale');
+      if(distributedFrame?.generation!==sceneVolumeSource?.describe().generation&&!sceneLightingSettingsPending&&!(sceneLightingRebuildPending&&sceneLightingPresentationAllowed))throw new Error('distributed flame lighting is stale');
       const key=`${multisampled}:${targetPipeline===readbackPipeline}:${selectEmissive}${opticalKey}`
         + (options.opticalTrace ? ':optical-trace' : '');
       if(!distributedPipelines.has(key)) {
@@ -21747,7 +21747,7 @@ export function createKaminosVolumePrototype({
       if (!sceneSourcePreparedEncoders.has(encoder)) encodeSharedSceneSource(encoder);
       if(distributedGroup) {
         emissiveSeedProducer = null;
-        state.physicalColor.incidentLight={model:'distributed-volume-direct-radiance-v0',source:'same-generation-raw-emission-extinction',
+        state.physicalColor.incidentLight={model:'distributed-volume-direct-radiance-v0',source:sceneLightingSettingsPending||sceneLightingRebuildPending?'retained-accepted-lighting-during-preparation':'same-generation-raw-emission-extinction',
           support:'full-height-geometry-visible-receivers',generation:distributedFrame.generation,frame:distributedFrame.frame,
           receivers:distributedFrame.volumeReceivers,directions:distributedFrame.directions,legacyDispatched:false};
       } else {
@@ -29602,7 +29602,7 @@ export function createKaminosVolumePrototype({
       const plan=sceneSourceGridPlan(value,[gridSize,gridHeight,gridSize],device?.limits);
       if(value!==sceneSourceGrid){
         sceneVolumeSource?.destroy();sceneVolumeSource=null;
-        sceneSourceGrid=value;distributedFrame=null;distributedGroup=null;
+        sceneSourceGrid=value;if(!sceneLightingSettingsPending){distributedFrame=null;distributedGroup=null;}
       }
       return plan;
     },

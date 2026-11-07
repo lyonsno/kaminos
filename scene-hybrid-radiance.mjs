@@ -279,6 +279,17 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     }).finally(()=>{kernelTask=null;onStatus({...status});});
     kernelTask.catch(()=>{});
   }
+  function configureGather(target){
+    target.setDirections(directions);target.setAngularPattern(angularPattern,angularRotation);target.setRetainComparisons(retainComparisons);
+    if(angularPattern==='guided'){
+      if(!getSourceGuide)throw Error('hybrid guided smoke requires authored source guide');
+      target.setSourceGuide(deriveSourceGuide(getSourceGuide(),sourceTransform,sourceDomain));
+    }
+    if(angularPattern==='regions'){
+      if(!getSourceRegions)throw Error('multi-emitter sampling requires stable source regions');
+      target.setSourceRegions(getSourceRegions(sourceTransform,sourceDomain));
+    }
+  }
   function prepare(field){
     if(disposed)throw new Error('hybrid lighting disposed');const acceptedValid=valid;valid=false;
     if(rebuilding||status.status==='lighting-compile-failed')throw Error(status.error??'lighting compilation pending');
@@ -304,7 +315,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         if(rebuild?.prepareKernels){
           valid=acceptedValid;
           queueKernelPreparation(async()=>{
-            await candidate.gather.prepare(field.source,{sourceSoftness});
+            configureGather(candidate.gather);await candidate.gather.prepare(field.source,{sourceSoftness});
             if(disposed||pendingGather!==candidate||candidate.volumeGrid!==volumeGrid||candidate.smokeRefinement!==smokeRefinement)return;
             if(gather)retiredGathers.push(gather);gather=candidate.gather;pendingGather=null;geometryRevision=revision;builtDomain=domainKey;valid=false;
             status.geometryBuilds++;status.visibilityBuilds++;status.staticTriangles=packed.triangleCount;
@@ -315,11 +326,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         status.geometryBuilds++;status.visibilityBuilds++;status.lastGeometryBuildMs=performance.now()-started;status.staticTriangles=packed.triangleCount;
       }
       gather.setGeometryTransforms(packed.matrices);
-      gather.setDirections(directions);gather.setAngularPattern(angularPattern,angularRotation);gather.setRetainComparisons(retainComparisons);
-      if(angularPattern==='guided'){
-        if(!getSourceGuide)throw new Error('hybrid guided smoke requires authored source guide');
-        gather.setSourceGuide(deriveSourceGuide(getSourceGuide(),sourceTransform,sourceDomain));
-      }
+      configureGather(gather);
       if(rebuild?.prepareKernels&&!gather.isPrepared(field.source,{sourceSoftness})){
         valid=acceptedValid;
         queueKernelPreparation(()=>gather.prepare(field.source,{sourceSoftness}));
@@ -327,10 +334,8 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       }
       // Even legacy smoke display may request scattered contribution to the
       // surface points; the gather owns that once-scattered source and gain.
-      if(angularPattern==='regions'){if(!getSourceRegions)throw Error('multi-emitter sampling requires stable source regions');gather.setSourceRegions(getSourceRegions(sourceTransform,sourceDomain));}
       const environment=smokeMode==='distributed'||surfaceScattering?smokeEnvironment.frame():null;
       const sceneLights=collectSceneSmokeLights(scene,sourceTransform);
-      const fineFrame=gather.encode(field.source,{gain,sourceSoftness,surfaceScattering,smokeEnabled:smokeMode==='distributed',environment,sceneLights,samplingFrame:prototype.sceneLightSamplingFrame?.()??field.source.frame});
       exteriorLight.setReceiverCoverage(exteriorReceiverCoverage??nearSmokeBoxCoverage(nearBox,sourceDomain));
       const exteriorOptions={geometry:packed,revision,directions,gain,sourceSoftness,environment,sceneLights,fineReceiverGrid:volumeGrid};
       if(rebuild?.prepareKernels&&smokeMode==='distributed'&&!exteriorLight.isPrepared(field.source,exteriorOptions)){
@@ -338,10 +343,11 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         queueKernelPreparation(()=>exteriorLight.prepare(field.source,exteriorOptions));
         return;
       }
-      const exterior=smokeMode==='distributed'?exteriorLight.encode(field.source,exteriorOptions):null;
-      if(rebuild?.prepareKernels&&surfaceEnabled&&!points.isPrepared(gather.transportSource())){
-        valid=acceptedValid;queueKernelPreparation(()=>points.ready(gather.transportSource()));return;
+      if(rebuild?.prepareKernels&&surfaceEnabled&&!points.isPrepared(field.source)){
+        valid=acceptedValid;queueKernelPreparation(()=>points.ready(field.source));return;
       }
+      const fineFrame=gather.encode(field.source,{gain,sourceSoftness,surfaceScattering,smokeEnabled:smokeMode==='distributed',environment,sceneLights,samplingFrame:prototype.sceneLightSamplingFrame?.()??field.source.frame});
+      const exterior=smokeMode==='distributed'?exteriorLight.encode(field.source,exteriorOptions):null;
       const reduction=surfaceEnabled?points.encode(gather.transportSource()):null;
       const medium=surfaceEnabled&&smokeShadowSteps&&smokeShadow?smokeShadow.encode(field.source,reduction):null;
       let solidShadowCapture=null;

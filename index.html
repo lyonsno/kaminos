@@ -11760,10 +11760,10 @@ async function initScene() {
     return () => { restoreBeauty?.(); restoreVis(); };
   };
   sceneLightingPreparation=createLightingPreparation({
-    compile:async({isCurrent,visibility}={})=>{
+    compile:async({isCurrent,visibility,retainPresentation=false}={})=>{
       await sceneBeautyLods?.whenIdle?.();
       return compileSceneLighting(renderer,sceneGISettings.mode==='combined'?[sceneGI.source,sceneGI.beauty]:[prePass,scenePass],{
-        live:!!visibility,isCurrent,visibility:()=>{
+        live:retainPresentation,isCurrent,visibility:()=>{
           const restoreGraph=visibility?.(),restoreViewport=borrowViewportAndBeautyVisibility();
           return ()=>{restoreViewport();restoreGraph?.();};
         },

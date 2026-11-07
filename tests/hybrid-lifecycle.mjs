@@ -13,7 +13,7 @@ const device={limits:{maxUniformBufferBindingSize:65536,maxStorageBufferBindingS
  queue:{writeBuffer(buffer,offset,data){uploads.push([buffer.label,new Float32Array(data)]);},submit(){}},
  createBuffer({label}){return {label,destroy(){}};},createTexture(){return {createView(){return {};},destroy(){}};},
  createShaderModule(){return {};},createComputePipeline(descriptor){pipelines.push(descriptor.label);return pipeline;},createBindGroup({entries}){const source=entries.find(e=>e.binding===5)?.resource?.source;if(source===failSource&&source)throw Error('injected source binding failure');return {source};},
- createCommandEncoder(){return {copyTextureToTexture(){},beginComputePass({label}={}){passes.push(label);if(label===failPass)throw Error('injected preparation failure');return {setPipeline(){},setBindGroup(_,group){if(label==='live distributed flame transport')consumedSources.push(group.source);},dispatchWorkgroups(){},end(){}};},finish(){return {};}};}};
+ createCommandEncoder(){return {copyBufferToBuffer(){},copyTextureToTexture(){},beginComputePass({label}={}){passes.push(label);if(label===failPass)throw Error('injected preparation failure');return {setPipeline(){},setBindGroup(_,group){if(label==='live distributed flame transport')consumedSources.push(group.source);},dispatchWorkgroups(){},end(){}};},finish(){return {};}};}};
 let consume,hostFrame;
 const field={source:{status:'encoded',texture:{createView(){return {source:'A'};}},dimensions:[4,8,4],localMax:[1,3,1],generation:1,frame:1}};
 const prototype={setSceneMediumSource(){},setSceneSourceFrameConsumer(fn){consume=fn;},setSceneDistributedLightFrame(frame){hostFrame=frame;},sceneVolumeSourceField:()=>field.source};
@@ -372,7 +372,7 @@ const editDevice=Object.create(device);let delayKernels=false;const kernelReleas
 editDevice.createComputePipelineAsync=descriptor=>delayKernels?new Promise(resolve=>kernelReleases.push(()=>resolve(pipeline))):Promise.resolve(pipeline);
 const editOwner=createLightingPreparation({hold(){},compile:async()=>{}}),settingsHolds=[];
 prototype.setSceneLightingSettingsPending=value=>settingsHolds.push(value);
-const edited=mountDistributedSceneRadiance({renderer,scene,prototype,device:editDevice,volumeGrid:2,smokeRefinement:1,
+const edited=mountDistributedSceneRadiance({renderer,scene,prototype,device:editDevice,volumeGrid:2,smokeRefinement:1,getSourceRegions:()=>[{id:'beam',lo:[-.5,-.9,-.5],hi:[.5,.9,.5]}],
  rebuild:{hold:editOwner.setExternalHold,prepareRetained:editOwner.request,prepareKernels:editOwner.prepareKernels},
  createShadow:()=>({visibility:THREE.TSL.float(1),render(){},debugState:()=>({}),dispose(){}})});
 for(let phase=0;phase<4;phase++){consume(field);await editOwner.whenIdle();}
@@ -393,4 +393,17 @@ for(const release of kernelReleases.splice(0))release();
 await editOwner.whenIdle();consume(field);await editCompletion;
 assert.equal(hostFrame.smokeReconstruction.coarseDimensions[0],4,'a newer grid request cannot be overwritten by an older compile completion');
 assert.notEqual(hostFrame,acceptedSmokeFrame);assert.equal(settingsHolds.at(-1),false);
-assert.equal(edited.canRender(),true);edited.dispose();delete prototype.setSceneLightingSettingsPending;
+assert.equal(edited.canRender(),true);
+delayKernels=false;
+field.source.exterior={status:'encoded',texture:device.createTexture(),emissionTexture:device.createTexture(),dimensions:[8,16,8],localMin:[-3,-3,-3],localMax:[3,9,3],generation:field.source.generation,frame:field.source.frame};
+for(let phase=0;phase<4;phase++){consume(field);await editOwner.whenIdle();}
+assert.equal(edited.canRender(),true);
+edited.setDirections(48);const directionsDone=edited.whenRebuilt();
+for(let phase=0;phase<4;phase++){consume(field);await editOwner.whenIdle();}
+await directionsDone;assert.equal(edited.debugState().frame.exterior.directions,48,'exterior direction increases warm their prefix-cache variant');
+edited.setAngularPattern('regions');const regionsDone=edited.whenRebuilt();
+for(let phase=0;phase<4;phase++){consume(field);await editOwner.whenIdle();}
+await regionsDone;consume(field);
+assert.equal(editOwner.state().pending,false,'prepared region proposals do not trigger a delayed follow-on hold');
+assert.equal(edited.debugState().frame.sourceGuide.regions[0].id,'beam');
+edited.dispose();field.source.exterior=null;delete prototype.setSceneLightingSettingsPending;

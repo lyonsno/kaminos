@@ -94,7 +94,7 @@ export function createLightingPreparation({compile,liveCompile,hold,recover,onSt
     held=next;drain=hold(next);return drain;
   };
   function request(change) {
-    if(change){changes.push(change);exclusive=true;}
+    if(change){changes.push(change);exclusive=true;if(!task)retained=false;}
     revision++;error=null;
     const quiescent=syncHold();publish();
     if(task)return task;
@@ -121,7 +121,7 @@ export function createLightingPreparation({compile,liveCompile,hold,recover,onSt
               return ()=>{for(const restore of restores.reverse())restore();};
             }:undefined;
             const isCurrent=()=>revision===current;
-            await (exclusive||external?compile:liveCompile)({isCurrent,visibility});
+            await (exclusive||external?compile:liveCompile)({isCurrent,visibility,retainPresentation:retained});
             for(const candidate of staged)isCurrent()?candidate.commit():candidate.discard();
           }catch(cause){for(const candidate of staged)candidate.discard();throw cause;}
         });
@@ -129,7 +129,7 @@ export function createLightingPreparation({compile,liveCompile,hold,recover,onSt
       }
           for(const dispose of disposals.splice(0))dispose();
     }).catch(cause=>{error=String(cause.message??cause);throw cause;})
-      .finally(()=>{compiling=false;task=null;syncHold();if(!error)exclusive=!liveCompile;publish();});
+      .finally(()=>{compiling=false;task=null;if(!error)retained=false;syncHold();if(!error)exclusive=!liveCompile;publish();});
     task.catch(()=>{}); // UI callers surface failure through onStatus.
     return task;
   }

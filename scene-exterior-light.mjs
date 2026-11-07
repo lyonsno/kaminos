@@ -47,13 +47,12 @@ export function createExteriorSmokeLight(device,{grid=8,refinement=4,receiverCov
     receiverBounds:{lo:spec.region.localMin,hi:spec.region.localMax},smokeRefinement:refinement,directions:spec.regionDirections,angularPattern:'source',worldGeometry,exteriorMedium:true,exteriorIntegrationGrid:grid,receiverExclusion:spec.exclude,asynchronous});}
   return {
     setReceiverCoverage(value){nearCoverage=coverage(value);},
-    isPrepared(source,options){const specs=specifications(source,options);return specs.length===regions.size&&specs.every(spec=>{const current=regions.get(spec.name);return current?.key===spec.key&&current.gather.isPrepared(source,options);});},
+    isPrepared(source,options){const specs=specifications(source,options);return specs.length===regions.size&&specs.every(spec=>{const current=regions.get(spec.name);if(current?.key!==spec.key)return false;current.gather.setDirections(spec.regionDirections);return current.gather.isPrepared(source,options);});},
     async prepare(source,options){
       const specs=specifications(source,options),candidates=new Map(),owned=[];
       try{
         for(const spec of specs){let current=regions.get(spec.name);if(current?.key!==spec.key){current={key:spec.key,gather:makeGather(source,spec,options.geometry,options.worldGeometry!==false)};owned.push(current);}current.gather.setDirections(spec.regionDirections);if(options.worldGeometry!==false)current.gather.setGeometryTransforms(options.geometry.matrices);candidates.set(spec.name,current);}
         await Promise.all([...candidates.values()].map(current=>current.gather.prepare(source,options)));
-        const replaced=[...regions].some(([name,current])=>candidates.get(name)!==current);
         for(const [name,current] of regions)if(candidates.get(name)!==current)retired.push(current.gather);
         for(const current of owned)builds++;
         regions.clear();for(const [name,current] of candidates)regions.set(name,current);

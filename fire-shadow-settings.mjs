@@ -63,10 +63,10 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
       const quality=state.shadowQuality;
       if(status)status.textContent=state.available?`Configured: ${state.effective} · ${state.shadowComparison?`${comparison.implementation} / ${comparison.grain} grain`:'comparison unavailable'} · ${state.points} sources, ${state.evaluatedPoints??'?'} evaluated per pixel · ${state.residentShadowCount??state.capturedPoints??'?'} retained solid cubes · ${quality?.resolution??'?'} px/face · ${quality?.blockerSamples??'?'} blocker + up to ${quality?.filterSamples??'?'} filter taps/source · softness ${state.softness}`:'Awaiting hybrid lighting; load an authored hybrid fire scene.';
       if(status&&!diagnostics&&state.available)status.textContent=`${state.evaluatedPoints??'?'} of ${state.points} sources per pixel · ${state.residentShadowCount??state.capturedPoints??'?'} retained solid cubes · ${quality?.resolution??'?'} px/face · ${quality?.blockerSamples??'?'} blocker + ${quality?.filterSamples??'?'} shadow samples${state.effective!=='complementary'||comparison.implementation!=='shared'?` · Saved diagnostic mode: ${state.effective} / ${comparison.implementation}`:''}`;
-      if(status&&state.status==='compiling-lighting')status.textContent='Compiling lighting asynchronously; holding the last image. Additional changes are queued.';
-      if(status&&state.status==='lighting-compile-failed')status.textContent=`Lighting compilation failed: ${state.error}. Retry compilation below.`;
+      if(status&&state.status==='compiling-lighting')status.textContent='Preparing lighting; simulation held, viewport live. Additional changes are queued.';
+      if(status&&['lighting-compile-failed','lighting-kernel-failed'].includes(state.status))status.textContent=`Lighting compilation failed: ${state.error}. Retry compilation below.`;
       if(status&&win.__kaminosSceneRadiance?.debugState().surfaceEnabled===false)status.textContent='Fire surface lighting off: no point reduction, shadow captures or direct surface-light contribution. Visible flame and distributed smoke lighting unchanged.';
-      if(retry)retry.hidden=state.status!=='lighting-compile-failed';
+      if(retry)retry.hidden=!['lighting-compile-failed','lighting-kernel-failed'].includes(state.status);
     };
     const apply=(points,mode)=>{
       validateSourceQuadrature(points,mode);
