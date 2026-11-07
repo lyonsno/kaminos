@@ -36,7 +36,7 @@ export default {
    if(sourceSelect)sourceSelect.value=sourceMode;
    if(viewSelect)viewSelect.value=viewMode;
    if(traceSelect)traceSelect.value=traceMetric;
-   if(projectionNote){const p=cameraComparison?.read(index);projectionNote.textContent=p?.available?`Cyan / orange: each model only. Purple: overlap. This is disagreement, not ground-truth error. Camera is estimated; MobRecon placement is fitted to its own landmarks. Raw palm width retains size changes.${viewMode==='time'?` Time runs into depth: ${p.pairedFrames}/${p.totalFrames} paired slices. Orbit to inspect.`:''}`:`Recorded-camera view unavailable: ${p?.reason??'no metadata'}`;}
+   if(projectionNote){const p=cameraComparison?.read(index);projectionNote.textContent=p?.available?`Cyan / orange: each model only. Purple: overlap. This is disagreement, not ground-truth error. Projection: ${[...new Set(p.methods)].join('; ')}.${viewMode==='time'?` Time runs into depth: ${p.pairedFrames}/${p.totalFrames} paired slices. Orbit to inspect.`:''}`:`Recorded-camera view unavailable: ${p?.reason??'no metadata'}`;}
    if(teacherToggle)teacherToggle.checked=showTeachers;
    if(arcToggle)arcToggle.checked=showArcs;
    if(fingerSelect)fingerSelect.value=String(finger);
