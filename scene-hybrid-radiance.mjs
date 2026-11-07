@@ -5,7 +5,7 @@ import {createFireLightFieldShadow,renderFireShadowBatch} from './fire-light-fie
 import {createLocalSceneVisibility} from './scene-local-visibility.mjs';
 import {createVolumeGather,volumeGatherPlan,lightingDirections} from './scene-volume-gather.mjs';
 import {createPointRegions} from './scene-point-regions.mjs';
-import {validateSceneSourceTransform,sceneSourceDomain,sceneLightingDomain} from './scene-volume-source.mjs';
+import {validateSceneSourceTransform,sceneSourceAuthoringTransform,sceneSourceDomain,sceneLightingDomain} from './scene-volume-source.mjs';
 import {deriveSourceGuide} from './scene-source-guide.mjs';
 import {validateSourceSoftness} from './scene-source-softening.mjs';
 import {validateShadowSampling,validateShadowComparison,shadowGrainNode} from './fire-shadow-sampling.mjs';
@@ -191,11 +191,11 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       gather.setDirections(directions);gather.setAngularPattern(angularPattern,angularRotation);gather.setRetainComparisons(retainComparisons);
       if(angularPattern==='guided'){
         if(!getSourceGuide)throw new Error('hybrid guided smoke requires authored source guide');
-        gather.setSourceGuide(deriveSourceGuide(getSourceGuide(),sourceTransform,sourceDomain));
+        gather.setSourceGuide(deriveSourceGuide(getSourceGuide(),sceneSourceAuthoringTransform(field.source),sourceDomain));
       }
       // Even legacy smoke display may request scattered contribution to the
       // surface points; the gather owns that once-scattered source and gain.
-      if(angularPattern==='regions'){if(!getSourceRegions)throw Error('multi-emitter sampling requires stable source regions');gather.setSourceRegions(getSourceRegions(sourceTransform,sourceDomain));}
+      if(angularPattern==='regions'){if(!getSourceRegions)throw Error('multi-emitter sampling requires stable source regions');gather.setSourceRegions(getSourceRegions(sceneSourceAuthoringTransform(field.source),sourceDomain));}
       const environment=smokeMode==='distributed'||surfaceScattering?smokeEnvironment.frame():null;
       const sceneLights=collectSceneSmokeLights(scene,sourceTransform);
       frame=gather.encode(field.source,{gain,sourceSoftness,surfaceScattering,smokeEnabled:smokeMode==='distributed',environment,sceneLights,samplingFrame:prototype.sceneLightSamplingFrame?.()??field.source.frame});

@@ -34,7 +34,11 @@ does not change `simulationPaused`. A consumer integrated with the native flame
 feature must use that feature's activity owner so subsequent visibility updates
 do not disagree with the runtime. On re-entry, update the presentation transform
 before resuming. Hide/show the accompanying scene objects at the same boundary.
-An inactive raw scene-volume source is explicitly unavailable to lighting.
+Inactive raw scene-volume, point-medium and irradiance-atlas fields are explicitly
+unavailable to lighting while retaining their allocations. The atlas receiver
+refreshes its world bounds without needing a new allocation generation. Source
+metadata includes `physicalTransform` for guided/regional authoring proposals;
+`worldTransform` remains the composed frame for optical receivers and geometry.
 
 Rotation and nonuniform scale are not represented by this API. Moving a fine
 box through stationary world gas is still `relocateOrdinaryDomain`, with its

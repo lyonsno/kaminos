@@ -12105,7 +12105,7 @@ export function createKaminosVolumePrototype({
     const source=getSceneCollision?.();let solids,collisionSource=null;
     if(source?.requested&&source.object){
       const a=worldSmoke.anchor;
-      const produced=worldSolidProducer.update(source.objects||[{id:source.id,object:source.object}],{translate:a.translate,scale:a.scale*Number(controlsSnapshot.worldSmokeExtent||3)},{grid:plan.flowDims[0],gridHeight:plan.flowDims[1]},{materialMasks:gpuThermalConsumer?.materialMasks?.()??[]});
+      const produced=worldSolidProducer.update(source.objects||[{id:source.id,object:source.object}],composeVolumePresentationTransform({translate:a.translate,scale:a.scale*Number(controlsSnapshot.worldSmokeExtent||3)},presentationTransform),{grid:plan.flowDims[0],gridHeight:plan.flowDims[1]},{materialMasks:gpuThermalConsumer?.materialMasks?.()??[]});
       // An empty producer has no presentation dispatch. Never reuse its last
       // nonempty texture after the last collision object has been removed.
       if(produced.triangleCount>0){worldSolidProducer.encode(encoder);solids=worldSolidProducer.texture;collisionSource={revision:produced.revision,members:produced.members,backend:produced.backend};}
@@ -12121,7 +12121,7 @@ export function createKaminosVolumePrototype({
       let middleSolids;
       if(source?.requested&&source.object){
         const a=intermediateFlow.anchor,p=intermediateFlow.plan;
-        const produced=intermediateSolidProducer.update(source.objects||[{id:source.id,object:source.object}],{translate:a.translate,scale:a.scale*(-p.min[0])},{grid:p.flowDims[0],gridHeight:p.flowDims[1]},{materialMasks:gpuThermalConsumer?.materialMasks?.()??[]});
+        const produced=intermediateSolidProducer.update(source.objects||[{id:source.id,object:source.object}],composeVolumePresentationTransform({translate:a.translate,scale:a.scale*(-p.min[0])},presentationTransform),{grid:p.flowDims[0],gridHeight:p.flowDims[1]},{materialMasks:gpuThermalConsumer?.materialMasks?.()??[]});
         if(produced.triangleCount>0){intermediateSolidProducer.encode(encoder);middleSolids=intermediateSolidProducer.texture;}
       }
       const result=intermediateFlow.encode(encoder,{...input,iterations:regions.middleIterations,materialIndex:worldSmoke.materialResources().index,solids:middleSolids});
@@ -14122,6 +14122,7 @@ export function createKaminosVolumePrototype({
     readback.unmap();
     readback.destroy();
     const statusLabels = ['unset', 'applied', 'invalid-source-header', 'stale-source-tick', 'fresh-source-tick', 'fresh-no-exchange'];
+    const displayTransform=presentationWorldTransform();
     return {
       ok: words[1] === 1,
       schema: LIQUID_FIRE_CONTACT_CONSUMER_SCHEMA,
@@ -14156,8 +14157,8 @@ export function createKaminosVolumePrototype({
       sourcePilotEnabled,
       sourceFrameId: liquidFireContactDescriptor?.sourceFrameId || null,
       receiverTransformId: LIQUID_FIRE_CONTACT_RECEIVER_TRANSFORM_ID,
-      receiverScale: [0.5, 0.5, 0.5].map(value => value / productTransform.scale),
-      receiverOffset: productTransform.translate.map(value => 0.5 - value * 0.5 / productTransform.scale),
+      receiverScale: [0.5, 0.5, 0.5].map(value => value / displayTransform.scale),
+      receiverOffset: displayTransform.translate.map(value => 0.5 - value * 0.5 / displayTransform.scale),
       dispatchCount: state.liquidFireContactDispatchCount,
       transferEnabled: liquidFireContactTransferEnabled,
       transferGateReason: state.liquidFireContactTransferGateReason,
@@ -18816,6 +18817,9 @@ export function createKaminosVolumePrototype({
       fallbackAuthority: false,
       canvasAuthority: false,
     };
+    if (!state.active) {
+      return {...base,status:'inactive',reason:'volume-withdrawn',atlasTexture:null,metaTexture:null};
+    }
     if (!requested) {
       return { ...base, status: 'inactive', reason: 'fire-light-field-route-not-requested', atlasTexture: null, metaTexture: null };
     }
@@ -21488,7 +21492,7 @@ export function createKaminosVolumePrototype({
       grid: EMISSIVE_LIGHT_GRID, gridY: EMISSIVE_LIGHT_GRID * gridHeight / gridSize, fluidGrid: gridSize, fluidGridY: gridHeight});
     sceneVolumeSource.encode(encoder, currentFluid, state.frameCount,presentationWorldTransform());
     if (sceneMediumSource) sceneVolumeSource.encodeOpticalDepth(encoder, sceneMediumSource.position, sceneMediumSource.stepLength);
-    return {source: sceneVolumeSource.describe(), medium: sceneVolumeSource.opticalDepthField(), simStepCount: state.simStepCount};
+    return {source: {...sceneVolumeSource.describe(),physicalTransform:validateSceneSourceTransform(productTransform)}, medium: sceneVolumeSource.opticalDepthField(), simStepCount: state.simStepCount};
   }
 
   function prepareFixedCountAllocation(encoder,optical) {
@@ -29647,7 +29651,7 @@ export function createKaminosVolumePrototype({
     },
     sceneVolumeSourceField() {
       if(!state.active)return {requested:sceneVolumeSourceRequested,status:'inactive',reason:'volume-withdrawn',generation:null,texture:null,scatteringTexture:null};
-      return {requested: sceneVolumeSourceRequested, ...(sceneVolumeSource?.describe() || {status: 'unbuilt', texture: null})};
+      return {requested: sceneVolumeSourceRequested, ...(sceneVolumeSource?.describe() || {status: 'unbuilt', texture: null}),physicalTransform:validateSceneSourceTransform(productTransform)};
     },
     sharedAshAtmosphere(){return structuredClone(sharedAsh);},
     setSharedAshAtmosphere(value){const next=atmosphereSettings(value);const displayColor=value.displayColor??next.color;if(!Array.isArray(displayColor)||displayColor.length!==3||displayColor.some(x=>!Number.isFinite(x)||x<0))throw Error('Invalid shared ash display color');sharedAsh={density:next.density,color:next.color,displayColor:[...displayColor]};return this.sharedAshAtmosphere();},
@@ -29658,6 +29662,7 @@ export function createKaminosVolumePrototype({
       sceneVolumeSource?.invalidate('medium-source-changed');
     },
     sceneMediumOpticalDepthField() {
+      if(!state.active)return {status:'inactive',reason:'volume-withdrawn',generation:null,texture:null};
       return sceneVolumeSource?.opticalDepthField() || {status: 'unbuilt', texture: null};
     },
     async sampleSceneMediumOpticalDepth() {

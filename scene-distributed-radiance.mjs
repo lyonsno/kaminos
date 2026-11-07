@@ -6,7 +6,7 @@ import {buildTriangleVisibility} from './scene-light-visibility.mjs';
 import {createVolumeGather} from './scene-volume-gather.mjs';
 import {validateSourceSoftness} from './scene-source-softening.mjs';
 import {validateSurfaceReconstruction} from './scene-surface-reconstruction.mjs';
-import {validateSceneSourceTransform,sceneSourceLocalPoint,sceneSourceDomain,sceneLightingDomain} from './scene-volume-source.mjs';
+import {validateSceneSourceTransform,sceneSourceAuthoringTransform,sceneSourceLocalPoint,sceneSourceDomain,sceneLightingDomain} from './scene-volume-source.mjs';
 import {surfaceReceiverLayout,validateReceiverSpacing} from './scene-surface-receivers.mjs';
 import {inspectSourceRays,validateInspectionSnapshot} from './scene-light-inspection.mjs';
 import {deriveSourceGuide} from './scene-source-guide.mjs';
@@ -193,9 +193,9 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       handle.setAngularPattern(angularPattern,angularRotation);
       if(angularPattern==='guided'){
         if(!getSourceGuide)throw new Error('emitter-informed sampling requires an authored emitter descriptor');
-        handle.setSourceGuide(deriveSourceGuide(getSourceGuide(),sourceTransform,sourceDomain));
+        handle.setSourceGuide(deriveSourceGuide(getSourceGuide(),sceneSourceAuthoringTransform(field.source),sourceDomain));
       }
-      if(angularPattern==='regions'){if(!getSourceRegions)throw Error('multi-emitter sampling requires stable source regions');handle.setSourceRegions(getSourceRegions(sourceTransform,sourceDomain));}
+      if(angularPattern==='regions'){if(!getSourceRegions)throw Error('multi-emitter sampling requires stable source regions');handle.setSourceRegions(getSourceRegions(sceneSourceAuthoringTransform(field.source),sourceDomain));}
       const environment=smokeMode==='distributed'||surfaceScattering?smokeEnvironment.frame():null;
       const sceneLights=collectSceneSmokeLights(scene,sourceTransform);
       frame=handle.encode(field.source,{gain,smokeEnabled:smokeMode==='distributed',sourceSoftness,surfaceReconstruction,surfaceScattering,environment,sceneLights,samplingFrame:prototype.sceneLightSamplingFrame?.()??field.source.frame});
