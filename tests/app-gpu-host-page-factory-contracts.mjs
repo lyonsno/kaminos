@@ -11,7 +11,7 @@ function page({failFirst=false}={}){
   const device={queue:{submit(){},async onSubmittedWorkDone(){}}};
   const owner={setForegroundOpportunityRequester(){},foregroundGpuContext:()=>({renderer:'kaminos-app',device,queue:device.queue})};
   const installed=new Map();
-  const handoff={has:id=>installed.has(id),install:(id,r)=>installed.set(id,r),async activate(){}};
+  const handoff={async moveTo(){},has:id=>installed.has(id),install:(id,r)=>installed.set(id,r),async activate(){}};
   const context={deviceRecoveryHeld:()=>false,sharedGpu:{device,adapter:{info:{description:'fixture'}}},compositionHost:{device,setForegroundServiceActive(){},runForegroundFrame:run=>run()},
     createAppGpuHost,frameOwner:()=>owner,foregroundHandoff:()=>handoff,Error,Promise,
     kitModule:async()=>{imports++;await new Promise(r=>setTimeout(r,5));if(failFirst&&imports===1)throw Error('kit import failed');return kit;}};

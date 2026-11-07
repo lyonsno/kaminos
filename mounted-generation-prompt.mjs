@@ -28,7 +28,7 @@ export async function createMountedGenerationPrompt({document,workshop,camera,on
   if(!burnWindow||!active)return;
   if(visible&&workshop.read().amount===1)burnWindow.resume();else burnWindow.pause();
   const state=burnWindow.read();fire?.setEmission(visible&&state.emitting);strip.advance(state.progress);
-  if(state.done&&finishResolve){const resolve=finishResolve;finishResolve=null;active=false;fire?.setActive(false).then(resolve,failure);editor.setBurning(false);}
+  if(state.done&&finishResolve)complete().catch(failure);
  }
  function presentation(){const parent=mountedWaterPresentation(root);return {translate:parent.translation,scale:parent.scale};}
  const layer=viewport.querySelector('.kiln-prompt-plane');layer.style.cssText='position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:5;';layer.hidden=true;input.style.pointerEvents='auto';
@@ -36,6 +36,11 @@ export async function createMountedGenerationPrompt({document,workshop,camera,on
  // that origin; later draft scrolling cannot move the submitted burn source.
  function alignSolid(){if(prepared)strip.scroll(admitted?admittedScroll:input.scrollTop);}
  function schedule(){clearTimeout(timer);timer=null;if(disposed||admitted)return;timer=setTimeout(()=>{timer=null;if(disposed||admitted)return;prepare({prompt:input.value}).catch(e=>{if(!disposed){error=e.message;changed();}});},250);}
+ async function complete(){
+  active=false;admitted=null;error=null;burnWindow=null;startedRequest=null;
+  fire?.setEmission(false);
+  try{await fire?.setActive(false);}finally{editor.setBurning(false);strip.release();finishResolve?.();finishResolve=null;schedule();}
+ }
  async function prepare(next){
   clearTimeout(timer);timer=null;const token=++serial;admittedScroll=input.scrollTop;const previousId=admitted?.id;admitted=next.request?structuredClone(next.request):null;error=null;
   if(admitted?.id!==previousId){burnWindow=admitted?createKilnBurnWindow({seconds:mesh.userData.kaminosPromptRelief?.burnerSeconds??5,flares:mesh.userData.kaminosPromptRelief?.burnerFlares??3,pauseSeconds:mesh.userData.kaminosPromptRelief?.burnerPauseSeconds??1,clock}):null;startedRequest=null;}
@@ -85,10 +90,10 @@ export async function createMountedGenerationPrompt({document,workshop,camera,on
     if(!admitted||!body||!burnWindow)throw Error('No prepared admitted text to burn');
     if(startedRequest!==admitted.id){body.reset();strip.admit();burnWindow.start();burnWindow.pause();startedRequest=admitted.id;}
     active=true;editor.setBurning(true);advance();await fire.setActive(visible);
-   }else{active=false;burnWindow?.pause();fire?.setEmission(false);await fire?.setActive(false);editor.setBurning(false);}
+   }else{active=false;burnWindow?.pause();fire?.setEmission(false);try{await fire?.setActive(false);}finally{editor.setBurning(false);finishResolve?.();finishResolve=null;}}
   },
   finish(){if(!burnWindow)return Promise.resolve();const done=new Promise(resolve=>{finishResolve=resolve;});advance();return done;},
-  async complete(){active=false;admitted=null;error=null;burnWindow=null;fire?.setEmission(false);await fire?.setActive(false);editor.setBurning(false);finishResolve?.();finishResolve=null;schedule();},
+  complete,
   async cancel(){return this.complete();},
   debugState:()=>({route:'mounted-app-viewport',visible,prompt:prepared?.text??null,request:admitted?.id??null,preparing:!!preparing,error,physicalCombustion:!!fire&&active,burner:burnWindow?.read()??null,field:fire?.read()??null,thermal:body?.read()??null,preparation:preparation.read()}),
   dispose,

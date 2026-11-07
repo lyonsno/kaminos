@@ -24,3 +24,13 @@ for(const [search,hash]of [['?volume_light_field=1',''],['','#volume_light_field
  assert.equal(f.createPageSceneDocumentSession().requiresNavigation({composition:null},{mounted:false}),true);
  assert.equal(f.createPageSceneDocumentSession().requiresNavigation({composition:null},{mounted:true}),false);
 });
+test('authored recovery and preview snapshots exclude the temporary flame route',()=>{
+ const f=fixture('?workspace=workbench&authoring=1');
+ f.fireShadowSceneRoute=()=>({});f.window.__kaminosSceneRadiance={debugState:()=>({})};
+ for(const marker of ['recoverySimulation??=','capturePreview:()=>']){
+  const start=page.indexOf(marker),at=page.indexOf('flameRoute:',start),end=page.indexOf('])',at)+2;
+  assert.ok(start>0&&at>start&&end>at);
+  const route=vm.runInContext(page.slice(at+'flameRoute:'.length,end),f);
+  assert.equal(route.volume_light_field,undefined,marker+' must retain authored route identity');
+ }
+});

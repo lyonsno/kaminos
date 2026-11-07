@@ -159,3 +159,31 @@ test('keyboard admission reveals the solid once and preserves subsequent deliber
   assert.equal(f.document.activeElement,f.input);
  }finally{editor.dispose();}
 });
+
+test('real mounted consumer releases finished admission and prepares the next edited draft ahead of Generate',async()=>{
+ const f=fixture();let now=0,view;
+ const fire={prepare:async()=>{},setActive:async()=>{},present:async()=>{},setEmission(){},dispose:async()=>{},read:()=>({})};
+ const answer=async()=>{await tick();const w=f.worker();w.onmessage({data:{id:w.last.id,attributes:{position:{array:new Float32Array([0,0,0,1,0,0,0,1,.1]),itemSize:3,normalized:false}},groups:[],mask:{},samples:[],surface:[]}});await tick();};
+ try{
+  view=installGenerationFlame({document:f.document,slot:new Element(),createRenderer:(_,options)=>createMountedGenerationPrompt({...f,...options,clock:()=>now,createFire:async()=>fire,createBurnBody:async()=>({setMounted(){},reset(){},read:()=>({}),dispose(){}})})});
+  await view.setVisible(true);f.frameTick();f.input.value='FIRST';const request={id:'first',prompt:'FIRST'};
+  view.render({status:'loading',request});await answer();view.render({status:'running',request});await tick();f.frameTick();
+  view.render({status:'complete',request});await tick();now=8000;f.frameTick();await tick();
+  assert.equal(view.read().renderer.request,null,'finished burn must release the admitted draft lock');
+  f.input.value='SECOND';f.input.dispatchEvent(new Event('input'));await new Promise(r=>setTimeout(r,275));
+  assert.equal(view.read().renderer.preparation.text,'SECOND','native editing must prepare before a second admission');
+  await answer();assert.equal(view.read().renderer.prompt,'SECOND');
+ }finally{f.worker()?.onerror({message:'fixture teardown'});await view?.dispose();}
+});
+
+test('Return settles the pending finish waiter but preserves the admitted burn for re-entry',async()=>{
+ const f=fixture();let now=0;
+ const fire={prepare:async()=>{},setActive:async()=>{},present:async()=>{},setEmission(){},dispose:async()=>{},read:()=>({})};
+ const consumer=await createMountedGenerationPrompt({...f,signal:new AbortController().signal,clock:()=>now,createFire:async()=>fire,createBurnBody:async()=>({setMounted(){},reset(){},read:()=>({}),dispose(){}})});
+ try{
+  const prepare=consumer.prepare({prompt:'FIRST',request:{id:'first',prompt:'FIRST'}});await tick();const w=f.worker();w.onmessage({data:{id:w.last.id,attributes:{position:{array:new Float32Array([0,0,0,1,0,0,0,1,.1]),itemSize:3,normalized:false}},groups:[],mask:{},samples:[],surface:[]}});await prepare;
+  f.frameTick();await consumer.setActive(true);let settled=false;consumer.finish().then(()=>{settled=true;});
+  now=1000;f.frameTick();await consumer.setActive(false);await tick();assert.equal(settled,true,'hidden view must not leave an unresolvable finish waiter');
+  assert.equal(consumer.debugState().request,'first');await consumer.setActive(true);const finished=consumer.finish();now=9000;f.frameTick();await finished;assert.equal(consumer.debugState().request,null);
+ }finally{await consumer.dispose();}
+});

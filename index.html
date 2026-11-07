@@ -3636,6 +3636,7 @@ let sceneExposureControls=null;
 let viewportGizmosVisible=true;
 let viewportDisplay=checkedViewportDisplay();
 let selectionFeedback=null,selectionCaptureSuspended=false,viewportBoundsVisible=false,authoringAssets=null,authoringAssetsUI=null,authoringGenerator=null,authoringImageGenerator=null,authoringImageUI=null,authoringPromptExpansion=null,authoringPromptUI=null,authoringForegroundHandoff=null,authoringTrellisGenerator=null,authoringMeshModel=null,authoringGenerateLayout=null,authoringBrowseLayout=null,authoringImageHistory=null,authoringImageHistoryUI=null;
+let refreshAuthoringFrameOwner=async()=>{};
 function attachViewportGizmo(target) {
   if(window.kaminosSceneVisibility&&readSceneSelection().ids.some(id=>!isSceneItemEditable(id))){transformControls.detach();return;}
   const directEmitter=workingScene.selection.ids.length===1&&selectedSceneObjectEntry()?.type===FLAME_EMITTER_TYPE;
@@ -12615,7 +12616,7 @@ async function initScene() {
       recoverySimulation??={flame:!!volumePrototype,active:!!volumePrototype?.isActive(),paused:!!volumePrototype?.debugState().simulationPaused,
         water:waterFeature.recoveryRequested,waterPaused:waterFeature.paused,
         flamePresent:flameFeature.present||!!activeSceneComposition,
-        flameRoute:Object.fromEntries([...fireLightFieldRouteParams(),...Object.entries(fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()))])};
+        flameRoute:Object.fromEntries([...fireLightFieldRouteParams({includeMounted:false}),...Object.entries(fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()))])};
       environmentLoader.invalidateResources();
       transportPrototype?.setSceneTransportConsumer(null);transportPrototype=null;
       authoredWaterFlameTransportActive=false;authoredFlameHDRActive=false;
@@ -13026,7 +13027,7 @@ function createPageSceneLifecycle(){
         if(setup.water)await mountLocalLiquidHost();
         for(const entry of workingScene.objects)if(entry.type===ASH_OBJECT_TYPE){if(typeof sceneColliderCollection!=='undefined')await sceneColliderCollection.prepare?.(workingScene.objects,{...(typeof currentColliderLodOptions==='function'?currentColliderLodOptions():{}),ashCellSize:entry.ash?.cellSize??0.04});await authoredAsh.get(entry.id).initialize();}
       },
-      capturePreview:()=>({flamePresent:flameFeature.present,flameRoute:Object.fromEntries([...fireLightFieldRouteParams(),...Object.entries(fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()))]),activeSceneFieldId:workingScene.activeFieldId,documentSession:sceneDocument.snapshot(),volumePrimitives:getVolumePrimitiveState(),modelSourceUrl,modelSourceType,glbFileName}),
+      capturePreview:()=>({flamePresent:flameFeature.present,flameRoute:Object.fromEntries([...fireLightFieldRouteParams({includeMounted:false}),...Object.entries(fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()))]),activeSceneFieldId:workingScene.activeFieldId,documentSession:sceneDocument.snapshot(),volumePrimitives:getVolumePrimitiveState(),modelSourceUrl,modelSourceType,glbFileName}),
       previewDetached(){
         currentMesh=null;setVolumePrimitivesState({schema:VOLUME_PRIMITIVE_SCHEMA,primitives:[]});
         if(transformControls){transformControls.detach();transformControls.visible=false;}
@@ -23558,7 +23559,7 @@ async function createMountedPromptFire({root,body,burning,signal}) {
    const dispose=async()=>{
     detach?.();detach=null;gas?.dispose();gas=null;
     if(mountedFlameState!==state)return;
-    await flameFeature.setActive(false);await releaseSceneRadianceRoute();mountedFlameState=null;
+    await flameFeature.setActive(false);await refreshAuthoringFrameOwner();await releaseSceneRadianceRoute();mountedFlameState=null;
     if(host){if(saved.frame?.physicalTransform)host.relocateOrdinaryDomain(saved.frame.physicalTransform.translate,[],saved.frame.physicalTransform.scale);host.setPresentationTransform(saved.frame?.presentationTransform??{translate:[0,0,0],scale:1});host.setSceneCompositionPresentation(false);host.setImmersedSources([]);host.setControls(saved.controls);host.setSimulationPaused(saved.paused);host.restoreWorldFrame(saved.world);host.setPressureResidualTelemetryEnabled(saved.pressureTelemetry);}
     window.kaminosOrdinaryDepthSetEnabled?.(saved.depth);window._kaminosDirty?.();
    };
@@ -23593,7 +23594,7 @@ async function createMountedPromptFire({root,body,burning,signal}) {
       await context.device.queue.onSubmittedWorkDone();
     } finally {await host.setActive(false);host.setCanvasPresentationSuppressed(false);}
     return {setEmission,setFrame(frame){host.setPresentationTransform({translate:frame.translate.map((v,i)=>v+root.position.getComponent(i)*frame.scale),scale:frame.scale*root.scale.x});},
-     async setActive(value){state.active=!!value;await flameFeature.setActive(value);},dispose};
+     async setActive(value){state.active=!!value;await flameFeature.setActive(value);await refreshAuthoringFrameOwner();},dispose};
    }catch(error){await dispose();throw error;}
   }});
  mountedFlameOwner=owner;return owner;
@@ -29493,8 +29494,6 @@ function setupAuthoringAssets(){
   let appFrameSource=null,appFrameDevice=null;
   const frameOwner=()=>{
     if(volumePrototype?.foregroundGpuContext?.().active){
-      // A fire scene took over: the app owner stops requesting frames.
-      if(appFrameSource?.debugState().active&&!appFrameSource.debugState().pending)appFrameSource.setForegroundOpportunityRequester(null);
       return volumePrototype;
     }
     const device=sharedGpu?.device;
@@ -29506,8 +29505,12 @@ function setupAuthoringAssets(){
   const foregroundHandoff=()=>{
     const owner=frameOwner();
     if(!owner||!compositionHost)return null;
-    if(authoringForegroundHandoff?.prototype!==owner)authoringForegroundHandoff={prototype:owner,handoff:createForegroundHandoff({prototype:owner,host:compositionHost})};
+    if(authoringForegroundHandoff?.host!==compositionHost)authoringForegroundHandoff={host:compositionHost,handoff:createForegroundHandoff({prototype:owner,host:compositionHost})};
     return authoringForegroundHandoff.handoff;
+  };
+  refreshAuthoringFrameOwner=async()=>{
+    // Do not construct a model host during cold workshop preparation.
+    if(authoringForegroundHandoff?.host===compositionHost)await authoringForegroundHandoff.handoff.moveTo(frameOwner());
   };
   // One GPU host for the page (app-gpu-host.mjs): models borrow its session and run
   // through its foreground service. SAM, UniMate and SuperMat consumers take it too.
@@ -29524,7 +29527,7 @@ function setupAuthoringAssets(){
       const kit=await import('./webgpu-inference-kit/src/core.js');
       if(admittedGpu!==sharedGpu||deviceRecoveryHeld())throw Error('Model host device retired');
       return createAppGpuHost({sharedGpu:admittedGpu,host:compositionHost,kit,frameOwner,
-        install:async requester=>{const handoff=foregroundHandoff();if(!handoff)throw Error('no frame owner');if(!handoff.has('app'))handoff.install('app',requester);await handoff.activate('app');}});
+        install:async(requester,owner)=>{const handoff=foregroundHandoff();if(!handoff)throw Error('no frame owner');await handoff.moveTo(owner);if(!handoff.has('app'))handoff.install('app',requester);await handoff.activate('app');}});
     })();
     const pending=appGpuPending;pending.catch(()=>{if(appGpuPending===pending)appGpuPending=null;});
     return appGpuPending;

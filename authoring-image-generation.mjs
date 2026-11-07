@@ -78,7 +78,8 @@ export function kleinImageName(prompt,seed,model='flux2'){
 // klein borrows the kiln for its run and hands it back, so whichever model is running
 // interleaves its duties with kiln frames.
 export function createForegroundHandoff({prototype,host,waitFrame=()=>new Promise(resolve=>requestAnimationFrame(()=>resolve())),settleMs=10000}){
-  const requesters=new Map();let current=null;
+  const requesters=new Map();let current=null,tail=Promise.resolve();
+  const serial=work=>{const next=tail.catch(()=>{}).then(work);tail=next;return next;};
   async function set(requester){
     const started=Date.now();
     for(;;){
@@ -92,26 +93,37 @@ export function createForegroundHandoff({prototype,host,waitFrame=()=>new Promis
   }
   return {
     owner:()=>current,
+    // A model owns the requester; its frame source may change when temporary
+    // fire stops. Drain the previous source before giving that same requester
+    // to the ordinary scene. Never replace a different model's requester.
+    moveTo(next){return serial(async()=>{
+      if(!next)throw Error('no foreground frame source');
+      if(next===prototype)return;
+      if(current!==null)await set(null);
+      prototype=next;
+      if(current!==null)await set(requesters.get(current));
+    });},
     // A view of the prototype for a producer that installs its requester itself (SF3D).
     recording(owner){
-      return new Proxy(prototype,{get(target,key){
+      return new Proxy(prototype,{get(_target,key){
+        const target=prototype;
         if(key==='setForegroundOpportunityRequester')return requester=>{target.setForegroundOpportunityRequester(requester);requesters.set(owner,requester);current=owner;};
         const value=target[key];return typeof value==='function'?value.bind(target):value;
       }});
     },
     install(owner,requester){requesters.set(owner,requester);},
     has:owner=>requesters.has(owner),
-    async activate(owner){
+    activate(owner){return serial(async()=>{
       if(!requesters.has(owner))throw Error(`no foreground requester for ${owner}`);
       if(current===owner)return;
       await set(requesters.get(owner));current=owner;host.setForegroundServiceActive(true);
-    },
+    });},
     // Back to the kiln's private animation loop, as before any model loaded, so a producer
     // that installs its own requester (SF3D) does not meet another model's pending frame.
-    async release(){
+    release(){return serial(async()=>{
       if(current===null)return;
       await set(null);current=null;host.setForegroundServiceActive(false);
-    },
+    });},
   };
 }
 
