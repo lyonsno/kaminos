@@ -6189,7 +6189,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         # For images, serve directly
-        if ext in (".png", ".jpg", ".jpeg", ".webp", ".exr", ".glb", ".gltf", ".ply", ".spz", ".f32", ".u32"):
+        if ext in (".png", ".jpg", ".jpeg", ".webp", ".exr", ".glb", ".gltf", ".ply", ".spz", ".f32", ".u32") or (root_name == "image-conditioning" and ext == ".bin"):
             body = target.read_bytes()
             immutable_sha = None
             if root_name == "generated-meshes" and ext == ".glb" and re.fullmatch(r"[a-f0-9]{64}\.glb", sub_path):

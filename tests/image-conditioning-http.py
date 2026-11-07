@@ -20,6 +20,7 @@ class ConditioningHttp(unittest.TestCase):
   header=json.dumps({'schema':'kaminos.conditioning-geometry.v1','width':2,'height':2,'metadata':{'cacheKey':'a'*64,'source':{'source':'/api/read?root=image-inbox&path=test.png','sha256':'b'*64},'producerSha256':'c'*64,'route':{'status':'real'}}}).encode();return struct.pack('<I',len(header))+header+b'\0'*((-len(header))%4)+struct.pack('<16f',*([1]*16))
  def test_roundtrip_and_incomplete_refusal(self):
   body=self.body();status,entry=self.call('/api/image-conditioning',body);self.assertEqual(status,200,entry);self.assertEqual(entry['sha256'],hashlib.sha256(body).hexdigest());self.assertEqual((self.root/(entry['sha256']+'.bin')).read_bytes(),body)
+  with urlopen(self.url+entry['source']) as r:self.assertEqual(r.read(),body,'native geometry consumer receives exact binary bytes')
   status,cached=self.call('/api/image-conditioning?key='+'a'*64);self.assertEqual(status,200);self.assertEqual(cached,entry)
   status,_=self.call('/api/image-conditioning',body[:-4]);self.assertEqual(status,400)
   status,again=self.call('/api/image-conditioning?key='+'a'*64);self.assertEqual(again,entry)
