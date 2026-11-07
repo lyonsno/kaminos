@@ -42,6 +42,7 @@ export default {
    const exposure=document.createElement('input');exposure.type='number';exposure.min=0;exposure.step='any';exposure.value=gain;exposure.setAttribute('aria-label','Shared comparison gain');exposure.className='transform-input';
    const gainInput=event=>{if(exposure.value!==''&&exposure.validity.valid)return act('setGain',Number(exposure.value));if(event.type==='change'){sync();status.textContent='Enter a finite comparison gain of zero or greater.';}};
    exposure.addEventListener('input',gainInput);exposure.addEventListener('change',gainInput);
+   exposure.addEventListener('blur',()=>queueMicrotask(()=>sync()));
    const gainLabel=document.createElement('label');gainLabel.textContent='Shared comparison gain ';gainLabel.append(exposure);host.controls.installNumberDrag({input:exposure,grip:gainLabel,step:.05});
    const frame=document.createElement('button');frame.type='button';frame.textContent='Frame flame';frame.addEventListener('click',()=>act('frame'));
    root.append(modes,play,timeline,views,gainLabel,frame,status);
