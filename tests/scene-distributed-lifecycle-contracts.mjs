@@ -135,7 +135,8 @@ if(!selected||selected==='source') {
   assert.equal(state.integration,'exact-cell');
   assert.equal(state.angularCache.preparedRayDirections,12);
   f.mount.setDirections(16);f.prepare();
-  assert.equal(f.copies.length,1,'growing progressive quality copies existing visibility');
+  const visibilityCopies=f.copies.filter(([from,,to])=>from.label==='cached first solid distance per receiver ray'&&to.label===from.label);
+  assert.equal(visibilityCopies.length,1,'growing progressive quality copies existing visibility independently of optical bounds copies');
   state=f.mount.debugState().frame;
   assert.equal(state.angularCache.preparedRayDirections,16,'only four new rays per receiver were traced');
   assert.equal(state.angularCache.lastPreparedDirections,4);

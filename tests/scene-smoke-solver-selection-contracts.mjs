@@ -10,6 +10,7 @@ for(const distributed of [true,false]) {
   const uniforms=new Float32Array(400);uniforms[368]=2;
   const state={physicalColor:{}};
   const context={uniforms,state,encoder:{},currentFluid:1,options:{},EMISSIVE_LIGHT_GRID:32,gridSize:48,gridHeight:96,emissiveSeedProducer:null,
+    sceneLightingSettingsPending:false,sceneLightingRebuildPending:false,
     distributedGroup:distributed?{}:null,distributedFrame:{generation:7,frame:12,volumeReceivers:8192,directions:96},
     sceneSourcePreparedEncoders:new Set(),encodeSharedSceneSource(){sourceCalls++;},
     emissiveLightField:{encode(){legacyCalls++;}}};

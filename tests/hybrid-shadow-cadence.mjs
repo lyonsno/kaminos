@@ -13,7 +13,7 @@ const device={limits:{maxUniformBufferBindingSize:65536,maxStorageBufferBindingS
  queue:{writeBuffer(buffer,offset,data){uploads.push([buffer.label,new Float32Array(data)]);},submit(){}},
  createBuffer({label}){return {label,destroy(){}};},createTexture(){return {createView(){return {};},destroy(){}};},
  createShaderModule(){return {};},createComputePipeline(descriptor){pipelines.push(descriptor.label);return pipeline;},createBindGroup({entries}){const source=entries.find(e=>e.binding===5)?.resource?.source;if(source===failSource&&source)throw Error('injected source binding failure');return {source};},
- createCommandEncoder(){return {copyTextureToTexture(){},beginComputePass({label}={}){passes.push(label);if(label===failPass)throw Error('injected preparation failure');return {setPipeline(){},setBindGroup(_,group){if(label==='live distributed flame transport')consumedSources.push(group.source);},dispatchWorkgroups(){},end(){}};},finish(){return {};}};}};
+ createCommandEncoder(){return {copyTextureToTexture(){},copyBufferToBuffer(){},beginComputePass({label}={}){passes.push(label);if(label===failPass)throw Error('injected preparation failure');return {setPipeline(){},setBindGroup(_,group){if(label==='live distributed flame transport')consumedSources.push(group.source);},dispatchWorkgroups(){},end(){}};},finish(){return {};}};}};
 let consume,hostFrame;
 const field={source:{status:'encoded',texture:{createView(){return {source:'A'};}},dimensions:[4,8,4],localMax:[1,3,1],generation:1,frame:1}};
 const prototype={setSceneMediumSource(){},setSceneSourceFrameConsumer(fn){consume=fn;},setSceneDistributedLightFrame(frame){hostFrame=frame;},sceneVolumeSourceField:()=>field.source};

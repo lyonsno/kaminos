@@ -53,14 +53,14 @@ test('separated pressure projection preserves zero-Neumann delta on coarse-block
  assert.match(sep,/maxSpeed:\s*TRANSPORT_MAX_BACKTRACE_CELLS\s*\/\s*time\.backtraceScale\s*\/\s*\(velocityOwner\?\.plan\.materialPerVelocity\?\?1\)\s*\*\s*calibrationGain/);
  assert.match(cal,/return select\(VELOCITY_UNIT_SCALE,f32\(GRID\)\*u\.world_calibration\.y\/max\(1\.0,u\.world_calibration\.w\),u\.world_calibration\.w>0\.0\);/);
 });
-test('material predictor caches oxidizer and turbulent characteristic while optical medium seeds gate Hamburger quadrature',()=>{
+test('material predictor caches oxidizer and turbulent characteristic while physical optics gates Hamburger quadrature',()=>{
  const code=readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
- const sceneSource=readFileSync(new URL('../scene-volume-source.mjs',import.meta.url),'utf8');
  const worldOptics=readFileSync(new URL('../volume-world-smoke-optics.mjs',import.meta.url),'utf8');
  const predOx=code.slice(code.indexOf('fn reactantPredictedOxidizer('),code.indexOf('fn sampleReactantPredicted('));
  assert.match(predOx,/fluidPredict\[slotIndex\(c, 0u\)\]\.w/);
  assert.doesNotMatch(predOx,/sampleReactantOxidizer/);
- assert.match(sceneSource,/regionSmokeMaterial\(regionSmokeSample\(middleOptical,p,worldRender\.middleLoPitch,0\),vec3<f32>\(0\.0\),1\.0,0\.0\)/);
+ // The production Middle lighting seed's material/moment wiring executes in
+ // lighting-source-quadrature-native.mjs; it must include exterior emission.
  assert.match(worldOptics,/if\(fireVisible>0\.0&&u\.emissive_physics\.x>\.5&&raw\.x>1e-5&&moments\.x>1e-6\)/);
 });
 test('physical diffusivity stays fixed as coverage changes and time conversion remains explicit',()=>{

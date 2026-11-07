@@ -31,7 +31,7 @@ test('production immersed source has full centre weight, antialiased slab edge a
     inputs: [[0,1.5], [0.5,1.5], [1.25,1.5], [0,0.5], [0.5,0.5], [1,0.5]],
   };
   await withKaminosGpu(async (ctx) => {
-    assert.deepEqual(await evalWgslBatch(ctx, options), [1, 0.84375, 0]);
+    assert.deepEqual(await evalWgslBatch(ctx, options), [1, 0.84375, 0, 1, 0.5, 0]);
     const thin={...options,argTypes:['f32','f32'],body:options.body.replace('vec4<f32>(1.5, 0.0, 0.0, 0.0)','vec4<f32>(arg1, 0.0, 0.0, 0.0)'),inputs:[[0,.75],[.5,.75],[1.25,.75],[0,1],[.5,1],[1.25,1]]};
     assert.deepEqual(await evalWgslBatch(ctx,thin),[1,.5,0,1,.5,0],'converted subcell thickness retains the production antialias floor');
     // Negative control: collapse the slab thickness in the extracted production code.

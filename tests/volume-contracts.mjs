@@ -4,6 +4,7 @@ import {balancedWgslBlock} from './helpers/wgsl-guard-ownership.mjs';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import vm from 'node:vm';
 
 const root = new URL('..', import.meta.url).pathname;
 const index = readFileSync(join(root, 'index.html'), 'utf8');
@@ -492,7 +493,23 @@ assert.match(core, /uniforms\[19\]\s*=\s*0\s*;/, 'ordinary product shaders recei
 assert.match(core, /uniforms\[47\]\s*=\s*controlsSnapshot\.rayStartNoise === false \? 0 : 1;/, 'reused frame-cycle slot carries only the static ray-start toggle');
 assert.doesNotMatch(core, /uniforms\[47\]\s*=.*(?:frameCount|now|renderPhase)/, 'ray starts do not restore retired frame-cycle authority');
 assert.match(core, /writeAnalyticEmitterInjectionUniform\([\s\S]*?renderPhaseTimeMs\s*\*\s*0\.001/, 'look freeze pins time only for explicit analytic-emitter temporal descriptors');
-assert.match(core, /if \(advanceSim && !sampleLookFreeze && !simulationPaused\) \{[\s\S]*encodeSim\(encoder\)/, 'sampleFrame does not advance simulation while look freeze is active');
+const sampleStart=core.indexOf('    const sampleLookFreeze =',core.indexOf('  async function sampleFrame('));
+const sampleEnd=core.indexOf('    encoder = prepareSharedSceneConsumers(encoder);',sampleStart);
+assert.ok(sampleStart>=0&&sampleEnd>sampleStart,'sampleFrame exposes its actual evolution decision');
+for(const advanceSim of [false,true])for(const lookFreeze of [false,true])for(const simulationPaused of [false,true])
+for(const sceneLightingRebuildPending of [false,true])for(const sceneLightingSettingsPending of [false,true]){
+  let sim=0,fields=0,contact=0;
+  const context={advanceSim,simulationPaused,sceneLightingRebuildPending,sceneLightingSettingsPending,
+    controlsSnapshot:{lookFreeze},state:{},encoder:{},normalizeLookFreeze:Boolean,lookFreezeCanPin:()=>true,
+    encodeSim:()=>sim++,encodeLiquidFireContactTransfer:()=>contact++,encodeSelectiveHeadLiveFields:()=>fields++,
+    selectiveHeadLiveRoleGroups:()=>null,selectiveHeadLiveRoleDescriptorSource:()=>null};
+  vm.runInNewContext(core.slice(sampleStart,sampleEnd),context);
+  const evolving=!lookFreeze&&!simulationPaused&&!sceneLightingRebuildPending&&!sceneLightingSettingsPending;
+  assert.equal(sim,Number(advanceSim&&evolving),'sampleFrame obeys freeze, playback and both lighting holds');
+  assert.equal(contact,sim,'contact transfer advances with the simulation');
+  assert.equal(fields,Number(evolving),'held samples do not advance selective fields');
+  assert.equal(context.state.simulationPaused,simulationPaused,'a lighting hold cannot overwrite desired playback');
+}
 assert.match(index, /id="volume-fire-scale"/, 'Volume tab exposes emitter scale control');
 assert.match(index, /<span class="slider-label">Emitter Scale<\/span>\s*<input type="range" id="volume-fire-scale"/, 'Fire Scale is labeled by its honest emitter/source role');
 assert.match(index, /volume_fire_scale/, 'URL route can override emitter scale');

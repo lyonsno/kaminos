@@ -12,7 +12,10 @@ assert.equal(field.describe().scatteringTexture,null,'allocated scattering is no
 const encoder={beginComputePass(){return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};}};
 field.encode(encoder,0,7);assert.equal(field.describe().scatteringTexture,textures[1]);
 assert.equal(textures[1].spec.format,'r32float');
-assert.equal(groups.at(-1).entries.length,2,'seed exports emission/extinction and actual scattering together');
+const outputs=groups.find(group=>group.entries.some(entry=>entry.binding===4));
+assert.equal(outputs.entries.find(entry=>entry.binding===4).resource.texture,textures[0],'seed exports emission/extinction');
+assert.equal(outputs.entries.find(entry=>entry.binding===5).resource.texture,textures[1],'seed exports actual scattering alongside emission');
+assert.ok(outputs.entries.find(entry=>entry.binding===10)?.resource.buffer,'source quadrature is an independent uniform binding');
 field.invalidate('test');assert.equal(field.describe().scatteringTexture,null);
 field.destroy();assert.ok(textures[1].destroyed);
 const scattering=await import('../scene-volume-scattering.mjs');
