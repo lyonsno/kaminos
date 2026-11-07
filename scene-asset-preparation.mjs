@@ -13,16 +13,19 @@ function shareable(asset){
   if(asset?.animations?.length||asset?.scenes?.length>1)return false;
   const root=rootOf(asset);if(!root?.isObject3D)return false;
   let ok=true;root.traverse(node=>{
+    if(node.isSurfaceSplatObject)ok=false;
     if(!['Scene','Group','Object3D','Mesh'].includes(node.type)||node.isSkinnedMesh||node.isInstancedMesh)ok=false;
     if(node.isMesh&&node.constructor.name!=='Mesh')ok=false;
     for(const material of [].concat(node.material??[])){
-      if(material.isShaderMaterial)ok=false;
+      if(material.isShaderMaterial||material.isNodeMaterial)ok=false;
       for(const value of Object.values(material))if(value?.isVideoTexture||value?.isCanvasTexture)ok=false;
     }
   });return ok;
 }
 export function disposePreparedAsset(asset){
   const root=rootOf(asset);if(!root?.traverse)return;releasePreparedRoot(root);
+  const runtimes=[];root.traverse(node=>{if(node.isSurfaceSplatObject)runtimes.push(node);});
+  for(const node of runtimes)node.dispose();
   const seen=new Set(),dispose=value=>{if(value&&!seen.has(value)){seen.add(value);value.dispose?.();}};
   root.traverse(node=>{dispose(node.geometry);for(const material of [].concat(node.material??[])){for(const value of Object.values(material))if(value?.isTexture)dispose(value);dispose(material);}});
 }
