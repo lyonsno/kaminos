@@ -8,6 +8,18 @@ const source=fs.readFileSync(new URL('../volume-core.js',import.meta.url),'utf8'
 const frame=source.slice(source.indexOf('  function renderOrdinaryFrame('),source.indexOf('  function pumpLookLabFrozenFrame('));
 const invalidate=source.match(/  function invalidateRaymarchReadouts\([^]*?\n  \}/)?.[0]||'function invalidateRaymarchReadouts() {}';
 const prepare=source.match(/  function prepareRayStepCounters\([^]*?\n  \}/)?.[0];
+test('revealing diagnostics on standalone Old adaptive retains its existing beauty pipeline',()=>{
+  const start=source.indexOf('    const opticalKey = '),end=source.indexOf('    if (multisampled) {',start);
+  const block=source.slice(start,end);assert.ok(start>0&&end>start);
+  const beauty={existing:true};
+  const context=vm.createContext({transparentCanvas:false,optical:{mode:'current',value:0},rayStepTelemetry:{active:true},
+    multisampled:false,scenePointBindGroup:null,distributedGroup:null,targetPipeline:beauty,readbackPipeline:{},drawPipeline:beauty,
+    opticalSteppingPipelines:new Map(),productRaymarchPipelineLayout:{},shader:{},opticalConstants:{OPTICAL_STEP_MODE:0,RAY_STEP_STATS:false},format:'bgra8unorm',
+    device:{createRenderPipeline(){throw Error('synchronous first-statistics beauty compilation');}},
+    rayStepPipelineVariants:{create(){throw Error('synchronous first-statistics beauty compilation');}}});
+  assert.doesNotThrow(()=>vm.runInContext(block,context));
+  assert.equal(context.drawPipeline,beauty);
+});
 test('releasing disabled counters refreshes fluid bindings before they can be submitted',()=>{
   let rebound=0;
   const context=vm.createContext({state:{width:8,height:8},controlsSnapshot:{rayStepTelemetry:false},debugOpticalStepping:{mode:'numerical'},
