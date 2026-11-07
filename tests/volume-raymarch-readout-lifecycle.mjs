@@ -76,6 +76,7 @@ test('shared transport initializes, advances and invalidates actual spatial guid
    resolveOpticalStepping,raymarchAdaptivity,controlsSnapshot:{adaptiveRays:.65},sceneTransportLightEncoders:{has:()=>true},WGSL:'',distributedGroup:null,emissiveLightField:null,scenePointBindGroup:null,
    sceneTransport:null,createSceneVolumeTransport:()=>({encode(input){constants=input.constants;assert.ok(rayAllocationHistory.read().geometry,'guidance geometry must exist when the actual transport binds');return {};}}),device,stateSource:null,bindGroupLayout:{},
    rebuildFluidBindGroups(){rebuilds++;},fluidBindGroup:()=>({}),productTransform:{translate:[0,0,0],scale:1},currentFluid:0});
+  context.presentationWorldTransform=()=>context.productTransform;
   context.worldSmoke.plan.materialDims=[8,8,8];
   vm.runInContext(helper+'\n'+body+'\nrenderSceneTransportHost();',context);
   assert.equal(constants.OPTICAL_STEP_MODE,opticalSteppingConfig({mode}).value);assert.equal(state.sceneTransport.stepping,mode);
