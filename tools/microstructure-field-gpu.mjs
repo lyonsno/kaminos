@@ -16,12 +16,12 @@ export function fieldComputeSource(model){
 }`;
 }
 
-export async function decodeFieldGpu(ctx,model,points){
+export async function decodeFieldGpu(ctx,model,points,code=fieldComputeSource(model)){
   if(!(points instanceof Float32Array)||points.length===0||points.length%4||!points.every(Number.isFinite))throw Error('Finite packed xyz/carrier queries required');
   for(let i=3;i<points.length;i+=4)if(!Number.isInteger(points[i])||points[i]<0||points[i]>=model.meta.carrierCount)throw Error('Query carrier outside model');
   const {device}=ctx,buffers=[];
   try{
-    const module=await ctx.compileShaderModule({code:fieldComputeSource(model),label:'microstructure-field-decoder'});
+    const module=await ctx.compileShaderModule({code,label:'microstructure-field-decoder'});
     const pipeline=await withGpuErrorScopes(device,'field-pipeline',()=>device.createComputePipeline({layout:'auto',compute:{module,entryPoint:'main'}}));
     const make=(size,usage)=>{const buffer=device.createBuffer({size,usage});buffers.push(buffer);return buffer;};
     const upload=data=>{const buffer=make(data.byteLength,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST);device.queue.writeBuffer(buffer,0,data);return buffer;};
