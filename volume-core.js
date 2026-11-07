@@ -22065,6 +22065,7 @@ export function createKaminosVolumePrototype({
   let activitySequence = 0;
   let sceneLightingRebuildPending = false;
   let sceneLightingPresentationAllowed = false;
+  let sceneLightingSettingsPending = false;
   let foregroundDrain = Promise.resolve();
   let stillPresentationHeld = false;
 
@@ -22170,11 +22171,11 @@ export function createKaminosVolumePrototype({
       // typeof: source-extraction contract harnesses run this body without the
       // closure that declares the pacing.
       const pacing = typeof proxyPacing !== 'undefined' ? proxyPacing : null;
-      const stepThisFrame = !sceneLightingRebuildPending && !lookFreeze && !simulationPaused && (!pacing || pacing.frame++ % pacing.simStepEvery === 0);
+      const stepThisFrame = !sceneLightingRebuildPending && !sceneLightingSettingsPending && !lookFreeze && !simulationPaused && (!pacing || pacing.frame++ % pacing.simStepEvery === 0);
       // Armed for this frame's light field build only (see
       // encodeFireIrradianceLightField).
       if (typeof lightFieldPacing !== 'undefined') lightFieldPacing = pacing?.lightFieldWithSnapshots ? pacing : null;
-      if (!sceneLightingRebuildPending && !stepThisFrame && pendingDomainRemap) {
+      if (!sceneLightingRebuildPending && !sceneLightingSettingsPending && !stepThisFrame && pendingDomainRemap) {
         prepareWorldSmoke();
         encodeDomainRemap(encoder);
         refreshSceneCollision();
@@ -26334,7 +26335,7 @@ export function createKaminosVolumePrototype({
     const sampleLookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
     state.simulationPaused = simulationPaused;
     let sampleSelectiveHeadLiveFields = null;
-    if (advanceSim && !sceneLightingRebuildPending && !sampleLookFreeze && !simulationPaused) {
+    if (advanceSim && !sceneLightingRebuildPending && !sceneLightingSettingsPending && !sampleLookFreeze && !simulationPaused) {
       encodeSim(encoder);
       encodeLiquidFireContactTransfer(encoder);
       encodeSelectiveHeadLiveFields(encoder);
@@ -26344,7 +26345,7 @@ export function createKaminosVolumePrototype({
         render: selectiveHeadLiveRoleGroups('render'),
         descriptorSource: selectiveHeadLiveRoleDescriptorSource(),
       };
-    } else if (!sceneLightingRebuildPending && !sampleLookFreeze && !simulationPaused) {
+    } else if (!sceneLightingRebuildPending && !sceneLightingSettingsPending && !sampleLookFreeze && !simulationPaused) {
       encodeSelectiveHeadLiveFields(encoder);
       sampleSelectiveHeadLiveFields = {
         sidecar: selectiveHeadLiveRoleGroups('sidecar'),
@@ -29590,6 +29591,7 @@ export function createKaminosVolumePrototype({
     sceneLightSamplingTexture(){return rayStartNoiseTexture;},
     sceneLightSamplingFrame(){return state.simStepCount;},
     fireIrradianceLightField,
+    setSceneLightingSettingsPending(value){sceneLightingSettingsPending=!!value;},
     setSceneLightingRebuildPending,
     setSceneVolumeSourceEnabled(enabled) {
       sceneVolumeSourceRequested = enabled === true;

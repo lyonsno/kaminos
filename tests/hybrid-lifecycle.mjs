@@ -365,3 +365,32 @@ const originalLiveMaterial=mesh.material;
 liveKernels.setPointCount(2);await liveKernels.whenRebuilt();consume(field);
 assert.equal(liveKernels.canRender(),true);assert.notEqual(mesh.material,originalLiveMaterial);
 liveKernels.dispose();
+
+// A compute edit owns settlement immediately and keeps accepted smoke fields
+// until a complete current replacement has been encoded and bound.
+const editDevice=Object.create(device);let delayKernels=false;const kernelReleases=[];
+editDevice.createComputePipelineAsync=descriptor=>delayKernels?new Promise(resolve=>kernelReleases.push(()=>resolve(pipeline))):Promise.resolve(pipeline);
+const editOwner=createLightingPreparation({hold(){},compile:async()=>{}}),settingsHolds=[];
+prototype.setSceneLightingSettingsPending=value=>settingsHolds.push(value);
+const edited=mountDistributedSceneRadiance({renderer,scene,prototype,device:editDevice,volumeGrid:2,smokeRefinement:1,
+ rebuild:{hold:editOwner.setExternalHold,prepareRetained:editOwner.request,prepareKernels:editOwner.prepareKernels},
+ createShadow:()=>({visibility:THREE.TSL.float(1),render(){},debugState:()=>({}),dispose(){}})});
+for(let phase=0;phase<4;phase++){consume(field);await editOwner.whenIdle();}
+assert.equal(edited.canRender(),true);const acceptedSmokeFrame=hostFrame;
+delayKernels=true;edited.setLightGrid(3);
+let editSettled=false;const editCompletion=edited.whenRebuilt().then(()=>editSettled=true);
+await Promise.resolve();assert.equal(editSettled,false,'a settings request arms settlement before the next source frame');
+assert.equal(settingsHolds.at(-1),true,'simulation evolution is held from the request boundary');
+consume(field);await new Promise(resolve=>setImmediate(resolve));
+assert.equal(hostFrame,acceptedSmokeFrame,'previous smoke lighting remains bound while kernels prepare');
+edited.setLightGrid(4);
+for(const release of kernelReleases.splice(0))release();
+await editOwner.whenIdle();
+assert.equal(hostFrame,acceptedSmokeFrame,'prepared kernels alone cannot clear accepted smoke lighting');
+assert.equal(editSettled,false,'preparation completion waits for a source-frame bind');
+consume(field);await new Promise(resolve=>setImmediate(resolve));
+for(const release of kernelReleases.splice(0))release();
+await editOwner.whenIdle();consume(field);await editCompletion;
+assert.equal(hostFrame.smokeReconstruction.coarseDimensions[0],4,'a newer grid request cannot be overwritten by an older compile completion');
+assert.notEqual(hostFrame,acceptedSmokeFrame);assert.equal(settingsHolds.at(-1),false);
+assert.equal(edited.canRender(),true);edited.dispose();delete prototype.setSceneLightingSettingsPending;

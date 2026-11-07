@@ -12,7 +12,7 @@ export function createExteriorSmokeLight(device,{grid=8,refinement=4,receiverCov
     return {localMin:[...value.lo],localMax:value.lo.map((v,a)=>v+dimensions[a]*value.pitch),dimensions,pitch:value.pitch,directions:value.directions??null};
   }
   let nearCoverage=coverage(receiverCoverage);
-  const regions=new Map();let builds=0;
+  const regions=new Map(),retired=[];let builds=0;
   function remove(name){const r=regions.get(name);if(r){beforeReplace();r.gather.destroy();regions.delete(name);}}
   function specifications(source,{geometry,revision,worldGeometry=true,directions,fineReceiverGrid=16}){
       const medium=source.exterior;
@@ -54,8 +54,7 @@ export function createExteriorSmokeLight(device,{grid=8,refinement=4,receiverCov
         for(const spec of specs){let current=regions.get(spec.name);if(current?.key!==spec.key){current={key:spec.key,gather:makeGather(source,spec,options.geometry,options.worldGeometry!==false)};owned.push(current);}current.gather.setDirections(spec.regionDirections);if(options.worldGeometry!==false)current.gather.setGeometryTransforms(options.geometry.matrices);candidates.set(spec.name,current);}
         await Promise.all([...candidates.values()].map(current=>current.gather.prepare(source,options)));
         const replaced=[...regions].some(([name,current])=>candidates.get(name)!==current);
-        if(replaced)beforeReplace();
-        for(const [name,current] of regions)if(candidates.get(name)!==current)current.gather.destroy();
+        for(const [name,current] of regions)if(candidates.get(name)!==current)retired.push(current.gather);
         for(const current of owned)builds++;
         regions.clear();for(const [name,current] of candidates)regions.set(name,current);
       }catch(error){for(const current of owned)current.gather.destroy();throw error;}
@@ -76,6 +75,7 @@ export function createExteriorSmokeLight(device,{grid=8,refinement=4,receiverCov
       }
       return {...frames.world,builds,handoffMargin:normalizeSmokeHandoffMargin(medium.handoffMargin),middle:frames.middle??null};
     },
-    destroy(){for(const {gather} of regions.values())gather.destroy();regions.clear();},
+    retireReplaced(){for(const gather of retired.splice(0))gather.destroy();},
+    destroy(){for(const gather of retired.splice(0))gather.destroy();for(const {gather} of regions.values())gather.destroy();regions.clear();},
   };
 }

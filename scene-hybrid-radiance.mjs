@@ -164,7 +164,8 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   const status={identity:'hybrid-distributed-smoke-point-surfaces-v0',status:'awaiting-source',surfaceTransport:'gpu-point-regions',surfaceReceivers:0,pointCount,shadowResolution,shadowSoftness,shadowSampling,blockerSamples,filterSamples,maxShadowResolution:device.limits.maxTextureDimension2D,volumeGrid,sourceGrid,directions,
     geometryBuilds:0,visibilityBuilds:0,previewStale:false,receiverSpacingRequested:0,surfaceReconstructionRequested:0,
     limitations:['point-region-surface-approximation','center-cube-area-shadow-approximation','GPU-smoke-visibility-refresh-on-transform','CPU-local-BVH-rebuild-on-vertex-or-topology-edit','no-surface-bounce']};
-  let rebuildRevision=0,rebuildTask=null,rebuilding=false,kernelTask=null,kernelRetry=null,pendingGather=null;
+  let rebuildRevision=0,rebuildTask=null,rebuilding=false,kernelTask=null,kernelRetry=null,pendingGather=null,settingsPending=null;
+  const retiredGathers=[];
   function replaceLighting(){stageLighting(()=>true).commit();}
   // Candidate graphs own their textures and cloned materials. Compilation
   // borrows them; every yield restores the accepted generation for drawing.
@@ -259,12 +260,22 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     for(const root of surfaceLighting?.proxyRoots??[])installMaterials(root);
   }
   const releaseProxyAdapter=surfaceLighting?.setProxyMaterialAdapter({install:installMaterials,release:releaseProxyMaterials});
+  function armSettings(){
+    if(settingsPending)return;
+    let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});promise.catch(()=>{});
+    settingsPending={promise,resolve,reject};prototype.setSceneLightingSettingsPending?.(true);
+  }
+  function finishSettings(error=null){
+    const pending=settingsPending;settingsPending=null;
+    if(pending)error?pending.reject(error):pending.resolve();
+    prototype.setSceneLightingSettingsPending?.(false);
+  }
   function queueKernelPreparation(operation){
     if(kernelTask)return;
     kernelRetry=()=>queueKernelPreparation(operation);
     status.status='preparing-lighting-kernels';onStatus({...status});
     kernelTask=rebuild.prepareKernels(operation).then(()=>{kernelRetry=null;status.status='awaiting-source';delete status.error;},error=>{
-      status.status='lighting-kernel-failed';status.error=String(error.message);throw error;
+      status.status='lighting-kernel-failed';status.error=String(error.message);settingsPending?.reject(error);throw error;
     }).finally(()=>{kernelTask=null;onStatus({...status});});
     kernelTask.catch(()=>{});
   }
@@ -287,15 +298,15 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         const key=JSON.stringify([revision,domainKey,volumeGrid,smokeRefinement]);
         if(!pendingGather||pendingGather.key!==key){
           pendingGather?.gather.destroy();
-          pendingGather={key,gather:createVolumeGather(device,{geometry:packed,receivers:[],volumeGrid,sourceDimensions:sourceDomain.dimensions,smokeRefinement,directions,angularPattern,angularRotation,worldGeometry:true,samplingNoise:prototype.sceneLightSamplingTexture?.(),exteriorMedium:true,asynchronous:!!rebuild?.prepareKernels})};
+          pendingGather={key,volumeGrid,smokeRefinement,gather:createVolumeGather(device,{geometry:packed,receivers:[],volumeGrid,sourceDimensions:sourceDomain.dimensions,smokeRefinement,directions,angularPattern,angularRotation,worldGeometry:true,samplingNoise:prototype.sceneLightSamplingTexture?.(),exteriorMedium:true,asynchronous:!!rebuild?.prepareKernels})};
         }
         const candidate=pendingGather;
         if(rebuild?.prepareKernels){
           valid=acceptedValid;
           queueKernelPreparation(async()=>{
             await candidate.gather.prepare(field.source,{sourceSoftness});
-            if(disposed||pendingGather!==candidate)return;
-            prototype.setSceneDistributedLightFrame(null);gather?.destroy();gather=candidate.gather;pendingGather=null;geometryRevision=revision;builtDomain=domainKey;valid=false;
+            if(disposed||pendingGather!==candidate||candidate.volumeGrid!==volumeGrid||candidate.smokeRefinement!==smokeRefinement)return;
+            if(gather)retiredGathers.push(gather);gather=candidate.gather;pendingGather=null;geometryRevision=revision;builtDomain=domainKey;valid=false;
             status.geometryBuilds++;status.visibilityBuilds++;status.staticTriangles=packed.triangleCount;
           });
           return;
@@ -319,7 +330,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       if(angularPattern==='regions'){if(!getSourceRegions)throw Error('multi-emitter sampling requires stable source regions');gather.setSourceRegions(getSourceRegions(sourceTransform,sourceDomain));}
       const environment=smokeMode==='distributed'||surfaceScattering?smokeEnvironment.frame():null;
       const sceneLights=collectSceneSmokeLights(scene,sourceTransform);
-      frame=gather.encode(field.source,{gain,sourceSoftness,surfaceScattering,smokeEnabled:smokeMode==='distributed',environment,sceneLights,samplingFrame:prototype.sceneLightSamplingFrame?.()??field.source.frame});
+      const fineFrame=gather.encode(field.source,{gain,sourceSoftness,surfaceScattering,smokeEnabled:smokeMode==='distributed',environment,sceneLights,samplingFrame:prototype.sceneLightSamplingFrame?.()??field.source.frame});
       exteriorLight.setReceiverCoverage(exteriorReceiverCoverage??nearSmokeBoxCoverage(nearBox,sourceDomain));
       const exteriorOptions={geometry:packed,revision,directions,gain,sourceSoftness,environment,sceneLights,fineReceiverGrid:volumeGrid};
       if(rebuild?.prepareKernels&&smokeMode==='distributed'&&!exteriorLight.isPrepared(field.source,exteriorOptions)){
@@ -347,10 +358,10 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         shadowBank?.copyCompleted(plan.indices,lights.map(l=>l.shadow));
         solidShadowCapture=captureSchedule.commit(plan,{generation:field.source.generation,frame:field.source.frame});
       }
-      frame={...frame,exterior,pointRegions:reduction,smokeShadow:medium,solidShadowCapture,surfaceTransport:status.surfaceTransport,previewStale:false};
+      frame={...fineFrame,exterior,pointRegions:reduction,smokeShadow:medium,solidShadowCapture,surfaceTransport:status.surfaceTransport,previewStale:false};
       prototype.setSceneDistributedLightFrame(smokeMode==='distributed'?{texture:gather.smoke,...frame}:null);
-      valid=true;status.status='submitted-awaiting-presentation';delete status.error;onStatus({...status});
-    } catch(error){status.status='preparation-failed';status.error=String(error.message);prototype.setSceneDistributedLightFrame(null);onStatus({...status});throw error;}
+      valid=true;for(const old of retiredGathers.splice(0))old.destroy();exteriorLight.retireReplaced?.();finishSettings();status.status='submitted-awaiting-presentation';delete status.error;onStatus({...status});
+    } catch(error){finishSettings(error);status.status='preparation-failed';status.error=String(error.message);prototype.setSceneDistributedLightFrame(null);onStatus({...status});throw error;}
   }
   prototype.setSceneMediumSource(null);prototype.setSceneSourceFrameConsumer(prepare);
   const nonnegative=(v)=>{if(!Number.isFinite(v)||v<0)throw new Error('nonnegative finite gain required');return v;};
@@ -367,19 +378,19 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     }
   }
   return {
-    setNearBox(value){const next=admitNearSmokeBox({...nearBox,...value},sourceDomain,device.limits,exteriorRefinement);if(disposed)throw Error('hybrid lighting disposed');nearBox=next;valid=false;},
-    setExteriorReceiverCoverage(value){exteriorLight.setReceiverCoverage(value);exteriorReceiverCoverage=value;prototype.setSceneDistributedLightFrame(null);valid=false;},
+    setNearBox(value){const next=admitNearSmokeBox({...nearBox,...value},sourceDomain,device.limits,exteriorRefinement);if(disposed)throw Error('hybrid lighting disposed');armSettings();nearBox=next;valid=false;},
+    setExteriorReceiverCoverage(value){exteriorLight.setReceiverCoverage(value);armSettings();exteriorReceiverCoverage=value;valid=false;},
     setSourceGrid(value){
       validateSceneSourceGrid(value);if(disposed)throw Error('hybrid lighting disposed');
       if(value===sourceGrid)return;
       if(!prototype.setSceneSourceGrid)throw Error('lighting host does not support emission resolution');
-      prototype.setSceneSourceGrid(value);sourceGrid=value;status.sourceGrid=value;valid=false;
+      armSettings();try{prototype.setSceneSourceGrid(value);}catch(error){finishSettings(error);throw error;}sourceGrid=value;status.sourceGrid=value;valid=false;
     },
     setLightGrid(value){
       if(!Number.isSafeInteger(value)||value<1)throw Error('positive integer light grid required');
       volumeGatherPlan({volumeGrid:value,sourceDimensions:sourceDomain.dimensions,directions,smokeRefinement,
         sceneLightCount:collectSceneSmokeLights(scene,sourceTransform).lights.length},device.limits);
-      if(value!==volumeGrid){volumeGrid=value;status.volumeGrid=value;builtDomain=null;valid=false;}
+      if(value!==volumeGrid){armSettings();volumeGrid=value;status.volumeGrid=value;builtDomain=null;valid=false;}
     },
     setShadowEdgeFilter(value){if(typeof value!=='boolean')throw Error('shadow edge filter must be boolean');shadowEdgeFilter=value;for(const light of lights)light.shadow.setEdgeFilter(value);},
     setSmokeShadowQuality(value){
@@ -405,10 +416,10 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     },
     setSmokeEnvironmentBlur(value){smokeEnvironmentBlur=validateSmokeEnvironmentBlur(value);smokeEnvironment.setBlur(smokeEnvironmentBlur);},
     setGain(value){gain=nonnegative(value);},setSurfaceGain(value){surfaceGain.value=nonnegative(value);},
-    setSurfaceScattering(value){surfaceScattering=!!value;},setSourceSoftness(value){sourceSoftness=validateSourceSoftness(value);},
+    setSurfaceScattering(value){if(surfaceScattering!==!!value){armSettings();surfaceScattering=!!value;}},setSourceSoftness(value){const next=validateSourceSoftness(value);if(next!==sourceSoftness){armSettings();sourceSoftness=next;}},
     setSmokeMode(value){if(!['distributed','legacy'].includes(value))throw new Error('unknown smoke mode');smokeMode=value;},
-    setDirections(value){volumeGatherPlan({volumeGrid,sourceDimensions:sourceDomain.dimensions,directions:value,smokeRefinement,angularPattern,sceneLightCount:collectSceneSmokeLights(scene,sourceTransform).lights.length},device.limits);directions=value;status.directions=value;},
-    setAngularPattern(pattern,rotation=0){if(!['fixed','spatial','blue','source','guided','regions','importance'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern required');volumeGatherPlan({volumeGrid,sourceDimensions:sourceDomain.dimensions,directions,smokeRefinement,angularPattern:pattern},device.limits);gather?.setAngularPattern(pattern,rotation);angularPattern=pattern;angularRotation=rotation;},
+    setDirections(value){volumeGatherPlan({volumeGrid,sourceDimensions:sourceDomain.dimensions,directions:value,smokeRefinement,angularPattern,sceneLightCount:collectSceneSmokeLights(scene,sourceTransform).lights.length},device.limits);if(value===directions)return;armSettings();directions=value;status.directions=value;},
+    setAngularPattern(pattern,rotation=0){if(!['fixed','spatial','blue','source','guided','regions','importance'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern required');volumeGatherPlan({volumeGrid,sourceDimensions:sourceDomain.dimensions,directions,smokeRefinement,angularPattern:pattern},device.limits);if(pattern===angularPattern&&rotation===angularRotation)return;armSettings();gather?.setAngularPattern(pattern,rotation);angularPattern=pattern;angularRotation=rotation;},
     setRetainComparisons(value){retainComparisons=!!value;},
     setShadowSoftness(value){if(!Number.isFinite(value)||value<0)throw Error('shadow softness must be finite and nonnegative');for(const light of lights)light.shadow.setSoftness(value);shadowSoftness=value;status.shadowSoftness=value;},
     setShadowSampling(value){validateShadowSampling(value);for(const light of lights)light.shadow.setSampling(value);shadowSampling=value;status.shadowSampling=value;},
@@ -421,7 +432,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       if(lights.every(light=>typeof light.shadow.setQuality==='function')){for(const light of lights)light.shadow.setQuality(next);shadowBank?.setResolution(next.resolution);valid=false;}
       else requestRebuild();
     },
-    whenRebuilt(){return kernelTask??rebuildTask??(status.error?Promise.reject(Error(status.error)):Promise.resolve());},
+    whenRebuilt(){const tasks=[settingsPending?.promise,kernelTask,rebuildTask].filter(Boolean);return tasks.length?Promise.all(tasks):(status.error?Promise.reject(Error(status.error)):Promise.resolve());},
     retryRebuild(){if(disposed)throw Error('hybrid lighting disposed');if(kernelRetry){kernelRetry();return kernelTask;}requestRebuild();return rebuildTask;},
     setShadowCaptureBudget(value){
       validateShadowCaptureBudget(value);if(disposed)throw Error('hybrid lighting disposed');
@@ -437,7 +448,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     setReceiverSpacing(value){status.receiverSpacingRequested=value;},setSurfaceReconstruction(value){status.surfaceReconstructionRequested=value;},setEditing(){},
     debugState(){const captures=valid&&surfaceEnabled?frame?.solidShadowCapture:null;return {...status,sourceInput:prototype.sceneVolumeSourceField()?.dimensions??null,shadowBank:shadowBank?.debugState()??{strategy:'individual-cubes',reason:shadowBankFallback},shadowCaptureBudget,nearBox:normalizeNearSmokeBox(nearBox),smokeEnvironmentBlur,angularPattern,angularRotation,shadowEdgeFilter,surfaceEnabled,smokeShadowSteps,smokeShadowResolution,smokeShadowFilter,smokeShadowFilterAngle,smokeShadowFilterTaps,smokeShadowMediumResolution,smokeShadowWork:smokeShadowWork({steps:smokeShadowSteps,resolution:smokeShadowResolution,filter:smokeShadowFilter,angleDegrees:smokeShadowFilterAngle,tapsPerAxis:smokeShadowFilterTaps,count:pointCount}),mediumExtinction:smokeShadowSteps?'radial-prefix-atlas':'omitted',shadowCasterLevel:casterScene.debugState().level,casters:casterScene.debugState(),shadowImplementation:comparison.implementation,shadowGrain:comparison.grain,shadowWorldCellSize:comparison.worldCellSize,pointSampling,pointEvaluationBudget,sourceEvaluationImplementation:pointEvaluationBudget&&selectedEvaluationAvailable?'shared-selected-filter':'per-source-filter',pointSelection:pointEvaluationBudget?'cyclic-complementary':pointSampling,evaluatedPointCount:surfaceEnabled?sourceEvaluationCount(pointCount,pointEvaluationBudget,pointSampling):0,capturedPointCount:captures?.refreshedCount??0,residentShadowCount:captures?.residentCount??0,solidShadowCapture:captures,gain,sourceTransform,sourceSoftness,smokeMode,surfaceScattering,surfaceGain:surfaceGain.value,frame,shadows:lights.map(l=>l.shadow.debugState())};},
     canRender(){const source=prototype.sceneVolumeSourceField();return !disposed&&valid&&source.status==='encoded'&&source.generation===frame?.generation&&source.frame===frame?.frame;},
-    canPresent(){const source=prototype.sceneVolumeSourceField();return !disposed&&(!!kernelTask||!!kernelRetry||(valid&&source.status==='encoded'&&source.generation===frame?.generation&&source.frame===frame?.frame));},
+    canPresent(){const source=prototype.sceneVolumeSourceField();return !disposed&&(!!settingsPending||!!kernelTask||!!kernelRetry||(valid&&source.status==='encoded'&&source.generation===frame?.generation&&source.frame===frame?.frame));},
     readback(options){if(!gather)throw new Error('hybrid not encoded');return gather.readback(options);},
     async readShadowCaptureOrigins(){
       if(!surfaceEnabled||!valid)throw Error('solid shadow sources not current');
@@ -447,7 +458,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     },
     readPointRegions(){if(!surfaceEnabled)throw Error('surface lighting disabled');if(!valid)throw Error('hybrid source not current');return points.readback();},
     dispose(){
-      valid=false;disposed=true;prototype.setSceneSourceFrameConsumer(null);prototype.setSceneDistributedLightFrame(null);
+      valid=false;disposed=true;finishSettings(Error('hybrid lighting disposed'));prototype.setSceneSourceFrameConsumer(null);prototype.setSceneDistributedLightFrame(null);
       const cleanup=()=>{
       releaseProxyAdapter?.();
       for(const [mesh,row] of originals){
@@ -461,7 +472,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         }
         for(const material of row.owned){surfaceLighting?.unbind(material);material.dispose();}
       }
-      originals.clear();releasePoints();gather?.destroy();pendingGather?.gather.destroy();exteriorLight.destroy();casterScene.dispose();smokeEnvironment.dispose();
+      originals.clear();releasePoints();gather?.destroy();for(const old of retiredGathers.splice(0))old.destroy();pendingGather?.gather.destroy();exteriorLight.destroy();casterScene.dispose();smokeEnvironment.dispose();
       };
       if(rebuildTask||kernelTask)Promise.allSettled([rebuildTask,kernelTask]).then(cleanup);else {cleanup();rebuild?.hold(false);}
     },
