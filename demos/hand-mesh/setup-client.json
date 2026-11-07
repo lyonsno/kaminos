@@ -27,7 +27,7 @@
     },
     {
       "path": "lib/three.webgpu.js",
-      "sha256": "e5b62bfe5c8c2103dd9c2a42780e06b1e08733363031f6068851601663b330fd"
+      "sha256": "6ef258a4e93b8504867d69705fb87b71366595bfde8c64ad9e7c11a208e8f95d"
     },
     {
       "path": "models/mobrecon/OPENMESH-LICENSE.txt",
@@ -51,15 +51,15 @@
     },
     {
       "path": "models/mobrecon/mobrecon-kernels.js",
-      "sha256": "a810ea36a285641cc4adc63568de1c4638bc248b43871b161e8fa4ff30cf4730"
+      "sha256": "16366c07f63e4a8bc4344c981e27e807f9b61456b487b0df8c5a31c1977eb1cf"
     },
     {
       "path": "models/mobrecon/mobrecon-network.js",
-      "sha256": "5621b4a0bcdc0c9e31a41b50b4a910d918a00df04b334511fdff3f87c7ecab47"
+      "sha256": "a64b3e04b1b9a3fc53ea574fc15af4fe90414059c572847e364e74c2aa3466cb"
     },
     {
       "path": "models/mobrecon/mobrecon-route.js",
-      "sha256": "d5939eb5bd46a8fb26040ef0f39d76f296237e7db6035b29f182440967ace9ac"
+      "sha256": "4cd84570faca70c4c0d2bb455c7e8cdd2bd7caa8f3ba3d10df540c23472db29d"
     },
     {
       "path": "models/mobrecon/model-package-source.js",
@@ -211,7 +211,7 @@
     },
     {
       "path": "webgpu-inference-kit/src/kernel-profile.js",
-      "sha256": "a33865eeb50fd2c44b60e9e19df3011bade90600ee8a01cb2de92a6b298278e1"
+      "sha256": "9d0f5145f166c04e9214f8c7024c1b57cec1b4c373c58c9c2ddf256237c37ca2"
     },
     {
       "path": "webgpu-inference-kit/src/kimodo-route.js",
