@@ -43,6 +43,10 @@ Explicit withdrawal also keeps ordinary scene rendering available while zeroing
 the installed gas-lighting contribution. Ordinary material/environment lighting
 is retained; unavailable or stale active-source bindings still block presentation.
 Re-entry restores the existing current-source checks without recompilation.
+The legacy Point experiment is different: its light is independently authored,
+not produced by gas. Withdrawal selects a retained zero-optical-depth texture
+for that light and refreshes ordinary solid visibility; it does not dim the
+point source. Its identity-coordinate limitation remains unchanged.
 
 Rotation and nonuniform scale are not represented by this API. Moving a fine
 box through stationary world gas is still `relocateOrdinaryDomain`, with its
