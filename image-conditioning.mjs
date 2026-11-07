@@ -49,3 +49,7 @@ export function unpackConditioningGeometry(bytes){
  if(header.schema!=='kaminos.conditioning-geometry.v1'||!Number.isInteger(width)||!Number.isInteger(height)||width<2||height<2||bytes.length!==offset+count*16)throw Error('Invalid retained geometry');
  const copy=bytes.slice();return {...header,depth:new Float32Array(copy.buffer,offset,count),normals:new Float32Array(copy.buffer,offset+count*4,count*3)};
 }
+export function conditioningSourceName(entry){
+ const url=new URL(entry.source,'http://conditioning.local'),path=url.searchParams.get('path')??url.searchParams.get('file')??url.pathname,extension=/\.(png|jpe?g|webp)$/i.exec(path)?.[0];
+ if(!extension)throw Error('Choose a PNG, JPEG or WebP source');return /\.(png|jpe?g|webp)$/i.test(entry.name??'')?entry.name:`${entry.name||'Conditioning source'}${extension}`;
+}

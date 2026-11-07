@@ -1,4 +1,4 @@
-import {conditioningCloud,conditioningDefaults,conditioningSettings,packConditioningGeometry,unpackConditioningGeometry,CONDITIONING_ROUTE} from './image-conditioning.mjs';
+import {conditioningSourceName,conditioningCloud,conditioningDefaults,conditioningSettings,packConditioningGeometry,unpackConditioningGeometry,CONDITIONING_ROUTE} from './image-conditioning.mjs';
 import {createConditioningRenderer} from './image-conditioning-renderer.mjs';
 import {createImagePreparation} from './authoring-image-preparation.mjs';
 import {withPngProvenance,readPngProvenance} from './authoring-image-generation.mjs';
@@ -36,7 +36,7 @@ export function installImageConditioning({document,assets,experiments,openRefere
    const cached=await responseJson(await fetch('/api/image-conditioning?'+new URLSearchParams({key})));if(cached){await restore(cached);return clone(state.geometry);}
    const outcome=await withGreenroomLease({post:leasePost,runId:crypto.randomUUID(),route:'moge.conditioning.webgpu.v1',admission:'queue',signal:abort.signal,onWait:()=>{status.textContent='Waiting in Greenroom for foreground preparation and MoGe…';}},async held=>{
     if(held.status!=='held')throw Error('Conditioning inference requires Greenroom admission');admissionId=null;
-    status.textContent='Preparing foreground with the existing image preparation route…';const preparation=await createImagePreparation()(state.entry,{signal:abort.signal});
+    status.textContent='Preparing foreground with the existing image preparation route…';const preparation=await createImagePreparation()({...state.entry,name:conditioningSourceName(state.entry)},{signal:abort.signal});
     const input=await pixels(await bytes(state.entry.source));let gpu=context().sharedGpu;if(!gpu?.device)throw Error('Kaminos shared WebGPU device is unavailable');
     const {MoGeInference,borrowedDeviceBackendIdentity}=await import('./demos/material-photo/moge-producer.js');gpu={...gpu,backendIdentity:gpu.backendIdentity??borrowedDeviceBackendIdentity(gpu)};const inference=new MoGeInference(gpu);let result;
     try{await inference.init((loaded,total)=>{status.textContent=`Loading MoGe ${Math.round(loaded/1e6)}${total?' / '+Math.round(total/1e6):''} MB…`;});if(!inference.useRealWeights)throw Error('MoGe synthetic weights cannot produce conditioning geometry');status.textContent='Recovering source depth and normals…';
