@@ -82,3 +82,18 @@ console.log('Attachment-relative history, scaled rigid frames, and reconstructed
  edits.redo();assert.equal(runtime.read().bodies.replacements,1);
  edits.clear();await runtime.dispose();
 }
+
+// A removed controller retains snapshots only as long as native history owns
+// them; later history clear/discard must complete that deferred release.
+{
+ const {mechanismHistory}=await import('../experiments/link-workshop/history.mjs');
+ for(const how of ['clear','discard']){
+  const scene=new T.Group(),entries=[],edits=createSceneEdits({read(){throw Error('No ordinary target');},write(){throw Error('No ordinary target');}});let adapter;
+  const host={scene:{objects:()=>entries,async open(){return {async attach(root){scene.add(root);return {id:'removed',root};},redraw(){},readView(){return {};},onFrame(){return ()=>{};},async dispose(){}};}},controls:{document:{defaultView:{kaminosSceneEdits:edits}},components:{register(_,a){adapter=a;return {changed(fn){fn?.();},dispose(){}};}}}};
+  const root=new T.Group();root.userData.linkMechanism=recipe();entries.push({id:'removed',object:root});const runtime=await createMechanismController({host,inputs:{root}});await runtime.operations.importBodies(runtime.operations.exportBodies());runtime.operations.period({seconds:4});const ref=adapter.target().read().geometryRef;
+  root.removeFromParent();entries.length=0;await runtime.dispose();const retained=mechanismHistory(edits,'removed',()=>entries);assert.ok(retained.geometry(ref).bodies.length,'Undo/redo still owns the removed mechanism geometry');retained.dispose();
+  if(how==='clear')edits.clear();else edits.discard(()=>true);
+  assert.throws(()=>retained.geometry(ref),/snapshot is unavailable/,'The disposed history client no longer retains an orphan packet');
+  const released=mechanismHistory(edits,'removed',()=>entries);try{assert.throws(()=>released.geometry(ref),/snapshot is unavailable/,'Orphan geometry releases after the final history owner disappears');const first=released.rememberGeometry({schema:'kaminos.assembly-geometry.v1',bodies:[]}),second=released.rememberGeometry({schema:'kaminos.assembly-geometry.v1',bodies:[]});assert.ok(![first,second].includes(ref),'New stores cannot alias an old snapshot reference');assert.throws(()=>retained.rememberGeometry({schema:'kaminos.assembly-geometry.v1',bodies:[]}),/store is released/,'A disposed client cannot repopulate a released store');}finally{released.dispose();}
+ }
+}

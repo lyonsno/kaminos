@@ -111,7 +111,7 @@ export async function createMechanismController({host,inputs={},record=()=>{}}){
   const oldWorld=new T.Vector3(...f.point,0).applyMatrix4(root.matrixWorld),moved=oldWorld.distanceTo(new T.Vector3(...v.position))>1e-7;
   const resized=v.mode==='build'&&n.parent!==null&&Math.abs(v.scale[0]-n.length)>1e-7;
   if(moved&&!resized)model=moveJoint(base,selected,[p.x,p.y],v.mode);
-  else if(n.parent!==null){const q=new T.Quaternion().setFromEuler(new T.Euler(...v.rotation)).premultiply(root.getWorldQuaternion(new T.Quaternion()).invert()),e=new T.Euler().setFromQuaternion(q),parent=frames(base,v.mode==='B'?1:0)[n.parent],length=v.mode==='build'?v.scale[0]:n.length;model=moveJoint(base,selected,[parent.point[0]+Math.cos(e.z)*length,parent.point[1]+Math.sin(e.z)*length],v.mode);if(v.mode==='build')model.nodes[selected].length=length;}
+  else if(n.parent!==null){const q=new T.Quaternion().setFromEuler(new T.Euler(...v.rotation)).premultiply(root.getWorldQuaternion(new T.Quaternion()).invert()),e=new T.Euler().setFromQuaternion(q),parent=frames(base,v.mode==='B'?1:0)[n.parent],length=v.mode==='build'?v.scale[0]:n.length;model=moveJoint(base,selected,[parent.point[0]+Math.cos(e.z)*length,parent.point[1]+Math.sin(e.z)*length],v.mode);if(v.mode==='build')model.nodes[selected].length=Math.abs(length);}
   update();restoreGeometry(v.geometryRef??v.geometry);session.redraw();refresh();
  }});
 

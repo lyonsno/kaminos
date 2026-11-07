@@ -97,3 +97,12 @@ console.log('Native workshop history through empty state and numeric preview/com
  selected='elsewhere';owners.update();assert.equal(inspector.children[0].hidden,true,'Changing owner hides old controls');assert.equal(components.active(),false);
  await runtime.dispose();
 }
+
+{
+ const {runtime,edits,target}=await setup(),h=target(),base=h.read();
+ edits.begin(h.id);edits.preview({...base,...transformPose(base,{operation:'scale',axis:'x',amount:-1})});
+ assert.equal(runtime.read().recipe.nodes[1].length,base.recipe.nodes[1].length,'Signed native scale preserves an exact positive rigid length');assert.doesNotThrow(()=>runtime.tick());
+ assert.doesNotThrow(()=>edits.cancel(),'A signed scale must remain cancellable');assert.deepEqual(runtime.read().recipe,base.recipe);
+ edits.begin(h.id);assert.throws(()=>edits.preview({...base,scale:[0,1,1]}),/nonzero|Positive/);assert.doesNotThrow(()=>edits.cancel(),'An unsupported zero length cannot poison the live recipe');
+ edits.begin(h.id);edits.preview({...base,...transformPose(base,{operation:'rotate',axis:'z',amount:.2})});edits.commit();assert.notDeepEqual(runtime.read().recipe,base.recipe,'Editing continues after signed-scale cancellation');await runtime.dispose();
+}
