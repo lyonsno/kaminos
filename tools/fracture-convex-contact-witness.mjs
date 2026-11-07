@@ -27,7 +27,7 @@ try{
  report.result=await page.evaluate(async()=>{
   const T=await import('/lib/three.webgpu.js'),{requestKaminosSharedWebGpuDevice}=await import('/volume-core.js');
   const {prepareWholeFracture}=await import('/fracture-whole-prepare.mjs'),{createCoarseFractureDynamics}=await import('/fracture-coarse-dynamics.mjs');
-  const {contactShapeSeparation,boxContactShape}=await import('/fracture-contact-shape.mjs');
+  const {contactShapeSeparation,boxContactShape,materialContactShape}=await import('/fracture-contact-shape.mjs');
   const {createConvexBodyContacts}=await import('/fracture-convex-contact.mjs');
   const {contactTopology,contactEligibility}=await import('/fracture-contact-topology.mjs');
   const {encodeCoarseExternalCompute}=await import('/fracture-compute-batch.mjs');
@@ -123,8 +123,24 @@ try{
     await freeSteps(stickyModel,12);await stickyModel.acquire();sticking={liveMaps,before,after:stickyModel.snapshot(),substep,floats,words};
    }finally{stage.encode=encode;trace.destroy();}
   }finally{stickyModel.dispose();}
+  // Compare actual GPU support-axis selection with the independent exhaustive
+  // CPU SAT oracle under oblique poses, including edge contact and separation.
+  // These fixed poses never drive an interactive solve.
+  const hullPoints=Array.from({length:16},(_,i)=>{const y=1-2*(i+.5)/16,r=Math.sqrt(1-y*y),a=i*2.399963229728653;return [Math.cos(a)*r,y*.7,Math.sin(a)*r*.5];});
+  const irregular=materialContactShape({positions:Float32Array.from(hullPoints.flat()),indices:Uint32Array.from(hullPoints,(_,i)=>i)},[0,0,0],[1,.7,.5]);
+  const axes=[];
+  for(let sample=0;sample<12;sample++){
+   const qa=new T.Quaternion().setFromEuler(new T.Euler(sample*.13,sample*.27,sample*.09)),qb=new T.Quaternion().setFromEuler(new T.Euler(.3+sample*.19,-.2+sample*.11,.4+sample*.17));
+   const original=[sample%2?irregular:boxContactShape([.7,.4,.5]),irregular],transformed=original.map((h,i)=>transformHull(h,i?qb:qa));
+   const direction=new T.Vector3(1,.2+sample*.07,-.35+sample*.05).normalize().toArray();let lo=0,hi=4;
+   for(let k=0;k<18;k++){const mid=(lo+hi)/2,gap=contactShapeSeparation(transformed[0],[0,0,0],transformed[1],direction.map(x=>x*mid)).separation;if(gap>0)hi=mid;else lo=mid;}
+   const distance=(lo+hi)/2+(sample%3===0?.01:-.03),position=direction.map(x=>x*distance),expected=contactShapeSeparation(transformed[0],[0,0,0],transformed[1],position);
+   const cells=original.map((collisionHull,index)=>({index,position:index?position:[0,0,0],halfExtents:[1,1,1],collisionHull})),buffers=[],alloc=(typed,extra=0)=>{const b=device.createBuffer({size:Math.max(16,typed.byteLength),usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|extra});device.queue.writeBuffer(b,0,typed);buffers.push(b);return b;};
+   const contacts=alloc(new Float32Array(144),GPUBufferUsage.COPY_SRC),stage=await createConvexBodyContacts(device,{cells,bonds:[],positions:alloc(Float32Array.from([0,0,0,1,...position,1])),quaternions:alloc(Float32Array.from([...qa.toArray(),...qb.toArray()])),contacts,joints:alloc(new Float32Array(44)),friction:.5}),read=device.createBuffer({size:576,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+   try{stage.encode(renderer);const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(contacts,0,read,0,576);device.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);const rows=Array.from(new Float32Array(read.getMappedRange())),active=Array.from({length:4},(_,i)=>rows.slice(i*36,(i+1)*36)).filter(row=>row[2]>0);axes.push({sample,shapes:original,quaternions:[qa.toArray(),qb.toArray()],position,expected,rows,active:active.length,maxDepth:Math.max(0,...active.map(row=>row[7]))});}finally{read.destroy();stage.dispose();buffers.forEach(b=>b.destroy());}
+  }
   await device.queue.onSubmittedWorkDone();renderer.dispose();
-  return {adapter,errors,fixture:{cells:whole.cells,bonds:whole.bonds,config:whole.config},legacy,candidate,rotated,topologyCases,unloaded,floor,sticking};
+  return {adapter,errors,fixture:{cells:whole.cells,bonds:whole.bonds,config:whole.config},legacy,candidate,rotated,topologyCases,unloaded,floor,sticking,axes};
  });
  assert.equal(report.errors.length,0);assert.equal(report.result.errors.length,0);
  assert.equal(report.result.candidate.effectiveShape,'complete-source-convex-hulls','Requested hull contact must not silently fall back to box contacts');
@@ -150,6 +166,7 @@ try{
  }
  assert.ok(reused>0,'Native solver must establish sticking before the controlled tangential impulse');
  assert.equal(sticky.liveMaps,0);assert.ok(Math.abs(sticky.after.bodies[1].position.x-sticky.before.bodies[1].position.x)<.003,'Static-friction sample must arrest the small tangential impulse');
+ for(const sample of report.result.axes){assert.ok(sample.rows.every(Number.isFinite),'Native support-axis contacts must remain finite');if(sample.expected.separation>0.001)assert.equal(sample.active,0,'Separated oblique hulls must not manufacture contact');else{assert.ok(sample.active>0,'Intersecting oblique hulls must produce real native contact');assert.ok(Math.abs(sample.maxDepth+sample.expected.separation)<.001,'Support-axis penetration must agree with independent exhaustive SAT');}}
  report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.failurePhase=report.phase;report.error=error.stack;process.exitCode=1;}finally{
  save();const cleanupErrors=[];

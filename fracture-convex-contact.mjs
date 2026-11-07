@@ -13,7 +13,13 @@ export function packContactShapes(cells,bonds){
   const vertexStart=records.length;for(let v=0;v<shape.vertices.length;v+=3)f(shape.vertices.subarray(v,v+3));
   const faceStart=records.length;for(let j=0;j<shape.faces.length;j++){u([0,shape.faces[j].length]);f(features.normals[j]);maxFaceVertices=Math.max(maxFaceVertices,shape.faces[j].length);}
   shape.faces.forEach((face,j)=>{records[faceStart+j*2][0]=ids(face);});
-  const edgeStart=records.length;for(const edge of features.edges)u(edge);
+  const edgeStart=records.length;
+  const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],unit=v=>{const d=Math.hypot(...v);return d?v.map(x=>x/d):[0,0,0];};
+  for(const [j,edge] of features.edges.entries()){
+   const faces=features.edgeFaces[j],valid=faces.length===2,a=valid?features.normals[faces[0]]:[0,0,0],b=valid?features.normals[faces[1]]:[0,0,0],c=cross(a,b);
+   u([...edge,...(valid?faces:[0xffffffff,0xffffffff])]);f(unit(cross(c,a)));f(unit(cross(b,c)));
+   f(unit([0,1,2].map(k=>shape.vertices[edge[1]*3+k]-shape.vertices[edge[0]*3+k])));
+  }
   const adjStart=records.length;for(const edge of topology.adjacency[i])u(edge);
   records[i*4]=Uint32Array.from([vertexStart,shape.vertices.length/3,faceStart,shape.faces.length]);
   records[i*4+1]=Uint32Array.from([edgeStart,features.edges.length,adjStart,topology.adjacency[i].length]);
@@ -21,12 +27,13 @@ export function packContactShapes(cells,bonds){
  });
  const pairStart=records.length;for(const p of topology.pairs)u([0,p.direct.length,Number(p.initialNeighbor),0]);
  for(const [i,p]of topology.pairs.entries())records[pairStart+i][0]=ids(p.direct);
+ const pairBodiesStart=records.length;for(const p of topology.pairs)u([p.i,p.j]);
  const data=new Float32Array(records.length*4),words=new Uint32Array(data.buffer);
  records.forEach((r,i)=>{if(r instanceof Uint32Array)words.set(r,i*4);else data.set(r,i*4);});
- return {data,topology,pairStart,maxFaceVertices,bodyCount:cells.length};
+ return {data,transformedBytes:data.byteLength,topology,pairStart,pairBodiesStart,maxFaceVertices,bodyCount:cells.length};
 }
 
-export function convexContactShader({bodyCount,pairStart,maxFaceVertices,friction}){
+export function convexContactShader({bodyCount,pairStart,pairBodiesStart,maxFaceVertices,friction,pairDispatchWidth=bodyCount*(bodyCount-1)/2||1}){
  // Clipping an m-gon by n half-planes yields at most m+n vertices.
  // This capacity follows the supplied geometry, never a sampled vertex budget.
  const polygonCapacity=2*maxFaceVertices;
@@ -37,6 +44,7 @@ export function convexContactShader({bodyCount,pairStart,maxFaceVertices,frictio
 @group(0) @binding(3) var<storage,read> shape:array<vec4f>;
 @group(0) @binding(4) var<storage,read> joints:array<vec4f>;
 @group(0) @binding(5) var<storage,read_write> labels:array<u32>;
+@group(0) @binding(6) var<storage,read_write> world:array<vec4f>;
 var<workgroup> connected:array<atomic<u32>,${bodyCount}>;
 const N:u32=${bodyCount}u;
 const PAIRS:u32=${bodyCount*(bodyCount-1)/2}u;
@@ -47,10 +55,18 @@ fn word(i:u32)->vec4u{return bitcast<vec4u>(shape[i]);}
 fn list(start:u32,i:u32)->u32{return word(start+i/4u)[i%4u];}
 fn rotate(q:vec4f,p:vec3f)->vec3f{return p+2.0*cross(q.xyz,cross(q.xyz,p)+q.w*p);}
 fn inverseRotate(q:vec4f,p:vec3f)->vec3f{return rotate(vec4f(-q.xyz,q.w),p);}
-fn point(body:u32,v:u32)->vec3f{return positions[body].xyz+rotate(quaternions[body],shape[word(body*4u).x+v].xyz);}
-fn faceNormal(body:u32,face:u32)->vec3f{return rotate(quaternions[body],shape[word(body*4u).z+face*2u+1u].xyz);}
+fn point(body:u32,v:u32)->vec3f{return world[word(body*4u).x+v].xyz;}
+fn faceNormal(body:u32,face:u32)->vec3f{return world[word(body*4u).z+face*2u+1u].xyz;}
 fn faceInfo(body:u32,face:u32)->vec4u{return word(word(body*4u).z+face*2u);}
-fn edgeInfo(body:u32,edge:u32)->vec4u{return word(word(body*4u+1u).x+edge);}
+fn edgeInfo(body:u32,edge:u32)->vec4u{return word(word(body*4u+1u).x+edge*4u);}
+fn edgeDirection(body:u32,edge:u32)->vec3f{return world[word(body*4u+1u).x+edge*4u+3u].xyz;}
+@compute @workgroup_size(64)
+fn transform(@builtin(workgroup_id) group:vec3u,@builtin(local_invocation_index) lane:u32){
+ let body=group.x;if(body>=N){return;}let h=word(body*4u);let e=word(body*4u+1u);let q=quaternions[body];
+ for(var v=lane;v<h.y;v+=64u){world[h.x+v]=vec4f(positions[body].xyz+rotate(q,shape[h.x+v].xyz),0);}
+ for(var f=lane;f<h.w;f+=64u){let at=h.z+f*2u+1u;world[at]=vec4f(rotate(q,shape[at].xyz),0);}
+ for(var k=lane;k<e.y*3u;k+=64u){let at=e.x+(k/3u)*4u+1u+k%3u;world[at]=vec4f(rotate(q,shape[at].xyz),0);}
+}
 fn alive(bond:u32)->bool{return bitcast<vec4u>(joints[bond*11u]).w!=0u;}
 fn eligible(pair:u32,a:u32,b:u32)->bool{
  let p=word(${pairStart}u+pair);
@@ -71,6 +87,9 @@ fn components(@builtin(local_invocation_index) lane:u32){
  for(var i=lane;i<N;i+=64u){labels[i]=atomicLoad(&connected[i]);}
 }
 struct Axis {gap:f32,normal:vec3f,kind:u32,a:u32,b:u32}
+var<workgroup> faceAxes:array<Axis,64>;
+var<workgroup> edgeAxes:array<Axis,64>;
+var<workgroup> separated:atomic<u32>;
 fn projection(body:u32,n:vec3f,origin:vec3f)->vec2f{
  let h=word(body*4u);var lo=1e30;var hi=-1e30;
  for(var v=0u;v<h.y;v++){let x=dot(point(body,v)-origin,n);lo=min(lo,x);hi=max(hi,x);}return vec2f(lo,hi);
@@ -79,6 +98,27 @@ fn evaluate(a:u32,b:u32,n:vec3f,kind:u32,fa:u32,fb:u32)->Axis{
  let origin=positions[a].xyz;let aa=projection(a,n,origin);let bb=projection(b,n,origin);
  if(kind==2u&&aa.x-bb.y>bb.x-aa.y){return Axis(aa.x-bb.y,-n,kind,fa,fb);}
  return Axis(bb.x-aa.y,n,kind,fa,fb);
+}
+// A hull edge supports a direction exactly when that direction is inside the
+// cone of its two incident outward face normals. Only opposing support edges
+// form a face of the Minkowski difference. Its plane needs two edge points,
+// rather than a complete vertex projection for every possible edge pair.
+// Uncertain boundary/flat/T-junction cases retain exhaustive SAT projection.
+fn supportCone(body:u32,edge:u32,n:vec3f)->vec2i{
+ let at=word(body*4u+1u).x+edge*4u;let first=world[at+1u].xyz;let second=world[at+2u].xyz;
+ if(dot(first,first)<0.5||dot(second,second)<0.5){return vec2i(0);}
+ let x=dot(first,n);let y=dot(second,n);let error=8e-7;
+ var forward=0;var reverse=0;
+ if(x < -error||y < -error){forward=-1;}else if(x>error&&y>error){forward=1;}
+ if(x>error||y>error){reverse=-1;}else if(x < -error&&y < -error){reverse=1;}
+ return vec2i(forward,reverse);
+}
+fn edgeAxis(a:u32,b:u32,ea:vec4u,eb:vec4u,n:vec3f,i:u32,j:u32)->Axis{
+ let ac=supportCone(a,i,n);let bc=supportCone(b,j,-n);
+ if(ac.x==1&&bc.x==1){return Axis(dot(point(b,eb.x)-point(a,ea.x),n),n,2u,i,j);}
+ if(ac.y==1&&bc.y==1){return Axis(dot(point(a,ea.x)-point(b,eb.x),n),-n,2u,i,j);}
+ if((ac.x<0||bc.x<0)&&(ac.y<0||bc.y<0)){return Axis(-1e30,n,2u,i,j);}
+ return evaluate(a,b,n,2u,i,j);
 }
 fn clear(pair:u32,a:u32,b:u32){for(var s=0u;s<4u;s++){let base=(pair*4u+s)*9u;contacts[base]=vec4f(f32(a),f32(b),0.0,0.0);contacts[base+8u]=vec4f(0.0);}}
 struct Polygon {points:array<vec3f,${polygonCapacity}>,count:u32}
@@ -130,29 +170,37 @@ fn edgeContacts(a:u32,b:u32,axis:Axis)->Candidates{
  let depth=-dot(pb-pa,axis.normal);if(depth>=0.0){out.points[0]=Candidate(pa,pb,depth);out.count=1u;}return out;
 }
 @compute @workgroup_size(64)
-fn generate(@builtin(global_invocation_id) id:vec3u){
- let pair=id.x;if(pair>=PAIRS){return;}
- // Native f32 sqrt can round to either side of an exact triangular boundary.
- // Correct its estimate with integer inequalities before indexing any body.
- var b=u32(floor((1.0+sqrt(1.0+8.0*f32(pair)))*0.5));
- while(b*(b-1u)/2u>pair){b--;}
- while(b*(b+1u)/2u<=pair){b++;}
- let a=pair-b*(b-1u)/2u;
- if(!eligible(pair,a,b)||positions[a].w+positions[b].w==0.0){clear(pair,a,b);return;}
+fn generate(@builtin(workgroup_id) group:vec3u,@builtin(local_invocation_index) lane:u32){
+ let pair=group.x+group.y*${pairDispatchWidth}u;if(pair>=PAIRS){return;}
+ // Pair identities are already known when packing topology. Consume those
+ // exact integers without a floating-point inverse or correction loops.
+ let bodies=word(${pairBodiesStart}u+pair);let a=bodies.x;let b=bodies.y;
+ let movable=positions[a].w+positions[b].w!=0.0;
  let ha=shape[a*4u+2u].xyz;let hb=shape[b*4u+2u].xyz;
  let qa=quaternions[a];let qb=quaternions[b];
  let boundsA=abs(rotate(qa,vec3f(ha.x,0.0,0.0)))+abs(rotate(qa,vec3f(0.0,ha.y,0.0)))+abs(rotate(qa,vec3f(0.0,0.0,ha.z)));
  let boundsB=abs(rotate(qb,vec3f(hb.x,0.0,0.0)))+abs(rotate(qb,vec3f(0.0,hb.y,0.0)))+abs(rotate(qb,vec3f(0.0,0.0,hb.z)));
- if(any(abs(positions[b].xyz-positions[a].xyz)>boundsA+boundsB+vec3f(SLOP))){clear(pair,a,b);return;}
+ let withinBounds=all(abs(positions[b].xyz-positions[a].xyz)<=boundsA+boundsB+vec3f(SLOP));
  let A=word(a*4u);let B=word(b*4u);var axis=Axis(-1e30,vec3f(0.0,1.0,0.0),0u,0u,0u);
- for(var f=0u;f<A.w;f++){let candidate=evaluate(a,b,faceNormal(a,f),0u,f,0u);if(candidate.gap>SLOP){clear(pair,a,b);return;}if(candidate.gap>axis.gap){axis=candidate;}}
- for(var f=0u;f<B.w;f++){let candidate=evaluate(a,b,-faceNormal(b,f),1u,0u,f);if(candidate.gap>SLOP){clear(pair,a,b);return;}if(candidate.gap>axis.gap){axis=candidate;}}
- let AE=word(a*4u+1u);let BE=word(b*4u+1u);
- for(var i=0u;i<AE.y;i++){let ea=edgeInfo(a,i);let u=normalize(point(a,ea.y)-point(a,ea.x));
-  for(var j=0u;j<BE.y;j++){let eb=edgeInfo(b,j);let v=normalize(point(b,eb.y)-point(b,eb.x));let n=cross(u,v);let l=dot(n,n);
-   if(l>1e-12){let candidate=evaluate(a,b,n*inverseSqrt(l),2u,i,j);if(candidate.gap>SLOP){clear(pair,a,b);return;}if(candidate.gap>axis.gap+0.0001){axis=candidate;}}
-  }
+ if(lane==0u){atomicStore(&separated,select(1u,0u,movable&&withinBounds&&eligible(pair,a,b)));}workgroupBarrier();
+ for(var f=lane;f<A.w+B.w;f+=64u){
+  if(atomicLoad(&separated)!=0u){break;}
+  var candidate:Axis;if(f<A.w){candidate=evaluate(a,b,faceNormal(a,f),0u,f,0u);}else{candidate=evaluate(a,b,-faceNormal(b,f-A.w),1u,0u,f-A.w);}
+  if(candidate.gap>SLOP){atomicStore(&separated,1u);}if(candidate.gap>axis.gap){axis=candidate;}
  }
+ faceAxes[lane]=axis;axis=Axis(-1e30,vec3f(0.0,1.0,0.0),2u,0u,0u);
+ let AE=word(a*4u+1u);let BE=word(b*4u+1u);
+ for(var edge=lane;edge<AE.y*BE.y;edge+=64u){
+  if(atomicLoad(&separated)!=0u){break;}
+  let i=edge/BE.y;let j=edge%BE.y;let ea=edgeInfo(a,i);let eb=edgeInfo(b,j);
+  let u=edgeDirection(a,i);let v=edgeDirection(b,j);let n=cross(u,v);let l=dot(n,n);
+  if(l>1e-12){let candidate=edgeAxis(a,b,ea,eb,n*inverseSqrt(l),i,j);if(candidate.gap>SLOP){atomicStore(&separated,1u);}if(candidate.gap>axis.gap){axis=candidate;}}
+ }
+ edgeAxes[lane]=axis;workgroupBarrier();
+ if(lane!=0u){return;}if(atomicLoad(&separated)!=0u){clear(pair,a,b);return;}
+ axis=faceAxes[0];var edge= edgeAxes[0];
+ for(var k=1u;k<64u;k++){if(faceAxes[k].gap>axis.gap){axis=faceAxes[k];}if(edgeAxes[k].gap>edge.gap){edge=edgeAxes[k];}}
+ if(edge.gap>axis.gap+0.0001){axis=edge;}
  var candidates:Candidates;if(axis.kind==2u){candidates=edgeContacts(a,b,axis);}else{candidates=faceContacts(a,b,axis);}
  if(candidates.count==0u){clear(pair,a,b);return;}
  var selected:array<u32,4>;var count=min(candidates.count,4u);
@@ -223,17 +271,19 @@ fn generate(@builtin(global_invocation_id) id:vec3u){
 
 export async function createConvexBodyContacts(device,{cells,bonds,positions,quaternions,contacts,joints,friction}){
  const packed=packContactShapes(cells,bonds),bodyCount=cells.length;
- if(bodyCount*4>device.limits.maxComputeWorkgroupStorageSize)throw Error('Contact topology exceeds native workgroup storage capacity');
+ if(bodyCount*4+64*2*48+4>device.limits.maxComputeWorkgroupStorageSize)throw Error('Contact topology and axis reduction exceed native workgroup storage capacity');
  const data=device.createBuffer({label:'Complete material collision shapes and topology',size:Math.max(16,packed.data.byteLength),usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
  const labels=device.createBuffer({label:'Resident material contact components',size:Math.max(4,bodyCount*4),usage:GPUBufferUsage.STORAGE});
+ const world=device.createBuffer({label:'Resident transformed hull support features',size:Math.max(16,packed.transformedBytes),usage:GPUBufferUsage.STORAGE});
  try{
   device.queue.writeBuffer(data,0,packed.data);
-  const code=convexContactShader({...packed,friction}),module=device.createShaderModule({label:'Convex material contacts',code}),info=await module.getCompilationInfo();
+  const pairCount=bodyCount*(bodyCount-1)/2,pairDispatchWidth=Math.min(Math.max(1,pairCount),device.limits.maxComputeWorkgroupsPerDimension);
+  const code=convexContactShader({...packed,friction,pairDispatchWidth}),module=device.createShaderModule({label:'Convex material contacts',code}),info=await module.getCompilationInfo();
   if(info.messages.some(m=>m.type==='error'))throw Error(info.messages.map(m=>m.message).join('\n'));
-  const layout=device.createBindGroupLayout({entries:Array.from({length:6},(_,binding)=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:[2,5].includes(binding)?'storage':'read-only-storage'}}))});
-  const group=device.createBindGroup({layout,entries:[positions,quaternions,contacts,data,joints,labels].map((buffer,binding)=>({binding,resource:{buffer}}))});
+  const layout=device.createBindGroupLayout({entries:Array.from({length:7},(_,binding)=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:[2,5,6].includes(binding)?'storage':'read-only-storage'}}))});
+  const group=device.createBindGroup({layout,entries:[positions,quaternions,contacts,data,joints,labels,world].map((buffer,binding)=>({binding,resource:{buffer}}))});
   const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]}),pipelines={};
-  for(const entryPoint of ['components','generate'])pipelines[entryPoint]=await device.createComputePipelineAsync({label:'Material contact '+entryPoint,layout:pipelineLayout,compute:{module,entryPoint}});
-  return {bodyCount,packedBytes:packed.data.byteLength,code,encode(renderer){encodeCoarseExternalCompute(renderer,encoder=>{const pass=encoder.beginComputePass({label:'Resident convex material contact generation'});pass.setBindGroup(0,group);pass.setPipeline(pipelines.components);pass.dispatchWorkgroups(1);if(bodyCount>1){pass.setPipeline(pipelines.generate);pass.dispatchWorkgroups(Math.ceil(bodyCount*(bodyCount-1)/2/64));}pass.end();});},dispose(){data.destroy();labels.destroy();}};
- }catch(error){data.destroy();labels.destroy();throw error;}
+  for(const entryPoint of ['components','transform','generate'])pipelines[entryPoint]=await device.createComputePipelineAsync({label:'Material contact '+entryPoint,layout:pipelineLayout,compute:{module,entryPoint}});
+  return {bodyCount,packedBytes:packed.data.byteLength,transformedBytes:world.size,code,encode(renderer){encodeCoarseExternalCompute(renderer,encoder=>{const pass=encoder.beginComputePass({label:'Resident convex material contact generation'});pass.setBindGroup(0,group);pass.setPipeline(pipelines.components);pass.dispatchWorkgroups(1);if(bodyCount>1){pass.setPipeline(pipelines.transform);pass.dispatchWorkgroups(bodyCount);pass.setPipeline(pipelines.generate);pass.dispatchWorkgroups(pairDispatchWidth,Math.ceil(pairCount/pairDispatchWidth));}pass.end();});},dispose(){data.destroy();labels.destroy();world.destroy();}};
+ }catch(error){data.destroy();labels.destroy();world.destroy();throw error;}
 }

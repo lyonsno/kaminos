@@ -57,17 +57,17 @@ export function materialContactShape(arrays,center,halfExtents){
 }
 
 export function contactShapeFeatures(shape){
- const vertex=i=>Array.from(shape.vertices.subarray(i*3,i*3+3)),edges=[],normals=[],seen=new Set();
- for(const face of shape.faces){
+ const vertex=i=>Array.from(shape.vertices.subarray(i*3,i*3+3)),edges=[],edgeFaces=[],normals=[],seen=new Map();
+ for(const [faceId,face] of shape.faces.entries()){
   // Coplanar merging can retain straight boundary segments. A valid polygon
   // need not begin with a noncollinear triple; use its complete oriented area.
   const origin=vertex(face[0]),area=[0,0,0];
   for(let i=1;i+1<face.length;i++){const c=cross(sub(vertex(face[i]),origin),sub(vertex(face[i+1]),origin));for(let k=0;k<3;k++)area[k]+=c[k];}
   const n=norm(area);
   if(!n)throw Error('Degenerate collision face');normals.push(n);
-  for(let k=0;k<face.length;k++){const a=face[k],b=face[(k+1)%face.length],key=Math.min(a,b)+':'+Math.max(a,b);if(!seen.has(key)){seen.add(key);edges.push([a,b]);}}
+  for(let k=0;k<face.length;k++){const a=face[k],b=face[(k+1)%face.length],key=Math.min(a,b)+':'+Math.max(a,b);if(!seen.has(key)){seen.set(key,edges.length);edges.push([a,b]);edgeFaces.push([]);}edgeFaces[seen.get(key)].push(faceId);}
  }
- return {normals,edges};
+ return {normals,edges,edgeFaces};
 }
 
 // Offline geometry oracle: complete convex SAT, including edge cross axes.
