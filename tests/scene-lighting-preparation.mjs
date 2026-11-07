@@ -114,3 +114,7 @@ const rejectedStage=lighting.createLightingPreparation({hold(){},compile:async()
 await assert.rejects(rejectedStage.request(()=>({borrow:()=>()=>{},commit:()=>rejectedEvents.push('commit'),discard:()=>rejectedEvents.push('discard')})),/candidate rejected/);
 assert.deepEqual(rejectedEvents,['discard'],'failed replacement cannot retire the accepted generation');
 assert.equal(rejectedStage.state().presentationHeld,false,'accepted lighting remains drawable after candidate rejection');
+
+staged.setExternalHold(true);
+assert.equal(staged.state().presentationHeld,true,'completed staged compilation cannot authorize a later unrelated hold');
+staged.setExternalHold(false);

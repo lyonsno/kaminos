@@ -13,7 +13,7 @@ const device={limits:{maxUniformBufferBindingSize:65536,maxStorageBufferBindingS
  queue:{writeBuffer(buffer,offset,data){uploads.push([buffer.label,new Float32Array(data)]);},submit(){}},
  createBuffer({label}){return {label,destroy(){}};},createTexture(){return {createView(){return {};},destroy(){}};},
  createShaderModule(){return {};},createComputePipeline(descriptor){pipelines.push(descriptor.label);return pipeline;},createBindGroup({entries}){const source=entries.find(e=>e.binding===5)?.resource?.source;if(source===failSource&&source)throw Error('injected source binding failure');return {source};},
- createCommandEncoder(){return {copyTextureToTexture(){},beginComputePass({label}={}){passes.push(label);if(label===failPass)throw Error('injected preparation failure');return {setPipeline(){},setBindGroup(_,group){if(label==='live distributed flame transport')consumedSources.push(group.source);},dispatchWorkgroups(){},end(){}};},finish(){return {};}};}};
+ createCommandEncoder(){return {copyBufferToBuffer(){},copyTextureToTexture(){},beginComputePass({label}={}){passes.push(label);if(label===failPass)throw Error('injected preparation failure');return {setPipeline(){},setBindGroup(_,group){if(label==='live distributed flame transport')consumedSources.push(group.source);},dispatchWorkgroups(){},end(){}};},finish(){return {};}};}};
 let consume,hostFrame;
 const field={source:{status:'encoded',texture:{createView(){return {source:'A'};}},dimensions:[4,8,4],localMax:[1,3,1],generation:1,frame:1}};
 const prototype={setSceneMediumSource(){},setSceneSourceFrameConsumer(fn){consume=fn;},setSceneDistributedLightFrame(frame){hostFrame=frame;},sceneVolumeSourceField:()=>field.source};
@@ -210,6 +210,14 @@ consume(field);assert.deepEqual(hostFrame.exterior.middle.smokeReconstruction.lo
 mount.setExteriorReceiverCoverage(null);consume(field);
 assert.deepEqual(hostFrame.exterior.middle.smokeReconstruction.localMin,[-1.5,-1,-1.5],'clearing override restores authored near box');
 mount.setNearBox({enabled:false});consume(field);assert.equal(hostFrame.exterior.middle,null);
+const acceptedTransport=mount.debugState().transportQuality,acceptedWorldFrame=hostFrame;
+assert.throws(()=>mount.setTransportQuality({worldGrid:99999}),/capacity|texture|bytes|integer/,'World receiver admission rejects unsupported allocation before mutating live settings');
+assert.deepEqual(mount.debugState().transportQuality,acceptedTransport);assert.equal(hostFrame,acceptedWorldFrame);assert.equal(mount.canRender(),true);
+mount.setTransportQuality({fineSteps:12,worldGrid:4,worldDirections:6,worldSteps:5,worldRefinement:1,emptySkip:false});consume(field);
+assert.equal(hostFrame.stepLength,2/12);assert.equal(hostFrame.traversal.emptySkip,false);
+assert.equal(hostFrame.exterior.smokeReconstruction.coarseDimensions[0],4);assert.equal(hostFrame.exterior.directions,6);assert.equal(hostFrame.exterior.smokeReconstruction.refinement,1);
+assert.equal(hostFrame.exterior.extinction.stepLength,6/5);
+
 field.source.exterior=null;consume(field);
 
 mesh.material.color.setHex(0xff0000);mount.dispose();assert.equal(mesh.material.color.getHex(),0xff0000);assert.equal(mesh.geometry,geometry);assert.equal(mount.canRender(),false);assert.equal(hostFrame,null);
@@ -354,7 +362,10 @@ const kernelOwner=createLightingPreparation({hold(){},compile:async ticket=>{con
 const liveKernels=mountDistributedSceneRadiance({renderer,scene,prototype,device:asyncDevice,volumeGrid:2,smokeRefinement:1,
  rebuild:{hold:kernelOwner.setExternalHold,prepareRetained:kernelOwner.request,prepareKernels:kernelOwner.prepareKernels},
  createShadow:()=>({visibility:THREE.TSL.float(1),render(){},debugState:()=>({}),dispose(){}})});
-consume(field);await liveKernels.whenRebuilt();
+consume(field);
+assert.equal(liveKernels.canRender(),false,'startup preparation must not claim current lighting');
+assert.equal(liveKernels.canPresent?.(),true,'startup must still supply a scene depth frame during kernel preparation');
+await liveKernels.whenRebuilt();
 consume(field);await liveKernels.whenRebuilt();
 consume(field);await liveKernels.whenRebuilt();
 consume(field);assert.equal(liveKernels.canRender(),true,'live producer consumes asynchronously prepared gather and point kernels');
@@ -362,3 +373,45 @@ const originalLiveMaterial=mesh.material;
 liveKernels.setPointCount(2);await liveKernels.whenRebuilt();consume(field);
 assert.equal(liveKernels.canRender(),true);assert.notEqual(mesh.material,originalLiveMaterial);
 liveKernels.dispose();
+
+// A compute edit owns settlement immediately and keeps accepted smoke fields
+// until a complete current replacement has been encoded and bound.
+const editDevice=Object.create(device);let delayKernels=false;const kernelReleases=[];
+editDevice.createComputePipelineAsync=descriptor=>delayKernels?new Promise(resolve=>kernelReleases.push(()=>resolve(pipeline))):Promise.resolve(pipeline);
+const editOwner=createLightingPreparation({hold(){},compile:async()=>{}}),settingsHolds=[];
+prototype.setSceneLightingSettingsPending=value=>settingsHolds.push(value);
+const edited=mountDistributedSceneRadiance({renderer,scene,prototype,device:editDevice,volumeGrid:2,smokeRefinement:1,getSourceRegions:()=>[{id:'beam',lo:[-.5,-.9,-.5],hi:[.5,.9,.5]}],
+ rebuild:{hold:editOwner.setExternalHold,prepareRetained:editOwner.request,prepareKernels:editOwner.prepareKernels},
+ createShadow:()=>({visibility:THREE.TSL.float(1),render(){},debugState:()=>({}),dispose(){}})});
+for(let phase=0;phase<4;phase++){consume(field);await editOwner.whenIdle();}
+assert.equal(edited.canRender(),true);const acceptedSmokeFrame=hostFrame;
+delayKernels=true;edited.setLightGrid(3);
+let editSettled=false;const editCompletion=edited.whenRebuilt().then(()=>editSettled=true);
+await Promise.resolve();assert.equal(editSettled,false,'a settings request arms settlement before the next source frame');
+assert.equal(settingsHolds.at(-1),true,'simulation evolution is held from the request boundary');
+consume(field);await new Promise(resolve=>setImmediate(resolve));
+assert.equal(hostFrame,acceptedSmokeFrame,'previous smoke lighting remains bound while kernels prepare');
+edited.setLightGrid(4);
+for(const release of kernelReleases.splice(0))release();
+await editOwner.whenIdle();
+assert.equal(hostFrame,acceptedSmokeFrame,'prepared kernels alone cannot clear accepted smoke lighting');
+assert.equal(editSettled,false,'preparation completion waits for a source-frame bind');
+consume(field);await new Promise(resolve=>setImmediate(resolve));
+for(const release of kernelReleases.splice(0))release();
+await editOwner.whenIdle();consume(field);await editCompletion;
+assert.equal(hostFrame.smokeReconstruction.coarseDimensions[0],4,'a newer grid request cannot be overwritten by an older compile completion');
+assert.notEqual(hostFrame,acceptedSmokeFrame);assert.equal(settingsHolds.at(-1),false);
+assert.equal(edited.canRender(),true);
+delayKernels=false;
+field.source.exterior={status:'encoded',texture:device.createTexture(),emissionTexture:device.createTexture(),dimensions:[8,16,8],localMin:[-3,-3,-3],localMax:[3,9,3],generation:field.source.generation,frame:field.source.frame};
+for(let phase=0;phase<4;phase++){consume(field);await editOwner.whenIdle();}
+assert.equal(edited.canRender(),true);
+edited.setDirections(48);const directionsDone=edited.whenRebuilt();
+for(let phase=0;phase<4;phase++){consume(field);await editOwner.whenIdle();}
+await directionsDone;assert.equal(edited.debugState().frame.exterior.directions,48,'exterior direction increases warm their prefix-cache variant');
+edited.setAngularPattern('regions');const regionsDone=edited.whenRebuilt();
+for(let phase=0;phase<4;phase++){consume(field);await editOwner.whenIdle();}
+await regionsDone;consume(field);
+assert.equal(editOwner.state().pending,false,'prepared region proposals do not trigger a delayed follow-on hold');
+assert.equal(edited.debugState().frame.sourceGuide.regions[0].id,'beam');
+edited.dispose();field.source.exterior=null;delete prototype.setSceneLightingSettingsPending;

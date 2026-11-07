@@ -1,5 +1,5 @@
 import {normalizeSmokeHandoffMargin} from './scene-smoke-handoff.mjs';
-import {createVolumeGather} from './scene-volume-gather.mjs';
+import {createVolumeGather,volumeGatherPlan} from './scene-volume-gather.mjs';
 
 // Receiver coverage is independent of material allocation and Fine source
 // coordinates. Source-directed quadrature covers the source inside Fine.
@@ -12,9 +12,10 @@ export function createExteriorSmokeLight(device,{grid=8,refinement=4,receiverCov
     return {localMin:[...value.lo],localMax:value.lo.map((v,a)=>v+dimensions[a]*value.pitch),dimensions,pitch:value.pitch,directions:value.directions??null};
   }
   let nearCoverage=coverage(receiverCoverage);
-  const regions=new Map();let builds=0;
+  const regions=new Map(),retired=[];let builds=0;
   function remove(name){const r=regions.get(name);if(r){beforeReplace();r.gather.destroy();regions.delete(name);}}
-  function specifications(source,{geometry,revision,worldGeometry=true,directions,fineReceiverGrid=16}){
+  function specifications(source,{geometry,revision,worldGeometry=true,directions,fineReceiverGrid=16},quality={grid,refinement,integrationGrid,worldDirections}){
+      const {grid,refinement,integrationGrid,worldDirections}=quality;
       const medium=source.exterior;
       if(!medium)return [];
       for(const r of [medium,medium.middle])if(r&&(r.status!=='encoded'||r.generation!==source.generation||r.frame!==source.frame))throw Error('exterior transport requires same-generation region extinction');
@@ -47,16 +48,18 @@ export function createExteriorSmokeLight(device,{grid=8,refinement=4,receiverCov
     receiverBounds:{lo:spec.region.localMin,hi:spec.region.localMax},smokeRefinement:refinement,directions:spec.regionDirections,angularPattern:'source',worldGeometry,exteriorMedium:true,exteriorIntegrationGrid:integrationGrid,receiverExclusion:spec.exclude,asynchronous});}
   return {
     setReceiverCoverage(value){nearCoverage=coverage(value);},
+    validateQuality(value,source,options){
+      const quality={grid:value.worldGrid,refinement:value.worldRefinement,integrationGrid:value.worldSteps,worldDirections:value.worldDirections};
+      for(const spec of specifications(source,options,quality))volumeGatherPlan({volumeGrid:spec.regionGrid,sourceDimensions:source.dimensions,receiverBounds:{lo:spec.region.localMin,hi:spec.region.localMax},directions:spec.regionDirections,smokeRefinement:value.worldRefinement,angularPattern:'source'},device.limits);
+    },
     setQuality(value){grid=value.worldGrid;refinement=value.worldRefinement;integrationGrid=value.worldSteps;worldDirections=value.worldDirections;},
-    isPrepared(source,options){const specs=specifications(source,options);return specs.length===regions.size&&specs.every(spec=>{const current=regions.get(spec.name);return current?.key===spec.key&&current.gather.isPrepared(source,options);});},
+    isPrepared(source,options){const specs=specifications(source,options);return specs.length===regions.size&&specs.every(spec=>{const current=regions.get(spec.name);if(current?.key!==spec.key)return false;current.gather.setDirections(spec.regionDirections);return current.gather.isPrepared(source,options);});},
     async prepare(source,options){
       const specs=specifications(source,options),candidates=new Map(),owned=[];
       try{
         for(const spec of specs){let current=regions.get(spec.name);if(current?.key!==spec.key){current={key:spec.key,gather:makeGather(source,spec,options.geometry,options.worldGeometry!==false)};owned.push(current);}current.gather.setDirections(spec.regionDirections);if(options.worldGeometry!==false)current.gather.setGeometryTransforms(options.geometry.matrices);candidates.set(spec.name,current);}
         await Promise.all([...candidates.values()].map(current=>current.gather.prepare(source,options)));
-        const replaced=[...regions].some(([name,current])=>candidates.get(name)!==current);
-        if(replaced)beforeReplace();
-        for(const [name,current] of regions)if(candidates.get(name)!==current)current.gather.destroy();
+        for(const [name,current] of regions)if(candidates.get(name)!==current)retired.push(current.gather);
         for(const current of owned)builds++;
         regions.clear();for(const [name,current] of candidates)regions.set(name,current);
       }catch(error){for(const current of owned)current.gather.destroy();throw error;}
@@ -77,6 +80,7 @@ export function createExteriorSmokeLight(device,{grid=8,refinement=4,receiverCov
       }
       return {...frames.world,builds,handoffMargin:normalizeSmokeHandoffMargin(medium.handoffMargin),middle:frames.middle??null};
     },
-    destroy(){for(const {gather} of regions.values())gather.destroy();regions.clear();},
+    retireReplaced(){for(const gather of retired.splice(0))gather.destroy();},
+    destroy(){for(const gather of retired.splice(0))gather.destroy();for(const {gather} of regions.values())gather.destroy();regions.clear();},
   };
 }

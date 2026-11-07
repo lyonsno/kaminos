@@ -237,7 +237,8 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
     if(key===preparationKey)return preparationPromise;
     preparationKey=key;preparationComplete=false;
     const compiled=compiledState();
-    const prefix=sourcePattern()?[...angularStates.values()].find(s=>s.family===family()&&s.cacheBuilt):null;
+    const reusable=sourcePattern()&&[...angularStates.values()].some(s=>s.family===family()&&s.capacity>=directions);
+    const prefix=sourcePattern()&&!reusable?[...angularStates.values()].find(s=>s.family===family()&&s.cacheBuilt):null;
     const cache=cacheKernel(compiled,prefix?.capacity??0);
     const full=cacheKernel(compiled,0);
     if(angularPattern==='importance')compiled.importance??=createLightingComputePipeline(device,{label:'prepare cached angular importance',layout:'auto',compute:{module:compiled.module,entryPoint:'prepareImportance'}},asynchronous);
