@@ -64,7 +64,11 @@ function reachChain(m,id,p,mode){
    const prefix=Math.max(lo,Math.min(hi,r)),d=Math.hypot(...end);
    if(d===0)elbow=unit.map(x=>x*length);
    else{
-    const u=end.map(x=>x/d),x=(prefix*prefix+d*d-length*length)/(2*d),h=Math.sqrt(Math.max(0,(prefix-x)*(prefix+x))),a=[u[0]*x-u[1]*h,u[1]*x+u[0]*h],b=[u[0]*x+u[1]*h,u[1]*x-u[0]*h];
+    const u=end.map(x=>x/d),scale=Math.max(prefix,d,length),r=prefix/scale,l=length/scale,dn=d/scale;
+    // Normalize before squaring; an underflowed separation is coincident at
+    // this circle's representable scale, so retain its old radial direction.
+    if(dn===0){solved[j-1]=unit.map(x=>x*length);continue;}
+    const xn=(r*r+dn*dn-l*l)/(2*dn),x=xn*scale,h=Math.sqrt(Math.max(0,(r-xn)*(r+xn)))*scale,a=[u[0]*x-u[1]*h,u[1]*x+u[0]*h],b=[u[0]*x+u[1]*h,u[1]*x-u[0]*h];
     elbow=Math.hypot(a[0]-prior[0],a[1]-prior[1])<=Math.hypot(b[0]-prior[0],b[1]-prior[1])?a:b;
    }
   }
@@ -74,6 +78,7 @@ function reachChain(m,id,p,mode){
  for(let j=1;j<=count;j++){
   const n=m.nodes[chain[j-1]],world=Math.atan2(solved[j][1]-solved[j-1][1],solved[j][0]-solved[j-1][0]),raw=world-parentAngle,oldAngle=n.angles[pose],delta=Math.atan2(Math.sin(raw-oldAngle),Math.cos(raw-oldAngle));
   if(mode==='build')n.angles=n.angles.map(a=>a+delta);else n.angles[pose]=oldAngle+delta;
+  if(!n.angles.every(Number.isFinite))throw Error('Chain exceeds numeric reach range');
   parentAngle=world;
  }
  return m;

@@ -44,3 +44,8 @@ assert.throws(()=>reach(m,2,[NaN,0]),/finite/);
 // length edit still get one; only native Move/new reach choose the chain solve.
 const construction=moveJoint(m,2,[4,0],'build');near(construction.nodes[2].length,3);
 console.log('Finite planar reach preserves lengths, poses, branches, anchor and nearest reachable endpoint');
+// Finite input lengths must not overflow the circle's squared-radius math.
+{
+ const length=1e200,m={schema:'kaminos.links.v1',period:3,pistons:[],nodes:[{parent:null,point:[0,0]},{parent:0,length,angles:[0,0]},{parent:1,length,angles:[0,0]}]},r=reach(m,2,[0,length]);
+ assert.ok(r.nodes.slice(1).every(n=>n.angles.every(Number.isFinite)),'Finite reach input cannot publish NaN hinge angles');const p=evaluate(r)[2];near(p[0]/length,0,1e-12);near(p[1]/length,1,1e-12);
+}
