@@ -27,6 +27,20 @@ function fixture({jobStatus='succeeded',release='released'}={}){
 const call=(f,extra={})=>runTrellisInPage({appGpu:f.appGpu,manifest:{id:'pack'},fetchTensor:async()=>new ArrayBuffer(4),
   pixelValues:new Float32Array(512*512*3),finishing:{postprocessMesh:async m=>m,unwrapMesh:async m=>m},deps:f.deps,...extra});
 
+test('occupancy preview delivery receives the actual run identity inside an app foreground window',async()=>{
+ const f=fixture(),createHost=f.deps.createTrellisSharedHost,createGeneration=f.deps.createTrellisImageGenerationAdapter;
+ let activeWindow,received,runId;
+ f.deps.createTrellisSharedHost=async options=>{const h=await createHost(options),begin=h.beginRun;return {...h,async beginRun(options){
+  runId=options.runId;const run=await begin(options);return {...run,async withForeground(phase,work){activeWindow=phase;try{return await work();}finally{activeWindow=null;}}};
+ }};};
+ f.deps.createTrellisImageGenerationAdapter=options=>{const a=createGeneration(options),run=a.run;return {...a,async run(i){
+  assert.equal(typeof options.onPreview,'function');assert.equal(options.runId,runId);await options.onPreview({kind:'sparse-occupancy',runId:options.runId});return run(i);
+ }};};
+ await call(f,{async onPreview(p){assert.equal(activeWindow,'trellis-occupancy-preview');received=p;await Promise.resolve();}});
+ assert.equal(received.runId,runId);assert.equal(received.kind,'sparse-occupancy');assert.ok(f.events.includes('finish'));
+ const bad=fixture();await assert.rejects(call(bad,{onPreview:true}),/preview observer/);assert.equal(bad.events.length,0);
+});
+
 test('requested scheduling reaches the host and its effective snapshot is retained in timing',async()=>{
  const f=fixture(),original=f.deps.createTrellisSharedHost;let observed;
  f.deps.createTrellisSharedHost=async options=>{const host=await original(options),begin=host.beginRun;return {...host,async beginRun(input){observed=input.scheduling;return {...await begin(input),scheduling:()=>({kind:'per-duty-fence-task',gpuDrains:3,taskYields:3})};}};};
