@@ -40,8 +40,8 @@ console.log('Native joint previews retain geometry and compact history survives 
 // Replay the operator's saved three-panel/three-cylinder construction, rather
 // than a piston-free link. Rotating must never resize its rigid panel bodies.
 {
- const saved=JSON.parse(await fs.readFile(new URL('../scenes/Mechanism_2026-11-05_13-43-42_ef6123a706f440d7a5615d104a86084a.kaminos.json',import.meta.url)));
- root=new T.Group();root.userData.linkMechanism=saved.objects[0].mechanism;scene.add(root);entries.length=0;entries.push({id:'mechanism',object:root});
+ const saved=JSON.parse(await fs.readFile(new URL('./fixtures/link-workshop-operator-kiln.json',import.meta.url)));
+ root=new T.Group();root.userData.linkMechanism=saved;scene.add(root);entries.length=0;entries.push({id:'mechanism',object:root});
  runtime=await createMechanismController({host,inputs:{root}});
  const packet=runtime.operations.exportBodies();packet.bodies=packet.bodies.filter(b=>b.id.startsWith('link:'));await runtime.operations.importBodies(packet);
  const panels=new Map(packet.bodies.map(b=>[b.id,runtime.read().bodies.bodies.find(v=>v.id===b.id).geometryKey]));
