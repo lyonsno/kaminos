@@ -3,6 +3,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Group, Mesh, BoxGeometry, MeshStandardMaterial, Texture} from '../lib/three.core.js';
 import {createGeneratedGlass} from '../generated-glass.mjs';
+import {MeshStandardNodeMaterial,TSL} from '../lib/three.webgpu.js';
+
+test('glass modes preserve spatial PBR nodes installed by the raw-field loader',()=>{
+ const root=new Group(),source=new MeshStandardNodeMaterial({map:new Texture()});
+ source.metalnessNode=TSL.float(.7);source.roughnessNode=TSL.float(.2);
+ const mesh=new Mesh(new BoxGeometry(),source);root.add(mesh);
+ const controller=createGeneratedGlass(root);
+ for(const mode of ['glass','opacity']){
+  controller.set({mode});assert.equal(mesh.material.metalnessNode,source.metalnessNode);assert.equal(mesh.material.roughnessNode,source.roughnessNode);
+ }
+ assert.equal(mesh.children[0].material.metalnessNode,source.metalnessNode);
+ controller.dispose();assert.equal(mesh.material,source);
+});
 
 test('glass study preserves source and restores exact materials without disposing shared maps', () => {
   const root=new Group(), map=new Texture(), source=new MeshStandardMaterial({map,roughness:.6,vertexColors:true});

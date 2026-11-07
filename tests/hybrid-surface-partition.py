@@ -435,6 +435,27 @@ class HybridPartitionTest(unittest.TestCase):
             self.assertEqual(splat_meta['triangles']['count'], 31)
             self.assertIn('footprints', splat_meta)
 
+    def test_raw_mesh_preserves_spatial_metal_and_roughness_without_uv_splits(self):
+        rows=np.zeros((4,12),dtype='<f4')
+        rows[:,:3]=[[0,0,0],[1,0,0],[0,1,0],[1,1,0]]
+        rows[:,5]=1;rows[:,6:9]=.5;rows[:,11]=1
+        rows[:,9:11]=[[0,.1],[.2,.3],[.7,.8],[1,1]]
+        original=rows.copy()
+        triangles=np.array([[0,1,2],[1,3,2]],dtype='<u4')
+        with tempfile.TemporaryDirectory() as t:
+            out=Path(t)/'mesh.glb';hybrid._write_raw_field_mesh_glb(rows,triangles,out)
+            payload=out.read_bytes();length=struct.unpack_from('<I',payload,12)[0]
+            doc=json.loads(payload[20:20+length]);blob=payload[28+length:]
+            primitive=doc['meshes'][0]['primitives'][0]
+            self.assertIn('_KAMINOS_MATERIAL',primitive['attributes'])
+            accessor=doc['accessors'][primitive['attributes']['_KAMINOS_MATERIAL']]
+            view=doc['bufferViews'][accessor['bufferView']]
+            values=np.frombuffer(blob,dtype='<f4',count=accessor['count']*2,offset=view.get('byteOffset',0)).reshape(-1,2)
+            np.testing.assert_array_equal(values,rows[:,9:11])
+            self.assertEqual(accessor['count'],4)
+            self.assertEqual(primitive['attributes']['TEXCOORD_0'],primitive['attributes']['_KAMINOS_MATERIAL'])
+            np.testing.assert_array_equal(rows,original)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -13,6 +13,7 @@ export function sceneContentBounds(object,box=new THREE.Box3()) {
   object.updateWorldMatrix(true,true);
   function visit(node){
     if(node.userData.kaminosEditorHelper||node.userData.kaminosEditorOnly)return;
+    if(node.userData.kaminosSurfaceSplatResolve)return;
     if(node.boundingBox!==undefined){
       if(node.boundingBox===null)node.computeBoundingBox();
       if(node.boundingBox)box.union(node.boundingBox.clone().applyMatrix4(node.matrixWorld));

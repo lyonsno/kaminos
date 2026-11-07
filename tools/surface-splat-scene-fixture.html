@@ -1,0 +1,65 @@
+<!doctype html><meta charset="utf-8"><title>Surface splat scene conformance</title>
+<style>body{margin:0;background:#111}</style>
+<script type="importmap">{"imports":{"three":"/lib/three.core.js","three/webgpu":"/lib/three.webgpu.js","three/tsl":"/lib/three.tsl.js","three/addons/":"/node_modules/three/examples/jsm/"}}</script>
+<script type="module">
+import * as T from '../lib/three.webgpu.js';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {GLTFExporter} from 'three/addons/exporters/GLTFExporter.js';
+import {embedSurfaceSplats} from '../surface-splat-glb.mjs';
+import {surfaceSplatsGLTFPlugin} from '../surface-splat-object.mjs';
+import {surfaceFieldMaterialsGLTFPlugin} from '../surface-field-material.mjs';
+import {createSceneGI} from '../scene-gi.mjs';
+import {createGpuSceneSolidProducer} from '../scene-solid-gpu.mjs';
+import {createSceneSolidGeometryCache,trianglesFromSceneObject} from '../volume-scene-solid.mjs';
+import {createAshCollisionRecords} from '../ash/scene-object.mjs';
+import {mountDistributedSceneRadiance} from '../scene-hybrid-radiance.mjs';
+window.runSurfaceScene=async(materialFixture)=>{
+ const renderer=new T.WebGPURenderer({antialias:false});renderer.setSize(192,192);await renderer.init();document.body.append(renderer.domElement);
+ const errors=[];renderer.backend.device.addEventListener('uncapturederror',e=>errors.push(e.error.message));
+ const scene=new T.Scene();scene.background=new T.Color(.01,.01,.01);const camera=new T.PerspectiveCamera(40,1,.1,10);camera.position.set(0,0,2);camera.lookAt(0,0,0);
+ const proxy=new T.Mesh(new T.BoxGeometry(.9,.9,.02),new T.MeshStandardMaterial()),rows=[],foot=[];
+ for(let y=-4;y<=4;y++)for(let x=-4;x<=4;x++){rows.push(x*.1,y*.1,0,0,0,1,.8,.3,.1,0,.5,1);foot.push(1,0,0,.06,0,1,0,.06);}
+ const base=await new GLTFExporter().parseAsync(proxy,{binary:true});
+ const bytes=embedSurfaceSplats(base,{data:new Float32Array(rows),footprints:new Float32Array(foot),meta:{count:81,stride:12,radius:.03}},{optics:{mode:'opaque',ior:1.45,thickness:.06}});
+ const loader=new GLTFLoader().register(surfaceSplatsGLTFPlugin).register(surfaceFieldMaterialsGLTFPlugin),loaded=await loader.parseAsync(bytes,'');
+ const object=loaded.scene;scene.add(object);let splat;object.traverse(node=>{if(node.isSurfaceSplatObject)splat=node;});if(!splat)throw Error('GLB did not instantiate splats');
+ const light=new T.PointLight(0xffffff,8);light.position.set(.3,.2,1);scene.add(light);
+ const gi=createSceneGI(scene,camera,T.TSL.uniform(1));gi.setSettings({mode:'combined',temporal:false,denoise:0,slices:1,steps:2,resolutionScale:1});
+ const post=new T.PostProcessing(renderer);post.outputNode=gi.output();
+ const target=new T.RenderTarget(192,192);renderer.setRenderTarget(target);
+ const sample=async()=>{await new Promise((resolve,reject)=>renderer.setAnimationLoop(()=>{try{post.render();resolve();}catch(e){reject(e);}finally{renderer.setAnimationLoop(null);}}));return Array.from(await renderer.readRenderTargetPixelsAsync(gi.beauty.renderTarget,96,96,1,1),T.DataUtils.fromHalfFloat);};
+ const bright=await sample();light.intensity=0;const dark=await sample();light.intensity=8;await sample();
+ const normal=Array.from(await renderer.readRenderTargetPixelsAsync(gi.source.renderTarget,96,96,1,1,1),T.DataUtils.fromHalfFloat);
+ renderer.setRenderTarget(null);post.render();const image=renderer.domElement.toDataURL();
+ // A retained 4x8x4 emission fixture exercises the real flame-to-surface
+ // reduction and the SSGI irradiance cache, without running a fluid simulation.
+ const device=renderer.backend.device,emission=device.createTexture({size:[4,8,4],dimension:'3d',format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST}),values=new Float32Array(4*8*4*4);
+ values.set([20,5,1,0],4*(2+4*(2+8*3)));device.queue.writeTexture({texture:emission},values,{bytesPerRow:64,rowsPerImage:8},[4,8,4]);
+ let consume;const prototype={setSceneMediumSource(){},setSceneSourceFrameConsumer(fn){consume=fn;},setSceneDistributedLightFrame(){}};
+ const flame=mountDistributedSceneRadiance({renderer,scene,prototype,device,directions:4,volumeGrid:2,smokeRefinement:1,pointCount:1,shadowResolution:32,blockerSamples:1,filterSamples:1,surfaceLighting:gi.surfaceLighting});
+ const field={source:{status:'encoded',texture:emission,dimensions:[4,8,4],generation:1,frame:1}};light.intensity=0;consume(field);const flameOn=await sample();
+ const flameState=flame.debugState(),cached=gi.surfaceLighting.state();values.fill(0);device.queue.writeTexture({texture:emission},values,{bytesPerRow:64,rowsPerImage:8},[4,8,4]);field.source.frame++;consume(field);const flameOff=await sample();
+ flame.dispose();emission.destroy();light.intensity=8;
+ // The same placed proxy feeds the fluid-solid producer and ash's native record adapter.
+ object.position.set(.13,.17,-.08);object.rotation.y=.23;object.updateWorldMatrix(true,true);
+ const shape={grid:16,gridHeight:16},transform={translate:[0,0,0],scale:1},objects=[{id:'splats',object}];
+ const cpu=createSceneSolidGeometryCache().update(objects,transform,shape),gpu=createGpuSceneSolidProducer(renderer.backend.device,shape);
+ const receipt=gpu.update(objects,transform,shape),encoder=renderer.backend.device.createCommandEncoder();gpu.encode(encoder);renderer.backend.device.queue.submit([encoder.finish()]);
+ const solid=await gpu.snapshot(),ashRoot=new T.Group(),ash=createAshCollisionRecords(ashRoot,()=>[{id:'splats',type:'glb',object}])();
+ const ashTriangles=ash.flatMap(record=>trianglesFromSceneObject(record.object).triangles),reference=trianglesFromSceneObject(object).triangles;
+ const clone=object.clone();let cloned;clone.traverse(n=>{if(n.isSurfaceSplatObject)cloned=n;});const independent=cloned?.splats!==splat.splats;cloned?.dispose();
+ let vertexMaterial=null;
+ if(materialFixture){
+  const response=await fetch(materialFixture);if(!response.ok)throw Error('Material fixture unavailable');
+  const raw=await response.arrayBuffer(),hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',raw)),v=>v.toString(16).padStart(2,'0')).join('');
+  const materialScene=(await loader.parseAsync(raw,'')).scene;let mesh;materialScene.traverse(n=>{if(n.isMesh)mesh=n;});
+  mesh.material.outputNode=T.TSL.vec4(T.TSL.metalness,T.TSL.roughness,0,1);renderer.setRenderTarget(target);renderer.render(materialScene,camera);
+  vertexMaterial={hash,attribute:Array.from(mesh.geometry.getAttribute('_kaminos_material').array),schema:mesh.material.userData.kaminosSurfaceFields,
+   left:Array.from(await renderer.readRenderTargetPixelsAsync(target,68,96,1,1)),right:Array.from(await renderer.readRenderTargetPixelsAsync(target,124,96,1,1))};
+ }
+ gpu.destroy();target.dispose();gi.dispose();post.dispose();splat.dispose();renderer.dispose();
+ return {backend:renderer.backend.isWebGPUBackend?'webgpu':'fallback',bright,dark,normal,gi:gi.debugState(),receipt,cpu:Array.from(cpu.field.cells),gpu:Array.from(solid.cells),ashTriangles,reference,independent,errors,image,vertexMaterial,
+  flame:{on:flameOn,off:flameOff,cached,identity:flameState.identity,status:flameState.status,evaluatedPointCount:flameState.evaluatedPointCount,capturedPointCount:flameState.capturedPointCount}};
+};
+window.fixtureLoaded=true;
+</script>

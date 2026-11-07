@@ -1721,6 +1721,9 @@ export function createSceneBeautyLodController({
           ensureSurfelLevelsLoaded(root, entry, handle);
           continue;
         }
+        // These mesh tiers describe the explicit collision/GI proxy. They do
+        // not approximate the visible splat field and cannot replace it.
+        if(handle.representation==='surface-splats')continue;
         const levels=handle.beautyLevels??handle.levels;
         if (!levels?.length) {
           if(config.enabled&&handle.state==='resolving')applyDisplayedRung(root,entry);
