@@ -1,4 +1,5 @@
 import {createAdaptiveLayout,adaptiveIndex,adaptiveCell} from './adaptive-plan.mjs';
+import {createHierarchyLayout,hierarchyIndex,hierarchyCell} from './hierarchy-plan.mjs';
 import {patchLayout} from './gpu-plan.mjs';
 import {slidingThreshold} from './sliding.mjs';
 
@@ -17,6 +18,7 @@ export function refinementSurfaceCache(p,surfaceEncoding='auto'){
 // Resolution changes only storage and ownership. All material quantities use
 // the volume of one finest cell, including coarse cells whose capacity is eight.
 export function createRefinementLayout({cellSize, bounds, tileSize = 16, refinement}) {
+  if(refinement?.mode==='hierarchy')return createHierarchyLayout({cellSize,bounds,refinement});
   if(refinement?.mode==='adaptive')return createAdaptiveLayout({cellSize,bounds,refinement});
   if (refinement?.ratio !== 2 || !Array.isArray(refinement.regions)) {
     throw Error('Ash refinement requires ratio 2 and explicit regions');
@@ -115,6 +117,7 @@ export function createRefinementLayout({cellSize, bounds, tileSize = 16, refinem
 }
 
 export function refinementIndex(p, q) {
+  if(p.hierarchy)return hierarchyIndex(p,q);
   if(p.adaptive)return adaptiveIndex(p,q);
   if (!inside(q, [0, 0, 0], p.dims)) return -1;
   let owner = p.regions[0];
@@ -125,6 +128,7 @@ export function refinementIndex(p, q) {
 }
 
 export function refinementCell(p, i) {
+  if(p.hierarchy)return hierarchyCell(p,i);
   if(p.adaptive)return adaptiveCell(p,i);
   const region = p.regions.find(r => i >= r.offset && i < r.offset + r.layout.count);
   if (!region) return {coord: [0, 0, 0], size: 0, owned: false, tile: -1};

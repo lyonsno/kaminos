@@ -1,7 +1,7 @@
 // Transport has one reusable parcel slot per ground column; overflow remains pending.
 export function fallingLayout(p){
  if(!p?.dims?.every(n=>Number.isSafeInteger(n)&&n>0)||p.dims.length!==3||!(p.cellSize>0))throw Error('Invalid falling ash layout');
- const scale=p.detailPool?2:1,capacity=Math.ceil(p.dims[0]/scale)*Math.ceil(p.dims[2]/scale);return {capacity,parcelUnits:8*scale**3,parcelVolume:(2*p.cellSize*scale)**3,bytes:capacity*32};
+ const scale=p.hierarchy?Math.max(1,p.regions[0].scale/2):p.detailPool?2:1,capacity=Math.ceil(p.dims[0]/scale)*Math.ceil(p.dims[2]/scale);return {capacity,parcelUnits:8*scale**3,parcelVolume:(2*p.cellSize*scale)**3,bytes:capacity*32};
 }
 export function sourceSettings({rate=.006,spread=.2,position=[0,1,1],halfExtents=null}={}){
  if(!Number.isFinite(rate)||rate<0||!Number.isFinite(spread)||spread<0||!Array.isArray(position)||position.length!==3||!position.every(Number.isFinite))throw Error('Invalid falling ash source');

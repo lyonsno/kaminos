@@ -29,7 +29,7 @@ export function installAshInspector({document,anchor,selected,read,edit,regrid,c
  for(const input of panel.querySelectorAll('[data-ash-layer],[data-ash-volume]'))installRelativeNumberDrag({input,grip:input,step:.001});
  const inspect=document.createElement('button');inspect.type='button';inspect.className='btn';inspect.textContent='Inspect fine residency';inspect.dataset.ashInspectResidency='';
  const residency=document.createElement('p');residency.className='hint';residency.dataset.ashResidency='';
- inspect.addEventListener('click',()=>act(async()=>{const result=await diagnostics(selected());const a=result.allocation;const d=result.detailAllocation;residency.textContent=a?`${a.resident}/${a.capacity} fine bricks · ${a.pinned} retaining deposited history · ${a.unmet} unmet requests.${d?` Close detail: ${d.resident}/${d.capacity} bricks · ${d.pinned} retaining history · ${d.unmet} unmet (${d.balanceBlocked} need middle support).`:""} Snapshot on request; no live CPU readback.`:'This field uses a fixed lattice.';}));
+ inspect.addEventListener('click',()=>act(async()=>{const result=await diagnostics(selected());const h=result.hierarchy;if(h){residency.textContent=`${h.resident}/${h.capacity} bricks · ${h.pinned} retaining history · deepest ${h.deepest}/${h.byDepth.length-1} refinements · ${h.unmet} capacity refusals · ${h.balanceBlocked} need intermediate support. Depth counts: ${h.byDepth.join(', ')}. Snapshot on request; no live CPU readback.`;return;}const a=result.allocation;const d=result.detailAllocation;residency.textContent=a?`${a.resident}/${a.capacity} fine bricks · ${a.pinned} retaining deposited history · ${a.unmet} unmet requests.${d?` Close detail: ${d.resident}/${d.capacity} bricks · ${d.pinned} retaining history · ${d.unmet} unmet (${d.balanceBlocked} need middle support).`:""} Snapshot on request; no live CPU readback.`:'This field uses a fixed lattice.';}));
  const showRow=document.createElement('label');showRow.className='slider-row';showRow.textContent='Show fine bricks';const show=document.createElement('input');show.type='checkbox';show.dataset.ashShowRefinement='';show.addEventListener('change',()=>showRefinement(selected(),show.checked));showRow.append(show);
  const cellInput=panel.querySelector('[data-ash-cell]');
  const refinementControls=installAshRefinementControls({document,panel,anchor:cellInput});
@@ -60,14 +60,14 @@ export function installAshInspector({document,anchor,selected,read,edit,regrid,c
  for(const input of Object.values(dimInputs))input.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();runRegrid();}});
  panel.querySelector('[data-ash-cover]').onclick=()=>act(()=>cover(selected(),Number(panel.querySelector('[data-ash-layer]').value)));
  panel.querySelector('[data-ash-burst]').onclick=()=>act(()=>burst(selected(),Number(panel.querySelector('[data-ash-volume]').value)));
- function sync(){const id=selected();panel.hidden=!id;if(!id)return;const state=read(id),s=state.settings;refinementControls.sync(id,s);show.checked=!!state.showRefinement;inspect.hidden=s.refinement?.mode!=='adaptive';residency.hidden=inspect.hidden;showRow.hidden=inspect.hidden;
+ function sync(){const id=selected();panel.hidden=!id;if(!id)return;const state=read(id),s=state.settings;refinementControls.sync(id,s);show.checked=!!state.showRefinement;inspect.hidden=!['adaptive','hierarchy'].includes(s.refinement?.mode);residency.hidden=inspect.hidden;showRow.hidden=inspect.hidden;
   for(const [key,input]of Object.entries(dimInputs)){
    if(document.activeElement!==input&&(id!==syncedCellId||s[key]!==syncedDims[key])){input.value=String(s[key]);syncedDims[key]=s[key];}
   }
   syncedCellId=id;
   panel.querySelector('[data-ash-regrid]').disabled=state.busy;
   panel.querySelector('[data-ash-status]').textContent=state.failure?`Ash stopped: ${state.failure}`:`${s.paused?'Paused':'Running'} · ${state.runtime.steps} steps · ${state.runtime.volume.toFixed(3)} introduced volume`;
-  panel.querySelector('[data-ash-size]').textContent=`${s.width} × ${s.depth} × ${s.height} local field · ${s.cellSize} cell width${s.refinement?.levels===3?` · ${state.runtime.layout.cellSize} close detail`:""} · ${(state.runtime.allocatedBytes/1048576).toFixed(1)} MiB allocated`;
+  panel.querySelector('[data-ash-size]').textContent=`${s.width} × ${s.depth} × ${s.height} local field · ${s.refinement?.mode==='hierarchy'?`${s.refinement.backgroundCellSize} background · ${state.runtime.layout.cellSize} finest requested`:s.cellSize+' cell width'}${s.refinement?.levels===3?` · ${state.runtime.layout.cellSize} close detail`:""} · ${(state.runtime.allocatedBytes/1048576).toFixed(1)} MiB allocated`;
   for(const input of panel.querySelectorAll('[data-ash-key]')){const key=input.dataset.ashKey,value=key.startsWith('source')?s.sourcePosition[['sourceX','sourceY','sourceZ'].indexOf(key)]:(s[key]??((key==='slideVariation'||key==='slideRelease')?0:key==='slideScale'?.24:undefined));if(input.type==='checkbox')input.checked=value;else if(document.activeElement!==input)input.value=String(value);}
  }
  return {sync};

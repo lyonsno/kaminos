@@ -3,6 +3,7 @@ import {adaptiveOffsets,adaptiveTopologyWGSL} from './adaptive-wgsl.mjs';
 import {refinementAddressWGSL} from './refinement-wgsl.mjs';
 import {slidingWGSL} from './sliding.mjs';
 import {refinementSurfaceCache} from './refinement-plan.mjs';
+import {hierarchyOffsets,hierarchyTopologyWGSL} from './hierarchy-wgsl.mjs';
 
 export function refinementArena(p,{surfaceEncoding='face-records'}={}) {
   const surfaceCache=refinementSurfaceCache(p,surfaceEncoding);
@@ -14,14 +15,17 @@ export function refinementArena(p,{surfaceEncoding='face-records'}={}) {
   const prefix = stats + 16;
   const adaptive=p.adaptive?adaptiveOffsets(p,prefix+p.tiles.count+1):null;
   if(adaptive)p.adaptiveArena=adaptive;
-  const words = new Uint32Array(adaptive?.end??(prefix + p.tiles.count + 1));
+  const hierarchy=p.hierarchy?hierarchyOffsets(p,prefix+p.tiles.count+1):null;
+  if(hierarchy)p.hierarchyArena=hierarchy;
+  const words = new Uint32Array(hierarchy?.end??adaptive?.end??(prefix + p.tiles.count + 1));
   for (const [tile, record] of p.tileRecords.entries()) {
     const c = record.coord ?? [0, 0, 0];
     words.set([record.region < 0 ? 0xffffffff : record.region, ...c, record.faceOffset,
       record.faceCapacity, record.neighborOffset ?? 0, record.neighbors.length], tile * 8);
   }
   words.set(p.tileNeighbors, neighbors);
-  return {meta, neighbors, active, surface, stats, prefix, words, adaptive,surfaceCache};
+  if(hierarchy){for(let t=0;t<p.hierarchy.roots;t++){const c=p.tileRecords[t].coord;words.set([...c.map(n=>n*8*p.regions[0].scale),p.regions[0].scale,0,0,0,1],hierarchy.nodes+t*8);words[hierarchy.flags+t]=2;}words[hierarchy.state+8]=1;}
+  return {meta, neighbors, active, surface, stats, prefix, words, adaptive,hierarchy,surfaceCache};
 }
 
 export function refinementShader(p, arena, row = 65535) {
@@ -39,7 +43,7 @@ const SURFACE:u32=${arena.surface}u;
 const STATS:u32=${arena.stats}u;
 const PREFIX:u32=${arena.prefix}u;
 const NEIGHBORS:u32=${arena.neighbors}u;
-struct Params {contact:vec4<f32>,previous:vec4<f32>,sliding:vec4<f32>,clock:vec4<u32>${p.detailPool?",fieldClip:mat4x4<f32>,view:vec4<f32>":""}}
+struct Params {contact:vec4<f32>,previous:vec4<f32>,sliding:vec4<f32>,clock:vec4<u32>${p.detailPool||p.hierarchy?",fieldClip:mat4x4<f32>,view:vec4<f32>":""}}
 @group(0) @binding(0) var<storage,read_write> mass:array<f32>;
 @group(0) @binding(1) var<storage,read_write> nextMass:array<f32>;
 @group(0) @binding(2) var<storage,read> solid:array<u32>;
@@ -224,7 +228,7 @@ fn face_band(i:u32,face:u32,sub:u32,shape:vec2<u32>)->vec2<f32> {
  if(id.x<ASH_TILE_COUNT){atomicStore(&headers[id.x*8u],1u);}
 }
 `;
-  if(p.adaptive){
+  if(p.adaptive||p.hierarchy){
     code=code.replace('fn neighbor_count(tile:u32)->u32 {return word(tile*8u+7u);}',`fn neighbor_count(tile:u32)->u32 {return 64u;}`);
     const start=code.indexOf('fn neighbor_at('),end=code.indexOf('fn mark_cell(',start);
     code=code.slice(0,start)+`fn neighbor_at(tile:u32,n:u32)->u32 {
@@ -235,12 +239,18 @@ fn face_band(i:u32,face:u32,sub:u32,shape:vec2<u32>)->vec2<f32> {
     }
 `+code.slice(end);
     code=code.replaceAll('word(tile*8u)==0xffffffffu','ash_tile_cell(tile,0u)==0xffffffffu');
-    code=code.replace('if(nextMass[i]!=mass[i]){mark_cell(i);',`if(nextMass[i]!=mass[i]){if(i>=AP_OFFSET&&nextMass[i]==0.0&&mass[i]>0.0){atomicStore(&arena[${arena.adaptive.state+8}u],1u);}mark_cell(i);`);
+    if(p.adaptive)code=code.replace('if(nextMass[i]!=mass[i]){mark_cell(i);',`if(nextMass[i]!=mass[i]){if(i>=AP_OFFSET&&nextMass[i]==0.0&&mass[i]>0.0){atomicStore(&arena[${arena.adaptive.state+8}u],1u);}mark_cell(i);`);
     if(p.detailPool)code=code.replace('mark_cell(i);atomicAdd',`if(i>=DP_OFFSET&&nextMass[i]==0.0&&mass[i]>0.0){atomicStore(&arena[${arena.adaptive.detail.state+8}u],1u);}mark_cell(i);atomicAdd`);
-    code+=adaptiveTopologyWGSL(p,arena.adaptive);
+    if(p.adaptive)code+=adaptiveTopologyWGSL(p,arena.adaptive);
     if(p.detailPool)code+=detailTopologyWGSL(p,arena.adaptive);
+    if(p.hierarchy){
+      code=code.replace('if(nextMass[i]!=mass[i]){mark_cell(i);',`if(nextMass[i]!=mass[i]){if(nextMass[i]==0.0&&mass[i]>0.0){atomicStore(&arena[${arena.hierarchy.state+8}u],1u);}mark_cell(i);`);
+      code=code.replace('f32(a.size*a.size*a.size)','(f32(a.size)*f32(a.size)*f32(a.size))').replace('f32(b.size*b.size*b.size)','(f32(b.size)*f32(b.size)*f32(b.size))');
+      code=code.replaceAll('f32(a.size*a.size)','(f32(a.size)*f32(a.size))').replaceAll('f32(b.size*b.size)','(f32(b.size)*f32(b.size))');
+      code+=hierarchyTopologyWGSL(p);
+    }
   }
-  if(p.detailPool){
+  if(p.detailPool||p.hierarchy){
     code=code.replace('atomicStore(&headers[tile*8u+3u],0u);','atomicStore(&headers[tile*8u+3u],0u);atomicStore(&headers[tile*8u+6u],0u);');
     code=code.replace('let c=ash_cell(i);\n  for(var face=', 'let c=ash_cell(i);if(mass[i]>0.0){atomicAdd(&headers[tile*8u+6u],1u); }\n  for(var face=');
   }
@@ -263,28 +273,28 @@ fn face_band(i:u32,face:u32,sub:u32,shape:vec2<u32>)->vec2<f32> {
  faces[(tile*V+local)*2u]=mask;
 }
 var<workgroup> ashFaceCounts:array<u32,64>;
-${p.detailPool?"var<workgroup> ashOccupiedCounts:array<u32,64>;":""}
+${(p.detailPool||p.hierarchy)?"var<workgroup> ashOccupiedCounts:array<u32,64>;":""}
 @compute @workgroup_size(64) fn prefix_surface(@builtin(workgroup_id) w:vec3<u32>,@builtin(local_invocation_id) l:vec3<u32>){
  let group=w.x+w.y*ROW;let rank=group/G;
  // Reuse the dirty-surface indirect arguments; only one group per tile scans.
  let admitted=rank<word(STATS+1u)&&group%G==0u;
  var tile=0u;if(admitted){tile=word(SURFACE+rank);}
- let chunk=(V+63u)/64u;var sum=0u;${p.detailPool?"var occupied=0u;":""}
+ let chunk=(V+63u)/64u;var sum=0u;${(p.detailPool||p.hierarchy)?"var occupied=0u;":""}
  for(var n=0u;n<chunk;n++){
   let local=l.x*chunk+n;if(local<V&&admitted){
-   let address=(tile*V+local)*2u;${p.detailPool?"let i=ash_tile_cell(tile,local);if(i!=0xffffffffu&&ash_cell(i).owned&&mass[i]>0.0){occupied++;}":""}sum+=countOneBits(faces[address]);faces[address+1u]=sum;
+   let address=(tile*V+local)*2u;${(p.detailPool||p.hierarchy)?"let i=ash_tile_cell(tile,local);if(i!=0xffffffffu&&ash_cell(i).owned&&mass[i]>0.0){occupied++;}":""}sum+=countOneBits(faces[address]);faces[address+1u]=sum;
   }
  }
- ashFaceCounts[l.x]=sum;${p.detailPool?"ashOccupiedCounts[l.x]=occupied;":""}workgroupBarrier();
+ ashFaceCounts[l.x]=sum;${(p.detailPool||p.hierarchy)?"ashOccupiedCounts[l.x]=occupied;":""}workgroupBarrier();
  for(var offset=1u;offset<64u;offset*=2u){
-  var before=0u;if(l.x>=offset){before=ashFaceCounts[l.x-offset];}${p.detailPool?"var priorOccupied=0u;if(l.x>=offset){priorOccupied=ashOccupiedCounts[l.x-offset];}":""}
-  workgroupBarrier();ashFaceCounts[l.x]+=before;${p.detailPool?"ashOccupiedCounts[l.x]+=priorOccupied;":""}workgroupBarrier();
+  var before=0u;if(l.x>=offset){before=ashFaceCounts[l.x-offset];}${(p.detailPool||p.hierarchy)?"var priorOccupied=0u;if(l.x>=offset){priorOccupied=ashOccupiedCounts[l.x-offset];}":""}
+  workgroupBarrier();ashFaceCounts[l.x]+=before;${(p.detailPool||p.hierarchy)?"ashOccupiedCounts[l.x]+=priorOccupied;":""}workgroupBarrier();
  }
  var before=0u;if(l.x>0u){before=ashFaceCounts[l.x-1u];}
  for(var n=0u;n<chunk;n++){
   let local=l.x*chunk+n;if(local<V&&admitted){faces[(tile*V+local)*2u+1u]+=before;}
  }
- if(l.x==63u&&admitted){atomicStore(&headers[tile*8u+3u],ashFaceCounts[63u]);${p.detailPool?"atomicStore(&headers[tile*8u+6u],ashOccupiedCounts[63u]);":""}}
+ if(l.x==63u&&admitted){atomicStore(&headers[tile*8u+3u],ashFaceCounts[63u]);${(p.detailPool||p.hierarchy)?"atomicStore(&headers[tile*8u+6u],ashOccupiedCounts[63u]);":""}}
 }
 `+code.slice(end);
   }

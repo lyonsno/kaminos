@@ -72,7 +72,7 @@ fn ash_refined_corner(q:vec2<i32>,reference:f32,density:ptr<storage,array<f32>,r
  let cover=min(clamp(0.24+0.22*count,0.0,1.0),clamp(0.22+0.78*edge/span,0.0,1.0));
  return vec4<f32>(height,cover,0.5*((va+vc)-(vb+vd)),0.5*((va+vb)-(vc+vd)));
 }`;
-  if(p.adaptive){
+  if(p.adaptive||p.hierarchy){
     // Every address helper receives the same storage pointer already used by
     // the vertex consumer; no extra render binding or CPU topology mirror.
     const fixed=refinementAddressWGSL(p);

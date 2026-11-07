@@ -113,8 +113,10 @@ export async function createGpuAshFall({renderer,layout,density,collision,wake,t
  if(layout.detailPool){
   code=code.replace('0.25,8.0',`2.0,${description.parcelUnits.toFixed(1)}`).replace('random(seed+27u)*cell','random(seed+27u)*cell*2.0');
  }
+ if(layout.hierarchy)code=code.replace('0.25,8.0',`${(description.parcelUnits/32).toFixed(1)},${description.parcelUnits.toFixed(1)}`);
  if(layout.refinement){
-  code=code.replace('fn index(c:vec3<u32>)->u32{return c.x+p.dims.x*(c.y+p.dims.y*c.z);}',refinementAddressWGSL(layout,layout.adaptive?{load:i=>`atomicLoad(&groupData[${Math.ceil(description.capacity/64)*3+4}u+(${i})-${layout.adaptiveArena.map}u])`}:undefined));
+  const mapStart=layout.hierarchy?layout.hierarchyArena.nodes:layout.adaptiveArena?.map;
+  code=code.replace('fn index(c:vec3<u32>)->u32{return c.x+p.dims.x*(c.y+p.dims.y*c.z);}',refinementAddressWGSL(layout,layout.adaptive||layout.hierarchy?{load:i=>`atomicLoad(&groupData[${Math.ceil(description.capacity/64)*3+4}u+(${i})-${mapStart}u])`}:undefined));
   code=code.replace('let available=1.0-bitcast<f32>(old);','let available=ash_capacity(i)-bitcast<f32>(old);');
   code=code.replace('let next=min(1.0,bitcast<f32>(old)+amount);','let next=min(ash_capacity(i),bitcast<f32>(old)+amount);');
  }

@@ -15,7 +15,7 @@ export function checkedAshSettings(raw){
  for(const key of ['paused','emitting'])if(typeof raw[key]!=='boolean')throw Error(`Invalid ash ${key}`);
  sourceSettings({position:raw.sourcePosition,rate:raw.rate,spread:raw.spread});
  if(raw.sourcePosition[1]<0||Math.abs(raw.sourcePosition[0])>raw.width/2||Math.abs(raw.sourcePosition[2])>raw.depth/2)throw Error('Place the ash source over its field');
- if(raw.checkpoint!=null&&raw.checkpoint.schema!==(raw.refinement?.levels===3?'kaminos.adaptive-ash.v2':raw.refinement?.mode==='adaptive'?'kaminos.adaptive-ash.v1':raw.refinement?'kaminos.refined-ash.v1':'kaminos.tiled-ash.v1'))throw Error('Invalid retained ash checkpoint schema');
+ if(raw.checkpoint!=null&&raw.checkpoint.schema!==(raw.refinement?.mode==='hierarchy'?'kaminos.hierarchical-ash.v1':raw.refinement?.levels===3?'kaminos.adaptive-ash.v2':raw.refinement?.mode==='adaptive'?'kaminos.adaptive-ash.v1':raw.refinement?'kaminos.refined-ash.v1':'kaminos.tiled-ash.v1'))throw Error('Invalid retained ash checkpoint schema');
  const result=structuredClone(raw);ashObjectLayout(result);return result;
 }
 export function ashObjectLayout(s){

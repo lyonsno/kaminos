@@ -2,10 +2,11 @@ import {Box3,Vector3,Matrix4,Mesh} from '../lib/three.core.js';
 import {createGpuSceneSolidProducer} from '../scene-solid-gpu.mjs';
 import {ashDispatchGrid} from './gpu-plan.mjs';
 import {sceneTiles} from './scene-plan.mjs';
+import {occupancyMipLevels,occupancyMipBytes,encodeOccupancyMips} from './collision-mips.mjs';
 
 // Object-local occupancy survives rigid motion. Geometry is conservatively
 // voxelized by the shared producer; live poses resample only affected ash tiles.
-export function createAshSceneSolids({device,layout:p,collision,headers,collisionOffset=0,headersOffset=0,samplingCellSize=p.cellSize,adaptive=null}){
+export function createAshSceneSolids({device,layout:p,collision,headers,collisionOffset=0,headersOffset=0,samplingCellSize=p.cellSize,adaptive=null,occupancyMips=false}){
  const t=p.tiles,cache=new Map(),boundsCache=new WeakMap(),pendingDirty=new Set();let builds=0,updates=0,lastTiles=0,disposed=false,geometryRevision=0;
  let jobsCapacity=t.count+1,jobs=device.createBuffer({label:'ash moved-solid tile addresses',size:jobsCapacity*4,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
  const dummy=device.createTexture({size:[1,1,1],dimension:'3d',format:'r32uint',usage:GPUTextureUsage.TEXTURE_BINDING});
@@ -190,7 +191,7 @@ export function createAshSceneSolids({device,layout:p,collision,headers,collisio
    const uniform=device.createBuffer({label:'ash analytic burner '+mesh.name,size:128,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
    builds++;return {...spec,texture:null,coarseTexture:null,uniform,group:group(dummy,uniform),box:null,matrix:null,bytes:128};
   }
-  const {grid,step,origin,center,bounds,fullBounds,clipped,coarseKey,coarseGrid,coarseStep,coarseCenter,coarseOrigin}=spec,bytes=grid**3*4;
+  const {grid,step,origin,center,bounds,fullBounds,clipped,coarseKey,coarseGrid,coarseStep,coarseCenter,coarseOrigin}=spec,bytes=occupancyMips?occupancyMipBytes(grid):grid**3*4;
   if(grid>device.limits.maxTextureDimension3D||bytes+4>device.limits.maxStorageBufferBindingSize||bytes+4>device.limits.maxBufferSize||Math.ceil(grid**3/64)>device.limits.maxComputeWorkgroupsPerDimension)throw Error(`Ash shape exceeds effective GPU capacity: ${mesh.name} (${grid} cubed)`);
   let producer,coarseProducer,texture,coarseTexture=null,reusedCoarse=false,uniform;
   try{
@@ -207,8 +208,8 @@ export function createAshSceneSolids({device,layout:p,collision,headers,collisio
    producer=createGpuSceneSolidProducer(device,{grid});
    const boundaryCap=clipped?{texture:coarseTexture,origin:coarseOrigin.toArray(),step:coarseStep,boundsMin:fullBounds.min.toArray(),boundsMax:fullBounds.max.toArray()}:null;
    producer.update([{id:mesh.uuid,object:proxy}],{translate:center.toArray(),scale:grid*step/2},{grid,gridHeight:grid},{boundaryCap});
-   texture=device.createTexture({label:'cached local ash solid '+mesh.name,size:[grid,grid,grid],dimension:'3d',format:'r32uint',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});
-   const e=device.createCommandEncoder();producer.encode(e);e.copyTextureToTexture({texture:producer.texture},{texture},[grid,grid,grid]);device.queue.submit([e.finish()]);
+   texture=device.createTexture({label:'cached local ash solid '+mesh.name,size:[grid,grid,grid],dimension:'3d',format:'r32uint',mipLevelCount:occupancyMips?occupancyMipLevels(grid):1,usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST|(occupancyMips?GPUTextureUsage.STORAGE_BINDING:0)});
+   const e=device.createCommandEncoder();producer.encode(e);e.copyTextureToTexture({texture:producer.texture},{texture},[grid,grid,grid]);if(occupancyMips)encodeOccupancyMips(device,e,texture,grid);device.queue.submit([e.finish()]);
    uniform=device.createBuffer({label:'ash object pose '+mesh.name,size:128,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
    if(reusedCoarse)prev.coarseTexture=null;
    const coarseBytes=coarseTexture?coarseGrid**3*4:0;

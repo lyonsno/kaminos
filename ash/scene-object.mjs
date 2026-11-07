@@ -147,7 +147,7 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,read
  const locked=async fn=>{check();busy=true;try{return await fn();}finally{busy=false;}};
  function dispose(){if(disposed)return;disposed=true;patch?.dispose();for(const child of fineGuides.children)child.geometry.dispose();fineMaterial.dispose();guide.geometry.dispose();guide.material.dispose();emitter.geometry.dispose();emitter.material.dispose();root.removeFromParent();}
  const fieldClip=new Matrix4(),viewport=new Vector2();
- const projection=()=>{if(!camera)return null;root.updateWorldMatrix(true,false);camera.updateWorldMatrix(true,false);fieldClip.copy(camera.projectionMatrix).multiply(camera.matrixWorldInverse).multiply(root.matrixWorld);renderer.getDrawingBufferSize(viewport);return {matrix:fieldClip.toArray(),viewport:viewport.toArray(),targetPixels:3};};
+ const projection=()=>{if(!camera)return null;root.updateWorldMatrix(true,false);camera.updateWorldMatrix(true,false);fieldClip.copy(camera.projectionMatrix).multiply(camera.matrixWorldInverse).multiply(root.matrixWorld);renderer.getDrawingBufferSize(viewport);return {matrix:fieldClip.toArray(),viewport:viewport.toArray(),targetPixels:settings.refinement?.targetPixels??3};};
  async function build(s){const layout=checkedLayout(s);let candidate;
   try{candidate=await createPatch({renderer,cellSize:s.cellSize,bounds:layout.bounds,solid:s.refinement?undefined:new Uint8Array(layout.count),tileSize:16,refinement:s.refinement,readView:projection,sceneRecords:collisionRecords,surfaceMode:'runs',sliding:{variation:s.slideVariation,scale:s.slideScale,release:s.slideRelease}});
    candidate.setSoftNormals?.(s.softNormals);return candidate;

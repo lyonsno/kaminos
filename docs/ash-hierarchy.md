@@ -1,0 +1,59 @@
+# Budgeted physical ash hierarchy
+
+The native ash inspector offers **Budgeted hierarchy · collider detail** under
+Adaptive detail. This is a new physical runtime option alongside saved fixed
+and two/three-level fields. Existing saves keep their previous interpretation.
+
+**Cell width** requests local receiving precision. **Background cell width**
+independently determines covering storage. Local widths halve from that
+background until they meet or exceed the requested precision. The inspector
+reports the resulting effective finest pitch. A request outside float32 field
+coordinate capacity is refused explicitly. There is no three-level ceiling.
+
+**Material storage budget (MiB)** reserves one shared brick pool across all
+depths, plus the covering grid and its material/flux/surface/metadata buffers.
+Object-local collision caches and airborne transport have separate allocations;
+the runtime reports them. A finer target does not reserve a finer covering grid
+or a full-world page map. Parent-relative child links cost storage only for
+covering tiles and pool capacity. These controls apply through the clearing
+reset, preserving placement and connected sources. Reset clears prior material.
+
+Cached collider occupancy requests refinement. Maximum-occupancy mip levels
+preserve thin-feature discovery between coarse point samples. Newly allocated
+children receive their own collision stamps and can request further children.
+Receiving space accompanies geometry. Projected cell size prioritizes current
+visible demand; **Projected parent cell target (pixels)** sets that threshold.
+Balancing support can extend outside the view. There is no live CPU readback.
+
+Each 8³ child brick replaces a 4³ block of parent cells. Prolongation preserves
+material and column fill height; staged child links become visible only after
+that transfer. One physical owner supplies contact, transport, conservative
+exchange and surface drawing. Neighbors remain at most one level apart.
+Occupied history and supporting parents retain storage after geometry or camera
+motion. Empty unneeded bricks can be reused. Capacity refusal leaves existing
+material and its current resolution intact. There is no lossy history demotion.
+
+**Show fine bricks** draws live residency, colored by depth. Empty receiving
+space appears too. **Inspect fine residency** reads an explicit snapshot of
+depth counts, retained history, capacity refusals and missing balancing support.
+The counters describe the latest planning episode; repeated refusals need not
+represent distinct locations. Ordinary unchanged evolution uses cached state.
+
+`kaminos.hierarchical-ash.v1` checkpoints retain child links, node descriptors,
+material, pending work, parcels and the volume ledger. Restore validates unique
+parent ownership, roots, reachable nodes, balancing support and retained volume
+before uploading state. Derived collision/surfaces are rebuilt without allocating
+or releasing the saved topology during restoration. Old checkpoint schemas keep
+their existing routes. Their restore likewise preserves authoritative topology.
+
+The collider producer's existing cache/LOD precision still limits available
+geometry. These maximum-occupancy mips preserve what the cache contains; they do
+not recover triangles already discarded by simplification. No total frame-cost
+or production affordability claim follows from this implementation.
+
+Focused checks: `tests/ash-hierarchy.mjs`, `tests/ash-hierarchy-gpu.mjs`.
+The production GPU check covers deep receiving support, actual fallout on an
+elevated rail, conserved material through motion, and checkpoint restoration.
+`tools/ash-hierarchy-native-witness.mjs` supplies the native pipe comparison at
+fixed background/storage settings, captures and saved continuation. Caller-owned
+output paths retain source identity, failures and console diagnostics.
