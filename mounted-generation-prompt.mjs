@@ -23,6 +23,11 @@ export async function createMountedGenerationPrompt({document,workshop,camera,on
  const editor=installKilnPromptEditor({document,viewport,input,camera,object:root,presentation:mesh,onChange:schedule,onScroll:alignSolid,onError:e=>{error=e.message;changed();}});
  const preparation=createKilnPromptPreparation({rasterize:editor.rasterize,Worker:document.defaultView.Worker});
  let handle=null,stop=()=>{},body=null,installation=Promise.resolve(),fire=null,firePreparation=null,burnWindow=null,active=false,startedRequest=null,finishResolve=null;
+ root.userData.kaminosCaptureVisibility=()=>{
+  if(!body||disposed||workshop.read().amount!==1)return()=>{};
+  const prior=mesh.visible;mesh.visible=true;const restore=body.borrowPreparationVisibility?.();
+  return()=>{restore?.();mesh.visible=prior;};
+ };
  const failure=e=>{if(!disposed){error=e.message;active=false;editor.setBurning(false);changed();}};
  function advance(){
   if(!burnWindow||!active)return;
@@ -64,6 +69,7 @@ export async function createMountedGenerationPrompt({document,workshop,camera,on
      // A later admission of this draft can retain the construction in flight.
      // A different queued draft disposes it before replacing any geometry.
      body=candidate;body.setMounted(false);
+     if(fire){await firePreparation;await fire.prepareSurface?.();}
     }
    });installation=install;await install;
   }finally{if(preparing===work)preparing=null;changed();}

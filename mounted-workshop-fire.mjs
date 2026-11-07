@@ -27,6 +27,11 @@ export function createMountedWorkshopFire({ordinary,epoch,acquire}){
   },
   present(value,nextFrame=frame){const next=Boolean(value),changed=next!==visible;visible=next;frame=nextFrame;if(resource&&valid()&&frame)resource.setFrame(frame);return changed||!valid()?reconcile():serial;},
   setActive(value){requested=Boolean(value);if(requested&&!resource)return Promise.reject(Error(error||'Workshop fire is still preparing'));return reconcile();},
+  prepareSurface(){const run=serial.catch(()=>{}).then(async()=>{
+   await pending;if(!valid()||!resource)throw Error('Workshop fire is unavailable for surface preparation');
+   if(requested)throw Error('Cannot prepare a new surface during combustion');
+   if(frame)resource.setFrame(frame);await resource.prepareSurface?.();
+  });serial=run;return run;},
   setEmission(value){emitting=Boolean(value);if(resource&&valid())resource.setEmission(visible&&requested&&emitting);},
   async withdraw(){withdrawn=true;version++;requested=false;emitting=false;await serial.catch(()=>{});await release();await pending?.catch(()=>{});},
   async dispose(){if(disposed)return;disposed=true;await api.withdraw();},

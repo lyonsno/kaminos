@@ -4,6 +4,7 @@ import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {annularBurnerCasterKey,createAnnularBurnerCaster} from './annular-burner.mjs';
 import {allocateShadowCasterLods,applyRootVertexWarpToRung} from './scene-lod-budget.mjs';
 import {residentLightCoverage} from './scene-resident-coverage.mjs';
+import {borrowSceneCaptureVisibility} from './scene-capture-visibility.mjs';
 // Explicit provisional Stunt Doubles mapping, 2026-10-17T14:43:30Z; no measured-error selection.
 export const KILN_CASTER_SOURCE='f8e6ce918e3e5cf234d186724dc21b40b3f9cf7cbc9e776000cf55f24801c91b';
 export const KILN_CASTERS=Object.freeze({'5k':'1050a1d34389366eac0161ea002176fece47c7eeaac53a7795bae63ed4807456','10k':'11319add7e7593d80f33ec9c25b6f43c531122d423b9a25ef06b86b71b2d7470'});
@@ -142,7 +143,7 @@ export function createFireShadowCasters({scene,load=loadFireCaster,giProxies=nul
       if(disposed)throw Error('fire caster consumer disposed');
       await proxies()?.whenIdle?.();
       if(disposed)return null;
-      const beautyRestores=[];
+      const beautyRestores=[borrowSceneCaptureVisibility(scene)];
       scene.traverse(n=>{if(typeof n.userData?.kaminosBeautyLodRestore==='function')beautyRestores.push(n.userData.kaminosBeautyLodRestore());});
       try{collectAndAllocate({smokeVisibility:false,flameBox});}
       finally{for(let i=beautyRestores.length-1;i>=0;i--)beautyRestores[i]?.();}
@@ -158,7 +159,7 @@ export function createFireShadowCasters({scene,load=loadFireCaster,giProxies=nul
     },
     withCapture(fn,{smokeVisibility=false,flameBox=null}={}){
       if(disposed)throw Error('fire caster consumer disposed');if(active)return fn();
-      const beautyRestores=[];
+      const beautyRestores=[borrowSceneCaptureVisibility(scene)];
       scene.traverse(n=>{if(typeof n.userData?.kaminosBeautyLodRestore==='function')beautyRestores.push(n.userData.kaminosBeautyLodRestore());});
       try{
       const candidates=collectAndAllocate({smokeVisibility,flameBox});

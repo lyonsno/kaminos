@@ -188,6 +188,7 @@ export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame,k
       reset(){if(disposed)throw Error('Burn body is disposed');field.reset();structure.reset();fracture.reset();debris.reset();elapsed=0;for(const binding of bindings)binding.update(0);},
       setAppearance(value){if(bindings.some(binding=>!binding.read().appearanceSelectable))throw Error('No incineration appearance on this material');for(const binding of bindings)binding.setAppearance(value);},
       setMounted(value){debris.root.visible=value;},
+      borrowPreparationVisibility(){const prior=debris.root.visible;debris.root.visible=true;return()=>{debris.root.visible=prior;};},
       materialMask:()=>field.materialMask(entry.id),
       encodeGasSource:(encoder,frame,gas)=>field.encodeGasSource(encoder,frame,gas),
       encode(encoder,frame){const fStatus=fracture.read().status;if(fStatus==='preparing'||fStatus==='compiling')return;field.encode(encoder,frame);structure.encode(encoder);if(!fracture.active)debris.encode(encoder,frame);elapsed+=frame.dt;for(const binding of bindings)binding.update(elapsed);},

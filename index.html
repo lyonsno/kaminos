@@ -3012,6 +3012,7 @@ import { pass, mrt, normalView, positionViewDirection, vec2, vec3, vec4, mix, fl
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { createSceneGI } from './scene-gi.mjs';
 import { compileSceneLighting, createLightingPreparation } from './scene-lighting-compile.mjs';
+import {borrowSceneCaptureVisibility} from './scene-capture-visibility.mjs';
 import { createFireShadowSettings } from './fire-shadow-settings.mjs';
 import {createFireLightingHistory} from './fire-lighting-history.mjs';
 import {createSceneAOState,bindSceneAOControls,AO_CONTROL_FIELDS} from './scene-ao-state.mjs';
@@ -11772,13 +11773,18 @@ async function initScene() {
     parseGlb: async bytes => {const root=(await new GLTFLoader().parseAsync(bytes, '')).scene;prepareArrivedMeshMaterials(root,{maxAnisotropy:16});return root;},
     onUpdate: () => { if (typeof syncSceneLodReadout === 'function') syncSceneLodReadout(); window._kaminosDirty?.(); },
   });
+  const borrowPreparedBeautyVisibility=()=>{
+    const restoreBeauty = sceneBeautyLods?.borrowFrame(camera, currentBeautyFrameOptions());
+    const restoreCapture=borrowSceneCaptureVisibility(scene);
+    return()=>{restoreCapture();restoreBeauty?.();};
+  };
   const borrowViewportAndBeautyVisibility = () => {
     const restoreVis = borrowViewportVisibility(viewportVisibilityObjects(), isSceneItemVisible);
-    const restoreBeauty = sceneBeautyLods?.borrowFrame(camera, currentBeautyFrameOptions());
-    return () => { restoreBeauty?.(); restoreVis(); };
+    const restorePrepared=borrowPreparedBeautyVisibility();
+    return () => { restorePrepared(); restoreVis(); };
   };
   sceneLightingPreparation=createLightingPreparation({
-    compile:()=>withViewportVisibilityAsync(viewportVisibilityObjects(),isSceneItemVisible,async()=>{await sceneBeautyLods?.whenIdle?.();return compileSceneLighting(renderer,sceneGISettings.mode==='combined'?[sceneGI.source,sceneGI.beauty]:[prePass,scenePass],{visibility:()=>sceneBeautyLods?.borrowFrame(camera,currentBeautyFrameOptions())??(()=>{})});}),
+    compile:()=>withViewportVisibilityAsync(viewportVisibilityObjects(),isSceneItemVisible,async()=>{await sceneBeautyLods?.whenIdle?.();return compileSceneLighting(renderer,sceneGISettings.mode==='combined'?[sceneGI.source,sceneGI.beauty]:[prePass,scenePass],{visibility:borrowPreparedBeautyVisibility});}),
     liveCompile:({isCurrent})=>compileSceneLighting(renderer,sceneGISettings.mode==='combined'?[sceneGI.source,sceneGI.beauty]:[prePass,scenePass],{live:true,isCurrent,visibility:borrowViewportAndBeautyVisibility}),
     recover:()=>window.__kaminosSceneRadiance?.debugState().status==='lighting-compile-failed'?window.__kaminosSceneRadiance.retryRebuild():undefined,
     hold:syncVolumeSceneFrameHold,
@@ -23586,14 +23592,20 @@ async function createMountedPromptFire({root,body,burning,signal}) {
     // Exercise the actual cold native workload before admission. The source is
     // off and the prompt consumer is inactive, so no text fuel is consumed.
     host.setSimulationPaused(true);host.resetThermalExperimentFluid();host.setSimulationPaused(false);
-    const before=host.debugState().frameCount;
-    host.setCanvasPresentationSuppressed(true);
-    try {
-      await host.setActive(true);
-      while(host.debugState().frameCount===before){signal.throwIfAborted();if(host.debugState().error)throw Error(host.debugState().error);await new Promise(resolve=>requestAnimationFrame(resolve));}
-      await context.device.queue.onSubmittedWorkDone();
-    } finally {await host.setActive(false);host.setCanvasPresentationSuppressed(false);}
-    return {setEmission,setFrame(frame){host.setPresentationTransform({translate:frame.translate.map((v,i)=>v+root.position.getComponent(i)*frame.scale),scale:frame.scale*root.scale.x});},
+    const prepareSurface=async()=>{
+      signal.throwIfAborted();if(state.active)throw Error('Cannot warm an active workshop surface');
+      setEmission(false);
+      await sceneLightingPreparation.request();
+      const before=host.debugState().frameCount;
+      host.setCanvasPresentationSuppressed(true);
+      try {
+        await host.setActive(true);await refreshAuthoringFrameOwner();
+        while(host.debugState().frameCount===before){signal.throwIfAborted();if(host.debugState().error)throw Error(host.debugState().error);await new Promise(resolve=>requestAnimationFrame(resolve));}
+        await context.device.queue.onSubmittedWorkDone();
+      } finally {await host.setActive(false);await refreshAuthoringFrameOwner();host.setCanvasPresentationSuppressed(false);}
+    };
+    await prepareSurface();
+    return {setEmission,prepareSurface,setFrame(frame){host.setPresentationTransform({translate:frame.translate.map((v,i)=>v+root.position.getComponent(i)*frame.scale),scale:frame.scale*root.scale.x});},
      async setActive(value){state.active=!!value;await flameFeature.setActive(value);await refreshAuthoringFrameOwner();},dispose};
    }catch(error){await dispose();throw error;}
   }});
