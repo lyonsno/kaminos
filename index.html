@@ -21632,6 +21632,7 @@ async function initKaminosVolumeRoute() {
   }
   let volumeEmitterRuntimeFrame = 0;
   function applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot, pose = flameEmitterPose, { sourceEnabled = controlsSnapshot.emitterSourceLaw==='immersed-source'?flamePoseInDomain(pose,flameDomainTranslation,flameDomainScale,effectiveFlameDomainControls(controlsSnapshot,volumePrototype)):!flameEmitterInjectionSuspended } = {}) {
+    if(mountedFlameState&&!activeSceneComposition){volumePrototype.setControls(mountedFlameState.controls);return window.__kaminosVolumeEmitterReceipt;}
     if(controlsSnapshot.emitterSourceLaw==='immersed-source')sourceEnabled=sourceEnabled&&flamePoseInDomain(pose,flameDomainTranslation,flameDomainScale,effectiveFlameDomainControls(controlsSnapshot,volumePrototype));
     const family = document.getElementById('emitter-assay-family').value;
     if(workingScene.objects.filter(entry=>entry.type===FLAME_EMITTER_TYPE).length>1&&(family==='cluster'||controlsSnapshot.emitterSourceLaw!=='immersed-source'))throw Error('Multiple scene sources require the immersed source law');
@@ -23562,8 +23563,8 @@ async function createMountedPromptFire({root,body,burning,signal}) {
     window.kaminosOrdinaryDepthSetEnabled?.(saved.depth);window._kaminosDirty?.();
    };
    try{
-    mountedFlameState=state;
     if(!volumePrototype)await initKaminosVolumeRoute();host=volumePrototype;
+    mountedFlameState=state;
     signal.throwIfAborted();if(activeSceneComposition||load!==sceneLoadRequests.current())throw Error('The scene changed during workshop fire acquisition');
     host.setControls(settings);host.setSceneCompositionPresentation(true);host.setRaymarchSmokePresentationMode(authored.presentationControls['raymarch-smoke-presentation'].value);
     host.relocateOrdinaryDomain(recipe.plan.flameDomainTranslation,[],recipe.plan.flameDomainScale);
