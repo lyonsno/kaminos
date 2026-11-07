@@ -28,7 +28,7 @@ for(const mesh of control.root.children)assert.ok(mesh.geometry.boundingBox.cont
 control.setMode('fine');assert.equal(control.read().mode,'fine');
 assert.throws(()=>control.setMode('unknown'),/Mode/);control.dispose();control.dispose();
 console.log('microstructure scene: source identity, native transformed picking, bounds and lifecycle passed');
-const invisibleOutlier=packMicrostructure(new Float32Array([0,0,0,0,0,1,.2,.8,.4,0,.8,1, 0,-10,0,0,0,1,.2,.8,.4,0,.8,0]),{radius:.1,cellSize:.5});
+const invisibleOutlier=packMicrostructure(new Float32Array([0,0,0,0,0,1,.2,.8,.4,0,.8,1, 0,0,0,0,1,0,.2,.8,.4,0,.8,1, 0,-10,0,0,0,1,.2,.8,.4,0,.8,0]),{radius:.1,cellSize:.5});
 const visible=createMicrostructureControl(invisibleOutlier),proxy=visible.root.sceneGeometry;
 const {delta}=snapGroundWorldDelta({points:proxy.attributes.position.array,triangles:proxy.index.array,groundY:0});
 assert.ok(Math.abs(delta.elements[13]-.1)<1e-5,'Transparent outlier must not determine actual grounding');visible.dispose();
