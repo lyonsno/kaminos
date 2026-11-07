@@ -46,10 +46,15 @@ function cloneBorrowed(node){
  for(const child of node.children)if(!isRepetitionCopy(child)&&!child.userData.kaminosBeautyLodProxy&&!child.userData.kaminosEditorHelper&&!child.userData.kaminosEditorOnly)copy.add(cloneBorrowed(child));
  return copy;
 }
+// Ordinary repeated meshes borrow resources; custom surface fields own only
+// their reconstruction runtime. Retire that runtime before detaching a copy.
+export function disposeRepetitionCopy(copy){
+ const runtimes=[];copy.traverse(node=>{if(node.isSurfaceSplatObject)runtimes.push(node);});
+ for(const node of runtimes)node.dispose();copy.removeFromParent();
+}
 export function createRepetitionView(){
  const states=new WeakMap();
- function retire(copy){const runtimes=[];copy.traverse(node=>{if(node.isSurfaceSplatObject)runtimes.push(node);});for(const node of runtimes)node.dispose();copy.removeFromParent();}
- function clear(root){for(const copy of root.children.filter(isRepetitionCopy))retire(copy);states.delete(root);}
+ function clear(root){for(const copy of new Set([...root.children.filter(isRepetitionCopy),...(states.get(root)?.copies??[])]))disposeRepetitionCopy(copy);states.delete(root);}
  function sync(root,settings,frame,{outer=[new Matrix4()]}={}){
   const restoreBeauty=root.userData?.kaminosBeautyLodRestore?.();
   try{
@@ -58,7 +63,7 @@ export function createRepetitionView(){
   const signature=[];function inspect(node){if(isRepetitionCopy(node)||node.userData?.kaminosBeautyLodProxy)return;signature.push(node.uuid,node.geometry?.uuid,Array.isArray(node.material)?node.material.map(m=>m.uuid):node.material?.uuid,...node.children.filter(n=>!isRepetitionCopy(n)&&!n.userData?.kaminosBeautyLodProxy).map(n=>n.uuid));for(const child of node.children)if(!isRepetitionCopy(child)&&!child.userData?.kaminosBeautyLodProxy)inspect(child);}inspect(root);
   const key=JSON.stringify(signature);let state=states.get(root);
   if(!state||state.key!==key){clear(root);state={key,copies:[]};states.set(root,state);}
-  while(state.copies.length>count)retire(state.copies.pop());
+  while(state.copies.length>count)disposeRepetitionCopy(state.copies.pop());
   while(state.copies.length<count){const copy=cloneBorrowed(root);copy.userData.kaminosRepetitionCopy=true;copy.matrixAutoUpdate=false;copy.name=`${root.name||'Object'} repetition ${state.copies.length+1}`;state.copies.push(copy);root.add(copy);}
   root.updateWorldMatrix(true,false);const world=root.matrixWorld.clone(),inverse=world.clone().invert();
   for(let i=0;i<count;i++){const copy=state.copies[i];copy.matrix.copy(inverse).multiply(matrices[i+1]).multiply(world);copy.matrixWorldNeedsUpdate=true;}

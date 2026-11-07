@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from '../lib/three.core.js';
-import {createSurfaceSplatObject} from '../surface-splat-object.mjs';
+import {createSurfaceSplatObject,surfaceSplatsGLTFPlugin,isSurfaceSplatResolve} from '../surface-splat-object.mjs';
 import {installSurfaceFieldMaterials} from '../surface-field-material.mjs';
 import {createPreparedAssetPool,disposePreparedAsset} from '../scene-asset-preparation.mjs';
 import {exportCloneInWorld} from '../scene-export.mjs';
@@ -44,4 +44,13 @@ test('a seeded proxy tier cannot replace splats during interactive camera work',
  const coarse=new T.Group().add(new T.Mesh(new T.BoxGeometry(),new T.MeshStandardMaterial()));seedInitialBeautyLevels(root,[{sha:'b'.repeat(64),faces:12,root:coarse}]);
  const controller=createSceneBeautyLodController({THREE:T,scene,giProxies:registry,loadLevel:async()=>{throw Error('unexpected mesh beauty load');}}),camera=new T.PerspectiveCamera(40,1,.1,100);camera.position.z=2;camera.updateMatrixWorld(true);
  controller.update(camera,192);assert.deepEqual(controller.interactiveRoots([root],{matchDisplay:true}).map(n=>n.uuid),[root.uuid]);assert.deepEqual(controller.interactiveRoots([root]).map(n=>n.uuid),[root.uuid]);controller.dispose();registry.clear();find(root).dispose();
+});
+test('GLB-loaded copies preserve post-load shadow flags and retire even after a host detach',async()=>{
+ const p=payload(),plugin=surfaceSplatsGLTFPlugin({json:{nodes:[{mesh:0,extensions:{KAMINOS_surface_splats:{version:1,count:1,radius:.03,data:0,footprints:1}}}]},getDependency(type,index){return Promise.resolve(type==='mesh'?new T.Mesh(new T.BoxGeometry(),new T.MeshStandardMaterial()):index===0?p.data.buffer:p.footprints.buffer);}});
+ const root=new T.Group().add(await plugin.createNodeMesh(0));root.traverse(n=>{if(n.isMesh){n.castShadow=!isSurfaceSplatResolve(n);n.receiveShadow=true;}});
+ const scene=new T.Scene().add(root),view=createRepetitionView(),settings={schema:'kaminos.repetition.v1',mode:'line',count:3,axis:'y',angle:360,step:[1,0,0],space:'world',center:[0,0,0],mirror:[false,false,false]};
+ view.sync(root,settings,{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]});
+ const copies=root.children.filter(n=>n.userData.kaminosRepetitionCopy),runtimes=copies.map(find),casters=createFireShadowCasters({scene});
+ renderFireShadowBatch({scene,casterScene:casters,shadows:[{render(batch){assert.equal(batch.triangleCount,36);assert.equal(batch.casters.length,3);}}]});
+ root.remove(...copies);view.clear(root);assert.ok(runtimes.every(n=>n.splats===null));casters.dispose();find(root).dispose();
 });
