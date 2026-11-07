@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
 import {buildSceneDocument} from '../scene-persistence-core.js';
 import {compositionRestoreUrl} from '../scene-authoring.mjs';
 import {visualWork} from '../visual-work.mjs';
@@ -7,8 +8,11 @@ const [origin,out,source]=process.argv.slice(2);if(!origin||!out||!source)throw 
 await fs.mkdir(out,{recursive:true});const report={ok:false,phase:'save-input',origin,source,repoRoot:process.cwd(),errors:[]};let browser,page;
 const save=()=>fs.writeFile(out+'/launch.json',JSON.stringify(report,null,2));await save();
 try{
+ report.commit=execFileSync('git',['rev-parse','HEAD'],{cwd:report.repoRoot,encoding:'utf8'}).trim();
+ report.dirty=!!execFileSync('git',['status','--porcelain'],{cwd:report.repoRoot,encoding:'utf8'}).trim();await save();
  const document=buildSceneDocument({objects:[{id:'surface-object',type:'glb',source,label:'Witch — deferred surface splats',fileName:'surface.glb',transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}}],camera:{position:[.9,.4,1.9],target:[0,-.02,0],fov:40},environment:{name:'studio',exposure:1.1,intensity:1,rotation:0,showBackground:false,ground:{visible:true,height:-.51}}});
  const response=await fetch(origin+'/api/save-scene',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(document)});assert(response.ok);report.input=await response.json();
+ report.phase='launch-browser';await save();
  const {chromium}=await import(process.env.PLAYWRIGHT_MODULE);report.executable=process.env.CHROME_EXECUTABLE;assert(report.executable&&!report.executable.includes('/Applications/Google Chrome.app/'));
  browser=await chromium.launchPersistentContext(out+'/profile',{executablePath:report.executable,headless:true,viewport:{width:1280,height:850},args:['--use-mock-keychain','--password-store=basic','--use-angle=metal','--enable-unsafe-webgpu']});page=browser.pages()[0];page.setDefaultTimeout(0);
  let fail;const failure=new Promise((_,reject)=>fail=reject);failure.catch(()=>{});page.on('pageerror',error=>{report.errors.push(String(error));fail(error);});

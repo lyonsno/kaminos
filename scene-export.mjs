@@ -12,6 +12,10 @@ export function exportCloneInWorld(object) {
     object.updateWorldMatrix(true, true);
     const clone = cloneHierarchy(object);
     snapshotExportGeometry(object, clone);
+    // Export the portable triangle fallback. Retire the temporary clone's
+    // reconstruction before detaching helpers, restoring its source materials.
+    const splats=[];clone.traverse(child=>{if(child.isSurfaceSplatObject)splats.push(child);});
+    for(const child of splats)child.dispose();
     const helpers = [];
     clone.traverse(child => {
       // Evaluated copies become ordinary asset geometry at this boundary. Their
