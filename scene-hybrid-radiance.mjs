@@ -264,6 +264,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     if(settingsPending)return;
     let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});promise.catch(()=>{});
     settingsPending={promise,resolve,reject};prototype.setSceneLightingSettingsPending?.(true);
+    if(kernelRetry&&status.status==='lighting-kernel-failed')queueMicrotask(()=>{if(!disposed&&!kernelTask)kernelRetry?.();});
   }
   function finishSettings(error=null){
     const pending=settingsPending;settingsPending=null;
@@ -275,7 +276,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     kernelRetry=()=>queueKernelPreparation(operation);
     status.status='preparing-lighting-kernels';onStatus({...status});
     kernelTask=rebuild.prepareKernels(operation).then(()=>{kernelRetry=null;status.status='awaiting-source';delete status.error;},error=>{
-      status.status='lighting-kernel-failed';status.error=String(error.message);settingsPending?.reject(error);throw error;
+      status.status='lighting-kernel-failed';status.error=String(error.message);settingsPending?.reject(error);settingsPending=null;throw error;
     }).finally(()=>{kernelTask=null;onStatus({...status});});
     kernelTask.catch(()=>{});
   }
@@ -439,7 +440,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       else requestRebuild();
     },
     whenRebuilt(){const tasks=[settingsPending?.promise,kernelTask,rebuildTask].filter(Boolean);return tasks.length?Promise.all(tasks):(status.error?Promise.reject(Error(status.error)):Promise.resolve());},
-    retryRebuild(){if(disposed)throw Error('hybrid lighting disposed');if(kernelRetry){kernelRetry();return kernelTask;}requestRebuild();return rebuildTask;},
+    retryRebuild(){if(disposed)throw Error('hybrid lighting disposed');if(kernelRetry){armSettings();kernelRetry();return this.whenRebuilt();}requestRebuild();return rebuildTask;},
     setShadowCaptureBudget(value){
       validateShadowCaptureBudget(value);if(disposed)throw Error('hybrid lighting disposed');
       shadowCaptureBudget=value;captureSchedule.setBudget(value);
