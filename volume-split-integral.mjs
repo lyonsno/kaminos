@@ -17,6 +17,10 @@ fn splitTransfer(s:SplitObservation,width:f32,lightLife:f32,opacityLife:f32)->ve
   return vec4<f32>(q*scale,trans);
 }
 fn splitCompose(a:vec4<f32>,b:vec4<f32>)->vec4<f32>{return vec4<f32>(a.xyz+a.w*b.xyz,a.w*b.w);}
+fn splitRefresh(old:SplitObservation,fresh:SplitObservation,response:f32,lightLife:f32,opacityLife:f32)->SplitObservation{
+ let age=max(0.0,old.anchor.w-1.0);let evolved=old.optical*vec4<f32>(vec3<f32>(exp(-age/lightLife)),exp(-age/opacityLife));
+ return SplitObservation(mix(evolved,fresh.optical,response),fresh.anchor);
+}
 fn splitProminence(s:SplitObservation)->f32{return max(length(s.optical.xyz),s.optical.w);}
 `;
 
@@ -107,8 +111,8 @@ fn splitFinish(r:SplitRay,pixel:u32,ro:vec3<f32>,rd:vec3<f32>)->vec4<f32>{
  var a=r.kept[0];var b=r.kept[1];let fresh=r.fresh[0];
  if(splitOptions.size.z==2u){a=fresh;b=r.fresh[1];}
  else if(r.refreshSlot>=0){
-  if(r.refreshSlot==0){a=SplitObservation(mix(a.optical,fresh.optical,splitOptions.policy.z),fresh.anchor);}
-  else{b=SplitObservation(mix(b.optical,fresh.optical,splitOptions.policy.z),fresh.anchor);}
+  if(r.refreshSlot==0){a=splitRefresh(a,fresh,splitOptions.policy.z,splitOptions.life.x,splitOptions.life.y);}
+  else{b=splitRefresh(b,fresh,splitOptions.policy.z,splitOptions.life.x,splitOptions.life.y);}
  }else{
   if(a.anchor.w<=0){a=fresh;}else if(b.anchor.w<=0){b=fresh;}else{
    let pa=splitProminence(a)*exp(-max(0.0,a.anchor.w-1.0)/splitOptions.life.x);
@@ -172,3 +176,18 @@ export function createSplitIntegral(device) {
   try{const e=device.createCommandEncoder();e.copyBufferToBuffer(b,0,read,0,b.size);device.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);if(frames!==epoch||banks[index]!==b)throw Error('Split readback became stale');return {available:true,state,records:new Float32Array(read.getMappedRange().slice(0))};}finally{read.unmap();read.destroy();}}
  return {layout,emptyLayout,emptyGroup,prepare,disable,sample,reset(){key=null;},read:()=>state,dispose(){disable();uniform.destroy();fallback.destroy();}};
 }
+
+// WebGPU discovers resource use before constant branch elimination. Ordinary
+// pipelines compile these resource-free hooks; only the split specialization
+// substitutes the real group-three implementation.
+export const SPLIT_OPTICAL_OFF_WGSL=/* wgsl */`
+override SPLIT_INTEGRAL:bool=false;
+struct SplitOptions {size:vec4<u32>}
+var<private> splitOptions:SplitOptions;
+struct SplitRay {unused:f32}
+fn splitInit(pixel:vec2<f32>,ro:vec3<f32>,rd:vec3<f32>,start:f32,end:f32,phase:f32)->SplitRay{return SplitRay(0);}
+fn splitSampleDepth(r:SplitRay,ro:vec3<f32>,rd:vec3<f32>,ordinary:f32)->f32{return ordinary;}
+fn splitObserve(r:ptr<function,SplitRay>,index:u32,p:vec3<f32>,q:vec3<f32>,sigma:f32){}
+fn splitFinish(r:SplitRay,pixel:u32,ro:vec3<f32>,rd:vec3<f32>)->vec4<f32>{return vec4<f32>(0,0,0,1);}
+`;
+export function splitOpticalShader(code,active=false){return active?code.replace(SPLIT_OPTICAL_OFF_WGSL,SPLIT_OPTICAL_WGSL):code;}

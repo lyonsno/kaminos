@@ -1,4 +1,4 @@
-import {createSplitIntegral,splitIntegralSettings,SPLIT_OPTICAL_WGSL} from './volume-split-integral.mjs';
+import {createSplitIntegral,splitIntegralSettings,SPLIT_OPTICAL_OFF_WGSL,splitOpticalShader} from './volume-split-integral.mjs';
 import {EMPTY_SPACE_WGSL} from './volume-empty-space.mjs';
 import {resolveWorldCalibration,calibrationSignature,calibrationWaveletLattice,WORLD_CALIBRATION_WGSL,resolveSimulationLevers} from './volume-world-calibration.mjs';
 import {WORLD_RENDER_WGSL,createWorldRenderField} from './volume-world-render.mjs';
@@ -6473,7 +6473,7 @@ ${FLAME_GUIDANCE_WGSL}
 override RAY_STEP_STATS: bool = false;
 @group(0) @binding(26) var<storage, read_write> rayStepCounters: array<u32>;
 ${HISTORY_ALLOCATION_WGSL}
-${SPLIT_OPTICAL_WGSL}
+${SPLIT_OPTICAL_OFF_WGSL}
 ${EMPTY_SPACE_WGSL}
 ${EMISSIVE_TRANSPORT_WGSL}
 ${WORLD_SMOKE_OPTICS_WGSL}
@@ -11800,7 +11800,7 @@ export function createKaminosVolumePrototype({
   let debugRaymarchShaderSpecialization = 'auto';
   let debugOpticalStepping = opticalSteppingConfig({mode:controlsSnapshot.raymarchMode??'numerical',tolerance:controlsSnapshot.opticalTolerance??0.001});
   let rayStepTelemetry = null;
-  let splitIntegral=null,splitSettings=splitIntegralSettings();
+  let splitIntegral=null,splitIntegralShader=null,splitSettings=splitIntegralSettings();
   let integralReconstruction=null, reconstructionSample=0;
   let integralGuideDisplay=integralGuideDisplaySettings();
   let integralEvaluation=null, integralCameraValues=null, integralCameraSignature=null, integralSceneSignature=null;
@@ -15177,7 +15177,7 @@ export function createKaminosVolumePrototype({
     rayStepTelemetry = createRayStepTelemetry(device);
     rayAllocationHistory = createRayAllocationHistory(device);
     integralReconstruction=createIntegralReconstruction(device,{transparent:transparentCanvas});
-    splitIntegral=createSplitIntegral(device);
+    splitIntegral=createSplitIntegral(device);splitIntegralShader=null;
     integralReconstruction.setGuideDisplay(integralGuideDisplay);
     rayStepTelemetry.setCanvas(rayStepTelemetryCanvas);
     rayStartNoiseTexture = await createRayStartTexture(device);
@@ -21433,7 +21433,7 @@ export function createKaminosVolumePrototype({
     let splitGroup=null;
     if(splitActive){
       const field=owner=>owner?{...owner.remapResources(),map:worldSmokeMapping(owner.plan,owner.anchor,productTransform).fineToField}:null;
-      const {rayNoiseFrame,...sourceControls}=controlsSnapshot;
+      const {rayNoiseFrame,raySteps,integralReconstruction,reconstructionSpatial,reconstructionRadius,reconstructionWindow,reconstructionResponse,reconstructionEdge,reconstructionEdges,reconstructionImageEdge,reconstructionFresh,...sourceControls}=controlsSnapshot;
       const identity=JSON.stringify([Array.from(invViewProj.elements),productTransform,sourceControls,worldSmokeKey,intermediateKey,state.integralSourceGeneration]);
       const prepared=splitIntegral.prepare(encoder,{width:state.width,height:state.height,settings:splitSettings,identity,step:state.simStepCount,
         viewProj:new THREE.Matrix4().copy(invViewProj).invert().elements,world:field(worldSmoke),middle:field(intermediateFlow),
@@ -21470,13 +21470,15 @@ export function createKaminosVolumePrototype({
       state.opticalStepping.fullRay=true;
       rebuildFluidBindGroups();
     }else{rayAllocationHistory.reset();}
+    const nativeCode=()=>splitOpticalShader(WGSL,splitActive);
+    const nativeShader=splitActive?(splitIntegralShader??=device.createShaderModule({label:'retained local optical contributions',code:nativeCode()})):shader;
     const opticalKey = `:${optical.mode}:stats=${rayStepTelemetry.active}:integral=${reconstruct}:split=${splitActive}`;
     if ((optical.mode !== 'fallback-fixed'||rayStepTelemetry.active||reconstruct) && !multisampled && !scenePointBindGroup && !distributedGroup) {
       const key = `${targetPipeline === readbackPipeline}:${gridSize}:${gridHeight}${opticalKey}`;
       if (!opticalSteppingPipelines.has(key)) {
         opticalSteppingPipelines.set(key,device.createRenderPipeline({label:'experimental optical stepping',
           layout:device.createPipelineLayout({bindGroupLayouts:[bindGroupLayout,productRaymarchDepthBindGroupLayout,...(splitActive?[splitIntegral.emptyLayout,splitIntegral.layout]:[])]}),
-          vertex:{module:shader,entryPoint:'vs'},fragment:{module:shader,entryPoint,
+          vertex:{module:nativeShader,entryPoint:'vs'},fragment:{module:nativeShader,entryPoint,
             constants:{TRANSPARENT_CANVAS:transparentCanvas?1:0,LEAN_EMISSIVE_RAYMARCH:true,...opticalConstants},
             targets:colorTargets},primitive:{topology:'triangle-list'}}));
       }
@@ -21488,18 +21490,18 @@ export function createKaminosVolumePrototype({
       if (!ordinaryDepthPipelines.has(depthKey)) {
         // Compiled on first MSAA scene-depth draw: a second full volume shader
         // module is only needed when the host supplies multisampled depth.
-        ordinaryMultisampleShader ||= device.createShaderModule({label:'ordinary emissive MSAA scene-depth shader',
+        const multisampleModule=splitActive?device.createShaderModule({label:'split optical MSAA shader',code:nativeCode().replace('var productSceneDepth: texture_depth_2d;','var productSceneDepth: texture_depth_multisampled_2d;').replace('let depth = textureLoad(productSceneDepth, pixel, 0);',`var depth=textureLoad(productSceneDepth,pixel,0);for(var sample=1u;sample<textureNumSamples(productSceneDepth);sample++){depth=min(depth,textureLoad(productSceneDepth,pixel,sample));}`)}):(ordinaryMultisampleShader ||= device.createShaderModule({label:'ordinary emissive MSAA scene-depth shader',
           code:WGSL.replace('var productSceneDepth: texture_depth_2d;', 'var productSceneDepth: texture_depth_multisampled_2d;')
             .replace('let depth = textureLoad(productSceneDepth, pixel, 0);',
               `var depth = textureLoad(productSceneDepth, pixel, 0);
            for (var sample = 1u; sample < textureNumSamples(productSceneDepth); sample++) {
              depth = min(depth, textureLoad(productSceneDepth, pixel, sample));
            }`),
-        });
+        }));
         ordinaryDepthPipelines.set(depthKey,device.createRenderPipeline({
           label:'ordinary emissive raymarch with MSAA scene-depth clipping',layout:splitActive?device.createPipelineLayout({bindGroupLayouts:[bindGroupLayout,ordinaryMultisampleDepthLayout,splitIntegral.emptyLayout,splitIntegral.layout]}):ordinaryMultisamplePipelineLayout,
-          vertex:{module:ordinaryMultisampleShader,entryPoint:'vs'},
-          fragment:{module:ordinaryMultisampleShader,entryPoint,
+          vertex:{module:multisampleModule,entryPoint:'vs'},
+          fragment:{module:multisampleModule,entryPoint,
             constants:{TRANSPARENT_CANVAS:transparentCanvas ? 1 : 0,
               LEAN_STOCK_RAYMARCH:basePipeline === leanStockPipeline || basePipeline === leanStockReadbackPipeline,
               LEAN_EMISSIVE_RAYMARCH: selectEmissive,...opticalConstants},
@@ -21515,7 +21517,7 @@ export function createKaminosVolumePrototype({
       }
       const key = `${multisampled}:${targetPipeline === readbackPipeline}:${gridSize}:${gridHeight}:${selectEmissive}${opticalKey}`;
       if (!scenePointPipelines.has(key)) {
-        let code = WGSL.replaceAll('medium.scattering * incidentAt(p)', 'medium.scattering * (incidentAt(p) + scenePointIncident(p))') + SCENE_POINT_SMOKE_WGSL;
+        let code = nativeCode().replaceAll('medium.scattering * incidentAt(p)', 'medium.scattering * (incidentAt(p) + scenePointIncident(p))') + SCENE_POINT_SMOKE_WGSL;
         if (multisampled) code = code.replace('var productSceneDepth: texture_depth_2d;', 'var productSceneDepth: texture_depth_multisampled_2d;')
           .replace('let depth = textureLoad(productSceneDepth, pixel, 0);', `var depth = textureLoad(productSceneDepth, pixel, 0);
             for (var sample = 1u; sample < textureNumSamples(productSceneDepth); sample++) {
@@ -21538,7 +21540,7 @@ export function createKaminosVolumePrototype({
       if(!distributedPipelines.has(key)) {
         // Replace internal flame incident lighting so this emission is counted
         // once. Direct camera emission and material scattering stay intact.
-        let code=WGSL.replaceAll('medium.scattering * incidentAt(p)','medium.scattering * distributedMeanIncident(p)')
+        let code=nativeCode().replaceAll('medium.scattering * incidentAt(p)','medium.scattering * distributedMeanIncident(p)')
           .replace('fn opticalIncidentMaskFlags(p: vec3<f32>) -> vec2<f32> { return vec2<f32>(0.0); }',
             'fn opticalIncidentMaskFlags(p: vec3<f32>) -> vec2<f32> { return distributedLastMaskFlags; }')+DISTRIBUTED_SMOKE_WGSL;
         if(multisampled)code=code.replace('var productSceneDepth: texture_depth_2d;','var productSceneDepth: texture_depth_multisampled_2d;')

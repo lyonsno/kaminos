@@ -57,3 +57,14 @@ test('production retained banks compose two local samples, refresh one, preserve
   }finally{owner.dispose();target.destroy();}
  });
 });
+
+import {SPLIT_OPTICAL_OFF_WGSL,splitOpticalShader} from '../volume-split-integral.mjs';
+test('ordinary shader hooks admit an empty layout without retained-buffer bindings',async()=>{
+ await withKaminosGpu(async({device:d})=>{
+  const code=`${SPLIT_OPTICAL_OFF_WGSL}
+   @vertex fn vs(@builtin(vertex_index) i:u32)->@builtin(position)vec4<f32>{return vec4<f32>(0,0,0,1);}
+   @fragment fn fs()->@location(0)vec4<f32>{var r=splitInit(vec2<f32>(0),vec3<f32>(0),vec3<f32>(0,0,1),0,1,.5);if(SPLIT_INTEGRAL){return splitFinish(r,0u,vec3<f32>(0),vec3<f32>(0,0,1));}return vec4<f32>(0,0,0,1);}`;
+  const module=d.createShaderModule({code:splitOpticalShader(code,false)});
+  d.pushErrorScope('validation');d.createRenderPipeline({layout:d.createPipelineLayout({bindGroupLayouts:[]}),vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',targets:[{format:'rgba8unorm'}]}});assert.equal(await d.popErrorScope(),null);
+ });
+});
