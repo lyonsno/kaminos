@@ -164,7 +164,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   const status={identity:'hybrid-distributed-smoke-point-surfaces-v0',status:'awaiting-source',surfaceTransport:'gpu-point-regions',surfaceReceivers:0,pointCount,shadowResolution,shadowSoftness,shadowSampling,blockerSamples,filterSamples,maxShadowResolution:device.limits.maxTextureDimension2D,volumeGrid,sourceGrid,directions,
     geometryBuilds:0,visibilityBuilds:0,previewStale:false,receiverSpacingRequested:0,surfaceReconstructionRequested:0,
     limitations:['point-region-surface-approximation','center-cube-area-shadow-approximation','GPU-smoke-visibility-refresh-on-transform','CPU-local-BVH-rebuild-on-vertex-or-topology-edit','no-surface-bounce']};
-  let rebuildRevision=0,rebuildTask=null,rebuilding=false;
+  let rebuildRevision=0,rebuildTask=null,rebuilding=false,kernelTask=null,kernelRetry=null,pendingGather=null;
   function replaceLighting(){stageLighting(()=>true).commit();}
   // Candidate graphs own their textures and cloned materials. Compilation
   // borrows them; every yield restores the accepted generation for drawing.
@@ -258,8 +258,17 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     for(const root of surfaceLighting?.proxyRoots??[])installMaterials(root);
   }
   const releaseProxyAdapter=surfaceLighting?.setProxyMaterialAdapter({install:installMaterials,release:releaseProxyMaterials});
+  function queueKernelPreparation(operation){
+    if(kernelTask)return;
+    kernelRetry=()=>queueKernelPreparation(operation);
+    status.status='preparing-lighting-kernels';onStatus({...status});
+    kernelTask=rebuild.prepareKernels(operation).then(()=>{kernelRetry=null;status.status='awaiting-source';delete status.error;},error=>{
+      status.status='lighting-kernel-failed';status.error=String(error.message);throw error;
+    }).finally(()=>{kernelTask=null;onStatus({...status});});
+    kernelTask.catch(()=>{});
+  }
   function prepare(field){
-    if(disposed)throw new Error('hybrid lighting disposed');valid=false;
+    if(disposed)throw new Error('hybrid lighting disposed');const acceptedValid=valid;valid=false;
     if(rebuilding||status.status==='lighting-compile-failed')throw Error(status.error??'lighting compilation pending');
     try {
       sourceTransform=validateSceneSourceTransform(field.source.worldTransform);
@@ -274,8 +283,23 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       status.localBvhBuilds=snapshot.localBuilds;status.visibilityMeshes=snapshot.meshCount;
       if(!gather||revision!==geometryRevision||domainKey!==builtDomain){
         status.status='building-smoke-world-visibility';onStatus({...status});
-        const next=createVolumeGather(device,{geometry:packed,receivers:[],volumeGrid,sourceDimensions:sourceDomain.dimensions,smokeRefinement,directions,angularPattern,angularRotation,worldGeometry:true,samplingNoise:prototype.sceneLightSamplingTexture?.(),exteriorMedium:true});
-        prototype.setSceneDistributedLightFrame(null);gather?.destroy();gather=next;geometryRevision=revision;builtDomain=domainKey;
+        const key=JSON.stringify([revision,domainKey,volumeGrid,smokeRefinement]);
+        if(!pendingGather||pendingGather.key!==key){
+          pendingGather?.gather.destroy();
+          pendingGather={key,gather:createVolumeGather(device,{geometry:packed,receivers:[],volumeGrid,sourceDimensions:sourceDomain.dimensions,smokeRefinement,directions,angularPattern,angularRotation,worldGeometry:true,samplingNoise:prototype.sceneLightSamplingTexture?.(),exteriorMedium:true,asynchronous:!!rebuild?.prepareKernels})};
+        }
+        const candidate=pendingGather;
+        if(rebuild?.prepareKernels){
+          valid=acceptedValid;
+          queueKernelPreparation(async()=>{
+            await candidate.gather.prepare(field.source,{sourceSoftness});
+            if(disposed||pendingGather!==candidate)return;
+            prototype.setSceneDistributedLightFrame(null);gather?.destroy();gather=candidate.gather;pendingGather=null;geometryRevision=revision;builtDomain=domainKey;valid=false;
+            status.geometryBuilds++;status.visibilityBuilds++;status.staticTriangles=packed.triangleCount;
+          });
+          return;
+        }
+        prototype.setSceneDistributedLightFrame(null);gather?.destroy();gather=candidate.gather;pendingGather=null;geometryRevision=revision;builtDomain=domainKey;
         status.geometryBuilds++;status.visibilityBuilds++;status.lastGeometryBuildMs=performance.now()-started;status.staticTriangles=packed.triangleCount;
       }
       gather.setGeometryTransforms(packed.matrices);
@@ -283,6 +307,11 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       if(angularPattern==='guided'){
         if(!getSourceGuide)throw new Error('hybrid guided smoke requires authored source guide');
         gather.setSourceGuide(deriveSourceGuide(getSourceGuide(),sourceTransform,sourceDomain));
+      }
+      if(rebuild?.prepareKernels&&!gather.isPrepared(field.source,{sourceSoftness})){
+        valid=acceptedValid;
+        queueKernelPreparation(()=>gather.prepare(field.source,{sourceSoftness}));
+        return;
       }
       // Even legacy smoke display may request scattered contribution to the
       // surface points; the gather owns that once-scattered source and gain.
@@ -382,8 +411,8 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       if(lights.every(light=>typeof light.shadow.setQuality==='function')){for(const light of lights)light.shadow.setQuality(next);shadowBank?.setResolution(next.resolution);valid=false;}
       else requestRebuild();
     },
-    whenRebuilt(){return rebuildTask??(status.error?Promise.reject(Error(status.error)):Promise.resolve());},
-    retryRebuild(){if(disposed)throw Error('hybrid lighting disposed');requestRebuild();return rebuildTask;},
+    whenRebuilt(){return kernelTask??rebuildTask??(status.error?Promise.reject(Error(status.error)):Promise.resolve());},
+    retryRebuild(){if(disposed)throw Error('hybrid lighting disposed');if(kernelRetry){kernelRetry();return kernelTask;}requestRebuild();return rebuildTask;},
     setShadowCaptureBudget(value){
       validateShadowCaptureBudget(value);if(disposed)throw Error('hybrid lighting disposed');
       shadowCaptureBudget=value;captureSchedule.setBudget(value);
@@ -397,7 +426,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     // they affect point surfaces; the prototype UI marks them inapplicable.
     setReceiverSpacing(value){status.receiverSpacingRequested=value;},setSurfaceReconstruction(value){status.surfaceReconstructionRequested=value;},setEditing(){},
     debugState(){const captures=valid&&surfaceEnabled?frame?.solidShadowCapture:null;return {...status,sourceInput:prototype.sceneVolumeSourceField()?.dimensions??null,shadowBank:shadowBank?.debugState()??{strategy:'individual-cubes',reason:shadowBankFallback},shadowCaptureBudget,nearBox:normalizeNearSmokeBox(nearBox),smokeEnvironmentBlur,angularPattern,angularRotation,shadowEdgeFilter,surfaceEnabled,smokeShadowSteps,smokeShadowResolution,smokeShadowFilter,smokeShadowFilterAngle,smokeShadowFilterTaps,smokeShadowMediumResolution,smokeShadowWork:smokeShadowWork({steps:smokeShadowSteps,resolution:smokeShadowResolution,filter:smokeShadowFilter,angleDegrees:smokeShadowFilterAngle,tapsPerAxis:smokeShadowFilterTaps,count:pointCount}),mediumExtinction:smokeShadowSteps?'radial-prefix-atlas':'omitted',shadowCasterLevel:casterScene.debugState().level,casters:casterScene.debugState(),shadowImplementation:comparison.implementation,shadowGrain:comparison.grain,shadowWorldCellSize:comparison.worldCellSize,pointSampling,pointEvaluationBudget,sourceEvaluationImplementation:pointEvaluationBudget&&selectedEvaluationAvailable?'shared-selected-filter':'per-source-filter',pointSelection:pointEvaluationBudget?'cyclic-complementary':pointSampling,evaluatedPointCount:surfaceEnabled?sourceEvaluationCount(pointCount,pointEvaluationBudget,pointSampling):0,capturedPointCount:captures?.refreshedCount??0,residentShadowCount:captures?.residentCount??0,solidShadowCapture:captures,gain,sourceTransform,sourceSoftness,smokeMode,surfaceScattering,surfaceGain:surfaceGain.value,frame,shadows:lights.map(l=>l.shadow.debugState())};},
-    canRender(){const source=prototype.sceneVolumeSourceField();return !disposed&&valid&&source.status==='encoded'&&source.generation===frame?.generation&&source.frame===frame?.frame;},
+    canRender(){const source=prototype.sceneVolumeSourceField();return !disposed&&valid&&(kernelTask||status.status==='lighting-kernel-failed'||(source.status==='encoded'&&source.generation===frame?.generation&&source.frame===frame?.frame))?true:false;},
     readback(options){if(!gather)throw new Error('hybrid not encoded');return gather.readback(options);},
     async readShadowCaptureOrigins(){
       if(!surfaceEnabled||!valid)throw Error('solid shadow sources not current');
@@ -421,9 +450,9 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         }
         for(const material of row.owned){surfaceLighting?.unbind(material);material.dispose();}
       }
-      originals.clear();releasePoints();gather?.destroy();exteriorLight.destroy();casterScene.dispose();smokeEnvironment.dispose();
+      originals.clear();releasePoints();gather?.destroy();pendingGather?.gather.destroy();exteriorLight.destroy();casterScene.dispose();smokeEnvironment.dispose();
       };
-      if(rebuildTask)rebuildTask.then(cleanup,cleanup);else {cleanup();rebuild?.hold(false);}
+      if(rebuildTask||kernelTask)Promise.allSettled([rebuildTask,kernelTask]).then(cleanup);else {cleanup();rebuild?.hold(false);}
     },
   };
 }

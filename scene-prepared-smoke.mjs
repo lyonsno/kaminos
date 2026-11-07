@@ -1,3 +1,4 @@
+import {createLightingComputePipeline,prepareLightingComputePipelines} from './scene-lighting-compute.mjs';
 // Static geometry owns stencils and conservative clear support. Live source
 // values own the prepared incident texture. The camera receives neither BVH
 // nor triangles. Resources are scoped to the enclosing geometry gather handle.
@@ -15,7 +16,7 @@ export function preparedSmokePlan(coarseDimensions, factor, limits) {
 }
 
 const preparedSmokeCache=new WeakMap();
-export function createPreparedSmoke(device,{nodes,triangles,nodeCount,source,coarseDimensions,factor=4,localMin=[-1,-1,-1],pitch=2/coarseDimensions[0]}) {
+export function createPreparedSmoke(device,{nodes,triangles,nodeCount,source,coarseDimensions,factor=4,localMin=[-1,-1,-1],pitch=2/coarseDimensions[0],asynchronous=false}) {
   if(!Array.isArray(localMin)||localMin.length!==3||!localMin.every(Number.isFinite)||!Number.isFinite(pitch)||pitch<=0)throw Error('finite prepared smoke origin and positive pitch required');
   let deviceCache=preparedSmokeCache.get(device);
   if(!deviceCache){deviceCache=new Map();preparedSmokeCache.set(device,deviceCache);}
@@ -36,14 +37,17 @@ export function createPreparedSmoke(device,{nodes,triangles,nodeCount,source,coa
     let pipelines=deviceCache.get(constants);
     if(!pipelines){
       const module=device.createShaderModule({label:'prepare and update smoke lighting',code:constants+PREPARED_SMOKE_WGSL});
-      const prepare=device.createComputePipeline({label:'static smoke stencil and boundary preparation',layout:'auto',compute:{module,entryPoint:'prepareSmoke'}});
-      const update=device.createComputePipeline({label:'update prepared smoke lighting from live receivers',layout:'auto',compute:{module,entryPoint:'updateSmoke'}});
+      const prepare=createLightingComputePipeline(device,{label:'static smoke stencil and boundary preparation',layout:'auto',compute:{module,entryPoint:'prepareSmoke'}},asynchronous);
+      const update=createLightingComputePipeline(device,{label:'update prepared smoke lighting from live receivers',layout:'auto',compute:{module,entryPoint:'updateSmoke'}},asynchronous);
       pipelines={module,prepare,update};
       deviceCache.set(constants,pipelines);
     }
-    const {prepare,update}=pipelines;
-    const prepareGroup=device.createBindGroup({layout:prepare.getBindGroupLayout(0),entries:[... [nodes,triangles,weights,masks].map((b,binding)=>({binding,resource:{buffer:b}})),{binding:6,resource:{buffer:planes}}]});
-    const updateGroup=device.createBindGroup({layout:update.getBindGroupLayout(0),entries:[{binding:2,resource:{buffer:weights}},{binding:4,resource:source.createView()},{binding:5,resource:texture.createView()}]});
+    let prepare,update,prepareGroup,updateGroup;
+    const initialize=()=>{if(prepareGroup)return;prepare=pipelines.prepare.get();update=pipelines.update.get();
+    prepareGroup=device.createBindGroup({layout:prepare.getBindGroupLayout(0),entries:[... [nodes,triangles,weights,masks].map((b,binding)=>({binding,resource:{buffer:b}})),{binding:6,resource:{buffer:planes}}]});
+    updateGroup=device.createBindGroup({layout:update.getBindGroupLayout(0),entries:[{binding:2,resource:{buffer:weights}},{binding:4,resource:source.createView()},{binding:5,resource:texture.createView()}]});
+    };
+    if(pipelines.prepare.pipeline&&pipelines.update.pipeline)initialize();
     const dispatch=count=>{const groups=Math.ceil(count/64),limit=device.limits.maxComputeWorkgroupsPerDimension;
       if(groups>limit*limit)throw new Error('prepared smoke dispatch exceeds device capacity');
       return [Math.min(groups,limit),Math.ceil(groups/limit)];};
@@ -53,7 +57,8 @@ export function createPreparedSmoke(device,{nodes,triangles,nodeCount,source,coa
       coarseDimensions:coarseDimensions.slice(),refinement:factor,weightBytes:plan.weightBytes,maskBytes:plan.maskBytes,planeBytes:plan.planeBytes,
       cameraTriangleTests:0,boundaryPolicy:'certified-planar-halfspace-or-clear-box-fade',
       staticPreparations:0,updates:0};
-    return {texture,metadata,encode(encoder){
+    return {texture,metadata,ready:async()=>{await prepareLightingComputePipelines([pipelines.prepare,pipelines.update]);initialize();},encode(encoder){
+      initialize();
       if(!prepared){const pass=encoder.beginComputePass({label:'prepare static smoke interpolation'});pass.setPipeline(prepare);pass.setBindGroup(0,prepareGroup);pass.dispatchWorkgroups(...dispatch(plan.sampleCount));pass.end();prepared=true;metadata.staticPreparations++;}
       const pass=encoder.beginComputePass({label:'reconstruct live smoke illumination once per volume'});pass.setPipeline(update);pass.setBindGroup(0,updateGroup);pass.dispatchWorkgroups(...dispatch(plan.sampleCount));pass.end();metadata.updates=++updates;
     },invalidateGeometry(){prepared=false;},destroy(){for(const r of owned)r.destroy();}};

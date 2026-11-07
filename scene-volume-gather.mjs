@@ -1,3 +1,4 @@
+import {createLightingComputePipeline,prepareLightingComputePipelines} from './scene-lighting-compute.mjs';
 import {ANGULAR_IMPORTANCE_WGSL} from './scene-angular-importance.mjs';
 import {SMOKE_LIGHT_NOISE_WGSL} from './scene-light-noise.mjs';
 // Direct distributed emission. Surface irradiance and isotropic smoke mean
@@ -69,7 +70,7 @@ export function volumeGatherPlan({volumeGrid=16,sourceDimensions=[volumeGrid,vol
 }
 
 const volumeGatherShaderCache=new WeakMap();
-export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[],volumeGrid=16,sourceDimensions=[volumeGrid,volumeGrid*2,volumeGrid],directions=24,smokeRefinement=4,angularRotation=0,angularPattern='fixed',worldGeometry=false,samplingNoise=null,receiverBounds=null,exteriorMedium=false,exteriorIntegrationGrid=8,receiverExclusion=null}) {
+export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[],volumeGrid=16,sourceDimensions=[volumeGrid,volumeGrid*2,volumeGrid],directions=24,smokeRefinement=4,angularRotation=0,angularPattern='fixed',worldGeometry=false,samplingNoise=null,receiverBounds=null,exteriorMedium=false,exteriorIntegrationGrid=8,receiverExclusion=null,asynchronous=false}) {
 
   if(worldGeometry&&receivers.length)throw new Error('world BVH mode requires smoke-only receivers');
   let deviceShaderCache=volumeGatherShaderCache.get(device);
@@ -102,7 +103,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
   }
   const nodes=buffer('static kiln BVH nodes',geometry.nodes);
   const triangles=buffer('static kiln BVH triangles',geometry.triangles);
-  const reproject=worldGeometry?createBvhReproject(device,{geometry,nodes,triangles}):null;
+  const reproject=worldGeometry?createBvhReproject(device,{geometry,nodes,triangles,asynchronous}):null;
   let geometryTransforms=geometry.matrices;
   const receiverBuffer=buffer('surface and smoke receivers',receiverValues,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC);
   const params=buffer('distributed transport parameters',new Float32Array(4),GPUBufferUsage.UNIFORM);
@@ -129,7 +130,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
   const surface=device.createTexture({label:'direct flame surface irradiance',size:[surfaceWidth,surfaceHeight],format:'rgba32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});
   const surfaceBack=device.createTexture({label:'direct flame back surface irradiance',size:[surfaceWidth,surfaceHeight],format:'rgba32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});
   const smoke=device.createTexture({label:'direct flame mean incident radiance',dimension:'3d',size:volumeDimensions,format:'rgba32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});
-  const preparedSmoke=createPreparedSmoke(device,{nodes,triangles,nodeCount:geometry.nodeCount,source:smoke,coarseDimensions:volumeDimensions,factor:smokeRefinement,localMin:bounds.lo,pitch:receiverPitch});
+  const preparedSmoke=createPreparedSmoke(device,{nodes,triangles,nodeCount:geometry.nodeCount,source:smoke,coarseDimensions:volumeDimensions,factor:smokeRefinement,localMin:bounds.lo,pitch:receiverPitch,asynchronous});
   const smokeReconstruction=preparedSmoke.metadata;
   const dispatchLimit=device.limits.maxComputeWorkgroupsPerDimension;
   // Geometry, material bindings, outputs and smoke reconstruction are shared.
@@ -144,6 +145,31 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
     ...(angularPattern==='regions'?[...guideEntries(),{binding:5,resource:cacheFieldTexture.createView()},...(exteriorMedium?[{binding:23,resource:{buffer:exteriorParams}}]:[])]:[]),
     ...(['blue','importance'].includes(angularPattern)?[{binding:18,resource:samplingNoise.createView()}]:[]),
   ];
+  function compiledState(){
+      const constants=`const DISPATCH_WIDTH:u32=${dispatchLimit*64}u;override CACHE_START:u32=0u;const SURFACE_COUNT:u32=${receivers.length}u;const RECEIVER_COUNT:u32=${total}u;const NODE_COUNT:u32=${geometry.nodeCount}u;const VOLUME_GRID:u32=${volumeGrid}u;const VOLUME_HEIGHT:u32=${volumeHeight}u;const SURFACE_WIDTH:u32=${surfaceWidth}u;`;
+      const codeRaw=`const SOURCE_PATTERN:bool=${sourcePattern()};const SPATIAL_PATTERN:bool=${angularPattern==='spatial'};const BLUE_PATTERN:bool=${['blue','importance'].includes(angularPattern)};const IMPORTANCE_PATTERN:bool=${angularPattern==='importance'};`+constants+(['blue','importance'].includes(angularPattern)?SMOKE_LIGHT_NOISE_WGSL:'fn blueReceiverRotation(p:vec3<f32>)->vec4<f32>{return vec4<f32>(0,0,0,1);}fn blueRayPhase(p:vec3<f32>,a:u32)->f32{return 0.5;}')+GATHER_WGSL_BODY+(exteriorMedium?EXTERIOR_MEDIUM_WGSL:NO_EXTERIOR_MEDIUM_WGSL)+(angularPattern==='importance'?ANGULAR_IMPORTANCE_WGSL.replaceAll('DIRECTION_COUNT','(arrayLength(&importanceScores)/RECEIVER_COUNT)'):'fn selectImportance(receiver:u32,u:f32)->u32{return 0u;}fn importanceProbability(receiver:u32,a:u32)->f32{return 1.0;}fn recordImportance(receiver:u32,a:u32,radiance:vec3<f32>){}')+(sourcePattern()?SOURCE_ENVIRONMENT_WGSL.replaceAll('DIRECTION_COUNT','arrayLength(&environmentDirections)'):'fn sourceEnvironment(receiver:u32,p:vec3<f32>)->vec3<f32>{return vec3<f32>(0.0);}')+transportSourceCode(angularPattern==='regions'?REGION_SOURCE_WGSL:angularPattern==='guided'?SOURCE_GUIDE_WGSL:SOURCE_AWARE_WGSL);
+      const code=codeRaw.replaceAll('DIRECTION_COUNT','arrayLength(&directions)');
+      let compiled=deviceShaderCache.get(code);
+      if(!compiled){
+        const module=device.createShaderModule({label:'distributed volume ray gather',code});
+        compiled={
+          module,
+          sceneLightPipeline:createLightingComputePipeline(device,{label:'cache scene-light smoke visibility',layout:'auto',compute:{module,entryPoint:'cacheSceneLights'}},asynchronous),
+          gather:createLightingComputePipeline(device,{label:'integrate actual flame emission to receivers',layout:'auto',compute:{module,entryPoint:'gatherLight'}},asynchronous),
+          gatherVolume:createLightingComputePipeline(device,{label:'direct flame incident on smoke',layout:'auto',compute:{module,entryPoint:'gatherVolume'}},asynchronous),
+          environmentCache:sourcePattern()?createLightingComputePipeline(device,{label:'cache full-sphere environment visibility',layout:'auto',compute:{module,entryPoint:'cacheEnvironment'}},asynchronous):null,
+          importance:null,
+          cacheByStart:new Map(),
+        };
+        deviceShaderCache.set(code,compiled);
+      }
+      return compiled;
+  }
+  function cacheKernel(compiled,start){
+    let kernel=compiled.cacheByStart.get(start);
+    if(!kernel){kernel=createLightingComputePipeline(device,{label:'cache static solid ray intersections',layout:'auto',compute:{module:compiled.module,entryPoint:'cacheGeometry',constants:{CACHE_START:start}}},asynchronous);compiled.cacheByStart.set(start,kernel);}
+    return kernel;
+  }
   function angularState() {
     if(['blue','importance'].includes(angularPattern)&&!samplingNoise?.createView)throw Error('blue-noise smoke lighting requires the shared sampling atlas');
     const key=family()+directions;
@@ -166,38 +192,16 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
       const distances=buffer('cached first solid distance per receiver ray',new Float32Array(total*bankDirections),GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC,owned);
       const environmentDirections=sourcePattern()?buffer('uniform environment directions',new Float32Array(lightingDirections(directions,angularRotation).flatMap(d=>[...d,0])),GPUBufferUsage.STORAGE,owned):null;
       const environmentHits=sourcePattern()?buffer('cached environment solid distances',new Float32Array(volumeCount*directions),GPUBufferUsage.STORAGE,owned):null;
-      const constants=`const DISPATCH_WIDTH:u32=${dispatchLimit*64}u;const DIRECTION_COUNT:u32=${bankDirections}u;override CACHE_START:u32=0u;const SURFACE_COUNT:u32=${receivers.length}u;const RECEIVER_COUNT:u32=${total}u;const NODE_COUNT:u32=${geometry.nodeCount}u;const VOLUME_GRID:u32=${volumeGrid}u;const VOLUME_HEIGHT:u32=${volumeHeight}u;const SURFACE_WIDTH:u32=${surfaceWidth}u;`;
-      const code=`const SOURCE_PATTERN:bool=${sourcePattern()};const SPATIAL_PATTERN:bool=${angularPattern==='spatial'};const BLUE_PATTERN:bool=${['blue','importance'].includes(angularPattern)};const IMPORTANCE_PATTERN:bool=${angularPattern==='importance'};`+constants+(['blue','importance'].includes(angularPattern)?SMOKE_LIGHT_NOISE_WGSL:'fn blueReceiverRotation(p:vec3<f32>)->vec4<f32>{return vec4<f32>(0,0,0,1);}fn blueRayPhase(p:vec3<f32>,a:u32)->f32{return 0.5;}')+GATHER_WGSL_BODY+(exteriorMedium?EXTERIOR_MEDIUM_WGSL:NO_EXTERIOR_MEDIUM_WGSL)+(angularPattern==='importance'?ANGULAR_IMPORTANCE_WGSL:'fn selectImportance(receiver:u32,u:f32)->u32{return 0u;}fn importanceProbability(receiver:u32,a:u32)->f32{return 1.0;}fn recordImportance(receiver:u32,a:u32,radiance:vec3<f32>){}')+(sourcePattern()?SOURCE_ENVIRONMENT_WGSL:'fn sourceEnvironment(receiver:u32,p:vec3<f32>)->vec3<f32>{return vec3<f32>(0.0);}')+transportSourceCode(angularPattern==='regions'?REGION_SOURCE_WGSL:angularPattern==='guided'?SOURCE_GUIDE_WGSL:SOURCE_AWARE_WGSL);
-      let compiled=deviceShaderCache.get(code);
-      if(!compiled){
-        const module=device.createShaderModule({label:'distributed volume ray gather',code});
-        compiled={
-          module,
-          sceneLightPipeline:device.createComputePipeline({label:'cache scene-light smoke visibility',layout:'auto',compute:{module,entryPoint:'cacheSceneLights'}}),
-          gather:device.createComputePipeline({label:'integrate actual flame emission to receivers',layout:'auto',compute:{module,entryPoint:'gatherLight'}}),
-          gatherVolume:device.createComputePipeline({label:'direct flame incident on smoke',layout:'auto',compute:{module,entryPoint:'gatherVolume'}}),
-          environmentCache:sourcePattern()?device.createComputePipeline({label:'cache full-sphere environment visibility',layout:'auto',compute:{module,entryPoint:'cacheEnvironment'}}):null,
-          importance:null,
-          cacheByStart:new Map(),
-        };
-        deviceShaderCache.set(code,compiled);
-      }
-      const {module,gather,gatherVolume,environmentCache}=compiled;
-      if(!sceneLightPipeline)sceneLightPipeline=compiled.sceneLightPipeline;
+      const compiled=compiledState();
+      const {module}=compiled;
+      const gather=compiled.gather.get(),gatherVolume=compiled.gatherVolume.get(),environmentCache=compiled.environmentCache?.get();
+      sceneLightPipeline=compiled.sceneLightPipeline.get();
       const cacheStart=prefix?.capacity||0;
-      let cache=compiled.cacheByStart.get(cacheStart);
-      if(!cache){
-        cache=device.createComputePipeline({label:'cache static solid ray intersections',layout:'auto',compute:{module,entryPoint:'cacheGeometry',constants:{CACHE_START:cacheStart}}});
-        compiled.cacheByStart.set(cacheStart,cache);
-      }
+      const cache=cacheKernel(compiled,cacheStart).get();
       const cacheGroup=device.createBindGroup({layout:cache.getBindGroupLayout(0),entries:geometryCacheEntries(directionBuffer,distances)});
       let fullCache=cache;
       if(prefix){
-        fullCache=compiled.cacheByStart.get(0);
-        if(!fullCache){
-          fullCache=device.createComputePipeline({label:'refresh moving solid ray intersections',layout:'auto',compute:{module,entryPoint:'cacheGeometry'}});
-          compiled.cacheByStart.set(0,fullCache);
-        }
+        fullCache=cacheKernel(compiled,0).get();
       }
       const fullCacheGroup=prefix?device.createBindGroup({layout:fullCache.getBindGroupLayout(0),entries:geometryCacheEntries(directionBuffer,distances)}):cacheGroup;
       const environmentCacheGroup=environmentCache?device.createBindGroup({layout:environmentCache.getBindGroupLayout(0),entries:[
@@ -205,7 +209,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
         {binding:12,resource:{buffer:environmentParams}},{binding:13,resource:{buffer:environmentDirections}},{binding:14,resource:{buffer:environmentHits}}]}):null;
       const importanceScores=angularPattern==='importance'?buffer('recent angular contribution scores',new Float32Array(total*bankDirections),GPUBufferUsage.STORAGE,owned):null;
       const importanceCdf=angularPattern==='importance'?buffer('angular proposal CDF',new Float32Array(total*bankDirections),GPUBufferUsage.STORAGE,owned):null;
-      const importance=importanceScores?(compiled.importance??=device.createComputePipeline({label:'prepare cached angular importance',layout:'auto',compute:{module,entryPoint:'prepareImportance'}})):null;
+      const importance=importanceScores?(compiled.importance??=createLightingComputePipeline(device,{label:'prepare cached angular importance',layout:'auto',compute:{module,entryPoint:'prepareImportance'}},asynchronous)).get():null;
       const importanceEntries=importanceScores?[{binding:20,resource:{buffer:importanceScores}},{binding:21,resource:{buffer:importanceCdf}}]:[];
       const importanceGroup=importance?device.createBindGroup({layout:importance.getBindGroupLayout(0),entries:importanceEntries}):null;
       const state={cacheFieldTexture,importance,importanceGroup,importanceEntries,owned,directionBuffer,distances,cache,cacheGroup,fullCache,fullCacheGroup,gather,gatherVolume,environmentCache,environmentCacheGroup,environmentDirections,environmentHits,environmentCount:directions,environmentCacheBuilt:false,family:family(),capacity:bankDirections,requestedDirections:directions,prefix,sourceTexture:null,gatherGroup:null,cacheBuilt:false};
@@ -217,7 +221,28 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
   function pruneComparisons() {
     for(const [key,state] of angularStates)if(state.family!==family()||(!sourcePattern()&&state.requestedDirections!==directions)){for(const b of state.owned)b.destroy();angularStates.delete(key);}
   }
-  return {surface,surfaceBack,smoke,surfaceDimensions:[surfaceWidth,surfaceHeight],volumeDimensions,
+  function inputDomain(field){
+    cacheFieldTexture=field.texture;
+    const exterior=exteriorMedium?field.exterior:null;
+    if(exterior?.emissionTexture){const lo=domain.lo.map((v,a)=>Math.min(v,exterior.localMin[a])),hi=domain.hi.map((v,a)=>Math.max(v,exterior.localMax[a]));transportDomain={lo,hi,volume:hi.reduce((n,v,a)=>n*(v-lo[a]),1)};}
+    else transportDomain=domain;
+  }
+  let preparationKey=null,preparationPromise=null,preparationComplete=false;
+  const requestedPreparation=(field,sourceSoftness)=>{inputDomain(field);return JSON.stringify([family(),directions,sourceSoftness?field.dimensions:null]);};
+  function prepare(field,{sourceSoftness=0}={}){
+    const key=requestedPreparation(field,sourceSoftness);
+    if(key===preparationKey)return preparationPromise;
+    preparationKey=key;preparationComplete=false;
+    const compiled=compiledState();
+    const prefix=sourcePattern()?[...angularStates.values()].find(s=>s.family===family()&&s.cacheBuilt):null;
+    const cache=cacheKernel(compiled,prefix?.capacity??0);
+    const full=cacheKernel(compiled,0);
+    if(angularPattern==='importance')compiled.importance??=createLightingComputePipeline(device,{label:'prepare cached angular importance',layout:'auto',compute:{module:compiled.module,entryPoint:'prepareImportance'}},asynchronous);
+    if(sourceSoftness&&field.dimensions.join(',')!==softeningDimensions){softening?.destroy();softening=createSourceSoftening(device,{nodes,triangles,nodeCount:geometry.nodeCount,dimensions:field.dimensions,asynchronous});softeningDimensions=field.dimensions.join(',');}
+    preparationPromise=Promise.all([prepareLightingComputePipelines([compiled.sceneLightPipeline,compiled.gather,compiled.gatherVolume,compiled.environmentCache,compiled.importance,cache,full]),preparedSmoke.ready(),reproject?.ready(),sourceSoftness?softening.ready():null]).then(()=>{if(key===preparationKey)preparationComplete=true;});
+    preparationPromise.catch(()=>{if(key===preparationKey)preparationKey=null;});return preparationPromise;
+  }
+  return {prepare,isPrepared:(field,options={})=>preparationComplete&&preparationKey===requestedPreparation(field,options.sourceSoftness??0),surface,surfaceBack,smoke,surfaceDimensions:[surfaceWidth,surfaceHeight],volumeDimensions,
     setGeometryTransforms(value){geometryTransforms=value;},
     setDirections(value){volumeGatherPlan({volumeGrid,sourceDimensions,receiverBounds,surfaceCount:receivers.length,directions:value,smokeRefinement,angularPattern},device.limits);directions=value;},
     setAngularPattern(pattern,rotation=0){
@@ -298,7 +323,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
       }
       if(softening&&softeningDimensions!==field.dimensions.join(',')){softening.destroy();softening=null;}
       if(sourceSoftness>0&&!softening){
-        softening=createSourceSoftening(device,{nodes,triangles,nodeCount:geometry.nodeCount,dimensions:field.dimensions});
+        softening=createSourceSoftening(device,{nodes,triangles,nodeCount:geometry.nodeCount,dimensions:field.dimensions,asynchronous});
         softeningDimensions=field.dimensions.join(',');
       }
       const lightingTexture=softening?softening.encode(encoder,field.texture,sourceSoftness):field.texture;

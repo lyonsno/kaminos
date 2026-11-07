@@ -1,3 +1,4 @@
+import {createLightingComputePipeline,prepareLightingComputePipelines} from './scene-lighting-compute.mjs';
 // Lighting-only emission preparation. The raw source and its extinction remain
 // authoritative; this approximation does not modify the visible flame.
 export function validateSourceSoftness(passes) {
@@ -25,7 +26,7 @@ export function softenEmissionReference(values, dimensions, occupied, passes) {
   return result;
 }
 
-export function createSourceSoftening(device,{nodes,triangles,nodeCount,dimensions}) {
+export function createSourceSoftening(device,{nodes,triangles,nodeCount,dimensions,asynchronous=false}) {
   const count=dimensions.reduce((a,b)=>a*b,1),owned=[];
   if(dimensions.length!==3||dimensions.some(n=>!Number.isInteger(n)||n<1||n>device.limits.maxTextureDimension3D))throw new Error('source softening dimensions exceed capacity');
   if(count*4>device.limits.maxStorageBufferBindingSize)throw new Error('source softening mask exceeds capacity');
@@ -37,12 +38,17 @@ export function createSourceSoftening(device,{nodes,triangles,nodeCount,dimensio
     const textures=[0,1].map(i=>{const t=device.createTexture({label:`lighting-only softened coefficients ${i}`,dimension:'3d',size:dimensions,format:'rgba32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});owned.push(t);return t;});
     const code=`const DIMS:vec3<u32>=vec3<u32>(${dimensions.map(n=>n+'u').join(',')});const COUNT:u32=${count}u;const NODE_COUNT:u32=${nodeCount}u;const WIDTH:u32=${limit*64}u;const PITCH:f32=${2/dimensions[0]};`+SOURCE_SOFTENING_WGSL;
     const module=device.createShaderModule({label:'lighting-only emission softening',code});
-    const prepare=device.createComputePipeline({label:'source solid-cell preparation',layout:'auto',compute:{module,entryPoint:'prepareSourceCells'}});
-    const filter=device.createComputePipeline({label:'conservative emission diffusion',layout:'auto',compute:{module,entryPoint:'softenSource'}});
-    const prepGroup=device.createBindGroup({layout:prepare.getBindGroupLayout(0),entries:[nodes,triangles,masks].map((b,binding)=>({binding,resource:{buffer:b}}))});
+    const prepKernel=createLightingComputePipeline(device,{label:'source solid-cell preparation',layout:'auto',compute:{module,entryPoint:'prepareSourceCells'}},asynchronous);
+    const filterKernel=createLightingComputePipeline(device,{label:'conservative emission diffusion',layout:'auto',compute:{module,entryPoint:'softenSource'}},asynchronous);
+    let prepare,filter,prepGroup;
+    const initialize=()=>{if(prepGroup)return;prepare=prepKernel.get();filter=filterKernel.get();
+    prepGroup=device.createBindGroup({layout:prepare.getBindGroupLayout(0),entries:[nodes,triangles,masks].map((b,binding)=>({binding,resource:{buffer:b}}))});
+    };
+    if(prepKernel.pipeline&&filterKernel.pipeline)initialize();
     let source=null,bindings=null,prepared=false;
     const metadata={identity:'solid-bounded-emission-diffusion-v1',passes:0,staticPreparations:0,updates:0,dimensions:dimensions.slice(),bytes:count*36,extinction:'unchanged',boundary:'occupied-cells-isolated-no-flux-domain',rawSourceMutated:false};
-    return {metadata,masks,encode(encoder,input,passes){
+    return {metadata,masks,ready:async()=>{await prepareLightingComputePipelines([prepKernel,filterKernel]);initialize();},encode(encoder,input,passes){
+      initialize();
       validateSourceSoftness(passes);metadata.passes=passes;
       if(passes===0)return input;
       if(source!==input){

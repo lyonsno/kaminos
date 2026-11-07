@@ -1,8 +1,9 @@
+import {createLightingComputePipeline,prepareLightingComputePipelines} from './scene-lighting-compute.mjs';
 import {validateSceneSourceTransform} from './scene-volume-source.mjs';
 const bvhReprojectCache=new WeakMap();
 // Transform immutable mesh-local trees (or a legacy world tree) into source
 // coordinates. Motion changes only matrices, never CPU triangle data/topology.
-export function createBvhReproject(device,{geometry,nodes,triangles}) {
+export function createBvhReproject(device,{geometry,nodes,triangles,asynchronous=false}) {
   let deviceCache=bvhReprojectCache.get(device);
   if(!deviceCache){deviceCache={reproject:new Map(),mask:new Map()};bvhReprojectCache.set(device,deviceCache);}
   const coverages=()=>geometry.coverages??(geometry.coverage?[{...geometry.coverage,triangleStart:0,triangleCount:geometry.triangleCount}]:[]);
@@ -41,13 +42,14 @@ fn reproject(@builtin(global_invocation_id) gid:vec3<u32>){
   localTriangles[i]=Triangle(vec4<f32>(((m*vec4<f32>(t.a.xyz,1.0)).xyz-transform.xyz)/transform.w,t.a.w),vec4<f32>((m*vec4<f32>(t.e1.xyz,0.0)).xyz/transform.w,t.e1.w),vec4<f32>((m*vec4<f32>(t.e2.xyz,0.0)).xyz/transform.w,t.e2.w));
  }
 }`});
-    pipeline=device.createComputePipeline({layout:'auto',compute:{module,entryPoint:'reproject'}});
+    pipeline=createLightingComputePipeline(device,{layout:'auto',compute:{module,entryPoint:'reproject'}},asynchronous);
     deviceCache.reproject.set(reprojectKey,pipeline);
   }
-  const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[worldNodes,worldTriangles,nodes,triangles,params,owners,matrices].map((buffer,binding)=>({binding,resource:{buffer}}))});
+  let group;
+  const initialize=()=>{group??=device.createBindGroup({layout:pipeline.get().getBindGroupLayout(0),entries:[worldNodes,worldTriangles,nodes,triangles,params,owners,matrices].map((buffer,binding)=>({binding,resource:{buffer}}))});};
   // Each range visits only its own triangles. Separate bindings avoid a fixed
   // texture-slot limit without gathering material state back to the CPU.
-  const masks=[];
+  const masks=[];let maskKernel=null;
   if(coverages().length){
     let maskPipeline=deviceCache.mask.get(limit);
     if(!maskPipeline){
@@ -64,18 +66,21 @@ fn mask(@builtin(global_invocation_id) gid:vec3<u32>){
  let c=vec3<i32>(i32(cell%n),i32((cell/n)%n),i32(cell/(n*n)));
  if(textureLoad(remaining,c,0).w<0.5){triangles[i].e1=vec4<f32>(0.0);triangles[i].e2=vec4<f32>(0.0);}
 }`});
-      maskPipeline=device.createComputePipeline({layout:'auto',compute:{module:maskModule,entryPoint:'mask'}});
+      maskPipeline=createLightingComputePipeline(device,{layout:'auto',compute:{module:maskModule,entryPoint:'mask'}},asynchronous);
       deviceCache.mask.set(limit,maskPipeline);
     }
+    maskKernel=maskPipeline;
     for(const c of coverages()){
       const range=device.createBuffer({size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});owned.push(range);
       device.queue.writeBuffer(range,0,new Uint32Array([c.triangleStart,c.triangleCount,0,0]));
-      const group=device.createBindGroup({layout:maskPipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:triangles}},{binding:1,resource:c.texture.createView()},{binding:2,resource:{buffer:range}}]});
-      masks.push({pipeline:maskPipeline,group,count:c.triangleCount});
+      masks.push({kernel:maskPipeline,range,coverage:c,count:c.triangleCount,group:null});
     }
   }
+  const initializeMasks=()=>{initialize();for(const mask of masks)mask.group??=device.createBindGroup({layout:mask.kernel.get().getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:triangles}},{binding:1,resource:mask.coverage.texture.createView()},{binding:2,resource:{buffer:mask.range}}]});};
+  if(pipeline.pipeline&&(!maskKernel||maskKernel.pipeline))initializeMasks();
   let key=null,pending=null;
-  return {encode(encoder,value,meshMatrices=geometry.matrices??identity){
+  return {ready:async()=>{await prepareLightingComputePipelines([pipeline,maskKernel]);initializeMasks();},encode(encoder,value,meshMatrices=geometry.matrices??identity){
+    initializeMasks();
     pending=null; // A skipped/reverted retry must not commit an abandoned pose.
     if(meshMatrices.length!==(geometry.matrices??identity).length||!meshMatrices.every(Number.isFinite))throw Error('BVH matrix upload shape or values invalid');
     const t=validateSceneSourceTransform(value),next=JSON.stringify([t,Array.from(meshMatrices),coverages().map(c=>c.revision)]);if(next===key)return false;
@@ -83,8 +88,8 @@ fn mask(@builtin(global_invocation_id) gid:vec3<u32>){
     if(groups>limit*limit)throw new Error('BVH reproject exceeds device dispatch capacity');
     device.queue.writeBuffer(params,0,new Float32Array([...t.translate,t.scale]));
     device.queue.writeBuffer(matrices,0,meshMatrices);
-    if(groups){const pass=encoder.beginComputePass({label:'reproject world BVH without CPU rebuild'});pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.min(groups,limit),Math.ceil(groups/limit));pass.end();}
-    for(const mask of masks){const groups=Math.ceil(mask.count/64);if(!groups)continue;const pass=encoder.beginComputePass({label:'apply resident material visibility'});pass.setPipeline(mask.pipeline);pass.setBindGroup(0,mask.group);pass.dispatchWorkgroups(Math.min(groups,limit),Math.ceil(groups/limit));pass.end();}
+    if(groups){const pass=encoder.beginComputePass({label:'reproject world BVH without CPU rebuild'});pass.setPipeline(pipeline.get());pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.min(groups,limit),Math.ceil(groups/limit));pass.end();}
+    for(const mask of masks){const groups=Math.ceil(mask.count/64);if(!groups)continue;const pass=encoder.beginComputePass({label:'apply resident material visibility'});pass.setPipeline(mask.kernel.get());pass.setBindGroup(0,mask.group);pass.dispatchWorkgroups(Math.min(groups,limit),Math.ceil(groups/limit));pass.end();}
     pending=next;return true;
   },commit(){if(pending!==null)key=pending;pending=null;},destroy(){for(const b of owned)b.destroy();}};
 }

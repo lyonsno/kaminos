@@ -81,15 +81,15 @@ export async function compileSceneLighting(renderer, passes, {live=false,visibil
 // flame graph replacement queues with ordinary light edits, before compiling.
 export function createLightingPreparation({compile,liveCompile,hold,recover,onStatus=()=>{}}) {
   let task=null,revision=0,completed=0,compiling=false,external=false,held=false,error=null;
-  const changes=[],disposals=[];
+  const changes=[],disposals=[],kernelTasks=new Set();
   let rendererTask=Promise.resolve();
   const withRenderer=operation=>{const next=rendererTask.then(operation);rendererTask=next.catch(()=>{});return next;};
-  let exclusive=!liveCompile,retained=false;
+  let exclusive=!liveCompile,retained=false,kernelHolds=0,kernelFailure=null;
   let drain;
-  const state=()=>({held,presentationHeld:held&&!retained,compiling,pending:completed!==revision,error,revision,completed});
+  const state=()=>({held,presentationHeld:held&&!retained&&!kernelHolds&&!kernelFailure,compiling:compiling||kernelHolds>0,pending:completed!==revision||kernelHolds>0,error,revision,completed});
   const publish=()=>onStatus(state());
   const syncHold=()=>{
-    const next=external||(exclusive&&(completed!==revision||error!==null));
+    const next=external||kernelHolds>0||kernelFailure!==null||(exclusive&&(completed!==revision||error!==null));
     if(next===held)return drain;
     held=next;drain=hold(next);return drain;
   };
@@ -132,6 +132,17 @@ export function createLightingPreparation({compile,liveCompile,hold,recover,onSt
     task.catch(()=>{}); // UI callers surface failure through onStatus.
     return task;
   }
-  return {request,state,withRenderer,deferDisposal:dispose=>disposals.push(dispose),retry:()=>recover?.()??request(),whenIdle:()=>task??(error?Promise.reject(Error(error)):Promise.resolve()),
+  function prepareKernels(operation){
+    kernelHolds++;kernelFailure=null;error=null;
+    const quiescent=syncHold();publish();
+    const pending=(async()=>{
+      try {await quiescent;return await withRenderer(operation);}
+      catch(cause){kernelFailure=cause;error=String(cause.message??cause);throw cause;}
+      finally{kernelHolds--;syncHold();publish();}
+    })();
+    kernelTasks.add(pending);pending.finally(()=>kernelTasks.delete(pending)).catch(()=>{});return pending;
+  }
+
+  return {request,prepareKernels,state,withRenderer,deferDisposal:dispose=>disposals.push(dispose),retry:()=>recover?.()??request(),whenIdle:()=>Promise.all([...(task?[task]:[]),...kernelTasks]).then(()=>{if(error)throw Error(error);}),
     setExternalHold(value){external=Boolean(value);const result=syncHold();publish();return result;}};
 }
