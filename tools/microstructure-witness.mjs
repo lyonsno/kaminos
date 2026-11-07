@@ -5,9 +5,14 @@ import assert from 'node:assert/strict';
 const [server,source,browserPath,puppeteerRoot,output]=process.argv.slice(2);
 if(!output)throw Error('Usage: node tools/microstructure-witness.mjs SERVER SOURCE BROWSER PUPPETEER_ROOT OUTPUT');
 fs.mkdirSync(output,{recursive:true});
-const report={ok:false,phase:'launch',server,source,browserPath,repoRoot:process.cwd(),errors:[],gpuErrors:[],captures:[]};
+const report={ok:false,phase:'launch',server,source,browserPath,repoRoot:process.cwd(),errors:[],gpuErrors:[],failedResources:[],captures:[]};
 let browser,page;
 try{
+  const sourceReport=new URL(source,server);
+  if(sourceReport.pathname==='/api/read')sourceReport.searchParams.set('path',(sourceReport.searchParams.get('path')??'')+'report.json');
+  else sourceReport.pathname+='report.json';
+  const response=await fetch(sourceReport);if(!response.ok)throw Error(`Expected source report HTTP ${response.status}`);report.expectedSource=await response.json();
+  assert.equal(report.expectedSource.ok,true);assert.equal(report.expectedSource.schema,'kaminos.microstructure-control.v1');
   if(browserPath.includes('/Applications/Google Chrome.app/'))throw Error('Independent automation browser required');
   const require=createRequire(path.join(puppeteerRoot,'package.json')),puppeteer=require('puppeteer');
   report.profile=fs.mkdtempSync(path.join(output,'profile-'));
@@ -16,6 +21,7 @@ try{
   console.log(`Owned Chrome for Testing PID ${report.browserPid}`);
   page=await browser.newPage();page.setDefaultTimeout(0);page.setDefaultNavigationTimeout(0);
   page.on('pageerror',e=>report.errors.push(String(e.stack??e)));page.on('console',m=>{if(m.type()==='error')report.errors.push(m.text());});
+  page.on('response',r=>{if(r.status()>=400)report.failedResources.push({url:r.url(),status:r.status()});});
   await page.evaluateOnNewDocument(()=>{
     window.__microGpuErrors=[];const request=GPUAdapter.prototype.requestDevice;
     GPUAdapter.prototype.requestDevice=async function(...args){const d=await request.apply(this,args);d.addEventListener('uncapturederror',e=>window.__microGpuErrors.push(e.error.message??String(e.error)));return d;};
@@ -26,11 +32,15 @@ try{
   await new Promise(r=>setTimeout(r,2000));
   report.entry=await page.evaluate(()=>({state:window.kaminosWorkbenchExperiments?.state(),body:document.body.innerText.slice(-3000)}));
   report.state=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
-  assert.equal(report.state.sourceSHA256,'666d39062d19c819d9fd1d6546201fa7ff5a0be7515d9db5836eea246409253a');
+  assert.equal(report.state.source,source);assert.equal(report.state.sourceSHA256,report.expectedSource.sourceSHA256);assert.equal(report.state.sourceDiscs,report.expectedSource.count);assert.equal(report.state.carriers,report.expectedSource.carrierCount);
   report.adapter=await page.evaluate(async()=>{const a=await navigator.gpu.requestAdapter();return a?.info?{vendor:a.info.vendor,architecture:a.info.architecture,isFallbackAdapter:a.info.isFallbackAdapter}:null;});
   assert.equal(report.adapter?.vendor,'apple');assert.equal(report.adapter?.isFallbackAdapter,false);
+  report.grounding=await page.evaluate(id=>{const read=()=>window.kaminosSceneObjectDebugState().find(r=>r.id===id).transform;const before=read(),ground=window.kaminosGroundDebugState();window.selectSceneObject(id);window.snapToGround();const after=read();window.kaminosSetSceneObjectTransform(id,before);return {before,after,ground};},report.state.objectId);
+  assert.ok(Math.abs(report.grounding.after.position[1]+report.state.localBounds.min[1]-report.grounding.ground.height)<1e-5,'Snap Ground must use the actual floor and fine surface, not a unit template box');
   report.phase='render';
-  for(const [pose,position]of [['front',null],['reverse',[-.3,.38,-.32]],['grazing',[.36,.24,.07]]]){
+  for(const [pose,position]of [['front',null],['reverse',[-.3,.38,-.32]],['grazing',[.36,.24,.07]],['orthographic',[-.3,.38,-.32]],['transformed',[.3,.38,.32]]]){
+    if(pose==='orthographic')await page.evaluate(()=>window.kaminosViewProjection.setOrthographic(true));
+    if(pose==='transformed')await page.evaluate(id=>{window.kaminosViewProjection.setOrthographic(false);window.kaminosSetSceneObjectTransform(id,{position:[0,.2,0],rotation:[.12,.31,.07],scale:[1.1,.85,1.2]});},report.state.objectId);
     if(position)await page.evaluate(position=>window.__kaminosSetSceneCameraFrame(position,[0,.2,0]),position);
     for(const mode of ['fine','coarse','carrier']){
     if(mode==='coarse')await page.select('select[aria-label="Surface representation"]',mode);
@@ -50,7 +60,9 @@ try{
     },mode);
     assert.ok(pixels.foreground>1000,'Missing visible surface in captured canvas');
     fs.writeFileSync(path.join(output,pose+'-'+mode+'-canvas.png'),Buffer.from(pixels.png.split(',')[1],'base64'));delete pixels.png;
-    report.captures.push({pose,mode,state,pixels});
+    const projection=await page.evaluate(()=>window.kaminosViewProjection.state());
+    if(pose==='orthographic')assert.equal(projection.orthographic,true);
+    report.captures.push({pose,mode,state,pixels,projection});
     report.gpuErrors=await page.evaluate(()=>window.__microGpuErrors);
     assert.equal(report.gpuErrors.length,0,report.gpuErrors.join('\n'));
     }
@@ -65,5 +77,5 @@ try{
   report.errors=report.errors.filter(e=>!e.includes('favicon.ico'));assert.equal(report.errors.length,0,report.errors.join('\n'));
   report.phase='complete';report.ok=true;
 }catch(error){report.error=String(error.stack??error);if(page)await page.screenshot({path:path.join(output,'failure.png')}).catch(()=>{});process.exitCode=1;}
-finally{await browser?.close();report.browserClosed=true;fs.writeFileSync(path.join(output,'report.json'),JSON.stringify(report,null,2));}
+finally{try{await browser?.close();report.browserClosed=true;}catch(error){report.cleanupError=String(error.stack??error);report.ok=false;process.exitCode=1;}finally{fs.writeFileSync(path.join(output,'report.json'),JSON.stringify(report,null,2));}}
 console.log(JSON.stringify(report));
