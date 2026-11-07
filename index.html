@@ -12373,7 +12373,7 @@ async function initScene() {
     readInputs:()=>({lightingHeld:deviceRecoveryHeld()||sceneLightingPreparation?.state().presentationHeld||(typeof sceneDocument!=='undefined'&&sceneDocument?.state().phase==='applying'),
       exclusiveInspection:exclusiveInspectionRender,manualInspection:manualInspectionRender,
       transportRequired:authoredWaterFlameTransportActive||authoredFlameHDRActive,
-      radianceReady:!window.__kaminosSceneRadiance||window.__kaminosSceneRadiance.canRender()}),
+      radianceReady:!window.__kaminosSceneRadiance||(window.__kaminosSceneRadiance.canPresent?.()??window.__kaminosSceneRadiance.canRender())}),
     draw:drawSceneFrame,frameCount:()=>sceneFrameCount,
     prepare:()=>{syncViewportRendererSize();camera.updateMatrixWorld();fireLightFieldPass?.update();},
   });

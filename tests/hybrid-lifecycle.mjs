@@ -354,7 +354,10 @@ const kernelOwner=createLightingPreparation({hold(){},compile:async ticket=>{con
 const liveKernels=mountDistributedSceneRadiance({renderer,scene,prototype,device:asyncDevice,volumeGrid:2,smokeRefinement:1,
  rebuild:{hold:kernelOwner.setExternalHold,prepareRetained:kernelOwner.request,prepareKernels:kernelOwner.prepareKernels},
  createShadow:()=>({visibility:THREE.TSL.float(1),render(){},debugState:()=>({}),dispose(){}})});
-consume(field);await liveKernels.whenRebuilt();
+consume(field);
+assert.equal(liveKernels.canRender(),false,'startup preparation must not claim current lighting');
+assert.equal(liveKernels.canPresent?.(),true,'startup must still supply a scene depth frame during kernel preparation');
+await liveKernels.whenRebuilt();
 consume(field);await liveKernels.whenRebuilt();
 consume(field);await liveKernels.whenRebuilt();
 consume(field);assert.equal(liveKernels.canRender(),true,'live producer consumes asynchronously prepared gather and point kernels');
