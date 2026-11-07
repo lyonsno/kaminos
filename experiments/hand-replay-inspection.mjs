@@ -1,15 +1,17 @@
 import {Group,Mesh,PlaneGeometry,BufferGeometry,BufferAttribute,MeshNormalMaterial,MeshBasicMaterial,DoubleSide,CanvasTexture,SRGBColorSpace,Quaternion,Vector3,EdgesGeometry,LineSegments,LineBasicMaterial,Sprite,SpriteMaterial} from '../lib/three.core.js';
-import {projectionSupport} from './hand-replay-projection.mjs';
-export function sourceStageGeometry(hand,box,span=2.5){
+import {projectionSupport,commonImageBox} from './hand-replay-projection.mjs';
+export function sourceStageGeometry(hand,box,span=2.5,sequenceDepth=null){
  const support=projectionSupport(hand);if(!support.available)throw Error(support.reason);
  const [fx,fy,cx,cy]=hand.camera.intrinsics,t=hand.camera.translation;
  const camera=hand.vertices.map(v=>v.map((x,k)=>x+t[k]));const width=box[2]-box[0],height=box[3]-box[1],extent=Math.max(width,height),u=(box[0]+box[2])/2,v=(box[1]+box[3])/2;
- const depth=Math.max(...camera.map(p=>p[2]))+.015,scale=span*fx/(extent*depth),ox=(u-cx)/fx*depth,oy=(v-cy)/fy*depth;
+ const depth=sequenceDepth??Math.max(...camera.map(p=>p[2]))+.015;
+ if(!Number.isFinite(depth)||depth<=Math.max(...camera.map(p=>p[2])))throw Error('photo plane must be behind mesh');
+ const scale=span*fx/(extent*depth),ox=(u-cx)/fx*depth,oy=(v-cy)/fy*depth;
  const transform=p=>[(p[0]-ox)*scale,-(p[1]-oy)*scale,(depth-p[2])*scale];const wrist=transform(hand.joints[0].map((x,k)=>x+t[k]));
  return {positions:new Float32Array(camera.flatMap(p=>transform(p).map((x,k)=>x-wrist[k]))),wrist,planeSize:[span,span*fx/fy],scale,sourceCamera:[-ox*scale,oy*scale,depth*scale]};
 }
 export async function createHandInspection(scene,document,models,labelTexture){
- const stations=[];let data,images=[],frozen=null,index=0,locked=true,visible=false,shown=models.map(m=>m.id),source='crop';
+ const stations=[];let data,images=[],sequenceDepth=null,sequenceBox=null,frozen=null,index=0,locked=true,visible=false,shown=models.map(m=>m.id),source='crop';
  for(let i=0;i<models.length;i++){
   const root=new Group();const cols=Math.min(models.length,2),rows=Math.ceil(models.length/cols);root.position.set((i%cols-(cols-1)/2)*3.2,4.7+((rows-1)/2-Math.floor(i/cols))*3.3,0);root.visible=false;
   const canvas=document.createElement('canvas');canvas.width=canvas.height=640;const texture=new CanvasTexture(canvas);texture.colorSpace=SRGBColorSpace;
@@ -20,20 +22,20 @@ export async function createHandInspection(scene,document,models,labelTexture){
   await scene.attach(root,{owned:true,metadata:{label:models[i].label+' · camera plane',type:'hand-source-camera-station',source:models[i]}});
   stations.push({root,canvas,texture,photo,edge,pivot,mesh,title});
  }
- const read=()=>({locked,frozen:frozen!==null,meshFrame:frozen??index,imageFrame:index,rotations:stations.map(s=>s.pivot.quaternion.toArray()),visible,placement:'True camera-space meshes in front of fixed photograph planes. A shared overview has different parallax from each source camera; exact alignment is available in Recorded camera silhouettes.'});
+ const read=()=>({locked,frozen:frozen!==null,meshFrame:frozen??index,imageFrame:index,rotations:stations.map(s=>s.pivot.quaternion.toArray()),visible,sequenceDepth,sequenceBox,placement:'True camera-space meshes in front of fixed photograph planes. A shared overview has different parallax from each source camera; exact alignment is available in Recorded camera silhouettes.'});
  const draw=(nextIndex,nextVisible=visible,sourceMode=source,visibleModels=shown)=>{
   index=nextIndex;visible=nextVisible;shown=visibleModels;source=sourceMode;
   if(!data){stations.forEach(s=>s.root.visible=false);return;}
   const photoRow=data.frames[index],meshRow=data.frames[frozen??index];
   for(let i=0;i<stations.length;i++){
    const s=stations[i],hand=meshRow.hands[i];s.root.visible=visible&&shown.includes(models[i].id);if(!s.root.visible)continue;
-   const im=images[index],size=[im.naturalWidth??im.width,im.naturalHeight??im.height],box=source==='crop'?(hand.cropBox??[0,0,...size]):[0,0,...size],w=box[2]-box[0],h=box[3]-box[1],fit=640/Math.max(w,h),ctx=s.canvas.getContext('2d');ctx.fillStyle='#303844';ctx.fillRect(0,0,640,640);ctx.drawImage(im,(640-w*fit)/2-box[0]*fit,(640-h*fit)/2-box[1]*fit,...size.map(x=>x*fit));s.texture.needsUpdate=true;
+   const im=images[index],size=[im.naturalWidth??im.width,im.naturalHeight??im.height],box=source==='crop'?(sequenceBox??[0,0,...size]):[0,0,...size],w=box[2]-box[0],h=box[3]-box[1],fit=640/Math.max(w,h),ctx=s.canvas.getContext('2d');ctx.fillStyle='#303844';ctx.fillRect(0,0,640,640);ctx.drawImage(im,(640-w*fit)/2-box[0]*fit,(640-h*fit)/2-box[1]*fit,...size.map(x=>x*fit));s.texture.needsUpdate=true;
    const supported=projectionSupport(hand);s.mesh.visible=supported.available;if(!supported.available)continue;
-   const geometry=sourceStageGeometry(hand,box);s.pivot.position.fromArray(geometry.wrist);s.mesh.geometry.setAttribute('position',new BufferAttribute(geometry.positions,3));s.mesh.geometry.setIndex(models[i].faces.flat());s.mesh.geometry.computeVertexNormals();s.mesh.geometry.computeBoundingSphere();s.photo.scale.set(...geometry.planeSize,1);s.edge.scale.copy(s.photo.scale);
+   const geometry=sourceStageGeometry(hand,box,2.5,sequenceDepth);s.pivot.position.fromArray(geometry.wrist);s.mesh.geometry.setAttribute('position',new BufferAttribute(geometry.positions,3));s.mesh.geometry.setIndex(models[i].faces.flat());s.mesh.geometry.computeVertexNormals();s.mesh.geometry.computeBoundingSphere();s.photo.scale.set(...geometry.planeSize,1);s.edge.scale.copy(s.photo.scale);
   }
  };
  const reset=target=>{if(target===undefined)stations.forEach(s=>s.pivot.quaternion.identity());else{if(!Number.isInteger(target)||!stations[target])throw Error('unknown hand');stations[target].pivot.quaternion.identity();}scene.redraw();return read();};
- return {read,draw,load(next,nextImages){data=next;images=nextImages;frozen=null;},clear(){data=null;frozen=null;stations.forEach(s=>s.root.visible=false);},lock(value){locked=!!value;if(locked)reset();return read();},freeze(value){frozen=value?index:null;return read();},reset,rotate({dx,dy}){if(locked)throw Error('hands locked');if(!Number.isFinite(dx)||!Number.isFinite(dy))throw Error('invalid rotation');const view=scene.readView(),forward=new Vector3().fromArray(view.position??[0,0,10]).sub(new Vector3().fromArray(view.target??[0,0,0])).normalize(),up=new Vector3().fromArray(view.up??[0,1,0]),right=new Vector3().crossVectors(up,forward).normalize();up.crossVectors(forward,right).normalize();const q=new Quaternion().setFromAxisAngle(up,dx*.008).multiply(new Quaternion().setFromAxisAngle(right,dy*.008));stations.forEach(s=>s.pivot.quaternion.premultiply(q));scene.redraw();return read();},dispose(){for(const s of stations){s.texture.dispose();s.photo.geometry.dispose();s.photo.material.dispose();s.edge.geometry.dispose();s.edge.material.dispose();s.mesh.geometry.dispose();s.mesh.material.dispose();s.title.material.map.dispose();s.title.material.dispose();}}};
+ return {read,draw,load(next,nextImages){data=next;images=nextImages;frozen=null;let maxDepth=0;for(const frame of next.frames)for(const hand of frame.hands)if(projectionSupport(hand).available)for(const vertex of hand.vertices)maxDepth=Math.max(maxDepth,vertex[2]+hand.camera.translation[2]);sequenceDepth=maxDepth+.015;const image=nextImages[0];sequenceBox=commonImageBox(next.frames,0,[image.naturalWidth??image.width,image.naturalHeight??image.height]);},clear(){data=null;images=[];frozen=null;visible=false;sequenceDepth=null;sequenceBox=null;stations.forEach(s=>s.root.visible=false);},lock(value){locked=!!value;if(locked)reset();return read();},freeze(value){frozen=value?index:null;return read();},reset,rotate({dx,dy}){if(locked)throw Error('hands locked');if(!Number.isFinite(dx)||!Number.isFinite(dy))throw Error('invalid rotation');const view=scene.readView(),forward=new Vector3().fromArray(view.position??[0,0,10]).sub(new Vector3().fromArray(view.target??[0,0,0])).normalize(),up=new Vector3().fromArray(view.up??[0,1,0]),right=new Vector3().crossVectors(up,forward).normalize();up.crossVectors(forward,right).normalize();const q=new Quaternion().setFromAxisAngle(up,dx*.008).multiply(new Quaternion().setFromAxisAngle(right,dy*.008));stations.forEach(s=>s.pivot.quaternion.premultiply(q));scene.redraw();return read();},dispose(){for(const s of stations){s.texture.dispose();s.photo.geometry.dispose();s.photo.material.dispose();s.edge.geometry.dispose();s.edge.material.dispose();s.mesh.geometry.dispose();s.mesh.material.dispose();s.title.material.map.dispose();s.title.material.dispose();}}};
 }
 export function mountInspectionControls(document,invoke,read){
  const viewport=document.querySelector?.('#viewport');if(!viewport)return {sync(){},dispose(){}};
