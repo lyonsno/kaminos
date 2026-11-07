@@ -2,11 +2,13 @@ import {ClippingGroup,Mesh,MeshStandardMaterial,BufferGeometry} from './lib/thre
 import {createKilnPromptStrip} from './kiln-prompt-strip.mjs';
 import {installKilnPromptEditor,KILN_PROMPT_WINDOW_HEIGHT} from './kiln-prompt-editor.mjs';
 import {createKilnPromptPreparation} from './kiln-prompt-preparation.mjs';
+import {createKilnBurnWindow} from './kiln-burn-window.mjs';
+import {mountedWaterPresentation} from './mounted-workshop-water.mjs';
 import {promptReliefMetadata} from './inference-kiln-record.mjs';
 
 // The mounted workshop owns membership and the app owns camera/rendering. This
 // consumer owns only native editing and the admitted solid-text preparation.
-export async function createMountedGenerationPrompt({document,workshop,camera,onFrame,input,signal,prompt='',request=null,controls=null,statusSlot=null,createBurnBody=null,changed=()=>{}}){
+export async function createMountedGenerationPrompt({document,workshop,camera,onFrame,input,signal,prompt='',request=null,controls=null,statusSlot=null,createBurnBody=null,createFire=null,clock=()=>performance.now(),changed=()=>{}}){
  const viewport=document.getElementById('viewport');
  // Initial authored pose in cold-stage's kiln opening; it remains a normal
  // editable workshop member after mounting. Text scrolls within this window.
@@ -20,14 +22,23 @@ export async function createMountedGenerationPrompt({document,workshop,camera,on
  let disposed=false,serial=0,timer=null,admitted=null,prepared=null,preparing=null,error=null,visible=false,admittedScroll=0;
  const editor=installKilnPromptEditor({document,viewport,input,camera,object:root,presentation:mesh,onChange:schedule,onScroll:alignSolid,onError:e=>{error=e.message;changed();}});
  const preparation=createKilnPromptPreparation({rasterize:editor.rasterize,Worker:document.defaultView.Worker});
- let handle=null,stop=()=>{},body=null,installation=Promise.resolve();
+ let handle=null,stop=()=>{},body=null,installation=Promise.resolve(),fire=null,firePreparation=null,burnWindow=null,active=false,startedRequest=null,finishResolve=null;
+ const failure=e=>{if(!disposed){error=e.message;active=false;editor.setBurning(false);changed();}};
+ function advance(){
+  if(!burnWindow||!active)return;
+  if(visible)burnWindow.resume();else burnWindow.pause();
+  const state=burnWindow.read();fire?.setEmission(visible&&state.emitting);strip.advance(state.progress);
+  if(state.done&&finishResolve){const resolve=finishResolve;finishResolve=null;active=false;fire?.setActive(false).then(resolve,failure);editor.setBurning(false);}
+ }
+ function presentation(){const parent=mountedWaterPresentation(root);return {translate:parent.translation,scale:parent.scale};}
  const layer=viewport.querySelector('.kiln-prompt-plane');layer.style.cssText='position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:5;';layer.hidden=true;input.style.pointerEvents='auto';
  // Keep the full solid at the native scrolling window origin. Admission freezes
  // that origin; later draft scrolling cannot move the submitted burn source.
  function alignSolid(){if(prepared)strip.scroll(admitted?admittedScroll:input.scrollTop);}
  function schedule(){clearTimeout(timer);timer=null;if(disposed||admitted)return;timer=setTimeout(()=>{timer=null;if(disposed||admitted)return;prepare({prompt:input.value}).catch(e=>{if(!disposed){error=e.message;changed();}});},250);}
  async function prepare(next){
-  clearTimeout(timer);timer=null;const token=++serial;admittedScroll=input.scrollTop;admitted=next.request?structuredClone(next.request):null;error=null;
+  clearTimeout(timer);timer=null;const token=++serial;admittedScroll=input.scrollTop;const previousId=admitted?.id;admitted=next.request?structuredClone(next.request):null;error=null;
+  if(admitted?.id!==previousId){burnWindow=admitted?createKilnBurnWindow({seconds:mesh.userData.kaminosPromptRelief?.burnerSeconds??5,flares:mesh.userData.kaminosPromptRelief?.burnerFlares??3,pauseSeconds:mesh.userData.kaminosPromptRelief?.burnerPauseSeconds??1,clock}):null;startedRequest=null;}
   const work=next.prompt.trim()?preparation.prepare(next.prompt):Promise.resolve(null);preparing=work;
   try{const result=await work;if(disposed||token!==serial)return;
    // Serial installation keeps an obsolete async body from restoring its old
@@ -52,29 +63,34 @@ export async function createMountedGenerationPrompt({document,workshop,camera,on
    });installation=install;await install;
   }finally{if(preparing===work)preparing=null;changed();}
  }
- function dispose(){if(disposed)return;disposed=true;serial++;clearTimeout(timer);stop();preparation.dispose();editor.dispose();body?.dispose();body=null;root.visible=false;}
+ async function dispose(){if(disposed)return;disposed=true;serial++;clearTimeout(timer);stop();finishResolve?.();finishResolve=null;await fire?.dispose();preparation.dispose();editor.dispose();body?.dispose();body=null;root.visible=false;}
  try {
  await prepare({prompt,request});signal.throwIfAborted();
  handle=await workshop.attach(root,{type:'pbr',label:'Generation prompt',source:null,waterCollision:false});
  await prepare({prompt,request});signal.throwIfAborted();
+ if(createFire){fire=await createFire({root,body:()=>body,burning:()=>active&&visible,signal});firePreparation=fire.prepare();firePreparation.catch(failure);}
  stop=onFrame(()=>{
   const mounted=workshop.read().amount>0&&root.parent!==null&&root.visible&&workshop.handles().some(h=>h.id===handle.id);
-  visible=mounted;if(statusSlot)statusSlot.hidden=workshop.read().amount===0;if(controls)controls.hidden=!mounted;layer.hidden=!mounted;layer.style.opacity=String(workshop.read().amount);
+  visible=mounted;if(fire)fire.present(mounted,presentation()).catch(failure);advance();if(statusSlot)statusSlot.hidden=workshop.read().amount===0;if(controls)controls.hidden=!mounted;layer.hidden=!mounted;layer.style.opacity=String(workshop.read().amount);
   // Editor follows the shared camera and the native transform, including Undo.
   if(mounted){strip.sync();editor.position();}
-  body?.setMounted(false);
+  body?.setMounted(mounted&&active);
  });
- }catch(error){dispose();throw error;}
+ }catch(error){await dispose();throw error;}
  return {prepare,get thermalBody(){return body;},syncEditor(){editor.sync();input.style.pointerEvents='auto';},
-  async setActive(active){
-   // No substitute flame: the retained moving gas producer must be composed
-   // before the request can truthfully claim physical combustion.
-   if(active){error='Mounted combustion is not connected yet.';throw Error(error);}
-   else {editor.setBurning(false);}
+  async setActive(value){
+   if(value){
+    if(!fire)throw Error('Mounted combustion is not connected yet.');
+    await firePreparation;await installation;if(disposed)return;
+    if(!admitted||!body||!burnWindow)throw Error('No prepared admitted text to burn');
+    if(startedRequest!==admitted.id){body.reset();strip.admit();burnWindow.start();burnWindow.pause();startedRequest=admitted.id;}
+    active=true;editor.setBurning(true);advance();await fire.setActive(visible);
+   }else{active=false;burnWindow?.pause();fire?.setEmission(false);await fire?.setActive(false);editor.setBurning(false);}
   },
-  complete(){admitted=null;error=null;editor.setBurning(false);schedule();},
-  cancel(){admitted=null;error=null;editor.setBurning(false);schedule();},
-  debugState:()=>({route:'mounted-app-viewport',visible,prompt:prepared?.text??null,request:admitted?.id??null,preparing:!!preparing,error,physicalCombustion:false,thermal:body?.read()??null,preparation:preparation.read()}),
+  finish(){if(!burnWindow)return Promise.resolve();const done=new Promise(resolve=>{finishResolve=resolve;});advance();return done;},
+  async complete(){active=false;admitted=null;error=null;burnWindow=null;fire?.setEmission(false);await fire?.setActive(false);editor.setBurning(false);finishResolve?.();finishResolve=null;schedule();},
+  async cancel(){return this.complete();},
+  debugState:()=>({route:'mounted-app-viewport',visible,prompt:prepared?.text??null,request:admitted?.id??null,preparing:!!preparing,error,physicalCombustion:!!fire&&active,burner:burnWindow?.read()??null,field:fire?.read()??null,thermal:body?.read()??null,preparation:preparation.read()}),
   dispose,
  };
 }

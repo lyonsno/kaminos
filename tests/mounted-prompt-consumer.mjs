@@ -70,7 +70,7 @@ for(const [height,scroll] of [[180,0],[1000,0],[1000,400]])test(`solid shares na
   await consumer.prepare({prompt:'GLYPH',request:{id:'admitted-scroll',prompt:'GLYPH'}});
   f.input.scrollTop=scroll+160;f.input.dispatchEvent(new Event('scroll'));
   assert.equal(mesh.position.y,shifted,'admitted solid retains its scroll origin');
- }finally{consumer.dispose();geometry.dispose();}
+ }finally{await consumer.dispose();geometry.dispose();}
 });
 
 test('initial native writing window sits inside the authored kiln opening instead of over the mold',async()=>{
@@ -90,12 +90,12 @@ test('initial native writing window sits inside the authored kiln opening instea
    assert.ok(p.x>-.23&&p.x<.23&&p.y>-.22&&p.y<.22&&p.z>.1&&p.z<.3,`writing corner outside kiln opening: ${p.toArray()}`);
   }
   assert.ok(Math.abs(root.quaternion.dot(rotation))>1-1e-8,'writing plane faces the same direction as its kiln');
- }finally{consumer.dispose();}
+ }finally{await consumer.dispose();}
 });
 
 test('the mounted lettering owns a stationary render aperture carried by its native pose',async()=>{
  const f=fixture(),consumer=await createMountedGenerationPrompt({...f,signal:new AbortController().signal});
- try{f.frameTick();const root=f.frame.children[0];assert.equal(root.isClippingGroup,true,'long solid lettering needs the same bounded opening as its native editor');assert.equal(root.clippingPlanes.length,2);}finally{consumer.dispose();}
+ try{f.frameTick();const root=f.frame.children[0];assert.equal(root.isClippingGroup,true,'long solid lettering needs the same bounded opening as its native editor');assert.equal(root.clippingPlanes.length,2);}finally{await consumer.dispose();}
 });
 
 test('admission reuses the prepared draft geometry without another full vertex-buffer clone',async()=>{
@@ -103,7 +103,7 @@ test('admission reuses the prepared draft geometry without another full vertex-b
  const pending=createMountedGenerationPrompt({...f,prompt:'ADMITTED',signal:new AbortController().signal});await tick();const worker=f.worker();
  worker.onmessage({data:{id:worker.last.id,attributes:{position:{array:new Float32Array([0,0,0,1,0,0,0,1,0]),itemSize:3,normalized:false}},groups:[],mask:{},samples:[],surface:[]}});
  const consumer=await pending;
- try{const mesh=f.frame.children[0].children[0],geometry=mesh.geometry;await consumer.prepare({prompt:'ADMITTED',request:{id:'real-request',prompt:'ADMITTED'}});assert.equal(mesh.geometry,geometry,'admitting the already prepared draft must retain its geometry');assert.equal(consumer.debugState().request,'real-request');}finally{consumer.dispose();}
+ try{const mesh=f.frame.children[0].children[0],geometry=mesh.geometry;await consumer.prepare({prompt:'ADMITTED',request:{id:'real-request',prompt:'ADMITTED'}});assert.equal(mesh.geometry,geometry,'admitting the already prepared draft must retain its geometry');assert.equal(consumer.debugState().request,'real-request');}finally{await consumer.dispose();}
 });
 
 test('thermal preparation precedes admission and retains the same body with the same draft',async()=>{
@@ -115,7 +115,7 @@ test('thermal preparation precedes admission and retains the same body with the 
   await draft;assert.equal(constructions,1,'real thermal body must be prepared with the draft, before Generate');assert.ok(mask);
   await consumer.prepare({prompt:'COLD DRAFT',request:{id:'admitted',prompt:'COLD DRAFT'}});
   assert.equal(constructions,1,'admission must reuse the prepared thermal body');assert.equal(disposals,0);f.frameTick();assert.equal(visibility.at(-1),false,'attached char remains hidden during native editing');
- }finally{consumer.dispose();}
+ }finally{await consumer.dispose();}
  assert.equal(disposals,1,'consumer disposal releases retained thermal state');
 });
 
@@ -132,5 +132,14 @@ test('in-flight thermal construction is reused on admission and disposed before 
   const admit=consumer.prepare({prompt:'FIRST',request:{id:'first'}});releaseBody();await Promise.all([draft,admit]);assert.equal(events.length,2,'same admission must not rebuild');
   const next=consumer.prepare({prompt:'SECOND'});await answer();assert.deepEqual(events.map(e=>e[0]),['start','built','disposed','start']);
   const clear=consumer.prepare({prompt:''});releaseBody();await Promise.all([next,clear]);assert.deepEqual(events.map(e=>e[0]),['start','built','disposed','start','built','disposed']);assert.equal(consumer.thermalBody,null);
- }finally{consumer.dispose();}
+ }finally{await consumer.dispose();}
+});
+
+test('admitted text activates the prepared shared field and Return only suspends its clock',async()=>{
+ const f=fixture();let amount=1,now=0,resets=0;f.workshop.read=()=>({amount});const calls=[];
+ const fire={prepare:async()=>calls.push('prepared'),setActive:async v=>calls.push(['active',v]),present:async v=>calls.push(['visible',v]),setEmission:v=>calls.push(['emitting',v]),dispose:async()=>{},read:()=>({phase:'prepared'})};
+ const consumer=await createMountedGenerationPrompt({...f,signal:new AbortController().signal,createFire:async()=>fire,clock:()=>now,createBurnBody:async()=>({setMounted(){},reset(){resets++;},read:()=>({steps:0}),dispose(){}})});
+ try{const work=consumer.prepare({prompt:'BURN'});await tick();const w=f.worker();w.onmessage({data:{id:w.last.id,attributes:{position:{array:new Float32Array([0,0,0,1,0,0,0,1,.1]),itemSize:3,normalized:false}},groups:[],mask:{},samples:[],surface:[]}});await work;
+ await consumer.prepare({prompt:'BURN',request:{id:'first',prompt:'BURN'}});f.frameTick();await consumer.setActive(true);assert.equal(resets,1);now=1000;f.frameTick();amount=0;f.frameTick();const before=consumer.debugState().burner.elapsedSeconds;now=9000;f.frameTick();assert.equal(consumer.debugState().burner.elapsedSeconds,before);amount=1;f.frameTick();assert.equal(resets,1);assert.ok(calls.some(x=>Array.isArray(x)&&x[0]==='emitting'&&x[1]));
+ }finally{await await consumer.dispose();}
 });

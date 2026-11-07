@@ -3224,6 +3224,7 @@ function fireLightFieldRouteParams() {
   for (const [key, value] of new URLSearchParams(window.location.hash.replace(/^#/, ''))) {
     if (key.startsWith('volume_light_field')) merged.set(key, value);
   }
+  if(mountedFlameState&&!activeSceneComposition)for(const [key,value]of Object.entries(mountedFlameState.route))merged.set(key,value);
   return resolveFlameLightingRoute(merged);
 }
 
@@ -3532,6 +3533,7 @@ import {createInvestigationEntry} from './investigation-entry.mjs';
 import {registerSceneObjectPoseHistory} from './scene-object-pose-history.mjs';
 import {mountedWorldPose,mountedLocalPose,createMountedSelectionHistory} from './mounted-workshop-pose.mjs';
 import {createMountedWorkshopMembership} from './mounted-workshop-membership.mjs';
+import {createMountedWorkshopFire} from './mounted-workshop-fire.mjs';
 import {createMountedGenerationPrompt} from './mounted-generation-prompt.mjs';
 import {installGenerationFlame} from './authoring-generation-flame.mjs';
 import {installMountedGenerationWorkshop} from './mounted-generation-workshop-page.mjs';
@@ -3845,8 +3847,9 @@ let authoringBusy = false;
 let vantageCaptureHeld = false;
 let volumePrototype = null;
 let sceneBurning = null;
+let mountedFlameState=null,mountedFlameOwner=null;
 let sceneAshAtmosphereSettings={density:0,color:[0,0,0],displayColor:[0,0,0]};
-const flameFeature=createAuthoredFlameFeature({runtime:()=>volumePrototype,composed:()=>!!activeSceneComposition,visible:()=>isSceneItemVisible('flame-field')});
+const flameFeature=createAuthoredFlameFeature({runtime:()=>volumePrototype,composed:()=>!!activeSceneComposition||!!mountedFlameState,visible:()=>mountedFlameState&&!activeSceneComposition?mountedFlameState.active:isSceneItemVisible('flame-field')});
 const syncAuthoredFireActivity=flameFeature.sync;
 let ownerVolumeReady = null;
 let annularBurner = null;
@@ -5710,6 +5713,7 @@ function projectAuthoredFlameSourceControls(entry=primaryAuthoredFlameSource()) 
 }
 
 function authoredFlameSourceRecords(){
+  if(mountedFlameState&&!activeSceneComposition)return mountedFlameState.records;
   return workingScene.objects.filter(record=>record.type===FLAME_EMITTER_TYPE).map(record=>{
     const raw=serializeSceneObject(record);
     if(!raw.emission)raw.emission={domainId:FIRE_DOMAIN_ID,settings:Object.fromEntries(Object.entries(readVolumeSettingsValues().domControls).filter(([id])=>fireControlOwner(id)==='source'))};
@@ -19883,6 +19887,7 @@ function linkedVolumeEmitterInletVelocity() {
 }
 
 function readVolumeControls({quality=viewportDisplay.quality,document=globalThis.document,routeParams=null}={}) {
+  if(mountedFlameState&&!activeSceneComposition&&document===globalThis.document)return {...mountedFlameState.controls};
   const volumeScene = document.getElementById('volume-scene').value;
   const volumeSceneRequested = document.getElementById('volume-scene').dataset.volumeSceneRequest || volumeScene;
   const pressureConfig = volumePressureConfigForMode(document.getElementById('volume-pressure-mode').value, volumeScene);
@@ -23522,7 +23527,68 @@ async function writeFirstFlameFieldStateUnchecked(value) {
   window.__kaminosFirstFlameMount=mounting;
   return mounting;
 }
+// Temporary native fire composition. Saved authored composition, controls and
+// history remain untouched; the borrowed runtime is withdrawn before Add Flame.
+async function createMountedPromptFire({root,body,burning,signal}) {
+ const load=sceneLoadRequests.current();
+ const owner=createMountedWorkshopFire({ordinary:()=>!!activeSceneComposition,
+  epoch:()=>sceneLoadRequests.current(),
+  acquire:async()=>{
+   signal.throwIfAborted();
+   const [schemaResponse,referenceResponse,studyResponse]=await Promise.all([fetch('./volume-settings-preset-schema-v2.json'),fetch('./artifacts/generation-flame/basin.json'),fetch('./artifacts/inference-kiln/study.json')]);
+   if(!schemaResponse.ok||!referenceResponse.ok||!studyResponse.ok)throw Error('Workshop flame settings unavailable');
+   const [schema,reference,study]=await Promise.all([schemaResponse.json(),referenceResponse.json(),studyResponse.json()]);
+   const response=await fetch(`/api/volume-settings-preset?id=${encodeURIComponent(reference.presetId)}`);if(!response.ok)throw Error('Workshop flame basin unavailable');
+   const artifact=await response.json(),receipt=validateVolumeSettingsPresetDocument(artifact,reference.presetId,schema);
+   const authored=projectFireSettingsToSchema(receipt.preset,schema);
+   for(const axis of ['domControls','rendererControls','presentationControls'])for(const descriptor of Object.values(authored[axis]||{}))if(Object.hasOwn(study.query,descriptor.param)){const raw=study.query[descriptor.param];delete descriptor.rawValue;descriptor.value=descriptor.type==='checkbox'?['1','true'].includes(raw):['range','number'].includes(descriptor.type)?Number(raw):raw;}
+   // Explicit first-consumer workload: the existing small kiln, with a single
+   // retained combined grid. Outer-world smoke has no role inside this opening.
+   for(const [id,value]of [['volume-resolution',32],['volume-steps',8],['volume-render-scale',.4],['volume-fine-velocity',0],['volume-fine-pressure',0],['volume-world-smoke','off'],['volume-world-smoke-intermediate','off']]){const d=authored.domControls[id];if(!d)throw Error('Missing workshop control '+id);d.value=value;delete d.rawValue;}
+   const recipe=defaultKilnRecipe(document,artifact,authored),copy=document.implementation.createHTMLDocument('Workshop flame controls');
+   for(const original of document.querySelectorAll('input[id],select[id]')){const node=original.cloneNode(true);node.value=original.value;node.checked=original.checked;copy.body.append(node);}
+   for(const axis of ['domControls','rendererControls'])for(const setting of Object.values(authored[axis]||{})){const node=copy.getElementById(setting.id);if(!node)throw Error('Unsupported workshop control '+setting.id);if(node.type==='checkbox')node.checked=setting.value;else{const value=setting.rawValue??setting.value;if(node.type==='range'){node.min=String(Math.min(Number(node.min),Number(value)));node.max=String(Math.max(Number(node.max),Number(value)));node.step='any';}node.value=String(value);if(node.type==='select-one'&&node.value!==String(value))throw Error('Unsupported workshop value '+setting.id);}}
+   const route=Object.fromEntries(resolveFlameLightingRoute({...recipe.plan.composition.route,volume_light_field_test_scene:'0',volume_collision:'off'}));
+   const settings={...readVolumeControls({quality:'full',document:copy,routeParams:new URLSearchParams(route)}),rayStepTelemetry:false,lookFreeze:0};
+   signal.throwIfAborted();if(activeSceneComposition||load!==sceneLoadRequests.current())throw Error('The scene changed before workshop fire acquisition');
+   const saved={controls:readVolumeControls(),frame:volumePrototype?.presentationFrame?.(),world:volumePrototype?.worldFrame?.(),paused:volumePrototype?.debugState().simulationPaused??false,depth:fireLightFieldRouteParams().get('volume_light_field_scene_depth')==='1'};
+   const state={controls:settings,route,active:false,records:recipe.plan.flameSources,identity:{presetId:reference.presetId,variant:'mounted-kiln-32-combined',settings:authored}};
+   let gas=null,detach=null,host=null;
+   const dispose=async()=>{
+    detach?.();detach=null;gas?.dispose();gas=null;
+    if(mountedFlameState!==state)return;
+    await flameFeature.setActive(false);await releaseSceneRadianceRoute();mountedFlameState=null;
+    if(host){host.setPresentationTransform(saved.frame?.presentationTransform??{translate:[0,0,0],scale:1});host.setSceneCompositionPresentation(false);host.setImmersedSources([]);host.setControls(saved.controls);host.setSimulationPaused(saved.paused);host.restoreWorldFrame(saved.world);}
+    window.kaminosOrdinaryDepthSetEnabled?.(saved.depth);window._kaminosDirty?.();
+   };
+   try{
+    mountedFlameState=state;
+    if(!volumePrototype)await initKaminosVolumeRoute();host=volumePrototype;
+    signal.throwIfAborted();if(activeSceneComposition||load!==sceneLoadRequests.current())throw Error('The scene changed during workshop fire acquisition');
+    host.setControls(settings);host.setSceneCompositionPresentation(true);host.setRaymarchSmokePresentationMode(authored.presentationControls['raymarch-smoke-presentation'].value);
+    host.relocateOrdinaryDomain(recipe.plan.flameDomainTranslation,[],recipe.plan.flameDomainScale);
+    const sources=flameSourceInputs(recipe.plan.flameSources,{controls:settings,translation:recipe.plan.flameDomainTranslation,scale:recipe.plan.flameDomainScale,visible:()=>true});
+    const setEmission=value=>host.setImmersedSources(sources.map(source=>({...source,controls:{...source.controls,immersedSourceEnabled:!!value&&source.controls.immersedSourceEnabled}})));
+    setEmission(false);window.kaminosOrdinaryDepthSetEnabled?.(true);
+    // Borrowing prepares the native pipelines/grid while inactive. The shared
+    // scene and device remain their original owners throughout.
+    await new Promise(resolve=>requestAnimationFrame(resolve));
+    const context=await host.borrowThermalGpuContext();signal.throwIfAborted();
+    gas=await createLogGasSourceGpu(context);
+    const current=()=>burning()?body():null;
+    detach=host.bindGpuThermalConsumer({device:context.device,gasSource:gas.descriptor,resizeGrid:d=>gas.resize(d),materialMasks:()=>current()?[current().materialMask()]:[],
+     prepareSource(encoder,frame){gas.begin(encoder);current()?.encodeGasSource(encoder,frame,gas);gas.resolve(encoder);},
+     encode(encoder,frame){current()?.encode(encoder,frame);window._kaminosDirty?.();},
+     read:()=>({identity:'kaminos.mounted-prompt-burning.v1',objects:current()?[current().read()]:[],gasSource:gas.read()})});
+    await syncSceneRadianceRoute(new URLSearchParams(route));
+    return {setEmission,setFrame(frame){host.setPresentationTransform({translate:frame.translate.map((v,i)=>v+root.position.getComponent(i)*frame.scale),scale:frame.scale*root.scale.x});},
+     async setActive(value){state.active=!!value;await flameFeature.setActive(value);},dispose};
+   }catch(error){await dispose();throw error;}
+  }});
+ mountedFlameOwner=owner;return owner;
+}
 async function addFirstFlameField(presetId,{signal,lightingRoute={}}={}) {
+  await mountedFlameOwner?.withdraw();
   signal?.throwIfAborted();
   assertSceneConstructionAvailable();
   if(activeSceneComposition)return addBurnerObject('flame-source');
@@ -29789,7 +29855,7 @@ function setupAuthoringAssets(){
   const mountedPromptControls=document.createElement('div');mountedPromptControls.className='mounted-generation-actions';mountedPromptControls.hidden=true;document.getElementById('viewport').append(mountedPromptControls);
   const mountedPromptCeremony=installGenerationFlame({document,slot:mountedPromptSlot,createRenderer:async(_slot,options)=>{
     await workbenchViewerReady;await generationWorkshop.prepare();options.signal.throwIfAborted();
-    return createMountedGenerationPrompt({document,workshop:generationWorkshop,camera,controls:mountedPromptControls,statusSlot:mountedPromptSlot,onFrame:workbenchSceneFrames.onFrame,createBurnBody:prepared=>createSceneBurnBody({...prepared,renderer,scene,onFrame:workbenchSceneFrames.onFrame,kelvinPerHeat:()=>Number(document.getElementById('volume-physical-kelvin-per-heat').value),ground:()=>({center:[groundPlane.position.x,groundPlane.position.y,groundPlane.position.z],height:groundPlane.position.y,radius:5,visible:groundPlane.visible})}),...options});
+    return createMountedGenerationPrompt({document,workshop:generationWorkshop,camera,controls:mountedPromptControls,statusSlot:mountedPromptSlot,onFrame:workbenchSceneFrames.onFrame,createFire:createMountedPromptFire,createBurnBody:prepared=>createSceneBurnBody({...prepared,renderer,scene,onFrame:workbenchSceneFrames.onFrame,kelvinPerHeat:()=>mountedFlameState?.controls.physicalKelvinPerHeat??Number(document.getElementById('volume-physical-kelvin-per-heat').value),ground:()=>({center:[groundPlane.position.x,groundPlane.position.y,groundPlane.position.z],height:groundPlane.position.y,radius:5,visible:groundPlane.visible})}),...options});
   }});
   // Acquisition runs during app preparation, before Generate. Return controls
   // workshop visibility without cancelling the image request or its consumer.
