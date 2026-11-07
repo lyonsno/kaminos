@@ -14166,6 +14166,7 @@ async function installOwnerWorkbenchEntry() {
   atmosphere:{async open(settings){await workbenchViewerReady;await ownerVolumeReady;const {createAshAtmosphere}=await import('./ash/atmosphere-gpu.mjs');return createAshAtmosphere({scene,camera,renderer,volume:{sharedAshAtmosphere:()=>structuredClone(sceneAshAtmosphereSettings),setSharedAshAtmosphere(value){sceneAshAtmosphereSettings=structuredClone(value);volumePrototype?.setSharedAshAtmosphere(value);}},groundY:groundPlane.position.y,settings});}},
   rendering:{gi:value=>setSceneGIControls(value),readGI:()=>({...sceneGISettings}),
     reflections:value=>window.kaminosSceneReflections.set(value),readReflections:()=>window.kaminosSceneReflections.read(),
+    openGISourceFootprint:()=>sceneGI.openSourceFootprint(),
     openGISourceComparison:(root,candidates)=>{if(!window.kaminosGISourceComparison)throw Error('Open this comparison with ?experiment=gi-source-study');return window.kaminosGISourceComparison.open(root,candidates);},
     readFireLighting:()=>window.kaminosFireLightFieldDebugState(),muteFireLighting:value=>window.kaminosFireLightFieldSetWitnessMute(value)},
   flame:{async open(){await workbenchViewerReady;return openFlameWorkbench();}}};

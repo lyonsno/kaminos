@@ -5,6 +5,7 @@ import SceneGIHistory from './scene-gi-history.mjs';
 import SceneLightingFilter from './scene-lighting-filter.mjs';
 import SceneSurfaceLighting from './scene-surface-lighting.mjs';
 import {createGISourceComparison} from './scene-gi-source-comparison.mjs';
+import {createSourceFootprintControl} from './scene-gi-footprint.mjs';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { resolveSceneGISettings, resolveSceneGIEstimatorSettings, sceneGIReceives } from './scene-gi-settings.mjs';
 import SceneReflections from './scene-reflections.mjs';
@@ -41,6 +42,8 @@ export function createSceneGI(scene, camera, aoIntensity, {renderer=null,reflect
     return output;
   })();
   const feedbackIncident=history.feedbackForSurface().toVar('sourceFeedbackIrradiance');
+  const sourceFootprint=createSourceFootprintControl(effect,reason=>history.reset(reason));
+
   const feedbackOutput=Fn(([],{material})=>{
     if(!sceneGIReceives(material))return output;
     // Return reflected *unboosted* irradiance to transport. Artistic gain,
@@ -219,7 +222,7 @@ export function createSceneGI(scene, camera, aoIntensity, {renderer=null,reflect
       effect.useLinearThickness.value = next.linearThickness;
       effect.backfaceLighting.value = next.backfaceLighting;
       effect.aoIntensity.value = next.aoContrast;
-      effect.useMipSampling.value = next.mipSampling;
+      sourceFootprint.ordinary(next.mipSampling);
       effect.usePerspectiveReconstruction.value = next.perspectiveReconstruction;
       if(Object.keys(next).some(key=>next[key]!==estimator[key]))history.reset('estimator-parameters');
       for(const pair of filters.values())for(const {filter} of [pair.ao,pair.gi])for(const key of ['depthPhi','normalPhi','lumaPhi'])filter[key].value=next[key];
@@ -240,8 +243,10 @@ export function createSceneGI(scene, camera, aoIntensity, {renderer=null,reflect
       }
       return { ...opticalFinish };
     },
+    openSourceFootprint:()=>sourceFootprint.open(),
     requestHistoryFrames(){reflectionField?.requestFrames();if(settings.mode==='combined'&&settings.temporal)history.requestFrames();},
     needsHistoryFrame:()=>Boolean(reflectionField?.needsFrame())||(settings.mode==='combined'&&settings.temporal&&history.needsFrame()),
+
     historyStatus:()=>settings.mode==='combined'&&settings.temporal&&settings.temporalRefine?history.state():null,
     resetHistory(reason) { history.reset(reason);reflectionField?.reset(reason); },
     async readback(renderer,kind='incoming') {
