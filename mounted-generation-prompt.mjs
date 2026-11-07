@@ -9,7 +9,7 @@ export async function createMountedGenerationPrompt({document,workshop,camera,on
  const viewport=document.getElementById('viewport');
  // Initial authored pose in cold-stage's kiln opening; it remains a normal
  // editable workshop member after mounting. Text scrolls within this window.
- const root=new Group();root.name='Generation prompt';root.position.set(1.55,2.46,-3.4);root.rotation.y=-.15;root.scale.setScalar(2);
+ const root=new Group();root.name='Generation prompt';root.position.set(1.17,2.46,-3.4);root.rotation.y=-.15;root.scale.setScalar(1.75);
  const material=new MeshStandardMaterial({color:0xb8b2a8,roughness:.8});material.userData.kaminosBurnAppearance='composed';
  const mesh=new Mesh(new BufferGeometry(),material);mesh.castShadow=true;mesh.receiveShadow=true;root.add(mesh);
  // Match the relief's front face (.0175) to the native editor plane (.018),
