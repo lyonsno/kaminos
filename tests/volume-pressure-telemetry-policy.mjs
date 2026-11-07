@@ -1,0 +1,6 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import {runInNewContext} from 'node:vm';
+const source=readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');const start=source.indexOf('  function beginPressureResidualProbe('),end=source.indexOf('  function finishPressureResidualProbe(',start);
+let passes=0;const encoder={beginComputePass(){passes++;return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};}};
+const scope={pressureResidualTelemetryEnabled:false,pressureResidualBeforePipeline:{},pressureResidualAfterPipeline:{},pressureResidualBindGroup:{},pressureResidualPartialsBuffer:{},pressureResidualReadbackBuffer:{},pressureResidualCopyPending:false,pressureResidualMapPending:false,state:{simStepCount:16},PRESSURE_RESIDUAL_PROBE_INTERVAL_STEPS:16,gridSize:32,gridHeight:32,fluidBindGroup:()=>({})};
+const run=runInNewContext(source.slice(start,end)+';beginPressureResidualProbe',scope);assert.equal(run(encoder),false,'serving policy must suppress the diagnostic before encode/copy/map');assert.equal(passes,0);scope.pressureResidualTelemetryEnabled=true;assert.equal(run(encoder),true);assert.equal(passes,1);

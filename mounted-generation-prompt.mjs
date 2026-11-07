@@ -26,7 +26,7 @@ export async function createMountedGenerationPrompt({document,workshop,camera,on
  const failure=e=>{if(!disposed){error=e.message;active=false;editor.setBurning(false);changed();}};
  function advance(){
   if(!burnWindow||!active)return;
-  if(visible)burnWindow.resume();else burnWindow.pause();
+  if(visible&&workshop.read().amount===1)burnWindow.resume();else burnWindow.pause();
   const state=burnWindow.read();fire?.setEmission(visible&&state.emitting);strip.advance(state.progress);
   if(state.done&&finishResolve){const resolve=finishResolve;finishResolve=null;active=false;fire?.setActive(false).then(resolve,failure);editor.setBurning(false);}
  }
@@ -71,7 +71,7 @@ export async function createMountedGenerationPrompt({document,workshop,camera,on
  if(createFire){fire=await createFire({root,body:()=>body,burning:()=>active&&visible,signal});firePreparation=fire.prepare();firePreparation.catch(failure);}
  stop=onFrame(()=>{
   const mounted=workshop.read().amount>0&&root.parent!==null&&root.visible&&workshop.handles().some(h=>h.id===handle.id);
-  visible=mounted;if(fire)fire.present(mounted,presentation()).catch(failure);advance();if(statusSlot)statusSlot.hidden=workshop.read().amount===0;if(controls)controls.hidden=!mounted;layer.hidden=!mounted;layer.style.opacity=String(workshop.read().amount);
+  visible=mounted;if(fire)fire.present(mounted&&workshop.read().amount===1,presentation()).catch(failure);advance();if(statusSlot)statusSlot.hidden=workshop.read().amount===0;if(controls)controls.hidden=!mounted;layer.hidden=!mounted;layer.style.opacity=String(workshop.read().amount);
   // Editor follows the shared camera and the native transform, including Undo.
   if(mounted){strip.sync();editor.position();}
   body?.setMounted(mounted&&active);

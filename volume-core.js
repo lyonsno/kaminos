@@ -12285,6 +12285,7 @@ export function createKaminosVolumePrototype({
   let pressureResidualMapPending = false;
   let pressureResidualMapStartedFrame = 0;
   let pressureResidualMapGeneration = 0;
+  let pressureResidualTelemetryEnabled = true;
   let boundarySidecarWriteBindGroup = null;
   let boundarySplatComputeBindGroups = [];
   let boundarySplatRenderBindGroup = null;
@@ -18161,6 +18162,7 @@ export function createKaminosVolumePrototype({
   }
 
   function beginPressureResidualProbe(encoder) {
+    if (!pressureResidualTelemetryEnabled) return false;
     if (!pressureResidualBeforePipeline || !pressureResidualAfterPipeline || !pressureResidualBindGroup
       || !pressureResidualPartialsBuffer || !pressureResidualReadbackBuffer) {
       return false;
@@ -28972,6 +28974,16 @@ export function createKaminosVolumePrototype({
         simStepCount: state.simStepCount,
         authority: 'witness-owned-compute-pause-render-live-v0',
       };
+    },
+    setPressureResidualTelemetryEnabled(enabled) {
+      if(typeof enabled!=='boolean')throw Error('Pressure telemetry policy must be Boolean');
+      if(enabled!==pressureResidualTelemetryEnabled){
+        pressureResidualTelemetryEnabled=enabled;
+        retirePressureResidualMap(enabled?'diagnostic-enabled':'diagnostic-disabled');
+        state.pressureSolver={...state.pressureSolver,residual:null,residualError:enabled?null:'diagnostic-disabled'};
+      }
+      state.pressureResidualTelemetryEnabled=enabled;
+      return enabled;
     },
     async borrowThermalGpuContext({prepareControls=false}={}){
       await ensureGpu();if(prepareControls)updateUniforms(performance.now());return {device,dimensions:[gridSize,gridHeight,gridSize],ownership:'borrowed-device-no-destruction-authority'};

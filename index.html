@@ -23552,21 +23552,21 @@ async function createMountedPromptFire({root,body,burning,signal}) {
    const route=Object.fromEntries(resolveFlameLightingRoute({...recipe.plan.composition.route,volume_light_field_test_scene:'0',volume_collision:'off'}));
    const settings={...readVolumeControls({quality:'full',document:copy,routeParams:new URLSearchParams(route)}),rayStepTelemetry:false,lookFreeze:0};
    signal.throwIfAborted();if(activeSceneComposition||load!==sceneLoadRequests.current())throw Error('The scene changed before workshop fire acquisition');
-   const saved={controls:readVolumeControls(),frame:volumePrototype?.presentationFrame?.(),world:volumePrototype?.worldFrame?.(),paused:volumePrototype?.debugState().simulationPaused??false,depth:fireLightFieldRouteParams().get('volume_light_field_scene_depth')==='1'};
+   const saved={controls:readVolumeControls(),frame:volumePrototype?.presentationFrame?.(),world:volumePrototype?.worldFrame?.(),paused:volumePrototype?.debugState().simulationPaused??false,pressureTelemetry:volumePrototype?.debugState().pressureResidualTelemetryEnabled!==false,depth:fireLightFieldRouteParams().get('volume_light_field_scene_depth')==='1'};
    const state={controls:settings,route,active:false,records:recipe.plan.flameSources,identity:{presetId:reference.presetId,variant:'mounted-kiln-32-combined',settings:authored}};
    let gas=null,detach=null,host=null;
    const dispose=async()=>{
     detach?.();detach=null;gas?.dispose();gas=null;
     if(mountedFlameState!==state)return;
     await flameFeature.setActive(false);await releaseSceneRadianceRoute();mountedFlameState=null;
-    if(host){if(saved.frame?.physicalTransform)host.relocateOrdinaryDomain(saved.frame.physicalTransform.translate,[],saved.frame.physicalTransform.scale);host.setPresentationTransform(saved.frame?.presentationTransform??{translate:[0,0,0],scale:1});host.setSceneCompositionPresentation(false);host.setImmersedSources([]);host.setControls(saved.controls);host.setSimulationPaused(saved.paused);host.restoreWorldFrame(saved.world);}
+    if(host){if(saved.frame?.physicalTransform)host.relocateOrdinaryDomain(saved.frame.physicalTransform.translate,[],saved.frame.physicalTransform.scale);host.setPresentationTransform(saved.frame?.presentationTransform??{translate:[0,0,0],scale:1});host.setSceneCompositionPresentation(false);host.setImmersedSources([]);host.setControls(saved.controls);host.setSimulationPaused(saved.paused);host.restoreWorldFrame(saved.world);host.setPressureResidualTelemetryEnabled(saved.pressureTelemetry);}
     window.kaminosOrdinaryDepthSetEnabled?.(saved.depth);window._kaminosDirty?.();
    };
    try{
     if(!volumePrototype)await initKaminosVolumeRoute();host=volumePrototype;
     mountedFlameState=state;
     signal.throwIfAborted();if(activeSceneComposition||load!==sceneLoadRequests.current())throw Error('The scene changed during workshop fire acquisition');
-    host.setControls(settings);host.setSceneCompositionPresentation(true);host.setRaymarchSmokePresentationMode(authored.presentationControls['raymarch-smoke-presentation'].value);
+    host.setControls(settings);host.setPressureResidualTelemetryEnabled(false);host.setSceneCompositionPresentation(true);host.setRaymarchSmokePresentationMode(authored.presentationControls['raymarch-smoke-presentation'].value);
     host.relocateOrdinaryDomain(recipe.plan.flameDomainTranslation,[],recipe.plan.flameDomainScale);
     const sources=flameSourceInputs(recipe.plan.flameSources,{controls:settings,translation:recipe.plan.flameDomainTranslation,scale:recipe.plan.flameDomainScale,visible:()=>true});
     const setEmission=value=>host.setImmersedSources(sources.map(source=>({...source,controls:{...source.controls,immersedSourceEnabled:!!value&&source.controls.immersedSourceEnabled}})));
@@ -23582,6 +23582,16 @@ async function createMountedPromptFire({root,body,burning,signal}) {
      encode(encoder,frame){current()?.encode(encoder,frame);window._kaminosDirty?.();},
      read:()=>({identity:'kaminos.mounted-prompt-burning.v1',objects:current()?[current().read()]:[],gasSource:gas.read()})});
     await syncSceneRadianceRoute(new URLSearchParams(route));
+    // Exercise the actual cold native workload before admission. The source is
+    // off and the prompt consumer is inactive, so no text fuel is consumed.
+    host.setSimulationPaused(true);host.resetThermalExperimentFluid();host.setSimulationPaused(false);
+    const before=host.debugState().frameCount;
+    host.setCanvasPresentationSuppressed(true);
+    try {
+      await host.setActive(true);
+      while(host.debugState().frameCount===before){signal.throwIfAborted();if(host.debugState().error)throw Error(host.debugState().error);await new Promise(resolve=>requestAnimationFrame(resolve));}
+      await context.device.queue.onSubmittedWorkDone();
+    } finally {await host.setActive(false);host.setCanvasPresentationSuppressed(false);}
     return {setEmission,setFrame(frame){host.setPresentationTransform({translate:frame.translate.map((v,i)=>v+root.position.getComponent(i)*frame.scale),scale:frame.scale*root.scale.x});},
      async setActive(value){state.active=!!value;await flameFeature.setActive(value);},dispose};
    }catch(error){await dispose();throw error;}
