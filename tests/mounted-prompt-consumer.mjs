@@ -143,3 +143,19 @@ test('admitted text activates the prepared shared field and Return only suspends
  await consumer.prepare({prompt:'BURN',request:{id:'first',prompt:'BURN'}});f.frameTick();await consumer.setActive(true);assert.equal(resets,1);now=1000;f.frameTick();amount=.5;f.frameTick();assert.deepEqual(calls.filter(x=>Array.isArray(x)&&x[0]==='visible').at(-1),['visible',false],'partial transition must withdraw native binary-shadow fire before fading');amount=0;f.frameTick();const before=consumer.debugState().burner.elapsedSeconds;now=9000;f.frameTick();assert.equal(consumer.debugState().burner.elapsedSeconds,before);amount=1;f.frameTick();assert.equal(resets,1);assert.ok(calls.some(x=>Array.isArray(x)&&x[0]==='emitting'&&x[1]));
  }finally{await await consumer.dispose();}
 });
+
+test('keyboard admission reveals the solid once and preserves subsequent deliberate editing',async()=>{
+ const {installKilnPromptEditor}=await import('../kiln-prompt-editor.mjs');
+ const f=fixture(),presentation={visible:true},object=new Group();let blurs=0;
+ f.input.value='ADMITTED';f.document.activeElement=f.input;
+ f.input.blur=()=>{blurs++;f.document.activeElement=null;f.input.dispatchEvent(new Event('blur'));};
+ const editor=installKilnPromptEditor({...f,object,presentation});
+ try{
+  editor.setBurning(true);
+  assert.equal(presentation.visible,true,'keyboard admission must reveal physical lettering without requiring a click elsewhere');
+  assert.equal(blurs,1);assert.equal(f.input.value,'ADMITTED');
+  f.document.activeElement=f.input;f.input.dispatchEvent(new Event('focus'));editor.setBurning(true);
+  assert.equal(blurs,1,'repeated running state must not steal deliberate editing focus');
+  assert.equal(f.document.activeElement,f.input);
+ }finally{editor.dispose();}
+});

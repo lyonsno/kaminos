@@ -60,7 +60,7 @@ export function installKilnPromptEditor({document,viewport,input,camera,object,p
  // their original element and native setter; the consumer calls sync on render.
  const observer=new document.defaultView.ResizeObserver(position);observer.observe(viewport);
  sync();
- return {sync,position,setBurning(value){burning=!!value;present();},
+ return {sync,position,setBurning(value){const entering=!!value&&!burning;burning=!!value;if(entering&&document.activeElement===input)input.blur();present();},
   async rasterize(value){
    await document.fonts.ready;const h=measure(value),canvas=document.createElement('canvas');canvas.width=width;canvas.height=h;
    const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${h}"><foreignObject width="${width}" height="${h}"><div xmlns="http://www.w3.org/1999/xhtml" style="${typography}color:white;">${escape(value)}</div></foreignObject></svg>`;
