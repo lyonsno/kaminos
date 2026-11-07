@@ -62,6 +62,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   let points,external,lights,irradiance,prepareSurfaceSampling,smokeShadow,shadowSources,shadowExternal,captureSchedule,selectedEvaluationAvailable=false,shadowBank=null,shadowBankFallback=null;
   let sourceDomain=sceneSourceDomain(),builtDomain=null,sourceRadius=Math.sqrt(11);
   function buildPoints(count){
+  let points,external,lights,irradiance,prepareSurfaceSampling,smokeShadow,shadowSources,shadowExternal,captureSchedule,selectedEvaluationAvailable,shadowBank,shadowBankFallback;
   let pointBank=null;
   const sharedPreparation=comparison.implementation==='shared';
   const filterPattern=sharedPreparation?{count:filterSamples,bytes:0,route:'runtime-arithmetic',reason:null,node:null}:{count:filterSamples,bytes:0,route:'arithmetic',reason:'legacy-comparison',node:null};
@@ -151,19 +152,47 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     });
     return sum.mul(surfaceGain);
   })();
+  return {points,external,lights,irradiance,prepareSurfaceSampling,smokeShadow,shadowSources,shadowExternal,captureSchedule,selectedEvaluationAvailable,shadowBank,shadowBankFallback};
   }
-  function releasePoints(){shadowBank?.dispose();shadowBank=null;for(const light of lights)light.shadow.dispose();smokeShadow?.dispose(renderer);delete renderer.backend.get(external).texture;external.dispose();delete renderer.backend.get(shadowExternal).texture;shadowExternal.dispose();shadowSources.destroy();points.destroy();}
-  buildPoints(pointCount);
-  const originals=new Map(),localVisibility=createLocalSceneVisibility();let gather=null,geometryRevision=null,frame=null,disposed=false,valid=false;
+  const pointGeneration=()=>({points,external,lights,irradiance,prepareSurfaceSampling,smokeShadow,shadowSources,shadowExternal,captureSchedule,selectedEvaluationAvailable,shadowBank,shadowBankFallback});
+  const usePoints=g=>({points,external,lights,irradiance,prepareSurfaceSampling,smokeShadow,shadowSources,shadowExternal,captureSchedule,selectedEvaluationAvailable,shadowBank,shadowBankFallback}=g);
+  function releasePoints(g=pointGeneration()){g.shadowBank?.dispose();for(const light of g.lights)light.shadow.dispose();g.smokeShadow?.dispose(renderer);delete renderer.backend.get(g.external).texture;g.external.dispose();delete renderer.backend.get(g.shadowExternal).texture;g.shadowExternal.dispose();g.shadowSources.destroy();g.points.destroy();}
+  usePoints(buildPoints(pointCount));
+  let originals=new Map();const localVisibility=createLocalSceneVisibility();let gather=null,geometryRevision=null,frame=null,disposed=false,valid=false;
   let gain=1,sourceSoftness=0,surfaceScattering=false,smokeMode='distributed',angularPattern='fixed',angularRotation=0,retainComparisons=false;
   let sourceTransform=validateSceneSourceTransform();
   const status={identity:'hybrid-distributed-smoke-point-surfaces-v0',status:'awaiting-source',surfaceTransport:'gpu-point-regions',surfaceReceivers:0,pointCount,shadowResolution,shadowSoftness,shadowSampling,blockerSamples,filterSamples,maxShadowResolution:device.limits.maxTextureDimension2D,volumeGrid,sourceGrid,directions,
     geometryBuilds:0,visibilityBuilds:0,previewStale:false,receiverSpacingRequested:0,surfaceReconstructionRequested:0,
     limitations:['point-region-surface-approximation','center-cube-area-shadow-approximation','GPU-smoke-visibility-refresh-on-transform','CPU-local-BVH-rebuild-on-vertex-or-topology-edit','no-surface-bounce']};
   let rebuildRevision=0,rebuildTask=null,rebuilding=false;
-  function replaceLighting(){
-    releasePoints();buildPoints(pointCount);installAllMaterials();
-    for(const row of originals.values())for(const material of row.owned){material.sceneRadianceNode=irradiance;surfaceLighting?.bind(material,irradiance,prepareSurfaceSampling);material.needsUpdate=true;}
+  function replaceLighting(){stageLighting(()=>true).commit();}
+  // Candidate graphs own their textures and cloned materials. Compilation
+  // borrows them; every yield restores the accepted generation for drawing.
+  function stageLighting(isCurrent){
+    const accepted=pointGeneration(),acceptedMaterials=originals;
+    const candidate=buildPoints(pointCount),candidateMaterials=new Map();
+    const select=(generation,materials)=>{
+      usePoints(generation);originals=materials;
+      for(const [mesh,row] of materials)mesh.material=row.installed;
+    };
+    const disposeMaterials=materials=>{for(const row of materials.values())for(const material of row.owned){surfaceLighting?.unbind(material);material.dispose();}};
+    try {
+      usePoints(candidate);originals=candidateMaterials;
+      for(const [mesh,row] of acceptedMaterials)if(mesh.material===row.installed)mesh.material=row.source;
+      installAllMaterials();
+    }catch(error){disposeMaterials(candidateMaterials);releasePoints(candidate);select(accepted,acceptedMaterials);throw error;}
+    select(accepted,acceptedMaterials);
+    let settled=false;
+    const discard=()=>{if(settled)return;settled=true;disposeMaterials(candidateMaterials);releasePoints(candidate);};
+    return {
+      borrow(){select(candidate,candidateMaterials);return ()=>select(accepted,acceptedMaterials);},
+      commit(){
+        if(settled)return;
+        if(!isCurrent()){discard();return;}
+        settled=true;select(candidate,candidateMaterials);valid=false;
+        disposeMaterials(acceptedMaterials);releasePoints(accepted);
+      },discard,
+    };
   }
   function requestRebuild(){
     rebuildRevision++;
@@ -173,12 +202,13 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     const quiescent=rebuild.hold(true);
     rebuildTask=Promise.resolve().then(async()=>{
       await quiescent;
-      rebuilding=true;valid=false;
+      rebuilding=true;if(!rebuild.prepareRetained)valid=false;
       let compiled;
       do {
         if(disposed)return;
         compiled=rebuildRevision;
-        if(rebuild.prepare)await rebuild.prepare(()=>{if(!disposed)replaceLighting();});
+        if(rebuild.prepareRetained)await rebuild.prepareRetained(()=>stageLighting(()=>!disposed&&compiled===rebuildRevision));
+        else if(rebuild.prepare)await rebuild.prepare(()=>{if(!disposed)replaceLighting();});
         else {replaceLighting();await rebuild.compile();}
       } while(!disposed&&compiled!==rebuildRevision);
       if(!disposed){rebuilding=false;status.status='awaiting-source';rebuild.hold(false);onStatus({...status});}
@@ -199,6 +229,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       if(!list.every(m=>m.isMeshStandardMaterial||m.isMeshStandardNodeMaterial||m.isMeshPhysicalMaterial||m.isMeshPhysicalNodeMaterial))return;
       const owned=list.map(original=>{
         const material=cloneSceneRadianceMaterial(renderer.library,original),setup=material.setupMaterialLightings;
+        const radiance=irradiance,sampling=prepareSurfaceSampling;
         // The callback below injects a live graph outside Three's standard
         // material properties. Expose it to the material observer as well:
         // otherwise unchanged GI-source surfaces can skip uniform/binding
@@ -207,9 +238,9 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         const cacheKey=material.customProgramCacheKey;
         // This injected graph is not one of NodeMaterial's enumerated node
         // properties. A version bump alone can reuse its old texture bindings.
-        material.customProgramCacheKey=function(){return `${cacheKey.call(this)}:hybrid:${irradiance.uuid}`;};
-        surfaceLighting?.bind(material,irradiance,prepareSurfaceSampling);
-        material.setupMaterialLightings=function(builder){return [...setup.call(this,builder),new THREE.IrradianceNode(surfaceLighting?.forMaterial(builder,this,irradiance)??irradiance)];};return material;
+        material.customProgramCacheKey=function(){return `${cacheKey.call(this)}:hybrid:${radiance.uuid}`;};
+        surfaceLighting?.bind(material,radiance,sampling);
+        material.setupMaterialLightings=function(builder){return [...setup.call(this,builder),new THREE.IrradianceNode(surfaceLighting?.forMaterial(builder,this,radiance)??radiance)];};return material;
       });
       const installed=Array.isArray(source)?owned:owned[0];originals.set(mesh,{source,installed,owned});mesh.material=installed;
     });

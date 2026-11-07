@@ -89,3 +89,28 @@ const oldRequest=revisions.request();await new Promise(r=>setImmediate(r));
 assert.equal(tickets[0]?.isCurrent?.(),true,'current preparation owns promotion');
 const newRequest=revisions.request();assert.equal(tickets[0].isCurrent(),false,'newer request revokes old promotion');
 finishFirst();await Promise.all([oldRequest,newRequest]);assert.equal(tickets[1].isCurrent(),true);
+
+// A staged flame graph borrows candidate bindings only while compiling. Its
+// accepted predecessor remains available for viewport draws at every yield.
+const stagedEvents=[];let settleStaged,stagedTicket;
+const staged=lighting.createLightingPreparation({hold(){},compile:async ticket=>{
+ stagedTicket=ticket;const restore=ticket.visibility();stagedEvents.push('compile');restore();
+ await new Promise(resolve=>settleStaged=resolve);
+}});
+const stagedTask=staged.request(()=>({
+ borrow(){stagedEvents.push('borrow');return ()=>stagedEvents.push('restore');},
+ commit(){stagedEvents.push('commit');},discard(){stagedEvents.push('discard');},
+}));
+await new Promise(resolve=>setImmediate(resolve));
+assert.equal(staged.state().presentationHeld,false,'staged resources permit drawing the accepted predecessor');
+assert.equal(staged.state().held,true,'simulation evolution remains held');
+assert.deepEqual(stagedEvents,['borrow','compile','restore']);
+settleStaged();await stagedTask;
+assert.deepEqual(stagedEvents,['borrow','compile','restore','commit']);
+assert.equal(staged.state().presentationHeld,false);
+
+const rejectedEvents=[];
+const rejectedStage=lighting.createLightingPreparation({hold(){},compile:async()=>{throw Error('candidate rejected');}});
+await assert.rejects(rejectedStage.request(()=>({borrow:()=>()=>{},commit:()=>rejectedEvents.push('commit'),discard:()=>rejectedEvents.push('discard')})),/candidate rejected/);
+assert.deepEqual(rejectedEvents,['discard'],'failed replacement cannot retire the accepted generation');
+assert.equal(rejectedStage.state().presentationHeld,false,'accepted lighting remains drawable after candidate rejection');

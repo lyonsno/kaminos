@@ -4392,7 +4392,8 @@ let sceneViewerPaused = null;
 const sceneLoadRequests = workingScene.loads;
 let sceneDocumentFrameHolds = 0;
 function syncVolumeSceneFrameHold(lightingHeld = sceneLightingPreparation?.state().held === true) {
-  return volumePrototype?.setSceneLightingRebuildPending(lightingHeld || sceneDocumentFrameHolds > 0);
+  return volumePrototype?.setSceneLightingRebuildPending(lightingHeld || sceneDocumentFrameHolds > 0,
+    {presentRetained:sceneDocumentFrameHolds===0 && sceneLightingPreparation?.state().presentationHeld===false});
 }
 function createPageSceneDocumentSession(options = {}) {
   return createSceneDocumentSession({
@@ -11759,14 +11760,23 @@ async function initScene() {
     return () => { restoreBeauty?.(); restoreVis(); };
   };
   sceneLightingPreparation=createLightingPreparation({
-    compile:()=>withViewportVisibilityAsync(viewportVisibilityObjects(),isSceneItemVisible,async()=>{await sceneBeautyLods?.whenIdle?.();return compileSceneLighting(renderer,sceneGISettings.mode==='combined'?[sceneGI.source,sceneGI.beauty]:[prePass,scenePass],{visibility:()=>sceneBeautyLods?.borrowFrame(camera,currentBeautyFrameOptions())??(()=>{})});}),
+    compile:async({isCurrent,visibility}={})=>{
+      await sceneBeautyLods?.whenIdle?.();
+      return compileSceneLighting(renderer,sceneGISettings.mode==='combined'?[sceneGI.source,sceneGI.beauty]:[prePass,scenePass],{
+        live:!!visibility,isCurrent,visibility:()=>{
+          const restoreGraph=visibility?.(),restoreViewport=borrowViewportAndBeautyVisibility();
+          return ()=>{restoreViewport();restoreGraph?.();};
+        },
+      });
+    },
     liveCompile:({isCurrent})=>compileSceneLighting(renderer,sceneGISettings.mode==='combined'?[sceneGI.source,sceneGI.beauty]:[prePass,scenePass],{live:true,isCurrent,visibility:borrowViewportAndBeautyVisibility}),
     recover:()=>window.__kaminosSceneRadiance?.debugState().status==='lighting-compile-failed'?window.__kaminosSceneRadiance.retryRebuild():undefined,
     hold:syncVolumeSceneFrameHold,
     onStatus:state=>{
+      syncVolumeSceneFrameHold(state.held);
       const node=document.getElementById('scene-lighting-preparation-status');
       node.hidden=!state.pending&&!state.error;
-      node.querySelector('span').textContent=state.error?`Lighting preparation failed: ${state.error}`:(state.held?'Preparing lighting — previous frame shown':'Preparing lighting — scene remains live');
+      node.querySelector('span').textContent=state.error?`Lighting preparation failed: ${state.error}`:(state.presentationHeld?'Preparing lighting — previous frame shown':state.held?'Preparing lighting — simulation held; viewport live':'Preparing lighting — scene remains live');
       node.querySelector('button').hidden=!state.error;
       if (typeof loadingTelemetry !== 'undefined') {
         if (state.error) loadingTelemetry.fail('lighting-compile', state.error);
@@ -12360,7 +12370,7 @@ async function initScene() {
     lastFrame:waterFeature.host?.state().lastFrame??null,source:volumePrototype?.debugState().sceneTransport??null,
     refraction:'existing-screen-space-scene-query',displayTransform:'one-final-scene-camera'});
   const frameComposition=createSceneFrameComposition({
-    readInputs:()=>({lightingHeld:deviceRecoveryHeld()||sceneLightingPreparation?.state().held||(typeof sceneDocument!=='undefined'&&sceneDocument?.state().phase==='applying'),
+    readInputs:()=>({lightingHeld:deviceRecoveryHeld()||sceneLightingPreparation?.state().presentationHeld||(typeof sceneDocument!=='undefined'&&sceneDocument?.state().phase==='applying'),
       exclusiveInspection:exclusiveInspectionRender,manualInspection:manualInspectionRender,
       transportRequired:authoredWaterFlameTransportActive||authoredFlameHDRActive,
       radianceReady:!window.__kaminosSceneRadiance||window.__kaminosSceneRadiance.canRender()}),
@@ -12500,7 +12510,7 @@ async function initScene() {
     requestAnimationFrame(animate);
     if(outputCaptureExtent)return;
     if(deviceRecoveryHeld())return;
-    if(sceneLightingPreparation?.state().held||(typeof sceneDocument!=='undefined'&&sceneDocument?.state().phase==='applying')||(typeof startupRestorePending!=='undefined'&&startupRestorePending)){controls.update();return;}
+    if(sceneLightingPreparation?.state().presentationHeld||(typeof sceneDocument!=='undefined'&&sceneDocument?.state().phase==='applying')||(typeof startupRestorePending!=='undefined'&&startupRestorePending)){controls.update();return;}
     // Outside any render: a quality change resizes render targets.
     syncViewportQuality(syncViewportRendererSize);
     if(recordingExtent)needsRender=true;
@@ -21021,7 +21031,7 @@ async function mountSceneRadianceRoute(params) {
     if(distributed)renderingMode='shared';
     const module=await import(hybrid ? './scene-hybrid-radiance.mjs' : distributed ? './scene-distributed-radiance.mjs' : './scene-radiance.mjs');
       window.__kaminosSceneRadiance = distributed
-        ? module.mountDistributedSceneRadiance({renderer,scene,prototype:volumePrototype,device:sharedGpu.device,...(hybrid?{surfaceLighting:window.__kaminosSurfaceLighting,...readFireShadowSceneSettings(params),rebuild:{hold:value=>sceneLightingPreparation.setExternalHold(value),prepare:change=>window.kaminosCompileSceneLighting(change)},smokeRefinement:Number(params.get('volume_light_field_hybrid_smoke_refinement')??4)}:{}),getSourceRegions:(transform,domain)=>module.authoredSourceRegions(authoredFlameSourceRecords(),{transform,domain,controls:readVolumeControls()}),getSourceGuide:()=>({position:[...flameEmitterPose.position],radius:Number(document.getElementById('volume-input-radius').value),height:Number(document.getElementById('volume-plume-height').value),depth:Number(document.getElementById('volume-emitter-source-depth').value)}),onStatus:state=>{
+        ? module.mountDistributedSceneRadiance({renderer,scene,prototype:volumePrototype,device:sharedGpu.device,...(hybrid?{surfaceLighting:window.__kaminosSurfaceLighting,...readFireShadowSceneSettings(params),rebuild:{hold:value=>sceneLightingPreparation.setExternalHold(value),prepareRetained:change=>window.kaminosCompileSceneLighting(change)},smokeRefinement:Number(params.get('volume_light_field_hybrid_smoke_refinement')??4)}:{}),getSourceRegions:(transform,domain)=>module.authoredSourceRegions(authoredFlameSourceRecords(),{transform,domain,controls:readVolumeControls()}),getSourceGuide:()=>({position:[...flameEmitterPose.position],radius:Number(document.getElementById('volume-input-radius').value),height:Number(document.getElementById('volume-plume-height').value),depth:Number(document.getElementById('volume-emitter-source-depth').value)}),onStatus:state=>{
           window.kaminosFireLightingSettings?.syncStatus(state);
           const badge=document.getElementById('lighting-edit-status'),message=lightingEditStatus(state);
           if(badge.textContent!==message)badge.textContent=message;

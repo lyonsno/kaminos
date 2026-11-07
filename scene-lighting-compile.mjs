@@ -61,7 +61,7 @@ export async function compileSceneLighting(renderer, passes, {live=false,visibil
       try {
         const cooperativeYield=async(wait=yieldToMain)=>{leave();try{await wait();}finally{enter();}};
         await renderer.compileAsync(scene,camera,null,{callDepth:pass._renderCallDepths?.get(renderer)??0,pipelineWork,
-          ...(live?{lightsNode:generations.get(scene).node,yieldToMain:cooperativeYield}:{})});
+          yieldToMain:cooperativeYield,...(live?{lightsNode:generations.get(scene).node}:{})});
       } finally {leave();}
     }
   } finally {
@@ -84,9 +84,9 @@ export function createLightingPreparation({compile,liveCompile,hold,recover,onSt
   const changes=[],disposals=[];
   let rendererTask=Promise.resolve();
   const withRenderer=operation=>{const next=rendererTask.then(operation);rendererTask=next.catch(()=>{});return next;};
-  let exclusive=!liveCompile;
+  let exclusive=!liveCompile,retained=false;
   let drain;
-  const state=()=>({held,compiling,pending:completed!==revision,error,revision,completed});
+  const state=()=>({held,presentationHeld:held&&!retained,compiling,pending:completed!==revision,error,revision,completed});
   const publish=()=>onStatus(state());
   const syncHold=()=>{
     const next=external||(exclusive&&(completed!==revision||error!==null));
@@ -105,8 +105,24 @@ export function createLightingPreparation({compile,liveCompile,hold,recover,onSt
         await drain; // A live edit can acquire an exclusive hold during its compile.
         const current=revision;
         await withRenderer(async()=>{
-          for(const apply of changes.splice(0))await apply();
-          await (exclusive||external?compile:liveCompile)({isCurrent:()=>revision===current});
+          const staged=[];let unstaged=false;
+          try {
+            for(const apply of changes.splice(0)){
+              const result=await apply();
+              if(result?.borrow&&result?.commit&&result?.discard)staged.push(result);
+              else unstaged=true;
+            }
+            retained=staged.length>0&&!unstaged;publish();
+            const visibility=staged.length?()=>{
+              const restores=[];
+              try {for(const candidate of staged)restores.push(candidate.borrow());}
+              catch(cause){for(const restore of restores.reverse())restore();throw cause;}
+              return ()=>{for(const restore of restores.reverse())restore();};
+            }:undefined;
+            const isCurrent=()=>revision===current;
+            await (exclusive||external?compile:liveCompile)({isCurrent,visibility});
+            for(const candidate of staged)isCurrent()?candidate.commit():candidate.discard();
+          }catch(cause){for(const candidate of staged)candidate.discard();throw cause;}
         });
         completed=current;
       }

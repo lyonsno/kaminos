@@ -325,3 +325,23 @@ try{
   scene.remove(surfelHolder);
   delete globalThis.window;
 }
+
+// Retained preparation exercises the real mount and shared preparation owner.
+let retainedFinish,retainedTicket,retainedDisposals=0;
+const retainedOwner=createLightingPreparation({hold(){},compile:async ticket=>{
+ retainedTicket=ticket;const restore=ticket.visibility();
+ assert.notEqual(mesh.material,acceptedMaterial);restore();
+ assert.equal(mesh.material,acceptedMaterial,'candidate restores accepted surface between compile turns');
+ await new Promise(resolve=>retainedFinish=resolve);
+}});
+const retainedMount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,smokeRefinement:1,
+ rebuild:{hold:retainedOwner.setExternalHold,prepareRetained:retainedOwner.request},
+ createShadow:()=>({visibility:THREE.TSL.float(1),render(){},debugState:()=>({}),dispose(){retainedDisposals++;}})});
+consume(field);const acceptedMaterial=mesh.material;
+retainedMount.setPointCount(2);await new Promise(resolve=>setImmediate(resolve));
+assert.equal(retainedOwner.state().presentationHeld,false);
+assert.equal(retainedMount.canRender(),true,'accepted source and lighting remain drawable while candidate compiles');
+assert.equal(mesh.material,acceptedMaterial);assert.equal(retainedDisposals,0);
+retainedFinish();await retainedMount.whenRebuilt();
+assert.notEqual(mesh.material,acceptedMaterial);assert.equal(retainedDisposals,4,'old source resources retire only after promotion');
+consume(field);assert.equal(retainedMount.canRender(),true);retainedMount.dispose();
