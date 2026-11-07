@@ -1,3 +1,4 @@
+import {createLightingComputePipeline,prepareLightingComputePipelines} from './scene-lighting-compute.mjs';
 import {cubeCoordinates,CUBE_COORDINATES_WGSL} from './fire-cube-coordinates.mjs';
 import * as THREE from './lib/three.webgpu.js';
 import {createShadowMedium,validateShadowMediumResolution,shadowMediumPlan} from './scene-shadow-medium.mjs';
@@ -93,21 +94,21 @@ const fireSmokeShadowCache=new WeakMap();
 // Four prefix endpoints per RGBA texel keep angular filtering to two reads.
 // All coordinates and extinction lengths stay volume-local; world scale is
 // applied only when transforming the receiver into that same coefficient space.
-export function createFireSmokeShadow(device,{points,resolution=16,steps=16,count=4,filter=false,angleDegrees=null,tapsPerAxis=3,mediumResolution=0,renderer=null}={}){
+export function createFireSmokeShadow(device,{points,resolution=16,steps=16,count=4,filter=false,angleDegrees=null,tapsPerAxis=3,mediumResolution=0,renderer=null,asynchronous=false}={}){
   const managed=typeof renderer?.initTexture==='function';
   let lastDimensions=null;
-  const filteredMedium=device.features?.has('float32-filterable')===true,medium=createShadowMedium(device);
-  let deviceCache=fireSmokeShadowCache.get(device);
-  if(!deviceCache){
-    deviceCache={
-      pipeline:device.createComputePipeline({label:'smoke optical-depth prefix rays',layout:'auto',compute:{module:device.createShaderModule({code:FIRE_SMOKE_SHADOW_WGSL}),entryPoint:'integrate'}}),
-      filterPipeline:device.createComputePipeline({label:'smoke neighboring-direction transmission filter',layout:'auto',compute:{module:device.createShaderModule({code:FIRE_SMOKE_FILTER_WGSL}),entryPoint:'filterDirections'}}),
-      preparedPipelines:new Map(),
-      mediumSampler:null,
-    };
-    fireSmokeShadowCache.set(device,deviceCache);
-  }
-  let preparedPipeline=null,mediumSampler=null;
+  const filteredMedium=device.features?.has('float32-filterable')===true,medium=createShadowMedium(device,{asynchronous});
+  let deviceCache=fireSmokeShadowCache.get(device);if(!deviceCache){deviceCache=new Map();fireSmokeShadowCache.set(device,deviceCache);}
+  const kernel=(key,label,code,entryPoint)=>{
+    const name=`${asynchronous}:${key}`;
+    if(!deviceCache.has(name))deviceCache.set(name,createLightingComputePipeline(device,{label,layout:'auto',compute:{module:device.createShaderModule({code}),entryPoint}},asynchronous));
+    return deviceCache.get(name);
+  };
+  const required=q=>!q.steps?[]:[
+    q.mediumResolution?kernel(`prepared:${filteredMedium}`,'filtered smoke optical-depth prefix rays',smokeShadowIntegrationWGSL({prepared:true,filterable:filteredMedium}),'integrate'):kernel('raw','smoke optical-depth prefix rays',FIRE_SMOKE_SHADOW_WGSL,'integrate'),
+    ...(q.filter?[kernel('filter','smoke neighboring-direction transmission filter',FIRE_SMOKE_FILTER_WGSL,'filterDirections')]:[])
+  ];
+  let mediumSampler=null;
   const validate=q=>{
     validateShadowMediumResolution(q.mediumResolution);
     if(q.mediumResolution&&lastDimensions)shadowMediumPlan(lastDimensions,q.mediumResolution,device.limits);
@@ -123,7 +124,6 @@ export function createFireSmokeShadow(device,{points,resolution=16,steps=16,coun
   const filterParams=device.createBuffer({label:'smoke shadow angular filter quality',size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
   const exteriorParams=device.createBuffer({label:'smoke shadow exterior domains',size:64,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
   const emptyExterior=device.createTexture({label:'empty exterior shadow medium',dimension:'3d',size:[1,1,1],format:'r32float',usage:GPUTextureUsage.TEXTURE_BINDING});
-  const {pipeline,filterPipeline}=deviceCache;
   let outputGpu=null;
   const external=managed?new THREE.StorageTexture(...plan.size):new THREE.ExternalTexture();
   external.image={width:plan.size[0],height:plan.size[1]};external.type=THREE.HalfFloatType;external.format=THREE.RGBAFormat;external.colorSpace=THREE.NoColorSpace;
@@ -133,7 +133,8 @@ export function createFireSmokeShadow(device,{points,resolution=16,steps=16,coun
   const lo=uniform(new THREE.Vector3(-1,-1,-1)),hi=uniform(new THREE.Vector3(1,3,1));
   let bound=null,group=null,filterGroup=null,metadata=null,disposed=false;
   function configure(next){
-    const nextPlan=validate(next),resize=!gpu||nextPlan.size.some((n,a)=>n!==plan.size[a]);
+    const nextPlan=validate(next);if(gpu&&Object.keys(next).every(k=>next[k]===quality[k]))return;
+    const resize=!gpu||nextPlan.size.some((n,a)=>n!==plan.size[a]);
     if(resize){
       const oldGpu=gpu,oldOutput=outputGpu;
       gpu=device.createTexture({label:'live smoke radial optical-depth prefixes',size:nextPlan.size,format:'rgba16float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.COPY_SRC});
@@ -145,11 +146,14 @@ export function createFireSmokeShadow(device,{points,resolution=16,steps=16,coun
     device.queue.writeBuffer(params,0,new Uint32Array([next.resolution,Math.max(1,next.steps),count,plan.groups]));
     device.queue.writeBuffer(filterParams,0,new Float32Array([Math.tan((next.angleDegrees??0)*Math.PI/180),next.tapsPerAxis,next.angleDegrees===null?-1:1,0]));
     bound=null;metadata=null;group=null;
-    filterGroup=device.createBindGroup({layout:filterPipeline.getBindGroupLayout(0),entries:[{binding:0,resource:gpu.createView()},{binding:1,resource:outputGpu.createView()},{binding:2,resource:{buffer:params}},{binding:3,resource:{buffer:filterParams}}]});
+    filterGroup=null;
   }
   configure(quality);
   return {
     external,supportsLiveQuality:managed,
+    validateQuality(value){return validate({...quality,...value});},
+    isPrepared(value={}){const q={...quality,...value};validate(q);return required(q).every(k=>!!k.pipeline&&!k.error)&&(!q.steps||!q.mediumResolution||medium.isPrepared());},
+    async ready(value={}){const q={...quality,...value};validate(q);await Promise.all([prepareLightingComputePipelines(required(q)),q.steps&&q.mediumResolution?medium.ready():null]);},
     setQuality(value){if(disposed)throw Error('smoke shadow disposed');configure({...quality,...value});},
     visibility(source,receiver,index){return Fn(()=>{
       const result=float(1).toVar();If(enabled,()=>{
@@ -167,18 +171,10 @@ export function createFireSmokeShadow(device,{points,resolution=16,steps=16,coun
       if(disposed||field.status!=='encoded'||!field.texture||reduction?.generation!==field.generation||reduction?.frame!==field.frame||reduction.count!==count)throw Error('smoke shadow requires matching current field and point reduction');
       const fineDomain=sceneLightingDomain(field),domain=sceneTransportDomain(field);lastDimensions=[...field.dimensions];lo.value.set(...domain.lo);hi.value.set(...domain.hi);
       const encoder=device.createCommandEncoder({label:'current smoke shadow prefixes'});
-      let input=field.texture,activePipeline=pipeline,prepared=null;
+      const kernels=required(quality),activePipeline=kernels[0].get(),filterPipeline=quality.filter?kernels[1].get():null;
+      let input=field.texture,prepared=null;
       if(quality.mediumResolution){
         prepared=medium.encode(encoder,field,quality.mediumResolution);input=prepared.texture;
-        if(!preparedPipeline){
-          preparedPipeline=deviceCache.preparedPipelines.get(filteredMedium);
-          if(!preparedPipeline){
-            preparedPipeline=device.createComputePipeline({label:'filtered smoke optical-depth prefix rays',layout:'auto',compute:{module:device.createShaderModule({code:smokeShadowIntegrationWGSL({prepared:true,filterable:filteredMedium})}),entryPoint:'integrate'}});
-            deviceCache.preparedPipelines.set(filteredMedium,preparedPipeline);
-          }
-        }
-        activePipeline=preparedPipeline;
-
         if(filteredMedium)mediumSampler??=(deviceCache.mediumSampler??=device.createSampler({minFilter:'linear',magFilter:'linear',mipmapFilter:'nearest',addressModeU:'clamp-to-edge',addressModeV:'clamp-to-edge',addressModeW:'clamp-to-edge'}));
       }
       const exterior=field.exterior,middle=exterior?.middle;
@@ -191,7 +187,7 @@ export function createFireSmokeShadow(device,{points,resolution=16,steps=16,coun
       {group=device.createBindGroup({layout:activePipeline.getBindGroupLayout(0),entries:[{binding:0,resource:input.createView()},{binding:1,resource:points.createView()},{binding:2,resource:(quality.filter?gpu:outputGpu).createView()},{binding:3,resource:{buffer:params}},{binding:4,resource:{buffer:mediumDomain}},...(prepared&&filteredMedium?[{binding:5,resource:mediumSampler}]:[]),{binding:22,resource:(exterior?.texture??emptyExterior).createView()},{binding:23,resource:{buffer:exteriorParams}},{binding:24,resource:(middle?.texture??emptyExterior).createView()}]});bound=input;}
       const pass=encoder.beginComputePass({label:'live smoke shadow prefix integration'});
       pass.setPipeline(activePipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.ceil(quality.resolution/8),Math.ceil(quality.resolution/8),count*6);pass.end();
-      if(quality.filter){const pass=encoder.beginComputePass({label:'current smoke directional filter'});pass.setPipeline(filterPipeline);pass.setBindGroup(0,filterGroup);pass.dispatchWorkgroups(Math.ceil(quality.resolution/8),Math.ceil(quality.resolution/8),count*6*plan.groups);pass.end();}
+      if(quality.filter){filterGroup??=device.createBindGroup({layout:filterPipeline.getBindGroupLayout(0),entries:[{binding:0,resource:gpu.createView()},{binding:1,resource:outputGpu.createView()},{binding:2,resource:{buffer:params}},{binding:3,resource:{buffer:filterParams}}]});const pass=encoder.beginComputePass({label:'current smoke directional filter'});pass.setPipeline(filterPipeline);pass.setBindGroup(0,filterGroup);pass.dispatchWorkgroups(Math.ceil(quality.resolution/8),Math.ceil(quality.resolution/8),count*6*plan.groups);pass.end();}
       device.queue.submit([encoder.finish()]);if(prepared)medium.commit();
       metadata={identity:'gpu-radial-smoke-optical-depth-v1',generation:field.generation,frame:field.frame,...plan,coefficientSource:prepared?'prepared-volume-average-extinction':'raw-live-emission-extinction-alpha',medium:prepared?{...prepared.metadata,sampling:filteredMedium?'hardware-trilinear':'manual-trilinear'}:{mode:'raw',resolution:field.dimensions[0],dimensions:[...field.dimensions],sourceGeneration:field.generation,sourceFrame:field.frame,sampling:'nearest-cell'},sampling:'clipped-radial-midpoint',receiverSampling:'angular-bilinear-radial-linear',directionFilter:quality.filter?(quality.angleDegrees===null?'binomial-3x3-transmission':'angular-tent-transmission'):'off',angleDegrees:quality.angleDegrees,tapsPerAxis:quality.tapsPerAxis,work:smokeShadowWork({...quality,count}),exterior:exterior?{generation:exterior.generation,frame:exterior.frame,dimensions:[...exterior.dimensions],localMin:[...exterior.localMin],localMax:[...exterior.localMax],middle:Boolean(middle)}:null,lengthSpace:'volume-local'};return {...metadata};
     },

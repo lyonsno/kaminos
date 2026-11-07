@@ -73,7 +73,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   shadowExternal=new THREE.ExternalTexture(shadowSources.texture);
   shadowExternal.image={width:count,height:1};shadowExternal.format=THREE.RGBAFormat;shadowExternal.type=THREE.FloatType;
   shadowExternal.colorSpace=THREE.NoColorSpace;shadowExternal.minFilter=shadowExternal.magFilter=THREE.NearestFilter;shadowExternal.generateMipmaps=false;
-  smokeShadow=(smokeShadowSteps||typeof renderer.initTexture==='function')?createFireSmokeShadow(device,{points:points.texture,count,steps:smokeShadowSteps,resolution:smokeShadowResolution,filter:smokeShadowFilter,angleDegrees:smokeShadowFilterAngle,tapsPerAxis:smokeShadowFilterTaps,mediumResolution:smokeShadowMediumResolution,renderer}):null;
+  smokeShadow=(smokeShadowSteps||typeof renderer.initTexture==='function')?createFireSmokeShadow(device,{points:points.texture,count,asynchronous:!!rebuild?.prepareKernels,steps:smokeShadowSteps,resolution:smokeShadowResolution,filter:smokeShadowFilter,angleDegrees:smokeShadowFilterAngle,tapsPerAxis:smokeShadowFilterTaps,mediumResolution:smokeShadowMediumResolution,renderer}):null;
   external=new THREE.ExternalTexture(points.texture);
   external.image={width:count,height:2};external.format=THREE.RGBAFormat;external.type=THREE.FloatType;
   external.colorSpace=THREE.NoColorSpace;external.minFilter=external.magFilter=THREE.NearestFilter;external.generateMipmaps=false;
@@ -186,7 +186,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     let settled=false;
     const discard=()=>{if(settled)return;settled=true;disposeMaterials(candidateMaterials);releasePoints(candidate);};
     return {
-      prepare:()=>candidate.points.ready(prototype.sceneVolumeSourceField()),
+      prepare:()=>Promise.all([candidate.points.ready(prototype.sceneVolumeSourceField()),candidate.smokeShadow?.ready()]),
       borrow(){select(candidate,candidateMaterials);return ()=>select(accepted,acceptedMaterials);},
       commit(){
         if(settled)return;
@@ -347,6 +347,11 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       if(rebuild?.prepareKernels&&surfaceEnabled&&!points.isPrepared(field.source)){
         valid=acceptedValid;queueKernelPreparation(()=>points.ready(field.source));return;
       }
+      const smokeQuality={steps:smokeShadowSteps,resolution:smokeShadowResolution,filter:smokeShadowFilter,angleDegrees:smokeShadowFilterAngle,tapsPerAxis:smokeShadowFilterTaps,mediumResolution:smokeShadowMediumResolution};
+      if(rebuild?.prepareKernels&&surfaceEnabled&&smokeShadowSteps&&smokeShadow&&!smokeShadow.isPrepared(smokeQuality)){
+        valid=acceptedValid;queueKernelPreparation(()=>smokeShadow.ready(smokeQuality));return;
+      }
+      if(smokeShadow?.supportsLiveQuality)smokeShadow.setQuality(smokeQuality);
       const fineFrame=gather.encode(field.source,{gain,sourceSoftness,surfaceScattering,smokeEnabled:smokeMode==='distributed',environment,sceneLights,samplingFrame:prototype.sceneLightSamplingFrame?.()??field.source.frame});
       const exterior=smokeMode==='distributed'?exteriorLight.encode(field.source,exteriorOptions):null;
       const reduction=surfaceEnabled?points.encode(gather.transportSource()):null;
@@ -406,7 +411,10 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       if(typeof filter!=='boolean')throw Error('smoke shadow filter must be boolean');
       validateShadowMediumResolution(mediumResolution);validateSmoke(steps,resolution);validateSmokeAngularFilter({angleDegrees,tapsPerAxis});if(disposed)throw Error('hybrid lighting disposed');
       if(steps===smokeShadowSteps&&resolution===smokeShadowResolution&&filter===smokeShadowFilter&&angleDegrees===smokeShadowFilterAngle&&tapsPerAxis===smokeShadowFilterTaps&&mediumResolution===smokeShadowMediumResolution)return;
-      if(smokeShadow?.supportsLiveQuality){smokeShadow.setQuality({steps,resolution,filter,angleDegrees,tapsPerAxis,mediumResolution});valid=false;}
+      if(smokeShadow?.supportsLiveQuality){
+        const next={steps,resolution,filter,angleDegrees,tapsPerAxis,mediumResolution};smokeShadow.validateQuality(next);
+        if(rebuild?.prepareKernels)armSettings();else smokeShadow.setQuality(next);valid=false;
+      }
       smokeShadowSteps=steps;smokeShadowResolution=resolution;smokeShadowFilter=filter;smokeShadowFilterAngle=angleDegrees;smokeShadowFilterTaps=tapsPerAxis;smokeShadowMediumResolution=mediumResolution;
       if(!smokeShadow?.supportsLiveQuality)requestRebuild();
     },
