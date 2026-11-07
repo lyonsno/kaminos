@@ -33,7 +33,7 @@ export function mountSceneRadiance({renderer,scene,prototype,source:initial={pos
   const {uniform,vec3,positionWorld,normalWorld,texture3D,cubeTexture,sampler,wgslFn}=THREE.TSL;
   let source=validateScenePointSource(initial);
   const position=uniform(new THREE.Vector3(...source.position));
-  const intensity=uniform(new THREE.Vector3(...source.intensity));
+  const intensity=uniform(new THREE.Vector3(...source.intensity)),sourceVisible=uniform(1);
   const shadow=createFireLightFieldShadow({renderer,scene,sourceNode:position,receiverNode:positionWorld,normalNode:normalWorld,requested:true});
   function wrapTau(texture=null,dimensions=[32,64,32]) {
     const external=new THREE.ExternalTexture(texture);
@@ -52,7 +52,7 @@ export function mountSceneRadiance({renderer,scene,prototype,source:initial={pos
   const transfer=wgslFn(SCENE_POINT_TRANSFER_WGSL,[mediumFn]);
   const transported=transfer({tau:tauNode,radial:cubeNode,radialSampler:sampler(cubeNode),
     source:position,intensity,receiver:positionWorld,normal:normalWorld,resolution:uniform(512)});
-  const irradiance=transported.mul(normalWorld.dot(position.sub(positionWorld).normalize()).max(0));
+  const irradiance=transported.mul(normalWorld.dot(position.sub(positionWorld).normalize()).max(0)).mul(sourceVisible);
   const originals=new Map(), converted=new Map();
   const bindingEvidence=new Map();
   const updateBindings=renderer._bindings.updateForRender;
@@ -147,14 +147,16 @@ export function mountSceneRadiance({renderer,scene,prototype,source:initial={pos
       }
       return {...source};
     },
-    debugState:()=>({...status,source:{...source},frame:prototype.scenePointLightFrame(),shadow:shadow.debugState(),
+    debugState:()=>({...status,sourceVisible:sourceVisible.value,source:{...source},frame:prototype.scenePointLightFrame(),shadow:shadow.debugState(),
       bindingEvidence:[...bindingEvidence],wrapper:{uuid:tauExternal.uuid,version:tauExternal.version}}),
     canRender() {
       const medium=prototype.sceneMediumOpticalDepthField();
+      const withdrawn=medium.status==='inactive'&&medium.reason==='volume-withdrawn';
+      sourceVisible.value=withdrawn?0:1;
       // The host RAF is independent of volume replay/reset. Never submit a
       // material using a borrowed texture after its producer has retired it.
-      return !disposed && medium.status==='encoded' && medium.texture===tauExternal.sourceTexture
-        && medium.generation===lastFrame?.generation;
+      return !disposed && (withdrawn || (medium.status==='encoded' && medium.texture===tauExternal.sourceTexture
+        && medium.generation===lastFrame?.generation));
     },
     dispose() {
       renderer._bindings.updateForRender=updateBindings;
