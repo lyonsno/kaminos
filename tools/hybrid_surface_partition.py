@@ -374,7 +374,9 @@ def _write_raw_field_mesh_glb(surfels, mesh_triangles_u32, out_path):
     n_len = np.linalg.norm(raw_nrm, axis=1, keepdims=True)
     raw_nrm = np.where(n_len > 1e-12, raw_nrm / np.maximum(n_len, 1e-12), [0., 0., 1.])
     sub_nrm = np.ascontiguousarray(raw_nrm, dtype='<f4')
-    sub_uv = np.zeros((len(used_verts), 2), dtype='<f4')
+    # The texture is constant white, so these coordinates can also carry the
+    # source's metallic/roughness pair without another buffer or UV splits.
+    sub_uv = np.ascontiguousarray(np.clip(sub_rows[:, 9:11], 0., 1.), dtype='<f4')
     sub_col = np.ascontiguousarray(linear(np.clip(sub_rows[:, 6:9].astype(np.float64), 0., 1.)), dtype='<f4')
 
     metallic_mean = float(np.clip(sub_rows[:, 9].mean(), 0., 1.))
@@ -426,7 +428,7 @@ def _write_raw_field_mesh_glb(surfels, mesh_triangles_u32, out_path):
         'meshes': [{
             'primitives': [{
                 'indices': 0,
-                'attributes': {'POSITION': 1, 'NORMAL': 2, 'TEXCOORD_0': 3, 'COLOR_0': 4},
+                'attributes': {'POSITION': 1, 'NORMAL': 2, 'TEXCOORD_0': 3, 'COLOR_0': 4, '_KAMINOS_MATERIAL': 3},
                 'material': 0,
             }],
         }],

@@ -80,6 +80,7 @@ export function createFireShadowCasters({scene,load=loadFireCaster,giProxies=nul
       if(!node.visible)return;
       let hasResident=false;node.traverse(m=>{if(m.isMesh&&residentLightCoverage(m))hasResident=true;});
       if(hasResident)return;
+      if(node.isSurfaceSplatObject){candidates.push({root:node,kind:'surface-splats'});return;}
       if(!smokeVisibility&&level!=='original'&&matches(node)){candidates.push({root:node,kind:'explicit-kiln'});return;}
       const handle=reg?.handleFor?.(node)??reg?.get?.(node);
       if((handle?.state==='loaded'||handle?.state==='resolving')&&handle.proxyRoot){candidates.push({root:node,kind:'gi-proxy',handle});return;}
@@ -170,16 +171,23 @@ export function createFireShadowCasters({scene,load=loadFireCaster,giProxies=nul
       }
       const hidden=[];
       try{active=true;for(const {root,kind,handle,recipe}of candidates){
-        const meshes=[];root.traverseVisible(m=>{if(m.isMesh&&m.castShadow)meshes.push(m);});if(!meshes.length)continue;
+        const meshes=[];(kind==='surface-splats'?root.proxy:root).traverseVisible(m=>{if(m.isMesh&&m.castShadow)meshes.push(m);});if(!meshes.length)continue;
         if(meshes.some(m=>m.isSkinnedMesh||(!isSurfelMesh(m)&&m.isInstancedMesh)||m.morphTargetInfluences?.length))throw Error('fire caster substitution requires static geometry');
         if(!root.matrixWorld.elements.every(Number.isFinite)||root.matrixWorld.determinant()===0)throw Error('fire caster requires a finite invertible source transform');
         if(meshes.some(m=>(Array.isArray(m.material)?m.material:[m.material]).some(a=>a.transparent||a.opacity<1||a.alphaTest>0||a.displacementMap)))throw Error('fire-shadow-unsupported-caster: reduced source must remain opaque and undisplaced');
-        if(kind==='explicit-kiln'){
+        let instance=instances.get(root);
+        if(kind==='surface-splats'){
+          if(instance?.sourceAsset!==root.proxy){
+            disposeInstance(instance);
+            const wrapper=new THREE.Group(),proxy=cloneBorrowedProxy(root.proxy);
+            proxy.traverse(m=>{if(m.isMesh){m.material=(Array.isArray(m.material)?m.material[0]:m.material).clone();m.material.visible=true;m.castShadow=true;}});
+            wrapper.matrixAutoUpdate=false;wrapper.add(proxy);instance={wrapper,proxy,repCopies:[],sourceAsset:root.proxy,key:'surface-splats',measured:false};instances.set(root,instance);
+          }
+        }else if(kind==='explicit-kiln'){
           const key=JSON.stringify(meshes.map(m=>[m.uuid,m.geometry.uuid,bufferKey(m.geometry.attributes.position),bufferKey(m.geometry.index),m.matrix.elements]));
           if(!fingerprints.has(root))fingerprints.set(root,key);if(fingerprints.get(root)!==key)throw Error('fire caster source geometry changed; choose original');
         }
         const sides=new Set(meshes.flatMap(m=>(Array.isArray(m.material)?m.material:[m.material]).map(m=>m.side)));if(sides.size!==1)throw Error('fire caster source has mixed sidedness');
-        let instance=instances.get(root);
         if(kind==='explicit-kiln'){
           const key=`explicit:${level}`;
           if(instance?.key!==key){disposeInstance(instance);const wrapper=new THREE.Group(),proxy=assets.get(level).clone(true);proxy.traverse(m=>{if(m.isMesh)m.material=m.material.clone();});wrapper.matrixAutoUpdate=false;wrapper.add(proxy);instance={wrapper,proxy,repCopies:[],key,measured:false};instances.set(root,instance);}

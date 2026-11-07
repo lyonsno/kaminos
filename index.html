@@ -3477,11 +3477,13 @@ import { AssetKTX2Loader as KTX2Loader } from './asset-ktx2-loader.mjs';
 import {configureAssetTextures} from './asset-texture-support.mjs';
 import {loadBrazierRoom} from './brazier-room.mjs';
 import { trellisSurfelsGLTFPlugin, configureSurfelRendering } from './trellis-surfels.mjs';
+import {surfaceFieldMaterialsGLTFPlugin} from './surface-field-material.mjs';
+import {surfaceSplatsGLTFPlugin,isSurfaceSplatResolve} from './surface-splat-object.mjs';
 import { createGiProxyRegistry } from './scene-gi-proxies.mjs';
 import { seedInitialBeautyLevels, releaseInitialBeautyLevels, createSceneBeautyLodController, allocateSceneBeautyLods, allocateShadowCasterLods, allocateColliderLods, screenPixelError, selectFootprintTier, voxelSolidError, selectColliderTier, bakeRungMeshesToRootSpace, formatLodBudgetReadout } from './scene-lod-budget.mjs';
 import { giProxySettingFor, checkedGiProxySetting, canHaveGiProxy } from './scene-gi-proxy-settings.mjs';
 // Every GLB this page loads understands TRELLIS surfel assets (trellis-surfels.mjs); other GLBs are unaffected.
-class GLTFLoader extends ThreeGLTFLoader { constructor(manager) { super(manager); this.register(trellisSurfelsGLTFPlugin(THREE)); configureAssetTextures(this,renderer,()=>new KTX2Loader(manager)); } }
+class GLTFLoader extends ThreeGLTFLoader { constructor(manager) { super(manager); this.register(trellisSurfelsGLTFPlugin(THREE)); this.register(surfaceFieldMaterialsGLTFPlugin); this.register(surfaceSplatsGLTFPlugin); configureAssetTextures(this,renderer,()=>new KTX2Loader(manager)); } }
 // Surfel detail follows the drawing buffer's real height (backing pixels), read at every LOD update.
 configureSurfelRendering({ viewportHeight: () => { try { return renderer?.domElement?.height || 0; } catch { return 0; } } });
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
@@ -5508,6 +5510,7 @@ function disposeObjectTree(object) {
   for(const child of [...(object.children||[])])if(child.userData?.kaminosRepetitionCopy)object.remove(child);
   if(object.userData?.disposeBrazierRoom){object.userData.disposeBrazierRoom();return;}
   object.traverse(child => {
+    if(child.isSurfaceSplatObject)child.dispose();
     if (child.geometry) child.geometry.dispose();
     if (child.material) {
       const mats = Array.isArray(child.material) ? child.material : [child.material];
@@ -7624,6 +7627,7 @@ window.kaminosSceneObjectDebugState = function() {
     arrival: record.object?.userData?.kaminosAssetArrival ? { ...record.object.userData.kaminosAssetArrival } : null,
     sceneTransform: record.sceneTransform ? cloneTransformState(record.sceneTransform) : null,
     splat: record.splat || null,
+    surfaceSplats: (()=>{const rows=[];record.object.traverse(node=>{if(node.isSurfaceSplatObject)rows.push(node.splats?.read()??{disposed:true});});return rows;})(),
     image: record.image || null,
     renderRoute: record.renderRoute || null,
     renderCapabilities: record.renderCapabilities || null,
@@ -13446,7 +13450,7 @@ function sceneObjectWorldGeometry(object, { triangles: withTriangles = false } =
   const meshes = [], proxied = [];
   object.traverse(child => { if (child.sceneGeometry?.getAttribute?.('position')) { proxied.push(child); meshes.push({ geometry: child.sceneGeometry, matrixWorld: child.matrixWorld }); } });
   const underProxy = child => { for (let p = child; p; p = p.parent) if (proxied.includes(p)) return true; return false; };
-  object.traverse(child => { if (child.isMesh && child.geometry?.getAttribute('position') && !(proxied.length && underProxy(child))) meshes.push(child); });
+  object.traverse(child => { for(let p=child;p;p=p.parent)if(p.userData?.kaminosSurfaceSplatResolve)return;if (child.isMesh && child.geometry?.getAttribute('position') && !(proxied.length && underProxy(child))) meshes.push(child); });
   const total = meshes.reduce((sum, mesh) => sum + mesh.geometry.getAttribute('position').count, 0);
   const points = new Float32Array(total * 3), v = new THREE.Vector3();
   const triangles = [];
@@ -13769,7 +13773,7 @@ function mountSingleAssetLowLodStandIn({ url, isBlob, arrival, assetMetadata, is
       const placement = applyAssetArrival(proxyRoot, arrival);
       proxyRoot.traverse(child => {
         if (child.isMesh) {
-          child.castShadow = true;
+          child.castShadow = !isSurfaceSplatResolve(child);
           child.receiveShadow = true;
         }
       });
@@ -13920,7 +13924,7 @@ async function showGLB(file, options = {}) {
       const arrivalPlacement = applyAssetArrival(model, arrival, preparedGeometry);
       model.traverse(child => {
         if (child.isMesh) {
-          child.castShadow = true;
+          child.castShadow = !isSurfaceSplatResolve(child);
           child.receiveShadow = true;
           if (child.material && typeof prepareArrivedMeshMaterials !== 'function') {
             for (const mat of [].concat(child.material)) {
