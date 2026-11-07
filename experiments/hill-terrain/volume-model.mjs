@@ -57,7 +57,7 @@ export function packVolumeBodies(bodies){
   let radius=0;
   for(let k=0;k<b.solid.positions.length;k+=3){const p=b.solid.positions.slice(k,k+3);radius=Math.max(radius,Math.hypot(...p));vertices.push(...p,0);vertexBodies.push(i);}
   for(let k=0;k<b.solid.positions.length;k+=9)for(let q=0;q<3;q++)triangles.push(...b.solid.positions.slice(k+q*3,k+q*3+3),0);
-  body.set([radius,b.mass,b.volume,0],j+32);body.set([...b.position,0],j+36);
+  body.set([radius,b.mass,b.volume,0],j+32);body.set([...(b.restPosition??b.position),0],j+36);
  }
  return{body,planes:new Float32Array(planes),triangles:new Float32Array(triangles),vertices:new Float32Array(vertices),vertexBodies:new Uint32Array(vertexBodies)};
 }
@@ -75,7 +75,8 @@ export function weatherBody(model,index,distance){
  samples.forEach((p,i)=>{const r=rotate(b.rotation,p),world=r.map((x,k)=>x+b.position[k]),t=cross(b.omega,r);added.set([...world,volume*model.config.density,...b.velocity.map((x,k)=>x+t[k]),volume],i*PARTICLE_WORDS);});
  // Keep the existing local reference origin and integrate inertia about it.
  // Uniform recession may move the centroid: recenter and carry its world pose.
- const shift=rotate(b.rotation,moments.center);b.position=b.position.map((v,k)=>v+shift[k]);
+ const shift=rotate(b.rotation,moments.center);b.position=b.position.map((v,k)=>v+shift[k]);if(b.restPosition)b.restPosition=b.restPosition.map((v,k)=>v+shift[k]);
+ b.velocity=b.velocity.map((v,k)=>v+cross(b.omega,shift)[k]);
  b.solid=buildConvexRock(next.planes.map(p=>[...p.slice(0,3),p[3]-dot(p.slice(0,3),moments.center)]));b.mass=moments.mass;b.inertia=moments.inertia;b.volume=moments.volume;
  const particles=new Float32Array(model.particles.length+added.length);particles.set(model.particles);particles.set(added,model.particles.length);model.particles=particles;model.weatheredMass+=lostMass;
  return{lostMass,addedParticles:samples.length};

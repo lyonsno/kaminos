@@ -4,7 +4,7 @@ import {packVolumeBodies,PARTICLE_WORDS,BODY_WORDS} from './volume-model.mjs';
 export async function createVolumeGPU({device,model,display={}}){
  const U=GPUBufferUsage,c=model.config,packed=packVolumeBodies(model.bodies),owned=[],kernels={},count=model.particles.length/PARTICLE_WORDS,cells=c.dimensions.reduce((n,v)=>n*v,1);
  const cubeCount=c.dimensions.map(v=>v-1).reduce((n,v)=>n*v,1),maxVertices=cubeCount*36;
- let disposed=false,failure=null,steps=0,completedSteps=0,pending=Promise.resolve(),busy=false,driveHeight=0,driveRate=0,impulse=null;
+ let disposed=false,failure=null,steps=model.runtime?.steps??0,completedSteps=steps,pending=Promise.resolve(),busy=false,driveHeight=model.runtime?.driveHeight??0,driveRate=model.runtime?.driveRate??0,impulse=null;
  const errors=event=>{failure=event.error?.message||String(event.error);};device.addEventListener('uncapturederror',errors);
  const buffer=(data,usage,label)=>{
   const size=typeof data==='number'?data:data.byteLength;
@@ -33,7 +33,7 @@ export async function createVolumeGPU({device,model,display={}}){
   kernels.rigid=await make(VOLUME_KERNELS,'rigid',[[2,'bodies'],[3,'planes'],[4,'triangles'],[5,'reactions'],[6,'params']]);
   kernels.surface=await make(SURFACE_KERNELS,'surface',[[0,'cells'],[1,'soilPositions'],[2,'soilNormals'],[3,'indirect'],[4,'origin'],[5,'shape'],[6,'material']]);
   kernels.rock=await make(SURFACE_KERNELS,'rock_surface',[[1,'rockPositions'],[2,'rockNormals'],[7,'bodies'],[8,'localVertices'],[9,'vertexBodies']]);
-  device.queue.writeBuffer(resources.params,0,params(0,0));const first=device.createCommandEncoder();draw(first);device.queue.submit([first.finish()]);await device.queue.onSubmittedWorkDone();if(failure)throw Error(failure);
+  device.queue.writeBuffer(resources.params,0,params(driveHeight,driveRate));const first=device.createCommandEncoder();draw(first);device.queue.submit([first.finish()]);await device.queue.onSubmittedWorkDone();if(failure)throw Error(failure);
   function advance(n){
    if(disposed||failure)throw Error(failure||'Material specimen disposed');if(busy)throw Error('Material batch still pending');if(!Number.isSafeInteger(n)||n<0)throw Error('Choose a nonnegative physical step count');
    if(!n)return pending;
@@ -55,15 +55,15 @@ export async function createVolumeGPU({device,model,display={}}){
     // Body shape directory occupies u32 words and is not floating-point state.
     if(!particles.every(Number.isFinite)||!bodies.every((v,i)=>i%BODY_WORDS>=28&&i%BODY_WORDS<32||Number.isFinite(v)))throw Error('Non-finite material state');
     return{particles,bodies,indirect,identity:read()};
-   }finally{for(const b of buffers)b.destroy();}
+   }finally{for(const b of buffers){b.destroy();owned.splice(owned.indexOf(b),1);}}
   }
   const read=()=>({route:'hill/direct-volume-apic-frictional-v1',backend:'webgpu',steps,completedSteps,seconds:completedSteps*c.dt,busy,failure,particleCount:count,bodyCount:model.bodies.length,gridCells:cells,config:c,drive:{height:driveHeight,rate:driveRate},weatheredMass:model.weatheredMass,readbackInRuntime:false,
-   material:'rate-form hypoelastic; no tension; Frobenius deviator yield <= friction*pressure',contact:'reciprocal soil/rigid; released convex vertex/anchored-face fixture; general free/free and edge/edge unresolved',surface:'GPU mass occupancy isosurface; 6 tetrahedra per cell; indirect draw',bytes:owned.reduce((n,b)=>n+b.size,0),maxSurfaceVertices:maxVertices});
+   material:'rate-form hypoelastic; no tension; Frobenius deviator yield <= friction*pressure',contact:'reciprocal soil/rigid; released convex vertex/anchored-face fixture; general free/free and edge/edge unresolved',surface:'GPU mass occupancy isosurface; 6 tetrahedra per cell; indirect draw',gpuBufferBytes:[...new Set(Object.values(resources))].reduce((n,b)=>n+b.size,0),maxSurfaceVertices:maxVertices});
   return{resources,advance,snapshot,read,done:()=>pending,
    release(index){if(!Number.isInteger(index)||!model.bodies[index])throw Error('Choose a represented rock');const b=model.bodies[index];b.anchored=false;device.queue.writeBuffer(resources.bodies,index*BODY_WORDS*4+12,new Float32Array([1/b.mass]));},
    push(action){if(!action||![action.center,action.velocity].every(v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite))||!Number.isFinite(action.radius)||action.radius<=0)throw Error('Invalid material impulse');impulse=structuredClone(action);},
    setDrive(rate){if(!Number.isFinite(rate))throw Error('Invalid growth velocity');driveRate=rate;},
-   async synchronizeModel(){const s=await snapshot();model.particles=s.particles;model.bodies.forEach((b,i)=>{const j=i*BODY_WORDS;b.position=Array.from(s.bodies.slice(j,j+3));b.rotation=Array.from(s.bodies.slice(j+4,j+8));b.velocity=Array.from(s.bodies.slice(j+8,j+11));b.omega=Array.from(s.bodies.slice(j+12,j+15));});return model;},
+   async synchronizeModel(){const s=await snapshot();model.particles=s.particles;model.runtime={steps:completedSteps,driveHeight,driveRate};model.bodies.forEach((b,i)=>{const j=i*BODY_WORDS;b.position=Array.from(s.bodies.slice(j,j+3));b.rotation=Array.from(s.bodies.slice(j+4,j+8));b.velocity=Array.from(s.bodies.slice(j+8,j+11));b.omega=Array.from(s.bodies.slice(j+12,j+15));b.restPosition=Array.from(s.bodies.slice(j+36,j+39));});return model;},
    dispose(){if(disposed)return;disposed=true;device.removeEventListener('uncapturederror',errors);owned.forEach(b=>b.destroy());}
   };
  }catch(e){device.removeEventListener('uncapturederror',errors);owned.forEach(b=>b.destroy());throw e;}
