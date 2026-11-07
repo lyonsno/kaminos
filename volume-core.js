@@ -1,3 +1,4 @@
+import {createSplitIntegral,splitIntegralSettings,SPLIT_OPTICAL_WGSL} from './volume-split-integral.mjs';
 import {EMPTY_SPACE_WGSL} from './volume-empty-space.mjs';
 import {resolveWorldCalibration,calibrationSignature,calibrationWaveletLattice,WORLD_CALIBRATION_WGSL,resolveSimulationLevers} from './volume-world-calibration.mjs';
 import {WORLD_RENDER_WGSL,createWorldRenderField} from './volume-world-render.mjs';
@@ -6472,6 +6473,7 @@ ${FLAME_GUIDANCE_WGSL}
 override RAY_STEP_STATS: bool = false;
 @group(0) @binding(26) var<storage, read_write> rayStepCounters: array<u32>;
 ${HISTORY_ALLOCATION_WGSL}
+${SPLIT_OPTICAL_WGSL}
 ${EMPTY_SPACE_WGSL}
 ${EMISSIVE_TRANSPORT_WGSL}
 ${WORLD_SMOKE_OPTICS_WGSL}
@@ -8132,13 +8134,16 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
   let entryP = ro + rd * startT;
   let exitP = ro + rd * endT;
   var gridAccum = max(gridLine(entryP), gridLine(exitP));
-  let expensiveSampleBudget = select(u32(ceil(steps)), nonRidgeOpticalCaptureHeader.sampleCount, opticalTrace);
+  var expensiveSampleBudget = select(u32(ceil(steps)), nonRidgeOpticalCaptureHeader.sampleCount, opticalTrace);
+  if(SPLIT_INTEGRAL){expensiveSampleBudget=splitOptions.size.z;}
   let maxTraversalSteps = GRID_Y * 3u + expensiveSampleBudget + 3u + select(0u,u32(ceil(max(0.0,endT-startT)/max(.0001,worldMarchStep(worldMinimumMaterialPitch(),steps))))+4u,worldActive);
   var expensiveSamples = 0u;
   var rayMaterialSamples = 0u;
   var allocatedSamples = 0u;
   var quadratureProbes = 0u;
   var traversalSteps = 0u;
+  var splitRay:SplitRay;
+  if(SPLIT_INTEGRAL){splitRay=splitInit(in.pos.xy,ro,rd,max(startT,sceneDepthStartT),endT,rayPhase);}
   var guidedRay:GuidedRay;
   if(guided){guidedRay=guidedRayInit(ro,rd,max(startT,sceneDepthStartT),endT);}
   loop {
@@ -8148,6 +8153,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
     if(guided){
       let phase=select(.5,.05+.9*rayNoiseSample(in.pos.xy,u.occupancy_controls.y,1u),u.reserved_render_controls.w>.5 && u.occupancy_controls.w>.5);
       t=guidedNext(&guidedRay,ro,rd,allocatedSamples,expensiveSampleBudget,phase,rayPhase);
+      if(SPLIT_INTEGRAL&&expensiveSampleBudget==1u){t=splitSampleDepth(splitRay,ro,rd,t);}
     }
     if (opticalStepping) {
       if (opticalStep.cursor >= opticalStep.end) { break; }
@@ -8182,7 +8188,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
         t = opticalStepPositionJittered(&opticalStep, rayNoiseSample(in.pos.xy, u.occupancy_controls.y, quadratureProbes + 1u));
       }
     }
-    if(LEAN_EMISSIVE_RAYMARCH&&!fullGridCapture&&!opticalTrace&&u.occupancy_controls.x>0.0){
+    if(!SPLIT_INTEGRAL&&LEAN_EMISSIVE_RAYMARCH&&!fullGridCapture&&!opticalTrace&&u.occupancy_controls.x>0.0){
       if(guided&&emptyOpticalInterval(ro,rd,guidedRay.intervalStart,guidedRay.left,t,worldActive,nearHit,middleHit)){
         allocatedSamples++; continue;
       }
@@ -8228,6 +8234,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
         opticalStepObserveWithTolerance(&opticalStep,vec4<f32>(medium.emission+scatteredSource,sigma),u.reserved_render_controls.y);
         color=opticalStep.transfer.xyz;trans=opticalStep.transfer.w;ds=0.0;
       }
+      if(SPLIT_INTEGRAL){splitObserve(&splitRay,allocatedSamples-1u,p,medium.emission+scatteredSource,sigma);}
       if(guided){recordRayGuidance(p,medium.emission+scatteredSource,max(sigma,brickSupport/max(pitch,1e-4)),trans,ds);}
       color+=trans*(medium.emission+scatteredSource)*emissionIntegral(sigma,ds);
       trans*=exp(-sigma*ds);t+=ds;continue;
@@ -9100,6 +9107,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
       var scatteredSource=vec3<f32>(0.0);
       if(medium.scattering>0.0){scatteredSource=medium.scattering * incidentAt(p);}
       let emission = medium.emission + scatteredSource;
+      if(SPLIT_INTEGRAL){splitObserve(&splitRay,allocatedSamples-1u,p,emission,sigma);}
       if(guided){recordRayGuidance(p,emission,max(sigma,displaySupport*0.35*visibleSmokeAuthority),trans,localDt);}
       if (opticalStepping) {
         opticalStepObserveWithTolerance(&opticalStep, vec4<f32>(emission, sigma), u.reserved_render_controls.y);
@@ -9280,6 +9288,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
     t = t + localDt;
   }
 
+  if(SPLIT_INTEGRAL){let composed=splitFinish(splitRay,traceRay,ro,rd);color=composed.xyz;trans=composed.w;}
   let bAppliedToFixedAColor = recomposedColor - structuralAColor;
   if (appearanceDecompositionMode > 0.5 && appearanceDecompositionMode < 1.5) {
     color = structuralAColor;
@@ -11791,6 +11800,7 @@ export function createKaminosVolumePrototype({
   let debugRaymarchShaderSpecialization = 'auto';
   let debugOpticalStepping = opticalSteppingConfig({mode:controlsSnapshot.raymarchMode??'numerical',tolerance:controlsSnapshot.opticalTolerance??0.001});
   let rayStepTelemetry = null;
+  let splitIntegral=null,splitSettings=splitIntegralSettings();
   let integralReconstruction=null, reconstructionSample=0;
   let integralGuideDisplay=integralGuideDisplaySettings();
   let integralEvaluation=null, integralCameraValues=null, integralCameraSignature=null, integralSceneSignature=null;
@@ -15143,7 +15153,7 @@ export function createKaminosVolumePrototype({
         + `required=${VOLUME_STORAGE_BUFFER_BINDING_COUNT}:supported=${maxStorageBuffersPerShaderStage}`,
       );
     }
-    requiredLimits.maxStorageBuffersPerShaderStage = VOLUME_STORAGE_BUFFER_BINDING_COUNT;
+    requiredLimits.maxStorageBuffersPerShaderStage = maxStorageBuffersPerShaderStage;
     if (suppliedDevice) {
       device = suppliedDevice;
       const supportedStorageBufferBytes = Math.min(
@@ -15167,6 +15177,7 @@ export function createKaminosVolumePrototype({
     rayStepTelemetry = createRayStepTelemetry(device);
     rayAllocationHistory = createRayAllocationHistory(device);
     integralReconstruction=createIntegralReconstruction(device,{transparent:transparentCanvas});
+    splitIntegral=createSplitIntegral(device);
     integralReconstruction.setGuideDisplay(integralGuideDisplay);
     rayStepTelemetry.setCanvas(rayStepTelemetryCanvas);
     rayStartNoiseTexture = await createRayStartTexture(device);
@@ -21418,7 +21429,19 @@ export function createKaminosVolumePrototype({
     state.integralReconstruction={requested:reconstructionRequested,effective:'off',reason:reconstructionRequested!=='off'?'requires-ordinary-emissive-beauty-without-debug-overlays':null};
     const entryPoint=reconstruct?'fsIntegral':'fs';
     const colorTargets=reconstruct?[{format:'rgba32float'},{format:'r32float'}]:[{format:targetPipeline===readbackPipeline?'rgba8unorm':format}];
-    const opticalConstants = {OPTICAL_STEP_MODE:optical.value,RAY_STEP_STATS:rayStepTelemetry.active};
+    const splitActive=splitSettings.mode!=='off'&&reconstructionSupported&&optical.value===4&&device.limits.maxStorageBuffersPerShaderStage>=14;
+    let splitGroup=null;
+    if(splitActive){
+      const field=owner=>owner?{...owner.remapResources(),map:worldSmokeMapping(owner.plan,owner.anchor,productTransform).fineToField}:null;
+      const {rayNoiseFrame,...sourceControls}=controlsSnapshot;
+      const identity=JSON.stringify([Array.from(invViewProj.elements),productTransform,sourceControls,worldSmokeKey,intermediateKey,state.integralSourceGeneration]);
+      const prepared=splitIntegral.prepare(encoder,{width:state.width,height:state.height,settings:splitSettings,identity,step:state.simStepCount,
+        viewProj:new THREE.Matrix4().copy(invViewProj).invert().elements,world:field(worldSmoke),middle:field(intermediateFlow),
+        backtrace:resolveTimeStepConfig(controlsSnapshot).effective.backtraceScale,fineScale:2/gridSize,
+        staggered:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode==='staggered'});
+      splitGroup=prepared.group;state.splitIntegral=prepared.state;
+    }else{state.splitIntegral=splitIntegral.disable(splitSettings.mode==='off'?'off':device.limits.maxStorageBuffersPerShaderStage<14?'requires-14-fragment-storage-buffers':'requires-Fixed-evaluations-ordinary-joined-emissive-beauty');state.splitIntegral.requested=splitSettings.mode;}
+    const opticalConstants = {OPTICAL_STEP_MODE:optical.value,RAY_STEP_STATS:rayStepTelemetry.active,SPLIT_INTEGRAL:splitActive};
     state.opticalStepping = { ...optical, effective: optical.mode,
       adaptivity:raymarchAdaptivity(optical.mode,controlsSnapshot.adaptiveRays),
       source:'native-emissive-material-and-current-incident-light', fullRay:optical.mode !== 'fallback-fixed',
@@ -21447,12 +21470,12 @@ export function createKaminosVolumePrototype({
       state.opticalStepping.fullRay=true;
       rebuildFluidBindGroups();
     }else{rayAllocationHistory.reset();}
-    const opticalKey = `:${optical.mode}:stats=${rayStepTelemetry.active}:integral=${reconstruct}`;
+    const opticalKey = `:${optical.mode}:stats=${rayStepTelemetry.active}:integral=${reconstruct}:split=${splitActive}`;
     if ((optical.mode !== 'fallback-fixed'||rayStepTelemetry.active||reconstruct) && !multisampled && !scenePointBindGroup && !distributedGroup) {
       const key = `${targetPipeline === readbackPipeline}:${gridSize}:${gridHeight}${opticalKey}`;
       if (!opticalSteppingPipelines.has(key)) {
         opticalSteppingPipelines.set(key,device.createRenderPipeline({label:'experimental optical stepping',
-          layout:device.createPipelineLayout({bindGroupLayouts:[bindGroupLayout,productRaymarchDepthBindGroupLayout]}),
+          layout:device.createPipelineLayout({bindGroupLayouts:[bindGroupLayout,productRaymarchDepthBindGroupLayout,...(splitActive?[splitIntegral.emptyLayout,splitIntegral.layout]:[])]}),
           vertex:{module:shader,entryPoint:'vs'},fragment:{module:shader,entryPoint,
             constants:{TRANSPARENT_CANVAS:transparentCanvas?1:0,LEAN_EMISSIVE_RAYMARCH:true,...opticalConstants},
             targets:colorTargets},primitive:{topology:'triangle-list'}}));
@@ -21474,7 +21497,7 @@ export function createKaminosVolumePrototype({
            }`),
         });
         ordinaryDepthPipelines.set(depthKey,device.createRenderPipeline({
-          label:'ordinary emissive raymarch with MSAA scene-depth clipping',layout:ordinaryMultisamplePipelineLayout,
+          label:'ordinary emissive raymarch with MSAA scene-depth clipping',layout:splitActive?device.createPipelineLayout({bindGroupLayouts:[bindGroupLayout,ordinaryMultisampleDepthLayout,splitIntegral.emptyLayout,splitIntegral.layout]}):ordinaryMultisamplePipelineLayout,
           vertex:{module:ordinaryMultisampleShader,entryPoint:'vs'},
           fragment:{module:ordinaryMultisampleShader,entryPoint,
             constants:{TRANSPARENT_CANVAS:transparentCanvas ? 1 : 0,
@@ -21500,7 +21523,7 @@ export function createKaminosVolumePrototype({
             }`);
         const module = device.createShaderModule({label:'shared point light ordinary smoke',code});
         const layout = device.createPipelineLayout({bindGroupLayouts:[bindGroupLayout,
-          multisampled ? ordinaryMultisampleDepthLayout : productRaymarchDepthBindGroupLayout,scenePointBindings.layout]});
+          multisampled ? ordinaryMultisampleDepthLayout : productRaymarchDepthBindGroupLayout,scenePointBindings.layout,...(splitActive?[splitIntegral.layout]:[])]});
         scenePointPipelines.set(key,device.createRenderPipeline({label:'shared point light smoke consumer',layout,
           vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint,
             constants:{TRANSPARENT_CANVAS:transparentCanvas?1:0,LEAN_STOCK_RAYMARCH:false,LEAN_EMISSIVE_RAYMARCH: selectEmissive,...opticalConstants},
@@ -21522,7 +21545,7 @@ export function createKaminosVolumePrototype({
           .replace('let depth = textureLoad(productSceneDepth, pixel, 0);',`var depth=textureLoad(productSceneDepth,pixel,0);
           for(var sample=1u;sample<textureNumSamples(productSceneDepth);sample++){depth=min(depth,textureLoad(productSceneDepth,pixel,sample));}`);
         const module=device.createShaderModule({label:'distributed flame smoke consumer',code});
-        const layout=device.createPipelineLayout({bindGroupLayouts:[bindGroupLayout,multisampled?ordinaryMultisampleDepthLayout:productRaymarchDepthBindGroupLayout,distributedLayout]});
+        const layout=device.createPipelineLayout({bindGroupLayouts:[bindGroupLayout,multisampled?ordinaryMultisampleDepthLayout:productRaymarchDepthBindGroupLayout,distributedLayout,...(splitActive?[splitIntegral.layout]:[])]});
         distributedPipelines.set(key,device.createRenderPipeline({label:'distributed flame scene smoke',layout,
           vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint,constants:{TRANSPARENT_CANVAS:transparentCanvas?1:0,LEAN_STOCK_RAYMARCH:false,LEAN_EMISSIVE_RAYMARCH: selectEmissive,OPTICAL_TRACE_CAPTURE:Boolean(options.opticalTrace),...opticalConstants},
           targets:colorTargets},primitive:{topology:'triangle-list'}}));
@@ -21564,6 +21587,7 @@ export function createKaminosVolumePrototype({
     pass.setBindGroup(1, ordinarySceneDepthBindGroup);
     if (scenePointBindGroup) pass.setBindGroup(2, scenePointBindGroup);
     if (distributedGroup) pass.setBindGroup(2,distributedGroup);
+    if(splitGroup){if(!scenePointBindGroup&&!distributedGroup)pass.setBindGroup(2,splitIntegral.emptyGroup);pass.setBindGroup(3,splitGroup);}
     pass.draw(3);
     pass.end();
     if(reconstruct) {
@@ -29174,6 +29198,9 @@ export function createKaminosVolumePrototype({
       if(device&&worldRenderUniform)device.queue.writeBuffer(worldRenderUniform,32,new Float32Array([mode==='contributions'?1:0,0,0,0]));
       return mode;
     },
+    setSplitIntegral(next){assertIntegralSourceEditable('Split optical transport');const value=splitIntegralSettings({...splitSettings,...next});if(value.mode!==splitSettings.mode)splitIntegral?.reset();splitSettings=value;return {...splitSettings};},
+    splitIntegralSettings(){return {...splitSettings};},
+    async sampleSplitIntegral(){if(!selectiveHeadLiveCapturePaused&&!simulationPaused)throw Error('Pause simulation/capture before reading split observations');return splitIntegral?.sample()??{available:false};},
     setIntegralGuideDisplay(next){
       integralGuideDisplay=integralGuideDisplaySettings({...integralGuideDisplay,...next});
       integralReconstruction?.setGuideDisplay(integralGuideDisplay);return {...integralGuideDisplay};
@@ -29574,6 +29601,7 @@ export function createKaminosVolumePrototype({
       worldOpticalFallback?.destroy();worldRenderUniform?.destroy();
       rayAllocationHistory?.dispose();
       integralReconstruction?.dispose();
+      splitIntegral?.dispose();
       ordinarySceneDepthFallback?.destroy();
       boundarySplatHdrTexture?.destroy();
       boundarySplatOpticalTexture?.destroy();
