@@ -34,11 +34,11 @@ fn opticalPreview(field:texture_3d<f32>,origin:vec3<f32>,direction:vec3<f32>,siz
 export function createOpticalPreview(frame){
  const size=frame.bounds[1].map((x,a)=>x-frame.bounds[0][a]),texture=new Data3DTexture(frame.optical,...frame.dimensions);
  texture.format=RGBAFormat;texture.type=FloatType;texture.minFilter=NearestFilter;texture.magFilter=NearestFilter;texture.unpackAlignment=1;texture.needsUpdate=true;
- const gain=uniform(1),view=uniform(0),steps=uniform(40),extent=uniform(new Vector3(...size));
+ const gain=uniform(1),view=uniform(0),steps=uniform(128),extent=uniform(new Vector3(...size));
  const origin=modelWorldMatrixInverse.mul(vec4(cameraPosition,1)).xyz;
  const shader=wgslFn(OPTICAL_PREVIEW_WGSL,[wgslFn(OPTICAL_SAMPLE_WGSL)]);
  const material=new MeshBasicNodeMaterial({side:BackSide,transparent:true,depthWrite:false,blending:CustomBlending,blendSrc:OneFactor,blendDst:OneMinusSrcAlphaFactor});
  material.fragmentNode=shader({field:texture3D(texture),origin,direction:positionGeometry.sub(origin),size:extent,gain,view,steps});
  const mesh=new Mesh(new BoxGeometry(...size),material);mesh.name='Recorded flame material';mesh.position.y=size[1]/2;
- return {mesh,setFrame(frame){if(frame.dimensions.some((n,a)=>n!==texture.image[['width','height','depth'][a]]))throw Error('Preview field dimensions changed');texture.image.data=frame.optical;texture.needsUpdate=true;},setView(value){if(!['beauty','emission','extinction'].includes(value))throw Error('Unknown optical view');view.value=['beauty','emission','extinction'].indexOf(value);},setGain(value){if(!Number.isFinite(value)||value<0)throw Error('Nonnegative finite optical gain required');gain.value=value;},dispose(){mesh.geometry.dispose();material.dispose();texture.dispose();}};
+ return {mesh,setFrame(frame){if(frame.dimensions.some((n,a)=>n!==texture.image[['width','height','depth'][a]]))throw Error('Preview field dimensions changed');texture.image.data=frame.optical;texture.needsUpdate=true;},setView(value){if(!['beauty','emission','extinction'].includes(value))throw Error('Unknown optical view');view.value=['beauty','emission','extinction'].indexOf(value);},setGain(value){if(!Number.isFinite(value)||value<0)throw Error('Nonnegative finite optical gain required');gain.value=value;},setSteps(value){if(!Number.isSafeInteger(value)||value<1||Math.fround(value)>=2**32)throw Error('Positive preview step count representable by the GPU counter required');steps.value=value;},dispose(){mesh.geometry.dispose();material.dispose();texture.dispose();}};
 }
