@@ -105,3 +105,32 @@ test('admission reuses the prepared draft geometry without another full vertex-b
  const consumer=await pending;
  try{const mesh=f.frame.children[0].children[0],geometry=mesh.geometry;await consumer.prepare({prompt:'ADMITTED',request:{id:'real-request',prompt:'ADMITTED'}});assert.equal(mesh.geometry,geometry,'admitting the already prepared draft must retain its geometry');assert.equal(consumer.debugState().request,'real-request');}finally{consumer.dispose();}
 });
+
+test('thermal preparation precedes admission and retains the same body with the same draft',async()=>{
+ const f=fixture();let constructions=0,disposals=0,mask;const visibility=[];
+ const consumer=await createMountedGenerationPrompt({...f,signal:new AbortController().signal,createBurnBody:async args=>{constructions++;mask=args.surfaceMask;return {setMounted:v=>visibility.push(v),dispose:()=>disposals++,read:()=>({steps:0})};}});
+ try{
+  const draft=consumer.prepare({prompt:'COLD DRAFT'});await tick();const worker=f.worker();
+  worker.onmessage({data:{id:worker.last.id,attributes:{position:{array:new Float32Array([0,0,0,1,0,0,0,1,.1]),itemSize:3,normalized:false}},groups:[],mask:{},samples:[],surface:[]}});
+  await draft;assert.equal(constructions,1,'real thermal body must be prepared with the draft, before Generate');assert.ok(mask);
+  await consumer.prepare({prompt:'COLD DRAFT',request:{id:'admitted',prompt:'COLD DRAFT'}});
+  assert.equal(constructions,1,'admission must reuse the prepared thermal body');assert.equal(disposals,0);f.frameTick();assert.equal(visibility.at(-1),false,'attached char remains hidden during native editing');
+ }finally{consumer.dispose();}
+ assert.equal(disposals,1,'consumer disposal releases retained thermal state');
+});
+
+test('in-flight thermal construction is reused on admission and disposed before replacing the draft',async()=>{
+ const f=fixture(),events=[];let releaseBody;
+ const consumer=await createMountedGenerationPrompt({...f,signal:new AbortController().signal,createBurnBody:async({entry})=>{
+  const geometry=entry.object.children[0].geometry;events.push(['start',geometry]);
+  await new Promise(resolve=>{releaseBody=resolve;});events.push(['built',geometry]);
+  return {setMounted(){},read:()=>({steps:0}),dispose(){assert.equal(entry.object.children[0].geometry,geometry,'dispose must precede geometry replacement');events.push(['disposed',geometry]);}};
+ }});
+ const answer=async()=>{await tick();const worker=f.worker();worker.onmessage({data:{id:worker.last.id,attributes:{position:{array:new Float32Array([0,0,0,1,0,0,0,1,.1]),itemSize:3,normalized:false}},groups:[],mask:{},samples:[],surface:[]}});await tick();};
+ try{
+  const draft=consumer.prepare({prompt:'FIRST'});await answer();assert.equal(events.length,1);
+  const admit=consumer.prepare({prompt:'FIRST',request:{id:'first'}});releaseBody();await Promise.all([draft,admit]);assert.equal(events.length,2,'same admission must not rebuild');
+  const next=consumer.prepare({prompt:'SECOND'});await answer();assert.deepEqual(events.map(e=>e[0]),['start','built','disposed','start']);
+  const clear=consumer.prepare({prompt:''});releaseBody();await Promise.all([next,clear]);assert.deepEqual(events.map(e=>e[0]),['start','built','disposed','start','built','disposed']);assert.equal(consumer.thermalBody,null);
+ }finally{consumer.dispose();}
+});

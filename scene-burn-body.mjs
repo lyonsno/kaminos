@@ -14,7 +14,7 @@ import {createSceneBurnFracture} from './scene-burn-fracture.mjs';
 export const originalBurnMaterial=sceneRadianceSourceMaterial;
 
 // An object's material owns its state; it never switches sources, clocks or domains.
-export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame,kelvinPerHeat=()=>1600,beautyLods=null,resolveSurfaceGeometry=null,surfaceMask=null}){
+export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame,kelvinPerHeat=()=>1600,beautyLods=null,resolveSurfaceGeometry=null,surfaceMask=null,surfacePresentation=null}){
   resolveBurnableTarget([entry],entry.id);
   const mesh=resolveBurnableHeroMesh(entry.object);
   const resolveBeautyLods=()=>typeof beautyLods==='function'?beautyLods():beautyLods;
@@ -148,6 +148,7 @@ export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame,k
     syncProxyBurnMaterials();
     debris=await createLogDebrisGpu({renderer,field,ground:ground(),onFrame,thermalControls:bindings[0]?.thermalControls});
     releases.push(bindResidentLightCoverage(debris.caps,coverage));debris.caps.castShadow=true;
+    const releaseSurface=surfacePresentation?.(debris.caps);if(releaseSurface)releases.push(releaseSurface);
     // Detached fragments remain world-space presentation, never a separately editable object.
     scene.add(debris.root);
     structure=createSceneBurnStructure({renderer,field,parent:debris.root});

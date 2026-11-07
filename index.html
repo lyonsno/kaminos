@@ -29789,7 +29789,7 @@ function setupAuthoringAssets(){
   const mountedPromptControls=document.createElement('div');mountedPromptControls.className='mounted-generation-actions';mountedPromptControls.hidden=true;document.getElementById('viewport').append(mountedPromptControls);
   const mountedPromptCeremony=installGenerationFlame({document,slot:mountedPromptSlot,createRenderer:async(_slot,options)=>{
     await workbenchViewerReady;await generationWorkshop.prepare();options.signal.throwIfAborted();
-    return createMountedGenerationPrompt({document,workshop:generationWorkshop,camera,controls:mountedPromptControls,statusSlot:mountedPromptSlot,onFrame:workbenchSceneFrames.onFrame,...options});
+    return createMountedGenerationPrompt({document,workshop:generationWorkshop,camera,controls:mountedPromptControls,statusSlot:mountedPromptSlot,onFrame:workbenchSceneFrames.onFrame,createBurnBody:prepared=>createSceneBurnBody({...prepared,renderer,scene,onFrame:workbenchSceneFrames.onFrame,kelvinPerHeat:()=>Number(document.getElementById('volume-physical-kelvin-per-heat').value),ground:()=>({center:[groundPlane.position.x,groundPlane.position.y,groundPlane.position.z],height:groundPlane.position.y,radius:5,visible:groundPlane.visible})}),...options});
   }});
   // Acquisition runs during app preparation, before Generate. Return controls
   // workshop visibility without cancelling the image request or its consumer.

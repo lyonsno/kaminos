@@ -21,3 +21,13 @@ test('full admitted strip feeds through an aperture carried by the native frame'
  strip.release(80);assert.equal(mesh.position.y,(520-1240+160)/1024);assert.equal(strip.read().admitted,false);
  mesh.geometry.dispose();mesh.material.dispose();
 });
+
+test('attached char shares the aperture and its shadows while detached particles remain outside',()=>{
+ const root=new ClippingGroup(),mesh=new Mesh(),debris=new Group(),caps=new Mesh(),particles=new Group();root.add(mesh);debris.add(caps,particles);
+ const strip=createKilnPromptStrip({root,mesh});
+ assert.equal(root.clipShadows,true,'hidden rows must not cast outside the writing opening');
+ const release=strip.attachSurface(caps);
+ assert.equal(caps.parent.isClippingGroup,true);assert.equal(caps.parent.clippingPlanes,root.clippingPlanes);assert.equal(caps.parent.clipShadows,true);assert.equal(particles.parent,debris);
+ root.position.y=4;strip.sync();assert.equal(caps.parent.clippingPlanes[0].constant,root.clippingPlanes[0].constant);
+ release();assert.equal(caps.parent,debris);assert.deepEqual(debris.children,[particles,caps]);
+});
