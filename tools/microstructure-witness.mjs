@@ -22,7 +22,8 @@ try{
   if(browserPath.includes('/Applications/Google Chrome.app/'))throw Error('Independent automation browser required');
   const require=createRequire(path.join(puppeteerRoot,'package.json')),puppeteer=require('puppeteer');
   report.profile=fs.mkdtempSync(path.join(output,'profile-'));
-  browser=await puppeteer.launch({executablePath:browserPath,userDataDir:report.profile,headless:true,defaultViewport:{width:1200,height:850,deviceScaleFactor:model ? 0.35 : 1},protocolTimeout:0,args:['--use-mock-keychain','--password-store=basic','--enable-unsafe-webgpu']});
+  report.viewport=model?{width:900,height:650,deviceScaleFactor:1}:{width:1200,height:850,deviceScaleFactor:1};
+  browser=await puppeteer.launch({executablePath:browserPath,userDataDir:report.profile,headless:true,defaultViewport:report.viewport,protocolTimeout:0,args:['--use-mock-keychain','--password-store=basic','--enable-unsafe-webgpu']});
   report.browserPid=browser.process().pid;fs.writeFileSync(path.join(output,'start.json'),JSON.stringify(report,null,2));
   console.log(`Owned Chrome for Testing PID ${report.browserPid}`);
   page=await browser.newPage();page.setDefaultTimeout(0);page.setDefaultNavigationTimeout(0);
