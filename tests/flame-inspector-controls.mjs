@@ -19,7 +19,9 @@ test('the contextual inspector includes current appearance, structure, motion an
   assert.equal(new Set(ids).size,ids.length);
   const schema=JSON.parse(fs.readFileSync(new URL('../volume-settings-preset-schema-v2.json',import.meta.url)));
   const supported=new Set([...schema.controls,...schema.rendererControls].map(entry=>entry.key));
-  for(const id of ids)assert.ok(supported.has(id),`no invented source control ${id}`);
+  const transientPresentation=new Set(['integral-guide-view','integral-guide-gain']);
+  for(const id of transientPresentation){assert.ok(ids.includes(id),`transient inspection control ${id}`);assert.equal(supported.has(id),false,'guide inspection does not enter scene persistence');}
+  for(const id of ids)assert.ok(supported.has(id)||transientPresentation.has(id),`no invented source control ${id}`);
   assert.ok(!ids.some(id=>id.startsWith('volume-pyro-')||id==='volume-emitter-aperture-ratio'),'retired appearance and aperture experiments stay out');
 });
 
