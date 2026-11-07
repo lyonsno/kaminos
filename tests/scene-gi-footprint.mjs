@@ -8,6 +8,8 @@ control.ordinary(false);const session=control.open();
 assert.equal(effect.useMipSampling.value,true,'comparison actively requests the source pyramid');
 assert.throws(()=>control.open(),/already open/);
 session.set({mode:'fixed',level:4});assert.equal(effect.sourceMipMode.value,1);assert.equal(effect.sourceMipLevel.value,4);
+const settled=resets.length;session.set({mode:'fixed',level:4});
+assert.equal(resets.length,settled,'Pointer release after live input must preserve accumulated history when the value is unchanged');
 const before=session.read(),count=resets.length;
 for(const patch of [{mode:'invented'},{level:-1},{level:1.5},{detailBias:Infinity},{allFields:'false'}])assert.throws(()=>session.set(patch));
 assert.deepEqual(session.read(),before,'invalid drafts preserve the active policy');assert.equal(resets.length,count);

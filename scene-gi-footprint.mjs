@@ -25,7 +25,9 @@ export function createSourceFootprintControl(effect,reset) {
       const current=()=>{if(owner!==token)throw Error('Source footprint comparison is closed');};
       return {
         read(){current();return {...value,optimizations:effect.getOptimizationState()};},
-        set(patch){current();const next=resolveSourceFootprint({...value,...patch});value=next;apply();reset('source-footprint-policy');return this.read();},
+        set(patch){current();const next=resolveSourceFootprint({...value,...patch});
+          if(Object.keys(next).some(key=>next[key]!==value[key])){value=next;apply();reset('source-footprint-policy');}
+          return this.read();},
         dispose(){if(owner!==token)return;owner=null;value=resolveSourceFootprint();apply();reset('source-footprint-close');}
       };
     }
