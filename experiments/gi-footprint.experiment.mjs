@@ -48,14 +48,18 @@ export default {
         const numeric=(input,grip,key,step)=>{
           let start=null;
           const begin=()=>{start=read()[key];};
-          const update=()=>{if(input.value.trim()!=='')change({[key]:Number(input.value)});};
+          const update=finish=>{
+            if(input.value.trim()!=='')change({[key]:Number(input.value)}).then(()=>{if(finish&&!disposed)input.value=String(read()[key]);});
+          };
           input.addEventListener('focus',begin);
-          input.addEventListener('input',update);input.addEventListener('change',update);
+          input.addEventListener('input',()=>update(false));input.addEventListener('change',()=>update(true));
           input.addEventListener('pointercancel',()=>{
             if(start===null||disposed)return;
             const value=start;start=null;input.value=String(value);change({[key]:value});
           });
-          return host.controls.installNumberDrag({input,grip,step,onStart:begin,onEnd:()=>{start=null;}});
+          const drag=host.controls.installNumberDrag({input,grip,step,onStart:begin,onEnd:()=>{start=null;}});
+          input.addEventListener('blur',()=>{if(!disposed){input.value=String(read()[key]);start=null;}});
+          return drag;
         };
         drags=[numeric(level,levelGrip,'level',1),numeric(bias,biasGrip,'detailBias',.1)];
         stopFrame=session.onFrame(()=>{const s=read(),m=s.optimizations.mipSampling;if(previous!==JSON.stringify([m.effective,m.availableMaxLevel,m.resolution,s.lighting.mode]))sync();});sync();
