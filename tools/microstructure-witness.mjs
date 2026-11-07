@@ -2,10 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {createRequire} from 'node:module';
 import assert from 'node:assert/strict';
-const [server,source,browserPath,puppeteerRoot,output]=process.argv.slice(2);
+const [server,source,browserPath,puppeteerRoot,output,model]=process.argv.slice(2);
 if(!output)throw Error('Usage: node tools/microstructure-witness.mjs SERVER SOURCE BROWSER PUPPETEER_ROOT OUTPUT');
 fs.mkdirSync(output,{recursive:true});
-const report={ok:false,phase:'launch',server,source,browserPath,repoRoot:process.cwd(),errors:[],gpuErrors:[],failedResources:[],captures:[]};
+const report={ok:false,phase:'launch',server,source,model:model??null,browserPath,repoRoot:process.cwd(),errors:[],gpuErrors:[],failedResources:[],captures:[],claimCeiling:model?'Rendered learned-field comparison; completion is not a fidelity or performance pass':'Exact fine-payload control comparison'};
 let browser,page;
 try{
   const sourceReport=new URL(source,server);
@@ -16,7 +16,7 @@ try{
   if(browserPath.includes('/Applications/Google Chrome.app/'))throw Error('Independent automation browser required');
   const require=createRequire(path.join(puppeteerRoot,'package.json')),puppeteer=require('puppeteer');
   report.profile=fs.mkdtempSync(path.join(output,'profile-'));
-  browser=await puppeteer.launch({executablePath:browserPath,userDataDir:report.profile,headless:true,defaultViewport:{width:1200,height:850,deviceScaleFactor:1},protocolTimeout:0,args:['--use-mock-keychain','--password-store=basic','--enable-unsafe-webgpu']});
+  browser=await puppeteer.launch({executablePath:browserPath,userDataDir:report.profile,headless:true,defaultViewport:{width:1200,height:850,deviceScaleFactor:model ? 0.35 : 1},protocolTimeout:0,args:['--use-mock-keychain','--password-store=basic','--enable-unsafe-webgpu']});
   report.browserPid=browser.process().pid;fs.writeFileSync(path.join(output,'start.json'),JSON.stringify(report,null,2));
   console.log(`Owned Chrome for Testing PID ${report.browserPid}`);
   page=await browser.newPage();page.setDefaultTimeout(0);page.setDefaultNavigationTimeout(0);
@@ -26,7 +26,7 @@ try{
     window.__microGpuErrors=[];const request=GPUAdapter.prototype.requestDevice;
     GPUAdapter.prototype.requestDevice=async function(...args){const d=await request.apply(this,args);d.addEventListener('uncapturederror',e=>window.__microGpuErrors.push(e.error.message??String(e.error)));return d;};
   });
-  report.phase='load';const url=new URL(server);url.searchParams.set('workspace','workbench');url.searchParams.set('experiment','trellis-microstructure');url.searchParams.set('experiment_inputs',JSON.stringify({source,mode:'fine'}));report.url=url.href;
+  report.phase='load';const url=new URL(server);url.searchParams.set('workspace','workbench');url.searchParams.set('experiment','trellis-microstructure');url.searchParams.set('experiment_inputs',JSON.stringify({source,mode:'fine',...(model?{model}:{})}));report.url=url.href;
   await page.goto(report.url,{waitUntil:'domcontentloaded'});
   await page.waitForFunction(()=>window.kaminosWorkbenchExperiments);
   await new Promise(r=>setTimeout(r,2000));
@@ -42,7 +42,7 @@ try{
     if(pose==='orthographic')await page.evaluate(()=>window.kaminosViewProjection.setOrthographic(true));
     if(pose==='transformed')await page.evaluate(id=>{window.kaminosViewProjection.setOrthographic(false);window.kaminosSetSceneObjectTransform(id,{position:[0,.2,0],rotation:[.12,.31,.07],scale:[1.1,.85,1.2]});},report.state.objectId);
     if(position)await page.evaluate(position=>window.__kaminosSetSceneCameraFrame(position,[0,.2,0]),position);
-    for(const mode of ['fine','coarse','carrier']){
+    for(const mode of ['fine','coarse','carrier',...(model?['learned']:[])]){
     if(mode==='coarse')await page.select('select[aria-label="Surface representation"]',mode);
     else await page.evaluate(mode=>window.kaminosWorkbenchExperiments.invoke('mode',mode),mode);
     const state=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
@@ -68,7 +68,7 @@ try{
     }
     const compare=await page.evaluate(()=>{
       const compare=(a,b)=>{let squared=0,changed=0,major=0,max=0;for(let i=0;i<a.length;i+=4){let m=0;for(let c=0;c<3;c++){const d=Math.abs(a[i+c]-b[i+c]);squared+=d*d;max=Math.max(max,d);m=Math.max(m,d);}if(m>0)changed++;if(m>8)major++;}return {rmse:Math.sqrt(squared/(a.length/4*3)),changedPixels:changed,majorPixels:major,max};};
-      return {carrier:compare(window.__microWitnessPixels.fine,window.__microWitnessPixels.carrier),coarse:compare(window.__microWitnessPixels.fine,window.__microWitnessPixels.coarse)};
+      return {carrier:compare(window.__microWitnessPixels.fine,window.__microWitnessPixels.carrier),coarse:compare(window.__microWitnessPixels.fine,window.__microWitnessPixels.coarse),...(window.__microWitnessPixels.learned?{learned:compare(window.__microWitnessPixels.fine,window.__microWitnessPixels.learned)}:{})};
     });
     (report.comparisons??=[]).push({pose,...compare});
     assert.ok(compare.coarse.majorPixels>1000,'Coarse negative control must visibly differ');
