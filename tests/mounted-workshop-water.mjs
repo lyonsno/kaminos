@@ -1,6 +1,7 @@
 // kaminos-test: node
 import test from 'node:test';import assert from 'node:assert/strict';
 import {createMountedWorkshopWater} from '../mounted-workshop-water.mjs';
+import {createAuthoredWaterFeature} from '../authored-water-feature.mjs';
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
 function fixture(wait){let allocations=0,active=null,physicalStep=8,pose=null,source={emissionEnabled:false};const host={paused:true,setPaused(v){this.paused=v;},setPresentationFrame(v){pose=v;},setEmitters(){},state:()=>({step:physicalStep}),dispose(){this.disposed=true;}};
  const water=createMountedWorkshopWater({prepareHost:async()=>{allocations++;return wait?await wait.promise:host;},source:()=>source,editSource:p=>Object.assign(source,p),activate:h=>{active=h;},deactivate:h=>{if(active===h)active=null;},frame:()=>({translation:[1,2,3],scale:.2})});return {water,host,source,allocations:()=>allocations,active:()=>active,pose:()=>pose};}
@@ -14,4 +15,19 @@ test('native Reset invalidates the old host and the next frame prepares the curr
  await water.prepare();water.present(true);await water.pour();const first=physical;first.dispose();physical=null; // ordinary inspector Reset owns this change
  water.sync();assert.equal(water.read().runtime,null,'the disposed host must not remain a reported live runtime');assert.equal(water.read().phase,'preparing');
  await water.prepare();assert.notEqual(physical,first);await water.pour();assert.equal(physical.paused,false);await water.dispose();
+});
+test('Pour and Return update the native feature pause owner as well as its host',async()=>{
+ const host={paused:true,setPaused(v){this.paused=v;},setPresentationFrame(){},setEmitters(){},state:()=>({mode:'continuous'}),dispose(){}};
+ const feature=createAuthoredWaterFeature({services:()=>({}),emitters:()=>[],viewerPaused:()=>true,loadHost:async()=>({createAuthoredWaterHost:async()=>host})});feature.setup={};
+ const water=createMountedWorkshopWater({prepareHost:async()=>{await feature.restore();return feature.host;},currentHost:()=>feature.host,setPaused:v=>feature.setPaused(v),source:()=>({}),editSource(){}});
+ await water.prepare();water.present(true);await water.pour();assert.equal(feature.paused,false,'editor visibility reconciliation must see the active pour');
+ host.setPaused(feature.paused);assert.equal(host.paused,false);
+ water.present(false);assert.equal(feature.paused,true);assert.equal(host.paused,true);
+ water.present(true);assert.equal(feature.paused,false);assert.equal(host.paused,false);await water.dispose();
+});
+test('a rejected activation remains withdrawn and can be retried after the conflict clears',async()=>{
+ let blocked=true,active=false;const f=fixture();
+ const water=createMountedWorkshopWater({prepareHost:async()=>f.host,source:()=>({}),editSource(){},activate(){if(blocked)throw Error('Other water');active=true;}});
+ await water.prepare();assert.throws(()=>water.present(true),/Other water/);assert.equal(water.read().visible,false);assert.equal(f.host.paused,true);
+ blocked=false;water.present(true);assert.equal(active,true);assert.equal(water.read().visible,true);await water.dispose();
 });

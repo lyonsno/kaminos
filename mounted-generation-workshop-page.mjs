@@ -61,6 +61,7 @@ export function installMountedGenerationWorkshop({document,THREE,mergeGeometries
       for(const h of acquired)h.root.visible=amount>0;
       for(const h of acquired)h.root.traverse(node=>{for(const material of [node.material].flat().filter(Boolean)){if(!materials.has(material))materials.set(material,material.opacity);material.transparent=true;material.opacity=materials.get(material)*amount;}});
       if(amount===0&&placed){frame.position.set(0,0,0);frame.scale.setScalar(1);frame.updateMatrixWorld(true);placed=false;restoreSelection();}
+      parts?.present?.(amount);
       redraw();
      },
      async dispose(){restoreSelection();handles=[];await release();},
