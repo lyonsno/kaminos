@@ -7,9 +7,14 @@ import {promptReliefMetadata} from './inference-kiln-record.mjs';
 // consumer owns only native editing and the admitted solid-text preparation.
 export async function createMountedGenerationPrompt({document,workshop,camera,onFrame,input,signal,prompt='',request=null,controls=null,statusSlot=null,changed=()=>{}}){
  const viewport=document.getElementById('viewport');
- const root=new Group();root.name='Generation prompt';root.position.set(.5,1.5,.3);root.scale.setScalar(4.5);
+ // Initial authored pose in cold-stage's kiln opening; it remains a normal
+ // editable workshop member after mounting. Text scrolls within this window.
+ const root=new Group();root.name='Generation prompt';root.position.set(1.55,2.46,-3.4);root.rotation.y=-.15;root.scale.setScalar(2);
  const material=new MeshStandardMaterial({color:0xb8b2a8,roughness:.8});material.userData.kaminosBurnAppearance='composed';
  const mesh=new Mesh(new BufferGeometry(),material);mesh.castShadow=true;mesh.receiveShadow=true;root.add(mesh);
+ // Match the relief's front face (.0175) to the native editor plane (.018),
+ // including oblique views of the kiln rather than only front-on projection.
+ mesh.position.z=.0005;
  let disposed=false,serial=0,timer=null,admitted=null,prepared=null,preparing=null,error=null,visible=false,admittedScroll=0;
  const editor=installKilnPromptEditor({document,viewport,input,camera,object:root,presentation:mesh,onChange:schedule,onScroll:alignSolid,onError:e=>{error=e.message;changed();}});
  const preparation=createKilnPromptPreparation({rasterize:editor.rasterize,Worker:document.defaultView.Worker});

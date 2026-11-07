@@ -28,6 +28,9 @@ export function installKilnPromptEditor({document,viewport,input,camera,object,p
  function sync(){
   height=KILN_PROMPT_WINDOW_HEIGHT;const scroll=input.scrollTop;input.style.cssText=typography+`height:${height}px;min-height:0;max-height:none;position:absolute;left:0;top:0;transform-origin:0 0;resize:none;background:transparent;border-radius:0;box-shadow:none;overflow:auto;scrollbar-width:thin;outline:none;caret-color:#ffcd8d;text-shadow:0 1px 2px #000,0 0 5px #0008;`;
   input.scrollTop=scroll;position();present();
+  // The projected layer lets scene clicks through, but typing must remain
+  // clickable after rebuilding the inline style on every input event.
+  input.style.pointerEvents='auto';
  }
  // Measure the native caret using the same transformed typography. This runs
  // on editing/selection events, never on the simulation or render hot path.

@@ -72,3 +72,23 @@ for(const [height,scroll] of [[180,0],[1000,0],[1000,400]])test(`solid shares na
   assert.equal(mesh.position.y,shifted,'admitted solid retains its scroll origin');
  }finally{consumer.dispose();geometry.dispose();}
 });
+
+test('initial native writing window sits inside the authored kiln opening instead of over the mold',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const {Matrix4,Vector3,Quaternion,Euler}=await import('../lib/three.core.js');
+ const recipe=JSON.parse(await readFile(new URL('../assets/workshop/cold-stage.json',import.meta.url),'utf8'));
+ const kiln=recipe.objects.find(o=>o.type==='glb'&&o.label==='Kiln · composition study').transform;
+ const rotation=new Quaternion().setFromEuler(new Euler(...kiln.rotation));
+ const inverse=new Matrix4().compose(new Vector3(...kiln.position),rotation,new Vector3(...kiln.scale)).invert();
+ const f=fixture(),consumer=await createMountedGenerationPrompt({...f,signal:new AbortController().signal});
+ try{
+  const root=f.frame.children[0];root.updateMatrix();
+  // Authored opening clearance in the kiln asset's local units. This tests the
+  // visible native window, not the unbounded submitted prompt's glyph count.
+  for(const x of [-1,1])for(const y of [-520/1024,520/1024]){
+   const p=new Vector3(x,y,.018).applyMatrix4(root.matrix).applyMatrix4(inverse);
+   assert.ok(p.x>-.23&&p.x<.23&&p.y>-.22&&p.y<.22&&p.z>.1&&p.z<.3,`writing corner outside kiln opening: ${p.toArray()}`);
+  }
+  assert.ok(Math.abs(root.quaternion.dot(rotation))>1-1e-8,'writing plane faces the same direction as its kiln');
+ }finally{consumer.dispose();}
+});
