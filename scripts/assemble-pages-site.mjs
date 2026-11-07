@@ -26,7 +26,7 @@ export function assemblePagesSite(out, { supermatWeightsUrl = null } = {}) {
 
   const hand = path.join(out, 'inference-kit', 'hand-mesh');
   fs.mkdirSync(hand, { recursive: true });
-  for (const file of ['index.html', 'style.css', 'main.js', 'model-files.js']) {
+  for (const file of ['index.html', 'style.css', 'main.js', 'model-files.js', 'fps.js']) {
     fs.copyFileSync(path.join(repoRoot, 'demos', 'hand-mesh', file), path.join(hand, file));
   }
   for (const model of ['mobrecon', 'wilor-hand-detector']) {
