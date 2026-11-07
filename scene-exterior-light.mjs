@@ -3,7 +3,7 @@ import {createVolumeGather} from './scene-volume-gather.mjs';
 
 // Receiver coverage is independent of material allocation and Fine source
 // coordinates. Source-directed quadrature covers the source inside Fine.
-export function createExteriorSmokeLight(device,{grid=8,refinement=4,receiverCoverage=null,beforeReplace=()=>{}}={}){
+export function createExteriorSmokeLight(device,{grid=8,refinement=4,receiverCoverage=null,beforeReplace=()=>{},asynchronous=false}={}){
   function coverage(value){
     if(value===null)return null;
     if(![value?.lo,value?.hi].every(v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite))||value.hi.some((v,a)=>v<=value.lo[a]))throw Error('ordered finite receiver coverage required');
@@ -14,14 +14,11 @@ export function createExteriorSmokeLight(device,{grid=8,refinement=4,receiverCov
   let nearCoverage=coverage(receiverCoverage);
   const regions=new Map();let builds=0;
   function remove(name){const r=regions.get(name);if(r){beforeReplace();r.gather.destroy();regions.delete(name);}}
-  return {
-    setReceiverCoverage(value){nearCoverage=coverage(value);},
-    encode(source,{geometry,revision,worldGeometry=true,directions,gain,sourceSoftness,environment,sceneLights,fineReceiverGrid=16}){
+  function specifications(source,{geometry,revision,worldGeometry=true,directions,fineReceiverGrid=16}){
       const medium=source.exterior;
-      if(!medium){for(const name of regions.keys())remove(name);return null;}
+      if(!medium)return [];
       for(const r of [medium,medium.middle])if(r&&(r.status!=='encoded'||r.generation!==source.generation||r.frame!==source.frame))throw Error('exterior transport requires same-generation region extinction');
-      if(!medium.middle&&!nearCoverage)remove('middle');
-      const frames={};
+      const specs=[];
       const near=nearCoverage??medium.middle;
       const fineHi=source.dimensions.map(n=>-1+2*n/source.dimensions[0]);
       const margin=normalizeSmokeHandoffMargin(medium.handoffMargin)||null;
@@ -42,15 +39,36 @@ export function createExteriorSmokeLight(device,{grid=8,refinement=4,receiverCov
         const regionGrid=name==='middle'&&nearCoverage?dims[0]:Math.ceil(grid/widthUnit)*widthUnit;
         const exclude=name==='world'&&near?{lo:near.localMin,hi:near.localMax,blendWidth:nearCoverage?.pitch??(near.localMax[0]-near.localMin[0])/grid}:fineCore;
         const key=JSON.stringify([revision,source.dimensions,region.localMin,region.localMax,regionGrid,exclude]);
-        let current=regions.get(name);
-        if(!current||current.key!==key){
-          const next=createVolumeGather(device,{geometry,receivers:[],volumeGrid:regionGrid,sourceDimensions:source.dimensions,
-            receiverBounds:{lo:region.localMin,hi:region.localMax},smokeRefinement:refinement,directions:regionDirections,angularPattern:'source',worldGeometry,exteriorMedium:true,exteriorIntegrationGrid:grid,receiverExclusion:exclude});
-          beforeReplace();current?.gather.destroy();current={key,gather:next};regions.set(name,current);builds++;
-        }
-        const {gather}=current;
-        if(worldGeometry)gather.setGeometryTransforms(geometry.matrices);
-        gather.setDirections(regionDirections);
+        specs.push({name,key,regionGrid,regionDirections,region,exclude});
+      }
+      return specs;
+  }
+  function makeGather(source,spec,geometry,worldGeometry){return createVolumeGather(device,{geometry,receivers:[],volumeGrid:spec.regionGrid,sourceDimensions:source.dimensions,
+    receiverBounds:{lo:spec.region.localMin,hi:spec.region.localMax},smokeRefinement:refinement,directions:spec.regionDirections,angularPattern:'source',worldGeometry,exteriorMedium:true,exteriorIntegrationGrid:grid,receiverExclusion:spec.exclude,asynchronous});}
+  return {
+    setReceiverCoverage(value){nearCoverage=coverage(value);},
+    isPrepared(source,options){const specs=specifications(source,options);return specs.length===regions.size&&specs.every(spec=>{const current=regions.get(spec.name);return current?.key===spec.key&&current.gather.isPrepared(source,options);});},
+    async prepare(source,options){
+      const specs=specifications(source,options),candidates=new Map(),owned=[];
+      try{
+        for(const spec of specs){let current=regions.get(spec.name);if(current?.key!==spec.key){current={key:spec.key,gather:makeGather(source,spec,options.geometry,options.worldGeometry!==false)};owned.push(current);}current.gather.setDirections(spec.regionDirections);if(options.worldGeometry!==false)current.gather.setGeometryTransforms(options.geometry.matrices);candidates.set(spec.name,current);}
+        await Promise.all([...candidates.values()].map(current=>current.gather.prepare(source,options)));
+        const replaced=[...regions].some(([name,current])=>candidates.get(name)!==current);
+        if(replaced)beforeReplace();
+        for(const [name,current] of regions)if(candidates.get(name)!==current)current.gather.destroy();
+        for(const current of owned)builds++;
+        regions.clear();for(const [name,current] of candidates)regions.set(name,current);
+      }catch(error){for(const current of owned)current.gather.destroy();throw error;}
+    },
+    encode(source,options){
+      const {geometry,worldGeometry=true,gain,sourceSoftness,environment,sceneLights}=options;
+      const medium=source.exterior,specs=specifications(source,options),frames={};
+      for(const name of regions.keys())if(!specs.some(spec=>spec.name===name))remove(name);
+      if(!medium)return null;
+      for(const spec of specs){
+        const {name,key,regionDirections}=spec;let current=regions.get(name);
+        if(current?.key!==key){const next=makeGather(source,spec,geometry,worldGeometry);beforeReplace();current?.gather.destroy();current={key,gather:next};regions.set(name,current);builds++;}
+        const {gather}=current;if(worldGeometry)gather.setGeometryTransforms(geometry.matrices);gather.setDirections(regionDirections);
         const frame=gather.encode(source,{gain,sourceSoftness,environment,sceneLights});
         frames[name]={texture:gather.smoke,...frame,coverage:name==='middle'&&nearCoverage?'independent-near-receivers':`${name}-material-bounds`,builds,
           extinction:{generation:medium.generation,method:'region-split-midpoint-trilinear',stepLength:(medium.localMax[0]-medium.localMin[0])/grid,fineInterval:'physical-blend-in-fine-source',overlap:'camera-two-middle-material-cells'},

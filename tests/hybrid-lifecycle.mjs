@@ -345,3 +345,20 @@ assert.equal(mesh.material,acceptedMaterial);assert.equal(retainedDisposals,0);
 retainedFinish();await retainedMount.whenRebuilt();
 assert.notEqual(mesh.material,acceptedMaterial);assert.equal(retainedDisposals,4,'old source resources retire only after promotion');
 consume(field);assert.equal(retainedMount.canRender(),true);retainedMount.dispose();
+
+// Exercise preparation through the actual live consumer boundary, rather than
+// accepting a factory-local asynchronous handle as a complete handoff.
+const asyncDevice=Object.create(device);
+asyncDevice.createComputePipelineAsync=async descriptor=>{pipelines.push('async:'+descriptor.label);return pipeline;};
+const kernelOwner=createLightingPreparation({hold(){},compile:async ticket=>{const restore=ticket.visibility?.();restore?.();}});
+const liveKernels=mountDistributedSceneRadiance({renderer,scene,prototype,device:asyncDevice,volumeGrid:2,smokeRefinement:1,
+ rebuild:{hold:kernelOwner.setExternalHold,prepareRetained:kernelOwner.request,prepareKernels:kernelOwner.prepareKernels},
+ createShadow:()=>({visibility:THREE.TSL.float(1),render(){},debugState:()=>({}),dispose(){}})});
+consume(field);await liveKernels.whenRebuilt();
+consume(field);await liveKernels.whenRebuilt();
+consume(field);await liveKernels.whenRebuilt();
+consume(field);assert.equal(liveKernels.canRender(),true,'live producer consumes asynchronously prepared gather and point kernels');
+const originalLiveMaterial=mesh.material;
+liveKernels.setPointCount(2);await liveKernels.whenRebuilt();consume(field);
+assert.equal(liveKernels.canRender(),true);assert.notEqual(mesh.material,originalLiveMaterial);
+liveKernels.dispose();

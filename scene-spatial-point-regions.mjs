@@ -1,3 +1,4 @@
+import {createLightingComputePipeline,prepareLightingComputePipelines} from './scene-lighting-compute.mjs';
 // Emission-weighted, axis-aligned binary partition. Tree topology is fixed;
 // split axes and cell boundaries follow the source with hysteresis on the GPU.
 export function spatialRegionTree(count){
@@ -30,7 +31,7 @@ export function reduceSpatialRegions(values,dims,count,gain=1){
 }
 
 const spatialReducerCache=new WeakMap();
-export function createSpatialReducer(device,count,texture){
+export function createSpatialReducer(device,count,texture,{asynchronous=false}={}){
   const tree=spatialRegionTree(count),shards=16,owned=[];
   const buffer=(label,size,usage=GPUBufferUsage.STORAGE)=>{const b=device.createBuffer({label,size,usage:usage|GPUBufferUsage.COPY_DST});owned.push(b);return b;};
   // lo.xyz / fractional energy, hi.xyz / previous axis, child indices / leaf
@@ -45,14 +46,15 @@ export function createSpatialReducer(device,count,texture){
   let cached=spatialReducerCache.get(device);
   if(!cached){
     const module=device.createShaderModule({label:'three-axis emission partition',code:`const SHARDS:u32=${shards}u;\n`+SPATIAL_REGIONS_WGSL});
-    const scan=device.createComputePipeline({layout:'auto',compute:{module,entryPoint:'scan'}});
-    const finish=device.createComputePipeline({layout:'auto',compute:{module,entryPoint:'finish'}});
+    const scan=createLightingComputePipeline(device,{layout:'auto',compute:{module,entryPoint:'scan'}},asynchronous);
+    const finish=createLightingComputePipeline(device,{layout:'auto',compute:{module,entryPoint:'finish'}},asynchronous);
     cached={module,scan,finish};
     spatialReducerCache.set(device,cached);
   }
-  const {scan,finish}=cached;
+  const kernels=cached;
   let source=null,dimensions='',groups=[];
-  return {encode(field){
+  return {ready:()=>prepareLightingComputePipelines([kernels.scan,kernels.finish]),encode(field){
+    const scan=kernels.scan.get(),finish=kernels.finish.get();
     const key=field.dimensions.join(',');
     if(dimensions!==key){device.queue.writeBuffer(state,0,data);dimensions=key;}
     if(source!==field.texture){source=field.texture;groups=params.map(p=>{

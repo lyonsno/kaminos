@@ -102,24 +102,30 @@ fn reduce(@builtin(workgroup_id) group:vec3<u32>){
  textureStore(output,vec2<i32>(i32(band),1),e);
 }`;
 
-export function createPointRegions(device,{count=4,partition='vertical'}={}) {
+export function createPointRegions(device,{count=4,partition='vertical',asynchronous=false}={}) {
   if(!['vertical','energy','spatial'].includes(partition))throw Error('unknown point partition');
   if(!Number.isInteger(count)||count<1||count>device.limits.maxTextureDimension2D||count>device.limits.maxComputeWorkgroupsPerDimension)throw new Error('point count exceeds device capacity');
   if(partition==='spatial'&&(2*count-1)*16*48>device.limits.maxStorageBufferBindingSize)throw new Error('spatial point moments exceed device storage capacity');
   const texture=device.createTexture({label:'live hybrid surface point regions',size:[count,2],format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.COPY_SRC});
   const params=device.createBuffer({label:'hybrid point reduction parameters',size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
   const adaptive=partition==='energy'&&count>1;
-  const spatial=partition==='spatial'?createSpatialReducer(device,count,texture):null;
+  const spatial=partition==='spatial'?createSpatialReducer(device,count,texture,{asynchronous}):null;
   const pipeline=spatial?null:device.createComputePipeline({label:'all-cell source to surface points',layout:'auto',compute:{module:device.createShaderModule({code:adaptive?ENERGY_ROWS_WGSL:POINT_REGIONS_WGSL}),entryPoint:'reduce'}});
   const finish=adaptive?device.createComputePipeline({label:'equal-energy surface points',layout:'auto',compute:{module:device.createShaderModule({code:ENERGY_REGIONS_WGSL}),entryPoint:'reduce'}}):null;
   let sourceTexture=null,group=null,metadata=null,disposed=false,rows=null,rowHeight=0,finishGroup=null,emissionCells=null;
-  return {texture,count,
+  let preparedSourceMode=null;
+  const mode=field=>!!field.exterior?.emissionTexture;
+  async function ready(field){
+    if(spatial){await spatial.ready();if(mode(field)){emissionCells??=createEmissionCellReducer(device,count,texture,{asynchronous});await emissionCells.ready();}}
+    preparedSourceMode=mode(field);
+  }
+  return {texture,count,ready,isPrepared:field=>!asynchronous||preparedSourceMode===mode(field),
     encode(field){
       if(disposed||field.status!=='encoded'||!field.texture)throw new Error('point reduction requires current encoded source');
       pointRegionPlan(field.dimensions,spatial?1:count);
       if(!Number.isFinite(field.gain)||field.gain<0)throw new Error('point reduction requires nonnegative gain');
       if(spatial&&field.exterior?.emissionTexture){
-        emissionCells??=createEmissionCellReducer(device,count,texture);
+        emissionCells??=createEmissionCellReducer(device,count,texture,{asynchronous});
         metadata={identity:'all-region-physical-point-regions-v1',partition,count,generation:field.generation,frame:field.frame,gain:field.gain,...emissionCells.encode(field)};return {...metadata};
       }
       if(spatial){

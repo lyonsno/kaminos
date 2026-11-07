@@ -1,3 +1,4 @@
+import {createLightingComputePipeline,prepareLightingComputePipelines} from './scene-lighting-compute.mjs';
 import {spatialRegionTree} from './scene-spatial-point-regions.mjs';
 
 // The cells are optical-source samples in the Fine coordinate frame. Fine's
@@ -22,16 +23,16 @@ export function emissionRegionPlan(field,limits={}){
  return {regions,count,bytes,lo,hi,pitch:(fine.localMax[0]-fine.localMin[0])/fine.dimensions[0]};
 }
 const cache=new WeakMap();
-export function createEmissionCellReducer(device,count,output){
+export function createEmissionCellReducer(device,count,output,{asynchronous=false}={}){
  const tree=spatialRegionTree(count),owned=[];
  const buffer=(label,size,usage=GPUBufferUsage.STORAGE)=>{const b=device.createBuffer({label,size,usage:usage|GPUBufferUsage.COPY_DST});owned.push(b);return b;};
  const state=buffer('all-region spatial emission tree',tree.nodes.length*64),partials=buffer('all-region emission moments',tree.nodes.length*16*48),ids=buffer('all-region emission levels',tree.nodes.length*4);
  const initial=new Float32Array(tree.nodes.length*16),words=new Uint32Array(initial.buffer);tree.nodes.forEach((n,i)=>words.set([n.left,n.right,n.budget,n.leaf],i*16+8));device.queue.writeBuffer(ids,0,new Uint32Array(tree.levels.flat()));
  const levels=tree.levels.map((_,i)=>buffer('all-region emission level '+i,64,GPUBufferUsage.UNIFORM));
  let compiled=cache.get(device);
- if(!compiled){const module=device.createShaderModule({label:'physical emission cells and spatial moments',code:EMISSION_CELLS_WGSL});compiled=Object.fromEntries(['seed','scan','finish'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'all-region emission '+entryPoint,layout:'auto',compute:{module,entryPoint}})]));cache.set(device,compiled);}
+ if(!compiled){const module=device.createShaderModule({label:'physical emission cells and spatial moments',code:EMISSION_CELLS_WGSL});compiled=Object.fromEntries(['seed','scan','finish'].map(entryPoint=>[entryPoint,createLightingComputePipeline(device,{label:'all-region emission '+entryPoint,layout:'auto',compute:{module,entryPoint}},asynchronous)]));cache.set(device,compiled);}
  let cells=null,cellCount=0,shape=null,seedRows=[],groups=null;
- return {encode(field){
+ return {ready:()=>prepareLightingComputePipelines(Object.values(compiled)),encode(field){
   const plan=emissionRegionPlan(field,device.limits),key=JSON.stringify([plan.regions.map(r=>[r.dimensions,r.localMin,r.localMax,r.role]),plan.lo,plan.hi]);
   if(cellCount!==plan.count){cells?.destroy();cells=device.createBuffer({label:'all physical emission cells',size:plan.bytes,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC});cellCount=plan.count;groups=null;for(const r of seedRows)r.texture=null;}
   if(shape!==key){device.queue.writeBuffer(state,0,initial);shape=key;}
@@ -43,16 +44,16 @@ export function createEmissionCellReducer(device,count,output){
    f.set([...(world?.localMin??fine.localMin),0,...(world?.localMax??fine.localMax),0],32);
    f[3]=r.role===0?field.gain:(field.exteriorGain??field.gain);
    u.set([...r.dimensions,r.offset,r.role,middle?1:0,0,0],24);device.queue.writeBuffer(row.params,0,bytes);
-   if(row.texture!==r.texture){row.group=device.createBindGroup({layout:compiled.seed.getBindGroupLayout(0),entries:[{binding:0,resource:r.texture.createView()},{binding:1,resource:{buffer:cells}},{binding:2,resource:{buffer:row.params}}]});row.texture=r.texture;}
-   const p=encoder.beginComputePass({label:'physical source ownership '+r.role});p.setPipeline(compiled.seed);p.setBindGroup(0,row.group);p.dispatchWorkgroups(Math.ceil(r.count/64));p.end();
+   if(row.texture!==r.texture){row.group=device.createBindGroup({layout:compiled.seed.get().getBindGroupLayout(0),entries:[{binding:0,resource:r.texture.createView()},{binding:1,resource:{buffer:cells}},{binding:2,resource:{buffer:row.params}}]});row.texture=r.texture;}
+   const p=encoder.beginComputePass({label:'physical source ownership '+r.role});p.setPipeline(compiled.seed.get());p.setBindGroup(0,row.group);p.dispatchWorkgroups(Math.ceil(r.count/64));p.end();
   });
   if(!groups)groups=levels.map(p=>{
    const entries=[{binding:3,resource:{buffer:cells}},{binding:4,resource:{buffer:state}},{binding:5,resource:{buffer:partials}},{binding:6,resource:{buffer:p}},{binding:7,resource:{buffer:ids}},{binding:8,resource:output.createView()}];
-   return [compiled.scan,compiled.finish].map((pipeline,i)=>device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:entries.filter(e=>i===0?e.binding!==8:e.binding!==3)}));
+   return [compiled.scan.get(),compiled.finish.get()].map((pipeline,i)=>device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:entries.filter(e=>i===0?e.binding!==8:e.binding!==3)}));
   });
   let offset=0;tree.levels.forEach((level,i)=>{
    const bytes=new ArrayBuffer(64),f=new Float32Array(bytes),u=new Uint32Array(bytes);f.set([...plan.lo,0,...plan.hi,0]);u.set([offset,i,plan.count,0],8);f.set([field.gain,plan.pitch,0,0],12);device.queue.writeBuffer(levels[i],0,bytes);offset+=level.length;
-   const a=encoder.beginComputePass();a.setPipeline(compiled.scan);a.setBindGroup(0,groups[i][0]);a.dispatchWorkgroups(16,level.length);a.end();const b=encoder.beginComputePass();b.setPipeline(compiled.finish);b.setBindGroup(0,groups[i][1]);b.dispatchWorkgroups(level.length);b.end();
+   const a=encoder.beginComputePass();a.setPipeline(compiled.scan.get());a.setBindGroup(0,groups[i][0]);a.dispatchWorkgroups(16,level.length);a.end();const b=encoder.beginComputePass();b.setPipeline(compiled.finish.get());b.setBindGroup(0,groups[i][1]);b.dispatchWorkgroups(level.length);b.end();
   });device.queue.submit([encoder.finish()]);return {sourceCells:plan.count,sourceRegions:plan.regions.map(r=>({role:['fine','world','middle'][r.role],dimensions:[...r.dimensions],localMin:[...r.localMin],localMax:[...r.localMax]})),emissionBounds:{lo:plan.lo,hi:plan.hi}};
  },destroy(){cells?.destroy();for(const b of owned)b.destroy();}};
 }

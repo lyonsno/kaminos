@@ -47,7 +47,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   validateSmoke(smokeShadowSteps,smokeShadowResolution);
   const smokeEnvironment=createSceneSmokeEnvironment({renderer,scene,device,blur:smokeEnvironmentBlur});
   const exteriorRefinement=4;
-  const exteriorLight=createExteriorSmokeLight(device,{refinement:exteriorRefinement,receiverCoverage:exteriorReceiverCoverage,beforeReplace:()=>prototype.setSceneDistributedLightFrame(null)});
+  const exteriorLight=createExteriorSmokeLight(device,{asynchronous:!!rebuild?.prepareKernels,refinement:exteriorRefinement,receiverCoverage:exteriorReceiverCoverage,beforeReplace:()=>prototype.setSceneDistributedLightFrame(null)});
   const {uniform,vec2,vec3,textureLoad,ivec2,positionWorld,normalWorld,screenCoordinate,Fn,If}=THREE.TSL;
   // Deferred surfaces reconstruct their world position per pixel. The default
   // positionWorld is the fullscreen carrier geometry, not the visible surface.
@@ -67,7 +67,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   const sharedPreparation=comparison.implementation==='shared';
   const filterPattern=sharedPreparation?{count:filterSamples,bytes:0,route:'runtime-arithmetic',reason:null,node:null}:{count:filterSamples,bytes:0,route:'arithmetic',reason:'legacy-comparison',node:null};
   const grain=comparison.grain==='ordered'?null:shadowGrainNode(comparison.grain==='world'?receiverPosition.div(worldCellSize):vec3(screenCoordinate.xy,0),THREE.TSL,comparison.grain==='screen-animated'?THREE.TSL.frameId:null);
-  points=createPointRegions(device,{count,partition:'spatial'});
+  points=createPointRegions(device,{count,partition:'spatial',asynchronous:!!rebuild?.prepareKernels});
   shadowSources=createShadowSourceSnapshots(device,{points:points.texture,count});
   captureSchedule=createShadowCaptureSchedule({count,budget:shadowCaptureBudget});
   shadowExternal=new THREE.ExternalTexture(shadowSources.texture);
@@ -185,6 +185,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     let settled=false;
     const discard=()=>{if(settled)return;settled=true;disposeMaterials(candidateMaterials);releasePoints(candidate);};
     return {
+      prepare:()=>candidate.points.ready(prototype.sceneVolumeSourceField()),
       borrow(){select(candidate,candidateMaterials);return ()=>select(accepted,acceptedMaterials);},
       commit(){
         if(settled)return;
@@ -320,7 +321,16 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       const sceneLights=collectSceneSmokeLights(scene,sourceTransform);
       frame=gather.encode(field.source,{gain,sourceSoftness,surfaceScattering,smokeEnabled:smokeMode==='distributed',environment,sceneLights,samplingFrame:prototype.sceneLightSamplingFrame?.()??field.source.frame});
       exteriorLight.setReceiverCoverage(exteriorReceiverCoverage??nearSmokeBoxCoverage(nearBox,sourceDomain));
-      const exterior=smokeMode==='distributed'?exteriorLight.encode(field.source,{geometry:packed,revision,directions,gain,sourceSoftness,environment,sceneLights,fineReceiverGrid:volumeGrid}):null;
+      const exteriorOptions={geometry:packed,revision,directions,gain,sourceSoftness,environment,sceneLights,fineReceiverGrid:volumeGrid};
+      if(rebuild?.prepareKernels&&smokeMode==='distributed'&&!exteriorLight.isPrepared(field.source,exteriorOptions)){
+        valid=acceptedValid;
+        queueKernelPreparation(()=>exteriorLight.prepare(field.source,exteriorOptions));
+        return;
+      }
+      const exterior=smokeMode==='distributed'?exteriorLight.encode(field.source,exteriorOptions):null;
+      if(rebuild?.prepareKernels&&surfaceEnabled&&!points.isPrepared(gather.transportSource())){
+        valid=acceptedValid;queueKernelPreparation(()=>points.ready(gather.transportSource()));return;
+      }
       const reduction=surfaceEnabled?points.encode(gather.transportSource()):null;
       const medium=surfaceEnabled&&smokeShadowSteps&&smokeShadow?smokeShadow.encode(field.source,reduction):null;
       let solidShadowCapture=null;

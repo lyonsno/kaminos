@@ -113,6 +113,7 @@ export function createLightingPreparation({compile,liveCompile,hold,recover,onSt
               else unstaged=true;
             }
             retained=staged.length>0&&!unstaged;publish();
+            await Promise.all(staged.map(candidate=>candidate.prepare?.()));
             const visibility=staged.length?()=>{
               const restores=[];
               try {for(const candidate of staged)restores.push(candidate.borrow());}
