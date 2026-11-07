@@ -56,11 +56,14 @@ def make_dataset(rows, carriers, radius, samples, seed):
         lo, hi = h[:3], h[3:6]
         start, count = map(int, h[6:])
         children = rows[start:start + count]
+        visible = children[children[:, 11] > 0]
+        if not len(visible):
+            raise ValueError(f'Carrier {i} has no visible support for distance fitting')
         points = rng.uniform(lo, hi, (samples, 3)).astype(np.float32)
         # Half of the samples buy near-surface evidence; the rest observe the
         # empty space that a trivial "everything is solid" field would fill.
         near = samples // 2
-        selected = children[rng.integers(0, count, near)]
+        selected = visible[rng.integers(0, len(visible), near)]
         points[:near] = np.clip(selected[:, :3] + rng.normal(0, radius * .4, (near, 3)), lo, hi)
         truth = distance_targets(points, children, radius)
         truth[:, 0] /= radius

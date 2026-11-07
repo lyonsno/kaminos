@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import {packMicroField,decodeMicroField,assertMicroFieldSource,loadMicroField,microstructureFileURL} from '../neural-microstructure-field.mjs';
 import {fieldFixture} from './fixtures/microstructure-field.mjs';
 import {createLearnedMicrostructure} from '../neural-microstructure-learned.mjs';
+import {Box3} from '../lib/three.webgpu.js';
 const {meta,arrays}=fieldFixture(),model=packMicroField(meta,arrays);
 for(const [position,raw]of [[[0,0,0],0],[[1,1,1],1],[[.5,.5,.5],.5],[[1,0,0],4/7]]){
   const values=decodeMicroField(model,0,position);assert.ok(Math.abs(values[0]-Math.log1p(Math.exp(raw)))<1e-6);assert.deepEqual(values.slice(1,4),[0,0,1]);
@@ -16,8 +17,14 @@ const source={sourceSHA256:'original',carrierCount:1,radius:.1,files:Object.from
 const matching={...source,sourceFiles:source.files};assertMicroFieldSource(source,matching);
 const surface=createLearnedMicrostructure({...source,rows:new Float32Array([0,0,0,0,0,1,.2,.4,.6,.3,.8,1]),carriers:new Float32Array([0,0,0,1,1,1,0,1])},packMicroField({...meta,sourceSHA256:source.sourceSHA256,sourceFiles:source.files},arrays));
 assert.equal(surface.mesh.geometry.instanceCount,1,'Actual draw count must be finite, not InstancedBufferGeometry default Infinity');
+for(const precise of [false,true]){
+  const bounds=new Box3().setFromObject(surface.mesh,precise);
+  assert.deepEqual(bounds.min.toArray(),[0,0,0],'Native bounds must follow carrier coordinates, not the unit template');assert.deepEqual(bounds.max.toArray(),[1,1,1]);
+}
 const clone=surface.mesh.material.clone();assert.equal(clone.microPosition,surface.mesh.material.microPosition);assert.equal(clone.microWorld,surface.mesh.material.microWorld);clone.dispose();
 surface.setAppearance('constant');assert.equal(surface.read().appearance,'coarse-source-average');assert.equal(surface.read().appearanceControlBytes,32);assert.throws(()=>surface.setAppearance('bad'),/Appearance/);surface.dispose();
+const normalControl=createLearnedMicrostructure({...source,rows:new Float32Array([0,0,0,0,0,10,.2,.4,.6,.3,.8,1, 0,0,0,0,2,0,.2,.4,.6,.3,.8,1]),carriers:new Float32Array([0,0,0,1,1,1,0,2])},packMicroField({...meta,sourceSHA256:source.sourceSHA256,sourceFiles:source.files},arrays));
+assert.equal(normalControl.mesh.geometry.attributes.fieldConstantNormal.getY(0),.5);assert.equal(normalControl.mesh.geometry.attributes.fieldConstantNormal.getZ(0),.5);normalControl.dispose();
 assert.throws(()=>assertMicroFieldSource(source,{...matching,sourceFiles:{...source.files,'carriers.f32':{sha256:'wrong-crop'}}}),/carriers.f32/,'A common original source must not excuse a different crop');
 assert.throws(()=>assertMicroFieldSource(source,{...matching,radius:.2}),/source/);
 assert.equal(microstructureFileURL('http://localhost/api/read?root=generated-meshes&path=model%2F','grid.f32').searchParams.get('path'),'model/grid.f32');

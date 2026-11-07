@@ -45,6 +45,9 @@ try{
   assert.equal(report.state.source,source);assert.equal(report.state.sourceSHA256,report.expectedSource.sourceSHA256);assert.equal(report.state.sourceDiscs,report.expectedSource.count);assert.equal(report.state.carriers,report.expectedSource.carrierCount);
   report.adapter=await page.evaluate(async()=>{const a=await navigator.gpu.requestAdapter();return a?.info?{vendor:a.info.vendor,architecture:a.info.architecture,isFallbackAdapter:a.info.isFallbackAdapter}:null;});
   assert.equal(report.adapter?.vendor,'apple');assert.equal(report.adapter?.isFallbackAdapter,false);
+  report.nativeObject=await page.evaluate(id=>window.kaminosSceneObjectDebugState().find(row=>row.id===id),report.state.objectId);
+  const bounds=report.state.modelBounds??report.state.localBounds;
+  for(const side of ['min','max'])for(let axis=0;axis<3;axis++)assert.ok(Math.abs(report.nativeObject.worldBounds[side][axis]-bounds[side][axis]-report.nativeObject.transform.position[axis])<1e-5,'Native world bounds must follow the actual carriers/surface, not template geometry');
   report.grounding=await page.evaluate(id=>{const read=()=>window.kaminosSceneObjectDebugState().find(r=>r.id===id).transform;const before=read(),ground=window.kaminosGroundDebugState();window.selectSceneObject(id);window.snapToGround();const after=read();window.kaminosSetSceneObjectTransform(id,before);return {before,after,ground};},report.state.objectId);
   assert.ok(Math.abs(report.grounding.after.position[1]+report.state.localBounds.min[1]-report.grounding.ground.height)<1e-5,'Snap Ground must use the actual floor and fine surface, not a unit template box');
   report.phase='render';

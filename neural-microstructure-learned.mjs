@@ -1,4 +1,4 @@
-import {TSL,InstancedMesh,InstancedBufferGeometry,BoxGeometry,InstancedBufferAttribute,InstancedInterleavedBuffer,InterleavedBufferAttribute,IntType,StorageBufferAttribute,MeshPhysicalNodeMaterial,MeshBasicNodeMaterial,BackSide} from './lib/three.webgpu.js';
+import {TSL,Box3,Sphere,Vector3,InstancedMesh,InstancedBufferGeometry,BoxGeometry,InstancedBufferAttribute,InstancedInterleavedBuffer,InterleavedBufferAttribute,IntType,StorageBufferAttribute,MeshPhysicalNodeMaterial,MeshBasicNodeMaterial,BackSide} from './lib/three.webgpu.js';
 import {microFieldWGSL,assertMicroFieldSource} from './neural-microstructure-field.mjs';
 const {wgslFn,storage,attribute,varying,vec3,vec4,float,uniform,positionGeometry,positionView,positionViewDirection,modelWorldMatrix,modelWorldMatrixInverse,cameraViewMatrix,cameraWorldMatrix,cameraProjectionMatrix,cameraProjectionMatrixInverse,screenUV,getViewPosition,transformNormalToView}=TSL;
 
@@ -40,7 +40,7 @@ export function createLearnedMicrostructure(field,model){
   const appearanceData=new Float32Array(field.carrierCount*8);
   for(let i=0;i<field.carrierCount;i++){
     const start=field.carriers[i*8+6],count=field.carriers[i*8+7];let visible=0;
-    for(let j=start;j<start+count;j++){if(field.rows[j*12+11]<=0)continue;visible++;for(let k=0;k<8;k++)appearanceData[i*8+k]+=field.rows[j*12+3+k];}
+    for(let j=start;j<start+count;j++){if(field.rows[j*12+11]<=0)continue;visible++;const length=Math.hypot(...field.rows.subarray(j*12+3,j*12+6));for(let k=0;k<8;k++)appearanceData[i*8+k]+=field.rows[j*12+3+k]/(k<3?length:1);}
     if(visible)for(let k=0;k<8;k++)appearanceData[i*8+k]/=visible;
   }
   const appearanceBuffer=new InstancedInterleavedBuffer(appearanceData,8);
@@ -63,7 +63,9 @@ export function createLearnedMicrostructure(field,model){
   material.colorNode=srgb.lessThanEqual(.04045).select(srgb.div(12.92),srgb.add(.055).div(1.055).pow(2.4));
   const constantParams=varying(attribute('fieldConstantParams','vec2')).setInterpolation('flat');material.metalnessNode=useLearned.select(decoded.element(2).y,constantParams.x).clamp(0,1);material.roughnessNode=useLearned.select(decoded.element(2).z,constantParams.y).clamp(.04,1);
   const mesh=new InstancedMesh(geometry,material,field.carrierCount);mesh.name='Learned intrinsic microstructure';mesh.frustumCulled=false;mesh.raycast=()=>{};
+  const bounds=new Box3();for(let i=0;i<field.carrierCount;i++){bounds.expandByPoint(new Vector3().fromArray(lo,i*3));bounds.expandByPoint(new Vector3().fromArray(hi,i*3));}
+  mesh.boundingBox=bounds.clone();mesh.boundingSphere=bounds.getBoundingSphere(new Sphere());geometry.boundingBox=bounds.clone();geometry.boundingSphere=mesh.boundingSphere.clone();
   const ao=new MeshBasicNodeMaterial({side:BackSide});ao.positionNode=material.positionNode;ao.maskNode=material.maskNode;ao.depthNode=material.depthNode;ao.colorNode=vec4(view.z.negate(),0,0,1);ao.toneMapped=false;mesh.userData.kaminosAODepthMaterial=ao;
   let renderer,disposed=false;mesh.onBeforeRender=r=>{renderer=r;};
-  return {mesh,setAppearance(value){if(!['learned','constant'].includes(value))throw Error('Appearance must be learned or constant');learnedAppearance.value=value==='learned'?1:0;},read:()=>({neural:true,representation:'intrinsic-udf-shell',coveragePolicy:'sampled-udf-shell',opacityPolicy:'opaque learned shell; continuous optical alpha not modeled',appearance:learnedAppearance.value?'learned':'coarse-source-average',appearanceControlBytes:appearanceData.byteLength,shellRadiusUnits:.2,rayStepRadiusUnits:.25,parameterBytes:model.grid.byteLength+model.parameters.byteLength,carrierCount:field.carrierCount,pickingProxy:'exact fine source; not learned-surface evidence'}),dispose(){if(disposed)return;disposed=true;mesh.dispose();geometry.dispose();material.dispose();ao.dispose();for(const b of buffers)renderer?._attributes?.delete(b);}};
+  return {mesh,setAppearance(value){if(!['learned','constant'].includes(value))throw Error('Appearance must be learned or constant');learnedAppearance.value=value==='learned'?1:0;},read:()=>({neural:true,representation:'intrinsic-udf-shell',carrierBounds:{min:bounds.min.toArray(),max:bounds.max.toArray()},coveragePolicy:'sampled-udf-shell',opacityPolicy:'opaque learned shell; continuous optical alpha not modeled',appearance:learnedAppearance.value?'learned':'coarse-source-average',appearanceControlBytes:appearanceData.byteLength,shellRadiusUnits:.2,rayStepRadiusUnits:.25,parameterBytes:model.grid.byteLength+model.parameters.byteLength,carrierCount:field.carrierCount,pickingProxy:'exact fine source; not learned-surface evidence'}),dispose(){if(disposed)return;disposed=true;mesh.dispose();geometry.dispose();material.dispose();ao.dispose();for(const b of buffers)renderer?._attributes?.delete(b);}};
 }

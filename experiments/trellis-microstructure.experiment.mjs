@@ -28,16 +28,17 @@ export default {
     if(learned)control.root.add(learned.mesh);
     let currentMode=mode;
     const setMode=value=>{if(!modes.includes(value))throw Error('Unknown surface mode');currentMode=value;const isLearned=value==='learned'||value==='learned-constant';control.setMode(isLearned?'fine':value);if(learned){learned.setAppearance(value==='learned-constant'?'constant':'learned');learned.mesh.visible=isLearned;if(isLearned)for(const child of control.root.children)child.visible=child===learned.mesh;}};
+    setMode(mode);
     const session=await host.scene.open();let asset;
     // Position the small selected patch above the workbench floor; native
     // selection and transforms remain the owner of subsequent placement.
     control.root.position.y=.2;
     try{asset=await session.attach(control.root,{owned:true,metadata:{label:control.root.name,source:meta.sourceSHA256,type:'experiment'}});}
     catch(error){learned?.dispose();control.dispose();await session.dispose();throw error;}
-    const read=()=>({...control.read(),...(learned&&currentMode.startsWith('learned')?learned.read():{}),mode:currentMode,model:inputs.model??null,source:url,sourceSHA256:meta.sourceSHA256,regionYUp:meta.regionYUp,objectId:asset.id,view:session.readView()});
+    const read=()=>({...control.read(),...(learned&&currentMode.startsWith('learned')?learned.read():{}),modelBounds:learned?.read().carrierBounds??null,mode:currentMode,model:inputs.model??null,source:url,sourceSHA256:meta.sourceSHA256,regionYUp:meta.regionYUp,objectId:asset.id,view:session.readView()});
     let select;
     const frame=()=>session.setView({position:[.22,.34,.25],target:[0,.2,0]});
-    frame();setMode(mode);
+    frame();
     return {read,operations:{
       mode(value){setMode(value);if(select)select.value=value;session.redraw();const effective=read();record({kind:'microstructure.mode',phase:'applied',target:asset.id,requested:value,effective});return effective;},
       frame(){const effective=frame();record({kind:'microstructure.view',phase:'applied',target:asset.id,effective});return effective;},

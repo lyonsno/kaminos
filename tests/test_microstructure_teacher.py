@@ -10,6 +10,15 @@ spec.loader.exec_module(module)
 
 
 class MicrostructureTeacherTest(unittest.TestCase):
+    def test_near_samples_ignore_invisible_centers(self):
+        rows = np.array([[0, 0, 0, 0, 0, 2, 1, 0, 0, 0, .8, 1], [100, 0, 0, 0, 0, 1, 0, 1, 0, 0, .8, 0]], dtype=np.float32)
+        carriers = np.array([[-1, -1, -1, 101, 1, 1, 0, 2]], dtype=np.float32)
+        data = module.make_dataset(rows, carriers, .1, 64, 1106)
+        world_x = data['positions'][:32, 0] * 102 - 1
+        self.assertLess(float(np.abs(world_x).max()), .2)
+        with self.assertRaisesRegex(ValueError, 'no visible support'):
+            module.make_dataset(rows[1:], np.array([[-1, -1, -1, 101, 1, 1, 0, 1]], dtype=np.float32), .1, 4, 1106)
+
     def test_distance_is_to_disc_not_infinite_plane_or_center(self):
         rows = np.array([[0, 0, 0, 0, 0, 2, 1, 0, 0, 0, .8, 1]], dtype=np.float32)
         points = np.array([[0, 0, .5], [.5, 0, 0], [2, 0, 0], [2, 0, 1]], dtype=np.float32)
