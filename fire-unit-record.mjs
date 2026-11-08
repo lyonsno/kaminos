@@ -1,3 +1,4 @@
+import {normalizeFlameEmitterPose} from './scene-flame-emitter.mjs';
 import {checkedPose} from './scene-edit-session.mjs';
 export const FIRE_UNIT_TYPE='fire-unit';
 export const FIRE_UNIT_SOURCE='kaminos:fire-unit';
@@ -23,8 +24,9 @@ export function checkedFireUnitRecord(raw){
  if(raw?.type!==FIRE_UNIT_TYPE||raw.source!==FIRE_UNIT_SOURCE||typeof raw.id!=='string'||!raw.id)throw Error('Invalid fire unit identity');
  const r=copy(raw),f=r.fireUnit;
  if(!f||typeof f.moveEmitterWithGrid!=='boolean')throw Error('Move emitter with grid must be boolean');
+ if(f.emissionEnabled!==undefined&&typeof f.emissionEnabled!=='boolean')throw Error('Fire emission enabled must be boolean');
  r.transform=checkedFireUnitPose(r.transform);
- r.fireUnit={...f,controls:checkedControls(f.controls),emitter:checkedPose(f.emitter)};
+ r.fireUnit={...f,controls:checkedControls(f.controls),emitter:normalizeFlameEmitterPose(f.emitter)};
  return r;
 }
 export const fireUnitRecordDomain={type:FIRE_UNIT_TYPE,source:FIRE_UNIT_SOURCE,check:checkedFireUnitRecord,

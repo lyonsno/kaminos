@@ -278,7 +278,7 @@ export function authoredFlameShapeOptions(options) {
   return [...options].filter(option=>option.value!=='cluster');
 }
 
-export function createFlameInspector({ document, host, gridTuning, sharedHost = host, listBasins, applyBasin, saveBasin, readSource, readSourceRuntime = () => null, readPressureRuntime = () => null, readWorldRuntime = () => null, readWorldOverlay = () => ({mode:'off',summary:''}), setWorldOverlay = () => {}, readAppearanceRuntime = () => null, readRaymarchRuntime = () => null, readSceneLighting = () => false, readControlBounds = () => null, readSourceControl = () => null, writeSourceControl = () => false, writeValue = (source,value) => {source.value=String(value);}, onError }) {
+export function createFlameInspector({ document, host, gridTuning, scopeDescription='Flame appearance, reaction and motion below edit the shared fire simulation.', sharedHost = host, listBasins, applyBasin, saveBasin, readSource, readSourceRuntime = () => null, readPressureRuntime = () => null, readWorldRuntime = () => null, readWorldOverlay = () => ({mode:'off',summary:''}), setWorldOverlay = () => {}, readAppearanceRuntime = () => null, readRaymarchRuntime = () => null, readSceneLighting = () => false, readControlBounds = () => null, readSourceControl = () => null, writeSourceControl = () => false, writeValue = (source,value) => {source.value=String(value);}, onError }) {
   sharedHost.classList.add('flame-control-inspector');host.classList.add('flame-control-inspector');
   const navigation=document.createElement('div');navigation.className='flame-inspector-navigation';
   const search=document.createElement('input');search.type='search';search.placeholder='Find a flame setting';search.setAttribute('aria-label','Find a flame setting');
@@ -357,7 +357,7 @@ export function createFlameInspector({ document, host, gridTuning, sharedHost = 
   overlay.onchange=()=>{try{setWorldOverlay(overlay.value);sync();}catch(error){onError(error);}};overlayRow.append(overlay);
   const overlayStatus=document.createElement('p');overlayStatus.className='flame-scope';overlayStatus.id='world-smoke-overlay-legend';
   const appearanceStatus=document.createElement('output');appearanceStatus.id='flame-material-status';appearanceStatus.className='flame-material-status';appearanceStatus.setAttribute('role','status');
-  const sharedNotice=document.createElement('p');sharedNotice.className='flame-scope';sharedNotice.textContent='Flame appearance, reaction and motion below edit the shared fire simulation.';host.append(sharedNotice);
+  const sharedNotice=document.createElement('p');sharedNotice.className='flame-scope';sharedNotice.textContent=scopeDescription;host.append(sharedNotice);
   for(const group of [...FLAME_EMITTER_QUICK_GROUPS,...FLAME_PROPERTY_GROUPS]) {
     const section=document.createElement('details');section.open=!!group.open;section.className='flame-inspector-section';section.dataset.flameGroup=group.name;
     const title=document.createElement('summary');title.textContent=group.name;section.append(title);
@@ -489,5 +489,5 @@ export function createFlameInspector({ document, host, gridTuning, sharedHost = 
     const source=readSource();byId('flame-basin-current').textContent=source?`${source.label || 'Loaded basin'}${source.modified?' · Modified':''}`:'Scene working settings';
   }
   void refresh();sync();
-  return {sync,refresh};
+  return {sync,refresh,closeGrid(){gridInspector?.close();},dispose(){gridInspector?.dispose();}};
 }

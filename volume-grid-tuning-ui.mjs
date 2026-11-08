@@ -3,7 +3,7 @@ import {volumeControlTooltip,INTERMEDIATE_GRID_MODE_DESCRIPTIONS} from './volume
 import {installRelativeNumberDrag} from './scene-control-history.mjs';
 import {GRID_TUNING_GROUPS,GRID_TUNING_FIELDS,gridTuningSummary,intermediateCoverageChoices} from './volume-grid-tuning.mjs';
 
-export function createGridTuningInspector({document,host,read,validate,apply,live,calibration,bindLiveField,installNumberDrag=installRelativeNumberDrag}) {
+export function createGridTuningInspector({document,host,read,validate,apply,live,calibration,bindLiveField,installNumberDrag=installRelativeNumberDrag,idPrefix='',isEnabled=()=>true}) {
  const element=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e;};
  const root=element('section','flame-grid-tuning');root.id='flame-grid-tuning';
  const openButton=element('button','btn','Edit simulation grids · Alt G');openButton.type='button';openButton.id='grid-tuning-open';root.append(openButton);host.prepend(root);
@@ -119,12 +119,13 @@ export function createGridTuningInspector({document,host,read,validate,apply,liv
   status.dataset.state=error||stale?'invalid':dirty?'draft':'applied';applyButton.disabled=!dirty||!!error||stale||applying;reset.disabled=!dirty;draw(plan);
  }
  function sync(){if(applying||panel.hidden)return;if(dirty&&baseline){const current=pick(read());for(const [key] of GRID_TUNING_FIELDS)if(key.endsWith('Iterations')&&current[key]!==baseline[key]){if(draft[key]===baseline[key])draft[key]=current[key];baseline[key]=current[key];}}if(!dirty){baseline=pick(read());draft={...baseline};physicalReach=Number(baseline.worldSmokeTransition??0)*Number(baseline.worldSmokeExtent??3)/Number(baseline.worldSmokeFlow??16);}refresh();}
- function open(){panel.hidden=false;sync();fields.get('resolution').focus?.();}
+ function open(){if(!isEnabled())return;panel.hidden=false;sync();fields.get('resolution').focus?.();}
  function hide(){for(const binding of bindings)binding.commit?.();panel.hidden=true;openButton.focus?.();}
  reset.onclick=()=>{dirty=false;for(const input of fields.values())if(document.activeElement===input)input.blur?.();sync();};
  applyButton.onclick=()=>{if(applyButton.disabled)return;try{applying=true;apply({...draft});dirty=false;}catch(e){status.textContent=`${e.message}. Draft retained.`;return;}finally{applying=false;}sync();};
  openButton.onclick=open;close.onclick=hide;
- const keyboard=e=>{if(e.altKey&&e.code==='KeyG'){e.preventDefault();open();}else if(!panel.hidden&&e.key==='Escape'){e.preventDefault();hide();}else if(!panel.hidden&&(e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();applyButton.onclick();}};
+ const keyboard=e=>{if(!isEnabled()&&panel.hidden)return;if(e.altKey&&e.code==='KeyG'){e.preventDefault();open();}else if(!panel.hidden&&e.key==='Escape'){e.preventDefault();hide();}else if(!panel.hidden&&(e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();applyButton.onclick();}};
  document.addEventListener?.('keydown',keyboard);
+ if(idPrefix){for(const parent of [root,panel]){if(parent.id)parent.id=idPrefix+parent.id;for(const node of parent.querySelectorAll?.('[id]')??[])node.id=idPrefix+node.id;}}
  sync();return {sync,root,open,close:hide,dispose(){calibrationDrag?.dispose?.();bindings.forEach(b=>b?.dispose?.());document.removeEventListener?.('keydown',keyboard);panel.remove?.();}};
 }

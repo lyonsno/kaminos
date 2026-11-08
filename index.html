@@ -3044,6 +3044,7 @@ import {createSceneRecordOperations} from './scene-record-operations.mjs';
 import {FIRE_UNIT_TYPE,FIRE_UNIT_SOURCE,checkedFireUnitRecord,checkedFireUnitPose} from './fire-unit-record.mjs';
 import {createFireUnitObject} from './fire-unit-runtime.mjs';
 import {mountFireUnitControls} from './fire-unit-controls.mjs';
+import {mountFireUnitAuthoring,createFireUnitControlDocument} from './fire-unit-authoring.mjs';
 import {createSceneDocumentSession} from './scene-document-session.mjs';
 import {createSceneMembershipOperations, membershipEditTargetId as sceneMembershipTargetId} from './scene-membership-operations.mjs';
 import {createSceneMembershipBatch} from './scene-membership-batch.mjs';
@@ -3841,6 +3842,7 @@ let authoringBusy = false;
 let vantageCaptureHeld = false;
 let volumePrototype = null;
 const authoredFireUnits=new Map();
+let fireUnitSceneDepthProvider=null;
 let sceneBurning = null;
 let sceneAshAtmosphereSettings={density:0,color:[0,0,0],displayColor:[0,0,0]};
 const flameFeature=createAuthoredFlameFeature({runtime:()=>volumePrototype,composed:()=>!!activeSceneComposition,visible:()=>isSceneItemVisible('flame-field')});
@@ -6860,7 +6862,7 @@ function updateTransformInspector() {
   empty.hidden = !!entry;
   fields.hidden = !entry;
   setTransformInspectorFieldsDisabled(!entry);
-  for(const input of document.querySelectorAll('[data-transform-field^="rotation."]'))input.disabled=!entry||workingScene.activeFieldId==='water-field';
+  for(const input of document.querySelectorAll('[data-transform-field^="rotation."]'))input.disabled=!entry||workingScene.activeFieldId==='water-field'||entry.type===FIRE_UNIT_TYPE;
   updateSplatCorrectionPanel(entry);
   syncEditorHelperVisibility();syncSelectionInspector();
   if (!entry && workingScene.activeGroupId) {
@@ -7486,7 +7488,7 @@ sceneAddMenuPopup.addEventListener('click', event => {
   if (action.dataset.sceneAdd === 'water-emitter') {
     addLocalLiquidEmitter().catch(error => setInfo(`Could not add Water Emitter: ${error.message}`));
   }
-  if(action.dataset.sceneAdd==='fire-unit')addAuthoredFireUnit().catch(error=>setInfo(error.message));
+  if(action.dataset.sceneAdd==='fire-unit')openFirstFlameFieldDialog({unit:true}).catch(error=>setInfo(error.message));
   if(action.dataset.sceneAdd==='flame-emitter')openFirstFlameFieldDialog().catch(error=>setInfo(error.message));
 });
 document.getElementById('scene-mesh-file').onchange=async event=>{
@@ -12015,7 +12017,8 @@ async function initScene() {
   window.__kaminosRenderSceneForInspection=()=>{const before=sceneFrameCount;manualInspectionRender=true;try{const result=renderSceneFrame();if(result===false||sceneFrameCount===before)throw new Error('inspection scene draw skipped');return {frame:renderer.info.frame,sceneFrameCount,drawn:true};}finally{manualInspectionRender=false;}};
   const IDLE_THRESHOLD = 3;
 
-  const markDirty = () => { sceneRepetitionController?.sync(); needsRender = true; idleFrames = 0; sceneGI.requestHistoryFrames(); };
+  let unitDepthRevision=0,unitDepthCachedRevision=-1,unitDepthCachedFrame=-1,unitDepthSnapshot=null;
+  const markDirty = () => { unitDepthRevision++;sceneRepetitionController?.sync(); needsRender = true; idleFrames = 0; sceneGI.requestHistoryFrames(); };
   controls.addEventListener('change', markDirty);
   transformControls.addEventListener('change', () => {
     markDirty();
@@ -12034,6 +12037,11 @@ async function initScene() {
       }
       const entry = selectedSceneObjectEntry();
 
+      if(entry?.type===FIRE_UNIT_TYPE&&transformControls.dragging){
+        if(!scenePlacementTools?.state().gizmoEditing)return;
+        try{const unit=authoredFireUnits.get(entry.id);unit.owner.syncPose();scenePlacementTools.edits.preview(sceneObjectTransformState(entry.object));}
+        catch(error){scenePlacementTools.finish(false);setInfo(error.message);}return;
+      }
       if (entry?.type === 'splat') syncSplatSceneTransformFromVisual(entry);
       if (entry?.type === FLAME_EMITTER_TYPE) {
         const pose = sceneObjectTransformState(entry.object);
@@ -12400,7 +12408,7 @@ async function initScene() {
     });
   }
   ordinarySceneDepthProvider = () => {
-    if (deviceRecoveryHeld() || !ordinaryDepthEnabled) return null;
+    if (deviceRecoveryHeld() || (!ordinaryDepthEnabled&&!authoredFireUnits.size)) return null;
     if (!sharedGpu?.device) throw new Error('ordinary-scene-depth-shared-device-unavailable');
     // Own a current prepass before the ordinary volume frame encodes. Both
     // consumers share camera/device; the volume may render at lower resolution.
@@ -12410,6 +12418,10 @@ async function initScene() {
     if (!frameComposition.renderDepth()) return null;
     const texture = renderer.backend.get(activeSceneDepth.value).texture;
     return {device:sharedGpu.device, camera, texture};
+  };
+  fireUnitSceneDepthProvider=()=>{
+    if(unitDepthCachedFrame!==sceneFrameCount||unitDepthCachedRevision!==unitDepthRevision){unitDepthSnapshot=ordinarySceneDepthProvider();unitDepthCachedFrame=sceneFrameCount;unitDepthCachedRevision=unitDepthRevision;}
+    return unitDepthSnapshot;
   };
   window.kaminosOrdinaryDepthSetEnabled = enabled => {
     ordinaryDepthEnabled = Boolean(enabled); markDirty(); return ordinaryDepthEnabled;
@@ -12531,7 +12543,7 @@ async function initScene() {
     if(typeof ensureSimFramePlan==='function')ensureSimFramePlan(frameNowMs);
     updateAutomaticFineCoverage(frameNowMs/1000);
     for(const [id,unit] of authoredFireUnits){
-      try{unit.owner.sync({visible:workingScene.objects.some(e=>e.id===id)&&isSceneItemVisible(id),helpers:viewportHelpersVisible&&viewportDisplay.domains,paused:sceneViewerPaused===true});}
+      try{unit.owner.sync({visible:unit.owner.root.parent!==null&&isSceneItemVisible(id),helpers:viewportHelpersVisible&&viewportDisplay.domains,paused:sceneViewerPaused===true});}
       catch(error){void unit.owner.setVisible(false);setInfo('Fire simulation: '+error.message);}
     }
     workbenchSceneFrames.tick(frameNowMs);
@@ -18568,13 +18580,13 @@ function updateAutomaticFineCoverage(now){
   }catch(error){fineCoverageStatus={status:'error',error:error.message};}
 }
 function readFineCoverageState(){return {options:readFineCoverageSettings(),...fineCoverageController.read(),...fineCoverageStatus};}
-function readAdaptiveMaterialSettings() {
+function readAdaptiveMaterialSettings(document=globalThis.document) {
   return readAdaptiveMaterialControls(Object.fromEntries(ADAPTIVE_MATERIAL_FIELDS.map(field=>{
     const el=document.getElementById(field.id);return [field.id,{value:readVolumeDomControlValue(el)}];
   })));
 }
-function adaptiveMaterialRuntimeControls() {
-  const {enabled,options}=readAdaptiveMaterialSettings();return enabled?options:null;
+function adaptiveMaterialRuntimeControls(document=globalThis.document) {
+  const {enabled,options}=readAdaptiveMaterialSettings(document);return enabled?options:null;
 }
 function setAdaptiveMaterialSettings(patch,{history=true}={}) {
   if(window.kaminosFlameAuthoring&&volumePrototype?.debugState?.().active) {
@@ -20203,7 +20215,7 @@ function readVolumeControls({quality=viewportDisplay.quality,document=globalThis
     worldSmokeTransition: Number(document.getElementById('volume-world-smoke-transition').value),
     worldSmokeIntermediate: document.getElementById('volume-world-smoke-intermediate').value,
     ...Object.fromEntries(REGION_CONTROL_FIELDS.map(field=>[field.key,Number(document.getElementById(field.id).value)])),
-    adaptiveMaterial: adaptiveMaterialRuntimeControls(),
+    adaptiveMaterial: adaptiveMaterialRuntimeControls(document),
     ...Object.fromEntries([...WORLD_CALIBRATION_FIELDS,...SIMULATION_LEVER_FIELDS].map(f=>[f.key,f.type==='select-one'?document.getElementById(f.id).value:Number(document.getElementById(f.id).value)])),
     heatReleaseExpansion: parseFloat(document.getElementById('volume-heat-release-expansion').value),
     reactionLaw: document.getElementById('volume-reaction-law').value || 'authored-tall-plume',
@@ -20654,9 +20666,9 @@ function syncPhysicsAppearanceCockpit(physics) {
   }
 }
 function sceneViewerPlaybackState(s=volumePrototype?.debugState?.()) {
-  const fire=!!s?.active,water=!!waterFeature.host;
+  const fire=!!s?.active,water=!!waterFeature.host,units=[...authoredFireUnits.values()].some(unit=>unit.owner.runtime.isActive());
   const firePaused=Number(document.getElementById('volume-look-freeze')?.value)>=0.5;
-  return {present:fire||water,paused:!(fire&&!firePaused||water&&!waterFeature.paused)};
+  return {present:fire||water||units,paused:!(fire&&!firePaused||units&&sceneViewerPaused!==true||water&&!waterFeature.paused)};
 }
 function syncVolumeViewerPlay(s) {
   const button=document.getElementById('volume-viewer-play');if(!button)return;
@@ -20667,14 +20679,19 @@ function syncVolumeViewerPlay(s) {
   button.querySelector('.pause-glyph').style.display=state.paused?'none':'';
   button.querySelector('.play-glyph').style.display=state.paused?'':'none';
 }
-document.getElementById('volume-viewer-play')?.addEventListener('click',()=>{
-  const paused=!sceneViewerPlaybackState().paused;
+function setSceneViewerPaused(paused){
+  if(typeof paused!=='boolean')throw Error('Scene pause must be boolean');
+  sceneViewerPaused=paused;
   const freeze=document.getElementById('volume-look-freeze');
   if(freeze){freeze.value=paused?'1':'0';freeze.dispatchEvent(new Event('input',{bubbles:true}));freeze.dispatchEvent(new Event('change',{bubbles:true}));}
   if(waterFeature.host)window.kaminosPauseLocalLiquid(paused);
   sceneViewerPaused=paused;
-  syncVolumeViewerPlay();window._kaminosDirty?.();
-});
+  for(const unit of authoredFireUnits.values())unit.owner.runtime.setSimulationPaused(paused);
+  syncVolumeViewerPlay();window._kaminosDirty?.();return sceneViewerPlaybackState();
+}
+window.kaminosScenePlayback={read:()=>sceneViewerPlaybackState(),setPaused:setSceneViewerPaused};
+document.getElementById('volume-viewer-play')?.addEventListener('click',()=>setSceneViewerPaused(!sceneViewerPlaybackState().paused));
+
 function refreshVolumeReadout() {
   if (!volumePrototype) return;
   const s = volumePrototype.debugState();
@@ -23201,7 +23218,7 @@ function updateAuthoringPropertySelection() {
   syncBurnerInspector();
   syncSceneDataInspector();
   document.querySelectorAll('#transform-bar button[onclick]').forEach(button=>{
-    if(/reverseWinding|flipNormals|cullSmallFaces|flipAxis|rotateAxis|resetTransform|exportGLB|toggleDoubleSided|toggleBackface|forceOpaque|snapToGround/.test(button.getAttribute('onclick'))) button.hidden=workingScene.selection.ids.length>1||!!workingScene.activeGroupId||['light',CAMERA_TYPE].includes(selectedSceneObjectEntry()?.type);
+    if(/reverseWinding|flipNormals|cullSmallFaces|flipAxis|rotateAxis|resetTransform|exportGLB|toggleDoubleSided|toggleBackface|forceOpaque|snapToGround/.test(button.getAttribute('onclick'))) button.hidden=workingScene.selection.ids.length>1||!!workingScene.activeGroupId||['light',CAMERA_TYPE,FIRE_UNIT_TYPE].includes(selectedSceneObjectEntry()?.type);
   });
 }
 let flameInspector = null;
@@ -23234,7 +23251,7 @@ function createFlameQuickFields() {
   authoringControlSessions.push(installSceneControlHistory({controls:[enabledRow.querySelector('input')],edits:scenePlacementTools.edits,id:()=>ensureFlameSourceDataTarget(selectedFlameControlEntry()?.id),label:'Toggle flame source',onError:error=>setInfo(error.message)}));
   flameInspector=createFlameInspector({document,host:document.getElementById('selected-flame-fields'),sharedHost:shared,
     gridTuning:{
-      read:()=>readVolumeControls(),
+      read:()=>readVolumeControls(),isEnabled:()=>authoredFireUnits.size===0||workingScene.activeFieldId==='flame-field'||selectedFlameControlEntry()?.type===FLAME_EMITTER_TYPE,
       calibration:{
         capture:()=>{const patch=captureWorldCalibration(readVolumeControls(),flameDomainScale);const next=window.kaminosFlameAuthoring.read();for(const f of WORLD_CALIBRATION_FIELDS){const d=next.domControls[f.id];d.value=patch[f.key];if('rawValue' in d)d.rawValue=String(d.value);}window.kaminosFlameAuthoring.apply(next,'Capture simulation world scale');},
         set:(patch,{preview=false}={})=>{const next=window.kaminosFlameAuthoring.read();for(const f of [...WORLD_CALIBRATION_FIELDS,...SIMULATION_LEVER_FIELDS])if(Object.hasOwn(patch,f.key)){const d=next.domControls[f.id];d.value=patch[f.key];if('rawValue' in d)d.rawValue=String(d.value);}if(preview){if(scenePlacementTools.edits.state().active?.id==='@flame-settings')window.kaminosFlameAuthoring.preview(next);}else window.kaminosFlameAuthoring.apply(next,'Tune simulation world scale');},
@@ -23537,8 +23554,8 @@ async function addFirstFlameField(presetId,{signal,lightingRoute={}}={}) {
   setInfo(clamped.length?`Added flame from the saved basin, clamped to range (${clamped.map(clamp=>clamp.message).join('; ')}). Move its source; Undo removes the field.`:'Added flame from the saved basin. Move its source; Undo removes the field.');
   return FLAME_EMITTER_ID;
 }
-async function openFirstFlameFieldDialog() {
-  if(activeSceneComposition)return addFirstFlameField();
+async function openFirstFlameFieldDialog({unit=false}={}) {
+  if(activeSceneComposition)return unit?addAuthoredFireUnit():addFirstFlameField();
   assertSceneConstructionAvailable();
   const response=await fetch('/api/volume-settings-presets',{cache:'no-store'}),index=await response.json();
   if(!response.ok)throw Error(index.error||'Basin library unavailable');
@@ -23555,7 +23572,7 @@ async function openFirstFlameFieldDialog() {
   dialog.querySelector('[type="button"]').onclick=async event=>{
     if(pendingAdd||request.signal.aborted)return;
     event.target.disabled=true;select.disabled=true;pendingAdd=true;
-    try{await addFirstFlameField(select.value,{signal:request.signal});if(!request.signal.aborted)dialog.close();}
+    try{if(unit)await addFireUnitFromBasin(select.value,{signal:request.signal});else await addFirstFlameField(select.value,{signal:request.signal});if(!request.signal.aborted)dialog.close();}
     catch(error){if(!request.signal.aborted)dialog.querySelector('[role="status"]').textContent=error.message;}
     finally{pendingAdd=false;if(!request.signal.aborted){select.disabled=false;event.target.disabled=!select.value;}}
   };
@@ -27779,32 +27796,47 @@ async function makeSceneRepetitionReal(id){
 async function mountAuthoredFireUnit(raw,{activate=true,loadRequestId=null}={}) {
  const record=checkedFireUnitRecord(raw),arrival=workingScene.arrival();
  const owner=createFireUnitObject({THREE,record,camera,controls,viewport:document.getElementById('viewport'),sharedGpuContext:sharedGpu,
-  getSceneDepth:()=>ordinarySceneDepthProvider?.()??null,onError:error=>setInfo('Fire simulation: '+error.message)});
+  getSceneDepth:()=>fireUnitSceneDepthProvider?.()??null,onError:error=>setInfo('Fire simulation: '+error.message)});
  let unit;
  try {
   if(!arrival.isCurrent()||(loadRequestId!==null&&!sceneLoadRequests.isCurrent(loadRequestId)))throw Error('Fire scene load superseded');
   scene.add(owner.root);registerSceneObject(owner.root,record,{activate});
   sceneOwnerControls??=createSceneOwnerControls({document,viewport:document.getElementById('viewport'),inspector:document.getElementById('transform-inspector'),selected:selectedPlacementEntry,onContext:value=>sharedWorkbench?.setOwnerControlsActive(value)});
   const panel=mountFireUnitControls({document,owner,asset:{id:record.id,root:owner.root},edits:scenePlacementTools.edits,components:sceneComponents,
-   mountObject:sceneOwnerControls.mount,select:id=>window.selectSceneObject(id),redraw:()=>window._kaminosDirty?.(),onError:error=>setInfo(error.message)});
+   mountObject:sceneOwnerControls.mount,select:id=>window.selectSceneObject(id),redraw:()=>window._kaminosDirty?.(),onError:error=>setInfo(error.message),
+   mountTuning:({root,owner,target})=>mountFireUnitAuthoring({document,root,owner,edits:scenePlacementTools.edits,target,seedSettings:buildVolumeSettingsPreset(),
+    compile:copy=>readVolumeControls({quality:'full',document:copy}),
+    seedControls(copy,values){for(const [key]of VOLUME_BASIN_ROUTE_FIELDS){const node=copy.getElementById(volumeSceneControlId(key));if(node&&values[key]!==undefined){if(node.type==='checkbox')node.checked=Boolean(values[key]);else{node.min=String(Math.min(Number(node.min)||0,Number(values[key])||0));node.max=String(Math.max(Number(node.max)||0,Number(values[key])||0));node.step='any';node.value=String(values[key]);}}}for(const [key,id]of GRID_TUNING_FIELDS){const node=copy.getElementById(id);if(node&&values[key]!==undefined)node.value=String(values[key]);}},
+    listBasins:async()=>{const response=await fetch('/api/volume-settings-presets',{cache:'no-store'});if(!response.ok)throw Error('Basin library unavailable');const index=await response.json();validateVolumeSettingsPresetIndex(index);return index;},
+    loadBasin:async id=>{const [artifactResponse,schemaResponse]=await Promise.all([fetch('/api/volume-settings-preset?id='+encodeURIComponent(id),{cache:'no-store'}),fetch('./volume-settings-preset-schema-v2.json')]);if(!artifactResponse.ok||!schemaResponse.ok)throw Error('Basin unavailable');const schema=await schemaResponse.json(),receipt=validateVolumeSettingsPresetDocument(await artifactResponse.json(),id,schema);return {...projectFireSettingsToSchema(flamePresetForLocalControls(receipt.preset,owner.capture().emitter.scale[0]/owner.root.scale.x),schema),source:{presetId:id,label:receipt.label}};},
+    saveBasin:(snapshot,label)=>{const {source,...preset}=snapshot;for(const axis of ['domControls','rendererControls','presentationControls'])preset[axis]=structuredClone(snapshot[axis]);preset.route=buildVolumeAgentCaptureRoute(preset.domControls,preset.rendererControls,preset.presentationControls);preset.savedAt=new Date().toISOString();return saveVolumeSettingsPreset({preset:portableFlamePreset(preset,owner.capture().emitter.scale[0]/owner.root.scale.x),label});},onError:error=>setInfo(error.message)}),});
   unit={owner,controls:panel};authoredFireUnits.set(record.id,unit);
-  await owner.initialize();
+  await owner.initialize();syncVolumeViewerPlay();
   if(!arrival.isCurrent()||(loadRequestId!==null&&!sceneLoadRequests.isCurrent(loadRequestId)))throw Error('Fire scene load superseded');
   return owner.root;
- }catch(error){unit?.controls.dispose();authoredFireUnits.delete(record.id);await owner.dispose();if(workingScene.find(record.id))removeSceneObjectInternal(record.id,{recordHistory:false});throw error;}
+ }catch(error){unit?.controls.dispose();if(authoredFireUnits.get(record.id)?.owner===owner)authoredFireUnits.delete(record.id);await owner.dispose();if(workingScene.find(record.id)?.object===owner.root)removeSceneObjectInternal(record.id,{recordHistory:false});throw error;}
+}
+async function addFireUnitFromBasin(id,{signal,...options}={}) {
+ signal?.throwIfAborted();
+ const [artifactResponse,schemaResponse]=await Promise.all([fetch('/api/volume-settings-preset?id='+encodeURIComponent(id),{cache:'no-store'}),fetch('./volume-settings-preset-schema-v2.json')]);
+ if(!artifactResponse.ok||!schemaResponse.ok)throw Error('Basin unavailable');
+ const schema=await schemaResponse.json(),receipt=validateVolumeSettingsPresetDocument(await artifactResponse.json(),id,schema);
+ const settings={...projectFireSettingsToSchema(receipt.preset,schema),source:{presetId:id,label:receipt.label}},copy=createFireUnitControlDocument(document,settings);
+ const raw=readVolumeControls({quality:'full',document:copy,routeParams:new URLSearchParams(new URL(settings.route,location.href).search)});
+ signal?.throwIfAborted();return addAuthoredFireUnit({...options,signal,settings,controls:{...raw,...options.controls},label:options.label??receipt.label});
 }
 async function addAuthoredFireUnit(options={}) {
- assertSceneConstructionAvailable();
+ options.signal?.throwIfAborted();assertSceneConstructionAvailable();
  const id=makeSceneObjectId('fire'),source=options.controls??readVolumeControls();
  if(source.emitterSourceLaw!=='immersed-source')throw Error('Select an immersed-source flame basin before adding an independent fire simulation');
  const offset=options.position??[controls.target.x+authoredFireUnits.size*2.5,groundPlane.position.y+1,controls.target.z];
  const emitter=structuredClone(options.emitter??flameEmitterPose);
  if(!options.emitter)emitter.position=emitter.position.map((v,i)=>v-flameDomainTranslation[i]+offset[i]);
  const record=checkedFireUnitRecord({id,type:FIRE_UNIT_TYPE,source:FIRE_UNIT_SOURCE,fileName:'Fire simulation',label:options.label??'Fire simulation '+(authoredFireUnits.size+1),createdAt:new Date().toISOString(),
-  transform:{position:offset,rotation:[0,0,0],scale:[1,1,1]},fireUnit:{controls:structuredClone(source),emitter,moveEmitterWithGrid:true}});
+  transform:{position:offset,rotation:[0,0,0],scale:[1,1,1]},fireUnit:{controls:structuredClone(source),settings:options.settings??buildVolumeSettingsPreset(),emitter,moveEmitterWithGrid:true}});
  const target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
  await mountAuthoredFireUnit(record);
- try{await recordSceneObjectInsertion(id);setActiveSceneObject(id);return id;}
+ try{options.signal?.throwIfAborted();await recordSceneObjectInsertion(id);setActiveSceneObject(id);return id;}
  catch(error){removeSceneObjectInternal(id,{recordHistory:false});throw error;}
 }
 
@@ -27995,7 +28027,7 @@ function installSceneConstruction() {
   document.getElementById('selected-flame-properties').before(assemblyPanel);
   document.getElementById('assembly-outlet').onchange=event=>{authoringControlSessions.forEach(session=>session.commit());assemblyOutletChoices.set(workingScene.activeGroupId,event.target.value);updateAuthoringPropertySelection();};
   const modeLabel=document.createElement('span');modeLabel.id='assembly-edit-mode';modeLabel.hidden=true;modeLabel.style.cssText='padding:6px 12px;color:#ffca77';document.getElementById('transform-bar').append(modeLabel);
-  window.kaminosSceneAuthoring={addFireUnit:addAuthoredFireUnit,fireUnits:()=>[...authoredFireUnits.values()].map(u=>u.owner.read()),addAsh:addAuthoredAsh,addFlameEmitter:addFirstFlameField,addWaterEmitter:addLocalLiquidEmitter,addLight:addSceneSpotLight,read:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),activeFieldId:workingScene.activeFieldId}),setFireSettings:editOwnedFireSettings,setAssembly:setSceneAssembly,addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
+  window.kaminosSceneAuthoring={addFireUnit:addAuthoredFireUnit,addFireUnitFromBasin:addFireUnitFromBasin,fireUnits:()=>[...authoredFireUnits.values()].map(u=>u.owner.read()),fireUnitRuntime:id=>authoredFireUnits.get(id)?.owner.runtime??null,addAsh:addAuthoredAsh,addFlameEmitter:addFirstFlameField,addWaterEmitter:addLocalLiquidEmitter,addLight:addSceneSpotLight,read:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),activeFieldId:workingScene.activeFieldId}),setFireSettings:editOwnedFireSettings,setAssembly:setSceneAssembly,addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
     setRepetition:(id,value)=>setSceneRepetition(id,value),repetitionState:sceneRepetitionState,makeCopiesEditable:makeSceneRepetitionReal,
     setWaterCollision:setObjectWaterCollision,
     setCollision:(id,value)=>{assertSceneConstructionAvailable();if(!activeSceneComposition)throw Error('Fire & smoke is not mounted');const target=ensureObjectCollisionTarget(id);return edits.apply(target,typeof value==='boolean'?{domainId:'flame-field',enabled:value}:value,'Set Fire & smoke obstacle');},
