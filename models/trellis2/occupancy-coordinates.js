@@ -13,34 +13,48 @@ export function buildOccupancyCoordinatesPlan({ resolution = 64 } = {}) {
     stages: Object.freeze(['occupancy-max-any', 'occupancy-coordinate-compact']), threshold: 0, downsample: '2-cubed-max-any' });
 }
 
-// Optional consumer of the completed support already used by the next shape model.
-// This copies coordinates, not logits or latents, and performs no neural decoding.
-export async function readTrellisOccupancyPreview({runtime,coordinates,plan,runId,routeId,steps,invocation}={}){
-  if(!runtime?.readTensor||![runId,routeId,invocation?.jobId,invocation?.invocationId].every(v=>typeof v==='string'&&v.trim()))
-    throw TypeError('occupancy preview needs its runtime and actual run/route/job/invocation identities');
+function occupancyPreviewDescription({coordinates,plan,runId,routeId,steps,invocation}={}){
+  if(![runId,routeId,invocation?.jobId,invocation?.invocationId].every(v=>typeof v==='string'&&v.trim()))
+    throw TypeError('occupancy preview needs actual run/route/job/invocation identities');
   const r=plan?.outputResolution,n=coordinates?.shape?.[0];
   if(!Number.isSafeInteger(r)||r<1||plan.resolution!==2*r||plan.candidateRows!==r**3||plan.threshold!==0||plan.downsample!=='2-cubed-max-any'||plan.coordinateOrder!=='z-y-x-lexicographic'||
     !Number.isSafeInteger(steps)||steps<1||!coordinates?.buffer||coordinates.dtype!=='i32'||
-    !(coordinates.usage&U.copySrc)||!Number.isSafeInteger(n)||n<1||n>plan.candidateRows||coordinates.shape.length!==2||coordinates.shape[1]!==3||coordinates.byteLength!==n*12)
+    !(coordinates.usage&U.storage)||!(coordinates.usage&U.copySrc)||!Number.isSafeInteger(n)||n<1||n>plan.candidateRows||coordinates.shape.length!==2||coordinates.shape[1]!==3||coordinates.byteLength!==n*12)
     throw TypeError('complete source occupancy plan and resident Int32[N,3] support required');
-  const raw=await runtime.readTensor(coordinates,{schedulerInvocation:invocation});
-  const values=raw instanceof ArrayBuffer?new Int32Array(raw):raw;
-  if(!(values instanceof Int32Array)||values.length!==n*3)throw Error('partial or retyped occupancy preview readback');
-  // Own the CPU storage even when a runtime reuses its readback backing store.
-  const snapshot=values.slice();let previous=-1;
-  for(let i=0;i<n;i++){
-    const z=snapshot[i*3],y=snapshot[i*3+1],x=snapshot[i*3+2],code=(z*r+y)*r+x;
-    if(z<0||y<0||x<0||z>=r||y>=r||x>=r||code<=previous)throw Error('occupancy preview coordinates are outside the grid or not source-ordered unique rows');
-    previous=code;
-  }
-  return Object.freeze({schema:'trellis2.sparse-occupancy-preview.v1',kind:'sparse-occupancy',stage:'occupancy-coordinates',status:'completed',
-    runId,routeId,jobId:invocation.jobId,invocationId:invocation.invocationId,step:steps,steps,count:n,coordinates:snapshot,
+  return {kind:'sparse-occupancy',stage:'occupancy-coordinates',status:'completed',
+    runId,routeId,jobId:invocation.jobId,invocationId:invocation.invocationId,step:steps,steps,count:n,
     grid:{dimensions:[r,r,r],sourceDimensions:[plan.resolution,plan.resolution,plan.resolution],downsample:[2,2,2],threshold:plan.threshold,rule:plan.downsample},
     layout:{dtype:'int32',shape:[n,3],rowOrder:plan.coordinateOrder,componentOrder:['source-z','source-y','source-x']},
     spatial:{frame:'trellis-source',gridToSource:{scale:[1/r,1/r,1/r],offset:[-.5,-.5,-.5]},cellCenterOffset:[.5,.5,.5],
       sourceToGltf:[1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1],
       convention:'source components map directly to mesh position components; display transform belongs to the consumer'},
-    lifetime:'owned-cpu-snapshot',coordinateBytesToCPU:snapshot.byteLength,additionalDecoderExecutions:0});
+    additionalDecoderExecutions:0};
+}
+
+// Live consumers borrow the existing support on its actual device, without a
+// readback. Submit any retaining GPU copy synchronously during callback delivery.
+export function createTrellisOccupancyPreview(options={}){
+  const description=occupancyPreviewDescription(options);
+  if(!options.runtime?.device||typeof options.isCurrent!=='function')throw TypeError('resident preview needs its actual device and lifetime predicate');
+  return Object.freeze({...description,schema:'trellis2.sparse-occupancy-preview.gpu.v1',device:options.runtime.device,
+    coordinates:options.coordinates,isCurrent:options.isCurrent,lifetime:'borrowed-during-model-run',coordinateBytesToCPU:0});
+}
+
+// Explicit capture/export consumer. This is not used by live preview delivery.
+export async function readTrellisOccupancyPreview(options={}){
+  const description=occupancyPreviewDescription(options),{runtime,coordinates,invocation}=options;
+  if(typeof runtime?.readTensor!=='function')throw TypeError('capture needs its coordinate readback runtime');
+  const raw=await runtime.readTensor(coordinates,{schedulerInvocation:invocation});
+  const values=raw instanceof ArrayBuffer?new Int32Array(raw):raw;
+  if(!(values instanceof Int32Array)||values.length!==description.count*3)throw Error('partial or retyped occupancy preview readback');
+  const snapshot=values.slice(),r=description.grid.dimensions[0];let previous=-1;
+  for(let i=0;i<description.count;i++){
+    const z=snapshot[i*3],y=snapshot[i*3+1],x=snapshot[i*3+2],code=(z*r+y)*r+x;
+    if(z<0||y<0||x<0||z>=r||y>=r||x>=r||code<=previous)throw Error('occupancy preview coordinates are outside the grid or not source-ordered unique rows');
+    previous=code;
+  }
+  return Object.freeze({...description,schema:'trellis2.sparse-occupancy-preview.v1',coordinates:snapshot,
+    lifetime:'owned-cpu-snapshot',coordinateBytesToCPU:snapshot.byteLength});
 }
 
 export function occupancyDownsampleShader(plan) {

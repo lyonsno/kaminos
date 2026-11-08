@@ -29528,7 +29528,7 @@ function setupAuthoringAssets(){
     const bakeMaterial=createBrowserMaterialBaker({WorkerClass:Worker,signal,projectPositions:postprocessMesh.projectMaterialPositions,
       withCpu:postprocessMesh.withCpu});
     try{
-      const result=await runTrellisInPage({appGpu,manifest:pack.manifest,fetchTensor:pack.fetchTensor,pixelValues,highResolutionPixelValues,signal,onPhase,onPreview,scheduling,decoderActivationStorage:'f16',finishMesh:finishMesh!==false,textureSize,
+      const result=await runTrellisInPage({appGpu,runId,manifest:pack.manifest,fetchTensor:pack.fetchTensor,pixelValues,highResolutionPixelValues,signal,onPhase,onPreview,scheduling,decoderActivationStorage:'f16',finishMesh:finishMesh!==false,textureSize,
         // Stop reaches the finishing providers too (cleanup and UV in workers where supported).
         finishing:{postprocessMesh,bakeMaterial,unwrapMesh:createWasmXatlasUnwrapper({WorkerClass:Worker,signal,normalMode:finishingMode==='original-remesh'?'source-original':'post-uv'})},
         provenance:{checkpointManifestSha256:pack.manifestSha256,
