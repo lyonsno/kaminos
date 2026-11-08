@@ -1,9 +1,10 @@
 // One fluid consumer gathers any number of independently owned material fields.
-export function createSceneBurning({objects,retained=()=>[],runtime,createBody,createGas,onError=()=>{},dirty=()=>{}}){
+export function createSceneBurning({objects,retained=()=>[],runtime,createBody,createGas,mechanics=null,onError=()=>{},dirty=()=>{}}){
   const bodies=new Map(),failures=new Map(),generations=new WeakMap();
   let binding=null,pending=null,disposed=false,fault=null,resync=false;
   const mounted=entry=>objects().some(row=>row.id===entry.id&&row.object===entry.object&&row.burnable?.enabled);
   function active(){return [...bodies.values()].filter(row=>mounted(row.entry));}
+  const participants=rows=>rows.flatMap(row=>{const p=row.body.mechanicalParticipant?.();return p?[p]:[];});
   function release(){binding?.detach();binding?.gas.dispose();binding=null;}
   function forget(object){
     generations.set(object,(generations.get(object)??0)+1);
@@ -21,7 +22,7 @@ export function createSceneBurning({objects,retained=()=>[],runtime,createBody,c
     if(fault?.host!==host)fault=null;
     if(binding&&binding.host!==host)release();
     if(!objects().some(entry=>entry.burnable?.enabled)){
-      release();fault=null;return;
+      release();fault=null;await mechanics?.sync([]);return;
     }
     // Merely checking Burnable must not boot a cold volume or start a fire.
     if(!host||!contextState?.active||fault)return;
@@ -37,11 +38,11 @@ export function createSceneBurning({objects,retained=()=>[],runtime,createBody,c
           prepareSource(encoder,frame){gas.begin(encoder);for(const row of active())row.body.encodeGasSource(encoder,frame,gas);gas.resolve(encoder);},
           get requiresSubmittedSteps(){return active().some(row=>row.body.requiresSubmittedSteps===true);},
           encode(encoder,frame){
-            const rows=active();for(const row of rows)row.body.encode(encoder,frame);dirty();
+            const rows=active(),members=participants(rows);if(mechanics&&!mechanics.matches(members))return;for(const row of rows)row.body.encode(encoder,frame);dirty();
             if(!rows.some(row=>row.body.afterSubmit))return;
-            return ()=>{for(const row of rows)if(bodies.get(row.entry.object)===row&&mounted(row.entry))row.body.afterSubmit?.(frame);dirty();};
+            return ()=>{const current=rows.filter(row=>bodies.get(row.entry.object)===row&&mounted(row.entry));if(mechanics&&(current.length!==rows.length||!mechanics.matches(participants(current))))return;for(const row of current)row.body.afterSubmit?.(frame,mechanics);if(mechanics&&mechanics.matches(participants(current)))mechanics.advance(frame.dt,members);dirty();};
           },
-          read:()=>({identity:'kaminos.scene-burning.v1',objects:active().map(row=>row.body.read()),gasSource:gas.read()}),
+          read:()=>({identity:'kaminos.scene-burning.v1',objects:active().map(row=>row.body.read()),gasSource:gas.read(),contactWorld:mechanics?.read()??null}),
         };
         binding={host,gas,detach:host.bindGpuThermalConsumer(consumer)};
       }catch(error){gas.dispose();throw error;}
@@ -55,6 +56,7 @@ export function createSceneBurning({objects,retained=()=>[],runtime,createBody,c
         bodies.set(entry.object,{entry,body});dirty();
       }catch(error){failures.set(entry.object,error.message);onError(error);}
     }
+    if(mechanics){await Promise.all(active().map(row=>row.body.settleMechanics?.()));if(!disposed)await mechanics.sync(participants(active()));}
   }
   function sync(){
     if(disposed)return Promise.resolve();
@@ -74,6 +76,6 @@ export function createSceneBurning({objects,retained=()=>[],runtime,createBody,c
     },
     read(id){const entry=objects().find(row=>row.id===id),row=entry&&bodies.get(entry.object),error=entry&&(failures.get(entry.object)??fault?.message);
       return {enabled:entry?.burnable?.enabled===true,status:error?'failed':!entry?.burnable?.enabled?'off':row?'resident':'waiting-for-fire',error:error??null,state:row?.body.read()??null};},
-    async dispose(){disposed=true;await pending;release();for(const {body}of bodies.values())body.dispose();bodies.clear();failures.clear();},
+    async dispose(){disposed=true;await pending;release();mechanics?.dispose();for(const {body}of bodies.values())body.dispose();bodies.clear();failures.clear();},
   };
 }

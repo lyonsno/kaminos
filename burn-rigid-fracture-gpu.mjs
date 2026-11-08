@@ -30,7 +30,11 @@ export async function createBurnRigidFractureGpu({renderer,prepared,sections,fin
   const dispatch=(encoder,name)=>{const stage=stages[name],pass=encoder.beginComputePass({label:'Burn rigid '+name});pass.setPipeline(stage.pipeline);pass.setBindGroup(0,stage.group);pass.dispatchWorkgroups(Math.ceil((name==='weaken'?m:n+m)/64));pass.end();};
   function presentMaterial(){const encoder=device.createCommandEncoder();liveBodies.encode(encoder);dispatch(encoder,'weaken');motion.encodeTopology(encoder);dispatch(encoder,'present');device.queue.submit([encoder.finish()]);}
   presentMaterial();
-  return {texture,wrapper,matrices,
+  const residentMotion={device,buffers,bodies:n,bonds:m,origin:frame.origin,timeStep:h,substeps,iterations:prepared.config.solverIterations,
+   encodeMaterial(encoder){if(disposed)throw Error('Burn fracture disposed');liveBodies.encode(encoder);dispatch(encoder,'weaken');},
+   encodePresentation(encoder,clock){if(disposed)throw Error('Burn fracture disposed');steps+=clock.steps;seconds+=clock.seconds;remainder=clock.remainder;motion.encodeTopology(encoder);dispatch(encoder,'present');},
+  };
+  return {texture,wrapper,matrices,residentMotion,
    setGravity(value){motion.setGravity(value);gravity=[...value];},
    setContactsEnabled(value){if(disposed)throw Error('Burn fracture disposed');motion.setContactsEnabled(value);contactsEnabled=value;},
    setSupport(index,next){if(disposed)throw Error('Burn fracture disposed');if(!Number.isInteger(index)||index<0||index>=finiteSupports.length)throw Error('Unknown finite support');const s=checkedBurnSupport(next);if(s.friction!==finiteSupports[index].friction||s.halfExtents.some((v,k)=>v!==finiteSupports[index].halfExtents[k]))throw Error('Support resizing requires reconstruction');finiteSupports[index]=s;motion.setSupport(index,localSupport(s));},
