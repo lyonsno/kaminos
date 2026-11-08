@@ -57,3 +57,7 @@ test('playback services accumulated time using measured batches while exact adva
   assert.equal(i.value.read().playback.pendingSeconds,0,'Explicit paused advance clears interactive wall-clock credit');
  }finally{held=false;release();await i.value.dispose();Object.defineProperty(globalThis,'performance',original);}
 });
+
+test('unrepresentable exact step counts reject before any GPU work',async()=>{
+ const i=await instance();try{i.render();await i.value.operations.setPlaying(false);i.renderer.backend.device.queue.submit=()=>{throw Error('Invalid duration reached GPU submission');};await assert.rejects(i.value.operations.advance(Number.MAX_VALUE),/Choose a nonnegative physical step count/);assert.equal(i.value.read().gpu.steps,0);}finally{await i.value.dispose();}
+});
