@@ -417,7 +417,13 @@ export function createFlameInspector({ document, host, gridTuning, scopeDescript
     }
     if(group.scope==='emitter')section.append(runtimeStatus);
     if(group.name==='Domain & simulation')section.append(pressureStatus);
-    if(group.name==='World smoke')section.append(worldStatus,overlayRow,overlayStatus);
+    if(group.name==='World smoke'){
+      section.append(worldStatus,overlayRow,overlayStatus);
+      // The grid dialog owns the dimension controls; the diagnostic selector
+      // remains a real row even when those dimension rows have moved away.
+      const record={id:'selected-world-smoke-overlay',row:overlayRow,source:overlay,quick:false,emission:false,searchText:'world smoke field overlay bounds fine coarse contribution'};
+      rows.push(record);sectionRows.push(record);
+    }
     if(group.name==='Combustion')section.append(appearanceStatus);
     if(group.name==='Carriers & added forces')section.append(byId('volume-appearance-model-state'));
     if(group.name==='Ray marching')section.append(byId('volume-raymarch-status'),byId('volume-ray-step-stats'));
