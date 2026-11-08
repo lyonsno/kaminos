@@ -14,7 +14,7 @@ assert.equal(effect.usePerspectiveReconstruction?.value,false,'perspective recon
 assert.equal(typeof effect.getOptimizationState,'function','effective optimization state must be inspectable');
 const coords=TSL.vec2(.27,.61),level=TSL.float(2);
 for(let i=0;i<3;i++){
- const sample=effect._sourcePyramid.sample(i,coords,level);
+ const sample=effect._sourcePyramid.sample(i,coords,level,false);
  assert.equal(sample.uvNode,coords,'outward mip sample coordinates must survive cloning');
  assert.equal(sample.levelNode,level,'explicit mip level must survive cloning');
  assert.equal(sample.value,effect._sourcePyramid.target.textures[i]);

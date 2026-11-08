@@ -1,7 +1,7 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import {createSourceFootprintControl,resolveSourceFootprint} from '../scene-gi-footprint.mjs';
-const effect=Object.fromEntries(['sourceMipMode','sourceMipLevel','sourceMipDetailBias','sourceMipAllFields','useMipSampling'].map(k=>[k,{value:0}]));
+const effect=Object.fromEntries(['sourceMipMode','sourceMipLevel','sourceMipDetailBias','sourceMipAllFields','sourceMipReduction','sourceMipDepthTolerance','sourceMipNormalCos','useMipSampling'].map(k=>[k,{value:0}]));
 effect.getOptimizationState=()=>({mipSampling:{effective:effect.useMipSampling.value}});
 const resets=[],control=createSourceFootprintControl(effect,r=>resets.push(r));
 control.ordinary(false);const session=control.open();
@@ -11,7 +11,7 @@ session.set({mode:'fixed',level:4});assert.equal(effect.sourceMipMode.value,1);a
 const settled=resets.length;session.set({mode:'fixed',level:4});
 assert.equal(resets.length,settled,'Pointer release after live input must preserve accumulated history when the value is unchanged');
 const before=session.read(),count=resets.length;
-for(const patch of [{mode:'invented'},{level:-1},{level:1.5},{detailBias:Infinity},{allFields:'false'}])assert.throws(()=>session.set(patch));
+for(const patch of [{mode:'invented'},{level:-1},{level:1.5},{detailBias:Infinity},{allFields:'false'},{reduction:'unknown'},{depthTolerance:-1},{normalAngle:181}])assert.throws(()=>session.set(patch));
 assert.deepEqual(session.read(),before,'invalid drafts preserve the active policy');assert.equal(resets.length,count);
 control.ordinary(true);control.ordinary(false);
 assert.equal(effect.useMipSampling.value,true,'ordinary editing cannot silently disable the active comparison');
@@ -19,4 +19,7 @@ session.dispose();assert.equal(effect.useMipSampling.value,false,'release uses l
 assert.throws(()=>session.set({mode:'fixed'}),/closed/);session.dispose();
 control.ordinary(true);const next=control.open();next.set({mode:'distance',level:6,detailBias:-2,allFields:true});next.dispose();
 assert.equal(effect.useMipSampling.value,true,'enabled ordinary setting survives comparison release');
-assert.deepEqual(resolveSourceFootprint({level:9}),{mode:'legacy',level:9,detailBias:3.15,allFields:false},'fixed experiment can request any real mip; shader clamps to actual availability');
+assert.deepEqual(resolveSourceFootprint({level:9}),{mode:'legacy',level:9,detailBias:3.15,allFields:false,reduction:'average',depthTolerance:.05,normalAngle:60},'fixed experiment can request any real mip; shader clamps to actual availability');
+const coherent=control.open();coherent.set({reduction:'dominant',depthTolerance:.1,normalAngle:90});
+assert.equal(effect.sourceMipReduction.value,true);assert.equal(effect.sourceMipDepthTolerance.value,.1);assert.ok(Math.abs(effect.sourceMipNormalCos.value)<1e-10);
+coherent.dispose();assert.equal(effect.sourceMipReduction.value,false,'release restores ordinary average pyramid');
