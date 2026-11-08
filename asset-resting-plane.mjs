@@ -26,7 +26,10 @@ function hullCandidates(points) {
   const count = points.length / 3, best = SEED_DIRECTIONS.map(() => [-Infinity, -1]);
   for (let i = 0; i < count; i++) {
     const x = points[3 * i], y = points[3 * i + 1], z = points[3 * i + 2];
-    SEED_DIRECTIONS.forEach((d, k) => { const s = d.x * x + d.y * y + d.z * z; if (s > best[k][0]) best[k] = [s, i]; });
+    for (let k = 0; k < SEED_DIRECTIONS.length; k++) {
+      const d = SEED_DIRECTIONS[k], s = d.x * x + d.y * y + d.z * z;
+      if (s > best[k][0]) { best[k][0] = s; best[k][1] = i; }
+    }
   }
   const seedIndices = [...new Set(best.map(([, i]) => i))];
   const toVector = i => new Vector3(points[3 * i], points[3 * i + 1], points[3 * i + 2]);
@@ -37,7 +40,12 @@ function hullCandidates(points) {
   const kept = [];
   for (let i = 0; i < count; i++) {
     const x = points[3 * i], y = points[3 * i + 1], z = points[3 * i + 2];
-    if (planes.some(([a, b, c, d]) => a * x + b * y + c * z - d > -1e-9)) kept.push(toVector(i));
+    // This visits every source vertex. Avoid allocating a predicate and
+    // destructuring plane arrays for each point/face comparison.
+    for (let k = 0; k < planes.length; k++) {
+      const p = planes[k];
+      if (p[0] * x + p[1] * y + p[2] * z - p[3] > -1e-9) { kept.push(toVector(i)); break; }
+    }
   }
   return kept;
 }
