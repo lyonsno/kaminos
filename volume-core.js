@@ -21436,7 +21436,7 @@ export function createKaminosVolumePrototype({
     if(splitActive){
       const field=owner=>owner?{...owner.remapResources(),map:worldSmokeMapping(owner.plan,owner.anchor,productTransform).fineToField}:null;
       const {rayNoiseFrame,raySteps,integralReconstruction,reconstructionSpatial,reconstructionRadius,reconstructionWindow,reconstructionResponse,reconstructionEdge,reconstructionEdges,reconstructionImageEdge,reconstructionFresh,...sourceControls}=controlsSnapshot;
-      const identity=JSON.stringify([Array.from(invViewProj.elements),productTransform,sourceControls,worldSmokeKey,intermediateKey,state.integralSourceGeneration]);
+      const identity=JSON.stringify([productTransform,sourceControls,worldSmokeKey,intermediateKey,state.integralSourceGeneration]);
       const prepared=splitIntegral.prepare(encoder,{width:state.width,height:state.height,settings:splitSettings,identity,step:state.simStepCount,
         viewProj:new THREE.Matrix4().copy(invViewProj).invert().elements,world:field(worldSmoke),middle:field(intermediateFlow),
         backtrace:resolveTimeStepConfig(controlsSnapshot).effective.backtraceScale,fineScale:2/gridSize,
