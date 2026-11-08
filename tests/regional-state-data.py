@@ -27,6 +27,17 @@ class RegionalStateData(unittest.TestCase):
             self.assertEqual(report['failurePhase'], 'inputs')
             self.assertNotIn('arms', report)
 
+    def test_malformed_training_arguments_keep_the_report(self):
+        with tempfile.TemporaryDirectory(prefix='regional-training-arguments-') as out:
+            argv = ['--out', out, '--steps', 'not-an-integer']
+            run = subprocess.run([sys.executable, 'scripts/train-regional-state.py', *argv],
+                                 cwd=Path(__file__).parents[1], capture_output=True, text=True)
+            self.assertNotEqual(run.returncode, 0)
+            report = json.loads((Path(out) / 'report.json').read_text())
+            self.assertEqual(report['status'], 'failed')
+            self.assertEqual(report['failurePhase'], 'arguments')
+            self.assertEqual(report['rawInvocation'], argv)
+
     def test_storage_preserves_constants_and_charges_metadata(self):
         x = np.array([[2, 2, 2], [-3, .2, 9]], dtype=np.float32)
         for bits in (4, 8, 16):

@@ -142,3 +142,21 @@ test('a source-free analytic family retains the flame handle for editing and sav
   assert.equal(updated,1);
   assert.equal(context.flameDomainGuide.visible,true);
 });
+
+test('restored primary source pose survives the later handle refresh', () => {
+  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+  const start=html.indexOf('function ensureAuthoredFlameEmitter(');
+  const end=html.indexOf('function acceptedFlameDomainPose()',start);
+  const saved={position:[0,-.76,0],rotation:[0,0,0],scale:[2.046666666666667,2.046666666666667,2.046666666666667]};
+  const object={pose:{position:[0,-.76,0],rotation:[0,0,0],scale:[1,1,1]}};
+  const flame={id:'flame-emitter',type:'flame-emitter',object};
+  const context={isSceneItemVisible:()=>true,activeSceneComposition:{},refreshFlameDomainPreview(){},authoredFlamePresent:true,scene:{},isFireLightFieldRoute:()=>true,
+    applyFlameEmitterPose(){},window:{__kaminosVolumeEmitterReceipt:{effective:{family:'ring'}}},
+    sceneObjects:[flame],FLAME_EMITTER_ID:'flame-emitter',activeSceneObjectId:'flame-emitter',flameDomainGuide:null,
+    viewportDisplay:{emitterWidth:1,emitterOpacity:.82,emitters:true},styleHelperLines(){},viewportHelpersVisible:true,selectionCaptureSuspended:false,
+    THREE:{},flameEmitterPose:structuredClone(object.pose),
+    applySceneObjectTransformState:(o,pose)=>{o.pose=structuredClone(pose);},sceneObjectTransformState:o=>structuredClone(o.pose),updateFlameEmitterSupportOutline(){},saved};
+  runInSceneContext(html.slice(start,end)+'\nensureAuthoredFlameEmitter({id:"flame-emitter",transform:saved});ensureAuthoredFlameEmitter();',context);
+  assert.deepEqual(object.pose,saved,'a later no-metadata refresh must retain the restored source scale');
+  assert.deepEqual(context.flameEmitterPose,saved,'the primary pose consumed by runtime synchronization must match the saved object');
+});

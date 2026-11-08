@@ -5704,7 +5704,10 @@ function ensureAuthoredFlameEmitter(metadata = {}, {activate = true} = {}) {
   if(entry){
     if(Object.hasOwn(metadata,'emission')){entry.emission=structuredClone(metadata.emission);entry.object.userData.kaminosSceneObject.emission=entry.emission;}
     if(Object.hasOwn(metadata,'emissionEnabled')){entry.emissionEnabled=metadata.emissionEnabled!==false;entry.object.userData.kaminosSceneObject.emissionEnabled=entry.emissionEnabled;}
-    if(metadata.transform)applySceneObjectTransformState(entry.object,metadata.transform);
+    if(metadata.transform){
+      applySceneObjectTransformState(entry.object,metadata.transform);
+      if(entry===primaryAuthoredFlameSource())flameEmitterPose=sceneObjectTransformState(entry.object);
+    }
     else if(id===FLAME_EMITTER_ID)applySceneObjectTransformState(entry.object,flameEmitterPose);
     const supply=entry.emission?.settings,requested=window.__kaminosVolumeEmitterReceipt?.requested;
     updateFlameEmitterSupportOutline(THREE,entry.object,supply?{...requested,sourceLaw:supply['volume-emitter-source-law']?.value??requested?.sourceLaw,immersedRadius:Number(supply['volume-immersed-radius']?.rawValue??supply['volume-immersed-radius']?.value??requested?.immersedRadius),inputRadius:Number(supply['volume-input-radius']?.rawValue??supply['volume-input-radius']?.value??requested?.inputRadius)}:requested);
