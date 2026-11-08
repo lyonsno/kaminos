@@ -8,20 +8,20 @@ globalThis.window={};globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,COPY_SRC:4,
 const modulePath=process.env.HILL_VOLUME_TEST_MODULE??path.resolve('experiments/hill-volume.experiment.mjs');
 const {default:experiment}=await import(pathToFileURL(modulePath));
 function accountingDevice(fence=async()=>{}){
- const writes=[];const makeBuffer=d=>({size:d.size,label:d.label,bytes:new ArrayBuffer(d.size),getMappedRange(){return this.bytes;},unmap(){},mapAsync:async()=>{},destroy(){this.destroyed=true;}});
+ const writes=[],batches=[];const makeBuffer=d=>{if(d.mappedAtCreation)batches.push(d.size/112);return({size:d.size,label:d.label,bytes:new ArrayBuffer(d.size),getMappedRange(){return this.bytes;},unmap(){},mapAsync:async()=>{},destroy(){this.destroyed=true;}});};
  const device={limits:{maxStorageBufferBindingSize:1e9,maxBufferSize:1e9},addEventListener(){},removeEventListener(){},createBuffer:makeBuffer,
   createShaderModule:()=>({getCompilationInfo:async()=>({messages:[]})}),createComputePipelineAsync:async()=>({getBindGroupLayout:()=>({})}),createBindGroup:()=>({}),
   createCommandEncoder:()=>({clearBuffer:b=>new Uint8Array(b.bytes).fill(0),copyBufferToBuffer:(a,ao,b,bo,n)=>new Uint8Array(b.bytes,bo,n).set(new Uint8Array(a.bytes,ao,n)),beginComputePass:()=>({setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}}),finish:()=>({})}),
   queue:{writeBuffer(b,o,data){const raw=new Uint8Array(data.buffer,data.byteOffset,data.byteLength);new Uint8Array(b.bytes,o,raw.length).set(raw);writes.push({label:b.label,offset:o,length:raw.length});},submit(){},onSubmittedWorkDone:fence}};
- return{device,writes};
+ return{device,writes,batches};
 }
 async function instance({fence}={}){
- const {device,writes}=accountingDevice(fence),map=new Map(),events=[];let root,view={},frame;
+ const {device,writes,batches}=accountingDevice(fence),map=new Map(),events=[];let root,view={},frame;
  const renderer={backend:{isWebGPUBackend:true,device,get(a){if(!map.has(a)){const b=device.createBuffer({size:a.array.byteLength});new Uint8Array(b.bytes).set(new Uint8Array(a.array.buffer));map.set(a,{buffer:b});}return map.get(a);}},compute(){},_attributes:{delete:a=>map.get(a)?.buffer.destroy()}};
  const session={attach:async r=>{root=r;return{id:'volume-test',root:r};},setView:v=>view=v,readView:()=>view,redraw(){},onFrame:fn=>{frame=fn;return()=>{frame=null;};},dispose:async()=>{}};
  const host={scene:{open:async()=>session}};
  const value=await experiment.create({host,inputs:{config:{dimensions:[8,8,8],spacing:.15}},record:e=>events.push(e)});
- return{value,renderer,writes,events,tick:seconds=>frame?.({deltaSeconds:seconds}),render(){root.children[0].onBeforeRender(renderer);}};
+ return{value,renderer,writes,batches,events,tick:seconds=>frame?.({deltaSeconds:seconds}),render(){root.children[0].onBeforeRender(renderer);}};
 }
 test('queued release retains the selected rock before subsequent edits',async()=>{
  const i=await instance();try{i.render();await i.value.operations.setPlaying(false);const first=i.value.operations.release();const edit=i.value.operations.setSettings({rock:0});await Promise.all([first,edit]);
@@ -53,7 +53,7 @@ test('playback services accumulated time using measured batches while exact adva
   for(let f=0;f<120;f++)i.tick(1/60);now=100;held=false;release();await i.value.operations.setSettings({rockPushZ:2});
   i.tick(.016);await i.value.operations.setSettings({rockPushZ:2});assert.equal(i.value.read().gpu.steps,2,'A slow batch must not turn two seconds of frame debt into one enormous GPU batch');
   assert.ok(i.value.read().playback.pendingSeconds>2,'Unprocessed wall time stays represented');
-  await i.value.operations.advance(.03);assert.equal(i.value.read().gpu.completedSteps,22,'Exact advance still executes all20 requested substeps');
+  const beforeBatches=i.batches.length;await i.value.operations.advance(.03);assert.ok(i.batches.slice(beforeBatches).every(n=>n===1),'Exact advance must service all requested time through the observed work budget');assert.equal(i.value.read().gpu.completedSteps,22,'Exact advance still executes all20 requested substeps');
   assert.equal(i.value.read().playback.pendingSeconds,0,'Explicit paused advance clears interactive wall-clock credit');
  }finally{held=false;release();await i.value.dispose();Object.defineProperty(globalThis,'performance',original);}
 });
