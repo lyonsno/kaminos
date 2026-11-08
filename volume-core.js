@@ -22,7 +22,7 @@ import { pressureResolutionPlan, createPressureTransfer, pressureProfileWindows,
 import { createOpenBoundary } from './volume-open-boundary.mjs';
 import { RAY_START_WGSL, createRayStartTexture } from './volume-ray-start.mjs';
 import { leanEmissiveRaymarchAdmission, RAYMARCH_NEIGHBORHOOD_WGSL, FLAME_GUIDANCE_WGSL } from './volume-raymarch-sampling.mjs';
-import { OPTICAL_TRACE_IDENTITY, traceChunkPlan, validateTraceRows, createOpticalCaptureOwner } from './volume-optical-trace.mjs';
+import { OPTICAL_TRACE_IDENTITY, REGIONAL_CAPTURE_IDENTITY, NATIVE_OPTICAL_CAPTURE_WGSL, pointCaptureSeed, traceChunkPlan, validateTraceRows, createOpticalCaptureOwner } from './volume-optical-trace.mjs';
 import { raymarchAdaptivity, opticalSteppingConfig, resolveOpticalStepping, OPTICAL_STEPPING_WGSL } from './volume-optical-native.mjs';
 import { createRayStepTelemetry } from './volume-ray-step-telemetry.mjs';
 import { createRayAllocationHistory, HISTORY_ALLOCATION_WGSL } from './volume-history-allocation.mjs';
@@ -8087,11 +8087,13 @@ fn writeOpticalTraceMiss(ray: u32) {
   }
 }
 
+${NATIVE_OPTICAL_CAPTURE_WGSL}
 fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool, sceneDepthStartT: f32) -> RaymarchResult {
   let physicalColorMode = select(u.physical_fire.x, 2.0, LEAN_EMISSIVE_RAYMARCH);
-  let opticalCaptureMode = select(select(nonRidgeOpticalCaptureHeader.mode, 0u, LEAN_EMISSIVE_RAYMARCH), 5u, OPTICAL_TRACE_CAPTURE);
+  let opticalCaptureMode = select(select(nonRidgeOpticalCaptureHeader.mode, 0u, LEAN_EMISSIVE_RAYMARCH), nonRidgeOpticalCaptureHeader.mode, OPTICAL_TRACE_CAPTURE);
   let fullGridCapture = !LEAN_STOCK_RAYMARCH && opticalCaptureMode >= 3u && opticalCaptureMode <= 4u;
-  let opticalTrace = opticalCaptureMode == 5u;
+  let opticalTrace = opticalCaptureMode >= 5u && opticalCaptureMode <= 7u;
+  let opticalPoint = opticalCaptureMode == 6u;
   let traceRay = u32(in.pos.x) + u32(in.pos.y) * u32(u.viewport_steps_density.x);
   if (RAY_STEP_STATS) { rayStepCounters[traceRay] = 0xffffffffu; }
   if (opticalTrace && (traceRay < nonRidgeOpticalCaptureHeader.firstRay || traceRay >= nonRidgeOpticalCaptureHeader.firstRay + nonRidgeOpticalCaptureHeader.rayCount)) {
@@ -8105,7 +8107,11 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
   let nearWorld = nearWorldRaw.xyz / nearWorldRaw.w;
   let farWorld = farWorldRaw.xyz / farWorldRaw.w;
   let ro = viewRayOrigin(ndc);
-  let rd = normalize(farWorld - nearWorld);
+  var rd = normalize(farWorld - nearWorld);
+  if(opticalPoint) {
+    let base=(traceRay-nonRidgeOpticalCaptureHeader.firstRay)*32u;
+    rd=normalize(vec3<f32>(nonRidgeOpticalCaptureRows[base+12u],nonRidgeOpticalCaptureRows[base+13u],nonRidgeOpticalCaptureRows[base+14u]));
+  }
   // The box spans x/z [-1, 1] and y [-1, -1 + 2 GRID_Y/GRID] at equal pitch
   // (grid height control, report §34; raymarchDomainBox is the CPU mirror).
   let domainHalfY = f32(GRID_Y) / f32(GRID);
@@ -8118,7 +8124,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
     middleHit=boxHit(ro-(lo+hi)*.5,rd,(hi-lo)*.5);
   }
   if(worldActive){let lo=min(worldRender.loPitch.xyz,vec3<f32>(-1));let hi=max(worldRender.hiEnabled.xyz,vec3<f32>(1,2.0*domainHalfY-1.0,1));hit=boxHit(ro-(lo+hi)*.5,rd,(hi-lo)*.5);}
-  if (!fullGridCapture && min(hit.y, sceneDepthEndT) <= max(hit.x, sceneDepthStartT)) {
+  if (!fullGridCapture && !opticalPoint && min(hit.y, sceneDepthEndT) <= max(hit.x, sceneDepthStartT)) {
     if (opticalTrace) { writeOpticalTraceMiss(traceRay); }
     let missAlpha = mix(1.0, 0.0, TRANSPARENT_CANVAS);
     return makeRaymarchResult(
@@ -8241,8 +8247,8 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
   let appearanceDecompositionMode = select(u.boundary_fire_display.w, 0.0, LEAN_STOCK_RAYMARCH || LEAN_EMISSIVE_RAYMARCH);
   let appearanceAssayActive = step(0.5, appearanceDecompositionMode);
   let effectiveRaymarchSmokeSuppressed = max(raymarchSmokeSuppressed, appearanceAssayActive);
-  let startT = select(max(hit.x, 0.0), 0.0, fullGridCapture);
-  let endT = select(min(hit.y, sceneDepthEndT), 2.0 * domainHalfY, fullGridCapture);
+  let startT = select(select(max(hit.x, 0.0), 0.0, fullGridCapture),0.0,opticalPoint);
+  let endT = select(select(min(hit.y, sceneDepthEndT), 2.0 * domainHalfY, fullGridCapture),1.0,opticalPoint);
   // Keep ordinary sample positions stable; clipping removes hidden samples,
   // rather than resampling the visible fire at a different density.
   let standaloneDt = (select(endT, select(hit.y, 2.0 * domainHalfY, fullGridCapture), preserveSamplePositions) - startT) / steps;
@@ -8341,7 +8347,11 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
     let fullGridX = min(u32(floor(in.uv.x * f32(GRID))), GRID - 1u);
     let fullGridY = min(u32(floor(in.uv.y * f32(GRID_Y))), GRID_Y - 1u);
     let fullGridP = cellToWorld(vec3<f32>(f32(fullGridX), f32(fullGridY), f32(sampleIndex)) + vec3<f32>(0.5));
-    let p = select(ro + rd * t, fullGridP, fullGridCapture);
+    var p = select(ro + rd * t, fullGridP, fullGridCapture);
+    if(opticalPoint) {
+      let base=(traceRay-nonRidgeOpticalCaptureHeader.firstRay)*32u;
+      p=vec3<f32>(nonRidgeOpticalCaptureRows[base+8u],nonRidgeOpticalCaptureRows[base+9u],nonRidgeOpticalCaptureRows[base+10u]);
+    }
     // Own segments by the same ray interval used to clip their lengths. Testing
     // the reconstructed position can round an exact entry back outside the box.
     let fineRayInterval = nearHit.y > nearHit.x && t >= nearHit.x && t < nearHit.y;
@@ -9281,7 +9291,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
         nonRidgeOpticalCaptureRows[base+13u] = rd.y;
         nonRidgeOpticalCaptureRows[base+14u] = rd.z;
         nonRidgeOpticalCaptureRows[base+15u] = 2.0 / f32(GRID);
-        let supported = directSupport > 0.0001;
+        let supported = opticalCaptureKeepsMaterial(opticalCaptureMode,directSupport);
         nonRidgeOpticalCaptureRows[base+16u] = select(0.0, sigma, supported);
         for (var channel=0u; channel<3u; channel++) {
           nonRidgeOpticalCaptureRows[base+17u+channel] = select(0.0, medium.emission[channel], supported);
@@ -21772,6 +21782,10 @@ export function createKaminosVolumePrototype({
     return opticalCaptureOwner.run('camera-trace', () => sampleOpticalTraceChunkOwned(options));
   }
 
+  async function sampleRegionalOpticalChunk(options = {}) {
+    return opticalCaptureOwner.run('native-regional', () => sampleOpticalTraceChunkOwned({...options,regionalCapture:true}));
+  }
+
   async function sampleOpticalTraceChunkOwned(options = {}) {
     if (!state.active || !device || !selectiveHeadLiveCapturePaused) {
       return {ok:false,phase:'admission',reason:'optical-trace-requires-held-capture'};
@@ -21787,6 +21801,14 @@ export function createKaminosVolumePrototype({
     const step=state.simStepCount;
     try {
       updateUniforms(options.now);
+      if(options.regionalCapture) {
+        if(options.scope!=='fine-only')throw Error('regional native capture requires explicit fine-only scope');
+        if(!['rays','points'].includes(options.kind))throw Error('regional native capture requires an explicit query kind');
+        if(options.kind==='points')for(const point of options.points??[]) {
+          if(!Array.isArray(point.position)||point.position.some((v,i)=>v < -1 || v > (i===1?2*gridHeight/gridSize-1:1)))
+            throw Error('regional point outside the Fine domain');
+        }
+      } else if(options.kind==='points')throw Error('point queries require the regional native capture API');
       if (!Number.isFinite(options.now) || uniforms[368]!==2 || uniforms[310]!==0 || uniforms[305]!==0 || uniforms[307]!==0) {
         throw new Error('trace requires explicit phase, mode 2 beauty and zero boundary step-width');
       }
@@ -21796,15 +21818,16 @@ export function createKaminosVolumePrototype({
         maxBytes:Math.min(device.limits.maxBufferSize,device.limits.maxStorageBufferBindingSize)});
       phase='allocation';
       rows=device.createBuffer({label:OPTICAL_TRACE_IDENTITY,size:plan.byteLength,
-        usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC});
+        usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST});
       readback=device.createBuffer({label:`${OPTICAL_TRACE_IDENTITY} readback`,size:plan.byteLength,
         usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
       nonRidgeOpticalCaptureRowBuffer=rows;
       rebuildNonRidgeOpticalCaptureBindGroups();
       if (!['auto','force-full'].includes(options.specialization)) throw new Error('explicit trace specialization required');
       debugRaymarchShaderSpecialization=options.specialization;
+      if(options.kind==='points')device.queue.writeBuffer(rows,0,pointCaptureSeed(options.points));
       device.queue.writeBuffer(nonRidgeOpticalCaptureHeaderBuffer,0,new Uint32Array([
-        0,plan.rowCount,5,0,plan.firstRay,plan.rayCount,plan.sampleOffset,plan.sampleCount,plan.subdivisions,
+        0,plan.rowCount,options.regionalCapture?(options.kind==='points'?6:7):5,0,plan.firstRay,plan.rayCount,plan.sampleOffset,plan.sampleCount,plan.subdivisions,
       ]));
       phase='gpu-capture';
       device.pushErrorScope('validation'); scopeOpen=true;
@@ -21816,6 +21839,11 @@ export function createKaminosVolumePrototype({
       effective={route:state.effectiveRoute,backend:state.backend,simStepCount:step,
         specialization:{...state.raymarchShaderSpecialization},incidentLight:{...state.physicalColor.incidentLight},
         uniforms:Array.from(uniforms),controls:structuredClone(controlsSnapshot)};
+      if(options.regionalCapture)effective.regionalCapture={identity:REGIONAL_CAPTURE_IDENTITY,
+        scope:'fine-only',kind:options.kind,worldIncluded:false,
+        worldRequested:state.worldSmoke?.requested??state.worldSmoke?.effective??null,coefficientSource:'native-material-before-trace-support-mask',
+        emissionAndScattering:'separate-signed-linear-rgb',sigma:'absorption-plus-scattering',
+        gridShape:[gridSize,gridHeight,gridSize],bounds:{lo:[-1,-1,-1],hi:[1,2*gridHeight/gridSize-1,1]}};
       encoder.copyBufferToBuffer(rows,0,readback,0,plan.byteLength);
       submitVolumeCommands([finishVolumeEncoder(encoder)]);
       await readback.mapAsync(GPUMapMode.READ);
@@ -21825,11 +21853,12 @@ export function createKaminosVolumePrototype({
       if(error)throw new Error(error.message);
       phase='validation';
       if(state.simStepCount!==step)throw new Error('state advanced during optical capture');
-      const counts=validateTraceRows(values,plan);
-      return {ok:true,identity:OPTICAL_TRACE_IDENTITY,phase:'complete',plan,counts,effective,
+      const counts=validateTraceRows(values,plan,options.regionalCapture?
+        {requireRegional:true,effective,expectedStep:step,expectedKind:options.kind}:{});
+      return {ok:true,identity:options.regionalCapture?REGIONAL_CAPTURE_IDENTITY:OPTICAL_TRACE_IDENTITY,phase:'complete',plan,counts,effective,
         interval:'authored-jitter-start-to-scene-depth-clipped-exit',values};
     } catch(error) {
-      return {ok:false,identity:OPTICAL_TRACE_IDENTITY,phase,reason:String(error),simStepCount:step,
+      return {ok:false,identity:options.regionalCapture?REGIONAL_CAPTURE_IDENTITY:OPTICAL_TRACE_IDENTITY,phase,reason:String(error),simStepCount:step,
         plan,effective,values};
     } finally {
       if(scopeOpen)await device.popErrorScope();
@@ -29682,6 +29711,7 @@ export function createKaminosVolumePrototype({
     sampleEmissiveLightProfile,
     sampleEmissiveRaymarchProfile,
     sampleOpticalTraceChunk,
+    sampleRegionalOpticalChunk,
     renderFrozenScaleToCanvas,
     readFlowKernelDescriptorCaptureChunk,
     releaseFlowKernelDescriptorCapture,
