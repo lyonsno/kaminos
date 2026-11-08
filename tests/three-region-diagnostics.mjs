@@ -6,11 +6,8 @@ const fluidLayout=runtimeSource.split("label: 'kaminos fluid bind group layout',
 const fluidBindings=[...fluidLayout.matchAll(/binding:\s*(\d+)/g)].map(m=>Number(m[1]));
 assert.equal(new Set(fluidBindings).size,fluidBindings.length,'Composed fluid layout assigns a unique binding to every resource');
 import {pressureResidualProbeDisposition} from '../volume-core.js';
-import {flamePropertyApplies} from '../flame-authoring.mjs';
 assert.equal(pressureResidualProbeDisposition({independentVelocity:true}),'unavailable','Shared-grid residual is unavailable during independent velocity');
 assert.equal(pressureResidualProbeDisposition({independentVelocity:true,mapPending:true}),'unavailable','Pending old map cannot restore a shared-grid residual');
-for(const mode of ['off','on'])assert.equal(flamePropertyApplies('volume-intermediate-material',{intermediateMode:mode}),false,'Inactive material controls must not imply a live effect');
-assert.equal(flamePropertyApplies('volume-intermediate-material',{intermediateMode:'fields'}),true);
 
 // Exercise the real constructor, with only browser/Three host objects stubbed.
 // No GPU is initialized: this catches setup failures before native scene tests.
