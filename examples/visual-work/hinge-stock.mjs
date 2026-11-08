@@ -5,6 +5,9 @@ export default async function ({page,retain,inputs={}}){
   const T=await import('/lib/three.core.js'),api=window.kaminosWorkbenchExperiments,stock=window.kaminosSceneObjectDebugState(),post=stock.find(o=>o.id===inputs.postId)||stock.find(o=>o.label==='Timber');
   if(!post||post.type!=='glb')throw Error('Open a scene with the existing Timber stock, or supply postId');
   await api.invoke('restore',{schema:'kaminos.links.v1',nodes:[],pistons:[],period:3});
+  // Detachment leaves a live quaternion; reconcile it with the authored pose
+  // used by normal save/load before deriving stock-local mounting frames.
+  window.kaminosSetSceneObjectTransform(post.id,post.transform);
   const beam=window.kaminosSceneAuthoring.duplicate(post.id);window.renameSceneObject(post.id,'Fixed timber post');window.renameSceneObject(beam,'Hinged timber beam');
   window.kaminosSetSceneObjectTransform(beam,{position:[0,0,0],rotation:[0,0,0],scale:post.transform.scale});
   const all=window.kaminosSceneObjectDebugState(),p=all.find(o=>o.id===post.id),b=all.find(o=>o.id===beam),pb=p.worldBounds,bb=b.worldBounds;

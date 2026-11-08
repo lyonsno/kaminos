@@ -11,7 +11,7 @@ export default async function ({page,retain,inputs={}}){
    const id=window.kaminosSceneAuthoring.addMesh('box',{width:.5,height:.36,depth:.36});window.renameSceneObject(id,family+' receiver');window.kaminosSetSceneObjectTransform(id,{position:p.toArray(),rotation:[e.x,e.y,e.z]});window.kaminosSceneAuthoring.setMaterial(id,{color:'#405765',metalness:.5,roughness:.4});
    const sourceId=family+'-moving',targetId=family+'-fixed';recipe.mounts.push({id:sourceId,label:'Moving mount',owner:{objectId:binding.objectId},position:[-.4,0,0],rotation:[0,-Math.PI/2,0]},{id:targetId,label:'Fixed mount',owner:{objectId:id},...fixedFrame});recipe.attachments.push({objectId:binding.objectId,sourceMount:sourceId,targetMount:targetId,offset:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},hinge:[0,.7],hardware});
   }
-  await api.invoke('restore',recipe);await api.invoke('selectConnection',{objectId:recipe.attachments[0].objectId});await api.invoke('mode',{value:'A'});await api.invoke('editAxle');window.kaminosSetCameraDebugPose({position:[.7,2.4,8.8],target:[.7,1.3,0]});
+  await api.invoke('restore',recipe);await api.invoke('selectConnection',{objectId:recipe.attachments[0].objectId});await api.invoke('mode',{value:'A'});await api.invoke('editAxle');window.kaminosSetCameraDebugPose({position:[.7,2.8,13.6],target:[.7,1.3,0]});
   return {recipe,ids:recipe.attachments.map(a=>a.objectId)};
  });
  const first=await retain({name:inputs.name??'Hinge families — seated mounts',observe:()=>assembly});return {assembly,first};

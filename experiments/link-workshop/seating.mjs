@@ -30,7 +30,7 @@ export function adjustSeating(root,model,objectId,t,entries,requested){
  const angle=Math.hypot(mag,turn.w)<1e-12?0:2*dir*Math.atan2(mag,turn.w);
  if(hasAxle&&(requested.mode==='A'||requested.mode==='B')){
   a.hinge[requested.mode==='B'?1:0]+=angle;
-  const base=attachmentBase(root,model,model.attachments.find(x=>x.objectId===objectId),poseT,entries,undefined,{unhinged:true}),bq=new T.Quaternion().setFromRotationMatrix(base).invert();
+  const base=attachmentBase(root,next,a,poseT,entries),bq=new T.Quaternion().setFromRotationMatrix(base).invert();
   const localDelta=delta.applyQuaternion(bq);a.offset.position=a.offset.position.map((x,i)=>x+localDelta.getComponent(i));return next;
  }
  const q=new T.Quaternion().setFromAxisAngle(normal,angle).multiply(oldQ);
