@@ -11949,6 +11949,35 @@ export function createKaminosVolumePrototype({
   let fluidPipelineDevice = null;
   let fluidPipelineTransparency = null;
   const fluidRenderPipelines = new Map();
+  const optionalShaderModules = new Map();
+  const optionalShaderDescriptors = {
+    browserResidualShader: {label:'kaminos browser direct residual wgsl',code:BROWSER_RESIDUAL_WGSL},
+    boundarySplatShader: {label:`kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} wgsl`,code:BOUNDARY_SPLAT_WGSL},
+    boundarySplatPresentationShader: {label:`kaminos ${BOUNDARY_SPLAT_PRESENTATION_RESOLVE_IDENTITY} wgsl`,code:BOUNDARY_SPLAT_PRESENTATION_WGSL},
+    boundarySplatOpticalPresentationShader: {label:`kaminos ${BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY} presentation wgsl`,code:BOUNDARY_SPLAT_OPTICAL_PRESENTATION_WGSL},
+    fourArmHeldStateLinearResolveShader: {label:'kaminos four-arm held-state linear HDR resolve wgsl',code:FOUR_ARM_HELD_STATE_LINEAR_RESOLVE_WGSL},
+    fourArmHeldStateResidualMarchShader: {label:'kaminos four-arm positive-complement residual march wgsl',code:FOUR_ARM_HELD_STATE_RESIDUAL_MARCH_WGSL},
+    fourArmHeldStateTimestampMarkerShader: {label:'kaminos four-arm held-state timestamp marker wgsl',code:FOUR_ARM_HELD_STATE_TIMESTAMP_MARKER_WGSL},
+  };
+  // Optional pipelines already wait for first use. Their modules must follow
+  // the same lifetime, rather than validating every unused renderer at startup.
+  function optionalShaderModule(name) {
+    const previous=optionalShaderModules.get(name);
+    if(previous?.device===device)return previous.module;
+    const descriptor=optionalShaderDescriptors[name];
+    if(!descriptor)throw Error(`Unknown optional volume shader: ${name}`);
+    const module=device.createShaderModule(descriptor);
+    const validation=module.getCompilationInfo().then(info=>{
+      const errors=info.messages.filter(message=>message.type==='error');
+      if(errors.length)throw Error(`${descriptor.label} compilation failed:\n${errors.map(message=>`${message.lineNum}:${message.linePos} ${message.message}`).join('\n')}`);
+    }).catch(error=>{
+      if(device!==entry.device)return;
+      state.error=error?.message||String(error);emitStatus({phase:'gpu-error',error:state.error});
+    });
+    const entry={device,module,validation};optionalShaderModules.set(name,entry);
+    return module;
+  }
+
   const optionalPipelines = {
     opticalTransportContributionPipeline: null,
     browserResidualPipeline: null,
@@ -11991,7 +12020,6 @@ export function createKaminosVolumePrototype({
   const opticalSteppingPipelines = new Map();
   let browserResidualBindGroupLayout = null;
   let browserResidualPipelineLayout = null;
-  let browserResidualShader = null;
   let browserResidualSampler = null;
   let browserResidualBuffer = null;
   let browserResidualBufferSize = 0;
@@ -12208,11 +12236,6 @@ export function createKaminosVolumePrototype({
   let sceneMediumSource = null;
   let emissiveWhiteKelvin = null;
   let emissiveWhiteMatrix = null;
-  let boundarySplatPresentationShader = null;
-  let boundarySplatOpticalPresentationShader = null;
-  let fourArmHeldStateLinearResolveShader = null;
-  let fourArmHeldStateResidualMarchShader = null;
-  let fourArmHeldStateTimestampMarkerShader = null;
   let fourArmHeldStateResidualBindGroupLayout = null;
   let fourArmHeldStateResidualPipelineLayout = null;
   let boundarySplatHdrTexture = null;
@@ -12313,7 +12336,6 @@ export function createKaminosVolumePrototype({
   let pressureResidualPipelineLayout = null;
   let shader = null;
   let analyticEmitterInjectionShader = null;
-  let boundarySplatShader = null;
   let uniformBuffer = null;
   let analyticEmitterInjectionUniformBuffer = null;
   const analyticEmitterInjectionUniformData = new ArrayBuffer(36 * Float32Array.BYTES_PER_ELEMENT);
@@ -14785,8 +14807,8 @@ export function createKaminosVolumePrototype({
     deferPipeline('browserResidualPipeline', () => device.createRenderPipeline({
       label: `kaminos volume browser webgpu-direct-residual postprocess ${gridShapeLabel(gridSize)}`,
       layout: browserResidualPipelineLayout,
-      vertex: { module: browserResidualShader, entryPoint: 'vs' },
-      fragment: { module: browserResidualShader, entryPoint: 'fs', targets: [{ format }] },
+      vertex: { module: optionalShaderModule('browserResidualShader'), entryPoint: 'vs' },
+      fragment: { module: optionalShaderModule('browserResidualShader'), entryPoint: 'fs', targets: [{ format }] },
       primitive: { topology: 'triangle-list' },
     }));
     computePipeline = device.createComputePipeline({
@@ -14895,12 +14917,12 @@ export function createKaminosVolumePrototype({
     deferPipeline('boundarySplatCompactPipeline', () => device.createComputePipeline({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact ${gridShapeLabel(gridSize)}`,
       layout: boundarySplatComputePipelineLayout,
-      compute: { module: boundarySplatShader, entryPoint: 'compactBoundarySplats', constants: computePipelineConstants },
+      compute: { module: optionalShaderModule('boundarySplatShader'), entryPoint: 'compactBoundarySplats', constants: computePipelineConstants },
     }));
     deferPipeline('boundarySplatFinalizePipeline', () => device.createComputePipeline({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} finalize ${gridShapeLabel(gridSize)}`,
       layout: boundarySplatComputePipelineLayout,
-      compute: { module: boundarySplatShader, entryPoint: 'finalizeBoundarySplats', constants: computePipelineConstants },
+      compute: { module: optionalShaderModule('boundarySplatShader'), entryPoint: 'finalizeBoundarySplats', constants: computePipelineConstants },
     }));
     const makeBoundarySplatRenderPipeline = (
       targetFormat,
@@ -14911,9 +14933,9 @@ export function createKaminosVolumePrototype({
     ) => device.createRenderPipeline({
       label,
       layout: boundarySplatRenderPipelineLayout,
-      vertex: { module: boundarySplatShader, entryPoint: vertexEntryPoint },
+      vertex: { module: optionalShaderModule('boundarySplatShader'), entryPoint: vertexEntryPoint },
       fragment: {
-        module: boundarySplatShader,
+        module: optionalShaderModule('boundarySplatShader'),
         entryPoint: fragmentEntryPoint,
         targets: [{
           format: targetFormat,
@@ -14930,9 +14952,9 @@ export function createKaminosVolumePrototype({
       deferPipeline('productBoundarySplatRenderPipeline', () => device.createRenderPipeline({
         label: `kaminos product shared-depth ${BOUNDARY_SPLAT_RENDERER_IDENTITY} raster ${gridShapeLabel(gridSize)}`,
         layout: boundarySplatRenderPipelineLayout,
-        vertex: { module: boundarySplatShader, entryPoint: 'boundarySplatVs' },
+        vertex: { module: optionalShaderModule('boundarySplatShader'), entryPoint: 'boundarySplatVs' },
         fragment: {
-          module: boundarySplatShader,
+          module: optionalShaderModule('boundarySplatShader'),
           entryPoint: 'boundarySplatFs',
           targets: [{
             format,
@@ -14981,9 +15003,9 @@ export function createKaminosVolumePrototype({
     ) => Array.from({ length: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS }, (_, binIndex) => device.createRenderPipeline({
       label: `kaminos ${BOUNDARY_SPLAT_OPTICAL_ACCUMULATION_IDENTITY} ${labelSuffix} bin ${binIndex}`,
       layout: boundarySplatRenderPipelineLayout,
-      vertex: { module: boundarySplatShader, entryPoint: vertexEntryPoint },
+      vertex: { module: optionalShaderModule('boundarySplatShader'), entryPoint: vertexEntryPoint },
       fragment: {
-        module: boundarySplatShader,
+        module: optionalShaderModule('boundarySplatShader'),
         entryPoint: fragmentEntryPoint,
         constants: { OPTICAL_BIN: binIndex },
         targets: [{
@@ -15011,9 +15033,9 @@ export function createKaminosVolumePrototype({
     const makeBoundarySplatPresentationPipeline = (targetFormat, label) => device.createRenderPipeline({
       label,
       layout: 'auto',
-      vertex: { module: boundarySplatPresentationShader, entryPoint: 'boundarySplatPresentationVs' },
+      vertex: { module: optionalShaderModule('boundarySplatPresentationShader'), entryPoint: 'boundarySplatPresentationVs' },
       fragment: {
-        module: boundarySplatPresentationShader,
+        module: optionalShaderModule('boundarySplatPresentationShader'),
         entryPoint: 'boundarySplatPresentationFs',
         targets: [{ format: targetFormat }],
       },
@@ -15028,9 +15050,9 @@ export function createKaminosVolumePrototype({
     ) => device.createRenderPipeline({
       label,
       layout: 'auto',
-      vertex: { module: boundarySplatOpticalPresentationShader, entryPoint: 'boundarySplatOpticalPresentationVs' },
+      vertex: { module: optionalShaderModule('boundarySplatOpticalPresentationShader'), entryPoint: 'boundarySplatOpticalPresentationVs' },
       fragment: {
-        module: boundarySplatOpticalPresentationShader,
+        module: optionalShaderModule('boundarySplatOpticalPresentationShader'),
         entryPoint,
         targets: [{ format: targetFormat }],
       },
@@ -15046,9 +15068,9 @@ export function createKaminosVolumePrototype({
     deferPipeline('fourArmHeldStateLinearResolvePipeline', () => device.createRenderPipeline({
       label: 'kaminos four-arm held-state linear HDR resolve',
       layout: 'auto',
-      vertex: { module: fourArmHeldStateLinearResolveShader, entryPoint: 'fourArmHeldStateResolveVs' },
+      vertex: { module: optionalShaderModule('fourArmHeldStateLinearResolveShader'), entryPoint: 'fourArmHeldStateResolveVs' },
       fragment: {
-        module: fourArmHeldStateLinearResolveShader,
+        module: optionalShaderModule('fourArmHeldStateLinearResolveShader'),
         entryPoint: 'fourArmHeldStateResolveFs',
         targets: [{ format: BOUNDARY_SPLAT_HDR_TARGET_FORMAT }],
       },
@@ -15058,7 +15080,7 @@ export function createKaminosVolumePrototype({
       label: 'kaminos four-arm held-state timestamp marker',
       layout: 'auto',
       compute: {
-        module: fourArmHeldStateTimestampMarkerShader,
+        module: optionalShaderModule('fourArmHeldStateTimestampMarkerShader'),
         entryPoint: 'fourArmHeldStateTimestampMarker',
       },
     }));
@@ -15086,9 +15108,9 @@ export function createKaminosVolumePrototype({
       (_, binIndex) => device.createRenderPipeline({
         label: `kaminos four-arm positive-complement residual march bin ${binIndex}`,
         layout: fourArmHeldStateResidualPipelineLayout,
-        vertex: { module: fourArmHeldStateResidualMarchShader, entryPoint: 'fourArmResidualVs' },
+        vertex: { module: optionalShaderModule('fourArmHeldStateResidualMarchShader'), entryPoint: 'fourArmResidualVs' },
         fragment: {
-          module: fourArmHeldStateResidualMarchShader,
+          module: optionalShaderModule('fourArmHeldStateResidualMarchShader'),
           entryPoint: 'fourArmResidualFs',
           constants: { OPTICAL_BIN: binIndex },
           targets: [{
@@ -15426,84 +15448,6 @@ export function createKaminosVolumePrototype({
         .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
         .join('\n');
       throw new Error(`Analytic emitter injection WGSL compilation failed:\n${detail}`);
-    }
-    browserResidualShader = device.createShaderModule({ label: 'kaminos browser direct residual wgsl', code: BROWSER_RESIDUAL_WGSL });
-    const residualCompilationInfo = await browserResidualShader.getCompilationInfo();
-    const residualCompilationErrors = residualCompilationInfo.messages.filter(message => message.type === 'error');
-    if (residualCompilationErrors.length > 0) {
-      const detail = residualCompilationErrors
-        .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
-        .join('\n');
-      throw new Error(`Browser residual WGSL compilation failed:\n${detail}`);
-    }
-    boundarySplatShader = device.createShaderModule({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} wgsl`, code: BOUNDARY_SPLAT_WGSL });
-    const boundarySplatCompilationInfo = await boundarySplatShader.getCompilationInfo();
-    const boundarySplatCompilationErrors = boundarySplatCompilationInfo.messages.filter(message => message.type === 'error');
-    if (boundarySplatCompilationErrors.length > 0) {
-      const detail = boundarySplatCompilationErrors
-        .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
-        .join('\n');
-      throw new Error(`Boundary splat WGSL compilation failed:\n${detail}`);
-    }
-    boundarySplatPresentationShader = device.createShaderModule({
-      label: `kaminos ${BOUNDARY_SPLAT_PRESENTATION_RESOLVE_IDENTITY} wgsl`,
-      code: BOUNDARY_SPLAT_PRESENTATION_WGSL,
-    });
-    const boundarySplatPresentationCompilationInfo = await boundarySplatPresentationShader.getCompilationInfo();
-    const boundarySplatPresentationCompilationErrors = boundarySplatPresentationCompilationInfo.messages.filter(message => message.type === 'error');
-    if (boundarySplatPresentationCompilationErrors.length > 0) {
-      const detail = boundarySplatPresentationCompilationErrors
-        .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
-        .join('\n');
-      throw new Error(`Boundary splat presentation WGSL compilation failed:\n${detail}`);
-    }
-    boundarySplatOpticalPresentationShader = device.createShaderModule({
-      label: `kaminos ${BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY} presentation wgsl`,
-      code: BOUNDARY_SPLAT_OPTICAL_PRESENTATION_WGSL,
-    });
-    const boundarySplatOpticalCompilationInfo = await boundarySplatOpticalPresentationShader.getCompilationInfo();
-    const boundarySplatOpticalCompilationErrors = boundarySplatOpticalCompilationInfo.messages.filter(message => message.type === 'error');
-    if (boundarySplatOpticalCompilationErrors.length > 0) {
-      const detail = boundarySplatOpticalCompilationErrors
-        .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
-        .join('\n');
-      throw new Error(`Boundary splat optical presentation WGSL compilation failed:\n${detail}`);
-    }
-    fourArmHeldStateLinearResolveShader = device.createShaderModule({
-      label: 'kaminos four-arm held-state linear HDR resolve wgsl',
-      code: FOUR_ARM_HELD_STATE_LINEAR_RESOLVE_WGSL,
-    });
-    const fourArmResolveCompilationInfo = await fourArmHeldStateLinearResolveShader.getCompilationInfo();
-    const fourArmResolveCompilationErrors = fourArmResolveCompilationInfo.messages.filter(message => message.type === 'error');
-    if (fourArmResolveCompilationErrors.length > 0) {
-      const detail = fourArmResolveCompilationErrors
-        .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
-        .join('\n');
-      throw new Error(`Four-arm held-state linear resolve WGSL compilation failed:\n${detail}`);
-    }
-    fourArmHeldStateResidualMarchShader = device.createShaderModule({
-      label: 'kaminos four-arm positive-complement residual march wgsl',
-      code: FOUR_ARM_HELD_STATE_RESIDUAL_MARCH_WGSL,
-    });
-    const fourArmResidualCompilationInfo = await fourArmHeldStateResidualMarchShader.getCompilationInfo();
-    const fourArmResidualCompilationErrors = fourArmResidualCompilationInfo.messages.filter(message => message.type === 'error');
-    if (fourArmResidualCompilationErrors.length > 0) {
-      const detail = fourArmResidualCompilationErrors
-        .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
-        .join('\n');
-      throw new Error(`Four-arm positive-complement residual march WGSL compilation failed:\n${detail}`);
-    }
-    fourArmHeldStateTimestampMarkerShader = device.createShaderModule({
-      label: 'kaminos four-arm held-state timestamp marker wgsl',
-      code: FOUR_ARM_HELD_STATE_TIMESTAMP_MARKER_WGSL,
-    });
-    const fourArmTimestampCompilationInfo = await fourArmHeldStateTimestampMarkerShader.getCompilationInfo();
-    const fourArmTimestampCompilationErrors = fourArmTimestampCompilationInfo.messages.filter(message => message.type === 'error');
-    if (fourArmTimestampCompilationErrors.length > 0) {
-      const detail = fourArmTimestampCompilationErrors
-        .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
-        .join('\n');
-      throw new Error(`Four-arm held-state timestamp marker WGSL compilation failed:\n${detail}`);
     }
     bindGroupLayout = device.createBindGroupLayout({
       label: 'kaminos fluid bind group layout',

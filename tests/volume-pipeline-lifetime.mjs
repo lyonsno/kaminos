@@ -331,3 +331,19 @@ test('wavelet coordinate upload buffers are not retained across fine-velocity or
 });
 
 
+
+test('each deferred optional pipeline asks for its shader only when a consumer selects it',()=>{
+ const f=fixture(),requested=[],modules=new Map();
+ f.context.BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS=2; // Two consumers suffice to test shared shader lifetime.
+ f.context.optionalShaderModule=name=>{requested.push(name);if(!modules.has(name))modules.set(name,{name});return modules.get(name);};
+ f.rebuild();assert.deepEqual(requested,[]);
+ for(const [pipeline,shader]of [
+  ['browserResidualPipeline','browserResidualShader'],['boundarySplatCompactPipeline','boundarySplatShader'],
+  ['boundarySplatPresentationRenderPipeline','boundarySplatPresentationShader'],['boundarySplatOpticalPresentationRenderPipeline','boundarySplatOpticalPresentationShader'],
+  ['fourArmHeldStateLinearResolvePipeline','fourArmHeldStateLinearResolveShader'],['fourArmHeldStateResidualMarchPipelines','fourArmHeldStateResidualMarchShader'],['fourArmHeldStateTimestampMarkerPipeline','fourArmHeldStateTimestampMarkerShader'],
+ ]){
+  requested.length=0;const selected=f.context.optionalPipelines[pipeline];assert.ok(selected);assert.ok(requested.length>0);assert.ok(requested.every(name=>name===shader),pipeline);
+  requested.length=0;assert.equal(f.context.optionalPipelines[pipeline],selected);assert.deepEqual(requested,[],'cached pipeline does not request another shader');
+ }
+ assert.equal(modules.size,7);
+});
