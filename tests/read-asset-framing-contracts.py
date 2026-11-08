@@ -11,22 +11,24 @@ tree=ast.parse(source.read_text())
 handler=next(n for n in tree.body if isinstance(n,ast.ClassDef) and any(
     isinstance(child,ast.FunctionDef) and child.name=='handle_read' for child in n.body))
 read=next(n for n in handler.body if isinstance(n,ast.FunctionDef) and n.name=='handle_read')
+send_json=next(n for n in handler.body if isinstance(n,ast.FunctionDef) and n.name=='send_json')
 
 class ReadAssetFraming(unittest.TestCase):
     def test_exact_payload_lengths_and_original_bytes(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder);namespace={'BROWSE_ROOTS':{'asset':root},'SPLAT_EXTENSIONS':set(),
                 'splat_asset_root_allows_pointer':lambda _:False,'json':json}
-            exec(compile(ast.Module(body=[read],type_ignores=[]),str(source),'exec'),namespace)
+            exec(compile(ast.Module(body=[read,send_json],type_ignores=[]),str(source),'exec'),namespace)
             class Endpoint(BaseHTTPRequestHandler):
                 handle_read=namespace['handle_read']
+                send_json=namespace['send_json']
                 def refuse_sf3d_source(self,_):return False
                 def log_message(self,*_):pass
                 def do_GET(self):self.handle_read(parse_qs(urlparse(self.path).query))
             server=ThreadingHTTPServer(('127.0.0.1',0),Endpoint)
             thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
             try:
-                for name,body in [('mesh.glb',b'glTF'+bytes(range(256))*4),('image.png',b'\x89PNG\r\n\x1a\n'),('mesh.ply',b'ply\nend_header\n')]:
+                for name,body in [('mesh.glb',b'glTF'+bytes(range(256))*4),('image.png',b'\x89PNG\r\n\x1a\n'),('mesh.ply',b'ply\nend_header\n'),('alpha.u8',bytes(range(256))),('features.f16',b'\x00\xbc\xff\x7b')]:
                     (root/name).write_bytes(body)
                     with urlopen(f'http://127.0.0.1:{server.server_port}/api/read?root=asset&path={name}') as response:
                         self.assertEqual(response.status,200)
