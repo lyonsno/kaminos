@@ -7,8 +7,8 @@ const {Fn,NodeUpdateType,uniform,texture,sampler,passTexture,context,uv,screenUV
 import {resolveReflectionSettings} from './scene-reflection-settings.mjs';
 export {resolveReflectionSettings} from './scene-reflection-settings.mjs';
 
-const sample=wgslFn(`fn reflectionSampleEntry(coords:vec2<f32>,depthMap:texture_depth_2d,colorMap:texture_2d<f32>,colorSampler:sampler,normalMap:texture_2d<f32>,projection:mat4x4<f32>,inverseProjection:mat4x4<f32>,maxDistance:f32,thickness:f32,nearPlane:f32,steps:u32,frame:u32,roughnessCutoff:f32)->vec4<f32>{
- return sampleSceneReflection(coords,depthMap,colorMap,colorSampler,normalMap,projection,inverseProjection,maxDistance,thickness,nearPlane,steps,frame,roughnessCutoff);
+const sample=wgslFn(`fn reflectionSampleEntry(coords:vec2<f32>,depthMap:texture_depth_2d,colorMap:texture_2d<f32>,colorSampler:sampler,normalMap:texture_2d<f32>,projection:mat4x4<f32>,inverseProjection:mat4x4<f32>,maxDistance:f32,thickness:f32,nearPlane:f32,steps:u32,frame:u32,roughnessCutoff:f32,samples:u32,stable:bool)->vec4<f32>{
+ return sampleSceneReflection(coords,depthMap,colorMap,colorSampler,normalMap,projection,inverseProjection,maxDistance,thickness,nearPlane,steps,frame,roughnessCutoff,samples,stable);
 }`,[wgsl(SCENE_REFLECTION_QUERY_WGSL)]);
 
 export default class SceneReflections extends Node{
@@ -22,6 +22,7 @@ export default class SceneReflections extends Node{
   this.updateBeforeType=NodeUpdateType.FRAME;this.frames=0;this.pendingHistoryFrames=0;this.valid=uniform(false);this.frame=uniform(0,'uint');this.size=uniform(new Vector2(1,1));
   this.projection=uniform(camera.projectionMatrix);this.inverseProjection=uniform(camera.projectionMatrixInverse);this.near=uniform(camera.near);
   this.distance=uniform(50);this.thickness=uniform(.15);this.steps=uniform(64,'uint');this.cutoff=uniform(.95);this.historyWeight=uniform(.85);
+  this.samples=uniform(1,'uint');this.stable=uniform(false);
   this.depth=source.getTextureNode('depth');this.normal=source.getTextureNode('normal');this.color=source.getTextureNode('output');
   this.radiance=new RenderTarget(1,1,{type:HalfFloatType,depthBuffer:false,minFilter:LinearMipmapLinearFilter,magFilter:LinearFilter,generateMipmaps:true});
   this.radiance.texture.name='SSR foreground HDR source pyramid';
@@ -62,6 +63,7 @@ export default class SceneReflections extends Node{
   const next=resolveReflectionSettings({...this.settings,...value});
   if(JSON.stringify(next)!==JSON.stringify(this.settings))this.reset('settings');
   this.settings=next;this.distance.value=next.maxDistance;this.thickness.value=next.thickness;this.steps.value=next.steps;this.cutoff.value=next.roughnessCutoff;this.historyWeight.value=next.temporal?Math.fround(next.historyWeight):0;
+  this.samples.value=next.samples;this.stable.value=next.sampling==='stable';
   this.requestFrames();
   return this.state();
  }
@@ -71,7 +73,7 @@ export default class SceneReflections extends Node{
  needsFrame(){return this.syncSupport().effective&&this.settings.temporal&&this.pendingHistoryFrames>0;}
  reset(reason='scene-change'){this.valid.value=false;this.resetReason=reason;this.requestFrames();}
  state(){const support=this.syncSupport();return {...this.settings,...support,route:'kaminos-screen-reflection-radiance-v1',frames:this.frames,resolution:this.size.value.toArray(),valid:this.valid.value,resetReason:this.resetReason,
-  materialResponse:'existing-physical-base-specular-once',worldGeometry:false,history:'stationary-camera-geometry-validated-neighborhood-clamped',samplesPerTracingPixel:1,
+  materialResponse:'existing-physical-base-specular-once',worldGeometry:false,history:'stationary-camera-geometry-validated-neighborhood-clamped',samplesPerTracingPixel:this.settings.samples,samplingSequence:this.settings.sampling==='stable'?'coherent-hammersley':'frame-hashed-white-noise',
   sourceFiltering:'visible-GGX-pdf-footprint-mips',sourcePyramidFrames:this.radianceFrames,sourcePyramidResolution:[this.radiance.width,this.radiance.height],pendingHistoryFrames:this.pendingHistoryFrames,historyRemainderTarget:.01,effectiveHistoryWeight:this.historyWeight.value};}
  forSurface(){
   return Fn(()=>{
@@ -103,7 +105,7 @@ export default class SceneReflections extends Node{
   const covered=float(this.depth.sample(uv()).r.lessThan(1));
   this.radianceMaterial.fragmentNode=vec4(this.color.sample(uv()).rgb.mul(covered),covered);
   this.traceMaterial.contextNode=context(shared);
-  this.traceMaterial.fragmentNode=sample({coords:uv(),depthMap:this.depth,colorMap:this.filteredColor,colorSampler:sampler(this.filteredColor),normalMap:this.normal,projection:this.projection,inverseProjection:this.inverseProjection,maxDistance:this.distance,thickness:this.thickness,nearPlane:this.near,steps:this.steps,frame:this.frame,roughnessCutoff:this.cutoff});
+  this.traceMaterial.fragmentNode=sample({coords:uv(),depthMap:this.depth,colorMap:this.filteredColor,colorSampler:sampler(this.filteredColor),normalMap:this.normal,projection:this.projection,inverseProjection:this.inverseProjection,maxDistance:this.distance,thickness:this.thickness,nearPlane:this.near,steps:this.steps,frame:this.frame,roughnessCutoff:this.cutoff,samples:this.samples,stable:this.stable});
   const resolved=property('vec4'),surface=property('vec4'),metricDepth=property('float');
   this.filterMaterial.contextNode=context(shared);
   this.filterMaterial.colorNode=Fn(()=>{

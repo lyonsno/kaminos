@@ -77,3 +77,20 @@ test('glossy capture admission rejects repeated reflection and pyramid frames',a
  const stalePyramid=structuredClone(valid);stalePyramid.small.frames[1].pyramid--;
  assert.throws(()=>assertGlossySourceEvidence(stalePyramid),/fresh source-pyramid frame/);
 });
+
+test('the document reflection writer synchronizes initialized controls without adding history',async()=>{
+ const {readFileSync}=await import('node:fs'),{runInNewContext}=await import('node:vm');
+ const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const a=source.indexOf('  restoreSceneReflectionSettings='),b=source.indexOf('\n',a);
+ let runtime={enabled:false,resolutionScale:.5,steps:64},display={...runtime},writes=0;
+ const context={writeReflections:value=>{runtime={...runtime,...value};writes++;},reflectionControls:{sync:()=>{display={...runtime};}}};
+ runInNewContext(source.slice(a,b),context);
+ context.restoreSceneReflectionSettings({enabled:true,resolutionScale:.25,steps:6});
+ assert.equal(writes,1);assert.deepEqual(display,runtime,'visible controls describe the restored settings');
+});
+
+test('reflection sample budgets and sequence identity are explicit and validated',()=>{
+ assert.equal(resolveReflectionSettings().samples,1);assert.equal(resolveReflectionSettings().sampling,'stochastic');
+ for(const bad of [{samples:0},{samples:1.5},{samples:4294967296},{sampling:'hidden-fallback'}])assert.throws(()=>resolveReflectionSettings(bad));
+ const value=resolveReflectionSettings({samples:8,sampling:'stable',steps:6,resolutionScale:.3});assert.equal(value.samples,8);assert.equal(value.sampling,'stable');
+});

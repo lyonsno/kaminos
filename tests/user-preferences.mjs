@@ -77,3 +77,11 @@ test('agent defaults are explicitly selected before Workbench entry and never re
  assert.equal(resolveStartupSceneDefaults(stored,'/?experiment=material-study').defaults,null,'ordinary experiment behavior stays explicit');
  assert.throws(()=>resolveStartupSceneDefaults(stored,'/?defaults=typo'),/defaults profile/);
 });
+
+test('reflection performance defaults are validated and survive preference capture and scene construction',()=>{
+ const reflection={enabled:true,resolutionScale:.3,steps:6,maxDistance:75,temporal:false};
+ const defaults=sceneDefaultsFromDocument({...blank(),postprocessing:{reflections:reflection}});
+ const saved=checkedPreferences({schema:PREFERENCES_SCHEMA,sceneDefaults:defaults});
+ assert.deepEqual(newSceneDocument(blank(),saved.sceneDefaults).postprocessing.reflections,reflection);
+ for(const bad of [{steps:0},{steps:1.5},{resolutionScale:0},{resolutionScale:2},{enabled:'yes'},{historyWeight:1}])assert.throws(()=>checkedPreferences({schema:PREFERENCES_SCHEMA,sceneDefaults:{postprocessing:{reflections:bad}}}));
+});

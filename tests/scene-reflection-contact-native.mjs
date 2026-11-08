@@ -28,7 +28,7 @@ test('production reflection query retains nearby distinct surfaces independently
      let gap=select(0.02,0.08,id.x==2u);let thickness=select(0.15,0.3,id.x==1u);
      let hit=traceSceneReflection(vec3<f32>(0.0,0.0,-2.0+gap),normalize(vec3<f32>(0.6,0.0,-1.0)),
       depths,colors,filtered,normals,${matrix(camera.projectionMatrix)},${matrix(camera.projectionMatrixInverse)},
-      0.4,thickness,0.1,64u,vec3<f32>(0.0,0.0,1.0),vec3<f32>(0.0,0.0,1.0),0.1);
+      0.4,thickness,0.1,64u,vec3<f32>(0.0,0.0,1.0),vec3<f32>(0.0,0.0,1.0),0.1,25.0/3.0);
      results[id.x]=vec4<f32>(f32(hit.kind),hit.distance,hit.confidence,hit.radiance.r);
     }`});
    const pipeline=await device.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint:'main'}});

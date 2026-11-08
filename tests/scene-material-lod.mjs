@@ -1,3 +1,4 @@
+// kaminos-test: node
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.core.js';
@@ -35,4 +36,22 @@ test('an LOD that merges independently assigned source slots keeps truthful hero
  materials=createSceneMaterials({entries:()=>[{id:'asset',object:root}],definitions,representations:e=>controller.materialRoots(e.object)});
  const camera=new THREE.PerspectiveCamera(50,1,.01,100);camera.position.z=3;camera.lookAt(0,0,0);camera.updateProjectionMatrix();
  try{materials.write({recipes:[recipe],bindings:[{objectId:'asset',slot:'0:0',recipeId:'finish'}]});controller.update(camera);await controller.whenIdle();const state=controller.update(camera);assert.equal(state.objects[0].displayedTier,'hero');assert.match(state.objects[0].materialFallback,/slots/);assert.equal(state.totalFaces,600);assert.equal(state.withinBudget,false);}finally{materials.clear();controller.dispose();}
+});
+
+test('an asynchronously arriving repeated LOD restores source materials after unassignment',async()=>{
+ const scene=new THREE.Scene(),root=new THREE.Group(),base=new THREE.MeshStandardMaterial({roughness:.9});
+ root.add(new THREE.Mesh(new THREE.BoxGeometry(1,1,1,8,8,8),base));
+ const repetition=new THREE.Group();repetition.userData.kaminosRepetitionCopy=true;repetition.position.x=1.5;root.add(repetition);scene.add(root);
+ root.userData.kaminosSceneObject={id:'asset',source:'/api/read?root=generated-meshes&path='+('a'.repeat(64))+'.glb'};
+ const level={sha:'b'.repeat(64),faces:12,purpose:'beauty',error:{relative:{p95:0,max:0,mean:0}}},handle={root,levels:[level],beautyLevels:[level]};
+ let materials;const controller=createSceneBeautyLodController({THREE,scene,giProxies:{list:()=>[handle],get:()=>handle},settings:{faceBudget:100,texelWeight:0},loadLevel:async()=>new THREE.Group().add(new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshStandardMaterial({roughness:.9}))),onRungLoaded:()=>materials?.sync(),onRepresentationChanged:()=>materials?.sync(),onRepresentationReleased:(_root,copy)=>materials.releaseObject(copy)});
+ materials=createSceneMaterials({entries:()=>[{id:'asset',object:root}],definitions,representations:e=>controller.materialRoots(e.object)});
+ const camera=new THREE.PerspectiveCamera(50,1,.01,100);camera.position.z=3;camera.lookAt(0,0,0);camera.updateProjectionMatrix();
+ try{
+  materials.write({recipes:[recipe],bindings:[{objectId:'asset',slot:'0:0',recipeId:'finish'}]});controller.update(camera);await controller.whenIdle();controller.update(camera);
+  const representations=controller.materialRoots(root);assert.equal(representations.length,2,'primary and repeated reduced geometry are resident');
+  for(const r of representations)assert.equal(r.children[0].material.roughness,.23);
+  materials.write({recipes:[recipe],bindings:[]});
+  for(const r of representations)assert.equal(r.children[0].material.roughness,.9,'unassignment restores the source on every displayed representation');
+ }finally{materials.clear();controller.dispose();}
 });

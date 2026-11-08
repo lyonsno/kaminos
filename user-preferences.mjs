@@ -3,6 +3,7 @@ import {checkedViewportDisplay} from './viewport-display-settings.mjs';
 import {checkedCameraView} from './scene-camera-views.mjs';
 import {resolveSceneGIControlState} from './scene-gi-settings.mjs';
 import {createSceneAOState} from './scene-ao-state.mjs';
+import {resolveReflectionSettings} from './scene-reflection-settings.mjs';
 import {STUDIO_LOOK_LIBRARY} from './asset-arrival.mjs';
 export const PREFERENCES_SCHEMA='kaminos.preferences.v1';
 const copy=value=>structuredClone(value);
@@ -42,6 +43,7 @@ export function checkedSceneDefaults(raw){
  if(value.sceneCamera){const aspect=value.sceneCamera.aspect;if(!Array.isArray(aspect)||aspect.length!==2||!aspect.every(n=>Number.isFinite(n)&&n>0)||value.sceneCamera.activeId!=null)throw Error('Default output needs a positive aspect and no active scene camera');}
  if(value.postprocessing?.sceneGI)resolveSceneGIControlState(value.postprocessing.sceneGI);
  if(value.postprocessing?.ao)createSceneAOState().restoreDocument(value.postprocessing.ao);
+ if(value.postprocessing?.reflections)resolveReflectionSettings(value.postprocessing.reflections);
  if(value.environment){
   const env=value.environment;if(env.backgroundBlur>1)throw Error('Default environment blur must be between 0 and 1');if(typeof env.name!=='string'||!env.name)throw Error('Choose a default environment');
   for(const key of ['exposure','intensity','backgroundBlur','backgroundBrightness','backgroundContrast'])if(Object.hasOwn(env,key)&&(typeof env[key]!=='number'||env[key]<0))throw Error('Invalid default environment '+key);

@@ -17,6 +17,15 @@ fn reflectionRandom(pixel: vec2<u32>, frame: u32) -> vec2<f32> {
   v = (v ^ (v >> 16u)) * 2246822519u;
   return vec2<f32>(x, f32(v & 16777215u) / 16777216.0);
 }
+// A coherent Hammersley set buys a deterministic angular approximation inside
+// each frame. Unlike freezing one random ray, every pixel integrates the lobe.
+// The centred radical-inverse bins avoid the exact GGX endpoints at any budget.
+fn reflectionSamplePoint(index:u32, count:u32, pixel:vec2<u32>, frame:u32, stable:bool) -> vec2<f32> {
+  if (!stable) { return reflectionRandom(pixel, frame * count + index); }
+  var bits = index; var inverse = 0.0; var place = 0.5;
+  for (var i=0u; i<32u; i++) { inverse += f32(bits & 1u) * place; bits >>= 1u; place *= 0.5; }
+  return vec2<f32>((f32(index) + 0.5) / f32(count), inverse + 0.5 / exp2(ceil(log2(f32(count)))));
+}
 // Spherical-cap visible-GGX sampling, in a frame whose Z axis is the normal.
 fn reflectionGGX(view: vec3<f32>, normal: vec3<f32>, perceptualRoughness: f32, xi: vec2<f32>) -> vec3<f32> {
   let helper = select(vec3<f32>(0.0, 0.0, 1.0), vec3<f32>(1.0, 0.0, 0.0), abs(normal.z) > 0.999);
@@ -35,9 +44,9 @@ fn reflectionGGX(view: vec3<f32>, normal: vec3<f32>, perceptualRoughness: f32, x
 // Visible-GGX reflection-direction density. The ray represents a finite solid
 // angle, rather than one arbitrarily bright source texel. The reconstruction's
 // centre/neighbor weights (1 and eight .5s) give 25/3 effective spatial samples.
-fn reflectionSourceLevel(view: vec3<f32>, normal: vec3<f32>, direction: vec3<f32>, roughness: f32,
+fn reflectionSourceLevelForSamples(view: vec3<f32>, normal: vec3<f32>, direction: vec3<f32>, roughness: f32,
   hitPosition: vec3<f32>, hitNormal: vec3<f32>, distance: f32,
-  projection: mat4x4<f32>, dimensions: vec2<u32>) -> f32 {
+  projection: mat4x4<f32>, dimensions: vec2<u32>, effectiveSamples:f32) -> f32 {
   let alpha = max(roughness * roughness, 0.001);
   let a2 = alpha * alpha;
   let halfVector = normalize(view + direction);
@@ -51,15 +60,18 @@ fn reflectionSourceLevel(view: vec3<f32>, normal: vec3<f32>, direction: vec3<f32
   let cameraCosine = abs(dot(hitNormal, normalize(-hitPosition)));
   let rayCosine = max(abs(dot(hitNormal, direction)), 0.0001);
   let area = distance * distance * focal.x * focal.y * cameraCosine /
-    ((25.0 / 3.0) * pdf * hitPosition.z * hitPosition.z * rayCosine);
+    (effectiveSamples * pdf * hitPosition.z * hitPosition.z * rayCosine);
   return max(0.0, 0.5 * log2(max(area, 1.0)));
+}
+fn reflectionSourceLevel(view:vec3<f32>,normal:vec3<f32>,direction:vec3<f32>,roughness:f32,hitPosition:vec3<f32>,hitNormal:vec3<f32>,distance:f32,projection:mat4x4<f32>,dimensions:vec2<u32>) -> f32 {
+  return reflectionSourceLevelForSamples(view,normal,direction,roughness,hitPosition,hitNormal,distance,projection,dimensions,25.0/3.0);
 }
 fn traceSceneReflection(
   origin: vec3<f32>, direction: vec3<f32>,
   depthMap: texture_depth_2d, colorMap: texture_2d<f32>, colorSampler: sampler, normalMap: texture_2d<f32>,
   projection: mat4x4<f32>, inverseProjection: mat4x4<f32>,
   maxDistance: f32, thickness: f32, nearPlane: f32, steps: u32,
-  view: vec3<f32>, normal: vec3<f32>, roughness: f32
+  view: vec3<f32>, normal: vec3<f32>, roughness: f32, effectiveSamples:f32
 ) -> SceneReflectionHit {
   var hit: SceneReflectionHit;
   hit.radiance = vec3<f32>(0.0); hit.confidence = 0.0;
@@ -113,8 +125,8 @@ fn traceSceneReflection(
       let originExclusion = max(0.002, abs(origin.z) * 0.0002);
       if (d < 1.0 && penetration >= 0.0 && penetration <= thickness && dot(n, direction) < 0.0 && length(p - origin) > originExclusion) {
         let edge = min(min(hitUV.x, hitUV.y), min(1.0 - hitUV.x, 1.0 - hitUV.y));
-        let level = min(reflectionSourceLevel(view, normal, direction, roughness, p, normalize(n),
-          length(p - origin), projection, textureDimensions(colorMap)), f32(textureNumLevels(colorMap) - 1u));
+        let level = min(reflectionSourceLevelForSamples(view, normal, direction, roughness, p, normalize(n),
+          length(p - origin), projection, textureDimensions(colorMap),effectiveSamples), f32(textureNumLevels(colorMap) - 1u));
         let filtered = textureSampleLevel(colorMap, colorSampler, hitUV, level);
         hit.radiance = filtered.rgb / max(filtered.a, 0.00001);
         hit.confidence = smoothstep(0.0, 0.035, edge) * filtered.a;
@@ -129,18 +141,23 @@ fn traceSceneReflection(
 fn sampleSceneReflection(
   uv: vec2<f32>, depthMap: texture_depth_2d, colorMap: texture_2d<f32>, colorSampler: sampler, normalMap: texture_2d<f32>,
   projection: mat4x4<f32>, inverseProjection: mat4x4<f32>,
-  maxDistance: f32, thickness: f32, nearPlane: f32, steps: u32, frame: u32, roughnessCutoff: f32
+  maxDistance: f32, thickness: f32, nearPlane: f32, steps: u32, frame: u32, roughnessCutoff: f32,
+  samples:u32, stable:bool
 ) -> vec4<f32> {
   let dimensions = vec2<i32>(textureDimensions(depthMap));
   let pixel = clamp(vec2<i32>(uv * vec2<f32>(dimensions)), vec2<i32>(0), dimensions - vec2<i32>(1));
   let d = textureLoad(depthMap, pixel, 0); let nr = textureLoad(normalMap, pixel, 0);
   if (d >= 1.0 || nr.w >= roughnessCutoff || dot(nr.xyz, nr.xyz) < 0.5) { return vec4<f32>(0.0); }
   let p = reflectionViewPosition(uv, d, inverseProjection); let n = normalize(nr.xyz);
-  let direction = reflectionGGX(normalize(-p), n, nr.w, reflectionRandom(vec2<u32>(pixel), frame));
-  if (dot(direction, n) <= 0.0) { return vec4<f32>(0.0); }
   let origin = p + n * max(0.002, abs(p.z) * 0.0002);
-  let hit = traceSceneReflection(origin, direction, depthMap, colorMap, colorSampler, normalMap, projection, inverseProjection,
-    maxDistance, thickness, nearPlane, steps, normalize(-p), n, nr.w);
-  return vec4<f32>(hit.radiance * hit.confidence, hit.confidence);
+  var result=vec4<f32>(0.0);
+  for(var i=0u;i<samples;i++) {
+    let direction = reflectionGGX(normalize(-p), n, nr.w, reflectionSamplePoint(i,samples,vec2<u32>(pixel),frame,stable));
+    if (dot(direction, n) <= 0.0) { continue; }
+    let hit = traceSceneReflection(origin, direction, depthMap, colorMap, colorSampler, normalMap, projection, inverseProjection,
+      maxDistance, thickness, nearPlane, steps, normalize(-p), n, nr.w,f32(samples)*select(25.0/3.0,1.0,stable));
+    result+=vec4<f32>(hit.radiance * hit.confidence, hit.confidence);
+  }
+  return result/f32(samples);
 }
 `;

@@ -20,6 +20,23 @@ const gi=createSceneGI(scene,camera,THREE.TSL.uniform(0),{renderer,reflections:{
 gi.setSettings({mode:'combined',gain:0,denoise:0,temporal:false,slices:1,steps:2});
 const pipeline=new THREE.RenderPipeline(renderer);
 window.reflectionAssay={
+ async samplingFrames({settings,roughness=.35,views}){
+  if(!Array.isArray(views)||!views.length)throw Error('Explicit replay camera sequence required');
+  floor.material.roughness=roughness;gi.reflections.setSettings(settings);
+  pipeline.outputNode=gi.output();pipeline.needsUpdate=true;
+  const frames=[],before=gi.reflections.state();
+  for(const view of views){
+   camera.position.fromArray(view);camera.lookAt(0,.5,0);camera.updateMatrixWorld();
+   await new Promise(requestAnimationFrame);pipeline.render();await renderer.backend.device.queue.onSubmittedWorkDone();
+   const target=gi.reflections.raw;
+   const values=await renderer.readRenderTargetPixelsAsync(target,0,0,target.width,target.height);
+   const row=target.height>1?(values.length-target.width*4)/(target.height-1):target.width*4;
+   if(!Number.isInteger(row)||row<target.width*4)throw Error('Invalid reflection readback row layout');
+   const raw=[];for(let y=0;y<target.height;y++)for(let x=0;x<target.width*4;x++)raw.push(THREE.DataUtils.fromHalfFloat(values[y*row+x]));
+   frames.push({camera:camera.position.toArray(),state:gi.reflections.state(),readback:{elements:values.length,rowElements:row},raw});
+  }
+  return {before,frames};
+ },
  async transport(){
   const matte=new THREE.Mesh(new THREE.SphereGeometry(.35,16,12),new THREE.MeshStandardMaterial({color:0x00ff00,roughness:1}));matte.position.set(1.3,.4,0);
   const unlit=new THREE.Mesh(new THREE.BoxGeometry(.5,.5,.5),new THREE.MeshBasicMaterial({color:0x0000ff}));unlit.position.set(-1.3,.3,0);scene.add(matte,unlit);

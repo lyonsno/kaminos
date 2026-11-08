@@ -23,6 +23,7 @@ import {geometrySignature, textureInfo} from './lod-textures.mjs';
 import {allocateTextureLods, createTextureResidency, inspectRootTextures} from './scene-lod-textures.mjs';
 import {readSurfelGLBExtension, attachStoredSurfelLevels} from './trellis-surfels.mjs';
 import {presentedSurface} from './scene-presented-surface.mjs';
+import {sourceRecipeMaterial} from './scene-material-recipes.mjs';
 
 const digestHex = async bytes =>
   Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('');
@@ -807,7 +808,8 @@ function cloneBorrowedRung(THREE, node, existing = null) {
   const copy = existing ?? (node.isMesh ? new THREE.Mesh() : new THREE.Group());
   if(node.isMesh){
     copy.geometry=node.geometry;
-    copy.material=node.userData?.kaminosOriginalMaterial ?? node.material;
+    const material=node.userData?.kaminosOriginalMaterial ?? node.material;
+    copy.material=Array.isArray(material)?material.map(sourceRecipeMaterial):sourceRecipeMaterial(material);
   }
   copy.name = node.name;
   copy.layers.mask = node.layers.mask;

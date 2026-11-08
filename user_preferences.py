@@ -7,6 +7,7 @@ import json
 import math
 import os
 import tempfile
+import struct
 
 SCHEMA = 'kaminos.preferences.v1'
 
@@ -67,6 +68,16 @@ def _scene_defaults(defaults, label):
         ao = _settings_object(post['ao'], 'Ambient occlusion')
         _booleans(ao, ('enabled',))
         _numbers(ao, ('radius','intensity','scale','thickness','falloff','farBlend'))
+    if 'reflections' in post:
+        reflections = _settings_object(post['reflections'], 'Reflections')
+        _booleans(reflections, ('enabled','temporal'))
+        _numbers(reflections, ('steps','samples'), positive=True, integer=True, maximum=4294967295)
+        _numbers(reflections, ('resolutionScale','roughnessCutoff'), positive=True, maximum=1)
+        _numbers(reflections, ('maxDistance','thickness'), positive=True)
+        _numbers(reflections, ('historyWeight',), maximum=1)
+        if struct.unpack('f', struct.pack('f', reflections.get('historyWeight', 0)))[0] >= 1:
+            raise ValueError('Reflection history weight must remain below one at float32 precision')
+        _choices(reflections, {'sampling': ('stochastic','stable')})
     # Match the unchanged fixed-range consumers; arbitrary valid GI fractions
     # remain untouched. Unknown/additive settings are retained verbatim.
     ranges = [('backdropBrightness', defaults, .1, 2, .05)]

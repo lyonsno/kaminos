@@ -1,10 +1,16 @@
 // Authored identity and parameters are JSON. Programs and GPU resources stay code-owned.
 const copy=value=>structuredClone(value);
+// Keep authored program instances separate from the resident source appearance.
+// Texture residency and borrowed geometry must reach the material restored on
+// unassignment without imposing source maps on an independent program.
+const programSources=new WeakMap();
+export const materialProgramSource=material=>programSources.get(material);
+export function sourceRecipeMaterial(material){while(programSources.has(material))material=programSources.get(material).source;return material;}
 const color=(label,value)=>{if(typeof value!=='string'||!/^#[\da-f]{6}$/i.test(value))throw Error(`${label} requires a hex color`);return value;};
 const number=(label,value,min,max)=>{if(!Number.isFinite(value)||value<min||value>max)throw Error(`${label} must be between ${min} and ${max}`);return value;};
 const surfaceFields=[{key:'color',label:'Color',type:'color',default:'#92979c'},{key:'roughness',label:'Roughness',type:'number',min:0,max:1,step:.01,default:.55},{key:'metalness',label:'Metallic',type:'number',min:0,max:1,step:.01,default:.05}];
 export const materialDefinitions=[
- {id:'asset-surface',version:1,title:'Asset surface',description:'Preserves this slot’s source textures and shading; overrides its finish.',fields:surfaceFields},
+ {id:'asset-surface',version:1,preservesSourceMaps:true,title:'Asset surface',description:'Preserves this slot’s source textures and shading; overrides its finish.',fields:surfaceFields},
  {id:'standard-surface',version:1,title:'Standard surface',description:'A complete standard surface, independent of the source textures.',fields:surfaceFields},
  {id:'kiln-glaze',version:1,supportsBurning:false,title:'Kiln glaze',description:'Code-authored ceramic glaze: fired color variation, glaze coverage, micro relief and clear coat.',fields:[
   {key:'clay',label:'Clay',type:'color',default:'#43251d'},{key:'glaze',label:'Glaze',type:'color',default:'#4aafaa'},
@@ -105,6 +111,7 @@ export function createSceneMaterials({entries,definitions,retainedEntries=()=>[]
      if(!definition.create)throw Error('Material runtime unavailable: '+recipe.implementation);
      const program=definition.create({base,parameters:copy(recipe.parameters)});
      if(!program?.material||typeof program.update!=='function'||typeof program.dispose!=='function')throw Error('Invalid material program: '+recipe.implementation);
+     programSources.set(program.material,{source:base,preservesMaps:definition.preservesSourceMaps===true});
      staged.set(id,{slot,base,program,recipe,owner:entry.object,ownerEntry:entry});
     }
    }

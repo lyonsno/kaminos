@@ -7,6 +7,8 @@ import * as THREE from '../lib/three.webgpu.js';
 import {createSceneBurnBody,originalBurnMaterial} from '../scene-burn-body.mjs';
 import {cloneSceneRadianceMaterial} from '../scene-radiance.mjs';
 import {createRepetitionView} from '../scene-repetition.mjs';
+import {createSceneMaterials} from '../scene-material-recipes.mjs';
+import {sceneMaterialPrograms} from '../scene-material-programs.mjs';
 import {createTextureResidency} from '../scene-lod-textures.mjs';
 import {encodeTrellisPbrGLB} from '../models/trellis2/trellis-material.js';
 import {buildTextureVariants,geometrySignature} from '../lod-textures.mjs';
@@ -59,4 +61,21 @@ test('ordinary repetition copies keep selected maps after actual lighting instal
   assert.equal(currentCopy.material.map,hero.material.map,'lighting clones must share the newly selected map');
   assert.equal(currentCopy.material,installed,'appearance does not discard lighting adaptation');
   residency.dispose();view.clear(root);
+});
+
+for(const implementation of ['asset-surface','standard-surface'])test('texture residency preserves source and '+implementation+' map policy during assignment',async()=>{
+ const {root,residency,variants}=await fixture(),base=root.children[0].material;
+ const entry={id:'asset',object:root},materials=createSceneMaterials({entries:()=>[entry],definitions:sceneMaterialPrograms});
+ const recipe={id:'finish',name:'Finish',implementation,version:1,parameters:{color:'#aa5533',roughness:.23,metalness:.8}};
+ try{
+  materials.write({recipes:[recipe],bindings:[{objectId:entry.id,slot:'0:0',recipeId:recipe.id}]});
+  const authored=root.children[0].material,prior=base.map;
+  residency.request(root,variants[0],{});await residency.whenIdle();materials.sync();
+  assert.notEqual(base.map,prior,'resident source receives selected maps while a recipe is assigned');
+  assert.equal(authored.map,implementation==='asset-surface'?base.map:null,'program map policy survives automatic residency');
+  const selected=base.map;
+  materials.write({recipes:[recipe],bindings:[]});
+  assert.equal(root.children[0].material,base);assert.equal(base.map,selected);
+  assert.equal(residency.state(root).displayedSha,variants[0].sha256);
+ }finally{materials.clear();residency.dispose();}
 });

@@ -81,3 +81,21 @@ inheritance decision without applying them. `startup()` reports `requested`,
 `effective`, `usesDefaults`, `settled` and `reason`; an existing-object/edit guard
 or a failed startup cannot claim that the selected settings applied. `capture()`
 continues returning the actual complete scene settings without saving anything.
+
+The **Scene reflections** section also stores reflection enablement, linear
+resolution scale, march steps, glossy ray count, sampling sequence, distance,
+depth tolerance, roughness cutoff and temporal filtering. Both New scenes and
+Agent runs use these fields through the same preference file. Saved scenes keep
+their authored reflection settings; changing a preference draft does not change
+the open scene.
+
+Trace steps advance each reflection ray through the scene depth buffer. Glossy
+rays integrate directions across the material's roughness lobe. **Changing
+samples** uses a frame-varying random sequence; **Stable approximation** uses a
+coherent Hammersley set within every frame. The latter trades temporal sampling
+noise for finite angular approximation error, including possible structured
+artifacts. It does not reveal hidden or off-screen geometry, and camera motion
+can still expose depth and reconstruction discontinuities. It is available for
+comparison without replacing the existing stochastic sequence. The working
+factory tune is six march steps and 33% width/height; larger scenes or thin
+features can require more steps. These are defaults, not enforced budgets.
