@@ -1,5 +1,7 @@
 import {createFlameInspector} from './flame-authoring.mjs';
 import {GRID_TUNING_FIELDS} from './volume-grid-tuning.mjs';
+import {WORLD_CALIBRATION_FIELDS,SIMULATION_LEVER_FIELDS,captureWorldCalibration} from './volume-world-calibration.mjs';
+import {installSceneControlHistory} from './scene-control-history.mjs';
 export function setFireUnitControlValue(node,value){
  if(node.type==='checkbox'){node.checked=value;return;}
  if(GRID_TUNING_FIELDS.some(([,id])=>id===node.id)&&node.tagName==='SELECT'&&String(value).trim()!==''&&Number.isFinite(Number(value))&&!Array.from(node.options).some(o=>o.value===String(value))){const option=node.ownerDocument.createElement('option');option.value=String(value);option.textContent=String(value);node.append(option);}
@@ -26,8 +28,9 @@ export function mountFireUnitAuthoring({document,root,owner,edits,target,seedSet
  let applying=false,inspector;
  function write(label='Tune fire simulation',nextSettings=snapshot()){
   const next={...owner.capture(),settings:nextSettings,controls:compile(copy,nextSettings)};
-  applying=true;try{edits.apply(target,next,label);}finally{applying=false;}inspector?.sync();
+  applying=true;try{if(edits.state().active?.id===target)edits.preview(next);else edits.apply(target,next,label);}finally{applying=false;}inspector?.sync();
  }
+ function writeCalibration(patch,label='Tune simulation world scale'){for(const f of [...WORLD_CALIBRATION_FIELDS,...SIMULATION_LEVER_FIELDS])if(Object.hasOwn(patch,f.key))setFireUnitControlValue(copy.getElementById(f.id),patch[f.key]);write(label);}
  const byId=id=>{let node=root.querySelector(`[data-fire-control-id="${id}"]`)??root.querySelector(`[id="${id}"]`)??copy.getElementById(id);
   if(!node){const source=document.getElementById(id);if(source){node=source.cloneNode(true);copy.body.append(node);}}return node;};
  const facade=new Proxy(document,{get(object,key){if(key==='getElementById')return byId;const v=Reflect.get(object,key,object);return typeof v==='function'?v.bind(object):v;}});
@@ -42,6 +45,8 @@ export function mountFireUnitAuthoring({document,root,owner,edits,target,seedSet
   readAppearanceRuntime:()=>owner.runtime.debugState().physicsAppearance,
   readRaymarchRuntime:()=>owner.runtime.debugState().opticalStepping,
   gridTuning:{idPrefix:prefix,isEnabled:()=>!root.closest('[hidden]'),read:()=>owner.capture().controls,validate:c=>owner.runtime.validateGridControls(c),
+   calibration:{set:patch=>writeCalibration(patch),capture:()=>writeCalibration(captureWorldCalibration(owner.capture().controls,owner.root.scale.x),'Capture simulation world scale')},
+   bindLiveField:(input,label='Tune pressure iterations')=>installSceneControlHistory({controls:[input],edits,id:target,label,onError}),
    apply:patch=>{for(const [key,id]of GRID_TUNING_FIELDS)if(Object.hasOwn(patch,key))setFireUnitControlValue(copy.getElementById(id),patch[key]);write('Change simulation grids');},
    live:(key,value)=>{const id=GRID_TUNING_FIELDS.find(f=>f[0]===key)[1];setFireUnitControlValue(copy.getElementById(id),value);write('Tune pressure iterations');}},
  });
