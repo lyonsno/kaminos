@@ -103,14 +103,17 @@ test('crossing refinement is a distinct saved budget, with zero allowed and call
  for(const refinementSteps of [-1,1.5,4294967296])assert.throws(()=>resolveReflectionSettings({refinementSteps}),/refinement/i);
 });
 
-test('legacy scene restoration clears reflection history without replacing session settings',()=>{
+test('legacy scene restoration uses the renderer-owned writer without leaking its scope',()=>{
  const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
- const a=source.indexOf('  if(restorePlan.reflections)'),b=source.indexOf('  if (data.postprocessing)',a);
- assert.ok(a>=0&&b>a);
+ const writerStart=source.indexOf('  restoreSceneReflectionSettings='),writerEnd=source.indexOf('\n',writerStart);
+ const callerStart=source.indexOf('  restoreSceneReflectionSettings(restorePlan.reflections);'),callerEnd=source.indexOf('  if (data.postprocessing)',callerStart);
+ assert.ok(writerStart>=0&&writerEnd>writerStart&&callerStart>=0&&callerEnd>callerStart);
  for(const reflections of [null,{enabled:true}]){
-  const resets=[],writes=[],context={restorePlan:{reflections},restoreSceneReflectionSettings:value=>writes.push(value),sceneGI:{reflections:{reset:reason=>resets.push(reason)}}};
-  runInNewContext(source.slice(a,b),context);
-  if(reflections)assert.deepEqual(writes,[reflections]);
-  else {assert.deepEqual(writes,[]);assert.deepEqual(resets,['scene-restored']);}
+  const resets=[],writes=[];
+  const rendererScope={writeReflections:value=>writes.push(value),sceneGI:{reflections:{reset:reason=>resets.push(reason)}},reflectionControls:{sync(){}}};
+  runInNewContext(source.slice(writerStart,writerEnd),rendererScope);
+  const documentScope={restorePlan:{reflections},restoreSceneReflectionSettings:rendererScope.restoreSceneReflectionSettings};
+  runInNewContext(source.slice(callerStart,callerEnd),documentScope);
+  assert.deepEqual(writes,reflections?[reflections]:[]);assert.deepEqual(resets,['scene-restored']);
  }
 });

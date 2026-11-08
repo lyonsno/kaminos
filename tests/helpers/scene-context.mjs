@@ -40,6 +40,7 @@ const interactionFunctions=['currentBeautyFrameOptions','interactiveSceneRoots',
 // createWorkingScene itself; this double is not evidence for its invariants.
 export function sceneContext(context, options) {
   context.sceneMaterials??=createSceneMaterials({entries:()=>context.workingScene?.objects??[],definitions:sceneMaterialPrograms});
+  context.restoreSceneReflectionSettings??=()=>{};
   context.ashMembershipEntry??=ashMembershipEntry;
   context.ASH_OBJECT_TYPE??=ASH_OBJECT_TYPE;context.ASH_SOURCE_TYPE??=ASH_SOURCE_TYPE;
   context.authoredAsh??=new Map();context.ashEditTargets??=new Set();
