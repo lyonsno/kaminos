@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {fineGridPlan} from '../volume-fine-grid.mjs';
 import {pressureResolutionPlan} from '../volume-pressure-resolution.mjs';
-import {worldSmokePlan,intermediateSmokePlan} from '../volume-world-smoke.mjs';
+import {worldSmokePlan} from '../volume-world-smoke.mjs';
 
 test('independent widths cover an integer neighborhood in either resolution order',()=>{
  for(let velocity=2;velocity<=32;velocity++)for(let pressure=2;pressure<=32;pressure++){
@@ -14,8 +14,6 @@ test('independent widths cover an integer neighborhood in either resolution orde
   assert.equal(q.reason,null);assert.deepEqual(q.pressureDims,p.pressureDims);
   const w=worldSmokePlan({flow:velocity,pressure,material:17,extent:4});
   assert.deepEqual(w.pressureDims,[pressure,2*pressure,pressure]);
-  const m=intermediateSmokePlan(w,{flow:velocity,pressure,material:17,extent:2,fineHeightRatio:1});
-  assert.deepEqual(m.pressureDims,[pressure,pressure,pressure]);
  }
 });
 test('shape refusal describes physical tiling rather than imposing divisor choices',()=>{

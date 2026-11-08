@@ -7,7 +7,6 @@ import {resolvePressureSolverConfig} from './volume-core.js';
 // One planning operation shared by the inspector and runtime admission.
 export const GRID_TUNING_GROUPS = [
  {name:'Fine · flame',fields:[['resolution','volume-resolution','Material detail'],['gridHeightRatio','volume-grid-height-ratio','Height / width'],['fineVelocity','volume-fine-velocity','Velocity detail'],['finePressure','volume-fine-pressure','Pressure detail'],['pressureSolverIterations','volume-pressure-solver-iterations','Pressure iterations']]},
- {name:'Intermediate · transition',fields:[['worldSmokeIntermediate','volume-world-smoke-intermediate','Mode'],['intermediateExtent','volume-intermediate-extent','Width / fine width'],['intermediateMaterial','volume-intermediate-material','Material detail'],['intermediateFlow','volume-intermediate-flow','Velocity detail'],['intermediatePressure','volume-intermediate-pressure','Pressure detail'],['intermediateIterations','volume-intermediate-iterations','Pressure iterations']]},
  {name:'World · plume',fields:[['worldSmoke','volume-world-smoke','Enabled'],['worldSmokeExtent','volume-world-smoke-extent','Width / fine width'],['worldSmokeMaterial','volume-world-smoke-material','Material detail'],['worldSmokeFlow','volume-world-smoke-flow','Velocity detail'],['worldSmokePressure','volume-world-smoke-pressure','Pressure detail'],['worldSmokeIterations','volume-world-smoke-iterations','Pressure iterations'],['worldSmokeTransition','volume-world-smoke-transition','Momentum collar cells']]},
 ];
 export const GRID_TUNING_FIELDS=GRID_TUNING_GROUPS.flatMap(g=>g.fields);
@@ -23,13 +22,11 @@ export function gridTuningPlan(c,limits={},context={}) {
  const regions=c.worldSmoke==='on'?resolveWorldRegions(c,fine.materialDims):null;
  if(regions&&(!Number.isFinite(Number(c.worldSmokeTransition??0))||Number(c.worldSmokeTransition??0)<0))throw Error('Momentum collar must have a nonnegative finite reach');
  const rows=[{name:'Fine',...fine,pressureDims:pressure.pressureDims,pressureReason:pressure.reason,flowDims:fine.velocityDims,materialPitch:2/width,flowPitch:2/fine.velocityDims[0],pressurePitch:2/pressure.pressureDims[0],iterations:solver.iterations}];
- if(regions?.middle)rows.push({name:'Intermediate',...regions.middle,iterations:regions.middleIterations});
  if(regions)rows.push({name:'World',...regions.world,iterations:regions.worldIterations});
  for(const r of rows) {
   const fine=r.name==='Fine';const materialForcePlanes=fine&&r.materialPerVelocity===1&&Number(c.waveletTurbulence)>0?9:3;
   if(fine&&r.materialPerVelocity!==1&&Math.max(9*r.flowDims[0],r.flowDims[1])>(limits.maxTextureDimension3D??Infinity))throw Error('Fine velocity auxiliary textures exceed this GPU texture limit');
   for(const [kind,dims,bytesPerCell] of [['material',r.materialDims,fine?64:32],['velocity',r.flowDims,fine?64:16],['pressure',r.pressureDims,fine?64:8]]) {
-   if(!dims)continue; // The legacy middle flow borrows world material.
    if(dims.some(n=>n>(limits.maxTextureDimension3D??Infinity)) || (fine&&materialForcePlanes*width>(limits.maxTextureDimension3D??Infinity)))throw Error(`${r.name} ${kind} dimensions exceed this GPU's texture limit`);
    if(cells(dims)*bytesPerCell>Math.min(limits.maxStorageBufferBindingSize??Infinity,limits.maxBufferSize??Infinity))throw Error(`${r.name} ${kind} buffer exceeds this GPU's storage limit; reduce its width or extent height`);
   }
@@ -44,20 +41,4 @@ export function gridTuningSummary(row, fineWidth) {
  const count=n=>n.toLocaleString('en-US'),pitch=n=>Number(n.toPrecision(4));
  const entries=[['Material',row.materialDims,row.materialPitch],['Velocity',row.flowDims,row.flowPitch],['Pressure',row.pressureDims,row.pressurePitch??row.flowPitch*row.flowDims[0]/row.pressureDims[0]]];
  return entries.filter(([,d])=>d).map(([name,d,p])=>`${name}: ${d.join(' × ')} · ${count(cells(d))} cells · cell width ${pitch(p/(2/fineWidth))}× fine material`).join('\n')+(row.iterations===null?'\nPressure work: legacy spatial tiers':`\nPressure work: ${count(cells(row.pressureDims)*row.iterations)} cell-iterations / step`)+(row.pressureReason?`\nPressure fallback: ${row.pressureReason}`:'');
-}
-
-// Cubic cells require height/width to be integral on all three lattices.
-// Their gcd enumerates every compatible height, hence every finite extent > 1.
-export function intermediateCoverageChoices(c) {
- const values=['intermediateMaterial','intermediateFlow','intermediatePressure'].map(k=>Number(c[k]));
- if(values.some(n=>!Number.isSafeInteger(n)||n<2))return [];
- const gcd=(a,b)=>b?gcd(b,a%b):a,g=values.reduce(gcd);
- const ratio=resolveGridHeight(c,Number(c.resolution)).ratio;
- if(ratio===1)return []; // Every extent tiles; no fitting is needed.
- const choices=[];
- for(let k=1;k<g*(ratio-1);k++){
-  const extent=g*(ratio-1)/k;
-  try{gridTuningPlan({...c,intermediateExtent:extent});choices.push(extent);}catch{}
- }
- return choices.sort((a,b)=>a-b);
 }

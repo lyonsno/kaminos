@@ -12,11 +12,6 @@
 import {FINE_COVERAGE_FIELDS} from './volume-fine-coverage-controls.mjs';
 import {WORLD_CALIBRATION_FIELDS,SIMULATION_LEVER_FIELDS} from './volume-world-calibration.mjs';
 export const VOLUME_CONTROL_KINDS = Object.freeze(['physical', 'proxy', 'artistic', 'quality', 'conditional', 'diagnostic', 'capture', 'playback', 'inert']);
-export const INTERMEDIATE_GRID_MODE_DESCRIPTIONS = Object.freeze({
-  off: 'Off: Fine feeds the World grid directly; no Intermediate grid is allocated.',
-  on: 'Flow bridge: adds an automatically sized velocity and pressure grid around Fine, using material from the World grid. The Intermediate coverage, material, velocity, pressure and iteration fields are unused in this mode.',
-  fields: 'Own fields: gives Intermediate its own material, velocity and pressure grids, pressure iterations and coverage. It transports and reacts material from Fine before feeding World.',
-});
 export const VOLUME_CONTROL_DESCRIPTIONS = Object.freeze({
   ...Object.fromEntries(FINE_COVERAGE_FIELDS.map(field=>[field.id,{kind:'quality',tooltip:field.description}])),
   ...Object.fromEntries(WORLD_CALIBRATION_FIELDS.map(field=>[field.id,{kind:'physical',tooltip:field.description}])),
@@ -31,11 +26,6 @@ export const VOLUME_CONTROL_DESCRIPTIONS = Object.freeze({
   'volume-world-smoke-iterations': {kind:'quality',activeWhen:'World is on',tooltip:'Pressure sweeps per World step. More sweeps improve the pressure correction at added cost; they do not increase spatial resolution or add material detail.'},
   'volume-world-smoke-extent': {kind:'quality',activeWhen:'World is on',tooltip:'World width relative to Fine width. Increasing coverage at the same cell count makes World cells larger. The grid editor shows both coverage and cell spacing.'},
   'volume-world-smoke-transition': {kind:'quality',activeWhen:'World is on',tooltip:'Reach of the Fine-to-World momentum transfer, expressed here in World velocity cells. The grid editor exposes the same reach in Fine widths so it can stay fixed when velocity resolution changes.'},
-  'volume-intermediate-flow': {kind:'quality',activeWhen:'Intermediate = Own fields',tooltip:'Velocity cells across Intermediate in Own fields mode. Resolves motion between Fine and World. Flow bridge mode chooses its own velocity dimensions and ignores this value.'},
-  'volume-intermediate-material': {kind:'quality',activeWhen:'Intermediate = Own fields',tooltip:'Material cells across Intermediate in Own fields mode. Stores and reacts transported gas between Fine and World. Flow bridge borrows World material and ignores this value.'},
-  'volume-intermediate-pressure': {kind:'quality',activeWhen:'Intermediate = Own fields',tooltip:'Pressure cells across Intermediate in Own fields mode. Can be coarser than its velocity field to reduce correction cost. Flow bridge chooses its own pressure dimensions.'},
-  'volume-intermediate-iterations': {kind:'quality',activeWhen:'Intermediate = Own fields',tooltip:'Pressure sweeps per Intermediate step in Own fields mode. More sweeps improve pressure convergence at added cost. Flow bridge uses its automatic solve settings.'},
-  'volume-intermediate-extent': {kind:'quality',activeWhen:'Intermediate = Own fields',tooltip:'Intermediate width relative to Fine width in Own fields mode. At fixed cell counts, larger coverage gives coarser cells. Flow bridge sizes its region automatically.'},
   'volume-wavelet-octave1-weight': {kind:'artistic',activeWhen:'Wavelet turbulence enabled',tooltip:'Weight of the base wavelet octave, independent of the second octave. Adds smaller-scale material motion without changing the existing wavelengths or the solved velocity resolution.'},
   'volume-wavelet-octave2-weight': {kind:'artistic',activeWhen:'Wavelet turbulence enabled',tooltip:'Weight of the second wavelet octave, independent of the base octave. Controls the finest existing wavelet band; material transport evaluates it independently of velocity-grid detail.'},
   'volume-adaptive-material': {kind:'quality',activeWhen:'World is on',tooltip:'Refines material where reaction, mixing, heat and smoke request detail throughout World. Allocation follows the evolving gas within the extra material budget; velocity and pressure keep their configured grids.'},
@@ -55,8 +45,6 @@ export const VOLUME_CONTROL_DESCRIPTIONS = Object.freeze({
   'volume-smoke-interpolation': {kind:'artistic',activeWhen:'Display reconstruction enabled',tooltip:'Independent smoke opacity kernel: Smoothing averages samples; Interpolating passes through them but can overshoot; Local cubic passes through them without new segment extrema. Does not change soot production, albedo or dynamics.'},
   'volume-emission-smoothing': {kind:'artistic',activeWhen:'Display reconstruction enabled',tooltip:'Per-axis blend from linear at 0 to the selected cubic kernel at 1. Smoothing broadens peaks; Interpolating may sharpen or overshoot; Local cubic preserves segment bounds. Independent of smoke opacity.'},
   'volume-smoke-smoothing': {kind:'artistic',activeWhen:'Display reconstruction enabled',tooltip:'Per-axis blend from linear at 0 to the selected smoke cubic kernel at 1. Independent of emission. Changes only reconstructed smoke opacity, not soot production, albedo or dynamics.'},
-  "volume-world-smoke-intermediate": { kind: "quality", activeWhen: "World is on",
-    tooltip: 'Off: Fine feeds World directly. Flow bridge: automatic velocity/pressure only; borrows World material and ignores the Intermediate numeric fields. Own fields: independently tunable material, velocity, pressure, iterations and coverage; transports and reacts material between Fine and World.' },
   "volume-swirl-jostle": { kind: "artistic", activeWhen: "always (0 is off)",
     tooltip: "Authored force that shoves gas sideways across its own swirl wherever there is heat, smoke or fresh source, making the plume ragged at small scale. Stronger with Curl. 0 is off, 1 is the original force, 2 doubles it." },
   "emitter-assay-family": { kind: "conditional", activeWhen: "Shape matters under Filled volume, Shallow primary and Inflow boundary. Under Immersed source the shape is ignored (any non-Cluster family gives the same disc slab) and Cluster is refused.",

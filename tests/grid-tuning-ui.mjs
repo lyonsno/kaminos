@@ -16,9 +16,9 @@ class Element {
 const host=new Element('div'),body=new Element('body'),backing=Object.fromEntries(GRID_TUNING_FIELDS.map(([,id])=>[id,new Element('select')]));
 backing['volume-pressure-solver-iterations'].min='4';backing['volume-pressure-solver-iterations'].max='240';
 const document={body,activeElement:null,listeners:{},createElement:tag=>new Element(tag),getElementById:id=>backing[id],addEventListener(type,fn){this.listeners[type]=fn;}};
-let dragCount=0,liveCount=0;
+const draggedFields=new Set();let liveCount=0;
 let current={pressureSolver:'converged-open-top',resolution:64,gridHeightRatio:2,fineVelocity:32,finePressure:16,pressureSolverIterations:12,worldSmoke:'on',worldSmokeFlow:16,worldSmokeMaterial:64,worldSmokePressure:8,worldSmokeExtent:4,worldSmokeTransition:2,worldSmokeIntermediate:'off',intermediateFlow:24,intermediateMaterial:48,intermediatePressure:12,intermediateExtent:1.5,intermediateIterations:12},applications=0;
-const inspector=createGridTuningInspector({document,host,read:()=>current,validate:gridTuningPlan,apply:p=>{current={...current,...p};applications++;},live:(key,value)=>{current={...current,[key]:value};liveCount++;},installNumberDrag:()=>{dragCount++;return {dispose(){}};}});
+const inspector=createGridTuningInspector({document,host,read:()=>current,validate:gridTuningPlan,apply:p=>{current={...current,...p};applications++;},live:(key,value)=>{current={...current,[key]:value};liveCount++;},installNumberDrag:({input})=>{draggedFields.add(input.id);return {dispose(){}};}});
 const find=(id,node=body)=>node.id===id?node:node.children.map(child=>find(id,child)).find(Boolean);
 const edit=(key,value)=>{const e=find('grid-draft-'+key);e.focus();e.value=String(value);e.listeners.input();return e;};
 inspector.open();assert.equal(find('grid-tuning-editor').hidden,false);
@@ -34,7 +34,7 @@ find('grid-tuning-reset').onclick();assert.equal(velocity.value,'24','discard re
 edit('finePressure',-1);assert.equal(find('grid-tuning-apply').disabled,true);find('grid-tuning-apply').onclick();assert.equal(applications,2,'invalid dimensions cannot mutate simulation');
 console.log('PASS keyboard apply, preserved draft/focus, stale/invalid refusal, physical collar preservation');
 
-find('grid-tuning-reset').onclick();edit('fineVelocity',33);edit('pressureSolverIterations',7);assert.equal(current.pressureSolverIterations,7,'iterations update live');assert.equal(current.fineVelocity,24,'live iterations do not apply pending dimensions');assert.equal(liveCount,1);assert.equal(find('grid-tuning-apply').disabled,false,'valid pending dimensions survive live iteration');assert.ok(dragCount>=16,'numeric fields share drag interaction');
+find('grid-tuning-reset').onclick();edit('fineVelocity',33);edit('pressureSolverIterations',7);assert.equal(current.pressureSolverIterations,7,'iterations update live');assert.equal(current.fineVelocity,24,'live iterations do not apply pending dimensions');assert.equal(liveCount,1);assert.equal(find('grid-tuning-apply').disabled,false,'valid pending dimensions survive live iteration');for(const [key] of GRID_TUNING_FIELDS.filter(([key])=>!['worldSmoke','worldSmokeTransition'].includes(key)))assert.ok(draggedFields.has('grid-draft-'+key),`${key} shares numeric dragging`);
 
 find('grid-tuning-reset').onclick();edit('worldSmokeFlow','');edit('worldSmokeFlow',24);assert.equal(Number(find('grid-draft-collarReach').value),.5,'clearing velocity retains intended physical reach');find('grid-tuning-apply').onclick();assert.equal(current.worldSmokeTransition,3);
 edit('worldSmokeExtent','');edit('worldSmokeExtent',6);assert.equal(Number(find('grid-draft-collarReach').value),.5,'clearing coverage retains intended reach');find('grid-tuning-apply').onclick();assert.equal(current.worldSmokeTransition,2);
@@ -52,7 +52,7 @@ const closing=createGridTuningInspector({document,host:new Element('div'),read:(
 const number=key=>find('grid-draft-'+key,document.body);
 const event=(input,type)=>input.listeners[type]?.({currentTarget:input,preventDefault(){}});
 closing.open();const liveField=number('pressureSolverIterations');event(liveField,'focusin');liveField.value='7';event(liveField,'input');event(liveField,'change');assert.equal(edits.state().undoCount,1);
-const focusOnly=number('intermediateIterations');event(focusOnly,'focusin');assert.equal(edits.state().active.id,'@flame-settings');closing.close();assert.equal(edits.state().active,null,'closing releases a focus-only live gesture before hiding controls');edits.undo();assert.equal(current.pressureSolverIterations,12,'Undo reaches the last actual live change after closing');
+const focusOnly=number('worldSmokeIterations');event(focusOnly,'focusin');assert.equal(edits.state().active.id,'@flame-settings');closing.close();assert.equal(edits.state().active,null,'closing releases a focus-only live gesture before hiding controls');edits.undo();assert.equal(current.pressureSolverIterations,12,'Undo reaches the last actual live change after closing');
 
 // World scale is a live authored value: one edit per gesture, with cancellation.
 document.body=new Element('body');

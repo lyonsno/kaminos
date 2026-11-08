@@ -8115,11 +8115,6 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
   let nearHit = boxHit(ro - vec3<f32>(0.0, domainHalfY - 1.0, 0.0), rd, vec3<f32>(1.0, domainHalfY, 1.0));
   var hit = nearHit;
   let worldActive = worldSmokeOn() && !fullGridCapture && !opticalTrace;
-  var middleHit=vec2<f32>(1.0,-1.0);
-  if(worldActive&&worldRender.middleHiEnabled.w>.5){
-    let lo=worldRender.middleLoPitch.xyz;let hi=worldRender.middleHiEnabled.xyz;
-    middleHit=boxHit(ro-(lo+hi)*.5,rd,(hi-lo)*.5);
-  }
   if(worldActive){let lo=min(worldRender.loPitch.xyz,vec3<f32>(-1));let hi=max(worldRender.hiEnabled.xyz,vec3<f32>(1,2.0*domainHalfY-1.0,1));hit=boxHit(ro-(lo+hi)*.5,rd,(hi-lo)*.5);}
   if (!fullGridCapture && min(hit.y, sceneDepthEndT) <= max(hit.x, sceneDepthStartT)) {
     if (opticalTrace) { writeOpticalTraceMiss(traceRay); }
@@ -8309,12 +8304,11 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
         let remaining = opticalStep.end - opticalStep.cursor;
         var stop = remaining;
         if (worldActive) {
-          stop = min(opticalStepJoinStop(opticalStep, nearHit), opticalStepJoinStop(opticalStep, middleHit));
+          stop = opticalStepJoinStop(opticalStep, nearHit);
         }
         let localCursor = opticalStep.cursor;
         let insideFine = !worldActive || (nearHit.y > nearHit.x && localCursor >= nearHit.x-opticalStep.origin && localCursor < nearHit.y-opticalStep.origin);
-        let insideMiddle = worldActive && !insideFine && (middleHit.y > middleHit.x && localCursor >= middleHit.x-opticalStep.origin && localCursor < middleHit.y-opticalStep.origin);
-        let regionBase = select(worldMarchStep(select(worldRender.loPitch.w, worldMinimumMaterialPitch(), insideMiddle), steps, 1.6, 0.0), dtBase, insideFine);
+        let regionBase = select(worldMarchStep(worldRender.loPitch.w, steps, 1.6, 0.0), dtBase, insideFine);
         var minimum = regionBase * select(1.0, 0.5, OPTICAL_STEP_MODE == 3u);
         var maximum = minimum * select(1.0, 4.0, OPTICAL_STEP_MODE == 2u);
         if (OPTICAL_STEP_MODE == 2u && priority > 0.0 && insideFine) {
@@ -8352,14 +8346,9 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
       let medium=worldSmokeDiagnostic(worldSmokeMaterial(p,1.0-effectiveRaymarchSmokeSuppressed,selectiveRaymarchFireAuthority),true);
       rayMaterialSamples += 1u;
       let sigma=medium.absorption+medium.scattering;
-      let middleInterval=middleHit.y>middleHit.x&&t>=middleHit.x&&t<middleHit.y;
-      let pitch=select(worldRender.loPitch.w,worldMinimumMaterialPitch(),middleInterval);
+      let pitch=worldRender.loPitch.w;
       let interest=clamp(max(sigma*pitch,length(medium.emission)*pitch),0.0,1.6);
       var ds=select(min(worldMarchStep(pitch,steps,interest,clamp(u.radiance_controls.w,0.0,1.0)),max(.0001,endT-t)),guidedRay.width,guided);
-      if(!guided && middleHit.y>middleHit.x){
-        if(t<middleHit.x&&t+ds>middleHit.x){ds=middleHit.x-t;}
-        if(middleInterval&&t+ds>middleHit.y){ds=middleHit.y-t;}
-      }
       if(!guided && nearHit.y>nearHit.x && t<nearHit.x && t+ds>nearHit.x){ds=nearHit.x-t;}
       let scatteredSource=medium.scattering * incidentAt(p);
       if(opticalStepping){
@@ -12027,11 +12016,6 @@ export function createKaminosVolumePrototype({
   let sceneSolidGeometryCache = null;
   let sceneSolidSupportCache = null;
   let worldSmoke = null, worldSolidProducer = null, worldSmokeKey = null, worldReferenceDims = null, pendingWorldSeed = false, worldFrameRestore = undefined;
-  let intermediateFlow=null, intermediateSolidProducer=null, intermediateKey=null;
-  function retireIntermediateFlow(){
-    intermediateFlow?.destroy();intermediateSolidProducer?.destroy();
-    intermediateFlow=null;intermediateSolidProducer=null;intermediateKey=null;
-  }
   let worldOpticalFallback = null, worldRenderUniform = null, worldRenderField = null;
   let worldSmokeOverlay = 'off';
   let adaptiveMaterialOptions = controlsSnapshot.adaptiveMaterial?validateAllocation(controlsSnapshot.adaptiveMaterial):null, adaptiveMaterialError = null;
@@ -12066,7 +12050,6 @@ export function createKaminosVolumePrototype({
     device.queue.writeBuffer(uniformBuffer,OPEN_WORLD_UNIFORM_OFFSET*4,uniforms.subarray(OPEN_WORLD_UNIFORM_OFFSET,OPEN_WORLD_UNIFORM_OFFSET+4));
     const key=JSON.stringify(plan);
     if(!worldSmoke||worldSmokeKey!==key){
-      retireIntermediateFlow();
       worldSmoke?.destroy();worldSolidProducer?.destroy();
       worldSolidProducer=createGpuSceneSolidProducer(device,{grid:plan.flowDims[0],gridHeight:plan.flowDims[1]});
       const anchor=worldFrameRestore!==undefined?(worldFrameRestore??{translate:[...productTransform.translate],scale:productTransform.scale}):(worldSmoke?.anchor??{translate:[...productTransform.translate],scale:productTransform.scale});
@@ -12078,17 +12061,6 @@ export function createKaminosVolumePrototype({
       catch(error){adaptiveMaterialError=error.message;}
       rebuildFluidBindGroups();
     }
-    if(regions.middle){
-      const middlePlan=regions.middle;
-      const middleKey=JSON.stringify([regions.middleMode,middlePlan]);
-      if(intermediateKey!==middleKey){
-        retireIntermediateFlow();
-        intermediateFlow=createWorldSmoke(device,middlePlan,worldSmoke.anchor,regions.middleMode==='fields'?{exportFields:true}:{borrowMaterial:worldSmoke.materialResources()});
-        intermediateSolidProducer=createGpuSceneSolidProducer(device,{grid:middlePlan.flowDims[0],gridHeight:middlePlan.flowDims[1]});
-        intermediateKey=middleKey;
-        rebuildFluidBindGroups();
-      }
-    }else if(intermediateFlow){retireIntermediateFlow();rebuildFluidBindGroups();}
     return regions;
   }
   function encodeWorldSmoke(encoder, regions, timing=null) {
@@ -12108,19 +12080,7 @@ export function createKaminosVolumePrototype({
     if(immersedCollectionPrepared){immersedWorldSourcesGPU??=createGPUImmersedWorldSources(device);immersedWorldSourcesGPU.update(immersedCollectionPrepared,{grid:gridSize,gridHeight});sources=immersedWorldSourcesGPU.encode(encoder,{mapping:worldSmokeMapping(plan,worldSmoke.anchor,productTransform),collection:immersedCollectionGPU,step:state.simStepCount});}
     const simLevers=resolveSimulationLevers(controlsSnapshot);
     const input={sources,fineBuffer:fluidBuffers[currentFluid],reactionTexture:reactantTextures[currentFluid],fineDims:[gridSize,gridHeight,gridSize],fineVelocityMode:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode,transform:productTransform,time,reactant:state.reactantCombustion,physics,calibration:controlsSnapshot,wind:{strength:uniforms[53],angle:uniforms[54],height:uniforms[55],speed:time.dynamicsSpeed},worldSmokeOnly:simLevers.worldSmokeOnly};
-    let intermediateState={effective:'off'};
-    if(intermediateFlow){
-      let middleSolids;
-      if(source?.requested&&source.object){
-        const a=intermediateFlow.anchor,p=intermediateFlow.plan;
-        const produced=intermediateSolidProducer.update(source.objects||[{id:source.id,object:source.object}],{translate:a.translate,scale:a.scale*(-p.min[0])},{grid:p.flowDims[0],gridHeight:p.flowDims[1]},{materialMasks:gpuThermalConsumer?.materialMasks?.()??[]});
-        if(produced.triangleCount>0){intermediateSolidProducer.encode(encoder);middleSolids=intermediateSolidProducer.texture;}
-      }
-      const result=intermediateFlow.encode(encoder,{...input,iterations:regions.middleIterations,materialIndex:worldSmoke.materialResources().index,solids:middleSolids});
-      const p=intermediateFlow.plan;
-      intermediateState={...result,effective:intermediateFlow.exportFields?'independent-material-and-flow':'two-fine-cell-flow',flowPitch:p.flowPitch,materialPitch:p.materialPitch,flowCells:p.flowCells,min:p.min,max:p.max,extraMaterialCells:p.extraMaterialCells,pressureIterations:result.pressureIterations,overlapCells:2,handoff:intermediateFlow.exportFields?'projected-velocity-and-material-to-world':'projected-velocity-blend-before-world-material',fineFeedback:false};
-    }
-    state.worldSmoke={requested:true,effective:'one-way-world-field',...worldSmoke.encode(encoder,{...input,iterations:regions.worldIterations,transitionCells:Number(controlsSnapshot.worldSmokeTransition??0),solids,collisionSource,timing,intermediate:intermediateFlow}),intermediate:intermediateState};
+    state.worldSmoke={requested:true,effective:'one-way-world-field',...worldSmoke.encode(encoder,{...input,iterations:regions.worldIterations,transitionCells:Number(controlsSnapshot.worldSmokeTransition??0),solids,collisionSource,timing})};
     Object.assign(state.worldSmoke,{min:[...plan.min],max:[...plan.max],fineDims:[gridSize,gridHeight,gridSize],fineTransform:{translate:[...productTransform.translate],scale:productTransform.scale},raymarch:{policy:'shared-quality-material-cell-step',reference:'160-steps-adaptive-off-half-cell',steps:uniforms[22],adaptive:controlsSnapshot.adaptiveRays,sampleTelemetry:'includes-exterior'}});
     refreshWorldRenderMapping();
   }
@@ -12128,8 +12088,8 @@ export function createKaminosVolumePrototype({
     if (!worldSmoke || controlsSnapshot.worldSmoke !== 'on') return;
     const map=worldSmokeMapping(worldSmoke.plan,worldSmoke.anchor,productTransform);
     device.queue.writeBuffer(worldRenderUniform,0,new Float32Array([...map.renderMin,map.renderPitch,...map.renderMax,1]));
-    const middleMap=intermediateFlow?.exportFields?worldSmokeMapping(intermediateFlow.plan,intermediateFlow.anchor,productTransform):null;
-    device.queue.writeBuffer(worldRenderUniform,48,new Float32Array(middleMap?[...middleMap.renderMin,middleMap.renderPitch,...middleMap.renderMax,1]:Array(8).fill(0)));
+    // Reserved uniform slots remain zero; the legacy Middle region is retired.
+    device.queue.writeBuffer(worldRenderUniform,48,new Float32Array(8));
   }
   let immersedWallCache = null;
   const immersedSourceWeightCache = createImmersedSourceWeightCache();
@@ -13168,7 +13128,6 @@ export function createKaminosVolumePrototype({
     domainRemapper?.destroy(); domainRemapper=null; pendingDomainRemap=null;
     fineVelocity?.destroy(); fineVelocity=null;
     if(!preserveWorld){
-      retireIntermediateFlow();
       worldSmoke?.destroy();worldSmoke=null;worldSolidProducer?.destroy();worldSolidProducer=null;worldSmokeKey=null;worldReferenceDims=null;
     }
     if(worldRenderUniform)device.queue.writeBuffer(worldRenderUniform,0,new Float32Array(8));
@@ -13359,7 +13318,7 @@ export function createKaminosVolumePrototype({
         { binding: 15, resource: { buffer: emissiveLightField.incident } },
         { binding: 20, resource: (worldSmoke?.optical??worldOpticalFallback).createView() },
         { binding: 21, resource: { buffer: worldRenderUniform } },
-        { binding: 35, resource: (intermediateFlow?.exportFields?intermediateFlow.optical:worldOpticalFallback).createView() },
+        { binding: 35, resource: worldOpticalFallback.createView() },
         { binding: 16, resource: solidView },
           { binding: 28, resource: lowerFaceTexture.createView({dimension:'2d-array'}) },
           { binding: 29, resource: joinedGhostView(0) },
@@ -17837,7 +17796,7 @@ export function createKaminosVolumePrototype({
       // This legacy ledger does not enumerate the extra transport, transfer,
       // wavelet or exterior passes. Never present its sum as this route's total.
       state.simCostLedger.coverage='partial';
-      state.simCostLedger.omittedWork=['independent-velocity-and-transfer','world-and-intermediate-fields'];
+      state.simCostLedger.omittedWork=['independent-velocity-and-transfer','world-fields'];
       state.simCostLedger.fullGridPassesPerFrame=null;
       state.simCostLedger.fullGridCellVisitsPerFrame=null;
       state.simCostLedger.fullGridPassBreakdown.total=null;
@@ -18356,7 +18315,7 @@ export function createKaminosVolumePrototype({
     device.queue.writeBuffer(owner.uniform, 0, coarseUniforms);
     const targetSolid=velocityOwner?.solid??sceneSolidTexture,targetBurn=velocityOwner?.burn??burnRateTexture,targetLower=velocityOwner?.lower??joinedLowerFaceTexture;
     const solidEnabled = targetSolid.width === targetDims[0];
-    const groupResources = [solidEnabled,sceneSolidTexture,reactantTextures[0],reactantTextures[1],frontBuffers[0],frontBuffers[1],burnRateTexture,worldSmoke?.optical??worldOpticalFallback,intermediateFlow?.exportFields?intermediateFlow.optical:worldOpticalFallback,immersedCollectionTexture];
+    const groupResources = [solidEnabled,sceneSolidTexture,reactantTextures[0],reactantTextures[1],frontBuffers[0],frontBuffers[1],burnRateTexture,worldSmoke?.optical??worldOpticalFallback,worldOpticalFallback,immersedCollectionTexture];
     if (!owner.group || !groupResources.every((value,i)=>value===owner.groupResources?.[i])) {
       owner.groupResources = groupResources;
       owner.solidEnabled = solidEnabled;
@@ -18984,13 +18943,11 @@ export function createKaminosVolumePrototype({
       profile.worldFlowThroughProjection = stats(worldFlowSamples);
       profile.worldMaterialTransportReaction = stats(worldMaterialSamples);
       profile.worldSmoke = structuredClone(state.worldSmoke);
-      profile.intermediateTimingStatus = ['two-fine-cell-flow','independent-material-and-flow'].includes(state.worldSmoke?.intermediate?.effective) ? 'unmeasured' : 'inactive';
       profile.worldTimingStatus = state.worldSmoke?.effective!=='one-way-world-field' ? 'inactive'
         : worldFlowSamples.length===steps && worldMaterialSamples.length===steps ? 'sampled' : 'partial';
       if(profile.worldTimingStatus==='partial')profile.status='partial';
       profile.timestampStride=8;
       profile.windowScope = 'GPU elapsed intervals: main kernel through final projection/prolong excludes preceding predictor, collision rebuild and rendering. After-main includes forces, injection, pressure and transfer; not pressure-exclusive. World flow spans transport through projection; world material spans transport and reaction. Both exclude world optical resolve, collision construction and raymarch.';
-      if(profile.intermediateTimingStatus==='unmeasured')profile.windowScope += ' The intermediate solve is unmeasured; these intervals cannot establish total simulation cost or its on/off delta.';
       profile.timestampsNs = Array.from(t,String);
       profile.pressureResolution = structuredClone(state.pressureResolution);
       profile.simPassMicrosecondsPerStep = profile.simPass?.mean ?? null;
@@ -21474,9 +21431,7 @@ export function createKaminosVolumePrototype({
       worldRenderUniform,samplesPerAxis:sceneSourceSamplesPerAxis,getWorldSmoke:()=>{
         if(!worldSmoke||state.worldSmoke?.effective!=='one-way-world-field')return null;
         const map=worldSmokeMapping(worldSmoke.plan,worldSmoke.anchor,productTransform);
-        const middleMap=intermediateFlow?.exportFields?worldSmokeMapping(intermediateFlow.plan,intermediateFlow.anchor,productTransform):null;
-        const middle=middleMap?{texture:intermediateFlow.optical,dimensions:intermediateFlow.plan.materialDims,localMin:middleMap.renderMin,localMax:middleMap.renderMax}:null;
-        return {texture:worldSmoke.optical,dimensions:worldSmoke.plan.materialDims,localMin:map.renderMin,localMax:map.renderMax,renderView:worldRenderField.view,middle};
+        return {texture:worldSmoke.optical,dimensions:worldSmoke.plan.materialDims,localMin:map.renderMin,localMax:map.renderMax,renderView:worldRenderField.view};
       },
       grid: sceneSourceGrid, gridY: sceneSourceGridPlan(sceneSourceGrid,[gridSize,gridHeight,gridSize],device.limits).dimensions[1], fluidGrid: gridSize, fluidGridY: gridHeight});
     sceneVolumeSource.encode(encoder, currentFluid, state.frameCount,productTransform);
@@ -21488,7 +21443,7 @@ export function createKaminosVolumePrototype({
     if(optical.value<4){rayAllocationHistory.reset();return;}
     if(!worldSmoke||state.worldSmoke?.effective!=='one-way-world-field')throw Error('fixed-count allocation requires ordinary joined emissive beauty');
     const map=worldSmokeMapping(worldSmoke.plan,worldSmoke.anchor,productTransform);
-    const identity=JSON.stringify([controlsSnapshot,productTransform,worldSmokeKey,intermediateKey]);
+    const identity=JSON.stringify([controlsSnapshot,productTransform,worldSmokeKey]);
     state.opticalStepping.allocation=rayAllocationHistory.prepare(encoder,
       {min:map.renderMin,max:map.renderMax,dims:worldSmoke.plan.materialDims},identity,state.simStepCount);
     state.opticalStepping.guidance='uniform-positive-coverage + known-blend-bands + previous-march-spatial-importance';

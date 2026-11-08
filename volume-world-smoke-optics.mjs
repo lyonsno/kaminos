@@ -6,20 +6,15 @@ export function worldSmokeOverlayGeometry(s) {
  const worldMin=s.min.map((v,i)=>s.anchor.translate[i]+v*s.anchor.scale),worldMax=s.max.map((v,i)=>s.anchor.translate[i]+v*s.anchor.scale);
  const f=s.fineTransform,fineMin=f.translate.map(v=>v-f.scale),fineMax=f.translate.map((v,i)=>v+f.scale*(i===1?2*s.fineDims[1]/s.fineDims[0]-1:1));
  const volume=(lo,hi)=>hi.reduce((p,v,i)=>p*(v-lo[i]),1);
- const m=s.intermediate,hasMiddle=['two-fine-cell-flow','independent-material-and-flow'].includes(m?.effective)&&m.min&&m.max;
- return {worldMin,worldMax,fineMin,fineMax,finePitch:2*f.scale/s.fineDims[0],materialPitch:(worldMax[0]-worldMin[0])/s.materialDims[0],flowPitch:(worldMax[0]-worldMin[0])/s.flowDims[0],volumeRatio:volume(worldMin,worldMax)/volume(fineMin,fineMax),
-  middleMin:hasMiddle?m.min.map((v,i)=>s.anchor.translate[i]+v*s.anchor.scale):null,
-  middleMax:hasMiddle?m.max.map((v,i)=>s.anchor.translate[i]+v*s.anchor.scale):null,
-  middleFlowPitch:hasMiddle?m.flowPitch*s.anchor.scale:null,middleMaterialPitch:hasMiddle?m.materialPitch*s.anchor.scale:null,middlePressurePitch:hasMiddle?m.pressurePitch*s.anchor.scale:null};
+ return {worldMin,worldMax,fineMin,fineMax,finePitch:2*f.scale/s.fineDims[0],materialPitch:(worldMax[0]-worldMin[0])/s.materialDims[0],flowPitch:(worldMax[0]-worldMin[0])/s.flowDims[0],volumeRatio:volume(worldMin,worldMax)/volume(fineMin,fineMax)};
 }
 // One ray integral for the fine flame and world material. No alpha-overlay seam.
 export const WORLD_SMOKE_OPTICS_WGSL=/* wgsl */`
 ${THERMAL_MOMENTS_WGSL}
 ${FINE_SMOKE_HANDOFF_WGSL}
-struct WorldSmokeRender { loPitch:vec4<f32>, hiEnabled:vec4<f32>, overlayControls:vec4<f32>, middleLoPitch:vec4<f32>, middleHiEnabled:vec4<f32>, atlas:vec4<f32> }
+struct WorldSmokeRender { loPitch:vec4<f32>, hiEnabled:vec4<f32>, overlayControls:vec4<f32>, reserved48:vec4<f32>, reserved64:vec4<f32>, atlas:vec4<f32> }
 @group(0) @binding(20) var worldOptical:texture_3d<f32>;
 @group(0) @binding(21) var<uniform> worldRender:WorldSmokeRender;
-@group(0) @binding(35) var middleOptical:texture_3d<f32>;
 fn worldSmokeOn()->bool{return worldRender.hiEnabled.w>0.5;}
 fn worldSmokeDiagnostic(m:EmissiveMaterial,coarse:bool)->EmissiveMaterial{
  if(worldRender.overlayControls.x<.5||!worldSmokeOn()){return m;}
@@ -63,11 +58,6 @@ fn regionSmokeMaterial(raw:vec4<f32>,moments:vec3<f32>,smokeVisible:f32,fireVisi
  }
  medium.emission=max(medium.emission,vec3<f32>(0))*fireVisible;return medium;
 }
-fn middleSmokeWeight(p:vec3<f32>)->f32{
- if(worldRender.middleHiEnabled.w<.5){return 0.0;}
- let d=min(p-worldRender.middleLoPitch.xyz,worldRender.middleHiEnabled.xyz-p);
- return smoothstep(0.0,2.0*worldRender.middleLoPitch.w,min(d.x,min(d.y,d.z)));
-}
 fn worldSmokeFarMaterial(p:vec3<f32>,smokeVisible:f32,fireVisible:f32)->EmissiveMaterial{
  let fire=select(fireVisible,0.0,u.open_world_boundary.y>0.5);
  var far:EmissiveMaterial;
@@ -80,18 +70,9 @@ fn worldSmokeFarMaterial(p:vec3<f32>,smokeVisible:f32,fireVisible:f32)->Emissive
  return far;
 }
 fn worldSmokeMaterial(p:vec3<f32>,smokeVisible:f32,fireVisible:f32)->EmissiveMaterial{
- let fire=select(fireVisible,0.0,u.open_world_boundary.y>0.5);
- let far=worldSmokeFarMaterial(p,smokeVisible,fire);
- let weight=middleSmokeWeight(p);if(weight<=0.0){return far;}
- let midRaw=regionSmokeSample(middleOptical,p,worldRender.middleLoPitch,0);
- let midMoments=select(vec3<f32>(0.0),regionSmokeSample(middleOptical,p,worldRender.middleLoPitch,1).xyz,fire>0.0&&u.emissive_physics.x>.5&&midRaw.x>1e-5);
- let middle=regionSmokeMaterial(midRaw,midMoments,smokeVisible,fire);
- return EmissiveMaterial(mix(far.emission,middle.emission,weight),mix(far.absorption,middle.absorption,weight),mix(far.scattering,middle.scattering,weight));
+ return worldSmokeFarMaterial(p,smokeVisible,fireVisible);
 }
-fn worldMinimumMaterialPitch()->f32{
- if(worldRender.middleHiEnabled.w>.5){return min(worldRender.loPitch.w,worldRender.middleLoPitch.w);}
- return worldRender.loPitch.w;
-}
+fn worldMinimumMaterialPitch()->f32{return worldRender.loPitch.w;}
 fn worldSmokeBlendWeight(p:vec3<f32>)->f32{
  if(!worldSmokeOn()||any(p<worldRender.loPitch.xyz)||any(p>worldRender.hiEnabled.xyz)){return 0.0;}
  let top=2.0*f32(GRID_Y)/f32(GRID)-1.0;

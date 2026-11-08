@@ -125,7 +125,6 @@ fn hierarchyHistory(p:vec3<f32>)->Gas{return hierarchyPlane(p,true);}
   }else{let cooling=pow(.982,u.time.x);let survival=pow(.990,u.time.x);r.b=select(vec4<f32>(0),vec4<f32>(0,shiftThermalMoments(r.b.yzw,r.a.x,0,cooling)*survival),r.b.y>1e-6);r.a.x*=survival;r.a.y*=cooling;}
   r=gasAdd(gasScale(r,1.0-fraction),owned);
  }
- if(u.bridgeMaterial.w>0.0){let weight=bridgeWeight(p);if(weight>0.0){let upstream=bridgeMaterialSample(p);r=Gas(mix(r.a,upstream.a,weight),mix(r.b,upstream.b,weight));owned=Gas(mix(owned.a,upstream.a*fraction,weight),mix(owned.b,upstream.b*fraction,weight));}}
  if(blocked(vec3<i32>(floor((p-u.lo.xyz)/u.flow.w)))){r=Gas(vec4<f32>(0),vec4<f32>(0));}
  hout[slot*64u+l]=r;hout[arrayLength(&hout)/2u+slot*64u+l]=Gas(min(owned.a,r.a),min(owned.b,r.b));
 }

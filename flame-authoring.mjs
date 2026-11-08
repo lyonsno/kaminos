@@ -141,12 +141,6 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-world-smoke-pressure','Pressure width (0 = flow)'], ['volume-world-smoke-iterations','Pressure iterations'],
     ['volume-world-smoke-transition','Momentum collar (experimental)'],
   ] },
-  { name:'Intermediate region', view:'quality', open:true, scope:'Independent material and velocity mode uses its own material field. Width changes preserve the physical extent. Material, velocity and pressure detail are independent.', fields:[
-    ['volume-world-smoke-intermediate','Mode'],
-    ['volume-intermediate-flow','Velocity width'], ['volume-intermediate-material','Material width'],
-    ['volume-intermediate-pressure','Pressure width'], ['volume-intermediate-iterations','Pressure iterations'],
-    ['volume-intermediate-extent','Extent / fine width'],
-  ] },
   // Group by the material or mechanism being authored, not by implementation layer.
   { name:'Emission & image', view:'look', open:true, fields:[
     ['volume-physical-thermal','Glow gain'], ['volume-physical-clean','Clean reaction emission'],
@@ -251,10 +245,9 @@ export const FLAME_EMITTER_QUICK_GROUPS = [
 ];
 // Physics (soot x blackbody) is the material law (2026-10-18; the law select
 // is retired), so its calibration controls always apply.
-export function flamePropertyApplies(id,{toneMapping,physicsActive=false,sceneLighting=false,supportActive=false,intermediateMode}) {
+export function flamePropertyApplies(id,{toneMapping,physicsActive=false,sceneLighting=false,supportActive=false}) {
   if(['volume-boundary-sidecar-source','volume-boundary-sidecar-width','volume-boundary-sidecar-blur','volume-boundary-sidecar-ridge'].includes(id))return supportActive;
   if(id==='volume-physical-ambient'&&sceneLighting)return false;
-  if(id.startsWith('volume-intermediate-')&&intermediateMode!==undefined)return intermediateMode==='fields';
   if(id==='volume-physical-knee')return toneMapping==='custom';
   if(['volume-physical-kelvin-per-heat','volume-physical-soot-burnout-rate','volume-physical-soot-burnout-kelvin'].includes(id))return true;
   return !physicsActive||!physicsUnused.has(id);
@@ -430,7 +423,7 @@ export function createFlameInspector({ document, host, gridTuning, sharedHost = 
   }
   const geometry=[...sharedHost.querySelectorAll(':scope > .flame-domain-controls,:scope > .flame-collision-controls')];
   for(const panel of geometry)panels.get('quality').append(panel);
-  const mode=()=>({toneMapping:byId('volume-tone-mapping').value,intermediateMode:byId('volume-world-smoke-intermediate').value,
+  const mode=()=>({toneMapping:byId('volume-tone-mapping').value,
     physicsActive:readAppearanceRuntime()?.effective?.render===true,sceneLighting:readSceneLighting(),
     supportActive:byId('volume-reaction-law').value==='authored-tall-plume'||byId('volume-boundary-sidecar-view').value!=='off'
       ||!['off','boundary_fire'].includes(byId('volume-reaction-live-view').value)
@@ -453,7 +446,7 @@ export function createFlameInspector({ document, host, gridTuning, sharedHost = 
         else if(searching)item.section.open=item.open;
       }
     }
-    const gridMatches=!!gridInspector&&(!isSearching||/grid|dimension|material|velocity|pressure|fine|intermediate|world/.test(query));
+    const gridMatches=!!gridInspector&&(!isSearching||/grid|dimension|material|velocity|pressure|fine|world/.test(query));
     for(const [id,panel] of panels){
       panel.hidden=isSearching?!(id==='quality'&&gridMatches)&&!sections.some(item=>item.group.view===id&&!item.section.hidden):id!==activeView;
       const button=tabButtons.get(id);button.setAttribute('aria-selected',String(id===activeView));button.tabIndex=id===activeView?0:-1;

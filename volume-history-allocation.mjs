@@ -156,12 +156,6 @@ fn guidanceStop(ro:vec3<f32>,rd:vec3<f32>,t:f32,end:f32)->f32{
   let inset=vec3<f32>(min(.5,worldRender.loPitch.w));
   stop=guidanceBoxStop(ro,rd,lo,hi,t,stop);
   stop=guidanceBoxStop(ro,rd,lo+inset,hi-inset,t,stop);
-  if(worldRender.middleHiEnabled.w>.5){
-    let ml=worldRender.middleLoPitch.xyz;let mh=worldRender.middleHiEnabled.xyz;
-    let mi=vec3<f32>(2.0*worldRender.middleLoPitch.w);
-    stop=guidanceBoxStop(ro,rd,ml,mh,t,stop);
-    stop=guidanceBoxStop(ro,rd,ml+mi,mh-mi,t,stop);
-  }
   return stop;
 }
 struct GuidedRay {

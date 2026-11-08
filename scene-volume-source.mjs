@@ -35,7 +35,6 @@ export function sceneLightingDomain(field) {
 }
 
 // Receiver and capture support is Fine plus the active World optical volume.
-// Middle refines World inside these bounds; it does not extend World ownership.
 export function sceneTransportDomain(field){
   const fine=sceneLightingDomain(field),world=field.exterior;
   if(!world)return fine;
@@ -125,16 +124,16 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
   // The seed reaches sceneEmissiveMaterialAt, which reads the reactant sidecar
   // (fresh burn); the sidecar is reallocated when the reaction law changes.
   const emptyWorldView=emptyWorld.createView();
-  let boundTextures = null, boundWorld=null,boundMiddle=null,boundRenderView=null;
+  let boundTextures = null, boundWorld=null,boundRenderView=null;
   const buildInputs = () => {
     const textures = getReactantTextures();
     boundTextures = textures;
-    const world=getWorldSmoke();boundWorld=world?.texture??emptyWorld;boundMiddle=world?.middle?.texture??emptyWorld;boundRenderView=world?.renderView??emptyWorldView;
+    const world=getWorldSmoke();boundWorld=world?.texture??emptyWorld;boundRenderView=world?.renderView??emptyWorldView;
     return fluidBuffers.map((buffer, i) => device.createBindGroup({layout: pipeline.getBindGroupLayout(0),
       entries: [...[[0, uniformBuffer], [1, buffer], [7, frontBuffers[i]]].map(([binding, buffer]) => ({binding, resource: {buffer}})),
         {binding: 23, resource: textures[i].createView({dimension: '3d'})},
         {binding:20,resource:boundWorld.createView()},{binding:21,resource:{buffer:worldRenderUniform}},
-        {binding:35,resource:boundMiddle.createView()},{binding:40,resource:boundRenderView}]}));
+        {binding:40,resource:boundRenderView}]}));
   };
   let inputs = buildInputs();
   const output = device.createBindGroup({layout: pipeline.getBindGroupLayout(3), entries: [{binding: 4, resource: texture.createView()},{binding:5,resource:scatteringTexture.createView()},{binding:10,resource:{buffer:sampling}}]});
@@ -152,15 +151,15 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
       const texture=device.createTexture({label:`physical ${name} smoke extinction`,dimension:'3d',size:region.dimensions,format:'r32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});
       let extPipeline=cachedPipelines.exterior.get(name);
       if(!extPipeline){
-        extPipeline=device.createComputePipeline({label:`encode ${name} smoke extinction`,layout:'auto',compute:{module,entryPoint:name==='middle'?'seedSceneMiddleMedium':'seedSceneExteriorMedium'}});
+        extPipeline=device.createComputePipeline({label:`encode ${name} smoke extinction`,layout:'auto',compute:{module,entryPoint:'seedSceneExteriorMedium'}});
         cachedPipelines.exterior.set(name,extPipeline);
       }
       r={key,texture,emissionTexture,pipeline:extPipeline};exteriorResources.set(name,r);
     }
     const renderView=region.renderView??emptyWorldView;
-    if(r.input!==region.texture||(name==='world'&&r.renderView!==renderView)){
+    if(r.input!==region.texture||r.renderView!==renderView){
       r.group=device.createBindGroup({layout:r.pipeline.getBindGroupLayout(0),entries:[
-        {binding:0,resource:{buffer:uniformBuffer}},{binding:name==='middle'?35:20,resource:region.texture.createView()},{binding:21,resource:{buffer:worldRenderUniform}},...(name==='world'?[{binding:40,resource:renderView}]:[])]});
+        {binding:0,resource:{buffer:uniformBuffer}},{binding:20,resource:region.texture.createView()},{binding:21,resource:{buffer:worldRenderUniform}},{binding:40,resource:renderView}]});
       r.output=device.createBindGroup({layout:r.pipeline.getBindGroupLayout(3),entries:[{binding:6,resource:r.texture.createView()},{binding:7,resource:r.emissionTexture.createView()}]});r.input=region.texture;r.renderView=renderView;
     }
     const pass=encoder.beginComputePass({label:`current ${name} physical extinction`});
@@ -170,11 +169,10 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
   function encodeExterior(encoder){
     exterior=null;
     const world=getWorldSmoke();
-    for(const [name,r] of exteriorResources)if(!world||(name==='middle'&&!world.middle)){r.texture.destroy();r.emissionTexture.destroy();exteriorResources.delete(name);}
+    for(const [name,r] of exteriorResources)if(!world){r.texture.destroy();r.emissionTexture.destroy();exteriorResources.delete(name);}
     if(!world)return;
     exterior=encodeRegion(encoder,world,'world');
     exterior.handoffMargin=normalizeSmokeHandoffMargin(world.handoffMargin);
-    exterior.middle=world.middle?encodeRegion(encoder,world.middle,'middle'):null;
   }
   const invalidateOptical = () => {if (optical) optical.generation = null;};
   return {
@@ -185,7 +183,8 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
       // This optional authored value is also the camera's physical ownership
       // parameter. Publish and seed from the same value in this queued frame.
       device.queue.writeBuffer(worldRenderUniform,36,new Float32Array([normalizeSmokeHandoffMargin(world?.handoffMargin)]));
-      if (getReactantTextures() !== boundTextures||(world?.texture??emptyWorld)!==boundWorld||(world?.middle?.texture??emptyWorld)!==boundMiddle||(world?.renderView??emptyWorldView)!==boundRenderView) inputs = buildInputs();
+      const inputsChanged=getReactantTextures() !== boundTextures||(world?.texture??emptyWorld)!==boundWorld||(world?.renderView??emptyWorldView)!==boundRenderView;
+      if(inputsChanged)inputs = buildInputs();
       if (!Number.isInteger(index) || !inputs[index]) throw new Error('invalid scene source index');
       worldTransform=validateSceneSourceTransform(transform);
       status = 'unbuilt'; reason = 'encoding';
@@ -279,17 +278,6 @@ fn seedSceneExteriorMedium(@builtin(global_invocation_id) c:vec3<u32>){
   let p=worldRender.loPitch.xyz+(vec3<f32>(c)+.5)*worldRender.loPitch.w;
   // Same physical law as the camera, before optional diagnostic tinting.
   let medium=worldSmokeFarMaterial(p,1.0,1.0);
-  textureStore(sceneExteriorOut,vec3<i32>(c),vec4<f32>(medium.absorption+medium.scattering,0,0,0));
-  textureStore(sceneExteriorEmissionOut,vec3<i32>(c),vec4<f32>(medium.emission,medium.absorption+medium.scattering));
-}
-@compute @workgroup_size(4,4,4)
-fn seedSceneMiddleMedium(@builtin(global_invocation_id) c:vec3<u32>){
-  seatGridShape();
-  let dims=textureDimensions(sceneExteriorOut);if(any(c>=dims)){return;}
-  let p=worldRender.middleLoPitch.xyz+(vec3<f32>(c)+.5)*worldRender.middleLoPitch.w;
-  let raw=regionSmokeSample(middleOptical,p,worldRender.middleLoPitch,0);
-  let moments=regionSmokeSample(middleOptical,p,worldRender.middleLoPitch,1).xyz;
-  let medium=regionSmokeMaterial(raw,moments,1.0,1.0);
   textureStore(sceneExteriorOut,vec3<i32>(c),vec4<f32>(medium.absorption+medium.scattering,0,0,0));
   textureStore(sceneExteriorEmissionOut,vec3<i32>(c),vec4<f32>(medium.emission,medium.absorption+medium.scattering));
 }
