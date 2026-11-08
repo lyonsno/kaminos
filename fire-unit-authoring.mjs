@@ -3,14 +3,13 @@ import {GRID_TUNING_FIELDS} from './volume-grid-tuning.mjs';
 export function createFireUnitControlDocument(document,settings){
  const copy=document.implementation.createHTMLDocument('Fire unit controls');
  for(const source of document.querySelectorAll('input[id],select[id],output[id]')){const node=source.cloneNode(true);if('value'in source)node.value=source.value;if('checked'in source)node.checked=source.checked;copy.body.append(node);}
- for(const axis of ['domControls','rendererControls','presentationControls'])for(const d of Object.values(settings?.[axis]??{})){const node=copy.getElementById(d.id);if(!node)throw Error('Unsupported fire control '+d.id);if(node.type==='checkbox')node.checked=d.value;else{const value=d.rawValue??d.value;if(node.type==='range'){node.min=String(Math.min(Number(node.min),Number(value)));node.max=String(Math.max(Number(node.max),Number(value)));node.step='any';}node.value=String(value);}}
+ for(const axis of ['domControls','rendererControls','presentationControls'])for(const d of Object.values(settings?.[axis]??{})){let node=copy.getElementById(d.id);if(!node&&axis==='presentationControls'&&d.id==='raymarch-smoke-presentation'&&d.type==='button-state'){node=copy.createElement('input');node.id=d.id;node.type='hidden';copy.body.append(node);}if(!node)throw Error('Unsupported fire control '+d.id);if(node.type==='checkbox')node.checked=d.value;else{const value=d.rawValue??d.value;if(node.type==='range'){node.min=String(Math.min(Number(node.min),Number(value)));node.max=String(Math.max(Number(node.max),Number(value)));node.step='any';}node.value=String(value);}}
  return copy;
 }
 // Each unit borrows the ordinary inspector with detached backing controls. A
 // unit edit never writes the page singleton's controls or another unit.
 export function mountFireUnitAuthoring({document,root,owner,edits,target,seedSettings,compile,seedControls,listBasins,loadBasin,saveBasin,onError}){
- const prefix=target.replaceAll(/[^a-zA-Z0-9-]/g,'-')+'-',copy=document.implementation.createHTMLDocument('Fire unit controls');
- for(const source of document.querySelectorAll('input[id],select[id],output[id]')){const node=source.cloneNode(true);if('value'in source)node.value=source.value;if('checked'in source)node.checked=source.checked;copy.body.append(node);}
+ const prefix=target.replaceAll(/[^a-zA-Z0-9-]/g,'-')+'-',copy=createFireUnitControlDocument(document,owner.capture().settings??seedSettings);
  const settings=()=>owner.capture().settings??seedSettings;
  function project(value){for(const axis of ['domControls','rendererControls','presentationControls'])for(const d of Object.values(value?.[axis]??{})){
   const node=copy.getElementById(d.id);if(!node)throw Error('Unsupported fire control '+d.id);

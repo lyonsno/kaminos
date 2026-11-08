@@ -22,6 +22,7 @@ export function createFireUnitObject({THREE,record,camera,controls,viewport,shar
   transparentCanvas:true,canvasId:'kaminos-fire-unit-'+record.id,externalProductTransform:fireUnitFrame(accepted),
   onStatus:value=>{status=value;if(value.error){failed=value.error;onError(Error(value.error));}}});
  runtime.setCoreEmitterSourceMode('analytic-only');
+ runtime.setRaymarchSmokePresentationMode(data.settings?.presentationControls?.['raymarch-smoke-presentation']?.value??'on');
  const initialFrame=fireUnitFrame(accepted);runtime.repositionOrdinaryUnit(initialFrame.translate,initialFrame.scale);
  const canvas=runtime.canvasElement();canvas.classList.add('kaminos-fire-unit-canvas');canvas.dataset.fireUnit=record.id;canvas.style.background='transparent';
  emitter.userData.kaminosEditorHelper=true;
@@ -52,7 +53,7 @@ export function createFireUnitObject({THREE,record,camera,controls,viewport,shar
   setData(value){const next=checkedFireUnitRecord({...record,transform:accepted,fireUnit:value}).fireUnit;
    if(next.controls.emitterSourceLaw!=='immersed-source')throw Error('Independent fire units require the immersed source law');
    runtime.validateGridControls(next.controls);
-   const before=data,changed=JSON.stringify(next.controls)!==JSON.stringify(before.controls);data=next;try{if(changed)runtime.setControls({...data.controls,lookFreeze:0});if(changed||data.emissionEnabled!==before.emissionEnabled)supply();placeEmitter();if(changed)updateBounds();authoringRevision++;}catch(error){data=before;if(changed)runtime.setControls({...before.controls,lookFreeze:0});supply();placeEmitter();updateBounds();throw error;}},
+   const before=data,changed=JSON.stringify(next.controls)!==JSON.stringify(before.controls);data=next;try{if(changed)runtime.setControls({...data.controls,lookFreeze:0});runtime.setRaymarchSmokePresentationMode(data.settings?.presentationControls?.['raymarch-smoke-presentation']?.value??'on');if(changed||data.emissionEnabled!==before.emissionEnabled)supply();placeEmitter();if(changed)updateBounds();authoringRevision++;}catch(error){data=before;if(changed)runtime.setControls({...before.controls,lookFreeze:0});supply();placeEmitter();updateBounds();throw error;}},
   setEmitter(value){const next=checkedFireUnitRecord({...record,transform:accepted,fireUnit:{...data,emitter:value}}).fireUnit.emitter;
    const before=data.emitter;data.emitter=next;try{supply();placeEmitter();}catch(error){data.emitter=before;placeEmitter();throw error;}},
   syncPose(){
