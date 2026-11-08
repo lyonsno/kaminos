@@ -16,7 +16,7 @@ export function createViewportPosePin({asset,redraw=()=>{}}){
  return{
   update(record,{active=true,hot=false}={}){
    if(disposed)return;group.visible=active&&record.attached;if(lastHot!==hot||lastVisible!==group.visible){lastHot=hot;lastVisible=group.visible;redraw();}group.userData.anchorId=record.id;
-   if(!group.visible)return;asset.root.updateMatrixWorld(true);const inv=asset.root.matrixWorld.clone().invert();
+   if(!group.visible)return;asset.root.updateWorldMatrix(true,false);const inv=asset.root.matrixWorld.clone().invert();
    const point=new Vector3(...record.worldPoint).applyMatrix4(inv),face=record.worldFace.map(p=>new Vector3(...p).applyMatrix4(inv));
    const normal=new Vector3().crossVectors(face[1].clone().sub(face[0]),face[2].clone().sub(face[0])).normalize();
    group.position.copy(point);group.quaternion.setFromUnitVectors(new Vector3(0,1,0),normal);
