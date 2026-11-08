@@ -4,7 +4,7 @@ export function resolveSourceFootprint(value={}) {
   if(!Number.isSafeInteger(next.level)||next.level<0)throw Error('Source mip level must be a nonnegative integer');
   if(!Number.isFinite(next.detailBias))throw Error('Source detail bias must be finite');
   if(typeof next.allFields!=='boolean')throw Error('Source field selection must be boolean');
-  if(!['average','dominant'].includes(next.reduction))throw Error('Unknown source pyramid reduction');
+  if(!['off','average','dominant'].includes(next.reduction))throw Error('Unknown source pyramid reduction');
   if(!Number.isFinite(next.depthTolerance)||next.depthTolerance<0)throw Error('Layer depth tolerance must be nonnegative');
   if(!Number.isFinite(next.normalAngle)||next.normalAngle<0||next.normalAngle>180)throw Error('Layer normal angle must be between zero and 180 degrees');
   return Object.fromEntries(['mode','level','detailBias','allFields','reduction','depthTolerance','normalAngle'].map(key=>[key,next[key]]));
@@ -20,7 +20,7 @@ export function createSourceFootprintControl(effect,reset) {
     effect.sourceMipAllFields.value=value.allFields;
     effect.sourceMipReduction.value=value.reduction==='dominant';
     effect.sourceMipDepthTolerance.value=value.depthTolerance;effect.sourceMipNormalCos.value=Math.cos(value.normalAngle*Math.PI/180);
-    effect.useMipSampling.value=owner!==null||ordinaryMipSampling;
+    effect.useMipSampling.value=owner!==null?value.reduction!=='off':ordinaryMipSampling;
   };
   return {
     ordinary(value){ordinaryMipSampling=value;apply();},

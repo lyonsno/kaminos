@@ -23,3 +23,8 @@ assert.deepEqual(resolveSourceFootprint({level:9}),{mode:'legacy',level:9,detail
 const coherent=control.open();coherent.set({reduction:'dominant',depthTolerance:.1,normalAngle:90});
 assert.equal(effect.sourceMipReduction.value,true);assert.equal(effect.sourceMipDepthTolerance.value,.1);assert.ok(Math.abs(effect.sourceMipNormalCos.value)<1e-10);
 coherent.dispose();assert.equal(effect.sourceMipReduction.value,false,'release restores ordinary average pyramid');
+
+const disabled=control.open();disabled.set({reduction:'off'});
+assert.equal(effect.useMipSampling.value,false,'The no-pyramid comparison must bypass source construction and mip reads');
+control.ordinary(false);control.ordinary(true);assert.equal(effect.useMipSampling.value,false,'Ordinary changes do not replace an explicit no-pyramid arm');
+disabled.dispose();assert.equal(effect.useMipSampling.value,true,'Closing no-pyramid restores the latest ordinary choice');
