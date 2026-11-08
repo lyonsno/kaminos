@@ -49,3 +49,12 @@ test('explicit model and size choices define preview and execution while preserv
  const resize=experiments.imageVariationRequest({experiment,run:{id:'r',sources:[source],overrides:{size:256},author:{kind:'person',id:'noah',label:'Noah'}},job:{id:'j',sourceIndex:0,seed:3}});assert.equal(resize.size,256);assert.deepEqual(resize.expectedModel,{source:p.source,sampling:p.sampling,lora:null});
  assert.throws(()=>experiments.imageVariationPlan({experiment,sources:[source],seeds:[1],overrides:{model:'made-up'}}),/model/i);assert.throws(()=>experiments.imageVariationPlan({experiment,sources:[source],seeds:[1],overrides:{size:999}}),/size/i);
 });
+
+test('cross-model plans describe the target model preprocessing of the same original reference',async()=>{
+ const{referenceImageGeometry}=await import('../models/flux3-klein/reference-image.js');
+ for(const [original,target,oldArea,newArea]of [['flux2','flux3',1024**2,4096**2],['flux3','flux2',4096**2,1024**2]]){
+  const provenance={...p,model:original,reference:{source:'/original.png',name:'Original',sha256:'a'.repeat(64),geometry:referenceImageGeometry(2048,2048,{maxArea:oldArea})}},entry={...source,provenance};
+  const plan=experiments.imageVariationPlan({experiment:{title:'Reference comparison'},sources:[entry],seeds:[1],overrides:{model:target}});
+  assert.deepEqual(plan.rows[0].request.reference.geometry,referenceImageGeometry(2048,2048,{maxArea:newArea}));assert.equal(plan.rows[0].request.reference.source,'/original.png');assert.equal(plan.rows[0].request.reference.sha256,'a'.repeat(64));assert.deepEqual(entry.provenance,provenance);
+ }
+});

@@ -89,6 +89,22 @@ class ExperimentsHttp(unittest.TestCase):
         status,value=self.finish_actual(result);self.assertEqual(status,200,value)
         saved=self.call(query='?id=gloves')[1]['runs'][0];self.assertEqual(saved['overrides'],payload['overrides']);self.assertEqual(saved['sources'][0]['provenance'],p)
 
+    def test_cross_model_reference_geometry_changes_preserve_original_identity(self):
+        for original,target,old_size,new_size in [('flux2','flux3',1024,2048),('flux3','flux2',2048,1024)]:
+            def geometry(n):return {'sourceWidth':2048,'sourceHeight':2048,'resizedWidth':n,'resizedHeight':n,'left':0,'top':0,'width':n,'height':n}
+            p={'schema':'kaminos.image-generation.v1','model':original,'prompt':'Large reference','seed':5,'width':512,'height':512,'weightsLevel':'4-bit','lora':None,'reference':{'source':self.source,'name':'Original reference','sha256':'a'*64,'geometry':geometry(old_size),'resize':'canvas-high-quality','alphaBackground':'white'}}
+            self.write_recipe('glove.png',p)
+            if not (self.directory/'experiments/gloves.json').exists():self.create()
+            author={'kind':'person','id':'noah','label':'Noah'};run_id='cross-'+original
+            status,doc=self.call({'action':'create-run','id':'gloves','runId':run_id,'title':run_id,'sources':[self.source],'seeds':[41],'author':author,'overrides':{'model':target}});self.assertEqual(status,200,doc)
+            self.assertEqual(self.call({'action':'claim-job','id':'gloves','runId':run_id,'jobId':'0:0','attempt':'one'})[0],200)
+            result={**p,'model':target,'textLength':'model' if target=='flux3' else 'fit16','author':author,'seed':41,'iteration':{'parent':{'source':self.source}},'variation':{'experimentId':'gloves','runId':run_id,'jobId':'0:0','attempt':'one'},'reference':{**p['reference'],'geometry':geometry(new_size)}}
+            def finish(value):
+                source=self.write_recipe('cross-result.png',value)
+                return self.call({'action':'finish-job','id':'gloves','runId':run_id,'jobId':'0:0','attempt':'one','status':'succeeded','result':{'source':source,'name':'Result'}})
+            for ref in [{**result['reference'],'source':'/different.png'},{**result['reference'],'sha256':'b'*64},{**result['reference'],'geometry':geometry(old_size)}]:self.assertEqual(finish({**result,'reference':ref})[0],400,'changed original or wrong target preprocessing must refuse')
+            status,value=finish(result);self.assertEqual(status,200,value)
+
     def write_recipe(self,name,provenance):
         png=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==')
         data=b'kaminos:image-generation'+bytes(5)+json.dumps(provenance).encode()

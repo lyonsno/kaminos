@@ -35,6 +35,14 @@ def effective_run_recipe(before,overrides):
         if model!=old_model:
             result['textLength']='model' if model=='flux3' else 'fit16'
             if model=='flux3':result['weightsLevel']='4-bit'
+            reference=result.get('reference')
+            if isinstance(reference,dict) and 'geometry' in reference:
+                g=reference['geometry']
+                if not isinstance(g,dict) or any(type(g.get(k))!=int or g[k]<16 for k in ('sourceWidth','sourceHeight')):raise ValueError('Reference recipe has invalid source dimensions')
+                w,h=g['sourceWidth'],g['sourceHeight'];scale=min(1,math.sqrt((1024**2 if model=='flux2' else 4096**2)/(w*h)))
+                rw,rh=math.floor(w*scale),math.floor(h*scale);fw,fh=rw//16*16,rh//16*16
+                if not fw or not fh:raise ValueError('Reference image becomes smaller than the 16-pixel grid')
+                reference['geometry']={'sourceWidth':w,'sourceHeight':h,'resizedWidth':rw,'resizedHeight':rh,'left':(rw-fw)//2,'top':(rh-fh)//2,'width':fw,'height':fh}
     if 'size' in overrides:
         size=overrides['size'];short=math.floor(size*9/16/16+.5)*16
         width,height=before.get('width'),before.get('height')

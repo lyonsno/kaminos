@@ -1,5 +1,6 @@
 import {imageGenerationRecipe,imageRecipeChanges} from './authoring-image-recipe.mjs';
 import {checkedImageAuthor,AUTHORING_IMAGE_MODELS,KLEIN_IMAGE_SIZES} from './authoring-image-generation.mjs';
+import {referenceImageGeometry} from './models/flux3-klein/reference-image.js';
 const copy=value=>structuredClone(value);
 function runOverrides(value={}){
  if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(k=>!['model','size'].includes(k)))throw Error('Unsupported run setting');
@@ -7,7 +8,7 @@ function runOverrides(value={}){
  if(Object.hasOwn(value,'size')&&!KLEIN_IMAGE_SIZES.includes(value.size))throw Error('Choose a supported image size');return copy(value);
 }
 function effectiveRecipe(before,overrides){
- const request={...before,...overrides};if(request.model!==before.model){request.textLength=request.model==='flux3'?'model':'fit16';if(!AUTHORING_IMAGE_MODELS[request.model].levels.includes(request.level))request.level=AUTHORING_IMAGE_MODELS[request.model].levels[0];}return request;
+ const request={...before,...overrides};if(request.model!==before.model){request.textLength=request.model==='flux3'?'model':'fit16';if(!AUTHORING_IMAGE_MODELS[request.model].levels.includes(request.level))request.level=AUTHORING_IMAGE_MODELS[request.model].levels[0];if(before.reference?.geometry){const g=before.reference.geometry;request.reference={...before.reference,geometry:referenceImageGeometry(g.sourceWidth,g.sourceHeight,{maxArea:request.model==='flux2'?1024**2:4096**2})};}}return request;
 }
 export function imageVariationPlan({experiment,sources,seeds,title,overrides={}}){
  overrides=runOverrides(overrides);
