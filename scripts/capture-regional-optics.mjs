@@ -24,7 +24,7 @@ let root=args.root;
 const out=path.resolve(args.out);
 await fs.mkdir(out,{recursive:true});
 const report={identity:'native-regional-optical-capture-run-v0',status:'running',phase:'inputs',root,out,
-  requested:args,scope:'held-Fine-regional-diagnostic',chunks:[],errors:[],artifacts:{},
+  requested:args,scope:'held-Fine-domain-native-material-diagnostic',chunks:[],errors:[],artifacts:{},
   claim:'native material samples and finite segment-reference dataset; no learned quality or runtime saving established'};
 const save=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));
 const hash=b=>createHash('sha256').update(b).digest('hex');
@@ -126,7 +126,7 @@ try {
         if(c.values){const b=new Uint8Array(c.values.buffer,c.values.byteOffset,c.values.byteLength),parts=[];
           for(let i=0;i<b.length;i+=0x8000)parts.push(String.fromCharCode(...b.subarray(i,i+0x8000)));base64=btoa(parts.join(''));}
         return {...c,values:undefined,base64};
-      },{scope:'fine-only',kind:'points',points:requestedPoints,now,specialization:'auto'});
+      },{scope:'fine-domain',kind:'points',points:requestedPoints,now,specialization:'auto'});
       const bytes=result.base64===null?null:Buffer.from(result.base64,'base64');delete result.base64;
       const name=`${label}-${offset}.f32`;
       if(bytes)await artifact(name,bytes);
@@ -155,9 +155,9 @@ try {
   const dataset=regionalDataset(plan,rows);
   assert.ok(dataset.target.some((v,i)=>i%7<6&&Math.abs(v)>1e-6),'all regional emission/scattering targets are empty');
   assert.ok(dataset.target.some((v,i)=>i%7===6&&v<.999999),'all regional extinction targets are empty');
-  for(const name of ['context','query','target','coarse','onePoint','regionIndex'])
+  for(const name of ['context','query','target','coarse','onePoint','sparse','opticalDepth','regionIndex'])
     await artifact(`${name}.bin`,Buffer.from(dataset[name].buffer));
-  report.dataset={...dataset,context:undefined,query:undefined,target:undefined,coarse:undefined,onePoint:undefined,regionIndex:undefined};
+  report.dataset={...dataset,context:undefined,query:undefined,target:undefined,coarse:undefined,onePoint:undefined,sparse:undefined,opticalDepth:undefined,regionIndex:undefined};
   report.phase='source-retention';await save();
   const exported=await page.evaluate(()=>window.__kaminosVolumePrototype.beginDebugFullFieldExport());
   report.fullField=exported;await save();

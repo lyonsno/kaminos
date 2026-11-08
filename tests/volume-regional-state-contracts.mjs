@@ -15,6 +15,10 @@ for(let i=0;i<plan.pointCount;i++) {
 const data=regionalDataset(plan,rows);
 assert.equal(data.context.length,12*27*7);
 assert.equal(data.query.length,48*7);
+assert.equal(data.sparse?.length,48*7,'the actual midpoint material observation must be an input, independent of its integrated baseline');
+assert.equal(data.sparse[0],Math.fround(.7));
+assert.equal(data.sparse[1],2);
+assert.equal(data.opticalDepth.length,48);
 for(const s of plan.segments){const t=data.target.subarray(s.id*7,s.id*7+7);assert.ok(Math.abs(t[6]-Math.exp(-.7*s.length))<1e-7);assert.ok(t[1]<0);}
 assert.ok(data.reference.maxNestedDifference<1e-6);
 assert.ok(data.reference.maxOrderingDifference<1e-6,'constant field is invariant to ray reversal');

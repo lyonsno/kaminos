@@ -10,7 +10,7 @@ const { constantTransfer, composeTransfers, integrateProbes, estimateProbeError,
   opticalProbeFeatures, traceChunkPlan, validateTraceRows, validateTraceSpecialization, createOpticalCaptureOwner } = await import('../volume-optical-trace.mjs');
 assert.equal(typeof createOpticalCaptureOwner,'function','all optical producers need shared asynchronous ownership');
 const owner=createOpticalCaptureOwner();
-for(const name of ['sampleOpticalTraceChunk','materializeLiveCompleteFlameOpticalCoefficients','beginDebugNonRidgeOpticalCapture','beginDebugNonRidgeSourceBasisCapture']) {
+for(const name of ['sampleOpticalTraceChunk','sampleRegionalOpticalChunk','materializeLiveCompleteFlameOpticalCoefficients','beginDebugNonRidgeOpticalCapture','beginDebugNonRidgeSourceBasisCapture']) {
   const wrapper=core.match(new RegExp(`async function ${name}\\(options = \\{\\}\\) \\{([\\s\\S]*?)\\n  \\}`));
   assert.ok(wrapper,`${name} wrapper missing`);
   let entered=false,release;
