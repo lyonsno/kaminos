@@ -4,7 +4,7 @@ import {findRestingPlanes, chooseLevelingPlane, levelingWorldDelta} from './asse
 
 // Snapshot descriptors/typed arrays, not a per-vertex JSON conversion. postMessage
 // clones their buffers; the displayed geometries keep ownership of their arrays.
-export function snapshotAssetGeometry(root) {
+export function snapshotAssetGeometry(root,{triangles=true}={}) {
   const geometries=[], originals=[], ids=new Map();let unsupported=false;
   const attribute=a=>a&&({array:a.isInterleavedBufferAttribute?a.data.array:a.array,itemSize:a.itemSize,normalized:a.normalized,
     ...(a.isInterleavedBufferAttribute?{stride:a.data.stride,offset:a.offset}:{}),count:a.count});
@@ -15,7 +15,7 @@ export function snapshotAssetGeometry(root) {
       const g=node.geometry;
       if(!ids.has(g)){
         ids.set(g,geometries.length);originals.push(g);
-        geometries.push({position:attribute(g.getAttribute('position')),index:attribute(g.index),
+        geometries.push({position:attribute(g.getAttribute('position')),index:triangles?attribute(g.index):null,
           boundingBox:g.boundingBox?{min:g.boundingBox.min.toArray(),max:g.boundingBox.max.toArray()}:null,
           boundingSphere:g.boundingSphere?{center:g.boundingSphere.center.toArray(),radius:g.boundingSphere.radius}:null});
       }
@@ -25,10 +25,10 @@ export function snapshotAssetGeometry(root) {
   };
   root.updateWorldMatrix(true,true);
   const tree=visit(root);
-  return unsupported?null:{snapshot:{tree,geometries},originals};
+  return unsupported?null:{snapshot:{tree,geometries,parentWorld:root.parent?root.parent.matrixWorld.toArray():null},originals};
 }
 
-export function restoreAssetGeometry({tree,geometries}) {
+export function restoreAssetGeometry({tree,geometries,parentWorld=null}) {
   const attribute=a=>{
     if(!a)return null;
     return a.stride!==undefined?new InterleavedBufferAttribute(new InterleavedBuffer(a.array,a.stride),a.itemSize,a.offset,a.normalized)
@@ -46,10 +46,13 @@ export function restoreAssetGeometry({tree,geometries}) {
   const visit=data=>{
     const node=data.geometry===null?new Object3D():new Mesh(prepared[data.geometry]);
     node.position.fromArray(data.position);node.quaternion.fromArray(data.quaternion);node.scale.fromArray(data.scale);
-    node.matrix.fromArray(data.matrix);node.matrixAutoUpdate=data.matrixAutoUpdate;
+    node.matrix.fromArray(data.matrix);node.matrixAutoUpdate=data.matrixAutoUpdate;node.matrixWorldNeedsUpdate=true;
     for(const child of data.children)node.add(visit(child));return node;
   };
-  return {root:visit(tree),geometries:prepared};
+  const root=visit(tree);
+  if(parentWorld){const parent=new Object3D();parent.matrixAutoUpdate=false;parent.matrix.fromArray(parentWorld);parent.matrixWorldNeedsUpdate=true;parent.add(root);}
+  root.updateWorldMatrix(true,true);
+  return {root,geometries:prepared};
 }
 
 // Same Float32 world-coordinate and index order as sceneObjectWorldGeometry.
@@ -72,8 +75,8 @@ function serializeObstacle(snapshot){const box=new Box3().setFromObject(restoreA
 export function prepareAssetGeometryArrival(snapshot,options) {
   const {root,geometries}=restoreAssetGeometry(snapshot);
   const {mode,groundY,anchor:initialAnchor,viewDirection,framing}=options;
-  const obstacles=options.obstacleSources?options.obstacleSources.map(source=>source.snapshot
-    ? serializeObstacle(source.snapshot):source.bounds).filter(Boolean):(options.obstacles??[]);
+  const obstacleBounds=options.obstacleSources?.map(source=>source.snapshot?serializeObstacle(source.snapshot):source.bounds)??null;
+  const obstacles=obstacleBounds?obstacleBounds.filter(Boolean):(options.obstacles??[]);
   const sourceBox=new Box3().setFromObject(root,true);
   const serializeBox=box=>box.isEmpty()?null:{min:box.min.toArray(),max:box.max.toArray()};
   let placement=null,arrivalData=null,leveling=null;
@@ -103,7 +106,7 @@ export function prepareAssetGeometryArrival(snapshot,options) {
   }
   const bounds=serializeBox(new Box3().setFromObject(root,true));
   const camera=mode==='fresh'&&placement&&framing?computeAssetArrivalFraming({...framing,points:assetWorldGeometry(root).points}):null;
-  return {placement,arrivalData,leveling,bounds,framing:camera,pose:{position:root.position.toArray(),quaternion:root.quaternion.toArray(),scale:root.scale.toArray(),matrix:root.matrix.toArray()},
+  return {placement,arrivalData,leveling,bounds,obstacleBounds,framing:camera,pose:{position:root.position.toArray(),quaternion:root.quaternion.toArray(),scale:root.scale.toArray(),matrix:root.matrix.toArray()},
     geometryBounds:geometries.map(g=>({box:serializeBox(g.boundingBox??new Box3()),sphere:g.boundingSphere?{center:g.boundingSphere.center.toArray(),radius:g.boundingSphere.radius}:null})),
     effectiveRoute:'static-geometry-worker'};
 }
@@ -131,4 +134,63 @@ export async function prepareAssetGeometryOffThread(root,options,{Worker:WorkerC
     }
     return result;
   }finally{await worker.terminate();}
+}
+
+
+// Precise world bounds may be reused only for the same hierarchy, transforms
+// and uploaded position attributes. No vertex values are visited by this check.
+export function captureAssetBoundsState(root){
+ root.updateWorldMatrix(true,true);const state=[];let supported=true;
+ root.traverse(node=>{
+  const g=node.geometry,p=g?.getAttribute('position');
+  if(node.isSkinnedMesh||node.isInstancedMesh||node.isBatchedMesh||node.sceneGeometry||node.matrixWorldAutoUpdate===false||g&&!node.isMesh||g?.morphAttributes?.position?.length||p?.isFloat16BufferAttribute||p?.isGLBufferAttribute)supported=false;
+  state.push(node,g,p,p?.array,p?.data,p?.data?.array,p?.version,p?.data?.version,p?.count,p?.itemSize,p?.normalized,p?.offset,p?.data?.stride,p?.array?.byteLength,p?.data?.array?.byteLength,...node.matrixWorld.elements);
+ });
+ return supported?state:null;
+}
+export const assetBoundsStateMatches=(a,b)=>!!a&&!!b&&a.length===b.length&&a.every((value,index)=>value===b[index]);
+export function createAssetBoundsCache(){
+ const entries=new WeakMap();
+ return{
+  remember(root,bounds,state=captureAssetBoundsState(root)){
+   if(!bounds||!assetBoundsStateMatches(state,captureAssetBoundsState(root)))return false;
+   entries.set(root,{state,bounds:{min:[...bounds.min],max:[...bounds.max]}});return true;
+  },
+  read(root){const entry=entries.get(root);if(!entry||!assetBoundsStateMatches(entry.state,captureAssetBoundsState(root))){entries.delete(root);return null;}return{min:[...entry.bounds.min],max:[...entry.bounds.max]};},
+ };
+}
+
+export function prepareAssetGeometryBounds(snapshots,{localOnly=false}={}){
+ return {effectiveRoute:localOnly?'static-local-bounds-worker':'static-world-bounds-worker',rows:snapshots.map(snapshot=>{
+  const {root,geometries}=restoreAssetGeometry(snapshot);const box=localOnly?null:new Box3().setFromObject(root,true);
+  return{bounds:box&&!box.isEmpty()?{min:box.min.toArray(),max:box.max.toArray()}:null,
+   geometryBounds:geometries.map(g=>({box:g.boundingBox&&!g.boundingBox.isEmpty()?{min:g.boundingBox.min.toArray(),max:g.boundingBox.max.toArray()}:null,sphere:g.boundingSphere?{center:g.boundingSphere.center.toArray(),radius:g.boundingSphere.radius}:null}))};
+ })};
+}
+export async function prepareAssetBoundsOffThread(roots,{localOnly=false,Worker:WorkerClass=globalThis.Worker}={}){
+ if(!WorkerClass)return[];
+ const captured=roots.map(root=>({root,state:captureAssetBoundsState(root),...snapshotAssetGeometry(root,{triangles:false})})).filter(row=>row.snapshot);
+ if(!captured.length)return[];
+ const worker=new WorkerClass(new URL('./asset-geometry.worker.mjs',import.meta.url),{type:'module'});
+ try{
+  const result=await new Promise((resolve,reject)=>{
+   worker.onmessage=({data})=>data.error?reject(Error(data.error)):resolve(data.result);
+   worker.onerror=event=>reject(Error(event.message||'Asset bounds worker failed'));worker.onmessageerror=()=>reject(Error('Asset bounds worker response could not be read'));
+   worker.postMessage({task:'bounds',snapshots:captured.map(row=>row.snapshot),options:{localOnly}});
+  });
+  const vector=(value,size)=>Array.isArray(value)&&value.length===size&&value.every(Number.isFinite),box=value=>value===null||(vector(value?.min,3)&&vector(value?.max,3));
+  if(result?.effectiveRoute!==(localOnly?'static-local-bounds-worker':'static-world-bounds-worker')||!Array.isArray(result.rows)||result.rows.length!==captured.length)throw Error('Incomplete asset bounds preparation');
+  return result.rows.map((row,index)=>{
+   const capture=captured[index];
+   if(!box(row.bounds)||!Array.isArray(row.geometryBounds)||row.geometryBounds.length!==capture.originals.length)throw Error('Incomplete asset bounds preparation');
+   if(!assetBoundsStateMatches(capture.state,captureAssetBoundsState(capture.root)))return{root:capture.root,state:capture.state,bounds:null,stale:true,effectiveRoute:result.effectiveRoute};
+   for(let k=0;k<capture.originals.length;k++){
+    const g=capture.originals[k],b=row.geometryBounds[k];
+    if(!box(b.box)||!(b.sphere===null||(vector(b.sphere?.center,3)&&Number.isFinite(b.sphere?.radius))))throw Error('Incomplete asset bounds preparation');
+    if(!g.boundingBox&&b.box)g.boundingBox=new Box3(new Vector3().fromArray(b.box.min),new Vector3().fromArray(b.box.max));
+    if(!g.boundingSphere&&b.sphere)g.boundingSphere=new Sphere(new Vector3().fromArray(b.sphere.center),b.sphere.radius);
+   }
+   return{root:capture.root,state:capture.state,bounds:row.bounds,effectiveRoute:result.effectiveRoute};
+  });
+ }finally{await worker.terminate();}
 }

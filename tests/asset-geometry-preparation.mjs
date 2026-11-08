@@ -7,7 +7,7 @@ import {Worker as NodeWorker} from 'node:worker_threads';
 import * as THREE from '../lib/three.core.js';
 import * as arrival from '../asset-arrival.mjs';
 import {findRestingPlanes,chooseLevelingPlane,levelingWorldDelta} from '../asset-resting-plane.mjs';
-import {snapshotAssetGeometry,restoreAssetGeometry,assetWorldGeometry,prepareAssetGeometryArrival,prepareAssetGeometryOffThread} from '../asset-geometry-preparation.mjs';
+import {snapshotAssetGeometry,restoreAssetGeometry,assetWorldGeometry,prepareAssetGeometryArrival,prepareAssetGeometryOffThread,prepareAssetBoundsOffThread,createAssetBoundsCache} from '../asset-geometry-preparation.mjs';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const section=(a,b)=>html.slice(html.indexOf(a),html.indexOf(b,html.indexOf(a)));
 function model(){
@@ -84,4 +84,83 @@ test('malformed worker poses cannot masquerade as completed geometry preparation
  let terminated=false;
  class Malformed {postMessage({snapshot}){queueMicrotask(()=>this.onmessage({data:{result:{effectiveRoute:'static-geometry-worker',pose:{},geometryBounds:snapshot.geometries.map(()=>({box:null,sphere:null}))}}}));}terminate(){terminated=true;}}
  await assert.rejects(prepareAssetGeometryOffThread(model(),options,{Worker:Malformed}),/Incomplete/);assert.ok(terminated);
+});
+
+test('append GI calibration consumes prepared bounds for existing roots instead of scanning their vertices again',()=>{
+ const old=new THREE.Group(),added=new THREE.Group(),oldBounds={min:[-2,0,-2],max:[2,2,2]},newBounds={min:[3,0,0],max:[4,1,1]},cache=new Map([[old,oldBounds],[added,newBounds]]);let calibrated;
+ class NoScanBox extends THREE.Box3{setFromObject(){assert.fail('main-thread vertex rescan despite prepared bounds');}}
+ const c={THREE:{...THREE,Box3:NoScanBox},sceneGIManuallyConfigured:false,sceneGIBounceManuallyConfigured:false,sceneGISettings:{},sceneGIAutoCalibrationState:null,
+  workingScene:{objects:[{object:old,type:'glb'},{object:added,type:'glb'}]},readPreparedAssetBounds:object=>cache.get(object),camera:null,controls:null,
+  calibrateSceneGISettingsForBounds:input=>{calibrated=input;return{};},setSceneGIControls(){}};
+ vm.createContext(c);vm.runInContext(section('function autoCalibrateSceneGIFromScene(', 'function recordAssetArrivalLightingAndGI('),c);
+ c.autoCalibrateSceneGIFromScene(added,newBounds);assert.deepEqual(structuredClone(calibrated.boxes),[oldBounds,newBounds]);
+});
+
+
+test('bounds cache invalidates on transforms, hierarchy and uploaded geometry changes',()=>{
+ const root=model(),cache=createAssetBoundsCache(),bounds={min:[-1,-1,-1],max:[1,1,1]};
+ assert.equal(cache.remember(root,bounds),true);assert.deepEqual(cache.read(root),bounds);
+ const copy=cache.read(root);copy.min[0]=99;assert.deepEqual(cache.read(root),bounds);
+ root.position.x+=1;assert.equal(cache.read(root),null);
+ cache.remember(root,bounds);const g=root.children[0].children[0].geometry;g.attributes.position.needsUpdate=true;assert.equal(cache.read(root),null);
+ cache.remember(root,bounds);root.add(new THREE.Object3D());assert.equal(cache.read(root),null);
+ cache.remember(root,bounds);g.setAttribute('position',g.attributes.position.clone());assert.equal(cache.read(root),null);
+});
+test('one bounds worker handles multiple final saved transforms and parent-group pivots',async()=>{
+ const parent=new THREE.Group();parent.position.set(2,1,-.8);parent.rotation.y=.6;parent.scale.set(1.2,.8,1.1);const first=model(),second=model();second.position.x=-2;parent.add(first);parent.add(second);
+ let created=0;class Counted extends BrowserWorker{constructor(url){super(url);created++;}}
+ const expected=[first,second].map(root=>{root.updateWorldMatrix(true,true);const box=new THREE.Box3().setFromObject(root,true);return{min:box.min.toArray(),max:box.max.toArray()};});
+ const rows=await prepareAssetBoundsOffThread([first,second],{Worker:Counted});assert.equal(created,1);assert.equal(rows.length,2);
+ const cache=createAssetBoundsCache();for(let i=0;i<rows.length;i++){assert.deepEqual(rows[i].bounds,expected[i]);assert.ok(cache.remember(rows[i].root,rows[i].bounds,rows[i].state));}
+ assert.deepEqual(cache.read(first),expected[0]);parent.position.y+=1;assert.equal(cache.read(first),null);
+});
+test('local-only source preparation fills reusable geometry bounds without computing unused world boxes',async()=>{
+ const root=model(),rows=await prepareAssetBoundsOffThread([root],{localOnly:true,Worker:BrowserWorker});assert.equal(rows.length,1);assert.equal(rows[0].bounds,null);assert.equal(rows[0].effectiveRoute,'static-local-bounds-worker');
+ root.traverse(node=>{if(node.geometry){assert.ok(node.geometry.boundingBox);assert.ok(node.geometry.boundingSphere);}});
+});
+test('saved-record arrival does not start its own geometry worker',async()=>{
+ const c={prepareAssetGeometryOffThread:()=>assert.fail('saved records must reuse prepared source bounds')};vm.createContext(c);vm.runInContext(section('async function prepareGLBGeometryArrival(', 'function applyAssetArrival('),c);assert.equal(await c.prepareGLBGeometryArrival(model(),null),null);
+});
+
+
+test('worker obstacle placement includes the existing object parent-group transform',()=>{
+ const parent=new THREE.Group();parent.position.x=12;const obstacle=new THREE.Group().add(new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial()));parent.add(obstacle);obstacle.updateWorldMatrix(true,true);
+ const box=new THREE.Box3().setFromObject(obstacle,true),worldBox={min:box.min.toArray(),max:box.max.toArray()};
+ const incoming=model(),opts={...options,mode:'append',obstacles:[worldBox],obstacleSources:[{snapshot:snapshotAssetGeometry(obstacle).snapshot}]};
+ const actual=prepareAssetGeometryArrival(snapshotAssetGeometry(incoming).snapshot,opts),expected=reference(incoming,opts);
+ assert.deepEqual(actual.arrivalData,structuredClone(expected.arrivalData));assert.deepEqual(actual.obstacleBounds,[worldBox]);
+});
+test('bounds batch rejects partial output and closes its worker',async()=>{
+ let closed=false;class Partial{postMessage(){queueMicrotask(()=>this.onmessage({data:{result:{effectiveRoute:'static-world-bounds-worker',rows:[]}}}));}terminate(){closed=true;}}
+ await assert.rejects(prepareAssetBoundsOffThread([model()],{Worker:Partial}),/Incomplete asset bounds/);assert.ok(closed);
+});
+test('unchanged cached bounds never read vertex coordinates on the main thread',()=>{
+ const root=model(),cache=createAssetBoundsCache(),bounds={min:[-1,0,-1],max:[1,1,1]};cache.remember(root,bounds);
+ root.traverse(node=>{if(node.geometry)node.geometry.getAttribute('position').getX=()=>assert.fail('cached bounds touched vertices');});
+ assert.deepEqual(cache.read(root),bounds);
+});
+
+
+test('worker bounds preserve matrix-authored children and parent world transforms',()=>{
+ const parent=new THREE.Group();parent.position.set(12,3,-1);
+ const root=new THREE.Group();root.position.x=2;parent.add(root);
+ const mesh=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial());mesh.matrixAutoUpdate=false;mesh.matrix.makeTranslation(10,0,0);mesh.matrixWorldNeedsUpdate=true;root.add(mesh);
+ root.updateWorldMatrix(true,true);const expected=new THREE.Box3().setFromObject(root,true),copy=restoreAssetGeometry(snapshotAssetGeometry(root).snapshot).root;
+ const actual=new THREE.Box3().setFromObject(copy,true);assert.deepEqual(actual.min.toArray(),expected.min.toArray());assert.deepEqual(actual.max.toArray(),expected.max.toArray());
+});
+test('fresh preparation measures the toolbar that will become visible and restores hidden state',async()=>{
+ let visible=false,received;
+ const bar={classList:{contains:()=>visible,add:()=>{visible=true;},remove:()=>{visible=false;}},getBoundingClientRect:()=>visible?{left:0,right:800,top:56,bottom:120,width:800,height:64}:{left:0,right:0,top:0,bottom:0,width:0,height:0}};
+ const c={THREE,JSON,workingScene:{objects:[]},groundPlane:{position:{y:0}},controls:{target:new THREE.Vector3()},camera:{position:new THREE.Vector3(0,0,1),fov:45,aspect:2},
+  document:{getElementById:()=>bar},renderer:{domElement:{getBoundingClientRect:()=>({left:0,right:800,top:0,height:400})}},assetArrivalFramingWindow:arrival.assetArrivalFramingWindow,
+  prepareAssetGeometryOffThread:async(_root,opts)=>{received=opts;return{placement:null};}};
+ vm.createContext(c);vm.runInContext(section('function viewportOverlayTopNdc(', 'function frameAssetArrival(')+section('async function prepareGLBGeometryArrival(', 'function applyAssetArrival('),c);
+ await c.prepareGLBGeometryArrival(model(),'fresh');assert.equal(visible,false);assert.ok(Math.abs(received.framing.window.top-.35)<1e-12,JSON.stringify(received.framing.window));
+ await c.prepareGLBGeometryArrival(model(),'fresh',()=>true,{activate:false});assert.equal(received.framing.window.top,.62);assert.equal(visible,false);
+});
+
+test('worker preserves an unparented matrix-authored root',()=>{
+ const root=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial());root.matrixAutoUpdate=false;root.matrix.makeTranslation(8,3,-2);root.matrixWorldNeedsUpdate=true;
+ const expected=new THREE.Box3().setFromObject(root,true),copy=restoreAssetGeometry(snapshotAssetGeometry(root).snapshot).root,actual=new THREE.Box3().setFromObject(copy,true);
+ assert.deepEqual(actual.min.toArray(),expected.min.toArray());assert.deepEqual(actual.max.toArray(),expected.max.toArray());
 });

@@ -3555,7 +3555,7 @@ import {createAppFrameSource} from './app-frame-source.mjs';
 import {createSceneFrameComposition} from './scene-frame-composition.mjs';
 import {createAppGpuHost} from './app-gpu-host.mjs';
 import {fireAtBoot,createFluidBoot} from './fire-boot.mjs';
-import {prepareAssetGeometryOffThread,snapshotAssetGeometry} from './asset-geometry-preparation.mjs';
+import {prepareAssetGeometryOffThread,snapshotAssetGeometry,prepareAssetBoundsOffThread,createAssetBoundsCache,captureAssetBoundsState,assetBoundsStateMatches} from './asset-geometry-preparation.mjs';
 import {createAuthoringPromptExpansion,installAuthoringPromptExpansion,authoringPromptWeightRoot} from './authoring-prompt-expansion.mjs';
 import {createKleinAuthoringImageGeneration,installKleinImageGeneration,createForegroundHandoff,runWithKilnHandoff,sharedDeviceHostRequirements,authoringImageWeightRoot,readPngProvenance} from './authoring-image-generation.mjs';
 import {createImagePreparation} from './authoring-image-preparation.mjs';
@@ -4248,7 +4248,19 @@ const sceneRecords = createSceneRecordOperations({
 let sceneNavigation = null;
 // GI proxy handles (scene-gi-proxies.mjs): a stored low tier of each TRELLIS object's hero, loaded off the frame
 // loop and never in the scene. The GI renderer reads them via window.kaminosGiProxies; pass policy is its own.
-const fullSceneAssetPool=createPreparedAssetPool({load:source=>new GLTFLoader().loadAsync(source)});
+const preparedAssetBounds=createAssetBoundsCache();
+function readPreparedAssetBounds(object){return preparedAssetBounds.read(object);}
+async function prepareSavedSceneGeometryBounds(isCurrent=()=>true){
+  const roots=workingScene.objects.filter(entry=>entry.object&&entry.object.visible!==false&&!['camera','light'].includes(entry.type)).map(entry=>entry.object);
+  const rows=await prepareAssetBoundsOffThread(roots);
+  if(!isCurrent())return;
+  for(const row of rows)preparedAssetBounds.remember(row.root,row.bounds,row.state);
+}
+const fullSceneAssetPool=createPreparedAssetPool({load:async source=>{
+  const asset=await new GLTFLoader().loadAsync(source);
+  try{await prepareAssetBoundsOffThread([asset.scene],{localOnly:true});return asset;}
+  catch(error){disposePreparedAsset(asset);throw error;}
+}});
 const sceneLodAssetPool=createPreparedAssetPool();
 const parseGiProxyGlb=async bytes => (await new GLTFLoader().register(parser => ({
     name: 'KaminosUntexturedGiProxy',
@@ -13270,7 +13282,10 @@ async function showPBRPreview(options = {}) {
 // Imported assets land resting on the ground at the shared size. A fresh
 // arrival (scene just cleared) sits at the origin and gets a framed camera; an
 // append lands under the orbit pivot and leaves camera and lighting alone.
-async function prepareGLBGeometryArrival(object,mode,isCurrent=()=>true) {
+async function prepareGLBGeometryArrival(object,mode,isCurrent=()=>true,{activate=true}={}) {
+  const overlayTop=()=>viewportOverlayTopNdc({includeHidden:activate});
+  if(!mode)return null; // Saved sources are prepared once in their shared pool.
+
   const contextKey=()=>{
     const poses=[];
     for(const entry of workingScene.objects??[]){
@@ -13278,38 +13293,45 @@ async function prepareGLBGeometryArrival(object,mode,isCurrent=()=>true) {
       entry.object.updateWorldMatrix(true,true);
       entry.object.traverse(node=>poses.push([node.id,node.visible,...node.matrixWorld.elements,node.geometry?.id,node.geometry?.getAttribute('position')?.version,node.geometry?.getAttribute('position')?.data?.version]));
     }
-    return JSON.stringify([groundPlane?.position.y,camera?.fov,camera?.aspect,viewportOverlayTopNdc(),poses]);
+    return JSON.stringify([groundPlane?.position.y,camera?.fov,camera?.aspect,overlayTop(),poses]);
   };
   for(;;){
     const key=contextKey(),groundY=groundPlane?groundPlane.position.y:0;
     const anchor=mode==='append'&&controls?[controls.target.x,controls.target.z]:[0,0];
-    const obstacleSources=[];
+    const obstacleSources=[],obstacleRoots=[];
     if(mode==='append'){
       for(const entry of workingScene.objects){
         if(!entry.object||['camera','light'].includes(entry.type)||entry.object.visible===false)continue;
+        const cached=preparedAssetBounds.read(entry.object);
+        if(cached){obstacleSources.push({bounds:cached});obstacleRoots.push({root:entry.object,state:captureAssetBoundsState(entry.object)});continue;}
         const snapshot=snapshotAssetGeometry(entry.object)?.snapshot;
-        if(snapshot)obstacleSources.push({snapshot});
-        else{const box=new THREE.Box3().setFromObject(entry.object,true);if(!box.isEmpty())obstacleSources.push({bounds:{min:box.min.toArray(),max:box.max.toArray()}});}
+        if(snapshot){obstacleSources.push({snapshot});obstacleRoots.push({root:entry.object,state:captureAssetBoundsState(entry.object)});}
+        else{const box=new THREE.Box3().setFromObject(entry.object,true);if(!box.isEmpty()){obstacleSources.push({bounds:{min:box.min.toArray(),max:box.max.toArray()}});obstacleRoots.push(null);}}
       }
       const box=flameDomainGuide?.box;
-      if(activeSceneComposition&&box&&!box.isEmpty())obstacleSources.push({bounds:{min:box.min.toArray(),max:box.max.toArray()}});
+      if(activeSceneComposition&&box&&!box.isEmpty()){obstacleSources.push({bounds:{min:box.min.toArray(),max:box.max.toArray()}});obstacleRoots.push(null);}
     }
     const prepared=await prepareAssetGeometryOffThread(object,{mode,groundY,anchor,obstacleSources,
       viewDirection:camera&&controls?camera.position.clone().sub(controls.target).toArray():[0,0,1],
-      framing:mode==='fresh'&&camera?{fovDeg:camera.fov,aspect:camera.aspect,window:assetArrivalFramingWindow({overlayTopNdc:viewportOverlayTopNdc()})}:null});
+      framing:mode==='fresh'&&camera?{fovDeg:camera.fov,aspect:camera.aspect,window:assetArrivalFramingWindow({overlayTopNdc:overlayTop()})}:null});
     if(!prepared){object.userData.kaminosAssetPreparation={requestedRoute:'static-geometry-worker',effectiveRoute:'main-thread-compatibility'};return null;}
     // Recheck viewport shape and neighboring geometry; ordinary camera orbit
     // must not keep restarting a completed preparation.
-    if(!isCurrent()||key===contextKey())return prepared;
+    if(!isCurrent())return prepared;
+    if(key===contextKey()&&obstacleRoots.every(row=>!row||assetBoundsStateMatches(row.state,captureAssetBoundsState(row.root)))){
+      for(let i=0;i<obstacleRoots.length;i++){const row=obstacleRoots[i];if(row)preparedAssetBounds.remember(row.root,prepared.obstacleBounds?.[i],row.state);}
+      return prepared;
+    }
   }
 }
 
 function applyAssetArrival(object, mode, prepared = null) {
   if(prepared){
-    object.position.fromArray(prepared.pose.position);object.quaternion.fromArray(prepared.pose.quaternion);object.scale.fromArray(prepared.pose.scale);object.matrix.fromArray(prepared.pose.matrix);object.updateWorldMatrix(true,true);
+    object.position.fromArray(prepared.pose.position);object.quaternion.fromArray(prepared.pose.quaternion);object.scale.fromArray(prepared.pose.scale);object.matrix.fromArray(prepared.pose.matrix);object.matrixWorldNeedsUpdate=true;object.updateWorldMatrix(true,true);
     if(prepared.leveling)object.userData.kaminosLeveling=prepared.leveling;
     if(prepared.arrivalData)object.userData.kaminosAssetArrival=prepared.arrivalData;
     object.userData.kaminosAssetPreparation={effectiveRoute:prepared.effectiveRoute};
+    preparedAssetBounds.remember(object,prepared.bounds);
     if(prepared.placement)recordAssetArrivalLightingAndGI(object,mode,prepared.bounds);
     return prepared.placement;
   }
@@ -13451,10 +13473,15 @@ function sceneObjectWorldPoints(object) {
 // The Workbench transform toolbar floats over the top of the canvas; in
 // Authoring it lives in the inspector. Only a toolbar actually overlapping the
 // canvas's top half shrinks the framing window.
-function viewportOverlayTopNdc() {
+function viewportOverlayTopNdc({includeHidden=false}={}) {
   const canvasRect = renderer.domElement.getBoundingClientRect();
   const bar = document.getElementById('transform-bar');
-  const barRect = bar?.classList.contains('visible') ? bar.getBoundingClientRect() : null;
+  const shown=bar?.classList.contains('visible'),measureHidden=bar&&!shown&&includeHidden;
+  let barRect=null;
+  try{
+    if(measureHidden)bar.classList.add('visible');
+    if(shown||measureHidden)barRect=bar.getBoundingClientRect();
+  }finally{if(measureHidden)bar.classList.remove('visible');}
   if (!barRect || !(canvasRect.height > 0) || !(barRect.width > 0 && barRect.height > 0)) return 1;
   const overlaps = barRect.left < canvasRect.right && barRect.right > canvasRect.left
     && barRect.bottom > canvasRect.top && barRect.top < canvasRect.top + canvasRect.height / 2;
@@ -13860,7 +13887,7 @@ async function showGLB(file, options = {}) {
       let preparedGeometry=null;
       if(typeof prepareGLBGeometryArrival==='function'){
         loadingTelemetry?.progress('asset',{label:telemetryLabel,phase:'preparing-geometry',token:telemetryOp?.token});
-        try{preparedGeometry=await prepareGLBGeometryArrival(gltf.scene,arrival,()=>loadToken===workingScene.generation&&options.isCurrent?.()!==false);}
+        try{preparedGeometry=await prepareGLBGeometryArrival(gltf.scene,arrival,()=>loadToken===workingScene.generation&&options.isCurrent?.()!==false,{activate:options.activate!==false});}
         catch(error){disposeObjectTree(gltf.scene);throw error;}
       }
       heroSettled = true;
@@ -24057,8 +24084,9 @@ function autoCalibrateSceneGIFromScene(extraObject = null, preparedBounds = null
   const pushBox = obj => {
     if (!obj) return;
     obj.updateWorldMatrix?.(true, true);
-    const box = obj===extraObject&&preparedBounds
-      ? new THREE.Box3(new THREE.Vector3().fromArray(preparedBounds.min),new THREE.Vector3().fromArray(preparedBounds.max))
+    const cachedBounds=typeof readPreparedAssetBounds==='function'?readPreparedAssetBounds(obj):(obj===extraObject?preparedBounds:null);
+    const box = cachedBounds
+      ? new THREE.Box3(new THREE.Vector3().fromArray(cachedBounds.min),new THREE.Vector3().fromArray(cachedBounds.max))
       : new THREE.Box3().setFromObject(obj, true);
     if (!box.isEmpty()) boxes.push({ min: box.min.toArray(), max: box.max.toArray() });
   };
@@ -24162,7 +24190,8 @@ function refreshArrivalLightingFromWorkingScene({syncPromoted=false}={}) {
     for (const entry of workingScene.objects) {
       if (entry.object && entry.object.visible !== false && !['camera', 'light'].includes(entry.type)) {
         entry.object.updateWorldMatrix?.(true, true);
-        const box = new THREE.Box3().setFromObject(entry.object, true);
+        const cachedBounds=typeof readPreparedAssetBounds==='function'?readPreparedAssetBounds(entry.object):null;
+        const box = cachedBounds?new THREE.Box3(new THREE.Vector3().fromArray(cachedBounds.min),new THREE.Vector3().fromArray(cachedBounds.max)):new THREE.Box3().setFromObject(entry.object, true);
         if (!box.isEmpty()) union.union(box);
         allSamples.push(...extractObjectMaterialSamples(entry.object));
       }
@@ -29067,6 +29096,8 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
   // Apply postprocessing
   restoreFireRendering(document,data.postprocessing?.fireLighting);
   sceneBloom.set(checkedSceneBloom(data.postprocessing?.bloom??{}));bloomControls?.sync();
+  if(typeof prepareSavedSceneGeometryBounds==='function')await prepareSavedSceneGeometryBounds(()=>sceneLoadRequests.isCurrent(loadRequestId));
+  if(!sceneLoadRequests.isCurrent(loadRequestId))return false;
   if (typeof autoCalibrateSceneGIFromScene === 'function') autoCalibrateSceneGIFromScene();
   if (typeof arrivalLightingState !== 'undefined') {
     if (Array.isArray(data?.objects) && data.objects.length > 0) {
