@@ -71,6 +71,24 @@ class ExperimentsHttp(unittest.TestCase):
             self.assertEqual([j['status'] for j in doc['runs'][0]['jobs']],['succeeded','queued'])
         self.assertEqual(json.loads((self.directory/'experiments/gloves.json').read_text())['runs'][0]['sources'][0]['provenance'],provenance)
 
+    def test_model_size_plan_is_persistent_and_publication_checks_effective_choices(self):
+        p={'schema':'kaminos.image-generation.v1','model':'FLUX.3 Image Klein','prompt':'A rack','seed':5,'width':512,'height':512,'weightsLevel':'4-bit','lora':None,'source':{'revision':'old'},'sampling':{'steps':4}}
+        self.write_recipe('glove.png',p);self.create();author={'kind':'person','id':'noah','label':'Noah'}
+        payload={'action':'create-run','id':'gloves','runId':'real-png','title':'Model and size','sources':[self.source],'seeds':[41],'author':author,'overrides':{'model':'flux2','size':768}}
+        status,doc=self.call(payload);self.assertEqual(status,200,doc);self.assertEqual(doc['runs'][0]['overrides'],payload['overrides'])
+        self.assertEqual(self.call(payload)[0],200);self.assertEqual(self.call({**payload,'overrides':{'model':'flux3','size':768}})[0],409)
+        self.assertEqual(self.call({**payload,'runId':'bad','overrides':{'size':999}})[0],400)
+        self.assertEqual(self.call({**payload,'runId':'bad','overrides':{'model':'unknown'}})[0],400)
+        for malformed in [{'model':[]},{'model':{}},{'model':None},{'size':True},{'prompt':'changed'}]:self.assertEqual(self.call({**payload,'runId':'bad','overrides':malformed})[0],400)
+        self.assertEqual(self.call({'action':'claim-job','id':'gloves','runId':'real-png','jobId':'0:0','attempt':'one'})[0],200)
+        result={**p,'author':author,'seed':41,'iteration':{'parent':{'source':self.source}},'variation':{'experimentId':'gloves','runId':'real-png','jobId':'0:0','attempt':'one'}}
+        self.assertEqual(self.finish_actual(result)[0],400,'old effective model/size must not masquerade as chosen plan')
+        result.update(model='FLUX.2 [klein] 4B',width=768,height=768,textLength='fit16',source={'revision':'new model'},sampling={'steps':4})
+        self.assertEqual(self.finish_actual({**result,'width':512,'height':512})[0],400,'ignored requested size must not publish')
+        self.assertEqual(self.finish_actual({**result,'prompt':'different'})[0],400,'model choice cannot silently change prompt')
+        status,value=self.finish_actual(result);self.assertEqual(status,200,value)
+        saved=self.call(query='?id=gloves')[1]['runs'][0];self.assertEqual(saved['overrides'],payload['overrides']);self.assertEqual(saved['sources'][0]['provenance'],p)
+
     def write_recipe(self,name,provenance):
         png=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==')
         data=b'kaminos:image-generation'+bytes(5)+json.dumps(provenance).encode()

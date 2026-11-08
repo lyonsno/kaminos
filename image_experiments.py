@@ -6,6 +6,7 @@ merge under a file lock; metadata edits use a revision to detect stale writers.
 import copy
 import fcntl
 import json
+import math
 import os
 import re
 import tempfile
@@ -16,6 +17,30 @@ from functools import lru_cache
 from pathlib import Path
 
 SCHEMA = 'kaminos.image-experiment.v1'
+IMAGE_MODELS={'flux2':'FLUX.2 [klein] 4B','flux3':'FLUX.3 Image Klein'}
+
+def run_overrides(value):
+    if not isinstance(value,dict) or any(key not in ('model','size') for key in value):raise ValueError('Unsupported run setting')
+    if 'model' in value and (not isinstance(value['model'],str) or value['model'] not in IMAGE_MODELS):raise ValueError('Choose a supported image model')
+    if 'size' in value and (type(value['size'])!=int or value['size'] not in (256,384,512,768,1024)):raise ValueError('Choose a supported image size')
+    return copy.deepcopy(value)
+
+def recipe_model(value):
+    return next((key for key,name in IMAGE_MODELS.items() if value in (key,name)),None)
+
+def effective_run_recipe(before,overrides):
+    result=copy.deepcopy(before);old_model=recipe_model(before.get('model'));model=overrides.get('model',old_model)
+    if 'model' in overrides:
+        result['model']=IMAGE_MODELS[model]
+        if model!=old_model:
+            result['textLength']='model' if model=='flux3' else 'fit16'
+            if model=='flux3':result['weightsLevel']='4-bit'
+    if 'size' in overrides:
+        size=overrides['size'];short=math.floor(size*9/16/16+.5)*16
+        width,height=before.get('width'),before.get('height')
+        if type(width)!=int or type(height)!=int or min(width,height)<=0:raise ValueError('Source recipe has invalid dimensions')
+        result['width'],result['height']=(size,short) if width>height else (short,size) if height>width else (size,size)
+    return result
 
 class Conflict(ValueError):
     pass
@@ -117,13 +142,14 @@ class ExperimentStore:
         run=next((r for r in runs if r['id']==run_id),None)
         if action=='create-run':
             sources=payload.get('sources');seeds=payload.get('seeds');author=payload.get('author')
+            overrides=run_overrides(payload.get('overrides',{}))
             if not isinstance(sources,list) or not sources or len(set(sources))!=len(sources):raise ValueError('Choose distinct source recipes')
             if not isinstance(seeds,list) or not seeds or any(type(seed)!=int or seed<0 or seed>9007199254740991 for seed in seeds) or len(set(seeds))!=len(seeds):raise ValueError('Choose distinct nonnegative integer seeds')
             if not isinstance(author,dict) or author.get('kind') not in ('person','agent'):raise ValueError('A run needs its actual author')
             author={key:text(author.get(key),key,True) for key in ('kind','id','label')}
             title=text(payload.get('title'),'Run name',True)
             if run:
-                if [r['source'] for r in run['sources']]!=sources or run['seeds']!=seeds or run['title']!=title or run['author']!=author:raise Conflict('Run id already belongs to a different plan')
+                if [r['source'] for r in run['sources']]!=sources or run['seeds']!=seeds or run['title']!=title or run['author']!=author or run.get('overrides',{})!=overrides:raise Conflict('Run id already belongs to a different plan')
                 return
             snapshots=[]
             for source in sources:
@@ -132,8 +158,9 @@ class ExperimentStore:
                 entry=self.inspect(source);p=entry.get('provenance')
                 if entry.get('visibility',{}).get('status')=='withheld':raise ValueError('Source image is withheld')
                 if not isinstance(p,dict) or p.get('schema')!='kaminos.image-generation.v1':raise ValueError('Source has no generation recipe')
+                effective_run_recipe(p,overrides)
                 snapshots.append({'source':source,'name':member['name'],'provenance':copy.deepcopy(p)})
-            runs.append({'id':run_id,'title':title,'author':author,'createdAt':time.time(),'seeds':seeds,'sources':snapshots,'stopRequested':False,
+            runs.append({'id':run_id,'title':title,'author':author,'createdAt':time.time(),'seeds':seeds,'overrides':overrides,'sources':snapshots,'stopRequested':False,
                          'jobs':[{'id':f'{r}:{c}','sourceIndex':r,'seed':seed,'status':'queued','attempts':[]} for r in range(len(snapshots)) for c,seed in enumerate(seeds)]})
             return
         if not run:raise ValueError('Saved run is missing')
@@ -185,11 +212,15 @@ class ExperimentStore:
             def preserves(expected,actual):
                 if isinstance(expected,dict):return isinstance(actual,dict) and all(key in actual and preserves(value,actual[key]) for key,value in expected.items())
                 return expected==actual
-            for key in ('prompt','model','width','height','weightsLevel','reference','source','sampling','lora'):
-                if not preserves(before.get(key),p.get(key)):raise ValueError('Saved result changed a fixed recipe field: '+key)
+            effective=effective_run_recipe(before,run_overrides(run.get('overrides',{})))
+            if (recipe_model(effective.get('model')) or effective.get('model'))!=(recipe_model(p.get('model')) or p.get('model')):raise ValueError('Saved result changed the planned model')
+            keys=['prompt','width','height','weightsLevel','reference']
+            if recipe_model(before.get('model'))==recipe_model(effective.get('model')):keys+=['source','sampling','lora']
+            for key in keys:
+                if not preserves(effective.get(key),p.get(key)):raise ValueError('Saved result changed a fixed recipe field: '+key)
             def text_length(recipe):
                 return 'model' if recipe.get('model') in ('flux3','FLUX.3 Image Klein') else recipe.get('textLength') or 'fit16'
-            if text_length(p)!=text_length(before):raise ValueError('Saved result changed a fixed recipe field: textLength')
+            if text_length(p)!=text_length(effective):raise ValueError('Saved result changed a fixed recipe field: textLength')
             if p.get('author')!=run['author']:raise ValueError('Saved result author differs from the run')
             job['result']={'source':member['source'],'name':member['name']}
             if not any(m['source']==member['source'] for m in doc['members']):doc['members'].append(member)

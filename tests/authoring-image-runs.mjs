@@ -38,3 +38,14 @@ test('Stop while a claim is settling prevents the newly claimed image from start
  const request=async(url,body)=>{if(body?.action==='claim-job'){run.jobs[0].status='running';run.jobs[0].attempt=body.attempt;await executor.stop();}if(body?.action==='stop-run')run.stopRequested=true;if(body?.action==='finish-job')run.jobs[0].status=body.status;return structuredClone(doc);};
  executor=experiments.createImageRunExecutor({request,generate:async()=>{generated++;return null;}});await executor.execute('burners','r');assert.equal(generated,0);assert.equal(run.jobs[0].status,'stopped');
 });
+
+test('explicit model and size choices define preview and execution while preserving original input',()=>{
+ const overrides={model:'flux2',size:768},experiment={id:'burners',title:'Burners'};
+ const plan=experiments.imageVariationPlan({experiment,sources:[source],seeds:[42],overrides});
+ assert.deepEqual(plan.overrides,overrides);assert.equal(plan.rows[0].request.model,'flux2');assert.equal(plan.rows[0].request.size,768);
+ const request=experiments.imageVariationRequest({experiment,run:{id:'r',sources:[source],overrides,author:{kind:'person',id:'noah',label:'Noah'}},job:{id:'0:0',sourceIndex:0,seed:42,attempt:'a'}});
+ assert.equal(request.model,'flux2');assert.equal(request.size,768);assert.equal(request.reference.source,'/cad.png');assert.equal(request.prompt,p.prompt);assert.equal(request.expectedModel,undefined,'new model must not inherit another model package pin');
+ assert.ok(request.iteration.changes.some(c=>c.field==='model'&&c.after==='flux2'));assert.ok(request.iteration.changes.some(c=>c.field==='size'&&c.after===768));assert.deepEqual(source.provenance,p);
+ const resize=experiments.imageVariationRequest({experiment,run:{id:'r',sources:[source],overrides:{size:256},author:{kind:'person',id:'noah',label:'Noah'}},job:{id:'j',sourceIndex:0,seed:3}});assert.equal(resize.size,256);assert.deepEqual(resize.expectedModel,{source:p.source,sampling:p.sampling,lora:null});
+ assert.throws(()=>experiments.imageVariationPlan({experiment,sources:[source],seeds:[1],overrides:{model:'made-up'}}),/model/i);assert.throws(()=>experiments.imageVariationPlan({experiment,sources:[source],seeds:[1],overrides:{size:999}}),/size/i);
+});
