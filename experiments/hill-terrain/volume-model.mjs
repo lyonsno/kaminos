@@ -27,12 +27,13 @@ function inverse3(m){
 }
 export function volumeConfig(input={}){
  const defaults=input.fixture==='hundred-rocks'?{origin:[-3.36,-.36,-3.84],dimensions:[56,36,64]}:{};
- const c={fixture:'outcrop',contactIterations:2,cell:.12,spacing:.075,dt:.0015,density:1600,rockDensity:2400,bulk:12000,shear:5000,friction:.65,contactFriction:.6,gravity:9.81,origin:[-2.4,-.36,-1.8],dimensions:[40,30,40],conditionContacts:true,...defaults,...input};
+ const c={fixture:'outcrop',pileSoilHeight:.65,contactIterations:2,cell:.12,spacing:.075,dt:.0015,density:1600,rockDensity:2400,bulk:12000,shear:5000,friction:.65,contactFriction:.6,gravity:9.81,origin:[-2.4,-.36,-1.8],dimensions:[40,30,40],conditionContacts:true,...defaults,...input};
  if(!['outcrop','hundred-rocks'].includes(c.fixture))throw Error('Unknown material fixture');if(!Number.isSafeInteger(c.contactIterations)||c.contactIterations<1)throw Error('Contact iterations must be a positive integer');
  for(const k of ['cell','spacing','dt','density','rockDensity','bulk','shear'])if(!Number.isFinite(c[k])||c[k]<=0)throw Error('Invalid volume '+k);
  for(const k of ['friction','contactFriction','gravity'])if(!Number.isFinite(c[k])||c[k]<0)throw Error('Invalid volume '+k);
  if(!Array.isArray(c.origin)||c.origin.length!==3||!c.origin.every(Number.isFinite)||!Array.isArray(c.dimensions)||c.dimensions.length!==3||!c.dimensions.every(x=>Number.isInteger(x)&&x>=8))throw Error('Invalid material domain');
  if(c.dt>c.cell/Math.sqrt((c.bulk+4*c.shear/3)/c.density)*.2)throw Error('Time step exceeds explicit elastic CFL');
+ if(!Number.isFinite(c.pileSoilHeight)||c.pileSoilHeight<.18||c.fixture==='hundred-rocks'&&c.pileSoilHeight>=c.origin[1]+(c.dimensions[1]-2.1)*c.cell)throw Error('Initial soil height must fit inside the physical material domain');
  if(typeof c.conditionContacts!=='boolean')throw Error('Contact preparation must be boolean');
  return c;
 }
@@ -58,7 +59,7 @@ export function makeVolumeSpecimen(input={}){
  // lobes, a low apron and a hollow surround the retained authored outcrop.
  const pile=config.fixture==='hundred-rocks',bounds=pile?[-3.0,3.0,-3.45,3.45]:[-1.95,1.95,-1.35,2.35];
  for(let x=bounds[0]+h/2;x<bounds[1];x+=h)for(let z=bounds[2]+h/2;z<bounds[3];z+=h){
-  const localBodies=neighbors(x,z);const top=pile?.18+1.1*Math.exp(-((x/2.5)**4+(z/3.1)**4)):.20+.72*Math.exp(-((x+.95)**2/.32+(z-.25)**2/1.1))+.30*Math.exp(-((x-.9)**2/.45+(z-1.0)**2/.65))-.16*Math.exp(-((x-.25)**2/.25+(z-1.55)**2/.30));
+  const localBodies=neighbors(x,z);const top=pile?.18+(config.pileSoilHeight-.18)*Math.exp(-((x/2.5)**4+(z/3.1)**4)):.20+.72*Math.exp(-((x+.95)**2/.32+(z-.25)**2/1.1))+.30*Math.exp(-((x-.9)**2/.45+(z-1.0)**2/.65))-.16*Math.exp(-((x-.25)**2/.25+(z-1.55)**2/.30));
   for(let y=h/2;y<top;y+=h){const p=[x,y,z];if(localBodies.some(b=>contains(b.solid,p.map((v,k)=>v-b.position[k]),h*.1)))continue;
    const row=Array(PARTICLE_WORDS).fill(0);row.splice(0,8,...p,config.density*h**3,0,0,0,h**3);particles.push(...row);
   }

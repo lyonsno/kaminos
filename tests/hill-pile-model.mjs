@@ -24,3 +24,5 @@ for(let i=25;i<100;i++){
  const body=pile.bodies[i],support=pile.bodies[i-25],lowered={...body,position:body.position.map((v,k)=>v-(k===1?.001:0))};
  assert.ok(convexContact(lowered,support),'Each upper rock must begin at its actual support contact, not suspended in a lattice');
 }
+
+const deep=makeVolumeSpecimen({fixture:'hundred-rocks',pileSoilHeight:1.28});assert.ok(deep.particles.length>pile.particles.length,'Increasing initial soil fill adds material rather than only recoloring it');assert.throws(()=>makeVolumeSpecimen({fixture:'hundred-rocks',pileSoilHeight:10}),/physical material domain/);
