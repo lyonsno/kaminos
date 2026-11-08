@@ -43,3 +43,19 @@ const originalJSON=T.Object3D.prototype.toJSON;let exports=0;
 T.Object3D.prototype.toJSON=function(...args){exports++;return originalJSON.apply(this,args);};
 try{assert.deepEqual(fast.replacementState().bodies,[]);assert.equal(exports,0,'Empty replacement snapshots must skip analytical mesh export');}finally{T.Object3D.prototype.toJSON=originalJSON;}
 const existing=fastRoot.children[0];fast.setBodies({schema:'kaminos.assembly-geometry.v1',bodies:[]});assert.equal(fastRoot.children[0],existing,'Restoring an already empty replacement state must retain the body view');fast.dispose();
+
+// A pose edit with unchanged local shape must not allocate/dispose provisional
+// geometries and materials just to discover that the existing body still fits.
+{
+ const root=new T.Group(),view=createMechanismView(root),recipe={schema:'kaminos.links.v1',period:3,nodes:[{parent:null,point:[0,0]},{parent:0,length:2,angles:[0,1]}],pistons:[]};
+ view.update(recipe,0,1,false);const geometry=new Set(),materials=new Set();root.traverse(o=>{if(o.geometry)geometry.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material])if(m)materials.add(m);});
+ const dispatch=T.EventDispatcher.prototype.dispatchEvent;let discarded=0;T.EventDispatcher.prototype.dispatchEvent=function(event){if(event.type==='dispose'&&(this.isBufferGeometry||this.isMaterial))discarded++;return dispatch.call(this,event);};
+ try{recipe.nodes[1].angles=[.2,1.2];view.update(recipe,0,1,false);assert.equal(discarded,0,'Rigid pose edit must not build and throw away matching bodies');root.traverse(o=>{if(o.geometry)assert.ok(geometry.has(o.geometry));for(const m of Array.isArray(o.material)?o.material:[o.material])if(m)assert.ok(materials.has(m));});}finally{T.EventDispatcher.prototype.dispatchEvent=dispatch;view.dispose();}
+}
+
+{
+ const view=createMechanismView(new T.Group());view.update(m,0,1,false);const packet=view.exportBodies();view.importBodies(packet);
+ const survivor=view.bodyMeshes('link:2')[0];view.clearReplacements(['link:1']);
+ assert.equal(view.bodyManifest().bodies.find(b=>b.id==='link:1').replacement,false);
+ assert.equal(view.bodyManifest().replacements,packet.bodies.length-1);assert.equal(view.bodyMeshes('link:2')[0],survivor,'Dropping one shell retains every unaffected rendered mesh');view.dispose();
+}

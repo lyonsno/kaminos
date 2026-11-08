@@ -1,6 +1,7 @@
+import {copyMechanism} from './recipe-state.mjs';
 import {checkedHardware} from './hinge-primitives.mjs';
 // Planar rooted forests. Each edge is a rigid link; angles are relative to its parent.
-const copy=x=>structuredClone(x),point=p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite);
+const copy=copyMechanism,point=p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite);
 export function emptyMechanism(){return {schema:'kaminos.links.v1',nodes:[],pistons:[],period:3};}
 export function checkedMechanism(m){
  if(m?.schema!=='kaminos.links.v1'||!Array.isArray(m.nodes)||!Array.isArray(m.pistons))throw Error('Choose a saved link workshop');

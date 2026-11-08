@@ -1,8 +1,9 @@
+import {retainHingeParts} from './recipe-state.mjs';
 import * as T from '../../lib/three.core.js';
 export const hingeFamilies={clevis:'Fork · hub · pin',knuckle:'Interleaved knuckles',flange:'Flange pivot'};
 export function checkedHardware(value={family:'clevis',size:1}){
  if(!value||!hingeFamilies[value.family]||!Number.isFinite(value.size)||value.size<=0)throw Error('Choose a hinge family and positive size');
- const v=structuredClone(value);if(v.parts){const ids=Object.keys(v.parts);if(ids.some(id=>!['fixed','moving','pin'].includes(id)))throw Error('Unknown hinge part slot');for(const id of ids){if(!v.parts[id]?.object)throw Error('Hinge return requires serialized part geometry');if(!['Group','Mesh','Object3D'].includes(v.parts[id].object.type))throw Error('Invalid hinge part');}}
+ const {parts,...metadata}=value,v=structuredClone(metadata);if(parts)v.parts=retainHingeParts(parts);if(v.parts){const ids=Object.keys(v.parts);if(ids.some(id=>!['fixed','moving','pin'].includes(id)))throw Error('Unknown hinge part slot');for(const id of ids){if(!v.parts[id]?.object)throw Error('Hinge return requires serialized part geometry');if(!['Group','Mesh','Object3D'].includes(v.parts[id].object.type))throw Error('Invalid hinge part');}}
  return v;
 }
 export function disposePart(o){const gs=new Set(),ms=new Set();o.traverse(m=>{if(m.geometry)gs.add(m.geometry);for(const x of Array.isArray(m.material)?m.material:[m.material])if(x)ms.add(x);});gs.forEach(g=>g.dispose());ms.forEach(m=>m.dispose());o.removeFromParent();}
