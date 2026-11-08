@@ -19,8 +19,8 @@ class Element{style={};dataset={};children=[];listeners={};append(...x){this.chi
 const keyboardListeners=new Map();
 const document={baseURI:'http://fixture',defaultView:{},createElement:()=>new Element(),addEventListener:(name,fn)=>keyboardListeners.set(name,fn),removeEventListener:name=>keyboardListeners.delete(name)};
 let tick;const attached=[];const scene={attach:async root=>attached.push(root),readView:()=>({}),redraw(){},setView(){},onFrame:fn=>(tick=fn,()=>{}),async dispose(){}};
-const updates=[];const inputs={manifest:'/catalog.json',guide:'/guide.json',viewMode:'inspection',modelLabels:{original:'Learned geometry'}};
-const instance=await experiment.create({host:{controls:{document},scene:{open:async()=>scene}},inputs,updateInputs:v=>updates.push(v),record(){}});
+let cadenceDisposals=0;const installNumberDrag=({input})=>({dispose(){if(input['aria-label']==='Seconds per example')cadenceDisposals++;}});const updates=[];const inputs={manifest:'/catalog.json',guide:'/guide.json',viewMode:'inspection',modelLabels:{original:'Learned geometry'}};
+const instance=await experiment.create({host:{controls:{document,installNumberDrag},scene:{open:async()=>scene}},inputs,updateInputs:v=>updates.push(v),record(){}});
 assert.deepEqual(instance.read().gallery,{index:0,total:3,label:'Photograph 0'},'single-frame catalogs must open as a numbered photo gallery in source order');
 assert.equal(instance.read().models[0].label,'Learned geometry');assert.equal(instance.read().models[0].sourceLabel,'original');
 assert.equal(instance.read().captureId,'photo-0','guide ranking must not silently choose the photo order');
@@ -51,7 +51,7 @@ await instance.operations.toggle();assert.equal(instance.read().captureId,'photo
 instance.operations.toggle();tick({timestampMs:2000});failedSource='/sequence-2';tick({timestampMs:2300});while(instance.read().loading)await new Promise(setImmediate);assert.equal(instance.read().playing,false);assert.equal(instance.read().captureId,null);assert.match(instance.read().error,/photograph source unavailable/);failedSource=null;await instance.operations.selectExample(0);
 instance.operations.setTeachers(false);instance.operations.setComparisonPair(['size_signal','full_size']);assert.deepEqual(instance.read().visibleModels,['size_signal','full_size','mobrecon_original','dsconv_released'],'original MobRecon and released DSConv remain visible for every comparison pair');instance.operations.setTeachers(true);
 assert.deepEqual(frames[0].hands[0].vertices,vertices,'gallery navigation must preserve the saved mesh');
-await instance.dispose();assert.equal(keyboardListeners.has('keydown'),false,'dispose must remove the gallery shortcut');
+await instance.dispose();assert.equal(cadenceDisposals,1,'disposing the gallery releases its cadence number-drag listeners');assert.equal(keyboardListeners.has('keydown'),false,'dispose must remove the gallery shortcut');
 const reopened=await experiment.create({host:{controls:{document},scene:{open:async()=>scene}},inputs:{...inputs,example:2},record(){}});assert.equal(reopened.read().captureId,'photo-2','an example address must reopen the same photograph');await reopened.dispose();
 const start=attached.length;const free=await experiment.create({host:{controls:{document},scene:{open:async()=>scene}},inputs:{manifest:'/catalog.json',viewMode:'spatial'},record(){}});free.operations.setViewMode('spatial');assert.equal(new Set(attached.slice(start,start+7).map(root=>root.position.toArray().join(','))).size,7,'every comparison hand has its own free-3D station');await free.dispose();
 console.log('still-gallery navigation, complete model visibility, controls, source failure and address reconstruction passed');
