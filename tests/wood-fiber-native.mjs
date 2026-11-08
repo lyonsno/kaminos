@@ -3,6 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {WOOD_FIBER_WGSL} from '../wood-fiber-wgsl.mjs';
 import {withKaminosGpu,evalWgslBatch} from '../tools/shader-herder.mjs';
+// Numerical acceptance requires actual execution; compiler-only cannot pass.
+process.env.SHADER_HERDER_STRICT_METAL='1';
 
 test('finished wood fiber cone follows axis and rejects back lighting', async()=>{
  await withKaminosGpu(async ctx=>{

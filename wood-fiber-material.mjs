@@ -9,9 +9,15 @@ export async function loadWoodMaps(manifestUrl,sample='cmaple'){
  const response=await fetch(manifestUrl);if(!response.ok)throw Error('Wood manifest unavailable');
  const manifest=await response.json();const descriptors=manifest.samples?.[sample];
  if(manifest.encoding!=='rgba32float-le'||!descriptors)throw Error('Unsupported measured wood sample');
+ const channels=['diffuse','axis','fiber','beta'];
+ for(const name of channels){
+  const d=descriptors[name];if(!d)throw Error('Missing measured wood channel: '+name);
+  if(typeof d.url!=='string'||!d.url||!Number.isSafeInteger(d.width)||d.width<=0||!Number.isSafeInteger(d.height)||d.height<=0||!Number.isSafeInteger(d.width*d.height*16)||typeof d.sha256!=='string'||!/^[a-f0-9]{64}$/i.test(d.sha256))throw Error('Invalid measured wood descriptor: '+name);
+ }
  const maps={};
  try{
-  for(const [name,d] of Object.entries(descriptors)){
+  for(const name of channels){
+   const d=descriptors[name];
    const r=await fetch(new URL(d.url,location.href));if(!r.ok)throw Error('Missing wood map '+name);
    const bytes=await r.arrayBuffer();if(bytes.byteLength!==d.width*d.height*16)throw Error('Wood map shape mismatch');
    const actual=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
