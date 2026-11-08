@@ -18,12 +18,14 @@ function setup({postFailure=false}={}){
   if(options?.method==='POST'){const body=JSON.parse(options.body);posts.push(body);if(fail&&body.frame){fail=false;return {ok:false,json:async()=>({error:'Disk temporarily unavailable'})};}return {ok:true,json:async()=>({runId:body.runId,frameId:body.frame?.id??null})};}
   gets++;return {ok:true,json:async()=>structuredClone(remote)};
  };
+ const element=tag=>({tagName:tag,children:[],textContent:'',append(...nodes){this.children.push(...nodes);},replaceChildren(...nodes){this.children=nodes;},setAttribute(){},remove(){}}),document={createElement:element},root=element('main');
  const context=vm.createContext({...format,console,crypto:webcrypto,performance,Int32Array,Map,Set,Promise,structuredClone,fetch:fetcher,
-  createTrellisVoxelVisual({frame,coordinates}){const root={visible:false,parent:null},buffer={data:coordinates?.buffer.slice(0)??new ArrayBuffer(frame.count*12)};return {root,buffer:()=>buffer,read:()=>({count:frame.count,registered:!!root.parent,visible:root.visible}),dispose(){root.parent=null;}};},mountPlaybackControls(){throw Error('DOM controls are outside this test');}});
+  createTrellisVoxelVisual({frame,coordinates}){const root={visible:false,parent:null},buffer={data:coordinates?.buffer.slice(0)??new ArrayBuffer(frame.count*12)};return {root,buffer:()=>buffer,read:()=>({count:frame.count,registered:!!root.parent,visible:root.visible}),dispose(){root.parent=null;}};},mountPlaybackControls(){return {update(){},dispose(){}};}});
  const create=vm.runInContext(implementation+';createAuthoringTrellisHistory',context);
  const rows=new Int32Array([0,0,0,1,2,3]),coordinates={buffer:{data:rows.buffer},shape:[2,3],dtype:'i32',usage:140,byteLength:24};
  const preview=current=>createTrellisOccupancyPreview({runtime:{device},coordinates,plan:buildOccupancyCoordinatesPlan({resolution:8}),runId:'test-run',routeId:'trellis2.actual',steps:12,invocation:{jobId:'job',invocationId:'invocation'},isCurrent:()=>current});
- return {create:()=>create({renderer:{backend:{isWebGPUBackend:true,device}},scene,foreground,document:{},fetcher}),preview,rows,posts,attached,get copies(){return copies;},get gets(){return gets;},get remote(){return remote;},set remote(value){remote=value;}};
+ const text=node=>node.textContent+' '+node.children.map(text).join(' ');
+ return {create:()=>create({renderer:{backend:{isWebGPUBackend:true,device}},scene,foreground,document,fetcher}),root,text:()=>text(root),preview,rows,posts,attached,get copies(){return copies;},get gets(){return gets;},get remote(){return remote;},set remote(value){remote=value;}};
 }
 test('failed persistence keeps captured rows retryable without inventing a capture gap or rerunning the GPU copy',async()=>{
  const h=setup({postFailure:true}),c=await h.create();c.start({runId:'test-run',label:'Shoe',source:{routeId:'trellis2.actual'}});
@@ -41,4 +43,14 @@ test('reopening remote history refreshes additions and preserves its incomplete 
  const h=setup(),c=await h.create();h.remote={schema:format.VOXEL_HISTORY_SCHEMA,runId:'saved',label:'Shoe',source:{kind:'retained-reference-replay'},status:'incomplete',error:'A snapshot was missed',gaps:[{id:'missed',stage:'occupancy-coordinates',reason:'Source retired'}],frames:[]};
  await c.open({runId:'saved'});assert.equal(c.read().status,'incomplete');assert.equal(c.read().error,'A snapshot was missed');assert.equal(c.read().retention.failed,1);
  h.remote={...h.remote,error:'Updated saved cause'};await c.open({runId:'saved'});assert.equal(h.gets,2);assert.equal(c.read().error,'Updated saved cause');await c.dispose();
+});
+test('terminal empty histories name their outcome instead of promising a grid that cannot arrive',async()=>{
+ for(const status of ['failed','stopped','completed']){
+  const h=setup(),c=await h.create();c.mount({root:h.root});c.start({runId:'test-run',label:'Shoe',source:{routeId:'trellis2.actual'}});await c.watch();assert.match(h.text(),/Waiting for the first/);
+  await c.finish('test-run',status);assert.doesNotMatch(h.text(),/Waiting for the first/);assert.match(h.text(),status==='failed'?/Failed/:status==='stopped'?/Stopped/:/No snapshots retained/);await c.dispose();
+ }
+});
+test('a terminal failed run keeps the earlier snapshot usable and names the failed outcome',async()=>{
+ const h=setup(),c=await h.create();c.mount({root:h.root});c.start({runId:'test-run',label:'Shoe',source:{routeId:'trellis2.actual'}});c.capture(h.preview(true));await c.watch();await c.finish('test-run','failed');
+ assert.equal(c.read().presentation.count,2);assert.match(h.text(),/Failed/);assert.match(h.text(),/2 occupied voxels/);await c.dispose();
 });

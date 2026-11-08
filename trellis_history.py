@@ -37,13 +37,16 @@ def read_frame(root,run_id,frame_id):
 def validate_frame(frame,data,run_id):
     if not isinstance(frame,dict) or frame.get('schema')!=FRAME or frame.get('representation')!='occupied-cells' or frame.get('runId')!=run_id:raise ValueError('Matching occupied-cell frame required')
     for key in ('id','stage','routeId'):identity(frame.get(key))
-    dims=frame.get('grid',{}).get('dimensions');n=frame.get('count');layout=frame.get('layout',{});spatial=frame.get('spatial',{})
+    for key in ('grid','layout','spatial'):
+        if not isinstance(frame.get(key),dict):raise ValueError('Voxel '+key+' object required')
+    dims=frame['grid'].get('dimensions');n=frame.get('count');layout=frame['layout'];spatial=frame['spatial']
     integer=lambda x:isinstance(x,int) and not isinstance(x,bool)
     if not isinstance(dims,list) or len(dims)!=3 or not all(integer(d) and d>0 for d in dims) or not integer(n) or n<0 or n>math.prod(dims):raise ValueError('Complete voxel dimensions/count required')
     if len(data)!=n*12 or layout.get('dtype')!='int32' or layout.get('shape')!=[n,3] or layout.get('rowOrder')!='z-y-x-lexicographic':raise ValueError('Complete packed Int32 coordinates required')
     if not integer(frame.get('step')) or frame['step']<0 or not integer(frame.get('steps')) or frame['steps']<frame['step'] or not isinstance(frame.get('atSeconds'),(int,float)) or not math.isfinite(frame['atSeconds']) or frame['atSeconds']<0:raise ValueError('Sampling clock required')
     def vector(x,size):return isinstance(x,list) and len(x)==size and all(isinstance(v,(int,float)) and not isinstance(v,bool) and math.isfinite(v) for v in x)
     transform=spatial.get('gridToSource',{})
+    if not isinstance(transform,dict):raise ValueError('Voxel gridToSource object required')
     if spatial.get('frame')!='trellis-source' or not vector(transform.get('scale'),3) or min(transform['scale'])<=0 or not vector(transform.get('offset'),3) or not vector(spatial.get('cellCenterOffset'),3) or not vector(spatial.get('sourceToGltf'),16):raise ValueError('Explicit voxel spatial frame required')
     previous=-1
     for z,y,x in struct.iter_unpack('<iii',data):

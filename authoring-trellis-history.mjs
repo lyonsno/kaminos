@@ -130,8 +130,10 @@ export async function createAuthoringTrellisHistory({renderer,scene,foreground,d
    const playback=mountPlaybackControls({document,root:pane,read:readPlayback,invoke:(name,input)=>operations[name](input),label:'TRELLIS snapshot replay'});
    let optionKey='';const m={update(){pane.hidden=!visible;title.textContent=current?.label??'TRELLIS history';
     const list=current?.frames??[],selected=list.findLast(f=>f.atSeconds<=time)??list[0];
-    status.textContent=(current?.source.kind==='retained-reference-replay'?'Reference replay · ':'Live generation · ')+(selected?`Step ${selected.step} of ${selected.steps} · ${selected.count.toLocaleString()} occupied voxels`:'Waiting for the first occupied grid')+
-     (current?.source.clock==='presentation-sequence'?' · Timeline spacing is for playback':'')+(current?.failed?` · History incomplete: ${current.error}`:current?.pending?' · Saving history…':'');
+    const terminal={completed:'Completed',failed:'Failed',stopped:'Stopped',incomplete:'History incomplete'}[current?.status];
+    status.textContent=(current?.source.kind==='retained-reference-replay'?'Reference replay · ':'Live generation · ')+(terminal?terminal+' · ':'')+
+     (selected?`Step ${selected.step} of ${selected.steps} · ${selected.count.toLocaleString()} occupied voxels`:current?.pending?'Snapshot capture pending':terminal?'No snapshots retained':'Waiting for the first occupied grid')+
+     (current?.source.clock==='presentation-sequence'?' · Timeline spacing is for playback':'')+(current?.error?` · ${current.error}`:current?.pending?' · Saving history…':'');
     const key=JSON.stringify(list.map(f=>[f.id,f.count]));if(key!==optionKey){optionKey=key;select.replaceChildren(...list.map((f,i)=>{const n=document.createElement('option');n.value=String(i);n.textContent=`${i+1}. ${f.state==='predicted-clean'?'Predicted shape':f.stage==='cascade-support'?'Refined occupied volume':'Completed coarse shape'} · step ${f.step}/${f.steps}`;return n;}));}
     retryButton.hidden=!current?.local||(!current.unsaved.size&&!current.terminalError);retryButton.disabled=!!current?.pending;
     if(selected)select.value=String(list.indexOf(selected));select.disabled=!list.length;playback.update();},dispose(){mounts.delete(m);playback.dispose();pane.remove();}};

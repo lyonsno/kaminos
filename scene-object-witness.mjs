@@ -291,6 +291,18 @@ async function runTrellisHistoryLiveScenario(ws) {
     await window.kaminosTrellisHistory.open({runId});
     return {runId,source,admitted,shown,saved,gap,route:'actual-app-device/foreground-service/GPU-copy/native-voxel-view/HTTP-history',claimCeiling:'retained observed coordinate fixture exercises the live consumer; no new neural generation'};
   })()`,{timeoutMs:60000});
+  lastEvidence.trellisHistoryLive.terminal=await evaluate(ws,`(async()=>{
+    const controller=await window.kaminosTrellisHistory.ensure(),previous=controller.read().runId,runId=previous+':stopped';
+    controller.start({runId,label:'Stopped before first snapshot',source:{kind:'retained-reference-replay',routeId:'trellis2.terminal-history-conformance'}});
+    await controller.watch();await controller.finish(runId,'stopped');
+    const text=document.querySelector('.trellis-history-view')?.textContent??'';
+    if(!text.includes('Stopped')||!text.includes('No snapshots retained')||text.includes('Waiting for the first'))throw Error('Stopped empty history still promises a future grid: '+text);
+    return {state:controller.read(),text,previous};
+  })()`,{timeoutMs:60000});
+  const terminal=await wsRequest(ws,'Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
+  const terminalPath=out.replace(/\.png$/i,'.terminal.png');writeFileSync(terminalPath,Buffer.from(terminal.data,'base64'));
+  lastEvidence.trellisHistoryLive.terminal.image=terminalPath;
+  await evaluate(ws,`window.kaminosTrellisHistory.open({runId:${JSON.stringify(lastEvidence.trellisHistoryLive.runId)}})`,{timeoutMs:60000});
   phase='trellis-history-live-observed';
 }
 

@@ -31,6 +31,10 @@ class History(unittest.TestCase):
     trellis_history.save_history(serve.trellis_history_root(),interrupted)
     self.assertEqual(trellis_history.read_frame(serve.trellis_history_root(),'interrupted-save',frame['id']),data,'an interrupted save can retry without a conflicting partial frame')
     self.assertEqual(call('GET',url)[0],404)
+    for key,bad in [('grid',None),('layout',[]),('spatial',None),('spatial',{**frame['spatial'],'gridToSource':None})]:
+     with self.subTest(malformed=key,value=bad):
+      status,body=call('POST','/api/trellis-history',{**payload,'frame':{**frame,key:bad}})
+      self.assertEqual(status,400,body);self.assertEqual(json.loads(body)['phase'],'trellis-history')
     status,body=call('POST','/api/trellis-history',payload);self.assertEqual(status,200,body)
     self.assertEqual(call('POST','/api/trellis-history',payload)[0],200,'retry is idempotent')
     status,body=call('GET',url);value=json.loads(body);self.assertEqual(status,200);self.assertEqual(len(value['frames']),1);self.assertEqual(value['frames'][0]['coordinates']['sha256'],hashlib.sha256(data).hexdigest())
