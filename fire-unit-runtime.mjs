@@ -22,6 +22,7 @@ export function createFireUnitObject({THREE,record,camera,controls,viewport,shar
   transparentCanvas:true,canvasId:'kaminos-fire-unit-'+record.id,externalProductTransform:fireUnitFrame(accepted),
   onStatus:value=>{status=value;if(value.error){failed=value.error;onError(Error(value.error));}}});
  runtime.setCoreEmitterSourceMode('analytic-only');
+ const initialFrame=fireUnitFrame(accepted);runtime.repositionOrdinaryUnit(initialFrame.translate,initialFrame.scale);
  const canvas=runtime.canvasElement();canvas.classList.add('kaminos-fire-unit-canvas');canvas.dataset.fireUnit=record.id;canvas.style.background='transparent';
  emitter.userData.kaminosEditorHelper=true;
  function placeEmitter(){
@@ -47,7 +48,7 @@ export function createFireUnitObject({THREE,record,camera,controls,viewport,shar
   pose:()=>({position:root.position.toArray(),rotation:[root.rotation.x,root.rotation.y,root.rotation.z],scale:root.scale.toArray()}),
   setPose(value){const pose=checkedFireUnitPose(value);root.position.fromArray(pose.position);root.rotation.set(...pose.rotation);root.scale.fromArray(pose.scale);owner.syncPose();},
   capture(){owner.syncPose();return structuredClone(data);},
-  read(){return {id:record.id,transform:structuredClone(accepted),fireUnit:owner.capture(),active,desired,error:failed,runtime:runtime.debugState()};},
+  read(){return {id:record.id,transform:structuredClone(accepted),fireUnit:owner.capture(),active,desired,present:root.parent!==null,error:failed,runtime:runtime.debugState()};},
   setData(value){const next=checkedFireUnitRecord({...record,transform:accepted,fireUnit:value}).fireUnit;
    if(next.controls.emitterSourceLaw!=='immersed-source')throw Error('Independent fire units require the immersed source law');
    runtime.validateGridControls(next.controls);

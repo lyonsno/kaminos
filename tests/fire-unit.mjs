@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {checkedFireUnitPose,checkedFireUnitRecord,fireUnitFrame,moveLinkedFireEmitter,FIRE_UNIT_SOURCE,fireUnitRecordDomain} from '../fire-unit-record.mjs';
+import {worldSmokeMapping} from '../volume-world-smoke.mjs';
 import {createSceneRecordOperations} from '../scene-record-operations.mjs';
 const pose=(position=[0,0,0],scale=1)=>({position,rotation:[0,0,0],scale:[scale,scale,scale]});
 const record=()=>({id:'fire-a',type:'fire-unit',source:FIRE_UNIT_SOURCE,label:'Fire A',transform:pose(),fireUnit:{controls:{resolution:16,worldSmoke:'on',worldSmokeResolution:8,raySteps:1,renderScale:.1},moveEmitterWithGrid:true,emitter:pose([.2,-.76,0])}});
@@ -32,9 +33,11 @@ test('whole-unit movement retains gas resources and does not enter the Fine rema
  const body=source.slice(start,source.indexOf('\n    },',start)+6).trim().replace(/^repositionOrdinaryUnit\(/,'function repositionOrdinaryUnit(');
  const ctx={structuredClone,productFrameOwner:'prototype',followingDomain:null,pendingDomainRemap:null,
   productTransform:{translate:[0,0,0],scale:1},worldSmoke:{anchor:{translate:[1,2,3],scale:1},gas:{identity:'gas-a'}},worldFrameRestore:undefined,state:{},lastResidualPartials:null};
+ const plan={min:[-3,-3,-3],max:[3,9,3],materialPitch:.75},beforeMapping=worldSmokeMapping(plan,ctx.worldSmoke.anchor,ctx.productTransform);
  vm.createContext(ctx);vm.runInContext(body,ctx);const gas=ctx.worldSmoke.gas;
  ctx.repositionOrdinaryUnit([4,5,6],2);
  assert.deepEqual(Array.from(ctx.worldSmoke.anchor.translate),[6,9,12]);assert.equal(ctx.worldSmoke.anchor.scale,2);
+ const afterMapping=worldSmokeMapping(plan,ctx.worldSmoke.anchor,ctx.productTransform);assert.deepEqual(afterMapping,beforeMapping,'rigid Fine and World movement leaves the local render mapping unchanged, including while paused');
  assert.equal(ctx.worldSmoke.gas,gas);assert.equal(ctx.pendingDomainRemap,null);assert.equal(ctx.state.unitTransform.resampled,false);
  const before=JSON.stringify(ctx.productTransform);assert.throws(()=>ctx.repositionOrdinaryUnit([NaN,0,0],1),/finite/);assert.equal(JSON.stringify(ctx.productTransform),before);
  ctx.pendingDomainRemap={};assert.throws(()=>ctx.repositionOrdinaryUnit([0,0,0],1),/Finish Fine relocation/);

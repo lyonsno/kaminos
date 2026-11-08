@@ -3013,7 +3013,7 @@ import {createAuthoredWaterFeature} from './authored-water-feature.mjs';
 import { createWorkingScene } from './working-scene.mjs';
 import {createSceneObjectRecord} from './scene-object-record.mjs';
 import {createSceneRecordOperations} from './scene-record-operations.mjs';
-import {FIRE_UNIT_TYPE,FIRE_UNIT_SOURCE,checkedFireUnitRecord,checkedFireUnitPose} from './fire-unit-record.mjs';
+import {FIRE_UNIT_TYPE,FIRE_UNIT_SOURCE,checkedFireUnitRecord,checkedFireUnitPose,moveLinkedFireEmitter} from './fire-unit-record.mjs';
 import {createFireUnitObject} from './fire-unit-runtime.mjs';
 import {mountFireUnitControls} from './fire-unit-controls.mjs';
 import {mountFireUnitAuthoring,createFireUnitControlDocument} from './fire-unit-authoring.mjs';
@@ -27779,7 +27779,8 @@ async function addFireUnitFromBasin(id,{signal,...options}={}) {
  const [artifactResponse,schemaResponse]=await Promise.all([fetch('/api/volume-settings-preset?id='+encodeURIComponent(id),{cache:'no-store'}),fetch('./volume-settings-preset-schema-v2.json')]);
  if(!artifactResponse.ok||!schemaResponse.ok)throw Error('Basin unavailable');
  const schema=await schemaResponse.json(),receipt=validateVolumeSettingsPresetDocument(await artifactResponse.json(),id,schema);
- const settings={...projectFireSettingsToSchema(receipt.preset,schema),source:{presetId:id,label:receipt.label}},copy=createFireUnitControlDocument(document,settings);
+ const localScale=options.emitter?options.emitter.scale[0]/(options.scale??(activeSceneComposition?flameDomainScale:1)):flameEmitterPose.scale[0]/flameDomainScale;
+ const settings={...projectFireSettingsToSchema(flamePresetForLocalControls(receipt.preset,localScale),schema),source:{presetId:id,label:receipt.label}},copy=createFireUnitControlDocument(document,settings);
  const raw=readVolumeControls({quality:'full',document:copy,routeParams:new URLSearchParams(new URL(settings.route,location.href).search)});
  signal?.throwIfAborted();return addAuthoredFireUnit({...options,signal,settings,controls:{...raw,...options.controls},label:options.label??receipt.label});
 }
@@ -27787,11 +27788,11 @@ async function addAuthoredFireUnit(options={}) {
  options.signal?.throwIfAborted();assertSceneConstructionAvailable();
  const id=makeSceneObjectId('fire'),source=options.controls??readVolumeControls();
  if(source.emitterSourceLaw!=='immersed-source')throw Error('Select an immersed-source flame basin before adding an independent fire simulation');
- const offset=options.position??[controls.target.x+authoredFireUnits.size*2.5,groundPlane.position.y+1,controls.target.z];
- const emitter=structuredClone(options.emitter??flameEmitterPose);
- if(!options.emitter)emitter.position=emitter.position.map((v,i)=>v-flameDomainTranslation[i]+offset[i]);
+ const unitScale=options.scale??(activeSceneComposition?flameDomainScale:1),offset=options.position??[controls.target.x+authoredFireUnits.size*2.5*unitScale,groundPlane.position.y+unitScale,controls.target.z];
+ const pose={position:offset,rotation:[0,0,0],scale:[unitScale,unitScale,unitScale]};
+ const emitter=options.emitter?structuredClone(options.emitter):moveLinkedFireEmitter(flameEmitterPose,{position:flameDomainTranslation,rotation:[0,0,0],scale:[flameDomainScale,flameDomainScale,flameDomainScale]},pose,true);
  const record=checkedFireUnitRecord({id,type:FIRE_UNIT_TYPE,source:FIRE_UNIT_SOURCE,fileName:'Fire simulation',label:options.label??'Fire simulation '+(authoredFireUnits.size+1),createdAt:new Date().toISOString(),
-  transform:{position:offset,rotation:[0,0,0],scale:[1,1,1]},fireUnit:{controls:structuredClone(source),settings:options.settings??buildVolumeSettingsPreset(),emitter,moveEmitterWithGrid:true}});
+  transform:pose,fireUnit:{controls:structuredClone(source),settings:options.settings??buildVolumeSettingsPreset(),emitter,moveEmitterWithGrid:true}});
  const target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
  await mountAuthoredFireUnit(record);
  try{options.signal?.throwIfAborted();await recordSceneObjectInsertion(id);setActiveSceneObject(id);return id;}
