@@ -212,7 +212,8 @@ export const FLAME_PROPERTY_GROUPS = [
   { name:'Domain & simulation', view:'quality', open:true, fields:[
     ['volume-resolution','Grid width (cells)'], ['volume-grid-height-ratio','Height / width'],
     ['volume-speed','Simulation speed'], ['volume-time-step','Time stepping'],
-    ['volume-pressure-solver-iterations','Solver sweeps'],
+    ['volume-pressure-algorithm','Fine pressure algorithm'], ['volume-pressure-cg-iterations','Fine CG iterations'],
+    ['volume-pressure-solver-iterations','SOR sweeps'],
     ['volume-pressure-solver','Pressure solver'], ['volume-projection','Projection'],
     ['volume-advection-scheme','Advection'],
     ['volume-common-gas-transport','Common gas transport'], ['volume-velocity-staggering','Velocity sampling'],

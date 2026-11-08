@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 174,
+  "controlCount": 176,
   "controls": [
     {
       "key": "volume-fine-velocity",
@@ -1343,6 +1343,28 @@
         "off",
         "on"
       ]
+    },
+    {
+      "key": "volume-pressure-algorithm",
+      "param": "volume_pressure_algorithm",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "allowedValues": [
+        "sor",
+        "amgpcg"
+      ],
+      "additiveDefault": "sor",
+      "additiveLineage": "amgpcg",
+      "additiveSinceControlCount": 1
+    },
+    {
+      "key": "volume-pressure-cg-iterations",
+      "param": "volume_pressure_cg_iterations",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 6,
+      "additiveLineage": "amgpcg",
+      "additiveSinceControlCount": 2
     }
   ],
   "retiredControls": [

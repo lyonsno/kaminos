@@ -1,3 +1,4 @@
+import {resolvePressureAlgorithm,createAmgpcgPressure} from './volume-amgpcg.mjs';
 import {createGPUImmersedCollection} from './volume-immersed-source-gpu.mjs';
 import {createGPUImmersedWorldSources} from './volume-immersed-world-source-gpu.mjs';
 import {resolveWorldCalibration,calibrationSignature,calibrationWaveletLattice,WORLD_CALIBRATION_WGSL,resolveSimulationLevers} from './volume-world-calibration.mjs';
@@ -3170,6 +3171,7 @@ export function resolvePressureSolverConfig(controls = {}) {
     : (dispatchGain <= 0.001 ? 'projection-zero' : null);
   const dispatchEnabled = disabledReason === null;
   const projectionGain = converged ? Math.min(1, dispatchGain) : null;
+  const algorithm=resolvePressureAlgorithm(controls,converged,dispatchEnabled);
   return {
     identity: PRESSURE_SOLVER_IDENTITY,
     requested: { solver: requestedSolver, iterations: requestedSweeps ?? null, legacyIterations: controls.pressureIterations ?? null },
@@ -3178,7 +3180,9 @@ export function resolvePressureSolverConfig(controls = {}) {
       dispatch: dispatchEnabled ? (converged ? PRESSURE_SOLVER_CONVERGED : PRESSURE_SOLVER_LEGACY) : 'disabled',
       disabledReason,
       openTop: requestedSolver === PRESSURE_SOLVER_CONVERGED_OPEN_TOP,
-      iterations: converged ? (dispatchEnabled ? sweeps : 0) : null,
+      algorithm: converged ? algorithm.algorithm : 'jacobi',
+      iterationUnit: algorithm.algorithm==='amgpcg'?'CG iterations':'SOR sweeps',
+      iterations: converged ? (algorithm.algorithm==='amgpcg'?algorithm.iterations:(dispatchEnabled ? sweeps : 0)) : null,
       omega: converged ? PRESSURE_SOLVER_SOR_OMEGA : null,
       projectionGain,
       projection: converged
@@ -12003,6 +12007,8 @@ export function createKaminosVolumePrototype({
   let computePipeline = null;
   const simulationVariants = new Map();
   let separatedPressure = null;
+  let amgpcgPressure = null;
+  let amgpcgPressureKey = null;
   let fineVelocity = null;
   const fineVelocityPipelines = new Map();
   let separatedPressureProjectPipeline = null;
@@ -13167,6 +13173,7 @@ export function createKaminosVolumePrototype({
     if(worldRenderUniform)device.queue.writeBuffer(worldRenderUniform,0,new Float32Array(8));
     separatedPressure?.destroy();
     separatedPressure = null;
+    amgpcgPressure?.destroy(); amgpcgPressure=null; amgpcgPressureKey=null;
     if(sceneSolidGpu){sceneSolidGpu.destroy();sceneSolidGpu=null;sceneSolidTexture=null;}
     sceneSolidGpuSupportKey=null;sceneSolidGeometryCache=null;
     sceneSolidTexture?.destroy();
@@ -17384,6 +17391,7 @@ export function createKaminosVolumePrototype({
         mapPending: pressureResidualMapPending,
         mapGeneration: pressureResidualMapGeneration,
       },
+      amgpcg: state.pressureSolver?.amgpcg ?? null,
       residual: state.pressureSolver?.residual ?? null,
       staleResidual: state.pressureSolver?.staleResidual ?? null,
       residualHistory: state.pressureSolver?.residualHistory ?? [],
@@ -17578,6 +17586,8 @@ export function createKaminosVolumePrototype({
     const pressureEnabled = state.pressureProjectionEnabled && pressureIterationRequested > 0;
     const pressureIterations = pressureEnabled ? state.pressureProjectionIterations : 0;
     const convergedSolver = resolvePressureSolverConfig(controlsSnapshot).effective.solver === PRESSURE_SOLVER_CONVERGED;
+    const amgpcgSolver = convergedSolver && resolvePressureSolverConfig(controlsSnapshot).effective.algorithm==='amgpcg';
+    const amgpcgWork = pressureEnabled && amgpcgSolver ? state.pressureSolver?.amgpcg : null;
     const spatialPressureEnabled = pressureEnabled && !convergedSolver && tierPlan.strategy === TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY;
     const tallPlumePressureStrategy = spatialPressureEnabled
       ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE
@@ -17630,18 +17640,18 @@ export function createKaminosVolumePrototype({
       : TALL_PLUME_TRANSITION_BAND_STRATEGY_INACTIVE;
     const tallPlumeTransitionBandExtraReadsPerCell = 0;
     const pressureSourceStrategy = pressureEnabled
-      ? (convergedSolver ? PRESSURE_SOURCE_STRATEGY_RED_BLACK_SOR : PRESSURE_SOURCE_STRATEGY_INLINE_DIVERGENCE)
+      ? (convergedSolver ? (amgpcgSolver?'matrix-free-uaamg-pcg-v1':PRESSURE_SOURCE_STRATEGY_RED_BLACK_SOR) : PRESSURE_SOURCE_STRATEGY_INLINE_DIVERGENCE)
       : PRESSURE_SOURCE_STRATEGY_DISABLED;
     const pressureDivergencePasses = pressureEnabled && convergedSolver ? 1 : 0;
     const pressureJacobiPasses = pressureEnabled && !convergedSolver ? pressureIterations : 0;
     // Each converged sweep is two half-grid dispatches touching every cell once.
-    const pressureRedBlackHalfPasses = pressureEnabled && convergedSolver ? pressureIterations * 2 : 0;
+    const pressureRedBlackHalfPasses = pressureEnabled && convergedSolver && !amgpcgSolver ? pressureIterations * 2 : 0;
     const pressureJacobiInlineDivergencePasses = pressureJacobiPasses;
     const pressureJacobiFullGridPasses = spatialPressureEnabled ? tierPlan.fullGridPasses : pressureJacobiPasses;
     const pressureJacobiPartialSlabPasses = spatialPressureEnabled ? tierPlan.partialSlabPasses : 0;
     const pressureJacobiFullGridEquivalentPasses = spatialPressureEnabled
       ? tierPlan.equivalentPasses
-      : (convergedSolver ? pressureIterations : pressureJacobiPasses);
+      : (convergedSolver ? (amgpcgSolver ? 0 : pressureIterations) : pressureJacobiPasses);
     const pressureProjectionPasses = pressureEnabled ? 1 : 0;
     const pressureResidualProbePasses = pressureEnabled && pressureResidualPartialsBuffer
       ? 2 / PRESSURE_RESIDUAL_PROBE_INTERVAL_STEPS
@@ -17652,7 +17662,7 @@ export function createKaminosVolumePrototype({
     // Cell visits, not a timing prediction: restriction reads every material
     // cell and prolongation writes every material cell, in addition to solve.
     const pressureTransferPasses = separated ? 2 : 0;
-    const fullGridPassesPerFrame = simPassesPerFrame + transportPredictorPasses + (pressureDivergencePasses + pressureJacobiFullGridEquivalentPasses + pressureProjectionPasses) * pressureCellRatio + pressureResidualProbePasses + pressureTransferPasses;
+    const fullGridPassesPerFrame = simPassesPerFrame + transportPredictorPasses + (pressureDivergencePasses + pressureJacobiFullGridEquivalentPasses + pressureProjectionPasses) * pressureCellRatio + pressureResidualProbePasses + pressureTransferPasses + (amgpcgWork?.cellVisits ?? 0) / (gridSize*gridHeight*gridSize);
     const fullGridPassBreakdown = {
       fluidSim: simPassesPerFrame,
       pressureDivergence: pressureDivergencePasses,
@@ -17662,6 +17672,7 @@ export function createKaminosVolumePrototype({
       pressureJacobiPartialSlab: pressureJacobiPartialSlabPasses,
       pressureJacobiFullGridEquivalent: pressureJacobiFullGridEquivalentPasses,
       pressureRedBlackHalfPasses,
+      pressureAmgpcg: amgpcgWork,
       pressureProjection: pressureProjectionPasses,
       pressureResidualProbe: pressureResidualProbePasses,
       transportPredictor: transportPredictorPasses,
@@ -18315,6 +18326,15 @@ export function createKaminosVolumePrototype({
     }
   }
 
+  function encodeAmgpcg(encoder,solver,dims,pressure,solid,openWorld) {
+    const key=dims.join(':');
+    if(!amgpcgPressure||amgpcgPressureKey!==key){
+      amgpcgPressure?.destroy();amgpcgPressure=createAmgpcgPressure(device,dims);amgpcgPressureKey=key;
+    }
+    const receipt=amgpcgPressure.encode(encoder,{pressure,solid,openTop:solver.effective.openTop,openWorld,iterations:solver.effective.iterations});
+    state.pressureSolver={...state.pressureSolver,amgpcg:receipt};
+  }
+
   function encodeSeparatedPressure(encoder, solver, options, velocityOwner=null) {
     const explicitWidth=Number(controlsSnapshot.finePressure??0);
     const targetDims=velocityOwner?.plan.velocityDims??[gridSize,gridHeight,gridSize];
@@ -18378,9 +18398,13 @@ export function createKaminosVolumePrototype({
       pass.dispatchWorkgroups(...plan.pressureDims.map(n=>Math.ceil(n/4)));pass.end();
     };
     run(pressureDivergenceWarmPipeline,owner.write,'separated warm divergence');
-    for(let sweep=0;sweep<solver.effective.iterations;sweep++) {
-      run(pressureRedBlackEvenPipeline,owner.write,'separated red sweep');
-      run(pressureRedBlackOddPipeline,owner.write,'separated black sweep');
+    if(solver.effective.algorithm==='amgpcg') {
+      encodeAmgpcg(encoder,solver,plan.pressureDims,owner.pressure,solidEnabled?owner.solid:sceneSolidTexture,open);
+    }else{
+      for(let sweep=0;sweep<solver.effective.iterations;sweep++) {
+        run(pressureRedBlackEvenPipeline,owner.write,'separated red sweep');
+        run(pressureRedBlackOddPipeline,owner.write,'separated black sweep');
+      }
     }
     run(separatedPressureProjectPipeline,owner.read,'separated pressure correction');
     if(open)owner.boundary.encode(encoder,true);
@@ -18399,6 +18423,10 @@ export function createKaminosVolumePrototype({
       materialDims: [gridSize,gridHeight,gridSize], pressureDims: [gridSize,gridHeight,gridSize],
       scope: 'pressure-only', dispatched: false, reason: 'pressure-not-dispatched' };
     const solverConfig = resolvePressureSolverConfig(controlsSnapshot);
+    if(solverConfig.effective.algorithm!=='amgpcg'||solverConfig.effective.dispatch==='disabled'){
+      amgpcgPressure?.destroy();amgpcgPressure=null;amgpcgPressureKey=null;
+      state.pressureSolver={...state.pressureSolver,amgpcg:null};
+    }
     const pressureIterationCount = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
     const pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene);
     const tierPlan = pressureTierDispatchPlan(gridSize, pressureStrategy, controlsSnapshot.volumeScene, normalizePressureTierControls(controlsSnapshot), gridHeight);
@@ -18459,9 +18487,13 @@ export function createKaminosVolumePrototype({
         openBoundary.encode(encoder);
       }
       encodeSolverPass(pressureDivergenceWarmPipeline, 'kaminos pressure warm divergence pass', fluidBindGroup(), pressureWriteBindGroup);
-      for (let sweep = 0; sweep < sweeps; sweep += 1) {
-        encodeSolverPass(pressureRedBlackEvenPipeline, `kaminos pressure red sweep ${sweep + 1}`, fluidBindGroup(), pressureWriteBindGroup);
-        encodeSolverPass(pressureRedBlackOddPipeline, `kaminos pressure black sweep ${sweep + 1}`, fluidBindGroup(), pressureWriteBindGroup);
+      if(solverConfig.effective.algorithm==='amgpcg') {
+        encodeAmgpcg(encoder,solverConfig,[gridSize,gridHeight,gridSize],pressureBuffers[0],sceneSolidTexture,open);
+      }else{
+        for (let sweep = 0; sweep < sweeps; sweep += 1) {
+          encodeSolverPass(pressureRedBlackEvenPipeline, `kaminos pressure red sweep ${sweep + 1}`, fluidBindGroup(), pressureWriteBindGroup);
+          encodeSolverPass(pressureRedBlackOddPipeline, `kaminos pressure black sweep ${sweep + 1}`, fluidBindGroup(), pressureWriteBindGroup);
+        }
       }
       const probe = beginPressureResidualProbe(encoder);
       encodeSolverPass(
@@ -18988,7 +19020,8 @@ export function createKaminosVolumePrototype({
       profile.simPassMicrosecondsPerStep = profile.simPass?.mean ?? null;
       profile.projectionMicrosecondsPerStep = profile.projection?.mean ?? null;
       profile.grid = [gridSize, gridHeight, gridSize];
-      profile.inForce = { reactionLaw: state.reactantCombustion?.effective?.law ?? null, appearanceModel: state.appearanceModel?.effective ?? null, transport: state.transport?.effective?.scheme ?? null, pressureSolver: controlsSnapshot.pressureSolver ?? null };
+      profile.inForce = { reactionLaw: state.reactantCombustion?.effective?.law ?? null, appearanceModel: state.appearanceModel?.effective ?? null, transport: state.transport?.effective?.scheme ?? null, pressureSolver: controlsSnapshot.pressureSolver ?? null, pressureAlgorithm:state.pressureSolver?.effective?.algorithm??null, pressureIterations:state.pressureSolver?.effective?.iterations??null };
+      profile.pressureAmgpcg=structuredClone(state.pressureSolver?.amgpcg??null);
       return profile;
     } finally {
       controlsSnapshot.appearanceModel = savedAppearanceModel;
@@ -28470,6 +28503,7 @@ export function createKaminosVolumePrototype({
     },
     validateGridControls(next) {
       const candidate={...controlsSnapshot,...next};
+      resolvePressureSolverConfig(candidate);
       // Match the runtime's existing fine-width normalization.
       const plan=gridTuningPlan(candidate,device?.limits,{joined:state.joinedBoundary?.admitted===true});
       if(plan.fine.materialPerVelocity!==1) {

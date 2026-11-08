@@ -22,7 +22,7 @@ export function gridTuningPlan(c,limits={},context={}) {
  if(Number(c.finePressure)>0&&pressure.reason)throw Error(`Fine pressure: ${pressure.reason}`);
  const regions=c.worldSmoke==='on'?resolveWorldRegions(c,fine.materialDims):null;
  if(regions&&(!Number.isFinite(Number(c.worldSmokeTransition??0))||Number(c.worldSmokeTransition??0)<0))throw Error('Momentum collar must have a nonnegative finite reach');
- const rows=[{name:'Fine',...fine,pressureDims:pressure.pressureDims,pressureReason:pressure.reason,flowDims:fine.velocityDims,materialPitch:2/width,flowPitch:2/fine.velocityDims[0],pressurePitch:2/pressure.pressureDims[0],iterations:solver.iterations}];
+ const rows=[{name:'Fine',algorithm:solver.algorithm,...fine,pressureDims:pressure.pressureDims,pressureReason:pressure.reason,flowDims:fine.velocityDims,materialPitch:2/width,flowPitch:2/fine.velocityDims[0],pressurePitch:2/pressure.pressureDims[0],iterations:solver.iterations}];
  if(regions?.middle)rows.push({name:'Intermediate',...regions.middle,iterations:regions.middleIterations});
  if(regions)rows.push({name:'World',...regions.world,iterations:regions.worldIterations});
  for(const r of rows) {
@@ -43,7 +43,7 @@ export function gridWidthChoices(c,key) {
 export function gridTuningSummary(row, fineWidth) {
  const count=n=>n.toLocaleString('en-US'),pitch=n=>Number(n.toPrecision(4));
  const entries=[['Material',row.materialDims,row.materialPitch],['Velocity',row.flowDims,row.flowPitch],['Pressure',row.pressureDims,row.pressurePitch??row.flowPitch*row.flowDims[0]/row.pressureDims[0]]];
- return entries.filter(([,d])=>d).map(([name,d,p])=>`${name}: ${d.join(' × ')} · ${count(cells(d))} cells · cell width ${pitch(p/(2/fineWidth))}× fine material`).join('\n')+(row.iterations===null?'\nPressure work: legacy spatial tiers':`\nPressure work: ${count(cells(row.pressureDims)*row.iterations)} cell-iterations / step`)+(row.pressureReason?`\nPressure fallback: ${row.pressureReason}`:'');
+ return entries.filter(([,d])=>d).map(([name,d,p])=>`${name}: ${d.join(' × ')} · ${count(cells(d))} cells · cell width ${pitch(p/(2/fineWidth))}× fine material`).join('\n')+(row.algorithm==='amgpcg'?`\nPressure work: ${row.iterations} CG iterations with multigrid per step`:row.iterations===null?'\nPressure work: legacy spatial tiers':`\nPressure work: ${count(cells(row.pressureDims)*row.iterations)} cell-iterations / step`)+(row.pressureReason?`\nPressure fallback: ${row.pressureReason}`:'');
 }
 
 // Cubic cells require height/width to be integral on all three lattices.

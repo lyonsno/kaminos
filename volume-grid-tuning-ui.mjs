@@ -108,6 +108,7 @@ export function createGridTuningInspector({document,host,read,validate,apply,liv
   }catch(e){error=e.message;}
   const stale=dirty&&signature(current)!==signature(baseline);
   for(const [key,input] of fields){
+   if(key==='pressureSolverIterations'&&candidate.pressureAlgorithm==='amgpcg'){input.disabled=true;input.title=`SOR sweeps unused; Fine uses ${candidate.pressureCgIterations??6} CG iterations from Domain & simulation.`;continue;}
    const independent=candidate.worldSmoke==='on'&&candidate.worldSmokeIntermediate==='fields';input.disabled=key.startsWith('intermediate')&&!independent||key.startsWith('worldSmoke')&&key!=='worldSmoke'&&candidate.worldSmoke!=='on';
    if(document.activeElement!==input)input.value=String(draft[key]??'');
   }

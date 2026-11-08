@@ -2175,6 +2175,17 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-pressure-solver-val">legacy</span>
     </div>
     <div class="slider-row">
+      <span class="slider-label">Fine pressure algorithm</span>
+      <select id="volume-pressure-algorithm" class="select-input" data-volume-settings-param="volume_pressure_algorithm">
+        <option value="sor" selected>Red-black SOR</option><option value="amgpcg">AMGPCG</option>
+      </select><span class="slider-val" id="volume-pressure-algorithm-val">SOR</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Fine CG iterations</span>
+      <input type="number" id="volume-pressure-cg-iterations" min="1" step="1" value="6" data-volume-settings-param="volume_pressure_cg_iterations">
+      <span class="slider-val" id="volume-pressure-cg-iterations-val">6</span>
+    </div>
+    <div class="slider-row">
       <span class="slider-label">Pressure grid (experimental)</span>
       <select id="volume-pressure-resolution" class="select-input" data-volume-settings-param="volume_pressure_resolution">
         <option value="off" selected>Original coupled grid</option>
@@ -18476,6 +18487,8 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['lookFreeze', 'volume_look_freeze'],
   ['pressureMode', 'volume_pressure_mode'],
   ['pressureSolver', 'volume_pressure_solver'],
+  ['pressureAlgorithm', 'volume_pressure_algorithm'],
+  ['pressureCgIterations', 'volume_pressure_cg_iterations'],
   ['pressureResolution', 'volume_pressure_resolution'],
   ['worldSmoke', 'volume_world_smoke'], ['worldSmokeFlow', 'volume_world_smoke_flow'], ['worldSmokeMaterial', 'volume_world_smoke_material'], ['worldSmokeExtent', 'volume_world_smoke_extent'], ['worldSmokeTransition', 'volume_world_smoke_transition'],
   ['worldSmokeIntermediate', 'volume_world_smoke_intermediate'],
@@ -20207,6 +20220,8 @@ function readVolumeControls({quality=viewportDisplay.quality,document=globalThis
     pressureMode: pressureConfig.pressureMode,
     pressureEffectiveLabel: pressureConfig.pressureEffectiveLabel,
     pressureSolver: document.getElementById('volume-pressure-solver').value,
+    pressureAlgorithm: document.getElementById('volume-pressure-algorithm').value,
+    pressureCgIterations: Number(document.getElementById('volume-pressure-cg-iterations').value),
     pressureResolution: document.getElementById('volume-pressure-resolution').value,
     worldSmoke: document.getElementById('volume-world-smoke').value,
     worldSmokeFlow: Number(document.getElementById('volume-world-smoke-flow').value),
@@ -20439,6 +20454,13 @@ function updateVolumeControlLabels() {
     }
     const solver = String(c.pressureSolver || 'legacy');
     const sweeps = Math.round(Number(c.pressureSolverIterations) || 60);
+    const amgpcg=solverConfig.effective.algorithm==='amgpcg';
+    document.getElementById('volume-pressure-algorithm-val').textContent=amgpcg?'AMGPCG · Fine only':'SOR';
+    document.getElementById('volume-pressure-cg-iterations-val').textContent=String(c.pressureCgIterations??6);
+    document.getElementById('volume-pressure-cg-iterations').disabled=!amgpcg;
+    document.getElementById('volume-pressure-solver-iterations').disabled=amgpcg;
+    document.getElementById('volume-pressure-algorithm').disabled=solverConfig.effective.solver==='legacy';
+    document.querySelector('#volume-pressure-solver option[value="legacy"]').disabled=amgpcg;
     const gain = solverConfig.effective.projectionGain;
     const offReason = solverConfig.effective.disabledReason === 'pressure-iterations-zero' ? 'pressure iterations 0' : 'gain 0';
     const convergedName = solverConfig.effective.openTop ? 'converged, open top' : 'converged';
@@ -20448,8 +20470,8 @@ function updateVolumeControlLabels() {
         : `legacy (${solverConfig.effective.reason || 'unknown solver'})`)
       : (solverConfig.effective.dispatch === 'disabled'
         ? `${convergedName} · off (${offReason})`
-        : `${convergedName} · ${sweeps} sweeps · ${solverConfig.effective.projection === 'full' ? 'full projection' : `partial projection, gain ${gain.toFixed(2)}`}`);
-    document.getElementById('volume-pressure-solver-iterations-val').textContent = solverConfig.effective.solver === 'legacy' ? `${sweeps} (converged only)` : String(sweeps);
+        : `${convergedName} · ${solverConfig.effective.iterations} ${amgpcg?'CG iterations':'sweeps'} · ${solverConfig.effective.projection === 'full' ? 'full projection' : `partial projection, gain ${gain.toFixed(2)}`}`);
+    document.getElementById('volume-pressure-solver-iterations-val').textContent = amgpcg ? `${sweeps} (SOR only)` : solverConfig.effective.solver === 'legacy' ? `${sweeps} (converged only)` : String(sweeps);
     const transportConfig = resolveTransportConfig(c);
     const schemeName = { legacy: 'legacy', undamped: 'undamped', 'maccormack-velocity': 'MacCormack velocity', maccormack: 'MacCormack' }[transportConfig.effective.scheme] || transportConfig.effective.scheme;
     document.getElementById('volume-advection-scheme-val').textContent = transportConfig.effective.reason
@@ -21575,6 +21597,8 @@ async function initKaminosVolumeRoute() {
     ['volume-flame-priority', 'volume_flame_priority'],
     ['volume-swirl-jostle', 'volume_swirl_jostle'],
     ['volume-pressure-solver', 'volume_pressure_solver'],
+    ['volume-pressure-algorithm', 'volume_pressure_algorithm'],
+    ['volume-pressure-cg-iterations', 'volume_pressure_cg_iterations'],
     ['volume-pressure-resolution', 'volume_pressure_resolution'],
     ['volume-world-smoke', 'volume_world_smoke'], ['volume-world-smoke-flow', 'volume_world_smoke_flow'], ['volume-world-smoke-material', 'volume_world_smoke_material'], ['volume-world-smoke-extent', 'volume_world_smoke_extent'], ['volume-world-smoke-transition', 'volume_world_smoke_transition'],
     ['volume-world-smoke-intermediate', 'volume_world_smoke_intermediate'],
@@ -21967,6 +21991,8 @@ async function initKaminosVolumeRoute() {
     'volume-wind-gust-veer',
     'volume-fixed-source-dephase',
     'volume-pressure-solver',
+    'volume-pressure-algorithm',
+    'volume-pressure-cg-iterations',
     'volume-pressure-resolution',
     'volume-world-smoke', 'volume-world-smoke-flow', 'volume-world-smoke-material', 'volume-world-smoke-extent', 'volume-world-smoke-transition',
     'volume-world-smoke-intermediate',
