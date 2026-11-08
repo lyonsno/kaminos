@@ -1,6 +1,6 @@
 // Covariance of each retained group's original points in its tangent plane.
 // Layout: unit tangent U.xyz, sigmaU, unit tangent V.xyz, sigmaV. Centres/materials stay unchanged.
-export function fitSurfaceFootprints(source,reduced,parent,radius,triangles,{boundaryOnly=false}={}){
+export function fitSurfaceFootprints(source,reduced,parent,radius,triangles,{boundaryOnly=false,boundaryVertices}={}){
  if(!(source instanceof Float32Array)||!(reduced instanceof Float32Array)||source.length%12||reduced.length%12||!(parent instanceof Uint32Array)||parent.length*12!==source.length||!(radius>0))throw Error('Invalid footprint source');
  const n=reduced.length/12,frames=new Float64Array(n*6),moments=new Float64Array(n*4),out=new Float32Array(n*8);
  for(let j=0;j<n;j++){
@@ -24,12 +24,13 @@ export function fitSurfaceFootprints(source,reduced,parent,radius,triangles,{bou
   out[k+3]=Math.sqrt(Math.max(0,(a+d+delta)*.5)+variance);out[k+7]=Math.sqrt(Math.max(0,(a+d-delta)*.5)+variance);
  }
  if(boundaryOnly&&triangles===undefined)throw Error('Boundary fitting requires source triangles');
- return triangles===undefined?out:fitTriangleSupport(source,reduced,parent,radius,triangles,frames,out,boundaryOnly);
+ if(boundaryVertices!==undefined&&(!boundaryOnly||!(boundaryVertices instanceof Uint8Array)||boundaryVertices.length!==parent.length))throw Error('Invalid shared boundary vertices');
+ return triangles===undefined?out:fitTriangleSupport(source,reduced,parent,radius,triangles,frames,out,boundaryOnly,boundaryVertices);
 }
 
 // An edge used by exactly one source triangle bounds that surface region.
 // Sort packed uint32 pairs rather than retaining millions of boxed edge keys.
-function boundaryGroups(triangles,parent,count){
+function boundaryGroups(triangles,parent,count,boundaryVertices){
  const edges=new BigUint64Array(triangles.length);let used=0;
  for(let t=0;t<triangles.length;t+=3)for(let a=0;a<3;a++){
   const u=triangles[t+a],v=triangles[t+(a+1)%3];if(u===v)continue;
@@ -38,8 +39,9 @@ function boundaryGroups(triangles,parent,count){
  const sorted=edges.subarray(0,used).sort(),selected=new Uint8Array(count);
  for(let i=0;i<used;){
   let end=i+1;while(end<used&&sorted[end]===sorted[i])end++;
-  if(end===i+1)for(const id of [Number(sorted[i]>>32n),Number(sorted[i]&0xffffffffn)]){
-   const group=parent[id];if(group!==0xffffffff)selected[group]=1;
+  if(end===i+1){
+   const ids=[Number(sorted[i]>>32n),Number(sorted[i]&0xffffffffn)];
+   if(!boundaryVertices||ids.every(id=>boundaryVertices[id]))for(const id of ids){const group=parent[id];if(group!==0xffffffff)selected[group]=1;}
   }
   i=end;
  }
@@ -50,10 +52,10 @@ function boundaryGroups(triangles,parent,count){
 // midpoints and the face centre. These cells tile the source surface. Fit their
 // union in the retained tangent plane, keeping the retained centre unchanged.
 // The renderer clips at 3 sigma: enclose the support THERE, not at 1 sigma.
-function fitTriangleSupport(source,reduced,parent,radius,triangles,frames,out,boundaryOnly){
+function fitTriangleSupport(source,reduced,parent,radius,triangles,frames,out,boundaryOnly,boundaryVertices){
  if(!(triangles instanceof Uint32Array)||triangles.length%3)throw Error('Invalid triangle indices');
  for(const i of triangles)if(i>=parent.length)throw Error('Triangle index outside source field');
- const n=reduced.length/12,selected=boundaryOnly?boundaryGroups(triangles,parent,n):null;
+ const n=reduced.length/12,selected=boundaryOnly?boundaryGroups(triangles,parent,n,boundaryVertices):null;
  if(selected&&!selected.some(Boolean))return out;
  const moments=new Float64Array(n*4),incident=new Uint8Array(parent.length),extent=new Float64Array(n);
  function cells(emit){

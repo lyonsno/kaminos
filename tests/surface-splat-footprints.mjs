@@ -68,3 +68,11 @@ test('boundary fitting follows source connectivity rather than proximity to anot
  const triangles=new Uint32Array([...a.triangles,...b.triangles.map(i=>i+a.parent.length)]);
  assert.deepEqual(fitSurfaceFootprints(data,data,parent,.01,triangles,{boundaryOnly:true}).slice(0,a.parent.length*8),fitSurfaceFootprints(a.data,a.data,a.parent,.01,a.triangles,{boundaryOnly:true}));
 });
+test('shared boundary mask excludes unrelated open edges from the refit',()=>{
+ const {data,triangles,parent}=grid([-.04,0,.04],[-.04,0,.04]);
+ const baseline=fitSurfaceFootprints(data,data,parent,.01),boundaryVertices=new Uint8Array([1,1,1,0,0,0,0,0,0]);
+ const fitted=fitSurfaceFootprints(data,data,parent,.01,triangles,{boundaryOnly:true,boundaryVertices});
+ assert.notDeepEqual(fitted.slice(8,16),baseline.slice(8,16),'shared edge must be refitted');
+ assert.deepEqual(fitted.slice(3*8),baseline.slice(3*8),'unrelated open edges and interior must retain coverage');
+ assert.throws(()=>fitSurfaceFootprints(data,data,parent,.01,triangles,{boundaryOnly:true,boundaryVertices:new Uint8Array(2)}),/boundary/i);
+});

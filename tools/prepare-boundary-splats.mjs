@@ -3,8 +3,8 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import {fitSurfaceFootprints} from '../surface-splat-footprints.mjs';
 
-const [source,reduced,output,...extra]=process.argv.slice(2);
-if(!source||!reduced||!output||extra.length)throw Error('Usage: prepare-boundary-splats.mjs SOURCE_DIR REDUCED_DIR NEW_OUTPUT_DIR');
+const [source,reduced,output,mesh,...extra]=process.argv.slice(2);
+if(!source||!reduced||!output||extra.length)throw Error('Usage: prepare-boundary-splats.mjs SOURCE_DIR REDUCED_DIR NEW_OUTPUT_DIR [PAIRED_MESH_GLB]');
 // Never replace a source or a previous experiment, including via a symlink.
 fs.mkdirSync(output);
 const report={ok:false,phase:'source',source:path.resolve(source),reduced:path.resolve(reduced)};
@@ -21,14 +21,25 @@ try{
  report.phase='baseline';
  const baseline=fitSurfaceFootprints(src,dst,parent,meta.radius);
  if(!Buffer.from(baseline.buffer).equals(previous))throw Error('Existing footprints differ from point-covariance baseline');
+ let boundaryVertices,pairedMesh;
+ if(mesh){
+  report.phase='paired-mesh';
+  const {GLTFLoader}=await import('three/addons/loaders/GLTFLoader.js'),{Vector3}=await import('three');
+  const payload=fs.readFileSync(mesh),asset=await new GLTFLoader().parseAsync(payload.buffer.slice(payload.byteOffset,payload.byteOffset+payload.length),'');
+  const positions=new Set(),p=new Vector3(),key=(x,y,z)=>[Math.fround(x),Math.fround(y),Math.fround(z)].join(',');asset.scene.updateMatrixWorld(true);
+  asset.scene.traverse(object=>{if(object.isMesh){const a=object.geometry.attributes.position;for(let i=0;i<a.count;i++){p.fromBufferAttribute(a,i).applyMatrix4(object.matrixWorld);positions.add(key(p.x,p.y,p.z));}}});
+  boundaryVertices=Uint8Array.from({length:meta.count},(_,i)=>Number(positions.has(key(src[i*12],src[i*12+1],src[i*12+2]))));
+  const sharedVertices=boundaryVertices.reduce((n,v)=>n+v,0);if(!sharedVertices)throw Error('Paired mesh shares no source vertices');
+  pairedMesh={path:path.resolve(mesh),sha256:hash(payload),sharedVertices};
+ }
  report.phase='fit';
- const fitted=fitSurfaceFootprints(src,dst,parent,meta.radius,triangles,{boundaryOnly:true}),footprints=Buffer.from(fitted.buffer);
+ const fitted=fitSurfaceFootprints(src,dst,parent,meta.radius,triangles,{boundaryOnly:true,boundaryVertices}),footprints=Buffer.from(fitted.buffer);
  if(!fitted.every(Number.isFinite))throw Error('Nonfinite fitted footprint');
  let changed=0;for(let i=0;i<level.count;i++)if(!footprints.subarray(i*32,(i+1)*32).equals(previous.subarray(i*32,(i+1)*32)))changed++;
  report.phase='write';
  fs.writeFileSync(path.join(output,'surfels.f32'),data);fs.writeFileSync(path.join(output,'parent.u32'),parents);fs.writeFileSync(path.join(output,'footprints.f32'),footprints);
  if(level.depthTolerance)fs.writeFileSync(path.join(output,level.depthTolerance.file),read(reduced,level.depthTolerance.file,level.depthTolerance.sha256));
- const next={...level,footprintFit:'boundary-triangle-dual-cell',footprints:{...level.footprints,sha256:hash(footprints)},boundaryFit:{sourceTrianglesSHA256:meta.triangles.sha256,previousFootprintsSHA256:hash(previous),changedGroups:changed,unchangedGroups:level.count-changed}};
+ const next={...level,footprintFit:mesh?'shared-boundary-triangle-dual-cell':'boundary-triangle-dual-cell',footprints:{...level.footprints,sha256:hash(footprints)},boundaryFit:{sourceTrianglesSHA256:meta.triangles.sha256,previousFootprintsSHA256:hash(previous),changedGroups:changed,unchangedGroups:level.count-changed,...(pairedMesh?{pairedMesh}:{})}};
  fs.writeFileSync(path.join(output,'report.json'),JSON.stringify(next,null,2));
  Object.assign(report,{ok:true,phase:'done',count:level.count,dataSHA256:hash(data),footprintsSHA256:hash(footprints),...next.boundaryFit});
 }catch(error){report.error=String(error);process.exitCode=1;}
