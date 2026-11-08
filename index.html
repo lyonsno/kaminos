@@ -29529,6 +29529,7 @@ function setupAuthoringAssets(){
   const ensureTrellisHistory=()=>{
     if(trellisHistoryController)return Promise.resolve(mountTrellisHistory(trellisHistoryController));
     return trellisHistoryPending??=(async()=>{
+      await workbenchViewerReady;
       const [{createAuthoringTrellisHistory},app]=await Promise.all([import('./authoring-trellis-history.mjs'),appGpuHost()]);
       if(!app)throw Error('TRELLIS history needs the app GPU host');
       const controller=await createAuthoringTrellisHistory({renderer,scene:workbenchSceneHost,foreground:app.foreground,document,
