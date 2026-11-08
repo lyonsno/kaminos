@@ -9,3 +9,9 @@ test('a canonical basin retains its virtual smoke presentation control in a priv
 test('an unknown physical control still fails rather than silently using a default',()=>{
  assert.throws(()=>createFireUnitControlDocument(document(),{domControls:{missing:{id:'missing',type:'range',value:1}}}),/Unsupported fire control missing/);
 });
+test('a valid grid dimension outside the legacy dropdown options round-trips into private controls',()=>{
+ function select(){let value='32';return{id:'volume-resolution',tagName:'SELECT',type:'select-one',options:[{value:'32'}],get value(){return value;},set value(v){value=this.options.some(o=>o.value===v)?v:'';},cloneNode(){return select();},append(o){this.options.push(o);}};}
+ const source=select(),doc=document();doc.querySelectorAll=()=>[source];const create=doc.implementation.createHTMLDocument;
+ doc.implementation.createHTMLDocument=()=>{const copy=create(),append=copy.body.append;copy.body.append=node=>{node.ownerDocument=copy;append(node);};return copy;};
+ const copy=createFireUnitControlDocument(doc,{domControls:{'volume-resolution':{id:'volume-resolution',type:'select-one',value:'16'}}});assert.equal(copy.getElementById('volume-resolution').value,'16');
+});

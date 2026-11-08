@@ -1,9 +1,14 @@
 import {createFlameInspector} from './flame-authoring.mjs';
 import {GRID_TUNING_FIELDS} from './volume-grid-tuning.mjs';
+export function setFireUnitControlValue(node,value){
+ if(node.type==='checkbox'){node.checked=value;return;}
+ if(node.id==='volume-resolution'&&node.tagName==='SELECT'&&Number.isSafeInteger(Number(value))&&Number(value)>=4&&!Array.from(node.options).some(o=>o.value===String(value))){const option=node.ownerDocument.createElement('option');option.value=String(value);option.textContent=String(value);node.append(option);}
+ if(node.type==='range'){node.min=String(Math.min(Number(node.min),Number(value)));node.max=String(Math.max(Number(node.max),Number(value)));node.step='any';}node.value=String(value);
+}
 export function createFireUnitControlDocument(document,settings){
  const copy=document.implementation.createHTMLDocument('Fire unit controls');
  for(const source of document.querySelectorAll('input[id],select[id],output[id]')){const node=source.cloneNode(true);if('value'in source)node.value=source.value;if('checked'in source)node.checked=source.checked;copy.body.append(node);}
- for(const axis of ['domControls','rendererControls','presentationControls'])for(const d of Object.values(settings?.[axis]??{})){let node=copy.getElementById(d.id);if(!node&&axis==='presentationControls'&&d.id==='raymarch-smoke-presentation'&&d.type==='button-state'){node=copy.createElement('input');node.id=d.id;node.type='hidden';copy.body.append(node);}if(!node)throw Error('Unsupported fire control '+d.id);if(node.type==='checkbox')node.checked=d.value;else{const value=d.rawValue??d.value;if(node.type==='range'){node.min=String(Math.min(Number(node.min),Number(value)));node.max=String(Math.max(Number(node.max),Number(value)));node.step='any';}node.value=String(value);}}
+ for(const axis of ['domControls','rendererControls','presentationControls'])for(const d of Object.values(settings?.[axis]??{})){let node=copy.getElementById(d.id);if(!node&&axis==='presentationControls'&&d.id==='raymarch-smoke-presentation'&&d.type==='button-state'){node=copy.createElement('input');node.id=d.id;node.type='hidden';copy.body.append(node);}if(!node)throw Error('Unsupported fire control '+d.id);setFireUnitControlValue(node,node.type==='checkbox'?d.value:(d.rawValue??d.value));}
  return copy;
 }
 // Each unit borrows the ordinary inspector with detached backing controls. A
@@ -13,14 +18,14 @@ export function mountFireUnitAuthoring({document,root,owner,edits,target,seedSet
  const settings=()=>owner.capture().settings??seedSettings;
  function project(value){for(const axis of ['domControls','rendererControls','presentationControls'])for(const d of Object.values(value?.[axis]??{})){
   const node=copy.getElementById(d.id);if(!node)throw Error('Unsupported fire control '+d.id);
-  if(node.type==='checkbox')node.checked=d.value;else{const value=d.rawValue??d.value;if(node.type==='range'){node.min=String(Math.min(Number(node.min),Number(value)));node.max=String(Math.max(Number(node.max),Number(value)));node.step='any';}node.value=String(value);}
+  setFireUnitControlValue(node,node.type==='checkbox'?d.value:(d.rawValue??d.value));
  }}
- function snapshot(){const value=structuredClone(settings());for(const axis of ['domControls','rendererControls','presentationControls'])for(const d of Object.values(value[axis]??{})){
+ function snapshot(base=settings()){const value=structuredClone(base);for(const axis of ['domControls','rendererControls','presentationControls'])for(const d of Object.values(value[axis]??{})){
   const node=copy.getElementById(d.id);if(!node)continue;d.value=node.type==='checkbox'?node.checked:['range','number'].includes(node.type)?Number(node.value):node.value;if('rawValue'in d)d.rawValue=node.type==='checkbox'?node.checked:node.value;
  }return value;}
  let applying=false,inspector;
- function write(label='Tune fire simulation'){
-  const next={...owner.capture(),settings:snapshot(),controls:compile(copy)};
+ function write(label='Tune fire simulation',nextSettings=snapshot()){
+  const next={...owner.capture(),settings:nextSettings,controls:compile(copy,nextSettings)};
   applying=true;try{edits.apply(target,next,label);}finally{applying=false;}inspector?.sync();
  }
  const byId=id=>{let node=root.querySelector(`[data-fire-control-id="${id}"]`)??root.querySelector(`[id="${id}"]`)??copy.getElementById(id);
@@ -30,15 +35,15 @@ export function mountFireUnitAuthoring({document,root,owner,edits,target,seedSet
  for(const node of copy.querySelectorAll('input,select'))for(const event of ['input','change'])node.addEventListener(event,()=>{try{write();}catch(error){onError(error);}});
  inspector=createFlameInspector({document:facade,host:root,sharedHost:root,scopeDescription:'These controls edit this fire simulation only.',onError,listBasins,
   readSourceRuntime:()=>owner.runtime.debugState().immersedSources?.sources?.[0]?.config??null,
-  applyBasin:async id=>{const preset=await loadBasin(id);project(preset);write('Apply fire basin');return preset;},
+  applyBasin:async id=>{const preset=await loadBasin(id);project(preset);write('Apply fire basin',snapshot(preset));return preset;},
   saveBasin:({label})=>saveBasin(snapshot(),label),readSource:()=>settings().source??null,
   readPressureRuntime:()=>owner.runtime.debugState().pressureResolution,
   readWorldRuntime:()=>owner.runtime.debugState().worldSmoke,
   readAppearanceRuntime:()=>owner.runtime.debugState().physicsAppearance,
   readRaymarchRuntime:()=>owner.runtime.debugState().opticalStepping,
   gridTuning:{idPrefix:prefix,isEnabled:()=>!root.closest('[hidden]'),read:()=>owner.capture().controls,validate:c=>owner.runtime.validateGridControls(c),
-   apply:patch=>{for(const [key,id]of GRID_TUNING_FIELDS)if(Object.hasOwn(patch,key))copy.getElementById(id).value=String(patch[key]);write('Change simulation grids');},
-   live:(key,value)=>{const id=GRID_TUNING_FIELDS.find(f=>f[0]===key)[1];copy.getElementById(id).value=String(value);write('Tune pressure iterations');}},
+   apply:patch=>{for(const [key,id]of GRID_TUNING_FIELDS)if(Object.hasOwn(patch,key))setFireUnitControlValue(copy.getElementById(id),patch[key]);write('Change simulation grids');},
+   live:(key,value)=>{const id=GRID_TUNING_FIELDS.find(f=>f[0]===key)[1];setFireUnitControlValue(copy.getElementById(id),value);write('Tune pressure iterations');}},
  });
  for(const node of root.querySelectorAll('[id]'))if(!node.id.startsWith(prefix)){node.dataset.fireControlId=node.id;node.id=prefix+node.id;}
  for(const node of root.querySelectorAll('[for],[aria-controls],[aria-labelledby]'))for(const name of ['for','aria-controls','aria-labelledby']){const value=node.getAttribute(name);if(value&&!value.startsWith(prefix))node.setAttribute(name,prefix+value);}

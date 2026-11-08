@@ -3016,7 +3016,7 @@ import {createSceneRecordOperations} from './scene-record-operations.mjs';
 import {FIRE_UNIT_TYPE,FIRE_UNIT_SOURCE,checkedFireUnitRecord,checkedFireUnitPose,moveLinkedFireEmitter} from './fire-unit-record.mjs';
 import {createFireUnitObject} from './fire-unit-runtime.mjs';
 import {mountFireUnitControls} from './fire-unit-controls.mjs';
-import {mountFireUnitAuthoring,createFireUnitControlDocument} from './fire-unit-authoring.mjs';
+import {mountFireUnitAuthoring,createFireUnitControlDocument,setFireUnitControlValue} from './fire-unit-authoring.mjs';
 import {createSceneDocumentSession} from './scene-document-session.mjs';
 import {createSceneMembershipOperations, membershipEditTargetId as sceneMembershipTargetId} from './scene-membership-operations.mjs';
 import {createSceneMembershipBatch} from './scene-membership-batch.mjs';
@@ -6487,7 +6487,7 @@ async function restoreAuthoredSceneFromPreview(options = {}) {
 window.restoreAuthoredSceneFromPreview = restoreAuthoredSceneFromPreview;
 
 function sceneObjectReloadabilityLabel(record) {
-  if (isReloadableSceneObjectRecord(record)) return 'reloadable';
+  if (isReloadableSceneObjectRecord(record.type===FIRE_UNIT_TYPE&&record.object?serializeSceneObject(record):record)) return 'reloadable';
   if (!record.source) return 'unsourced';
   if (record.type === 'pbr') return 'procedural';
   return 're-drop required';
@@ -27763,8 +27763,8 @@ async function mountAuthoredFireUnit(raw,{activate=true,loadRequestId=null}={}) 
   const panel=mountFireUnitControls({document,owner,asset:{id:record.id,root:owner.root},edits:scenePlacementTools.edits,components:sceneComponents,
    mountObject:sceneOwnerControls.mount,select:id=>window.selectSceneObject(id),redraw:()=>window._kaminosDirty?.(),onError:error=>setInfo(error.message),
    mountTuning:({root,owner,target})=>mountFireUnitAuthoring({document,root,owner,edits:scenePlacementTools.edits,target,seedSettings:buildVolumeSettingsPreset(),
-    compile:copy=>readVolumeControls({quality:'full',document:copy}),
-    seedControls(copy,values){for(const [key]of VOLUME_BASIN_ROUTE_FIELDS){const node=copy.getElementById(volumeSceneControlId(key));if(node&&values[key]!==undefined){if(node.type==='checkbox')node.checked=Boolean(values[key]);else{node.min=String(Math.min(Number(node.min)||0,Number(values[key])||0));node.max=String(Math.max(Number(node.max)||0,Number(values[key])||0));node.step='any';node.value=String(values[key]);}}}for(const [key,id]of GRID_TUNING_FIELDS){const node=copy.getElementById(id);if(node&&values[key]!==undefined)node.value=String(values[key]);}},
+    compile:(copy,settings)=>readVolumeControls({quality:'full',document:copy,routeParams:new URLSearchParams(new URL(settings.route,location.href).search)}),
+    seedControls(copy,values){for(const [key]of VOLUME_BASIN_ROUTE_FIELDS){const node=copy.getElementById(volumeSceneControlId(key));if(node&&values[key]!==undefined){if(node.type==='checkbox')node.checked=Boolean(values[key]);else{node.min=String(Math.min(Number(node.min)||0,Number(values[key])||0));node.max=String(Math.max(Number(node.max)||0,Number(values[key])||0));node.step='any';setFireUnitControlValue(node,values[key]);}}}for(const [key,id]of GRID_TUNING_FIELDS){const node=copy.getElementById(id);if(node&&values[key]!==undefined)setFireUnitControlValue(node,values[key]);}},
     listBasins:async()=>{const response=await fetch('/api/volume-settings-presets',{cache:'no-store'});if(!response.ok)throw Error('Basin library unavailable');const index=await response.json();validateVolumeSettingsPresetIndex(index);return index;},
     loadBasin:async id=>{const [artifactResponse,schemaResponse]=await Promise.all([fetch('/api/volume-settings-preset?id='+encodeURIComponent(id),{cache:'no-store'}),fetch('./volume-settings-preset-schema-v2.json')]);if(!artifactResponse.ok||!schemaResponse.ok)throw Error('Basin unavailable');const schema=await schemaResponse.json(),receipt=validateVolumeSettingsPresetDocument(await artifactResponse.json(),id,schema);return {...projectFireSettingsToSchema(flamePresetForLocalControls(receipt.preset,owner.capture().emitter.scale[0]/owner.root.scale.x),schema),source:{presetId:id,label:receipt.label}};},
     saveBasin:(snapshot,label)=>{const {source,...preset}=snapshot;for(const axis of ['domControls','rendererControls','presentationControls'])preset[axis]=structuredClone(snapshot[axis]);preset.route=buildVolumeAgentCaptureRoute(preset.domControls,preset.rendererControls,preset.presentationControls);preset.savedAt=new Date().toISOString();return saveVolumeSettingsPreset({preset:portableFlamePreset(preset,owner.capture().emitter.scale[0]/owner.root.scale.x),label});},onError:error=>setInfo(error.message)}),});
