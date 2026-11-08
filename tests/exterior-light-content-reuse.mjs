@@ -1,0 +1,35 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import {createExteriorSmokeLight} from '../scene-exterior-light.mjs';
+globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,UNIFORM:4,COPY_SRC:8};
+globalThis.GPUTextureUsage={STORAGE_BINDING:1,TEXTURE_BINDING:2,COPY_SRC:4};
+let submissions=0;
+const texture=()=>({createView:()=>({}),destroy(){}});
+const device={limits:{maxStorageBufferBindingSize:1e9,maxTextureDimension2D:1024,maxTextureDimension3D:256,maxComputeWorkgroupsPerDimension:65535},queue:{writeBuffer(){},submit(){submissions++;}},createBuffer:()=>({destroy(){}}),createTexture:texture,createShaderModule:()=>({}),createComputePipeline:()=>({getBindGroupLayout:()=>({})}),createBindGroup:x=>x,createCommandEncoder:()=>({copyBufferToBuffer(){},beginComputePass:()=>({setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}}),finish:()=>({})})};
+const geometry={nodes:new Float32Array(12),triangles:new Float32Array(12),nodeCount:0,triangleCount:0,matrices:new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1])};
+const source={status:'encoded',texture:texture(),dimensions:[4,8,4],generation:1,frame:1,worldTransform:{translate:[0,0,0],scale:1}};
+source.exterior={status:'encoded',texture:texture(),emissionTexture:texture(),dimensions:[4,8,4],localMin:[-3,-3,-3],localMax:[3,9,3],generation:1,frame:1};
+const options={geometry,revision:1,worldGeometry:false,directions:4,gain:1};
+const light=createExteriorSmokeLight(device,{grid:2,refinement:1});
+const encode=()=>{source.frame++;source.exterior.frame=source.frame;return light.encode(source,options);};
+let first=encode();const built=submissions;
+const retained=encode();assert.equal(submissions,built,'Unchanged World receiver transport must not submit GPU work on a new presentation frame');assert.equal(retained.frame,source.frame);assert.equal(retained.generation,source.generation);assert.equal(retained.texture,first.texture);
+const rebuild=(change,label)=>{const before=submissions;change();const frame=encode();assert(submissions>before,label);const after=submissions;encode();assert.equal(submissions,after,label+' settles to exact reuse');return frame;};
+rebuild(()=>{source.generation++;source.exterior.generation=source.generation;},'Material generation');
+rebuild(()=>{source.texture=texture();},'Source texture replacement');
+rebuild(()=>{source.exterior.emissionTexture=texture();},'Exterior emission replacement');
+rebuild(()=>{geometry.matrices[12]=.5;},'In-place solid transform');
+rebuild(()=>{source.worldTransform.translate[0]=.25;},'Source transform');
+rebuild(()=>{options.gain=2;},'Lighting gain');
+rebuild(()=>{options.sourceSoftness=1;},'Source smoothing');
+rebuild(()=>{options.directions=8;},'Requested direction count');
+rebuild(()=>{options.environment={texture:texture(),metadata:{generation:1}};},'Environment texture');
+rebuild(()=>{options.environment.metadata.generation++;},'In-place environment generation');
+rebuild(()=>{options.sceneLights={lights:[],worldScale:2};},'Scene light inputs');
+rebuild(()=>{options.revision++;},'Solid topology revision');
+rebuild(()=>{light.setReceiverCoverage({lo:[-2,-2,-2],hi:[2,6,2],pitch:2,directions:4});},'Receiver refinement coverage');
+const covered=encode();assert.equal(covered.middle.frame,source.frame);assert.equal(covered.middle.generation,source.generation);
+// GPU-owned occupancy without an explicit content contract stays conservative.
+geometry.coverage={};let before=submissions;encode();encode();assert.equal(submissions,before+4,'Resident geometry continues to execute both receiver fields');
+geometry.coverage=null;delete source.generation;delete source.exterior.generation;before=submissions;encode();encode();assert.equal(submissions,before+4,'Missing content authority never enables reuse');
+light.destroy();console.log('Exterior lighting retains exact unchanged receiver transport and invalidates on material, geometry, settings and resources');

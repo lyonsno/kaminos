@@ -73,10 +73,25 @@ export function createExteriorSmokeLight(device,{grid=8,refinement=4,receiverCov
         const {name,key,regionDirections}=spec;let current=regions.get(name);
         if(current?.key!==key){const next=makeGather(source,spec,geometry,worldGeometry);beforeReplace();current?.gather.destroy();current={key,gather:next};regions.set(name,current);builds++;}
         const {gather}=current;if(worldGeometry)gather.setGeometryTransforms(geometry.matrices);gather.setDirections(regionDirections);
+        // Source-directed quadrature is deterministic. Presentation frame IDs
+        // do not change its integral; material, geometry and lighting inputs do.
+        // GPU-owned resident occupancy keeps its existing live refresh route.
+        const cacheable=Number.isSafeInteger(source.generation)&&source.generation>=0&&!geometry.coverage&&!geometry.coverages?.length
+          &&(!environment||Number.isSafeInteger(environment.metadata?.generation));
+        const content=cacheable?JSON.stringify([key,regionDirections,source.generation,source.dimensions,source.localMin,source.localMax,source.worldTransform,source.gain,source.exteriorGain,
+          medium.dimensions,medium.localMin,medium.localMax,medium.handoffMargin,medium.middle?.dimensions,medium.middle?.localMin,medium.middle?.localMax,
+          geometry.matrices?Array.from(geometry.matrices):null,gain,sourceSoftness,options.emptySkip,environment?.metadata,sceneLights]):null;
+        const resources=[source.texture,source.scatteringTexture,medium.texture,medium.emissionTexture,medium.middle?.texture,medium.middle?.emissionTexture,environment?.texture];
+        if(content!==null&&current.content===content&&current.resources?.every((resource,i)=>resource===resources[i])){
+          frames[name]={...current.frame,frame:source.frame};
+          continue;
+        }
+        current.content=null;current.frame=null;
         const frame=gather.encode(source,{emptySkip:options.emptySkip,gain,sourceSoftness,environment,sceneLights});
         frames[name]={texture:gather.smoke,...frame,coverage:name==='middle'&&nearCoverage?'independent-near-receivers':`${name}-material-bounds`,builds,
           extinction:{generation:medium.generation,method:'region-split-midpoint-trilinear',stepLength:(medium.localMax[0]-medium.localMin[0])/integrationGrid,fineInterval:'physical-blend-in-fine-source',overlap:'camera-two-middle-material-cells'},
           exteriorEmission:Boolean(medium.emissionTexture),approximation:'fine-and-exterior-physical-emission; independent-receiver-grids'};
+        current.content=content;current.resources=resources;current.frame=frames[name];
       }
       return {...frames.world,builds,handoffMargin:normalizeSmokeHandoffMargin(medium.handoffMargin),middle:frames.middle??null};
     },
