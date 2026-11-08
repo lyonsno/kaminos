@@ -141,12 +141,13 @@ export async function createMechanismController({host,inputs={},record=()=>{}}){
  }});
  function axleRead(objectId=editingConnection){const a=model.attachments.find(a=>a.objectId===objectId);return {...history.recipeSnapshot(model),connection:objectId,...matrixFrame(hingeWorldFrame(root,model,a,0,objects())),scale:[a.hardware?.size??1,a.hardware?.size??1,a.hardware?.size??1]};}
  axleTarget=history.register('axle',{read:axleRead,readForReplay:v=>axleRead(v.connection),check:v=>{history.restoreRecipe(v);for(const k of ['position','rotation','scale'])if(v[k]?.length!==3||!v[k].every(Number.isFinite))throw Error('Finite axle transform required');if(v.scale.some(x=>x<=0))throw Error('Positive hinge size required');return structuredClone(v);},write:v=>{
+  const liveBinding=model.attachments.find(a=>a.objectId===v.connection),liveFrame=edits.state().active&&liveBinding?.hardware?.mounting==='part-frames'?matrixFrame(hingeWorldFrame(root,model,liveBinding,0,objects())):null;
   model=history.restoreRecipe(v);if(edits.state().active&&JSON.stringify(v)!==JSON.stringify(edits.state().active.before)){
    const a=model.attachments.find(a=>a.objectId===v.connection),previous=a.hardware?.size??1,changed=v.scale.find(x=>Math.abs(x-previous)>1e-7);
    a.hardware=checkedHardware({...a.hardware??{family:'clevis',size:1},size:changed??previous});if(changed&&a.hardware.parts)delete a.hardware.parts;
    const target=previewMountMatrix(root,model,a.targetMount,0,objects());
    if(a.hardware.mounting==='part-frames'){
-    const before=edits.state().active.before,resizeOnly=changed&&['position','rotation'].every(k=>v[k].every((x,i)=>Math.abs(x-before[k][i])<1e-7));
+    const before=edits.state().active.before,resizeOnly=changed&&[before,liveFrame].some(pose=>pose&&['position','rotation'].every(k=>v[k].every((x,i)=>Math.abs(x-pose[k][i])<1e-7)));
     if(!resizeOnly){const desired=new T.Matrix4().compose(new T.Vector3(...v.position),new T.Quaternion().setFromEuler(new T.Euler(...v.rotation)),new T.Vector3(1,1,1)),local=matrixFrame(target.clone().invert().multiply(desired).multiply(frameMatrix(hingeMountFrames(a.hardware).fixed)));
     a.axle={position:local.position,rotation:local.rotation};}
    }else{
@@ -224,7 +225,7 @@ export async function createMechanismController({host,inputs={},record=()=>{}}){
   try{const next=appendJoint(model,event.shiftKey?null:(selected<0?null:selected),p.point.slice(0,2));apply(next,'Draw link');seat.changed(()=>{selected=model.nodes.length-1;update();});}catch(e){if(status)status.textContent=e.message;}
  }});
  connectionHistory=edits.registerHistoryScope({active:()=>!!(tool==='connect'&&connectionDraft&&seat.active?.()),state:()=>({undoCount:connectionPast.length,redoCount:connectionFuture.length}),undo:()=>replayConnection(connectionPast,connectionFuture),redo:()=>replayConnection(connectionFuture,connectionPast)});
- unsubscribe=edits.subscribe(()=>{if(!disposed){if(editingConnection&&!edits.state().active&&!model.attachments?.some(a=>a.objectId===editingConnection&&a.targetMount))seat.back?.();putProxy();refresh();}});
+ unsubscribe=edits.subscribe(()=>{if(!disposed){if(editingConnection&&!edits.state().active&&!model.attachments?.some(a=>a.objectId===editingConnection&&a.targetMount))seat.back?.();if(!edits.state().active)putProxy();refresh();}});
  const operations={
   hingeHardware({objectId=selectedConnection,family,size}={}){const next=copyMechanism(model),a=next.attachments?.find(a=>a.objectId===objectId&&a.hinge);if(!a)throw Error('Choose a hinged connection');a.hardware=checkedHardware({family:family??a.hardware?.family??'clevis',size:size??a.hardware?.size??1,...(a.hardware?.mounting?{mounting:a.hardware.mounting}:{})});apply(next,'Change analytical hinge',{reset:false});operations.selectConnection({objectId});return read();},
   seatHinge({objectId=selectedConnection}={}){const next=copyMechanism(model),a=next.attachments?.find(a=>a.objectId===objectId&&a.hinge);if(!a?.hardware)throw Error('Choose an analytical hinge');a.hardware={...a.hardware,mounting:'part-frames'};delete a.axle;a.offset={...identityFrame(),scale:a.offset.scale};apply(next,'Seat on hinge mounting faces',{reset:false});operations.selectConnection({objectId});return read();},
