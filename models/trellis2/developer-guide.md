@@ -200,44 +200,64 @@ speed or interactive comfort; use the option provisionally on useful work.
 ## Completed sparse occupancy previews
 
 Pass `runId` and an optional `onPreview` callback to
-`createTrellisImageGenerationAdapter` to receive the completed occupied-support
-grid before low-resolution shape sampling starts:
+`createTrellisImageGenerationAdapter` to observe the completed occupied support
+before low-resolution shape sampling. Live delivery stays on the GPU:
 
 ~~~js
-const previews = [];
 const generator = createTrellisImageGenerationAdapter({
   route, ...inputs, runId: crypto.randomUUID(),
-  onPreview: preview => { previews.push(preview); },
+  onPreview: preview => {
+    if (!preview.isCurrent()) return;
+    // Your same-device renderer consumes or copies the resident support here.
+    // Complete a retaining copy submission before returning or awaiting anything.
+  },
 });
 ~~~
 
-`runTrellisInPage` and `window.kaminosTrellisPage` accept the same `onPreview`
-callback and supply the actual app run identity. The page opens a foreground
-window while delivering it. Delivery is awaited, like `onPhase`; a thrown or
-rejected callback fails the invocation before further shape generation.
-Consumers should handle optional presentation errors in their callback.
+`runTrellisInPage` accepts an optional nonblank `runId` and the same callback;
+when omitted it creates one ID and returns it with the result. The public
+`window.kaminosTrellisPage` caller passes its actual run ID through, so preview,
+host, job and final generation record agree. The observer is called directly
+without an added foreground window or completion join. Its returned promise is
+never awaited. A thrown or rejected observer is recorded in `previewDelivery`
+without failing the model; a still-pending last observer is `expired` at model
+completion. Preview promises are not joined during final decoding or cleanup.
 
-The event has schema `trellis2.sparse-occupancy-preview.v1` and kind
-`sparse-occupancy`. It contains the actual run, route, job and invocation
-identities, completed sampling `step`/`steps`, `count`, and a complete owned
-`Int32Array` named `coordinates`. Keeping the snapshot after generation or
-producer disposal does not observe subsequent GPU/readback-buffer reuse.
+The live event schema is `trellis2.sparse-occupancy-preview.gpu.v1`, kind
+`sparse-occupancy`. It includes actual run/route/job/invocation identities,
+completed sampling `step`/`steps`, `count`, the actual `device`, and resident
+`coordinates` tensor (`buffer`, `bufferOffset`, `byteLength`, dtype `i32`,
+shape `[count,3]`). Coordinates are packed i32 triples: a shader reads
+`array<i32>` at `row*3+axis`; `array<vec3<i32>>` has a different array stride.
+The buffer supports `STORAGE`, `COPY_SRC` and `COPY_DST`; it has no vertex-buffer
+usage. Use the same device/queue, not another tab's or process's WebGPU device.
 
-`grid` declares the source and support dimensions, strict-positive logit
-threshold and max-any downsampling. The normal 64³ decoded occupancy produces
-32³ support; this is the support passed to the shape model. `layout` preserves
-the source component and row order. For a cell center, add
-`spatial.cellCenterOffset` to each coordinate, then apply
-`spatial.gridToSource` (scale followed by offset). `spatial.sourceToGltf` is the
-column-major node transform used by the ordinary geometry exporter. It is
-provided separately, without changing the raw coordinate components.
+The live source is borrowed during the model run. `isCurrent()` becomes false
+on model completion, failure or disposal. It is a validity check, not an async
+lease: a consumer retaining support must encode and submit a GPU-to-GPU copy
+synchronously during callback delivery, within its existing command admission,
+before awaiting renderer initialization or other work. The consumer owns that
+copy and its disposal. Later rendering/delivery must also respect the consumer's
+active run and final-result identity so a late preview cannot replace a final
+result or a newer run. A pending renderer must never hold model progress.
 
-This preview copies existing compact support once, with no extra neural
-decoder execution. At normal dimensions the complete coordinate copy is at
-most 384 KiB; the actual count and byte length are reported. Generation's
-`coordinateBytesToCPUDuringServing` includes it. With no observer, coordinates
-stay resident and no preview readback runs. Intermediate denoising tensors
-remain latents; this callback does not present them as evolving occupancy.
+`grid` declares source/support dimensions, strict-positive threshold and
+max-any downsampling. Normal64³ occupancy becomes32³ support, the exact input
+for the shape model. `layout` preserves raw component/row order. A cell center
+adds `spatial.cellCenterOffset`, then applies `spatial.gridToSource` (scale,
+then offset). `spatial.sourceToGltf` is the column-major node transform used by
+the ordinary geometry exporter, separate from the unmodified raw components.
+The live event and generation's `coordinateBytesToCPUDuringServing` report zero;
+no observer adds neither buffer/readback work nor decoding. Intermediate
+sampler tensors remain latents, not evolving occupancy.
+
+For an explicit capture/export boundary, `readTrellisOccupancyPreview` in
+`occupancy-coordinates.js` can copy the complete resident support using its
+actual runtime and scheduler invocation. Its separate schema
+`trellis2.sparse-occupancy-preview.v1` contains an owned CPU `Int32Array` that
+survives producer disposal, and reports the exact copied bytes. At normal
+source dimensions complete support fits at most384KiB. This explicit helper is
+not called by live delivery or used as a required inference/display dependency.
 
 ## Memory and performance
 

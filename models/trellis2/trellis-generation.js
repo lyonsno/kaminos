@@ -1,12 +1,12 @@
 // Serving composition from the live image encoder's resident conditioning.
 // Model adapters below are the production kernels, not injectable model or
 // reference callbacks. Initial noise is CPU-authored input; learned fields
-// and coordinates stay resident by default. An optional completed-occupancy
-// preview copies support coordinates only. Mesh extraction/UV/PBR are later consumers.
+// and coordinates stay resident, including optional completed-occupancy
+// previews. Mesh extraction/UV/PBR and explicit captures are later consumers.
 import {createTrellisSparseFlowAdapter,createTrellisSparseFlowAdapterAsync} from './sparse-flow.js';
 import {createTrellisSparseSamplerAdapter} from './sparse-sampler.js';
 import {createTrellisSparseDecoderAdapter} from './sparse-decoder.js';
-import {createTrellisOccupancyCoordinatesAdapter,readTrellisOccupancyPreview} from './occupancy-coordinates.js';
+import {createTrellisOccupancyCoordinatesAdapter,createTrellisOccupancyPreview} from './occupancy-coordinates.js';
 import {createTrellisSLatFlowAdapter,createTrellisSLatFlowAdapterAsync} from './slat-flow.js';
 import {createTrellisSLatSamplerAdapter} from './slat-sampler.js';
 import {createTrellisSLatCascadeSupportAdapter,createTrellisSLatCascadeSupportAdapterAsync} from './slat-cascade.js';
@@ -64,6 +64,7 @@ export function createTrellisImageGenerationAdapter({route,pixelValues,highResol
     get conditioning(){return producer.outputs?.conditioning;},
     get highResolutionConditioning(){return highProducer?.outputs?.conditioning;},
     get noiseInputs(){return generation?.noiseInputs??Object.freeze({});},
+    get previewDelivery(){return generation?.previewDelivery;},
     get decoderFailureContext(){return disposed?undefined:generation?.decoderFailureContext;},
     async run(invocation){
       if(disposed)throw Error('image generation adapter disposed');if(state!=='new')throw Error('image generation adapter is '+state);
@@ -107,7 +108,9 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
   if(onNoiseInput!==undefined&&typeof onNoiseInput!=='function')throw TypeError('noise input observer must be a function');
   if(onPreview!==undefined&&(typeof onPreview!=='function'||typeof runId!=='string'||!runId.trim()))throw TypeError('preview observer needs a function and caller-owned runId');
   const gaussian=browserNoise(seed),owned=new Set(),noiseInputs={},phases=[];
-  let state='new',phase='new',result,disposed=false,lastDecoder,coordinatePreviewBytes=0;
+  let state='new',phase='new',result,disposed=false,lastDecoder;
+  let previewDelivery={status:onPreview?'not-offered':'disabled'};
+  const previewFailed=error=>{previewDelivery={status:'failed',error:{name:error?.name??'Error',message:String(error?.message??error)}};};
   const decode=(decoder,invocation)=>{lastDecoder=decoder;return decoder.run(invocation);};
   const own=a=>{owned.add(a);return a;},retire=async(...adapters)=>{
     await runtime.device?.queue?.onSubmittedWorkDone?.();
@@ -154,7 +157,7 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
   };
   return Object.freeze({runtime,routeId:route.routeId,inputs:Object.freeze({conditioning:conditioningTensor,highResolutionConditioning:highResolutionConditioningTensor}),
     get state(){return state;},get phase(){return phase;},get noiseInputs(){return Object.freeze({...noiseInputs});},
-    get outputs(){return result;},
+    get outputs(){return result;},get previewDelivery(){return Object.freeze({...previewDelivery});},
     // Final geometry/material decoder only; earlier cascade support and failures
     // outside decoder.run do not pretend to provide this diagnostic boundary.
     get decoderFailureContext(){return disposed||state!=='failed'?undefined:lastDecoder?.failureContext;},
@@ -177,13 +180,14 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
         const lrCoordinates=await coordinates.coordinates(invocation),lrResolution=coordinates.plan.outputResolution;
         await retire(occupancy,sparseSampler,sparse);
         if(onPreview){
-          const preview=await readTrellisOccupancyPreview({runtime,coordinates:lrCoordinates,plan:coordinates.plan,
-            runId,routeId:route.routeId,steps:sparseSampler.plan.steps.length,invocation});
-          coordinatePreviewBytes+=preview.coordinateBytesToCPU;
-          // Like the phase observer, delivery is awaited. A thrown/rejected observer
-          // fails this invocation before shape generation; consumers handle optional
-          // presentation failures locally. The snapshot outlives producer retirement.
-          await onPreview(preview);
+          // Optional observation never launches a CPU readback or joins inference,
+          // foreground settlement, final decode, or final result completion.
+          try{
+            const preview=createTrellisOccupancyPreview({runtime,coordinates:lrCoordinates,plan:coordinates.plan,
+              runId,routeId:route.routeId,steps:sparseSampler.plan.steps.length,invocation,isCurrent:()=>state==='running'&&!disposed});
+            previewDelivery={status:'pending'};
+            Promise.resolve(onPreview(preview)).then(()=>{previewDelivery={status:'delivered'};},previewFailed);
+          }catch(error){previewFailed(error);}
         }
         const lrFlow=await shapeFlow('lowResolutionShape',lrCoordinates),lr=await sampleShape('lowResolutionShape',lrFlow,'lowResolutionShape',invocation);
         // The decoder expands the latent coordinate grid, not the final mesh grid.
@@ -227,7 +231,8 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
             .map(role=>[role,Object.freeze([...stageConditioning(role).shape])]))),
           modelIdentities:Object.freeze(Object.fromEntries(roles.map(role=>[role,models[role].identity??null]))),
           phases:Object.freeze(phases.map(Object.freeze)),initialNoise:Object.freeze({...noiseInputs}),
-          featureBytesToCPUDuringServing:0,coordinateBytesToCPUDuringServing:coordinatePreviewBytes,
+          featureBytesToCPUDuringServing:0,coordinateBytesToCPUDuringServing:0,
+          ...(onPreview?{previewDelivery:Object.freeze(previewDelivery.status==='pending'?{status:'expired'}:{...previewDelivery})}:{}),
           handoff:'resident learned geometry/material fields; post-model mesh/UV/PBR consumers outstanding',
           comparison:'browser generation; no assertion of matched MLX noise or model fidelity'});
         state='completed';phase='completed';return result;
