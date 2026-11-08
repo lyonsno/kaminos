@@ -529,3 +529,10 @@ body[data-workspace=authoring].has-assets-panel:has(#asset-generate[data-image-e
 }
 
 @media(min-width:801px){body.has-authoring-workspace[data-workspace=workbench].has-assets-panel:has(#asset-browse:not([hidden])):has(#asset-detail:not([hidden])){--asset-workbench-default:clamp(400px,46vh,540px);}}
+
+#authoring-material-properties > label { display:grid; grid-template-columns:92px minmax(0,1fr); align-items:center; gap:8px; margin:10px 0; font-size:11px; }
+#authoring-material-properties select, #material-name { width:100%; min-width:0; padding:6px; border:1px solid #41434a; border-radius:4px; background:#25262a; color:#ddd; font:inherit; }
+#authoring-material-properties .material-actions { display:flex; gap:6px; margin:12px 0; }
+#authoring-material-properties .material-users, #authoring-material-properties .material-implementation-description { font-size:11px; line-height:1.5; color:#a4abb5; }
+#authoring-material-properties .material-users { padding:8px; border-left:2px solid #7a9b9e; background:#23282b; }
+#authoring-material-properties input[type=color] { width:100%; height:28px; padding:2px; }

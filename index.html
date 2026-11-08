@@ -3367,6 +3367,9 @@ import {
 import {createPromptLettering} from './prompt-lettering.mjs';
 import {PROMPT_RELIEF_SOURCE,promptReliefRecord,restorePromptRelief,checkedPromptRelief} from './inference-kiln-record.mjs';
 import { COMPOSITION_SCHEMA, resolveFlameLightingRoute, compositionRestoreUrl, savedSceneLocation, captureComposedCanvases } from './scene-authoring.mjs';
+import {createSceneMaterials} from './scene-material-recipes.mjs';
+import {sceneMaterialPrograms} from './scene-material-programs.mjs';
+import {installMaterialInspector} from './scene-material-inspector.mjs';
 import {PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh,checkedGeometry,createProceduralMesh,GEOMETRY_DEFAULTS} from './scene-geometry.mjs';
 import {canCollideWithFire,checkedObjectCollision,createSceneColliderCollection} from './scene-collider.mjs';
 import {GROUP_TYPE,checkedGroupPose,checkedGroupEdit,moveGroupMembers,identityGroupPose} from './scene-group.mjs';
@@ -4211,6 +4214,8 @@ let fingerFluidBenchState = createFingerFluidBenchState({
 window.__kaminosFingerFluidBenchDebugState = () => fingerFluidBenchState;
 let volumePrimitives = [];
 const workingScene = createWorkingScene();
+let materialInspector=null;
+const sceneMaterials=createSceneMaterials({entries:()=>[...workingScene.objects,...workingScene.suspendedObjects()],definitions:sceneMaterialPrograms,changed:()=>{window._kaminosDirty?.();materialInspector?.sync();}});
 const authoredAsh = new Map();
 let ashInspector=null,ashSourceInspector=null;
 const ashEditTargets=new Set();
@@ -5481,6 +5486,7 @@ function sceneObjectMetadataFor(object) {
 }
 
 function disposeObjectTree(object) {
+  sceneMaterials.releaseObject(object);
   releasePreparedRoot(object);releaseInitialBeautyLevels(object);
   if(object.userData?.disposeAshObject){object.userData.disposeAshObject();for(const [id,ash] of authoredAsh)if(ash.root===object)authoredAsh.delete(id);return;}
   sceneBurning?.forget(object);
@@ -10632,7 +10638,7 @@ function createPageSceneMembershipOperations() {
         const pending=applyGiProxySetting(entry);
         if(!pending)prepareSceneNavigationRoot(entry.object);
       },
-      attach(entry){setSceneObjectMounted(entry,true);if(!entry.giProxy?.enabled)prepareSceneNavigationRoot(entry.object);sceneDocument.authoringChanged();},
+      attach(entry){setSceneObjectMounted(entry,true);sceneMaterials.sync();if(!entry.giProxy?.enabled)prepareSceneNavigationRoot(entry.object);sceneDocument.authoringChanged();},
       detach(entry){
         if(hybridSplatOverlayState.objectId===entry.id)stopHybridSplatOverlay({silent:true});
         if(splatCorrectionMode?.objectId===entry.id)exitSplatCorrectionMode({revert:false,silent:true});
@@ -12201,6 +12207,9 @@ async function initScene() {
     openWorkbenchTab: tab => setActiveTab(tab),
   });
   window.kaminosWorkspace = authoringWorkspace;
+  materialInspector=installMaterialInspector({document,root:document.getElementById("authoring-material-properties"),materials:sceneMaterials,definitions:sceneMaterialPrograms,edits:scenePlacementTools.edits,selected:id=>id?workingScene.objects.find(e=>e.id===id):selectedSceneObjectEntry(),assertAvailable:assertSceneConstructionAvailable,changed:()=>window._kaminosDirty?.(),error:setInfo});
+  window.kaminosMaterials=materialInspector;
+  scenePlacementTools.addHistoryScope(document.getElementById("authoring-material-properties"));
   cameraViews=createCameraViews({
     edits:scenePlacementTools.edits,
     readCamera:readAuthoredCameraView,
@@ -12985,8 +12994,9 @@ function createPageSceneLifecycle(){
     groups:{restore:setSceneGroupsFromRecords},
     selection:{set:setSceneSelection,object:setActiveSceneObject,group:setActiveSceneGroup},
     context:{retire:retireSceneFlame,beforeClear:clearSceneEditingState,clearDomains:clearSceneDomains,clearTransient:clearSceneTransient,cleared:projectClearedScene,
-      beginLoad:setup=>{waterFeature.setup=setup.water;activeSceneComposition=setup.flame.composition;authoredFlamePresent=setup.flame.sourcePresent;volumePrototype?.setSceneCompositionPresentation?.(Boolean(activeSceneComposition));},beforeLoad:(record,requestId)=>record.type===ASH_OBJECT_TYPE?sceneGeometryPreview?.present(requestId):undefined,
+      beginLoad:setup=>{sceneMaterials.write(setup.materialLibrary??{recipes:[],bindings:[]});waterFeature.setup=setup.water;activeSceneComposition=setup.flame.composition;authoredFlamePresent=setup.flame.sourcePresent;volumePrototype?.setSceneCompositionPresentation?.(Boolean(activeSceneComposition));},beforeLoad:(record,requestId)=>record.type===ASH_OBJECT_TYPE?sceneGeometryPreview?.present(requestId):undefined,
       loaded:async(setup,requestId)=>{
+        sceneMaterials.sync();
         const waitingForDomains=setup.water||setup.flame.sourcePresent||workingScene.objects.some(entry=>entry.type===ASH_OBJECT_TYPE);
         // Preserve a textured coarse frame through static refinement. An empty
         // draw (no eligible or successfully loaded stand-ins) still needs its fallback.
@@ -13028,6 +13038,7 @@ function clearSceneEditingState(){
   authoringControlSessions.forEach(session => session.cancel());
   sceneControlHistory?.cancel();
   scenePlacementTools?.clear();
+  sceneMaterials.clear();
   sceneCameras?.clear();
   for(const proxy of groupProxies.values())proxy.removeFromParent();
   groupProxies.clear();
@@ -26980,8 +26991,8 @@ function restoreLoadedSceneRecord(entry,record){
   if (typeof removeSceneLowLodStandIn === 'function') removeSceneLowLodStandIn(record.id);
   if(record.groupId)setSceneObjectGroupId(entry,record.groupId);
 }
-async function loadSceneObjects(records, activeId, groups = [], activeGroupId = null, liquidSetup = null, loadRequestId = null,startupLodHint=null) {
-  return sceneLifecycle.replace(records,{activeId,groups,activeGroupId,setup:{water:liquidSetup,flame:{composition:activeSceneComposition,sourcePresent:authoredFlamePresent},startupLodHint,startupGroups:groups},loadRequestId});
+async function loadSceneObjects(records, activeId, groups = [], activeGroupId = null, liquidSetup = null, loadRequestId = null,startupLodHint=null,materialLibrary=null) {
+  return sceneLifecycle.replace(records,{activeId,groups,activeGroupId,setup:{materialLibrary,water:liquidSetup,flame:{composition:activeSceneComposition,sourcePresent:authoredFlamePresent},startupLodHint,startupGroups:groups},loadRequestId});
 }
 
 function writeAuthoredCameraView(view){
@@ -27037,6 +27048,7 @@ function buildSceneData(capture = null) {
   const data = buildSceneDocument({
     timestamp: new Date().toISOString(),
     objects,
+    materialLibrary: sceneMaterials.document(),
     groups: serializeSceneGroups(),
     activeObjectId: workingScene.activeObjectId,
     activeGroupId: workingScene.activeGroupId,
@@ -27486,10 +27498,12 @@ function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
   else if(entry.type===CAMERA_TYPE)mountAuthoredCamera(record);
   else if(entry.type==='light')mountSceneSpotLight(record);
   else {
-    const copy=withoutRepetitionCopies(entry.object,()=>cloneSceneObjectHierarchy(entry.object));copy.traverse(child=>{if(child.geometry)child.geometry=child.geometry.clone();if(child.material)child.material=Array.isArray(child.material)?child.material.map(cloneSceneMaterial):cloneSceneMaterial(child.material);});
+    const copy=sceneMaterials.withSource(entry.object,()=>withoutRepetitionCopies(entry.object,()=>cloneSceneObjectHierarchy(entry.object)));copy.traverse(child=>{if(child.geometry)child.geometry=child.geometry.clone();if(child.material)child.material=Array.isArray(child.material)?child.material.map(cloneSceneMaterial):cloneSceneMaterial(child.material);});
     const burnLabels=[];copy.traverse(child=>{if(child.userData.kaminosBurnIndicator)burnLabels.push(child);});for(const label of burnLabels){label.removeFromParent();disposeObjectTree(label);}
     scene.add(copy);registerSceneObject(copy,record,{activate:!deferRecord});
   }
+  const materialCopy=sceneMaterials.read();const sharedBindings=materialCopy.bindings.filter(b=>b.objectId===id).map(b=>({...b,objectId:copyId}));
+  if(sharedBindings.length){materialCopy.bindings.push(...sharedBindings);sceneMaterials.write(materialCopy);}
   if(!deferRecord&&entry.groupId){const group=workingScene.groups.find(g=>g.id===entry.groupId);if(group)workingScene.updateGroup(group.id,{objectIds:[...group.objectIds,copyId]});}
   if(!deferRecord)setActiveSceneObject(copyId);renderSceneObjectList();
   const complete=({commit})=>{
@@ -27660,6 +27674,7 @@ function setObjectWaterCollision(id,enabled){
   return scenePlacementTools.edits.apply(ensureMeshDataTarget(id),checkedProceduralMesh(record),'Set water collision');
 }
 function syncSceneDataInspector() {
+  materialInspector?.sync();
   ashInspector?.sync();ashSourceInspector?.sync();
   sceneRepetitionInspector?.sync();
   const entry=selectedSceneObjectEntry(),group=selectedSceneGroupEntry();
@@ -27859,7 +27874,7 @@ function installSceneConstruction() {
   edits.register('@scene-groups',{read:()=>({groups:serializeSceneGroups()}),check:value=>({groups:checkedSceneGroups(value.groups)}),write:value=>writeSceneGroups(value.groups)});
   const host=document.getElementById('authoring-type-anchor')||document.getElementById('selected-flame-properties');
   const panel=document.createElement('section');panel.id='selected-mesh-properties';panel.hidden=true;
-  panel.innerHTML='<h3>Geometry · <span id="geometry-kind"></span></h3><div id="mesh-shape-fields"></div><h3>Material</h3><div id="mesh-surface-fields"></div>';
+  panel.innerHTML='<h3>Geometry · <span id="geometry-kind"></span></h3><div id="mesh-shape-fields"></div><button type="button" class="btn" id="mesh-open-material">Edit material</button>';
   host.after(panel);
   function field(parent,key,label,type,step,geometry) {
     const row=document.createElement('label');row.className='slider-row';row.innerHTML=`<span class="slider-label">${label}</span><input type="${type}" class="transform-input" ${type==='number'?'step="any"':''}>`;
@@ -27874,9 +27889,7 @@ function installSceneConstruction() {
     if(type==='number'){const scrub=installRelativeNumberDrag({grip:row.querySelector('span'),input,step});edits.subscribe(state=>{if(!state.active)scrub.stop();});}
   }
   for(const key of ['width','height','depth','radius','thickness'])field(panel.querySelector('#mesh-shape-fields'),key,key[0].toUpperCase()+key.slice(1),'number',.01,true);
-  field(panel.querySelector('#mesh-surface-fields'),'color','Color','color',0,false);
-  field(panel.querySelector('#mesh-surface-fields'),'roughness','Roughness','number',.01,false);
-  field(panel.querySelector('#mesh-surface-fields'),'metalness','Metallic','number',.01,false);
+  panel.querySelector('#mesh-open-material').onclick=()=>authoringWorkspace.setContext('material');
   const waterCollisionRow=document.createElement('label');waterCollisionRow.className='slider-row';waterCollisionRow.innerHTML='<span class="slider-label">Water collision</span><input type="checkbox" id="object-water-collision"><span class="flame-scope">Box: independent axis scale; other shapes: uniform scale</span>';panel.append(waterCollisionRow);
   const waterCollisionInput=waterCollisionRow.querySelector('input');
   waterCollisionInput.addEventListener('change',()=>{try{setObjectWaterCollision(workingScene.activeObjectId,waterCollisionInput.checked);}catch(error){setInfo(error.message);syncSceneDataInspector();}});
@@ -28369,12 +28382,13 @@ function mountProceduralMesh(raw) {
   const bed=reuse?existing:createProceduralMesh(THREE,mergeGeometries,record.geometry,record.surface);
   if(reuse)bed.updateSurface(record.surface);
   applySceneObjectTransformState(bed.group,record.transform);
-  if(!reuse)existing?.dispose();
+  if(!reuse){if(previous)sceneMaterials.releaseObject(previous.object);existing?.dispose();}
   proceduralMeshes.set(record.id,bed);
   const entry={...record,object:bed.group};
   bed.group.userData.kaminosSceneObject={...record};
   sceneMembership.admit(entry,{index:previous?workingScene.objects.indexOf(previous):null});
   scene.add(bed.group);
+  sceneMaterials.sync();
   if(workingScene.activeObjectId===record.id){currentMesh=bed.group;if(transformControls)attachViewportGizmo(bed.group);}
   return entry;
 }
@@ -28903,7 +28917,7 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
   flameDomainFollowSource=restorePlan.flameDomainFollowSource;
   fineCoverageController=new FineCoverageController();fineCoverageStatus={status:'awaiting-scene'};
   try {
-    const loadStage = await sceneLoadRequests.awaitStage(loadRequestId, loadSceneObjects(objectRecords, restorePlan.activeObjectId, restorePlan.groups, restorePlan.activeGroupId, restorePlan.localLiquid, loadRequestId,data.lodPreparation));
+    const loadStage = await sceneLoadRequests.awaitStage(loadRequestId, loadSceneObjects(objectRecords, restorePlan.activeObjectId, restorePlan.groups, restorePlan.activeGroupId, restorePlan.localLiquid, loadRequestId,data.lodPreparation,restorePlan.materialLibrary));
     if (!loadStage.current || !loadStage.value || !sceneLoadRequests.isCurrent(loadRequestId)) return false;
   } catch (e) {
     if (!sceneLoadRequests.isCurrent(loadRequestId)) return false;
