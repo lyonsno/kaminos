@@ -185,7 +185,8 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
   // appHost (app-gpu-host.mjs): borrow the page's session and run on its one foreground
   // service. Without it, klein keeps its own session and service (the earlier route).
   let loaded=null,active=false,abort=null,decodeRequested=false;
-  let state={status:'idle',progress:'Weights load the first time you generate an image.',stage:null,percent:null,canStop:false,error:null,results:[],pending:null,preview:null,timing:null};
+  let state={status:'idle',progress:'Weights load the first time you generate an image.',stage:null,percent:null,canStop:false,error:null,results:[],outputs:[],pending:null,preview:null,timing:null};
+  const outputSaves=new Map();
   let startedAt=null,generationStartedAt=null,generationFinished=false;
   const timing=()=>!state.timing?null:{...state.timing,...(active&&!generationFinished?(generationStartedAt===null?{loadMs:clock()-startedAt}:{generationMs:clock()-generationStartedAt}):{})};
   // A computed image is kept until it is saved; a failed save retries these exact pixels.
@@ -202,6 +203,23 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
   }
   const publish=()=>changed(structuredClone(state));
   const set=(values)=>{Object.assign(state,values);publish();};
+  async function saveOutput(id){
+    const pending=outputSaves.get(id),output=state.outputs.find(item=>item.id===id);
+    if(!pending)throw Error('No caller output needs saving');
+    if(output.status==='saving')throw Error('Caller output is already saving');
+    output.status='saving';output.error=null;publish();
+    try{
+      if(!pending.file){
+        const {rgba,width,height}=output.preview;
+        const blob=await withPngProvenance(await encodePng(rgba,width,height),output.provenance);
+        pending.file=new File([blob],output.name,{type:'image/png'});
+      }
+      const entry=await pending.persist(pending.file,output.provenance);
+      output.entry=entry;output.status='complete';output.pending=false;
+      state.results.push({...entry,provenance:output.provenance});outputSaves.delete(id);publish();
+      return entry;
+    }catch(error){output.status='failed';output.error=errorIdentity(error).message;publish();throw error;}
+  }
   function unavailable(){
     const {sharedGpu}=context();const device=sharedGpu?.device;
     if(!device)return 'Image generation needs the Kaminos shared GPU device.';
@@ -251,6 +269,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
     },
     timing,
     busy:()=>active,
+    retryOutput:saveOutput,
     async retryPersistence(){
       if(active)throw Error('Image generation is already running');
       if(!pendingImage)throw Error('No generated image needs saving');
@@ -268,7 +287,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       abort.abort(new DOMException('Image generation stopped by operator','AbortError'));set({canStop:false,status:'stopping',progress:'Stopping… waiting for the current GPU work to settle.'});return true;
     },
     // Automation may retain its own result without selecting or preparing it in the editor.
-    // The destination stays with pending pixels so a failed save retries the same delivery.
+    // Caller persistence has its own lifetime; it cannot hold the next GPU operation.
     async run({prompt,seed,size=512,level='4-bit',aspect='square',model='flux2',reference=null,promptExpansion=null,deliver:persist=deliver}){
       if(active)throw Error('Image generation is already running');
       if(pendingImage)throw Error('Save the generated image before generating another');
@@ -286,6 +305,8 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       active=true;decodeRequested=false;abort=new AbortController();const runAbort=abort;let phase='weights',previous=null,handoff=null,frameRun=null,route=null,control=null,session=null;
       startedAt=clock();generationStartedAt=null;generationFinished=false;
       const runId=`kaminos-${model}-klein:${crypto.randomUUID()}`;
+      const output=persist!==deliver?{id:runId,name:kleinImageName(text,seed,model),prompt:text,status:'generating',preview:null,pending:false,error:null}:null;
+      if(output)state.outputs.push(output);
       set({request:{id:runId,prompt:text,model,seed,width,height},status:'loading',error:null,canStop:true,canDecode:false,preview:null,timing:{loadMs:0,generationMs:null},stage:null,percent:null,progress:loaded?.model===model?'Starting…':`Loading ${spec.name}…`});
       try{
         if(reference&&!reference.rgb){set({stage:'Reading reference image',progress:'Reading the selected reference image…'});reference=await prepareReference(reference,{signal:abort.signal,maxArea:model==='flux2'?1024*1024:4096*4096});}
@@ -323,8 +344,9 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
             // GPU readback can land after Stop, save, or the next run. Only the
             // current inference may replace its own provisional image.
             if(!active||abort!==runAbort||runAbort.signal.aborted||phase!=='inference'||state.status!=='running')return;
-            if(state.preview?.step>=frame.step)return;
-            set({preview:{...frame,kind:'partial',runId}});
+            if((output?.preview??state.preview)?.step>=frame.step)return;
+            const preview={...frame,kind:'partial',runId};
+            if(output){output.preview=preview;publish();}else set({preview});
           },
           schedule:{runtime:route.runtime,invocation,control,signal:abort.signal,targetDutyMs:12,maxInFlight:2,withForeground:frameRun.withForeground}})});
         const completion=await job.completion;
@@ -337,11 +359,21 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         if(reference)provenance.reference=structuredClone(reference.provenance);
         if(pipeline.ditManifest?.source)provenance.source=structuredClone(pipeline.ditManifest.source);
         if(model==='flux3')Object.assign(provenance,{sampling:structuredClone(pipeline.sampling),source:structuredClone(pipeline.ditManifest.source),...(pipeline.ditManifest.lora?{lora:structuredClone(pipeline.ditManifest.lora)}:{})});
+        if(output){
+          Object.assign(output,{provenance,preview:{rgba:image.rgba,width:image.width,height:image.height,kind:'final',runId},pending:true});
+          outputSaves.set(runId,{persist,file:null});
+          set({status:'complete',error:null,canStop:false,canDecode:false,stage:'Complete',percent:100,progress:'Image generated.'});
+          // Do not await storage here: finally releases the route and foreground run.
+          // The returned promise still reports this caller's exact persistence result.
+          const saving=saveOutput(runId);saving.catch(()=>{});
+          return saving;
+        }
         pendingImage={image,provenance,text,seed,model,persist};state.pending={name:kleinImageName(text,seed,model),provenance};
         state.preview={rgba:image.rgba,width:image.width,height:image.height,kind:'final',runId};
         return await savePending();
       }catch(error){
         const identity=errorIdentity(error);
+        if(output){output.status=abort.signal.aborted&&identity.name==='AbortError'?'stopped':'failed';output.error=identity.message;}
         if(phase!=='persistence')state.preview=null;
         if(phase!=='persistence'&&abort.signal.aborted&&identity.name==='AbortError'){set({status:'stopped',error:null,stage:null,percent:null,progress:'Image generation stopped. Your scene is unchanged.'});return null;}
         set({status:'failed',error:`${phase}: ${identity.message}`,stage:null,percent:null});throw error;
@@ -364,6 +396,41 @@ export function imageGenerationTimeLabel(timing,status){
   return `${label} ${seconds(timing.generationMs)}${timing.loadMs>=1000?` · model load ${seconds(timing.loadMs)}`:''}`;
 }
 
+export function installKleinCallerOutputs({document,root,controller,assets}){
+  const host=document.createElement('section');host.className='asset-caller-outputs';host.hidden=true;
+  const heading=document.createElement('strong');heading.textContent='Generated outputs';host.append(heading);root.append(host);
+  const rows=new Map();
+  function render(){
+    const outputs=controller.read().outputs||[];host.hidden=outputs.length===0;
+    for(const output of outputs){
+      let row=rows.get(output.id);
+      if(!row){
+        const node=document.createElement('div');node.className='asset-caller-output';
+        const title=document.createElement('div'),canvas=document.createElement('canvas'),status=document.createElement('div');
+        canvas.setAttribute('aria-label','Generated image');status.setAttribute('role','status');
+        const retry=document.createElement('button'),view=document.createElement('button');
+        retry.type=view.type='button';retry.textContent='Retry saving';view.textContent='View image';
+        node.append(title,canvas,status,retry,view);host.append(node);
+        row={node,title,canvas,status,retry,view,painted:null};rows.set(output.id,row);
+      }
+      row.title.textContent=output.prompt;
+      row.status.textContent=output.error||({generating:'Generating',saving:'Saving',complete:'Saved',stopped:'Stopped',failed:'Failed'}[output.status]||output.status);
+      row.retry.hidden=!output.pending||output.status==='saving';
+      row.retry.onclick=()=>controller.retryOutput(output.id).catch(()=>{});
+      row.view.disabled=!output.entry?.source;
+      row.view.onclick=()=>{if(output.entry?.source)assets.select({...output.entry,kind:'image',provenance:output.provenance});};
+      const preview=output.preview;row.canvas.hidden=!preview;
+      const key=preview?`${preview.runId}:${preview.kind}:${preview.step??'final'}`:null;
+      if(preview&&row.painted!==key){
+        row.canvas.width=preview.width;row.canvas.height=preview.height;
+        const ctx=row.canvas.getContext('2d'),pixels=ctx.createImageData(preview.width,preview.height);
+        pixels.data.set(preview.rgba);ctx.putImageData(pixels,0,0);row.painted=key;
+      }
+    }
+  }
+  return{render};
+}
+
 export function installKleinImageGeneration({document,controller,assets,meshBusy:meshBusyOption=null,promptExpansion=null,promptProvenance=()=>null,reference=()=>assets.read({selectionOnly:true}).selected}){
   const container=document.getElementById('asset-generate');if(!container)throw Error('Generate panel is missing');
   const section=document.createElement('section');section.id='asset-text-image';
@@ -372,6 +439,7 @@ export function installKleinImageGeneration({document,controller,assets,meshBusy
     <div class="asset-text-image-actions"><button type="button" id="asset-text-run">Generate image</button><label>Size <select id="asset-image-size" aria-label="Image size"><option value="256">256 (fastest)</option><option value="384">384</option><option value="512" selected>512</option><option value="768">768 (slower)</option><option value="1024">1024 (slowest)</option></select></label><label>Shape <select id="asset-image-aspect" aria-label="Image shape"><option value="square" selected>Square</option><option value="landscape">Landscape 16:9</option><option value="portrait">Portrait 9:16</option></select></label><label>Weights <select id="asset-image-level" aria-label="Transformer weights"><option value="4-bit" selected>4-bit (full)</option><option value="3-bit">3-bit</option><option value="2-bit">2-bit (jankiest)</option></select></label><label>Seed <input id="asset-seed" type="number" min="0" step="1" aria-label="Seed"></label><button type="button" id="asset-reseed" title="New seed" aria-label="New seed">⟳</button><button type="button" id="asset-text-decode" hidden>Decode now</button><button type="button" id="asset-text-stop" hidden>Stop</button><button type="button" id="asset-text-retry" hidden>Retry saving image</button></div>
     <div id="asset-image-timing" hidden></div><div id="asset-text-status" role="status"></div><progress id="asset-text-progress" max="100" aria-label="Image generation progress" hidden></progress>`;
   container.prepend(section);
+  const callerOutputs=installKleinCallerOutputs({document,root:container,controller,assets});
   // Looked up in the document: the Generate layout may move these controls out of this section.
   const byId=id=>document.getElementById(id),seedInput=byId('asset-seed');
   const reseed=()=>{seedInput.value=String(Math.floor(Math.random()*1e9));};reseed();
@@ -384,6 +452,7 @@ export function installKleinImageGeneration({document,controller,assets,meshBusy
     else if(!controller.busy()&&timer!==null){clearTimeout(timer);timer=null;}
   }
   function render(){
+    callerOutputs.render();
     const state=controller.read(),active=['loading','running','stopping','saving'].includes(state.status)||!!promptExpansion?.busy();
     timingStatus=state.status;renderTime();
     byId('asset-image-model').disabled=active||!!state.pending;

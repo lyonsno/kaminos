@@ -291,8 +291,9 @@ test('a caller-owned result destination bypasses default selection and survives 
  };
  await assert.rejects(h.service.run({prompt:'lantern',seed:21,deliver}),/caller storage unavailable/);
  assert.equal(h.delivered.length,0,'a custom destination must not fall back to the selection-changing default');
- assert.ok(h.service.read().pending);
- const result=await h.service.retryPersistence();
+ assert.equal(h.service.read().pending,null,'caller persistence must not block ordinary generation');
+ const output=h.service.read().outputs[0];assert.equal(output.status,'failed');
+ const result=await h.service.retryOutput(output.id);
  assert.equal(result.source,'/caller-results/lantern.png');
  assert.equal(attempts,2);assert.equal(saved.length,1);assert.equal(h.generations.length,1,'retry saves existing pixels');
  assert.equal(saved[0].provenance.seed,21);
@@ -303,6 +304,33 @@ test('a caller-owned result destination bypasses default selection and survives 
  assert.equal(h.delivered.length,1,'ordinary Generate retains its default destination');
  assert.equal(saved.length,1,'a previous caller destination must not leak into the next request');
  assert.equal(h.loads(),1,'caller delivery does not require a second loaded model');
+});
+
+test('caller previews and retained final output never replace the selected image preview',async()=>{
+ const gate=deferred(),h=harness({gate,onGenerate:request=>request.onPreview({step:1,steps:4,width:1,height:1,rgba:new Uint8ClampedArray([1,2,3,255])})});
+ const run=h.service.run({prompt:'lantern',seed:4,size:256,deliver:async file=>({name:file.name,source:'/caller.png'})});
+ await tick();
+ assert.equal(h.service.read().preview,null,'the selected image viewer must remain untouched');
+ assert.equal(h.service.read().outputs[0].preview.kind,'partial');
+ gate.resolve();await run;
+ const state=h.service.read();assert.equal(state.preview,null);
+ assert.equal(state.outputs[0].preview.kind,'final');assert.equal(state.outputs[0].entry.source,'/caller.png');
+ assert.equal(state.outputs[0].status,'complete');
+});
+
+test('unresolved caller persistence releases generation and late completion cannot overwrite a newer run',async()=>{
+ const save=deferred(),saving=deferred(),h=harness();
+ const first=h.service.run({prompt:'lantern',seed:1,size:256,deliver:async()=>{saving.resolve();return save.promise;}});
+ await saving.promise;await tick();
+ assert.equal(h.service.busy(),false,'storage does not own the GPU operation');
+ assert.equal(h.service.read().pending,null);
+ const id=h.service.read().outputs[0].id;
+ await assert.rejects(h.service.retryOutput(id),/already saving/);
+ await h.service.run({prompt:'teapot',seed:2,size:256});
+ const latest=h.service.read().request.id;
+ save.resolve({source:'/caller.png'});await first;
+ assert.equal(h.service.read().request.id,latest);assert.equal(h.service.read().status,'complete');
+ assert.equal(h.service.read().outputs[0].status,'complete');assert.equal(h.loads(),1);
 });
 
 test('an invalid caller result destination fails before model work',async()=>{

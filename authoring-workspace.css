@@ -507,6 +507,12 @@ body[data-workspace=authoring].has-assets-panel:has(#asset-generate[data-image-e
 .asset-agent-group > summary { cursor:pointer; font-weight:600; padding:4px 2px 12px; }
 .asset-agent-group > summary > small { float:right; color:var(--text-muted,#989da8); font-weight:400; margin-left:16px; }
 .asset-agent-entries { display:grid; grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:10px; }
+.asset-caller-outputs{grid-column:1/-1;min-width:0;border-top:1px solid #41484a;padding-top:8px;font-size:12px;}
+.asset-caller-outputs[hidden],.asset-caller-output [hidden]{display:none!important;}
+.asset-caller-output{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px;align-items:center;padding:8px 0;border-bottom:1px solid #ffffff19;}
+.asset-caller-output>div:first-child{grid-column:1/-1;overflow-wrap:anywhere;}
+.asset-caller-output>canvas{grid-column:1/-1;width:100%;height:160px;object-fit:contain;background:#101415;}
+.asset-caller-output>div[role=status]{min-width:0;overflow-wrap:anywhere;}
 
 /* Browse selection has room for an actual object preview and source details. */
 #asset-detail{flex-basis:clamp(240px,28vw,360px);overflow:auto;}
