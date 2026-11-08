@@ -6,7 +6,6 @@ import {createSceneVolumeSource, SCENE_VOLUME_SOURCE_WGSL} from '../scene-volume
 import {WORLD_SMOKE_OPTICS_WGSL} from '../volume-world-smoke-optics.mjs';
 import {exteriorSegments} from '../scene-exterior-medium.mjs';
 import {createExteriorSmokeLight} from '../scene-exterior-light.mjs';
-import {resolveWorldRegions} from '../volume-region-controls.mjs';
 globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,UNIFORM:4,COPY_SRC:8};
 globalThis.GPUTextureUsage={STORAGE_BINDING:1,TEXTURE_BINDING:2,COPY_SRC:4};
 const uploads=new Map(),groups=[];
@@ -39,13 +38,7 @@ assert.equal(producer.describe().exterior.generation,producer.describe().generat
 assert.deepEqual(producer.describe().exterior.localMin,bounds.lo);
 world.middle={texture:device.createTexture(),dimensions:[8,16,8],localMin:[-2,-2,-2],localMax:[2,6,2]};
 producer.encode(device.createCommandEncoder(),0,10);
-const middle=producer.describe().exterior.middle;
-assert.ok(middle?.texture,'independent intermediate material must publish its own extinction field');
-assert.deepEqual(middle.dimensions,[8,16,8],'intermediate detail must not be downsampled to world dimensions');
-assert.equal(middle.generation,producer.describe().generation);
-assert.deepEqual(middle.localMax,[2,6,2]);
-const middleBinding=Number(WORLD_SMOKE_OPTICS_WGSL.match(/@group\(0\) @binding\((\d+)\) var middleOptical:/)[1]);
-assert.ok(groups.some(g=>g.entries.some(e=>e.binding===middleBinding)),'intermediate material seed must bind the actual intermediate optical field');
+assert.equal(Object.hasOwn(producer.describe().exterior,'middle'),false,'retired Middle input cannot publish a third physical material region');
 // Check composition against the current exported helper interfaces, rather
 // than pinning the old branch's call arity. Native validation still owns WGSL.
 function argumentsAt(text,start){
@@ -64,24 +57,16 @@ for(const name of ['regionSmokeMaterial','regionSmokeSample']){
  for(const call of SCENE_VOLUME_SOURCE_WGSL.matchAll(new RegExp('\\b'+name+'\\(','g')))
   assert.equal(argumentsAt(SCENE_VOLUME_SOURCE_WGSL,call.index+name.length),arity,name+' seed call must match the current optical atlas helper');
 }
-const lighting=createExteriorSmokeLight(device,{grid:2,refinement:1});
+const lighting=createExteriorSmokeLight(device,{grid:2,refinement:1,receiverCoverage:{lo:world.middle.localMin,hi:world.middle.localMax,pitch:1}});
 const lit=lighting.encode(producer.describe(),{geometry,revision:1,worldGeometry:false,directions:4,gain:1});
 assert.deepEqual(lit.middle.smokeReconstruction.localMin,world.middle.localMin);
 assert.deepEqual(lit.middle.smokeReconstruction.localMax,world.middle.localMax);
 assert.equal(lit.middle.generation,lit.generation);
 assert.notEqual(lit.middle.texture,lit.texture,'middle lighting has independent spatial coverage');
-assert.deepEqual(lit.sourceDomain,{lo:[-1,-1,-1],hi:[1,3,1]},'three region lighting still samples the actual fine emitter bounds');
-const actualMiddle=resolveWorldRegions({worldSmokeIntermediate:'fields'},[64,128,64]).middle;
-world.middle={texture:device.createTexture(),dimensions:actualMiddle.materialDims,localMin:actualMiddle.min,localMax:actualMiddle.max};
-producer.encode(device.createCommandEncoder(),0,11);
-const actualLighting=createExteriorSmokeLight(device);
-const actualLit=actualLighting.encode(producer.describe(),{geometry,revision:1,worldGeometry:false,directions:4,gain:1});
-assert.deepEqual(actualLit.middle.smokeReconstruction.localMin,actualMiddle.min);
-assert.deepEqual(actualLit.middle.smokeReconstruction.localMax,actualMiddle.max,'production intermediate proportions preserve exact coverage');
-assert.deepEqual(actualLit.middle.smokeReconstruction.coarseDimensions,[9,15,9]);
-actualLighting.destroy();
+assert.deepEqual(lit.sourceDomain,{lo:[-1,-1,-1],hi:[1,3,1]},'receiver refinement still samples the actual fine emitter bounds');
 world.middle=null;producer.encode(device.createCommandEncoder(),0,11);
-assert.equal(producer.describe().exterior.middle,null,'removing intermediate must clear its published support');
+assert.equal(Object.hasOwn(producer.describe().exterior,'middle'),false);
+lighting.setReceiverCoverage(null);
 assert.equal(lighting.encode(producer.describe(),{geometry,revision:1,worldGeometry:false,directions:4,gain:1}).middle,null);
 lighting.destroy();
 world=null;producer.encode(device.createCommandEncoder(),0,10);

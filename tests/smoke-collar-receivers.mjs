@@ -33,7 +33,7 @@ let world={texture:device.createTexture(),dimensions:[4,8,4],localMin:[-3,-3,-3]
 const producer=createSceneVolumeSource({device,module:{},uniformBuffer:{},fluidBuffers:[{}],frontBuffers:[{}],getReactantTextures:()=>[device.createTexture()],grid:4,gridY:8,getWorldSmoke:()=>world,worldRenderUniform:{}});
 producer.encode(device.createCommandEncoder(),0,1);
 assert.equal(producer.describe().exterior.handoffMargin,.17,'source preserves authored handoff width');
-assert.ok(groups.some(g=>[20,21,35].every(b=>g.entries.some(e=>e.binding===b))), 'fine source must bind the physical World/Middle coefficients used by the camera');
+assert.ok(groups.some(g=>[20,21].every(b=>g.entries.some(e=>e.binding===b))), 'fine source must bind the physical World coefficients used by the camera');
 const light=createExteriorSmokeLight(device,{grid:2,refinement:1});
 const lit=light.encode(producer.describe(),{geometry,revision:1,worldGeometry:false,directions:4,gain:1});
 assert.equal(lit.handoffMargin,.17,'published receiver frame preserves the authored handoff width');
