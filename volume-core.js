@@ -21783,7 +21783,11 @@ export function createKaminosVolumePrototype({
   }
 
   async function sampleRegionalOpticalChunk(options = {}) {
-    return opticalCaptureOwner.run('native-regional', () => sampleOpticalTraceChunkOwned({...options,regionalCapture:true}));
+    return opticalCaptureOwner.run('native-regional', () => sampleRegionalOpticalChunkOwned(options));
+  }
+
+  async function sampleRegionalOpticalChunkOwned(options = {}) {
+    return sampleOpticalTraceChunkOwned({...options,regionalCapture:true});
   }
 
   async function sampleOpticalTraceChunkOwned(options = {}) {
@@ -21802,12 +21806,8 @@ export function createKaminosVolumePrototype({
     try {
       updateUniforms(options.now);
       if(options.regionalCapture) {
-        if(options.scope!=='fine-only')throw Error('regional native capture requires explicit fine-only scope');
+        if(options.scope!=='fine-domain')throw Error('regional native capture requires explicit fine-domain scope');
         if(!['rays','points'].includes(options.kind))throw Error('regional native capture requires an explicit query kind');
-        if(options.kind==='points')for(const point of options.points??[]) {
-          if(!Array.isArray(point.position)||point.position.some((v,i)=>v < -1 || v > (i===1?2*gridHeight/gridSize-1:1)))
-            throw Error('regional point outside the Fine domain');
-        }
       } else if(options.kind==='points')throw Error('point queries require the regional native capture API');
       if (!Number.isFinite(options.now) || uniforms[368]!==2 || uniforms[310]!==0 || uniforms[305]!==0 || uniforms[307]!==0) {
         throw new Error('trace requires explicit phase, mode 2 beauty and zero boundary step-width');
@@ -21815,6 +21815,7 @@ export function createKaminosVolumePrototype({
       if (boundarySplatRequested() || browserResidualCanApply() || productFrameOwner!=='prototype') throw new Error('trace requires native camera raymarch');
       ensureFrameTexture();
       plan=traceChunkPlan({...options,width:frameTexture.width,height:frameTexture.height,
+        bounds:options.regionalCapture?{lo:[-1,-1,-1],hi:[1,2*gridHeight/gridSize-1,1]}:undefined,
         maxBytes:Math.min(device.limits.maxBufferSize,device.limits.maxStorageBufferBindingSize)});
       phase='allocation';
       rows=device.createBuffer({label:OPTICAL_TRACE_IDENTITY,size:plan.byteLength,
@@ -21840,7 +21841,9 @@ export function createKaminosVolumePrototype({
         specialization:{...state.raymarchShaderSpecialization},incidentLight:{...state.physicalColor.incidentLight},
         uniforms:Array.from(uniforms),controls:structuredClone(controlsSnapshot)};
       if(options.regionalCapture)effective.regionalCapture={identity:REGIONAL_CAPTURE_IDENTITY,
-        scope:'fine-only',kind:options.kind,worldIncluded:false,
+        scope:'fine-domain',kind:options.kind,worldTraversalIncluded:false,
+        worldCollarIncluded:state.worldSmoke?.effective==='one-way-world-field',
+        materialPreparation:structuredClone(state.displayReconstruction??null),
         worldRequested:state.worldSmoke?.requested??state.worldSmoke?.effective??null,coefficientSource:'native-material-before-trace-support-mask',
         emissionAndScattering:'separate-signed-linear-rgb',sigma:'absorption-plus-scattering',
         gridShape:[gridSize,gridHeight,gridSize],bounds:{lo:[-1,-1,-1],hi:[1,2*gridHeight/gridSize-1,1]}};

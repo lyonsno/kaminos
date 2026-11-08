@@ -92,11 +92,16 @@ export function opticalProbeFeatures(probes, {h, gridPitch, direction, cellFract
   return result;
 }
 
-export function traceChunkPlan({firstRay,rayCount,sampleOffset,sampleCount,subdivisions,width,height,maxBytes,kind='rays',points}) {
+export function traceChunkPlan({firstRay,rayCount,sampleOffset,sampleCount,subdivisions,width,height,maxBytes,kind='rays',points,bounds}) {
   if(!['rays','points'].includes(kind))throw Error('unknown native optical query kind');
   if(kind==='points') {
     if(!Array.isArray(points)||!points.length)throw Error('native query points must be nonempty');
     pointCaptureSeed(points); // Validate all inputs before GPU allocation.
+    if(bounds) {
+      for(const key of ['lo','hi'])if(!Array.isArray(bounds[key])||bounds[key].length!==3||!bounds[key].every(Number.isFinite))throw Error('invalid native domain bounds');
+      if(bounds.lo.some((v,i)=>bounds.hi[i]<=v))throw Error('invalid native domain bounds');
+      if(points.some(p=>p.position.some((v,i)=>v<bounds.lo[i]||v>bounds.hi[i])))throw Error('native point outside the declared domain');
+    }
     firstRay=0;rayCount=points.length;sampleOffset=0;sampleCount=1;subdivisions=1;
   }
   for(const [key,v] of Object.entries({firstRay,rayCount,sampleOffset,sampleCount,subdivisions,width,height})) {
@@ -115,9 +120,10 @@ export function validateTraceRows(values, plan, {requireRegional=false,effective
     if(effective?.route!=='native-3d-compute-fluid-raymarch-v0'||effective?.backend!=='WebGPU:apple')
       throw Error('regional evidence requires the native Apple WebGPU route');
     const capture=effective.regionalCapture;
-    if(capture?.identity!==REGIONAL_CAPTURE_IDENTITY||capture.scope!=='fine-only'||capture.worldIncluded!==false||
+    if(capture?.identity!==REGIONAL_CAPTURE_IDENTITY||capture.scope!=='fine-domain'||capture.worldTraversalIncluded!==false||
+      typeof capture.worldCollarIncluded!=='boolean'||capture.materialPreparation===undefined||
       capture.coefficientSource!=='native-material-before-trace-support-mask'||!['points','rays'].includes(capture.kind))
-      throw Error('regional evidence requires complete unmasked native Fine capture identity');
+      throw Error('regional evidence requires complete native Fine-domain material/preparation identity');
     if(!Number.isSafeInteger(effective.simStepCount)||effective.simStepCount<0||
       expectedStep!==undefined&&effective.simStepCount!==expectedStep||expectedKind!==undefined&&capture.kind!==expectedKind)
       throw Error('regional capture state or query kind changed');

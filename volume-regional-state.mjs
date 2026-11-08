@@ -72,6 +72,7 @@ export function regionalDataset(plan,rows) {
     context.set(opticalChannels(rows,region.contextOffset+i),region.id*contextWidth+i*channels);
   const query=new Float32Array(plan.segments.length*7),target=new Float32Array(plan.segments.length*7);
   const coarse=new Float32Array(target.length),onePoint=new Float32Array(target.length);
+  const sparse=new Float32Array(target.length),opticalDepth=new Float32Array(plan.segments.length);
   const regionIndex=new Uint32Array(plan.segments.length);
   const transfer=(probes,length)=>{
     const emitted=integrateProbes(probes.map(p=>({...p,scattered:[0,0,0]})),length);
@@ -89,6 +90,8 @@ export function regionalDataset(plan,rows) {
     target.set(transfer(probes,segment.length),at);
     coarse.set(transfer(probes.filter((_,i)=>i%2===0),segment.length),at);
     const middle=probes[plan.subdivisions/2];
+    sparse.set([middle.sigma,...middle.emission,...middle.scattered],at);
+    opticalDepth[segment.id]=probes.slice(1).reduce((sum,p,i)=>sum+(p.sigma+probes[i].sigma)*.5,0)*segment.length/plan.subdivisions;
     const e=constantTransfer({...middle,scattered:[0,0,0]},segment.length);
     const s=constantTransfer({...middle,emission:[0,0,0]},segment.length);
     onePoint.set([...e.slice(0,3),...s.slice(0,3),e[3]],at);
@@ -97,10 +100,12 @@ export function regionalDataset(plan,rows) {
   for(let i=0;i<target.length;i++)maxNestedDifference=Math.max(maxNestedDifference,Math.abs(target[i]-coarse[i]));
   for(const segment of plan.segments)if(segment.id%plan.queriesPerRegion%2)
     for(let k=0;k<6;k++)maxOrderingDifference=Math.max(maxOrderingDifference,Math.abs(target[segment.id*7+k]-target[(segment.id-1)*7+k]));
-  return {identity:plan.identity,context,query,target,coarse,onePoint,regionIndex,
+  return {identity:plan.identity,context,query,target,coarse,onePoint,sparse,opticalDepth,regionIndex,
     shape:{regions:plan.regions.length,contextWidth,queries:plan.segments.length,queryWidth:7,targetWidth:7},
     channels:['sigma','emission-r','emission-g','emission-b','scattered-r','scattered-g','scattered-b'],
     targets:['emitted-r','emitted-g','emitted-b','scattered-r','scattered-g','scattered-b','transmission'],
+    observation:{source:'actual-native-midpoint-coefficients',channels:['sigma','emission-r','emission-g','emission-b','scattered-r','scattered-g','scattered-b'],
+      freshMaterialEvaluationsPerQuery:1,depthFraction:.5},
     reference:{method:'ordered-trapezoid-native-coefficients',subdivisions:plan.subdivisions,
       nestedSubdivisions:plan.subdivisions/2,maxNestedDifference,maxOrderingDifference,
       authority:'finite-native-sample-reference; convergence must be judged from nested differences'}};
