@@ -1,9 +1,36 @@
 import * as THREE from './lib/three.core.js';
+import {checkedPose} from './scene-edit-session.mjs';
+const dockResources=new WeakMap();
 export const DOCK_SOURCE='kaminos:stockroom-dock-v1';
-export const defaultDock=()=>({schema:'kaminos.stockroom-dock.v1',width:6,depth:3,height:1.2,boardDirection:'x',bayLength:2,stairs:true,stairWidth:1.1,stairRun:1.8,landingHeight:.07,memberOffsets:{}});
+export function editDockMember(value,parentWorld){
+ const p=checkedDock(value.dock),pose=checkedPose(value),anchor=checkedPose(value.anchor),base=dockMembers(p).find(m=>m.id===value.member);
+ if(!base)throw Error('Dock piece no longer exists');
+ if(!Array.isArray(value.localMatrix)||value.localMatrix.length!==16||!value.localMatrix.every(Number.isFinite)||!parentWorld?.isMatrix4||Math.abs(parentWorld.determinant())<1e-12)throw Error('An invertible dock frame and original member matrix are required');
+ if(['position','rotation','scale'].every(key=>pose[key].every((v,i)=>v===anchor[key][i])))return p;
+ const matrix=s=>new THREE.Matrix4().compose(new THREE.Vector3(...s.position),new THREE.Quaternion().setFromEuler(new THREE.Euler(...s.rotation)),new THREE.Vector3(...s.scale));
+ if(anchor.scale.some(v=>Math.abs(v)<1e-12))throw Error('Cannot edit a collapsed dock piece');
+ // Apply the proxy delta to the original affine world transform. Rebuilding
+ // that transform from its decomposed proxy would discard inherited shear.
+ const local=parentWorld.clone().invert().multiply(matrix(pose).multiply(matrix(anchor).invert())).multiply(parentWorld).multiply(new THREE.Matrix4().fromArray(value.localMatrix));
+ const position=new THREE.Vector3(),rotation=new THREE.Quaternion(),scale=new THREE.Vector3();local.decompose(position,rotation,scale);
+ const reconstructed=new THREE.Matrix4().compose(position,rotation,scale),magnitude=Math.max(1,...local.elements.map(Math.abs));
+ if(local.elements.some((v,i)=>Math.abs(v-reconstructed.elements[i])>1e-8*magnitude))throw Error('This world-space edit would shear the piece; use a uniformly scaled dock');
+ const angles=new THREE.Euler().setFromQuaternion(rotation);
+ p.memberOffsets[value.member]={position:position.toArray().map((v,i)=>v-base.position[i]),rotation:[angles.x,angles.y,angles.z].map((v,i)=>v-base.rotation[i]),scale:scale.toArray().map((v,i)=>v/base.size[i])};return checkedDock(p);
+}
+export function resizeDock(value,handle,delta,snap=false){
+ const p=checkedDock(value),field=handle.replace('Min',''),sign=handle.endsWith('Min')?-1:1;
+ if(!['width','depth','height','stairRun'].includes(field)||!Number.isFinite(delta))throw Error('Finite dock handle displacement required');
+ const raw=p[field]+delta*sign,next=snap?Math.round(raw/.1)*.1:raw;
+ if(field==='width'||field==='depth')p.origin[field==='width'?0:1]+=(next-p[field])/sign/2;
+ p[field]=next;return checkedDock(p);
+}
+export const defaultDock=()=>({schema:'kaminos.stockroom-dock.v1',width:6,depth:3,height:1.2,origin:[0,0],boardDirection:'x',bayLength:2,stairs:true,stairWidth:1.1,stairRun:1.8,landingHeight:.07,memberOffsets:{}});
 export function checkedDock(value){
  if(value?.schema!=='kaminos.stockroom-dock.v1')throw Error('Unsupported dock recipe');
  const p={};for(const key of Object.keys(defaultDock()))p[key]=value[key];
+ p.origin=value.origin===undefined?[0,0]:value.origin;
+ if(!Array.isArray(p.origin)||p.origin.length!==2||!p.origin.every(Number.isFinite))throw Error('Dock origin needs two finite coordinates');p.origin=[...p.origin];
  for(const key of ['width','depth','height','bayLength','stairWidth','stairRun','landingHeight'])if(!Number.isFinite(p[key]))throw Error(`Finite dock ${key} required`);
  if(p.width<.7||p.depth<.7||p.height<.55||p.bayLength<.3)throw Error('Dock must accommodate boards, bearing beams and posts');
  if(!['x','z'].includes(p.boardDirection)||typeof p.stairs!=='boolean')throw Error('Explicit board direction and stair choice required');
@@ -17,11 +44,15 @@ export function checkedDock(value){
 }
 export function dockMembers(value){
  const p=checkedDock(value),out=[];
- const add=(id,role,size,position,rotation=[0,0,0])=>out.push({id,role,size,position,rotation});
+ const add=(id,role,size,position,rotation=[0,0,0])=>out.push({id,role,size,position:[position[0]+p.origin[0],position[1],position[2]+p.origin[1]],rotation});
+ const divided=(id,role,size,position,axis,cuts)=>{
+  for(let j=0;j<cuts.length-1;j++){const dims=[...size],point=[...position];dims[axis]=cuts[j+1]-cuts[j];point[axis]+=(cuts[j+1]+cuts[j])/2;add(j===0?id:`${id}:span:${j}`,role,dims,point);}
+ };
+ const cuts=span=>Array.from({length:Math.ceil(span/p.bayLength)+1},(_,i)=>-span/2+i*span/Math.ceil(span/p.bayLength));
  const boards=(role,along,span,across,y,cx=0,cz=0)=>{
   const count=Math.ceil(across/.24),width=(across-(count-1)*.008)/count;
   for(let i=0;i<count;i++){const offset=-across/2+width/2+i*(width+.008);
-   add(`${role}:${i}`,role,along==='x'?[span,.07,width]:[width,.07,span],[cx+(along==='z'?offset:0),y-.035,cz+(along==='x'?offset:0)]);
+   divided(`${role}:${i}`,role,along==='x'?[span,.07,width]:[width,.07,span],[cx+(along==='z'?offset:0),y-.035,cz+(along==='x'?offset:0)],along==='x'?0:2,cuts(span));
   }
  };
  boards('deck',p.boardDirection,p.boardDirection==='x'?p.width:p.depth,p.boardDirection==='x'?p.depth:p.width,p.height);
@@ -29,14 +60,15 @@ export function dockMembers(value){
  const xs=Array.from({length:xCount+1},(_,i)=>-.5*p.width+.12+i*(p.width-.24)/xCount);
  const zs=Array.from({length:zCount+1},(_,i)=>-.5*p.depth+.12+i*(p.depth-.24)/zCount);
  const along=p.boardDirection==='x',span=along?p.width:p.depth,count=Math.ceil((span-.16)/.55);
- for(let i=0;i<=count;i++){
-  const v=-span/2+.08+i*(span-.16)/count;
-  add(`joist:${i}`,'joist',along?[.1,.18,p.depth]:[p.width,.18,.1],[along?v:0,p.height-.16,along?0:v]);
+ const joistSites=[...new Set([...Array.from({length:count+1},(_,i)=>-span/2+.08+i*(span-.16)/count),...cuts(span).slice(1,-1)])].sort((a,b)=>a-b);
+ for(const [i,v]of joistSites.entries()){
+  const across=along?p.depth:p.width,sites=along?zs:xs;
+  divided(`joist:${i}`,'joist',along?[.1,.18,p.depth]:[p.width,.18,.1],[along?v:0,p.height-.16,along?0:v],along?2:0,[-across/2,...sites.slice(1,-1),across/2]);
  }
- for(const [i,v]of(along?zs:xs).entries())add(`beam:${i}`,'beam',along?[p.width,.22,.16]:[.16,.22,p.depth],[along?0:v,p.height-.36,along?v:0]);
+ for(const [i,v]of(along?zs:xs).entries())divided(`beam:${i}`,'beam',along?[p.width,.22,.16]:[.16,.22,p.depth],[along?0:v,p.height-.36,along?v:0],along?0:2,[-span/2,...(along?xs:zs).slice(1,-1),span/2]);
  for(const [i,x]of xs.entries())for(const [j,z]of zs.entries())add(`post:${i}:${j}`,'post',[.17,p.height-.47,.17],[x,(p.height-.47)/2,z]);
- for(const [i,z]of[-p.depth/2+.04,p.depth/2-.04].entries())add(`fascia:z:${i}`,'fascia',[p.width,.22,.08],[0,p.height-.13,z]);
- for(const [i,x]of[-p.width/2+.04,p.width/2-.04].entries())add(`fascia:x:${i}`,'fascia',[.08,.22,p.depth-.16],[x,p.height-.13,0]);
+ for(const [i,z]of[-p.depth/2+.04,p.depth/2-.04].entries())divided(`fascia:z:${i}`,'fascia',[p.width,.22,.08],[0,p.height-.13,z],0,cuts(p.width));
+ for(const [i,x]of[-p.width/2+.04,p.width/2-.04].entries())divided(`fascia:x:${i}`,'fascia',[.08,.22,p.depth-.16],[x,p.height-.13,0],2,cuts(p.depth-.16));
  if(p.stairs){
   const n=Math.max(2,Math.ceil((p.height-p.landingHeight)/.18)),rise=(p.height-p.landingHeight)/n,run=p.stairRun/(n-1);
   for(let i=0;i<n-1;i++)add(`tread:${i}`,'tread',[run,.07,p.stairWidth],[p.width/2+(i+.5)*run,p.height-(i+1)*rise-.035,0]);
@@ -47,12 +79,12 @@ export function dockMembers(value){
  return out;
 }
 export function rebuildDock(root,value){
- const p=checkedDock(value),members=dockMembers(p),old=new Map(root.children.map(o=>[o.name,o]));
- if(!root.userData.dockResources){
+ const p=checkedDock(value),members=dockMembers(p),old=new Map(root.children.filter(o=>o.userData.dockMember).map(o=>[o.name,o]));
+ if(!dockResources.has(root)){
   const colors=[0x9b9c91,0xa8a598,0x8e938c,0xb0ada0];
-  root.userData.dockResources={geometry:new THREE.BoxGeometry(1,1,1),materials:colors.map(color=>new THREE.MeshStandardMaterial({color,roughness:.82})),frame:new THREE.MeshStandardMaterial({color:0x676e67,roughness:.88})};
+  dockResources.set(root,{geometry:new THREE.BoxGeometry(1,1,1),materials:colors.map(color=>new THREE.MeshStandardMaterial({color,roughness:.82})),frame:new THREE.MeshStandardMaterial({color:0x676e67,roughness:.88})});
  }
- const resources=root.userData.dockResources;
+ const resources=dockResources.get(root);
  for(const [i,m]of members.entries()){
   let mesh=old.get(m.id);old.delete(m.id);
   if(!mesh){mesh=new THREE.Mesh(resources.geometry,['deck','tread','landing'].includes(m.role)?resources.materials[i%4]:resources.frame);root.add(mesh);}
