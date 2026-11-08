@@ -24,7 +24,8 @@ test('sharp reconstruction preserves a one-pixel reflected feature while broad g
    const pipeline=await device.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint:'main'}});
    const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:depth.createView()},...textures.map((t,i)=>({binding:i+1,resource:t.createView()})),{binding:4,resource:{buffer:result}}]});
    const values=[];
-   for(const roughness of [.05,.5]){
+   for(const [roughness,untraced] of [[.05,false],[.5,false],[.5,true]]){
+    const stats=new Float32Array(36);if(untraced)for(let i=0;i<9;i++)if(i!==4)stats[i*4+3]=-1;device.queue.writeTexture({texture:textures[2]},stats,{bytesPerRow:144},[9,1]);
     const nr=new Float32Array(36);for(let i=0;i<9;i++)nr.set([0,0,1,roughness],i*4);device.queue.writeTexture({texture:textures[1]},nr,{bytesPerRow:144},[9,1]);
     const encoder=device.createCommandEncoder(),clear=encoder.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthClearValue:new Vector3(0,0,-4).applyMatrix4(camera.projectionMatrix).z,depthLoadOp:'clear',depthStoreOp:'store'}});clear.end();
     const pass=encoder.beginComputePass();pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(1);pass.end();encoder.copyBufferToBuffer(result,0,read,0,16);device.queue.submit([encoder.finish()]);
@@ -33,6 +34,7 @@ test('sharp reconstruction preserves a one-pixel reflected feature while broad g
    console.log('sharp-and-glossy-feature:',JSON.stringify(values));
    assert.ok(values[0][0]>.99,'near-mirror feature must retain its center intensity');
    assert.ok(values[1][0]<.8&&values[1][0]>0,'broad gloss must still reconstruct neighboring samples');
+   assert.ok(values[2][0]>.99,'untraced allocation neighbors must not be treated as observed misses');
   }finally{depth.destroy();textures.forEach(t=>t.destroy());result.destroy();read.destroy();}
  });
 });

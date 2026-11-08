@@ -54,14 +54,17 @@ fn reconstructSceneReflection(coords:vec2<f32>,current:texture_2d<f32>,currentSt
  var sum=vec4<f32>(0.0);var squared=vec3<f32>(0.0);var neighborhood=vec3<f32>(0.0);var neighborhoodWeight=0.0;var total=0.0;var distanceSum=0.0;var distanceSquared=0.0;var support=0.0;
  var lower=vec3<f32>(1e30);var upper=vec3<f32>(0.0);var maximumCoverage=0.0;
  let radius=.5+2.0*nr.w;let glossyFilter=smoothstep(.06,.2,nr.w);
- for(var i=0u;i<13u;i++){
+ // Sharp samples retain their centre color; only a small cross is needed for
+ // temporal clipping. Broad gloss uses the full reconstruction neighborhood.
+ let taps=select(13u,5u,nr.w<=.06);
+ for(var i=0u;i<taps;i++){
   let q=coords+offsets[i]*radius/vec2<f32>(size);if(any(q<vec2<f32>(0.0))||any(q>vec2<f32>(1.0))){continue;}
   let qp=clamp(vec2<i32>(q*vec2<f32>(size)),vec2<i32>(0),size-vec2<i32>(1));let actual=(vec2<f32>(qp)+.5)/vec2<f32>(size);
   let qpixel=clamp(vec2<i32>(actual*vec2<f32>(dimensions)),vec2<i32>(0),dimensions-vec2<i32>(1));let qdepth=textureLoad(depthMap,qpixel,0);if(qdepth>=1.0){continue;}
   let neighbor=textureLoad(normalMap,qpixel,0);let point=reflectionFilterPosition(actual,qdepth,inverseProjection);
   let plane=abs(dot(point-p,n))/max(.01,abs(p.z)*.003);
   var weight=exp(-plane)*pow(max(dot(n,neighbor.xyz),0.0),64.0)*exp(-abs(nr.w-neighbor.w)*16.0)*exp(-dot(offsets[i],offsets[i])*.25);
-  let value=textureLoad(current,qp,0);let stats=textureLoad(currentStats,qp,0);let distance=reflectionDecodeMoment(stats.r);let variance=reflectionDecodeMoment(stats.g);
+  let value=textureLoad(current,qp,0);let stats=textureLoad(currentStats,qp,0);if(stats.w<0.0){continue;}let distance=reflectionDecodeMoment(stats.r);let variance=reflectionDecodeMoment(stats.g);
   if(centreDistance>0.0&&distance>0.0){let tolerance=max(.04,.15*(centreDistance+distance)+2.0*sqrt(centreVariance+variance));let delta=centreDistance-distance;weight*=exp(-delta*delta/(tolerance*tolerance));}
   neighborhood+=value.rgb*weight;squared+=value.rgb*value.rgb*weight;neighborhoodWeight+=weight;
   let filterWeight=weight*select(glossyFilter,1.0,i==0u);sum+=value*filterWeight;total+=filterWeight;

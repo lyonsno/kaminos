@@ -11,7 +11,7 @@ import {resolveReflectionSettings} from './scene-reflection-settings.mjs';
 export {resolveReflectionSettings} from './scene-reflection-settings.mjs';
 
 const sample=wgslFn(`fn reflectionSampleEntry(coords:vec2<f32>,depthMap:texture_depth_2d,colorMap:texture_2d<f32>,colorSampler:sampler,normalMap:texture_2d<f32>,projection:mat4x4<f32>,inverseProjection:mat4x4<f32>,maxDistance:f32,thickness:f32,nearPlane:f32,steps:u32,refinementSteps:u32,frame:u32,roughnessCutoff:f32,samples:u32,stable:bool,coarseStats:texture_2d<f32>,dense:bool)->mat4x4<f32>{
- var weight=0.0;if(dense){weight=reflectionAllocationAt(coords,depthMap,normalMap,coarseStats,projection,inverseProjection);if(weight<=0.0){return mat4x4<f32>();}}
+ var weight=0.0;if(dense){weight=reflectionAllocationAt(coords,depthMap,normalMap,coarseStats,projection,inverseProjection);if(weight<=0.0){return mat4x4<f32>(vec4<f32>(0.0),vec4<f32>(0.0,0.0,0.0,-1.0),vec4<f32>(0.0),vec4<f32>(0.0));}}
  var payload=sampleSceneReflectionPayload(coords,depthMap,colorMap,colorSampler,normalMap,projection,inverseProjection,maxDistance,thickness,nearPlane,steps,refinementSteps,frame,roughnessCutoff,samples,stable);payload[2].x=weight;return payload;
 }`,[wgsl(SCENE_REFLECTION_QUERY_WGSL),wgsl(SCENE_REFLECTION_ALLOCATION_WGSL)]);
 const reconstruct=wgslFn(`fn reflectionReconstructEntry(coords:vec2<f32>,current:texture_2d<f32>,currentStats:texture_2d<f32>,depthMap:texture_depth_2d,normalMap:texture_2d<f32>,oldColor:texture_2d<f32>,oldNormal:texture_2d<f32>,oldDepth:texture_2d<f32>,oldStats:texture_2d<f32>,inverseProjection:mat4x4<f32>,toPrevious:mat4x4<f32>,previousProjection:mat4x4<f32>,previousInverseProjection:mat4x4<f32>,historyValid:bool,historyWeight:f32,roughnessCutoff:f32,detailMask:texture_2d<f32>,dense:bool)->mat4x4<f32>{
@@ -82,11 +82,13 @@ export default class SceneReflections extends Node{
   return Fn(()=>{
    const result=vec4(0).toVar();
    If(this.available,()=>{
-   result.assign(this.sampleField(this.coarse,this.size));
    If(this.adaptive,()=>{
-    const weight=this.detail.allocation.sample(screenUV).r;
-    If(weight.greaterThan(0),()=>{result.assign(mix(result,this.sampleField(this.detail,this.detailSize),weight));});
-   });
+    const weight=this.detail.allocation.sample(screenUV).r.toVar();
+    If(weight.greaterThanEqual(1),()=>{result.assign(this.sampleField(this.detail,this.detailSize));}).Else(()=>{
+     result.assign(this.sampleField(this.coarse,this.size));
+     If(weight.greaterThan(0),()=>{result.assign(mix(result,this.sampleField(this.detail,this.detailSize),weight));});
+    });
+   }).Else(()=>{result.assign(this.sampleField(this.coarse,this.size));});
    });
    return result;
   })();
