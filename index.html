@@ -2570,6 +2570,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <button type="button" role="menuitem" data-scene-add="sphere">Sphere</button>
         <button type="button" role="menuitem" data-scene-add="cylinder">Cylinder</button>
         <button type="button" role="menuitem" data-scene-add="annular">Annular plate</button>
+        <button type="button" role="menuitem" data-scene-add="dock">Dock / deck</button>
         <button type="button" role="menuitem" data-scene-add="camera">Camera</button>
         <div class="scene-menu-heading">Light</div>
         <button type="button" role="menuitem" data-scene-add="spot-light">Spot</button>
@@ -7477,6 +7478,7 @@ sceneAddMenuPopup.addEventListener('click', event => {
     try{addProceduralMesh(action.dataset.sceneAdd);document.activeElement?.blur?.();}catch(error){setInfo(error.message);}
   }
   if(action.dataset.sceneAdd==='ash-source')addAuthoredAshSource().catch(error=>setInfo(error.message));
+  if(action.dataset.sceneAdd==='dock')addStockroomDock().catch(error=>setInfo(error.message));
   if(action.dataset.sceneAdd==='camera'){try{addAuthoredCamera();}catch(error){setInfo(error.message);}}
   if(action.dataset.sceneAdd==='spot-light'){try{addSceneSpotLight();}catch(error){setInfo(error.message);}}
   if(action.dataset.sceneAdd==='import-mesh')document.getElementById('scene-mesh-file').click();
@@ -12296,6 +12298,7 @@ async function initScene() {
       const result=[
         ...[['box','Cube',['box','mesh primitive']],['plane','Plane',['mesh primitive']],['sphere','Sphere',['mesh primitive']],['bowl','Bowl',['cup','basin','water container']],['cylinder','Cylinder',['mesh primitive']],['annular','Annular plate',['ring','mesh primitive']]].map(([kind,label,aliases])=>command('add.'+kind,'Add',label,()=>addProceduralMesh(kind),{aliases})),
         command('add.camera','Add','Camera',()=>addAuthoredCamera()),
+        command('add.dock','Add','Dock / deck',()=>addStockroomDock(),{aliases:['platform','construction','jetty']}),
         command('add.light','Add','Spot Light',()=>addSceneSpotLight(),{aliases:['lamp','lighting']}),
         command('add.ash-source','Add','Ash source',()=>addAuthoredAshSource(),{aliases:['emitter','fallout']}),
         command('add.ash','Add','Ash field',()=>addAshFromMenu(),{aliases:['deposition','simulation']}),
@@ -14218,7 +14221,8 @@ function installSharedWorkbench() {
 async function installOwnerWorkbenchEntry() {
   if(ownerExperimentEntry)return;
   sceneOwnerControls??=createSceneOwnerControls({document,viewport:document.getElementById('viewport'),inspector:document.getElementById('transform-inspector'),selected:selectedPlacementEntry,onContext:value=>sharedWorkbench?.setOwnerControlsActive(value)});
-  dockEditing=createDockEditing({document,viewport:document.getElementById('viewport'),canvas:renderer.domElement,camera,navigation:controls,entries:()=>workingScene.objects,selected:selectedPlacementEntry,edits:scenePlacementTools.edits,ownerControls:sceneOwnerControls,components:sceneComponents,installNumberDrag:installRelativeNumberDrag,redraw:()=>window._kaminosDirty?.(),onError:error=>setInfo(error.message)});
+  dockEditing=createDockEditing({document,viewport:document.getElementById('viewport'),canvas:renderer.domElement,camera,navigation:controls,entries:()=>workingScene.objects,selected:selectedPlacementEntry,edits:scenePlacementTools.edits,ownerControls:sceneOwnerControls,components:sceneComponents,installNumberDrag:installRelativeNumberDrag,redraw:()=>{sceneRepetitionController?.sync();window._kaminosDirty?.();},onError:error=>setInfo(error.message)});
+  dockEditing.sync();
   const host={controls:{document,installNumberDrag:installRelativeNumberDrag,mountObject:sceneOwnerControls.mount,transformSettings:()=>({...transformPreferences}),components:{register:(id,adapter)=>sceneComponents.register(id,adapter)}},fluid:{
     async open(setup){
       await workbenchViewerReady;
@@ -27595,7 +27599,7 @@ function addSceneSpotLight() {
     light:{kind:'spot',enabled:true,color:'#ffffff',intensity:30,angle:30,penumbra:.3,aimDistance:3}});
   recordSceneObjectInsertion(id);setActiveSceneObject(id);return id;
 }
-function canDuplicateObject(entry){return !!entry&&['glb','light',CAMERA_TYPE,PROCEDURAL_MESH_TYPE,LOCAL_LIQUID_EMITTER_TYPE,FLAME_EMITTER_TYPE,ASH_SOURCE_TYPE].includes(entry.type);}
+function canDuplicateObject(entry){return !!entry&&(entry.source===DOCK_SOURCE||['glb','light',CAMERA_TYPE,PROCEDURAL_MESH_TYPE,LOCAL_LIQUID_EMITTER_TYPE,FLAME_EMITTER_TYPE,ASH_SOURCE_TYPE].includes(entry.type));}
 function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
   assertSceneConstructionAvailable();const entry=workingScene.objects.find(o=>o.id===id);
   if(!canDuplicateObject(entry))throw Error('This object does not support Duplicate');
@@ -27607,6 +27611,7 @@ function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
   else if(entry.type===PROCEDURAL_MESH_TYPE)mountProceduralMesh(record);
   else if(entry.type===CAMERA_TYPE)mountAuthoredCamera(record);
   else if(entry.type==='light')mountSceneSpotLight(record);
+  else if(entry.source===DOCK_SOURCE){const copy=createDock(record.dock);applySceneObjectTransformState(copy,record.transform);applyMaterialStateToObject(copy,record.materials);scene.add(copy);registerSceneObject(copy,record,{activate:!deferRecord});}
   else {
     const copy=sceneMaterials.withSource(entry.object,()=>withoutRepetitionCopies(entry.object,()=>cloneSceneObjectHierarchy(entry.object)));copy.traverse(child=>{if(child.geometry)child.geometry=child.geometry.clone();if(child.material)child.material=Array.isArray(child.material)?child.material.map(cloneSceneMaterial):cloneSceneMaterial(child.material);});
     const burnLabels=[];copy.traverse(child=>{if(child.userData.kaminosBurnIndicator)burnLabels.push(child);});for(const label of burnLabels){label.removeFromParent();disposeObjectTree(label);}
@@ -28122,7 +28127,7 @@ function installSceneConstruction() {
   document.getElementById('selected-flame-properties').before(assemblyPanel);
   document.getElementById('assembly-outlet').onchange=event=>{authoringControlSessions.forEach(session=>session.commit());assemblyOutletChoices.set(workingScene.activeGroupId,event.target.value);updateAuthoringPropertySelection();};
   const modeLabel=document.createElement('span');modeLabel.id='assembly-edit-mode';modeLabel.hidden=true;modeLabel.style.cssText='padding:6px 12px;color:#ffca77';document.getElementById('transform-bar').append(modeLabel);
-  window.kaminosSceneAuthoring={addFireUnit:addAuthoredFireUnit,addFireUnitFromBasin:addFireUnitFromBasin,fireUnits:()=>[...authoredFireUnits.values()].map(u=>u.owner.read()),fireUnitRuntime:id=>authoredFireUnits.get(id)?.owner.runtime??null,addAsh:addAuthoredAsh,addFlameEmitter:addFirstFlameField,addWaterEmitter:addLocalLiquidEmitter,addLight:addSceneSpotLight,read:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),activeFieldId:workingScene.activeFieldId}),setFireSettings:editOwnedFireSettings,setAssembly:setSceneAssembly,addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
+  window.kaminosSceneAuthoring={addDock:addStockroomDock,addFireUnit:addAuthoredFireUnit,addFireUnitFromBasin:addFireUnitFromBasin,fireUnits:()=>[...authoredFireUnits.values()].map(u=>u.owner.read()),fireUnitRuntime:id=>authoredFireUnits.get(id)?.owner.runtime??null,addAsh:addAuthoredAsh,addFlameEmitter:addFirstFlameField,addWaterEmitter:addLocalLiquidEmitter,addLight:addSceneSpotLight,read:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),activeFieldId:workingScene.activeFieldId}),setFireSettings:editOwnedFireSettings,setAssembly:setSceneAssembly,addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
     setRepetition:(id,value)=>setSceneRepetition(id,value),repetitionState:sceneRepetitionState,makeCopiesEditable:makeSceneRepetitionReal,
     setWaterCollision:setObjectWaterCollision,
     setCollision:(id,value)=>{assertSceneConstructionAvailable();if(!activeSceneComposition)throw Error('Fire & smoke is not mounted');const target=ensureObjectCollisionTarget(id);return edits.apply(target,typeof value==='boolean'?{domainId:'flame-field',enabled:value}:value,'Set Fire & smoke obstacle');},
