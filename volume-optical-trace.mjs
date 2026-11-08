@@ -1,5 +1,28 @@
 export const OPTICAL_TRACE_IDENTITY = 'camera-mode2-ordered-optical-trace-v0';
 export const OPTICAL_TRACE_STRIDE = 32;
+export const REGIONAL_CAPTURE_IDENTITY = 'native-fine-regional-optical-query-v0';
+
+// Shared with the production trace writer. Legacy traces keep their support
+// predicate; regional queries observe the actual material result, including
+// weak/nonzero extinction and scattering outside that predicate.
+export const NATIVE_OPTICAL_CAPTURE_WGSL = /* wgsl */`
+fn opticalCaptureKeepsMaterial(mode:u32,support:f32)->bool {
+  return mode == 6u || mode == 7u || support > 0.0001;
+}
+`;
+
+export function pointCaptureSeed(points) {
+  const rows=new Float32Array(points.length*OPTICAL_TRACE_STRIDE);
+  points.forEach((point,i)=>{
+    const valid=v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite);
+    if(!valid(point?.position))throw Error('native query position must contain three finite coordinates');
+    const norm=valid(point?.direction)?Math.hypot(...point.direction):NaN;
+    if(!Number.isFinite(norm)||norm===0)throw Error('native query direction must be finite and nonzero');
+    rows.set(point.position,i*OPTICAL_TRACE_STRIDE+8);
+    rows.set(point.direction.map(v=>v/norm),i*OPTICAL_TRACE_STRIDE+12);
+  });
+  return rows;
+}
 
 export function createOpticalCaptureOwner() {
   let owner=null;
@@ -69,7 +92,13 @@ export function opticalProbeFeatures(probes, {h, gridPitch, direction, cellFract
   return result;
 }
 
-export function traceChunkPlan({firstRay,rayCount,sampleOffset,sampleCount,subdivisions,width,height,maxBytes}) {
+export function traceChunkPlan({firstRay,rayCount,sampleOffset,sampleCount,subdivisions,width,height,maxBytes,kind='rays',points}) {
+  if(!['rays','points'].includes(kind))throw Error('unknown native optical query kind');
+  if(kind==='points') {
+    if(!Array.isArray(points)||!points.length)throw Error('native query points must be nonempty');
+    pointCaptureSeed(points); // Validate all inputs before GPU allocation.
+    firstRay=0;rayCount=points.length;sampleOffset=0;sampleCount=1;subdivisions=1;
+  }
   for(const [key,v] of Object.entries({firstRay,rayCount,sampleOffset,sampleCount,subdivisions,width,height})) {
     if(!Number.isSafeInteger(v)||v<0)throw new Error(`${key} must be a nonnegative integer`);
   }
@@ -81,7 +110,20 @@ export function traceChunkPlan({firstRay,rayCount,sampleOffset,sampleCount,subdi
   return {firstRay,rayCount,sampleOffset,sampleCount,subdivisions,width,height,rowCount,byteLength};
 }
 
-export function validateTraceRows(values, plan) {
+export function validateTraceRows(values, plan, {requireRegional=false,effective,expectedStep,expectedKind}={}) {
+  if(requireRegional) {
+    if(effective?.route!=='native-3d-compute-fluid-raymarch-v0'||effective?.backend!=='WebGPU:apple')
+      throw Error('regional evidence requires the native Apple WebGPU route');
+    const capture=effective.regionalCapture;
+    if(capture?.identity!==REGIONAL_CAPTURE_IDENTITY||capture.scope!=='fine-only'||capture.worldIncluded!==false||
+      capture.coefficientSource!=='native-material-before-trace-support-mask'||!['points','rays'].includes(capture.kind))
+      throw Error('regional evidence requires complete unmasked native Fine capture identity');
+    if(!Number.isSafeInteger(effective.simStepCount)||effective.simStepCount<0||
+      expectedStep!==undefined&&effective.simStepCount!==expectedStep||expectedKind!==undefined&&capture.kind!==expectedKind)
+      throw Error('regional capture state or query kind changed');
+    if(!Array.isArray(effective.uniforms)||!effective.uniforms.length||!effective.uniforms.every(Number.isFinite)||
+      !effective.controls||typeof effective.controls!=='object')throw Error('regional capture is missing native material state');
+  }
   if(!(values instanceof Float32Array)||values.length!==plan.rowCount*OPTICAL_TRACE_STRIDE)throw new Error('partial optical trace');
   let misses=0,emittingRows=0;
   for(let r=0;r<plan.rayCount;r++)for(let s=0;s<plan.sampleCount;s++) {
