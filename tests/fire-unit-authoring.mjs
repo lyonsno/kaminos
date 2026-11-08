@@ -15,3 +15,15 @@ test('a valid grid dimension outside the legacy dropdown options round-trips int
  doc.implementation.createHTMLDocument=()=>{const copy=create(),append=copy.body.append;copy.body.append=node=>{node.ownerDocument=copy;append(node);};return copy;};
  const copy=createFireUnitControlDocument(doc,{domControls:{'volume-world-smoke-flow':{id:'volume-world-smoke-flow',type:'select-one',value:'10'}}});assert.equal(copy.getElementById('volume-world-smoke-flow').value,'10');
 });
+
+test('private numeric pressure fields keep their authored bounds and integer step while seeding runtime values',async()=>{
+ const {readFileSync}=await import('node:fs'),vm=await import('node:vm');
+ const {setFireUnitControlValue}=await import('../fire-unit-authoring.mjs');
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8'),start=html.indexOf('seedControls(copy,values){'),end=html.indexOf('\n    listBasins:',start);
+ const input={id:'volume-pressure-cg-iterations',type:'number',value:'6',min:'1',max:'',step:'1'};
+ const ctx=vm.createContext({volumeSceneControlId:()=>input.id,GRID_TUNING_FIELDS:[],setFireUnitControlValue});
+ const callback=vm.runInContext('({'+html.slice(start,end)+'})',ctx).seedControls;
+ callback({getElementById:()=>input},{pressureCgIterations:6});
+ assert.equal(input.max,'','an unbounded CG count must remain adjustable above its current value');
+ assert.equal(input.min,'1');assert.equal(input.step,'1');
+});
