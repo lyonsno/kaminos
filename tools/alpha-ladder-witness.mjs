@@ -41,12 +41,13 @@ async function main(){
     page.on('pageerror',e=>report.errors.push(String(e.stack??e)));
     await page.evaluateOnNewDocument(()=>{window.__alphaGpu={errors:[],adapters:[]};const method=GPUAdapter.prototype.requestDevice;GPUAdapter.prototype.requestDevice=async function(...args){const i=this.info;window.__alphaGpu.adapters.push({vendor:i.vendor,architecture:i.architecture,isFallbackAdapter:i.isFallbackAdapter});const d=await method.apply(this,args);d.addEventListener('uncapturederror',e=>window.__alphaGpu.errors.push(String(e.error)));return d;};});
     report.phase='load';await page.goto(report.url,{waitUntil:'domcontentloaded'});
-    const admission=await page.waitForFunction(async()=>{
+    const admission=await page.waitForFunction(()=>{
       if(window.kaminosWorkbenchExperimentError)return {error:window.kaminosWorkbenchExperimentError};
-      if(!window.kaminosWorkbenchExperiments)return false;
-      try{return (await window.kaminosWorkbenchExperiments.read())?.mode==='learned';}catch{return false;}
-    });
+      return document.querySelector('select[aria-label="Alpha representation"]')?.value==='learned';
+    },{polling:'mutation'});
     const admitted=await admission.jsonValue();await admission.dispose();if(admitted?.error)throw Error(admitted.error);
+    const initial=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
+    assert.equal(initial.asset,report.inputs.asset);assert.equal(initial.mode,'learned');assert.equal(initial.count,4000);
     await new Promise(resolve=>setTimeout(resolve,1500));
     report.adapter=await page.evaluate(()=>window.__alphaGpu.adapters[0]);assert.equal(report.adapter?.vendor,'apple');assert.equal(report.adapter?.isFallbackAdapter,false);
     report.phase='capture';
