@@ -19,7 +19,7 @@ export function mountViewportImpulseGesture({document,viewport,canvas,camera,con
  const coords=e=>({clientX:e.clientX,clientY:e.clientY});
  const set=(n,a)=>{for(const [k,v] of Object.entries(a))n.setAttribute(k,v);};
  function hide(){svg.style.display='none';}
- function showHover(){if(!hover||!hoverPoint||drag||!enabled||!isActive()){hide();return;}const r=viewport.getBoundingClientRect(),x=hoverPoint.clientX-r.left,y=hoverPoint.clientY-r.top;svg.style.display='';svg.hidden=false;line.style.display=arrow.style.display='none';set(dot,{cx:x,cy:y,stroke:hover.released?'#ffe9b4':'#b6bec5'});set(label,{x:x+12,y:y-12});label.textContent=hover.released?'Drag to shove':'Attached · release joint first';}
+ function showHover(){if(!hover||!hoverPoint||drag||!enabled||!isActive()){hide();return;}const r=viewport.getBoundingClientRect(),x=hoverPoint.clientX-r.left,y=hoverPoint.clientY-r.top;svg.style.display='';svg.hidden=false;line.style.display=arrow.style.display='none';set(dot,{cx:x,cy:y,stroke:hover.released?'#ffe9b4':'#b6bec5'});set(label,{x:x+12,y:y-12});label.textContent=hover.released?'Drag to shove':'Attached · pull its pose pin to release';}
  async function queryHover(){if(querying||!latest||drag||disposed)return;querying=true;const request=latest;latest=null;const id=sequence;
   try{const hit=await pick(rayAt(request));if(!disposed&&!drag&&id===sequence){hover=hit;hoverPoint=request;showHover();}}catch(e){if(!disposed)onError(e);}finally{querying=false;if(latest&&!disposed&&!drag)queryHover();}
  }

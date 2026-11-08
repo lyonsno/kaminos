@@ -85,3 +85,17 @@ export function weatherBody(model,index,distance){
  const particles=new Float32Array(model.particles.length+added.length);particles.set(model.particles);particles.set(added,model.particles.length);model.particles=particles;model.weatheredMass+=lostMass;
  return{lostMass,addedParticles:samples.length};
 }
+
+// These fixture constraints hold the complete pose relative to the specimen.
+// The surface mount is an interaction/annotation location, not a hinge or bond.
+export function volumePoseAnchors(model,driveHeight=0){
+ if(!Number.isFinite(driveHeight))throw Error('Invalid anchor drive height');
+ const free=model.bodies.some(b=>!b.anchored);
+ return model.bodies.map((body,rock)=>{
+  const face=body.solid.faces.reduce((a,b)=>a.normal[1]>b.normal[1]?a:b),mount=[0,1,2].map(k=>face.vertices.reduce((n,p)=>n+p[k],0)/face.vertices.length),rest=body.restPosition??body.position;
+  const position=[...rest];position[1]+=driveHeight*Math.exp(-(rest[0]**2+rest[2]**2)/.75);
+  const place=p=>rotate(body.rotation,p).map((v,k)=>v+position[k]);
+  const reason=!body.anchored?'Released':!model.config.conditionContacts?'Enable starting contact preparation before release':free?'Reset specimen before releasing a different rock':null;
+  return{id:'pose-anchor:'+body.id,bodyId:body.id,rock,kind:'pose-anchor',frame:'specimen',locks:{position:true,orientation:true},attached:body.anchored,canRelease:body.anchored&&!reason,reason,mount:[...mount],specimenPoint:body.anchored?place(mount):null,specimenFace:body.anchored?face.vertices.map(place):[]};
+ });
+}

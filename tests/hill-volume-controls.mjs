@@ -37,3 +37,6 @@ test('queued material impulse retains its requested velocity before later edits'
 test('Reset during aim supersedes the captured playback state',async()=>{
  const i=await instance();try{i.render();await i.value.operations.setPlaying(true);await i.value.operations.beginShove({origin:[0,1,2],direction:[0,0,-1]});assert.equal(i.value.read().playing,false);await i.value.operations.reset();await i.value.operations.cancelShove();assert.equal(i.value.read().playing,false,'Cancelling a stale drag must not restart a reset specimen');}finally{await i.value.dispose();}
 });
+test('spatial release targets its rock without changing the sidebar selection',async()=>{
+ const i=await instance();try{i.render();await i.value.operations.setPlaying(false);await i.value.operations.release(0);const writes=i.writes.filter(w=>w.label==='Hill volume rigid state'&&w.length===4);assert.equal(writes.at(-1).offset,12,'The pin must release its own rock, not the sidebar rock');assert.equal(i.value.read().settings.rock,7);}finally{await i.value.dispose();}
+});

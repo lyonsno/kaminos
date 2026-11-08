@@ -3446,6 +3446,7 @@ import {installOwnerExperimentEntry,readOwnerExperimentAddress,writeOwnerExperim
 import {createInvestigationEntry} from './investigation-entry.mjs';
 import {createWorkbenchFrameService,createWorkbenchSceneHost,disposeOwnedSceneTree} from './workbench-scene-host.mjs';
 import {mountViewportImpulseGesture} from './viewport-impulse-gesture.mjs';
+import {mountViewportAttachmentControls} from './viewport-attachment-controls.mjs';
 import { checkedSceneLightRecord } from './scene-spot-light.mjs';
 
 import {checkedPose} from './scene-edit-session.mjs';
@@ -13153,7 +13154,7 @@ function installSharedWorkbench() {
 async function installOwnerWorkbenchEntry() {
   if(ownerExperimentEntry)return;
   sceneOwnerControls=createSceneOwnerControls({document,viewport:document.getElementById('viewport'),inspector:document.getElementById('transform-inspector'),selected:selectedPlacementEntry,onContext:value=>sharedWorkbench?.setOwnerControlsActive(value)});
-  const host={controls:{document,mountImpulseGesture:options=>mountViewportImpulseGesture({document,viewport:document.getElementById('viewport'),canvas:renderer.domElement,camera,controls,isActive:()=>authoringWorkspace.state().mode==='workbench',onFrame:workbenchSceneFrames.onFrame,...options}),installNumberDrag:installRelativeNumberDrag,mountObject:sceneOwnerControls.mount,transformSettings:()=>({...transformPreferences}),components:{register:(id,adapter)=>sceneComponents.register(id,adapter)}},fluid:{
+  const host={controls:{document,mountAttachmentControls:options=>mountViewportAttachmentControls({document,viewport:document.getElementById('viewport'),canvas:renderer.domElement,camera,isActive:()=>authoringWorkspace.state().mode==='workbench',onFrame:workbenchSceneFrames.onFrame,...options}),mountImpulseGesture:options=>mountViewportImpulseGesture({document,viewport:document.getElementById('viewport'),canvas:renderer.domElement,camera,controls,isActive:()=>authoringWorkspace.state().mode==='workbench',onFrame:workbenchSceneFrames.onFrame,...options}),installNumberDrag:installRelativeNumberDrag,mountObject:sceneOwnerControls.mount,transformSettings:()=>({...transformPreferences}),components:{register:(id,adapter)=>sceneComponents.register(id,adapter)}},fluid:{
     async open(setup){
       await workbenchViewerReady;
       const capability=await waterFeature.openExperiment(setup);
