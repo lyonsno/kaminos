@@ -232,8 +232,10 @@ shape `[count,3]`). Coordinates are packed i32 triples: a shader reads
 The buffer supports `STORAGE`, `COPY_SRC` and `COPY_DST`; it has no vertex-buffer
 usage. Use the same device/queue, not another tab's or process's WebGPU device.
 
-The live source is borrowed during the model run. `isCurrent()` becomes false
-on model completion, failure or disposal. It is a validity check, not an async
+The live source is borrowed until that support owner retires. `isCurrent()`
+becomes false at support retirement, model completion, failure or disposal,
+whichever happens first. The default1024 cascade retires the initial coarse
+support before high-resolution shape sampling, while the model is still running. It is a validity check, not an async
 lease: a consumer retaining support must encode and submit a GPU-to-GPU copy
 synchronously during callback delivery, within its existing command admission,
 before awaiting renderer initialization or other work. The consumer owns that

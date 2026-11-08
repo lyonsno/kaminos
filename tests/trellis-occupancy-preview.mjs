@@ -46,16 +46,16 @@ test('a different threshold policy or non-copyable tensor is refused before read
   const f=snapshotInput();change(f.options);await assert.rejects(occupancy.readTrellisOccupancyPreview(f.options));assert.equal(f.reads(),0);
  }
 });
-function composition(onPreview,{hangReadback=false}={}){
+function composition(onPreview,{hangReadback=false,pipelineType='512',observePhase=()=>{}}={}){
  let phase,marked=false;const phases=[],reads=[];
  const runtime={device:{limits:{maxStorageBufferBindingSize:134217728},queue:{async onSubmittedWorkDone(){}}},
-  createTensor(s){const t={...s,byteLength:s.shape.reduce((a,b)=>a*b,4)};t.buffer=s.buffer??{destroy(){t.destroyed=true;}};return t;},
+  createTensor(s){const t={...s,byteLength:s.shape.reduce((a,b)=>a*b,4)};t.buffer=s.buffer??{destroy(){t.destroyed=true;this.destroyed=true;}};return t;},
   uploadTensor(){},defineComputeKernel:k=>k,async runKernel(k,o){if(o.stage==='slat-regrid-mark')marked=true;},
   async readTensor(t,o){reads.push({t,o});if(t.dtype==='i32')return hangReadback?new Promise(()=>{}):new Int32Array([0,0,0,0,1,2,1,0,0]);
    assert.equal(t.byteLength,4);return new Uint32Array([t.name.includes('hash-status')?0:t.name.includes('occupancy.count')?3:phase==='learned-cascade-support'&&marked?4:5]);}};
  const conditioning=runtime.createTensor({name:'conditioning',shape:[1,7,5],dtype:'f32',usage:U.storage});
- const adapter=createTrellisGenerationFromConditioningAdapter({route:{runtime,routeId:'resident-preview-composition'},conditioningTensor:conditioning,models,pipelineType:'512',meshResolution:64,
-  runId:'resident-preview-run',onPreview,onPhase:e=>{phase=e.phase;phases.push(phase);}});
+ const adapter=createTrellisGenerationFromConditioningAdapter({route:{runtime,routeId:'resident-preview-composition'},conditioningTensor:conditioning,models,pipelineType,highResolutionConditioningTensor:runtime.createTensor({name:'high-conditioning',shape:[1,11,5],dtype:'f32',usage:U.storage}),meshResolution:pipelineType==='512'?64:128,
+  runId:'resident-preview-run',onPreview,onPhase:e=>{phase=e.phase;if(phase==='learned-cascade-support')marked=false;phases.push(phase);observePhase(phase);}});
  return{adapter,reads,phases,runtime};
 }
 test('a never-settling LAST observer does not gate final model output',async()=>{
@@ -67,7 +67,7 @@ test('a never-settling LAST observer does not gate final model output',async()=>
  await new Promise(setImmediate);
  assert.equal(failure,undefined);assert.equal(completed,true,'optional preview must not hold model or final decode');
  const out=await pending;assert.equal(validDuringDelivery,true);assert.equal(out.previewDelivery.status,'expired');assert.equal(f.adapter.previewDelivery.status,'expired');assert.equal(out.coordinateBytesToCPUDuringServing,0);assert.ok(f.reads.every(r=>r.t.dtype==='u32'),'live delivery must not launch a coordinate readback');
- assert.ok(preview.coordinates.buffer);assert.equal(preview.coordinates.dtype,'i32');assert.deepEqual(preview.coordinates.shape,[3,3]);
+ assert.equal(preview.lifetime,'borrowed-until-support-retirement');assert.ok(preview.coordinates.buffer);assert.equal(preview.coordinates.dtype,'i32');assert.deepEqual(preview.coordinates.shape,[3,3]);
  assert.equal(preview.device,f.runtime.device);assert.equal(preview.isCurrent(),false,'completed generation invalidates a late preview');
  f.adapter.dispose();assert.equal(preview.isCurrent(),false);
 });
@@ -97,4 +97,12 @@ test('a preview becomes invalid when later shape generation fails',async()=>{
  let preview;const f=composition(p=>{preview=p;});const kernel=f.runtime.runKernel;
  f.runtime.runKernel=async(k,o)=>{if(preview)throw Error('later model failure');return kernel(k,o);};
  await assert.rejects(f.adapter.run(invocation),/later model failure/);assert.equal(preview.isCurrent(),false);assert.equal(f.adapter.state,'failed');f.adapter.dispose();
+});
+
+test('default cascade invalidates the preview when coarse support retires before high-resolution shape',async()=>{
+ let preview,sawRetirement=false;const f=composition(p=>{preview=p;assert.equal(p.isCurrent(),true);},{pipelineType:'1024_cascade',observePhase(phase){
+  if(phase==='high-resolution-shape-sampling'){sawRetirement=true;assert.equal(preview.coordinates.buffer.destroyed,true,'coarse support was retired');
+   assert.equal(preview.isCurrent(),false,'destroyed coarse support must never be advertised as current during the rest of cascade');}
+ }});
+ const out=await f.adapter.run(invocation);assert.equal(sawRetirement,true);assert.ok(out.geometry);f.adapter.dispose();
 });
