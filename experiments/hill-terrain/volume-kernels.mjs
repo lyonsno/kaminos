@@ -62,10 +62,13 @@ fn closest_triangle(p:vec3f,t:Triangle)->vec3f{
  let va=d3*d6-d5*d4;if(va<=0.&&(d4-d3)>=0.&&(d5-d6)>=0.){return b+(c-b)*((d4-d3)/((d4-d3)+(d5-d6)));}
  let inv=1./(va+vb+vc);return a+ab*(vb*inv)+ac*(vc*inv);
 }
-fn solid_frame(world:vec3f,b:Body)->vec4f{
+fn plane_frame(world:vec3f,b:Body)->vec4f{
  let p=invrot(b.q,world-b.p.xyz);var d=-1e30;var n=vec3f(0,1,0);
  for(var j=0u;j<b.shape.y;j++){let pl=planes[b.shape.x+j];let q=dot(pl.xyz,p)-pl.w;if(q>d){d=q;n=pl.xyz;}}
- if(d<=0.){return vec4f(rot(b.q,n),d);}
+ return vec4f(rot(b.q,n),d);
+}
+fn finite_frame(world:vec3f,b:Body,frame:vec4f)->vec4f{
+ if(frame.w<=0.){return frame;}let p=invrot(b.q,world-b.p.xyz);
  // Outside a corner, plane distance alone is not the finite-surface distance.
  var distance=1e30;var delta=vec3f(0,1,0);
  for(var j=0u;j<b.shape.w;j++){let q=p-closest_triangle(p,triangles[b.shape.z+j]);let q2=dot(q,q);if(q2<distance){distance=q2;delta=q;}}
@@ -81,13 +84,17 @@ fn contact_velocity(point:vec3f,velocity:vec3f,mass:f32,margin:f32)->vec3f{
  for(var x=lo.x;x<=hi.x;x++){for(var y=lo.y;y<=hi.y;y++){for(var z=lo.z;z<=hi.z;z++){
  var link=atomicLoad(&bodyHeads[bucket_index(vec3i(x,y,z))]);while(link>0u){let i=link-1u;link=bodyLinks[i];
   let b=bodies[i];let r=point-b.p.xyz;if(length(r)>b.size.x+margin){continue;}
-  let f=solid_frame(point,b);let bv=b.v.xyz+cross(b.w.xyz,r);let rel=v-bv;let vn=dot(rel,f.xyz);
+  let bv=b.v.xyz+cross(b.w.xyz,r);let rel=v-bv;let coarse=plane_frame(point,b);
+  // Plane distance is a lower bound on finite convex-surface distance. Even
+  // the full relative speed cannot close this gap during this substep.
+  if(coarse.w>margin+length(rel)*cfg.forces.x){continue;}
+  let f=finite_frame(point,b,coarse);let vn=dot(rel,f.xyz);
   if(f.w>margin+max(0.,-vn)*cfg.forces.x||vn>=0.){continue;}
   let effective=1./mass+b.p.w+select(0.,dot(f.xyz,cross(inverse_inertia(b,cross(r,f.xyz)),r)),b.p.w>0.);
   let jn=-vn/max(effective,1e-12);var impulse=f.xyz*jn;
   let tangent=rel-vn*f.xyz;let speed=length(tangent);
   if(speed>1e-8){let t=tangent/speed;let kt=1./mass+b.p.w+select(0.,dot(t,cross(inverse_inertia(b,cross(r,t)),r)),b.p.w>0.);impulse-=t*min(cfg.forces.z*jn,speed/max(kt,1e-12));}
-  v+=impulse/mass;react(i,-impulse,r);
+  v+=impulse/mass;if(b.p.w>0.){react(i,-impulse,r);}
  }}}}
  return v;
 }
@@ -130,7 +137,7 @@ fn contact_velocity(point:vec3f,velocity:vec3f,mass:f32,margin:f32)->vec3f{
  let corrected=contact_velocity(p.p.xyz,p.v.xyz,p.p.w,0.);p.v=vec4f(corrected,p.v.w);
  let extent=spatial.origin.w*.5;let loBody=bucket(p.p.xyz-vec3f(extent));let hiBody=bucket(p.p.xyz+vec3f(extent));
  for(var x=loBody.x;x<=hiBody.x;x++){for(var y=loBody.y;y<=hiBody.y;y++){for(var z=loBody.z;z<=hiBody.z;z++){
- var link=atomicLoad(&bodyHeads[bucket_index(vec3i(x,y,z))]);while(link>0u){let i=link-1u;link=bodyLinks[i];let b=bodies[i];if(distance(p.p.xyz,b.p.xyz)>b.size.x){continue;}let f=solid_frame(p.p.xyz,b);if(f.w<0.){p.p=vec4f(p.p.xyz-f.xyz*f.w,p.p.w);}}
+ var link=atomicLoad(&bodyHeads[bucket_index(vec3i(x,y,z))]);while(link>0u){let i=link-1u;link=bodyLinks[i];let b=bodies[i];if(distance(p.p.xyz,b.p.xyz)>b.size.x){continue;}let f=plane_frame(p.p.xyz,b);if(f.w<0.){p.p=vec4f(p.p.xyz-f.xyz*f.w,p.p.w);}}
  }}}
  let influence=exp(-dot(p.p.xz,p.p.xz)/.75);let floor=cfg.drive.x*influence;
  if(p.p.y<floor){p.p.y=floor;p.v.y=max(cfg.drive.y*influence,p.v.y);}

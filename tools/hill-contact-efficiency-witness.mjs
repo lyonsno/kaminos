@@ -1,0 +1,43 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
+const [root,out,url]=process.argv.slice(2);
+if(!out)throw Error('output required');await fs.mkdir(out,{recursive:true});
+const report={status:'running',phase:'configuration',requested:{root,url},workload:'tiny production shader query correctness; no timing',closed:false,errors:[]};
+let context;const save=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));await save();
+try{
+ assert.ok(root&&url,'root and URL required');new URL(url);report.source={head:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),files:{}};
+ const files=['volume-kernels.mjs','soil-material.mjs','volume-model.mjs','volume-spatial.mjs','rock-geometry.mjs'];report.phase='source';await save();
+ for(const name of files){const f='experiments/hill-terrain/'+name,b=await fs.readFile(path.join(root,f)),r=await fetch(new URL('/'+f,url));assert.ok(r.ok,'Missing served source '+f);assert.ok(b.equals(Buffer.from(await r.arrayBuffer())),'Wrong served source '+f);report.source.files[f]=createHash('sha256').update(b).digest('hex');}
+ const {chromium}=await import('/Users/noahlyons/.npm/_npx/e41f203b7505f1fb/node_modules/playwright/index.mjs');report.executable='/Users/noahlyons/.local/state/hand-state-runtime/analysis/browser-juice-1024/chrome155-complete/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';report.profile=await fs.mkdtemp(path.join(out,'profile-'));
+ context=await chromium.launchPersistentContext(report.profile,{executablePath:report.executable,headless:true,viewport:{width:1000,height:800},args:['--use-mock-keychain','--password-store=basic','--enable-unsafe-webgpu']});const page=context.pages()[0];page.on('pageerror',e=>report.errors.push(e.message));
+ await page.goto(new URL('/docs/',url).href);report.phase='queries';await save();
+ report.result=await page.evaluate(async()=>{
+  const {VOLUME_KERNELS}=await import('/experiments/hill-terrain/volume-kernels.mjs'),{buildConvexRock}=await import('/experiments/hill-terrain/rock-geometry.mjs'),{rockMoments,packVolumeBodies,volumeConfig}=await import('/experiments/hill-terrain/volume-model.mjs'),{volumeSpatialConfig}=await import('/experiments/hill-terrain/volume-spatial.mjs');
+  const adapter=await navigator.gpu.requestAdapter({powerPreference:'high-performance'});if(!adapter)throw Error('No WebGPU adapter');const device=await adapter.requestDevice(),gpuErrors=[];device.addEventListener('uncapturederror',e=>gpuErrors.push(e.error.message));
+  const hardware={...Object.fromEntries(['vendor','architecture','device','description'].map(k=>[k,adapter.info?.[k]??null])),isFallbackAdapter:adapter.isFallbackAdapter??adapter.info?.isFallbackAdapter??null};
+  const solid=buildConvexRock([[1,0,0,.5],[-1,0,0,.5],[0,1,0,.5],[0,-1,0,.5],[0,0,1,.5],[0,0,-1,.5]]),moments=rockMoments(solid,800),body={id:'probe',solid,...moments,position:[0,0,0],rotation:[0,0,0,1],velocity:[0,0,0],omega:[0,0,0],anchored:false};
+  const packed=packVolumeBodies([body]),config=volumeConfig({gravity:0}),spatial=volumeSpatialConfig({config,bodies:[body]},packed),owned=[];
+  const buffer=(data,usage)=>{const b=device.createBuffer({size:typeof data==='number'?data:data.byteLength,usage});owned.push(b);if(typeof data!=='number')device.queue.writeBuffer(b,0,data);return b;};const U=GPUBufferUsage,S=U.STORAGE|U.COPY_DST|U.COPY_SRC;
+  const resources={bodies:buffer(packed.body,S),planes:buffer(packed.planes,S),triangles:buffer(packed.triangles,S),reactions:buffer(32,S),params:buffer(new Float32Array(28),U.UNIFORM|U.COPY_DST),bodyHeads:buffer(spatial.cellCount*4,S),bodyLinks:buffer(new Uint32Array([0]),S),spatialParams:buffer(spatial.uniform,U.UNIFORM|U.COPY_DST),output:buffer(32,S),read:buffer(64,U.MAP_READ|U.COPY_DST)};
+  const c=spatial.dimensions,o=config.origin,w=spatial.width,p=body.position.map((v,k)=>Math.max(0,Math.min(c[k]-1,Math.floor((v-o[k])/w)))),heads=new Uint32Array(spatial.cellCount);heads[(p[0]*c[1]+p[1])*c[2]+p[2]]=1;device.queue.writeBuffer(resources.bodyHeads,0,heads);
+  // Instrument executed triangle queries, never infer shader behavior from text.
+  const code=VOLUME_KERNELS.replace('fn closest_triangle(', 'fn original_triangle(')+`
+var<private> triangleVisits:u32;
+fn closest_triangle(p:vec3f,t:Triangle)->vec3f{triangleVisits++;return original_triangle(p,t);}
+@group(2) @binding(0) var<storage,read_write> probe:array<f32>;
+@compute @workgroup_size(1) fn contact_probe(){triangleVisits=0u;let v=contact_velocity(cfg.action.xyz,cfg.impulse.xyz,1.,cfg.action.w);probe[0]=f32(triangleVisits);probe[1]=v.x;probe[2]=v.y;probe[3]=v.z;}
+`;
+  try{
+   const module=device.createShaderModule({code});const info=await module.getCompilationInfo();if(info.messages.some(m=>m.type==='error'))throw Error(info.messages.map(m=>m.message).join('\n'));const pipeline=await device.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint:'contact_probe'}});
+   const groups=[[[2,'bodies'],[3,'planes'],[4,'triangles'],[5,'reactions'],[6,'params']],[[0,'bodyHeads'],[1,'bodyLinks'],[2,'spatialParams']],[[0,'output']]].map((bindings,i)=>device.createBindGroup({layout:pipeline.getBindGroupLayout(i),entries:bindings.map(([binding,name])=>({binding,resource:{buffer:resources[name]}}))}));
+   const inputs=[{name:'distant-corner',point:[.6,.6,0],velocity:[-1,-1,0],margin:.02,anchored:false},{name:'near-face',point:[.501,0,0],velocity:[-1,0,0],margin:.02,anchored:false},{name:'near-corner',point:[.51,.51,0],velocity:[-1,-1,0],margin:.02,anchored:false},{name:'fast-face',point:[.55,0,0],velocity:[-100,0,0],margin:.02,anchored:false},{name:'anchored-face',point:[.501,0,0],velocity:[-1,0,0],margin:.02,anchored:true},{name:'inside',point:[.4,0,0],velocity:[-1,0,0],margin:0,anchored:false}],cases=[];
+   for(const input of inputs){const params=new Float32Array(28),uints=new Uint32Array(params.buffer);params.set([...config.origin,config.cell]);uints.set([...config.dimensions,1],4);params.set([config.dt,0,.6,0],12);params.set([...input.point,input.margin],16);params.set([...input.velocity,0],20);device.queue.writeBuffer(resources.params,0,params);device.queue.writeBuffer(resources.bodies,12,new Float32Array([input.anchored?0:1/body.mass]));const e=device.createCommandEncoder();e.clearBuffer(resources.reactions);e.clearBuffer(resources.output);const pass=e.beginComputePass();pass.setPipeline(pipeline);groups.forEach((g,i)=>pass.setBindGroup(i,g));pass.dispatchWorkgroups(1);pass.end();e.copyBufferToBuffer(resources.output,0,resources.read,0,32);e.copyBufferToBuffer(resources.reactions,0,resources.read,32,32);device.queue.submit([e.finish()]);await resources.read.mapAsync(GPUMapMode.READ);const raw=Array.from(new Float32Array(resources.read.getMappedRange()));resources.read.unmap();cases.push({...input,triangleVisits:raw[0],velocityAfter:raw.slice(1,4),reactions:raw.slice(8,16)});}
+   return{hardware,cases,triangleCount:packed.triangles.length/12,gpuErrors,probeSource:code};
+  }finally{for(const b of owned)b.destroy();device.destroy();}
+ });await save();assert.match(report.result.hardware.vendor??'',/apple/i);assert.notEqual(report.result.hardware.isFallbackAdapter,true);assert.deepEqual(report.result.gpuErrors,[]);const cases=Object.fromEntries(report.result.cases.map(x=>[x.name,x]));
+ assert.equal(cases['distant-corner'].triangleVisits,0,'A plane-excluded soil query must not walk finite triangles');assert.deepEqual(cases['distant-corner'].velocityAfter,[-1,-1,0]);assert.ok(cases['near-corner'].triangleVisits>0,'A genuinely nearby corner still uses finite geometry');assert.ok(Math.abs(cases['near-corner'].velocityAfter[0])<.01);assert.ok(Math.abs(cases['near-face'].velocityAfter[0])<.01);assert.ok(Math.abs(cases['fast-face'].velocityAfter[0])<1,'Closing speed must retain predictive face contact');assert.deepEqual(cases['anchored-face'].reactions,new Array(8).fill(0),'Anchored bodies must not receive discarded atomic reactions');assert.ok(Math.abs(cases['anchored-face'].velocityAfter[0])<1e-6);assert.ok(cases['near-face'].reactions.some(x=>x!==0),'Free-body reciprocal reaction remains');
+ assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';
+}catch(e){report.status='failed';report.error=e.stack??String(e);process.exitCode=1;}finally{if(context){await context.close();report.closed=true;}await save();}console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,report:path.join(out,'report.json')}));
