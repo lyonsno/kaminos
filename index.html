@@ -3008,6 +3008,7 @@ import {createSceneBloom,checkedSceneBloom} from './scene-bloom.mjs';
 import {createSceneFlameHDR} from './scene-flame-hdr.mjs';
 import {bloom} from './scene-bloom-node.mjs';
 import {installSceneBloomControls} from './scene-bloom-controls.mjs';
+import {installSceneReflectionControls} from './scene-reflection-controls.mjs';
 import { pass, mrt, normalView, positionViewDirection, vec2, vec3, vec4, mix, float, uniform, texture, pmremTexture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, screenUV, builtinAOContext, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix, Fn, agxToneMapping } from 'three/tsl';
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { createSceneGI } from './scene-gi.mjs';
@@ -3367,7 +3368,7 @@ import {
 import {createPromptLettering} from './prompt-lettering.mjs';
 import {PROMPT_RELIEF_SOURCE,promptReliefRecord,restorePromptRelief,checkedPromptRelief} from './inference-kiln-record.mjs';
 import { COMPOSITION_SCHEMA, resolveFlameLightingRoute, compositionRestoreUrl, savedSceneLocation, captureComposedCanvases } from './scene-authoring.mjs';
-import {createSceneMaterials} from './scene-material-recipes.mjs';
+import {createSceneMaterials,assertMaterialBurningSupport} from './scene-material-recipes.mjs';
 import {sceneMaterialPrograms} from './scene-material-programs.mjs';
 import {installMaterialInspector} from './scene-material-inspector.mjs';
 import {PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh,checkedGeometry,createProceduralMesh,GEOMETRY_DEFAULTS} from './scene-geometry.mjs';
@@ -4214,8 +4215,8 @@ let fingerFluidBenchState = createFingerFluidBenchState({
 window.__kaminosFingerFluidBenchDebugState = () => fingerFluidBenchState;
 let volumePrimitives = [];
 const workingScene = createWorkingScene();
-let materialInspector=null;
-const sceneMaterials=createSceneMaterials({entries:()=>[...workingScene.objects,...workingScene.suspendedObjects()],definitions:sceneMaterialPrograms,changed:()=>{window._kaminosDirty?.();materialInspector?.sync();}});
+let materialInspector=null,restoreSceneReflectionSettings=null;
+const sceneMaterials=createSceneMaterials({entries:()=>[...workingScene.objects,...workingScene.suspendedObjects()],definitions:sceneMaterialPrograms,retainedEntries:()=>workingScene.retainedObjects(),representations:entry=>sceneBeautyLods?.materialRoots(entry.object)??[],changed:()=>{window._kaminosDirty?.();materialInspector?.sync();}});
 const authoredAsh = new Map();
 let ashInspector=null,ashSourceInspector=null;
 const ashEditTargets=new Set();
@@ -4291,6 +4292,7 @@ const ensureSceneBeautyLods = () => (sceneBeautyLods ??= createSceneBeautyLodCon
   surfaceLighting: { registerProxyRoot: root => window.__kaminosSurfaceLighting?.registerProxyRoot?.(root) ?? null },
   loadLevel:async level=>{const root=await loadPreparedLod(level);prepareArrivedMeshMaterials(root,{maxAnisotropy:16});return root;},
   parseGlb: async bytes => {const root=(await new GLTFLoader().parseAsync(bytes, '')).scene;prepareArrivedMeshMaterials(root,{maxAnisotropy:16});return root;},
+  onRungLoaded:()=>sceneMaterials.sync(),onRepresentationChanged:()=>sceneMaterials.sync(),onRepresentationReleased:(_root,representation)=>sceneMaterials.releaseObject(representation),canDisplayRung:sceneMaterials.canDisplay,
   onUpdate: () => window._kaminosDirty?.(),
 }));
 window.kaminosSceneLodBudget = {
@@ -10632,7 +10634,7 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
 function createPageSceneMembershipOperations() {
   return createSceneMembershipOperations({
     scene:workingScene,selectionScope:()=>assemblyEditing?.scope()?.objectIds??null,
-    records:{serialize:entry=>serializeSceneObject(ashMembershipEntry(entry)),reloadable:isReloadableSceneObjectRecord,load:(record,options)=>addSceneObjectFromSource(record,null,options)},
+    records:{serialize:entry=>({...serializeSceneObject(ashMembershipEntry(entry)),materialBindings:sceneMaterials.bindings(entry.id)}),reloadable:isReloadableSceneObjectRecord,load:(record,options)=>addSceneObjectFromSource(record,null,options)},
     roots:{
       prepare(entry){
         const pending=applyGiProxySetting(entry);
@@ -10644,10 +10646,12 @@ function createPageSceneMembershipOperations() {
         if(splatCorrectionMode?.objectId===entry.id)exitSplatCorrectionMode({revert:false,silent:true});
         if(transformControls&&currentMesh===entry.object){transformControls.detach();transformControls.visible=false;}
         scene.remove(entry.object);sceneGiProxies.release(entry.object);
+        if(!entry.burnable?.enabled)sceneMaterials.restoreBindings(entry,[]);
       },
       restore(entry,record){
         applySceneObjectTransformState(entry.object,record.transform);
         applyMaterialStateToObject(entry.object,record.materials);
+        sceneMaterials.restoreBindings(entry,record.materialBindings??[]);
         if(canCollideWithFire(entry))writeObjectCollision(entry.id,record.collision);
         writeObjectBurnable(entry.id,record.burnable??null);
       },
@@ -10676,7 +10680,7 @@ function createPageSceneMembershipOperations() {
         restored:(_entry,snapshot)=>sceneCameras?.membershipChanged(snapshot.activeCameraId),
       },
       [PROCEDURAL_MESH_TYPE]:{retainRoot:true,dispose(entry){
-        sceneBurning?.forget(entry.object);
+        sceneBurning?.forget(entry.object);sceneMaterials.releaseObject(entry.object);
         const instance=proceduralMeshes.get(entry.id);
         // Geometry edits can replace the root while history retains its predecessor.
         if(instance?.group===entry.object){instance.dispose();proceduralMeshes.delete(entry.id);}
@@ -11741,13 +11745,17 @@ async function initScene() {
     float(1).add(aoIntensity.sub(1).max(0).mul(float(1).sub(aoVisibility))));
   scenePass.contextNode = builtinAOContext(aoOutput);
   const lightingWorkParams=new URLSearchParams(location.search);
-  const sceneGI = createSceneGI(scene,camera,aoIntensity,{filterImplementation:lightingWorkParams.get('lighting_filter')==='separate'?'separate':'shared',surfaceReuse:lightingWorkParams.get('lighting_surface_reuse')!=='0',sourceComparison:lightingWorkParams.get('experiment')==='gi-source-study'});
+  const sceneGI = createSceneGI(scene,camera,aoIntensity,{renderer,reflections:{enabled:lightingWorkParams.get('scene_reflections')==='1'},filterImplementation:lightingWorkParams.get('lighting_filter')==='separate'?'separate':'shared',surfaceReuse:lightingWorkParams.get('lighting_surface_reuse')!=='0',sourceComparison:lightingWorkParams.get('experiment')==='gi-source-study'});
   activeSceneGI = sceneGI;
+  const reflectionSceneSetup=scenePass.setup;
+  scenePass.setup=function(builder){if(sceneGI.reflections.settings.enabled)sceneGI.reflections.result.build(builder);return reflectionSceneSetup.call(this,builder);};
   if (typeof syncArrivalStudioLighting === 'function') syncArrivalStudioLighting();
   window.kaminosGISourceComparison=sceneGI.sourceComparison;
   window.__kaminosSurfaceLighting=sceneGI.surfaceLighting;
   sceneBeautyLods ??= createSceneBeautyLodController({
+    onRepresentationChanged:()=>sceneMaterials.sync(),onRepresentationReleased:(_root,representation)=>sceneMaterials.releaseObject(representation),canDisplayRung:sceneMaterials.canDisplay,
     onRungLoaded: (root,rungRoot) => {
+      sceneMaterials.sync();
       prepareSceneNavigationRoot(root);
       if(!root.userData?.kaminosVertexWarp)sceneNavigation?.prepare(rungRoot);
     },
@@ -11811,6 +11819,11 @@ async function initScene() {
   let sceneEmissionSource=null,sceneFlameHDR=null;
   sceneBloom=createSceneBloom({bloom,convertToTexture,vec4,initial:{enabled:lightingWorkParams.get('scene_bloom')==='1',composeFlame:lightingWorkParams.get('scene_bloom')==='1'},rebuild:()=>rebuildSceneGIOutput(),redraw:()=>markDirty()});
   const bloomHost=document.createElement('section');bloomHost.id='scene-bloom-controls';document.getElementById('rendering-fire-controls').before(bloomHost);
+  const reflectionHost=document.createElement('section');reflectionHost.id='scene-reflection-controls';document.getElementById('scene-gi-refinement-status').after(reflectionHost);
+  let reflectionControls=null;
+  const writeReflections=value=>{sceneGI.reflections.setSettings(value);scenePass.contextNode=THREE.TSL.context({...builtinAOContext(aoOutput).getFlowContextData(),sceneReflectionLighting:sceneGI.reflections.settings.enabled?sceneGI.reflections.lightingContext:null});scenePass.needsUpdate=true;rebuildSceneGIOutput();markDirty();};
+  restoreSceneReflectionSettings=writeReflections;
+  window.kaminosSceneReflections={read:()=>{const state=sceneGI.reflections.state();return {...state,settings:{...sceneGI.reflections.settings},effective:state.effective&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene')};},set(value){if(reflectionControls)reflectionControls.set(value);else writeReflections(value);return this.read();},reset:reason=>sceneGI.reflections.reset(reason)};
   window.kaminosSceneBloom={read:()=>({...sceneBloom.read(),effective:sceneBloom.read().settings.enabled&&sceneBloom.read().settings.radius>0&&sceneBloom.read().settings.strength>0&&!waterFeature.host&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene'),flameComposition:{...sceneFlameHDR?.read(),effective:authoredFlameHDRActive&&sceneFlameHDR?.read().effective===true}}),set(settings){bloomControls.set(settings);return this.read();}};
   function rebuildSceneGIOutput() {
     const combined = sceneGISettings.mode === 'combined';
@@ -11826,7 +11839,7 @@ async function initScene() {
       sceneEmissionSource=beauty.getTextureNode('emissive');
     }
     activeSceneDepth = combined ? sceneGI.depth : prePassDepth;
-    const graphKey = `${sceneGI.debugState().filterImplementation}:${sceneGISettings.mode}:${sceneGISettings.denoise>0}:${sceneGISettings.temporal}:${isFireLightFieldRoute()}:${fireLightFieldRouteParams().get('volume_light_field_distributed')==='1'}:${sceneBloom.read().settings.enabled&&sceneBloom.read().settings.radius>0&&sceneBloom.read().settings.strength>0&&!diagnostic}`;
+    const graphKey = `${sceneGI.debugState().filterImplementation}:${sceneGISettings.mode}:${sceneGISettings.denoise>0}:${sceneGISettings.temporal}:${sceneGI.reflections.settings.enabled}:${isFireLightFieldRoute()}:${fireLightFieldRouteParams().get('volume_light_field_distributed')==='1'}:${sceneBloom.read().settings.enabled&&sceneBloom.read().settings.radius>0&&sceneBloom.read().settings.strength>0&&!diagnostic}`;
     const cached = giOutputGraphs.get(graphKey);
     if (cached) {
       ({rawSceneOutput,outlinedSceneOutput,outlinedCameraOutput,sceneEmissiveCamera,fireLightFieldPass} = cached);
@@ -11873,6 +11886,7 @@ async function initScene() {
   };
   sceneGI.setSettings(sceneGISettings);
   sceneGI.setEstimatorSettings(sceneGISettings.estimator);
+  scenePass.contextNode=THREE.TSL.context({...builtinAOContext(aoOutput).getFlowContextData(),sceneReflectionLighting:sceneGI.reflections.settings.enabled?sceneGI.reflections.lightingContext:null});
   rebuildSceneGIOutput();
   getLocalLiquidDisplayPolicy=()=>({rawOutput:rawSceneOutput,cameraState:sceneEmissiveCamera&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene')?sceneEmissiveCamera.debugState():{effective:false}});
   window.kaminosRefreshSceneGIOutput=rebuildSceneGIOutput;
@@ -12184,6 +12198,8 @@ async function initScene() {
   scenePlacementTools.edits.subscribe(state=>{if(!state.active)for(const field of upgradedRangeFields)field.scrub.stop();});
   bloomControls=installSceneBloomControls({document,host:bloomHost,edits:scenePlacementTools.edits,read:()=>sceneBloom.read().settings,write:value=>sceneBloom.set(value)});
   authoringControlSessions.push(bloomControls);scenePlacementTools.addHistoryScope(bloomHost);
+  reflectionControls=installSceneReflectionControls({document,host:reflectionHost,edits:scenePlacementTools.edits,read:()=>({...sceneGI.reflections.settings}),write:writeReflections});
+  authoringControlSessions.push(reflectionControls);scenePlacementTools.addHistoryScope(reflectionHost);
   window.kaminosSceneEdits = scenePlacementTools.edits;
   window.kaminosPlacementDebugState = scenePlacementTools.state;
   await volumeCockpitLayoutReady;
@@ -12636,6 +12652,7 @@ async function initScene() {
       replacement.outputColorSpace=old.outputColorSpace;
       await replacement.init();assertCurrent();
       renderer=replacement;sharedGpu=next;sharedGpuFailureReason=null;compositionHost.device=next.device;
+      sceneGI.reflections.setRenderer(renderer);
       renderPipeline.renderer=renderer;renderPipeline.needsUpdate=true;
       pmremGenerator=new THREE.PMREMGenerator(renderer);
       // Render-target contents are gone, even though their CPU descriptors survived.
@@ -14148,6 +14165,7 @@ async function installOwnerWorkbenchEntry() {
     select:()=>window.selectSceneObject(primaryAuthoredFlameSource()?.id),setVisible:visible=>{volumePrototype.canvasElement().style.opacity=visible?'1':'0';window._kaminosDirty?.();}},
   atmosphere:{async open(settings){await workbenchViewerReady;await ownerVolumeReady;const {createAshAtmosphere}=await import('./ash/atmosphere-gpu.mjs');return createAshAtmosphere({scene,camera,renderer,volume:{sharedAshAtmosphere:()=>structuredClone(sceneAshAtmosphereSettings),setSharedAshAtmosphere(value){sceneAshAtmosphereSettings=structuredClone(value);volumePrototype?.setSharedAshAtmosphere(value);}},groundY:groundPlane.position.y,settings});}},
   rendering:{gi:value=>setSceneGIControls(value),readGI:()=>({...sceneGISettings}),
+    reflections:value=>window.kaminosSceneReflections.set(value),readReflections:()=>window.kaminosSceneReflections.read(),
     openGISourceComparison:(root,candidates)=>{if(!window.kaminosGISourceComparison)throw Error('Open this comparison with ?experiment=gi-source-study');return window.kaminosGISourceComparison.open(root,candidates);},
     readFireLighting:()=>window.kaminosFireLightFieldDebugState(),muteFireLighting:value=>window.kaminosFireLightFieldSetWitnessMute(value)},
   flame:{async open(){await workbenchViewerReady;return openFlameWorkbench();}}};
@@ -27079,6 +27097,7 @@ function buildSceneData(capture = null) {
     volumePrimitives: getVolumePrimitiveState(),
     flameDomainTranslation: [...flameDomainTranslation], flameDomainScale, flameDomainFollowSource,flameWorldFrame:volumePrototype?.worldFrame?.()??null,
     postprocessing: {
+      reflections:window.kaminosSceneReflections?.read().settings,
       fireLighting:readFireRendering(document),
       bloom: {...sceneBloom.read().settings},
       sceneGI: {...sceneGISettings},
@@ -27583,7 +27602,7 @@ function writeObjectBurnable(id,value){
   const entry=workingScene.objects.find(row=>row.id===id)||workingScene.retained(id);
   if(!entry)throw Error('Burnable object is absent');
   const next=checkedBurnable(entry,value);
-  if(next?.enabled){resolveBurnableTarget(workingScene.objects,id);if(workingScene.groups.some(g=>g.objectIds.includes(id)&&g.repetition))throw Error('Burnable wood requires independent objects; make repeated copies editable first');}
+  if(next?.enabled){assertMaterialBurningSupport(sceneMaterials.read(),id);resolveBurnableTarget(workingScene.objects,id);if(workingScene.groups.some(g=>g.objectIds.includes(id)&&g.repetition))throw Error('Burnable wood requires independent objects; make repeated copies editable first');}
   entry.burnable=next;
   if(entry.object.userData.kaminosSceneObject)entry.object.userData.kaminosSceneObject.burnable=structuredClone(entry.burnable);
   void sceneBurning?.sync();syncSceneDataInspector();window._kaminosDirty?.();
@@ -27593,7 +27612,7 @@ function ensureObjectBurnableTarget(id){
   if(!entry)throw Error('Burnable object is absent');
   if(!burnableEditTargets.has(target)){
     scenePlacementTools.edits.register(target,{allowMissing:true,read:()=>structuredClone((workingScene.objects.find(row=>row.id===id)||workingScene.retained(id))?.burnable??null),
-      check:value=>{const current=workingScene.find(id)||workingScene.retained(id),next=checkedBurnable(current,value);if(next?.enabled){resolveBurnableTarget(workingScene.objects,id);if(workingScene.groups.some(g=>g.objectIds.includes(id)&&g.repetition))throw Error('Burnable wood requires independent objects; make repeated copies editable first');}return next;},write:value=>writeObjectBurnable(id,value)});
+      check:value=>{const current=workingScene.find(id)||workingScene.retained(id),next=checkedBurnable(current,value);if(next?.enabled){assertMaterialBurningSupport(sceneMaterials.read(),id);resolveBurnableTarget(workingScene.objects,id);if(workingScene.groups.some(g=>g.objectIds.includes(id)&&g.repetition))throw Error('Burnable wood requires independent objects; make repeated copies editable first');}return next;},write:value=>writeObjectBurnable(id,value)});
     burnableEditTargets.add(target);
   }
   return target;
@@ -27976,7 +27995,7 @@ function installSceneConstruction() {
     ungroup:id=>editSceneGroups(groups=>{const i=groups.findIndex(g=>g.id===id);if(i<0)throw Error('Group is absent');groups.splice(i,1);},'Ungroup objects'),
     setGeometry:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(workingScene.objects.find(o=>o.id===id));record.geometry=checkedGeometry({kind:patch.kind||record.geometry.kind,parameters:{...(patch.kind&&patch.kind!==record.geometry.kind?{}:record.geometry.parameters),...patch.parameters}});edits.apply(ensureMeshDataTarget(id),record,'Edit geometry');return record;},
     setLight:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(workingScene.objects.find(o=>o.id===id));record.light={...record.light,...patch};edits.apply(ensureMeshDataTarget(id),checkedSceneLightRecord(record),'Edit light');return record;},
-    setMaterial:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(workingScene.objects.find(o=>o.id===id));record.surface={...record.surface,...patch};edits.apply(ensureMeshDataTarget(id),checkedProceduralMesh(record),'Edit material');return record;}};
+    setMaterial:(id,patch)=>{assertSceneConstructionAvailable();const binding=sceneMaterials.bindings(id)[0];if(binding){const recipe=sceneMaterials.recipe(binding.recipeId),definition=sceneMaterialPrograms.find(d=>d.id===recipe.implementation);if(Object.keys(patch).some(key=>!definition.fields.some(f=>f.key===key)))throw Error('Use this material implementation’s exposed controls');return materialInspector.edit(recipe.id,{parameters:patch});}const record=serializeSceneObject(workingScene.objects.find(o=>o.id===id));record.surface={...record.surface,...patch};edits.apply(ensureMeshDataTarget(id),checkedProceduralMesh(record),'Edit material');return record;}};
   sceneRepetitionInspector=installRepetitionInspector({document,host:groupPanel,target:repetitionInspectorTarget,edits,editId:()=>ensureRepetitionTarget(repetitionInspectorTarget()?.id),set:value=>setSceneRepetition(repetitionInspectorTarget()?.id,value),makeReal:()=>makeSceneRepetitionReal(repetitionInspectorTarget()?.id),selectGroup:id=>window.selectSceneGroup(id),usePivot:()=>controls.target.toArray(),history:installSceneControlHistory,numberDrag:installRelativeNumberDrag,onError:error=>setInfo(error.message)});
   scenePlacementTools.addHistoryScope(sceneRepetitionInspector.panel);
   document.getElementById('object-parent').onchange=e=>{try{attachSceneObject(workingScene.activeObjectId,e.target.value||null);}catch(error){setInfo(error.message);}};
@@ -28134,7 +28153,7 @@ function setupSelectionTransforms(){
 
 function createPageSceneMembershipBatch(){
   return createSceneMembershipBatch({scene:workingScene,membership:sceneMembership,
-    records:{serialize:entry=>serializeSceneObject(ashMembershipEntry(entry)),reloadable:isReloadableSceneObjectRecord,apply:applyCompoundSceneRecord},
+    records:{serialize:entry=>({...serializeSceneObject(ashMembershipEntry(entry)),materialBindings:sceneMaterials.bindings(entry.id)}),reloadable:isReloadableSceneObjectRecord,apply:applyCompoundSceneRecord},
     groups:{serialize:serializeSceneGroups,ensure:ensureGroupTarget,create:createSceneGroupForObjects},
     context:{
       capture:()=>({field:workingScene.activeFieldId,domain:[...flameDomainTranslation],domainScale:flameDomainScale,domainFollowSource:flameDomainFollowSource,activeCameraId:sceneCameras?.read().settings.activeId??null}),
@@ -28149,6 +28168,7 @@ function createPageSceneMembershipBatch(){
 }
 function applyCompoundSceneRecord(entry,record){
   const existing=serializeSceneObject(ashMembershipEntry(entry));
+  sceneMaterials.restoreBindings(entry,record.materialBindings??[]);
   entry.repetition=checkedRepetition(record.repetition);
   if(JSON.stringify(existing.transform)!==JSON.stringify(record.transform))applyAuthoredScenePose(record.id,record.transform);
   if(entry.type==='light'&&JSON.stringify(entry.light)!==JSON.stringify(record.light))mountSceneSpotLight(record);
@@ -28380,9 +28400,10 @@ function mountProceduralMesh(raw) {
   const record=checkedProceduralMesh(raw),previous=workingScene.objects.find(entry=>entry.id===record.id);
   const existing=proceduralMeshes.get(record.id),reuse=existing?.updateSurface&&JSON.stringify(previous.geometry)===JSON.stringify(record.geometry);
   const bed=reuse?existing:createProceduralMesh(THREE,mergeGeometries,record.geometry,record.surface);
+  if(!reuse)try{sceneMaterials.validateSlots(record.id,bed.group);}catch(error){bed.dispose();throw error;}
   if(reuse)bed.updateSurface(record.surface);
   applySceneObjectTransformState(bed.group,record.transform);
-  if(!reuse){if(previous)sceneMaterials.releaseObject(previous.object);existing?.dispose();}
+  if(!reuse){if(previous){sceneBurning?.forget(previous.object);sceneMaterials.releaseObject(previous.object);}existing?.dispose();}
   proceduralMeshes.set(record.id,bed);
   const entry={...record,object:bed.group};
   bed.group.userData.kaminosSceneObject={...record};
@@ -28420,7 +28441,7 @@ function writeBurnerGraphUnchecked(next) {
   const selected=workingScene.activeObjectId,selectedGroup=workingScene.activeGroupId;
   const ids=new Set(next.objects.map(record=>record.id));
   for(const entry of [...workingScene.objects])if(entry.type===PROCEDURAL_MESH_TYPE&&!ids.has(entry.id)){
-    proceduralMeshes.get(entry.id)?.dispose();proceduralMeshes.delete(entry.id);workingScene.forget(entry.id);
+    sceneMaterials.releaseObject(entry.object);proceduralMeshes.get(entry.id)?.dispose();proceduralMeshes.delete(entry.id);workingScene.forget(entry.id);
   }
   for(const entry of [...workingScene.objects])if(entry.type===FLAME_EMITTER_TYPE&&!ids.has(entry.id)){scene.remove(entry.object);disposeObjectTree(entry.object);workingScene.forget(entry.id);}
   authoredFlamePresent=next.objects.some(record=>record.type===FLAME_EMITTER_TYPE);
@@ -29003,6 +29024,7 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
     }
   }
   if (typeof refreshArrivalLightingFromWorkingScene === 'function') refreshArrivalLightingFromWorkingScene();
+  if(restorePlan.reflections)restoreSceneReflectionSettings(restorePlan.reflections);
   if (data.postprocessing) {
     const ao = data.postprocessing.ao;
     if (ao) {sceneAO.restoreDocument(ao);saveSettings();}

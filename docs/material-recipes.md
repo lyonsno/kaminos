@@ -13,3 +13,15 @@ Runtime instances and source textures are derived resources. Each assigned slot 
 Live burning currently owns its surface adaptation. The inspector identifies that owner and holds base-material authoring while Burning is enabled; this slice does not move heat, char or damage into shared recipe parameters. Annular burner field controls and other specialized existing material owners remain with their domains. This first context follows selection; pinning, texture replacement tools and broader owner-specific controls remain follow-up work.
 
 `node --test tests/scene-material-recipes.mjs` covers persistence, validation, material arrays, sharing, uniqueness through native history, source texture preservation, program reuse and resource retirement. `demos/material-recipes/two-finishes.glb` is a 3,828-byte fixture exported with the installed Three GLTFExporter: one box with alternating textured woven panels and brass ends. Its six imported primitives exercise distinct source slots through the actual GLTF loader.
+
+## Imported assets and automatic LOD
+
+Authored slots enumerate the source mesh, excluding temporary beauty-LOD proxies, repetition copies and editor helpers. Recipes also instantiate on resident display LODs. A single source slot projects to that asset's derived surfaces; identical layouts or unique material names establish correspondence for multiple slots. Asset surface preserves each tier's own texture maps. This keeps automatic LOD active while changing a finish.
+
+When a remesh merges independently assigned slots without correspondence, the renderer provisionally displays the original geometry. The LOD readout names the reason and reports its actual face count/budget result. An arbitrary material is never assigned to an unrelated reduced surface. Source-material correspondence can be extended later without changing authored recipe identity.
+
+Membership history retains slot bindings with each object's reconstruction snapshot. Duplicate shares recipes; cancelling or undoing insertion removes its bindings, and Redo restores them. A geometry edit that removes an assigned slot is rejected before retiring the old geometry. The legacy procedural `setMaterial` command delegates to the assigned implementation's exposed recipe parameters when present.
+
+The composed renderer supports scene reflections on imported physical materials, including texture-driven roughness and metalness. Reflection settings are scene rendering data and now survive Save/Open. They are controlled in Scene → Rendering; a material does not need a separate reflection opt-in. The environment supplies the existing fallback where the screen trace has no hit. Rendering support still follows the existing reflection camera/material contract.
+
+Shared edits and history replay respect a live Burning owner centrally, including edits initiated from another user of the same recipe. The current burn adapter cannot preserve the complete Kiln glaze shader, so that combination is rejected during editing and scene admission rather than dropping the shader graph. Standard/source surfaces retain the existing burn integration.

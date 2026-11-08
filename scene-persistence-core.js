@@ -1,4 +1,5 @@
-import {checkedMaterialDocument} from './scene-material-recipes.mjs';
+import {resolveReflectionSettings} from './scene-reflection-settings.mjs';
+import {checkedMaterialDocument,assertMaterialBurningSupport} from './scene-material-recipes.mjs';
 import {checkedAssembly} from './scene-assembly.mjs';
 import {canonicalAuthoredWaterFlowRecords} from './authored-mls-water.mjs';
 import {defaultSceneRecordOperations,normalizeSceneObjectRecord} from './scene-record-operations.mjs';
@@ -142,6 +143,7 @@ export function planSceneRestore(data, { allowEmpty = false } = {}) {
     throw new Error('Authored water emitters require a saved local liquid domain');
   }
   const materialLibrary=checkedMaterialDocument(data.materialLibrary);
+  for(const entry of objects)if(entry.burnable?.enabled)assertMaterialBurningSupport(materialLibrary,entry.id);
   const materialObjectIds=new Set(objects.map(o=>o.id));
   if(materialLibrary.bindings.some(b=>!materialObjectIds.has(b.objectId)))throw Error("Material assignment refers to an absent object");
   const groups = getSceneGroupRecords(data, objects);
@@ -152,6 +154,7 @@ export function planSceneRestore(data, { allowEmpty = false } = {}) {
   return {
     schema: data.schema || null,
     materialLibrary,
+    reflections:data.postprocessing?.reflections==null?null:resolveReflectionSettings(data.postprocessing.reflections),
     cameraViews: normalizeCameraViews(data.cameraViews),
     sceneCamera:normalizeSceneCamera(data.sceneCamera,objects),
     editorDisplay:data.editorDisplay==null?null:checkedViewportDisplay(data.editorDisplay),

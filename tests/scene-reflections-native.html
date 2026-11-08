@@ -1,0 +1,107 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Scene reflection conformance</title>
+<style>body{margin:0;background:#111}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three/webgpu":"/lib/three.webgpu.js","three/tsl":"/lib/three.tsl.js"}}</script>
+<script type="module">
+import * as THREE from 'three/webgpu';
+import {createSceneGI} from '../scene-gi.mjs';
+import {createViewProjection} from '../view-projection.mjs';
+THREE.Node.captureStackTrace=true;
+const W=256,H=192;let renderer=new THREE.WebGPURenderer({antialias:false});
+try {
+await renderer.init();renderer.setPixelRatio(1);renderer.setSize(W,H);renderer.toneMapping=THREE.NoToneMapping;document.body.append(renderer.domElement);
+const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(50,W/H,.1,30);
+camera.position.set(2,2,4);camera.lookAt(0,.5,0);camera.updateMatrixWorld();
+const projection=createViewProjection({camera,target:()=>new THREE.Vector3(0,.5,0)});
+const data=new Uint8Array(16*8*4);for(let i=0;i<data.length;i+=4){data[i]=data[i+1]=data[i+2]=32;data[i+3]=255;}
+const env=new THREE.DataTexture(data,16,8);env.mapping=THREE.EquirectangularReflectionMapping;env.needsUpdate=true;scene.environment=env;
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(10,10),new THREE.MeshStandardMaterial({color:0xffffff,metalness:1,roughness:.05}));floor.rotation.x=-Math.PI/2;scene.add(floor);
+const box=new THREE.Mesh(new THREE.BoxGeometry(.9,1.3,.7),new THREE.MeshStandardMaterial({color:0,emissive:0xff1000,emissiveIntensity:3}));box.position.set(0,.65,0);scene.add(box);
+const gi=createSceneGI(scene,camera,THREE.TSL.uniform(0),{renderer,reflections:{enabled:true,resolutionScale:.5,steps:64,maxDistance:20,thickness:.15}});
+gi.setSettings({mode:'combined',gain:0,denoise:0,temporal:false,slices:1,steps:2});
+const pipeline=new THREE.RenderPipeline(renderer);
+window.reflectionAssay={
+ async transport(){
+  const matte=new THREE.Mesh(new THREE.SphereGeometry(.35,16,12),new THREE.MeshStandardMaterial({color:0x00ff00,roughness:1}));matte.position.set(1.3,.4,0);
+  const unlit=new THREE.Mesh(new THREE.BoxGeometry(.5,.5,.5),new THREE.MeshBasicMaterial({color:0x0000ff}));unlit.position.set(-1.3,.3,0);scene.add(matte,unlit);
+  const light=new THREE.DirectionalLight(0xffffff,6);light.position.set(-2,3,-4);scene.add(light);
+  // Exercise the existing surface-light attachment alongside the new transport
+  // channel on the default 32-byte color-attachment budget.
+  gi.surfaceLighting.bind(box.material,THREE.TSL.vec3(.01,.02,.03));
+  const reference=THREE.TSL.pass(scene,camera,{samples:0});reference.transparent=false;reference.contextNode=THREE.TSL.context({sceneReflectionLighting:null});reference.setMRT(THREE.TSL.mrt({output:THREE.TSL.output}));
+  const referencePipeline=new THREE.RenderPipeline(renderer);referencePipeline.outputNode=reference.getTextureNode('output');
+  try{
+   await this.render(false);
+   const read=async(target,attachment=0)=>Array.from(await renderer.readRenderTargetPixelsAsync(target,0,0,W,H,attachment),THREE.DataUtils.fromHalfFloat);
+   const full=await read(gi.source.renderTarget),transportNode=gi.transport??gi.source.getTextureNode('output');
+   const transport=await read(gi.source.renderTarget,gi.source.renderTarget.textures.indexOf(transportNode.value));
+   const normal=await read(gi.source.renderTarget,gi.source.renderTarget.textures.indexOf(gi.source.getTextureNode('normal').value));
+   referencePipeline.render();await renderer.backend.device.queue.onSubmittedWorkDone();const ordinary=await read(reference.renderTarget);
+   let metalPixels=0,metalTransportPeak=0,metalFullPeak=0,emissivePixels=0,emissiveError=0,diffusePixels=0,diffusePeak=0,unlitPixels=0,unlitError=0,fullReferenceError=0;
+   const emission=box.material.emissive.toArray().map(x=>x*box.material.emissiveIntensity);
+   for(let i=0;i<full.length;i+=4){
+    for(let c=0;c<3;c++)fullReferenceError=Math.max(fullReferenceError,Math.abs(full[i+c]-ordinary[i+c]));
+    const covered=normal[i]**2+normal[i+1]**2+normal[i+2]**2>.5;
+    if(covered&&normal[i+3]<.1){metalPixels++;for(let c=0;c<3;c++){metalTransportPeak=Math.max(metalTransportPeak,Math.abs(transport[i+c]));metalFullPeak=Math.max(metalFullPeak,full[i+c]);}}
+    if(covered&&full[i]>2&&full[i+1]<.05){emissivePixels++;for(let c=0;c<3;c++)emissiveError=Math.max(emissiveError,Math.abs(transport[i+c]-emission[c]));}
+    if(covered&&full[i+1]>.01&&full[i+1]>full[i]*2){diffusePixels++;diffusePeak=Math.max(diffusePeak,transport[i+1]);}
+    if(covered&&full[i+2]>.5&&full[i+2]>full[i]*4){unlitPixels++;for(let c=0;c<3;c++)unlitError=Math.max(unlitError,Math.abs(transport[i+c]-full[i+c]));}
+   }
+   return {stats:{metalPixels,metalTransportPeak,metalFullPeak,emissivePixels,emissiveError,diffusePixels,diffusePeak,unlitPixels,unlitError,fullReferenceError},full,transport,ordinary,normal};
+  }finally{light.removeFromParent();referencePipeline.dispose();reference.dispose();for(const mesh of [matte,unlit]){mesh.removeFromParent();mesh.geometry.dispose();mesh.material.dispose();}}
+ },
+ async studyShadow(){
+  const {default:study}=await import('../experiments/reflection-study.experiment.mjs');
+  const oldEnv=scene.environment,oldCamera=camera.clone(),oldShadows=renderer.shadowMap.enabled,root=new THREE.Group();scene.add(root);
+  const session={attach:async value=>{root.add(value);return {id:value.uuid,root:value};},setView(){},dispose:async()=>root.removeFromParent()};
+  const instance=await study.create({host:{scene:{open:async()=>session},rendering:{readReflections:()=>({settings:{enabled:true}}),reflections:()=>{}}},inputs:{},record(){},updateInputs(){}});
+  const ground=root.getObjectByName('Reflective ground'),block=root.getObjectByName('Warm reflected block');
+  root.getObjectByName('Cool reflected block').visible=false;root.getObjectByName('Curved silver receiver').visible=false;
+  block.position.set(0,.76,-2);block.material.emissiveIntensity=0;block.material.color.set(0);
+  ground.material.metalness=1;ground.material.roughness=.08;
+  const light=new THREE.DirectionalLight(0xffffff,6);light.position.set(0,2,-4);light.castShadow=true;light.shadow.camera.left=-5;light.shadow.camera.right=5;light.shadow.camera.top=5;light.shadow.camera.bottom=-5;light.shadow.camera.near=.1;light.shadow.camera.far=20;scene.add(light);
+  floor.visible=false;box.visible=false;scene.environment=null;renderer.shadowMap.enabled=true;camera.position.set(0,2,4);camera.lookAt(0,0,0);camera.updateMatrixWorld();
+  try{
+   const records={};const point=new THREE.Vector3(0,.01,0).project(camera),px=Math.round((point.x*.5+.5)*W),py=Math.round((.5-point.y*.5)*H);
+   for(const [name,visible]of [['open',false],['blocked',true]]){block.visible=visible;light.shadow.needsUpdate=true;const frame=await this.render(false);let peak=0;for(let y=py-2;y<=py+2;y++)for(let x=px-2;x<=px+2;x++)for(let c=0;c<3;c++)peak=Math.max(peak,frame.pixels[(y*W+x)*4+c]);records[name]={peak,pixels:frame.pixels};}
+   return {...records,probe:[px,py],castShadow:block.castShadow,receiveShadow:ground.receiveShadow};
+  }finally{await instance.dispose();root.traverse(o=>{if(o.isMesh){o.geometry.dispose();o.material.dispose();}});light.removeFromParent();light.dispose();floor.visible=box.visible=true;scene.environment=oldEnv;renderer.shadowMap.enabled=oldShadows;camera.copy(oldCamera);camera.updateMatrixWorld();gi.reflections.reset('shadow-study-disposed');}
+ },
+ async glossySource({samples=12}={}){
+  if(!Number.isSafeInteger(samples)||samples<1)throw Error('Positive glossy capture count required');
+  const hotspot=new THREE.Mesh(new THREE.PlaneGeometry(.06,.06),new THREE.MeshBasicMaterial({color:new THREE.Color(4096,4096,4096)}));hotspot.position.set(0,.9,.355);scene.add(hotspot);
+  const read=async target=>Array.from(await renderer.readRenderTargetPixelsAsync(target,0,0,target.width,target.height),THREE.DataUtils.fromHalfFloat);
+  const results={};
+  try{
+   for(const [name,scale]of [['small',1],['broad',12]]){
+    hotspot.scale.setScalar(scale);gi.reflections.reset('glossy-source-'+name);await this.render(true,.35);
+    const source=await read(gi.source.renderTarget),frames=[],before={frame:gi.reflections.frames,pyramid:gi.reflections.radianceFrames};let peak=0;
+    for(let i=0;i<samples;i++){await new Promise(requestAnimationFrame);pipeline.render();await renderer.backend.device.queue.onSubmittedWorkDone();const raw=await read(gi.reflections.raw);let maximum=0;for(let j=0;j<raw.length;j+=4)maximum=Math.max(maximum,raw[j],raw[j+1],raw[j+2]);peak=Math.max(peak,maximum);frames.push({frame:gi.reflections.frames,pyramid:gi.reflections.radianceFrames,maximum,raw});}
+    let sourcePeak=0;for(let j=0;j<source.length;j+=4)sourcePeak=Math.max(sourcePeak,source[j],source[j+1],source[j+2]);results[name]={sourcePeak,peak,before,frames,source};
+   }
+   return results;
+  }finally{hotspot.removeFromParent();hotspot.geometry.dispose();hotspot.material.dispose();gi.reflections.reset('glossy-source-disposed');}
+ },
+ async render(enabled,roughness=.05){
+  floor.material.roughness=roughness;gi.reflections?.setSettings({enabled});
+  pipeline.outputNode=gi.output();pipeline.needsUpdate=true;
+  for(let i=0;i<12;i++){await new Promise(requestAnimationFrame);pipeline.render();await renderer.backend.device.queue.onSubmittedWorkDone();}
+  const target=gi.beauty.renderTarget;
+  const values=await renderer.readRenderTargetPixelsAsync(target,0,0,W,H);
+  const pixels=Array.from(values,THREE.DataUtils.fromHalfFloat);
+  return {pixels,state:gi.reflections?.state()??{enabled:false,route:'missing'},gi:gi.debugState()};
+ },
+ setObjectVisible(value){box.visible=value;gi.reflections?.reset('object-visibility');},
+ setOrthographic(value){projection.setOrthographic(value);return gi.reflections.state();},
+ async replaceRenderer(){
+  const canvas=renderer.domElement;renderer.dispose();
+  renderer=new THREE.WebGPURenderer({canvas,antialias:false});await renderer.init();
+  renderer.setPixelRatio(1);renderer.setSize(W,H);renderer.toneMapping=THREE.NoToneMapping;
+  gi.reflections.setRenderer(renderer);gi.resetHistory('device-replaced');
+  pipeline.renderer=renderer;pipeline.needsUpdate=true;
+  return gi.reflections.state();
+ },
+ dispose(){pipeline.dispose();gi.dispose();renderer.dispose();}
+};
+window.assayLoaded=true;
+}catch(error){window.assayFailure=String(error.stack||error);}
+</script></html>

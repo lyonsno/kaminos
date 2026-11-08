@@ -952,6 +952,7 @@ export function formatLodBudgetReadout({objectId = null, beautyState = null, col
           ? `hero (${(obj.faces ?? 0).toLocaleString('en-US')} faces${obj.pinned ? ', pinned' : ''})`
           : `${(obj.faces ?? 0).toLocaleString('en-US')} faces (${Number(obj.pixelError ?? 0).toFixed(2)} px)`;
         beautyText = `Beauty: ${tierLabel} · ${sceneBudgetStr}${obj.demotedByBudget ? ' · Reduced to fit scene budget' : ''}`;
+        if (obj.materialFallback) beautyText += ` · ${obj.materialFallback}`;
         if (obj.textureFailure) beautyText += ` · Texture catalog failed: ${obj.textureFailure}`;
         if (obj.texture) beautyText += ` · Maps ${obj.texture.textureSize || 0}px (${((obj.texture.gpuBytes??0)/1048576).toFixed(1)} MiB)${obj.texture.loading ? ` → ${obj.texture.targetSize}px loading` : ''}${obj.texture.demotedByTextureBudget ? ' · Texture budget pressure' : ''}${obj.texture.error ? ` · Texture refresh failed: ${obj.texture.error}` : ''}`;
       } else {
@@ -1231,6 +1232,9 @@ export function createSceneBeautyLodController({
   settings: initialSettings = {},
   onUpdate = null,
   onRungLoaded = null,
+  onRepresentationChanged = null,
+  onRepresentationReleased = null,
+  canDisplayRung = null,
 }) {
   const config = {
     enabled: true,
@@ -1321,6 +1325,7 @@ export function createSceneBeautyLodController({
 
   function releaseRepCopies(entry) {
     for (const holder of entry.repCopies) {
+      onRepresentationReleased?.(entry.root,holder);
       holder.userData?.kaminosReleaseLighting?.();
       holder.removeFromParent();
     }
@@ -1351,9 +1356,11 @@ export function createSceneBeautyLodController({
       entry.wrapper = wrapper;
       entry.mountedRungSha = entry.displayedTier;
     }
+    let copiesChanged=false;
     const repSources = root.children.filter(c => c.userData?.kaminosRepetitionCopy === true && (entry.savedHeroVisibility.get(c) ?? c.visible));
     while (entry.repCopies.length > repSources.length) {
       const removed = entry.repCopies.pop();
+      onRepresentationReleased?.(root,removed);
       removed.userData?.kaminosReleaseLighting?.();
       removed.removeFromParent();
     }
@@ -1362,13 +1369,14 @@ export function createSceneBeautyLodController({
       holder.matrixAutoUpdate = false;
       holder.add(cloneBorrowedRung(THREE, rungRecord.root));
       holder.userData.kaminosReleaseLighting = surfaceLighting?.registerProxyRoot?.(holder) ?? null;
-      entry.repCopies.push(holder);
+      entry.repCopies.push(holder);copiesChanged=true;
       entry.wrapper.add(holder);
     }
     for (let i = 0; i < repSources.length; i++) {
       entry.repCopies[i].matrix.copy(repSources[i].matrix);
       entry.repCopies[i].matrixWorldNeedsUpdate = true;
     }
+    if(copiesChanged)onRepresentationChanged?.(root);
     if (entry.wrapper.parent !== root) root.add(entry.wrapper);
     entry.wrapper.visible = true;
     root.userData.kaminosBeautyLodRestore = () => {
@@ -1520,6 +1528,7 @@ export function createSceneBeautyLodController({
     restoreRootToHero(root, entry);
     releaseRepCopies(entry);
     for (const r of entry.rungs.values()) {
+      onRepresentationReleased?.(root,r.root);
       textureResidency.release(r.root);
       r.releaseLighting?.();
       disposeTree(r.root);
@@ -1605,6 +1614,7 @@ export function createSceneBeautyLodController({
     if (!entry) {
       const {heroFaces, localBox, unwarpedBounds, texelStretch} = inspectHeroRoot(root);
       entry = {
+        root,
         id: root.userData?.kaminosSceneObject?.id ?? root.uuid,
         heroFaces,
         localBox,
@@ -1656,6 +1666,7 @@ export function createSceneBeautyLodController({
   }
 
   return {
+    materialRoots(root){const entry=entries.get(root);return entry?[...[...entry.rungs.values()].map(r=>r.root),...entry.repCopies.flatMap(r=>r.children)]:[];},
     setPreparation: value => {preparing=value===true;},
     read: () => ({...config}),
     setSettings(patch = {}) {
@@ -1800,6 +1811,9 @@ export function createSceneBeautyLodController({
             c.entry.displayedTier = 'hero';
           }
         }
+        const materialFallback=c.entry.displayedTier!=='hero'&&canDisplayRung?.(c.root,c.entry.rungs.get(c.entry.displayedTier)?.root)===false;
+        if(materialFallback)c.entry.displayedTier='hero';
+        c.entry.materialFallback=materialFallback?'source material slots do not correspond to this LOD':null;
         applyDisplayedRung(c.root, c.entry);
         const displayedFaces = c.entry.displayedTier === 'hero'
           ? c.entry.heroFaces
@@ -1823,7 +1837,7 @@ export function createSceneBeautyLodController({
         objectStates.push({
           id: c.id,
           targetTier,
-          displayedTier: c.entry.displayedTier,
+          displayedTier: c.entry.displayedTier,materialFallback:c.entry.materialFallback,
           faces: displayedFaces,
           targetFaces: alloc.faces,
           totalFaces: alloc.inFrustum ? alloc.instanceCount * displayedFaces : 0,
@@ -1849,11 +1863,11 @@ export function createSceneBeautyLodController({
       textureResidency.retain(activeTextures);
       lastState = {
         enabled: true,
-        totalFaces: budgetResult.totalFaces,
+        totalFaces: objectStates.some(row=>row.materialFallback)?objectStates.reduce((sum,row)=>sum+row.totalFaces,0):budgetResult.totalFaces,
         heroFacesTotal: budgetResult.heroFacesTotal,
         faceBudget: config.faceBudget,
         maxPixelError: config.maxPixelError,
-        withinBudget: budgetResult.withinBudget,
+        withinBudget: objectStates.some(row=>row.materialFallback)?objectStates.reduce((sum,row)=>sum+row.totalFaces,0)<=config.faceBudget:budgetResult.withinBudget,
         objects: objectStates,
         textures: {...textureBudget,allocatedWithinBudget:textureBudget.withinBudget,withinBudget:textureBudget.withinBudget&&textureResidency.totalBytes()<=config.textureBudgetBytes,residentBytes:textureResidency.totalBytes(),scope:'managed PNG appearance mip chains'},
       };

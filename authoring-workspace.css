@@ -536,3 +536,5 @@ body[data-workspace=authoring].has-assets-panel:has(#asset-generate[data-image-e
 #authoring-material-properties .material-users, #authoring-material-properties .material-implementation-description { font-size:11px; line-height:1.5; color:#a4abb5; }
 #authoring-material-properties .material-users { padding:8px; border-left:2px solid #7a9b9e; background:#23282b; }
 #authoring-material-properties input[type=color] { width:100%; height:28px; padding:2px; }
+
+#authoring-material-properties .material-users { overflow-wrap:anywhere; }

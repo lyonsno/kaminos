@@ -67,3 +67,34 @@ test('runtime parameter edits reuse programs, failed program construction is ato
  materials.releaseObject(root);assert.equal(root.material,source);assert.equal(disposed,1);materials.sync();assert.notEqual(root.material,source);materials.clear();assert.equal(root.material,source);assert.equal(disposed,2);
  const bad=structuredClone(initial);bad.recipes[0].parameters.roughness=.99;assert.throws(()=>materials.write(bad),/Program rejected/);assert.deepEqual(materials.read(),{recipes:[],bindings:[]});assert.equal(root.material,source);
 });
+test('shared edits and unique copies respect a live Burning owner; unchanged sync preserves its wrapper',()=>{
+ const a={id:'a',object:new Mesh(new BoxGeometry(),new MeshStandardMaterial())},b={id:'b',label:'Burning timber',object:new Mesh(new BoxGeometry(),new MeshStandardMaterial())};
+ const definition={id:'standard-surface',version:1,check:p=>p,create:({base,parameters})=>{const material=base.clone(),update=p=>{material.roughness=p.roughness;};update(parameters);return {material,update,dispose:()=>material.dispose()};}};
+ const materials=createSceneMaterials({entries:()=>[a,b],definitions:[definition]});materials.write({recipes:[recipe],bindings:[a,b].map(e=>({objectId:e.id,slot:'.:0',recipeId:recipe.id}))});
+ const original=b.object.material,wrapper=new MeshStandardMaterial({color:0x111111});b.burnable={enabled:true};b.object.material=wrapper;
+ const changed=materials.read();changed.recipes[0].parameters.roughness=.8;assert.throws(()=>materials.check(changed),/Disable Burning/);assert.equal(original.roughness,.3);assert.equal(b.object.material,wrapper);
+ const unique=materials.read();unique.recipes.push({...recipe,id:'unique'});unique.bindings[1].recipeId='unique';assert.throws(()=>materials.write(unique),/Disable Burning/);
+ materials.sync();assert.equal(b.object.material,wrapper);b.burnable.enabled=false;b.object.material=original;materials.write(changed);assert.equal(b.object.material.roughness,.8);
+});
+test('geometry replacement validates bound slots before the caller retires its old geometry',()=>{
+ const group=new Group().add(new Mesh(new BoxGeometry(),new MeshStandardMaterial()),new Mesh(new BoxGeometry(),new MeshStandardMaterial())),entry={id:'part',object:group};
+ const definition={id:'standard-surface',version:1,check:p=>p,create:({base})=>({material:base.clone(),update(){},dispose(){}})};
+ const materials=createSceneMaterials({entries:()=>[entry],definitions:[definition]});materials.write({recipes:[recipe],bindings:[{objectId:'part',slot:'1:0',recipeId:recipe.id}]});
+ const replacement=new Group().add(new Mesh(new BoxGeometry(),new MeshStandardMaterial()));assert.throws(()=>materials.validateSlots('part',replacement),/remove assigned/);assert.equal(entry.object,group);assert.equal(materials.bindings('part')[0].slot,'1:0');
+});
+test('scene admission rejects a custom glaze that the live Burning adapter cannot preserve',()=>{
+ const materialLibrary={recipes:[{id:'glaze',name:'Ceramic',implementation:'kiln-glaze',version:1,parameters:{}}],bindings:[{objectId:'part',slot:'.:0',recipeId:'glaze'}]};
+ const saved=buildSceneDocument({objects:[{...meshRecord,burnable:{enabled:true,material:'wood'}}],materialLibrary});
+ assert.throws(()=>planSceneRestore(saved),/Burning.*Kiln glaze|Kiln glaze.*Burning/);
+});
+test('reflection settings are admitted before scene replacement, normalized and preserved with material assignments',()=>{
+ const saved=buildSceneDocument({objects:[meshRecord],materialLibrary,postprocessing:{reflections:{enabled:true,resolutionScale:.25}}});
+ const plan=planSceneRestore(saved);assert.equal(plan.reflections.enabled,true);assert.equal(plan.reflections.resolutionScale,.25);
+ assert.throws(()=>planSceneRestore({...saved,postprocessing:{reflections:{steps:-1}}}),/Reflection steps/);
+});
+test('a removed Burning user retains its owned program until root retirement while save omits it',()=>{
+ const a={id:'a',object:new Mesh(new BoxGeometry(),new MeshStandardMaterial())},b={id:'b',label:'Retained timber',object:new Mesh(new BoxGeometry(),new MeshStandardMaterial())};let entries=[a,b],disposed=0;
+ const definition={id:'standard-surface',version:1,check:p=>p,create:({base})=>({material:base.clone(),update(){},dispose(){disposed++;}})};
+ const materials=createSceneMaterials({entries:()=>entries,definitions:[definition]});materials.write({recipes:[recipe],bindings:[a,b].map(e=>({objectId:e.id,slot:'.:0',recipeId:recipe.id}))});const program=b.object.material,wrapper=new MeshStandardMaterial();b.burnable={enabled:true};b.object.material=wrapper;entries=[a];materials.sync();assert.equal(b.object.material,wrapper);assert.equal(disposed,0);assert.equal(materials.document().bindings.length,1);
+ const change=materials.read();change.recipes[0].parameters.roughness=.8;assert.throws(()=>materials.check(change),/Disable Burning/);b.object.material=program;materials.releaseObject(b.object);assert.equal(disposed,1);
+});

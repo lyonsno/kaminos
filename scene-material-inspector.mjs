@@ -5,7 +5,7 @@ export function installMaterialInspector({document,root,materials,definitions,ed
  edits.register(target,{read:materials.read,write:materials.write,check:materials.check});
  let slotKey=null,renderKey=null,sessions=[];
  const id=()=>globalThis.crypto.randomUUID();
- const apply=(value,label)=>{assertAvailable();return edits.apply(target,value,label);};
+ const apply=(value,label)=>{assertAvailable();try{return edits.apply(target,value,label);}catch(e){if(edits.state().active?.id===target)edits.cancel();throw e;}};
  const api={
   read:()=>materials.document(),
   slots:objectId=>materials.slots(selectedById(objectId)).map(({key,label,recipeId})=>({key,label,recipeId})),
@@ -17,9 +17,9 @@ export function installMaterialInspector({document,root,materials,definitions,ed
    const recipe={id:id(),name:name||slot.base.name||`${entry.label||'Surface'} finish`,implementation,version:definition.version,parameters};
    const next=materials.read();next.recipes.push(recipe);next.bindings=next.bindings.filter(b=>b.objectId!==entry.id||b.slot!==slot.key);next.bindings.push({objectId:entry.id,slot:slot.key,recipeId:recipe.id});apply(next,'Create material');return recipe.id;
   },
-  edit(recipeId,patch){const next=materials.read(),recipe=next.recipes.find(r=>r.id===recipeId);if(!recipe)throw Error('Material missing');if(patch.name!==undefined)recipe.name=patch.name;if(patch.parameters)recipe.parameters={...recipe.parameters,...patch.parameters};return apply(next,'Edit material');},
-  assign({objectId,slot,recipeId}){const entry=selectedById(objectId);if(entry.burnable?.enabled)throw Error('Disable Burning before changing its material');if(!materials.slots(entry).some(s=>s.key===slot))throw Error('Material slot missing');const next=materials.read();next.bindings=next.bindings.filter(b=>b.objectId!==entry.id||b.slot!==slot);if(recipeId)next.bindings.push({objectId:entry.id,slot,recipeId});return apply(next,'Assign material');},
-  makeUnique({objectId,slot}){const entry=selectedById(objectId),next=materials.read(),binding=next.bindings.find(b=>b.objectId===entry.id&&b.slot===slot);if(!binding)throw Error('Assign a material first');const recipe=structuredClone(next.recipes.find(r=>r.id===binding.recipeId));recipe.id=id();recipe.name+=' copy';next.recipes.push(recipe);binding.recipeId=recipe.id;apply(next,'Make material unique');return recipe.id;},
+  edit(recipeId,patch){if(!patch||typeof patch!=='object')throw Error('Material edit requires a parameter patch');const next=materials.read(),recipe=next.recipes.find(r=>r.id===recipeId);if(!recipe)throw Error('Material missing');if(patch.name!==undefined)recipe.name=patch.name;if(patch.parameters)recipe.parameters={...recipe.parameters,...patch.parameters};return apply(next,'Edit material');},
+  assign({objectId,slot,recipeId}={}){const entry=selectedById(objectId);if(entry.burnable?.enabled)throw Error('Disable Burning before changing its material');if(!materials.slots(entry).some(s=>s.key===slot))throw Error('Material slot missing');const next=materials.read();next.bindings=next.bindings.filter(b=>b.objectId!==entry.id||b.slot!==slot);if(recipeId)next.bindings.push({objectId:entry.id,slot,recipeId});return apply(next,'Assign material');},
+  makeUnique({objectId,slot}={}){const entry=selectedById(objectId);if(entry.burnable?.enabled)throw Error('Disable Burning before changing its material');const next=materials.read(),binding=next.bindings.find(b=>b.objectId===entry.id&&b.slot===slot);if(!binding)throw Error('Assign a material first');const recipe=structuredClone(next.recipes.find(r=>r.id===binding.recipeId));recipe.id=id();recipe.name+=' copy';next.recipes.push(recipe);binding.recipeId=recipe.id;apply(next,'Make material unique');return recipe.id;},
  };
  function selectedById(objectId){const entry=objectId?selected(objectId):selected();if(!entry)throw Error('Select a mesh');return entry;}
  const run=action=>{try{action();}catch(e){error(e.message);sync(true);}};

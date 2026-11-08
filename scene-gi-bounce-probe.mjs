@@ -59,7 +59,7 @@ export async function runFrozenBounceProbe(inputs,{samples=128}={}) {
   };
   try {
     // Snapshot synchronously in this turn, before any await can advance history.
-    const direct=capture(texture(source.getTextureNode('output').value));
+    const direct=capture(texture((inputs.transport??source.getTextureNode('output')).value));
     const first=capture(texture(history.oldGI.value));
     const response=capture(texture(source.getTextureNode('probeDiffuseResponse').value));
     const depth=capture(vec4(texture(source.getTextureNode('depth').value).r,0,0,1));
