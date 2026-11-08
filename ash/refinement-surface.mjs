@@ -1,8 +1,9 @@
+import {ashCornerPackingWGSL} from './corner-packing.mjs';
 import {refinementAddressWGSL} from './refinement-wgsl.mjs';
 
 // Both levels reconstruct corners at the same finest-grid positions. Coarse
 // top faces are subdivided there as well, including their shared boundary edge.
-export function refinementVertexWGSL(p, arena) {
+export function refinementVertexWGSL(p, arena, {cached=false}={}) {
   let code = `fn ash_refined_vertex(rank:u32,uv:vec2<f32>,soft:f32,density:ptr<storage,array<f32>,read>,solid:ptr<storage,array<u32>,read>,faces:ptr<storage,array<u32>,read>,arena:ptr<storage,array<u32>,read>)->vec4<f32>{
  let address=ash_refined_face_code(rank,faces,arena);let tile=address.x;let code=address.y;
  let local=code/24u;let face=(code%24u)/4u;let sub=code%4u;
@@ -92,6 +93,11 @@ fn ash_refined_corner(q:vec2<i32>,reference:f32,density:ptr<storage,array<f32>,r
       }return source;
     }
     code=passMap(before)+dynamic+passMap(after);
+  }
+  if(cached){
+    code=code.replace('arena:ptr<storage,array<u32>,read>)->vec4<f32>{','arena:ptr<storage,array<u32>,read>,scratch:ptr<storage,array<u32>,read>,pairs:ptr<storage,array<u32>,read>)->vec4<f32>{');
+    code=code.replace('if(!capped){corner=ash_refined_corner', 'if(c.size==1u){let at=vec2<u32>(vec2<i32>(round(point.xz))-c.lower.xz);corner=ash_cached_corner(i,at.x+2u*at.y,top,scratch,pairs);}else if(!capped){corner=ash_refined_corner');
+    code+='\n'+ashCornerPackingWGSL;
   }
   return code;
 }

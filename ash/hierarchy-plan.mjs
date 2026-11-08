@@ -1,3 +1,4 @@
+import {checkedHierarchyPolicy} from './cost-policy.mjs';
 import {patchLayout} from './gpu-plan.mjs';
 const product=a=>a.reduce((x,y)=>x*y,1),linear=(q,d)=>q[0]+d[0]*(q[1]+d[1]*q[2]);
 const coords=(i,d)=>[i%d[0],Math.floor(i/d[0])%d[1],Math.floor(i/(d[0]*d[1]))];
@@ -12,6 +13,7 @@ export function createHierarchyLayout({cellSize,bounds,refinement}){
  const depth=Math.max(0,Math.ceil(Math.log2(background/cellSize)-1e-12)),scale=2**depth;
  const base=patchLayout({cellSize:background,bounds,tileSize:8}),roots=base.tiles.count;
  if(Math.max(...base.dims)*scale>2**24)throw Error('Requested ash precision exceeds float32 field-coordinate capacity');
+ checkedHierarchyPolicy(refinement,depth,0);
  const dims=base.dims.map(n=>n*scale),pitch=background/scale;
  // Material, flux, collision, masks, headers, work lists and tree metadata.
  // Airborne parcels and borrowed object-local collider caches are separate.

@@ -1,3 +1,4 @@
+import {hierarchyTraceWGSL} from './hierarchy-trace.mjs';
 import {releaseAshAttributes} from './gpu-disposal.mjs';
 import * as THREE from '../lib/three.webgpu.js';
 import {ashAirAdmissionWGSL} from './scan-wgsl.mjs';
@@ -115,6 +116,9 @@ export async function createGpuAshFall({renderer,layout,density,collision,wake,t
   code=code.replace('0.25,8.0',`2.0,${description.parcelUnits.toFixed(1)}`).replace('random(seed+27u)*cell','random(seed+27u)*cell*2.0');
  }
  if(layout.hierarchy){
+  code=code.replace('0.25,8.0',`${Math.min(.25,description.parcelUnits).toFixed(12)},${description.parcelUnits.toFixed(12)}`);
+  const traceStart=code.indexOf(' let samples='),traceEnd=code.indexOf(' if(hit){',traceStart);
+  code=code.slice(0,traceStart)+' let traced=ash_trace_segment(pos,nextPosition);var hit=traced.w!=0;var hitCell=traced.xyz;\n'+code.slice(traceEnd)+hierarchyTraceWGSL;
   code=code.replace('hitCell=c+vec3<i32>(0,1,0);','hitCell=vec3<i32>(c.x,ash_cell(j).lower.y+i32(ash_cell(j).size),c.z);');
   const start=code.indexOf(' if(hit){'),end=code.indexOf(' parcel.position=vec4<f32>(nextPosition',start);
   code=code.slice(0,start)+hierarchyImpactWGSL+code.slice(end);
@@ -146,7 +150,7 @@ fn wake_cell(i:u32){let c=vec3<u32>(i%p.dims.x,(i/p.dims.x)%p.dims.y,i/(p.dims.x
   code=code.replace('@group(0) @binding(4) var<storage,read_write> wake:array<atomic<u32>>;','').replace('atomicStore(&wake[3],1u);','wake_cell(i);');
   const prepareStart=code.indexOf('@compute @workgroup_size(1) fn prepare_fall(){');
   const prepareEnd=code.indexOf('@compute @workgroup_size(64) fn fall(',prepareStart);
-  code=code.slice(0,prepareStart)+ashAirAdmissionWGSL(groups)+'\n'+code.slice(prepareEnd);
+  code=code.slice(0,prepareStart)+ashAirAdmissionWGSL(groups,description.parcelUnits)+'\n'+code.slice(prepareEnd);
   code=code.replace('@builtin(global_invocation_id) gid:vec3<u32>','@builtin(workgroup_id) wg:vec3<u32>,@builtin(local_invocation_id) lane:vec3<u32>').replace('let i=gid.x;if(i>=p.dims.w)',`let group=atomicLoad(&groupData[${groups*2}u+wg.x]);let i=group*64u+lane.x;if(i>=p.dims.w)`);
   code=code.replace('atomicAdd(&state[1],1u);',`atomicOr(&groupData[group*2u+lane.x/32u],1u<<(lane.x%32u));let slot=atomicAdd(&state[1],1u);visible[slot]=i;atomicAdd(&draw[1],1u);`);
   // One packed storage/indirect buffer holds masks, group list and dispatch args.
@@ -163,7 +167,7 @@ fn wake_cell(i:u32){let c=vec3<u32>(i%p.dims.x,(i/p.dims.x)%p.dims.y,i/(p.dims.x
  const positions=storage(attr,'vec4',capacity*2).toReadOnly().element(particleId.mul(2)).toVar('ash_parcel_pos');
  geometry=new THREE.OctahedronGeometry(1,0);
  material=new THREE.MeshStandardNodeMaterial({color:0xc6bfb3,roughness:1});
- material.positionNode=positionGeometry.mul(positions.w.greaterThan(0).select((layout.hierarchy?layout.cellSize:(layout.requestedCellSize??layout.cellSize))*.36,0)).add(positions.xyz);
+ material.positionNode=positionGeometry.mul(positions.w.greaterThan(0).select((layout.hierarchy?(layout.refinement.transportCellSize??layout.cellSize):(layout.requestedCellSize??layout.cellSize))*.36,0)).add(positions.xyz);
  if(tiled)geometry.setIndirect(drawAttr);root=tiled?new THREE.Mesh(geometry,material):new THREE.InstancedMesh(geometry,material,capacity);root.name='Airborne ash';root.userData.kaminosAODepthUnsupported=true;root.frustumCulled=false;root.castShadow=false;
  return {root,description,
   request(volume){if(!Number.isFinite(volume)||volume<=0)throw Error('Invalid ash burst volume');if(!Number.isFinite(requestedVolume+volume))throw Error('Ash source volume exceeds numeric range');if(!Number.isFinite(Math.fround((queuedVolume+volume)/layout.cellSize**3)))throw Error('Ash source budget exceeds GPU float capacity');queuedVolume+=volume;requestedVolume+=volume;},

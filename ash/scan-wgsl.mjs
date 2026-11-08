@@ -23,14 +23,14 @@ export function ashDrawPrefixWGSL(count,counter){return `${ashScanWGSL}
  for(var tile=begin;tile<end;tile++){prefix[tile]=offset;offset+=atomicLoad(&headers[tile*8u+3u]);}
  if(lane==0u){prefix[${count}u]=scanned.y;atomicStore(&draw[1],scanned.y);atomicStore(&jobs[${counter}u],scanned.y);}
 }`;}
-export function ashAirAdmissionWGSL(groups){return `${ashScanWGSL}
+export function ashAirAdmissionWGSL(groups,parcelUnits=8){return `${ashScanWGSL}
 fn ash_free(group:u32)->u32{
  return min(64u,p.dims.w-group*64u)-countOneBits(atomicLoad(&groupData[group*2u]))-countOneBits(atomicLoad(&groupData[group*2u+1u]));
 }
 @compute @workgroup_size(${ASH_SCAN_WIDTH}) fn prepare_fall(@builtin(local_invocation_index) lane:u32){
  if(lane==0u){atomicStore(&state[0],bitcast<u32>(bitcast<f32>(atomicLoad(&state[0]))+p.clock.y));atomicStore(&state[1],0u);atomicAdd(&state[2],1u);atomicStore(&draw[1],0u);}
  storageBarrier();
- let need=u32(ceil(bitcast<f32>(atomicLoad(&state[0]))/8.0));
+ let need=u32(ceil(bitcast<f32>(atomicLoad(&state[0]))/${parcelUnits.toFixed(12)}));
  let chunk=(${groups}u+${ASH_SCAN_WIDTH-1}u)/${ASH_SCAN_WIDTH}u;
  let begin=lane*chunk;let end=min(begin+chunk,${groups}u);var freeSum=0u;
  for(var group=begin;group<end;group++){freeSum+=ash_free(group);}

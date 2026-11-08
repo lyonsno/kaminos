@@ -1,6 +1,6 @@
 import {installRelativeNumberDrag} from '../scene-control-history.mjs';
 
-export function installAshRefinementControls({document,panel,anchor}) {
+export function installAshRefinementControls({document,panel,anchor,onPolicyChange=()=>{}}) {
   const group=document.createElement('details');group.dataset.ashRefinementControls='';
   const title=document.createElement('summary');title.textContent='Adaptive detail';group.append(title);
   const label=document.createElement('label');label.className='slider-row';label.textContent='Use local fine resolution';
@@ -10,9 +10,12 @@ export function installAshRefinementControls({document,panel,anchor}) {
   const mode=document.createElement('select');mode.className='transform-input';mode.dataset.ashRefinementMode='';
   for(const [value,text] of [['hierarchy','Budgeted hierarchy · collider detail'],['adaptive','Two / three levels · legacy'],['fixed','Fixed regions · debugging']]){const o=document.createElement('option');o.value=value;o.textContent=text;mode.append(o);}group.append(mode);
   const hierarchyFields=document.createElement('div');group.append(hierarchyFields);const hierarchyInputs={};
-  for(const [key,text,value]of [['backgroundCellSize','Background cell width',.08],['budgetMiB','Material storage budget (MiB)',32],['airBudgetMiB','Airborne storage budget (MiB)',4],['targetPixels','Projected parent cell target (pixels)',3]]){
+  for(const [key,text,value]of [['backgroundCellSize','Background cell width',.08],['budgetMiB','Material storage budget (MiB)',32],['airBudgetMiB','Airborne storage budget (MiB)',4],['targetPixels','Projected parent cell target (pixels)',3],['maxDepth','Maximum refinements',0],['planningRounds','Refinement rounds / tick',1],['transportCellSize','Transport parcel width',.00125]]){
     const row=document.createElement('label');row.className='slider-row';row.textContent=text;const input=document.createElement('input');input.type='number';input.step='any';input.min='0';input.className='transform-input';input.dataset.ashHierarchy=key;input.value=String(value);row.append(input);hierarchyFields.append(row);hierarchyInputs[key]=input;installRelativeNumberDrag({input,grip:input,step:key.endsWith('MiB')?1:.001});
   }
+  const depthRows=document.createElement('div');hierarchyFields.append(depthRows);let depthInputs=[];
+  const policyChange=()=>{if(!settings||settings.refinement?.mode!=='hierarchy')return;const values=depthInputs.map(i=>i.value.trim()===''?null:i.valueAsNumber);if(values.some(n=>n!==null&&(!Number.isFinite(n)||n<0)))return;onPolicyChange({maxDepth:hierarchyInputs.maxDepth.valueAsNumber,planningRounds:hierarchyInputs.planningRounds.valueAsNumber,targetPixels:hierarchyInputs.targetPixels.valueAsNumber,depthBudgetMiB:values});};
+  for(const key of ['maxDepth','planningRounds','targetPixels'])hierarchyInputs[key].addEventListener('input',()=>{if(hierarchyInputs[key].value.trim()!==''&&Number.isFinite(hierarchyInputs[key].valueAsNumber))policyChange();});
   const budgetRow=document.createElement('label');budgetRow.className='slider-row';budgetRow.textContent='Fine capacity (% of field)';
   const budget=document.createElement('input');budget.className='transform-input';budget.type='number';budget.min='0';budget.max='100';budget.step='any';budget.dataset.ashFineCapacity='';budgetRow.append(budget);group.append(budgetRow);
   const closeRow=document.createElement('label');closeRow.className='slider-row';closeRow.textContent='Extra detail near the camera';
@@ -61,11 +64,16 @@ export function installAshRefinementControls({document,panel,anchor}) {
       if(id===nextId&&version===nextVersion)return;
       id=nextId;version=nextVersion;enabled.checked=!!settings.refinement;mode.value=['adaptive','hierarchy'].includes(settings.refinement?.mode)?settings.refinement.mode:'fixed';budget.value=String((settings.refinement?.fineFraction??.125)*100);
       hierarchyInputs.backgroundCellSize.value=String(settings.refinement?.backgroundCellSize??settings.cellSize*2);hierarchyInputs.budgetMiB.value=String(settings.refinement?.budgetMiB??32);hierarchyInputs.airBudgetMiB.value=String(settings.refinement?.airBudgetMiB??(settings.refinement?.budgetMiB??32)/8);hierarchyInputs.targetPixels.value=String(settings.refinement?.targetPixels??3);
+      const depth=Math.max(0,Math.ceil(Math.log2((settings.refinement?.backgroundCellSize??settings.cellSize*2)/settings.cellSize)-1e-12));
+      hierarchyInputs.maxDepth.value=String(settings.refinement?.maxDepth??depth);hierarchyInputs.maxDepth.max=String(depth);hierarchyInputs.maxDepth.step='1';hierarchyInputs.planningRounds.step='1';hierarchyInputs.planningRounds.value=String(settings.refinement?.planningRounds??1);hierarchyInputs.transportCellSize.value=String(settings.refinement?.transportCellSize??settings.cellSize);
+      if(depthInputs.length!==depth+1){depthRows.replaceChildren();depthInputs=[];const hint=document.createElement('p');hint.className='hint';hint.textContent='Live targets for new detail. Shared storage, retained history and balancing support can exceed a depth target. Storage and transport-width edits use the clearing reset.';depthRows.append(hint);
+      for(let d=0;d<=depth;d++){const row=document.createElement('label');row.className='slider-row';row.textContent=d===0?'Background (fixed)':'Depth '+d+' target (MiB)';const input=document.createElement('input');input.type='number';input.step='any';input.min='0';input.className='transform-input';input.placeholder='Shared';input.value=settings.refinement?.depthBudgetMiB?.[d]==null?'':String(settings.refinement.depthBudgetMiB[d]);input.disabled=d===0;row.append(input);depthRows.append(row);installRelativeNumberDrag({input,grip:input,step:.25});input.addEventListener('input',policyChange);depthInputs.push(input);}}
+      for(let d=0;d<depthInputs.length;d++)if(document.activeElement!==depthInputs[d])depthInputs[d].value=settings.refinement?.depthBudgetMiB?.[d]==null?'':String(settings.refinement.depthBudgetMiB[d]);
       close.checked=settings.refinement?.levels===3;regions=structuredClone(settings.refinement?.regions??[]);active=0;display();
     },
     read(nextSettings) {
       if(!enabled.checked)return null;
-      if(mode.value==='hierarchy')return {ratio:2,mode:'hierarchy',backgroundCellSize:hierarchyInputs.backgroundCellSize.valueAsNumber,budgetMiB:hierarchyInputs.budgetMiB.valueAsNumber,targetPixels:hierarchyInputs.targetPixels.valueAsNumber,airBudgetMiB:hierarchyInputs.airBudgetMiB.valueAsNumber};
+      if(mode.value==='hierarchy'){const depth=Math.max(0,Math.ceil(Math.log2(hierarchyInputs.backgroundCellSize.valueAsNumber/nextSettings.cellSize)-1e-12));return {ratio:2,mode:'hierarchy',backgroundCellSize:hierarchyInputs.backgroundCellSize.valueAsNumber,budgetMiB:hierarchyInputs.budgetMiB.valueAsNumber,targetPixels:hierarchyInputs.targetPixels.valueAsNumber,airBudgetMiB:hierarchyInputs.airBudgetMiB.valueAsNumber,maxDepth:Math.min(depth,hierarchyInputs.maxDepth.valueAsNumber),planningRounds:hierarchyInputs.planningRounds.valueAsNumber,transportCellSize:hierarchyInputs.transportCellSize.valueAsNumber,depthBudgetMiB:depthInputs.map(i=>i.value.trim()===''?null:i.valueAsNumber)};}
       if(mode.value==='adaptive'){const fineFraction=budget.valueAsNumber/100;if(!Number.isFinite(fineFraction)||fineFraction<=0||fineFraction>1)throw Error('Fine capacity must lie between 0 and 100 percent');return {ratio:2,mode:'adaptive',fineFraction,...(close.checked?{levels:3}:{})};}
       const h=nextSettings.cellSize*2;
       const origin=[-nextSettings.width/2,0,-nextSettings.depth/2];

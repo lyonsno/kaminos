@@ -1,6 +1,6 @@
 export function hierarchyOffsets(p,start){
  const nodes=start,children=nodes+p.tiles.count*8,demand=children+p.tiles.count*8,flags=demand+p.tiles.count*8,free=flags+p.tiles.count,collision=free+p.hierarchy.capacity,state=collision+p.tiles.count,args=state+16;
- return {nodes,children,demand,flags,free,collision,state,args,end:args+4};
+ return {nodes,children,demand,flags,free,collision,state,args,policy:args+4,resident:args+8+p.hierarchy.depth+1,end:args+8+(p.hierarchy.depth+1)*2};
 }
 export function hierarchyAddressWGSL(p,{load=i=>`atomicLoad(&arena[${i}])`,parameter=''}={}){
  const a=p.hierarchyArena,base=p.regions[0].layout,h=p.hierarchy;
@@ -53,7 +53,7 @@ fn ht_load(i:u32)->u32{return atomicLoad(&arena[i]);}
 fn ht_at(t:u32,local:vec3<u32>)->u32{if(t>=HT_ROOTS){return HT_BASE+(t-HT_ROOTS)*512u+local.x+8u*(local.y+8u*local.z);}let n=ht_node(t);let q=n.xyz/${p.regions[0].scale}u+local;if(any(q>=HT_DIMS)){return 0xffffffffu;}return q.x+HT_DIMS.x*(q.y+HT_DIMS.y*q.z);}
 fn ht_low(candidate:u32)->vec4<u32>{let t=candidate/8u;let o=candidate%8u;let n=ht_node(t);return vec4<u32>(n.xyz+vec3<u32>(o%2u,(o/2u)%2u,o/4u)*n.w*4u,n.w/2u);}
 fn ht_score(candidate:u32)->u32{
- let t=candidate/8u;if(ht_live(t)!=1u||ht_node(t).w<=1u){return 0u;}
+ let t=candidate/8u;if(ht_live(t)!=1u||ht_node(t).w<=1u||ht_load(${a.nodes}u+t*8u+4u)>=ht_load(${a.policy}u)){return 0u;}
  let demand=ht_load(${a.demand}u+candidate);if(demand==0u){return 0u;}if(demand==4u||params.view.w==0.0){return demand;}
  let n=ht_low(candidate);let point=O+(vec3<f32>(n.xyz)+vec3<f32>(f32(n.w)*4.0))*H;let clip=params.fieldClip*vec4<f32>(point,1.0);if(clip.w<=0.0){return 0u;}
  var pixels=0.0;for(var axis=0u;axis<3u;axis++){var delta=vec3<f32>(0);delta[axis]=H*f32(n.w*2u);let end=params.fieldClip*vec4<f32>(point+delta,1.0);pixels=max(pixels,length((end.xy/max(end.w,1e-6)-clip.xy/clip.w)*params.view.xy*.5));}
@@ -70,9 +70,10 @@ fn ht_neighbors(n:vec4<u32>){
 }
 @compute @workgroup_size(1) fn hierarchy_reset(){
  let pending=ht_load(${a.state+8}u);let full=params.clock.y!=0u||params.clock.z!=0u||pending==2u;let enabled=full||pending!=0u;
- if(enabled){for(var n=0u;n<16u;n++){atomicStore(&arena[${a.state}u+n],0u);}}
+ if(enabled){for(var n=0u;n<16u;n++){atomicStore(&arena[${a.state}u+n],0u);}for(var d=0u;d<=HT_DEPTH;d++){atomicStore(&arena[${a.resident}u+d],0u);}}
  atomicStore(&arena[${a.state+7}u],select(0u,select(2u,1u,full),enabled));atomicStore(&arena[${a.state+8}u],0u);
 }
+@compute @workgroup_size(64) fn hierarchy_count(@builtin(global_invocation_id) id:vec3<u32>){let t=id.x;if(t>=HT_ROOTS&&t<ASH_TILE_COUNT&&ht_live(t)==1u&&ht_load(${a.state+7}u)!=0u){atomicAdd(&arena[${a.resident}u+ht_load(${a.nodes}u+t*8u+4u)],1u);}}
 @compute @workgroup_size(64) fn hierarchy_dirty(@builtin(global_invocation_id) id:vec3<u32>){let t=id.x;if(t>=ASH_TILE_COUNT||ht_live(t)!=1u){return;}if(params.clock.y!=0u){atomicOr(&arena[${a.flags}u+t],2u);}}
 fn ht_supports_finer(t:u32)->bool{
  let n=ht_node(t);
@@ -95,7 +96,7 @@ ${[1,2].map(priority=>`@compute @workgroup_size(1) fn hierarchy_reclaim_${priori
  if(atomicLoad(&headers[t*8u+6u])>0u||children||ht_supports_finer(t)){atomicAdd(&arena[${a.state+5}u],1u);return;}
  let parent=ht_load(${a.nodes}u+t*8u+5u)-1u;let octant=ht_load(${a.nodes}u+t*8u+6u);
  if(ht_score(parent*8u+octant)>cutoff){return;}
- let n=ht_node(t);atomicStore(&arena[${a.children}u+parent*8u+octant],0u);atomicStore(&arena[${a.nodes}u+t*8u+7u],0u);atomicStore(&headers[t*8u+3u],0u);ht_mark(parent);ht_neighbors(n);atomicAdd(&arena[${a.state+3}u],1u);
+ atomicSub(&arena[${a.resident}u+ht_load(${a.nodes}u+t*8u+4u)],1u);let n=ht_node(t);atomicStore(&arena[${a.children}u+parent*8u+octant],0u);atomicStore(&arena[${a.nodes}u+t*8u+7u],0u);atomicStore(&headers[t*8u+3u],0u);ht_mark(parent);ht_neighbors(n);atomicAdd(&arena[${a.state+3}u],1u);
 }
 @compute @workgroup_size(64) fn hierarchy_free(@builtin(global_invocation_id) id:vec3<u32>){let slot=id.x;if(slot>=HT_CAP||ht_load(${a.state+7}u)==0u||ht_live(HT_ROOTS+slot)!=0u){return;}let rank=atomicAdd(&arena[${a.state}u],1u);atomicStore(&arena[${a.free}u+rank],slot);}
 fn ht_balanced(candidate:u32,request:bool)->bool{
@@ -113,7 +114,8 @@ fn ht_allocate(candidate:u32,score:u32){
  if(candidate>=ASH_TILE_COUNT*8u||ht_load(${a.state+7}u)!=1u||ht_score(candidate)!=score||ht_load(${a.children}u+candidate)!=0u){return;}
  atomicAdd(&arena[${a.state+1}u],1u);if(!ht_balanced(candidate,false)){atomicAdd(&arena[${a.state+10}u],1u);return;}
  let claim=atomicCompareExchangeWeak(&arena[${a.children}u+candidate],0u,0xffffffffu);if(!claim.exchanged){return;}
- let slot=ht_take();if(slot==0xffffffffu){atomicStore(&arena[${a.children}u+candidate],0u);atomicAdd(&arena[${a.state+4}u],1u);return;}
+ let depth=ht_load(${a.nodes}u+candidate/8u*8u+4u)+1u;let previous=atomicAdd(&arena[${a.resident}u+depth],1u);if(score!=4u&&previous>=ht_load(${a.policy+4}u+depth)){atomicSub(&arena[${a.resident}u+depth],1u);atomicStore(&arena[${a.children}u+candidate],0u);return;}
+ let slot=ht_take();if(slot==0xffffffffu){atomicSub(&arena[${a.resident}u+depth],1u);atomicStore(&arena[${a.children}u+candidate],0u);atomicAdd(&arena[${a.state+4}u],1u);return;}
  let t=HT_ROOTS+slot;let n=ht_low(candidate);let parent=candidate/8u;
  atomicStore(&arena[${a.nodes}u+t*8u],n.x);atomicStore(&arena[${a.nodes}u+t*8u+1u],n.y);atomicStore(&arena[${a.nodes}u+t*8u+2u],n.z);atomicStore(&arena[${a.nodes}u+t*8u+3u],n.w);
  atomicStore(&arena[${a.nodes}u+t*8u+4u],ht_load(${a.nodes}u+parent*8u+4u)+1u);atomicStore(&arena[${a.nodes}u+t*8u+5u],parent+1u);atomicStore(&arena[${a.nodes}u+t*8u+6u],candidate%8u);atomicStore(&arena[${a.nodes}u+t*8u+7u],2u);
@@ -140,7 +142,7 @@ ${[4,3,2,1].map(n=>`@compute @workgroup_size(64) fn hierarchy_allocate_${n}(@bui
 }
 @compute @workgroup_size(64) fn hierarchy_reschedule(@builtin(global_invocation_id) id:vec3<u32>){
  let c=id.x;if(c>=ASH_TILE_COUNT*8u||ht_load(${a.state+7}u)!=1u||ht_load(${a.state}u)==0u){return;}
- if(ht_score(c)>=2u&&ht_load(${a.children}u+c)==0u){atomicMax(&arena[${a.state+8}u],2u);}
+ let score=ht_score(c);let depth=ht_load(${a.nodes}u+c/8u*8u+4u)+1u;if(score>=2u&&ht_load(${a.children}u+c)==0u&&(score==4u||ht_load(${a.resident}u+depth)<ht_load(${a.policy+4}u+depth))){atomicMax(&arena[${a.state+8}u],2u);}
 }
 @compute @workgroup_size(1) fn hierarchy_collision_reset(){atomicStore(&arena[${a.state+6}u],0u);}
 @compute @workgroup_size(64) fn hierarchy_collision_list(@builtin(global_invocation_id) id:vec3<u32>){let t=id.x;if(t>=ASH_TILE_COUNT||ht_live(t)!=1u||(ht_load(${a.flags}u+t)&2u)==0u){return;}let n=atomicAdd(&arena[${a.state+6}u],1u);atomicStore(&arena[${a.collision}u+n],t);}

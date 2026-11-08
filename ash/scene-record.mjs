@@ -1,3 +1,4 @@
+import {ashActivity} from './cost-policy.mjs';
 import {checkedSliding} from './sliding.mjs';
 import {patchLayout} from './gpu-plan.mjs';
 import {createRefinementLayout} from './refinement-plan.mjs';
@@ -9,6 +10,7 @@ export function checkedAshSettings(raw){
  if(!raw||raw.schema!=='kaminos.ash-object.v1')throw Error('Ash object requires saved ash settings');
  for(const key of ['width','depth','height','cellSize'])if(!Number.isFinite(raw[key])||raw[key]<=0)throw Error(`Invalid ash ${key}`);
  if(!Number.isFinite(raw.initialDepth)||raw.initialDepth<0||raw.initialDepth>raw.height)throw Error('Invalid initial ash depth');
+ ashActivity(raw);
  checkedSliding({variation:raw.slideVariation,scale:raw.slideScale,release:raw.slideRelease});
  if(raw.softNormals!==undefined&&typeof raw.softNormals!=='boolean')throw Error('Invalid ash shading');
  if(raw.fallout!==undefined&&typeof raw.fallout!=='boolean')throw Error('Invalid field fallout');
@@ -16,7 +18,7 @@ export function checkedAshSettings(raw){
  sourceSettings({position:raw.sourcePosition,rate:raw.rate,spread:raw.spread});
  if(raw.sourcePosition[1]<0||Math.abs(raw.sourcePosition[0])>raw.width/2||Math.abs(raw.sourcePosition[2])>raw.depth/2)throw Error('Place the ash source over its field');
  if(raw.checkpoint!=null&&raw.checkpoint.schema!==(raw.refinement?.mode==='hierarchy'?'kaminos.hierarchical-ash.v1':raw.refinement?.levels===3?'kaminos.adaptive-ash.v2':raw.refinement?.mode==='adaptive'?'kaminos.adaptive-ash.v1':raw.refinement?'kaminos.refined-ash.v1':'kaminos.tiled-ash.v1'))throw Error('Invalid retained ash checkpoint schema');
- const result=structuredClone(raw);ashObjectLayout(result);return result;
+ const result=structuredClone(raw);if(result.refinement?.mode==='hierarchy'&&result.refinement.transportCellSize===undefined){const d=Math.max(0,Math.ceil(Math.log2(result.refinement.backgroundCellSize/result.cellSize)-1e-12));result.refinement.transportCellSize=result.refinement.backgroundCellSize/2**d;}ashObjectLayout(result);return result;
 }
 export function ashObjectLayout(s){
  const input={cellSize:s.cellSize,tileSize:16,bounds:{min:[-s.width/2,0,-s.depth/2],max:[s.width/2,s.height,s.depth/2]}};

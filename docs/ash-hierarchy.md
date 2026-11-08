@@ -58,3 +58,41 @@ elevated rail, conserved material through motion, and checkpoint restoration.
 `tools/ash-hierarchy-native-witness.mjs` supplies the native pipe comparison at
 fixed background/storage ceilings, captures and saved continuation. It fences each production step through explicit offline diagnostics; these readbacks are evidence work, not the live simulation path. Caller parameters choose emission/settling step counts without an upper cap. Caller-owned
 output paths retain source identity, failures and console diagnostics.
+
+## Controlling work and visibility
+
+The native field inspector separates **Show airborne ash**, **Show accumulated
+ash**, **Advance airborne ash**, and **Settle accumulated ash**. Drawing switches
+leave physical state intact. Pausing airborne advancement also pauses source
+admission; it does not silently bank additional source material. Disabling
+settling freezes exchanges while enabled airborne transport may still deposit
+new material. The global Pause ash switch stops both update paths.
+
+**Maximum refinements** is a live admission ceiling within the Cell width grid
+limit. **Depth target (MiB)** limits admission of new non-balancing bricks at
+that depth within the shared material pool. Blank targets share the whole pool.
+Occupied history and required balancing support remain resident, so a target
+is not an eviction instruction. Lowering a target or the maximum depth preserves
+existing material. **Refinement rounds / tick** controls how many waves of new
+receiving detail are processed per live tick. Startup/rebuild convergence is
+separate; motion can acquire deeper detail progressively. The projected parent
+cell threshold also updates live. Changes to storage, covering pitch, physical
+grid width or transport parcel width still require the explicit clearing reset.
+
+A hierarchy field captures **Transport parcel width** independently of its
+receiving grid. Subsequent changes to receiving precision do not shrink that
+chosen physical parcel quantity. Larger parcels can remain at a contact longer
+while transferring their material into fine supported cells. The volume ledger
+retains both airborne and deposited material. The transport walk crosses actual
+hierarchy cell boundaries through empty space instead of sampling every flight
+at the globally finest pitch. This remains ballistic parcel transport, separate
+from the flame raymarch.
+
+Finest receiving cells cache four corner lighting states after dirty/active
+surface updates. The cache reuses flux scratch between simulation steps and adds
+no field-sized GPU buffer. Physical vertex positions retain their existing
+calculation; compact corner directions use 8-bit octahedral coordinates and
+8-bit coverage. Coarser cells retain the reference per-vertex reconstruction.
+The simulation refreshes derived data after overwriting its scratch, including
+awake cells whose material did not change. Cached lighting is derived state,
+not authoritative saved material.

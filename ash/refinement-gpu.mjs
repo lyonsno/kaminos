@@ -1,3 +1,5 @@
+import {createAshLightingCache} from './lighting-cache.mjs';
+import {ashActivity,checkedHierarchyPolicy,sameAshLayout} from './cost-policy.mjs';
 import {adaptiveView} from './adaptive-plan.mjs';
 import {hierarchyView} from './hierarchy-plan.mjs';
 import {hierarchyAddressWGSL} from './hierarchy-wgsl.mjs';
@@ -24,9 +26,9 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
   cellSize=p.cellSize;
   const levels=p.adaptive?[{pool:p.pool,at:p.adaptiveArena},...(p.detailPool?[{pool:p.detailPool,at:p.adaptiveArena.detail}]:[])]:[];
   const topologyEnd=p.hierarchy?p.hierarchyArena.children+p.tiles.count*8:p.detailPool?p.adaptiveArena.detail.slots+p.detailPool.capacity:p.adaptiveArena?.slots+p.pool?.capacity;
-  let lastViewKey=null;
+  let lastViewKey=null,activity=ashActivity(),policy=p.hierarchy?checkedHierarchyPolicy(p.refinement,p.hierarchy.depth,p.hierarchy.capacity):null;
   const owned=[],attributes=[],colliders=[];
-  let mesh,wire,fall,fineCollision,detailCollision,treeCollision,disposed=false,steps=0,seededVolume=0,readbacks=0,lastContact=null,restoredCollision=null;
+  let mesh,wire,fall,root,lightingCache,fineCollision,detailCollision,treeCollision,disposed=false,steps=0,seededVolume=0,readbacks=0,lastContact=null,restoredCollision=null;
   let sliding=checkedSliding(initialSliding);
   function buffer(label,size,extra=0) {
     if(size>device.limits.maxBufferSize||size>device.limits.maxStorageBufferBindingSize)throw Error(`Refined ash ${label} exceeds effective GPU capacity`);
@@ -42,7 +44,7 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
   function cleanup() {
     if(disposed)return;disposed=true;
     for(const collider of colliders)collider.dispose();
-    treeCollision?.dispose();fineCollision?.dispose();detailCollision?.dispose();fall?.dispose();wire?.geometry.dispose();wire?.material.dispose();mesh?.removeFromParent();mesh?.geometry.dispose();mesh?.material.dispose();
+    treeCollision?.dispose();fineCollision?.dispose();detailCollision?.dispose();fall?.dispose();wire?.geometry.dispose();wire?.material.dispose();root?.removeFromParent();mesh?.removeFromParent();mesh?.geometry.dispose();mesh?.material.dispose();
     releaseAshAttributes(renderer,attributes);for(const b of owned)b.destroy();
   }
   try {
@@ -54,8 +56,8 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
     const faces=attribute(new Uint32Array(arena.surfaceCache.words));
     const work=attribute(arena.words);
     const draw=attribute(new Uint32Array([6,0,0,0,0]),true);
-    const next=buffer('refined ash next mass',p.count*4);
-    const limits=buffer('refined ash capacity limits',p.count*8);
+    const nextAttribute=attribute(new Uint32Array(p.count)),limitAttribute=attribute(new Uint32Array(p.count*2));
+    const next=nextAttribute.buffer,limits=limitAttribute.buffer;
     const headers=buffer('refined ash region tile state',p.tiles.count*32);
     const uniform=buffer('refined ash parameters',p.detailPool||p.hierarchy?144:64,GPUBufferUsage.UNIFORM);
     const activeArgs=buffer('refined ash active dispatch',16,GPUBufferUsage.INDIRECT);
@@ -67,14 +69,17 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
     const layout=device.createBindGroupLayout({entries:Array.from({length:8},(_,binding)=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:binding===7?'uniform':binding===2?'read-only-storage':'storage'}}))});
     const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]});
     const names=[...(p.adaptive?['adaptive_reset','adaptive_release','adaptive_count_direct','adaptive_reclaim_halo','adaptive_allocate_detail','adaptive_allocate_halo','adaptive_prolong','adaptive_collision_list','adaptive_collision_args','adaptive_recount']:[]),...(p.detailPool?['detail_reset','detail_requests','detail_release','detail_max_priority','detail_count_priority','detail_reclaim_lower','detail_allocate_highest','detail_allocate_high','detail_allocate_medium','detail_allocate_low','detail_prolong','detail_collision_list','detail_collision_args','detail_recount']:[]),'reset','admit','clear_wake','pack_dispatch','limit_flux','gather_flux','commit_mass','admit_surface','build_surface',...(arena.surfaceCache.encoding==='cell-masks'?['prefix_surface']:[]),'finish_surface','draw_prefix','wake_all'];
-    if(p.hierarchy)names.unshift('hierarchy_reset','hierarchy_dirty','hierarchy_release','hierarchy_release_begin','hierarchy_release_next','hierarchy_free','hierarchy_pressure_reset','hierarchy_pressure','hierarchy_reclaim_1','hierarchy_reclaim_2','hierarchy_reschedule','hierarchy_balance',...['4','3','2','1'].map(n=>'hierarchy_allocate_'+n),'hierarchy_prolong_args','hierarchy_prolong','hierarchy_activate','hierarchy_activate_done','hierarchy_collision_reset','hierarchy_collision_list','hierarchy_collision_args');
+    if(p.hierarchy)names.unshift('hierarchy_count','hierarchy_reset','hierarchy_dirty','hierarchy_release','hierarchy_release_begin','hierarchy_release_next','hierarchy_free','hierarchy_pressure_reset','hierarchy_pressure','hierarchy_reclaim_1','hierarchy_reclaim_2','hierarchy_reschedule','hierarchy_balance',...['4','3','2','1'].map(n=>'hierarchy_allocate_'+n),'hierarchy_prolong_args','hierarchy_prolong','hierarchy_activate','hierarchy_activate_done','hierarchy_collision_reset','hierarchy_collision_list','hierarchy_collision_args');
     const pipelines=Object.fromEntries(await Promise.all(names.map(async name=>[name,await device.createComputePipelineAsync({label:'refined ash '+name,layout:pipelineLayout,compute:{module,entryPoint:name}})])));
     const group=device.createBindGroup({layout,entries:[mass.buffer,next,solid.buffer,limits,headers,work.buffer,faces.buffer,uniform].map((b,binding)=>({binding,resource:{buffer:b}}))});
+    let compute=null,computeEncoder=null;
+    function flush(){if(compute){compute.end();compute=null;computeEncoder=null;}}
+    function copy(encoder,...args){flush();encoder.copyBufferToBuffer(...args);}
+    function finish(encoder){flush();return encoder.finish();}
     function dispatch(encoder,name,count=1,indirect=null) {
-      const pass=encoder.beginComputePass({label:'refined ash '+name});
-      pass.setPipeline(pipelines[name]);pass.setBindGroup(0,group);
-      if(indirect)pass.dispatchWorkgroupsIndirect(indirect,0);else if(name==='hierarchy_prolong')pass.dispatchWorkgroups(Math.min(count,device.limits.maxComputeWorkgroupsPerDimension),Math.max(1,Math.ceil(count/device.limits.maxComputeWorkgroupsPerDimension)));else pass.dispatchWorkgroups(count);
-      pass.end();
+      if(computeEncoder!==encoder){flush();compute=encoder.beginComputePass({label:'ash batched work'});computeEncoder=encoder;}
+      compute.setPipeline(pipelines[name]);compute.setBindGroup(0,group);
+      if(indirect)compute.dispatchWorkgroupsIndirect(indirect,0);else if(name==='hierarchy_prolong')compute.dispatchWorkgroups(Math.min(count,device.limits.maxComputeWorkgroupsPerDimension),Math.max(1,Math.ceil(count/device.limits.maxComputeWorkgroupsPerDimension)));else compute.dispatchWorkgroups(count);
     }
     function parameters(contact=null,previous=contact,moved=false,geometryChanged=false) {
       const bytes=new ArrayBuffer(p.detailPool||p.hierarchy?144:64),floats=new Float32Array(bytes),ints=new Uint32Array(bytes);
@@ -92,15 +97,17 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
     }
     function surfaces(encoder) {
       dispatch(encoder,'admit_surface',Math.ceil(p.tiles.count/64));dispatch(encoder,'pack_dispatch');
-      encoder.copyBufferToBuffer(work.buffer,(arena.stats+12)*4,surfaceArgs,0,12);
+      copy(encoder,work.buffer,(arena.stats+12)*4,surfaceArgs,0,12);
       dispatch(encoder,'build_surface',0,surfaceArgs);
       if(arena.surfaceCache.encoding==='cell-masks')dispatch(encoder,'prefix_surface',0,surfaceArgs);
       dispatch(encoder,'finish_surface',Math.ceil(p.tiles.count/64));dispatch(encoder,'draw_prefix');
-      encoder.copyBufferToBuffer(work.buffer,(arena.stats+4)*4,draw.buffer,4,4);
+      if(lightingCache){flush();lightingCache.encode(encoder,surfaceArgs);}
+      copy(encoder,work.buffer,(arena.stats+4)*4,draw.buffer,4,4);
     }
     function rebuild(geometryChanged=false,plan=true) {
-      parameters(null,null,false,geometryChanged);const encoder=device.createCommandEncoder();if(plan)adapt(encoder);dispatch(encoder,'reset');surfaces(encoder);device.queue.submit([encoder.finish()]);
+      parameters(null,null,false,geometryChanged);const encoder=device.createCommandEncoder();if(plan)adapt(encoder,true);dispatch(encoder,'reset');surfaces(encoder);device.queue.submit([finish(encoder)]);
     }
+    if(p.hierarchy)lightingCache=await createAshLightingCache({device,p,arena,mass:mass.buffer,solid:solid.buffer,faces:faces.buffer,work:work.buffer,headers,next,limits});
     if(sceneRecords) {
       for(const region of p.regions)colliders.push(createAshSceneSolids({device,layout:region.layout,collision:solid.buffer,headers,collisionOffset:region.offset*4,headersOffset:region.tileOffset*32,occupancyMips:!!p.hierarchy,samplingCellSize:p.adaptive||p.hierarchy?p.cellSize:region.layout.cellSize,adaptive:p.adaptive?{layout:p,arena:work.buffer}:null}));
     }
@@ -112,19 +119,19 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
     if(p.adaptive&&colliders.length)fineCollision=createAdaptiveCollision({device,p,arena:work.buffer,collision:solid.buffer,headers,shapes:colliders[0]});
     if(p.detailPool&&colliders.length)detailCollision=createAdaptiveCollision({device,p,arena:work.buffer,collision:solid.buffer,headers,shapes:colliders[0],level:'detail'});
     if(p.hierarchy&&colliders.length)treeCollision=createHierarchyCollision({device,p,arena:work.buffer,collision:solid.buffer,headers,shapes:colliders[0]});
-    function adapt(encoder){
+    function adapt(encoder,cold=false){
       if(p.hierarchy){
-        dispatch(encoder,'hierarchy_reset');dispatch(encoder,'hierarchy_dirty',Math.ceil(p.tiles.count/64));
-        const collision=()=>{dispatch(encoder,'hierarchy_collision_reset');dispatch(encoder,'hierarchy_collision_list',Math.ceil(p.tiles.count/64));dispatch(encoder,'hierarchy_collision_args');treeCollision?.encode(encoder);};
+        dispatch(encoder,'hierarchy_reset');dispatch(encoder,'hierarchy_count',Math.ceil(p.tiles.count/64));dispatch(encoder,'hierarchy_dirty',Math.ceil(p.tiles.count/64));
+        const collision=()=>{dispatch(encoder,'hierarchy_collision_reset');dispatch(encoder,'hierarchy_collision_list',Math.ceil(p.tiles.count/64));dispatch(encoder,'hierarchy_collision_args');flush();treeCollision?.encode(encoder);};
         const release=name=>{dispatch(encoder,name);for(let d=p.hierarchy.depth;d>0;d--){dispatch(encoder,'hierarchy_release',Math.ceil(p.hierarchy.capacity/64));dispatch(encoder,'hierarchy_release_next');}dispatch(encoder,'hierarchy_free',Math.ceil(p.hierarchy.capacity/64));};
-        const prolong=()=>{dispatch(encoder,'hierarchy_prolong_args');encoder.copyBufferToBuffer(work.buffer,p.hierarchyArena.args*4,activeArgs,0,12);dispatch(encoder,'hierarchy_prolong',0,activeArgs);dispatch(encoder,'hierarchy_activate',Math.ceil(p.hierarchy.capacity/64));dispatch(encoder,'hierarchy_activate_done');};
-        const cascade=(priorities=[4,3,2])=>{for(let depth=0;depth<p.hierarchy.depth*2+1;depth++){
+        const prolong=()=>{dispatch(encoder,'hierarchy_prolong_args');copy(encoder,work.buffer,p.hierarchyArena.args*4,activeArgs,0,12);dispatch(encoder,'hierarchy_prolong',0,activeArgs);dispatch(encoder,'hierarchy_activate',Math.ceil(p.hierarchy.capacity/64));dispatch(encoder,'hierarchy_activate_done');};
+        const cascade=(priorities=[4,3,2])=>{for(let depth=0;depth<(cold?p.hierarchy.depth*2+1:policy.planningRounds);depth++){
           dispatch(encoder,'hierarchy_balance',Math.ceil(p.tiles.count*8/64));
           for(const priority of priorities)dispatch(encoder,'hierarchy_allocate_'+priority,Math.ceil(p.tiles.count*8/64));
           prolong();collision();
         }};
         collision();release('hierarchy_release_begin');cascade();
-        for(const priority of [1,2]){dispatch(encoder,'hierarchy_pressure_reset');dispatch(encoder,'hierarchy_pressure',Math.ceil(p.tiles.count*8/64));release('hierarchy_reclaim_'+priority);cascade([4,3]);}
+        for(const priority of [1,2]){dispatch(encoder,'hierarchy_pressure_reset');dispatch(encoder,'hierarchy_pressure',Math.ceil(p.tiles.count*8/64));release('hierarchy_reclaim_'+priority);if(cold)cascade([4,3]);}
         dispatch(encoder,'hierarchy_allocate_2',Math.ceil(p.tiles.count*8/64));dispatch(encoder,'hierarchy_allocate_1',Math.ceil(p.tiles.count*8/64));
         prolong();collision();dispatch(encoder,'hierarchy_reschedule',Math.ceil(p.tiles.count*8/64));
         return;
@@ -133,12 +140,12 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
       dispatch(encoder,'adaptive_reset');dispatch(encoder,'adaptive_release',Math.ceil(p.pool.capacity/64));dispatch(encoder,'adaptive_count_direct',Math.ceil(p.pool.pages/64));dispatch(encoder,'adaptive_reclaim_halo',Math.ceil(p.pool.capacity/64));
       dispatch(encoder,'adaptive_allocate_detail',Math.ceil(p.pool.pages/64));dispatch(encoder,'adaptive_allocate_halo',Math.ceil(p.pool.pages/64));
       dispatch(encoder,'adaptive_prolong',Math.ceil(p.pool.capacity/64));dispatch(encoder,'adaptive_collision_list',Math.ceil(p.pool.capacity/64));dispatch(encoder,'adaptive_collision_args');
-      fineCollision?.encode(encoder);
+      flush();fineCollision?.encode(encoder);
       if(p.detailPool){
         dispatch(encoder,'detail_reset');dispatch(encoder,'detail_requests',Math.ceil(p.detailPool.pages/64));dispatch(encoder,'detail_release',Math.ceil(p.detailPool.capacity/64));
         dispatch(encoder,'detail_max_priority',Math.ceil(p.detailPool.pages/64));dispatch(encoder,'detail_count_priority',Math.ceil(p.detailPool.pages/64));dispatch(encoder,'detail_reclaim_lower',Math.ceil(p.detailPool.capacity/64));
         for(const priority of ['highest','high','medium','low'])dispatch(encoder,'detail_allocate_'+priority,Math.ceil(p.detailPool.pages/64));
-        dispatch(encoder,'detail_prolong',Math.ceil(p.detailPool.capacity/64));dispatch(encoder,'detail_collision_list',Math.ceil(p.detailPool.capacity/64));dispatch(encoder,'detail_collision_args');detailCollision?.encode(encoder);
+        dispatch(encoder,'detail_prolong',Math.ceil(p.detailPool.capacity/64));dispatch(encoder,'detail_collision_list',Math.ceil(p.detailPool.capacity/64));dispatch(encoder,'detail_collision_args');flush();detailCollision?.encode(encoder);
       }
     }
     const fallLayout={...p,tiles:{...p.tiles,dims:p.dims.map(n=>Math.ceil(n/tileSize))}};
@@ -149,17 +156,18 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
     const readFaces=storage(faces.attribute,'uint',arena.surfaceCache.words).toReadOnly();
     const readArena=storage(work.attribute,'uint',arena.words.length).toReadOnly();
     const softNormals=THREE.TSL.uniform(1);
-    const vertex=THREE.TSL.wgslFn(refinementVertexWGSL(p,arena));
+    const vertex=THREE.TSL.wgslFn(refinementVertexWGSL(p,arena,{cached:!!p.hierarchy}));
     const normal=THREE.TSL.wgslFn(refinementNormalWGSL);
     const cover=THREE.TSL.wgslFn('fn ash_refined_cover(packed:f32)->f32{return f32(u32(round(packed))&255u)/255.0;}');
     const opacity=THREE.TSL.wgslFn(refinementOpacityWGSL);
-    const vertexState=vertex({rank:instanceIndex,uv:positionGeometry.xy.add(.5),soft:softNormals,density:readMass,solid:readSolid,faces:readFaces,arena:readArena}).toVar('ash_refined_vertex_state');
+    const cacheInputs=p.hierarchy?{scratch:storage(nextAttribute.attribute,'uint',p.count).toReadOnly(),pairs:storage(limitAttribute.attribute,'uint',p.count*2).toReadOnly()}:{};
+    const vertexState=vertex({...cacheInputs,rank:instanceIndex,uv:positionGeometry.xy.add(.5),soft:softNormals,density:readMass,solid:readSolid,faces:readFaces,arena:readArena}).toVar('ash_refined_vertex_state');
     const material=new THREE.MeshStandardNodeMaterial({color:0xb9b3a8,roughness:1,alphaTest:.5});
     material.positionNode=vertexState.xyz;
     material.normalNode=transformNormalToView(normal({packed:vertexState.w}).toVarying('ash_refined_normal'));
     material.opacityNode=opacity({cover:cover({packed:vertexState.w}).toVarying('ash_refined_cover'),point:vertexState.xyz.toVarying('ash_refined_world'),origin:vec3(...p.origin),size:THREE.TSL.float(cellSize)});
     const geometry=new THREE.PlaneGeometry(1,1);geometry.setIndirect(draw.attribute);
-    mesh=new THREE.Mesh(geometry,material);mesh.name='Coarse and fine retained ash';mesh.userData.kaminosAODepthUnsupported=true;mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=true;mesh.add(fall.root);
+    mesh=new THREE.Mesh(geometry,material);mesh.name='Coarse and fine retained ash';mesh.userData.kaminosAODepthUnsupported=true;mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=true;root=new THREE.Group();root.name='Retained ash';root.add(mesh,fall.root);
     if(p.adaptive){
       const geometry=new THREE.BoxGeometry(1,1,1),drawFine=attribute(new Uint32Array([72,levels.reduce((sum,{pool})=>sum+pool.capacity,0),0,0,0]),true);geometry.setIndirect(drawFine.attribute);
       const position=THREE.TSL.wgslFn(`fn adaptive_ash_brick(slot:u32,point:vec3<f32>,map:ptr<storage,array<u32>,read>)->vec3<f32>{
@@ -175,14 +183,14 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
       }`);
       const material=new THREE.MeshBasicNodeMaterial({color:0xd7b866,wireframe:true,transparent:true,opacity:.65,depthWrite:false});
       material.positionNode=position({slot:instanceIndex,point:positionGeometry,map:readArena});
-      wire=new THREE.Mesh(geometry,material);wire.name='Automatic fine ash bricks';wire.userData.kaminosEditorHelper=true;wire.frustumCulled=false;wire.visible=false;mesh.add(wire);
+      wire=new THREE.Mesh(geometry,material);wire.name='Automatic fine ash bricks';wire.userData.kaminosEditorHelper=true;wire.frustumCulled=false;wire.visible=false;root.add(wire);
     }
     if(p.hierarchy){
       const a=p.hierarchyArena,geometry=new THREE.BoxGeometry(1,1,1),indirect=attribute(new Uint32Array([72,p.hierarchy.capacity,0,0,0]),true);geometry.setIndirect(indirect.attribute);
       const position=THREE.TSL.wgslFn(`fn ash_hierarchy_brick(slot:u32,point:vec3<f32>,map:ptr<storage,array<u32>,read>)->vec3<f32>{let k=${a.nodes}u+(${p.hierarchy.roots}u+slot)*8u;if((*map)[k+7u]!=1u){return vec3<f32>(-100000.0);}let low=vec3<f32>(f32((*map)[k]),f32((*map)[k+1u]),f32((*map)[k+2u]));return vec3<f32>(${p.origin.join(',')})+(low+(point+.5)*f32((*map)[k+3u])*8.0)*${p.cellSize};}`);
       const color=THREE.TSL.wgslFn(`fn ash_hierarchy_color(slot:u32,map:ptr<storage,array<u32>,read>)->vec3<f32>{let depth=f32((*map)[${a.nodes}u+(${p.hierarchy.roots}u+slot)*8u+4u]);return .5+.4*cos(vec3<f32>(0,2,4)+depth*1.35);}`);
       const material=new THREE.MeshBasicNodeMaterial({wireframe:true,transparent:true,opacity:.55,depthWrite:false});material.positionNode=position({slot:instanceIndex,point:positionGeometry,map:readArena});material.colorNode=color({slot:instanceIndex,map:readArena});
-      wire=new THREE.Mesh(geometry,material);wire.name='Ash hierarchy by depth';wire.userData.kaminosEditorHelper=true;wire.frustumCulled=false;wire.visible=false;mesh.add(wire);
+      wire=new THREE.Mesh(geometry,material);wire.name='Ash hierarchy by depth';wire.userData.kaminosEditorHelper=true;wire.frustumCulled=false;wire.visible=false;root.add(wire);
     }
 
     function check() {if(disposed)throw Error('Refined ash disposed');}
@@ -201,15 +209,15 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
       const read=device.createBuffer({size:countBytes*2+headerBytes+64+topologyBytes+(p.hierarchy?64:levels.length*64),usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
       try {
         const encoder=device.createCommandEncoder();
-        encoder.copyBufferToBuffer(mass.buffer,0,read,0,countBytes);
-        encoder.copyBufferToBuffer(solid.buffer,0,read,countBytes,countBytes);
-        encoder.copyBufferToBuffer(headers,0,read,countBytes*2,headerBytes);
-        encoder.copyBufferToBuffer(work.buffer,arena.stats*4,read,countBytes*2+headerBytes,64);
+        copy(encoder,mass.buffer,0,read,0,countBytes);
+        copy(encoder,solid.buffer,0,read,countBytes,countBytes);
+        copy(encoder,headers,0,read,countBytes*2,headerBytes);
+        copy(encoder,work.buffer,arena.stats*4,read,countBytes*2+headerBytes,64);
         let cursor=countBytes*2+headerBytes+64;
-        if(p.hierarchy){encoder.copyBufferToBuffer(work.buffer,p.hierarchyArena.nodes*4,read,cursor,topologyBytes);cursor+=topologyBytes;encoder.copyBufferToBuffer(work.buffer,p.hierarchyArena.state*4,read,cursor,64);}
-        for(const {pool,at}of levels){const bytes=(pool.pages+pool.capacity)*4;encoder.copyBufferToBuffer(work.buffer,at.map*4,read,cursor,bytes);cursor+=bytes;}
-        for(const {at}of levels){encoder.copyBufferToBuffer(work.buffer,at.state*4,read,cursor,64);cursor+=64;}
-        device.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);
+        if(p.hierarchy){copy(encoder,work.buffer,p.hierarchyArena.nodes*4,read,cursor,topologyBytes);cursor+=topologyBytes;copy(encoder,work.buffer,p.hierarchyArena.state*4,read,cursor,64);}
+        for(const {pool,at}of levels){const bytes=(pool.pages+pool.capacity)*4;copy(encoder,work.buffer,at.map*4,read,cursor,bytes);cursor+=bytes;}
+        for(const {at}of levels){copy(encoder,work.buffer,at.state*4,read,cursor,64);cursor+=64;}
+        device.queue.submit([finish(encoder)]);await read.mapAsync(GPUMapMode.READ);
         const data=read.getMappedRange();
         const topology=topologyBytes?new Uint32Array(data.slice(countBytes*2+headerBytes+64,countBytes*2+headerBytes+64+topologyBytes)):null;
         let residency=null,offset=0;
@@ -229,21 +237,23 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
       for(let i=3;i<air.particles.length;i+=8)total+=air.particles[i];
       return total*cellSize**3+air.queuedVolume;
     }
-    return {root:mesh,layout:p,
+    return {root,layout:p,
+      setActivity(value){activity=ashActivity(value);mesh.visible=activity.showDeposited;fall.root.visible=activity.showAirborne;},
+      setRefinementPolicy(value){check();if(!p.hierarchy)throw Error('Ash hierarchy policy requires a hierarchy');const next=checkedHierarchyPolicy(value,p.hierarchy.depth,p.hierarchy.capacity);policy=next;device.queue.writeBuffer(work.buffer,p.hierarchyArena.policy*4,new Uint32Array([next.maxDepth]));device.queue.writeBuffer(work.buffer,(p.hierarchyArena.policy+4)*4,Uint32Array.from(next.quotas));device.queue.writeBuffer(work.buffer,(p.hierarchyArena.state+8)*4,new Uint32Array([2]));},
       step(contact=null,source=null) {
         check();const geometryChanged=syncCollision();
         if(contact&&(!Array.isArray(contact)||contact.length!==4||contact.some(v=>!Number.isFinite(v))||contact[3]<=0))throw Error('Invalid contact');
         parameters(contact,lastContact,JSON.stringify(contact)!==JSON.stringify(lastContact),geometryChanged);lastContact=contact?.slice()??null;
         const encoder=device.createCommandEncoder();adapt(encoder);
-        if(source)fall.encode(encoder,{...source,contact});
-        dispatch(encoder,'reset');dispatch(encoder,'admit',Math.ceil(p.tiles.count/64));dispatch(encoder,'clear_wake',Math.ceil(p.tiles.count/64));dispatch(encoder,'pack_dispatch');
-        encoder.copyBufferToBuffer(work.buffer,(arena.stats+8)*4,activeArgs,0,12);
-        dispatch(encoder,'limit_flux',0,activeArgs);dispatch(encoder,'gather_flux',0,activeArgs);dispatch(encoder,'commit_mass',0,activeArgs);
-        surfaces(encoder);device.queue.submit([encoder.finish()]);steps++;
+        if(source&&activity.moveAirborne){flush();fall.encode(encoder,{...source,contact});}
+        dispatch(encoder,'reset');if(activity.settleDeposited){dispatch(encoder,'admit',Math.ceil(p.tiles.count/64));dispatch(encoder,'clear_wake',Math.ceil(p.tiles.count/64));dispatch(encoder,'pack_dispatch');
+        copy(encoder,work.buffer,(arena.stats+8)*4,activeArgs,0,12);
+        dispatch(encoder,'limit_flux',0,activeArgs);dispatch(encoder,'gather_flux',0,activeArgs);dispatch(encoder,'commit_mass',0,activeArgs);}
+        surfaces(encoder);device.queue.submit([finish(encoder)]);steps++;
       },
       syncScene(){check();if(syncCollision())rebuild(true);},
       setSliding(value) {
-        check();const next=checkedSliding(value);if(JSON.stringify(next)===JSON.stringify(sliding))return;sliding=next;parameters();const encoder=device.createCommandEncoder();dispatch(encoder,'wake_all',Math.ceil(p.tiles.count/64));device.queue.submit([encoder.finish()]);
+        check();const next=checkedSliding(value);if(JSON.stringify(next)===JSON.stringify(sliding))return;sliding=next;parameters();const encoder=device.createCommandEncoder();dispatch(encoder,'wake_all',Math.ceil(p.tiles.count/64));device.queue.submit([finish(encoder)]);
       },
       setSoftNormals(value){check();softNormals.value=value?1:0;},
       setShowRefinement(value){if(wire)wire.visible=!!value;},
@@ -274,7 +284,7 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
         if(p.hierarchy){
           const counts=Array(p.hierarchy.depth+1).fill(0);let pinned=0;
           for(let t=p.hierarchy.roots;t<p.tiles.count;t++)if(state.residency.nodes[t*8+7]){counts[state.residency.nodes[t*8+4]]++;if(state.headers[t*8+6])pinned++;}
-          return {...(fields?{values:Array.from(state.values),solid:Array.from(state.solid)}:{}),residency:state.residency,stats:{visibleFaces:state.stats[4],surfaceOverflow:state.stats[5]},hierarchy:{capacity:p.hierarchy.capacity,resident:counts.reduce((n,m)=>n+m,0),byDepth:counts,deepest:counts.findLastIndex(n=>n>0),pinned,unmet:state.allocation[4],balanceBlocked:state.allocation[10],backgroundCellSize:p.hierarchy.backgroundCellSize,finestCellSize:p.cellSize,reservedBytes:p.hierarchy.reservedBytes},transport:await fall.schedulingSnapshot()};
+          return {...(fields?{values:Array.from(state.values),solid:Array.from(state.solid)}:{}),residency:state.residency,stats:{visibleFaces:state.stats[4],surfaceOverflow:state.stats[5]},hierarchy:{maxDepth:policy.maxDepth,planningRounds:policy.planningRounds,depthTargets:policy.quotas,capacity:p.hierarchy.capacity,resident:counts.reduce((n,m)=>n+m,0),byDepth:counts,deepest:counts.findLastIndex(n=>n>0),pinned,unmet:state.allocation[4],balanceBlocked:state.allocation[10],backgroundCellSize:p.hierarchy.backgroundCellSize,finestCellSize:p.cellSize,reservedBytes:p.hierarchy.reservedBytes},transport:await fall.schedulingSnapshot()};
         }
         return {...(fields?{values:Array.from(state.values),solid:Array.from(state.solid)}:{}),stats:{activeTiles:state.stats[0],rebuiltTiles:state.stats[1],changedPairs:state.stats[2],exchangeCellVisits:state.stats[3],visibleFaces:state.stats[4],surfaceOverflow:state.stats[5]},tiles:p.tileRecords.map((r,id)=>({id,pending:state.headers[id*8],awake:state.headers[id*8+1],dirty:state.headers[id*8+2],faces:state.headers[id*8+3]})),residency:state.residency,allocation:state.allocation?{capacity:p.pool.capacity,resident:state.residency.slots.filter(Boolean).length,requested:state.allocation[1],allocated:state.allocation[2],released:state.allocation[3],unmet:state.allocation[4],pinned:state.residency.slots.reduce((n,page,slot)=>n+Number(!!page&&state.values.subarray(p.pool.offset+slot*p.pool.cells,p.pool.offset+(slot+1)*p.pool.cells).some(v=>v>0)),0),collisionBricks:state.allocation[6],maintenanceRan:!!state.allocation[7]}:null,detailAllocation:state.detailAllocation?{capacity:p.detailPool.capacity,resident:state.residency.detail.slots.filter(Boolean).length,requested:state.detailAllocation[1],allocated:state.detailAllocation[2],released:state.detailAllocation[3],unmet:state.detailAllocation[4],pinned:state.detailAllocation[5],balanceBlocked:state.detailAllocation[10],maintenanceRan:!!state.detailAllocation[7]}:null,transport:await fall.schedulingSnapshot()};
       },
@@ -286,7 +296,7 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
       restore(state,{allowCollisionUpgrade=false}={}) {
         check();const restoredSliding=checkedSliding(state?.sliding);syncCollision(state?.collisionIdentity);
         const view=p.hierarchy?hierarchyView(p,state?.residency):p.adaptive?adaptiveView(p,state?.residency):p;
-        if(state?.schema!==(p.hierarchy?'kaminos.hierarchical-ash.v1':p.detailPool?'kaminos.adaptive-ash.v2':p.adaptive?'kaminos.adaptive-ash.v1':'kaminos.refined-ash.v1')||JSON.stringify(state.layout)!==JSON.stringify(p)||!Array.isArray(state.values)||state.values.length!==p.count||state.values.some((value,i)=>!Number.isFinite(value)||value<0||value>refinementCell(view,i).size**3+1e-6||(!refinementCell(view,i).owned&&value!==0)))throw Error('Invalid refined ash checkpoint');
+        if(state?.schema!==(p.hierarchy?'kaminos.hierarchical-ash.v1':p.detailPool?'kaminos.adaptive-ash.v2':p.adaptive?'kaminos.adaptive-ash.v1':'kaminos.refined-ash.v1')||!sameAshLayout(state.layout,p)||!Array.isArray(state.values)||state.values.length!==p.count||state.values.some((value,i)=>!Number.isFinite(value)||value<0||value>refinementCell(view,i).size**3+1e-6||(!refinementCell(view,i).owned&&value!==0)))throw Error('Invalid refined ash checkpoint');
         const exactCollision=JSON.stringify(state.collisionIdentity)===JSON.stringify(collisionIdentity());
         if(!exactCollision&&!(allowCollisionUpgrade&&sameAshCollisionPoses(state.collisionIdentity,collisionIdentity())))throw Object.assign(Error('Checkpoint scene geometry or poses differ; restore the scene first'),{code:'ASH_CHECKPOINT_COLLISION_MISMATCH'});
         fall.validate(state.falling);const values=Float32Array.from(state.values);
@@ -299,10 +309,10 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
         }
         if(p.hierarchy){const a=p.hierarchyArena;device.queue.writeBuffer(work.buffer,a.nodes*4,Uint32Array.from(view.residency.nodes));device.queue.writeBuffer(work.buffer,a.children*4,Uint32Array.from(view.residency.children));const restoredState=new Uint32Array(16);restoredState[8]=2;device.queue.writeBuffer(work.buffer,a.state*4,restoredState);device.queue.writeBuffer(work.buffer,a.flags*4,new Uint32Array(p.tiles.count).fill(2));}
         restoredCollision=state.collisionIdentity;sliding=restoredSliding;parameters();upload(values,exactCollision?new Set(state.pendingTiles):null,view,false);fall.restore(state.falling);steps=state.steps;seededVolume=state.seededVolume;lastContact=state.lastContact?.slice()??null;
-        if(p.hierarchy){const e=device.createCommandEncoder();dispatch(e,'hierarchy_collision_reset');dispatch(e,'hierarchy_collision_list',Math.ceil(p.tiles.count/64));dispatch(e,'hierarchy_collision_args');treeCollision?.encode(e);dispatch(e,'reset');surfaces(e);device.queue.submit([e.finish()]);}
-        if(p.adaptive){const e=device.createCommandEncoder();dispatch(e,'adaptive_collision_list',Math.ceil(p.pool.capacity/64));dispatch(e,'adaptive_collision_args');fineCollision?.encode(e);if(p.detailPool){dispatch(e,'detail_collision_list',Math.ceil(p.detailPool.capacity/64));dispatch(e,'detail_collision_args');detailCollision?.encode(e);}dispatch(e,'reset');surfaces(e);dispatch(e,'adaptive_recount',Math.ceil(p.pool.pages/64));if(p.detailPool)dispatch(e,'detail_recount',Math.ceil(p.detailPool.pages/64));device.queue.submit([e.finish()]);}
+        if(p.hierarchy){const e=device.createCommandEncoder();dispatch(e,'hierarchy_collision_reset');dispatch(e,'hierarchy_collision_list',Math.ceil(p.tiles.count/64));dispatch(e,'hierarchy_collision_args');flush();treeCollision?.encode(e);dispatch(e,'reset');surfaces(e);device.queue.submit([finish(e)]);}
+        if(p.adaptive){const e=device.createCommandEncoder();dispatch(e,'adaptive_collision_list',Math.ceil(p.pool.capacity/64));dispatch(e,'adaptive_collision_args');flush();fineCollision?.encode(e);if(p.detailPool){dispatch(e,'detail_collision_list',Math.ceil(p.detailPool.capacity/64));dispatch(e,'detail_collision_args');flush();detailCollision?.encode(e);}dispatch(e,'reset');surfaces(e);dispatch(e,'adaptive_recount',Math.ceil(p.pool.pages/64));if(p.detailPool)dispatch(e,'detail_recount',Math.ceil(p.detailPool.pages/64));device.queue.submit([finish(e)]);}
       },
-      read:()=>({backend:p.hierarchy?'webgpu-hierarchical-ash':p.adaptive?'webgpu-adaptive-ash':'webgpu-coarse-fine-ash',surface:'joined-cached-refined-faces',surfaceMode:'refined',surfaceCache:{encoding:arena.surfaceCache.encoding,allocatedBytes:faces.buffer.size,legacyReservedBytes:p.faceWords*4},layout:p,steps,volume:seededVolume+fall.read().requestedVolume,falling:fall.read(),sliding:{...sliding},sceneCollision:{route:'regional-cached-collision',members:colliders.flatMap(c=>c.read().members),allocatedBytes:colliders.reduce((sum,c)=>sum+c.read().allocatedBytes,0)},runtimeReadbacks:0,explicitReadbacks:readbacks,allocatedBytes:owned.reduce((sum,b)=>sum+b.size,0)+attributes.reduce((sum,a)=>sum+a.array.byteLength,0)+(treeCollision?.read().allocatedBytes??0)+(fineCollision?.read().allocatedBytes??0)+(detailCollision?.read().allocatedBytes??0)+fall.read().allocatedBytes+colliders.reduce((sum,c)=>sum+c.read().allocatedBytes,0),allocationMeaning:p.hierarchy?'independent background and budgeted shared hierarchy; occupied history and balancing support retained':p.adaptive?'resident coarse covering and reusable fine pool; occupied fine history pinned':'resident coarse volume and explicit fine regions, including cached surface capacity',boundary:'single material owner and conservative coarse-fine exchange',lastContact}),
+      read:()=>({backend:p.hierarchy?'webgpu-hierarchical-ash':p.adaptive?'webgpu-adaptive-ash':'webgpu-coarse-fine-ash',activity:{...activity},planning:policy?{...policy}:null,surface:'joined-cached-refined-faces',surfaceMode:'refined',surfaceCache:{lighting:p.hierarchy?'cached-finest-corners':'per-vertex',encoding:arena.surfaceCache.encoding,allocatedBytes:faces.buffer.size,legacyReservedBytes:p.faceWords*4},layout:p,steps,volume:seededVolume+fall.read().requestedVolume,falling:fall.read(),sliding:{...sliding},sceneCollision:{route:'regional-cached-collision',members:colliders.flatMap(c=>c.read().members),allocatedBytes:colliders.reduce((sum,c)=>sum+c.read().allocatedBytes,0)},runtimeReadbacks:0,explicitReadbacks:readbacks,allocatedBytes:owned.reduce((sum,b)=>sum+b.size,0)+attributes.reduce((sum,a)=>sum+a.array.byteLength,0)+(treeCollision?.read().allocatedBytes??0)+(fineCollision?.read().allocatedBytes??0)+(detailCollision?.read().allocatedBytes??0)+fall.read().allocatedBytes+colliders.reduce((sum,c)=>sum+c.read().allocatedBytes,0),allocationMeaning:p.hierarchy?'independent background and budgeted shared hierarchy; occupied history and balancing support retained':p.adaptive?'resident coarse covering and reusable fine pool; occupied fine history pinned':'resident coarse volume and explicit fine regions, including cached surface capacity',boundary:'single material owner and conservative coarse-fine exchange',lastContact}),
       dispose:cleanup,
     };
   }catch(error){cleanup();throw error;}

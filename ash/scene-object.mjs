@@ -1,3 +1,4 @@
+import {ashActivity,sameHierarchyStorage} from './cost-policy.mjs';
 import {Group,Mesh,Matrix4,Matrix3,Vector2,Vector3,Quaternion,BoxGeometry,LatheGeometry,CylinderGeometry,EdgesGeometry,LineSegments,LineBasicMaterial,TorusGeometry,MeshBasicMaterial,MeshStandardMaterial} from '../lib/three.core.js';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {normalizeBurner,annularBurnerCasterKey,createAnnularBurnerCaster} from '../annular-burner.mjs';
@@ -150,7 +151,7 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,read
  const projection=()=>{if(!camera)return null;root.updateWorldMatrix(true,false);camera.updateWorldMatrix(true,false);fieldClip.copy(camera.projectionMatrix).multiply(camera.matrixWorldInverse).multiply(root.matrixWorld);renderer.getDrawingBufferSize(viewport);return {matrix:fieldClip.toArray(),viewport:viewport.toArray(),targetPixels:settings.refinement?.targetPixels??3};};
  async function build(s){const layout=checkedLayout(s);let candidate;
   try{candidate=await createPatch({renderer,cellSize:s.cellSize,bounds:layout.bounds,solid:s.refinement?undefined:new Uint8Array(layout.count),tileSize:16,refinement:s.refinement,readView:projection,sceneRecords:collisionRecords,surfaceMode:'runs',sliding:{variation:s.slideVariation,scale:s.slideScale,release:s.slideRelease}});
-   candidate.setSoftNormals?.(s.softNormals);return candidate;
+   candidate.setSoftNormals?.(s.softNormals);candidate.setActivity?.(ashActivity(s));return candidate;
   }catch(error){candidate?.dispose();throw error;}
  }
  try{patch=await build(settings);root.add(patch.root);}
@@ -184,8 +185,10 @@ export async function createAshSceneObject({record:raw,renderer,readObjects,read
   },
   setShowRefinement(value){showRefinement=!!value;patch.setShowRefinement?.(showRefinement);},
   set(patchSettings){check();if(Object.hasOwn(patchSettings,'checkpoint'))throw Error('Checkpoint state is owned by scene saving');const next=checkedAshSettings({...settings,...patchSettings,checkpoint:null});next.checkpoint=settings.checkpoint;
-   for(const key of ['width','depth','height','cellSize','initialDepth','refinement'])if(JSON.stringify(next[key])!==JSON.stringify(settings[key]))throw Error('Use Reset at cell width to rebuild the lattice; dimensions belong to creation');
-   patch.setSliding?.({variation:next.slideVariation,scale:next.slideScale,release:next.slideRelease});settings=next;patch.setSoftNormals?.(settings.softNormals);sync();return api.read();
+   for(const key of ['width','depth','height','cellSize','initialDepth'])if(JSON.stringify(next[key])!==JSON.stringify(settings[key]))throw Error('Use Reset at cell width to rebuild the lattice; dimensions belong to creation');
+   if(!sameHierarchyStorage(next.refinement,settings.refinement))throw Error('Use Reset at cell width to change ash storage');
+   if(JSON.stringify(next.refinement)!==JSON.stringify(settings.refinement)){if(next.refinement?.mode!=='hierarchy'||!patch.setRefinementPolicy)throw Error('Live allocation policy requires the hierarchy');patch.setRefinementPolicy(next.refinement);}
+   patch.setActivity?.(ashActivity(next));patch.setSliding?.({variation:next.slideVariation,scale:next.slideScale,release:next.slideRelease});settings=next;patch.setSoftNormals?.(settings.softNormals);sync();return api.read();
   },
   regrid(cellSizeOrPatch){return locked(async()=>{
    const patchInput=cellSizeOrPatch&&typeof cellSizeOrPatch==='object'?cellSizeOrPatch:{cellSize:cellSizeOrPatch};

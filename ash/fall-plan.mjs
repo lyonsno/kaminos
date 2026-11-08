@@ -10,7 +10,8 @@ export function fallingLayout(p){
   if(reservedBytes>budget){capacity--;reservedBytes=metadata+capacity*36+Math.ceil(capacity/64)*12;}
   if(!Number.isSafeInteger(capacity)||capacity<1||capacity>0xffffffff)throw Error('Airborne ash budget exceeds GPU address capacity');
  }
- const parcelUnits=p.hierarchy?8:8*scale**3;
+ const parcelUnits=p.hierarchy?8*((p.refinement.transportCellSize??p.cellSize)/p.cellSize)**3:8*scale**3;
+ if(!(Math.fround(parcelUnits)>0&&Number.isFinite(Math.fround(parcelUnits))))throw Error('Ash transport parcel exceeds numeric capacity');
  return {capacity,parcelUnits,parcelVolume:parcelUnits*p.cellSize**3,bytes:capacity*32,...(reservedBytes===undefined?{}:{reservedBytes})};
 }
 export function sourceSettings({rate=.006,spread=.2,position=[0,1,1],halfExtents=null}={}){

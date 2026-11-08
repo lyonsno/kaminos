@@ -1,3 +1,4 @@
+import {checkedHierarchyPolicy} from './cost-policy.mjs';
 import {detailTopologyWGSL} from './detail-wgsl.mjs';
 import {adaptiveOffsets,adaptiveTopologyWGSL} from './adaptive-wgsl.mjs';
 import {refinementAddressWGSL} from './refinement-wgsl.mjs';
@@ -24,7 +25,7 @@ export function refinementArena(p,{surfaceEncoding='face-records'}={}) {
       record.faceCapacity, record.neighborOffset ?? 0, record.neighbors.length], tile * 8);
   }
   words.set(p.tileNeighbors, neighbors);
-  if(hierarchy){for(let t=0;t<p.hierarchy.roots;t++){const c=p.tileRecords[t].coord;words.set([...c.map(n=>n*8*p.regions[0].scale),p.regions[0].scale,0,0,0,1],hierarchy.nodes+t*8);words[hierarchy.flags+t]=2;}words[hierarchy.state+8]=1;}
+  if(hierarchy){for(let t=0;t<p.hierarchy.roots;t++){const c=p.tileRecords[t].coord;words.set([...c.map(n=>n*8*p.regions[0].scale),p.regions[0].scale,0,0,0,1],hierarchy.nodes+t*8);words[hierarchy.flags+t]=2;}words[hierarchy.state+8]=1;const policy=checkedHierarchyPolicy(p.refinement,p.hierarchy.depth,p.hierarchy.capacity);words[hierarchy.policy]=policy.maxDepth;words.set(policy.quotas,hierarchy.policy+4);}
   return {meta, neighbors, active, surface, stats, prefix, words, adaptive,hierarchy,surfaceCache};
 }
 
@@ -143,7 +144,7 @@ fn active_cell(w:vec3<u32>,lane:u32)->u32 {
   let r=max(params.contact.w,params.previous.w)+4.0*H;
   if(all(low<=max(params.contact.xyz,params.previous.xyz)+vec3<f32>(r))&&all(high>=min(params.contact.xyz,params.previous.xyz)-vec3<f32>(r))){awake=true;}
  }
- atomicStore(&headers[tile*8u+1u],select(0u,1u,awake));
+ atomicStore(&headers[tile*8u+1u],select(0u,1u,awake));${p.hierarchy?"if(awake){atomicStore(&headers[tile*8u+2u],1u);}":""}
  if(awake){let rank=atomicAdd(&arena[STATS],1u);atomicStore(&arena[ACTIVE+rank],tile);}
 }
 @compute @workgroup_size(64) fn clear_wake(@builtin(global_invocation_id) id:vec3<u32>){
