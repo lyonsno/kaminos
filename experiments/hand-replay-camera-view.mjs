@@ -2,7 +2,7 @@ import {Group,Sprite,SpriteMaterial,CanvasTexture,SRGBColorSpace,Mesh,PlaneGeome
 import {projectHand,projectionSupport,commonImageBox,maskDisagreement} from './hand-replay-projection.mjs';
 // The existing shared renderer displays camera-projected silhouette textures.
 // A filled triangle union gives exact projected mesh coverage, including self overlap.
-export async function createCameraComparison(scene,document,labelTexture){
+export async function createCameraComparison(scene,document,labelTexture,labelFor=model=>model.label){
  const N=640,root=new Group(),cards=[],planes=[],timeLabels=[],timeRoot=new Group();root.add(timeRoot);
  const canvas=()=>{const c=document.createElement('canvas');c.width=c.height=N;return c;};
  const sprite=(c)=>{const texture=new CanvasTexture(c);texture.colorSpace=SRGBColorSpace;const s=new Sprite(new SpriteMaterial({map:texture,depthTest:false,depthWrite:false,toneMapped:false}));return {canvas:c,texture,sprite:s};};
@@ -51,7 +51,7 @@ export async function createCameraComparison(scene,document,labelTexture){
   if(mode==='camera'){
    cards.forEach(c=>photo(c.canvas.getContext('2d'),images[index]));setLabel(cards[0],'Recorded camera');
    for(let k=0;k<2;k++){
-    const c=cards[k+1],ctx=c.canvas.getContext('2d'),h=f.hands[pair[k]];setLabel(c,data.models[pair[k]].label);
+    const c=cards[k+1],ctx=c.canvas.getContext('2d'),h=f.hands[pair[k]];setLabel(c,labelFor(data.models[pair[k]]));
     if(r.masks[k]?.pixels){
      const colored=canvas(),cc=colored.getContext('2d');cc.drawImage(r.masks[k].canvas,0,0);cc.globalCompositeOperation='source-in';cc.fillStyle=k?'#ff963c':'#2dbeff';cc.fillRect(0,0,N,N);ctx.globalAlpha=opacity;ctx.drawImage(colored,0,0);ctx.globalAlpha=1;
     }else warning(ctx,r.masks[k]?'Projected mesh is outside view':h.reason??'not observed');
