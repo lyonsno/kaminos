@@ -1,7 +1,5 @@
-import {checkedFireUnitPose} from './fire-unit-record.mjs';
 // Native inspector attachment for the unit root and its emitter component.
 export function mountFireUnitControls({document,owner,asset,edits,components,mountObject,select,redraw,onError,mountTuning=()=>null}){
- edits.register(asset.id,{read:owner.pose,check:checkedFireUnitPose,write:value=>{owner.setPose(value);redraw();}});
  const dataTarget='@fire-unit-data:'+asset.id,sourceTarget='@fire-unit-emitter:'+asset.id;
  let sourceMode=false,tuning=null,tuningRevision=-1;
  const emissionLabel=document.createElement('label'),enabled=document.createElement('input');enabled.type='checkbox';emissionLabel.append(enabled,document.createTextNode(' Emit gas'));
@@ -20,5 +18,5 @@ export function mountFireUnitControls({document,owner,asset,edits,components,mou
  link.onchange=()=>guarded(()=>edits.apply(dataTarget,{...owner.capture(),moveEmitterWithGrid:link.checked},'Link emitter to fire grid'));
  const tuningRoot=document.createElement('div');properties.append(tuningRoot);tuning=mountTuning({root:tuningRoot,owner,target:dataTarget});
  const controls=mountObject({asset,properties,onSelected:refresh,onDeselected:()=>tuning?.close()});refresh();
- return {refresh,dispose(){tuning?.dispose();seat.dispose();controls.dispose();edits.unregister(asset.id);edits.unregister(dataTarget);edits.unregister(sourceTarget);}};
+ return {refresh,dispose(){tuning?.dispose();seat.dispose();controls.dispose();edits.unregister(dataTarget);edits.unregister(sourceTarget);}};
 }
