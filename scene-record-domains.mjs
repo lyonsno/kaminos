@@ -9,9 +9,10 @@ import {proceduralMeshRecordDomain} from './scene-geometry.mjs';
 import {fireSourceRecordDomain,fireDomainRecordDomain} from './scene-fire-domain.mjs';
 import {localLiquidRecordDomain} from './local-liquid-setup.mjs';
 import {promptReliefRecordDomain} from './inference-kiln-record.mjs';
+import {fireUnitRecordDomain} from './fire-unit-record.mjs';
 
 export const sceneRecordDomains=Object.freeze([
   ...sceneAssetRecordDomains,cameraRecordDomain,spotLightRecordDomain,proceduralMeshRecordDomain,
   {...proceduralMeshRecordDomain,type:'burner-bed'},fireSourceRecordDomain,fireDomainRecordDomain,
-  localLiquidRecordDomain,promptReliefRecordDomain,brazierRoomRecordDomain,ashRecordDomain,ashSourceRecordDomain,
+  localLiquidRecordDomain,promptReliefRecordDomain,brazierRoomRecordDomain,ashRecordDomain,ashSourceRecordDomain,fireUnitRecordDomain,
 ]);

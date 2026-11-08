@@ -11255,6 +11255,7 @@ export function createKaminosVolumePrototype({
   externalColorFormat = null,
   externalDepthFormat = 'depth24plus',
   externalProductTransform = { translate: [0, 0, 0], scale: 1 },
+  canvasId = 'kaminos-volume-canvas',
 }) {
   if (productFrameOwner !== 'prototype' && productFrameOwner !== 'caller') {
     throw new Error(`unsupported-product-frame-owner:${productFrameOwner}`);
@@ -11290,7 +11291,7 @@ export function createKaminosVolumePrototype({
     return Math.min(gridCellCount(size), Math.max(currentCapacity, nextPowerOfTwo(candidateCount)));
   }
   const canvas = document.createElement('canvas');
-  canvas.id = 'kaminos-volume-canvas';
+  canvas.id = canvasId;
   canvas.dataset.prototype = PROTOTYPE_IDENTITY;
   canvas.dataset.routeIdentity = ROUTE_IDENTITY;
   if (productFrameOwner !== 'caller') viewport.appendChild(canvas);
@@ -28381,6 +28382,17 @@ export function createKaminosVolumePrototype({
       state.sceneCollision=runtime;
       emitStatus({phase:'scene-collision-sampled'});
       return {status:'sampled',...snapshot,runtime};
+    },
+    repositionOrdinaryUnit(translation, scale = productTransform.scale) {
+      if(productFrameOwner!=='prototype'||followingDomain||pendingDomainRemap)throw Error('Finish Fine relocation before moving the whole fire unit');
+      if(!Array.isArray(translation)||translation.length!==3||!translation.every(Number.isFinite)||!Number.isFinite(scale)||scale<=0)throw Error('Fire unit needs a finite translation and positive scale');
+      const previous=structuredClone(productTransform),ratio=scale/previous.scale;
+      const anchor=worldSmoke?.anchor??worldFrameRestore;
+      if(anchor){anchor.translate=anchor.translate.map((v,i)=>translation[i]+(v-previous.translate[i])*ratio);anchor.scale*=ratio;}
+      productTransform.translate=[...translation];productTransform.scale=scale;
+      state.residualFieldGeneration=(state.residualFieldGeneration||0)+1;lastResidualPartials=null;
+      state.unitTransform={translate:[...translation],scale,transport:'rigid-local-fields',resampled:false};
+      return {...state.unitTransform};
     },
     relocateOrdinaryDomain(translation, localPrimitives = volumePrimitives, scale = productTransform.scale) {
       if(followingDomain)throw Error('Release object-following domain before editing the simulation box');

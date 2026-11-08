@@ -469,8 +469,8 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .reaction-front-atlas-wrap { margin: 8px 0 4px; border: 1px solid #303030; border-radius: 6px; background: #070707; overflow: hidden; }
 #volume-reaction-atlas-canvas { width: 100%; aspect-ratio: 5 / 2; display: block; image-rendering: pixelated; }
 .reaction-front-atlas-state { color: #71848a; font: 9px 'SF Mono', monospace; margin: 5px 0 0; min-height: 13px; }
-#kaminos-volume-canvas { position: absolute; left: -10000px; top: -10000px; width: 1px; height: 1px; opacity: 0; pointer-events: none; background: #050607; }
-#kaminos-volume-canvas.active { left: 0; top: 0; width: 100%; height: 100%; opacity: 1; z-index: 3; }
+.kaminos-fire-unit-canvas, #kaminos-volume-canvas { position: absolute; left: -10000px; top: -10000px; width: 1px; height: 1px; opacity: 0; pointer-events: none; background: #050607; }
+.kaminos-fire-unit-canvas.active, #kaminos-volume-canvas.active { left: 0; top: 0; width: 100%; height: 100%; opacity: 1; z-index: 3; }
 /* Viewer play/pause: drives the look-lab Freeze (sim steps and shader time). */
 #volume-viewer-play { position: absolute; left: 10px; bottom: 10px; z-index: 4; width: 26px; height: 26px; padding: 0; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,0.16); border-radius: 50%; background: rgba(8,9,10,0.28); color: rgba(255,255,255,0.72); cursor: pointer; backdrop-filter: blur(2px); }
 #volume-viewer-play:hover { color: #fff; border-color: rgba(255,255,255,0.34); background: rgba(8,9,10,0.42); }
@@ -2605,6 +2605,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <button type="button" role="menuitem" data-scene-add="water-volume">Water volume</button>
         <button type="button" role="menuitem" data-scene-add="water-emitter">Water emitter</button>
         <button type="button" role="menuitem" data-scene-add="flame-emitter">Flame</button>
+        <button type="button" role="menuitem" data-scene-add="fire-unit">Fire simulation</button>
       </div>
     </div>
   </nav>
@@ -3040,6 +3041,9 @@ import {createAuthoredWaterFeature} from './authored-water-feature.mjs';
 import { createWorkingScene } from './working-scene.mjs';
 import {createSceneObjectRecord} from './scene-object-record.mjs';
 import {createSceneRecordOperations} from './scene-record-operations.mjs';
+import {FIRE_UNIT_TYPE,FIRE_UNIT_SOURCE,checkedFireUnitRecord,checkedFireUnitPose} from './fire-unit-record.mjs';
+import {createFireUnitObject} from './fire-unit-runtime.mjs';
+import {mountFireUnitControls} from './fire-unit-controls.mjs';
 import {createSceneDocumentSession} from './scene-document-session.mjs';
 import {createSceneMembershipOperations, membershipEditTargetId as sceneMembershipTargetId} from './scene-membership-operations.mjs';
 import {createSceneMembershipBatch} from './scene-membership-batch.mjs';
@@ -3836,6 +3840,7 @@ let authoringBusy = false;
 // Set while the agent vantage borrows the viewport camera for a picture.
 let vantageCaptureHeld = false;
 let volumePrototype = null;
+const authoredFireUnits=new Map();
 let sceneBurning = null;
 let sceneAshAtmosphereSettings={density:0,color:[0,0,0],displayColor:[0,0,0]};
 const flameFeature=createAuthoredFlameFeature({runtime:()=>volumePrototype,composed:()=>!!activeSceneComposition,visible:()=>isSceneItemVisible('flame-field')});
@@ -4223,6 +4228,7 @@ const sceneRecords = createSceneRecordOperations({
       try{scene.add(room.root);registerSceneObject(room.root,record,{activate});return room.root;}
       catch(error){room.root.removeFromParent();room.dispose();throw error;}
     },
+    fireUnit:(record,options)=>mountAuthoredFireUnit(record,options),
     ash:(record,options)=>mountAuthoredAsh(record,options),
     ashSource:(record,options)=>mountAuthoredAshSource(record,options),
     camera:record=>mountAuthoredCamera(record).object,
@@ -7480,6 +7486,7 @@ sceneAddMenuPopup.addEventListener('click', event => {
   if (action.dataset.sceneAdd === 'water-emitter') {
     addLocalLiquidEmitter().catch(error => setInfo(`Could not add Water Emitter: ${error.message}`));
   }
+  if(action.dataset.sceneAdd==='fire-unit')addAuthoredFireUnit().catch(error=>setInfo(error.message));
   if(action.dataset.sceneAdd==='flame-emitter')openFirstFlameFieldDialog().catch(error=>setInfo(error.message));
 });
 document.getElementById('scene-mesh-file').onchange=async event=>{
@@ -7790,9 +7797,11 @@ function applyAuthoredScenePose(id, transform = {}) {
     applySplatCorrectionToRecord(entry);
   } else {
 
+    if(entry.type===FIRE_UNIT_TYPE)checkedFireUnitPose({...sceneObjectTransformState(entry.object),...transform});
     if(entry.type===ASH_OBJECT_TYPE)checkedAshPose({...sceneObjectTransformState(entry.object),...transform});
     if (entry.type === LOCAL_LIQUID_EMITTER_TYPE) normalizeLocalLiquidEmitter(entry.localLiquidEmitter, transform);
     applySceneObjectTransformState(entry.object, transform);
+    if(entry.type===FIRE_UNIT_TYPE)authoredFireUnits.get(entry.id)?.owner.syncPose();
   }
   if (entry.type === LOCAL_LIQUID_EMITTER_TYPE) syncLocalLiquidHostEmitters();
   updateTransformInspector();
@@ -10648,6 +10657,9 @@ function createPageSceneMembershipOperations() {
       dispose:object=>{sceneBurning?.forget(object);disposeObjectTree(object);},
     },
     domains:{
+      [FIRE_UNIT_TYPE]:{retainRoot:true,detached:entry=>authoredFireUnits.get(entry.id)?.owner.setVisible(false),
+        restored:entry=>{const unit=authoredFireUnits.get(entry.id);if(unit){unit.owner.syncPose();unit.owner.setVisible(true);}},
+        dispose(entry){const unit=authoredFireUnits.get(entry.id);if(unit){unit.controls.dispose();void unit.owner.dispose();authoredFireUnits.delete(entry.id);}}},
       [ASH_OBJECT_TYPE]:{retainRoot:true},
       glb:{retainRoot:true},
       light:{retainRoot:true,
@@ -12518,6 +12530,10 @@ async function initScene() {
     const frameNowMs=performance.now();
     if(typeof ensureSimFramePlan==='function')ensureSimFramePlan(frameNowMs);
     updateAutomaticFineCoverage(frameNowMs/1000);
+    for(const [id,unit] of authoredFireUnits){
+      try{unit.owner.sync({visible:workingScene.objects.some(e=>e.id===id)&&isSceneItemVisible(id),helpers:viewportHelpersVisible&&viewportDisplay.domains,paused:sceneViewerPaused===true});}
+      catch(error){void unit.owner.setVisible(false);setInfo('Fire simulation: '+error.message);}
+    }
     workbenchSceneFrames.tick(frameNowMs);
     const liquidFireCompositionActive = fingerFluidPyroCompositionRequested();
     const volumeSmokeRouteActive = isKaminosVolumeSmokeRoute() || liquidFireCompositionActive;
@@ -13055,6 +13071,7 @@ function clearSceneDomains(setup=null){
   volumePrototype?.setSceneCompositionPresentation?.(Boolean(setup?.flame?.composition));
   setVolumePrimitivesState({schema:VOLUME_PRIMITIVE_SCHEMA,primitives:[]});
   waterFeature.clear();
+  for(const unit of authoredFireUnits.values()){unit.controls.dispose();void unit.owner.dispose();}authoredFireUnits.clear();
   for(const ash of authoredAsh.values())ash.dispose();authoredAsh.clear();
   for(const id of [...sceneSpotLights.keys()])disposeSceneSpotLight(id);
   sceneGiProxies.clear();
@@ -14108,7 +14125,7 @@ function installSharedWorkbench() {
 }
 async function installOwnerWorkbenchEntry() {
   if(ownerExperimentEntry)return;
-  sceneOwnerControls=createSceneOwnerControls({document,viewport:document.getElementById('viewport'),inspector:document.getElementById('transform-inspector'),selected:selectedPlacementEntry,onContext:value=>sharedWorkbench?.setOwnerControlsActive(value)});
+  sceneOwnerControls??=createSceneOwnerControls({document,viewport:document.getElementById('viewport'),inspector:document.getElementById('transform-inspector'),selected:selectedPlacementEntry,onContext:value=>sharedWorkbench?.setOwnerControlsActive(value)});
   const host={controls:{document,installNumberDrag:installRelativeNumberDrag,mountObject:sceneOwnerControls.mount,transformSettings:()=>({...transformPreferences}),components:{register:(id,adapter)=>sceneComponents.register(id,adapter)}},fluid:{
     async open(setup){
       await workbenchViewerReady;
@@ -27759,6 +27776,38 @@ async function makeSceneRepetitionReal(id){
 }
 
 
+async function mountAuthoredFireUnit(raw,{activate=true,loadRequestId=null}={}) {
+ const record=checkedFireUnitRecord(raw),arrival=workingScene.arrival();
+ const owner=createFireUnitObject({THREE,record,camera,controls,viewport:document.getElementById('viewport'),sharedGpuContext:sharedGpu,
+  getSceneDepth:()=>ordinarySceneDepthProvider?.()??null,onError:error=>setInfo('Fire simulation: '+error.message)});
+ let unit;
+ try {
+  if(!arrival.isCurrent()||(loadRequestId!==null&&!sceneLoadRequests.isCurrent(loadRequestId)))throw Error('Fire scene load superseded');
+  scene.add(owner.root);registerSceneObject(owner.root,record,{activate});
+  sceneOwnerControls??=createSceneOwnerControls({document,viewport:document.getElementById('viewport'),inspector:document.getElementById('transform-inspector'),selected:selectedPlacementEntry,onContext:value=>sharedWorkbench?.setOwnerControlsActive(value)});
+  const panel=mountFireUnitControls({document,owner,asset:{id:record.id,root:owner.root},edits:scenePlacementTools.edits,components:sceneComponents,
+   mountObject:sceneOwnerControls.mount,select:id=>window.selectSceneObject(id),redraw:()=>window._kaminosDirty?.(),onError:error=>setInfo(error.message)});
+  unit={owner,controls:panel};authoredFireUnits.set(record.id,unit);
+  await owner.initialize();
+  if(!arrival.isCurrent()||(loadRequestId!==null&&!sceneLoadRequests.isCurrent(loadRequestId)))throw Error('Fire scene load superseded');
+  return owner.root;
+ }catch(error){unit?.controls.dispose();authoredFireUnits.delete(record.id);await owner.dispose();if(workingScene.find(record.id))removeSceneObjectInternal(record.id,{recordHistory:false});throw error;}
+}
+async function addAuthoredFireUnit(options={}) {
+ assertSceneConstructionAvailable();
+ const id=makeSceneObjectId('fire'),source=options.controls??readVolumeControls();
+ if(source.emitterSourceLaw!=='immersed-source')throw Error('Select an immersed-source flame basin before adding an independent fire simulation');
+ const offset=options.position??[controls.target.x+authoredFireUnits.size*2.5,groundPlane.position.y+1,controls.target.z];
+ const emitter=structuredClone(options.emitter??flameEmitterPose);
+ if(!options.emitter)emitter.position=emitter.position.map((v,i)=>v-flameDomainTranslation[i]+offset[i]);
+ const record=checkedFireUnitRecord({id,type:FIRE_UNIT_TYPE,source:FIRE_UNIT_SOURCE,fileName:'Fire simulation',label:options.label??'Fire simulation '+(authoredFireUnits.size+1),createdAt:new Date().toISOString(),
+  transform:{position:offset,rotation:[0,0,0],scale:[1,1,1]},fireUnit:{controls:structuredClone(source),emitter,moveEmitterWithGrid:true}});
+ const target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
+ await mountAuthoredFireUnit(record);
+ try{await recordSceneObjectInsertion(id);setActiveSceneObject(id);return id;}
+ catch(error){removeSceneObjectInternal(id,{recordHistory:false});throw error;}
+}
+
 async function mountAuthoredAsh(record,{activate=true,loadRequestId=null}={}) {
  const arrival=workingScene.arrival();
  const ash=await createAshSceneObject({record,renderer,readObjects:()=>workingScene.objects,readSources:()=>readAshSources(record.id),lodController:ensureSceneBeautyLods(),onError:message=>{setInfo(message?'Ash stopped: '+message:'Ash resumed after scene correction');ashInspector?.sync();}});
@@ -27946,7 +27995,7 @@ function installSceneConstruction() {
   document.getElementById('selected-flame-properties').before(assemblyPanel);
   document.getElementById('assembly-outlet').onchange=event=>{authoringControlSessions.forEach(session=>session.commit());assemblyOutletChoices.set(workingScene.activeGroupId,event.target.value);updateAuthoringPropertySelection();};
   const modeLabel=document.createElement('span');modeLabel.id='assembly-edit-mode';modeLabel.hidden=true;modeLabel.style.cssText='padding:6px 12px;color:#ffca77';document.getElementById('transform-bar').append(modeLabel);
-  window.kaminosSceneAuthoring={addAsh:addAuthoredAsh,addFlameEmitter:addFirstFlameField,addWaterEmitter:addLocalLiquidEmitter,addLight:addSceneSpotLight,read:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),activeFieldId:workingScene.activeFieldId}),setFireSettings:editOwnedFireSettings,setAssembly:setSceneAssembly,addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
+  window.kaminosSceneAuthoring={addFireUnit:addAuthoredFireUnit,fireUnits:()=>[...authoredFireUnits.values()].map(u=>u.owner.read()),addAsh:addAuthoredAsh,addFlameEmitter:addFirstFlameField,addWaterEmitter:addLocalLiquidEmitter,addLight:addSceneSpotLight,read:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),activeFieldId:workingScene.activeFieldId}),setFireSettings:editOwnedFireSettings,setAssembly:setSceneAssembly,addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
     setRepetition:(id,value)=>setSceneRepetition(id,value),repetitionState:sceneRepetitionState,makeCopiesEditable:makeSceneRepetitionReal,
     setWaterCollision:setObjectWaterCollision,
     setCollision:(id,value)=>{assertSceneConstructionAvailable();if(!activeSceneComposition)throw Error('Fire & smoke is not mounted');const target=ensureObjectCollisionTarget(id);return edits.apply(target,typeof value==='boolean'?{domainId:'flame-field',enabled:value}:value,'Set Fire & smoke obstacle');},
@@ -28010,6 +28059,7 @@ function checkSelectionRoot(id,state){
   }
   const entry=workingScene.objects.find(o=>o.id===id);if(!entry)throw Error('Selected object is absent');
   checkedGroupPose(state);
+  if(entry.type===FIRE_UNIT_TYPE)checkedFireUnitPose(state);
   if(entry.type===ASH_OBJECT_TYPE)checkedAshPose(state);
   if(entry.type==='light')checkedSceneLightRecord({...serializeSceneObject(entry),transform:state});
   if(entry.type===FLAME_EMITTER_TYPE)normalizeFlameEmitterPose(state);
