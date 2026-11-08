@@ -31,4 +31,4 @@ await withKaminosGpu(async({device})=>{
   assert.ok(Math.abs(hit.v[0]+3*hit.v[4]-2)<.003,'Mutual contact conserves total linear momentum');
   assert.ok(Math.abs(hit.w[2])+Math.abs(hit.w[6])>.02,'An off-center impact transfers angular momentum');
  }finally{owned.forEach(b=>b.destroy());}
-},{wgslSources:[{label:'burn-rigid-mutual-production',code:BURN_RIGID_ISLANDS_WGSL,entryPoint:'solve'}]});
+},{wgslSources:['connect','aggregate','findContacts','findMutual','solveMutual','publish'].map(entryPoint=>({label:'burn-rigid-mutual-production-'+entryPoint,code:BURN_RIGID_ISLANDS_WGSL,entryPoint}))});
