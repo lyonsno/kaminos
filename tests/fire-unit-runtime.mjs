@@ -2,13 +2,14 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.core.js';
 import {createFireUnitObject} from '../fire-unit-runtime.mjs';
+import {FINE_COVERAGE_FIELDS} from '../volume-fine-coverage-controls.mjs';
 const pose=()=>({position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]});
-function fixture(){
+function fixture(fireUnit={}){
  const original={document:globalThis.document,window:globalThis.window,cancelAnimationFrame:globalThis.cancelAnimationFrame};
  globalThis.document={createElement:()=>({dataset:{},style:{},classList:{add(){},remove(){}},remove(){}})};globalThis.window={devicePixelRatio:1};globalThis.cancelAnimationFrame=()=>{};
- const controls={emitterSourceLaw:'immersed-source',resolution:16,gridHeightRatio:1,fineVelocity:16,finePressure:16,worldSmoke:'on',worldSmokeExtent:3,worldSmokeFlow:8,worldSmokeMaterial:8,worldSmokePressure:8,worldSmokeIterations:12,worldSmokeIntermediate:'off'};
+ const controls={pressureSolver:'converged',emitterSourceLaw:'immersed-source',resolution:16,gridHeightRatio:1,fineVelocity:16,finePressure:16,worldSmoke:'on',worldSmokeExtent:3,worldSmokeFlow:8,worldSmokeMaterial:8,worldSmokePressure:8,worldSmokeIterations:12,worldSmokeIntermediate:'off'};
  const owner=createFireUnitObject({THREE,camera:new THREE.PerspectiveCamera(50,1.5,.1,100),viewport:{appendChild(){},clientWidth:600,clientHeight:400},controls:null,
-  record:{id:'fire-a',type:'fire-unit',source:'kaminos:fire-unit',transform:pose(),fireUnit:{controls,moveEmitterWithGrid:true,emitter:{...pose(),position:[0,-.76,0]}}}});
+  record:{id:'fire-a',type:'fire-unit',source:'kaminos:fire-unit',transform:pose(),fireUnit:{controls,moveEmitterWithGrid:true,emitter:{...pose(),position:[0,-.76,0]},...fireUnit}}});
  return {owner,restore:()=>Object.assign(globalThis,original)};
 }
 test('a new unit shows its outer World grid and Fine grid before GPU initialization',()=>{
@@ -25,4 +26,30 @@ test('a refused native grid rotation restores the last accepted root pose',()=>{
 });
 test('each unit disables the prototype floor/cluster injector',()=>{
  const {owner,restore}=fixture();try{assert.equal(owner.runtime.debugState().coreEmitterSourceMode,'analytic-only');}finally{restore();}
+});
+
+test('a restored Fine offset leaves World at the unit origin and moves rigidly with the unit',()=>{
+ const {owner,restore}=fixture({fineOffset:[1,.25,0],worldReferenceDims:[16,16,16]});try{
+ assert.deepEqual(owner.runtime.debugState().ordinaryDomainTranslation,[1,.25,0]);
+ assert.deepEqual(owner.runtime.worldFrame(),{translate:[0,0,0],scale:1,referenceDims:[16,16,16]});
+ assert.deepEqual(owner.root.children[0].box.min.toArray(),[0,-.75,-1]);
+ owner.setPose({...pose(),position:[4,2,0],scale:[2,2,2]});
+ assert.deepEqual(owner.runtime.debugState().ordinaryDomainTranslation,[6,2.5,0]);
+ assert.deepEqual(owner.runtime.worldFrame(),{translate:[4,2,0],scale:2,referenceDims:[16,16,16]});
+ assert.deepEqual(owner.capture().fineOffset,[1,.25,0]);
+ }finally{restore();}
+});
+test('per-unit field overlay reaches the existing renderer and remains view-only',()=>{
+ const {owner,restore}=fixture();try{const before=owner.capture();owner.setWorldOverlay('contributions');assert.equal(owner.runtime.debugState().worldSmokeOverlay,'contributions');assert.equal(owner.worldOverlay().mode,'contributions');assert.deepEqual(owner.capture(),before);assert.throws(()=>owner.setWorldOverlay('bogus'),/Unknown/);}finally{restore();}
+});
+
+test('each unit reuses source following on its own fixed World, with cached policy and interval',()=>{
+ const domControls=Object.fromEntries(FINE_COVERAGE_FIELDS.map(f=>[f.id,{value:f.key==='mode'?'sources':f.value}]));
+ const {owner,restore}=fixture({settings:{domControls}});try{
+ let reads=0;owner.runtime.fineCoverageInputs=()=>{reads++;const frame=owner.runtime.debugState();return {status:'active',frame:{translate:frame.ordinaryDomainTranslation,scale:frame.ordinaryDomainScale},dims:[16,16,16],world:{lo:[-3,-3,-3],hi:[3,3,3]},sources:[{id:'source',lo:[2.2,-.8,-.1],hi:[2.6,-.6,.1],weight:1}],demand:[]};};
+ owner.updateFineCoverage(1);assert.ok(owner.capture().fineOffset[0]>1);assert.deepEqual(owner.runtime.worldFrame().translate,[0,0,0]);
+ owner.updateFineCoverage(1.1);assert.equal(reads,1,'interval avoids another source observation');
+ owner.updateFineCoverage(1.3,{editing:true});assert.equal(reads,1,'active authoring owns the frame');
+ const next=owner.capture();next.settings.domControls['volume-coverage-headroom'].value=.4;owner.setData(next);owner.updateFineCoverage(1.4);assert.equal(reads,2);assert.equal(owner.read().fineCoverage.options.headroom,.4);
+ }finally{restore();}
 });

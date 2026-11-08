@@ -1,5 +1,6 @@
 import {normalizeFlameEmitterPose} from './scene-flame-emitter.mjs';
 import {checkedPose} from './scene-edit-session.mjs';
+import {checkedWorldFrame} from './volume-world-frame.mjs';
 export const FIRE_UNIT_TYPE='fire-unit';
 export const FIRE_UNIT_SOURCE='kaminos:fire-unit';
 const copy=value=>structuredClone(value);
@@ -10,6 +11,7 @@ export function checkedFireUnitPose(value){
  return p;
 }
 export function fireUnitFrame(pose){const p=checkedFireUnitPose(pose);return {translate:[...p.position],scale:p.scale[0]};}
+export function fireUnitFineFrame(pose,offset=[0,0,0]){const frame=fireUnitFrame(pose);return {...frame,translate:frame.translate.map((v,i)=>v+offset[i]*frame.scale)};}
 export function moveLinkedFireEmitter(source,before,after,linked){
  const s=checkedPose(source),a=checkedFireUnitPose(before),b=checkedFireUnitPose(after);
  if(!linked)return s;
@@ -25,6 +27,8 @@ export function checkedFireUnitRecord(raw){
  const r=copy(raw),f=r.fireUnit;
  if(!f||typeof f.moveEmitterWithGrid!=='boolean')throw Error('Move emitter with grid must be boolean');
  if(f.emissionEnabled!==undefined&&typeof f.emissionEnabled!=='boolean')throw Error('Fire emission enabled must be boolean');
+ if(f.fineOffset!==undefined&&(!Array.isArray(f.fineOffset)||f.fineOffset.length!==3||!f.fineOffset.every(Number.isFinite)))throw Error('Fine offset must have three finite coordinates');
+ if(f.worldReferenceDims!==undefined)checkedWorldFrame({translate:[0,0,0],scale:1,referenceDims:f.worldReferenceDims});
  r.transform=checkedFireUnitPose(r.transform);
  r.fireUnit={...f,controls:checkedControls(f.controls),emitter:normalizeFlameEmitterPose(f.emitter)};
  return r;

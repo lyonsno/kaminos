@@ -12515,7 +12515,7 @@ async function initScene() {
     if(typeof ensureSimFramePlan==='function')ensureSimFramePlan(frameNowMs);
     updateAutomaticFineCoverage(frameNowMs/1000);
     for(const [id,unit] of authoredFireUnits){
-      try{unit.owner.sync({visible:unit.owner.root.parent!==null&&isSceneItemVisible(id),helpers:viewportHelpersVisible&&viewportDisplay.domains,paused:sceneViewerPaused===true});}
+      try{unit.owner.sync({visible:unit.owner.root.parent!==null&&isSceneItemVisible(id),helpers:viewportHelpersVisible&&viewportDisplay.domains,paused:sceneViewerPaused===true,now:frameNowMs/1000,editing:authoringBusy||sceneDocument?.state().blocked||!!scenePlacementTools?.edits.state().active||scenePlacementTools?.edits.state().replaying});}
       catch(error){void unit.owner.setVisible(false);setInfo('Fire simulation: '+error.message);}
     }
     workbenchSceneFrames.tick(frameNowMs);
@@ -27755,6 +27755,7 @@ async function makeSceneRepetitionReal(id){
 async function mountAuthoredFireUnit(raw,{activate=true,loadRequestId=null}={}) {
  const record=checkedFireUnitRecord(raw),arrival=workingScene.arrival();
  const owner=createFireUnitObject({THREE,record,camera,controls,viewport:document.getElementById('viewport'),sharedGpuContext:sharedGpu,
+  onChange:()=>window._kaminosDirty?.(),
   getSceneDepth:()=>fireUnitSceneDepthProvider?.()??null,onError:error=>setInfo('Fire simulation: '+error.message)});
  let unit;
  try {

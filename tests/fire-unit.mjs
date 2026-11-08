@@ -40,5 +40,13 @@ test('whole-unit movement retains gas resources and does not enter the Fine rema
  const afterMapping=worldSmokeMapping(plan,ctx.worldSmoke.anchor,ctx.productTransform);assert.deepEqual(afterMapping,beforeMapping,'rigid Fine and World movement leaves the local render mapping unchanged, including while paused');
  assert.equal(ctx.worldSmoke.gas,gas);assert.equal(ctx.pendingDomainRemap,null);assert.equal(ctx.state.unitTransform.resampled,false);
  const before=JSON.stringify(ctx.productTransform);assert.throws(()=>ctx.repositionOrdinaryUnit([NaN,0,0],1),/finite/);assert.equal(JSON.stringify(ctx.productTransform),before);
- ctx.pendingDomainRemap={};assert.throws(()=>ctx.repositionOrdinaryUnit([0,0,0],1),/Finish Fine relocation/);
+ ctx.pendingDomainRemap={translate:[3,4,5],scale:2};
+ ctx.repositionOrdinaryUnit([5,6,7],2);
+ assert.deepEqual(Array.from(ctx.pendingDomainRemap.translate),[4,5,6],'a pending Fine remap co-moves with the whole unit');
+ assert.equal(ctx.pendingDomainRemap.scale,2);assert.equal(ctx.worldSmoke.gas,gas);
+ ctx.pendingDomainRemap={};assert.throws(()=>ctx.repositionOrdinaryUnit([0,0,0],1),/Fine relocation/);
+});
+
+test('saved Fine offsets and World reference dimensions reject malformed frames',()=>{
+ for(const extra of [{fineOffset:[1,2]},{fineOffset:[NaN,0,0]},{worldReferenceDims:[16,8,12]}])assert.throws(()=>checkedFireUnitRecord({...record(),fireUnit:{...record().fireUnit,...extra}}),/Fine offset|world field frame/);
 });

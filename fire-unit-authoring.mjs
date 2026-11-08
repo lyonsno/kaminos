@@ -42,6 +42,7 @@ export function mountFireUnitAuthoring({document,root,owner,edits,target,seedSet
   saveBasin:({label})=>saveBasin(snapshot(),label),readSource:()=>settings().source??null,
   readPressureRuntime:()=>owner.runtime.debugState().pressureResolution,
   readWorldRuntime:()=>owner.runtime.debugState().worldSmoke,
+  readWorldOverlay:()=>owner.worldOverlay(),setWorldOverlay:mode=>owner.setWorldOverlay(mode),
   readAppearanceRuntime:()=>owner.runtime.debugState().physicsAppearance,
   readRaymarchRuntime:()=>owner.runtime.debugState().opticalStepping,
   gridTuning:{idPrefix:prefix,isEnabled:()=>!root.closest('[hidden]'),read:()=>owner.capture().controls,validate:c=>owner.runtime.validateGridControls(c),

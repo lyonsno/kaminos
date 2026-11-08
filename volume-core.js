@@ -27507,9 +27507,13 @@ export function createKaminosVolumePrototype({
       return {status:'sampled',...snapshot,runtime};
     },
     repositionOrdinaryUnit(translation, scale = productTransform.scale) {
-      if(productFrameOwner!=='prototype'||followingDomain||pendingDomainRemap)throw Error('Finish Fine relocation before moving the whole fire unit');
+      if(productFrameOwner!=='prototype'||followingDomain)throw Error('Release object-following before moving the whole fire unit');
       if(!Array.isArray(translation)||translation.length!==3||!translation.every(Number.isFinite)||!Number.isFinite(scale)||scale<=0)throw Error('Fire unit needs a finite translation and positive scale');
+      if(pendingDomainRemap&&(!Array.isArray(pendingDomainRemap.translate)||pendingDomainRemap.translate.length!==3||!pendingDomainRemap.translate.every(Number.isFinite)||!Number.isFinite(pendingDomainRemap.scale)||pendingDomainRemap.scale<=0))throw Error('Invalid pending Fine relocation');
       const previous=structuredClone(productTransform),ratio=scale/previous.scale;
+      // A queued Fine remap retains its relative before/after frames when its
+      // entire unit moves. World and both Fine frames share this rigid motion.
+      if(pendingDomainRemap){pendingDomainRemap.translate=pendingDomainRemap.translate.map((v,i)=>translation[i]+(v-previous.translate[i])*ratio);pendingDomainRemap.scale*=ratio;}
       const anchor=worldSmoke?.anchor??worldFrameRestore;
       if(anchor){anchor.translate=anchor.translate.map((v,i)=>translation[i]+(v-previous.translate[i])*ratio);anchor.scale*=ratio;}
       productTransform.translate=[...translation];productTransform.scale=scale;
