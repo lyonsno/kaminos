@@ -9,7 +9,7 @@ import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {compositionRestoreUrl} from '../scene-authoring.mjs';
 import {getSceneObjectRecords} from '../scene-persistence-core.js';
-import {regionalQueryPlan,regionalDataset} from '../volume-regional-state.mjs';
+import {regionalQueryPlan,regionalDataset,regionalSceneLoaded} from '../volume-regional-state.mjs';
 import {validateTraceRows,REGIONAL_CAPTURE_IDENTITY} from '../volume-optical-trace.mjs';
 
 const {values:args}=parseArgs({options:{
@@ -46,6 +46,9 @@ try {
     /Google Chrome for Testing|headless_shell|chrome-headless-shell/.test(executable),'independent test browser required');
   report.executable=executable;
   const sceneBytes=await fs.readFile(args.scene),scene=JSON.parse(sceneBytes);
+  const expectedObjects=getSceneObjectRecords(scene);
+  assert.ok(expectedObjects.length,'saved scene has no declared objects');
+  report.expectedObjectIds=expectedObjects.map(object=>object.id);
   await artifact('source-scene.kaminos.json',sceneBytes);
   assert.ok(scene.composition?.flame?.presetId,'saved native flame composition required');
   const stores=Object.fromEntries(['scenes','settings','sessions','layouts','browser-profile'].map(k=>[k,path.join(out,k)]));
@@ -76,19 +79,23 @@ try {
   page.on('pageerror',e=>report.errors.push(String(e)));
   page.on('console',m=>{if(m.type()==='error')report.errors.push(m.text());});
   report.url=compositionRestoreUrl(scene.composition,'regional-source.kaminos.json',base);
-  report.phase='load';await save();await page.goto(report.url);
+  report.phase='navigation';await save();await page.goto(report.url);
+  report.phase='volume-start';await save();
   await page.waitForFunction(()=>window.__kaminosVolumePrototype?.debugState().active||window.__kaminosVolumePrototype?.debugState().error);
+  report.boot=await page.evaluate(()=>{const s=window.__kaminosVolumePrototype.debugState();return {active:s.active,error:s.error};});
+  assert.ok(report.boot.active&&!report.boot.error,`native volume startup failed: ${report.boot.error}`);
   const targetStep=Number(args.step);
   await page.evaluate(step=>{window.regionalHold=window.__kaminosVolumePrototype.pauseSelectiveHeadLiveAtSimStep(step);},targetStep);
-  await page.waitForFunction(()=>window.kaminosSceneAuthoring?.read().objects.length>=3||/load failed/i.test(document.getElementById('info-bar')?.textContent||''));
+  report.phase='scene-objects';await save();
+  await page.waitForFunction(regionalSceneLoaded,report.expectedObjectIds);
   report.loadedObjects=await page.evaluate(()=>window.kaminosSceneAuthoring.read().objects.map(({id,type,source,transform})=>({id,type,source,transform})));
-  const expectedObjects=getSceneObjectRecords(scene);
   for(const expected of expectedObjects) {
     const observed=report.loadedObjects.find(o=>o.id===expected.id);
     assert.ok(observed,`saved scene object missing: ${expected.id}`);
     for(const key of ['id','type','source'])assert.equal(observed[key],expected[key],`wrong saved object ${expected.id}:${key}`);
     if(expected.transform)assert.deepEqual(observed.transform,expected.transform,`saved object transform changed: ${expected.id}`);
   }
+  report.phase='source-hold';await save();
   report.hold=await page.evaluate(()=>window.regionalHold);
   assert.ok(report.hold.ok&&report.hold.gpuComplete&&report.hold.paused,'source hold failed');
   assert.equal(report.hold.effectiveSimStepCount,targetStep);

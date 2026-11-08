@@ -114,3 +114,11 @@ export function regionalDataset(plan,rows) {
 export function integrateRegionalPredictions(transfers) {
   return transfers.reduce((a,t)=>composeTransfers(a,[t[0]+t[3],t[1]+t[4],t[2]+t[5],t[6]]),[0,0,0,1]);
 }
+
+// Browser-evaluated predicate, shared with the capture harness test.
+export function regionalSceneLoaded(expectedIds) {
+  const message=document.getElementById('info-bar')?.textContent||'';
+  if(/load failed/i.test(message))throw Error(message);
+  const objects=window.kaminosSceneAuthoring?.read().objects;
+  return !!objects&&expectedIds.every(id=>objects.some(object=>object.id===id));
+}

@@ -16,3 +16,18 @@ try {
   assert.equal(report.dataset,undefined,'failure must not synthesize a default dataset');
 } finally {await rm(out,{recursive:true,force:true});}
 console.log('regional capture fails before acquisition with a durable phase report');
+
+// Exercise the exact browser wait predicate with a valid two-object source.
+const {regionalSceneLoaded}=await import('../volume-regional-state.mjs');
+const savedWindow=globalThis.window,savedDocument=globalThis.document;
+try {
+  globalThis.window={kaminosSceneAuthoring:{read:()=>({objects:[{id:'flame-emitter'},{id:'flame-field'}]})}};
+  globalThis.document={getElementById:()=>({textContent:''})};
+  assert.equal(regionalSceneLoaded(['flame-emitter','flame-field']),true,'two-object saved scene must finish loading');
+  assert.equal(regionalSceneLoaded(['flame-emitter','missing-domain']),false,'count alone cannot establish requested object identity');
+  globalThis.document={getElementById:()=>({textContent:'Scene load failed: missing source'})};
+  assert.throws(()=>regionalSceneLoaded(['flame-emitter','missing-domain']),/load failed/i);
+} finally {
+  if(savedWindow===undefined)delete globalThis.window;else globalThis.window=savedWindow;
+  if(savedDocument===undefined)delete globalThis.document;else globalThis.document=savedDocument;
+}
