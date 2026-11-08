@@ -276,6 +276,34 @@ test('KMA-04: a finished image survives a failed save and retries without anothe
  assert.equal(h.delivered[0].provenance.seed,3);assert.equal(h.service.read().status,'complete');assert.equal(h.service.read().pending,null);
 });
 
+test('a caller-owned result destination bypasses default selection and survives a save retry',async()=>{
+ const h=harness(),saved=[];let attempts=0;
+ const deliver=async(file,provenance)=>{
+  attempts++;if(attempts===1)throw Error('caller storage unavailable');
+  saved.push({file,provenance});return{name:file.name,source:'/caller-results/lantern.png'};
+ };
+ await assert.rejects(h.service.run({prompt:'lantern',seed:21,deliver}),/caller storage unavailable/);
+ assert.equal(h.delivered.length,0,'a custom destination must not fall back to the selection-changing default');
+ assert.ok(h.service.read().pending);
+ const result=await h.service.retryPersistence();
+ assert.equal(result.source,'/caller-results/lantern.png');
+ assert.equal(attempts,2);assert.equal(saved.length,1);assert.equal(h.generations.length,1,'retry saves existing pixels');
+ assert.equal(saved[0].provenance.seed,21);
+ assert.deepEqual(module.readPngProvenance(new Uint8Array(await saved[0].file.arrayBuffer())),saved[0].provenance);
+ assert.equal(h.delivered.length,0);assert.equal(h.service.read().results[0].source,result.source);
+ assert.doesNotMatch(h.service.read().progress,/selected/i,'saving elsewhere must not claim selection changed');
+ await h.service.run({prompt:'teapot',seed:22});
+ assert.equal(h.delivered.length,1,'ordinary Generate retains its default destination');
+ assert.equal(saved.length,1,'a previous caller destination must not leak into the next request');
+ assert.equal(h.loads(),1,'caller delivery does not require a second loaded model');
+});
+
+test('an invalid caller result destination fails before model work',async()=>{
+ const h=harness();
+ await assert.rejects(h.service.run({prompt:'lantern',seed:1,deliver:'/not-a-function'}),/delivery.*function/i);
+ assert.equal(h.loads(),0);assert.equal(h.service.busy(),false);
+});
+
 test('with the app GPU host, klein borrows its session and runs as a klein route on the one app service',async()=>{
  const log=[],prototype=prototypeDouble(),host={setForegroundServiceActive(){},runForegroundFrame:run=>run()};
  const handoff=createForegroundHandoff({prototype,host,waitFrame:tick});
