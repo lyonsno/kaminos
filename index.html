@@ -3547,13 +3547,15 @@ import {applyPreviewQualityCaps,previewScenePixelRatio} from './preview-quality.
 import {styleHelperLines} from './scene-helper-lines.mjs';
 import {createSelectionFeedback} from './scene-selection-feedback.mjs';
 import {createSceneOwnerControls} from './scene-owner-controls.mjs';
+import {createDock,defaultDock,DOCK_SOURCE} from './stockroom-dock.mjs';
+import {createDockEditing} from './stockroom-dock-controls.mjs';
 import {visibleSceneIntersections} from './scene-visible-picking.mjs';
 import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,mixedSelectionValue,objectsInScreenBox,pointerHitsBoxOutline,createSelectionTransformTarget} from './scene-selection.mjs';
 
 let authoringWorkspace = null;
 let cameraViews=null,cameraViewsPanel=null;
 let sceneCameras=null,cameraAuthoring=null,cameraProjectionBase=null,viewPie=null;
-let sharedWorkbench=null,ownerExperimentEntry=null,workbenchSceneHost=null,sceneOwnerControls=null;
+let sharedWorkbench=null,ownerExperimentEntry=null,workbenchSceneHost=null,sceneOwnerControls=null,dockEditing=null;
 let resolveWorkbenchViewerReady,rejectWorkbenchViewerReady;
 const workbenchViewerReady=new Promise((resolve,reject)=>{resolveWorkbenchViewerReady=resolve;rejectWorkbenchViewerReady=reject;});
 workbenchViewerReady.catch(()=>{});
@@ -6843,6 +6845,7 @@ function updateTransformInspector() {
   const fields = document.getElementById('transform-inspector-fields');
   if (!inspector || !empty || !fields) return;
   const entry = selectedPlacementEntry();
+  dockEditing?.sync();
   sceneOwnerControls?.update();
   inspector.dataset.selectedObjectId = workingScene.activeFieldId || entry?.id || '';
   inspector.dataset.selectedGroupId = workingScene.activeGroupId || '';
@@ -14215,6 +14218,7 @@ function installSharedWorkbench() {
 async function installOwnerWorkbenchEntry() {
   if(ownerExperimentEntry)return;
   sceneOwnerControls??=createSceneOwnerControls({document,viewport:document.getElementById('viewport'),inspector:document.getElementById('transform-inspector'),selected:selectedPlacementEntry,onContext:value=>sharedWorkbench?.setOwnerControlsActive(value)});
+  dockEditing=createDockEditing({document,viewport:document.getElementById('viewport'),canvas:renderer.domElement,camera,navigation:controls,entries:()=>workingScene.objects,selected:selectedPlacementEntry,edits:scenePlacementTools.edits,ownerControls:sceneOwnerControls,components:sceneComponents,installNumberDrag:installRelativeNumberDrag,redraw:()=>window._kaminosDirty?.(),onError:error=>setInfo(error.message)});
   const host={controls:{document,installNumberDrag:installRelativeNumberDrag,mountObject:sceneOwnerControls.mount,transformSettings:()=>({...transformPreferences}),components:{register:(id,adapter)=>sceneComponents.register(id,adapter)}},fluid:{
     async open(setup){
       await workbenchViewerReady;
@@ -14224,6 +14228,7 @@ async function installOwnerWorkbenchEntry() {
   },scene:{
     async open(){await workbenchViewerReady;if(!workbenchSceneHost)throw Error('Shared scene host unavailable');setActiveTab('assets');return workbenchSceneHost.open();},
     refreshPresentation:refreshWorkbenchAssetPresentation,
+    addDock:addStockroomDock,
     renderer:()=>renderer,objects:()=>workingScene.objects,select:id=>window.selectSceneObject(id),
     materials:{create:options=>materialInspector.create(options),edit:(id,patch)=>materialInspector.edit(id,patch),read:()=>sceneMaterials.read(),subscribe:fn=>scenePlacementTools.edits.subscribe(fn)},
     ground:()=>({center:[groundPlane.position.x,groundPlane.position.y,groundPlane.position.z],height:groundPlane.position.y,radius:5,visible:groundPlane.visible}),
@@ -27551,6 +27556,14 @@ function addProceduralMesh(kind,parameters={}) {
   mountProceduralMesh(record);setActiveSceneObject(id);
   try{recordSceneObjectInsertion(id);}catch(error){removeSceneObjectInternal(id,{recordHistory:false});throw error;}
   renderSceneObjectList();return id;
+}
+async function addStockroomDock(recipe=defaultDock()) {
+  assertSceneConstructionAvailable();const id=makeSceneObjectId('dock'),object=createDock(recipe);
+  const target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
+  scene.add(object);
+  try{registerSceneObject(object,{id,type:'pbr',source:DOCK_SOURCE,label:'Dock',fileName:'Dock',dock:recipe,createdAt:new Date().toISOString()});await recordSceneObjectInsertion(id);}
+  catch(error){removeSceneObjectInternal(id,{recordHistory:false});throw error;}
+  setActiveSceneObject(id);return workingScene.objects.find(entry=>entry.id===id);
 }
 function cloneSceneMaterial(material){const copy=originalBurnMaterial(material).clone();for(const key of Object.keys(copy))if(copy[key]?.isTexture)copy[key]=copy[key].clone();return copy;}
 async function addPromptLettering(prompt){
