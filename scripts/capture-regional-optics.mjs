@@ -12,19 +12,18 @@ import {getSceneObjectRecords} from '../scene-persistence-core.js';
 import {regionalQueryPlan,regionalDataset,regionalSceneLoaded} from '../volume-regional-state.mjs';
 import {validateTraceRows,REGIONAL_CAPTURE_IDENTITY} from '../volume-optical-trace.mjs';
 
-const {values:args}=parseArgs({options:{
-  root:{type:'string'},scene:{type:'string'},settings:{type:'string'},out:{type:'string'},
-  port:{type:'string',default:'57130'},step:{type:'string',default:'151'},
-  tiles:{type:'string',default:'2,3,2'},'context-side':{type:'string',default:'6'},
-  queries:{type:'string',default:'32'},subdivisions:{type:'string',default:'64'},seed:{type:'string',default:'1108'},
-  chromium:{type:'string'},playwright:{type:'string'},'expected-source':{type:'string'},
-}});
-if(!args.out)throw Error('--out is required to retain a report');
-let root=args.root;
-const out=path.resolve(args.out);
+const rawInvocation=process.argv.slice(2);
+let outputDestination;
+for(let i=0;i<rawInvocation.length&&rawInvocation[i]!=='--';i++){
+  if(rawInvocation[i].startsWith('--out='))outputDestination=rawInvocation[i].slice(6);
+  else if(rawInvocation[i]==='--out'&&rawInvocation[i+1]&&!rawInvocation[i+1].startsWith('--'))outputDestination=rawInvocation[++i];
+}
+if(!outputDestination)throw Error('--out is required to retain a report');
+let root;
+const out=path.resolve(outputDestination);
 await fs.mkdir(out,{recursive:true});
-const report={identity:'native-regional-optical-capture-run-v0',status:'running',phase:'inputs',root,out,
-  requested:args,scope:'held-Fine-domain-native-material-diagnostic',chunks:[],errors:[],artifacts:{},
+const report={identity:'native-regional-optical-capture-run-v0',status:'running',phase:'arguments',root,out,
+  rawInvocation,requested:null,scope:'held-Fine-domain-native-material-diagnostic',chunks:[],errors:[],artifacts:{},
   claim:'native material samples and finite segment-reference dataset; no learned quality or runtime saving established'};
 const save=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));
 const hash=b=>createHash('sha256').update(b).digest('hex');
@@ -32,6 +31,14 @@ const artifact=async(name,bytes)=>{await fs.writeFile(path.join(out,name),bytes)
 let server,context,page;
 await save();
 try {
+const {values:args}=parseArgs({args:rawInvocation,options:{
+  root:{type:'string'},scene:{type:'string'},settings:{type:'string'},out:{type:'string'},
+  port:{type:'string',default:'57130'},step:{type:'string',default:'151'},
+  tiles:{type:'string',default:'2,3,2'},'context-side':{type:'string',default:'6'},
+  queries:{type:'string',default:'32'},subdivisions:{type:'string',default:'64'},seed:{type:'string',default:'1108'},
+  chromium:{type:'string'},playwright:{type:'string'},'expected-source':{type:'string'},
+}});
+  report.requested=args;report.phase='inputs';await save();
   for(const key of ['root','scene','settings','chromium','playwright'])if(!args[key])throw Error(`--${key} is required`);
   root=await fs.realpath(args.root);report.root=root;
   const git=(...a)=>execFileSync('git',a,{cwd:root,encoding:'utf8'}).trim();

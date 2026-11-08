@@ -31,3 +31,12 @@ try {
   if(savedWindow===undefined)delete globalThis.window;else globalThis.window=savedWindow;
   if(savedDocument===undefined)delete globalThis.document;else globalThis.document=savedDocument;
 }
+
+const malformedOut=await mkdtemp(path.join(tmpdir(),'regional-capture-arguments-'));
+try {
+  const run=spawnSync(process.execPath,['scripts/capture-regional-optics.mjs','--out',malformedOut,'--unknown-option','x'],{cwd:new URL('..',import.meta.url),encoding:'utf8'});
+  assert.notEqual(run.status,0);
+  const report=JSON.parse(await readFile(path.join(malformedOut,'report.json'),'utf8'));
+  assert.equal(report.status,'failed');assert.equal(report.failurePhase,'arguments');
+  assert.deepEqual(report.rawInvocation,['--out',malformedOut,'--unknown-option','x']);
+} finally {await rm(malformedOut,{recursive:true,force:true});}

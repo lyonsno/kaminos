@@ -223,7 +223,7 @@ def run(args, report, save):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument('--capture')
     parser.add_argument('--capture-source')
     parser.add_argument('--out', required=True)
@@ -234,16 +234,30 @@ def main():
     parser.add_argument('--small-hidden', type=int, default=32)
     parser.add_argument('--learning-rate', type=float, default=.002)
     parser.add_argument('--seed', type=int, default=1108)
-    args = parser.parse_args()
-    out = Path(args.out).resolve()
+    raw_invocation = sys.argv[1:]
+    destination = None
+    for i, value in enumerate(raw_invocation):
+        if value == '--':
+            break
+        if value.startswith('--out='):
+            destination = value[6:]
+        elif value == '--out' and i + 1 < len(raw_invocation) and not raw_invocation[i + 1].startswith('--'):
+            destination = raw_invocation[i + 1]
+    if not destination:
+        parser.parse_args()  # Preserve normal help/errors when no report path is recoverable.
+        raise ValueError('--out is required to retain a report')
+    out = Path(destination).resolve()
     out.mkdir(parents=True, exist_ok=True)
     report = {'identity': 'regional-information-and-readout-diagnostic-v0', 'status': 'running',
-              'phase': 'inputs', 'requested': vars(args), 'started': time.time(),
+              'phase': 'arguments', 'requested': None, 'rawInvocation': raw_invocation, 'started': time.time(),
               'claim': 'matched finite-source diagnostic; no final-image, temporal or runtime-benefit claim'}
     def save():
         (out / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
     save()
     try:
+        args = parser.parse_args(raw_invocation)
+        report['requested'] = vars(args)
+        report['phase'] = 'inputs'
         if not args.capture or not args.capture_source:
             raise ValueError('--capture and --capture-source are required native input identities')
         if any(getattr(args, key) <= 0 for key in ['steps', 'code_width', 'encoder_hidden', 'reader_hidden', 'small_hidden']):
@@ -261,7 +275,7 @@ def main():
             raise ValueError('training source changed during execution')
         report['status'] = 'observed'
         report['phase'] = 'complete'
-    except Exception as error:
+    except (Exception, SystemExit) as error:
         report['status'] = 'failed'
         report['failurePhase'] = report['phase']
         report['error'] = f'{type(error).__name__}: {error}'
