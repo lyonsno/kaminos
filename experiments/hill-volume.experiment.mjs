@@ -2,6 +2,7 @@ import * as THREE from '../lib/three.core.js';
 import {MeshStandardNodeMaterial,StorageBufferAttribute,IndirectStorageBufferAttribute} from '../lib/three.webgpu.js';
 import {storage,vertexIndex,instanceIndex,Fn,vec4,uint,transformNormalToView} from '../lib/three.tsl.js';
 import {makeVolumeSpecimen,packVolumeBodies,weatherBody,volumePoseAnchors} from './hill-terrain/volume-model.mjs';
+import {createViewportPosePin} from '../viewport-pose-pin.mjs';
 import {createVolumeGPU} from './hill-terrain/volume-gpu.mjs';
 
 export default {
@@ -76,7 +77,7 @@ export default {
   }
   const api={read,...operations};window.kaminosHillVolume=api;
   if(host.controls?.mountImpulseGesture)shoveGesture=host.controls.mountImpulseGesture({pick:operations.pickRock,begin:operations.beginShove,commit:operations.shove,cancel:operations.cancelShove,gain:()=>settings.shoveGain,onError:e=>{record({kind:'hill-volume.shove-refused',error:e.message});console.warn(e.message);}});
-  if(host.controls?.mountAttachmentControls){anchorControls=host.controls.mountAttachmentControls({asset,attachments:anchorRecords,onRelease:operations.releaseAnchor});anchorControls.setVisible(anchorsVisible);}
+  if(host.controls?.mountAttachmentControls){anchorControls=host.controls.mountAttachmentControls({asset,attachments:anchorRecords,onRelease:operations.releaseAnchor,onReset:operations.reset,createPin:()=>createViewportPosePin({asset,redraw:()=>session.redraw()})});anchorControls.setVisible(anchorsVisible);}
   return{read,operations,
    mount({root:panel,document,invoke}){
     const description=document.createElement('p');description.textContent='3D material specimen · frictional soil and rigid rock held by pose anchors. Start paused; inspect the initial bank, then advance or play.';panel.append(description);
@@ -84,7 +85,7 @@ export default {
     const button=(label,op,arg)=>{const b=document.createElement('button');b.textContent=label;b.type='button';b.addEventListener('click',()=>invoke(op,typeof arg==='function'?arg():arg).catch(e=>{error=e.message;sync();}));panel.append(b);return b;};
     const anchorToggle=document.createElement('input');anchorToggle.type='checkbox';anchorToggle.checked=anchorsVisible;const anchorLabel=document.createElement('label');anchorLabel.append(anchorToggle,' Show pose anchors');panel.append(anchorLabel);anchorToggle.addEventListener('change',()=>invoke('setAnchorsVisible',anchorToggle.checked).catch(e=>{error=e.message;sync();}));
     const shoveToggle=document.createElement('input');shoveToggle.type='checkbox';shoveToggle.checked=shoveEnabled;const shoveLabel=document.createElement('label');shoveLabel.append(shoveToggle,' Drag released rocks to shove');panel.append(shoveLabel);shoveToggle.addEventListener('change',()=>invoke('setShoveEnabled',shoveToggle.checked));
-    playButton=button('Play','setPlaying',()=>!playing);button('Advance 0.1 s','advance',.1);button('Reset specimen','reset');button('Frame specimen','frame');
+    playButton=button('Play','setPlaying',()=>!playing);button('Advance 0.1 s','advance',.1);button('Frame specimen','frame');
     const prepLabel=document.createElement('label');contactToggle=document.createElement('input');contactToggle.type='checkbox';contactToggle.setAttribute('aria-label','Separate overlapping starting poses');contactToggle.addEventListener('change',()=>invoke('setInitialContacts',contactToggle.checked).catch(e=>{error=e.message;sync();}));prepLabel.append(contactToggle,document.createTextNode('Separate overlapping starting poses (resets)'));panel.append(prepLabel);
     const field=(key,label,step)=>{const l=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');grip.textContent=label;input.type='number';input.step='any';input.className='transform-input';input.value=String(settings[key]);input.setAttribute('aria-label',label);input.addEventListener('input',()=>{if(input.value.trim()&&Number.isFinite(Number(input.value)))invoke('setSettings',{[key]:Number(input.value)}).catch(e=>{error=e.message;sync();});});host.controls.installNumberDrag({input,grip,step});l.append(grip,input);panel.append(l);};
     const select=document.createElement('select');select.setAttribute('aria-label','Rock volume');model.bodies.forEach((b,i)=>{const o=document.createElement('option');o.value=i;o.textContent=b.id;select.append(o);});select.value=settings.rock;select.addEventListener('change',()=>invoke('setSettings',{rock:Number(select.value)}));panel.append(select);
