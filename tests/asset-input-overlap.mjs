@@ -50,3 +50,18 @@ test('Assets page callback carries downloaded bytes into persistent import witho
  vm.createContext(ctx);const add=vm.runInContext('('+html.slice(begin,end).replace('addMesh:','')+'})',ctx);
  assert.equal(await add({kind:'mesh',name:'asset.glb',source:'/api/read?root=generated-meshes&path=a.glb'}),'inserted');assert.equal(fetches,1);assert.equal(passed.bytes,bytes);assert.equal(passed.telemetryOp.token,7);
 });
+
+
+test('GLB publication waits for off-thread geometry and rejects a stale prepared root',async()=>{
+ for(const stale of [false,true]){
+  const f=fixture();let finish;const gate=new Promise(r=>finish=r);
+  f.ctx.resolveAssetArrivalMode=()=> 'append';
+  f.ctx.prepareGLBGeometryArrival=async()=>{f.events.push('geometry-worker');await gate;return {placement:{scale:1},bounds:{min:[0,0,0],max:[1,1,1]}};};
+  const loading=f.show(f.file,{clear:false});f.release();await new Promise(r=>setImmediate(r));
+  assert.ok(f.events.includes('geometry-worker'),'actual loader must invoke geometry preparation');
+  assert.ok(!f.events.includes('scene-add'),'unprepared root must not publish');
+  if(stale)f.change();finish();
+  if(stale){await assert.rejects(loading,/stale/);assert.ok(!f.events.includes('scene-add'));assert.ok(f.events.includes('dispose'));}
+  else{await loading;assert.ok(f.events.includes('scene-add'));}
+ }
+});
