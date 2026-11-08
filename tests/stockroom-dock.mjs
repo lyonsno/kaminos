@@ -2,7 +2,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.core.js';
-import {defaultDock,dockMembers,createDock,rebuildDock,DOCK_SOURCE,checkedDock} from '../stockroom-dock.mjs';
+import {defaultDock,dockMembers,createDock,rebuildDock,DOCK_SOURCE,checkedDock,resizeDock,editDockMember} from '../stockroom-dock.mjs';
+import {createSceneRepetitionController} from '../scene-repetition-controller.mjs';
+import {repetitionDefaults,isRepetitionCopy} from '../scene-repetition.mjs';
 import {createSceneObjectRecord} from '../scene-object-record.mjs';
 import {createSceneRecordOperations} from '../scene-record-operations.mjs';
 import {buildSceneDocument,planSceneRestore} from '../scene-persistence-core.js';
@@ -20,8 +22,8 @@ test('footprint edits change member count without stretching board widths',()=>{
 test('board direction changes framing and support bays remain bounded',()=>{
  const p={...defaultDock(),width:8.1,boardDirection:'z'},m=dockMembers(p);
  const boards=m.filter(m=>m.role==='deck'),joists=m.filter(m=>m.role==='joist');
- assert.ok(boards.length>20);assert.ok(boards.every(m=>m.size[0]<=.24&&m.size[2]===p.depth));
- assert.ok(joists.length>2);assert.ok(joists.every(m=>m.size[0]===p.width));
+ assert.ok(boards.length>20);assert.ok(boards.every(m=>m.size[0]<=.24&&m.size[2]<=p.bayLength));
+ assert.ok(joists.length>2);assert.ok(joists.every(m=>m.size[0]<=p.bayLength+.24));
  const xs=[...new Set(m.filter(m=>m.role==='post').map(m=>m.position[0]))].sort((a,b)=>a-b);
  assert.ok(xs.length>=5);for(let i=1;i<xs.length;i++)assert.ok(xs[i]-xs[i-1]<=p.bayLength);
 });
@@ -34,6 +36,16 @@ test('stairs meet the deck edge and descend uniformly to a real landing',()=>{
  const landing=m.find(m=>m.role==='landing');assert.ok(landing);
  assert.equal(landing.position[1]+landing.size[1]/2,p.landingHeight);
  assert.equal(dockMembers({...p,stairs:false}).filter(m=>['tread','stringer','landing'].includes(m.role)).length,0);
+});
+test('long decks grow from finite stock-length boards and supported framing segments',()=>{
+ const p={...defaultDock(),width:8.1},m=dockMembers(p);
+ for(const role of ['deck','beam','joist','fascia'])for(const part of m.filter(m=>m.role===role))assert.ok(Math.max(part.size[0],part.size[2])<=p.bayLength+.24,`${part.id} has unsegmented length`);
+});
+test('dragging either footprint edge anchors the opposite edge without moving the native root',()=>{
+ const p=defaultDock(),next=resizeDock(p,'width',1);
+ assert.equal(next.width,p.width+1);assert.equal(next.origin[0]-next.width/2,-p.width/2);
+ const left=resizeDock(p,'widthMin',-1);assert.equal(left.width,p.width+1);assert.equal(left.origin[0]+left.width/2,p.width/2);
+ const far=resizeDock(next,'depth',.6);assert.equal(far.origin[1]-far.depth/2,-p.depth/2);
 });
 test('member identities survive extent edits and malformed dimensions fail loudly',()=>{
  const p=defaultDock(),a=dockMembers(p),b=dockMembers({...p,width:7});
@@ -59,4 +71,15 @@ test('recipe preview, cancel and Undo use native history while sharing member re
  edits.register('@dock:test',{read:()=>root.userData.stockroomDock,check:checkedDock,write:p=>rebuildDock(root,p)});
  edits.begin('@dock:test','Resize');edits.preview({...before,width:8});assert.equal(root.userData.stockroomDock.width,8);edits.cancel();assert.deepEqual(root.userData.stockroomDock,before);
  edits.begin('@dock:test','Resize');for(const depth of [3.2,3.4,3.6])edits.preview({...before,depth});edits.commit();assert.equal(edits.state().undoCount,1);edits.undo();assert.deepEqual(root.userData.stockroomDock,before);edits.redo();assert.equal(root.userData.stockroomDock.depth,3.6);assert.ok(root.children.every(m=>m.geometry===geometry));
+});
+test('translating a rotated stringer under a non-uniform parent does not invent rotation or scale',()=>{
+ const root=createDock();root.rotation.y=.4;root.scale.set(1.15,1,1);root.updateMatrixWorld(true);const member=root.children.find(m=>m.name==='stringer:0'),position=new THREE.Vector3(),rotation=new THREE.Quaternion(),scale=new THREE.Vector3();member.matrixWorld.decompose(position,rotation,scale);const e=new THREE.Euler().setFromQuaternion(rotation),anchor={position:position.toArray(),rotation:[e.x,e.y,e.z],scale:scale.toArray()};
+ const value={...structuredClone(anchor),anchor,member:member.name,localMatrix:member.matrix.toArray(),dock:root.userData.stockroomDock};value.position[1]+=.08;
+ const next=editDockMember(value,root.matrixWorld),offset=next.memberOffsets[member.name];assert.ok(offset);assert.ok(Math.abs(offset.position[1]-.08)<1e-9);assert.ok(offset.rotation.every(v=>Math.abs(v)<1e-9));assert.ok(offset.scale.every(v=>Math.abs(v-1)<1e-9));
+});
+test('native repetition survives dock replanning and refreshes copied member poses',()=>{
+ const p={...defaultDock(),stairs:false},root=createDock(p),entry={id:'dock',type:'pbr',source:DOCK_SOURCE,object:root,dock:p,repetition:{...repetitionDefaults(),mode:'line',count:2,step:[8,0,0]}},controller=createSceneRepetitionController({objects:()=>[entry],groups:()=>[],readPose:o=>({position:o.position.toArray(),rotation:[o.rotation.x,o.rotation.y,o.rotation.z],scale:o.scale.toArray()})});
+ controller.sync();assert.equal(root.children.filter(isRepetitionCopy).length,1);
+ const next={...p,height:1.25};rebuildDock(root,next);entry.dock=next;assert.equal(root.children.filter(isRepetitionCopy).length,1,'replanning must not sweep native repeat roots');controller.sync();
+ const copy=root.children.find(isRepetitionCopy),board=root.children.find(m=>m.name==='deck:0'),copied=copy.children.find(m=>m.name==='deck:0');assert.deepEqual(copied.position.toArray(),board.position.toArray());assert.equal(copied.geometry,board.geometry);controller.clearAll();
 });

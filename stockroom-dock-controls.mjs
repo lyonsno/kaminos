@@ -1,6 +1,5 @@
 import * as THREE from './lib/three.core.js';
-import {checkedDock,rebuildDock,dockMembers} from './stockroom-dock.mjs';
-import {checkedPose} from './scene-edit-session.mjs';
+import {checkedDock,rebuildDock,resizeDock,editDockMember} from './stockroom-dock.mjs';
 import {installSceneControlHistory} from './scene-control-history.mjs';
 
 // The recipe is the only shape state. Native scene edits own each gesture.
@@ -13,12 +12,12 @@ export function createDockEditing({document,viewport,canvas,camera,navigation,en
    const live=find(seat.id),show=live?.object===seat.root&&active(seat)&&live.object.visible;
    seat.overlay.hidden=!show;if(!show)continue;
    const p=recipe(seat.id),rect=canvas.getBoundingClientRect(),vp=viewport.getBoundingClientRect();seat.root.updateWorldMatrix(true,false);
-   const points={width:[p.width/2,p.height,0],depth:[0,p.height,p.depth/2],height:[-p.width/2,p.height,-p.depth/2],stairRun:[p.width/2+p.stairRun,p.landingHeight,0]};
+   const points={width:[p.width/2,p.height,0],widthMin:[-p.width/2,p.height,0],depth:[0,p.height,p.depth/2],depthMin:[0,p.height,-p.depth/2],height:[-p.width/2,p.height,-p.depth/2],stairRun:[p.width/2+p.stairRun,p.landingHeight,0]};
    for(const [key,b]of seat.handles){
-    const world=new THREE.Vector3(...points[key]).applyMatrix4(seat.root.matrixWorld),screen=world.project(camera);
+    const point=[...points[key]];point[0]+=p.origin[0];point[2]+=p.origin[1];const world=new THREE.Vector3(...point).applyMatrix4(seat.root.matrixWorld),screen=world.project(camera);
     b.hidden=screen.z<-1||screen.z>1||key==='stairRun'&&!p.stairs;
     b.style.left=`${rect.left-vp.left+(screen.x+1)*rect.width/2}px`;b.style.top=`${rect.top-vp.top+(1-screen.y)*rect.height/2}px`;
-    b.title=`${key==='stairRun'?'Stair run':key[0].toUpperCase()+key.slice(1)} ${p[key].toFixed(2)} m`;
+    const field=key.replace('Min','');b.title=`${field==='stairRun'?'Stair run':field[0].toUpperCase()+field.slice(1)} ${p[field].toFixed(2)} m`;
     b.setAttribute('aria-label',b.title);
    }
   }
@@ -36,8 +35,8 @@ export function createDockEditing({document,viewport,canvas,camera,navigation,en
   if(event.button!==0||gesture)return;
   event.preventDefault();event.stopPropagation();
   try{
-   const p=recipe(seat.id),axis=new THREE.Vector3(key==='width'||key==='stairRun'?1:0,key==='height'?1:0,key==='depth'?1:0);
-   const anchor=new THREE.Vector3(...(key==='width'?[p.width/2,p.height,0]:key==='depth'?[0,p.height,p.depth/2]:key==='height'?[-p.width/2,p.height,-p.depth/2]:[p.width/2+p.stairRun,p.landingHeight,0]));
+   const p=recipe(seat.id),field=key.replace('Min',''),axis=new THREE.Vector3(field==='width'||field==='stairRun'?1:0,field==='height'?1:0,field==='depth'?1:0),sign=key.endsWith('Min')?-1:1;
+   const anchor=new THREE.Vector3(...(field==='width'?[sign*p.width/2,p.height,0]:field==='depth'?[0,p.height,sign*p.depth/2]:field==='height'?[-p.width/2,p.height,-p.depth/2]:[p.width/2+p.stairRun,p.landingHeight,0]));anchor.x+=p.origin[0];anchor.z+=p.origin[1];
    seat.root.updateWorldMatrix(true,false);const view=ray(event,seat.root),normal=view.direction.clone().addScaledVector(axis,-view.direction.dot(axis));
    if(normal.lengthSq()<1e-10)throw Error('View this edge from an angle to resize it');
    const plane=new THREE.Plane().setFromNormalAndCoplanarPoint(normal.normalize(),anchor),start=view.intersectPlane(plane,new THREE.Vector3());if(!start)return;
@@ -49,8 +48,8 @@ export function createDockEditing({document,viewport,canvas,camera,navigation,en
  function move(event){
   const g=gesture;if(!g||g.pointerId!==event.pointerId)return;
   event.preventDefault();const point=ray(event,g.seat.root).intersectPlane(g.plane,new THREE.Vector3());if(!point)return;
-  const delta=point.sub(g.start).dot(g.axis)*(g.key==='width'||g.key==='depth'?2:1),value=g.recipe[g.key]+delta;
-  try{const next={...g.recipe,[g.key]:event.ctrlKey||event.metaKey?Math.round(value/.1)*.1:value};checkedDock(next);edits.preview(next);}catch(error){g.seat.error.textContent=error.message;}
+  const delta=point.sub(g.start).dot(g.axis);
+  try{edits.preview(resizeDock(g.recipe,g.key,delta,event.ctrlKey||event.metaKey));g.seat.error.textContent='';}catch(error){g.seat.error.textContent=error.message;}
  }
  const keydown=event=>{if(gesture&&event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();finish(true);}};
  const blur=()=>finish(true);
@@ -80,29 +79,25 @@ export function createDockEditing({document,viewport,canvas,camera,navigation,en
   direction.style.cssText='background:#25262a;color:#d6d7db;border:1px solid #424348;border-radius:4px;padding:5px;max-width:100%';
   const overlay=document.createElement('div');overlay.className='scene-owner-playback';overlay.style.cssText='position:absolute;inset:0;pointer-events:none;overflow:hidden';overlay.dataset.dockHandles=id;
   const handles=new Map(),proxy=new THREE.Group();proxy.userData.kaminosEditorHelper=true;root.parent.add(proxy);
-  const seat={id,target,root,properties,error,fields,direction,stairs,overlay,handles,history,drags,proxy,piece:'deck:0',editMode:false};
+  const seat={id,target,pieceTarget,root,properties,error,fields,direction,stairs,overlay,handles,history,drags,proxy,piece:'deck:0',editMode:false};
   const member=()=>find(id)?.object.children.find(m=>m.name===seats.get(id)?.piece);
   const poseOf=object=>{object.updateWorldMatrix(true,false);const p=new THREE.Vector3(),q=new THREE.Quaternion(),s=new THREE.Vector3();object.matrixWorld.decompose(p,q,s);const e=new THREE.Euler().setFromQuaternion(q);return {position:p.toArray(),rotation:[e.x,e.y,e.z],scale:s.toArray()};};
-  const snapshot=()=>{const current=seats.get(id),m=member();if(!current||!m)throw Error('Choose an existing dock piece');const pose=poseOf(m);return {...pose,anchor:structuredClone(pose),member:current.piece,dock:recipe(id)};};
+  const snapshot=()=>{const current=seats.get(id),m=member();if(!current||!m)throw Error('Choose an existing dock piece');const pose=poseOf(m);return {...pose,anchor:structuredClone(pose),localMatrix:m.matrix.toArray(),member:current.piece,dock:recipe(id)};};
   if(!targets.has(pieceTarget)){
-   edits.register(pieceTarget,{read:snapshot,check:value=>{checkedPose(value);checkedPose(value.anchor);const p=checkedDock(value.dock);if(!dockMembers(p).some(m=>m.id===value.member))throw Error('Dock piece no longer exists');return {...structuredClone(value),dock:p};},write:value=>{
-    let p=checkedDock(value.dock);const e=find(id);if(!e)throw Error('Dock is no longer in this scene');
-    if(!['position','rotation','scale'].every(key=>value[key].every((v,i)=>v===value.anchor[key][i]))){
-     const world=new THREE.Matrix4().compose(new THREE.Vector3(...value.position),new THREE.Quaternion().setFromEuler(new THREE.Euler(...value.rotation)),new THREE.Vector3(...value.scale));
-     e.object.updateWorldMatrix(true,false);const local=e.object.matrixWorld.clone().invert().multiply(world),position=new THREE.Vector3(),rotation=new THREE.Quaternion(),scale=new THREE.Vector3();local.decompose(position,rotation,scale);const angles=new THREE.Euler().setFromQuaternion(rotation),base=dockMembers(p).find(m=>m.id===value.member);
-     p.memberOffsets[value.member]={position:position.toArray().map((v,i)=>v-base.position[i]),rotation:[angles.x,angles.y,angles.z].map((v,i)=>v-base.rotation[i]),scale:scale.toArray().map((v,i)=>v/base.size[i])};p=checkedDock(p);
-    }
-    rebuildDock(e.object,p);e.dock=p;const current=seats.get(id);if(current)current.piece=value.member;redraw();refresh();
+   edits.register(pieceTarget,{read:snapshot,check:value=>{const e=find(id);if(!e)throw Error('Dock is no longer in this scene');e.object.updateWorldMatrix(true,false);editDockMember(value,e.object.matrixWorld);return structuredClone(value);},write:value=>{
+    const e=find(id);if(!e)throw Error('Dock is no longer in this scene');e.object.updateWorldMatrix(true,false);const p=editDockMember(value,e.object.matrixWorld);
+    rebuildDock(e.object,p);e.dock=p;const current=seats.get(id);if(current){current.piece=value.member;current.proxy.position.fromArray(value.position);current.proxy.rotation.set(...value.rotation);current.proxy.scale.fromArray(value.scale);current.proxy.updateMatrixWorld(true);}redraw();refresh();
    }});targets.add(pieceTarget);
   }
   const placeProxy=()=>{const m=member();if(m){const pose=poseOf(m);proxy.position.fromArray(pose.position);proxy.rotation.set(...pose.rotation);proxy.scale.fromArray(pose.scale);proxy.updateMatrixWorld(true);}};
+  seat.placeProxy=placeProxy;
   seats.set(id,seat);
   seat.component=components.register(id,{
    enter(){seat.editMode=true;placeProxy();updateHandles();},exit(){seat.editMode=false;updateHandles();},
    target(){if(!member())seat.piece=root.children[0]?.name;if(!member())return null;if(!edits.state().active)placeProxy();return {id:pieceTarget,type:'dock-piece',label:seat.piece,object:proxy,read:snapshot,frameObjects:[member()]};},
    pick(event,{camera,canvas}){const rect=canvas.getBoundingClientRect(),ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,1-(event.clientY-rect.top)/rect.height*2),camera);const hit=ray.intersectObjects(root.children,false)[0];if(hit)seat.component.changed(()=>{seat.piece=hit.object.name;placeProxy();});},
   });
-  for(const [key,icon,color]of[['width','↔','#63d6bd'],['depth','↔','#72aefb'],['height','↕','#f0c56b'],['stairRun','↔','#eaa0bc']]){
+  for(const [key,icon,color]of[['width','↔','#63d6bd'],['widthMin','↔','#63d6bd'],['depth','↔','#72aefb'],['depthMin','↔','#72aefb'],['height','↕','#f0c56b'],['stairRun','↔','#eaa0bc']]){
    const b=document.createElement('button');b.type='button';b.dataset.dockHandle=key;b.textContent=icon;b.style.cssText=`position:absolute;transform:translate(-50%,-50%);width:30px;height:30px;padding:0;border-radius:50%;border:2px solid ${color};background:#202526;color:${color};pointer-events:auto;touch-action:none;cursor:${key==='height'?'ns-resize':'ew-resize'};font-size:20px;line-height:24px`;
    b.addEventListener('pointerdown',e=>begin(e,seat,key));b.addEventListener('pointermove',move);b.addEventListener('pointerup',()=>finish(false));b.addEventListener('pointercancel',()=>finish(true));b.addEventListener('lostpointercapture',()=>finish(true));overlay.append(b);handles.set(key,b);
   }
@@ -111,6 +106,7 @@ export function createDockEditing({document,viewport,canvas,camera,navigation,en
  function refresh(){
   for(const seat of seats.values()){
    if(find(seat.id)?.object!==seat.root)continue;const p=recipe(seat.id);
+   if(seat.editMode&&edits.state().active?.id!==seat.pieceTarget)seat.placeProxy();
    for(const [key,{input,row}]of seat.fields){if(document.activeElement!==input)input.value=String(p[key]);row.hidden=key.startsWith('stair')||key==='landingHeight'?!p.stairs:false;row.style.display=row.hidden?'none':'flex';}
    seat.direction.value=p.boardDirection;seat.stairs.checked=p.stairs;
   }
