@@ -10,7 +10,7 @@ test('the contextual inspector includes current appearance, structure, motion an
   const ids=flame.FLAME_PROPERTY_GROUPS.flatMap(group=>group.fields.map(([id])=>id));
   for(const id of ['volume-tone-mapping','volume-physical-kelvin-per-heat',
     'volume-physical-soot-burnout-rate','volume-physical-soot-burnout-kelvin','volume-physical-ambient',
-    'volume-boundary-sidecar-ridge','volume-microdetail','volume-fire-licks',
+    'volume-boundary-sidecar-ridge','volume-interface-shred',
     'volume-wind-model','volume-wind-gust-period','volume-reactant-mixing-time','volume-reactant-cooling-time',
     'volume-heat-release-expansion','volume-ray-start-noise','volume-occupancy-skip',
     'volume-emitter-fuel-fraction','volume-emitter-aperture-pattern','volume-emitter-inlet-turbulence']){

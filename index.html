@@ -1845,16 +1845,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <input type="checkbox" id="volume-common-gas-transport" data-volume-settings-param="volume_common_gas_transport">
       <span class="slider-val" id="volume-common-gas-transport-val">legacy split</span>
     </div>
-    <div class="slider-row" data-volume-visual-cost-knob="procedural-excitation">
-      <span class="slider-label">Swirl jostle</span>
-      <input type="range" id="volume-swirl-jostle" data-volume-settings-param="volume_swirl_jostle" min="0" max="2" step="any" value="1">
-      <span class="slider-val" id="volume-swirl-jostle-val">1.00</span>
-    </div>
-    <div class="slider-row" data-volume-visual-cost-knob="procedural-excitation">
-      <span class="slider-label">Swirl jostle focus</span>
-      <input type="range" id="volume-fine-breakup-localization" data-volume-settings-param="volume_fine_breakup_localization" min="0" max="1" step="0.01" value="0">
-      <span class="slider-val" id="volume-fine-breakup-localization-val">0.00 broad</span>
-    </div>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
       <span class="slider-label">Soot display gain</span>
       <input type="range" id="volume-density" min="0.35" max="12" step="0.05" value="4.2">
@@ -1866,19 +1856,9 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-curl-val">2.65</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="transport-detail">
-      <span class="slider-label">Microdetail</span>
-      <input type="range" id="volume-microdetail" min="0" max="2.5" step="0.05" value="2.5">
-      <span class="slider-val" id="volume-microdetail-val">2.50</span>
-    </div>
-    <div class="slider-row" data-volume-visual-cost-knob="transport-detail">
       <span class="slider-label">Shred</span>
       <input type="range" id="volume-interface-shred" min="0" max="10" step="0.05" value="2.5">
       <span class="slider-val" id="volume-interface-shred-val">2.50</span>
-    </div>
-    <div class="slider-row" data-volume-visual-cost-knob="branch-threshold">
-      <span class="slider-label">Fire Licks</span>
-      <input type="range" id="volume-fire-licks" min="0" max="10" step="0.05" value="1.65">
-      <span class="slider-val" id="volume-fire-licks-val">1.65</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="projection-pass-gate">
       <span class="slider-label">Projection</span>
@@ -1889,11 +1869,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-label">Speed</span>
       <input type="range" id="volume-speed" min="0.1" max="5" step="0.05" value="5">
       <span class="slider-val" id="volume-speed-val">5.00</span>
-    </div>
-    <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
-      <span class="slider-label">Emitter Scale</span>
-      <input type="range" id="volume-fire-scale" min="0.35" max="1.3" step="0.01" value="0.86">
-      <span class="slider-val" id="volume-fire-scale-val">0.86</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
       <span class="slider-label">Plume Height</span>
@@ -2238,40 +2213,37 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="slider-row">
       <span class="slider-label">Reaction law</span>
       <select id="volume-reaction-law" class="select-input" data-volume-settings-param="volume_reaction_law">
-        <option value="authored-tall-plume">Authored (tall plume)</option>
-        <option value="reactant-v0">Reactant candidate</option>
+        <option value="reactant-v0">Reactant</option>
       </select>
-      <span class="slider-val" id="volume-reaction-law-val">authored-tall-plume</span>
+      <span class="slider-val" id="volume-reaction-law-val">reactant-v0</span>
     </div>
-    <span class="slider-help">Authored keeps the existing tall-plume reaction. Reactant candidate replaces it with one local burn: fuel and oxidizer (ambient air carries oxidizer; the inlet stream brings fuel at Fuel Fraction and no oxidizer) burn where they share a cell and the heat is in or above the ignition band, and that one burned amount sets the fuel and oxidizer loss, the heat release, the soot (smoke) made and the Heat release expansion. Contact comes from the flow plus one named neighbour exchange; nothing depends on height in the box. Fire Licks and Interface Shred are not drawn; under Authored, Fire Licks also speeds the authored burn. Inflow or immersed source and shared gas transport (Common gas transport, or MacCormack) only; otherwise the receipt says NOT ADMITTED. Saved basins load on Authored.</span>
+<span class="slider-help">Fuel and oxygen burn together where the gas is hot enough; that burn determines fuel and oxygen loss, heat, soot production and expansion.</span>
     <div class="slider-row">
       <span class="slider-label">Mixing time</span>
       <input type="range" id="volume-reactant-mixing-time" data-volume-settings-param="volume_reactant_mixing_time" min="0.01" max="30" step="any" value="3">
       <span class="slider-val" id="volume-reactant-mixing-time-val">3.0</span>
     </div>
-    <span class="slider-help">Reactant candidate: how quickly fuel and air that already share a cell and are hot enough burn, in reference steps (each step burns 1 − e^(−dt/time) of what can burn). Shorter makes a thinner, brighter flame front; longer lets fuel travel further before it burns. It does not bring fuel and air together: the flow and the neighbour exchange do.</span>
+    <span class="slider-help">Reactant: how quickly fuel and air that already share a cell and are hot enough burn, in reference steps (each step burns 1 − e^(−dt/time) of what can burn). Shorter makes a thinner, brighter flame front; longer lets fuel travel further before it burns. It does not bring fuel and air together: the flow and the neighbour exchange do.</span>
     <div class="slider-row">
       <span class="slider-label">Cooling time</span>
       <input type="range" id="volume-reactant-cooling-time" data-volume-settings-param="volume_reactant_cooling_time" min="5" max="300" step="any" value="55.06">
       <span class="slider-val" id="volume-reactant-cooling-time-val">55</span>
     </div>
-    <span class="slider-help">Reactant candidate: how quickly heat fades, in reference steps (heat keeps e^(−dt/time) per step). 55 matches the authored cooling. Longer keeps burned gas hot and glowing further up and keeps neighbouring fuel above ignition; shorter lets the flame starve itself of heat.</span>
+    <span class="slider-help">Reactant: how quickly heat fades, in reference steps (heat keeps e^(−dt/time) per step). 55 matches the authored cooling. Longer keeps burned gas hot and glowing further up and keeps neighbouring fuel above ignition; shorter lets the flame starve itself of heat.</span>
     <div class="slider-row">
       <span class="slider-label">Soot yield</span>
       <input type="range" id="volume-reactant-soot-yield" data-volume-settings-param="volume_reactant_soot_yield" min="0" max="6" step="any" value="2">
       <span class="slider-val" id="volume-reactant-soot-yield-val">2.00</span>
     </div>
-    <span class="slider-help">Reactant candidate: soot made per unit of fuel burned, in the simulation (2 is the model default; older basins without this control load with 2). It changes how much soot exists, so smoke amount, darkness, glow and shadowing all follow; it does not change the heat released. 0 burns clean.</span>
+    <span class="slider-help">Reactant: soot made per unit of fuel burned, in the simulation (2 is the model default; older basins without this control load with 2). It changes how much soot exists, so smoke amount, darkness, glow and shadowing all follow; it does not change the heat released. 0 burns clean.</span>
     <div class="slider-row">
       <span class="slider-label">Appearance model</span>
       <select id="volume-appearance-model" class="select-input" data-volume-settings-param="volume_appearance_model">
-        <option value="authored">Legacy activity network</option>
-        <option value="compact-3">Compact (three carriers)</option>
         <option value="shred-only">Shred only (one activity field)</option>
       </select>
-      <span class="slider-val" id="volume-appearance-model-val">authored</span>
+      <span class="slider-val" id="volume-appearance-model-val">shred-only</span>
     </div>
-    <span class="slider-help">A/B of the appearance state. Authored stores nine appearance channels per cell (flame, ember, flame detail, combustion front, micro smoke, interface shred, fire lick, ember fleck, material detail) plus a separate front field. Compact stores three (flame, interface shred, combustion front) and rebuilds the other six wherever they are read, by fixed ratios fitted on the saved basin; the Physics look draws none of these channels, so the choice shows mainly in motion, where detail forces read them, and in the Old adaptive ray marcher&rsquo;s step choice. Compact needs the Reactant reaction law; otherwise Authored runs. Known limit: the separate front field is approximated by one ratio of the stored front. Saved basins load on Authored.</span>
+    <span class="slider-help">Shred adds interface-localized stirring with one transported memory. Its force is zero at Shred 0.</span>
     <div class="slider-row">
       <span class="slider-label">Solver Sweeps</span>
       <input type="range" id="volume-pressure-solver-iterations" min="4" max="240" step="4" value="60" data-volume-settings-param="volume_pressure_solver_iterations">
@@ -3023,7 +2995,7 @@ import { resolveSceneGIControlState, calibrateSceneGISettingsForBounds } from '.
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import {collisionVoxelInstances,createGpuCollisionVoxelMesh} from './scene-collision-debug.mjs';
-import {authorFireObjects,fireControlOwner,FIRE_DOMAIN_ID,projectFireSettingsToSchema,checkedFireSourceRecord,flameSourceInputs} from './scene-fire-domain.mjs';
+import {authorFireObjects,fireControlOwner,FIRE_DOMAIN_ID,projectFireSettingsToSchema,runtimeFireSettings,checkedFireSourceRecord,flameSourceInputs} from './scene-fire-domain.mjs';
 import { createFlameAuthoring, createFlameInspector, flameControlDisplayValue, portableFlamePreset, flamePresetRadius, flamePresetForLocalControls } from './flame-authoring.mjs';
 import { GRID_TUNING_FIELDS } from './volume-grid-tuning.mjs';
 import { REGION_CONTROL_FIELDS } from './volume-region-controls.mjs';
@@ -17679,7 +17651,7 @@ const TALL_PLUME_OPERATOR_PRESETS = {
 
 // Bare kaminos_volume_smoke routes boot into this committed basin export
 // (grid 64, cheap ray budget). The ruffles tall preset stays available by name.
-const DEFAULT_VOLUME_SMOKE_BASIN_URL = './artifacts/default-basin/cheap-blast-furnace.json';
+const DEFAULT_VOLUME_SMOKE_BASIN_URL = '/api/volume-settings-preset?runtime=1&id=%40reactant-preview';
 
 const CANONICAL_VOLUME_MACRO_PRESETS = {
   macro_foothold_0621: {
@@ -18756,6 +18728,8 @@ function describeFlameSettingsProblems() {
   if (clamps.length) parts.push(`Clamped to range: ${clamps.map(clamp => clamp.message).join('; ')}`);
   const basin = window.__kaminosFlameBasinClampReport;
   if (basin?.clamps?.length) parts.push(`Basin ${basin.label} was clamped to range: ${basin.clamps.map(clamp => clamp.message).join('; ')}`);
+  const fallback=window.__kaminosVolumeSettingsPresetReceipt?.runtimeFallback;
+  if(fallback?.warning)parts.push(fallback.warning);
   const sceneMigration = window.__kaminosVolumeSettingsPresetReceipt?.serverProjection?.sceneMigration
     || volumeSceneReceipt(document.getElementById('volume-scene')?.dataset.volumeSceneRequest);
   if (sceneMigration?.migrated) parts.push(sceneMigration.migrationNote);
@@ -19936,8 +19910,8 @@ function readVolumeControls({quality=viewportDisplay.quality,document=globalThis
     // The procedural-force switches were retired 2026-10-22: Microdetail and
     // Shred are their own switches; Swirl jostle sets the fine force's strength.
     proceduralDetailForces: true,
-    swirlJostle: parseFloat(document.getElementById('volume-swirl-jostle').value),
-    fineBreakupLocalization: parseFloat(document.getElementById('volume-fine-breakup-localization').value),
+    swirlJostle: 0,
+    fineBreakupLocalization: 0,
     commonGasTransport: document.getElementById('volume-common-gas-transport').checked,
     volumeExposure: 1,
     density: parseFloat(document.getElementById('volume-density').value),
@@ -19947,15 +19921,15 @@ function readVolumeControls({quality=viewportDisplay.quality,document=globalThis
     glow: 1.15,
     smoke: 2.8, // retired 2026-10-21: no effect under the Physics law
     curl: parseFloat(document.getElementById('volume-curl').value),
-    microdetail: parseFloat(document.getElementById('volume-microdetail').value),
+    microdetail: 0,
     interfaceShred: parseFloat(document.getElementById('volume-interface-shred').value),
-    fireLicks: parseFloat(document.getElementById('volume-fire-licks').value),
+    fireLicks: 0,
     projection: parseFloat(document.getElementById('volume-projection').value),
     speed: parseFloat(document.getElementById('volume-speed').value),
     raySteps: parseFloat(document.getElementById('volume-steps').value),
     adaptiveRays: parseFloat(document.getElementById('volume-adaptive-rays').value),
     occupancySkip: parseFloat(document.getElementById('volume-occupancy-skip').value),
-    fireScale: parseFloat(document.getElementById('volume-fire-scale').value),
+    fireScale: 1,
     detailScale: 1.75, // retired 2026-10-21: the single Flame simulator fixes the detail frequency
     plumeHeight: parseFloat(document.getElementById('volume-plume-height').value),
     windStrength: parseFloat(document.getElementById('volume-wind-strength').value),
@@ -20218,11 +20192,11 @@ function readVolumeControls({quality=viewportDisplay.quality,document=globalThis
     adaptiveMaterial: adaptiveMaterialRuntimeControls(document),
     ...Object.fromEntries([...WORLD_CALIBRATION_FIELDS,...SIMULATION_LEVER_FIELDS].map(f=>[f.key,f.type==='select-one'?document.getElementById(f.id).value:Number(document.getElementById(f.id).value)])),
     heatReleaseExpansion: parseFloat(document.getElementById('volume-heat-release-expansion').value),
-    reactionLaw: document.getElementById('volume-reaction-law').value || 'authored-tall-plume',
+    reactionLaw: 'reactant-v0',
     reactantMixingTime: parseFloat(document.getElementById('volume-reactant-mixing-time').value),
     reactantCoolingTime: parseFloat(document.getElementById('volume-reactant-cooling-time').value),
     reactantSootYield: parseFloat(document.getElementById('volume-reactant-soot-yield').value),
-    appearanceModel: document.getElementById('volume-appearance-model').value || 'authored',
+    appearanceModel: 'shred-only',
     velocityStaggering: document.getElementById('volume-velocity-staggering').value || 'collocated',
     immersedCentreX: parseFloat(document.getElementById('volume-immersed-centre-x').value),
     immersedCentreY: parseFloat(document.getElementById('volume-immersed-centre-y').value),
@@ -20330,8 +20304,6 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-scene-val').textContent = 'Flame';
   document.getElementById('volume-artistic-swirl-val').textContent = c.artisticSwirl ? 'on' : 'off';
   document.getElementById('volume-phased-sway-val').textContent = c.phasedSway ? 'on' : 'off';
-  document.getElementById('volume-swirl-jostle-val').textContent = c.swirlJostle.toFixed(2);
-  document.getElementById('volume-fine-breakup-localization-val').textContent = `${c.fineBreakupLocalization.toFixed(2)}${c.fineBreakupLocalization === 0 ? ' broad' : ' localized'}`;
   {
     const transportConfig = resolveTransportConfig(c);
     document.getElementById('volume-common-gas-transport-val').textContent = transportConfig.effective.commonCharacteristic
@@ -20340,9 +20312,7 @@ function updateVolumeControlLabels() {
   }
   document.getElementById('volume-density-val').textContent = c.density.toFixed(2);
   document.getElementById('volume-curl-val').textContent = c.curl.toFixed(2);
-  document.getElementById('volume-microdetail-val').textContent = c.microdetail.toFixed(2);
   document.getElementById('volume-interface-shred-val').textContent = c.interfaceShred.toFixed(2);
-  document.getElementById('volume-fire-licks-val').textContent = c.fireLicks.toFixed(2);
   document.getElementById('volume-projection-val').textContent = c.projection.toFixed(2);
   document.getElementById('volume-speed-val').textContent = c.speed.toFixed(2);
   document.getElementById('volume-steps-val').textContent = String(c.raySteps | 0);
@@ -20350,7 +20320,6 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-flame-priority-val').textContent = c.flamePriority.toFixed(2);
   document.getElementById('volume-adaptive-rays-val').textContent = c.adaptiveRays.toFixed(2);
   document.getElementById('volume-occupancy-skip-val').textContent = c.occupancySkip.toFixed(2);
-  document.getElementById('volume-fire-scale-val').textContent = c.fireScale.toFixed(2);
   document.getElementById('volume-plume-height-val').textContent = c.plumeHeight.toFixed(2);
   document.getElementById('volume-wind-strength-val').textContent = c.windStrength.toFixed(2);
   document.getElementById('volume-wind-angle-val').textContent = formatVolumeWindDirection(c.windAngle);
@@ -20739,21 +20708,15 @@ function refreshVolumeReadout() {
   }
   syncVolumeViewerPlay(s);
   const appearance = s.appearanceModel;
-  for (const id of ['volume-microdetail','volume-fire-licks','volume-swirl-jostle','volume-fine-breakup-localization','volume-fire-scale']) {
-    document.getElementById(id).disabled = appearance?.effective === 'shred-only';
-  }
   document.getElementById('volume-appearance-model-state').textContent = appearance?.reason
     ? `${appearance.requested}: ${appearance.reason}; running ${appearance.effective}`
-    : appearance?.effective === 'shred-only' ? 'Shred only: physical interface + one transported activity field'
-    : !appearance || appearance.effective !== 'compact-3'
-    ? 'authored · nine carriers + front field stored'
-    : 'compact · flame, interface shred, combustion front stored; six rebuilt at read';
+    : 'Shred: physical interface + one transported activity field';
   const reactant = s.reactantCombustion;
   document.getElementById('volume-reaction-law-state').textContent = !reactant || reactant.requested.law !== 'reactant-v0'
-    ? 'authored'
+    ? 'Reactant state unavailable'
     : (reactant.effective.admitted
-      ? `reactant candidate · mixing ${reactant.effective.mixingTimeSteps.toFixed(1)} · cooling ${reactant.effective.coolingTimeSteps.toFixed(0)} · exchange ${reactant.effective.exchange.effective.toFixed(3)}/step${reactant.effective.exchange.capped ? ' (CAPPED)' : ''}`
-      : `reactant candidate — NOT ADMITTED (${reactant.effective.reason}); the authored law runs`);
+      ? `Reactant · mixing ${reactant.effective.mixingTimeSteps.toFixed(1)} · cooling ${reactant.effective.coolingTimeSteps.toFixed(0)} · exchange ${reactant.effective.exchange.effective.toFixed(3)}/step${reactant.effective.exchange.capped ? ' (CAPPED)' : ''}`
+      : `Reactant unavailable (${reactant.effective.reason})`);
   const staggering = s.velocityStaggering;
   document.getElementById('volume-velocity-staggering-state').textContent = !staggering || staggering.requested.mode !== 'staggered'
     ? 'collocated'
@@ -20930,17 +20893,23 @@ async function admitVolumeSettingsPresetRoute(params) {
   const requestedPresetId = params.get('settings_preset');
   const requestedAuthority = params.get('settings_preset_authority');
   if (!requestedPresetId && !requestedAuthority) return null;
-  if (!requestedPresetId || requestedAuthority !== 'shared-volume-settings-preset-v2') {
+  if (!requestedPresetId || !['shared-volume-settings-preset-v2','runtime-reactant-preview-v1'].includes(requestedAuthority)) {
     throw new Error('settings preset route identity or authority is incomplete');
   }
   const [artifactResponse, schemaResponse] = await Promise.all([
-    fetch(`/api/volume-settings-preset?id=${encodeURIComponent(requestedPresetId)}`, { cache: 'no-store' }),
+    fetch(`/api/volume-settings-preset?runtime=1&id=${encodeURIComponent(requestedPresetId)}`, { cache: 'no-store' }),
     fetch('/volume-settings-preset-schema-v2.json', { cache: 'no-store' }),
   ]);
   const [artifact, schema] = await Promise.all([artifactResponse.json(), schemaResponse.json()]);
   if (!artifactResponse.ok) throw new Error(artifact.error || `settings preset lookup failed: ${artifactResponse.status}`);
   if (!schemaResponse.ok) throw new Error(`settings preset schema lookup failed: ${schemaResponse.status}`);
   const receipt = validateVolumeSettingsPresetDocument(artifact, requestedPresetId, schema);
+  if(receipt.runtimeFallback){
+    for(const key of [...params.keys()])if(key.startsWith('volume_')&&!key.startsWith('volume_light_field'))params.delete(key);
+    for(const [key,value] of receipt.routeEntries)params.set(key,value);
+    params.set('settings_preset_authority',receipt.sourcePresetAuthority);
+    console.warn(receipt.runtimeFallback.warning);setInfo(receipt.runtimeFallback.warning);
+  }
   validateVolumeSettingsPresetTarget(receipt, params);
   adaptiveMaterialSettingsAuthored=hasAuthoredAdaptiveMaterial(receipt);
   activeVolumeSettingsPresetReceipt = receipt;
@@ -21311,10 +21280,6 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_speed') && Number.isFinite(routeSpeed)) {
     document.getElementById('volume-speed').value = String(Math.max(0.1, Math.min(5, routeSpeed)));
   }
-  const routeMicrodetail = Number(params.get('volume_microdetail'));
-  if (params.has('volume_microdetail') && Number.isFinite(routeMicrodetail)) {
-    document.getElementById('volume-microdetail').value = String(Math.max(0, Math.min(2.5, routeMicrodetail)));
-  }
   const routeCurl = Number(params.get('volume_curl'));
   if (params.has('volume_curl') && Number.isFinite(routeCurl)) {
     document.getElementById('volume-curl').value = String(Math.max(0, Math.min(5, routeCurl)));
@@ -21322,10 +21287,6 @@ async function initKaminosVolumeRoute() {
   const routeInterfaceShred = Number(params.get('volume_interface_shred'));
   if (params.has('volume_interface_shred') && Number.isFinite(routeInterfaceShred)) {
     document.getElementById('volume-interface-shred').value = String(Math.max(0, Math.min(10, routeInterfaceShred)));
-  }
-  const routeFireLicks = Number(params.get('volume_fire_licks'));
-  if (params.has('volume_fire_licks') && Number.isFinite(routeFireLicks)) {
-    document.getElementById('volume-fire-licks').value = String(Math.max(0, Math.min(10, routeFireLicks)));
   }
   const routeRadiance = Number(params.get('volume_radiance'));
   const routeGlow = Number(params.get('volume_glow'));
@@ -21464,10 +21425,6 @@ async function initKaminosVolumeRoute() {
   const routeOccupancySkip = Number(params.get('volume_occupancy_skip'));
   if (params.has('volume_occupancy_skip') && Number.isFinite(routeOccupancySkip)) {
     document.getElementById('volume-occupancy-skip').value = String(Math.max(0, Math.min(1, routeOccupancySkip)));
-  }
-  const routeFireScale = Number(params.get('volume_fire_scale'));
-  if (params.has('volume_fire_scale') && Number.isFinite(routeFireScale)) {
-    document.getElementById('volume-fire-scale').value = String(Math.max(0.35, Math.min(1.3, routeFireScale)));
   }
   const routePlumeHeight = Number(params.get('volume_plume_height'));
   if (params.has('volume_plume_height') && Number.isFinite(routePlumeHeight)) {
@@ -23297,7 +23254,7 @@ function flameSettingsState(preset=readVolumeSettingsValues(),source=activeVolum
     sourcePose:flameEmitterPose});
   // The applied controls may be remapped below; the immutable source receipt
   // must remain separate even when its preset shares the input control graph.
-  state.source=source ? structuredClone({presetId:source.presetId,label:source.label,preset:source.preset,...(source.serverProjection?{serverProjection:source.serverProjection}:{}),...(source.sourceSizeRecovery?{sourceSizeRecovery:source.sourceSizeRecovery}:{})}) : null;
+  state.source=source ? structuredClone({presetId:source.presetId,label:source.label,preset:source.preset,...(source.runtimeFallback?{runtimeFallback:source.runtimeFallback}:{}),...(source.serverProjection?{serverProjection:source.serverProjection}:{}),...(source.sourceSizeRecovery?{sourceSizeRecovery:source.sourceSizeRecovery}:{})}) : null;
   state.volumeSceneRequested=source?.serverProjection?.sceneMigration?.requested
     ?? (arguments.length ? DEFAULT_VOLUME_SCENE : document.getElementById('volume-scene').dataset.volumeSceneRequest || DEFAULT_VOLUME_SCENE);
   // Applying a look preset keeps the source where the author put it. Its feed
@@ -23469,14 +23426,15 @@ function installFlameAuthoring() {
 
 async function loadAuthoredFlameBasin(id,options={}) {
   loadAuthoredFlameBasin.schemaPromise ||= fetch('/volume-settings-preset-schema-v2.json',{cache:'no-store'}).then(async r=>{const s=await r.json();if(!r.ok)throw Error(s.error||'Basin lookup failed');return s;}).catch(e=>{loadAuthoredFlameBasin.schemaPromise=null;throw e;});
-  const [artifactResponse,schema]=await Promise.all([fetch(`/api/volume-settings-preset?id=${encodeURIComponent(id)}`,{cache:'no-store'}),loadAuthoredFlameBasin.schemaPromise]);
+  const [artifactResponse,schema]=await Promise.all([fetch(`/api/volume-settings-preset?runtime=1&id=${encodeURIComponent(id)}`,{cache:'no-store'}),loadAuthoredFlameBasin.schemaPromise]);
   const artifact=await artifactResponse.json();
   if(!artifactResponse.ok)throw Error(artifact.error||'Basin lookup failed');
   const receipt=validateVolumeSettingsPresetDocument(artifact,id,schema);
   if(receipt.preset.domControls['emitter-assay-family'].value==='cluster')throw Error('Cluster basins have no placeable flame source; use Workbench for that route');
   // Operator, 2026-10-18: values outside a control's range do not ban a basin;
   // they are clamped before the write and the page says which.
-  const state=flameSettingsState(receipt.preset,receipt,options);
+  if(receipt.runtimeFallback){console.warn(receipt.runtimeFallback.warning);setInfo(receipt.runtimeFallback.warning);}
+  const state=flameSettingsState(receipt.preset,receipt,receipt.runtimeFallback?{...options,sourceSize:'current'}:options);
   const clamps=flameSettingsStateClamps(state);
   window.__kaminosFlameBasinClamps=Object.freeze(clamps);
   // Named in the flame warning until another basin replaces it.
@@ -29006,9 +28964,18 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
       return response.json();
     })());
     if(!schemaStage.current)return false;
-    const fireSettings=projectFireSettingsToSchema(restorePlan.fireSettings,schemaStage.value);
-    writeFlameSettingsState(flameSettingsState(fireSettings,activeVolumeSettingsPresetReceipt));
-    adaptiveMaterialSettingsAuthored=Object.hasOwn(restorePlan.fireSettings.domControls,'volume-adaptive-material');
+    const restored=runtimeFireSettings(restorePlan.fireSettings,schemaStage.value,{pressureIterations:volumePressureConfigForMode(restorePlan.fireSettings.domControls?.['volume-pressure-mode']?.value,DEFAULT_VOLUME_SCENE).pressureIterations});
+    if(restored.settings){
+      writeFlameSettingsState(flameSettingsState(restored.settings,activeVolumeSettingsPresetReceipt));
+    }else{
+      const fallbackStage=await sceneLoadRequests.awaitStage(loadRequestId,loadAuthoredFlameBasin('@reactant-preview',{sourceSize:'current'}));
+      if(!fallbackStage.current)return false;
+      const fallback=fallbackStage.value;
+      const warning=`SAVED FIRE REPLACED: ${restored.reason}. Loaded cheap Reactant preview; scene objects and emitter pose are preserved. Original saved file is unchanged.`;
+      fallback.source.runtimeFallback={...fallback.source.runtimeFallback,reason:restored.reason,warning};
+      console.warn(warning);setInfo(warning);writeFlameSettingsState(fallback);
+    }
+    adaptiveMaterialSettingsAuthored=!!restored.settings&&Object.hasOwn(restored.settings.domControls,'volume-adaptive-material');
   }
 
   volumePrototype?.restoreWorldFrame?.(restorePlan.flameWorldFrame??null);

@@ -173,31 +173,6 @@ test('wind: steady is the authored law unchanged; gusty modulates strength and v
   assert.doesNotMatch(source.slice(source.indexOf('export class WindGustProcess'), source.indexOf('export function resolveWindConfig')), /Math\.(sin|cos|tan)/, 'the gust process uses no periodic math (the periodic-authorship inventory forbids trig animating a simulation uniform)');
 });
 
-test('wind: the effective strength never exceeds the shader ceiling, saturation is receipted, and the gust clock follows simulated time', () => {
-  assert.equal(core.WIND_STRENGTH_CEILING, 1.5);
-  const ceilingClamps = source.match(/clamp\(u\.scene_controls\.y, 0\.0, 1\.5\)/g) || [];
-  assert.equal(ceilingClamps.length, 2, 'the predictor and the main kernel both clamp the wind strength at 1.5');
-  // Base 1.5, gust 1, a positive signal of 0.5 would ask for 2.25: the shader
-  // clamps at 1.5, so the receipt must say 1.5 and that it saturated.
-  const high = core.resolveWindConfig({ windModel: 'gusty', windStrength: 1.5, windAngle: 0, windGust: 1, windGustPeriod: 8, windGustVeer: 0 }, { s1: 0.5, s2: 0, step: 10 }).effective;
-  assert.equal(high.strength, 1.5, 'the effective strength is the strength the shader uses');
-  assert.equal(high.saturated, true);
-  assert.equal(high.unsaturatedStrength, 2.25, 'the asked-for strength is still visible');
-  const low = core.resolveWindConfig({ windModel: 'gusty', windStrength: 0.5, windAngle: 0, windGust: 0.8, windGustPeriod: 8, windGustVeer: 0 }, { s1: 0.5, s2: 0, step: 10 }).effective;
-  assert.equal(low.saturated, false);
-  assert.ok(Math.abs(low.strength - 0.7) < 1e-12);
-  // The correlation time is `period` seconds of simulated time: under the
-  // uniform time step at Speed 0.1 each step advances a tenth as much, so the
-  // process must take ten times as many steps to decorrelate.
-  const uniform = { timeStep: 'uniform', advectionScheme: 'maccormack', commonGasTransport: true };
-  const full = core.windGustTauSteps({ ...uniform, windGustPeriod: 8, speed: 1 });
-  const slow = core.windGustTauSteps({ ...uniform, windGustPeriod: 8, speed: 0.1 });
-  assert.equal(full, 8 * core.WIND_GUST_STEPS_PER_SECOND);
-  assert.ok(Math.abs(slow - full * 10) < 1e-9, `at Speed 0.1 the correlation time is ten times as many steps (${slow} vs ${full})`);
-  assert.equal(core.windGustTauSteps({ windGustPeriod: 8, speed: 0.1 }), full, 'the legacy time step has no dt scale; the step clock stands');
-  assert.match(source, /windGustProcess\.sampleAt\(state\.simStepCount \?\? 0, windGustTauSteps\(controlsSnapshot\)\)/, 'the packing uses the simulated-time correlation');
-});
-
 test('cockpit and schema carry the new controls', () => {
   for (const id of ['volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer']) {
     assert.match(index, new RegExp(`id="${id}"`), `${id} exists`);

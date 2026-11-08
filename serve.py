@@ -1411,6 +1411,12 @@ def read_volume_settings_preset(store_path, preset_ref, schema=None):
     if document.get("identity") != VOLUME_SETTINGS_PRESET_ARTIFACT_IDENTITY or document.get("presetId") != preset_id:
         raise ValueError("volume settings preset artifact identity mismatch")
     raw_payload = document.get("preset") or {}
+    if not isinstance(raw_payload, dict):
+        raise ValueError("volume settings preset payload is not a JSON object")
+    for axis in ("domControls", "rendererControls", "presentationControls"):
+        values = raw_payload.get(axis)
+        if values is not None and (not isinstance(values, dict) or any(not isinstance(value, dict) for value in values.values())):
+            raise ValueError(f"volume settings preset payload has invalid {axis}")
     if (
         document.get("schemaIdentity") != schema.get("identity")
         or document.get("controlCount") != raw_payload.get("controlCount")
@@ -2064,6 +2070,70 @@ def read_volume_settings_preset_layered(layers, preset_ref, schema=None):
             continue
         return {**document, "storeRole": role}
     raise FileNotFoundError(f"volume settings preset not found in any basin store: {requested}")
+
+
+def read_runtime_volume_settings_preset(layers, preset_ref, schema=None):
+    """Substitute an explicit, ephemeral preview; never rewrite historical work."""
+    schema = _load_volume_settings_preset_schema(schema)
+    try:
+        document = read_volume_settings_preset_layered(layers, preset_ref, schema)
+        law = (document["preset"].get("domControls") or {}).get("volume-reaction-law", {})
+        added = (document.get("schemaProjection") or {}).get("defaultsApplied") or []
+        replaced = (document.get("schemaProjection") or {}).get("unsupportedValuesDefaulted") or []
+        controls = document["preset"].get("domControls") or {}
+        value = lambda key: _settings_preset_descriptor_value(controls.get(key, {}))
+        supported_source = value("volume-emitter-source-law") in ("inflow-boundary", "immersed-source") and value("emitter-assay-family") != "cluster"
+        shared_transport = value("volume-advection-scheme") in ("maccormack", "maccormack-velocity") or value("volume-common-gas-transport") is True
+        pressure_source = (value("volume-pressure-solver") == "converged-open-top"
+                           and float(value("volume-projection")) > 0.001)
+        if (_settings_preset_descriptor_value(law) == "reactant-v0"
+                and "volume-reaction-law" not in added
+                and not any(entry.get("id") == "volume-reaction-law" for entry in replaced)
+                and supported_source and shared_transport and pressure_source):
+            return document
+        reason = "The basin uses retired combustion or a source/transport/pressure configuration that cannot feed Reactant combustion"
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        reason = str(error)
+    source = json.loads((ROOT / "artifacts/default-basin/reactant-preview-source.json").read_text())
+    payload, projection = normalize_volume_settings_preset_payload(source["preset"], schema, tolerate_foreign_controls=True)
+    controls = payload["domControls"]
+    overrides = {
+        "volume-reaction-law": "reactant-v0", "volume-appearance-model": "shred-only",
+        "volume-resolution": "32", "volume-steps": 8, "volume-render-scale": 0.4,
+        "volume-fine-velocity": "0", "volume-fine-pressure": "0",
+        "volume-world-smoke": "off", "volume-world-smoke-intermediate": "off",
+        "volume-adaptive-material": False,
+    }
+    route = urlparse(payload["route"])
+    params = dict(parse_qsl(route.query, keep_blank_values=True))
+    for key, value in overrides.items():
+        if key not in controls:
+            continue
+        descriptor = controls[key]
+        descriptor.pop("rawValue", None)
+        descriptor["value"] = value
+        params[descriptor["param"]] = _settings_preset_route_value(value)
+    payload["route"] = route._replace(query=urlencode(params)).geturl()
+    validate_volume_settings_preset_payload(payload, schema)
+    content_hash = _volume_settings_content_hash(payload, schema)
+    effective = f"vsp-{content_hash}"
+    builtin = preset_ref == "@reactant-preview"
+    if builtin:
+        reason = "No saved basin selected"
+    warning = "Built-in cheap Reactant preview (no saved basin selected)." if builtin else f"BASIN REPLACED: {preset_ref}: {reason}. Loaded cheap Reactant preview instead; the historical look is not reproduced. Original basin is unchanged."
+    return {
+        "identity": VOLUME_SETTINGS_PRESET_ARTIFACT_IDENTITY,
+        "schemaIdentity": schema["identity"], "presetId": effective,
+        "contentHash": f"sha256:{content_hash}", "controlCount": payload["controlCount"],
+        "preset": payload, "label": "Reactant preview" if builtin else "Reactant preview (historical basin fallback)",
+        "requestedPresetRef": str(preset_ref), "schemaProjection": projection,
+        "runtimeFallback": {
+            "identity": "kaminos.volume.runtime-basin-fallback.v1",
+            "requestedPresetRef": str(preset_ref), "effectivePresetId": effective,
+            "sourcePresetId": source["presetId"], "reason": reason, "warning": warning,
+            "historicalLookPreserved": False, "sourceModified": False,
+        },
+    }
 
 
 def list_volume_settings_presets_layered(layers, schema=None):
@@ -5038,7 +5108,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
     def handle_volume_settings_preset_get(self, query):
         preset_ref = (query.get("id") or query.get("preset") or [""])[0]
         try:
-            document = read_volume_settings_preset_layered(
+            reader = read_runtime_volume_settings_preset if (query.get("runtime") or [""])[0] == "1" else read_volume_settings_preset_layered
+            document = reader(
                 volume_settings_store_layers(VOLUME_SETTINGS_STORE, SHARED_BASIN_STORE), preset_ref
             )
         except FileNotFoundError as error:
@@ -5830,8 +5901,11 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         try:
             basin = scene_library_import_basin(document, store)
         except (OSError, ValueError) as error:
-            self.send_json({'error': f'Could not retain the scene fire basin: {error}'}, 400)
-            return
+            basin = {
+                'kind': 'basin', 'status': 'runtime-fallback',
+                'presetId': ((document.get('composition') or {}).get('flame') or {}).get('presetId'),
+                'warning': f'Could not retain the historical fire basin: {error}. The scene will use a cheap Reactant preview; the source basin was not modified.',
+            }
         try:
             dependencies = [scene_library_import_dependency(obj.get("source"), store)
                             for obj in document.get("objects") or [] if isinstance(obj, dict) and str(obj.get("source") or "").startswith("/api/read?")]

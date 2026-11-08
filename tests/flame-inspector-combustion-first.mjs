@@ -11,10 +11,10 @@ assert.equal(firstGroups[0]?.name,'Emission & image','image controls lead the Ma
 const combustion = firstGroups.find(group=>group.name==='Combustion');
 assert.equal(combustion.open, true, 'and starts open');
 const ids = combustion.fields.map(([id]) => id);
-for (const id of ['volume-reaction-law', 'volume-reactant-mixing-time', 'volume-heat-release-expansion','volume-physical-kelvin-per-heat','volume-reactant-cooling-time']) {
+for (const id of ['volume-reactant-mixing-time', 'volume-heat-release-expansion','volume-physical-kelvin-per-heat','volume-reactant-cooling-time']) {
   assert.ok(ids.includes(id), `${id} is in Combustion on the first panel`);
 }
-assert.equal(ids.at(-1),'volume-reaction-law','infrequent law selector follows thermal settings');
+assert.ok(!ids.includes('volume-reaction-law'),'a single combustion law has no alternate-law selector');
 const everywhere = FLAME_PROPERTY_GROUPS.flatMap(group => group.fields.map(([id]) => id));
 for (const id of ids) assert.equal(everywhere.filter(other => other === id).length, 1, `${id} appears once in the inspector`);
 const emission=firstGroups.find(group=>group.name==='Emission & image');

@@ -28,25 +28,6 @@ test('the reconstruction sample carries the fresh burn rate, sampled from the si
   assert.doesNotMatch(cellBody, /sceneSolidAt|u\.reactant_combustion_c\.z/, 'no solid mask (solid cells hold zero burn; a mask would drag the scene-solid texture into every auto-layout kernel that reaches the renderer) and no ambient fallback');
 });
 
-test('the renderer: reaction light from the burn rate and raw soot under the reactant law, originals otherwise', () => {
-  const body = fnBody(EMISSIVE_TRANSPORT_WGSL, 'emissiveMaterial');
-  assert.match(body, /let reactant = u\.reactant_combustion_a\.x > 0\.5;/);
-  assert.match(body, /let smokeAmount = select\(m\.x\+d\.x\*0\.50\+m\.w\*0\.08, m\.x, reactant\) \* max\(0\.0, u\.viewport_steps_density\.w\);/, 'raw soot under the candidate (what crosses to the exterior), the folded amount under the authored law');
-  assert.match(body, /let burnLight = reactionLightFromBurn\(r\.freshBurn, u\.reactant_combustion_d\.x\);/, 'the reaction signal is the fresh burn normalised by the appearance burn reference');
-  assert.match(body, /let reactionDrive = select\(front\*freshFuel, burnLight, reactant\);/, 'the reaction drive is fuel presence x front memory under the authored law and the burn under the candidate (coverage, carrier-built, still multiplies both)');
-  assert.match(body, /let clean = max\(0\.0,coverage\)\*reactionDrive\*exp\(-sootYield\*smokeAmount\*4\.0-hotSoot\*2\.0\);/, 'soot still suppresses reaction light locally');
-  assert.match(body, /let energy = emissiveHeatSource\(m, f, d, transported\);/, 'the temperature mapping is unchanged (transported heat); the hot-soot population follows the drawn soot amount, so it is raw smoke under the candidate');
-  // The scalar law, executed from production source (the emission test's own method).
-  const scalar = EMISSIVE_TRANSPORT_WGSL.split('fn reactionLightFromBurn(')[1].split('\n}')[0].split('-> f32 {')[1];
-  const lightAt = new Function('freshBurn', 'reference', 'max', 'exp', scalar);
-  const at = (b, ref = 0.04) => lightAt(b, ref, Math.max, Math.exp);
-  assert.equal(at(0), 0, 'no burning, no reaction light');
-  assert.equal(at(-1), 0, 'a negative sample is no burning');
-  assert.ok(Math.abs(at(0.04) - (1 - Math.exp(-1))) < 1e-12, 'one reference burn gives 1 - 1/e');
-  assert.ok(at(0.01) < at(0.02) && at(0.02) < at(0.08) && at(0.08) < 1, 'monotone and bounded');
-  assert.ok(Math.abs(at(0.04, 0) - 1) < 1e-6, 'a zero reference is guarded, not a division by zero');
-});
-
 test('every pipeline that reaches the emission function can see the sidecar: fragment visibility, the sidecar-read layout, and the two auto-layout kernels', () => {
   assert.match(source, /\{ binding: 23, visibility: GPUShaderStage\.FRAGMENT \| GPUShaderStage\.COMPUTE, texture: \{ sampleType: 'unfilterable-float', viewDimension: '3d' \} \},/, 'the raymarch fragment reads it through the shared fluid layout');
   const sidecarLayout = source.split('boundarySidecarReadBindGroupLayout = device.createBindGroupLayout({')[1].split('});')[0];

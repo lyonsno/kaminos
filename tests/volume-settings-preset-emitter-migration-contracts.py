@@ -178,7 +178,7 @@ def main():
             assert preset["controlCount"] == schema["controlCount"]
             assert preset["domControls"]["emitter-assay-family"]["value"] == "cluster"
             assert preset["domControls"]["volume-wavelet-strength"]["value"] == 1
-            assert preset["domControls"]["volume-appearance-model"]["value"] == "authored"
+            assert preset["domControls"]["volume-appearance-model"]["value"] == "shred-only"
             assert "volume-exposure" not in preset["domControls"], "retired controls are stripped on migration"
             assert preset["domControls"]["volume-artistic-swirl"]["value"] is True
             assert preset["domControls"]["volume-phased-sway"]["value"] is True

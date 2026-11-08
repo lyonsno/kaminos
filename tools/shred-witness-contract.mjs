@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
 
+export function isShredWitnessFatalConsole(text) {
+  return /invalid generated code|invalid shader|error while|validation|device lost|error occurred|PRESET LOAD FAILED/i.test(text);
+}
+
 export function validateShredWitness({state, replay, field, front}, {mode, steps, cells, split = false}) {
   assert.equal(state.backend, 'WebGPU:apple', 'native Apple GPU required');
   assert.equal(state.effectiveRoute, 'native-3d-compute-fluid-raymarch-v0');

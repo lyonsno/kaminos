@@ -223,7 +223,6 @@ test('synthetic ghosts: a constant exterior for witnesses, receipted as syntheti
   assert.equal(parseSyntheticGhosts('x:1'), null);
 });
 
-
 // Joined witness readout: the residual probe runs inside the fine projection,
 // which joined mode skips, so its height profile goes stale. A direct readback
 // of the fine field reports mean heat (slot 1 .y) in the boundary band (the
@@ -277,11 +276,6 @@ test('JG-02-C: settlement requires the join admitted, the ghosts bound and the r
   assert.match(syntheticGhostSettlementMismatch('2:0.5', { joinedAdmitted: true, joinedGhostsBound: true, joinedGhostsSynthetic: null }), /synthetic fill gone/);
   assert.match(syntheticGhostSettlementMismatch('2:0.5', { joinedAdmitted: true, joinedGhostsBound: true, joinedGhostsSynthetic: { ...fill, heat: 0 } }), /synthetic fill .* requested/);
   assert.match(syntheticGhostSettlementMismatch('2:0.5', { joinedAdmitted: true, joinedGhostsBound: true, joinedGhostsSynthetic: { ...fill, velocityLocal: [0.1, 0.5, 0] } }), /synthetic fill .* requested/);
-});
-
-test('JG-03: the front-topology field blends to the exterior appearance (0) beyond the box like the appearance slots', () => {
-  assert.match(shader, /fn sampleFrontFieldTransport\(p: vec3<f32>\) -> f32 \{\n  let fine = sampleFrontFieldMasked\(p\);\n  if \(openWorldBoundary\(\)\) \{[^\n]+\}\n  if \(!joinedGhosts\(\)\) \{ return fine; \}\n  return mix\(fine, 0\.0, clamp\(ghostOutsideAmount\(p\) \* 2\.0, 0\.0, 1\.0\)\);\n\}/);
-  assert.match(shader, /var combustionFrontTopology = 0\.0;\s*if \(!SHRED_ONLY\) \{ combustionFrontTopology = sampleFrontFieldTransport\(backCell\) \* stepRate\(0\.936\); \}/, 'legacy front transport retains exterior blending; Shred only has no front history');
 });
 
 test('JG-04: the band readback is labelled from the queued snapshot and refuses nonfinite results', () => {

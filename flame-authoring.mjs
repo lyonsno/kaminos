@@ -157,7 +157,6 @@ export const FLAME_PROPERTY_GROUPS = [
   { name:'Combustion', view:'look', open:true, fields:[
     ['volume-reactant-mixing-time','Reaction time'], ['volume-heat-release-expansion','Combustion expansion'],
     ['volume-physical-kelvin-per-heat','Kelvin per heat'], ['volume-reactant-cooling-time','Cooling time'],
-    ['volume-reaction-law','Reaction law'],
   ] },
   { name:'Soot', view:'look', open:true, fields:[
     ['volume-reactant-soot-yield','Yield per fuel burned'],
@@ -178,9 +177,7 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-smoke-interpolation','Smoke kernel'], ['volume-smoke-smoothing','Smoke cubic blend'],
   ] },
   { name:'Carriers & added forces', view:'motion', fields:[
-    ['volume-appearance-model','Activity model'],
-    ['volume-microdetail','Microdetail'], ['volume-interface-shred','Shred'],
-    ['volume-fire-licks','Fire licks'], ['volume-swirl-jostle','Swirl jostle'], ['volume-fine-breakup-localization','Swirl jostle focus'], ['volume-fire-scale','Carrier contour scale'],
+    ['volume-interface-shred','Shred'],
   ] },
   { name:'Emitter & feed', scope:'emitter', open:true, fields:[
     ['volume-emitter-source-law','Source law'],
@@ -238,7 +235,6 @@ export const FLAME_EMITTER_QUICK_GROUPS = [
     ['volume-physical-clean','Blue / clean emission'],
   ]},
   {name:'Reaction & cooling',quick:true,open:true,fields:[
-    ['volume-reaction-law','Reaction law'],
     ['volume-reactant-mixing-time','Burn / mixing time'],['volume-reactant-cooling-time','Cooling time'],
     ['volume-physical-soot-burnout-rate','Soot burnout rate'],['volume-physical-soot-burnout-kelvin','Burnout temperature (K)'],
     ['volume-heat-release-expansion','Heat release expansion'],
@@ -432,7 +428,7 @@ export function createFlameInspector({ document, host, gridTuning, scopeDescript
   for(const panel of geometry)panels.get('quality').append(panel);
   const mode=()=>({toneMapping:byId('volume-tone-mapping').value,intermediateMode:byId('volume-world-smoke-intermediate').value,
     physicsActive:readAppearanceRuntime()?.effective?.render===true,sceneLighting:readSceneLighting(),
-    supportActive:byId('volume-reaction-law').value==='authored-tall-plume'||byId('volume-boundary-sidecar-view').value!=='off'
+    supportActive:byId('volume-boundary-sidecar-view').value!=='off'
       ||!['off','boundary_fire'].includes(byId('volume-reaction-live-view').value)
       ||(byId('volume-raymarch-mode').value==='numerical'&&Number(byId('volume-flame-priority').value)>0)});
   function syncVisibility(){
