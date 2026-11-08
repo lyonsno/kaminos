@@ -44,6 +44,9 @@ a white diffuse response for those missing directional integrations. It uses
 the shared scene rendering pipeline; native direct-light shadows remain the
 light producer's responsibility. Large silhouettes remain mesh geometry.
 No training, frame-rate or broad performance claim follows from this port.
+The default SSGI source and beauty passes currently evaluate this material
+twice. Reusing the first evaluation is an identified optimization before
+interpreting a practical screen-coverage budget.
 
 The public factory `createNeumipMaterial(model, options)` returns a node material,
 live scale/gain uniforms and its source identity. `loadNeumipModel` loads and
@@ -57,6 +60,12 @@ changes compile the new material's small networks into shader code.
 npm test -- --only tests/neumip-model.mjs
 SHADER_HERDER_STRICT_METAL=1 node tools/neumip-native-check.mjs \
   /path/to/wool2_web.model /path/to/numerical-evidence
+```
+
+The resource-lifetime check runs without a GPU:
+
+```sh
+node tools/neumip-lifecycle-check.mjs /path/to/wool2_web.model
 ```
 
 The numerical check executes the production generated WGSL against an

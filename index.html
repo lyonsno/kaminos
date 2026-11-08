@@ -7528,6 +7528,7 @@ document.addEventListener('keydown', event => {
 
 function registerWorkbenchSceneObject(object, metadata) {
   const record=registerSceneObject(object,metadata);
+  refreshArrivalLightingFromWorkingScene();
   autoCalibrateSceneGIFromScene();
   return record;
 }
