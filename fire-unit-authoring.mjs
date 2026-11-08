@@ -1,7 +1,7 @@
 import {createFlameInspector} from './flame-authoring.mjs';
 import {GRID_TUNING_FIELDS} from './volume-grid-tuning.mjs';
 import {WORLD_CALIBRATION_FIELDS,SIMULATION_LEVER_FIELDS,captureWorldCalibration} from './volume-world-calibration.mjs';
-import {installSceneControlHistory} from './scene-control-history.mjs';
+import {installSceneControlHistory,installRelativeNumberDrag} from './scene-control-history.mjs';
 export function setFireUnitControlValue(node,value){
  if(node.type==='checkbox'){node.checked=value;return;}
  if(GRID_TUNING_FIELDS.some(([,id])=>id===node.id)&&node.tagName==='SELECT'&&String(value).trim()!==''&&Number.isFinite(Number(value))&&!Array.from(node.options).some(o=>o.value===String(value))){const option=node.ownerDocument.createElement('option');option.value=String(value);option.textContent=String(value);node.append(option);}
@@ -22,7 +22,10 @@ export function mountFireUnitAuthoring({document,root,owner,edits,target,seedSet
   const node=copy.getElementById(d.id);if(!node)throw Error('Unsupported fire control '+d.id);
   setFireUnitControlValue(node,node.type==='checkbox'?d.value:(d.rawValue??d.value));
  }}
- function snapshot(base=settings()){const value=structuredClone(base);for(const axis of ['domControls','rendererControls','presentationControls'])for(const d of Object.values(value[axis]??{})){
+ function snapshot(base=settings()){const value=structuredClone(base);
+  for(const id of ['volume-pressure-algorithm','volume-pressure-cg-iterations'])if(!value.domControls[id]&&seedSettings.domControls[id])value.domControls[id]=structuredClone(seedSettings.domControls[id]);
+  value.controlCount=Object.keys(value.domControls).length;
+  for(const axis of ['domControls','rendererControls','presentationControls'])for(const d of Object.values(value[axis]??{})){
   const node=copy.getElementById(d.id);if(!node)continue;d.value=node.type==='checkbox'?node.checked:['range','number'].includes(node.type)?Number(node.value):node.value;if('rawValue'in d)d.rawValue=node.type==='checkbox'?node.checked:node.value;
  }return value;}
  let applying=false,inspector;
@@ -53,5 +56,9 @@ export function mountFireUnitAuthoring({document,root,owner,edits,target,seedSet
  });
  for(const node of root.querySelectorAll('[id]'))if(!node.id.startsWith(prefix)){node.dataset.fireControlId=node.id;node.id=prefix+node.id;}
  for(const node of root.querySelectorAll('[for],[aria-controls],[aria-labelledby]'))for(const name of ['for','aria-controls','aria-labelledby']){const value=node.getAttribute(name);if(value&&!value.startsWith(prefix))node.setAttribute(name,prefix+value);}
- return {close(){inspector.closeGrid();},sync(){if(applying)return;project(settings());seedControls(copy,owner.capture().controls);inspector.sync();},dispose(){inspector.dispose?.();}};
+ const cg=root.querySelector('[data-authoring-alias="volume-pressure-cg-iterations"]');
+ const cgHistory=installSceneControlHistory({controls:[cg],edits,id:target,label:'Tune Fine CG iterations',onError});
+ const cgDrag=installRelativeNumberDrag({input:cg,grip:cg.closest('.slider-row').querySelector('label'),step:1});
+ const unsubscribe=edits.subscribe(state=>{if(!state.active)cgDrag.stop();});
+ return {close(){inspector.closeGrid();},sync(){if(applying)return;project(settings());seedControls(copy,owner.capture().controls);inspector.sync();},dispose(){unsubscribe();cgDrag.dispose();cgHistory.dispose();inspector.dispose?.();}};
 }

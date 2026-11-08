@@ -388,6 +388,10 @@ export function createFlameInspector({ document, host, gridTuning, scopeDescript
         const adaptivity=id==='volume-adaptive-rays'
           ?resolveRaymarchAdaptivity(byId('volume-raymarch-mode').value,Number(source.value),readRaymarchRuntime()):null;
         field.disabled=adaptivity?adaptivity.automatic:source.disabled;
+        if(id==='volume-pressure-cg-iterations')field.disabled=byId('volume-pressure-algorithm').value!=='amgpcg';
+        if(id==='volume-pressure-solver-iterations')field.disabled=byId('volume-pressure-algorithm').value==='amgpcg';
+        if(id==='volume-pressure-algorithm')field.disabled=byId('volume-pressure-solver').value==='legacy';
+        if(id==='volume-pressure-solver')for(const option of field.options)if(option.value==='legacy')option.disabled=byId('volume-pressure-algorithm').value==='amgpcg';
         if(adaptivity){
           grip.textContent=adaptivity.label;
           field.setAttribute('aria-label',`Flame ${adaptivity.label}`);

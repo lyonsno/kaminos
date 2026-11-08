@@ -90,3 +90,16 @@ test('actual inspector synchronization follows effective fallback and marks unma
     assert.deepEqual({value:field.value,disabled:field.disabled,label:grip.textContent},expected);
   }
 });
+
+test('pressure field availability follows the selected fire rather than cloned page disabled flags',()=>{
+ const text=fs.readFileSync(new URL('../flame-authoring.mjs',import.meta.url),'utf8');
+ const body=text.slice(text.indexOf('function syncField(force=false)'),text.indexOf('const eventName=',text.indexOf('function syncField(force=false)')));
+ for(const [id,algorithm,solver,inherited,disabled] of [
+  ['volume-pressure-cg-iterations','amgpcg','converged',true,false],['volume-pressure-cg-iterations','sor','converged',false,true],
+  ['volume-pressure-algorithm','sor','legacy',false,true],['volume-pressure-algorithm','sor','converged',true,false],
+ ]){
+  const field={type:'number',setAttribute(){}};vm.runInNewContext(body+';syncField(true);',{id,source:{value:'6',disabled:inherited,min:'1',max:''},field,grip:{},
+   byId:key=>({value:key==='volume-pressure-algorithm'?algorithm:solver}),document:{activeElement:null},readControlBounds:()=>null,readSourceControl:()=>null,flameControlDisplayValue:flame.flameControlDisplayValue});
+  assert.equal(field.disabled,disabled,`${id} in ${algorithm}/${solver}`);
+ }
+});

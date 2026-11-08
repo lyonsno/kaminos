@@ -27,3 +27,15 @@ test('private numeric pressure fields keep their authored bounds and integer ste
  assert.equal(input.max,'','an unbounded CG count must remain adjustable above its current value');
  assert.equal(input.min,'1');assert.equal(input.step,'1');
 });
+
+test('editing an older fire object materializes new pressure controls for basin saving',async()=>{
+ const {readFileSync}=await import('node:fs'),vm=await import('node:vm');
+ const text=readFileSync(new URL('../fire-unit-authoring.mjs',import.meta.url),'utf8'),start=text.indexOf('function snapshot('),end=text.indexOf('\n let applying',start);
+ const old={controlCount:1,domControls:{'volume-pressure-solver':{id:'volume-pressure-solver',value:'converged-open-top'}},rendererControls:{},presentationControls:{}};
+ const seedSettings={domControls:Object.fromEntries([['volume-pressure-algorithm','sor'],['volume-pressure-cg-iterations',6]].map(([id,value])=>[id,{id,value}]))};
+ const ctx=vm.createContext({structuredClone,seedSettings,settings:()=>old,copy:{getElementById:id=>({type:id==='volume-pressure-cg-iterations'?'number':'select-one',value:id==='volume-pressure-cg-iterations'?'10':id==='volume-pressure-algorithm'?'amgpcg':'converged-open-top'})}});
+ vm.runInContext(text.slice(start,end),ctx);const result=ctx.snapshot();
+ assert.ok(result.domControls['volume-pressure-algorithm'],'edited legacy object must include its pressure algorithm in basin settings');
+ assert.deepEqual(JSON.parse(JSON.stringify(result.domControls['volume-pressure-algorithm'])),{id:'volume-pressure-algorithm',value:'amgpcg'});
+ assert.equal(result.domControls['volume-pressure-cg-iterations'].value,10);assert.equal(result.controlCount,3);assert.equal(old.controlCount,1);
+});
