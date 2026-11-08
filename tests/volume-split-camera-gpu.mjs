@@ -55,3 +55,22 @@ test('camera history policy is explicit and rejects unknown values',()=>{
  assert.equal(splitIntegralSettings({cameraMotion:'reset'}).cameraMotion,'reset');
  assert.throws(()=>splitIntegralSettings({cameraMotion:'unknown'}),/camera/i);
 });
+
+test('camera history selector applies its string policy and respects comparison hold',async()=>{
+ const {default:definition}=await import('../experiments/split-optical-transport.experiment.mjs');
+ let held=false,view={position:[0,0,3]},applied;const records=[];
+ const doc={activeElement:null};
+ class Element extends EventTarget{
+  constructor(tag){super();this.tagName=tag;this.children=[];this.dataset={};this.style={};this.classList={contains:()=>false};}
+  append(...els){this.children.push(...els);}prepend(...els){this.children.unshift(...els);}setAttribute(){}
+  querySelectorAll(){const all=e=>[e,...e.children.flatMap(all)];return all(this).filter(e=>e.dataset.optical);}
+ }
+ doc.createElement=tag=>new Element(tag);doc.defaultView={__kaminosVolumePrototype:{setSplitIntegral:o=>{applied=o;},debugState:()=>({}),isIntegralEvaluationHeld:()=>held}};
+ const session={onFrame:()=>()=>{},redraw(){},readView:()=>view,setView:v=>(view=v),dispose(){}};
+ const owner=await definition.create({host:{scene:{open:async()=>session},controls:{document:doc,installNumberDrag:()=>null}},record:r=>records.push(r),updateInputs(){}});
+ const root=new Element('div');owner.mount({root,document:doc,invoke:async(op,value)=>owner.operations[op](value)});
+ const select=root.querySelectorAll().find(e=>e.dataset.optical==='cameraMotion');select.value='reset';select.dispatchEvent(new Event('change'));await Promise.resolve();
+ assert.equal(applied.cameraMotion,'reset','UI choice must reach the same policy operation as agents');
+ held=true;assert.throws(()=>owner.operations.setView({position:[1,0,3]}),/Resume history comparison/);assert.deepEqual(view,{position:[0,0,3]});
+ held=false;owner.operations.setView({position:[1,0,3]});assert.deepEqual(view,{position:[1,0,3]});assert.equal(records.at(-1).kind,'optical-transport.camera');await owner.dispose();
+});
