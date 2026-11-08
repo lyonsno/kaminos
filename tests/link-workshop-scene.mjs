@@ -96,3 +96,22 @@ console.log('Attachment placement, native offset editing, moving assembly, body-
  assert.equal(walks,0,'Normalized returned body geometry also avoids repeated vertex walks');assert.ok(Object.isFrozen(vertices));
  const detached=records.properties(normalized);detached.geometry.bodies[0].object.object.name='external body';assert.notEqual(normalized.geometry.bodies[0].object.object.name,'external body');
 }
+
+// Live scene admission is a separate consumer from saved-document normalization.
+{
+ const {createSceneObjectRecord}=await import('../scene-object-record.mjs');
+ const {createWorkingScene}=await import('../working-scene.mjs');
+ const {exportHinge,importHinge}=await import('../experiments/link-workshop/hinge-primitives.mjs');
+ const source=structuredClone(capturedWithBodies);source.mechanism.mounts=[{id:'s',owner:{objectId:'payload'},position:[0,0,0],rotation:[0,0,0]},{id:'t',owner:{joint:1},position:[0,0,0],rotation:[0,0,0]}];
+ source.mechanism.attachments=[{objectId:'payload',sourceMount:'s',targetMount:'t',offset:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},hinge:[0,1],hardware:importHinge({family:'clevis',size:1},exportHinge({family:'clevis',size:1}))}];
+ const object=mechanismObject(source.mechanism,source.geometry),live=createSceneObjectRecord(object,source,{id:'live'}),scene=createWorkingScene();scene.put(live);
+ const entry=scene.objects[0],parts=entry.mechanism.attachments[0].hardware.parts,partVertices=parts.moving.geometries.find(g=>g.data?.attributes?.position).data.attributes.position.array,bodyVertices=entry.geometry.bodies[0].object.geometries.find(g=>g.data?.attributes?.position).data.attributes.position.array;
+ assert.equal(records.reloadable(entry),true);const stringify=JSON.stringify;let partWalks=0,bodyWalks=0;
+ JSON.stringify=function(value,replacer,space){return stringify(value,function(k,v){if(v===partVertices)partWalks++;if(v===bodyVertices)bodyWalks++;return typeof replacer==='function'?replacer.call(this,k,v):v;},space);};
+ try{for(let i=0;i<4;i++)assert.equal(records.reloadable(entry),true);}finally{JSON.stringify=stringify;}
+ assert.equal(partWalks,0,'Live Outliner entries retain hinge identities after scene admission');assert.equal(bodyWalks,0,'Live Outliner entries retain returned body identities after scene admission');
+ assert.ok(Object.isFrozen(partVertices));assert.ok(Object.isFrozen(bodyVertices));
+ const oldName=parts.moving.object.name;source.mechanism.attachments[0].hardware.parts=structuredClone(parts);source.mechanism.attachments[0].hardware.parts.moving.object.name='caller';assert.equal(parts.moving.object.name,oldName,'Live retained fields must not alias mutable input');
+ const publicFields=records.properties(entry);publicFields.mechanism.attachments[0].hardware.parts.moving.object.name='public';assert.equal(parts.moving.object.name,oldName,'Live record property extraction remains detached');
+ entry.mechanism.mounts[1].owner.joint=88;assert.equal(records.reloadable(entry),false,'Live metadata invalidation is preserved');
+}
