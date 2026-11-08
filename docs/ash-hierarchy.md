@@ -12,7 +12,7 @@ coordinate capacity is refused explicitly. There is no three-level ceiling.
 
 **Material storage budget (MiB)** reserves one shared brick pool across all
 depths, plus the covering grid and its material/flux/surface/metadata buffers.
-**Airborne storage budget (MiB)** independently bounds parcel, live-list and topology-copy storage. Parcels use finest-cell mass units; one impact coats only supported neighboring cells and keeps remaining mass airborne at the contact. Transport capacity exhaustion keeps emission pending instead of dropping it. Smaller air budgets can therefore limit deposition throughput. Old saves without this setting retain their original slot count.
+**Airborne storage budget (MiB)** independently bounds parcel, live-list and topology-copy storage. Parcels retain finest-cell accounting units with an independently chosen physical transport quantity; one impact coats only supported neighboring cells and keeps remaining mass airborne at the contact. Transport capacity exhaustion keeps emission pending instead of dropping it. Smaller air budgets can therefore limit deposition throughput. Old saves without this setting retain their original slot count.
 Object-local collision caches have separate allocations;
 the runtime reports them. A finer target does not reserve a finer covering grid
 or a full-world page map. Parent-relative child links cost storage only for

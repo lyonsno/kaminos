@@ -17,8 +17,8 @@ await withKaminosGpu(async ctx=>{
   assert.equal(patch.read().surfaceCache.lighting,'cached-finest-corners','settled surface lighting must reuse GPU derived data');
   patch.setActivity({moveAirborne:false,settleDeposited:false,showAirborne:true,showDeposited:false});const before=await patch.snapshot();patch.step(null,{position:[.13,.3,.13],spread:.02,rate:.00001,dt:1/30});const frozen=await patch.snapshot();assert.equal(frozen.falling.requestedVolume,before.falling.requestedVolume,'paused airborne transport cannot silently bank new emission');assert.deepEqual(frozen.values,before.values,'disabled settling and transport preserve physical material');assert.equal(patch.root.getObjectByName('Airborne ash').visible,true,'air remains drawable independently of the deposit');
   patch.setActivity({moveAirborne:true,settleDeposited:true,showAirborne:false,showDeposited:true});patch.step(null,{position:[.13,.3,.13],spread:.02,rate:.00001,dt:1/30});const live=await patch.snapshot();assert.ok(live.falling.requestedVolume>before.falling.requestedVolume);assert.ok(Math.abs(live.retainedVolume-live.volume)<1e-9);
-  patch.setRefinementPolicy({...patch.layout.refinement,maxDepth:0,depthBudgetMiB:[0],planningRounds:1});for(let n=0;n<3;n++)patch.step();const history=await patch.snapshot();assert.ok(Math.abs(history.retainedVolume-live.retainedVolume)<1e-9,'lowering new-detail limits preserves material history');
-  await compareAshCornerCache({ctx,patch,attributes,source});
+  await compareAshCornerCache({ctx,patch,attributes,source});const coated=await patch.snapshot();
+  patch.setRefinementPolicy({...patch.layout.refinement,maxDepth:0,depthBudgetMiB:[0],planningRounds:1});for(let n=0;n<3;n++)patch.step();const history=await patch.snapshot();assert.ok(Math.abs(history.retainedVolume-coated.retainedVolume)<1e-9,'lowering new-detail limits preserves material history');
   console.log(JSON.stringify({source,stationaryPassBound:24,allocation:patch.read().allocatedBytes,conserved:history.retainedVolume}));
  });}finally{patch?.dispose();rail.geometry.dispose();rail.material.dispose();}
 });

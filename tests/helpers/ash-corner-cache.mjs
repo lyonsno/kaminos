@@ -5,6 +5,7 @@ export async function compareAshCornerCache({ctx,patch,attributes,source}){
  const {refinementVertexWGSL}=await load('ash/refinement-surface.mjs'),{refinementArena}=await load('ash/refinement-shader.mjs');
  const {device}=ctx,U=globalThis.GPUBufferUsage,p=patch.layout,a=refinementArena(p);
  await patch.deposit({blanketDepth:.14});
+ const {hierarchyView}=await load('ash/hierarchy-plan.mjs'),{refinementCell}=await load('ash/refinement-plan.mjs');const saved=await patch.snapshot(),view=hierarchyView(p,saved.residency);assert.ok(saved.values.some((v,i)=>v>0&&refinementCell(view,i).size===1),'cache comparison requires actual finest material, not only coarse fallback');
  const state=await patch.diagnostics(),count=state.stats.visibleFaces;assert.ok(count>0);
  const entries=[...attributes],mass=entries.find(([a])=>a.array instanceof Float32Array&&a.array.length===p.count)[1].buffer;
  const byLength=n=>entries.filter(([a])=>a.array instanceof Uint32Array&&a.array.length===n).map(x=>x[1].buffer);
