@@ -83,19 +83,29 @@ or a failed startup cannot claim that the selected settings applied. `capture()`
 continues returning the actual complete scene settings without saving anything.
 
 The **Scene reflections** section also stores reflection enablement, linear
-resolution scale, march steps, glossy ray count, sampling sequence, distance,
-depth tolerance, roughness cutoff and temporal filtering. Both New scenes and
+resolution scale, march steps, glossy ray count, crossing refinement steps,
+sampling sequence, distance, depth tolerance, roughness cutoff and temporal filtering. Both New scenes and
 Agent runs use these fields through the same preference file. Saved scenes keep
 their authored reflection settings; changing a preference draft does not change
 the open scene.
 
-Trace steps advance each reflection ray through the scene depth buffer. Glossy
-rays integrate directions across the material's roughness lobe. **Changing
-samples** uses a frame-varying random sequence; **Stable approximation** uses a
-coherent Hammersley set within every frame. The latter trades temporal sampling
-noise for finite angular approximation error, including possible structured
-artifacts. It does not reveal hidden or off-screen geometry, and camera motion
-can still expose depth and reconstruction discontinuities. It is available for
-comparison without replacing the existing stochastic sequence. The working
-factory tune is six march steps and 33% width/height; larger scenes or thin
+**March steps per ray** controls the coarse depth search. **Rays per pixel**
+samples directions across the roughness lobe. **Refinement steps per crossing**
+controls binary search after each candidate crossing; six steps divides that
+candidate interval by 64. Rejected candidates can be followed by another crossing,
+so refinement can run more than once per ray. Zero disables binary refinement.
+Trace work scales with tracing pixels × rays × (coarse samples + candidate
+crossings × refinement steps), with early exits. Source mip generation,
+reconstruction, history and final shading have their own costs. A 50% tracing
+resolution uses 25% of the viewport pixels; 25% uses 6.25%.
+
+**Scrambled samples** uses a per-pixel scrambled Halton sequence. The retained
+**Fixed pattern (diagnostic)** comparison has correlated visibility transitions
+that can produce harsh artifacts; it is not the quality default. Fresh frames
+use a geometry- and hit-distance-aware spatial filter. Temporal history reprojects
+receiver surfaces and virtual reflection positions during camera movement,
+validates depth, normal, roughness and hit distance, and clips prior radiance to
+the current neighborhood. This provides camera reprojection, not general object
+motion vectors or hidden geometry. The working factory tune is one ray, six
+march steps, six refinement steps and 33% width/height; larger scenes or thin
 features can require more steps. These are defaults, not enforced budgets.

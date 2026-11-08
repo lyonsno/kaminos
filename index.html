@@ -11822,7 +11822,7 @@ async function initScene() {
   const reflectionHost=document.createElement('section');reflectionHost.id='scene-reflection-controls';document.getElementById('scene-gi-refinement-status').after(reflectionHost);
   let reflectionControls=null;
   const writeReflections=value=>{sceneGI.reflections.setSettings(value);scenePass.contextNode=THREE.TSL.context({...builtinAOContext(aoOutput).getFlowContextData(),sceneReflectionLighting:sceneGI.reflections.settings.enabled?sceneGI.reflections.lightingContext:null});scenePass.needsUpdate=true;rebuildSceneGIOutput();markDirty();};
-  restoreSceneReflectionSettings=value=>{writeReflections(value);reflectionControls?.sync();};
+  restoreSceneReflectionSettings=value=>{writeReflections(value);sceneGI.reflections.reset('scene-restored');reflectionControls?.sync();};
   window.kaminosSceneReflections={read:()=>{const state=sceneGI.reflections.state();return {...state,settings:{...sceneGI.reflections.settings},effective:state.effective&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene')};},set(value){if(reflectionControls)reflectionControls.set(value);else writeReflections(value);return this.read();},reset:reason=>sceneGI.reflections.reset(reason)};
   window.kaminosSceneBloom={read:()=>({...sceneBloom.read(),effective:sceneBloom.read().settings.enabled&&sceneBloom.read().settings.radius>0&&sceneBloom.read().settings.strength>0&&!waterFeature.host&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene'),flameComposition:{...sceneFlameHDR?.read(),effective:authoredFlameHDRActive&&sceneFlameHDR?.read().effective===true}}),set(settings){bloomControls.set(settings);return this.read();}};
   function rebuildSceneGIOutput() {

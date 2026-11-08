@@ -13,7 +13,7 @@ test('production reflection query retains nearby distinct surfaces independently
   const usage=GPUTextureUsage,depth=device.createTexture({size:[256,1],format:'depth32float',usage:usage.TEXTURE_BINDING|usage.RENDER_ATTACHMENT});
   const color=device.createTexture({size:[1,1],format:'rgba16float',usage:usage.TEXTURE_BINDING|usage.COPY_DST});
   const normal=device.createTexture({size:[256,1],format:'rgba32float',usage:usage.TEXTURE_BINDING|usage.COPY_DST});
-  const result=device.createBuffer({size:48,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC}),read=device.createBuffer({size:48,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});
+  const result=device.createBuffer({size:96,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC}),read=device.createBuffer({size:96,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});
   try{
    device.queue.writeTexture({texture:color},new Uint16Array([0x4000,0,0,0x3c00]),{bytesPerRow:8},[1,1]);
    const normals=new Float32Array(256*4);for(let i=0;i<256;i++)normals.set([0,0,1,.1],i*4);
@@ -25,10 +25,10 @@ test('production reflection query retains nearby distinct surfaces independently
     @group(0) @binding(3) var normals:texture_2d<f32>;
     @group(0) @binding(4) var<storage,read_write> results:array<vec4<f32>>;
     @compute @workgroup_size(1) fn main(@builtin(global_invocation_id) id:vec3<u32>){
-     let gap=select(0.02,0.08,id.x==2u);let thickness=select(0.15,0.3,id.x==1u);
+     let gap=select(0.02,0.08,id.x==2u);let thickness=select(0.15,0.3,id.x==1u);let steps=select(64u,6u,id.x>=3u);let refinement=select(6u,select(0u,select(6u,12u,id.x==5u),id.x>=4u),id.x>=3u);
      let hit=traceSceneReflection(vec3<f32>(0.0,0.0,-2.0+gap),normalize(vec3<f32>(0.6,0.0,-1.0)),
       depths,colors,filtered,normals,${matrix(camera.projectionMatrix)},${matrix(camera.projectionMatrixInverse)},
-      0.4,thickness,0.1,64u,vec3<f32>(0.0,0.0,1.0),vec3<f32>(0.0,0.0,1.0),0.1,25.0/3.0);
+      0.4,thickness,0.1,steps,refinement,vec3<f32>(0.0,0.0,1.0),vec3<f32>(0.0,0.0,1.0),0.1,25.0/3.0);
      results[id.x]=vec4<f32>(f32(hit.kind),hit.distance,hit.confidence,hit.radiance.r);
     }`});
    const pipeline=await device.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint:'main'}});
@@ -38,7 +38,7 @@ test('production reflection query retains nearby distinct surfaces independently
     {binding:3,resource:normal.createView()},{binding:4,resource:{buffer:result}},
    ]});
    const encoder=device.createCommandEncoder(),clear=encoder.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthClearValue:depthValue,depthLoadOp:'clear',depthStoreOp:'store'}});clear.end();
-   const pass=encoder.beginComputePass();pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(3);pass.end();encoder.copyBufferToBuffer(result,0,read,0,48);device.queue.submit([encoder.finish()]);
+   const pass=encoder.beginComputePass();pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(6);pass.end();encoder.copyBufferToBuffer(result,0,read,0,96);device.queue.submit([encoder.finish()]);
    await read.mapAsync(GPUMapMode.READ);const values=Array.from(new Float32Array(read.getMappedRange()));read.unmap();
    console.log('reflection-contact-hits:',JSON.stringify(values));
    assert.equal(values[8],1,'distant control surface is hit');
@@ -46,6 +46,9 @@ test('production reflection query retains nearby distinct surfaces independently
    assert.equal(values[4],1,'depth penetration tolerance must not enlarge the origin exclusion');
    assert.ok(values[1]>.02&&values[1]<.03);assert.ok(Math.abs(values[1]-values[5])<1e-5);
    assert.equal(values[3],2,'HDR source preserved');
+   const exact=.02/Math.abs(new Vector3(.6,0,-1).normalize().z),errors=[3,4,5].map(i=>Math.abs(values[i*4+1]-exact));
+   for(const i of [3,4,5])assert.equal(values[i*4],1,'each refinement budget retains a valid coarse crossing');
+   assert.ok(errors[1]<errors[0]);assert.ok(errors[2]<errors[1]);
   }finally{depth.destroy();color.destroy();normal.destroy();result.destroy();read.destroy();}
  });
 });

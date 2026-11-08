@@ -34,3 +34,11 @@ test('production stable glossy sample sets cover the lobe and do not change with
   assert.notDeepEqual(varying.slice(0,8),varying.slice(8));
  });
 });
+
+test('GGX sample directions stay continuous across the former tangent-frame branch',async()=>{
+ await withKaminosGpu(async ctx=>{
+  const inputs=[.9989,.9991].flatMap(z=>Array.from({length:8},(_,i)=>[z,i]));
+  const values=await evalWgslBatch(ctx,{preamble:SCENE_REFLECTION_QUERY_WGSL,argTypes:['f32','u32'],returnType:'vec3<f32>',inputs,body:'let n=vec3<f32>(sqrt(1.0-arg0*arg0),0.0,arg0);return reflectionGGX(vec3<f32>(0.0,0.0,1.0),n,0.35,reflectionSamplePoint(arg1,8u,vec2<u32>(13u),0u,true));'});
+  for(let i=0;i<8;i++)assert.ok(Math.hypot(...values[i].map((x,j)=>x-values[i+8][j]))<.03,'small normal change must not rotate the quadrature frame abruptly');
+ });
+});

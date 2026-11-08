@@ -72,6 +72,7 @@ def _scene_defaults(defaults, label):
         reflections = _settings_object(post['reflections'], 'Reflections')
         _booleans(reflections, ('enabled','temporal'))
         _numbers(reflections, ('steps','samples'), positive=True, integer=True, maximum=4294967295)
+        _numbers(reflections, ('refinementSteps',), integer=True, maximum=4294967295)
         _numbers(reflections, ('resolutionScale','roughnessCutoff'), positive=True, maximum=1)
         _numbers(reflections, ('maxDistance','thickness'), positive=True)
         _numbers(reflections, ('historyWeight',), maximum=1)

@@ -83,14 +83,20 @@ test('the document reflection writer synchronizes initialized controls without a
  const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  const a=source.indexOf('  restoreSceneReflectionSettings='),b=source.indexOf('\n',a);
  let runtime={enabled:false,resolutionScale:.5,steps:64},display={...runtime},writes=0;
- const context={writeReflections:value=>{runtime={...runtime,...value};writes++;},reflectionControls:{sync:()=>{display={...runtime};}}};
+ let resetReason;const context={writeReflections:value=>{runtime={...runtime,...value};writes++;},reflectionControls:{sync:()=>{display={...runtime};}},sceneGI:{reflections:{reset:reason=>{resetReason=reason;}}}};
  runInNewContext(source.slice(a,b),context);
  context.restoreSceneReflectionSettings({enabled:true,resolutionScale:.25,steps:6});
- assert.equal(writes,1);assert.deepEqual(display,runtime,'visible controls describe the restored settings');
+ assert.equal(writes,1);assert.deepEqual(display,runtime,'visible controls describe the restored settings');assert.equal(resetReason,'scene-restored');
 });
 
 test('reflection sample budgets and sequence identity are explicit and validated',()=>{
  assert.equal(resolveReflectionSettings().samples,1);assert.equal(resolveReflectionSettings().sampling,'stochastic');
  for(const bad of [{samples:0},{samples:1.5},{samples:4294967296},{sampling:'hidden-fallback'}])assert.throws(()=>resolveReflectionSettings(bad));
  const value=resolveReflectionSettings({samples:8,sampling:'stable',steps:6,resolutionScale:.3});assert.equal(value.samples,8);assert.equal(value.sampling,'stable');
+});
+
+test('crossing refinement is a distinct saved budget, with zero allowed and caller values retained',()=>{
+ assert.equal(resolveReflectionSettings().refinementSteps,6);
+ for(const refinementSteps of [0,3,16,4096])assert.equal(resolveReflectionSettings({refinementSteps}).refinementSteps,refinementSteps);
+ for(const refinementSteps of [-1,1.5,4294967296])assert.throws(()=>resolveReflectionSettings({refinementSteps}),/refinement/i);
 });

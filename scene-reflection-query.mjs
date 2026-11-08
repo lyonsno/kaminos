@@ -20,16 +20,27 @@ fn reflectionRandom(pixel: vec2<u32>, frame: u32) -> vec2<f32> {
 // A coherent Hammersley set buys a deterministic angular approximation inside
 // each frame. Unlike freezing one random ray, every pixel integrates the lobe.
 // The centred radical-inverse bins avoid the exact GGX endpoints at any budget.
+fn reflectionRadicalInverse(index:u32,base:u32)->f32 {
+  var n=index;var factor=1.0/f32(base);var value=0.0;
+  while(n>0u){value+=f32(n%base)*factor;n/=base;factor/=f32(base);}
+  return value;
+}
 fn reflectionSamplePoint(index:u32, count:u32, pixel:vec2<u32>, frame:u32, stable:bool) -> vec2<f32> {
-  if (!stable) { return reflectionRandom(pixel, frame * count + index); }
+  if (!stable) {
+    let sequence=frame*count+index+1u;
+    return fract(vec2<f32>(reflectionRadicalInverse(sequence,2u),reflectionRadicalInverse(sequence,3u))+reflectionRandom(pixel,0u));
+  }
   var bits = index; var inverse = 0.0; var place = 0.5;
   for (var i=0u; i<32u; i++) { inverse += f32(bits & 1u) * place; bits >>= 1u; place *= 0.5; }
   return vec2<f32>((f32(index) + 0.5) / f32(count), inverse + 0.5 / exp2(ceil(log2(f32(count)))));
 }
 // Spherical-cap visible-GGX sampling, in a frame whose Z axis is the normal.
 fn reflectionGGX(view: vec3<f32>, normal: vec3<f32>, perceptualRoughness: f32, xi: vec2<f32>) -> vec3<f32> {
-  let helper = select(vec3<f32>(0.0, 0.0, 1.0), vec3<f32>(1.0, 0.0, 0.0), abs(normal.z) > 0.999);
-  let tangent = normalize(cross(helper, normal)); let bitangent = cross(normal, tangent);
+  // Duff's orthonormal basis keeps the visible forward hemisphere continuous;
+  // the former .999 helper-axis switch abruptly rotated finite sample sets.
+  let signZ=select(-1.0,1.0,normal.z>=0.0);let basisA=-1.0/(signZ+normal.z);let basisB=normal.x*normal.y*basisA;
+  let tangent=vec3<f32>(1.0+signZ*normal.x*normal.x*basisA,signZ*basisB,-signZ*normal.x);
+  let bitangent=vec3<f32>(basisB,signZ+normal.y*normal.y*basisA,-normal.y);
   let v = vec3<f32>(dot(view, tangent), dot(view, bitangent), max(dot(view, normal), 0.0001));
   let alpha = max(perceptualRoughness * perceptualRoughness, 0.001);
   let stretched = normalize(vec3<f32>(alpha * v.xy, v.z));
@@ -42,8 +53,9 @@ fn reflectionGGX(view: vec3<f32>, normal: vec3<f32>, perceptualRoughness: f32, x
   return normalize(tangent * outgoing.x + bitangent * outgoing.y + normal * outgoing.z);
 }
 // Visible-GGX reflection-direction density. The ray represents a finite solid
-// angle, rather than one arbitrarily bright source texel. The reconstruction's
-// centre/neighbor weights (1 and eight .5s) give 25/3 effective spatial samples.
+// angle, rather than one arbitrarily bright source texel. The source footprint
+// retains the former nine-tap filter's 25/3 sample estimate; the hit-aware
+// thirteen-tap reconstruction has variable support, not a fixed sample count.
 fn reflectionSourceLevelForSamples(view: vec3<f32>, normal: vec3<f32>, direction: vec3<f32>, roughness: f32,
   hitPosition: vec3<f32>, hitNormal: vec3<f32>, distance: f32,
   projection: mat4x4<f32>, dimensions: vec2<u32>, effectiveSamples:f32) -> f32 {
@@ -70,7 +82,7 @@ fn traceSceneReflection(
   origin: vec3<f32>, direction: vec3<f32>,
   depthMap: texture_depth_2d, colorMap: texture_2d<f32>, colorSampler: sampler, normalMap: texture_2d<f32>,
   projection: mat4x4<f32>, inverseProjection: mat4x4<f32>,
-  maxDistance: f32, thickness: f32, nearPlane: f32, steps: u32,
+  maxDistance: f32, thickness: f32, nearPlane: f32, steps: u32, refinementSteps:u32,
   view: vec3<f32>, normal: vec3<f32>, roughness: f32, effectiveSamples:f32
 ) -> SceneReflectionHit {
   var hit: SceneReflectionHit;
@@ -105,7 +117,7 @@ fn traceSceneReflection(
     let difference = surface.z - rayZ;
     if (depth < 1.0 && difference >= 0.0 && priorDelta < 0.0) {
       var lo = priorT; var hi = t;
-      for (var refine = 0u; refine < 6u; refine++) {
+      for (var refine = 0u; refine < refinementSteps; refine++) {
         let mid = (lo + hi) * 0.5; let sampleUV = startUV + deltaUV * mid;
         let samplePixel = clamp(vec2<i32>(sampleUV * vec2<f32>(dimensions)), vec2<i32>(0), dimensions - vec2<i32>(1));
         let d = textureLoad(depthMap, samplePixel, 0);
@@ -138,26 +150,32 @@ fn traceSceneReflection(
   }
   return hit;
 }
-fn sampleSceneReflection(
+fn sampleSceneReflectionPayload(
   uv: vec2<f32>, depthMap: texture_depth_2d, colorMap: texture_2d<f32>, colorSampler: sampler, normalMap: texture_2d<f32>,
   projection: mat4x4<f32>, inverseProjection: mat4x4<f32>,
-  maxDistance: f32, thickness: f32, nearPlane: f32, steps: u32, frame: u32, roughnessCutoff: f32,
+  maxDistance: f32, thickness: f32, nearPlane: f32, steps: u32, refinementSteps:u32, frame: u32, roughnessCutoff: f32,
   samples:u32, stable:bool
-) -> vec4<f32> {
+) -> mat4x4<f32> {
   let dimensions = vec2<i32>(textureDimensions(depthMap));
   let pixel = clamp(vec2<i32>(uv * vec2<f32>(dimensions)), vec2<i32>(0), dimensions - vec2<i32>(1));
   let d = textureLoad(depthMap, pixel, 0); let nr = textureLoad(normalMap, pixel, 0);
-  if (d >= 1.0 || nr.w >= roughnessCutoff || dot(nr.xyz, nr.xyz) < 0.5) { return vec4<f32>(0.0); }
+  if (d >= 1.0 || nr.w >= roughnessCutoff || dot(nr.xyz, nr.xyz) < 0.5) { return mat4x4<f32>(vec4<f32>(0.0),vec4<f32>(0.0),vec4<f32>(0.0),vec4<f32>(0.0)); }
   let p = reflectionViewPosition(uv, d, inverseProjection); let n = normalize(nr.xyz);
   let origin = p + n * max(0.002, abs(p.z) * 0.0002);
-  var result=vec4<f32>(0.0);
+  var result=vec4<f32>(0.0);var distanceSum=0.0;var distanceSquared=0.0;var moment=0.0;var momentSquared=0.0;
   for(var i=0u;i<samples;i++) {
     let direction = reflectionGGX(normalize(-p), n, nr.w, reflectionSamplePoint(i,samples,vec2<u32>(pixel),frame,stable));
     if (dot(direction, n) <= 0.0) { continue; }
     let hit = traceSceneReflection(origin, direction, depthMap, colorMap, colorSampler, normalMap, projection, inverseProjection,
-      maxDistance, thickness, nearPlane, steps, normalize(-p), n, nr.w,f32(samples)*select(25.0/3.0,1.0,stable));
-    result+=vec4<f32>(hit.radiance * hit.confidence, hit.confidence);
+      maxDistance, thickness, nearPlane, steps, refinementSteps, normalize(-p), n, nr.w,f32(samples)*select(25.0/3.0,1.0,stable));
+    let value=vec4<f32>(hit.radiance * hit.confidence, hit.confidence);
+    result+=value;distanceSum+=hit.distance*hit.confidence;distanceSquared+=hit.distance*hit.distance*hit.confidence;
+    let brightness=dot(value.rgb,vec3<f32>(0.2126,0.7152,0.0722));moment+=brightness;momentSquared+=brightness*brightness;
   }
-  return result/f32(samples);
+  let meanDistance=distanceSum/max(result.a,0.00001);
+  let distanceVariance=max(0.0,distanceSquared/max(result.a,0.00001)-meanDistance*meanDistance);
+  let brightness=moment/f32(samples);let variance=max(0.0,momentSquared/f32(samples)-brightness*brightness);
+  // Log moments retain the HDR/world-distance range in finite half-float MRTs.
+  return mat4x4<f32>(result/f32(samples),vec4<f32>(log2(1.0+meanDistance),log2(1.0+distanceVariance),log2(1.0+variance),0.0),vec4<f32>(0.0),vec4<f32>(0.0));
 }
 `;

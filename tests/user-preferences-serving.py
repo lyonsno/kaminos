@@ -45,6 +45,8 @@ class PreferencesServing(unittest.TestCase):
                         {'postprocessing': {'sceneGI': {'estimator': {'aoContrast': -1}}}},
                         {'postprocessing': {'sceneGI': {'steps': 0}}},
                         {'postprocessing': {'reflections': {'steps': 0}}},
+                        {'postprocessing': {'reflections': {'refinementSteps': -1}}},
+                        {'postprocessing': {'reflections': {'refinementSteps': 1.5}}},
                         {'postprocessing': {'reflections': {'samples': 1.5}}},
                         {'postprocessing': {'reflections': {'resolutionScale': 2}}},
                         {'postprocessing': {'reflections': {'sampling': 'invalid'}}},

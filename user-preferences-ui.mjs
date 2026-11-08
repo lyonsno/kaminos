@@ -1,5 +1,6 @@
 import {checkedPreferences,checkedSceneDefaults,sceneDefaultsFromDocument,SCENE_DEFAULT_RANGES,quantizeSceneDefaultDrag} from './user-preferences.mjs';
 import {resolveSceneGIControlState} from './scene-gi-settings.mjs';
+import {REFLECTION_CONTROL_FIELDS,REFLECTION_COST_HELP} from './scene-reflection-settings.mjs';
 import {DEFAULT_STUDIO_LOOK_ID,STUDIO_LOOK_LIBRARY,resolveStudioLook} from './asset-arrival.mjs';
 const copy=value=>structuredClone(value),get=(object,path)=>path.split('.').reduce((o,k)=>o?.[k],object);
 const set=(object,path,value)=>{const keys=path.split('.');let slot=object;for(const key of keys.slice(0,-1))slot=slot[key]??={};slot[keys.at(-1)]=value;};
@@ -16,10 +17,11 @@ export function installUserPreferences({document,controller,readScene,readFactor
  const ownDefaults=()=>draft[editing]??=copy(editingDefaults());
  const status=(text,error=false)=>{const node=dialog.querySelector('#preferences-status');node.textContent=text;node.dataset.error=String(error);};
  function group(name,open=false){const node=document.createElement('details');node.open=open;const title=document.createElement('summary');title.textContent=name;node.append(title);dialog.querySelector('#preferences-fields').append(node);return node;}
- function field(parent,path,label,{source,type='number',options,min,max,step='any'}={}){
+ function field(parent,path,label,{source,type='number',options,min,max,step='any',help}={}){
   const row=document.createElement('label');row.className='preference-field';const title=document.createElement('span');title.textContent=label;
   const original=source?document.getElementById(source):null;const select=options||original?.tagName==='SELECT';const input=document.createElement(select?'select':'input');
   input.dataset.preferencePath=path;input.id='preference-'+path.replaceAll('.','-');
+  if(help)row.title=title.title=input.title=help;
   if(select){for(const [value,label] of options??[...original.options].map(o=>[o.value,o.textContent])){const option=document.createElement('option');option.value=value;option.textContent=label;input.append(option);}}
   // Only fixed-range consumers constrain numeric admission; exposure remains unbounded.
   else{const range=SCENE_DEFAULT_RANGES[path];input.type=type;input.step=range?.step??(['postprocessing.sceneGI.slices','postprocessing.sceneGI.steps'].includes(path)?1:'any');for(const [key,value] of Object.entries({min:range?.min??min,max:range?.max??max}))if(value!==undefined&&value!=='')input[key]=String(value);}
@@ -36,7 +38,10 @@ export function installUserPreferences({document,controller,readScene,readFactor
    catch(error){input.setCustomValidity(error.message);pendingInvalid.set(input,error.message);status(error.message,true);}
   });
   fields.push({input,path,row});row.append(title,input);parent.append(row);
-  if(input.type==='number'&&typeof installNumberDrag==='function')scrubs.push(installNumberDrag({input,grip:title,step:Number(step)>0?Number(step):Number(original?.step)>0?Number(original.step):.01}));
+  if(input.type==='number'&&typeof installNumberDrag==='function'){
+   scrubs.push(installNumberDrag({input,grip:title,step:Number(step)>0?Number(step):Number(original?.step)>0?Number(original.step):.01}));
+   if(help)input.title=help+' '+input.title;
+  }
   return row;
  }
  const env=group('Environment & ground',true);
@@ -60,8 +65,8 @@ export function installUserPreferences({document,controller,readScene,readFactor
  function syncLightingVisibility(){if(!draft)return;const defaults=editingDefaults(),gi=resolveSceneGIControlState(defaults.postprocessing?.sceneGI),inherited=editing==='agentSceneDefaults'&&draft.agentSceneDefaults===null;ssgi.hidden=gi.mode!=='combined';gtao.hidden=gi.mode==='combined';for(const {input,path} of fields){input.disabled=inherited||autoScale.checked&&['postprocessing.sceneGI.radius','postprocessing.sceneGI.thickness'].includes(path)||path==='postprocessing.sceneGI.bounceFeedback'&&!gi.temporal;}autoScale.disabled=inherited;}
  autoScale.onchange=()=>{if(!draft)return;const own=ownDefaults();if(autoScale.checked)automaticScale(own);else{const current=resolveSceneGIControlState(readScene()?.postprocessing?.sceneGI);set(own,'postprocessing.sceneGI.radius',current.radius);set(own,'postprocessing.sceneGI.thickness',current.thickness);}render();status('Unsaved preferences');};
  const reflections=group('Scene reflections');
- for(const [key,label,type,step]of [['enabled','Screen reflections','checkbox'],['resolutionScale','Resolution (width and height)','number',.05],['steps','Trace steps','number',1],['samples','Glossy rays','number',1],['maxDistance','Reflection distance','number',.1],['thickness','Depth tolerance','number',.01],['roughnessCutoff','Roughness cutoff','number',.01],['temporal','Temporal filtering','checkbox'],['historyWeight','History blend','number',.01]])field(reflections,'postprocessing.reflections.'+key,label,{type,step});
- field(reflections,'postprocessing.reflections.sampling','Sampling',{options:[['stochastic','Changing samples'],['stable','Stable approximation']]});
+ for(const {key,label,...options}of REFLECTION_CONTROL_FIELDS)field(reflections,'postprocessing.reflections.'+key,label,options);
+ const reflectionHelp=document.createElement('p');reflectionHelp.className='preferences-help';reflectionHelp.textContent=REFLECTION_COST_HELP;reflections.append(reflectionHelp);
  for(const [key,label,source] of [['enabled','Depth of field','dof-toggle'],['focus','Focus distance','dof-focus'],['aperture','Aperture','dof-aperture'],['maxblur','Maximum blur','dof-maxblur']])field(light,'postprocessing.dof.'+key,label,{source,type:key==='enabled'?'checkbox':'number'});
  field(light,'backdrop','Backdrop',{type:'checkbox'});field(light,'backdropBrightness','Backdrop brightness',{source:'backdrop-brightness'});
  const view=group('View & viewport');field(view,'camera.fov','View field of view',{});field(view,'sceneCamera.aspect.0','Output aspect width',{});field(view,'sceneCamera.aspect.1','Output aspect height',{});

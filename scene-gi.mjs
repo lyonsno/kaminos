@@ -243,7 +243,7 @@ export function createSceneGI(scene, camera, aoIntensity, {renderer=null,reflect
     requestHistoryFrames(){reflectionField?.requestFrames();if(settings.mode==='combined'&&settings.temporal)history.requestFrames();},
     needsHistoryFrame:()=>Boolean(reflectionField?.needsFrame())||(settings.mode==='combined'&&settings.temporal&&history.needsFrame()),
     historyStatus:()=>settings.mode==='combined'&&settings.temporal&&settings.temporalRefine?history.state():null,
-    resetHistory(reason) { history.reset(reason); },
+    resetHistory(reason) { history.reset(reason);reflectionField?.reset(reason); },
     async readback(renderer,kind='incoming') {
       if(kind==='bounce-probe-inputs'){
         if(!bounceProbe)throw Error('Bounce probe requires explicit gi_bounce_probe=1');

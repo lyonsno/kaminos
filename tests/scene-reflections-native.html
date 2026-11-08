@@ -1,4 +1,5 @@
 <!doctype html><html lang="en"><meta charset="utf-8"><title>Scene reflection conformance</title>
+<link rel="icon" href="data:,">
 <style>body{margin:0;background:#111}canvas{display:block}</style>
 <script type="importmap">{"imports":{"three/webgpu":"/lib/three.webgpu.js","three/tsl":"/lib/three.tsl.js"}}</script>
 <script type="module">
@@ -20,12 +21,15 @@ const gi=createSceneGI(scene,camera,THREE.TSL.uniform(0),{renderer,reflections:{
 gi.setSettings({mode:'combined',gain:0,denoise:0,temporal:false,slices:1,steps:2});
 const pipeline=new THREE.RenderPipeline(renderer);
 window.reflectionAssay={
- async samplingFrames({settings,roughness=.35,views}){
+ async samplingFrames({settings,roughness=.35,views,boxPositions=null,resetBefore=false}){
   if(!Array.isArray(views)||!views.length)throw Error('Explicit replay camera sequence required');
+  if(boxPositions&&(!Array.isArray(boxPositions)||boxPositions.length!==views.length))throw Error('Block replay must match the camera sequence');
+  if(resetBefore)gi.reflections.reset('sampling-replay');
   floor.material.roughness=roughness;gi.reflections.setSettings(settings);
   pipeline.outputNode=gi.output();pipeline.needsUpdate=true;
   const frames=[],before=gi.reflections.state();
-  for(const view of views){
+  for(const [index,view]of views.entries()){
+   if(boxPositions)box.position.fromArray(boxPositions[index]);
    camera.position.fromArray(view);camera.lookAt(0,.5,0);camera.updateMatrixWorld();
    await new Promise(requestAnimationFrame);pipeline.render();await renderer.backend.device.queue.onSubmittedWorkDone();
    const target=gi.reflections.raw;
@@ -33,7 +37,10 @@ window.reflectionAssay={
    const row=target.height>1?(values.length-target.width*4)/(target.height-1):target.width*4;
    if(!Number.isInteger(row)||row<target.width*4)throw Error('Invalid reflection readback row layout');
    const raw=[];for(let y=0;y<target.height;y++)for(let x=0;x<target.width*4;x++)raw.push(THREE.DataUtils.fromHalfFloat(values[y*row+x]));
-   frames.push({camera:camera.position.toArray(),state:gi.reflections.state(),readback:{elements:values.length,rowElements:row},raw});
+   const completed=gi.reflections.targets[1-gi.reflections.writeIndex];const resolvedValues=await renderer.readRenderTargetPixelsAsync(completed,0,0,completed.width,completed.height,0);
+   let historyStats=null;if(completed.textures.length>3){const historyValues=await renderer.readRenderTargetPixelsAsync(completed,0,0,completed.width,completed.height,3);historyStats=[];for(let y=0;y<target.height;y++)for(let x=0;x<target.width*4;x++)historyStats.push(THREE.DataUtils.fromHalfFloat(historyValues[y*row+x]));}
+   const resolved=[];for(let y=0;y<target.height;y++)for(let x=0;x<target.width*4;x++)resolved.push(THREE.DataUtils.fromHalfFloat(resolvedValues[y*row+x]));
+   frames.push({camera:camera.position.toArray(),block:box.position.toArray(),state:gi.reflections.state(),readback:{elements:values.length,rowElements:row},raw,resolved,historyStats});
   }
   return {before,frames};
  },
