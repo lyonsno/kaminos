@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import {createDeferredRenderPipelines} from '../deferred-render-pipelines.mjs';
 import {readFileSync} from 'node:fs';
 import {createEmissiveLightField} from '../volume-emissive-transport.mjs';
 import {createDisplayReconstruction} from '../volume-display-reconstruction.mjs';
@@ -86,7 +87,9 @@ function fixture(){
   createSampler:descriptor=>({kind:'sampler',descriptor}),
   createBindGroup:descriptor=>({kind:'bind-group',descriptor}),
  });
+ const deferred=createDeferredRenderPipelines();
  const context={
+  deferRenderPipeline:deferred.defer,resolveRenderPipeline:deferred.resolve,
   device:device(),
   fluidPipelineDevice:null,
   fluidPipelineTransparency:null,
@@ -201,7 +204,7 @@ test('changing canvas transparency refreshes the shader specialization without r
  f.context.transparentCanvas=false;f.rebuild();
  const opaqueRender=f.context.pipeline;
  assert.notEqual(opaqueRender,firstRender);
- assert.equal(opaqueRender.descriptor.fragment.constants.TRANSPARENT_CANVAS,0);
+ assert.equal(f.context.resolveRenderPipeline(opaqueRender).descriptor.fragment.constants.TRANSPARENT_CANVAS,0);
  assert.equal(f.context.computePipeline,firstCompute,'canvas transparency toggle must not recreate compute pipelines');
  assert.equal(f.context.irradianceSeedPipeline,firstSeed,'canvas transparency toggle must not discard irradiance compute pipelines');
  const createdOnOpaque=f.created.slice(afterTransparent);
@@ -331,3 +334,16 @@ test('wavelet coordinate upload buffers are not retained across fine-velocity or
 });
 
 
+
+test('cold basin initialization does not compile unused root raymarch renderer variants',()=>{
+ const f=fixture();f.rebuild();assert.equal(f.created.filter(resource=>resource.kind==='render').length,0,'renderer variants must wait for the selected draw path');
+});
+
+test('root render selection handles compile only when submitted and retain device lifetime',()=>{
+ const f=fixture();f.rebuild();const count=f.created.length,first=f.context.pipeline;
+ const selected=f.context.resolveRenderPipeline(first);assert.equal(f.created.length,count+1);assert.equal(f.context.resolveRenderPipeline(first),selected);assert.equal(f.created.length,count+1);
+ assert.equal(selected.descriptor.fragment.entryPoint,'fs');
+ f.context.gridSize=48;f.context.gridHeight=96;f.rebuild();assert.equal(f.context.pipeline,first);assert.equal(f.context.resolveRenderPipeline(first),selected);
+ f.context.device=f.device();f.rebuild();assert.notEqual(f.context.pipeline,first);assert.notEqual(f.context.resolveRenderPipeline(f.context.pipeline),selected);
+ const alreadyCompiled={kind:'render'};assert.equal(f.context.resolveRenderPipeline(alreadyCompiled),alreadyCompiled,'derived scene/depth pipelines pass through unchanged');
+});
