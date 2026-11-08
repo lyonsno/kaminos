@@ -197,6 +197,48 @@ generation receipt retain the effective scheduling snapshot. Retained-block
 checks preserve output and scene service, but do not establish full-generation
 speed or interactive comfort; use the option provisionally on useful work.
 
+## Completed sparse occupancy previews
+
+Pass `runId` and an optional `onPreview` callback to
+`createTrellisImageGenerationAdapter` to receive the completed occupied-support
+grid before low-resolution shape sampling starts:
+
+~~~js
+const previews = [];
+const generator = createTrellisImageGenerationAdapter({
+  route, ...inputs, runId: crypto.randomUUID(),
+  onPreview: preview => { previews.push(preview); },
+});
+~~~
+
+`runTrellisInPage` and `window.kaminosTrellisPage` accept the same `onPreview`
+callback and supply the actual app run identity. The page opens a foreground
+window while delivering it. Delivery is awaited, like `onPhase`; a thrown or
+rejected callback fails the invocation before further shape generation.
+Consumers should handle optional presentation errors in their callback.
+
+The event has schema `trellis2.sparse-occupancy-preview.v1` and kind
+`sparse-occupancy`. It contains the actual run, route, job and invocation
+identities, completed sampling `step`/`steps`, `count`, and a complete owned
+`Int32Array` named `coordinates`. Keeping the snapshot after generation or
+producer disposal does not observe subsequent GPU/readback-buffer reuse.
+
+`grid` declares the source and support dimensions, strict-positive logit
+threshold and max-any downsampling. The normal 64³ decoded occupancy produces
+32³ support; this is the support passed to the shape model. `layout` preserves
+the source component and row order. For a cell center, add
+`spatial.cellCenterOffset` to each coordinate, then apply
+`spatial.gridToSource` (scale followed by offset). `spatial.sourceToGltf` is the
+column-major node transform used by the ordinary geometry exporter. It is
+provided separately, without changing the raw coordinate components.
+
+This preview copies existing compact support once, with no extra neural
+decoder execution. At normal dimensions the complete coordinate copy is at
+most 384 KiB; the actual count and byte length are reported. Generation's
+`coordinateBytesToCPUDuringServing` includes it. With no observer, coordinates
+stay resident and no preview readback runs. Intermediate denoising tensors
+remain latents; this callback does not present them as evolving occupancy.
+
 ## Memory and performance
 
 Model weights are float32 and load one stage at a time. Keep the weight package
