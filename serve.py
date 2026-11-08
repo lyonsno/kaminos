@@ -4389,6 +4389,10 @@ def authoring_asset_catalog(collection):
         output_resolver=resolve_greenroom_output_dir, label=_clean_label)
 
 
+def trellis_history_root():
+    return Path(os.environ.get('KAMINOS_TRELLIS_HISTORY_DIR', str(Path(BROWSE_ROOTS['generated-meshes']) / '.trellis-history'))).expanduser()
+
+
 def greenroom_output_roots():
     """Roots that can lawfully serve receipt output_dir files."""
     roots = [Path.home().resolve()]
@@ -4646,6 +4650,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json({"error": str(error)}, 400)
             except FileNotFoundError as error:
                 self.send_json({"error": str(error)}, 404)
+        elif parsed.path == '/api/trellis-history':
+            self.handle_trellis_history(parse_qs(parsed.query))
         elif parsed.path == "/api/scene-thumbnail":
             self.handle_scene_thumbnail(parse_qs(parsed.query))
         elif parsed.path == "/api/scene-catalogue":
@@ -4711,6 +4717,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_gpu_queue_cancel()
         elif parsed.path == "/api/mesh-generation-origin":
             self.handle_mesh_generation_origin()
+        elif parsed.path == '/api/trellis-history':
+            self.handle_trellis_history(write=True)
         elif parsed.path == "/api/mesh-lod-textures":
             self.handle_mesh_lod_textures_register()
         elif parsed.path == "/api/mesh-lods":
@@ -5573,6 +5581,29 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({'error': str(error), 'phase': 'mesh-lods'}, 400)
         except OSError as error:
             self.send_json({'error': str(error), 'phase': 'mesh-lods'}, 500)
+
+    def handle_trellis_history(self, params=None, write=False):
+        import trellis_history
+        try:
+            if write:
+                length = int(self.headers.get('Content-Length', 0))
+                if length <= 0:raise ValueError('History body required')
+                body = self.rfile.read(length)
+                if len(body) != length:raise ValueError('Incomplete history body')
+                self.send_json(trellis_history.save_history(trellis_history_root(), json.loads(body)))
+            else:
+                run_id = (params.get('runId') or [''])[0]
+                frame_id = (params.get('frameId') or [None])[0]
+                if frame_id is None:self.send_json(trellis_history.read_history(trellis_history_root(), run_id))
+                else:
+                    data = trellis_history.read_frame(trellis_history_root(), run_id, frame_id)
+                    self.send_response(200);self.send_header('Content-Type', 'application/octet-stream');self.send_header('Content-Length', str(len(data)));self.send_header('Cache-Control', 'no-store');self.end_headers();self.wfile.write(data)
+        except FileNotFoundError:
+            self.send_json({'error':'No retained TRELLIS history for this run','phase':'trellis-history'},404)
+        except (ValueError,KeyError,TypeError) as error:
+            self.send_json({'error':str(error),'phase':'trellis-history'},400)
+        except OSError as error:
+            self.send_json({'error':str(error),'phase':'trellis-history'},500)
 
     def handle_mesh_generation_origin(self):
         try:

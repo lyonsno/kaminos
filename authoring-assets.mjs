@@ -10,7 +10,7 @@ const collections=new Set(['generated-meshes','image-inbox','greenroom','trellis
 export function assetSource(root, path) {
   return `/api/read?${new URLSearchParams({root, path})}`;
 }
-export function createAuthoringAssets({request, addMesh, uploadImage, prepareImage, generator, nameForSource=()=>null, changed = () => {}}) {
+export function createAuthoringAssets({request, addMesh, uploadImage, prepareImage, generator, history, nameForSource=()=>null, changed = () => {}}) {
   let state = {roots:[], root:'generated-meshes', path:'', entries:[], selected:null, preparation:null, loading:false, adding:false, error:null, results:[]};
   let preparationTicket=0,preparationAbort=null,preparationPromise=null;
   let navigation = 0,revision=0;
@@ -91,6 +91,14 @@ export function createAuthoringAssets({request, addMesh, uploadImage, prepareIma
       const entry=await uploadImage(file);this.select({...entry,root:entry.root_id,kind:'image',label:entry.name});return entry;
     },
     preparesInput:()=>generator()?.preparesInput===true,
+    history:()=>history?.read?.()??null,
+    async openHistory(entry=state.selected){
+      requireVisible(entry);
+      if(!entry?.generation?.runId||!entry.generation.route?.startsWith('trellis'))throw Error('Choose an asset with a TRELLIS generation identity');
+      if(!history?.open)throw Error('TRELLIS history viewer is unavailable');
+      return history.open({runId:entry.generation.runId,assetSource:entry.source||assetSource(entry.root,entry.path)});
+    },
+    watchHistory(){if(!history?.watch)throw Error('No live TRELLIS history is available');return history.watch();},
     generation:()=>state.preparation?.status==='preparing'?{status:'preparing',stage:'Preparing image',progress:'Removing background…',percent:null,canStop:true}:generator()?.read() || {status:'unavailable',error:'Generation host is initializing'},
     stop(){if(preparationAbort&&!preparationAbort.signal.aborted){preparationAbort.abort(new DOMException('Image preparation stopped','AbortError'));return true;}return generator()?.stop() || false;},
     async recover() {const result=await generator().retryPersistence();state.results.push({...result,kind:'mesh',label:result.name});publish();return result;},
@@ -126,9 +134,9 @@ export function installAuthoringAssets({document,controller,edits}) {
   panel.innerHTML=`<div id="asset-resize" role="separator" aria-label="Asset browser height" aria-orientation="horizontal" tabindex="0"></div><header><strong>Assets</strong><button type="button" id="asset-close" aria-label="Close assets">×</button></header>
     <nav><button type="button" data-assets-mode="browse">Browse</button><button type="button" data-assets-mode="generate">Generate</button></nav>
     <div class="asset-content"><div id="asset-browse"><div class="asset-folder-controls"><button type="button" id="asset-up" aria-label="Parent folder">↑</button><select id="asset-root" aria-label="Asset location"></select><button type="button" id="asset-refresh" aria-label="Refresh assets">↻</button></div><div id="asset-path"></div><input id="asset-filter" type="search" placeholder="Search assets…" aria-label="Search this asset collection"><div id="asset-entries"></div></div>
-    <div id="asset-generate" hidden><p>Image → textured mesh · Stable Fast 3D</p><p class="asset-help">Choose an image from Browse or open a local image. Its background is removed before generation; your scene stays in place.</p><div id="asset-preparation-status" role="status"></div><button type="button" id="asset-prepare" hidden>Prepare image</button><button type="button" id="asset-run">Generate mesh</button><button type="button" id="asset-recover" hidden>Retry saving result</button><div id="asset-results"></div></div>
+    <div id="asset-generate" hidden><p>Image → textured mesh · Stable Fast 3D</p><p class="asset-help">Choose an image from Browse or open a local image. Its background is removed before generation; your scene stays in place.</p><div id="asset-preparation-status" role="status"></div><button type="button" id="asset-prepare" hidden>Prepare image</button><button type="button" id="asset-run">Generate mesh</button><button type="button" id="asset-recover" hidden>Retry saving result</button><button type="button" id="asset-watch-history" hidden>Watch TRELLIS in 3D</button><div id="asset-results"></div></div>
     <div id="asset-detail" hidden><div id="asset-hold-notice" hidden><b aria-hidden="true">×</b><strong>TOP SECRET</strong><p>Hostile to eyesight.<br>Awaiting further review.</p></div><img id="asset-image" alt="Selected source image" hidden><button type="button" id="asset-preview-enlarge" hidden>Enlarge preview</button><div id="asset-preview-status" role="status"></div><strong id="asset-name"></strong><div id="asset-source"></div><div id="asset-facts"></div></div>
-    </div><div id="asset-generation" hidden><div class="asset-generation-line"><span id="asset-generation-status" role="status"></span><span id="asset-percent"></span><button type="button" id="asset-stop">Stop</button></div><progress id="asset-progress" max="100" aria-label="Generation stage progress"></progress></div><div class="asset-browser-status"><span id="asset-loading" class="asset-loading-spinner" aria-hidden="true" hidden></span><div id="asset-status" role="status"></div></div><footer><button type="button" id="asset-file-open">Open file…</button><input id="asset-file" type="file" accept=".glb,.png,.jpg,.jpeg,.webp" hidden><div class="asset-selected-actions"><button type="button" id="asset-add" hidden>Add to scene</button><button type="button" id="asset-use-image" hidden>Use for generation</button></div></footer>`;
+    </div><div id="asset-generation" hidden><div class="asset-generation-line"><span id="asset-generation-status" role="status"></span><span id="asset-percent"></span><button type="button" id="asset-stop">Stop</button></div><progress id="asset-progress" max="100" aria-label="Generation stage progress"></progress></div><div class="asset-browser-status"><span id="asset-loading" class="asset-loading-spinner" aria-hidden="true" hidden></span><div id="asset-status" role="status"></div></div><footer><button type="button" id="asset-file-open">Open file…</button><input id="asset-file" type="file" accept=".glb,.png,.jpg,.jpeg,.webp" hidden><div class="asset-selected-actions"><button type="button" id="asset-add" hidden>Add to scene</button><button type="button" id="asset-use-image" hidden>Use for generation</button><button type="button" id="asset-history" hidden>Generation history</button></div></footer>`;
   const previewDialog=document.createElement('dialog');previewDialog.id='asset-preview-dialog';
   previewDialog.innerHTML='<header><strong id="asset-preview-title"></strong><button type="button" id="asset-preview-close" aria-label="Close enlarged preview">Close</button></header><img id="asset-preview-full" alt=""><div id="asset-preview-facts"></div>';
   document.body.append(previewDialog);
@@ -220,6 +228,7 @@ export function installAuthoringAssets({document,controller,edits}) {
     // A self-preparing model's own account of its input wins over any server preparation it does not use.
     byId('asset-preparation-status').textContent=(selfPreparing&&selected?.kind==='image')?usedInputStatusFor(controller.generation().inputPreview,selected.source || assetSource(selected.root,selected.path)):preparation?.error||(preparation?.status==='complete'?(preparation.value.route==='input-alpha'?'Existing transparency retained.':'Background removed.')+' This is the image generation will use.':preparation?.status==='preparing'?'Removing background…':preparation?.status==='stopped'?'Image preparation stopped.':selected?.kind==='image'?'Prepare this image to preview the generation input.':'');
     byId('asset-prepare').hidden=withheld||selected?.kind!=='image'||['preparing','complete'].includes(preparation?.status);
+    const history=controller.history?.();byId('asset-watch-history').hidden=!history?.liveRunId;byId('asset-history').hidden=withheld||!selected?.generation?.runId||!selected.generation.route?.startsWith('trellis');
     const generation=controller.generation();
     byId('asset-use-image').disabled=byId('asset-prepare').disabled=['input','loading','running','stopping','saving'].includes(generation.status);
     const active=['preparing','input','loading','running','stopping','saving'].includes(generation.status);runHeader.hidden=!active||!panel.hidden;
@@ -240,6 +249,7 @@ export function installAuthoringAssets({document,controller,edits}) {
   byId('asset-close').onclick=close;byId('asset-root').onchange=event=>action(()=>controller.browse(event.target.value));byId('asset-up').onclick=()=>action(()=>{const s=controller.read();return controller.browse(s.root,s.path.split('/').slice(0,-1).join('/'));});
   byId('asset-refresh').onclick=()=>action(()=>controller.refresh());byId('asset-filter').oninput=()=>render(controller.read());
   byId('asset-add').onclick=()=>action(async()=>{await controller.add();document.activeElement?.blur();});byId('asset-use-image').onclick=()=>{setMode('generate');if(!controller.preparesInput?.())action(()=>controller.prepare());};byId('asset-prepare').onclick=()=>action(()=>controller.prepare());byId('asset-run').onclick=()=>action(()=>controller.generate());
+  byId('asset-history').onclick=()=>action(()=>controller.openHistory());byId('asset-watch-history').onclick=()=>action(()=>controller.watchHistory());
   byId('asset-stop').onclick=()=>controller.stop();runById('generation-header-stop').onclick=()=>controller.stop();
   runById('generation-header-show').onclick=()=>{panel.hidden=false;document.body.classList.add('has-assets-panel');setMode('generate');};
   document.addEventListener('kaminos-workspace-change',()=>render(controller.read()));

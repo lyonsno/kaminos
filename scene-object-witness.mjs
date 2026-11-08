@@ -215,6 +215,111 @@ async function setLiveFireSteps(ws, steps) {
     return window.__kaminosVolumePrototype?.debugState?.()?.controls?.raySteps ?? Number(s.value); })()`, { timeoutMs: 30000, liveBudgetRemedy: true });
 }
 
+async function runTrellisHistoryScenario(ws) {
+  phase='scenario-trellis-history';
+  lastEvidence.trellisHistory=await evaluate(ws,`(async()=>{
+    const wait=ms=>new Promise(r=>setTimeout(r,ms));
+    for(let i=0;i<160&&!window.kaminosAssets;i++)await wait(125);
+    if(!window.kaminosAssets||!window.kaminosTrellisHistory)throw Error('Kaminos product history entry is unavailable');
+    const input=JSON.parse(new URLSearchParams(location.search).get('experiment_inputs')||'{}');
+    if(!input.runId||!input.assetSource)throw Error('History witness needs exact saved run and associated asset');
+    const controller=await window.kaminosTrellisHistory.ensure();
+    await window.kaminosAssets.open('browse');await window.kaminosAssets.browse('generated-meshes');
+    const entry=window.kaminosAssets.read().entries.find(e=>e.source===input.assetSource&&e.generation?.runId===input.runId);
+    if(!entry)throw Error('Associated TRELLIS asset is absent from the ordinary asset browser');
+    window.kaminosAssets.select(entry);
+    const button=document.getElementById('asset-history');
+    if(!button||button.hidden)throw Error('Selected TRELLIS asset has no history action');
+    const before=window.kaminosSceneObjectDebugState?.()??[];
+    button.click();
+    for(let i=0;i<160;i++){const s=controller.read();if(s.visible&&s.runId===input.runId&&s.presentation?.registered)break;await wait(125);}
+    const state=controller.read();
+    if(!state.visible||state.runId!==input.runId||!state.presentation?.registered||state.frames.length<2)throw Error('Asset history did not mount its actual registered native scene view: '+JSON.stringify(state));
+    if(window.kaminosWorkbenchSceneState?.().rendererBackend!=='webgpu')throw Error('History view fell back from WebGPU');
+    await controller.operations.pause();await controller.operations.seek({seconds:state.frames[0].atSeconds});await wait(600);
+    const first=controller.read();
+    if(first.presentation.coordinateBytesToCPUForDisplay!==0||first.presentation.count!==first.frames[0].count)throw Error('First voxel frame presentation does not match retained data');
+    return {asset:{source:entry.source,runId:entry.generation.runId},before,first,renderer:window.kaminosWorkbenchSceneState()};
+  })()`,{timeoutMs:60000});
+  const first=await wsRequest(ws,'Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
+  const firstPath=out.replace(/\.png$/i,'.first.png');writeFileSync(firstPath,Buffer.from(first.data,'base64'));
+  lastEvidence.trellisHistory.firstImage=firstPath;
+  lastEvidence.trellisHistory.last=await evaluate(ws,`(async()=>{
+    const controller=await window.kaminosTrellisHistory.ensure(),s=controller.read();
+    const last=s.frames.at(-1);await controller.operations.seek({seconds:last.atSeconds});
+    await new Promise(r=>setTimeout(r,650));
+    const result=controller.read();if(result.presentation.count!==last.count||!result.presentation.visible)throw Error('Final voxel snapshot did not replace the first');
+    return {state:result,objects:window.kaminosSceneObjectDebugState?.()??[],selectedAsset:window.kaminosAssets.read({selectionOnly:true}).selected?.source};
+  })()`,{timeoutMs:60000});
+  assert.deepEqual(lastEvidence.trellisHistory.last.objects,lastEvidence.trellisHistory.before,'history must not edit authored scene objects');
+  assert.equal(lastEvidence.trellisHistory.last.selectedAsset,lastEvidence.trellisHistory.asset.source);
+  phase='trellis-history-observed';
+}
+
+async function runTrellisHistoryLiveScenario(ws) {
+  phase='scenario-trellis-history-live';
+  lastEvidence.trellisHistoryLive=await evaluate(ws,`(async()=>{
+    if(!window.kaminosTrellisHistory)await new Promise(resolve=>document.addEventListener('kaminos-trellis-history-installed',resolve,{once:true}));
+    const input=JSON.parse(new URLSearchParams(location.search).get('experiment_inputs')||'{}');
+    const controller=await window.kaminosTrellisHistory.ensure(),app=await window.kaminosAppGpu();
+    const {readVoxelHistoryFrame}=await import('./models/trellis2/voxel-history.js');
+    const {createTrellisOccupancyPreview,buildOccupancyCoordinatesPlan}=await import('./models/trellis2/occupancy-coordinates.js');
+    const history=await (await fetch('/api/trellis-history?'+new URLSearchParams({runId:input.runId}))).json();
+    const observed=history.frames.at(-1),rows=await readVoxelHistoryFrame({frame:observed});
+    const runId='trellis-resident-capture-witness:'+crypto.randomUUID();
+    const buffer=app.device.createBuffer({size:rows.byteLength,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST,mappedAtCreation:true});
+    new Int32Array(buffer.getMappedRange()).set(rows);buffer.unmap();
+    const source={kind:'retained-reference-replay',clock:'elapsed-capture-seconds',routeId:'trellis2.resident-capture-conformance',inputKind:'retained-observed-voxel-coordinates',inputRunId:history.runId,inputFrameId:observed.id,inputSha256:observed.coordinates.sha256};
+    controller.start({runId,label:'Shoe · resident capture exercise',source});
+    const make=(identity,isCurrent)=>{
+      const preview=createTrellisOccupancyPreview({runtime:{device:app.device},coordinates:{buffer,shape:[rows.length/3,3],dtype:'i32',usage:buffer.usage,byteLength:rows.byteLength},plan:buildOccupancyCoordinatesPlan({resolution:observed.grid.sourceDimensions[0]}),runId:identity,routeId:source.routeId,steps:12,invocation:{jobId:identity,invocationId:identity},isCurrent});
+      if(JSON.stringify(preview.grid)!==JSON.stringify(observed.grid))throw Error('Witness source grid differs from the observed frame');return preview;
+    };
+    const run=await app.beginRun(runId,{routeId:source.routeId});let current=true;
+    const returned=controller.capture(make(runId,()=>current));
+    if(returned!==undefined)throw Error('Optional capture joined the caller');
+    const admitted=await run.foregroundOpportunities.serviceAtBoundary({invocationId:runId,boundaryId:'capture-before-encode',dutyId:'witness',phase:'saved-source-capture',position:'before-encode'});
+    await app.device.queue.onSubmittedWorkDone();current=false;
+    await run.finish();await controller.finish(runId);buffer.destroy();
+    await window.kaminosTrellisHistory.watch();
+    const shown=controller.read();
+    if(shown.frames.length!==1||shown.presentation?.count!==observed.count||shown.gaps.length||shown.status!=='completed')throw Error('Resident capture was not presented and retained: '+JSON.stringify(shown));
+    const saved=await(await fetch('/api/trellis-history?'+new URLSearchParams({runId}))).json();
+    if(saved.frames[0]?.coordinates.sha256!==observed.coordinates.sha256)throw Error('Retained native copy changed coordinate bytes');
+    const gapRunId=runId+':expired';controller.start({runId:gapRunId,label:'Expired source exercise',source});
+    const gapRun=await app.beginRun(gapRunId,{routeId:source.routeId});controller.capture(make(gapRunId,()=>false));await gapRun.finish();await controller.finish(gapRunId);await controller.watch();
+    const gap=controller.read();if(gap.status!=='incomplete'||gap.frames.length||gap.gaps.length!==1)throw Error('Expired source was disguised as complete replay');
+    await window.kaminosTrellisHistory.open({runId});
+    return {runId,source,admitted,shown,saved,gap,route:'actual-app-device/foreground-service/GPU-copy/native-voxel-view/HTTP-history',claimCeiling:'retained observed coordinate fixture exercises the live consumer; no new neural generation'};
+  })()`,{timeoutMs:60000});
+  lastEvidence.trellisHistoryLive.terminal=await evaluate(ws,`(async()=>{
+    const controller=await window.kaminosTrellisHistory.ensure(),previous=controller.read().runId,runId=previous+':stopped';
+    controller.start({runId,label:'Stopped before first snapshot',source:{kind:'retained-reference-replay',routeId:'trellis2.terminal-history-conformance'}});
+    await controller.watch();await controller.finish(runId,'stopped');
+    const text=document.querySelector('.trellis-history-view')?.textContent??'';
+    if(!text.includes('Stopped')||!text.includes('No snapshots retained')||text.includes('Waiting for the first'))throw Error('Stopped empty history still promises a future grid: '+text);
+    return {state:controller.read(),text,previous};
+  })()`,{timeoutMs:60000});
+  const terminal=await wsRequest(ws,'Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
+  const terminalPath=out.replace(/\.png$/i,'.terminal.png');writeFileSync(terminalPath,Buffer.from(terminal.data,'base64'));
+  lastEvidence.trellisHistoryLive.terminal.image=terminalPath;
+  await evaluate(ws,`window.kaminosTrellisHistory.open({runId:${JSON.stringify(lastEvidence.trellisHistoryLive.runId)}})`,{timeoutMs:60000});
+  phase='trellis-history-live-observed';
+}
+
+async function runTrellisHistoryReopenScenario(ws){
+  phase='scenario-trellis-history-reopen';
+  lastEvidence.trellisHistoryReopen=await evaluate(ws,`(async()=>{
+    if(!window.kaminosTrellisHistory)await new Promise(resolve=>document.addEventListener('kaminos-trellis-history-installed',resolve,{once:true}));
+    const input=JSON.parse(new URLSearchParams(location.search).get('experiment_inputs')||'{}');
+    const controller=await window.kaminosTrellisHistory.ensure();await controller.open({runId:input.runId});
+    const saved=await(await fetch('/api/trellis-history?'+new URLSearchParams({runId:input.runId}))).json();
+    const {readVoxelHistoryFrame}=await import('./models/trellis2/voxel-history.js');await readVoxelHistoryFrame({frame:saved.frames[0]});
+    const state=controller.read();if(state.liveRunId!==null||!state.presentation?.registered||!state.presentation.visible||state.status!=='completed'||saved.frames[0].coordinates.sha256!==input.expectedSha256)throw Error('Fresh page did not recover the actual retained capture');
+    return {state,source:saved.source,coordinateSha256:saved.frames[0].coordinates.sha256};
+  })()`,{timeoutMs:60000});
+}
+
 async function runMeshAssetLinkScenario(ws) {
   phase = 'scenario-mesh-asset-link';
   lastEvidence.meshAssetLink = await evaluate(ws, `
@@ -7541,6 +7646,12 @@ try {
     await runAuthoredWaterPreviewScenario(ws);
   } else if (scenario === 'startup-empty') {
     await runStartupEmptyScenario(ws);
+  } else if (scenario === 'trellis-history') {
+    await runTrellisHistoryScenario(ws);
+  } else if (scenario === 'trellis-history-live') {
+    await runTrellisHistoryLiveScenario(ws);
+  } else if (scenario === 'trellis-history-reopen') {
+    await runTrellisHistoryReopenScenario(ws);
   } else if (scenario === 'mesh-asset-link') {
     await runMeshAssetLinkScenario(ws);
   } else if (scenario === 'viewport-wireframe-toggle') {
