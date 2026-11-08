@@ -20,3 +20,19 @@ test('experiment radii preserve the other axis, edits use shared reaction and a 
  const second=make();win.__kaminosVolumePrototype=second;experiment.read();assert.equal(second.opticalParticleSettings().enabled,true);assert.equal(first.opticalParticleSettings().enabled,false);
  await experiment.dispose();assert.equal(second.opticalParticleSettings().enabled,false);
 });
+test('explicit reaction tuning roundtrips and fallback edits change particle settings',async()=>{
+ let settings=opticalParticleSettings(),writes=[],shared={burnTime:3,cooling:50,heatRelease:6};
+ const runtime={opticalParticleSettings:()=>settings,setOpticalParticles:s=>settings=opticalParticleSettings({...settings,...s}),splitIntegralSettings:()=>({mode:'off'}),setSplitIntegral(){},opticalParticleState:()=>({effective:'world-optical-particles',simulationReaction:shared}),setParticleSimulationReaction:p=>{shared={...shared,...p};return shared;}};
+ const make=inputs=>definition.create({host:{controls:{document:{defaultView:{__kaminosVolumePrototype:runtime},getElementById:()=>null}},scene:{open:async()=>({onFrame:()=>()=>{},redraw(){},async dispose(){}})}},inputs,record(){},updateInputs:v=>writes.push(structuredClone(v))});
+ let ex=await make({simulationReaction:{cooling:23}});assert.equal(shared.cooling,23,'explicit saved reaction tuning applies to shared simulation');
+ ex.operations.setReaction({heatRelease:4});assert.equal(writes.at(-1).simulationReaction.heatRelease,4,'reaction edits persist explicit overrides');await ex.dispose();
+ shared=null;ex=await make({});ex.operations.setReaction({cooling:17,heatRelease:2});assert.equal(settings.cooling,17,'inactive Reactant law edits particle fallback');assert.equal(ex.read().settings.heatRelease,2);await ex.dispose();
+});
+
+import {resolveOpticalStepping,opticalSteppingConfig} from '../volume-optical-native.mjs';
+test('Fine-only particle capture is explicit while ordinary fixed-budget admission stays joined',()=>{
+ const c=opticalSteppingConfig({mode:'budgeted'});
+ assert.equal(resolveOpticalStepping(c,{emissive:true,localSource:true}).value,4);
+ assert.equal(resolveOpticalStepping(c,{emissive:true}).reason,'requires-joined-exterior');
+ assert.equal(resolveOpticalStepping(c,{emissive:false,localSource:true}).mode,'fallback-fixed');
+});

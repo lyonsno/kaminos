@@ -31,8 +31,8 @@ export function resolveRaymarchAdaptivity(requested, legacyAmount, receipt) {
   return {...raymarchAdaptivity(receipt.effective,legacyAmount),pending:false};
 }
 
-export function resolveOpticalStepping(config,{emissive,trace=false,exterior=false,explicit=false}){
- const wrongExterior=config.value>=4&&!exterior;
+export function resolveOpticalStepping(config,{emissive,trace=false,exterior=false,localSource=false,explicit=false}){
+ const wrongExterior=config.value>=4&&!exterior&&!localSource;
  if(!emissive||trace||wrongExterior){
   if(explicit)throw Error('optical stepping comparison requires lean emissive beauty, without trace capture or missing joined exterior');
   if(wrongExterior&&emissive&&!trace)return {...opticalSteppingConfig({mode:'numerical',tolerance:config.tolerance}),requested:config.mode,reason:'requires-joined-exterior'};

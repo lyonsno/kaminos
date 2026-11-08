@@ -3,10 +3,11 @@ export default {
  id:'optical-particles',title:'Reactive optical particles',
  async create({host,inputs={},record,updateInputs}){
   let settings=opticalParticleSettings({enabled:true,...inputs.particles});
+  let reactionOverrides={...Object.fromEntries(Object.entries(inputs.particles??{}).filter(([key])=>['burnTime','cooling','heatRelease'].includes(key))),...inputs.simulationReaction};
   await host.volume?.ready;const session=await host.scene.open(),win=host.controls.document.defaultView;
   let current=null,previous=null,panel,notice,error=null;const drags=[],fields=new Map(),stats=new Map();
   function source(){const next=win.__kaminosVolumePrototype;if(!next?.opticalParticleState)throw Error('This revision does not supply the particle controls');
-   if(next!==current){if(current)try{current.setOpticalParticles(previous.particles);current.setSplitIntegral(previous.split);}catch{}current=next;previous={particles:next.opticalParticleSettings(),split:next.splitIntegralSettings()};next.setOpticalParticles(settings);}return current;
+   if(next!==current){if(current)try{current.setOpticalParticles(previous.particles);current.setSplitIntegral(previous.split);}catch{}current=next;previous={particles:next.opticalParticleSettings(),split:next.splitIntegralSettings()};next.setOpticalParticles(settings);if(Object.keys(reactionOverrides).length&&next.opticalParticleState().simulationReaction)next.setParticleSimulationReaction(reactionOverrides);}return current;
   }
   try{source();}catch(error){await session.dispose();throw error;}
   const read=()=>({settings,effective:source().opticalParticleState(),error});
@@ -19,11 +20,17 @@ export default {
    for(const [key,{input,digits}] of fields){if(host.controls.document.activeElement===input||input.classList.contains('scrubbing'))continue;const v=value(key,e);if(input.type==='checkbox'){input.checked=!!v;continue;}const next=Number.isFinite(v)?v.toFixed(digits):'';if(input.value!==next)input.value=next;}
   }
   function setReaction(patch){
-   const runtime=source();runtime.setParticleSimulationReaction(patch);
-   for(const [key,id] of [['burnTime','volume-reactant-mixing-time'],['cooling','volume-reactant-cooling-time']])if(key in patch){const el=host.controls.document.getElementById(id);if(el){el.value=String(patch[key]);el.dispatchEvent(new win.Event('input',{bubbles:true}));}}
-   record({kind:'simulation.reaction',values:patch});session.redraw();sync();return read();
+   const runtime=source(),shared=!!runtime.opticalParticleState().simulationReaction;
+   settings=opticalParticleSettings({...settings,...patch});
+   if(shared){
+    for(const [key,id] of [['burnTime','volume-reactant-mixing-time'],['cooling','volume-reactant-cooling-time']])if(key in patch){const el=host.controls.document.getElementById(id);if(el){el.value=String(patch[key]);el.dispatchEvent(new win.Event('input',{bubbles:true}));}}
+    runtime.setParticleSimulationReaction(patch);
+   }
+   runtime.setOpticalParticles(settings);reactionOverrides={...reactionOverrides,...patch};
+   updateInputs({particles:settings,simulationReaction:reactionOverrides});
+   record({kind:shared?'simulation.reaction':'particle.reaction-fallback',values:patch});session.redraw();sync();return read();
   }
-  function setOptions(patch){const next=opticalParticleSettings({...settings,...patch});const reaction=Object.fromEntries(Object.entries(patch).filter(([key])=>['burnTime','cooling','heatRelease'].includes(key)));if(Object.keys(reaction).length)setReaction(reaction);source().setOpticalParticles(next);settings=next;updateInputs({particles:settings});record({kind:'optical-particles.settings',settings});session.redraw();sync();return read();}
+  function setOptions(patch){const reaction=Object.fromEntries(Object.entries(patch).filter(([key])=>['burnTime','cooling','heatRelease'].includes(key)));if(Object.keys(reaction).length)setReaction(reaction);const next=opticalParticleSettings({...settings,...patch});source().setOpticalParticles(next);settings=next;updateInputs({particles:settings,simulationReaction:reactionOverrides});record({kind:'optical-particles.settings',settings});session.redraw();sync();return read();}
   const operations={setOptions,setReaction,reset(){source().resetOpticalParticles();session.redraw();sync();return read();},
    setRadius({axis,value:v}){if(!['horizontal','vertical'].includes(axis))throw Error('Unknown radius axis');if(!Number.isFinite(v)||v<=0)throw Error('Radius must be positive');const vertical=settings.radius*settings.stretch;return axis==='vertical'?setOptions({stretch:v/settings.radius}):setOptions({radius:v,stretch:vertical/v});}
   };
@@ -38,7 +45,7 @@ export default {
     fields.set(key,{input,digits});input.addEventListener(input.type==='checkbox'?'change':'input',()=>{if(input.type==='number'&&!input.value.trim())return;const v=input.type==='checkbox'?input.checked:Number(input.value);const args=operation==='setRadius'?{axis:key==='verticalRadius'?'vertical':'horizontal',value:v}:{[key]:v};invoke(operation,args).then(()=>{error=null;sync();}).catch(e=>{error=e.message;sync();});});row.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) 9rem;gap:10px;align-items:center;margin:8px 0';input.style.cssText='width:100%;min-width:0;font-variant-numeric:tabular-nums';row.append(grip,input);root.append(row);}
    control('Display particles','enabled','Show the particle rendering. Turning it off clears its population and returns to the ordinary marcher.');
    control('Particle spacing (source px)','spacing','1 keeps one particle slot per fire-target pixel. 2 keeps one per 2 × 2 block: about one quarter of the particle storage/update/draw work. Each update selects a source within its block. The one-evaluation source image stays full size. Changing this clears the pool; lower density can change brightness.',{step:1,digits:0,min:1});
-   control('Maximum age (reference steps)','maxAge','Retire particles at this simulation reference-time age. 0 allows their optical lifetimes to decide. This reduces persistence and active work, not allocated slot memory. It counts simulation time, not rendered frames.',{step:1});
+   control('Maximum age (reference steps)','maxAge','Retire particles at this simulation reference-time age. 0 allows their optical lifetimes to decide. This limits persistence; all allocated slots are still dispatched, and retired slots can immediately acquire a fresh observation. It does not reduce allocated memory. It counts simulation time, not rendered frames.',{step:1});
    control('Source refresh fraction','refresh','Chance per simulation update to replace an occupied slot when the selected current ray observation contains material. 0 preserves occupied slots; 1 replaces every eligible slot. Empty slots can be filled at any setting. This changes persistence, not the fresh material-evaluation count.',{step:.01});
    control('Source depth support (cells)','depthSupport','Ray interval represented by a source observation, in the local material grid’s cell units. It controls optical path length, separately from the particle’s spatial radius.',{step:.25});
    control('Horizontal radius (source cells)','radius','World X/Z Gaussian radius in the material-cell units recorded at birth. Fine and coarse observations use their own cell size. One radius is one standard deviation; the drawn footprint extends to 2.5 radii. Editing this preserves the vertical radius.',{step:.01,min:.00001,operation:'setRadius'});
