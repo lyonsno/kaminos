@@ -40,3 +40,6 @@ test('Reset during aim supersedes the captured playback state',async()=>{
 test('spatial release targets its rock without changing the sidebar selection',async()=>{
  const i=await instance();try{i.render();await i.value.operations.setPlaying(false);await i.value.operations.release(0);const writes=i.writes.filter(w=>w.label==='Hill volume rigid state'&&w.length===4);assert.equal(writes.at(-1).offset,12,'The pin must release its own rock, not the sidebar rock');assert.equal(i.value.read().settings.rock,7);}finally{await i.value.dispose();}
 });
+test('multiple represented rocks can release without resetting existing free bodies',async()=>{
+ const i=await instance();try{i.render();await i.value.operations.setPlaying(false);await i.value.operations.release(0);await i.value.operations.release(7);const anchors=i.value.read().anchors;assert.equal(anchors[0].attached,false);assert.equal(anchors[7].attached,false);assert.equal(anchors[1].canRelease,true);}finally{await i.value.dispose();}
+});

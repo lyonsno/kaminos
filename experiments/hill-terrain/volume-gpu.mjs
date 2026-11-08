@@ -1,8 +1,10 @@
 import {VOLUME_KERNELS,SURFACE_KERNELS,ROCK_PICK_KERNEL} from './volume-kernels.mjs';
+import {volumeSpatialConfig} from './volume-spatial.mjs';
 import {packVolumeBodies,PARTICLE_WORDS,BODY_WORDS} from './volume-model.mjs';
 
 export async function createVolumeGPU({device,model,display={}}){
  const U=GPUBufferUsage,c=model.config,packed=packVolumeBodies(model.bodies),owned=[],kernels={},count=model.particles.length/PARTICLE_WORDS,cells=c.dimensions.reduce((n,v)=>n*v,1);
+ const broad=volumeSpatialConfig(model,packed);
  const cubeCount=c.dimensions.map(v=>v-1).reduce((n,v)=>n*v,1),maxVertices=cubeCount*36;
  let disposed=false,failure=null,steps=model.runtime?.steps??0,completedSteps=steps,pending=Promise.resolve(),busy=false,driveHeight=model.runtime?.driveHeight??0,driveRate=model.runtime?.driveRate??0,impulse=null;
  const errors=event=>{failure=event.error?.message||String(event.error);};device.addEventListener('uncapturederror',errors);
@@ -13,24 +15,30 @@ export async function createVolumeGPU({device,model,display={}}){
  };
  const storage=(data,label)=>buffer(data,U.STORAGE|U.COPY_DST|U.COPY_SRC,label);
  const uniform=(data,label)=>buffer(data,U.UNIFORM|U.COPY_DST,label);
- const resources={particles:storage(model.particles,'Hill volume material samples'),cells:storage(cells*16,'Hill temporary APIC grid'),bodies:storage(packed.body,'Hill volume rigid state'),planes:storage(packed.planes,'Hill local rock planes'),triangles:storage(packed.triangles,'Hill finite contact triangles'),convexData:storage(packed.convex,'Hill convex contact features'),reactions:storage(model.bodies.length*32,'Hill reciprocal rigid impulses'),params:uniform(new Float32Array(28),'Hill material step'),
+ const resources={particles:storage(model.particles,'Hill volume material samples'),cells:storage(cells*16,'Hill temporary APIC grid'),bodies:storage(packed.body,'Hill volume rigid state'),planes:storage(packed.planes,'Hill local rock planes'),triangles:storage(packed.triangles,'Hill finite contact triangles'),convexData:storage(packed.convex,'Hill convex contact features'),reactions:storage(model.bodies.length*32,'Hill reciprocal rigid impulses'),bodyHeads:storage(broad.cellCount*4,'Hill spatial bucket heads'),bodyLinks:storage(model.bodies.length*4,'Hill spatial body links'),spatialParams:uniform(broad.uniform,'Hill spatial extent'),bodyDegrees:storage(model.bodies.length*4,'Hill contact neighbor degrees'),worldFeatures:storage(packed.convex.byteLength,'Hill world convex features'),featureOwners:storage(packed.convexOwners,'Hill convex feature ownership'),nextBodies:storage(packed.body.byteLength,'Hill next rigid poses'),params:uniform(new Float32Array(28),'Hill material step'),
   soilPositions:display.soilPositions??storage(maxVertices*16,'Hill soil surface positions'),soilNormals:display.soilNormals??storage(maxVertices*16,'Hill soil surface normals'),indirect:display.indirect??buffer(new Uint32Array([0,1,0,0]),U.STORAGE|U.INDIRECT|U.COPY_DST|U.COPY_SRC,'Hill soil draw count'),
   rockPositions:display.rockPositions??storage(packed.vertices.byteLength,'Hill moving rock positions'),rockNormals:display.rockNormals??storage(packed.vertices.byteLength,'Hill moving rock normals'),localVertices:storage(packed.vertices,'Hill retained source vertices'),vertexBodies:storage(packed.vertexBodies,'Hill source vertex ownership'),
   origin:uniform(new Float32Array([...c.origin,c.cell]),'Hill source origin'),shape:uniform(new Uint32Array([...c.dimensions,0]),'Hill source grid extent'),material:uniform(new Float32Array([c.density,.35,0,0]),'Hill surface occupancy'),pickRay:uniform(new Float32Array(8),'Hill pointer ray'),pickHit:storage(32,'Hill pointer hit')};
- const make=async(code,entry,bindings)=>{
+ const make=async(code,entry,bindings,spatialBindings=[])=>{
   const module=device.createShaderModule({label:'Hill volume '+entry,code});const info=await module.getCompilationInfo();const errors=info.messages.filter(m=>m.type==='error');
   if(errors.length)throw Error(entry+': '+errors.map(m=>m.message).join('; '));
   const pipeline=await device.createComputePipelineAsync({label:'Hill volume '+entry,layout:'auto',compute:{module,entryPoint:entry}});
-  const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:bindings.map(([binding,name])=>({binding,resource:{buffer:resources[name]}}))});return{pipeline,group};
+  const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:bindings.map(([binding,name])=>({binding,resource:{buffer:resources[name]}}))});const spatialGroup=spatialBindings.length?device.createBindGroup({layout:pipeline.getBindGroupLayout(1),entries:spatialBindings.map(([binding,name])=>({binding,resource:{buffer:resources[name]}}))}):null;return{pipeline,group,spatialGroup};
  };
- const dispatch=(e,k,n)=>{const p=e.beginComputePass();p.setPipeline(k.pipeline);p.setBindGroup(0,k.group);p.dispatchWorkgroups(Math.ceil(n/64));p.end();};
+ const dispatch=(e,k,n)=>{const p=e.beginComputePass();p.setPipeline(k.pipeline);p.setBindGroup(0,k.group);if(k.spatialGroup)p.setBindGroup(1,k.spatialGroup);p.dispatchWorkgroups(Math.ceil(n/64));p.end();};
  const draw=e=>{e.clearBuffer(resources.cells);dispatch(e,kernels.p2g,count);e.clearBuffer(resources.indirect);dispatch(e,kernels.surface,cubeCount);dispatch(e,kernels.rock,packed.vertices.length/4);};
  const params=(height,rate,action)=>{const a=new Float32Array(28),u=new Uint32Array(a.buffer);a.set([...c.origin,c.cell]);u.set([...c.dimensions,model.bodies.length],4);a.set([c.bulk,c.shear,c.friction,c.density,c.dt,c.gravity,c.contactFriction,0],8);if(action){if(action.kind==='rock'){a.set([...action.velocity,action.index+1],20);if(action.point)a.set([...action.point,1],16);}else{a.set([...action.center,action.radius],16);a.set([...action.velocity,0],20);}}a.set([height,rate,0,0],24);return a;};
+ const bins=[[0,'bodyHeads'],[1,'bodyLinks'],[2,'spatialParams']];
+ const build=e=>{e.clearBuffer(resources.bodyHeads);dispatch(e,kernels.bins,model.bodies.length);};
  try{
+  kernels.bins=await make(VOLUME_KERNELS,'build_body_grid',[[2,'bodies']],bins);
+  kernels.features=await make(VOLUME_KERNELS,'transform_features',[[2,'bodies'],[7,'convexData']],[[4,'worldFeatures'],[6,'featureOwners']]);
+  kernels.degrees=await make(VOLUME_KERNELS,'contact_degrees',[[2,'bodies']],[...bins,[3,'bodyDegrees']]);
+  kernels.solve=await make(VOLUME_KERNELS,'solve_rigid',[[2,'bodies'],[3,'planes'],[6,'params']],[...bins,[3,'bodyDegrees'],[4,'worldFeatures'],[5,'nextBodies']]);
   kernels.p2g=await make(VOLUME_KERNELS,'p2g',[[0,'particles'],[1,'cells'],[6,'params']]);
-  kernels.grid=await make(VOLUME_KERNELS,'grid',[[1,'cells'],[2,'bodies'],[3,'planes'],[4,'triangles'],[5,'reactions'],[6,'params']]);
-  kernels.g2p=await make(VOLUME_KERNELS,'g2p',[[0,'particles'],[1,'cells'],[2,'bodies'],[3,'planes'],[4,'triangles'],[5,'reactions'],[6,'params']]);
-  kernels.rigid=await make(VOLUME_KERNELS,'rigid',[[2,'bodies'],[3,'planes'],[5,'reactions'],[6,'params'],[7,'convexData']]);
+  kernels.grid=await make(VOLUME_KERNELS,'grid',[[1,'cells'],[2,'bodies'],[3,'planes'],[4,'triangles'],[5,'reactions'],[6,'params']],bins);
+  kernels.g2p=await make(VOLUME_KERNELS,'g2p',[[0,'particles'],[1,'cells'],[2,'bodies'],[3,'planes'],[4,'triangles'],[5,'reactions'],[6,'params']],bins);
+  kernels.rigid=await make(VOLUME_KERNELS,'integrate_rigid',[[2,'bodies'],[5,'reactions'],[6,'params']]);
   kernels.pick=await make(ROCK_PICK_KERNEL,'pick_rock',[[2,'bodies'],[3,'planes'],[8,'pickRay'],[9,'pickHit']]);
   kernels.kick=await make(VOLUME_KERNELS,'kick',[[2,'bodies'],[6,'params']]);
   kernels.surface=await make(SURFACE_KERNELS,'surface',[[0,'cells'],[1,'soilPositions'],[2,'soilNormals'],[3,'indirect'],[4,'origin'],[5,'shape'],[6,'material']]);
@@ -45,8 +53,9 @@ export async function createVolumeGPU({device,model,display={}}){
    for(let i=0;i<n;i++){
     encoder.copyBufferToBuffer(upload,i*112,resources.params,0,112);encoder.clearBuffer(resources.cells);encoder.clearBuffer(resources.reactions);
     const kick=encoder.beginComputePass();kick.setPipeline(kernels.kick.pipeline);kick.setBindGroup(0,kernels.kick.group);kick.dispatchWorkgroups(1);kick.end();
-    dispatch(encoder,kernels.p2g,count);dispatch(encoder,kernels.grid,cells);dispatch(encoder,kernels.g2p,count);
-    const p=encoder.beginComputePass();p.setPipeline(kernels.rigid.pipeline);p.setBindGroup(0,kernels.rigid.group);p.dispatchWorkgroups(1);p.end();
+    build(encoder);dispatch(encoder,kernels.p2g,count);dispatch(encoder,kernels.grid,cells);dispatch(encoder,kernels.g2p,count);
+    dispatch(encoder,kernels.rigid,model.bodies.length);
+    for(let iteration=0;iteration<c.contactIterations;iteration++){build(encoder);dispatch(encoder,kernels.features,packed.convexOwners.length);dispatch(encoder,kernels.degrees,model.bodies.length);dispatch(encoder,kernels.solve,model.bodies.length);encoder.copyBufferToBuffer(resources.nextBodies,0,resources.bodies,0,packed.body.byteLength);}
    }
    draw(encoder);device.queue.submit([encoder.finish()]);steps+=n;busy=true;
    pending=device.queue.onSubmittedWorkDone().then(()=>{if(failure)throw Error(failure);completedSteps=steps;}).catch(e=>{failure=String(e);throw e;}).finally(()=>{busy=false;upload.destroy();});return pending;
@@ -61,7 +70,7 @@ export async function createVolumeGPU({device,model,display={}}){
    }finally{for(const b of buffers){b.destroy();owned.splice(owned.indexOf(b),1);}}
   }
   const read=()=>({route:'hill/direct-volume-apic-frictional-v1',backend:'webgpu',steps,completedSteps,seconds:completedSteps*c.dt,busy,failure,particleCount:count,bodyCount:model.bodies.length,gridCells:cells,config:c,drive:{height:driveHeight,rate:driveRate},weatheredMass:model.weatheredMass,readbackInRuntime:false,
-   material:'rate-form hypoelastic; no tension; Frobenius deviator yield <= friction*pressure',contact:'reciprocal soil/rigid; full convex SAT against anchored volumes; one released body; general free/free pile unresolved',conditioning:model.conditioning,surface:'GPU mass occupancy isosurface; 6 tetrahedra per cell; indirect draw',gpuBufferBytes:[...new Set(Object.values(resources))].reduce((n,b)=>n+b.size,0),maxSurfaceVertices:maxVertices});
+   material:'rate-form hypoelastic; no tension; Frobenius deviator yield <= friction*pressure',contact:'reciprocal soil/rigid and free/free convex SAT; canonical pair impulses; neighbor-weighted Jacobi',spatial:{kind:'GPU center-cell linked lists',dimensions:broad.dimensions,width:broad.width,entries:model.bodies.length,perCellCap:null},contactIterations:c.contactIterations,conditioning:model.conditioning,surface:'GPU mass occupancy isosurface; 6 tetrahedra per cell; indirect draw',gpuBufferBytes:[...new Set(Object.values(resources))].reduce((n,b)=>n+b.size,0),maxSurfaceVertices:maxVertices});
   let picking=Promise.resolve();
   function pickRay(origin,direction){
    if(![origin,direction].every(v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite))||Math.hypot(...direction)===0)return Promise.reject(Error('Invalid pointer ray'));
@@ -71,7 +80,7 @@ export async function createVolumeGPU({device,model,display={}}){
    });picking=task.catch(()=>{});return task;
   }
   return{resources,advance,snapshot,read,pickRay,done:()=>Promise.all([pending,picking]),
-   release(index){if(!Number.isInteger(index)||!model.bodies[index])throw Error('Choose a represented rock');if(c.conditionContacts===false)throw Error('Unconditioned authored poses overlap; enable starting contact preparation before release');if(model.bodies.some((b,i)=>i!==index&&!b.anchored))throw Error('This specimen supports one released rock against anchored volumes; reset before releasing another');const b=model.bodies[index];b.anchored=false;device.queue.writeBuffer(resources.bodies,index*BODY_WORDS*4+12,new Float32Array([1/b.mass]));},
+   release(index){if(!Number.isInteger(index)||!model.bodies[index])throw Error('Choose a represented rock');if(c.conditionContacts===false)throw Error('Unconditioned authored poses overlap; enable starting contact preparation before release');const b=model.bodies[index];b.anchored=false;device.queue.writeBuffer(resources.bodies,index*BODY_WORDS*4+12,new Float32Array([1/b.mass]));},
    push(action){if(!action||![action.center,action.velocity].every(v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite))||!Number.isFinite(action.radius)||action.radius<=0)throw Error('Invalid material impulse');impulse=structuredClone(action);},
    pushRock(index,velocity,point){if(!Number.isInteger(index)||!model.bodies[index]||model.bodies[index].anchored||!Array.isArray(velocity)||velocity.length!==3||!velocity.every(Number.isFinite))throw Error('Choose the released rock and a finite velocity impulse');if(point!==undefined&&(!Array.isArray(point)||point.length!==3||!point.every(Number.isFinite)))throw Error('Invalid contact point');impulse={kind:'rock',index,velocity:[...velocity],...(point?{point:[...point]}:{})};},
    setDrive(rate){if(!Number.isFinite(rate))throw Error('Invalid growth velocity');driveRate=rate;},
