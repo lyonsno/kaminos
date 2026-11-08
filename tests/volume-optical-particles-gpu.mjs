@@ -57,13 +57,13 @@ test('native source-only producer retains intrinsic emission separately and clea
 
 async function opticalFixture(d,run,view={}){
  const owner=createOpticalParticles(d,{transparent:true}),n=16,identity=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
- const births=d.createBuffer({size:n*64,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});const uniform=d.createBuffer({size:240,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});const fine=d.createBuffer({size:8*64,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
- const sf=new Float32Array(60);sf.set(identity);sf.set([0,2,1,0],28);d.queue.writeBuffer(uniform,0,sf);
+ const births=d.createBuffer({size:n*64+128,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});const uniform=d.createBuffer({size:240,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});const fine=d.createBuffer({size:8*64,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
+ const sf=new Float32Array(60);sf.set(identity);sf.set([0,2,1,0],28);if(view.sourceUniform)sf.set(view.sourceUniform);d.queue.writeBuffer(uniform,0,sf);
  const target=d.createTexture({size:[4,4],format:'rgba8unorm',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC});const depth=d.createTexture({size:[1,1],format:'depth32float',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING});
- const camera=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,1,1,0,0,0,1,0]);const source={buffer:births,uniform,width:4,height:4,pixels:n,step:0,backtrace:0,viewProj:view.vp??identity};
+ const camera=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,1,1,0,0,0,1,0]);const source={buffer:births,uniform,width:4,height:4,pixels:n,step:0,backtrace:view.backtrace??0,reactionStepScale:view.stepScale??1,viewProj:view.vp??identity};
  const seed=rows=>{d.queue.writeBuffer(births,0,rows);owner.reset();};
  const draw=async(step=0,settings={})=>{source.step=step;const e=d.createCommandEncoder();const dp=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthClearValue:view.depth??1,depthStoreOp:'store'}});dp.end();owner.encode(e,{view:target.createView(),format:'rgba8unorm',source,fine,dims:[2,2,2],invViewProj:view.inverse??identity,depthZeroToOne:view.depthZeroToOne??false,settings:{enabled:true,refresh:0,...settings},cameraValues:camera,depth,identity:'fixture'});const read=d.createBuffer({size:1024,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});e.copyTextureToBuffer({texture:target},{buffer:read,bytesPerRow:256},[4,4]);d.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);const pixels=new Uint8Array(read.getMappedRange().slice(0));read.unmap();read.destroy();return pixels;};
- try{await run({owner,seed,draw});}finally{owner.dispose();births.destroy();uniform.destroy();fine.destroy();target.destroy();depth.destroy();}
+ try{await run({owner,seed,draw,upload:rows=>d.queue.writeBuffer(births,0,rows)});}finally{owner.dispose();births.destroy();uniform.destroy();fine.destroy();target.destroy();depth.destroy();}
 }
 test('optically negligible carriers cannot dilute an overlapping live carrier',async()=>{
  await withKaminosGpu(async({device:d})=>opticalFixture(d,async({seed,draw})=>{
@@ -74,8 +74,8 @@ test('optically negligible carriers cannot dilute an overlapping live carrier',a
 });
 test('reaction creates smoke extinction even when its source had no initial smoke',async()=>{
  await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw})=>{
-  const rows=new Float32Array(16*16);rows.set([4,2,1,0,0,0,0,1,-.5,.5,1,1,4,2,1,0]);seed(rows);await draw();
-  const result=await draw(100,{burnTime:1,cooling:1,heatRelease:0,sootYield:1,smokeLife:10000});const s=await owner.sample();assert.ok(s.records[22]>.9,'smoke state was produced');assert.ok(s.records[21]<1e-10,'emission has cooled');
+  const rows=new Float32Array(16*16);rows.set([4,2,1,0,0,0,0,1,-.5,.5,1,1,4,2,1,0]);seed(rows);await draw();const initial=(await owner.sample()).records[20];
+  const result=await draw(100,{burnTime:1,cooling:1,heatRelease:0,sootYield:1,smokeLife:10000});const s=await owner.sample();assert.ok(Math.abs(s.records[22]-(initial-s.records[20])*Math.exp(-.01))<1e-5,'soot matches consumed finite potential and survival');assert.ok(s.records[22]>.5,'a strong source produces substantial smoke');assert.ok(s.records[21]<1e-10,'emission has cooled');
   let alpha=0;for(let y=0;y<4;y++)for(let x=0;x<4;x++)alpha=Math.max(alpha,result[256*y+4*x+3]);assert.ok(alpha>10,'new soot must remain visible as extinction after light ends');
  }));
 });
@@ -89,4 +89,33 @@ test('native WebGPU perspective depth stays in zero-to-one clip space',async()=>
    const rows=new Float32Array(16*16);rows.set([4,2,1,1,0,0,z,1,-.5,.5,1,1,4,2,1,0]);seed(rows);const result=await draw();let alpha=0;for(let y=0;y<4;y++)for(let x=0;x<4;x++)alpha=Math.max(alpha,result[256*y+4*x+3]);assert.equal(alpha>0,visible,JSON.stringify({z,depth,alpha}));
   },{vp,inverse,depthZeroToOne:true,depth});
  });
+});
+
+test('arbitrarily faint intrinsic emission cannot manufacture a full soot parcel',async()=>{
+ await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw})=>{
+  const rows=new Float32Array(16*16);rows.set([1e-12,1e-12,1e-12,0,0,0,0,1,-.5,.5,1,1,1e-12,1e-12,1e-12,0]);seed(rows);await draw();await draw(100,{burnTime:1,cooling:1,heatRelease:0,sootYield:1,smokeLife:10000});
+  const sample=await owner.sample();assert.ok(sample.records[22]<1e-8,`faint source minted soot ${sample.records[22]}`);
+ }));
+});
+test('explicit particle spacing reduces the retained allocation, independently from source image dimensions',async()=>{
+ await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw})=>{
+  const rows=new Float32Array(16*16);for(let i=0;i<16;i++)rows.set([4,2,1,0,0,0,0,1,-.5,.5,1,1,4,2,1,0],16*i);seed(rows);await draw(0,{spacing:2});const sample=await owner.sample();
+  assert.equal(sample.records.length,4*24);assert.equal(sample.state.slots,4);assert.equal(sample.state.width,4);
+ }));
+});
+test('maximum age retires an unrefreshed observation instead of carrying its state forever',async()=>{
+ await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw,upload})=>{
+  const rows=new Float32Array(16*16);rows.set([4,2,1,0,0,0,0,1,-.5,.5,1,1,4,2,1,0]);seed(rows);await draw(0,{maxAge:2});upload(new Float32Array(16*16));await draw(3,{maxAge:2});assert.equal((await owner.sample()).records[3],0);
+ }));
+});
+test('particle reaction follows the simulation reference-time scale rather than render-step count',async()=>{
+ await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw,upload})=>{
+  const rows=new Float32Array(16*16);rows.set([4,2,1,0,0,0,0,1,-.5,.5,1,1,4,2,1,0]);seed(rows);await draw();upload(new Float32Array(16*16));await draw(1,{heatRelease:0,cooling:10});const sample=await owner.sample();assert.ok(Math.abs(sample.records[21]-Math.exp(-.1/10))<1e-5);assert.ok(Math.abs(sample.records[3]-1.1)<1e-5);
+ },{stepScale:.1}));
+});
+test('a carrier outside every velocity field does not extrapolate clamped boundary flow',async()=>{
+ const sf=new Float32Array(60);sf.set([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]);sf.set([0,2,1,0],28);sf.set([0,0,0,1],32);sf.set([2,2,2,1],36);sf.set([0,0,0,1],40);new Uint32Array(sf.buffer).set([0,0,64,0],56);
+ await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw,upload})=>{
+  const rows=new Float32Array(16*16+32);rows.set([4,2,1,0,4,0,0,1,-.5,.5,1,1,4,2,1,0]);for(let i=0;i<8;i++)rows.set([1,0,0,0],256+i*4);seed(rows);await draw();rows.fill(0,0,256);upload(rows);await draw(1);assert.equal((await owner.sample()).records[0],4);
+ },{sourceUniform:sf,backtrace:1}));
 });

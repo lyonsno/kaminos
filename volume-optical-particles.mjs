@@ -3,9 +3,10 @@ import {INTEGRAL_PRESENT_WGSL} from './volume-integral-reconstruction.mjs';
 export function opticalParticleSettings(input={}) {
  const s={enabled:false,refresh:.18,depthSupport:2,radius:.4,stretch:2,gain:1,opacity:1,
   burnTime:8,cooling:10,heatRelease:.35,sootYield:.25,smokeLife:24,
-  flow:1,rise:0,drag:4,expansion:0,...input};
+  flow:1,rise:0,drag:4,expansion:0,spacing:1,maxAge:0,...input};
  if(typeof s.enabled!=='boolean')throw Error('Particle enabled must be boolean');
  for(const [k,v] of Object.entries(s))if(k!=='enabled'&&(!Number.isFinite(v)||v<0||!Number.isFinite(Math.fround(v))))throw Error(`Invalid particle ${k}`);
+ if(!Number.isSafeInteger(s.spacing)||s.spacing<1)throw Error('Particle spacing must be a positive whole number of source pixels');
  if(s.refresh>1||s.radius<=0||s.stretch<=0||s.burnTime<=0||s.cooling<=0||s.smokeLife<=0||s.drag<=0)throw Error('Particle fractions must be at most one and scales/lifetimes positive');
  return s;
 }
@@ -17,6 +18,10 @@ fn particleReact(state:vec4<f32>,dt:f32,burnTime:f32,cooling:f32,heatRelease:f32
  return vec4<f32>(max(0.0,state.x-burn),(state.y+heatRelease*burn)*exp(-dt/cooling),state.z+sootYield*burn,burn);
 }
 `;
+export function particleReactionFromSimulation(config){
+ const e=config?.effective;if(!e?.admitted)return null;
+ return {burnTime:e.mixingTimeSteps,cooling:e.coolingTimeSteps,heatRelease:e.model.heatOfCombustion};
+}
 const OPTIONS=/* wgsl */`
 struct Particle {anchor:vec4<f32>, source:vec4<f32>, emission:vec4<f32>, motion:vec4<f32>, shape:vec4<f32>, state:vec4<f32>}
 struct Options {vp:mat4x4<f32>, inverse:mat4x4<f32>, size:vec4<u32>, time:vec4<f32>, reaction:vec4<f32>, shape:vec4<f32>, transport:vec4<f32>, fine:vec4<f32>, gain:vec4<f32>}
@@ -33,7 +38,8 @@ fn hash32(x:u32)->u32{var h=x;h=(h^(h>>16u))*0x7feb352du;h=(h^(h>>15u))*0x846ca6
 fn coarseVelocity(p:vec3<f32>,middle:bool)->vec3<f32>{
  let lo=select(source.worldLo,source.middleLo,middle);let dims=select(source.worldDims,source.middleDims,middle);let map=select(source.worldMap,source.middleMap,middle);
  if(dims.w<=0){return vec3<f32>(0);}
- let q=p*map.w+map.xyz;var result=vec3<f32>(0);
+ let q=p*map.w+map.xyz;if(any(q<lo.xyz)||any(q>=lo.xyz+dims.xyz*lo.w)){return vec3<f32>(0);}
+ var result=vec3<f32>(0);
  for(var a=0u;a<3u;a++){
   var offset=vec3<f32>(.5);offset[a]=1;let cell=(q-lo.xyz)/lo.w-offset;let base=vec3<i32>(floor(cell));let f=fract(cell);
   for(var z=0;z<2;z++){for(var y=0;y<2;y++){for(var x=0;x<2;x++){
@@ -59,24 +65,32 @@ fn particleVelocity(p:vec3<f32>)->vec3<f32>{
  return coarseVelocity(p,middle);
 }
 @compute @workgroup_size(64) fn update(@builtin(global_invocation_id) id:vec3<u32>){
- let i=id.x;if(i>=u.size.z){return;}var p=particles[i];let dt=u.time.x;
+ let i=id.x;if(i>=u.size.z){return;}var p=particles[i];let steps=u.time.x;let dt=steps*u.fine.w;
  if(p.anchor.w>0&&dt>0){
   let s=particleReact(p.state,dt,u.reaction.x,u.reaction.y,u.reaction.z,u.reaction.w);
   p.state=vec4<f32>(s.xy,s.z*exp(-dt/u.time.w),s.w);
   let damping=exp(-dt/u.transport.z);
   p.motion=vec4<f32>(p.motion.xyz*damping+vec3<f32>(0,u.transport.y*p.state.y*u.transport.z*(1.0-damping),0),0);
-  p.anchor=vec4<f32>(p.anchor.xyz+particleVelocity(p.anchor.xyz)*dt*u.time.z*u.transport.x+p.motion.xyz*dt,p.anchor.w+dt);
+  p.anchor=vec4<f32>(p.anchor.xyz+particleVelocity(p.anchor.xyz)*steps*u.time.z*u.transport.x+p.motion.xyz*dt,p.anchor.w+dt);
  }
- // A bounded representation with one explicit slot per current fire-target pixel.
+ if(u.gain.z>0&&p.anchor.w-1.0>=u.gain.z){p.anchor.w=0;}
+ // Explicit spacing selects one source within each source-pixel block per update.
  // All source pixels participate. Refresh probability is an exposed policy, not
  // a hidden truncation of the source set. Weak source evaluations can replace slots.
- let at=4u*i;let q=births[at];let anchor=births[at+1u];
+ let spacing=u32(u.shape.z);let columns=u32(u.shape.w);
+ let noise=hash32(i+u.size.w*747796405u);let pixel=min(vec2<u32>(u.size.xy)-1u,vec2<u32>(i%columns,i/columns)*spacing+vec2<u32>(noise%spacing,(noise/spacing)%spacing));
+ let at=4u*(pixel.x+pixel.y*u.size.x);let q=births[at];let anchor=births[at+1u];
  let random=f32(hash32(i+u.size.w*1664525u))/4294967296.0;
  if((dt>0||u.size.w==1u)&&anchor.w>0&&max(length(q.xyz),q.w)>0&&(p.anchor.w<=0||random<u.time.y)){
   let support=births[at+2u];let emission=min(q.xyz,births[at+3u].xyz);
   let pitch=max(support.w,.00001);let burning=select(0.0,1.0,length(emission)>0.0);
   p.anchor=anchor;p.source=q;p.emission=vec4<f32>(emission,0);p.motion=vec4<f32>(0);
-  p.shape=vec4<f32>(vec3<f32>(pitch),max(.00001,support.y-support.x));p.state=vec4<f32>(burning,burning,0,0);
+  p.shape=vec4<f32>(vec3<f32>(pitch),max(.00001,support.y-support.x));
+  // Finite visual energy comes from the observed emission over its source interval.
+  // Vanishing emission must produce vanishing new soot, without a hard threshold.
+  let energy=max(0.0,dot(emission,vec3<f32>(.2126,.7152,.0722)))*p.shape.w;
+  let potential=(1.0-exp(-energy))/max(1.0,u.reaction.z);
+  p.state=vec4<f32>(potential,burning,0,0);p.emission.w=potential;
  }
  particles[i]=p;
 }
@@ -89,7 +103,7 @@ struct Vertex {@builtin(position) clip:vec4<f32>,@location(0) local:vec2<f32>,@l
 @vertex fn vs(@builtin(vertex_index) vertex:u32,@builtin(instance_index) i:u32)->Vertex{
  let p=particles[i];var out:Vertex;
  if(p.anchor.w<=0){out.clip=vec4<f32>(2,2,2,1);return out;}
- let growth=1.0+u.transport.w*(select(0.0,1.0,length(p.emission.xyz)>0)-p.state.x);
+ let growth=1.0+u.transport.w*select(0.0,max(0.0,1.0-p.state.x/max(p.emission.w,1e-20)),p.emission.w>0);
  let radius=p.shape.xyz*u.shape.x*vec3<f32>(1,u.shape.y,1)*growth;
  var center=u.vp*vec4<f32>(p.anchor.xyz,1);var cxx=0.0;var cyy=0.0;var cxy=0.0;
  if(center.w<=.0001){out.clip=vec4<f32>(2,2,2,1);return out;}
@@ -131,20 +145,21 @@ export function createOpticalParticles(device,{transparent=false}={}) {
  function reset(){key=null;frame=0;info={effective:'off',reason:'reset'};}
  function encode(encoder,{view,format,source,fine,dims,invViewProj,settings,cameraValues,depth,identity,depthZeroToOne=false}){
   const s=opticalParticleSettings(settings),{width,height,pixels,step}=source;
-  if(pixels*96>Math.min(device.limits.maxBufferSize,device.limits.maxStorageBufferBindingSize))throw Error(`Particle population requires ${pixels*96} bytes; exceeds effective device binding capacity`);
-  const nextKey=JSON.stringify([width,height,identity]);
+  const columns=Math.ceil(width/s.spacing),rows=Math.ceil(height/s.spacing),slots=columns*rows;
+  if(slots*96>Math.min(device.limits.maxBufferSize,device.limits.maxStorageBufferBindingSize))throw Error(`Particle population requires ${slots*96} bytes; exceeds effective device binding capacity`);
+  const nextKey=JSON.stringify([width,height,s.spacing,identity]);
   const resetNeeded=key!==nextKey||lastStep===null||step<lastStep;const dt=resetNeeded?0:step-lastStep;
-  if(!particles||particles.size!==pixels*96){retire(particles?[particles]:[]);particles=device.createBuffer({label:'shared world optical material carriers',size:pixels*96,usage:storage});}
+  if(!particles||particles.size!==slots*96){retire(particles?[particles]:[]);particles=device.createBuffer({label:'shared world optical material carriers',size:slots*96,usage:storage});}
   if(!textures.length||textures[0].width!==width||textures[0].height!==height){retire(textures);textures=['rgba16float','rgba32float'].map(f=>device.createTexture({size:[width,height],format:f,usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING}));}
   if(resetNeeded){encoder.clearBuffer(particles);frame=0;}frame++;lastStep=step;key=nextKey;
-  const data=new ArrayBuffer(240),f=new Float32Array(data),u=new Uint32Array(data);f.set(source.viewProj);f.set(invViewProj,16);u.set([width,height,pixels,frame],32);
-  f.set([dt,s.refresh,source.backtrace,s.smokeLife],36);f.set([s.burnTime,s.cooling,s.heatRelease,s.sootYield],40);f.set([s.radius,s.stretch,0,0],44);f.set([s.flow,s.rise,s.drag,s.expansion],48);f.set([...dims,0],52);f.set([s.gain,s.opacity,0,depthZeroToOne?1:0],56);device.queue.writeBuffer(options,0,data);
-  const c=encoder.beginComputePass({label:'particle finite reaction and native grid flow'});c.setPipeline(compute);c.setBindGroup(0,device.createBindGroup({layout:compute.getBindGroupLayout(0),entries:[particles,source.buffer,fine,source.uniform,options].map((buffer,binding)=>({binding,resource:{buffer}}))}));c.dispatchWorkgroups(Math.ceil(pixels/64));c.end();
+  const data=new ArrayBuffer(240),f=new Float32Array(data),u=new Uint32Array(data);f.set(source.viewProj);f.set(invViewProj,16);u.set([width,height,slots,frame],32);
+  f.set([dt,s.refresh,source.backtrace,s.smokeLife],36);f.set([s.burnTime,s.cooling,s.heatRelease,s.sootYield],40);f.set([s.radius,s.stretch,s.spacing,columns],44);f.set([s.flow,s.rise,s.drag,s.expansion],48);f.set([...dims,source.reactionStepScale??1],52);f.set([s.gain,s.opacity,s.maxAge,depthZeroToOne?1:0],56);device.queue.writeBuffer(options,0,data);
+  const c=encoder.beginComputePass({label:'particle finite reaction and native grid flow'});c.setPipeline(compute);c.setBindGroup(0,device.createBindGroup({layout:compute.getBindGroupLayout(0),entries:[particles,source.buffer,fine,source.uniform,options].map((buffer,binding)=>({binding,resource:{buffer}}))}));c.dispatchWorkgroups(Math.ceil(slots/64));c.end();
   const ms=depth.sampleCount>1;let rp=render.get(ms);
   if(!rp){const code=RENDER.replace('DEPTH_TYPE',ms?'texture_depth_multisampled_2d':'texture_depth_2d').replace('DEPTH_LOAD','textureLoad(sceneDepth,pixel,0)').replace('DEPTH_REDUCE',ms?'for(var sample=1u;sample<textureNumSamples(sceneDepth);sample++){depth=min(depth,textureLoad(sceneDepth,pixel,sample));}':'');const module=device.createShaderModule({code});
    const blend={color:{srcFactor:'one',dstFactor:'one',operation:'add'},alpha:{srcFactor:'one',dstFactor:'one',operation:'add'}};
    rp=device.createRenderPipeline({label:'anisotropic material carrier optical moments',layout:'auto',vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',targets:[{format:'rgba16float',blend}]},primitive:{topology:'triangle-list'}});render.set(ms,rp);}
-  const r=encoder.beginRenderPass({label:'spatial material support',colorAttachments:textures.slice(0,1).map(t=>({view:t.createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}))});r.setPipeline(rp);r.setBindGroup(0,device.createBindGroup({layout:rp.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:particles}},{binding:1,resource:{buffer:options}},{binding:2,resource:depth.createView()}]}));r.draw(6,pixels);r.end();
+  const r=encoder.beginRenderPass({label:'spatial material support',colorAttachments:textures.slice(0,1).map(t=>({view:t.createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}))});r.setPipeline(rp);r.setBindGroup(0,device.createBindGroup({layout:rp.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:particles}},{binding:1,resource:{buffer:options}},{binding:2,resource:depth.createView()}]}));r.draw(6,slots);r.end();
   if(!resolvePipeline){const module=device.createShaderModule({code:RESOLVE});
   resolvePipeline=device.createRenderPipeline({layout:'auto',vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',targets:[{format:'rgba32float'}]}});}
   const resolve=encoder.beginRenderPass({label:'material optical moment transfer',colorAttachments:[{view:textures[1].createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:1}}]});resolve.setPipeline(resolvePipeline);resolve.setBindGroup(0,device.createBindGroup({layout:resolvePipeline.getBindGroupLayout(0),entries:[{binding:0,resource:textures[0].createView()}]}));resolve.draw(3);resolve.end();
@@ -152,7 +167,7 @@ export function createOpticalParticles(device,{transparent=false}={}) {
   device.queue.writeBuffer(camera,0,cameraValues);
   const output=encoder.beginRenderPass({label:'native optical particle presentation',colorAttachments:[{view,loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}]});output.setPipeline(pp);output.setBindGroup(0,device.createBindGroup({layout:pp.getBindGroupLayout(0),entries:[{binding:0,resource:textures[1].createView()},{binding:1,resource:{buffer:camera}}]}));output.draw(3);output.end();
   if(retired.length){const old=retired.splice(0);queueMicrotask(()=>device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>old.forEach(x=>x.destroy())));}
-  info={requested:true,effective:'world-optical-particles',width,height,slots:pixels,bytes:particles.size+pixels*24,sourceBytes:source.buffer.size,totalBytes:particles.size+pixels*24+source.buffer.size,frames:frame,step,stepDelta:dt,settings:s,
+  info={requested:true,effective:'world-optical-particles',width,height,slots,spacing:s.spacing,sourcePixels:pixels,bytes:particles.size+pixels*24,sourceBytes:source.buffer.size,totalBytes:particles.size+pixels*24+source.buffer.size,frames:frame,step,stepDelta:dt,settings:s,
    clipDepth:depthZeroToOne?'zero-to-one':'minus-one-to-one',source:'one fresh native local optical observation; separate intrinsic emission',flow:'current Fine/Middle/World grid velocity',reaction:'finite visual proxy seeded by intrinsic emission; no inferred fuel/oxygen',composition:'additive optical moments; approximate mixed-depth attenuation',generatedSmoke:'new reaction soot contributes absorption; carried source scattering uses birth illumination',reset:resetNeeded};return info;
  }
  let resolvePipeline=null;

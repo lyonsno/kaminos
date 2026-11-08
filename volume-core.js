@@ -1,4 +1,4 @@
-import {createOpticalParticles,opticalParticleSettings} from './volume-optical-particles.mjs';
+import {createOpticalParticles,opticalParticleSettings,particleReactionFromSimulation} from './volume-optical-particles.mjs';
 import {createSplitIntegral,splitIntegralSettings,SPLIT_OPTICAL_OFF_WGSL,splitOpticalShader} from './volume-split-integral.mjs';
 import {EMPTY_SPACE_WGSL} from './volume-empty-space.mjs';
 import {resolveWorldCalibration,calibrationSignature,calibrationWaveletLattice,WORLD_CALIBRATION_WGSL,resolveSimulationLevers} from './volume-world-calibration.mjs';
@@ -21602,7 +21602,7 @@ export function createKaminosVolumePrototype({
     if(particleSourceFrame){
       opticalParticles??=createOpticalParticles(device,{transparent:transparentCanvas});
       const cameraValues=new Float32Array([...emissiveWhiteMatrix[0],0,...emissiveWhiteMatrix[1],0,...emissiveWhiteMatrix[2],0,0,uniforms[373],uniforms[374],0,0,0,uniforms[46],0]);
-      state.opticalParticles=opticalParticles.encode(encoder,{view,format:targetPipeline===readbackPipeline?'rgba8unorm':format,source:particleSourceFrame,fine:fluidBuffers[currentFluid],dims:[gridSize,gridHeight,gridSize],invViewProj:invViewProj.elements,settings:particleSettings,cameraValues,depthZeroToOne:camera.coordinateSystem===THREE.WebGPUCoordinateSystem,depth:ordinarySceneDepthTexture??ordinarySceneDepthFallback,identity:JSON.stringify([worldSmokeKey,intermediateKey,productTransform,state.integralSourceGeneration])});
+      state.opticalParticles=opticalParticles.encode(encoder,{view,format:targetPipeline===readbackPipeline?'rgba8unorm':format,source:{...particleSourceFrame,reactionStepScale:resolveTimeStepConfig(controlsSnapshot).effective.dtScale},fine:fluidBuffers[currentFluid],dims:[gridSize,gridHeight,gridSize],invViewProj:invViewProj.elements,settings:{...particleSettings,...particleReactionFromSimulation(state.reactantCombustion)},cameraValues,depthZeroToOne:camera.coordinateSystem===THREE.WebGPUCoordinateSystem,depth:ordinarySceneDepthTexture??ordinarySceneDepthFallback,identity:JSON.stringify([worldSmokeKey,intermediateKey,productTransform,state.integralSourceGeneration])});
     }else{state.opticalParticles={requested:particleSettings.enabled,effective:'off',reason:particleSettings.enabled?'requires-one-fresh-Fixed-evaluations-ordinary-joined-beauty':'disabled'};}
     if(reconstruct) {
       const cameraValues=new Float32Array([...emissiveWhiteMatrix[0],0,...emissiveWhiteMatrix[1],0,...emissiveWhiteMatrix[2],0,
@@ -29214,6 +29214,13 @@ export function createKaminosVolumePrototype({
     },
     setOpticalParticles(next){assertIntegralSourceEditable('Optical particles');particleSettings=opticalParticleSettings({...particleSettings,...next});if(!particleSettings.enabled){opticalParticles?.reset();state.opticalParticles={requested:false,effective:'off',reason:'disabled'};}return {...particleSettings};},
     opticalParticleSettings(){return {...particleSettings};},
+    opticalParticleState(){return {...state.opticalParticles,simulationReaction:particleReactionFromSimulation(state.reactantCombustion),reactionLaw:state.reactantCombustion?.effective?.law??null};},
+    setParticleSimulationReaction(patch){
+      const keys=['burnTime','cooling','heatRelease'];for(const [key,value] of Object.entries(patch))if(!keys.includes(key)||!Number.isFinite(value)||value<0||((key==='burnTime'||key==='cooling')&&value<=0))throw Error('Invalid shared simulation reaction '+key);
+      const next={};if('burnTime' in patch)next.reactantMixingTime=patch.burnTime;if('cooling' in patch)next.reactantCoolingTime=patch.cooling;
+      if('heatRelease' in patch)next.reactantModelOverrides={...controlsSnapshot.reactantModelOverrides,heatOfCombustion:patch.heatRelease};
+      this.setControls(next);return particleReactionFromSimulation(resolveReactantCombustionConfig(controlsSnapshot,{grid:gridSize}));
+    },
     resetOpticalParticles(){opticalParticles?.reset();state.opticalParticles=opticalParticles?.read()??{effective:'off',reason:'reset'};},
     async sampleOpticalParticles(){return opticalParticles?.sample()??{available:false};},
     setSplitIntegral(next){assertIntegralSourceEditable('Split optical transport');const value=splitIntegralSettings({...splitSettings,...next});if(value.mode!==splitSettings.mode)splitIntegral?.reset();splitSettings=value;return {...splitSettings};},
