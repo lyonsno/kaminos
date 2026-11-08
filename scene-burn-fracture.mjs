@@ -10,7 +10,7 @@ import {registerPresentedSurface} from './scene-presented-surface.mjs';
 export function createSceneBurnFracture({renderer,field,structure,debris,parent,ground,materials,
  createDynamics=createBurnFractureGpu,createSurface=createBurnFractureSurface}){
  const {mesh}=field.residentState(),hiddenMaterials=new Map(),hiddenObjects=new Map();
- let enabled=false,disposed=false,generation=0,status='off',error=null,pending=null,dynamics=null,surface=null,referenceScale=null,releasePresentation=null,sharedContact=null,participant=null;
+ let enabled=false,disposed=false,generation=0,status='off',error=null,pending=null,dynamics=null,surface=null,referenceScale=null,releasePresentation=null,sharedContact=null,participant=null,lastFrame=null;
  function frame(){
   mesh.updateWorldMatrix(true,false);const inverse=mesh.matrixWorld.clone().invert(),g=ground();
   const worldScale=new Vector3().setFromMatrixScale(mesh.matrixWorld),s=worldScale.x;
@@ -19,7 +19,14 @@ export function createSceneBurnFracture({renderer,field,structure,debris,parent,
   const position=new Vector3(g.center[0],g.height-.05,g.center[2]).applyMatrix4(inverse),scale=new Vector3(),rotation=new Quaternion();inverse.decompose(new Vector3(),rotation,scale);
   return {scale:s,contactsEnabled:g.visible!==false,gravity:new Vector3(0,-9.81,0).applyMatrix3(new Matrix3().setFromMatrix4(inverse)).toArray(),support:{position:position.toArray(),quaternion:rotation.toArray(),halfExtents:[g.radius/s,.05/s,g.radius/s],friction:.6}};
  }
- function clear(){participant=null;sharedContact=null;releasePresentation?.();releasePresentation=null;field.setRegionMotion(null);debris.setRegionMotion(null);surface?.dispose();surface=null;dynamics?.dispose();dynamics=null;referenceScale=null;for(const [material,visible] of hiddenMaterials)material.visible=visible;hiddenMaterials.clear();for(const [object,visible] of hiddenObjects)object.visible=visible;hiddenObjects.clear();}
+ function clear(){participant=null;sharedContact=null;lastFrame=null;releasePresentation?.();releasePresentation=null;field.setRegionMotion(null);debris.setRegionMotion(null);surface?.dispose();surface=null;dynamics?.dispose();dynamics=null;referenceScale=null;for(const [material,visible] of hiddenMaterials)material.visible=visible;hiddenMaterials.clear();for(const [object,visible] of hiddenObjects)object.visible=visible;hiddenObjects.clear();}
+ function syncFrame(){const current=frame(),equal=(a,b)=>a?.length===b?.length&&a.every((v,k)=>v===b[k]);
+  if(!equal(current.gravity,lastFrame?.gravity))dynamics.setGravity(current.gravity);
+  if(current.contactsEnabled!==lastFrame?.contactsEnabled)dynamics.setContactsEnabled(current.contactsEnabled);
+  if(!lastFrame||!['position','quaternion','halfExtents'].every(k=>equal(current.support[k],lastFrame.support[k])))dynamics.setSupport(0,current.support);
+  lastFrame=current;return current;
+ }
+ function refreshFrame(){if(status==='live')try{syncFrame();}catch(cause){error=cause.message;status='failed';}}
  function present(){if(!surface)return;mesh.updateWorldMatrix(true,false);parent.updateWorldMatrix(true,false);surface.mesh.matrix.copy(parent.matrixWorld).invert().multiply(mesh.matrixWorld);surface.mesh.updateWorldMatrix(false,false);}
  async function prepare(token){let candidate,view;try{
   await structure.setRequired(true);if(disposed||token!==generation)return;
@@ -35,7 +42,7 @@ export function createSceneBurnFracture({renderer,field,structure,debris,parent,
   field.setRegionMotion({device:field.device,count:prepared.cells.length,owners:mapping.owners,matrices:candidate.matrices,wrapper:candidate.wrapper});
   debris.setRegionMotion(field.residentState().regionMotion);
   dynamics=candidate;surface=view;parent.add(surface.mesh);
-  if(candidate.residentMotion)participant={resident:candidate.residentMotion,present,frame(){const current=frame(),position=new Vector3(),rotation=new Quaternion(),scale=new Vector3();mesh.matrixWorld.decompose(position,rotation,scale);const g=ground();return {position:position.toArray(),quaternion:rotation.toArray(),scale:current.scale,contactsEnabled:current.contactsEnabled,ground:{position:[g.center[0],g.height-.05,g.center[2]],quaternion:[0,0,0,1],halfExtents:[g.radius,.05,g.radius],friction:.6}};}};
+  if(candidate.residentMotion)participant={resident:candidate.residentMotion,present,valid:()=>!disposed&&dynamics===candidate&&status==='live',bindContactWorld(world){if(disposed||dynamics!==candidate)return;sharedContact=world;syncFrame();},frame(){if(disposed||dynamics!==candidate)throw Error('Burn contact participant detached');const current=syncFrame(),position=new Vector3(),rotation=new Quaternion(),scale=new Vector3();mesh.matrixWorld.decompose(position,rotation,scale);const g=ground();return {position:position.toArray(),quaternion:rotation.toArray(),scale:current.scale,contactsEnabled:current.contactsEnabled,ground:{position:[g.center[0],g.height-.05,g.center[2]],quaternion:[0,0,0,1],halfExtents:[g.radius,.05,g.radius],friction:.6}};}};
   // Keep the authored object in collision and selection traversal. Only its
   // superseded draw materials and cubic voxel interior/debris proxies are hidden;
   // the watertight fracture regions and planar section caps own presentation.
@@ -51,13 +58,13 @@ export function createSceneBurnFracture({renderer,field,structure,debris,parent,
   },
   get active(){return status==='live';},
   settled:()=>pending??Promise.resolve(),
-  mechanicalParticipant(){if(status!=='live'||!participant)return null;try{frame();return participant;}catch(cause){error=cause.message;status='failed';return null;}},
-  afterSubmit({dt},contactWorld=null){if(status!=='live')return;try{const current=frame();if(contactWorld&&participant){sharedContact=contactWorld;return;}dynamics.setGravity(current.gravity);dynamics.setContactsEnabled(current.contactsEnabled);dynamics.setSupport(0,current.support);dynamics.advance(dt);present();}catch(cause){error=cause.message;status='failed';}},
-  reset(){if(status==='live'&&dynamics){dynamics.reset();present();}},
+  mechanicalParticipant(){refreshFrame();return status==='live'?participant:null;},
+  afterSubmit({dt},contactWorld=null){if(status!=='live')return;try{syncFrame();sharedContact=contactWorld&&participant?contactWorld:null;if(sharedContact)return;dynamics.advance(dt);present();}catch(cause){error=cause.message;status='failed';}},
+  reset(){if(status==='live'&&dynamics){syncFrame();dynamics.reset();if(sharedContact)sharedContact.synchronizeReset(participant);present();}},
   present,
   update(seconds,appearance){const displayed=Array.isArray(surface?.mesh?.material)?surface.mesh.material:[surface?.mesh?.material];(surface?.bindings??[]).forEach((b,i)=>{b.setAppearance(appearance);b.update(seconds,displayed[i]);});},
-  read:()=>({enabled,status,error,thermal:'live-resident-material',clock:'submitted-fluid-simulation-seconds',mechanics:dynamics?.read()??null,surface:surface?.read()??null,contact:sharedContact?'shared-world-mutual-surviving-region-boxes':'coarse-surviving-boxes-against-ground; no-piece-self-contact',sharedContact:sharedContact?.read()??null,interaction:'ordinary-whole-object-transforms; no-independent-fragment-grab'}),
-  snapshot:()=>dynamics?.snapshot()??null,
+  read(){refreshFrame();const world=sharedContact?.read()??null,local=dynamics?.read()??null;return {enabled,status,error,thermal:'live-resident-material',clock:'submitted-fluid-simulation-seconds',mechanics:local&&world?{...local,contact:world.mechanics?.contact,mutualContacts:true,pairCount:world.mechanics?.pairCount,pairScope:'shared-world',clockScope:'object-reset-counters-with-shared-world-phase'}:local,surface:surface?.read()??null,contact:sharedContact?'shared-world-mutual-surviving-region-boxes':'coarse-surviving-boxes-against-ground; no-piece-self-contact',sharedContact:world,interaction:'ordinary-whole-object-transforms; no-independent-fragment-grab'};},
+  async snapshot(){refreshFrame();if(!dynamics)return null;const result=await dynamics.snapshot();return {...result,state:this.read().mechanics};},
   dispose(){if(disposed)return;disposed=true;generation++;clear();status='disposed';},
  };
 }

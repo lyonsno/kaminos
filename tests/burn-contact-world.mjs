@@ -10,9 +10,9 @@ await withKaminosGpu(async({device})=>{
  const ground={position:[0,-.1,0],quaternion:[0,0,0,1],halfExtents:[10,.1,10],friction:.6};
  function participant({center,origin,half,mass,position,scale=1,quaternion=[0,0,0,1]}){
   const buffers={positions:alloc(Float32Array.from([...center,1/mass])),rotations:alloc(Float32Array.from([0,0,0,1])),velocities:alloc(new Float32Array(4)),angular:alloc(new Float32Array(4)),boxes:alloc(Float32Array.from([0,...half])),joints:alloc(new Float32Array(4))};
-  const frame={position,scale,quaternion,ground,contactsEnabled:true};let materialCalls=0,presentCalls=0,steps=0,seconds=0;
-  const resident={device,buffers,origin,bodies:1,bonds:0,timeStep:1/60,substeps:2,iterations:12,encodeMaterial(){materialCalls++;},encodePresentation(_e,clock){steps+=clock.steps;seconds+=clock.seconds;presentCalls++;}};
-  return {resident,frame:()=>frame,present(){},counts:()=>({materialCalls,presentCalls,steps,seconds})};
+  const frame={position,scale,quaternion,ground,contactsEnabled:true};let materialCalls=0,presentCalls=0,steps=0,seconds=0,remainder=0;
+  const resident={device,buffers,origin,bodies:1,bonds:0,timeStep:1/60,substeps:2,iterations:12,setClockPhase:value=>{remainder=value;},encodeMaterial(){materialCalls++;},encodePresentation(_e,clock){steps+=clock.steps;seconds+=clock.seconds;remainder=clock.remainder;presentCalls++;}};
+  return {resident,frame:()=>frame,present(){},counts:()=>({materialCalls,presentCalls,steps,seconds,remainder})};
  }
  async function read(buffer){const b=device.createBuffer({size:buffer.size,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});try{const e=device.createCommandEncoder();e.copyBufferToBuffer(buffer,0,b,0,b.size);device.queue.submit([e.finish()]);await b.mapAsync(GPUMapMode.READ);return new Float32Array(b.getMappedRange()).slice();}finally{b.unmap();b.destroy();}}
  let world;
@@ -35,8 +35,10 @@ await withKaminosGpu(async({device})=>{
   const before=Array.from(fallen);upper.frame().position[0]+=3;world.advance(0);const moved=await read(upper.resident.buffers.positions);
   moved.forEach((v,k)=>assert.ok(Math.abs(v-before[k])<1e-5,'Native root placement must not rebind or reset the local mechanical pose'));
   assert.equal(world.read().runtimeReadbacks,0);assert.equal(world.read().objects,2);
+  world.advance(1/240);const beforeReset=world.read(),lowerBefore=lower.counts();upper.resident.setClockPhase(0);world.synchronizeReset(upper);
+  assert.ok(Math.abs(upper.counts().remainder-beforeReset.remainder)<1e-12,'A reset participant immediately adopts the shared fractional phase');assert.deepEqual(lower.counts(),lowerBefore,'Reset must not rewind another material owner');assert.deepEqual(world.read(),beforeReset,'Material reset does not reset the shared clock or discard elapsed time');
  }finally{world?.dispose();owned.forEach(b=>b.destroy());}
-},{wgslSources:[{label:'burn-world-transfer-production',code:BURN_CONTACT_WORLD_WGSL,entryPoint:'toWorld'}]});
+},{wgslSources:['toWorld','toLocal','reindex'].map(entryPoint=>({label:'burn-world-transfer-production-'+entryPoint,code:BURN_CONTACT_WORLD_WGSL,entryPoint}))});
 
 let builds=0,drops=0,advances=0;
 const host=createSceneBurnContact({renderer:{backend:{device:{}}},createWorld:async()=>{builds++;return {dispose(){drops++;},advance(){advances++;},read:()=>({})};}});
@@ -46,3 +48,4 @@ host.advance(.1,[a,b]);assert.equal(advances,1);assert.equal(host.matches([a]),f
 await host.sync([a]);assert.equal(builds,2);assert.equal(drops,1);host.dispose();assert.equal(drops,2);assert.equal(host.matches([a]),false);
 let release;const delayed=createSceneBurnContact({renderer:{backend:{device:{}}},createWorld:()=>new Promise(r=>{release=r;})});
 const build=delayed.sync([a]);assert.equal(delayed.matches([a]),false);delayed.dispose();release({dispose(){drops++;}});await build;assert.equal(drops,3,'Late creation after disposal must release its owned world');
+let valid=true;const invalidated=createSceneBurnContact({renderer:{backend:{device:{}}},createWorld:()=>new Promise(r=>{release=r;})});const removedDuringBuild=invalidated.sync([{resident:{},valid:()=>valid}]);valid=false;release({dispose(){drops++;}});await removedDuringBuild;assert.equal(drops,4);assert.equal(invalidated.read().error,null,'An owner removed during preparation is cancellation, not a persistent fluid-host fault');assert.equal(invalidated.matches([]),true);invalidated.dispose();
