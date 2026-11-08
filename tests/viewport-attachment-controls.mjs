@@ -13,7 +13,7 @@ const tool=mountViewportAttachmentControls({document:doc,viewport,canvas,camera,
 const layer=viewport.children[0],button=layer.children.find(n=>n.tag==='button');assert.equal(button.attrs['aria-label'],'Release pose anchor — rock-a');
 const fire=(type,p={})=>{const e=new Event(type,{cancelable:true});Object.assign(e,{button:0,pointerId:1,clientX:100,clientY:100,...p});button.dispatchEvent(e);return e;};const flush=async()=>{await new Promise(setImmediate);await new Promise(setImmediate);};
 fire('click');await flush();assert.deepEqual(called,[{id:'a',generation:0}]);
-fire('pointerdown');fire('pointermove',{clientX:135});fire('keydown',{key:'Escape'});fire('pointerup',{clientX:135});fire('click');await flush();assert.equal(called.length,1,'Escape consumes the activation associated with the cancelled pull');
+fire('pointerdown');fire('pointermove',{clientX:135});fire('keydown',{key:'Escape'});assert.equal(button.capture,1,'A cancelled pull must retain ownership until pointerup');fire('pointerup',{clientX:135});fire('click');await flush();assert.equal(called.length,1,'Escape consumes the activation associated with the cancelled pull');
 fire('pointerdown');fire('pointermove',{clientX:140});fire('pointerup',{clientX:140});fire('click');await flush();assert.equal(called.length,2,'A pull releases once, without a second trailing-click release');
 fire('pointerdown');records=[{...records[0],generation:1}];frame();fire('pointerup');fire('click');await flush();assert.equal(called.length,2,'A rebuilt anchor cancels the old pull');
 records=[{...records[0],canRelease:false,reason:'Reset specimen first'}];frame();fire('pointerdown');fire('pointerup');fire('click');await flush();assert.equal(called.length,2);assert.equal(button.attrs['aria-disabled'],'true');

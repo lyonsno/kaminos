@@ -14,7 +14,7 @@ export function mountViewportAttachmentControls({document,viewport,canvas,camera
   try{await onRelease({id:source.id,generation:source.generation});if(!disposed){e.message=null;e.button.dataset.error='false';update();}}
   catch(error){if(!disposed)message(e,error.message);}finally{e.busy=false;e.button.removeAttribute('aria-busy');}
  }
- function cancel(e){if(!e.drag)return;e.drag=null;e.ignoreClick=true;e.button.dataset.pulling='false';try{e.button.releasePointerCapture(e.pointerId);}catch{}update();}
+ function cancel(e){if(!e.drag)return;e.drag=null;e.ignoreClick=true;e.cancelledPointer=true;e.button.dataset.pulling='false';update();}
  function create(record){
   const button=document.createElement('button');button.type='button';button.className='pose-anchor-pin';button.dataset.anchorId=record.id;
   const icon=document.createElementNS(ns,'svg');icon.setAttribute('viewBox','0 0 20 20');icon.setAttribute('aria-hidden','true');const path=document.createElementNS(ns,'path');set(path,{d:'M6 3h8l-2 5 3 3H5l3-3z M10 11v7',fill:'none',stroke:'currentColor','stroke-width':1.6,'stroke-linejoin':'round','stroke-linecap':'round'});icon.append(path);button.append(icon);
@@ -25,14 +25,14 @@ export function mountViewportAttachmentControls({document,viewport,canvas,camera
   for(const type of ['pointerdown','pointermove','pointerup','click','dblclick','wheel','keydown','keyup'])listen(button,type,event=>event.stopPropagation());
   listen(button,'pointerenter',()=>{e.hot=true;set(face,{opacity:1});});listen(button,'pointerleave',()=>{e.hot=false;if(!e.drag)set(face,{opacity:0});});
   listen(button,'focus',()=>set(face,{opacity:1}));listen(button,'blur',()=>{cancel(e);set(face,{opacity:0});});
-  listen(button,'pointerdown',event=>{if(event.button!==0||e.busy||!isActive())return;e.ignoreClick=false;e.message=null;button.dataset.error='false';if(!e.record.canRelease){message(e,e.record.reason);return;}e.drag={x:event.clientX,y:event.clientY,dx:0,dy:0,source:{...e.record}};e.pointerId=event.pointerId;button.dataset.pulling='true';button.setPointerCapture(event.pointerId);});
+  listen(button,'pointerdown',event=>{if(event.button!==0||e.busy||!isActive())return;e.ignoreClick=false;e.cancelledPointer=false;e.message=null;button.dataset.error='false';if(!e.record.canRelease){message(e,e.record.reason);return;}e.drag={x:event.clientX,y:event.clientY,dx:0,dy:0,source:{...e.record}};e.pointerId=event.pointerId;button.dataset.pulling='true';button.setPointerCapture(event.pointerId);});
   listen(button,'pointermove',event=>{if(!e.drag||event.pointerId!==e.pointerId)return;e.drag.dx=event.clientX-e.drag.x;e.drag.dy=event.clientY-e.drag.y;const length=Math.hypot(e.drag.dx,e.drag.dy);detail.textContent=length>=18?'Release to unpin':'Pull out, then release · Esc cancels';update();});
-  listen(button,'pointerup',event=>{if(!e.drag||event.pointerId!==e.pointerId)return;const d=e.drag;e.drag=null;button.dataset.pulling='false';try{button.releasePointerCapture(event.pointerId);}catch{}if(Math.hypot(d.dx,d.dy)>=18){event.preventDefault();e.ignoreClick=true;release(e,d.source);}update();});
+  listen(button,'pointerup',event=>{if(event.pointerId!==e.pointerId)return;if(!e.drag){if(e.cancelledPointer){event.preventDefault();e.cancelledPointer=false;try{button.releasePointerCapture(event.pointerId);}catch{}}return;}const d=e.drag;e.drag=null;button.dataset.pulling='false';try{button.releasePointerCapture(event.pointerId);}catch{}if(Math.hypot(d.dx,d.dy)>=18){event.preventDefault();e.ignoreClick=true;release(e,d.source);}update();});
   listen(button,'pointercancel',()=>cancel(e));listen(button,'click',event=>{event.preventDefault();if(e.ignoreClick){e.ignoreClick=false;return;}if(isActive())release(e,{...e.record});});
   listen(button,'keydown',event=>{if(event.key==='Escape'){event.preventDefault();cancel(e);}});
   entries.set(record.id,e);return e;
  }
- function remove(e){cancel(e);e.listeners.forEach(f=>f());for(const n of [e.button,e.line,e.dot,e.face])n.remove();}
+ function remove(e){cancel(e);try{e.button.releasePointerCapture(e.pointerId);}catch{}e.listeners.forEach(f=>f());for(const n of [e.button,e.line,e.dot,e.face])n.remove();}
  function update(){
   if(disposed)return;const active=visible&&isActive();layer.hidden=!active;if(!active){for(const e of entries.values())if(e.drag)cancel(e);return;}
   camera.updateMatrixWorld(true);const v=viewport.getBoundingClientRect(),r=canvas.getBoundingClientRect(),placed=[],records=attachments().filter(a=>a.attached&&a.worldPoint);
