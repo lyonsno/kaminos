@@ -31,6 +31,11 @@ test('controls can exist before the shared GPU host; the smoke waits for the act
  const actual=await waitForAuthoringGpuHost({read:async()=>++reads<3?null:host,wait:async()=>{waits++;}});
  assert.equal(actual,host);assert.equal(waits,2);
 });
+test('a failed GPU host must terminate the smoke rather than wait forever',async()=>{
+ let reads=0;
+ await assert.rejects(waitForAuthoringGpuHost({read:async()=>{if(++reads===3)throw Error('sentinel: kept waiting');return null;},wait:async()=>{},failure:()=> 'WebGL fallback: no WebGPU adapter'}),/WebGL fallback/);
+ assert.equal(reads,1);
+});
 
 test('frames before or after inference cannot certify rendering during computation',()=>{
  for(const inference of [undefined,{before:10,after:10,startedAt:100,finishedAt:200},{before:10,after:11,startedAt:200,finishedAt:100}]){

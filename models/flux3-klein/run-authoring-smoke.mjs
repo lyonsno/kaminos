@@ -78,8 +78,8 @@ export function validateFlux3AuthoringResult(r){
   return r;
 }
 
-export async function waitForAuthoringGpuHost({read,wait}){
-  for(;;){const host=await read();if(host)return host;await wait();}
+export async function waitForAuthoringGpuHost({read,wait,failure=()=>null}){
+  for(;;){const host=await read();if(host)return host;const error=failure();if(error)throw Error(error);await wait();}
 }
 
 async function runCallerRepeat(browser,report,out,write){
@@ -169,7 +169,8 @@ async function main(){
     report.device=await waitForAuthoringGpuHost({read:()=>browser.evaluate(`(async()=>{const host=await window.kaminosAppGpu();if(!host)return null;
       window.flux3SmokeGpuErrors=[];host.device.addEventListener('uncapturederror',e=>window.flux3SmokeGpuErrors.push(e.error.message));
       return {features:[...host.device.features],adapter:{vendor:host.adapter.info.vendor,architecture:host.adapter.info.architecture,device:host.adapter.info.device,description:host.adapter.info.description}};})()`),
-      wait:async()=>{if(report.console.some(line=>line.startsWith('exception:')))throw Error('Page failed while constructing its GPU host');await write();await new Promise(resolve=>setTimeout(resolve,1000));}});
+      failure:()=>report.console.find(line=>line.startsWith('exception:')||line.includes('initScene failed:')||line.includes('WebGPU adapter unavailable')),
+      wait:async()=>{await write();await new Promise(resolve=>setTimeout(resolve,1000));}});
     assert.ok(report.device.features.includes('shader-f16'));
     report.prompt=v.prompt??'A copper kettle with a round handle, isolated on a plain white background, studio product photo';
     if(v['reference-source']){
