@@ -27,7 +27,7 @@ function inverse3(m){
 }
 export function volumeConfig(input={}){
  const defaults=input.fixture==='hundred-rocks'?{origin:[-3.36,-.36,-3.84],dimensions:[56,36,64]}:{};
- const c={fixture:'outcrop',pileSoilHeight:.65,contactIterations:2,cell:.12,spacing:.075,dt:.0015,density:1600,rockDensity:2400,bulk:12000,shear:5000,friction:.65,contactFriction:.6,gravity:9.81,origin:[-2.4,-.36,-1.8],dimensions:[40,30,40],conditionContacts:true,...defaults,...input};
+ const c={fixture:'outcrop',pileSoilHeight:.65,contactIterations:8,cell:.12,spacing:.075,dt:.0015,density:1600,rockDensity:2400,bulk:12000,shear:5000,friction:.65,contactFriction:.6,gravity:9.81,origin:[-2.4,-.36,-1.8],dimensions:[40,30,40],conditionContacts:true,...defaults,...input};
  if(!['outcrop','hundred-rocks'].includes(c.fixture))throw Error('Unknown material fixture');if(!Number.isSafeInteger(c.contactIterations)||c.contactIterations<1)throw Error('Contact iterations must be a positive integer');
  for(const k of ['cell','spacing','dt','density','rockDensity','bulk','shear'])if(!Number.isFinite(c[k])||c[k]<=0)throw Error('Invalid volume '+k);
  for(const k of ['friction','contactFriction','gravity'])if(!Number.isFinite(c[k])||c[k]<0)throw Error('Invalid volume '+k);

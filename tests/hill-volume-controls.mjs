@@ -11,7 +11,7 @@ function accountingDevice(fence=async()=>{}){
  const writes=[],batches=[];const makeBuffer=d=>{if(d.mappedAtCreation)batches.push(d.size/112);return({size:d.size,label:d.label,bytes:new ArrayBuffer(d.size),getMappedRange(){return this.bytes;},unmap(){},mapAsync:async()=>{},destroy(){this.destroyed=true;}});};
  const device={limits:{maxStorageBufferBindingSize:1e9,maxBufferSize:1e9,maxComputeWorkgroupsPerDimension:65535},addEventListener(){},removeEventListener(){},createBuffer:makeBuffer,
   createShaderModule:()=>({getCompilationInfo:async()=>({messages:[]})}),createComputePipelineAsync:async()=>({getBindGroupLayout:()=>({})}),createBindGroup:()=>({}),
-  createCommandEncoder:()=>({clearBuffer:b=>new Uint8Array(b.bytes).fill(0),copyBufferToBuffer:(a,ao,b,bo,n)=>new Uint8Array(b.bytes,bo,n).set(new Uint8Array(a.bytes,ao,n)),beginComputePass:()=>({setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}}),finish:()=>({})}),
+  createCommandEncoder:()=>({clearBuffer:b=>new Uint8Array(b.bytes).fill(0),copyBufferToBuffer:(a,ao,b,bo,n)=>new Uint8Array(b.bytes,bo,n).set(new Uint8Array(a.bytes,ao,n)),beginComputePass:()=>({setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},dispatchWorkgroupsIndirect(){},end(){}}),finish:()=>({})}),
   queue:{writeBuffer(b,o,data){const raw=new Uint8Array(data.buffer,data.byteOffset,data.byteLength);new Uint8Array(b.bytes,o,raw.length).set(raw);writes.push({label:b.label,offset:o,length:raw.length});},submit(){},onSubmittedWorkDone:fence}};
  return{device,writes,batches};
 }

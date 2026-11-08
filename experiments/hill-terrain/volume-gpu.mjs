@@ -1,10 +1,12 @@
+import {contactGraphConfig,contactGraphKernels} from './volume-contact-graph.mjs';
 import {VOLUME_KERNELS,SURFACE_KERNELS,ROCK_PICK_KERNEL} from './volume-kernels.mjs';
 import {volumeSpatialConfig} from './volume-spatial.mjs';
 import {packVolumeBodies,PARTICLE_WORDS,BODY_WORDS} from './volume-model.mjs';
 
 export async function createVolumeGPU({device,model,display={}}){
  const U=GPUBufferUsage,c=model.config,packed=packVolumeBodies(model.bodies),owned=[],kernels={},count=model.particles.length/PARTICLE_WORDS,cells=c.dimensions.reduce((n,v)=>n*v,1);
- const broad=volumeSpatialConfig(model,packed);
+ const broad=volumeSpatialConfig(model,packed),graph=contactGraphConfig(model,packed,device.limits);
+ const graphCode=VOLUME_KERNELS+contactGraphKernels({bodyCount:model.bodies.length,polygonCapacity:graph.polygonCapacity});
  const cubeCount=c.dimensions.map(v=>v-1).reduce((n,v)=>n*v,1),maxVertices=cubeCount*36;
  let disposed=false,failure=null,steps=model.runtime?.steps??0,completedSteps=steps,pending=Promise.resolve(),busy=false,driveHeight=model.runtime?.driveHeight??0,driveRate=model.runtime?.driveRate??0,impulse=null;
  const errors=event=>{failure=event.error?.message||String(event.error);};device.addEventListener('uncapturederror',errors);
@@ -15,17 +17,17 @@ export async function createVolumeGPU({device,model,display={}}){
  };
  const storage=(data,label)=>buffer(data,U.STORAGE|U.COPY_DST|U.COPY_SRC,label);
  const uniform=(data,label)=>buffer(data,U.UNIFORM|U.COPY_DST,label);
- const resources={particles:storage(model.particles,'Hill volume material samples'),cells:storage(cells*16,'Hill temporary APIC grid'),bodies:storage(packed.body,'Hill volume rigid state'),planes:storage(packed.planes,'Hill local rock planes'),triangles:storage(packed.triangles,'Hill finite contact triangles'),convexData:storage(packed.convex,'Hill convex contact features'),reactions:storage(model.bodies.length*32,'Hill reciprocal rigid impulses'),bodyHeads:storage(broad.cellCount*4,'Hill spatial bucket heads'),bodyLinks:storage(model.bodies.length*4,'Hill spatial body links'),spatialParams:uniform(broad.uniform,'Hill spatial extent'),bodyDegrees:storage(model.bodies.length*4,'Hill contact neighbor degrees'),worldFeatures:storage(packed.convex.byteLength,'Hill world convex features'),featureOwners:storage(packed.convexOwners,'Hill convex feature ownership'),nextBodies:storage(packed.body.byteLength,'Hill next rigid poses'),params:uniform(new Float32Array(28),'Hill material step'),
+ const resources={contactGraph:buffer(graph.bytes,U.STORAGE|U.COPY_DST|U.COPY_SRC|U.INDIRECT,'Hill unique contact graph'),contactDispatch:buffer(12,U.STORAGE|U.INDIRECT,'Hill contact dispatch'),contactFaces:storage(graph.faces,'Hill ordered source contact faces'),particles:storage(model.particles,'Hill volume material samples'),cells:storage(cells*16,'Hill temporary APIC grid'),bodies:storage(packed.body,'Hill volume rigid state'),planes:storage(packed.planes,'Hill local rock planes'),triangles:storage(packed.triangles,'Hill finite contact triangles'),convexData:storage(packed.convex,'Hill convex contact features'),reactions:storage(model.bodies.length*32,'Hill reciprocal rigid impulses'),bodyHeads:storage(broad.cellCount*4,'Hill spatial bucket heads'),bodyLinks:storage(model.bodies.length*4,'Hill spatial body links'),spatialParams:uniform(broad.uniform,'Hill spatial extent'),bodyDegrees:storage(model.bodies.length*4,'Hill contact neighbor degrees'),worldFeatures:storage(packed.convex.byteLength,'Hill world convex features'),featureOwners:storage(packed.convexOwners,'Hill convex feature ownership'),nextBodies:storage(packed.body.byteLength,'Hill next rigid poses'),params:uniform(new Float32Array(28),'Hill material step'),
   soilPositions:display.soilPositions??storage(maxVertices*16,'Hill soil surface positions'),soilNormals:display.soilNormals??storage(maxVertices*16,'Hill soil surface normals'),indirect:display.indirect??buffer(new Uint32Array([0,1,0,0]),U.STORAGE|U.INDIRECT|U.COPY_DST|U.COPY_SRC,'Hill soil draw count'),
   rockPositions:display.rockPositions??storage(packed.vertices.byteLength,'Hill moving rock positions'),rockNormals:display.rockNormals??storage(packed.vertices.byteLength,'Hill moving rock normals'),localVertices:storage(packed.vertices,'Hill retained source vertices'),vertexBodies:storage(packed.vertexBodies,'Hill source vertex ownership'),
   origin:uniform(new Float32Array([...c.origin,c.cell]),'Hill source origin'),shape:uniform(new Uint32Array([...c.dimensions,0]),'Hill source grid extent'),material:uniform(new Float32Array([c.density,.35,0,0]),'Hill surface occupancy'),pickRay:uniform(new Float32Array(8),'Hill pointer ray'),pickHit:storage(32,'Hill pointer hit')};
- const make=async(code,entry,bindings,spatialBindings=[])=>{
+ const make=async(code,entry,bindings,spatialBindings=[],graphBindings=[])=>{
   const module=device.createShaderModule({label:'Hill volume '+entry,code});const info=await module.getCompilationInfo();const errors=info.messages.filter(m=>m.type==='error');
   if(errors.length)throw Error(entry+': '+errors.map(m=>m.message).join('; '));
   const pipeline=await device.createComputePipelineAsync({label:'Hill volume '+entry,layout:'auto',compute:{module,entryPoint:entry}});
-  const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:bindings.map(([binding,name])=>({binding,resource:{buffer:resources[name]}}))});const spatialGroup=spatialBindings.length?device.createBindGroup({layout:pipeline.getBindGroupLayout(1),entries:spatialBindings.map(([binding,name])=>({binding,resource:{buffer:resources[name]}}))}):null;return{pipeline,group,spatialGroup};
+  const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:bindings.map(([binding,name])=>({binding,resource:{buffer:resources[name]}}))});const spatialGroup=spatialBindings.length?device.createBindGroup({layout:pipeline.getBindGroupLayout(1),entries:spatialBindings.map(([binding,name])=>({binding,resource:{buffer:resources[name]}}))}):null;const graphGroup=graphBindings.length?device.createBindGroup({layout:pipeline.getBindGroupLayout(2),entries:graphBindings.map(([binding,name])=>({binding,resource:{buffer:resources[name]}}))}):null;return{pipeline,group,spatialGroup,graphGroup};
  };
- const dispatch=(e,k,n)=>{const p=e.beginComputePass();p.setPipeline(k.pipeline);p.setBindGroup(0,k.group);if(k.spatialGroup)p.setBindGroup(1,k.spatialGroup);if(k.groupPerBody){const limit=device.limits.maxComputeWorkgroupsPerDimension,x=Math.min(n,limit),y=Math.min(Math.ceil(n/x),limit),z=Math.ceil(n/(x*y));p.dispatchWorkgroups(x,y,z);}else p.dispatchWorkgroups(Math.ceil(n/64));p.end();};
+ const dispatch=(e,k,n)=>{const p=e.beginComputePass();p.setPipeline(k.pipeline);p.setBindGroup(0,k.group);if(k.spatialGroup)p.setBindGroup(1,k.spatialGroup);if(k.graphGroup)p.setBindGroup(2,k.graphGroup);if(k.indirect)p.dispatchWorkgroupsIndirect(resources.contactDispatch,0);else if(k.groupPerBody){const limit=device.limits.maxComputeWorkgroupsPerDimension,x=Math.min(n,limit),y=Math.min(Math.ceil(n/x),limit),z=Math.ceil(n/(x*y));p.dispatchWorkgroups(x,y,z);}else p.dispatchWorkgroups(Math.ceil(n/64));p.end();};
  const draw=e=>{e.clearBuffer(resources.cells);dispatch(e,kernels.p2g,count);e.clearBuffer(resources.indirect);dispatch(e,kernels.surface,cubeCount);dispatch(e,kernels.rock,packed.vertices.length/4);};
  const params=(height,rate,action)=>{const a=new Float32Array(28),u=new Uint32Array(a.buffer);a.set([...c.origin,c.cell]);u.set([...c.dimensions,model.bodies.length],4);a.set([c.bulk,c.shear,c.friction,c.density,c.dt,c.gravity,c.contactFriction,0],8);if(action){if(action.kind==='rock'){a.set([...action.velocity,action.index+1],20);if(action.point)a.set([...action.point,1],16);}else{a.set([...action.center,action.radius],16);a.set([...action.velocity,0],20);}}a.set([height,rate,0,0],24);return a;};
  const bins=[[0,'bodyHeads'],[1,'bodyLinks'],[2,'spatialParams']];
@@ -33,9 +35,11 @@ export async function createVolumeGPU({device,model,display={}}){
  try{
   kernels.bins=await make(VOLUME_KERNELS,'build_body_grid',[[2,'bodies']],bins);
   kernels.features=await make(VOLUME_KERNELS,'transform_features',[[2,'bodies'],[7,'convexData']],[[4,'worldFeatures'],[6,'featureOwners']]);
-  kernels.degrees=await make(VOLUME_KERNELS,'contact_degrees',[[2,'bodies'],[3,'planes']],[...bins,[3,'bodyDegrees'],[4,'worldFeatures']]);
-  kernels.solve=await make(VOLUME_KERNELS,'solve_rigid',[[2,'bodies'],[3,'planes'],[6,'params']],[...bins,[3,'bodyDegrees'],[4,'worldFeatures'],[5,'nextBodies']]);
-  kernels.degrees.groupPerBody=true;kernels.solve.groupPerBody=true;
+  kernels.contacts=await make(graphCode,'generate_contacts',[[2,'bodies'],[3,'planes']],[...bins,[4,'worldFeatures']],[[0,'contactGraph'],[1,'contactFaces']]);
+  kernels.prepare=await make(graphCode,'prepare_contacts',[],[],[[0,'contactGraph'],[2,'contactDispatch']]);
+  kernels.solve=await make(graphCode,'solve_contacts',[[2,'bodies'],[6,'params']],[],[[0,'contactGraph']]);
+  kernels.gather=await make(graphCode,'gather_contacts',[[2,'bodies'],[6,'params'],[7,'convexData']],[[5,'nextBodies']],[[0,'contactGraph']]);
+  kernels.contacts.groupPerBody=true;kernels.gather.groupPerBody=true;kernels.solve.indirect=true;
   kernels.p2g=await make(VOLUME_KERNELS,'p2g',[[0,'particles'],[1,'cells'],[6,'params']]);
   kernels.grid=await make(VOLUME_KERNELS,'grid',[[1,'cells'],[2,'bodies'],[3,'planes'],[4,'triangles'],[5,'reactions'],[6,'params']],bins);
   kernels.g2p=await make(VOLUME_KERNELS,'g2p',[[0,'particles'],[1,'cells'],[2,'bodies'],[3,'planes'],[4,'triangles'],[5,'reactions'],[6,'params']],bins);
@@ -50,16 +54,17 @@ export async function createVolumeGPU({device,model,display={}}){
    if(!n)return pending;
    const bytes=new Float32Array(n*28);for(let i=0;i<n;i++){driveHeight+=driveRate*c.dt;bytes.set(params(driveHeight,driveRate,i===0?impulse:null),i*28);}impulse=null;
    const upload=device.createBuffer({size:bytes.byteLength,usage:U.COPY_SRC,mappedAtCreation:true});new Float32Array(upload.getMappedRange()).set(bytes);upload.unmap();
-   const encoder=device.createCommandEncoder({label:'Hill volume physical batch'});
+   const encoder=device.createCommandEncoder({label:'Hill volume physical batch'});encoder.clearBuffer(resources.contactGraph,4,4);
    for(let i=0;i<n;i++){
     encoder.copyBufferToBuffer(upload,i*112,resources.params,0,112);encoder.clearBuffer(resources.cells);encoder.clearBuffer(resources.reactions);
     const kick=encoder.beginComputePass();kick.setPipeline(kernels.kick.pipeline);kick.setBindGroup(0,kernels.kick.group);kick.dispatchWorkgroups(1);kick.end();
     build(encoder);dispatch(encoder,kernels.p2g,count);dispatch(encoder,kernels.grid,cells);dispatch(encoder,kernels.g2p,count);
     dispatch(encoder,kernels.rigid,model.bodies.length);
-    for(let iteration=0;iteration<c.contactIterations;iteration++){build(encoder);dispatch(encoder,kernels.features,packed.convexOwners.length);dispatch(encoder,kernels.degrees,model.bodies.length);dispatch(encoder,kernels.solve,model.bodies.length);encoder.copyBufferToBuffer(resources.nextBodies,0,resources.bodies,0,packed.body.byteLength);}
+    build(encoder);dispatch(encoder,kernels.features,packed.convexOwners.length);encoder.clearBuffer(resources.contactGraph,0,4);encoder.clearBuffer(resources.contactGraph,8,graph.offset-8);dispatch(encoder,kernels.contacts,model.bodies.length);dispatch(encoder,kernels.prepare,1);
+    for(let iteration=0;iteration<c.contactIterations;iteration++){dispatch(encoder,kernels.solve,1);dispatch(encoder,kernels.gather,model.bodies.length);encoder.copyBufferToBuffer(resources.nextBodies,0,resources.bodies,0,packed.body.byteLength);}
    }
-   draw(encoder);device.queue.submit([encoder.finish()]);steps+=n;busy=true;
-   pending=device.queue.onSubmittedWorkDone().then(()=>{if(failure)throw Error(failure);completedSteps=steps;}).catch(e=>{failure=String(e);throw e;}).finally(()=>{busy=false;upload.destroy();});return pending;
+   draw(encoder);const status=graph.needsCapacityReadback?device.createBuffer({size:8,usage:U.COPY_DST|U.MAP_READ}):null;if(status)encoder.copyBufferToBuffer(resources.contactGraph,0,status,0,8);device.queue.submit([encoder.finish()]);steps+=n;busy=true;
+   pending=(status?status.mapAsync(GPUMapMode.READ).then(()=>{const data=new Uint32Array(status.getMappedRange());if(data[1])throw Error('Native contact storage exhausted: '+data[0]+' pairs exceed '+graph.capacity+'; reset or use a device with larger contact storage');}):device.queue.onSubmittedWorkDone()).then(()=>{if(failure)throw Error(failure);completedSteps=steps;}).catch(e=>{failure=String(e);throw e;}).finally(()=>{busy=false;upload.destroy();status?.destroy();});return pending;
   }
   async function snapshot(){
    await pending;if(disposed)throw Error('Material specimen disposed');const lengths=[model.particles.byteLength,packed.body.byteLength,16],buffers=lengths.map((n,i)=>buffer(n,U.COPY_DST|U.MAP_READ,'Hill explicit diagnostic '+i));
@@ -70,8 +75,8 @@ export async function createVolumeGPU({device,model,display={}}){
     return{particles,bodies,indirect,identity:read()};
    }finally{for(const b of buffers){b.destroy();owned.splice(owned.indexOf(b),1);}}
   }
-  const read=()=>({route:'hill/direct-volume-apic-frictional-v1',backend:'webgpu',steps,completedSteps,seconds:completedSteps*c.dt,busy,failure,particleCount:count,bodyCount:model.bodies.length,gridCells:cells,config:c,drive:{height:driveHeight,rate:driveRate},weatheredMass:model.weatheredMass,readbackInRuntime:false,
-   material:'rate-form hypoelastic; no tension; Frobenius deviator yield <= friction*pressure',contact:'reciprocal soil/rigid and free/free convex SAT; canonical pair impulses; neighbor-weighted Jacobi',spatial:{kind:'GPU center-cell linked lists',dimensions:broad.dimensions,width:broad.width,entries:model.bodies.length,perCellCap:null},contactIterations:c.contactIterations,conditioning:model.conditioning,surface:'GPU mass occupancy isosurface; 6 tetrahedra per cell; indirect draw',gpuBufferBytes:[...new Set(Object.values(resources))].reduce((n,b)=>n+b.size,0),maxSurfaceVertices:maxVertices});
+  const read=()=>({route:'hill/direct-volume-apic-frictional-v1',backend:'webgpu',steps,completedSteps,seconds:completedSteps*c.dt,busy,failure,particleCount:count,bodyCount:model.bodies.length,gridCells:cells,config:c,drive:{height:driveHeight,rate:driveRate},weatheredMass:model.weatheredMass,readbackInRuntime:graph.needsCapacityReadback,
+   material:'rate-form hypoelastic; no tension; Frobenius deviator yield <= friction*pressure',contact:'reciprocal soil/rigid and free/free convex SAT; canonical pair impulses; neighbor-weighted Jacobi',spatial:{kind:'GPU center-cell linked lists',dimensions:broad.dimensions,width:broad.width,entries:model.bodies.length,perCellCap:null},contactIterations:c.contactIterations,conditioning:model.conditioning,materialReadbackInRuntime:false,contactGraph:{kind:'unique source-convex contact patches',capacity:graph.capacity,bytes:graph.bytes,pointsPerPatch:4,iterations:c.contactIterations,geometryUpdatesPerStep:1,capacityReadbackBytesPerBatch:graph.needsCapacityReadback?8:0},surface:'GPU mass occupancy isosurface; 6 tetrahedra per cell; indirect draw',gpuBufferBytes:[...new Set(Object.values(resources))].reduce((n,b)=>n+b.size,0),maxSurfaceVertices:maxVertices});
   let picking=Promise.resolve();
   function pickRay(origin,direction){
    if(![origin,direction].every(v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite))||Math.hypot(...direction)===0)return Promise.reject(Error('Invalid pointer ray'));

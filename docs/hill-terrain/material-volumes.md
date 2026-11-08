@@ -55,3 +55,43 @@ Initial soil height is a retained fixture parameter, exposed as a drag slider th
 Interactive playback retains elapsed frame time as pending simulation credit. It first measures one physical substep, then uses the observed batch completion cost to choose the next batch against a16.7ms service budget. The budget controls how much work is submitted at once; it neither changes the physical timestep nor discards pending time. Slow service appears as time behind in the status. Pause/resume and explicit Advance establish a fresh interactive clock; Advance still executes its entire requested duration, submitting measured chunks and redrawing between them. This prevents catch-up batches from growing without feedback while keeping the difference between responsive controls and actual simulation throughput explicit.
 
 Rigid SAT contact now assigns one64-lane workgroup to each represented body. Lanes share face-normal and edge-cross-axis projections, with a stable source-axis rank resolving equal-depth ties. A collective face separation test avoids edge work for disjoint candidates. Spatial linked-list traversal, all feature axes, canonical pair impulses, contact-degree weighting and Jacobi iteration count remain the same. Dispatch tiles workgroups across the device dimensions rather than adding a body-count ceiling. Native parity checks compare30synthetic/authored pairs in both orders against the retained serial shader and an independent CPU SAT reference; runtime gains are assessed separately with the paired compute profiler.
+
+### Unique contact patches and coupled response
+
+Rigid geometry discovery now emits each unordered touching pair once per
+physical step. It clips an ordered source face against the other convex solid
+and retains up to four representative contact points; edge-only contact uses
+the source support construction. The complete SAT axis set still determines
+whether the pair intersects. Reducing a contact patch to four points is a
+contact-model approximation, not a reduction in collision geometry.
+
+Each patch maintains accumulated normal/friction and split-position impulses
+through the solve. Four local point sweeps form a patch block. Eight global
+Jacobi iterations couple the blocks: contacts compute their contributions,
+then a workgroup per body reduces the contributions and writes that body's next
+state. Contact degree counts actual interfaces, not nearby bounding volumes.
+There is no small per-body neighbor limit. Geometry generation is outside these
+iterations; contact history is not yet retained between physical steps.
+
+The graph is an append arena with per-body linked adjacency. Its reserved
+capacity is the lesser of the possible unique-pair count and the effective
+native storage-binding capacity. Only actual contacts are dispatched/solved;
+there is no all-pairs traversal or dense contact matrix. The reserve is not a
+sparse allocator: memory rises with the possible-pair bound until the native
+binding limit. Paging/allocation proportional to active contacts is a later
+scale concern, not an established property of this implementation. Capacity,
+bytes and iteration count are exposed in `read().contactGraph`.
+
+When native capacity cannot cover all possible pairs, the batch acquires an
+8-byte count/overflow status, not material state. An exhausted arena stops with
+an explicit error; it never silently omits contacts. The hundred-rock case can
+reserve all4950 possible pairs and needs no runtime status readback. The soil,
+body counts, grid, timestep and source geometry are retained.
+
+Interactive service reserves a quarter of an8.33ms target frame per batch,
+retains outstanding physical time, and reports completed physical seconds per
+host second, host callback cadence and time debt separately. This is an explicit
+work allowance, not proof that the simulation meets it. The app's render counter
+counts render calls rather than physical presentation. Performance checks must
+separate composed step-plus-render service cost, natural Play advancement and
+actual display cadence.

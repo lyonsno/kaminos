@@ -12081,7 +12081,7 @@ async function initScene() {
     const elapsed = performance.now() - fpsLast;
     if (elapsed >= 500) {
       const fps = (fpsFrames / elapsed * 1000).toFixed(0);
-      fpsEl.textContent = `${fps} app fps · ${frameMs.toFixed(1)}ms app CPU`;
+      fpsEl.textContent = `${fps} app renders/s · ${frameMs.toFixed(1)}ms app CPU`;
       fpsFrames = 0;
       fpsLast = performance.now();
     }
