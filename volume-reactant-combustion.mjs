@@ -1,8 +1,7 @@
 import {resolveWorldCalibration} from './volume-world-calibration.mjs';
-// Reactant-driven combustion (candidate v0, 2026-10-12).
+// Reactant-driven combustion.
 //
-// One local material process replaces the authored tall-plume reaction when
-// the Reaction Law select asks for it: fuel and oxidizer that share a cell
+// One local material process: fuel and oxidizer that share a cell
 // burn when the cell's thermal state is in or above the ignition band, at a
 // rate set by one mixing time. The single burned amount b owns every
 // consequence: fuel loses b, oxidizer loses s·b, the thermal state gains Q·b,
@@ -22,7 +21,7 @@ import {resolveWorldCalibration} from './volume-world-calibration.mjs';
 // timeStep; dt = 1 at the reference Speed under the uniform step). Fuel: the
 // existing fuel channel (the inflow stream carries Fuel Fraction). Oxidizer:
 // normalised so ambient air is 1. Thermal state: the existing dimensionless
-// heat channel (Kelvin is only a renderer calibration of it). Soot: the
+// heat channel (the Kelvin conversion also governs soot burnout). Soot: the
 // existing smoke channel's optical units.
 //
 // The existing solver stores velocity in cells per step, so a diffusivity fixed
@@ -30,9 +29,8 @@ import {resolveWorldCalibration} from './volume-world-calibration.mjs';
 // reports both the domain value and the per-step cell weight.
 
 export const REACTANT_COMBUSTION_IDENTITY = 'kaminos.volume.reactant-combustion.v0';
-export const REACTION_LAW_AUTHORED = 'authored-tall-plume';
 export const REACTION_LAW_REACTANT = 'reactant-v0';
-export const REACTION_LAWS = Object.freeze([REACTION_LAW_AUTHORED, REACTION_LAW_REACTANT]);
+export const REACTION_LAWS = Object.freeze([REACTION_LAW_REACTANT]);
 export const REACTANT_COMBUSTION_UNIFORM_FLOATS = 16;
 // Explicit 6-neighbour exchange is monotone while the per-neighbour weight is
 // at most 1/6; the effective weight is capped just inside that and the receipt
@@ -45,7 +43,7 @@ export const REACTANT_MODEL = Object.freeze({
     time: 'reference steps: dt = timeStep, 1 at the reference Speed under the uniform step',
     fuel: 'existing fuel channel; the inflow stream carries Fuel Fraction',
     oxidizer: 'normalised oxidizer: ambient air = 1',
-    thermal: 'existing dimensionless heat channel; Kelvin is a renderer calibration',
+    thermal: 'dimensionless heat channel; Kelvin conversion governs emission and soot burnout',
     soot: 'existing smoke channel optical units',
   }),
   ambientOxidizer: 1,
@@ -291,7 +289,7 @@ function resolveModel(overrides) {
 
 export function resolveReactantCombustionConfig(controls = {}, options = {}) {
   const grid = Number.isFinite(options.grid) ? options.grid : 32;
-  const lawRequested = REACTION_LAWS.includes(controls.reactionLaw) ? controls.reactionLaw : REACTION_LAW_AUTHORED;
+  const lawRequested = controls.reactionLaw ?? REACTION_LAW_REACTANT;
   const [mixLo, mixHi] = REACTANT_CONTROL_RANGES.mixingTimeSteps;
   const [coolLo, coolHi] = REACTANT_CONTROL_RANGES.coolingTimeSteps;
   const mixingTimeSteps = clamp(finiteOr(controls.reactantMixingTime, REACTANT_CONTROL_DEFAULTS.mixingTimeSteps), mixLo, mixHi);
@@ -311,8 +309,8 @@ export function resolveReactantCombustionConfig(controls = {}, options = {}) {
     sootYield: finiteOr(controls.reactantSootYield, REACTANT_CONTROL_DEFAULTS.sootYield),
     modelOverrides: overridden.length ? Object.fromEntries(overridden.map(key => [key, Number(controls.reactantModelOverrides[key])])) : null,
   };
-  const off = reason => ({ identity: REACTANT_COMBUSTION_IDENTITY, requested, effective: { admitted: false, reason, law: REACTION_LAW_AUTHORED } });
-  if (lawRequested !== REACTION_LAW_REACTANT) return off('reaction-law-is-authored');
+  const off = reason => ({ identity: REACTANT_COMBUSTION_IDENTITY, requested, effective: { admitted: false, reason, law: null } });
+  if (lawRequested !== REACTION_LAW_REACTANT) return off('retired-reaction-law-requires-runtime-basin-fallback');
   if (!['inflow-boundary', 'immersed-source'].includes(requested.emitterSourceLaw)) return off('reactant-law-requires-inflow-or-immersed-source');
   // The oxidizer rides the fuel's characteristic, which exists only under the
   // common-gas (or MacCormack) transport; legacy per-layer lifts would carry

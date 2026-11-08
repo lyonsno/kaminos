@@ -27,7 +27,12 @@ with tempfile.TemporaryDirectory() as tmp:
     preset = result["preset"]
     assert preset["domControls"]["volume-adaptive-rays"]["value"] == 0.65
     for key, descriptor in observed["preset"]["domControls"].items():
-        assert preset["domControls"][key] == descriptor, key
+        if any(entry["key"] == key for entry in serve._load_volume_settings_preset_schema()["retiredControls"]):
+            assert key not in preset["domControls"]
+        elif key == "volume-appearance-model":
+            assert preset["domControls"][key]["value"] == "shred-only"
+        else:
+            assert preset["domControls"][key] == descriptor, key
     assert preset["rendererControls"]["volume-raymarch-mode"]["value"] == "history"
     assert preset["domControls"]["volume-steps"]["value"] == 4
     assert preset["domControls"]["volume-adaptive-budget"]["value"] == 20

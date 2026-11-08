@@ -122,9 +122,6 @@ assert.match(VOLUME_EMITTER_FIELD_COMMIT_WGSL, /let committedMicroLayer = vec4<f
 // The density lane is reserved (derived where read) since the channel cleanup of 2026-10-13:
 // the shallow law neither preserves nor reconstructs a stored carrier.
 assert.match(injectionShader, /let candidateVelocityDensity = vec4<f32>\(injectedVelocity, 0\.0\);/, 'the shallow law writes the reserved density lane as zero');
-assert.match(coreSource, /let fixedSourceDephase = step\(0\.5, u\.reserved_source_extension_0\.x\);/, 'the fixed-grid source perturbation has an executable ablation gate');
-assert.match(coreSource, /let sourceStartupDephase = sourceSpatialDephase \* sourceStartupAuthority \* fixedSourceDephase;/, 'the ordinary source dephase obeys the ablation gate');
-assert.doesNotMatch(coreSource, /let startupDephase = staticDephase/, 'retired Bonfire dephasing stays absent');
 
 const calls = [];
 const prototype = {

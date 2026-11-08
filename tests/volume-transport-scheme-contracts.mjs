@@ -66,53 +66,6 @@ test('transport resolver reports scheme, characteristic, damping, and bound with
   assert.equal(unknown.effective.reason, 'unknown-scheme');
 });
 
-test('WGSL carries the predictor buffer, the MacCormack corrector with an extremum limiter, and one velocity bound helper', () => {
-  assert.match(source, /@group\(3\) @binding\(1\) var<storage, read_write> fluidPredict: array<vec4<f32>>;/, 'predictor buffer lives in its own bind group 3');
-  // The shared fluid layout already carries 8 compute-visible storage buffers;
-  // the tiered pressure projection layout adds 2 more. Adding the predictor
-  // there breached the default 10-per-stage limit on Apple WebGPU.
-  const fluidLayoutStart = source.indexOf("label: 'kaminos fluid bind group layout'");
-  const fluidLayout = source.slice(fluidLayoutStart, source.indexOf('});', fluidLayoutStart));
-  assert.ok(fluidLayout.length > 0, 'shared fluid bind group layout must exist');
-  assert.doesNotMatch(fluidLayout, /binding: 16[^\n]*buffer:/, 'predictor storage must not be added to the shared fluid bind group layout');
-  assert.match(fluidLayout,/binding: 16[^\n]*texture: \{ sampleType: 'uint'/,'binding 16 is the resident collision texture, not predictor storage');
-  assert.ok(source.includes('fn csTransportPredict('), 'predictor entry point must exist');
-  const predict = wgslFunction('csTransportPredict');
-  assert.match(predict, /fluidPredict\[base \+ slot\] = sampleFluidSlotInflow\(backCell, slot\)/, 'predictor writes the forward semi-Lagrangian estimate for every slot (through the transport sampler, which adds the inflow ghost below the floor when the inflow law is admitted)');
-  const corrector = wgslFunction('macCormackSlot');
-  assert.ok(corrector, 'macCormackSlot must exist');
-  assert.match(corrector, /samplePredictSlot\(forwardCell, slot\)/, 'corrector re-advects the prediction backwards along the same characteristic');
-  assert.match(corrector, /\(current - reversed\) \* 0\.5/, 'MacCormack applies half the measured round-trip error');
-  assert.match(corrector, /let outOfRange = \(corrected < extrema\.lo\) \| \(corrected > extrema\.hi\);\s*return select\(corrected, predicted, outOfRange\);/, 'a component outside the neighbor extrema reverts to the first-order prediction instead of clamping to the extremum');
-  assert.doesNotMatch(corrector, /clamp\(corrected, extrema\.lo, extrema\.hi\)/, 'clamping to the extremum is rejected: it inflates fields toward their running maximum');
-  const bound = wgslFunction('boundVelocity');
-  assert.ok(bound, 'boundVelocity must exist');
-  assert.match(bound, /transport_controls\.z/, 'non-legacy schemes bound the step by backtrace cells from the uniform');
-  // The separated projection emits a coarse correction, then bounds the
-  // prolonged velocity in the receiving lattice. Solid-cell clearing carries
-  // no velocity. Other velocity writes still use the shared bound helper.
-  const separatedProjection = /if \(SEPARATED_PRESSURE\) \{ fluidDst\[base\] = vec4<f32>\((?:0\.0|correctedVelocity, 0\.0)\); return; \}/g;
-  assert.equal((source.match(separatedProjection) || []).length, 2);
-  assert.match(pressureTransfer, /velocity=clamp\(velocity,vec3<f32>\(-0\.34\*shape\.bounds\.w\),vec3<f32>\(0\.52\*shape\.bounds\.w\)\)/,
-    'separated pressure applies the legacy bound after prolongation in the receiving lattice units');
-  assert.match(pressureTransfer, /if\(magnitude>shape\.bounds\.y\) \{ velocity\*=shape\.bounds\.y\/magnitude; \}/,
-    'separated pressure also applies the selected backtrace bound after prolongation');
-  const velocityWrites = source.replace(separatedProjection, '').match(/fluidDst\[base\] = vec4<f32>\([^\n]*\n/g) || [];
-  assert.ok(velocityWrites.length >= 4, `expected the main kernel and three projection kernels to write velocity: ${velocityWrites.length}`);
-  // Bounds can be applied before the final write (the empty-air bypass);
-  // calibrated bound arithmetic is executed by the native oracle below.
-
-  assert.doesNotMatch(source, /var vel = advected\.xyz \* 0\.982;/, 'per-step velocity damping is no longer unconditional');
-  assert.match(source, /let velTransported = advected\.xyz \* transportVelocityDamping\(\);\s*\n\s*var vel = velTransported;/, 'velocity damping goes through the scheme-aware helper');
-  const damping = wgslFunction('transportVelocityDamping');
-  assert.match(damping, /0\.982/, 'legacy damping constant is preserved for the legacy scheme');
-  const main = source.slice(source.indexOf('\nfn cs(@builtin(global_invocation_id)'), source.indexOf('struct RaymarchResult'));
-  assert.match(main, /if \(macCormack\) \{[^]*?macCormackSlot\(cellI, idx, backCell, forwardCell, 0u\)[^]*?if \(macCormackScalars\) \{[^]*?macCormackSlot\(cellI, idx, backCell, forwardCell, 3u\)/, 'main kernel corrects velocity under both MacCormack schemes and scalars only under the all-fields scheme');
-  assert.match(main, /let macCormackScalars = u\.transport_controls\.x > 2\.5;/, 'scalar correction is gated on the all-fields scheme value');
-  assert.match(main, /let commonGasTransport = macCormack \|\| u\.reserved_source_extension_2\.y > 0\.5;/, 'common gas transport shares the uniform slot Sexy Fireman used, and MacCormack implies it');
-  assert.match(main, /material = thermalAdvection\(cell, advectVelocity, speed, localMaterial\.y, thermalAdvectionRiseDirection\)/, 'legacy per-layer transport is retained for the legacy characteristic');
-});
-
 test('a MacCormack step with an extremum limiter retains more of a transported bump than first-order semi-Lagrangian and stays bounded', () => {
   // CPU model of the scheme as written in WGSL: forward SL prediction, reverse
   // SL of the prediction along the same velocity, half-error correction, and

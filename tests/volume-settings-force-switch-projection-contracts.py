@@ -85,17 +85,17 @@ sliders = {"volume-microdetail": 0.9, "volume-interface-shred": 5, "volume-swirl
 normalized, receipt, route = project(payload({**all_on, "volume-force-interface-shred": False}, sliders))
 assert value(normalized, "volume-interface-shred") == 0, "a shred switch that was off sets Shred to 0"
 assert route["volume_interface_shred"] == "0", "the applied route agrees"
-assert value(normalized, "volume-microdetail") == 0.9, "a switch that was on leaves its slider alone"
+assert "volume-microdetail" not in normalized["domControls"], "the retired force has no live slider"
 assert receipt["forceSwitchTransfers"] == ["volume-interface-shred"], receipt.get("forceSwitchTransfers")
 
 normalized, receipt, route = project(payload({**all_on, "volume-force-fine-breakup": False}, sliders, omit={"volume-swirl-jostle"}))
-assert value(normalized, "volume-swirl-jostle") == 0, "a basin saved before Swirl jostle, with fine breakup off, gains it at 0"
-assert route["volume_swirl_jostle"] == "0"
+assert "volume-swirl-jostle" not in normalized["domControls"]
+assert "volume_swirl_jostle" not in route
 
 normalized, receipt, route = project(payload({**all_on, "volume-procedural-detail-forces": False}, sliders))
-assert [value(normalized, key) for key in ("volume-microdetail", "volume-interface-shred", "volume-swirl-jostle")] == [0, 0, 0], "the master switch off turned all three off"
+assert value(normalized, "volume-interface-shred") == 0, "the master switch off preserves Shred off"
 
 normalized, receipt, route = project(payload(all_on, sliders))
-assert [value(normalized, key) for key in ("volume-microdetail", "volume-interface-shred", "volume-swirl-jostle")] == [0.9, 5, 1], "all switches on: sliders unchanged"
+assert value(normalized, "volume-interface-shred") == 5, "Shred's authored gain remains unchanged"
 assert receipt["forceSwitchTransfers"] == []
 print("server force-switch projection contracts passed")

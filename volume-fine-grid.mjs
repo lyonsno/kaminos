@@ -16,7 +16,6 @@ export function fineGridPlan({materialDims,velocity=0,pressure=0}) {
 export const FINE_GRID_TRANSFER_WGSL=/* wgsl */`
 struct Shape { material:vec4<u32>, velocity:vec4<u32>, ratio:vec4<f32> };
 override GENERAL_TRANSFER:bool=false;
-override SHRED_ONLY:bool=false;
 ${TRANSFER_GEOMETRY_WGSL}
 @group(0) @binding(0) var<uniform> s:Shape;
 @group(0) @binding(1) var<storage,read_write> fine:array<vec4<f32>>;
@@ -67,8 +66,7 @@ fn restrictGeneral(c:vec3<u32>){
   let p=vec3<i32>(x,y,z);let o=transferOverlap(p,lo,hi);let w=o.x*o.y*o.z;if(w<=0.0){continue;}weightSum+=w;
   let blocked=solid(p);mask=max(mask,select(0u,1u,blocked));if(blocked){continue;}fluidWeight+=w;
   let fi=idx(vec3<u32>(p),s.material.xyz);
-  if(SHRED_ONLY){a+=vec4<f32>(fine[fi*4u+1u].xyz,0.0)*w;d.y+=fine[fi*4u+3u].y*w;}
-  else{a+=fine[fi*4u+1u]*w;b+=fine[fi*4u+2u]*w;d+=fine[fi*4u+3u]*w;front+=fineFront[fi]*w;}
+  a+=vec4<f32>(fine[fi*4u+1u].xyz,0.0)*w;d.y+=fine[fi*4u+3u].y*w;
   wet+=f32(fineQuench[fi])*w;
   if(textureDimensions(fineReactant).x==s.material.x){react+=textureLoad(fineReactant,p,0)*w;}
  }}}
@@ -89,8 +87,7 @@ fn restrictScalars(@builtin(global_invocation_id) c:vec3<u32>){
   mask=max(mask,select(0u,1u,blocked));
   if(!blocked){
    fluidWeight+=weight;
-  if(SHRED_ONLY){a+=vec4<f32>(fine[fi*4u+1u].xyz,0.0)*weight;d.y+=fine[fi*4u+3u].y*weight;}
-  else{a+=fine[fi*4u+1u]*weight;b+=fine[fi*4u+2u]*weight;d+=fine[fi*4u+3u]*weight;front+=fineFront[fi]*weight;}
+  a+=vec4<f32>(fine[fi*4u+1u].xyz,0.0)*weight;d.y+=fine[fi*4u+3u].y*weight;
    wet+=f32(fineQuench[fi])*weight;
    if(textureDimensions(fineReactant).x==s.material.x){react+=textureLoad(fineReactant,vec3<i32>(p),0)*weight;}
   }
@@ -173,17 +170,13 @@ export function createFineVelocityGrid(device,plan,uniformBytes,waveletFrame={})
  let entry=cached.byGeneral.get(general);
  if(!entry){
   const base=Object.fromEntries(['restrictScalars','restrictBurn','injectMomentum','prolongVelocity'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'fine '+entryPoint,layout:'auto',compute:{module:cached.module,entryPoint,constants:{GENERAL_TRANSFER:general}}})]));
-  entry={base,restrictions:new Map([[false,base.restrictScalars]])};
+  entry={base};
   cached.byGeneral.set(general,entry);
  }
- const pipelines={...entry.base},restrictions=entry.restrictions;
- let activeShredOnly=false;
+ const pipelines={...entry.base};
  let current=0,seed=true,bindings,prior=[];
- function prepare(f,{shredOnly=activeShredOnly}={}) {
-  activeShredOnly=shredOnly;
-  if(!restrictions.has(shredOnly))restrictions.set(shredOnly,device.createComputePipeline({label:'fine Shred-only restriction',layout:'auto',compute:{module:cached.module,entryPoint:'restrictScalars',constants:{GENERAL_TRANSFER:general,SHRED_ONLY:shredOnly}}}));
-  pipelines.restrictScalars=restrictions.get(shredOnly);
-  const resources=[f.fluid,f.front,f.quench,f.solid,f.reactant,f.burn,f.lower,f.prior,current,shredOnly];
+ function prepare(f) {
+  const resources=[f.fluid,f.quench,f.solid,f.reactant,f.burn,f.lower,f.prior,current];
   if(bindings&&resources.every((v,i)=>v===prior[i]))return;
   prior=resources;
   const bs=[shape,f.fluid,fluid[current],fluid[current],f.front,front[0],f.quench,quench[0]];
@@ -191,7 +184,7 @@ export function createFineVelocityGrid(device,plan,uniformBytes,waveletFrame={})
   [f.solid,solid,f.reactant,reactant[0],f.burn,burn].forEach((t,i)=>entries.push({binding:8+i,resource:t.createView()}));
   entries.push({binding:14,resource:f.lower.createView({dimension:'2d-array'})},{binding:15,resource:lower.createView({dimension:'2d-array'})});
   entries.push({binding:16,resource:{buffer:f.prior??f.fluid}});entries.push({binding:17,resource:f.lower.createView({dimension:'2d-array'})});
-  const used={injectMomentum:[0,1,2,8,16,17],restrictScalars:[0,1,2,4,5,6,7,8,9,10,11,16,17],restrictBurn:[0,12,13],prolongVelocity:[0,1,3,8,14,15]};
+  const used={injectMomentum:[0,1,2,8,16,17],restrictScalars:[0,1,2,5,6,7,8,9,10,11,16,17],restrictBurn:[0,12,13],prolongVelocity:[0,1,3,8,14,15]};
   bindings=Object.fromEntries(Object.entries(used).map(([k,ids])=>[k,device.createBindGroup({layout:pipelines[k].getBindGroupLayout(0),entries:entries.filter(e=>ids.includes(e.binding))})]));
   bindings.seed=device.createBindGroup({layout:pipelines.restrictScalars.getBindGroupLayout(0),entries:entries.filter(e=>used.restrictScalars.includes(e.binding)).map(e=>e.binding===0?{binding:0,resource:{buffer:seedShape}}:e)});
  }

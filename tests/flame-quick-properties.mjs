@@ -7,7 +7,8 @@ test('emitter quick properties expose shared appearance, chemistry and immediate
   const groups=flame.FLAME_EMITTER_QUICK_GROUPS;
   assert.ok(Array.isArray(groups),'emitter has explicitly grouped shared quick properties');
   const ids=groups.flatMap(g=>g.fields.map(([id])=>id));
-  for(const id of ['volume-physical-exposure','volume-physical-kelvin-per-heat','volume-density','volume-physical-smoke-extinction','volume-physical-smoke-albedo','volume-physical-clean','volume-reaction-law','volume-reactant-mixing-time','volume-reactant-cooling-time','volume-heat-release-expansion','volume-physical-soot-burnout-rate','volume-physical-soot-burnout-kelvin','volume-emitter-inlet-turbulence-scale','volume-emitter-puff','volume-emitter-puff-period','volume-wind-model','volume-wind-strength'])assert.ok(ids.includes(id),id);
+  for(const id of ['volume-physical-exposure','volume-physical-kelvin-per-heat','volume-density','volume-physical-smoke-extinction','volume-physical-smoke-albedo','volume-physical-clean','volume-reactant-mixing-time','volume-reactant-cooling-time','volume-heat-release-expansion','volume-physical-soot-burnout-rate','volume-physical-soot-burnout-kelvin','volume-emitter-inlet-turbulence-scale','volume-emitter-puff','volume-emitter-puff-period','volume-wind-model','volume-wind-strength'])assert.ok(ids.includes(id),id);
+  assert.ok(!ids.includes('volume-reaction-law'));
   assert.equal(new Set(ids).size,ids.length);
   assert.ok(!ids.includes('volume-wind-angle')&&!ids.includes('volume-wind-gust'));
 });

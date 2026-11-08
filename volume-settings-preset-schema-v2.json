@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 176,
+  "controlCount": 171,
   "controls": [
     {
       "key": "volume-fine-velocity",
@@ -292,14 +292,6 @@
       "tagName": "INPUT",
       "type": "checkbox",
       "additiveDefault": true
-    },
-    {
-      "key": "volume-fine-breakup-localization",
-      "param": "volume_fine_breakup_localization",
-      "tagName": "INPUT",
-      "type": "range",
-      "additiveDefault": 0,
-      "additiveSinceControlCount": 210
     },
     {
       "key": "volume-common-gas-transport",
@@ -788,20 +780,8 @@
       "type": "range"
     },
     {
-      "key": "volume-microdetail",
-      "param": "volume_microdetail",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
       "key": "volume-interface-shred",
       "param": "volume_interface_shred",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
-      "key": "volume-fire-licks",
-      "param": "volume_fire_licks",
       "tagName": "INPUT",
       "type": "range"
     },
@@ -814,12 +794,6 @@
     {
       "key": "volume-speed",
       "param": "volume_speed",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
-      "key": "volume-fire-scale",
-      "param": "volume_fire_scale",
       "tagName": "INPUT",
       "type": "range"
     },
@@ -1005,9 +979,8 @@
       "param": "volume_reaction_law",
       "tagName": "SELECT",
       "type": "select-one",
-      "additiveDefault": "authored-tall-plume",
+      "additiveDefault": "reactant-v0",
       "allowedValues": [
-        "authored-tall-plume",
         "reactant-v0"
       ],
       "additiveSinceControlCount": 250
@@ -1057,10 +1030,8 @@
       "param": "volume_appearance_model",
       "tagName": "SELECT",
       "type": "select-one",
-      "additiveDefault": "authored",
+      "additiveDefault": "shred-only",
       "allowedValues": [
-        "authored",
-        "compact-3",
         "shred-only"
       ],
       "additiveSinceControlCount": 256
@@ -1097,15 +1068,6 @@
       "additiveDefault": 2,
       "additiveLineage": "reactant-soot-yield",
       "additiveSinceControlCount": 1
-    },
-    {
-      "key": "volume-swirl-jostle",
-      "param": "volume_swirl_jostle",
-      "tagName": "INPUT",
-      "type": "range",
-      "additiveDefault": 1,
-      "additiveSinceControlCount": 1,
-      "additiveLineage": "swirl-jostle"
     },
     {
       "key": "volume-adaptive-material",
@@ -2338,6 +2300,41 @@
       "param": "volume_force_fine_breakup",
       "tagName": "INPUT",
       "type": "checkbox"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-microdetail",
+      "param": "volume_microdetail",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-fire-licks",
+      "param": "volume_fire_licks",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-swirl-jostle",
+      "param": "volume_swirl_jostle",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-fine-breakup-localization",
+      "param": "volume_fine_breakup_localization",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-fire-scale",
+      "param": "volume_fire_scale",
+      "tagName": "INPUT",
+      "type": "range"
     }
   ],
   "rendererControls": [

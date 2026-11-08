@@ -23,3 +23,17 @@ test('whole-settings checks reject incompatible algorithms and invalid CG budget
   assert.ok(c.flameSettingsStateProblems(state).length,`${solver}/${algorithm}/${iterations} must be refused before mutation`);
  }
 });
+
+test('independent fire control documents compile their own CG budget rather than the page singleton',()=>{
+ const pageDocument={getElementById:()=>({value:'6'})},unitDocument={getElementById:()=>({value:'10'})};
+ const c=vm.createContext({document:pageDocument,volumePrototype:{debugState:()=>({controls:{pressureCgIterations:6}})}});
+ vm.runInContext(extract('readPressureCgIterations'),c);
+ assert.equal(c.readPressureCgIterations(unitDocument),10);
+ assert.equal(c.readPressureCgIterations(),6);
+});
+test('invalid private CG drafts refuse the unit edit rather than substituting a page budget',()=>{
+ const pageDocument={getElementById:()=>({value:'6'})};
+ const c=vm.createContext({document:pageDocument,volumePrototype:{debugState:()=>({controls:{pressureCgIterations:6}})}});
+ vm.runInContext(extract('readPressureCgIterations'),c);
+ for(const value of ['', '6.5','0'])assert.throws(()=>c.readPressureCgIterations({getElementById:()=>({value})}),/positive integer/);
+});

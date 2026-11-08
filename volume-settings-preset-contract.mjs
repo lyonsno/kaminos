@@ -463,13 +463,14 @@ export function validateVolumeSettingsPresetDocument(document, requestedPresetRe
     storePath: document.storePath || null,
     preset,
     presetRoute,
-    sourcePresetAuthority: 'shared-volume-settings-preset-v2',
+    sourcePresetAuthority: document.runtimeFallback ? 'runtime-reactant-preview-v1' : 'shared-volume-settings-preset-v2',
     schemaIdentity: schema.identity,
     rendererControlCount: rendererEntries.length,
     presentationControlCount: presentationEntries.length,
     routeEntries: Object.freeze([...presetRoute.searchParams].map(entry => Object.freeze([...entry]))),
     routeVolumeEntries: Object.freeze(routeVolumeEntries.map(entry => Object.freeze([...entry]))),
     serverProjection,
+    runtimeFallback: document.runtimeFallback ? Object.freeze({...document.runtimeFallback}) : null,
     retirementMigration: Object.freeze({
       identity: 'kaminos.volume.retired-control-migration.v1',
       applied: retirementMigration.applied,
@@ -536,7 +537,7 @@ export function volumeSettingsPresetControlValuesEqual(left, right) {
 export function buildVolumeSettingsPresetTarget(receipt, origin) {
   const target = new URL('/', origin);
   for (const [key, value] of receipt.routeEntries) target.searchParams.set(key, value);
-  target.searchParams.set('settings_preset', receipt.presetId);
+  target.searchParams.set('settings_preset', receipt.runtimeFallback?.requestedPresetRef || receipt.presetId);
   target.searchParams.set('settings_preset_authority', receipt.sourcePresetAuthority);
   return target;
 }
@@ -551,14 +552,14 @@ export function buildVolumeSettingsPresetVisualTarget(receipt, origin, view, { a
   target.searchParams.set('warmup_steps', '0');
   target.searchParams.set('volume_presentation', 'beauty');
   target.searchParams.set('volume_raymarch_smoke', viewSpec.composition === 'splat-only-v0' ? 'off' : 'on');
-  target.searchParams.set('settings_preset', receipt.presetId);
+  target.searchParams.set('settings_preset', receipt.runtimeFallback?.requestedPresetRef || receipt.presetId);
   target.searchParams.set('settings_preset_authority', receipt.sourcePresetAuthority);
   if (assayToolbar) target.searchParams.set('assay_toolbar', '1');
   return target;
 }
 
 export function validateVolumeSettingsPresetVisualTarget(receipt, params) {
-  if (params.get('settings_preset') !== receipt.presetId) throw new Error('visual target settings preset id mismatch');
+  if (params.get('settings_preset') !== (receipt.runtimeFallback?.requestedPresetRef || receipt.presetId)) throw new Error('visual target settings preset id mismatch');
   if (params.get('settings_preset_authority') !== receipt.sourcePresetAuthority) {
     throw new Error('visual target settings preset authority mismatch');
   }
@@ -633,7 +634,7 @@ export function validateVolumeSettingsPresetVisualTarget(receipt, params) {
 }
 
 export function validateVolumeSettingsPresetTarget(receipt, params) {
-  if (params.get('settings_preset') !== receipt.presetId) throw new Error('target settings preset id mismatch');
+  if (params.get('settings_preset') !== (receipt.runtimeFallback?.requestedPresetRef || receipt.presetId)) throw new Error('target settings preset id mismatch');
   if (params.get('settings_preset_authority') !== receipt.sourcePresetAuthority) {
     throw new Error('target settings preset authority mismatch');
   }
