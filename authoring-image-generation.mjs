@@ -191,13 +191,13 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
   // A computed image is kept until it is saved; a failed save retries these exact pixels.
   let pendingImage=null;
   async function savePending(){
-    const {image,provenance,text,seed,model}=pendingImage;
-    set({status:'saving',canStop:false,canDecode:false,stage:'Saving image',percent:null,progress:'Saving the image to Source images…'});
+    const {image,provenance,text,seed,model,persist}=pendingImage;
+    set({status:'saving',canStop:false,canDecode:false,stage:'Saving image',percent:null,progress:'Saving the image…'});
     const blob=await withPngProvenance(await encodePng(image.rgba,image.width,image.height),provenance);
     const file=new File([blob],kleinImageName(text,seed,model),{type:'image/png'});
-    const entry=await deliver(file,provenance);
+    const entry=await persist(file,provenance);
     pendingImage=null;state.pending=null;state.results.push({...entry,provenance});
-    set({status:'complete',error:null,preview:null,stage:'Complete',percent:100,progress:'Image saved and selected. Generate a mesh from it below.'});
+    set({status:'complete',error:null,preview:null,stage:'Complete',percent:100,progress:'Image saved.'});
     return entry;
   }
   const publish=()=>changed(structuredClone(state));
@@ -267,9 +267,12 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       if(!active||!state.canStop||abort.signal.aborted)return false;
       abort.abort(new DOMException('Image generation stopped by operator','AbortError'));set({canStop:false,status:'stopping',progress:'Stopping… waiting for the current GPU work to settle.'});return true;
     },
-    async run({prompt,seed,size=512,level='4-bit',aspect='square',model='flux2',reference=null,promptExpansion=null}){
+    // Automation may retain its own result without selecting or preparing it in the editor.
+    // The destination stays with pending pixels so a failed save retries the same delivery.
+    async run({prompt,seed,size=512,level='4-bit',aspect='square',model='flux2',reference=null,promptExpansion=null,deliver:persist=deliver}){
       if(active)throw Error('Image generation is already running');
       if(pendingImage)throw Error('Save the generated image before generating another');
+      if(typeof persist!=='function')throw TypeError('Image result delivery must be a function');
       const text=String(prompt||'').trim();if(!text)throw Error('Describe the image to generate');
       const spec=imageModel(model);
       const routeId=reference?`${model}-klein.image-and-text.authoring-shared-device.v0`:spec.routeId;
@@ -334,7 +337,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         if(reference)provenance.reference=structuredClone(reference.provenance);
         if(pipeline.ditManifest?.source)provenance.source=structuredClone(pipeline.ditManifest.source);
         if(model==='flux3')Object.assign(provenance,{sampling:structuredClone(pipeline.sampling),source:structuredClone(pipeline.ditManifest.source),...(pipeline.ditManifest.lora?{lora:structuredClone(pipeline.ditManifest.lora)}:{})});
-        pendingImage={image,provenance,text,seed,model};state.pending={name:kleinImageName(text,seed,model),provenance};
+        pendingImage={image,provenance,text,seed,model,persist};state.pending={name:kleinImageName(text,seed,model),provenance};
         state.preview={rgba:image.rgba,width:image.width,height:image.height,kind:'final',runId};
         return await savePending();
       }catch(error){
