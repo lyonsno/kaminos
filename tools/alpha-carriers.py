@@ -28,12 +28,21 @@ def canonical_normals(a):
     return n * np.where(n[np.arange(len(n)), biggest] < 0, -1, 1)[:, None]
 
 
+def normal_features(a):
+    n = unit(a)
+    # Symmetric dyads preserve unoriented planes without a hemisphere discontinuity.
+    return np.stack([n[:, 0] ** 2, n[:, 1] ** 2, n[:, 2] ** 2,
+                     np.sqrt(2) * n[:, 0] * n[:, 1],
+                     np.sqrt(2) * n[:, 0] * n[:, 2],
+                     np.sqrt(2) * n[:, 1] * n[:, 2]], axis=1)
+
+
 def partition(rows, counts, radius):
     if rows.ndim != 2 or rows.shape[1] != 12 or not np.isfinite(rows).all() or radius <= 0:
         raise ValueError('Finite source rows and positive radius required')
     if not counts or min(counts) < 1 or max(counts) > len(rows):
         raise ValueError('Carrier count must lie within source count')
-    features = np.concatenate([rows[:, :3], canonical_normals(rows[:, 3:6]) * radius * 4], axis=1)
+    features = np.concatenate([rows[:, :3], normal_features(rows[:, 3:6]) * radius * 4], axis=1)
     groups, queue, serial = {}, [], 0
 
     def add(ids):
@@ -68,11 +77,9 @@ def patch(rows, radius):
         raise ValueError('No visible support')
     p = visible[:, :3].astype(np.float64)
     center = p.mean(0)
-    normals = canonical_normals(visible[:, 3:6])
-    n = normals.mean(0)
-    if np.linalg.norm(n) < 1e-8:
-        n = normals[0]
-    n = unit(n)
+    normals = unit(visible[:, 3:6])
+    _, directions = np.linalg.eigh(normals.T @ normals)
+    n = canonical_normals(directions[:, -1][None, :])[0]
     axis = np.array([0., 0., 1.]) if abs(n[2]) < .9 else np.array([0., 1., 0.])
     u = unit(np.cross(axis, n))
     v = np.cross(n, u)

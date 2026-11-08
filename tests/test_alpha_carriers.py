@@ -45,6 +45,22 @@ class AlphaCarriers(unittest.TestCase):
         self.assertTrue(np.all(np.abs(p @ u) + .1 <= h[12] + 1e-6))
         self.assertTrue(np.all(np.abs(p @ v) + .1 <= h[13] + 1e-6))
 
+    def test_curved_normals_across_dominant_axis_boundary_keep_their_plane(self):
+        a = self.rows()
+        a[:4, 3:6] = [.71, -.70, 0]
+        a[4:, 3:6] = [.70, -.71, 0]
+        expected = alpha.unit(a[:, 3:6].mean(0))
+        self.assertGreater(abs(float(alpha.patch(a, .1)[9:12] @ expected)), .999)
+        a[::2, 3:6] *= -1
+        self.assertGreater(abs(float(alpha.patch(a, .1)[9:12] @ expected)), .999)
+
+    def test_tilted_finite_disc_projection_contracts_instead_of_expanding(self):
+        a = self.rows()[:1]
+        a[0, :3] = 0
+        a[0, 3:6] = [np.sqrt(3) / 2, 0, .5]
+        q = np.array([[.4, 0, 0], [.6, 0, 0], [0, .9, 0], [0, 1.1, 0]])
+        np.testing.assert_array_equal(alpha.coverage(q, a, np.array([0, 0, 1]), 1), [1, 0, 1, 0])
+
     def test_actual_mask_samples_disk_and_empty_corners(self):
         a = self.rows()[:1]
         h = alpha.patch(a, .1)
