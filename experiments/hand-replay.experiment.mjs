@@ -75,7 +75,7 @@ export default {
    for(let i=0;i<objects.length;i++){
     const o=objects[i],h=row.hands[i];
     o.root.visible=viewMode==='spatial'&&(!guide||showTeachers||pair.includes(i));
-    if(guide){const p=pair.indexOf(i),remaining=catalog.models.map((_,j)=>j).filter(j=>!pair.includes(j)),slot=p>=0?p:2+remaining.indexOf(i);o.root.scale.setScalar(7);o.root.position.set(slot%2?1.3:-.7,4-3*Math.floor(slot/2),0);o.label.scale.set(.27,.034,1);}
+    if(guide){const p=pair.indexOf(i),remaining=catalog.models.map((_,j)=>j).filter(j=>!pair.includes(j)),slot=p>=0?p:2+remaining.indexOf(i);o.root.scale.setScalar(7);o.root.position.set(slot%2?1.3:-.7,1+3*(Math.ceil(catalog.models.length/2)-1)-3*Math.floor(slot/2),0);o.label.scale.set(.27,.034,1);}
     o.mesh.visible=h.status==='observed'&&display[i]!==null;o.arc.visible=o.landing.visible=o.mesh.visible&&showArcs;
     if(!o.mesh.visible)continue;
     const wrist=h.joints[0],transform=v=>v.map((x,k)=>(x-wrist[k])*(k===1||(k===2&&h.camera?.basis==='opencv_x_right_y_down_z_forward')?-1:1)*display[i]);
@@ -120,7 +120,7 @@ export default {
   const seek=value=>{if(loading||!data)throw Error('sequence unavailable');const n=Number(value);if(!Number.isInteger(n)||n<0||n>=data.frames.length)throw Error('frame out of range');playing=false;if(moment&&(n<moment.start||n>moment.end)){moment=null;rebuildTrace();}index=n;time=data.frames[n].timeMs;draw();return read();};
   const toggle=()=>{if(loading||!data)throw Error('sequence unavailable');if(!playing&&index===(moment?.end??data.frames.length-1)){index=moment?.start??0;time=data.frames[index].timeMs;draw();}playing=!playing;lastTick=null;sync();return read();};
   const pause=()=>{playing=false;lastTick=null;sync();return read();};
-  const frame=()=>scene.setView(viewMode==='camera'?{position:[0,4.8,11.4],target:[0,4.8,0]}:viewMode==='inspection'?{position:[1,6,catalog.models.length>2?5*(Math.ceil(catalog.models.length/2)+1):10],target:[0,4.7,0],fov:40}:viewMode==='time'?{position:[5,7.5,10],target:[0,4.6,-1.5]}:guide&&showTeachers&&catalog.models.length>4?{position:[-.4,4-1.5*(Math.ceil(catalog.models.length/2)-1)+.8,5+4*Math.ceil(catalog.models.length/2)],target:[-.4,4-1.5*(Math.ceil(catalog.models.length/2)-1)+.8,0]}:guide?{position:[-.4,showTeachers?3.8:4.9,showTeachers?13:10],target:[-.4,showTeachers?3.8:4.9,0]}:{position:[0,4.7,12],target:[0,4.7,0]});
+  const frame=()=>scene.setView(viewMode==='camera'?{position:[0,4.8,11.4],target:[0,4.8,0]}:viewMode==='inspection'?{position:[1,catalog.models.length>4?6.6:6,catalog.models.length>2?5*(Math.ceil(catalog.models.length/2)+1):10],target:[0,catalog.models.length>4?5.3:4.7,0],fov:40}:viewMode==='time'?{position:[5,7.5,10],target:[0,4.6,-1.5]}:guide&&showTeachers&&catalog.models.length>4?{position:[-.4,1+1.5*(Math.ceil(catalog.models.length/2)-1)+.8,5+4*Math.ceil(catalog.models.length/2)],target:[-.4,1+1.5*(Math.ceil(catalog.models.length/2)-1)+.8,0]}:guide?{position:[-.4,showTeachers?3.8:4.9,showTeachers?13:10],target:[-.4,showTeachers?3.8:4.9,0]}:{position:[0,4.7,12],target:[0,4.7,0]});
   const setMoment=async id=>{const m=guide?.moments.find(m=>m.id===id);if(!m)throw Error('unknown comparison moment');const result=await load(m.sequence,m);frame();return result;};
   const drawTrace=()=>{
    if(!tracePanel||!trace)return;const a=data.frames[trace.start].timeMs,b=data.frames[trace.end].timeMs;

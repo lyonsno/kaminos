@@ -29,7 +29,7 @@ await instance.operations.setMoment('motion');assert.equal(instance.read().frame
 instance.operations.toggle();tick({timestampMs:0});tick({timestampMs:400});assert.equal(instance.read().frame,1,'loop wraps inside selected interval');assert.equal(instance.read().playing,true);
 instance.operations.seek(2);assert.equal(instance.read().playing,false);assert.equal(instance.read().trace.cursorFrame,2);
 instance.operations.setTeachers(true);assert.equal(instance.read().visibleModels.length,5);
-instance.operations.setComparisonPair(['original','wilor']);instance.operations.setViewMode('spatial');assert.equal(new Set(attached.slice(0,5).map(root=>root.position.toArray().join(','))).size,5,'same-parity pair keeps every registered hand in its own station');
+instance.operations.setComparisonPair(['original','wilor']);instance.operations.setViewMode('spatial');assert.equal(new Set(attached.slice(0,5).map(root=>root.position.toArray().join(','))).size,5,'same-parity pair keeps every registered hand in its own station');assert(attached.slice(0,5).every(root=>root.position.y>=1),'every comparison root remains above the scene floor');
 
 instance.operations.seek(0);assert.equal(instance.read().moment,null,'seeking outside a moment returns to full recording');assert.equal(instance.read().trace.start,0);
 await instance.dispose();
