@@ -23,7 +23,19 @@ world={texture:texture(),renderView:{},dimensions:[4,8,4],localMin:[-2,-2,-2],lo
 field.encode(encoder,1,17,undefined,'world-added');const withWorld=field.describe();assert.equal(dispatches,8);
 field.encode(encoder,1,18,undefined,'world-added');assert.equal(dispatches,8);assert.equal(field.describe().exterior.frame,18);assert.equal(field.describe().exterior.generation,withWorld.generation);
 world={...world,renderView:{}};field.encode(encoder,1,19,undefined,'world-added');assert.equal(dispatches,10,'World atlas replacement invalidates retained content');
-world=null;field.encode(encoder,1,20,undefined,'world-removed');assert.equal(dispatches,11);assert.equal(field.describe().exterior,null);
-field.encode(encoder,1,21);field.encode(encoder,1,22);assert.equal(dispatches,13,'Without explicit content authority, every call encodes conservatively');
+// World geometry can change while texture/view identities remain stable.
+for(const [name,value] of [['handoffMargin',.36],['localMin',[-3,-2,-2]],['localMax',[3,6,2]],['dimensions',[8,8,4]]]){
+  const before=field.describe().generation,priorDispatches=dispatches;
+  world[name]=value;
+  field.encode(encoder,1,20,undefined,'world-added');
+  assert.equal(field.describe().generation,before+1,`${name} changes invalidate retained physical coefficients`);
+  assert.equal(dispatches,priorDispatches+2,`${name} rebuilds Fine and World coefficients`);
+  assert.deepEqual(field.describe().exterior[name],value);
+  field.encode(encoder,1,21,undefined,'world-added');
+  assert.equal(dispatches,priorDispatches+2,`${name} remains reusable once encoded`);
+}
+assert.equal(dispatches,18);
+world=null;field.encode(encoder,1,20,undefined,'world-removed');assert.equal(dispatches,19);assert.equal(field.describe().exterior,null);
+field.encode(encoder,1,21);field.encode(encoder,1,22);assert.equal(dispatches,21,'Without explicit content authority, every call encodes conservatively');
 field.destroy();assert.throws(()=>field.encode(encoder,0,23,undefined,'same-material'),/destroyed/);
 console.log('Source content reuse retains coefficients, publishes current metadata, and invalidates on material/resource/quality changes');

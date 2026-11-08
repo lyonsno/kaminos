@@ -138,7 +138,7 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
   let inputs = buildInputs();
   const output = device.createBindGroup({layout: pipeline.getBindGroupLayout(3), entries: [{binding: 4, resource: texture.createView()},{binding:5,resource:scatteringTexture.createView()},{binding:10,resource:{buffer:sampling}}]});
   let status = 'unbuilt', reason = 'not-encoded', frame = null, sourceIndex = null, generation = 0;
-  let lastContentVersion = null;
+  let lastContentVersion = null, lastWorldContentVersion = null;
   let worldTransform=validateSceneSourceTransform();
   let optical = null;
   let exterior=null;
@@ -181,9 +181,9 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
     encode(encoder, index, currentFrame,transform,contentVersion=null) {
       if (status === 'destroyed') throw new Error('scene source destroyed');
       const world=getWorldSmoke();
-      // This optional authored value is also the camera's physical ownership
-      // parameter. Publish and seed from the same value in this queued frame.
-      device.queue.writeBuffer(worldRenderUniform,36,new Float32Array([normalizeSmokeHandoffMargin(world?.handoffMargin)]));
+      // Resource identity alone does not capture a retained World's geometry.
+      // Snapshot values: callers may update the same arrays/descriptor in place.
+      const worldContentVersion=world?JSON.stringify([normalizeSmokeHandoffMargin(world.handoffMargin),world.dimensions,world.localMin,world.localMax]):null;
       const inputsChanged=getReactantTextures() !== boundTextures||(world?.texture??emptyWorld)!==boundWorld||(world?.renderView??emptyWorldView)!==boundRenderView;
       if(inputsChanged)inputs = buildInputs();
       if (!Number.isInteger(index) || !inputs[index]) throw new Error('invalid scene source index');
@@ -192,11 +192,13 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
       worldTransform=nextTransform;
       // Content authority comes from the producer's material/reset/uniform
       // revision, never from camera frame count. Omitted authority is conservative.
-      if(contentVersion!==null&&status==='encoded'&&!inputsChanged&&sourceIndex===index&&sameTransform&&lastContentVersion===contentVersion){
+      if(contentVersion!==null&&status==='encoded'&&!inputsChanged&&sourceIndex===index&&sameTransform&&lastContentVersion===contentVersion&&lastWorldContentVersion===worldContentVersion){
         frame=currentFrame;
         if(exterior)exterior.frame=currentFrame;
         return;
       }
+      // The camera and this seed must use the same physical ownership margin.
+      device.queue.writeBuffer(worldRenderUniform,36,new Float32Array([normalizeSmokeHandoffMargin(world?.handoffMargin)]));
       status = 'unbuilt'; reason = 'encoding';
       invalidateOptical();
       const pass = encoder.beginComputePass({label: 'raw live volume source'});
@@ -204,7 +206,7 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
       pass.dispatchWorkgroups(Math.ceil(grid/4), Math.ceil(gridY/4), Math.ceil(grid/4)); pass.end();
       status = 'encoded'; reason = null; sourceIndex = index; frame = currentFrame; generation++;
       encodeExterior(encoder);
-      lastContentVersion=contentVersion;
+      lastContentVersion=contentVersion;lastWorldContentVersion=worldContentVersion;
     },
     invalidate(why) {if (status !== 'destroyed') {status = 'unbuilt'; reason = why; invalidateOptical();}},
     // First experiment: one controlled source, in volume-local coordinates.

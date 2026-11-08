@@ -21438,8 +21438,8 @@ export function createKaminosVolumePrototype({
     // animated pixel jitter. Keep every remaining material uniform, the actual
     // buffer epoch and World optical builds in the identity; presentation-only
     // frames may then reuse the exact coefficients without delaying live fire.
-    const sourceContentVersion=JSON.stringify([state.thermalFluidAllocationId,state.fluidStateResetCount,state.simStepCount,currentFront,
-      Array.from(uniforms.subarray(23,41)),Array.from(uniforms.subarray(42)),worldSmokeKey,worldRenderField.read().builds]);
+    const sourceContentVersion=JSON.stringify([state.thermalFluidAllocationId,state.fluidStateResetCount,state.domainRemap?.count||0,state.simStepCount,currentFront,
+      Array.from(uniforms.subarray(23,41)),Array.from(uniforms.subarray(42)),worldSmokeKey,worldSmoke?.anchor,worldRenderField.read().builds]);
     sceneVolumeSource.encode(encoder, currentFluid, state.frameCount,productTransform,sourceContentVersion);
     if (sceneMediumSource) sceneVolumeSource.encodeOpticalDepth(encoder, sceneMediumSource.position, sceneMediumSource.stepLength);
     return {source: sceneVolumeSource.describe(), medium: sceneVolumeSource.opticalDepthField(), simStepCount: state.simStepCount};
