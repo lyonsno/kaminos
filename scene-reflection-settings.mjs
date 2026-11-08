@@ -1,8 +1,8 @@
 export function resolveReflectionSettings(value={}){
- const result={enabled:false,resolutionScale:.33,steps:6,refinementSteps:6,samples:1,sampling:'stochastic',maxDistance:50,thickness:.15,roughnessCutoff:.95,temporal:true,historyWeight:.85,...value};
- for(const key of ['enabled','temporal'])if(typeof result[key]!=='boolean')throw Error(`${key} must be boolean`);
- for(const key of ['resolutionScale','maxDistance','thickness','roughnessCutoff'])if(!Number.isFinite(result[key])||result[key]<=0)throw Error(`${key} must be positive`);
- if(result.resolutionScale>1||result.roughnessCutoff>1)throw Error('Reflection scale and roughness cutoff must be at most one');
+ const result={enabled:false,resolutionScale:.33,adaptive:true,sharpResolutionScale:1,steps:6,refinementSteps:6,samples:1,sampling:'stochastic',maxDistance:50,thickness:.15,roughnessCutoff:.95,temporal:true,historyWeight:.85,...value};
+ for(const key of ['enabled','temporal','adaptive'])if(typeof result[key]!=='boolean')throw Error(`${key} must be boolean`);
+ for(const key of ['resolutionScale','sharpResolutionScale','maxDistance','thickness','roughnessCutoff'])if(!Number.isFinite(result[key])||result[key]<=0)throw Error(`${key} must be positive`);
+ if(result.resolutionScale>1||result.sharpResolutionScale>1||result.roughnessCutoff>1)throw Error('Reflection scale and roughness cutoff must be at most one');
  if(!Number.isSafeInteger(result.steps)||result.steps<1||result.steps>4294967295)throw Error('Reflection steps must be a positive u32 integer');
  if(!Number.isSafeInteger(result.refinementSteps)||result.refinementSteps<0||result.refinementSteps>4294967295)throw Error('Reflection refinement steps must be a nonnegative u32 integer');
  if(!Number.isSafeInteger(result.samples)||result.samples<1||result.samples>4294967295)throw Error('Reflection samples must be a positive u32 integer');
@@ -12,10 +12,12 @@ export function resolveReflectionSettings(value={}){
  return result;
 }
 
-export const REFLECTION_COST_HELP='Trace work grows with tracing pixels × rays per pixel. Each ray takes up to its march-step budget; each candidate depth crossing can add the refinement-step budget before a hit is accepted or rejected. Early exits reduce that work. Source mip generation, reconstruction, history and final shading have separate costs.';
+export const REFLECTION_COST_HELP='Trace work grows with tracing pixels × rays per pixel. Each ray takes up to its march-step budget; each candidate depth crossing can add the refinement-step budget before a hit is accepted or rejected. Early exits reduce that work. Adaptive detail adds a second grid: its rays execute only where the projected reflection footprint is narrow or normals vary. Classification, target writes, source mips, reconstruction, history and final shading have separate costs.';
 export const REFLECTION_CONTROL_FIELDS=[
  {key:'enabled',label:'Screen reflections',type:'checkbox',help:'Reflect visible opaque scene surfaces. Missing screen-space information falls back to the existing environment.'},
- {key:'resolutionScale',label:'Tracing resolution',type:'number',step:.05,min:0,max:1,help:'Fraction of viewport width and height used for ray tracing. 0.5 traces 25% of the pixels; 0.25 traces 6.25%. Lower values reduce trace work and need more reconstruction.'},
+ {key:'resolutionScale',label:'Glossy tracing resolution',type:'number',step:.05,min:0,max:1,help:'Fraction of viewport width and height used for ray tracing. 0.5 traces 25% of the pixels; 0.25 traces 6.25%. Lower values reduce trace work and need more reconstruction.'},
+ {key:'adaptive',label:'Adaptive sharp reflections',type:'checkbox',help:'Keep a denser reflection grid where the projected GGX footprint is narrow or receiver normals vary. Broad glossy reflections keep the lower resolution. Adds classification, image storage and reconstruction costs even where few extra rays are needed.'},
+ {key:'sharpResolutionScale',label:'Sharp tracing resolution',type:'number',step:.05,min:0,max:1,help:'Fraction of viewport width and height for narrow reflections when adaptive detail is enabled. One preserves full-resolution receiver detail. At or below the glossy resolution, the extra field is disabled.'},
  {key:'samples',label:'Rays per pixel',type:'number',step:1,min:1,help:'Reflection directions sampled per tracing pixel each frame. More rays reduce angular sampling noise. Each ray has its own march and crossing-refinement work.'},
  {key:'steps',label:'March steps per ray',type:'number',step:1,min:1,help:'Maximum coarse depth-search samples along each ray. More steps help find thin or distant screen-space features. This is separate from glossy ray count and hit refinement.'},
  {key:'refinementSteps',label:'Refinement steps per crossing',type:'number',step:1,min:0,help:'Binary-search steps after a candidate depth crossing. Each step halves that candidate interval. A rejected candidate can be followed by another crossing, so this budget can run more than once per ray. Zero disables binary refinement.'},

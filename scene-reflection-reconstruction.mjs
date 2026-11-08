@@ -51,9 +51,9 @@ fn reconstructSceneReflection(coords:vec2<f32>,current:texture_2d<f32>,currentSt
  let centre=clamp(vec2<i32>(coords*vec2<f32>(size)),vec2<i32>(0),size-vec2<i32>(1));let centreStats=textureLoad(currentStats,centre,0);
  let centreDistance=reflectionDecodeMoment(centreStats.r);let centreVariance=reflectionDecodeMoment(centreStats.g);
  let offsets=array<vec2<f32>,13>(vec2<f32>(0.0),vec2<f32>(1.0,0.0),vec2<f32>(-1.0,0.0),vec2<f32>(0.0,1.0),vec2<f32>(0.0,-1.0),vec2<f32>(1.0,1.0),vec2<f32>(-1.0,1.0),vec2<f32>(1.0,-1.0),vec2<f32>(-1.0,-1.0),vec2<f32>(2.0,0.0),vec2<f32>(-2.0,0.0),vec2<f32>(0.0,2.0),vec2<f32>(0.0,-2.0));
- var sum=vec4<f32>(0.0);var squared=vec3<f32>(0.0);var total=0.0;var distanceSum=0.0;var distanceSquared=0.0;var support=0.0;
+ var sum=vec4<f32>(0.0);var squared=vec3<f32>(0.0);var neighborhood=vec3<f32>(0.0);var neighborhoodWeight=0.0;var total=0.0;var distanceSum=0.0;var distanceSquared=0.0;var support=0.0;
  var lower=vec3<f32>(1e30);var upper=vec3<f32>(0.0);var maximumCoverage=0.0;
- let radius=.5+2.0*nr.w;
+ let radius=.5+2.0*nr.w;let glossyFilter=smoothstep(.06,.2,nr.w);
  for(var i=0u;i<13u;i++){
   let q=coords+offsets[i]*radius/vec2<f32>(size);if(any(q<vec2<f32>(0.0))||any(q>vec2<f32>(1.0))){continue;}
   let qp=clamp(vec2<i32>(q*vec2<f32>(size)),vec2<i32>(0),size-vec2<i32>(1));let actual=(vec2<f32>(qp)+.5)/vec2<f32>(size);
@@ -63,11 +63,12 @@ fn reconstructSceneReflection(coords:vec2<f32>,current:texture_2d<f32>,currentSt
   var weight=exp(-plane)*pow(max(dot(n,neighbor.xyz),0.0),64.0)*exp(-abs(nr.w-neighbor.w)*16.0)*exp(-dot(offsets[i],offsets[i])*.25);
   let value=textureLoad(current,qp,0);let stats=textureLoad(currentStats,qp,0);let distance=reflectionDecodeMoment(stats.r);let variance=reflectionDecodeMoment(stats.g);
   if(centreDistance>0.0&&distance>0.0){let tolerance=max(.04,.15*(centreDistance+distance)+2.0*sqrt(centreVariance+variance));let delta=centreDistance-distance;weight*=exp(-delta*delta/(tolerance*tolerance));}
-  sum+=value*weight;squared+=value.rgb*value.rgb*weight;total+=weight;
-  distanceSum+=distance*value.a*weight;distanceSquared+=(variance+distance*distance)*value.a*weight;support+=value.a*weight;
+  neighborhood+=value.rgb*weight;squared+=value.rgb*value.rgb*weight;neighborhoodWeight+=weight;
+  let filterWeight=weight*select(glossyFilter,1.0,i==0u);sum+=value*filterWeight;total+=filterWeight;
+  distanceSum+=distance*value.a*filterWeight;distanceSquared+=(variance+distance*distance)*value.a*filterWeight;support+=value.a*filterWeight;
   if(weight>.00001){lower=min(lower,value.rgb);upper=max(upper,value.rgb);maximumCoverage=max(maximumCoverage,value.a);}
  }
- resolved=sum/max(total,.00001);let variance=max(vec3<f32>(0.0),squared/max(total,.00001)-resolved.rgb*resolved.rgb);
+ resolved=sum/max(total,.00001);let mean=neighborhood/max(neighborhoodWeight,.00001);let variance=max(vec3<f32>(0.0),squared/max(neighborhoodWeight,.00001)-mean*mean);
  let brightness=dot(resolved.rgb,vec3<f32>(.2126,.7152,.0722));let currentVariance=dot(variance,vec3<f32>(.2126,.7152,.0722));
  let distance=distanceSum/max(support,.00001);let distanceVariance=max(0.0,distanceSquared/max(support,.00001)-distance*distance);
  metadata=vec4<f32>(reflectionEncodeMoment(distance),reflectionEncodeMoment(distanceVariance),reflectionEncodeMoment(currentVariance),0.0);

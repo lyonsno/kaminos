@@ -5,6 +5,7 @@
 <script type="module">
 import * as THREE from 'three/webgpu';
 import {createSceneGI} from '../scene-gi.mjs';
+import {measureSceneGpu} from '../scene-light-timing.mjs';
 import {createViewProjection} from '../view-projection.mjs';
 THREE.Node.captureStackTrace=true;
 const W=256,H=192;let renderer=new THREE.WebGPURenderer({antialias:false});
@@ -21,6 +22,30 @@ const gi=createSceneGI(scene,camera,THREE.TSL.uniform(0),{renderer,reflections:{
 gi.setSettings({mode:'combined',gain:0,denoise:0,temporal:false,slices:1,steps:2});
 const pipeline=new THREE.RenderPipeline(renderer);
 window.reflectionAssay={
+ async adaptiveStudy({settings,width=512,height=384,frames=6,measure=false,timingSamples=12}){
+  if(!Number.isSafeInteger(frames)||frames<1)throw Error('Positive explicit frame count required');
+  const oldCamera=camera.clone(),oldMap=floor.material.roughnessMap;
+  const texels=new Uint8Array(64*4);for(let x=0;x<64;x++)texels.set([255,x<32?230:16,255,255],x*4);
+  const map=new THREE.DataTexture(texels,64,1);map.magFilter=map.minFilter=THREE.NearestFilter;map.needsUpdate=true;
+  const bars=new THREE.Group();
+  for(let i=0;i<16;i++){const m=new THREE.Mesh(new THREE.PlaneGeometry(.045,1.2),new THREE.MeshBasicMaterial({color:i%2?0x00ffff:0xffffff}));m.position.set(-.4+i*.05,.66,.356);bars.add(m);}scene.add(bars);
+  const unpack=async(target,attachment=0)=>{
+   const data=await renderer.readRenderTargetPixelsAsync(target,0,0,target.width,target.height,attachment),row=target.height>1?(data.length-target.width*4)/(target.height-1):target.width*4;
+   if(!Number.isInteger(row)||row<target.width*4)throw Error('Invalid readback layout');
+   const pixels=[];for(let y=0;y<target.height;y++)for(let x=0;x<target.width*4;x++)pixels.push(THREE.DataUtils.fromHalfFloat(data[y*row+x]));return {width:target.width,height:target.height,pixels};
+  };
+  try{
+   renderer.setSize(width,height);camera.aspect=width/height;camera.updateProjectionMatrix();
+   floor.material.roughness=1;floor.material.roughnessMap=map;floor.material.needsUpdate=true;
+   camera.position.set(2,2,4);camera.lookAt(0,.5,0);camera.updateMatrixWorld();
+   gi.reflections.setSettings(settings);gi.reflections.reset('adaptive-study');pipeline.outputNode=gi.output();pipeline.needsUpdate=true;
+   const replay=[];for(let i=0;i<frames;i++){camera.position.x=2+i*.015;camera.lookAt(0,.5,0);camera.updateMatrixWorld();await new Promise(requestAnimationFrame);pipeline.render();await renderer.backend.device.queue.onSubmittedWorkDone();replay.push({camera:camera.position.toArray(),state:gi.reflections.state()});}
+   let timing=null;
+   if(measure)timing=await measureSceneGpu(renderer,{samples:timingSamples,getSignature:()=>JSON.stringify(gi.reflections.settings),drawFrame:()=>{pipeline.render();return {drawn:true,frame:renderer.info.frame};}});
+   const canvas=await unpack(gi.beauty.renderTarget),coarse=await unpack(gi.reflections.raw,1),detail=gi.reflections.adaptive.value?await unpack(gi.reflections.detail.raw,1):null;
+   return {canvas,coarse,detail,timing,replay,image:renderer.domElement.toDataURL(),state:gi.reflections.state()};
+  }finally{bars.removeFromParent();bars.traverse(m=>{m.geometry?.dispose();m.material?.dispose();});map.dispose();floor.material.roughnessMap=oldMap;floor.material.needsUpdate=true;camera.copy(oldCamera);camera.updateMatrixWorld();renderer.setSize(W,H);gi.reflections.reset('adaptive-study-disposed');}
+ },
  async samplingFrames({settings,roughness=.35,views,boxPositions=null,resetBefore=false}){
   if(!Array.isArray(views)||!views.length)throw Error('Explicit replay camera sequence required');
   if(boxPositions&&(!Array.isArray(boxPositions)||boxPositions.length!==views.length))throw Error('Block replay must match the camera sequence');

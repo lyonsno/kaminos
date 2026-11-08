@@ -117,3 +117,10 @@ test('legacy scene restoration uses the renderer-owned writer without leaking it
   assert.deepEqual(writes,reflections?[reflections]:[]);assert.deepEqual(resets,['scene-restored']);
  }
 });
+
+test('adaptive detail has independent persistent spatial quality and can release its extra field',()=>{
+ const defaults=resolveReflectionSettings();assert.equal(defaults.adaptive,true);assert.equal(defaults.sharpResolutionScale,1);
+ for(const bad of [{adaptive:'yes'},{sharpResolutionScale:0},{sharpResolutionScale:1.1}])assert.throws(()=>resolveReflectionSettings(bad));
+ const {field}=fieldFixture();
+ try{field.setSettings({resolutionScale:.15,sharpResolutionScale:1,adaptive:true});assert.equal(field.state().denseFieldActive,true);field.setSettings({sharpResolutionScale:.15});assert.equal(field.state().denseFieldActive,false);field.setSettings({sharpResolutionScale:1,adaptive:false});assert.equal(field.state().denseFieldActive,false);}finally{field.dispose();}
+});

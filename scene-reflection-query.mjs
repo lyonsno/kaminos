@@ -162,12 +162,13 @@ fn sampleSceneReflectionPayload(
   if (d >= 1.0 || nr.w >= roughnessCutoff || dot(nr.xyz, nr.xyz) < 0.5) { return mat4x4<f32>(vec4<f32>(0.0),vec4<f32>(0.0),vec4<f32>(0.0),vec4<f32>(0.0)); }
   let p = reflectionViewPosition(uv, d, inverseProjection); let n = normalize(nr.xyz);
   let origin = p + n * max(0.002, abs(p.z) * 0.0002);
-  var result=vec4<f32>(0.0);var distanceSum=0.0;var distanceSquared=0.0;var moment=0.0;var momentSquared=0.0;
+  var result=vec4<f32>(0.0);var distanceSum=0.0;var distanceSquared=0.0;var moment=0.0;var momentSquared=0.0;var tracedRays=0.0;
   for(var i=0u;i<samples;i++) {
     let direction = reflectionGGX(normalize(-p), n, nr.w, reflectionSamplePoint(i,samples,vec2<u32>(pixel),frame,stable));
     if (dot(direction, n) <= 0.0) { continue; }
+    tracedRays+=1.0;
     let hit = traceSceneReflection(origin, direction, depthMap, colorMap, colorSampler, normalMap, projection, inverseProjection,
-      maxDistance, thickness, nearPlane, steps, refinementSteps, normalize(-p), n, nr.w,f32(samples)*select(25.0/3.0,1.0,stable));
+      maxDistance, thickness, nearPlane, steps, refinementSteps, normalize(-p), n, nr.w,f32(samples)*select(mix(1.0,25.0/3.0,smoothstep(.06,.2,nr.w)),1.0,stable));
     let value=vec4<f32>(hit.radiance * hit.confidence, hit.confidence);
     result+=value;distanceSum+=hit.distance*hit.confidence;distanceSquared+=hit.distance*hit.distance*hit.confidence;
     let brightness=dot(value.rgb,vec3<f32>(0.2126,0.7152,0.0722));moment+=brightness;momentSquared+=brightness*brightness;
@@ -176,6 +177,6 @@ fn sampleSceneReflectionPayload(
   let distanceVariance=max(0.0,distanceSquared/max(result.a,0.00001)-meanDistance*meanDistance);
   let brightness=moment/f32(samples);let variance=max(0.0,momentSquared/f32(samples)-brightness*brightness);
   // Log moments retain the HDR/world-distance range in finite half-float MRTs.
-  return mat4x4<f32>(result/f32(samples),vec4<f32>(log2(1.0+meanDistance),log2(1.0+distanceVariance),log2(1.0+variance),0.0),vec4<f32>(0.0),vec4<f32>(0.0));
+  return mat4x4<f32>(result/f32(samples),vec4<f32>(log2(1.0+meanDistance),log2(1.0+distanceVariance),log2(1.0+variance),tracedRays),vec4<f32>(0.0),vec4<f32>(0.0));
 }
 `;
