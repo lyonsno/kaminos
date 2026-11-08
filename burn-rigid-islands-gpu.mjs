@@ -2,7 +2,7 @@ import {BURN_RIGID_CONTACT_WGSL} from './burn-rigid-contact.mjs';
 
 export const BURN_RIGID_ISLANDS_WGSL=BURN_RIGID_CONTACT_WGSL+`
 struct Island {center:vec4f,velocity:vec4f,angular:vec4f,inertia:array<vec4f,3>,inverse:array<vec4f,3>,before:vec4f,delta:vec4f}
-struct Contact {point:vec4f,normal:vec4f,impulse:vec4f,bias:vec4f}
+struct Contact {point:vec4f,normal:vec4f,impulse:vec4f,bias:vec4f,key:vec4u}
 struct Params {counts:vec4u,gravityDt:vec4f}
 struct Pseudo {linear:vec4f,angular:vec4f}
 @group(0) @binding(0) var<storage,read_write> positions:array<vec4f>;
@@ -33,25 +33,43 @@ fn rootOf(start:u32)->u32{var i=start;loop{let next=links[i].x;if(next==i){break
 }
 @compute @workgroup_size(64) fn aggregate(@builtin(global_invocation_id) id:vec3u){
  let r=id.x;if(r>=p.counts.x||links[r].x!=r||links[r].y==END){return;}
- var mass=0.0;var center=vec3f(0);var linear=vec3f(0);var i=links[r].y;
- loop{if(i==END){break;}let m=1.0/positions[i].w;mass+=m;center+=positions[i].xyz*m;linear+=velocities[i].xyz*m;i=links[i].z;}
+ var mass=0.0;var center=vec3f(0);var linear=vec3f(0);var i=links[r].y;var members=0u;
+ loop{if(i==END){break;}let m=1.0/positions[i].w;mass+=m;center+=positions[i].xyz*m;linear+=velocities[i].xyz*m;members++;i=links[i].z;}
  center/=mass;linear/=mass;var inertia=mat3x3f(vec3f(0),vec3f(0),vec3f(0));var momentum=vec3f(0);i=links[r].y;
  loop{if(i==END){break;}let m=1.0/positions[i].w;let offset=positions[i].xyz-center;let body=rigidBoxInertia(rotations[i],boxes[i].yzw,m);
   inertia+=body+(rigidIdentity()*dot(offset,offset)-rigidOuter(offset,offset))*m;momentum+=body*angular[i].xyz+cross(offset,(velocities[i].xyz-linear)*m);i=links[i].z;
  }
- let inverse=rigidInverse(inertia);islands[r].center=vec4f(center,mass);islands[r].before=vec4f(center,0);islands[r].velocity=vec4f(linear,0);islands[r].angular=vec4f(inverse*momentum,0);
+ let inverse=rigidInverse(inertia);islands[r].center=vec4f(center,mass);islands[r].before=vec4f(center,f32(members));islands[r].velocity=vec4f(linear,0);islands[r].angular=vec4f(inverse*momentum,0);
  for(var k=0u;k<3u;k++){islands[r].inertia[k]=vec4f(inertia[k],0);islands[r].inverse[k]=vec4f(inverse[k],0);}islands[r].delta=vec4f(0,0,0,1);
 }
+// Match contact points one-to-one, never carrying reactions across compound
+// splits or a lost manifold. Position-correction impulses are not persistent.
+fn cachedManifold(previous:array<Contact,8>,manifold:RigidManifold,key:vec4u,reach:f32)->array<Contact,8>{
+ var out:array<Contact,8>;var used:array<bool,8>;
+ for(var k=0u;k<manifold.count;k++){
+  var c:Contact;c.point=manifold.points[k];c.normal=vec4f(manifold.normal,1);c.key=key;
+  var matched=END;var distance=reach*reach;
+  for(var j=0u;j<8u;j++){let old=previous[j];if(used[j]||old.normal.w==0.0||any(old.key!=key)||dot(old.normal.xyz,manifold.normal)<.99){continue;}
+   let delta=old.point.xyz-c.point.xyz;let d=dot(delta,delta);if(d<distance){distance=d;matched=j;}
+  }
+  if(matched!=END){used[matched]=true;let old=previous[matched].impulse;let tangent=old.xyz-manifold.normal*dot(old.xyz,manifold.normal);c.impulse=vec4f(tangent,old.w);}
+  out[k]=c;
+ }
+ return out;
+}
 @compute @workgroup_size(64) fn findContacts(@builtin(global_invocation_id) id:vec3u){
- let pair=id.x;if(pair>=p.counts.x*p.counts.z){return;}for(var k=0u;k<8u;k++){contacts[pair*8u+k]=Contact(vec4f(0),vec4f(0),vec4f(0),vec4f(0));}
+ let pair=id.x;if(pair>=p.counts.x*p.counts.z){return;}var previous:array<Contact,8>;
+ for(var k=0u;k<8u;k++){previous[k]=contacts[pair*8u+k];contacts[pair*8u+k]=Contact();}
  let i=pair/p.counts.z;let s=pair%p.counts.z;if(positions[i].w<=0.0){return;}let island=islands[links[i].x];let half=boxes[i].yzw;
  let margin=(length(island.velocity.xyz)+length(island.angular.xyz)*(length(positions[i].xyz-island.center.xyz)+length(half))+length(p.gravityDt.xyz)*p.gravityDt.w)*p.gravityDt.w;
  let manifold=rigidManifold(RigidBox(positions[i],rotations[i],vec4f(half,0)),supports[s],margin);
- for(var k=0u;k<manifold.count;k++){contacts[pair*8u+k].point=manifold.points[k];contacts[pair*8u+k].normal=vec4f(manifold.normal,1);}
+ let current=cachedManifold(previous,manifold,vec4u(links[i].x,u32(island.before.w),END,s),min(half.x,min(half.y,half.z))*.25);
+ for(var k=0u;k<8u;k++){contacts[pair*8u+k]=current[k];}
 }
 fn rigidEffective(inverse:mat3x3f,arm:vec3f,n:vec3f,inverseMass:f32)->f32{return inverseMass+dot(n,cross(inverse*cross(arm,n),arm));}
 @compute @workgroup_size(64) fn findMutual(@builtin(global_invocation_id) id:vec3u){
  let pair=id.x;if(pair>=p.counts.x*(p.counts.x-1u)/2u){return;}
+ var previous:array<Contact,8>;for(var k=0u;k<8u;k++){previous[k]=mutual[pair*8u+k];mutual[pair*8u+k]=Contact();}
  let ids=pairs[pair];let a=ids.x;let b=ids.y;if(a>=p.counts.x||b>=p.counts.x||positions[a].w<=0.0||positions[b].w<=0.0||links[a].x==links[b].x){return;}
  let ia=islands[links[a].x];let ib=islands[links[b].x];let ha=boxes[a].yzw;let hb=boxes[b].yzw;
  let speed=length(ia.velocity.xyz-ib.velocity.xyz)+length(ia.angular.xyz)*(length(positions[a].xyz-ia.center.xyz)+length(ha))+length(ib.angular.xyz)*(length(positions[b].xyz-ib.center.xyz)+length(hb));
@@ -59,7 +77,8 @@ fn rigidEffective(inverse:mat3x3f,arm:vec3f,n:vec3f,inverseMass:f32)->f32{return
  if(length(positions[a].xyz-positions[b].xyz)>length(ha)+length(hb)+margin){return;}
  let manifold=rigidManifold(RigidBox(positions[a],rotations[a],vec4f(ha,0)),RigidBox(positions[b],rotations[b],vec4f(hb,0)),margin);
  if(manifold.count==0u){return;}let slot=atomicAdd(&activePairs[0],1u);atomicStore(&activePairs[1u+slot*2u],pair);atomicStore(&activePairs[2u+slot*2u],manifold.count);
- for(var k=0u;k<manifold.count;k++){mutual[pair*8u+k]=Contact(manifold.points[k],vec4f(manifold.normal,1),vec4f(0),vec4f(0));}
+ let current=cachedManifold(previous,manifold,vec4u(links[a].x,u32(ia.before.w),links[b].x,u32(ib.before.w)),min(min(ha.x,min(ha.y,ha.z)),min(hb.x,min(hb.y,hb.z)))*.25);
+ for(var k=0u;k<8u;k++){mutual[pair*8u+k]=current[k];}
 }
 fn islandInverse(r:u32)->mat3x3f{return mat3x3f(islands[r].inverse[0].xyz,islands[r].inverse[1].xyz,islands[r].inverse[2].xyz);}
 fn applyReaction(r:u32,arm:vec3f,impulse:vec3f,correction:vec3f){
@@ -79,7 +98,8 @@ fn solvePair(a:u32,b:u32,input:Contact,friction:f32)->Contact{
  applyReaction(a,aa,impulse,correction);if(b!=END){applyReaction(b,ab,-impulse,-correction);}
  relative=pointSpeed(a,aa);if(b!=END){relative-=pointSpeed(b,ab);}let vt=relative-n*dot(relative,n);let speed=length(vt);
  var next=c.impulse.xyz;
- if(speed>1e-10){let tangent=vt/speed;next-=tangent*(speed/(rigidEffective(ia,aa,tangent,ma)+rigidEffective(ib,ab,tangent,mb)));let limit=friction*normal;if(length(next)>limit){next*=limit/max(length(next),1e-30);}}
+ if(speed>1e-10){let tangent=vt/speed;next-=tangent*(speed/(rigidEffective(ia,aa,tangent,ma)+rigidEffective(ib,ab,tangent,mb)));}
+ let limit=friction*normal;if(length(next)>limit){next*=limit/max(length(next),1e-30);}
  let change=next-c.impulse.xyz;applyReaction(a,aa,change,vec3f(0));if(b!=END){applyReaction(b,ab,-change,vec3f(0));}
  c.impulse=vec4f(next,normal);c.bias.w=bias;return c;
 }
@@ -88,6 +108,12 @@ fn solvePair(a:u32,b:u32,input:Contact,friction:f32)->Contact{
 // elastic joints, restitution, physical penetration velocity or runtime readback.
 @compute @workgroup_size(1) fn solveMutual(){
  for(var r=0u;r<p.counts.x;r++){if(links[r].x!=r||links[r].y==END){continue;}islands[r].velocity+=vec4f(p.gravityDt.xyz*p.gravityDt.w,0);pseudo[r]=Pseudo(vec4f(0),vec4f(0));}
+ for(var member=0u;member<p.counts.x;member++){if(links[member].w==0u){continue;}let r=links[member].x;
+  for(var s=0u;s<p.counts.z;s++){for(var k=0u;k<8u;k++){let c=contacts[(member*p.counts.z+s)*8u+k];if(c.normal.w>0.0){applyReaction(r,c.point.xyz-islands[r].center.xyz,c.normal.xyz*c.impulse.w+c.impulse.xyz,vec3f(0));}}}
+ }
+ for(var slot=0u;slot<atomicLoad(&activePairs[0]);slot++){let pair=atomicLoad(&activePairs[1u+slot*2u]);let ids=pairs[pair];let a=links[ids.x].x;let b=links[ids.y].x;
+  for(var k=0u;k<atomicLoad(&activePairs[2u+slot*2u]);k++){let c=mutual[pair*8u+k];let impulse=c.normal.xyz*c.impulse.w+c.impulse.xyz;applyReaction(a,c.point.xyz-islands[a].center.xyz,impulse,vec3f(0));applyReaction(b,c.point.xyz-islands[b].center.xyz,-impulse,vec3f(0));}
+ }
  for(var iteration=0u;iteration<p.counts.w;iteration++){
   for(var member=0u;member<p.counts.x;member++){if(links[member].w==0u){continue;}let r=links[member].x;
    for(var s=0u;s<p.counts.z;s++){for(var k=0u;k<8u;k++){let ci=(member*p.counts.z+s)*8u+k;if(contacts[ci].normal.w>0.0){contacts[ci]=solvePair(r,END,contacts[ci],supports[s].half.w);}}}
@@ -107,6 +133,8 @@ fn solvePair(a:u32,b:u32,input:Contact,friction:f32)->Contact{
  let dt=p.gravityDt.w;let center=islands[r].center.xyz;let im=1.0/islands[r].center.w;
  let inverse=mat3x3f(islands[r].inverse[0].xyz,islands[r].inverse[1].xyz,islands[r].inverse[2].xyz);
  var v=islands[r].velocity.xyz+p.gravityDt.xyz*dt;var w=islands[r].angular.xyz;var pv=vec3f(0);var pw=vec3f(0);
+ var cached=links[r].y;
+ loop{if(cached==END){break;}for(var s=0u;s<p.counts.z;s++){for(var k=0u;k<8u;k++){let c=contacts[(cached*p.counts.z+s)*8u+k];if(c.normal.w>0.0){let impulse=c.normal.xyz*c.impulse.w+c.impulse.xyz;v+=impulse*im;w+=inverse*cross(c.point.xyz-center,impulse);}}}cached=links[cached].z;}
  for(var iteration=0u;iteration<p.counts.w;iteration++){
   var member=links[r].y;
   loop{if(member==END){break;}
@@ -115,9 +143,10 @@ fn solvePair(a:u32,b:u32,input:Contact,friction:f32)->Contact{
     let n=c.normal.xyz;let arm=c.point.xyz-center;let effective=rigidEffective(inverse,arm,n,im);let normalSpeed=-max(c.point.w,0.0)/dt;
     let impulse=max(0.0,c.impulse.w+(normalSpeed-dot(v+cross(w,arm),n))/effective);let change=n*(impulse-c.impulse.w);v+=change*im;w+=inverse*cross(arm,change);c.impulse.w=impulse;
     let cv=v+cross(w,arm);let vt=cv-n*dot(cv,n);let speed=length(vt);
-    if(speed>1e-10){let tangent=vt/speed;let old=c.impulse.xyz;var next=old-tangent*(speed/rigidEffective(inverse,arm,tangent,im));let limit=supports[s].half.w*impulse;
-     if(length(next)>limit){next*=limit/max(length(next),1e-30);}let friction=next-old;v+=friction*im;w+=inverse*cross(arm,friction);c.impulse=vec4f(next,impulse);
-    }
+    let old=c.impulse.xyz;var next=old;
+    if(speed>1e-10){let tangent=vt/speed;next-=tangent*(speed/rigidEffective(inverse,arm,tangent,im));}
+    let limit=supports[s].half.w*impulse;if(length(next)>limit){next*=limit/max(length(next),1e-30);}
+    let friction=next-old;v+=friction*im;w+=inverse*cross(arm,friction);c.impulse=vec4f(next,impulse);
     // Position correction is a separate, non-physical velocity. It never
     // becomes the next frame's physical velocity or launches a resting body.
     let biasTarget=max(-c.point.w,0.0)/dt;let bias=max(0.0,c.bias.w+(biasTarget-dot(pv+cross(pw,arm),n))/effective);let correction=n*(bias-c.bias.w);
@@ -142,11 +171,11 @@ export async function createBurnRigidIslandsGpu({device,positions,rotations,velo
  const allocate=(label,size,usage=GPUBufferUsage.STORAGE)=>{const b=device.createBuffer({label,size:Math.max(16,size),usage:usage|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC});owned.push(b);return b;};
  try{
   device.pushErrorScope('validation');validationScope=true;
-  const links=allocate('Resident burn connected components',bodies*16),islands=allocate('Resident compound mass and full inertia',bodies*176),contacts=allocate('Finite compound support manifolds',Math.max(64,bodies*supports.length*8*64)),supportBuffer=allocate('Finite rigid supports',Math.max(48,supports.length*48)),params=allocate('Rigid island topology and clock',32,GPUBufferUsage.UNIFORM);
+  const links=allocate('Resident burn connected components',bodies*16),islands=allocate('Resident compound mass and full inertia',bodies*176),contacts=allocate('Finite compound support manifolds',Math.max(80,bodies*supports.length*8*80)),supportBuffer=allocate('Finite rigid supports',Math.max(48,supports.length*48)),params=allocate('Rigid island topology and clock',32,GPUBufferUsage.UNIFORM);
   const pairCount=mutualContacts?bodies*(bodies-1)/2:0,pairData=new Uint32Array(Math.max(2,pairCount*2));let at=0;
   for(let a=0;mutualContacts&&a<bodies;a++)for(let b=a+1;b<bodies;b++){pairData[at++]=a;pairData[at++]=b;}
   if(!pairCount)pairData.fill(0xffffffff);
-  const pairBuffer=allocate('All unordered burn region pairs',pairData.byteLength),mutual=allocate('Mutual compound manifolds',Math.max(64,pairCount*8*64)),pseudo=allocate('Nonphysical compound position correction',bodies*32);device.queue.writeBuffer(pairBuffer,0,pairData);
+  const pairBuffer=allocate('All unordered burn region pairs',pairData.byteLength),mutual=allocate('Mutual compound manifolds',Math.max(80,pairCount*8*80)),pseudo=allocate('Nonphysical compound position correction',bodies*32);device.queue.writeBuffer(pairBuffer,0,pairData);
   const activePairs=allocate('Uncapped active burn region pairs',(1+pairCount*2)*4);
   const raw=new ArrayBuffer(32),u=new Uint32Array(raw),f=new Float32Array(raw);u.set([bodies,bonds,supports.length,iterations]);f.set([...gravity,timeStep],4);
   const uploadParams=()=>device.queue.writeBuffer(params,0,raw);
