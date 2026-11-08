@@ -89,7 +89,7 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
         const view=readView();
         if(view){
           if(!Array.isArray(view.matrix)||view.matrix.length!==16||!view.matrix.every(Number.isFinite)||!Array.isArray(view.viewport)||view.viewport.length!==2||!view.viewport.every(n=>Number.isFinite(n)&&n>0)||!Number.isFinite(view.targetPixels??3)||(view.targetPixels??3)<=0)throw Error('Invalid ash detail projection');
-          floats.set(view.matrix,16);floats.set([...view.viewport,view.targetPixels??3,1],32);
+          floats.set(view.matrix,16);floats.set([...view.viewport,policy?.targetPixels??view.targetPixels??3,1],32);
         }
         const key=JSON.stringify(view);ints[14]=key!==lastViewKey?1:0;lastViewKey=key;
       }
@@ -131,7 +131,11 @@ export async function createGpuRefinedAsh({renderer,cellSize,bounds,tileSize=16,
           prolong();collision();
         }};
         collision();release('hierarchy_release_begin');cascade();
-        for(const priority of [1,2]){dispatch(encoder,'hierarchy_pressure_reset');dispatch(encoder,'hierarchy_pressure',Math.ceil(p.tiles.count*8/64));release('hierarchy_reclaim_'+priority);if(cold)cascade([4,3]);}
+        const pressure=()=>{dispatch(encoder,'hierarchy_pressure_reset');dispatch(encoder,'hierarchy_pressure',Math.ceil(p.tiles.count*8/64));};
+        for(const priority of [1,2]){pressure();release('hierarchy_reclaim_'+priority);cascade([4,3]);}
+        // Preserve free capacity for newly exposed geometry/balance demand
+        // until the next bounded planning wave can service it.
+        pressure();
         dispatch(encoder,'hierarchy_allocate_2',Math.ceil(p.tiles.count*8/64));dispatch(encoder,'hierarchy_allocate_1',Math.ceil(p.tiles.count*8/64));
         prolong();collision();dispatch(encoder,'hierarchy_reschedule',Math.ceil(p.tiles.count*8/64));
         return;

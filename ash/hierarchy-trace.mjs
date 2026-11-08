@@ -23,7 +23,9 @@ fn ash_trace_segment(startPoint:vec3<f32>,endPoint:vec3<f32>)->vec4<i32>{
    if(delta[axis]!=0.0){let edge=f32(c.lower[axis])+select(0.0,f32(c.size),delta[axis]>0.0);boundary[axis]=(edge-a[axis])/delta[axis];}
   }
   let next=min(boundary.x,min(boundary.y,boundary.z));if(next>1.0){break;}
-  var nextQ=vec3<i32>(floor(a+delta*next));
+  // The other axes may round onto a face we already crossed. Keep them in
+  // this cell; only an axis whose boundary we reached may leave it.
+  var nextQ=clamp(vec3<i32>(floor(a+delta*next)),c.lower,c.lower+vec3<i32>(i32(c.size)-1));
   for(var axis=0u;axis<3u;axis++){if(boundary[axis]<=next){nextQ[axis]=c.lower[axis]+select(-1,i32(c.size),delta[axis]>0.0);}}
   q=nextQ;t=next;
  }

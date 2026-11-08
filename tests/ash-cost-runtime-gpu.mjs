@@ -20,5 +20,12 @@ await withKaminosGpu(async ctx=>{
   await compareAshCornerCache({ctx,patch,attributes,source});const coated=await patch.snapshot();
   patch.setRefinementPolicy({...patch.layout.refinement,maxDepth:0,depthBudgetMiB:[0],planningRounds:1});for(let n=0;n<3;n++)patch.step();const history=await patch.snapshot();assert.ok(Math.abs(history.retainedVolume-coated.retainedVolume)<1e-9,'lowering new-detail limits preserves material history');
   console.log(JSON.stringify({source,stationaryPassBound:24,allocation:patch.read().allocatedBytes,conserved:history.retainedVolume}));
+  patch.dispose();patch=await createGpuRefinedAsh({renderer,cellSize:.0025,bounds:{min:[0,0,0],max:[.32,.32,.32]},refinement:{mode:'hierarchy',ratio:2,backgroundCellSize:.08,budgetMiB:2,airBudgetMiB:.25,maxDepth:0},sceneRecords:()=>[{id:'rail',object:rail}]});patch.syncScene();
+  assert.equal((await patch.diagnostics()).hierarchy.deepest,0,'the initial zero-depth ceiling is effective');
+  patch.setRefinementPolicy({...patch.layout.refinement,maxDepth:5,planningRounds:2,depthBudgetMiB:[null,0,0,0,0,0]});
+  patch.step();assert.equal((await patch.diagnostics()).hierarchy.deepest,0,'a zero depth target blocks new detail despite free shared storage');
+  patch.setRefinementPolicy({...patch.layout.refinement,maxDepth:5,planningRounds:1,targetPixels:2,depthBudgetMiB:[null,2,2,2,2,2]});
+  for(let n=0;n<12;n++){patch.step();await device.queue.onSubmittedWorkDone();}
+  const raised=await patch.diagnostics();assert.equal(raised.hierarchy.deepest,5,'raising depth and quotas must converge without collider or camera motion');assert.equal(patch.read().planning.planningRounds,1);assert.equal(patch.read().planning.targetPixels,2);
  });}finally{patch?.dispose();rail.geometry.dispose();rail.material.dispose();}
 });

@@ -85,8 +85,8 @@ fn ht_supports_finer(t:u32)->bool{
 }
 @compute @workgroup_size(1) fn hierarchy_release_begin(){atomicStore(&arena[${a.state}u],0u);atomicStore(&arena[${a.state+9}u],HT_DEPTH);atomicStore(&arena[${a.state+12}u],0u);}
 @compute @workgroup_size(1) fn hierarchy_release_next(){let d=ht_load(${a.state+9}u);atomicStore(&arena[${a.state+9}u],select(0u,d-1u,d>0u));}
-@compute @workgroup_size(1) fn hierarchy_pressure_reset(){atomicStore(&arena[${a.state+11}u],0u);}
-@compute @workgroup_size(64) fn hierarchy_pressure(@builtin(global_invocation_id) id:vec3<u32>){let c=id.x;if(c<ASH_TILE_COUNT*8u&&ht_load(${a.state+7}u)==1u&&ht_score(c)>=3u&&ht_load(${a.children}u+c)==0u){atomicStore(&arena[${a.state+11}u],1u);}}
+@compute @workgroup_size(1) fn hierarchy_pressure_reset(){atomicStore(&arena[${a.state+11}u],0u);atomicStore(&arena[${a.state+14}u],0u);}
+@compute @workgroup_size(64) fn hierarchy_pressure(@builtin(global_invocation_id) id:vec3<u32>){let c=id.x;if(c>=ASH_TILE_COUNT*8u||ht_load(${a.state+7}u)!=1u||ht_load(${a.children}u+c)!=0u){return;}let score=ht_score(c);if(score<3u){return;}let depth=ht_load(${a.nodes}u+c/8u*8u+4u)+1u;if(score!=4u&&ht_load(${a.resident}u+depth)>=ht_load(${a.policy+4}u+depth)){return;}atomicStore(&arena[${a.state+14}u],1u);if(ht_load(${a.state}u)==0u){atomicStore(&arena[${a.state+11}u],1u);}}
 ${[1,2].map(priority=>`@compute @workgroup_size(1) fn hierarchy_reclaim_${priority}(){atomicStore(&arena[${a.state}u],0u);atomicStore(&arena[${a.state+9}u],HT_DEPTH);atomicStore(&arena[${a.state+12}u],${priority}u);}`).join('\n')}
 @compute @workgroup_size(64) fn hierarchy_release(@builtin(global_invocation_id) id:vec3<u32>){
  let slot=id.x;if(slot>=HT_CAP||ht_load(${a.state+7}u)==0u){return;}let t=HT_ROOTS+slot;
@@ -112,6 +112,7 @@ fn ht_balanced(candidate:u32,request:bool)->bool{
 fn ht_take()->u32{loop{let n=ht_load(${a.state}u);if(n==0u){return 0xffffffffu;}let r=atomicCompareExchangeWeak(&arena[${a.state}u],n,n-1u);if(r.exchanged){return ht_load(${a.free}u+n-1u);}}}
 fn ht_allocate(candidate:u32,score:u32){
  if(candidate>=ASH_TILE_COUNT*8u||ht_load(${a.state+7}u)!=1u||ht_score(candidate)!=score||ht_load(${a.children}u+candidate)!=0u){return;}
+ if(score<3u&&ht_load(${a.state+14}u)!=0u){return;}
  atomicAdd(&arena[${a.state+1}u],1u);if(!ht_balanced(candidate,false)){atomicAdd(&arena[${a.state+10}u],1u);return;}
  let claim=atomicCompareExchangeWeak(&arena[${a.children}u+candidate],0u,0xffffffffu);if(!claim.exchanged){return;}
  let depth=ht_load(${a.nodes}u+candidate/8u*8u+4u)+1u;let previous=atomicAdd(&arena[${a.resident}u+depth],1u);if(score!=4u&&previous>=ht_load(${a.policy+4}u+depth)){atomicSub(&arena[${a.resident}u+depth],1u);atomicStore(&arena[${a.children}u+candidate],0u);return;}

@@ -7,9 +7,10 @@ export function checkedHierarchyPolicy(refinement,depth,capacity){
  if(!Number.isSafeInteger(planningRounds)||planningRounds<1)throw Error('Invalid ash planning rounds');
  if(refinement.depthBudgetMiB!==undefined&&(!Array.isArray(refinement.depthBudgetMiB)||refinement.depthBudgetMiB.some(n=>n!==null&&(!Number.isFinite(n)||n<0))))throw Error('Invalid ash depth budget');
  if(refinement.transportCellSize!==undefined&&(!(refinement.transportCellSize>0)||!Number.isFinite(refinement.transportCellSize)))throw Error('Invalid ash transport cell width');
+ if(refinement.targetPixels!==undefined&&(!(refinement.targetPixels>0)||!Number.isFinite(refinement.targetPixels)))throw Error('Invalid ash projected detail target');
  const bytesPerBrick=512*28+32*6;
  const quotas=Array.from({length:depth+1},(_,d)=>refinement.depthBudgetMiB?.[d]==null?capacity:Math.min(capacity,Math.floor(refinement.depthBudgetMiB[d]*1048576/bytesPerBrick)));
- return {maxDepth,planningRounds,quotas};
+ return {maxDepth,planningRounds,quotas,targetPixels:refinement.targetPixels??null};
 }
 export const hierarchyLivePolicyKeys=['maxDepth','planningRounds','depthBudgetMiB','targetPixels'];
 export function sameHierarchyStorage(a,b){const strip=s=>Object.fromEntries(Object.entries(s??{}).filter(([key])=>!hierarchyLivePolicyKeys.includes(key)));return JSON.stringify(strip(a))===JSON.stringify(strip(b));}
