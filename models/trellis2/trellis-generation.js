@@ -157,7 +157,7 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
   };
   return Object.freeze({runtime,routeId:route.routeId,inputs:Object.freeze({conditioning:conditioningTensor,highResolutionConditioning:highResolutionConditioningTensor}),
     get state(){return state;},get phase(){return phase;},get noiseInputs(){return Object.freeze({...noiseInputs});},
-    get outputs(){return result;},get previewDelivery(){return Object.freeze({...previewDelivery});},
+    get outputs(){return result;},get previewDelivery(){return Object.freeze(previewDelivery.status==='pending'&&state!=='running'?{status:'expired'}:{...previewDelivery});},
     // Final geometry/material decoder only; earlier cascade support and failures
     // outside decoder.run do not pretend to provide this diagnostic boundary.
     get decoderFailureContext(){return disposed||state!=='failed'?undefined:lastDecoder?.failureContext;},

@@ -248,7 +248,7 @@ adds `spatial.cellCenterOffset`, then applies `spatial.gridToSource` (scale,
 then offset). `spatial.sourceToGltf` is the column-major node transform used by
 the ordinary geometry exporter, separate from the unmodified raw components.
 The live event and generation's `coordinateBytesToCPUDuringServing` report zero;
-no observer adds neither buffer/readback work nor decoding. Intermediate
+with no observer there is no preview buffer/readback work or decoding. Intermediate
 sampler tensors remain latents, not evolving occupancy.
 
 For an explicit capture/export boundary, `readTrellisOccupancyPreview` in

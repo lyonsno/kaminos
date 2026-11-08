@@ -66,7 +66,7 @@ test('a never-settling LAST observer does not gate final model output',async()=>
  // turn is a deterministic sentinel, not a production timeout or preview deadline.
  await new Promise(setImmediate);
  assert.equal(failure,undefined);assert.equal(completed,true,'optional preview must not hold model or final decode');
- const out=await pending;assert.equal(validDuringDelivery,true);assert.equal(out.previewDelivery.status,'expired');assert.equal(out.coordinateBytesToCPUDuringServing,0);assert.ok(f.reads.every(r=>r.t.dtype==='u32'),'live delivery must not launch a coordinate readback');
+ const out=await pending;assert.equal(validDuringDelivery,true);assert.equal(out.previewDelivery.status,'expired');assert.equal(f.adapter.previewDelivery.status,'expired');assert.equal(out.coordinateBytesToCPUDuringServing,0);assert.ok(f.reads.every(r=>r.t.dtype==='u32'),'live delivery must not launch a coordinate readback');
  assert.ok(preview.coordinates.buffer);assert.equal(preview.coordinates.dtype,'i32');assert.deepEqual(preview.coordinates.shape,[3,3]);
  assert.equal(preview.device,f.runtime.device);assert.equal(preview.isCurrent(),false,'completed generation invalidates a late preview');
  f.adapter.dispose();assert.equal(preview.isCurrent(),false);
@@ -91,4 +91,10 @@ test('no observer retains scalar-only coordinate reads',async()=>{
 test('a synchronous optional observer exception is diagnostic and cannot poison model output',async()=>{
  const f=composition(()=>{throw Error('sync display failed');});const out=await f.adapter.run(invocation);
  assert.ok(out.geometry);assert.equal(out.previewDelivery.status,'failed');assert.equal(f.adapter.previewDelivery.error.message,'sync display failed');f.adapter.dispose();
+});
+
+test('a preview becomes invalid when later shape generation fails',async()=>{
+ let preview;const f=composition(p=>{preview=p;});const kernel=f.runtime.runKernel;
+ f.runtime.runKernel=async(k,o)=>{if(preview)throw Error('later model failure');return kernel(k,o);};
+ await assert.rejects(f.adapter.run(invocation),/later model failure/);assert.equal(preview.isCurrent(),false);assert.equal(f.adapter.state,'failed');f.adapter.dispose();
 });
