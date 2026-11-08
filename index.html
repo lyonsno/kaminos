@@ -27827,7 +27827,10 @@ async function addAuthoredFireUnit(options={}) {
  if(source.emitterSourceLaw!=='immersed-source')throw Error('Select an immersed-source flame basin before adding an independent fire simulation');
  const unitScale=options.scale??template?.root.scale.x??(activeSceneComposition?flameDomainScale:1),offset=options.position??[controls.target.x+authoredFireUnits.size*2.5*unitScale,groundPlane.position.y+unitScale,controls.target.z];
  const pose={position:offset,rotation:[0,0,0],scale:[unitScale,unitScale,unitScale]};
- const emitter=options.emitter?structuredClone(options.emitter):moveLinkedFireEmitter(templateData?.emitter??flameEmitterPose,template?.pose()??{position:flameDomainTranslation,rotation:[0,0,0],scale:[flameDomainScale,flameDomainScale,flameDomainScale]},pose,true);
+ const fresh=options.controls!==undefined||options.settings!==undefined||options.emitter!==undefined;
+ if(fresh&&templateData){delete templateData.fineOffset;delete templateData.worldReferenceDims;}
+ const inheritedEmitter=moveLinkedFireEmitter(templateData?.emitter??flameEmitterPose,template?.pose()??{position:flameDomainTranslation,rotation:[0,0,0],scale:[flameDomainScale,flameDomainScale,flameDomainScale]},pose,true);
+ const emitter=options.emitter?structuredClone(options.emitter):fresh?flamePoseFromImmersedControls(source,offset,inheritedEmitter,unitScale):inheritedEmitter;
  const record=checkedFireUnitRecord({id,type:FIRE_UNIT_TYPE,source:FIRE_UNIT_SOURCE,fileName:'Fire simulation',label:options.label??'Fire simulation '+(authoredFireUnits.size+1),createdAt:new Date().toISOString(),
   transform:pose,fireUnit:{...templateData,controls:structuredClone(source),settings:options.settings??templateData?.settings??buildVolumeSettingsPreset(),emitter,moveEmitterWithGrid:templateData?.moveEmitterWithGrid??true}});
  const target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
