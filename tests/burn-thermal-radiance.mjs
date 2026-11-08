@@ -1,9 +1,17 @@
 // kaminos-test: node
 import {test} from 'node:test';import assert from 'node:assert/strict';
-import {surfaceThermalRadiance} from '../burn-thermal-radiance.mjs';
+import {surfaceThermalRadiance,createSurfaceThermalRadiance} from '../burn-thermal-radiance.mjs';
+import {TSL,NearestFilter} from '../lib/three.webgpu.js';
 import {thermalRadianceRGB} from '../volume-emissive-transport.mjs';
 import {LIVE_LOG_HEAT_TO_FLUID_HEAT,stepLiveLogThermal} from '../live-log-heat-core.mjs';
 import {linearLuminance} from '../volume-physical-color.mjs';
+test('resident thermal lookup leaves sampler slots for the composed surface',()=>{
+ const thermal=createSurfaceThermalRadiance(TSL.float(.7),TSL.float(1600)),maps=new Set();
+ thermal.node.traverse(node=>{if(node.isTextureNode)maps.add(node.value);});
+ assert.equal(maps.size,1,'one existing Planck table supplies both interpolation endpoints');
+ for(const map of maps){assert.equal(map.minFilter,NearestFilter,'explicit table interpolation must not allocate a filtering sampler');assert.equal(map.magFilter,NearestFilter);}
+ thermal.dispose();
+});
 test('surface incandescence uses the volume Planck spectrum and radiant power',()=>{
  assert.deepEqual(surfaceThermalRadiance(0),[0,0,0]);
  for(const kelvin of [900,1200,1600,1900,2600,4000]){
