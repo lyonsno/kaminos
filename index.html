@@ -3490,6 +3490,7 @@ import {clone as cloneSceneObjectHierarchy} from 'three/addons/utils/SkeletonUti
 import {checkedBurnable,checkedBurnAppearance} from './scene-burning-settings.mjs';
 import {resolveBurnableTarget} from './burnable-target.mjs';
 import {createSceneBurning} from './scene-burning.mjs';
+import {createSceneBurnContact} from './scene-burn-contact.mjs';
 import {createSceneBurnBody,originalBurnMaterial} from './scene-burn-body.mjs';
 import {createLogGasSourceGpu} from './live-log-gas-source.mjs';
 import { installSceneNavigation } from './scene-navigation.mjs';
@@ -28030,6 +28031,7 @@ function installSceneConstruction() {
   const burnResetBtn=document.createElement('button');burnResetBtn.type='button';burnResetBtn.className='btn';burnResetBtn.id='object-burn-reset';burnResetBtn.textContent='Reset to healthy';burnResetBtn.disabled=true;burnPanel.append(burnResetBtn);
   burnResetBtn.addEventListener('click',()=>{try{window.kaminosSceneAuthoring.resetBurnable(workingScene.activeObjectId);syncBurnableStatus();}catch(error){setInfo(error.message);}});
   sceneBurning=createSceneBurning({objects:()=>workingScene.objects,retained:()=>[...workingScene.retainedObjects(),...workingScene.suspendedObjects()],runtime:()=>activeSceneComposition?volumePrototype:null,
+    mechanics:createSceneBurnContact({renderer}),
     createGas:createLogGasSourceGpu,createBody:entry=>createSceneBurnBody({entry,renderer,scene,document,kelvinPerHeat:()=>Number(document.getElementById('volume-physical-kelvin-per-heat').value),ground:()=>({center:[groundPlane.position.x,groundPlane.position.y,groundPlane.position.z],height:groundPlane.position.y,radius:5,visible:groundPlane.visible}),onFrame:workbenchSceneFrames.onFrame,beautyLods:()=>sceneBeautyLods,resolveSurfaceGeometry:(e,opts)=>sceneColliderCollection.resolveBurnableSurface(e,opts)}),
     onError:error=>{setInfo('Combustion: '+error.message);console.error('Scene combustion',error);},dirty:()=>window._kaminosDirty?.()});
   workbenchSceneFrames.onFrame(()=>void sceneBurning.sync().then(syncBurnableStatus));

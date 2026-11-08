@@ -10,7 +10,7 @@ import {registerPresentedSurface} from './scene-presented-surface.mjs';
 export function createSceneBurnFracture({renderer,field,structure,debris,parent,ground,materials,
  createDynamics=createBurnFractureGpu,createSurface=createBurnFractureSurface}){
  const {mesh}=field.residentState(),hiddenMaterials=new Map(),hiddenObjects=new Map();
- let enabled=false,disposed=false,generation=0,status='off',error=null,pending=null,dynamics=null,surface=null,referenceScale=null,releasePresentation=null;
+ let enabled=false,disposed=false,generation=0,status='off',error=null,pending=null,dynamics=null,surface=null,referenceScale=null,releasePresentation=null,sharedContact=null,participant=null;
  function frame(){
   mesh.updateWorldMatrix(true,false);const inverse=mesh.matrixWorld.clone().invert(),g=ground();
   const worldScale=new Vector3().setFromMatrixScale(mesh.matrixWorld),s=worldScale.x;
@@ -19,7 +19,7 @@ export function createSceneBurnFracture({renderer,field,structure,debris,parent,
   const position=new Vector3(g.center[0],g.height-.05,g.center[2]).applyMatrix4(inverse),scale=new Vector3(),rotation=new Quaternion();inverse.decompose(new Vector3(),rotation,scale);
   return {scale:s,contactsEnabled:g.visible!==false,gravity:new Vector3(0,-9.81,0).applyMatrix3(new Matrix3().setFromMatrix4(inverse)).toArray(),support:{position:position.toArray(),quaternion:rotation.toArray(),halfExtents:[g.radius/s,.05/s,g.radius/s],friction:.6}};
  }
- function clear(){releasePresentation?.();releasePresentation=null;field.setRegionMotion(null);debris.setRegionMotion(null);surface?.dispose();surface=null;dynamics?.dispose();dynamics=null;referenceScale=null;for(const [material,visible] of hiddenMaterials)material.visible=visible;hiddenMaterials.clear();for(const [object,visible] of hiddenObjects)object.visible=visible;hiddenObjects.clear();}
+ function clear(){participant=null;sharedContact=null;releasePresentation?.();releasePresentation=null;field.setRegionMotion(null);debris.setRegionMotion(null);surface?.dispose();surface=null;dynamics?.dispose();dynamics=null;referenceScale=null;for(const [material,visible] of hiddenMaterials)material.visible=visible;hiddenMaterials.clear();for(const [object,visible] of hiddenObjects)object.visible=visible;hiddenObjects.clear();}
  function present(){if(!surface)return;mesh.updateWorldMatrix(true,false);parent.updateWorldMatrix(true,false);surface.mesh.matrix.copy(parent.matrixWorld).invert().multiply(mesh.matrixWorld);surface.mesh.updateWorldMatrix(false,false);}
  async function prepare(token){let candidate,view;try{
   await structure.setRequired(true);if(disposed||token!==generation)return;
@@ -35,6 +35,7 @@ export function createSceneBurnFracture({renderer,field,structure,debris,parent,
   field.setRegionMotion({device:field.device,count:prepared.cells.length,owners:mapping.owners,matrices:candidate.matrices,wrapper:candidate.wrapper});
   debris.setRegionMotion(field.residentState().regionMotion);
   dynamics=candidate;surface=view;parent.add(surface.mesh);
+  if(candidate.residentMotion)participant={resident:candidate.residentMotion,present,frame(){const current=frame(),position=new Vector3(),rotation=new Quaternion(),scale=new Vector3();mesh.matrixWorld.decompose(position,rotation,scale);const g=ground();return {position:position.toArray(),quaternion:rotation.toArray(),scale:current.scale,contactsEnabled:current.contactsEnabled,ground:{position:[g.center[0],g.height-.05,g.center[2]],quaternion:[0,0,0,1],halfExtents:[g.radius,.05,g.radius],friction:.6}};}};
   // Keep the authored object in collision and selection traversal. Only its
   // superseded draw materials and cubic voxel interior/debris proxies are hidden;
   // the watertight fracture regions and planar section caps own presentation.
@@ -49,11 +50,13 @@ export function createSceneBurnFracture({renderer,field,structure,debris,parent,
    status='preparing';pending=prepare(token);return pending;
   },
   get active(){return status==='live';},
-  afterSubmit({dt}){if(status!=='live')return;try{const current=frame();dynamics.setGravity(current.gravity);dynamics.setContactsEnabled(current.contactsEnabled);dynamics.setSupport(0,current.support);dynamics.advance(dt);present();}catch(cause){error=cause.message;status='failed';}},
+  settled:()=>pending??Promise.resolve(),
+  mechanicalParticipant(){if(status!=='live'||!participant)return null;try{frame();return participant;}catch(cause){error=cause.message;status='failed';return null;}},
+  afterSubmit({dt},contactWorld=null){if(status!=='live')return;try{const current=frame();if(contactWorld&&participant){sharedContact=contactWorld;return;}dynamics.setGravity(current.gravity);dynamics.setContactsEnabled(current.contactsEnabled);dynamics.setSupport(0,current.support);dynamics.advance(dt);present();}catch(cause){error=cause.message;status='failed';}},
   reset(){if(status==='live'&&dynamics){dynamics.reset();present();}},
   present,
   update(seconds,appearance){const displayed=Array.isArray(surface?.mesh?.material)?surface.mesh.material:[surface?.mesh?.material];(surface?.bindings??[]).forEach((b,i)=>{b.setAppearance(appearance);b.update(seconds,displayed[i]);});},
-  read:()=>({enabled,status,error,thermal:'live-resident-material',clock:'submitted-fluid-simulation-seconds',mechanics:dynamics?.read()??null,surface:surface?.read()??null,contact:'coarse-surviving-boxes-against-ground; no-piece-self-contact',interaction:'ordinary-whole-object-transforms; no-independent-fragment-grab'}),
+  read:()=>({enabled,status,error,thermal:'live-resident-material',clock:'submitted-fluid-simulation-seconds',mechanics:dynamics?.read()??null,surface:surface?.read()??null,contact:sharedContact?'shared-world-mutual-surviving-region-boxes':'coarse-surviving-boxes-against-ground; no-piece-self-contact',sharedContact:sharedContact?.read()??null,interaction:'ordinary-whole-object-transforms; no-independent-fragment-grab'}),
   snapshot:()=>dynamics?.snapshot()??null,
   dispose(){if(disposed)return;disposed=true;generation++;clear();status='disposed';},
  };

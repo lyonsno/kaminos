@@ -43,3 +43,16 @@ const purge=createSceneBurning({objects:()=>objects,runtime:()=>runtime,createGa
 await purge.sync();purge.forget?.(objects[0].object);
 assert.equal(purged,1,'Host disposal releases the live material wrapper synchronously');
 objects=[];await purge.dispose();assert.equal(purged,1);
+
+// All owners submit thermal work before one shared mechanical clock advances.
+objects=[object('lower'),object('upper')];let members=[],worldDisposed=0,worldSteps=0;
+const mechanical=new Map(objects.map(row=>[row.id,{resident:{id:row.id}}]));
+const mechanics={matches:rows=>rows.length===members.length&&rows.every((r,i)=>r===members[i]),sync:async rows=>{members=rows;},advance(dt,rows){assert.ok(this.matches(rows));worldSteps++;events.push('world:'+dt);},read:()=>({}),dispose:()=>worldDisposed++};
+const shared=createSceneBurning({objects:()=>objects,runtime:()=>runtime,mechanics,createGas:async()=>gas,createBody:async entry=>({
+ mechanicalParticipant:()=>mechanical.get(entry.id),settleMechanics:async()=>events.push(entry.id+':settled'),setMounted(){},encode:()=>events.push(entry.id+':thermal'),afterSubmit:(_frame,world)=>{assert.equal(world,mechanics);events.push(entry.id+':local-submitted');},read:()=>({}),dispose(){},
+})});
+await shared.sync();assert.equal(members.length,2);events.length=0;
+const complete=consumer.encode({},{dt:.01});assert.deepEqual(events,['lower:thermal','upper:thermal']);complete();assert.deepEqual(events,['lower:thermal','upper:thermal','lower:local-submitted','upper:local-submitted','world:0.01']);assert.equal(worldSteps,1);
+const stale=consumer.encode({},{dt:.01});objects.pop();stale();assert.equal(worldSteps,1,'Removal between encoding and submission must not step a disposed participant');await shared.sync();assert.equal(members.length,1);
+mechanical.set('lower',{resident:{id:'rebuilt'}});assert.equal(consumer.encode({},{dt:.01}),undefined,'A rebuilt owner waits for the matching shared world instead of stepping stale buffers');await shared.sync();assert.equal(members[0],mechanical.get('lower'));
+objects=[];await shared.sync();assert.equal(members.length,0,'Removing the last active burnable releases its shared arena');await shared.dispose();assert.equal(worldDisposed,1);
