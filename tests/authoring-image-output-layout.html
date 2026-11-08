@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Generate installer composition fixture</title>
+<style>
+body{margin:16px;background:#161b1c;color:#e2e6e4;font:14px sans-serif}
+[hidden]{display:none!important}
+button,select,textarea,input{max-width:100%;box-sizing:border-box;background:#283337;color:inherit;border:1px solid #536367;border-radius:4px;padding:6px}
+button:disabled{opacity:.45}h1{font-size:18px}#fixture{container-type:inline-size;container-name:asset-pane}
+#asset-generate{height:730px}#asset-step-image,#asset-step-mesh,#asset-step-results{min-width:0;overflow:auto}
+</style>
+<h1>Generate installer composition fixture (no inference)</h1>
+<div id="fixture"><div id="asset-generate"><div id="asset-results"></div></div></div>
+<script type="module">
+try{
+ const styles=document.createElement('style');styles.textContent=await(await fetch('../authoring-workspace.css')).text();document.head.append(styles);
+ const {installKleinImageGeneration}=await import('../authoring-image-generation.mjs');
+ const {installGenerateLayout}=await import('../authoring-generate-layout.mjs');
+ const image=new Image();image.src='../models/flux2-klein/assets/jank-engine.jpg';await image.decode();
+ const canvas=document.createElement('canvas');canvas.width=canvas.height=256;
+ const ctx=canvas.getContext('2d');ctx.drawImage(image,0,0,256,256);
+ const output={id:'caller-1',prompt:'Retained caller image',status:'failed',pending:true,error:'Storage unavailable',preview:{runId:'caller-1',kind:'final',width:256,height:256,rgba:ctx.getImageData(0,0,256,256).data}};
+ const selected={kind:'image',source:image.src,name:'Existing selected image'};
+ const state={status:'complete',outputs:[output],preview:null,pending:null,progress:'Image generated.',timing:null};
+ window.outputFixture={selected,retried:null};
+ const controller={read:()=>state,timing:()=>null,busy:()=>false,retryOutput:async id=>{window.outputFixture.retried=id;}};
+ const assets={read:()=>({selected:window.outputFixture.selected}),generation:()=>({status:'idle'}),select:entry=>{window.outputFixture.selected=entry;}};
+ const ui=installKleinImageGeneration({document,controller,assets});
+ const layout=installGenerateLayout({document,selected:()=>window.outputFixture.selected,imageState:()=>state});
+ ui.render();layout.render();
+ const host=document.querySelector('.asset-caller-outputs');
+ if(!host?.isConnected)throw Error('Caller outputs detached by Generate layout');
+ if(window.outputFixture.selected!==selected)throw Error('Installer changed selection');
+ host.querySelector('button').click();
+ if(window.outputFixture.retried!=='caller-1')throw Error('Retained Retry control is disconnected');
+ output.status='complete';output.pending=false;output.error=null;output.entry={source:image.src+'?caller',name:'Caller result'};ui.render();
+ if(window.outputFixture.selected!==selected)throw Error('Saving changed selection');
+ host.querySelector('button:last-child').click();
+ if(window.outputFixture.selected.source!==output.entry.source)throw Error('Explicit View did not select output');
+ window.outputTest={ok:true,parent:host.parentElement.id};
+}catch(error){window.outputTest={ok:false,error:String(error.stack||error)};}
+</script>
+</html>
