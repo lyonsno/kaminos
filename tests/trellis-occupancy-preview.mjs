@@ -5,6 +5,7 @@ import * as occupancy from '../models/trellis2/occupancy-coordinates.js';
 import {createTrellisGenerationFromConditioningAdapter} from '../models/trellis2/trellis-generation.js';
 import {models} from '../models/trellis2/tests/generation-composition-contracts.mjs';
 import {WEBGPU_BUFFER_USAGE as U} from '../webgpu-inference-kit/src/core.js';
+import {encodeTrellisGeometryGLB} from '../models/trellis2/trellis-mesh.js';
 
 const invocation={jobId:'observed-preview-job',invocationId:'observed-preview-invocation'};
 function snapshotInput(){
@@ -32,6 +33,17 @@ test('missing identity, partial data, invalid grid coordinates and duplicate row
   o=>o.runtime.readTensor=async()=>new ArrayBuffer(12),o=>o.runtime.readTensor=async()=>new Int32Array([0,0,1,1,2,4]).buffer,
   o=>o.runtime.readTensor=async()=>new Int32Array([0,0,1,0,0,1]).buffer]){
   const f=snapshotInput();change(f.options);await assert.rejects(occupancy.readTrellisOccupancyPreview(f.options));
+ }
+});
+test('preview declares the same source-to-GLTF frame as the ordinary geometry exporter',async()=>{
+ const f=snapshotInput(),p=await occupancy.readTrellisOccupancyPreview(f.options);
+ const glb=encodeTrellisGeometryGLB({vertices:new Float32Array([.1,.2,.3,.2,.2,.3,.1,.3,.3]),triangles:new Uint32Array([0,1,2])});
+ const length=new DataView(glb).getUint32(12,true),document=JSON.parse(new TextDecoder().decode(new Uint8Array(glb,20,length)));
+ assert.deepEqual(p.spatial.sourceToGltf,document.nodes[0].matrix,'the preview must not make consumers guess the source export axis convention');
+});
+test('a different threshold policy or non-copyable tensor is refused before readback',async()=>{
+ for(const change of [o=>o.plan={...o.plan,threshold:1},o=>o.coordinates={...o.coordinates,usage:0}]){
+  const f=snapshotInput();change(f.options);await assert.rejects(occupancy.readTrellisOccupancyPreview(f.options));assert.equal(f.reads(),0);
  }
 });
 function composition(onPreview){

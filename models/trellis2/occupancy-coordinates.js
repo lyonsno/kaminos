@@ -19,9 +19,9 @@ export async function readTrellisOccupancyPreview({runtime,coordinates,plan,runI
   if(!runtime?.readTensor||![runId,routeId,invocation?.jobId,invocation?.invocationId].every(v=>typeof v==='string'&&v.trim()))
     throw TypeError('occupancy preview needs its runtime and actual run/route/job/invocation identities');
   const r=plan?.outputResolution,n=coordinates?.shape?.[0];
-  if(!Number.isSafeInteger(r)||r<1||plan.resolution!==2*r||plan.coordinateOrder!=='z-y-x-lexicographic'||
+  if(!Number.isSafeInteger(r)||r<1||plan.resolution!==2*r||plan.candidateRows!==r**3||plan.threshold!==0||plan.downsample!=='2-cubed-max-any'||plan.coordinateOrder!=='z-y-x-lexicographic'||
     !Number.isSafeInteger(steps)||steps<1||!coordinates?.buffer||coordinates.dtype!=='i32'||
-    !Number.isSafeInteger(n)||n<1||n>plan.candidateRows||coordinates.shape.length!==2||coordinates.shape[1]!==3||coordinates.byteLength!==n*12)
+    !(coordinates.usage&U.copySrc)||!Number.isSafeInteger(n)||n<1||n>plan.candidateRows||coordinates.shape.length!==2||coordinates.shape[1]!==3||coordinates.byteLength!==n*12)
     throw TypeError('complete source occupancy plan and resident Int32[N,3] support required');
   const raw=await runtime.readTensor(coordinates,{schedulerInvocation:invocation});
   const values=raw instanceof ArrayBuffer?new Int32Array(raw):raw;
@@ -38,6 +38,7 @@ export async function readTrellisOccupancyPreview({runtime,coordinates,plan,runI
     grid:{dimensions:[r,r,r],sourceDimensions:[plan.resolution,plan.resolution,plan.resolution],downsample:[2,2,2],threshold:plan.threshold,rule:plan.downsample},
     layout:{dtype:'int32',shape:[n,3],rowOrder:plan.coordinateOrder,componentOrder:['source-z','source-y','source-x']},
     spatial:{frame:'trellis-source',gridToSource:{scale:[1/r,1/r,1/r],offset:[-.5,-.5,-.5]},cellCenterOffset:[.5,.5,.5],
+      sourceToGltf:[1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1],
       convention:'source components map directly to mesh position components; display transform belongs to the consumer'},
     lifetime:'owned-cpu-snapshot',coordinateBytesToCPU:snapshot.byteLength,additionalDecoderExecutions:0});
 }
