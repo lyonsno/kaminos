@@ -325,9 +325,11 @@ export class KleinPipeline {
     if (this.collecting) return;
     const take = this.preview.encode(this.sched.encoder(), this.previewInput, { width: latW * 2, height: latH * 2 });
     await this.sched.boundary(`preview[${step}]`, { force: true });
-    const read = take?.();
-    if (onPreview) read?.then(image => onPreview({ ...image, step, steps }), () => {});
-    else await read; // the warm-up generation: dispatch once, then free the slot
+    if (onPreview) {
+      // Neither a readback nor its observer belongs to generation's completion chain.
+      if (take) Promise.resolve().then(take).then(image => onPreview({ ...image, step, steps }))
+        .catch(error => console.warn(`Klein preview failed (step ${step}/${steps})`, error));
+    } else await take?.(); // the warm-up generation: dispatch once, then free the slot
   }
 
   // Release every GPU buffer this pipeline owns: both models' weights and activations, the decoder's
@@ -434,12 +436,19 @@ export class KleinPipeline {
   async generate({ prompt, seed = 0, width = 512, height = 512, steps = 4, textLength = 512, onStep = null, onPhase = null, onPreview = null, shouldDecode = null, reference = null, schedule = null }) {
     this.assertUsable();
     this.sched.setSchedule(schedule);
+    let previewActive = true, lastPreviewStep = 0;
+    const deliverPreview = onPreview ? image => {
+      if (!previewActive || this.destroyed || schedule?.signal?.aborted || image.step <= lastPreviewStep) return;
+      lastPreviewStep = image.step;
+      return onPreview(image);
+    } : null;
     try {
-      return await this.generateScheduled({ prompt, seed, width, height, steps, textLength, onStep, onPhase, onPreview, shouldDecode, reference });
+      return await this.generateScheduled({ prompt, seed, width, height, steps, textLength, onStep, onPhase, onPreview: deliverPreview, shouldDecode, reference });
     } catch (error) {
       await this.sched.discard();
       throw error;
     } finally {
+      previewActive = false;
       if (this.sched.cooperative) this.sched.setSchedule(null);
     }
   }
