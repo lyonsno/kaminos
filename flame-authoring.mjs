@@ -371,7 +371,7 @@ export function createFlameInspector({ document, host, gridTuning, sharedHost = 
       const grip=document.createElement('label');grip.className='slider-label';grip.textContent=label;
       const field=document.createElement(source.tagName==='SELECT'?'select':'input');
       if(source.tagName==='SELECT')for(const option of id==='emitter-assay-family'?authoredFlameShapeOptions(source.options):source.options)field.append(option.cloneNode(true));
-      else {field.type=flamePropertyInputType(source);field.step='any';}
+      else {field.type=flamePropertyInputType(source);field.step=id==='volume-pressure-cg-iterations'?source.step:'any';}
       field.className='transform-input';field.dataset.authoringAlias=id;field.id=`${group.quick?'emitter':'selected'}-${id}`;grip.htmlFor=field.id;
       if(source.dataset.volumeCommit==='confirm') {
         field.dataset.volumeCommit='confirm';

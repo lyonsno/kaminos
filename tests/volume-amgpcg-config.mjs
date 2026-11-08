@@ -29,3 +29,14 @@ test('AMGPCG diagnostics name the effective algorithm and its own requested budg
  assert.equal(c.requested.sorSweeps,136);
  assert.equal(c.effective.omega,null,'SOR relaxation does not apply to CG');
 });
+
+test('AMGPCG linear dispatch tiles supported tall grids instead of exceeding one dimension',async()=>{
+ const {amgpcgPlan}=await import('../volume-amgpcg.mjs');
+ const p=amgpcgPlan([128,512,128],{maxComputeWorkgroupsPerDimension:65535});
+ assert.ok(p.linearDispatch?.every(n=>n<=65535),'every dimension must fit the acquired dispatch limit');
+ assert.ok(p.linearDispatch.reduce((a,b)=>a*b,1)>=p.groups,'all linear groups must be covered');
+});
+test('grid preview checks AMGPCG admission before accepting a settings mutation',async()=>{
+ const {gridTuningPlan}=await import('../volume-grid-tuning.mjs');
+ assert.throws(()=>gridTuningPlan({resolution:16,pressureSolver:'converged',pressureAlgorithm:'amgpcg'},{maxComputeWorkgroupStorageSize:8192}),/workgroup storage/);
+});

@@ -4,6 +4,7 @@ import {createSceneEdits} from '../scene-edit-session.mjs';import {createFlameAu
 import {readAdaptiveMaterialControls,ADAPTIVE_MATERIAL_FIELDS} from '../volume-adaptive-material-controls.mjs';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const writer=html.slice(html.indexOf('function writeFlameSettingsState(state) {'),html.indexOf('function installFlameAuthoring()'));
+const pressure=html.slice(html.indexOf('function flamePressureControlPatch('),html.indexOf('function readPressureCgIterations('));
 const range=html.slice(html.indexOf('function applyVolumeRangeSavedValue('),html.indexOf('// Whether a select offers a value'));
 const liveStart=html.indexOf('live:(key,value)=>{',html.indexOf('gridTuning:{'));
 const live=html.slice(liveStart+'live:'.length,html.indexOf('\n      },\n      apply:patch=>',liveStart)+8);
@@ -13,7 +14,7 @@ function fixture(){
  const read=()=>({domControls:{...adaptive,[id]:{tagName:'INPUT',type:'range',value:Number(control.value),rawValue:control.value}},rendererControls:{},presentationControls:{'raymarch-smoke-presentation':{value:'on'}},volumeSceneRequested:'flame',source:null});
  const noop=()=>{};
  const ctx={scenePlacementTools:{edits:null},readAdaptiveMaterialControls,window:{},GRID_TUNING_FIELDS:[['pressureSolverIterations',id]],document:{getElementById:key=>key===id?control:null},volumePrototype:{validateGridControls:noop,setRaymarchSmokePresentationMode:mode=>({effectiveMode:mode})},supersedeVolumeRebuildHolds:noop,setVolumeControlValue:noop,updateVolumeControlLabels:noop,applyFlameEmitterPose:()=>applied.push(Number(control.value)),flameEmitterPose:{},syncRaymarchSmokePresentationControls:noop,volumeSettingsPresetControlValuesEqual,buildVolumeSettingsPreset:read,syncBurnerControls:noop,refreshVolumeReadout:noop,recordFlameSettingsProblems:noop,flameInspector:null,checkFlameSettingsState:x=>x};
- vm.createContext(ctx);vm.runInContext(range+'\n'+writer+'\nvar live='+live+';',ctx);
+ vm.createContext(ctx);vm.runInContext(range+'\n'+pressure+'\n'+writer+'\nvar live='+live+';',ctx);
  const edits=createSceneEdits({read:()=>({}),write:noop}),flame=createFlameAuthoring({edits,read,write:ctx.writeFlameSettingsState,check:x=>x});ctx.window.kaminosFlameAuthoring=flame;ctx.scenePlacementTools.edits=edits;
  return{control,applied,edits,flame,live:ctx.live};
 }

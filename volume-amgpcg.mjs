@@ -18,12 +18,17 @@ export function amgpcgPlan(dims,limits={}) {
   const levels=[{dims:[...dims],count:dims.reduce((a,b)=>a*b,1)}];
   while(Math.max(...levels.at(-1).dims)>8){const d=levels.at(-1).dims.map(n=>Math.ceil(n/2));levels.push({dims:d,count:d.reduce((a,b)=>a*b,1)});}
   const count=levels[0].count,groups=Math.ceil(count/128);
+  const dispatchLimit=limits.maxComputeWorkgroupsPerDimension??65535;
+  const linearDispatch=[Math.min(groups,dispatchLimit),1,1];
+  linearDispatch[1]=Math.min(Math.ceil(groups/linearDispatch[0]),dispatchLimit);
+  linearDispatch[2]=Math.ceil(groups/(linearDispatch[0]*linearDispatch[1]));
+  if(linearDispatch.some(n=>!Number.isSafeInteger(n)||n<1||n>dispatchLimit)||levels.some(l=>l.dims.some(n=>Math.ceil(n/4)>dispatchLimit)))throw Error('AMGPCG dispatch exceeds acquired GPU limits');
   let bytes=0;
   for(const l of levels){for(const size of [l.count*16,l.count*4,l.count*4]){if(size>Math.min(limits.maxBufferSize??Infinity,limits.maxStorageBufferBindingSize??Infinity))throw Error('AMGPCG buffer exceeds acquired GPU limits');bytes+=size;}bytes+=48;}
   for(const size of [count*4,count*16,groups*16,32,48,32]){if(size>Math.min(limits.maxBufferSize??Infinity,limits.maxStorageBufferBindingSize??Infinity))throw Error('AMGPCG buffer exceeds acquired GPU limits');bytes+=size;}
   bytes+=(levels.length-1)*48;
   if((limits.maxComputeWorkgroupStorageSize??16384)<12288)throw Error('AMGPCG coarse solve requires 12 KiB workgroup storage');
-  return {identity:AMGPCG_IDENTITY,levels,count,groups,residentBytes:bytes,coarseSymmetricSweeps:10,prolongationScale:2};
+  return {identity:AMGPCG_IDENTITY,levels,count,groups,linearDispatch,residentBytes:bytes,coarseSymmetricSweeps:10,prolongationScale:2};
 }
 
 const gridWgsl=`
@@ -108,6 +113,8 @@ fn coarseSmooth(lane:u32,parity:u32){
 `;
 
 export const AMGPCG_CG_WGSL=gridWgsl+`
+fn linearInvocation(g:vec3<u32>)->u32{return g.x+128u*u.flags.y*(g.y+u.flags.z*g.z);}
+fn linearGroup(g:vec3<u32>)->u32{return g.x+u.flags.y*(g.y+u.flags.z*g.z);}
 @group(0) @binding(1) var<storage,read> coef:array<vec4<f32>>;
 @group(0) @binding(2) var<storage,read_write> solution:array<f32>;
 @group(0) @binding(3) var<storage,read_write> residual:array<f32>;
@@ -130,21 +137,21 @@ fn blockSum(lane:u32,value:vec4<f32>)->vec4<f32>{
  return sums[0];
 }
 @compute @workgroup_size(128) fn rhsSum(@builtin(global_invocation_id)g:vec3<u32>,@builtin(local_invocation_index)lane:u32,@builtin(workgroup_id)group:vec3<u32>){
- var v=vec4<f32>(0);if(g.x<u.dims.w&&coef[g.x].x>0.0){v=vec4<f32>(residual[g.x],1,0,0);}
- let total=blockSum(lane,v);if(lane==0u){partials[group.x]=total;}
+ let i=linearInvocation(g);var v=vec4<f32>(0);if(i<u.dims.w&&coef[i].x>0.0){v=vec4<f32>(residual[i],1,0,0);}
+ let total=blockSum(lane,v);let block=linearGroup(group);if(lane==0u&&block<u.other.w){partials[block]=total;}
 }
 @compute @workgroup_size(128) fn initialize(@builtin(global_invocation_id)g:vec3<u32>){
- let i=g.x;if(i>=u.dims.w){return;}var r=0.0;
+ let i=linearInvocation(g);if(i>=u.dims.w){return;}var r=0.0;
  if(coef[i].x>0.0){r=residual[i]-select(0.0,stats[5],u.flags.x==1u)-apply(i,false);}
  vectors[i]=vec4<f32>(0,0,r,0);residual[i]=r;preconditioned[i]=0.0;
 }
 @compute @workgroup_size(128) fn directionDot(@builtin(global_invocation_id)g:vec3<u32>,@builtin(local_invocation_index)lane:u32,@builtin(workgroup_id)group:vec3<u32>){
- var v=vec4<f32>(0);if(g.x<u.dims.w){let i=g.x;let ap=apply(i,true);vectors[i].y=ap;v.x=vectors[i].x*ap;}
- let total=blockSum(lane,v);if(lane==0u){partials[group.x]=total;}
+ let i=linearInvocation(g);var v=vec4<f32>(0);if(i<u.dims.w){let ap=apply(i,true);vectors[i].y=ap;v.x=vectors[i].x*ap;}
+ let total=blockSum(lane,v);let block=linearGroup(group);if(lane==0u&&block<u.other.w){partials[block]=total;}
 }
 @compute @workgroup_size(128) fn residualDot(@builtin(global_invocation_id)g:vec3<u32>,@builtin(local_invocation_index)lane:u32,@builtin(workgroup_id)group:vec3<u32>){
- var v=vec4<f32>(0);if(g.x<u.dims.w){let i=g.x;let r=vectors[i].z;v=vec4<f32>(r*preconditioned[i],r*r,0,0);}
- let total=blockSum(lane,v);if(lane==0u){partials[group.x]=total;}
+ let i=linearInvocation(g);var v=vec4<f32>(0);if(i<u.dims.w){let r=vectors[i].z;v=vec4<f32>(r*preconditioned[i],r*r,0,0);}
+ let total=blockSum(lane,v);let block=linearGroup(group);if(lane==0u&&block<u.other.w){partials[block]=total;}
 }
 fn totalPartials(lane:u32)->vec4<f32>{var v=vec4<f32>(0);for(var i=lane;i<u.other.w;i+=128u){v+=partials[i];}return blockSum(lane,v);}
 @compute @workgroup_size(128) fn reduceRhs(@builtin(local_invocation_index)lane:u32){
@@ -159,8 +166,8 @@ fn totalPartials(lane:u32)->vec4<f32>{var v=vec4<f32>(0);for(var i=lane;i<u.othe
 @compute @workgroup_size(128) fn reduceResidual(@builtin(local_invocation_index)lane:u32){
  let v=totalPartials(lane);if(lane==0u){var beta=0.0;if(stats[0]>0.0){beta=v.x/stats[0];}stats[2]=beta;stats[0]=v.x;stats[4]=v.y;}
 }
-@compute @workgroup_size(128) fn updateDirection(@builtin(global_invocation_id)g:vec3<u32>){let i=g.x;if(i<u.dims.w){vectors[i].x=preconditioned[i]+stats[2]*vectors[i].x;}}
-@compute @workgroup_size(128) fn updateSolution(@builtin(global_invocation_id)g:vec3<u32>){let i=g.x;if(i>=u.dims.w){return;}
+@compute @workgroup_size(128) fn updateDirection(@builtin(global_invocation_id)g:vec3<u32>){let i=linearInvocation(g);if(i<u.dims.w){vectors[i].x=preconditioned[i]+stats[2]*vectors[i].x;}}
+@compute @workgroup_size(128) fn updateSolution(@builtin(global_invocation_id)g:vec3<u32>){let i=linearInvocation(g);if(i>=u.dims.w){return;}
  solution[i]+=stats[1]*vectors[i].x;let r=vectors[i].z-stats[1]*vectors[i].y;
  vectors[i].z=r;residual[i]=r;preconditioned[i]=0.0;
 }
@@ -194,6 +201,11 @@ fn blocked(c:vec3<i32>)->bool{return inside(c)&&u.flags.y==1u&&textureLoad(solid
 `;
 
 const devicePipelines=new WeakMap();
+export const AMGPCG_SHADER_MODULES=[
+ {code:AMGPCG_MULTIGRID_WGSL,entryPoints:['coarsen','red','black','restrictResidual','prolong','coarseSolve']},
+ {code:AMGPCG_CG_WGSL,entryPoints:['rhsSum','reduceRhs','initialize','directionDot','residualDot','reduceDirection','reduceResidual','updateDirection','updateSolution']},
+ {code:AMGPCG_BRIDGE_WGSL,entryPoints:['importPressure','exportPressure']},
+];
 const used={
  coarsen:[0,1,4],red:[0,1,2,3],black:[0,1,2,3],restrictResidual:[0,1,2,3,5,6],prolong:[0,1,2,5],coarseSolve:[0,1,2,3],
  rhsSum:[0,1,3,6],reduceRhs:[0,5,6],initialize:[0,1,2,3,4,5,7],
@@ -203,9 +215,9 @@ const used={
 function pipelinesFor(device){
  if(devicePipelines.has(device))return devicePipelines.get(device);
  const all={};
- for(const [code,names] of [[AMGPCG_MULTIGRID_WGSL,['coarsen','red','black','restrictResidual','prolong','coarseSolve']],[AMGPCG_CG_WGSL,['rhsSum','reduceRhs','initialize','directionDot','residualDot','reduceDirection','reduceResidual','updateDirection','updateSolution']],[AMGPCG_BRIDGE_WGSL,['importPressure','exportPressure']]]){
+ for(const {code,entryPoints} of AMGPCG_SHADER_MODULES){
   const module=device.createShaderModule({label:'AMGPCG',code});
-  for(const entryPoint of names)all[entryPoint]=device.createComputePipeline({label:`AMGPCG ${entryPoint}`,layout:'auto',compute:{module,entryPoint}});
+  for(const entryPoint of entryPoints)all[entryPoint]=device.createComputePipeline({label:`AMGPCG ${entryPoint}`,layout:'auto',compute:{module,entryPoint}});
  }
  devicePipelines.set(device,all);return all;
 }
@@ -217,7 +229,7 @@ export function createAmgpcgPressure(device,dims){
  const levels=plan.levels.map((l,i)=>({...l,coef:buffer(`coefficients ${i}`,l.count*16),x:buffer(`correction ${i}`,l.count*4),b:buffer(`residual ${i}`,l.count*4)}));
  levels.forEach((l,i)=>{const next=levels[i+1]??l;l.uniform=uniform(`level ${i}`,new Uint32Array([...l.dims,l.count,...next.dims,next.count,0,0,0,0]));if(i){const fine=levels[i-1];l.coarsenUniform=uniform(`coarsen ${i}`,new Uint32Array([...l.dims,l.count,...fine.dims,fine.count,0,0,0,0]));}});
  const top=levels[0],solution=buffer('solution',plan.count*4),vectors=buffer('CG vectors',plan.count*16),stats=buffer('CG scalars',32),partials=buffer('dot partials',plan.groups*16);
- const cgValues=new Uint32Array([...dims,plan.count,0,0,0,plan.groups,0,0,0,0]);
+ const cgValues=new Uint32Array([...dims,plan.count,0,0,0,plan.groups,0,plan.linearDispatch[0],plan.linearDispatch[1],0]);
  const cgUniform=uniform('CG dimensions',cgValues),bridgeValues=new Uint32Array([...dims,plan.count,0,0,1,0]),bridgeUniform=uniform('existing pressure bridge',bridgeValues);
  const groups=new Map();let lastPressure=null,lastSolid=null,bridgeResources=null;
  const resource=v=>v?.createView?v.createView():{buffer:v};
@@ -240,21 +252,21 @@ export function createAmgpcgPressure(device,dims){
    const run=(stage,res,dispatch)=>{pass.setPipeline(pipelines[stage]);pass.setBindGroup(0,group(stage,res));pass.dispatchWorkgroups(...dispatch);};
    run('importPressure',bridgeResources,cells(dims));
    for(let i=1;i<levels.length;i++)run('coarsen',[levels[i].coarsenUniform,levels[i].coef,null,null,levels[i-1].coef],cells(levels[i].dims));
-   if(cgValues[8]){run('rhsSum',cgResources,[plan.groups]);run('reduceRhs',cgResources,[1]);}
-   run('initialize',cgResources,[plan.groups]);
+   if(cgValues[8]){run('rhsSum',cgResources,plan.linearDispatch);run('reduceRhs',cgResources,[1]);}
+   run('initialize',cgResources,plan.linearDispatch);
    const vcycle=()=>{
     for(let i=0;i<levels.length-1;i++){const l=levels[i],r=mgResources[i];run('red',r,cells(l.dims));run('black',r,cells(l.dims));run('restrictResidual',r,cells(levels[i+1].dims));}
     run('coarseSolve',mgResources.at(-1),[1]);
     for(let i=levels.length-2;i>=0;i--){const l=levels[i],r=mgResources[i];run('prolong',r,cells(l.dims));run('black',r,cells(l.dims));run('red',r,cells(l.dims));}
    };
-   vcycle();run('residualDot',cgResources,[plan.groups]);run('reduceResidual',cgResources,[1]);run('updateDirection',cgResources,[plan.groups]);
+   vcycle();run('residualDot',cgResources,plan.linearDispatch);run('reduceResidual',cgResources,[1]);run('updateDirection',cgResources,plan.linearDispatch);
    for(let i=0;i<iterations;i++){
-    run('directionDot',cgResources,[plan.groups]);run('reduceDirection',cgResources,[1]);run('updateSolution',cgResources,[plan.groups]);
-    if(i+1<iterations){vcycle();run('residualDot',cgResources,[plan.groups]);run('reduceResidual',cgResources,[1]);run('updateDirection',cgResources,[plan.groups]);}
+    run('directionDot',cgResources,plan.linearDispatch);run('reduceDirection',cgResources,[1]);run('updateSolution',cgResources,plan.linearDispatch);
+    if(i+1<iterations){vcycle();run('residualDot',cgResources,plan.linearDispatch);run('reduceResidual',cgResources,[1]);run('updateDirection',cgResources,plan.linearDispatch);}
    }
-   run('residualDot',cgResources,[plan.groups]);run('reduceResidual',cgResources,[1]);
+   run('residualDot',cgResources,plan.linearDispatch);run('reduceResidual',cgResources,[1]);
    run('exportPressure',bridgeResources,cells(dims));pass.end();encodeCount++;
-   return {identity:AMGPCG_IDENTITY,algorithm:'amgpcg',iterations,iterationUnit:'CG iteration with one multigrid V-cycle',grid:[...dims],levels:levels.map(l=>[...l.dims]),residentBytes:plan.residentBytes,cellVisits:4*plan.count+levels.slice(0,-1).reduce((n,l)=>n+l.count,0)+iterations*(4*levels.slice(0,-1).reduce((n,l)=>n+l.count,0)+10*levels.at(-1).count+4*plan.count)+(cgValues[8]?plan.count:0),dispatchCount:3+(levels.length-1)+(cgValues[8]?2:0)+iterations*(6*(levels.length-1)+7)+2,coarseSymmetricSweeps:10,warmStart,pureNeumann:cgValues[8]===1,encodeCount,implementation:'separate-stages-untrimmed',workgroupStorageBytes:12288};
+   return {identity:AMGPCG_IDENTITY,algorithm:'amgpcg',iterations,iterationUnit:'CG iteration with one multigrid V-cycle',grid:[...dims],levels:levels.map(l=>[...l.dims]),residentBytes:plan.residentBytes,linearDispatch:[...plan.linearDispatch],cellVisits:4*plan.count+levels.slice(0,-1).reduce((n,l)=>n+l.count,0)+iterations*(4*levels.slice(0,-1).reduce((n,l)=>n+l.count,0)+10*levels.at(-1).count+4*plan.count)+(cgValues[8]?plan.count:0),dispatchCount:3+(levels.length-1)+(cgValues[8]?2:0)+iterations*(6*(levels.length-1)+7)+2,coarseSymmetricSweeps:10,warmStart,pureNeumann:cgValues[8]===1,encodeCount,implementation:'separate-stages-untrimmed',workgroupStorageBytes:12288};
   },
   destroy(){owned.forEach(b=>b.destroy());groups.clear();}
  };

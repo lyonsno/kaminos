@@ -20221,7 +20221,7 @@ function readVolumeControls({quality=viewportDisplay.quality,document=globalThis
     pressureEffectiveLabel: pressureConfig.pressureEffectiveLabel,
     pressureSolver: document.getElementById('volume-pressure-solver').value,
     pressureAlgorithm: document.getElementById('volume-pressure-algorithm').value,
-    pressureCgIterations: Number(document.getElementById('volume-pressure-cg-iterations').value),
+    pressureCgIterations: readPressureCgIterations(),
     pressureResolution: document.getElementById('volume-pressure-resolution').value,
     worldSmoke: document.getElementById('volume-world-smoke').value,
     worldSmokeFlow: Number(document.getElementById('volume-world-smoke-flow').value),
@@ -23355,6 +23355,19 @@ function flameSettingsState(preset=readVolumeSettingsValues(),source=activeVolum
 // Every reason the flame settings edit would be refused, in the order the
 // check meets them. The edit session refuses a press on any flame control
 // while one exists, so the loaded page lists them all (recordFlameSettingsProblems).
+function flamePressureControlPatch(domControls) {
+  const patch={};
+  for(const [key,id] of [['pressureSolver','volume-pressure-solver'],['pressureAlgorithm','volume-pressure-algorithm'],['pressureCgIterations','volume-pressure-cg-iterations']]) {
+    const descriptor=domControls?.[id];
+    if(descriptor)patch[key]=key==='pressureCgIterations'?Number(descriptor.rawValue??descriptor.value):descriptor.value;
+  }
+  return patch;
+}
+function readPressureCgIterations() {
+  const raw=document.getElementById('volume-pressure-cg-iterations').value;
+  const value=Number(raw);
+  return raw.trim()&&Number.isSafeInteger(value)&&value>=1?value:(volumePrototype?.debugState?.().controls?.pressureCgIterations??6);
+}
 function flameSettingsStateProblems(state) {
   const problems=[];
   const current=flameSettingsState();
@@ -23378,6 +23391,8 @@ function flameSettingsStateProblems(state) {
       } else if(source.type==='color'&&!/^#[0-9a-f]{6}$/i.test(value))problem(`Invalid color ${id}`);
     }
   }
+  try {resolvePressureSolverConfig(flamePressureControlPatch(state.domControls));}
+  catch(error){problems.push({id:'volume-pressure-cg-iterations',message:error.message});}
   if(state.domControls?.['volume-emitter-source-law']?.value==='immersed-source') {
     try {
       const radius=state.domControls['volume-immersed-radius'];
@@ -23456,6 +23471,7 @@ function writeFlameSettingsState(state) {
   readAdaptiveMaterialControls(state.domControls);
   const gridPatch={};
   for(const [key,id] of GRID_TUNING_FIELDS){const d=state.domControls[id];if(d)gridPatch[key]=['worldSmoke','worldSmokeIntermediate'].includes(key)?d.value:Number(d.rawValue??d.value);}
+  Object.assign(gridPatch,flamePressureControlPatch(state.domControls));
   for(const [key,id] of [['pressureSolver','volume-pressure-solver'],['velocityStaggering','volume-velocity-staggering'],['emitterSourceLaw','volume-emitter-source-law']]){if(state.domControls[id])gridPatch[key]=state.domControls[id].value;}
   volumePrototype?.validateGridControls(gridPatch);
   supersedeVolumeRebuildHolds();
@@ -23652,7 +23668,7 @@ function installAuthoringParameterEditing() {
       else if(control.type==='checkbox'){if(typeof state.value!=='boolean')throw Error('Expected an enabled/disabled value');}
       else if(control.type==='color'){if(!/^#[\da-f]{6}$/i.test(state.value))throw Error('Expected a hex color');}
       else if(!Number.isFinite(state.value)||(control.min!==''&&state.value<Number(control.min))||(control.max!==''&&state.value>Number(control.max)))throw Error('Parameter is outside its supported range');
-      const gridKey={'volume-velocity-staggering':'velocityStaggering','volume-pressure-solver':'pressureSolver'}[control.id];
+      const gridKey={'volume-velocity-staggering':'velocityStaggering','volume-pressure-solver':'pressureSolver','volume-pressure-algorithm':'pressureAlgorithm','volume-pressure-cg-iterations':'pressureCgIterations'}[control.id];
       if(gridKey)volumePrototype?.validateGridControls({[gridKey]:state.value});
       if(['volume-immersed-radius','volume-emitter-source-law','volume-optical-tolerance'].includes(control.id)) {
         const next=flameSettingsState();
@@ -23667,11 +23683,14 @@ function installAuthoringParameterEditing() {
     edits.register(id,definition);authoringParameterTargets.set(id,definition);
     authoringControlSessions.push(installSceneControlHistory({edits,id:'@flame-settings',
       controls:[control,...(fireControlOwner(control.id)==='source'?[]:document.querySelectorAll(`[data-authoring-alias="${control.id}"]`))],label,onError:error=>showFlameEditRefused(error)}));
-    if(['volume-velocity-staggering','volume-pressure-solver'].includes(control.id)) {
+    if(['volume-velocity-staggering','volume-pressure-solver','volume-pressure-algorithm','volume-pressure-cg-iterations'].includes(control.id)) {
       // Refuse before live handlers: dispatchEvent does not return listener
       // exceptions to the inspector alias. Restore even without a focus gesture.
-      const gridKey=control.id==='volume-velocity-staggering'?'velocityStaggering':'pressureSolver';
+      const gridKey={'volume-velocity-staggering':'velocityStaggering','volume-pressure-solver':'pressureSolver','volume-pressure-algorithm':'pressureAlgorithm','volume-pressure-cg-iterations':'pressureCgIterations'}[control.id];
       const validateGridPreview=event=>{
+        if(control.id==='volume-pressure-cg-iterations'&&event.type==='input'&&(!control.value.trim()||!Number.isSafeInteger(Number(control.value))||Number(control.value)<1)) {
+          event.stopImmediatePropagation();return;
+        }
         try{check(read());}
         catch(error){
           event.stopImmediatePropagation();
