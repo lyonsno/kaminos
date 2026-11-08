@@ -1,6 +1,6 @@
 # Analytical hinge families
 
-Select an existing hinged connection in Link workshop. The Analytical hinge section offers Fork · hub · pin, Interleaved knuckles, and Flange pivot. New Hinge together connections start with the fork family.
+Select an existing hinged connection in Link workshop. The Analytical hinge section offers Fork · hub · pin, Interleaved knuckles, and Flange pivot. New Hinge together connections start with the fork family and seat its fixed and moving mounting faces, so the hardware’s dimensions participate in placement. The object’s picked frame follows the moving half; the receiver carries the fixed half. Family changes retain that relationship.
 
 Edit axle enters a native component target. G moves the pivot, R changes its axis, and S uniformly sizes its analytical hardware. The axle frame is independent of the picked receiving plane. Edit seating returns to contact-plane adjustment; Pose A/B authors swing about the axle. Tab returns to connection selection.
 
@@ -9,3 +9,10 @@ Changing family or size rebuilds analytical geometry; Undo restores an earlier a
 The export/return operations are also available through kaminosWorkbenchExperiments.invoke('exportHinge', {objectId}) and invoke('importHinge', {objectId, packet}); hingeHardware selects family/size, editAxle and editSeat select the native targets. Image generation, TRELLIS execution, generated-geometry registration, bore rectification and collision checking are subsequent pipeline stages. The current return exercise changes a part's appearance to establish slot retention without claiming a generation result.
 
 Returned part values are retained immutably inside the live mechanism. Native transform and recipe history carry small part references, so a drag does not copy serialized mesh arrays through each editor notification. Public reads, exports and scene saves continue to include complete detached part geometry. Native history retains the referenced values through controller reconstruction and releases its store after the final controller/history owner disappears.
+
+
+Each family defines two analytical mating frames on its flat mounting faces, in axle-local coordinates. Fixed-frame Z points out of the hardware into the receiver; moving-frame Z points into the hardware and matches the attached object’s outward picked normal. `hardware.mounting="part-frames"` selects this placement. The fixed half and pin use the seated axle frame; the moving half and object compose the same authored swing. `hingeFrames({objectId})` returns the actual world fixed/moving/axle frames for inspection. Part exports include each fixed/moving slot’s local `mount` frame; returned appearances keep the analytical mounting contract.
+
+Previously saved contact-based hinges keep their original placement. **Seat on hinge mounts** (`seatHinge({objectId})`) explicitly adopts the physical mounting frames, clears old axle/seating offsets, and repositions the attached object; one Undo restores the previous recipe and placement. Changing family/size still regenerates geometry; it never regenerates an image or runs TRELLIS.
+
+Selected hardware shows a small cyan fixed mounting patch, amber moving patch and violet axle. The axle can be selected to enter the existing native G/R/S target. These guides follow actual hardware frames, including edited axle pose, rather than drawing a contact-frame ring as the axis. Plain fastenings retain their contact-plane guides. Hide editing marks removes these overlays.

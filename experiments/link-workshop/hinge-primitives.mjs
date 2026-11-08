@@ -1,8 +1,19 @@
 import {retainHingeParts} from './recipe-state.mjs';
 import * as T from '../../lib/three.core.js';
 export const hingeFamilies={clevis:'Fork · hub · pin',knuckle:'Interleaved knuckles',flange:'Flange pivot'};
+// Rigid mating frames on actual analytical faces, in the shared axle space.
+// Fixed Z points out of hardware into its receiver; moving Z points into
+// hardware, matching the attached object’s outward surface normal.
+export function hingeMountFrames(h){
+ if(!hingeFamilies[h?.family]||!Number.isFinite(h.size)||h.size<=0)throw Error('Choose a hinge family and positive size');
+ const frame=(position,rotation)=>({position:position.map(x=>x*h.size),rotation});
+ if(h.family==='clevis')return {fixed:frame([-.61,0,0],[0,-Math.PI/2,0]),moving:frame([.6,0,0],[0,-Math.PI/2,0])};
+ if(h.family==='knuckle')return {fixed:frame([-.4,.08,0],[-Math.PI/2,0,0]),moving:frame([.4,.08,0],[Math.PI/2,0,0])};
+ return {fixed:frame([0,-.2,-.22],[0,Math.PI,0]),moving:frame([.72,0,.14],[0,-Math.PI/2,0])};
+}
 export function checkedHardware(value={family:'clevis',size:1}){
  if(!value||!hingeFamilies[value.family]||!Number.isFinite(value.size)||value.size<=0)throw Error('Choose a hinge family and positive size');
+ if(value.mounting!==undefined&&value.mounting!=='part-frames')throw Error('Unknown hinge mounting');
  const {parts,...metadata}=value,v=structuredClone(metadata);if(parts)v.parts=retainHingeParts(parts);if(v.parts){const ids=Object.keys(v.parts);if(ids.some(id=>!['fixed','moving','pin'].includes(id)))throw Error('Unknown hinge part slot');for(const id of ids){if(!v.parts[id]?.object)throw Error('Hinge return requires serialized part geometry');if(!['Group','Mesh','Object3D'].includes(v.parts[id].object.type))throw Error('Invalid hinge part');}}
  return v;
 }
@@ -26,5 +37,5 @@ export function buildHingeParts(value){
  for(const [i,id]of ['fixed','moving','pin'].entries())if(h.parts?.[id]){const original=parts[i],replacement=new T.Group();replacement.add(new T.ObjectLoader().parse(h.parts[id]));replacement.name=original.name;replacement.userData.hingePart=original.userData.hingePart;disposePart(original);parts[i]=replacement;}
  return parts;
 }
-export function exportHinge(value){const h=checkedHardware(value),parts=buildHingeParts({...h,parts:undefined});try{return {schema:'kaminos.hinge-parts.v1',hardware:{family:h.family,size:h.size},key:JSON.stringify([h.family,h.size]),joint:{origin:[0,0,0],axis:[0,0,1]},parts:parts.map(p=>({id:p.userData.hingePart.id,role:p.userData.hingePart.role,object:p.toJSON(),frame:{position:[0,0,0],rotation:[0,0,0]},bore:{axis:[0,0,1],radius:.065*h.size}}))};}finally{parts.forEach(disposePart);}}
+export function exportHinge(value){const h=checkedHardware(value),parts=buildHingeParts({...h,parts:undefined});try{return {schema:'kaminos.hinge-parts.v1',hardware:{family:h.family,size:h.size},key:JSON.stringify([h.family,h.size]),joint:{origin:[0,0,0],axis:[0,0,1]},parts:parts.map(p=>({id:p.userData.hingePart.id,role:p.userData.hingePart.role,object:p.toJSON(),frame:{position:[0,0,0],rotation:[0,0,0]},...(p.userData.hingePart.id!=='pin'?{mount:hingeMountFrames(h)[p.userData.hingePart.id]}:{}),bore:{axis:[0,0,1],radius:.065*h.size}}))};}finally{parts.forEach(disposePart);}}
 export function importHinge(value,packet){const h=checkedHardware(value);if(packet?.schema!=='kaminos.hinge-parts.v1'||packet.key!==JSON.stringify([h.family,h.size]))throw Error('Return belongs to different hinge dimensions or family');if(!Array.isArray(packet.parts)||packet.parts.length!==3||new Set(packet.parts.map(p=>p.id)).size!==3)throw Error('Return all three distinct hinge parts');for(const p of packet.parts){const object=new T.ObjectLoader().parse(p.object);let meshes=0;object.traverse(o=>{if(o.isMesh&&o.geometry?.attributes.position?.count)meshes++;});disposePart(object);if(!meshes)throw Error('Returned part is empty');}return checkedHardware({...h,appearanceId:T.MathUtils.generateUUID(),parts:Object.fromEntries(packet.parts.map(p=>[p.id,p.object]))});}

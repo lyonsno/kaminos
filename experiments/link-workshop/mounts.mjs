@@ -1,3 +1,4 @@
+import {hingeMountFrames} from './hinge-primitives.mjs';
 import * as T from '../../lib/three.core.js';
 import {frames} from './model.mjs';
 export const identityFrame=()=>({position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]});
@@ -12,7 +13,12 @@ export function mountOwnerMatrix(root,model,mount,t,entries){
 export function mountMatrix(root,model,id,t,entries){const m=model.mounts?.find(m=>m.id===id);if(!m)throw Error('Unknown mount');const full=mountOwnerMatrix(root,model,m,t,entries).multiply(frameMatrix(m)),p=new T.Vector3().setFromMatrixPosition(full);let q;
  if(m.owner.joint!==undefined)q=new T.Quaternion().setFromRotationMatrix(jointMatrix(root,model,m.owner.joint,t));else q=entries.find(e=>e.id===m.owner.objectId).object.getWorldQuaternion(new T.Quaternion()).normalize();q.multiply(new T.Quaternion().setFromEuler(new T.Euler(...m.rotation)));return new T.Matrix4().compose(p,q,new T.Vector3(1,1,1));}
 export const hingeAngle=(a,t=0)=>Array.isArray(a?.hinge)?a.hinge[0]+(a.hinge[1]-a.hinge[0])*t:0;
+function mountedHingeFrame(target,a){return target.clone().multiply(frameMatrix({position:a.axle?.position??[0,0,0],rotation:a.axle?.rotation??[0,0,0]})).multiply(frameMatrix(hingeMountFrames(a.hardware).fixed).invert());}
 function mountAttachmentBase(target,source,a,t,scale,unhinged=false){
+ if(a.hardware?.mounting==='part-frames'){
+  const mounts=hingeMountFrames(a.hardware),sourceFrame=frameMatrix({...source,position:source.position.map((v,i)=>v*scale.getComponent(i)),scale:[1,1,1]});
+  return mountedHingeFrame(target,a).multiply(new T.Matrix4().makeRotationZ(unhinged?0:hingeAngle(a,t))).multiply(frameMatrix(mounts.moving)).multiply(sourceFrame.invert());
+ }
  const targetQ=new T.Quaternion().setFromRotationMatrix(target),sourceQ=new T.Quaternion().setFromEuler(new T.Euler(...source.rotation));
  const q=targetQ.clone().multiply(sourceQ.clone().invert()),p=new T.Vector3().setFromMatrixPosition(target).sub(new T.Vector3(...source.position).multiply(scale).applyQuaternion(q));
  const base=new T.Matrix4().compose(p,q,new T.Vector3(1,1,1));
@@ -54,6 +60,6 @@ export function previewMountMatrix(root,model,id,t,entries){
 
 // Axle frame is independent of the mating face; offsets are in receiving-frame units.
 export function hingeWorldFrame(root,model,a,t,entries){
- const target=previewMountMatrix(root,model,a.targetMount,t,entries),source=model.mounts.find(m=>m.id===a.sourceMount),scale=new T.Vector3(...a.offset.scale),world=mountAttachmentBase(target,source,a,t,scale,true).multiply(frameMatrix(a.offset)),p=new T.Vector3(),q=new T.Quaternion();world.decompose(p,q,new T.Vector3());p.add(new T.Vector3(...source.position).multiply(scale).applyQuaternion(q));
+ const target=previewMountMatrix(root,model,a.targetMount,t,entries);if(a.hardware?.mounting==='part-frames')return mountedHingeFrame(target,a);const source=model.mounts.find(m=>m.id===a.sourceMount),scale=new T.Vector3(...a.offset.scale),world=mountAttachmentBase(target,source,a,t,scale,true).multiply(frameMatrix(a.offset)),p=new T.Vector3(),q=new T.Quaternion();world.decompose(p,q,new T.Vector3());p.add(new T.Vector3(...source.position).multiply(scale).applyQuaternion(q));
  const tq=new T.Quaternion().setFromRotationMatrix(target);p.add(new T.Vector3(...(a.axle?.position??[0,0,0])).applyQuaternion(tq));q.copy(tq).multiply(new T.Quaternion().setFromEuler(new T.Euler(...(a.axle?.rotation??[0,0,0]))));return new T.Matrix4().compose(p,q,new T.Vector3(1,1,1));
 }

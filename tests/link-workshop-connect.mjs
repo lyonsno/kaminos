@@ -98,10 +98,12 @@ try {
   assert.equal(transport.hidden,false,'Playback transport stays visible inside Tab seating edit');
   c.operations.mode({value:'A'});assert.equal(c.read().editingConnection,'cube','Switching pose mode inside Tab seating edit stays in seating edit');
   c.operations.mode({value:'B'});assert.equal(c.read().editingConnection,'cube');
-  const hSeat=components.target(),hBase=hSeat.read();
+  const hSeat=components.target(),hBase=hSeat.read(),hRest=cube.getWorldQuaternion(new T.Quaternion());
   edits.begin(hSeat.id,'Hinge Pose B');edits.preview({position:hBase.position,rotation:[0,0,Math.PI/2]});edits.commit();
   assert.ok(Math.abs(c.read().recipe.attachments[0].hinge[1]-Math.PI/2)<1e-6,'Pose B seating rotation records the hinge swing');
-  c.operations.seek({cycle:.25});assert.ok(Math.abs(cube.rotation.z-Math.PI/4)<1e-6,'Mid-cycle seek interpolates the hinged mesh rotation');
+  c.operations.seek({cycle:.25});
+  const hingeAxis=new T.Vector3(0,0,1).applyQuaternion(new T.Quaternion().setFromEuler(new T.Euler(...c.operations.hingeFrames().axle.rotation))),expectedSwing=new T.Quaternion().setFromAxisAngle(hingeAxis,Math.PI/4).multiply(hRest);
+  assert.ok(Math.abs(cube.getWorldQuaternion(new T.Quaternion()).dot(expectedSwing))>1-1e-6,'Mid-cycle seek rotates the payload around the installed hardware axle');
   // Clicking another connection anchor (including a separated mount marker) while already inside Tab seating switches directly and refreshes components.
   const capBlock=new T.Mesh(new T.BoxGeometry(),new T.MeshBasicMaterial());capBlock.position.set(0,3,0);scene.add(capBlock);entries.push({id:'cap',object:capBlock,type:'procedural-mesh',label:'Cap'});
   c.operations.tool({value:'connect'});c.operations.connectEnd({objectId:'cap',position:[0,-.5,0],rotation:[0,0,0]});c.operations.connectEnd({objectId:'base',position:[0,3,0],rotation:[0,0,0]});c.operations.previewConnection({kind:'fasten'});c.operations.commitConnection();
