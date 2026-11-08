@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import experiment from '../experiments/hand-replay.experiment.mjs';
 const hash=async t=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t))),b=>b.toString(16).padStart(2,'0')).join('');
-const models=['original','trained','wilor','anyhand'].map(id=>({id,label:id,checkpointSha256:'a'.repeat(64),faces:[0,1,2]}));
+const models=['original','trained','wilor','anyhand','teacher'].map(id=>({id,label:id,checkpointSha256:'a'.repeat(64),faces:[0,1,2]}));
 const hand=(scale=1)=>{const joints=Array.from({length:21},(_,i)=>[i*.01*scale,(i%4)*.01*scale,0]);return {status:'observed',joints,vertices:Array.from({length:778},(_,i)=>joints[i%21]),cropBox:[0,0,50,50]};};
 const data={schema:'hand-state.teacher-replay.v1',generation:'test',label:'sequence',models,frames:[0,100,300,450].map((timeMs,i)=>({captureId:'f'+i,timeMs,image:'/frame.jpg',hands:models.map((_,i)=>hand(i===1?.5:1))}))};
 const seq=JSON.stringify(data),catalog=JSON.stringify({generation:'test',models,sequences:[{url:'/sequence',sha256:await hash(seq)}]});
@@ -17,6 +17,8 @@ const create=()=>experiment.create({host:{controls:{document},scene:{open:async(
 const instance=await create();
 assert.equal(instance.read().moment,'shape','guided entry must apply the selected saved moment');
 assert.equal(instance.read().frame,1);assert.equal(instance.read().scaleMode,'predicted');
+instance.operations.setTraceMetric('palmLength');await instance.operations.setMoment('motion');assert.equal(instance.read().trace.metric,'palmLength','chosen raw palm metric survives a moment change without a view-mode switch');await instance.operations.setMoment('shape');
+
 assert.deepEqual(instance.read().visibleModels,['original','trained']);
 instance.operations.setScaleMode('palm');
 assert.deepEqual(instance.read().displayScales.slice(0,2),[1,2]);
@@ -26,7 +28,9 @@ const before=instance.read().trace;instance.operations.setScaleMode('predicted')
 await instance.operations.setMoment('motion');assert.equal(instance.read().frame,1);
 instance.operations.toggle();tick({timestampMs:0});tick({timestampMs:400});assert.equal(instance.read().frame,1,'loop wraps inside selected interval');assert.equal(instance.read().playing,true);
 instance.operations.seek(2);assert.equal(instance.read().playing,false);assert.equal(instance.read().trace.cursorFrame,2);
-instance.operations.setTeachers(true);assert.equal(instance.read().visibleModels.length,4);
+instance.operations.setTeachers(true);assert.equal(instance.read().visibleModels.length,5);
+instance.operations.setComparisonPair(['original','wilor']);instance.operations.setViewMode('spatial');assert.equal(new Set(attached.slice(0,5).map(root=>root.position.toArray().join(','))).size,5,'same-parity pair keeps every registered hand in its own station');
+
 instance.operations.seek(0);assert.equal(instance.read().moment,null,'seeking outside a moment returns to full recording');assert.equal(instance.read().trace.start,0);
 await instance.dispose();
 guide.moments[0].captures.frame='wrong';await assert.rejects(create,/moment capture/);

@@ -22,7 +22,7 @@ export function deformationTrace(data,start,end,finger,modelIndices,metric='segm
  if(!['segment','palmWidth','palmLength','palmRatio'].includes(metric))throw Error('invalid trace metric');
  const joint=1+4*finger;
  const series=modelIndices.map(mi=>{
-  const points=data.frames.slice(start,end+1).map((frame,i)=>{const h=frame.hands[mi],width=palmWidth(h);const length=h?.status==='observed'?distance(h.joints[0],h.joints[9]):null;const value=width>1e-10?(metric==='palmWidth'?width*1000:metric==='palmLength'?length*1000:metric==='palmRatio'?length/width:distance(h.joints[joint],h.joints[joint+1])/width):null;return {frame:start+i,timeMs:frame.timeMs,value};});
+  const points=data.frames.slice(start,end+1).map((frame,i)=>{const h=frame.hands[mi],width=palmWidth(h);const length=h?.status==='observed'?distance(h.joints[0],h.joints[9]):null;const value=metric==='palmLength'?(length===null?null:length*1000):width>1e-10?(metric==='palmWidth'?width*1000:metric==='palmRatio'?length/width:distance(h.joints[joint],h.joints[joint+1])/width):null;return {frame:start+i,timeMs:frame.timeMs,value};});
   const values=points.map(p=>p.value).filter(v=>v!==null&&Number.isFinite(v)).sort((a,b)=>a-b),n=values.length;
   const median=n?(values[Math.floor((n-1)/2)]+values[Math.floor(n/2)])/2:null;
   return {model:data.models[mi].id,label:data.models[mi].label,points:points.map(p=>({...p,percent:median>1e-10&&p.value!==null?p.value/median*100:null})),rangePercent:n>1&&median>1e-10?(values.at(-1)-values[0])/median*100:null};

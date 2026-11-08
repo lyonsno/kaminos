@@ -10,3 +10,7 @@ assert(Math.abs(ratios.series[0].points[0].value-1.5)<1e-12);
 assert.equal(ratios.series[1].points[1].value,null);
 assert.deepEqual(data.frames[0].hands[0].joints[9],[0,.09,0]);
 console.log('raw palm length and proportion traces passed');
+
+const zeroWidth={models:[{id:'hand',label:'hand'}],frames:[{timeMs:0,hands:[hand(.09,0)]}]};
+assert.equal(deformationTrace(zeroWidth,0,0,0,[0],'palmLength').series[0].points[0].value,90,'raw length remains defined when width is degenerate');
+assert.equal(deformationTrace(zeroWidth,0,0,0,[0],'palmRatio').series[0].points[0].value,null);
