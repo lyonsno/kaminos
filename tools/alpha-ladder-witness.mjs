@@ -36,7 +36,12 @@ async function main(){
     page.on('pageerror',e=>report.errors.push(String(e.stack??e)));
     await page.evaluateOnNewDocument(()=>{window.__alphaGpu={errors:[],adapters:[]};const method=GPUAdapter.prototype.requestDevice;GPUAdapter.prototype.requestDevice=async function(...args){const i=this.info;window.__alphaGpu.adapters.push({vendor:i.vendor,architecture:i.architecture,isFallbackAdapter:i.isFallbackAdapter});const d=await method.apply(this,args);d.addEventListener('uncapturederror',e=>window.__alphaGpu.errors.push(String(e.error)));return d;};});
     report.phase='load';await page.goto(report.url,{waitUntil:'domcontentloaded'});
-    await page.waitForFunction(()=>window.kaminosWorkbenchExperiments?.read()?.mode==='learned');
+    const admission=await page.waitForFunction(async()=>{
+      if(window.kaminosWorkbenchExperimentError)return {error:window.kaminosWorkbenchExperimentError};
+      if(!window.kaminosWorkbenchExperiments)return false;
+      try{return (await window.kaminosWorkbenchExperiments.read())?.mode==='learned';}catch{return false;}
+    });
+    const admitted=await admission.jsonValue();await admission.dispose();if(admitted?.error)throw Error(admitted.error);
     await new Promise(resolve=>setTimeout(resolve,1500));
     report.adapter=await page.evaluate(()=>window.__alphaGpu.adapters[0]);assert.equal(report.adapter?.vendor,'apple');assert.equal(report.adapter?.isFallbackAdapter,false);
     report.phase='capture';
@@ -52,7 +57,7 @@ async function main(){
         for(const [count,mode]of [[2000,'analytic'],[2000,'baked'],[2000,'learned'],[4000,'analytic'],[4000,'baked'],[4000,'learned'],[16000,'analytic'],[4000,'reference']]){
           if(mode==='analytic'&&count===16000){
             await page.$eval('input[aria-label="Carrier density"]',e=>{e.value='2';e.dispatchEvent(new Event('change',{bubbles:true}));});
-            await page.waitForFunction(()=>window.kaminosWorkbenchExperiments.read()?.count===16000);
+            await page.waitForFunction(async()=>(await window.kaminosWorkbenchExperiments.read())?.count===16000);
           }else await page.evaluate(value=>window.kaminosWorkbenchExperiments.invoke('show',value),{asset,count,mode});
           const state=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());assert.equal(state.mode,mode);assert.equal(state.asset,asset);if(mode!=='reference')assert.equal(state.count,count);
           await new Promise(resolve=>setTimeout(resolve,450));
