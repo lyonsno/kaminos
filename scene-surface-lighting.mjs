@@ -1,4 +1,4 @@
-import {TSL} from './lib/three.webgpu.js';
+import {TSL,NearestFilter} from './lib/three.webgpu.js';
 const {Fn,mrt,vec4,vec3,uniform,screenUV,positionView,normalView,positionViewDirection,getViewPosition,If,abs,max,dot}=TSL;
 
 // The opaque GI source already evaluates these materials. Export their raw
@@ -33,6 +33,9 @@ export default class SceneSurfaceLighting {
       this.source.setMRT(mrt({...this.source.getMRT().outputNodes,surfaceIrradiance:exported}));
       this.capture=this.source.getTextureNode('surfaceIrradiance');
       this.capture.value.name='surfaceIrradiance';
+      // This cache is read at the same full-resolution pixel that produced it.
+      // Point reads retain that value and leave filtering slots to materials.
+      this.capture.value.minFilter=this.capture.value.magFilter=NearestFilter;
       // Mounting a flame can happen after the ordinary scene has drawn. Its
       // existing target must rebuild its attachment set before the next draw.
       this.source.renderTarget.dispose();this.source.needsUpdate=true;

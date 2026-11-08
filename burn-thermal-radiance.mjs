@@ -20,13 +20,16 @@ export function surfaceThermalRadiance(heat,kelvinPerHeat=SURFACE_KELVIN_PER_HEA
  return value.slice(0,3).map(v=>v*value[3]);
 }
 export function createSurfaceThermalRadiance(heat,kelvinPerHeat){
- const {texture,vec2,vec3,float}=THREE.TSL;
+ const {textureLoad,ivec2,vec3,mix}=THREE.TSL;
  const data=Uint16Array.from(THERMAL_LUT,value=>THREE.DataUtils.toHalfFloat(value));
  const map=new THREE.DataTexture(data,THERMAL_LUT_COUNT,1,THREE.RGBAFormat,THREE.HalfFloatType);
  map.name='Shared Planck chromaticity and power';map.colorSpace=THREE.NoColorSpace;
- map.minFilter=map.magFilter=THREE.LinearFilter;map.generateMipmaps=false;map.needsUpdate=true;
+ map.minFilter=map.magFilter=THREE.NearestFilter;map.generateMipmaps=false;map.needsUpdate=true;
  const kelvin=heat.max(0).mul(kelvinPerHeat).add(PHYSICS_COLD_KELVIN).clamp(THERMAL_LUT_MIN,THERMAL_LUT_MAX);
- const coordinate=kelvin.sub(THERMAL_LUT_MIN).div(THERMAL_LUT_STEP).add(.5).div(THERMAL_LUT_COUNT);
- const sample=texture(map,vec2(coordinate,float(.5))).toVar('surfacePlanckRadiance');
+ // Preserve the linear half-float table lookup without a hardware sampler.
+ // The composed burning surface also receives studio, GI and flame lighting.
+ const coordinate=kelvin.sub(THERMAL_LUT_MIN).div(THERMAL_LUT_STEP);
+ const lo=coordinate.floor().min(THERMAL_LUT_COUNT-2).toInt();
+ const sample=mix(textureLoad(map,ivec2(lo,0)),textureLoad(map,ivec2(lo.add(1),0)),coordinate.sub(lo.toFloat())).toVar('surfacePlanckRadiance');
  return {node:heat.greaterThan(0).select(sample.rgb.mul(sample.a),vec3(0)),dispose:()=>map.dispose()};
 }
