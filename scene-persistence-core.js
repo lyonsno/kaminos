@@ -1,3 +1,5 @@
+import {resolveReflectionSettings} from './scene-reflection-settings.mjs';
+import {checkedMaterialDocument,assertMaterialBurningSupport} from './scene-material-recipes.mjs';
 import {checkedAssembly} from './scene-assembly.mjs';
 import {canonicalAuthoredWaterFlowRecords} from './authored-mls-water.mjs';
 import {defaultSceneRecordOperations,normalizeSceneObjectRecord} from './scene-record-operations.mjs';
@@ -15,7 +17,7 @@ import {normalizeCameraViews} from './scene-camera-views.mjs';
 import {CAMERA_TYPE,normalizeSceneCamera,normalizeCameraViewport} from './scene-camera.mjs';
 export const SCENE_SCHEMA = 'kaminos.scene.v1';
 export const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
-export const SCENE_VERSION = 11;
+export const SCENE_VERSION = 12;
 
 function cloneJson(value) {
   if (value === undefined) return undefined;
@@ -140,6 +142,10 @@ export function planSceneRestore(data, { allowEmpty = false } = {}) {
   if (objects.some(record => record.type === LOCAL_LIQUID_EMITTER_TYPE) && !localLiquid) {
     throw new Error('Authored water emitters require a saved local liquid domain');
   }
+  const materialLibrary=checkedMaterialDocument(data.materialLibrary);
+  for(const entry of objects)if(entry.burnable?.enabled)assertMaterialBurningSupport(materialLibrary,entry.id);
+  const materialObjectIds=new Set(objects.map(o=>o.id));
+  if(materialLibrary.bindings.some(b=>!materialObjectIds.has(b.objectId)))throw Error("Material assignment refers to an absent object");
   const groups = getSceneGroupRecords(data, objects);
   const loadedIds = new Set(objects.map(record => record.id));
   const requestedActiveId = data.activeObjectId && loadedIds.has(data.activeObjectId) ? data.activeObjectId : null;
@@ -147,6 +153,8 @@ export function planSceneRestore(data, { allowEmpty = false } = {}) {
   const activeObjectId = requestedActiveId || (Array.isArray(data.selectionIds)?null:objects.at(-1)?.id || null);
   return {
     schema: data.schema || null,
+    materialLibrary,
+    reflections:data.postprocessing?.reflections==null?null:resolveReflectionSettings(data.postprocessing.reflections),
     cameraViews: normalizeCameraViews(data.cameraViews),
     sceneCamera:normalizeSceneCamera(data.sceneCamera,objects),
     editorDisplay:data.editorDisplay==null?null:checkedViewportDisplay(data.editorDisplay),
@@ -171,6 +179,7 @@ export function buildSceneDocument({
   timestamp = new Date().toISOString(),
   objects = [],
   groups = [],
+  materialLibrary = undefined,
   activeObjectId = null,
   activeGroupId = null,
   activeFieldId = null, selectionIds = null,
@@ -215,8 +224,9 @@ export function buildSceneDocument({
   }
   const document = {
     schema: SCENE_SCHEMA,
-    version: sceneObjects.some(o=>o.repetition)||sceneGroups.some(g=>g.repetition)?SCENE_VERSION:fireSettings?10:8,
+    version: materialLibrary?12:sceneObjects.some(o=>o.repetition)||sceneGroups.some(g=>g.repetition)?SCENE_VERSION:fireSettings?10:8,
     timestamp,
+    ...(materialLibrary?{materialLibrary:checkedMaterialDocument(materialLibrary)}:{}),
     objects: fireSettings ? authorFireObjects(sceneObjects,fireSettings,{translation:authoredFlameDomain,scale:flameDomainScale,followSource:flameDomainFollowSource,worldFrame:flameWorldFrame,collision:composition?.route?.volume_collision==='kiln'}) : sceneObjects,
     ...(fireSettings?{fireRendering:fireRenderingSettings(fireSettings)}:{}),
     groups: sceneGroups,

@@ -35,7 +35,8 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   hierarchy.innerHTML = `<div class="authoring-panel-heading"><h2 title="Click to select · Double-click to rename · Arrow folds children · × removes (Undo restores)">Outliner</h2><span id="authoring-object-count"></span><button type="button" id="authoring-group-selection" class="authoring-heading-action" title="Group selection" aria-label="Group selection"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h4.2l1.3 1.6H14v7.4H2zM8 7.6v3.6M6.2 9.4h3.6"/></svg></button></div><div id="authoring-tree"></div>`;
   const inspector = document.createElement('aside');
   inspector.id = 'authoring-inspector'; inspector.setAttribute('aria-label', 'Properties');
-  inspector.innerHTML = `<nav class="inspector-switch" aria-label="Properties context"><button type="button" data-inspector-context="object" aria-pressed="true">Selection</button><button type="button" data-inspector-context="scene" aria-pressed="false">Scene</button></nav>
+  inspector.innerHTML = `<nav class="inspector-switch" aria-label="Properties context"><button type="button" data-inspector-context="object" aria-pressed="true">Selection</button><button type="button" data-inspector-context="material" aria-pressed="false">Material</button><button type="button" data-inspector-context="scene" aria-pressed="false">Scene</button></nav>
+    <div id="authoring-material-properties" class="authoring-inspector-body" hidden></div>
     <div id="authoring-camera-properties" class="authoring-inspector-body" hidden></div>
     <div id="authoring-object-properties" class="authoring-inspector-body"><div id="authoring-transform-slot"></div><div id="authoring-type-slot"></div><details id="authoring-object-tools"><summary>Object tools</summary></details></div>
     <div id="authoring-scene-properties" class="authoring-inspector-body" hidden><details id="authoring-inspector-scene-tree" hidden><summary>Scene objects</summary><div id="authoring-inspector-tree-slot"></div></details><h2>Composition</h2><div class="scene-data-choices"><button type="button" id="scene-fire-data">Fire & smoke data</button><button type="button" id="scene-water-data">Water simulation data</button></div><div id="authoring-composition-slot"></div><details open id="authoring-world-slot"><summary>Environment</summary></details><div id="authoring-water-slot"></div><details id="authoring-render-slot"><summary>Rendering</summary></details></div>`;
@@ -176,10 +177,11 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   }
   function setContext(context) {
     if(context==='camera')context='scene'; // Existing camera-panel callers open scene-owned shot settings.
-    if(!['object','scene','camera'].includes(context))throw Error('Unknown properties context');
+    if(!['object','material','scene','camera'].includes(context))throw Error('Unknown properties context');
     inspectorContext=context;
     const object = context === 'object';
     byId('authoring-object-properties').hidden = !object;
+    byId('authoring-material-properties').hidden = context!=='material';
     byId('authoring-scene-properties').hidden = context!=='scene';
     byId('authoring-camera-properties').hidden = context!=='scene';
     inspector.querySelectorAll('[data-inspector-context]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.inspectorContext === context)));
@@ -233,7 +235,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
     if (key === selectionKey) return;
     selectionKey = key;
     byId('authoring-object-tools').hidden=!!source.dataset.selectedFieldId||Number(source.dataset.selectionCount)>1||!!source.dataset.selectedGroupId;
-    setContext('object');
+    if(inspectorContext!=='material')setContext('object');
 
   });
   observer.observe(byId('transform-inspector'), { attributes: true, attributeFilter: ['data-selected-object-id', 'data-selected-group-id','data-selected-field-id'] });

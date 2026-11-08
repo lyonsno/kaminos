@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
+import {createSceneMaterials} from '../scene-material-recipes.mjs';
+import {sceneMaterialPrograms} from '../scene-material-programs.mjs';
 import {ASH_SOURCE_TYPE} from '../ash/source-object.mjs';
 import {sceneContext} from './helpers/scene-context.mjs';
 import { createWorkingScene } from '../working-scene.mjs';
@@ -37,7 +39,7 @@ function makeSceneContext({reloadObject = () => ({}), reloadableType = 'glb'} = 
   };
   // VM remains only for the unrelated page presenter and mesh repair callers.
   // Membership operations themselves are imported and run outside that context.
-  const context = vm.createContext({structuredClone,workingScene,scene,currentMesh:null,sceneBurning:null,releasePreparedRoot,releaseInitialBeautyLevels,
+  const context = vm.createContext({sceneMaterials:createSceneMaterials({entries:()=>workingScene.objects,definitions:sceneMaterialPrograms}),structuredClone,workingScene,scene,currentMesh:null,sceneBurning:null,releasePreparedRoot,releaseInitialBeautyLevels,
     window:{_kaminosDirty(){}},setInfo(){},renderSceneObjectList(){},sceneNavigation:{invalidate(){}},
     applyMaterialStateToObject(){},applySceneObjectTransformState(){},
   });

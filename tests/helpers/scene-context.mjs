@@ -1,3 +1,5 @@
+import {createSceneMaterials} from '../../scene-material-recipes.mjs';
+import {sceneMaterialPrograms} from '../../scene-material-programs.mjs';
 import {ASH_OBJECT_TYPE} from '../../ash/scene-record.mjs';
 import {ASH_SOURCE_TYPE} from '../../ash/source-object.mjs';
 import {ashMembershipEntry} from '../../ash/history-record.mjs';
@@ -37,6 +39,8 @@ const interactionFunctions=['currentBeautyFrameOptions','interactiveSceneRoots',
 // while exercising extracted page consumers. Ownership/integration tests use
 // createWorkingScene itself; this double is not evidence for its invariants.
 export function sceneContext(context, options) {
+  context.sceneMaterials??=createSceneMaterials({entries:()=>context.workingScene?.objects??[],definitions:sceneMaterialPrograms});
+  context.restoreSceneReflectionSettings??=()=>{};
   context.ashMembershipEntry??=ashMembershipEntry;
   context.ASH_OBJECT_TYPE??=ASH_OBJECT_TYPE;context.ASH_SOURCE_TYPE??=ASH_SOURCE_TYPE;
   context.authoredAsh??=new Map();context.ashEditTargets??=new Set();

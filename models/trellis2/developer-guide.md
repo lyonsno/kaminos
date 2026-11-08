@@ -197,6 +197,70 @@ generation receipt retain the effective scheduling snapshot. Retained-block
 checks preserve output and scene service, but do not establish full-generation
 speed or interactive comfort; use the option provisionally on useful work.
 
+## Completed sparse occupancy previews
+
+Pass `runId` and an optional `onPreview` callback to
+`createTrellisImageGenerationAdapter` to observe the completed occupied support
+before low-resolution shape sampling. Live delivery stays on the GPU:
+
+~~~js
+const generator = createTrellisImageGenerationAdapter({
+  route, ...inputs, runId: crypto.randomUUID(),
+  onPreview: preview => {
+    if (!preview.isCurrent()) return;
+    // Your same-device renderer consumes or copies the resident support here.
+    // Complete a retaining copy submission before returning or awaiting anything.
+  },
+});
+~~~
+
+`runTrellisInPage` accepts an optional nonblank `runId` and the same callback;
+when omitted it creates one ID and returns it with the result. The public
+`window.kaminosTrellisPage` caller passes its actual run ID through, so preview,
+host, job and final generation record agree. The observer is called directly
+without an added foreground window or completion join. Its returned promise is
+never awaited. A thrown or rejected observer is recorded in `previewDelivery`
+without failing the model; a still-pending last observer is `expired` at model
+completion. Preview promises are not joined during final decoding or cleanup.
+
+The live event schema is `trellis2.sparse-occupancy-preview.gpu.v1`, kind
+`sparse-occupancy`. It includes actual run/route/job/invocation identities,
+completed sampling `step`/`steps`, `count`, the actual `device`, and resident
+`coordinates` tensor (`buffer`, `bufferOffset`, `byteLength`, dtype `i32`,
+shape `[count,3]`). Coordinates are packed i32 triples: a shader reads
+`array<i32>` at `row*3+axis`; `array<vec3<i32>>` has a different array stride.
+The buffer supports `STORAGE`, `COPY_SRC` and `COPY_DST`; it has no vertex-buffer
+usage. Use the same device/queue, not another tab's or process's WebGPU device.
+
+The live source is borrowed until that support owner retires. `isCurrent()`
+becomes false at support retirement, model completion, failure or disposal,
+whichever happens first. The default1024 cascade retires the initial coarse
+support before high-resolution shape sampling, while the model is still running. It is a validity check, not an async
+lease: a consumer retaining support must encode and submit a GPU-to-GPU copy
+synchronously during callback delivery, within its existing command admission,
+before awaiting renderer initialization or other work. The consumer owns that
+copy and its disposal. Later rendering/delivery must also respect the consumer's
+active run and final-result identity so a late preview cannot replace a final
+result or a newer run. A pending renderer must never hold model progress.
+
+`grid` declares source/support dimensions, strict-positive threshold and
+max-any downsampling. Normal64³ occupancy becomes32³ support, the exact input
+for the shape model. `layout` preserves raw component/row order. A cell center
+adds `spatial.cellCenterOffset`, then applies `spatial.gridToSource` (scale,
+then offset). `spatial.sourceToGltf` is the column-major node transform used by
+the ordinary geometry exporter, separate from the unmodified raw components.
+The live event and generation's `coordinateBytesToCPUDuringServing` report zero;
+with no observer there is no preview buffer/readback work or decoding. Intermediate
+sampler tensors remain latents, not evolving occupancy.
+
+For an explicit capture/export boundary, `readTrellisOccupancyPreview` in
+`occupancy-coordinates.js` can copy the complete resident support using its
+actual runtime and scheduler invocation. Its separate schema
+`trellis2.sparse-occupancy-preview.v1` contains an owned CPU `Int32Array` that
+survives producer disposal, and reports the exact copied bytes. At normal
+source dimensions complete support fits at most384KiB. This explicit helper is
+not called by live delivery or used as a required inference/display dependency.
+
 ## Memory and performance
 
 Model weights are float32 and load one stage at a time. Keep the weight package

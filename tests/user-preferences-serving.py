@@ -44,6 +44,13 @@ class PreferencesServing(unittest.TestCase):
                     for settings in (
                         {'postprocessing': {'sceneGI': {'estimator': {'aoContrast': -1}}}},
                         {'postprocessing': {'sceneGI': {'steps': 0}}},
+                        {'postprocessing': {'reflections': {'steps': 0}}},
+                        {'postprocessing': {'reflections': {'refinementSteps': -1}}},
+                        {'postprocessing': {'reflections': {'refinementSteps': 1.5}}},
+                        {'postprocessing': {'reflections': {'samples': 1.5}}},
+                        {'postprocessing': {'reflections': {'resolutionScale': 2}}},
+                        {'postprocessing': {'reflections': {'sampling': 'invalid'}}},
+                        {'postprocessing': {'reflections': {'historyWeight': .9999999999999999}}},
                         {'postprocessing': {'sceneGI': {'steps': 10**400}}},
                         {'postprocessing': {'sceneGI': {'slices': 1.5}}},
                         {'postprocessing': {'sceneGI': {'temporal': 'true'}}},

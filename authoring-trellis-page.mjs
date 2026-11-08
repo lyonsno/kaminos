@@ -17,11 +17,13 @@ const MODEL_DEPS=async()=>{
 // activation memory); it needs shader-f16 on the shared device.
 // Every run also yields a surfel asset (trellis-surfels.mjs) from the decoded field, built from the raw
 // mesh before any cleanup. finishMesh:false stops there: no cleanup, UV or bake, and no mesh GLB.
-export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixelValues,highResolutionPixelValues,finishing,finishMesh=true,textureSize=1024,decoderActivationStorage,scheduling,signal,onPhase=()=>{},provenance={},deps}){
+export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixelValues,highResolutionPixelValues,finishing,finishMesh=true,textureSize=1024,decoderActivationStorage,scheduling,signal,onPhase=()=>{},onPreview,runId=`authoring-trellis-page-${globalThis.crypto.randomUUID()}`,provenance={},deps}){
   if(!Number.isSafeInteger(textureSize)||textureSize<1||!Number.isSafeInteger(textureSize**2))
     throw TypeError('positive representable texture size required');
   if(!(pixelValues instanceof Float32Array)||pixelValues.length!==512*512*3)
     throw TypeError('TRELLIS needs the selected image as prepared 512x512 RGB pixels');
+  if(onPreview!==undefined&&typeof onPreview!=='function')throw TypeError('preview observer must be a function');
+  if(typeof runId!=='string'||!runId.trim())throw TypeError('nonblank runId required');
   if(finishMesh&&(typeof finishing?.postprocessMesh!=='function'||typeof finishing?.unwrapMesh!=='function'))
     throw TypeError('TRELLIS page finishing needs mesh cleanup and UV providers');
   if(decoderActivationStorage!==undefined&&!['f32','f16'].includes(decoderActivationStorage))throw TypeError('f32 or f16 decoder activation storage');
@@ -45,13 +47,14 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
     return onPhase(event);
   };
   try{
-    run=await host.beginRun({runId:`authoring-trellis-page-${globalThis.crypto.randomUUID()}`,signal:stop,scheduling});
+    run=await host.beginRun({runId,signal:stop,scheduling});
     finishing?.postprocessMesh?.setExecutionContext?.({withCpu:(phase,work)=>run.withForeground(phase,work),withGpu:(phase,work)=>run.withGpuDuty(phase,work)});
     await timed({phase:'checkpoint-loading'});
     // CPU/network spans open a foreground window so scene frames run while they wait;
     // GPU work and readbacks keep the run's boundary admission.
     const inputs=await run.withForeground('trellis-checkpoint-loading',()=>d.loadGenerationInputs(manifest,fetchTensor,{pixelValues,highResolutionPixelValues}));
-    generation=d.createTrellisImageGenerationAdapter({...inputs,route:run.route,onPhase:timed});
+    generation=d.createTrellisImageGenerationAdapter({...inputs,route:run.route,onPhase:timed,
+      ...(onPreview?{runId:run.runId,onPreview}:{})});
     const job=run.route.enqueue({jobId:run.runId+':image-to-fields',execute:invocation=>generation.run(invocation)});
     const completed=await job.completion;
     if(completed.status!=='succeeded'){
@@ -85,7 +88,7 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
       provenance:{input:'caller-prepared pixels',...provenance,route:run.route.routeId,modelIdentities:out.modelIdentities},
       onPhase:timed});
     let finished;
-    try{finished=await asset.run();}catch(error){if(surfels&&error&&typeof error==='object')error.trellisSurfels={...surfels,route:run.route.routeId};throw error;}
+    try{finished=await asset.run();}catch(error){if(surfels&&error&&typeof error==='object')error.trellisSurfels={...surfels,route:run.route.routeId,runId:run.runId};throw error;}
     if(!(finished.glb?.byteLength>=12)||new DataView(finished.glb).getUint32(0,true)!==0x46546c67)throw Error('TRELLIS page run returned bytes that are not a GLB');
     result={glb:finished.glb,conditioningShapes:out.conditioningShapes,meshFinishing:finished.mesh?.metadata?.postprocess??null,uv:finished.mesh?.uvMetadata??null,material:finished.textures?.metadata??null,route:run.route.routeId,
       ...(surfels??{surfelGlb:null,surfels:{status:'failed',error:'the asset consumer did not hand over the raw mesh'}})};
@@ -114,7 +117,7 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
     if(failure)throw failure;
   }
   // Checked here: the run's GPU route was released and the asset is a GLB.
-  return {...result,timing,receiptValidation:{ok:true,by:'authoring-trellis-page',checks:['route-released','glb-magic']}};
+  return {...result,runId:run.runId,timing,...(onPreview?{previewDelivery:generation?.previewDelivery}:{}),receiptValidation:{ok:true,by:'authoring-trellis-page',checks:['route-released','glb-magic']}};
 }
 
 // Kit profile stages grouped by name: resolved GPU time per stage, not running-total deltas.

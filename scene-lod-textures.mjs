@@ -2,6 +2,7 @@
 // costs describe RGBA8 mip chains for the supported PNG products, not total
 // renderer/device memory (render targets, environments and other owners differ).
 import {sceneRadianceMaterialChain} from './scene-radiance.mjs';
+import {materialProgramSource,sourceRecipeMaterial} from './scene-material-recipes.mjs';
 import {digestBytes,geometrySignature,textureInfo} from './lod-textures.mjs';
 const MAPS=['map','normalMap','roughnessMap','metalnessMap','aoMap','emissiveMap','alphaMap','bumpMap','displacementMap','lightMap'];
 const meshes=(root,includeRepetitions=false)=>{const out=[];function visit(m){if(m!==root&&(m.userData?.kaminosBeautyLodProxy||(!includeRepetitions&&m.userData?.kaminosRepetitionCopy)||m.userData?.kaminosEditorHelper||m.userData?.kaminosEditorOnly))return;if(m.isMesh)out.push(m);for(const child of m.children??[])visit(child);}visit(root);return out;};
@@ -35,7 +36,11 @@ export function allocateTextureLods(candidates=[],{textureBudgetBytes=Infinity,m
   return {allocations,totalBytes,textureBudgetBytes,budgetMode:Number.isFinite(textureBudgetBytes)?'explicit':'unlimited',unknown,withinBudget:unknown.length===0&&totalBytes<=textureBudgetBytes};
 }
 
-function bindings(root){return meshes(root).map(m=>materials(m.userData?.kaminosOriginalMaterial??m.material).map(mat=>Object.fromEntries(MAPS.map(k=>[k,mat?.[k]??null]))));}
+function appearanceChain(material){
+  const chain=sceneRadianceMaterialChain(material),program=chain.map(materialProgramSource).find(Boolean);
+  return program?[...sceneRadianceMaterialChain(program.source),...(program.preservesMaps?chain:[])]:chain;
+}
+function bindings(root){return meshes(root).map(m=>materials(m.userData?.kaminosOriginalMaterial??m.material).map(mat=>{const source=sourceRecipeMaterial(sceneRadianceMaterialChain(mat).at(-1));return Object.fromEntries(MAPS.map(k=>[k,source?.[k]??null]));}));}
 function applyBindings(root,maps){
   const targets=meshes(root);
   if(targets.length!==maps.length)throw Error('Appearance mesh layout does not match the displayed geometry');
@@ -44,7 +49,7 @@ function applyBindings(root,maps){
   for(let i=0;i<groups.length;i++)for(const group of groups[i])if(group.length!==maps[i].length)throw Error('Appearance material slots do not match the displayed geometry');
   const owners=new Map();
   const assign=(material,values)=>{
-    for(const owner of sceneRadianceMaterialChain(material)){
+    for(const owner of appearanceChain(material)){
       for(const key of MAPS)owner[key]=values[key];
       owner.needsUpdate=true;owners.set(owner,values);
     }
@@ -56,7 +61,7 @@ function applyBindings(root,maps){
   const primary=new Set(targets);
   for(const mesh of meshes(root,true))if(!primary.has(mesh)){
     for(const material of [...materials(mesh.userData?.kaminosOriginalMaterial),...materials(mesh.material)]){
-      const values=sceneRadianceMaterialChain(material).map(owner=>owners.get(owner)).find(Boolean);
+      const values=appearanceChain(material).map(owner=>owners.get(owner)).find(Boolean);
       if(values)assign(material,values);
     }
   }
