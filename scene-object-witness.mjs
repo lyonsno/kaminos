@@ -259,6 +259,7 @@ async function runTrellisHistoryScenario(ws) {
 async function runTrellisHistoryLiveScenario(ws) {
   phase='scenario-trellis-history-live';
   lastEvidence.trellisHistoryLive=await evaluate(ws,`(async()=>{
+    if(!window.kaminosTrellisHistory)await new Promise(resolve=>document.addEventListener('kaminos-trellis-history-installed',resolve,{once:true}));
     const input=JSON.parse(new URLSearchParams(location.search).get('experiment_inputs')||'{}');
     const controller=await window.kaminosTrellisHistory.ensure(),app=await window.kaminosAppGpu();
     const {readVoxelHistoryFrame}=await import('./models/trellis2/voxel-history.js');
@@ -309,6 +310,7 @@ async function runTrellisHistoryLiveScenario(ws) {
 async function runTrellisHistoryReopenScenario(ws){
   phase='scenario-trellis-history-reopen';
   lastEvidence.trellisHistoryReopen=await evaluate(ws,`(async()=>{
+    if(!window.kaminosTrellisHistory)await new Promise(resolve=>document.addEventListener('kaminos-trellis-history-installed',resolve,{once:true}));
     const input=JSON.parse(new URLSearchParams(location.search).get('experiment_inputs')||'{}');
     const controller=await window.kaminosTrellisHistory.ensure();await controller.open({runId:input.runId});
     const saved=await(await fetch('/api/trellis-history?'+new URLSearchParams({runId:input.runId}))).json();
