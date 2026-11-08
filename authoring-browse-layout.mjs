@@ -26,7 +26,7 @@ export function thumbnailDistance({size,fovDeg=35,aspect=1,margin=1.08}){
   return margin*Math.max(size[1]/2/tanV,across/2/(tanV*aspect))+across/2;
 }
 
-const LABELS={'generated-meshes':'Saved assets','image-inbox':'Source images',greenroom:'Generator outputs','agent-work':'Agent work',pixal3d:'Pixal',trellis2mlx:'TRELLIS'};
+const LABELS={'generated-meshes':'Saved assets','image-inbox':'Source images',greenroom:'Generator outputs','agent-work':'Agent work','image-experiments':'Experiments',pixal3d:'Pixal',trellis2mlx:'TRELLIS'};
 
 export function installBrowseLayout({document,controller,inScene=()=>new Set(),open=()=>{},openMasks=null}){
   const byId=id=>document.getElementById(id);
@@ -45,6 +45,7 @@ export function installBrowseLayout({document,controller,inScene=()=>new Set(),o
   // Double-click: a mesh goes into the scene, an image goes to Generate.
   byId('asset-entries').addEventListener('dblclick',event=>{
     const button=event.target.closest('.asset-entry');if(!button)return;
+    if(button.dataset.experimentId)return;
     const selected=controller.read({selectionOnly:true}).selected;if(!selected||selected.visibility?.status==='withheld')return;
     if(['mesh','surface'].includes(selected.kind))controller.add().catch(()=>{});
     else if(selected.kind==='image')open('generate');

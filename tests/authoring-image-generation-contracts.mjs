@@ -101,7 +101,8 @@ test('a prompt becomes a saved image on the shared device while the kiln stays o
  assert.equal(first.name,'klein-a-bronze-lantern-s42.png');
  assert.equal(h.delivered.length,1);assert.equal(h.delivered[0].file.type,'image/png');
  assert.deepEqual(module.readPngProvenance(new Uint8Array(await h.delivered[0].file.arrayBuffer())),h.delivered[0].provenance,'the stored file itself carries the provenance');
- assert.deepEqual((({elapsed,...rest})=>rest)(h.delivered[0].provenance),{schema:'kaminos.image-generation.v1',route:'flux2-klein.text-to-image.authoring-shared-device.v0',model:'FLUX.2 [klein] 4B',prompt:'A bronze lantern',seed:42,width:512,height:512,weights:'/klein-weights',aspect:'square',weightsLevel:'4-bit',transformer:'/klein-weights/dit',timings:{totalMs:5}});
+ const expected={schema:'kaminos.image-generation.v1',route:'flux2-klein.text-to-image.authoring-shared-device.v0',model:'FLUX.2 [klein] 4B',prompt:'A bronze lantern',seed:42,width:512,height:512,weights:'/klein-weights',aspect:'square',weightsLevel:'4-bit',transformer:'/klein-weights/dit',timings:{totalMs:5},textLength:'fit16'};
+ for(const [key,value]of Object.entries(expected))assert.deepEqual(h.delivered[0].provenance[key],value,key);
  assert.ok(h.log.includes('owner:klein'),'denoising runs while klein owns the kiln foreground');
  assert.equal(h.handoff.owner(),'sf3d','after the image the kiln returns to SF3D so mesh generation keeps interleaving frames');
  assert.ok(h.log.indexOf('finish')>h.log.indexOf('drain'),'route drains before the foreground run finishes');
@@ -149,6 +150,23 @@ test('FLUX.3 cannot silently substitute published FLUX.2 weights or an unsupport
  await assert.rejects(h.service.run({model:'flux3',prompt:'kettle',seed:1,level:'3-bit'}),/FLUX.3.*4-bit/);
  await assert.rejects(h.service.run({model:'typo',prompt:'kettle',seed:1}),/Unknown image model/);
  assert.equal(h.loads(),0);
+});
+
+test('a recalled FLUX.3 recipe refuses a different loaded source or sampler before generating',async()=>{
+ for(const expectedModel of [{source:{repo:'black-forest-labs/flux-3-image-klein-base',revision:'different'}},{sampling:{steps:16,shift:6.93}},{lora:{sha256:'different'}}]){
+  const h=harness({modelWeights:async()=>'/flux3-weights'});
+  await assert.rejects(h.service.run({model:'flux3',prompt:'glove',seed:7009,size:256,expectedModel}),/recipe.*(source|sampling|lora)/i);
+  assert.equal(h.generations.length,0,'a package mismatch must not produce an alleged replay');
+ }
+});
+
+test('a rerun persists its separate recipe parent and changes inside the saved PNG',async()=>{
+ const h=harness(),iteration={parent:{source:'/glove.png',name:'Glove'},changes:[{field:'prompt',before:'leather glove',after:'knitted glove'}]};
+ const experiment={id:'glove-flight',title:'Glove flight'};
+ const variation={experimentId:experiment.id,runId:'seed-study',jobId:'0:0',attempt:'attempt'};
+ await h.service.run({prompt:'knitted glove',seed:7009,size:256,iteration,experiment,variation});
+ const p=module.readPngProvenance(new Uint8Array(await h.delivered[0].file.arrayBuffer()));
+ assert.deepEqual(p.variation,variation);assert.deepEqual(p.iteration,iteration);assert.deepEqual(p.experiment,experiment);assert.equal(p.reference,undefined,'a recipe parent is not image conditioning');
 });
 
 test('the actual pipeline factory selects Flux3Pipeline for FLUX.3',async()=>{
@@ -427,4 +445,19 @@ test('the kiln gets the exact admitted prompt and model request before async loa
  const run=h.service.run({prompt:'  engraved bronze lantern  ',seed:42,size:256,model:'flux2'});await tick();
  const request=h.service.read().request;assert.equal(request.prompt,'engraved bronze lantern');assert.equal(request.width,256);assert.equal(request.seed,42);assert.match(request.id,/^kaminos-flux2-klein:/);
  gate.resolve();await run;assert.equal(h.generations[0].prompt,request.prompt);assert.equal(h.service.read().request.id,request.id);
+});
+
+test('recorded adapter absence rejects an added adapter before inference, and new plain outputs record absence',async()=>{
+ const adapted=harness({modelWeights:async()=>'/flux3-weights'});
+ await assert.rejects(adapted.service.run({model:'flux3',prompt:'rack',seed:614,size:256,expectedModel:{lora:null}}),/recipe.*adapter|recipe.*lora/i);
+ assert.equal(adapted.generations.length,0);
+ const plain=harness();await plain.service.run({model:'flux2',prompt:'rack',seed:614,size:256});
+ assert.equal(plain.delivered[0].provenance.lora,null);
+});
+
+test('generation preserves explicit human or agent attribution and never substitutes the recipe parent author',async()=>{
+ const author={kind:'person',id:'noah',label:'Noah'};const h=harness();await h.service.run({prompt:'rack',seed:42,size:256,author});
+ assert.deepEqual(h.delivered[0].provenance.author,author);
+ const agent={kind:'agent',id:'design-agent',label:'Design Agent'};await h.service.run({prompt:'rack',seed:43,size:256,author:agent});assert.deepEqual(h.delivered[1].provenance.author,agent);
+ await assert.rejects(h.service.run({prompt:'rack',seed:44,size:256,author:{kind:'person',label:'Noah'}}),/author|identity/i);
 });

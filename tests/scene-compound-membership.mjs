@@ -56,7 +56,7 @@ test('failed group Redo rolls back partial reconstruction and permits retry',asy
 test('group Redo republishes restored flame sources through the production domain adapters',async()=>{
  const state=createWorkingScene(),scene=new THREE.Scene(),edits=createSceneEdits({read:()=>null,write(){}}),published=[];let next=0;
  const serialize=row=>({id:row.id,type:row.type,label:row.label,source:row.source,transform:pose,emission:row.emission});
- const h=sceneContext({writeObjectBurnable(){},structuredClone,createSceneMembershipOperations,createSceneMembershipBatch,workingScene:state,scene,scenePlacementTools:{edits},checkedRepetition,
+ const h=sceneContext({burnerGraphWriting:false,writeObjectBurnable(){},structuredClone,createSceneMembershipOperations,createSceneMembershipBatch,workingScene:state,scene,scenePlacementTools:{edits},checkedRepetition,
  FLAME_EMITTER_TYPE:'flame-emitter',CAMERA_TYPE:'camera',PROCEDURAL_MESH_TYPE:'procedural',LOCAL_LIQUID_EMITTER_TYPE:'water',GROUP_TYPE:'group',
  serializeSceneObject:serialize,isReloadableSceneObjectRecord:()=>true,sceneNavigation:null,sceneCameras:null,transformControls:null,currentMesh:null,splatCorrectionMode:null,hybridSplatOverlayState:{},
  applyGiProxySetting(){},sceneGiProxies:{release(){}},applySceneObjectTransformState(){},applyMaterialStateToObject(){},canCollideWithFire:()=>false,disposeObjectTree(){},renderSceneObjectList(){},updateTransformInspector(){},setInfo(){},
@@ -101,4 +101,15 @@ test('duplicating a component inside assembly Edit Mode keeps membership and rol
  assert.equal(f.state.groups[0].assembly.roles['lamp-copy'],'outlet');
  await f.edits.undo();assert.deepEqual(f.state.groups[0].objectIds,['lamp']);assert.equal(f.state.find('lamp-copy'),undefined);
  await f.edits.redo();assert.deepEqual(f.state.groups[0].objectIds,['lamp','lamp-copy']);assert.equal(f.state.groups[0].assembly.roles['lamp-copy'],'outlet');
+});
+
+test('compound membership selects its new assembly without cancelling its settling edit',async()=>{
+ const f=fixture(),h=f.context,edits=createSceneEdits({read:()=>null,write(){}});
+ Object.assign(h,{burnerGraphWriting:false,createSceneMembershipBatch,ashMembershipEntry:x=>x,applyCompoundSceneRecord(){},serializeSceneGroups:()=>structuredClone(f.state.groups),ensureGroupTarget(){},flameDomainTranslation:[0,0,0],flameDomainScale:1,flameDomainFollowSource:false,sceneCameras:null,normalizeFlameDomainTranslation(){},normalizeFlameDomainScale(){},restoreCompoundSceneContext(){},detachSelectionMember(){},clearActiveSceneObjectSelection:()=>f.state.clearSelection(),renderSceneObjectList(){},updateTransformInspector(){},window:{_kaminosDirty(){}},setSceneSelection:(ids,id)=>{if(!h.burnerGraphWriting)edits.cancel();return f.state.select(ids,id);}});
+ h.scenePlacementTools.edits=edits;
+ const a=html.indexOf('function createPageSceneMembershipBatch('),b=html.indexOf('function applyCompoundSceneRecord(',a);vm.runInContext(html.slice(a,b),h);
+ const batch=h.createPageSceneMembershipBatch();batch.attachHistory(edits);
+ const next=batch.capture();next.groups=[{id:'burner-new',type:'group',label:'Burner',transform:pose,objectIds:['lamp'],assembly:{kind:'burner',roles:{lamp:'body'}}}];next.selection={ids:['@group:burner-new'],activeId:'@group:burner-new'};
+ await edits.applySettled('@selection-membership',next,'Make burner');
+ assert.deepEqual(f.state.selection.ids,['@group:burner-new']);assert.equal(edits.state().undoCount,1);await edits.undo();assert.equal(f.state.groups[0].id,'original');await edits.redo();assert.equal(f.state.groups[0].id,'burner-new');
 });

@@ -52,12 +52,23 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   for(const id of ['asset-text-run','asset-text-decode','asset-text-stop','asset-text-retry']){const control=image.querySelector('#'+id);if(control)imageActions.append(control);}
   const imageSize=image.querySelector('#asset-image-size')?.closest('label');if(imageSize)imageActions.append(imageSize);
   if(imageOptions)imageOptions.before(imageActions,kilnPanel);else image.append(imageActions,kilnPanel);
-  const ceremony=createFlame?installGenerationFlame({document,slot:kilnView,createRenderer:createFlame}):null;
-  kilnChoose.onclick=async()=>{try{if(await kiln?.choose()){syncKiln();await ceremony?.refresh();kilnStatus.textContent='';}}catch(error){kilnStatus.textContent=error.message;}};
-  kiln?.load().then(syncKiln).catch(error=>{kilnStatus.textContent=error.message;});syncKiln();
+  const kilnPreference='kaminos.generate-kiln.v1';let kilnDisabled=true;
+  try{const saved=JSON.parse(document.defaultView.localStorage.getItem(kilnPreference));if(typeof saved?.disabled==='boolean')kilnDisabled=saved.disabled;}catch{}
+  const kilnToggle=document.createElement('input');kilnToggle.type='checkbox';kilnToggle.id='asset-kiln-disabled';kilnToggle.checked=kilnDisabled;
+  const kilnToggleLabel=document.createElement('label');kilnToggleLabel.append(kilnToggle,document.createTextNode('Disable inference kiln'));kilnTools.prepend(kilnToggleLabel);
+  kilnView.hidden=kilnDisabled;kilnChoose.disabled=kilnDisabled;
+  const ceremony=createFlame?installGenerationFlame({document,slot:kilnView,createRenderer:createFlame,enabled:!kilnDisabled}):null;
+  kilnToggle.onchange=async()=>{
+    kilnDisabled=kilnToggle.checked;kilnView.hidden=kilnDisabled;kilnChoose.disabled=kilnDisabled;
+    let preferenceError='';try{document.defaultView.localStorage.setItem(kilnPreference,JSON.stringify({disabled:kilnDisabled}));}catch(error){preferenceError=`Kiln preference not saved: ${error.message}`;}
+    try{await ceremony?.setEnabled(!kilnDisabled);if(!kilnDisabled){await kiln?.load();syncKiln();}kilnStatus.textContent=preferenceError;}
+    catch(error){kilnStatus.textContent=[preferenceError,error.message].filter(Boolean).join(' · ');}
+  };
+  kilnChoose.onclick=async()=>{if(kilnDisabled)return;try{if(await kiln?.choose()){syncKiln();await ceremony?.refresh();kilnStatus.textContent='';}}catch(error){kilnStatus.textContent=error.message;}};
+  if(!kilnDisabled)kiln?.load().then(syncKiln).catch(error=>{kilnStatus.textContent=error.message;});syncKiln();
   const observer=ceremony&&new document.defaultView.IntersectionObserver(entries=>{ceremony.setVisible(entries.some(entry=>entry.isIntersecting));});observer?.observe(kilnView);
   image.querySelector('#asset-prompt')?.addEventListener('change',()=>{if(!ceremony?.read().running)ceremony?.refresh();});
-  document.defaultView.addEventListener('focus',async()=>{try{const before=kiln?.read(),next=await kiln?.load();if(JSON.stringify([before?.selection,before?.document])!==JSON.stringify([next?.selection,next?.document]))await ceremony?.refresh();syncKiln();}catch(error){kilnStatus.textContent=error.message;}});
+  document.defaultView.addEventListener('focus',async()=>{if(kilnDisabled)return;try{const before=kiln?.read(),next=await kiln?.load();if(JSON.stringify([before?.selection,before?.document])!==JSON.stringify([next?.selection,next?.document]))await ceremony?.refresh();syncKiln();}catch(error){kilnStatus.textContent=error.message;}});
   const pair=document.createElement('div');pair.id='asset-image-comparison';pair.className='asset-image-pair';
   const inputFrame=document.createElement('div');inputFrame.className='asset-image-view asset-compare-input';inputFrame.hidden=true;const inputPreview=document.createElement('img');inputPreview.id='asset-compare-source';inputPreview.alt='Comparison input';inputFrame.append(inputPreview);
   const blink=document.createElement('img');blink.id='asset-compare-blink';blink.hidden=true;blink.alt='Comparison input';frame.append(blink);pair.append(inputFrame,frame);
