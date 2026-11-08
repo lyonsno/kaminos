@@ -78,7 +78,7 @@ export default {
    for(let i=0;i<objects.length;i++){
     const o=objects[i],h=row.hands[i];
     o.root.visible=viewMode==='spatial'&&(!guide||showTeachers||pair.includes(i));
-    if(guide){const p=pair.indexOf(i),remaining=catalog.models.map((_,j)=>j).filter(j=>!pair.includes(j)),slot=p>=0?p:2+remaining.indexOf(i);o.root.scale.setScalar(7);o.root.position.set(slot%2?1.3:-.7,1+3*(Math.ceil(catalog.models.length/2)-1)-3*Math.floor(slot/2),0);o.label.scale.set(.27,.034,1);}
+    if(guide||galleryMode){const p=pair.indexOf(i),remaining=catalog.models.map((_,j)=>j).filter(j=>!pair.includes(j)),slot=p>=0?p:2+remaining.indexOf(i);o.root.scale.setScalar(7);o.root.position.set(slot%2?1.3:-.7,1+3*(Math.ceil(catalog.models.length/2)-1)-3*Math.floor(slot/2),0);o.label.scale.set(.27,.034,1);}
     o.mesh.visible=h.status==='observed'&&display[i]!==null;o.arc.visible=o.landing.visible=o.mesh.visible&&showArcs;
     if(!o.mesh.visible)continue;
     const wrist=h.joints[0],transform=v=>v.map((x,k)=>(x-wrist[k])*(k===1||(k===2&&h.camera?.basis==='opencv_x_right_y_down_z_forward')?-1:1)*display[i]);

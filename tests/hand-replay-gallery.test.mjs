@@ -18,7 +18,7 @@ globalThis.Image=class{width=224;height=224;set src(v){queueMicrotask(()=>this.o
 class Element{style={};dataset={};children=[];listeners={};append(...x){this.children.push(...x);}setAttribute(k,v){this[k]=v;}removeAttribute(k){delete this[k];}addEventListener(k,v){this.listeners[k]=v;}removeEventListener(k){delete this.listeners[k];}getContext(){return {fillRect(){},fillText(){},clearRect(){},drawImage(){},beginPath(){},moveTo(){},lineTo(){},closePath(){},fill(){},getImageData(){return {data:new Uint8ClampedArray(4*640*640)};},putImageData(){},createImageData(w,h){return {data:new Uint8ClampedArray(w*h*4)}}};}}
 const keyboardListeners=new Map();
 const document={baseURI:'http://fixture',defaultView:{},createElement:()=>new Element(),addEventListener:(name,fn)=>keyboardListeners.set(name,fn),removeEventListener:name=>keyboardListeners.delete(name)};
-const scene={attach:async()=>{},readView:()=>({}),redraw(){},setView(){},onFrame:()=>()=>{},async dispose(){}};
+const attached=[];const scene={attach:async root=>attached.push(root),readView:()=>({}),redraw(){},setView(){},onFrame:()=>()=>{},async dispose(){}};
 const updates=[];const inputs={manifest:'/catalog.json',guide:'/guide.json',viewMode:'inspection',modelLabels:{original:'Learned geometry'}};
 const instance=await experiment.create({host:{controls:{document},scene:{open:async()=>scene}},inputs,updateInputs:v=>updates.push(v),record(){}});
 assert.deepEqual(instance.read().gallery,{index:0,total:3,label:'Photograph 0'},'single-frame catalogs must open as a numbered photo gallery in source order');
@@ -46,4 +46,5 @@ failedSource=null;await instance.operations.selectExample(0);assert.equal(instan
 assert.deepEqual(frames[0].hands[0].vertices,vertices,'gallery navigation must preserve the saved mesh');
 await instance.dispose();assert.equal(keyboardListeners.has('keydown'),false,'dispose must remove the gallery shortcut');
 const reopened=await experiment.create({host:{controls:{document},scene:{open:async()=>scene}},inputs:{...inputs,example:2},record(){}});assert.equal(reopened.read().captureId,'photo-2','an example address must reopen the same photograph');await reopened.dispose();
+const start=attached.length;const free=await experiment.create({host:{controls:{document},scene:{open:async()=>scene}},inputs:{manifest:'/catalog.json',viewMode:'spatial'},record(){}});free.operations.setViewMode('spatial');assert.equal(new Set(attached.slice(start,start+5).map(root=>root.position.toArray().join(','))).size,5,'a five-output still gallery without a guide must give every free-3D hand its own station');await free.dispose();
 console.log('still-gallery navigation, complete model visibility, controls, source failure and address reconstruction passed');
