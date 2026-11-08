@@ -3551,6 +3551,7 @@ import {createAppFrameSource} from './app-frame-source.mjs';
 import {createSceneFrameComposition} from './scene-frame-composition.mjs';
 import {createAppGpuHost} from './app-gpu-host.mjs';
 import {fireAtBoot,createFluidBoot} from './fire-boot.mjs';
+import {prepareAssetGeometryOffThread,snapshotAssetGeometry} from './asset-geometry-preparation.mjs';
 import {createAuthoringPromptExpansion,installAuthoringPromptExpansion,authoringPromptWeightRoot} from './authoring-prompt-expansion.mjs';
 import {createKleinAuthoringImageGeneration,installKleinImageGeneration,createForegroundHandoff,runWithKilnHandoff,sharedDeviceHostRequirements,authoringImageWeightRoot,readPngProvenance} from './authoring-image-generation.mjs';
 import {createImagePreparation} from './authoring-image-preparation.mjs';
@@ -13241,7 +13242,49 @@ async function showPBRPreview(options = {}) {
 // Imported assets land resting on the ground at the shared size. A fresh
 // arrival (scene just cleared) sits at the origin and gets a framed camera; an
 // append lands under the orbit pivot and leaves camera and lighting alone.
-function applyAssetArrival(object, mode) {
+async function prepareGLBGeometryArrival(object,mode,isCurrent=()=>true) {
+  const contextKey=()=>{
+    const poses=[];
+    for(const entry of workingScene.objects??[]){
+      if(!entry.object||['camera','light'].includes(entry.type))continue;
+      entry.object.updateWorldMatrix(true,true);
+      entry.object.traverse(node=>poses.push([node.id,node.visible,...node.matrixWorld.elements,node.geometry?.id,node.geometry?.getAttribute('position')?.version,node.geometry?.getAttribute('position')?.data?.version]));
+    }
+    return JSON.stringify([groundPlane?.position.y,camera?.fov,camera?.aspect,viewportOverlayTopNdc(),poses]);
+  };
+  for(;;){
+    const key=contextKey(),groundY=groundPlane?groundPlane.position.y:0;
+    const anchor=mode==='append'&&controls?[controls.target.x,controls.target.z]:[0,0];
+    const obstacleSources=[];
+    if(mode==='append'){
+      for(const entry of workingScene.objects){
+        if(!entry.object||['camera','light'].includes(entry.type)||entry.object.visible===false)continue;
+        const snapshot=snapshotAssetGeometry(entry.object)?.snapshot;
+        if(snapshot)obstacleSources.push({snapshot});
+        else{const box=new THREE.Box3().setFromObject(entry.object,true);if(!box.isEmpty())obstacleSources.push({bounds:{min:box.min.toArray(),max:box.max.toArray()}});}
+      }
+      const box=flameDomainGuide?.box;
+      if(activeSceneComposition&&box&&!box.isEmpty())obstacleSources.push({bounds:{min:box.min.toArray(),max:box.max.toArray()}});
+    }
+    const prepared=await prepareAssetGeometryOffThread(object,{mode,groundY,anchor,obstacleSources,
+      viewDirection:camera&&controls?camera.position.clone().sub(controls.target).toArray():[0,0,1],
+      framing:mode==='fresh'&&camera?{fovDeg:camera.fov,aspect:camera.aspect,window:assetArrivalFramingWindow({overlayTopNdc:viewportOverlayTopNdc()})}:null});
+    if(!prepared){object.userData.kaminosAssetPreparation={requestedRoute:'static-geometry-worker',effectiveRoute:'main-thread-compatibility'};return null;}
+    // Recheck viewport shape and neighboring geometry; ordinary camera orbit
+    // must not keep restarting a completed preparation.
+    if(!isCurrent()||key===contextKey())return prepared;
+  }
+}
+
+function applyAssetArrival(object, mode, prepared = null) {
+  if(prepared){
+    object.position.fromArray(prepared.pose.position);object.quaternion.fromArray(prepared.pose.quaternion);object.scale.fromArray(prepared.pose.scale);object.matrix.fromArray(prepared.pose.matrix);object.updateWorldMatrix(true,true);
+    if(prepared.leveling)object.userData.kaminosLeveling=prepared.leveling;
+    if(prepared.arrivalData)object.userData.kaminosAssetArrival=prepared.arrivalData;
+    object.userData.kaminosAssetPreparation={effectiveRoute:prepared.effectiveRoute};
+    if(prepared.placement)recordAssetArrivalLightingAndGI(object,mode,prepared.bounds);
+    return prepared.placement;
+  }
   if (!mode) return null;
   object.updateWorldMatrix(true, true);
   const box = new THREE.Box3().setFromObject(object, true);
@@ -13391,9 +13434,9 @@ function viewportOverlayTopNdc() {
   return 1 - 2 * Math.max(0, barRect.bottom - canvasRect.top) / canvasRect.height;
 }
 
-function frameAssetArrival(object) {
+function frameAssetArrival(object, prepared = null) {
   if (!object || !camera || !controls) return false;
-  const framing = computeAssetArrivalFraming({
+  const framing = prepared?.framing ?? computeAssetArrivalFraming({
     points: sceneObjectWorldPoints(object),
     fovDeg: camera.fov,
     aspect: camera.aspect,
@@ -13408,7 +13451,7 @@ function frameAssetArrival(object) {
   camera.updateProjectionMatrix();
   if (typeof sceneNavigation !== 'undefined' && sceneNavigation?.resetView) sceneNavigation.resetView();
   else controls.update();
-  syncArrivalLightingAndGI(object);
+  syncArrivalLightingAndGI(object,prepared?.bounds);
   window._kaminosDirty?.();
   return true;
 }
@@ -13785,7 +13828,13 @@ async function showGLB(file, options = {}) {
       })
     : null;
 	return new Promise((resolve, reject) => {
-    const onLoad=gltf=>{
+    const onLoad=async gltf=>{
+      let preparedGeometry=null;
+      if(typeof prepareGLBGeometryArrival==='function'){
+        loadingTelemetry?.progress('asset',{label:telemetryLabel,phase:'preparing-geometry',token:telemetryOp?.token});
+        try{preparedGeometry=await prepareGLBGeometryArrival(gltf.scene,arrival,()=>loadToken===workingScene.generation&&options.isCurrent?.()!==false);}
+        catch(error){disposeObjectTree(gltf.scene);throw error;}
+      }
       heroSettled = true;
       const earlyStandIn = releaseEarlyStandIn?.() ?? null;
 
@@ -13812,7 +13861,7 @@ async function showGLB(file, options = {}) {
           baseEnvMapIntensity: envIntensity,
         });
       }
-      const arrivalPlacement = applyAssetArrival(model, arrival);
+      const arrivalPlacement = applyAssetArrival(model, arrival, preparedGeometry);
       model.traverse(child => {
         if (child.isMesh) {
           child.castShadow = true;
@@ -13859,9 +13908,9 @@ async function showGLB(file, options = {}) {
       if(options.activate!==false)document.getElementById('transform-bar').classList.add('visible');
       if (arrival === 'fresh' && arrivalPlacement) {
         if (earlyStandIn?.framed && earlyStandIn.cameraMovedSinceFrame && typeof syncArrivalLightingAndGI === 'function') {
-          syncArrivalLightingAndGI(model);
+          syncArrivalLightingAndGI(model,preparedGeometry?.bounds);
         } else {
-          frameAssetArrival(model);
+          frameAssetArrival(model, preparedGeometry);
         }
       }
       if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.complete('asset',{token:telemetryOp?.token});
@@ -23973,13 +24022,15 @@ function syncArrivalStudioLighting({ syncPromoted = false } = {}) {
   return plan;
 }
 
-function autoCalibrateSceneGIFromScene(extraObject = null) {
+function autoCalibrateSceneGIFromScene(extraObject = null, preparedBounds = null) {
   if (sceneGIManuallyConfigured) return null;
   const boxes = [];
   const pushBox = obj => {
     if (!obj) return;
     obj.updateWorldMatrix?.(true, true);
-    const box = new THREE.Box3().setFromObject(obj, true);
+    const box = obj===extraObject&&preparedBounds
+      ? new THREE.Box3(new THREE.Vector3().fromArray(preparedBounds.min),new THREE.Vector3().fromArray(preparedBounds.max))
+      : new THREE.Box3().setFromObject(obj, true);
     if (!box.isEmpty()) boxes.push({ min: box.min.toArray(), max: box.max.toArray() });
   };
   if (typeof workingScene !== 'undefined') {
@@ -24013,10 +24064,12 @@ function autoCalibrateSceneGIFromScene(extraObject = null) {
   return sceneGIAutoCalibrationState;
 }
 
-function recordAssetArrivalLightingAndGI(object, mode) {
+function recordAssetArrivalLightingAndGI(object, mode, preparedBounds = null) {
   if (!object || !mode) return;
   object.updateWorldMatrix(true, true);
-  const box = new THREE.Box3().setFromObject(object, true);
+  const box = preparedBounds
+    ? new THREE.Box3(new THREE.Vector3().fromArray(preparedBounds.min),new THREE.Vector3().fromArray(preparedBounds.max))
+    : new THREE.Box3().setFromObject(object, true);
   if (mode === 'fresh') {
     arrivalLightingState.sceneKind = 'static-asset';
     arrivalLightingState.studioLightsEnabled = true;
@@ -24069,7 +24122,7 @@ function recordAssetArrivalLightingAndGI(object, mode) {
       }
     }
     syncArrivalStudioLighting({ syncPromoted: true });
-    queueMicrotask(() => autoCalibrateSceneGIFromScene(object));
+    queueMicrotask(() => autoCalibrateSceneGIFromScene(object,preparedBounds));
   }
 }
 
@@ -24091,9 +24144,9 @@ function refreshArrivalLightingFromWorkingScene({syncPromoted=false}={}) {
   syncArrivalStudioLighting({ syncPromoted });
 }
 
-function syncArrivalLightingAndGI(object) {
+function syncArrivalLightingAndGI(object, preparedBounds = null) {
   syncArrivalStudioLighting();
-  autoCalibrateSceneGIFromScene(object);
+  autoCalibrateSceneGIFromScene(object,preparedBounds);
 }
 
 function promoteArrivalStudioLightsToScene({ groupRig = true, select = 'rig', startDrag = null, recordHistory = !startDrag } = {}) {

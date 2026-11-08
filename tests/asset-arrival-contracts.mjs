@@ -220,7 +220,7 @@ test('fresh asset arrival framing resets tilted orbit camera.up so the horizon n
   close(right.y, 0, 'camera right axis must stay level with the horizon after fresh arrival framing');
 
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const frameStart = html.indexOf('function frameAssetArrival(object)');
+  const frameStart = html.indexOf('function frameAssetArrival(');
   const frameEnd = html.indexOf('async function showGLB(', frameStart);
   assert.match(
     html.slice(frameStart, frameEnd),

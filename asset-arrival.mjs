@@ -539,6 +539,7 @@ const PHASE_LABELS = Object.freeze({
   downloading: 'Downloading',
   parsing: 'Parsing geometry',
   'preparing-materials': 'Preparing materials & textures',
+  'preparing-geometry': 'Preparing placement & camera',
   'compiling-shaders': 'Compiling WebGPU shaders',
   'environment-hdr': 'Loading HDR environment',
   'applying-look': 'Applying Studio look',
