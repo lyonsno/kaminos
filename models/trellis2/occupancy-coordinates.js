@@ -37,7 +37,7 @@ export function createTrellisOccupancyPreview(options={}){
   const description=occupancyPreviewDescription(options);
   if(!options.runtime?.device||typeof options.isCurrent!=='function')throw TypeError('resident preview needs its actual device and lifetime predicate');
   return Object.freeze({...description,schema:'trellis2.sparse-occupancy-preview.gpu.v1',device:options.runtime.device,
-    coordinates:options.coordinates,isCurrent:options.isCurrent,lifetime:'borrowed-during-model-run',coordinateBytesToCPU:0});
+    coordinates:options.coordinates,isCurrent:options.isCurrent,lifetime:'borrowed-until-support-retirement',coordinateBytesToCPU:0});
 }
 
 // Explicit capture/export consumer. This is not used by live preview delivery.

@@ -184,7 +184,7 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
           // foreground settlement, final decode, or final result completion.
           try{
             const preview=createTrellisOccupancyPreview({runtime,coordinates:lrCoordinates,plan:coordinates.plan,
-              runId,routeId:route.routeId,steps:sparseSampler.plan.steps.length,invocation,isCurrent:()=>state==='running'&&!disposed});
+              runId,routeId:route.routeId,steps:sparseSampler.plan.steps.length,invocation,isCurrent:()=>state==='running'&&!disposed&&owned.has(coordinates)});
             previewDelivery={status:'pending'};
             Promise.resolve(onPreview(preview)).then(()=>{previewDelivery={status:'delivered'};},previewFailed);
           }catch(error){previewFailed(error);}
