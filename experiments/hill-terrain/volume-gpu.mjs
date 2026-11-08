@@ -33,7 +33,7 @@ export async function createVolumeGPU({device,model,display={}}){
  try{
   kernels.bins=await make(VOLUME_KERNELS,'build_body_grid',[[2,'bodies']],bins);
   kernels.features=await make(VOLUME_KERNELS,'transform_features',[[2,'bodies'],[7,'convexData']],[[4,'worldFeatures'],[6,'featureOwners']]);
-  kernels.degrees=await make(VOLUME_KERNELS,'contact_degrees',[[2,'bodies']],[...bins,[3,'bodyDegrees']]);
+  kernels.degrees=await make(VOLUME_KERNELS,'contact_degrees',[[2,'bodies'],[3,'planes']],[...bins,[3,'bodyDegrees'],[4,'worldFeatures']]);
   kernels.solve=await make(VOLUME_KERNELS,'solve_rigid',[[2,'bodies'],[3,'planes'],[6,'params']],[...bins,[3,'bodyDegrees'],[4,'worldFeatures'],[5,'nextBodies']]);
   kernels.p2g=await make(VOLUME_KERNELS,'p2g',[[0,'particles'],[1,'cells'],[6,'params']]);
   kernels.grid=await make(VOLUME_KERNELS,'grid',[[1,'cells'],[2,'bodies'],[3,'planes'],[4,'triangles'],[5,'reactions'],[6,'params']],bins);

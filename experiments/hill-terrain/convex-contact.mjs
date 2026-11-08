@@ -33,3 +33,16 @@ export function conditionRockPoses(bodies){
  }
  return{kind:'upward nonpenetration preparation',verticalShifts:shifts,maxShift:Math.max(...shifts)};
 }
+
+// Highest vertical sweep boundary: place a source volume just above its
+// support without overlap or an arbitrary air gap. Initial construction only.
+export function verticalContactHeight(body,support){
+ const a=convexFeatures(body.solid),b=convexFeatures(support.solid),world=(o,f)=>f.vertices.map(p=>rotate(o.rotation,p).map((v,k)=>v+o.position[k]));
+ const A=world(body,a),B=world(support,b),ea=a.edges.map(p=>rotate(body.rotation,p)),eb=b.edges.map(p=>rotate(support.rotation,p));
+ const axes=[...a.normals.map(n=>rotate(body.rotation,n)),...b.normals.map(n=>rotate(support.rotation,n)),...ea.flatMap(x=>eb.map(y=>cross(x,y)))];let enter=-Infinity,exit=Infinity;
+ for(const candidate of axes){const n=unit(candidate);if(!n)continue;const pa=A.map(p=>dot(p,n)),pb=B.map(p=>dot(p,n)),alo=Math.min(...pa),ahi=Math.max(...pa),blo=Math.min(...pb),bhi=Math.max(...pb);
+  if(Math.abs(n[1])<1e-9){if(ahi<=blo||bhi<=alo)throw Error('Source volumes have no vertical support intersection');continue;}
+  const t0=(blo-ahi)/n[1],t1=(bhi-alo)/n[1];enter=Math.max(enter,Math.min(t0,t1));exit=Math.min(exit,Math.max(t0,t1));
+ }
+ if(!Number.isFinite(exit)||enter>exit)throw Error('Source volumes have no vertical support intersection');return body.position[1]+exit;
+}

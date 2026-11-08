@@ -1,5 +1,5 @@
 import {createRockOutcrop,buildConvexRock} from './rock-geometry.mjs';
-import {convexFeatures,conditionRockPoses} from './convex-contact.mjs';
+import {convexFeatures,conditionRockPoses,verticalContactHeight} from './convex-contact.mjs';
 export const PARTICLE_WORDS=36,BODY_WORDS=40;
 const dot=(a,b)=>a.reduce((n,v,i)=>n+v*b[i],0);
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
@@ -44,7 +44,10 @@ export function makeVolumeSpecimen(input={}){
  if(config.fixture==='hundred-rocks'){
   const templates=bodies.map(b=>{const solid=buildConvexRock(b.solid.planes.map(p=>[...p.slice(0,3),p[3]*.65])),m=rockMoments(solid,config.rockDensity);return{...b,solid,mass:m.mass,inertia:m.inertia,volume:m.volume};});
   const half=[0,1,2].map(k=>Math.max(...templates.map(b=>Math.max(...b.solid.positions.filter((_,i)=>i%3===k).map(Math.abs))))),pitch=half.map(v=>2*v+.04);bodies=[];
-  for(let y=0;y<4;y++)for(let z=0;z<5;z++)for(let x=0;x<5;x++){const b=templates[(x+3*z+2*y)%templates.length];bodies.push({...b,id:`pile-${y}-${z}-${x}`,bed:y,position:[(x-2)*pitch[0],half[1]+.04+y*pitch[1],(z-2)*pitch[2]],rotation:[0,0,0,1],velocity:[0,0,0],omega:[0,0,0]});}
+  for(let y=0;y<4;y++)for(let z=0;z<5;z++)for(let x=0;x<5;x++){
+   const b=templates[(x+3*z+2*y)%templates.length],next={...b,id:`pile-${y}-${z}-${x}`,bed:y,position:[(x-2)*pitch[0],0,(z-2)*pitch[2]],rotation:[0,0,0,1],velocity:[0,0,0],omega:[0,0,0]};
+   next.position[1]=y?verticalContactHeight(next,bodies[(y-1)*25+z*5+x])+1e-5:-Math.min(...b.solid.positions.filter((_,i)=>i%3===1))+1e-5;bodies.push(next);
+  }
   conditioning={kind:'disjoint source-bounded stack',verticalShifts:bodies.map(()=>0),maxShift:0};
  }else conditioning=config.conditionContacts?conditionRockPoses(bodies):{kind:'unconditioned authored poses',maxShift:0,verticalShifts:bodies.map(()=>0)};
  const width=2*Math.max(...bodies.map(b=>Math.max(...b.solid.positions.filter((_,i)=>i%3!==1).map(Math.abs))))+.1,buckets=new Map();
@@ -55,7 +58,7 @@ export function makeVolumeSpecimen(input={}){
  // lobes, a low apron and a hollow surround the retained authored outcrop.
  const pile=config.fixture==='hundred-rocks',bounds=pile?[-3.0,3.0,-3.45,3.45]:[-1.95,1.95,-1.35,2.35];
  for(let x=bounds[0]+h/2;x<bounds[1];x+=h)for(let z=bounds[2]+h/2;z<bounds[3];z+=h){
-  const localBodies=neighbors(x,z);const top=pile?.18+1.6*Math.exp(-((x/2.5)**4+(z/3.1)**4)):.20+.72*Math.exp(-((x+.95)**2/.32+(z-.25)**2/1.1))+.30*Math.exp(-((x-.9)**2/.45+(z-1.0)**2/.65))-.16*Math.exp(-((x-.25)**2/.25+(z-1.55)**2/.30));
+  const localBodies=neighbors(x,z);const top=pile?.18+1.1*Math.exp(-((x/2.5)**4+(z/3.1)**4)):.20+.72*Math.exp(-((x+.95)**2/.32+(z-.25)**2/1.1))+.30*Math.exp(-((x-.9)**2/.45+(z-1.0)**2/.65))-.16*Math.exp(-((x-.25)**2/.25+(z-1.55)**2/.30));
   for(let y=h/2;y<top;y+=h){const p=[x,y,z];if(localBodies.some(b=>contains(b.solid,p.map((v,k)=>v-b.position[k]),h*.1)))continue;
    const row=Array(PARTICLE_WORDS).fill(0);row.splice(0,8,...p,config.density*h**3,0,0,0,h**3);particles.push(...row);
   }

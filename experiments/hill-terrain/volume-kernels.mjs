@@ -41,7 +41,7 @@ fn reaction_add(index:u32,value:f32){
  if(id.x>=arrayLength(&bodies)){return;}let b=bodies[id.x];var count=0u;
  if(b.p.w>0.){let extent=b.size.x+spatial.origin.w*.5;let lo=bucket(b.p.xyz-vec3f(extent));let hi=bucket(b.p.xyz+vec3f(extent));
  for(var x=lo.x;x<=hi.x;x++){for(var y=lo.y;y<=hi.y;y++){for(var z=lo.z;z<=hi.z;z++){
- var link=atomicLoad(&bodyHeads[bucket_index(vec3i(x,y,z))]);while(link>0u){let j=link-1u;link=bodyLinks[j];if(j!=id.x&&distance(b.p.xyz,bodies[j].p.xyz)<b.size.x+bodies[j].size.x){count++;}}
+ var link=atomicLoad(&bodyHeads[bucket_index(vec3i(x,y,z))]);while(link>0u){let j=link-1u;link=bodyLinks[j];if(j!=id.x&&distance(b.p.xyz,bodies[j].p.xyz)<b.size.x+bodies[j].size.x&&convex_contact(b,bodies[j]).w>0.){count++;}}
  }}}}bodyDegrees[id.x]=max(1u,count);
 }
 const FP:f32=1048576.;
