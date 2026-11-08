@@ -48,3 +48,23 @@ test('triangle adjacency does not borrow support from a nearby disconnected surf
  assert.deepEqual(fitSurfaceFootprints(combined,combined,parent,.01,triangles).slice(0,a.parent.length*8),fitSurfaceFootprints(a.data,a.data,a.parent,.01,a.triangles));
  assert.throws(()=>fitSurfaceFootprints(a.data,a.data,a.parent,.01,new Uint32Array([0,1,99])),/triangle/i);
 });
+
+test('boundary-only triangle fitting leaves interior support bit-for-bit unchanged',()=>{
+ const {data,triangles,parent}=grid([-.04,0,.04],[-.04,0,.04]),before=data.slice();
+ const baseline=fitSurfaceFootprints(data,data,parent,.01);
+ const fitted=fitSurfaceFootprints(data,data,parent,.01,triangles,{boundaryOnly:true});
+ assert.deepEqual(fitted.slice(4*8,5*8),baseline.slice(4*8,5*8),'the interior group must keep its original coverage');
+ assert.notDeepEqual(fitted.slice(0,8),baseline.slice(0,8),'a boundary group must use its incident triangle support');
+ assert.deepEqual(data,before,'fitting must preserve source positions and material channels');
+});
+test('closed triangle surfaces and isolated samples retain their original footprints',()=>{
+ const data=new Float32Array([row(0,0),row(.03,0),row(0,.03),[0,0,.03,0,0,1,1,.5,0,0,.3,1],row(.2,.2)].flat());
+ const parent=new Uint32Array([0,1,2,3,4]),triangles=new Uint32Array([0,2,1,0,1,3,1,2,3,2,0,3]);
+ assert.deepEqual(fitSurfaceFootprints(data,data,parent,.01,triangles,{boundaryOnly:true}),fitSurfaceFootprints(data,data,parent,.01));
+});
+test('boundary fitting follows source connectivity rather than proximity to another sheet',()=>{
+ const a=grid([-.04,0,.04],[-.001,.001]),b=grid([-.04,0,.04],[.002,.04]);
+ const data=new Float32Array([...a.data,...b.data]),parent=Uint32Array.from({length:data.length/12},(_,i)=>i);
+ const triangles=new Uint32Array([...a.triangles,...b.triangles.map(i=>i+a.parent.length)]);
+ assert.deepEqual(fitSurfaceFootprints(data,data,parent,.01,triangles,{boundaryOnly:true}).slice(0,a.parent.length*8),fitSurfaceFootprints(a.data,a.data,a.parent,.01,a.triangles,{boundaryOnly:true}));
+});
