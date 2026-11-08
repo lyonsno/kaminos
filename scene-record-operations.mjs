@@ -30,6 +30,9 @@ export function createSceneRecordOperations({domains=sceneRecordDomains,readers=
     const domain=domainFor(raw),record=domain?.check?domain.check(raw):raw;
     if(domain?.documentOnly)return record;
     const id=String(record.id||record.fileName||record.source||'object');
+    // Domains may retain immutable payloads after this boundary owns its copy.
+    // properties()/serialize() continue to return detached, mutable fields.
+    const fields=properties(record),normalizedFields=domain?.retainFields?domain.retainFields(fields):fields;
     return {
       id,source:record.source??null,type:record.type??'glb',fileName:record.fileName??'object.glb',
       label:record.label??record.fileName??id,groupId:record.groupId??null,createdAt:record.createdAt??null,
@@ -44,7 +47,7 @@ export function createSceneRecordOperations({domains=sceneRecordDomains,readers=
       ...(record.burnable!=null?{burnable:checkedBurnable(record)}:{}),
       ...(record.repetition?{repetition:checkedRepetition(record.repetition)}:{}),
       ...(record.arrivalLeveling&&typeof record.arrivalLeveling==='object'?{arrivalLeveling:copy(record.arrivalLeveling)}:{}),
-      ...properties(record),
+      ...normalizedFields,
     };
   }
 

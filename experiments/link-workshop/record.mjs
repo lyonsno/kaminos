@@ -1,4 +1,4 @@
-import {mechanismIdentity} from './recipe-state.mjs';
+import {mechanismIdentity,copyMechanism,retainBodyGeometry} from './recipe-state.mjs';
 import {Group} from '../../lib/three.core.js';
 import {checkedMechanism} from './model.mjs';
 import {checkedBodyGeometry} from './bodies.mjs';
@@ -14,6 +14,7 @@ export const mechanismRecordDomain={type:'pbr',source:MECHANISM_SOURCE,
  recognize:o=>!!o?.userData?.linkMechanism,
  check:r=>{const mechanism=checkedMechanism(r.mechanism),geometry=checkedBodyGeometry(mechanism,r.geometry);return geometry?{...r,mechanism,geometry}:{...r,mechanism};},
  fields:r=>r.geometry?{mechanism:r.mechanism,geometry:r.geometry}:{mechanism:r.mechanism},
+ retainFields:fields=>({...fields,mechanism:copyMechanism(fields.mechanism),...(fields.geometry?{geometry:retainBodyGeometry(fields.geometry)}:{})}),
  capture:entry=>{const mechanism=checkedMechanism(entry.object.userData.linkMechanism),geometry=checkedBodyGeometry(mechanism,entry.object.userData.linkGeometry);return {type:'pbr',source:MECHANISM_SOURCE,mechanism,geometry};},
  reloadable:r=>{const key=mechanismIdentity([r.mechanism,r.geometry]);if(reloadChecks.get(r)===key)return true;const m=checkedMechanism(r.mechanism);checkedBodyGeometry(m,r.geometry);reloadChecks.set(r,key);return true;},
  load:(r,l,o)=>l.constructed(mechanismObject(r.mechanism,r.geometry),r,o)};

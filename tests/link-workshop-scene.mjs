@@ -65,3 +65,34 @@ console.log('Attachment placement, native offset editing, moving assembly, body-
  const serializer=createSceneRecordOperations({readers:{transform:()=>({position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}),materials:()=>null}}),saved=serializer.serialize({...old,object});
  assert.equal(saved.geometry,undefined,'An absent live shell must override the original scene record');assert.equal(serializer.reloadable(saved),true);
 }
+
+// The Outliner uses normalized records, after the common envelope clones fields.
+// Their immutable mesh payloads must remain identifiable without vertex walks.
+{
+ const {exportHinge,importHinge}=await import('../experiments/link-workshop/hinge-primitives.mjs');
+ const hardware=importHinge({family:'clevis',size:1},exportHinge({family:'clevis',size:1}));
+ const input={...record,mechanism:{...recipe,mounts:[{id:'s',owner:{objectId:'payload'},position:[0,0,0],rotation:[0,0,0]},{id:'t',owner:{joint:1},position:[0,0,0],rotation:[0,0,0]}],attachments:[{objectId:'payload',sourceMount:'s',targetMount:'t',offset:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},hinge:[0,1],hardware}]}};
+ const normalized=records.normalize(input),parts=normalized.mechanism.attachments[0].hardware.parts;
+ const vertices=parts.moving.geometries.find(g=>g.data?.attributes?.position).data.attributes.position.array;
+ assert.equal(records.reloadable(normalized),true);
+ const stringify=JSON.stringify;let walks=0;
+ JSON.stringify=function(value,replacer,space){return stringify(value,function(k,v){if(v===vertices)walks++;return typeof replacer==='function'?replacer.call(this,k,v):v;},space);};
+ try{for(let i=0;i<4;i++)assert.equal(records.reloadable(normalized),true);}finally{JSON.stringify=stringify;}
+ assert.equal(walks,0,'Normalized Outliner records must not traverse immutable hinge vertices on repeated reloadability checks');
+ assert.ok(Object.isFrozen(vertices),'Normalized geometry must be immutable before identity-based admission caching');
+ const detached=records.properties(normalized);detached.mechanism.attachments[0].hardware.parts.moving.object.name='changed externally';assert.notEqual(parts.moving.object.name,'changed externally','Public properties stay detached and mutable');
+ normalized.mechanism.mounts[1].owner.joint=88;assert.equal(records.reloadable(normalized),false,'Normalized metadata mutations still invalidate admission');
+ normalized.mechanism.mounts[1].owner.joint=1;
+ const replaced=structuredClone(parts);replaced.moving.object.type='InvalidPart';
+ assert.equal(records.reloadable(input),true);input.mechanism.attachments[0].hardware.parts=structuredClone(parts);assert.equal(records.reloadable(input),true);input.mechanism.attachments[0].hardware.parts.moving.object.type='InvalidPart';assert.equal(records.reloadable(input),false,'An external mutable part cannot reuse a previously retained valid copy');
+ normalized.mechanism.attachments[0].hardware.parts=replaced;assert.equal(records.reloadable(normalized),false,'Replacing an immutable part with damaged mutable geometry must invalidate admission');
+}
+
+{
+ const normalized=records.normalize(capturedWithBodies),vertices=normalized.geometry.bodies[0].object.geometries.find(g=>g.data?.attributes?.position).data.attributes.position.array;
+ assert.equal(records.reloadable(normalized),true);const stringify=JSON.stringify;let walks=0;
+ JSON.stringify=function(value,replacer,space){return stringify(value,function(k,v){if(v===vertices)walks++;return typeof replacer==='function'?replacer.call(this,k,v):v;},space);};
+ try{assert.equal(records.reloadable(normalized),true);}finally{JSON.stringify=stringify;}
+ assert.equal(walks,0,'Normalized returned body geometry also avoids repeated vertex walks');assert.ok(Object.isFrozen(vertices));
+ const detached=records.properties(normalized);detached.geometry.bodies[0].object.object.name='external body';assert.notEqual(normalized.geometry.bodies[0].object.object.name,'external body');
+}
