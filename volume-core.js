@@ -1,3 +1,4 @@
+import {createOpticalParticles,opticalParticleSettings} from './volume-optical-particles.mjs';
 import {createSplitIntegral,splitIntegralSettings,SPLIT_OPTICAL_OFF_WGSL,splitOpticalShader} from './volume-split-integral.mjs';
 import {EMPTY_SPACE_WGSL} from './volume-empty-space.mjs';
 import {resolveWorldCalibration,calibrationSignature,calibrationWaveletLattice,WORLD_CALIBRATION_WGSL,resolveSimulationLevers} from './volume-world-calibration.mjs';
@@ -8235,7 +8236,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
         opticalStepObserveWithTolerance(&opticalStep,vec4<f32>(medium.emission+scatteredSource,sigma),u.reserved_render_controls.y);
         color=opticalStep.transfer.xyz;trans=opticalStep.transfer.w;ds=0.0;
       }
-      if(SPLIT_INTEGRAL){splitObserve(&splitRay,allocatedSamples-1u,p,medium.emission+scatteredSource,sigma,t,guidedRay.intervalStart,guidedRay.left,pitch);}
+      if(SPLIT_INTEGRAL){splitObserve(&splitRay,allocatedSamples-1u,p,medium.emission+scatteredSource,sigma,t,guidedRay.intervalStart,guidedRay.left,pitch);splitIntrinsic(&splitRay,allocatedSamples-1u,medium.emission);}
       if(guided){recordRayGuidance(p,medium.emission+scatteredSource,max(sigma,brickSupport/max(pitch,1e-4)),trans,ds);}
       color+=trans*(medium.emission+scatteredSource)*emissionIntegral(sigma,ds);
       trans*=exp(-sigma*ds);t+=ds;continue;
@@ -9108,7 +9109,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
       var scatteredSource=vec3<f32>(0.0);
       if(medium.scattering>0.0){scatteredSource=medium.scattering * incidentAt(p);}
       let emission = medium.emission + scatteredSource;
-      if(SPLIT_INTEGRAL){splitObserve(&splitRay,allocatedSamples-1u,p,emission,sigma,t,guidedRay.intervalStart,guidedRay.left,2.0/f32(GRID));}
+      if(SPLIT_INTEGRAL){splitObserve(&splitRay,allocatedSamples-1u,p,emission,sigma,t,guidedRay.intervalStart,guidedRay.left,2.0/f32(GRID));splitIntrinsic(&splitRay,allocatedSamples-1u,medium.emission);}
       if(guided){recordRayGuidance(p,emission,max(sigma,displaySupport*0.35*visibleSmokeAuthority),trans,localDt);}
       if (opticalStepping) {
         opticalStepObserveWithTolerance(&opticalStep, vec4<f32>(emission, sigma), u.reserved_render_controls.y);
@@ -11802,6 +11803,7 @@ export function createKaminosVolumePrototype({
   let debugOpticalStepping = opticalSteppingConfig({mode:controlsSnapshot.raymarchMode??'numerical',tolerance:controlsSnapshot.opticalTolerance??0.001});
   let rayStepTelemetry = null;
   let splitIntegral=null,splitIntegralShader=null,splitSettings=splitIntegralSettings();
+  let opticalParticles=null,particleSettings=opticalParticleSettings(),particlePreviousSplit=null;
   let integralReconstruction=null, reconstructionSample=0;
   let integralGuideDisplay=integralGuideDisplaySettings();
   let integralEvaluation=null, integralCameraValues=null, integralCameraSignature=null, integralSceneSignature=null;
@@ -15179,6 +15181,7 @@ export function createKaminosVolumePrototype({
     rayAllocationHistory = createRayAllocationHistory(device);
     integralReconstruction=createIntegralReconstruction(device,{transparent:transparentCanvas});
     splitIntegral=createSplitIntegral(device);splitIntegralShader=null;
+    opticalParticles?.dispose();opticalParticles=null;
     integralReconstruction.setGuideDisplay(integralGuideDisplay);
     rayStepTelemetry.setCanvas(rayStepTelemetryCanvas);
     rayStartNoiseTexture = await createRayStartTexture(device);
@@ -21425,14 +21428,14 @@ export function createKaminosVolumePrototype({
       &&!nonRidgeOpticalCaptureSession&&!nonRidgeSourceBasisCaptureSession&&productFrameOwner==='prototype'
       &&!sceneTransportConsumer&&!(controlsSnapshot.gridOverlay>0)&&!(controlsSnapshot.flowDebug>0)
       &&volumePresentationModeEffective==='beauty';
-    const reconstruct=reconstructionRequested!=='off'&&reconstructionSupported;
+    const reconstruct=reconstructionRequested!=='off'&&reconstructionSupported&&!particleSettings.enabled;
     if(!reconstruct)integralReconstruction?.disable(reconstructionRequested==='off'?'disabled':'unsupported-route');
     state.integralReconstruction={requested:reconstructionRequested,effective:'off',reason:reconstructionRequested!=='off'?'requires-ordinary-emissive-beauty-without-debug-overlays':null};
     const entryPoint=reconstruct?'fsIntegral':'fs';
     const colorTargets=reconstruct?[{format:'rgba32float'},{format:'r32float'}]:[{format:targetPipeline===readbackPipeline?'rgba8unorm':format}];
     const splitBufferBefore=splitIntegral.buffer;
     const splitActive=splitSettings.mode!=='off'&&reconstructionSupported&&optical.value===4&&device.limits.maxStorageBuffersPerShaderStage>=10;
-    let splitGroup=null;
+    let splitGroup=null,particleSourceFrame=null;
     if(splitActive){
       const field=owner=>owner?{...owner.remapResources(),map:worldSmokeMapping(owner.plan,owner.anchor,productTransform).fineToField}:null;
       const {rayNoiseFrame,raySteps,integralReconstruction,reconstructionSpatial,reconstructionRadius,reconstructionWindow,reconstructionResponse,reconstructionEdge,reconstructionEdges,reconstructionImageEdge,reconstructionFresh,...sourceControls}=controlsSnapshot;
@@ -21440,8 +21443,8 @@ export function createKaminosVolumePrototype({
       const prepared=splitIntegral.prepare(encoder,{width:state.width,height:state.height,settings:splitSettings,identity,step:state.simStepCount,
         viewProj:new THREE.Matrix4().copy(invViewProj).invert().elements,world:field(worldSmoke),middle:field(intermediateFlow),
         backtrace:resolveTimeStepConfig(controlsSnapshot).effective.backtraceScale,fineScale:2/gridSize,
-        staggered:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode==='staggered'});
-      splitGroup=prepared.group;state.splitIntegral=prepared.state;
+        staggered:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode==='staggered',sourcesOnly:particleSettings.enabled});
+      splitGroup=prepared.group;state.splitIntegral=prepared.state;particleSourceFrame=prepared.sourceFrame;
     }else{state.splitIntegral=splitIntegral.disable(splitSettings.mode==='off'?'off':device.limits.maxStorageBuffersPerShaderStage<10?'requires-10-fragment-storage-buffers':'requires-Fixed-evaluations-ordinary-joined-emissive-beauty');state.splitIntegral.requested=splitSettings.mode;}
     if(splitBufferBefore!==splitIntegral.buffer)rebuildFluidBindGroups();
     const opticalConstants = {OPTICAL_STEP_MODE:optical.value,RAY_STEP_STATS:rayStepTelemetry.active,SPLIT_INTEGRAL:splitActive};
@@ -21595,6 +21598,11 @@ export function createKaminosVolumePrototype({
     if(splitGroup){if(!scenePointBindGroup&&!distributedGroup)pass.setBindGroup(2,splitIntegral.emptyGroup);pass.setBindGroup(3,splitGroup);}
     pass.draw(3);
     pass.end();
+    if(particleSourceFrame){
+      opticalParticles??=createOpticalParticles(device,{transparent:transparentCanvas});
+      const cameraValues=new Float32Array([...emissiveWhiteMatrix[0],0,...emissiveWhiteMatrix[1],0,...emissiveWhiteMatrix[2],0,0,uniforms[373],uniforms[374],0,0,0,uniforms[46],0]);
+      state.opticalParticles=opticalParticles.encode(encoder,{view,format:targetPipeline===readbackPipeline?'rgba8unorm':format,source:particleSourceFrame,fine:fluidBuffers[currentFluid],dims:[gridSize,gridHeight,gridSize],invViewProj:invViewProj.elements,settings:particleSettings,cameraValues,depth:ordinarySceneDepthTexture??ordinarySceneDepthFallback,identity:JSON.stringify([worldSmokeKey,intermediateKey,productTransform,state.integralSourceGeneration])});
+    }else{state.opticalParticles={requested:particleSettings.enabled,effective:'off',reason:particleSettings.enabled?'requires-one-fresh-Fixed-evaluations-ordinary-joined-beauty':'disabled'};}
     if(reconstruct) {
       const cameraValues=new Float32Array([...emissiveWhiteMatrix[0],0,...emissiveWhiteMatrix[1],0,...emissiveWhiteMatrix[2],0,
         0,uniforms[373],uniforms[374],0,0,0,uniforms[46],0]);
@@ -29203,6 +29211,10 @@ export function createKaminosVolumePrototype({
       if(device&&worldRenderUniform)device.queue.writeBuffer(worldRenderUniform,32,new Float32Array([mode==='contributions'?1:0,0,0,0]));
       return mode;
     },
+    setOpticalParticles(next){assertIntegralSourceEditable('Optical particles');const previous=particleSettings;particleSettings=opticalParticleSettings({...particleSettings,...next});if(particleSettings.enabled&&!previous.enabled)particlePreviousSplit={...splitSettings};if(particleSettings.enabled){splitSettings=splitIntegralSettings({mode:'transport',fresh:1,exploration:1,motion:0,depthSupport:particleSettings.depthSupport});}else{opticalParticles?.reset();if(particlePreviousSplit){splitSettings=particlePreviousSplit;particlePreviousSplit=null;}}return {...particleSettings};},
+    opticalParticleSettings(){return {...particleSettings};},
+    resetOpticalParticles(){opticalParticles?.reset();},
+    async sampleOpticalParticles(){return opticalParticles?.sample()??{available:false};},
     setSplitIntegral(next){assertIntegralSourceEditable('Split optical transport');const value=splitIntegralSettings({...splitSettings,...next});if(value.mode!==splitSettings.mode)splitIntegral?.reset();splitSettings=value;return {...splitSettings};},
     splitIntegralSettings(){return {...splitSettings};},
     async sampleSplitIntegral(){if(!selectiveHeadLiveCapturePaused&&!simulationPaused)throw Error('Pause simulation/capture before reading split observations');return splitIntegral?.sample()??{available:false};},
@@ -29606,7 +29618,7 @@ export function createKaminosVolumePrototype({
       worldOpticalFallback?.destroy();worldRenderUniform?.destroy();
       rayAllocationHistory?.dispose();
       integralReconstruction?.dispose();
-      splitIntegral?.dispose();
+      splitIntegral?.dispose();opticalParticles?.dispose();
       ordinarySceneDepthFallback?.destroy();
       boundarySplatHdrTexture?.destroy();
       boundarySplatOpticalTexture?.destroy();
