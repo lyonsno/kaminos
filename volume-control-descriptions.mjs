@@ -146,7 +146,7 @@ export const VOLUME_CONTROL_DESCRIPTIONS = Object.freeze({
   "volume-pressure-solver": { kind: "physical", activeWhen: "always",
     tooltip: "How the sim enforces incompressible flow. Legacy is a rough partial fix; Converged really solves it; Open top lets rising gas leave through the ceiling." },
   "volume-pressure-algorithm": { kind: "quality", activeWhen: "Pressure Solver = Converged (either top)",
-    tooltip: "Fine pressure only: compare red-black SOR with matrix-free algebraic multigrid PCG. Keeps the current flow update, boundary and expansion target. World and Intermediate keep their existing pressure solvers. No LFM history or additional simulation steps." },
+    tooltip: "Fine pressure only: compare red-black SOR with algebraic multigrid PCG. Keeps the current flow update, boundary and expansion target. World and Intermediate keep their existing pressure solvers. No LFM history or additional simulation steps." },
   "volume-pressure-cg-iterations": { kind: "quality", activeWhen: "Fine pressure algorithm = AMGPCG",
     tooltip: "Conjugate-gradient iterations per Fine pressure solve. Each iteration uses a multigrid V-cycle. More iterations cost more and usually reduce pressure error; they do not advance simulation time. SOR sweeps are separate." },
   "volume-pressure-solver-iterations": { kind: "conditional", activeWhen: "Pressure Solver = Converged (either top)",

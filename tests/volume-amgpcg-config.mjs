@@ -20,3 +20,12 @@ test('existing basins retain SOR, and unsupported AMGPCG requests fail visibly',
   for(const iterations of [0,-1,2.5,NaN,Infinity])assert.throws(()=>resolvePressureSolverConfig({pressureSolver:'converged',pressureAlgorithm:'amgpcg',pressureCgIterations:iterations}),/CG iterations/);
   assert.equal(resolvePressureSolverConfig({pressureSolver:'converged',pressureAlgorithm:'amgpcg',pressureCgIterations:300}).effective.iterations,300,'no hidden tighter CG cap');
 });
+
+test('AMGPCG diagnostics name the effective algorithm and its own requested budget',()=>{
+ const c=resolvePressureSolverConfig({pressureSolver:'converged-open-top',pressureAlgorithm:'amgpcg',pressureCgIterations:6,pressureSolverIterations:136});
+ assert.equal(c.identity,'kaminos.pressure.uaamg-pcg.v1');
+ assert.equal(c.requested.algorithm,'amgpcg');
+ assert.equal(c.requested.iterations,6);
+ assert.equal(c.requested.sorSweeps,136);
+ assert.equal(c.effective.omega,null,'SOR relaxation does not apply to CG');
+});

@@ -1,4 +1,4 @@
-import {resolvePressureAlgorithm,createAmgpcgPressure} from './volume-amgpcg.mjs';
+import {AMGPCG_IDENTITY,resolvePressureAlgorithm,createAmgpcgPressure} from './volume-amgpcg.mjs';
 import {createGPUImmersedCollection} from './volume-immersed-source-gpu.mjs';
 import {createGPUImmersedWorldSources} from './volume-immersed-world-source-gpu.mjs';
 import {resolveWorldCalibration,calibrationSignature,calibrationWaveletLattice,WORLD_CALIBRATION_WGSL,resolveSimulationLevers} from './volume-world-calibration.mjs';
@@ -3173,8 +3173,8 @@ export function resolvePressureSolverConfig(controls = {}) {
   const projectionGain = converged ? Math.min(1, dispatchGain) : null;
   const algorithm=resolvePressureAlgorithm(controls,converged,dispatchEnabled);
   return {
-    identity: PRESSURE_SOLVER_IDENTITY,
-    requested: { solver: requestedSolver, iterations: requestedSweeps ?? null, legacyIterations: controls.pressureIterations ?? null },
+    identity: algorithm.algorithm==='amgpcg'?AMGPCG_IDENTITY:PRESSURE_SOLVER_IDENTITY,
+    requested: { solver: requestedSolver, algorithm:controls.pressureAlgorithm??'sor', iterations:algorithm.algorithm==='amgpcg'?(controls.pressureCgIterations??6):(requestedSweeps??null), sorSweeps:requestedSweeps??null, legacyIterations: controls.pressureIterations ?? null },
     effective: {
       solver: converged ? PRESSURE_SOLVER_CONVERGED : PRESSURE_SOLVER_LEGACY,
       dispatch: dispatchEnabled ? (converged ? PRESSURE_SOLVER_CONVERGED : PRESSURE_SOLVER_LEGACY) : 'disabled',
@@ -3183,7 +3183,7 @@ export function resolvePressureSolverConfig(controls = {}) {
       algorithm: converged ? algorithm.algorithm : 'jacobi',
       iterationUnit: algorithm.algorithm==='amgpcg'?'CG iterations':'SOR sweeps',
       iterations: converged ? (algorithm.algorithm==='amgpcg'?algorithm.iterations:(dispatchEnabled ? sweeps : 0)) : null,
-      omega: converged ? PRESSURE_SOLVER_SOR_OMEGA : null,
+      omega: converged && algorithm.algorithm==='sor' ? PRESSURE_SOLVER_SOR_OMEGA : null,
       projectionGain,
       projection: converged
         ? (!dispatchEnabled ? 'disabled' : (projectionGain >= 1 ? 'full' : 'partial'))
@@ -17640,7 +17640,7 @@ export function createKaminosVolumePrototype({
       : TALL_PLUME_TRANSITION_BAND_STRATEGY_INACTIVE;
     const tallPlumeTransitionBandExtraReadsPerCell = 0;
     const pressureSourceStrategy = pressureEnabled
-      ? (convergedSolver ? (amgpcgSolver?'matrix-free-uaamg-pcg-v1':PRESSURE_SOURCE_STRATEGY_RED_BLACK_SOR) : PRESSURE_SOURCE_STRATEGY_INLINE_DIVERGENCE)
+      ? (convergedSolver ? (amgpcgSolver?'stencil-uaamg-pcg-v1':PRESSURE_SOURCE_STRATEGY_RED_BLACK_SOR) : PRESSURE_SOURCE_STRATEGY_INLINE_DIVERGENCE)
       : PRESSURE_SOURCE_STRATEGY_DISABLED;
     const pressureDivergencePasses = pressureEnabled && convergedSolver ? 1 : 0;
     const pressureJacobiPasses = pressureEnabled && !convergedSolver ? pressureIterations : 0;

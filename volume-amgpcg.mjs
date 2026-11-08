@@ -1,4 +1,4 @@
-// Matrix-free unsmoothed-aggregation multigrid PCG.
+// Unsmoothed-aggregation multigrid PCG with explicit 7-point coefficients.
 // Algorithm: Sun et al., Leapfrog Flow Maps, TOG 2025, sections 5.1/5.3.
 // This WGSL implementation uses explicit dispatch ordering and a symmetric
 // smoother. It does not yet reproduce the CUDA tiled/fused/trimmed fast path.
