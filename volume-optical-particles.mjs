@@ -72,7 +72,7 @@ fn particleVelocity(p:vec3<f32>)->vec3<f32>{
  // a hidden truncation of the source set. Weak source evaluations can replace slots.
  let at=4u*i;let q=births[at];let anchor=births[at+1u];
  let random=f32(hash32(i+u.size.w*1664525u))/4294967296.0;
- if(anchor.w>0&&max(length(q.xyz),q.w)>0&&(p.anchor.w<=0||random<u.time.y)){
+ if((dt>0||u.size.w==1u)&&anchor.w>0&&max(length(q.xyz),q.w)>0&&(p.anchor.w<=0||random<u.time.y)){
   let support=births[at+2u];let emission=min(q.xyz,births[at+3u].xyz);
   let pitch=max(support.w,.00001);let burning=select(0.0,1.0,length(emission)>0.0);
   p.anchor=anchor;p.source=q;p.emission=vec4<f32>(emission,0);p.motion=vec4<f32>(0);
@@ -89,7 +89,7 @@ struct Vertex {@builtin(position) clip:vec4<f32>,@location(0) local:vec2<f32>,@l
 @vertex fn vs(@builtin(vertex_index) vertex:u32,@builtin(instance_index) i:u32)->Vertex{
  let p=particles[i];var out:Vertex;
  if(p.anchor.w<=0){out.clip=vec4<f32>(2,2,2,1);return out;}
- let growth=1.0+u.transport.w*(1.0-p.state.x);
+ let growth=1.0+u.transport.w*(select(0.0,1.0,length(p.emission.xyz)>0)-p.state.x);
  let radius=p.shape.xyz*u.shape.x*vec3<f32>(1,u.shape.y,1)*growth;
  var center=u.vp*vec4<f32>(p.anchor.xyz,1);var cxx=0.0;var cyy=0.0;var cxy=0.0;
  if(center.w<=.0001){out.clip=vec4<f32>(2,2,2,1);return out;}
@@ -99,24 +99,23 @@ struct Vertex {@builtin(position) clip:vec4<f32>,@location(0) local:vec2<f32>,@l
  let corners=array<vec2<f32>,6>(vec2<f32>(-1,-1),vec2<f32>(1,-1),vec2<f32>(1,1),vec2<f32>(-1,-1),vec2<f32>(1,1),vec2<f32>(-1,1));let xy=corners[vertex]*2.5;
  let offset=axis*xy.x*major+vec2<f32>(-axis.y,axis.x)*xy.y*minor;center.x+=offset.x*2.0/f32(u.size.x)*center.w;center.y+=offset.y*2.0/f32(u.size.y)*center.w;center.z=(center.z+center.w)*.5;
  out.clip=center;out.local=xy;
- let opacity=exp(-max(0.0,p.anchor.w-1.0)/u.time.w)+p.state.z;
+ let opacity=exp(-max(0.0,p.anchor.w-1.0)/u.time.w);
  let emission=p.emission.xyz*pow(max(0.0,p.state.y),4.0)*u.gain.x;
  out.light=(emission+max(vec3<f32>(0),p.source.xyz-p.emission.xyz)*opacity)*p.shape.w;
- out.tau=p.source.w*opacity*p.shape.w*u.gain.y;return out;
+ // New soot has its own absorption even when the source had no extinction.
+ out.tau=(p.source.w*opacity+p.state.z)*p.shape.w*u.gain.y;return out;
 }
-struct Accum {@location(0) optics:vec4<f32>,@location(1) weight:f32}
-@fragment fn fs(v:Vertex)->Accum{
+@fragment fn fs(v:Vertex)->@location(0) vec4<f32>{
  let pixel=clamp(vec2<i32>(v.clip.xy/vec2<f32>(u.size.xy)*vec2<f32>(textureDimensions(sceneDepth))),vec2<i32>(0),vec2<i32>(textureDimensions(sceneDepth))-1);var depth=DEPTH_LOAD;DEPTH_REDUCE
  if(v.clip.z>depth+.00001){discard;}
- let weight=exp(-.5*dot(v.local,v.local));var out:Accum;out.optics=vec4<f32>(v.light,v.tau)*weight;out.weight=weight;return out;
+ let weight=exp(-.5*dot(v.local,v.local));return vec4<f32>(v.light,v.tau)*weight;
 }
 `;
 const RESOLVE=/* wgsl */`
 @group(0) @binding(0) var optics:texture_2d<f32>;
-@group(0) @binding(1) var weights:texture_2d<f32>;
 @vertex fn vs(@builtin(vertex_index) i:u32)->@builtin(position)vec4<f32>{let p=array<vec2<f32>,3>(vec2<f32>(-1,-1),vec2<f32>(3,-1),vec2<f32>(-1,3));return vec4<f32>(p[i],0,1);}
 @fragment fn fs(@builtin(position) p:vec4<f32>)->@location(0)vec4<f32>{
- let at=vec2<i32>(p.xy);let weight=max(1.0,textureLoad(weights,at,0).x);let v=textureLoad(optics,at,0)/weight;
+ let at=vec2<i32>(p.xy);let v=textureLoad(optics,at,0);
  let trans=exp(-v.w);let scale=select(1.0,(1.0-trans)/max(v.w,1e-6),v.w>.00001);return vec4<f32>(v.xyz*scale,trans);
 }
 `;
@@ -136,7 +135,7 @@ export function createOpticalParticles(device,{transparent=false}={}) {
   const nextKey=JSON.stringify([width,height,identity]);
   const resetNeeded=key!==nextKey||lastStep===null||step<lastStep;const dt=resetNeeded?0:step-lastStep;
   if(!particles||particles.size!==pixels*96){retire(particles?[particles]:[]);particles=device.createBuffer({label:'shared world optical material carriers',size:pixels*96,usage:storage});}
-  if(!textures.length||textures[0].width!==width||textures[0].height!==height){retire(textures);textures=['rgba16float','r16float','rgba32float'].map(f=>device.createTexture({size:[width,height],format:f,usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING}));}
+  if(!textures.length||textures[0].width!==width||textures[0].height!==height){retire(textures);textures=['rgba16float','rgba32float'].map(f=>device.createTexture({size:[width,height],format:f,usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING}));}
   if(resetNeeded){encoder.clearBuffer(particles);frame=0;}frame++;lastStep=step;key=nextKey;
   const data=new ArrayBuffer(240),f=new Float32Array(data),u=new Uint32Array(data);f.set(source.viewProj);f.set(invViewProj,16);u.set([width,height,pixels,frame],32);
   f.set([dt,s.refresh,source.backtrace,s.smokeLife],36);f.set([s.burnTime,s.cooling,s.heatRelease,s.sootYield],40);f.set([s.radius,s.stretch,0,0],44);f.set([s.flow,s.rise,s.drag,s.expansion],48);f.set([...dims,0],52);f.set([s.gain,s.opacity,0,0],56);device.queue.writeBuffer(options,0,data);
@@ -144,17 +143,17 @@ export function createOpticalParticles(device,{transparent=false}={}) {
   const ms=depth.sampleCount>1;let rp=render.get(ms);
   if(!rp){const code=RENDER.replace('DEPTH_TYPE',ms?'texture_depth_multisampled_2d':'texture_depth_2d').replace('DEPTH_LOAD','textureLoad(sceneDepth,pixel,0)').replace('DEPTH_REDUCE',ms?'for(var sample=1u;sample<textureNumSamples(sceneDepth);sample++){depth=min(depth,textureLoad(sceneDepth,pixel,sample));}':'');const module=device.createShaderModule({code});
    const blend={color:{srcFactor:'one',dstFactor:'one',operation:'add'},alpha:{srcFactor:'one',dstFactor:'one',operation:'add'}};
-   rp=device.createRenderPipeline({label:'anisotropic material carrier optical moments',layout:'auto',vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',targets:[{format:'rgba16float',blend},{format:'r16float',blend}]},primitive:{topology:'triangle-list'}});render.set(ms,rp);}
-  const r=encoder.beginRenderPass({label:'spatial material support',colorAttachments:textures.slice(0,2).map(t=>({view:t.createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}))});r.setPipeline(rp);r.setBindGroup(0,device.createBindGroup({layout:rp.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:particles}},{binding:1,resource:{buffer:options}},{binding:2,resource:depth.createView()}]}));r.draw(6,pixels);r.end();
+   rp=device.createRenderPipeline({label:'anisotropic material carrier optical moments',layout:'auto',vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',targets:[{format:'rgba16float',blend}]},primitive:{topology:'triangle-list'}});render.set(ms,rp);}
+  const r=encoder.beginRenderPass({label:'spatial material support',colorAttachments:textures.slice(0,1).map(t=>({view:t.createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}))});r.setPipeline(rp);r.setBindGroup(0,device.createBindGroup({layout:rp.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:particles}},{binding:1,resource:{buffer:options}},{binding:2,resource:depth.createView()}]}));r.draw(6,pixels);r.end();
   if(!resolvePipeline){const module=device.createShaderModule({code:RESOLVE});
   resolvePipeline=device.createRenderPipeline({layout:'auto',vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',targets:[{format:'rgba32float'}]}});}
-  const resolve=encoder.beginRenderPass({label:'material optical moment transfer',colorAttachments:[{view:textures[2].createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:1}}]});resolve.setPipeline(resolvePipeline);resolve.setBindGroup(0,device.createBindGroup({layout:resolvePipeline.getBindGroupLayout(0),entries:[{binding:0,resource:textures[0].createView()},{binding:1,resource:textures[1].createView()}]}));resolve.draw(3);resolve.end();
+  const resolve=encoder.beginRenderPass({label:'material optical moment transfer',colorAttachments:[{view:textures[1].createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:1}}]});resolve.setPipeline(resolvePipeline);resolve.setBindGroup(0,device.createBindGroup({layout:resolvePipeline.getBindGroupLayout(0),entries:[{binding:0,resource:textures[0].createView()}]}));resolve.draw(3);resolve.end();
   let pp=present.get(format);if(!pp){const m=device.createShaderModule({code:INTEGRAL_PRESENT_WGSL});pp=device.createRenderPipeline({layout:'auto',vertex:{module:m,entryPoint:'vs'},fragment:{module:m,entryPoint:'present',constants:{TRANSPARENT_CANVAS:transparent},targets:[{format}]}});present.set(format,pp);}
   device.queue.writeBuffer(camera,0,cameraValues);
-  const output=encoder.beginRenderPass({label:'native optical particle presentation',colorAttachments:[{view,loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}]});output.setPipeline(pp);output.setBindGroup(0,device.createBindGroup({layout:pp.getBindGroupLayout(0),entries:[{binding:0,resource:textures[2].createView()},{binding:1,resource:{buffer:camera}}]}));output.draw(3);output.end();
+  const output=encoder.beginRenderPass({label:'native optical particle presentation',colorAttachments:[{view,loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}]});output.setPipeline(pp);output.setBindGroup(0,device.createBindGroup({layout:pp.getBindGroupLayout(0),entries:[{binding:0,resource:textures[1].createView()},{binding:1,resource:{buffer:camera}}]}));output.draw(3);output.end();
   if(retired.length){const old=retired.splice(0);queueMicrotask(()=>device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>old.forEach(x=>x.destroy())));}
-  info={requested:true,effective:'world-optical-particles',width,height,slots:pixels,bytes:particles.size+pixels*26,frames:frame,step,stepDelta:dt,settings:s,
-   source:'one fresh native local optical observation; separate intrinsic emission',flow:'current Fine/Middle/World grid velocity',reaction:'finite visual proxy seeded by intrinsic emission; no inferred fuel/oxygen',composition:'normalized optical moments; approximate mixed-depth attenuation',reset:resetNeeded};return info;
+  info={requested:true,effective:'world-optical-particles',width,height,slots:pixels,bytes:particles.size+pixels*24,sourceBytes:source.buffer.size,totalBytes:particles.size+pixels*24+source.buffer.size,frames:frame,step,stepDelta:dt,settings:s,
+   source:'one fresh native local optical observation; separate intrinsic emission',flow:'current Fine/Middle/World grid velocity',reaction:'finite visual proxy seeded by intrinsic emission; no inferred fuel/oxygen',composition:'additive optical moments; approximate mixed-depth attenuation',generatedSmoke:'new reaction soot contributes absorption; carried source scattering uses birth illumination',reset:resetNeeded};return info;
  }
  let resolvePipeline=null;
  async function sample(){if(!particles||!frame)return {available:false,state:info};const p=particles,read=device.createBuffer({size:p.size,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});try{const e=device.createCommandEncoder();e.copyBufferToBuffer(p,0,read,0,p.size);device.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);return {available:true,state:info,records:new Float32Array(read.getMappedRange().slice(0))};}finally{read.unmap();read.destroy();}}

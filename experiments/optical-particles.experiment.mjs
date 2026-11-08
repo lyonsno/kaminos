@@ -3,12 +3,12 @@ export default {
  id:'optical-particles',title:'Reactive optical particles',
  async create({host,inputs={},record,updateInputs}){
   await host.volume?.ready;const session=await host.scene.open();const source=host.controls.document.defaultView.__kaminosVolumePrototype;
-  if(!source?.setOpticalParticles)throw Error('This revision does not supply native optical particles');
+  if(!source?.setOpticalParticles){await session.dispose();throw Error('This revision does not supply native optical particles');}
   const previous=source.splitIntegralSettings();let settings=opticalParticleSettings({enabled:true,...inputs.particles});let panel,status,error=null;const drags=[];
-  source.setOpticalParticles(settings);
+  try{source.setOpticalParticles(settings);}catch(error){await session.dispose();throw error;}
   const read=()=>({settings,effective:source.debugState()?.opticalParticles??null,error});
   const sync=()=>{if(!panel)return;for(const el of panel.querySelectorAll('[data-particle]')){if(host.controls.document.activeElement!==el&&!el.classList.contains('scrubbing')){if(el.type==='checkbox')el.checked=settings[el.dataset.particle];else el.value=String(settings[el.dataset.particle]);}}
-   const e=read().effective;status.textContent=error?error:e?.effective==='world-optical-particles'?`${e.width} × ${e.height} · ${e.slots.toLocaleString()} world-space slots · ${(e.bytes/1048576).toFixed(1)} MiB particle/resolve buffers · simulation step ${e.step}.`:`${e?.reason??'Waiting for the fire volume. Use Fixed evaluations with 1 evaluation and a World field.'}`;
+   const e=read().effective;status.textContent=error?error:e?.effective==='world-optical-particles'?`${e.width} × ${e.height} · ${e.slots.toLocaleString()} world-space slots · ${(e.totalBytes/1048576).toFixed(1)} MiB including source observations · simulation step ${e.step}.`:`${e?.reason??'Waiting for the fire volume. Use Fixed evaluations with 1 evaluation and a World field.'}`;
   };
   const operations={setOptions(patch){const next=opticalParticleSettings({...settings,...patch});source.setOpticalParticles(next);settings=next;updateInputs({particles:settings});record({kind:'optical-particles.settings',settings});session.redraw();sync();return read();},reset(){source.resetOpticalParticles();session.redraw();return read();}};
   const stop=session.onFrame(sync);
@@ -23,7 +23,7 @@ export default {
    control('Reaction time (sim steps)','burnTime',1);control('Cooling time (sim steps)','cooling',1);control('Reaction heat','heatRelease',.05);control('Reaction smoke yield','sootYield',.05);control('Smoke lifetime (sim steps)','smokeLife',1);
    control('Grid flow transport','flow',.1);control('Additional rise','rise',.001);control('Velocity relaxation (steps)','drag',1);control('Reaction support expansion','expansion',.05);
    const reset=document.createElement('button');reset.textContent='Clear particle observations';reset.addEventListener('click',()=>invoke('reset'));root.append(reset);
-   const note=document.createElement('p');note.textContent='Reaction and motion advance with simulation steps and freeze with the simulation. Radius, stretch and gains can be compared while paused. Camera movement preserves the world-space population; target resize and source changes clear it. Refresh controls replacement of observed slots. This first renderer averages overlapping optical moments; depth ordering within the material is approximate. The thermal/reactive state is a visual proxy, not measured fuel chemistry.';root.append(note);sync();
+   const note=document.createElement('p');note.textContent='Reaction and motion advance with simulation steps and freeze with the simulation. Radius, stretch and gains can be compared while paused. Camera movement preserves the world-space population; target resize and source changes clear it. Refresh controls replacement of observed slots. This first renderer adds overlapping optical moments; depth ordering within the material is approximate. Increasing support can add optical thickness. New reaction soot adds absorption; source scattering carries its birth illumination. The thermal/reactive state is a visual proxy, not measured fuel chemistry.';root.append(note);sync();
   },async dispose(){stop();drags.forEach(x=>x?.dispose?.());source.setOpticalParticles({enabled:false});source.setSplitIntegral(previous);await session.dispose();}};
  }
 };
