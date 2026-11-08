@@ -11,15 +11,13 @@ import {resolveReflectionSettings} from './scene-reflection-settings.mjs';
 export {resolveReflectionSettings} from './scene-reflection-settings.mjs';
 
 const sample=wgslFn(`fn reflectionSampleEntry(coords:vec2<f32>,depthMap:texture_depth_2d,colorMap:texture_2d<f32>,colorSampler:sampler,normalMap:texture_2d<f32>,projection:mat4x4<f32>,inverseProjection:mat4x4<f32>,maxDistance:f32,thickness:f32,nearPlane:f32,steps:u32,refinementSteps:u32,frame:u32,roughnessCutoff:f32,samples:u32,stable:bool,coarseStats:texture_2d<f32>,dense:bool)->mat4x4<f32>{
- if(dense&&reflectionAllocationAt(coords,depthMap,normalMap,coarseStats,projection,inverseProjection)<=0.0){return mat4x4<f32>();}
- return sampleSceneReflectionPayload(coords,depthMap,colorMap,colorSampler,normalMap,projection,inverseProjection,maxDistance,thickness,nearPlane,steps,refinementSteps,frame,roughnessCutoff,samples,stable);
+ var weight=0.0;if(dense){weight=reflectionAllocationAt(coords,depthMap,normalMap,coarseStats,projection,inverseProjection);if(weight<=0.0){return mat4x4<f32>();}}
+ var payload=sampleSceneReflectionPayload(coords,depthMap,colorMap,colorSampler,normalMap,projection,inverseProjection,maxDistance,thickness,nearPlane,steps,refinementSteps,frame,roughnessCutoff,samples,stable);payload[2].x=weight;return payload;
 }`,[wgsl(SCENE_REFLECTION_QUERY_WGSL),wgsl(SCENE_REFLECTION_ALLOCATION_WGSL)]);
-const reconstruct=wgslFn(`fn reflectionReconstructEntry(coords:vec2<f32>,current:texture_2d<f32>,currentStats:texture_2d<f32>,depthMap:texture_depth_2d,normalMap:texture_2d<f32>,oldColor:texture_2d<f32>,oldNormal:texture_2d<f32>,oldDepth:texture_2d<f32>,oldStats:texture_2d<f32>,inverseProjection:mat4x4<f32>,toPrevious:mat4x4<f32>,previousProjection:mat4x4<f32>,previousInverseProjection:mat4x4<f32>,historyValid:bool,historyWeight:f32,roughnessCutoff:f32,coarseStats:texture_2d<f32>,projection:mat4x4<f32>,dense:bool)->mat4x4<f32>{
- if(dense&&reflectionAllocationAt(coords,depthMap,normalMap,coarseStats,projection,inverseProjection)<=0.0){return mat4x4<f32>();}
+const reconstruct=wgslFn(`fn reflectionReconstructEntry(coords:vec2<f32>,current:texture_2d<f32>,currentStats:texture_2d<f32>,depthMap:texture_depth_2d,normalMap:texture_2d<f32>,oldColor:texture_2d<f32>,oldNormal:texture_2d<f32>,oldDepth:texture_2d<f32>,oldStats:texture_2d<f32>,inverseProjection:mat4x4<f32>,toPrevious:mat4x4<f32>,previousProjection:mat4x4<f32>,previousInverseProjection:mat4x4<f32>,historyValid:bool,historyWeight:f32,roughnessCutoff:f32,detailMask:texture_2d<f32>,dense:bool)->mat4x4<f32>{
+ if(dense){let size=vec2<i32>(textureDimensions(detailMask));let pixel=clamp(vec2<i32>(coords*vec2<f32>(size)),vec2<i32>(0),size-vec2<i32>(1));if(textureLoad(detailMask,pixel,0).r<=0.0){return mat4x4<f32>();}}
  return reconstructSceneReflection(coords,current,currentStats,depthMap,normalMap,oldColor,oldNormal,oldDepth,oldStats,inverseProjection,toPrevious,previousProjection,previousInverseProjection,historyValid,historyWeight,roughnessCutoff);
-}`,[wgsl(SCENE_REFLECTION_RECONSTRUCTION_WGSL),wgsl(SCENE_REFLECTION_ALLOCATION_WGSL)]);
-
-const allocation=wgslFn(`fn reflectionAllocationEntry(coords:vec2<f32>,depthMap:texture_depth_2d,normalMap:texture_2d<f32>,coarseStats:texture_2d<f32>,projection:mat4x4<f32>,inverseProjection:mat4x4<f32>)->f32{return reflectionAllocationAt(coords,depthMap,normalMap,coarseStats,projection,inverseProjection);}`,[wgsl(SCENE_REFLECTION_ALLOCATION_WGSL)]);
+}`,[wgsl(SCENE_REFLECTION_RECONSTRUCTION_WGSL)]);
 
 export default class SceneReflections extends Node{
  static get type(){return 'SceneReflections';}
@@ -78,7 +76,7 @@ export default class SceneReflections extends Node{
  reset(reason='scene-change'){this.valid.value=false;this.resetReason=reason;this.requestFrames();}
  state(){const support=this.syncSupport();return {...this.settings,...support,route:'kaminos-screen-reflection-adaptive-v2',renderBackend:this.renderer.backend?.isWebGPUBackend===true?'webgpu':this.renderer.backend?.constructor.name??'unobserved',frames:this.frames,resolution:this.size.value.toArray(),valid:this.valid.value,resetReason:this.resetReason,
   allocation:this.adaptive.value?'projected-GGX-footprint-two-grid':'uniform',sharpResolution:this.detailSize.value.toArray(),sharpFrames:this.detail.frames,denseFieldActive:this.adaptive.value,rayAllocation:'coarse rays plus sharp-field rays only where footprint or normal variation needs detail',
-  materialResponse:'existing-physical-base-specular-once',worldGeometry:false,history:'surface-and-reflection-parallax-reprojection-geometry-validated-variance-clipped',cameraMotionFrames:this.cameraMotionFrames,historyAttachmentBytesPerPixel:28,allocatedFieldBytes:72*(this.coarse.raw.width*this.coarse.raw.height+this.detail.raw.width*this.detail.raw.height),samplesPerTracingPixel:this.settings.samples,samplingSequence:this.settings.sampling==='stable'?'coherent-hammersley':'pixel-scrambled-halton',
+  materialResponse:'existing-physical-base-specular-once',worldGeometry:false,history:'surface-and-reflection-parallax-reprojection-geometry-validated-variance-clipped',cameraMotionFrames:this.cameraMotionFrames,historyAttachmentBytesPerPixel:28,allocatedFieldBytes:72*this.coarse.raw.width*this.coarse.raw.height+74*this.detail.raw.width*this.detail.raw.height,samplesPerTracingPixel:this.settings.samples,samplingSequence:this.settings.sampling==='stable'?'coherent-hammersley':'pixel-scrambled-halton',
   sourceFiltering:'visible-GGX-pdf-footprint-mips',sourcePyramidFrames:this.radianceFrames,sourcePyramidResolution:[this.radiance.width,this.radiance.height],pendingHistoryFrames:this.pendingHistoryFrames,historyRemainderTarget:.01,effectiveHistoryWeight:this.historyWeight.value};}
  forSurface(){
   return Fn(()=>{
@@ -86,7 +84,7 @@ export default class SceneReflections extends Node{
    If(this.available,()=>{
    result.assign(this.sampleField(this.coarse,this.size));
    If(this.adaptive,()=>{
-    const weight=allocation({coords:screenUV,depthMap:this.depth,normalMap:this.normal,coarseStats:this.coarse.currentStats,projection:this.projection,inverseProjection:this.inverseProjection});
+    const weight=this.detail.allocation.sample(screenUV).r;
     If(weight.greaterThan(0),()=>{result.assign(mix(result,this.sampleField(this.detail,this.detailSize),weight));});
    });
    });

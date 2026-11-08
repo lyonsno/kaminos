@@ -54,8 +54,8 @@ fn reflectionGGX(view: vec3<f32>, normal: vec3<f32>, perceptualRoughness: f32, x
 }
 // Visible-GGX reflection-direction density. The ray represents a finite solid
 // angle, rather than one arbitrarily bright source texel. The source footprint
-// retains the former nine-tap filter's 25/3 sample estimate; the hit-aware
-// thirteen-tap reconstruction has variable support, not a fixed sample count.
+// uses one effective sample for sharp receivers, ramping to the inherited
+// 25/3 estimate for broad gloss. Reconstruction has variable actual support.
 fn reflectionSourceLevelForSamples(view: vec3<f32>, normal: vec3<f32>, direction: vec3<f32>, roughness: f32,
   hitPosition: vec3<f32>, hitNormal: vec3<f32>, distance: f32,
   projection: mat4x4<f32>, dimensions: vec2<u32>, effectiveSamples:f32) -> f32 {
@@ -177,6 +177,6 @@ fn sampleSceneReflectionPayload(
   let distanceVariance=max(0.0,distanceSquared/max(result.a,0.00001)-meanDistance*meanDistance);
   let brightness=moment/f32(samples);let variance=max(0.0,momentSquared/f32(samples)-brightness*brightness);
   // Log moments retain the HDR/world-distance range in finite half-float MRTs.
-  return mat4x4<f32>(result/f32(samples),vec4<f32>(log2(1.0+meanDistance),log2(1.0+distanceVariance),log2(1.0+variance),tracedRays),vec4<f32>(0.0),vec4<f32>(0.0));
+  return mat4x4<f32>(result/f32(samples),vec4<f32>(log2(1.0+meanDistance),log2(1.0+distanceVariance),log2(1.0+variance),log2(1.0+tracedRays)),vec4<f32>(0.0),vec4<f32>(0.0));
 }
 `;
