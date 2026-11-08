@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 174,
+  "controlCount": 168,
   "controls": [
     {
       "key": "volume-fine-velocity",
@@ -19,19 +19,6 @@
       "additiveSinceControlCount": 277
     },
     {
-      "key": "volume-world-smoke-intermediate",
-      "param": "volume_world_smoke_intermediate",
-      "tagName": "SELECT",
-      "type": "select-one",
-      "additiveDefault": "off",
-      "allowedValues": [
-        "off",
-        "on",
-        "fields"
-      ],
-      "additiveSinceControlCount": 268
-    },
-    {
       "key": "volume-world-smoke-pressure",
       "param": "volume_world_smoke_pressure",
       "tagName": "INPUT",
@@ -46,46 +33,6 @@
       "type": "number",
       "additiveDefault": "16",
       "additiveSinceControlCount": 270
-    },
-    {
-      "key": "volume-intermediate-flow",
-      "param": "volume_intermediate_flow",
-      "tagName": "INPUT",
-      "type": "number",
-      "additiveDefault": "24",
-      "additiveSinceControlCount": 271
-    },
-    {
-      "key": "volume-intermediate-material",
-      "param": "volume_intermediate_material",
-      "tagName": "INPUT",
-      "type": "number",
-      "additiveDefault": "48",
-      "additiveSinceControlCount": 272
-    },
-    {
-      "key": "volume-intermediate-pressure",
-      "param": "volume_intermediate_pressure",
-      "tagName": "INPUT",
-      "type": "number",
-      "additiveDefault": "12",
-      "additiveSinceControlCount": 273
-    },
-    {
-      "key": "volume-intermediate-iterations",
-      "param": "volume_intermediate_iterations",
-      "tagName": "INPUT",
-      "type": "number",
-      "additiveDefault": "12",
-      "additiveSinceControlCount": 274
-    },
-    {
-      "key": "volume-intermediate-extent",
-      "param": "volume_intermediate_extent",
-      "tagName": "INPUT",
-      "type": "number",
-      "additiveDefault": "1.5",
-      "additiveSinceControlCount": 275
     },
     {
       "key": "volume-world-smoke-transition",
@@ -2316,6 +2263,53 @@
       "param": "volume_force_fine_breakup",
       "tagName": "INPUT",
       "type": "checkbox"
+    },
+    {
+      "key": "volume-world-smoke-intermediate",
+      "param": "volume_world_smoke_intermediate",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "allowedValues": [
+        "off",
+        "on",
+        "fields"
+      ],
+      "axis": "domControls"
+    },
+    {
+      "key": "volume-intermediate-flow",
+      "param": "volume_intermediate_flow",
+      "tagName": "INPUT",
+      "type": "number",
+      "axis": "domControls"
+    },
+    {
+      "key": "volume-intermediate-material",
+      "param": "volume_intermediate_material",
+      "tagName": "INPUT",
+      "type": "number",
+      "axis": "domControls"
+    },
+    {
+      "key": "volume-intermediate-pressure",
+      "param": "volume_intermediate_pressure",
+      "tagName": "INPUT",
+      "type": "number",
+      "axis": "domControls"
+    },
+    {
+      "key": "volume-intermediate-iterations",
+      "param": "volume_intermediate_iterations",
+      "tagName": "INPUT",
+      "type": "number",
+      "axis": "domControls"
+    },
+    {
+      "key": "volume-intermediate-extent",
+      "param": "volume_intermediate_extent",
+      "tagName": "INPUT",
+      "type": "number",
+      "axis": "domControls"
     }
   ],
   "rendererControls": [
