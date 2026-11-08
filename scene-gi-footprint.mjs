@@ -1,10 +1,13 @@
 export function resolveSourceFootprint(value={}) {
-  const next={mode:'legacy',level:4,detailBias:3.15,allFields:false,...value};
+  const next={mode:'legacy',level:4,detailBias:3.15,allFields:false,reduction:'average',depthTolerance:.05,normalAngle:60,...value};
   if(!['legacy','fixed','distance'].includes(next.mode))throw Error('Unknown source footprint policy');
   if(!Number.isSafeInteger(next.level)||next.level<0)throw Error('Source mip level must be a nonnegative integer');
   if(!Number.isFinite(next.detailBias))throw Error('Source detail bias must be finite');
   if(typeof next.allFields!=='boolean')throw Error('Source field selection must be boolean');
-  return Object.fromEntries(['mode','level','detailBias','allFields'].map(key=>[key,next[key]]));
+  if(!['average','dominant'].includes(next.reduction))throw Error('Unknown source pyramid reduction');
+  if(!Number.isFinite(next.depthTolerance)||next.depthTolerance<0)throw Error('Layer depth tolerance must be nonnegative');
+  if(!Number.isFinite(next.normalAngle)||next.normalAngle<0||next.normalAngle>180)throw Error('Layer normal angle must be between zero and 180 degrees');
+  return Object.fromEntries(['mode','level','detailBias','allFields','reduction','depthTolerance','normalAngle'].map(key=>[key,next[key]]));
 }
 
 // A disposable owner override; ordinary estimator settings remain authoritative
@@ -15,6 +18,8 @@ export function createSourceFootprintControl(effect,reset) {
     effect.sourceMipMode.value=['legacy','fixed','distance'].indexOf(value.mode);
     effect.sourceMipLevel.value=value.level;effect.sourceMipDetailBias.value=value.detailBias;
     effect.sourceMipAllFields.value=value.allFields;
+    effect.sourceMipReduction.value=value.reduction==='dominant';
+    effect.sourceMipDepthTolerance.value=value.depthTolerance;effect.sourceMipNormalCos.value=Math.cos(value.normalAngle*Math.PI/180);
     effect.useMipSampling.value=owner!==null||ordinaryMipSampling;
   };
   return {
