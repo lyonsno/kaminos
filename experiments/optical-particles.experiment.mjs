@@ -2,9 +2,10 @@ import {opticalParticleSettings} from '../volume-optical-particles.mjs';
 export default {
  id:'optical-particles',title:'Reactive optical particles',
  async create({host,inputs={},record,updateInputs}){
+  const initial=opticalParticleSettings({enabled:true,...inputs.particles});
   await host.volume?.ready;const session=await host.scene.open();const source=host.controls.document.defaultView.__kaminosVolumePrototype;
   if(!source?.setOpticalParticles){await session.dispose();throw Error('This revision does not supply native optical particles');}
-  const previous=source.splitIntegralSettings();let settings=opticalParticleSettings({enabled:true,...inputs.particles});let panel,status,error=null;const drags=[];
+  const previous=source.splitIntegralSettings();let settings=initial;let panel,status,error=null;const drags=[];
   try{source.setOpticalParticles(settings);}catch(error){await session.dispose();throw error;}
   const read=()=>({settings,effective:source.debugState()?.opticalParticles??null,error});
   const sync=()=>{if(!panel)return;for(const el of panel.querySelectorAll('[data-particle]')){if(host.controls.document.activeElement!==el&&!el.classList.contains('scrubbing')){if(el.type==='checkbox')el.checked=settings[el.dataset.particle];else el.value=String(settings[el.dataset.particle]);}}
@@ -24,6 +25,6 @@ export default {
    control('Grid flow transport','flow',.1);control('Additional rise','rise',.001);control('Velocity relaxation (steps)','drag',1);control('Reaction support expansion','expansion',.05);
    const reset=document.createElement('button');reset.textContent='Clear particle observations';reset.addEventListener('click',()=>invoke('reset'));root.append(reset);
    const note=document.createElement('p');note.textContent='Reaction and motion advance with simulation steps and freeze with the simulation. Radius, stretch and gains can be compared while paused. Camera movement preserves the world-space population; target resize and source changes clear it. Refresh controls replacement of observed slots. This first renderer adds overlapping optical moments; depth ordering within the material is approximate. Increasing support can add optical thickness. New reaction soot adds absorption; source scattering carries its birth illumination. The thermal/reactive state is a visual proxy, not measured fuel chemistry.';root.append(note);sync();
-  },async dispose(){stop();drags.forEach(x=>x?.dispose?.());source.setOpticalParticles({enabled:false});source.setSplitIntegral(previous);await session.dispose();}};
+  },async dispose(){stop();drags.forEach(x=>x?.dispose?.());try{source.setOpticalParticles({enabled:false});source.setSplitIntegral(previous);}finally{await session.dispose();}}};
  }
 };

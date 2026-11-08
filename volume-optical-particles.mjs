@@ -97,7 +97,7 @@ struct Vertex {@builtin(position) clip:vec4<f32>,@location(0) local:vec2<f32>,@l
  let angle=.5*atan2(2.0*cxy,cxx-cyy);let axis=vec2<f32>(cos(angle),sin(angle));let disc=sqrt((cxx-cyy)*(cxx-cyy)+4.0*cxy*cxy);
  let major=sqrt(max(.25,(cxx+cyy+disc)*.5));let minor=sqrt(max(.25,(cxx+cyy-disc)*.5));
  let corners=array<vec2<f32>,6>(vec2<f32>(-1,-1),vec2<f32>(1,-1),vec2<f32>(1,1),vec2<f32>(-1,-1),vec2<f32>(1,1),vec2<f32>(-1,1));let xy=corners[vertex]*2.5;
- let offset=axis*xy.x*major+vec2<f32>(-axis.y,axis.x)*xy.y*minor;center.x+=offset.x*2.0/f32(u.size.x)*center.w;center.y+=offset.y*2.0/f32(u.size.y)*center.w;center.z=(center.z+center.w)*.5;
+ let offset=axis*xy.x*major+vec2<f32>(-axis.y,axis.x)*xy.y*minor;center.x+=offset.x*2.0/f32(u.size.x)*center.w;center.y+=offset.y*2.0/f32(u.size.y)*center.w;if(u.gain.w<.5){center.z=(center.z+center.w)*.5;}
  out.clip=center;out.local=xy;
  let opacity=exp(-max(0.0,p.anchor.w-1.0)/u.time.w);
  let emission=p.emission.xyz*pow(max(0.0,p.state.y),4.0)*u.gain.x;
@@ -128,8 +128,8 @@ export function createOpticalParticles(device,{transparent=false}={}) {
  const present=new Map(),render=new Map();let particles=null,textures=[],key=null,frame=0,lastStep=null,info={effective:'off'};
  const retired=[];
  function retire(items){if(items.length)retired.push(...items);}
- function reset(){key=null;}
- function encode(encoder,{view,format,source,fine,dims,invViewProj,settings,cameraValues,depth,identity}){
+ function reset(){key=null;frame=0;info={effective:'off',reason:'reset'};}
+ function encode(encoder,{view,format,source,fine,dims,invViewProj,settings,cameraValues,depth,identity,depthZeroToOne=false}){
   const s=opticalParticleSettings(settings),{width,height,pixels,step}=source;
   if(pixels*96>Math.min(device.limits.maxBufferSize,device.limits.maxStorageBufferBindingSize))throw Error(`Particle population requires ${pixels*96} bytes; exceeds effective device binding capacity`);
   const nextKey=JSON.stringify([width,height,identity]);
@@ -138,7 +138,7 @@ export function createOpticalParticles(device,{transparent=false}={}) {
   if(!textures.length||textures[0].width!==width||textures[0].height!==height){retire(textures);textures=['rgba16float','rgba32float'].map(f=>device.createTexture({size:[width,height],format:f,usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING}));}
   if(resetNeeded){encoder.clearBuffer(particles);frame=0;}frame++;lastStep=step;key=nextKey;
   const data=new ArrayBuffer(240),f=new Float32Array(data),u=new Uint32Array(data);f.set(source.viewProj);f.set(invViewProj,16);u.set([width,height,pixels,frame],32);
-  f.set([dt,s.refresh,source.backtrace,s.smokeLife],36);f.set([s.burnTime,s.cooling,s.heatRelease,s.sootYield],40);f.set([s.radius,s.stretch,0,0],44);f.set([s.flow,s.rise,s.drag,s.expansion],48);f.set([...dims,0],52);f.set([s.gain,s.opacity,0,0],56);device.queue.writeBuffer(options,0,data);
+  f.set([dt,s.refresh,source.backtrace,s.smokeLife],36);f.set([s.burnTime,s.cooling,s.heatRelease,s.sootYield],40);f.set([s.radius,s.stretch,0,0],44);f.set([s.flow,s.rise,s.drag,s.expansion],48);f.set([...dims,0],52);f.set([s.gain,s.opacity,0,depthZeroToOne?1:0],56);device.queue.writeBuffer(options,0,data);
   const c=encoder.beginComputePass({label:'particle finite reaction and native grid flow'});c.setPipeline(compute);c.setBindGroup(0,device.createBindGroup({layout:compute.getBindGroupLayout(0),entries:[particles,source.buffer,fine,source.uniform,options].map((buffer,binding)=>({binding,resource:{buffer}}))}));c.dispatchWorkgroups(Math.ceil(pixels/64));c.end();
   const ms=depth.sampleCount>1;let rp=render.get(ms);
   if(!rp){const code=RENDER.replace('DEPTH_TYPE',ms?'texture_depth_multisampled_2d':'texture_depth_2d').replace('DEPTH_LOAD','textureLoad(sceneDepth,pixel,0)').replace('DEPTH_REDUCE',ms?'for(var sample=1u;sample<textureNumSamples(sceneDepth);sample++){depth=min(depth,textureLoad(sceneDepth,pixel,sample));}':'');const module=device.createShaderModule({code});
@@ -153,9 +153,9 @@ export function createOpticalParticles(device,{transparent=false}={}) {
   const output=encoder.beginRenderPass({label:'native optical particle presentation',colorAttachments:[{view,loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}]});output.setPipeline(pp);output.setBindGroup(0,device.createBindGroup({layout:pp.getBindGroupLayout(0),entries:[{binding:0,resource:textures[1].createView()},{binding:1,resource:{buffer:camera}}]}));output.draw(3);output.end();
   if(retired.length){const old=retired.splice(0);queueMicrotask(()=>device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>old.forEach(x=>x.destroy())));}
   info={requested:true,effective:'world-optical-particles',width,height,slots:pixels,bytes:particles.size+pixels*24,sourceBytes:source.buffer.size,totalBytes:particles.size+pixels*24+source.buffer.size,frames:frame,step,stepDelta:dt,settings:s,
-   source:'one fresh native local optical observation; separate intrinsic emission',flow:'current Fine/Middle/World grid velocity',reaction:'finite visual proxy seeded by intrinsic emission; no inferred fuel/oxygen',composition:'additive optical moments; approximate mixed-depth attenuation',generatedSmoke:'new reaction soot contributes absorption; carried source scattering uses birth illumination',reset:resetNeeded};return info;
+   clipDepth:depthZeroToOne?'zero-to-one':'minus-one-to-one',source:'one fresh native local optical observation; separate intrinsic emission',flow:'current Fine/Middle/World grid velocity',reaction:'finite visual proxy seeded by intrinsic emission; no inferred fuel/oxygen',composition:'additive optical moments; approximate mixed-depth attenuation',generatedSmoke:'new reaction soot contributes absorption; carried source scattering uses birth illumination',reset:resetNeeded};return info;
  }
  let resolvePipeline=null;
- async function sample(){if(!particles||!frame)return {available:false,state:info};const p=particles,read=device.createBuffer({size:p.size,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});try{const e=device.createCommandEncoder();e.copyBufferToBuffer(p,0,read,0,p.size);device.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);return {available:true,state:info,records:new Float32Array(read.getMappedRange().slice(0))};}finally{read.unmap();read.destroy();}}
+ async function sample(){if(!particles||!frame||key===null)return {available:false,state:info};const epoch=frame,sourceKey=key,snapshot=structuredClone(info),p=particles,read=device.createBuffer({size:p.size,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});try{const e=device.createCommandEncoder();e.copyBufferToBuffer(p,0,read,0,p.size);device.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);if(frame!==epoch||key!==sourceKey||particles!==p)throw Error('Particle readback became stale');return {available:true,state:snapshot,records:new Float32Array(read.getMappedRange().slice(0))};}finally{read.unmap();read.destroy();}}
  return {encode,reset,read:()=>info,sample,dispose(){retire([options,camera,...textures,...(particles?[particles]:[])]);const old=retired.splice(0);queueMicrotask(()=>device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>old.forEach(x=>x.destroy())));particles=null;textures=[];}};
 }
