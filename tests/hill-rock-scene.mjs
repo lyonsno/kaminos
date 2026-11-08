@@ -25,7 +25,7 @@ test('closing the enclosing experiment destroys the exported rock buffers',async
  let root,view,instance;
  globalThis.window={};globalThis.GPUBufferUsage={STORAGE:128,COPY_DST:8};
  globalThis.fetch=async url=>{const bytes=await readFile(url);return{ok:true,arrayBuffer:async()=>bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength)};};
- const device={limits:{maxStorageBufferBindingSize:1e9,maxBufferSize:1e9,maxComputeWorkgroupsPerDimension:65535},addEventListener(){},removeEventListener(){},lost:new Promise(()=>{}),queue:{writeBuffer(){}},createBuffer({size}){const b={size,destroyed:false,destroy(){this.destroyed=true;}};allocated.push(b);return b;}};
+ const device={limits:{maxStorageBufferBindingSize:1e9,maxBufferSize:1e9,maxComputeWorkgroupsPerDimension:65535,maxComputeWorkgroupsPerDimension:65535},addEventListener(){},removeEventListener(){},lost:new Promise(()=>{}),queue:{writeBuffer(){}},createBuffer({size}){const b={size,destroyed:false,destroy(){this.destroyed=true;}};allocated.push(b);return b;}};
  const renderer={_attributes:{delete(){}},backend:{isWebGPUBackend:true,device,get:a=>({buffer:{size:a.array.byteLength}})},compute(){}};
  const session={attach:async value=>(root=value,{id:root.uuid,root}),setView:v=>(view=v),readView:()=>view,redraw(){},onFrame:()=>()=>{},dispose:async()=>{root=null;}};
  try{

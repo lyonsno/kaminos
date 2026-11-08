@@ -25,7 +25,7 @@ export async function createVolumeGPU({device,model,display={}}){
   const pipeline=await device.createComputePipelineAsync({label:'Hill volume '+entry,layout:'auto',compute:{module,entryPoint:entry}});
   const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:bindings.map(([binding,name])=>({binding,resource:{buffer:resources[name]}}))});const spatialGroup=spatialBindings.length?device.createBindGroup({layout:pipeline.getBindGroupLayout(1),entries:spatialBindings.map(([binding,name])=>({binding,resource:{buffer:resources[name]}}))}):null;return{pipeline,group,spatialGroup};
  };
- const dispatch=(e,k,n)=>{const p=e.beginComputePass();p.setPipeline(k.pipeline);p.setBindGroup(0,k.group);if(k.spatialGroup)p.setBindGroup(1,k.spatialGroup);p.dispatchWorkgroups(Math.ceil(n/64));p.end();};
+ const dispatch=(e,k,n)=>{const p=e.beginComputePass();p.setPipeline(k.pipeline);p.setBindGroup(0,k.group);if(k.spatialGroup)p.setBindGroup(1,k.spatialGroup);if(k.groupPerBody){const limit=device.limits.maxComputeWorkgroupsPerDimension,x=Math.min(n,limit),y=Math.min(Math.ceil(n/x),limit),z=Math.ceil(n/(x*y));p.dispatchWorkgroups(x,y,z);}else p.dispatchWorkgroups(Math.ceil(n/64));p.end();};
  const draw=e=>{e.clearBuffer(resources.cells);dispatch(e,kernels.p2g,count);e.clearBuffer(resources.indirect);dispatch(e,kernels.surface,cubeCount);dispatch(e,kernels.rock,packed.vertices.length/4);};
  const params=(height,rate,action)=>{const a=new Float32Array(28),u=new Uint32Array(a.buffer);a.set([...c.origin,c.cell]);u.set([...c.dimensions,model.bodies.length],4);a.set([c.bulk,c.shear,c.friction,c.density,c.dt,c.gravity,c.contactFriction,0],8);if(action){if(action.kind==='rock'){a.set([...action.velocity,action.index+1],20);if(action.point)a.set([...action.point,1],16);}else{a.set([...action.center,action.radius],16);a.set([...action.velocity,0],20);}}a.set([height,rate,0,0],24);return a;};
  const bins=[[0,'bodyHeads'],[1,'bodyLinks'],[2,'spatialParams']];
@@ -35,6 +35,7 @@ export async function createVolumeGPU({device,model,display={}}){
   kernels.features=await make(VOLUME_KERNELS,'transform_features',[[2,'bodies'],[7,'convexData']],[[4,'worldFeatures'],[6,'featureOwners']]);
   kernels.degrees=await make(VOLUME_KERNELS,'contact_degrees',[[2,'bodies'],[3,'planes']],[...bins,[3,'bodyDegrees'],[4,'worldFeatures']]);
   kernels.solve=await make(VOLUME_KERNELS,'solve_rigid',[[2,'bodies'],[3,'planes'],[6,'params']],[...bins,[3,'bodyDegrees'],[4,'worldFeatures'],[5,'nextBodies']]);
+  kernels.degrees.groupPerBody=true;kernels.solve.groupPerBody=true;
   kernels.p2g=await make(VOLUME_KERNELS,'p2g',[[0,'particles'],[1,'cells'],[6,'params']]);
   kernels.grid=await make(VOLUME_KERNELS,'grid',[[1,'cells'],[2,'bodies'],[3,'planes'],[4,'triangles'],[5,'reactions'],[6,'params']],bins);
   kernels.g2p=await make(VOLUME_KERNELS,'g2p',[[0,'particles'],[1,'cells'],[2,'bodies'],[3,'planes'],[4,'triangles'],[5,'reactions'],[6,'params']],bins);

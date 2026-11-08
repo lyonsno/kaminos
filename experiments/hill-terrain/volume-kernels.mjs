@@ -37,12 +37,15 @@ fn reaction_add(index:u32,value:f32){
 @compute @workgroup_size(64) fn transform_features(@builtin(global_invocation_id) id:vec3u){
  if(id.x>=arrayLength(&convexData)){return;}let b=bodies[featureOwners[id.x]];var p=rot(b.q,convexData[id.x].xyz);if(id.x<u32(b.i0.w+b.i1.w)){p+=b.p.xyz;}worldFeatures[id.x]=vec4f(p,0.);
 }
-@compute @workgroup_size(64) fn contact_degrees(@builtin(global_invocation_id) id:vec3u){
- if(id.x>=arrayLength(&bodies)){return;}let b=bodies[id.x];var count=0u;
+@compute @workgroup_size(64) fn contact_degrees(@builtin(workgroup_id) group:vec3u,@builtin(num_workgroups) groups:vec3u,@builtin(local_invocation_index) lane:u32){
+ let i=group.x+groups.x*(group.y+groups.y*group.z);if(i>=arrayLength(&bodies)){return;}
+ if(lane==0u){satBody=bodies[i];}let b=workgroupUniformLoad(&satBody);var count=0u;
  if(b.p.w>0.){let extent=b.size.x+spatial.origin.w*.5;let lo=bucket(b.p.xyz-vec3f(extent));let hi=bucket(b.p.xyz+vec3f(extent));
  for(var x=lo.x;x<=hi.x;x++){for(var y=lo.y;y<=hi.y;y++){for(var z=lo.z;z<=hi.z;z++){
- var link=atomicLoad(&bodyHeads[bucket_index(vec3i(x,y,z))]);while(link>0u){let j=link-1u;link=bodyLinks[j];if(j!=id.x&&distance(b.p.xyz,bodies[j].p.xyz)<b.size.x+bodies[j].size.x&&convex_contact(b,bodies[j]).w>0.){count++;}}
- }}}}bodyDegrees[id.x]=max(1u,count);
+ if(lane==0u){satHead=atomicLoad(&bodyHeads[bucket_index(vec3i(x,y,z))]);}var link=workgroupUniformLoad(&satHead);
+ while(link>0u){let j=link-1u;if(lane==0u){satNeighbor=SatNeighbor(bodies[j],bodyLinks[j]);}let neighbor=workgroupUniformLoad(&satNeighbor);link=neighbor.next;
+ if(j!=i&&distance(b.p.xyz,neighbor.body.p.xyz)<b.size.x+neighbor.body.size.x){if(parallel_convex_contact(b,neighbor.body,lane).w>0.){count++;}}}
+ }}}}if(lane==0u){bodyDegrees[i]=max(1u,count);}
 }
 const FP:f32=1048576.;
 fn encode(v:f32)->i32{return i32(round(v*FP));}
@@ -162,6 +165,29 @@ fn convex_contact(a:Body,b:Body)->vec4f{
   for(var j=0u;j<u32(b.size.w);j++){let axis=cross(edge,worldFeatures[u32(b.i2.w)+j].xyz);let c=contact_axis(a,b,axis);if(c.w<0.){return c;}if(c.w<best.w){best=c;}}
  }return best;
 }
+struct SatCandidate { frame:vec4f, rank:u32 }
+struct SatNeighbor { body:Body, next:u32 }
+var<workgroup> satCandidates:array<SatCandidate,64>;
+var<workgroup> satBody:Body;
+var<workgroup> satNeighbor:SatNeighbor;
+var<workgroup> satHead:u32;
+fn sat_reduce(frame:vec4f,rank:u32,lane:u32)->SatCandidate{
+ satCandidates[lane]=SatCandidate(frame,rank);workgroupBarrier();
+ for(var stride=32u;stride>0u;stride/=2u){
+  if(lane<stride){let a=satCandidates[lane];let b=satCandidates[lane+stride];if(b.frame.w<a.frame.w||(b.frame.w==a.frame.w&&b.rank<a.rank)){satCandidates[lane]=b;}}
+  workgroupBarrier();
+ }
+ return workgroupUniformLoad(&satCandidates[0]);
+}
+fn parallel_convex_contact(a:Body,b:Body,lane:u32)->vec4f{
+ var best=vec4f(0.,0.,0.,1e30);var rank=0xffffffffu;let faces=a.shape.y+b.shape.y;
+ for(var k=lane;k<faces;k+=64u){var axis:vec3f;if(k<a.shape.y){axis=rot(a.q,planes[a.shape.x+k].xyz);}else{axis=rot(b.q,planes[b.shape.x+k-a.shape.y].xyz);}let c=contact_axis(a,b,axis);if(c.w<best.w||(c.w==best.w&&k<rank)){best=c;rank=k;}}
+ let face=sat_reduce(best,rank,lane);if(face.frame.w<0.){return face.frame;}
+ best=face.frame;rank=face.rank;let na=u32(a.size.w);let nb=u32(b.size.w);
+ for(var k=lane;k<na*nb;k+=64u){let axis=cross(worldFeatures[u32(a.i2.w)+k/nb].xyz,worldFeatures[u32(b.i2.w)+k%nb].xyz);let c=contact_axis(a,b,axis);let order=faces+k;if(c.w<best.w||(c.w==best.w&&order<rank)){best=c;rank=order;}}
+ return sat_reduce(best,rank,lane).frame;
+}
+
 fn support_center(b:Body,n:vec3f)->vec3f{
  let lo=interval(b,n).x;var sum=vec3f(0.);var count=0.;
  for(var k=0u;k<u32(b.i1.w);k++){let p=worldFeatures[u32(b.i0.w)+k].xyz;if(dot(p,n)<lo+1e-5){sum+=p;count+=1.;}}return sum/max(count,1.);
@@ -198,21 +224,22 @@ fn pair_impulse(a:Body,b:Body,n:vec3f,point:vec3f)->vec3f{
  let tangent=after-n*dot(after,n);let speed=length(tangent);var impulse=normalImpulse;
  if(speed>1e-8){let t=tangent/speed;impulse-=t*min(cfg.forces.z*jn,speed/max(pair_effective(a,b,ra,rb,t),1e-12));}return impulse;
 }
-@compute @workgroup_size(64) fn solve_rigid(@builtin(global_invocation_id) id:vec3u){
- let i=id.x;if(i>=arrayLength(&bodies)){return;}let original=bodies[i];var body=original;if(body.p.w==0.){nextBodies[i]=body;return;}
- let extent=body.size.x+spatial.origin.w*.5;let lo=bucket(body.p.xyz-vec3f(extent));let hi=bucket(body.p.xyz+vec3f(extent));var dp=vec3f(0.);var dv=vec3f(0.);var dw=vec3f(0.);
+@compute @workgroup_size(64) fn solve_rigid(@builtin(workgroup_id) group:vec3u,@builtin(num_workgroups) groups:vec3u,@builtin(local_invocation_index) lane:u32){
+ let i=group.x+groups.x*(group.y+groups.y*group.z);if(i>=arrayLength(&bodies)){return;}
+ if(lane==0u){satBody=bodies[i];}let original=workgroupUniformLoad(&satBody);var body=original;if(original.p.w==0.){if(lane==0u){nextBodies[i]=original;}return;}
+ let extent=original.size.x+spatial.origin.w*.5;let lo=bucket(original.p.xyz-vec3f(extent));let hi=bucket(original.p.xyz+vec3f(extent));var dp=vec3f(0.);var dv=vec3f(0.);var dw=vec3f(0.);
  for(var x=lo.x;x<=hi.x;x++){for(var y=lo.y;y<=hi.y;y++){for(var z=lo.z;z<=hi.z;z++){
- var link=atomicLoad(&bodyHeads[bucket_index(vec3i(x,y,z))]);while(link>0u){let j=link-1u;link=bodyLinks[j];if(j==i){continue;}let other=bodies[j];if(distance(original.p.xyz,other.p.xyz)>original.size.x+other.size.x){continue;}
- // Canonical pair order gives both body threads the same normal/contact and
- // impulse; each writes only its own next pose, with equal/opposite impulses.
- let a=bodies[min(i,j)];let b=bodies[max(i,j)];let c=convex_contact(a,b);if(c.w<=0.||c.w>=1e29){continue;}
- let point=(support_center(a,c.xyz)+support_center(b,-c.xyz))*.5;let sign=select(-1.,1.,i<j);
+ if(lane==0u){satHead=atomicLoad(&bodyHeads[bucket_index(vec3i(x,y,z))]);}var link=workgroupUniformLoad(&satHead);
+ while(link>0u){let j=link-1u;if(lane==0u){satNeighbor=SatNeighbor(bodies[j],bodyLinks[j]);}let neighbor=workgroupUniformLoad(&satNeighbor);link=neighbor.next;let other=neighbor.body;
+ if(j==i||distance(original.p.xyz,other.p.xyz)>original.size.x+other.size.x){continue;}
+ var a=original;var b=other;if(i>j){a=other;b=original;}let c=parallel_convex_contact(a,b,lane);if(c.w<=0.||c.w>=1e29){continue;}
+ if(lane==0u){let point=(support_center(a,c.xyz)+support_center(b,-c.xyz))*.5;let sign=select(-1.,1.,i<j);
  let degree=max(select(0u,bodyDegrees[min(i,j)],a.p.w>0.),select(0u,bodyDegrees[max(i,j)],b.p.w>0.));let weight=1./f32(max(1u,degree));
- let impulse=pair_impulse(a,b,c.xyz,point)*sign*weight;dv+=impulse*original.p.w;dw+=inverse_inertia(original,cross(point-original.p.xyz,impulse));dp+=c.xyz*(sign*c.w*original.p.w/(a.p.w+b.p.w)*weight);
+ let impulse=pair_impulse(a,b,c.xyz,point)*sign*weight;dv+=impulse*original.p.w;dw+=inverse_inertia(original,cross(point-original.p.xyz,impulse));dp+=c.xyz*(sign*c.w*original.p.w/(a.p.w+b.p.w)*weight);}
  }}}}
- body.p=vec4f(original.p.xyz+dp,original.p.w);body.v=vec4f(original.v.xyz+dv,0.);body.w=vec4f(original.w.xyz+dw,0.);
+ if(lane==0u){body.p=vec4f(original.p.xyz+dp,original.p.w);body.v=vec4f(original.v.xyz+dv,0.);body.w=vec4f(original.w.xyz+dw,0.);
  let bottom=support_center(original,vec3f(0,1,0))+dp;let influence=exp(-dot(bottom.xz,bottom.xz)/.75);let floor=cfg.drive.x*influence;
- if(bottom.y<floor){body=contact_body(body,vec3f(0,1,0),floor-bottom.y,bottom,vec3f(0.,cfg.drive.y*influence,0.));}nextBodies[i]=body;
+ if(bottom.y<floor){body=contact_body(body,vec3f(0,1,0),floor-bottom.y,bottom,vec3f(0.,cfg.drive.y*influence,0.));}nextBodies[i]=body;}
 }
 
 `;
