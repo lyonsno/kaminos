@@ -9,7 +9,7 @@ test('observed pre-composition scene migrates independent soot history without a
  const {settings}=JSON.parse(readFileSync(new URL('./fixtures/fire-scene-816e82aa1.json',import.meta.url)));
  const result=fire.projectFireSettingsToSchema(settings,schema);
  assert.equal(result.domControls['volume-reactant-soot-yield'].value,2);
- assert.equal(result.domControls['volume-world-smoke-intermediate'].value,'off');
+ assert.equal(Object.hasOwn(result.domControls,'volume-world-smoke-intermediate'),false,'Retired Middle controls cannot be reintroduced into restored authoring state');
  for(const e of schema.controls.filter(e=>e.additiveSinceControlCount>=269))assert.equal(result.domControls[e.key].value,e.additiveDefault);
  for(const entry of schema.controls)if(settings.domControls[entry.key])assert.deepEqual(result.domControls[entry.key],settings.domControls[entry.key]);
  const hole=structuredClone(settings);delete hole.domControls['volume-pressure-solver'];

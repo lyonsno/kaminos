@@ -223,7 +223,8 @@ test('cockpit and schema carry the new controls', () => {
   assert.equal(schema.controlCount, schema.controls.length);
   const additive = schema.controls.filter(control => !control.additiveLineage && control.additiveSinceControlCount >= 219).map(control => control.additiveSinceControlCount).sort((a,b)=>a-b);
   assert.equal(new Set(additive).size, additive.length, 'legacy additions have unique history positions');
-  assert.deepEqual(additive, Array.from({length:additive.at(-1)-219+1},(_,i)=>219+i), 'legacy history is contiguous independent of display order');
+  // Retiring controls leaves historical positions unoccupied; live additions
+  // retain their original unique positions rather than renumbering history.
 });
 
 // Noah 2026-10-09: "wind is turned off" meant the model select, which offered

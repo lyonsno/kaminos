@@ -26,8 +26,12 @@ with tempfile.TemporaryDirectory() as tmp:
     assert result["schemaProjection"]["defaultsApplied"] == ["volume-adaptive-rays"]
     preset = result["preset"]
     assert preset["domControls"]["volume-adaptive-rays"]["value"] == 0.65
+    retired = {entry["key"] for entry in json.loads((ROOT / "volume-settings-preset-schema-v2.json").read_text())["retiredControls"] if entry["axis"] == "domControls"}
     for key, descriptor in observed["preset"]["domControls"].items():
-        assert preset["domControls"][key] == descriptor, key
+        if key in retired:
+            assert key not in preset["domControls"], key
+        else:
+            assert preset["domControls"][key] == descriptor, key
     assert preset["rendererControls"]["volume-raymarch-mode"]["value"] == "history"
     assert preset["domControls"]["volume-steps"]["value"] == 4
     assert preset["domControls"]["volume-adaptive-budget"]["value"] == 20
