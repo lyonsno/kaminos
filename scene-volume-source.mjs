@@ -138,6 +138,7 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
   let inputs = buildInputs();
   const output = device.createBindGroup({layout: pipeline.getBindGroupLayout(3), entries: [{binding: 4, resource: texture.createView()},{binding:5,resource:scatteringTexture.createView()},{binding:10,resource:{buffer:sampling}}]});
   let status = 'unbuilt', reason = 'not-encoded', frame = null, sourceIndex = null, generation = 0;
+  let lastContentVersion = null;
   let worldTransform=validateSceneSourceTransform();
   let optical = null;
   let exterior=null;
@@ -177,7 +178,7 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
   const invalidateOptical = () => {if (optical) optical.generation = null;};
   return {
     setSampling(value){normalizeLightingTransport({sourceSamplesPerAxis:value});if(value===samplesPerAxis)return;samplesPerAxis=value;updateSampling();status='unbuilt';reason='material-quadrature-changed';invalidateOptical();},
-    encode(encoder, index, currentFrame,transform) {
+    encode(encoder, index, currentFrame,transform,contentVersion=null) {
       if (status === 'destroyed') throw new Error('scene source destroyed');
       const world=getWorldSmoke();
       // This optional authored value is also the camera's physical ownership
@@ -186,7 +187,16 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
       const inputsChanged=getReactantTextures() !== boundTextures||(world?.texture??emptyWorld)!==boundWorld||(world?.renderView??emptyWorldView)!==boundRenderView;
       if(inputsChanged)inputs = buildInputs();
       if (!Number.isInteger(index) || !inputs[index]) throw new Error('invalid scene source index');
-      worldTransform=validateSceneSourceTransform(transform);
+      const nextTransform=validateSceneSourceTransform(transform);
+      const sameTransform=nextTransform.scale===worldTransform.scale&&nextTransform.translate.every((n,a)=>n===worldTransform.translate[a]);
+      worldTransform=nextTransform;
+      // Content authority comes from the producer's material/reset/uniform
+      // revision, never from camera frame count. Omitted authority is conservative.
+      if(contentVersion!==null&&status==='encoded'&&!inputsChanged&&sourceIndex===index&&sameTransform&&lastContentVersion===contentVersion){
+        frame=currentFrame;
+        if(exterior)exterior.frame=currentFrame;
+        return;
+      }
       status = 'unbuilt'; reason = 'encoding';
       invalidateOptical();
       const pass = encoder.beginComputePass({label: 'raw live volume source'});
@@ -194,6 +204,7 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
       pass.dispatchWorkgroups(Math.ceil(grid/4), Math.ceil(gridY/4), Math.ceil(grid/4)); pass.end();
       status = 'encoded'; reason = null; sourceIndex = index; frame = currentFrame; generation++;
       encodeExterior(encoder);
+      lastContentVersion=contentVersion;
     },
     invalidate(why) {if (status !== 'destroyed') {status = 'unbuilt'; reason = why; invalidateOptical();}},
     // First experiment: one controlled source, in volume-local coordinates.

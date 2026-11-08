@@ -21434,7 +21434,13 @@ export function createKaminosVolumePrototype({
         return {texture:worldSmoke.optical,dimensions:worldSmoke.plan.materialDims,localMin:map.renderMin,localMax:map.renderMax,renderView:worldRenderField.view};
       },
       grid: sceneSourceGrid, gridY: sceneSourceGridPlan(sceneSourceGrid,[gridSize,gridHeight,gridSize],device.limits).dimensions[1], fluidGrid: gridSize, fluidGridY: gridHeight});
-    sceneVolumeSource.encode(encoder, currentFluid, state.frameCount,productTransform);
+    // Source coefficients do not depend on the camera matrix, viewport or
+    // animated pixel jitter. Keep every remaining material uniform, the actual
+    // buffer epoch and World optical builds in the identity; presentation-only
+    // frames may then reuse the exact coefficients without delaying live fire.
+    const sourceContentVersion=JSON.stringify([state.thermalFluidAllocationId,state.fluidStateResetCount,state.simStepCount,currentFront,
+      Array.from(uniforms.subarray(23,41)),Array.from(uniforms.subarray(42)),worldSmokeKey,worldRenderField.read().builds]);
+    sceneVolumeSource.encode(encoder, currentFluid, state.frameCount,productTransform,sourceContentVersion);
     if (sceneMediumSource) sceneVolumeSource.encodeOpticalDepth(encoder, sceneMediumSource.position, sceneMediumSource.stepLength);
     return {source: sceneVolumeSource.describe(), medium: sceneVolumeSource.opticalDepthField(), simStepCount: state.simStepCount};
   }

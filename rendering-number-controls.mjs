@@ -4,7 +4,7 @@ const installed=new WeakSet();
 let errorSerial=0;
 // Preserve the input and its existing input/change handlers. Cost controls
 // commit on release; live controls keep their existing input behavior.
-export function installRenderingNumberControl(input,installNumberDrag=installRelativeNumberDrag) {
+export function installRenderingNumberControl(input,installNumberDrag=installRelativeNumberDrag,{dragScale=1}={}) {
   if(installed.has(input))return;
   installed.add(input);
   const errorHost=input.closest?.('label')??input.closest?.('.field')??input.parentElement;
@@ -47,7 +47,7 @@ export function installRenderingNumberControl(input,installNumberDrag=installRel
     input.value=before;
     input.dispatchEvent(new input.ownerDocument.defaultView.Event('input',{bubbles:true}));
   });
-  return installNumberDrag({input,grip:input,step:Number(input.step)>0?Number(input.step):.001,onStart:()=>{before=input.value;if(valid())lastValid=input.value;dragging=true;},onEnd:()=>{dragging=false;}});
+  return installNumberDrag({input,grip:input,step:Number(input.step)>0?Number(input.step):.001,dragScale,onStart:()=>{before=input.value;if(valid())lastValid=input.value;dragging=true;},onEnd:()=>{dragging=false;}});
 }
 export function installRenderingNumberControls(root) {
   for(const input of root.querySelectorAll('input[type="number"],input[type="range"]')) {

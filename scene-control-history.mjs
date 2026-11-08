@@ -90,7 +90,8 @@ function installNumberPresentation(input) {
 }
 
 /** One field: relative dragging while idle, ordinary text editing after a click. */
-export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=()=>{}}) {
+export function installRelativeNumberDrag({grip,input,step,dragScale=1,onStart=()=>{},onEnd=()=>{}}) {
+  if(!Number.isFinite(dragScale)||dragScale<=0)throw Error('Number drag scale must be positive and finite');
   let gesture=null, suppressClick=false, disposed=false;
   const doc=input.ownerDocument || document;
   const targets=[...new Set([grip,input].filter(Boolean))];
@@ -152,7 +153,7 @@ export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=
       const min=bound(input.min),max=bound(input.max);
       // A finite interval has one consistent travel distance, independent of
       // the source's keyboard step. Unbounded fields retain their unit scale.
-      const rate=min!==null&&max!==null&&max>min?(max-min)/300:step;
+      const rate=(min!==null&&max!==null&&max>min?(max-min)/300:step)*dragScale;
       gesture={target,x:event.clientX,lastX:event.clientX,startValue:Number(input.value),value:Number(input.value),min,max,rate,pointerId:event.pointerId,moved:false};
       target.setPointerCapture(event.pointerId);
       gesture.continuous=beginContinuousPointer(target,{x:event.clientX,y:event.clientY},{move:({dx,event})=>adjust(dx,event.shiftKey),lost:()=>finish(true),unavailable:()=>{input.title='Continuous pointer unavailable · Drag to adjust · Click to type';}});

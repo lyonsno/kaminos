@@ -184,11 +184,11 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
         const sourceRow=document.createElement('label');sourceRow.textContent='Lighting emission resolution';
         sourceRow.title='Source cells across the Fine width, independent of simulation and smoke receiver resolution. Lower values reduce material sampling and the spatial reduction used to derive every retained light source. Height follows the box aspect. Source count stays unchanged.';
         const sourceInput=document.createElement('input');sourceInput.type='number';sourceInput.min='1';sourceInput.step='1';sourceInput.setAttribute('aria-label','Lighting emission resolution');
-        sourceInput.addEventListener('change',()=>invoke('setSourceGrid',Number(sourceInput.value)).catch(failed));sourceRow.append(sourceInput);panel.append(sourceRow);lightControls.push({key:'sourceGrid',number:sourceInput});numberScrubs.push(installRenderingNumberControl(sourceInput,installNumberDrag));
+        sourceInput.addEventListener('change',()=>invoke('setSourceGrid',Number(sourceInput.value)).catch(failed));sourceRow.append(sourceInput);panel.append(sourceRow);lightControls.push({key:'sourceGrid',number:sourceInput});numberScrubs.push(installRenderingNumberControl(sourceInput,installNumberDrag,{dragScale:1/16}));
         const gridRow=document.createElement('label');gridRow.textContent='Smoke light receiver resolution';
         gridRow.title='Independent lighting samples across the domain width. Material and flow resolution stay independent. Height follows the domain aspect.';
         const gridInput=document.createElement('input');gridInput.type='number';gridInput.min='1';gridInput.step='1';gridInput.setAttribute('aria-label','Smoke light receiver resolution');
-        gridInput.addEventListener('change',()=>invoke('setLightGrid',Number(gridInput.value)).catch(failed));gridRow.append(gridInput);panel.append(gridRow);lightControls.push({key:'volumeGrid',number:gridInput});numberScrubs.push(installRenderingNumberControl(gridInput,installNumberDrag));
+        gridInput.addEventListener('change',()=>invoke('setLightGrid',Number(gridInput.value)).catch(failed));gridRow.append(gridInput);panel.append(gridRow);lightControls.push({key:'volumeGrid',number:gridInput});numberScrubs.push(installRenderingNumberControl(gridInput,installNumberDrag,{dragScale:1/16}));
         const transportHeading=document.createElement('h3');transportHeading.textContent='Lighting traversal & reconstruction';panel.append(transportHeading);
         for(const [key,text,min,step,help]of [
           ['sourceSamplesPerAxis','Fine emission material samples per axis',1,'1','Material evaluations per lighting-source cell grow as this value cubed. Two preserves the existing eight samples; one uses the cell center. This changes the lighting source approximation, not simulation or camera material.'],
@@ -208,8 +208,9 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
         ]){
           const row=document.createElement('label');row.textContent=text;row.title=help;
           const number=document.createElement('input');number.type='number';number.min=String(min);number.step=step;number.setAttribute('aria-label',text);
+          if(['importanceExploration','importanceHistoryDecay','importanceHistoryBlend','shadowCutoff'].includes(key))number.max='1';
           number.addEventListener('change',()=>invoke('setTransportQuality',{[key]:Number(number.value)}).catch(failed));
-          transportControls.push({key,number});row.append(number);panel.append(row);numberScrubs.push(installRenderingNumberControl(number,installNumberDrag));
+          transportControls.push({key,number});row.append(number);panel.append(row);numberScrubs.push(installRenderingNumberControl(number,installNumberDrag,{dragScale:['sourceSamplesPerAxis','fineRefinement','worldGrid','worldRefinement'].includes(key)?1/16:1}));
           if(key==='sourceSamplesPerAxis'){
             sourceSampleInput=number;sourceSampleWork=document.createElement('small');
             sourceSampleWork.setAttribute('aria-label','Fine emission material sampling workload');row.append(sourceSampleWork);
@@ -226,6 +227,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
           const row=document.createElement('label');row.textContent=text;
           row.title=key==='grid'?'Independent cubic-cell spacing: this many near receivers span the Fine width. Actual dimensions grow with the box extent.':key==='directions'?'Live quadrature per near receiver, independent of Fine lighting directions.':'Total extent relative to Fine. Extra height reaches above the outlet; extra width/depth is symmetric.';
           const number=document.createElement('input');number.type='number';number.min=String(min);number.step=step;number.setAttribute('aria-label',text);
+          if(['importanceExploration','importanceHistoryDecay','importanceHistoryBlend','shadowCutoff'].includes(key))number.max='1';
           number.addEventListener('change',()=>{
             const next=axis===undefined?{[key]:Number(number.value)}:{extent:source().debugState().nearBox.extent.map((n,a)=>a===axis?Number(number.value):n)};
             invoke('setNearBox',next).catch(failed);
