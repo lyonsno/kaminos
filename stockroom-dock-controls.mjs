@@ -94,7 +94,7 @@ export function createDockEditing({document,viewport,canvas,camera,navigation,en
   seats.set(id,seat);
   seat.component=components.register(id,{
    enter(){seat.editMode=true;placeProxy();updateHandles();},exit(){seat.editMode=false;updateHandles();},
-   target(){if(!member())seat.piece=root.children[0]?.name;if(!member())return null;if(!edits.state().active)placeProxy();return {id:pieceTarget,type:'dock-piece',label:seat.piece,object:proxy,read:snapshot,frameObjects:[member()]};},
+   target(){if(!member())seat.piece=root.children[0]?.name;if(!member())return null;if(!edits.state().active)placeProxy();return {id:pieceTarget,type:'dock-piece',label:seat.piece,object:proxy,read:snapshot,localOrientation:poseOf(member()).rotation,frameObjects:[member()]};},
    pick(event,{camera,canvas}){const rect=canvas.getBoundingClientRect(),ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,1-(event.clientY-rect.top)/rect.height*2),camera);const hit=ray.intersectObjects(root.children,false)[0];if(hit)seat.component.changed(()=>{seat.piece=hit.object.name;placeProxy();});},
   });
   for(const [key,icon,color]of[['width','↔','#63d6bd'],['widthMin','↔','#63d6bd'],['depth','↔','#72aefb'],['depthMin','↔','#72aefb'],['height','↕','#f0c56b'],['stairRun','↔','#eaa0bc']]){
