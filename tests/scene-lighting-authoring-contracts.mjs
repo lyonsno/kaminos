@@ -152,7 +152,7 @@ test('AO is attached to material indirect lighting, not multiplied over lit outp
     const c=sceneContext({localLiquidHost:null,scenePass:pass,aoIntensity:float(3),float,
       mix:(a,b,t)=>float(a).mul(float(1).sub(t)).add(float(b).mul(t)),
       builtinAOContext:ao=>({ao}),texture:()=>({r:float(.2)}),denoiseResolved:{value:{}},screenUV:{},
-      sceneGISettings:{mode:'gtao',view:'scene'},sceneGI:{debugState:()=>({filterImplementation:'shared'})},document:{body:{dataset:{}}},prePassDepth:{},
+      sceneGISettings:{mode:'gtao',view:'scene'},sceneGI:{debugState:()=>({filterImplementation:'shared'}),reflections:{settings:{enabled:false}}},document:{body:{dataset:{}}},prePassDepth:{},
       URLSearchParams,location:{search:''},
       sceneEmissionSource:null,sceneBloom:{read:()=>({settings:{enabled:false}}),output:value=>value},
       giOutputGraphs:new Map(),renderPipeline:pipeline,isFireLightFieldRoute:()=>false,

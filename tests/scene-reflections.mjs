@@ -6,6 +6,8 @@ import {installSceneReflectionLighting} from '../scene-reflection-lighting.mjs';
 import {StandardNodeLibrary,MeshStandardMaterial,PerspectiveCamera,Vector3,Texture,TSL} from '../lib/three.webgpu.js';
 import {createViewProjection} from '../view-projection.mjs';
 import {execFileSync} from 'node:child_process';
+import {readFileSync} from 'node:fs';
+import {runInNewContext} from 'node:vm';
 test('reflection requests retain caller budgets and reject unrepresentable values',()=>{
  const s=resolveReflectionSettings({enabled:true,steps:4096,resolutionScale:.75,maxDistance:120});
  assert.equal(s.steps,4096);assert.equal(s.resolutionScale,.75);assert.equal(s.maxDistance,120);
@@ -99,4 +101,16 @@ test('crossing refinement is a distinct saved budget, with zero allowed and call
  assert.equal(resolveReflectionSettings().refinementSteps,6);
  for(const refinementSteps of [0,3,16,4096])assert.equal(resolveReflectionSettings({refinementSteps}).refinementSteps,refinementSteps);
  for(const refinementSteps of [-1,1.5,4294967296])assert.throws(()=>resolveReflectionSettings({refinementSteps}),/refinement/i);
+});
+
+test('legacy scene restoration clears reflection history without replacing session settings',()=>{
+ const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const a=source.indexOf('  if(restorePlan.reflections)'),b=source.indexOf('  if (data.postprocessing)',a);
+ assert.ok(a>=0&&b>a);
+ for(const reflections of [null,{enabled:true}]){
+  const resets=[],writes=[],context={restorePlan:{reflections},restoreSceneReflectionSettings:value=>writes.push(value),sceneGI:{reflections:{reset:reason=>resets.push(reason)}}};
+  runInNewContext(source.slice(a,b),context);
+  if(reflections)assert.deepEqual(writes,[reflections]);
+  else {assert.deepEqual(writes,[]);assert.deepEqual(resets,['scene-restored']);}
+ }
 });

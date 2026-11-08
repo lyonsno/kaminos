@@ -52,7 +52,7 @@ test('mirrored light surfaces keep outward normals',()=>{
 test('object and group repetition survives scene-document save and normalize',()=>{
  const object={id:'baffle',type:'procedural-mesh',source:'kaminos:geometry',geometry:{kind:'box',parameters:{width:1,height:1,depth:1}},transform:pose(),repetition:config()};
  const document=buildSceneDocument({objects:[object],groups:[{id:'ring',type:'group',objectIds:['baffle'],transform:pose(),repetition:config({mode:'line'})}]});
- assert.equal(document.version,11);assert.deepEqual(document.objects[0].repetition,config());assert.deepEqual(document.groups[0].repetition,config({mode:'line'}));const restored=planSceneRestore(document);assert.deepEqual(restored.objects[0].repetition,config());assert.deepEqual(restored.groups[0].repetition,config({mode:'line'}));
+ assert.ok(document.version>=11,'repetition requires its introduced schema version or later');assert.deepEqual(document.objects[0].repetition,config());assert.deepEqual(document.groups[0].repetition,config({mode:'line'}));const restored=planSceneRestore(document);assert.deepEqual(restored.objects[0].repetition,config());assert.deepEqual(restored.groups[0].repetition,config({mode:'line'}));
 });
 
 import {sceneLiquidCollider,sceneLiquidDistance,createSceneLiquidSupport} from '../scene-liquid-support.mjs';

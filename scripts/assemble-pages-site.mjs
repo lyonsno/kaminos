@@ -80,9 +80,9 @@ export function assemblePagesSite(out, { supermatWeightsUrl = null } = {}) {
     "models/supermat/supermat-kernels.js","models/supermat/supermat-preprocess.js","models/supermat/supermat-maps.js","models/supermat/supermat-cpu-worker.js"]){
     const target=path.join(out,file);fs.mkdirSync(path.dirname(target),{recursive:true});fs.copyFileSync(path.join(repoRoot,file),target);
   }
-  // The solver is shared by Material Photograph. Preserve its static module
-  // graph as the numerical owner splits reusable browser components.
-  const pending=["finger-fluid-webgpu-core.js"],seen=new Set();
+  // Material Photograph shares both the fluid solver and scene illumination.
+  // Preserve their static module graphs as reusable browser owners evolve.
+  const pending=["finger-fluid-webgpu-core.js","scene-gi.mjs"],seen=new Set();
   while(pending.length){
     const file=pending.pop();if(seen.has(file))continue;seen.add(file);
     const source=fs.readFileSync(path.join(repoRoot,file),"utf8");

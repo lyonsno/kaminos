@@ -29025,6 +29025,7 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
   }
   if (typeof refreshArrivalLightingFromWorkingScene === 'function') refreshArrivalLightingFromWorkingScene();
   if(restorePlan.reflections)restoreSceneReflectionSettings(restorePlan.reflections);
+  else sceneGI.reflections.reset('scene-restored');
   if (data.postprocessing) {
     const ao = data.postprocessing.ao;
     if (ao) {sceneAO.restoreDocument(ao);saveSettings();}
