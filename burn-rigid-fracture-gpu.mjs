@@ -31,6 +31,7 @@ export async function createBurnRigidFractureGpu({renderer,prepared,sections,fin
   function presentMaterial(){const encoder=device.createCommandEncoder();liveBodies.encode(encoder);dispatch(encoder,'weaken');motion.encodeTopology(encoder);dispatch(encoder,'present');device.queue.submit([encoder.finish()]);}
   presentMaterial();
   const residentMotion={device,buffers,bodies:n,bonds:m,origin:frame.origin,timeStep:h,substeps,iterations:prepared.config.solverIterations,
+   setClockPhase(value){if(disposed)throw Error('Burn fracture disposed');if(!Number.isFinite(value)||value<0||value>=h)throw Error('Shared clock phase must be within its fixed step');remainder=value;},
    encodeMaterial(encoder){if(disposed)throw Error('Burn fracture disposed');liveBodies.encode(encoder);dispatch(encoder,'weaken');},
    encodePresentation(encoder,clock){if(disposed)throw Error('Burn fracture disposed');steps+=clock.steps;seconds+=clock.seconds;remainder=clock.remainder;motion.encodeTopology(encoder);dispatch(encoder,'present');},
   };

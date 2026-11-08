@@ -68,6 +68,12 @@ export async function createBurnContactWorldGpu({device,participants}){
     for(const row of rows){dispatch(encoder,row,'toLocal');const r=row.resident;for(const name of ['positions','rotations','velocities','angular'])encoder.copyBufferToBuffer(buffers[name],row.bodyOffset*16,r.buffers[name],0,r.bodies*16);r.encodePresentation(encoder,{steps:advanced,seconds:advanced*h,remainder});}
     device.queue.submit([encoder.finish()]);for(const row of rows)row.participant.present();
    },
+   synchronizeReset(participant){
+    if(disposed)throw Error('Shared burn contact world disposed');const row=rows.find(r=>r.participant===participant);if(!row)throw Error('Unknown shared burn participant');
+    // Resetting one material/pose does not rewind other objects. Its new local
+    // counters join the existing shared fixed-step phase immediately.
+    row.resident.setClockPhase(remainder);
+   },
    read:()=>({status:'live',objects:rows.length,regions:n,connections:m,steps,seconds,remainder,coordinates:'world-aligned-positive-uniform-source-frames',...motion.read()}),
    dispose,
   };

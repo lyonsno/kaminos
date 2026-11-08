@@ -10,14 +10,15 @@ export function createSceneBurnContact({renderer,createWorld=createBurnContactWo
   matches(rows){return !disposed&&!pending&&!error&&same(rows);},
   async sync(rows){
    if(disposed)return;if(same(rows)&&!error)return pending;
-   const token=++generation;current?.dispose();current=null;participants=rows;error=null;
+   const token=++generation;for(const row of participants)row.bindContactWorld?.(null);current?.dispose();current=null;participants=rows;error=null;
    if(!rows.length){pending=null;return;}
-   const build=(async()=>{const world=await createWorld({device:renderer.backend.device,participants:rows});if(disposed||token!==generation){world.dispose();return;}current=world;})();
+   const host=this,invalid=()=>rows.some(row=>row.valid?.()===false),build=(async()=>{const world=await createWorld({device:renderer.backend.device,participants:rows});if(disposed||token!==generation||invalid()){world.dispose();if(token===generation)participants=[];return;}current=world;for(const row of rows)row.bindContactWorld?.(host);})();
    pending=build;
-   try{await build;}catch(cause){if(token===generation)error=cause.message;throw cause;}finally{if(token===generation)pending=null;}
+   try{await build;}catch(cause){if(disposed||token!==generation||invalid()){if(token===generation)participants=[];return;}error=cause.message;throw cause;}finally{if(token===generation)pending=null;}
   },
   advance(dt,rows){if(!this.matches(rows))throw Error(error??'Shared burn contact participants are not synchronized');current?.advance(dt);},
+  synchronizeReset(participant){if(!disposed&&current&&participants.includes(participant))current.synchronizeReset(participant);},
   read:()=>({status:disposed?'disposed':error?'failed':pending?'compiling':current?'live':'empty',error,mechanics:current?.read()??null}),
-  dispose(){if(disposed)return;disposed=true;generation++;current?.dispose();current=null;participants=[];},
+  dispose(){if(disposed)return;disposed=true;generation++;for(const row of participants)row.bindContactWorld?.(null);current?.dispose();current=null;participants=[];},
  };
 }
