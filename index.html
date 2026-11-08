@@ -23513,6 +23513,7 @@ async function addFirstFlameField(presetId,{signal,lightingRoute={}}={}) {
   return FLAME_EMITTER_ID;
 }
 async function openFirstFlameFieldDialog({unit=false}={}) {
+  if(unit&&currentFireUnitTemplate())return addAuthoredFireUnit();
   if(activeSceneComposition)return unit?addAuthoredFireUnit():addFirstFlameField();
   assertSceneConstructionAvailable();
   const response=await fetch('/api/volume-settings-presets',{cache:'no-store'}),index=await response.json();
@@ -27774,25 +27775,26 @@ async function mountAuthoredFireUnit(raw,{activate=true,loadRequestId=null}={}) 
   return owner.root;
  }catch(error){unit?.controls.dispose();if(authoredFireUnits.get(record.id)?.owner===owner)authoredFireUnits.delete(record.id);await owner.dispose();if(workingScene.find(record.id)?.object===owner.root)removeSceneObjectInternal(record.id,{recordHistory:false});throw error;}
 }
+function currentFireUnitTemplate(){const selected=authoredFireUnits.get(workingScene.activeObjectId)?.owner;if(selected?.root.parent)return selected;return [...authoredFireUnits.values()].map(u=>u.owner).findLast(owner=>owner.root.parent)??null;}
 async function addFireUnitFromBasin(id,{signal,...options}={}) {
  signal?.throwIfAborted();
  const [artifactResponse,schemaResponse]=await Promise.all([fetch('/api/volume-settings-preset?id='+encodeURIComponent(id),{cache:'no-store'}),fetch('./volume-settings-preset-schema-v2.json')]);
  if(!artifactResponse.ok||!schemaResponse.ok)throw Error('Basin unavailable');
  const schema=await schemaResponse.json(),receipt=validateVolumeSettingsPresetDocument(await artifactResponse.json(),id,schema);
- const localScale=options.emitter?options.emitter.scale[0]/(options.scale??(activeSceneComposition?flameDomainScale:1)):flameEmitterPose.scale[0]/flameDomainScale;
+ const template=currentFireUnitTemplate(),localScale=options.emitter?options.emitter.scale[0]/(options.scale??template?.root.scale.x??(activeSceneComposition?flameDomainScale:1)):template?template.capture().emitter.scale[0]/template.root.scale.x:flameEmitterPose.scale[0]/flameDomainScale;
  const settings={...projectFireSettingsToSchema(flamePresetForLocalControls(receipt.preset,localScale),schema),source:{presetId:id,label:receipt.label}},copy=createFireUnitControlDocument(document,settings);
  const raw=readVolumeControls({quality:'full',document:copy,routeParams:new URLSearchParams(new URL(settings.route,location.href).search)});
  signal?.throwIfAborted();return addAuthoredFireUnit({...options,signal,settings,controls:{...raw,...options.controls},label:options.label??receipt.label});
 }
 async function addAuthoredFireUnit(options={}) {
  options.signal?.throwIfAborted();assertSceneConstructionAvailable();
- const id=makeSceneObjectId('fire'),source=options.controls??readVolumeControls();
+ const template=currentFireUnitTemplate(),templateData=template?.capture(),id=makeSceneObjectId('fire'),source=options.controls??templateData?.controls??readVolumeControls();
  if(source.emitterSourceLaw!=='immersed-source')throw Error('Select an immersed-source flame basin before adding an independent fire simulation');
- const unitScale=options.scale??(activeSceneComposition?flameDomainScale:1),offset=options.position??[controls.target.x+authoredFireUnits.size*2.5*unitScale,groundPlane.position.y+unitScale,controls.target.z];
+ const unitScale=options.scale??template?.root.scale.x??(activeSceneComposition?flameDomainScale:1),offset=options.position??[controls.target.x+authoredFireUnits.size*2.5*unitScale,groundPlane.position.y+unitScale,controls.target.z];
  const pose={position:offset,rotation:[0,0,0],scale:[unitScale,unitScale,unitScale]};
- const emitter=options.emitter?structuredClone(options.emitter):moveLinkedFireEmitter(flameEmitterPose,{position:flameDomainTranslation,rotation:[0,0,0],scale:[flameDomainScale,flameDomainScale,flameDomainScale]},pose,true);
+ const emitter=options.emitter?structuredClone(options.emitter):moveLinkedFireEmitter(templateData?.emitter??flameEmitterPose,template?.pose()??{position:flameDomainTranslation,rotation:[0,0,0],scale:[flameDomainScale,flameDomainScale,flameDomainScale]},pose,true);
  const record=checkedFireUnitRecord({id,type:FIRE_UNIT_TYPE,source:FIRE_UNIT_SOURCE,fileName:'Fire simulation',label:options.label??'Fire simulation '+(authoredFireUnits.size+1),createdAt:new Date().toISOString(),
-  transform:pose,fireUnit:{controls:structuredClone(source),settings:options.settings??buildVolumeSettingsPreset(),emitter,moveEmitterWithGrid:true}});
+  transform:pose,fireUnit:{...templateData,controls:structuredClone(source),settings:options.settings??templateData?.settings??buildVolumeSettingsPreset(),emitter,moveEmitterWithGrid:templateData?.moveEmitterWithGrid??true}});
  const target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
  await mountAuthoredFireUnit(record);
  try{options.signal?.throwIfAborted();await recordSceneObjectInsertion(id);setActiveSceneObject(id);return id;}

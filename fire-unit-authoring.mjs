@@ -2,7 +2,7 @@ import {createFlameInspector} from './flame-authoring.mjs';
 import {GRID_TUNING_FIELDS} from './volume-grid-tuning.mjs';
 export function setFireUnitControlValue(node,value){
  if(node.type==='checkbox'){node.checked=value;return;}
- if(node.id==='volume-resolution'&&node.tagName==='SELECT'&&Number.isSafeInteger(Number(value))&&Number(value)>=4&&!Array.from(node.options).some(o=>o.value===String(value))){const option=node.ownerDocument.createElement('option');option.value=String(value);option.textContent=String(value);node.append(option);}
+ if(GRID_TUNING_FIELDS.some(([,id])=>id===node.id)&&node.tagName==='SELECT'&&String(value).trim()!==''&&Number.isFinite(Number(value))&&!Array.from(node.options).some(o=>o.value===String(value))){const option=node.ownerDocument.createElement('option');option.value=String(value);option.textContent=String(value);node.append(option);}
  if(node.type==='range'){node.min=String(Math.min(Number(node.min),Number(value)));node.max=String(Math.max(Number(node.max),Number(value)));node.step='any';}node.value=String(value);
 }
 export function createFireUnitControlDocument(document,settings){
