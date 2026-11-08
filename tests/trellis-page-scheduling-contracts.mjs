@@ -7,14 +7,14 @@ test('the actual page caller uses native-style finishing by default and forwards
  const context={crypto:webcrypto,Uint8Array,Float32Array,ArrayBuffer,Error,Worker:class{},fetch:async()=>({ok:true,json:async()=>({trellisPage:{mounted:true}})}),appGpuHost:async()=>({}),
   loadModule:async path=>path.includes('material-bake')?{createBrowserMaterialBaker:()=>async()=>({})}:path.includes('authoring-trellis-page')?{
    createTrellisPageCheckpoints:async()=>({manifest:{pipelineType:'512',image:{}},manifestSha256:'observed-manifest',fetchTensor:async()=>{throw Error('no package pixels');}}),
-   runTrellisInPage:async options=>{received=options;options.onPreview?.({runId:options.runId});return {runId:options.runId,glb:new ArrayBuffer(12),route:'trellis2.image-generation.webgpu.v0',timing:{scheduling:{kind:'per-duty-fence-task',gpuDrains:95}}};}
+   runTrellisInPage:async options=>{received=options;options.onPreview?.({runId:options.runId});return {runId:options.runId,previewDelivery:{status:'expired'},glb:new ArrayBuffer(12),route:'trellis2.image-generation.webgpu.v0',timing:{scheduling:{kind:'per-duty-fence-task',gpuDrains:95}}};}
   }:path.includes('mesh-cleanup')?{createBrowserMeshPostprocess:options=>{finishing=options;return async m=>m;}}:{createWasmXatlasUnwrapper:options=>{unwrapOptions=options;return async m=>m;}}};
  context.appGpuHost=async()=>({device});
  vm.runInNewContext(html.slice(a,b).replaceAll('import(','loadModule(')+'\nthis.run=trellisPageRunInner;',context);
  let previewRunId;const onPreview=p=>{previewRunId=p.runId;};
  const result=await context.run({pixels:new Float32Array(512*512*3),scheduling:'per-duty-fence-task',textureSize:4096,onPreview});
  assert.equal(received.onPreview,onPreview,'the public page caller must forward the model preview observer');
- assert.equal(typeof received.runId,'string');assert.equal(previewRunId,result.generation.runId,'preview and persisted generation must share the actual host run');
+ assert.equal(result.generation.previewDelivery?.status,'expired','optional delivery diagnostics must survive the public result');assert.equal(typeof received.runId,'string');assert.equal(previewRunId,result.generation.runId,'preview and persisted generation must share the actual host run');
  assert.equal(received.scheduling,'per-duty-fence-task');assert.equal(received.textureSize,4096);assert.equal(result.generation.scheduling.kind,'per-duty-fence-task');assert.equal(result.generation.scheduling.gpuDrains,95);
  assert.equal(finishing.mode,'original-remesh');assert.equal(finishing.device,device);assert.equal(finishing.resolution,512);assert.equal(finishing.targetFaces,200000);
  assert.equal(unwrapOptions.normalMode,'source-original');

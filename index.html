@@ -29535,7 +29535,8 @@ function setupAuthoringAssets(){
           input:image?`alpha image prepared in the page: ${image.source}`:pixels==='package'?'checkpoint package prepared pixels (Python-prepared stand-in), not a selected image':'caller-prepared pixels'}});
       const generation={schema:'kaminos.asset-generation.v1',runId,route:result.route,target:'this-page',
         receiptValidation:result.receiptValidation,conditioningShapes:result.conditioningShapes,input:{sha256:imageSha256,pixels:image?'page-alpha-prepared':pixels==='package'?'checkpoint-package-prepared':'caller-prepared',source:image?.source??null,preparation,checkpointManifestSha256:pack.manifestSha256},decoderActivationStorage:'f16',
-        meshFinishing:result.meshFinishing,uv:result.uv,material:result.material,scheduling:result.timing?.scheduling};
+        meshFinishing:result.meshFinishing,uv:result.uv,material:result.material,scheduling:result.timing?.scheduling,
+        ...(result.previewDelivery?{previewDelivery:result.previewDelivery}:{})};
       return {glb:result.glb,generation,label,timing:result.timing,surfelGlb:result.surfelGlb??null,surfels:result.surfels??null,levelInputs:result.levelInputs??null};
     }catch(error){
       // Kept for a decoder-only replay: the run's own capture plus the exact input and settings.
