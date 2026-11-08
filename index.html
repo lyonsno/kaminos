@@ -29479,6 +29479,36 @@ function setupAuthoringAssets(){
   // Browser U2Net for opaque photos: the shop-hosted package (immutable revision, sha-checked on load).
   const U2NET_PACKAGE_URL='https://huggingface.co/BasinShapers/u2net-webgpu/resolve/f4f82a54b6e8d7ffd4321005dbff1cb03198c78b/f32/';
   let u2netRunner=null;
+  let trellisHistoryController=null,trellisHistoryPending=null,trellisHistoryMount=null,trellisHistoryError=null;
+  const trellisHistoryTools=document.createElement('section');
+  const mountTrellisHistory=controller=>{
+    if(!trellisHistoryMount)trellisHistoryMount=controller.mount({root:trellisHistoryTools});
+    return controller;
+  };
+  const showTrellisHistoryTools=()=>{
+    authoringWorkspace.setMode('workbench');setActiveTab('assets');
+    window.kaminosWorkbenchSetInvestigation(trellisHistoryTools,{tool:'assets'});
+    authoringAssetsUI?.close();
+  };
+  const ensureTrellisHistory=()=>{
+    if(trellisHistoryController)return Promise.resolve(mountTrellisHistory(trellisHistoryController));
+    return trellisHistoryPending??=(async()=>{
+      const [{createAuthoringTrellisHistory},app]=await Promise.all([import('./authoring-trellis-history.mjs'),appGpuHost()]);
+      if(!app)throw Error('TRELLIS history needs the app GPU host');
+      const controller=await createAuthoringTrellisHistory({renderer,scene:workbenchSceneHost,foreground:app.foreground,document,
+        changed:()=>authoringAssetsUI?.render(authoringAssets.read())});
+      trellisHistoryController=controller;trellisHistoryError=null;return mountTrellisHistory(controller);
+    })().catch(error=>{trellisHistoryPending=null;trellisHistoryError=error.message;throw error;});
+  };
+  const trellisHistoryBridge={
+    ensure:ensureTrellisHistory,
+    read:()=>trellisHistoryController?.read()??{liveRunId:null,runId:null,status:'unavailable',error:trellisHistoryError},
+    open:async options=>{const value=await (await ensureTrellisHistory()).open(options);showTrellisHistoryTools();return value;},
+    watch:async()=>{const value=await (await ensureTrellisHistory()).watch();showTrellisHistoryTools();return value;},
+    mount:root=>root.append(trellisHistoryTools),
+  };
+  window.kaminosTrellisHistory=trellisHistoryBridge;
+  document.dispatchEvent(new Event('kaminos-trellis-history-installed'));
   const trellisPageRunInner=async({pixels,highResolutionPixels,image,label='TRELLIS page',signal,onPhase,onInput,onPreview,finishMesh=true,textureSize=1024,scheduling,finishingMode='original-remesh'}={})=>{
     const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};
     const [{runTrellisInPage,createTrellisPageCheckpoints},{createBrowserMeshPostprocess},{createWasmXatlasUnwrapper}]=await Promise.all([
@@ -29522,23 +29552,39 @@ function setupAuthoringAssets(){
     // Caller pixels without an image are identified by their own bytes.
     imageSha256??=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',pixelValues)),b=>b.toString(16).padStart(2,'0')).join('');
     const runId=`authoring-trellis-page-${crypto.randomUUID()}`;
+    // Initialization/capture and durable history finish never join model progress.
+    let historyForRun=null;
+    const historyStarted=ensureTrellisHistory().then(history=>{
+      history.start({runId,label,source:{routeId:'trellis2.image-generation.webgpu.v0',inputSha256:imageSha256,checkpointManifestSha256:pack.manifestSha256}});
+      historyForRun=history;return history;
+    });
+    historyStarted.catch(error=>console.warn('TRELLIS history initialization failed',error));
+    const previewForProduct=preview=>{
+      if(!historyForRun)throw Error('TRELLIS history viewer was unavailable at preview delivery');
+      historyForRun.capture(preview);
+      return onPreview?.(preview);
+    };
+    const finishHistory=status=>{historyStarted.then(history=>history.finish(runId,status)).catch(error=>console.warn('TRELLIS history retention failed',error));};
     const postprocessMesh=createBrowserMeshPostprocess({targetFaces:200000,WorkerClass:Worker,signal,mode:finishingMode,
       device:appGpu.device,resolution:needsHighConditioning?1024:512});
     const {createBrowserMaterialBaker}=await import('./models/trellis2/material-bake.js');
     const bakeMaterial=createBrowserMaterialBaker({WorkerClass:Worker,signal,projectPositions:postprocessMesh.projectMaterialPositions,
       withCpu:postprocessMesh.withCpu});
     try{
-      const result=await runTrellisInPage({appGpu,runId,manifest:pack.manifest,fetchTensor:pack.fetchTensor,pixelValues,highResolutionPixelValues,signal,onPhase,onPreview,scheduling,decoderActivationStorage:'f16',finishMesh:finishMesh!==false,textureSize,
+      const result=await runTrellisInPage({appGpu,runId,manifest:pack.manifest,fetchTensor:pack.fetchTensor,pixelValues,highResolutionPixelValues,signal,onPhase,onPreview:previewForProduct,scheduling,decoderActivationStorage:'f16',finishMesh:finishMesh!==false,textureSize,
         // Stop reaches the finishing providers too (cleanup and UV in workers where supported).
         finishing:{postprocessMesh,bakeMaterial,unwrapMesh:createWasmXatlasUnwrapper({WorkerClass:Worker,signal,normalMode:finishingMode==='original-remesh'?'source-original':'post-uv'})},
         provenance:{checkpointManifestSha256:pack.manifestSha256,
           input:image?`alpha image prepared in the page: ${image.source}`:pixels==='package'?'checkpoint package prepared pixels (Python-prepared stand-in), not a selected image':'caller-prepared pixels'}});
+      finishHistory('completed');
       const generation={schema:'kaminos.asset-generation.v1',runId,route:result.route,target:'this-page',
+        history:{schema:'trellis2.voxel-history.v1',runId,source:'/api/trellis-history?'+new URLSearchParams({runId}),retention:'independent-of-generation-completion'},
         receiptValidation:result.receiptValidation,conditioningShapes:result.conditioningShapes,input:{sha256:imageSha256,pixels:image?'page-alpha-prepared':pixels==='package'?'checkpoint-package-prepared':'caller-prepared',source:image?.source??null,preparation,checkpointManifestSha256:pack.manifestSha256},decoderActivationStorage:'f16',
         meshFinishing:result.meshFinishing,uv:result.uv,material:result.material,scheduling:result.timing?.scheduling,
         ...(result.previewDelivery?{previewDelivery:result.previewDelivery}:{})};
       return {glb:result.glb,generation,label,timing:result.timing,surfelGlb:result.surfelGlb??null,surfels:result.surfels??null,levelInputs:result.levelInputs??null};
     }catch(error){
+      finishHistory(signal?.aborted?'stopped':'failed');
       // Kept for a decoder-only replay: the run's own capture plus the exact input and settings.
       // Decoding succeeded and mesh finishing failed: the surfels built before cleanup go back with the run's identity.
       if((error?.trellisSurfels?.surfelGlb||error?.trellisSurfels?.levelInputs)&&!signal?.aborted)error.trellisSurfelsRun={surfelGlb:error.trellisSurfels.surfelGlb,surfels:error.trellisSurfels.surfels,levelInputs:error.trellisSurfels.levelInputs,label,
@@ -29676,7 +29722,7 @@ function setupAuthoringAssets(){
     if(entry.visibility?.status==='withheld'||historyReads.has(source)||authoringImageHistory.read().viewed?.provenance)return;
     historyReads.add(source);fetch(source).then(async response=>{if(!response.ok)throw Error(`Image metadata HTTP ${response.status}`);const provenance=readPngProvenance(new Uint8Array(await response.arrayBuffer()));if(provenance)authoringImageHistory.annotate(source,{provenance});}).catch(error=>console.warn('Image history metadata unavailable',error));
   };
-  authoringAssets=createAuthoringAssets({request,prepareImage:createImagePreparation(),generator:generation,nameForSource:source=>workingScene.objects.find(entry=>entry.source===source)?.label,changed:state=>{syncImageHistory(state);authoringAssetsUI?.render(state);authoringImageHistoryUI?.render();authoringImageUI?.render();authoringPromptUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render(state);},
+  authoringAssets=createAuthoringAssets({request,history:trellisHistoryBridge,prepareImage:createImagePreparation(),generator:generation,nameForSource:source=>workingScene.objects.find(entry=>entry.source===source)?.label,changed:state=>{syncImageHistory(state);authoringAssetsUI?.render(state);authoringImageHistoryUI?.render();authoringImageUI?.render();authoringPromptUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render(state);},
     uploadImage:async file=>{
       const response=await fetch('/api/ingest-image?'+new URLSearchParams({name:file.name}),{method:'POST',body:await file.arrayBuffer()});const value=await response.json();
       if(!response.ok||value.schema!=='kaminos.asset-ingest.v0'||value.kind!=='image'||!value.entry?.source)throw Error(value.error||'Image storage failed');return value.entry;
@@ -29781,6 +29827,7 @@ function setupAuthoringAssets(){
       const model=/FLUX\.3/.test(p.model)?'flux3':'flux2';document.getElementById('asset-image-model').value=model;document.getElementById('asset-image-model').dispatchEvent(new Event('change'));document.getElementById('asset-use-reference').checked=!!p.reference;document.getElementById('asset-seed').value=String(p.seed);authoringPromptUI.recall(p);document.getElementById('asset-prompt').value=p.prompt;document.getElementById('asset-prompt').dispatchEvent(new Event('input'));redraw();}});
   const restoreHistory=authoringImageHistory.read().viewed;if(restoreHistory&&!authoringAssets.read({selectionOnly:true}).selected)authoringAssets.select(restoreHistory);
   loadStartupRuntimeConfig().then(config=>authoringPromptUI.configureDefault(config.pup?.keepLoadedDefault===true)).catch(error=>console.warn('Prompt residency default unavailable',error));
+  ensureTrellisHistory().catch(error=>console.warn('TRELLIS history view unavailable',error));
   window.kaminosAssets={...authoringAssets,open:mode=>authoringAssetsUI.open(mode),close:()=>authoringAssetsUI.close(),panel:()=>authoringAssetsUI.state(),imageHistory:authoringImageHistory,showHistoryImage:source=>authoringImageHistoryUI.show(source),compareImages:value=>authoringGenerateLayout.compare(value),images:authoringImageGenerator,promptExpansion:authoringPromptExpansion,expandPrompt:()=>authoringPromptUI.expand(),generationFlame:authoringGenerateLayout.ceremony};
 }
 

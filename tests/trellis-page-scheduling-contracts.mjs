@@ -2,9 +2,10 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';import {webcrypto}from 'node:crypto';
 test('the actual page caller uses native-style finishing by default and forwards scheduling and atlas size',async()=>{
  const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8'),a=html.indexOf('  const trellisPageRunInner=async('),b=html.indexOf('  // Page TRELLIS is reserved',a);
- assert.ok(a>0&&b>a);let received,finishing,unwrapOptions;
+ assert.ok(a>0&&b>a);let received,finishing,unwrapOptions;const histories=[],captures=[],finishes=[];
  const device={identity:'actual-app-device'};
- const context={crypto:webcrypto,Uint8Array,Float32Array,ArrayBuffer,Error,Worker:class{},fetch:async()=>({ok:true,json:async()=>({trellisPage:{mounted:true}})}),appGpuHost:async()=>({}),
+ const context={crypto:webcrypto,URLSearchParams,console,Uint8Array,Float32Array,ArrayBuffer,Error,Worker:class{},fetch:async()=>({ok:true,json:async()=>({trellisPage:{mounted:true}})}),appGpuHost:async()=>({}),
+  ensureTrellisHistory:async()=>({start:value=>histories.push(value),capture:value=>captures.push(value),finish:(...value)=>{finishes.push(value);return new Promise(()=>{});}}),
   loadModule:async path=>path.includes('material-bake')?{createBrowserMaterialBaker:()=>async()=>({})}:path.includes('authoring-trellis-page')?{
    createTrellisPageCheckpoints:async()=>({manifest:{pipelineType:'512',image:{}},manifestSha256:'observed-manifest',fetchTensor:async()=>{throw Error('no package pixels');}}),
    runTrellisInPage:async options=>{received=options;options.onPreview?.({runId:options.runId});return {runId:options.runId,previewDelivery:{status:'expired'},glb:new ArrayBuffer(12),route:'trellis2.image-generation.webgpu.v0',timing:{scheduling:{kind:'per-duty-fence-task',gpuDrains:95}}};}
@@ -13,7 +14,8 @@ test('the actual page caller uses native-style finishing by default and forwards
  vm.runInNewContext(html.slice(a,b).replaceAll('import(','loadModule(')+'\nthis.run=trellisPageRunInner;',context);
  let previewRunId;const onPreview=p=>{previewRunId=p.runId;};
  const result=await context.run({pixels:new Float32Array(512*512*3),scheduling:'per-duty-fence-task',textureSize:4096,onPreview});
- assert.equal(received.onPreview,onPreview,'the public page caller must forward the model preview observer');
+ assert.equal(typeof received.onPreview,'function');assert.equal(captures.length,1,'actual caller sends the real event to the product history before forwarding it');
+ assert.equal(histories[0].runId,result.generation.runId);assert.equal(captures[0].runId,result.generation.runId);assert.equal(finishes[0][0],result.generation.runId,'unresolved independent history saving must not hold the returned asset');
  assert.equal(result.generation.previewDelivery?.status,'expired','optional delivery diagnostics must survive the public result');assert.equal(typeof received.runId,'string');assert.equal(previewRunId,result.generation.runId,'preview and persisted generation must share the actual host run');
  assert.equal(received.scheduling,'per-duty-fence-task');assert.equal(received.textureSize,4096);assert.equal(result.generation.scheduling.kind,'per-duty-fence-task');assert.equal(result.generation.scheduling.gpuDrains,95);
  assert.equal(finishing.mode,'original-remesh');assert.equal(finishing.device,device);assert.equal(finishing.resolution,512);assert.equal(finishing.targetFaces,200000);

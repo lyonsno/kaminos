@@ -40,6 +40,24 @@ export function createTrellisOccupancyPreview(options={}){
     coordinates:options.coordinates,isCurrent:options.isCurrent,lifetime:'borrowed-until-support-retirement',coordinateBytesToCPU:0});
 }
 
+// The cascade already computes this refined support for the next shape flow.
+// Its geometry is a requantized learned support, not thresholded occupancy logits.
+export function createTrellisRefinedSupportPreview({runtime,coordinates,resolution,sourceResolution,runId,routeId,steps,invocation,isCurrent}={}){
+ const n=coordinates?.shape?.[0];
+ if(!runtime?.device||typeof isCurrent!=='function'||![runId,routeId,invocation?.jobId,invocation?.invocationId].every(v=>typeof v==='string'&&v.trim())||
+  !Number.isSafeInteger(resolution)||resolution<1||!Number.isSafeInteger(sourceResolution)||sourceResolution<resolution||
+  !Number.isSafeInteger(n)||n<1||n>resolution**3||!Number.isSafeInteger(steps)||steps<1||coordinates?.dtype!=='i32'||
+  JSON.stringify(coordinates.shape)!==JSON.stringify([n,3])||coordinates.byteLength!==n*12||!coordinates.buffer||!(coordinates.usage&U.storage)||!(coordinates.usage&U.copySrc))throw TypeError('complete resident refined support and actual source identity required');
+ return Object.freeze({schema:'trellis2.sparse-occupancy-preview.gpu.v1',kind:'sparse-occupancy',stage:'cascade-support',status:'completed',
+  runId,routeId,jobId:invocation.jobId,invocationId:invocation.invocationId,step:steps,steps,count:n,
+  grid:{dimensions:[resolution,resolution,resolution],sourceDimensions:[sourceResolution,sourceResolution,sourceResolution],
+   rule:'learned-shape-support/requantized',regrid:{rounding:'source-F64-equivalent-ties-even',sourceResolution,resolution}},
+  layout:{dtype:'int32',shape:[n,3],rowOrder:'z-y-x-lexicographic',componentOrder:['source-z','source-y','source-x']},
+  spatial:{frame:'trellis-source',gridToSource:{scale:[1/resolution,1/resolution,1/resolution],offset:[-.5,-.5,-.5]},cellCenterOffset:[.5,.5,.5],
+   sourceToGltf:[1,0,0,0,0,0,-1,0,0,1,0,0,0,0,0,1],convention:'source components map directly to mesh position components; display transform belongs to the consumer'},
+  device:runtime.device,coordinates,isCurrent,lifetime:'borrowed-until-support-retirement',coordinateBytesToCPU:0,additionalDecoderExecutions:0});
+}
+
 // Explicit capture/export consumer. This is not used by live preview delivery.
 export async function readTrellisOccupancyPreview(options={}){
   const description=occupancyPreviewDescription(options),{runtime,coordinates,invocation}=options;

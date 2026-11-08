@@ -100,9 +100,18 @@ test('a preview becomes invalid when later shape generation fails',async()=>{
 });
 
 test('default cascade invalidates the preview when coarse support retires before high-resolution shape',async()=>{
- let preview,sawRetirement=false;const f=composition(p=>{preview=p;assert.equal(p.isCurrent(),true);},{pipelineType:'1024_cascade',observePhase(phase){
+ let preview,sawRetirement=false;const f=composition(p=>{if(p.stage==='occupancy-coordinates')preview=p;assert.equal(p.isCurrent(),true);},{pipelineType:'1024_cascade',observePhase(phase){
   if(phase==='high-resolution-shape-sampling'){sawRetirement=true;assert.equal(preview.coordinates.buffer.destroyed,true,'coarse support was retired');
    assert.equal(preview.isCurrent(),false,'destroyed coarse support must never be advertised as current during the rest of cascade');}
  }});
  const out=await f.adapter.run(invocation);assert.equal(sawRetirement,true);assert.ok(out.geometry);f.adapter.dispose();
+});
+
+test('the default cascade exposes both existing occupied grids without another decode or CPU coordinate read',async()=>{
+ const previews=[];const f=composition(p=>{previews.push({preview:p,valid:p.isCurrent()});},{pipelineType:'1024_cascade'});
+ const out=await f.adapter.run(invocation);
+ assert.deepEqual(previews.map(p=>p.preview.stage),['occupancy-coordinates','cascade-support'],'the live tool needs the refined support already computed before HR sampling');
+ assert.equal(previews[1].preview.grid.dimensions[0],8);assert.equal(previews[1].preview.additionalDecoderExecutions,0);
+ assert.ok(previews.every(p=>p.valid));assert.ok(previews.every(p=>!p.preview.isCurrent()));assert.ok(f.reads.every(r=>r.t.dtype==='u32'));
+ assert.equal(out.previewDelivery.frames.length,2);f.adapter.dispose();
 });

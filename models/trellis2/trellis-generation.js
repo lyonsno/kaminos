@@ -6,7 +6,7 @@
 import {createTrellisSparseFlowAdapter,createTrellisSparseFlowAdapterAsync} from './sparse-flow.js';
 import {createTrellisSparseSamplerAdapter} from './sparse-sampler.js';
 import {createTrellisSparseDecoderAdapter} from './sparse-decoder.js';
-import {createTrellisOccupancyCoordinatesAdapter,createTrellisOccupancyPreview} from './occupancy-coordinates.js';
+import {createTrellisOccupancyCoordinatesAdapter,createTrellisOccupancyPreview,createTrellisRefinedSupportPreview} from './occupancy-coordinates.js';
 import {createTrellisSLatFlowAdapter,createTrellisSLatFlowAdapterAsync} from './slat-flow.js';
 import {createTrellisSLatSamplerAdapter} from './slat-sampler.js';
 import {createTrellisSLatCascadeSupportAdapter,createTrellisSLatCascadeSupportAdapterAsync} from './slat-cascade.js';
@@ -109,8 +109,17 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
   if(onPreview!==undefined&&(typeof onPreview!=='function'||typeof runId!=='string'||!runId.trim()))throw TypeError('preview observer needs a function and caller-owned runId');
   const gaussian=browserNoise(seed),owned=new Set(),noiseInputs={},phases=[];
   let state='new',phase='new',result,disposed=false,lastDecoder;
-  let previewDelivery={status:onPreview?'not-offered':'disabled'};
-  const previewFailed=error=>{previewDelivery={status:'failed',error:{name:error?.name??'Error',message:String(error?.message??error)}};};
+  const previewAttempts=[];
+  const previewSnapshot=(terminal=false)=>{
+    const frames=previewAttempts.map(row=>({...row,status:row.status==='pending'&&(terminal||state!=='running')?'expired':row.status}));
+    const failed=frames.find(f=>f.status==='failed'),status=failed?'failed':frames.some(f=>f.status==='pending')?'pending':frames.some(f=>f.status==='expired')?'expired':frames.length?'delivered':onPreview?'not-offered':'disabled';
+    return Object.freeze({status,...(failed?{error:failed.error}:{}),frames});
+  };
+  const offerPreview=(stage,make)=>{
+    if(!onPreview)return;const row={stage,status:'pending'};previewAttempts.push(row);
+    const failed=error=>{if(row.status==='pending'){row.status='failed';row.error={name:error?.name??'Error',message:String(error?.message??error)};}};
+    try{const p=make();Promise.resolve(onPreview(p)).then(()=>{if(row.status==='pending')row.status='delivered';},failed);}catch(error){failed(error);}
+  };
   const decode=(decoder,invocation)=>{lastDecoder=decoder;return decoder.run(invocation);};
   const own=a=>{owned.add(a);return a;},retire=async(...adapters)=>{
     await runtime.device?.queue?.onSubmittedWorkDone?.();
@@ -157,7 +166,7 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
   };
   return Object.freeze({runtime,routeId:route.routeId,inputs:Object.freeze({conditioning:conditioningTensor,highResolutionConditioning:highResolutionConditioningTensor}),
     get state(){return state;},get phase(){return phase;},get noiseInputs(){return Object.freeze({...noiseInputs});},
-    get outputs(){return result;},get previewDelivery(){return Object.freeze(previewDelivery.status==='pending'&&state!=='running'?{status:'expired'}:{...previewDelivery});},
+    get outputs(){return result;},get previewDelivery(){return previewSnapshot();},
     // Final geometry/material decoder only; earlier cascade support and failures
     // outside decoder.run do not pretend to provide this diagnostic boundary.
     get decoderFailureContext(){return disposed||state!=='failed'?undefined:lastDecoder?.failureContext;},
@@ -179,16 +188,9 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
           logitsTensor:occupancy.outputs.logits}));await coordinates.run(invocation);
         const lrCoordinates=await coordinates.coordinates(invocation),lrResolution=coordinates.plan.outputResolution;
         await retire(occupancy,sparseSampler,sparse);
-        if(onPreview){
-          // Optional observation never launches a CPU readback or joins inference,
-          // foreground settlement, final decode, or final result completion.
-          try{
-            const preview=createTrellisOccupancyPreview({runtime,coordinates:lrCoordinates,plan:coordinates.plan,
-              runId,routeId:route.routeId,steps:sparseSampler.plan.steps.length,invocation,isCurrent:()=>state==='running'&&!disposed&&owned.has(coordinates)});
-            previewDelivery={status:'pending'};
-            Promise.resolve(onPreview(preview)).then(()=>{previewDelivery={status:'delivered'};},previewFailed);
-          }catch(error){previewFailed(error);}
-        }
+        // Optional observation launches no readback or observer-completion join.
+        offerPreview('occupancy-coordinates',()=>createTrellisOccupancyPreview({runtime,coordinates:lrCoordinates,plan:coordinates.plan,
+          runId,routeId:route.routeId,steps:sparseSampler.plan.steps.length,invocation,isCurrent:()=>state==='running'&&!disposed&&owned.has(coordinates)}));
         const lrFlow=await shapeFlow('lowResolutionShape',lrCoordinates),lr=await sampleShape('lowResolutionShape',lrFlow,'lowResolutionShape',invocation);
         // The decoder expands the latent coordinate grid, not the final mesh grid.
         let finalCoordinates=lrCoordinates,finalResolution=lrResolution,finalSample=lr.sample,sampledAdapters;
@@ -199,6 +201,8 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
             weights:model.weights,loadWeight:model.loadWeight,siluTable:model.siluTable,sampleTensor:lr.sample,
             coordinateTensor:lrCoordinates,meshResolution}))),hr=await support.run(invocation);
           await retire(lr.sampler,lrFlow,coordinates);
+          offerPreview('cascade-support',()=>createTrellisRefinedSupportPreview({runtime,coordinates:hr.coordinates,resolution:hr.resolution,sourceResolution:support.plan.outputResolution,
+            runId,routeId:route.routeId,steps:lr.sampler.plan.steps.length,invocation,isCurrent:()=>state==='running'&&!disposed&&owned.has(support)}));
           const hrFlow=await shapeFlow('highResolutionShape',hr.coordinates),hrSample=await sampleShape('highResolutionShape',hrFlow,'highResolutionShape',invocation);
           finalCoordinates=hr.coordinates;finalResolution=hr.resolution;finalSample=hrSample.sample;
           sampledAdapters=[hrSample.sampler,hrFlow];
@@ -232,7 +236,7 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
           modelIdentities:Object.freeze(Object.fromEntries(roles.map(role=>[role,models[role].identity??null]))),
           phases:Object.freeze(phases.map(Object.freeze)),initialNoise:Object.freeze({...noiseInputs}),
           featureBytesToCPUDuringServing:0,coordinateBytesToCPUDuringServing:0,
-          ...(onPreview?{previewDelivery:Object.freeze(previewDelivery.status==='pending'?{status:'expired'}:{...previewDelivery})}:{}),
+          ...(onPreview?{previewDelivery:previewSnapshot(true)}:{}),
           handoff:'resident learned geometry/material fields; post-model mesh/UV/PBR consumers outstanding',
           comparison:'browser generation; no assertion of matched MLX noise or model fidelity'});
         state='completed';phase='completed';return result;
