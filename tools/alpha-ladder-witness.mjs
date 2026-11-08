@@ -3,9 +3,13 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import {spawn,execFileSync} from 'node:child_process';
 import {createRequire} from 'node:module';
+import crypto from 'node:crypto';
 
 export function assertAlphaRuntime(expected,actual){
   if(!actual||actual.repoRoot!==expected.repoRoot||actual.branch!==expected.branch||actual.commit!==expected.commit||actual.dirty!==false)throw Error('Effective alpha renderer differs from expected clean source');
+}
+export function assertAlphaPixels(pixels){
+  assert.ok(pixels.foregroundChanged>100,'No visible alpha object relative to its hidden scene');
 }
 
 async function main(){
@@ -14,18 +18,19 @@ async function main(){
   fs.mkdirSync(output,{recursive:true});
   const report={ok:false,phase:'source',server,repoRoot:fs.realpathSync(process.cwd()),errors:[],gpuErrors:[],captures:[],claimCeiling:'Saved alpha-only representation comparison; no performance benchmark or fidelity acceptance'};
   const save=()=>fs.writeFileSync(path.join(output,'report.json'),JSON.stringify(report,null,2));
-  if(chrome==='--serve'){
+  try{if(chrome==='--serve'){
     const log=fs.openSync(path.join(output,'server.log'),'a'),port=new URL(server).port;
-    const child=spawn('/usr/bin/python3',['serve.py',port],{cwd:process.cwd(),env:{...process.env,KAMINOS_GENERATED_MESH_DIR:browseRoot},detached:true,stdio:['ignore',log,log]});child.unref();fs.closeSync(log);
+    const child=spawn('/usr/bin/python3',['serve.py',port],{cwd:process.cwd(),env:{...process.env,KAMINOS_GENERATED_MESH_DIR:browseRoot},detached:true,stdio:['ignore',log,log]});
+    try{await new Promise((resolve,reject)=>child.once('spawn',resolve).once('error',reject));child.unref();}finally{fs.closeSync(log);}
     report.serverPid=child.pid;report.phase='files-only-server';report.browseRoot=browseRoot;report.ok=true;save();console.log(JSON.stringify(report));return;
-  }
+  }}catch(error){report.error=String(error.stack??error);report.phase='server-start';save();throw error;}
   let browser,page;
   try{
     report.expected={repoRoot:report.repoRoot,branch:execFileSync('git',['branch','--show-current'],{encoding:'utf8'}).trim(),commit:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim()};
     report.actual=(await (await fetch(new URL('/api/runtime-config',server))).json()).source;assertAlphaRuntime(report.expected,report.actual);
     if(chrome.includes('/Applications/Google Chrome.app/'))throw Error('Independent testing browser required');
     const require=createRequire(path.join(puppeteerRoot,'package.json')),puppeteer=require('puppeteer');
-    const configurations={grass:{source:'/api/read?root=generated-meshes&path=grass-source%2F',ladder:'/api/read?root=generated-meshes&path=grass%2F'},kiln:{source:'/api/read?root=generated-meshes&path=kiln%2Fsource%2F',ladder:'/api/read?root=generated-meshes&path=kiln%2Fladder%2F'}};
+    const configurations={grass:{source:'/api/read?root=generated-meshes&path=grass-source%2F',ladder:'/api/read?root=generated-meshes&path=grass-r3%2F',analytical:'/api/read?root=generated-meshes&path=grass-analytical%2F'},kiln:{source:'/api/read?root=generated-meshes&path=kiln%2Fsource%2F',ladder:'/api/read?root=generated-meshes&path=kiln%2Fladder%2F'}};
     report.inputs={assets:Object.fromEntries((assets.length?assets:['grass','kiln']).map(key=>[key,configurations[key]])),asset:assets[0]??'grass',count:4000,mode:'learned'};
     if(Object.values(report.inputs.assets).some(v=>!v))throw Error('Unknown source asset');
     const url=new URL(server);url.searchParams.set('workspace','workbench');url.searchParams.set('experiment','trellis-alpha-ladder');url.searchParams.set('experiment_inputs',JSON.stringify(report.inputs));report.url=url.href;
@@ -54,17 +59,18 @@ async function main(){
       const target=object.worldBounds.min.map((v,i)=>(v+object.worldBounds.max[i])/2),span=Math.hypot(...object.worldBounds.min.map((v,i)=>object.worldBounds.max[i]-v));
       for(const [pose,offset]of [['front',[.9,.55,1]],['reverse',[-.9,.55,-1]],['grazing',[1,.08,.15]]]){
         await page.evaluate(({target,position})=>window.__kaminosSetSceneCameraFrame(position,target),{target,position:target.map((v,i)=>v+offset[i]*span)});
-        for(const [count,mode]of [[2000,'analytic'],[2000,'baked'],[2000,'learned'],[4000,'analytic'],[4000,'baked'],[4000,'learned'],[16000,'analytic'],[4000,'reference']]){
+        const controls=report.inputs.assets[asset].analytical?[[2000,'existing'],[4000,'existing'],[16000,'existing']]:[];
+        for(const [count,mode]of [[2000,'analytic'],[2000,'baked'],[2000,'learned'],[4000,'analytic'],[4000,'baked'],[4000,'learned'],[16000,'analytic'],...controls,[4000,'reference']]){
           if(mode==='analytic'&&count===16000){
             await page.$eval('input[aria-label="Carrier density"]',e=>{e.value='2';e.dispatchEvent(new Event('change',{bubbles:true}));});
             await page.waitForFunction(async()=>(await window.kaminosWorkbenchExperiments.read())?.count===16000);
           }else await page.evaluate(value=>window.kaminosWorkbenchExperiments.invoke('show',value),{asset,count,mode});
-          const state=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());assert.equal(state.mode,mode);assert.equal(state.asset,asset);if(mode!=='reference')assert.equal(state.count,count);
+          const state=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());assert.equal(state.mode,mode);assert.equal(state.asset,asset);if(!['reference','existing'].includes(mode))assert.equal(state.count,count);
           await new Promise(resolve=>setTimeout(resolve,450));
-          const name=`${asset}-${pose}-${mode}-${mode==='reference'?state.count:count}`;
+          const name=`${asset}-${pose}-${mode}-${state.count}`;
           await page.screenshot({path:path.join(output,`${name}.png`)});
-          const pixels=await page.evaluate(async()=>{await new Promise(requestAnimationFrame);const source=[...document.querySelectorAll('canvas')].sort((a,b)=>b.width*b.height-a.width*a.height)[0],c=document.createElement('canvas');c.width=source.width;c.height=source.height;const ctx=c.getContext('2d');ctx.drawImage(source,0,0);const data=ctx.getImageData(0,0,c.width,c.height).data;let changed=0;for(let i=0;i<data.length;i+=4)if(Math.abs(data[i]-data[0])+Math.abs(data[i+1]-data[1])+Math.abs(data[i+2]-data[2])>30)changed++;return {width:c.width,height:c.height,changed,png:c.toDataURL('image/png')};});
-          assert.ok(pixels.changed>1000,'Blank alpha comparison');fs.writeFileSync(path.join(output,`${name}-canvas.png`),Buffer.from(pixels.png.split(',')[1],'base64'));delete pixels.png;
+          const pixels=await page.evaluate(async id=>{const settle=async()=>{for(let i=0;i<3;i++)await new Promise(requestAnimationFrame);};await settle();const source=[...document.querySelectorAll('canvas')].sort((a,b)=>b.width*b.height-a.width*a.height)[0],c=document.createElement('canvas');c.width=source.width;c.height=source.height;const ctx=c.getContext('2d');ctx.drawImage(source,0,0);const data=ctx.getImageData(0,0,c.width,c.height).data,png=c.toDataURL('image/png');let foregroundChanged=0;try{window.kaminosSceneVisibility.set(id,false);await settle();ctx.drawImage(source,0,0);const hidden=ctx.getImageData(0,0,c.width,c.height).data;for(let i=0;i<data.length;i+=4)if(Math.abs(data[i]-hidden[i])+Math.abs(data[i+1]-hidden[i+1])+Math.abs(data[i+2]-hidden[i+2])>30)foregroundChanged++;}finally{window.kaminosSceneVisibility.set(id,true);await settle();}return {width:c.width,height:c.height,foregroundChanged,png};},state.objectId);
+          assertAlphaPixels(pixels);const png=Buffer.from(pixels.png.split(',')[1],'base64');pixels.sha256=crypto.createHash('sha256').update(png).digest('hex');fs.writeFileSync(path.join(output,`${name}-canvas.png`),png);delete pixels.png;
           report.gpuErrors=await page.evaluate(()=>window.__alphaGpu.errors);assert.deepEqual(report.gpuErrors,[]);assert.deepEqual(report.errors,[]);
           report.captures.push({name,asset,pose,count:state.count,mode,state,pixels});save();
         }

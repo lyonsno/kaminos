@@ -1,7 +1,7 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import {Box3,Vector3} from '../lib/three.webgpu.js';
-import {createAlphaObject,createAlphaReference,childUrl} from '../alpha-carrier-scene.mjs';
+import {createAlphaObject,createAlphaReference,createAlphaReducedReference,childUrl} from '../alpha-carrier-scene.mjs';
 const h=new Float32Array([2,3,4,1,0,0,0,1,0,0,0,1,.5,.25,0,0]);
 const level={headers:h,meta:{count:1,sourceCount:8,sourceSHA256:'source',patchesSHA256:'patch'}};
 const object=createAlphaObject(level,'analytic');
@@ -11,8 +11,15 @@ assert.deepEqual(box.min.toArray(),[1.5,2.75,4]);assert.deepEqual(box.max.toArra
 assert.equal(object.read().decoderCallsPerShadedFragment,0);assert.ok(object.root.userData.kaminosAODepthMaterial);object.dispose();
 assert.throws(()=>createAlphaObject(level,'learned'),/analytical support only/);
 assert.throws(()=>createAlphaObject(level,'other'),/Unknown/);
+const baked=createAlphaObject({...level,meta:{...level.meta,maskResolution:32},mask:new Uint8Array(32*32),model:{}},'baked');
+const tile=baked.root.geometry.getAttribute('alphaTile').array;
+assert.ok(Math.abs((tile[0]+tile[2]*(.5/32))*34-1.5)<1e-6,'baked texel centers must remain at the source UVs');baked.dispose();
 const source={rows:new Float32Array([2,3,4,0,0,1,1,1,1,0,1,1]),meta:{count:1,radius:.1},sha:'s'};
 const reference=createAlphaReference(source);assert.equal(reference.root.geometry.attributes.position.count,4);
 assert.ok(new Box3().setFromObject(reference.root).containsPoint(new Vector3(2,3,4)));reference.dispose();
+const reduced=createAlphaReducedReference({...source,footprints:new Float32Array([1,0,0,.2,0,1,0,.1]),meta:{...source.meta,reduction:{factor:4},footprints:{supportSigma:3}}});
+assert.equal(reduced.read().mode,'existing');assert.equal(reduced.read().factor,4);
+const reducedBounds=new Box3().setFromObject(reduced.root);
+assert.ok(Math.abs(reducedBounds.max.x-2.6)<1e-6);assert.ok(Math.abs(reducedBounds.min.y-2.7)<1e-6);reduced.dispose();
 assert.equal(childUrl('http://localhost/api/read?root=generated-meshes&path=grass%2F','4000/').searchParams.get('path'),'grass/4000/');
 console.log('Native plane bounds, AO support, single-call contract and source URL composition pass');

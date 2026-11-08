@@ -45,6 +45,12 @@ export async function loadAlphaSource(base){
   if(rows.length!==meta.count*12||!rows.every(Number.isFinite))throw Error('Dense source shape differs');
   return {meta,rows,sha};
 }
+export async function loadAlphaReduced(base,factor,sourceSHA){
+  const dir=childUrl(base,`factor-${factor}/`),source=await loadAlphaSource(dir);
+  if(source.meta.sourceDataSHA256!==sourceSHA||source.meta.reduction?.factor!==factor||source.meta.footprints?.stride!==8||source.meta.footprints?.supportSigma!==3)throw Error('Analytical reducer source/layout differs');
+  source.footprints=new Float32Array(await bytes(childUrl(dir,'footprints.f32'),source.meta.footprints.sha256));
+  return source;
+}
 function atlasTexture(atlas,features){
   const tex=new DataTexture(atlas.data,atlas.width,atlas.height,features?RGBAFormat:RedFormat,features?HalfFloatType:UnsignedByteType);
   tex.minFilter=tex.magFilter=LinearFilter;tex.wrapS=tex.wrapT=ClampToEdgeWrapping;tex.generateMipmaps=false;tex.needsUpdate=true;return tex;
@@ -59,7 +65,8 @@ export function createAlphaObject(level,mode){
     const learned=mode==='learned',size=learned?level.model.meta.gridSize:meta.maskResolution;
     const atlas=alphaAtlas(learned?level.model.grid:level.mask,meta.count,size,learned?4:1);
     const tiles=new Float32Array(meta.count*4);
-    for(let i=0;i<meta.count;i++)tiles.set([(i%atlas.columns*atlas.pitch+1.5)/atlas.width,(Math.floor(i/atlas.columns)*atlas.pitch+1.5)/atlas.height,(size-1)/atlas.width,(size-1)/atlas.height],i*4);
+    const offset=learned?1.5:1,span=learned?size-1:size;
+    for(let i=0;i<meta.count;i++)tiles.set([(i%atlas.columns*atlas.pitch+offset)/atlas.width,(Math.floor(i/atlas.columns)*atlas.pitch+offset)/atlas.height,span/atlas.width,span/atlas.height],i*4);
     geometry.setAttribute('alphaTile',new InstancedBufferAttribute(tiles,4));
     const tile=varying(attribute('alphaTile','vec4')).setInterpolation('flat'),map=atlasTexture(atlas,learned);textures.push(map);
     const features=texture(map,tile.xy.add(uv().mul(tile.zw)));
@@ -88,4 +95,18 @@ export function createAlphaReference(source){
   }
   mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingBox();mesh.computeBoundingSphere();mesh.name='Dense source disc reference';mesh.userData.kaminosAODepthMaterial=ao;
   return {root:mesh,read:()=>({mode:'reference',count:meta.count,sourceSHA256:source.sha,source:'retained finite source discs, not original mesh'}),dispose(){geometry.dispose();material.dispose();ao.dispose();mesh.dispose();}};
+}
+export function createAlphaReducedReference(source){
+  const {meta,rows,footprints}=source;
+  if(!(footprints instanceof Float32Array)||footprints.length!==meta.count*8||!footprints.every(Number.isFinite))throw Error('Invalid analytical footprint payload');
+  const headers=new Float32Array(meta.count*16);
+  for(let i=0;i<meta.count;i++){
+    const r=rows.subarray(i*12,i*12+12),f=footprints.subarray(i*8,i*8+8),k=i*16;
+    headers.set(r.subarray(0,3),k);headers.set(f.subarray(0,3),k+3);headers.set(f.subarray(4,7),k+6);headers.set(r.subarray(3,6),k+9);
+    headers[k+12]=3*f[3];headers[k+13]=3*f[7];
+  }
+  const object=createAlphaObject({headers,meta:{...meta,sourceSHA256:meta.sourceDataSHA256}},'analytic');
+  object.root.name='Existing reducer covariance support';
+  const read=object.read;
+  return {...object,read:()=>({...read(),mode:'existing',factor:meta.reduction.factor,geometry:'existing reduceSurfelRows + fitSurfaceFootprints, 3-sigma elliptical support',shading:'fixed clay Phong; not the deferred renderer/material accumulation'})};
 }

@@ -6,6 +6,18 @@ const createSelectionMaskProxies=createSelectionFeedback.maskProxies;
 const feedbackFor=()=>{const scene=new THREE.Scene(),m=createSelectionMaskProxies(scene,{selected:new THREE.MeshBasicMaterial(),active:new THREE.MeshBasicMaterial()});return {update:m.update,proxies:m.proxies,state:()=>({meshCount:m.pairs().length})};};
 import {buildSurfelField,createSurfelObject} from '../trellis-surfels.mjs';
 
+test('ordinary alpha cutouts keep their coverage in selected and active outlines',()=>{
+ const feedback=feedbackFor(),material=new THREE.MeshBasicNodeMaterial({alphaTest:.5});
+ material.opacityNode=THREE.TSL.uv().x;material.maskNode=THREE.TSL.uv().y.greaterThan(.2);
+ const source=new THREE.InstancedMesh(new THREE.PlaneGeometry(2,2),material,1);
+ for(const active of [[],['alpha']]){
+  feedback.update([{id:'alpha',object:source}],active);
+  const proxy=feedback.proxies()[0];
+  assert.equal(proxy.material.opacityNode,material.opacityNode);
+  assert.equal(proxy.material.maskNode,material.maskNode);assert.equal(proxy.material.alphaTest,.5);
+ }
+});
+
 test('changing children of the same selected root replaces stale outlines and preserves unchanged proxies',()=>{
  const feedback=feedbackFor(),root=new THREE.Group(),geometry=new THREE.BoxGeometry(),material=new THREE.MeshBasicMaterial();
  const source=new THREE.Mesh(geometry,material),copy=new THREE.Mesh(geometry,material);copy.position.x=3;root.add(source,copy);

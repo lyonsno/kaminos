@@ -40,7 +40,8 @@ function createSelectionMaskProxies(maskScene,{selected,active,pairs=[],camera=n
         const proxy=source.isInstancedMesh?new THREE.InstancedMesh(source.geometry,selected,source.count):new THREE.Mesh(source.geometry,selected);
         const owned=[];
         const materialFor=base=>{const make=material=>{const mask=base.clone();for(const key of ['positionNode','maskNode','opacityNode','alphaTest','side'])mask[key]=material[key];owned.push(mask);return mask;};return Array.isArray(source.material)?source.material.map(make):make(source.material);};
-        const masks=presentation?{selected:materialFor(selected),active:materialFor(active)}:{selected,active};
+        const cutout=[source.material].flat().some(material=>material?.maskNode||material?.opacityNode);
+        const masks=presentation||cutout?{selected:materialFor(selected),active:materialFor(active)}:{selected,active};
         proxy.matrixAutoUpdate=false;proxy.frustumCulled=source.frustumCulled;maskScene.add(proxy);pairs.push({source,owner,proxy,id,root,masks,owned});
       }
     }
