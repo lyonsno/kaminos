@@ -127,8 +127,7 @@ fn joinProposal(p:vec3<f32>)->f32{
   let top=2.0*f32(GRID_Y)/f32(GRID)-1.0;
   let d=min(min(1.0-abs(p.x),1.0-abs(p.z)),min(p.y+1.0,top-p.y));
   let w=smoothstep(0.0,min(.5,worldRender.loPitch.w),d);
-  let m=middleSmokeWeight(p);
-  return max(4.0*w*(1.0-w),4.0*m*(1.0-m));
+  return 4.0*w*(1.0-w);
 }
 fn guidanceWeight(p:vec3<f32>)->f32{
   var weight=1.0;
