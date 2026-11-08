@@ -38,6 +38,9 @@ try {
   report.source={root,commit:git('rev-parse','HEAD'),branch:git('branch','--show-current'),dirty:!!git('status','--porcelain')};
   assert.equal(report.source.dirty,false,'capture requires a committed source tree');
   if(args['expected-source'])assert.equal(report.source.commit,args['expected-source'],'capture source changed before execution');
+  report.phase='native-shader-conformance';await save();
+  await import('../tests/volume-regional-capture-native.mjs');
+  report.nativeShaderConformance={scope:'production-capture-predicate',route:'shader-herder-required-Apple-hardware',passed:true};
   const executable=await fs.realpath(args.chromium);
   assert.ok(!executable.includes('/Google Chrome.app/')&&
     /Google Chrome for Testing|headless_shell|chrome-headless-shell/.test(executable),'independent test browser required');
