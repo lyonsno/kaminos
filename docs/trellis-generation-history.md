@@ -44,10 +44,11 @@ that path changes which histories the server can serve; keep it with the asset
 store when moving a developer runtime.
 
 For retained model trajectories, `models/trellis2/replay-voxel-history.mjs` accepts
-`--request <json>` and writes decoder frames and a terminal report to the paths
-in that request. This executes the production coarse decoder and belongs in the
-GPU queue. `models/trellis2/import-voxel-history.mjs --request <json>` imports an
-existing frame bundle through the same HTTP storage route used by live capture;
+`--input request.json --out chosen-directory` and writes decoder frames and a
+terminal report there. This executes the production coarse decoder and belongs
+in the GPU queue. `models/trellis2/import-voxel-history.mjs --input history.json
+--out receipt.json --server URL --repo-root checkout` imports an existing frame
+bundle through the same HTTP storage route used by live capture;
 it does not perform model inference. Both preserve exact input/source identity
 and write failure reports. An associated coarse GLB must carry the same completed
 support digest. Intermediate noisy samples and predicted clean samples must not
