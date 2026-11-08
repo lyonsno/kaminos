@@ -71,3 +71,14 @@ test('early-decode evidence rejects an unchanged full schedule or a frozen flame
 test('a FLUX2 request cannot be certified by a FLUX3 output',()=>{
  const r=good();r.model='flux2';assert.throws(()=>validate(r));
 });
+
+test('caller repeat needs two real runs, warm reuse and preserved editor state',()=>{
+ const r=good();r.callerRepeat=true;
+ assert.throws(()=>validate(r),/caller|runs/i,'one normal image is not a caller-repeat witness');
+ const snapshot={selected:{source:'/original.png'},objects:[{id:'box'}],camera:{position:[0,0,5]},selection:{ids:['box']}};
+ r.caller={loads:1,before:snapshot,after:structuredClone(snapshot),runs:[0,1].map(i=>({id:`run-${i}`,pipeline:1,output:{...r.output},provenance:{...r.provenance,seed:7006+i},frames:r.frames,preview:{visible:true,distinctRgb:3},saved:true}))};
+ assert.doesNotThrow(()=>validate(r));
+ for(const mutate of [x=>x.caller.runs.pop(),x=>x.caller.loads=2,x=>x.caller.runs[1].pipeline=2,x=>x.caller.runs[1].id='run-0',x=>x.caller.runs[1].provenance.seed=7006,x=>x.caller.runs[0].output.distinctRgb=1,x=>x.caller.runs[0].saved=false,x=>x.caller.runs[0].preview.visible=false,x=>x.caller.runs[0].frames.compute=[],x=>x.caller.after.selected.source='/generated.png',x=>x.caller.after.camera.position[0]=5]){
+  const bad=structuredClone(r);mutate(bad);assert.throws(()=>validate(bad));
+ }
+});

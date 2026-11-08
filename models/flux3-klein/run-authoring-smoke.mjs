@@ -10,6 +10,20 @@ import {verifyAuthoringServer} from '../../scene-authoring-witness-identity.mjs'
 import {readPngProvenance} from '../../authoring-image-generation.mjs';
 
 export function validateFlux3AuthoringResult(r){
+  if(r.callerRepeat){
+    const c=r.caller;assert.ok(c?.runs?.length===2,'two caller runs are required');
+    assert.equal(c.loads,1,'the second caller run reuses resident weights');
+    assert.deepEqual(c.after,c.before,'caller generation preserves the editor');
+    assert.notEqual(c.runs[0].id,c.runs[1].id,'distinct live run identities');
+    assert.equal(c.runs[0].pipeline,c.runs[1].pipeline,'same pipeline instance');
+    for(const [i,run]of c.runs.entries()){
+      assert.equal(run.provenance.seed,7006+i,'requested seed reaches actual output');
+      assert.ok(run.saved,'caller retained PNG bytes');
+      assert.ok(run.preview?.visible&&run.preview.distinctRgb>1,'visible nonblank caller partial');
+      validateFlux3AuthoringResult({...r,...run,callerRepeat:false,inspectControls:false,decodeAfter:null});
+    }
+    return r;
+  }
   const model=r.model??'flux3';assert.ok(['flux2','flux3'].includes(model),'known requested model');
   const mount=model==='flux2'?'klein':'flux3',base=model==='flux2'?'/klein-weights':'/flux3-weights';
   assert.equal(r.runtime[mount]?.mounted,true,'local model pack is mounted');
@@ -68,8 +82,62 @@ export async function waitForAuthoringGpuHost({read,wait}){
   for(;;){const host=await read();if(host)return host;await wait();}
 }
 
+async function runCallerRepeat(browser,report,out,write){
+  assert.equal(report.model,'flux2','caller-repeat currently exercises Klein FLUX2');
+  report.phase='caller-setup';await write();
+  await browser.evaluate(`(async()=>{
+    const {KleinPipeline}=await import('./models/flux2-klein/klein-pipeline.js');
+    const {KleinTransformer}=await import('./models/flux2-klein/klein-transformer.js');
+    const frames=()=>window.kaminosAppFrameSource()?.completedFrames??0;
+    const c=window.callerSmoke={loads:0,runs:[],pipelineIds:new WeakMap(),nextPipeline:0};
+    const load=KleinPipeline.prototype.load;
+    KleinPipeline.prototype.load=async function(...args){c.loads++;const interval=c.load={startedAt:performance.now(),cacheWrites:[]};try{return await load.apply(this,args);}finally{interval.finishedAt=performance.now();interval.stats=this.loadStats;}};
+    const put=Cache.prototype.put;Cache.prototype.put=function(key,...args){const url=typeof key==='string'?key:key.url;if(url.includes('/klein-weights/')&&c.load)c.load.cacheWrites.push({url});return put.call(this,key,...args);};
+    const forward=KleinTransformer.prototype.forward;
+    KleinTransformer.prototype.forward=async function(...args){const run=c.active;if(!run)return forward.apply(this,args);const stage={before:frames(),startedAt:performance.now()};run.frames.compute.push(stage);try{return await forward.apply(this,args);}finally{stage.after=frames();stage.finishedAt=performance.now();}};
+    const generate=KleinPipeline.prototype.generate;
+    KleinPipeline.prototype.generate=async function(options){
+      if(!c.pipelineIds.has(this))c.pipelineIds.set(this,++c.nextPipeline);
+      const run={id:window.kaminosAssets.images.read().request.id,pipeline:c.pipelineIds.get(this),frames:{inference:{before:frames(),startedAt:performance.now()},compute:[]}};c.runs.push(run);c.active=run;
+      const receive=options.onPreview;
+      try{return await generate.call(this,{...options,onPreview:frame=>{
+        receive(frame);const canvas=document.querySelector('.asset-caller-output:last-child canvas');
+        if(!canvas)throw Error('Caller partial canvas is missing');canvas.scrollIntoView({block:'center'});
+        const pixels=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data,colors=new Set();for(let i=0;i<pixels.length;i+=4)colors.add((pixels[i]<<16)|(pixels[i+1]<<8)|pixels[i+2]);
+        const rect=canvas.getBoundingClientRect();run.preview={visible:canvas.isConnected&&!canvas.hidden&&rect.width>0&&rect.height>0,distinctRgb:colors.size,step:frame.step,png:canvas.toDataURL('image/png').split(',')[1]};
+      }});}finally{run.frames.inference.after=frames();run.frames.inference.finishedAt=performance.now();c.active=null;}
+    };
+    await window.kaminosAssets.open('generate');
+    window.kaminosSceneAuthoring.addMesh('box');
+    window.kaminosSetCameraDebugPose({position:[3,2,4],target:[0,0,0]});
+    window.kaminosAssets.select({kind:'image',name:'Unchanged selected image',source:'./models/flux2-klein/assets/jank-engine.jpg'});
+    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    c.snapshot=()=>({selected:window.kaminosAssets.read().selected,objects:window.kaminosSceneAuthoring.read(),selection:window.kaminosSelection.read(),camera:window.kaminosCameraDebugState()});
+    c.before=c.snapshot();
+  })()`);
+  for(let i=0;i<2;i++){
+    report.phase=`caller-run-${i+1}`;await write();
+    const saved=await browser.evaluate(`(async()=>{
+      const c=window.callerSmoke;
+      const entry=await window.kaminosAssets.images.run({model:'flux2',prompt:${JSON.stringify(report.prompt)},seed:${7006+i},size:${report.expectedSize},deliver:async(file,provenance)=>({name:file.name,source:URL.createObjectURL(file),provenance})});
+      if(!entry?.source)throw Error('Caller did not retain an image');
+      const response=await fetch(entry.source);if(!response.ok)throw Error('Caller output is unavailable');const blob=await response.blob(),bitmap=await createImageBitmap(blob),canvas=new OffscreenCanvas(bitmap.width,bitmap.height),ctx=canvas.getContext('2d');ctx.drawImage(bitmap,0,0);
+      const pixels=ctx.getImageData(0,0,bitmap.width,bitmap.height).data,colors=new Set();for(let j=0;j<pixels.length;j+=4)colors.add((pixels[j]<<16)|(pixels[j+1]<<8)|pixels[j+2]);
+      const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result.split(',')[1]);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(blob);});
+      const run=c.runs.at(-1);Object.assign(run,{provenance:entry.provenance,output:{width:bitmap.width,height:bitmap.height,bytes:blob.size,distinctRgb:colors.size},saved:true});
+      return {run,data,loads:c.loads,load:c.load,before:c.before,after:c.snapshot(),gpuErrors:window.flux3SmokeGpuErrors};
+    })()`);
+    const bytes=Buffer.from(saved.data,'base64');await fs.writeFile(path.join(out,`caller-${i+1}.png`),bytes);
+    saved.run.provenance=readPngProvenance(bytes);saved.run.output.sha256=createHash('sha256').update(bytes).digest('hex');
+    if(saved.run.preview?.png){await fs.writeFile(path.join(out,`caller-${i+1}-partial.png`),Buffer.from(saved.run.preview.png,'base64'));delete saved.run.preview.png;}
+    report.caller??={runs:[]};Object.assign(report.caller,{loads:saved.loads,before:saved.before,after:saved.after});report.caller.runs.push(saved.run);report.load=saved.load;report.gpuErrors=saved.gpuErrors;await write();
+    const shot=await browser.send('Page.captureScreenshot',{format:'png'});assert.ok(shot.result?.data);await fs.writeFile(path.join(out,`caller-${i+1}-app.png`),Buffer.from(shot.result.data,'base64'));
+  }
+  validateFlux3AuthoringResult(report);report.phase='done';report.ok=true;await write();
+}
+
 async function main(){
-  const {values:v}=parseArgs({options:{model:{type:'string',default:'flux3'},origin:{type:'string'},out:{type:'string'},chrome:{type:'string'},'repo-root':{type:'string'},'weights-root':{type:'string'},size:{type:'string',default:'512'},'inspect-controls':{type:'boolean',default:false},'decode-after':{type:'string'},'reference-source':{type:'string'},prompt:{type:'string'}}});
+  const {values:v}=parseArgs({options:{model:{type:'string',default:'flux3'},origin:{type:'string'},out:{type:'string'},chrome:{type:'string'},'repo-root':{type:'string'},'weights-root':{type:'string'},size:{type:'string',default:'512'},'inspect-controls':{type:'boolean',default:false},'caller-repeat':{type:'boolean',default:false},'decode-after':{type:'string'},'reference-source':{type:'string'},prompt:{type:'string'}}});
   assert.ok(v.out,'--out is required');const out=path.resolve(v.out);await fs.mkdir(out,{recursive:true});
   const report={schema:'kaminos.flux3.authoring-smoke.v1',receiver:'thomas-the-jank-engine',model:v.model,requested:v,startedAt:new Date().toISOString(),phase:'setup',ok:false};
   const write=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));
@@ -110,6 +178,7 @@ async function main(){
       report.reference={source:v['reference-source'],sha256:createHash('sha256').update(bytes).digest('hex')};
     }
     report.seed=7006;report.expectedSize=Number(v.size);
+    if(v['caller-repeat']){report.callerRepeat=true;await runCallerRepeat(browser,report,out,write);return;}
     report.phase='generate';await write();
     // Observe the actual pipeline promise, excluding weight loading and PNG persistence.
     // This wrapper preserves the production method and its caller; no synthetic work is substituted.
