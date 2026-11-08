@@ -117,7 +117,7 @@ export async function prepareAssetGeometryOffThread(root,options,{Worker:WorkerC
   const worker=new WorkerClass(new URL('./asset-geometry.worker.mjs',import.meta.url),{type:'module'});
   try{
     const result=await new Promise((resolve,reject)=>{
-      worker.onmessage=({data})=>data.error?reject(Error(data.error)):resolve(data.result);
+      worker.onmessage=({data})=>data?.error?reject(Error(data.error)):resolve(data?.result);
       worker.onerror=event=>reject(Error(event.message||'Asset geometry worker failed'));
       worker.onmessageerror=()=>reject(Error('Asset geometry worker response could not be read'));
       worker.postMessage({snapshot:captured.snapshot,options});
@@ -174,7 +174,7 @@ export async function prepareAssetBoundsOffThread(roots,{localOnly=false,Worker:
  const worker=new WorkerClass(new URL('./asset-geometry.worker.mjs',import.meta.url),{type:'module'});
  try{
   const result=await new Promise((resolve,reject)=>{
-   worker.onmessage=({data})=>data.error?reject(Error(data.error)):resolve(data.result);
+   worker.onmessage=({data})=>data?.error?reject(Error(data.error)):resolve(data?.result);
    worker.onerror=event=>reject(Error(event.message||'Asset bounds worker failed'));worker.onmessageerror=()=>reject(Error('Asset bounds worker response could not be read'));
    worker.postMessage({task:'bounds',snapshots:captured.map(row=>row.snapshot),options:{localOnly}});
   });

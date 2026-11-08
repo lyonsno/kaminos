@@ -164,3 +164,12 @@ test('worker preserves an unparented matrix-authored root',()=>{
  const expected=new THREE.Box3().setFromObject(root,true),copy=restoreAssetGeometry(snapshotAssetGeometry(root).snapshot).root,actual=new THREE.Box3().setFromObject(copy,true);
  assert.deepEqual(actual.min.toArray(),expected.min.toArray());assert.deepEqual(actual.max.toArray(),expected.max.toArray());
 });
+
+test('null and missing worker envelopes reject asynchronously and terminate both clients',async()=>{
+ for(const data of [null,undefined])for(const kind of ['bounds','arrival']){
+  let escaped=null,closed=false,settled='pending';
+  class Invalid{postMessage(){queueMicrotask(()=>{try{this.onmessage({data});}catch(error){escaped=error;}});}terminate(){closed=true;}}
+  const pending=(kind==='bounds'?prepareAssetBoundsOffThread([model()],{Worker:Invalid}):prepareAssetGeometryOffThread(model(),options,{Worker:Invalid})).then(()=>{settled='fulfilled';},error=>{settled='rejected';assert.match(error.message,/Incomplete/);});
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(escaped,null,'response validation escaped the worker callback');assert.equal(settled,'rejected');assert.equal(closed,true);await pending;
+ }
+});
