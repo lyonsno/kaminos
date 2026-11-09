@@ -40,8 +40,11 @@ page reconstructs them through the ordinary scene and material library; the
 experiment is not required. Opening the experiment over a restored neural carrier
 borrows that object, so closing it leaves the saved scene intact.
 
-The **Material** context exposes the named Neural surface recipe and its UV scale
-and gain controls, with ordinary shared assignment, Make unique and Undo/Redo.
+The **Material** context exposes the named Neural surface recipe, installed
+checkpoint selection, UV scale and gain controls, with ordinary shared assignment,
+Make unique and Undo/Redo. Source edits load and verify the checkpoint before
+changing the recipe; failed or superseded loads preserve the current material.
+The experiment follows native edits and Undo/Redo, including custom material names.
 The same recipe can be assigned to UV-equipped imported mesh slots. Missing UVs
 reject assignment; unsupported Burning and area-light integration remain explicit.
 The checkpoint stays an external, digest-verified source; saved documents do not

@@ -11,12 +11,13 @@ export async function prepareNeumipParameters(parameters){
  await pending;
 }
 export const neumipProgram={...neumipDefinition,resourceKey:sourceKey,
- async defaults(){
+ async sources(){
   const root='/api/read?root=image-inbox&path=neumip-author-models%2F';
   const response=await fetch(root+'catalog.json');if(!response.ok)throw Error('Install NeuMIP author models first');
   const catalog=await response.json();if(catalog.schema!=='kaminos.neumip.author-models.v1'||!catalog.materials.wool2)throw Error('Invalid NeuMIP catalog');
-  return {source:{url:root+encodeURIComponent(catalog.materials.wool2.filename),sha256:catalog.materials.wool2.sha256},uvScale:3,gain:1};
+  return Object.entries(catalog.materials).map(([label,entry])=>({label,source:{url:root+encodeURIComponent(entry.filename),sha256:entry.sha256}}));
  },
+ async defaults(){return {source:(await this.sources()).find(entry=>entry.label==='wool2').source,uvScale:3,gain:1};},
  prepare:prepareNeumipParameters,
  create({parameters,slot}){
   if(!slot?.mesh?.geometry?.getAttribute('uv'))throw Error('Neural surface requires UV coordinates on the assigned mesh');

@@ -14224,7 +14224,7 @@ async function installOwnerWorkbenchEntry() {
     async open(){await workbenchViewerReady;if(!workbenchSceneHost)throw Error('Shared scene host unavailable');setActiveTab('assets');return workbenchSceneHost.open();},
     refreshPresentation:refreshWorkbenchAssetPresentation,
     renderer:()=>renderer,objects:()=>workingScene.objects,select:id=>window.selectSceneObject(id),
-    materials:{create:options=>materialInspector.create(options),edit:(id,patch)=>materialInspector.edit(id,patch),read:()=>sceneMaterials.read()},
+    materials:{create:options=>materialInspector.create(options),edit:(id,patch)=>materialInspector.edit(id,patch),read:()=>sceneMaterials.read(),subscribe:fn=>scenePlacementTools.edits.subscribe(fn)},
     ground:()=>({center:[groundPlane.position.x,groundPlane.position.y,groundPlane.position.z],height:groundPlane.position.y,radius:5,visible:groundPlane.visible}),
     frame:objects=>{frameObjects(objects,camera,controls);window._kaminosDirty?.();},
     setTransform:(id,pose)=>window.kaminosSetSceneObjectTransform(id,pose),
