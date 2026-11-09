@@ -47,101 +47,8 @@ for (const [nm, x, y, z] of CIE_1931_2DEG) {
 }
 const reactionRGB = xyzToRGB.map(row => Math.max(0, row.reduce((sum, v, i) => sum + v*reactionXYZ[i], 0)));
 export const REACTION_RGB = reactionRGB.map(v => v / linearLuminance(reactionRGB));
-export const EMISSIVE_LIGHT_GRID = 32;
-
-// Summary of emissive seed coefficients (vec4 per cell: emission rgb,
-// extinction): finite and nonzero cells, extinction mean / max / spread, peak
-// emission channel.
-export function emissiveCoefficientStats(values) {
-  const cells = Math.floor(values.length / 4);
-  let finiteCells = 0, nonzeroCells = 0, extinctionMax = 0, extinctionSum = 0, extinctionSq = 0, emissionMax = 0;
-  for (let i = 0; i < cells; i++) {
-    const r = values[4 * i], g = values[4 * i + 1], b = values[4 * i + 2], x = values[4 * i + 3];
-    if (![r, g, b, x].every(Number.isFinite)) continue;
-    finiteCells++;
-    if (r || g || b || x) nonzeroCells++;
-    extinctionMax = Math.max(extinctionMax, x); extinctionSum += x; extinctionSq += x * x;
-    emissionMax = Math.max(emissionMax, r, g, b);
-  }
-  const extinctionMean = finiteCells ? extinctionSum / finiteCells : 0;
-  const extinctionStdDev = finiteCells ? Math.sqrt(Math.max(0, extinctionSq / finiteCells - extinctionMean * extinctionMean)) : 0;
-  return { cells, finiteCells, nonzeroCells, extinctionMax, extinctionMean, emissionMax, extinctionStdDev };
-}
-
-const emissiveLightPipelines = new WeakMap();
-
-export function createEmissiveLightField(device, module, uniformBuffer, fluidBuffers, frontBuffers, getReactantTextures) {
-  const cells = EMISSIVE_LIGHT_GRID ** 3;
-  const allocate = (label, count) => device.createBuffer({ label, size: count*16, usage: GPUBufferUsage.STORAGE });
-  const coefficients = device.createBuffer({ label: 'emissive material coefficients', size: cells*16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
-  const directions = allocate('six-direction incident radiance', cells*6);
-  const incident = allocate('single-scattering mean incident radiance', cells);
-  let byModule = emissiveLightPipelines.get(device);
-  if (!byModule) { byModule = new WeakMap(); emissiveLightPipelines.set(device, byModule); }
-  let cached = byModule.get(module);
-  if (!cached) {
-    const pipeline = name => device.createComputePipeline({ label: name, layout: 'auto', compute: { module, entryPoint: name } });
-    cached = { seed: pipeline('seedEmissiveLight'), sweep: pipeline('sweepEmissiveLight'), resolve: pipeline('resolveEmissiveLight') };
-    byModule.set(module, cached);
-  }
-  const { seed, sweep, resolve } = cached;
-  const group = (pipe, index, buffers) => device.createBindGroup({
-    layout: pipe.getBindGroupLayout(index),
-    entries: buffers.map(([binding, buffer]) => ({ binding, resource: { buffer } })),
-  });
-  // The seed reaches emissiveMaterial, which reads the reactant sidecar (fresh
-  // burn); the sidecar is reallocated when the reaction law changes, so the
-  // inputs are rebuilt whenever the textures handed out are not the bound ones.
-  let boundTextures = null;
-  const buildSeedInputs = () => {
-    const textures = getReactantTextures();
-    boundTextures = textures;
-    return fluidBuffers.map((buffer, i) => device.createBindGroup({
-      layout: seed.getBindGroupLayout(0),
-      entries: [
-        { binding: 0, resource: { buffer: uniformBuffer } },
-        { binding: 1, resource: { buffer } },
-        { binding: 7, resource: { buffer: frontBuffers[i] } },
-        { binding: 23, resource: textures[i].createView({ dimension: '3d' }) },
-      ],
-    }));
-  };
-  let seedInputs = buildSeedInputs();
-  const seedOutput = group(seed,3,[[1,coefficients]]);
-  const sweepInput = group(sweep,0,[[0,uniformBuffer],[13,coefficients]]);
-  const sweepOutput = group(sweep,3,[[2,directions]]);
-  const resolveInput = group(resolve,0,[[14,directions]]);
-  const resolveOutput = group(resolve,3,[[3,incident]]);
-  return {
-    incident,
-    encode(encoder, sourceIndex, timestampWrites) {
-      if (getReactantTextures() !== boundTextures) seedInputs = buildSeedInputs();
-      const pass = encoder.beginComputePass({ label: 'same-state emissive single-scattering field', ...(timestampWrites ? { timestampWrites } : {}) });
-      pass.setPipeline(seed); pass.setBindGroup(0,seedInputs[sourceIndex]); pass.setBindGroup(3,seedOutput);
-      pass.dispatchWorkgroups(EMISSIVE_LIGHT_GRID/4,EMISSIVE_LIGHT_GRID/4,EMISSIVE_LIGHT_GRID/4);
-      pass.setPipeline(sweep); pass.setBindGroup(0,sweepInput); pass.setBindGroup(3,sweepOutput);
-      pass.dispatchWorkgroups(Math.ceil(6*EMISSIVE_LIGHT_GRID**2/64));
-      pass.setPipeline(resolve); pass.setBindGroup(0,resolveInput); pass.setBindGroup(3,resolveOutput);
-      pass.dispatchWorkgroups(Math.ceil(cells/64));
-      pass.end();
-    },
-    // Diagnostic readback of the seed's material coefficients (emission rgb,
-    // extinction) for witnesses (review GR-01).
-    async readCoefficients() {
-      const staging = device.createBuffer({ label: 'emissive coefficients readback', size: cells*16, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
-      try {
-        const encoder = device.createCommandEncoder({ label: 'emissive coefficients readback' });
-        encoder.copyBufferToBuffer(coefficients, 0, staging, 0, cells*16);
-        device.queue.submit([encoder.finish()]);
-        await staging.mapAsync(GPUMapMode.READ);
-        const values = new Float32Array(staging.getMappedRange().slice(0));
-        staging.unmap();
-        return values;
-      } finally { staging.destroy(); }
-    },
-    destroy() { coefficients.destroy(); directions.destroy(); incident.destroy(); },
-  };
-}
+// Shared scene-source sampling resolution; independent of incident-light transport.
+export const SCENE_SOURCE_GRID = 32;
 
 export const EMISSIVE_TRANSPORT_WGSL = /* wgsl */`
 struct EmissiveMaterial { emission: vec3<f32>, absorption: f32, scattering: f32, }
@@ -215,66 +122,9 @@ fn emissiveCamera(rgb: vec3<f32>) -> vec3<f32> {
   let linear = select(exposed, shoulder, exposed > vec3<f32>(knee));
   return select(1.055*pow(linear,vec3<f32>(1.0/2.4))-vec3<f32>(0.055),linear*12.92,linear <= vec3<f32>(0.0031308));
 }
-const LIGHT_GRID: u32 = ${EMISSIVE_LIGHT_GRID}u;
-const LIGHT_CELLS: u32 = LIGHT_GRID*LIGHT_GRID*LIGHT_GRID;
-@group(0) @binding(13) var<storage,read> emissiveCoefficients: array<vec4<f32>>;
-@group(0) @binding(14) var<storage,read> emissiveDirections: array<vec4<f32>>;
-@group(0) @binding(15) var<storage,read> emissiveIncident: array<vec4<f32>>;
-@group(3) @binding(1) var<storage,read_write> emissiveCoefficientsDst: array<vec4<f32>>;
-@group(3) @binding(2) var<storage,read_write> emissiveDirectionsDst: array<vec4<f32>>;
-@group(3) @binding(3) var<storage,read_write> emissiveIncidentDst: array<vec4<f32>>;
-fn lightIndex(c: vec3<u32>) -> u32 { return c.x+LIGHT_GRID*(c.y+LIGHT_GRID*c.z); }
+// No implicit incident-light producer. Distributed and point consumers replace
+// this call when attached; emission and extinction remain independently usable.
 fn incidentAt(p: vec3<f32>) -> vec3<f32> {
-  let q = clamp((p*0.5+vec3<f32>(0.5))*f32(LIGHT_GRID)-vec3<f32>(0.5),vec3<f32>(0.0),vec3<f32>(f32(LIGHT_GRID)-1.001));
-  let c = vec3<u32>(floor(q)); let w = fract(q);
-  var sum = vec3<f32>(0.0);
-  for (var z=0u; z<2u; z++) { for (var y=0u; y<2u; y++) { for (var x=0u; x<2u; x++) {
-    let weight = select(1.0-w.x,w.x,x==1u)*select(1.0-w.y,w.y,y==1u)*select(1.0-w.z,w.z,z==1u);
-    sum += emissiveIncident[lightIndex(c+vec3<u32>(x,y,z))].rgb*weight;
-  } } }
-  return sum;
-}
-// This lattice is a coarse single-scattering lighting approximation. Its
-// support is a cell-volume sample, not a substitute for the camera's ridge.
-@compute @workgroup_size(4,4,4)
-fn seedEmissiveLight(@builtin(global_invocation_id) c: vec3<u32>) {
-  seatGridShape();
-  if (any(c>=vec3<u32>(LIGHT_GRID))) { return; }
-  var coefficients = vec4<f32>(0.0);
-  for(var k=0u;k<8u;k++) {
-    let offset = (vec3<f32>(f32(k&1u),f32((k>>1u)&1u),f32((k>>2u)&1u))+vec3<f32>(0.5))*0.5;
-    let p = (vec3<f32>(c)+offset)*(2.0/f32(LIGHT_GRID))-vec3<f32>(1.0);
-    let medium = fastEmissiveMaterialAt(p, 1.0-u.boundary_fire_display.z);
-    coefficients += vec4<f32>(medium.emission,medium.absorption+medium.scattering)*0.125;
-  }
-  emissiveCoefficientsDst[lightIndex(c)] = coefficients;
-}
-// Six discrete directions, each column solved front-to-back. No amplifying
-// neighbor diffusion and no secondary ray per camera sample.
-@compute @workgroup_size(64)
-fn sweepEmissiveLight(@builtin(global_invocation_id) id: vec3<u32>) {
-  let plane = LIGHT_GRID*LIGHT_GRID;
-  if(id.x>=6u*plane) { return; }
-  let direction = id.x/plane; let column = id.x%plane;
-  var light = vec3<f32>(u.emissive_material.z);
-  let ds = 2.0/f32(LIGHT_GRID);
-  for(var step=0u;step<LIGHT_GRID;step++) {
-    let along = select(step,LIGHT_GRID-1u-step,(direction&1u)==1u);
-    var c = vec3<u32>(along,column%LIGHT_GRID,column/LIGHT_GRID);
-    if(direction/2u==1u) { c=c.yxz; }
-    if(direction/2u==2u) { c=c.yzx; }
-    let index = lightIndex(c); let material = emissiveCoefficients[index];
-    let halfT = exp(-material.w*ds*0.5);
-    let centerLight = light*halfT+material.rgb*emissionIntegral(material.w,ds*0.5);
-    emissiveDirectionsDst[direction*LIGHT_CELLS+index] = vec4<f32>(centerLight,0.0);
-    light = centerLight*halfT+material.rgb*emissionIntegral(material.w,ds*0.5);
-  }
-}
-@compute @workgroup_size(64)
-fn resolveEmissiveLight(@builtin(global_invocation_id) id: vec3<u32>) {
-  if(id.x>=LIGHT_CELLS) { return; }
-  var light = vec3<f32>(0.0);
-  for(var direction=0u;direction<6u;direction++) { light += emissiveDirections[direction*LIGHT_CELLS+id.x].rgb/6.0; }
-  emissiveIncidentDst[id.x] = vec4<f32>(light,1.0);
+  return vec3<f32>(0.0);
 }
 `;

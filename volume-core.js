@@ -41,7 +41,7 @@ import {followingDomainShift} from './moving-volume.mjs';
 import {createMovingVolumeGpu} from './moving-volume-gpu.mjs';
 import {atmosphereSettings} from './ash/atmosphere-plan.mjs';
 import {createDomainRemap} from './volume-domain-remap.mjs';
-import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField, emissiveCoefficientStats } from './volume-emissive-transport.mjs';
+import { EMISSIVE_TRANSPORT_WGSL, SCENE_SOURCE_GRID, cameraWhiteBalance } from './volume-emissive-transport.mjs';
 import { DISPLAY_RECONSTRUCTION_WGSL, createDisplayReconstruction, resolveDisplayReconstruction, displayPreparationTiming } from './volume-display-reconstruction.mjs';
 export { resolveDisplayReconstruction } from './volume-display-reconstruction.mjs';
 import { SOOT_BURNOUT_WGSL, resolvePhysicsAppearance, physicsAppearanceUniformValues } from './volume-physics-appearance.mjs';
@@ -3714,6 +3714,7 @@ fn passiveHeatToSmokeRate(heat: f32, yFine: f32) -> f32 {
 `;
 })();
 
+export {WGSL as VOLUME_WGSL};
 const WGSL = /* wgsl */`
 var<private> GRID: u32;
 var<private> GRID_Y: u32;
@@ -11342,15 +11343,12 @@ export function createKaminosVolumePrototype({
   let pressureResidualBeforePipeline = null;
   let pressureResidualAfterPipeline = null;
   let boundarySidecarBuildPipeline = null;
-  let emissiveLightField = null;
   let displayReconstruction = null;
   // The draw that last dispatched the emissive seed (review GR-02).
-  let emissiveSeedProducer = null;
   let sceneVolumeSource = null;
   let sceneVolumeSourceRequested = false;
   let sceneTransportConsumer = null;
   let sceneTransport = null;
-  const sceneTransportLightEncoders = new WeakSet();
   let scenePointBindings = null;
   let scenePointBindGroup = null;
   let scenePointFrame = null;
@@ -12335,8 +12333,6 @@ export function createKaminosVolumePrototype({
     sceneSolidCellsCpu = null;
     sceneVolumeSource?.destroy();
     sceneVolumeSource = null;
-    emissiveLightField?.destroy();
-    emissiveLightField = null;
     displayReconstruction?.destroy();
     displayReconstruction = null;
     selectiveHeadLiveRuntime?.destroy();
@@ -12508,7 +12504,6 @@ export function createKaminosVolumePrototype({
         { binding: 12, resource: { buffer: captureRows } },
         { binding: 13, resource: { buffer: quenchRead } },
         { binding: 14, resource: { buffer: quenchWrite } },
-        { binding: 15, resource: { buffer: emissiveLightField.incident } },
         { binding: 20, resource: (worldSmoke?.optical??worldOpticalFallback).createView() },
         { binding: 21, resource: { buffer: worldRenderUniform } },
         { binding: 35, resource: (intermediateFlow?.exportFields?intermediateFlow.optical:worldOpticalFallback).createView() },
@@ -14280,9 +14275,7 @@ export function createKaminosVolumePrototype({
     ensureNonRidgeOpticalCaptureBuffers();
     installSceneSolidTexture();
     worldRenderField?.destroy();worldRenderField=createWorldRenderField(device,shader,uniformBuffer);
-    emissiveLightField = createEmissiveLightField(device, shader, uniformBuffer, fluidBuffers, frontBuffers, () => reactantTextures);
     displayReconstruction = createDisplayReconstruction(device, shader, uniformBuffer, () => ({fluid:fluidBuffers,reactant:reactantTextures}));
-    emissiveSeedProducer = null;
     rebuildFluidBindGroups();
     analyticEmitterInjectionBindGroups = fluidBuffers.map((buffer, index) => device.createBindGroup({
       label: `kaminos bounded analytic emitter injection ${gridShapeLabel(gridSize)} ${index}`,
@@ -14712,7 +14705,6 @@ export function createKaminosVolumePrototype({
           visibility: GPUShaderStage.FRAGMENT,
           buffer: { type: 'storage' },
         },
-        { binding: 15, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'read-only-storage' } },
         { binding: 20, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType:'unfilterable-float',viewDimension:'3d' } },
         { binding: 21, visibility: GPUShaderStage.FRAGMENT, buffer: {type:'uniform'} },
         { binding: 35, visibility: GPUShaderStage.FRAGMENT, texture: {sampleType:'unfilterable-float',viewDimension:'3d'} },
@@ -16259,7 +16251,7 @@ export function createKaminosVolumePrototype({
       Object.assign(state.immersedSources,{backend:'gpu-resident-source',preparedRevision:immersedCollectionRevision,preparedStep:state.simStepCount,sources:sources.map(({id,config,worldSource})=>({id,config:structuredClone(config),worldSource:!!worldSource})),overlapLaw:'sum-local-capped-supply; bounded-supply-weighted-mixture; union-relaxation-weighted-momentum',aggregateSupplyCap:null,mixtureEntryCap:1});
     }
     uniforms.set(immersedSourceUniformValues(immersedSourceConfig), IMMERSED_SOURCE_UNIFORM_OFFSET);
-    uniforms.set(gridShapeUniformValues({ grid: gridSize, gridHeight, irradianceGrid: irradianceGridSize, irradianceGridHeight: gridHeightForSize(irradianceGridSize), sceneSourceGrid: EMISSIVE_LIGHT_GRID, sceneSourceGridHeight: gridHeightForSize(EMISSIVE_LIGHT_GRID) }), GRID_SHAPE_UNIFORM_OFFSET);
+    uniforms.set(gridShapeUniformValues({ grid: gridSize, gridHeight, irradianceGrid: irradianceGridSize, irradianceGridHeight: gridHeightForSize(irradianceGridSize), sceneSourceGrid: SCENE_SOURCE_GRID, sceneSourceGridHeight: gridHeightForSize(SCENE_SOURCE_GRID) }), GRID_SHAPE_UNIFORM_OFFSET);
     state.immersedSource = immersedSourceConfig;
     if(sceneSolidGpu&&immersedSourceConfig.effective.admitted){
       state.immersedSource.effective.supplyPredictionAuthority='gpu-unmeasured-solid-masked-at-injection';
@@ -20594,7 +20586,7 @@ export function createKaminosVolumePrototype({
         const middle=middleMap?{texture:intermediateFlow.optical,dimensions:intermediateFlow.plan.materialDims,localMin:middleMap.renderMin,localMax:middleMap.renderMax}:null;
         return {texture:worldSmoke.optical,dimensions:worldSmoke.plan.materialDims,localMin:map.renderMin,localMax:map.renderMax,middle};
       },
-      grid: EMISSIVE_LIGHT_GRID, gridY: EMISSIVE_LIGHT_GRID * gridHeight / gridSize, fluidGrid: gridSize, fluidGridY: gridHeight});
+      grid: SCENE_SOURCE_GRID, gridY: SCENE_SOURCE_GRID * gridHeight / gridSize, fluidGrid: gridSize, fluidGridY: gridHeight});
     sceneVolumeSource.encode(encoder, currentFluid, state.frameCount,productTransform);
     if (sceneMediumSource) sceneVolumeSource.encodeOpticalDepth(encoder, sceneMediumSource.position, sceneMediumSource.stepLength);
     return {source: sceneVolumeSource.describe(), medium: sceneVolumeSource.opticalDepthField(), simStepCount: state.simStepCount};
@@ -20650,9 +20642,6 @@ export function createKaminosVolumePrototype({
               .replace('fn opticalIncidentMaskFlags(p: vec3<f32>) -> vec2<f32> { return vec2<f32>(0.0); }','fn opticalIncidentMaskFlags(p: vec3<f32>) -> vec2<f32> { return distributedLastMaskFlags; }')+DISTRIBUTED_SMOKE_WGSL;
             lighting={layout:distributedLayout,group:distributedGroup};
           } else {
-            if(!sceneTransportLightEncoders.has(input.encoder)) {
-              emissiveLightField.encode(input.encoder,currentFluid);sceneTransportLightEncoders.add(input.encoder);
-            }
             if(scenePointBindGroup) {
               if(scenePointFrame?.generation!==sceneVolumeSource?.describe().generation)throw new Error('Native scene transport point lighting is stale');
               code=code.replaceAll('medium.scattering * incidentAt(p)','medium.scattering * (incidentAt(p) + scenePointIncident(p))')+SCENE_POINT_SMOKE_WGSL;
@@ -20664,7 +20653,7 @@ export function createKaminosVolumePrototype({
             forwardScale:[...forward,productTransform.scale],constants:{LEAN_EMISSIVE_RAYMARCH:lean,OPTICAL_STEP_MODE:optical.value}});
           state.sceneTransport={...receipt,sourceFrame,sourceStep,sourceIndex:currentFluid,
             worldTransform:{translate:[...productTransform.translate],scale:productTransform.scale},renderScale:state.renderScale,
-            material:'native-emissive-transport-v2',lighting:distributedGroup?'distributed':scenePointBindGroup?'native-six-direction-plus-point':'native-six-direction',
+            material:'native-emissive-transport-v2',lighting:distributedGroup?'distributed':scenePointBindGroup?'scene-point':'unlit',
             stepping:optical.mode,authority:'native-material-current-field-ordered-host-encoder'};
           return {...state.sceneTransport};
         },
@@ -20857,18 +20846,14 @@ export function createKaminosVolumePrototype({
     }
     if (uniforms[368] > 1.5) {
       if (!sceneSourcePreparedEncoders.has(encoder)) encodeSharedSceneSource(encoder);
-      if(distributedGroup) {
-        emissiveSeedProducer = null;
-        state.physicalColor.incidentLight={model:'distributed-volume-direct-radiance-v0',source:'same-generation-raw-emission-extinction',
-          support:'full-height-geometry-visible-receivers',generation:distributedFrame.generation,frame:distributedFrame.frame,
-          receivers:distributedFrame.volumeReceivers,directions:distributedFrame.directions,legacyDispatched:false};
-      } else {
-        emissiveLightField.encode(encoder, currentFluid, options.emissiveTimestampWrites);
-        emissiveSeedProducer = { frameCount: state.frameCount, simStepCount: state.simStepCount, grid: [gridSize, gridHeight, gridSize] };
-        state.physicalColor.incidentLight = { model: 'six-direction-single-scattering-v1', grid: EMISSIVE_LIGHT_GRID, source: 'same-fluid-and-material-uniforms', support: 'eight-samples-per-light-cell-coarse-boundary-support', sourceIndex: currentFluid, updates: 'each-draw-including-frozen-edits',legacyDispatched:true };
-      }
+      state.physicalColor.incidentLight = distributedGroup
+        ? {model:'distributed-volume-direct-radiance-v0',source:'same-generation-raw-emission-extinction',
+           support:'full-height-geometry-visible-receivers',generation:distributedFrame.generation,frame:distributedFrame.frame,
+           receivers:distributedFrame.volumeReceivers,directions:distributedFrame.directions,legacyDispatched:false}
+        : scenePointBindGroup
+          ? {model:'scene-point',source:'same-generation-scene-point',generation:scenePointFrame.generation,frame:scenePointFrame.frame,legacyDispatched:false}
+          : {model:'unlit',reason:'distributed-lighting-not-connected',legacyDispatched:false};
     }
-    if (uniforms[368] <= 1.5) emissiveSeedProducer = null;
     if (uniforms[368] <= 1.5 || !sceneVolumeSourceRequested) sceneVolumeSource?.invalidate('inactive-source-route');
     const pass = encoder.beginRenderPass({
       label,
@@ -21025,22 +21010,7 @@ export function createKaminosVolumePrototype({
   }
 
   async function sampleEmissiveLightProfile() {
-    if (uniforms[368] !== 2 || !timestampQueriesAvailable()) return { ok: false, reason: 'emissive-mode-or-gpu-timestamps-unavailable' };
-    const query = device.createQuerySet({ type: 'timestamp', count: 2 });
-    const resolved = device.createBuffer({ size: 16, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
-    const readback = device.createBuffer({ size: 16, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
-    try {
-      const encoder = device.createCommandEncoder({ label: 'same-state emissive lighting cost' });
-      emissiveLightField.encode(encoder, currentFluid, { querySet: query, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 });
-      encoder.resolveQuerySet(query,0,2,resolved,0);
-      encoder.copyBufferToBuffer(resolved,0,readback,0,16);
-      submitVolumeCommands([finishVolumeEncoder(encoder)]);
-      await readback.mapAsync(GPUMapMode.READ);
-      const times = new BigUint64Array(readback.getMappedRange().slice(0));
-      readback.unmap();
-      if (times[0] === 0n || times[1] <= times[0]) return { ok:false, reason:'missing-or-invalid-lighting-timestamps', timestamps:Array.from(times,String) };
-      return { ok:true, scope:'incident-light-compute-only-not-camera-or-frame', ms:Number(times[1]-times[0])/1e6, timestamps:Array.from(times,String), grid:EMISSIVE_LIGHT_GRID, simStepCount:state.simStepCount, effectiveRoute:state.effectiveRoute, physicalColor:state.physicalColor, backend:state.backend };
-    } finally { query.destroy(); resolved.destroy(); readback.destroy(); }
+    return {ok:false,reason:'six-direction-lighting-retired'};
   }
 
   function encodeProductSmokeRaymarch(encoder, colorView, sceneDepthView, bindGroup) {
@@ -28321,14 +28291,9 @@ export function createKaminosVolumePrototype({
     // The resolved grid shape and box bounds for a requested height, without
     // touching the sim: the cockpit and the Kaminos authoring side preview the
     // box while the height is edited and rebuild only on confirm.
-    // Witness for review GR-01: the emissive seed's coefficients after the
-    // latest frame, summarised with the grid shape that produced them.
+    // Retained diagnostic entry point reports retirement without allocating GPU work.
     async sampleEmissiveSeedCoefficients() {
-      if (!emissiveLightField?.readCoefficients) return { status: 'unsupported', reason: 'emissive-light-field-inactive', grid: [gridSize, gridHeight, gridSize] };
-      if (!emissiveSeedProducer) return { status: 'unsupported', reason: 'emissive-seed-not-dispatched', grid: [gridSize, gridHeight, gridSize] };
-      const producer = { ...emissiveSeedProducer, frameLag: state.frameCount - emissiveSeedProducer.frameCount };
-      const values = await emissiveLightField.readCoefficients();
-      return { status: 'sampled', grid: [gridSize, gridHeight, gridSize], producer, ...emissiveCoefficientStats(values) };
+      return {status:'unsupported',reason:'six-direction-lighting-retired'};
     },
     // Joined boundary (Sexy's stationary two-way candidate): opt-in. Admission
     // needs the immersed source and the converged solver; a change rebuilds the

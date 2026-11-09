@@ -53,3 +53,10 @@ test('each unit reuses source following on its own fixed World, with cached poli
  const next=owner.capture();next.settings.domControls['volume-coverage-headroom'].value=.4;owner.setData(next);owner.updateFineCoverage(1.4);assert.equal(reads,2);assert.equal(owner.read().fineCoverage.options.headroom,.4);
  }finally{restore();}
 });
+
+test('retired six-direction diagnostics report retirement without allocating or profiling GPU work',async()=>{
+ const {owner,restore}=fixture();try{
+  assert.deepEqual(await owner.runtime.sampleEmissiveLightProfile(),{ok:false,reason:'six-direction-lighting-retired'});
+  assert.equal((await owner.runtime.sampleEmissiveSeedCoefficients()).reason,'six-direction-lighting-retired');
+ }finally{restore();}
+});
