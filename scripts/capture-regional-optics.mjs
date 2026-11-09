@@ -9,7 +9,7 @@ import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {compositionRestoreUrl} from '../scene-authoring.mjs';
 import {getSceneObjectRecords} from '../scene-persistence-core.js';
-import {regionalQueryPlan,regionalDataset,regionalSceneLoaded,regionalSceneRestored} from '../volume-regional-state.mjs';
+import {regionalQueryPlan,regionalDataset,regionalSceneLoaded,regionalSceneRestored,regionalCaptureScene} from '../volume-regional-state.mjs';
 import {validateTraceRows,REGIONAL_CAPTURE_IDENTITY} from '../volume-optical-trace.mjs';
 
 const rawInvocation=process.argv.slice(2);
@@ -60,11 +60,17 @@ const {values:args}=parseArgs({args:rawInvocation,options:{
   assert.ok(expectedObjects.length,'saved scene has no declared objects');
   report.expectedObjectIds=expectedObjects.map(object=>object.id);
   await artifact('source-scene.kaminos.json',sceneBytes);
+  const schema=JSON.parse(await fs.readFile(path.join(root,'volume-settings-preset-schema-v2.json'),'utf8'));
+  const projection=regionalCaptureScene(scene,schema);
+  report.sceneProjection={omittedRendererControls:projection.omittedRendererControls,
+    reason:'branch-only camera/history controls are inactive in this current-main native-material diagnostic; source/material/pose data unchanged'};
+  const captureSceneBytes=Buffer.from(JSON.stringify(projection.scene));
+  await artifact('capture-scene.kaminos.json',captureSceneBytes);
   assert.ok(scene.composition?.flame?.presetId,'saved native flame composition required');
   const stores=Object.fromEntries(['scenes','settings','sessions','layouts','browser-profile'].map(k=>[k,path.join(out,k)]));
   for(const dir of Object.values(stores))await fs.mkdir(dir,{recursive:true});
   await fs.cp(args.settings,stores.settings,{recursive:true});
-  await fs.writeFile(path.join(stores.scenes,'regional-source.kaminos.json'),sceneBytes);
+  await fs.writeFile(path.join(stores.scenes,'regional-source.kaminos.json'),captureSceneBytes);
   report.stores=stores;
   const env={...process.env,KAMINOS_BIND_HOST:'127.0.0.1',KAMINOS_SCENES_DIR:stores.scenes};
   server=spawn('python3',['-u','serve.py',args.port,'--no-shared-basin-store','--volume-settings-store',stores.settings,
@@ -129,8 +135,8 @@ const {values:args}=parseArgs({args:rawInvocation,options:{
   report.phase='native-baseline';await save();
   report.baseline=await page.evaluate(async now=>{
     const r=window.__kaminosVolumePrototype;
-    r.setSplitIntegral({mode:'off'});
-    r.setControls({integralReconstruction:'off',rayStartNoise:false,rayNoiseFrame:0,rayStepTelemetry:false});
+    r.setSplitIntegral?.({mode:'off'});
+    r.setControls({rayStartNoise:false,rayNoiseFrame:0,rayStepTelemetry:false});
     const sample=await r.sampleFrame({advanceSim:false,includeRgba:true,now});
     if(!sample.ok||!sample.image)throw Error('native baseline image missing');
     const bytes=new Uint8Array(sample.image.rgba),parts=[];

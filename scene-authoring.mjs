@@ -71,8 +71,10 @@ export function compositionRestoreUrl(composition, sceneFile, origin, workspace 
 export function forwardCompositionHash(target, sourceHash, sourceSearch = '') {
   const url = new URL(target);
   const hash = new URLSearchParams(sourceHash.replace(/^#/, ''));
-  const workspace = new URLSearchParams(sourceSearch).get('workspace');
+  const invocation = new URLSearchParams(sourceSearch);
+  const workspace = invocation.get('workspace');
   if (workspace !== null) hash.set('workspace',workspace);
+  if (invocation.has('environment_resources')) url.searchParams.set('environment_resources',invocation.get('environment_resources'));
   const forwarded = new URLSearchParams();
   for (const [key, value] of hash) {
     if (['workspace', 'authoring', 'scene', 'note', 'experiment', 'experiment_inputs', 'composition_module_url', 'volume_collision', 'burn_fracture_cutout', 'rendering_source_xyz', 'rendering_source_gain', 'rendering_surface_gain', 'rendering_surface_scattering', 'rendering_receiver_spacing', 'rendering_angular_pattern', 'rendering_directions', 'rendering_match_camera'].includes(key)

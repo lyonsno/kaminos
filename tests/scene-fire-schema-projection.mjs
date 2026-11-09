@@ -48,3 +48,17 @@ test('older rendering inventories gain only declared auxiliary defaults',()=>{
  const hole=structuredClone(saved),requiredSchema=structuredClone(schema);delete hole.rendererControls['volume-flow-kernel-strength'];delete requiredSchema.rendererControls.find(e=>e.key==='volume-flow-kernel-strength').additiveDefault;assert.throws(()=>fire.projectFireSettingsToSchema(hole,requiredSchema),/Missing authored fire control volume-flow-kernel-strength/,'local policy refuses missing controls without a declared default');
  const unknown=structuredClone(saved);unknown.rendererControls.unrecognized={value:1};assert.throws(()=>fire.projectFireSettingsToSchema(unknown,schema),/Unsupported authored fire control unrecognized/);
 });
+
+test('observed post-retirement fire settings restore the reintroduced adaptive control without changing authored values',()=>{
+ const observed=JSON.parse(readFileSync(new URL('./fixtures/retired-adaptive-rays-basin.json',import.meta.url)));
+ // Auxiliary branch-only controls are outside this DOM-schema restoration check.
+ observed.preset.rendererControls=Object.fromEntries(Object.entries(observed.preset.rendererControls).filter(([key])=>schema.rendererControls.some(e=>e.key===key)));
+ const before=structuredClone(observed.preset),projected=fire.projectFireSettingsToSchema(observed.preset,schema);
+ assert.equal(projected.domControls['volume-adaptive-rays'].value,.65);
+ for(const [key,descriptor]of Object.entries(before.domControls))if(projected.domControls[key])assert.deepEqual(projected.domControls[key],descriptor,key);
+ assert.deepEqual(observed.preset,before);
+ projected.domControls['volume-adaptive-rays'].value=.27;
+ assert.equal(fire.projectFireSettingsToSchema(projected,schema).domControls['volume-adaptive-rays'].value,.27);
+ const hole=structuredClone(projected);delete hole.domControls['volume-density'];
+ assert.throws(()=>fire.projectFireSettingsToSchema(hole,schema),/Missing authored fire control volume-density/);
+});

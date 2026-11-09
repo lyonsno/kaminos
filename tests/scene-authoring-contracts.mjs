@@ -44,3 +44,6 @@ for(const hasVolumePrimitiveScene of [false,true])for(const activeSceneCompositi
  assert.equal(firePresent,Boolean(hasVolumePrimitiveScene||activeSceneComposition),'document membership decides presence independently of an old smoke URL');
 }
 console.log('scene authoring contracts passed');
+const noEnvironment = new URL(forwardCompositionHash('http://localhost:8106/?settings_preset=exact', '#scene=saved.kaminos.json', '?preset=exact&environment_resources=off'));
+assert.equal(noEnvironment.searchParams.get('environment_resources'),'off','preset redirection must retain the explicit environment resource override');
+assert.equal(noEnvironment.searchParams.get('settings_preset'),'exact');

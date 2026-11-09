@@ -870,7 +870,9 @@
       "param": "volume_adaptive_rays",
       "tagName": "INPUT",
       "type": "range",
-      "additiveDefault": 0.65
+      "additiveDefault": 0.65,
+      "additiveSinceControlCount": 1,
+      "additiveLineage": "adaptive-rays-restoration"
     },
     {
       "key": "volume-occupancy-skip",

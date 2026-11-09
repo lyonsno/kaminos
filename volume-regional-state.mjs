@@ -130,3 +130,22 @@ export async function regionalSceneRestored(expectedFilename) {
   if (result.document.filename !== expectedFilename) throw Error('wrong saved scene after restore');
   return result;
 }
+
+// Capture is the native material path with temporal reconstruction disabled.
+// Retain branch-only camera/reconstruction descriptors separately when using
+// current main; never project physical/source controls or unknown features.
+export function regionalCaptureScene(source, schema) {
+  const scene = structuredClone(source), omittedRendererControls = {};
+  const known = new Set(schema.rendererControls.map(entry => entry.key));
+  const inactive = new Set(['volume-occupancy-threshold','volume-history-influence','volume-history-window',
+    'volume-integral-reconstruction','volume-reconstruction-spatial','volume-reconstruction-radius',
+    'volume-reconstruction-window','volume-reconstruction-response','volume-reconstruction-edge',
+    'volume-reconstruction-fresh','volume-reconstruction-edges','volume-reconstruction-image-edge']);
+  for (const [key, value] of Object.entries(scene.fireRendering?.rendererControls ?? {})) {
+    if (known.has(key)) continue;
+    if (!inactive.has(key)) throw Error(`unsupported regional capture control ${key}`);
+    omittedRendererControls[key] = value;
+    delete scene.fireRendering.rendererControls[key];
+  }
+  return {scene, omittedRendererControls};
+}
