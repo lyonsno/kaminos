@@ -26278,11 +26278,12 @@ export function createKaminosVolumePrototype({
       const sourceIdentity=()=>JSON.stringify([state.simStepCount,state.fluidStateResetCount,currentFluid,controlsSnapshot,productTransform,integralViewIdentity(),state.particleSourceGeneration,worldSmokeKey,intermediateKey,sceneVolumeSource?.describe?.()?.generation]);
       const before=sourceIdentity(),lighting=distributedFrame,point=scenePointFrame,heldDevice=device;
       const builds={fine:state.displayReconstruction?.builds??0,outer:state.worldRenderField?.builds??0};
+      const waitStart=performance.now();
       try{await device.queue.onSubmittedWorkDone();}catch(error){buffer.destroy();await heldDevice.popErrorScope().catch(()=>{});return {ok:false,reason:'settled-particle-input-completion-failed',error:String(error)};}
       if(!state.active||device!==heldDevice||!simulationPaused||before!==sourceIdentity()||lighting!==distributedFrame||point!==scenePointFrame){
         buffer.destroy();await heldDevice.popErrorScope();return {ok:false,reason:'settled-particle-inputs-changed-before-acquisition'};
       }
-      settledParticleInputs={completed:true,sourceIdentity:before,builds,route:'held distributed scene source; queued material, lighting and host-depth work completed before source raster'};
+      settledParticleInputs={completed:true,sourceIdentity:before,builds,completionWaitMs:performance.now()-waitStart,waitScope:'CPU wait for already-submitted GPU work; includes scheduling',route:'held distributed scene source; queued material, lighting and host-depth work completed before source raster'};
     }
     encodeBoundarySidecar(encoder, { readBindGroup: sampleSelectiveHeadLiveFields?.sidecar || null });
     if (sampleSelectiveHeadLiveFields?.splat) {
