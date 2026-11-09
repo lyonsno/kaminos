@@ -26227,6 +26227,8 @@ export function createKaminosVolumePrototype({
 
   async function sampleFrame(options = {}) {
     if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    if(options.settleParticleInputs===true&&(!simulationPaused||!particleSettings.enabled||!particleSettings.acquisitionMode||!sceneSourceFrameConsumer||!distributedGroup))return {ok:false,reason:'settled-inputs-require-held-distributed-particles'};
+    let settledParticleInputs=null;
     const advanceSim = options.advanceSim !== false;
     const sampleNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
     const includeRgba = options.includeRgba === true;
@@ -26269,6 +26271,19 @@ export function createKaminosVolumePrototype({
     }
     if (!(advanceSim && !sampleLookFreeze && !simulationPaused)) prepareWorldSmoke();
     encoder = prepareSharedSceneConsumers(encoder);
+    if(options.settleParticleInputs===true){
+      // prepareSharedSceneConsumers submitted the current material/source/light
+      // work and returned an empty, registered encoder. Complete those inputs
+      // before placing timestamps in that same encoder; this is diagnostic only.
+      const sourceIdentity=()=>JSON.stringify([state.simStepCount,state.fluidStateResetCount,currentFluid,controlsSnapshot,productTransform,integralViewIdentity(),state.particleSourceGeneration,worldSmokeKey,intermediateKey,sceneVolumeSource?.describe?.()?.generation]);
+      const before=sourceIdentity(),lighting=distributedFrame,point=scenePointFrame,heldDevice=device;
+      const builds={fine:state.displayReconstruction?.builds??0,outer:state.worldRenderField?.builds??0};
+      await device.queue.onSubmittedWorkDone();
+      if(!state.active||device!==heldDevice||!simulationPaused||before!==sourceIdentity()||lighting!==distributedFrame||point!==scenePointFrame){
+        buffer.destroy();await heldDevice.popErrorScope();return {ok:false,reason:'settled-particle-inputs-changed-before-acquisition'};
+      }
+      settledParticleInputs={completed:true,sourceIdentity:before,builds,route:'held distributed scene source; queued material, lighting and host-depth work completed before source raster'};
+    }
     encodeBoundarySidecar(encoder, { readBindGroup: sampleSelectiveHeadLiveFields?.sidecar || null });
     if (sampleSelectiveHeadLiveFields?.splat) {
       encodeBoundarySplats(encoder, {
@@ -26757,6 +26772,7 @@ export function createKaminosVolumePrototype({
     const smokeVerticalStripeRatio = smokeHorizontalEnergy / Math.max(0.0035, smokeVerticalEnergy);
     return {
       ok: true,
+      settledParticleInputs,
       width: state.width,
       height: state.height,
       cssWidth: state.cssWidth,
@@ -29277,7 +29293,10 @@ export function createKaminosVolumePrototype({
       if(device&&worldRenderUniform)device.queue.writeBuffer(worldRenderUniform,32,new Float32Array([mode==='contributions'?1:0,0,0,0]));
       return mode;
     },
-    async measureOpticalParticleFrame(){
+    async measureOpticalParticleFrame({settleInputs=false}={}){
+      if(typeof settleInputs!=='boolean')return {ok:false,reason:'invalid-settle-inputs-option'};
+      if(settleInputs&&!simulationPaused)return {ok:false,reason:'settled-inputs-require-paused-simulation'};
+      if(settleInputs&&(!sceneSourceFrameConsumer||!distributedGroup))return {ok:false,reason:'settled-inputs-require-distributed-scene-source'};
       if(!state.active||!device||!particleSettings.enabled||!particleSettings.acquisitionMode)return {ok:false,reason:'requires-active-source-focused-particles'};
       if(!timestampQueriesAvailable())return {ok:false,reason:'gpu-timestamps-unavailable'};
       if(particleProfileWrites||stillPresentationHeld||boundarySplatRequested()||productFrameOwner!=='prototype')return {ok:false,reason:'particle-profile-route-busy-or-unsupported'};
@@ -29288,13 +29307,14 @@ export function createKaminosVolumePrototype({
       const readback=device.createBuffer({size:96,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
       try{
         particleProfileWrites=label=>{if(labels.includes(label)||labels.length>=6)throw Error('Unexpected duplicate particle profile pass '+label);const i=labels.length*2;labels.push(label);return {timestampWrites:{querySet:query,beginningOfPassWriteIndex:i,endOfPassWriteIndex:i+1}};};
-        const frame=await sampleFrame({advanceSim:!simulationPaused});particleProfileWrites=null;
+        const frame=await sampleFrame({advanceSim:!simulationPaused,settleParticleInputs:settleInputs});particleProfileWrites=null;
         if(!frame.ok)return {ok:false,reason:frame.reason,validationError:frame.validationError};
+        if(settleInputs&&(!frame.settledParticleInputs?.completed||frame.settledParticleInputs.builds.fine!==(state.displayReconstruction?.builds??0)||frame.settledParticleInputs.builds.outer!==(state.worldRenderField?.builds??0)))return {ok:false,reason:'settled-inputs-rebuilt-during-acquisition'};
         if(!labels.includes('acquisition')||!labels.includes('update')||!labels.includes('births'))return {ok:false,reason:'incomplete-particle-profile-route',labels};
         const e=device.createCommandEncoder();e.resolveQuerySet(query,0,labels.length*2,resolved,0);e.copyBufferToBuffer(resolved,0,readback,0,labels.length*16);device.queue.submit([e.finish()]);await readback.mapAsync(GPUMapMode.READ);
         const times=new BigUint64Array(readback.getMappedRange().slice(0,labels.length*16));
         const passes={};for(let i=0;i<labels.length;i++){if(times[2*i]===0n||times[2*i+1]<times[2*i])return {ok:false,reason:'missing-or-invalid-particle-timestamps',labels,timestamps:Array.from(times,String)};passes[labels[i]]=Number(times[2*i+1]-times[2*i])/1e6;}
-        return {ok:true,scope:'particle-passes-only; excludes shared lighting, material preparation, simulation, readback and other scene work',passes,timestamps:Array.from(times,String),paused:simulationPaused,stepDelta:state.opticalParticles.stepDelta,backend:state.backend,route:state.effectiveRoute,particles:structuredClone(state.opticalParticles)};
+        return {ok:true,scope:'GPU pass intervals; may overlap and include dependency or scheduling waits; not additive exclusive costs or whole-frame time',settledInputs:!!frame.settledParticleInputs?.completed,preparation:frame.settledParticleInputs,passes,timestamps:Array.from(times,String),paused:simulationPaused,stepDelta:state.opticalParticles.stepDelta,backend:state.backend,route:state.effectiveRoute,particles:structuredClone(state.opticalParticles)};
       }finally{particleProfileWrites=null;readback.unmap();query.destroy();resolved.destroy();readback.destroy();this.setSelectiveHeadLiveCapturePaused(pausedBefore);}
     },
     validateOpticalParticleBudget(next=particleSettings,source={}){return particleBudget(opticalParticleSettings({...particleSettings,...next}),source.renderScale??controlsSnapshot.renderScale);},
