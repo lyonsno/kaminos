@@ -37,7 +37,7 @@ test('production retained banks compose two local samples, refresh one, preserve
    @vertex fn vs(@builtin(vertex_index) i:u32)->@builtin(position)vec4<f32>{let p=array<vec2<f32>,3>(vec2<f32>(-1,-1),vec2<f32>(3,-1),vec2<f32>(-1,3));return vec4<f32>(p[i],0,1);}
    @fragment fn fs(@builtin(position) p:vec4<f32>)->@location(0)vec4<f32>{
     let ro=vec3<f32>(0,0,-1);let rd=vec3<f32>(0,0,1);var r=splitInit(p.xy,ro,rd,0,2,.75);
-    let t=splitSampleDepth(r,ro,rd,.5);let rear=t>1.0;
+    let t=splitSampleDepth(r,ro,rd,.5,vec2<f32>(0,2),1,.5);let rear=t>1.0;
     splitObserve(&r,0u,ro+rd*t,select(vec3<f32>(0),vec3<f32>(4,2,1),rear),select(.69314718056,0.0,rear),t,0,select(2.0,1.0,splitOptions.size.z==2u),1);
     if(splitOptions.size.z==2u){splitObserve(&r,1u,vec3<f32>(0,0,.5),vec3<f32>(4,2,1),0,1.5,1,2,1);}
     return splitFinish(r,0u,ro,rd);

@@ -58,6 +58,7 @@ test('native source-only producer retains intrinsic emission separately and clea
 async function opticalFixture(d,run,view={}){
  const owner=createOpticalParticles(d,{transparent:true}),n=16,identity=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
  const births=d.createBuffer({size:n*64+128,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});const uniform=d.createBuffer({size:240,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});const fine=d.createBuffer({size:8*64,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
+ if(view.velocity){const v=new Float32Array(8*16);for(let i=0;i<8;i++)v.set(view.velocity,i*16);d.queue.writeBuffer(fine,0,v);}
  const sf=new Float32Array(60);sf.set(identity);sf.set([0,2,1,0],28);if(view.sourceUniform)sf.set(view.sourceUniform);d.queue.writeBuffer(uniform,0,sf);
  const target=d.createTexture({size:[4,4],format:'rgba8unorm',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC});const depth=d.createTexture({size:[1,1],format:'depth32float',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING});
  const camera=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,1,1,0,0,0,1,0]);const source={buffer:births,uniform,width:4,height:4,pixels:n,step:0,backtrace:view.backtrace??0,reactionStepScale:view.stepScale??1,viewProj:view.vp??identity};
@@ -118,4 +119,42 @@ test('a carrier outside every velocity field does not extrapolate clamped bounda
  await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw,upload})=>{
   const rows=new Float32Array(16*16+32);rows.set([4,2,1,0,4,0,0,1,-.5,.5,1,1,4,2,1,0]);for(let i=0;i<8;i++)rows.set([1,0,0,0],256+i*4);seed(rows);await draw();rows.fill(0,0,256);upload(rows);await draw(1);assert.equal((await owner.sample()).records[0],4);
  },{sourceUniform:sf,backtrace:1}));
+});
+test('population dimensions and optical target scale are independent from source pixels',async()=>{
+ await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw})=>{
+  const rows=new Float32Array(16*16);for(let i=0;i<16;i++)rows.set([4,2,1,1,0,0,0,1,-.5,.5,1,1,4,2,1,0],i*16);seed(rows);
+  await draw(0,{populationWidth:2,populationHeight:3,targetScale:.5});const a=await owner.sample();assert.equal(a.state.slots,6,'explicit2x3pool must allocate6records');assert.equal(a.records.length,6*24);assert.deepEqual(a.state.targetSize,[2,2]);
+  const records=a.records;await draw(0,{populationWidth:2,populationHeight:3,targetScale:1});assert.deepEqual((await owner.sample()).records,records,'paused target-size edit preserves population');
+ }));
+});
+test('smoke yield changes production, and generated-smoke gain changes existing soot while paused',async()=>{
+ await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw})=>{
+  const rows=new Float32Array(16*16);rows.set([4,2,1,0,0,0,0,1,-.5,.5,1,1,4,2,1,0]);seed(rows);await draw(0);await draw(8,{sootYield:0});assert.equal((await owner.sample()).records[22],0);
+  seed(rows);await draw(0);await draw(8,{sootYield:2});const born=await owner.sample();assert.ok(born.records[22]>0);
+  const hidden=await draw(8,{gain:0,carriedSmokeGain:0,generatedSmokeGain:0});const visible=await draw(8,{gain:0,carriedSmokeGain:0,generatedSmokeGain:20});assert.notDeepEqual(visible,hidden,'existing soot visibility must respond without another sim step');assert.deepEqual((await owner.sample()).records,born.records);
+ }));
+});
+
+import {PARTICLE_PROJECTION_WGSL} from '../volume-optical-particles.mjs';
+test('production support projection uses the local perspective footprint at near and far distances',async()=>{
+ const c=new PerspectiveCamera(45,1,.1,100);const matrix=c.projectionMatrix.elements;const k=matrix[0]*32;
+ await withKaminosGpu(async ctx=>{
+  const result=await evalWgslBatch(ctx,{preamble:PARTICLE_PROJECTION_WGSL,argTypes:['f32','f32'],returnType:'vec3<f32>',body:`let vp=mat4x4<f32>(${matrix.join(',')});return particleProjectedCovariance(vp,vec3<f32>(arg0,0,arg1),vec3<f32>(.2),vec3<f32>(0,1,0),vec2<f32>(64));`,inputs:[[.5,-2],[1,-4]]});
+  for(let i=0;i<2;i++){const d=i===0?2:4;const expected=k*k*.04/(d*d)*(1+.25*.25);assert.ok(Math.abs(result[i][0]-expected)<.001,`projected variance ${result[i][0]} differs from local footprint ${expected}`);}
+ });
+});
+test('optional flow orientation reuses advection without changing particle trajectory or reaction',async()=>{
+ await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw})=>{
+  const rows=new Float32Array(16*16);rows.set([4,2,1,1,0,0,0,1,-.5,.5,1,1,4,2,1,0]);seed(rows);await draw(0);await draw(1,{flowAlignment:0});const a=(await owner.sample()).records;
+  seed(rows);await draw(0);await draw(1,{flowAlignment:1});const b=(await owner.sample()).records;
+  for(let i=0;i<a.length;i++)if(i%24!==17&&i%24!==18)assert.equal(b[i],a[i]);
+  assert.ok(Math.abs(b[17]-1/6)<1e-6&&Math.abs(b[18]-1/3)<1e-6,'stored direction comes from actual nonzero grid velocity');
+ },{velocity:[.1,.2,.3]}));
+});
+import {SPLIT_FINE_PROPOSAL_WGSL} from '../volume-split-integral.mjs';
+test('Fine acquisition proposes within the actual intersected interval while keeping the original zero-bias depth',async()=>{
+ await withKaminosGpu(async ctx=>{
+  const rows=await evalWgslBatch(ctx,{preamble:SPLIT_FINE_PROPOSAL_WGSL,argTypes:['f32','f32'],returnType:'f32',body:'return splitFineProposal(8,vec2<f32>(2,4),vec2<f32>(0,10),arg0,arg1,.25);',inputs:[[0,0],[1,.5],[.25,.5],[.75,.5]]});
+  assert.deepEqual(rows.map(x=>Number(x)),[8,2.5,8,2.5]);
+ });
 });

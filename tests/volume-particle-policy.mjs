@@ -36,3 +36,10 @@ test('Fine-only particle capture is explicit while ordinary fixed-budget admissi
  assert.equal(resolveOpticalStepping(c,{emissive:true}).reason,'requires-joined-exterior');
  assert.equal(resolveOpticalStepping(c,{emissive:false,localSource:true}).mode,'fallback-fixed');
 });
+
+test('source controls roundtrip independently from population and particle target controls',async()=>{
+ let particle=opticalParticleSettings(),controls={renderScale:.7,raySteps:8},writes=[];
+ const v={opticalParticleSettings:()=>particle,setOpticalParticles:s=>particle=opticalParticleSettings({...particle,...s}),splitIntegralSettings:()=>({mode:'off'}),setSplitIntegral(){},setControls:p=>controls={...controls,...p},opticalParticleState:()=>({simulationReaction:null,sourceRenderScale:controls.renderScale,sourceRaySteps:controls.raySteps})};
+ const ex=await definition.create({inputs:{source:{renderScale:.3}},host:{controls:{document:{defaultView:{__kaminosVolumePrototype:v},getElementById:()=>null}},scene:{open:async()=>({onFrame:()=>()=>{},redraw(){},async dispose(){}})}},record(){},updateInputs:v=>writes.push(v)});
+ assert.equal(controls.renderScale,.3);ex.operations.setSource({raySteps:16});ex.operations.setOptions({populationWidth:100,populationHeight:200,targetScale:.5,showParticles:false,showRaymarch:true});assert.equal(controls.raySteps,16);assert.equal(particle.populationWidth,100);assert.equal(writes.at(-1).source.renderScale,.3);assert.equal(writes.at(-1).particles.targetScale,.5);await ex.dispose();
+});

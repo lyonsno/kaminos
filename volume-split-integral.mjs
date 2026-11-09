@@ -1,14 +1,22 @@
 import {HISTORY_ALLOCATION_WGSL} from './volume-history-allocation.mjs';
 // Two local optical observations, never two copies of a whole-chord integral.
 export function splitIntegralSettings(c={}) {
-  const v={mode:'off',fresh:1,memory:6,opacityMemory:6,response:.5,exploration:.25,motion:1,footprint:2,depthSupport:2,...c};
+  const v={mode:'off',fresh:1,memory:6,opacityMemory:6,response:.5,exploration:.25,motion:1,footprint:2,depthSupport:2,fineAcquisition:0,...c};
   if(!['off','split','transport'].includes(v.mode))throw Error('Unknown split optical mode');
   if(![1,2].includes(v.fresh))throw Error('Fresh optical evaluations must be 1 or 2');
-  for(const k of ['memory','opacityMemory','response','exploration','motion','footprint','depthSupport'])if(!Number.isFinite(v[k])||!Number.isFinite(Math.fround(v[k]))||v[k]<0)throw Error(`Invalid split optical ${k}`);
-  if(v.memory<1||v.opacityMemory<1||v.response>1||v.exploration>1)throw Error('Invalid optical memory or fraction');
+  for(const k of ['memory','opacityMemory','response','exploration','motion','footprint','depthSupport','fineAcquisition'])if(!Number.isFinite(v[k])||!Number.isFinite(Math.fround(v[k]))||v[k]<0)throw Error(`Invalid split optical ${k}`);
+  if(v.memory<1||v.opacityMemory<1||v.response>1||v.exploration>1||v.fineAcquisition>1)throw Error('Invalid optical memory or fraction');
   return v;
 }
+export const SPLIT_FINE_PROPOSAL_WGSL=/* wgsl */`
+fn splitFineProposal(ordinary:f32,fineHit:vec2<f32>,interval:vec2<f32>,fraction:f32,selector:f32,phase:f32)->f32{
+ let lo=max(fineHit.x,interval.x);let hi=min(fineHit.y,interval.y);
+ if(fraction<=0||selector>=fraction||hi<=lo){return ordinary;}
+ return mix(lo,hi,clamp(phase,.00001,.99999));
+}
+`;
 export const SPLIT_OPTICAL_MATH_WGSL=/* wgsl */`
+${SPLIT_FINE_PROPOSAL_WGSL}
 struct SplitObservation { optical:vec4<f32>, anchor:vec4<f32>, support:vec4<f32> }
 fn splitTransfer(s:SplitObservation,width:f32,lightLife:f32,opacityLife:f32)->vec4<f32>{
   let age=max(0.0,s.anchor.w-1.0);
@@ -105,7 +113,8 @@ fn splitInit(pixel:vec2<f32>,ro:vec3<f32>,rd:vec3<f32>,start:f32,end:f32,phase:f
   }
  }return r;
 }
-fn splitSampleDepth(r:SplitRay,ro:vec3<f32>,rd:vec3<f32>,ordinary:f32)->f32{
+fn splitSampleDepth(r:SplitRay,ro:vec3<f32>,rd:vec3<f32>,ordinary:f32,fineHit:vec2<f32>,selector:f32,phase:f32)->f32{
+ if(splitOptions.policy.x>2.5){return splitFineProposal(ordinary,fineHit,vec2<f32>(r.start,r.end),splitOptions.policy.z,selector,phase);}
  if(r.refreshSlot>=0){return clamp(dot(r.kept[u32(r.refreshSlot)].anchor.xyz-ro,rd),r.start,r.end);}
  // A fixed phase still acquires a distinct second depth rather than duplicating
  // the first observation after a cold start.
@@ -184,7 +193,7 @@ export function createSplitIntegral(device) {
   if(middle)encoder.copyBufferToBuffer(middle.velocity,0,arena,next.middleOffset*16,cells(middle)*16);
   const stepDelta=reset?0:step-lastStep;const data=new ArrayBuffer(240),f=new Float32Array(data),u=new Uint32Array(data);
   f.set(viewProj);u.set([width,height,fresh,frames],16);
-  f.set([sourcesOnly?3:config.mode==='transport'?2:1,config.exploration,config.response,config.motion],20);
+  f.set([sourcesOnly?3:config.mode==='transport'?2:1,config.exploration,sourcesOnly?config.fineAcquisition:config.response,config.motion],20);
   f.set([config.memory,config.opacityMemory,stepDelta,config.footprint],24);
   f.set([stepDelta*backtrace,config.depthSupport,fineScale,staggered?1:0],28);
   const put=(field,offset)=>{if(!field){f.set([0,0,0,1,1,1,1,0,0,0,0,1],offset);return;}
@@ -207,11 +216,11 @@ export function createSplitIntegral(device) {
 // substitutes the real group-three implementation.
 export const SPLIT_OPTICAL_OFF_WGSL=/* wgsl */`
 override SPLIT_INTEGRAL:bool=false;
-struct SplitOptions {size:vec4<u32>}
+struct SplitOptions {size:vec4<u32>,policy:vec4<f32>}
 var<private> splitOptions:SplitOptions;
 struct SplitRay {unused:f32}
 fn splitInit(pixel:vec2<f32>,ro:vec3<f32>,rd:vec3<f32>,start:f32,end:f32,phase:f32)->SplitRay{return SplitRay(0);}
-fn splitSampleDepth(r:SplitRay,ro:vec3<f32>,rd:vec3<f32>,ordinary:f32)->f32{return ordinary;}
+fn splitSampleDepth(r:SplitRay,ro:vec3<f32>,rd:vec3<f32>,ordinary:f32,fineHit:vec2<f32>,selector:f32,phase:f32)->f32{return ordinary;}
 fn splitObserve(r:ptr<function,SplitRay>,index:u32,p:vec3<f32>,q:vec3<f32>,sigma:f32,depth:f32,lo:f32,hi:f32,pitch:f32){}
 fn splitIntrinsic(r:ptr<function,SplitRay>,index:u32,emission:vec3<f32>){}
 fn splitFinish(r:SplitRay,pixel:u32,ro:vec3<f32>,rd:vec3<f32>)->vec4<f32>{return vec4<f32>(0,0,0,1);}
