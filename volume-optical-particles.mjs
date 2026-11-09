@@ -36,6 +36,15 @@ struct Particle {anchor:vec4<f32>, source:vec4<f32>, emission:vec4<f32>, motion:
 struct Options {vp:mat4x4<f32>, inverse:mat4x4<f32>, size:vec4<u32>, time:vec4<f32>, reaction:vec4<f32>, shape:vec4<f32>, transport:vec4<f32>, fine:vec4<f32>, gain:vec4<f32>, raster:vec4<f32>, support:vec4<f32>, acquisition:vec4<u32>, lighting:vec4<f32>}
 struct SourceOptions {vp:mat4x4<f32>,size:vec4<u32>,policy:vec4<f32>,life:vec4<f32>,flow:vec4<f32>,worldLo:vec4<f32>,worldDims:vec4<f32>,worldMap:vec4<f32>,middleLo:vec4<f32>,middleDims:vec4<f32>,middleMap:vec4<f32>,arenaOffsets:vec4<u32>}
 `;
+const PARTICLE_MATERIAL_WGSL=/* wgsl */`
+fn particleMaterial(p:Particle,u:Options)->vec4<f32>{
+ let age=max(0.0,p.anchor.w-1.0);let opacity=exp(-age/u.time.w);
+ let emission=p.emission.xyz*pow(max(0.0,p.state.y),4.0)*u.gain.x;
+ let lightLife=select(u.time.w,u.lighting.y,u.lighting.y>0);
+ let scattered=max(vec3<f32>(0),p.source.xyz-p.emission.xyz)*exp(-age/lightLife)*u.lighting.x;
+ return vec4<f32>((emission+scattered)*p.shape.w,(p.source.w*opacity*u.support.y+p.state.z*u.support.z)*p.shape.w*u.gain.y);
+}
+`;
 export const PARTICLE_PROJECTION_WGSL=/* wgsl */`
 fn particleProjectedCovariance(vp:mat4x4<f32>,point:vec3<f32>,radius:vec3<f32>,axisY:vec3<f32>,size:vec2<f32>)->vec3<f32>{
  let center=vp*vec4<f32>(point,1);var sum=vec3<f32>(0);
@@ -148,6 +157,7 @@ fn particleVelocity(p:vec3<f32>)->vec3<f32>{
 @compute @workgroup_size(1) fn finishBirths(){atomicStore(&pool.next,(atomicLoad(&pool.next)+min(atomicLoad(&pool.frameBirths),u.size.z))%u.size.z);}
 `;
 const RENDER=/* wgsl */`${OPTIONS}
+${PARTICLE_MATERIAL_WGSL}
 override PARTICLE_INDEXED_QUADS:bool=false;
 DEPTH_DECLARATIONS
 ${PARTICLE_PROJECTION_WGSL}
@@ -169,16 +179,11 @@ struct Vertex {@builtin(position) clip:vec4<f32>,@location(0) local:vec2<f32>,@l
  var xy:vec2<f32>;
  if(PARTICLE_INDEXED_QUADS){let corners=array<vec2<f32>,4>(vec2<f32>(-1,-1),vec2<f32>(1,-1),vec2<f32>(1,1),vec2<f32>(-1,1));xy=corners[vertex]*2.5;}
  else{let corners=array<vec2<f32>,6>(vec2<f32>(-1,-1),vec2<f32>(1,-1),vec2<f32>(1,1),vec2<f32>(-1,-1),vec2<f32>(1,1),vec2<f32>(-1,1));xy=corners[vertex]*2.5;}
- let offset=axis*xy.x*major+vec2<f32>(-axis.y,axis.x)*xy.y*minor;center.x+=offset.x*2.0/u.raster.x*center.w;center.y+=offset.y*2.0/u.raster.y*center.w;if(u.gain.w<.5){center.z=(center.z+center.w)*.5;}
+ var offset=axis*xy.x*major+vec2<f32>(-axis.y,axis.x)*xy.y*minor;var footprintGain=1.0;DEPTH_FOOTPRINT_FILTER
+center.x+=offset.x*2.0/u.raster.x*center.w;center.y+=offset.y*2.0/u.raster.y*center.w;if(u.gain.w<.5){center.z=(center.z+center.w)*.5;}
  DEPTH_VERTEX_TRANSFORM
  out.clip=center;out.local=xy;
- let opacity=exp(-max(0.0,p.anchor.w-1.0)/u.time.w);
- let emission=p.emission.xyz*pow(max(0.0,p.state.y),4.0)*u.gain.x;
- let lightLife=select(u.time.w,u.lighting.y,u.lighting.y>0);
- let scattered=max(vec3<f32>(0),p.source.xyz-p.emission.xyz)*exp(-max(0.0,p.anchor.w-1.0)/lightLife)*u.lighting.x;
- out.light=(emission+scattered)*p.shape.w;
- // New soot has its own absorption even when the source had no extinction.
- out.tau=(p.source.w*opacity*u.support.y+p.state.z*u.support.z)*p.shape.w*u.gain.y;return out;
+ let optical=particleMaterial(p,u);out.light=optical.xyz;out.tau=optical.w*footprintGain;return out;
 }
 @fragment fn fs(v:Vertex)->@location(0) vec4<f32>{
  DEPTH_FRAGMENT_COORDINATES
@@ -248,19 +253,28 @@ export function createOpticalParticles(device,{transparent=false,indexedQuads=tr
   if(!s.showParticles){if(!s.showRaymarch){const clear=encoder.beginRenderPass({label:'hidden particle display clear',...profileWrites('present'),colorAttachments:[{view,loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}]});clear.end();}if(retired.length){const old=retired.splice(0);queueMicrotask(()=>device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>old.forEach(x=>x.destroy())));}info=readState();return info;}
   const ms=depth.sampleCount>1;
   const depthCode=(deposit)=>s.depthMode?{declarations:`override PARTICLE_DEPTH_MODE:u32=${s.depthMode}u;${PARTICLE_DEPTH_RENDER_WGSL}`,
+   filter:deposit?`let ratio=vec2<f32>(particleDepth.size.xy)/u.raster.xy;
+    if(any(ratio<vec2<f32>(1))){
+     let ax=axis*major*ratio;let ay=vec2<f32>(-axis.y,axis.x)*minor*ratio;
+     let a=ax.x*ax.x+ay.x*ay.x;let b=ax.y*ax.y+ay.y*ay.y;let c=ax.x*ax.y+ay.x*ay.y;
+     let filtered=vec2<f32>(a,b)+vec2<f32>(1.0/12.0);let det=max(a*b-c*c,1e-20);let detFiltered=max(filtered.x*filtered.y-c*c,1e-20);
+     footprintGain=sqrt(det/detFiltered);var theta=0.0;if(abs(c)+abs(a-b)>1e-20){theta=.5*atan2(2*c,a-b);}
+     let faxis=vec2<f32>(cos(theta),sin(theta));let disc=sqrt((a-b)*(a-b)+4*c*c);let sig=sqrt(max(vec2<f32>(1e-20),(vec2<f32>(filtered.x+filtered.y)+vec2<f32>(disc,-disc))*.5));
+     offset=(faxis*xy.x*sig.x+vec2<f32>(-faxis.y,faxis.x)*xy.y*sig.y)/ratio;
+    }`:'',
    field:', @location(3) @interpolate(flat) depthInfo:vec2<f32>',
    vertex:`out.depthInfo=particleDepthCoordinate(center);${deposit?`let tile=particleDepthTile(u32(out.depthInfo.x));let size=vec2<f32>(particleDepth.size.xy);let dims=vec2<f32>(f32(particleDepth.size.z)*size.x,f32((particleDepth.size.w+particleDepth.size.z-1u)/particleDepth.size.z)*size.y);let at=(center.xy/center.w*vec2<f32>(.5,-.5)+.5)*size+vec2<f32>(tile)*size;center.xy=(at/dims*vec2<f32>(2,-2)+vec2<f32>(-1,1))*center.w;`:''}`,
    coords:deposit?'let local=v.clip.xy-vec2<f32>(particleDepthTile(u32(v.depthInfo.x))*particleDepth.size.xy);if(any(local<vec2<f32>(0))||any(local>=vec2<f32>(particleDepth.size.xy))){discard;}let sceneUv=local/vec2<f32>(particleDepth.size.xy);':'let sceneUv=v.clip.xy/u.raster.xy;',
-   output:deposit?'return vec4<f32>(min(v.tau*weight,65504.0),0,0,0);':'return vec4<f32>(v.light*particleDepthWeight(v.clip.xy,v.depthInfo),v.tau)*weight;'}:
-   {declarations:'',field:'',vertex:'',coords:'let sceneUv=v.clip.xy/u.raster.xy;',output:'return vec4<f32>(v.light,v.tau)*weight;'};
+   output:deposit?'return vec4<f32>(min(v.tau*weight,65504.0),0,0,0);':'return vec4<f32>(v.light*particleDepthWeight(v.clip.xy,v.depthInfo,v.tau*weight),v.tau)*weight;'}:
+   {declarations:'',filter:'',field:'',vertex:'',coords:'let sceneUv=v.clip.xy/u.raster.xy;',output:'return vec4<f32>(v.light,v.tau)*weight;'};
   function raster(deposit=false){
    const key=`${ms}:${s.depthMode}:${deposit}`;let rp=render.get(key);
-   if(!rp){const dc=depthCode(deposit);const code=RENDER.replace('DEPTH_DECLARATIONS',dc.declarations).replace('DEPTH_VERTEX_FIELD',dc.field).replace('DEPTH_VERTEX_TRANSFORM',dc.vertex).replace('DEPTH_FRAGMENT_COORDINATES',dc.coords).replace('DEPTH_FRAGMENT_OUTPUT',dc.output).replace('DEPTH_TYPE',ms?'texture_depth_multisampled_2d':'texture_depth_2d').replace('DEPTH_LOAD','textureLoad(sceneDepth,pixel,0)').replace('DEPTH_REDUCE',ms?'for(var sample=1u;sample<textureNumSamples(sceneDepth);sample++){depth=min(depth,textureLoad(sceneDepth,pixel,sample));}':'');const module=device.createShaderModule({code});
+   if(!rp){const dc=depthCode(deposit);const code=RENDER.replace('DEPTH_DECLARATIONS',dc.declarations).replace('DEPTH_FOOTPRINT_FILTER',dc.filter).replace('DEPTH_VERTEX_FIELD',dc.field).replace('DEPTH_VERTEX_TRANSFORM',dc.vertex).replace('DEPTH_FRAGMENT_COORDINATES',dc.coords).replace('DEPTH_FRAGMENT_OUTPUT',dc.output).replace('DEPTH_TYPE',ms?'texture_depth_multisampled_2d':'texture_depth_2d').replace('DEPTH_LOAD','textureLoad(sceneDepth,pixel,0)').replace('DEPTH_REDUCE',ms?'for(var sample=1u;sample<textureNumSamples(sceneDepth);sample++){depth=min(depth,textureLoad(sceneDepth,pixel,sample));}':'');const module=device.createShaderModule({code});
     const blend={color:{srcFactor:'one',dstFactor:'one',operation:'add'},alpha:{srcFactor:'one',dstFactor:'one',operation:'add'}};
     rp=device.createRenderPipeline({label:deposit?'particle extinction slice deposition':'particle depth-weighted source',layout:'auto',vertex:{module,entryPoint:'vs',constants:{PARTICLE_INDEXED_QUADS:indexedQuads}},fragment:{module,entryPoint:'fs',targets:[{format:deposit?'r16float':'rgba16float',blend}]},primitive:{topology:'triangle-list'}});render.set(key,rp);}
    const r=encoder.beginRenderPass({label:deposit?'particle extinction deposition':'spatial material support',...profileWrites(deposit?'depthDeposit':'raster'),colorAttachments:[{view:(deposit?depthField.target:textures[0]).createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}]});r.setPipeline(rp);r.setBindGroup(0,device.createBindGroup({layout:rp.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:particles}},{binding:1,resource:{buffer:options}},{binding:2,resource:depth.createView()},...(s.depthMode?depthField.entries(!deposit):[])]}));if(quadIndices){r.setIndexBuffer(quadIndices,'uint16');r.drawIndexed(6,slots);}else r.draw(6,slots);r.end();
   }
-  if(s.depthMode){depthField??=createParticleDepthField(device,{optionsWgsl:OPTIONS,options});depthPlan=depthField.prepare(encoder,s,{width:targetWidth,height:targetHeight,limit:device.limits},particles,slots,profileWrites);raster(true);depthField.prefix(encoder,profileWrites);}
+  if(s.depthMode){depthField??=createParticleDepthField(device,{optionsWgsl:OPTIONS+PARTICLE_MATERIAL_WGSL,options});depthPlan=depthField.prepare(encoder,s,{width:targetWidth,height:targetHeight,limit:device.limits},particles,slots,profileWrites);raster(true);depthField.prefix(encoder,profileWrites);}
   raster();
   if(!directTransfer){let resolvePipeline=resolvePipelines.get(!!s.depthMode);if(!resolvePipeline){const module=device.createShaderModule({code:s.depthMode?RESOLVE.replace(OPTICAL_TRANSFER,DEPTH_TRANSFER):RESOLVE});
   resolvePipeline=device.createRenderPipeline({layout:'auto',vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',targets:[{format:'rgba32float'}]}});resolvePipelines.set(!!s.depthMode,resolvePipeline);}

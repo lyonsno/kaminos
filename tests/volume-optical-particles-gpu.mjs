@@ -237,3 +237,24 @@ test('equal horizontal and vertical particle radii produce a visible round footp
   assert.ok(image.some((x,i)=>i%4!==3&&x>0),'isotropic covariance must not generate invalid vertex coordinates');
  }));
 });
+test('fractional depth preserves an isolated carrier self transfer when harmless range anchors change',async()=>{
+ await withKaminosGpu(async({device:d})=>{
+  const camera=new PerspectiveCamera(45,1,.1,20);camera.coordinateSystem=WebGPUCoordinateSystem;camera.updateProjectionMatrix();
+  await opticalFixture(d,async({seed,draw})=>{
+   const rows=new Float32Array(16*16);rows.set([.1,.05,.01,4,0,0,-3,1,-.5,.5,1,1,.1,.05,.01,0]);seed(rows);const settings={depthMode:2,depthSlices:7,depthScale:1,radius:.6};const alone=await draw(0,settings);assert.ok(alone.some((v,i)=>i%4===0&&v>0),'isolated source is actually visible');
+   rows.set([0,0,0,1e-6,0,0,-9,1,-.5,.5,1,1,0,0,0,0],16);seed(rows);const range=await draw(0,settings);
+   for(let y=0;y<4;y++)for(let x=0;x<16;x++)assert.ok(Math.abs(alone[y*256+x]-range[y*256+x])<=1,'a negligible far source cannot change isolated self attenuation');
+  },{vp:camera.projectionMatrix.toArray(),inverse:camera.projectionMatrixInverse.toArray(),depthZeroToOne:true});
+ });
+});
+test('subpixel smoke survives coarse visibility deposition instead of vanishing between atlas samples',async()=>{
+ await withKaminosGpu(async({device:d})=>{
+  const camera=new PerspectiveCamera(45,1,.1,20);camera.coordinateSystem=WebGPUCoordinateSystem;camera.updateProjectionMatrix();
+  await opticalFixture(d,async({seed,draw})=>{
+   const rows=new Float32Array(16*16),settings={depthMode:1,depthSlices:8,depthScale:.25,radius:.001,stretch:1,pixelFloor:.5};
+   rows.set([4,2,1,0,-1.2,0,-4,1,-.5,.5,1,1,4,2,1,0]);seed(rows);const alone=await draw(0,settings);
+   rows.set([0,0,0,200,-.6,0,-2,1,-.5,.5,1,1,0,0,0,0],16);seed(rows);const smoke=await draw(0,settings);
+   let a=0,b=0;for(let y=0;y<4;y++)for(let x=0;x<4;x++){a+=alone[y*256+x*4];b+=smoke[y*256+x*4];}assert.ok(a>0);assert.ok(b<a*.9,`coarse smoke must attenuate: ${b} vs ${a}`);
+  },{vp:camera.projectionMatrix.toArray(),inverse:camera.projectionMatrixInverse.toArray(),depthZeroToOne:true});
+ });
+});

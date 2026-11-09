@@ -25,12 +25,18 @@ fn particleDepthTile(layer:u32)->vec2<u32>{return vec2<u32>(layer%particleDepth.
 fn particleDepthCumulative(xy:vec2<i32>,layer:i32)->f32{
  if(layer<0){return 0.0;}return textureLoad(particleDepthPrefix,xy+vec2<i32>(particleDepthTile(u32(layer))*particleDepth.size.xy),0).r;
 }
-fn particleDepthWeight(xy:vec2<f32>,depth:vec2<f32>)->f32{
+fn particleDepthWeight(xy:vec2<f32>,depth:vec2<f32>,selfTau:f32)->f32{
  // Nearest field cell is deliberate: this first route uses a piecewise-constant
  // XY profile. Filtering across opaque boundaries is not silently introduced.
  let at=clamp(vec2<i32>(xy/u.raster.xy*vec2<f32>(particleDepth.size.xy)),vec2<i32>(0),vec2<i32>(particleDepth.size.xy)-1);
  let layer=i32(depth.x);let before=particleDepthCumulative(at,layer-1);let tau=max(0.0,particleDepthCumulative(at,layer)-before);
- if(PARTICLE_DEPTH_MODE==2u){return exp(-before-tau*depth.y);}
+ if(PARTICLE_DEPTH_MODE==2u){
+  // A carrier's own finite slab transfer is independent of its bin phase.
+  // The field approximates other carriers. At coarse XY, clamp subtraction
+  // because that field contains the filtered rather than sample-local self.
+  let own=select(1.0,(1.0-exp(-selfTau))/max(selfTau,1e-6),selfTau>1e-5);
+  return exp(-before-max(0.0,tau-selfTau)*depth.y)*own;
+ }
  let local=select(1.0,(1.0-exp(-tau))/max(tau,1e-6),tau>1e-5);return exp(-before)*local;
 }
 `;
@@ -58,7 +64,7 @@ export function createParticleDepthField(device,{optionsWgsl,options}){
  var<workgroup> lower:array<u32,64>;var<workgroup> upper:array<u32,64>;
  @compute @workgroup_size(64) fn build(@builtin(global_invocation_id) gid:vec3<u32>,@builtin(local_invocation_index) tid:u32){
   var lo=0x7f800000u;var hi=0u;
-  if(gid.x<u.size.z){let p=particles[gid.x];let depth=(u.vp*vec4<f32>(p.anchor.xyz,1)).w;if(p.anchor.w>0&&depth>0){lo=bitcast<u32>(depth);hi=lo;}}
+  if(gid.x<u.size.z){let p=particles[gid.x];let depth=(u.vp*vec4<f32>(p.anchor.xyz,1)).w;let clip=u.vp*vec4<f32>(p.anchor.xyz,1);let z=select((clip.z+clip.w)*.5,clip.z,u.gain.w>.5);if(p.anchor.w>0&&depth>0&&z>=0&&z<=clip.w&&any(particleMaterial(p,u)>vec4<f32>(0))){lo=bitcast<u32>(depth);hi=lo;}}
   lower[tid]=lo;upper[tid]=hi;workgroupBarrier();
   for(var stride=32u;stride>0u;stride/=2u){if(tid<stride){lower[tid]=min(lower[tid],lower[tid+stride]);upper[tid]=max(upper[tid],upper[tid+stride]);}workgroupBarrier();}
   if(tid==0u){atomicMin(&bounds[0],lower[0]);atomicMax(&bounds[1],upper[0]);}
