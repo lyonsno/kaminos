@@ -26278,7 +26278,7 @@ export function createKaminosVolumePrototype({
       const sourceIdentity=()=>JSON.stringify([state.simStepCount,state.fluidStateResetCount,currentFluid,controlsSnapshot,productTransform,integralViewIdentity(),state.particleSourceGeneration,worldSmokeKey,intermediateKey,sceneVolumeSource?.describe?.()?.generation]);
       const before=sourceIdentity(),lighting=distributedFrame,point=scenePointFrame,heldDevice=device;
       const builds={fine:state.displayReconstruction?.builds??0,outer:state.worldRenderField?.builds??0};
-      await device.queue.onSubmittedWorkDone();
+      try{await device.queue.onSubmittedWorkDone();}catch(error){buffer.destroy();await heldDevice.popErrorScope().catch(()=>{});return {ok:false,reason:'settled-particle-input-completion-failed',error:String(error)};}
       if(!state.active||device!==heldDevice||!simulationPaused||before!==sourceIdentity()||lighting!==distributedFrame||point!==scenePointFrame){
         buffer.destroy();await heldDevice.popErrorScope();return {ok:false,reason:'settled-particle-inputs-changed-before-acquisition'};
       }

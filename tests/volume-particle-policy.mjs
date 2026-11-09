@@ -71,3 +71,10 @@ test('invalid particle target edits preserve accepted experiment settings and in
  const ex=await definition.create({host:{controls:{document:{defaultView:{__kaminosVolumePrototype:runtime},getElementById:()=>null}},scene:{open:async()=>({onFrame:()=>()=>{},redraw(){},async dispose(){}})}},inputs:{particles:{targetScale:1}},record(){},updateInputs:v=>writes.push(v)});
  assert.throws(()=>ex.operations.setOptions({targetScale:2}),/texture dimensions/);assert.equal(ex.read().settings.targetScale,1);assert.equal(settings.targetScale,1);assert.equal(writes.length,0);await ex.dispose();
 });
+
+test('measurement options and actual runtime receipt pass through the Workbench operation',async()=>{
+ let settings=opticalParticleSettings(),seen;
+ const runtime={opticalParticleSettings:()=>settings,setOpticalParticles:s=>settings=opticalParticleSettings({...settings,...s}),splitIntegralSettings:()=>({mode:'off'}),setSplitIntegral(){},opticalParticleState:()=>({simulationReaction:null}),async measureOpticalParticleFrame(options){seen=options;return {ok:true,settledInputs:options.settleInputs,passes:{acquisition:.1}};}};
+ const ex=await definition.create({host:{controls:{document:{defaultView:{__kaminosVolumePrototype:runtime},getElementById:()=>null}},scene:{open:async()=>({onFrame:()=>()=>{},redraw(){},async dispose(){}})}},inputs:{},record(){},updateInputs(){}});
+ const receipt=await ex.operations.measure({settleInputs:true});assert.deepEqual(seen,{settleInputs:true});assert.equal(receipt.settledInputs,true);assert.deepEqual(ex.read().measurement,receipt);await ex.dispose();
+});
