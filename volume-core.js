@@ -28451,7 +28451,7 @@ export function createKaminosVolumePrototype({
       this.validateGridControls(next);
       if(Object.hasOwn(next,'adaptiveMaterial')&&next.adaptiveMaterial!==null)validateAllocation(next.adaptiveMaterial);
       // Reference-only ray budgets change the ordinary integral, not particle material.
-      if(integralChanges.length)invalidateIntegralReconstruction('render-or-simulation-settings-changed',{source:true,particleSource:integralChanges.some(key=>!['raySteps','runtimeQualityReceipt',...(particleSettings.acquisitionMode?['renderScale']:[])].includes(key))});
+      if(integralChanges.length)invalidateIntegralReconstruction('render-or-simulation-settings-changed',{source:true,particleSource:integralChanges.some(key=>!['raySteps','runtimeQualityReceipt','integralReconstruction','reconstructionFresh',...(particleSettings.acquisitionMode?['renderScale']:[])].includes(key))});
       if(Object.hasOwn(next,'adaptiveMaterial')) {
         const requested=next.adaptiveMaterial===null?null:validateAllocation(next.adaptiveMaterial);
         if(JSON.stringify(requested)!==JSON.stringify(adaptiveMaterialOptions))this.configureAdaptiveMaterial(requested);

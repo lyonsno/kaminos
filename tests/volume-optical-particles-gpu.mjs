@@ -165,3 +165,9 @@ test('Fine acquisition proposes within the actual intersected interval while kee
   assert.deepEqual(rows.map(x=>Number(x)),[8,2.5,8,2.5]);
  });
 });
+test('particles-only source batch clears the old display when both display toggles are off',async()=>{
+ await withKaminosGpu(async({device:d})=>opticalFixture(d,async({seed,draw})=>{
+  const rows=new Float32Array(16*16);rows.set([4,2,1,0,0,0,0,1,-.5,.5,1,1,4,2,1,0]);seed(rows);await draw(0,{acquisitionMode:1,capacity:16});const hidden=await draw(0,{acquisitionMode:1,capacity:16,showParticles:false,showRaymarch:false});
+  for(let y=0;y<4;y++)for(let x=0;x<16;x++)assert.equal(hidden[256*y+x],0,'turning display off must not leave the preceding particle image');
+ }));
+});
