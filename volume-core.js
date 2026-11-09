@@ -29,7 +29,7 @@ import { createRayStepTelemetry } from './volume-ray-step-telemetry.mjs';
 import {integralGuideDisplaySettings} from './volume-integral-guide-display.mjs';
 import {createIntegralReconstruction,integralReconstructionSettings} from './volume-integral-reconstruction.mjs';
 import {reconstructionSourceChanges} from './volume-reconstruction-pause.mjs';
-import {particleBatch,particleSourceEnvelope,particleAcquisitionData} from './volume-particle-acquisition.mjs';
+import {particleResourceBudget,particleSourceEnvelope,particleAcquisitionData} from './volume-particle-acquisition.mjs';
 import { createRayAllocationHistory, rayHistorySettings, HISTORY_ALLOCATION_WGSL } from './volume-history-allocation.mjs';
 import { frameCadenceSummary } from './volume-frame-timing.mjs';
 import { applyPreviewQualityCaps } from './preview-quality.mjs';
@@ -7944,7 +7944,8 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
   let opticalCaptureMode = select(select(nonRidgeOpticalCaptureHeader.mode, 0u, LEAN_EMISSIVE_RAYMARCH), 5u, OPTICAL_TRACE_CAPTURE);
   let fullGridCapture = !LEAN_STOCK_RAYMARCH && opticalCaptureMode >= 3u && opticalCaptureMode <= 4u;
   let opticalTrace = opticalCaptureMode == 5u;
-  let traceRay = u32(in.pos.x) + u32(in.pos.y) * u32(u.viewport_steps_density.x);
+  var traceRay = u32(in.pos.x) + u32(in.pos.y) * u32(u.viewport_steps_density.x);
+  if(SPLIT_INTEGRAL){traceRay=splitAcquisitionIndex(in.pos.xy,u32(u.viewport_steps_density.x));}
   if (RAY_STEP_STATS) { rayStepCounters[traceRay] = 0xffffffffu; }
   if (opticalTrace && (traceRay < nonRidgeOpticalCaptureHeader.firstRay || traceRay >= nonRidgeOpticalCaptureHeader.firstRay + nonRidgeOpticalCaptureHeader.rayCount)) {
     return makeRaymarchResult(vec4<f32>(0), 1.0, vec4<f32>(0), vec4<f32>(0), vec4<f32>(0), vec4<f32>(0));
@@ -11819,16 +11820,9 @@ export function createKaminosVolumePrototype({
   state.particleSourceGeneration=0;
   let particleAcquisitionTarget=null,particleProfileWrites=null;
   function particleBudget(settings=particleSettings,renderScale=controlsSnapshot.renderScale){
-    const s=opticalParticleSettings(settings),limit=device?.limits;if(!limit)return null;
-    const outputWidth=Math.max(1,Math.floor((state.displayWidth??state.width??1)*renderScale)),outputHeight=Math.max(1,Math.floor((state.displayHeight??state.height??1)*renderScale));
-    const batch=s.acquisitionMode?particleBatch(s.acquisitionSamples,outputWidth/outputHeight,limit.maxTextureDimension2D):{width:outputWidth,height:outputHeight,samples:outputWidth*outputHeight,pixels:outputWidth*outputHeight};
-    const slots=s.capacity||(s.populationWidth||Math.ceil(batch.width/s.spacing))*(s.populationHeight||Math.ceil(batch.height/s.spacing));
-    const maxTargetScale=Math.min(limit.maxTextureDimension2D/outputWidth,limit.maxTextureDimension2D/outputHeight);
-    if(s.targetScale>maxTargetScale)throw Error(`Particle target scale ${s.targetScale.toFixed(3)} exceeds device maximum ${maxTargetScale.toFixed(3)} at ${outputWidth} × ${outputHeight}; previous target preserved`);
-    if(Math.max(outputWidth,outputHeight)>limit.maxTextureDimension2D)throw Error('Source output exceeds device texture dimensions; previous source preserved');
-    if(!Number.isSafeInteger(slots)||slots>0xffffffff||slots*96>Math.min(limit.maxBufferSize,limit.maxStorageBufferBindingSize)||Math.ceil(slots/64)>limit.maxComputeWorkgroupsPerDimension)throw Error('Particle capacity exceeds effective device storage or dispatch limit; previous population preserved');
-    if(batch.pixels*64>Math.min(limit.maxBufferSize,limit.maxStorageBufferBindingSize)||Math.ceil(batch.samples/64)>limit.maxComputeWorkgroupsPerDimension)throw Error('Fresh sample batch exceeds effective device storage or dispatch limit; previous source preserved');
-    return {batch,slots,outputWidth,outputHeight,maxTargetScale,maxCapacity:Math.min(0xffffffff,Math.floor(Math.min(limit.maxBufferSize,limit.maxStorageBufferBindingSize)/96),limit.maxComputeWorkgroupsPerDimension*64)};
+    if(!device)return null;
+    const cells=owner=>owner?.plan?.flowDims?.reduce((a,b)=>a*b,1)??0;
+    return particleResourceBudget(opticalParticleSettings(settings),{limit:device.limits,renderScale,displayWidth:state.displayWidth??state.width??1,displayHeight:state.displayHeight??state.height??1,flowCells:state.worldSmoke?.effective==='one-way-world-field'?cells(worldSmoke)+cells(intermediateFlow):0});
   }
   state.integralReconstruction={requested:controlsSnapshot.integralReconstruction??'off',effective:'off',reason:'awaiting-presentation',frames:0};
   function integralSceneIdentity(){return JSON.stringify([productTransform,volumePresentationModeEffective,raymarchSmokePresentationEffectiveMode(),appearanceDecompositionModeEffective,boundarySplatPresentationModeEffective,state.integralSourceGeneration,worldSmokeKey,intermediateKey]);}
@@ -29321,7 +29315,7 @@ export function createKaminosVolumePrototype({
     async sampleOpticalParticles(){return opticalParticles?.sample()??{available:false};},
     setSplitIntegral(next){assertIntegralSourceEditable('Split optical transport');const value=splitIntegralSettings({...splitSettings,...next});if(value.mode!==splitSettings.mode)splitIntegral?.reset();splitSettings=value;return {...splitSettings};},
     splitIntegralSettings(){return {...splitSettings};},
-    async sampleSplitIntegral(){if(!selectiveHeadLiveCapturePaused&&!simulationPaused)throw Error('Pause simulation/capture before reading split observations');return splitIntegral?.sample()??{available:false};},
+    async sampleSplitIntegral(options={}){if(!selectiveHeadLiveCapturePaused&&!simulationPaused)throw Error('Pause simulation/capture before reading split observations');return splitIntegral?.sample(options)??{available:false};},
     setIntegralGuideDisplay(next){
       integralGuideDisplay=integralGuideDisplaySettings({...integralGuideDisplay,...next});
       integralReconstruction?.setGuideDisplay(integralGuideDisplay);return {...integralGuideDisplay};

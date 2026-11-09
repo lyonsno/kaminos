@@ -177,7 +177,7 @@ export function createSplitIntegral(device) {
  const emptyGroup=device.createBindGroup({layout:emptyLayout,entries:[]});
  const uniform=device.createBuffer({label:'split optical transport policy',size:240,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
  const acquisitionUniform=device.createBuffer({label:'particle film and source-region policy',size:112,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
- let arena=null,allocation=null,key=null,index=0,frames=0,lastStep=0,config=splitIntegralSettings(),state={requested:'off',effective:'off',bytes:0};
+ let arena=null,allocation=null,key=null,index=0,frames=0,lastStep=0,config=splitIntegralSettings(),state={requested:'off',effective:'off',bytes:0},sourceFields=null;
  function retire(owned){if(!owned)return;queueMicrotask(()=>{device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>owned.destroy());});}
  function disable(reason='off'){retire(arena);arena=null;allocation=null;key=null;frames=0;state={requested:config.mode,effective:'off',reason,bytes:0};return state;}
  function prepare(encoder,{width,height,settings,identity,step,viewProj,world,middle,backtrace,fineScale,staggered,sourcesOnly=false,acquisition=null}) {
@@ -187,7 +187,7 @@ export function createSplitIntegral(device) {
   if(next.bytes>Math.min(device.limits.maxBufferSize,device.limits.maxStorageBufferBindingSize))throw Error(`Split optical arena needs ${next.bytes} bytes; exceeds effective device binding capacity`);
   const nextKey=JSON.stringify([width,height,identity,next]);let reset=key!==nextKey||step<lastStep;
   if(!arena||arena.size!==next.bytes){retire(arena);arena=device.createBuffer({label:'two local optical contributions per pixel',size:next.bytes,usage});reset=true;}
-  allocation=next;
+  allocation=next;sourceFields={world,middle,worldCells:cells(world),middleCells:cells(middle)};
   if(reset){encoder.clearBuffer(arena,0,next.historyBytes);frames=0;index=0;}else index=sourcesOnly?0:1-index;
   encoder.clearBuffer(arena,index*next.bankBytes,next.bankBytes);
   // Small current coarse-flow snapshots share this storage binding. No CPU
@@ -210,8 +210,21 @@ export function createSplitIntegral(device) {
    motion:'pull warped source anchors using current Fine/Middle/World velocity; camera changes reset',life:'independent exponential radiance/extinction lifetime in rendered draws',source:'local source coefficient including incident scattering, before prefix attenuation',intervals:fresh===2?'original equal-distance strata':'bounded source support; sorted nonoverlapping optical intervals',extraWork:'anchor reprojection and velocity queries plus coarse flow buffer copies; no additional material evaluation'};
   return {group,state,sourceFrame:sourcesOnly?{buffer:arena,uniform,width,height,pixels:width*height,step,stepDelta,backtrace,viewProj,world,middle}:null};
  }
- async function sample(){if(!frames)return {available:false,state};const epoch=frames,b=arena,offset=index*allocation.bankBytes,size=allocation.bankBytes,read=device.createBuffer({size,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
-  try{const e=device.createCommandEncoder();e.copyBufferToBuffer(b,offset,read,0,size);device.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);if(frames!==epoch||arena!==b)throw Error('Split readback became stale');return {available:true,state,records:new Float32Array(read.getMappedRange().slice(0))};}finally{read.unmap();read.destroy();}}
+ async function sample({includeFlow=false}={}){
+  if(!frames)return {available:false,state};
+  if(includeFlow&&state.effective!=='source-observations')throw Error('Flow parity requires the source-observation route');
+  const epoch=frames,b=arena,offset=includeFlow?0:index*allocation.bankBytes,size=includeFlow?allocation.bytes:allocation.bankBytes;
+  const read=device.createBuffer({size,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+  const expected=includeFlow&&allocation.flowBytes?device.createBuffer({size:allocation.flowBytes,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ}):null;
+  try{
+   const e=device.createCommandEncoder();e.copyBufferToBuffer(b,offset,read,0,size);
+   if(expected){if(sourceFields.worldCells)e.copyBufferToBuffer(sourceFields.world.velocity,0,expected,0,sourceFields.worldCells*16);if(sourceFields.middleCells)e.copyBufferToBuffer(sourceFields.middle.velocity,0,expected,sourceFields.worldCells*16,sourceFields.middleCells*16);}
+   device.queue.submit([e.finish()]);await Promise.all([read.mapAsync(GPUMapMode.READ),...(expected?[expected.mapAsync(GPUMapMode.READ)]:[])]);
+   if(frames!==epoch||arena!==b)throw Error('Split readback became stale');
+   const data=read.getMappedRange().slice(0),records=new Float32Array(data.slice(0,allocation.bankBytes));
+   return {available:true,state,records,...(includeFlow?{flow:{actual:new Float32Array(data.slice(allocation.historyBytes)),expected:expected?new Float32Array(expected.getMappedRange().slice(0)):new Float32Array(),worldCells:sourceFields.worldCells,middleCells:sourceFields.middleCells,authority:'same held observation: post-raster arena compared with source velocity buffers; complete raw flow arrays'}}:{})};
+  }finally{read.unmap();read.destroy();expected?.unmap();expected?.destroy();}
+ }
  return {layout,emptyLayout,emptyGroup,get buffer(){return arena;},prepare,disable,sample,reset(){key=null;},read:()=>state,dispose(){disable();uniform.destroy();acquisitionUniform.destroy();}};
 }
 
@@ -222,6 +235,7 @@ export const SPLIT_OPTICAL_OFF_WGSL=/* wgsl */`
 override SPLIT_INTEGRAL:bool=false;
 struct SplitOptions {size:vec4<u32>,policy:vec4<f32>}
 var<private> splitOptions:SplitOptions;
+fn splitAcquisitionIndex(pixel:vec2<f32>,outputWidth:u32)->u32{return u32(pixel.x)+u32(pixel.y)*outputWidth;}
 fn splitAcquisitionEnabled()->bool{return false;}
 fn splitAcquisitionUv(uv:vec2<f32>,pixel:vec2<f32>)->vec2<f32>{return uv;}
 fn splitAcquisitionHit(pixel:vec2<f32>,ro:vec3<f32>,rd:vec3<f32>,fine:vec2<f32>,coarse:vec2<f32>)->vec2<f32>{return coarse;}

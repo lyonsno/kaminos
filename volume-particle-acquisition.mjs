@@ -39,6 +39,7 @@ export function particleAcquisitionData({settings,batch,phase,vp,fine,coarse,sou
 }
 export const PARTICLE_ACQUISITION_MATH_WGSL=/* wgsl */`
 struct ParticleAcquisition {fineRect:vec4<f32>,coarseRect:vec4<f32>,sourceRect:vec4<f32>,sourceLo:vec4<f32>,sourceHi:vec4<f32>,policy:vec4<f32>,counts:vec4<u32>}
+fn acquisitionIndex(pixel:vec2<f32>,outputWidth:u32,a:ParticleAcquisition)->u32{return u32(pixel.x)+u32(pixel.y)*select(outputWidth,a.counts.x,a.policy.x>.5);}
 fn acquisitionHash(x:u32)->u32{var h=x;h=(h^(h>>16u))*0x7feb352du;h=(h^(h>>15u))*0x846ca68bu;return h^(h>>16u);}
 fn acquisitionRandom(pixel:vec2<f32>,a:ParticleAcquisition,salt:u32)->f32{return f32(acquisitionHash(u32(pixel.x)+u32(pixel.y)*a.counts.x+a.counts.z*747796405u+salt))/4294967296.0;}
 fn acquisitionComponent(pixel:vec2<f32>,a:ParticleAcquisition)->u32{
@@ -57,11 +58,12 @@ fn acquisitionBox(ro:vec3<f32>,rd:vec3<f32>,lo:vec3<f32>,hi:vec3<f32>)->vec2<f32
 }
 fn acquisitionInterval(pixel:vec2<f32>,ro:vec3<f32>,rd:vec3<f32>,fine:vec2<f32>,coarse:vec2<f32>,a:ParticleAcquisition)->vec2<f32>{
  let component=acquisitionComponent(pixel,a);var rect=a.fineRect;if(component==1u){rect=a.coarseRect;}if(component==2u){rect=a.sourceRect;}if(any(rect.zw<=rect.xy)){return vec2<f32>(1,-1);}if(component==0u){return fine;}if(component==1u){return coarse;}
- if(component!=2u||a.sourceLo.w<.5){return vec2<f32>(1,-1);}return acquisitionBox(ro,rd,a.sourceLo.xyz,a.sourceHi.xyz);
+ if(component!=2u||a.sourceLo.w<.5){return vec2<f32>(1,-1);}let source=acquisitionBox(ro,rd,a.sourceLo.xyz,a.sourceHi.xyz);return vec2<f32>(max(source.x,coarse.x),min(source.y,coarse.y));
 }
 `;
 export const PARTICLE_ACQUISITION_WGSL=/* wgsl */`${PARTICLE_ACQUISITION_MATH_WGSL}
 @group(3) @binding(1) var<uniform> particleAcquisition:ParticleAcquisition;
+fn splitAcquisitionIndex(pixel:vec2<f32>,outputWidth:u32)->u32{return acquisitionIndex(pixel,outputWidth,particleAcquisition);}
 fn splitAcquisitionEnabled()->bool{return particleAcquisition.policy.x>.5;}
 fn splitAcquisitionUv(uv:vec2<f32>,pixel:vec2<f32>)->vec2<f32>{if(!splitAcquisitionEnabled()){return uv;}return acquisitionFilm(pixel,particleAcquisition);}
 fn splitAcquisitionHit(pixel:vec2<f32>,ro:vec3<f32>,rd:vec3<f32>,fine:vec2<f32>,coarse:vec2<f32>)->vec2<f32>{
@@ -70,3 +72,16 @@ fn splitAcquisitionHit(pixel:vec2<f32>,ro:vec3<f32>,rd:vec3<f32>,fine:vec2<f32>,
  return acquisitionInterval(pixel,ro,rd,fine,coarse,particleAcquisition);
 }
 `;
+
+export function particleResourceBudget(s,{limit,renderScale,displayWidth,displayHeight,flowCells=0}){
+    const outputWidth=Math.max(1,Math.floor(displayWidth*renderScale)),outputHeight=Math.max(1,Math.floor(displayHeight*renderScale));
+    const batch=s.acquisitionMode?particleBatch(s.acquisitionSamples,outputWidth/outputHeight,limit.maxTextureDimension2D):{width:outputWidth,height:outputHeight,samples:outputWidth*outputHeight,pixels:outputWidth*outputHeight};
+    const slots=s.capacity||(s.populationWidth||Math.ceil(batch.width/s.spacing))*(s.populationHeight||Math.ceil(batch.height/s.spacing));
+    const maxTargetScale=Math.min(limit.maxTextureDimension2D/outputWidth,limit.maxTextureDimension2D/outputHeight);
+    if(s.targetScale>maxTargetScale)throw Error(`Particle target scale ${s.targetScale.toFixed(3)} exceeds device maximum ${maxTargetScale.toFixed(3)} at ${outputWidth} × ${outputHeight}; previous target preserved`);
+    if(Math.max(outputWidth,outputHeight)>limit.maxTextureDimension2D)throw Error('Source output exceeds device texture dimensions; previous source preserved');
+    if(!Number.isSafeInteger(slots)||slots>0xffffffff||slots*96>Math.min(limit.maxBufferSize,limit.maxStorageBufferBindingSize)||Math.ceil(slots/64)>limit.maxComputeWorkgroupsPerDimension)throw Error('Particle capacity exceeds effective device storage or dispatch limit; previous population preserved');
+    const sourceBytes=batch.pixels*64+flowCells*16;
+    if(sourceBytes>Math.min(limit.maxBufferSize,limit.maxStorageBufferBindingSize)||Math.ceil(batch.samples/64)>limit.maxComputeWorkgroupsPerDimension)throw Error('Fresh source batch including coarse flow exceeds effective device storage binding or dispatch limit; previous source preserved');
+    return {batch,slots,sourceBytes,outputWidth,outputHeight,maxTargetScale,maxCapacity:Math.min(0xffffffff,Math.floor(Math.min(limit.maxBufferSize,limit.maxStorageBufferBindingSize)/96),limit.maxComputeWorkgroupsPerDimension*64)};
+}

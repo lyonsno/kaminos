@@ -40,18 +40,21 @@ test('production particle update transports actual fine flow, preserves paused s
 });
 
 import {createSplitIntegral,SPLIT_OPTICAL_WGSL} from '../volume-split-integral.mjs';
+import {particleAcquisitionData} from '../volume-particle-acquisition.mjs';
 test('native source-only producer retains intrinsic emission separately and clears uncovered pixels',async()=>{
  await withKaminosGpu(async({device:d})=>{
   const owner=createSplitIntegral(d),arenaLayout=d.createBindGroupLayout({entries:[{binding:39,visibility:GPUShaderStage.FRAGMENT,buffer:{type:'storage'}}]});
   const code=`fn worldInsideFine(p:vec3<f32>)->bool{return true;}fn worldToCell(p:vec3<f32>)->vec3<f32>{return p;}fn sampleFluidSlot(p:vec3<f32>,slot:u32)->vec4<f32>{return vec4<f32>(0);}${SPLIT_OPTICAL_WGSL}
   @vertex fn vs(@builtin(vertex_index) i:u32)->@builtin(position)vec4<f32>{let p=array<vec2<f32>,3>(vec2<f32>(-1,-1),vec2<f32>(3,-1),vec2<f32>(-1,3));return vec4<f32>(p[i],0,1);}
-  @fragment fn fs(@builtin(position) p:vec4<f32>)->@location(0)vec4<f32>{if(p.x>1){return vec4<f32>(0);}var r=splitInit(p.xy,vec3<f32>(0),vec3<f32>(0,0,1),0,2,.5);splitObserve(&r,0u,vec3<f32>(0,0,1),vec3<f32>(5,3,2),1,1,0,2,.25);splitIntrinsic(&r,0u,vec3<f32>(4,1,0));return splitFinish(r,u32(p.x),vec3<f32>(0),vec3<f32>(0,0,1));}`;
+  @fragment fn fs(@builtin(position) p:vec4<f32>)->@location(0)vec4<f32>{if(p.x>1){return vec4<f32>(0);}var r=splitInit(p.xy,vec3<f32>(0),vec3<f32>(0,0,1),0,2,.5);splitObserve(&r,0u,vec3<f32>(0,0,1),vec3<f32>(5,3,2),1,1,0,2,.25);splitIntrinsic(&r,0u,vec3<f32>(4,1,0));return splitFinish(r,splitAcquisitionIndex(p.xy,4u),vec3<f32>(0),vec3<f32>(0,0,1));}`;
   const module=d.createShaderModule({code});const pipeline=d.createRenderPipeline({layout:d.createPipelineLayout({bindGroupLayouts:[arenaLayout,owner.emptyLayout,owner.emptyLayout,owner.layout]}),vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',targets:[{format:'rgba32float'}]}});
-  const target=d.createTexture({size:[2,1],format:'rgba32float',usage:GPUTextureUsage.RENDER_ATTACHMENT});
-  try{const e=d.createCommandEncoder();const prepared=owner.prepare(e,{width:2,height:1,settings:{mode:'transport',fresh:1},sourcesOnly:true,identity:'genuine-producer-fixture',step:4,viewProj:[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],backtrace:1,fineScale:1,staggered:false});
-   const p=e.beginRenderPass({colorAttachments:[{view:target.createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}]});p.setPipeline(pipeline);p.setBindGroup(0,d.createBindGroup({layout:arenaLayout,entries:[{binding:39,resource:{buffer:owner.buffer}}]}));p.setBindGroup(1,owner.emptyGroup);p.setBindGroup(2,owner.emptyGroup);p.setBindGroup(3,prepared.group);p.draw(3);p.end();d.queue.submit([e.finish()]);const sample=await owner.sample();
-   assert.equal(sample.records.length,32);assert.deepEqual(Array.from(sample.records.slice(0,4)),[5,3,2,1]);assert.deepEqual(Array.from(sample.records.slice(12,15)),[4,1,0]);assert.equal(sample.records[11],.25);assert.ok(sample.records.slice(16).every(x=>x===0),'uncovered source rows are cleared');assert.equal(sample.state.effective,'source-observations');
-  }finally{owner.dispose();target.destroy();}
+  const target=d.createTexture({size:[2,2],format:'rgba32float',usage:GPUTextureUsage.RENDER_ATTACHMENT});
+  const flow=d.createBuffer({size:128,usage:GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST|GPUBufferUsage.STORAGE}),expected=new Float32Array(32).fill(.125);d.queue.writeBuffer(flow,0,expected);
+  const acquisition=particleAcquisitionData({settings:{acquisitionMode:1,filmJitter:0,sourceBias:0,fineCoverage:1,coarseCoverage:0},batch:{width:2,height:2,samples:4},phase:0,vp:[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],fine:{lo:[-1,-1,-1],hi:[1,1,1]}});
+  try{const e=d.createCommandEncoder();const prepared=owner.prepare(e,{width:2,height:2,acquisition,world:{velocity:flow,plan:{flowDims:[2,2,2],min:[-1,-1,-1],flowPitch:1},map:[0,0,0,1]},settings:{mode:'transport',fresh:1},sourcesOnly:true,identity:'genuine-producer-fixture',step:4,viewProj:[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],backtrace:1,fineScale:1,staggered:false});
+   const p=e.beginRenderPass({colorAttachments:[{view:target.createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}]});p.setPipeline(pipeline);p.setBindGroup(0,d.createBindGroup({layout:arenaLayout,entries:[{binding:39,resource:{buffer:owner.buffer}}]}));p.setBindGroup(1,owner.emptyGroup);p.setBindGroup(2,owner.emptyGroup);p.setBindGroup(3,prepared.group);p.draw(3);p.end();d.queue.submit([e.finish()]);const sample=await owner.sample({includeFlow:true});
+   assert.equal(sample.records.length,64);assert.deepEqual(Array.from(sample.records.slice(0,4)),[5,3,2,1]);assert.deepEqual(Array.from(sample.records.slice(12,15)),[4,1,0]);assert.equal(sample.records[11],.25);assert.ok(sample.records.slice(16,32).every(x=>x===0),'uncovered source rows are cleared');assert.equal(sample.records[32],5,'second row follows acquisition stride, not output stride');assert.deepEqual(sample.flow.actual,expected,'source raster must preserve adjacent flow snapshots');assert.deepEqual(sample.flow.expected,expected);assert.equal(sample.state.effective,'source-observations');
+  }finally{owner.dispose();target.destroy();flow.destroy();}
  });
 });
 

@@ -1,7 +1,7 @@
 // kaminos-test: node
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {particleBatch,particleSourceEnvelope,particleProjectedRect,particleAcquisitionData,PARTICLE_ACQUISITION_MATH_WGSL} from '../volume-particle-acquisition.mjs';
+import {particleBatch,particleResourceBudget,particleSourceEnvelope,particleProjectedRect,particleAcquisitionData,PARTICLE_ACQUISITION_MATH_WGSL} from '../volume-particle-acquisition.mjs';
 import {opticalParticleSettings} from '../volume-optical-particles.mjs';
 import {withKaminosGpu,evalWgslBatch} from '../tools/shader-herder.mjs';
 const identity=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
@@ -37,5 +37,29 @@ test('offscreen projected source produces an empty interval rather than fallback
  await withKaminosGpu(async ctx=>{
   const data=particleAcquisitionData({settings:opticalParticleSettings({acquisitionMode:1,sourceBias:1}),batch:{width:1,height:1,samples:1},phase:0,vp:identity,fine,source:{lo:[3,3,-1],hi:[4,4,1]}});
   const r=await evalWgslBatch(ctx,{preamble:PARTICLE_ACQUISITION_MATH_WGSL,argTypes:[],returnType:'vec2<f32>',body:shader(data)+'return acquisitionInterval(vec2<f32>(.5),vec3<f32>(0),vec3<f32>(0,0,1),vec2<f32>(0,1),vec2<f32>(0,2),a);',inputs:[[]]});assert.ok(r[0][1]<r[0][0]);
+ });
+});
+
+test('effective source arena limit includes coarse flow snapshots before accepting a setting',()=>{
+ const limit={maxTextureDimension2D:1024,maxBufferSize:2**20,maxStorageBufferBindingSize:2**20,maxComputeWorkgroupsPerDimension:65535};
+ const s=opticalParticleSettings({capacity:100,acquisitionMode:1,acquisitionSamples:4096});
+ const args={limit,renderScale:.5,displayWidth:100,displayHeight:100};
+ assert.equal(particleResourceBudget(s,args).batch.samples,4096);
+ assert.throws(()=>particleResourceBudget(s,{...args,flowCells:60000}),/source.*binding|source.*storage/i,'flow snapshots share the source binding and must be charged');
+ assert.throws(()=>particleResourceBudget({...s,targetScale:30},args),/maximum/);
+});
+
+test('production source addressing follows batch width for output widths both larger and smaller',async()=>{
+ await withKaminosGpu(async ctx=>{
+  const r=await evalWgslBatch(ctx,{preamble:PARTICLE_ACQUISITION_MATH_WGSL,argTypes:['u32'],returnType:'u32',body:shader(acquisition({sourceBias:1}))+'return acquisitionIndex(vec2<f32>(7.5,7.5),arg0,a);',inputs:[[16],[4]]});assert.deepEqual(r.map(Number),[63,63]);
+ });
+});
+test('source envelope is intersected with live material before sampling nonzero boundary cells',async()=>{
+ await withKaminosGpu(async ctx=>{
+  const make=box=>shader(particleAcquisitionData({settings:opticalParticleSettings({acquisitionMode:1,sourceBias:1}),batch:{width:1,height:1,samples:1},phase:0,vp:identity,fine,source:box}));
+  for(const [box,expected] of [[{lo:[-2.2,-2.2,-2.2],hi:[2.2,2.2,2.2]},[2,4]],[{lo:[-.2,-.2,1.5],hi:[.2,.2,2]},null]]){
+   const r=await evalWgslBatch(ctx,{preamble:PARTICLE_ACQUISITION_MATH_WGSL,argTypes:[],returnType:'vec2<f32>',body:make(box)+'return acquisitionInterval(vec2<f32>(.5),vec3<f32>(0,0,-3),vec3<f32>(0,0,1),vec2<f32>(2,4),vec2<f32>(2,4),a);',inputs:[[]]});
+   if(expected)assert.deepEqual(Array.from(r[0]),expected,'a nonzero clamped boundary may not extend fresh material outside Fine');else assert.ok(r[0][1]<r[0][0],'wholly exterior source must yield no observation');
+  }
  });
 });
