@@ -18,6 +18,8 @@ assert.equal(typeof instance.operations.setProjectionLocked,'function','inspecti
 instance.operations.setViewMode('inspection');assert.equal(instance.read().inspection.locked,true);
 assert.throws(()=>instance.operations.rotateHands({dx:20,dy:10}),/locked/);
 instance.operations.setProjectionLocked(false);instance.operations.rotateHands({dx:20,dy:10});
+const stations=attached.filter(r=>r.children?.some(c=>c.isMesh&&c.material?.map)&&r.children?.some(c=>c.isGroup));assert.equal(stations.length,models.length,'exercise every photographic station');
+for(const root of stations){const photo=root.children.find(c=>c.isMesh&&c.material?.map),mesh=root.children.find(c=>c.isGroup).children[0];assert.equal(photo.material.depthWrite,false,'reference photographs must not write depth that cuts through a rotated hand');assert(photo.renderOrder<mesh.renderOrder,'photographic references must be drawn before inspected mesh surfaces');}
 const rotated=instance.read().inspection.rotations;assert(rotated.every(q=>Math.abs(q[0])+Math.abs(q[1])>0));
 instance.operations.snapHand(0);let s=instance.read().inspection;assert.deepEqual(s.rotations[0],[0,0,0,1]);assert.deepEqual(s.rotations[1],rotated[1]);assert.equal(s.locked,false);
 instance.operations.snapHands();assert(instance.read().inspection.rotations.every(q=>q.every((x,i)=>x===[0,0,0,1][i])));
