@@ -28,13 +28,13 @@ export async function loadWoodMaps(manifestUrl,sample='cmaple'){
    t.colorSpace=NoColorSpace;t.minFilter=LinearFilter;t.magFilter=LinearFilter;
    t.generateMipmaps=false;t.needsUpdate=true;maps[name]=t;
   }
-  return {maps,source:{manifestUrl,sourceUrl:manifest.sourceUrl,sample,descriptors,model:'Marschner2005 fiber + host GGX surface'},dispose(){Object.values(maps).forEach(t=>t.dispose());}};
+  return {maps,source:{manifestUrl,sourceUrl:manifest.sourceUrl,sample,availableSamples:Object.keys(manifest.samples),descriptors,model:'Marschner2005 fiber + host GGX surface'},dispose(){Object.values(maps).forEach(t=>t.dispose());}};
  }catch(e){Object.values(maps).forEach(t=>t.dispose());throw e;}
 }
 
-export function createWoodMaterial(maps,{fiberStrength=1,roughness=.28,ior=1.5}={}){
- if(!Number.isFinite(fiberStrength)||fiberStrength<0||!Number.isFinite(roughness)||roughness<=0||roughness>1||!Number.isFinite(ior)||ior<1)throw Error('Invalid wood material parameters');
- const strength=uniform(fiberStrength),index=uniform(ior);
+export function createWoodMaterial(maps,{fiberStrength=1,roughness=.28,fiberSpread=1,ior=1.5}={}){
+ if(!Number.isFinite(fiberStrength)||fiberStrength<0||!Number.isFinite(roughness)||roughness<=0||roughness>1||!Number.isFinite(fiberSpread)||fiberSpread<=0||!Number.isFinite(ior)||ior<1)throw Error('Invalid wood material parameters');
+ const strength=uniform(fiberStrength),index=uniform(ior),spread=uniform(fiberSpread);
  // Select the central measured patch, avoiding the acquisition border and
  // registration marks. Every channel uses the identical window; files remain intact.
  const coordinates=uv().mul(vec2(.36,.36)).add(vec2(.32,.32));
@@ -43,7 +43,7 @@ export function createWoodMaterial(maps,{fiberStrength=1,roughness=.28,ior=1.5}=
  const axis=tangentView.mul(axisSample.x).sub(bitangentView.mul(axisSample.y))
   .add(normalView.mul(axisSample.z)).normalize();
  const fiber=texture(maps.fiber,coordinates).rgb.mul(20);
- const beta=texture(maps.beta,coordinates).r;
+ const beta=texture(maps.beta,coordinates).r.mul(spread);
  class WoodLighting extends PhysicalLightingModel{
   direct(data,builder){
    super.direct(data,builder);
@@ -57,5 +57,8 @@ export function createWoodMaterial(maps,{fiberStrength=1,roughness=.28,ior=1.5}=
  material.setupLightingModel=()=>new WoodLighting();
  return {material,setFiberStrength(value){if(!Number.isFinite(value)||value<0)throw Error('Fiber strength must be nonnegative');strength.value=value;},
   setRoughness(value){if(!Number.isFinite(value)||value<=0||value>1)throw Error('Roughness must be in (0,1]');material.roughness=value;},
+  setFiberSpread(value){if(!Number.isFinite(value)||value<=0)throw Error('Fiber lobe width must be positive');spread.value=value;},
+  setIOR(value){if(!Number.isFinite(value)||value<1)throw Error('Fiber medium IOR must be at least1');index.value=value;},
+  readParameters(){return {fiberStrength:strength.value,roughness:material.roughness,fiberSpread:spread.value,ior:index.value};},
   dispose(){material.dispose();}};
 }
