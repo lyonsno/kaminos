@@ -65,8 +65,9 @@ try{
  report.owner=await owner.evaluate(async()=>({state:await window.kaminosWorkbenchExperiments.read(),objects:window.kaminosSceneObjectDebugState()}));
  assert.equal(report.owner.state.objectId,report.setup.objectId);assert.equal(report.owner.objects.filter(o=>o.source==='kaminos:neumip-carrier').length,1);
  report.ownerCoherence=await owner.evaluate(async({id,recipeId})=>{
+  const {readOwnerExperimentAddress}=await import('./owner-experiment-entry.mjs');
   const e=window.kaminosWorkbenchExperiments;window.kaminosMaterials.edit(recipeId,{name:'My boutique knit'});window.kaminosMaterials.edit(recipeId,{parameters:{uvScale:1.85}});
-  const readControls=()=>{const panel=document.querySelector('.owner-experiment-content'),row=[...panel.querySelectorAll('label')].find(l=>l.textContent.startsWith('UV scale'));const params=new URLSearchParams(location.hash.slice(1));return {scale:row.querySelector('input').value,checkpoint:panel.querySelector('select').value,url:JSON.parse(params.get('experiment_inputs'))};};
+  const readControls=()=>{const panel=document.querySelector('.owner-experiment-content'),row=[...panel.querySelectorAll('label')].find(l=>l.textContent.startsWith('UV scale'));return {scale:row.querySelector('input').value,checkpoint:panel.querySelector('select').value,url:JSON.parse(readOwnerExperimentAddress(location).inputsText)};};
   const edited=readControls();await window.kaminosSceneEdits.undo();const undone=readControls();
   await window.removeSceneObject(id);await window.kaminosSceneEdits.undo();await e.invoke('setSurface','folded');await e.invoke('setSurface','sphere');await e.invoke('frame');
   return {edited,undone,restored:await e.read()};
