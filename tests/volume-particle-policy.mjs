@@ -65,3 +65,9 @@ test('population dispatch capacity is checked before allocation or retained-stat
   owner.encode(e,{...args,settings:{...args.settings,populationWidth:64,populationHeight:65535}});assert.ok(calls.some(x=>x[0]==='dispatch'&&x[1]===65535));
  }finally{flags.forEach((k,i)=>{if(prior[i]===undefined)delete globalThis[k];else globalThis[k]=prior[i];});}
 });
+test('invalid particle target edits preserve accepted experiment settings and inputs',async()=>{
+ let settings=opticalParticleSettings(),writes=[];
+ const runtime={opticalParticleSettings:()=>settings,setOpticalParticles:s=>{if(s.targetScale>1)throw Error('Particle target exceeds device texture dimensions');settings=s;},splitIntegralSettings:()=>({mode:'off'}),setSplitIntegral(){},opticalParticleState:()=>({simulationReaction:null}),};
+ const ex=await definition.create({host:{controls:{document:{defaultView:{__kaminosVolumePrototype:runtime},getElementById:()=>null}},scene:{open:async()=>({onFrame:()=>()=>{},redraw(){},async dispose(){}})}},inputs:{particles:{targetScale:1}},record(){},updateInputs:v=>writes.push(v)});
+ assert.throws(()=>ex.operations.setOptions({targetScale:2}),/texture dimensions/);assert.equal(ex.read().settings.targetScale,1);assert.equal(settings.targetScale,1);assert.equal(writes.length,0);await ex.dispose();
+});

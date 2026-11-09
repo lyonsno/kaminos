@@ -1,4 +1,5 @@
 import {HISTORY_ALLOCATION_WGSL} from './volume-history-allocation.mjs';
+import {PARTICLE_ACQUISITION_WGSL} from './volume-particle-acquisition.mjs';
 // Two local optical observations, never two copies of a whole-chord integral.
 export function splitIntegralSettings(c={}) {
   const v={mode:'off',fresh:1,memory:6,opacityMemory:6,response:.5,exploration:.25,motion:1,footprint:2,depthSupport:2,fineAcquisition:0,...c};
@@ -40,6 +41,7 @@ fn splitProminence(s:SplitObservation)->f32{return max(length(s.optical.xyz),s.o
 `;
 
 export const SPLIT_OPTICAL_WGSL=/* wgsl */`
+${PARTICLE_ACQUISITION_WGSL}
 override SPLIT_INTEGRAL:bool=false;
 struct SplitOptions {
  viewProj:mat4x4<f32>, size:vec4<u32>, policy:vec4<f32>, life:vec4<f32>,
@@ -170,14 +172,15 @@ export function createSplitIntegral(device) {
  const usage=GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC;
  // The ordinary Fixed-mode allocator never consumes importance history. Its
  // existing binding39 carries the arena, keeping the composed stage at10slots.
- const layout=device.createBindGroupLayout({label:'split optical policy',entries:[{binding:0,visibility:GPUShaderStage.FRAGMENT,buffer:{type:'uniform'}}]});
+ const layout=device.createBindGroupLayout({label:'split optical policy',entries:[{binding:0,visibility:GPUShaderStage.FRAGMENT,buffer:{type:'uniform'}},{binding:1,visibility:GPUShaderStage.FRAGMENT,buffer:{type:'uniform'}}]});
  const emptyLayout=device.createBindGroupLayout({entries:[]});
  const emptyGroup=device.createBindGroup({layout:emptyLayout,entries:[]});
  const uniform=device.createBuffer({label:'split optical transport policy',size:240,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+ const acquisitionUniform=device.createBuffer({label:'particle film and source-region policy',size:112,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
  let arena=null,allocation=null,key=null,index=0,frames=0,lastStep=0,config=splitIntegralSettings(),state={requested:'off',effective:'off',bytes:0};
  function retire(owned){if(!owned)return;queueMicrotask(()=>{device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>owned.destroy());});}
  function disable(reason='off'){retire(arena);arena=null;allocation=null;key=null;frames=0;state={requested:config.mode,effective:'off',reason,bytes:0};return state;}
- function prepare(encoder,{width,height,settings,identity,step,viewProj,world,middle,backtrace,fineScale,staggered,sourcesOnly=false}) {
+ function prepare(encoder,{width,height,settings,identity,step,viewProj,world,middle,backtrace,fineScale,staggered,sourcesOnly=false,acquisition=null}) {
   config=splitIntegralSettings(settings);const fresh=config.mode==='split'?2:config.fresh;
   const cells=field=>field?field.plan.flowDims.reduce((a,b)=>a*b,1):0;
   const next=splitArenaLayout(width,height,cells(world),cells(middle),{sourcesOnly});
@@ -199,7 +202,8 @@ export function createSplitIntegral(device) {
   const put=(field,offset)=>{if(!field){f.set([0,0,0,1,1,1,1,0,0,0,0,1],offset);return;}
    f.set([...field.plan.min,field.plan.flowPitch,...field.plan.flowDims,1,...field.map],offset);};
   put(world,32);put(middle,44);u.set([sourcesOnly?0:(1-index)*next.bankBytes/16,index*next.bankBytes/16,next.worldOffset,next.middleOffset],56);device.queue.writeBuffer(uniform,0,data);
-  const group=device.createBindGroup({layout,entries:[{binding:0,resource:{buffer:uniform}}]});
+  device.queue.writeBuffer(acquisitionUniform,0,acquisition??new ArrayBuffer(112));
+  const group=device.createBindGroup({layout,entries:[{binding:0,resource:{buffer:uniform}},{binding:1,resource:{buffer:acquisitionUniform}}]});
   frames++;key=nextKey;lastStep=step;
   state={requested:config.mode,effective:sourcesOnly?'source-observations':config.mode==='transport'&&fresh===2?'full-refresh':config.mode,retainedSlots:2,freshEvaluations:fresh,frames,step,stepDelta,reset,
    width,height,pixels:width*height,bytes:next.bytes,historyBytes:next.historyBytes,flowBytes:next.flowBytes,recordBytes:sourcesOnly?64:48,storageBindings:1,storageSlot:39,recordAllocation:sourcesOnly?'fresh-source-target-no-history':'dense-fire-render-target',settings:config,
@@ -208,7 +212,7 @@ export function createSplitIntegral(device) {
  }
  async function sample(){if(!frames)return {available:false,state};const epoch=frames,b=arena,offset=index*allocation.bankBytes,size=allocation.bankBytes,read=device.createBuffer({size,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
   try{const e=device.createCommandEncoder();e.copyBufferToBuffer(b,offset,read,0,size);device.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);if(frames!==epoch||arena!==b)throw Error('Split readback became stale');return {available:true,state,records:new Float32Array(read.getMappedRange().slice(0))};}finally{read.unmap();read.destroy();}}
- return {layout,emptyLayout,emptyGroup,get buffer(){return arena;},prepare,disable,sample,reset(){key=null;},read:()=>state,dispose(){disable();uniform.destroy();}};
+ return {layout,emptyLayout,emptyGroup,get buffer(){return arena;},prepare,disable,sample,reset(){key=null;},read:()=>state,dispose(){disable();uniform.destroy();acquisitionUniform.destroy();}};
 }
 
 // WebGPU discovers resource use before constant branch elimination. Ordinary
@@ -218,6 +222,9 @@ export const SPLIT_OPTICAL_OFF_WGSL=/* wgsl */`
 override SPLIT_INTEGRAL:bool=false;
 struct SplitOptions {size:vec4<u32>,policy:vec4<f32>}
 var<private> splitOptions:SplitOptions;
+fn splitAcquisitionEnabled()->bool{return false;}
+fn splitAcquisitionUv(uv:vec2<f32>,pixel:vec2<f32>)->vec2<f32>{return uv;}
+fn splitAcquisitionHit(pixel:vec2<f32>,ro:vec3<f32>,rd:vec3<f32>,fine:vec2<f32>,coarse:vec2<f32>)->vec2<f32>{return coarse;}
 struct SplitRay {unused:f32}
 fn splitInit(pixel:vec2<f32>,ro:vec3<f32>,rd:vec3<f32>,start:f32,end:f32,phase:f32)->SplitRay{return SplitRay(0);}
 fn splitSampleDepth(r:SplitRay,ro:vec3<f32>,rd:vec3<f32>,ordinary:f32,fineHit:vec2<f32>,selector:f32,phase:f32)->f32{return ordinary;}

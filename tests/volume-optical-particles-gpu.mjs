@@ -127,6 +127,13 @@ test('population dimensions and optical target scale are independent from source
   const records=a.records;await draw(0,{populationWidth:2,populationHeight:3,targetScale:1});assert.deepEqual((await owner.sample()).records,records,'paused target-size edit preserves population');
  }));
 });
+test('explicit retained capacity uses a rotating pool instead of duplicating source pixels',async()=>{
+ await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw})=>{
+  const rows=new Float32Array(16*16);for(let i=0;i<16;i++)rows.set([4,2,1,0,0,0,0,1,-.5,.5,1,1,4,2,1,0],16*i);seed(rows);
+  await draw(0,{capacity:37,acquisitionMode:1,refresh:1});const first=await owner.sample();assert.equal(first.state.slots,37,'capacity is independent of source dimensions');assert.equal(first.records.filter((x,i)=>i%24===3&&x>0).length,16,'one birth per fresh observation, not one duplicate per retained slot');
+  await draw(1,{capacity:37,acquisitionMode:1,refresh:1});assert.equal((await owner.sample()).records.filter((x,i)=>i%24===3&&x>0).length,32,'new observations fill distinct retained slots');
+ }));
+});
 test('smoke yield changes production, and generated-smoke gain changes existing soot while paused',async()=>{
  await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw})=>{
   const rows=new Float32Array(16*16);rows.set([4,2,1,0,0,0,0,1,-.5,.5,1,1,4,2,1,0]);seed(rows);await draw(0);await draw(8,{sootYield:0});assert.equal((await owner.sample()).records[22],0);
