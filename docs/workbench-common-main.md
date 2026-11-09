@@ -187,6 +187,24 @@ Experiment controls occupy the shared left surface. Existing Selection/Scene, li
 
 ## Environment parameter ownership
 
+For an inspection or experiment that needs no environment illumination, append
+`environment_resources=off` to its ordinary URL. This invocation override skips
+preview/full HDR downloads and local placeholder/fallback PMREM generation,
+sets the effective environment map to null and its intensity to zero, and uses
+the solid backdrop. Saved environment recipes remain authored state; removing
+the query (or using `environment_resources=on`) restores their normal loading.
+Other lights and the flame's separate `physicalAmbient` setting are unaffected.
+Flame-only smoke captures must explicitly set that ambient term to zero too.
+`window.kaminosEnvironmentLoading.state()` reports requested preset, resource
+mode, map quality, map presence and effective environment intensity. Consumers
+needing full authored lighting can await its `whenSettled()` and check `quality`.
+
+Saved-scene capture consumers can await `window.kaminosSceneLoadReady()` after
+the API appears. It shares the app's startup promise and rejects a failed restore;
+it returns document and environment state after scene startup completes. Check
+the returned document filename and idle/unblocked state before reading saved
+transforms or material controls. Object IDs alone may be present earlier.
+
 The accepted HDR environment recipe lives in `scene-environment-state.mjs`.
 Per-map exposure, intensity, rotation and background grading are retained there;
 map-background visibility is shared across map choices. Controls project and edit

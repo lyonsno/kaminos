@@ -2988,7 +2988,7 @@ import {createRecordingSink} from './recording-mp4.mjs';
 import {installRenderOutput} from './render-output-ui.mjs';
 import { settleStartupVeil } from './startup-veil.mjs';
 import {createSceneLoadingGeometry} from './scene-loading-geometry.mjs';
-import { createEnvironmentLoader } from './scene-environment-loader.mjs';
+import { createEnvironmentLoader, environmentResourceModeFromSearch } from './scene-environment-loader.mjs';
 import {createDeviceRecovery} from './scene-device-recovery.mjs';
 window.kaminosStartup?.phase('Preparing application');
 // Adopt the <head> guard's early runtime-config request (startup-veil-guard.js).
@@ -10892,7 +10892,9 @@ sceneAO.subscribe(applySceneAOParameters);
 const sceneEnvironment=createSceneEnvironmentState({presets:HDR_ENVS});
 sceneEnvironment.subscribe(applyEnvironmentParameters);
 let neutralEnvironmentMap;
+const environmentResourceMode = environmentResourceModeFromSearch(window.location.search);
 const environmentLoader = createEnvironmentLoader({
+  resourceMode: environmentResourceMode,
   presets: HDR_ENVS,
   async load(url) {
     const generator=pmremGenerator;
@@ -10908,7 +10910,7 @@ const environmentLoader = createEnvironmentLoader({
     const el = document.getElementById('env-loading');
     const toolbar = document.getElementById('authoring-viewport-tools');
     if (toolbar && el.parentElement !== toolbar) toolbar.append(el);
-    el.style.display = state.quality === 'full' ? 'none' : 'block';
+    el.style.display = state.quality === 'full' || state.quality === 'off' ? 'none' : 'block';
     el.textContent = state.pending
       ? `${label} · ${state.quality === 'preview' ? 'preview lighting · full detail loading…' : 'lighting loading…'}`
       : `${label} · ${state.quality === 'preview' ? 'preview lighting' : 'neutral fallback'} · full map unavailable; select environment to retry`;
@@ -10921,7 +10923,10 @@ const environmentLoader = createEnvironmentLoader({
     }
   },
 });
-window.kaminosEnvironmentLoading = {state: environmentLoader.read, whenSettled: environmentLoader.whenSettled};
+window.kaminosEnvironmentLoading = {
+  state:()=>({...environmentLoader.read(),hasEnvironmentMap:Boolean(scene?.environment),effectiveIntensity:scene?.environmentIntensity??null}),
+  async whenSettled(){await environmentLoader.whenSettled();return this.state();},
+};
 
 let loadingTelemetryHideTimer = null;
 let loadingTelemetryTickInterval = null;
@@ -11827,6 +11832,7 @@ async function initScene() {
     });
   };
   window.kaminosSceneLoadPresentation=()=>({document:sceneDocument.state(),preview:sceneGeometryPreview.read()});
+  window.kaminosSceneLoadReady=async()=>{await workbenchViewerReady;return {document:sceneDocument.state(),environment:environmentLoader.read()};};
   let activeSceneDepth = prePassDepth;
   selectionFeedback=createSelectionFeedback(camera);
   window.kaminosSelectionFeedbackState=()=>selectionFeedback.state();
@@ -12926,7 +12932,7 @@ function applyEnvironmentParameters(value=sceneEnvironment.read()) {
     : 0;
   const matchedEvScale = Number.isFinite(matchedFlameEv) && matchedFlameEv !== 0 ? 2 ** matchedFlameEv : 1;
   renderer.toneMappingExposure=value.exposure * activeDelta.exposureScale * matchedEvScale;
-  scene.environmentIntensity=value.intensity * activeDelta.envIntensityScale;
+  scene.environmentIntensity=environmentResourceMode === 'none' ? 0 : value.intensity * activeDelta.envIntensityScale;
   scene.environmentRotation=new THREE.Euler(0,value.rotation + activeDelta.envRotationOffset,0);
   const tunedMaterials = typeof prepareArrivedMeshMaterials === 'function' && typeof arrivalLightingState !== 'undefined' && Boolean(arrivalLightingState?.materialTuningEnabled);
   for(const {object,type} of workingScene.objects){
@@ -12992,7 +12998,7 @@ async function loadEnvironment(name, { remember = true } = {}) {
 }
 
 function applyEnvMap(envMap, intensity) {
-  const effectiveIntensity = intensity * (typeof arrivalLightingState !== 'undefined' && arrivalLightingState?.materialTuningEnabled ? (arrivalLightingState.plan?.environmentDelta?.envIntensityScale ?? 1) : 1);
+  const effectiveIntensity = environmentResourceMode === 'none' ? 0 : intensity * (typeof arrivalLightingState !== 'undefined' && arrivalLightingState?.materialTuningEnabled ? (arrivalLightingState.plan?.environmentDelta?.envIntensityScale ?? 1) : 1);
   scene.environment = envMap;
   scene.environmentIntensity = effectiveIntensity;
   currentEnvMap = envMap;

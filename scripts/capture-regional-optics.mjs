@@ -9,7 +9,7 @@ import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {compositionRestoreUrl} from '../scene-authoring.mjs';
 import {getSceneObjectRecords} from '../scene-persistence-core.js';
-import {regionalQueryPlan,regionalDataset,regionalSceneLoaded} from '../volume-regional-state.mjs';
+import {regionalQueryPlan,regionalDataset,regionalSceneLoaded,regionalSceneRestored} from '../volume-regional-state.mjs';
 import {validateTraceRows,REGIONAL_CAPTURE_IDENTITY} from '../volume-optical-trace.mjs';
 
 const rawInvocation=process.argv.slice(2);
@@ -37,9 +37,12 @@ const {values:args}=parseArgs({args:rawInvocation,options:{
   tiles:{type:'string',default:'2,3,2'},'context-side':{type:'string',default:'6'},
   queries:{type:'string',default:'32'},subdivisions:{type:'string',default:'64'},seed:{type:'string',default:'1108'},
   chromium:{type:'string'},playwright:{type:'string'},'expected-source':{type:'string'},
+  environment:{type:'string',default:'scene'},
 }});
   report.requested=args;report.phase='inputs';await save();
   for(const key of ['root','scene','settings','chromium','playwright'])if(!args[key])throw Error(`--${key} is required`);
+  assert.ok(['scene','none'].includes(args.environment),'--environment must be scene or none');
+  report.lighting={requested:args.environment,hdrRequests:[],effective:null};
   root=await fs.realpath(args.root);report.root=root;
   const git=(...a)=>execFileSync('git',a,{cwd:root,encoding:'utf8'}).trim();
   report.source={root,commit:git('rev-parse','HEAD'),branch:git('branch','--show-current'),dirty:!!git('status','--porcelain')};
@@ -83,14 +86,21 @@ const {values:args}=parseArgs({args:rawInvocation,options:{
     viewport:{width:1120,height:840},args:['--enable-unsafe-webgpu','--use-angle=metal','--use-mock-keychain',
       '--password-store=basic','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
   page=await context.newPage();page.setDefaultTimeout(0);page.setDefaultNavigationTimeout(0);
+  page.on('request',request=>{if(/\.hdr(?:[?#]|$)/i.test(request.url()))report.lighting.hdrRequests.push(request.url());});
   page.on('pageerror',e=>report.errors.push(String(e)));
   page.on('console',m=>{if(m.type()==='error')report.errors.push(m.text());});
-  report.url=compositionRestoreUrl(scene.composition,'regional-source.kaminos.json',base);
+  const captureUrl=new URL(compositionRestoreUrl(scene.composition,'regional-source.kaminos.json',base));
+  captureUrl.searchParams.set('environment_resources',args.environment==='none'?'off':'on');
+  report.url=captureUrl.href;
   report.phase='navigation';await save();await page.goto(report.url);
+  report.phase='scene-restore';await save();
+  await page.waitForFunction(()=>typeof window.kaminosSceneLoadReady==='function');
+  report.sceneRestore=await page.evaluate(regionalSceneRestored,'regional-source.kaminos.json');
   report.phase='volume-start';await save();
   await page.waitForFunction(()=>window.__kaminosVolumePrototype?.debugState().active||window.__kaminosVolumePrototype?.debugState().error);
   report.boot=await page.evaluate(()=>{const s=window.__kaminosVolumePrototype.debugState();return {active:s.active,error:s.error};});
   assert.ok(report.boot.active&&!report.boot.error,`native volume startup failed: ${report.boot.error}`);
+  if(args.environment==='none')await page.evaluate(()=>window.__kaminosVolumePrototype.setControls({physicalAmbient:0}));
   const targetStep=Number(args.step);
   await page.evaluate(step=>{window.regionalHold=window.__kaminosVolumePrototype.pauseSelectiveHeadLiveAtSimStep(step);},targetStep);
   report.phase='scene-objects';await save();
@@ -106,6 +116,15 @@ const {values:args}=parseArgs({args:rawInvocation,options:{
   report.hold=await page.evaluate(()=>window.regionalHold);
   assert.ok(report.hold.ok&&report.hold.gpuComplete&&report.hold.paused,'source hold failed');
   assert.equal(report.hold.effectiveSimStepCount,targetStep);
+  report.phase='environment-settlement';await save();
+  report.lighting.effective=await page.evaluate(()=>window.kaminosEnvironmentLoading.whenSettled());
+  if(args.environment==='none'){
+    assert.equal(report.lighting.effective.resourceMode,'none');
+    assert.equal(report.lighting.effective.quality,'off');
+    assert.equal(report.lighting.effective.hasEnvironmentMap,false);
+    assert.equal(report.lighting.effective.effectiveIntensity,0);
+    assert.deepEqual(report.lighting.hdrRequests,[],'disabled environment still requested HDR resources');
+  } else assert.equal(report.lighting.effective.quality,'full','authored environment did not reach full lighting');
   const now=4000;
   report.phase='native-baseline';await save();
   report.baseline=await page.evaluate(async now=>{
@@ -122,6 +141,7 @@ const {values:args}=parseArgs({args:rawInvocation,options:{
   assert.equal(report.baseline.state.effectiveRoute,'native-3d-compute-fluid-raymarch-v0');
   assert.equal(report.baseline.state.backend,'WebGPU:apple');
   assert.equal(report.baseline.state.simStepCount,targetStep,'held source was reset while configuring capture');
+  if(args.environment==='none')assert.equal(report.baseline.state.controls.physicalAmbient,0,'flame-only capture retained ambient smoke light');
   assert.ok(pixels.some((v,i)=>i%4!==3&&v>0),'blank native source frame');
   await artifact('native-baseline.rgba',pixels);await page.screenshot({path:path.join(out,'native-baseline.png')});
   const capture=async(points,label)=>{
@@ -185,6 +205,7 @@ const {values:args}=parseArgs({args:rawInvocation,options:{
   }
   await page.evaluate(()=>window.__kaminosVolumePrototype.releaseDebugFullFieldExport());
   assert.equal(report.errors.length,0,report.errors.join('\n'));
+  if(args.environment==='none')assert.deepEqual(report.lighting.hdrRequests,[],'late HDR request escaped the environment opt-out');
   assert.equal(git('rev-parse','HEAD'),report.source.commit,'source changed during capture');
   assert.equal(git('status','--porcelain'),'','source became dirty during capture');
   report.status='observed';report.phase='complete';

@@ -2,7 +2,15 @@
 // select() never waits for I/O. releaseFull() lets scene construction finish
 // before requesting/preparing the large maps; whenSettled() serves consumers
 // that explicitly need final lighting.
-export function createEnvironmentLoader({presets, load, apply, fallback, placeholder = fallback, changed = () => {}}) {
+// Invocation policy, separate from the saved scene's authored environment.
+export function environmentResourceModeFromSearch(search) {
+  const value = new URLSearchParams(search).get('environment_resources');
+  if (value === null || value === 'on') return 'scene';
+  if (value === 'off') return 'none';
+  throw Error('environment_resources must be on or off');
+}
+export function createEnvironmentLoader({presets, load, apply, fallback, placeholder = fallback, changed = () => {}, resourceMode = 'scene'}) {
+  if (!['scene', 'none'].includes(resourceMode)) throw Error(`Unknown environment resource mode: ${resourceMode}`);
   const cache = new Map(), pending = new Map();
   let resourceEpoch = 0;
   let generation = 0, hasMap = false, holds = 0, release;
@@ -14,7 +22,8 @@ export function createEnvironmentLoader({presets, load, apply, fallback, placeho
   }
   const releaseStartup = holdFull();
   async function waitForFull() { while (holds) await fullAllowed; }
-  let state = {name: null, mapName: null, quality: 'none', pending: false, error: null};
+  const initialState = () => ({name: null, mapName: null, quality: 'none', pending: false, error: null, resourceMode});
+  let state = initialState();
   let completion = Promise.resolve(state);
   const publish = patch => { state = {...state, ...patch}; changed({...state}); };
   async function resource(name, quality) {
@@ -32,6 +41,11 @@ export function createEnvironmentLoader({presets, load, apply, fallback, placeho
   }
   function select(name) {
     if (!Object.hasOwn(presets, name)) throw Error(`Unknown environment: ${name}`);
+    if (resourceMode === 'none') {
+      apply(null);
+      publish({name, mapName: null, quality: 'off', pending: false, error: null});
+      completion = Promise.resolve({...state}); return {...state};
+    }
     if (name === state.name && (state.pending || state.quality === 'full')) return {...state};
     const token = ++generation, preset = presets[name];
     const current = () => token === generation;
@@ -73,7 +87,7 @@ export function createEnvironmentLoader({presets, load, apply, fallback, placeho
   return {select, invalidateResources(){
     generation++;resourceEpoch++;pending.clear();
     for(const map of cache.values())map?.dispose?.();cache.clear();hasMap=false;
-    state={name:null,mapName:null,quality:'none',pending:false,error:null};completion=Promise.resolve(state);
+    state=initialState();completion=Promise.resolve(state);
   }, read: () => ({...state}), holdFull, releaseFull: releaseStartup,
     async whenSettled() { for (;;) { const chosen = completion; await chosen; if (chosen === completion) return {...state}; } }};
 }

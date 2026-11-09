@@ -40,3 +40,20 @@ try {
   assert.equal(report.status,'failed');assert.equal(report.failurePhase,'arguments');
   assert.deepEqual(report.rawInvocation,['--out',malformedOut,'--unknown-option','x']);
 } finally {await rm(malformedOut,{recursive:true,force:true});}
+
+// Exercise the production acquisition barrier while IDs exist but restore is pending.
+const {regionalSceneRestored}=await import('../volume-regional-state.mjs');
+try {
+ let resolve;globalThis.window={kaminosSceneLoadReady:()=>new Promise(r=>{resolve=r;})};
+ let finished=false;const pending=regionalSceneRestored('regional-source.kaminos.json').then(value=>{finished=true;return value;});
+ await new Promise(r=>setImmediate(r));assert.equal(finished,false);
+ resolve({document:{filename:'regional-source.kaminos.json',phase:'idle',blocked:false}});await pending;
+ window.kaminosSceneLoadReady=async()=>({document:{filename:'wrong.kaminos.json',phase:'idle',blocked:false}});
+ await assert.rejects(regionalSceneRestored('regional-source.kaminos.json'), /wrong saved scene/);
+ window.kaminosSceneLoadReady=async()=>({document:{filename:'regional-source.kaminos.json',phase:'applying',blocked:true}});
+ await assert.rejects(regionalSceneRestored('regional-source.kaminos.json'), /restore incomplete/);
+ window.kaminosSceneLoadReady=async()=>{throw Error('scene restore rejected');};
+ await assert.rejects(regionalSceneRestored('regional-source.kaminos.json'), /restore rejected/);
+} finally {
+ if(savedWindow===undefined)delete globalThis.window;else globalThis.window=savedWindow;
+}

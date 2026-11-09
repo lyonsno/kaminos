@@ -38,3 +38,18 @@ test('pending environment supports the renderer minimum PMREM mip resolution',()
  // produce an undersized atlas, even though its texture object exists.
  assert.ok(sizing._cubeSize>=16,'placeholder must populate the PMREM minimum 16px cube faces');
 });
+
+test('scene load readiness waits for document restoration even when startup object IDs already exist',async()=>{
+ const start=source.indexOf('window.kaminosSceneLoadReady='),end=source.indexOf('\n',start);
+ assert.ok(start>=0,'the shared startup promise must be exposed to capture consumers');
+ let resolve,reject;const workbenchViewerReady=new Promise((a,b)=>{resolve=a;reject=b;});
+ let restored=false,finished=false;
+ const c={window:{},workbenchViewerReady,sceneDocument:{state:()=>({filename:restored?'saved.kaminos.json':null,phase:restored?'idle':'applying',blocked:!restored})},
+  environmentLoader:{read:()=>({quality:'off',resourceMode:'none'})}};
+ vm.runInNewContext(source.slice(start,end),c);
+ const pending=c.window.kaminosSceneLoadReady().then(value=>{finished=true;return value;});
+ await new Promise(r=>setImmediate(r));assert.equal(finished,false,'object presence cannot finish a pending document restore');
+ restored=true;resolve();const value=await pending;assert.equal(value.document.filename,'saved.kaminos.json');assert.equal(value.document.blocked,false);
+ const failure=new Error('restore failed');c.workbenchViewerReady=Promise.reject(failure);
+ await assert.rejects(c.window.kaminosSceneLoadReady(), /restore failed/);
+});

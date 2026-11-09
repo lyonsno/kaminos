@@ -51,3 +51,22 @@ test('later scene restoration can hold new full maps with overlapping release ow
  assert.equal(f.requests.length,1);releaseB();await flush();assert.equal(f.requests.at(-1).url,'studio-full');
  f.resolve('studio-full');await f.loader.whenSettled();
 });
+test('explicit resource opt-out skips every HDR and local PMREM path across restore selections',async()=>{
+ const requests=[],applied=[];
+ const loader=createEnvironmentLoader({resourceMode:'none',presets:{sunset:{url:'full',previewUrl:'preview'},neutral:{}},
+  load:url=>{requests.push(url);return Promise.resolve({});},apply:map=>applied.push(map),
+  fallback:()=>assert.fail('opt-out must not build a procedural PMREM'),placeholder:()=>assert.fail('opt-out must not build a pending PMREM')});
+ loader.select('sunset');loader.releaseFull();await loader.whenSettled();
+ loader.select('neutral');loader.select('sunset');await loader.whenSettled();
+ assert.deepEqual(requests,[]);assert.ok(applied.length>0);assert.ok(applied.every(map=>map===null));
+ assert.deepEqual(loader.read(),{name:'sunset',mapName:null,quality:'off',pending:false,error:null,resourceMode:'none'});
+ loader.invalidateResources();loader.select('sunset');await loader.whenSettled();assert.deepEqual(requests,[]);
+});
+test('resource opt-out is explicit and malformed routing fails instead of silently changing lighting',async()=>{
+ const {environmentResourceModeFromSearch}=await import('../scene-environment-loader.mjs');
+ assert.equal(environmentResourceModeFromSearch(''), 'scene');
+ assert.equal(environmentResourceModeFromSearch('?environment_resources=on'), 'scene');
+ assert.equal(environmentResourceModeFromSearch('?environment_resources=off'), 'none');
+ assert.throws(()=>environmentResourceModeFromSearch('?environment_resources=of'), /environment_resources/);
+ assert.throws(()=>createEnvironmentLoader({presets:{},resourceMode:'typo'}), /resource mode/);
+});

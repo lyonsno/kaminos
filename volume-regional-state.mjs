@@ -122,3 +122,11 @@ export function regionalSceneLoaded(expectedIds) {
   const objects=window.kaminosSceneAuthoring?.read().objects;
   return !!objects&&expectedIds.every(id=>objects.some(object=>object.id===id));
 }
+
+// The app owns restoration. IDs can precede its saved transforms/materials.
+export async function regionalSceneRestored(expectedFilename) {
+  const result = await window.kaminosSceneLoadReady();
+  if (result.document?.blocked || result.document?.phase !== 'idle') throw Error('saved scene restore incomplete');
+  if (result.document.filename !== expectedFilename) throw Error('wrong saved scene after restore');
+  return result;
+}
