@@ -248,7 +248,9 @@ export const FLAME_EMITTER_QUICK_GROUPS = [
 ];
 // Physics (soot x blackbody) is the material law (2026-10-18; the law select
 // is retired), so its calibration controls always apply.
-export function flamePropertyApplies(id,{toneMapping,physicsActive=false,sceneLighting=false,supportActive=false,intermediateMode}) {
+export function flamePropertyApplies(id,{toneMapping,physicsActive=false,sceneLighting=false,supportActive=false,intermediateMode,pressureAlgorithm,pressureSolver}) {
+  if(id==='volume-pressure-cg-iterations')return pressureSolver!=='legacy'&&pressureAlgorithm==='amgpcg';
+  if(id==='volume-pressure-solver-iterations')return pressureSolver!=='legacy'&&pressureAlgorithm!=='amgpcg';
   if(['volume-boundary-sidecar-source','volume-boundary-sidecar-width','volume-boundary-sidecar-blur','volume-boundary-sidecar-ridge'].includes(id))return supportActive;
   if(id==='volume-physical-ambient'&&sceneLighting)return false;
   if(id.startsWith('volume-intermediate-')&&intermediateMode!==undefined)return intermediateMode==='fields';
@@ -343,7 +345,7 @@ export function createFlameInspector({ document, host, gridTuning, scopeDescript
     finally{button.disabled=!byId('flame-basin-select').value;sync();}
   };
   const gridInspector=gridTuning?createGridTuningInspector({document,host:panels.get('quality'),...gridTuning}):null;
-  const gridControlIds=new Set(gridTuning?GRID_TUNING_FIELDS.map(f=>f[1]):[]);
+  const gridControlIds=new Set(gridTuning?GRID_TUNING_FIELDS.filter(([key])=>key!=='pressureSolverIterations').map(f=>f[1]):[]);
   const aliases=[];
   const runtimeStatus=document.createElement('p');runtimeStatus.className='flame-scope';runtimeStatus.id='selected-flame-source-status';runtimeStatus.setAttribute('role','status');
   const pressureStatus=document.createElement('p');pressureStatus.className='flame-scope';pressureStatus.id='selected-pressure-resolution-status';pressureStatus.setAttribute('role','status');
@@ -367,7 +369,7 @@ export function createFlameInspector({ document, host, gridTuning, scopeDescript
       const grip=document.createElement('label');grip.className='slider-label';grip.textContent=label;
       const field=document.createElement(source.tagName==='SELECT'?'select':'input');
       if(source.tagName==='SELECT')for(const option of id==='emitter-assay-family'?authoredFlameShapeOptions(source.options):source.options)field.append(option.cloneNode(true));
-      else {field.type=flamePropertyInputType(source);field.step=id==='volume-pressure-cg-iterations'?source.step:'any';}
+      else {field.type=flamePropertyInputType(source);field.step=id==='volume-pressure-cg-iterations'||id==='volume-pressure-solver-iterations'?'1':'any';}
       field.className='transform-input';field.dataset.authoringAlias=id;field.id=`${group.quick?'emitter':'selected'}-${id}`;grip.htmlFor=field.id;
       if(source.dataset.volumeCommit==='confirm') {
         field.dataset.volumeCommit='confirm';
@@ -377,7 +379,7 @@ export function createFlameInspector({ document, host, gridTuning, scopeDescript
         field.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key==='Escape')confirm(event.key);});
       }
       field.setAttribute('aria-label',`Flame ${label}`);
-      field.dataset.authoringDragStep=source.dataset.authoringDragStep||(source.step==='any'?'.01':source.step||'.01');
+      field.dataset.authoringDragStep=id==='volume-pressure-solver-iterations'?'1':source.dataset.authoringDragStep||(source.step==='any'?'.01':source.step||'.01');
       function syncField(force=false) {
         const bounds=readControlBounds(id);
         if(bounds&&!readSourceControl(id))syncFlameRangeBounds(source,bounds);
@@ -437,7 +439,7 @@ export function createFlameInspector({ document, host, gridTuning, scopeDescript
   }
   const geometry=[...sharedHost.querySelectorAll(':scope > .flame-domain-controls,:scope > .flame-collision-controls')];
   for(const panel of geometry)panels.get('quality').append(panel);
-  const mode=()=>({toneMapping:byId('volume-tone-mapping').value,intermediateMode:byId('volume-world-smoke-intermediate').value,
+  const mode=()=>({pressureAlgorithm:byId('volume-pressure-algorithm').value,pressureSolver:byId('volume-pressure-solver').value,toneMapping:byId('volume-tone-mapping').value,intermediateMode:byId('volume-world-smoke-intermediate').value,
     physicsActive:readAppearanceRuntime()?.effective?.render===true,sceneLighting:readSceneLighting(),
     supportActive:byId('volume-boundary-sidecar-view').value!=='off'
       ||!['off','boundary_fire'].includes(byId('volume-reaction-live-view').value)

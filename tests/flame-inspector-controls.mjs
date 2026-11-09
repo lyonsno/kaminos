@@ -103,3 +103,17 @@ test('pressure field availability follows the selected fire rather than cloned p
   assert.equal(field.disabled,disabled,`${id} in ${algorithm}/${solver}`);
  }
 });
+
+test('the selected solver shows its own budget and SOR sweeps remain in the ordinary inspector',async()=>{
+ for(const [algorithm,solver,cg,sor] of [['sor','converged',false,true],['amgpcg','converged',true,false],['sor','legacy',false,false]]){
+  const mode={pressureAlgorithm:algorithm,pressureSolver:solver};
+  assert.equal(flame.flamePropertyApplies('volume-pressure-cg-iterations',mode),cg,`${algorithm}/${solver} CG budget`);
+  assert.equal(flame.flamePropertyApplies('volume-pressure-solver-iterations',mode),sor,`${algorithm}/${solver} SOR budget`);
+ }
+ const {GRID_TUNING_FIELDS}=await import('../volume-grid-tuning.mjs');
+ const text=fs.readFileSync(new URL('../flame-authoring.mjs',import.meta.url),'utf8');
+ const start=text.indexOf('const gridControlIds='),end=text.indexOf(';',start)+1;
+ const ids=vm.runInNewContext(text.slice(start,end)+';gridControlIds',{gridTuning:{},GRID_TUNING_FIELDS});
+ assert.equal(ids.has('volume-pressure-solver-iterations'),false,'active SOR budget cannot disappear into the dimensions dialog');
+ assert.equal(ids.has('volume-resolution'),true,'dimension controls retain their existing editor');
+});

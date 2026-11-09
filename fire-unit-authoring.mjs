@@ -56,9 +56,12 @@ export function mountFireUnitAuthoring({document,root,owner,edits,target,seedSet
  });
  for(const node of root.querySelectorAll('[id]'))if(!node.id.startsWith(prefix)){node.dataset.fireControlId=node.id;node.id=prefix+node.id;}
  for(const node of root.querySelectorAll('[for],[aria-controls],[aria-labelledby]'))for(const name of ['for','aria-controls','aria-labelledby']){const value=node.getAttribute(name);if(value&&!value.startsWith(prefix))node.setAttribute(name,prefix+value);}
- const cg=root.querySelector('[data-authoring-alias="volume-pressure-cg-iterations"]');
- const cgHistory=installSceneControlHistory({controls:[cg],edits,id:target,label:'Tune Fine CG iterations',onError});
- const cgDrag=installRelativeNumberDrag({input:cg,grip:cg.closest('.slider-row').querySelector('label'),step:1});
- const unsubscribe=edits.subscribe(state=>{if(!state.active)cgDrag.stop();});
- return {close(){inspector.closeGrid();},sync(){if(applying)return;project(settings());seedControls(copy,owner.capture().controls);inspector.sync();},dispose(){unsubscribe();cgDrag.dispose();cgHistory.dispose();inspector.dispose?.();}};
+ const pressureBindings=['volume-pressure-cg-iterations','volume-pressure-solver-iterations'].map(id=>{
+  const input=root.querySelector(`[data-authoring-alias="${id}"]`);
+  const history=installSceneControlHistory({controls:[input],edits,id:target,label:id==='volume-pressure-cg-iterations'?'Tune Fine CG iterations':'Tune Fine SOR sweeps',onError});
+  const drag=installRelativeNumberDrag({input,grip:input.closest('.slider-row').querySelector('label'),step:1});
+  return {history,drag};
+ });
+ const unsubscribe=edits.subscribe(state=>{if(!state.active)pressureBindings.forEach(({drag})=>drag.stop());});
+ return {close(){inspector.closeGrid();},sync(){if(applying)return;project(settings());seedControls(copy,owner.capture().controls);inspector.sync();},dispose(){unsubscribe();pressureBindings.forEach(({drag,history})=>{drag.dispose();history.dispose();});inspector.dispose?.();}};
 }
