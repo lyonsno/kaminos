@@ -6,7 +6,6 @@ import { EMISSIVE_TRANSPORT_WGSL } from '../volume-emissive-transport.mjs';
 
 const source = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 const sceneSource = readFileSync(new URL('../scene-volume-source.mjs', import.meta.url), 'utf8');
-const emissiveSource = readFileSync(new URL('../volume-emissive-transport.mjs', import.meta.url), 'utf8');
 const fnBody = (text, name) => text.split(`fn ${name}(`)[1].split('\n}')[0];
 
 // The renderer under the reactant law: reaction light follows the fresh burn
@@ -28,7 +27,7 @@ test('the reconstruction sample carries the fresh burn rate, sampled from the si
   assert.doesNotMatch(cellBody, /sceneSolidAt|u\.reactant_combustion_c\.z/, 'no solid mask (solid cells hold zero burn; a mask would drag the scene-solid texture into every auto-layout kernel that reaches the renderer) and no ambient fallback');
 });
 
-test('every pipeline that reaches the emission function can see the sidecar: fragment visibility, the sidecar-read layout, and the two auto-layout kernels', () => {
+test('every pipeline that reaches the emission function can see the sidecar: fragment visibility, the sidecar-read layout, and the scene-source auto-layout kernel', () => {
   assert.match(source, /\{ binding: 23, visibility: GPUShaderStage\.FRAGMENT \| GPUShaderStage\.COMPUTE, texture: \{ sampleType: 'unfilterable-float', viewDimension: '3d' \} \},/, 'the raymarch fragment reads it through the shared fluid layout');
   const sidecarLayout = source.split('boundarySidecarReadBindGroupLayout = device.createBindGroupLayout({')[1].split('});')[0];
   assert.match(sidecarLayout, /\{ binding: 23, visibility: GPUShaderStage\.COMPUTE, texture: \{ sampleType: 'unfilterable-float', viewDimension: '3d' \} \},/, 'the irradiance seed runs under the sidecar-read layout');
@@ -38,10 +37,6 @@ test('every pipeline that reaches the emission function can see the sidecar: fra
   for (const group of sidecarGroups) assert.match(group, /\{ ?binding: 23, resource: reactantTextureView\(/, `every one of them binds the sidecar:\n${group}`);
   assert.match(source, /function reactantTextureView\(index\) \{/, 'one helper hands out the view and allocates the placeholders if a rebuild runs before the grid allocation');
   assert.match(source, /if \(ensureReactantSidecar\(reactantCombustionConfig\.effective\.admitted\)\) \{\s*\n\s*rebuildFluidBindGroups\(\);\s*\n\s*rebuildSceneSolidBindingViews\(\);\s*\n\s*rebuildSelectiveHeadLiveBindGroups\(\);/, 'a reallocated sidecar rebuilds the sidecar-read groups too');
-  assert.match(emissiveSource, /export function createEmissiveLightField\(device, module, uniformBuffer, fluidBuffers, frontBuffers, getReactantTextures\)/);
-  assert.match(emissiveSource, /\{ binding: 23, resource: textures\[i\]\.createView\(\{ dimension: '3d' \}\) \}/, 'the light-field seed binds the sidecar paired with its fluid buffer');
-  assert.match(emissiveSource, /if \(getReactantTextures\(\) !== boundTextures\) seedInputs = buildSeedInputs\(\);/, 'and rebinds when the sidecar is reallocated');
-  assert.match(source, /createEmissiveLightField\(device, shader, uniformBuffer, fluidBuffers, frontBuffers, \(\) => reactantTextures\)/);
   assert.match(sceneSource, /getReactantTextures/, 'the scene-source seed takes the sidecar the same way');
   assert.match(sceneSource, /\{binding: 23, resource: textures\[i\]\.createView\(\{dimension: '3d'\}\)\}/);
   assert.match(sceneSource, /if \(getReactantTextures\(\) !== boundTextures\) inputs = buildInputs\(\);/);

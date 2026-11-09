@@ -6,7 +6,7 @@ import * as core from '../volume-core.js';
 import * as shape from '../volume-grid-shape.mjs';
 import { effectiveMismatches } from '../volume-arm-capture-checks.mjs';
 import { createSceneVolumeSource } from '../scene-volume-source.mjs';
-import { EMISSIVE_LIGHT_GRID } from '../volume-emissive-transport.mjs';
+import { SCENE_SOURCE_GRID } from '../volume-emissive-transport.mjs';
 
 const source = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -27,7 +27,7 @@ test('admissible heights: a multiple of the workgroup that gives every derived l
   assert.deepEqual(Object.fromEntries(SUPPORTED_WIDTHS.map(w => [w, shape.gridHeightStep(w)])),
     { 32: 4, 48: 12, 64: 4, 96: 12, 128: 8, 136: 68, 140: 140, 160: 20 });
   // The derived lattice list is exactly the lattices the core derives from the box.
-  assert.deepEqual([...shape.GRID_HEIGHT_DERIVED_LATTICE_WIDTHS].sort((a, b) => a - b), [...new Set([EMISSIVE_LIGHT_GRID, ...core.SUPPORTED_FIRE_IRRADIANCE_GRID_SIZES])].sort((a, b) => a - b));
+  assert.deepEqual([...shape.GRID_HEIGHT_DERIVED_LATTICE_WIDTHS].sort((a, b) => a - b), [...new Set([SCENE_SOURCE_GRID, ...core.SUPPORTED_FIRE_IRRADIANCE_GRID_SIZES])].sort((a, b) => a - b));
   for (const w of SUPPORTED_WIDTHS) {
     for (let request = 1; request <= 5 * w; request += 1) {
       const resolved = shape.resolveGridHeight({ gridHeightRatio: request / w }, w);
@@ -71,7 +71,7 @@ test('GH-02: the shared scene-source lattice accepts every height the resolver a
   // The seed binds the reactant sidecar beside each fluid buffer (a stub texture pair here).
   const reactant = [stub(), stub()];
   const build = (w, h) => createSceneVolumeSource({ device, module: {}, uniformBuffer: {}, fluidBuffers: [{}, {}], frontBuffers: [{}, {}], getReactantTextures: () => reactant,
-    grid: EMISSIVE_LIGHT_GRID, gridY: EMISSIVE_LIGHT_GRID * h / w, fluidGrid: w, fluidGridY: h });
+    grid: SCENE_SOURCE_GRID, gridY: SCENE_SOURCE_GRID * h / w, fluidGrid: w, fluidGridY: h });
   const was152 = shape.resolveGridHeight({ gridHeightRatio: 150 / 48 }, 48);
   assert.equal(was152.heightCells, 156);
   assert.doesNotThrow(() => build(48, 156));

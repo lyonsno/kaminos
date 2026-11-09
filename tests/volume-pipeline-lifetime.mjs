@@ -3,7 +3,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-import {createEmissiveLightField} from '../volume-emissive-transport.mjs';
 import {createDisplayReconstruction} from '../volume-display-reconstruction.mjs';
 import {createSceneVolumeSource} from '../scene-volume-source.mjs';
 import {createScatteredSource} from '../scene-volume-scattering.mjs';
@@ -272,7 +271,6 @@ test('companion GPU factories reuse shaders, layouts, and compute pipelines on t
   const display=createDisplayReconstruction(dev,sharedModule,stubBuffer,()=>({fluidBuffers:[stubBuffer,stubBuffer],reactantTextures:[stubTexture,stubTexture]}));
   display.ensure(dims,{value:true,scale:1,alignment:'cell',emissionInterpolation:'trilinear',smokeInterpolation:'trilinear'});
   return [
-   createEmissiveLightField(dev,sharedModule,stubBuffer,[stubBuffer,stubBuffer],[stubBuffer,stubBuffer],()=>[stubTexture,stubTexture]),
    display,
    createSceneVolumeSource({device:dev,module:sharedModule,uniformBuffer:stubBuffer,fluidBuffers:[stubBuffer,stubBuffer],frontBuffers:[stubBuffer,stubBuffer],getReactantTextures:()=>[stubTexture,stubTexture],grid:size,gridY:size}),
    createScatteredSource(dev,{dimensions:dims,primary:stubTexture,scattering:stubTexture,incident:stubTexture}),
