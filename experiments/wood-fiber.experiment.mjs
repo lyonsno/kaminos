@@ -50,7 +50,7 @@ export default {id:'wood-fiber',title:'Finished wood · fiber response',async cr
     input.addEventListener('blur',()=>sync(true));fields.push({input,op});
     drags.push(host.controls.installNumberDrag({input,grip,step}));row.append(grip,input);panel.append(row);
    }
-   const maps=document.createElement('p');maps.textContent='Color, fiber direction and fiber color come from measured maps. Width 1 uses the measured highlight width; IOR changes fiber refraction. The surface layer stays GGX. Surface SSR uses Kaminos; the added fiber lobe currently uses direct lights only.';
+   const maps=document.createElement('p');maps.textContent='Color, fiber direction and fiber color come from measured maps. Width 1 uses the measured highlight width; increasing width also brightens the fiber highlight. IOR changes fiber refraction only, not the surface finish. The surface layer stays GGX. Surface SSR uses Kaminos; the added fiber lobe currently uses direct lights only.';
    const frame=document.createElement('button');frame.textContent='Frame wood comparison';frame.onclick=()=>invoke('frame').catch(e=>status.textContent=e.message);panel.append(maps,frame,status);
   },async dispose(){for(const drag of drags)drag?.dispose?.();await session.dispose();program.dispose();reference.dispose();geometry.dispose();resource.dispose();}};
  }catch(error){await session.dispose();program?.dispose();reference?.dispose();geometry?.dispose();resource?.dispose();throw error;}
