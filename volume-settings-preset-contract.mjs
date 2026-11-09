@@ -1,5 +1,6 @@
 import { migrateRetiredVolumeSettingsPresetDocument, validateRetiredVolumeControlInventory } from './volume-retired-control-migration.mjs';
 import { volumeSceneReceipt } from './volume-scene-ontology.mjs';
+import {environmentResourceModeFromSearch} from './scene-environment-loader.mjs';
 
 export const VOLUME_SETTINGS_PRESET_SCHEMA_IDENTITY = 'kaminos-volume-settings-preset-schema-v2';
 export const VOLUME_SETTINGS_PRESET_VISUAL_VIEWS = Object.freeze({
@@ -558,6 +559,7 @@ export function buildVolumeSettingsPresetVisualTarget(receipt, origin, view, { a
 }
 
 export function validateVolumeSettingsPresetVisualTarget(receipt, params) {
+  environmentResourceModeFromSearch(params);
   if (params.get('settings_preset') !== receipt.presetId) throw new Error('visual target settings preset id mismatch');
   if (params.get('settings_preset_authority') !== receipt.sourcePresetAuthority) {
     throw new Error('visual target settings preset authority mismatch');
@@ -603,6 +605,7 @@ export function validateVolumeSettingsPresetVisualTarget(receipt, params) {
     'volume_appearance_decomposition',
     'volume_appearance_selection',
     'assay_toolbar',
+    'environment_resources',
   ]);
   const unexpected = [...params].map(([key]) => key).filter(key => !allowed.has(key));
   if (unexpected.length > 0) {
@@ -633,6 +636,7 @@ export function validateVolumeSettingsPresetVisualTarget(receipt, params) {
 }
 
 export function validateVolumeSettingsPresetTarget(receipt, params) {
+  environmentResourceModeFromSearch(params);
   if (params.get('settings_preset') !== receipt.presetId) throw new Error('target settings preset id mismatch');
   if (params.get('settings_preset_authority') !== receipt.sourcePresetAuthority) {
     throw new Error('target settings preset authority mismatch');
@@ -664,6 +668,7 @@ export function validateVolumeSettingsPresetTarget(receipt, params) {
     // it in the hash; addresses written before that keep it in the query.
     'experiment',
     'experiment_inputs',
+    'environment_resources',
   ]);
   const unexpected = [...params].map(([key]) => key).filter(key => !allowed.has(key));
   if (unexpected.length > 0) throw new Error(`target settings route contains unexpected parameters: ${unexpected.join(',')}`);

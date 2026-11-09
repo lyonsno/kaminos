@@ -4,7 +4,9 @@
 // that explicitly need final lighting.
 // Invocation policy, separate from the saved scene's authored environment.
 export function environmentResourceModeFromSearch(search) {
-  const value = new URLSearchParams(search).get('environment_resources');
+  const values = new URLSearchParams(search).getAll('environment_resources');
+  if (values.length > 1) throw Error('environment_resources must occur once');
+  const value = values[0] ?? null;
   if (value === null || value === 'on') return 'scene';
   if (value === 'off') return 'none';
   throw Error('environment_resources must be on or off');
