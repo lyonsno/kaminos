@@ -1,0 +1,14 @@
+{
+  "name": "@kaminos/jax-gated-delta-experiment",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test.mjs"
+  },
+  "dependencies": {
+    "@jax-js/jax": "0.1.27"
+  },
+  "devDependencies": {
+    "puppeteer-core": "25.16.0"
+  }
+}
