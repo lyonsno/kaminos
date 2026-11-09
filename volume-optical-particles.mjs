@@ -34,8 +34,8 @@ struct SourceOptions {vp:mat4x4<f32>,size:vec4<u32>,policy:vec4<f32>,life:vec4<f
 export const PARTICLE_PROJECTION_WGSL=/* wgsl */`
 fn particleProjectedCovariance(vp:mat4x4<f32>,point:vec3<f32>,radius:vec3<f32>,axisY:vec3<f32>,size:vec2<f32>)->vec3<f32>{
  let center=vp*vec4<f32>(point,1);var sum=vec3<f32>(0);
- let x=normalize(cross(axisY,select(vec3<f32>(0,0,1),vec3<f32>(1,0,0),abs(axisY.z)>.99)));
- let basis=array<vec3<f32>,3>(x,axisY,cross(x,axisY));
+ var basis=array<vec3<f32>,3>(vec3<f32>(1,0,0),vec3<f32>(0,1,0),vec3<f32>(0,0,1));
+ if(any(axisY!=vec3<f32>(0,1,0))){let x=normalize(cross(axisY,select(vec3<f32>(0,0,1),vec3<f32>(1,0,0),abs(axisY.z)>.99)));basis=array<vec3<f32>,3>(x,axisY,cross(x,axisY));}
  for(var a=0u;a<3u;a++){
   let delta=vp*vec4<f32>(basis[a]*radius[a],0);
   let v=(delta.xy*center.w-center.xy*delta.w)/(center.w*center.w)*size*.5;
