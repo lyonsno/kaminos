@@ -78,3 +78,14 @@ test('measurement options and actual runtime receipt pass through the Workbench 
  const ex=await definition.create({host:{controls:{document:{defaultView:{__kaminosVolumePrototype:runtime},getElementById:()=>null}},scene:{open:async()=>({onFrame:()=>()=>{},redraw(){},async dispose(){}})}},inputs:{},record(){},updateInputs(){}});
  const receipt=await ex.operations.measure({settleInputs:true});assert.deepEqual(seen,{settleInputs:true});assert.equal(receipt.settledInputs,true);assert.deepEqual(ex.read().measurement,receipt);await ex.dispose();
 });
+
+import {particleDepthLayout} from '../volume-particle-depth.mjs';
+test('depth field budgets use real atlas capacity and reject invalid drafts before rendering',()=>{
+ const limit={maxTextureDimension2D:128};
+ const s=opticalParticleSettings({depthMode:1,depthSlices:16,depthScale:.5});
+ assert.deepEqual(particleDepthLayout(s,{width:32,height:32,limit}),{width:16,height:16,slices:16,columns:4,rows:4,atlasWidth:64,atlasHeight:64,bytes:24608});
+ assert.throws(()=>particleDepthLayout({...s,depthSlices:65},{width:32,height:32,limit}),/device texture/);
+ for(const values of [{depthMode:3},{depthSlices:0},{depthSlices:1.5},{depthScale:0}])assert.throws(()=>opticalParticleSettings(values),/Invalid/);
+ assert.equal(opticalParticleSettings({carriedSmokeGain:.3}).scatteredGain,.3,'legacy light gain survives normalization');
+ assert.equal(opticalParticleSettings({carriedSmokeGain:0,scatteredGain:1}).scatteredGain,1,'light and inherited extinction can be independent');
+});

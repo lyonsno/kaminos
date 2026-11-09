@@ -202,3 +202,38 @@ test('same-size particle presentation transfers optics directly with exact resol
   }
  });
 });
+
+test('depth field suppresses a rear flame through foreground smoke without sorting particles',async()=>{
+ await withKaminosGpu(async({device:d})=>{
+  const camera=new PerspectiveCamera(45,1,.1,20);camera.coordinateSystem=WebGPUCoordinateSystem;camera.updateProjectionMatrix();
+  await opticalFixture(d,async({seed,draw,owner})=>{
+   const rows=new Float32Array(16*16),pixels=p=>{let sum=0;for(let y=1;y<3;y++)for(let x=1;x<3;x++)sum+=p[y*256+x*4];return sum;};
+   const config={depthMode:1,depthSlices:8,depthScale:1,radius:.8,stretch:1.1,pixelFloor:0};
+   rows.set([1,.4,.1,0,0,0,-4,1,-.5,.5,1,2,1,.4,.1,0]);rows.set([0,0,0,8,0,0,-2,1,-.5,.5,1,1,0,0,0,0],16);seed(rows);
+   const behind=await draw(0,config),held=(await owner.sample()).records;
+   const more=await draw(0,{...config,depthSlices:16});assert.deepEqual((await owner.sample()).records,held,'changing slices preserves retained material');
+   assert.ok(pixels(more)<=pixels(behind)+4,'separated layers remain occluded at higher depth resolution');
+   rows.set([1,.4,.1,0,0,0,-2,1,-.5,.5,1,1,1,.4,.1,0]);rows.set([0,0,0,8,0,0,-4,1,-.5,.5,1,2,0,0,0,0],16);seed(rows);
+   const inFront=await draw(0,config);const mixedOne=await draw(0,{...config,depthSlices:1});const fractionalFront=await draw(0,{...config,depthSlices:1,depthMode:2});assert.ok(pixels(fractionalFront)>pixels(mixedOne),'fractional source depth differs from uniform mixing inside a slice');assert.ok(pixels(inFront)>0,`front light is visible: ${pixels(inFront)}, behind ${pixels(behind)}`);
+   assert.ok(pixels(behind)<pixels(inFront)*.4,`foreground smoke must attenuate rear light: ${pixels(behind)} vs ${pixels(inFront)}`);
+   const swapped=rows.slice();swapped.set(rows.slice(16,32));swapped.set(rows.slice(0,16),16);seed(swapped);assert.deepEqual(await draw(0,config),inFront,'particle order does not change depth visibility');
+   const resized=await draw(0,{...config,depthScale:.5,targetScale:.5});assert.ok(resized.some(x=>x>0),'different visibility and draw resolutions produce real output');assert.equal((await owner.sample()).state.depthField.width,1);
+  },{vp:camera.projectionMatrix.toArray(),inverse:camera.projectionMatrixInverse.toArray(),depthZeroToOne:true});
+ });
+});
+test('captured light can be removed while inherited extinction and retained material persist',async()=>{
+ await withKaminosGpu(async({device:d})=>opticalFixture(d,async({seed,draw,owner})=>{
+  const rows=new Float32Array(16*16);rows.set([4,2,1,3,0,0,0,1,-.5,.5,1,1,0,0,0,0]);seed(rows);
+  const lit=await draw(),records=(await owner.sample()).records;
+  const dark=await draw(0,{scatteredGain:0});assert.deepEqual((await owner.sample()).records,records);
+  const old=await draw(8,{refresh:0,smokeLife:1000,scatteredLife:1});assert.deepEqual((await owner.sample()).records.slice(4,8),records.slice(4,8),'light lifetime does not alter captured extinction');assert.notDeepEqual(old,lit,'short light lifetime quenches old illumination');
+  let light=0,opacity=0;for(let y=0;y<4;y++)for(let x=0;x<4;x++){light+=dark[y*256+x*4];opacity=Math.max(opacity,dark[y*256+x*4+3]);}
+  assert.equal(light,0,'captured illumination is independent of intrinsic emission');assert.ok(opacity>50,'removing illumination must keep inherited smoke');assert.notDeepEqual(lit,dark);
+ }));
+});
+test('equal horizontal and vertical particle radii produce a visible round footprint',async()=>{
+ await withKaminosGpu(async({device:d})=>opticalFixture(d,async({seed,draw})=>{
+  const rows=new Float32Array(16*16);rows.set([4,2,1,1,0,0,0,1,-.5,.5,1,1,4,2,1,0]);seed(rows);const image=await draw(0,{stretch:1});
+  assert.ok(image.some((x,i)=>i%4!==3&&x>0),'isotropic covariance must not generate invalid vertex coordinates');
+ }));
+});

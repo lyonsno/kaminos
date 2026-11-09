@@ -1,3 +1,4 @@
+import {particleDepthLayout} from './volume-particle-depth.mjs';
 // Camera-relative acquisition policy; the retained pool is a separate resource.
 export function particleBatch(samples,aspect,limit){
  if(!Number.isSafeInteger(samples)||samples<1||samples>0xffffffff)throw Error('Fresh particle samples must be a positive u32 count');
@@ -83,5 +84,6 @@ export function particleResourceBudget(s,{limit,renderScale,displayWidth,display
     if(!Number.isSafeInteger(slots)||slots>0xffffffff||slots*96>Math.min(limit.maxBufferSize,limit.maxStorageBufferBindingSize)||Math.ceil(slots/64)>limit.maxComputeWorkgroupsPerDimension)throw Error('Particle capacity exceeds effective device storage or dispatch limit; previous population preserved');
     const sourceBytes=batch.pixels*64+flowCells*16;
     if(sourceBytes>Math.min(limit.maxBufferSize,limit.maxStorageBufferBindingSize)||Math.ceil(batch.samples/64)>limit.maxComputeWorkgroupsPerDimension)throw Error('Fresh source batch including coarse flow exceeds effective device storage binding or dispatch limit; previous source preserved');
-    return {batch,slots,sourceBytes,outputWidth,outputHeight,maxTargetScale,maxCapacity:Math.min(0xffffffff,Math.floor(Math.min(limit.maxBufferSize,limit.maxStorageBufferBindingSize)/96),limit.maxComputeWorkgroupsPerDimension*64)};
+    const depthField=particleDepthLayout(s,{width:Math.ceil(outputWidth*s.targetScale),height:Math.ceil(outputHeight*s.targetScale),limit});
+    return {depthField,batch,slots,sourceBytes,outputWidth,outputHeight,maxTargetScale,maxCapacity:Math.min(0xffffffff,Math.floor(Math.min(limit.maxBufferSize,limit.maxStorageBufferBindingSize)/96),limit.maxComputeWorkgroupsPerDimension*64)};
 }

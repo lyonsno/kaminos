@@ -29303,11 +29303,11 @@ export function createKaminosVolumePrototype({
       if(particleProfileWrites||stillPresentationHeld||boundarySplatRequested()||productFrameOwner!=='prototype')return {ok:false,reason:'particle-profile-route-busy-or-unsupported'};
       const pausedBefore=selectiveHeadLiveCapturePaused;
       this.setSelectiveHeadLiveCapturePaused(true);await foregroundDrain;
-      const labels=[],query=device.createQuerySet({type:'timestamp',count:12});
-      const resolved=device.createBuffer({size:96,usage:GPUBufferUsage.QUERY_RESOLVE|GPUBufferUsage.COPY_SRC});
-      const readback=device.createBuffer({size:96,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+      const labels=[],query=device.createQuerySet({type:'timestamp',count:18});
+      const resolved=device.createBuffer({size:144,usage:GPUBufferUsage.QUERY_RESOLVE|GPUBufferUsage.COPY_SRC});
+      const readback=device.createBuffer({size:144,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
       try{
-        particleProfileWrites=label=>{if(labels.includes(label)||labels.length>=6)throw Error('Unexpected duplicate particle profile pass '+label);const i=labels.length*2;labels.push(label);return {timestampWrites:{querySet:query,beginningOfPassWriteIndex:i,endOfPassWriteIndex:i+1}};};
+        particleProfileWrites=label=>{if(labels.includes(label)||labels.length>=9)throw Error('Unexpected duplicate particle profile pass '+label);const i=labels.length*2;labels.push(label);return {timestampWrites:{querySet:query,beginningOfPassWriteIndex:i,endOfPassWriteIndex:i+1}};};
         const frame=await sampleFrame({advanceSim:!simulationPaused,settleParticleInputs:settleInputs});particleProfileWrites=null;
         if(!frame.ok)return {ok:false,reason:frame.reason,validationError:frame.validationError};
         if(settleInputs&&(!frame.settledParticleInputs?.completed||frame.settledParticleInputs.builds.fine!==(state.displayReconstruction?.builds??0)||frame.settledParticleInputs.builds.outer!==(state.worldRenderField?.builds??0)))return {ok:false,reason:'settled-inputs-rebuilt-during-acquisition'};
