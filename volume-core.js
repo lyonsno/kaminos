@@ -11812,6 +11812,7 @@ export function createKaminosVolumePrototype({
   let integralEvaluation=null, integralCameraValues=null, integralCameraSignature=null, integralSceneSignature=null;
   let integralEncodedForFrame=false;
   state.integralSourceGeneration=0;
+  state.particleSourceGeneration=0;
   state.integralReconstruction={requested:controlsSnapshot.integralReconstruction??'off',effective:'off',reason:'awaiting-presentation',frames:0};
   function integralSceneIdentity(){return JSON.stringify([productTransform,volumePresentationModeEffective,raymarchSmokePresentationEffectiveMode(),appearanceDecompositionModeEffective,boundarySplatPresentationModeEffective,state.integralSourceGeneration,worldSmokeKey,intermediateKey]);}
   function integralViewIdentity(){return JSON.stringify([camera.position.toArray(),camera.quaternion.toArray(),Array.from(camera.projectionMatrix.elements)]);}
@@ -11821,10 +11822,11 @@ export function createKaminosVolumePrototype({
     integralEvaluation=null;integralReconstruction?.endEvaluation();
     state.integralEvaluation={active:false,reason};
   }
-  function invalidateIntegralReconstruction(reason,{source=false,release=false}={}) {
+  function invalidateIntegralReconstruction(reason,{source=false,release=false,particleSource=source}={}) {
     if(integralEvaluation){integralEvaluation.invalidReason=reason;state.integralEvaluation={...state.integralEvaluation,active:true,valid:false,reason};simulationPaused=true;state.simulationPaused=true;}
     else endIntegralEvaluation(reason);
     if(source)state.integralSourceGeneration++;
+    if(particleSource)state.particleSourceGeneration++;
     if(release)integralReconstruction?.disable(reason);else integralReconstruction?.reset(reason);
     integralEncodedForFrame=false;
     state.integralReconstruction={requested:controlsSnapshot.integralReconstruction??'off',effective:'off',reason,frames:0,sourceGeneration:state.integralSourceGeneration};
@@ -21452,7 +21454,7 @@ export function createKaminosVolumePrototype({
     if(splitActive){
       const field=owner=>owner?{...owner.remapResources(),map:worldSmokeMapping(owner.plan,owner.anchor,productTransform).fineToField}:null;
       const {rayNoiseFrame,raySteps,integralReconstruction,reconstructionSpatial,reconstructionRadius,reconstructionWindow,reconstructionResponse,reconstructionEdge,reconstructionEdges,reconstructionImageEdge,reconstructionFresh,...sourceControls}=controlsSnapshot;
-      const identity=JSON.stringify([Array.from(invViewProj.elements),productTransform,sourceControls,worldSmokeKey,intermediateKey,state.integralSourceGeneration]);
+      const identity=JSON.stringify([Array.from(invViewProj.elements),productTransform,sourceControls,worldSmokeKey,intermediateKey,particleSettings.enabled?state.particleSourceGeneration:state.integralSourceGeneration]);
       const prepared=splitIntegral.prepare(encoder,{width:state.width,height:state.height,settings:effectiveSplitSettings,identity,step:state.simStepCount,
         viewProj:new THREE.Matrix4().copy(invViewProj).invert().elements,world:field(state.worldSmoke?.effective==='one-way-world-field'?worldSmoke:null),middle:field(state.worldSmoke?.effective==='one-way-world-field'?intermediateFlow:null),
         backtrace:resolveTimeStepConfig(controlsSnapshot).effective.backtraceScale,fineScale:2/gridSize,
@@ -21626,7 +21628,7 @@ export function createKaminosVolumePrototype({
     if(particleSourceFrame){
       opticalParticles??=createOpticalParticles(device,{transparent:transparentCanvas});
       const cameraValues=new Float32Array([...emissiveWhiteMatrix[0],0,...emissiveWhiteMatrix[1],0,...emissiveWhiteMatrix[2],0,0,uniforms[373],uniforms[374],0,0,0,uniforms[46],0]);
-      state.opticalParticles=opticalParticles.encode(encoder,{view,format:targetPipeline===readbackPipeline?'rgba8unorm':format,source:{...particleSourceFrame,reactionStepScale:resolveTimeStepConfig(controlsSnapshot).effective.dtScale},fine:fluidBuffers[currentFluid],dims:[gridSize,gridHeight,gridSize],invViewProj:invViewProj.elements,settings:{...particleSettings,...particleReactionFromSimulation(state.reactantCombustion)},cameraValues,depthZeroToOne:camera.coordinateSystem===THREE.WebGPUCoordinateSystem,depth:ordinarySceneDepthTexture??ordinarySceneDepthFallback,identity:JSON.stringify([worldSmokeKey,intermediateKey,productTransform,state.integralSourceGeneration])});
+      state.opticalParticles=opticalParticles.encode(encoder,{view,format:targetPipeline===readbackPipeline?'rgba8unorm':format,source:{...particleSourceFrame,reactionStepScale:resolveTimeStepConfig(controlsSnapshot).effective.dtScale},fine:fluidBuffers[currentFluid],dims:[gridSize,gridHeight,gridSize],invViewProj:invViewProj.elements,settings:{...particleSettings,...particleReactionFromSimulation(state.reactantCombustion)},cameraValues,depthZeroToOne:camera.coordinateSystem===THREE.WebGPUCoordinateSystem,depth:ordinarySceneDepthTexture??ordinarySceneDepthFallback,identity:JSON.stringify([worldSmokeKey,intermediateKey,productTransform,state.particleSourceGeneration])});
       state.opticalParticles.reference=referenceReceipt;state.opticalParticles.sourceColorOutput=!particleSourceOnly;
     }else if(!options.particleReference){state.opticalParticles={requested:particleSettings.enabled,effective:'off',reason:particleSettings.enabled?'requires-one-fresh-Fixed-evaluations-ordinary-joined-beauty':'disabled'};}
     if(reconstruct) {
@@ -28406,7 +28408,8 @@ export function createKaminosVolumePrototype({
       // Reject incompatible dimensions before mutating controls or destroying GPU fields.
       this.validateGridControls(next);
       if(Object.hasOwn(next,'adaptiveMaterial')&&next.adaptiveMaterial!==null)validateAllocation(next.adaptiveMaterial);
-      if(integralChanges.length)invalidateIntegralReconstruction('render-or-simulation-settings-changed',{source:true});
+      // Reference-only ray budgets change the ordinary integral, not particle material.
+      if(integralChanges.length)invalidateIntegralReconstruction('render-or-simulation-settings-changed',{source:true,particleSource:integralChanges.some(key=>!['raySteps','runtimeQualityReceipt'].includes(key))});
       if(Object.hasOwn(next,'adaptiveMaterial')) {
         const requested=next.adaptiveMaterial===null?null:validateAllocation(next.adaptiveMaterial);
         if(JSON.stringify(requested)!==JSON.stringify(adaptiveMaterialOptions))this.configureAdaptiveMaterial(requested);

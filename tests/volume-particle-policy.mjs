@@ -1,7 +1,7 @@
 // kaminos-test: node
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {opticalParticleSettings,particleReactionFromSimulation} from '../volume-optical-particles.mjs';
+import {opticalParticleSettings,particleReactionFromSimulation,createOpticalParticles} from '../volume-optical-particles.mjs';
 import {resolveReactantCombustionConfig} from '../volume-reactant-combustion.mjs';
 import definition from '../experiments/optical-particles.experiment.mjs';
 test('particle reaction inherits the resolved simulation model and time values',()=>{
@@ -42,4 +42,26 @@ test('source controls roundtrip independently from population and particle targe
  const v={opticalParticleSettings:()=>particle,setOpticalParticles:s=>particle=opticalParticleSettings({...particle,...s}),splitIntegralSettings:()=>({mode:'off'}),setSplitIntegral(){},setControls:p=>controls={...controls,...p},opticalParticleState:()=>({simulationReaction:null,sourceRenderScale:controls.renderScale,sourceRaySteps:controls.raySteps})};
  const ex=await definition.create({inputs:{source:{renderScale:.3}},host:{controls:{document:{defaultView:{__kaminosVolumePrototype:v},getElementById:()=>null}},scene:{open:async()=>({onFrame:()=>()=>{},redraw(){},async dispose(){}})}},record(){},updateInputs:v=>writes.push(v)});
  assert.equal(controls.renderScale,.3);ex.operations.setSource({raySteps:16});ex.operations.setOptions({populationWidth:100,populationHeight:200,targetScale:.5,showParticles:false,showRaymarch:true});assert.equal(controls.raySteps,16);assert.equal(particle.populationWidth,100);assert.equal(writes.at(-1).source.renderScale,.3);assert.equal(writes.at(-1).particles.targetScale,.5);await ex.dispose();
+});
+
+test('restored source controls survive native full-control events and runtime replacement',async()=>{
+ let particle=opticalParticleSettings(),writes=[];const controls=new Map([['volume-render-scale',{value:'.7'}],['volume-steps',{value:'8'}]]);
+ const make=()=>{let values={renderScale:.7,raySteps:8};return {opticalParticleSettings:()=>particle,setOpticalParticles:s=>particle=opticalParticleSettings({...particle,...s}),splitIntegralSettings:()=>({mode:'off'}),setSplitIntegral(){},setControls:p=>{values={...values,...p};},opticalParticleState:()=>({simulationReaction:null,sourceRenderScale:values.renderScale,sourceRaySteps:values.raySteps})};};
+ const win={Event:class{},__kaminosVolumePrototype:make()};
+ const nativeInput=()=>win.__kaminosVolumePrototype.setControls({renderScale:Number(controls.get('volume-render-scale').value),raySteps:Number(controls.get('volume-steps').value)});
+ for(const e of controls.values())e.dispatchEvent=nativeInput;
+ const ex=await definition.create({inputs:{source:{renderScale:.3,raySteps:16}},host:{controls:{document:{defaultView:win,getElementById:k=>controls.get(k)}},scene:{open:async()=>({onFrame:()=>()=>{},redraw(){},async dispose(){}})}},record(){},updateInputs:v=>writes.push(v)});
+ assert.equal(Number(controls.get('volume-render-scale').value),.3,'restored native render scale must match runtime');
+ assert.equal(Number(controls.get('volume-steps').value),16);ex.operations.setSource({raySteps:24});nativeInput();assert.equal(ex.read().effective.sourceRenderScale,.3);assert.equal(ex.read().effective.sourceRaySteps,24);
+ win.__kaminosVolumePrototype=make();ex.read();nativeInput();assert.equal(ex.read().effective.sourceRenderScale,.3);assert.equal(ex.read().effective.sourceRaySteps,24);assert.equal(writes.at(-1).source.renderScale,.3);await ex.dispose();
+});
+
+test('population dispatch capacity is checked before allocation or retained-state mutation',()=>{
+ const flags=['GPUBufferUsage','GPUTextureUsage'];const prior=flags.map(k=>globalThis[k]);globalThis.GPUBufferUsage={STORAGE:1,COPY_SRC:2,COPY_DST:4,UNIFORM:8};globalThis.GPUTextureUsage={RENDER_ATTACHMENT:1,TEXTURE_BINDING:2};
+ const calls=[];const d={limits:{maxBufferSize:2**30,maxStorageBufferBindingSize:2**30,maxComputeWorkgroupsPerDimension:65535,maxTextureDimension2D:8192},createShaderModule:()=>({}),createComputePipeline:()=>({getBindGroupLayout:()=>({})}),createBindGroup:()=>({}),createBuffer:p=>(calls.push(['buffer',p.size]),{...p,destroy(){}}),createTexture:p=>(calls.push(['texture',p.size]),{width:p.size[0],height:p.size[1]}),queue:{writeBuffer(){}}};
+ try{const owner=createOpticalParticles(d);calls.length=0;const e={clearBuffer:()=>calls.push(['clear']),beginComputePass:()=>({setPipeline(){},setBindGroup(){},dispatchWorkgroups:n=>calls.push(['dispatch',n]),end(){}})};
+  const args={source:{width:1,height:1,pixels:1,step:0,viewProj:new Array(16).fill(0),buffer:{size:64}},invViewProj:new Array(16).fill(0),dims:[1,1,1],settings:{enabled:true,showParticles:false,populationWidth:2048,populationHeight:2048},cameraValues:new Float32Array(20),identity:'capacity'};
+  assert.throws(()=>owner.encode(e,args),/compute dispatch capacity/);assert.deepEqual(calls,[]);assert.equal(owner.read().effective,'off');
+  owner.encode(e,{...args,settings:{...args.settings,populationWidth:64,populationHeight:65535}});assert.ok(calls.some(x=>x[0]==='dispatch'&&x[1]===65535));
+ }finally{flags.forEach((k,i)=>{if(prior[i]===undefined)delete globalThis[k];else globalThis[k]=prior[i];});}
 });

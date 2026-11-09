@@ -8,7 +8,14 @@ export default {
   await host.volume?.ready;const session=await host.scene.open(),win=host.controls.document.defaultView;
   let current=null,previous=null,panel,notice,error=null;const drags=[],fields=new Map(),stats=new Map();
   function source(){const next=win.__kaminosVolumePrototype;if(!next?.opticalParticleState)throw Error('This revision does not supply the particle controls');
-   if(next!==current){if(current)try{current.setOpticalParticles(previous.particles);current.setSplitIntegral(previous.split);}catch{}current=next;previous={particles:next.opticalParticleSettings(),split:next.splitIntegralSettings()};next.setOpticalParticles(settings);if(Object.keys(sourceSettings).length)next.setControls(sourceSettings);if(Object.keys(reactionOverrides).length&&next.opticalParticleState().simulationReaction)next.setParticleSimulationReaction(reactionOverrides);}return current;
+   if(next!==current){if(current)try{current.setOpticalParticles(previous.particles);current.setSplitIntegral(previous.split);}catch{}current=next;previous={particles:next.opticalParticleSettings(),split:next.splitIntegralSettings()};next.setOpticalParticles(settings);if(Object.keys(sourceSettings).length)applySource(next,sourceSettings);if(Object.keys(reactionOverrides).length&&next.opticalParticleState().simulationReaction)next.setParticleSimulationReaction(reactionOverrides);}return current;
+  }
+  function applySource(runtime,patch){
+   const elements=[];
+   // Native events reread the whole cockpit: seat every restored value first.
+   for(const [key,id] of [['renderScale','volume-render-scale'],['raySteps','volume-steps']])if(key in patch){const el=host.controls.document.getElementById(id);if(el){el.value=String(patch[key]);elements.push(el);}}
+   for(const el of elements)el.dispatchEvent(new win.Event('input',{bubbles:true}));
+   runtime.setControls(patch);
   }
   try{source();}catch(error){await session.dispose();throw error;}
   const read=()=>({settings,effective:source().opticalParticleState(),error});
@@ -35,8 +42,7 @@ export default {
   function setSource(patch){
    for(const [key,v] of Object.entries(patch))if(!['renderScale','raySteps'].includes(key)||!Number.isFinite(v)||v<=0)throw Error('Invalid source control '+key);
    const runtime=source();
-   for(const [key,id] of [['renderScale','volume-render-scale'],['raySteps','volume-steps']])if(key in patch){const el=host.controls.document.getElementById(id);if(el){el.value=String(patch[key]);el.dispatchEvent(new win.Event('input',{bubbles:true}));}}
-   runtime.setControls(patch);sourceSettings={...sourceSettings,...patch};updateInputs({particles:settings,simulationReaction:reactionOverrides,source:sourceSettings});record({kind:'particle.source-controls',values:patch});session.redraw();sync();return read();
+   applySource(runtime,patch);sourceSettings={...sourceSettings,...patch};updateInputs({particles:settings,simulationReaction:reactionOverrides,source:sourceSettings});record({kind:'particle.source-controls',values:patch});session.redraw();sync();return read();
   }
   const operations={setOptions,setReaction,setSource,reset(){source().resetOpticalParticles();session.redraw();sync();return read();},
    setRadius({axis,value:v}){if(!['horizontal','vertical'].includes(axis))throw Error('Unknown radius axis');if(!Number.isFinite(v)||v<=0)throw Error('Radius must be positive');const vertical=settings.radius*settings.stretch;return axis==='vertical'?setOptions({stretch:v/settings.radius}):setOptions({radius:v,stretch:vertical/v});}

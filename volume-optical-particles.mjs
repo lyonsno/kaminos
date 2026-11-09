@@ -183,6 +183,7 @@ export function createOpticalParticles(device,{transparent=false}={}) {
   const targetWidth=Math.max(1,Math.ceil(width*s.targetScale)),targetHeight=Math.max(1,Math.ceil(height*s.targetScale));
   if(Math.max(targetWidth,targetHeight)>device.limits.maxTextureDimension2D)throw Error('Particle target exceeds device texture dimensions');
   if(slots*96>Math.min(device.limits.maxBufferSize,device.limits.maxStorageBufferBindingSize))throw Error(`Particle population requires ${slots*96} bytes; exceeds effective device binding capacity`);
+  if(Math.ceil(slots/64)>device.limits.maxComputeWorkgroupsPerDimension)throw Error('Particle population exceeds effective device compute dispatch capacity');
   const nextKey=JSON.stringify([columns,rows,identity]);
   const resetNeeded=key!==nextKey||lastStep===null||step<lastStep;const dt=resetNeeded?0:step-lastStep;
   if(!particles||particles.size!==slots*96){retire(particles?[particles]:[]);particles=device.createBuffer({label:'shared world optical material carriers',size:slots*96,usage:storage});}
