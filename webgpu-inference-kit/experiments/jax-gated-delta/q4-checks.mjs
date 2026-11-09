@@ -41,9 +41,10 @@ export async function runQ4Update(jax,backend,f=q4Fixture(),learningRate=1,onUpd
     g.input.dispose();
     return {value,input:p.input,a:p.a.sub(g.a.mul(learningRate)),b:p.b.sub(g.b.mul(learningRate))};
   }),evaluate=jax.jit(loss);
-  let updated;
+  let updated,frozen;
   try{
-    const x=q4Arrays(jax,f),out=step(x.params,x.base);
+    const x=q4Arrays(jax,f);frozen=x.base;
+    const out=step(x.params,jax.tree.map(a=>a.ref,frozen));
     const beforeLoss=(await read(out.value,backend))[0];
     updated={input:out.input,a:out.a,b:out.b};
     const params={};for(const [name,a]of Object.entries(updated))params[name]=await read(a.ref,backend);
@@ -54,11 +55,10 @@ export async function runQ4Update(jax,backend,f=q4Fixture(),learningRate=1,onUpd
       if(params[name].every((v,i)=>v===f.params[name][i]))throw new Error('adapter '+name+' did not change');
     }
     compare(params.input,f.params.input,{atol:0,rtol:0});
-    const afterBase=q4Arrays(jax,f);jax.tree.dispose(afterBase.params);
-    const afterLoss=(await read(evaluate(jax.tree.map(a=>a.ref,updated),afterBase.base),backend))[0];
+    const afterLoss=(await read(evaluate(jax.tree.map(a=>a.ref,updated),jax.tree.map(a=>a.ref,frozen)),backend))[0];
     compare([beforeLoss],[expected.loss]);compare([afterLoss],[q4Reference(f,next).loss]);
     if(!(afterLoss<beforeLoss))throw new Error('SGD step did not lower loss');
-    const handoff=await onUpdated(updated);
+    const handoff=await onUpdated(updated,frozen);
     return {caseName:'q4-lora-update',dims:f.dims,backend,learningRate,beforeLoss,afterLoss,params,errors,handoff};
-  }finally{if(updated)jax.tree.dispose(updated);step.dispose();evaluate.dispose();}
+  }finally{if(updated)jax.tree.dispose(updated);if(frozen)jax.tree.dispose(frozen);step.dispose();evaluate.dispose();}
 }

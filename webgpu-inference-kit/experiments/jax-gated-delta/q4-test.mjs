@@ -30,8 +30,14 @@ test('jax packed projection contributes base input gradients and both LoRA gradi
 });
 test('one compiled SGD update changes both adapter factors and lowers the same loss',async()=>{
   await jax.init('wasm');
-  const r=await runQ4Update(jax,'wasm');
+  const f=q4Fixture();
+  const r=await runQ4Update(jax,'wasm',f,1,async(p,base)=>{
+    assert(base?.packed,'consumer must receive the retained training base');
+    compare(Array.from(await base.packed.ref.data()),f.base.packed,{atol:0,rtol:0});
+    return 'retained training base';
+  });
   assert(r.afterLoss<r.beforeLoss);
+  assert.equal(r.handoff,'retained training base');
 });
 test('Q4 browser evidence rejects stale fixtures, missing base gradients and frozen updates',()=>{
   const f=q4Fixture(),r=q4Reference(f),next=structuredClone(f.params);

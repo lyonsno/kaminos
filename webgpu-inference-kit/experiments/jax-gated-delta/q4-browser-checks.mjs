@@ -1,17 +1,16 @@
 import * as jax from '@jax-js/jax';
-import {runQ4Case,runQ4Update,q4Arrays} from './q4-checks.mjs';
+import {runQ4Case,runQ4Update} from './q4-checks.mjs';
 import {q4Fixture,q4Reference} from './q4-reference.mjs';
 import {compare} from './reference.mjs';
 import {createWebGpuInferenceRuntime,createWebGpuLinearShader,WEBGPU_BUFFER_USAGE as U} from '../../src/core.js';
 
-async function consumeAdapter(device,p,f,affineShader){
+async function consumeAdapter(device,p,frozen,f,affineShader){
   const {tokens:T,columns:C,rows:R,rank:K,alpha}=f.dims;
-  const frozen=q4Arrays(jax,f);jax.tree.dispose(frozen.params);
   let runtime;
   try{
     runtime=await createWebGpuInferenceRuntime({routeId:'experiment.jax-q4-lora.updated-adapter',device,adapterName:device.adapterInfo.vendor,yieldMs:0});
     const borrowed={};
-    for(const [name,a]of Object.entries({...p,...frozen.base}))borrowed[name]=runtime.createTensor({name,shape:a.shape,dtype:name==='packed'?'u32':'f32',buffer:await a.ref.gpuBuffer(),usage:U.storage|U.copySrc});
+    for(const [name,a]of Object.entries({...p,...frozen}))borrowed[name]=runtime.createTensor({name,shape:a.shape,dtype:name==='packed'?'u32':'f32',buffer:await a.ref.gpuBuffer(),usage:U.storage|U.copySrc});
     const upload=(name,data,usage=U.storage|U.copyDst|U.copySrc)=>{
       const t=runtime.createTensor({name,shape:[data.length],dtype:data instanceof Uint32Array?'u32':'f32',usage});runtime.uploadTensor(t,data);return t;
     };
@@ -35,10 +34,10 @@ async function consumeAdapter(device,p,f,affineShader){
     compare(values,q4Reference(f,parameters).output);
     const disposal=runtime.dispose();runtime=null;
     for(const [name,a]of Object.entries(p))compare(Array.from(await a.ref.data()),parameters[name],{atol:0,rtol:0});
-    for(const [name,a]of Object.entries(frozen.base))compare(Array.from(await a.ref.data()),f.base[name],{atol:0,rtol:0});
+    for(const [name,a]of Object.entries(frozen))compare(Array.from(await a.ref.data()),f.base[name],{atol:0,rtol:0});
     return {output:values,sameDevice,borrowedSurvived:true,frozenUnchanged:true,disposal,
       kernels:['existing-qwen-affine4','kit-linear-a/split4','kit-linear-b/split4','lora-add']};
-  }finally{await device.queue.onSubmittedWorkDone();runtime?.dispose();jax.tree.dispose(frozen.base);}
+  }finally{await device.queue.onSubmittedWorkDone();runtime?.dispose();}
 }
 
 export async function runBrowserChecks(nonce,progress,{fixture,fixtureSha256}){
@@ -62,7 +61,7 @@ export async function runBrowserChecks(nonce,progress,{fixture,fixtureSha256}){
   }
   compare(cases[1].output,fixture.nativeOutput);
   phase='update-and-kit';
-  const update=await runQ4Update(jax,'webgpu',q4Fixture(),1,p=>consumeAdapter(device,p,q4Fixture(),fixture.consumer.affineShader));
+  const update=await runQ4Update(jax,'webgpu',q4Fixture(),1,(p,frozen)=>consumeAdapter(device,p,frozen,q4Fixture(),fixture.consumer.affineShader));
   cases.push(update);await progress({phase:'kit-updated-adapter',case:update});
   await device.queue.onSubmittedWorkDone();
   if(errors.length)throw new Error('WebGPU validation errors: '+errors.join('; '));
