@@ -1,3 +1,4 @@
+import {neumipDefinition} from './neumip-settings.mjs';
 // Authored identity and parameters are JSON. Programs and GPU resources stay code-owned.
 const copy=value=>structuredClone(value);
 // Keep authored program instances separate from the resident source appearance.
@@ -17,7 +18,7 @@ export const materialDefinitions=[
   {key:'coverage',label:'Glaze coverage',type:'number',min:0,max:1,step:.01,default:.7},
   {key:'scale',label:'Firing pattern scale',type:'number',min:.1,max:100,step:.1,default:5},
   {key:'relief',label:'Micro relief',type:'number',min:0,max:1,step:.01,default:.15},
-  {key:'roughness',label:'Glaze roughness',type:'number',min:0,max:1,step:.01,default:.2}]}];
+  {key:'roughness',label:'Glaze roughness',type:'number',min:0,max:1,step:.01,default:.2}]},neumipDefinition];
 export function checkMaterialParameters(definition,raw={}) {
  if(!raw||typeof raw!=='object'||Array.isArray(raw))throw Error('Material parameters must be an object');
  if(definition.check)return definition.check(copy(raw));
@@ -104,12 +105,13 @@ export function createSceneMaterials({entries,definitions,retainedEntries=()=>[]
   try{
    for(const {id,entry,slot,recipe} of targets){
     const previous=active.get(id);
-    if(previous?.slot.mesh===slot.mesh&&previous.recipe.implementation===recipe.implementation&&previous.recipe.version===recipe.version){
+    const definition=registry.get(recipe.implementation);
+    if(previous?.slot.mesh===slot.mesh&&previous.recipe.implementation===recipe.implementation&&previous.recipe.version===recipe.version&&definition.resourceKey?.(previous.recipe.parameters)===definition.resourceKey?.(recipe.parameters)){
      staged.set(id,previous);if(JSON.stringify(previous.recipe.parameters)!==JSON.stringify(recipe.parameters))updates.push({previous,recipe});
     }else{
      const base=previous?.slot.mesh===slot.mesh?previous.base:slot.base??slot.material,definition=registry.get(recipe.implementation);
      if(!definition.create)throw Error('Material runtime unavailable: '+recipe.implementation);
-     const program=definition.create({base,parameters:copy(recipe.parameters)});
+     const program=definition.create({base,parameters:copy(recipe.parameters),slot});
      if(!program?.material||typeof program.update!=='function'||typeof program.dispose!=='function')throw Error('Invalid material program: '+recipe.implementation);
      programSources.set(program.material,{source:base,preservesMaps:definition.preservesSourceMaps===true});
      staged.set(id,{slot,base,program,recipe,owner:entry.object,ownerEntry:entry});
@@ -125,7 +127,7 @@ export function createSceneMaterials({entries,definitions,retainedEntries=()=>[]
   active.clear();for(const [id,runtime]of staged)active.set(id,runtime);state=next;unsupported=nextUnsupported;changed();
  }
  const read=()=>copy(state);
- return {read,write,check,sync:()=>write(state),recipe:id=>copy(state.recipes.find(r=>r.id===id)??null),canDisplay:(_root,representation)=>!unsupported.has(representation),
+ return {read,write,check,async prepare(raw){const next=checkedMaterialDocument(raw,definitions);await Promise.all(next.recipes.map(r=>registry.get(r.implementation).prepare?.(copy(r.parameters))));return next;},sync:()=>write(state),recipe:id=>copy(state.recipes.find(r=>r.id===id)??null),canDisplay:(_root,representation)=>!unsupported.has(representation),
   slots:entry=>materialSlots(entry?.object).map(slot=>({...slot,base:active.get(key({objectId:entry.id,slot:slot.key}))?.base??slot.material,recipeId:state.bindings.find(b=>b.objectId===entry.id&&b.slot===slot.key)?.recipeId??null})),
   validateSlots(id,object){const slots=new Set(materialSlots(object).map(s=>s.key));for(const b of state.bindings)if(b.objectId===id&&!slots.has(b.slot))throw Error(`Geometry would remove assigned material slot ${b.slot}; unassign it first`);},
   bindings:id=>copy(state.bindings.filter(b=>b.objectId===id).map(({objectId,...binding})=>binding)),

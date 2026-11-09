@@ -33,8 +33,19 @@ Models remain local assets; no model archive is bundled with this source.
 
 Experiment inputs retain `material`, `surface`, `uvScale` and `gain` through the
 normal experiment URL. `inputs.view` can restore an explicit scene camera.
-The carrier is experiment-owned and is removed on closing. This first version
-does not reconstruct its custom material through ordinary scene-file saving.
+New experiment carriers are owned by that experiment and removed on closing.
+Normal **Save / Save As / Open** also retain the authored folded/sphere carrier,
+transform, checkpoint URL and SHA256, UV scale, gain and native lights. A fresh
+page reconstructs them through the ordinary scene and material library; the
+experiment is not required. Opening the experiment over a restored neural carrier
+borrows that object, so closing it leaves the saved scene intact.
+
+The **Material** context exposes the named Neural surface recipe and its UV scale
+and gain controls, with ordinary shared assignment, Make unique and Undo/Redo.
+The same recipe can be assigned to UV-equipped imported mesh slots. Missing UVs
+reject assignment; unsupported Burning and area-light integration remain explicit.
+The checkpoint stays an external, digest-verified source; saved documents do not
+embed model bytes. Reopening still requires the same mounted asset or URL.
 
 ## Current boundary
 

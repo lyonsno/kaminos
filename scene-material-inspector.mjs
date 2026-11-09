@@ -9,20 +9,29 @@ export function installMaterialInspector({document,root,materials,definitions,ed
  const api={
   read:()=>materials.document(),
   slots:objectId=>materials.slots(selectedById(objectId)).map(({key,label,recipeId})=>({key,label,recipeId})),
-  create({objectId,slot:requested,implementation='asset-surface',name}={}){
+  create({objectId,slot:requested,implementation='asset-surface',name,parameters:requestedParameters}={}){
    const entry=selectedById(objectId),slots=materials.slots(entry),slot=requested!==undefined?slots.find(s=>s.key===requested):(slots.find(s=>s.key===slotKey)||slots[0]);if(!slot)throw Error('Choose a material slot');
    if(entry.burnable?.enabled)throw Error('Disable Burning before changing its material');
    const definition=registry.get(implementation);if(!definition)throw Error('Material implementation unavailable');
-   const parameters=checkMaterialParameters(definition,implementation==='kiln-glaze'?{}:{color:'#'+(slot.base.color?.getHexString()??'92979c'),roughness:slot.base.roughness??.55,metalness:slot.base.metalness??0});
+   if(definition.prepare)return (async()=>{
+    const parameters=checkMaterialParameters(definition,requestedParameters??await definition.defaults());
+    await definition.prepare(parameters);assertAvailable();
+    if(selectedById(entry.id).object!==entry.object)throw Error('Material target changed while loading');
+    return createRecipe(parameters);
+   })();
+   return createRecipe(checkMaterialParameters(definition,requestedParameters??(implementation==='kiln-glaze'?{}:{color:'#'+(slot.base.color?.getHexString()??'92979c'),roughness:slot.base.roughness??.55,metalness:slot.base.metalness??0})));
+   function createRecipe(parameters){
    const recipe={id:id(),name:name||slot.base.name||`${entry.label||'Surface'} finish`,implementation,version:definition.version,parameters};
    const next=materials.read();next.recipes.push(recipe);next.bindings=next.bindings.filter(b=>b.objectId!==entry.id||b.slot!==slot.key);next.bindings.push({objectId:entry.id,slot:slot.key,recipeId:recipe.id});apply(next,'Create material');return recipe.id;
+   }
   },
   edit(recipeId,patch){if(!patch||typeof patch!=='object')throw Error('Material edit requires a parameter patch');const next=materials.read(),recipe=next.recipes.find(r=>r.id===recipeId);if(!recipe)throw Error('Material missing');if(patch.name!==undefined)recipe.name=patch.name;if(patch.parameters)recipe.parameters={...recipe.parameters,...patch.parameters};return apply(next,'Edit material');},
   assign({objectId,slot,recipeId}={}){const entry=selectedById(objectId);if(entry.burnable?.enabled)throw Error('Disable Burning before changing its material');if(!materials.slots(entry).some(s=>s.key===slot))throw Error('Material slot missing');const next=materials.read();next.bindings=next.bindings.filter(b=>b.objectId!==entry.id||b.slot!==slot);if(recipeId)next.bindings.push({objectId:entry.id,slot,recipeId});return apply(next,'Assign material');},
   makeUnique({objectId,slot}={}){const entry=selectedById(objectId);if(entry.burnable?.enabled)throw Error('Disable Burning before changing its material');const next=materials.read(),binding=next.bindings.find(b=>b.objectId===entry.id&&b.slot===slot);if(!binding)throw Error('Assign a material first');const recipe=structuredClone(next.recipes.find(r=>r.id===binding.recipeId));recipe.id=id();recipe.name+=' copy';next.recipes.push(recipe);binding.recipeId=recipe.id;apply(next,'Make material unique');return recipe.id;},
  };
  function selectedById(objectId){const entry=objectId?selected(objectId):selected();if(!entry)throw Error('Select a mesh');return entry;}
- const run=action=>{try{action();}catch(e){error(e.message);sync(true);}};
+ const failed=e=>{error(e.message);sync(true);};
+ const run=action=>{try{Promise.resolve(action()).catch(failed);}catch(e){failed(e);}};
  function sync(force=false){
   const entry=selected();const slots=materials.slots(entry);if(!slots.some(s=>s.key===slotKey))slotKey=slots[0]?.key??null;
   const slot=slots.find(s=>s.key===slotKey),state=materials.read(),recipe=state.recipes.find(r=>r.id===slot?.recipeId),definition=registry.get(recipe?.implementation);
@@ -42,8 +51,9 @@ export function installMaterialInspector({document,root,materials,definitions,ed
   button('Make unique',()=>api.makeUnique({objectId:entry.id,slot:slotKey}));root.append(actions);
   const name=document.createElement('input');name.id='material-name';name.value=recipe.name;name.setAttribute('aria-label','Material name');name.onchange=()=>run(()=>api.edit(recipe.id,{name:name.value}));root.append(name);
   const description=document.createElement('p');description.className='material-implementation-description';description.textContent=`${definition.title} · ${definition.description}`;root.append(description);
+  if(definition.describe){const source=document.createElement('p');source.className='material-source';source.textContent=definition.describe(recipe.parameters);root.append(source);}
   for(const field of definition.fields){
-   const row=document.createElement('label');row.className='transform-row';const grip=document.createElement('span');grip.textContent=field.label;const input=document.createElement('input');input.type=field.type;input.className='transform-input';input.dataset.materialParam=field.key;input.setAttribute('aria-label',field.label);input.value=recipe.parameters[field.key];if(field.type==='number'){input.min=field.min;input.max=field.max;input.step=field.step;}
+   const row=document.createElement('label');row.className='transform-row';const grip=document.createElement('span');grip.textContent=field.label;const input=document.createElement('input');input.type=field.type;input.className='transform-input';input.dataset.materialParam=field.key;input.setAttribute('aria-label',field.label);input.value=recipe.parameters[field.key];if(field.type==='number'){if(field.min!==undefined)input.min=field.min;if(field.max!==undefined)input.max=field.max;input.step=field.step;}
    input.addEventListener('input',()=>run(()=>{const next=materials.read(),current=next.recipes.find(r=>r.id===recipe.id);current.parameters[field.key]=input.type==='number'?input.valueAsNumber:input.value;edits.preview(next);}));
    const session=installSceneControlHistory({controls:[input],edits,id:target,label:'Edit '+field.label,onError:e=>error(e.message)});sessions.push(session);
    row.append(grip,input);root.append(row);if(field.type==='number')sessions.push(installRelativeNumberDrag({input,grip,step:field.step}));
