@@ -49,15 +49,22 @@ test('playback services accumulated time using measured batches while exact adva
  Object.defineProperty(globalThis,'performance',{configurable:true,value:{now:()=>now}});
  const i=await instance({fence:()=>held?gate:Promise.resolve()});
  try{i.render();await i.value.operations.setPlaying(true);held=true;i.tick(.016);await new Promise(setImmediate);
-  assert.equal(i.value.read().gpu.steps,1,'Playback bootstraps one physical step before estimating service cost');
+  assert.equal(i.value.read().gpu.steps,6,'Playback starts with a frame quantum instead of one physical step');
   for(let f=0;f<120;f++)i.tick(1/60);now=100;held=false;release();await i.value.operations.setSettings({rockPushZ:2});
-  i.tick(.016);await i.value.operations.setSettings({rockPushZ:2});assert.equal(i.value.read().gpu.steps,2,'A slow batch must not turn two seconds of frame debt into one enormous GPU batch');
-  assert.ok(i.value.read().playback.pendingSeconds>2,'Unprocessed wall time stays represented');
-  const beforeBatches=i.batches.length;await i.value.operations.advance(.03);assert.ok(i.batches.slice(beforeBatches).every(n=>n===1),'Exact advance must service all requested time through the observed work budget');assert.equal(i.value.read().gpu.completedSteps,22,'Exact advance still executes all20 requested substeps');
+  i.tick(.016);await i.value.operations.setSettings({rockPushZ:2});assert.equal(i.value.read().gpu.steps,18,'A stall services one recent frame quantum rather than one step or all accumulated debt');
+  assert.ok(i.value.read().playback.pendingSeconds>1.9,'Unprocessed wall time stays represented');
+  const beforeBatches=i.batches.length;await i.value.operations.advance(.03);assert.ok(i.batches.slice(beforeBatches).every(n=>n<=12),'Exact advance remains chunked for interaction');assert.equal(i.value.read().gpu.completedSteps,38,'Exact advance still executes all20 requested substeps');
   assert.equal(i.value.read().playback.pendingSeconds,0,'Explicit paused advance clears interactive wall-clock credit');
  }finally{held=false;release();await i.value.dispose();Object.defineProperty(globalThis,'performance',original);}
 });
 
 test('unrepresentable exact step counts reject before any GPU work',async()=>{
  const i=await instance();try{i.render();await i.value.operations.setPlaying(false);i.renderer.backend.device.queue.submit=()=>{throw Error('Invalid duration reached GPU submission');};await assert.rejects(i.value.operations.advance(Number.MAX_VALUE),/Choose a nonnegative physical step count/);assert.equal(i.value.read().gpu.steps,0);}finally{await i.value.dispose();}
+});
+
+for(const hz of [60,120])test('actual experiment services wall time despite frame-delayed completion at '+hz+'Hz',async()=>{
+ const original=Object.getOwnPropertyDescriptor(globalThis,'performance');let now=0;
+ Object.defineProperty(globalThis,'performance',{configurable:true,value:{now:()=>now}});
+ const i=await instance({fence:()=>{now+=1000/hz;return Promise.resolve();}});
+ try{i.render();await i.value.operations.setPlaying(true);for(let f=0;f<hz;f++){i.tick(1/hz);await new Promise(setImmediate);}const r=i.value.read();assert.ok(Math.abs(r.gpu.seconds-1)<r.gpu.config.dt,'Completed physical seconds follow the one-second host input');assert.ok(r.playback.pendingSeconds<r.gpu.config.dt);}finally{await i.value.dispose();Object.defineProperty(globalThis,'performance',original);}
 });

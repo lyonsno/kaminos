@@ -88,10 +88,13 @@ an explicit error; it never silently omits contacts. The hundred-rock case can
 reserve all4950 possible pairs and needs no runtime status readback. The soil,
 body counts, grid, timestep and source geometry are retained.
 
-Interactive service reserves a quarter of an8.33ms target frame per batch,
-retains outstanding physical time, and reports completed physical seconds per
-host second, host callback cadence and time debt separately. This is an explicit
-work allowance, not proof that the simulation meets it. The app's render counter
+Interactive service follows physical time due for the recent host-frame interval.
+Queue-completion latency does not reduce that normal demand to one substep. The
+quarter-of-8.33ms allowance governs extra catch-up work only; it does not throttle
+normal physical advancement. Three recent host intervals reject a single stall
+as the service quantum while all elapsed time remains outstanding credit. The
+clock reports completed physical seconds per host second, host callback cadence
+and debt separately; these do not establish a shared-frame-budget pass. The app's render counter
 counts render calls rather than physical presentation. Performance checks must
 separate composed step-plus-render service cost, natural Play advancement and
 actual display cadence.
