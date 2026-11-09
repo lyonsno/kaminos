@@ -59,14 +59,14 @@ test('native source-only producer retains intrinsic emission separately and clea
 });
 
 async function opticalFixture(d,run,view={}){
- const owner=createOpticalParticles(d,{transparent:true}),n=16,identity=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
+ const owner=createOpticalParticles(d,{transparent:true,indexedQuads:view.indexedQuads??true}),n=16,identity=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
  const births=d.createBuffer({size:n*64+128,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});const uniform=d.createBuffer({size:240,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});const fine=d.createBuffer({size:8*64,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
  if(view.velocity){const v=new Float32Array(8*16);for(let i=0;i<8;i++)v.set(view.velocity,i*16);d.queue.writeBuffer(fine,0,v);}
  const sf=new Float32Array(60);sf.set(identity);sf.set([0,2,1,0],28);if(view.sourceUniform)sf.set(view.sourceUniform);d.queue.writeBuffer(uniform,0,sf);
  const target=d.createTexture({size:[4,4],format:'rgba8unorm',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC});const depth=d.createTexture({size:[1,1],format:'depth32float',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING});
  const camera=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,1,1,0,0,0,1,0]);const source={buffer:births,uniform,width:4,height:4,pixels:n,step:0,backtrace:view.backtrace??0,reactionStepScale:view.stepScale??1,viewProj:view.vp??identity};
  const seed=rows=>{d.queue.writeBuffer(births,0,rows);owner.reset();};
- const draw=async(step=0,settings={})=>{source.step=step;const e=d.createCommandEncoder();const dp=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthClearValue:view.depth??1,depthStoreOp:'store'}});dp.end();owner.encode(e,{view:target.createView(),format:'rgba8unorm',source,fine,dims:[2,2,2],invViewProj:view.inverse??identity,depthZeroToOne:view.depthZeroToOne??false,settings:{enabled:true,refresh:0,...settings},cameraValues:camera,depth,identity:'fixture'});const read=d.createBuffer({size:1024,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});e.copyTextureToBuffer({texture:target},{buffer:read,bytesPerRow:256},[4,4]);d.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);const pixels=new Uint8Array(read.getMappedRange().slice(0));read.unmap();read.destroy();return pixels;};
+ const draw=async(step=0,settings={})=>{source.step=step;const e=d.createCommandEncoder();const dp=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthClearValue:view.depth??1,depthStoreOp:'store'}});dp.end();const measured=view.trace?new Proxy(e,{get(target,key){if(key==='beginRenderPass')return desc=>{const pass=target.beginRenderPass(desc);return desc.label==='spatial material support'?new Proxy(pass,{get(p,k){const value=p[k];return typeof value==='function'?function(...args){if(k==='draw'||k==='drawIndexed')view.trace.push({method:k,args});return value.apply(p,args);}:value;}}):pass;};const value=target[key];return typeof value==='function'?value.bind(target):value;}}):e;owner.encode(measured,{view:target.createView(),format:'rgba8unorm',source,fine,dims:[2,2,2],invViewProj:view.inverse??identity,depthZeroToOne:view.depthZeroToOne??false,settings:{enabled:true,refresh:0,...settings},cameraValues:camera,depth,identity:'fixture'});const read=d.createBuffer({size:1024,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});e.copyTextureToBuffer({texture:target},{buffer:read,bytesPerRow:256},[4,4]);d.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);const pixels=new Uint8Array(read.getMappedRange().slice(0));read.unmap();read.destroy();return pixels;};
  try{await run({owner,seed,draw,upload:rows=>d.queue.writeBuffer(births,0,rows)});}finally{owner.dispose();births.destroy();uniform.destroy();fine.destroy();target.destroy();depth.destroy();}
 }
 test('optically negligible carriers cannot dilute an overlapping live carrier',async()=>{
@@ -173,4 +173,17 @@ test('particles-only source batch clears the old display when both display toggl
   const rows=new Float32Array(16*16);rows.set([4,2,1,0,0,0,0,1,-.5,.5,1,1,4,2,1,0]);seed(rows);await draw(0,{acquisitionMode:1,capacity:16});const hidden=await draw(0,{acquisitionMode:1,capacity:16,showParticles:false,showRaymarch:false});
   for(let y=0;y<4;y++)for(let x=0;x<16;x++)assert.equal(hidden[256*y+x],0,'turning display off must not leave the preceding particle image');
  }));
+});
+
+test('indexed particle quads use the native index route with exactly the expanded route pixels',async()=>{
+ await withKaminosGpu(async({device:d})=>{
+  const images=[],calls=[[],[]];
+  for(const indexedQuads of [false,true])await opticalFixture(d,async({seed,draw})=>{
+   const rows=new Float32Array(16*16);rows.set([.1,.2,.3,.4,-.2,0,0,1,-.25,.25,.5,.5,.1,.1,.1,0]);rows.set([.2,.1,.05,.2,.3,.25,-.1,1,-.25,.25,.5,.5,.05,.02,.01,0],16);seed(rows);images.push(await draw(0,{gain:.2,opacity:.5,radius:.3,stretch:1.5}));
+  },{indexedQuads,trace:calls[Number(indexedQuads)]});
+  assert.ok(images[0].some(x=>x>0),'the geometry comparison must contain visible material');
+  assert.deepEqual(images[1],images[0],'indexing must preserve the exact production rendered pixels');
+  assert.ok(calls[0].some(x=>x.method==='draw'&&x.args[0]===6),'expanded comparison must execute its actual native route');
+  assert.ok(calls[1].some(x=>x.method==='drawIndexed'&&x.args[0]===6),'requested indexed geometry must not silently fall back to six repeated vertices');
+ });
 });
