@@ -33,3 +33,38 @@ Checks cover nonzero initial state, unequal key/value dimensions, multiple batch
 The actual Kit consumer retains the jax array owner, exports a read-only GPU buffer, executes an affine WGSL kernel through `createWebGpuInferenceRuntime()`, drains the work, disposes Kit resources and verifies that the original array and later jax computation still work. This tests borrowing **jax's** device. It does not establish that jax can adopt a device already owned by an application, import arbitrary Kit buffers, or honor the Kit's foreground scheduling during a jax training step. Architectural adoption remains a separate decision.
 
 The next engineering question is how to differentiate a bounded or fused recurrence without expanding the compilation graph and saved activations with every timestep. The present implementation is a reference for that work. AdamW/LoRA composition, quantized frozen weights, representative memory/throughput and model/task evaluation remain future slices.
+
+## Frozen Q4 projection and LoRA
+
+`q4-lora.mjs` adds a prepared affine4/group64 projection with a differentiated LoRA branch:
+
+```text
+weight[row,col] = code[row,col] * scale[row,col/64] + bias[row,col/64]
+output = input @ transpose(weight) + (alpha/rank) * (input @ transpose(A)) @ transpose(B)
+```
+
+The packed base is a separate, frozen argument tree: unsigned 32-bit words store eight 4-bit codes, least significant code first. Only `input`, `A` and `B` are differentiated. Both trees are consumed on success; shape/dtype checks precede consumption. The implementation accepts positive token/row/rank dimensions and columns divisible by64; group64 and FP32 arithmetic are explicit format choices.
+
+This is a correctness baseline that expresses dequantization followed by matrix multiplication. Actual generated WebGPU kernels materialize the full FP32 matrix in the exercised path. It does not yet retain the packed-weight memory advantage throughout the operation. A fused packed projection and input-gradient implementation is needed before claiming efficient model-scale QLoRA.
+
+The synthetic check covers two tokens, five rows,128columns, rank3 and non-unit LoRA scaling. Its scalar input and adapter gradients are checked against finite differences. One compiled SGD update changes both adapter factors and lowers the same loss while preserving the input. A second case replays one complete4096-column row from retained native Qwen projection evidence. Adapter weights are not published with this experiment.
+
+Prepare the external native replay from an existing kernel-reference directory and the existing Qwen shader source revision:
+
+```sh
+node prepare-q4-fixture.mjs \
+  --source '/absolute/path/to/native-kernel-reference' \
+  --qwen-root '/absolute/path/to/qwen-source-worktree' \
+  --qwen-commit 0452ac3f6f691bc6c63fc8670b1ea9e849865586 \
+  --out '/caller/chosen/path/native-fixture.json'
+node browser-runner.mjs \
+  --experiment q4-lora \
+  --fixture '/caller/chosen/path/native-fixture.json' \
+  --chrome '/absolute/path/to/Google Chrome for Testing' \
+  --expected-vendor apple \
+  --out '/caller/chosen/path/q4-browser-report.json'
+```
+
+Preparation validates the original array layouts and complete-file digests before selecting the first token and first complete row. The result retains the native source identity, original array metadata, selected values and exact generated Qwen affine shader. The browser report records the fixture digest and revalidates all returned numbers on the host. Missing fixtures and truncated source arrays produce explicit failure reports.
+
+The updated adapter factors stay on the GPU while the Kit borrows their buffers. Its consumer executes the existing Qwen affine shader, the Kit's two `split4` linear projections and a small scaled-add kernel. Kit disposal preserves the borrowed adapter/base buffers. This is projection-level composition; model adapter packaging, a whole-model training loop, AdamW, foreground cooperation and representative efficiency remain open. Raw allocation events and generated WGSL are retained as diagnostics; allocation events are not a peak-residency measurement because jax can reuse pooled storage.
