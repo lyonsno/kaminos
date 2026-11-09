@@ -21433,8 +21433,10 @@ export function createKaminosVolumePrototype({
     const particleCaptureRequested=particleSettings.enabled&&reconstructionSupported&&!options.particleReference;
     // Particle births own their one-evaluation capture; loading an authored
     // basin must not silently switch it to that basin's ordinary marcher.
+    const referenceConfig=options.particleReference&&debugOpticalStepping.value>=4
+      ?opticalSteppingConfig({mode:'numerical',tolerance:debugOpticalStepping.tolerance}):debugOpticalStepping;
     const optical = resolveOpticalStepping(particleCaptureRequested
-      ? opticalSteppingConfig({mode:'budgeted',tolerance:debugOpticalStepping.tolerance}) : debugOpticalStepping,
+      ? opticalSteppingConfig({mode:'budgeted',tolerance:debugOpticalStepping.tolerance}) : referenceConfig,
       {emissive:selectEmissive,trace:Boolean(options.opticalTrace),exterior:state.worldSmoke?.effective==='one-way-world-field',
         localSource:particleCaptureRequested,explicit:debugOpticalSteppingExplicit&&!particleCaptureRequested});
     if(particleCaptureRequested){optical.requested=debugOpticalStepping.mode;optical.reason='particle-source-one-fresh-evaluation';}
