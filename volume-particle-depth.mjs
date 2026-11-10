@@ -8,7 +8,8 @@ export function particleDepthLayout(s,{width,height,limit}){
  const maxCols=Math.floor(limit.maxTextureDimension2D/w),maxRows=Math.floor(limit.maxTextureDimension2D/h);
  if(maxCols<1||maxRows<1||slices>maxCols*maxRows)throw Error('Particle depth field exceeds device texture dimensions; previous field preserved');
  const columns=Math.max(Math.ceil(slices/maxRows),Math.min(maxCols,Math.ceil(Math.sqrt(slices)))),rows=Math.ceil(slices/columns);
- return {width:w,height:h,slices,columns,rows,atlasWidth:w*columns,atlasHeight:h*rows,bytes:w*h*columns*rows*6+32};
+ const gridBytes=(s.fillExtinction>0||s.extinctionView>0)?w*h*columns*rows*4+w*h*8:0;
+ return {width:w,height:h,slices,columns,rows,atlasWidth:w*columns,atlasHeight:h*rows,...(gridBytes?{gridBytes}:{}),bytes:w*h*columns*rows*6+32+gridBytes};
 }
 export const PARTICLE_DEPTH_RENDER_WGSL=`
 struct ParticleDepthParams {size:vec4<u32>}

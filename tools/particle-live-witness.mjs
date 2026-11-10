@@ -1,0 +1,46 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import {verifySingleGridParticleState,verifyParticleImage} from './optical-particles-witness.mjs';
+
+const [origin,out,expected,repoRoot,recipePath,playwrightModule,executable,measure]=process.argv.slice(2);
+if(!out)throw Error('Usage: origin output expectedCommit repoRoot recipe.json playwrightModule browserExecutable [measure]');
+await fs.mkdir(out,{recursive:true});let browser,page;
+const report={status:'failed',phase:'runtime',origin,expected,repoRoot,recipePath,executable,errors:[],arms:[]};
+let saves=Promise.resolve();const save=()=>{const text=JSON.stringify(report,null,2);saves=saves.then(()=>fs.writeFile(path.join(out,'report.json'),text));return saves;};await save();
+const digest=b=>crypto.createHash('sha256').update(b).digest('hex');
+try{
+ report.recipe=JSON.parse(await fs.readFile(recipePath,'utf8'));report.recipeSha256=digest(await fs.readFile(recipePath));
+ report.runtime=await fetch(origin+'/api/runtime-config').then(r=>{assert.ok(r.ok,'runtime config available');return r.json();});
+ assert.equal(report.runtime.source.commit,expected,'wrong source revision');assert.equal(report.runtime.source.repoRoot,repoRoot,'wrong source checkout');assert.equal(report.runtime.source.dirty,false,'committed native source required');
+ const {chromium}=await import(playwrightModule);await fs.access(executable);
+ report.phase='browser';await save();browser=await chromium.launchPersistentContext(path.join(out,'profile'),{executablePath:executable,headless:true,viewport:{width:1100,height:900},recordVideo:{dir:path.join(out,'video'),size:{width:1100,height:900}},args:['--enable-unsafe-webgpu','--use-angle=metal','--use-mock-keychain','--password-store=basic']});
+ page=browser.pages()[0]??await browser.newPage();page.setDefaultTimeout(0);page.setDefaultNavigationTimeout(0);
+ page.on('pageerror',e=>{report.errors.push(String(e));void save();});page.on('console',m=>{if(m.type()==='error'){report.errors.push(m.text());void save();}});await page.route('**/favicon.ico',r=>r.fulfill({status:204,body:''}));
+ const url=new URL(report.recipe.url);url.protocol=new URL(origin).protocol;url.host=new URL(origin).host;report.url=url.href;
+ report.phase='load';await save();await page.goto(report.url,{waitUntil:'domcontentloaded'});
+ await page.waitForFunction(()=>window.__kaminosVolumePrototype?.debugState()?.active&&window.kaminosWorkbenchExperiments?.state()?.id==='optical-particles');assert.deepEqual(report.errors,[]);
+ await page.evaluate(async recipe=>{const v=window.__kaminosVolumePrototype;v.setSelectiveHeadLiveCapturePaused(true);v.setSimulationPaused(true);v.setControls({worldSmoke:'off',resolution:8,gridHeightRatio:1.5,fineVelocity:8,finePressure:8,raymarchMode:'budgeted',raySteps:8,occupancySkip:0,rayNoiseFrame:0,integralReconstruction:'off'});await window.kaminosWorkbenchExperiments.invoke('setSource',recipe.source);await window.kaminosWorkbenchExperiments.invoke('setOptions',recipe.particles);},report.recipe);
+ report.phase='develop';await save();await page.evaluate(async()=>{const v=window.__kaminosVolumePrototype;v.setSimulationPaused(false);for(let i=0;i<48;i++){const r=await v.sampleFrame({advanceSim:true,now:1000+16*i});if(!r.ok)throw Error(r.reason+': '+r.validationError);}v.setSimulationPaused(true);});
+ const invoke=patch=>page.evaluate(p=>window.kaminosWorkbenchExperiments.invoke('setOptions',p),patch);
+ const frame=()=>page.evaluate(async()=>{const f=await window.__kaminosVolumePrototype.sampleFrame({advanceSim:false,now:4000});if(!f.ok)throw Error(f.reason+': '+f.validationError);return window.__kaminosVolumePrototype.debugState();});
+ const records=async name=>{const sample=await page.evaluate(async()=>{const r=await window.__kaminosVolumePrototype.sampleOpticalParticles();if(!r.available)throw Error('Missing retained population');let s='';const b=new Uint8Array(r.records.buffer);for(let i=0;i<b.length;i+=32768)s+=String.fromCharCode(...b.subarray(i,i+32768));return btoa(s);});const bytes=Buffer.from(sample,'base64');await fs.writeFile(path.join(out,name+'.f32'),bytes);return digest(bytes);};
+ const capture=async name=>{const image=await page.evaluate(async()=>{const f=await window.__kaminosVolumePrototype.sampleFrame({advanceSim:false,now:4000,includeRgba:true});if(!f.ok||!f.image?.rgba?.length)throw Error('Missing native frame');let s='';const b=new Uint8Array(f.image.rgba);for(let i=0;i<b.length;i+=32768)s+=String.fromCharCode(...b.subarray(i,i+32768));return {width:f.image.width,height:f.image.height,rgba:btoa(s)};});const rgba=Buffer.from(image.rgba,'base64');verifyParticleImage({...image,rgba});await fs.writeFile(path.join(out,name+'.rgba8'),rgba);await fs.writeFile(path.join(out,name+'.image.json'),JSON.stringify({width:image.width,height:image.height}));await page.evaluate(async()=>{window.__kaminosVolumePrototype.setSelectiveHeadLiveCapturePaused(false);for(let i=0;i<3;i++)await new Promise(requestAnimationFrame);});await page.locator('#viewport').screenshot({path:path.join(out,name+'.png')});await page.evaluate(()=>window.__kaminosVolumePrototype.setSelectiveHeadLiveCapturePaused(true));return digest(rgba);};
+ const initial=await frame();verifySingleGridParticleState(initial,report.recipe.particles);report.initial=initial;const held=await records('held');report.held=held;await capture('baseline');
+ report.phase='controls';await save();const bias=page.getByRole('spinbutton',{name:'Source-region bias',exact:true});await bias.click();await bias.fill('.4');await page.waitForFunction(()=>window.__kaminosVolumePrototype.opticalParticleSettings().sourceBias===.4);report.typed=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());assert.equal(report.typed.proposal.source,.4);
+ await bias.fill('2');await page.waitForTimeout(220);assert.equal(await bias.inputValue(),'2');assert.equal((await page.evaluate(()=>window.__kaminosVolumePrototype.opticalParticleSettings())).sourceBias,.4);await bias.press('Tab');assert.equal(Number(await bias.inputValue()),.4);
+ await invoke({sourceBias:report.recipe.particles.sourceBias,reactionSupportCoupling:0,reactionSeedLength:.3});await frame();assert.equal(await records('seed-edits'),held,'paused seed edits preserve the full population');
+ await page.screenshot({path:path.join(out,'controls.png')});
+ report.phase='visibility';await save();
+ for(const [name,patch] of [['unassisted',{fillExtinction:0,extinctionView:0,opacity:.15}],['assisted',{fillExtinction:1,extinctionView:0}],['missing',{fillExtinction:0,extinctionView:1}],['suppressed',{fillExtinction:0,extinctionView:2}],['restored',{fillExtinction:0,extinctionView:0}]]){
+  await invoke(patch);const state=await frame();verifySingleGridParticleState(state,{capacity:report.recipe.particles.capacity,acquisitionMode:1,depthMode:1,depthSlices:report.recipe.particles.depthSlices,...patch});const image=await capture(name);assert.equal(await records(name),held,'visibility edits preserve retained material');report.arms.push({name,state:state.opticalParticles,imageSha256:image});await save();
+ }
+ assert.notEqual(report.arms[0].imageSha256,report.arms[1].imageSha256,'native grid assist must change the rendered image');assert.equal(report.arms[0].imageSha256,report.arms[4].imageSha256,'off restores the exact held native image');
+ report.phase='renewal';await invoke({renewalDiagnostics:true,refresh:.25});await page.evaluate(async()=>{const v=window.__kaminosVolumePrototype;v.setSimulationPaused(false);const r=await v.sampleFrame({advanceSim:true,now:5000});if(!r.ok)throw Error(r.reason);v.setSimulationPaused(true);});report.population=await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('samplePopulation'));assert.ok(report.population.available&&report.population.active>0&&report.population.evaluated>0,'actual native population readout required');
+ await invoke({renewalDiagnostics:false,fillExtinction:1,extinctionView:0});await frame();
+ if(measure==='measure'){report.phase='profile';await save();report.profile=await page.evaluate(()=>window.__kaminosVolumePrototype.measureOpticalParticleFrame());assert.equal(report.profile.ok,true,report.profile.reason);assert.ok(report.profile.passes.gridExtinction>=0,'new extinction work is included in the native measurement route');assert.equal(Object.keys(report.profile.passes).length,10,'complete depth/assist transfer has ten passes');}
+ assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';
+}catch(error){report.failurePhase=report.phase;report.error=error.stack??String(error);if(page)try{await page.screenshot({path:path.join(out,'failure.png')});report.lastState=await page.evaluate(()=>window.__kaminosVolumePrototype?.debugState());}catch(e){report.captureFailure=String(e);}}
+finally{try{await browser?.close();report.browserClosed=true;if(report.errors.length){report.status='failed';report.failurePhase??='cleanup';report.error??='Browser errors were recorded';}}catch(e){report.status='failed';report.cleanupFailure=String(e);}await save();}
+console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,out}));if(report.status!=='passed')process.exitCode=1;

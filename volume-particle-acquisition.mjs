@@ -1,3 +1,9 @@
+// Expected proposal assignments; domains can overlap and hit/birth counts differ.
+export function particleProposalShares(s){
+ if(!s.acquisitionMode)return {mode:'camera-stratified',source:null,fine:null,broad:null,unassigned:null};
+ const total=s.fineCoverage+s.coarseCoverage,remainder=1-s.sourceBias;
+ return {mode:'independent-batch',source:s.sourceBias,fine:total?remainder*s.fineCoverage/total:0,broad:total?remainder*s.coarseCoverage/total:0,unassigned:total?0:remainder};
+}
 import {particleDepthLayout} from './volume-particle-depth.mjs';
 // Camera-relative acquisition policy; the retained pool is a separate resource.
 export function particleBatch(samples,aspect,limit){

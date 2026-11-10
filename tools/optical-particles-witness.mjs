@@ -1,6 +1,18 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
+export function verifySingleGridParticleState(state,expected){
+ assert.match(state.backend,/webgpu:apple/i,'native WebGPU Apple backend required');
+ assert.equal(state.gridHeight?.widthCells,8,'single-grid fixture width must be 8');assert.equal(state.gridHeight?.heightCells,12,'single-grid fixture height must be 12');
+ assert.notEqual(state.worldSmoke?.effective,'one-way-world-field','single-grid fixture must have Coarse/World off');
+ assert.equal(state.opticalParticles?.effective,'world-optical-particles','effective particle route required');
+ for(const [key,value] of Object.entries(expected))assert.equal(state.opticalParticles.settings[key],value,'effective particle setting '+key);
+ if(expected.fillExtinction>0||expected.extinctionView>0){assert.equal(state.opticalParticles.gridAssist?.effective,'current-single-grid-extinction','independent extinction assist must execute');assert.ok(state.opticalParticles.gridAssist.generation>0,'current extinction generation required');}
+}
+export function verifyParticleImage({width,height,rgba}){
+ assert.ok(Number.isSafeInteger(width)&&width>0&&Number.isSafeInteger(height)&&height>0,'native image dimensions required');assert.equal(rgba.length,width*height*4,'partial native image size');
+ assert.ok(rgba.some((v,i)=>i%4!==3&&v>10),'blank native image');
+}
 export function verifyParticleProgress(before,after){
  assert.equal(before.length,after.length,'particle population shape changed');let retained=0,changed=0;
  for(let i=0;i<before.length;i+=24){if(before[i+3]<=0||after[i+3]<=before[i+3])continue;let same=true;for(let k=4;k<12;k++)if(before[i+k]!==after[i+k])same=false;if(!same)continue;retained++;if([0,1,2,20,21,22].some(k=>Math.abs(before[i+k]-after[i+k])>1e-7))changed++;}
@@ -36,7 +48,7 @@ export async function runParticleWitness({origin,out,expected,repoRoot,playwrigh
   await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('setOptions',{radius:.5,stretch:2}));await draw('large-support');await capture('large-support');assert.notDeepEqual(await fs.readFile(path.join(out,'small-support.rgba8')),await fs.readFile(path.join(out,'large-support.rgba8')),'support controls must change rendered output');await saveRecords('paused-large-support');assert.deepEqual(await fs.readFile(path.join(out,'developed.f32')),await fs.readFile(path.join(out,'paused-large-support.f32')),'paused support edits must preserve carrier state at the default refresh fraction');
   report.phase='motion';await save();await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('setOptions',{refresh:0,rise:.001,expansion:.5}));
   await page.evaluate(async()=>{const v=window.__kaminosVolumePrototype;v.setSimulationPaused(false);for(let i=0;i<12;i++){const r=await v.sampleFrame({advanceSim:true,now:2200+16*i});if(!r.ok)throw Error(r.reason);}v.setSimulationPaused(true);});await saveRecords('continued');const before=await fs.readFile(path.join(out,'developed.f32')),after=await fs.readFile(path.join(out,'continued.f32'));report.progress=verifyParticleProgress(new Float32Array(before.buffer,before.byteOffset,before.length/4),new Float32Array(after.buffer,after.byteOffset,after.length/4));await capture('continued');await saveRecords('continued-presented');assert.deepEqual(await fs.readFile(path.join(out,'continued.f32')),await fs.readFile(path.join(out,'continued-presented.f32')),'display capture must match recorded carrier state');
-  report.phase='controls';await save();const control=page.getByRole('spinbutton',{name:'Emission gain',exact:true});await control.click();await control.fill('1.5');await control.dispatchEvent('input');assert.equal((await page.evaluate(()=>window.__kaminosVolumePrototype.opticalParticleSettings())).gain,1.5);
+  report.phase='controls';await save();const control=page.getByRole('spinbutton',{name:'Emission gain',exact:true});await control.click();await control.fill('1.5');await control.dispatchEvent('input');await page.waitForFunction(()=>window.__kaminosVolumePrototype.opticalParticleSettings().gain===1.5);assert.equal((await page.evaluate(()=>window.__kaminosVolumePrototype.opticalParticleSettings())).gain,1.5);
   await page.screenshot({path:path.join(out,'controls.png')});assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';
  }catch(error){report.failurePhase=report.phase;report.error=error.stack??String(error);if(page)try{await page.screenshot({path:path.join(out,'failure.png')});report.lastState=await page.evaluate(()=>window.__kaminosVolumePrototype?.debugState());}catch(e){report.captureFailure=String(e);}}
  finally{try{await browser?.close();report.browserClosed=true;}catch(e){report.status='failed';report.cleanupFailure=String(e);}await save();}
