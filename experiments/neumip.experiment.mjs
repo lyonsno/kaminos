@@ -39,7 +39,7 @@ export default {
         const next=createNeumipMaterial(model,{uvScale,gain});
         const previous=current;current=next;name=requested;if(mesh)mesh.material=next.material;previous?.material.dispose();persist();session.redraw();
         record({kind:'neumip.material',phase:'applied',effective:{name,source:model.source}});return read();
-      }finally{if(abort===controller){abort=null;sync();}}
+      }catch(error){if(disposed||token!==generation)return;throw error;}finally{if(abort===controller){abort=null;sync();}}
     };
     try{
       await select(name);mesh=new Mesh(makeGeometry(surface),current.material);mesh.name='Neural surface';mesh.receiveShadow=true;mesh.position.y=1.5;

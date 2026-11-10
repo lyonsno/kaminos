@@ -21,7 +21,24 @@ try{
  await assert.doesNotReject(pending,'Late ignored-abort result must not read a disposed scene session');
  closed=false;holdModel=false;catalog={schema:'kaminos.neumip.models.v1',materials:{student:{url:'fixture:student-archive',sha256}}};
  let custom;await assert.doesNotReject(async()=>{custom=await experiment.create({host,inputs:{catalogURL:'/fixture/catalog.json'},record(){},updateInputs(){}});},'Custom catalogs choose an installed material when none is specified');
- assert.equal(custom.read().material,'student');await custom.dispose();closed=false;
+ assert.equal(custom.read().material,'student');
+ // A superseded load is ordinary latest-selection behavior; real current
+ // failures still reject so the operator sees them.
+ const normalFetch=globalThis.fetch;
+ catalog.materials.slow={url:'fixture:held-archive',sha256};catalog.materials.broken={url:'fixture:failed-archive',sha256};
+ let heldStarted;const heldReady=new Promise(resolve=>heldStarted=resolve);
+ globalThis.fetch=(url,options={})=>{
+   if(url==='fixture:held-archive')return new Promise((resolve,reject)=>{heldStarted();options.signal.addEventListener('abort',()=>reject(options.signal.reason),{once:true});});
+   if(url==='fixture:failed-archive')return Promise.resolve({ok:false,status:503});
+   return normalFetch(url,options);
+ };
+ const obsolete=custom.operations.selectMaterial('slow'),settled=obsolete.then(()=>null,error=>error);await heldReady;
+ await custom.operations.selectMaterial('student');
+ assert.equal(await settled,null,'Superseded load cancellation must not become a material-selection error');
+ assert.equal(custom.read().material,'student');
+ await assert.rejects(custom.operations.selectMaterial('broken'),/HTTP 503/,'Current load failure must remain visible');
+ globalThis.fetch=normalFetch;
+ await custom.dispose();closed=false;
  catalog.materials.student={sha256};
  await assert.rejects(experiment.create({host,inputs:{catalogURL:'/fixture/catalog.json',material:'student'},record(){},updateInputs(){}}),/source URL|filename/);
  console.log('NeuMIP lifecycle, custom-catalog selection and invalid source checks passed');
