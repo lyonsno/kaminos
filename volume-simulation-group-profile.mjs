@@ -9,7 +9,7 @@ export async function sampleSimulationGroupGpuProfile(runtimes,{steps=32}={}) {
  if(!device.features.has('timestamp-query'))return {status:'unsupported',reason:'timestamp-query-not-supported'};
  const bytes=steps*256;
  if(!Number.isSafeInteger(bytes)||bytes>device.limits.maxBufferSize)throw Error('Profile exceeds GPU buffer capacity');
- for(const r of runtimes){if(typeof r.encodeSimulationProfileStep!=='function')throw Error('Runtime lacks common-scope simulation profiling');}
+ for(const r of runtimes){if(typeof r.submitSimulationProfileStep!=='function')throw Error('Runtime lacks common-scope simulation profiling');}
  for(const r of runtimes)r.setSelectiveHeadLiveCapturePaused(true);
  await device.queue.onSubmittedWorkDone();
  const owned=[];
@@ -23,7 +23,7 @@ export async function sampleSimulationGroupGpuProfile(runtimes,{steps=32}={}) {
   for(let round=0;round<steps;round++) {
    const start=device.createCommandEncoder({label:'simulation group start'});marker(start,0);device.queue.submit([start.finish()]);
    const cpuStart=performance.now(),row=[];
-   for(const runtime of runtimes){const encoder=device.createCommandEncoder({label:'simulation group unit'});row.push(runtime.encodeSimulationProfileStep(encoder,origin+round*1000/60));device.queue.submit([encoder.finish()]);}
+   for(const runtime of runtimes)row.push(runtime.submitSimulationProfileStep(origin+round*1000/60));
    encodeCpuMs.push(performance.now()-cpuStart);receipts.push(row);
    const end=device.createCommandEncoder({label:'simulation group end'});marker(end,1);end.resolveQuerySet(querySet,0,2,resolve,round*256);
    if(round===steps-1)end.copyBufferToBuffer(resolve,0,readback,0,bytes);
