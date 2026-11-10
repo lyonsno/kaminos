@@ -63,14 +63,15 @@ fn bsdfSample(n:vec3<f32>,v:vec3<f32>,m:Material,s:ptr<function,u32>)->vec3<f32>
  let h=tangentDirection(n,vec3<f32>(sqrt(1.0-c*c)*cos(phi),sqrt(1.0-c*c)*sin(phi),c));return reflect(-v,h);
 }
 fn powerWeight(a:f32,b:f32)->f32{return a*a/max(a*a+b*b,1e-20);}
-fn pathTrace(origin:vec3<f32>,direction:vec3<f32>,state:ptr<function,u32>)->vec3<f32>{
+fn pathTraceIncident(origin:vec3<f32>,direction:vec3<f32>,state:ptr<function,u32>,incident:vec3<f32>,materialQuery:bool)->vec3<f32>{
  var o=origin;var d=direction;var throughput=vec3<f32>(1.0);var radiance=vec3<f32>(0.0);var previousPdf=0.0;var previousNormal=vec3<f32>(0.0);
  for(var bounce=0u;bounce<params.extent.w;bounce++){
   let hit=trace(o,d,1e20);
   if(hit.id==0xffffffffu){var weight=1.0;if(bounce>0u){weight=powerWeight(previousPdf,max(dot(previousNormal,d),0.0)/PI);}radiance+=throughput*params.knobs.z*weight;break;}
   let point=o+d*hit.t;let n=hit.normal;let v=-d;let m=materials[u32(triangles[hit.id].a.w)];let offset=point+n*0.0001;
-  for(var i=0u;i<u32(params.knobs.w);i++){
-   let light=lights[i];var l=normalize(light.positionType.xyz);var distance=1e20;var intensity=light.color.rgb;
+  for(var i=0u;i<select(u32(params.knobs.w),1u,materialQuery);i++){
+   var light=lights[i];if(materialQuery){light=Light(vec4<f32>(incident,0.0),vec4<f32>(1.0),vec4<f32>(0.0),vec4<f32>(0.0));}
+   var l=normalize(light.positionType.xyz);var distance=1e20;var intensity=light.color.rgb;
    if(light.positionType.w>0.5){let delta=light.positionType.xyz-point;distance=length(delta);l=delta/max(distance,1e-8);intensity/=max(distance*distance,1e-8);}
    if(light.positionType.w>1.5){let angle=dot(-l,light.directionCone.xyz);var cone=select(0.0,1.0,angle>=light.directionCone.w);if(light.innerCone.x>light.directionCone.w+1e-7){cone=smoothstep(light.directionCone.w,light.innerCone.x,angle);}intensity*=cone;}
    if(dot(n,l)>0.0&&trace(offset,l,distance-.0002).id==0xffffffffu){radiance+=throughput*bsdf(n,v,l,m)*dot(n,l)*intensity;}
@@ -87,6 +88,7 @@ fn pathTrace(origin:vec3<f32>,direction:vec3<f32>,state:ptr<function,u32>)->vec3
  }
  return radiance;
 }
+fn pathTrace(origin:vec3<f32>,direction:vec3<f32>,state:ptr<function,u32>)->vec3<f32>{return pathTraceIncident(origin,direction,state,vec3<f32>(0.0,1.0,0.0),false);}
 `;
 
 export const SURFACE_TEACHER_IMAGE_WGSL=SURFACE_TEACHER_COMMON_WGSL+/* wgsl */`

@@ -1,0 +1,78 @@
+// kaminos-test: manual — explicit source/config/output; Greenroom accelerator job.
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {createHash} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
+import {createGroundTeacherSource} from '../ground-teacher-source.mjs';
+import {SurfaceMaterialTeacher} from '../surface-material-teacher.mjs';
+import {createNeumipStudent,createNeumipTraining,neumipTrainingLayout,neumipTrainingBufferSizes} from '../neumip-training.mjs';
+import {writeNeumipModel,readNeumipModel} from '../neumip-model.mjs';
+import {withKaminosGpu,withGpuErrorScopes} from './shader-herder.mjs';
+
+const [configPath,out]=process.argv.slice(2);if(!configPath||!out)throw Error('Usage: node tools/ground-material-fit.mjs CONFIG_JSON OUTPUT_DIR');
+await fs.mkdir(out,{recursive:true});
+const report={schema:'kaminos.ground-material-fit.v1',status:'running',phase:'configuration',repoRoot:process.cwd(),job:process.env.GREENROOM_JOB_ID??null,configPath,checkpoints:[],
+ claim:'Independent authored ground microgeometry, explicit diffuse/GGX multibounce directional transport, box-filtered labels; preliminary fit, not converged or simulated soil',
+ receiver:'neurips-unix-eunuch-neumip-turnip-tender'};
+const publish=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));await publish();
+const digest=x=>createHash('sha256').update(x).digest('hex');
+const raw=async(name,data)=>{const bytes=Buffer.from(data.buffer,data.byteOffset,data.byteLength);await fs.writeFile(path.join(out,name),bytes);return {file:name,sha256:digest(bytes),bytes:bytes.length};};
+const loss=(a,b)=>a.reduce((s,x,i)=>s+.5*(x-b[i])**2,0)/(a.length/3);
+try{
+ if(!report.job)throw Error('Ground capture/training requires Greenroom admission');
+ const config=JSON.parse(await fs.readFile(configPath,'utf8'));
+ const options={resolution:64,steps:2000,batch:2048,queries:65536,heldout:2048,samples:8,heldoutSamples:32,bounces:3,seed:41,...config.fit};report.options=options;
+ for(const [k,v]of Object.entries(options))if(!Number.isSafeInteger(v)||v<1)throw Error(`Invalid fit option ${k}`);
+ report.sourceRevision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();report.sourceStatus=execFileSync('git',['status','--porcelain'],{encoding:'utf8'});
+ report.sourceFiles={};for(const name of ['ground-teacher-source.mjs','surface-teacher-wgsl.mjs','surface-teacher.mjs','surface-material-teacher.mjs','neumip-training.mjs','neumip-model.mjs','tools/ground-material-fit.mjs']){const b=await fs.readFile(name);report.sourceFiles[name]=digest(b);await fs.writeFile(path.join(out,path.basename(name)),b);}
+ const source=createGroundTeacherSource(config.source);report.ground={config:source.config,triangles:source.triangles.length,materials:source.materials,boundary:source.boundary,referenceHeight:source.referenceHeight,sha256:digest(JSON.stringify(source))};
+ await fs.writeFile(path.join(out,'config.json'),JSON.stringify(config,null,2));await fs.writeFile(path.join(out,'source.json'),JSON.stringify(source));
+ let state=options.seed>>>0;const random=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return (state+.5)/4294967296;};
+ const queries=n=>{const data=new Float32Array(n*8);for(let i=0;i<n;i++){const q=i*8;data[q]=random();data[q+1]=random();for(const d of [2,4]){const r=Math.sqrt(random()*.99),t=random()*Math.PI*2;data[q+d]=r*Math.cos(t);data[q+d+1]=r*Math.sin(t);}data[q+6]=random()<.6?0:random()*Math.log2(options.resolution/2);}return data;};
+ const trainingQueries=queries(options.queries),heldoutQueries=queries(options.heldout),student=createNeumipStudent({resolution:options.resolution,seed:options.seed});
+ const buffers=neumipTrainingBufferSizes(neumipTrainingLayout(student),Math.max(options.batch,options.heldout,128**2));
+ const largest=Math.max(...Object.values(buffers),options.queries*32,source.triangles.length*48);
+ const requiredLimits={maxStorageBufferBindingSize:Math.max(128*1024**2,largest),maxBufferSize:Math.max(256*1024**2,largest)};
+ report.phase='capture';await publish();
+ await withKaminosGpu(async ctx=>{
+  report.adapter=ctx.adapterInfo;let teacher,learner;const start=performance.now();
+  try{
+   teacher=new SurfaceMaterialTeacher(ctx.device,{...source,lights:[],environment:0,bounces:options.bounces});
+   const capture={tileSize:source.config.tileSize,referenceHeight:source.referenceHeight,resolution:options.resolution,samples:options.samples,seed:options.seed};
+   const labels=await withGpuErrorScopes(ctx.device,'ground-label-capture',()=>teacher.evaluateMaterial(trainingQueries,capture));
+   const heldoutLabels=await teacher.evaluateMaterial(heldoutQueries,{...capture,samples:options.heldoutSamples,seed:options.seed+1});
+   report.captureMs=performance.now()-start;report.dataset={queries:await raw('training-queries.f32',trainingQueries),labels:await raw('training-labels.f32',labels),heldoutQueries:await raw('heldout-queries.f32',heldoutQueries),heldoutLabels:await raw('heldout-labels.f32',heldoutLabels),filter:'square box, width 2^LOD/resolution in material reference plane',response:'linear outgoing radiance under unit directional irradiance divided by macro light cosine; live material multiplies it back'};
+   learner=await createNeumipTraining(ctx.device,student,{batchSize:Math.max(options.batch,options.heldout,128**2)});
+   const checkpoint=async step=>{
+    learner.setQueries(heldoutQueries);const {rgb}=await learner.evaluate();
+    const model=await learner.exportModel(),bytes=writeNeumipModel(model),name=`ground-${options.resolution}-step-${step}.model`;
+    // Round-trip the actual runtime artifact, not only training-resident state.
+    readNeumipModel(bytes);await fs.writeFile(path.join(out,name),bytes);await raw(`heldout-${step}.f32`,rgb);
+    const record={step,loss:loss(rgb,heldoutLabels),elapsedMs:performance.now()-start,file:name,sha256:digest(bytes),bytes:bytes.length};report.checkpoints.push(record);console.log(JSON.stringify(record));await publish();
+   };
+   report.phase='fit';await checkpoint(0);
+   const fitStart=performance.now(),batch=new Float32Array(options.batch*8),targets=new Float32Array(options.batch*3);
+   for(let step=1;step<=options.steps;step++){
+    for(let i=0;i<options.batch;i++){const index=Math.floor(random()*options.queries);batch.set(trainingQueries.subarray(index*8,index*8+8),i*8);targets.set(labels.subarray(index*3,index*3+3),i*3);}
+    learner.setQueries(batch);learner.setTargets(targets);
+    const update=async()=>{const encoder=ctx.device.createCommandEncoder();learner.encodeUpdate(encoder);ctx.device.queue.submit([encoder.finish()]);await ctx.device.queue.onSubmittedWorkDone();};
+    if(step===1)await withGpuErrorScopes(ctx.device,'ground-first-update',update);else await update();
+    await new Promise(resolve=>setTimeout(resolve,16));
+    if(step%250===0||step===options.steps)await checkpoint(step);
+   }
+   report.fitMs=performance.now()-fitStart;
+   // Matched 128px material-domain images: same UV, footprint, directions and
+   // gain; these diagnose fitting, not projective camera or silhouette behavior.
+   report.phase='comparison';await publish();const size=128,images=[];
+   for(const [name,view,light]of [['front',[0,0],[.5,.3]],['oblique',[.75,.2],[-.5,.5]]]){
+    const q=new Float32Array(size*size*8);for(let y=0;y<size;y++)for(let x=0;x<size;x++)q.set([(x+.5)/size,(y+.5)/size,...view,...light,0,0],(y*size+x)*8);
+    const reference=await teacher.evaluateMaterial(q,{...capture,samples:32,seed:options.seed+2});learner.setQueries(q);const predicted=(await learner.evaluate()).rgb;
+    images.push({name,width:size,height:size,view,light,lod:0,reference:await raw(`${name}-source.f32`,reference),student:await raw(`${name}-student.f32`,predicted)});
+   }
+   report.images=images;report.elapsedMs=performance.now()-start;
+   if(!(report.checkpoints.at(-1).loss<report.checkpoints[0].loss))throw Error('Held-out response did not improve');
+  }finally{learner?.dispose();teacher?.dispose();}
+ },{requiredLimits,onEvidence:e=>report.evidence=e});
+ report.status='passed';report.phase='complete';
+}catch(error){report.status='failed';report.error=error.stack;process.exitCode=1;}
+finally{await publish();console.log(JSON.stringify({status:report.status,phase:report.phase,elapsedMs:report.elapsedMs,error:report.error}));}
