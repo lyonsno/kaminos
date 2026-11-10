@@ -33,8 +33,11 @@ training and held-out queries/labels, early checkpoints, archive digests, and
 matched source/student RGB arrays. It defaults to 64 square, 2,000 updates,
 2,048 queries per update, 65,536 stored training queries, eight path samples per
 training label, and 32 per held-out label. These are preliminary experiment
-settings, not convergence criteria. The finite label set is reused; training
-does not produce a fresh independent path integral for every update. Data and
+settings, not convergence criteria. By default the finite label set is reused.
+Set `fit.fresh: true` to trace a new query batch at every update. That route
+retains the complete training query and label streams with hashes, in addition
+to the initial corpus and fixed held-out set. A 2,000 × 2,048 fresh run stores
+about 172 MiB of additional uncompressed training data. Data and
 source remain in the selected output directory. On failure `report.json`
 preserves the phase, last trustworthy results and error.
 

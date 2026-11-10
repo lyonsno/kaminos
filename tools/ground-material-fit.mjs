@@ -21,8 +21,8 @@ const loss=(a,b)=>a.reduce((s,x,i)=>s+.5*(x-b[i])**2,0)/(a.length/3);
 try{
  if(!report.job)throw Error('Ground capture/training requires Greenroom admission');
  const config=JSON.parse(await fs.readFile(configPath,'utf8'));
- const options={resolution:64,steps:2000,batch:2048,queries:65536,heldout:2048,samples:8,heldoutSamples:32,bounces:3,seed:41,...config.fit};report.options=options;
- for(const [k,v]of Object.entries(options))if(!Number.isSafeInteger(v)||v<1)throw Error(`Invalid fit option ${k}`);
+ const options={resolution:64,steps:2000,batch:2048,queries:65536,heldout:2048,samples:8,heldoutSamples:32,bounces:3,seed:41,fresh:false,...config.fit};report.options=options;
+ for(const [k,v]of Object.entries(options))if(k==='fresh'?typeof v!=='boolean':!Number.isSafeInteger(v)||v<1)throw Error(`Invalid fit option ${k}`);
  report.sourceRevision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();report.sourceStatus=execFileSync('git',['status','--porcelain'],{encoding:'utf8'});
  report.sourceFiles={};for(const name of ['ground-teacher-source.mjs','surface-teacher-wgsl.mjs','surface-teacher.mjs','surface-material-teacher.mjs','neumip-training.mjs','neumip-model.mjs','tools/ground-material-fit.mjs']){const b=await fs.readFile(name);report.sourceFiles[name]=digest(b);await fs.writeFile(path.join(out,path.basename(name)),b);}
  const source=createGroundTeacherSource(config.source);report.ground={config:source.config,triangles:source.triangles.length,materials:source.materials,boundary:source.boundary,referenceHeight:source.referenceHeight,sha256:digest(JSON.stringify(source))};
@@ -51,15 +51,25 @@ try{
     const record={step,loss:loss(rgb,heldoutLabels),elapsedMs:performance.now()-start,file:name,sha256:digest(bytes),bytes:bytes.length};report.checkpoints.push(record);console.log(JSON.stringify(record));await publish();
    };
    report.phase='fit';await checkpoint(0);
-   const fitStart=performance.now(),batch=new Float32Array(options.batch*8),targets=new Float32Array(options.batch*3);
+   const fitStart=performance.now();let batch=new Float32Array(options.batch*8),targets=new Float32Array(options.batch*3);
+   let queryStream,labelStream;const queryHash=createHash('sha256'),labelHash=createHash('sha256');
+   try{
+   if(options.fresh){queryStream=await fs.open(path.join(out,'fresh-training-queries.f32'),'w');labelStream=await fs.open(path.join(out,'fresh-training-labels.f32'),'w');report.dataset.trainingMode='Fresh independently traced query batch per optimizer update; every query and label retained';}
+   else report.dataset.trainingMode='Resampled finite captured label set';
    for(let step=1;step<=options.steps;step++){
-    for(let i=0;i<options.batch;i++){const index=Math.floor(random()*options.queries);batch.set(trainingQueries.subarray(index*8,index*8+8),i*8);targets.set(labels.subarray(index*3,index*3+3),i*3);}
+    if(options.fresh){
+     batch=queries(options.batch);targets=await teacher.evaluateMaterial(batch,{...capture,seed:options.seed+step+3});
+     const qb=Buffer.from(batch.buffer,batch.byteOffset,batch.byteLength),tb=Buffer.from(targets.buffer,targets.byteOffset,targets.byteLength);
+     await queryStream.writeFile(qb);await labelStream.writeFile(tb);queryHash.update(qb);labelHash.update(tb);report.lastCapturedStep=step;
+    }else for(let i=0;i<options.batch;i++){const index=Math.floor(random()*options.queries);batch.set(trainingQueries.subarray(index*8,index*8+8),i*8);targets.set(labels.subarray(index*3,index*3+3),i*3);}
     learner.setQueries(batch);learner.setTargets(targets);
     const update=async()=>{const encoder=ctx.device.createCommandEncoder();learner.encodeUpdate(encoder);ctx.device.queue.submit([encoder.finish()]);await ctx.device.queue.onSubmittedWorkDone();};
     if(step===1)await withGpuErrorScopes(ctx.device,'ground-first-update',update);else await update();
     await new Promise(resolve=>setTimeout(resolve,16));
     if(step%250===0||step===options.steps)await checkpoint(step);
    }
+   }finally{await queryStream?.close();await labelStream?.close();}
+   if(options.fresh)report.dataset.fresh={queries:{file:'fresh-training-queries.f32',bytes:options.steps*options.batch*32,sha256:queryHash.digest('hex')},labels:{file:'fresh-training-labels.f32',bytes:options.steps*options.batch*12,sha256:labelHash.digest('hex')}};
    report.fitMs=performance.now()-fitStart;
    // Matched 128px material-domain images: same UV, footprint, directions and
    // gain; these diagnose fitting, not projective camera or silhouette behavior.
