@@ -4,7 +4,7 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {readNeumipModel,writeNeumipModel} from '../neumip-model.mjs';
-import {createNeumipStudent,createNeumipTraining} from '../neumip-training.mjs';
+import {createNeumipStudent,createNeumipTraining,neumipTrainingLayout,neumipTrainingBufferSizes} from '../neumip-training.mjs';
 import {withKaminosGpu} from './shader-herder.mjs';
 
 const [file,out,...flags]=process.argv.slice(2);
@@ -48,9 +48,11 @@ try{
   const heldoutCount=Math.min(options.batch,512),trainingState=state;
   state=(options.seed^0x5a17bca9)>>>0;const heldout=queries(heldoutCount,student.mips.length-1);state=trainingState;
   const heldoutFinest=heldout.slice();for(let q=0;q<heldoutCount;q++)heldoutFinest[q*8+6]=0;
+  const largestBinding=Math.max(...[author,student].flatMap(model=>Object.values(neumipTrainingBufferSizes(neumipTrainingLayout(model),options.batch))));
+  report.requiredLimits={maxStorageBufferBindingSize:Math.max(128*1024**2,largestBinding)};
   report.phase='compile';await publish();
   await withKaminosGpu(async ctx=>{
-    report.adapter=ctx.adapterInfo;let teacher=null,learner=null;
+    report.adapter=ctx.adapterInfo;report.effectiveLimits={maxStorageBufferBindingSize:ctx.device.limits.maxStorageBufferBindingSize,maxBufferSize:ctx.device.limits.maxBufferSize};let teacher=null,learner=null;
     try{
       teacher=await createNeumipTraining(ctx.device,author,{batchSize:options.batch});
       learner=await createNeumipTraining(ctx.device,student,{batchSize:options.batch});
@@ -84,7 +86,7 @@ try{
       report.matchedReference={sha256:hash(matched),bytes:matched.length,teacherLevelsRemoved:bias};
       report.samplerState=state;
     }finally{learner?.dispose();teacher?.dispose();}
-  },{onEvidence:e=>report.evidence=e});
+  },{requiredLimits:report.requiredLimits,onEvidence:e=>report.evidence=e});
   report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=error.stack;process.exitCode=1;}
 finally{await publish();console.log(JSON.stringify({status:report.status,phase:report.phase,latest:report.latest,lossRatio:report.lossRatio,error:report.error}));}

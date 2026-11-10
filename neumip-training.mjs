@@ -41,6 +41,13 @@ export function neumipTrainingLayout(model) {
   return {networks,fields,weightCount,count:at,actCount:act,deltaCount:delta,scratchStride:act+delta+4,values};
 }
 
+// Exact storage requirements, shared by device admission and allocation.
+export function neumipTrainingBufferSizes(layout,batchSize) {
+  if(!Number.isSafeInteger(batchSize)||batchSize<1)throw Error('batchSize must be positive');
+  return {parameters:layout.count*4,queries:batchSize*8*4,targets:batchSize*3*4,gradients:layout.count*4,
+    scratch:batchSize*layout.scratchStride*4,partial:layout.weightCount*Math.ceil(batchSize/64)*4,moments:layout.count*8};
+}
+
 export function restoreNeumipParameters(model,layout,values) {
   if(values.length!==layout.count||!values.every(Number.isFinite))throw Error('Invalid fitted NeuMIP parameter array');
   for(const net of Object.values(layout.networks))for(const l of net.layers){
@@ -203,16 +210,20 @@ var<workgroup> sums:array<f32,64>;
 // The caller owns scheduling/admission and can pause between fenced updates.
 export async function createNeumipTraining(device,model,{batchSize=4096}={}) {
   if(!Number.isSafeInteger(batchSize)||batchSize<1)throw Error('batchSize must be positive');
-  const layout=neumipTrainingLayout(model),buffers=[];
+  const layout=neumipTrainingLayout(model),sizes=neumipTrainingBufferSizes(layout,batchSize),buffers=[];
+  for(const [label,bytes] of Object.entries(sizes)){
+    if(bytes>device.limits?.maxStorageBufferBindingSize)throw Error(`NeuMIP storage binding ${label} requires ${bytes} bytes; device limit is ${device.limits.maxStorageBufferBindingSize}. Request sufficient device limits.`);
+    if(bytes>device.limits?.maxBufferSize)throw Error(`NeuMIP buffer ${label} requires ${bytes} bytes; device limit is ${device.limits.maxBufferSize}`);
+  }
   const storage=(label,bytes,extra=0)=>{const b=device.createBuffer({label,size:Math.max(4,bytes),usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC|extra});buffers.push(b);return b;};
   try {
-  const parameters=storage('neumip fitted parameters',layout.count*4);
-  const queries=storage('neumip material queries',batchSize*8*4);
-  const targets=storage('neumip teacher RGB',batchSize*3*4);
-  const gradients=storage('neumip gradients',layout.count*4);
-  const scratch=storage('neumip activations and deltas',batchSize*layout.scratchStride*4);
-  const partial=storage('neumip reduced weight gradients',layout.weightCount*Math.ceil(batchSize/64)*4);
-  const moments=storage('neumip Adam moments',layout.count*8);
+  const parameters=storage('neumip fitted parameters',sizes.parameters);
+  const queries=storage('neumip material queries',sizes.queries);
+  const targets=storage('neumip teacher RGB',sizes.targets);
+  const gradients=storage('neumip gradients',sizes.gradients);
+  const scratch=storage('neumip activations and deltas',sizes.scratch);
+  const partial=storage('neumip reduced weight gradients',sizes.partial);
+  const moments=storage('neumip Adam moments',sizes.moments);
   const config=device.createBuffer({label:'neumip train configuration',size:32,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});buffers.push(config);
   const bindingLayout=device.createBindGroupLayout({entries:Array.from({length:8},(_,binding)=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:binding===7?'uniform':binding===1?'read-only-storage':'storage'}}))});
   const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[bindingLayout]});

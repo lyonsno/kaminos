@@ -89,3 +89,9 @@ test('GPU target copies require a matching current source batch and encoder',()=
     assert.doesNotThrow(()=>learner.encodeUpdate(encoder));
   }finally{source.dispose();learner.dispose();}
 }));
+
+
+test('insufficient storage binding limits fail before creating a fake GPU learner',()=>withFakeDevice(async device=>{
+  device.limits={maxStorageBufferBindingSize:16,maxBufferSize:1024};
+  await assert.rejects(createNeumipTraining(device,createNeumipStudent({resolution:2}),{batchSize:2}),/storage binding.*requires/i);
+}));
