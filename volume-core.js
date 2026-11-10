@@ -28824,6 +28824,18 @@ export function createKaminosVolumePrototype({
     sampleBoundarySplatFootprintAudit,
     sampleBoundarySplatInstanceResidency,
     sampleDeterministicReplayFrame,
+    // Diagnostic caller supplies an encoder on this runtime's borrowed device.
+    // Keep normal per-unit submission ownership with the group profiler.
+    encodeSimulationProfileStep(encoder, now = performance.now()) {
+      if (!gpuInitialized || !device || !state.active) throw Error('Simulation profile runtime is inactive');
+      if (!selectiveHeadLiveCapturePaused) throw Error('Simulation profile requires capture pause');
+      const before = state.simStepCount;
+      updateUniforms(now);
+      encodeSim(encoder);
+      if (state.simStepCount !== before + 1) throw Error('Simulation profile step did not advance');
+      state.frameCount += 1;
+      return {beforeSimStepCount:before,simStepCount:state.simStepCount,frameCount:state.frameCount};
+    },
     sampleSimGpuProfile,
     beginDebugFullFieldImport,
     writeDebugFullFieldImportChunk,
