@@ -17,7 +17,7 @@ const report={status:'running',phase:'input',repoRoot:process.cwd(),queueJob:pro
   claim:'Randomly initialized directional student distilled from frozen author network; not an independent microgeometry reproduction',
   training:'Unquantized RGB squared error, independent learned mips, no decaying Gaussian field blur in this first experiment',
   scheduling:'One fenced optimizer update followed by a 16ms host yield; caller/Greenroom owns admission',
-  source:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim()};
+  source:null};
 const publish=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));await publish();
 const hash=a=>createHash('sha256').update(a).digest('hex');
 let state=options.seed>>>0;
@@ -34,6 +34,8 @@ function queries(n,maxLod){
 const meanLoss=(a,b)=>a.reduce((sum,x,i)=>sum+.5*(x-b[i])**2,0)/(a.length/3);
 try{
   if(!report.queueJob)throw Error('Directional fitting requires Greenroom admission');
+  report.source=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+  report.sourceStatus=execFileSync('git',['status','--porcelain'],{encoding:'utf8'});report.sourceDirty=!!report.sourceStatus.trim();
   for(const relative of ['neumip-training.mjs','neumip-model.mjs','tools/neumip-fit.mjs']){
     const data=await fs.readFile(relative);(report.sourceFiles??={})[relative]=hash(data);await fs.writeFile(path.join(out,path.basename(relative)),data);
   }

@@ -10,8 +10,13 @@ export default {
     const catalogURL=inputs.catalogURL??rootURL+'catalog.json';
     const response=await fetch(catalogURL);if(!response.ok)throw Error(`NeuMIP model catalog HTTP ${response.status}: ${catalogURL}`);
     const catalog=await response.json();if(!['kaminos.neumip.author-models.v1','kaminos.neumip.models.v1'].includes(catalog.schema))throw Error('Unknown NeuMIP model catalog');
-    const source=name=>{const entry=catalog.materials[name];if(!entry)throw Error(`NeuMIP material is not installed: ${name}`);return {...entry,url:entry.url??rootURL+encodeURIComponent(entry.filename)};};
-    let name=inputs.material??'wool2',uvScale=positive(inputs.uvScale??3,'UV scale'),gain=positive(inputs.gain??1,'Material gain'),surface=inputs.surface??'folded';
+    if(!catalog.materials||typeof catalog.materials!=='object'||Array.isArray(catalog.materials)||!Object.keys(catalog.materials).length)throw Error('NeuMIP catalog has no materials');
+    const source=name=>{const entry=catalog.materials[name];if(!entry)throw Error(`NeuMIP material is not installed: ${name}`);
+      if(typeof entry.url==='string'&&entry.url.trim())return {...entry,url:entry.url};
+      if(typeof entry.filename==='string'&&entry.filename.trim())return {...entry,url:rootURL+encodeURIComponent(entry.filename)};
+      throw Error(`NeuMIP material needs a source URL or filename: ${name}`);
+    };
+    let name=inputs.material??catalog.defaultMaterial??(Object.hasOwn(catalog.materials,'wool2')?'wool2':Object.keys(catalog.materials)[0]),uvScale=positive(inputs.uvScale??3,'UV scale'),gain=positive(inputs.gain??1,'Material gain'),surface=inputs.surface??'folded';
     const session=await host.scene.open();if(!host.scene.renderer().backend.isWebGPUBackend){await session.dispose();throw Error('Neural materials require native WebGPU');}
     let current,mesh,asset,disposed=false,generation=0,abort,selector,scaleInput,gainInput,surfaceInput,status,drag=[];
     const makeGeometry=kind=>{

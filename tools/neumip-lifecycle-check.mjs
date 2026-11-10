@@ -8,7 +8,8 @@ const [modelPath]=process.argv.slice(2);if(!modelPath)throw Error('Local author 
 const bytes=await fs.readFile(modelPath),sha256=Buffer.from(await webcrypto.subtle.digest('SHA-256',bytes)).toString('hex');
 const originalFetch=globalThis.fetch,originalDispose=BufferGeometry.prototype.dispose;
 let disposedGeometries=0,closed=false,rejectAttach=true,holdModel=false,releaseModel;
-globalThis.fetch=async url=>String(url).endsWith('catalog.json')?{ok:true,json:async()=>({schema:'kaminos.neumip.author-models.v1',materials:{wool2:{filename:'wool2_web.model',sha256}}})}:{ok:true,url:'fixture:author-archive',arrayBuffer:async()=>{if(holdModel)await new Promise(resolve=>releaseModel=resolve);return bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength);}};
+let catalog={schema:'kaminos.neumip.author-models.v1',materials:{wool2:{filename:'wool2_web.model',sha256}}};
+globalThis.fetch=async url=>String(url).endsWith('catalog.json')?{ok:true,json:async()=>catalog}:{ok:true,url:'fixture:author-archive',arrayBuffer:async()=>{if(holdModel)await new Promise(resolve=>releaseModel=resolve);return bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength);}};
 BufferGeometry.prototype.dispose=function(){disposedGeometries++;return originalDispose.call(this);};
 const session={readView(){if(closed)throw Error('Scene session is disposed');return {};},redraw(){},async attach(root){if(rejectAttach)throw Error('Fixture rejected attachment');return {id:'fixture',root};},async dispose(){closed=true;}};
 const host={scene:{open:async()=>session,renderer:()=>({backend:{isWebGPUBackend:true}}),objects:()=>[],frame(){}}};
@@ -18,5 +19,10 @@ try{
  closed=false;rejectAttach=false;const owner=await experiment.create({host,inputs:{},record(){},updateInputs(){}});
  holdModel=true;const pending=owner.operations.selectMaterial('wool2');while(!releaseModel)await Promise.resolve();await owner.dispose();releaseModel();
  await assert.doesNotReject(pending,'Late ignored-abort result must not read a disposed scene session');
- console.log('NeuMIP failed-attachment cleanup and stale completion after disposal passed');
+ closed=false;holdModel=false;catalog={schema:'kaminos.neumip.models.v1',materials:{student:{url:'fixture:student-archive',sha256}}};
+ let custom;await assert.doesNotReject(async()=>{custom=await experiment.create({host,inputs:{catalogURL:'/fixture/catalog.json'},record(){},updateInputs(){}});},'Custom catalogs choose an installed material when none is specified');
+ assert.equal(custom.read().material,'student');await custom.dispose();closed=false;
+ catalog.materials.student={sha256};
+ await assert.rejects(experiment.create({host,inputs:{catalogURL:'/fixture/catalog.json',material:'student'},record(){},updateInputs(){}}),/source URL|filename/);
+ console.log('NeuMIP lifecycle, custom-catalog selection and invalid source checks passed');
 }finally{globalThis.fetch=originalFetch;BufferGeometry.prototype.dispose=originalDispose;}
