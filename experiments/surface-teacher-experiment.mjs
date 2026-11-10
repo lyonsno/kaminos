@@ -7,7 +7,7 @@ function checkedConfiguration(value){
  return value;
 }
 
-export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,boundary,initialView,sourceControls,defaultMaterials}){return {
+export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,boundary,initialView,sourceControls,defaultMaterials,readSchema='kaminos.surface-teacher-experiment.v1'}){return {
  id,title,
  async create({host,inputs={},record,updateInputs=()=>{}}){
   if(!inputs||typeof inputs!=='object'||Array.isArray(inputs))throw Error('Teacher inputs must be an object');
@@ -51,7 +51,7 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
    }
    engine.setTransport(configuration);
   };
-  const read=()=>({schema:'kaminos.surface-teacher-experiment.v1',sourceSchema:source.schema,objectId:asset?.id,source:source.config,configuration:{...configuration},effective:engine?.state()??null,view:session.readView(),cameraFrame:cameraFrame(),failure,capturing,display:'shared Kaminos scene and camera; native selection/gizmos',displaySourceVisible:!!root.parent&&host.scene.isVisible(asset?.id),presentationLighting:screenMaterial?.lights===false?'lighting bypassed':'unverified',navigationIndexReady:!!root.geometry.boundsTree,supportedLights:'native directional, inverse-square point and spot; constant environment',boundary,deviceOwnership:'borrowed'});
+  const read=()=>({schema:readSchema,sourceSchema:source.schema,objectId:asset?.id,source:source.config,configuration:{...configuration},effective:engine?.state()??null,view:session.readView(),cameraFrame:cameraFrame(),failure,capturing,display:'shared Kaminos scene and camera; native selection/gizmos',displaySourceVisible:!!root.parent&&host.scene.isVisible(asset?.id),presentationLighting:screenMaterial?.lights===false?'lighting bypassed':'unverified',navigationIndexReady:!!root.geometry.boundsTree,supportedLights:'native directional, inverse-square point and spot; constant environment',boundary,deviceOwnership:'borrowed'});
   const showStatus=()=>{if(status)status.textContent=failure?`Stopped: ${failure}`:capturing?'Capturing raw reference…':`${configuration.paused?'Paused · ':''}${engine?.samples??0} samples · ${engine?.width??0} × ${engine?.height??0} · ${configuration.bounces} bounces`;};
   const render=({width,height,filter=configuration.reconstruction}={})=>{
    if(disposed)return;
