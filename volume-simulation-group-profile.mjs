@@ -1,4 +1,7 @@
 // Simulation-only common GPU boundary for real independent runtime steps.
+export const SIMULATION_PROFILE_MARKER_WGSL = `@group(0) @binding(0) var<storage, read_write> marker: u32;
+@compute @workgroup_size(1) fn main() { marker = 1u; }`;
+
 export async function sampleSimulationGroupGpuProfile(runtimes,{steps=32}={}) {
  if(!Array.isArray(runtimes)||!runtimes.length)throw Error('At least one simulation runtime required');
  if(new Set(runtimes).size!==runtimes.length)throw Error('Simulation runtimes must be distinct');
@@ -17,8 +20,12 @@ export async function sampleSimulationGroupGpuProfile(runtimes,{steps=32}={}) {
  const querySet=device.createQuerySet({type:'timestamp',count:2});owned.push(querySet);
  const resolve=device.createBuffer({label:'simulation group profile resolve',size:bytes,usage:GPUBufferUsage.QUERY_RESOLVE|GPUBufferUsage.COPY_SRC});owned.push(resolve);
  const readback=device.createBuffer({label:'simulation group profile readback',size:bytes,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});owned.push(readback);
+ const scratch=device.createBuffer({label:'simulation profile marker scratch',size:4,usage:GPUBufferUsage.STORAGE});owned.push(scratch);
+ const module=device.createShaderModule({label:'simulation profile marker',code:SIMULATION_PROFILE_MARKER_WGSL});
+ const pipeline=device.createComputePipeline({label:'simulation profile marker',layout:'auto',compute:{module,entryPoint:'main'}});
+ const bindGroup=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:scratch}}]});
  const encodeCpuMs=[],receipts=[];
- const marker=(encoder,index)=>{const p=encoder.beginComputePass({label:'simulation profile boundary',timestampWrites:{querySet,...(index===0?{beginningOfPassWriteIndex:0}:{endOfPassWriteIndex:1})}});p.end();};
+ const marker=(encoder,index)=>{const p=encoder.beginComputePass({label:'simulation profile boundary',timestampWrites:{querySet,...(index===0?{beginningOfPassWriteIndex:0}:{endOfPassWriteIndex:1})}});p.setPipeline(pipeline);p.setBindGroup(0,bindGroup);p.dispatchWorkgroups(1);p.end();};
   const origin=performance.now();
   for(let round=0;round<steps;round++) {
    const start=device.createCommandEncoder({label:'simulation group start'});marker(start,0);device.queue.submit([start.finish()]);
@@ -36,6 +43,6 @@ export async function sampleSimulationGroupGpuProfile(runtimes,{steps=32}={}) {
   return {identity:'kaminos.simulation-group-gpu-profile.v1',status:valid.length===steps?'sampled':'partial',rounds:steps,unitCount:runtimes.length,
    samplesUs,timestampsNs,encodeCpuMs,receipts,medianUs:q(.5),p10Us:q(.1),p90Us:q(.9),validRounds:valid.length,
    ordinarySubmissions:steps*runtimes.length,instrumentationSubmissions:steps*2,
-   scope:'Common GPU interval before all unit updates through all encodeSim work; one ordinary submit per unit/round plus two fixed boundary submits. Includes predictors, coupling and World work. Excludes rendering and lighting. CPU gaps between submissions can be inside the elapsed interval; encodeCpuMs is reported separately. Runtimes remain capture-paused.'};
+   scope:'Common GPU interval before all unit updates through all encodeSim work; one ordinary submit per unit/round plus two fixed boundary submits, each running a one-invocation marker against private scratch storage. Includes predictors, coupling and World work. Excludes rendering and lighting. CPU gaps between submissions can be inside the elapsed interval; encodeCpuMs is reported separately. Runtimes remain capture-paused.'};
  } finally {for(const resource of owned)resource.destroy();}
 }
