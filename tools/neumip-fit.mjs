@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {readNeumipModel,writeNeumipModel} from '../neumip-model.mjs';
 import {createNeumipStudent,createNeumipTraining,neumipTrainingLayout,neumipTrainingBufferSizes} from '../neumip-training.mjs';
-import {withKaminosGpu} from './shader-herder.mjs';
+import {withKaminosGpu,withGpuErrorScopes} from './shader-herder.mjs';
 
 const [file,out,...flags]=process.argv.slice(2);
 if(!file||!out)throw Error('Usage: node tools/neumip-fit.mjs AUTHOR_MODEL OUTPUT_DIR [--steps 2000 --batch 2048 --resolution 64 --seed 2718]');
@@ -52,7 +52,7 @@ try{
   report.requiredLimits={maxStorageBufferBindingSize:Math.max(128*1024**2,largestBinding)};
   report.phase='compile';await publish();
   await withKaminosGpu(async ctx=>{
-    report.adapter=ctx.adapterInfo;report.effectiveLimits={maxStorageBufferBindingSize:ctx.device.limits.maxStorageBufferBindingSize,maxBufferSize:ctx.device.limits.maxBufferSize};let teacher=null,learner=null;
+    report.adapter=ctx.adapterInfo;report.effectiveLimits={maxStorageBufferBindingSize:ctx.device.limits.maxStorageBufferBindingSize,maxBufferSize:ctx.device.limits.maxBufferSize,maxComputeWorkgroupsPerDimension:ctx.device.limits.maxComputeWorkgroupsPerDimension};let teacher=null,learner=null;
     try{
       teacher=await createNeumipTraining(ctx.device,author,{batchSize:options.batch});
       learner=await createNeumipTraining(ctx.device,student,{batchSize:options.batch});
@@ -71,9 +71,13 @@ try{
       const started=performance.now();await checkpoint(0);report.phase='fit';await publish();
       for(let step=1;step<=options.steps;step++){
         const batch=queries(options.batch,student.mips.length-1);teacher.setQueries(batch);learner.setQueries(batch);
-        const encoder=ctx.device.createCommandEncoder();teacher.encodeTeacher(encoder,{lodBias:bias});learner.copyTargetsFrom(encoder,teacher);
-        learner.encodeUpdate(encoder,{lrWeights:.001,lrFields:.01});ctx.device.queue.submit([encoder.finish()]);
-        await ctx.device.queue.onSubmittedWorkDone();await new Promise(resolve=>setTimeout(resolve,16));
+        report.lastAttemptedStep=step;
+        const update=async()=>{
+          const encoder=ctx.device.createCommandEncoder();teacher.encodeTeacher(encoder,{lodBias:bias});learner.copyTargetsFrom(encoder,teacher);
+          learner.encodeUpdate(encoder,{lrWeights:.001,lrFields:.01});ctx.device.queue.submit([encoder.finish()]);await ctx.device.queue.onSubmittedWorkDone();
+        };
+        if(step===1)await withGpuErrorScopes(ctx.device,'neumip-fit-step-1',update);else await update();
+        await new Promise(resolve=>setTimeout(resolve,16));
         if(step===1){report.step1ElapsedMs=performance.now()-started;console.log(JSON.stringify({step1ElapsedMs:report.step1ElapsedMs}));await publish();}
         if(step%250===0||step===options.steps)await checkpoint(step);
       }

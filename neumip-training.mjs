@@ -197,8 +197,8 @@ var<workgroup> sums:array<f32,64>;
   let w=id.x;if(w>=${weightCount}u){return;}let blocks=(cfg.count+63u)/64u;var sum=0.0;
   for(var b=0u;b<blocks;b++){sum+=partial[w*blocks+b];}atomicStore(&grad[w],bitcast<u32>(sum));
 }
-@compute @workgroup_size(64) fn adam(@builtin(global_invocation_id) id:vec3<u32>){
-  let i=id.x;if(i>=${layout.count}u){return;}let g=bitcast<f32>(atomicLoad(&grad[i]))/f32(cfg.count);
+@compute @workgroup_size(64) fn adam(@builtin(global_invocation_id) id:vec3<u32>,@builtin(num_workgroups) groups:vec3<u32>){
+  let i=id.x+id.y*groups.x*64u;if(i>=${layout.count}u){return;}let g=bitcast<f32>(atomicLoad(&grad[i]))/f32(cfg.count);
   let mv=moments[i];let next=vec2<f32>(0.9*mv.x+0.1*g,0.999*mv.y+0.001*g*g);moments[i]=next;
   let lr=select(cfg.lrFields,cfg.lrWeights,i<${weightCount}u);
   p[i]-=lr*(next.x/(1.0-pow(0.9,f32(cfg.step))))/(sqrt(next.y/(1.0-pow(0.999,f32(cfg.step))))+1e-8);
@@ -245,7 +245,8 @@ export async function createNeumipTraining(device,model,{batchSize=4096}={}) {
     const data=new ArrayBuffer(32),view=new DataView(data);view.setUint32(0,count,true);view.setUint32(4,Math.max(1,step),true);
     view.setFloat32(8,lrWeights,true);view.setFloat32(12,lrFields,true);view.setFloat32(16,lodBias,true);device.queue.writeBuffer(config,0,data);
   };
-  const dispatch=(encoder,name,x,y=1)=>{const pass=encoder.beginComputePass({label:`NeuMIP ${name}`});pass.setPipeline(pipelines[name]);pass.setBindGroup(0,group);pass.dispatchWorkgroups(x,y);pass.end();};
+  const maxGroups=device.limits?.maxComputeWorkgroupsPerDimension??65535;
+  const dispatch=(encoder,name,x,y=1)=>{if(x>maxGroups||y>maxGroups)throw Error(`NeuMIP ${name} dispatch ${x}x${y} exceeds device workgroup limit ${maxGroups}`);const pass=encoder.beginComputePass({label:`NeuMIP ${name}`});pass.setPipeline(pipelines[name]);pass.setBindGroup(0,group);pass.dispatchWorkgroups(x,y);pass.end();};
   const read=async(buffer,size)=>{
     const staging=device.createBuffer({size,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});
     try{const e=device.createCommandEncoder();e.copyBufferToBuffer(buffer,0,staging,0,size);device.queue.submit([e.finish()]);await staging.mapAsync(GPUMapMode.READ);return new Float32Array(staging.getMappedRange().slice(0));}finally{staging.destroy();}
@@ -265,7 +266,7 @@ export async function createNeumipTraining(device,model,{batchSize=4096}={}) {
       encoder.copyBufferToBuffer(source.buffers.targets,0,targets,0,count*3*4);currentTargets={version:queryVersion,encoder};
     },
     async gradients(options={}){targetsFor(null);configure(options);const e=device.createCommandEncoder();e.clearBuffer(gradients);dispatch(e,'backward',Math.ceil(count/64));dispatch(e,'weightPartials',layout.weightCount,Math.ceil(count/64));dispatch(e,'collectWeights',Math.ceil(layout.weightCount/64));device.queue.submit([e.finish()]);return {values:await read(gradients,layout.count*4),...await readPredictions({includeLoss:true})};},
-    encodeUpdate(encoder,options={}){targetsFor(encoder);step++;configure(options);encoder.clearBuffer(gradients);dispatch(encoder,'backward',Math.ceil(count/64));dispatch(encoder,'weightPartials',layout.weightCount,Math.ceil(count/64));dispatch(encoder,'collectWeights',Math.ceil(layout.weightCount/64));dispatch(encoder,'adam',Math.ceil(layout.count/64));},
+    encodeUpdate(encoder,options={}){targetsFor(encoder);step++;configure(options);encoder.clearBuffer(gradients);dispatch(encoder,'backward',Math.ceil(count/64));dispatch(encoder,'weightPartials',layout.weightCount,Math.ceil(count/64));dispatch(encoder,'collectWeights',Math.ceil(layout.weightCount/64));const groups=Math.ceil(layout.count/64),rows=Math.ceil(groups/maxGroups);dispatch(encoder,'adam',Math.ceil(groups/rows),rows);},
     [TARGET_STATE]:targetsFor,
     readPredictions,
     async exportModel(){return restoreNeumipParameters(model,layout,await read(parameters,layout.count*4));},

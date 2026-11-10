@@ -74,6 +74,24 @@ try{
       const encoder=ctx.device.createCommandEncoder();gpu.encodeUpdate(encoder,{lrWeights:.0001,lrFields:.0001});ctx.device.queue.submit([encoder.finish()]);await ctx.device.queue.onSubmittedWorkDone();
       const fitted=await gpu.exportModel(),after=loss(fitted)/rows.length;assert.ok(after<before,`optimizer must decrease fixture loss: ${before} -> ${after}`);
       report.update={before,after};
+      if(process.env.NEUMIP_LARGE_OPTIMIZER_FIXTURE==='1'){
+        report.phase='large-optimizer-tail';await publish();
+        const big=createNeumipStudent({resolution:512,seed:37});
+        for(const field of [big.offset,...big.mips])field.data.fill(.05);
+        for(const layer of big.layers){layer.weights.fill(.025);layer.biases.fill(.02);}
+        const large=await createNeumipTraining(ctx.device,big,{batchSize:1});
+        try{
+          large.setQueries(new Float32Array([.6,.6,0,0,0,0,8,0]));large.setTargets(new Float32Array([.1,.2,.3]));
+          const grad=await large.gradients(),tail=large.layout.count-1,g=grad.values[tail];
+          assert.ok(Math.abs(g)>1e-7,'coarsest field tail needs a nonzero gradient');
+          const before=big.mips.at(-1).data.at(-1),lr=.0001,expected=before-lr*g/(Math.abs(g)+1e-8);
+          ctx.device.pushErrorScope('validation');
+          const encoder=ctx.device.createCommandEncoder();large.encodeUpdate(encoder,{lrWeights:lr,lrFields:lr});ctx.device.queue.submit([encoder.finish()]);
+          const validation=await ctx.device.popErrorScope();assert.equal(validation,null,validation?.message);await ctx.device.queue.onSubmittedWorkDone();
+          const fitted=await large.exportModel(),after=fitted.mips.at(-1).data.at(-1);near([after],[expected],'large optimizer tail',{absolute:2e-7,relative:1e-6});
+          report.largeOptimizer={parameters:large.layout.count,index:tail,gradient:g,before,after,expected};
+        }finally{large.dispose();}
+      }
     }finally{gpu?.dispose();teacher?.dispose();}
   },{onEvidence:e=>report.evidence=e});
   report.status='passed';report.phase='complete';
