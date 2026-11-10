@@ -42,7 +42,7 @@ test('an initial image extent beyond device capacity disposes its opened session
  assert.equal(closed,1);assert.equal(attached,0);
 });
 
-test('teacher samples accepted native light visibility outside the host temporary draw mask',async()=>{
+test('teacher respects accepted native light visibility and stays out of world AO depth',async()=>{
  const THREE=await import('../lib/three.webgpu.js'),world=new THREE.Scene(),camera=new THREE.PerspectiveCamera(45,1,.01,100),gpu=device();
  gpu.addEventListener=()=>{};gpu.removeEventListener=()=>{};
  const light=new THREE.SpotLight(0xffffff,3);light.position.set(0,2,0);light.target.position.set(0,0,0);light.userData.kaminosSceneLightId='hidden-native-spot';world.add(light,light.target);
@@ -56,5 +56,10 @@ test('teacher samples accepted native light visibility outside the host temporar
   const lights=()=>gpu.buffers.filter(b=>b.label==='surface teacher lights'&&!b.destroyed).at(-1).data;
   assert.deepEqual(Array.from(lights().slice(4,7)),[0,0,0],'hidden native spot must not contribute although light.visible is still true between draws');
   hidden=false;await instance.operations.configure({bounces:3});assert.deepEqual(Array.from(lights().slice(4,7)),[3,3,3]);
+  const {configureMaterialSideAODepth}=await import('../scene-ao-depth.mjs'),screen=world.children.find(o=>o.userData.kaminosSurfaceTeacherPresentation);let depthDraws=0;
+  const aoRenderer={lighting:{enabled:true},setRenderTarget(){},setRenderObjectFunction(fn){this.callback=fn;},renderObject(){depthDraws++;},render(scene,camera){this.callback(screen,scene,camera,screen.geometry,screen.material);}};
+  const utils={resetRendererAndSceneState(){return {};},restoreRendererAndSceneState(){}};
+  const ao={setDepthPass(){},updateBefore(){}};configureMaterialSideAODepth(ao,{scene:world,camera,depthRT:{},depthMaterial:{}},utils);ao.updateBefore({renderer:aoRenderer});
+  assert.equal(depthDraws,0,'teacher image plane must not become world geometry in the standalone GTAO depth pass');
  }finally{await instance.dispose();}
 });
