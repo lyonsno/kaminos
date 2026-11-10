@@ -4,7 +4,7 @@
 import * as THREE from '../lib/three.webgpu.js';
 import {loadNeumipModel} from '../neumip-model.mjs';
 import {createNeumipMaterial} from '../neumip-material.mjs';
-import SceneNeuralShading from '../scene-neural-shading.mjs';
+import {createSceneGI} from '../scene-gi.mjs';
 import {referenceNeumip} from '../tools/neumip-reference.mjs';
 import {compileSceneLighting} from '../scene-lighting-compile.mjs';
 try{
@@ -20,19 +20,17 @@ try{
  const target=new THREE.RenderTarget(W,H,{type:THREE.HalfFloatType,format:THREE.RGBAFormat});
  const {pass,mrt,output,normalView,vec3,vec4,context,uniform,mix}=THREE.TSL;
  const probe=uniform(0),normalSign=uniform(1),foreignTag=uniform(0);
- const source=pass(scene,camera,{samples:0}),cache=new SceneNeuralShading(source,scene,camera);
- source.contextNode=context({sceneNeuralShading:cache,neuralShadingMode:'source'});
- source.setMRT(mrt({output,normal:vec4(normalView.mul(normalSign),1),transport:vec4(mix(cache.radianceNode.rgb,vec3(.25,.5,.75),probe),mix(cache.radianceNode.a,1,foreignTag))}));source.getTextureNode('normal');source.getTextureNode('transport');
- const beauty=pass(scene,camera,{samples:0});beauty.contextNode=context({sceneNeuralShading:cache,neuralShadingMode:'beauty'});
- cache.prepareBefore(source);
- const setupBeauty=beauty.setup;beauty.setup=function(builder){source.getTextureNode('output').build(builder);return setupBeauty.call(this,builder);};
+ const gi=createSceneGI(scene,camera,uniform(0));gi.setSettings({temporal:false,denoise:0,steps:1,slices:1,resolutionScale:.25,gain:0});
+ const {source,neuralShading:cache}=gi,beauty=gi.beauty,transport=source.getMRT().outputNodes.transport;
+ source.setMRT(mrt({...source.getMRT().outputNodes,normal:vec4(normalView.mul(normalSign),1),transport:vec4(mix(transport.rgb,vec3(.25,.5,.75),probe),mix(transport.a,1,foreignTag))}));source.getTextureNode('normal');source.getTextureNode('transport');
  const events=[],pipelineBuilds=[];
  for(const method of ['createRenderPipeline','createRenderPipelineAsync']){const native=renderer.backend.device[method];renderer.backend.device[method]=function(...args){pipelineBuilds.push({method,target:renderer.getRenderTarget()===cache.capture.renderTarget?'capture':renderer.getRenderTarget()===source.renderTarget?'source':renderer.getRenderTarget()===beauty.renderTarget?'beauty':'other'});return native.apply(this,args);};}
  for(const [name,p] of [['capture',cache.capture],['source',source],['beauty',beauty]]){const update=p.updateBefore;p.updateBefore=function(frame){events.push(name+':start');try{return update.call(this,frame);}finally{events.push(name+':end');}};}
+ scene.onBeforeRender=r=>{const target=r.getRenderTarget();events.push((target===cache.capture.renderTarget?'capture':target===source.renderTarget?'source':target===beauty.renderTarget?'beauty':'other')+':draw');};
  const pipeline=new THREE.RenderPipeline(renderer);pipeline.outputNode=beauty;pipeline.outputColorTransform=false;
  document.body.append(renderer.domElement);
  const points=[[20,25],[31,32],[42,36]];
- window.neumipRenderAssay={identity:{source:model.source,backend:'WebGPU',adapter:Object.fromEntries(['vendor','architecture','device','description'].map(key=>[key,(renderer.backend.device?.adapterInfo??renderer.backend.adapter?.info)?.[key]??null])),width:W,height:H,uvScale:scale,gain},
+ window.neumipRenderAssay={identity:{source:model.source,backend:'WebGPU',adapter:Object.fromEntries(['vendor','architecture','device','description'].map(key=>[key,(renderer.backend.device?.adapterInfo??renderer.backend.adapter?.info)?.[key]??null])),width:W,height:H,uvScale:scale,gain,route:'production combined SSGI; current-frame raw GI, gain0'},
  async render(count,resolution=1,reuse=true,variant={}){
   cache.setScale(resolution);cache.reuse.value=reuse;probe.value=variant.sentinel?1:0;normalSign.value=variant.rejectNormal?-1:1;foreignTag.value=variant.rejectMaterial?1:0;
   camera.near=variant.near??.1;camera.far=variant.far??20;camera.position.z=variant.distance??3;camera.updateProjectionMatrix();camera.updateMatrixWorld();
@@ -66,7 +64,7 @@ try{
   renderer.setRenderTarget(source.renderTarget);renderer.setMRT(source.getMRT());renderer.contextNode=source.contextNode;
    const shader=await renderer.debug.getShaderAsync(scene,camera,mesh);renderer.setRenderTarget(null);renderer.setMRT(null);renderer.contextNode=THREE.TSL.context({});
    return {count,resolution,reuse,variant,samples,events:[...events],pipelineBuilds:[...pipelineBuilds],nesting:{capture:cache.capture._renderCallDepths?.get(renderer),source:source._renderCallDepths?.get(renderer),beauty:beauty._renderCallDepths?.get(renderer)},raw:Array.from(raw),rowElements:row,shader,cache:cache.state()};
- },async dispose(){target.dispose();occluder.geometry.dispose();occluder.material.dispose();cache.dispose();source.dispose();beauty.dispose();pipeline.dispose();geometry.dispose();material.material.dispose();for(const light of lights)light.dispose();await renderer.dispose();}};
+ },async dispose(){target.dispose();occluder.geometry.dispose();occluder.material.dispose();gi.dispose();pipeline.dispose();geometry.dispose();material.material.dispose();for(const light of lights)light.dispose();await renderer.dispose();}};
  window.neumipRenderLoaded=true;
 }catch(e){window.neumipRenderFailure=e.stack;console.error(e);}
 </script></html>

@@ -31,7 +31,7 @@ export default class SceneNeuralShading {
   const update=capture.updateBefore;
   capture.updateBefore=frame=>{
    if(this.scale.value===1)return;
-   let active=false;scene.traverseVisible(o=>{if(o.isMesh&&[].concat(o.material??[]).some(m=>m.isNeumipMaterial))active=true;});
+   let active=false;scene.traverseVisible(o=>{if(o.isMesh&&[].concat(o.material??[]).some(m=>m.isNeumipMaterial&&!m.transparent))active=true;});
    if(!active)return;
    const restore=this.borrowMaterials(frame.renderer);
    try{update.call(capture,frame);this.frames++;}finally{restore();}
@@ -47,8 +47,11 @@ export default class SceneNeuralShading {
  hasMaterials(){let found=false;this.capture.scene.traverse(o=>{if(o.isMesh&&[].concat(o.material??[]).some(m=>m.isNeumipMaterial&&!m.transparent))found=true;});return found;}
  prepareBefore(target){
   if(this.scheduled.has(target))return;this.scheduled.add(target);
-  const setup=target.setup,cache=this;
-  target.setup=function(builder){cache.capture.getTextureNode('output').build(builder);return setup.call(this,builder);};
+  const update=target.updateBefore,cache=this;
+  // Pass texture dependencies do not necessarily build PassNode.setup (SSGI
+  // reads named transport). Schedule through the shared frame owner before
+  // the world draw; its FRAME guard prevents a later material read reentering.
+  target.updateBefore=function(frame){frame.updateBeforeNode(cache.capture);return update.call(this,frame);};
  }
  occluder(material,renderer){
   if(material.isNeumipMaterial||material.lights===false||material.fragmentNode!=null)return material;

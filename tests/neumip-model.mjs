@@ -27,3 +27,9 @@ const trailing=new Uint8Array(bytes.length+1);trailing.set(bytes);assert.throws(
 const shape=bytes.slice();new DataView(shape.buffer).setInt32(9,7,true);assert.throws(()=>readNeumipModel(shape),/shape/);
 const nonfinite=bytes.slice();new DataView(nonfinite.buffer).setFloat32(21,NaN,true);assert.throws(()=>readNeumipModel(nonfinite),/non-finite/);
 console.log('NeuMIP archive: shape, endianness, truncation, trailing bytes and finite values passed');
+
+const {createNeumipMaterial}=await import('../neumip-material.mjs');
+const {sceneGIReceives}=await import('../scene-gi-settings.mjs');
+const native=createNeumipMaterial(model);
+try{assert.equal(sceneGIReceives(native.material),false,'learned directional radiance must bypass the ordinary diffuse transport/receiver wrapper');}
+finally{native.material.dispose();}

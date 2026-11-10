@@ -30,8 +30,8 @@ try{
   await fs.writeFile(out+'/native-'+key+'.json',JSON.stringify(r));report.samples.push({count,scale,reuse,samples:r.samples,cache:r.cache});await save();
   if(scale===1)for(const sample of r.samples)for(let c=0;c<3;c++)assert.ok(Math.abs(sample.actual[c]-sample.expected[c])<.0001+Math.abs(sample.expected[c])*.002,'full-rate native radiance must match the independent author reference');
   if(scale<1){
-   assert.ok(r.events.indexOf('capture:end')<r.events.indexOf('source:start'),'capture finishes before source starts');
-   assert.ok(r.events.indexOf('source:end')<r.events.indexOf('beauty:start'),'source finishes before beauty starts');
+   assert.ok(r.events.indexOf('capture:end')<r.events.indexOf('source:draw'),'capture finishes before the source scene draw starts');
+   assert.ok(r.events.indexOf('source:end')<r.events.indexOf('beauty:draw'),'source finishes before the beauty scene draw starts');
    for(const sample of r.samples)for(let c=0;c<3;c++)assert.ok(Math.abs(sample.actual[c]-sample.reducedExpected[c])<.0001+Math.abs(sample.reducedExpected[c])*.003,'reduced-rate native radiance matches independent coarse author reconstruction');
   }
   assert.equal(r.cache.requestedScale,scale);if(scale<1)assert.deepEqual(r.cache.resolution,[Math.floor(64*scale),Math.floor(64*scale)]);
