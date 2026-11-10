@@ -344,3 +344,15 @@ test('unavailable grid assist can explicitly suspend at a live host without chan
   }
  },{allowUnavailableGridExtinction:true}));
 });
+
+test('paused rendering cannot advance the next rotating birth slot',async()=>{
+ await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw})=>{
+  const rows=new Float32Array(16*16);rows.set([0,0,0,2,0,0,0,1,0,.25,1,.25,0,0,0,0]);seed(rows);const cfg={acquisitionMode:1,capacity:5,refresh:1,renewalDiagnostics:true};await draw(0,cfg);await draw(1,cfg);await draw(1,cfg);await draw(2,cfg);assert.ok((await owner.sample()).records[2*24+3]>0,'the third actual birth belongs to slot2 despite a paused redraw');
+ }));
+});
+
+test('paused lifetime edits defer retirement and preserve renewal provenance until the next update',async()=>{
+ await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw})=>{
+  const rows=new Float32Array(16*16);rows.set([0,0,0,2,0,0,0,1,0,.25,1,.25,0,0,0,0]);seed(rows);const cfg={acquisitionMode:1,capacity:5,refresh:0,renewalDiagnostics:true};await draw(0,cfg);await draw(2,cfg);const before=(await owner.sample()).records,stats=await owner.statistics();await draw(2,{...cfg,maxAge:1});assert.deepEqual((await owner.sample()).records,before,'paused lifetime edits cannot retire material outside a population update');assert.deepEqual((await owner.statistics()).renewal,stats.renewal);assert.equal((await owner.statistics()).expired,stats.expired);await draw(3,{...cfg,maxAge:1});const after=await owner.statistics();assert.equal(after.active,0);assert.equal(after.expired,1);assert.equal(after.renewal.step,3);
+ }));
+});

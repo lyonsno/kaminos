@@ -84,3 +84,5 @@ The original depth-renderer baseline is `a497b09c2759126956162241d4364fd0a965dbf
 Renewal counters retain the last population update across paused redraws. Their `renewal` timestamp and tracking flag are distinct from the current readout/source-batch identity; enabling diagnostics while paused does not invent earlier counters. Numeric focus and blur preserve full accepted precision unless a draft was edited.
 
 In the live host, an extinction request whose current-field prerequisites disappear suspends to the original transfer and reports `gridAssist.effective="unavailable"` with its reason in the panel. The request remains visible and can resume when the field is available. Direct component callers retain strict field validation unless they explicitly admit this suspension. This avoids starting a hidden extra lighting/preparation route or stopping the existing effect.
+
+Display-only redraws also leave the rotating birth cursor unchanged. Maximum-age edits retire material on the next population update, keeping retained renewal counters and their timestamp consistent.

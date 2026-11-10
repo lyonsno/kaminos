@@ -134,7 +134,7 @@ fn particleVelocity(p:vec3<f32>)->vec3<f32>{
   p.anchor=vec4<f32>(p.anchor.xyz+flow*steps*u.time.z*u.transport.x+p.motion.xyz*dt,p.anchor.w+dt);
   if(particleOutsideSingleGrid(p.anchor.xyz)){p.anchor.w=0;if(u.seed.z>.5){atomicAdd(&pool.escaped,1u);}}
  }
- if(p.anchor.w>0&&u.gain.z>0&&p.anchor.w-1.0>=u.gain.z){p.anchor.w=0;if(u.seed.z>.5){atomicAdd(&pool.expired,1u);}}
+ if(dt>0&&p.anchor.w>0&&u.gain.z>0&&p.anchor.w-1.0>=u.gain.z){p.anchor.w=0;if(u.seed.z>.5){atomicAdd(&pool.expired,1u);}}
  if(u.acquisition.x>0u){particles[i]=p;return;}
  // Explicit spacing selects one source within each source-pixel block per update.
  // All source pixels participate. Refresh probability is an exposed policy, not
@@ -169,7 +169,7 @@ fn particleVelocity(p:vec3<f32>)->vec3<f32>{
  let potential=particleSeedPotential(emission,interval,u.seed.x,u.seed.y,u.reaction.z);
  particles[slot]=Particle(anchor,q,vec4<f32>(emission,potential),vec4<f32>(0),vec4<f32>(max(support.w,.00001),0,1,interval),vec4<f32>(potential,select(0.0,1.0,length(emission)>0),0,0));
 }
-@compute @workgroup_size(1) fn finishBirths(){atomicStore(&pool.next,(atomicLoad(&pool.next)+min(atomicLoad(&pool.frameBirths),u.size.z))%u.size.z);}
+@compute @workgroup_size(1) fn finishBirths(){if(u.time.x<=0&&u.size.w!=1u){return;}atomicStore(&pool.next,(atomicLoad(&pool.next)+min(atomicLoad(&pool.frameBirths),u.size.z))%u.size.z);}
 @group(0) @binding(6) var<storage,read_write> statsOutput:array<vec4<u32>>;
 var<workgroup> statsCounts:array<vec4<u32>,64>;
 var<workgroup> statsExtinction:array<u32,64>;
