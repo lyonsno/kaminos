@@ -36,9 +36,13 @@ export class SurfaceTeacher {
  reset(reason='explicit'){this.valid=false;this.samples=0;this.resetReason=reason;}
  group(pipeline,resources){return this.device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:resources.map((resource,binding)=>({binding,resource:resource?.createView?resource.createView():{buffer:resource}}))});}
  common(){return [...this.sceneBuffers,this.params];}
- writeParams({view,width=1,height=1,frame=this.serial,previousVP=this.previousVP}={}){
+ writeParams({view,cameraFrame,width=1,height=1,frame=this.serial,previousVP=this.previousVP}={}){
   const data=new Float32Array(44),words=new Uint32Array(data.buffer);let vp=null;
-  if(view){
+  if(cameraFrame){
+   if(!Array.isArray(cameraFrame.viewProjection)||cameraFrame.viewProjection.length!==16||!cameraFrame.viewProjection.every(Number.isFinite)||!finite3(cameraFrame.position))throw Error('Finite shared camera matrix and position required');
+   vp=new Matrix4().fromArray(cameraFrame.viewProjection);if(vp.determinant()===0)throw Error('Shared camera projection must be invertible');
+   data.set(vp.clone().invert().elements,0);data.set((previousVP??vp).elements,16);data.set(cameraFrame.position,32);
+  }else if(view){
    if(!finite3(view.position)||!finite3(view.target)||!finite3(view.up??[0,1,0]))throw Error('finite shared camera view required');
    const camera=new PerspectiveCamera(view.fov??45,width/height,view.near??.01,view.far??100);camera.coordinateSystem=WebGPUCoordinateSystem;camera.zoom=view.zoom??1;camera.position.fromArray(view.position);camera.up.fromArray(view.up??[0,1,0]);camera.lookAt(...view.target);camera.updateMatrixWorld(true);camera.updateProjectionMatrix();
    vp=new Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);data.set(vp.clone().invert().elements,0);data.set((previousVP??vp).elements,16);data.set(view.position,32);
@@ -63,10 +67,10 @@ export class SurfaceTeacher {
   const texture=label=>{const value=this.device.createTexture({label,size:[width,height],format:'rgba32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});this.targets.push(value);return value;};
   this.raw=texture('surface teacher raw image');this.histories=[texture('surface teacher history A'),texture('surface teacher history B')];this.points=[texture('surface teacher point A'),texture('surface teacher point B')];this.normals=[texture('surface teacher normal A'),texture('surface teacher normal B')];this.filtered=[texture('surface teacher filtered A'),texture('surface teacher filtered B')];this.width=width;this.height=height;this.index=0;this.reset('image extent changed');
  }
- render({view,width,height,filter=true}){
+ render({view,cameraFrame,width,height,filter=true}){
   if(this.disposed)throw Error('surface teacher is disposed');this.resize(width,height);
-  const key=JSON.stringify(view),moving=this.viewKey!==undefined&&key!==this.viewKey;
-  const vp=this.writeParams({view,width,height});const historyData=new Float32Array(20);historyData.set((this.previousVP??vp).elements);historyData.set([this.valid?1:0,moving?1:0,Math.max(.002,Math.hypot(...view.position)*4/height),0],16);this.device.queue.writeBuffer(this.historyParams,0,historyData);
+  const key=JSON.stringify([view,cameraFrame]),moving=this.viewKey!==undefined&&key!==this.viewKey;
+  const vp=this.writeParams({view,cameraFrame,width,height});const historyData=new Float32Array(20);historyData.set((this.previousVP??vp).elements);historyData.set([this.valid&&(!moving||filter)?1:0,moving&&filter?1:0,Math.max(.002,Math.hypot(...view.position)*4/height),0],16);this.device.queue.writeBuffer(this.historyParams,0,historyData);
   const i=this.index,j=1-i,encoder=this.device.createCommandEncoder({label:'surface teacher image and reconstruction'});
   const dispatch=(name,resources)=>{const pipeline=this.pipelines[name],pass=encoder.beginComputePass({label:`surface teacher ${name}`});pass.setPipeline(pipeline);pass.setBindGroup(0,this.group(pipeline,resources));pass.dispatchWorkgroups(Math.ceil(width/8),Math.ceil(height/8));pass.end();};
   dispatch('image',[...this.common(),this.raw,this.points[i],this.normals[i]]);

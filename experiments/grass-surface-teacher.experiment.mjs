@@ -11,11 +11,14 @@ export default {
   const groundMaterial=new THREE.MeshStandardMaterial({color:0x62513a,roughness:.95,colorWrite:false,depthWrite:false});
   const root=new THREE.Mesh(new THREE.BufferGeometry(),[groundMaterial,bladeMaterial]);root.name='Frozen grass ribbons';root.castShadow=false;root.receiveShadow=false;
   let configuration={scale:inputs.scale??.5,bounces:inputs.bounces??3,environment:inputs.environment??.15,reconstruction:inputs.reconstruction??true,paused:false};
-  let sceneKey='',failure=null,capturing=false,disposed=false,status,pending=null;
+  let sceneKey='',failure=null,capturing=false,disposed=false,status,pending=null,fieldDocument;
+  const fields=[];
+  const syncControls=()=>{for(const {input,group,key}of fields){if(fieldDocument.activeElement===input)continue;const value=group==='source'?source.config[key]:configuration[key];if(input.type==='checkbox')input.checked=value;else input.value=String(value);}};
+  const cameraFrame=()=>{camera.updateMatrixWorld(true);return {viewProjection:new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse).elements,position:camera.getWorldPosition(new THREE.Vector3()).toArray()};};
   const gpuFailure=event=>{failure=event.error?.message??String(event.error);showStatus();};
   const replaceGeometry=()=>{
    const positions=new Float32Array(source.triangles.flatMap(t=>[...t.a,...t.b,...t.c]));
-   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));geometry.addGroup(0,6,0);geometry.addGroup(6,positions.length/3-6,1);geometry.computeVertexNormals();geometry.computeBoundingSphere();const old=root.geometry;root.geometry=geometry;old.dispose();sceneKey='';
+   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));geometry.addGroup(0,6,0);geometry.addGroup(6,positions.length/3-6,1);geometry.computeVertexNormals();geometry.computeBoundingSphere();const old=root.geometry;root.geometry=geometry;old.dispose();sceneKey='';if(asset)host.scene.refreshPresentation(asset);
   };
   const nativeLights=()=>{
    const lights=[];scene.updateMatrixWorld(true);
@@ -40,14 +43,14 @@ export default {
    }
    engine.setTransport(configuration);
   };
-  const read=()=>({schema:'kaminos.grass-surface-teacher.v1',objectId:asset?.id,source:source.config,configuration:{...configuration},effective:engine?.state()??null,view:session.readView(),failure,capturing,display:'shared Kaminos scene and camera; native selection/gizmos',supportedLights:'native directional, inverse-square point and spot; constant environment',boundary:'finite grass patch on backing; not yet a periodic teacher',deviceOwnership:'borrowed'});
+  const read=()=>({schema:'kaminos.grass-surface-teacher.v1',objectId:asset?.id,source:source.config,configuration:{...configuration},effective:engine?.state()??null,view:session.readView(),cameraFrame:cameraFrame(),failure,capturing,display:'shared Kaminos scene and camera; native selection/gizmos',supportedLights:'native directional, inverse-square point and spot; constant environment',boundary:'finite grass patch on backing; not yet a periodic teacher',deviceOwnership:'borrowed'});
   const showStatus=()=>{if(status)status.textContent=failure?`Stopped: ${failure}`:capturing?'Capturing raw reference…':`${configuration.paused?'Paused · ':''}${engine?.samples??0} samples · ${engine?.width??0} × ${engine?.height??0} · ${configuration.bounces} bounces`;};
   const render=({width,height,filter=configuration.reconstruction}={})=>{
    if(disposed)return;
    if(!camera.isPerspectiveCamera)throw Error('Grass teacher currently requires the shared perspective camera');
    const size=renderer.getDrawingBufferSize(new THREE.Vector2());
    width??=Math.max(1,Math.round(size.x*configuration.scale));height??=Math.max(1,Math.round(size.y*configuration.scale));
-   syncScene();engine.render({view:session.readView(),width,height,filter});
+   syncScene();engine.render({view:session.readView(),cameraFrame:cameraFrame(),width,height,filter});
    if(!texture||texture.image.width!==width||texture.image.height!==height){
     texture?.dispose();texture=new THREE.StorageTexture(width,height);texture.type=THREE.FloatType;texture.format=THREE.RGBAFormat;texture.minFilter=THREE.NearestFilter;texture.magFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.mipmapsAutoUpdate=false;
     const {textureLoad,screenUV,vec2,ivec2}=THREE.TSL;screenMaterial.colorNode=textureLoad(texture,ivec2(screenUV.mul(vec2(width,height)))).rgb;screenMaterial.needsUpdate=true;
@@ -68,18 +71,18 @@ export default {
    });
    const operations={
     frame(){return session.setView({position:[2.5,1.7,3.2],target:[0,.35,0],fov:42});},
-    source(values){const next=createGrassTeacherSource({...source.config,...values});source=next;replaceGeometry();session.redraw();record({kind:'surface-teacher.source',phase:'applied',effective:source.config});return read();},
+    source(values){const next=createGrassTeacherSource({...source.config,...values});source=next;replaceGeometry();syncControls();session.redraw();record({kind:'surface-teacher.source',phase:'applied',effective:source.config});return read();},
     configure(values){
      const next={...configuration,...values};if(!Number.isFinite(next.scale)||next.scale<=0||!Number.isSafeInteger(next.bounces)||next.bounces<1||!Number.isFinite(next.environment)||next.environment<0||typeof next.reconstruction!=='boolean'||typeof next.paused!=='boolean')throw Error('Invalid teacher quality or transport setting');
-     configuration=next;session.redraw();record({kind:'surface-teacher.configuration',phase:'applied',effective:{...configuration}});showStatus();return read();
+     configuration=next;syncControls();session.redraw();record({kind:'surface-teacher.configuration',phase:'applied',effective:{...configuration}});showStatus();return read();
     },
     async capture({width,height,samples}={}){
      if(capturing)throw Error('A teacher capture is already active');if(![width,height,samples].every(v=>Number.isSafeInteger(v)&&v>0))throw Error('Explicit positive capture width, height and samples required');
-     capturing=true;showStatus();const view=JSON.stringify(session.readView()),sourceIdentity=JSON.stringify(source.config);let result;
+     capturing=true;showStatus();const view=JSON.stringify([session.readView(),cameraFrame()]),sourceIdentity=JSON.stringify(source.config);let result;
      try{
       await pending;syncScene();const capturedSceneKey=sceneKey,transport=JSON.stringify([configuration.environment,configuration.bounces]);engine.reset('raw reference capture');
       for(let i=0;i<samples;i++){
-       if(disposed||JSON.stringify(session.readView())!==view||JSON.stringify(source.config)!==sourceIdentity)throw Error('Source or camera changed during raw capture');
+       if(disposed||JSON.stringify([session.readView(),cameraFrame()])!==view||JSON.stringify(source.config)!==sourceIdentity)throw Error('Source or camera changed during raw capture');
        syncScene();if(sceneKey!==capturedSceneKey||JSON.stringify([configuration.environment,configuration.bounces])!==transport)throw Error('Geometry, lighting or transport changed during raw capture');
        render({width,height,filter:false});await engine.device.queue.onSubmittedWorkDone();
        if(failure)throw Error(failure);
@@ -91,10 +94,10 @@ export default {
     },
     async query({rays,sample=0}){syncScene();return engine.evaluate(rays,{sample});},
    };
-   return {read,operations,mount({root:panel,document,invoke}){
+   return {read,operations,mount({root:panel,document,invoke}){fieldDocument=document;
     const controls=[['Blade count','source','blades',1],['Blade height','source','height',.02],['Blade width','source','bladeWidth',.002],['Blade bend','source','bend',.03],['Source seed','source','seed',1],['Path bounces','configure','bounces',1],['Environment radiance','configure','environment',.02],['Resolution scale','configure','scale',.05]];
-    const drags=[];for(const [label,op,key,step]of controls){const row=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');grip.textContent=label+' ';input.type='number';input.step=String(step);input.value=String((op==='source'?source.config:configuration)[key]);input.className='transform-input';input.setAttribute('aria-label',label);input.addEventListener('input',()=>{if(input.value.trim())invoke(op,{[key]:Number(input.value)}).catch(error=>{status.textContent=error.message;});});row.append(grip,input);panel.append(row);drags.push(host.controls.installNumberDrag({input,grip,step}));}
-    for(const [label,key]of [['Reconstruction','reconstruction'],['Pause tracing','paused']]){const row=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.checked=configuration[key];input.onchange=()=>invoke('configure',{[key]:input.checked});row.append(input,label);panel.append(row);}
+    const drags=[];for(const [label,op,key,step]of controls){const row=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');grip.textContent=label+' ';input.type='number';input.step=String(step);input.value=String((op==='source'?source.config:configuration)[key]);input.className='transform-input';input.setAttribute('aria-label',label);input.addEventListener('input',()=>{if(input.value.trim())invoke(op,{[key]:Number(input.value)}).catch(error=>{status.textContent=error.message;});});input.addEventListener('blur',syncControls);fields.push({input,group:op==='source'?'source':'configuration',key});row.append(grip,input);panel.append(row);drags.push(host.controls.installNumberDrag({input,grip,step}));}
+    for(const [label,key]of [['Reconstruction','reconstruction'],['Pause tracing','paused']]){const row=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.checked=configuration[key];input.onchange=()=>invoke('configure',{[key]:input.checked});fields.push({input,group:'configuration',key});row.append(input,label);panel.append(row);}
     const frame=document.createElement('button');frame.textContent='Frame grass';frame.onclick=()=>invoke('frame');status=document.createElement('p');status.setAttribute('role','status');
     const note=document.createElement('p');note.textContent='Frozen ribbons with real visibility and surface bounces. Orbit in the scene. Select grass or ordinary scene lights in the native inspector; Add → Light creates another. Reconstruction off shows the raw accumulated estimate. This finite patch is for inspecting the source; periodic capture comes later.';
     panel.append(frame,status,note);showStatus();this.drags=drags;

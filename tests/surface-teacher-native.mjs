@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {SurfaceTeacher} from '../surface-teacher.mjs';
 import {withKaminosGpu,evalWgslBatch,extractWgslFunction} from '../tools/shader-herder.mjs';
 import {SURFACE_TEACHER_COMMON_WGSL,SURFACE_TEACHER_HISTORY_WGSL} from '../surface-teacher-wgsl.mjs';
+import {PerspectiveCamera,WebGPUCoordinateSystem,Matrix4} from '../lib/three.core.js';
 
 test('production teacher query sees a lit surface, geometric shadow, and a miss',async()=>{
  await withKaminosGpu(async ctx=>{
@@ -59,5 +60,16 @@ test('native-style spot cones illuminate their interior and reject rays outside,
    const teacher=new SurfaceTeacher(ctx.device,{...scene,lights:[{type:'spot',position:[0,2,0],direction:[0,-1,0],angle:.3,penumbra,color:[20,20,20]}]});
    try{const result=await teacher.evaluate([{origin:[0,1,0],direction:[0,-1,0]},{origin:[2,1,0],direction:[0,-1,0]}]);assert.ok(result[0][0]>.1);assert.ok(result[1][0]<.0001);assert.ok(result.flat().every(Number.isFinite));}finally{teacher.dispose();}
   }
+ });
+});
+test('image rays consume the shared camera projection, including offsets beyond a plain FOV',async()=>{
+ await withKaminosGpu(async ctx=>{
+  const camera=new PerspectiveCamera(40,1,.01,100);camera.coordinateSystem=WebGPUCoordinateSystem;camera.position.set(0,2,2);camera.lookAt(0,5,0);camera.updateMatrixWorld(true);camera.updateProjectionMatrix();
+  const cameraFrame={viewProjection:new Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse).elements,position:camera.position.toArray()};
+  const teacher=new SurfaceTeacher(ctx.device,{triangles:[{a:[-10,0,-10],b:[10,0,10],c:[10,0,-10],materialIndex:0},{a:[-10,0,-10],b:[-10,0,10],c:[10,0,10],materialIndex:0}],materials:[{color:[.8,.1,.01],roughness:.8,metalness:0}],lights:[],environment:.1,bounces:1});
+  try{
+   teacher.render({view:{position:[0,2,2],target:[0,0,0],fov:40},cameraFrame,width:8,height:8,filter:false});
+   const image=await teacher.readLinear();for(let i=0;i<image.length;i++)if(i%4!==3)assert.ok(Math.abs(image[i]-.1)<1e-6,'actual upward camera frame must see environment, not the downward reconstruction');
+  }finally{teacher.dispose();}
  });
 });
