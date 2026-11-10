@@ -8,7 +8,7 @@ export default class SceneNeuralShading {
  constructor(source,scene,camera){
   this.source=source;this.camera=camera;this.scale=uniform(1);this.reuse=uniform(true,'bool');
   this.footprint=uniform(new Vector2(1,1));this.frames=0;this.materials=new Map();
-  this.radianceNode=Fn(([],builder)=>builder.material?.isNeumipMaterial?vec4((builder.material.lightsNode??builder.lightsNode).totalDiffuseNode,1):vec4(0))();
+  this.radianceNode=Fn(([],builder)=>builder.material?.isNeumipMaterial?vec4((builder.material.lightsNode??builder.lightsNode).totalDiffuseNode.max(0),1):vec4(0))();
   const capture=pass(scene,camera,{samples:0});this.capture=capture;
   capture.name='Neural material shading';capture.transparent=false;
   capture.contextNode=context({sceneReflectionLighting:null,sceneNeuralShading:this,neuralShadingMode:'capture',neuralFootprintScale:this.footprint});
@@ -24,6 +24,7 @@ export default class SceneNeuralShading {
   const resize=capture.setSize;
   capture.setSize=(width,height)=>{
    resize.call(capture,width,height);
+   if(capture.renderTarget.width<1||capture.renderTarget.height<1)capture.renderTarget.setSize(Math.max(1,capture.renderTarget.width),Math.max(1,capture.renderTarget.height));
    this.footprint.value.set(capture.renderTarget.width/width,capture.renderTarget.height/height);
   };
   const update=capture.updateBefore;
@@ -71,9 +72,18 @@ export default class SceneNeuralShading {
   // initialization must precede cache branches, including the full-rate path.
   normalView.toVar('neuralReceiverNormal').append();
   positionViewDirection.toVar('neuralReceiverView').append();
-  const capture=this.capture,low=capture.getTextureNode('output'),normal=capture.getTextureNode('normal'),depth=capture.getTextureNode('depth'),identity=capture.getTextureNode('identity');
-  const full=this.source.getTextureNode('transport');
   const cached=vec3(0).toVar('neuralCachedRadiance'),valid=bool(false).toVar('neuralCacheValid');
+  if(mode==='beauty'){
+   const color=this.source.getTextureNode('transport'),depth=this.source.getTextureNode('depth'),normal=this.source.getTextureNode('normal');
+   const d=depth.sample(screenUV).r,p=getViewPosition(screenUV,d,uniform(this.camera.projectionMatrixInverse));
+   const n=normalView.dot(positionViewDirection).lessThan(0).select(normalView.negate(),normalView).normalize();
+   cached.assign(color.sample(screenUV).rgb);
+   valid.assign(this.reuse.and(d.lessThan(1))
+    .and(abs(p.z.sub(positionView.z)).lessThanEqual(max(.0001,abs(positionView.z).mul(.00001))))
+    .and(dot(normal.sample(screenUV).rgb.normalize(),n).greaterThan(.999)));
+   return {radiance:cached,valid};
+  }
+  const capture=this.capture,low=capture.getTextureNode('output'),normal=capture.getTextureNode('normal'),depth=capture.getTextureNode('depth'),identity=capture.getTextureNode('identity');
    If(this.scale.lessThan(1),()=>{
     const size=vec2(textureSize(low)),q=screenUV.mul(size).sub(.5),base=q.floor(),f=q.fract();
     const sum=vec3(0).toVar(),weight=float(0).toVar();
@@ -90,8 +100,6 @@ export default class SceneNeuralShading {
      sum.addAssign(textureLoad(low,coord).rgb.mul(w));weight.addAssign(w);
     }
     If(weight.greaterThan(.00001),()=>{cached.assign(sum.div(weight));valid.assign(true);});
-   }).Else(()=>{
-    if(mode==='beauty'){cached.assign(full.sample(screenUV).rgb);valid.assign(this.reuse);}
    });
   return {radiance:cached,valid};
  }

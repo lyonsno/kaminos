@@ -31,3 +31,10 @@ test('neural resolution is a validated saved viewport setting',()=>{
  for(const scale of [1,.75,.5,.25])assert.equal(checkedViewportDisplay({neuralResolution:scale}).neuralResolution,scale);
  for(const invalid of [0,-1,NaN,Infinity,1.01,'0.5'])assert.throws(()=>checkedViewportDisplay({neuralResolution:invalid}),/resolution/);
 });
+test('positive subpixel rates still allocate one real shading pixel',()=>{
+ const gi=createSceneGI(new Scene(),new PerspectiveCamera(),TSL.uniform(0));
+ try{
+  gi.neuralShading.setScale(.01);gi.neuralShading.capture.setSize(20,10);
+  assert.deepEqual(gi.neuralShading.state().resolution,[1,1]);
+ }finally{gi.dispose();}
+});

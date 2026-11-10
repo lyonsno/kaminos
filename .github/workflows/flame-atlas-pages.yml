@@ -16,6 +16,8 @@ on:
       - lib/three*.js
       - lib/addons/tsl/display/**
       - scene-gi*.mjs
+      - scene-neural-shading.mjs
+      - neural-resolution-settings.mjs
       - finger-fluid-webgpu-core.js
       - models/flux2-klein/index.html
       - models/flux2-klein/klein-*.js

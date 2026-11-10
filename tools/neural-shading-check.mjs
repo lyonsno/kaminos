@@ -22,6 +22,7 @@ try{
  report.phase='native';await save();await page.goto(origin+'/tests/neural-shading-render-native.html');
  await page.waitForFunction(()=>window.neumipRenderLoaded||window.neumipRenderFailure);assert.equal(await page.evaluate(()=>window.neumipRenderFailure),undefined);
  report.identity=await page.evaluate(()=>window.neumipRenderAssay.identity);assert.equal(report.identity.backend,'WebGPU');
+ assert.match(JSON.stringify(report.identity.adapter),/apple/i,'Apple hardware identity required for this native check');
  report.samples=[];
  for(const count of [1,8])for(const [scale,reuse] of [[1,false],[1,true],[.75,true],[.5,true],[.25,true]]){
   const r=await page.evaluate(([count,scale,reuse])=>window.neumipRenderAssay.render(count,scale,reuse),[count,scale,reuse]);

@@ -24,7 +24,7 @@ try{
  const pipeline=new THREE.RenderPipeline(renderer);pipeline.outputNode=beauty;pipeline.outputColorTransform=false;
  document.body.append(renderer.domElement);
  const points=[[20,25],[31,32],[42,36]];
- window.neumipRenderAssay={identity:{source:model.source,backend:'WebGPU',adapter:Object.fromEntries(['vendor','architecture','device','description'].map(key=>[key,renderer.backend.adapter?.info?.[key]??null])),width:W,height:H,uvScale:scale,gain},
+ window.neumipRenderAssay={identity:{source:model.source,backend:'WebGPU',adapter:Object.fromEntries(['vendor','architecture','device','description'].map(key=>[key,(renderer.backend.device?.adapterInfo??renderer.backend.adapter?.info)?.[key]??null])),width:W,height:H,uvScale:scale,gain},
  async render(count,resolution=1,reuse=true){
   cache.setScale(resolution);cache.reuse.value=reuse;
   for(let i=0;i<lights.length;i++)lights[i].visible=i<count;

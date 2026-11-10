@@ -12356,7 +12356,7 @@ async function initScene() {
     redraw:()=>window._kaminosDirty?.(),onFrame:workbenchSceneFrames.onFrame,
   });
   window.kaminosWorkbenchSceneState=()=>{
-    const info=renderer.backend.adapter?.info;
+    const info=renderer.backend.device?.adapterInfo??renderer.backend.adapter?.info;
     return {...workbenchSceneFrames.state(),
       rendererBackend:renderer.backend.isWebGPUBackend===true?'webgpu':renderer.backend.isWebGLBackend===true?'webgl':'unknown',
       adapter:info?Object.fromEntries(['vendor','architecture','device','description'].map(key=>[key,info[key]??null])):null,
