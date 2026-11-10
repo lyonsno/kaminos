@@ -1,7 +1,8 @@
+# kaminos-test: python
 import unittest,importlib.util,copy,tempfile,subprocess,sys,json
 from pathlib import Path
 import numpy as np
-spec=importlib.util.spec_from_file_location('exporter',Path(__file__).with_name('hand_replay_variants.py'));m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+spec=importlib.util.spec_from_file_location('exporter',Path(__file__).parents[1]/'tools/hand_replay_variants.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 class Variants(unittest.TestCase):
  def test_preserve_geometry_camera_and_recorded_frame(self):
   reg=np.zeros((21,778));reg[:,0]=1;v=np.arange(2334,dtype=float).reshape(778,3)/10000
