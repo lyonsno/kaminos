@@ -18,7 +18,7 @@ export default {
     };
     let name=inputs.material??catalog.defaultMaterial??(Object.hasOwn(catalog.materials,'wool2')?'wool2':Object.keys(catalog.materials)[0]),uvScale=positive(inputs.uvScale??3,'UV scale'),gain=positive(inputs.gain??1,'Material gain'),surface=inputs.surface??'folded';
     const session=await host.scene.open();if(!host.scene.renderer().backend.isWebGPUBackend){await session.dispose();throw Error('Neural materials require native WebGPU');}
-    let current,mesh,asset,disposed=false,generation=0,abort,selector,scaleInput,gainInput,surfaceInput,status,drag=[];
+    let current,mesh,asset,disposed=false,generation=0,abort,pendingName=null,selector,scaleInput,gainInput,surfaceInput,status,drag=[];
     const makeGeometry=kind=>{
       if(kind==='sphere'){const g=new SphereGeometry(1,64,48);g.computeTangents();return g;}
       if(kind!=='folded')throw Error('Choose folded or sphere');
@@ -27,11 +27,11 @@ export default {
       p.needsUpdate=true;g.computeVertexNormals();g.computeTangents();return g;
     };
     const read=()=>({material:name,catalogURL,pending:!!abort,surface,uvScale,gain,objectId:asset?.id,backend:'WebGPU',...current?.read(),authoredLights:host.scene.objects().filter(o=>o.type==='light').map(o=>({id:o.id,...o.light})),view:session.readView(),continuation:'Experiment inputs restore model, surface and material controls. Native scene lights remain editable; indirect/environment response is not implemented.'});
-    const sync=(force=false)=>{if(!status)return;selector.value=name;for(const [input,value] of [[scaleInput,uvScale],[gainInput,gain]])if(force||input.ownerDocument.activeElement!==input||input.readOnly)input.value=String(value);surfaceInput.value=surface;status.textContent=abort?'Loading material…':'Orbit to inspect the relief. Edit or add scene lights to change illumination. Environment and indirect lighting are not yet included.';};
+    const sync=(force=false)=>{if(!status)return;selector.value=pendingName??name;for(const [input,value] of [[scaleInput,uvScale],[gainInput,gain]])if(force||input.ownerDocument.activeElement!==input||input.readOnly)input.value=String(value);surfaceInput.value=surface;status.textContent=abort?'Loading material…':'Orbit to inspect the relief. Edit or add scene lights to change illumination. Environment and indirect lighting are not yet included.';};
     const persist=()=>updateInputs({...inputs,material:name,surface,uvScale,gain});
     const select=async requested=>{
       if(disposed)throw Error('Neural surface session is disposed');
-      const entry=source(requested),token=++generation;abort?.abort();const controller=new AbortController();abort=controller;sync();
+      const entry=source(requested),token=++generation;abort?.abort();const controller=new AbortController();abort=controller;pendingName=requested;sync();
       try{
         const model=await loadNeumipModel(entry.url,{sha256:entry.sha256,signal:controller.signal});
         if(disposed)return;
@@ -39,7 +39,7 @@ export default {
         const next=createNeumipMaterial(model,{uvScale,gain});
         const previous=current;current=next;name=requested;if(mesh)mesh.material=next.material;previous?.material.dispose();persist();session.redraw();
         record({kind:'neumip.material',phase:'applied',effective:{name,source:model.source}});return read();
-      }catch(error){if(disposed||token!==generation)return;throw error;}finally{if(abort===controller){abort=null;sync();}}
+      }catch(error){if(disposed||token!==generation)return;throw error;}finally{if(abort===controller){abort=null;pendingName=null;sync();}}
     };
     try{
       await select(name);mesh=new Mesh(makeGeometry(surface),current.material);mesh.name='Neural surface';mesh.receiveShadow=true;mesh.position.y=1.5;

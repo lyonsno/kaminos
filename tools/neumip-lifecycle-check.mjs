@@ -26,6 +26,10 @@ try{
  // failures still reject so the operator sees them.
  const normalFetch=globalThis.fetch;
  catalog.materials.slow={url:'fixture:held-archive',sha256};catalog.materials.broken={url:'fixture:failed-archive',sha256};
+ const fakeDocument={activeElement:null,createElement(tag){return {tag,ownerDocument:this,children:[],value:'',append(...children){this.children.push(...children);},addEventListener(){}};}};
+ const root=fakeDocument.createElement('root');host.controls={installNumberDrag(){return {dispose(){}};}};
+ custom.mount({root,document:fakeDocument,invoke:(operation,input)=>custom.operations[operation](input)});
+ const materialPicker=root.children[0].children[1];
  let heldStarted;const heldReady=new Promise(resolve=>heldStarted=resolve);
  globalThis.fetch=(url,options={})=>{
    if(url==='fixture:held-archive')return new Promise((resolve,reject)=>{heldStarted();options.signal.addEventListener('abort',()=>reject(options.signal.reason),{once:true});});
@@ -33,9 +37,10 @@ try{
    return normalFetch(url,options);
  };
  const obsolete=custom.operations.selectMaterial('slow'),settled=obsolete.then(()=>null,error=>error);await heldReady;
+ assert.equal(materialPicker.value,'slow','Picker must retain the requested option while loading so the operator can switch back');
  await custom.operations.selectMaterial('student');
  assert.equal(await settled,null,'Superseded load cancellation must not become a material-selection error');
- assert.equal(custom.read().material,'student');
+ assert.equal(custom.read().material,'student');assert.equal(materialPicker.value,'student');
  await assert.rejects(custom.operations.selectMaterial('broken'),/HTTP 503/,'Current load failure must remain visible');
  globalThis.fetch=normalFetch;
  await custom.dispose();closed=false;
