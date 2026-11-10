@@ -1,3 +1,5 @@
+// A Reactive Lagrangian Optical Integrator for Subgrid Flame Super-Resolution.
+// Method and continuation plan: docs/reactive-lagrangian-optical-integrator.md.
 import {particleDepthLayout,createParticleDepthField,PARTICLE_DEPTH_RENDER_WGSL} from './volume-particle-depth.mjs';
 import {INTEGRAL_PRESENT_WGSL} from './volume-integral-reconstruction.mjs';
 

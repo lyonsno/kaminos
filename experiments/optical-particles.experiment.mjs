@@ -1,6 +1,6 @@
 import {opticalParticleSettings} from '../volume-optical-particles.mjs';
 export default {
- id:'optical-particles',title:'Reactive optical particles',
+ id:'optical-particles',title:'A Reactive Lagrangian Optical Integrator for Subgrid Flame Super-Resolution',
  async create({host,inputs={},record,updateInputs}){
   let settings=opticalParticleSettings({enabled:true,...inputs.particles});
   let sourceSettings={...inputs.source};
