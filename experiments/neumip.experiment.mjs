@@ -7,9 +7,10 @@ const positive=(x,name)=>{if(!Number.isFinite(x)||x<=0)throw Error(`${name} must
 export default {
   id:'neumip',title:'Neural surface materials',
   async create({host,inputs,record,updateInputs}) {
-    const response=await fetch(rootURL+'catalog.json');if(!response.ok)throw Error('Install the author NeuMIP models first (tools/install_neumip_models.py)');
-    const catalog=await response.json();if(catalog.schema!=='kaminos.neumip.author-models.v1')throw Error('Unknown NeuMIP model catalog');
-    const source=name=>{const entry=catalog.materials[name];if(!entry)throw Error(`NeuMIP material is not installed: ${name}`);return {...entry,url:rootURL+encodeURIComponent(entry.filename)};};
+    const catalogURL=inputs.catalogURL??rootURL+'catalog.json';
+    const response=await fetch(catalogURL);if(!response.ok)throw Error(`NeuMIP model catalog HTTP ${response.status}: ${catalogURL}`);
+    const catalog=await response.json();if(!['kaminos.neumip.author-models.v1','kaminos.neumip.models.v1'].includes(catalog.schema))throw Error('Unknown NeuMIP model catalog');
+    const source=name=>{const entry=catalog.materials[name];if(!entry)throw Error(`NeuMIP material is not installed: ${name}`);return {...entry,url:entry.url??rootURL+encodeURIComponent(entry.filename)};};
     let name=inputs.material??'wool2',uvScale=positive(inputs.uvScale??3,'UV scale'),gain=positive(inputs.gain??1,'Material gain'),surface=inputs.surface??'folded';
     const session=await host.scene.open();if(!host.scene.renderer().backend.isWebGPUBackend){await session.dispose();throw Error('Neural materials require native WebGPU');}
     let current,mesh,asset,disposed=false,generation=0,abort,selector,scaleInput,gainInput,surfaceInput,status,drag=[];
@@ -20,7 +21,7 @@ export default {
       for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i);p.setZ(i,.18*Math.sin(6*x+1.2*y)+.12*Math.cos(3*y-2*x));}
       p.needsUpdate=true;g.computeVertexNormals();g.computeTangents();return g;
     };
-    const read=()=>({material:name,pending:!!abort,surface,uvScale,gain,objectId:asset?.id,backend:'WebGPU',...current?.read(),authoredLights:host.scene.objects().filter(o=>o.type==='light').map(o=>({id:o.id,...o.light})),view:session.readView(),continuation:'Experiment inputs restore model, surface and material controls. Native scene lights remain editable; indirect/environment response is not implemented.'});
+    const read=()=>({material:name,catalogURL,pending:!!abort,surface,uvScale,gain,objectId:asset?.id,backend:'WebGPU',...current?.read(),authoredLights:host.scene.objects().filter(o=>o.type==='light').map(o=>({id:o.id,...o.light})),view:session.readView(),continuation:'Experiment inputs restore model, surface and material controls. Native scene lights remain editable; indirect/environment response is not implemented.'});
     const sync=(force=false)=>{if(!status)return;selector.value=name;for(const [input,value] of [[scaleInput,uvScale],[gainInput,gain]])if(force||input.ownerDocument.activeElement!==input||input.readOnly)input.value=String(value);surfaceInput.value=surface;status.textContent=abort?'Loading material…':'Orbit to inspect the relief. Edit or add scene lights to change illumination. Environment and indirect lighting are not yet included.';};
     const persist=()=>updateInputs({...inputs,material:name,surface,uvScale,gain});
     const select=async requested=>{
@@ -48,7 +49,7 @@ export default {
       frame(){host.scene.frame([mesh]);return applied('view');}},
       mount({root,document,invoke}){
         const selectField=(text,entries,operation)=>{const label=document.createElement('label'),select=document.createElement('select');label.append(text,select);for(const [value,title] of entries){const option=document.createElement('option');option.value=value;option.textContent=title;select.append(option);}select.addEventListener('change',()=>invoke(operation,select.value).catch(e=>{sync();status.textContent=e.message;}));root.append(label);return select;};
-        selector=selectField('Material ',Object.keys(catalog.materials).map(name=>[name,name]),'selectMaterial');
+        selector=selectField('Material ',Object.keys(catalog.materials).map(name=>[name,catalog.materials[name].title??name]),'selectMaterial');
         surfaceInput=selectField('Surface ',[['folded','Folded surface'],['sphere','Sphere']],'setSurface');
         const number=(text,operation,value,step)=>{const label=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');grip.textContent=text;input.type='number';input.step='any';input.min='0.000001';input.className='transform-input';input.value=String(value);input.addEventListener('blur',()=>sync(true));input.addEventListener('input',()=>{if(input.value&&input.validity.valid)invoke(operation,Number(input.value)).catch(e=>status.textContent=e.message);});label.append(grip,input);root.append(label);drag.push(host.controls.installNumberDrag({input,grip,step}));return input;};
         scaleInput=number('UV scale ','setUVScale',uvScale,.05);gainInput=number('Material gain ','setGain',gain,.05);
