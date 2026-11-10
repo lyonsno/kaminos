@@ -41,3 +41,20 @@ test('an initial image extent beyond device capacity disposes its opened session
  await assert.rejects(()=>experiment.create({host,inputs:{scale:100},record(){}}),/device capacity/);
  assert.equal(closed,1);assert.equal(attached,0);
 });
+
+test('teacher samples accepted native light visibility outside the host temporary draw mask',async()=>{
+ const THREE=await import('../lib/three.webgpu.js'),world=new THREE.Scene(),camera=new THREE.PerspectiveCamera(45,1,.01,100),gpu=device();
+ gpu.addEventListener=()=>{};gpu.removeEventListener=()=>{};
+ const light=new THREE.SpotLight(0xffffff,3);light.position.set(0,2,0);light.target.position.set(0,0,0);light.userData.kaminosSceneLightId='hidden-native-spot';world.add(light,light.target);
+ let hidden=true,view={position:[2.5,1.7,3.2],target:[0,.35,0],fov:42};
+ const session={async attach(object){world.add(object);return {id:'grass'};},setView(v){view=v;},readView:()=>view,onFrame:()=>()=>{},redraw(){},async dispose(){}};
+ const renderer={getDrawingBufferSize:v=>v.set(100,100),backend:{device:gpu}};
+ const host={scene:{async open(){return session;},rendering:()=>({renderer,scene:world,camera}),isVisible:id=>id!=='hidden-native-spot'||!hidden}};
+ const instance=await experiment.create({host,inputs:{},record(){}});
+ try{
+  await instance.operations.configure({bounces:3});
+  const lights=()=>gpu.buffers.filter(b=>b.label==='surface teacher lights'&&!b.destroyed).at(-1).data;
+  assert.deepEqual(Array.from(lights().slice(4,7)),[0,0,0],'hidden native spot must not contribute although light.visible is still true between draws');
+  hidden=false;await instance.operations.configure({bounces:3});assert.deepEqual(Array.from(lights().slice(4,7)),[3,3,3]);
+ }finally{await instance.dispose();}
+});

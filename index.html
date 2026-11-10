@@ -27455,6 +27455,7 @@ function mountSceneSpotLight(raw) {
     scene.add(binding.light,binding.light.target,binding.marker);
   }
   const {light,marker}=binding;
+  light.userData.kaminosSceneLightId=record.id;
   const topologyChanged=(!entry&&!reusedStudioLight)||priorVisible!==record.light.enabled;
   applySceneObjectTransformState(marker,record.transform);marker.visible=record.light.enabled&&viewportHelpersVisible;
   light.visible=record.light.enabled;light.color.set(record.light.color);light.intensity=record.light.intensity;light.angle=THREE.MathUtils.degToRad(record.light.angle);light.penumbra=record.light.penumbra;

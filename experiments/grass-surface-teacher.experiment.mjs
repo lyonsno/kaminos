@@ -33,6 +33,7 @@ export default {
    const lights=[];scene.updateMatrixWorld(true);
    scene.traverseVisible(light=>{
     if(!light.isDirectionalLight&&!light.isPointLight&&!light.isSpotLight)return;
+    const nativeId=light.userData.kaminosSceneLightId;if(nativeId&&!host.scene.isVisible(nativeId))return;
     if((light.isPointLight||light.isSpotLight)&&light.decay!==2)return;
     const p=new THREE.Vector3();light.getWorldPosition(p);
     if(light.isDirectionalLight){const target=new THREE.Vector3();light.target.getWorldPosition(target);p.sub(target).normalize();}
