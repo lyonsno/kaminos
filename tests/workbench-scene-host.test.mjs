@@ -7,7 +7,7 @@ const {createWorkbenchFrameService=unavailable,createWorkbenchSceneHost=unavaila
  if(error.code==='ERR_MODULE_NOT_FOUND'&&error.url?.endsWith('/workbench-scene-host.mjs'))return {};
  throw error;
 });
-function harness(){
+function harness(extra={}){
  const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(45,1,.1,100);
  camera.position.set(0,1,5);
  const controls={target:new THREE.Vector3(),enableDamping:true,update(){camera.lookAt(this.target);}};
@@ -18,10 +18,17 @@ function harness(){
   loadAsset:async(url,options)=>{loads.push({url,options});const root=new THREE.Group();scene.add(root);const row=register(root,{source:url});return {id:row.id,root,clips:[],source:url};},
   registerObject:register,findObject:root=>[...rows.values()].find(row=>row.object===root),
   removeObject:handle=>{const row=rows.get(handle.id);if(row?.object!==handle.root)return false;rows.delete(handle.id);scene.remove(handle.root);removed.push(handle.id);return true;},
-  redraw(){},onFrame:frameService.onFrame,
+  redraw(){},onFrame:frameService.onFrame,...extra,
  });
  return {host,scene,camera,controls,rows,loads,removed,register,frameService};
 }
+test('a renderer experiment borrows the current app render context without creating another device or camera',()=>{
+ let renderer={backend:{device:{identity:'first'}}};
+ const h=harness({renderContext:()=>({renderer})});
+ assert.equal(h.host.rendering?.().renderer,renderer);
+ renderer={backend:{device:{identity:'replacement'}}};
+ assert.equal(h.host.rendering().renderer,renderer);
+});
 test('host frame clock uses seconds, excludes unsubscribe time and isolates a failed producer',()=>{
  const failures=[],frames=[],service=createWorkbenchFrameService({onError:error=>failures.push(error.message)});
  const cancel=service.onFrame(frame=>frames.push(frame));service.onFrame(()=>{throw Error('domain failure');});
