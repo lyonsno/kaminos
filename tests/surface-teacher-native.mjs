@@ -73,3 +73,14 @@ test('image rays consume the shared camera projection, including offsets beyond 
   }finally{teacher.dispose();}
  });
 });
+test('production raw accumulation restarts at one after camera motion and then counts exact new samples',async()=>{
+ await withKaminosGpu(async ctx=>{
+  const teacher=new SurfaceTeacher(ctx.device,{triangles:[{a:[-20,0,-20],b:[20,0,20],c:[20,0,-20],materialIndex:0},{a:[-20,0,-20],b:[-20,0,20],c:[20,0,20],materialIndex:0}],materials:[{color:[.5,.3,.1],roughness:.8,metalness:0}],lights:[],environment:.1,bounces:2});
+  const a={position:[0,2,2],target:[0,0,0],fov:45},b={...a,position:[.001,2,2]};
+  try{
+   for(const view of [a,a,a,b,b])teacher.render({view,width:8,height:8,filter:true});
+   const fresh=await teacher.readLinear();assert.equal(teacher.state().samples,1);assert.ok(fresh.every((v,i)=>i%4!==3||v===1));
+   teacher.render({view:b,width:8,height:8,filter:true});const next=await teacher.readLinear();assert.equal(teacher.state().samples,2);assert.ok(next.every((v,i)=>i%4!==3||v===2));
+  }finally{teacher.dispose();}
+ });
+});

@@ -6,13 +6,16 @@ const finite3=v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite);
 export class SurfaceTeacher {
  constructor(device,{triangles,materials,lights=[],environment=.15,bounces=3}) {
   this.device=device;this.resources=[];this.targets=[];this.pipelines={};this.disposed=false;this.serial=0;this.samples=0;this.valid=false;
+  this.setTransport({environment,bounces});
+  try{
   this.params=this.buffer('surface teacher parameters',new Float32Array(44),GPUBufferUsage.UNIFORM);
   this.historyParams=this.buffer('surface teacher history parameters',new Float32Array(20),GPUBufferUsage.UNIFORM);
   this.filterParams=[1,2,4].map(step=>this.buffer('surface teacher wavelet step',new Float32Array([step,.01,0,0]),GPUBufferUsage.UNIFORM));
   for(const [name,code]of Object.entries({image:SURFACE_TEACHER_IMAGE_WGSL,query:SURFACE_TEACHER_QUERY_WGSL,history:SURFACE_TEACHER_HISTORY_WGSL,filter:SURFACE_TEACHER_FILTER_WGSL})){
    this.pipelines[name]=device.createComputePipeline({label:`surface teacher ${name}`,layout:'auto',compute:{module:device.createShaderModule({label:`surface teacher ${name}`,code}),entryPoint:'main'}});
   }
-  this.setScene({triangles,materials,lights});this.setTransport({environment,bounces});
+   this.setScene({triangles,materials,lights});
+  }catch(error){this.dispose();throw error;}
  }
  buffer(label,data,usage=GPUBufferUsage.STORAGE){
   if(data.byteLength>this.device.limits.maxBufferSize||(usage&GPUBufferUsage.STORAGE)&&data.byteLength>this.device.limits.maxStorageBufferBindingSize)throw Error(`${label} exceeds the active device's buffer capacity`);
@@ -20,12 +23,12 @@ export class SurfaceTeacher {
  }
  setScene({triangles,materials,lights=[]}){
   if(!Array.isArray(materials)||!materials.length||materials.some(m=>!finite3(m.color)||m.color.some(v=>v<0||v>1)||!Number.isFinite(m.roughness)||m.roughness<0||m.roughness>1||!Number.isFinite(m.metalness)||m.metalness<0||m.metalness>1))throw Error('physical material colors, roughness and metalness required');
-  if(lights.some(l=>!finite3(l.position)||!finite3(l.color)||l.color.some(v=>v<0)||!['directional','point','spot'].includes(l.type)||l.type==='directional'&&Math.hypot(...l.position)===0||l.type==='spot'&&(!finite3(l.direction)||!Number.isFinite(l.angle)||l.angle<=0||l.angle>=Math.PI/2||!Number.isFinite(l.penumbra)||l.penumbra<0||l.penumbra>1)))throw Error('finite directional, inverse-square point or spot lights required');
+  if(lights.some(l=>!finite3(l.position)||!finite3(l.color)||l.color.some(v=>v<0)||!['directional','point','spot'].includes(l.type)||l.type==='directional'&&Math.hypot(...l.position)===0||l.type==='spot'&&(!finite3(l.direction)||Math.hypot(...l.direction)===0||!Number.isFinite(l.angle)||l.angle<=0||l.angle>=Math.PI/2||!Number.isFinite(l.penumbra)||l.penumbra<0||l.penumbra>1)))throw Error('finite directional, inverse-square point or nonzero spot direction required');
   if(triangles.some(t=>!Number.isSafeInteger(t.materialIndex)||t.materialIndex<0||t.materialIndex>=materials.length))throw Error('each triangle must address an existing material');
   const packed=buildTriangleVisibility(triangles).packGpu();
   for(let i=0;i<packed.triangleCount;i++)packed.triangles[i*12+3]=triangles[packed.triangleIndices[i]].materialIndex;
   const materialData=new Float32Array(materials.length*8);materials.forEach((m,i)=>materialData.set([...m.color,1,m.roughness,m.metalness,0,0],i*8));
-  const lightData=new Float32Array(Math.max(1,lights.length)*16);lights.forEach((l,i)=>lightData.set([...l.position,l.type==='spot'?2:l.type==='point'?1:0,...l.color,0,...(l.direction??[0,0,-1]),Math.cos(l.angle??0),Math.cos((l.angle??0)*(1-(l.penumbra??0))),0,0,0],i*16));
+  const lightData=new Float32Array(Math.max(1,lights.length)*16);lights.forEach((l,i)=>{const direction=l.type==='spot'?l.direction.map(v=>v/Math.hypot(...l.direction)):[0,0,-1];lightData.set([...l.position,l.type==='spot'?2:l.type==='point'?1:0,...l.color,0,...direction,Math.cos(l.angle??0),Math.cos((l.angle??0)*(1-(l.penumbra??0))),0,0,0],i*16);});
   const next=[this.buffer('surface teacher BVH nodes',packed.nodes),this.buffer('surface teacher triangles',packed.triangles),this.buffer('surface teacher materials',materialData),this.buffer('surface teacher lights',lightData)];
   for(const buffer of this.sceneBuffers||[]){buffer.destroy();this.resources.splice(this.resources.indexOf(buffer),1);}this.sceneBuffers=next;this.lightCount=lights.length;this.triangleCount=packed.triangleCount;this.reset('source or lighting changed');
  }
@@ -33,7 +36,7 @@ export class SurfaceTeacher {
   if(!Number.isFinite(environment)||environment<0||!Number.isSafeInteger(bounces)||bounces<1)throw Error('nonnegative environment and positive integer path depth required');
   if(environment!==this.environment||bounces!==this.bounces){this.environment=environment;this.bounces=bounces;this.reset('transport changed');}
  }
- reset(reason='explicit'){this.valid=false;this.samples=0;this.resetReason=reason;}
+ reset(reason='explicit'){this.valid=false;this.samples=0;this.wasMoving=false;this.resetReason=reason;}
  group(pipeline,resources){return this.device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:resources.map((resource,binding)=>({binding,resource:resource?.createView?resource.createView():{buffer:resource}}))});}
  common(){return [...this.sceneBuffers,this.params];}
  writeParams({view,cameraFrame,width=1,height=1,frame=this.serial,previousVP=this.previousVP}={}){
@@ -70,13 +73,14 @@ export class SurfaceTeacher {
  render({view,cameraFrame,width,height,filter=true}){
   if(this.disposed)throw Error('surface teacher is disposed');this.resize(width,height);
   const key=JSON.stringify([view,cameraFrame]),moving=this.viewKey!==undefined&&key!==this.viewKey;
+  if(this.wasMoving&&!moving)this.reset('camera settled');
   const vp=this.writeParams({view,cameraFrame,width,height});const historyData=new Float32Array(20);historyData.set((this.previousVP??vp).elements);historyData.set([this.valid&&(!moving||filter)?1:0,moving&&filter?1:0,Math.max(.002,Math.hypot(...view.position)*4/height),0],16);this.device.queue.writeBuffer(this.historyParams,0,historyData);
   const i=this.index,j=1-i,encoder=this.device.createCommandEncoder({label:'surface teacher image and reconstruction'});
   const dispatch=(name,resources)=>{const pipeline=this.pipelines[name],pass=encoder.beginComputePass({label:`surface teacher ${name}`});pass.setPipeline(pipeline);pass.setBindGroup(0,this.group(pipeline,resources));pass.dispatchWorkgroups(Math.ceil(width/8),Math.ceil(height/8));pass.end();};
   dispatch('image',[...this.common(),this.raw,this.points[i],this.normals[i]]);
   dispatch('history',[this.raw,this.points[i],this.normals[i],this.histories[j],this.points[j],this.normals[j],this.histories[i],this.historyParams]);
   let output=this.histories[i];if(filter){for(let step=0;step<3;step++){const target=this.filtered[step%2];dispatch('filter',[output,this.points[i],this.normals[i],target,this.filterParams[step]]);output=target;}}
-  this.device.queue.submit([encoder.finish()]);this.output=output;this.accumulation=this.histories[i];this.previousVP=vp;this.viewKey=key;this.valid=true;this.index=j;this.serial++;this.samples=moving?1:this.samples+1;return this.state();
+  this.device.queue.submit([encoder.finish()]);this.output=output;this.accumulation=this.histories[i];this.previousVP=vp;this.viewKey=key;this.valid=true;this.index=j;this.serial++;this.samples=moving?1:this.samples+1;this.wasMoving=moving;return this.state();
  }
  async readLinear(){
   if(!this.accumulation)throw Error('no completed image to capture');
@@ -90,6 +94,6 @@ export class SurfaceTeacher {
   if(destination.width!==this.width||destination.height!==this.height||destination.format!=='rgba32float')throw Error('Surface teacher presentation texture extent or format mismatch');
   const encoder=this.device.createCommandEncoder();encoder.copyTextureToTexture({texture:this.output},{texture:destination},[this.width,this.height]);this.device.queue.submit([encoder.finish()]);
  }
- state(){return {route:'explicit-surface-webgpu-path-teacher-v1',triangles:this.triangleCount,width:this.width??0,height:this.height??0,samples:this.samples,frame:this.serial,bounces:this.bounces,environment:this.environment,resetReason:this.resetReason,reconstruction:'geometry-validated temporal accumulation and variance-guided atrous',rawOutput:'linear RGB; alpha stores accumulated sample count',disposed:this.disposed};}
+ state(){return {route:'explicit-surface-webgpu-path-teacher-v1',triangles:this.triangleCount,width:this.width??0,height:this.height??0,samples:this.samples,frame:this.serial,bounces:this.bounces,environment:this.environment,resetReason:this.resetReason,accumulationMode:this.wasMoving?'responsive-history':'stationary-mean',reconstruction:'geometry-validated temporal accumulation and variance-guided atrous',rawOutput:'linear RGB; stationary alpha stores sample count, responsive alpha stores effective history weight',disposed:this.disposed};}
  dispose(){if(this.disposed)return;this.disposed=true;for(const value of [...this.resources,...this.targets])value.destroy();}
 }

@@ -14223,6 +14223,7 @@ async function installOwnerWorkbenchEntry() {
     async open(){await workbenchViewerReady;if(!workbenchSceneHost)throw Error('Shared scene host unavailable');setActiveTab('assets');return workbenchSceneHost.open();},
     refreshPresentation:refreshWorkbenchAssetPresentation,
     rendering:()=>workbenchSceneHost.rendering(),
+    isVisible:id=>isSceneItemVisible(id),
     renderer:()=>renderer,objects:()=>workingScene.objects,select:id=>window.selectSceneObject(id),
     ground:()=>({center:[groundPlane.position.x,groundPlane.position.y,groundPlane.position.z],height:groundPlane.position.y,radius:5,visible:groundPlane.visible}),
     frame:objects=>{frameObjects(objects,camera,controls);window._kaminosDirty?.();},
@@ -27448,7 +27449,7 @@ function mountSceneSpotLight(raw) {
     light.castShadow=true;light.shadow.mapSize.set(2048,2048);light.shadow.bias=-.00005;light.shadow.normalBias=.004;
     const points=[0,0,0,0,0,-.5,-.12,0,-.3,.12,0,-.3,0,-.12,-.3,0,.12,-.3];
     const marker=new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute(points,3)),new THREE.LineBasicMaterial({color:0xffc66d}));
-    marker.userData.kaminosEditorOnly=true;binding={light,marker,reusedStudioLight:Boolean(reusedStudioLight)};sceneSpotLights.set(record.id,binding);
+    marker.userData.kaminosEditorOnly=true;marker.renderOrder=1000;binding={light,marker,reusedStudioLight:Boolean(reusedStudioLight)};sceneSpotLights.set(record.id,binding);
     scene.add(light,light.target,marker);
   } else {
     scene.add(binding.light,binding.light.target,binding.marker);
