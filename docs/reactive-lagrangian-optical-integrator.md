@@ -79,3 +79,8 @@ For stronger reaction-driven motion, begin by distinguishing the existing heat-d
 - `volume-core.js`: shared reaction configuration, effective time scale and native scene integration.
 
 The original depth-renderer baseline is `a497b09c2759126956162241d4364fd0a965dbfe`. This guide versions the subsequent single-grid control/visibility implementation on `cc/particle-live-regime-1110`; numerical and native checks accompany the implementation. The integrator’s acquisition/transport/preparation coupling is a distinct question from the underlying grid-physics comparison and the grid-configuration performance ladder. Their results can later inform this method’s configuration choices.
+
+
+Renewal counters retain the last population update across paused redraws. Their `renewal` timestamp and tracking flag are distinct from the current readout/source-batch identity; enabling diagnostics while paused does not invent earlier counters. Numeric focus and blur preserve full accepted precision unless a draft was edited.
+
+In the live host, an extinction request whose current-field prerequisites disappear suspends to the original transfer and reports `gridAssist.effective="unavailable"` with its reason in the panel. The request remains visible and can resume when the field is available. Direct component callers retain strict field validation unless they explicitly admit this suspension. This avoids starting a hidden extra lighting/preparation route or stopping the existing effect.

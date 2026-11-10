@@ -66,7 +66,7 @@ async function opticalFixture(d,run,view={}){
  const target=d.createTexture({size:[4,4],format:'rgba8unorm',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC});const depth=d.createTexture({size:[1,1],format:'depth32float',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING});
  const camera=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,1,1,0,0,0,1,0]);const source={buffer:births,uniform,width:4,height:4,pixels:n,step:0,backtrace:view.backtrace??0,reactionStepScale:view.stepScale??1,viewProj:view.vp??identity};
  const seed=rows=>{d.queue.writeBuffer(births,0,rows);owner.reset();};
- const draw=async(step=0,settings={})=>{source.step=step;const e=d.createCommandEncoder();const dp=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthClearValue:view.depth??1,depthStoreOp:'store'}});dp.end();const measured=view.trace||view.passTrace?new Proxy(e,{get(target,key){if(key==='beginRenderPass')return desc=>{view.passTrace?.push(desc.label);const pass=target.beginRenderPass(desc);return desc.label==='spatial material support'?new Proxy(pass,{get(p,k){const value=p[k];return typeof value==='function'?function(...args){if(k==='draw'||k==='drawIndexed')view.trace?.push({method:k,args});return value.apply(p,args);}:value;}}):pass;};const value=target[key];return typeof value==='function'?value.bind(target):value;}}):e;owner.encode(measured,{view:target.createView(),format:'rgba8unorm',source,fine,dims:[2,2,2],invViewProj:view.inverse??identity,depthZeroToOne:view.depthZeroToOne??false,settings:{enabled:true,refresh:0,...settings},cameraValues:camera,depth,identity:'fixture',gridExtinction:view.gridExtinction});const read=d.createBuffer({size:1024,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});e.copyTextureToBuffer({texture:target},{buffer:read,bytesPerRow:256},[4,4]);d.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);const pixels=new Uint8Array(read.getMappedRange().slice(0));read.unmap();read.destroy();return pixels;};
+ const draw=async(step=0,settings={})=>{source.step=step;const e=d.createCommandEncoder();const dp=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthClearValue:view.depth??1,depthStoreOp:'store'}});dp.end();const measured=view.trace||view.passTrace?new Proxy(e,{get(target,key){if(key==='beginRenderPass')return desc=>{view.passTrace?.push(desc.label);const pass=target.beginRenderPass(desc);return desc.label==='spatial material support'?new Proxy(pass,{get(p,k){const value=p[k];return typeof value==='function'?function(...args){if(k==='draw'||k==='drawIndexed')view.trace?.push({method:k,args});return value.apply(p,args);}:value;}}):pass;};const value=target[key];return typeof value==='function'?value.bind(target):value;}}):e;owner.encode(measured,{view:target.createView(),format:'rgba8unorm',source,fine,dims:[2,2,2],invViewProj:view.inverse??identity,depthZeroToOne:view.depthZeroToOne??false,settings:{enabled:true,refresh:0,...settings},cameraValues:camera,depth,identity:'fixture',gridExtinction:view.gridExtinction,allowUnavailableGridExtinction:view.allowUnavailableGridExtinction});const read=d.createBuffer({size:1024,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});e.copyTextureToBuffer({texture:target},{buffer:read,bytesPerRow:256},[4,4]);d.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);const pixels=new Uint8Array(read.getMappedRange().slice(0));read.unmap();read.destroy();return pixels;};
  try{await run({owner,seed,draw,upload:rows=>d.queue.writeBuffer(births,0,rows)});}finally{owner.dispose();births.destroy();uniform.destroy();fine.destroy();target.destroy();depth.destroy();}
 }
 test('optically negligible carriers cannot dilute an overlapping live carrier',async()=>{
@@ -297,7 +297,7 @@ async function withExtinctionFixture(d,run,options={}){
  d.queue.writeTexture({texture:grid},voxels,{bytesPerRow:64,rowsPerImage:4},[4,4,4]);
  const field={status:'encoded',texture:grid,frame:0,expectedFrame:0,generation:1,coefficientLengthSpace:'volume-local',dimensions:[4,4,4],localMin:[-1,-1,-1],localMax:[1,1,1]};
  const camera=new PerspectiveCamera(45,1,.1,20);camera.coordinateSystem=WebGPUCoordinateSystem;camera.position.z=4;camera.updateProjectionMatrix();camera.updateMatrixWorld();const vp=new Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);
- try{await opticalFixture(d,x=>run({...x,field}),{vp:vp.toArray(),inverse:vp.clone().invert().toArray(),depthZeroToOne:true,transparent:options.transparent??false,gridExtinction:field});}finally{grid.destroy();}
+ try{await opticalFixture(d,x=>run({...x,field}),{vp:vp.toArray(),inverse:vp.clone().invert().toArray(),depthZeroToOne:true,transparent:options.transparent??false,gridExtinction:field,allowUnavailableGridExtinction:options.allowUnavailableGridExtinction});}finally{grid.destroy();}
 }
 const centerLight=image=>image[256+4]+image[256+8]+image[512+4]+image[512+8];
 test('independent grid extinction hides a rear particle without changing retained state and off remains exact',async()=>{
@@ -325,4 +325,22 @@ test('stale independent extinction is refused before changing retained state',as
   const rows=new Float32Array(16*16);rows.set([1,.4,.1,0,0,0,0,1,0,.25,1,.3,1,.4,.1,0]);seed(rows);const cfg={depthMode:1,depthSlices:8,depthScale:1};await draw(0,cfg);const old=(await owner.sample()).records;field.expectedFrame=1;
   await assert.rejects(()=>draw(0,{...cfg,fillExtinction:1}),/extinction.*(stale|current)|current.*extinction/i);assert.deepEqual((await owner.sample()).records,old);
  }));
+});
+
+
+test('paused renewal readouts preserve the last population update and its tracking provenance',async()=>{
+ await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw})=>{
+  const rows=new Float32Array(16*16);rows.set([0,0,0,2,0,0,0,1,0,.25,1,.25,0,0,0,0]);seed(rows);
+  const cfg={acquisitionMode:1,capacity:1,refresh:1,renewalDiagnostics:true};await draw(0,cfg);await draw(1,cfg);const next=await owner.statistics();assert.equal(next.overwritten,1);
+  await draw(1,{...cfg,fillExtinction:0});const paused=await owner.statistics();assert.equal(paused.overwritten,1,'presentation redraw cannot erase actual replacement');assert.equal(paused.placed,1);assert.equal(paused.reactionDelta,1);assert.deepEqual(paused.renewal,next.renewal);assert.ok(paused.identity.frame>paused.renewal.frame,'readout and renewal clocks remain distinguishable');
+  await draw(2,{...cfg,renewalDiagnostics:false});await draw(2,cfg);const untracked=await owner.statistics();assert.equal(untracked.overwritten,null,'enabling diagnostics on pause cannot invent past counters');assert.equal(untracked.renewal.tracked,false);
+ }));
+});
+test('unavailable grid assist can explicitly suspend at a live host without changing the original transfer',async()=>{
+ await withKaminosGpu(async({device:d})=>withExtinctionFixture(d,async({seed,draw,owner,field})=>{
+  const rows=new Float32Array(16*16);rows.set([1,.4,.1,.1,0,0,-.5,1,0,.25,1,.3,1,.4,.1,0]);seed(rows);const cfg={depthMode:1,depthSlices:8,depthScale:1};const plain=await draw(0,cfg),records=(await owner.sample()).records;
+  for(const unavailable of [{expectedFrame:1},{exterior:{}},{texture:null}]){
+   const old={...field};Object.assign(field,unavailable);assert.deepEqual(await draw(0,{...cfg,fillExtinction:1}),plain,'unsupported assist uses the exact unassisted transfer');const state=owner.read();assert.equal(state.gridAssist.requested,true);assert.equal(state.gridAssist.effective,'unavailable');assert.ok(state.gridAssist.reason);assert.equal(state.gridAssist.effectiveStrength,0);assert.deepEqual((await owner.sample()).records,records);Object.assign(field,old);
+  }
+ },{allowUnavailableGridExtinction:true}));
 });

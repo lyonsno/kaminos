@@ -50,3 +50,11 @@ test('scrubbed values apply immediately and disposal cancels pending typed write
  input.classList.add('scrubbing');input.value='.4';input.fire('input');await Promise.resolve();assert.equal(x.accepted().sourceBias,.4);
  input.classList.remove('scrubbing');x.document.activeElement=input;input.value='.2';input.fire('input');const n=x.writes.length;await x.dispose();await settle();assert.equal(x.writes.length,n,'closed controls cannot publish an old delayed edit');
 });
+
+test('untouched numeric controls preserve accepted precision and one edit publishes once',async()=>{
+ const x=await mounted();try{
+  x.owner.operations.setOptions({cooling:30.4472070312505});const input=x.field('cooling'),before=x.writes.length;x.document.activeElement=input;input.fire('blur');await Promise.resolve();assert.equal(x.accepted().cooling,30.4472070312505,'tab navigation cannot write rounded display values');assert.equal(x.writes.length,before);
+  input.value='27.25';input.fire('input');await settle();input.fire('change');input.fire('blur');await Promise.resolve();assert.equal(x.accepted().cooling,27.25);assert.equal(x.writes.length,before+1,'debounce/change/blur apply one draft once');
+  const bias=x.field('sourceBias');x.document.activeElement=bias;bias.value='2';bias.fire('input');await settle();assert.ok(x.owner.read().error);bias.fire('keydown',{key:'Escape'});assert.equal(x.owner.read().error,null,'discarding an invalid draft clears its error');
+ }finally{await x.dispose();}
+});
