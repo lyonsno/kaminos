@@ -2877,6 +2877,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div id="scene-lighting-preparation-status" role="status" hidden><span></span> <button type="button" hidden>Retry lighting</button></div>
       </div>
       <details id="rendering-flame-settings" open><summary>Flame</summary><section id="rendering-fire-controls" hidden aria-label="Fire illumination"><div id="rendering-fire-route-status" role="status"></div></section></details>
+      <details open><summary>Neural materials</summary><div class="field"><label for="scene-neural-resolution" title="Neural shading width and height relative to the viewport. Geometry and other materials stay at full resolution.">Shading resolution</label><select id="scene-neural-resolution"><option value="1">100%</option><option value="0.75">75%</option><option value="0.5">50%</option><option value="0.25">25%</option></select></div></details>
       <div id="rendering-light-study">
       <p class="rendering-description">Switch light contributions while viewing the same kiln. The flame, environment and authored geometry remain visible in every mode.</p>
       <label for="rendering-light-mode">Light contributions</label>
@@ -3805,6 +3806,8 @@ window.kaminosViewportSettings={
   const visibilityChanged=JSON.stringify(next.hiddenIds)!==JSON.stringify(viewportDisplay.hiddenIds);
   if(next.gizmos!==viewportGizmosVisible)scenePlacementTools?.finish(false);
   viewportDisplay=next;viewportGizmosVisible=next.gizmos;viewportBoundsVisible=next.overlays&&next.bounds;viewportHelpersVisible=next.overlays&&next.helpers;
+  activeSceneGI?.neuralShading.setScale(next.neuralResolution);
+  document.getElementById('scene-neural-resolution').value=String(next.neuralResolution);
   if(transformControls){transformControls.enabled=viewportGizmosVisible;transformControls.getHelper().visible=viewportGizmosVisible&&!!transformControls.object;}
   document.getElementById('navigation-hint').hidden=!(next.overlays&&next.hints);
   if(aoIntensity)aoIntensity.value=effectiveAOIntensity();
@@ -11564,7 +11567,7 @@ async function initScene() {
     samHostContext = { adapter, device, inferenceSession };
   }
   renderer = sharedGpu?.device
-    ? new THREE.WebGPURenderer({ antialias: true, device: sharedGpu.device, trackTimestamp: isFireLightFieldTimingRoute() || new URLSearchParams(location.search).get('ash_timing')==='1' })
+    ? new THREE.WebGPURenderer({ antialias: true, device: sharedGpu.device, trackTimestamp: isFireLightFieldTimingRoute() || new URLSearchParams(location.search).get('ash_timing')==='1' || new URLSearchParams(location.search).get('neural_timing')==='1' })
     : new THREE.WebGPURenderer({ antialias: true, ...(samHostContext ? { device: samHostContext.device } : {}) });
   renderer.domElement.id = 'kaminos-host-renderer-canvas';
   renderer.setSize(vp.clientWidth, vp.clientHeight);
@@ -11761,6 +11764,10 @@ async function initScene() {
   const lightingWorkParams=new URLSearchParams(location.search);
   const sceneGI = createSceneGI(scene,camera,aoIntensity,{renderer,reflections:{enabled:lightingWorkParams.get('scene_reflections')==='1'},filterImplementation:lightingWorkParams.get('lighting_filter')==='separate'?'separate':'shared',surfaceReuse:lightingWorkParams.get('lighting_surface_reuse')!=='0',sourceComparison:lightingWorkParams.get('experiment')==='gi-source-study'});
   activeSceneGI = sceneGI;
+  sceneGI.neuralShading.setScale(viewportDisplay.neuralResolution);
+  document.getElementById('scene-neural-resolution').value=String(viewportDisplay.neuralResolution);
+  document.getElementById('scene-neural-resolution').onchange=e=>window.kaminosViewportSettings.set({neuralResolution:Number(e.target.value)});
+  window.kaminosNeuralShading={read:()=>sceneGI.neuralShading.state(),setScale:value=>{window.kaminosViewportSettings.set({neuralResolution:value});return sceneGI.neuralShading.state();},setReuse:value=>{sceneGI.neuralShading.reuse.value=!!value;markDirty();return sceneGI.neuralShading.state();}};
   const reflectionSceneSetup=scenePass.setup;
   scenePass.setup=function(builder){if(sceneGI.reflections.settings.enabled)sceneGI.reflections.result.build(builder);return reflectionSceneSetup.call(this,builder);};
   if (typeof syncArrivalStudioLighting === 'function') syncArrivalStudioLighting();
@@ -11835,7 +11842,7 @@ async function initScene() {
   const bloomHost=document.createElement('section');bloomHost.id='scene-bloom-controls';document.getElementById('rendering-fire-controls').before(bloomHost);
   const reflectionHost=document.createElement('section');reflectionHost.id='scene-reflection-controls';document.getElementById('scene-gi-refinement-status').after(reflectionHost);
   let reflectionControls=null;
-  const writeReflections=value=>{sceneGI.reflections.setSettings(value);scenePass.contextNode=THREE.TSL.context({...builtinAOContext(aoOutput).getFlowContextData(),sceneReflectionLighting:sceneGI.reflections.settings.enabled?sceneGI.reflections.lightingContext:null});scenePass.needsUpdate=true;rebuildSceneGIOutput();markDirty();};
+  const writeReflections=value=>{sceneGI.reflections.setSettings(value);scenePass.contextNode=THREE.TSL.context({...builtinAOContext(aoOutput).getFlowContextData(),sceneReflectionLighting:sceneGI.reflections.settings.enabled?sceneGI.reflections.lightingContext:null,sceneNeuralShading:sceneGI.neuralShading,neuralShadingMode:'standalone'});scenePass.needsUpdate=true;rebuildSceneGIOutput();markDirty();};
   restoreSceneReflectionSettings=value=>{if(value)writeReflections(value);sceneGI.reflections.reset('scene-restored');reflectionControls?.sync();};
   window.kaminosSceneReflections={read:()=>{const state=sceneGI.reflections.state();return {...state,settings:{...sceneGI.reflections.settings},effective:state.effective&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene')};},set(value){if(reflectionControls)reflectionControls.set(value);else writeReflections(value);return this.read();},reset:reason=>sceneGI.reflections.reset(reason)};
   window.kaminosSceneBloom={read:()=>({...sceneBloom.read(),effective:sceneBloom.read().settings.enabled&&sceneBloom.read().settings.radius>0&&sceneBloom.read().settings.strength>0&&!waterFeature.host&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene'),flameComposition:{...sceneFlameHDR?.read(),effective:authoredFlameHDRActive&&sceneFlameHDR?.read().effective===true}}),set(settings){bloomControls.set(settings);return this.read();}};
@@ -11900,7 +11907,7 @@ async function initScene() {
   };
   sceneGI.setSettings(sceneGISettings);
   sceneGI.setEstimatorSettings(sceneGISettings.estimator);
-  scenePass.contextNode=THREE.TSL.context({...builtinAOContext(aoOutput).getFlowContextData(),sceneReflectionLighting:sceneGI.reflections.settings.enabled?sceneGI.reflections.lightingContext:null});
+  scenePass.contextNode=THREE.TSL.context({...builtinAOContext(aoOutput).getFlowContextData(),sceneReflectionLighting:sceneGI.reflections.settings.enabled?sceneGI.reflections.lightingContext:null,sceneNeuralShading:sceneGI.neuralShading,neuralShadingMode:'standalone'});
   rebuildSceneGIOutput();
   getLocalLiquidDisplayPolicy=()=>({rawOutput:rawSceneOutput,cameraState:sceneEmissiveCamera&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene')?sceneEmissiveCamera.debugState():{effective:false}});
   window.kaminosRefreshSceneGIOutput=rebuildSceneGIOutput;
@@ -12659,7 +12666,7 @@ async function initScene() {
       const detachCandidate=watch(next.device);
       let replacement;
       try{
-      replacement=new THREE.WebGPURenderer({canvas,device:next.device,antialias:true,trackTimestamp:isFireLightFieldTimingRoute()||new URLSearchParams(location.search).get('ash_timing')==='1'});
+      replacement=new THREE.WebGPURenderer({canvas,device:next.device,antialias:true,trackTimestamp:isFireLightFieldTimingRoute()||new URLSearchParams(location.search).get('ash_timing')==='1' || new URLSearchParams(location.search).get('neural_timing')==='1'});
       replacement.setPixelRatio(pixelRatio);replacement.setSize(size.x,size.y);
       replacement.toneMapping=toneMapping;replacement.toneMappingExposure=exposure;
       replacement.shadowMap.enabled=old.shadowMap.enabled;replacement.shadowMap.type=old.shadowMap.type;

@@ -4,6 +4,7 @@ import { ssgi } from './lib/addons/tsl/display/SSGINode.js';
 import SceneGIHistory from './scene-gi-history.mjs';
 import SceneLightingFilter from './scene-lighting-filter.mjs';
 import SceneSurfaceLighting from './scene-surface-lighting.mjs';
+import SceneNeuralShading from './scene-neural-shading.mjs';
 import {createGISourceComparison} from './scene-gi-source-comparison.mjs';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { resolveSceneGISettings, resolveSceneGIEstimatorSettings, sceneGIReceives } from './scene-gi-settings.mjs';
@@ -22,6 +23,8 @@ export function createSceneGI(scene, camera, aoIntensity, {renderer=null,reflect
   source.contextNode=context({sceneReflectionLighting:null});
   source.setMRT(mrt({output, normal:reflectionNormal,transport:output}));
   const surfaceLighting=new SceneSurfaceLighting(source,camera,{enabled:surfaceReuse});
+  const neuralShading=new SceneNeuralShading(source,scene,camera);
+  source.contextNode=context({sceneReflectionLighting:null,sceneNeuralShading:neuralShading,neuralShadingMode:'source'});
   const depth = source.getTextureNode('depth');
   const normal = source.getTextureNode('normal');
   const transport=source.getTextureNode('transport');
@@ -32,6 +35,9 @@ export function createSceneGI(scene, camera, aoIntensity, {renderer=null,reflect
   const history=new SceneGIHistory(effect.getAONode(),effect.getGINode(),depth,normal,camera);
   const diffuseSource=Fn(([],builder)=>{
     const material=builder.material;
+    // Neural direct radiance is already the transport contribution. Reuse this
+    // pre-fog value in beauty without adding another full-size MRT attachment.
+    if(material?.isNeumipMaterial)return neuralShading.radianceNode;
     // Stock physical lighting exposes its diffuse sum before specular lobes
     // and emission are added. Preserve custom/unlit output as authored.
     if((material?.isMeshStandardMaterial||material?.isMeshStandardNodeMaterial)&&material.lights!==false&&material.fragmentNode==null&&material.outputNode==null){
@@ -119,6 +125,7 @@ export function createSceneGI(scene, camera, aoIntensity, {renderer=null,reflect
     const beauty=pass(scene,camera);
     beauty.name='SSGI material receiving '+(filtered?'filtered':'raw');
     beauty.contextNode=context({
+      sceneNeuralShading:neuralShading,neuralShadingMode:'beauty',
       sceneSurfaceLighting:surfaceLighting,
       sceneReflectionLighting:reflectionField?.settings.enabled?reflectionField.lightingContext:null,
       ...builtinAOContext(ao).getFlowContextData(),
@@ -177,14 +184,14 @@ export function createSceneGI(scene, camera, aoIntensity, {renderer=null,reflect
   const update = effect.updateBefore;
   effect.updateBefore = function(frame) { update.call(this,frame); frames++; };
   return {
-    depth, source, transport, surfaceLighting, sourceComparison:comparison,reflections:reflectionField,
+    depth, source, transport, surfaceLighting, neuralShading, sourceComparison:comparison,reflections:reflectionField,
     dispose(){
       for(const route of routes.values())route.beauty.dispose();
       for(const pair of filters.values()){
         if(pair.shared)pair.shared.dispose();
         else for(const item of [pair.ao,pair.gi])item.filter.dispose();
       }
-      routes.clear();filters.clear();reflectionField?.dispose();history.dispose();effect.dispose();source.dispose();
+      routes.clear();filters.clear();neuralShading.dispose();reflectionField?.dispose();history.dispose();effect.dispose();source.dispose();
     },
     setFilterImplementation(value){if(!['shared','separate'].includes(value))throw Error('Unknown lighting filter implementation');filterImplementation=value;},
     get beauty() { return route().beauty; },
@@ -269,6 +276,7 @@ export function createSceneGI(scene, camera, aoIntensity, {renderer=null,reflect
       sourcePasses:1+(comparison?.read().additionalSourcePasses??0),sourceComparison:comparison?.read()??null,receivingPasses:1,sourceSamples:source.renderTarget.samples,receivingSamples:route().beauty.renderTarget.samples,
       filtering:settings.denoise>0,filterImplementation,filterFrames:filterImplementation==='shared'?{ao:filters.get(filterKey(settings.temporal))?.shared.frames??0,gi:filters.get(filterKey(settings.temporal))?.shared.frames??0}: {...filterFrames},
       surfaceLighting:surfaceLighting.state(),
+      neuralShading:neuralShading.state(),
       opticalFinish:{...opticalFinish},
       standaloneGTAO:false,format:'rgba16float',gainSemantics:'artistic-relative-estimator-gain',
       viewSemantics:settings.view==='gi'?'material-weighted-added-diffuse-radiance':settings.view==='incoming'?'incoming-irradiance-over-pi':settings.view}),
