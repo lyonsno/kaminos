@@ -58,7 +58,7 @@ export default {
    renderer.backend.device.addEventListener('uncapturederror',gpuFailure);
    replaceGeometry();asset=await session.attach(root,{owned:true,metadata:{label:root.name,source:'procedural:frozen-grass-v1',type:'experiment'}});
    screenMaterial=new THREE.MeshBasicNodeMaterial({depthTest:false,depthWrite:false});screenMaterial.vertexNode=THREE.TSL.vec4(THREE.TSL.positionGeometry.xy,0,1);
-   screen=new THREE.Mesh(new THREE.PlaneGeometry(2,2),screenMaterial);screen.name='Surface teacher presentation';screen.frustumCulled=false;screen.renderOrder=-100000;screen.raycast=()=>{};screen.userData.kaminosEditorOnly=true;
+   screen=new THREE.Mesh(new THREE.PlaneGeometry(2,2),screenMaterial);screen.name='Surface teacher presentation';screen.frustumCulled=false;screen.renderOrder=900;screen.raycast=()=>{};screen.userData.kaminosSurfaceTeacherPresentation=true;
    await session.attach(screen,{owned:true,presentation:true,metadata:{source:'surface-teacher-presentation'}});
    session.setView(inputs.view??{position:[2.5,1.7,3.2],target:[0,.35,0],fov:42});
    stop=session.onFrame(()=>{
