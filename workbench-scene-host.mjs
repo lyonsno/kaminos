@@ -51,7 +51,7 @@ function vector(value,name){
  return [...value];
 }
 
-export function createWorkbenchSceneHost({scene,camera,controls,loadAsset,registerObject,findObject,removeObject,redraw,onFrame,resourceConsumers=()=>[scene]}) {
+export function createWorkbenchSceneHost({scene,camera,controls,loadAsset,registerObject,findObject,removeObject,redraw,onFrame,resourceConsumers=()=>[scene],renderContext=null}) {
  const readView=()=>({schema:'kaminos.workbench-scene-view.v0',position:camera.position.toArray(),target:controls.target.toArray(),up:camera.up.toArray(),fov:camera.fov,zoom:camera.zoom,near:camera.near,far:camera.far});
  const setView=view=>{
   const next={...readView(),up:[0,1,0],...view};
@@ -67,7 +67,11 @@ export function createWorkbenchSceneHost({scene,camera,controls,loadAsset,regist
   }finally{controls.enableDamping=damping;}
   return readView();
  };
- return Object.freeze({open:()=>createOwnerSceneSession({
+ return Object.freeze({rendering(){
+  const current=renderContext?.();
+  if(!current?.renderer?.backend?.device)throw Error('Shared WebGPU render context unavailable');
+  return {...current,scene,camera};
+ },open:()=>createOwnerSceneSession({
   async loadAsset(input,context){
    const options=typeof input==='string'?{url:input}:input;
    if(!options||typeof options.url!=='string'||!options.url.trim())throw Error('Scene asset requires a URL');
