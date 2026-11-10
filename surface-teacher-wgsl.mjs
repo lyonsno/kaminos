@@ -5,7 +5,7 @@ const PI=3.141592653589793;
 struct Node {lo:vec4<f32>,hi:vec4<f32>,range:vec4<u32>}
 struct Triangle {a:vec4<f32>,e1:vec4<f32>,e2:vec4<f32>}
 struct Material {color:vec4<f32>,optics:vec4<f32>}
-struct Light {positionType:vec4<f32>,color:vec4<f32>}
+struct Light {positionType:vec4<f32>,color:vec4<f32>,directionCone:vec4<f32>,innerCone:vec4<f32>}
 struct Params {inverseVP:mat4x4<f32>,previousVP:mat4x4<f32>,camera:vec4<f32>,extent:vec4<u32>,knobs:vec4<f32>}
 struct Hit {t:f32,id:u32,normal:vec3<f32>,uv:vec2<f32>}
 @group(0) @binding(0) var<storage,read> nodes:array<Node>;
@@ -72,6 +72,7 @@ fn pathTrace(origin:vec3<f32>,direction:vec3<f32>,state:ptr<function,u32>)->vec3
   for(var i=0u;i<u32(params.knobs.w);i++){
    let light=lights[i];var l=normalize(light.positionType.xyz);var distance=1e20;var intensity=light.color.rgb;
    if(light.positionType.w>0.5){let delta=light.positionType.xyz-point;distance=length(delta);l=delta/max(distance,1e-8);intensity/=max(distance*distance,1e-8);}
+   if(light.positionType.w>1.5){let angle=dot(-l,light.directionCone.xyz);var cone=select(0.0,1.0,angle>=light.directionCone.w);if(light.innerCone.x>light.directionCone.w+1e-7){cone=smoothstep(light.directionCone.w,light.innerCone.x,angle);}intensity*=cone;}
    if(dot(n,l)>0.0&&trace(offset,l,distance-.0002).id==0xffffffffu){radiance+=throughput*bsdf(n,v,l,m)*dot(n,l)*intensity;}
   }
   let envDirection=cosineSample(n,state);let envPdf=max(dot(n,envDirection),0.0)/PI;let otherPdf=bsdfPdf(n,v,envDirection,m);
@@ -166,11 +167,3 @@ export const SURFACE_TEACHER_FILTER_WGSL=/* wgsl */`
 }
 `;
 
-export const SURFACE_TEACHER_PRESENT_WGSL=/* wgsl */`
-@group(0) @binding(0) var image:texture_2d<f32>;
-@group(0) @binding(1) var<uniform> settings:vec4<f32>;
-@vertex fn vertex(@builtin(vertex_index) id:u32)->@builtin(position) vec4<f32>{let p=array<vec2<f32>,3>(vec2<f32>(-1,-1),vec2<f32>(3,-1),vec2<f32>(-1,3));return vec4<f32>(p[id],0,1);}
-@fragment fn fragment(@builtin(position) pixel:vec4<f32>)->@location(0) vec4<f32>{
- let size=vec2<f32>(textureDimensions(image));let q=clamp(vec2<i32>(pixel.xy/settings.xy*size),vec2<i32>(0),vec2<i32>(size)-1);let linear=max(textureLoad(image,q,0).rgb*settings.z,vec3<f32>(0));let mapped=linear/(vec3<f32>(1)+linear);return vec4<f32>(pow(mapped,vec3<f32>(1.0/2.2)),1.0);
-}
-`;

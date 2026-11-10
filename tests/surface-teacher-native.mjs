@@ -52,3 +52,12 @@ test('production image passes retain raw means and reset source-dependent histor
   }finally{teacher.dispose();}
  });
 });
+test('native-style spot cones illuminate their interior and reject rays outside, including hard edges',async()=>{
+ await withKaminosGpu(async ctx=>{
+  const scene={triangles:[{a:[-3,0,-3],b:[3,0,3],c:[3,0,-3],materialIndex:0},{a:[-3,0,-3],b:[-3,0,3],c:[3,0,3],materialIndex:0}],materials:[{color:[.5,.5,.5],roughness:.8,metalness:0}],environment:0,bounces:1};
+  for(const penumbra of [0,.3]){
+   const teacher=new SurfaceTeacher(ctx.device,{...scene,lights:[{type:'spot',position:[0,2,0],direction:[0,-1,0],angle:.3,penumbra,color:[20,20,20]}]});
+   try{const result=await teacher.evaluate([{origin:[0,1,0],direction:[0,-1,0]},{origin:[2,1,0],direction:[0,-1,0]}]);assert.ok(result[0][0]>.1);assert.ok(result[1][0]<.0001);assert.ok(result.flat().every(Number.isFinite));}finally{teacher.dispose();}
+  }
+ });
+});

@@ -1,6 +1,6 @@
 import {PerspectiveCamera,WebGPUCoordinateSystem,Matrix4} from './lib/three.core.js';
 import {buildTriangleVisibility} from './scene-light-visibility.mjs';
-import {SURFACE_TEACHER_IMAGE_WGSL,SURFACE_TEACHER_QUERY_WGSL,SURFACE_TEACHER_HISTORY_WGSL,SURFACE_TEACHER_FILTER_WGSL,SURFACE_TEACHER_PRESENT_WGSL} from './surface-teacher-wgsl.mjs';
+import {SURFACE_TEACHER_IMAGE_WGSL,SURFACE_TEACHER_QUERY_WGSL,SURFACE_TEACHER_HISTORY_WGSL,SURFACE_TEACHER_FILTER_WGSL} from './surface-teacher-wgsl.mjs';
 
 const finite3=v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite);
 export class SurfaceTeacher {
@@ -9,7 +9,6 @@ export class SurfaceTeacher {
   this.params=this.buffer('surface teacher parameters',new Float32Array(44),GPUBufferUsage.UNIFORM);
   this.historyParams=this.buffer('surface teacher history parameters',new Float32Array(20),GPUBufferUsage.UNIFORM);
   this.filterParams=[1,2,4].map(step=>this.buffer('surface teacher wavelet step',new Float32Array([step,.01,0,0]),GPUBufferUsage.UNIFORM));
-  this.presentParams=this.buffer('surface teacher presentation',new Float32Array(4),GPUBufferUsage.UNIFORM);
   for(const [name,code]of Object.entries({image:SURFACE_TEACHER_IMAGE_WGSL,query:SURFACE_TEACHER_QUERY_WGSL,history:SURFACE_TEACHER_HISTORY_WGSL,filter:SURFACE_TEACHER_FILTER_WGSL})){
    this.pipelines[name]=device.createComputePipeline({label:`surface teacher ${name}`,layout:'auto',compute:{module:device.createShaderModule({label:`surface teacher ${name}`,code}),entryPoint:'main'}});
   }
@@ -21,12 +20,12 @@ export class SurfaceTeacher {
  }
  setScene({triangles,materials,lights=[]}){
   if(!Array.isArray(materials)||!materials.length||materials.some(m=>!finite3(m.color)||m.color.some(v=>v<0||v>1)||!Number.isFinite(m.roughness)||m.roughness<0||m.roughness>1||!Number.isFinite(m.metalness)||m.metalness<0||m.metalness>1))throw Error('physical material colors, roughness and metalness required');
-  if(lights.some(l=>!finite3(l.position)||!finite3(l.color)||l.color.some(v=>v<0)||!['directional','point'].includes(l.type)||l.type==='directional'&&Math.hypot(...l.position)===0))throw Error('finite directional or inverse-square point lights required');
+  if(lights.some(l=>!finite3(l.position)||!finite3(l.color)||l.color.some(v=>v<0)||!['directional','point','spot'].includes(l.type)||l.type==='directional'&&Math.hypot(...l.position)===0||l.type==='spot'&&(!finite3(l.direction)||!Number.isFinite(l.angle)||l.angle<=0||l.angle>=Math.PI/2||!Number.isFinite(l.penumbra)||l.penumbra<0||l.penumbra>1)))throw Error('finite directional, inverse-square point or spot lights required');
   if(triangles.some(t=>!Number.isSafeInteger(t.materialIndex)||t.materialIndex<0||t.materialIndex>=materials.length))throw Error('each triangle must address an existing material');
   const packed=buildTriangleVisibility(triangles).packGpu();
   for(let i=0;i<packed.triangleCount;i++)packed.triangles[i*12+3]=triangles[packed.triangleIndices[i]].materialIndex;
   const materialData=new Float32Array(materials.length*8);materials.forEach((m,i)=>materialData.set([...m.color,1,m.roughness,m.metalness,0,0],i*8));
-  const lightData=new Float32Array(Math.max(1,lights.length)*8);lights.forEach((l,i)=>lightData.set([...l.position,l.type==='point'?1:0,...l.color,0],i*8));
+  const lightData=new Float32Array(Math.max(1,lights.length)*16);lights.forEach((l,i)=>lightData.set([...l.position,l.type==='spot'?2:l.type==='point'?1:0,...l.color,0,...(l.direction??[0,0,-1]),Math.cos(l.angle??0),Math.cos((l.angle??0)*(1-(l.penumbra??0))),0,0,0],i*16));
   const next=[this.buffer('surface teacher BVH nodes',packed.nodes),this.buffer('surface teacher triangles',packed.triangles),this.buffer('surface teacher materials',materialData),this.buffer('surface teacher lights',lightData)];
   for(const buffer of this.sceneBuffers||[]){buffer.destroy();this.resources.splice(this.resources.indexOf(buffer),1);}this.sceneBuffers=next;this.lightCount=lights.length;this.triangleCount=packed.triangleCount;this.reset('source or lighting changed');
  }
@@ -75,16 +74,6 @@ export class SurfaceTeacher {
   let output=this.histories[i];if(filter){for(let step=0;step<3;step++){const target=this.filtered[step%2];dispatch('filter',[output,this.points[i],this.normals[i],target,this.filterParams[step]]);output=target;}}
   this.device.queue.submit([encoder.finish()]);this.output=output;this.accumulation=this.histories[i];this.previousVP=vp;this.viewKey=key;this.valid=true;this.index=j;this.serial++;this.samples=moving?1:this.samples+1;return this.state();
  }
- present(canvas,{exposure=1}={}){
-  if(!this.output)return;
-  if(this.canvas!==canvas){
-   this.canvas=canvas;this.context=canvas.getContext('webgpu');this.format=navigator.gpu.getPreferredCanvasFormat();this.context.configure({device:this.device,format:this.format,alphaMode:'opaque'});
-   const module=this.device.createShaderModule({label:'surface teacher presentation',code:SURFACE_TEACHER_PRESENT_WGSL});
-   this.presentation=this.device.createRenderPipeline({layout:'auto',vertex:{module,entryPoint:'vertex'},fragment:{module,entryPoint:'fragment',targets:[{format:this.format}]},primitive:{topology:'triangle-list'}});
-  }
-  this.device.queue.writeBuffer(this.presentParams,0,new Float32Array([canvas.width,canvas.height,exposure,0]));
-  const encoder=this.device.createCommandEncoder(),pass=encoder.beginRenderPass({colorAttachments:[{view:this.context.getCurrentTexture().createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:1}}]});pass.setPipeline(this.presentation);pass.setBindGroup(0,this.group(this.presentation,[this.output,this.presentParams]));pass.draw(3);pass.end();this.device.queue.submit([encoder.finish()]);
- }
  async readLinear(){
   if(!this.accumulation)throw Error('no completed image to capture');
   const stride=Math.ceil(this.width*16/256)*256,size=stride*this.height;
@@ -98,5 +87,5 @@ export class SurfaceTeacher {
   const encoder=this.device.createCommandEncoder();encoder.copyTextureToTexture({texture:this.output},{texture:destination},[this.width,this.height]);this.device.queue.submit([encoder.finish()]);
  }
  state(){return {route:'explicit-surface-webgpu-path-teacher-v1',triangles:this.triangleCount,width:this.width??0,height:this.height??0,samples:this.samples,frame:this.serial,bounces:this.bounces,environment:this.environment,resetReason:this.resetReason,reconstruction:'geometry-validated temporal accumulation and variance-guided atrous',rawOutput:'linear RGB; alpha stores accumulated sample count',disposed:this.disposed};}
- dispose(){if(this.disposed)return;this.disposed=true;this.context?.unconfigure();for(const value of [...this.resources,...this.targets])value.destroy();}
+ dispose(){if(this.disposed)return;this.disposed=true;for(const value of [...this.resources,...this.targets])value.destroy();}
 }
