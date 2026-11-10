@@ -11764,6 +11764,7 @@ async function initScene() {
   const lightingWorkParams=new URLSearchParams(location.search);
   const sceneGI = createSceneGI(scene,camera,aoIntensity,{renderer,reflections:{enabled:lightingWorkParams.get('scene_reflections')==='1'},filterImplementation:lightingWorkParams.get('lighting_filter')==='separate'?'separate':'shared',surfaceReuse:lightingWorkParams.get('lighting_surface_reuse')!=='0',sourceComparison:lightingWorkParams.get('experiment')==='gi-source-study'});
   activeSceneGI = sceneGI;
+  sceneGI.neuralShading.prepareBefore(scenePass);
   sceneGI.neuralShading.setScale(viewportDisplay.neuralResolution);
   document.getElementById('scene-neural-resolution').value=String(viewportDisplay.neuralResolution);
   document.getElementById('scene-neural-resolution').onchange=e=>window.kaminosViewportSettings.set({neuralResolution:Number(e.target.value)});
@@ -11793,9 +11794,10 @@ async function initScene() {
     const restoreBeauty = sceneBeautyLods?.borrowFrame(camera, currentBeautyFrameOptions());
     return () => { restoreBeauty?.(); restoreVis(); };
   };
+  const lightingPasses=()=>[...(sceneGI.neuralShading.hasMaterials()?[sceneGI.neuralShading.capture]:[]),...(sceneGISettings.mode==='combined'?[sceneGI.source,sceneGI.beauty]:[prePass,scenePass])];
   sceneLightingPreparation=createLightingPreparation({
-    compile:()=>withViewportVisibilityAsync(viewportVisibilityObjects(),isSceneItemVisible,async()=>{await sceneBeautyLods?.whenIdle?.();return compileSceneLighting(renderer,sceneGISettings.mode==='combined'?[sceneGI.source,sceneGI.beauty]:[prePass,scenePass],{visibility:()=>sceneBeautyLods?.borrowFrame(camera,currentBeautyFrameOptions())??(()=>{})});}),
-    liveCompile:({isCurrent})=>compileSceneLighting(renderer,sceneGISettings.mode==='combined'?[sceneGI.source,sceneGI.beauty]:[prePass,scenePass],{live:true,isCurrent,visibility:borrowViewportAndBeautyVisibility}),
+    compile:()=>withViewportVisibilityAsync(viewportVisibilityObjects(),isSceneItemVisible,async()=>{await sceneBeautyLods?.whenIdle?.();return compileSceneLighting(renderer,lightingPasses(),{visibility:()=>sceneBeautyLods?.borrowFrame(camera,currentBeautyFrameOptions())??(()=>{})});}),
+    liveCompile:({isCurrent})=>compileSceneLighting(renderer,lightingPasses(),{live:true,isCurrent,visibility:borrowViewportAndBeautyVisibility}),
     recover:()=>window.__kaminosSceneRadiance?.debugState().status==='lighting-compile-failed'?window.__kaminosSceneRadiance.retryRebuild():undefined,
     hold:syncVolumeSceneFrameHold,
     onStatus:state=>{

@@ -96,8 +96,9 @@ SHADER_HERDER_STRICT_METAL=1 node tools/neumip-native-check.mjs \
 
 A focused production raster/cache check uses an independent Chrome for Testing
 and the installed author checkpoint. It checks one and eight native point lights,
-full-rate cache/direct agreement with the scalar author reference, finite pixels
-and the effective reduced target sizes:
+full-rate cache/direct agreement and reduced-rate reconstruction against the
+scalar author reference. It also checks distant source reuse, foreign material
+and normal rejection, producer ordering, precompiled draws and effective target sizes:
 
 ```sh
 KAMINOS_TEST_BROWSER=/path/to/chrome-for-testing \

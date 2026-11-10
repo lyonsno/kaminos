@@ -29,9 +29,25 @@ try{
   const key=`${count}-${scale}-${reuse}`;await fs.writeFile(out+'/shader-'+key+'.wgsl',r.shader.fragmentShader);delete r.shader;
   await fs.writeFile(out+'/native-'+key+'.json',JSON.stringify(r));report.samples.push({count,scale,reuse,samples:r.samples,cache:r.cache});await save();
   if(scale===1)for(const sample of r.samples)for(let c=0;c<3;c++)assert.ok(Math.abs(sample.actual[c]-sample.expected[c])<.0001+Math.abs(sample.expected[c])*.002,'full-rate native radiance must match the independent author reference');
+  if(scale<1){
+   assert.ok(r.events.indexOf('capture:end')<r.events.indexOf('source:start'),'capture finishes before source starts');
+   assert.ok(r.events.indexOf('source:end')<r.events.indexOf('beauty:start'),'source finishes before beauty starts');
+   for(const sample of r.samples)for(let c=0;c<3;c++)assert.ok(Math.abs(sample.actual[c]-sample.reducedExpected[c])<.0001+Math.abs(sample.reducedExpected[c])*.003,'reduced-rate native radiance matches independent coarse author reconstruction');
+  }
   assert.equal(r.cache.requestedScale,scale);if(scale<1)assert.deepEqual(r.cache.resolution,[Math.floor(64*scale),Math.floor(64*scale)]);
   assert.ok(r.raw.every(Number.isFinite),'no nonfinite rendered pixels');
  }
+ for(const rejection of ['none','normal','material']){
+  const variant={sentinel:true,rejectNormal:rejection==='normal',rejectMaterial:rejection==='material',near:.01,far:107,distance:8};
+  const r=await page.evaluate(variant=>window.neumipRenderAssay.render(1,1,true,variant),variant);
+  await fs.writeFile(out+'/far-sentinel-'+rejection+'.json',JSON.stringify(r));report.samples.push({variant,samples:r.samples});await save();
+  for(const sample of r.samples){const expected=rejection==='none'?[.25,.5,.75]:sample.expected;for(let c=0;c<3;c++)assert.ok(Math.abs(sample.actual[c]-expected[c])<.0001+Math.abs(expected[c])*.002,'the source sentinel must be reused at workshop near/far distances, and incompatible normals/materials must fall back');}
+ }
+ const prepared=await page.evaluate(()=>window.neumipRenderAssay.render(1,.5,true,{precompile:true}));
+ await fs.writeFile(out+'/precompiled-native.json',JSON.stringify(prepared));
+ assert.deepEqual(prepared.pipelineBuilds.filter(x=>x.target!=='other'),[],'prepared unchanged capture/source/beauty must draw without compiling more native world pipelines');
+ assert.equal(prepared.nesting.capture,prepared.nesting.source,'capture preparation uses the same effective render nesting as source');
+ for(const sample of prepared.samples)for(let c=0;c<3;c++)assert.ok(Math.abs(sample.actual[c]-sample.reducedExpected[c])<.0001+Math.abs(sample.reducedExpected[c])*.003,'precompiled production passes preserve reconstruction');
  assert.deepEqual(report.errors,[]);
  report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=error.stack;process.exitCode=1;}finally{try{await context?.close();}catch(error){report.cleanupError=error.stack;}server?.kill('SIGTERM');await log?.close();await save();console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,out}));}

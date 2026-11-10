@@ -24,6 +24,7 @@ export function createSceneGI(scene, camera, aoIntensity, {renderer=null,reflect
   source.setMRT(mrt({output, normal:reflectionNormal,transport:output}));
   const surfaceLighting=new SceneSurfaceLighting(source,camera,{enabled:surfaceReuse});
   const neuralShading=new SceneNeuralShading(source,scene,camera);
+  neuralShading.prepareBefore(source);
   source.contextNode=context({sceneReflectionLighting:null,sceneNeuralShading:neuralShading,neuralShadingMode:'source'});
   const depth = source.getTextureNode('depth');
   const normal = source.getTextureNode('normal');

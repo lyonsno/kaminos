@@ -38,3 +38,11 @@ test('positive subpixel rates still allocate one real shading pixel',()=>{
   assert.deepEqual(gi.neuralShading.state().resolution,[1,1]);
  }finally{gi.dispose();}
 });
+test('capture restores borrowed scene materials even when a later material fails',()=>{
+ const scene=new Scene(),camera=new PerspectiveCamera(),gi=createSceneGI(scene,camera,TSL.uniform(0)),cache=gi.neuralShading;
+ const original={tag:'ordinary'},cheap={tag:'capture'},first={isMesh:true,material:original},second={isMesh:true,material:{tag:'broken'}};
+ cache.capture.scene={traverseVisible(fn){fn(first);fn(second);}};
+ cache.occluder=material=>{if(material===original)return cheap;throw Error('clone failed');};
+ try{assert.throws(()=>cache.borrowMaterials({}),/clone failed/);assert.equal(first.material,original);}
+ finally{gi.dispose();}
+});

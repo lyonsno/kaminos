@@ -13,7 +13,7 @@ export async function compileSceneLighting(renderer, passes, {live=false,visibil
   try {
     for (const pass of passes) {
       const {scene,camera}=pass;
-      let prior,restoreVisibility=()=>{};
+      let prior,restoreVisibility=()=>{},restoreMaterials=()=>{};
       const enter=()=>{
       restoreVisibility=visibility();
       prior={target:renderer.getRenderTarget(),mrt:renderer.getMRT(),context:renderer.contextNode,
@@ -48,19 +48,22 @@ export async function compileSceneLighting(renderer, passes, {live=false,visibil
           renderer.contextNode=receivingContext;
         }
         scene.name=pass.name||scene.name;
+        restoreMaterials=pass.borrowMaterials?.(renderer)??(()=>{});
       };
       let receivingContext, receivingValue;
       const leave=()=>{
+        if(!prior)return;
+        restoreMaterials();restoreMaterials=()=>{};
         if(receivingContext)receivingContext.value=receivingValue;
         renderer.setRenderTarget(prior.target);renderer.setMRT(prior.mrt);renderer.contextNode=prior.context;
         renderer.transparent=prior.transparent;renderer.opaque=prior.opaque;renderer.autoClear=prior.autoClear;
         scene.overrideMaterial=prior.material;camera.layers.mask=prior.mask;scene.name=prior.name;
         restoreVisibility();
       };
-      enter();
       try {
+        enter();
         const cooperativeYield=async(wait=yieldToMain)=>{leave();try{await wait();}finally{enter();}};
-        await renderer.compileAsync(scene,camera,null,{callDepth:pass._renderCallDepths?.get(renderer)??0,pipelineWork,
+        await renderer.compileAsync(scene,camera,null,{callDepth:pass._renderCallDepths?.get(renderer)??pass.compileCallDepth?.(renderer)??0,pipelineWork,
           ...(live?{lightsNode:generations.get(scene).node,yieldToMain:cooperativeYield}:{})});
       } finally {leave();}
     }
