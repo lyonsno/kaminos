@@ -241,3 +241,14 @@ page; importing a wrapper under Node can instead resolve the installed package.
 This constructor uses the supplied `THREE.TSL` directly. Bloom/output graph
 selection, authored loading and actual frame admission remain their respective
 scene-owner operations.
+
+`prepareSceneEmissionSource` and `createSceneDisplayGraph` in
+`scene-display-graph.mjs` construct the physical-emission attachment and the
+ordinary fire-receiving, bloom, camera and selection output nodes. The page
+uses these same functions and retains its existing `giOutputGraphs` cache and
+device-lifetime cleanup. The display constructor returns the five graph fields
+that the scene owner installs on its render pipeline or retains in that cache.
+It receives the existing scene/depth/normal/emission nodes and domain factories;
+no second renderer, cache or presentation loop is created. A requested
+fire-receiving path must provide its actual pass rather than silently produce
+an unlit scene graph.

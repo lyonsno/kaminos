@@ -1,5 +1,7 @@
 // kaminos-test: node
 import {createAuthoredFlameFeature} from '../authored-flame-feature.mjs';
+import {createSceneDisplayGraph,prepareSceneEmissionSource} from '../scene-display-graph.mjs';
+import {createSceneEmissiveCamera} from '../scene-emissive-camera.mjs';
 import { createSceneEdits } from '../scene-edit-session.mjs';
 import { createFireLightingHistory } from '../fire-lighting-history.mjs';
 import { createWorkingScene } from '../working-scene.mjs';

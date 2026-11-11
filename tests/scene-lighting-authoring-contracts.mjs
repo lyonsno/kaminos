@@ -2,14 +2,17 @@ import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import * as THREE from '../lib/three.webgpu.js';
 import { test } from 'node:test';
 import {createEnvironmentLoader} from '../scene-environment-loader.mjs';
-import {bindSceneExposureControls} from '../scene-emissive-camera.mjs';
+import {bindSceneExposureControls,createSceneEmissiveCamera} from '../scene-emissive-camera.mjs';
+import {createSceneDisplayGraph,prepareSceneEmissionSource} from '../scene-display-graph.mjs';
 import {resolveStartupSceneDefaults} from '../user-preferences.mjs';
 
 import {createSceneEnvironmentState,normalizeEnvironmentRecipe} from '../scene-environment-state.mjs';
 import {bindSceneEnvironmentControls,environmentLegacySettings} from '../scene-environment-controls.mjs';
 const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const lightingGraphSource=readFileSync(new URL('../scene-lighting-graph.mjs',import.meta.url),'utf8');
 const between = (a, b) => source.slice(source.indexOf(a), source.indexOf(b, source.indexOf(a)));
 function environmentContext({ storage = new Map(), startup = false, load = async url => ({name:url.split('.')[0]}) } = {}) {
   const elements = new Map();
@@ -149,7 +152,8 @@ test('AO is attached to material indirect lighting, not multiplied over lit outp
   function outputFor(pageSource) {
     const part=(a,b)=>pageSource.slice(pageSource.indexOf(a),pageSource.indexOf(b,pageSource.indexOf(a)));
     const pass=float(10),pipeline={};
-    const c=sceneContext({localLiquidHost:null,scenePass:pass,aoIntensity:float(3),float,
+    const c=sceneContext({THREE,localLiquidHost:null,scenePass:pass,aoIntensity:float(3),float,
+      createSceneDisplayGraph,prepareSceneEmissionSource,createSceneEmissiveCamera,createFireLightFieldReceiverPass:()=>assert.fail('unrequested fire receiver'),prePassNormal:{},
       mix:(a,b,t)=>float(a).mul(float(1).sub(t)).add(float(b).mul(t)),
       builtinAOContext:ao=>({ao}),texture:()=>({r:float(.2)}),denoiseResolved:{value:{}},screenUV:{},
       sceneGISettings:{mode:'gtao',view:'scene'},sceneGI:{debugState:()=>({filterImplementation:'shared'}),reflections:{settings:{enabled:false}}},document:{body:{dataset:{}}},prePassDepth:{},
@@ -157,7 +161,8 @@ test('AO is attached to material indirect lighting, not multiplied over lit outp
       sceneEmissionSource:null,sceneBloom:{read:()=>({settings:{enabled:false}}),output:value=>value},
       giOutputGraphs:new Map(),renderPipeline:pipeline,isFireLightFieldRoute:()=>false,
       fireLightFieldRouteParams:()=>new URLSearchParams(),selectionFeedback:{output:value=>value},refreshRenderingControls(){}});
-    vm.runInContext(part('  const aoVisibility =','  const sceneGI =')
+    const aoStart=lightingGraphSource.indexOf('  const aoVisibility ='),aoEnd=lightingGraphSource.indexOf('  const sceneGI =',aoStart);
+    vm.runInContext(lightingGraphSource.slice(aoStart,aoEnd)
       +'\n'+part('  function rebuildSceneGIOutput() {','  updateSceneGI =')+'\nrebuildSceneGIOutput();',c);
     assert.ok(pass.contextNode?.ao,'material AO hook must remain active');
     return Number(pipeline.outputNode);

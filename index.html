@@ -3554,6 +3554,7 @@ import {installBrowseLayout} from './authoring-browse-layout.mjs';
 import {createAppFrameSource} from './app-frame-source.mjs';
 import {createSceneFrameRuntime} from './scene-frame-runtime.mjs';
 import {createSceneLightingGraph} from './scene-lighting-graph.mjs';
+import {createSceneDisplayGraph,prepareSceneEmissionSource} from './scene-display-graph.mjs';
 import {createSceneDrawRuntime} from './scene-draw-runtime.mjs';
 import {createSceneRenderObjects,createSceneRenderer} from './scene-render-bootstrap.mjs';
 import {createAppGpuHost} from './app-gpu-host.mjs';
@@ -11790,14 +11791,8 @@ async function initScene() {
     const diagnostic = combined && sceneGISettings.view !== 'scene';
     document.body.dataset.sceneGiDiagnostic = String(diagnostic);
     const baseSceneOutput = combined ? sceneGI.output(sceneGISettings.view) : scenePass;
-    if(sceneBloom.read().settings.enabled||sceneBloom.read().settings.composeFlame){
-      const beauty=combined?sceneGI.beauty:scenePass;
-      if(!beauty.getMRT()?.outputNodes?.emissive){
-        beauty.setMRT(mrt({output:THREE.TSL.output,...beauty.getMRT()?.outputNodes,emissive:THREE.TSL.emissive}));
-        beauty.renderTarget.dispose();beauty.needsUpdate=true;
-      }
-      sceneEmissionSource=beauty.getTextureNode('emissive');
-    }
+    sceneEmissionSource=prepareSceneEmissionSource({THREE,beauty:combined?sceneGI.beauty:scenePass,
+      requested:sceneBloom.read().settings.enabled||sceneBloom.read().settings.composeFlame,previous:sceneEmissionSource});
     activeSceneDepth = combined ? sceneGI.depth : prePassDepth;
     const graphKey = `${sceneGI.debugState().filterImplementation}:${sceneGISettings.mode}:${sceneGISettings.denoise>0}:${sceneGISettings.temporal}:${sceneGI.reflections.settings.enabled}:${isFireLightFieldRoute()}:${fireLightFieldRouteParams().get('volume_light_field_distributed')==='1'}:${sceneBloom.read().settings.enabled&&sceneBloom.read().settings.radius>0&&sceneBloom.read().settings.strength>0&&!diagnostic}`;
     const cached = giOutputGraphs.get(graphKey);
@@ -11809,27 +11804,18 @@ async function initScene() {
       refreshRenderingControls();
       return;
     }
-  // Retain each graph across A/B: Three may still reference its resources in
-  // cached bindings. No per-toggle destruction of live GPU textures.
-  fireLightFieldPass = null;
-  if (isFireLightFieldRoute() && sharedGpu?.device) {
-    const receiverNormal = combined ? sceneGI.source.getTextureNode('normal') : prePassNormal;
-    fireLightFieldPass = createFireLightFieldReceiverPass(baseSceneOutput, activeSceneDepth, receiverNormal);
-    renderPipeline.outputNode = fireLightFieldPass.outputNode;
-    refreshRenderingControls();
-  } else {
-    renderPipeline.outputNode = baseSceneOutput;
-  }
-  rawSceneOutput=renderPipeline.outputNode;
-  const displaySceneOutput=diagnostic?rawSceneOutput:sceneBloom.output(rawSceneOutput,sceneEmissionSource);
-  sceneEmissiveCamera=null;
-  if(fireLightFieldRouteParams().get('volume_light_field_distributed')==='1') {
-    sceneEmissiveCamera=createSceneEmissiveCamera(displaySceneOutput,{TSL:{uniform,vec3,vec4,float,Fn,agxToneMapping},THREE});
-  }
-    outlinedSceneOutput=selectionFeedback.output(displaySceneOutput);
-    outlinedCameraOutput=sceneEmissiveCamera?selectionFeedback.output(sceneEmissiveCamera.outputNode):null;
+    // Retain each graph across A/B: Three may still reference its resources
+    // in cached bindings. No per-toggle destruction of live GPU textures.
+    const graph=createSceneDisplayGraph({THREE,baseSceneOutput,depth:activeSceneDepth,
+      receiverNormal:combined?sceneGI.source.getTextureNode('normal'):prePassNormal,
+      sceneBloom,sceneEmissionSource,selectionFeedback,diagnostic,
+      fireLightFieldRoute:isFireLightFieldRoute()&&Boolean(sharedGpu?.device),
+      distributed:fireLightFieldRouteParams().get('volume_light_field_distributed')==='1',
+      createFireLightFieldReceiverPass,createSceneEmissiveCamera});
+    ({rawSceneOutput,outlinedSceneOutput,outlinedCameraOutput,sceneEmissiveCamera,fireLightFieldPass}=graph);
+    if(fireLightFieldPass)refreshRenderingControls();
     renderPipeline.outputNode=outlinedSceneOutput;
-    giOutputGraphs.set(graphKey,{rawSceneOutput,outlinedSceneOutput,outlinedCameraOutput,sceneEmissiveCamera,fireLightFieldPass});
+    giOutputGraphs.set(graphKey,graph);
     renderPipeline.outputColorTransform = true;
     renderPipeline.needsUpdate = true;
   }
