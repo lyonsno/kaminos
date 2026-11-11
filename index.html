@@ -3558,7 +3558,7 @@ import {installBrowseLayout} from './authoring-browse-layout.mjs';
 import {createAppFrameSource} from './app-frame-source.mjs';
 import {createSceneFrameRuntime} from './scene-frame-runtime.mjs';
 import {createSceneRenderResources} from './scene-render-resources.mjs';
-import {createSceneDisplayGraph,prepareSceneEmissionSource} from './scene-display-graph.mjs';
+import {createSceneDisplayOwner} from './scene-display-owner.mjs';
 import {createSceneDrawRuntime} from './scene-draw-runtime.mjs';
 import {createSceneRenderObjects} from './scene-render-bootstrap.mjs';
 import {createAppGpuHost} from './app-gpu-host.mjs';
@@ -11371,39 +11371,16 @@ async function initScene() {
   restoreSceneReflectionSettings=value=>{if(value)writeReflections(value);sceneGI.reflections.reset('scene-restored');reflectionControls?.sync();};
   window.kaminosSceneReflections={read:()=>{const state=sceneGI.reflections.state();return {...state,settings:{...sceneGI.reflections.settings},effective:state.effective&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene')};},set(value){if(reflectionControls)reflectionControls.set(value);else writeReflections(value);return this.read();},reset:reason=>sceneGI.reflections.reset(reason)};
   window.kaminosSceneBloom={read:()=>({...sceneBloom.read(),effective:sceneBloom.read().settings.enabled&&sceneBloom.read().settings.radius>0&&sceneBloom.read().settings.strength>0&&!waterFeature.host&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene'),flameComposition:{...sceneFlameHDR?.read(),effective:authoredFlameHDRActive&&sceneFlameHDR?.read().effective===true}}),set(settings){bloomControls.set(settings);return this.read();}};
-  function rebuildSceneGIOutput() {
-    const combined = sceneGISettings.mode === 'combined';
-    const diagnostic = combined && sceneGISettings.view !== 'scene';
-    document.body.dataset.sceneGiDiagnostic = String(diagnostic);
-    const baseSceneOutput = combined ? sceneGI.output(sceneGISettings.view) : scenePass;
-    sceneEmissionSource=prepareSceneEmissionSource({THREE,beauty:combined?sceneGI.beauty:scenePass,
-      requested:sceneBloom.read().settings.enabled||sceneBloom.read().settings.composeFlame,previous:sceneEmissionSource});
-    activeSceneDepth = combined ? sceneGI.depth : prePassDepth;
-    const graphKey = `${sceneGI.debugState().filterImplementation}:${sceneGISettings.mode}:${sceneGISettings.denoise>0}:${sceneGISettings.temporal}:${sceneGI.reflections.settings.enabled}:${isFireLightFieldRoute()}:${fireLightFieldRouteParams().get('volume_light_field_distributed')==='1'}:${sceneBloom.read().settings.enabled&&sceneBloom.read().settings.radius>0&&sceneBloom.read().settings.strength>0&&!diagnostic}`;
-    const cached = giOutputGraphs.get(graphKey);
-    if (cached) {
-      ({rawSceneOutput,outlinedSceneOutput,outlinedCameraOutput,sceneEmissiveCamera,fireLightFieldPass} = cached);
-      renderPipeline.outputNode = outlinedSceneOutput;
-      renderPipeline.outputColorTransform = true;
-      renderPipeline.needsUpdate = true;
-      refreshRenderingControls();
-      return;
-    }
-    // Retain each graph across A/B: Three may still reference its resources
-    // in cached bindings. No per-toggle destruction of live GPU textures.
-    const graph=createSceneDisplayGraph({THREE,baseSceneOutput,depth:activeSceneDepth,
-      receiverNormal:combined?sceneGI.source.getTextureNode('normal'):prePassNormal,
-      sceneBloom,sceneEmissionSource,selectionFeedback,diagnostic,
-      fireLightFieldRoute:isFireLightFieldRoute()&&Boolean(sharedGpu?.device),
-      distributed:fireLightFieldRouteParams().get('volume_light_field_distributed')==='1',
-      createFireLightFieldReceiverPass,createSceneEmissiveCamera});
-    ({rawSceneOutput,outlinedSceneOutput,outlinedCameraOutput,sceneEmissiveCamera,fireLightFieldPass}=graph);
-    if(fireLightFieldPass)refreshRenderingControls();
-    renderPipeline.outputNode=outlinedSceneOutput;
-    giOutputGraphs.set(graphKey,graph);
-    renderPipeline.outputColorTransform = true;
-    renderPipeline.needsUpdate = true;
-  }
+  const sceneDisplayOwner=createSceneDisplayOwner({THREE,graphs:giOutputGraphs,
+    readSettings:()=>({...sceneGISettings,fireLightFieldRoute:isFireLightFieldRoute(),
+      sharedDeviceAvailable:Boolean(sharedGpu?.device),distributed:fireLightFieldRouteParams().get('volume_light_field_distributed')==='1'}),
+    readResources:()=>({sceneGI,scenePass,prePassDepth,prePassNormal,sceneBloom,selectionFeedback,renderPipeline}),
+    createFireLightFieldReceiverPass,createSceneEmissiveCamera,
+    onDiagnostic:value=>{document.body.dataset.sceneGiDiagnostic=String(value);},
+    onOutput:value=>{({rawSceneOutput,outlinedSceneOutput,outlinedCameraOutput,sceneEmissiveCamera,fireLightFieldPass,activeSceneDepth,sceneEmissionSource}=value);},
+    refresh:()=>refreshRenderingControls(),
+  });
+  function rebuildSceneGIOutput() {return sceneDisplayOwner.rebuild();}
   updateSceneGI = value => {
     const next = resolveSceneGIControlState(value);
     const rebuild = next.mode !== sceneGISettings.mode || (next.denoise>0)!==(sceneGISettings.denoise>0) || next.temporal!==sceneGISettings.temporal || (sceneBloom.read().settings.enabled&&(next.view==='scene')!==(sceneGISettings.view==='scene'));

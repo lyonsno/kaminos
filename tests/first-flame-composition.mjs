@@ -1,6 +1,6 @@
 // kaminos-test: node
 import {createAuthoredFlameFeature} from '../authored-flame-feature.mjs';
-import {createSceneDisplayGraph,prepareSceneEmissionSource} from '../scene-display-graph.mjs';
+import {createSceneDisplayOwner} from '../scene-display-owner.mjs';
 import {createSceneEmissiveCamera} from '../scene-emissive-camera.mjs';
 import {mountSceneRadianceResources} from '../scene-radiance-resource-mount.mjs';
 import { createSceneEdits } from '../scene-edit-session.mjs';
@@ -157,7 +157,7 @@ test('both actual GI graph arms preserve raw input and optional display bloom',(
     const sharedGpu={device:{}},isFireLightFieldRoute=()=>true,fireLightFieldRouteParams=()=>new URLSearchParams();
     const refreshRenderingControls=()=>{},createFireLightFieldReceiverPass=()=>({outputNode:raw});
     const cachedOutput=enabled?bloomed:raw;const giOutputGraphs=new Map(cached?[[`shared:gtao:true:false:false:true:false:${enabled}`,{rawSceneOutput:raw,outlinedSceneOutput:cachedOutput,outlinedCameraOutput:null,sceneEmissiveCamera:null,fireLightFieldPass:{}}]]:[]);
-    const a=source.indexOf('  function rebuildSceneGIOutput()'),b=source.indexOf('  updateSceneGI =',a);
-    const rebuild=eval('('+source.slice(a,b).trim()+')');rebuild();assert.equal(renderPipeline.outputColorTransform,true);assert.equal(rawSceneOutput,raw,'raw lighting must not include display bloom');assert.equal(renderPipeline.outputNode,cachedOutput,'both cache arms must use the requested display stage');
+    const a=source.indexOf('  const sceneDisplayOwner=createSceneDisplayOwner('),b=source.indexOf('  updateSceneGI =',a);
+    eval(source.slice(a,b)+'\nrebuildSceneGIOutput();');assert.equal(renderPipeline.outputColorTransform,true);assert.equal(rawSceneOutput,raw,'raw lighting must not include display bloom');assert.equal(renderPipeline.outputNode,cachedOutput,'both cache arms must use the requested display stage');
   }
 });

@@ -12,6 +12,7 @@ import {resolveStartupSceneDefaults} from '../user-preferences.mjs';
 import {createSceneEnvironmentState,normalizeEnvironmentRecipe} from '../scene-environment-state.mjs';
 import {bindSceneEnvironmentControls,environmentLegacySettings} from '../scene-environment-controls.mjs';
 const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const displayOwnerSource=readFileSync(new URL('../scene-display-owner.mjs',import.meta.url),'utf8');
 const lightingGraphSource=readFileSync(new URL('../scene-lighting-graph.mjs',import.meta.url),'utf8');
 const between = (a, b) => source.slice(source.indexOf(a), source.indexOf(b, source.indexOf(a)));
 function environmentContext({ storage = new Map(), startup = false, load = async url => ({name:url.split('.')[0]}) } = {}) {
@@ -149,28 +150,28 @@ test('AO is attached to material indirect lighting, not multiplied over lit outp
     clamp(a,b) { return this.max(a).min(b); }
   }
   const float = v => new Scalar(v), scenePass = float(10);
-  function outputFor(pageSource) {
-    const part=(a,b)=>pageSource.slice(pageSource.indexOf(a),pageSource.indexOf(b,pageSource.indexOf(a)));
+  function outputFor(ownerSource) {
+    const part=(a,b)=>source.slice(source.indexOf(a),source.indexOf(b,source.indexOf(a)));
     const pass=float(10),pipeline={};
     const c=sceneContext({THREE,localLiquidHost:null,scenePass:pass,aoIntensity:float(3),float,
       createSceneDisplayGraph,prepareSceneEmissionSource,createSceneEmissiveCamera,createFireLightFieldReceiverPass:()=>assert.fail('unrequested fire receiver'),prePassNormal:{},
       mix:(a,b,t)=>float(a).mul(float(1).sub(t)).add(float(b).mul(t)),
       builtinAOContext:ao=>({ao}),texture:()=>({r:float(.2)}),denoiseResolved:{value:{}},screenUV:{},
-      sceneGISettings:{mode:'gtao',view:'scene'},sceneGI:{debugState:()=>({filterImplementation:'shared'}),reflections:{settings:{enabled:false}}},document:{body:{dataset:{}}},prePassDepth:{},
+      sharedGpu:null,sceneGISettings:{mode:'gtao',view:'scene'},sceneGI:{debugState:()=>({filterImplementation:'shared'}),reflections:{settings:{enabled:false}}},document:{body:{dataset:{}}},prePassDepth:{},
       URLSearchParams,location:{search:''},
       sceneEmissionSource:null,sceneBloom:{read:()=>({settings:{enabled:false}}),output:value=>value},
       giOutputGraphs:new Map(),renderPipeline:pipeline,isFireLightFieldRoute:()=>false,
       fireLightFieldRouteParams:()=>new URLSearchParams(),selectionFeedback:{output:value=>value},refreshRenderingControls(){}});
     const aoStart=lightingGraphSource.indexOf('  const aoVisibility ='),aoEnd=lightingGraphSource.indexOf('  const sceneGI =',aoStart);
     vm.runInContext(lightingGraphSource.slice(aoStart,aoEnd)
-      +'\n'+part('  function rebuildSceneGIOutput() {','  updateSceneGI =')+'\nrebuildSceneGIOutput();',c);
+      +'\n'+ownerSource.replace(/^import .*;\n/m,'').replace('export function','function')+'\n'+part('  const sceneDisplayOwner=createSceneDisplayOwner(','  updateSceneGI =')+'\nrebuildSceneGIOutput();',c);
     assert.ok(pass.contextNode?.ao,'material AO hook must remain active');
     return Number(pipeline.outputNode);
   }
   const preservesLitOutput=pageSource=>assert.equal(outputFor(pageSource),10,'direct/emissive scene output must not receive a post-lighting AO multiplier');
-  preservesLitOutput(source);
-  const normal='const baseSceneOutput = combined ? sceneGI.output(sceneGISettings.view) : scenePass;';
-  const injected=source.replace(normal,normal.replace(': scenePass;',': scenePass.mul(aoOutput);'));
-  assert.notEqual(injected,source,'negative injection reaches the actual final output');
+  preservesLitOutput(displayOwnerSource);
+  const normal='const baseSceneOutput=combined?sceneGI.output(settings.view):scenePass;';
+  const injected=displayOwnerSource.replace(normal,normal.replace(':scenePass;',':scenePass.mul(float(.2));'));
+  assert.notEqual(injected,displayOwnerSource,'negative injection reaches the actual final output');
   assert.throws(()=>preservesLitOutput(injected),/direct\/emissive scene output/,'the harness must fail when final lighting is incorrectly attenuated');
 });
