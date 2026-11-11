@@ -20,6 +20,13 @@ class PortableTraining(unittest.TestCase):
    result=m.save_bundle(d,{'kind':'unit-test'});raw=json.loads(pathlib.Path(result['path']).read_text())
    self.assertEqual(raw['decoder']['hidden_layers'],[16,16]);self.assertEqual(len(raw['decoder']['_params']['network']['mlp_layers']),3)
    self.assertEqual((pathlib.Path(d)/'latents.f32').stat().st_size,2*2*8*4)
+ def test_tiny_negative_uv_stays_in_wrapped_texel(self):
+  import mlx.core as mx
+  import numpy as np
+  from neural_appearance_mlx import Appearance
+  mx.set_default_device(mx.cpu);m=Appearance(2,16,41)
+  q=mx.array([[.25,.99999,0,0,1,0,0,1],[.25,-1e-9,0,0,1,0,0,1]])
+  actual=np.asarray(m(q));np.testing.assert_allclose(actual[0],actual[1],rtol=1e-7,atol=1e-8)
  def test_optimizer_reduces_response_error(self):
   import mlx.core as mx
   import mlx.nn as nn

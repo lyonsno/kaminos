@@ -5,10 +5,11 @@ import {spawn,execFileSync} from 'node:child_process';
 import net from 'node:net';
 import assert from 'node:assert/strict';
 const [out]=process.argv.slice(2);assert(out,'Output directory required');
-const root=process.cwd(),report={root,commit:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),phase:'launch',status:'running',errors:[]};
+const root=process.cwd(),report={root,phase:'source-identity',status:'running',errors:[]};
 await fs.mkdir(out,{recursive:true});const save=()=>fs.writeFile(out+'/report.json',JSON.stringify(report,null,2));await save();
 let context,server,log,spawnError;
 try{
+ report.commit=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();report.phase='launch';await save();
  const socket=net.createServer();await new Promise(resolve=>socket.listen(0,'127.0.0.1',resolve));const port=socket.address().port;await new Promise(resolve=>socket.close(resolve));const origin='http://127.0.0.1:'+port;report.origin=origin;
  log=await fs.open(out+'/server.log','a');
  server=spawn('python3',['-u','serve.py',String(port)],{cwd:root,env:{...process.env,KAMINOS_BIND_HOST:'127.0.0.1',KAMINOS_SCENES_DIR:out+'/scenes'},stdio:['ignore',log.fd,log.fd]});server.on('error',e=>spawnError=e);await log.close();log=null;
@@ -50,4 +51,4 @@ try{
  for(const sample of prepared.samples)for(let c=0;c<3;c++)assert.ok(Math.abs(sample.actual[c]-sample.reducedExpected[c])<.0001+Math.abs(sample.reducedExpected[c])*.003,'precompiled production passes preserve reconstruction');
  assert.deepEqual(report.errors,[]);
  report.status='passed';report.phase='complete';
-}catch(error){report.status='failed';report.error=error.stack;process.exitCode=1;}finally{try{await context?.close();}catch(error){report.cleanupError=error.stack;}server?.kill('SIGTERM');await log?.close();await save();console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,out}));}
+}catch(error){report.status='failed';report.error=error.stack;process.exitCode=1;}finally{try{await context?.close();}catch(error){report.cleanupError=error.stack;report.status='failed';process.exitCode=1;}server?.kill('SIGTERM');try{await log?.close();}catch(error){report.logCleanupError=error.stack;report.status='failed';process.exitCode=1;}await save();console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,out}));}

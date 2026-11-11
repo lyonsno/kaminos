@@ -18,9 +18,23 @@ try{
   light.position.fromArray(direction);light.updateMatrixWorld();renderer.setRenderTarget(target);await renderer.renderAsync(scene,camera);await renderer.backend.device.queue.onSubmittedWorkDone();const data=await renderer.readRenderTargetPixelsAsync(target,0,0,64,64);const actual=Array.from(data.slice((32*64+32)*4,(32*64+32)*4+3),THREE.DataUtils.fromHalfFloat);results.push({direction,actual,expected});
   for(let c=0;c<3;c++)if(Math.abs(actual[c]-expected[c])>.001)throw Error('Native projected response mismatch '+JSON.stringify(results));
  }
+ // A rounded fract(-epsilon) must remain in the current channel slice.
+ const seamRaw=structuredClone(raw);
+ seamRaw.decoder._params.network.mlp_layers[0].weights[16]=1;
+ seamRaw.decoder._params.network.mlp_layers[1].weights[0]=1;
+ seamRaw.decoder._params.network.mlp_layers[2].weights[0]=1;
+ const seamBundle=readNeuralAppearanceBundle(seamRaw);seamBundle.levels[0].data=Float32Array.from({length:32},(_,i)=>i%8===0?.15:i%8===4?.9:0);
+ const seamRuntime=createNeuralAppearanceMaterial(seamBundle);mesh.material=seamRuntime.material;
+ const seamSamples=[];
+ for(const coords of [[.25,.99999],[.25,-1e-9]]){
+  const attr=geometry.getAttribute('uv');for(let i=0;i<attr.count;i++)attr.setXY(i,...coords);attr.needsUpdate=true;
+  renderer.setRenderTarget(target);await renderer.renderAsync(scene,camera);await renderer.backend.device.queue.onSubmittedWorkDone();
+  const data=await renderer.readRenderTargetPixelsAsync(target,32,32,1,1);seamSamples.push({coords,actual:Array.from(data.slice(0,3),THREE.DataUtils.fromHalfFloat)});
+ }
+ for(let c=0;c<3;c++)if(Math.abs(seamSamples[0].actual[c]-seamSamples[1].actual[c])>.001)throw Error('Atlas channel slice bleed '+JSON.stringify(seamSamples));
  renderer.setRenderTarget(null);await renderer.renderAsync(scene,camera);
  const adapter=renderer.backend.device.adapterInfo;
- window.neuralAppearanceResult={status:'passed',results,identity:{backend:'WebGPU',adapter:{vendor:adapter?.vendor,architecture:adapter?.architecture,device:adapter?.device},width:64,height:64,scope:'synthetic projected response conformance, not trained appearance'}};
- window.neuralAppearanceDispose=async()=>{await renderer.dispose();target.dispose();runtime.dispose();geometry.dispose();};
+ window.neuralAppearanceResult={status:'passed',results,seamSamples,identity:{backend:'WebGPU',adapter:{vendor:adapter?.vendor,architecture:adapter?.architecture,device:adapter?.device},width:64,height:64,scope:'synthetic projected response conformance, not trained appearance'}};
+ window.neuralAppearanceDispose=async()=>{await renderer.dispose();target.dispose();runtime.dispose();seamRuntime.dispose();geometry.dispose();};
 }catch(error){window.neuralAppearanceResult={status:'failed',error:error.stack};console.error(error);}
 </script></html>

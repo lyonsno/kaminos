@@ -34,7 +34,7 @@ class Appearance(nn.Module):
 
     def __call__(self, queries):
         uv=queries[:,:2]-mx.floor(queries[:,:2])
-        xy=mx.floor(uv*self.resolution).astype(mx.int32)
+        xy=mx.clip(mx.floor(uv*self.resolution).astype(mx.int32),0,self.resolution-1)
         z=mx.tanh(self.latents[xy[:,1]*self.resolution+xy[:,0]])
         frames=self.rotation(z)
         n=normalize(frames[:,:6].reshape((-1,2,3))+mx.array([0.,0.,1.]))

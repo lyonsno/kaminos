@@ -13,7 +13,9 @@ export function createNeuralAppearanceMaterial(bundle,{uvScale=1,gain=1}={}){
   let widths=array<i32,${levels.length}>(${levels.map(l=>l.width).join(',')});
   let heights=array<i32,${levels.length}>(${levels.map(l=>l.height).join(',')});
   let offsets=array<i32,${levels.length}>(${levels.map(l=>l.y).join(',')});
-  let mip=u32(clamp(floor(level+.5),0.,${levels.length-1}.));let p=vec2<i32>(floor(fract(coords)*vec2<f32>(f32(widths[mip]),f32(heights[mip]))));
+  let mip=u32(clamp(floor(level+.5),0.,${levels.length-1}.));
+  let extent=vec2<i32>(widths[mip],heights[mip]);
+  let p=clamp(vec2<i32>(floor(fract(coords)*vec2<f32>(extent))),vec2<i32>(0),extent-1);
   var z:array<f32,${model.numLatents}>;
   for(var c=0u;c<${model.numLatents}u;c++){let sample=textureLoad(atlas,p+vec2<i32>(0,offsets[mip]+i32(c/4u)*heights[mip]),0);z[c]=sample[c%4u];}
   return neuralAppearancePrepare(z);
