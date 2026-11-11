@@ -30,7 +30,7 @@ export function checkedMechanism(m){
   if(a.axle!==undefined){if(!a.hinge||!['position','rotation'].every(k=>Array.isArray(a.axle[k])&&a.axle[k].length===3&&a.axle[k].every(Number.isFinite)))throw Error('Finite hinge axle frame required');}
   ids.add(a.objectId);
  }
- if(m.poseHold!==undefined){const h=m.poseHold;if(typeof h.objectId!=='string'||!h.objectId||!['A','B'].includes(h.pose)||!['position','rotation','scale'].every(k=>Array.isArray(h.target?.[k])&&h.target[k].length===3&&h.target[k].every(Number.isFinite))||h.target.scale.some(v=>v!==1))throw Error('Held pose requires an object, Pose A/B and finite rigid target frame');}
+ if(m.poseHold!==undefined){const h=m.poseHold;if((h.space!==undefined&&h.space!=='object')||typeof h.objectId!=='string'||!h.objectId||!['A','B'].includes(h.pose)||!['position','rotation','scale'].every(k=>Array.isArray(h.target?.[k])&&h.target[k].length===3&&h.target[k].every(Number.isFinite))||h.target.scale.some(v=>v!==1))throw Error('Held pose requires an object, Pose A/B and finite rigid target frame');}
  return copy(m);
 }
 export function frames(m,t=0){
