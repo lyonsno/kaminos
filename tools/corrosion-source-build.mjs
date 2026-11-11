@@ -13,7 +13,7 @@ try{
  if(!Array.isArray(config.times)||!config.times.length||!config.times.every((v,i)=>Number.isFinite(v)&&v>=0&&(!i||v>config.times[i-1])))throw Error('Retained times must be strictly increasing and nonnegative');
  report.phase='source-preflight';report.sourceRevision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();report.sourceStatus=execFileSync('git',['status','--porcelain'],{encoding:'utf8'});
  if(config.sourceRevision!==report.sourceRevision||report.sourceStatus)throw Error('Requested clean source revision is not effective');
- report.sourceFiles={};for(const name of ['coating-corrosion.mjs','corrosion-source.mjs','tools/corrosion-source-build.mjs']){const b=await fs.readFile(name);report.sourceFiles[name]=sha(b);await fs.writeFile(path.join(out,path.basename(name)),b);}
+ report.sourceFiles={};for(const name of ['coating-corrosion.mjs','coating-finite-sheet.mjs','corrosion-source.mjs','tools/corrosion-source-build.mjs']){const b=await fs.readFile(name);report.sourceFiles[name]=sha(b);await fs.writeFile(path.join(out,path.basename(name)),b);}
  await fs.writeFile(path.join(out,'config.json'),JSON.stringify(config,null,2));
  const state=createCorrosionState(config.model),catalog={schema:'kaminos.corrosion-evolution.v1',status:'passed',sourceRevision:report.sourceRevision,sourceFiles:report.sourceFiles,snapshots:[]};
  if(!state.opening.some(Boolean))throw Error('The authored defect is unresolved at this formation resolution');
