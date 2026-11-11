@@ -1,3 +1,4 @@
+import {createBrowserVolumeSurface} from './volume-runtime-surface.mjs';
 import {createDeferredRenderPipelines} from './deferred-render-pipelines.mjs';
 import {createGPUImmersedCollection} from './volume-immersed-source-gpu.mjs';
 import {createGPUImmersedWorldSources} from './volume-immersed-world-source-gpu.mjs';
@@ -11244,6 +11245,8 @@ export function createKaminosVolumePrototype({
   controls,
   getControls,
   onStatus,
+  presentationSurface = null,
+  frameScheduler = globalThis,
   sharedGpuContext = null,
   getSceneDepth = null,
   getPresentationSize = () => null,
@@ -11290,11 +11293,12 @@ export function createKaminosVolumePrototype({
     if (candidateCount <= currentCapacity) return currentCapacity;
     return Math.min(gridCellCount(size), Math.max(currentCapacity, nextPowerOfTwo(candidateCount)));
   }
-  const canvas = document.createElement('canvas');
-  canvas.id = 'kaminos-volume-canvas';
-  canvas.dataset.prototype = PROTOTYPE_IDENTITY;
-  canvas.dataset.routeIdentity = ROUTE_IDENTITY;
-  if (productFrameOwner !== 'caller') viewport.appendChild(canvas);
+  const surface = presentationSurface ?? createBrowserVolumeSurface({
+    viewport, identity:PROTOTYPE_IDENTITY, routeIdentity:ROUTE_IDENTITY, mount:productFrameOwner !== 'caller',
+  });
+  const canvas = surface.canvas;
+  const requestAnimationFrame = callback => frameScheduler.requestAnimationFrame(callback);
+  const cancelAnimationFrame = handle => frameScheduler.cancelAnimationFrame(handle);
   const productTransform = {
     translate: Array.isArray(externalProductTransform?.translate)
       ? externalProductTransform.translate.slice(0, 3).map(value => Number(value) || 0)
@@ -15897,14 +15901,13 @@ export function createKaminosVolumePrototype({
 
   function resize() {
     const presentationSize = getPresentationSize();
-    const rect = viewport.getBoundingClientRect();
-    const win = viewport.ownerDocument?.defaultView || globalThis;
-    const fallbackWidth = Math.max(1, Math.floor((win?.innerWidth || 1280) - Math.max(0, rect.left || 0)));
-    const fallbackHeight = Math.max(1, Math.floor(win?.innerHeight || 720));
+    const rect = surface.viewport();
+    const fallbackWidth = Math.max(1, Math.floor(rect.fallbackWidth || 1280));
+    const fallbackHeight = Math.max(1, Math.floor(rect.fallbackHeight || 720));
     const useFallbackSize = !(rect.width > 0 && rect.height > 0);
     const cssWidth = useFallbackSize ? fallbackWidth : rect.width;
     const cssHeight = useFallbackSize ? fallbackHeight : rect.height;
-    const nativeDevicePixelRatio = Math.max(1, Number(win?.devicePixelRatio) || 1);
+    const nativeDevicePixelRatio = Math.max(1, Number(rect.pixelRatio) || 1);
     const canvasDevicePixelRatio = presentationSize ? 1 : (boundarySplatRequested() ? nativeDevicePixelRatio : 1);
     const dpr = canvasDevicePixelRatio;
     const displayWidth = Math.max(1, Math.floor((presentationSize?.width ?? cssWidth) * dpr));
@@ -15913,10 +15916,7 @@ export function createKaminosVolumePrototype({
     const renderWidth = Math.max(1, Math.floor(displayWidth * renderScale));
     const renderHeight = Math.max(1, Math.floor(displayHeight * renderScale));
     if (canvas.width !== renderWidth || canvas.height !== renderHeight || state.displayWidth !== displayWidth || state.displayHeight !== displayHeight) {
-      canvas.width = renderWidth;
-      canvas.height = renderHeight;
-      canvas.style.width = '100%';
-      canvas.style.height = '100%';
+      surface.resize(renderWidth,renderHeight);
       state.width = renderWidth;
       state.height = renderHeight;
       state.cssWidth = cssWidth;
@@ -15933,7 +15933,6 @@ export function createKaminosVolumePrototype({
       state.volumeReconstructionStyle = browserResidualCanApply()
         ? 'webgpu-direct-residual'
         : (renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution');
-      canvas.style.imageRendering = 'auto';
       frameTextureSize = '';
       browserResidualFeatureTextureSize = '';
     }
@@ -22112,7 +22111,7 @@ export function createKaminosVolumePrototype({
     }).catch(error => {
       state.active = false;
       state.error = error?.message || String(error);
-      canvas.classList.remove('active');
+      surface.setActive(false);
       emitStatus({phase: 'foreground-frame-error', error: state.error});
     }).finally(() => {
       foregroundPending = null;
@@ -22411,7 +22410,7 @@ export function createKaminosVolumePrototype({
       }
       state.active = false;
       state.error = err?.message || String(err);
-      canvas.classList.remove('active');
+      surface.setActive(false);
       cancelAnimationFrame(raf);
       emitStatus({ phase: 'render-error', error: state.error });
       if (foregroundService) throw err;
@@ -22710,7 +22709,7 @@ export function createKaminosVolumePrototype({
     }
     const wasActive = state.active;
     state.active = false;
-    canvas.classList.remove('active');
+    surface.setActive(false);
     cancelAnimationFrame(raf);
     if (gridSize !== requestedGrid) rebuildFluidState(requestedGrid, 'full-field-import-grid-rebuild');
     debugFullFieldImportUpload = {
@@ -22878,7 +22877,7 @@ export function createKaminosVolumePrototype({
       backend: state.backend,
     };
     state.active = false;
-    canvas.classList.remove('active');
+    surface.setActive(false);
     cancelAnimationFrame(raf);
     state.fullFieldImportReceipt = receipt;
     debugFullFieldImportUpload = null;
@@ -22939,7 +22938,7 @@ export function createKaminosVolumePrototype({
     const timeStepMs = Number.isFinite(Number(payload.timeStepMs)) ? Number(payload.timeStepMs) : 1000 / 60;
     const startTimeMs = Number.isFinite(Number(payload.startTimeMs)) ? Number(payload.startTimeMs) : 1000;
     state.active = false;
-    canvas.classList.remove('active');
+    surface.setActive(false);
     cancelAnimationFrame(raf);
     const before = { frameCount: state.frameCount, simStepCount: state.simStepCount };
     for (let step = 0; step < requestedSteps; step += 1) {
@@ -23031,7 +23030,7 @@ export function createKaminosVolumePrototype({
     state.selectiveHeadLiveCapturePaused = false;
     state.active = true;
     state.error = null;
-    canvas.classList.add('active');
+    surface.setActive(true);
     cancelAnimationFrame(raf);
     raf = requestAnimationFrame(render);
     const liveReplay = {
@@ -24177,7 +24176,7 @@ export function createKaminosVolumePrototype({
     }
     if (state.active) {
       state.active = false;
-      canvas.classList.remove('active');
+      surface.setActive(false);
       cancelAnimationFrame(raf);
     }
     let captured = null;
@@ -24186,7 +24185,7 @@ export function createKaminosVolumePrototype({
     } finally {
       if (wasActiveBeforeExport) {
         state.active = true;
-        canvas.classList.add('active');
+        surface.setActive(true);
         cancelAnimationFrame(raf);
         raf = requestAnimationFrame(render);
       }
@@ -27937,7 +27936,7 @@ export function createKaminosVolumePrototype({
           'kaminos residual shader-material-authority feature readback'
         )
         : null;
-      const canvasRect = canvas.getBoundingClientRect();
+      const canvasRect = surface.bounds();
       return {
         ok: true,
         sampleAuthority: 'render-only-frozen-sim-state',
@@ -27986,7 +27985,7 @@ export function createKaminosVolumePrototype({
           width: canvasRect.width,
           height: canvasRect.height,
         },
-        devicePixelRatio: window.devicePixelRatio || 1,
+        devicePixelRatio: surface.viewport().pixelRatio || 1,
         effectiveRoute: state.effectiveRoute,
         prototypeIdentity: state.prototypeIdentity,
         backend: state.backend,
@@ -29118,7 +29117,7 @@ export function createKaminosVolumePrototype({
         if(device)rebuildFluidState(gridSize,'scene-composition-presentation');
       }
       state.sceneCompositionPresentation={transparentCanvas:value};
-      canvas.style.background=value?'transparent':'';
+      surface.setTransparent(value);
       return {...state.sceneCompositionPresentation};
     },
     async setActive(active) {
@@ -29135,7 +29134,7 @@ export function createKaminosVolumePrototype({
           if (activity !== activitySequence) return;
           state.active = true;
           state.error = null;
-          canvas.classList.add('active');
+          surface.setActive(true);
           cancelAnimationFrame(raf);
           raf = foregroundPending ? 0 : requestAnimationFrame(render);
           emitStatus({ phase: 'active' });
@@ -29144,7 +29143,7 @@ export function createKaminosVolumePrototype({
           state.active = false;
           state.error = err?.message || String(err);
           state.backend = 'unavailable';
-          canvas.classList.remove('active');
+          surface.setActive(false);
           emitStatus({ phase: 'error', error: state.error });
           throw err;
         }
@@ -29159,7 +29158,7 @@ export function createKaminosVolumePrototype({
         if (activity !== activitySequence) return;
         state.active = false;
         invalidateRaymarchReadouts('inactive-renderer');
-        canvas.classList.remove('active');
+        surface.setActive(false);
         cancelAnimationFrame(raf);
         raf = 0;
         emitStatus({ phase: 'inactive' });
@@ -29168,7 +29167,7 @@ export function createKaminosVolumePrototype({
     retireLostDevice(){
       deviceRetired=true;activitySequence++;state.active=false;
       foregroundRequester=null;cancelAnimationFrame(raf);raf=0;
-      canvas.classList.remove('active');
+      surface.setActive(false);
     },
     setForegroundOpportunityRequester,
     foregroundGpuContext() {
@@ -29719,7 +29718,7 @@ export function createKaminosVolumePrototype({
       boundarySplatCameraBuffer = null;
       destroyFluidState();
       worldRenderUniform?.destroy();worldRenderUniform=null;
-      canvas.remove();
+      surface.dispose();
     },
   };
 }
