@@ -11,11 +11,11 @@ export default {id:'stockroom-space',title:'Stockroom - Shaping a place',async c
    const id=host.scene.addMesh('box',{width:size[0],height:size[1],depth:size[2]});host.scene.setTransform(id,{position});api.setMaterial(id,{color,roughness:.88,metalness:0});
    host.controls.document.defaultView.renameSceneObject(id,label);return id;
   };
-  box('Lower landing',[5.5,.12,2.1],[.55,.06,-1.5],'#72777a');
-  box('Bank - unresolved',[6.8,.5,1.2],[-.3,.25,3],'#747969');
-  box('Bank - unresolved',[3.8,.8,1.1],[2,.4,3.65],'#747969');
+  const landing=box('Lower landing',[5.5,.12,2.1],[.55,.06,-1.5],'#72777a');
+  const bank=box('Bank - unresolved',[6.8,.5,1.2],[-.3,.25,3],'#747969');
+  const upperBank=box('Bank - unresolved',[3.8,.8,1.1],[2,.4,3.65],'#747969');
   box('Ceramic backing',[1.15,.07,.08],[-1.1,.155,-2.2],'#8a8d8b');
-  const space=defaultSpace();space.claims[0]={...space.claims[0],center:[-.5,.25,.4],radii:[1.35,.8,1.1]};
+  const space=defaultSpace();space.neighbors=[dock.id,landing,bank,upperBank];space.claims[0]={...space.claims[0],center:[-.5,.25,.4],radii:[1.35,.8,1.1]};
   entry=await host.scene.addSpace(inputs.space??space);
   if(inputs.tiles!==false){
    const sha='0c57b96262b041ed2f2d578596a187d95ca31cf8072816ffb23048721ec9745f';
