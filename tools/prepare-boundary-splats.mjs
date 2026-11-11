@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import {SURFACE_SPLAT_SUPPORT_CUTOFF,SURFACE_SPLAT_FRONT_SUPPORT_SIGMA} from '../surface-splat-support.mjs';
 import {fitSurfaceFootprints} from '../surface-splat-footprints.mjs';
 
 const [source,reduced,output,mesh,...extra]=process.argv.slice(2);
@@ -25,7 +26,10 @@ try{
  if(mesh){
   report.phase='paired-mesh';
   const {GLTFLoader}=await import('three/addons/loaders/GLTFLoader.js'),{Vector3}=await import('three');
-  const payload=fs.readFileSync(mesh),asset=await new GLTFLoader().parseAsync(payload.buffer.slice(payload.byteOffset,payload.byteOffset+payload.length),'');
+  // Only geometry/transforms establish shared vertices. Materials stay in the
+  // retained source rows; embedded or external images need no browser decoder.
+  const loader=new GLTFLoader().register(()=>({name:'boundary-geometry-only',loadTexture:async()=>null}));
+  const payload=fs.readFileSync(mesh),asset=await loader.parseAsync(payload.buffer.slice(payload.byteOffset,payload.byteOffset+payload.length),'');
   const positions=new Set(),p=new Vector3(),key=(x,y,z)=>[Math.fround(x),Math.fround(y),Math.fround(z)].join(',');asset.scene.updateMatrixWorld(true);
   asset.scene.traverse(object=>{if(object.isMesh){const a=object.geometry.attributes.position;for(let i=0;i<a.count;i++){p.fromBufferAttribute(a,i).applyMatrix4(object.matrixWorld);positions.add(key(p.x,p.y,p.z));}}});
   boundaryVertices=Uint8Array.from({length:meta.count},(_,i)=>Number(positions.has(key(src[i*12],src[i*12+1],src[i*12+2]))));
@@ -39,7 +43,7 @@ try{
  report.phase='write';
  fs.writeFileSync(path.join(output,'surfels.f32'),data);fs.writeFileSync(path.join(output,'parent.u32'),parents);fs.writeFileSync(path.join(output,'footprints.f32'),footprints);
  if(level.depthTolerance)fs.writeFileSync(path.join(output,level.depthTolerance.file),read(reduced,level.depthTolerance.file,level.depthTolerance.sha256));
- const next={...level,footprintFit:mesh?'shared-boundary-triangle-dual-cell':'boundary-triangle-dual-cell',footprints:{...level.footprints,sha256:hash(footprints)},boundaryFit:{sourceTrianglesSHA256:meta.triangles.sha256,previousFootprintsSHA256:hash(previous),changedGroups:changed,unchangedGroups:level.count-changed,...(pairedMesh?{pairedMesh}:{})}};
+ const next={...level,footprintFit:mesh?'shared-boundary-triangle-dual-cell':'boundary-triangle-dual-cell',footprints:{...level.footprints,sha256:hash(footprints)},boundaryFit:{supportCutoff:SURFACE_SPLAT_SUPPORT_CUTOFF,enclosureSigma:SURFACE_SPLAT_FRONT_SUPPORT_SIGMA,enclosureView:'front-facing',sourceTrianglesSHA256:meta.triangles.sha256,previousFootprintsSHA256:hash(previous),changedGroups:changed,unchangedGroups:level.count-changed,...(pairedMesh?{pairedMesh}:{})}};
  fs.writeFileSync(path.join(output,'report.json'),JSON.stringify(next,null,2));
  Object.assign(report,{ok:true,phase:'done',count:level.count,dataSHA256:hash(data),footprintsSHA256:hash(footprints),...next.boundaryFit});
 }catch(error){report.error=String(error);process.exitCode=1;}

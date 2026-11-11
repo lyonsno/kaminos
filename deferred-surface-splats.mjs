@@ -1,3 +1,4 @@
+import {SURFACE_SPLAT_SUPPORT_CUTOFF} from './surface-splat-support.mjs';
 import {Group,Scene,Mesh,QuadMesh,NodeMaterial,PlaneGeometry,BufferAttribute,InstancedBufferGeometry,InstancedInterleavedBuffer,InterleavedBufferAttribute,RenderTarget,FloatType,HalfFloatType,NearestFilter,DoubleSide,DataUtils,CustomBlending,OneFactor,AddEquation,Vector2,Vector3,RendererUtils,MeshBasicNodeMaterial,MeshPhysicalNodeMaterial,TSL} from './lib/three.webgpu.js';
 const {Fn,If,Discard,attribute,vec2,vec3,vec4,float,bool,uv,screenUV,texture,uniform,varying,positionGeometry,positionView,positionViewDirection,faceDirection,transformNormalToView,outputStruct,cameraProjectionMatrix,cameraProjectionMatrixInverse,cameraWorldMatrix,cameraNear,cameraFar,getViewPosition,viewZToPerspectiveDepth,viewZToOrthographicDepth,viewportOpaqueMipTexture,refract}=TSL;
 
@@ -45,7 +46,7 @@ export function createDeferredSurfaceSplats(data,meta,footprints,depthTolerance)
   const grazing=viewNormal.z.abs().smoothstep(0,.35).mul(.75).add(.25);
   const nearSample=texture(nearest.texture,screenUV),weight=r2.mul(-4.5).exp().mul(grazing);
   const sourcePosition=attribute('center','vec3').add(attribute('axisU','vec4').xyz.mul(attribute('axisU','vec4').w.mul(positionGeometry.x).mul(3))).add(attribute('axisV','vec4').xyz.mul(attribute('axisV','vec4').w.mul(positionGeometry.y).mul(3)));
-  const nearMask=Fn(()=>{If(r2.greaterThan(1).or(weight.lessThan(.08)),()=>Discard());return bool(true);})();
+  const nearMask=Fn(()=>{If(r2.greaterThan(1).or(weight.lessThan(SURFACE_SPLAT_SUPPORT_CUTOFF)),()=>Discard());return bool(true);})();
   const sumMask=Fn(()=>{If(r2.greaterThan(1),()=>Discard());return bool(true);})();
   const nearestMaterial=new MeshBasicNodeMaterial({side:DoubleSide});nearestMaterial.positionNode=sourcePosition;nearestMaterial.maskNode=nearMask;nearestMaterial.outputNode=vec4(viewNormal,positionView.z.negate());nearestMaterial.toneMapped=false;
   const sumMaterial=new MeshBasicNodeMaterial({side:DoubleSide,transparent:true,depthTest:false,depthWrite:false,blending:CustomBlending,blendSrc:OneFactor,blendDst:OneFactor,blendEquation:AddEquation,blendSrcAlpha:OneFactor,blendDstAlpha:OneFactor,blendEquationAlpha:AddEquation});
@@ -58,7 +59,7 @@ export function createDeferredSurfaceSplats(data,meta,footprints,depthTolerance)
   const color=c.rgb.div(den),normal=n.xyz.div(den).normalize(),parameters=m.xyz.div(den),z=n.a.div(den).negate();
   const depth=Fn(([],builder)=>builder.camera.isOrthographicCamera?viewZToOrthographicDepth(z,cameraNear,cameraFar):viewZToPerspectiveDepth(z,cameraNear,cameraFar))();
   const position=getViewPosition(screenUV,depth,cameraProjectionMatrixInverse),world=cameraWorldMatrix.mul(vec4(position,1)).xyz;
-  const valid=c.a.greaterThan(.08);
+  const valid=c.a.greaterThan(SURFACE_SPLAT_SUPPORT_CUTOFF);
   const material=new SurfaceMaterial({side:DoubleSide});fullscreen(material);material.surfacePosition=position;material.surfaceWorld=world;
   material.maskNode=valid;material.depthNode=depth;material.normalNode=normal;material.receivedShadowPositionNode=world;
   const carrier=new PlaneGeometry(2,2);carrier.setAttribute('surfaceClip',new BufferAttribute(new Float32Array([-1,1,1,1,-1,-1,1,-1]),2));
@@ -101,7 +102,7 @@ export function createDeferredSurfaceSplats(data,meta,footprints,depthTolerance)
  }
  for(const l of layers)l.mesh.onBeforeRender=prepare;
  apply();
- return {root,read:()=>({...state,count:meta.count,sourceCount:meta.sourceCount??meta.count,route:'deferred-surface-splats',depthTolerance:depthTolerance?'per-splat':'uniform',supportCutoff:.08,layers:layers.length,lightingPrimitives:layers.length*2,updates,width:layers[0].nearest.width,height:layers[0].nearest.height,populations:layers.map(l=>({glass:!!l.p,count:l.count}))}),set(patch){
+ return {root,read:()=>({...state,count:meta.count,sourceCount:meta.sourceCount??meta.count,route:'deferred-surface-splats',depthTolerance:depthTolerance?'per-splat':'uniform',supportCutoff:SURFACE_SPLAT_SUPPORT_CUTOFF,layers:layers.length,lightingPrimitives:layers.length*2,updates,width:layers[0].nearest.width,height:layers[0].nearest.height,populations:layers.map(l=>({glass:!!l.p,count:l.count}))}),set(patch){
   if(disposed)throw Error('Surface splats disposed');state=checkedSurfaceSplatOptics({...state,...patch});apply();return this.read();
  },async inspectSurface(x,y){if(!lastRenderer||disposed)throw Error('Splats have not rendered');return Promise.all(layers.map(async l=>({glass:!!l.p,nearest:Array.from(await lastRenderer.readRenderTargetPixelsAsync(l.nearest,x,y,1,1)),sums:await Promise.all(l.sums.textures.map(async(_,i)=>Array.from(await lastRenderer.readRenderTargetPixelsAsync(l.sums,x,y,1,1,i),DataUtils.fromHalfFloat)))})));},
  dispose(){if(disposed)return;disposed=true;zeroMaterial.dispose();for(const l of layers){l.mesh.geometry.dispose();l.geometry.dispose();for(const m of [l.material,l.aoMaterial,l.nearestMaterial,l.sumMaterial])m.dispose();l.nearest.dispose();l.sums.dispose();}root.clear();}};

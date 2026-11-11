@@ -1,3 +1,4 @@
+import {SURFACE_SPLAT_FRONT_SUPPORT_SIGMA} from './surface-splat-support.mjs';
 // Covariance of each retained group's original points in its tangent plane.
 // Layout: unit tangent U.xyz, sigmaU, unit tangent V.xyz, sigmaV. Centres/materials stay unchanged.
 export function fitSurfaceFootprints(source,reduced,parent,radius,triangles,{boundaryOnly=false,boundaryVertices}={}){
@@ -51,7 +52,8 @@ function boundaryGroups(triangles,parent,count,boundaryVertices){
 // Each vertex owns the part of its incident triangles between the edge
 // midpoints and the face centre. These cells tile the source surface. Fit their
 // union in the retained tangent plane, keeping the retained centre unchanged.
-// The renderer clips at 3 sigma: enclose the support THERE, not at 1 sigma.
+// Legacy whole-field fitting encloses at the 3-sigma quad edge. Boundary-only
+// fitting encloses at the accepted front-facing contour; grazing remains narrower.
 function fitTriangleSupport(source,reduced,parent,radius,triangles,frames,out,boundaryOnly,boundaryVertices){
  if(!(triangles instanceof Uint32Array)||triangles.length%3)throw Error('Invalid triangle indices');
  for(const i of triangles)if(i>=parent.length)throw Error('Triangle index outside source field');
@@ -103,6 +105,6 @@ function fitTriangleSupport(source,reduced,parent,radius,triangles,frames,out,bo
   const u=(dx*out[k]+dy*out[k+1]+dz*out[k+2])/out[k+3],v=(dx*out[k+4]+dy*out[k+5]+dz*out[k+6])/out[k+7];
   extent[j]=Math.max(extent[j],Math.hypot(u,v));
  });
- for(let j=0;j<n;j++){if(selected&&!selected[j])continue;const k=j*8,scale=extent[j]*(1+1e-6)/3;out[k+3]*=scale;out[k+7]*=scale;}
+ for(let j=0;j<n;j++){if(selected&&!selected[j])continue;const k=j*8,scale=extent[j]*(1+1e-6)/(boundaryOnly?SURFACE_SPLAT_FRONT_SUPPORT_SIGMA:3);out[k+3]*=scale;out[k+7]*=scale;}
  return out;
 }

@@ -17,13 +17,14 @@ const l={...m,sourceDataSHA256:m.dataSHA256,parentSHA256:hash(bytes(parent)),foo
 fs.writeFileSync(source+'/report.json',JSON.stringify(m));fs.writeFileSync(level+'/report.json',JSON.stringify(l));
 const run=(out,...args)=>spawnSync(process.execPath,['tools/prepare-boundary-splats.mjs',source,level,out,...args],{encoding:'utf8'});
 function pairedMesh(y){
- const b=Buffer.alloc(48);new Float32Array(b.buffer,b.byteOffset,9).set([-.04,0,0,0,0,0,.04,0,0]);new Uint32Array(b.buffer,b.byteOffset+36,3).set([0,1,2]);
- const doc={asset:{version:'2.0'},buffers:[{byteLength:48}],bufferViews:[{buffer:0,byteOffset:0,byteLength:36},{buffer:0,byteOffset:36,byteLength:12}],accessors:[{bufferView:0,componentType:5126,count:3,type:'VEC3',min:[-.04,0,0],max:[.04,0,0]},{bufferView:1,componentType:5125,count:3,type:'SCALAR'}],meshes:[{primitives:[{attributes:{POSITION:0},indices:1}]}],nodes:[{mesh:0,translation:[0,y,0]}],scenes:[{nodes:[0]}],scene:0};
- const text=Buffer.from(JSON.stringify(doc)),n=(text.length+3)&~3,out=Buffer.alloc(28+n+48,32);out.writeUInt32LE(0x46546c67,0);out.writeUInt32LE(2,4);out.writeUInt32LE(out.length,8);out.writeUInt32LE(n,12);out.writeUInt32LE(0x4e4f534a,16);text.copy(out,20);out.writeUInt32LE(48,20+n);out.writeUInt32LE(0x004e4942,24+n);b.copy(out,28+n);return out;
+ const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==','base64');
+ const b=Buffer.alloc(48+((png.length+3)&~3));png.copy(b,48);new Float32Array(b.buffer,b.byteOffset,9).set([-.04,0,0,0,0,0,.04,0,0]);new Uint32Array(b.buffer,b.byteOffset+36,3).set([0,1,2]);
+ const doc={asset:{version:'2.0'},buffers:[{byteLength:b.length}],bufferViews:[{buffer:0,byteOffset:0,byteLength:36},{buffer:0,byteOffset:36,byteLength:12},{buffer:0,byteOffset:48,byteLength:png.length}],images:[{bufferView:2,mimeType:'image/png'}],textures:[{source:0}],materials:[{pbrMetallicRoughness:{baseColorTexture:{index:0}}}],accessors:[{bufferView:0,componentType:5126,count:3,type:'VEC3',min:[-.04,0,0],max:[.04,0,0]},{bufferView:1,componentType:5125,count:3,type:'SCALAR'}],meshes:[{primitives:[{attributes:{POSITION:0},indices:1,material:0}]}],nodes:[{mesh:0,translation:[0,y,0]}],scenes:[{nodes:[0]}],scene:0};
+ const text=Buffer.from(JSON.stringify(doc)),n=(text.length+3)&~3,out=Buffer.alloc(28+n+b.length,32);out.writeUInt32LE(0x46546c67,0);out.writeUInt32LE(2,4);out.writeUInt32LE(out.length,8);out.writeUInt32LE(n,12);out.writeUInt32LE(0x4e4f534a,16);text.copy(out,20);out.writeUInt32LE(b.length,20+n);out.writeUInt32LE(0x004e4942,24+n);b.copy(out,28+n);return out;
 }
 try{
  const out=root+'/valid',r=run(out);assert.equal(r.status,0,r.stdout+r.stderr);
- const report=JSON.parse(fs.readFileSync(out+'/conversion.json'));assert.equal(report.ok,true);assert.equal(report.count,9);assert.equal(report.changedGroups,8);assert.equal(report.unchangedGroups,1);
+ const report=JSON.parse(fs.readFileSync(out+'/conversion.json'));assert.equal(report.ok,true);assert.equal(report.supportCutoff,.08);assert.equal(report.enclosureView,'front-facing');assert.ok(Math.abs(report.enclosureSigma-Math.sqrt(-2*Math.log(.08)))<1e-12);assert.equal(report.count,9);assert.equal(report.changedGroups,8);assert.equal(report.unchangedGroups,1);
  assert.deepEqual(fs.readFileSync(out+'/surfels.f32'),bytes(data));assert.deepEqual(fs.readFileSync(out+'/parent.u32'),bytes(parent));
  const fitted=fs.readFileSync(out+'/footprints.f32');assert.deepEqual(fitted.subarray(4*32,5*32),bytes(baseline).subarray(4*32,5*32));
  for(const [name,patch,pattern]of [['wrong-source',{sourceDataSHA256:'wrong'},/belong/],['wrong-field',{dataSHA256:'wrong'},/hash mismatch/],['partial',{count:10},/shape mismatch/]]){

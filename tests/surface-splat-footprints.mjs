@@ -76,3 +76,17 @@ test('shared boundary mask excludes unrelated open edges from the refit',()=>{
  assert.deepEqual(fitted.slice(3*8),baseline.slice(3*8),'unrelated open edges and interior must retain coverage');
  assert.throws(()=>fitSurfaceFootprints(data,data,parent,.01,triangles,{boundaryOnly:true,boundaryVertices:new Uint8Array(2)}),/boundary/i);
 });
+
+test('boundary dual cells meet the front-facing renderer acceptance contour',()=>{
+ const {data,triangles,parent}=grid([-.04,0,.04],[-.001,.001]);
+ const fitted=fitSurfaceFootprints(data,data,parent,.01,triangles,{boundaryOnly:true});
+ for(let x=-.04;x<=.04;x+=.001)for(const y of [-.001,0,.001]){
+  let weight=0;
+  for(let i=0;i<parent.length;i++){
+   const k=i*8,dx=x-data[i*12],dy=y-data[i*12+1];
+   const q=((dx*fitted[k]+dy*fitted[k+1])/fitted[k+3])**2+((dx*fitted[k+4]+dy*fitted[k+5])/fitted[k+7])**2;
+   weight=Math.max(weight,Math.exp(-.5*q));
+  }
+  assert.ok(weight>=.08,`dual-cell support rejected at ${x},${y}: ${weight}`);
+ }
+});
