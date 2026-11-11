@@ -26,17 +26,23 @@ const IDENTITY=[1,0,0,0,1,0,0,0,1];
 const finite=(a,n)=>a?.length===n&&Array.from(a).every(Number.isFinite);
 const pipelines=new WeakMap();
 
+export function sourceMaterialUniform(binding){
+ if(!finite(binding.color,4)||binding.color.some(v=>v<0||v>1)||!finite([binding.roughness,binding.metalness],2)||[binding.roughness,binding.metalness].some(v=>v<0||v>1))throw Error('Physical source material factors required');
+ const maps=[binding.base,binding.rough,binding.metal];
+ for(const m of maps)if(!m?.texture||!m.sampler||!finite(m.transform,9)||m.transform[2]!==0||m.transform[5]!==0||m.transform[8]!==1)throw Error('Texture, sampler and affine UV transform required for each material channel');
+ const params=new Float32Array(44);params.set(binding.color);params.set([binding.roughness,binding.metalness,0,0],4);
+ maps.forEach((m,j)=>{for(let k=0;k<3;k++)params.set(m.transform.slice(k*3,k*3+3),8+j*12+k*4);});
+ if(!params.every(Number.isFinite))throw Error('Material factors must be representable as float32');return params;
+}
+
 // Point material labels only: explicit LOD 0, no lighting or footprint integral.
 // Textures are borrowed from the caller and are never destroyed by this query.
 export async function sampleSourceMaterialPoints(device,binding,uvs){
  if(!device||!Array.isArray(uvs)||uvs.some(p=>!finite(p,2)))throw Error('WebGPU device and finite source UV pairs required');
- if(!finite(binding.color,4)||binding.color.some(v=>v<0||v>1)||!finite([binding.roughness,binding.metalness],2)||[binding.roughness,binding.metalness].some(v=>v<0||v>1))throw Error('Physical source material factors required');
- const maps=[binding.base,binding.rough,binding.metal];
- for(const m of maps)if(!m?.texture||!m.sampler||!finite(m.transform,9)||m.transform[2]!==0||m.transform[5]!==0||m.transform[8]!==1)throw Error('Texture, sampler and affine UV transform required for each material channel');
+ const params=sourceMaterialUniform(binding);
  if(!uvs.length)return [];
  const count=uvs.length,size=count*32;if(size>device.limits.maxStorageBufferBindingSize||size>device.limits.maxBufferSize||Math.ceil(count/64)>device.limits.maxComputeWorkgroupsPerDimension)throw Error('Source material query exceeds the active device capacity');
- const data=Float32Array.from(uvs.flatMap(p=>[...p,0,0])),params=new Float32Array(44);params.set(binding.color);params.set([binding.roughness,binding.metalness,0,0],4);
- maps.forEach((m,j)=>{for(let k=0;k<3;k++)params.set(m.transform.slice(k*3,k*3+3),8+j*12+k*4);});
+ const data=Float32Array.from(uvs.flatMap(p=>[...p,0,0])),maps=[binding.base,binding.rough,binding.metal];
  if(!data.every(Number.isFinite)||!params.every(Number.isFinite))throw Error('Material queries and factors must be representable as float32');
  const owned=[],allocate=(size,usage)=>{const b=device.createBuffer({size,usage});owned.push(b);return b;};device.pushErrorScope('validation');let open=true;
  try{
@@ -69,7 +75,8 @@ export function createSourceMaterialSampler(renderer,material){
   return {texture:gpu,transform:Array.from(texture.matrix.elements),sampler:device.createSampler({addressModeU:address.get(texture.wrapS),addressModeV:address.get(texture.wrapT),magFilter:texture.magFilter===NearestFilter?'nearest':'linear',minFilter:nearest.has(texture.minFilter)?'nearest':'linear'})};
  };
  return {
-  async sample(uvs){if(disposed)throw Error('Source material sampler is disposed');admit();const base=map(material.map),rough=map(material.roughnessMap),metal=map(material.metalnessMap);lastTextures=Object.fromEntries(Object.entries({base,rough,metal}).map(([k,m])=>[k,{width:m.texture.width,height:m.texture.height,format:m.texture.format,mipLevelCount:m.texture.mipLevelCount,transform:m.transform}]));return sampleSourceMaterialPoints(device,{color:[material.color.r,material.color.g,material.color.b,material.opacity],roughness:material.roughness,metalness:material.metalness,base,rough,metal},uvs);},
+  binding(){if(disposed)throw Error('Source material sampler is disposed');admit();const base=map(material.map),rough=map(material.roughnessMap),metal=map(material.metalnessMap);lastTextures=Object.fromEntries(Object.entries({base,rough,metal}).map(([k,m])=>[k,{width:m.texture.width,height:m.texture.height,format:m.texture.format,mipLevelCount:m.texture.mipLevelCount,transform:m.transform}]));return {color:[material.color.r,material.color.g,material.color.b,material.opacity],roughness:material.roughness,metalness:material.metalness,base,rough,metal};},
+  async sample(uvs){return sampleSourceMaterialPoints(device,this.binding(),uvs);},
   read(){return {backend:'WebGPU',sampling:'explicit source texture LOD 0; no footprint or radiance integration',baseColorSpace:material.map?.colorSpace??'factor only',maps:{baseColor:!!material.map,roughness:!!material.roughnessMap,metalness:!!material.metalnessMap},effectiveTextures:lastTextures,disposed};},
   dispose(){if(disposed)return;disposed=true;white?.destroy();}
  };

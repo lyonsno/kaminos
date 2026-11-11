@@ -145,3 +145,55 @@ report, including a missing local inspection dependency.
 Saved-asset inspection and small native checks run directly. Heavy source
 processing, actual training and performance assays use Greenroom with the
 corresponding source/config identity and operator assay boundary.
+
+## Textured source lighting preparation
+
+`trellis-surface-teacher.mjs` joins the original source attributes to the shared
+`SurfaceTeacher` transport. The three shared teacher modules and their native
+regression tests were taken from Turnip/Knotty's
+`cc/earth-workshop-recovery-speed-1111@1398ae8a67fd4e23ca4ac5804b60ce352338e884`
+(last teacher commit `b6eb61a49`); they were not on this branch's main base
+`cbcf1b3df`. This is a selective source dependency on this feature branch, with a
+small optional source-lookup hook. It does not import the whole workshop branch
+or change its owner's checkout. Default constant-material transport retains its
+existing behavior. Main landing and the shared-engine owner's integration remain
+separate actions.
+
+The hook supplies original UV0, interpolated source vertex normals and source
+sidedness in BVH triangle order. Every path hit uses the original base-color,
+roughness and metalness maps, their transforms/samplers and physical factors
+before evaluating or sampling the BSDF. The source adapter uses a unit constant
+material (`SOURCE_TEACHER_UNIT_MATERIAL`) so the source factors are applied once.
+The source sampler's `binding()` borrows the shared renderer's actual GPU
+textures; its owner must outlive the transport observation. A source surface
+owns its uniform/attribute buffers, never those borrowed textures, and must be
+disposed after the teacher. Geometric hit normals still place ray offsets;
+interpolated shading normals are oriented into the visible hemisphere and fall
+back to the geometric normal when they face away from the query.
+
+`Probe normal lighting` exercises nine current region rays under a unit
+incident directional light along the support normal, zero environment, and one
+bounce. The same operation is agent-callable as
+`probeLighting({lightDirection, bounces})`. These are lighting queries; they do
+not create a scene light or change the scene's beauty lighting. `read().lighting`
+retains raw linear RGB, actual light direction/bounces, source scope and limits.
+The visible mesh is still rendered by the ordinary Kaminos renderer; this
+operation does not display a learned or path-traced replacement.
+
+This first observation traces **only the clipped region**. It omits external
+source/scene geometry and its shadows, uses texture LOD0 at every bounce, and
+does not integrate the pixel footprint. Raw teacher alpha is always one; it is
+not coverage. Bounded hit/exit records remain in `read().probe` and must be
+joined explicitly before training a coverage/exit-aware replacement for the
+rim. The directional material teacher can use the same source lookup, but its
+existing upper-hemisphere RGB query domain does not establish that richer
+contract. No neural model has been fitted in this slice.
+
+The browser witness compares the panel's direct response with an independent
+CPU GGX calculation from separately queried original normals and PBR labels.
+Native tests force BVH triangle reordering, two distinct texture regions,
+barycentric UV interpolation, shading normals, source sidedness and the actual
+`SurfaceMaterialTeacher` query route. Existing shared transport tests still run.
+These establish the source/transport join, not equality to Three's full beauty
+renderer, global light transport, the quality of a learned material or a runtime
+speed advantage.

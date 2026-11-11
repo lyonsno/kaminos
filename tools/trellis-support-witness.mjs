@@ -34,6 +34,19 @@ try{
   await page.getByRole('button',{name:'Frame region',exact:true}).click();await page.getByRole('combobox').filter({has:page.locator('option[value="partition"]')}).selectOption('partition');await shoot('region-partition');
   await page.getByRole('button',{name:'Probe region',exact:true}).click();await page.waitForFunction(()=>{const text=document.querySelector('[data-trellis-support-status]')?.dataset.trellisSupportStatus;if(!text)return false;const s=JSON.parse(text);return !!s.error||(!s.probePending&&s.probeSamples===9);});
   report.probe=(await page.evaluate(()=>window.kaminosWorkbenchExperiments.read())).probe;assert.equal(report.probe.backend,'WebGPU');assert.equal(report.probe.samples.length,9);for(const s of report.probe.samples){assert.equal(s.intersectsSupport,true);assert.ok(s.exit>=s.entry);assert.equal(s.entryBoundary?.supportFace,1);assert.equal(s.exitBoundary?.supportFace,0);for(const endpoint of [s.entryBoundary,s.exitBoundary]){assert.ok(endpoint.supportUV.every(v=>Number.isFinite(v)&&v>=0&&v<=1));}if(s.hit){assert.ok(s.sourceUV?.every(Number.isFinite));assert.ok(Math.hypot(...s.position.map((x,k)=>x-s.sourcePosition[k]))<1e-5);}}await fs.writeFile(path.join(out,'probe.json'),JSON.stringify(report.probe,null,2));await shoot('region-probes');
+  report.phase='textured-lighting';report.lighting=await invoke('probeLighting');
+  assert.equal(report.lighting.lightingPending,false);assert.equal(report.lighting.lighting.route,'textured-clipped-source-shared-transport');
+  assert.equal(report.lighting.lighting.radiance.length,9);assert.ok(report.lighting.lighting.radiance.flat().every(Number.isFinite));assert.ok(report.lighting.lighting.radiance.some(v=>v.slice(0,3).some(c=>c>0)));
+  // Independent CPU GGX evaluation using the separately observed hit normal and
+  // material inputs; this catches a constant-material or lost-UV transport route.
+  const dot=(a,b)=>a.reduce((v,x,i)=>v+x*b[i],0),norm=v=>v.map(x=>x/Math.hypot(...v));
+  const bsdf=(s,light)=>{let n=s.vertexNormal??s.normal;const v=norm(s.direction.map(x=>-x)),l=norm(light);if(dot(n,v)<0)n=n.map(x=>-x);if(dot(n,v)<=0)n=s.normal;
+    const nl=dot(n,l),nv=dot(n,v);if(nl<=0||nv<=0)return [0,0,0];const h=norm(v.map((x,k)=>x+l[k])),nh=Math.max(dot(n,h),0),vh=Math.max(dot(v,h),0),a=Math.max(.02,s.material.roughness**2),a2=a*a,D=a2/(Math.PI*(nh*nh*(a2-1)+1)**2),G=c=>2*c/(c+Math.sqrt(a2+(1-a2)*c*c)),metal=s.material.metalness;
+    return s.material.linearBaseColor.map(c=>{const f0=.04*(1-metal)+c*metal,F=f0+(1-f0)*(1-vh)**5;return (c*(1-metal)*(1-F)/Math.PI+F*D*G(nl)*G(nv)/(4*nl*nv))*nl;});};
+  report.lightingConformance={reference:'CPU direct GGX from separately queried original vertex normal and PBR point labels; one bounce, unit directional light, zero environment',rows:[],maxAbsoluteError:0};
+  report.lighting.lighting.radiance.forEach((row,i)=>{const s=report.lighting.probe.samples[i],expected=s.hit?bsdf(s,report.lighting.lighting.lightDirection):[0,0,0],actual=row.slice(0,3),errors=actual.map((v,k)=>Math.abs(v-expected[k]));report.lightingConformance.rows.push({expected,actual,errors});report.lightingConformance.maxAbsoluteError=Math.max(report.lightingConformance.maxAbsoluteError,...errors);});
+  assert.ok(report.lightingConformance.maxAbsoluteError<.002,'textured transport disagrees with source-hit lighting reference');
+  await fs.writeFile(path.join(out,'lighting.json'),JSON.stringify({lighting:report.lighting,conformance:report.lightingConformance},null,2));await shoot('region-lighting');
   await invoke('setMode','source');await shoot('region-source');
   await invoke('setMode','support');await shoot('region-support');
   await invoke('setMode','lod');report.near=await invoke('setThreshold',1);assert.equal(report.near.effective,'source');report.far=await invoke('setThreshold',100000);assert.equal(report.far.effective,'support');
@@ -54,7 +67,7 @@ try{
   report.rim=await invoke('probe');assert.deepEqual(report.rim.region.normal,[0,1,1]);assert.ok(report.rim.probe.samples.some(s=>s.hit)&&report.rim.probe.samples.some(s=>!s.hit),'the rolled rim must retain both material hits and genuine exits');for(const s of report.rim.probe.samples.filter(s=>s.hit))assert.ok(s.material.linearBaseColor.every(Number.isFinite));
   await fs.writeFile(path.join(out,'rim-candidate.json'),JSON.stringify(await invoke('inspectCandidate')));await fs.writeFile(path.join(out,'rim-probe.json'),JSON.stringify(report.rim.probe,null,2));await invoke('setMode','isolated');await invoke('frameRegion');await shoot('rim-isolated');await invoke('selectExample','panel');await invoke('setMode','partition');await invoke('frame');
   report.runtime=await page.evaluate(()=>fetch('/api/runtime-config').then(r=>r.json()));
-  report.codeHashes={};for(const name of ['trellis-local-support.mjs','trellis-support-gpu.mjs','trellis-support-rays.mjs','trellis-source-material.mjs','experiments/trellis-support.experiment.mjs']){
+  report.codeHashes={};for(const name of ['trellis-local-support.mjs','trellis-support-gpu.mjs','trellis-support-rays.mjs','trellis-source-material.mjs','trellis-surface-teacher.mjs','surface-teacher.mjs','surface-teacher-wgsl.mjs','surface-material-teacher.mjs','experiments/trellis-support.experiment.mjs']){
     const local=await fs.readFile(new URL('../'+name,import.meta.url)),response=await fetch(new URL('/'+name,url));assert.ok(response.ok,'served module unavailable');const served=Buffer.from(await response.arrayBuffer()),hash=b=>crypto.createHash('sha256').update(b).digest('hex');assert.equal(hash(local),hash(served),'served module differs from witness checkout');report.codeHashes[name]=hash(served);
   }
   report.final=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
