@@ -16,7 +16,7 @@ function issuedSequence(id,prefix,issued){
 }
 const namedError=(name,message,fields={})=>Object.assign(Error(message),{name,...fields});
 const abortError=reason=>namedError('AbortError',String(reason?.message??reason??'Scene operation canceled'));
-function errorRecord(error){return {name:String(error?.name??'Error'),message:String(error?.message??error),gpuRouteHeld:error?.gpuRouteHeld===true};}
+function errorRecord(error){return {name:String(error?.name??'Error'),message:String(error?.message??error),gpuRouteHeld:error?.gpuRouteHeld===true,...(Object.hasOwn(error??{},'mutationApplied')?{mutationApplied:error.mutationApplied}:{})};}
 function checkPort(port){
   for(const name of ['postMessage','addEventListener','removeEventListener'])if(typeof port?.[name]!=='function')throw Error(`Scene worker port requires ${name}`);
 }
@@ -76,7 +76,7 @@ export function createSceneWorkerClient({port,sessionId=globalThis.crypto.random
       if(data.ok&&data.authority!=='worker-handler-returned')throw Error('Invalid scene worker completion authority');
       entry.cleanup();pending.delete(data.requestId);
       if(data.ok)entry.resolve(data);
-      else entry.reject(namedError(data.error.name??'Error',data.error.message,{gpuRouteHeld:data.error.gpuRouteHeld===true,epoch:copyEpoch(data.epoch)}));
+      else entry.reject(namedError(data.error.name??'Error',data.error.message,{gpuRouteHeld:data.error.gpuRouteHeld===true,...(Object.hasOwn(data.error,'mutationApplied')?{mutationApplied:data.error.mutationApplied}:{}),epoch:copyEpoch(data.epoch)}));
     }catch(cause){disconnect(cause);}
   }
   port.addEventListener('message',message);
@@ -125,7 +125,8 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
   if(typeof createRuntime!=='function')throw Error('Scene worker runtime factory required');
   let sessionId=null,epoch=initialEpoch(),runtime=null,phase='uninitialized',active=null,pumping=false,disconnected=false,lastError=null;
   let lifetime=new AbortController();
-  const queue=[],entries=new Map(),foregroundFrames=new Set(),controls=new Set();
+  const queue=[],entries=new Map(),foregroundTasks=new Set(),controls=new Set();
+  let mutationHeld=false;
   let lastSequence=0,lastControlSequence=0,frameTail=Promise.resolve(),controlTail=Promise.resolve();
   const send=(data,transfer=[])=>port.postMessage({schema:SCENE_WORKER_REPLY,sessionId,...data,epoch:{...epoch}},transfer);
   function advance(part,owner=null){
@@ -157,7 +158,7 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
         entry.framesAllowed=true;admitFrames();
         const scope=Promise.resolve().then(run).finally(async()=>{
           entry.framesAllowed=false;
-          await Promise.allSettled([...foregroundFrames].map(frame=>frame.settlement));
+          await Promise.allSettled([...foregroundTasks].map(frame=>frame.settlement));
           await Promise.allSettled([...controls]);
         });
         (entry.frameScopes??=[]).push(scope);
@@ -169,6 +170,7 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
     });
   }
   function requireSettled(){
+    if(mutationHeld)throw namedError('GpuRouteHeldError','Asynchronous mutation escaped its foreground transaction',{gpuRouteHeld:true});
     if(!runtime?.host?.unsettledRuns)return;
     const runs=runtime.host.unsettledRuns();
     if(!Array.isArray(runs))throw Error('Invalid unsettled inference ledger');
@@ -178,6 +180,7 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
     const {operation,payload}=entry.data;
     entry.ticket=operation==='initialize'?{...epoch}:copyEpoch(entry.data.epoch);
     const ctx=context(entry);ctx.assertCurrent();let output;
+    if(mutationHeld)throw namedError('GpuRouteHeldError','Asynchronous mutation escaped its foreground transaction',{gpuRouteHeld:true});
     if(operation==='initialize'){
       if(runtime)throw Error('Scene worker already initialized');
       phase='starting';
@@ -210,6 +213,31 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
         // Admission may await the existing Kit foreground window. Its actual
         // draw/depth/source transaction remains synchronous inside that window.
         output=typeof runtime.requestFrame==='function'?await runtime.requestFrame(payload,ctx,draw):draw();
+      }else if(Object.hasOwn(runtime.foregroundCommands??{},operation)){
+        if(phase!=='active')throw Error('Scene worker mutation is not active after invalidation');
+        const handler=runtime.foregroundCommands[operation];
+        if(typeof handler!=='function'||handler.constructor?.name==='AsyncFunction')throw Error('Foreground edit handler must be synchronous');
+        if(Object.hasOwn(runtime.commands??{},operation))throw Error('Ambiguous scene worker command registration');
+        if(typeof runtime.requestMutation!=='function')throw Error('Foreground mutation admission adapter required');
+        const {requestId,signal,assertCurrent,report,transfer,epoch:readEpoch}=ctx;
+        const editContext=Object.freeze({requestId,signal,assertCurrent,report,transfer,epoch:readEpoch});
+        let accepting=true,called=false;
+        const apply=service=>{
+          if(!accepting||called)throw Error('Foreground mutation callback is no longer available');
+          ctx.assertCurrent();called=true;
+          const result=handler(payload,editContext,service);
+          if(result&&typeof result.then==='function'){
+            Promise.resolve(result).catch(()=>{});
+            mutationHeld=true;
+            const cause=namedError('GpuRouteHeldError','Foreground edit handler must be synchronous; asynchronous mutation settlement unknown',{gpuRouteHeld:true,mutationApplied:null});
+            advance('device');phase='mutation-held';throw cause;
+          }
+          ctx.assertCurrent();return result;
+        };
+        try{
+          output=await runtime.requestMutation(operation,payload,editContext,apply);
+          if(!called)throw Error('Foreground mutation adapter returned without applying the edit');
+        }finally{accepting=false;}
       }else{
         if(!Object.hasOwn(runtime.commands??{},operation)||typeof runtime.commands[operation]!=='function')throw Error(`Unknown scene worker operation: ${operation}`);
         try{output=await runtime.commands[operation](payload,ctx);}
@@ -253,13 +281,17 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
     task.finally(()=>controls.delete(task)).catch(()=>{});
   }
   function admitFrames(){
-    // A frame observes the applied scene while authored mutations wait their
-    // ordered turn. Pending edits cannot stop navigation/rendering for the
-    // duration of inference. Only the explicit cooperative scope permits this.
+    // Frames can observe applied state past pending work. Opted-in synchronous
+    // edits may interleave too, but never pass an earlier ordinary authored
+    // operation (including load/replacement/retirement).
+    let authoredBlocked=false;
     for(let index=0;active?.framesAllowed&&index<queue.length;){
-      if(queue[index].data.operation!=='frame'){index++;continue;}
-      const [entry]=queue.splice(index,1);foregroundFrames.add(entry);
-      entry.settlement=frameTail.then(()=>settle(entry)).finally(()=>foregroundFrames.delete(entry));
+      const entry=queue[index],operation=entry.data.operation;
+      const frame=operation==='frame';
+      const edit=!['initialize','retire'].includes(operation)&&Object.hasOwn(runtime?.foregroundCommands??{},operation);
+      if(!frame&&(!edit||authoredBlocked)){authoredBlocked=true;index++;continue;}
+      queue.splice(index,1);foregroundTasks.add(entry);
+      entry.settlement=frameTail.then(()=>settle(entry)).finally(()=>foregroundTasks.delete(entry));
       frameTail=entry.settlement.catch(cause=>{lastError=errorRecord(cause);phase='transport-failed';});
     }
   }
@@ -273,7 +305,7 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
         finally{
           // A subsequent replacement/retirement cannot overtake admitted GPU
           // frame opportunities, even if the model command returns first.
-          await Promise.allSettled([...foregroundFrames].map(entry=>entry.settlement));
+          await Promise.allSettled([...foregroundTasks].map(entry=>entry.settlement));
           await Promise.allSettled([...controls]);
           active=null;
         }
@@ -308,7 +340,7 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
   }
   port.addEventListener('message',message);port.start?.();
   return Object.freeze({invalidate:part=>advance(part),lifecycle,
-    read:()=>({sessionId,epoch:{...epoch},phase,active:active?.data.requestId??null,pending:queue.map(entry=>entry.data.requestId),foregroundFrames:[...foregroundFrames].map(entry=>entry.data.requestId),pendingControls:controls.size,error:lastError}),
+    read:()=>({sessionId,epoch:{...epoch},phase,active:active?.data.requestId??null,pending:queue.map(entry=>entry.data.requestId),foregroundFrames:[...foregroundTasks].filter(entry=>entry.data.operation==='frame').map(entry=>entry.data.requestId),foregroundMutations:[...foregroundTasks].filter(entry=>entry.data.operation!=='frame').map(entry=>entry.data.requestId),pendingControls:controls.size,error:lastError}),
     disconnect(){
       if(disconnected)return;
       disconnected=true;port.removeEventListener('message',message);
