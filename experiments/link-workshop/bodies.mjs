@@ -52,7 +52,7 @@ export function constructBodies(value,reuse=new Map()){
  const holes=recipe.nodes.map((n,i)=>Math.min(bore,...recipe.nodes.flatMap((c,j)=>(j===i||c.parent===i)&&c.parent!==null?[c.length/6]:[])));
  const add=(id,kind,parameters,build,pose,geometryKey=JSON.stringify([kind,parameters]))=>{const prior=reuse.get(id);let object=prior?.geometryKey===geometryKey?prior.object:null;if(!object){object=new T.Group();object.name=id;object.userData.assemblyBody={id,kind,parameters,frame:'local XY links, local Z hinges, local X piston travel'};build(object);}defs.push({id,kind,geometryKey,object,pose});};
  recipe.nodes.forEach((n,i)=>{
-  const kind=n.parent===null?'anchor':'link',parameters=n.parent===null?[.5,.5,.18]:[n.length,thickness,eye,holes[n.parent],holes[i]],hinges=recipe.pistons.filter(p=>p.hinge&&(p.a===i||p.b===i)),baseKey=JSON.stringify([kind,parameters]),geometryKey=hinges.length?JSON.stringify([baseKey,hinges]):baseKey;
+  const kind=n.parent===null?'anchor':'link',parameters=n.parent===null?[.5,.5,.18]:[n.length,thickness,eye,holes[n.parent],holes[i]],hinges=recipe.pistons.filter(p=>p.hinge&&(p.a===i||p.b===i)),baseKey=JSON.stringify([kind,parameters]),geometryKey=hinges.length?JSON.stringify([baseKey,hinges.map(({mechanics,...shape})=>shape)]):baseKey;
   const baseZ=n.parent===null?0:layers[i];
   add(`${kind}:${i}`,kind,parameters,object=>{
    if(n.parent===null)box(object,[.5,.5,.18],[0,0,-.16],0x374653);else plate(object,n.length,[holes[n.parent],holes[i]]);
@@ -67,7 +67,7 @@ export function constructBodies(value,reuse=new Map()){
   add(`pin:${i}`,'pin',[low,high,holes[i]],g=>{cylinder(g,holes[i]*.94,high-low,[0,0,(high+low)/2],0xc9a875);for(const z of [low-.025,high+.025])cylinder(g,.105,.05,[0,0,z],0xc9a875);},f=>({position:[...f[i].point,0],angle:f[i].angle}));
  });
  const travels=recipe.pistons.map((p,j)=>{
-  const range=travelEnvelope(recipe,p.a,p.b,1e-3,p),barrel=Math.max(.04,range.min*.85),rod=Math.max(.04,range.max-barrel+.08),z=p.z??pistonZ+j*pitch;
+  const fixed=p.mechanics,range=fixed?{min:fixed.minLength,max:fixed.maxLength,tolerance:0}:travelEnvelope(recipe,p.a,p.b,1e-3,p),barrel=fixed?.barrelLength??Math.max(.04,range.min*.85),rod=fixed?.rodLength??Math.max(.04,range.max-barrel+.08),z=p.z??pistonZ+j*pitch;
   const a=f=>pistonMountPoint(recipe,f,p.a,p.aOffset),b=f=>pistonMountPoint(recipe,f,p.b,p.bOffset),angle=f=>Math.atan2(b(f)[1]-a(f)[1],b(f)[0]-a(f)[0]);
   add(`piston:${j}:barrel`,'barrel',[barrel,holes[p.a]],g=>{const m=cylinder(g,.11,barrel,[barrel/2,0,0],0x374653,'x',.049);m.userData.baseColor=0x374653;cylinder(g,.13,thickness,[0,0,0],0xc9a875,'z',holes[p.a]);},f=>({position:[...a(f),z],angle:angle(f)}));
   add(`piston:${j}:rod`,'rod',[rod,holes[p.b]],g=>{const m=cylinder(g,.045,rod,[-rod/2,0,0],0xcdd7de,'x');m.userData.baseColor=0xcdd7de;cylinder(g,.13,thickness,[0,0,0],0xc9a875,'z',holes[p.b]);},f=>({position:[...b(f),z],angle:angle(f)}));
