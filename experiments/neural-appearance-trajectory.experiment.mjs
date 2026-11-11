@@ -31,6 +31,7 @@ export default {
    }catch(e){if(token===generation)problem=e.message;throw e;}finally{if(token===generation){pending=false;sync();}}
   };
   const repaint=async()=>{const token=++generation;problem=null;pending=true;sync();try{await draw(token);persist();return read();}catch(e){problem=e.message;throw e;}finally{if(token===generation){pending=false;sync();}}};
+  try{await select(step);}catch(error){await session.dispose();throw error;}
   return {read,operations:{selectCheckpoint:select,
    setResponseView(id){if(!run.views.some(v=>v.id===id))throw Error('Unknown retained view');viewId=id;return repaint();},
    setExposure(value){if(!Number.isFinite(value)||value<=0)throw Error('Positive display exposure required');exposure=value;return repaint();},
@@ -38,7 +39,7 @@ export default {
    async mount({root,document,invoke}){
     panel=root;const heading=document.createElement('p');heading.textContent='Retained training stages · same learned architecture and source';root.append(heading);
     const field=(label,entries,operation)=>{const row=document.createElement('label'),select=document.createElement('select');select.setAttribute('aria-label',label);for(const [value,text] of entries)select.add(new document.defaultView.Option(text,value));select.onchange=()=>invoke(operation,select.value).catch(e=>{problem=e.message;sync();});row.append(label,select);root.append(row);return select;};
-    checkpointControl=field('Training step ',run.checkpoints.map(c=>[String(c.step),`Step ${c.step}${c.step===250?' · lowest validation error':''}`]),'selectCheckpoint');
+    checkpointControl=field('Training step ',run.checkpoints.map(c=>[String(c.step),`Step ${c.step}${c.heldoutLogL1===Math.min(...run.checkpoints.map(x=>x.heldoutLogL1))?' · lowest validation error':''}`]),'selectCheckpoint');
     viewControl=field('Response slice ',run.views.map(v=>[v.id,v.label]),'setResponseView');
     const row=document.createElement('label'),grip=document.createElement('span'),number=document.createElement('input');grip.textContent='Slice exposure ';number.type='number';number.value=exposure;number.min='.001';number.step='any';number.className='transform-input';number.oninput=()=>{if(number.validity.valid)invoke('setExposure',number.valueAsNumber).catch(e=>{problem=e.message;sync();});};row.append(grip,number);root.append(row);drag=host.controls.installNumberDrag({input:number,grip,step:.1});
     const refresh=document.createElement('button');refresh.textContent='Refresh slices';refresh.onclick=()=>invoke('refreshSlices').catch(e=>{problem=e.message;sync();});
