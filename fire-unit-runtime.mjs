@@ -93,6 +93,7 @@ export function createFireUnitObject({THREE,record,camera,controls,viewport,shar
    if(!coverage.due(following,now))return;
    const input=runtime.fineCoverageInputs({activity:following.mode==='fire'});
    if(input.status!=='active'){coverageStatus={status:input.status};return;}
+   if(data.fineManualHold)coverage.hold(fineFrame());
    const result=coverage.update(input,following,now);if(result.status!=='manual-hold')data.fineManualHold=false;coverageStatus={...result,demandStatus:input.demandStatus,demandRevision:input.demandRevision};
    if(!result.target)return;
    const before=data.fineOffset,previous=fineFrame(),target=result.target;

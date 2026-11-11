@@ -105,3 +105,12 @@ test('native Fine and emitter cancel and history restore the coupled manual foll
   edits.apply(emitter,next);edits.undo();assert.equal(owner.capture().fineManualHold,true,'emitter Undo restores manual hold');edits.redo();assert.equal(owner.capture().fineManualHold,false);
  }finally{edits.clear();panel.dispose();restore();}
 });
+
+
+test('restored manual placement remains authoritative across derived source-bound refreshes',()=>{
+ const domControls=Object.fromEntries(FINE_COVERAGE_FIELDS.map(f=>[f.id,{value:f.key==='mode'?'sources':f.value}]));const {owner,restore}=fixture({settings:{domControls},fineManualHold:true});try{
+  const frame=owner.finePose();let shifted=false;owner.runtime.fineCoverageInputs=()=>({status:'active',frame:{translate:frame.position,scale:frame.scale[0]},dims:[16,16,16],world:{lo:[-3,-3,-3],hi:[3,3,3]},sources:[{id:'source',lo:[shifted?1.9:0,-.8,-.1],hi:[shifted?2.1:.2,-.6,.1],weight:1}],demand:[]});
+  owner.updateFineCoverage(1);shifted=true;owner.updateFineCoverage(2);assert.equal(owner.capture().fineManualHold,true,'derived observations cannot clear an authored/restored manual placement');assert.equal(owner.read().fineCoverage.status,'manual-hold');assert.deepEqual(owner.finePose(),frame);
+  owner.setEmitter({...owner.capture().emitter,position:[.1,-.76,0]});owner.updateFineCoverage(3);assert.equal(owner.capture().fineManualHold,false,'an actual source edit resumes following');
+ }finally{restore();}
+});

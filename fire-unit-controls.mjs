@@ -14,7 +14,7 @@ export function mountFireUnitControls({document,owner,asset,edits,components,mou
  const seat=components.register(asset.id,{enter(){component='fine';if(owner.fineProxy&&!owner.fineProxy.parent)asset.root.parent?.add(owner.fineProxy);if(owner.proxy&&!owner.proxy.parent)asset.root.parent?.add(owner.proxy);refresh();},exit(){component=null;refresh();},
   target:()=>component==='emitter'?{id:sourceTarget,type:'fire-unit-emitter',label:'Flame emitter',object:owner.proxy,read:()=>owner.capture().emitter,frameObjects:[owner.emitter]}:{id:fineTarget,type:'fire-unit-fine',label:'Fine box',object:owner.fineProxy,read:()=>owner.finePose(),frameObjects:[owner.fine]},
   pick(event,context){const next=owner.pickComponent(event,context);if(next&&next!==component)seat.changed(()=>{component=next;refresh();});},selectAll(){}});
- enabled.onchange=()=>guarded(()=>edits.apply(dataTarget,{...owner.capture(),emissionEnabled:enabled.checked},'Toggle fire source'));
+ enabled.onchange=()=>guarded(()=>edits.apply(dataTarget,{...owner.capture(),emissionEnabled:enabled.checked,fineManualHold:false},'Toggle fire source'));
  link.onchange=()=>guarded(()=>edits.apply(dataTarget,{...owner.capture(),moveEmitterWithGrid:link.checked},'Link emitter to fire grid'));
  const tuningRoot=document.createElement('div');properties.append(tuningRoot);tuning=mountTuning({root:tuningRoot,owner,target:dataTarget});
  const controls=mountObject({asset,properties,onSelected:refresh,onDeselected:()=>tuning?.close()});refresh();
