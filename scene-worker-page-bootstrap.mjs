@@ -1,5 +1,6 @@
 import {createSceneWorkerPage,captureSceneWorkerCamera,applySceneWorkerSurfaces,mergeSceneWorkerUi} from './scene-worker-page.mjs';
 import {createSceneWorkerImageController} from './scene-worker-image-controller.mjs';
+import {resolveSceneWorkerStartupInput} from './scene-worker-startup-input.mjs';
 
 export function assertSceneWorkerStartup(reply,{admission,preferences,ui=reply.output?.ui}){
  const applied=ui?.initialization;
@@ -28,7 +29,7 @@ export function mountSceneWorkerPage({document,window,THREE,createControls,insta
  controls=createControls(camera,canvases.scene);
  Object.assign(controls,{enableDamping:true,dampingFactor:.06,rotateSpeed:-.72,panSpeed:.45,zoomSpeed:.85,screenSpacePanning:true,minDistance:.5,maxDistance:Infinity});
  controls.mouseButtons={LEFT:null,MIDDLE:null,RIGHT:null};controls.touches={ONE:THREE.TOUCH.ROTATE,TWO:THREE.TOUCH.DOLLY_PAN};controls.target.set(0,0,0);
- const saved=admission?.data?.camera;
+ const saved=resolveSceneWorkerStartupInput({preferences,location:window.location,admission}).camera;
  if(saved){
   for(const key of ['position','up'])if(Array.isArray(saved[key])&&saved[key].length===3)camera[key].fromArray(saved[key]);
   if(Array.isArray(saved.target)&&saved.target.length===3)controls.target.fromArray(saved.target);
