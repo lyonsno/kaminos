@@ -10,17 +10,19 @@ physical input so the sphere can be repositioned freely. No new domain hotkeys.
 A persistent worker owns the same physical specimen during live and explicit
 advance. Each observed hand sample retains its duration and endpoints; solver
 substeps sweep the tool between them with contact velocity. Pending input is
-processed in order rather than discarded. The physics clock can lag the hand
+processed in order rather than discarded. Hidden-tab elapsed time is excluded on resume. The physics clock can lag the hand
 under load; this implementation does not promise real-time default-specimen
 throughput or a separate high-fidelity offline physics model. Pausing drains
 already accepted input. A short configurable contact/settling tail follows
 movement, then the physical clock rests until another intervention.
 
-A separate worker reconstructs a **coarse live surface at detail12** (or the
+A separate worker reconstructs a **coarse live surface at detail16 by default** (or the
 chosen preview detail when lower). While input continues, completed coarse
 surfaces can follow the evolving physics without waiting for detailed meshing.
-After motion and its settling tail stop, the chosen preview detail rebuilds
-automatically. New motion cancels obsolete fine reconstruction; generation and
+The live meshing worker stays resident across updates. After motion and its
+settling tail stop, the chosen resting detail rebuilds automatically, without an
+additional quiet-delay timer. Live, resting and capture detail are separate
+guarded settings under Earth → Surface. New motion cancels obsolete fine reconstruction; generation and
 physical-revision checks prevent old output replacing a newer specimen. Preview
 and capture detail change geometry sampling, not the retained physical state.
 The view and tool remain interactive while these jobs run. This is a first
@@ -42,9 +44,11 @@ surface triangles. There is no fixed resolution45 ceiling and no silent detail
 reduction. The underlying source builder accepts caller-owned allowances for
 offline work.
 
-**Stop** cancels reconstruction and retains the last completed surface; it also
-stops forming at the next physical chunk. Physical state may have advanced beyond
-that last surface after a stopped stroke; the next successful action rebuilds it.
+**Stop** cancels reconstruction and queued physical execution, retaining the last
+completed surface. The in-flight physical sample may complete; canceled samples
+remain marked stopped in the observed hand history. Resume or an explicit
+subsequent operation can reconstruct that accepted physical state. Physical state may have advanced beyond
+that last surface after stopping; the next successful action rebuilds it.
 Object chips remain reachable at the viewport edge when their world anchors move
 offscreen and identify that offscreen condition. Hidden objects keep hidden chips.
 

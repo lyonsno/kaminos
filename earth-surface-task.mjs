@@ -14,21 +14,21 @@ export function planEarthSurface(snapshot,resolution,{maxBufferSize=Infinity,hea
  if(maxTriangles<1)throw Error('No surface storage available; the specimen is unchanged');
  return {resolution,cells,points,gridBytes,maxTriangles};
 }
-export function createEarthSurfaceTask({WorkerType=globalThis.Worker,limits=()=>({})}={}){
- let active=null,disposed=false;
- const cancel=()=>{if(!active)return;const task=active;active=null;task.worker.terminate();task.reject(Object.assign(Error('Surface reconstruction stopped; previous surface retained'),{name:'AbortError'}));};
+export function createEarthSurfaceTask({WorkerType=globalThis.Worker,limits=()=>({}),persistent=false}={}){
+ let active=null,disposed=false,resident=null,serial=0;
+ const cancel=()=>{const task=active;active=null;resident?.terminate();resident=null;task?.reject(Object.assign(Error('Surface reconstruction stopped; previous surface retained'),{name:'AbortError'}));};
  return {
   async build(snapshot,resolution,{halo=0}={}){
    if(disposed)throw Error('Surface builder disposed');
-   const plan=planEarthSurface(snapshot,resolution,limits());cancel();
+   const plan=planEarthSurface(snapshot,resolution,limits());if(active)cancel();
    if(!WorkerType)return createEarthTeacherSource({snapshot,resolution,halo,maxTriangles:plan.maxTriangles});
    return new Promise((resolve,reject)=>{
-    const worker=new WorkerType(new URL('./earth-surface-worker.mjs',import.meta.url),{type:'module'}),task={worker,reject};active=task;
-    const finish=(error,value)=>{if(active!==task)return;active=null;worker.terminate();error?reject(error):resolve(value);};
-    worker.onmessage=({data})=>data.error?finish(Error(data.error)):finish(null,data.source);
+    const worker=resident??new WorkerType(new URL('./earth-surface-worker.mjs',import.meta.url),{type:'module',name:persistent?'earth-live-surface':'earth-surface'}),id=++serial,task={worker,reject};resident=worker;active=task;
+    const finish=(error,value)=>{if(active!==task)return;active=null;if(!persistent||error){worker.terminate();resident=null;}error?reject(error):resolve(value);};
+    worker.onmessage=({data})=>{if(data.id!==id)return;data.error?finish(Error(data.error)):finish(null,data.source);};
     worker.onerror=event=>finish(Error(event.message||'Surface worker failed'));
     worker.onmessageerror=()=>finish(Error('Surface worker result could not be read'));
-    worker.postMessage({snapshot,resolution,halo,maxTriangles:plan.maxTriangles});
+    try{worker.postMessage({id,snapshot,resolution,halo,maxTriangles:plan.maxTriangles});}catch(error){finish(error);}
    });
   },cancel,dispose(){disposed=true;cancel();},get pending(){return !!active;}
  };

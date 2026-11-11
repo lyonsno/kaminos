@@ -8,10 +8,16 @@ const p=planEarthSurface(snapshot,24,limits);assert.ok(p.cells>0);assert.throws(
 class Worker{static instances=[];constructor(){Worker.instances.push(this);}postMessage(data){this.data=data;}terminate(){this.terminated=true;}}
 const task=createEarthSurfaceTask({WorkerType:Worker,limits:()=>limits});
 const before=structuredClone(snapshot);const pending=task.build(snapshot,12);const worker=Worker.instances.at(-1);assert.equal(worker.data.resolution,12);task.cancel();await assert.rejects(pending,/stopped/);assert.ok(worker.terminated);assert.deepEqual(snapshot,before);
-const next=task.build(snapshot,10),current=Worker.instances.at(-1);worker.onmessage({data:{source:{stale:true}}});assert.equal(task.pending,true);current.onmessage({data:{source:{schema:'test-source'}}});assert.equal((await next).schema,'test-source');assert.ok(current.terminated);
+const next=task.build(snapshot,10),current=Worker.instances.at(-1);worker.onmessage({data:{source:{stale:true}}});assert.equal(task.pending,true);current.onmessage({data:{id:current.data.id,source:{schema:'test-source'}}});assert.equal((await next).schema,'test-source');assert.ok(current.terminated);
 const failure=task.build(snapshot,10);Worker.instances.at(-1).onerror({message:'worker broke'});await assert.rejects(failure,/worker broke/);task.dispose();await assert.rejects(task.build(snapshot,10),/disposed/);
 console.log('Surface planning, rejection before work, cancellation, stale result exclusion and error cleanup pass');
 // Sparse surface output must not be charged as twelve triangles per solid voxel.
 const finer=planEarthSurface(snapshot,100,{maxBufferSize:256*2**20,heapBytes:2**30,maxGridCells:2**21});assert.ok(finer.cells<2**21);
 const {rememberEarthSurface,preparedEarthSurface}=await import('../earth-surface-task.mjs');
 const source={schema:'kaminos.earth-teacher.v1',config:{snapshot,resolution:12,halo:0},triangles:[]};rememberEarthSurface(source);assert.equal(preparedEarthSurface(source.config),source,'a frozen source must be reusable without a second extraction');source.config.snapshot.time+=1;assert.equal(preparedEarthSurface(source.config),null,'mutated source inputs invalidate the prepared surface');
+
+// A live preview worker stays resident between completed surfaces, but disposal
+// and explicit cancellation still release it and exclude old request identities.
+const liveTask=createEarthSurfaceTask({WorkerType:Worker,persistent:true});
+const a=liveTask.build(snapshot,8),resident=Worker.instances.at(-1);resident.onmessage({data:{id:resident.data.id,source:{revision:1}}});await a;assert.ok(!resident.terminated);
+const oldId=resident.data.id,b=liveTask.build(snapshot,10);assert.equal(Worker.instances.at(-1),resident);resident.onmessage({data:{id:oldId,source:{revision:0}}});assert.equal(liveTask.pending,true);resident.onmessage({data:{id:resident.data.id,source:{revision:2}}});assert.equal((await b).revision,2);liveTask.dispose();assert.ok(resident.terminated);

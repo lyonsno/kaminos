@@ -56,7 +56,7 @@ export function mountEarthControls({document,host,session,root,tool,invoke,read,
  }
  number(earth.panel,'Cohesion (N)','cohesion',.2,{material:true});number(earth.panel,'Friction','friction',.05,{material:true});number(earth.panel,'Yield strain','plasticYield',.01,{material:true});
  const timing=group(earth.panel,'Settling');button(timing,'Settle further',()=>invoke('advance'));number(timing,'Settle time (s)','advanceSeconds',.01,{costly:true,min:.01,max:1});
- const surface=group(earth.panel,'Surface');number(surface,'Preview detail','previewResolution',1,{costly:true,min:2});number(surface,'Capture detail','captureResolution',1,{costly:true,min:2});make('p','Detail rebuilds run separately from the viewport. Oversized requests are rejected before extraction.',surface);button(surface,'Render frozen surface',()=>trace());
+ const surface=group(earth.panel,'Surface');number(surface,'Live detail','liveResolution',1,{costly:true,min:2});number(surface,'Resting detail','previewResolution',1,{costly:true,min:2});number(surface,'Capture detail','captureResolution',1,{costly:true,min:2});make('p','Detail rebuilds run separately from the viewport. Oversized requests are rejected before extraction.',surface);button(surface,'Render frozen surface',()=>trace());
  const files=group(earth.panel,'Specimen files'),actions=make('div',undefined,files);actions.className='earth-actions';
  const download=(value,name)=>{const url=URL.createObjectURL(new Blob([JSON.stringify(value)],{type:'application/json'})),a=make('a',undefined,layer);a.href=url;a.download=name;a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),0);};
  button(actions,'Save',async()=>download(await invoke('snapshot'),'earth-specimen.json'));

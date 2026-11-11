@@ -3,12 +3,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.webgpu.js';
 import workshop from '../experiments/earth-material.experiment.mjs';
+import {createEarthDynamicsKernel} from '../earth-dynamics.mjs';
+import {createEarthTeacherSource} from '../earth-surface.mjs';
 import transport from '../experiments/earth-surface-teacher.experiment.mjs';
 function fakeHost(){
  const frames=new Set(),roots=[],doc={activeElement:null,createElement:tag=>({tag,ownerDocument:doc,value:'',children:[],append(...a){this.children.push(...a);},setAttribute(k,v){this[k]=v;},addEventListener(){}})};
  let view={position:[1,1,1],target:[0,0,0],fov:40};const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera();
  const session={attach:async root=>{roots.push(root);scene.add(root);return {id:`object-${roots.length}`,root};},redraw(){},readView:()=>view,setView:v=>view=v,onFrame:fn=>{frames.add(fn);return()=>frames.delete(fn);},dispose:async()=>{for(const r of roots)scene.remove(r);}};
- return {roots,doc,frame:(deltaSeconds=1/60)=>{for(const fn of frames)fn({deltaSeconds,timestampMs:performance.now()});},host:{scene:{open:async()=>session,refreshPresentation(){},isVisible:()=>true,rendering:()=>({scene,camera,renderer:{getDrawingBufferSize:v=>v.set(64,48),backend:{device:{limits:{maxTextureDimension2D:4096},addEventListener(){},removeEventListener(){}}}}})},controls:{installNumberDrag:({input})=>{input.readOnly=true;return {dispose(){}};}}}};
+ return {roots,doc,frame:(deltaSeconds=1/60)=>{for(const fn of frames)fn({deltaSeconds,timestampMs:performance.now()});},host:{scene:{open:async()=>session,refreshPresentation(){},isVisible:()=>true,rendering:()=>({scene,camera,renderer:{getDrawingBufferSize:v=>v.set(64,48),backend:{device:{limits:{maxTextureDimension2D:4096},addEventListener(){},removeEventListener(){}}}}})},controls:{document:doc,installNumberDrag:({input})=>{input.readOnly=true;return {dispose(){}};}}}};
 }
 test('closing the workshop disposes its final geometry and materials',async()=>{
  const {host,roots}=fakeHost();const app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8}},record:()=>{}});
@@ -55,4 +57,46 @@ test('pausing allows native repositioning without deforming the specimen',async(
 test('refined preview converges to the same evolved state and survives a new motion',async()=>{
  const {host,roots,frame}=fakeHost(),app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:14,captureResolution:16}},record:()=>{}});
  try{roots[1].position.y=.04;frame();await new Promise(r=>setTimeout(r,550));assert.equal(app.read().surface.resolution,14);assert.equal(app.read().live.surfaceRevision,app.read().live.revision);const time=app.read().physics.time;roots[1].position.x=.04;frame();await new Promise(r=>setTimeout(r,550));assert.ok(app.read().physics.time>time);assert.equal(app.read().surface.resolution,14);assert.equal(app.read().live.surfaceRevision,app.read().live.revision);const frozen=await app.operations.freeze();assert.deepEqual(frozen.source.snapshot,(await app.operations.snapshot()).snapshot);}finally{await app.dispose();}
+});
+
+function simulatedWorker(){
+ class Worker{
+  static instances=[];static failSweep=false;
+  constructor(url){this.physics=String(url).includes('earth-dynamics-worker');this.kernel=this.physics?createEarthDynamicsKernel():null;this.messages=[];Worker.instances.push(this);}
+  postMessage(data){this.messages.push(data);setTimeout(()=>{if(this.closed)return;try{if(this.physics&&data.kind==='sweep'&&Worker.failSweep){Worker.failSweep=false;throw Error('injected physics failure');}this.onmessage({data:this.physics?{id:data.id,result:this.kernel.apply(data)}:{id:data.id,source:createEarthTeacherSource(data)}});}catch(e){this.onmessage({data:{id:data.id,error:e.message}});}},10);}
+  terminate(){this.closed=true;this.kernel?.dispose();}
+ }
+ return Worker;
+}
+test('Stop ends queued execution while preserving observed hand samples',async()=>{
+ const Saved=globalThis.Worker,Worker=simulatedWorker();globalThis.Worker=Worker;
+ const {host,roots,frame}=fakeHost();let app;
+ try{app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8}},record:()=>{}});
+  for(let i=0;i<4;i++){roots[1].position.x+=.01;frame();}app.operations.stop();await new Promise(r=>setTimeout(r,60));
+  const worker=Worker.instances.find(w=>w.physics);assert.equal(worker.messages.filter(m=>m.kind==='sweep').length,1,'only the in-flight physical chunk may complete');
+  const saved=await app.operations.snapshot();assert.equal(saved.forming.samples.length,4);assert.equal(saved.forming.samples.filter(s=>s.disposition==='stopped').length,3);assert.equal(app.read().live.enabled,false);
+ }finally{await app?.dispose();globalThis.Worker=Saved;}
+});
+test('New specimen recovers a failed physics worker and releases the old worker',async()=>{
+ const Saved=globalThis.Worker,Worker=simulatedWorker();globalThis.Worker=Worker;
+ const {host,roots,frame}=fakeHost();let app;
+ try{app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8}},record:()=>{}});
+  const old=Worker.instances.find(w=>w.physics);Worker.failSweep=true;roots[1].position.x=.02;frame();await new Promise(r=>setTimeout(r,30));assert.match(app.read().failure,/injected/);
+  await app.operations.reset();assert.equal(app.read().failure,null);assert.equal(app.read().live.enabled,true);assert.equal(app.read().live.pendingSamples,0);assert.equal(old.closed,true);
+  roots[1].position.x=.03;frame();await new Promise(r=>setTimeout(r,30));assert.ok(app.read().physics.time>0);
+ }finally{await app?.dispose();globalThis.Worker=Saved;}assert.ok(Worker.instances.every(w=>w.closed));
+});
+test('Save and material edits do not strand the coarse preview',async()=>{
+ const {host,roots,frame}=fakeHost(),app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:18}},record:()=>{}});
+ try{roots[1].position.y=.05;frame();await app.operations.snapshot();await app.operations.material({friction:.3});await new Promise(r=>setTimeout(r,100));assert.equal(app.read().surface.resolution,18);assert.equal(app.read().live.surfaceRevision,app.read().live.revision);}finally{await app.dispose();}
+});
+test('invalid settings and pose allocate no physics worker; failed host opening releases one',async()=>{
+ const Saved=globalThis.Worker,Worker=simulatedWorker();globalThis.Worker=Worker;
+ const {host}=fakeHost();
+ try{await assert.rejects(workshop.create({host,inputs:{settings:{previewResolution:0}},record:()=>{}}),/Invalid/);await assert.rejects(workshop.create({host,inputs:{pose:{position:[0]}},record:()=>{}}),/Invalid/);assert.equal(Worker.instances.length,0);host.scene.open=async()=>{throw Error('host unavailable');};await assert.rejects(workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0}},record:()=>{}}),/host unavailable/);assert.ok(Worker.instances.every(w=>w.closed));}finally{globalThis.Worker=Saved;}
+});
+
+test('background time is excluded when the live tool resumes',async()=>{
+ const {host,roots,frame,doc}=fakeHost(),app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8}},record:()=>{}});
+ try{doc.hidden=true;roots[1].position.x=.04;frame(60);doc.hidden=false;frame(60);assert.equal(app.read().physics.time,0);roots[1].position.x=.05;frame(1/60);await new Promise(r=>setTimeout(r,20));assert.ok(app.read().physics.time>0&&app.read().physics.time<.1,'resume must not turn the hidden interval into a long physical stroke');}finally{await app.dispose();}
 });
