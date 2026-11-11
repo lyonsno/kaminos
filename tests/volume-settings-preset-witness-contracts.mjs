@@ -16,4 +16,4 @@ const controlEnd=source.indexOf('\n}',controlStart)+2;
 const controls=runInNewContext(source.slice(controlStart,controlEnd)+'\nassertCockpitControls',{assert});
 const visible={retired:[{name:'atlas-capture',hidden:true,display:'none',width:0,height:0}],surviving:[{id:'volume-pressure-mode',missing:false},{id:'volume-oracle-activity-cue',missing:false}]};
 controls(visible);
-for(const edit of [x=>x.retired[0].width=5,x=>x.retired[0].hidden=false,x=>x.surviving[0].missing=true]){const wrong=structuredClone(visible);edit(wrong);assert.throws(()=>controls(wrong));}
+for(const edit of [x=>x.retired[0].width=5,x=>x.retired[0].hidden=false,x=>x.surviving[0].missing=true,x=>x.surviving[0].presentationMissing=true,x=>x.surviving[0].display='none']){const wrong=structuredClone(visible);edit(wrong);assert.throws(()=>controls(wrong));}

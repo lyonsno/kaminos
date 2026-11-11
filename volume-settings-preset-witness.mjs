@@ -72,6 +72,7 @@ function assertCockpitControls(observation) {
   for (const id of ['volume-oracle-activity-cue', 'volume-pressure-mode']) {
     const row = observation.surviving?.find(control => control.id === id);
     assert.equal(row?.missing, false, `surviving control ${id} is missing`);
+    assert.notEqual(row.presentationMissing, true, `surviving control ${id} lost its editing field`);
     assert.notEqual(row.display, 'none', `surviving control ${id} is hidden directly`);
     assert.notEqual(row.hidden, true, `surviving control ${id} is hidden directly`);
   }
@@ -310,8 +311,13 @@ try {
     const surviving = ['volume-oracle-activity-cue','volume-pressure-mode'].map(id => {
       const element = operatorDocument.getElementById(id);
       if (!element) return {id,missing:true};
-      const style=operatorWindow.getComputedStyle(element),rect=element.getBoundingClientRect();
-      return {id,missing:false,hidden:element.hidden,display:style.display,width:rect.width,height:rect.height,visible:rect.width>0&&rect.height>0};
+      // Canonical ranges remain in the settings schema while their existing
+      // scrub field owns editing and visibility (legacy-range-field.mjs).
+      const presentationId = element.dataset.scrubField || id;
+      const presentation = operatorDocument.getElementById(presentationId);
+      if (!presentation) return {id,missing:false,presentationId,presentationMissing:true};
+      const style=operatorWindow.getComputedStyle(presentation),rect=presentation.getBoundingClientRect();
+      return {id,missing:false,presentationId,presentationMissing:false,hidden:element.hidden||presentation.hidden,display:style.display,width:rect.width,height:rect.height,visible:rect.width>0&&rect.height>0};
     });
     const anchorId = ${JSON.stringify(cockpitAnchor)};
     const anchor = anchorId ? operatorDocument.getElementById(anchorId) : null;
