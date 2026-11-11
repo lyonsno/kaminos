@@ -305,3 +305,80 @@ test('sideband model controls stay ordered and scene retirement waits for contro
   await retire.completion;assert.deepEqual(calls,['pause','retire']);
   await assert.rejects(model.control('resume').completion,/no longer pending/);
 });
+
+test('two-stage initialization retains partial resources through failed cleanup and retirement retry',async t=>{
+  let allocations=0,releases=0,attempts=0,commands=0;
+  const {client,host}=await harness(t,()=>({
+    initialize:async()=>{allocations++;throw Error('renderer init failed');},
+    commands:{edit:()=>commands++},frame:()=>{throw Error('partial renderer must not draw');},
+    retire:async()=>{attempts++;if(attempts===1)throw Error('renderer cleanup failed');releases++;return {released:true};},
+  }));
+  await assert.rejects(client.initialize({}).completion,error=>/renderer init failed/.test(error.message)&&error.gpuRouteHeld===true);
+  assert.equal(allocations,1);assert.equal(host.read().runtimeRetained,true);assert.equal(host.read().initialized,false);
+  await assert.rejects(client.request('edit').completion,/not initialized/);assert.equal(commands,0);
+  await assert.rejects(client.request('frame').completion,/not initialized/);
+  await assert.rejects(client.initialize({}).completion,/already initialized|retained/);
+  await assert.rejects(client.request('retire').completion,error=>/renderer cleanup failed/.test(error.message)&&error.gpuRouteHeld===true);
+  assert.equal(host.read().runtimeRetained,true);assert.equal(host.read().initialized,false);assert.equal(releases,0);
+  const retired=await client.request('retire').completion;
+  assert.deepEqual(retired.output,{released:true});assert.equal(attempts,2);assert.equal(releases,1);
+  assert.equal(host.read().runtimeRetained,false);assert.equal(host.read().initialized,false);assert.equal(retired.epoch.device,1);
+});
+test('two-stage initialization cannot complete or admit work before its actual setup settles',async t=>{
+  const started=deferred(),finish=deferred();let completed=false,controls=0;
+  const {client,host}=await harness(t,()=>({
+    initialize:async ctx=>{ctx.assertCurrent();started.resolve();await finish.promise;},
+    commands:{read:()=>42},control:()=>controls++,retire:()=>true,
+  }));
+  const init=client.initialize({});init.completion.then(()=>completed=true,()=>{});
+  await Promise.race([started.promise,init.completion]);
+  try{
+    assert.equal(completed,false,'factory shell return is not initialization completion');
+    assert.equal(host.read().runtimeRetained,true);assert.equal(host.read().initialized,false);
+    await assert.rejects(init.control('decodeNow').completion,/not initialized/);assert.equal(controls,0);
+  }finally{finish.resolve();await init.completion;}
+  assert.equal(host.read().initialized,true);assert.equal((await client.request('read').completion).output,42);
+});
+test('canceled two-stage setup settles without success and retains its runtime for explicit retirement',async t=>{
+  const started=deferred(),finish=deferred();let retired=0;
+  const {client,host}=await harness(t,()=>({initialize:async()=>{started.resolve();await finish.promise;},commands:{},retire:()=>++retired}));
+  const init=client.initialize({});init.completion.catch(()=>{});
+  await Promise.race([started.promise,init.completion]);
+  init.cancel('cancel setup');await tick();await tick();finish.resolve();
+  await assert.rejects(init.completion,error=>error.name==='AbortError'&&error.gpuRouteHeld===true);
+  assert.equal(host.read().runtimeRetained,true);assert.equal(host.read().initialized,false);
+  await client.request('retire').completion;assert.equal(retired,1);
+});
+test('fallible two-stage initialization requires a retirement path before allocating resources',async t=>{
+  let initialized=false;
+  const {client,host}=await harness(t,()=>({initialize:()=>{initialized=true;},commands:{}}));
+  await assert.rejects(client.initialize({}).completion,/retire|retirement/);assert.equal(initialized,false);
+  assert.equal(host.read().runtimeRetained,true);assert.equal(host.read().initialized,false);
+  await assert.rejects(client.request('retire').completion,error=>error.gpuRouteHeld===true&&/retire|retirement/.test(error.message));
+});
+
+test('retained initialization shells keep live resource getters instead of snapshotting partial state',async t=>{
+  let resources=null,commandReads=0,hostReads=0;
+  const {client,host}=await harness(t,()=>({
+    initialize:async()=>{resources={value:73};},
+    get commands(){commandReads++;assert.ok(resources);return {read:()=>resources.value};},
+    get foregroundCommands(){assert.ok(resources);return {};},
+    get host(){hostReads++;return resources?{unsettledRuns:()=>[]}:null;},
+    retire:()=>{resources=null;return true;},
+  }));
+  await client.initialize({}).completion;assert.equal(commandReads,0);
+  assert.equal((await client.request('read').completion).output,73);assert.ok(commandReads>0);
+  await client.request('retire').completion;assert.equal(resources,null);assert.ok(hostReads>0);
+  assert.equal(host.read().runtimeRetained,false);
+});
+test('scene load and device invalidation during retained setup cannot publish initialized success',async t=>{
+  for(const part of ['scene','load','device']){
+    const started=deferred(),finish=deferred();let retirements=0;
+    const {client,host}=await harness(t,()=>({initialize:async()=>{started.resolve();await finish.promise;},retire:()=>++retirements}));
+    const init=client.initialize({});init.completion.catch(()=>{});await started.promise;
+    host.invalidate(part);finish.resolve();
+    await assert.rejects(init.completion,error=>error.gpuRouteHeld===true&&/epoch/.test(error.message));
+    assert.equal(host.read().initialized,false);assert.equal(host.read().runtimeRetained,true);
+    await client.request('retire').completion;assert.equal(retirements,1);
+  }
+});
