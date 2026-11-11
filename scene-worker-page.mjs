@@ -14,6 +14,25 @@ export function captureSceneWorkerCamera(camera,target){
  if([...result.position,...result.quaternion,...result.up,...result.target,...result.projectionMatrix,...['fov','aspect','near','far','zoom','filmGauge','filmOffset'].map(key=>result[key])].some(value=>!Number.isFinite(value)))throw Error('Worker page camera contains non-finite values');
  return result;
 }
+// UI messages are partial projections within one epoch. Explicit null values
+// clear metadata; omission cannot erase current bounds or invent surface flags.
+export function mergeSceneWorkerUi(previous,update){
+ if(!update||typeof update!=='object'||Array.isArray(update))throw Error('Worker UI projection must be an object');
+ const next=copy(update),merged={...(previous??{}),...next};
+ if(Object.hasOwn(next,'surfaces')){
+  if(!next.surfaces||typeof next.surfaces!=='object'||Array.isArray(next.surfaces))throw Error('Worker surfaces must be an object');
+  merged.surfaces={...previous?.surfaces,...next.surfaces};
+  for(const name of ['scene','volume','telemetry'])if(Object.hasOwn(next.surfaces,name)){
+   const value=next.surfaces[name];if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Worker surface state must be an object');
+   merged.surfaces[name]={...previous?.surfaces?.[name],...value};
+  }
+ }
+ if(Object.hasOwn(next,'initialization')){
+  if(!next.initialization||typeof next.initialization!=='object'||Array.isArray(next.initialization))throw Error('Worker initialization projection must be an object');
+  merged.initialization={...previous?.initialization,...next.initialization};
+ }
+ return merged;
+}
 export function applySceneWorkerSurfaces(canvases,surfaces){
  if(!surfaces||typeof surfaces!=='object'||Array.isArray(surfaces))throw Error('Worker surfaces must be an object');
  for(const [name,state] of Object.entries(surfaces)){
@@ -55,9 +74,10 @@ export function createSceneWorkerPage({entryUrl='/scene-worker.entry.bundle.mjs'
  function project(ui,meta){
   if(ui==null)return;
   if(typeof ui!=='object'||Array.isArray(ui))throw Error('Worker UI projection must be an object');
-  const next=copy(ui);applyUi(next,meta);state.ui=next;
+  const next=mergeSceneWorkerUi(state.ui,ui);applyUi(copy(ui),meta);state.ui=next;
  }
  function progress(event){
+  epochChanged();
   try{project(event.value?.ui,{kind:'progress',requestId:event.requestId,epoch:event.epoch});observe(onProgress,event);}
   catch(error){projectionError=error;fail(error);}
  }
@@ -128,7 +148,7 @@ export function createSceneWorkerPage({entryUrl='/scene-worker.entry.bundle.mjs'
   retirePromise.catch(()=>{});return retirePromise;
  }
  return Object.freeze({start,request,retire,
-  holdFrames(reason='Worker frame requests held'){stopFrames();state.error=reason;phase('held');},
+  holdFrames(reason='Worker frame requests held'){if(['retiring','retired','closed'].includes(state.phase))return;stopFrames();state.error=reason;phase('held');},
   resumeFrames(){if(!client||client.read().closed||!state.initialized||state.phase!=='held')throw Error('Worker page cannot resume frame requests');state.error=null;phase('active');schedule();},
   disconnect(){stopFrames();client?.disconnect();detach();phase('closed');},
   read:()=>({...state,pendingFrame:pendingFrame?.requestId??null,transport:client?.read()??null}),

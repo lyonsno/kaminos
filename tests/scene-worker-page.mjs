@@ -4,14 +4,14 @@ import assert from 'node:assert/strict';
 import {MessageChannel} from 'node:worker_threads';
 import * as THREE from '../lib/three.webgpu.js';
 import {installSceneWorkerHost} from '../scene-worker-handoff.mjs';
-import {createSceneWorkerPage,captureSceneWorkerCamera,applySceneWorkerSurfaces} from '../scene-worker-page.mjs';
+import {createSceneWorkerPage,captureSceneWorkerCamera,applySceneWorkerSurfaces,mergeSceneWorkerUi} from '../scene-worker-page.mjs';
 const tick=()=>new Promise(r=>setImmediate(r));
 const gate=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
-async function fixture(t,{holdFrame=null,retire=()=>true}={}){
+async function fixture(t,{holdFrame=null,retire=()=>true,commandsOverride={}}={}){
  const {port1,port2}=new MessageChannel(),frames=[],commands=[],raf=new Map(),surfaces=[],progress=[];let serial=0,terminated=0,x=1;
  const worker=port1;worker.terminate=()=>terminated++;
  const host=installSceneWorkerHost({port:port2,createRuntime:({payload})=>({initialize:async ctx=>{ctx.report({ui:{surfaces:{volume:{active:true,transparent:true}}}});assert.equal(payload.flameControls.resolution,16);},
-  commands:{read:()=>({value:x}),load:(_,ctx)=>{ctx.advanceEpoch('load');ctx.activate();return {loaded:true};}},
+  commands:{read:()=>({value:x}),load:(_,ctx)=>{ctx.advanceEpoch('load');ctx.activate();return {loaded:true};},...commandsOverride},
   foregroundCommands:{'flame.controls':patch=>{commands.push(patch);return {acceptedControls:{resolution:16,...patch}};}},
   requestMutation:async(_,payload,ctx,apply)=>apply(),requestFrame:async(_,ctx,draw)=>{if(holdFrame)await holdFrame.promise;return draw();},
   frame:input=>{frames.push(input);return {ui:{surfaces:{volume:{active:true,transparent:true}}},drawn:true};},retire,
@@ -81,4 +81,24 @@ test('malformed surface flags cannot partially publish another canvas state',()=
  const changes=[],canvas={classList:{toggle:(...args)=>changes.push(args)},style:{}};
  assert.throws(()=>applySceneWorkerSurfaces({scene:canvas,volume:canvas},{scene:{active:true},volume:{active:'false'}}),/boolean/);
  assert.deepEqual(changes,[]);
+});
+test('successful retirement cannot be relabeled as a held reusable page by late frame-hold callbacks',async t=>{
+ const f=await fixture(t);await f.page.start();await f.page.retire();f.page.holdFrames('Late pagehide');
+ assert.equal(f.page.read().phase,'retired');assert.equal(f.page.read().initialized,false);assert.equal(f.raf.size,0);
+});
+
+test('new-epoch progress clears old UI before adopting the actual new projection',async t=>{
+ const f=await fixture(t,{commandsOverride:{replace:(_,ctx)=>{ctx.advanceEpoch('scene');ctx.activate();ctx.report({ui:{bounds:{min:[1,2,3],max:[4,5,6]}}});return {applied:true};}}});
+ await f.page.start();assert.equal(f.page.read().ui.surfaces.volume.active,true);
+ await f.page.request('replace').completion;
+ assert.deepEqual(f.page.read().ui.bounds,{min:[1,2,3],max:[4,5,6]});
+ assert.equal(f.page.read().ui.surfaces,undefined,'old epoch surface projection must not leak into new state');
+ f.page.resumeFrames();await f.step();assert.deepEqual(f.page.read().ui.bounds,{min:[1,2,3],max:[4,5,6]});await f.page.retire();
+});
+test('partial UI merges preserve actual flags and additive metadata, and explicit null clears bounds',()=>{
+ const first=mergeSceneWorkerUi(null,{bounds:{min:[0,0,0],max:[1,1,1]},surfaces:{volume:{active:true,transparent:false}},extra:{actual:true}});
+ const next=mergeSceneWorkerUi(first,{surfaces:{volume:{transparent:true}}});
+ assert.equal(next.surfaces.volume.active,true);assert.equal(next.surfaces.volume.transparent,true);assert.deepEqual(next.bounds,first.bounds);assert.equal(next.extra.actual,true);
+ assert.equal(mergeSceneWorkerUi(next,{bounds:null}).bounds,null);assert.equal(Object.hasOwn(next.surfaces,'scene'),false);
+ assert.throws(()=>mergeSceneWorkerUi(next,{surfaces:{volume:null}}),/state must be an object/);
 });

@@ -1,4 +1,4 @@
-import {createSceneWorkerPage,captureSceneWorkerCamera,applySceneWorkerSurfaces} from './scene-worker-page.mjs';
+import {createSceneWorkerPage,captureSceneWorkerCamera,applySceneWorkerSurfaces,mergeSceneWorkerUi} from './scene-worker-page.mjs';
 import {createSceneWorkerImageController} from './scene-worker-image-controller.mjs';
 
 export function assertSceneWorkerStartup(reply,{admission,preferences,ui=reply.output?.ui}){
@@ -55,7 +55,11 @@ export function mountSceneWorkerPage({document,window,THREE,createControls,insta
   initializePayload:{camera:captureSceneWorkerCamera(camera,controls.target),admission,preferences,location:{href:window.location.href,search:window.location.search,hash:window.location.hash}},
   validateInitialization:(reply,ui)=>assertSceneWorkerStartup(reply,{admission,preferences,ui}),
   beforeFrame(){const size=readViewport();if(camera.aspect!==size.width/size.height){camera.aspect=size.width/size.height;camera.updateProjectionMatrix();}controls.update();},
-  applyUi(value){if(value.surfaces)applySceneWorkerSurfaces(canvases,value.surfaces);ui=value;},
+  applyUi(value){const next=mergeSceneWorkerUi(ui,value);if(next.surfaces)applySceneWorkerSurfaces(canvases,next.surfaces);ui=next;},
+  onPhase(value){
+   for(const canvas of Object.values(canvases))canvas.dataset.sceneWorkerState=value;
+   if(['held','retiring','retired','closed'].includes(value)){ui=null;report(`Worker scene ${value}; previous scene metadata is unavailable`);}
+  },
   onProgress,onError:error=>report(`Worker scene: ${error.message}`)});
  const image=createSceneWorkerImageController({page});
  function detach(){if(closed)return;closed=true;navigation.dispose();controls.dispose();navigationInput.removeEventListener('change',navigationChanged);}
