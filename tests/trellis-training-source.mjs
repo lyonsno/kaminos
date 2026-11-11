@@ -1,0 +1,13 @@
+// kaminos-test: node
+import test from 'node:test';import assert from 'node:assert/strict';
+import {encodeGlb} from '../poly-glb-io.mjs';import {createTrellisTrainingSource} from '../trellis-training-source.mjs';import {withKaminosGpu} from '../tools/shader-herder.mjs';
+function shellFixture(){
+ const positions=[],normals=[],uvs=[];const add=(x0,x1,z0,z1,y,up)=>{const a=[x0,y,z0],b=[x1,y,z1],c=[x1,y,z0],d=[x0,y,z1];for(const tri of [[a,b,c],[a,d,b]])for(const p of up?tri:[tri[0],tri[2],tri[1]]){positions.push(...p);normals.push(0,up?1:-1,0);uvs.push(.25,.25);}};
+ add(-1,1,-1,1,.1,true);for(let y=0;y<3;y++)for(let x=0;x<3;x++)add(-1+x*2/3,-1+(x+1)*2/3,-1+y*2/3,-1+(y+1)*2/3,-.1,false);
+ const arrays=[new Float32Array(positions),new Float32Array(normals),new Float32Array(uvs),Uint32Array.from({length:positions.length/3},(_,i)=>i)],chunks=[],views=[],accessors=[];let offset=0;
+ arrays.forEach((a,i)=>{chunks.push(new Uint8Array(a.buffer));views.push({buffer:0,byteOffset:offset,byteLength:a.byteLength});accessors.push({bufferView:i,componentType:i===3?5125:5126,count:i===3?a.length:a.length/(i===2?2:3),type:i===3?'SCALAR':i===2?'VEC2':'VEC3'});offset+=a.byteLength;});const bin=new Uint8Array(offset);let at=0;for(const a of chunks){bin.set(a,at);at+=a.length;}
+ return encodeGlb({asset:{version:'2.0'},buffers:[{byteLength:offset}],bufferViews:views,accessors,nodes:[{mesh:0}],scenes:[{nodes:[0]}],scene:0,meshes:[{primitives:[{attributes:{POSITION:0,NORMAL:1,TEXCOORD_0:2},indices:3,material:0}]}],materials:[{pbrMetallicRoughness:{baseColorFactor:[.5,.5,.5,1],roughnessFactor:1,metallicFactor:0}}]},bin);
+}
+test('panel sampling plane follows the first visible surface rather than a more densely tessellated underside',async()=>{
+ await withKaminosGpu(async({device})=>{let source;try{source=await createTrellisTrainingSource(device,shellFixture(),{region:{origin:[0,0,0],normal:[0,1,0],tangent:[1,0,0],radius:.5,depth:.4,top:.2},tileSize:.5});assert.ok(Math.abs(source.capture.samplingPlaneHeight-.1)<1e-6,`visible surface .1, got ${source.capture.samplingPlaneHeight}`);}finally{source?.dispose();}});
+});
