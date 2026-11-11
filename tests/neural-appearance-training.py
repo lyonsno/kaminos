@@ -27,6 +27,15 @@ class PortableTraining(unittest.TestCase):
   mx.set_default_device(mx.cpu);m=Appearance(2,16,41)
   q=mx.array([[.25,.99999,0,0,1,0,0,1],[.25,-1e-9,0,0,1,0,0,1]])
   actual=np.asarray(m(q));np.testing.assert_allclose(actual[0],actual[1],rtol=1e-7,atol=1e-8)
+ def test_published_loss_and_schedule(self):
+  import mlx.core as mx
+  from neural_appearance_mlx import appearance_response_loss,appearance_learning_rate
+  mx.set_default_device(mx.cpu)
+  self.assertAlmostEqual(float(appearance_response_loss(mx.array([1.,8.,27.]),mx.array([0.,1.,8.]),'L1WithPowerLog').item()),3.,places=6)
+  self.assertEqual(appearance_learning_rate(0,100000,.001,.01),.001)
+  self.assertAlmostEqual(appearance_learning_rate(50000,100000,.001,.01),.000505)
+  self.assertEqual(appearance_learning_rate(100000,100000,.001,.01),.00001)
+  with self.assertRaisesRegex(ValueError,'response loss'):appearance_response_loss(mx.array([1.]),mx.array([1.]),'unknown')
  def test_optimizer_reduces_response_error(self):
   import mlx.core as mx
   import mlx.nn as nn

@@ -5,6 +5,7 @@ fit directly optimizes texels and one decoder instance; it does not reproduce
 the official encoder/multi-instance selection or its FP16 arithmetic.
 """
 import json
+import math
 import hashlib
 from pathlib import Path
 import numpy as np
@@ -72,3 +73,19 @@ class Appearance(nn.Module):
             'provenance':provenance}
         payload=(json.dumps(ckpt,indent=2)+'\n').encode();(out/'model.json').write_bytes(payload)
         return {'path':str(out/'model.json'),'sha256':hashlib.sha256(payload).hexdigest()}
+
+
+def appearance_response_loss(predicted, reference, kind='log1p-l1', power=3.0):
+    """Author power-log loss, or the explicitly named legacy integration loss."""
+    if kind == 'log1p-l1':
+        return mx.mean(mx.abs(mx.log1p(predicted)-mx.log1p(reference)))
+    if kind != 'L1WithPowerLog' or not math.isfinite(power) or power <= 0:
+        raise ValueError('Supported response loss and positive power required')
+    return power*mx.mean(mx.abs(predicted**(1.0/power)-reference**(1.0/power)))
+
+
+def appearance_learning_rate(iteration, iterations, initial=.001, end_scale=1.0):
+    if not math.isfinite(iteration) or iteration < 0 or iterations <= 0 or not math.isfinite(initial) or initial <= 0 or not math.isfinite(end_scale) or end_scale < 0:
+        raise ValueError('Valid cosine training schedule required')
+    t=min(iteration/iterations,1.0)
+    return initial*(end_scale+(1.0-end_scale)*.5*(1.0+math.cos(math.pi*t)))

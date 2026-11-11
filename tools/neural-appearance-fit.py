@@ -13,7 +13,7 @@ try:
     expected=os.environ.get('EXPECTED_COMMIT')
     if not expected or report['sourceCommit']!=expected:raise RuntimeError('Explicit pinned training source commit required')
     if subprocess.check_output(['git','status','--porcelain'],text=True).strip():raise RuntimeError('Training source is dirty')
-    report['sourceHashes']={name:hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest() for name in ['tools/neural-appearance-fit.py','tools/neural_appearance_mlx.py','tools/neural-appearance-capture.mjs','neural-appearance.mjs']}
+    report['sourceHashes']={name:hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest() for name in ['tools/neural-appearance-fit.py','tools/neural_appearance_mlx.py','tools/neural-appearance-capture.mjs','neural-appearance.mjs','neural-appearance-training-recipe.mjs','neural-appearance-direction-capture.mjs']}
     config=json.loads(pathlib.Path(args.config).read_text());report['config']=config
     if config.get('capture'):
         report['phase']='capture';publish()
@@ -24,10 +24,10 @@ try:
     import mlx.core as mx
     import mlx.nn as nn
     import mlx.optimizers as optim
-    from neural_appearance_mlx import Appearance
+    from neural_appearance_mlx import Appearance, appearance_response_loss, appearance_learning_rate
     if not mx.metal.is_available():raise RuntimeError('Metal MLX runtime required; no CPU training fallback')
     mx.set_default_device(mx.gpu);report['backend']={'library':'mlx','device':str(mx.default_device()),'metalAvailable':True}
-    options={'resolution':64,'steps':1000,'batch':1024,'seed':41,**config.get('fit',{})}
+    options={'resolution':64,'steps':1000,'batch':1024,'seed':41,'learningRate':.001,'cosineEndScale':1.,'adamEpsilon':1e-8,'lossKind':'log1p-l1','lossPower':3.,**config.get('fit',{})}
     report['options']=options
     for k in ['resolution','steps','batch','seed']:
         if not isinstance(options[k],int) or options[k]<(0 if k=='seed' else 1):raise ValueError('Invalid fit '+k)
@@ -43,19 +43,23 @@ try:
     q,t,hq,ht=load('queries',8),load('labels',3),load('heldoutQueries',8),load('heldoutLabels',3)
     if q.shape[0]!=t.shape[0] or hq.shape[0]!=ht.shape[0] or not len(q) or not len(hq):raise ValueError('Corpus row mismatch')
     if options['batch']>len(q):raise ValueError('Batch exceeds retained query pool')
-    model=Appearance(options['resolution'],16,options['seed']);optimizer=optim.Adam(learning_rate=.001)
-    # A robust log response loss lets bright specular samples contribute
-    # without making unlit black samples dominate relative denominators.
-    def loss(model,queries,labels):return mx.mean(mx.abs(mx.log1p(model(queries))-mx.log1p(labels)))
+    if options['lossKind'] not in ['log1p-l1','L1WithPowerLog'] or not math.isfinite(options['lossPower']) or options['lossPower']<=0:raise ValueError('Supported response loss and positive power required')
+    if not math.isfinite(options['adamEpsilon']) or options['adamEpsilon']<=0:raise ValueError('Positive Adam epsilon required')
+    appearance_learning_rate(0,options['steps'],options['learningRate'],options['cosineEndScale'])
+    report['effectiveRecipe']={'loss':options['lossKind'],'power':options['lossPower'],'initialLearningRate':options['learningRate'],'cosineEndScale':options['cosineEndScale'],'adamEpsilon':options['adamEpsilon'],'candidates':1,'data':'retained-fixed-pool','directions':dataset.get('directionalSampling','legacy-cosine-fixed'),'publishedReference':'NVlabs/neuralappearance@305b4b9c12e679398c487603dd8245c3f348526c'}
+    model=Appearance(options['resolution'],16,options['seed']);optimizer=optim.Adam(learning_rate=options['learningRate'],eps=options['adamEpsilon'])
+    # Report the selected objective explicitly; the legacy metric remains a separate comparable diagnostic.
+    def loss(model,queries,labels):return appearance_response_loss(model(queries),labels,options['lossKind'],options['lossPower'])
     update=nn.value_and_grad(model,loss)
     def checkpoint(step):
-        predicted=model(hq);error=loss(model,hq,ht);mx.eval(predicted,error)
+        predicted=model(hq);error=loss(model,hq,ht);log_error=appearance_response_loss(predicted,ht);mx.eval(predicted,error,log_error)
         value=float(error.item())
         if not math.isfinite(value):raise ValueError('Nonfinite held-out loss')
-        record={'step':step,'heldoutLogL1':value,**model.save_bundle(out/f'step-{step}',{'kind':'own-mlx-fit','dataset':str(corpus),'datasetIdentity':hashlib.sha256((corpus/'dataset.json').read_bytes()).hexdigest(),'teacher':dataset['teacher'],'step':step})}
+        record={'step':step,'heldoutLogL1':float(log_error.item()),'heldoutTrainingLoss':value,'trainingLossKind':options['lossKind'],**model.save_bundle(out/f'step-{step}',{'kind':'own-mlx-fit','dataset':str(corpus),'datasetIdentity':hashlib.sha256((corpus/'dataset.json').read_bytes()).hexdigest(),'teacher':dataset['teacher'],'step':step,'recipe':report['effectiveRecipe']})}
         report['checkpoints'].append(record);np.asarray(predicted).astype('<f4').tofile(out/f'heldout-{step}.f32');publish();print(json.dumps(record),flush=True)
     report['phase']='fit';publish();checkpoint(0)
     for step in range(1,options['steps']+1):
+        optimizer.learning_rate=appearance_learning_rate(step-1,options['steps'],options['learningRate'],options['cosineEndScale'])
         ids=mx.random.randint(0,len(q),(options['batch'],));value,grads=update(model,q[ids],t[ids]);optimizer.update(model,grads);mx.eval(model.parameters(),optimizer.state,value)
         if step%250==0 or step==options['steps']:checkpoint(step)
     if report['checkpoints'][-1]['heldoutLogL1']>=report['checkpoints'][0]['heldoutLogL1']:raise ValueError('Held-out response did not improve')

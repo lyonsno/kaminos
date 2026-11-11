@@ -1,0 +1,20 @@
+// kaminos-test: manual — tiny production-shader conformance, no performance measurement.
+import fs from 'node:fs/promises';import path from 'node:path';import assert from 'node:assert/strict';import {execFileSync} from 'node:child_process';import {pathToFileURL} from 'node:url';
+import {withKaminosGpu,withGpuErrorScopes} from './shader-herder.mjs';import {createAppearanceDirectionCapture} from '../neural-appearance-direction-capture.mjs';
+const [teacherRoot,out]=process.argv.slice(2);assert(out,'Caller-owned output required');await fs.mkdir(out,{recursive:true});const report={status:'running',phase:'source',teacherRoot,root:process.cwd()};const save=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));await save();
+try{
+ report.commit=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();report.dirty=execFileSync('git',['status','--porcelain'],{encoding:'utf8'}).trim();report.teacherCommit=execFileSync('git',['-C',teacherRoot,'rev-parse','HEAD'],{encoding:'utf8'}).trim();assert.equal(report.teacherCommit,'c596d9d62da7bccd9e8bc3b72c202e7992c7d3da');
+ const {SurfaceMaterialTeacher}=await import(pathToFileURL(path.join(teacherRoot,'surface-material-teacher.mjs')));const {SURFACE_TEACHER_COMMON_WGSL}=await import(pathToFileURL(path.join(teacherRoot,'surface-teacher-wgsl.mjs')));
+ const triangles=[{a:[-20000,0,-20000],b:[20000,0,20000],c:[20000,0,-20000],materialIndex:0},{a:[-20000,0,-20000],b:[-20000,0,20000],c:[20000,0,20000],materialIndex:0}],materials=[{color:[.5,.3,.1],roughness:1,metalness:0}],settings={tileSize:1,referenceHeight:.1,resolution:64,samples:1};
+ const queries=new Float32Array([.5,.5,0,0,1,0,0,1,.5,.5,0,0,1,.6,0,.8,.5,.5,0,0,1,1,0,1e-5,.5,.5,1,0,1e-5,0,0,1]);report.queries=[...queries];
+ await withKaminosGpu(async({device,adapterInfo})=>{report.adapter=adapterInfo;const teacher=new SurfaceMaterialTeacher(device,{triangles,materials,environment:0,bounces:1});
+  try{
+   report.phase='legacy-horizon';await save();await assert.rejects(teacher.evaluateMaterial(new Float32Array([.5,.5,0,0,1,0,0,0]),settings),/hemisphere/);report.legacyRejectsRepresentableXYZ=true;
+   report.phase='explicit-directions';await save();const capture=createAppearanceDirectionCapture(teacher,SURFACE_TEACHER_COMMON_WGSL);const rgb=await withGpuErrorScopes(device,'explicit direction capture',()=>capture.evaluate(queries,settings));report.rgb=[...rgb];assert(rgb.every(Number.isFinite));assert(rgb[6]>0&&rgb[9]>0,'Grazing direction response must survive float32 XY rounding');
+   const legacy=await teacher.evaluateMaterial(new Float32Array([.5,.5,0,0,0,0,0,0,.5,.5,0,0,-.6,0,0,0]),settings);for(let i=0;i<6;i++)assert(Math.abs(rgb[i]-legacy[i]*(i<3?1:.8))<1e-6,'Regular direction convention changed');
+   const repeated=new Float32Array(130*8);for(let i=0;i<130;i++)repeated.set(queries.subarray(8,16),i*8);const full=await capture.evaluate(repeated,settings);
+   const facade=new Proxy(device,{get(target,key){if(key==='limits')return {maxComputeWorkgroupsPerDimension:1,maxStorageBufferBindingSize:target.limits.maxStorageBufferBindingSize,maxBufferSize:target.limits.maxBufferSize};const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;}});
+   const limited={device:facade,environment:0,disposed:false,common:teacher.common.bind(teacher),group:teacher.group.bind(teacher),writeParams:teacher.writeParams.bind(teacher)};const split=await createAppearanceDirectionCapture(limited,SURFACE_TEACHER_COMMON_WGSL).evaluate(repeated,settings);assert.deepEqual(split,full);report.partitionedQueryCount=130;report.partitionConformance='same production shader on actual device; declared test dispatch capacity64rows';
+  }finally{teacher.dispose();}
+ },{onEvidence:e=>report.evidence=e});report.status='passed';report.phase='complete';
+}catch(e){report.status='failed';report.error=e.stack;process.exitCode=1;}finally{await save();console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,out}));}
