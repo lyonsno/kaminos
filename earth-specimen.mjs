@@ -96,10 +96,10 @@ export class EarthSpecimen {
   this.tool=new CANNON.Body({type:CANNON.Body.KINEMATIC,mass:0});this.tool.addShape(new CANNON.Sphere(.08));this.tool.collisionResponse=false;this.tool.position.y=10;w.addBody(this.tool);
  }
  static fromSnapshot(snapshot){return new EarthSpecimen({},snapshot);}
- advance(seconds,{tool=null}={}){
+ advance(seconds,{tool=null,report=true}={}){
   if(this.disposed)throw Error('Earth specimen disposed');finite(seconds,'duration');
   if(tool){vector(tool.position,3,'tool position');finite(tool.radius,'tool radius',Number.MIN_VALUE);if(tool.velocity)vector(tool.velocity,3,'tool velocity');}
-  if(seconds===0)return this.state();
+  if(seconds===0)return report?this.state():undefined;
   this.tool.collisionResponse=!!tool;
   if(tool){this.tool.position.set(...tool.position);this.tool.velocity.set(...(tool.velocity??[0,0,0]));if(this.tool.shapes[0].radius!==tool.radius){this.tool.shapes[0].radius=tool.radius;this.tool.shapes[0].updateBoundingSphereRadius();this.tool.updateBoundingRadius();}this.tool.aabbNeedsUpdate=true;}
   const count=Math.ceil(seconds/this.config.dt),dt=seconds/count;
@@ -122,7 +122,7 @@ export class EarthSpecimen {
    this.time+=dt;this.steps++;
   }
   this.tool.collisionResponse=false;this.tool.velocity.set(0,0,0);
-  return this.state();
+  return report?this.state():undefined;
  }
  setMaterial(values){
   if(!values||typeof values!=='object'||Array.isArray(values)||Object.keys(values).some(k=>!['cohesion','friction','plasticYield','plasticRate','breakStrain','clodStrength','interfaceStrength','gritBinding'].includes(k)))throw Error('Invalid material parameter');

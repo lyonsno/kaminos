@@ -10,7 +10,7 @@ function fakeHost(){
  const frames=new Set(),roots=[],doc={activeElement:null,createElement:tag=>({tag,ownerDocument:doc,value:'',children:[],append(...a){this.children.push(...a);},setAttribute(k,v){this[k]=v;},addEventListener(){}})};
  let view={position:[1,1,1],target:[0,0,0],fov:40};const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera();
  const session={attach:async root=>{roots.push(root);scene.add(root);return {id:`object-${roots.length}`,root};},redraw(){},readView:()=>view,setView:v=>view=v,onFrame:fn=>{frames.add(fn);return()=>frames.delete(fn);},dispose:async()=>{for(const r of roots)scene.remove(r);}};
- return {roots,doc,frame:(deltaSeconds=1/60)=>{for(const fn of frames)fn({deltaSeconds,timestampMs:performance.now()});},host:{scene:{open:async()=>session,refreshPresentation(){},isVisible:()=>true,rendering:()=>({scene,camera,renderer:{getDrawingBufferSize:v=>v.set(64,48),backend:{device:{limits:{maxTextureDimension2D:4096},addEventListener(){},removeEventListener(){}}}}})},controls:{document:doc,installNumberDrag:({input})=>{input.readOnly=true;return {dispose(){}};}}}};
+ return {roots,doc,frame:(deltaSeconds=1/60)=>{for(const fn of frames)fn({deltaSeconds,timestampMs:performance.now()});},host:{scene:{open:async()=>{const owned=[];return {...session,attach:async root=>{const handle=await session.attach(root);owned.push(root);return handle;},dispose:async()=>{for(const root of owned)scene.remove(root);}};},refreshPresentation(){},isVisible:()=>true,rendering:()=>({scene,camera,renderer:{getDrawingBufferSize:v=>v.set(64,48),backend:{device:{limits:{maxTextureDimension2D:4096},addEventListener(){},removeEventListener(){}}}}})},controls:{document:doc,installNumberDrag:({input})=>{input.readOnly=true;return {dispose(){}};}}}};
 }
 test('closing the workshop disposes its final geometry and materials',async()=>{
  const {host,roots}=fakeHost();const app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8}},record:()=>{}});
@@ -104,4 +104,13 @@ test('a refused replacement resumes the retained healthy input queue',async()=>{
  const Saved=globalThis.Worker,Worker=simulatedWorker();globalThis.Worker=Worker;
  const {host,roots,frame}=fakeHost();let app;
  try{app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8}},record:()=>{}});const invalid=await app.operations.snapshot();invalid.snapshot.schema='bad';for(let i=0;i<4;i++){roots[1].position.x+=.01;frame();}await assert.rejects(app.operations.load(invalid),/schema/);await new Promise(r=>setTimeout(r,80));assert.equal(app.read().live.pendingSamples,0,'a refused load must not strand healthy prior movement');assert.equal(app.read().live.inFlight,false);}finally{await app?.dispose();globalThis.Worker=Saved;}
+});
+
+
+test('render inspection returns to the same retained specimen and a failed opening loses no work',async()=>{
+ const {host,roots}=fakeHost(),app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8,captureResolution:10}},record:()=>{}});
+ try{await app.operations.advance({seconds:.02});const before=await app.operations.snapshot(),root=roots[0],open=host.scene.open;
+ host.scene.open=async()=>{throw Error('injected transport opening failure');};await assert.rejects(app.operations.render({paused:true,scale:.02}),/transport opening/);assert.equal(root.visible,true);assert.deepEqual((await app.operations.snapshot()).snapshot,before.snapshot);
+ host.scene.open=open;await app.operations.render({paused:true,scale:.02});assert.equal(app.read().renderPreview.active,true);assert.equal(root.visible,false);const released=new Set(),resources=new Set();for(const r of roots.slice(2))r.traverse(o=>{if(o.geometry)resources.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material])if(m)resources.add(m);});for(const r of resources)r.addEventListener('dispose',()=>released.add(r));await app.operations.returnToEarth();assert.equal(released.size,resources.size,'preview geometry and materials must release');assert.ok(root.parent,'closing inspection must not remove the retained workshop');assert.equal(root.visible,true);assert.equal(app.read().renderPreview.active,false);assert.deepEqual((await app.operations.snapshot()).snapshot,before.snapshot);
+ }finally{await app.dispose();}
 });

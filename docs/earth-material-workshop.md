@@ -173,3 +173,23 @@ keeps its separate convex geometry. The live/resting/capture meshes all use the
 same field and frozen snapshot. Fine grain/pore finishing and calibrated
 volume-conserving surface reconstruction remain later material work; this slice
 adds aggregate organization, physical breakup and damage-dependent geometry.
+
+
+## Cheap interaction and frozen inspection
+
+Live, resting and capture detail control isosurface extraction only. They do not
+change the number of physical support samples, the contact solver iterations or
+the physical timestep. A higher capture detail reconstructs the same physical
+snapshot; it does not rerun the dynamics at finer physical resolution.
+
+Render frozen surface opens a borrowed transport preview while retaining the
+workshop, its physics worker and its contact state. Back to earth closes only
+that preview and restores the authoring view and prior live/paused state. A
+renderer opening failure retains the specimen. The standalone earth transport
+experiment remains available, but workshop inspection no longer switches away
+from and disposes the authoring experiment.
+
+The saved forming history retains observed tool trajectories. It is not yet a
+complete program for replaying a different-resolution simulation: material edits,
+manual advances, support remapping and physical parameter scaling need explicit
+composition before that stronger behavior can be promised.

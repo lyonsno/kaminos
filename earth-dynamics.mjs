@@ -19,7 +19,7 @@ export function createEarthDynamicsKernel(){
    for(let i=0;i<count;i++){
     const t=i/count,position=from.position.map((v,k)=>v+(to.position[k]-v)*t);
     const velocity=to.position.map((v,k)=>(v-from.position[k])/seconds);
-    model.advance(dt,{tool:{position,radius:from.radius+(to.radius-from.radius)*t,velocity}});
+    model.advance(dt,{tool:{position,radius:from.radius+(to.radius-from.radius)*t,velocity},report:false});
    }
   }else if(message.kind!=='snapshot'&&message.kind!=='material'&&message.kind!=='advance')throw Error(`Unknown earth dynamics operation ${message.kind}`);
   return result();

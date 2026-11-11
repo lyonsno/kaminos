@@ -109,7 +109,7 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
     const frame=document.createElement('button');frame.textContent='Frame source';frame.onclick=()=>invoke('frame').catch(error=>{status.textContent=error.message;});status=document.createElement('p');status.setAttribute('role','status');
     const note=document.createElement('p');note.textContent='Frozen explicit geometry with real visibility and surface bounces. Orbit and use native selection and scene lights. Reconstruction off shows the raw accumulated estimate. '+boundary;
     panel.append(frame,status,note);showStatus();this.drags=drags;
-   },async dispose(){disposed=true;stop?.();renderer.backend.device.removeEventListener('uncapturederror',gpuFailure);for(const drag of this.drags??[])drag?.dispose?.();engine?.dispose();texture?.dispose();await session.dispose();}};
+   },async dispose(){disposed=true;stop?.();renderer.backend.device.removeEventListener('uncapturederror',gpuFailure);for(const drag of this.drags??[])drag?.dispose?.();await pending;engine?.dispose();texture?.dispose();root.geometry.dispose();for(const material of sourceMaterials)material.dispose();screen?.geometry.dispose();screenMaterial?.dispose();await session.dispose();}};
   }catch(error){disposed=true;stop?.();renderer.backend.device.removeEventListener('uncapturederror',gpuFailure);engine?.dispose();texture?.dispose();try{await session.dispose();}catch(cleanup){throw new AggregateError([error,cleanup],`Grass setup: ${error.message}; cleanup: ${cleanup.message}`);}throw error;}
  }
 };}

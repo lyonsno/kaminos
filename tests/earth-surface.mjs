@@ -1,7 +1,8 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
+import test from 'node:test';
 import {EarthSpecimen} from '../earth-specimen.mjs';
-import {createEarthField,createEarthTeacherSource} from '../earth-surface.mjs';
+import {createEarthField,createEarthTeacherSource,meshEarthMatrix} from '../earth-surface.mjs';
 const earth=new EarthSpecimen({columns:4,layers:2,grains:2});
 const snapshot=earth.snapshot(),field=createEarthField(snapshot);
 assert.ok(field.value(...snapshot.particles[15].position)>0,'the implicit matrix must contain its represented material');
@@ -24,3 +25,10 @@ dense.embeddings=Array.from({length:3000},(_,grain)=>snapshot.embeddings.filter(
 const denseSource=createEarthTeacherSource({snapshot:dense,resolution:2});assert.equal(denseSource.triangles.filter(t=>t.kind==="grit").length,60000);assert.ok(Number.isFinite(denseSource.referenceHeight));
 
 assert.throws(()=>createEarthTeacherSource({snapshot,resolution:12,maxTriangles:1}),/storage/,'actual emitted triangles must enforce memory allowance');
+
+test('extraction orients its facets from the sampled cell without resampling density gradients',()=>{
+ let queries=0;
+ const field={bounds:{min:[-1.5,-1.5,-1.5],max:[1.5,1.5,1.5]},value(x,y,z){queries++;return 1-x*x-y*y-z*z;},normal(){throw Error('extra density-gradient reconstruction');},sample(){return{materialIndex:0,region:'matrix',clodId:0,fragmentId:0};}};
+ const triangles=meshEarthMatrix(field,8);assert.ok(triangles.length>0);assert.equal(queries,9**3,'only the retained sample lattice is needed for facet orientation');
+ for(const t of triangles){const u=t.b.map((v,k)=>v-t.a[k]),v=t.c.map((v,k)=>v-t.a[k]),n=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]],center=t.a.map((x,k)=>(x+t.b[k]+t.c[k])/3);assert.ok(n.reduce((s,x,k)=>s+x*center[k],0)>0,'all closed sphere facets face outward');}
+});

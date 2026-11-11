@@ -59,7 +59,12 @@ export function meshEarthMatrix(field,resolution=28,{maxTriangles=Infinity}={}){
    const polygon=[];
    for(const [a,b]of edges){const i=tet[a],j=tet[b];if((v[i]>0)===(v[j]>0))continue;const t=v[i]/(v[i]-v[j]),p=positions[i].map((p,k)=>p+(positions[j][k]-p)*t);if(!polygon.some(q=>Math.hypot(...sub(q,p))<1e-12))polygon.push(p);}
    if(polygon.length<3)continue;
-   const center=[0,1,2].map(k=>polygon.reduce((s,p)=>s+p[k],0)/polygon.length),normal=field.normal(...center),axis=norm(sub(polygon[0],center)),other=cross(normal,axis);
+   const center=[0,1,2].map(k=>polygon.reduce((s,p)=>s+p[k],0)/polygon.length);
+   // The tetrahedron's retained scalar samples already identify inside/outside.
+   // Orient its planar isosurface without six more nonlinear field evaluations.
+   const inside=tet.find(i=>v[i]>0),outside=tet.find(i=>v[i]<=0),outward=sub(positions[outside],positions[inside]);
+   let normal=norm(cross(sub(polygon[1],polygon[0]),sub(polygon[2],polygon[0])));if(dot(normal,outward)<0)normal=normal.map(v=>-v);
+   const axis=norm(sub(polygon[0],center)),other=cross(normal,axis);
    polygon.sort((a,b)=>Math.atan2(dot(sub(a,center),other),dot(sub(a,center),axis))-Math.atan2(dot(sub(b,center),other),dot(sub(b,center),axis)));
    for(let i=1;i<polygon.length-1;i++){let[a,b,c]=[polygon[0],polygon[i],polygon[i+1]];const n=cross(sub(b,a),sub(c,a));if(Math.hypot(...n)<1e-14)continue;if(dot(n,normal)<0)[b,c]=[c,b];if(triangles.length>=maxTriangles)throw Error('Surface output exceeds available interactive storage; previous surface retained');const region=field.sample(...a.map((v,k)=>(v+b[k]+c[k])/3));triangles.push({a,b,c,materialIndex:region.materialIndex,region:region.region,clodId:region.clodId,fragmentId:region.fragmentId,kind:'matrix',identity:`matrix-${x}-${y}-${z}-${triangles.length}`});}
   }
