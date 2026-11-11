@@ -14,8 +14,8 @@ export function validateCarrierCapture(raw,metadata,capture,commit){
  return {slots:e.slots,active,emissive,sha256:digest(raw),step:metadata.state?.simStepCount,sourceCommit:commit,records};
 }
 
-export async function runParticleLightWitness({snapshot,capture,sourceCommit,out,dims=[16,24,16],direction=[0,0,1]}){
- await fs.mkdir(out,{recursive:true});const report={schema:'kaminos.particle-light-sweep.v1',status:'running',phase:'source',snapshot,capture,sourceCommit,requested:{dims,direction},lastTrustworthy:null};
+export async function runParticleLightWitness({snapshot,capture,sourceCommit,out,dims=[16,24,16],direction=[0,0,1],settings={}}){
+ await fs.mkdir(out,{recursive:true});const report={schema:'kaminos.particle-light-sweep.v1',status:'running',phase:'source',snapshot,capture,sourceCommit,requested:{dims,direction,settings},lastTrustworthy:null};
  const save=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2)+'\n');await save();
  try{
   const metadata=JSON.parse(await fs.readFile(snapshot)),sourceReport=JSON.parse(await fs.readFile(capture)),raw=await fs.readFile(metadata.records.path),source=validateCarrierCapture(raw,metadata,sourceReport,sourceCommit);
@@ -25,7 +25,7 @@ export async function runParticleLightWitness({snapshot,capture,sourceCommit,out
   await withKaminosGpu(async ctx=>withGpuErrorScopes(ctx.device,'held particle shared illumination',async()=>{
    report.adapter=ctx.adapterInfo;report.effectiveRoute='native-apple/particle-Gaussian-slab-deposit/opposite-interior-sweeps';report.phase='deposition';await save();
    const d=ctx.device,s=metadata.effective.settings,controls=metadata.state.controls;
-   const owner=createParticleLightSweep(d,{dims,origin:[-1,-1,-1],extent:[2,3,2],direction,settings:{radius:s.radius,stretch:s.stretch,flowAlignment:s.flowAlignment,expansion:s.expansion,supportFloor:s.supportFloor,gain:s.gain,extinction:controls.density*controls.physicalSmokeExtinction*s.generatedSmokeGain*s.opacity,stateLife:s.stateLife,lifeFade:s.lifeFade}});
+   const owner=createParticleLightSweep(d,{dims,origin:[-1,-1,-1],extent:[2,3,2],direction,settings:{radius:s.radius,stretch:s.stretch,flowAlignment:s.flowAlignment,expansion:s.expansion,supportFloor:s.supportFloor,gain:s.gain,extinction:controls.density*controls.physicalSmokeExtinction*s.generatedSmokeGain*s.opacity,stateLife:s.stateLife,lifeFade:s.lifeFade,...settings}});
    const particles=d.createBuffer({size:raw.length,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST});
    try{
     d.queue.writeBuffer(particles,0,new Uint8Array(raw));report.plan=owner.plan;report.arms=[];

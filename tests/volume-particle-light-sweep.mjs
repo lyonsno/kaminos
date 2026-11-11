@@ -41,3 +41,11 @@ test('oblique nonmultiple field, separated smoke/emitter and interior solid mask
   try{d.queue.writeBuffer(particles,0,records);d.queue.writeBuffer(owner.solids,0,solid);const e=d.createCommandEncoder();owner.deposit(e,{particles,slots:3});owner.sweep(e);d.queue.submit([e.finish()]);const [c,p,m]=await Promise.all([readLightCoefficients(d,owner),readLightBuffer(d,owner.positive),readLightBuffer(d,owner.negative)]);assert.ok(c.some(v=>v>0),'oblique deposition cannot be blank');for(let z=0;z<7;z++)for(let y=0;y<5;y++)for(let x=0;x<3;x++){const i=x+3*(y+5*z);for(const [out,reverse]of [[p,false],[m,true]])(solid[i]?[0,0,0,0]:referenceLightAt(c,solid,dims,[x,y,z],reverse)).forEach((v,a)=>near(out[4*i+a],v));}}finally{owner.dispose();particles.destroy();}
  }));
 });
+test('thin bright slabs preserve the clear-medium limit without cancellation as spatial resolution rises',async()=>{
+ await withKaminosGpu(async ctx=>withGpuErrorScopes(ctx.device,'thin optical transfer',async()=>{
+  const d=ctx.device,owner=createParticleLightSweep(d,{dims:[1,1,1],origin:[0,0,0],extent:[1,1,1],direction:[0,0,1]});
+  try{for(const tau of [0,.0004,.004,.0000001]){
+   const half=new Float16Array([4096,2048,1024,tau]);d.queue.writeTexture({texture:owner.coefficients},new Uint8Array(half.buffer),{bytesPerRow:8},[1,1]);const e=d.createCommandEncoder();owner.sweep(e);d.queue.submit([e.finish()]);const actual=await readLightBuffer(d,owner.positive),t=Number(half[3])*.5,phi=t>0?-Math.expm1(-t)/t:1;for(let k=0;k<3;k++)near(actual[k],Number(half[k])*.5*phi,2e-6);
+  }}finally{owner.dispose();}
+ }));
+});

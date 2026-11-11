@@ -19,3 +19,11 @@ npm test -- --only tests/volume-particle-light-sweep.mjs,tests/particle-light-wi
 ```
 
 The larger captured-population witness belongs in Greenroom. Its positional inputs are snapshot JSON, native capture report, expected source revision, and caller-owned output directory. Source capture may precede the lighting implementation revision; both identities are retained separately. No FPS or full-scene benefit follows from a two-direction correctness result. The next comparison charges oblique deposition, transport, receiver reconstruction and solid visibility across a useful angular set.
+
+## Fixed-particle spatial-resolution comparison
+
+`tools/particle-light-resolution.mjs` consumes an explicit source-root/commit manifest and the same complete retained population at increasing nested receiver widths. The physical box, particle optics, two directions and held state remain fixed. Native sweep centers are reconstructed at exact requested world-Z planes by advancing the homogeneous local transfer from an upstream center or boundary, without dividing by nearly opaque transmission. It supports this axis-aligned comparison explicitly; arbitrary world planes through oblique fields are not implied.
+
+Raw native arrays, exact physical-plane arrays, source identities and terminal reports are retained. Higher-resolution XY samples are area-averaged onto coarser footprints for radiance ratios, spatial correlation, relative L1 difference and centroid displacement. These are diagnostics with no automatic convergence threshold. The receiver-footprint filter shrinks with cell width; changes therefore include the intended reduction in footprint smoothing. Plots need common physical coordinates and one shared color scale across the resolutions in each comparison.
+
+Production half-slab integration uses a small-optical-depth series to avoid cancellation in `1-exp(-tau)`. A native bright/thin-slab regression guards the clear-medium limit independently of field resolution.
