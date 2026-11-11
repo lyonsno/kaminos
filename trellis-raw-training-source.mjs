@@ -1,6 +1,6 @@
 // Teacher for the existing raw-field mesh consumer: exact raw topology, aligned
 // per-vertex PBR rows, sRGB conversion before interpolation, no UV/atlas bake.
-import {prepareSupportVolume,materializeFragments,worldPoint} from './trellis-local-support.mjs';
+import {prepareSupportVolume,materializeFragments,worldPoint,supportFrame} from './trellis-local-support.mjs';
 import {clipSupportVolume} from './trellis-support-gpu.mjs';
 import {traceSupportRays} from './trellis-support-rays.mjs';
 import {SurfaceMaterialTeacher} from './surface-material-teacher.mjs';
@@ -19,7 +19,7 @@ struct RawTriangle {c0:vec4f,c1:vec4f,c2:vec4f,o0:vec4f,o1:vec4f,o2:vec4f,n0:vec
 fn sourceMaterial(hit:Hit)->Material{
  let a=rawTriangles[hit.id];let b=vec3f(1.0-hit.uv.x-hit.uv.y,hit.uv);
  let color=a.c0.rgb*b.x+a.c1.rgb*b.y+a.c2.rgb*b.z;
- let optics=a.o0.xy*b.x+a.o1.xy*b.y+a.o2.xy*b.z;
+ let optics=clamp(a.o0.xy*b.x+a.o1.xy*b.y+a.o2.xy*b.z,vec2f(0.0),vec2f(1.0));
  let factor=materials[u32(triangles[hit.id].a.w)];
  return Material(vec4f(color*factor.color.rgb,1.0),vec4f(optics*factor.optics.xy,0.0,0.0));
 }
@@ -42,14 +42,15 @@ export function createRawFieldTeacherSurface(device){
 export async function createRawTrellisTrainingSource(device,source,{region,tileSize}){
  if(!(source.positions instanceof Float32Array)||!(source.indices instanceof Uint32Array)||!(source.normals instanceof Float32Array)||!(source.materialRows instanceof Float32Array)||source.materialRows.length!==source.positions.length*2||!source.materialRows.every(Number.isFinite))throw Error('Aligned finite raw fields required');
  if(!Number.isFinite(tileSize)||tileSize<=0||tileSize>2*region.radius)throw Error('Raw material tile must fit inside support');
+ if(source.provenance?.region){const canonical=r=>JSON.stringify({...supportFrame(r),top:r.top??.01});if(canonical(source.provenance.region)!==canonical(region))throw Error('Raw manifest region mismatch; use the recorded region or extract a matching raw bundle');}
  const prepared=prepareSupportVolume(source,region),candidate={...prepared,...await clipSupportVolume(device,prepared)},f=candidate.frame;
  const rotate=(v,point=false)=>{const d=v.map((x,k)=>x-(point?f.origin[k]:0));return [dot(d,f.u),dot(d,f.n),-dot(d,f.v)];};
- const materialized=materializeFragments(source,candidate.patch,f),clamp=x=>Math.max(0,Math.min(1,x));
+ const materialized=materializeFragments(source,candidate.patch,f);
  const triangles=candidate.patch.map((t,i)=>{
   const colors=[],optics=[];
   for(const v of t.vertices){
    colors.push([0,1,2].map(c=>v.b.reduce((sum,w,k)=>sum+w*linear(source.materialRows[source.indices[t.sourceTriangle*3+k]*6+c]),0)));
-   optics.push([4,3].map(c=>v.b.reduce((sum,w,k)=>sum+w*clamp(source.materialRows[source.indices[t.sourceTriangle*3+k]*6+c]),0)));
+   optics.push([4,3].map(c=>v.b.reduce((sum,w,k)=>sum+w*source.materialRows[source.indices[t.sourceTriangle*3+k]*6+c],0)));
   }
   const points=[0,1,2].map(k=>rotate(Array.from(materialized.positions.subarray(i*9+k*3,i*9+k*3+3)),true));
   return {a:points[0],b:points[1],c:points[2],materialIndex:0,sourceColors:colors,sourceOptics:optics,sourceNormals:[0,1,2].map(k=>rotate(Array.from(materialized.normals.subarray(i*9+k*3,i*9+k*3+3)))),sourceTriangle:source.provenance?.originalTriangleIds?.[t.sourceTriangle]??t.sourceTriangle,sourceBarycentrics:t.vertices.flatMap(v=>v.b)};
@@ -59,5 +60,5 @@ export async function createRawTrellisTrainingSource(device,source,{region,tileS
  const referenceHeight=candidate.hi[2]*f.radius,samplingPlaneHeight=rotate(probe.position,true)[1],surface=createRawFieldTeacherSurface(device);let teacher;
  try{teacher=new SurfaceMaterialTeacher(device,{triangles,materials:[SOURCE_TEACHER_UNIT_MATERIAL],surface,environment:0,bounces:1});}
  catch(e){surface.dispose();throw e;}
- return {teacher,triangles,capture:{tileSize,referenceHeight,samplingPlaneHeight},source:{route:'raw-aligned-fields',region,tileSize,sourceTriangles:source.indices.length/3,upstreamSourceTriangles:source.provenance?.triangles?.sourceCount??source.indices.length/3,clippedTriangles:triangles.length,coordinateFrame:f,samplingPlaneHeight,referenceHeight,samplingPlaneSelection:{method:'first visible center hit',probe},material:'existing raw-field mesh semantics; vertex sRGB linearized before interpolation; metallic/roughness clamped per vertex; opaque control',scope:'raw local geometry and aligned material rows; no UV atlas or reduction; clipped local transport only'},dispose(){teacher.dispose();surface.dispose();}};
+ return {teacher,triangles,capture:{tileSize,referenceHeight,samplingPlaneHeight},source:{route:'raw-aligned-fields',region,tileSize,sourceTriangles:source.indices.length/3,upstreamSourceTriangles:source.provenance?.triangles?.sourceCount??source.indices.length/3,clippedTriangles:triangles.length,coordinateFrame:f,samplingPlaneHeight,referenceHeight,samplingPlaneSelection:{method:'first visible center hit',probe},material:'existing raw-field mesh semantics; vertex sRGB linearized before interpolation; metallic/roughness clamped after interpolation; opaque control',scope:'raw local geometry and aligned material rows; no UV atlas or reduction; clipped local transport only'},dispose(){teacher.dispose();surface.dispose();}};
 }

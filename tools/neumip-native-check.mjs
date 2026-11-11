@@ -18,15 +18,15 @@ try{
  const shader=buildNeumipWGSL(model),inputs=[[.1,.2,-.1,-.3],[-.2,.4,.3,-.1],[.01,-.2,.1,.2]];
  const f0=[.11,-.12,.13,.14],f1=[.15,.16,-.17,.18];
  const expected=inputs.map(([vx,vy,lx,ly])=>rgb(cpu(model,'main',[lx,ly,vx,vy,...f0,...f1])));
- const expectedOffset=inputs.map(([vx,vy])=>[cpu(model,'offset_network',[...f0,...f1.slice(0,2),vx,vy])[0]]);
+ const expectedOffset=inputs.map(([vx,vy])=>cpu(model,'offset_network',[...f0,...f1.slice(0,2),vx,vy]));
  report.phase='shader-execution';await publish();
  await withKaminosGpu(async ctx=>{
   report.adapter=ctx.adapterInfo;
   const args={argTypes:['f32','f32','f32','f32'],inputs};
   const body='return neumipMain(vec4<f32>(0.11,-0.12,0.13,0.14),vec4<f32>(0.15,0.16,-0.17,0.18),vec2<f32>(arg0,arg1),vec2<f32>(arg2,arg3));';
   const actual=await evalWgslBatch(ctx,{...args,preamble:shader.main,returnType:'vec3<f32>',body});near(actual,expected);
-  const offsets=await evalWgslBatch(ctx,{...args,preamble:shader.offset,returnType:'f32',body:'return neumipOffset(vec4<f32>(0.11,-0.12,0.13,0.14),vec4<f32>(0.15,0.16,0.0,0.0),vec2<f32>(arg0,arg1));'});
-  near(offsets.map(x=>[x]),expectedOffset);
+  const offsets=await evalWgslBatch(ctx,{...args,preamble:shader.offset,returnType:model.coverage?'vec2<f32>':'f32',body:'return neumipOffset(vec4<f32>(0.11,-0.12,0.13,0.14),vec4<f32>(0.15,0.16,0.0,0.0),vec2<f32>(arg0,arg1));'});
+  near(model.coverage?offsets:offsets.map(x=>[x]),expectedOffset);
   const fault={...model,layers:model.layers.map(l=>({...l,biases:l.biases.slice()}))};fault.layers.find(l=>l.name==='main.mpl3').biases[0]+=1;
   const bad=await evalWgslBatch(ctx,{...args,preamble:buildNeumipWGSL(fault).main,returnType:'vec3<f32>',body});assert.throws(()=>near(bad,expected),/oracle mismatch/);
   report.numerics={actual,expected,offsets,expectedOffset,validShaderFaultRejected:true};

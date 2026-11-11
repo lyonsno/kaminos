@@ -161,8 +161,9 @@ fn evaluate(q:u32)->vec3<f32>{
 @compute @workgroup_size(64) fn backward(@builtin(global_invocation_id) id:vec3<u32>){
   let q=id.x;if(q>=cfg.count){return;}let rgb=evaluate(q);let base=q*${scratchStride}u;
   let teacherColor=vec3<f32>(targets[q*${targetStride}u],targets[q*${targetStride}u+1u],targets[q*${targetStride}u+2u]);
-  let error=rgb-teacherColor;
-  scratch[base+${actCount+deltaCount}u]=dot(error,error)*0.5;
+  let colorError=rgb-teacherColor;let colorWeight=${coverage?'targets[q*4u+3u]':'1.0'};
+  let error=colorError*colorWeight;
+  scratch[base+${actCount+deltaCount}u]=dot(colorError,colorError)*0.5*colorWeight;
   ${coverage?`let opacity=1.0/(1.0+exp(-a[${o+1}u]));
   let coverageTarget=targets[q*4u+3u];
   scratch[base+${actCount+deltaCount+4}u]=opacity;

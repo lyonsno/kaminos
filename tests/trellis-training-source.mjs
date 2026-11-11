@@ -23,3 +23,18 @@ test('raw aligned material rows are the teacher, rather than a reduced GLB fallb
 test('coverage labels distinguish source hits from support exits',async()=>{
  await withKaminosGpu(async({device})=>{let source;try{source=await createTrellisTrainingSource(device,shellFixture(),{region:{origin:[0,0,0],normal:[0,1,0],tangent:[1,0,0],radius:.5,depth:.4,top:.2},tileSize:.5});const labels=await source.teacher.evaluateMaterial(new Float32Array([.5,.5,0,0,0,0,0,0,10,10,0,0,0,0,0,0]),{...source.capture,resolution:32,samples:1,coverage:true});assert.equal(labels.length,8,'coverage query returns RGB plus coverage per query');assert.equal(labels[3],1);assert.equal(labels[7],0);}finally{source?.dispose();}});
 });
+
+test('a preselected raw source cannot silently supply a different support region',async()=>{
+ const {createRawTrellisTrainingSource}=await import('../trellis-raw-training-source.mjs');
+ const region={origin:[0,0,0],normal:[0,1,0],tangent:[1,0,0],radius:.5,depth:.4,top:.2};
+ const rawSource={positions:new Float32Array([0,0,0]),indices:new Uint32Array([0,0,0]),normals:new Float32Array([0,1,0]),materialRows:new Float32Array([1,0,0,0,1,1]),provenance:{region:{...region,radius:.1}}};
+ await assert.rejects(createRawTrellisTrainingSource({},rawSource,{region,tileSize:.5}),/Raw manifest region mismatch/);
+});
+test('raw optics clamp after barycentric interpolation, like the existing raw-field mesh',async()=>{
+ await withKaminosGpu(async({device})=>{let source;try{
+  const rawSource={positions:new Float32Array([-1,.1,-1,1,.1,1,1,.1,-1,-1,.1,1]),indices:new Uint32Array([0,1,2,0,3,1]),normals:new Float32Array([0,1,0,0,1,0,0,1,0,0,1,0]),materialRows:new Float32Array([1,0,0,-1,1,1,1,0,0,1,1,1,1,0,0,1,1,1,1,0,0,-1,1,1])};
+  source=await createTrellisTrainingSource(device,shellFixture(),{rawSource,region:{origin:[0,0,0],normal:[0,1,0],tangent:[1,0,0],radius:.5,depth:.4,top:.2},tileSize:.5});
+  const rgb=await source.teacher.evaluateMaterial(new Float32Array([.5,.5,0,0,0,0,0,0]),{...source.capture,resolution:1000000,samples:1});
+  assert.ok(Math.abs(rgb[0]-.97/Math.PI)<1e-5,`center interpolates raw metallic to zero before clamping; expected ${.97/Math.PI}, received ${rgb[0]}`);
+ }finally{source?.dispose();}});
+});
