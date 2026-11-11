@@ -506,7 +506,12 @@ resuming them follows the worker owner's successful recovery command.
 Plain UI arrives under `output.ui` (also accepting existing Kit
 `output.result.ui`) or progress `{ui}`. Actual supplied
 `ui.surfaces.{scene,volume,telemetry}.{active,transparent}` booleans drive page
-mounting/CSS; omitted fields remain unreported. Root-owned `ui.bounds` and
+mounting/CSS. Partial updates preserve previously reported fields within the same
+epoch; omitted fields with no prior report remain unreported. Explicit null
+clears ordinary metadata. New epochs clear the previous projection before
+adopting fresh status, and held/retiring states clear bootstrap navigation
+metadata and display their status. Frame updates do not clone the full retained
+membership projection on every RAF. Root-owned `ui.bounds` and
 `ui.selectionBounds` with finite `min`/`max` arrays support framing. This adapter
 navigates around the current camera pivot. Mesh-surface picking, authored-camera
 overlays, scene registry editing, saved-scene application, Asset Add and

@@ -44,3 +44,9 @@ test('failed actual retirement preserves mounted surfaces and input owner until 
  assert.equal(f.elements.size,5);assert.deepEqual(f.disposed(),{controls:0,navigation:0});
  await f.instance.retire();assert.equal(f.elements.size,3);assert.deepEqual(f.disposed(),{controls:1,navigation:1});
 });
+test('same-epoch partial surface status preserves actual bounds until invalidation clears them visibly',async()=>{
+ const f=fixture();f.config.applyUi({bounds:{min:[0,0,0],max:[1,1,1]}});
+ f.config.applyUi({surfaces:{volume:{active:true,transparent:true}}});assert.equal(f.input.frameAll(),true);
+ f.config.onPhase?.('held');assert.equal(f.input.frameAll(),false,'old-epoch navigation bounds must be cleared');
+ assert.equal(f.instance.canvases.scene.dataset.sceneWorkerState,'held');await f.instance.retire();
+});
