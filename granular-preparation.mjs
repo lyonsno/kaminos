@@ -1,5 +1,7 @@
 import * as CANNON from './node_modules/cannon-es/dist/cannon-es.js';
-import {GRIT_VERTICES} from './earth-specimen.mjs';
+import {GRIT_VERTICES,GRIT_FACES} from './earth-specimen.mjs';
+import {ConvexHull} from './lib/addons/math/ConvexHull.js';
+import {Vector3} from './lib/three.core.js';
 export const PREPARATION_SCHEMA='kaminos.granular-preparation.v1';
 export const INGREDIENTS=[
  {name:'dark angular mineral',color:[.095,.073,.045],roughness:.72,metalness:0},
@@ -13,8 +15,8 @@ const vector=(v,n)=>{if(!Array.isArray(v)||v.length!==n||!v.every(Number.isFinit
 const random=seed=>{let s=seed>>>0;return()=>{s=(Math.imul(s,1664525)+1013904223)>>>0;return(s+.5)/2**32;};};
 export function preparationRecipe(input={}){
  if(!input||typeof input!=='object'||Array.isArray(input))throw Error('Invalid mixture');
- const c={seed:41,count:256,width:.06,radius:.0027,spread:.45,angularity:.17,friction:.65,paleFraction:.22,darkFraction:.25,density:2600,pourRate:100,dt:1/240,iterations:16,...input};
- for(const k of ['seed','count','iterations'])if(!Number.isSafeInteger(c[k])||c[k]<(k==='seed'?0:1))throw Error(`Invalid ${k}`);
+ const c={seed:41,count:256,grainDetail:1,width:.06,radius:.0027,spread:.45,angularity:.17,friction:.65,paleFraction:.22,darkFraction:.25,density:2600,pourRate:100,dt:1/240,iterations:16,...input};
+ for(const k of ['seed','count','iterations','grainDetail'])if(!Number.isSafeInteger(c[k])||c[k]<(['seed','grainDetail'].includes(k)?0:1))throw Error(`Invalid ${k}`);
  for(const k of ['width','radius','density','pourRate','dt'])positive(c[k],k);
  for(const k of ['spread','angularity','friction','paleFraction','darkFraction'])positive(c[k],k,true);
  if(c.spread>=1||c.angularity>.45||c.paleFraction+c.darkFraction>1)throw Error('Invalid mixture fractions or morphology');
@@ -25,26 +27,29 @@ export function preparationRecipe(input={}){
 // worker checkpoints and the visible triangle buffers. This is a planning
 // estimate, not a measured maximum particle capacity; requests are never reduced.
 export function planPreparation(input,{availableBytes=Infinity}={}){
- const c=preparationRecipe(input),estimatedBytes=c.count*65536;
- if(!Number.isFinite(estimatedBytes)||estimatedBytes>availableBytes)throw Error(`Preparation storage estimate ${estimatedBytes} exceeds available ${availableBytes} bytes; previous specimen retained`);
+ const c=preparationRecipe(input),estimatedBytes=c.count*(65536+512*(10*4**c.grainDetail+2));
+ if(!Number.isSafeInteger(estimatedBytes)||estimatedBytes>availableBytes)throw Error(`Preparation storage estimate ${estimatedBytes} exceeds available ${availableBytes} bytes; previous specimen retained`);
  return {count:c.count,estimatedBytes,availableBytes};
 }
 // A small convex hull of a coherently perturbed icosahedron. The exact same
 // hull is consumed by Cannon contacts, the preview, and the optical source.
 function hull(vertices){
- const faces=[];
- for(let a=0;a<vertices.length;a++)for(let b=a+1;b<vertices.length;b++)for(let c=b+1;c<vertices.length;c++){
-  const n=cross(sub(vertices[b],vertices[a]),sub(vertices[c],vertices[a]));if(Math.hypot(...n)<1e-15)continue;
-  const d=vertices.map(p=>dot(n,sub(p,vertices[a]))),eps=1e-13;
-  if(d.every(v=>v<=eps))faces.push([a,b,c]);else if(d.every(v=>v>=-eps))faces.push([a,c,b]);
+ const points=vertices.map(p=>new Vector3(...p)),indices=new Map(points.map((p,i)=>[p,i])),h=new ConvexHull().setFromPoints(points);
+ return h.faces.map(f=>{const face=[];let edge=f.edge;do{face.push(indices.get(edge.head().point));edge=edge.next;}while(edge!==f.edge);return face;});
+}
+function grainDirections(detail){
+ let points=GRIT_VERTICES.map(p=>[...p]),faces=GRIT_FACES.map(f=>[...f]);
+ for(let level=0;level<detail;level++){
+  const edges=new Map(),mid=(a,b)=>{const key=[Math.min(a,b),Math.max(a,b)].join(':');if(edges.has(key))return edges.get(key);const v=points[a].map((x,k)=>(x+points[b][k])*.5),r=Math.hypot(...v),i=points.length;points.push(v.map(x=>x/r));edges.set(key,i);return i;},next=[];
+  for(const[a,b,c]of faces){const ab=mid(a,b),bc=mid(b,c),ca=mid(c,a);next.push([a,ab,ca],[ab,b,bc],[ca,bc,c],[ab,bc,ca]);}faces=next;
  }
- return faces;
+ return points;
 }
 function ingredients(c){
- const rng=random(c.seed),result=[];
+ const rng=random(c.seed),result=[],directions=grainDirections(c.grainDetail);
  for(let i=0;i<c.count;i++){
   const r=c.radius*(1+c.spread*(2*rng()-1)),phases=[rng()*6.28,rng()*6.28,rng()*6.28],axes=[.75+.5*rng(),.65+.5*rng(),.75+.5*rng()];
-  const vertices=GRIT_VERTICES.map(p=>{const noise=(Math.sin(2.7*p[0]+1.3*p[1]+phases[0])+Math.sin(2.1*p[1]-p[2]+phases[1])+Math.cos(1.8*p[2]+p[0]+phases[2]))/3;return p.map((v,k)=>v*r*axes[k]*(1+c.angularity*noise));});
+  const vertices=directions.map(p=>{const noise=(Math.sin(2.7*p[0]+1.3*p[1]+phases[0])+Math.sin(2.1*p[1]-p[2]+phases[1])+Math.cos(1.8*p[2]+p[0]+phases[2]))/3;return p.map((v,k)=>v*r*axes[k]*(1+c.angularity*noise));});
   const faces=hull(vertices),volume=faces.reduce((s,[a,b,d])=>s+dot(vertices[a],cross(vertices[b],vertices[d]))/6,0),q=new CANNON.Quaternion();q.setFromEuler(rng()*6.28,rng()*6.28,rng()*6.28);
   const f=rng(),materialIndex=f<c.darkFraction?0:f<c.darkFraction+c.paleFraction?2:1;
   result.push({id:i,vertices,faces,volume,mass:volume*c.density,radius:Math.max(...vertices.map(p=>Math.hypot(...p))),quaternion:q.toArray(),materialIndex});
@@ -83,7 +88,7 @@ export function createGranularPreparation(input={},saved=null){
   w.addBody(b);grains.push({ingredient:g,body:b});
  };
  if(saved){if(!Array.isArray(saved.grains)||saved.grains.length>all.length)throw Error('Invalid deposited inventory');for(const [i,row]of saved.grains.entries()){if(row.id!==i)throw Error('Invalid deposited identity');add(all[i],row);}}
- const top=()=>grains.reduce((h,g)=>Math.max(h,g.body.position.y+g.ingredient.radius),0);
+ const top=()=>grains.reduce((h,g)=>{const pose={position:g.body.position.toArray(),quaternion:g.body.quaternion.toArray()};return g.ingredient.vertices.reduce((height,p)=>Math.max(height,transform(p,pose)[1]),h);},0);
  const read=()=>({schema:PREPARATION_SCHEMA,recipe:{...c},deposited:grains.length,total:all.length,time,lidHeight,containerX,top:top(),mass:grains.reduce((s,g)=>s+g.ingredient.mass,0),phase:phase?structuredClone(phase):null,backend:'cannon-es-0.20.0-cpu',boundary:'bounded prepared granular packing; cohesive matrix and weathering not yet represented'});
  const row=g=>({id:g.ingredient.id,position:g.body.position.toArray(),quaternion:g.body.quaternion.toArray(),velocity:g.body.velocity.toArray(),angularVelocity:g.body.angularVelocity.toArray()});
  const snapshot=()=>({schema:PREPARATION_SCHEMA,recipe:{...c},ingredients:structuredClone(all),grains:grains.map(row),time,lidHeight,containerX,phase:phase?structuredClone(phase):null,history:structuredClone(history)});

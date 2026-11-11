@@ -5,7 +5,8 @@ import {surfaceTeacherExperiment} from './surface-teacher-experiment.mjs';
 import {mountEarthRenderControls} from './earth-workshop-controls.mjs';
 
 export default {id:'granular-preparation',title:'Granular earth preparation',async create({host,inputs={},record,updateInputs=()=>{}}){
- const session=await host.scene.open(),root=new THREE.Group();root.name='Granular preparation chamber';root.scale.setScalar(inputs.displayScale??10);
+ const displayScale=inputs.displayScale??10;if(!Number.isFinite(displayScale)||displayScale<=0)throw Error('Invalid preparation display scale');
+ const session=await host.scene.open(),root=new THREE.Group();root.name='Granular preparation chamber';root.scale.setScalar(displayScale);
  let task,asset,ui,context,preview,transition=false,disposed=false,error=null,recipe=preparationRecipe(inputs.snapshot?.recipe??inputs.recipe??{});
  const materials=INGREDIENTS.map(m=>new THREE.MeshStandardMaterial({color:new THREE.Color(...m.color),roughness:m.roughness,metalness:m.metalness}));
  const lid=new THREE.Mesh(new THREE.BoxGeometry(recipe.width*1.03,recipe.width*.025,recipe.width*1.03),new THREE.MeshStandardMaterial({color:0x798580,roughness:.3,metalness:.45}));lid.name='Compression platen';
@@ -33,7 +34,7 @@ export default {id:'granular-preparation',title:'Granular earth preparation',asy
   snapshot(){if(task.read().running)throw Error('Pause preparation before saving');return task.snapshot();},
   async load(snapshot){if(task.read().running||preview||transition)throw Error('Pause and return before loading');if(snapshot.recipe?.width!==recipe.width)throw Error('Reopen a matching chamber width to load');const next=await createPreparationTask({snapshot,onChange:refresh});task.dispose();task=next;recipe=preparationRecipe(snapshot.recipe);refresh();persist();return read();},
   freeze(){if(!task.read().deposited)throw Error('Pour ingredients before freezing');if(task.read().running)throw Error('Pause preparation before freezing');return preparationSource(task.snapshot());},
-  async render(values={}){if(task.read().running||preview||transition)throw Error('Pause preparation before inspecting');if(!task.read().deposited)throw Error('Pour ingredients before rendering');transition=true;
+  async render(values={}){if(!values||typeof values!=='object'||Array.isArray(values)||Object.keys(values).some(k=>!['scale','bounces','environment','reconstruction','paused'].includes(k)))throw Error('Invalid integral settings');if(task.read().running||preview||transition)throw Error('Pause preparation before inspecting');if(!task.read().deposited)throw Error('Pour ingredients before rendering');transition=true;
    try{frameSample();const snapshot=task.snapshot(),definition=surfaceTeacherExperiment({id:'granular-integral',title:'Prepared grain integral',createSource:config=>preparationSource(config.snapshot,{container:true}),label:'Prepared granular source',sourceURL:'kaminos:granular-preparation',boundary:'Actual convex grain surfaces and tray; bounded packing, no cohesive matrix or weathering.',initialView:session.readView(),sourceControls:[]});
     preview=await definition.create({host,record,inputs:{source:{snapshot},view:session.readView(),pose:pose(),scale:.35,bounces:3,environment:.18,...values},updateInputs:()=>{}});root.visible=false;ui?.dispose();ui=mountEarthRenderControls({document:context.document,host,sessionRead:preview.read,invoke:(name,value)=>context.invoke(name==='configure'?'renderSettings':name==='capture'?'renderCapture':name,value),back:()=>context.invoke('back')});return preview.read();
    }finally{transition=false;}
