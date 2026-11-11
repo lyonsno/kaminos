@@ -2877,7 +2877,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div id="scene-lighting-preparation-status" role="status" hidden><span></span> <button type="button" hidden>Retry lighting</button></div>
       </div>
       <details id="rendering-flame-settings" open><summary>Flame</summary><section id="rendering-fire-controls" hidden aria-label="Fire illumination"><div id="rendering-fire-route-status" role="status"></div></section></details>
-      <details open><summary>Neural materials</summary><div class="field"><label for="scene-neural-resolution" title="Neural shading width and height relative to the viewport. Geometry and other materials stay at full resolution.">Shading resolution</label><select id="scene-neural-resolution"><option value="1">100% dimensions · 100% pixels</option><option value="0.75">75% dimensions · 56% pixels</option><option value="0.7071067811865476">71% dimensions · 50% pixels</option><option value="0.5">50% dimensions · 25% pixels</option><option value="0.25">25% dimensions · 6% pixels</option></select></div></details>
+      <details open><summary>Neural materials</summary><div class="field"><label for="scene-neural-resolution" title="Neural shading width and height relative to the viewport. Geometry and other materials stay at full resolution.">Shading resolution</label><select id="scene-neural-resolution"><option value="1">100% dimensions · 100% pixels</option><option value="0.75">75% dimensions · 56% pixels</option><option value="0.7071067811865476">71% dimensions · 50% pixels</option><option value="0.5">50% dimensions · 25% pixels</option><option value="0.25">25% dimensions · 6% pixels</option></select></div><div id="scene-neural-fallback-readout"></div></details>
       <div id="rendering-light-study">
       <p class="rendering-description">Switch light contributions while viewing the same kiln. The flame, environment and authored geometry remain visible in every mode.</p>
       <label for="rendering-light-mode">Light contributions</label>
@@ -3013,6 +3013,7 @@ import {installSceneReflectionControls} from './scene-reflection-controls.mjs';
 import { pass, mrt, normalView, positionViewDirection, vec2, vec3, vec4, mix, float, uniform, texture, pmremTexture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, screenUV, builtinAOContext, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix, Fn, agxToneMapping } from 'three/tsl';
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { createSceneGI } from './scene-gi.mjs';
+import {NeuralFallbackReadout,SourceNeuralFallbackProbe,mountNeuralFallbackReadout} from './scene-neural-diagnostics.mjs';
 import { compileSceneLighting, createLightingPreparation } from './scene-lighting-compile.mjs';
 import { createFireShadowSettings } from './fire-shadow-settings.mjs';
 import {createFireLightingHistory} from './fire-lighting-history.mjs';
@@ -11769,6 +11770,24 @@ async function initScene() {
   document.getElementById('scene-neural-resolution').value=String(viewportDisplay.neuralResolution);
   document.getElementById('scene-neural-resolution').onchange=e=>window.kaminosViewportSettings.set({neuralResolution:Number(e.target.value)});
   window.kaminosNeuralShading={read:()=>sceneGI.neuralShading.state(),setScale:value=>{window.kaminosViewportSettings.set({neuralResolution:value});return sceneGI.neuralShading.state();},setReuse:value=>{sceneGI.neuralShading.reuse.value=!!value;markDirty();return sceneGI.neuralShading.state();}};
+  const neuralFallbackProbe=new SourceNeuralFallbackProbe(sceneGI.neuralShading);
+  sceneGI.neuralShading.diagnosticProbe=neuralFallbackProbe;
+  const neuralFallbackReadout=new NeuralFallbackReadout(async({signal})=>{
+    await sceneLightingPreparation.whenIdle();signal.throwIfAborted();
+    if(sceneGISettings.mode!=='combined')throw Error('Source fallback measurement requires combined GI mode');
+    const release=window.__kaminosBeginSceneInspection();
+    try{
+      await new Promise(requestAnimationFrame);signal.throwIfAborted();
+      const before=sceneGI.debugState(),draw=window.__kaminosRenderSceneForInspection(),after=sceneGI.debugState();
+      if(after.frames!==before.frames+1)throw Error('A fresh opaque source frame was not rendered');
+      signal.throwIfAborted();
+      const result=await neuralFallbackProbe.sample(renderer,{frame:draw.sceneFrameCount,borrowVisibility:borrowViewportAndBeautyVisibility});
+      if(result.captureActive&&after.neuralShading.frames!==before.neuralShading.frames+1)throw Error('A fresh neural capture was not rendered');
+      return {...result,rendererBackend:'webgpu',sourceRoute:'combined',sourceEstimatorFrame:after.frames,captureFrame:result.captureActive?after.neuralShading.frames:null};
+    }finally{release();}
+  });
+  window.kaminosNeuralShading.diagnostics={read:()=>neuralFallbackReadout.read(),sample:()=>neuralFallbackReadout.sample(),stop:()=>neuralFallbackReadout.stop()};
+  mountNeuralFallbackReadout(document.getElementById('scene-neural-fallback-readout'),neuralFallbackReadout);
   const reflectionSceneSetup=scenePass.setup;
   scenePass.setup=function(builder){if(sceneGI.reflections.settings.enabled)sceneGI.reflections.result.build(builder);return reflectionSceneSetup.call(this,builder);};
   if (typeof syncArrivalStudioLighting === 'function') syncArrivalStudioLighting();
@@ -12012,6 +12031,7 @@ async function initScene() {
     const h = (outputCaptureExtent??recordingExtent)?.height ?? Math.max(1, vp.clientHeight);
     const currentSize = renderer.getSize(new THREE.Vector2());
     if (currentSize.x !== w || currentSize.y !== h) {
+      neuralFallbackReadout.invalidate('viewport resized');
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h, !(outputCaptureExtent||recordingExtent));
@@ -12046,7 +12066,7 @@ async function initScene() {
   window.__kaminosRenderSceneForInspection=()=>{const before=sceneFrameCount;manualInspectionRender=true;try{const result=renderSceneFrame();if(result===false||sceneFrameCount===before)throw new Error('inspection scene draw skipped');return {frame:renderer.info.frame,sceneFrameCount,drawn:true};}finally{manualInspectionRender=false;}};
   const IDLE_THRESHOLD = 3;
 
-  const markDirty = () => { sceneRepetitionController?.sync(); needsRender = true; idleFrames = 0; sceneGI.requestHistoryFrames(); };
+  const markDirty = () => { neuralFallbackReadout.invalidate();sceneRepetitionController?.sync(); needsRender = true; idleFrames = 0; sceneGI.requestHistoryFrames(); };
   controls.addEventListener('change', markDirty);
   transformControls.addEventListener('change', () => {
     markDirty();

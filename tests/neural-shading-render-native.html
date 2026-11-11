@@ -7,6 +7,7 @@ import {createNeumipMaterial} from '../neumip-material.mjs';
 import {createSceneGI} from '../scene-gi.mjs';
 import {referenceNeumip} from '../tools/neumip-reference.mjs';
 import {compileSceneLighting} from '../scene-lighting-compile.mjs';
+import {SourceNeuralFallbackProbe} from '../scene-neural-diagnostics.mjs';
 try{
  const W=64,H=64,scale=.125,gain=1;
  const renderer=new THREE.WebGPURenderer({antialias:false});await renderer.init();
@@ -22,6 +23,8 @@ try{
  const probe=uniform(0),normalSign=uniform(1),foreignTag=uniform(0);
  const gi=createSceneGI(scene,camera,uniform(0));gi.setSettings({temporal:false,denoise:0,steps:1,slices:1,resolutionScale:.25,gain:0});
  const {source,neuralShading:cache}=gi,beauty=gi.beauty,transport=source.getMRT().outputNodes.transport;
+ const captureTag=uniform(0),captureOutput=cache.capture.getMRT().outputNodes.output,diagnostic=new SourceNeuralFallbackProbe(cache);
+ cache.capture.setMRT(mrt({...cache.capture.getMRT().outputNodes,output:vec4(captureOutput.rgb,mix(captureOutput.a,1,captureTag))}));
  source.setMRT(mrt({...source.getMRT().outputNodes,normal:vec4(normalView.mul(normalSign),1),transport:vec4(mix(transport.rgb,vec3(.25,.5,.75),probe),mix(transport.a,1,foreignTag))}));source.getTextureNode('normal');source.getTextureNode('transport');
  const events=[],pipelineBuilds=[];
  for(const method of ['createRenderPipeline','createRenderPipelineAsync']){const native=renderer.backend.device[method];renderer.backend.device[method]=function(...args){pipelineBuilds.push({method,target:renderer.getRenderTarget()===cache.capture.renderTarget?'capture':renderer.getRenderTarget()===source.renderTarget?'source':renderer.getRenderTarget()===beauty.renderTarget?'beauty':'other'});return native.apply(this,args);};}
@@ -64,7 +67,12 @@ try{
   renderer.setRenderTarget(source.renderTarget);renderer.setMRT(source.getMRT());renderer.contextNode=source.contextNode;
    const shader=await renderer.debug.getShaderAsync(scene,camera,mesh);renderer.setRenderTarget(null);renderer.setMRT(null);renderer.contextNode=THREE.TSL.context({});
    return {count,resolution,reuse,variant,samples,events:[...events],pipelineBuilds:[...pipelineBuilds],nesting:{capture:cache.capture._renderCallDepths?.get(renderer),source:source._renderCallDepths?.get(renderer),beauty:beauty._renderCallDepths?.get(renderer)},raw:Array.from(raw),rowElements:row,shader,cache:cache.state()};
- },async dispose(){target.dispose();occluder.geometry.dispose();occluder.material.dispose();gi.dispose();pipeline.dispose();geometry.dispose();material.material.dispose();for(const light of lights)light.dispose();await renderer.dispose();}};
+ },async diagnose(scale=.25,reject=false){
+  captureTag.value=reject?1:0;await this.render(1,scale,true);const frames=cache.frames,giFrames=gi.debugState().frames;
+  const result=await diagnostic.sample(renderer,{frame:renderer.info.frame});
+  if(cache.frames!==frames||gi.debugState().frames!==giFrames)throw Error('Diagnostic unexpectedly reran learned capture or GI');
+  return {...result,maskInferenceBypass:true};
+ },async dispose(){diagnostic.dispose();target.dispose();occluder.geometry.dispose();occluder.material.dispose();gi.dispose();pipeline.dispose();geometry.dispose();material.material.dispose();for(const light of lights)light.dispose();await renderer.dispose();}};
  window.neumipRenderLoaded=true;
 }catch(e){window.neumipRenderFailure=e.stack;console.error(e);}
 </script></html>

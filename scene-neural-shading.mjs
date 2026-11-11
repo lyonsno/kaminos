@@ -1,5 +1,5 @@
 import {TSL,Vector2,DataUtils,NearestFilter} from './lib/three.webgpu.js';
-const {Fn,pass,mrt,context,vec2,vec3,vec4,float,uniform,screenUV,positionView,normalView,positionViewDirection,getViewPosition,textureSize,textureLoad,ivec2,If,abs,max,dot,bool}=TSL;
+const {Fn,pass,mrt,context,vec2,vec3,vec4,float,uniform,screenUV,positionView,normalView,positionViewDirection,getViewPosition,textureSize,textureLoad,texture,ivec2,If,abs,max,dot,bool}=TSL;
 import {checkedNeuralResolution} from './neural-resolution-settings.mjs';
 
 // This cache contains current-frame directional radiance. Learned appearance
@@ -83,13 +83,14 @@ export default class SceneNeuralShading {
   additionalGeometryPasses:this.scale.value<1?1:0,uncacheableMaterials:this.uncacheableMaterials,fallback:'direct neural evaluation where no compatible sample exists; nominal fraction excludes fallback work',
   footprint:'full-resolution receiving pixels; independently learned mips'};}
  resolveLighting(builder,material){
-  const mode=builder.context.neuralShadingMode;
+  const diagnostic=builder.context.neuralShadingMode==='diagnostic-source';
+  const mode=diagnostic?'source':builder.context.neuralShadingMode;
   if(builder.camera!==this.camera||!['source','beauty','standalone'].includes(mode)||material.transparent||builder.renderer.logarithmicDepthBuffer===true)return null;
   // Three shares normal/view properties across the lighting graph. Their first
   // initialization must precede cache branches, including the full-rate path.
   normalView.toVar('neuralReceiverNormal').append();
   positionViewDirection.toVar('neuralReceiverView').append();
-  const key=this.materialKey(material);if(key===0)return null;
+  const key=this.materialKey(material);if(key===0)return diagnostic?{radiance:vec3(1,0,0),valid:bool(true)}:null;
   const cached=vec3(0).toVar('neuralCachedRadiance'),valid=bool(false).toVar('neuralCacheValid');
   if(mode==='beauty'){
    const color=this.source.getTextureNode('transport'),depth=this.source.getTextureNode('depth'),normal=this.source.getTextureNode('normal');
@@ -106,7 +107,9 @@ export default class SceneNeuralShading {
     .and(dot(textureLoad(normal,coord).rgb.normalize(),n).greaterThan(.999)));
    return {radiance:cached,valid};
   }
-  const capture=this.capture,low=capture.getTextureNode('output'),normal=capture.getTextureNode('normal'),depth=capture.getTextureNode('depth');
+  // Snapshot diagnostics read the completed capture without scheduling another
+  // learned shading draw. The acceptance branch below is shared verbatim.
+  const capture=this.capture,input=name=>diagnostic?texture(capture.getTexture(name)):capture.getTextureNode(name),low=input('output'),normal=input('normal'),depth=input('depth');
    If(this.scale.lessThan(1),()=>{
     const size=vec2(textureSize(low)),q=screenUV.mul(size).sub(.5),base=q.floor(),f=q.fract();
     const sum=vec3(0).toVar(),weight=float(0).toVar();
@@ -124,8 +127,8 @@ export default class SceneNeuralShading {
     }
     If(weight.greaterThan(.00001),()=>{cached.assign(sum.div(weight));valid.assign(true);});
    });
-  return {radiance:cached,valid};
+  return diagnostic?{radiance:valid.select(vec3(0,1,0),vec3(1,0,0)),valid:bool(true)}:{radiance:cached,valid};
  }
 
- dispose(){for(const [material,{release}] of this.keys)material.removeEventListener('dispose',release);this.keys.clear();this.capture.dispose();for(const [source,{material,release}] of this.materials){source.removeEventListener('dispose',release);material.dispose();}this.materials.clear();}
+ dispose(){this.diagnosticProbe?.dispose();for(const [material,{release}] of this.keys)material.removeEventListener('dispose',release);this.keys.clear();this.capture.dispose();for(const [source,{material,release}] of this.materials){source.removeEventListener('dispose',release);material.dispose();}this.materials.clear();}
 }

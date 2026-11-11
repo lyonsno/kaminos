@@ -86,6 +86,32 @@ validates the author web-export format. Source float32 textures are retained;
 manual bilinear lookup avoids requiring optional float32 filtering. Model
 changes compile the new material's small networks into shader code.
 
+## Measuring reconstruction fallback
+
+Render & Output → Neural materials → **Measure source fallback** takes one
+snapshot. It reports the percentage and count of opaque neural source pixels
+that need direct full-resolution evaluation, plus the requested shading scale
+and actual source/capture dimensions through
+`await kaminosNeuralShading.diagnostics.sample()`. Read the last state with
+`kaminosNeuralShading.diagnostics.read()`; **Clear** or `.stop()` clears it.
+There is no background sampler, recurring timer or diagnostic readback when idle.
+
+A measurement renders a fresh ordinary scene frame, then one full-resolution
+mask using the same production reconstruction predicate. The mask bypasses
+neural inference and GPU reduction reads back four integers (16 bytes). The
+first measurement may compile its private diagnostic shaders. This operation
+has a cost; no timing or claim of free updates is implied. It retains its GPU
+resources for another explicit request and releases them with the renderer's
+neural cache. Stop suppresses publication of an in-flight request; already
+submitted GPU work still completes.
+
+The result is a snapshot, not a live percentage. Scene edits invalidate it;
+failed, stopped or stale measurements show no percentage. It measures
+source-stage pixel coverage, not elapsed time, MACs, receiving-pass fallback
+or multisampled fragment invocations. At 100% requested resolution, all neural
+source pixels intentionally use direct evaluation. Combined GI mode and the
+WebGPU renderer are required for this measurement.
+
 ## Verification
 
 ```sh
