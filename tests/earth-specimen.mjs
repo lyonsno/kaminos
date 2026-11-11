@@ -1,0 +1,28 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import {EarthSpecimen} from '../earth-specimen.mjs';
+const earth=new EarthSpecimen({seed:41,columns:5,layers:3,grains:3});
+const before=earth.snapshot(),mass=before.particles.reduce((s,p)=>s+p.mass,0);
+earth.advance(.08);
+const settled=earth.snapshot();
+assert.ok(settled.particles.some((p,i)=>p.position[1]<before.particles[i].position[1]-.00001),'gravity must move actual material, not merely advance the clock');
+assert.equal(settled.particles.reduce((s,p)=>s+p.mass,0),mass,'forming retains all represented soil mass');
+assert.ok(settled.particles.every(p=>p.position.every(Number.isFinite)));
+const replay=EarthSpecimen.fromSnapshot(settled);
+assert.deepEqual(replay.snapshot(),settled,'snapshot restores positions, velocities and bond plasticity exactly');
+const replay2=EarthSpecimen.fromSnapshot(settled);replay.advance(.025);replay2.advance(.025);
+assert.deepEqual(replay.snapshot(),replay2.snapshot(),'two cold-contact continuations of the same saved material agree');
+const copied=earth.snapshot();copied.particles[0].position[0]=999;
+assert.notEqual(earth.snapshot().particles[0].position[0],999,'caller cannot mutate live state');
+assert.throws(()=>EarthSpecimen.fromSnapshot({...settled,schema:'unknown'}),/schema/i);
+assert.throws(()=>EarthSpecimen.fromSnapshot({...settled,particles:[]}),/particle/i);
+assert.throws(()=>earth.advance(-.1),/duration/i);
+const pressed=new EarthSpecimen({seed:7,columns:5,layers:3,grains:0});
+pressed.advance(.12);
+const unpressed=pressed.snapshot();
+const top=Math.max(...unpressed.particles.map(p=>p.position[1]));
+pressed.advance(.08,{tool:{position:[0,top+.02,0],radius:.085}});
+const worked=pressed.snapshot();
+assert.ok(worked.particles.some((p,i)=>Math.abs(p.position[0]-unpressed.particles[i].position[0])+Math.abs(p.position[2]-unpressed.particles[i].position[2])>.0001),'contact with forming tool must displace material');
+assert.ok(worked.bonds.some(b=>b.rest<b.initial-.000001)||worked.bonds.some(b=>!b.active),'tool work must leave a yielded or broken bond state');
+console.log('earth specimen physical state, contact, mass, yield and continuation checks pass');

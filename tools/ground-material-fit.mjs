@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
-import {createGroundTeacherSource} from '../ground-teacher-source.mjs';
+import {createMaterialTeacherSource} from '../material-teacher-source.mjs';
 import {SurfaceMaterialTeacher} from '../surface-material-teacher.mjs';
 import {createNeumipStudent,createNeumipTraining,neumipTrainingLayout,neumipTrainingBufferSizes} from '../neumip-training.mjs';
 import {writeNeumipModel,readNeumipModel} from '../neumip-model.mjs';
@@ -12,7 +12,7 @@ import {withKaminosGpu,withGpuErrorScopes} from './shader-herder.mjs';
 const [configPath,out]=process.argv.slice(2);if(!configPath||!out)throw Error('Usage: node tools/ground-material-fit.mjs CONFIG_JSON OUTPUT_DIR');
 await fs.mkdir(out,{recursive:true});
 const report={schema:'kaminos.ground-material-fit.v1',status:'running',phase:'configuration',repoRoot:process.cwd(),job:process.env.GREENROOM_JOB_ID??null,configPath,checkpoints:[],
- claim:'Independent authored ground microgeometry, explicit diffuse/GGX multibounce directional transport, box-filtered labels; preliminary fit, not converged or simulated soil',
+ claim:'Source-identified ground microgeometry, explicit diffuse/GGX multibounce directional transport and box-filtered labels; preliminary fit, not converged or calibrated soil',
  receiver:'neurips-unix-eunuch-neumip-turnip-tender'};
 const publish=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));await publish();
 const digest=x=>createHash('sha256').update(x).digest('hex');
@@ -24,8 +24,8 @@ try{
  const options={resolution:64,steps:2000,batch:2048,queries:65536,heldout:2048,samples:8,heldoutSamples:32,bounces:3,seed:41,fresh:true,...config.fit};report.options=options;
  for(const [k,v]of Object.entries(options))if(k==='fresh'?typeof v!=='boolean':!Number.isSafeInteger(v)||v<1)throw Error(`Invalid fit option ${k}`);
  report.sourceRevision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();report.sourceStatus=execFileSync('git',['status','--porcelain'],{encoding:'utf8'});
- report.sourceFiles={};for(const name of ['ground-teacher-source.mjs','surface-teacher-wgsl.mjs','surface-teacher.mjs','surface-material-teacher.mjs','neumip-training.mjs','neumip-model.mjs','tools/ground-material-fit.mjs']){const b=await fs.readFile(name);report.sourceFiles[name]=digest(b);await fs.writeFile(path.join(out,path.basename(name)),b);}
- const source=createGroundTeacherSource(config.source);report.ground={config:source.config,triangles:source.triangles.length,materials:source.materials,boundary:source.boundary,referenceHeight:source.referenceHeight,sha256:digest(JSON.stringify(source))};
+ report.sourceFiles={};for(const name of ['ground-teacher-source.mjs','material-teacher-source.mjs','earth-specimen.mjs','earth-surface.mjs','surface-teacher-wgsl.mjs','surface-teacher.mjs','surface-material-teacher.mjs','neumip-training.mjs','neumip-model.mjs','tools/ground-material-fit.mjs']){const b=await fs.readFile(name);report.sourceFiles[name]=digest(b);await fs.writeFile(path.join(out,path.basename(name)),b);}
+ const source=createMaterialTeacherSource(config.source);report.ground={config:source.config,triangles:source.triangles.length,materials:source.materials,boundary:source.boundary,referenceHeight:source.referenceHeight,sha256:digest(JSON.stringify(source))};
  await fs.writeFile(path.join(out,'config.json'),JSON.stringify(config,null,2));await fs.writeFile(path.join(out,'source.json'),JSON.stringify(source));
  let state=options.seed>>>0;const random=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return (state+.5)/4294967296;};
  const queries=n=>{const data=new Float32Array(n*8);for(let i=0;i<n;i++){const q=i*8;data[q]=random();data[q+1]=random();for(const d of [2,4]){const r=Math.sqrt(random()*.99),t=random()*Math.PI*2;data[q+d]=r*Math.cos(t);data[q+d+1]=r*Math.sin(t);}data[q+6]=random()<.6?0:random()*Math.log2(options.resolution/2);}return data;};
