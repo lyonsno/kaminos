@@ -11,10 +11,10 @@ async function harness(t,{gate=null,failSave=false,destroyFails=0,encodeGate=nul
   const {port1,port2}=new MessageChannel(),started=deferred(),encoding=deferred(),saving=deferred(),saved=[];
   let adapter;
   let loads=0,destroyed=0,finished=0,request=null,frames=0;
-  const device={features:new Set(['shader-f16']),queue:{}},session={
-    registerRoute:async({routeId})=>({routeId,runtime:{},enqueue:({execute})=>({completion:Promise.resolve().then(()=>execute({})).then(output=>({status:'succeeded',output}))}),drain:async()=>{}}),unregisterRoute(){},
+  const device={features:new Set(['shader-f16']),queue:{onSubmittedWorkDone:async()=>{}}},session={
+    registerRoute:async({routeId})=>({routeId,runtime:{runInvocation:async(_options,work)=>work({})},enqueue:({execute})=>({cancel:()=>({status:'not-cancelled-active'}),completion:Promise.resolve().then(()=>execute({})).then(output=>({status:'succeeded',output}))}),drain:async()=>{}}),unregisterRoute(){},
   };
-  const appHost={session:()=>session,unsettledRuns:()=>[],beginRun:async()=>({foregroundOpportunities:{},withForeground:async(_phase,work)=>work(),finish:async()=>{finished++;}})};
+  const appHost={queue:device.queue,session:()=>session,unsettledRuns:()=>[],beginRun:async()=>({foregroundOpportunities:{},withForeground:async(_phase,work)=>work(),finish:async()=>{finished++;}})};
   const png=Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==','base64'));
   const options={context:()=>({sharedGpu:{device}}),appHost:()=>appHost,weights:async()=>'/weights',
     kit:async()=>({createWebGpuInferenceControl:()=>({close:async()=>{}})}),

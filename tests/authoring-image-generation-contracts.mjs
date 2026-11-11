@@ -369,9 +369,9 @@ test('an invalid caller result destination fails before model work',async()=>{
 test('with the app GPU host, klein borrows its session without page prototype or handoff dependencies',async()=>{
  const log=[],prototype=prototypeDouble(),host={setForegroundServiceActive(){},runForegroundFrame:run=>run()};
  const handoff=createForegroundHandoff({prototype,host,waitFrame:tick});
- const device={features:new Set(['shader-f16']),queue:{submit(){}}};
- const session={registerRoute:async({routeId})=>({routeId,runtime:{},enqueue:({jobId,execute})=>({completion:(async()=>({status:'succeeded',output:await execute({jobId})}))()}),drain:async()=>log.push('drain')}),unregisterRoute:()=>{}};
- const appHost={session:async()=>{log.push('host-session');return session;},beginRun:async(runId,{routeId})=>{log.push(`begin:${routeId}`);return {foregroundOpportunities:{},withForeground:fn=>fn(),finish:async()=>log.push('finish')};}};
+ const device={features:new Set(['shader-f16']),queue:{submit(){},onSubmittedWorkDone:async()=>{}}};
+ const session={registerRoute:async({routeId})=>({routeId,runtime:{runInvocation:async(_options,work)=>work({})},enqueue:({jobId,execute})=>({completion:(async()=>({status:'succeeded',output:await execute({jobId})}))()}),drain:async()=>log.push('drain')}),unregisterRoute:()=>{}};
+ const appHost={queue:device.queue,session:async()=>{log.push('host-session');return session;},beginRun:async(runId,{routeId})=>{log.push(`begin:${routeId}`);return {foregroundOpportunities:{},withForeground:fn=>fn(),finish:async()=>log.push('finish')};}};
  const service=createKleinAuthoringImageGeneration({
   context:()=>({sharedGpu:{device,queue:device.queue}}),appHost:async()=>appHost,
   kit:async()=>({createWebGpuInferenceSession:async()=>{throw Error('no private session with an app host');},createWebGpuForegroundService:()=>{throw Error('no private foreground service with an app host');},createWebGpuInferenceControl:()=>({close:async()=>{}})}),
@@ -381,7 +381,7 @@ test('with the app GPU host, klein borrows its session without page prototype or
   deliver:async file=>({name:file.name,source:'/s'}),
  });
  await service.run({prompt:'lantern',seed:1,size:512});
- assert.deepEqual(log,['host-session','begin:flux2-klein.text-to-image.authoring-shared-device.v0','drain','finish']);
+ assert.deepEqual(log,['host-session','begin:flux2-klein.text-to-image.authoring-shared-device.v0','finish','drain']);
  assert.equal(handoff.has('klein'),false,'no private klein requester when the app owns the frames');
 });
 
@@ -462,12 +462,16 @@ test('live and retained elapsed time separates model loading from generation and
  now+=300;gate.resolve();await run;
  assert.equal(h.service.read().timing.generationMs,5300);now+=100000;
  assert.equal(h.service.read().timing.generationMs,5300,'completed duration is frozen');
- assert.deepEqual(h.delivered[0].provenance.elapsed,{loadMs:2000,generationMs:5300});
+ assert.equal(h.delivered[0].provenance.elapsed.loadMs,2000);
+ assert.equal(h.delivered[0].provenance.elapsed.generationMs,5300);
+ assert.equal(h.delivered[0].provenance.elapsed.queuedMs,null,'legacy private foreground route does not claim app admission telemetry');
  const stored=module.readPngProvenance(new Uint8Array(await h.delivered[0].file.arrayBuffer()));assert.deepEqual(stored.elapsed,h.delivered[0].provenance.elapsed);
 });
 
 test('elapsed labels distinguish running, completed and stopped generation',()=>{
  assert.equal(module.imageGenerationTimeLabel({loadMs:2000,generationMs:null},'loading'),'Loading model · 2.0 s');
+ assert.equal(module.imageGenerationTimeLabel({loadMs:2000,queuedMs:5300,generationMs:null},'queued'),'Waiting for shared GPU · 5.3 s · model load 2.0 s');
+ assert.equal(module.imageGenerationTimeLabel({loadMs:0,queuedMs:5300,generationMs:null},'stopped'),'Stopped before generation · queue wait 5.3 s');
  assert.equal(module.imageGenerationTimeLabel({loadMs:2000,generationMs:5300},'running'),'Generating 5.3 s · model load 2.0 s');
  assert.equal(module.imageGenerationTimeLabel({loadMs:0,generationMs:5300},'complete'),'Generated in 5.3 s');
  assert.equal(module.imageGenerationTimeLabel({loadMs:0,generationMs:5300},'stopped'),'Stopped after 5.3 s');

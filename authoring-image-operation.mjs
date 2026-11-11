@@ -132,8 +132,8 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
   let loaded=null,retiring=null,heldError=null,active=false,abort=null,decodeRequested=false;
   let state={status:'idle',progress:'Weights load the first time you generate an image.',stage:null,percent:null,canStop:false,error:null,results:[],outputs:[],pending:null,preview:null,timing:null};
   const outputSaves=new Map();
-  let startedAt=null,generationStartedAt=null,generationFinished=false;
-  const timing=()=>!state.timing?null:{...state.timing,...(active&&!generationFinished?(generationStartedAt===null?{loadMs:clock()-startedAt}:{generationMs:clock()-generationStartedAt}):{})};
+  let startedAt=null,queuedAt=null,generationStartedAt=null,generationFinished=false;
+  const timing=()=>!state.timing?null:{...state.timing,...(active&&!generationFinished?(generationStartedAt!==null?{generationMs:clock()-generationStartedAt}:queuedAt!==null?{queuedMs:clock()-queuedAt}:{loadMs:clock()-startedAt}):{})};
   // A computed image is kept until it is saved; a failed save retries these exact pixels.
   let pendingImage=null;
   async function savePending(){
@@ -189,27 +189,26 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
     }
     retiring=null;
   }
-  async function runWarmup(resource,work){
-    // Downloads and compilation do not reserve the host; actual GPU warmup does.
+  async function runAdmitted(resource,{routeId,runId,label},work){
+    // Only the outer job queues; frame ownership and GPU cleanup stay inside it.
     const {app,session,model}=resource,signal=abort.signal;
     signal.throwIfAborted();
-    const routeId=`${imageModel(model).routeId}:warmup`,runId=`klein-warmup:${crypto.randomUUID()}`;
-    const route=await session.registerRoute({routeId,runtimeOptions:{runtimeLabel:`${model}-warmup`}});
+    const route=await session.registerRoute({routeId:`${routeId}:admission`,runtimeOptions:{runtimeLabel:`${model}-${label}-admission`}});
     let job,failure;
-    const cancelQueued=()=>job?.cancel('image-command-canceled-before-warmup');
+    const cancelQueued=()=>job?.cancel('image-command-canceled-before-start');
     try{
       job=route.enqueue({jobId:runId,execute:async()=>{
         let run;
         try{
           signal.throwIfAborted();run=await app.beginRun(runId,{routeId});
-          signal.throwIfAborted();await work();signal.throwIfAborted();
+          signal.throwIfAborted();return await work(run);
         }catch(error){failure=error;throw error;}
         finally{
           if(run){
             // Unknown queue settlement must not release the host's tracked run.
             try{await app.queue.onSubmittedWorkDone();await run.finish();}
             catch(error){
-              heldError=Object.assign(new AggregateError([...(failure?[failure]:[]),error],'Klein warmup settlement failed'),{gpuRouteHeld:true});
+              heldError=Object.assign(new AggregateError([...(failure?[failure]:[]),error],`Klein ${label} settlement failed`),{gpuRouteHeld:true});
               throw heldError;
             }
           }
@@ -218,13 +217,22 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       signal.addEventListener('abort',cancelQueued,{once:true});if(signal.aborted)cancelQueued();
       const completion=await job.completion;
       if(heldError)throw heldError;
-      signal.throwIfAborted();
-      if(completion.status!=='succeeded')throw failure??Error(completion.failure?.message??completion.status);
+      if(completion.status!=='succeeded'){
+        signal.throwIfAborted();throw failure??Error(completion.failure?.message??completion.status);
+      }
+      return completion.output;
     }finally{
       signal.removeEventListener('abort',cancelQueued);
       try{await route.drain();session.unregisterRoute(route.routeId);}
       catch(error){heldError=Object.assign(error,{gpuRouteHeld:true});throw heldError;}
     }
+  }
+  async function runWarmup(resource,work){
+    const signal=abort.signal;
+    await runAdmitted(resource,{routeId:`${imageModel(resource.model).routeId}:warmup`,runId:`klein-warmup:${crypto.randomUUID()}`,label:'warmup'},async()=>{
+      await work();signal.throwIfAborted();
+    });
+    signal.throwIfAborted();
   }
   async function load(level,model){
     const spec=imageModel(model);
@@ -309,11 +317,11 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       const reason=unavailable();if(reason)throw Error(reason);
       const scene=context();if(!appHost&&(!scene.prototype?.foregroundGpuContext||!scene.host||!scene.handoff))throw Error('Image generation needs the Kaminos shared GPU device and its frame owner.');
       active=true;decodeRequested=false;abort=new AbortController();const runAbort=abort;let phase='weights',previous=null,handoff=null,frameRun=null,route=null,control=null,session=null;
-      startedAt=clock();generationStartedAt=null;generationFinished=false;
+      startedAt=clock();queuedAt=null;generationStartedAt=null;generationFinished=false;
       const runId=`kaminos-${model}-klein:${crypto.randomUUID()}`;
       const output=persist!==deliver?{id:runId,name:kleinImageName(text,seed,model),prompt:text,status:'generating',preview:null,pending:false,error:null}:null;
       if(output)state.outputs.push(output);
-      set({request:{id:runId,prompt:text,model,seed,width,height},status:'loading',error:null,canStop:true,canDecode:false,preview:null,timing:{loadMs:0,generationMs:null},stage:null,percent:null,progress:loaded?.model===model?'Starting…':`Loading ${spec.name}…`});
+      set({request:{id:runId,prompt:text,model,seed,width,height},status:'loading',error:null,canStop:true,canDecode:false,preview:null,timing:{loadMs:0,queuedMs:null,generationMs:null},stage:null,percent:null,progress:loaded?.model===model?'Starting…':`Loading ${spec.name}…`});
       const cancelCommand=()=>{
         runAbort.abort(new DOMException(String(commandSignal.reason?.message??commandSignal.reason??'Image command canceled'),'AbortError'));
         if(state.canStop)set({canStop:false,status:'stopping',progress:'Stopping… waiting for the current GPU work to settle.'});
@@ -344,12 +352,11 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
           handoff.install('klein',request=>foreground.request({...request,run:service=>host.runForegroundFrame(()=>request.run(service))}));
           await handoff.activate('klein');
         }
-        generationStartedAt=clock();state.timing={loadMs:generationStartedAt-startedAt,generationMs:0};
-        phase='inference';set({status:'running',stage:'Reading prompt',percent:null,progress:'Reading the prompt…'});
-        frameRun=app?await app.beginRun(runId,{routeId}):await foreground.beginRun(runId);
-        route=await session.registerRoute({routeId,runtimeOptions:{runtimeLabel:`${model}-klein`,foregroundOpportunities:frameRun.foregroundOpportunities}});
-        control=core.createWebGpuInferenceControl({queue:context().sharedGpu.device.queue,signal:abort.signal,withForeground:frameRun.withForeground});
-        const job=route.enqueue({jobId:runId,execute:invocation=>pipeline.generate({prompt:text,seed,width,height,textLength:'fit16',reference,
+        const startGeneration=()=>{
+          const elapsed=timing();generationStartedAt=clock();state.timing={...elapsed,generationMs:0};
+          phase='inference';set({status:'running',stage:'Reading prompt',percent:null,progress:'Reading the prompt…'});
+        };
+        const generate=(runtime,invocation,inferenceControl,frames)=>pipeline.generate({prompt:text,seed,width,height,textLength:'fit16',reference,
           shouldDecode:()=>decodeRequested,
           onPhase:value=>{if(!abort.signal.aborted)set(value==='reference'?{stage:'Reading reference image',canDecode:false,percent:null,progress:'Reading the reference image…'}:value==='decode'?{stage:'Decoding',canDecode:false,percent:null,progress:'Decoding the image…'}:value==='text'?{stage:'Reading prompt',percent:null,progress:'Reading the prompt…'}:value==='denoise'?{stage:'Denoising',canDecode:!decodeRequested,progress:'Denoising…'}:{progress:'Swapping weights in from the browser cache…'});},
           onStep:(i,n)=>{if(!abort.signal.aborted)set({stage:'Denoising',canDecode:!decodeRequested,percent:i/n*100,progress:decodeRequested?'Decoding after the current diffusion step…':`Denoising, step ${i} of ${n}`});},
@@ -361,11 +368,33 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
             const preview={...frame,kind:'partial',runId};
             if(output){output.preview=preview;publish();}else set({preview});
           },
-          schedule:{runtime:route.runtime,invocation,control,signal:abort.signal,targetDutyMs:12,maxInFlight:2,withForeground:frameRun.withForeground}})});
-        const completion=await job.completion;
-        if(completion.status!=='succeeded'){const error=Error(completion.failure?.message??completion.status);error.name=completion.failure?.name??'Error';throw error;}
+          schedule:{runtime,invocation,control:inferenceControl,signal:abort.signal,targetDutyMs:12,maxInFlight:2,withForeground:frames.withForeground}});
+        let image;
+        if(app){
+          queuedAt=clock();state.timing={loadMs:queuedAt-startedAt,queuedMs:0,generationMs:null};
+          phase='admission';set({status:'queued',stage:'Waiting for shared GPU',percent:null,progress:'Waiting for the shared GPU…'});
+          image=await runAdmitted(loaded,{routeId,runId,label:'generation'},async frames=>{
+            startGeneration();let modelRoute,inferenceControl;
+            try{
+              modelRoute=await session.registerRoute({routeId,runtimeOptions:{runtimeLabel:`${model}-klein`,foregroundOpportunities:frames.foregroundOpportunities}});
+              abort.signal.throwIfAborted();
+              inferenceControl=core.createWebGpuInferenceControl({queue:app.queue,signal:abort.signal,withForeground:frames.withForeground});
+              return await modelRoute.runtime.runInvocation({invocationId:runId},invocation=>generate(modelRoute.runtime,invocation,inferenceControl,frames));
+            }finally{
+              try{await inferenceControl?.close();}
+              finally{if(modelRoute)session.unregisterRoute(modelRoute.routeId);}
+            }
+          });
+        }else{
+          startGeneration();frameRun=await foreground.beginRun(runId);
+          route=await session.registerRoute({routeId,runtimeOptions:{runtimeLabel:`${model}-klein`,foregroundOpportunities:frameRun.foregroundOpportunities}});
+          control=core.createWebGpuInferenceControl({queue:context().sharedGpu.device.queue,signal:abort.signal,withForeground:frameRun.withForeground});
+          const job=route.enqueue({jobId:runId,execute:invocation=>generate(route.runtime,invocation,control,frameRun)});
+          const completion=await job.completion;
+          if(completion.status!=='succeeded'){const error=Error(completion.failure?.message??completion.status);error.name=completion.failure?.name??'Error';throw error;}
+          image=completion.output;
+        }
         if(commandSignal?.aborted)throw runAbort.signal.reason;
-        const image=completion.output;
         state.timing={...timing(),generationMs:clock()-generationStartedAt};generationFinished=true;
         // Completed pixels win a stop race; they are saved like any other result.
         phase='persistence';
