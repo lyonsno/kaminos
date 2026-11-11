@@ -1,0 +1,63 @@
+import * as THREE from '../lib/three.webgpu.js';
+import {preparationRecipe,preparationSource,planPreparation,INGREDIENTS} from '../granular-preparation.mjs';
+import {createPreparationTask} from '../granular-preparation-task.mjs';
+import {surfaceTeacherExperiment} from './surface-teacher-experiment.mjs';
+import {mountEarthRenderControls} from './earth-workshop-controls.mjs';
+
+export default {id:'granular-preparation',title:'Granular earth preparation',async create({host,inputs={},record,updateInputs=()=>{}}){
+ const session=await host.scene.open(),root=new THREE.Group();root.name='Granular preparation chamber';
+ let task,asset,ui,context,preview,transition=false,disposed=false,error=null,recipe=preparationRecipe(inputs.snapshot?.recipe??inputs.recipe??{});
+ const materials=INGREDIENTS.map(m=>new THREE.MeshStandardMaterial({color:new THREE.Color(...m.color),roughness:m.roughness,metalness:m.metalness}));
+ const lid=new THREE.Mesh(new THREE.BoxGeometry(recipe.width*1.03,recipe.width*.025,recipe.width*1.03),new THREE.MeshStandardMaterial({color:0x798580,roughness:.3,metalness:.45}));lid.name='Compression platen';
+ const floor=new THREE.Mesh(new THREE.BoxGeometry(recipe.width*1.08,recipe.width*.035,recipe.width*1.08),materials[3]);floor.name='Preparation tray';floor.position.y=-recipe.width*.0175;
+ const windowMaterial=new THREE.MeshStandardMaterial({color:0xabc2b8,transparent:true,opacity:.11,roughness:.14,depthWrite:false,side:THREE.DoubleSide});
+ const wall=new THREE.Mesh(new THREE.BoxGeometry(recipe.width,recipe.width*.75,recipe.width),windowMaterial);wall.position.y=recipe.width*.375;wall.name='Chamber window';
+ root.add(floor,wall,lid);let grains=[];
+ const pose=()=>({position:root.position.toArray(),quaternion:root.quaternion.toArray(),scale:root.scale.toArray()});
+ const read=()=>({schema:'kaminos.granular-workshop.v1',...task.read(),objectId:asset?.id,recipe:{...recipe},render:preview?.read()??null,transition,error});
+ const persist=()=>updateInputs({recipe,view:session.readView()});
+ const refresh=()=>{
+  if(disposed||!task)return;const snap=task.snapshot(),source=preparationSource(snap);for(const m of grains){root.remove(m);m.geometry.dispose();}grains=[];
+  for(let index=0;index<3;index++){const ts=source.triangles.filter(t=>t.materialIndex===index);if(!ts.length)continue;const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(ts.flatMap(t=>[...t.a,...t.b,...t.c]),3));geometry.computeVertexNormals();const mesh=new THREE.Mesh(geometry,materials[index]);mesh.name=INGREDIENTS[index].name;mesh.castShadow=true;mesh.receiveShadow=true;root.add(mesh);grains.push(mesh);}
+  floor.position.x=snap.containerX;wall.position.x=snap.containerX;lid.position.set(snap.containerX,snap.lidHeight,0);ui?.refresh();session.redraw();
+ };
+ const mount=()=>{if(!context)return;ui=mountControls({document:context.document,host,session,root,read,invoke:context.invoke});};
+ const back=async()=>{if(transition)throw Error('Wait for render transition');if(!preview)return read();transition=true;try{await preview.dispose();preview=null;ui?.dispose();root.visible=true;mount();refresh();return read();}finally{transition=false;}};
+ const run=async(kind,options)=>{if(preview||transition)throw Error('Return from the integral before preparing');error=null;try{const result=await task.run(kind,options);record({kind:'granular.preparation',phase:result.phase?'paused':'applied',effective:{operation:kind,options,snapshot:task.snapshot()}});persist();return read();}catch(e){error=e.message;ui?.refresh();throw e;}};
+ const operations={
+  read,run:({kind,options}={})=>run(kind,options),pause(){task.pause();return read();},
+  async prepare(){for(const [kind,options]of [['pour',{}],['settle',{seconds:.8}],['compress',{seconds:.8,strain:.25}],['unload',{seconds:.4}],['settle',{seconds:.3}]]){await run(kind,options);if(task.read().phase)return read();}return read();},
+  async mixture(values){if(task.read().running||preview||transition)throw Error('Pause and return to the preparation scene first');const next=preparationRecipe({...recipe,...values});if(next.width!==recipe.width)throw Error('Reopen the preparation scene to change chamber width');recipe=next;persist();ui?.refresh();return read();},
+  async newMixture(){if(task.read().running||preview||transition)throw Error('Pause and return to the preparation scene first');planPreparation(recipe,{availableBytes:performance.memory?performance.memory.jsHeapSizeLimit-performance.memory.usedJSHeapSize:Infinity});transition=true;let next;try{next=await createPreparationTask({recipe,onChange:refresh});if(disposed){next.dispose();throw Error('Preparation disposed');}task.dispose();task=next;refresh();persist();return read();}finally{transition=false;}},
+  snapshot(){if(task.read().running)throw Error('Pause preparation before saving');return task.snapshot();},
+  async load(snapshot){if(task.read().running||preview||transition)throw Error('Pause and return before loading');if(snapshot.recipe?.width!==recipe.width)throw Error('Reopen a matching chamber width to load');const next=await createPreparationTask({snapshot,onChange:refresh});task.dispose();task=next;recipe=preparationRecipe(snapshot.recipe);refresh();persist();return read();},
+  freeze(){if(!task.read().deposited)throw Error('Pour ingredients before freezing');if(task.read().running)throw Error('Pause preparation before freezing');return preparationSource(task.snapshot());},
+  async render(values={}){if(task.read().running||preview||transition)throw Error('Pause preparation before inspecting');if(!task.read().deposited)throw Error('Pour ingredients before rendering');transition=true;
+   try{const snapshot=task.snapshot(),definition=surfaceTeacherExperiment({id:'granular-integral',title:'Prepared grain integral',createSource:config=>preparationSource(config.snapshot,{container:true}),label:'Prepared granular source',sourceURL:'kaminos:granular-preparation',boundary:'Actual convex grain surfaces and tray; bounded packing, no cohesive matrix or weathering.',initialView:session.readView(),sourceControls:[]});
+    preview=await definition.create({host,record,inputs:{source:{snapshot},view:session.readView(),pose:pose(),scale:.25,bounces:3,environment:.18,...values},updateInputs:()=>{}});root.visible=false;ui?.dispose();ui=mountEarthRenderControls({document:context.document,host,sessionRead:preview.read,invoke:(name,value)=>context.invoke(name==='configure'?'renderSettings':name==='capture'?'renderCapture':name,value),back:()=>context.invoke('back')});return preview.read();
+   }finally{transition=false;}
+  },back,
+  renderSettings:values=>preview.operations.configure(values),renderCapture:values=>preview.operations.capture(values),
+ };
+ try{task=await createPreparationTask({recipe,snapshot:inputs.snapshot,onChange:refresh});asset=await session.attach(root,{owned:true,metadata:{label:root.name,source:'kaminos:granular-preparation',type:'experiment'}});session.setView(inputs.view??{position:[.11,.105,.13],target:[0,.025,0],fov:38});refresh();
+  return {read,operations,mount(c){context=c;mount();},async dispose(){disposed=true;task.pause();task.dispose();await preview?.dispose();ui?.dispose();for(const mesh of grains)mesh.geometry.dispose();floor.geometry.dispose();wall.geometry.dispose();lid.geometry.dispose();lid.material.dispose();windowMaterial.dispose();materials.forEach(m=>m.dispose());await session.dispose();}};
+ }catch(e){task?.dispose();await session.dispose();throw e;}
+}};
+
+function mountControls({document,host,session,root,read,invoke}){
+ const viewport=document.getElementById('viewport'),layer=document.createElement('div'),style=document.createElement('style');layer.dataset.vantageIgnore='';layer.className='grain-preparation-controls';
+ style.textContent=`body.has-authoring-workspace.experiment-workspace[data-workspace=workbench].grain-preparing{grid-template-columns:0 minmax(0,1fr) 316px}body.grain-preparing #experiment-instruments{display:none!important}.grain-preparation-controls{position:absolute;left:20px;bottom:90px;max-width:520px;z-index:35;color:#e9e4d7;font:12px -apple-system,sans-serif;background:#242821eb;padding:12px;border:1px solid #777b67;border-radius:8px;display:flex;gap:8px;flex-wrap:wrap}.grain-preparation-controls button,.grain-preparation-controls input{font:inherit;color:inherit;background:#343a31;border:1px solid #747e69;border-radius:4px;padding:5px 7px}.grain-preparation-controls button:disabled{opacity:.4}.grain-preparation-controls label{display:flex;gap:5px;align-items:center}.grain-preparation-controls input{width:62px}.grain-preparation-controls output{flex-basis:100%;line-height:1.5}.grain-preparation-controls details{flex-basis:100%}`;
+ document.head.append(style);document.body.classList.add('grain-preparing');viewport.append(layer);for(const type of ['pointerdown','pointerup','click','dblclick','wheel','keydown'])layer.addEventListener(type,e=>e.stopPropagation());
+ const make=(tag,text,parent=layer)=>{const e=document.createElement(tag);if(text)e.textContent=text;parent.append(e);return e;},buttons=[],fields=[],drags=[];let error=null;
+ const status=make('output');status.setAttribute('role','status');
+ const action=(label,operation,values,allowRunning=false,parent=layer)=>{const b=make('button',label,parent);b.type='button';b.onclick=()=>Promise.resolve().then(()=>invoke(operation,values)).then(()=>{error=null;refresh();}).catch(e=>{error=e.message;refresh();});buttons.push({b,allowRunning});return b;};
+ action('Pour → press → unload','prepare');action('Pause','pause',undefined,true);action('Continue','run',{});action('Inspect integral','render');
+ const number=(label,key,step,min,max,parent=layer,costly=false)=>{const row=make('label',null,parent),grip=make('span',label,row),input=make('input',null,row);input.type='number';input.step=step;input.min=min;if(max!==undefined)input.max=max;input.value=read().recipe[key];input.setAttribute('aria-label',label);const commit=()=>{const v=Number(input.value);if(!input.value.trim()||v<min||(max!==undefined&&v>max)||!Number.isFinite(v)){error='Invalid '+label;refresh();return;}return invoke('mixture',{[key]:v}).then(()=>{error=null;refresh();}).catch(e=>{error=e.message;refresh();});};if(costly){input.title='Type and press Enter; used by New mixture';input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();void commit();}};}else{input.oninput=commit;drags.push(host.controls.installNumberDrag({input,grip,step:Number(step)}));}input.onblur=refresh;fields.push({input,key});};
+ number('Grain radius (m)','radius',.0001,.0001);number('Size spread','spread',.05,0,.95);number('Pale fraction','paleFraction',.05,0,1);number('Dark fraction','darkFraction',.05,0,1);
+ const details=make('details');make('summary','Preparation and specimen',details);number('Grain count','count',1,1,undefined,details,true);number('Seed','seed',1,0,undefined,details,true);number('Friction','friction',.05,0,undefined,details);number('Angularity','angularity',.02,0,.45,details);
+ action('New mixture','newMixture');action('Pour','run',{kind:'pour'},false,details);action('Settle','run',{kind:'settle'},false,details);action('Shake','run',{kind:'shake'},false,details);action('Press','run',{kind:'compress'},false,details);action('Unload','run',{kind:'unload'},false,details);
+ const save=make('button','Save specimen');save.onclick=async()=>{try{const value=await invoke('snapshot'),url=URL.createObjectURL(new Blob([JSON.stringify(value)],{type:'application/json'})),a=make('a');a.href=url;a.download='prepared-grains.json';a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),0);}catch(e){error=e.message;refresh();}};
+ const load=make('input');load.type='file';load.accept='.json';load.setAttribute('aria-label','Load prepared specimen');load.onchange=async()=>{try{if(load.files[0])await invoke('load',JSON.parse(await load.files[0].text()));error=null;}catch(e){error=e.message;}refresh();};
+ function refresh(){const s=read();status.textContent=error??s.error??`${s.deposited}/${s.total} grains · ${s.phase?s.phase.kind+(s.paused?' paused':''):s.deposited?'prepared packing':'mixture ready'} · ${(s.mass*1000).toFixed(1)} g. Mixture edits affect New mixture.`;for(const {b,allowRunning}of buttons)b.disabled=(s.running||s.transition)&&!allowRunning;save.disabled=s.running;load.disabled=s.running;for(const {input,key}of fields){input.disabled=s.running;if(document.activeElement!==input)input.value=String(s.recipe[key]);}}
+ const stop=session.onFrame(()=>{if(root.visible)refresh();});refresh();return {refresh,dispose(){stop();drags.forEach(d=>d?.dispose?.());layer.remove();style.remove();document.body.classList.remove('grain-preparing');}};
+}
