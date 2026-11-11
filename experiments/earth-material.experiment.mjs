@@ -29,10 +29,17 @@ export default {
   const show=()=>ui?.refresh();
   const sync=()=>show();
   const update=()=>{updateInputs(recipe());show();};
-  const rebuild=async(resolution=config.previewResolution)=>{
-   const next=await builder.build(model.snapshot(),resolution);
-   const geometries=materials.map((_,i)=>meshGeometry(next.triangles.filter(t=>t.materialIndex===i)));
-   for(let i=0;i<surfaces.length;i++){const old=surfaces[i].geometry;surfaces[i].geometry=geometries[i];old.dispose();}source=next;session.redraw();show();
+  const prepare=async(snapshot,resolution)=>{
+   const next=await builder.build(snapshot,resolution),geometries=[];
+   try{for(let i=0;i<materials.length;i++)geometries.push(meshGeometry(next.triangles.filter(t=>t.materialIndex===i)));if(disposed)throw Error('Earth workshop disposed');return {next,geometries};}
+   catch(error){for(const g of geometries)g.dispose();throw error;}
+  };
+  const install=({next,geometries})=>{for(let i=0;i<surfaces.length;i++){const old=surfaces[i].geometry;surfaces[i].geometry=geometries[i];old.dispose();}source=next;session.redraw();show();};
+  const rebuild=async(resolution=config.previewResolution)=>install(await prepare(model.snapshot(),resolution));
+  const replaceModel=async(next,nextSettings,value={})=>{
+   let prepared,installed=false;
+   try{planEarthSurface(next.snapshot(),nextSettings.captureResolution,limits());prepared=await prepare(next.snapshot(),nextSettings.previewResolution);if(value.view)session.setView(value.view);restore(root,value.pose);restore(tool,value.tool);const old=model;model=next;config=nextSettings;install(prepared);installed=true;old.dispose();}
+   finally{if(!installed){next.dispose();for(const g of prepared?.geometries??[])g.dispose();}}
   };
   const toolQuery=()=>{
    root.updateWorldMatrix(true,false);tool.updateWorldMatrix(true,false);
@@ -70,8 +77,8 @@ export default {
      await evolve(config.releaseSeconds);
      record({kind:'earth.press',phase:'applied',effective:{tool:query,depth:config.pressDepth,seconds:config.pressSeconds,releaseSeconds:config.releaseSeconds,state:model.state()}});});
     },
-    async reset(){if(busy)throw Error('Wait for forming to finish');const next=new EarthSpecimen(model.config);const old=model;model=next;old.dispose();await rebuild();failure=null;update();record({kind:'earth.reset',phase:'applied',effective:model.config});return read();},
-    async load(value){if(busy)throw Error('Wait for forming to finish');checkedPose(value.pose);checkedPose(value.tool);const nextSettings=settings(value.settings),next=EarthSpecimen.fromSnapshot(value.snapshot);if(next.config.width!==model.config.width){next.dispose();throw Error('Load a different tray width by reopening the specimen setup');}try{restore(root,value.pose);restore(tool,value.tool);}catch(error){next.dispose();throw error;}const old=model;model=next;config=nextSettings;old.dispose();await rebuild();host.scene.refreshPresentation(asset);host.scene.refreshPresentation(toolAsset);if(value.view)session.setView(value.view);failure=null;sync();update();return read();},
+    async reset(){return work(async()=>{await replaceModel(new EarthSpecimen(model.config),config);record({kind:'earth.reset',phase:'applied',effective:model.config});},false);},
+    async load(value){if(busy)throw Error('Wait for forming to finish');checkedPose(value.pose);checkedPose(value.tool);const nextSettings=settings(value.settings),next=EarthSpecimen.fromSnapshot(value.snapshot);if(next.config.width!==model.config.width){next.dispose();throw Error('Load a different tray width by reopening the specimen setup');}return work(async()=>{await replaceModel(next,nextSettings,value);host.scene.refreshPresentation(asset);host.scene.refreshPresentation(toolAsset);sync();},false);},
     async freeze(){if(busy)throw Error('Wait for forming to finish');await work(()=>rebuild(config.captureResolution),false);update();record({kind:'earth.freeze',phase:'applied',effective:{state:model.state(),resolution:config.captureResolution,triangles:source.triangles.length}});return {source:{...source.config,halo:1},authoring:recipe(),surface:{...read().surface,captureHalo:1}};},
     source(){if(busy)throw Error('Wait for forming to finish');return structuredClone(source);},
    },mount({document,invoke}){ui=mountEarthControls({document,host,session,root,tool,invoke,read,stop:()=>{stopRequested=true;builder.cancel();},trace:async()=>{const frozen=await invoke('freeze');return window.kaminosWorkbenchExperiments.open('earth-surface-teacher',{source:{...frozen.source,halo:0},authoring:frozen.authoring,scale:.3,bounces:3,environment:.15});}});},async dispose(){disposed=true;ui?.dispose();builder.dispose();model.dispose();try{await session.dispose();}finally{disposeResources();}}};

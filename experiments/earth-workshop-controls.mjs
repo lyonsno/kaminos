@@ -19,7 +19,7 @@ export function mountEarthControls({document,host,session,root,tool,invoke,read,
  .earth-card {position:absolute;top:35px;left:0;box-sizing:border-box;width:270px;max-height:50vh;overflow:auto;background:#22231ff5;border:1px solid #777564;border-radius:7px;padding:12px;box-shadow:0 8px 24px #0007}
  .earth-card label {display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0;color:#d6d4c8}
  .earth-card input {box-sizing:border-box;width:104px;background:#33352f;border:1px solid #696b5d;border-radius:4px;color:#fff;padding:5px;font:inherit}
- .earth-card .authoring-number-wrap {width:104px}
+ .earth-card .authoring-number-wrap {width:104px;flex:0 0 104px}
  .earth-card .authoring-number {width:104px}
  .earth-card details {margin-top:12px;border-top:1px solid #55564c;padding-top:9px}
  .earth-card summary {cursor:pointer;color:#c9c4ad}
@@ -38,12 +38,12 @@ export function mountEarthControls({document,host,session,root,tool,invoke,read,
  const take=e=>e.stopPropagation();for(const type of ['pointerdown','pointerup','click','dblclick','wheel','keydown'])layer.addEventListener(type,take);
  const feedback=make('div');feedback.className='earth-feedback';feedback.hidden=true;feedback.setAttribute('role','status');const message=make('span','',feedback),stopButton=make('button','Stop',feedback);stopButton.onclick=()=>stop();
  const fail=e=>{error=e.message;refresh();};
- const run=action=>Promise.resolve().then(action).then(()=>{error=null;refresh();}).catch(fail);
+ const run=action=>Promise.resolve().then(action).then(()=>{if(disposed)return;error=null;refresh();}).catch(e=>{if(!disposed)fail(e);});
  const button=(parent,text,action)=>{const b=make('button',text,parent);b.type='button';b.onclick=()=>run(action);buttons.push(b);return b;};
  const card=(object,offset,label)=>{const anchor=make('div');anchor.className='earth-anchor';const chip=make('button',label,anchor);chip.type='button';chip.className='earth-chip';const panel=make('div',undefined,anchor);panel.className='earth-card';panel.hidden=true;chip.setAttribute('aria-expanded','false');chip.onclick=()=>{panel.hidden=!panel.hidden;chip.setAttribute('aria-expanded',String(!panel.hidden));host.scene.select?.(object===tool?identity.toolId:identity.objectId);position();};anchors.push({anchor,panel,chip,object,offset});return {anchor,panel,chip};};
  const earth=card(root,()=>[-identity.physicsWidth/2,.04,identity.physicsWidth/2],'Earth ▾');earth.chip.setAttribute('aria-label','Earth material');
  const toolControls=card(tool,()=>[1.3,0,0],'Stroke ▾');toolControls.chip.setAttribute('aria-label','Forming tool settings');
- const press=button(toolControls.anchor,'Press',()=>invoke('press'));press.className='earth-chip';press.style.marginLeft='4px';
+ const press=button(toolControls.anchor,'Press',()=>invoke('press'));press.className='earth-chip';press.style.marginRight='4px';toolControls.anchor.insertBefore(press,toolControls.chip);
  const group=(parent,title)=>{const details=make('details',undefined,parent);make('summary',title,details);return details;};
  function number(parent,label,key,step,{material=false,costly=false,min=0,max}={}){
   const row=make('label',undefined,parent),grip=make('span',label,row),input=make('input',undefined,row);input.type='number';input.step=String(step);input.min=String(min);if(max!==undefined)input.max=String(max);input.setAttribute('aria-label',label);
@@ -54,15 +54,15 @@ export function mountEarthControls({document,host,session,root,tool,invoke,read,
   else {input.oninput=commit;input.onblur=()=>{input.value=String(value());};drags.push(host.controls.installNumberDrag({input,grip,step}));}
   fields.push({input,value});return input;
  }
- number(earth.panel,'Cohesion (N)','cohesion',.2,{material:true,max:20});number(earth.panel,'Friction','friction',.05,{material:true,max:2});number(earth.panel,'Yield strain','plasticYield',.01,{material:true,max:1});
+ number(earth.panel,'Cohesion (N)','cohesion',.2,{material:true});number(earth.panel,'Friction','friction',.05,{material:true});number(earth.panel,'Yield strain','plasticYield',.01,{material:true});
  button(earth.panel,'Settle',()=>invoke('advance'));
  const timing=group(earth.panel,'Settling');number(timing,'Settle time (s)','advanceSeconds',.01,{costly:true,min:.01,max:1});
  const surface=group(earth.panel,'Surface');number(surface,'Preview detail','previewResolution',1,{costly:true,min:2});number(surface,'Capture detail','captureResolution',1,{costly:true,min:2});make('p','Detail rebuilds run separately from the viewport. Oversized requests are rejected before extraction.',surface);button(surface,'Render frozen surface',()=>trace());
  const files=group(earth.panel,'Specimen files'),actions=make('div',undefined,files);actions.className='earth-actions';
  const download=(value,name)=>{const url=URL.createObjectURL(new Blob([JSON.stringify(value)],{type:'application/json'})),a=make('a',undefined,layer);a.href=url;a.download=name;a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),0);};
  button(actions,'Save',async()=>download(await invoke('snapshot'),'earth-specimen.json'));
- const file=make('input',undefined,files);file.type='file';file.accept='.json,application/json';file.hidden=true;file.onchange=()=>run(async()=>{try{if(file.files[0])await invoke('load',JSON.parse(await file.files[0].text()));}finally{file.value='';}});button(actions,'Load',()=>file.click());button(actions,'New specimen',()=>invoke('reset'));button(actions,'Export teacher',async()=>download({source:(await invoke('freeze')).source},'earth-material-teacher.json'));
- number(toolControls.panel,'Stroke depth (m)','pressDepth',.005,{min:.001,max:.2});number(toolControls.panel,'Stroke time (s)','pressSeconds',.01,{costly:true,min:.01,max:1});number(toolControls.panel,'Release time (s)','releaseSeconds',.01,{costly:true,min:.01,max:1});make('p','Position the sphere with the scene gizmo, then press. The result includes settling after release.',toolControls.panel);
+ const file=make('input',undefined,files);file.type='file';file.accept='.json,application/json';file.hidden=true;file.onchange=()=>run(async()=>{try{if(file.files[0])await invoke('load',JSON.parse(await file.files[0].text()));}finally{file.value='';}});button(actions,'Load',()=>file.click());button(actions,'New specimen',()=>invoke('reset'));button(actions,'Leave workshop',()=>window.kaminosWorkbenchExperiments.close());button(actions,'Export teacher',async()=>download({source:(await invoke('freeze')).source},'earth-material-teacher.json'));
+ number(toolControls.panel,'Stroke depth (m)','pressDepth',.005,{min:.001});number(toolControls.panel,'Stroke time (s)','pressSeconds',.01,{costly:true,min:.01,max:1});number(toolControls.panel,'Release time (s)','releaseSeconds',.01,{costly:true,min:.01,max:1});make('p','Position the sphere with the scene gizmo, then press. The result includes settling after release.',toolControls.panel);
  function position(){
   if(disposed)return;const {camera,renderer}=host.scene.rendering(),canvas=renderer.domElement.getBoundingClientRect(),vp=viewport.getBoundingClientRect();camera.updateMatrixWorld();
   for(const a of anchors){a.object.updateWorldMatrix(true,false);const p=a.object.localToWorld(new Vector3(...a.offset())).project(camera);const x=canvas.left-vp.left+(p.x+1)*canvas.width/2,y=canvas.top-vp.top+(1-p.y)*canvas.height/2;a.anchor.hidden=!a.object.visible||!host.scene.isVisible(a.object===tool?identity.toolId:identity.objectId)||p.z<-1||p.z>1||x<0||x>vp.width||y<0||y>vp.height;
@@ -70,8 +70,9 @@ export function mountEarthControls({document,host,session,root,tool,invoke,read,
    a.panel.style.top=y>vp.height/2?'auto':'35px';a.panel.style.bottom=y>vp.height/2?'35px':'auto';a.panel.style.left=x>vp.width-280?'-100px':'0';}
  }
  function refresh(){const state=read();for(const f of fields){f.input.disabled=state.busy;if(document.activeElement!==f.input||f.input.readOnly)f.input.value=String(f.value());}for(const b of buttons)b.disabled=state.busy;feedback.hidden=!state.busy&&!state.failure&&!error;message.textContent=error??state.failure??(state.busy?'Working the specimen…':'');stopButton.hidden=!state.busy;position();}
+ const dismiss=event=>{for(const a of anchors)if(!a.anchor.contains(event.target)){a.panel.hidden=true;a.chip.setAttribute('aria-expanded','false');}};document.addEventListener('pointerdown',dismiss,true);
  const unsubscribe=session.onFrame(position);refresh();
- return {refresh,dispose(){disposed=true;unsubscribe();for(const d of drags)d.dispose();layer.remove();style.remove();document.body.classList.remove('earth-authoring');}};
+ return {refresh,dispose(){disposed=true;unsubscribe();document.removeEventListener('pointerdown',dismiss,true);for(const d of drags)d.dispose();layer.remove();style.remove();document.body.classList.remove('earth-authoring');}};
 }
 
 export function mountEarthRenderControls({document,host,sessionRead,invoke,back}){
