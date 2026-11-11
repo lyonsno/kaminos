@@ -21,7 +21,7 @@ class WarmupProducer extends KleinPipeline{
   await this.afterDispatch?.();
   return {width:1,height:1,rgba:new Uint8ClampedArray([1,2,3,255])};
  }
- async destroy(){this.retired=true;await super.destroy();}
+ async destroy(){await super.destroy();this.retired=true;}
 }
 async function fixture(t,{settled=async()=>{},afterDispatch=null}={}){
  const preparing=deferred(),submissions=[],pipelines=[];
@@ -107,4 +107,15 @@ test('production transformer reload forwards its caller admission to precompile'
   async precompile(options){await options?.runWarmup?.(async()=>{admitted++;});}};
  await KleinPipeline.prototype.loadTransformer.call(receiver,'https://fixture.invalid/dit',()=>{},{runWarmup:work=>work()});
  assert.equal(admitted,1);
+});
+
+test('authoring retirement retries actual producer cleanup without closing the borrowed app session',async(t)=>{
+ let failing=false;
+ const h=await fixture(t,{settled:async()=>{if(failing)throw Error('retirement queue unsettled');}});
+ await h.operation.run(request);const pipeline=h.pipelines[0];
+ failing=true;await assert.rejects(h.operation.destroy(),/retirement queue unsettled/);
+ assert.equal(pipeline.destroyed,true);assert.ok(pipeline.transformer);assert.equal(pipeline.retired,false);
+ failing=false;await h.operation.destroy();
+ assert.equal(pipeline.transformer,null);assert.equal(pipeline.retired,true);
+ assert.equal(h.session.snapshot().status,'active');assert.equal(await h.app.session(),h.session);
 });

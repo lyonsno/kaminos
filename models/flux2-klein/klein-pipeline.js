@@ -335,16 +335,21 @@ export class KleinPipeline {
   // Release every GPU buffer this pipeline owns: both models' weights and activations, the decoder's
   // weights and working memory, the live-preview resources and the prompt cache. The device belongs
   // to the caller and stays usable for its own work or another model. Waits for submitted work, and
-  // is a no-op the second time; generate() and the loaders refuse afterwards.
-  async destroy() {
-    if (this.destroyed) return;
+  // Concurrent calls share cleanup; failures retain the remaining resources for retry.
+  // generate() and the loaders refuse as soon as retirement starts.
+  destroy() {
+    if (this.destroying) return this.destroying;
     this.destroyed = true;
-    try { await this.sched.discard(); } catch { /* nothing unsubmitted to drop */ }
-    await this.device.queue.onSubmittedWorkDone?.();
-    for (const model of [this.textEncoder, this.transformer, this.vae, this.referenceEncoder]) model?.destroy();
-    this.preview?.destroy(); this.previewInput?.destroy(); this.promptCache?.buffer?.destroy();
-    this.referenceEncoder = this.textEncoder = this.transformer = this.vae = this.preview = this.previewInput = this.promptCache = null;
-    this.residentBytes = {};
+    this.destroying = Promise.resolve().then(async () => {
+      await this.sched.discard();
+      await this.device.queue.onSubmittedWorkDone?.();
+      for (const name of ['textEncoder', 'transformer', 'vae', 'referenceEncoder', 'preview', 'previewInput']) {
+        this[name]?.destroy(); this[name] = null;
+      }
+      this.promptCache?.buffer?.destroy(); this.promptCache = null;
+      this.residentBytes = {};
+    }).catch(error => { this.destroying = null; throw error; });
+    return this.destroying;
   }
 
   assertUsable() { if (this.destroyed) throw new Error('this KleinPipeline has been destroyed'); }
