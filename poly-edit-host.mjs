@@ -55,12 +55,18 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
 
   document.addEventListener('keydown',event=>{
     if(event.defaultPrevented||isText(event.target)||blocked())return;
+    if(event.key==='Tab'&&event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.shiftKey&&ownerComponents?.active()){if(!scoped())return;steal(event);attempt(()=>ownerComponents.back());return;}
     if(event.key==='Tab'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.shiftKey){
       if(!scoped())return;steal(event);attempt(()=>edit.active()?exit():ownerComponents?.toggle(selectedId())||enter());return;
     }
     if(ownerComponents?.active()&&!ownerComponents.scope?.()){
+      if(event.key==='Escape'&&attempt(()=>ownerComponents.cancel?.())){steal(event);return;}
       if(event.code==='KeyA'&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey){steal(event);attempt(()=>ownerComponents.selectAll(event.altKey?'deselect':'select'));return;}
-      if(['Delete','Backspace'].includes(event.key)||['KeyB','KeyP','KeyL','Digit1','Digit2','Digit3'].includes(event.code)||(event.shiftKey&&event.code==='KeyD')){steal(event);setInfo('Joint topology is fixed in this editor; click or Shift-click joints to select them');}
+      if(['Delete','Backspace'].includes(event.key)){
+        if(event.ctrlKey||event.metaKey||event.altKey)return;
+        steal(event);if(!event.repeat)attempt(()=>{if(!ownerComponents.remove?.())setInfo('This component editor does not support deletion');});return;
+      }
+      if(['KeyB','KeyP','KeyL','Digit1','Digit2','Digit3'].includes(event.code)||(event.shiftKey&&event.code==='KeyD')){steal(event);setInfo('Joint topology is fixed in this editor; click or Shift-click joints to select them');}
       return;
     }
     if(!live())return;
@@ -81,6 +87,7 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
   },true);
 
   document.addEventListener('pointermove',event=>{
+    if(ownerComponents?.active()&&!ownerComponents.scope?.()){attempt(()=>ownerComponents.hover?.(!blocked()&&insideCanvas(event)&&!overlayHit(event)&&!event.buttons&&!gizmo?.dragging&&!gizmo?.axis?event:null,{camera,canvas}));return;}
     if(!edit.active())return;
     if(insideCanvas(event))hover={x:event.clientX,y:event.clientY};
     if(cutLine?.start){drawCut(event.clientX,event.clientY);return;}

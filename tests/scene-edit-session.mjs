@@ -248,3 +248,18 @@ test('operation switching recalculates from the gesture-start pose and local axi
   assert.deepEqual(rotated.scale, original.scale);
   assert.ok(rotated.rotation.some((value, index) => Math.abs(value - original.rotation[index]) > .1));
 });
+
+test('unfinished interaction history takes Undo/Redo precedence only for its active owner',()=>{
+ const f=fixture(),e=f.edits;e.apply('kiln',{position:[7,2,3]});let engaged=true,picks=2,undone=0;
+ const release=e.registerHistoryScope({active:()=>engaged,state:()=>({undoCount:picks,redoCount:undone}),undo(){if(!picks)return false;picks--;undone++;return true;},redo(){if(!undone)return false;picks++;undone--;return true;}});
+ assert.equal(e.state().undoCount,2);e.undo();e.undo();assert.equal(e.undo(),false);assert.equal(f.pose.position[0],7);assert.equal(e.state().redoCount,2);e.redo();assert.equal(picks,1);
+ engaged=false;e.undo();assert.deepEqual(f.pose,original);e.redo();assert.equal(f.pose.position[0],7);
+ engaged=true;e.begin('kiln');assert.throws(()=>e.undo(),/Finish/);assert.equal(picks,1);e.cancel();release.dispose();e.undo();assert.deepEqual(f.pose,original);
+});
+
+test('a target can distinguish live previews from restore writes at identical values',()=>{
+ const edits=createSceneEdits({read(){},write(){}}),seen=[];let value={position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]};
+ edits.register('@dynamic',{read:()=>value,write:(next,context)=>{value=next;seen.push(context?.operation??'restore');}});
+ edits.begin('@dynamic');edits.preview(value,{transform:'translate'});edits.cancel();
+ assert.deepEqual(seen,['preview','restore'],'Returning to the starting target is a preview, while cancellation restores state');
+});

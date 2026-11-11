@@ -120,7 +120,7 @@ export function installScenePlacementTools({
     // Operation changes are alternatives within one gesture. Always restart
     // from the accepted pose captured by begin(), then preview only this mode.
     modal.base = structuredClone(edits.state().active.before);
-    edits.preview(modal.base);
+    edits.preview(modal.base,{transform:operation});
     modal.operation = operation;
     modal.anchor = { ...lastPointer };
     modal.awaitViewportEntry = !pointerInViewport(lastPointer);
@@ -184,7 +184,7 @@ export function installScenePlacementTools({
       const rotation=current.frame==='local'?current.frameRotation:[0,0,0];
       base={...base,rotation:[...rotation],frame:{position:[...base.position],rotation:[...rotation],scale:[...base.scale]},preferences:{...base.preferences,orientation:current.frame}};
     }
-    edits.preview({...base,...transformPose(base, { ...current, amount, delta: delta.toArray(), viewAxis: forward.toArray(), snap })});
+    edits.preview({...base,...transformPose(base, { ...current, amount, delta: delta.toArray(), viewAxis: forward.toArray(), snap })},{transform:current.operation});
     current.amount = amount;
     draw();
   }
@@ -321,7 +321,7 @@ export function installScenePlacementTools({
     // focused sidebar controls still retain their own keyboard input.
     const neutralPageFocus = document.activeElement === document.body;
     const viewportScoped = hover || viewport.contains(document.activeElement);
-    const historyScopedUndo = historyScopeArmed && (event.ctrlKey || event.metaKey) && key === 'z';
+    const historyScopedUndo = (historyScopeArmed || inHistoryScope(event.target)) && (event.ctrlKey || event.metaKey) && key === 'z';
     if (!(viewportScoped || neutralPageFocus || historyScopedUndo) || !allowed() || busy()) return;
     if ((event.ctrlKey || event.metaKey) && key === 'z') {
       steal(event);

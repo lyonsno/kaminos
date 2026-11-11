@@ -54,8 +54,8 @@ export async function installOwnerExperimentEntry({document,root,host,discover,o
   },
   open(id,inputs={}){return serial(async()=>{
    const definition=definitions.find(d=>d.id===id);if(!definition)throw Error('Unknown experiment: '+id);if(definition.error)throw Error(definition.error);
-   await close();status.textContent='Opening '+definition.title+'…';
-   try{await onOpen(definition,inputs);current=await openExperiment(definition,{host,inputs,onInputsChange:value=>onChange({id,inputs:value,moduleUrl:definition.moduleUrl})});selected=id;currentModuleUrl=definition.moduleUrl;await current.mount({root:content,document});select.value=id;status.textContent=definition.title;onChange({id,inputs,moduleUrl:definition.moduleUrl});return current.read();}
+   await close();status.textContent='Opening '+definition.title+'…';let effectiveInputs=inputs;
+   try{await onOpen(definition,inputs);current=await openExperiment(definition,{host,inputs,onInputsChange:value=>{effectiveInputs=value;onChange({id,inputs:value,moduleUrl:definition.moduleUrl});}});selected=id;currentModuleUrl=definition.moduleUrl;await current.mount({root:content,document});select.value=id;status.textContent=definition.title;onChange({id,inputs:effectiveInputs,moduleUrl:definition.moduleUrl});return current.read();}
    catch(error){await close();select.value='';onChange({id:null,inputs:null});fail(error);throw error;}
   });},
   read:()=>{if(!current)throw Error('No experiment open');return current.read();},
