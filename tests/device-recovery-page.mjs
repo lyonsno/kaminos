@@ -4,6 +4,8 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {createSceneRecoveryResourceCallbacks} from '../scene-recovery-resources.mjs';
 import {createSceneRenderResources} from '../scene-render-resources.mjs';
+import {loadSceneAppearance} from './helpers/load-scene-appearance.mjs';
+const {createSceneAppearanceResources}=await loadSceneAppearance();
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const source=html.slice(html.indexOf('  let recoverySimulation=null;'),html.indexOf('  window.kaminosDeviceRecovery='));
 async function fixture({loading=false,fail=false,present=true,offscreen=false}={}){
@@ -31,6 +33,7 @@ async function fixture({loading=false,fail=false,present=true,offscreen=false}={
   readViewport:()=>({width:100,height:100,pixelRatio:1}),readSharedGpu:()=>({device:ctx.renderer.backend.device}),
   readRendererOptions:()=>({updateStyle:!offscreen}),readLightingOptions:()=>({}),onConstructed:value=>{ctx.renderer=value;}});
  await ctx.sceneRenderResources.initializeRenderer({assertCurrent:no});
+ ctx.sceneAppearanceResources=createSceneAppearanceResources({THREE:ctx.THREE,readScene:()=>ctx.scene,readRenderer:()=>ctx.renderer,readPMREM:()=>ctx.pmremGenerator,environmentState:{read:()=>({intensity:1})},readEntries:()=>[],readStudio:()=>null,readLighting:()=>({})});
  vm.createContext(ctx);vm.runInContext(source,ctx);
  return {ctx,hooks,events,routes,devices,setFail:value=>{fail=value;},run:()=>hooks.rebuild({assertCurrent:no,watch:()=>()=>events.push('detach')})};
 }

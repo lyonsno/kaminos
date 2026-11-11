@@ -2,7 +2,7 @@
 // select() never waits for I/O. releaseFull() lets scene construction finish
 // before requesting/preparing the large maps; whenSettled() serves consumers
 // that explicitly need final lighting.
-export function createEnvironmentLoader({presets, load, apply, fallback, placeholder = fallback, changed = () => {}}) {
+export function createEnvironmentLoader({presets, load, apply, fallback, placeholder = fallback, changed = () => {}, disposeResource = map => map?.dispose?.()}) {
   const cache = new Map(), pending = new Map();
   let resourceEpoch = 0;
   let generation = 0, hasMap = false, holds = 0, release;
@@ -22,9 +22,9 @@ export function createEnvironmentLoader({presets, load, apply, fallback, placeho
     if (cache.has(key)) return cache.get(key);
     if (pending.has(key)) return pending.get(key);
     const epoch = resourceEpoch;
-    const promise = Promise.resolve().then(() => load(presets[name][quality === 'preview' ? 'previewUrl' : 'url'], {name, quality}))
+    const promise = Promise.resolve().then(() => load(presets[name][quality === 'preview' ? 'previewUrl' : 'url'], {name, quality, isCurrent:()=>epoch===resourceEpoch}))
       .then(map => {
-        if(epoch!==resourceEpoch){map?.dispose?.();throw Error('Environment resource superseded');}
+        if(epoch!==resourceEpoch){disposeResource(map);throw Error('Environment resource superseded');}
         cache.set(key, map); return map;
       }).finally(() => {if(pending.get(key)===promise)pending.delete(key);});
     pending.set(key, promise);
@@ -70,9 +70,14 @@ export function createEnvironmentLoader({presets, load, apply, fallback, placeho
     })();
     return {...state};
   }
-  return {select, invalidateResources(){
+  return {select, invalidateResources({dispose=true}={}){
+    if(typeof dispose!=='boolean')throw Error('Environment disposal choice must be Boolean');
     generation++;resourceEpoch++;pending.clear();
-    for(const map of cache.values())map?.dispose?.();cache.clear();hasMap=false;
+    // A retained resource owner can fence I/O now and release its targets later.
+    // Other callers keep the original eager-disposal behavior.
+    if(dispose)for(const [key,map]of cache){disposeResource(map);cache.delete(key);}
+    else cache.clear();
+    hasMap=false;
     state={name:null,mapName:null,quality:'none',pending:false,error:null};completion=Promise.resolve(state);
   }, read: () => ({...state}), holdFull, releaseFull: releaseStartup,
     async whenSettled() { for (;;) { const chosen = completion; await chosen; if (chosen === completion) return {...state}; } }};

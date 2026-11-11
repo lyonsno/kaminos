@@ -28,12 +28,13 @@ test('ordinary scene restore holds full-detail work until restoration settles an
 });
 
 test('pending environment supports the renderer minimum PMREM mip resolution',()=>{
- const start=source.indexOf('function createPendingEnvironment('),end=source.indexOf('\nfunction createProceduralEnv(',start);
+ const resourceSource=readFileSync(new URL('../scene-appearance-resources.mjs',import.meta.url),'utf8');
+ const start=resourceSource.indexOf(' function pendingEnvironment('),end=resourceSource.indexOf(' function neutralEnvironment(',start);
+ assert(start>=0&&end>start,'actual pending environment constructor is present');
  const sizing={_setSize:PMREMGenerator.prototype._setSize};
- const c={THREE,pmremGenerator:{fromEquirectangular(texture){
-  PMREMGenerator.prototype._setSizeFromTexture.call(sizing,texture);return {texture:{}};
- }}};
- vm.runInNewContext(source.slice(start,end),c);c.createPendingEnvironment();
+ const generator={fromEquirectangular(texture){PMREMGenerator.prototype._setSizeFromTexture.call(sizing,texture);return {texture:{}};}};
+ const c={THREE,readPMREM:()=>generator,ownTarget:target=>target.texture};
+ vm.runInNewContext(resourceSource.slice(start,end),c);c.pendingEnvironment();
  // The installed PMREMGenerator has LOD_MIN=4 (16px faces); smaller inputs
  // produce an undersized atlas, even though its texture object exists.
  assert.ok(sizing._cubeSize>=16,'placeholder must populate the PMREM minimum 16px cube faces');
