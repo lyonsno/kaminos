@@ -40,7 +40,7 @@ test('separated pressure rebinds resized world optical and emitter collection te
   const ctx={pressureResolutionPlan,gridSize:32,gridHeight:64,controlsSnapshot:{pressureResolution:'half'},state:{simStepCount:1},separatedPressure:owner,
     separatedPressureProjectPipeline:{},uniforms:new Float32Array(512),GRID_SHAPE_UNIFORM_OFFSET:0,OPEN_WORLD_UNIFORM_OFFSET:472,joinedLowerFaceTexture:{},device:{queue:{writeBuffer(){}}},
     sceneSolidTexture:{width:32},reactantTextures:[{},{}],frontBuffers:[{},{}],burnRateTexture:{},worldSmoke:{optical},worldOpticalFallback:{},intermediateFlow:null,
-    nonRidgeOpticalCaptureRowBuffer:{},sceneSolidTextureView:{},fluidBuffers:[{}],currentFluid:0,immersedCollectionTexture:{destroyed:false},
+    opticalTraceRowBuffer:{},sceneSolidTextureView:{},fluidBuffers:[{}],currentFluid:0,immersedCollectionTexture:{destroyed:false},
     createFluidRenderBindGroup:()=>({textures:[ctx.worldSmoke.optical,ctx.immersedCollectionTexture]}),resolveTransportConfig:()=>({effective:{scheme:'maccormack'}}),resolveTimeStepConfig:()=>({effective:{backtraceScale:1}}),TRANSPORT_MAX_BACKTRACE_CELLS:1,
     beginPressureResidualProbe:()=>null,pressureDivergenceWarmPipeline:{},pressureRedBlackEvenPipeline:{},pressureRedBlackOddPipeline:{},updateSimCostLedger(){}};
   vm.createContext(ctx);vm.runInContext(grab('encodeSeparatedPressure'),ctx);
@@ -104,7 +104,7 @@ test('separated pressure follows display allocation rebuilds without rebuilding 
   const ctx={immersedCollectionTexture:{},displayReconstruction:{texture:optical},bindGroupLayout:{},uniformBuffer:{},externalEmitterBuffer:{},oracleActivityCueBuffer:{},nonRidgeOpticalCaptureHeaderBuffer:{},quenchBuffers:[{},{}],boundarySidecarBuffer:{},bindGroups:[],boundarySplatLiveCompleteFlameCoefficientBuffer:null,liveCompleteFlameCoefficientWriteBindGroups:[],gridShapeLabel:()=>'32x64x32',waveletTextures:[{},{}],pressureResolutionPlan,gridSize:32,gridHeight:64,controlsSnapshot:{pressureResolution:'half'},state:{simStepCount:1},separatedPressure:owner,
     separatedPressureProjectPipeline:{},uniforms:new Float32Array(512),GRID_SHAPE_UNIFORM_OFFSET:0,OPEN_WORLD_UNIFORM_OFFSET:472,joinedLowerFaceTexture:{},device:{queue:{writeBuffer(){}}},
     sceneSolidTexture:{width:32},reactantTextures:[{},{}],frontBuffers:[{},{}],burnRateTexture:{},worldSmoke:{optical},worldOpticalFallback:{},intermediateFlow:null,
-    nonRidgeOpticalCaptureRowBuffer:{},sceneSolidTextureView:{},fluidBuffers:[{},{}],currentFluid:0,
+    opticalTraceRowBuffer:{},sceneSolidTextureView:{},fluidBuffers:[{},{}],currentFluid:0,
     createFluidRenderBindGroup:()=>({texture:ctx.displayReconstruction.texture}),resolveTransportConfig:()=>({effective:{scheme:'maccormack'}}),resolveTimeStepConfig:()=>({effective:{backtraceScale:1}}),TRANSPORT_MAX_BACKTRACE_CELLS:1,
     beginPressureResidualProbe:()=>null,pressureDivergenceWarmPipeline:{},pressureRedBlackEvenPipeline:{},pressureRedBlackOddPipeline:{},updateSimCostLedger(){}};
   vm.createContext(ctx);vm.runInContext([grab('rebuildFluidBindGroups'),grab('encodeSeparatedPressure')].join('\n'),ctx);

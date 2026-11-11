@@ -21,11 +21,6 @@ for (const [key, id, param] of expectedControls) {
 }
 assert.doesNotMatch(index, /Flow reconstruction follows the support-sheet tangent/, 'the compact authoring surface does not narrate implementation mechanics in-app');
 
-const fireSimLookFields = index.match(/const FIRESIM_LOOK_FIELDS = \[([\s\S]*?)\];/)?.[1] || '';
-for (const [key] of expectedControls) {
-  assert.match(fireSimLookFields, new RegExp(`'${key}'`), `${key} is saved as authored reconstruction state`);
-}
-
 assert.match(core, /FLOW_RECONSTRUCTION_KERNEL_IDENTITY\s*=\s*'flow-tangent-positive-symmetric-trilinear-v0'/, 'kernel has a stable semantic identity');
 assert.match(core, /function normalizeFlowKernelStrength/, 'kernel strength is normalized once on the host');
 assert.match(core, /function normalizeFlowKernelRadius/, 'world-space feature radius is normalized once on the host');

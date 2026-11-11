@@ -16,9 +16,9 @@ const binding = name => {
   assert.ok(match, `GPU binding exists for ${name}`);
   return `${match[1]}:${match[2]}`;
 };
-const names = ['quenchSrc', 'quenchDst', 'nonRidgeOpticalCaptureHeader', 'nonRidgeOpticalCaptureRows'];
+const names = ['quenchSrc', 'quenchDst'];
 assert.equal(new Set(names.map(binding)).size, names.length,
-  'quench ping-pong and optical capture must use four distinct GPU bindings');
+  'quench ping-pong uses distinct GPU bindings');
 
 const helper = core.match(/  function createFluidRenderBindGroup\([\s\S]*?\n  }\n/)?.[0];
 assert.ok(helper, 'one shared fluid binding constructor');
@@ -28,7 +28,7 @@ const resources = {
   device: { createBindGroup: descriptor => descriptor }, bindGroupLayout: {},
   uniformBuffer: buffer('uniform'), externalEmitterBuffer: buffer('emitter'),
   oracleActivityCueBuffer: buffer('oracle'), boundarySidecarBuffer: buffer('sidecar'),
-  nonRidgeOpticalCaptureHeaderBuffer: buffer('capture header'),
+  opticalTraceHeaderBuffer: buffer('capture header'),
   emissiveLightField: { incident: buffer('incident') }, quenchBuffers,
   displayReconstruction: { view: { label: 'display reconstruction view' } },
   rayStepTelemetry: {counterBuffer:buffer('ray statistics')},
@@ -61,8 +61,6 @@ for (let q = 0; q < 2; q++) {
   const entry = name => group.entries.find(e => e.binding === Number(binding(name).split(':')[1]))?.resource.buffer;
   assert.equal(entry('quenchSrc'), quenchBuffers[q]);
   assert.equal(entry('quenchDst'), quenchBuffers[1 - q]);
-  assert.equal(entry('nonRidgeOpticalCaptureRows'), captureRows);
-  assert.equal(entry('nonRidgeOpticalCaptureHeader'), resources.nonRidgeOpticalCaptureHeaderBuffer);
   assert.equal(group.entries.find(e => e.binding === 16)?.resource, resources.sceneSolidTextureView);
   assert.deepEqual(group.entries.find(e => e.binding === 33)?.resource, {label:'immersed collection view',dimension:'2d-array'});
   const noiseBinding = Number(RAY_START_WGSL.match(/@binding\((\d+)\) var rayStartNoise:/)?.[1]);

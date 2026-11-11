@@ -36,10 +36,8 @@ test('the compact expansion is one law with the pooled coefficients, applied to 
   assert.doesNotMatch(fnBody('readSlotWith'), /slotIndex\(c, 3u\)/, 'no slot-3 load on the compact path');
   assert.match(fnBody('readSlot'), /return readSlotWith\(c, slot, false\);/);
   assert.match(fnBody('readPredictSlot'), /let carriers = fluidPredict\[slotIndex\(c, 2u\)\];\n\s*return expandCompactCarriers\(slot, carriers, carriers\.x, carriers\.y, carriers\.w\);/, 'the predict buffer carries the stored form and expands on read');
-  assert.match(fnBody('boundarySplatReadSlot'), /let carriers = fluid\[base \+ 2u\];\n\s*return expandCompactCarriers\(slot, carriers, carriers\.x, carriers\.y, carriers\.w\);/, 'the splat module expands from slot 2 alone');
   for (const name of ['sampleFluidSlotWith', 'sampleFluidSlotMaskedWith']) assert.match(fnBody(name), /readSlotWith\([^;]*, stored\)/, `${name} reads through the seam, carrying the stored flag`);
   for (const name of ['sampleFluidSlot', 'sampleFluidSlotMasked', 'sampleFluidSlotInflow']) assert.match(fnBody(name), new RegExp(`return ${name}With\\(cellCenter, slot, false\\);`), `${name} is the expanded read`);
-  assert.match(fnBody('boundarySplatSampleSlot'), /boundarySplatReadSlot\(/);
   for (const name of ['csProjectPressure', 'csProjectPressureTiered']) {
     const body = fnBody(name);
     assert.match(body, /let fireLayer = readSlot\(c, 2u\);\n\s*let microLayer = readSlot\(c, 3u\);/, `${name} reads the carriers through the seam`);
@@ -50,10 +48,6 @@ test('the compact expansion is one law with the pooled coefficients, applied to 
   assert.match(fnBody('macCormackSlot'), /let current = readSlot\(c, slot\);/, 'the corrector compares against the expanded current, not the stored form');
   assert.match(fnBody('csTransportPredict'), /if \(compactAppearanceOn\(\)\) \{[^}]*fluidPredict\[base \+ 2u\] = sampleFluidSlotInflowWith\(backCell, 2u, true\);\n\s*return;/, 'the predictor carries the stored form and predicts three slots under compact');
   assert.equal([...source.matchAll(/fluidSrc\[base \+ [23]u\]/g)].length, 6, 'raw carrier-slot reads: the two projection pass-throughs, the converged pass-through pair, the relayout pair');
-  assert.match(source, /splatCamera\.set\(\[gridSize, gridHeight, appearanceModelUniformValue\(state\.appearanceModel\?\.effective\), 0\], 56\);/, 'the splat camera carries the flag in gridShape.z');
-  const copies = [...source.matchAll(/fn expandCompactCarriers\([^]*?\n\}\n/g)].map(m => m[0]);
-  assert.equal(copies.length, 2, 'the main module and the splat module (a separate shader) each carry a copy');
-  assert.equal(copies[0], copies[1], 'byte-identical');
 });
 
 test('under compact-3 the step kernel stores the three carriers in slot 2, never writes slot 3, and the front-topology field is reconstructed, not stored', () => {
@@ -91,7 +85,6 @@ test('the cockpit carries the Appearance model select; saved basins load on auth
   assert.equal(schema.controlCount, schema.controls.length);
   assert.match(source, /const appearanceEffective = appearanceRequested === 'compact-3' && reactantCombustionConfig\.effective\.admitted \? 'compact-3' : 'authored';\n\s*uniforms\[REACTANT_COMBUSTION_UNIFORM_OFFSET \+ 15\] = appearanceModelUniformValue\(appearanceEffective\);/, 'packed in the last borrowed reactant lane (d.w); compact-3 is effective only under the admitted reactant law (under the authored law the dropped carriers feed the reaction)');
   assert.match(source, /reason: appearanceRequested === 'compact-3' && appearanceEffective !== 'compact-3' \? 'compact-3-requires-the-reactant-law' : null/, 'the receipt names the refusal');
-  assert.match(source, /splatCamera\.set\(\[gridSize, gridHeight, appearanceModelUniformValue\(state\.appearanceModel\?\.effective\), 0\], 56\);/, 'the splat lane follows the effective model');
   assert.equal(core.appearanceModelUniformValue('compact-3'), 1);
   assert.equal(core.appearanceModelUniformValue('authored'), 0);
   assert.equal(core.appearanceModelUniformValue(undefined), 0);

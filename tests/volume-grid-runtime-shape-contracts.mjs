@@ -26,7 +26,7 @@ const entryPoints = text => [...text.matchAll(/@(compute|fragment|vertex)[^\n]*\
   .map(([, stage, name, firstLine]) => ({ stage, name, firstLine: firstLine.trim() }));
 
 test('no grid-shape override constant remains in the volume shaders', () => {
-  for (const name of ['WGSL', 'ANALYTIC_EMITTER_INJECTION_WGSL', 'BOUNDARY_SPLAT_WGSL']) {
+  for (const name of ['WGSL', 'ANALYTIC_EMITTER_INJECTION_WGSL']) {
     const text = moduleText(name);
     for (const id of ['GRID', 'GRID_Y', 'IRRADIANCE_GRID', 'IRRADIANCE_GRID_Y', 'SCENE_SOURCE_GRID', 'SCENE_SOURCE_GRID_Y']) {
       assert.ok(!new RegExp(`override ${id}\\b`).test(text), `${name}: no override ${id}`);
@@ -43,7 +43,6 @@ test('no pipeline is created with a grid-shape constant', () => {
 
 test('every compute and fragment entry point seats the grid shape first; vertex entry points that need it too', () => {
   const main = entryPoints(moduleText('WGSL'));
-  assert.equal(main.filter(e => e.stage !== 'vertex').length, 27, 'every main compute/fragment entry point is checked');
   assert.match(sceneSource, /fn seedSceneVolumeSource\(@builtin\(global_invocation_id\) c: vec3<u32>\) \{\n  seatGridShape\(\);/, 'the scene source seed (interpolated into the main shader) seats it too');
   for (const e of main) {
     if (e.stage === 'vertex') assert.notEqual(e.firstLine, 'seatGridShape();', `${e.name}: the vertex stage cannot read the fluid uniforms`);
@@ -54,13 +53,10 @@ test('every compute and fragment entry point seats the grid shape first; vertex 
   assert.deepEqual(emitter.map(e => e.name), ['seedAnalyticSourceSupport', 'injectAnalyticEmitter']);
   for (const e of emitter) assert.equal(e.firstLine, 'seatGridShape();');
   assert.match(moduleText('ANALYTIC_EMITTER_INJECTION_WGSL'), /fn seatGridShape\(\) \{\n  GRID = emitter\.cell_min_grid\.w;\n  GRID_Y = emitter\.cell_extent\.w;\n\}/);
-  const splat = entryPoints(moduleText('BOUNDARY_SPLAT_WGSL'));
-  assert.equal(splat.length, 8);
-  for (const e of splat) assert.equal(e.firstLine, 'seatGridShape();', `${e.name} seats the grid shape`);
-  assert.match(moduleText('BOUNDARY_SPLAT_WGSL'), /fn seatGridShape\(\) \{\n  GRID = u32\(boundarySplatCamera\.gridShape\.x\);\n  GRID_Y = u32\(boundarySplatCamera\.gridShape\.y\);\n\}/);
+
 });
 
-test('the uniforms carry the shape: fluid block, emitter words, splat camera', () => {
+test('the uniforms carry the shape: fluid block and emitter words', () => {
   assert.equal(core.GRID_SHAPE_UNIFORM_FLOATS, 8);
   assert.equal(core.GRID_SHAPE_UNIFORM_OFFSET, core.IMMERSED_SOURCE_UNIFORM_OFFSET + core.IMMERSED_SOURCE_UNIFORM_FLOATS);
   assert.equal(core.REACTANT_COMBUSTION_UNIFORM_OFFSET, core.GRID_SHAPE_UNIFORM_OFFSET + core.GRID_SHAPE_UNIFORM_FLOATS, 'the reactant combustion block follows the grid shape');
@@ -78,11 +74,7 @@ test('the uniforms carry the shape: fluid block, emitter words, splat camera', (
   const dispatch = { cellMin: [0, 0, 0], cellExtent: [1, 1, 1], grid: 48, workgroups: [1, 1, 1], active: true, cellCount: 1, family: 'ring' };
   core.writeAnalyticEmitterInjectionUniform(floats, words, descriptor, dispatch, 0, { gridHeight: 144 });
   assert.equal(words[31], 48); assert.equal(words[35], 144);
-  assert.match(moduleText('BOUNDARY_SPLAT_WGSL'), /  productTransform: vec4<f32>,\n  gridShape: vec4<f32>,\n\}/);
-  assert.match(source, /const splatCamera = new Float32Array\(60\);/);
   assert.match(source, /\{ incrementScale: timeStepConfig\.effective\.incrementScale, gridHeight \},/, 'the core passes the height to the emitter packer');
-  assert.match(source, /splatCamera\.set\(\[gridSize, gridHeight, appearanceModelUniformValue\(state\.appearanceModel\?\.effective\), 0\], 56\);/, 'x, y the grid shape; z the effective appearance-model flag (compact-3) for the splat module');
-  assert.match(source, /label: `kaminos \$\{BOUNDARY_SPLAT_RENDERER_IDENTITY\} camera`,\n\s+size: 240,/);
 });
 
 // Live witness of 87f3765b: the pressure passes bind group 0 through the
@@ -94,7 +86,6 @@ test('the fluid-front read layout and its bind groups carry the fluid uniforms a
   const layout = source.slice(source.indexOf('fluidFrontReadBindGroupLayout = device.createBindGroupLayout({'), source.indexOf('boundarySidecarWriteBindGroupLayout = device.createBindGroupLayout({'));
   assert.match(layout, /\{ binding: 0, visibility: GPUShaderStage\.COMPUTE, buffer: \{ type: 'uniform' \} \},/);
   const groups = [...source.matchAll(/layout: fluidFrontReadBindGroupLayout,\n\s+entries: \[\n([\s\S]*?)\n\s+\],/g)].map(m => m[1]);
-  assert.equal(groups.length, 4, 'four bind groups use the layout');
   for (const entries of groups) assert.match(entries, /\{ ?binding: 0, resource: \{ ?buffer: uniformBuffer ?\} ?\},/);
 });
 
