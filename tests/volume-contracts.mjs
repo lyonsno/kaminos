@@ -9,6 +9,7 @@ import {createSceneRenderResources} from '../scene-render-resources.mjs';
 
 const root = new URL('..', import.meta.url).pathname;
 const index = readFileSync(join(root, 'index.html'), 'utf8');
+const controlMapper = readFileSync(join(root, 'volume-runtime-control-values.mjs'), 'utf8');
 const receiver = readFileSync(join(root, 'scene-fire-light-receiver.mjs'), 'utf8');
 const volumeWitness = readFileSync(join(root, 'volume-witness.mjs'), 'utf8');
 const serve = readFileSync(join(root, 'serve.py'), 'utf8');
@@ -516,7 +517,7 @@ assert.match(index, /windAngle/, 'Volume controls carry explicit wind direction 
 assert.match(index, /windHeight/, 'Volume controls carry explicit wind height/ramp into the renderer');
 assert.match(index, /id="volume-render-scale"/, 'Volume tab exposes internal render-scale control');
 assert.match(index, /id="volume-render-scale" min="0\.1" max="1" step="any"/, 'Volume tab gives the operator exact numeric control over the requested 10–100% raymarch range');
-assert.match(index, /renderScale: readVolumeRenderScaleControlValue\((?:document)?\)/, 'runtime uses the exact full-range render resolution');
+assert.match(controlMapper, /renderScale: readVolumeRenderScaleControlValue\(readControl\('volume-render-scale'\)\)/, 'runtime uses the exact full-range render resolution');
 assert.match(index, /volume_render_scale/, 'URL route can override internal render scale');
 assert.match(index, /renderScale/, 'Volume controls carry internal render scale into the renderer');
 assert.match(index, /data-volume-control-section="visual-tuning"[\s\S]*id="volume-fire-licks"[\s\S]*id="volume-projection"[\s\S]*id="volume-input-radius"[\s\S]*id="volume-flow-rate"[\s\S]*data-volume-control-section="render-budget"/, 'Volume tab groups visual tuning knobs with hidden cost consequences before the obvious render budget controls');
@@ -762,12 +763,12 @@ assert.match(index, /id="volume-reaction-live-view"/, 'reaction-front extractor 
 assert.match(index, /<option value="boundary">boundary<\/option>/, 'reaction-front live inspect selector exposes the derived boundary candidate in the primary viewer');
 assert.match(index, /<option value="boundary_fire">boundary-fire<\/option>/, 'reaction-front live inspect selector exposes the boundary-fire sheet radiance mode separately from scalar boundary inspect');
 assert.match(index, /volume_reaction_live_view/, 'reaction-front live inspect selector is routeable through basin URLs');
-assert.match(index, /reactionLiveView[\s\S]*fireRenderMode:\s*reactionLiveView !== 'off' \? 'inspect'/, 'reaction-front live inspect selector overrides the primary renderer into inspect mode');
+assert.match(controlMapper, /reactionLiveView[\s\S]*fireRenderMode:\s*reactionLiveView !== 'off' \? 'inspect'/, 'reaction-front live inspect selector overrides the primary renderer into inspect mode');
 assert.match(index, /reaction-live-view-shader-inspect-v0/, 'reaction-front live inspect labels its shader-side approximation boundary');
-assert.match(index, /reaction-boundary-live-controls-v0/, 'reaction-front live boundary controls declare a stable route/debug identity');
-assert.match(index, /reactionBoundaryControls:\s*\{[\s\S]*gradientGain[\s\S]*supportThermal[\s\S]*displayOpacity/, 'reaction-front live boundary controls reach the runtime controls object as a grouped contract');
-assert.match(index, /reaction-boundary-fire-controls-v0/, 'reaction-front boundary-fire controls declare a stable sheet-radiance identity');
-assert.match(index, /reactionBoundaryFireControls:\s*\{[\s\S]*ridgeGain[\s\S]*tipBreakup[\s\S]*cleanBlue[\s\S]*fireLuma/, 'reaction-front boundary-fire controls reach the runtime controls object as a grouped contract');
+assert.match(controlMapper, /reaction-boundary-live-controls-v0/, 'reaction-front live boundary controls declare a stable route/debug identity');
+assert.match(controlMapper, /reactionBoundaryControls:\s*\{[\s\S]*gradientGain[\s\S]*supportThermal[\s\S]*displayOpacity/, 'reaction-front live boundary controls reach the runtime controls object as a grouped contract');
+assert.match(controlMapper, /reaction-boundary-fire-controls-v0/, 'reaction-front boundary-fire controls declare a stable sheet-radiance identity');
+assert.match(controlMapper, /reactionBoundaryFireControls:\s*\{[\s\S]*ridgeGain[\s\S]*tipBreakup[\s\S]*cleanBlue[\s\S]*fireLuma/, 'reaction-front boundary-fire controls reach the runtime controls object as a grouped contract');
 assert.match(core, /shellInspectModeValue[\s\S]*mode === 'boundary'[\s\S]*return 8[\s\S]*mode === 'boundary_fire'[\s\S]*return 9/, 'volume shader routing maps boundary and boundary-fire inspect modes to distinct mode ids');
 assert.match(core, /let shellInspectMode = clamp\(u\.topology_shell_controls\.y,\s*0\.0,\s*9\.0\)/, 'shader inspect mode clamp includes boundary-fire');
 assert.match(core, /boundary_fire_structure:\s*vec4<f32>[\s\S]*boundary_fire_color:\s*vec4<f32>[\s\S]*boundary_fire_display:\s*vec4<f32>/, 'shader carries dedicated boundary-fire uniforms instead of stealing unrelated controls');
@@ -777,7 +778,7 @@ assert.match(core, /boundaryFireRidge[\s\S]*boundaryFireTipGate[\s\S]*boundaryFi
 assert.match(core, /cleanFuelColor[\s\S]*sootMaturity[\s\S]*sootThermalColor[\s\S]*boundaryFireColor/, 'shader boundary-fire color mixes clean fuel color toward soot-rich thermal color');
 assert.match(core, /reactionBoundaryControls/, 'renderer debug state exposes effective live boundary controls for witness reports');
 assert.match(core, /reactionBoundaryFireControls/, 'renderer debug state exposes effective boundary-fire controls for witness reports');
-assert.match(index, /reactionHeatMin:\s*parseFloat\(document\.getElementById\('volume-reaction-heat-min'\)\.value\)/, 'reaction-front heat threshold reaches the runtime controls object');
+assert.match(controlMapper, /reactionHeatMin:\s*parseFloat\(readControl\('volume-reaction-heat-min'\)\.value\)/, 'reaction-front heat threshold reaches the runtime controls object');
 assert.match(index, /volume-reaction-atlas-canvas/, 'reaction-front atlas has an in-page visual capture surface for operator smoke');
 assert.match(index, /captureVolumeReactionAtlas/, 'reaction-front atlas capture path can draw sampleFrame output without rewiring the renderer');
 assert.match(core, /normalizeReactionFrontAtlasControls/, 'reaction-front atlas has a normalized controls contract independent of legacy pyro controls');

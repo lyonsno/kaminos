@@ -1,0 +1,2673 @@
+[
+  {
+    "source": "b99ba5dc99a89e72a599cdadcc1caaca4fef7309",
+    "quality": "full",
+    "route": {
+      "activeVolumeRayBudgetPreset": "",
+      "routedVolumeRayBudgetPreset": "",
+      "activeCanonicalVolumeMacroPreset": "",
+      "routedCanonicalSourceMode": "current",
+      "routedCanonicalRenderMode": "default",
+      "routedCanonicalMotionMode": "animated",
+      "routedCanonicalContentMode": "smoke",
+      "routedCanonicalSourceY": -0.74,
+      "routedCanonicalInjection": 1,
+      "routedCanonicalBuoyancy": 1,
+      "routedVolumeReactionFuelScale": 1,
+      "routedVolumePressureStrategy": "global",
+      "routedVolumePressureMode": "auto",
+      "routedVolumeSimProfile": false,
+      "routedVolumeLifecycleEffect": "none",
+      "routedVolumeLifecycleT": 0,
+      "routedVolumeQuenchVapor": 0,
+      "routedVolumeRuntimeQuality": "live_high",
+      "routedVolumeGpuPressure": 0,
+      "routedVolumeQualityReason": "route-default",
+      "routedBonfireAblationControls": {
+        "bonfireRecenter": 1,
+        "bonfireLateralDamping": 1,
+        "bonfireShear": 1,
+        "bonfireDetailForces": 1,
+        "bonfireDepinch": 1,
+        "bonfireProjection": 1,
+        "bonfireTemporal": 1,
+        "bonfireInstabilityProbe": 0
+      }
+    },
+    "params": "",
+    "lightFieldParams": "volume_light_field=1&volume_light_field_grid=24",
+    "controls": {
+      "volume-scene": {
+        "value": "flame",
+        "checked": true,
+        "dataset": {
+          "volumeSceneRequest": "bonfire_plume"
+        }
+      },
+      "volume-pressure-mode": {
+        "value": "global-p3",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-live-view": {
+        "value": "boundary-fire",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-boundary-sidecar-source": {
+        "value": "mix",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-boundary-sidecar-view": {
+        "value": "ridge",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-physical-kelvin-per-heat": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-physical-soot-burnout-rate": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-physical-soot-burnout-kelvin": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-wavelet-turbulence": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-wavelet-octaves": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-wavelet-strength": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-wavelet-octave1-weight": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-wavelet-octave2-weight": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-physical-white": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-physical-smoke-extinction": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-physical-smoke-albedo": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-physical-ambient": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-physical-thermal": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-physical-clean": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-physical-exposure": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-physical-knee": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-artistic-swirl": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-phased-sway": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-swirl-jostle": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-fine-breakup-localization": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-common-gas-transport": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-density": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-curl": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-microdetail": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-interface-shred": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-fire-licks": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-projection": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-speed": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-steps": {
+        "value": "140",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-adaptive-rays": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-occupancy-skip": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-fire-scale": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-plume-height": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-wind-strength": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-wind-angle": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-wind-height": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-wind-model": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-wind-gust": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-wind-gust-period": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-wind-gust-veer": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-render-scale": {
+        "value": ".83",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-input-radius": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-flow-rate": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-source-law": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-source-depth": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-inlet-profile": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-momentum-linked": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-inlet-velocity": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-shear-width": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-edge-entrainment": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-fuel-fraction": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-inlet-temperature": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-aperture-pattern": {
+        "value": "shape",
+        "checked": true,
+        "dataset": {
+          "volumeRetiredPatternRequest": "spiral"
+        }
+      },
+      "volume-emitter-aperture-count": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-aperture-ratio": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-aperture-seed": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-swirl": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-line-weight": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-jet-jitter": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-inlet-turbulence": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-inlet-turbulence-scale": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-puff": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-puff-period": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-fixed-source-dephase": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-flow-kernel-strength": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-flow-kernel-radius": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-flow-kernel-coherence": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-tone-mapping": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-raymarch-mode": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-optical-tolerance": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-ray-step-telemetry": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-ray-start-noise": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-ray-noise-animated": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-quadrature-jitter": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-display-reconstruction": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-display-grid-scale": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-display-alignment": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emission-interpolation": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-smoke-interpolation": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emission-smoothing": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-smoke-smoothing": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-flame-priority": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-boundary-sidecar-blur": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-boundary-sidecar-width": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-boundary-sidecar-ridge": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-resolution": {
+        "value": "64",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-grid-height-ratio": {
+        "value": "1.5",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-residual-mode": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-residual-model-url": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-residual-strength": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-residual-feature-debug": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-grid-overlay": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-flow-debug": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-oracle-activity-cue": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-oracle-activity-display": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-oracle-activity-curl-noise": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-oracle-activity-vorticity": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-oracle-activity-material": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-look-freeze": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-heat-min": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-heat-max": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-fuel-min": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-fuel-max": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-flame-min": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-flame-max": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-front-min": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-front-max": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-gradient-min": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-gradient-max": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-core-min": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-core-max": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-core-reject": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-topology-gain": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-stretch-erode": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-divergence-min": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-divergence-max": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-divergence-gain": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-curl-warp": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-pressure-solver": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-pressure-resolution": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-world-smoke": {
+        "value": "on",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-world-smoke-flow": {
+        "value": "32",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-world-smoke-material": {
+        "value": "64",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-world-smoke-extent": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-world-smoke-transition": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-world-smoke-intermediate": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-fine-velocity": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-fine-pressure": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-world-smoke-pressure": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-world-smoke-iterations": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-intermediate-flow": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-intermediate-material": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-intermediate-pressure": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-intermediate-iterations": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-intermediate-extent": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-calibration-mode": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-simulation-world-scale": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-calibration-material-cells": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-calibration-velocity-cells": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-world-emissive": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-fast-bypass": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-velocity-wavelet": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-heat-release-expansion": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-law": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reactant-mixing-time": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reactant-cooling-time": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reactant-soot-yield": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-appearance-model": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-velocity-staggering": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-centre-x": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-centre-y": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-centre-z": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-yaw": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-pitch": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-radius": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-thickness": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-speed": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-fuel": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-temperature": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-momentum-gain": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-cap-fraction": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-back-wall": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-pressure-solver-iterations": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-advection-scheme": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-confinement": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-time-step": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-pressure-tier-overlay": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-pressure-tier-lower-max": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-pressure-tier-hero-min": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-pressure-tier-hero-max": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-canonical-spread": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-canonical-centerline": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-canonical-body-balance": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      }
+    },
+    "expected": {
+      "volumeScene": "flame",
+      "volumeSceneRequested": "bonfire_plume",
+      "physicalKelvinPerHeat": 0.7,
+      "physicalSootBurnoutRate": 0.7,
+      "physicalSootBurnoutKelvin": 0.7,
+      "waveletTurbulence": 0.7,
+      "waveletOctaves": 0.7,
+      "waveletStrength": 0.7,
+      "waveletOctave1Weight": 0.7,
+      "waveletOctave2Weight": 0.7,
+      "physicalWhiteBalance": 0.7,
+      "physicalSmokeExtinction": 0.7,
+      "physicalSmokeAlbedo": 0.7,
+      "physicalAmbient": 0.7,
+      "physicalThermalStrength": 0.7,
+      "physicalCleanStrength": 0.7,
+      "physicalExposureEV": 0.7,
+      "physicalHighlightKnee": 0.7,
+      "artisticSwirl": true,
+      "phasedSway": true,
+      "proceduralDetailForces": true,
+      "swirlJostle": 0.7,
+      "fineBreakupLocalization": 0.7,
+      "commonGasTransport": true,
+      "volumeExposure": 1,
+      "density": 0.7,
+      "fire": 1.4,
+      "radiance": 1.65,
+      "absorption": 0.85,
+      "glow": 1.15,
+      "smoke": 2.8,
+      "curl": 0.7,
+      "microdetail": 0.7,
+      "interfaceShred": 0.7,
+      "fireLicks": 0.7,
+      "projection": 0.7,
+      "speed": 0.7,
+      "raySteps": 140,
+      "adaptiveRays": 0.7,
+      "occupancySkip": 0.7,
+      "fireScale": 0.7,
+      "detailScale": 1.75,
+      "plumeHeight": 0.7,
+      "windStrength": 0.7,
+      "windAngle": 0.7,
+      "windHeight": 0.7,
+      "windModel": "0.7",
+      "windGust": 0.7,
+      "windGustPeriod": 0.7,
+      "windGustVeer": 0.7,
+      "renderScale": 0.83,
+      "inputRadius": 0.7,
+      "flowRate": 0.7,
+      "emitterSourceLaw": "0.7",
+      "emitterSourceDepth": 0.7,
+      "emitterInletProfile": "0.7",
+      "emitterMomentumLinked": true,
+      "emitterInletVelocity": 0.7,
+      "emitterShearWidthCells": 0.7,
+      "emitterEdgeEntrainment": 0.7,
+      "emitterFuelFraction": 0.7,
+      "emitterInletTemperature": 0.7,
+      "emitterAperturePattern": "spiral",
+      "emitterApertureCount": 0.7,
+      "emitterApertureRatio": 0.7,
+      "emitterApertureSeed": 0.7,
+      "emitterSwirl": 0.7,
+      "emitterLineWeight": 0.7,
+      "emitterJetJitter": 0.7,
+      "emitterInletTurbulence": 0.7,
+      "emitterInletTurbulenceScale": 0.7,
+      "emitterPuff": 0.7,
+      "emitterPuffPeriod": 0.7,
+      "fixedSourceDephase": true,
+      "reactionLiveView": "boundary_fire",
+      "reactionLiveViewIdentity": "reaction-live-view-shader-inspect-v0",
+      "boundarySidecarSource": "mix",
+      "boundarySidecarView": "ridge",
+      "boundarySplatMode": "off",
+      "boundarySplatFeatureCapture": false,
+      "flowKernelDescriptorCapture": false,
+      "boundarySplatInstanceConsumer": false,
+      "boundarySplatInstances": 1,
+      "boundarySplatRadius": 1,
+      "boundarySplatSharpness": 3.4,
+      "flowKernelStrength": 0.7,
+      "flowKernelRadius": 0.7,
+      "flowKernelCoherence": 0.7,
+      "toneMapping": "0.7",
+      "raymarchMode": "0.7",
+      "opticalTolerance": 0.7,
+      "rayStepTelemetry": true,
+      "rayStartNoise": true,
+      "rayNoiseAnimated": true,
+      "quadratureJitter": true,
+      "displayReconstruction": "0.7",
+      "displayGridScale": 0.7,
+      "displayAlignment": "0.7",
+      "emissionInterpolation": "0.7",
+      "smokeInterpolation": "0.7",
+      "emissionSmoothing": 0.7,
+      "smokeSmoothing": 0.7,
+      "flamePriority": 0.7,
+      "boundarySidecarControls": {
+        "identity": "baked-boundary-sidecar-v0",
+        "authority": "band-limited-support-coverage-ridge-proximity-footprint-v1",
+        "source": "mix",
+        "view": "ridge",
+        "blur": 0.7,
+        "stepWidth": 0.7,
+        "ridgeGain": 0.7
+      },
+      "reactionBoundaryControls": {
+        "identity": "reaction-boundary-live-controls-v0",
+        "gradientGain": 2.6,
+        "supportThermal": 0.1,
+        "supportReaction": 0.26,
+        "supportFront": 1.6,
+        "supportInterface": 1.46,
+        "cut": 0.3,
+        "softness": 0.08,
+        "coreReject": 0.92,
+        "topologyGain": 0.9,
+        "curlGain": 0.7,
+        "divergenceGain": 0.05,
+        "displayContrast": 1.35,
+        "displayGamma": 1.05,
+        "displayOpacity": 0.7
+      },
+      "reactionBoundaryFireControls": {
+        "identity": "reaction-boundary-fire-controls-v0",
+        "ridgeGain": 1.76,
+        "ridgeCut": 0.04,
+        "tipBreakup": 1.8,
+        "topologyErosion": 0.55,
+        "cleanBlue": 0.9,
+        "sootYield": 0.72,
+        "sootYellowing": 0.28,
+        "thermalWarmth": 0.3,
+        "fireLuma": 1.05,
+        "cleanColor": "#4a86ff",
+        "sootColor": "#ffc460"
+      },
+      "reactionBoundaryGradient": 2.6,
+      "reactionBoundarySupportThermal": 0.1,
+      "reactionBoundarySupportReaction": 0.26,
+      "reactionBoundarySupportFront": 1.6,
+      "reactionBoundarySupportInterface": 1.46,
+      "reactionBoundaryCut": 0.3,
+      "reactionBoundarySoftness": 0.08,
+      "reactionBoundaryCoreReject": 0.92,
+      "reactionBoundaryTopology": 0.9,
+      "reactionBoundaryCurl": 0.7,
+      "reactionBoundaryDivergence": 0.05,
+      "reactionBoundaryContrast": 1.35,
+      "reactionBoundaryGamma": 1.05,
+      "reactionBoundaryOpacity": 0.7,
+      "reactionBoundaryFireRidge": 1.76,
+      "reactionBoundaryFireRidgeCut": 0.04,
+      "reactionBoundaryFireTip": 1.8,
+      "reactionBoundaryFireErosion": 0.55,
+      "reactionBoundaryFireCleanBlue": 0.9,
+      "reactionBoundaryFireSoot": 0.72,
+      "reactionBoundaryFireYellow": 0.28,
+      "reactionBoundaryFireWarmth": 0.3,
+      "reactionBoundaryFireLuma": 1.05,
+      "reactionBoundaryFireCleanColor": "#4a86ff",
+      "reactionBoundaryFireSootColor": "#ffc460",
+      "boundarySidecarBlur": 0.7,
+      "boundarySidecarWidth": 0.7,
+      "boundarySidecarRidge": 0.7,
+      "fireRenderMode": "inspect",
+      "shellInspectMode": "boundary_fire",
+      "shellAmount": 1.1,
+      "shellWidth": 0.9,
+      "shellThermal": 0.85,
+      "shellReaction": 1.1,
+      "shellFront": 1.25,
+      "shellEdge": 0.85,
+      "shellCoreSuppress": 0.55,
+      "shellBite": 0.8,
+      "shellCurl": 0.25,
+      "shellHeat": 1.65,
+      "shellDivergence": 0,
+      "shellLuma": 1.35,
+      "shellExposure": 1.15,
+      "shellSoftClip": 1.6,
+      "shellSmoke": 0.25,
+      "resolution": 64,
+      "gridHeightRatio": 1.5,
+      "volumeResidualMode": "0.7",
+      "volumeResidualModelUrl": "0.7",
+      "volumeResidualStrength": 0.7,
+      "volumeResidualFeatureDebug": 0.7,
+      "gridOverlay": 0.7,
+      "flowDebug": 0.7,
+      "oracleActivityCue": 0.7,
+      "oracleActivityDisplay": 0.7,
+      "oracleActivityCurlNoise": 0.7,
+      "oracleActivityVorticity": 0.7,
+      "oracleActivityMaterial": 0.7,
+      "lookFreeze": 0.7,
+      "fireLightField": true,
+      "fireProbe": 0,
+      "fireLightFieldGrid": 24,
+      "reactionHeatMin": 0.7,
+      "reactionHeatMax": 0.7,
+      "reactionFuelMin": 0.7,
+      "reactionFuelMax": 0.7,
+      "reactionFlameMin": 0.7,
+      "reactionFlameMax": 0.7,
+      "reactionFrontMin": 0.7,
+      "reactionFrontMax": 0.7,
+      "reactionGradientMin": 0.7,
+      "reactionGradientMax": 0.7,
+      "reactionCoreMin": 0.7,
+      "reactionCoreMax": 0.7,
+      "reactionCoreReject": 0.7,
+      "reactionTopologyGain": 0.7,
+      "reactionStretchErode": 0.7,
+      "reactionDivergenceMin": 0.7,
+      "reactionDivergenceMax": 0.7,
+      "reactionDivergenceGain": 0.7,
+      "reactionCurlWarp": 0.7,
+      "reactionShellGamma": 1,
+      "reactionShellContrast": 1,
+      "pyroCompareMode": "base",
+      "pyroDynamicDetail": 0,
+      "pyroMaterialGain": 0,
+      "pyroInterfaceFocus": 0,
+      "pyroEdgeBite": 0,
+      "pyroBiteBorder": 0,
+      "pyroBiteTeeth": 0,
+      "pyroBiteWake": 0,
+      "pyroBiteHeight": 0,
+      "pyroBiteFireLock": 1,
+      "pyroBiteCore": 0,
+      "pyroBiteCoreCut": 1,
+      "pyroBiteRim": 0,
+      "pyroBiteRimCut": 1,
+      "pyroBiteAfter": 0,
+      "pyroBiteAfterCut": 1,
+      "pyroFireMode": "stock",
+      "pyroFlamePaint": 0,
+      "pyroStockMix": 1,
+      "pyroFlameLuma": 1,
+      "pyroFlameCoreColor": "#fff4b8",
+      "pyroFlameEdgeColor": "#ff8a24",
+      "pyroBiteHeat": 0,
+      "pyroBiteChroma": 0,
+      "pyroBiteLuma": 1,
+      "pyroBiteEmberColor": "#e65a1a",
+      "pyroBiteHotColor": "#fff4b8",
+      "pyroSmokeFold": 0,
+      "pyroFoldBorder": 0,
+      "pyroFoldWake": 0,
+      "pyroWakeLift": 0,
+      "pyroWakeWarmth": 0,
+      "pyroWakeLuma": 1,
+      "pyroWakeShadowColor": "#384c50",
+      "pyroWakeEmberColor": "#b06a2a",
+      "pyroRadiance": 0,
+      "pyroRadianceGate": 1,
+      "pyroRadianceSpill": 0,
+      "pyroRadianceWarmth": 0,
+      "pyroRadianceHue": 0.5,
+      "pyroRadianceChroma": 0,
+      "pyroRadianceLuma": 1,
+      "pyroRadianceCoolColor": "#7aa8b8",
+      "pyroRadianceWarmColor": "#d18438",
+      "pyroRadianceSource": "fire",
+      "pyroRadianceHeight": 0,
+      "pyroRadianceBorder": 0,
+      "pyroRadianceTeeth": 0,
+      "pyroRadianceRise": 0,
+      "pyroRadianceFireLock": 1,
+      "pyroFlowBite": 0,
+      "pyroFlowBorder": 0,
+      "pyroFlowTeeth": 0,
+      "pyroFlowRise": 0,
+      "pyroFlowFireLock": 1,
+      "pyroFlowLuma": 1,
+      "pyroFlowRadiance": 0,
+      "pyroFlowSpikes": 0,
+      "pyroFlowCoolColor": "#2aa7b8",
+      "pyroFlowHotColor": "#ff7a36",
+      "pyroDiagnosticPaint": 0,
+      "pyroCarrierView": "normal",
+      "pyroOverdrive": 1,
+      "pressureMode": "global-p3",
+      "pressureEffectiveLabel": "Full P3",
+      "pressureSolver": "0.7",
+      "pressureResolution": "0.7",
+      "worldSmoke": "on",
+      "worldSmokeFlow": 32,
+      "worldSmokeMaterial": 64,
+      "worldSmokeExtent": 0.7,
+      "worldSmokeTransition": 0.7,
+      "worldSmokeIntermediate": "0.7",
+      "fineVelocity": 0.7,
+      "finePressure": 0.7,
+      "worldSmokePressure": 0.7,
+      "worldSmokeIterations": 0.7,
+      "intermediateFlow": 0.7,
+      "intermediateMaterial": 0.7,
+      "intermediatePressure": 0.7,
+      "intermediateIterations": 0.7,
+      "intermediateExtent": 0.7,
+      "adaptiveMaterial": null,
+      "calibrationMode": "0.7",
+      "simulationWorldScale": 0.7,
+      "calibrationMaterialCells": 0.7,
+      "calibrationVelocityCells": 0.7,
+      "worldEmissive": "0.7",
+      "fastBypass": "0.7",
+      "velocityWavelet": "0.7",
+      "heatReleaseExpansion": 0.7,
+      "reactionLaw": "0.7",
+      "reactantMixingTime": 0.7,
+      "reactantCoolingTime": 0.7,
+      "reactantSootYield": 0.7,
+      "appearanceModel": "0.7",
+      "velocityStaggering": "0.7",
+      "immersedCentreX": 0.7,
+      "immersedCentreY": 0.7,
+      "immersedCentreZ": 0.7,
+      "immersedYaw": 0.7,
+      "immersedPitch": 0.7,
+      "immersedRadius": 0.7,
+      "immersedThickness": 0.7,
+      "immersedSpeed": 0.7,
+      "immersedFuel": 0.7,
+      "immersedTemperature": 0.7,
+      "immersedMomentumGain": 0.7,
+      "immersedCapFraction": 0.7,
+      "immersedBackWall": 0.7,
+      "pressureSolverIterations": 0.7,
+      "advectionScheme": "0.7",
+      "confinement": "0.7",
+      "timeStep": "0.7",
+      "pressureTierOverlay": 0.7,
+      "pressureTierLowerMax": 0.7,
+      "pressureTierHeroMin": 0.7,
+      "pressureTierHeroMax": 0.7,
+      "canonicalSpread": 0.7,
+      "canonicalCenterline": 0.7,
+      "canonicalBodyBalance": 0.7,
+      "canonicalMacroPreset": "",
+      "canonicalSourceMode": "current",
+      "canonicalSourceModeValue": 0,
+      "canonicalRenderMode": "default",
+      "canonicalRenderModeValue": 0,
+      "canonicalMotionMode": "animated",
+      "canonicalMotionRetirementIdentity": "retired-analytic-canonical-motion-v0",
+      "canonicalContentMode": "smoke",
+      "canonicalContentModeValue": 0,
+      "canonicalSourceY": -0.74,
+      "canonicalSourceInjection": 1,
+      "canonicalBuoyancy": 1,
+      "reactionFuelScale": 1,
+      "lifecycleEffect": "none",
+      "lifecycleT": 0,
+      "quenchVapor": 0,
+      "runtimeQualityRequested": "live_high",
+      "viewportPreview": false,
+      "gpuPressure": 0,
+      "runtimeQualityReason": "route-default",
+      "pressureIterations": 3,
+      "pressureStrategy": "global",
+      "simProfile": false,
+      "rayBudgetPreset": "",
+      "bonfireRecenter": 1,
+      "bonfireLateralDamping": 1,
+      "bonfireShear": 1,
+      "bonfireDetailForces": 1,
+      "bonfireDepinch": 1,
+      "bonfireProjection": 1,
+      "bonfireTemporal": 1,
+      "bonfireInstabilityProbe": 0,
+      "runtimeQualityEffective": "live_high",
+      "runtimeQualityReceipt": {
+        "identity": "volume-runtime-quality-ladder-v0",
+        "requested": "live_high",
+        "effective": "live_high",
+        "viewportPreview": false,
+        "reason": "route-default",
+        "gpuPressure": 0,
+        "changedControls": [],
+        "knobs": {
+          "renderScale": 0.83,
+          "raySteps": 140,
+          "adaptiveRays": 0.7,
+          "occupancySkip": 0.7,
+          "pressureStrategy": "global",
+          "pressureIterations": 3
+        }
+      },
+      "legacyPyroBackedOff": true
+    }
+  },
+  {
+    "source": "b99ba5dc99a89e72a599cdadcc1caaca4fef7309",
+    "quality": "preview",
+    "route": {
+      "activeVolumeRayBudgetPreset": "",
+      "routedVolumeRayBudgetPreset": "",
+      "activeCanonicalVolumeMacroPreset": "",
+      "routedCanonicalSourceMode": "current",
+      "routedCanonicalRenderMode": "default",
+      "routedCanonicalMotionMode": "animated",
+      "routedCanonicalContentMode": "smoke",
+      "routedCanonicalSourceY": -0.74,
+      "routedCanonicalInjection": 1,
+      "routedCanonicalBuoyancy": 1,
+      "routedVolumeReactionFuelScale": 1,
+      "routedVolumePressureStrategy": "global",
+      "routedVolumePressureMode": "auto",
+      "routedVolumeSimProfile": false,
+      "routedVolumeLifecycleEffect": "none",
+      "routedVolumeLifecycleT": 0,
+      "routedVolumeQuenchVapor": 0,
+      "routedVolumeRuntimeQuality": "live_high",
+      "routedVolumeGpuPressure": 0,
+      "routedVolumeQualityReason": "route-default",
+      "routedBonfireAblationControls": {
+        "bonfireRecenter": 1,
+        "bonfireLateralDamping": 1,
+        "bonfireShear": 1,
+        "bonfireDetailForces": 1,
+        "bonfireDepinch": 1,
+        "bonfireProjection": 1,
+        "bonfireTemporal": 1,
+        "bonfireInstabilityProbe": 0
+      }
+    },
+    "params": "",
+    "lightFieldParams": "volume_light_field=1&volume_light_field_grid=24",
+    "controls": {
+      "volume-scene": {
+        "value": "flame",
+        "checked": true,
+        "dataset": {
+          "volumeSceneRequest": "bonfire_plume"
+        }
+      },
+      "volume-pressure-mode": {
+        "value": "global-p3",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-live-view": {
+        "value": "boundary-fire",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-boundary-sidecar-source": {
+        "value": "mix",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-boundary-sidecar-view": {
+        "value": "ridge",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-physical-kelvin-per-heat": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-physical-soot-burnout-rate": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-physical-soot-burnout-kelvin": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-wavelet-turbulence": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-wavelet-octaves": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-wavelet-strength": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-wavelet-octave1-weight": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-wavelet-octave2-weight": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-physical-white": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-physical-smoke-extinction": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-physical-smoke-albedo": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-physical-ambient": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-physical-thermal": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-physical-clean": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-physical-exposure": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-physical-knee": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-artistic-swirl": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-phased-sway": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-swirl-jostle": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-fine-breakup-localization": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-common-gas-transport": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-density": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-curl": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-microdetail": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-interface-shred": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-fire-licks": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-projection": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-speed": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-steps": {
+        "value": "140",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-adaptive-rays": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-occupancy-skip": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-fire-scale": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-plume-height": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-wind-strength": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-wind-angle": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-wind-height": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-wind-model": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-wind-gust": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-wind-gust-period": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-wind-gust-veer": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-render-scale": {
+        "value": ".83",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-input-radius": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-flow-rate": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-source-law": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-source-depth": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-inlet-profile": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-momentum-linked": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-inlet-velocity": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-shear-width": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-edge-entrainment": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-fuel-fraction": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-inlet-temperature": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-aperture-pattern": {
+        "value": "shape",
+        "checked": true,
+        "dataset": {
+          "volumeRetiredPatternRequest": "spiral"
+        }
+      },
+      "volume-emitter-aperture-count": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-aperture-ratio": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-aperture-seed": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-swirl": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-line-weight": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-jet-jitter": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-inlet-turbulence": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-inlet-turbulence-scale": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-puff": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emitter-puff-period": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-fixed-source-dephase": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-flow-kernel-strength": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-flow-kernel-radius": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-flow-kernel-coherence": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-tone-mapping": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-raymarch-mode": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-optical-tolerance": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-ray-step-telemetry": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-ray-start-noise": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-ray-noise-animated": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-quadrature-jitter": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-display-reconstruction": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-display-grid-scale": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-display-alignment": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emission-interpolation": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-smoke-interpolation": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-emission-smoothing": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-smoke-smoothing": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-flame-priority": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-boundary-sidecar-blur": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-boundary-sidecar-width": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-boundary-sidecar-ridge": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-resolution": {
+        "value": "64",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-grid-height-ratio": {
+        "value": "1.5",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-residual-mode": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-residual-model-url": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-residual-strength": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-residual-feature-debug": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-grid-overlay": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-flow-debug": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-oracle-activity-cue": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-oracle-activity-display": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-oracle-activity-curl-noise": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-oracle-activity-vorticity": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-oracle-activity-material": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-look-freeze": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-heat-min": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-heat-max": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-fuel-min": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-fuel-max": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-flame-min": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-flame-max": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-front-min": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-front-max": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-gradient-min": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-gradient-max": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-core-min": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-core-max": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-core-reject": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-topology-gain": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-stretch-erode": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-divergence-min": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-divergence-max": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-divergence-gain": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-curl-warp": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-pressure-solver": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-pressure-resolution": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-world-smoke": {
+        "value": "on",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-world-smoke-flow": {
+        "value": "32",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-world-smoke-material": {
+        "value": "64",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-world-smoke-extent": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-world-smoke-transition": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-world-smoke-intermediate": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-fine-velocity": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-fine-pressure": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-world-smoke-pressure": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-world-smoke-iterations": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-intermediate-flow": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-intermediate-material": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-intermediate-pressure": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-intermediate-iterations": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-intermediate-extent": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-calibration-mode": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-simulation-world-scale": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-calibration-material-cells": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-calibration-velocity-cells": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-world-emissive": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-fast-bypass": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-velocity-wavelet": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-heat-release-expansion": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reaction-law": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reactant-mixing-time": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reactant-cooling-time": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-reactant-soot-yield": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-appearance-model": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-velocity-staggering": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-centre-x": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-centre-y": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-centre-z": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-yaw": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-pitch": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-radius": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-thickness": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-speed": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-fuel": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-temperature": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-momentum-gain": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-cap-fraction": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-immersed-back-wall": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-pressure-solver-iterations": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-advection-scheme": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-confinement": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-time-step": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-pressure-tier-overlay": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-pressure-tier-lower-max": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-pressure-tier-hero-min": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-pressure-tier-hero-max": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-canonical-spread": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-canonical-centerline": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      },
+      "volume-canonical-body-balance": {
+        "value": "0.7",
+        "checked": true,
+        "dataset": {}
+      }
+    },
+    "expected": {
+      "volumeScene": "flame",
+      "volumeSceneRequested": "bonfire_plume",
+      "physicalKelvinPerHeat": 0.7,
+      "physicalSootBurnoutRate": 0.7,
+      "physicalSootBurnoutKelvin": 0.7,
+      "waveletTurbulence": 0.7,
+      "waveletOctaves": 0.7,
+      "waveletStrength": 0.7,
+      "waveletOctave1Weight": 0.7,
+      "waveletOctave2Weight": 0.7,
+      "physicalWhiteBalance": 0.7,
+      "physicalSmokeExtinction": 0.7,
+      "physicalSmokeAlbedo": 0.7,
+      "physicalAmbient": 0.7,
+      "physicalThermalStrength": 0.7,
+      "physicalCleanStrength": 0.7,
+      "physicalExposureEV": 0.7,
+      "physicalHighlightKnee": 0.7,
+      "artisticSwirl": true,
+      "phasedSway": true,
+      "proceduralDetailForces": true,
+      "swirlJostle": 0.7,
+      "fineBreakupLocalization": 0.7,
+      "commonGasTransport": true,
+      "volumeExposure": 1,
+      "density": 0.7,
+      "fire": 1.4,
+      "radiance": 1.65,
+      "absorption": 0.85,
+      "glow": 1.15,
+      "smoke": 2.8,
+      "curl": 0.7,
+      "microdetail": 0.7,
+      "interfaceShred": 0.7,
+      "fireLicks": 0.7,
+      "projection": 0.7,
+      "speed": 0.7,
+      "raySteps": 12,
+      "adaptiveRays": 0.7,
+      "occupancySkip": 0.7,
+      "fireScale": 0.7,
+      "detailScale": 1.75,
+      "plumeHeight": 0.7,
+      "windStrength": 0.7,
+      "windAngle": 0.7,
+      "windHeight": 0.7,
+      "windModel": "0.7",
+      "windGust": 0.7,
+      "windGustPeriod": 0.7,
+      "windGustVeer": 0.7,
+      "renderScale": 0.5,
+      "inputRadius": 0.7,
+      "flowRate": 0.7,
+      "emitterSourceLaw": "0.7",
+      "emitterSourceDepth": 0.7,
+      "emitterInletProfile": "0.7",
+      "emitterMomentumLinked": true,
+      "emitterInletVelocity": 0.7,
+      "emitterShearWidthCells": 0.7,
+      "emitterEdgeEntrainment": 0.7,
+      "emitterFuelFraction": 0.7,
+      "emitterInletTemperature": 0.7,
+      "emitterAperturePattern": "spiral",
+      "emitterApertureCount": 0.7,
+      "emitterApertureRatio": 0.7,
+      "emitterApertureSeed": 0.7,
+      "emitterSwirl": 0.7,
+      "emitterLineWeight": 0.7,
+      "emitterJetJitter": 0.7,
+      "emitterInletTurbulence": 0.7,
+      "emitterInletTurbulenceScale": 0.7,
+      "emitterPuff": 0.7,
+      "emitterPuffPeriod": 0.7,
+      "fixedSourceDephase": true,
+      "reactionLiveView": "boundary_fire",
+      "reactionLiveViewIdentity": "reaction-live-view-shader-inspect-v0",
+      "boundarySidecarSource": "mix",
+      "boundarySidecarView": "ridge",
+      "boundarySplatMode": "off",
+      "boundarySplatFeatureCapture": false,
+      "flowKernelDescriptorCapture": false,
+      "boundarySplatInstanceConsumer": false,
+      "boundarySplatInstances": 1,
+      "boundarySplatRadius": 1,
+      "boundarySplatSharpness": 3.4,
+      "flowKernelStrength": 0.7,
+      "flowKernelRadius": 0.7,
+      "flowKernelCoherence": 0.7,
+      "toneMapping": "0.7",
+      "raymarchMode": "0.7",
+      "opticalTolerance": 0.7,
+      "rayStepTelemetry": true,
+      "rayStartNoise": true,
+      "rayNoiseAnimated": true,
+      "quadratureJitter": true,
+      "displayReconstruction": "0.7",
+      "displayGridScale": 0.7,
+      "displayAlignment": "0.7",
+      "emissionInterpolation": "0.7",
+      "smokeInterpolation": "0.7",
+      "emissionSmoothing": 0.7,
+      "smokeSmoothing": 0.7,
+      "flamePriority": 0.7,
+      "boundarySidecarControls": {
+        "identity": "baked-boundary-sidecar-v0",
+        "authority": "band-limited-support-coverage-ridge-proximity-footprint-v1",
+        "source": "mix",
+        "view": "ridge",
+        "blur": 0.7,
+        "stepWidth": 0.7,
+        "ridgeGain": 0.7
+      },
+      "reactionBoundaryControls": {
+        "identity": "reaction-boundary-live-controls-v0",
+        "gradientGain": 2.6,
+        "supportThermal": 0.1,
+        "supportReaction": 0.26,
+        "supportFront": 1.6,
+        "supportInterface": 1.46,
+        "cut": 0.3,
+        "softness": 0.08,
+        "coreReject": 0.92,
+        "topologyGain": 0.9,
+        "curlGain": 0.7,
+        "divergenceGain": 0.05,
+        "displayContrast": 1.35,
+        "displayGamma": 1.05,
+        "displayOpacity": 0.7
+      },
+      "reactionBoundaryFireControls": {
+        "identity": "reaction-boundary-fire-controls-v0",
+        "ridgeGain": 1.76,
+        "ridgeCut": 0.04,
+        "tipBreakup": 1.8,
+        "topologyErosion": 0.55,
+        "cleanBlue": 0.9,
+        "sootYield": 0.72,
+        "sootYellowing": 0.28,
+        "thermalWarmth": 0.3,
+        "fireLuma": 1.05,
+        "cleanColor": "#4a86ff",
+        "sootColor": "#ffc460"
+      },
+      "reactionBoundaryGradient": 2.6,
+      "reactionBoundarySupportThermal": 0.1,
+      "reactionBoundarySupportReaction": 0.26,
+      "reactionBoundarySupportFront": 1.6,
+      "reactionBoundarySupportInterface": 1.46,
+      "reactionBoundaryCut": 0.3,
+      "reactionBoundarySoftness": 0.08,
+      "reactionBoundaryCoreReject": 0.92,
+      "reactionBoundaryTopology": 0.9,
+      "reactionBoundaryCurl": 0.7,
+      "reactionBoundaryDivergence": 0.05,
+      "reactionBoundaryContrast": 1.35,
+      "reactionBoundaryGamma": 1.05,
+      "reactionBoundaryOpacity": 0.7,
+      "reactionBoundaryFireRidge": 1.76,
+      "reactionBoundaryFireRidgeCut": 0.04,
+      "reactionBoundaryFireTip": 1.8,
+      "reactionBoundaryFireErosion": 0.55,
+      "reactionBoundaryFireCleanBlue": 0.9,
+      "reactionBoundaryFireSoot": 0.72,
+      "reactionBoundaryFireYellow": 0.28,
+      "reactionBoundaryFireWarmth": 0.3,
+      "reactionBoundaryFireLuma": 1.05,
+      "reactionBoundaryFireCleanColor": "#4a86ff",
+      "reactionBoundaryFireSootColor": "#ffc460",
+      "boundarySidecarBlur": 0.7,
+      "boundarySidecarWidth": 0.7,
+      "boundarySidecarRidge": 0.7,
+      "fireRenderMode": "inspect",
+      "shellInspectMode": "boundary_fire",
+      "shellAmount": 1.1,
+      "shellWidth": 0.9,
+      "shellThermal": 0.85,
+      "shellReaction": 1.1,
+      "shellFront": 1.25,
+      "shellEdge": 0.85,
+      "shellCoreSuppress": 0.55,
+      "shellBite": 0.8,
+      "shellCurl": 0.25,
+      "shellHeat": 1.65,
+      "shellDivergence": 0,
+      "shellLuma": 1.35,
+      "shellExposure": 1.15,
+      "shellSoftClip": 1.6,
+      "shellSmoke": 0.25,
+      "resolution": 64,
+      "gridHeightRatio": 1.5,
+      "volumeResidualMode": "0.7",
+      "volumeResidualModelUrl": "0.7",
+      "volumeResidualStrength": 0.7,
+      "volumeResidualFeatureDebug": 0.7,
+      "gridOverlay": 0.7,
+      "flowDebug": 0.7,
+      "oracleActivityCue": 0.7,
+      "oracleActivityDisplay": 0.7,
+      "oracleActivityCurlNoise": 0.7,
+      "oracleActivityVorticity": 0.7,
+      "oracleActivityMaterial": 0.7,
+      "lookFreeze": 0.7,
+      "fireLightField": true,
+      "fireProbe": 0,
+      "fireLightFieldGrid": 24,
+      "reactionHeatMin": 0.7,
+      "reactionHeatMax": 0.7,
+      "reactionFuelMin": 0.7,
+      "reactionFuelMax": 0.7,
+      "reactionFlameMin": 0.7,
+      "reactionFlameMax": 0.7,
+      "reactionFrontMin": 0.7,
+      "reactionFrontMax": 0.7,
+      "reactionGradientMin": 0.7,
+      "reactionGradientMax": 0.7,
+      "reactionCoreMin": 0.7,
+      "reactionCoreMax": 0.7,
+      "reactionCoreReject": 0.7,
+      "reactionTopologyGain": 0.7,
+      "reactionStretchErode": 0.7,
+      "reactionDivergenceMin": 0.7,
+      "reactionDivergenceMax": 0.7,
+      "reactionDivergenceGain": 0.7,
+      "reactionCurlWarp": 0.7,
+      "reactionShellGamma": 1,
+      "reactionShellContrast": 1,
+      "pyroCompareMode": "base",
+      "pyroDynamicDetail": 0,
+      "pyroMaterialGain": 0,
+      "pyroInterfaceFocus": 0,
+      "pyroEdgeBite": 0,
+      "pyroBiteBorder": 0,
+      "pyroBiteTeeth": 0,
+      "pyroBiteWake": 0,
+      "pyroBiteHeight": 0,
+      "pyroBiteFireLock": 1,
+      "pyroBiteCore": 0,
+      "pyroBiteCoreCut": 1,
+      "pyroBiteRim": 0,
+      "pyroBiteRimCut": 1,
+      "pyroBiteAfter": 0,
+      "pyroBiteAfterCut": 1,
+      "pyroFireMode": "stock",
+      "pyroFlamePaint": 0,
+      "pyroStockMix": 1,
+      "pyroFlameLuma": 1,
+      "pyroFlameCoreColor": "#fff4b8",
+      "pyroFlameEdgeColor": "#ff8a24",
+      "pyroBiteHeat": 0,
+      "pyroBiteChroma": 0,
+      "pyroBiteLuma": 1,
+      "pyroBiteEmberColor": "#e65a1a",
+      "pyroBiteHotColor": "#fff4b8",
+      "pyroSmokeFold": 0,
+      "pyroFoldBorder": 0,
+      "pyroFoldWake": 0,
+      "pyroWakeLift": 0,
+      "pyroWakeWarmth": 0,
+      "pyroWakeLuma": 1,
+      "pyroWakeShadowColor": "#384c50",
+      "pyroWakeEmberColor": "#b06a2a",
+      "pyroRadiance": 0,
+      "pyroRadianceGate": 1,
+      "pyroRadianceSpill": 0,
+      "pyroRadianceWarmth": 0,
+      "pyroRadianceHue": 0.5,
+      "pyroRadianceChroma": 0,
+      "pyroRadianceLuma": 1,
+      "pyroRadianceCoolColor": "#7aa8b8",
+      "pyroRadianceWarmColor": "#d18438",
+      "pyroRadianceSource": "fire",
+      "pyroRadianceHeight": 0,
+      "pyroRadianceBorder": 0,
+      "pyroRadianceTeeth": 0,
+      "pyroRadianceRise": 0,
+      "pyroRadianceFireLock": 1,
+      "pyroFlowBite": 0,
+      "pyroFlowBorder": 0,
+      "pyroFlowTeeth": 0,
+      "pyroFlowRise": 0,
+      "pyroFlowFireLock": 1,
+      "pyroFlowLuma": 1,
+      "pyroFlowRadiance": 0,
+      "pyroFlowSpikes": 0,
+      "pyroFlowCoolColor": "#2aa7b8",
+      "pyroFlowHotColor": "#ff7a36",
+      "pyroDiagnosticPaint": 0,
+      "pyroCarrierView": "normal",
+      "pyroOverdrive": 1,
+      "pressureMode": "global-p3",
+      "pressureEffectiveLabel": "Full P3",
+      "pressureSolver": "0.7",
+      "pressureResolution": "0.7",
+      "worldSmoke": "on",
+      "worldSmokeFlow": 32,
+      "worldSmokeMaterial": 64,
+      "worldSmokeExtent": 0.7,
+      "worldSmokeTransition": 0.7,
+      "worldSmokeIntermediate": "0.7",
+      "fineVelocity": 0.7,
+      "finePressure": 0.7,
+      "worldSmokePressure": 0.7,
+      "worldSmokeIterations": 0.7,
+      "intermediateFlow": 0.7,
+      "intermediateMaterial": 0.7,
+      "intermediatePressure": 0.7,
+      "intermediateIterations": 0.7,
+      "intermediateExtent": 0.7,
+      "adaptiveMaterial": null,
+      "calibrationMode": "0.7",
+      "simulationWorldScale": 0.7,
+      "calibrationMaterialCells": 0.7,
+      "calibrationVelocityCells": 0.7,
+      "worldEmissive": "0.7",
+      "fastBypass": "0.7",
+      "velocityWavelet": "0.7",
+      "heatReleaseExpansion": 0.7,
+      "reactionLaw": "0.7",
+      "reactantMixingTime": 0.7,
+      "reactantCoolingTime": 0.7,
+      "reactantSootYield": 0.7,
+      "appearanceModel": "0.7",
+      "velocityStaggering": "0.7",
+      "immersedCentreX": 0.7,
+      "immersedCentreY": 0.7,
+      "immersedCentreZ": 0.7,
+      "immersedYaw": 0.7,
+      "immersedPitch": 0.7,
+      "immersedRadius": 0.7,
+      "immersedThickness": 0.7,
+      "immersedSpeed": 0.7,
+      "immersedFuel": 0.7,
+      "immersedTemperature": 0.7,
+      "immersedMomentumGain": 0.7,
+      "immersedCapFraction": 0.7,
+      "immersedBackWall": 0.7,
+      "pressureSolverIterations": 0.7,
+      "advectionScheme": "0.7",
+      "confinement": "0.7",
+      "timeStep": "0.7",
+      "pressureTierOverlay": 0.7,
+      "pressureTierLowerMax": 0.7,
+      "pressureTierHeroMin": 0.7,
+      "pressureTierHeroMax": 0.7,
+      "canonicalSpread": 0.7,
+      "canonicalCenterline": 0.7,
+      "canonicalBodyBalance": 0.7,
+      "canonicalMacroPreset": "",
+      "canonicalSourceMode": "current",
+      "canonicalSourceModeValue": 0,
+      "canonicalRenderMode": "default",
+      "canonicalRenderModeValue": 0,
+      "canonicalMotionMode": "animated",
+      "canonicalMotionRetirementIdentity": "retired-analytic-canonical-motion-v0",
+      "canonicalContentMode": "smoke",
+      "canonicalContentModeValue": 0,
+      "canonicalSourceY": -0.74,
+      "canonicalSourceInjection": 1,
+      "canonicalBuoyancy": 1,
+      "reactionFuelScale": 1,
+      "lifecycleEffect": "none",
+      "lifecycleT": 0,
+      "quenchVapor": 0,
+      "runtimeQualityRequested": "live_high",
+      "viewportPreview": true,
+      "gpuPressure": 0,
+      "runtimeQualityReason": "route-default",
+      "pressureIterations": 3,
+      "pressureStrategy": "global",
+      "simProfile": false,
+      "rayBudgetPreset": "",
+      "bonfireRecenter": 1,
+      "bonfireLateralDamping": 1,
+      "bonfireShear": 1,
+      "bonfireDetailForces": 1,
+      "bonfireDepinch": 1,
+      "bonfireProjection": 1,
+      "bonfireTemporal": 1,
+      "bonfireInstabilityProbe": 0,
+      "runtimeQualityEffective": "live_high",
+      "runtimeQualityReceipt": {
+        "identity": "volume-runtime-quality-ladder-v0",
+        "requested": "live_high",
+        "effective": "live_high",
+        "viewportPreview": true,
+        "reason": "route-default",
+        "gpuPressure": 0,
+        "changedControls": [
+          "raySteps",
+          "renderScale"
+        ],
+        "knobs": {
+          "renderScale": 0.5,
+          "raySteps": 12,
+          "adaptiveRays": 0.7,
+          "occupancySkip": 0.7,
+          "pressureStrategy": "global",
+          "pressureIterations": 3
+        }
+      },
+      "legacyPyroBackedOff": true
+    }
+  }
+]

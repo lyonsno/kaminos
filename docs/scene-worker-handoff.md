@@ -533,3 +533,10 @@ removes transport ownership without certifying resource settlement. Node
 MessagePort and DOM-recording tests establish adapter behavior; actual
 OffscreenCanvas presentation and coupled GPU responsiveness require the
 assembled native route.
+
+
+### Saved flame coefficient mapping
+
+`readVolumeRuntimeControlValues({readControl,quality,params,lightFieldParams,route,adaptiveMaterial})` in `volume-runtime-control-values.mjs` is the actual ordinary-page mapper over plain `{value,checked,requestedValue}` records. The page adapter supplies current applied control values, including held grid height. The mapper preserves the existing grouped boundary/physical/wavelet/region controls, retired requested identity, pressure/quality rules and legacy pyro retirement.
+
+`readAuthoredVolumeRuntimeControls(settings,options)` consumes the canonical projected scene/basin descriptor axes directly, including actual adaptive allocation settings. Callers retain saved-document validation/projection and effective route state; mapping does not certify application. Pass the result through the domain initializer's `applyFlameControls(patch,ctx)` before volume allocation, then restore actual domain/world/source state before reporting saved-scene success. Missing required controls fail explicitly.

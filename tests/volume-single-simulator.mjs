@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {readVolumeRuntimeControlValues} from '../volume-runtime-control-values.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
@@ -55,14 +56,14 @@ assert.equal(select.dataset.volumeSceneRequest, 'bonfire_plume', 'legacy assignm
 const core = await readFile(new URL('../volume-core.js', import.meta.url), 'utf8');
 const controlsStart = html.indexOf('function readVolumeControls(');
 assert.ok(controlsStart > 0, 'production controls reader must exist');
-const controlsPrefix = html.slice(controlsStart, html.indexOf('  const params =', controlsStart));
+const mappingFixture=JSON.parse(await readFile(new URL('./fixtures/volume-runtime-controls/page-b99.json',import.meta.url),'utf8'))[0];
 const receiptExpression = core.match(/state.volumeSceneAuthority = ([^;]+);/)[1];
 const describe = html.match(/function describeFlameSettingsProblems\([^]*?\n\}/)[0];
 Object.assign(context,{window:{},viewportDisplay:{quality:'scene'},volumeSceneReceipt,volumePressureConfigForMode:()=>({})});
 vm.runInContext(describe,context);
 for(const requested of ['canonical_plume','bonfire_plume','tall_plume','flame']){
  context.setVolumeControlValue('volume-scene',requested);
- const controlsSnapshot=vm.runInContext(controlsPrefix+"return {volumeScene,volumeSceneRequested:typeof volumeSceneRequested==='undefined'?undefined:volumeSceneRequested};} readVolumeControls()",context);
+ const controlsSnapshot=readVolumeRuntimeControlValues({readControl:id=>id==='volume-scene'?{value:select.value,requestedValue:select.dataset.volumeSceneRequest}:mappingFixture.controls[id],route:mappingFixture.route});
  const receipt=vm.runInNewContext(receiptExpression,{controlsSnapshot,volumeSceneReceipt});
  assert.equal(receipt.requested,requested,'controls-to-core receipt retains the legacy request');
  assert.equal(receipt.effective,'flame');
