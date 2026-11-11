@@ -30,15 +30,15 @@ export function createCorrosionSource(retained,{width=2.4,showSubstrate=false,sn
    quad(...corners(x,y,oxide),m,'oxide:'+id);
   }
   if(!s.opening[i]&&!showSubstrate){
-   const top=corners(x,y,film),back=top.map(p=>[p[0],p[1]-c.filmThickness*width,p[2]]);
+   const top=c.mechanics==='finite-shell'?[[x,y],[x,y+1],[x+1,y+1],[x+1,y]].map(([u,v])=>{const j=index(u,v)*3;return [(u/n-.5+s.filmDisplacement[j])*width,(c.filmThickness+s.filmDisplacement[j+1])*width,(v/n-.5+s.filmDisplacement[j+2])*width];}):corners(x,y,film),back=top.map(p=>[p[0],p[1]-c.filmThickness*width,p[2]]);
    quad(...top,4,'paint-top:'+id);quad(back[2],back[1],back[0],back[3],5,'paint-back:'+id);
    const adjacent=[[x-1,y],[x,y+1],[x+1,y],[x,y-1]];
    for(let e=0;e<4;e++)if(s.opening[index(...adjacent[e])])quad(top[e],back[e],back[(e+1)%4],top[(e+1)%4],5,`paint-edge:${id}:${e}`);
   }
  }
  const referenceHeight=triangles.reduce((v,t)=>Math.max(v,t.a[1],t.b[1],t.c[1]),-Infinity)+.005;
- return {schema:'kaminos.corrosion-derived-source.v1',config:{width,depth:width,showSubstrate,snapshot,opticalThicknessScale,formationResolution:n},triangles,materials,referenceHeight,
+ return {schema:'kaminos.corrosion-derived-source.v1',config:{width,depth:width,showSubstrate,snapshot,opticalThicknessScale,formationResolution:n,mechanics:c.mechanics},triangles,materials,referenceHeight,
   process:corrosionSummary(s),boundary:'Periodic formation fields, finite source tile. No periodic ray transport or learned material yet.',
   nativeMaterialFields:true,opticalModel:'Continuous effective oxide/steel PBR mixture with explicit optical thickness scale; not spectral thin-film optics',
-  geometryModel:'State-derived pitted metal, oxide height field and two-sided small-slope coating; no cracked/curling free sheets or resolved oxide microporosity'};
+  geometryModel:c.mechanics==='finite-shell'?'State-derived pitted metal and oxide height field; finite-strain membrane and dihedral bending, nodal contact and vertically extruded thin coating. No self-contact, fracture or resolved oxide microporosity':'State-derived pitted metal, oxide height field and two-sided small-slope coating; no cracked/curling free sheets or resolved oxide microporosity'};
 }

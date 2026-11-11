@@ -21,11 +21,11 @@ export default{
    const source=createCorrosionSource(states[snapshot],{...options,snapshot});source.config.stateSHA256=catalog.snapshots[snapshot].sha256;return source;
   };
   const definition=surfaceTeacherExperiment({id:this.id,title:this.title,createSource:choose,label:'Corrosion-grown coated steel',sourceURL:catalogURL,
-   boundary:'Retained formation states: pitting, oxide deposition and adhesion loss. Small-slope coating; fracture and curled free sheets are not implemented. Periodic fields, finite ray tile.',
+   boundary:'Retained formation states: pitting, oxide deposition and adhesion loss. Mechanical model is retained with each state; film fracture and self-contact are not implemented. Periodic fields, finite ray tile.',
    initialView:{position:[1.5,1.1,1.9],target:[0,.02,0],fov:40},defaultTracing:false,defaultMaterials:[],sourceControls:[],sourceToggles:[['Inspect substrate beneath paint','showSubstrate']],
    describeSource:options=>({...summaries[options.snapshot],stateSHA256:catalog.snapshots[options.snapshot].sha256,producerRevision:catalog.sourceRevision}),readSchema:'kaminos.corrosion-formation-experiment.v1'});
   const api=await definition.create(args),mount=api.mount,source=api.operations.source;let select,sourceInfo;
-  const updateSourceInfo=()=>{const state=api.read(),n=state.source.formationResolution;if(sourceInfo)sourceInfo.textContent=`Formation grid: ${n} × ${n} cells · ${state.sourceTriangles} triangles`;};
+  const updateSourceInfo=()=>{const state=api.read(),n=state.source.formationResolution;if(sourceInfo)sourceInfo.textContent=`Formation grid: ${n} × ${n} cells · ${state.sourceTriangles} triangles · ${state.source.mechanics==='finite-shell'?'Finite rotation and stretching':'Small-slope plate'}`;};
   api.operations.source=async value=>{const result=await source(value);if(select)select.value=String(result.source.snapshot);updateSourceInfo();return result;};
   api.mount=function(options){
    mount.call(api,options);const{root,document,invoke}=options,row=document.createElement('label');row.textContent='Retained exposure ';select=document.createElement('select');select.setAttribute('aria-label','Retained exposure');

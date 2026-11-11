@@ -1,10 +1,11 @@
+import {relaxFiniteCoating} from './coating-finite-sheet.mjs';
 // Reduced, nondimensional thin-interface corrosion model. Exposure time is not
 // calibrated service age. Iron thickness-equivalent is conserved as metal loss
 // -> dissolved iron -> deposited oxide. Chemistry is locally oxygen-coupled;
 // separate electrochemical potentials/cathodic fronts and osmotic fluid pressure
 // are not solved. The coating is a small-slope elastic plate with an irreversible
 // cohesive attachment, contacted by the growing solid oxide.
-const defaults={transportRegime:'defect-fed',bondedMobility:.02,resolution:48,seed:19,wetPeriod:2,wetFraction:.65,oxygenSupply:1,
+const defaults={mechanics:'small-slope',sheetPoisson:.3,sheetStretching:.2184,transportRegime:'defect-fed',bondedMobility:.02,resolution:48,seed:19,wetPeriod:2,wetFraction:.65,oxygenSupply:1,
  moistureDiffusion:.002,oxygenDiffusion:.004,ironDiffusion:.0008,
  openingPermeability:2,paintPermeability:.012,corrosionRate:.18,
  precipitationRate:1.2,oxygenCapacity:.3,oxideExpansion:2.5,oxidePorosity:.35,
@@ -19,11 +20,12 @@ function configuration(options={}){
  if(!Number.isSafeInteger(c.resolution)||c.resolution<4)throw Error('resolution must be an integer at least four');
  if(!Number.isSafeInteger(c.seed))throw Error('seed must be an integer');
  for(const [k,v]of Object.entries(c)){
-  if(['seed','resolution','defects','transportRegime'].includes(k))continue;
+  if(['seed','resolution','defects','transportRegime','mechanics'].includes(k))continue;
   if(!Number.isFinite(v)||v<0)throw Error(`Invalid corrosion setting ${k}`);
  }
  for(const k of ['wetPeriod','oxygenCapacity','oxideExpansion','metalScale','filmThickness','attachmentStiffness','adhesionEnergy','mechanicalInterval','mechanicalTolerance'])if(c[k]<=0)throw Error(`${k} must be positive`);
  if(!['defect-fed','distributed'].includes(c.transportRegime))throw Error('Unknown corrosion transport regime');
+ if(!['small-slope','finite-shell'].includes(c.mechanics)||c.sheetPoisson>=.5||c.sheetStretching<=0)throw Error('Invalid sheet mechanics');
  if(c.wetFraction>1||c.oxygenSupply>1||c.oxidePorosity>=1)throw Error('Invalid concentration or porosity');
  if(!Array.isArray(c.defects)||!c.defects.every(d=>d&&[d.a,d.b].every(p=>Array.isArray(p)&&p.length===2&&p.every(v=>Number.isFinite(v)&&v>=0&&v<=1))&&Number.isFinite(d.radius)&&d.radius>0&&d.radius<=.5))throw Error('Invalid coating defects');
  return structuredClone(c);
@@ -31,7 +33,7 @@ function configuration(options={}){
 function distance(p,a,b){const x=b[0]-a[0],y=b[1]-a[1],q=x*x+y*y,t=q?Math.max(0,Math.min(1,((p[0]-a[0])*x+(p[1]-a[1])*y)/q)):0;return Math.hypot(p[0]-a[0]-t*x,p[1]-a[1]-t*y);}
 export function createCorrosionState(options={}){
  const config=configuration(options),n=config.resolution,s={schema:'kaminos.coating-corrosion.v1',config,time:0,chemicalSteps:0,mechanicalSolves:0};
- for(const name of names)s[name]=new Float64Array(n*n);
+ for(const name of names)s[name]=new Float64Array(n*n);if(config.mechanics==='finite-shell')s.filmDisplacement=new Float64Array(n*n*3);
  let seed=config.seed>>>0;const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return (seed+.5)/4294967296;};
  for(let y=0;y<n;y++)for(let x=0;x<n;x++){
   const i=y*n+x,p=[(x+.5)/n,(y+.5)/n];let open=false;
@@ -107,25 +109,26 @@ export function advanceCorrosion(s,duration){
    s.dissolvedIron[i]-=deposited;s.rustIron[i]+=deposited;
   }
   s.time+=dt;s.chemicalSteps++;
-  if(s.time>=untilMechanical-1e-12){relaxFilm(s,neighbors);untilMechanical=Math.min(end,s.time+c.mechanicalInterval);}
+  if(s.time>=untilMechanical-1e-12){(c.mechanics==='finite-shell'?relaxFiniteCoating(s):relaxFilm(s,neighbors));untilMechanical=Math.min(end,s.time+c.mechanicalInterval);}
  }
  return s;
 }
 export function corrosionSummary(s){
  const consumedIron=total(s.metalLoss),dissolvedIron=total(s.dissolvedIron),depositedIron=total(s.rustIron),count=s.bond.length;
- return {time:s.time,formationResolution:s.config.resolution,transportRegime:s.config.transportRegime,consumedIron,dissolvedIron,depositedIron,ironBalanceError:consumedIron-dissolvedIron-depositedIron,
+ return {time:s.time,formationResolution:s.config.resolution,mechanics:s.config.mechanics,sheetSolve:s.sheetSolve??null,transportRegime:s.config.transportRegime,consumedIron,dissolvedIron,depositedIron,ironBalanceError:consumedIron-dissolvedIron-depositedIron,
   debondedFraction:s.bond.reduce((v,b,i)=>v+Number(!b&&!s.opening[i]),0)/count,openingFraction:total(s.opening)/count,
   oxideSolidVolumeEquivalent:depositedIron*s.config.oxideExpansion,
   chemicalSteps:s.chemicalSteps,mechanicalSolves:s.mechanicalSolves,
-  model:'Nondimensional oxygen-coupled interface corrosion/precipitation and small-slope plate contact; no calibrated service age, osmotic fluid pressure or film fracture'};
+  model:`Nondimensional oxygen-coupled interface corrosion/precipitation and ${s.config.mechanics==='finite-shell'?'finite metric membrane/dihedral sheet':'small-slope plate'} contact; no calibrated service age, osmotic fluid pressure, self-contact or film fracture`};
 }
-export function serializeCorrosion(s){return {...Object.fromEntries(['schema','time','chemicalSteps','mechanicalSolves'].map(k=>[k,s[k]])),config:structuredClone(s.config),...Object.fromEntries(names.map(k=>[k,Array.from(s[k])]))};}
+export function serializeCorrosion(s){return {...Object.fromEntries(['schema','time','chemicalSteps','mechanicalSolves'].map(k=>[k,s[k]])),config:structuredClone(s.config),...(s.filmDisplacement?{filmDisplacement:Array.from(s.filmDisplacement),sheetSolve:s.sheetSolve}:{}),...Object.fromEntries(names.map(k=>[k,Array.from(s[k])]))};}
 export function restoreCorrosion(value){
  if(value?.schema!=='kaminos.coating-corrosion.v1')throw Error('Unknown corrosion state');
- const config=configuration({transportRegime:'distributed',...value.config}),count=config.resolution**2,s={schema:value.schema,config};
+ const config=configuration({mechanics:'small-slope',transportRegime:'distributed',...value.config}),count=config.resolution**2,s={schema:value.schema,config};
  for(const k of ['time','chemicalSteps','mechanicalSolves'])if(!Number.isFinite(value[k])||value[k]<0)throw Error(`Invalid retained ${k}`);else s[k]=value[k];
  for(const k of names){if(!Array.isArray(value[k])||value[k].length!==count||!value[k].every(Number.isFinite))throw Error(`Invalid retained ${k}`);s[k]=Float64Array.from(value[k]);}
  for(const k of ['moisture','oxygen','bond','opening'])if(!s[k].every(v=>v>=0&&v<=1))throw Error(`Invalid retained ${k}`);
  for(const k of ['dissolvedIron','rustIron','metalLoss','reactivity','nucleation','toughness'])if(!s[k].every(v=>v>=0))throw Error(`Invalid retained ${k}`);
+ if(config.mechanics==='finite-shell'){if(!Array.isArray(value.filmDisplacement)||value.filmDisplacement.length!==count*3||!value.filmDisplacement.every(Number.isFinite))throw Error('Invalid retained film displacement');s.filmDisplacement=Float64Array.from(value.filmDisplacement);s.sheetSolve=value.sheetSolve?structuredClone(value.sheetSolve):undefined;}
  return s;
 }
