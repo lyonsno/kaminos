@@ -153,3 +153,16 @@ test('negative or asynchronous startup support cannot claim preference applicati
   await assert.rejects(f.shell.initialize(f.ctx),/support|synchronous/);assert.equal(f.ctx.reports.some(r=>r.ui?.initialization?.preferencesApplied),false);await f.shell.retire(f.ctx);
  }
 });
+
+test('actual merged domain route chooses distributed ground after domain initialization',async()=>{
+ let prepared=false;
+ const f=fixture({domainOverrides:{initialize(){prepared=true;},readRouteParams:()=>new URLSearchParams(prepared?'volume_light_field_distributed=1':'')}});
+ await f.shell.initialize(f.ctx);assert.equal(f.shell.ordinary.appearance.ground.geometry.type,'RingGeometry');await f.shell.retire(f.ctx);
+});
+
+test('ordinary bloom graph consumes the same authored-width node as the actual page',async()=>{
+ const {SceneBloomNode}=await import('../scene-bloom-node.mjs');const f=fixture();
+ f.payload.preferences={schema:'kaminos.preferences.v1',sceneDefaults:{postprocessing:{bloom:{enabled:true,radius:.2,strength:.3,threshold:.4,composeFlame:true}}}};
+ await f.shell.initialize(f.ctx);const output=f.shell.ordinary.bloom.output(THREE.TSL.vec4(0),THREE.TSL.texture(new THREE.Texture())),nodes=[];
+ output.traverse(node=>nodes.push(node));assert(nodes.some(node=>node instanceof SceneBloomNode),'actual SceneBloomNode must be wired; shader equations are unchanged');await f.shell.retire(f.ctx);
+});

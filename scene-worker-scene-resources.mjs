@@ -5,7 +5,7 @@ import {resolveSceneGIControlState} from './scene-gi-settings.mjs';
 import {resolveReflectionSettings} from './scene-reflection-settings.mjs';
 import {createSceneDisplayOwner} from './scene-display-owner.mjs';
 import {createSceneBloom,checkedSceneBloom} from './scene-bloom.mjs';
-import {bloom} from './lib/addons/tsl/display/BloomNode.js';
+import {bloom} from './scene-bloom-node.mjs';
 import {createSelectionFeedback} from './scene-selection-feedback.mjs';
 import {createSceneEmissiveCamera,applySceneEmissiveCamera} from './scene-emissive-camera.mjs';
 import {createSceneFrameRuntime} from './scene-frame-runtime.mjs';
@@ -136,7 +136,7 @@ export function createSceneWorkerSceneResources(context){
     for(const name of ['beforeDraw','syncProxies'])required(domains.drawOperations?.[name],`domains.drawOperations.${name}`);
     required(domains.assertRecordSupported,'domains.assertRecordSupported');
     appearance=createSceneAppearanceResources({THREE,readScene:()=>scene,readRenderer:renderer,readPMREM:()=>renderResources.pmremGenerator,environmentState:environment,readEntries:()=>workingScene.objects,
-     readArrival:()=>arrival,readGround:()=>({...ground,distributed:params.get('volume_light_field_distributed')==='1'}),
+     readArrival:()=>arrival,readGround:()=>({...ground,distributed:(domains.readRouteParams?.()??params).get('volume_light_field_distributed')==='1'}),
      readStudio:()=>({records:arrival.plan?.lights,enabled:arrival.studioLightsEnabled&&!frameState().fireLightFieldRoute}),
      readLighting:()=>({aoSettings:ao.read(),aoIntensityValue:ao.read().enabled?ao.read().intensity:0,giOptions:{reflections,filterImplementation:params.get('lighting_filter')==='separate'?'separate':'shared',surfaceReuse:params.get('lighting_surface_reuse')!=='0',sourceComparison:params.get('experiment')==='gi-source-study'}}),
      ...(services.loadHDR?{loadHDR:services.loadHDR}:{}),changed:value=>report(activeContext,{environmentLoading:value})});

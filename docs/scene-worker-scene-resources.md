@@ -62,6 +62,11 @@ environment/ground, AO/GI/reflections/bloom and editor visibility/shading apply
 through real local owners. The root supplies remaining presentation/domain
 meaning, including requested output cameras, backdrop/DOF, fire and water.
 
+The optional live `readRouteParams()` supplies the root's actual merged
+query/hash/saved-composition route. Ground construction reads it after domain
+initialization so distributed scenes use the same floor geometry as the page.
+Bloom uses the page's shared `scene-bloom-node.mjs` authored-width wrapper.
+
 Optional contribution fields are `initialVolumeActive`, `volumeOptions`,
 `commands`, `foregroundCommands`, `loaders`, `recordReaders`,
 `restoreOperations`, `roots`, `membership`, `replacement`, `documentServices`,
