@@ -72,10 +72,15 @@ export const PARTICLE_ACQUISITION_WGSL=/* wgsl */`${PARTICLE_ACQUISITION_MATH_WG
 @group(3) @binding(1) var<uniform> particleAcquisition:ParticleAcquisition;
 fn splitAcquisitionIndex(pixel:vec2<f32>,outputWidth:u32)->u32{return acquisitionIndex(pixel,outputWidth,particleAcquisition);}
 fn splitAcquisitionEnabled()->bool{return particleAcquisition.policy.x>.5;}
-fn splitAcquisitionUv(uv:vec2<f32>,pixel:vec2<f32>)->vec2<f32>{if(!splitAcquisitionEnabled()){return uv;}return acquisitionFilm(pixel,particleAcquisition);}
-fn splitAcquisitionHit(pixel:vec2<f32>,ro:vec3<f32>,rd:vec3<f32>,fine:vec2<f32>,coarse:vec2<f32>)->vec2<f32>{
+fn splitFollowTarget(pixel:vec2<f32>)->vec4<f32>{
+ if(!splitAcquisitionEnabled()||splitOptions.policy.x<2.5||acquisitionIndex(pixel,splitOptions.size.x,particleAcquisition)>=particleAcquisition.counts.w){return vec4<f32>(0);}
+ return splitArena[4u*acquisitionIndex(pixel,splitOptions.size.x,particleAcquisition)+1u];
+}
+fn splitAcquisitionUv(uv:vec2<f32>,pixel:vec2<f32>)->vec2<f32>{if(!splitAcquisitionEnabled()){return uv;}let tracked=splitFollowTarget(pixel);if(tracked.w<0){let clip=splitOptions.viewProj*vec4<f32>(tracked.xyz,1);return clip.xy/clip.w*.5+vec2<f32>(.5);}return acquisitionFilm(pixel,particleAcquisition);}
+fn splitAcquisitionHit(pixel:vec2<f32>,ro:vec3<f32>,rd:vec3<f32>,fine:vec2<f32>,coarse:vec2<f32>,sceneEnd:f32)->vec2<f32>{
  if(!splitAcquisitionEnabled()){return coarse;}
  if(u32(pixel.x)+u32(pixel.y)*particleAcquisition.counts.x>=particleAcquisition.counts.w){return vec2<f32>(1,-1);}
+ let tracked=splitFollowTarget(pixel);if(tracked.w<0){let t=dot(tracked.xyz-ro,rd);if(t<max(0.0,fine.x)||t>min(sceneEnd,fine.y)){return vec2<f32>(1,-1);}return fine;}
  return acquisitionInterval(pixel,ro,rd,fine,coarse,particleAcquisition);
 }
 `;

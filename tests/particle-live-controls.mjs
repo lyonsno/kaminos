@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import definition from '../experiments/optical-particles.experiment.mjs';
 import {opticalParticleSettings} from '../volume-optical-particles.mjs';
 
-async function mounted(){
+async function mounted({shared=false}={}){
  const document=new EventTarget();document.activeElement=null;
  class Element extends EventTarget{
   constructor(tag){super();this.tagName=tag.toUpperCase();this.children=[];this.dataset={};this.style={};this.value='';this.min='';this.max='';const classes=new Set();this.classList={add:v=>classes.add(v),remove:v=>classes.delete(v),contains:v=>classes.has(v)};}
@@ -12,14 +12,19 @@ async function mounted(){
   setAttribute(){}
   fire(type,init={}){const event=new Event(type,{bubbles:true,cancelable:true});Object.assign(event,init);this.dispatchEvent(event);}
  }
- document.createElement=t=>new Element(t);document.getElementById=()=>null;
- let accepted=opticalParticleSettings(),writes=[];
- const runtime={opticalParticleSettings:()=>accepted,setOpticalParticles:s=>{accepted=opticalParticleSettings(s);},splitIntegralSettings:()=>({mode:'off'}),setSplitIntegral(){},opticalParticleState:()=>({effective:'world-optical-particles',settings:accepted,simulationReaction:null,sourceRenderScale:1,sourceRaySteps:8})};
+ document.createElement=t=>new Element(t);const native=new Map();document.getElementById=id=>native.get(id)??null;
+ let accepted=opticalParticleSettings(),reaction=shared?{burnTime:3,cooling:50,heatRelease:6,sootYield:.1,smokeLife:90}:null,writes=[];
+ const trace={settings:[],reaction:[],records:[],redraw:[],nativeEvents:[],reset:[]};
+ const runtime={opticalParticleSettings:()=>accepted,setOpticalParticles:s=>{trace.settings.push(s);accepted=opticalParticleSettings(s);},splitIntegralSettings:()=>({mode:'off'}),setSplitIntegral(){},opticalParticleState:()=>({effective:'world-optical-particles',settings:accepted,simulationReaction:reaction,sourceRenderScale:1,sourceRaySteps:8}),setParticleSimulationReaction:p=>{trace.reaction.push(p);reaction={...reaction,...p};return reaction;},resetOpticalParticles(){trace.reset.push(true);}};
+ for(const [key,id] of [['burnTime','volume-reactant-mixing-time'],['cooling','volume-reactant-cooling-time'],['sootYield','volume-reactant-soot-yield']]){
+  const input=new Element('input'),label=new Element('span');input.value=String(reaction?.[key]??accepted[key]);input.addEventListener('input',()=>{trace.nativeEvents.push(key);runtime.setParticleSimulationReaction({[key]:Number(input.value)});});native.set(id,input);native.set(id+'-val',label);
+ }
  document.defaultView={__kaminosVolumePrototype:runtime,Event};
- const owner=await definition.create({host:{controls:{document,installNumberDrag:()=>({dispose(){}})},scene:{open:async()=>({onFrame:()=>()=>{},redraw(){},dispose(){}})}},inputs:{particles:{acquisitionMode:1}},record(){},updateInputs:s=>writes.push(s)});
+ const owner=await definition.create({host:{controls:{document,installNumberDrag:()=>({dispose(){}})},scene:{open:async()=>({onFrame:()=>()=>{},redraw(){trace.redraw.push(true);},dispose(){}})}},inputs:{particles:{acquisitionMode:1}},record:r=>trace.records.push(r),updateInputs:s=>writes.push(s)});
  const root=new Element('div');owner.mount({root,document,invoke:async(op,v)=>owner.operations[op](v)});
  const all=el=>[el,...el.children.flatMap(all)];const field=key=>all(root).find(el=>el.dataset.particle===key);
- return {owner,document,field,writes,accepted:()=>accepted,dispose:()=>owner.dispose()};
+ Object.values(trace).forEach(rows=>{rows.length=0;});
+ return {owner,document,field,writes,trace,native,accepted:()=>accepted,dispose:()=>owner.dispose()};
 }
 const settle=()=>new Promise(resolve=>setTimeout(resolve,220));
 
@@ -36,10 +41,36 @@ test('typed acquisition edits debounce complete values, retain invalid drafts an
   assert.equal(Number(input.value),.05,'leaving an invalid draft restores the accepted value');
  }finally{await x.dispose();}
 });
+test('one shared reaction scrub updates native projection and publishes exactly one accepted operation',async()=>{
+ const x=await mounted({shared:true});try{
+  const input=x.field('cooling');input.classList.add('scrubbing');input.value='27.25';input.fire('input');await Promise.resolve();
+  assert.equal(x.trace.reaction.length,1,'native UI projection may not send a second runtime reaction command');assert.equal(x.trace.settings.length,1);assert.equal(x.writes.length,1);assert.equal(x.trace.records.length,1);assert.equal(x.trace.redraw.length,1);assert.equal(x.trace.nativeEvents.length,0);assert.equal(x.trace.reset.length,0);
+  assert.equal(x.owner.read().effective.simulationReaction.cooling,27.25);assert.equal(x.native.get('volume-reactant-cooling-time').value,'27.25');assert.equal(x.native.get('volume-reactant-cooling-time-val').textContent,'27');
+  x.owner.operations.setReaction({sootYield:.4,smokeLife:70});assert.equal(x.owner.read().effective.simulationReaction.sootYield,.4);assert.equal(x.owner.read().effective.simulationReaction.smokeLife,70);assert.equal(Number(x.field('sootYield').value),.4);assert.equal(Number(x.field('smokeLife').value),70);
+ }finally{await x.dispose();}
+});
+test('mixed reaction/options edits publish once and invalid mixed edits do not partially change the shared law',async()=>{
+ const x=await mounted({shared:true});try{
+  x.owner.operations.setOptions({cooling:23,exchangeStrength:.4,lifeQuiet:4});assert.equal(x.trace.reaction.length,1);assert.equal(x.trace.settings.length,1);assert.equal(x.writes.length,1);assert.equal(x.trace.records.length,1);assert.equal(x.trace.redraw.length,1);
+  const accepted=x.owner.read(),counts=Object.fromEntries(Object.entries(x.trace).map(([key,rows])=>[key,rows.length])),n=x.writes.length;
+  assert.throws(()=>x.owner.operations.setOptions({cooling:17,exchangeStrength:2}),/exchangeStrength/);assert.equal(x.owner.read().effective.simulationReaction.cooling,accepted.effective.simulationReaction.cooling);assert.equal(x.owner.read().settings.exchangeStrength,.4);assert.equal(x.writes.length,n);for(const [key,length] of Object.entries(counts))assert.equal(x.trace[key].length,length,'invalid settings may not reach '+key);
+ }finally{await x.dispose();}
+});
+test('material controls expose exchange, survival, follow acquisition and normalized support through live operations',async()=>{
+ const x=await mounted();try{
+  const keys=['exchangeStrength','exchangeTime','exchangeCellSize','stateLife','lifeFuel','lifeHeat','lifeSmoke','lifeQuiet','lifeFade','followFraction','followJitter','followFuel','followHeat','followSmoke','debugView','emissionFalloff','extinctionFalloff','emissionEdgeSoftness','extinctionEdgeSoftness'];
+  for(const key of keys)assert.ok(x.field(key),'missing usable material control '+key);
+  for(const key of ['reactionSeedLength','reactionSupportCoupling','carriedSmokeGain','generatedSmokeGain'])assert.equal(x.field(key),undefined,'obsolete proxy/split control must not be exposed');
+  for(const key of ['exchangeStrength','stateLife','lifeFade','followFraction','emissionEdgeSoftness','extinctionEdgeSoftness'])assert.equal(x.field(key).max,'1');
+  for(const [key,value] of [['exchangeStrength',.25],['stateLife',.5],['followFraction',.8],['emissionFalloff',1.4]]){const input=x.field(key);input.classList.add('scrubbing');input.value=String(value);input.fire('input');await Promise.resolve();assert.equal(x.accepted()[key],value);input.classList.remove('scrubbing');}
+  const view=x.field('debugView');assert.equal(view.children.length,8);view.value='7';view.fire('change');await Promise.resolve();assert.equal(x.accepted().debugView,7);assert.equal(x.trace.reset.length,0);
+ }finally{await x.dispose();}
+});
 test('effective proposal shares expose normalized weights and an unassigned remainder',async()=>{
  const x=await mounted();try{
   x.owner.operations.setOptions({sourceBias:.9,fineCoverage:1,coarseCoverage:1});
   const p=x.owner.read().proposal;assert.ok(p,'effective placement is part of the agent and UI readout');
+  assert.equal(p.conditionalOn,'no-accepted-tracking');assert.equal(p.trackingAttemptFraction,.75);assert.equal(p.acceptedTrackingFraction,null,'authored attempt share cannot impersonate a measured tracking success rate');
   assert.equal(p.source,.9);assert.ok(Math.abs(p.fine-.05)<1e-12);assert.ok(Math.abs(p.broad-.05)<1e-12);assert.equal(p.unassigned,0);
   x.owner.operations.setOptions({fineCoverage:0,coarseCoverage:0});assert.ok(Math.abs(x.owner.read().proposal.unassigned-.1)<1e-12);
   assert.equal(x.field('sourceBias').max,'1','scrubbing uses the same fraction bound as typed validation');

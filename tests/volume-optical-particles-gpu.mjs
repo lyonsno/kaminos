@@ -2,40 +2,46 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {withKaminosGpu,evalWgslBatch} from '../tools/shader-herder.mjs';
-import {PARTICLE_REACTION_WGSL} from '../volume-optical-particles.mjs';
-test('reactive carriers consume finite potential, release heat, make soot and freeze at zero simulation time',async()=>{
+import {PARTICLE_STATE_WGSL} from '../volume-particle-state.mjs';
+test('actual reactants burn stoichiometrically, release heat, make soot and freeze at zero simulation time',async()=>{
  await withKaminosGpu(async ctx=>{
-  const rows=await evalWgslBatch(ctx,{preamble:PARTICLE_REACTION_WGSL,argTypes:['f32','f32'],returnType:'vec4<f32>',body:'return particleReact(vec4<f32>(arg0,1,0,0),arg1,2,100,2,.5);',inputs:[[1,0],[1,1],[0,1]]});
-  assert.deepEqual(Array.from(rows[0]),[1,1,0,0]);
-  assert.ok(rows[1][0]>0&&rows[1][0]<1,'reaction consumes remaining potential');
-  assert.ok(rows[1][1]>1,'finite reaction can brighten instead of only fading');
-  assert.ok(rows[1][2]>0,'reaction produces smoke');
+  const rows=await evalWgslBatch(ctx,{preamble:PARTICLE_STATE_WGSL,argTypes:['f32','f32','f32'],returnType:'vec4<f32>',body:'return particleCompositionBurn(vec4<f32>(arg0,1,0,arg2),arg1,vec4<f32>(2,2,.15,.75),vec4<f32>(2,100,.5,1000)).state;',inputs:[[1,0,2],[1,1,2],[0,1,2],[1,1,0]]});
+  assert.deepEqual(Array.from(rows[0]),[1,1,0,2]);
+  assert.ok(rows[1][0]>0&&rows[1][0]<1,'reaction consumes carried fuel');
+  assert.ok(rows[1][1]>1,'burning available reactants releases heat');assert.ok(Math.abs(rows[1][3]-2*rows[1][0])<1e-6,'oxygen consumption follows the declared stoichiometry');
+  assert.ok(rows[1][2]>0,'reaction produces actual soot');
   assert.equal(rows[2][0],0);assert.ok(rows[2][1]<1,'spent material cools');
+  assert.equal(rows[3][0],1,'fuel cannot burn without oxygen');assert.equal(rows[3][2],0);
  });
 });
 
 import {createOpticalParticles} from '../volume-optical-particles.mjs';
+function actualGrid(d,{state=[1,1,.2,3],velocity=[0,0,0]}={}){
+ const fine=d.createBuffer({size:8*64,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
+ const reactants=d.createTexture({size:[2,2,2],dimension:'3d',format:'rg32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});
+ function upload(next=state){const material=new Float32Array(8*16),oxygen=new Float32Array(8*2);for(let i=0;i<8;i++){const s=typeof next==='function'?next([i%2,Math.floor(i/2)%2,Math.floor(i/4)].map(v=>v-.5)):next;material.set([...velocity,0],i*16);material.set([s[2],s[1],s[0],0],i*16+4);oxygen.set([s[3],.01],i*2);}d.queue.writeBuffer(fine,0,material);d.queue.writeTexture({texture:reactants},oxygen,{bytesPerRow:16,rowsPerImage:2},[2,2,2]);}
+ upload();return {fine,reactants,upload,dispose(){fine.destroy();reactants.destroy();}};
+}
 test('production particle update transports actual fine flow, preserves paused state and renders supported material',async()=>{
  await withKaminosGpu(async({device:d})=>{
   const owner=createOpticalParticles(d),n=16;
   const births=d.createBuffer({size:n*64,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
   const sourceUniform=d.createBuffer({size:240,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
-  const fine=d.createBuffer({size:8*64,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
+  const grid=actualGrid(d,{velocity:[.1,.2,.3]}),{fine,reactants}=grid;
   const rows=new Float32Array(n*16);rows.set([4,2,1,1,0,0,0,1,-.5,.5,1,1,4,2,1,0]);d.queue.writeBuffer(births,0,rows);
-  const fluid=new Float32Array(8*16);for(let i=0;i<8;i++)fluid.set([.1,.2,.3,0],i*16);d.queue.writeBuffer(fine,0,fluid);
   const identity=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];const sf=new Float32Array(60);sf.set(identity);sf.set([0,2,1,0],28);d.queue.writeBuffer(sourceUniform,0,sf);
   const target=d.createTexture({size:[4,4],format:'rgba8unorm',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC});
   const depth=d.createTexture({size:[1,1],format:'depth32float',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING});
   const camera=new Float32Array(20);camera.set([1,0,0,0,0,1,0,0,0,0,1,0,0,1,1,0,0,0,1,0]);
   const source={buffer:births,uniform:sourceUniform,width:4,height:4,pixels:n,step:0,backtrace:1,viewProj:identity};
   async function draw(step,settings={}){source.step=step;const e=d.createCommandEncoder();const dp=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthClearValue:1,depthStoreOp:'store'}});dp.end();
-   owner.encode(e,{view:target.createView(),format:'rgba8unorm',source,fine,dims:[2,2,2],invViewProj:identity,settings:{enabled:true,refresh:0,...settings},cameraValues:camera,depth,identity:'fixture'});d.queue.submit([e.finish()]);await d.queue.onSubmittedWorkDone();return owner.sample();}
+   owner.encode(e,{view:target.createView(),format:'rgba8unorm',source,fine,reactants,dims:[2,2,2],invViewProj:identity,settings:{enabled:true,refresh:0,exchangeStrength:0,stateLife:0,...settings},cameraValues:camera,depth,identity:'fixture'});d.queue.submit([e.finish()]);await d.queue.onSubmittedWorkDone();return owner.sample();}
   try{
    const first=await draw(0);assert.equal(first.records[3],1);assert.equal(first.records[12],0);
    const moved=await draw(1);assert.ok(Math.abs(moved.records[0]-.1)<1e-5);assert.ok(Math.abs(moved.records[1]-.2)<1e-5);assert.ok(Math.abs(moved.records[2]-.3)<1e-5);assert.ok(moved.records[20]<1,'potential consumed');
    const paused=await draw(1,{refresh:1});assert.deepEqual(paused.records,moved.records,'paused material and flow do not evolve with presentation draws');
    const b=d.createBuffer({size:1024,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});const e=d.createCommandEncoder();e.copyTextureToBuffer({texture:target},{buffer:b,bytesPerRow:256},[4,4]);d.queue.submit([e.finish()]);await b.mapAsync(GPUMapMode.READ);const pixels=new Uint8Array(b.getMappedRange());assert.ok(pixels.some((x,i)=>i%4!==3&&x>8),'actual particle rendering contributes light');b.unmap();b.destroy();owner.reset();assert.equal((await owner.sample()).available,false,'reset invalidates old readback immediately');
-  }finally{owner.dispose();births.destroy();sourceUniform.destroy();fine.destroy();target.destroy();depth.destroy();}
+  }finally{owner.dispose();births.destroy();sourceUniform.destroy();grid.dispose();target.destroy();depth.destroy();}
  });
 });
 
@@ -60,46 +66,46 @@ test('native source-only producer retains intrinsic emission separately and clea
 
 async function opticalFixture(d,run,view={}){
  const owner=createOpticalParticles(d,{transparent:view.transparent??true,indexedQuads:view.indexedQuads??true,fusedResolve:view.fusedResolve??true}),n=16,identity=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
- const births=d.createBuffer({size:n*64+128,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});const uniform=d.createBuffer({size:240,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});const fine=d.createBuffer({size:8*64,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
- if(view.velocity){const v=new Float32Array(8*16);for(let i=0;i<8;i++)v.set(view.velocity,i*16);d.queue.writeBuffer(fine,0,v);}
+ const births=d.createBuffer({size:n*64+128,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});const uniform=d.createBuffer({size:240,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});const grid=actualGrid(d,{state:view.state,velocity:view.velocity}),{fine,reactants}=grid;
  const sf=new Float32Array(60);sf.set(identity);sf.set([0,2,1,0],28);if(view.sourceUniform)sf.set(view.sourceUniform);d.queue.writeBuffer(uniform,0,sf);
  const target=d.createTexture({size:[4,4],format:'rgba8unorm',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC});const depth=d.createTexture({size:[1,1],format:'depth32float',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING});
  const camera=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,1,1,0,0,0,1,0]);const source={buffer:births,uniform,width:4,height:4,pixels:n,step:0,backtrace:view.backtrace??0,reactionStepScale:view.stepScale??1,viewProj:view.vp??identity};
  const seed=rows=>{d.queue.writeBuffer(births,0,rows);owner.reset();};
- const draw=async(step=0,settings={})=>{source.step=step;const e=d.createCommandEncoder();const dp=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthClearValue:view.depth??1,depthStoreOp:'store'}});dp.end();const measured=view.trace||view.passTrace?new Proxy(e,{get(target,key){if(key==='beginRenderPass')return desc=>{view.passTrace?.push(desc.label);const pass=target.beginRenderPass(desc);return desc.label==='spatial material support'?new Proxy(pass,{get(p,k){const value=p[k];return typeof value==='function'?function(...args){if(k==='draw'||k==='drawIndexed')view.trace?.push({method:k,args});return value.apply(p,args);}:value;}}):pass;};const value=target[key];return typeof value==='function'?value.bind(target):value;}}):e;owner.encode(measured,{view:target.createView(),format:'rgba8unorm',source,fine,dims:[2,2,2],invViewProj:view.inverse??identity,depthZeroToOne:view.depthZeroToOne??false,settings:{enabled:true,refresh:0,...settings},cameraValues:camera,depth,identity:'fixture',gridExtinction:view.gridExtinction,allowUnavailableGridExtinction:view.allowUnavailableGridExtinction});const read=d.createBuffer({size:1024,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});e.copyTextureToBuffer({texture:target},{buffer:read,bytesPerRow:256},[4,4]);d.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);const pixels=new Uint8Array(read.getMappedRange().slice(0));read.unmap();read.destroy();return pixels;};
- try{await run({owner,seed,draw,upload:rows=>d.queue.writeBuffer(births,0,rows)});}finally{owner.dispose();births.destroy();uniform.destroy();fine.destroy();target.destroy();depth.destroy();}
+ const draw=async(step=0,settings={})=>{source.step=step;const e=d.createCommandEncoder();const dp=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthClearValue:view.depth??1,depthStoreOp:'store'}});dp.end();const measured=view.trace||view.passTrace?new Proxy(e,{get(target,key){if(key==='beginRenderPass')return desc=>{view.passTrace?.push(desc.label);const pass=target.beginRenderPass(desc);return desc.label==='spatial material support'?new Proxy(pass,{get(p,k){const value=p[k];return typeof value==='function'?function(...args){if(k==='draw'||k==='drawIndexed')view.trace?.push({method:k,args});return value.apply(p,args);}:value;}}):pass;};const value=target[key];return typeof value==='function'?value.bind(target):value;}}):e;owner.encode(measured,{view:target.createView(),format:'rgba8unorm',source,fine,reactants,dims:[2,2,2],invViewProj:view.inverse??identity,depthZeroToOne:view.depthZeroToOne??false,settings:{enabled:true,refresh:0,exchangeStrength:0,stateLife:0,...settings},cameraValues:camera,depth,identity:'fixture',gridExtinction:view.gridExtinction,allowUnavailableGridExtinction:view.allowUnavailableGridExtinction});const read=d.createBuffer({size:1024,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});e.copyTextureToBuffer({texture:target},{buffer:read,bytesPerRow:256},[4,4]);d.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);const pixels=new Uint8Array(read.getMappedRange().slice(0));read.unmap();read.destroy();return pixels;};
+ try{await run({owner,seed,draw,setMaterial:grid.upload,upload:rows=>d.queue.writeBuffer(births,0,rows)});}finally{owner.dispose();births.destroy();uniform.destroy();grid.dispose();target.destroy();depth.destroy();}
 }
 test('optically negligible carriers cannot dilute an overlapping live carrier',async()=>{
  await withKaminosGpu(async({device:d})=>opticalFixture(d,async({seed,draw})=>{
   const rows=new Float32Array(16*16);rows.set([4,2,1,1,0,0,0,1,-.5,.5,1,1,4,2,1,0]);seed(rows);const alone=await draw();
   rows.set([0,0,0,1e-12,0,0,0,1,-.5,.5,1,1,0,0,0,0],16);seed(rows);const together=await draw();
   for(let y=0;y<4;y++)for(let x=0;x<16;x++)assert.ok(Math.abs(together[256*y+x]-alone[256*y+x])<=1,'near-empty optical state must not erase existing light or extinction');
- }));
+ },{state:[1,1,0,3]}));
 });
-test('reaction creates smoke extinction even when its source had no initial smoke',async()=>{
+test('reaction creates soot extinction from actual fuel and oxygen when the initial grid has no soot',async()=>{
  await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw})=>{
   const rows=new Float32Array(16*16);rows.set([4,2,1,0,0,0,0,1,-.5,.5,1,1,4,2,1,0]);seed(rows);await draw();const initial=(await owner.sample()).records[20];
-  const result=await draw(100,{burnTime:1,cooling:1,heatRelease:0,sootYield:1,smokeLife:10000});const s=await owner.sample();assert.ok(Math.abs(s.records[22]-(initial-s.records[20])*Math.exp(-.01))<1e-5,'soot matches consumed finite potential and survival');assert.ok(s.records[22]>.5,'a strong source produces substantial smoke');assert.ok(s.records[21]<1e-10,'emission has cooled');
+  const result=await draw(100,{burnTime:1,cooling:1,heatRelease:0,sootYield:1,smokeLife:10000});const s=await owner.sample();assert.ok(Math.abs(s.records[22]-(initial-s.records[20])*Math.exp(-.01))<1e-5,'soot matches consumed actual fuel and retirement');assert.ok(s.records[22]>.5,'available reactants produce substantial smoke');assert.ok(s.records[21]<1e-10,'material has cooled');
   let alpha=0;for(let y=0;y<4;y++)for(let x=0;x<4;x++)alpha=Math.max(alpha,result[256*y+4*x+3]);assert.ok(alpha>10,'new soot must remain visible as extinction after light ends');
- }));
+ },{state:[1,1,0,3]}));
 });
 
 import {PerspectiveCamera,Matrix4,WebGPUCoordinateSystem} from '../lib/three.core.js';
+function cameraView(camera){camera.updateProjectionMatrix();camera.updateMatrixWorld();const vp=new Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);return {vp:vp.toArray(),inverse:vp.clone().invert().toArray(),depthZeroToOne:true};}
 test('native WebGPU perspective depth stays in zero-to-one clip space',async()=>{
  await withKaminosGpu(async({device:d})=>{
-  const camera=new PerspectiveCamera(45,1,1,10);camera.coordinateSystem=WebGPUCoordinateSystem;camera.updateProjectionMatrix();
-  const vp=camera.projectionMatrix.toArray(),inverse=camera.projectionMatrixInverse.toArray();
-  for(const [z,depth,visible] of [[-2,.7,true],[-2,.5,false],[-.75,1,false]])await opticalFixture(d,async({seed,draw})=>{
+  const camera=new PerspectiveCamera(45,1,.5,10);camera.coordinateSystem=WebGPUCoordinateSystem;camera.position.z=1;const view=cameraView(camera);
+  for(const [z,depth,visible] of [[-.5,.8,true],[-.5,.6,false],[.75,1,false]])await opticalFixture(d,async({seed,draw})=>{
    const rows=new Float32Array(16*16);rows.set([4,2,1,1,0,0,z,1,-.5,.5,1,1,4,2,1,0]);seed(rows);const result=await draw();let alpha=0;for(let y=0;y<4;y++)for(let x=0;x<4;x++)alpha=Math.max(alpha,result[256*y+4*x+3]);assert.equal(alpha>0,visible,JSON.stringify({z,depth,alpha}));
-  },{vp,inverse,depthZeroToOne:true,depth});
+  },{...view,depth});
  });
 });
 
-test('arbitrarily faint intrinsic emission cannot manufacture a full soot parcel',async()=>{
+test('initial optical emission does not seed chemistry or limit soot from actual reactants',async()=>{
  await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw})=>{
-  const rows=new Float32Array(16*16);rows.set([1e-12,1e-12,1e-12,0,0,0,0,1,-.5,.5,1,1,1e-12,1e-12,1e-12,0]);seed(rows);await draw();await draw(100,{burnTime:1,cooling:1,heatRelease:0,sootYield:1,smokeLife:10000});
-  const sample=await owner.sample();assert.ok(sample.records[22]<1e-8,`faint source minted soot ${sample.records[22]}`);
- }));
+  const states=[];
+  for(const light of [1e-12,4]){const rows=new Float32Array(16*16);rows.set([light,light,light,0,0,0,0,1,-.5,.5,1,1,light,light,light,0]);seed(rows);await draw();const born=await owner.sample();assert.equal(born.records[20],1);await draw(100,{burnTime:1,cooling:1,heatRelease:0,sootYield:1,smokeLife:10000});states.push((await owner.sample()).records.slice(20,24));}
+  assert.deepEqual(states[0],states[1],'equal actual reactants evolve equally despite different source light');assert.ok(states[0][2]>.5,'faint optical source still carries real fuel and oxygen');
+ },{state:[1,1,0,3]}));
 });
 test('explicit particle spacing reduces the retained allocation, independently from source image dimensions',async()=>{
  await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw})=>{
@@ -137,12 +143,13 @@ test('explicit retained capacity uses a rotating pool instead of duplicating sou
   await draw(1,{capacity:37,acquisitionMode:1,refresh:1});assert.equal((await owner.sample()).records.filter((x,i)=>i%24===3&&x>0).length,32,'new observations fill distinct retained slots');
  }));
 });
-test('smoke yield changes production, and generated-smoke gain changes existing soot while paused',async()=>{
+test('soot yield changes actual production and total extinction gain changes its held visibility',async()=>{
  await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw})=>{
   const rows=new Float32Array(16*16);rows.set([4,2,1,0,0,0,0,1,-.5,.5,1,1,4,2,1,0]);seed(rows);await draw(0);await draw(8,{sootYield:0});assert.equal((await owner.sample()).records[22],0);
   seed(rows);await draw(0);await draw(8,{sootYield:2});const born=await owner.sample();assert.ok(born.records[22]>0);
-  const hidden=await draw(8,{gain:0,carriedSmokeGain:0,generatedSmokeGain:0});const visible=await draw(8,{gain:0,carriedSmokeGain:0,generatedSmokeGain:20});assert.notDeepEqual(visible,hidden,'existing soot visibility must respond without another sim step');assert.deepEqual((await owner.sample()).records,born.records);
- }));
+  const hidden=await draw(8,{gain:0,scatteredGain:0,opacity:0});const visible=await draw(8,{gain:0,scatteredGain:0,opacity:20});assert.notDeepEqual(visible,hidden,'total soot visibility responds without another sim step');assert.deepEqual((await owner.sample()).records,born.records);
+  assert.deepEqual(await draw(8,{gain:0,scatteredGain:0,opacity:20,carriedSmokeGain:0,generatedSmokeGain:0}),visible,'legacy split gains cannot override actual total soot');
+ },{state:[1,1,0,3]}));
 });
 
 import {PARTICLE_PROJECTION_WGSL} from '../volume-optical-particles.mjs';
@@ -205,20 +212,20 @@ test('same-size particle presentation transfers optics directly with exact resol
 
 test('depth field suppresses a rear flame through foreground smoke without sorting particles',async()=>{
  await withKaminosGpu(async({device:d})=>{
-  const camera=new PerspectiveCamera(45,1,.1,20);camera.coordinateSystem=WebGPUCoordinateSystem;camera.updateProjectionMatrix();
-  await opticalFixture(d,async({seed,draw,owner})=>{
+  const camera=new PerspectiveCamera(45,1,.1,20);camera.coordinateSystem=WebGPUCoordinateSystem;camera.position.z=1.5;const view=cameraView(camera);
+  await opticalFixture(d,async({seed,draw,owner,setMaterial})=>{
    const rows=new Float32Array(16*16),pixels=p=>{let sum=0;for(let y=1;y<3;y++)for(let x=1;x<3;x++)sum+=p[y*256+x*4];return sum;};
    const config={depthMode:1,depthSlices:8,depthScale:1,radius:.8,stretch:1.1,pixelFloor:0};
-   rows.set([1,.4,.1,0,0,0,-4,1,-.5,.5,1,2,1,.4,.1,0]);rows.set([0,0,0,8,0,0,-2,1,-.5,.5,1,1,0,0,0,0],16);seed(rows);
+   setMaterial(p=>p[2]>0?[0,0,4,0]:[1,1,0,3]);rows.set([1,.4,.1,0,0,0,-.5,1,-.5,.5,1,2,1,.4,.1,0]);rows.set([0,0,0,0,0,0,.5,1,-.5,.5,1,1,0,0,0,0],16);seed(rows);
    const behind=await draw(0,config),held=(await owner.sample()).records;
    const more=await draw(0,{...config,depthSlices:16});assert.deepEqual((await owner.sample()).records,held,'changing slices preserves retained material');
    assert.ok(pixels(more)<=pixels(behind)+4,'separated layers remain occluded at higher depth resolution');
-   rows.set([1,.4,.1,0,0,0,-2,1,-.5,.5,1,1,1,.4,.1,0]);rows.set([0,0,0,8,0,0,-4,1,-.5,.5,1,2,0,0,0,0],16);seed(rows);
+   setMaterial(p=>p[2]<0?[0,0,4,0]:[1,1,0,3]);rows.set([1,.4,.1,0,0,0,.5,1,-.5,.5,1,1,1,.4,.1,0]);rows.set([0,0,0,0,0,0,-.5,1,-.5,.5,1,2,0,0,0,0],16);seed(rows);
    const inFront=await draw(0,config);const mixedOne=await draw(0,{...config,depthSlices:1});const fractionalFront=await draw(0,{...config,depthSlices:1,depthMode:2});assert.ok(pixels(fractionalFront)>pixels(mixedOne),'fractional source depth differs from uniform mixing inside a slice');assert.ok(pixels(inFront)>0,`front light is visible: ${pixels(inFront)}, behind ${pixels(behind)}`);
    assert.ok(pixels(behind)<pixels(inFront)*.4,`foreground smoke must attenuate rear light: ${pixels(behind)} vs ${pixels(inFront)}`);
    const swapped=rows.slice();swapped.set(rows.slice(16,32));swapped.set(rows.slice(0,16),16);seed(swapped);assert.deepEqual(await draw(0,config),inFront,'particle order does not change depth visibility');
    const resized=await draw(0,{...config,depthScale:.5,targetScale:.5});assert.ok(resized.some(x=>x>0),'different visibility and draw resolutions produce real output');assert.equal((await owner.sample()).state.depthField.width,1);
-  },{vp:camera.projectionMatrix.toArray(),inverse:camera.projectionMatrixInverse.toArray(),depthZeroToOne:true});
+  },view);
  });
 });
 test('captured light can be removed while inherited extinction and retained material persist',async()=>{
@@ -239,35 +246,34 @@ test('equal horizontal and vertical particle radii produce a visible round footp
 });
 test('fractional depth preserves an isolated carrier self transfer when harmless range anchors change',async()=>{
  await withKaminosGpu(async({device:d})=>{
-  const camera=new PerspectiveCamera(45,1,.1,20);camera.coordinateSystem=WebGPUCoordinateSystem;camera.updateProjectionMatrix();
+  const camera=new PerspectiveCamera(45,1,.1,20);camera.coordinateSystem=WebGPUCoordinateSystem;camera.position.z=1;const view=cameraView(camera);
   await opticalFixture(d,async({seed,draw})=>{
-   const rows=new Float32Array(16*16);rows.set([.1,.05,.01,4,0,0,-3,1,-.5,.5,1,1,.1,.05,.01,0]);seed(rows);const settings={depthMode:2,depthSlices:7,depthScale:1,radius:.6};const alone=await draw(0,settings);assert.ok(alone.some((v,i)=>i%4===0&&v>0),'isolated source is actually visible');
-   rows.set([0,0,0,1e-6,0,0,-9,1,-.5,.5,1,1,0,0,0,0],16);seed(rows);const range=await draw(0,settings);
+   const rows=new Float32Array(16*16);rows.set([.1,.05,.01,0,0,0,.5,1,-.5,.5,1,1,.1,.05,.01,0]);seed(rows);const settings={depthMode:2,depthSlices:7,depthScale:1,radius:.6};const alone=await draw(0,settings);assert.ok(alone.some((v,i)=>i%4===0&&v>0),'isolated source is actually visible');
+   rows.set([0,0,0,0,0,0,-.5,1,-.5,.5,1,1,0,0,0,0],16);seed(rows);const range=await draw(0,settings);
    for(let y=0;y<4;y++)for(let x=0;x<16;x++)assert.ok(Math.abs(alone[y*256+x]-range[y*256+x])<=1,'a negligible far source cannot change isolated self attenuation');
-  },{vp:camera.projectionMatrix.toArray(),inverse:camera.projectionMatrixInverse.toArray(),depthZeroToOne:true});
+  },{...view,state:p=>p[2]>0?[1,1,2,3]:[0,0,5e-7,0]});
  });
 });
 test('subpixel smoke survives coarse visibility deposition instead of vanishing between atlas samples',async()=>{
  await withKaminosGpu(async({device:d})=>{
-  const camera=new PerspectiveCamera(45,1,.1,20);camera.coordinateSystem=WebGPUCoordinateSystem;camera.updateProjectionMatrix();
+  const camera=new PerspectiveCamera(45,1,.1,20);camera.coordinateSystem=WebGPUCoordinateSystem;camera.position.z=1.5;const view=cameraView(camera);
   await opticalFixture(d,async({seed,draw})=>{
    const rows=new Float32Array(16*16),settings={depthMode:1,depthSlices:8,depthScale:.25,radius:.001,stretch:1,pixelFloor:.5};
-   rows.set([4,2,1,0,-1.2,0,-4,1,-.5,.5,1,1,4,2,1,0]);seed(rows);const alone=await draw(0,settings);
-   rows.set([0,0,0,200,-.6,0,-2,1,-.5,.5,1,1,0,0,0,0],16);seed(rows);const smoke=await draw(0,settings);
+   rows.set([4,2,1,0,-.6,0,-.5,1,-.5,.5,1,1,4,2,1,0]);seed(rows);const alone=await draw(0,settings);
+   rows.set([0,0,0,0,-.3,0,.5,1,-.5,.5,1,1,0,0,0,0],16);seed(rows);const smoke=await draw(0,settings);
    let a=0,b=0;for(let y=0;y<4;y++)for(let x=0;x<4;x++){a+=alone[y*256+x*4];b+=smoke[y*256+x*4];}assert.ok(a>0);assert.ok(b<a*.9,`coarse smoke must attenuate: ${b} vs ${a}`);
-  },{vp:camera.projectionMatrix.toArray(),inverse:camera.projectionMatrixInverse.toArray(),depthZeroToOne:true});
+  },{...view,state:p=>p[2]>0?[0,0,100,0]:[1,1,0,3]});
  });
 });
-test('reaction seed can be independent of optical support while the legacy endpoint remains coupled',async()=>{
+test('actual composition is independent of represented optical length and legacy proxy seed settings',async()=>{
  await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw})=>{
-  const potentials=[];
+  const states=[];
   for(const coupling of [0,1])for(const length of [.25,1]){
    const rows=new Float32Array(16*16);rows.set([.2,.1,.05,.3,0,0,0,1,0,length,1,.25,.2,.1,.05,0]);seed(rows);
    await draw(0,{reactionSupportCoupling:coupling,reactionSeedLength:.5});const r=(await owner.sample()).records;
-   assert.equal(r[19],length,'represented optical length retains its independent value');potentials.push(r[20]);
+   assert.equal(r[19],length,'represented optical length retains its independent value');states.push(r.slice(20,24));
   }
-  assert.equal(potentials[0],potentials[1],'support-independent initialization preserves reserve across quadrature changes');
-  assert.ok(potentials[2]<potentials[3],'legacy initialization retains its support-dependent reserve');
+  for(const state of states)assert.deepEqual(state,states[0],'material comes from the grid, not optical support or legacy reserve knobs');assert.equal(states[0][0],1);
  }));
 });
 test('a carrier exiting the single grid retires while stationary in-domain material survives',async()=>{

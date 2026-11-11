@@ -51,7 +51,7 @@ struct SplitOptions {
 @group(3) @binding(0) var<uniform> splitOptions:SplitOptions;
 @group(0) @binding(39) var<storage,read_write> splitArena:array<vec4<f32>>;
 ${SPLIT_OPTICAL_MATH_WGSL}
-struct SplitRay { kept:array<SplitObservation,2>, fresh:array<SplitObservation,2>, intrinsic:array<vec3<f32>,2>, refreshSlot:i32, start:f32, end:f32 }
+struct SplitRay { kept:array<SplitObservation,2>, fresh:array<SplitObservation,2>, intrinsic:array<vec3<f32>,2>, refreshSlot:i32, start:f32, end:f32,follow:vec4<f32> }
 fn splitProject(p:vec3<f32>)->vec3<f32>{let clip=splitOptions.viewProj*vec4<f32>(p,1);return vec3<f32>((clip.xy/clip.w*vec2<f32>(.5,-.5)+.5)*vec2<f32>(splitOptions.size.xy),clip.w);}
 fn splitCoarseVelocity(p:vec3<f32>,middle:bool)->vec3<f32>{
  let lo=select(splitOptions.worldLo,splitOptions.middleLo,middle);
@@ -102,7 +102,7 @@ fn splitPull(pixel:vec2<f32>,slot:u32,ro:vec3<f32>,rd:vec3<f32>,start:f32,end:f3
  return old;
 }
 fn splitInit(pixel:vec2<f32>,ro:vec3<f32>,rd:vec3<f32>,start:f32,end:f32,phase:f32)->SplitRay{
- var r:SplitRay;r.refreshSlot=-1;r.start=start;r.end=end;
+ var r:SplitRay;r.refreshSlot=-1;r.start=start;r.end=end;r.follow=splitFollowTarget(pixel);
  if(splitOptions.size.w>0u&&splitOptions.policy.x>1.5&&splitOptions.policy.x<2.5&&splitOptions.size.z==1u){
   r.kept[0]=splitPull(pixel,0u,ro,rd,start,end);r.kept[1]=splitPull(pixel,1u,ro,rd,start,end);
   // Refresh old or consequential evidence; reserve explicit independent coverage.
@@ -116,6 +116,7 @@ fn splitInit(pixel:vec2<f32>,ro:vec3<f32>,rd:vec3<f32>,start:f32,end:f32,phase:f
  }return r;
 }
 fn splitSampleDepth(r:SplitRay,ro:vec3<f32>,rd:vec3<f32>,ordinary:f32,fineHit:vec2<f32>,selector:f32,phase:f32)->f32{
+ if(r.follow.w<0){return dot(r.follow.xyz-ro,rd);}
  if(splitOptions.policy.x>2.5){return splitFineProposal(ordinary,fineHit,vec2<f32>(r.start,r.end),splitOptions.policy.z,selector,phase);}
  if(r.refreshSlot>=0){return clamp(dot(r.kept[u32(r.refreshSlot)].anchor.xyz-ro,rd),r.start,r.end);}
  // A fixed phase still acquires a distinct second depth rather than duplicating
@@ -135,7 +136,7 @@ fn splitObserve(r:ptr<function,SplitRay>,index:u32,p:vec3<f32>,q:vec3<f32>,sigma
 }
 fn splitIntrinsic(r:ptr<function,SplitRay>,index:u32,emission:vec3<f32>){if(index<2u){(*r).intrinsic[index]=max(emission,vec3<f32>(0));}}
 fn splitFinish(r:SplitRay,pixel:u32,ro:vec3<f32>,rd:vec3<f32>)->vec4<f32>{
- if(splitOptions.policy.x>2.5){let s=r.fresh[0];let at=4u*pixel;splitArena[at]=s.optical;splitArena[at+1u]=s.anchor;splitArena[at+2u]=s.support;splitArena[at+3u]=vec4<f32>(r.intrinsic[0],0);return splitTransfer(s,max(0.0,s.support.y-s.support.x),1,1);}
+ if(splitOptions.policy.x>2.5){let s=r.fresh[0];let at=4u*pixel;splitArena[at]=s.optical;splitArena[at+1u]=s.anchor;splitArena[at+2u]=s.support;splitArena[at+3u]=vec4<f32>(r.intrinsic[0],select(0.0,1.0,r.follow.w<0));return splitTransfer(s,max(0.0,s.support.y-s.support.x),1,1);}
  var a=r.kept[0];var b=r.kept[1];let fresh=r.fresh[0];
  if(splitOptions.size.z==2u){a=fresh;b=r.fresh[1];}
  else if(r.refreshSlot>=0){
@@ -238,7 +239,7 @@ var<private> splitOptions:SplitOptions;
 fn splitAcquisitionIndex(pixel:vec2<f32>,outputWidth:u32)->u32{return u32(pixel.x)+u32(pixel.y)*outputWidth;}
 fn splitAcquisitionEnabled()->bool{return false;}
 fn splitAcquisitionUv(uv:vec2<f32>,pixel:vec2<f32>)->vec2<f32>{return uv;}
-fn splitAcquisitionHit(pixel:vec2<f32>,ro:vec3<f32>,rd:vec3<f32>,fine:vec2<f32>,coarse:vec2<f32>)->vec2<f32>{return coarse;}
+fn splitAcquisitionHit(pixel:vec2<f32>,ro:vec3<f32>,rd:vec3<f32>,fine:vec2<f32>,coarse:vec2<f32>,sceneEnd:f32)->vec2<f32>{return coarse;}
 struct SplitRay {unused:f32}
 fn splitInit(pixel:vec2<f32>,ro:vec3<f32>,rd:vec3<f32>,start:f32,end:f32,phase:f32)->SplitRay{return SplitRay(0);}
 fn splitSampleDepth(r:SplitRay,ro:vec3<f32>,rd:vec3<f32>,ordinary:f32,fineHit:vec2<f32>,selector:f32,phase:f32)->f32{return ordinary;}

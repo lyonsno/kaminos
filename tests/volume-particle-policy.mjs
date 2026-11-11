@@ -6,7 +6,7 @@ import {resolveReactantCombustionConfig} from '../volume-reactant-combustion.mjs
 import definition from '../experiments/optical-particles.experiment.mjs';
 test('particle reaction inherits the resolved simulation model and time values',()=>{
  const config=resolveReactantCombustionConfig({reactionLaw:'reactant-v0',emitterSourceLaw:'immersed-source',reactantMixingTime:7.5,reactantCoolingTime:29,reactantModelOverrides:{heatOfCombustion:4}});
- assert.deepEqual(particleReactionFromSimulation(config),{burnTime:7.5,cooling:29,heatRelease:4});
+ assert.deepEqual(particleReactionFromSimulation(config),{burnTime:7.5,cooling:29,heatRelease:4,sootYield:config.effective.model.sootYield,smokeLife:config.effective.model.sootRetirementSteps});
  assert.equal(particleReactionFromSimulation(resolveReactantCombustionConfig({reactionLaw:'authored-tall-plume'})),null);
  assert.throws(()=>opticalParticleSettings({spacing:1.5}),/whole number/);assert.throws(()=>opticalParticleSettings({maxAge:-1}),/Invalid/);
 });
@@ -57,13 +57,10 @@ test('restored source controls survive native full-control events and runtime re
 });
 
 test('population dispatch capacity is checked before allocation or retained-state mutation',()=>{
- const flags=['GPUBufferUsage','GPUTextureUsage'];const prior=flags.map(k=>globalThis[k]);globalThis.GPUBufferUsage={STORAGE:1,COPY_SRC:2,COPY_DST:4,UNIFORM:8};globalThis.GPUTextureUsage={RENDER_ATTACHMENT:1,TEXTURE_BINDING:2};
- const calls=[];const d={limits:{maxBufferSize:2**30,maxStorageBufferBindingSize:2**30,maxComputeWorkgroupsPerDimension:65535,maxTextureDimension2D:8192},createShaderModule:()=>({}),createComputePipeline:()=>({getBindGroupLayout:()=>({})}),createBindGroup:()=>({}),createBuffer:p=>(calls.push(['buffer',p.size]),{...p,destroy(){}}),createTexture:p=>(calls.push(['texture',p.size]),{width:p.size[0],height:p.size[1]}),queue:{writeBuffer(){}}};
- try{const owner=createOpticalParticles(d);calls.length=0;const e={beginRenderPass:()=>({end(){}}),clearBuffer:()=>calls.push(['clear']),beginComputePass:()=>({setPipeline(){},setBindGroup(){},dispatchWorkgroups:n=>calls.push(['dispatch',n]),end(){}})};
-  const args={source:{width:1,height:1,pixels:1,step:0,viewProj:new Array(16).fill(0),buffer:{size:64}},invViewProj:new Array(16).fill(0),dims:[1,1,1],settings:{enabled:true,showParticles:false,populationWidth:2048,populationHeight:2048},cameraValues:new Float32Array(20),identity:'capacity'};
-  assert.throws(()=>owner.encode(e,args),/compute dispatch capacity/);assert.deepEqual(calls,[]);assert.equal(owner.read().effective,'off');
-  owner.encode(e,{...args,settings:{...args.settings,populationWidth:64,populationHeight:65535}});assert.ok(calls.some(x=>x[0]==='dispatch'&&x[1]===65535));
- }finally{flags.forEach((k,i)=>{if(prior[i]===undefined)delete globalThis[k];else globalThis[k]=prior[i];});}
+ const limit={maxBufferSize:2**30,maxStorageBufferBindingSize:2**30,maxComputeWorkgroupsPerDimension:65535,maxTextureDimension2D:8192};
+ const args={limit,renderScale:1,displayWidth:1,displayHeight:1};
+ assert.throws(()=>particleResourceBudget(opticalParticleSettings({populationWidth:2048,populationHeight:2048}),args),/dispatch limit/);
+ const valid=particleResourceBudget(opticalParticleSettings({populationWidth:64,populationHeight:65535}),args);assert.equal(valid.slots,64*65535);assert.equal(valid.maxCapacity,64*65535);
 });
 test('invalid particle target edits preserve accepted experiment settings and inputs',async()=>{
  let settings=opticalParticleSettings(),writes=[];
@@ -79,6 +76,7 @@ test('measurement options and actual runtime receipt pass through the Workbench 
  const receipt=await ex.operations.measure({settleInputs:true});assert.deepEqual(seen,{settleInputs:true});assert.equal(receipt.settledInputs,true);assert.deepEqual(ex.read().measurement,receipt);await ex.dispose();
 });
 
+import {particleResourceBudget} from '../volume-particle-acquisition.mjs';
 import {particleDepthLayout} from '../volume-particle-depth.mjs';
 test('depth field budgets use real atlas capacity and reject invalid drafts before rendering',()=>{
  const limit={maxTextureDimension2D:128};

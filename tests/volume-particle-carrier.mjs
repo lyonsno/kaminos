@@ -1,0 +1,37 @@
+// kaminos-test: node
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {withKaminosGpu} from '../tools/shader-herder.mjs';
+import {createOpticalParticles} from '../volume-optical-particles.mjs';
+
+async function fixture(d,run){
+ const owner=createOpticalParticles(d,{transparent:true}),matrix=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
+ const buffer=d.createBuffer({size:64,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC}),uniform=d.createBuffer({size:240,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+ const fine=d.createBuffer({size:8*64,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST}),reactants=d.createTexture({size:[2,2,2],dimension:'3d',format:'rg32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});
+ const source={buffer,uniform,width:1,height:1,pixels:1,samples:1,step:0,backtrace:1,viewProj:matrix};
+ const sf=new Float32Array(60);sf.set(matrix);sf.set([0,2,1,0],28);d.queue.writeBuffer(uniform,0,sf);
+ const target=d.createTexture({size:[8,8],format:'rgba8unorm',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC}),depth=d.createTexture({size:[1,1],format:'depth32float',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING});
+ const camera=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,1,1,0,0,0,1,0]);
+ function seed(state,q=[4,2,1,.4]){const material=new Float32Array(8*16),oxygen=new Float32Array(8*2);for(let i=0;i<8;i++){material.set([state[2],state[1],state[0],0],i*16+4);oxygen.set([state[3],.01],i*2);}d.queue.writeBuffer(fine,0,material);d.queue.writeTexture({texture:reactants},oxygen,{bytesPerRow:16,rowsPerImage:2},[2,2,2]);d.queue.writeBuffer(buffer,0,new Float32Array([...q,0,0,0,1,-.25,.25,1,1,...q.slice(0,3),0]));owner.reset();}
+ async function draw(step,settings={}){source.step=step;const e=d.createCommandEncoder();const p=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthStoreOp:'store',depthClearValue:1}});p.end();owner.encode(e,{view:target.createView(),format:'rgba8unorm',source,fine,reactants,dims:[2,2,2],invViewProj:matrix,settings:{enabled:true,acquisitionMode:1,capacity:1,refresh:0,flow:0,...settings},cameraValues:camera,depth,identity:'actual-composition-fixture'});d.queue.submit([e.finish()]);await d.queue.onSubmittedWorkDone();return owner.sample();}
+ async function propose(step){source.step=step;const read=d.createBuffer({size:64,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ}),e=d.createCommandEncoder();owner.prepareAcquisition?.(e,{source,fine,dims:[2,2,2],settings:{enabled:true,acquisitionMode:1,capacity:1,refresh:0,flow:0,followFraction:1,followFuel:1,followHeat:0,followSmoke:0,followJitter:0},identity:'actual-composition-fixture'});e.copyBufferToBuffer(buffer,0,read,0,64);d.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);const rows=new Float32Array(read.getMappedRange().slice(0));read.unmap();read.destroy();return rows;}
+ try{await run({owner,seed,draw,propose});}finally{owner.dispose();for(const r of [buffer,uniform,fine,reactants,target,depth])r.destroy();}
+}
+test('production carrier retains actual reactants and advances a state-dependent lifetime without enlarging the record',async()=>{
+ await withKaminosGpu(async({device:d})=>fixture(d,async({seed,draw})=>{
+  seed([1,.8,.2,3]);const birth=await draw(0);assert.equal(birth.records.length,24);[1,.8,.2,3].forEach((v,i)=>assert.ok(Math.abs(birth.records[20+i]-v)<1e-6,'birth samples actual F/H/S/O'));
+  const live=await draw(1,{exchangeStrength:0,lifeFuel:30,lifeHeat:30,lifeSmoke:30,lifeQuiet:30});assert.ok(live.records[20]<1&&live.records[23]<3,'reaction uses both carried reactants');assert.ok(live.records[15]>0,'motion.w retains representation lifetime progress');
+  const held=await draw(1,{exchangeStrength:1,exchangeTime:.01,lifeHeat:.1});assert.deepEqual(held.records,live.records,'presentation changes cannot advance material or survival');
+ }));
+});
+test('follow acquisition writes an actual retained material position without a CPU population readback',async()=>{
+ await withKaminosGpu(async({device:d})=>fixture(d,async({seed,draw,propose})=>{
+  seed([1,0,0,0]);await draw(0);const rows=await propose(1);assert.equal(rows[7],-1,'negative anchor tag identifies a GPU follow proposal');assert.ok(Math.abs(rows[4])+Math.abs(rows[5])+Math.abs(rows[6])<1e-6,'zero flow/jitter proposes retained center');
+ }));
+});
+test('unlit fuel can be acquired, and quiet material retires through the authored state lifetime',async()=>{
+ await withKaminosGpu(async({device:d})=>fixture(d,async({seed,draw})=>{
+  seed([1,0,0,0],[0,0,0,0]);const fuel=await draw(0);assert.equal(fuel.records[3],1,'optically transparent fuel is material, not an invalid observation');assert.equal(fuel.records[20],1);
+  seed([0,0,.1,0]);await draw(0);const dead=await draw(3,{lifeFuel:2,lifeHeat:2,lifeSmoke:2,lifeQuiet:2});assert.equal(dead.records[3],0,'state lifetime retires before the unrelated maximum-age cap');
+ }));
+});
