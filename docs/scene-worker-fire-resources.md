@@ -37,11 +37,14 @@ explicit `visible` projection. Root domain ownership retains receiver cleanup
 before its allocations, and retires radiance/HDR/receivers before ordinary
 resources and the separately owned device. A failed cleanup remains retryable.
 
-This constructor currently mounts authored flame sources and their saved fire
-field. Its real `createAuthoredWaterFeature` is dormant; water document
-restoration, geometry collision, backdrop/DOF and output-camera presentation
-still require their actual joins. Requests for those paths refuse before scene
-replacement. This is an implementation boundary while assembly continues, not
+This constructor mounts authored flame sources and their saved fire field, and
+restores finite initial water previews through the actual local-liquid record
+loader and `createAuthoredWaterFeature`. Preview particles are the owner's
+authored starting state; no water solver is allocated or stepped. `water.read`
+and current UI distinguish preview, pause and mounted-simulation state.
+Continuous water dynamics and water documents without an initial source preview,
+geometry collision, backdrop/DOF and output-camera presentation still require
+their actual joins. Requests for those paths refuse before scene replacement. This is an implementation boundary while assembly continues, not
 a complete worker migration or a permanent restriction of the editor.
 
 Focused checks: `tests/scene-worker-fire-settings.mjs`,
@@ -55,3 +58,7 @@ whole-scene coverage, recovery or responsiveness.
 Document preparation maps the candidate composition route before the live plan changes, preserving explicit URL precedence. Hybrid angular route settings supply defaults only where the saved rendering recipe omits them; requested caster geometry is selected before caster preparation. Leaving a fire document clears retired lighting status and refreshes ordinary studio/output state. These are authored-state transitions; they do not establish a new live GPU light-grid resizing capability.
 
 The common constructor supplies `readSharedGpu()` for presentation reconstruction. Fire radiance, HDR, receiving and water service callbacks read that live owner; current standalone callers may still provide only the original `sharedGpu`. A cleared live owner never falls back to the stale initial device. This reference join does not itself register or exercise full device recovery.
+
+Document replacement updates the retained volume’s scene-composition transparency while it is inactive, before the new scene can activate it. This covers ordinary → fire → ordinary → fire without leaving an opaque overlay from the initial document. The focused check uses the complete production volume and real offscreen surface without admitting GPU work.
+
+`prepareVolume` clears per-volume configuration caches when supplied a replacement prototype. `reattachVolume` then mounts presentation from the current live authored plan and sources, without replaying the startup admission. The recovery owner prepares and activates that replacement before reattachment and retains final lifecycle activation. This hook is a construction join, not an exercised full recovery command.

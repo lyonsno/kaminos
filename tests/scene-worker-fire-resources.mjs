@@ -7,6 +7,8 @@ import {execFileSync} from 'node:child_process';
 import {applySceneObjectTransformState,sceneObjectTransformState,getMaterialStateForObject} from '../scene-object-state.mjs';
 import {createSceneRecordOperations} from '../scene-record-operations.mjs';
 import {createSceneObjectRecord} from '../scene-object-record.mjs';
+import {defaultLocalLiquidSetup,LOCAL_LIQUID_EMITTER_SCHEMA} from '../local-liquid-setup.mjs';
+import {createLocalLiquidEmitterSceneRecord} from '../local-liquid-scene-object.mjs';
 import {FLAME_EMITTER_SOURCE} from '../scene-flame-emitter.mjs';
 const path=new URL('../scene-worker-fire-resources.mjs',import.meta.url);
 const api=await import(path).catch(error=>{if(error.code==='ERR_MODULE_NOT_FOUND'&&error.url===path.href)return {};throw error;});
@@ -25,7 +27,7 @@ function fixture({route={},realLoader=false}={}){
   registerSceneObject(object,metadata){const record=createSceneObjectRecord(object,metadata,{id:metadata.id});objects.push(record);return record;},lightingPreparation:{setExternalHold(){},request:async change=>change?.()},
   surfaceLighting:{},readSettings:()=>({gi:{mode:'combined',view:'scene'}}),bloom:{read:()=>({settings:{composeFlame:false}})},decorateOutput:node=>node,rebuildDisplay(){calls.push('display');}};
  const ctx={signal:new AbortController().signal,assertCurrent(){},report(){}};
- const volume={isActive:()=>active,debugState:()=>({simulationPaused:false}),setControls:c=>calls.push(['controls',c]),
+ const volume={setSceneCompositionPresentation(value){assert.equal(active,false);calls.push(['transparent',value]);},isActive:()=>active,debugState:()=>({simulationPaused:false}),setControls:c=>calls.push(['controls',c]),
   setActive:async value=>{calls.push(['active',value]);active=value;},setVolumePrimitives:value=>calls.push(['primitives',value]),restoreWorldFrame:value=>calls.push(['world',value]),
   setImmersedSources:value=>calls.push(['sources',value]),relocateOrdinaryDomain:(...args)=>calls.push(['domain',...args]),setRaymarchSmokePresentationMode:mode=>({effectiveMode:mode}),
   setSceneTransportConsumer:value=>calls.push(['transport',value]),emissiveCameraState:()=>null};
@@ -100,4 +102,54 @@ test('fire presentation uses the live shared-device owner supplied by the common
  const f=fixture(),next={queue:{onSubmittedWorkDone:async()=>{}}};f.input.readSharedGpu=()=>({device:next,queue:next.queue});
  await f.resources.initialize(f.ctx);await f.resources.prepareVolume({volume:f.volume,context:f.ctx});await f.resources.document.afterReplace(f.document,f.plan,{context:f.ctx});
  assert.equal(f.calls.findLast(row=>row[0]==='mount-device')[1],next);await f.resources.retire(f.ctx);
+});
+
+test('actual authored water preview restores beside fire without allocating a water solver',async()=>{
+ const f=fixture();const source=createLocalLiquidEmitterSceneRecord({id:'water-source',transform:{position:[.2,1,.1],rotation:[0,0,0],scale:[1,1,1]},settings:{schema:LOCAL_LIQUID_EMITTER_SCHEMA,mode:'finite_drop',drop:{width:.3,samplesPerUnit:8}}});
+ f.document.objects.push(source);f.document.localLiquid=defaultLocalLiquidSetup();const plan=planSceneRestore(f.document);
+ await f.resources.initialize(f.ctx);await f.resources.prepareVolume({volume:f.volume,context:f.ctx});
+ await f.resources.document.prepareDocument(f.document,plan,{context:f.ctx});await f.resources.document.beforeReplace(f.document,plan,{context:f.ctx});
+ await f.resources.loaders.flame(plan.flameSources[0],{context:f.ctx});const root=await f.resources.loaders.water(source,{context:f.ctx});
+ await f.resources.document.afterReplace(f.document,plan,{context:f.ctx});const water=f.resources.commands['water.read'](null,f.ctx);
+ assert.equal(root.parent,f.input.scene);assert.deepEqual(root.position.toArray(),source.transform.position);assert.equal(water.present,true);assert.equal(water.preview,true);assert.equal(water.paused,true);assert.equal(water.host,null);
+ assert(root.children.some(node=>node.userData.kaminosWaterPreview&&node.visible));assert.equal(f.resources.readFrameState().simInputs.water.active,false);
+ assert.equal(f.resources.readUi().water.preview,true);assert.equal(f.resources.readDrawResources().waterFeature.host,null);await f.resources.retire(f.ctx);
+});
+
+
+test('ordinary and fire replacements update the actual inactive volume surface presentation',async()=>{
+ const {createKaminosVolumePrototype}=await import('../volume-core.js');
+ const {createOffscreenVolumeSurface}=await import('../volume-runtime-surface.mjs');
+ const f=fixture({realLoader:true});f.input.payload.admission=null;
+ const r=api.createSceneWorkerFireResources(f.input,{definitions:JSON.parse(execFileSync('python3',[new URL('../tools/scene-worker-control-definitions.py',import.meta.url).pathname,'--page',new URL('../index.html',import.meta.url).pathname])).controls,fetch:async url=>({ok:true,json:async()=>url.includes('schema')?schema:basin})});
+ await r.initialize(f.ctx);let transparent=null;
+ const surface=createOffscreenVolumeSurface({canvas:{width:16,height:16,getContext(){throw Error('Unexpected GPU admission');}},readViewport:()=>({width:16,height:16}),onTransparent:value=>{transparent=value;}});
+ const volume=createKaminosVolumePrototype({THREE,camera:f.input.camera,getControls:()=>({resolution:16}),presentationSurface:surface,...r.volumeOptions,frameScheduleOwner:'host',frameScheduler:{requestAnimationFrame(){throw Error('Unexpected frame admission');},cancelAnimationFrame(){}}});
+ try{
+  await r.prepareVolume({volume,context:f.ctx});assert.equal(transparent,false);assert.equal(volume.isActive(),false);
+  const ordinary={version:8,objects:[],groups:[]};
+  for(const [data,expected]of [[f.document,true],[ordinary,false],[f.document,true]]){
+   const next=planSceneRestore(data,{allowEmpty:true});await r.document.prepareDocument(data,next,{context:f.ctx});await r.document.beforeReplace(data,next,{context:f.ctx});
+   assert.equal(volume.isActive(),false);assert.equal(transparent,expected);assert.equal(volume.debugState().sceneCompositionPresentation.transparentCanvas,expected);
+  }
+ }finally{await r.retire(f.ctx);await volume.dispose();}
+});
+
+
+test('water preview admission refuses unsupported continuous dynamics before mutation',()=>{
+ const f=fixture();const source=createLocalLiquidEmitterSceneRecord({id:'water-source',transform:{position:[0,1,0],rotation:[0,0,0],scale:[1,1,1]},settings:{schema:LOCAL_LIQUID_EMITTER_SCHEMA,mode:'continuous',baseRadius:.08,strength:1.15,rate:1200}});
+ const data={...f.document,objects:[...f.document.objects,source],localLiquid:defaultLocalLiquidSetup()},next=planSceneRestore(data);
+ const before=f.calls.length;assert.throws(()=>f.resources.document.assertSupported(data,next),/Continuous water dynamics/);assert.equal(f.calls.length,before);assert.equal(f.resources.readDrawResources().waterFeature.setup,null);
+});
+
+test('reattachment prepares a replacement volume from the current authored plan without replaying startup',async()=>{
+ const f=fixture();await f.resources.initialize(f.ctx);await f.resources.prepareVolume({volume:f.volume,context:f.ctx});
+ const next=structuredClone(f.document),domain=next.objects.find(row=>row.type==='simulation-domain');domain.transform.position[0]=2;domain.simulation.followSource=false;const plan=planSceneRestore(next);assert.deepEqual(plan.flameDomainTranslation,[2,0,0]);
+ await f.resources.document.prepareDocument(next,plan,{context:f.ctx});await f.resources.document.beforeReplace(next,plan,{context:f.ctx});
+ await f.resources.loaders.flame(plan.flameSources[0],{context:f.ctx});await f.resources.document.afterReplace(next,plan,{context:f.ctx});
+ const before=f.calls.length,restored=[];const volume={...f.volume,restoreWorldFrame:value=>restored.push(['world',value]),setVolumePrimitives:value=>restored.push(['primitives',value]),relocateOrdinaryDomain:(...value)=>restored.push(['domain',...value]),setImmersedSources:value=>restored.push(['sources',value])};
+ await f.resources.prepareVolume({volume,context:f.ctx});
+ assert.equal(typeof f.resources.reattachVolume,'function');await f.resources.reattachVolume({volume,context:f.ctx});
+ assert.deepEqual(restored.find(row=>row[0]==='domain')[1],[2,0,0]);assert.equal(restored.filter(row=>row[0]==='world').length,1);assert.equal(restored.filter(row=>row[0]==='primitives').length,1);assert.equal(restored.find(row=>row[0]==='sources')[1][0].id,'source');
+ assert.equal(f.calls.slice(before).some(row=>row[0]==='accepted'),false);assert.equal(f.ordinary.workingScene.objects.length,1);assert(f.calls.slice(before).some(row=>row[0]==='mount-device'));await f.resources.retire(f.ctx);
 });
