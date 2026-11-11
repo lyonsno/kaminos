@@ -49,3 +49,13 @@ test('production reference reader uses cooperative conversion and closes the bit
  await assert.rejects(image.readReferenceImage({kind:'image',source:'fixture:reference'},{signal:controller.signal,now:()=>clock+=13,yieldToBrowser:async()=>{yields++;controller.abort();}}),{name:'AbortError'});
  assert.equal(closed,1);assert.equal(yields,1);
 });
+test('abort while decoding closes the late bitmap without allocating or drawing a canvas',async(t)=>{
+ const original={fetch:globalThis.fetch,createImageBitmap:globalThis.createImageBitmap,OffscreenCanvas:globalThis.OffscreenCanvas};
+ t.after(()=>Object.assign(globalThis,original));
+ const controller=new AbortController();let closed=0,allocations=0,draws=0;
+ globalThis.fetch=async()=>({ok:true,blob:async()=>new Blob(['decode-fixture'])});
+ globalThis.createImageBitmap=async()=>{controller.abort();return {width:16,height:16,close(){closed++;}};};
+ globalThis.OffscreenCanvas=class{constructor(){allocations++;}getContext(){return {fillRect(){},drawImage(){draws++;}};}};
+ await assert.rejects(image.readReferenceImage({kind:'image',source:'fixture:decode'},{signal:controller.signal}),{name:'AbortError'});
+ assert.equal(closed,1);assert.equal(allocations,0);assert.equal(draws,0);
+});
