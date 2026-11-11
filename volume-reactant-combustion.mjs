@@ -352,6 +352,21 @@ export function reactantCombustionUniformValues(config) {
 // quench-spread flag (a lane borrowed by the host: 1 while a liquid is bound with
 // transfer enabled; not this law's), -.
 export const REACTANT_COMBUSTION_WGSL = `// Reactant combustion (kaminos.volume.reactant-combustion.v0; see volume-reactant-combustion.mjs).
+fn reactantMaterialWallFade(wall: f32, cellWidth: f32) -> f32 {
+  // Integrate the existing 0.14-wide ambient band over a resident cell.
+  // Point sampling misses the band entirely when outer cell centers are
+  // inside 0.86 (for example 5/6 on a six-cell-wide grid).
+  let width = max(cellWidth, 1e-6);
+  let lo = (wall - 0.5 * width - 0.86) / 0.14;
+  let hi = (wall + 0.5 * width - 0.86) / 0.14;
+  let a = clamp(lo, 0.0, 1.0);
+  let b = clamp(hi, 0.0, 1.0);
+  // Antiderivative of the clamped smoothstep ramp, including its unit tail.
+  let lower = a * a * a * (1.0 - 0.5 * a) + max(lo - 1.0, 0.0);
+  let upper = b * b * b * (1.0 - 0.5 * b) + max(hi - 1.0, 0.0);
+  return clamp(1.0 - 0.14 * (upper - lower) / width, 0.0, 1.0);
+}
+
 fn reactantLawOn() -> bool {
   return u.reactant_combustion_a.x > 0.5;
 }

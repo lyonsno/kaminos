@@ -6117,7 +6117,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let materialWall = max(max(abs(p.x), materialVerticalWall), abs(p.z));
   // Joined boundary: the exterior owns every boundary, so the material sponge
   // (and the oxidizer's relaxation toward ambient) is off too.
-  let materialWallFade = select(max(1.0 - smoothstep(0.86, 1.0, materialWall), clamp(immersedSlabWeight, 0.0, 1.0)), 1.0, joinedBoundary() || openWorldBoundary());
+  var standaloneMaterialFade = 1.0 - smoothstep(0.86, 1.0, materialWall);
+  if (reactantOn) { standaloneMaterialFade = reactantMaterialWallFade(materialWall, 2.0 / f32(GRID)); }
+  let materialWallFade = select(max(standaloneMaterialFade, clamp(immersedSlabWeight, 0.0, 1.0)), 1.0, joinedBoundary() || openWorldBoundary());
   let materialHeatTopFade = select(heatTopFade, 1.0, reactantOn);
   let materialSmokeTopFade = select(smokeTopFade, 1.0, reactantOn);
   let worldSmokeOnlyFlameEnvelope = select(1.0, fineFlameContainmentEnvelope(p, expandedTopY), worldSmokeOnlyOn() && (joinedBoundary() || openWorldBoundary()));
