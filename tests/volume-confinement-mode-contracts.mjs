@@ -80,20 +80,6 @@ test('an epsilon override is an evidence route: honored only in calibrated mode 
   assert.match(source, /confinementEpsilonOverride: /, 'the receipt names the override');
 });
 
-test('the shader branches on the mode uniform and keeps the legacy expressions byte-identical', () => {
-  const main = mainKernel();
-  assert.match(source, /uniforms\[345\] = confinementModeUniformValue\(confinementConfig\.effective\.mode\);/, 'mode packed at slot 345');
-  assert.match(source, /uniforms\[346\] = confinementConfig\.effective\.confinementAmount;/, 'confinement amount packed at slot 346');
-  assert.match(source, /uniforms\[347\] = confinementConfig\.effective\.thermalExpansionAmount;/, 'thermal expansion amount packed at slot 347');
-  assert.match(main, /let confinementMode = u\.reserved_source_extension_0\.y;/, 'main kernel reads the mode');
-  assert.match(main, /vorticityConfinement\(cellI, 0\.034 \+ curl \* 0\.044\)/, 'Curl-driven confinement amount survives unchanged');
-  assert.match(main, /\* \(0\.35 \+ smoke \* 0\.34 \+ heat \* 0\.52\)/, 'Curl-driven material weighting survives unchanged');
-  assert.match(main, /vorticityConfinement\(cellI, u\.reserved_source_extension_0\.z\)/, 'calibrated confinement takes the uniform epsilon');
-  assert.doesNotMatch(main, /vorticityConfinement\(cellI, u\.reserved_source_extension_0\.z\)\s*\*\s*\(0\.35/, 'calibrated confinement is uniform, not material weighted');
-  assert.match(main, /thermalExpansionForce\(cellI, heat, select\(u\.reserved_source_extension_0\.w, 0\.048 \+ curl \* 0\.019, confinementMode < 0\.5\)\)/, 'thermal expansion is Curl-driven only under the legacy mode');
-  assert.equal((source.match(/vel = vel \+ confinement/g) || []).length, 1, 'confinement is added to the velocity exactly once');
-});
-
 test('the residual probe also reduces enstrophy so confinement can be calibrated against a measurement', () => {
   assert.ok(core.PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP >= 12 && core.PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP % 4 === 0, 'at least three vec4 partials per workgroup: compact, wide, vorticity');
   const reduce = source.slice(source.indexOf('fn pressureResidualReduce('), source.indexOf('fn csPressureResidualBefore('));

@@ -5,7 +5,7 @@ import {spawn, execFileSync} from 'node:child_process';
 import {once} from 'node:events';
 import net from 'node:net';
 import {pathToFileURL} from 'node:url';
-import {validateShredWitness} from '../tools/shred-witness-contract.mjs';
+import {validateShredWitness,isShredWitnessFatalConsole} from '../tools/shred-witness-contract.mjs';
 
 const [root, sourceScene, sourceOffer, out] = process.argv.slice(2);
 assert.ok(root && sourceScene && sourceOffer && out, 'root scene offer-report output required');
@@ -69,7 +69,7 @@ try {
   assert.ok(report.executable?.includes('Google Chrome for Testing'), 'independent browser required');
   const {chromium} = await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE));
   browser = await chromium.launchPersistentContext(out+'/profile',{executablePath:report.executable,headless:true,
-    args:['--use-mock-keychain','--password-store=basic','--enable-unsafe-webgpu'],viewport:{width:1100,height:820}});
+    args:['--use-mock-keychain','--password-store=basic','--enable-unsafe-webgpu','--remote-debugging-port=0'],viewport:{width:1100,height:820}});
   page = browser.pages()[0]; page.setDefaultTimeout(0); page.setDefaultNavigationTimeout(0);
   let rejectFatal; const fatal = new Promise((_,reject)=>{rejectFatal=reject;}); fatal.catch(()=>{});
   const step = p => Promise.race([p,fatal]);
@@ -77,9 +77,17 @@ try {
   page.on('pageerror',e=>{report.errors.push(e.message);void save();rejectFatal(e);});
   page.on('console',m=>{if (['error','warning'].includes(m.type())) {
     report.warnings.push(m.text()); void save();
-    if (/invalid shader|error while|validation|device lost|error occurred|PRESET LOAD FAILED/i.test(m.text())) rejectFatal(Error(m.text()));
+    if (isShredWitnessFatalConsole(m.text())) rejectFatal(Error(m.text()));
   }});
   report.phase = 'load'; await save(); await step(page.goto(report.url,{waitUntil:'domcontentloaded'}));
+  try{
+    report.startup=await page.evaluate(()=>window.kaminosStartup?.read());
+    await page.screenshot({path:out+'/startup.png'});
+  }catch(error){
+    if(!/Execution context was destroyed|navigation/i.test(error.message))throw error;
+    report.startupCapture={status:'navigation-pending',reason:error.message};
+  }
+  await save();
   await step(page.waitForFunction(()=>window.kaminosWorkbenchExperimentError || window.__kaminosVolumePrototype?.debugState().error ||
     (window.kaminosWorkbenchExperiments?.state().id==='flame' && window.__kaminosVolumePrototype?.debugState().active)));
   report.initial = await page.evaluate(()=>({experiment:window.kaminosWorkbenchExperiments?.state(),
@@ -89,10 +97,10 @@ try {
   const invoke = (op,input) => step(page.evaluate(({op,input})=>{document.activeElement?.blur();return window.kaminosWorkbenchExperiments.invoke(op,input);},{op,input}));
   await invoke('setPaused',true); await invoke('select','domain');
   report.controls = {'volume-resolution':'32','volume-steps':8,'volume-render-scale':.4,'volume-ray-noise-animated':false,
-    'volume-fine-velocity':0,'volume-appearance-model':'authored'};
+    'volume-fine-velocity':0,'volume-appearance-model':'shred-only'};
   await invoke('setControls',report.controls);
   assert.equal((await page.evaluate(()=>window.kaminosLocalLiquidState())).mounted,false,'water must not be mounted');
-  const arms = [{mode:'authored',split:false},{mode:'shred-only',split:false},{mode:'shred-only',split:true},{mode:'authored',split:true}];
+  const arms = [{mode:'shred-only',split:false},{mode:'shred-only',split:true}];
   for (const arm of arms) {
     const label = arm.mode+(arm.split?'-split':'-combined'); report.phase = label; await save();
     await invoke('setControls',{'volume-appearance-model':arm.mode,'volume-fine-velocity':arm.split?16:0});
@@ -123,7 +131,7 @@ try {
   if (profile) {
     report.phase='profile'; report.profiles=[]; await save();
     await invoke('setControls',{'volume-fine-velocity':0});
-    for (let pair=0;pair<4;pair++) for (const mode of ['authored','shred-only']) {
+    for (let pair=0;pair<4;pair++) for (const mode of ['shred-only']) {
       await invoke('setControls',{'volume-appearance-model':mode});
       await step(page.evaluate(()=>window.__kaminosVolumePrototype.sampleDeterministicReplayFrame({steps:60,startTimeMs:1000,timeStepMs:1000/60})));
       const timing = await step(page.evaluate(appearanceModel=>window.__kaminosVolumePrototype.sampleSimGpuProfile({steps:32,appearanceModel}),mode));

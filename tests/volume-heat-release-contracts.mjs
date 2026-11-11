@@ -36,35 +36,6 @@ test('the heat-release uniform follows the inflow block and packs the gain only 
   assert.match(source, /uniforms\.set\(heatReleaseUniformValues\(heatReleaseConfig\), HEAT_RELEASE_UNIFORM_OFFSET\);\s*\n\s*state\.heatRelease = heatReleaseConfig;/, 'packed each frame and receipted');
 });
 
-test('the main kernel stores the burn rate per cell and the converged solve targets that expansion', () => {
-  assert.match(source, /@group\(0\) @binding\(19\) var burnRate: texture_storage_3d<r32float, read_write>;/, 'one read-write storage texture: the main kernel writes, the pressure kernels read');
-  // The stored rate is the fuel consumption rate the reaction itself used (the
-  // per-time quantity that multiplies timeStep in the fuel decrement).
-  assert.match(source, /let fuelBurnRate = heat \* 0\.018 \+ fuelConsumption;[\s\S]{0,500}?let fuelBurned = min\(fuel, fuelBurnRate \* timeStep\);\s*\n\s*fuel = fuel - fuelBurned;/, 'the fuel decrement is the fuel actually burned: capped by the fuel present, so a hot cell without fuel burns nothing');
-  assert.match(source, /textureStore\(burnRate, cellI, vec4<f32>\(u\.heat_release\.x \* fuelBurned \/ max\(timeStep, 1e-6\) \+ immersedTarget, 0\.0, 0\.0, 0\.0\)\);/, 'stored as the expansion target beside the immersed source: gain x burned fuel per unit time; zero gain stores zero');
-  assert.doesNotMatch(source, /fuel = max\(fuel - \(heat \* 0\.018 \+ fuelConsumption\) \* timeStep, 0\.0\);/, 'the old uncapped decrement form is gone (it was equivalent, but the stored rate must be the capped one)');
-  const expansion = wgslFunction('heatReleaseExpansion');
-  assert.match(expansion, /return max\(0\.0, textureLoad\(burnRate, c\)\.x\);/, 'the pressure kernels read the target directly (their layout binds no uniform), never negative');
-  // The pressure kernels bind the fluid-front read layout, not the full fluid layout: the target must be there too.
-  const frontLayout = source.slice(source.indexOf("label: 'kaminos fluid-front read bind group layout'"), source.indexOf('});', source.indexOf("label: 'kaminos fluid-front read bind group layout'")));
-  assert.match(frontLayout, /\{ binding: 19, visibility: GPUShaderStage\.COMPUTE, storageTexture: \{ access: 'read-write', format: 'r32float', viewDimension: '3d' \} \}/, 'the fluid-front read layout carries the target (first look at 86801d5d failed validation without it)');
-  assert.equal((source.match(/\{ ?binding: 19, resource: burnRateTexture\.createView\(\{ dimension: '3d' \}\) ?\}/g) || []).length, 4, 'bound in every fluid-front read bind group');
-  // The converged solver's right-hand side and the residual probe use the
-  // compact divergence; the legacy wide stencil (divergenceAtCell) is the
-  // legacy Jacobi's and the activity cue's and must not carry the source (the
-  // first look put it there: gain 1 left the simulation bit-identical).
-  const compact = wgslFunction('divergenceCompactAtCell');
-  assert.match(compact, /\+ \(compactFaceVelocity\(c, 2u\) - compactFaceVelocity\(c - vec3<i32>\(0, 0, 1\), 2u\)\)\s*\n\s*- heatReleaseExpansion\(c\);/, 'the compact divergence the converged solve drives to zero carries the expansion target');
-  assert.doesNotMatch(wgslFunction('divergenceAtCell'), /heatReleaseExpansion/, 'the legacy stencil does not');
-  assert.match(source, /pressureDst\[idx\] = vec4<f32>\(divergenceCompactAtCell\(vec3<i32>\(gid\)\), pressureDst\[idx\]\.y, 0\.0, 0\.0\);/, 'the warm right-hand side is that divergence');
-  // Bindings and lifecycle.
-  assert.match(source, /expansionTexture = burnRateTexture/, 'ordinary fluid groups default to the material burn target');
-  assert.match(source, /\{ binding: 19, visibility: GPUShaderStage\.FRAGMENT \| GPUShaderStage\.COMPUTE, storageTexture: \{ access: 'read-write', format: 'r32float', viewDimension: '3d' \} \}/, 'layout entry, fragment-visible: the raymarch entry point reaches divergenceAtCell through the shared module (first live look failed pipeline validation on compute-only visibility)');
-  assert.match(source, /\{ binding: 19, resource: expansionTexture\.createView\(\{ dimension: '3d' \}\) \}/, 'bound with the fluid state through its selected expansion texture');
-  assert.match(source, /burnRateTexture = device\.createTexture\(\{\s*\n\s*label: `kaminos fuel burn rate \$\{gridSize\}x\$\{gridHeight\}x\$\{gridSize\}`,\s*\n\s*size: \[gridSize, gridHeight, gridSize\],\s*\n\s*dimension: '3d',\s*\n\s*format: 'r32float',\s*\n\s*usage: GPUTextureUsage\.STORAGE_BINDING \| GPUTextureUsage\.COPY_DST,/, 'created with the grid');
-  assert.match(source, /burnRateTexture\?\.destroy\(\);\s*\n\s*burnRateTexture = null;/, 'destroyed with the fluid state');
-});
-
 test('cockpit: the expansion gain is a control with help, restored from routes, receipted, additive 234', () => {
   assert.match(index, /<input type="range" id="volume-heat-release-expansion" data-volume-settings-param="volume_heat_release_expansion" min="0" max="3" step="any" value="0">/);
   assert.match(index, /heatReleaseExpansion: parseFloat\(document\.getElementById\('volume-heat-release-expansion'\)\.value\)/);

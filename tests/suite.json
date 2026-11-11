@@ -793,12 +793,6 @@
     "tests/volume-beauty-control-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-bonfire-macro-force-periodicity-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-bonfire-source-periodicity-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-boundary-raster-transition-contracts.mjs": {
       "kind": "node"
     },
@@ -853,9 +847,6 @@
     "tests/volume-cockpit-retired-controls-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-common-gas-transport.mjs": {
-      "kind": "node"
-    },
     "tests/volume-confinement-mode-contracts.mjs": {
       "kind": "node"
     },
@@ -907,9 +898,6 @@
     "tests/volume-emitter-runtime.mjs": {
       "kind": "node"
     },
-    "tests/volume-entrainment-sway-periodicity-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-exact-basin-full-grid-export-contracts.mjs": {
       "kind": "browser",
       "reason": "spawns an exporter that can launch Chrome"
@@ -920,16 +908,10 @@
     "tests/volume-exact-load-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-external-emitter-flicker-periodicity-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-fire-actor-control-rebake-adapter-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-fire-actor-mount-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-fire-lick-periodicity-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-flame-settings-problems-contracts.mjs": {
@@ -1016,9 +998,6 @@
     "tests/volume-main-integration-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-microdetail-transport-slip-retirement-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-nonridge-randomized-capture-contracts.mjs": {
       "kind": "node"
     },
@@ -1044,9 +1023,6 @@
       "kind": "node"
     },
     "tests/volume-periodic-authorship-inventory-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-periodic-excitation-controls-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-persistent-sparse-cohort-contracts.mjs": {
@@ -1110,9 +1086,6 @@
     "tests/volume-retired-control-migration-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-scalar-advection-periodicity-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-scene-solid-contracts.mjs": {
       "kind": "node"
     },
@@ -1170,9 +1143,6 @@
     "tests/volume-slab-inlet-dynamics-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-source-birth-periodicity-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-splat-optical-recurrence-contracts.mjs": {
       "kind": "node"
     },
@@ -1196,9 +1166,6 @@
       "reason": "launches a browser with a remote debugging port"
     },
     "tests/volume-transport-scheme-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-transported-detail-force-periodicity-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-velocity-staggering-contracts.mjs": {

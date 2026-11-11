@@ -40,7 +40,7 @@
         throw new Error('diagnostic toolbar mode must be exactly 1 when requested');
       }
       const [response, schemaResponse] = await Promise.all([
-        fetch(`/api/volume-settings-preset?id=${encodeURIComponent(presetId)}`, { cache: 'no-store' }),
+        fetch(`/api/volume-settings-preset?runtime=1&id=${encodeURIComponent(presetId)}`, { cache: 'no-store' }),
         fetch('/volume-settings-preset-schema-v2.json', { cache: 'no-store' }),
       ]);
       const [artifact, schema] = await Promise.all([response.json(), schemaResponse.json()]);

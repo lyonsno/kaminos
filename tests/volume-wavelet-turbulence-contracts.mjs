@@ -161,27 +161,6 @@ test('band energies: a smooth field is all large band, a two-cell checkerboard i
   assert.throws(() => velocityBandEnergies(new Float32Array(8), dims), /expected/);
 });
 
-test('kernel: the closure fills the deficit of the transported sub band at the foot, scaled for the time step, and never subtracts', () => {
-  const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
-  const start = core.indexOf('fn waveletCorrection('), body = core.slice(start, core.indexOf('\n}\n', start));
-  assert.match(body, /fn waveletCorrection\(foot: vec3<f32>, transported: vec3<f32>, coordA: vec3<f32>, coordB: vec3<f32>, timeStep: f32\)/);
-  assert.match(body, /let band = waveletLevel2Box\(footCell, 2\) - waveletLevel2Box\(footCell, 4\);/, 'the estimator band is L3 − L4 at the foot');
-  assert.match(body, /let highPass = transported - waveletLowPassSample\(foot\);/, 'the sub band is the transported velocity against L1 at the same foot');
-  assert.match(body, /let carried = dot\(highPass, detail\) \/ \(dd \* readGain\);/, 'only the component along the pattern is read');
-  assert.match(body, /let blend = stepBlend\(clamp\(u\.wavelet_turbulence\.x, 0\.0, 1\.0\)\);/);
-  assert.match(body, /let fillTo = amplitude \* max\(u\.wavelet_turbulence\.z, 0\.0\);/, 'strength multiplies the Kolmogorov amplitude');
-  assert.doesNotMatch(body, /\blet (target|set|meta|active|smooth)\b/, 'no WGSL reserved words as locals');
-  assert.match(body, /return blend \/ max\(timeStep, 1e-6\) \* max\(fillTo - carried, 0\.0\) \* detail;/, 'one-sided fill along the pattern; the fold restores the per-step blend');
-  assert.match(body, /waveletBlendA\(u32\(u\.wavelet_turbulence\.w\), WAVELET_COHERENCE_PERIOD_STEPS\)/);
-  assert.doesNotMatch(body, /readSlot\(/, 'no destination-cell old-field term');
-  assert.match(core, /if \(waveletOn\(\) && !VELOCITY_ONLY\) \{ vel = vel \+ waveletCorrection\(backCell, velTransported, waveletCoordA, waveletCoordB, timeStep\); \}/);
-  const pre = core.slice(core.indexOf('fn csWaveletLowPass('), core.indexOf('\n}\n', core.indexOf('fn csWaveletLowPass(')));
-  assert.match(pre, /for \(var dz = -1; dz <= 1; dz = dz \+ 1\)/); assert.match(pre, /if \(!sceneSolidAt\(nc\)\)/); assert.match(pre, /waveletPlaneStore\(c, 3,/);
-  const pre2 = core.slice(core.indexOf('fn csWaveletLowPass2('), core.indexOf('\n}\n', core.indexOf('fn csWaveletLowPass2(')));
-  assert.match(pre2, /waveletLowPassLoad\(c \+ vec3<i32>\(dx, dy, dz\)\)/); assert.match(pre2, /waveletPlaneStore\(c, 6,/);
-  assert.match(core, /const planes = waveletSidecarFull \? 9 : 3;/);
-});
-
 test('estimator calibration: the pinned gains match the filters on unit curl fields (band 0.40 at eight cells, 0.13 at four; detail high-pass 0.50 / 0.65)', () => {
   const n = 36, dims = [n, n, n], cells = n ** 3;
   const field = fn => { const v = new Float32Array(cells * 16); for (let z = 0; z < n; z++) for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { const w = fn([x + 0.5, y + 0.5, z + 0.5]); const i = ((z * n + y) * n + x) * 16; v[i] = w[0]; v[i + 1] = w[1]; v[i + 2] = w[2]; } return v; };

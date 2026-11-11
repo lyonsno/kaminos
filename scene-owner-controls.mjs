@@ -10,13 +10,13 @@ export function createSceneOwnerControls({document,viewport,inspector,selected,o
  };
  function update(){
   const selection=selected();
-  for(const entry of entries){const active=belongs(entry,selection);entry.properties.hidden=!active;if(entry.playback)entry.playback.hidden=!active;if(active)entry.onSelected?.();}
+  for(const entry of entries){const active=belongs(entry,selection);entry.properties.hidden=!active;if(entry.playback)entry.playback.hidden=!active;if(entry.active===true&&!active)entry.onDeselected?.();entry.active=active;if(active)entry.onSelected?.();}
   const next=[...entries].some(e=>belongs(e,selection));if(next!==context){context=next;onContext(next);}
  }
- function mount({asset,relatedAssets=[],properties,playback,onSelected}){
+ function mount({asset,relatedAssets=[],properties,playback,onSelected,onDeselected}){
   if(!asset?.id||!asset.root||!properties)throw Error('Object controls require a registered root and properties');
   if(!Array.isArray(relatedAssets))throw Error('Related owner objects must be registered asset receipts');
-  const entry={asset,relatedAssets,properties,playback,onSelected};entries.add(entry);
+  const entry={asset,relatedAssets,properties,playback,onSelected,onDeselected};entries.add(entry);
   if(playback)playback.className+=' scene-owner-playback';
   properties.className+=' scene-owner-properties';
   inspector.append(properties);if(playback)viewport.append(playback);update();

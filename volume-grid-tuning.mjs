@@ -8,7 +8,7 @@ import {resolvePressureSolverConfig} from './volume-core.js';
 export const GRID_TUNING_GROUPS = [
  {name:'Fine · flame',fields:[['resolution','volume-resolution','Material detail'],['gridHeightRatio','volume-grid-height-ratio','Height / width'],['fineVelocity','volume-fine-velocity','Velocity detail'],['finePressure','volume-fine-pressure','Pressure detail'],['pressureSolverIterations','volume-pressure-solver-iterations','Pressure iterations']]},
  {name:'Intermediate · transition',fields:[['worldSmokeIntermediate','volume-world-smoke-intermediate','Mode'],['intermediateExtent','volume-intermediate-extent','Width / fine width'],['intermediateMaterial','volume-intermediate-material','Material detail'],['intermediateFlow','volume-intermediate-flow','Velocity detail'],['intermediatePressure','volume-intermediate-pressure','Pressure detail'],['intermediateIterations','volume-intermediate-iterations','Pressure iterations']]},
- {name:'World · plume',fields:[['worldSmoke','volume-world-smoke','Enabled'],['worldSmokeExtent','volume-world-smoke-extent','Width / fine width'],['worldSmokeMaterial','volume-world-smoke-material','Material detail'],['worldSmokeFlow','volume-world-smoke-flow','Velocity detail'],['worldSmokePressure','volume-world-smoke-pressure','Pressure detail'],['worldSmokeIterations','volume-world-smoke-iterations','Pressure iterations'],['worldSmokeTransition','volume-world-smoke-transition','Momentum collar cells']]},
+ {name:'World · plume',fields:[['worldSmoke','volume-world-smoke','Enabled'],['worldSmokeExtent','volume-world-smoke-extent','Width / fine width'],['worldSmokeMaterial','volume-world-smoke-material','Material detail'],['worldSmokeFlow','volume-world-smoke-flow','Velocity detail'],['worldSmokePressure','volume-world-smoke-pressure','Pressure detail'],['worldSmokeIterations','volume-world-smoke-iterations','Pressure iterations'],['worldSmokeTransition','volume-world-smoke-transition','Momentum collar cells'],['worldSmokeJoin','volume-world-smoke-join','Box join']]},
 ];
 export const GRID_TUNING_FIELDS=GRID_TUNING_GROUPS.flatMap(g=>g.fields);
 const cells=d=>d.reduce((a,b)=>a*b,1);
@@ -20,6 +20,7 @@ export function gridTuningPlan(c,limits={},context={}) {
  const solver=resolvePressureSolverConfig(c).effective;
  const pressure=pressureResolutionPlan({dims:fine.velocityDims,width:fine.materialPerVelocity!==1?(Number(c.finePressure)||fine.velocityDims[0]):Number(c.finePressure??0),mode:c.pressureResolution||'off',solver:solver.solver,inflow:c.emitterSourceLaw==='inflow-boundary',joined:context.joined===true});
  if(Number(c.finePressure)>0&&pressure.reason)throw Error(`Fine pressure: ${pressure.reason}`);
+ if(!['prescribed-flow','projected-donor'].includes(c.worldSmokeJoin??'prescribed-flow'))throw Error('Unknown Fine/World box join');
  const regions=c.worldSmoke==='on'?resolveWorldRegions(c,fine.materialDims):null;
  if(regions&&(!Number.isFinite(Number(c.worldSmokeTransition??0))||Number(c.worldSmokeTransition??0)<0))throw Error('Momentum collar must have a nonnegative finite reach');
  const rows=[{name:'Fine',...fine,pressureDims:pressure.pressureDims,pressureReason:pressure.reason,flowDims:fine.velocityDims,materialPitch:2/width,flowPitch:2/fine.velocityDims[0],pressurePitch:2/pressure.pressureDims[0],iterations:solver.iterations}];

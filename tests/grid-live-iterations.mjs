@@ -15,11 +15,18 @@ function fixture(){
  const ctx={scenePlacementTools:{edits:null},readAdaptiveMaterialControls,window:{},GRID_TUNING_FIELDS:[['pressureSolverIterations',id]],document:{getElementById:key=>key===id?control:null},volumePrototype:{validateGridControls:noop,setRaymarchSmokePresentationMode:mode=>({effectiveMode:mode})},supersedeVolumeRebuildHolds:noop,setVolumeControlValue:noop,updateVolumeControlLabels:noop,applyFlameEmitterPose:()=>applied.push(Number(control.value)),flameEmitterPose:{},syncRaymarchSmokePresentationControls:noop,volumeSettingsPresetControlValuesEqual,buildVolumeSettingsPreset:read,syncBurnerControls:noop,refreshVolumeReadout:noop,recordFlameSettingsProblems:noop,flameInspector:null,checkFlameSettingsState:x=>x};
  vm.createContext(ctx);vm.runInContext(range+'\n'+writer+'\nvar live='+live+';',ctx);
  const edits=createSceneEdits({read:()=>({}),write:noop}),flame=createFlameAuthoring({edits,read,write:ctx.writeFlameSettingsState,check:x=>x});ctx.window.kaminosFlameAuthoring=flame;ctx.scenePlacementTools.edits=edits;
- return{control,applied,edits,flame,live:ctx.live};
+ return{control,applied,edits,flame,live:ctx.live,ctx};
 }
 test('production live writer rolls back backing-range substitution inside the current gesture',()=>{
  for(const value of [1,3,241]){const f=fixture();f.edits.begin('@flame-settings','Tune iterations');assert.throws(()=>f.live('pressureSolverIterations',value),/substituted/);assert.equal(f.control.value,'12','refused live edit restores all applied settings');assert.equal(f.applied.at(-1),12);assert.equal(f.edits.state().active.id,'@flame-settings');f.edits.commit();assert.equal(f.edits.state().undoCount,0);}
 });
 test('valid live iterations form one undoable gesture and unowned preview is refused',()=>{
  const f=fixture();f.edits.begin('@flame-settings','Tune iterations');f.live('pressureSolverIterations',7);f.live('pressureSolverIterations',8);f.edits.commit();assert.equal(f.control.value,'8');assert.equal(f.edits.state().undoCount,1);f.edits.undo();assert.equal(f.control.value,'12');f.edits.redo();assert.equal(f.control.value,'8');assert.throws(()=>f.flame.preview(f.flame.read()),/gesture|edit/);
+});
+test('production grid writer passes the named box join intact to runtime admission',()=>{
+ const f=fixture(),accepted=new Error('admitted string join');
+ f.ctx.GRID_TUNING_FIELDS.push(['worldSmokeJoin','volume-world-smoke-join']);
+ f.ctx.volumePrototype.validateGridControls=patch=>{assert.equal(patch.worldSmokeJoin,'projected-donor');throw accepted;};
+ const state=f.flame.read();state.domControls['volume-world-smoke-join']={tagName:'SELECT',type:'select-one',value:'projected-donor'};
+ assert.throws(()=>f.ctx.writeFlameSettingsState(state),e=>e===accepted);
 });

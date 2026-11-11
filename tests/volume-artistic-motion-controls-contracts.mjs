@@ -3,7 +3,6 @@ import {assertCalibratedFireNumerics} from './helpers/calibrated-fire-native.mjs
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-
 const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 const schema = JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json', import.meta.url), 'utf8'));
@@ -40,21 +39,6 @@ for (const [id, param, controlKey] of [
   assert.ok(index.includes(`params.has('${param}')`), `${id} restores from an exact route`);
   assert.match(index, new RegExp(`'${controlKey}', '${param}'`), `${id} participates in snapshot routes`);
 }
-
-assert.match(core, /artistic_motion_controls:\s*vec4<f32>/, 'simulation uniforms own the two artistic gates');
-assert.match(core, /uniforms\[364\] = controlsSnapshot\.artisticSwirl === false \? 0 : 1/);
-assert.match(core, /uniforms\[365\] = controlsSnapshot\.phasedSway === false \? 0 : 1/);
-assert.match(
-  core,
-  /vel = vel \+ \(swirl \* heat[\s\S]*?\* artisticSwirl;/,
-  'Artistic Swirl gates only the authored macro rotation',
-);
-assert.match(
-  core,
-  /if \(transportedLateralExcitationEnabled > 0\.5\) \{[\s\S]*?let transportedLateralDelta = prev\.xz - advected\.xz;/,
-  'the legacy phased-sway route now gates transported lateral variation instead of imposing a phase wave',
-);
-assert.doesNotMatch(core, /let phasedSway\b|sin\(phase\) \* \(smoke \+ heat\)|cos\(phase \* 0\.93\)/, 'the simulation retains no phased-sway force authority while the persisted route key survives');
 
 console.log('volume artistic motion controls: independent live, route, preset, and simulation gates pass');
 

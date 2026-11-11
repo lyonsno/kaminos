@@ -25,7 +25,7 @@ export const GRID_HEIGHT_MIN_RATIO = 1;
 export const GRID_HEIGHT_MAX_RATIO = 4;
 export const GRID_HEIGHT_WORKGROUP = 4;
 // Widths of the lattices derived from the fluid box at equal pitch. A contract
-// holds this list equal to EMISSIVE_LIGHT_GRID plus the supported fire
+// holds this list equal to SCENE_SOURCE_GRID plus the supported fire
 // irradiance lattice sizes, so adding a lattice size cannot silently break it.
 export const GRID_HEIGHT_DERIVED_LATTICE_WIDTHS = Object.freeze([32, 48]);
 

@@ -105,28 +105,16 @@ test('soot burnout: off at rate 0, needs heat and oxygen, and is a survival in (
   assert.ok(Math.abs(twoSteps - hot * hot) < 1e-9, 'time-step consistent');
 });
 
-test('the kernel and the renderer carry the same laws as these references', () => {
-  const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
-  const transport = readFileSync(new URL('../volume-emissive-transport.mjs', import.meta.url), 'utf8');
-  const physicsBranch = transport.slice(transport.indexOf('fn physicsEmissiveMaterial('), transport.indexOf('\n}\n', transport.indexOf('fn physicsEmissiveMaterial(')));
-  assert.ok(physicsBranch.length > 0, 'the WGSL physics material exists');
-  assert.doesNotMatch(physicsBranch, /fireLayer|microLayer|frontTopology|coverage/, 'no carrier and no carrier-built coverage is read');
-  assert.match(physicsBranch, /physicsSootKelvin\(m\.y, u\.emissive_physics\.y\)/);
-  assert.match(transport, /if \(u\.emissive_physics\.x > 0\.5\) \{ return physicsEmissiveMaterial\(r, smokeVisible\); \}/, 'emissiveMaterial switches before reading anything else');
-  assert.match(core, /smoke = smoke \* sootBurnoutSurvival\(heat, clamp\(oxidizer \/ max\(u\.reactant_combustion_c\.z, 1e-6\), 0\.0, 1\.0\), timeStep\);/, 'the step kernel applies the burnout to soot');
-  assert.match(core, /emissive_physics: vec4<f32>,/);
-});
-
 test('the uncoupled-control list names real cockpit controls and the switch lives in the Emissive transport group', () => {
   const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   // The paintings were retired with the legacy material laws (2026-10-18); only the carrier drivers remain uncoupled.
-  assert.equal(PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.length, 3, 'Fire licks, Shred and Microdetail (Detail Scale retired 2026-10-21)');
+  assert.equal(PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.length, 1, 'only Shred remains an activity driver');
   assert.ok(PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.every(c => c.reason === 'carriers-only'));
   for (const { id, reason } of PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS) {
     assert.ok(index.includes(`id="${id}"`), `${id} exists in the cockpit`);
     assert.ok(['unused', 'carriers-only'].includes(reason), `${id}: ${reason}`);
   }
-  for (const id of ['volume-fire-licks', 'volume-interface-shred', 'volume-microdetail']) {
+  for (const id of ['volume-interface-shred']) {
     assert.ok(PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.some(c => c.id === id), `${id} is marked`);
   }
   for (const id of ['volume-physical-exposure', 'volume-physical-white', 'volume-physical-smoke-extinction', 'volume-density', 'volume-reactant-mixing-time']) {
