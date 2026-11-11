@@ -7,7 +7,7 @@ import {createKleinSceneWorkerAdapter} from '../authoring-image-worker-adapter.m
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 
-async function harness(t,{gate=null,failSave=false}={}){
+async function harness(t,{gate=null,failSave=false,destroyFails=0}={}){
   const {port1,port2}=new MessageChannel(),started=deferred(),saved=[];
   let loads=0,destroyed=0,finished=0,request=null,frames=0;
   const device={features:new Set(['shader-f16']),queue:{}},session={
@@ -17,7 +17,7 @@ async function harness(t,{gate=null,failSave=false}={}){
   const png=Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==','base64'));
   const options={context:()=>({sharedGpu:{device}}),appHost:()=>appHost,weights:async()=>'/weights',
     kit:async()=>({createWebGpuInferenceControl:()=>({close:async()=>{}})}),
-    createPipeline:()=>({load:async()=>{loads++;},destroy:async()=>{destroyed++;},generate:async value=>{
+    createPipeline:()=>({load:async()=>{loads++;},destroy:async()=>{destroyed++;if(destroyFails-->0)throw Error('pipeline retirement failed');},generate:async value=>{
       request=value;started.resolve();value.onStep(1,4);if(gate)await gate.promise;
       return {width:value.width,height:value.height,rgba:new Uint8ClampedArray(value.width*value.height*4),timings:{}};
     }}),encodePng:async()=>new Blob([png],{type:'image/png'}),
@@ -78,4 +78,12 @@ test('worker command cancellation cannot save a completed output from the cancel
   await h.started.promise;run.cancel('operator Stop');await tick();await tick();gate.resolve();
   await assert.rejects(run.completion,{name:'AbortError'});
   assert.equal(h.saved.length,0);assert.equal(h.stats().finished,1);
+});
+
+test('failed model retirement retains cleanup ownership for retry',async t=>{
+  const h=await harness(t,{destroyFails:1});
+  await h.client.request('image.generate',{prompt:'lantern',seed:1,size:256}).completion;
+  await assert.rejects(h.client.request('retire').completion,error=>error.gpuRouteHeld===true&&/retirement failed/.test(error.message));
+  await h.client.request('retire').completion;
+  assert.equal(h.stats().destroyed,2,'retry must actually retry model cleanup rather than forgetting it');
 });

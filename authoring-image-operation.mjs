@@ -128,7 +128,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
   encodePng=encodeCanvasPng,changed=()=>{},blocked=()=>null,appHost=null,clock=()=>performance.now()}){
   // appHost (app-gpu-host.mjs): borrow the page's session and run on its one foreground
   // service. Without it, klein keeps its own session and service (the earlier route).
-  let loaded=null,active=false,abort=null,decodeRequested=false;
+  let loaded=null,retiring=null,active=false,abort=null,decodeRequested=false;
   let state={status:'idle',progress:'Weights load the first time you generate an image.',stage:null,percent:null,canStop:false,error:null,results:[],outputs:[],pending:null,preview:null,timing:null};
   const outputSaves=new Map();
   let startedAt=null,generationStartedAt=null,generationFinished=false;
@@ -171,13 +171,14 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
     return blocked();
   }
   async function releaseLoaded(){
-    if(!loaded)return;
-    const previous=loaded;loaded=null;
+    const previous=retiring??loaded;if(!previous)return;
+    loaded=null;retiring=previous;
     await previous.pipeline.destroy();
     if(!previous.app){
       const handoff=context().handoff;if(handoff?.owner()==='klein')await handoff.release();
       await previous.foreground?.dispose?.();await previous.session.close?.();
     }
+    retiring=null;
   }
   async function load(level,model){
     const spec=imageModel(model);
