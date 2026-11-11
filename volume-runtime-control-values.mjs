@@ -3,7 +3,7 @@ import {REGION_CONTROL_FIELDS} from './volume-region-controls.mjs';
 import {WORLD_CALIBRATION_FIELDS,SIMULATION_LEVER_FIELDS} from './volume-world-calibration.mjs';
 import {applyPreviewQualityCaps} from './preview-quality.mjs';
 import {readAdaptiveMaterialControls} from './volume-adaptive-material-controls.mjs';
-import {normalizeVolumeScene} from './volume-scene-ontology.mjs';
+import {normalizeVolumeScene,DEFAULT_VOLUME_SCENE} from './volume-scene-ontology.mjs';
 
 const CANONICAL_VOLUME_SOURCE_MODE_VALUES = {
   current: 0,
@@ -733,8 +733,9 @@ export function readVolumeRuntimeControlValues({readControl,quality='full',param
 
 // Values already admitted/projected by the canonical saved-settings contract.
 // This adapter maps coefficients; it does not claim GPU application or restore.
-export function readAuthoredVolumeRuntimeControls(settings,options){
- const controls={...settings.domControls,...settings.rendererControls};
+export function readAuthoredVolumeRuntimeControls(settings,{nonPersistentControls={},...options}={}){
+ const controls={...nonPersistentControls,...settings.domControls,...settings.rendererControls};
+ controls['volume-scene']??={value:settings.volumeSceneRequested??DEFAULT_VOLUME_SCENE};
  return readVolumeRuntimeControlValues({...options,
   adaptiveMaterial:(()=>{const value=readAdaptiveMaterialControls(settings.domControls);return value.enabled?value.options:null;})(),
   readControl(id){
