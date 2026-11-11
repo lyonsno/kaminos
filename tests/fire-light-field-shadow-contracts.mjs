@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 
 // Exercise the production contribution, not a duplicate visibility predicate.
-const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+const source=readFileSync(new URL('../scene-fire-light-receiver.mjs',import.meta.url),'utf8');
 const expression=source.match(/const receiverSignal = ([\s\S]*?);/)[1];
 const scalar=value=>({valueOf:()=>value,add:other=>scalar(value+Number(other)),mul:other=>scalar(value*Number(other))});
 const evaluate=visibility=>Number(new Function('pixelLight','backgroundMask','materialResponse','fireLightFieldStrength','fireShadowVisibility',`return ${expression}`)({signal:scalar(2)},...Array(3).fill(scalar(1)),scalar(visibility)));

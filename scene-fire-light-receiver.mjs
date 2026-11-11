@@ -260,6 +260,7 @@ export function createSceneFireLightReceiver({THREE,sharedGpu,renderer,scene,cam
     return adopted;
   };
 
+  let adoptedAtlas=null,adoptedMeta=null,adoptedMetaShape=null;
   const bindBlackAtlas = (reason) => {
     if (passState.adoptionKey !== 'black') {
       atlasTextureNode.value = atlasExternalTexture;
@@ -267,6 +268,7 @@ export function createSceneFireLightReceiver({THREE,sharedGpu,renderer,scene,cam
       passState.adoptionKey = 'black';
       passState.farFieldIdentity = null;
     }
+    adoptedAtlas=null;adoptedMeta=null;adoptedMetaShape=null;
     passState.effective = false;
     passState.reason = reason;
     passState.sameDevice = false;
@@ -357,7 +359,9 @@ export function createSceneFireLightReceiver({THREE,sharedGpu,renderer,scene,cam
         return false;
       }
       const adoptionKey = `${lightField.generation}:${lightField.atlasWidth}x${lightField.atlasHeight}`;
-      if (passState.adoptionKey !== adoptionKey) {
+      const meta=lightField.metaTexture&&lightField.metaWidth===4&&lightField.visualExtentIdentity==='undiffused-emission-moments-v1'?lightField.metaTexture:null;
+      const metaShape=meta?`${lightField.metaWidth}x${lightField.metaHeight}`:null;
+      if (passState.adoptionKey !== adoptionKey||adoptedAtlas!==lightField.atlasTexture||adoptedMeta!==meta||adoptedMetaShape!==metaShape) {
         atlasTextureNode.value = makeAdoptedAtlasTexture(lightField.atlasTexture, lightField.atlasWidth, lightField.atlasHeight);
         if (lightField.metaTexture && lightField.metaWidth === 4 && lightField.visualExtentIdentity === 'undiffused-emission-moments-v1') {
           const adoptedMeta = makeAdoptedAtlasTexture(lightField.metaTexture, lightField.metaWidth, lightField.metaHeight);
@@ -367,16 +371,19 @@ export function createSceneFireLightReceiver({THREE,sharedGpu,renderer,scene,cam
         } else {
           metaTextureNode.value = metaExternalTexture;
         }
+        adoptedAtlas=lightField.atlasTexture;adoptedMeta=meta;adoptedMetaShape=metaShape;
         passState.adoptionKey = adoptionKey;
-        passState.farFieldIdentity = lightField.farFieldIdentity ?? null;
-        atlasGrid.value = lightField.grid;
-        atlasGridY.value = lightField.gridY;
-        fieldWorldMin.value.set(...lightField.worldMin);
-        fieldWorldMax.value.set(...lightField.worldMax);
-        fieldCellPitch.value = (lightField.worldMax[0] - lightField.worldMin[0]) / lightField.grid;
-        atlasTilesX.value = lightField.tilesX;
-        atlasTexelSize.value.set(1 / lightField.atlasWidth, 1 / lightField.atlasHeight);
       }
+      // Domain pose can change while the underlying textures stay resident.
+      // Resource generations are local to each producer, not world coordinates.
+      passState.farFieldIdentity = lightField.farFieldIdentity ?? null;
+      atlasGrid.value = lightField.grid;
+      atlasGridY.value = lightField.gridY;
+      fieldWorldMin.value.set(...lightField.worldMin);
+      fieldWorldMax.value.set(...lightField.worldMax);
+      fieldCellPitch.value = (lightField.worldMax[0] - lightField.worldMin[0]) / lightField.grid;
+      atlasTilesX.value = lightField.tilesX;
+      atlasTexelSize.value.set(1 / lightField.atlasWidth, 1 / lightField.atlasHeight);
       passState.effective = true;
       passState.reason = null;
       passState.sameDevice = true;

@@ -55,3 +55,31 @@ test('receiver releases its placeholders and shadow owners without destroying bo
  assert.deepEqual(f.textures.map(t=>t.destroyed),[1,1]);assert.equal(borrowedDestroyed,0);
  assert.ok(f.shadowCalls.includes('dispose-shadow'));assert.ok(f.shadowCalls.includes('dispose-casters'));
 });
+function graphNodes(root){const nodes=new Set();root.traverse(node=>nodes.add(node));return [...nodes];}
+test('same-generation producer replacement rebinds both actual sampled texture nodes',()=>{
+ const f=fixture();const first={...f.effective(),metaTexture:{id:'meta-first'},metaWidth:4,metaHeight:1,visualExtentIdentity:'undiffused-emission-moments-v1'};
+ f.setField(first);f.result.update();const nodes=graphNodes(f.result.outputNode);
+ const atlas=nodes.find(node=>node.value?.sourceTexture===first.atlasTexture),meta=nodes.find(node=>node.value?.sourceTexture===first.metaTexture);
+ assert.ok(atlas,'actual output graph samples the producer atlas');assert.ok(meta,'actual output graph samples the producer metadata');
+ const next={...first,atlasTexture:{id:'atlas-next'},metaTexture:{id:'meta-next'}};f.setField(next);f.result.update();
+ assert.equal(atlas.value.sourceTexture,next.atlasTexture);assert.equal(meta.value.sourceTexture,next.metaTexture);
+});
+test('live relocation refreshes actual shading bounds and cell pitch without rebinding stable textures',()=>{
+ const f=fixture(),field=f.effective();f.setField(field);f.result.update();const nodes=graphNodes(f.result.outputNode);
+ const vec=values=>nodes.find(node=>node.isUniformNode&&node.value?.isVector3&&node.value.toArray().every((v,i)=>v===values[i]));
+ const min=vec(field.worldMin),max=vec(field.worldMax);assert.ok(min);assert.ok(max);
+ const pitchCandidates=nodes.filter(node=>node.isUniformNode&&node.value===1);
+ const atlas=nodes.find(node=>node.value?.sourceTexture===field.atlasTexture),wrapper=atlas.value;
+ f.setField({...field,worldMin:[1,2,3],worldMax:[9,18,11]});f.result.update();
+ assert.deepEqual(min.value.toArray(),[1,2,3]);assert.deepEqual(max.value.toArray(),[9,18,11]);
+ assert.equal(atlas.value,wrapper,'domain motion preserves unchanged texture wrapper');
+ assert.ok(pitchCandidates.some(node=>node.value===2),'actual field pitch follows world width / grid');
+});
+
+test('metadata-only replacement and validity changes update the actual metadata sample',()=>{
+ const f=fixture(),field={...f.effective(),metaTexture:{id:'first'},metaWidth:4,metaHeight:1,visualExtentIdentity:'undiffused-emission-moments-v1'};
+ f.setField(field);f.result.update();const meta=graphNodes(f.result.outputNode).find(node=>node.value?.sourceTexture===field.metaTexture);assert.ok(meta);
+ const next={...field,metaTexture:{id:'next'}};f.setField(next);f.result.update();assert.equal(meta.value.sourceTexture,next.metaTexture);
+ f.setField({...next,visualExtentIdentity:'unavailable'});f.result.update();assert.equal(meta.value.sourceTexture,f.textures[1]);
+ f.setField({...next,metaHeight:2});f.result.update();assert.equal(meta.value.sourceTexture,next.metaTexture);assert.equal(meta.value.image.height,2);
+});
