@@ -3,7 +3,7 @@ export const controlDefinitions=[
  {key:'bevel',label:'Corner rounding',unit:'mm',step:.5,scale:1000,max:140},
  {key:'margin',label:'Rich margin width',unit:'mm',step:1,scale:1000,max:300},
  {key:'relief',label:'Margin relief',unit:'mm',step:.5,scale:1000,max:100},
- {key:'seed',label:'Source seed',step:1,scale:1,max:10000,integer:true},
+ {key:'seed',label:'Source seed',step:1,scale:1,integer:true},
  {key:'displayCells',label:'Display divisions',step:1,scale:1,min:2,max:128,integer:true},
  {key:'cells',label:'Integral source divisions',step:1,scale:1,min:2,max:128,integer:true},
 ];

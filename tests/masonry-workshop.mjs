@@ -47,6 +47,7 @@ test('numeric controls mount before installing drag and release their handles',a
  f.host.controls={document,installNumberDrag({input}){assert.ok(input.parentNode,'numeric drag requires an attached input');return {dispose(){cleaned++;}};}};
  const instance=await openExperiment(definition,{host:f.host,inputs:{source:{cells:8}},record(){}});
  await instance.mount({root:document.createElement('panel'),document});
+ const bevel=elements.find(e=>e.attributes['aria-label']==='Corner rounding');assert.ok(Number(bevel.max)<115,'rounding upper range must leave room for current relief');
  const input=elements.find(e=>e.attributes['aria-label']==='Margin relief');document.activeElement=input;input.value='300';input.listeners.change();
  await instance.invoke('flushEdits');
  assert.equal(Number(input.value),25,'rejected focused draft returns to the accepted value');
@@ -76,4 +77,35 @@ test('display and integral tessellation are independently exercised and retained
  assert.equal((await instance.invoke('sourceData')).stones[0].source.triangles.length,12*12*12);
  await instance.invoke('display',{mode:'integral'});assert.equal(stone.geometry.getAttribute('position').count,12*12*12*3);
  assert.deepEqual((await instance.invoke('recipe')).resolutions,{display:10,integral:12});await instance.dispose();
+});
+
+test('typing a leading one or decimal prefix does not rewrite the active draft',async()=>{
+ const f=fixture(),elements=[];
+ const document={activeElement:null,createElement(tag){const node={tag,children:[],style:{},attributes:{},listeners:{},append(...children){for(const c of children){c.parentNode=this;this.children.push(c);}},setAttribute(k,v){this.attributes[k]=v;},addEventListener(k,v){this.listeners[k]=v;}};elements.push(node);return node;}};
+ f.host.controls={document,installNumberDrag({input}){input.readOnly=true;return {dispose(){}};}};
+ const instance=await openExperiment(definition,{host:f.host,inputs:{source:{cells:8}},record(){}});
+ try{
+  await instance.mount({root:document.createElement('panel'),document});
+  const input=elements.find(e=>e.attributes['aria-label']==='Display divisions');document.activeElement=input;input.readOnly=false;
+  input.value='1';input.listeners.input();assert.equal(input.value,'1','leading 1 must remain a typing draft');
+  input.value='16';input.listeners.input();await instance.invoke('flushEdits');assert.equal((await instance.read()).resolutions.display,16);
+  const relief=elements.find(e=>e.attributes['aria-label']==='Margin relief');document.activeElement=relief;relief.readOnly=false;relief.value='0.0';relief.listeners.input();assert.equal(relief.value,'0.0','decimal prefix must survive typing');
+  relief.value='0.05';relief.listeners.input();await instance.invoke('flushEdits');assert.equal((await instance.read()).source.relief,.00005);
+  const seed=elements.find(e=>e.attributes['aria-label']==='Source seed');assert.equal(seed.max,'','unbounded seed drag retains single-seed step');
+ }finally{await instance.dispose();}
+});
+
+
+test('optional operations are no-ops or return domain errors without payloads',async()=>{
+ const f=fixture();const instance=await openExperiment(definition,{host:f.host,inputs:{source:{cells:6}},record(){}});
+ try{await instance.invoke('source');await instance.invoke('resolution');await instance.invoke('tune');await assert.rejects(instance.invoke('display'),/masonry view/);await assert.rejects(instance.invoke('resolution',null),/masonry resolution/);}finally{await instance.dispose();}
+});
+test('inspection identifies the visible mesh while retaining integral and display hits',async()=>{
+ const f=fixture();const instance=await openExperiment(definition,{host:f.host,inputs:{source:{cells:10},displayCells:6},record(){}});
+ const ray={origin:[-.1,1,-.12],direction:[0,-1,0]};
+ try{
+  const displayed=await instance.invoke('inspect',ray);assert.equal(displayed.source.resolution,10);assert.equal(displayed.visibleHit.resolution,6);assert.deepEqual(displayed.visibleHit,displayed.displaySource);
+  await instance.invoke('display',{mode:'integral'});const integral=await instance.invoke('inspect',ray);assert.deepEqual(integral.visibleHit,integral.source);
+  await instance.invoke('display',{mode:'carrier'});const carrier=await instance.invoke('inspect',ray);assert.deepEqual(carrier.visibleHit,carrier.displayCarrier);
+ }finally{await instance.dispose();}
 });

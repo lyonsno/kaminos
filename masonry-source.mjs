@@ -83,7 +83,7 @@ export function traceMasonryRay(source,{origin,direction,surface='source'}={}){
   const weights=[1-u-v,u,v],n=cross(e1,e2),norm=Math.hypot(...n);
   const blend=values=>values[0].map((_,i)=>values.reduce((s,x,k)=>s+weights[k]*x[i],0));
   closest=distance;
-  result={hit:true,surface,distance,position:origin.map((x,i)=>x+distance*d[i]),normal:n.map(x=>x/norm),
+  result={hit:true,resolution:source.config.cells,surface,distance,position:origin.map((x,i)=>x+distance*d[i]),normal:n.map(x=>x/norm),
    uv:blend(triangle.uv),referencePosition:blend(['a','b','c'].map(k=>triangle.reference[k])),
    barycentric:weights,faceId:triangle.faceId,region:triangle.region,triangleId:triangle.identity};
  }

@@ -55,7 +55,7 @@ export default {
     const value=key==='displayCells'?displayCells:config[key];
     if(force||host.controls.document?.activeElement!==input||input.readOnly)input.value=String(displayValue(key,drafts.get(key)??value));
     const d=controlDefinitions.find(d=>d.key===key),minimum=Math.min(config.width,config.height,config.depth)/2;
-    input.max=String(key==='bevel'?minimum*1000*(1-1e-6):key==='relief'?(minimum-config.bevel)*1000*(1-1e-6):Math.max(d.max,displayValue(key,value)));
+    input.max=key==='seed'?'':String(key==='bevel'?(minimum-config.relief)*1000*(1-1e-6):key==='relief'?(minimum-config.bevel)*1000*(1-1e-6):Math.max(d.max,displayValue(key,value)));
    }
    if(panelStatus)panelStatus.textContent=`${stones.length} stones · display ${stones.reduce((n,s)=>n+s.displaySource.triangles.length,0).toLocaleString()} triangles · integral source ${stones.reduce((n,s)=>n+s.source.triangles.length,0).toLocaleString()}. Geometry only; traced integral and learned responses are not built.`;
   };
@@ -77,7 +77,7 @@ export default {
    for(let i=0;i<stones.length;i++){const stone=stones[i],p=prepared[i];for(const key of ['detailed','carrier','integral'])if(p[key])stone[key].dispose();Object.assign(stone,p);}
    applyMode();clearRay();for(const stone of stones){if(!stone.mesh.parent)continue;host.scene.refreshPresentation(stone.asset);void prepareNavigationGeometry(stone.mesh).catch(error=>{if(panelStatus)panelStatus.textContent=error.message;});}sync();persist();
   };
-  const tune=values=>{const {displayCells:nextDisplay=displayCells,...source}=values;refresh(resolveMasonryConfig({...config,...source}),nextDisplay);record({kind:'masonry.source',phase:'applied',effective:recipe()});return read();};
+  const tune=(values={})=>{if(!values||typeof values!=='object'||Array.isArray(values))throw Error('Invalid masonry edit');const {displayCells:nextDisplay=displayCells,...source}=values;refresh(resolveMasonryConfig({...config,...source}),nextDisplay);record({kind:'masonry.source',phase:'applied',effective:recipe()});return read();};
   const inspect=request=>{
    const view=session.readView(),origin=validVector(request?.origin??view.position,'ray origin');
    const target=probe.getWorldPosition(new Vector3()),direction=request?.direction??target.toArray().map((x,i)=>x-origin[i]);validVector(direction,'ray direction');if(Math.hypot(...direction)===0)throw Error('Invalid masonry ray direction');
@@ -87,16 +87,17 @@ export default {
     if(!s.mesh.parent||!s.mesh.visible)continue;s.mesh.updateWorldMatrix(true,false);
     const inverse=new Matrix4().copy(s.mesh.matrixWorld).invert();const localOrigin=worldOrigin.clone().applyMatrix4(inverse),localDirection=worldDirection.clone().transformDirection(inverse);
     const ray={origin:localOrigin.toArray(),direction:localDirection.toArray()};
-    const source=traceMasonryRay(s.source,ray),carrier=traceMasonryRay(s.source,{...ray,surface:'carrier'});
-    if(!source.hit&&!carrier.hit)continue;
-    const selected=carrier.hit?carrier:source,world=new Vector3().fromArray(selected.position).applyMatrix4(s.mesh.matrixWorld),distance=world.distanceTo(worldOrigin);
+    const source=traceMasonryRay(s.source,ray),carrier=traceMasonryRay(s.source,{...ray,surface:'carrier'}),displaySource=traceMasonryRay(s.displaySource,ray),displayCarrier=traceMasonryRay(s.displaySource,{...ray,surface:'carrier'});
+    const visibleHit=mode==='carrier'?displayCarrier:mode==='integral'?source:displaySource;
+    const selected=visibleHit.hit?visibleHit:mode==='integral'?carrier:displayCarrier;if(!selected.hit)continue;
+    const visibleRepresentation=mode==='integral'?'integral source':mode==='carrier'?'display carrier':'display source',world=new Vector3().fromArray(selected.position).applyMatrix4(s.mesh.matrixWorld),distance=world.distanceTo(worldOrigin);
     if(best&&distance>=best.distance)continue;
     const normalMatrix=new Matrix3().getNormalMatrix(s.mesh.matrixWorld),worldNormal=hit=>hit.hit?new Vector3().fromArray(hit.normal).applyNormalMatrix(normalMatrix).toArray():null;
-    best={sourceWorldNormal:worldNormal(source),carrierWorldNormal:worldNormal(carrier),stoneId:s.asset.id,distance,source,carrier,origin:[...origin],direction:worldDirection.toArray(),sourceWorld:source.hit?new Vector3().fromArray(source.position).applyMatrix4(s.mesh.matrixWorld).toArray():null,carrierWorld:carrier.hit?new Vector3().fromArray(carrier.position).applyMatrix4(s.mesh.matrixWorld).toArray():null};
+    best={visibleHit,visibleRepresentation,resolutions:{display:displayCells,integral:config.cells},displaySource,displayCarrier,visibleWorld:visibleHit.hit?new Vector3().fromArray(visibleHit.position).applyMatrix4(s.mesh.matrixWorld).toArray():null,sourceWorldNormal:worldNormal(source),carrierWorldNormal:worldNormal(carrier),stoneId:s.asset.id,distance,source,carrier,origin:[...origin],direction:worldDirection.toArray(),sourceWorld:source.hit?new Vector3().fromArray(source.position).applyMatrix4(s.mesh.matrixWorld).toArray():null,carrierWorld:carrier.hit?new Vector3().fromArray(carrier.position).applyMatrix4(s.mesh.matrixWorld).toArray():null};
    }
    clearRay();lastProbe=best??{hit:false,origin:[...origin],direction:worldDirection.toArray()};
-   if(best){const endpoint=new Vector3().fromArray(best.sourceWorld??best.carrierWorld),begin=endpoint.clone().addScaledVector(worldDirection,-.35);const g=new BufferGeometry().setFromPoints([begin,endpoint]);rayLine=new Line(g,new LineBasicMaterial({color:0xffdd72,depthTest:false}));rayLine.renderOrder=1000;rayLine.raycast=()=>{};const parent=probe.parent;parent.updateWorldMatrix(true,false);parent.add(rayLine);rayLine.applyMatrix4(new Matrix4().copy(parent.matrixWorld).invert());}
-   if(probeText)probeText.textContent=best?`${best.source.hit?best.source.region+' · source hit':'Source miss'} / ${best.carrier.hit?'carrier hit':'carrier miss'}${best.source.hit?' · UV '+best.source.uv.map(x=>x.toFixed(3)).join(', '):''}`:'This ray misses all stones.';
+   if(best){const endpoint=new Vector3().fromArray(best.visibleWorld??best.carrierWorld),begin=endpoint.clone().addScaledVector(worldDirection,-.35);const g=new BufferGeometry().setFromPoints([begin,endpoint]);rayLine=new Line(g,new LineBasicMaterial({color:0xffdd72,depthTest:false}));rayLine.renderOrder=1000;rayLine.raycast=()=>{};const parent=probe.parent;parent.updateWorldMatrix(true,false);parent.add(rayLine);rayLine.applyMatrix4(new Matrix4().copy(parent.matrixWorld).invert());}
+   if(probeText)probeText.textContent=best?`${best.visibleRepresentation}: ${best.visibleHit.hit?best.visibleHit.region+' hit · UV '+best.visibleHit.uv.map(x=>x.toFixed(3)).join(', '):'miss'} / integral source ${best.source.hit?'hit':'miss'}`:'This ray misses all stones.';
    record({kind:'masonry.inspect',phase:'applied',effective:lastProbe});session.redraw();return lastProbe;
   };
   try{
@@ -113,9 +114,9 @@ export default {
    operations:{
     source:values=>tune(values),
     tune,
-    resolution({display=displayCells,integral=config.cells}){return tune({displayCells:display,cells:integral});},
+    resolution(request={}){if(!request||typeof request!=='object'||Array.isArray(request))throw Error('Invalid masonry resolution');const {display=displayCells,integral=config.cells}=request;return tune({displayCells:display,cells:integral});},
     async flushEdits(){await liveEdits?.flush();return read();},
-    display({mode:value}){mode=checkMode(value);applyMode();persist();return read();},
+    display(request={}){mode=checkMode(request?.mode);applyMode();persist();return read();},
     sourceData(){return {recipe:recipe(),stones:stones.map(s=>({id:s.asset.id,source:structuredClone(s.source)}))};},
     inspect,
     frame(){return session.setView({position:[3.3,2.5,3.4],target:[0,.18,0],fov:43});},
@@ -132,9 +133,18 @@ export default {
     for(const d of controlDefinitions){const {key,label,step}=d;
      const row=document.createElement('label');row.style.cssText='display:flex;gap:8px;align-items:center;margin:8px 0';const grip=document.createElement('span');grip.textContent=label+(d.unit?' ('+d.unit+')':'');grip.style.flex='1';
      const input=document.createElement('input');input.type='number';input.step='any';input.min=String(d.min??0);input.className='transform-input';input.style.width='100%';input.setAttribute('aria-label',label);controls.set(key,input);
-     const schedule=()=>{if(!input.value.trim()||!Number.isFinite(Number(input.value)))return;const value=controlValue(key,Number(input.value));input.value=String(displayValue(key,value));drafts.set(key,value);liveEdits.schedule({[key]:value});};
-     input.addEventListener('input',schedule);input.addEventListener('change',()=>{schedule();void liveEdits.flush();});
-     const field=document.createElement('span');field.style.cssText='display:inline-flex;flex:0 0 86px;width:86px';field.append(input);row.append(grip,field);panel.append(row);input.addEventListener('blur',()=>{void liveEdits.flush();sync();});dragHandles.push(host.controls.installNumberDrag({input,grip,step}));
+     const schedule=(commit=false)=>{
+      if(!input.value.trim()||!Number.isFinite(Number(input.value)))return;
+      const raw=Number(input.value);
+      // Preserve incomplete keyboard numbers; normalize committed edits and
+      // scrubbing values, while negative spatial values never reach the source.
+      if(!commit&&!input.readOnly&&raw>=0&&raw<(d.min??0))return;
+      const value=controlValue(key,raw);
+      if(commit||input.readOnly||raw<0)input.value=String(displayValue(key,value));
+      drafts.set(key,value);liveEdits.schedule({[key]:value});
+     };
+     input.addEventListener('input',()=>schedule(false));input.addEventListener('change',()=>{schedule(true);void liveEdits.flush();});
+     const field=document.createElement('span');field.style.cssText='display:inline-flex;flex:0 0 86px;width:86px';field.append(input);row.append(grip,field);panel.append(row);input.addEventListener('blur',()=>{schedule(true);void liveEdits.flush();sync();});dragHandles.push(host.controls.installNumberDrag({input,grip,step}));
     }
     const legend=document.createElement('p');legend.textContent='Regions: blue face · amber margin · rose corner.';
     const button=document.createElement('button');button.textContent='Inspect ray to gold target';button.addEventListener('click',()=>invoke('inspect',{}).catch(fail));
