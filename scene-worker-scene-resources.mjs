@@ -163,7 +163,7 @@ export function createSceneWorkerSceneResources(context){
     document=createSceneDocumentApplication({runtime:authored,assertSupported:assertOrdinarySupport,
      async prepareDocument(data,plan,meta){await materials.prepare(plan.materialLibrary??{recipes:[],bindings:[]});await domains.document.prepareDocument(data,plan,meta);},
      async beforeReplace(data,plan,meta){applySettings(data,meta.context);return domains.document.beforeReplace(data,plan,meta);},
-     async afterReplace(data,plan,meta){materials.write(plan.materialLibrary??{recipes:[],bindings:[]});await giProxies.whenIdle();await domains.document.afterReplace(data,plan,meta);appearance.applyEnvironment();report(meta.context,projection());},
+     async afterReplace(data,plan,meta){materials.write(plan.materialLibrary??{recipes:[],bindings:[]});await giProxies.whenIdle();await domains.document.afterReplace(data,plan,meta);appearance.applyEnvironment();},
      documentServices:{readAddress:()=>{const url=new URL(payload.location?.href??payload.location);return {href:url.href,origin:url.origin,search:url.search,hash:url.hash};},...domains.documentServices}});
     await domains.initialize(ctx);current(ctx);
     if(startup.startupDefaults.defaults){assertOrdinarySupport(startup.startupDefaults.defaults,{});applySettings(startup.startupDefaults.defaults,ctx);await domains.applyPreferences?.(startup,ctx);}
@@ -196,7 +196,8 @@ export function createSceneWorkerSceneResources(context){
      afterDraw:(receipt,now)=>{frameCount++;domains.afterDraw?.(receipt,now);}});
     commandMap=mergeCommands({...document.commands,async 'scene.applyDocument'(input,context){
      current(context);documentHolds++;const previousContext=activeContext;activeContext=context;
-     try{await syncVolumeHold();current(context);return await document.commands['scene.applyDocument'](input,context);}
+     try{await syncVolumeHold();current(context);const result=await document.commands['scene.applyDocument'](input,context);current(context);
+      return {...result,ui:{...projection(),...(input.document?.camera?{camera:checkedCameraView({...input.document.camera,position:camera.position.toArray(),up:camera.up.toArray(),fov:camera.fov,near:camera.near,far:camera.far})}:{})}};}
      finally{activeContext=previousContext;documentHolds--;await syncVolumeHold();}
     }},domains.commands);
     current(ctx);return shell;
@@ -205,8 +206,8 @@ export function createSceneWorkerSceneResources(context){
   async prepareVolume(input){current(input.context);volume=input.volume;await domains.prepareVolume(input);current(input.context);},
   async attachVolume(input){
    current(input.context);await domains.attachVolume(input);current(input.context);activeContext=input.context;
-   try{if(payload.admission?.data)await commandMap['scene.applyDocument']({document:payload.admission.data,sceneFile:payload.admission.sceneFile??null,emptySettings:true},input.context);
-    current(input.context);attached=true;appearance.environment.releaseFull();report(input.context,{...projection(),initialization:{sceneApplied:true,preferencesApplied:true}});
+   try{const applied=payload.admission?.data?await commandMap['scene.applyDocument']({document:payload.admission.data,sceneFile:payload.admission.sceneFile??null,emptySettings:true},input.context):null;
+    current(input.context);attached=true;appearance.environment.releaseFull();report(input.context,{...(applied?.ui??projection()),initialization:{sceneApplied:true,preferencesApplied:true}});
    }finally{activeContext=null;}
   },
   applyFrameInputs(input,ctx){current(ctx);if(!attached)throw Error('Ordinary scene is not attached');frameContext=ctx;domains.applyFrameInputs?.(input,ctx);},

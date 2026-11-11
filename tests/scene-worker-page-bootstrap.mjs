@@ -73,3 +73,11 @@ test('actual asset route still suppresses preference camera defaults',async()=>{
  const f=fixture({sceneInput:{data:null},preferences:storedViews(),href:'http://localhost/?scene_worker=1&mesh_source=sha256:asset'});
  assert.deepEqual(f.config.initializePayload.camera.position,[0,.6,3]);f.config.beforeFrame();assert.deepEqual(f.config.readCamera().target,[0,0,0]);await f.instance.retire();
 });
+
+test('document camera adoption reaches the next actual page snapshot without pinning later navigation',async()=>{
+ const f=fixture();f.config.applyUi({camera:agentView});f.config.beforeFrame();
+ let snapshot=f.config.readCamera();for(const key of ['position','target','up','fov','near','far'])assert.deepEqual(snapshot[key],agentView[key]);
+ f.instance.camera.position.x+=1;const moved=f.instance.camera.position.toArray();
+ f.config.applyUi({surfaces:{volume:{visible:false}}});f.config.beforeFrame();assert.deepEqual(f.config.readCamera().position,moved,'cached restored view cannot override subsequent navigation');
+ const before=f.config.readCamera();assert.throws(()=>f.config.applyUi({camera:{...agentView,target:agentView.position}}),/view/);assert.deepEqual(f.config.readCamera(),before);await f.instance.retire();
+});
