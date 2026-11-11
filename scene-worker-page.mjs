@@ -37,12 +37,13 @@ export function applySceneWorkerSurfaces(canvases,surfaces){
  if(!surfaces||typeof surfaces!=='object'||Array.isArray(surfaces))throw Error('Worker surfaces must be an object');
  for(const [name,state] of Object.entries(surfaces)){
   if(!canvases[name])continue;
-  if(!state||typeof state!=='object'||['active','transparent'].some(key=>Object.hasOwn(state,key)&&typeof state[key]!=='boolean'))throw Error('Worker surface flags must be actual booleans');
+  if(!state||typeof state!=='object'||['active','transparent','visible'].some(key=>Object.hasOwn(state,key)&&typeof state[key]!=='boolean'))throw Error('Worker surface flags must be actual booleans');
  }
  for(const [name,state] of Object.entries(surfaces)){
   const canvas=canvases[name];if(!canvas)continue;
   if(Object.hasOwn(state,'active')){canvas.classList.toggle('active',state.active);canvas.hidden=!state.active;}
   if(Object.hasOwn(state,'transparent'))canvas.style.background=state.transparent?'transparent':'';
+  if(Object.hasOwn(state,'visible'))canvas.style.visibility=state.visible?'':'hidden';
  }
 }
 

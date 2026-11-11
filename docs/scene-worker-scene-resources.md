@@ -31,7 +31,10 @@ Required methods:
 - `readFrameState(nowMs?)`: live ordinary admission fields `lightingHeld`,
   `exclusiveInspection`, `manualInspection`, `transportRequired`,
   `radianceReady`; display flags `fireLightFieldRoute`, `distributed`; and
-  `simInputs: {flame, water, ash}` for the existing simulation coordinator.
+  `simInputs: {flame, water, ash}` for the existing simulation coordinator. Each
+  simulator supplies an explicit Boolean `active`; `radianceReady` and
+  `transportRequired` are Boolean. Missing state refuses rather than silently
+  planning inactive simulations.
 - `readDrawSettings()`: actual `waterVisible`, `flameHDRActive`,
   `customToneMapping`, `matchFlameCamera`, `assetPreparationActive`, `capturing`
   as applicable. Ordinary GI settings remain with the ordinary owner.
@@ -71,7 +74,16 @@ queue settlement and any additional `replacement.context.retire` service.
 `ordinary` exposes actual `scene`, `camera`, `renderResources`, `sharedGpu`,
 `workingScene`, and `viewport`. Live getters expose `appearance`, `lighting`,
 `display`, `frames`, `authored`, `document`, `materials`, `beautyLods`,
-`giProxies`, `output`, `coordinator`, and the resolved `startup` input.
+`giProxies`, `output`, `coordinator`, `bloom`, `surfaceLighting`,
+`lightingPreparation`, and the resolved `startup` input.
+`decorateOutput(node)` uses the actual selection feedback output.
+The lighting preparation owner exposes the existing `request(change)`,
+`setExternalHold`, `state`, `whenIdle`, `withRenderer`, and retry operations;
+holds forward to the attached volume's `setSceneLightingRebuildPending`.
+`domains.prepareFrame()` optionally synchronizes sources before ordinary depth;
+the ordinary owner updates its fire receiver once afterward.
+`createFireLightReceiver` is accepted as an alias for
+`createFireLightFieldReceiverPass`.
 
 Operations: `readSettings()`, `applySettings(data, context)`, `visible(id)`,
 `readBounds()`, `rebuildDisplay()`, `registerSceneObject(...args)`, and
@@ -79,6 +91,14 @@ Operations: `readSettings()`, `applySettings(data, context)`, `visible(id)`,
 actual ordinary depth path; `frames.consumeTransport()` is the actual scene
 transport consumer. `workingScene` and `authored` preserve registered root
 identity and document load generations.
+
+`shell.readUi()` reads current asynchronous environment/loading/preparation state
+and merges `domains.readUi()`. The common runtime uses this for current
+frame/mutation/initialization replies; it does not rely on progress sent through
+a completed initializer. Full registry/bounds projection occurs at authored
+command boundaries, not on every frame. `surfaces.volume.visible` controls
+canvas presentation separately from simulation `active`; transport can hide
+retained volume pixels without disabling the simulation.
 
 The common runtime calls `initialize`, `prepareVolume`, volume activation, then
 `attachVolume`. Only after actual domain attachment and any initial document
