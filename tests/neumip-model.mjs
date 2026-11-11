@@ -27,3 +27,23 @@ const trailing=new Uint8Array(bytes.length+1);trailing.set(bytes);assert.throws(
 const shape=bytes.slice();new DataView(shape.buffer).setInt32(9,7,true);assert.throws(()=>readNeumipModel(shape),/shape/);
 const nonfinite=bytes.slice();new DataView(nonfinite.buffer).setFloat32(21,NaN,true);assert.throws(()=>readNeumipModel(nonfinite),/non-finite/);
 console.log('NeuMIP archive: shape, endianness, truncation, trailing bytes and finite values passed');
+
+const {createNeumipMaterial}=await import('../neumip-material.mjs');
+const {sceneGIReceives}=await import('../scene-gi-settings.mjs');
+const native=createNeumipMaterial(model);
+try{assert.equal(sceneGIReceives(native.material),false,'learned directional radiance must bypass the ordinary diffuse transport/receiver wrapper');}
+finally{native.material.dispose();}
+
+// Custom lighting graphs live in closures. Separate material instances must not
+// borrow a compiled graph (or its uniforms/textures) from a sibling.
+const first=createNeumipMaterial(model,{uvScale:2,gain:1});
+const second=createNeumipMaterial(model,{uvScale:5,gain:2});
+const changed=structuredClone(model);changed.layers.find(l=>l.name==='main.mpl3').biases[0]+=.5;
+const third=createNeumipMaterial(changed);
+try{
+ const key=first.material.customProgramCacheKey();
+ assert.notEqual(key,second.material.customProgramCacheKey(),'separate slots own separate lighting graphs and uniforms');
+ assert.notEqual(key,third.material.customProgramCacheKey(),'different learned weights own distinct shader programs');
+ first.settings.gain.value=3;first.settings.scale.value=4;
+ assert.equal(first.material.customProgramCacheKey(),key,'uniform edits preserve program identity');
+}finally{first.material.dispose();second.material.dispose();third.material.dispose();}

@@ -1,5 +1,5 @@
 import {MeshStandardNodeMaterial,DataTexture,RGBAFormat,FloatType,NearestFilter,NearestMipmapNearestFilter,RepeatWrapping,NoColorSpace,DoubleSide} from './lib/three.webgpu.js';
-import {Fn,uniform,texture,wgslFn,uv,positionViewDirection,TBNViewMatrix,normalView,dFdx,dFdy,sqrt,log2,max} from './lib/three.tsl.js';
+import {Fn,uniform,texture,wgslFn,uv,positionViewDirection,TBNViewMatrix,normalView,dFdx,dFdy,sqrt,log2,max,vec2,vec3,vec4,mat4,If} from './lib/three.tsl.js';
 import {buildNeumipWGSL} from './neumip-shader.mjs';
 
 function pack(level,block) {
@@ -21,22 +21,44 @@ export function createNeumipMaterial(model,{uvScale=3,gain=4}={}) {
   const bilinear=wgslFn(shaders.bilinear),offset=wgslFn(shaders.offset),featuresFn=wgslFn(shaders.features,[bilinear,offset]),mainFn=wgslFn(shaders.main);
   const tex=textures.map(t=>texture(t));
   const coords=uv().mul(scale),view=positionViewDirection.mul(TBNViewMatrix).negate().toVar('neumipView');
-  const features=Fn(()=>{
-    const dx=dFdx(coords).mul(model.mips[0].width),dy=dFdy(coords).mul(model.mips[0].height);
+  const gradients=vec4(dFdx(coords),dFdy(coords)).toVar('neumipFullRateGradients');
+  const decodedFeatures=Fn(()=>{
+    const rate=Fn(([],builder)=>builder.context.neuralFootprintScale??vec2(1))();
+    const dx=gradients.xy.mul(model.mips[0].width).mul(rate.x),dy=gradients.zw.mul(model.mips[0].height).mul(rate.y);
     const lod=max(0,log2(sqrt(dx.dot(dx).add(dy.dot(dy))).div(1.2)));
     return featuresFn(coords,view,lod,...tex);
-  })().toVar('neumipFeaturesShared');
+  })().toVar('neumipDecodedFeatures');
+  const features=mat4(0).toVar('neumipFeaturesShared');
   class NeumipMaterial extends MeshStandardNodeMaterial {
+    customProgramCacheKey() {
+      // The lighting graph closes over this instance's weights, textures and
+      // uniforms; NodeMaterial's public-node traversal cannot see that graph.
+      return `${super.customProgramCacheKey()}:neumip:${this.uuid}`;
+    }
     setupLightingModel(builder) {
       const lighting=super.setupLightingModel(builder);
+      let reused=null;
       lighting.direct=({lightDirection,lightColor,reflectedLight})=>{
+       const evaluate=()=>{
         const dir=lightDirection.mul(TBNViewMatrix).negate();
         const response=mainFn(features.element(0),features.element(1),view.xy,dir.xy);
         reflectedLight.directDiffuse.addAssign(response.mul(lightColor).mul(normalView.dot(lightDirection).max(0)).mul(brightness));
+       };
+       if(reused)If(reused.valid.not(),evaluate);else evaluate();
       };
       // The checkpoint supplies a directional BTF, not a diffuse environment proxy.
       lighting.indirect=()=>{};
       lighting.directRectArea=()=>{throw Error('NeuMIP rectangular area-light integration is not implemented');};
+      const cache=builder.context.sceneNeuralShading,start=lighting.start.bind(lighting);
+      lighting.start=b=>{
+        gradients.append();features.append();
+        reused=cache?.resolveLighting(b,this)??null;
+        if(reused){
+          b.context.reflectedLight.directDiffuse.assign(reused.valid.select(reused.radiance,vec3(0)));
+          If(reused.valid.not(),()=>features.assign(decodedFeatures));
+        }else features.assign(decodedFeatures);
+        start(b);
+      };
       return lighting;
     }
   }

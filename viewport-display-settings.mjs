@@ -1,5 +1,6 @@
 import {checkedHiddenIds} from './scene-visibility.mjs';
-export const DEFAULT_VIEWPORT_DISPLAY=Object.freeze({overlays:true,gizmos:true,outlines:true,bounds:false,helpers:true,bones:true,paths:false,zones:true,domains:true,emitters:true,hints:true,outlineWidth:1.5,outlineOpacity:1,domainWidth:1,domainOpacity:.82,emitterWidth:1,emitterOpacity:.55,shading:'solid',water:'full',fire:'full',quality:'full',hiddenIds:Object.freeze([])});
+import {checkedNeuralResolution} from './neural-resolution-settings.mjs';
+export const DEFAULT_VIEWPORT_DISPLAY=Object.freeze({overlays:true,gizmos:true,outlines:true,bounds:false,helpers:true,bones:true,paths:false,zones:true,domains:true,emitters:true,hints:true,outlineWidth:1.5,outlineOpacity:1,domainWidth:1,domainOpacity:.82,emitterWidth:1,emitterOpacity:.55,shading:'solid',water:'full',fire:'full',quality:'full',neuralResolution:1,hiddenIds:Object.freeze([])});
 export const VIEWPORT_SHADING_MODES=Object.freeze(['solid','wireframe']);
 export const VIEWPORT_WATER_DISPLAYS=Object.freeze(['full','proxy']);
 export const VIEWPORT_FIRE_DISPLAYS=Object.freeze(['full','proxy']);
@@ -12,6 +13,7 @@ export const VIEWPORT_SHADING_TOGGLE_HTML='<div class="viewport-shading" role="g
 export function checkedViewportDisplay(value={}) {
  if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Invalid viewport display');
  const result={...DEFAULT_VIEWPORT_DISPLAY,...value};
+ result.neuralResolution=checkedNeuralResolution(value.neuralResolution??1);
  for(const key of ['overlays','gizmos','outlines','bounds','helpers','bones','paths','zones','domains','emitters','hints'])if(typeof result[key]!=='boolean')throw Error(`Invalid viewport ${key}`);
  for(const key of ['outlineWidth','domainWidth','emitterWidth'])if(!Number.isFinite(result[key])||result[key]<=0)throw Error(`Invalid viewport line width ${key}`);
  for(const key of ['outlineOpacity','domainOpacity','emitterOpacity'])if(!Number.isFinite(result[key])||result[key]<0||result[key]>1)throw Error(`Invalid viewport opacity ${key}`);

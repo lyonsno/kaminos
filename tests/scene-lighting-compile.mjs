@@ -157,3 +157,20 @@ renderer.compileAsync=async(s,c,target,options)=>{if(++passes===1)await options.
 await compileSceneLighting(renderer,[pass,pass],{live:true,isCurrent:()=>current});
 assert.equal(committed,committedBefore,'superseded topology cannot be promoted');
 assert.equal(discarded,discardedBefore+1,'retire only the superseded candidate');
+
+// Neural capture temporarily borrows cheaper occluder materials. Native
+// compilation must see those exact materials, restoring them at every yield.
+let borrowed=false,borrows=0,restores=0;
+pass.borrowMaterials=()=>{assert.equal(borrowed,false);borrowed=true;borrows++;return()=>{borrowed=false;restores++;};};
+pass._renderCallDepths=new WeakMap();pass.compileCallDepth=()=>2;
+renderer.compileAsync=async(s,c,target,options)=>{
+ assert.equal(borrowed,true,'compile the same materials as the neural capture');
+ assert.equal(options.callDepth,2,'capture declares its effective nested pass depth before first draw');
+ await options.yieldToMain(async()=>{assert.equal(borrowed,false,'live drawing never sees borrowed capture materials');});
+ assert.equal(borrowed,true,'capture materials reacquired after cooperative yield');
+};
+await compileSceneLighting(renderer,[pass],{live:true});assert.equal(borrowed,false);assert.equal(borrows,2);assert.equal(restores,2);
+renderer.compileAsync=async()=>{assert.equal(borrowed,true);throw Error('capture failed');};
+await assert.rejects(compileSceneLighting(renderer,[pass]),/capture failed/);
+assert.equal(borrowed,false);assert.equal(borrows,3);assert.equal(restores,3);
+console.log('PASS capture material scope and declared nesting survive async failure and live yields');
