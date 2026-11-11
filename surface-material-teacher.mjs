@@ -21,17 +21,20 @@ struct Query {uvView:vec4<f32>,lightLod:vec4<f32>}
 }
 `;
 export class SurfaceMaterialTeacher extends SurfaceTeacher{
- async evaluateMaterial(queries,{tileSize,referenceHeight,resolution,samples,seed=0}={}){
+ async evaluateMaterial(queries,{tileSize,referenceHeight,samplingPlaneHeight=referenceHeight,resolution,samples,seed=0}={}){
   if(this.disposed)throw Error('surface teacher is disposed');
   if(this.environment!==0)throw Error('Material labels require zero environment; incident light is query-owned');
   if(!(queries instanceof Float32Array)||!queries.length||queries.length%8||!queries.every(Number.isFinite))throw Error('Finite nonempty material queries required');
   for(let i=0;i<queries.length;i+=8)if(queries[i+2]**2+queries[i+3]**2>=1||queries[i+4]**2+queries[i+5]**2>=1||queries[i+6]<0)throw Error('Upper hemisphere directions and nonnegative LOD required');
   if(!Number.isFinite(tileSize)||tileSize<=0||!Number.isFinite(referenceHeight)||!Number.isSafeInteger(resolution)||resolution<1||!Number.isSafeInteger(samples)||samples<1||!Number.isSafeInteger(seed)||seed<0)throw Error('Invalid material capture configuration');
+  if(!Number.isFinite(samplingPlaneHeight)||samplingPlaneHeight>referenceHeight)throw Error('Invalid material sampling plane');
+  let launchQueries=queries;
+  if(samplingPlaneHeight!==referenceHeight){launchQueries=queries.slice();for(let i=0;i<queries.length;i+=8){const vertical=Math.sqrt(1-queries[i+2]**2-queries[i+3]**2),travel=(referenceHeight-samplingPlaneHeight)/vertical;launchQueries[i]-=travel*queries[i+2]/tileSize;launchQueries[i+1]-=travel*queries[i+3]/tileSize;}}
   const count=queries.length/8;if(Math.ceil(count/64)>this.device.limits.maxComputeWorkgroupsPerDimension)throw Error('Material query dispatch exceeds device capacity');
   this.materialPipeline??=this.device.createComputePipeline({label:'surface material directional query',layout:'auto',compute:{module:this.device.createShaderModule({code:SURFACE_MATERIAL_QUERY_WGSL}),entryPoint:'main'}});
   const resources=[];let read;
   try{
-   const input=this.buffer('material queries',queries),output=this.buffer('material responses',new Float32Array(count*3),GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC);resources.push(input,output);
+   const input=this.buffer('material queries',launchQueries),output=this.buffer('material responses',new Float32Array(count*3),GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC);resources.push(input,output);
    const config=this.buffer('material footprint',new Float32Array([tileSize,referenceHeight,resolution,samples]),GPUBufferUsage.UNIFORM);resources.push(config);
    read=this.device.createBuffer({size:count*12,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});
    this.writeParams({frame:seed});const encoder=this.device.createCommandEncoder(),pass=encoder.beginComputePass();pass.setPipeline(this.materialPipeline);pass.setBindGroup(0,this.group(this.materialPipeline,[...this.common(),input,output,config]));pass.dispatchWorkgroups(Math.ceil(count/64));pass.end();encoder.copyBufferToBuffer(output,0,read,0,count*12);this.device.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);

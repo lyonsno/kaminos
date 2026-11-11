@@ -97,7 +97,7 @@ export class EarthSpecimen {
     const d=this.particles[bond.a].body.position.distanceTo(this.particles[bond.b].body.position);
     if(d>bond.initial*(1+this.config.breakStrain)){
      this.world.removeConstraint(bond.constraint);bond.active=false;
-    }else if(d<bond.rest*(1-this.config.plasticYield)){
+    }else if(Math.abs(d-bond.rest)>bond.rest*this.config.plasticYield){
      const lower=this.particles[bond.a].radius+this.particles[bond.b].radius;
      bond.rest=Math.max(lower,bond.rest+(d-bond.rest)*(1-Math.exp(-this.config.plasticRate*dt)));bond.constraint.distance=bond.rest;
     }

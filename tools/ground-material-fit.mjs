@@ -25,7 +25,7 @@ try{
  for(const [k,v]of Object.entries(options))if(k==='fresh'?typeof v!=='boolean':!Number.isSafeInteger(v)||v<1)throw Error(`Invalid fit option ${k}`);
  report.sourceRevision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();report.sourceStatus=execFileSync('git',['status','--porcelain'],{encoding:'utf8'});
  report.sourceFiles={};for(const name of ['ground-teacher-source.mjs','material-teacher-source.mjs','earth-specimen.mjs','earth-surface.mjs','surface-teacher-wgsl.mjs','surface-teacher.mjs','surface-material-teacher.mjs','neumip-training.mjs','neumip-model.mjs','tools/ground-material-fit.mjs']){const b=await fs.readFile(name);report.sourceFiles[name]=digest(b);await fs.writeFile(path.join(out,path.basename(name)),b);}
- const source=createMaterialTeacherSource(config.source);report.ground={config:source.config,triangles:source.triangles.length,materials:source.materials,boundary:source.boundary,referenceHeight:source.referenceHeight,sha256:digest(JSON.stringify(source))};
+ const source=createMaterialTeacherSource(config.source);report.ground={config:source.config,triangles:source.triangles.length,materials:source.materials,boundary:source.boundary,referenceHeight:source.referenceHeight,samplingPlaneHeight:source.samplingPlaneHeight??source.referenceHeight,sha256:digest(JSON.stringify(source))};
  await fs.writeFile(path.join(out,'config.json'),JSON.stringify(config,null,2));await fs.writeFile(path.join(out,'source.json'),JSON.stringify(source));
  let state=options.seed>>>0;const random=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return (state+.5)/4294967296;};
  const queries=n=>{const data=new Float32Array(n*8);for(let i=0;i<n;i++){const q=i*8;data[q]=random();data[q+1]=random();for(const d of [2,4]){const r=Math.sqrt(random()*.99),t=random()*Math.PI*2;data[q+d]=r*Math.cos(t);data[q+d+1]=r*Math.sin(t);}data[q+6]=random()<.6?0:random()*Math.log2(options.resolution/2);}return data;};
@@ -38,10 +38,10 @@ try{
   report.adapter=ctx.adapterInfo;let teacher,learner;const start=performance.now();
   try{
    teacher=new SurfaceMaterialTeacher(ctx.device,{...source,lights:[],environment:0,bounces:options.bounces});
-   const capture={tileSize:source.config.tileSize,referenceHeight:source.referenceHeight,resolution:options.resolution,samples:options.samples,seed:options.seed};
+   const capture={tileSize:source.config.tileSize,referenceHeight:source.referenceHeight,samplingPlaneHeight:source.samplingPlaneHeight??source.referenceHeight,resolution:options.resolution,samples:options.samples,seed:options.seed};
    const labels=await withGpuErrorScopes(ctx.device,'ground-label-capture',()=>teacher.evaluateMaterial(trainingQueries,capture));
    const heldoutLabels=await teacher.evaluateMaterial(heldoutQueries,{...capture,samples:options.heldoutSamples,seed:options.seed+1});
-   report.captureMs=performance.now()-start;report.dataset={queries:await raw('training-queries.f32',trainingQueries),labels:await raw('training-labels.f32',labels),heldoutQueries:await raw('heldout-queries.f32',heldoutQueries),heldoutLabels:await raw('heldout-labels.f32',heldoutLabels),filter:'square box, width 2^LOD/resolution in material reference plane',response:'linear outgoing radiance under unit directional irradiance divided by macro light cosine; live material multiplies it back'};
+   report.captureMs=performance.now()-start;report.dataset={queries:await raw('training-queries.f32',trainingQueries),labels:await raw('training-labels.f32',labels),heldoutQueries:await raw('heldout-queries.f32',heldoutQueries),heldoutLabels:await raw('heldout-labels.f32',heldoutLabels),filter:'square box, width 2^LOD/resolution in declared material sampling plane',samplingPlaneHeight:capture.samplingPlaneHeight,launchHeight:capture.referenceHeight,response:'linear outgoing radiance under unit directional irradiance divided by macro light cosine; live material multiplies it back'};
    learner=await createNeumipTraining(ctx.device,student,{batchSize:Math.max(options.batch,options.heldout,128**2)});
    const checkpoint=async step=>{
     learner.setQueries(heldoutQueries);const {rgb}=await learner.evaluate();

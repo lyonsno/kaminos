@@ -8,8 +8,9 @@ earth** lets gravity and contacts evolve the specimen without the tool.
 
 The first preparation model uses the already installed Cannon ES 0.20.0 CPU
 contact/rigid solver. Soil is represented by contacting mass-bearing spheres
-joined by cohesive distance constraints. Compressed bonds acquire shorter rest
-lengths; sufficiently stretched bonds break. Grit has convex faceted geometry
+joined by cohesive distance constraints. Yielded bonds retain changes to their rest lengths in compression and extension;
+sufficiently stretched bonds break. The tool is lifted and a separate unforced
+release interval is simulated before the press result is presented. Grit has convex faceted geometry
 and full translating/rotating rigid dynamics. Gravity, friction and reciprocal
 contact act on both. This is an exploratory cohesive aggregate model, not a
 calibrated soil continuum or a retained Hill terrain fork. The tray has fixed
@@ -43,7 +44,8 @@ Agents use the same operations via `window.kaminosWorkbenchExperiments.invoke`:
 `advance({seconds})`, `press()`, `configure(settings)`, `freeze()`, `snapshot()`,
 `load(recipe)`, `source()` and `reset()`. `freeze()` returns `{source,authoring,
 surface}`. The `source` descriptor includes the complete frozen snapshot and
-can be placed in the existing fit tool's caller JSON:
+includes a finite repeated neighborhood and can be placed in the existing fit
+tool's caller JSON:
 
 ```js
 const frozen = await window.kaminosWorkbenchExperiments.invoke('freeze');
@@ -54,3 +56,13 @@ Then run `node tools/ground-material-fit.mjs CONFIG_JSON OUTPUT_DIR` through
 Greenroom. The explicit `kind: 'earth-specimen'` route cannot silently fall back
 to the older analytic ground source. Optional finite repeated halos support
 neighborhood experiments but do not repair a bounded specimen's boundary.
+
+Material-query UVs are anchored at the projected-area mean height of the matrix.
+Rays start safely above all source geometry with their horizontal origin shifted
+so they pass through that UV on the material plane. This separates the safe ray
+launch height from the learned material coordinate plane. Older sources keep
+their original launch-plane semantics unless a sampling plane is supplied.
+Capture recipes add one repeated neighbor ring to reduce bounded-edge misses.
+This remains a finite-neighborhood approximation with visible authored seams,
+not an infinite periodic transport solution. Inspect the source before investing
+in a fit, particularly at grazing directions.
