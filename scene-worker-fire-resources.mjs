@@ -31,7 +31,7 @@ export function createSceneWorkerFireResources(input,{definitions,fetch:request=
  const url=new URL(payload.location?.href??payload.location??'http://localhost/');
  let volume=null,plan=null,prepared=null,radiance=null,hdr=null,retiring=false,transport=false,lightingStatus=null,configured=null,sourceSignature=null;
  let rendering=checkedFireRendering(),documentData=null;
- const preparedDocuments=new WeakMap(),receiverOwners=new Set();
+ const preparedDocuments=new WeakMap(),receiverOwners=new Set(),pendingHandles=new Set();
  const present=()=>Boolean(plan?.composition||plan?.hasVolumePrimitiveScene||url.searchParams.get('kaminos_volume_smoke')==='1');
  const route=()=>{const result=new URLSearchParams(url.search);for(const [key,value]of new URLSearchParams(url.hash.slice(1)))if(!result.has(key))result.set(key,value);for(const [key,value]of Object.entries(plan?.composition?.route??{}))if(!result.has(key))result.set(key,value);return result;};
  const loader=settingsLoader??createSceneWorkerFireSettingsLoader({definitions,fetch:request,mappingOptions:()=>({route:routeValues(readFlameControls()),params:url.searchParams,lightFieldParams:route()})});
@@ -123,7 +123,7 @@ export function createSceneWorkerFireResources(input,{definitions,fetch:request=
   applyFrameInputs(_input,ctx){check(ctx);},
   assertRecordSupported(record){if(record.type!==FLAME_EMITTER_TYPE)throw Error('Unsupported worker domain not mounted: '+record.type);checkedFireSourceRecord(record);},
   loaders:{flame(record,options){options.context?.assertCurrent();const source=checkedFireSourceRecord(record),object=createFlameEmitterHandle(THREE);applySceneObjectTransformState(object,source.transform);
-   ordinary.registerSceneObject(object,source,{activate:options.activate});return object;}},
+   pendingHandles.add(object);scene.add(object);ordinary.registerSceneObject(object,source,{activate:options.activate});pendingHandles.delete(object);return object;}},
   restoreOperations:{flamePose(id,pose){const record=ordinary.workingScene.objects.find(row=>row.id===id);if(!record)throw Error('Flame source absent: '+id);applySceneObjectTransformState(record.object,pose);}},
   document:{
    assertSupported(data,next){
@@ -138,7 +138,7 @@ export function createSceneWorkerFireResources(input,{definitions,fetch:request=
    async afterReplace(data,next,meta){check(meta.context);documentData=data;plan=next;configure();if(volume){await volume.setActive(present()&&ordinary.visible('flame-field'));check(meta.context);await mount(meta.context);}},
   },
   commands:{'fire.read'(_input,ctx){check(ctx);return {active:Boolean(volume?.isActive()),present:present(),source:prepared?.source?{presetId:prepared.source.presetId}:null,lighting:radiance?.debugState?.()??null};}},
-  async retire(ctx){ctx.assertCurrent();retiring=true;if(volume)await volume.setActive(false);await releaseRadiance();for(const owner of receiverOwners){await owner.dispose();receiverOwners.delete(owner);}waterFeature.clear();volume=null;},
+  async retire(ctx){ctx.assertCurrent();retiring=true;if(volume)await volume.setActive(false);await releaseRadiance();for(const owner of receiverOwners){await owner.dispose();receiverOwners.delete(owner);}for(const object of pendingHandles){object.removeFromParent();object.traverse(node=>{node.geometry?.dispose();for(const material of [].concat(node.material??[]))material.dispose();});pendingHandles.delete(object);}waterFeature.clear();volume=null;},
  };
  return shell;
 }

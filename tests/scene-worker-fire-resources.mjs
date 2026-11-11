@@ -19,7 +19,7 @@ function fixture(){
   composition:{schema:'kaminos.stationary-flame-composition.v1',flame:{presetId:'vsp-'+'a'.repeat(64),stationary:true},route:{volume_light_field:'1'},lightGainStops:0},flameDomainTranslation:[0,0,0]});
  const prepared={controls,settings:observed,presentation:'on',clamps:[],source:{presetId:'vsp-'+'a'.repeat(64)}};
  const ordinary={scene,camera,workingScene:{objects},visible:()=>true,authored:{records:createSceneRecordOperations({readers:{transform:sceneObjectTransformState,materials:getMaterialStateForObject}})},frames:{consumeTransport(){},depth:()=>({device,camera,texture:{}})},
-  registerSceneObject(object,metadata){const record=createSceneObjectRecord(object,metadata,{id:metadata.id});objects.push(record);scene.add(object);return record;},lightingPreparation:{setExternalHold(){},request:async change=>change?.()},
+  registerSceneObject(object,metadata){const record=createSceneObjectRecord(object,metadata,{id:metadata.id});objects.push(record);return record;},lightingPreparation:{setExternalHold(){},request:async change=>change?.()},
   surfaceLighting:{},readSettings:()=>({gi:{mode:'combined',view:'scene'}}),bloom:{read:()=>({settings:{composeFlame:false}})},decorateOutput:node=>node,rebuildDisplay(){calls.push('display');}};
  const ctx={signal:new AbortController().signal,assertCurrent(){},report(){}};
  const volume={isActive:()=>active,debugState:()=>({simulationPaused:false}),setControls:c=>calls.push(['controls',c]),
