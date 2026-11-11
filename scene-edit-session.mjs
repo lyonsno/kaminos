@@ -32,7 +32,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
     if (value == null && target?.allowMissing) return value;
     return checkedPose(value);
   };
-  const put = (id, value) => targets.has(id) ? targets.get(id).write(clone(value)) : write(id, value);
+  const put = (id, value, context) => targets.has(id) ? targets.get(id).write(clone(value), context) : write(id, value);
   const state = () => ({ active: active ? clone(active) : null, undoCount: historyScope()?.state().undoCount ?? past.length, redoCount: historyScope()?.state().redoCount ?? future.length, replaying });
   const hasHistoryEntry = id => past.some(entry => entry.id === id) || future.some(entry => entry.id === id);
   const waitForReplay = () => {
@@ -77,7 +77,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
     assertAvailable();
     if (!active) throw new Error('No scene edit is active');
     const pose = check(active.id, { ...get(active.id), ...patch });
-    put(active.id, pose);
+    put(active.id, pose, { operation: 'preview' });
     notify();
     return clone(pose);
   }
@@ -132,7 +132,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
     begin(id,label);
     const operation=active;settling=operation;
     try {
-      const pending=put(id,pose);notify();await pending;
+      const pending=put(id,pose,{operation:'preview'});notify();await pending;
       if(active!==operation)throw new Error('Scene operation was cancelled during settlement');
       settling=null;commit();return clone(pose);
     } catch(error) {

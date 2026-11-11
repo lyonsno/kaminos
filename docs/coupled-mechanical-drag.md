@@ -5,7 +5,10 @@ with Tab, and carry a point with G. The grip closely tracks reachable motion;
 connected parts move with body inertia, gravity and cylinder resistance. Stop or
 reverse the hand while still holding to see passive parts continue and
 accommodate. Release commits the authored pose and pauses this preview; it does
-not run a post-release simulation. Escape/Undo restore the native transaction.
+not run a post-release simulation. Escape/Undo restore the native transaction. Returning the hand through its
+gesture-start coordinate retains momentum, chamber pressures and the complete
+recording. Live previews carry explicit write context through native history;
+restore writes remain separate from equal-valued previews.
 Play remains the authored-cycle comparison.
 
 **Hydraulic response** switches the coarse fluid layer on the same body model.

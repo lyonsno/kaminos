@@ -256,3 +256,10 @@ test('unfinished interaction history takes Undo/Redo precedence only for its act
  engaged=false;e.undo();assert.deepEqual(f.pose,original);e.redo();assert.equal(f.pose.position[0],7);
  engaged=true;e.begin('kiln');assert.throws(()=>e.undo(),/Finish/);assert.equal(picks,1);e.cancel();release.dispose();e.undo();assert.deepEqual(f.pose,original);
 });
+
+test('a target can distinguish live previews from restore writes at identical values',()=>{
+ const edits=createSceneEdits({read(){},write(){}}),seen=[];let value={position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]};
+ edits.register('@dynamic',{read:()=>value,write:(next,context)=>{value=next;seen.push(context?.operation??'restore');}});
+ edits.begin('@dynamic');edits.preview(value);edits.cancel();
+ assert.deepEqual(seen,['preview','restore'],'Returning to the starting target is a preview, while cancellation restores state');
+});
