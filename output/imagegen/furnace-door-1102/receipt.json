@@ -1,0 +1,15 @@
+{
+  "route": "built-in image_gen.imagegen",
+  "model": "not exposed by tool",
+  "sourceRevision": "7927a54c8cccd504512bdb6a343e0f8263a52e76",
+  "sourceCapture": "/Users/noahlyons/.local/state/kaminos/hostile-assembly-bodies-1029/furnace-1793664810341/report.json",
+  "prompt": "prompt.txt",
+  "input": "source-open.png",
+  "output": "elaborated.png",
+  "claim": "Conditioned 2D surface elaboration; no reconstructed or clearance-tested assembly yet",
+  "sha256": {
+    "prompt.txt": "af5500925a91205e61cc8a3c51eba7b432672c737097b386b79a2530b46ed3f8",
+    "elaborated.png": "8ef6befcd8f25ba3ede30ed2d38082c25a40f464132df90860795d65cd155900",
+    "source-open.png": "23548b38a708eb21c007605ab7f6aab5b050dabf169a94413c65647744fbb1d6"
+  }
+}

@@ -1,0 +1,18 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import * as T from '../lib/three.core.js';
+import {createMechanismController} from '../experiments/link-workshop.experiment.mjs';
+import {createSceneEdits} from '../scene-edit-session.mjs';
+const scene=new T.Group(),root=new T.Group(),payload=new T.Group();scene.add(root,payload);
+let redraws=0;
+const edits=createSceneEdits({read(){throw Error('Unused');},write(){throw Error('Unused');}}),session={async attach(object){scene.add(object);return {id:'mechanism',root:object};},redraw(){redraws++;},readView(){return {};},onFrame(){return ()=>{};},async dispose(){}};
+root.userData.linkMechanism={schema:'kaminos.links.v1',nodes:[{parent:null,point:[0,0]},{parent:0,length:2,angles:[0,1]}],pistons:[],period:3,attachments:[{objectId:'payload',joint:1,offset:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}}]};
+const host={scene:{open:async()=>session,objects:()=>[{id:'mechanism',object:root},{id:'payload',object:payload}]},controls:{document:{defaultView:{kaminosSceneEdits:edits,kaminosSelection:{set(){}}}},components:{register(){return {changed(fn){edits.cancel();fn?.();},dispose(){}};}}}};
+const runtime=await createMechanismController({host,inputs:{root}});
+redraws=0;runtime.tick();runtime.tick();assert.equal(redraws,0,'A paused unchanged mechanism must allow the shared renderer and lighting history to settle');
+runtime.operations.play();redraws=0;runtime.advance(.2);runtime.follow('payload');runtime.tick();assert.ok(redraws>0,'Playback still requests a rendered frame');assert.ok(runtime.read().fraction>0);
+runtime.operations.pause();redraws=0;runtime.tick();runtime.tick();assert.equal(redraws,0,'Pause stops continuous redraw requests');
+const before=payload.position.clone();root.position.x+=3;runtime.follow('payload');assert.ok(payload.position.distanceTo(before)>2,'A paused mechanism still follows changed scene transforms');assert.ok(redraws>0,'Attachment movement requests a frame even while paused');
+redraws=0;runtime.operations.select({joint:1});assert.ok(redraws>0,'Explicit editing operations still redraw guides and selection');
+await runtime.dispose();
+console.log('Paused mechanisms allow rendering to settle; playback, attachments and edits retain redraws');
