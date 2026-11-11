@@ -2,7 +2,7 @@ export function resolveBurnableHeroMesh(object){
  if(!object?.isObject3D)throw Error('Select an existing mesh to make burnable');
  const meshes=[];object.traverse(node=>{
   if(!node.isMesh)return;
-  for(let p=node;p;p=p.parent)if(p.userData?.kaminosBeautyLodProxy||p.userData?.kaminosEditorHelper||p.userData?.kaminosEditorOnly||p.userData?.kaminosRepetitionCopy)return;
+  for(let p=node;p;p=p.parent)if(p.userData?.kaminosBeautyLodProxy||p.userData?.kaminosNonSolidVisual||p.userData?.kaminosEditorHelper||p.userData?.kaminosEditorOnly||p.userData?.kaminosRepetitionCopy)return;
   meshes.push(node);
  });
  if(meshes.length!==1)throw Error('Burnable wood currently supports one volumetric mesh per object');

@@ -4,6 +4,8 @@ import {createRepetitionView} from '../scene-repetition.mjs';
 import {exportCloneInWorld} from '../scene-export.mjs';
 import {surfaceSplatsGLTFPlugin} from '../surface-splat-object.mjs';
 import {installSurfaceFieldMaterials} from '../surface-field-material.mjs';
+import {resolveBurnableHeroMesh} from '../burnable-target.mjs';
+import {createSceneColliderCollection} from '../scene-collider.mjs';
 import {createResidentSolidMeshes} from '../scene-solid-gpu.mjs';
 import {createAshCollisionRecords} from '../ash/scene-object.mjs';
 import {trianglesFromSceneObject} from '../volume-scene-solid.mjs';
@@ -17,11 +19,11 @@ import {snapshotAssetGeometry,restoreAssetGeometry,assetWorldGeometry,prepareAss
 const fixture=()=>createSurfaceSplatObject(new T.Mesh(new T.BoxGeometry(.2,.5,.3),new T.MeshStandardMaterial()),{
  data:new Float32Array([0,0,0,0,0,1,1,.5,0,0,.3,1,.1,0,0,0,0,1,1,.5,0,0,.3,.2]),
  footprints:new Float32Array([1,0,0,10,0,1,0,10,1,0,0,10,0,1,0,10]),meta:{count:2,stride:12,radius:.01}});
-test('outline uses resolved coverage/depth and omits hidden proxy triangles',()=>{
+test('outline follows the same physical silhouette used for picking, without resolve rectangles',()=>{
  const root=fixture();try{
   const m=createSelectionFeedback.maskProxies(new T.Scene(),{selected:new T.MeshBasicNodeMaterial(),active:new T.MeshBasicNodeMaterial()});
-  m.update([{id:'surface',object:root}],['surface']);assert.equal(m.pairs().length,2,'only the two drawn resolved layers are outlined');
-  for(const pair of m.pairs())for(const key of ['vertexNode','maskNode','depthNode'])assert.equal(pair.proxy.material[key],pair.source.material[key],key+' must follow the actual resolved surface');
+  m.update([{id:'surface',object:root}],['surface']);assert.equal(m.pairs().length,1,'one stable object silhouette, not thousands of splat coverage edges');
+  assert.equal(m.pairs()[0].source,root.proxy);assert.equal(m.pairs()[0].proxy.geometry,root.proxy.geometry);
  }finally{root.dispose();}
 });
 test('recipes cannot expose a surface-splat physical fallback as visible beauty',()=>{
@@ -74,6 +76,8 @@ test('legacy hybrid visual bodies survive repetition/export and remain excluded 
   view.sync(root,{mode:'line',count:2,step:[2,0,0]},{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]});const repeated=root.children.find(o=>o.userData.kaminosRepetitionCopy);
   assert.equal(repeated.children[0].name,body.name);assert.equal(repeated.children[0].userData.kaminosNonSolidVisual,true);assert.equal(trianglesFromSceneObject(repeated).triangles.length,12);
   const resident=createResidentSolidMeshes({upload:x=>x,release(){}});assert.equal(resident.update([{id:'hybrid',object:root}],{translate:[0,0,0],scale:1})[0].triangleCount,24);resident.destroy();
+  assert.equal(resolveBurnableHeroMesh(root),splat.proxy,'renaming the visual marker preserves the prior volumetric target');
+  const colliders=createSceneColliderCollection(T).update([{id:'hybrid',type:'glb',object:root,collision:{domainId:'flame-field',enabled:true}}]);assert.equal(trianglesFromSceneObject(colliders.object).triangles.length,24,'live fire wrapper must retain only the two physical proxies');
   const ash=createAshCollisionRecords(new T.Group(),()=>[{id:'hybrid',type:'glb',object:root}]);assert.equal(ash().length,2,'only original and repeated physical proxies collide');
   const exported=exportCloneInWorld(root);assert.ok(exported.children.some(o=>o.name===body.name));
  }finally{view.clear(root);splat.dispose();}

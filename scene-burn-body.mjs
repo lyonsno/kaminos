@@ -101,7 +101,7 @@ export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame,k
         let inBeautyProxy=false;
         for(let p=node;p&&p!==entry.object;p=p.parent){
           if(p.userData?.kaminosRepetitionCopy||p.userData?.kaminosEditorHelper||p.userData?.kaminosEditorOnly)return;
-          if(p.userData?.kaminosBeautyLodProxy)inBeautyProxy=true;
+          if(p.userData?.kaminosBeautyLodProxy||p.userData?.kaminosNonSolidVisual)inBeautyProxy=true;
         }
         if(inBeautyProxy)proxyMeshes.add(node);
       });
