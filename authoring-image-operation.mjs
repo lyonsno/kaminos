@@ -129,7 +129,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
   retainOutputPixels=true,isRetryableOutputError=()=>true}){
   // appHost (app-gpu-host.mjs): borrow the page's session and run on its one foreground
   // service. Without it, klein keeps its own session and service (the earlier route).
-  let loaded=null,retiring=null,active=false,abort=null,decodeRequested=false;
+  let loaded=null,retiring=null,heldError=null,active=false,abort=null,decodeRequested=false;
   let state={status:'idle',progress:'Weights load the first time you generate an image.',stage:null,percent:null,canStop:false,error:null,results:[],outputs:[],pending:null,preview:null,timing:null};
   const outputSaves=new Map();
   let startedAt=null,generationStartedAt=null,generationFinished=false;
@@ -172,12 +172,14 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
     }
   }
   function unavailable(){
+    if(heldError)return heldError.message;
     const {sharedGpu}=context();const device=sharedGpu?.device;
     if(!device)return 'Image generation needs the Kaminos shared GPU device.';
     if(!device.features?.has?.('shader-f16'))return 'This GPU device was created without shader-f16, which Klein needs.';
     return blocked();
   }
   async function releaseLoaded(){
+    if(heldError)throw heldError;
     const previous=retiring??loaded;if(!previous)return;
     loaded=null;retiring=previous;
     await previous.pipeline.destroy();
@@ -186,6 +188,43 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       await previous.foreground?.dispose?.();await previous.session.close?.();
     }
     retiring=null;
+  }
+  async function runWarmup(resource,work){
+    // Downloads and compilation do not reserve the host; actual GPU warmup does.
+    const {app,session,model}=resource,signal=abort.signal;
+    signal.throwIfAborted();
+    const routeId=`${imageModel(model).routeId}:warmup`,runId=`klein-warmup:${crypto.randomUUID()}`;
+    const route=await session.registerRoute({routeId,runtimeOptions:{runtimeLabel:`${model}-warmup`}});
+    let job,failure;
+    const cancelQueued=()=>job?.cancel('image-command-canceled-before-warmup');
+    try{
+      job=route.enqueue({jobId:runId,execute:async()=>{
+        let run;
+        try{
+          signal.throwIfAborted();run=await app.beginRun(runId,{routeId});
+          signal.throwIfAborted();await work();signal.throwIfAborted();
+        }catch(error){failure=error;throw error;}
+        finally{
+          if(run){
+            // Unknown queue settlement must not release the host's tracked run.
+            try{await app.queue.onSubmittedWorkDone();await run.finish();}
+            catch(error){
+              heldError=Object.assign(new AggregateError([...(failure?[failure]:[]),error],'Klein warmup settlement failed'),{gpuRouteHeld:true});
+              throw heldError;
+            }
+          }
+        }
+      }});
+      signal.addEventListener('abort',cancelQueued,{once:true});if(signal.aborted)cancelQueued();
+      const completion=await job.completion;
+      if(heldError)throw heldError;
+      signal.throwIfAborted();
+      if(completion.status!=='succeeded')throw failure??Error(completion.failure?.message??completion.status);
+    }finally{
+      signal.removeEventListener('abort',cancelQueued);
+      try{await route.drain();session.unregisterRoute(route.routeId);}
+      catch(error){heldError=Object.assign(error,{gpuRouteHeld:true});throw heldError;}
+    }
   }
   async function load(level,model){
     const spec=imageModel(model);
@@ -197,15 +236,17 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
     const app=appHost?await appHost():null;
     const session=app?await app.session():await core.createWebGpuInferenceSession({sessionId:`kaminos-klein:${crypto.randomUUID()}`,device,adapterName:sharedGpu.adapter?.info?.description||'kaminos-shared-device',deviceOwnership:'borrowed'});
     const foreground=app?null:core.createWebGpuForegroundService({routeId:spec.routeId,device});
-    let pipeline;
+    let pipeline,resource;
     try{
     pipeline=await createPipeline(device,{textEncoderUrl:`${base}/te`,transformerUrl:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,vaeUrl:`${base}/vae`},model);
+    resource={core,session,foreground,pipeline,base,app,level,model};
     await pipeline.load((part,name,{loadedBytes,totalBytes})=>{
       if(abort?.signal.aborted)return;
       set({stage:'Loading weights',percent:totalBytes?Math.min(100,loadedBytes/totalBytes*100):null,progress:`Loading ${spec.name} weights (${part})`});
-    });
-    return {core,session,foreground,pipeline,base,app,level,model};
+    },app?{runWarmup:work=>runWarmup(resource,work)}:undefined);
+    return resource;
     }catch(error){
+      if(error?.gpuRouteHeld){heldError=error;retiring=resource;throw error;}
       await pipeline?.destroy();
       if(!app){await foreground?.dispose?.();await session.close?.();}
       throw error;
@@ -252,6 +293,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
     // Automation may retain its own result without selecting or preparing it in the editor.
     // Caller persistence has its own lifetime; it cannot hold the next GPU operation.
     async run({prompt,seed,size=512,level='4-bit',aspect='square',model='flux2',reference=null,promptExpansion=null,deliver:persist=deliver,signal:commandSignal=null}){
+      if(heldError)throw heldError;
       commandSignal?.throwIfAborted();
       if(active)throw Error('Image generation is already running');
       if(pendingImage)throw Error('Save the generated image before generating another');
@@ -289,7 +331,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
           loaded.level=null;
           set({stage:'Loading weights',percent:null,progress:`Loading the ${level} transformer…`});
           await loaded.pipeline.loadTransformer(`${loaded.base}/${KLEIN_WEIGHT_LEVELS[level]}`,(part,name,{loadedBytes,totalBytes})=>{
-            if(!abort.signal.aborted)set({stage:'Loading weights',percent:totalBytes?Math.min(100,loadedBytes/totalBytes*100):null,progress:`Loading the ${level} transformer`});});
+            if(!abort.signal.aborted)set({stage:'Loading weights',percent:totalBytes?Math.min(100,loadedBytes/totalBytes*100):null,progress:`Loading the ${level} transformer`});},loaded.app?{runWarmup:work=>runWarmup(loaded,work)}:undefined);
           loaded.level=level;
           if(abort.signal.aborted)throw abort.signal.reason;
         }
