@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRayStepTelemetry} from '../volume-ray-step-telemetry.mjs';
+import {createOffscreenRayStepDisplay} from '../volume-runtime-surface.mjs';
 
 function fixture(){
   globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,COPY_SRC:4};
@@ -85,4 +86,22 @@ test('live telemetry changes preserve counters referenced by an unsubmitted flui
   meter.ensure(16,16,false);
   for(const counter of encoded)assert.notEqual(counter.destroyed,true,'queue submission must retain every encoded counter');
   const current=meter.counterBuffer;meter.dispose();assert.equal(current.destroyed,true);
+});
+
+test('worker display uses host visibility and font canvas without page canvas methods',()=>{
+  const {meter,canvas,calls}=fixture();
+  const context=canvas.getContext();
+  const offscreen={getContext:()=>context};
+  let visible=true,fontCreates=0;
+  const active=[];
+  meter.setDisplay(createOffscreenRayStepDisplay({canvas:offscreen,readVisible:()=>visible,onActive:value=>active.push(value),
+    createFontCanvas(width,height){fontCreates++;assert.deepEqual([width,height],[128,96]);return {getContext:()=>({fillText(){}})};}}));
+  assert.equal(meter.ensure(8,8,true),true);
+  assert.equal(meter.active,true);assert.equal(fontCreates,1);assert.ok(calls.includes('font-upload'));
+  visible=false;meter.ensure(8,8,true);
+  assert.equal(meter.read().reason,'inspector-hidden');assert.equal(meter.encode({}),false);
+  visible=true;meter.ensure(8,8,true);assert.equal(meter.active,true);assert.equal(fontCreates,1);
+  meter.ensure(8,8,false);assert.deepEqual(active,[true,false,true,false]);
+  assert.equal('style' in offscreen,false);assert.equal('getClientRects' in offscreen,false);
+  meter.dispose();assert.ok(calls.includes('unconfigure'));
 });

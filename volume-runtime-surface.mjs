@@ -37,3 +37,17 @@ export function createOffscreenVolumeSurface({canvas,readViewport,onActive=()=>{
     dispose:onDispose,
   };
 }
+
+// Ray statistics keep their counters and display draw on the same GPU. Only
+// visibility and font-canvas creation differ between page and worker hosts.
+export function createBrowserRayStepDisplay({canvas,document=canvas.ownerDocument??globalThis.document}) {
+  return {canvas,isVisible:()=>canvas.getClientRects().length>0,
+    setActive:active=>{canvas.style.visibility=active?'visible':'hidden';},
+    createFontCanvas(width,height){const bitmap=document.createElement('canvas');bitmap.width=width;bitmap.height=height;return bitmap;},
+  };
+}
+
+export function createOffscreenRayStepDisplay({canvas,readVisible,onActive=()=>{},createFontCanvas=(width,height)=>new OffscreenCanvas(width,height)}) {
+  if(!canvas||typeof canvas.getContext!=='function'||typeof readVisible!=='function')throw Error('offscreen ray display requires canvas and visibility reader');
+  return {canvas,isVisible:readVisible,setActive:onActive,createFontCanvas};
+}

@@ -1,3 +1,5 @@
+import {createBrowserRayStepDisplay} from './volume-runtime-surface.mjs';
+
 const HISTOGRAM = 12, GLYPHS = HISTOGRAM + 3 * 256;
 // Label + gap + all 26 characters of a comma-grouped unsigned 64-bit total.
 const COLUMNS = 34, ROWS = 6;
@@ -137,7 +139,7 @@ const DISPLAY_WGSL = /* wgsl */`
 
 export function createRayStepTelemetry(device,{document=globalThis.document}={}){
   let counterBuffer=device.createBuffer({label:'disabled ray sample counters',size:4,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
-  let summaryBuffer=null,canvas=null,context=null,atlas=null,histogramPipelines,pickPipelines,computeGroup,displayGroup,displayPipeline;
+  let summaryBuffer=null,canvas=null,display=null,context=null,atlas=null,histogramPipelines,pickPipelines,computeGroup,displayGroup,displayPipeline;
   let pixels=1,active=false,status={requested:false,active:false,reason:'off',readback:false};
   const limit=Math.min(device.limits.maxBufferSize,device.limits.maxStorageBufferBindingSize);
   function initialize(){
@@ -152,7 +154,7 @@ export function createRayStepTelemetry(device,{document=globalThis.document}={})
     const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]});
     histogramPipelines=[24,16,8,0].map(shift=>device.createComputePipeline({layout:pipelineLayout,compute:{module,entryPoint:'histogram',constants:{BYTE_SHIFT:shift}}}));
     pickPipelines=[24,16,8,0].map(shift=>device.createComputePipeline({layout:pipelineLayout,compute:{module,entryPoint:'selectQuantiles',constants:{BYTE_SHIFT:shift}}}));
-    const bitmap=document.createElement('canvas');bitmap.width=128;bitmap.height=96;
+    const bitmap=display.createFontCanvas(128,96);
     const ctx=bitmap.getContext('2d');ctx.font='12px monospace';ctx.fillStyle='white';
     for(let i=0;i<96;i++)ctx.fillText(String.fromCharCode(32+i),(i%16)*8,Math.floor(i/16)*16+13);
     atlas=device.createTexture({label:'ray statistics font',size:[128,96],format:'rgba8unorm',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST|GPUTextureUsage.RENDER_ATTACHMENT});
@@ -166,13 +168,17 @@ export function createRayStepTelemetry(device,{document=globalThis.document}={})
   }
   function setCanvas(next){
     if(canvas===next)return;
-    context?.unconfigure();canvas=next;context=null;
+    setDisplay(next?createBrowserRayStepDisplay({canvas:next,document}):null);
+  }
+  function setDisplay(next){
+    if(display===next)return;
+    context?.unconfigure();display=next;canvas=next?.canvas??null;context=null;
     if(canvas){canvas.width=COLUMNS*8;canvas.height=ROWS*16;context=canvas.getContext('webgpu');
       context?.configure({device,format:navigator.gpu.getPreferredCanvasFormat(),alphaMode:'opaque'});}
   }
   function ensure(width,height,requested,{supported=true,reason='unsupported-renderer',allowResize=true,activate=true}={}){
     active=false;let refusal=!requested?'off':!supported?reason:!context?'display-unavailable':
-      !canvas.getClientRects().length?'inspector-hidden':null;
+      !display.isVisible()?'inspector-hidden':null;
     const count=width*height;
     if(!refusal&&(!Number.isSafeInteger(count)||count<=0||count>=0xffffffff||count*4>limit))refusal='counter-buffer-exceeds-device-limits';
     if(!refusal&&!allowResize&&count!==pixels)refusal='counter-buffer-not-prepared';
@@ -185,7 +191,7 @@ export function createRayStepTelemetry(device,{document=globalThis.document}={})
       if(count!==pixels){counterBuffer=device.createBuffer({label:'per-pixel ray material evaluations',size:count*4,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});pixels=count;changed=true;computeGroup=null;}
       active=activate;
     }else if(!requested&&pixels!==1&&allowResize){counterBuffer=device.createBuffer({label:'disabled ray sample counters',size:4,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});pixels=1;changed=true;computeGroup=null;}
-    if(canvas)canvas.style.visibility=active?'visible':'hidden';
+    display?.setActive(active);
     status={requested,active,reason:refusal||(!activate?'awaiting-instrumented-draw':null),readback:false,scope:'material-evaluations-per-intersecting-ray',width,height};
     return changed;
   }
@@ -207,7 +213,7 @@ export function createRayStepTelemetry(device,{document=globalThis.document}={})
     draw.setPipeline(displayPipeline);draw.setBindGroup(0,displayGroup);draw.draw(3);draw.end();return true;
   }
   return {get counterBuffer(){return counterBuffer;},get summaryBuffer(){return summaryBuffer;},get active(){return active;},
-    read:()=>({...status}),setCanvas,ensure,encode,
+    read:()=>({...status}),setCanvas,setDisplay,ensure,encode,
     dispose(){counterBuffer.destroy();summaryBuffer?.destroy();atlas?.destroy();context?.unconfigure();},
   };
 }

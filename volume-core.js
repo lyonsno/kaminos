@@ -11247,6 +11247,7 @@ export function createKaminosVolumePrototype({
   onStatus,
   presentationSurface = null,
   frameScheduler = globalThis,
+  rayStepTelemetryDisplay = null,
   sharedGpuContext = null,
   getSceneDepth = null,
   getPresentationSize = () => null,
@@ -11993,6 +11994,7 @@ export function createKaminosVolumePrototype({
   let rayStepTelemetry = null;
   let rayAllocationHistory = null;
   let rayStepTelemetryCanvas = null;
+  let configuredRayStepTelemetryDisplay = rayStepTelemetryDisplay;
   let debugOpticalSteppingExplicit = false;
   const opticalSteppingPipelines = new Map();
   let browserResidualBindGroupLayout = null;
@@ -15360,7 +15362,8 @@ export function createKaminosVolumePrototype({
     state.gpuInitStage = 'device';
     rayStepTelemetry = createRayStepTelemetry(device);
     rayAllocationHistory = createRayAllocationHistory(device);
-    rayStepTelemetry.setCanvas(rayStepTelemetryCanvas);
+    if(configuredRayStepTelemetryDisplay)rayStepTelemetry.setDisplay(configuredRayStepTelemetryDisplay);
+    else rayStepTelemetry.setCanvas(rayStepTelemetryCanvas);
     rayStartNoiseTexture = await createRayStartTexture(device);
     worldOpticalFallback=device.createTexture({label:'disabled world smoke',size:[1,1,1],dimension:'3d',format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING});
     worldRenderUniform=device.createBuffer({label:'world smoke render geometry',size:96,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
@@ -28457,8 +28460,14 @@ export function createKaminosVolumePrototype({
       return { ...next };
     },
     setRayStepTelemetryCanvas(canvas) {
+      configuredRayStepTelemetryDisplay=null;
       rayStepTelemetryCanvas=canvas;
       rayStepTelemetry?.setCanvas(canvas);
+    },
+    setRayStepTelemetryDisplay(display) {
+      configuredRayStepTelemetryDisplay=display;
+      rayStepTelemetryCanvas=null;
+      rayStepTelemetry?.setDisplay(display);
     },
     applyPersistentSparseCohortGpuState,
     applyFourArmHeldStateApplication,
