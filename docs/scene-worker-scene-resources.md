@@ -71,6 +71,12 @@ Optional contribution fields are `initialVolumeActive`, `volumeOptions`,
 `commands`, `foregroundCommands`, `loaders`, `recordReaders`,
 `restoreOperations`, `roots`, `membership`, `replacement`, `documentServices`,
 `applyPreferences(startup, context)`, and `applyFrameInputs(input, context)`.
+Domain `roots.prepare`, `roots.restore`, and `roots.dispose` are synchronous
+augmenting hooks: ordinary proxy registration, common pose/material restoration
+and owned-resource release still run. Ordinary settings validate synchronously
+during document preclear admission, before domain preparation, so invalid
+settings preserve the previous viable document filename/save admission. Legacy
+camera omissions retain the page's current lens and default up convention.
 Command collisions fail explicitly. Registry replacement uses actual device
 queue settlement and any additional `replacement.context.retire` service.
 

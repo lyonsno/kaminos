@@ -82,16 +82,20 @@ export function createSceneWorkerSceneResources(context){
   display?.rebuild();
  }
  function settings(){return {ao:ao.document(),environment:environment.document(),gi:structuredClone(gi),reflections:structuredClone(reflections),ground:{...ground},editorDisplay:structuredClone(editorDisplay),arrival:structuredClone(arrival)};}
- function applySettings(data,ctx){
-  current(ctx);
-  // Validate all ordinary settings before mutating live owners.
+ function checkSettings(data){
+  // Pure admission precedes asynchronous preparation and document mutation.
   const nextGI=resolveSceneGIControlState(data.postprocessing?.sceneGI??{}),nextReflections=resolveReflectionSettings(data.postprocessing?.reflections??{});
   const nextBloom=checkedSceneBloom(data.postprocessing?.bloom??{}),nextDisplay=checkedViewportDisplay(data.editorDisplay??{});
   const nextAO=createSceneAOState();if(data.postprocessing?.ao)nextAO.restoreDocument(data.postprocessing.ao);
   const nextEnvironment=createSceneEnvironmentState({presets:SCENE_HDR_PRESETS});if(data.environment)nextEnvironment.restoreDocument(data.environment);
   const savedGround=data.environment?.ground??{},nextGround={height:savedGround.height??-.85,visible:savedGround.visible??true,color:savedGround.color??'#808080',roughness:savedGround.roughness??.65,metalness:savedGround.metalness??0};
   if(!Number.isFinite(nextGround.height)||typeof nextGround.visible!=='boolean'||!Number.isFinite(nextGround.roughness)||!Number.isFinite(nextGround.metalness))throw Error('Invalid scene ground settings');
-  const nextCamera=data.camera?checkedCameraView(data.camera):null;
+  const nextCamera=data.camera?checkedCameraView({...data.camera,up:data.camera.up??[0,1,0],fov:data.camera.fov??camera.fov,near:data.camera.near??camera.near,far:data.camera.far??camera.far}):null;
+  return {nextGI,nextReflections,nextBloom,nextDisplay,nextAO,nextGround,nextCamera};
+ }
+ function applySettings(data,ctx){
+  current(ctx);
+  const {nextGI,nextReflections,nextBloom,nextDisplay,nextAO,nextGround,nextCamera}=checkSettings(data);
   gi=nextGI;reflections=nextReflections;bloomSettings=nextBloom;ground=nextGround;editorDisplay=nextDisplay;ao.patch(nextAO.read());
   if(data.environment)environment.restoreDocument(data.environment);
   if(nextCamera){camera.position.fromArray(nextCamera.position);camera.up.fromArray(nextCamera.up??[0,1,0]);camera.lookAt(...nextCamera.target);for(const key of ['fov','near','far','zoom'])if(nextCamera[key]!==undefined)camera[key]=nextCamera[key];camera.updateProjectionMatrix();camera.updateMatrixWorld(true);}
@@ -100,6 +104,7 @@ export function createSceneWorkerSceneResources(context){
   if(appearance&&data.environment)appearance.environment.select(environment.read().name??'studio');
  }
  function assertOrdinarySupport(data,plan){
+  checkSettings(data);
   // These need their actual presentation owners; the root's support callback
   // must implement/accept them before a document can clear the current scene.
   const supported=domains.document.assertSupported(data,plan);
@@ -148,7 +153,7 @@ export function createSceneWorkerSceneResources(context){
      onRungLoaded:()=>materials.sync(),onRepresentationChanged:()=>materials.sync(),onRepresentationReleased:(_root,representation)=>materials.releaseObject(representation),canDisplayRung:(...args)=>materials.canDisplay(...args)});
     materials=createSceneMaterials({entries:()=>[...workingScene.objects,...workingScene.suspendedObjects()],retainedEntries:()=>workingScene.retainedObjects(),definitions:sceneMaterialPrograms,representations:entry=>beautyLods.materialRoots(entry.object)});
     authored=createAuthoredSceneRuntime({scene,workingScene,readers:{transform:sceneObjectTransformState,materials:getMaterialStateForObject,...domains.recordReaders},
-     roots:{prepare(entry){if(entry.giProxy){const task=entry.giProxy.enabled?giProxies.select(entry.object,entry.giProxy.selection):giProxies.disable(entry.object,{retainLevels:true});Promise.resolve(task).catch(()=>{});}domains.roots?.prepare?.(entry);},restore(entry,record){restoreAuthoredSceneRecord(entry,record,{transform:applySceneObjectTransformState,materials:applyMaterialStateToObject,...domains.restoreOperations});},dispose:disposeRoot,...domains.roots},
+     roots:{...domains.roots,prepare(entry){if(entry.giProxy){const task=entry.giProxy.enabled?giProxies.select(entry.object,entry.giProxy.selection):giProxies.disable(entry.object,{retainLevels:true});Promise.resolve(task).catch(()=>{});}domains.roots?.prepare?.(entry);},restore(entry,record){restoreAuthoredSceneRecord(entry,record,{transform:applySceneObjectTransformState,materials:applyMaterialStateToObject,...domains.restoreOperations});domains.roots?.restore?.(entry,record);},dispose(root){domains.roots?.dispose?.(root);disposeRoot(root);}},
      membership:domains.membership,replacement:{...domains.replacement,context:{...domains.replacement?.context,retire:async()=>{await sharedGpu.device.queue.onSubmittedWorkDone();await domains.replacement?.context?.retire?.();}}},
      assertRecordSupported(record,loaders){if(record.type==='glb')return;return domains.assertRecordSupported(record,loaders);},
      createLoaders({registerSceneObject}){
