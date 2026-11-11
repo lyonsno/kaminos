@@ -19,7 +19,9 @@ export function beginContinuousPointer(target, point, {move, lost=()=>{}, unavai
     } else if(locked) {locked=false;stop();lost();}
   }
   function motion(event) {
-    if(!active || !locked)return;
+    // Browser ownership may precede its queued notification, or be lost before it.
+    if(!active || doc.pointerLockElement!==target)return;
+    locked=true;
     x+=event.movementX || 0;y+=event.movementY || 0;draw();
     move({x,y,dx:event.movementX || 0,dy:event.movementY || 0,event});
   }
