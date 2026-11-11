@@ -36,3 +36,11 @@ test('an unrequested or unavailable selected lighting route cannot silently choo
  const h=fixture(resolveFlameLightingRoute('volume_light_field=1'));h.options.loadModule=async()=>({mountSceneRadiance:()=>assert.fail('wrong provider')});
  await assert.rejects(()=>api()(h.options));
 });
+test('live resources are read after asynchronous module loading, preserving current scene ownership',async()=>{
+ const f=fixture(resolveFlameLightingRoute('volume_light_field=1'));let finish;
+ const loaded=new Promise(resolve=>{finish=resolve;});let current=f.options.surfaceLighting,reads=0;
+ f.options.readResources=()=>{reads++;return {...f.options,surfaceLighting:current};};
+ const moduleLoad=f.options.loadModule;f.options.loadModule=async route=>{await loaded;return moduleLoad(route);};
+ const result=api()(f.options);assert.equal(reads,0);current={replacement:true};finish();await result;
+ assert.equal(reads,1);assert.equal(f.calls[1][1].surfaceLighting,current);
+});
