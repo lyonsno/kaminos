@@ -15,7 +15,8 @@ function latentTexture(levels,block,name) {
   t.generateMipmaps=false;t.flipY=false;if(levels.length>1)t.mipmaps=mips;t.needsUpdate=true;return t;
 }
 
-export function createNeumipMaterial(model,{uvScale=3,gain=4}={}) {
+export function createNeumipMaterial(model,{uvScale=3,gain=4,lod=null}={}) {
+  if(lod!==null&&(!Number.isFinite(lod)||lod<0))throw Error('Explicit NeuMIP LOD must be nonnegative');
   const scale=uniform(uvScale),brightness=uniform(gain),shaders=buildNeumipWGSL(model);
   const textures=[latentTexture([model.offset],0,'NeuMIP offset0'),latentTexture([model.offset],1,'NeuMIP offset1'),latentTexture(model.mips,0,'NeuMIP appearance0'),latentTexture(model.mips,1,'NeuMIP appearance1')];
   const bilinear=wgslFn(shaders.bilinear),offset=wgslFn(shaders.offset),featuresFn=wgslFn(shaders.features,[bilinear,offset]),mainFn=wgslFn(shaders.main);
@@ -23,8 +24,8 @@ export function createNeumipMaterial(model,{uvScale=3,gain=4}={}) {
   const coords=uv().mul(scale),view=positionViewDirection.mul(TBNViewMatrix).negate().toVar('neumipView');
   const features=Fn(()=>{
     const dx=dFdx(coords).mul(model.mips[0].width),dy=dFdy(coords).mul(model.mips[0].height);
-    const lod=max(0,log2(sqrt(dx.dot(dx).add(dy.dot(dy))).div(1.2)));
-    return featuresFn(coords,view,lod,...tex);
+    const footprintLod=lod===null?max(0,log2(sqrt(dx.dot(dx).add(dy.dot(dy))).div(1.2))):uniform(lod);
+    return featuresFn(coords,view,footprintLod,...tex);
   })().toVar('neumipFeaturesShared');
   class NeumipMaterial extends MeshStandardNodeMaterial {
     setupLightingModel(builder) {
@@ -41,10 +42,11 @@ export function createNeumipMaterial(model,{uvScale=3,gain=4}={}) {
     }
   }
   const material=new NeumipMaterial();material.name='NeuMIP author material';material.side=DoubleSide;
+  if(model.coverage){material.opacityNode=features.element(2).x;material.alphaHash=true;}
   // Reuse standard node-material setup, but this is not a standard diffuse/GGX
   // receiver. The scene's diffuse SSGI adapter must not invent white bounce here.
   material.isMeshStandardNodeMaterial=false;material.isNeumipMaterial=true;
-  material.userData.neumip={source:model.source??null,lighting:'native direct point/spot/directional lights',indirect:'not evaluated',model:'author-web-export',precision:'source float32; manual bilinear and authored mip interpolation'};
+  material.userData.neumip={source:model.source??null,lighting:'native direct point/spot/directional lights',indirect:'not evaluated',model:'author-web-export',precision:'source float32; manual bilinear and authored mip interpolation',coverage:!!model.coverage,lod:lod??'automatic'};
   let disposed=false;material.addEventListener('dispose',()=>{if(disposed)return;disposed=true;for(const t of textures)t.dispose();});
   return {material,settings:{scale,gain:brightness},textures,read:()=>({...material.userData.neumip,uvScale:scale.value,gain:brightness.value})};
 }

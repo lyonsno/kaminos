@@ -10,14 +10,15 @@ test('experiment controls and URL follow native recipes, custom names and recons
  let library={recipes:[{id:'recipe',name:'My boutique knit',implementation:'neumip',parameters:{source:{url:'/api/read?root=image-inbox&path=neumip-author-models%2Fwool2_web.model',sha256:'a'.repeat(64)},uvScale:3,gain:1}}],bindings:[{objectId:entry.id,slot:'.:0',recipeId:'recipe'}]};
  const materials={read:()=>structuredClone(library),edit:(_id,patch)=>{Object.assign(library.recipes[0].parameters,patch.parameters);for(const l of listeners)l();},subscribe:fn=>{listeners.add(fn);return ()=>listeners.delete(fn);}};
  const session={readView:()=>({}),attach:async root=>({id:entry.id,root,owned:false}),dispose:async()=>{},redraw(){}};
- const document={activeElement:null,nodes:[],createElement(tag){const node={tag,ownerDocument:this,children:[],append(...xs){this.children.push(...xs);},addEventListener(){},value:'',readOnly:true};this.nodes.push(node);return node;}};
+ const document={activeElement:null,nodes:[],createElement(tag){const node={tag,ownerDocument:this,children:[],style:{},dataset:{},attributes:{},setAttribute(k,v){this.attributes[k]=String(v);},append(...xs){this.children.push(...xs);},addEventListener(){},value:'',readOnly:true};this.nodes.push(node);return node;}};
  const host={scene:{materials,open:async()=>session,renderer:()=>({backend:{isWebGPUBackend:true}}),objects:()=>[entry],frame:roots=>framed=roots},controls:{installNumberDrag:()=>({dispose(){}})}};
  let owner;try{
   owner=await experiment.create({host,inputs:{},record(){},updateInputs:value=>persisted=value});owner.mount({root:document.createElement('root'),document,invoke(){}});
   const scale=document.nodes.find(n=>n.children.some(c=>c.textContent==='UV scale ')).children.find(n=>n.tag==='input');
   materials.edit('recipe',{parameters:{uvScale:1.75}});
   assert.equal(scale.value,'1.75','Mounted control must follow native recipe edits');assert.equal(persisted.uvScale,1.75);
-  assert.equal(document.nodes.find(n=>n.tag==='select').value,'wool2','Checkpoint selection follows source identity, not authored recipe name');
+  assert.equal(document.nodes.filter(n=>n.tag==='select').length,0,'Material and carrier choices must remain directly visible, without opening dropdowns');
+  const checkpoint=document.nodes.find(n=>n.tag==='button'&&n.textContent==='wool2');assert.equal(checkpoint?.attributes['aria-pressed'],'true','Checkpoint choice follows source identity, not authored recipe name');
   assert.equal((await owner.read()).surface,'sphere','Borrowing reads live carrier state over its admission snapshot');
   const replaced=make();entry.object=replaced;owner.operations.setSurface('folded');owner.operations.frame();assert.equal(framed[0],replaced);assert.equal(replaced.userData.kaminosSceneObject.neuralCarrier.surface,'folded');
  }finally{await owner?.dispose();assert.equal(listeners.size,0);globalThis.fetch=fetchBefore;}

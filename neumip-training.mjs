@@ -1,7 +1,8 @@
 // Browser/native WebGPU training for Kaminos's released NeuMIP web format.
 // Parameters remain float32; all levels are independent learned fields.
 const TARGET_STATE=Symbol('NeuMIP current target batch');
-export function createNeumipStudent({resolution=64,seed=1}={}) {
+export function createNeumipStudent({resolution=64,seed=1,coverage=false}={}) {
+  if(typeof coverage!=='boolean')throw Error('coverage must be boolean');
   if(!Number.isInteger(resolution)||resolution<2||!Number.isInteger(Math.log2(resolution)))throw Error('NeuMIP resolution must be a power of two >= 2');
   let state=seed>>>0;
   const random=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return (state+.5)/4294967296;};
@@ -10,12 +11,12 @@ export function createNeumipStudent({resolution=64,seed=1}={}) {
   const offset=texture(resolution,6),mips=[];
   for(let n=resolution;n>=2;n/=2)mips.push(texture(n,8));
   const layers=[];
-  for(const [prefix,sizes] of [['offset_network',[8,24,24,24,1]],['main',[12,24,24,24,6]]])for(let k=0;k<4;k++){
+  for(const [prefix,sizes] of [['offset_network',[8,24,24,24,coverage?2:1]],['main',[12,24,24,24,6]]])for(let k=0;k<4;k++){
     const input=sizes[k],output=sizes[k+1],scale=k===3?.03:Math.sqrt(2/input);
     const biases=new Float32Array(output);if(prefix==='main'&&k===3)biases[0]=.05;
     layers.push({name:`${prefix}.mpl${k}`,input,output,relu:k<3,weights:Float32Array.from({length:input*output},()=>normal()*scale),biases});
   }
-  return {offset,mips,layers,architecture:'kaminos-neumip-web-distillation-v1'};
+  return {offset,mips,layers,coverage,architecture:coverage?'kaminos-neumip-coverage-v1':'kaminos-neumip-web-distillation-v1'};
 }
 
 export function neumipTrainingLayout(model) {
@@ -38,13 +39,14 @@ export function neumipTrainingLayout(model) {
   const values=new Float32Array(at);
   for(const net of Object.values(networks))for(const l of net.layers){values.set(l.weights,l.weightsOffset);values.set(l.biases,l.biasesOffset);}
   for(const f of fields)values.set(f.data,f.offset);
-  return {networks,fields,weightCount,count:at,actCount:act,deltaCount:delta,scratchStride:act+delta+4,values};
+  const coverage=networks.offset_network.layers[3].output===2;
+  return {networks,fields,weightCount,count:at,actCount:act,deltaCount:delta,coverage,targetStride:coverage?4:3,scratchStride:act+delta+(coverage?5:4),values};
 }
 
 // Exact storage requirements, shared by device admission and allocation.
 export function neumipTrainingBufferSizes(layout,batchSize) {
   if(!Number.isSafeInteger(batchSize)||batchSize<1)throw Error('batchSize must be positive');
-  return {parameters:layout.count*4,queries:batchSize*8*4,targets:batchSize*3*4,gradients:layout.count*4,
+  return {parameters:layout.count*4,queries:batchSize*8*4,targets:batchSize*layout.targetStride*4,gradients:layout.count*4,
     scratch:batchSize*layout.scratchStride*4,partial:layout.weightCount*Math.ceil(batchSize/64)*4,moments:layout.count*8};
 }
 
@@ -59,7 +61,7 @@ export function restoreNeumipParameters(model,layout,values) {
 }
 
 export function buildNeumipTrainingWGSL(layout) {
-  const {networks,fields,weightCount,actCount,deltaCount,scratchStride}=layout;
+  const {networks,fields,weightCount,actCount,deltaCount,scratchStride,coverage,targetStride}=layout;
   const off=networks.offset_network,main=networks.main;
   const o=off.layers[3].actOffset,m=main.layers[3].actOffset;
   const md=main.layers[3].deltaOffset;
@@ -148,17 +150,23 @@ fn evaluate(q:u32)->vec3<f32>{
 }
 @compute @workgroup_size(64) fn teacher(@builtin(global_invocation_id) id:vec3<u32>){
   let q=id.x;if(q>=cfg.count){return;}let rgb=evaluate(q);
-  for(var c=0u;c<3u;c++){targets[q*3u+c]=rgb[c];}
+  for(var c=0u;c<3u;c++){targets[q*${targetStride}u+c]=rgb[c];}
+  ${coverage?`targets[q*4u+3u]=1.0/(1.0+exp(-a[${o+1}u]));`:``}
 }
 @compute @workgroup_size(64) fn inference(@builtin(global_invocation_id) id:vec3<u32>){
   let q=id.x;if(q>=cfg.count){return;}let rgb=evaluate(q);let base=q*${scratchStride}u;
   for(var c=0u;c<3u;c++){scratch[base+${actCount+deltaCount+1}u+c]=rgb[c];}
+  ${coverage?`scratch[base+${actCount+deltaCount+4}u]=1.0/(1.0+exp(-a[${o+1}u]));`:``}
 }
 @compute @workgroup_size(64) fn backward(@builtin(global_invocation_id) id:vec3<u32>){
   let q=id.x;if(q>=cfg.count){return;}let rgb=evaluate(q);let base=q*${scratchStride}u;
-  let teacherColor=vec3<f32>(targets[q*3u],targets[q*3u+1u],targets[q*3u+2u]);
+  let teacherColor=vec3<f32>(targets[q*${targetStride}u],targets[q*${targetStride}u+1u],targets[q*${targetStride}u+2u]);
   let error=rgb-teacherColor;
   scratch[base+${actCount+deltaCount}u]=dot(error,error)*0.5;
+  ${coverage?`let opacity=1.0/(1.0+exp(-a[${o+1}u]));
+  let coverageTarget=targets[q*4u+3u];
+  scratch[base+${actCount+deltaCount+4}u]=opacity;
+  scratch[base+${actCount+deltaCount}u]+=-coverageTarget*log(max(opacity,1e-7))-(1.0-coverageTarget)*log(max(1.0-opacity,1e-7));`:``}
   for(var c=0u;c<3u;c++){scratch[base+${actCount+deltaCount+1}u+c]=rgb[c];}
   let logRGB=vec3<f32>(a[${m}u]+1.13983*a[${m+2}u],a[${m}u]-0.39465*a[${m+1}u]-0.58060*a[${m+2}u],a[${m}u]+2.03211*a[${m+1}u]);
   let sigmoid=1.0/(1.0+exp(-vec3<f32>(a[${m+3}u],a[${m+4}u],a[${m+5}u])));
@@ -179,7 +187,9 @@ fn evaluate(q:u32)->vec3<f32>{
     depthGrad+=g*dot(mix(s0.yz,s1.yz,t),factor);
     scatterField(low,shifted,c,g*(1.0-t));scatterField(high,shifted,c,g*t);
   }
-  d[${off.layers[3].deltaOffset}u]=depthGrad;offsetBackward();
+  d[${off.layers[3].deltaOffset}u]=depthGrad;
+  ${coverage?`d[${off.layers[3].deltaOffset+1}u]=opacity-coverageTarget;`:``}
+  offsetBackward();
   for(var c=0u;c<6u;c++){scatterField(0u,uv,c,di[c]);}
   for(var i=0u;i<${actCount}u;i++){scratch[base+i]=a[i];}
   for(var i=0u;i<${deltaCount}u;i++){scratch[base+${actCount}u+i]=d[i];}
@@ -239,7 +249,7 @@ export async function createNeumipTraining(device,model,{batchSize=4096}={}) {
   const targetsFor=encoder=>{
     if(!currentTargets||currentTargets.version!==queryVersion)throw Error('Targets do not match the current query batch');
     if(currentTargets.encoder&&currentTargets.encoder!==encoder)throw Error('Pending teacher targets belong to a different encoder');
-    return {count,queryBits,device};
+    return {count,queryBits,device,targetStride:layout.targetStride};
   };
   const configure=({lodBias=0,lrWeights=.001,lrFields=.01}={})=>{
     const data=new ArrayBuffer(32),view=new DataView(data);view.setUint32(0,count,true);view.setUint32(4,Math.max(1,step),true);
@@ -251,19 +261,19 @@ export async function createNeumipTraining(device,model,{batchSize=4096}={}) {
     const staging=device.createBuffer({size,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});
     try{const e=device.createCommandEncoder();e.copyBufferToBuffer(buffer,0,staging,0,size);device.queue.submit([e.finish()]);await staging.mapAsync(GPUMapMode.READ);return new Float32Array(staging.getMappedRange().slice(0));}finally{staging.destroy();}
   };
-  const readPredictions=async({includeLoss=false}={})=>{const all=await read(scratch,count*layout.scratchStride*4),rgb=new Float32Array(count*3);let loss=0;
-    for(let q=0;q<count;q++){const base=q*layout.scratchStride+layout.actCount+layout.deltaCount;loss+=all[base];rgb.set(all.subarray(base+1,base+4),q*3);}
-    if(!rgb.every(Number.isFinite)||(includeLoss&&!Number.isFinite(loss)))throw Error('Non-finite NeuMIP fit');return includeLoss?{rgb,loss:loss/count}:{rgb};};
+  const readPredictions=async({includeLoss=false}={})=>{const all=await read(scratch,count*layout.scratchStride*4),rgb=new Float32Array(count*3),coverage=layout.coverage?new Float32Array(count):null;let loss=0;
+    for(let q=0;q<count;q++){const base=q*layout.scratchStride+layout.actCount+layout.deltaCount;loss+=all[base];rgb.set(all.subarray(base+1,base+4),q*3);if(coverage)coverage[q]=all[base+4];}
+    if(!rgb.every(Number.isFinite)||coverage&&!coverage.every(Number.isFinite)||(includeLoss&&!Number.isFinite(loss)))throw Error('Non-finite NeuMIP fit');return includeLoss?{rgb,...(coverage?{coverage}:{}),loss:loss/count}:{rgb,...(coverage?{coverage}:{})};};
   return {layout,buffers:{parameters,queries,targets,gradients,scratch,partial,moments},code,
     setQueries(values){if(!(values instanceof Float32Array)||values.length%8||values.length<8||values.length>batchSize*8||!values.every(Number.isFinite))throw Error('Invalid NeuMIP queries');count=values.length/8;queryVersion++;currentTargets=null;queryBits=new Uint32Array(values.buffer,values.byteOffset,values.length).slice();device.queue.writeBuffer(queries,0,values);},
-    setTargets(values){if(!(values instanceof Float32Array)||values.length!==count*3||!values.every(Number.isFinite))throw Error('Invalid NeuMIP RGB targets');device.queue.writeBuffer(targets,0,values);currentTargets={version:queryVersion,encoder:null};},
+    setTargets(values){if(!(values instanceof Float32Array)||values.length!==count*layout.targetStride||!values.every(Number.isFinite))throw Error('Invalid NeuMIP RGB targets');if(layout.coverage&&values.some((v,i)=>i%4===3&&(v<0||v>1)))throw Error('Coverage targets must be in [0,1]');device.queue.writeBuffer(targets,0,values);currentTargets={version:queryVersion,encoder:null};},
     async evaluate(options={}){configure(options);const e=device.createCommandEncoder();dispatch(e,'inference',Math.ceil(count/64));device.queue.submit([e.finish()]);return readPredictions();},
-    async teach(options={}){configure(options);const version=queryVersion,n=count,e=device.createCommandEncoder();dispatch(e,'teacher',Math.ceil(n/64));device.queue.submit([e.finish()]);const rgb=await read(targets,n*3*4);currentTargets={version,encoder:null};return rgb;},
+    async teach(options={}){configure(options);const version=queryVersion,n=count,e=device.createCommandEncoder();dispatch(e,'teacher',Math.ceil(n/64));device.queue.submit([e.finish()]);const rgb=await read(targets,n*layout.targetStride*4);currentTargets={version,encoder:null};return rgb;},
     encodeTeacher(encoder,options={}){configure(options);dispatch(encoder,'teacher',Math.ceil(count/64));currentTargets={version:queryVersion,encoder};},
     copyTargetsFrom(encoder,source){
       const state=source[TARGET_STATE]?.(encoder);
-      if(!state||state.count!==count||state.device!==device||!queryBits||!state.queryBits||queryBits.some((v,i)=>v!==state.queryBits[i]))throw Error('Teacher target batch does not match current queries');
-      encoder.copyBufferToBuffer(source.buffers.targets,0,targets,0,count*3*4);currentTargets={version:queryVersion,encoder};
+      if(!state||state.count!==count||state.targetStride!==layout.targetStride||state.device!==device||!queryBits||!state.queryBits||queryBits.some((v,i)=>v!==state.queryBits[i]))throw Error('Teacher target batch does not match current queries');
+      encoder.copyBufferToBuffer(source.buffers.targets,0,targets,0,count*layout.targetStride*4);currentTargets={version:queryVersion,encoder};
     },
     async gradients(options={}){targetsFor(null);configure(options);const e=device.createCommandEncoder();e.clearBuffer(gradients);dispatch(e,'backward',Math.ceil(count/64));dispatch(e,'weightPartials',layout.weightCount,Math.ceil(count/64));dispatch(e,'collectWeights',Math.ceil(layout.weightCount/64));device.queue.submit([e.finish()]);return {values:await read(gradients,layout.count*4),...await readPredictions({includeLoss:true})};},
     encodeUpdate(encoder,options={}){targetsFor(encoder);step++;configure(options);encoder.clearBuffer(gradients);dispatch(encoder,'backward',Math.ceil(count/64));dispatch(encoder,'weightPartials',layout.weightCount,Math.ceil(count/64));dispatch(encoder,'collectWeights',Math.ceil(layout.weightCount/64));const groups=Math.ceil(layout.count/64),rows=Math.ceil(groups/maxGroups);dispatch(encoder,'adam',Math.ceil(groups/rows),rows);},

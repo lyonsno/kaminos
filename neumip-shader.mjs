@@ -19,12 +19,12 @@ function network(model,prefix,args,output) {
   }
   if(prefix==='main')text+=`let rgb=vec3<f32>(a4[0]+1.13983*a4[2],a4[0]-0.39465*a4[1]-0.58060*a4[2],a4[0]+2.03211*a4[1]);
 return (exp(rgb)-vec3<f32>(1.0))*(vec3<f32>(0.1)+vec3<f32>(1.0)/(vec3<f32>(1.0)+exp(-vec3<f32>(a4[3],a4[4],a4[5]))));\n}`;
-  else text+='return a4[0];\n}';
+  else text+=model.coverage?'return vec2<f32>(a4[0],a4[1]);\n}':'return a4[0];\n}';
   return text;
 }
 
 export function buildNeumipWGSL(model) {
-  const offset=network(model,'offset_network','f0:vec4<f32>,f1:vec4<f32>,view:vec2<f32>','f32');
+  const offset=network(model,'offset_network','f0:vec4<f32>,f1:vec4<f32>,view:vec2<f32>',model.coverage?'vec2<f32>':'f32');
   const main=network(model,'main','f0:vec4<f32>,f1:vec4<f32>,view:vec2<f32>,light:vec2<f32>','vec3<f32>');
   return {offset,main,bilinear:`
 fn nmBilinear(t:texture_2d<f32>,p:vec2<f32>,level:i32)->vec4<f32>{
@@ -34,10 +34,11 @@ fn nmBilinear(t:texture_2d<f32>,p:vec2<f32>,level:i32)->vec4<f32>{
  return mix(mix(textureLoad(t,a,level),textureLoad(t,vec2<i32>(b.x,a.y),level),w.x),mix(textureLoad(t,vec2<i32>(a.x,b.y),level),textureLoad(t,b,level),w.x),w.y);
 }`,features:`
 fn neumipFeatures(uv:vec2<f32>,view:vec3<f32>,lod:f32,off0:texture_2d<f32>,off1:texture_2d<f32>,map0:texture_2d<f32>,map1:texture_2d<f32>)->mat4x4<f32>{
- let depth=neumipOffset(nmBilinear(off0,uv,0),nmBilinear(off1,uv,0),view.xy);
+ let decoded=neumipOffset(nmBilinear(off0,uv,0),nmBilinear(off1,uv,0),view.xy);
+ let depth=${model.coverage?'decoded.x':'decoded'};
  let denominator=max(sqrt(max(0.0,1.0-dot(view.xy,view.xy))),0.6);
  let shifted=fract(uv)+depth*view.xy/denominator*0.05;
  let l=clamp(lod,0.0,f32(textureNumLevels(map0)-1u));let lo=i32(floor(l));let hi=min(lo+1,i32(textureNumLevels(map0))-1);let w=fract(l);
- return mat4x4<f32>(mix(nmBilinear(map0,shifted,lo),nmBilinear(map0,shifted,hi),w),mix(nmBilinear(map1,shifted,lo),nmBilinear(map1,shifted,hi),w),vec4<f32>(0.0),vec4<f32>(0.0));
+ return mat4x4<f32>(mix(nmBilinear(map0,shifted,lo),nmBilinear(map0,shifted,hi),w),mix(nmBilinear(map1,shifted,lo),nmBilinear(map1,shifted,hi),w),${model.coverage?'vec4<f32>(1.0/(1.0+exp(-decoded.y)),0.0,0.0,0.0)':'vec4<f32>(1.0,0.0,0.0,0.0)'},vec4<f32>(0.0));
 }`};
 }

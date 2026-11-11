@@ -1,3 +1,4 @@
+import {createRawTrellisTrainingSource} from './trellis-raw-training-source.mjs';
 // First native trainer source admits the already-observed finished plate's
 // single static identity-transformed primitive, UV0 and embedded PNG PBR maps.
 import {parseGlb,readTrianglePrimitives} from './poly-glb-io.mjs';
@@ -12,7 +13,8 @@ const dot=(a,b)=>a.reduce((s,x,k)=>s+x*b[k],0);
 export function materialFrameVector(v,frame,{point=false}={}){
  const d=v.map((x,k)=>x-(point?frame.origin[k]:0));return [dot(d,frame.u),dot(d,frame.n),-dot(d,frame.v)];
 }
-export async function createTrellisTrainingSource(device,bytes,{region,tileSize}){
+export async function createTrellisTrainingSource(device,bytes,{region,tileSize,rawSource}){
+ if(rawSource!==undefined)return createRawTrellisTrainingSource(device,rawSource,{region,tileSize});
  const {json,bin}=parseGlb(bytes),primitives=readTrianglePrimitives(bytes);
  if(json.extensionsUsed?.length||primitives.length!==1||json.skins?.length||json.animations?.length)throw Error('First trainer source requires one static extension-free glTF primitive');
  const p=primitives[0],primitive=json.meshes[p.mesh].primitives[p.primitive];

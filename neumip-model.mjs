@@ -21,13 +21,14 @@ export function readNeumipModel(input) {
   }
   if(at!==bytes.length)throw Error('NeuMIP archive has trailing bytes');
   if(offset.channels!==6||!mips.length||mips.some((m,i)=>m.channels!==8||(i>0&&(m.width!==Math.max(1,mips[i-1].width>>1)||m.height!==Math.max(1,mips[i-1].height>>1)))))throw Error('Unsupported NeuMIP web-export texture shape');
-  const expected={'main':[12,24,24,24,6],'offset_network':[8,24,24,24,1]};
+  const coverage=architecture==='kaminos-neumip-coverage-v1';
+  const expected={'main':[12,24,24,24,6],'offset_network':[8,24,24,24,coverage?2:1]};
   if(layers.length!==8)throw Error('Unsupported NeuMIP web-export layer count');
   for(const [prefix,widths] of Object.entries(expected))for(let i=0;i<4;i++){
     const l=layers.find(l=>l.name===`${prefix}.mpl${i}`);
     if(!l||l.input!==widths[i]||l.output!==widths[i+1]||l.relu!==(i<3))throw Error(`Unsupported NeuMIP layer shape: ${prefix}.mpl${i}`);
   }
-  return {offset,mips,layers,architecture,byteLength:bytes.length};
+  return {offset,mips,layers,architecture,coverage,byteLength:bytes.length};
 }
 
 export async function loadNeumipModel(url,{signal,sha256}={}) {

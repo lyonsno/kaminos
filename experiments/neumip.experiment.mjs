@@ -1,3 +1,4 @@
+import {createChoiceButtons} from '../experiment-choice-buttons.mjs';
 import {createNeumipCarrier,createNeumipCarrierGeometry,NEUMIP_CARRIER_SOURCE} from '../neumip-carrier.mjs';
 import {prepareNeumipParameters} from '../neumip-program.mjs';
 
@@ -60,9 +61,9 @@ export default {
       setSurface(value){liveMesh();const next=createNeumipCarrierGeometry({surface:value}),old=mesh.geometry;mesh.geometry=next;surface=value;mesh.userData.kaminosSceneObject.neuralCarrier={surface};old.dispose();return applied('surface');},
       frame(){host.scene.frame([liveMesh()]);return applied('view');}},
       mount({root,document,invoke}){
-        const selectField=(text,entries,operation)=>{const label=document.createElement('label'),select=document.createElement('select');label.append(text,select);for(const [value,title] of entries){const option=document.createElement('option');option.value=value;option.textContent=title;select.append(option);}select.addEventListener('change',()=>invoke(operation,select.value).catch(e=>{sync();status.textContent=e.message;}));root.append(label);return select;};
-        selector=selectField('Material ',[['','Current checkpoint'],...Object.keys(catalog.materials).map(name=>[name,name])],'selectMaterial');
-        surfaceInput=selectField('Surface ',[['folded','Folded surface'],['sphere','Sphere']],'setSurface');
+        const selectField=(text,entries,operation)=>{const label=document.createElement('div');label.textContent=text;const choices=createChoiceButtons(document,{label:text,entries,onChange:value=>invoke(operation,value).catch(e=>{sync();status.textContent=e.message;})});root.append(label,choices);return choices;};
+        selector=selectField('Checkpoint',Object.keys(catalog.materials).map(name=>[name,name]),'selectMaterial');
+        surfaceInput=selectField('Surface',[['folded','Folded surface'],['sphere','Sphere']],'setSurface');
         const number=(text,operation,value,step)=>{const label=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');grip.textContent=text;input.type='number';input.step='any';input.min='0.000001';input.className='transform-input';input.value=String(value);input.addEventListener('blur',()=>sync(true));input.addEventListener('input',()=>{if(input.value&&input.validity.valid)invoke(operation,Number(input.value)).catch(e=>status.textContent=e.message);});label.append(grip,input);root.append(label);drag.push(host.controls.installNumberDrag({input,grip,step}));return input;};
         scaleInput=number('UV scale ','setUVScale',uvScale,.05);gainInput=number('Material gain ','setGain',gain,.05);
         const frame=document.createElement('button');frame.textContent='Frame surface';frame.onclick=()=>invoke('frame');status=document.createElement('p');status.className='small';root.append(frame,status);sync();

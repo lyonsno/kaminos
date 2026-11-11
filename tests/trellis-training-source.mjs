@@ -11,3 +11,15 @@ function shellFixture(){
 test('panel sampling plane follows the first visible surface rather than a more densely tessellated underside',async()=>{
  await withKaminosGpu(async({device})=>{let source;try{source=await createTrellisTrainingSource(device,shellFixture(),{region:{origin:[0,0,0],normal:[0,1,0],tangent:[1,0,0],radius:.5,depth:.4,top:.2},tileSize:.5});assert.ok(Math.abs(source.capture.samplingPlaneHeight-.1)<1e-6,`visible surface .1, got ${source.capture.samplingPlaneHeight}`);}finally{source?.dispose();}});
 });
+test('raw aligned material rows are the teacher, rather than a reduced GLB fallback',async()=>{
+ await withKaminosGpu(async({device})=>{let source;try{
+  const rawSource={positions:new Float32Array([-1,.1,-1,1,.1,1,1,.1,-1,-1,.1,1]),indices:new Uint32Array([0,1,2,0,3,1]),normals:new Float32Array([0,1,0,0,1,0,0,1,0,0,1,0]),materialRows:new Float32Array([1,0,0,0,1,1,1,0,0,0,1,1,1,0,0,0,1,1,1,0,0,0,1,1])};
+  source=await createTrellisTrainingSource(device,shellFixture(),{rawSource,region:{origin:[0,0,0],normal:[0,1,0],tangent:[1,0,0],radius:.5,depth:.4,top:.2},tileSize:.5});
+  const rgb=await source.teacher.evaluateMaterial(new Float32Array([.5,.5,0,0,0,0,0,0]),{...source.capture,resolution:32,samples:1});
+  assert.ok(rgb[0]>rgb[1]*10,`provided raw material is red, received ${Array.from(rgb)}`);
+  assert.equal(source.source.route,'raw-aligned-fields');
+ }finally{source?.dispose();}});
+});
+test('coverage labels distinguish source hits from support exits',async()=>{
+ await withKaminosGpu(async({device})=>{let source;try{source=await createTrellisTrainingSource(device,shellFixture(),{region:{origin:[0,0,0],normal:[0,1,0],tangent:[1,0,0],radius:.5,depth:.4,top:.2},tileSize:.5});const labels=await source.teacher.evaluateMaterial(new Float32Array([.5,.5,0,0,0,0,0,0,10,10,0,0,0,0,0,0]),{...source.capture,resolution:32,samples:1,coverage:true});assert.equal(labels.length,8,'coverage query returns RGB plus coverage per query');assert.equal(labels[3],1);assert.equal(labels[7],0);}finally{source?.dispose();}});
+});
