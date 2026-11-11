@@ -1,6 +1,6 @@
 // kaminos-test: node
 import {test} from 'node:test';import assert from 'node:assert/strict';
-import {supportFrame,sampleSourceAddress} from '../trellis-local-support.mjs';import {traceSupportRays} from '../trellis-support-rays.mjs';import {withKaminosGpu} from '../tools/shader-herder.mjs';
+import {supportFrame,sampleSourceAddress,supportVolumeMesh} from '../trellis-local-support.mjs';import {traceSupportRays} from '../trellis-support-rays.mjs';import {withKaminosGpu} from '../tools/shader-herder.mjs';
 const teacher=()=>({frame:supportFrame({normal:[0,0,1],tangent:[1,0,0],radius:1,depth:.5}),lo:[-1,-1,-.5],hi:[1,1,.5],patch:[{sourceTriangle:37,vertices:[[-.5,-.5,0],[.5,-.5,0],[0,.5,0]].map((p,i)=>({p,b:[0,1,2].map(k=>+(k===i))}))}]});
 test('native ray teacher returns original triangle and barycentrics between support entry and exit',async()=>{
  await withKaminosGpu(async({device})=>{const r=await traceSupportRays(device,teacher(),[{origin:[0,0,1],direction:[0,0,-1]},{origin:[.9,.9,1],direction:[0,0,-1]},{origin:[0,0,.25],direction:[1,0,0]},{origin:[0,0,-1],direction:[0,0,1]}]);
@@ -26,4 +26,27 @@ test('source barycentrics sample the original UV island and base normal',()=>{
  const s={positions:Float32Array.from([0,0,0,1,0,0,0,1,0]),indices:Uint32Array.from([0,1,2]),uvs:Float32Array.from([.2,.3,.8,.3,.2,.9]),normals:Float32Array.from([0,0,1,0,0,1,0,0,1])};
  const sample=sampleSourceAddress(s,0,[.25,.25,.5]);assert.deepEqual(sample.sourcePosition,[.25,.5,0]);assert.ok(Math.abs(sample.sourceUV[0]-.35)<1e-6);assert.ok(Math.abs(sample.sourceUV[1]-.6)<1e-6);assert.deepEqual(sample.vertexNormal,[0,0,1]);
  assert.throws(()=>sampleSourceAddress(s,7,[1,0,0]),/valid original/);
+});
+
+test('support ray endpoints reconstruct all six carrier face charts and distinguish interior starts',async()=>{
+ await withKaminosGpu(async({device})=>{
+  const c=teacher(),rays=[
+   {origin:[.2,.4,-2],direction:[0,0,1]}, {origin:[.2,.4,2],direction:[0,0,-1]},
+   {origin:[.2,-2,.1],direction:[0,1,0]}, {origin:[.2,2,.1],direction:[0,-1,0]},
+   {origin:[-2,.4,.1],direction:[1,0,0]}, {origin:[2,.4,.1],direction:[-1,0,0]},
+   {origin:[0,0,.25],direction:[0,0,1]}, {origin:[2,2,0],direction:[-1,-1,0]}
+  ];
+  const r=await traceSupportRays(device,c,rays),mesh=supportVolumeMesh(c);
+  for(let i=0;i<6;i++){
+   const s=r.samples[i];assert.equal(s.entryBoundary?.supportFace,i,'entry must use the carrier mesh face numbering');
+   assert.equal(s.exitBoundary.supportFace,i^1);
+   for(const [endpoint,distance]of [[s.entryBoundary,s.entry],[s.exitBoundary,s.exit]]){
+    const p=rays[i].origin.map((x,k)=>x+s.direction[k]*distance);assert.ok(Math.hypot(...p.map((x,k)=>x-endpoint.position[k]))<1e-6);
+    const offset=endpoint.supportFace*18,point=j=>Array.from(mesh.positions.subarray(offset+j*3,offset+j*3+3)),a=point(0),b=point(1),d=point(5),[u,v]=endpoint.supportUV;
+    const reconstructed=a.map((x,k)=>x+u*(b[k]-x)+v*(d[k]-x));assert.ok(Math.hypot(...p.map((x,k)=>x-reconstructed[k]))<1e-6,'UV must reconstruct the point on the actual carrier mesh');
+   }
+  }
+  assert.equal(r.samples[6].entryBoundary,null,'an interior origin is not a carrier surface point');assert.equal(r.samples[6].exitBoundary.supportFace,1);
+  assert.equal(r.samples[7].entryBoundary.supportFace,3,'a corner tie deterministically chooses the lower face ID');
+ });
 });

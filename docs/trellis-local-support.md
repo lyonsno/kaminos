@@ -99,10 +99,22 @@ arbitrary ray array to `probe` through the same operation.
 shared device. It intersects the ray with the finite support first, then returns
 the nearest clipped source triangle inside that interval. Material sidedness is
 explicit. Results include support entry/exit distances, original triangle ID,
-original barycentrics and source-local hit position. `sampleSourceAddress` samples
+original barycentrics and source-local hit position. Entry and exit boundary
+addresses name the face and UV on the actual twelve-triangle support mesh, with
+chart-local and source-local positions. An origin already inside the support has
+no entry boundary; its entry distance is zero. Exact edge/corner crossings choose
+the lowest incident face ID deterministically. `sampleSourceAddress` samples
 that original triangle's UV island and interpolated vertex normal. A geometric
 miss reports a finite support exit rather than silently including another part
 of the asset. Continuing into retained geometry remains a renderer operation.
+
+The first knot contains an open source hole. Its central downward ray leaves
+this local support; the apparent brown floor visible in the original asset is
+the far underside of the double-sided hollow shell. Reproducing that source is
+distinct from filling it to depict solid timber. This inspector preserves the
+source and reports the miss; it does not repair the hole or classify it as
+intentional transparency. Grazing rays can also leave a support without meeting
+the local source, independently of such source defects.
 
 This teacher currently labels geometry and source addresses. It does not
 evaluate material opacity, normal maps, radiance, indirect transport or learned
@@ -133,7 +145,8 @@ The native tests execute production WGSL through the installed Shader Herder.
 They check coincident sheets, source interpolation, square coverage and an
 off-center peak that a naive maximum-height roof intersects. Ray tests check
 nearest hits, sidedness, misses/exits, parallel slab directions, transformed
-charts and source UV addresses. These small kernel checks establish numerical
+charts, all six carrier face UVs, interior starts, corner ties and source UV
+addresses. These small kernel checks establish numerical
 behavior, not throughput.
 
 `tools/trellis-support-witness.mjs URL OUTPUT_DIRECTORY INDEPENDENT_CHROMIUM`

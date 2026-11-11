@@ -10,10 +10,15 @@ struct Hit { distances:vec4f, sourceBary:vec4f, address:vec4u }
 @group(0) @binding(5) var<storage,read_write> hits:array<Hit>;
 @compute @workgroup_size(64) fn trace(@builtin(global_invocation_id) gid:vec3u){
   let i=gid.x;if(i>=arrayLength(&hits)){return;}let o=rays[i*2u].xyz;let d=rays[i*2u+1u].xyz;
-  var entry=0.;var exit=1e30;var intersects=true;
+  var entry=0.;var exit=1e30;var intersects=true;var entryFace=-1;var exitFace=-1;
   for(var k=0u;k<3u;k++){
     if(d[k]==0.){if(o[k]<bounds[0][k]||o[k]>bounds[1][k]){intersects=false;}}
-    else{let a=(bounds[0][k]-o[k])/d[k];let b=(bounds[1][k]-o[k])/d[k];entry=max(entry,min(a,b));exit=min(exit,max(a,b));}
+    else{
+      let a=(bounds[0][k]-o[k])/d[k];let b=(bounds[1][k]-o[k])/d[k];let near=min(a,b);let far=max(a,b);
+      let low=array<i32,3>(4,2,0)[k];let nf=select(low+1,low,a<=b);let ff=select(low,low+1,a<=b);
+      if(near>entry||(near==entry&&(entryFace<0||nf<entryFace))){entry=near;entryFace=nf;}
+      if(far<exit||(far==exit&&(exitFace<0||ff<exitFace))){exit=far;exitFace=ff;}
+    }
   }
   if(!intersects||exit<entry){hits[i]=Hit(vec4f(-1,-1,-1,0),vec4f(0),vec4u(0xffffffffu,0xffffffffu,0,0));return;}
   var nearest=exit+1e-5;var triangle=0xffffffffu;var clipped=0xffffffffu;var bary=vec3f(0);var found=0u;var front=0u;
@@ -27,7 +32,7 @@ struct Hit { distances:vec4f, sourceBary:vec4f, address:vec4u }
       bary=sourceBary[t*3u].xyz*(1.-u-v)+sourceBary[t*3u+1u].xyz*u+sourceBary[t*3u+2u].xyz*v;
     }
   }
-  hits[i]=Hit(vec4f(select(-1.,nearest,found==1u),entry,exit,0),vec4f(bary,0),vec4u(triangle,clipped,found,front));
+  hits[i]=Hit(vec4f(select(-1.,nearest,found==1u),entry,exit,f32(exitFace)),vec4f(bary,f32(entryFace)),vec4u(triangle,clipped,found,front));
 }
 `;
 
@@ -56,7 +61,13 @@ export async function traceSupportRays(device,candidate,queries,{twoSided=true}=
     const floats=new Float32Array(raw),ints=new Uint32Array(raw),samples=[];
     for(let i=0;i<queries.length;i++){
       const o=i*12,hit=ints[o+10]===1,entry=floats[o+1],exit=floats[o+2],distance=floats[o];
+      const endpoint=(face,t)=>{
+        if(entry<0||face<0)return null;
+        const p=packed.slice(i*8,i*8+3).map((x,k)=>x+packed[i*8+4+k]*t),axes=[[1,0],[0,1],[0,2],[2,0],[2,1],[1,2]][face];
+        return {supportFace:face,supportUV:axes.map(k=>(p[k]-candidate.lo[k])/(candidate.hi[k]-candidate.lo[k])),chartPoint:p,position:worldPoint(p,frame)};
+      };
       samples.push({origin:[...queries[i].origin],direction:directions[i],intersectsSupport:entry>=0,entry:entry>=0?entry*frame.radius:null,exit:exit>=0?exit*frame.radius:null,hit,
+        entryBoundary:endpoint(floats[o+7],entry),exitBoundary:endpoint(floats[o+3],exit),
         distance:hit?distance*frame.radius:null,sourceTriangle:hit?ints[o+8]:null,clippedTriangle:hit?ints[o+9]:null,sourceBary:hit?Array.from(floats.subarray(o+4,o+7)):null,frontFacing:hit?ints[o+11]===1:null,
         position:hit?worldPoint(packed.slice(i*8,i*8+3).map((x,k)=>x+packed[i*8+4+k]*distance),frame):null});
     }
