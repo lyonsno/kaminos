@@ -17,7 +17,7 @@ export function referenceRgb(rgba){
  for(let p=0;p<rgba.length/4;p++)for(let c=0;c<3;c++){const a=rgba[p*4+3]/255;out[p*3+c]=(rgba[p*4+c]*a+255*(1-a))/127.5-1;}
  return out;
 }
-export async function referenceRgbCooperative(rgba,{width,signal,targetDutyMs=12,now=()=>performance.now(),yieldToBrowser=globalThis.scheduler?.yield?.bind(globalThis.scheduler)||createCooperativeYield()}={}){
+export async function referenceRgbCooperative(rgba,{width,signal,targetDutyMs=12,now=()=>performance.now(),yieldToBrowser=createCooperativeYield()}={}){
  signal?.throwIfAborted();
  if(!Number.isInteger(width)||width<=0||rgba.length%(width*4)!==0)throw Error('Reference pixels must contain complete RGBA rows');
  if(!Number.isFinite(targetDutyMs)||targetDutyMs<=0)throw Error('Reference targetDutyMs must be finite and positive');
@@ -37,10 +37,13 @@ export async function readReferenceImage(entry,{signal,maxArea,targetDutyMs,now,
  if(entry?.kind!=='image'||entry?.visibility?.status==='withheld')throw Error('Choose an available source image for reference conditioning');
  const source=entry.source||`/api/read?${new URLSearchParams({root:entry.root_id||entry.root,path:entry.path})}`;
  const response=await fetch(source,{signal});if(!response.ok)throw Error(`Reference image: ${response.status}`);
- const blob=await response.blob(),bytes=await blob.arrayBuffer();
+ const blob=await response.blob();signal?.throwIfAborted();
+ const bytes=await blob.arrayBuffer();signal?.throwIfAborted();
  const sha256=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(x=>x.toString(16).padStart(2,'0')).join('');
+ signal?.throwIfAborted();
  const bitmap=await createImageBitmap(blob);let canvas;
  try{
+  signal?.throwIfAborted();
   const geometry=referenceImageGeometry(bitmap.width,bitmap.height,{maxArea}),{width,height,resizedWidth,resizedHeight,left,top}=geometry;
   canvas=new OffscreenCanvas(width,height);const ctx=canvas.getContext('2d',{willReadFrequently:true});
   ctx.fillStyle='white';ctx.fillRect(0,0,width,height);ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
