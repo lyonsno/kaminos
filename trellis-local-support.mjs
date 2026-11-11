@@ -11,6 +11,24 @@ export function supportFrame({origin=[0,0,0],normal=[0,1,0],tangent=[1,0,0],radi
 }
 export const chartPoint=(p,f)=>{const d=sub(p,f.origin);return [dot(d,f.u)/f.radius,dot(d,f.v)/f.radius,dot(d,f.n)/f.radius];};
 export const worldPoint=(p,f)=>f.origin.map((x,k)=>x+f.radius*(f.u[k]*p[0]+f.v[k]*p[1]+f.n[k]*p[2]));
+export function supportSourceFromMesh(mesh){
+  const g=mesh.geometry;
+  if(Array.isArray(mesh.material)||!g?.index)throw Error('First support constructor requires an indexed mesh with one material');
+  if(mesh.isSkinnedMesh||mesh.isInstancedMesh||Object.values(g.morphAttributes??{}).some(a=>a.length))throw Error('First support constructor requires static geometry without deformation or instances');
+  const unsupported=Object.keys(g.attributes??{}).filter(k=>!['position','normal','uv'].includes(k));
+  if(unsupported.length)throw Error(`Unsupported source attributes: ${unsupported.join(', ')}; partition would drop their data`);
+  if(!g.attributes?.position)throw Error('Source position attribute required');
+  for(const[name,width]of [['position',3],['normal',3],['uv',2]]){const a=g.attributes[name];if(a&&(a.itemSize!==width||a.normalized||!(a.array instanceof Float32Array)))throw Error(`Source ${name} requires packed unnormalized float32 attributes`);}
+  if(g.attributes.position.isInterleavedBufferAttribute||g.attributes.normal?.isInterleavedBufferAttribute||g.attributes.uv?.isInterleavedBufferAttribute)throw Error('First support constructor requires packed vertex attributes');
+  return {positions:Float32Array.from(g.attributes.position.array),indices:Uint32Array.from(g.index.array),normals:g.attributes.normal?Float32Array.from(g.attributes.normal.array):null,uvs:g.attributes.uv?Float32Array.from(g.attributes.uv.array):null};
+}
+export function sampleSourceAddress(source,triangle,bary){
+  const I=source.indices??Uint32Array.from({length:source.positions.length/3},(_,i)=>i);
+  if(!Number.isInteger(triangle)||triangle<0||triangle>=I.length/3||bary?.length!==3||!bary.every(Number.isFinite)||Math.abs(bary.reduce((s,x)=>s+x,0)-1)>2e-5)throw Error('valid original triangle and barycentric address required');
+  const sample=(data,width)=>data?Array.from({length:width},(_,k)=>bary.reduce((sum,w,j)=>sum+w*data[I[triangle*3+j]*width+k],0)):null;
+  const normal=sample(source.normals,3),length=normal?Math.hypot(...normal):0;
+  return {sourceTriangle:triangle,sourceBary:[...bary],sourcePosition:sample(source.positions,3),sourceUV:sample(source.uvs,2),vertexNormal:length?normal.map(x=>x/length):null};
+}
 const mix=(a,b,t)=>({p:a.p.map((x,i)=>x+t*(b.p[i]-x)),b:a.b.map((x,i)=>x+t*(b.b[i]-x))});
 function half(poly,axis,sign,inside=true,limit=1) {
   const out=[]; if(!poly.length)return out;
@@ -23,24 +41,20 @@ function half(poly,axis,sign,inside=true,limit=1) {
 
 // A closed support does not require a watertight teacher. All source triangles
 // crossing the volume participate, including backwards faces and disconnected
-// sheets. The GPU clips this broad-phase set; the complementary fragments keep
-// their source UVs and barycentric addresses on the CPU.
+// sheets. This is only a broad phase: both complementary clips run on the GPU.
 export function prepareSupportVolume(source,recipe={}){
   const frame=supportFrame(recipe),top=recipe.top??.01;
   if(!Number.isFinite(top)||top<=-frame.depth)throw Error('top must be above the bottom of the support');
   const lo=[-1,-1,-frame.depth/frame.radius],hi=[1,1,top/frame.radius],I=source.indices??Uint32Array.from({length:source.positions.length/3},(_,i)=>i),P=source.positions;
   if(P.length%3||I.length%3||!Array.from(P).every(Number.isFinite)||Array.from(I).some(x=>!Number.isInteger(x)||x<0||x>=P.length/3))throw Error('finite indexed triangle source required');
-  const candidates=[],retained=[],untouched=[];
-  const planes=[[0,1,hi[0]],[0,-1,-lo[0]],[1,1,hi[1]],[1,-1,-lo[1]],[2,1,hi[2]],[2,-1,-lo[2]]];
+  const candidates=[],untouched=[];
   for(let t=0;t<I.length/3;t++){
     const vertices=[0,1,2].map(k=>({p:chartPoint(Array.from(P.subarray(3*I[3*t+k],3*I[3*t+k]+3)),frame),b:[0,1,2].map(j=>+(j===k))}));
     if([0,1,2].some(k=>Math.min(...vertices.map(v=>v.p[k]))>hi[k]||Math.max(...vertices.map(v=>v.p[k]))<lo[k])){untouched.push(t);continue;}
-    let poly=vertices;const outside=[];
-    for(const[axis,sign,limit]of planes){emit(half(poly,axis,sign,false,limit),t,outside);poly=half(poly,axis,sign,true,limit);}
-    candidates.push({sourceTriangle:t,vertices});retained.push(...outside);
+    candidates.push({sourceTriangle:t,vertices});
   }
   if(!candidates.length)throw Error('support volume does not intersect the source bounding triangles');
-  return {schema:'kaminos.local-support-volume.v1',frame,lo,hi,candidates,retained,untouched:Uint32Array.from(untouched),sourceTriangleCount:I.length/3,
+  return {schema:'kaminos.local-support-volume.v1',frame,lo,hi,candidates,untouched:Uint32Array.from(untouched),sourceTriangleCount:I.length/3,
     diagnostics:{enclosure:'awaiting-webgpu-clip',neighborhoodIsolation:'all triangles of the selected primitive are partitioned; other scene objects remain external'}};
 }
 export function supportVolumeMesh(c){

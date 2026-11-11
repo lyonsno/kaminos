@@ -20,24 +20,26 @@ try{
   page.on('response',r=>{if(r.url().includes('weathered-timber-beam.glb'))assets.push(r.body().then(b=>({url:r.url(),status:r.status(),bytes:b.length,sha256:crypto.createHash('sha256').update(b).digest('hex')}),e=>({url:r.url(),status:r.status(),bodyError:String(e)})));});
   report.phase='page-load';await page.goto(url,{waitUntil:'domcontentloaded'});
   await page.waitForFunction(()=>window.kaminosWorkbenchExperiments?.state().id==='trellis-support');
-  report.phase='experiment-load';await page.waitForFunction(async()=>{try{return !!(await window.kaminosWorkbenchExperiments.read()).candidate;}catch{return false;}},{},{timeout:120000});
+  report.phase='experiment-load';
   report.initial=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());assert.equal(report.initial.backend,'WebGPU');assert.ok(report.initial.candidate.sourcePatchTriangles>0);assert.equal(report.initial.candidate.supportTriangles,12);
   const invoke=(op,arg)=>page.evaluate(({op,arg})=>window.kaminosWorkbenchExperiments.invoke(op,arg),{op,arg});
+  const candidate=JSON.stringify(await invoke('inspectCandidate'));report.candidateArtifact=path.join(out,'candidate.json');await fs.writeFile(report.candidateArtifact,candidate);report.candidateSha256=crypto.createHash('sha256').update(candidate).digest('hex');
   await invoke('frame');await page.waitForTimeout(1200);
   report.phase='controls';await page.getByLabel('Region X',{exact:true}).click();await page.getByLabel('Region X',{exact:true}).fill('.16');await page.getByLabel('Region X',{exact:true}).press('Enter');
-  await page.waitForFunction(async()=>{const s=await window.kaminosWorkbenchExperiments.read();return !s.pending&&s.region.origin[0]===.16;});
-  await page.waitForTimeout(600);
+  await page.waitForFunction(()=>{const text=document.querySelector('[data-trellis-support-status]')?.dataset.trellisSupportStatus;if(!text)return false;const s=JSON.parse(text);return !!s.error||(!s.pending&&s.origin[0]===.16);});
   report.changed=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());assert.equal(report.changed.region.origin[0],.16);assert.equal(report.changed.pending,false);assert.notDeepEqual(report.initial.candidate.sourceTriangleIds,report.changed.candidate.sourceTriangleIds);
   await invoke('setRegion',{origin:report.initial.region.origin});
   const shoot=async(name)=>{await page.waitForTimeout(700);const filename=path.join(out,name+'.png');await page.screenshot({path:filename});report.captures.push(filename);};
   await page.getByRole('button',{name:'Frame region',exact:true}).click();await page.getByRole('combobox').filter({has:page.locator('option[value="partition"]')}).selectOption('partition');await shoot('region-partition');
+  await page.getByRole('button',{name:'Probe region',exact:true}).click();await page.waitForFunction(()=>{const text=document.querySelector('[data-trellis-support-status]')?.dataset.trellisSupportStatus;if(!text)return false;const s=JSON.parse(text);return !!s.error||(!s.probePending&&s.probeSamples===9);});
+  report.probe=(await page.evaluate(()=>window.kaminosWorkbenchExperiments.read())).probe;assert.equal(report.probe.backend,'WebGPU');assert.equal(report.probe.samples.length,9);for(const s of report.probe.samples){assert.equal(s.intersectsSupport,true);assert.ok(s.exit>=s.entry);if(s.hit){assert.ok(s.sourceUV?.every(Number.isFinite));assert.ok(Math.hypot(...s.position.map((x,k)=>x-s.sourcePosition[k]))<1e-5);}}await fs.writeFile(path.join(out,'probe.json'),JSON.stringify(report.probe,null,2));await shoot('region-probes');
   await invoke('setMode','source');await shoot('region-source');
   await invoke('setMode','support');await shoot('region-support');
   await invoke('setMode','lod');report.near=await invoke('setThreshold',1);assert.equal(report.near.effective,'source');report.far=await invoke('setThreshold',100000);assert.equal(report.far.effective,'support');
   await invoke('setMode','partition');await invoke('setThreshold',180);await invoke('frame');await shoot('whole-partition');
   report.phase='source-provenance';report.assets=await Promise.all(assets);report.sourceBytes=await page.evaluate(async url=>{const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw Error('Source fetch failed');const b=await r.arrayBuffer();const hash=await crypto.subtle.digest('SHA-256',b);return {url:r.url,bytes:b.byteLength,sha256:Array.from(new Uint8Array(hash),v=>v.toString(16).padStart(2,'0')).join('')};},report.initial.sourceUrl);assert.equal(report.sourceBytes.sha256,'7be0be2857ce5100ffa86f329e4068ba83ebb701c8582e2f982d28e68b8f8bdd');assert.equal(report.initial.candidate.originalTriangles,97670);
   report.runtime=await page.evaluate(()=>fetch('/api/runtime-config').then(r=>r.json()));
-  report.codeHashes={};for(const name of ['trellis-local-support.mjs','trellis-support-gpu.mjs','experiments/trellis-support.experiment.mjs']){
+  report.codeHashes={};for(const name of ['trellis-local-support.mjs','trellis-support-gpu.mjs','trellis-support-rays.mjs','experiments/trellis-support.experiment.mjs']){
     const local=await fs.readFile(new URL('../'+name,import.meta.url)),response=await fetch(new URL('/'+name,url));assert.ok(response.ok,'served module unavailable');const served=Buffer.from(await response.arrayBuffer()),hash=b=>crypto.createHash('sha256').update(b).digest('hex');assert.equal(hash(local),hash(served),'served module differs from witness checkout');report.codeHashes[name]=hash(served);
   }
   report.final=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());

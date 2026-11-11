@@ -1,7 +1,7 @@
 // kaminos-test: node
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {extractLocalSupport,materializeFragments,supportMesh,supportFrame,chartPoint,prepareSupportVolume,supportVolumeMesh} from '../trellis-local-support.mjs';
+import {extractLocalSupport,materializeFragments,supportMesh,supportFrame,chartPoint,prepareSupportVolume,supportVolumeMesh,supportSourceFromMesh} from '../trellis-local-support.mjs';
 import {fitLocalSupport,clipSupportVolume} from '../trellis-support-gpu.mjs';
 import {withKaminosGpu} from '../tools/shader-herder.mjs';
 
@@ -12,6 +12,12 @@ function grid(){
   return {positions:Float32Array.from(positions),uvs:Float32Array.from(uvs),indices:Uint32Array.from(indices)};
 }
 const recipe={origin:[0,0,0],normal:[0,0,1],tangent:[1,0,0],radius:1,depth:1};
+test('source admission refuses attribute or deformation data the partition cannot preserve',()=>{
+  const make=()=>({material:{},geometry:{index:{array:Uint32Array.from([0,1,2])},attributes:{position:{itemSize:3,array:Float32Array.from([0,0,0,1,0,0,0,1,0])}},morphAttributes:{}}});
+  const valid=make();assert.equal(supportSourceFromMesh(valid).positions.length,9);
+  const colored=make();colored.geometry.attributes.color={itemSize:3,array:new Float32Array(9)};assert.throws(()=>supportSourceFromMesh(colored),/attributes/);
+  const skinned=make();skinned.isSkinnedMesh=true;assert.throws(()=>supportSourceFromMesh(skinned),/static/);
+});
 test('source split preserves surface area, triangle address and UV interpolation',()=>{
   const source=grid(),c=extractLocalSupport(source,recipe),part=materializeFragments(source,c.patch,c.frame);
   assert.ok(c.patch.length);assert.equal(c.diagnostics.projectedArea,4);assert.equal(c.diagnostics.neighborhoodIsolation,'unverified');
@@ -42,13 +48,27 @@ test('WebGPU clipping against depth and lateral planes conserves the slanted sou
   const area=ts=>ts.reduce((sum,t)=>{const[a,b,c]=t.vertices.map(v=>v.p),u=b.map((x,i)=>x-a[i]),v=c.map((x,i)=>x-a[i]);return sum+Math.hypot(u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0])/2;},0);
   await withKaminosGpu(async({device})=>{
     const result=await clipSupportVolume(device,c);assert.ok(result.patch.length>1);
-    assert.ok(Math.abs(area(result.patch)+area(c.retained)-Math.sqrt(512)/2)<1e-5);
+    assert.ok(Array.isArray(result.retained),'the same GPU partition must return both source and retained fragments');
+    assert.ok(Math.abs(area(result.patch)+area(result.retained)-Math.sqrt(512)/2)<1e-5);
+    assert.ok(result.boundarySegments.length,'source/support cut curves must have explicit addresses');
+    const support=supportVolumeMesh(c);
+    for(const edge of result.boundarySegments){assert.equal(edge.sourceTriangle,0);assert.ok(edge.supportFace>=0&&edge.supportFace<6);for(const v of edge.vertices){
+      assert.ok(v.supportUV.every(x=>x>=-1e-5&&x<=1+1e-5));assert.ok(Math.abs(v.b.reduce((s,x)=>s+x,0)-1)<1e-6);
+      // Each face's first triangle has UVs (0,0),(1,0),(1,1), so its
+      // affine chart extends over the complete square, including the other half.
+      const[u,vv]=v.supportUV,w=[1-u,u-vv,vv],first=edge.supportFace*18;
+      for(let k=0;k<3;k++)assert.ok(Math.abs(w.reduce((s,x,j)=>s+x*support.positions[first+j*3+k],0)-v.p[k])<1e-5,'support face address must reconstruct the cut point');
+    }}
     for(const t of result.patch)for(const v of t.vertices){for(let k=0;k<3;k++){
       assert.ok(v.p[k]>=c.lo[k]-1e-6&&v.p[k]<=c.hi[k]+1e-6);
       assert.ok(Math.abs(v.b.reduce((sum,w,j)=>sum+w*source.positions[j*3+k],0)-v.p[k])<1e-6);
     }}
     assert.equal(result.sourceTriangleIds[0],0);
   });
+});
+test('a source face on a support plane belongs to the inside once',async()=>{
+  const source={positions:Float32Array.from([-.5,-.5,.5,.5,-.5,.5,0,.5,.5]),indices:Uint32Array.from([0,1,2])};
+  await withKaminosGpu(async({device})=>{const result=await clipSupportVolume(device,prepareSupportVolume(source,{...recipe,top:.5}));assert.equal(result.patch.length,1);assert.equal(result.retained.length,0);});
 });
 test('missing square coverage and duplicate layers fail instead of masquerading as a support',()=>{
   const s=grid();assert.throws(()=>extractLocalSupport({...s,indices:s.indices.slice(3)}, {...recipe,radius:3}),/cover|rim|surface/);

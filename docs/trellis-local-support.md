@@ -34,7 +34,10 @@ sha256: 7be0be2857ce5100ffa86f329e4068ba83ebb701c8582e2f982d28e68b8f8bdd
 97,670 triangles, 120,301 vertices; one indexed primitive, one PBR material.
 ```
 
-The first constructor accepts one indexed mesh with one material. The source is
+The first constructor accepts one static indexed mesh with one material and
+packed float32 position, normal and UV attributes. It refuses attributes it
+cannot preserve (such as vertex colors, tangents and secondary UVs), deformation
+and instances. The source is
 loaded through the shared scene service and stays on the normal native object
 selection and transformation path. It uses the shared renderer's WebGPU device,
 camera, lights and frame service. It starts no independent adapter or renderer.
@@ -44,12 +47,22 @@ scene-domain format.
 
 Region coordinates are source-mesh local coordinates. `origin`, `normal` and
 `tangent` define a chart; `radius` is the square half-width, `depth` the inward
-extent, and `top` the outward extent. The CPU constructs a triangle AABB broad
-phase and complementary exterior fragments. Production WGSL clips candidate
-triangles against all six planes and returns local positions and source
-barycentrics. A convex triangle gains at most one vertex per clipping plane,
+extent, and `top` the outward extent. The CPU constructs only the triangle AABB
+broad phase. One production WGSL operation clips candidate triangles against all
+six planes and returns both interior and complementary exterior polygons, using
+the same computed intersection for each side of a cut. It returns local
+positions, source barycentrics and clipping-plane provenance. A convex triangle
+gains at most one vertex per clipping plane,
 so nine polygon vertices are sufficient by construction; no source triangles
 are dropped to meet a budget. Empty intersections fail visibly.
+
+The result also exports source/support intersection segments with source
+triangle and barycentric addresses, support face IDs and that face's UVs.
+These locate the source/retained interface on the support; they may branch or
+include coplanar contact edges and are not promised to form one manifold rim.
+The closed box remains an untrained candidate domain. Its six-face
+parameterization and the useful eventual support shape remain teacher/decoder
+design questions; boundary metadata does not establish learned fidelity.
 
 All triangles of the chosen primitive participate, irrespective of winding.
 Source geometry outside the volume remains explicit; other scene objects stay
@@ -59,7 +72,8 @@ transport is local: the future decoder/renderer needs an explicit exit contract.
 Display modes:
 
 - **Source region + support outline**: retain the original maps and tint the
-  clipped source region teal, with an orange support outline.
+  clipped source region teal, with an orange support outline and pink source/
+  support intersection curves in x-ray display.
 - **Original source**: restore the complete original mesh.
 - **Solid support diagnostic**: retain the exterior and replace the local
   source by the orange closed support. Its visible difference is intentional.
@@ -67,10 +81,35 @@ Display modes:
   and the diagnostic support below it. Near-plane crossings retain the source.
 
 Numeric region edits rebuild automatically. `setRegion`, `setMode`, `load`,
-`setThreshold`, `frame`, `frameRegion` and `inspectCandidate` are available through
+`setThreshold`, `frame`, `frameRegion`, `probe` and `inspectCandidate` are available through
 `window.kaminosWorkbenchExperiments.invoke`. The display and agent operations
 share the same implementation. Failed region proposals retain the last
 successful candidate and expose the error.
+
+## Bounded geometric ray teacher
+
+**Probe region** sends a diagnostic three-by-three set of inward rays from the
+outer support face. Green lines end at source hits; red lines reach the support
+exit without meeting source geometry. These are x-ray annotations. The operation
+is explicit and adds no ray tracing to the steady frame loop. The sample pattern
+is a small diagnostic, not an all-angle coverage estimate; agents can supply an
+arbitrary ray array to `probe` through the same operation.
+
+`traceSupportRays` in `trellis-support-rays.mjs` executes production WGSL on the
+shared device. It intersects the ray with the finite support first, then returns
+the nearest clipped source triangle inside that interval. Material sidedness is
+explicit. Results include support entry/exit distances, original triangle ID,
+original barycentrics and source-local hit position. `sampleSourceAddress` samples
+that original triangle's UV island and interpolated vertex normal. A geometric
+miss reports a finite support exit rather than silently including another part
+of the asset. Continuing into retained geometry remains a renderer operation.
+
+This teacher currently labels geometry and source addresses. It does not
+evaluate material opacity, normal maps, radiance, indirect transport or learned
+appearance. The initial kernel directly visits every clipped triangle; it is
+for small preparation/probe queries, with no hidden triangle truncation. Large
+training batches and performance measurements belong in Greenroom. This slice
+makes no throughput or BVH claim.
 
 ## Fitted lid constructor
 
@@ -86,19 +125,23 @@ triangle soup without repairing it.
 ## Verification
 
 ```sh
-npm test -- --only tests/trellis-local-support.mjs
-SHADER_HERDER_STRICT_METAL=1 node --test tests/trellis-local-support.mjs
+npm test -- --only tests/trellis-local-support.mjs,tests/trellis-support-rays.mjs,tests/trellis-support-evidence.mjs
+SHADER_HERDER_STRICT_METAL=1 node --test tests/trellis-local-support.mjs tests/trellis-support-rays.mjs
 ```
 
 The native tests execute production WGSL through the installed Shader Herder.
 They check coincident sheets, source interpolation, square coverage and an
-off-center peak that a naive maximum-height roof intersects. These small kernel
-checks establish numerical behavior, not throughput.
+off-center peak that a naive maximum-height roof intersects. Ray tests check
+nearest hits, sidedness, misses/exits, parallel slab directions, transformed
+charts and source UV addresses. These small kernel checks establish numerical
+behavior, not throughput.
 
 `tools/trellis-support-witness.mjs URL OUTPUT_DIRECTORY INDEPENDENT_CHROMIUM`
 uses Playwright Core (or `KAMINOS_PLAYWRIGHT_MODULE`) and an independent browser
 with a private profile and mock Keychain. It changes actual controls, captures
 source/partition/support views, verifies both footprint-routing branches and
-records served asset identity. It writes a report on success or failure. Saved
+records served asset identity. It retains the actual partition in `candidate.json`
+and ray inputs/results in `probe.json`, alongside screenshots. It writes a
+report on success or failure. Saved
 asset inspection is a lightweight direct run; performance comparisons and
 heavy extraction/training use Greenroom.
