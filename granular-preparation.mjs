@@ -13,9 +13,10 @@ const sub=(a,b)=>a.map((x,k)=>x-b[k]),dot=(a,b)=>a.reduce((s,v,k)=>s+v*b[k],0),c
 const positive=(v,n,zero=false)=>{if(!Number.isFinite(v)||(zero?v<0:v<=0))throw Error(`Invalid ${n}`);return v;};
 const vector=(v,n)=>{if(!Array.isArray(v)||v.length!==n||!v.every(Number.isFinite))throw Error('Invalid preparation vector');return v;};
 const random=seed=>{let s=seed>>>0;return()=>{s=(Math.imul(s,1664525)+1013904223)>>>0;return(s+.5)/2**32;};};
+const RECIPE_DEFAULTS={seed:41,count:64,grainDetail:1,width:.025,radius:.0027,spread:.45,angularity:.17,friction:.65,paleFraction:.22,darkFraction:.25,density:2600,pourRate:100,dt:1/240,iterations:16};
 export function preparationRecipe(input={}){
  if(!input||typeof input!=='object'||Array.isArray(input))throw Error('Invalid mixture');
- const c={seed:41,count:64,grainDetail:1,width:.025,radius:.0027,spread:.45,angularity:.17,friction:.65,paleFraction:.22,darkFraction:.25,density:2600,pourRate:100,dt:1/240,iterations:16,...input};
+ const c={...RECIPE_DEFAULTS,...input};
  for(const k of ['seed','count','iterations','grainDetail'])if(!Number.isSafeInteger(c[k])||c[k]<(['seed','grainDetail'].includes(k)?0:1))throw Error(`Invalid ${k}`);
  for(const k of ['width','radius','density','pourRate','dt'])positive(c[k],k);
  for(const k of ['spread','angularity','friction','paleFraction','darkFraction'])positive(c[k],k,true);
@@ -73,12 +74,17 @@ function validateIngredients(all,c){
 }
 function validatePhysicalState({time,lidHeight,containerX,phase,history,grains},all){
  positive(time,'time',true);positive(lidHeight,'lid height');if(!Number.isFinite(containerX))throw Error('Invalid container position');
- if(!Array.isArray(history))throw Error('Invalid preparation history');if(phase){if(!history.length||history.at(-1)?.kind!==phase.kind||history.at(-1)?.completed!==undefined)throw Error('Invalid active preparation history');if(!['pour','settle','shake','compress','unload'].includes(phase.kind))throw Error('Invalid saved phase');positive(phase.seconds,'phase duration');positive(phase.elapsed,'phase elapsed',true);if(phase.elapsed>=phase.seconds||!Number.isFinite(phase.from)||!Number.isFinite(phase.target)||!Number.isFinite(phase.amplitude)||!Number.isFinite(phase.frequency)||!Number.isSafeInteger(phase.initialCount)||phase.initialCount<0||phase.initialCount>all.length)throw Error('Invalid saved phase');}
+ if(!Array.isArray(history)||history.some((h,i)=>!h||typeof h!=='object'||!Number.isFinite(h.started)||(h.completed!==undefined&&!Number.isFinite(h.completed))||(h.completed===undefined&&(!phase||i!==history.length-1))))throw Error('Invalid preparation history');if(phase){if(!history.length||history.at(-1)?.kind!==phase.kind||history.at(-1)?.completed!==undefined)throw Error('Invalid active preparation history');if(!['pour','settle','shake','compress','unload'].includes(phase.kind))throw Error('Invalid saved phase');positive(phase.seconds,'phase duration');positive(phase.elapsed,'phase elapsed',true);if(phase.elapsed>=phase.seconds||!Number.isFinite(phase.from)||!Number.isFinite(phase.target)||!Number.isFinite(phase.amplitude)||!Number.isFinite(phase.frequency)||!Number.isSafeInteger(phase.initialCount)||phase.initialCount<0||phase.initialCount>all.length)throw Error('Invalid saved phase');}
  if(!Array.isArray(grains)||grains.length>all.length)throw Error('Invalid deposited inventory');for(const [i,row]of grains.entries()){if(!row||row.id!==i)throw Error('Invalid deposited identity');vector(row.position,3);vector(row.velocity,3);vector(row.angularVelocity,3);vector(row.quaternion,4);if(Math.abs(Math.hypot(...row.quaternion)-1)>1e-5)throw Error('Invalid grain orientation');}
 }
+function checkpointRecipe(saved){
+ if(saved?.schema!==PREPARATION_SCHEMA)throw Error('Invalid preparation checkpoint schema');
+ if(!saved.recipe||Object.keys(RECIPE_DEFAULTS).some(k=>!Object.hasOwn(saved.recipe,k)))throw Error('Missing required checkpoint recipe field');
+ if(!Object.hasOwn(saved,'phase')||(saved.phase!==null&&(!saved.phase||typeof saved.phase!=='object'||Array.isArray(saved.phase))))throw Error('Missing or invalid checkpoint phase');
+ return preparationRecipe(saved.recipe);
+}
 export function createGranularPreparation(input={},saved=null){
- if(saved!==null&&saved.schema!==PREPARATION_SCHEMA)throw Error('Invalid preparation checkpoint schema');
- const c=preparationRecipe(saved?.recipe??input);planPreparation(c,{availableBytes:globalThis.performance?.memory?performance.memory.jsHeapSizeLimit-performance.memory.usedJSHeapSize:Infinity});const all=saved?structuredClone(saved.ingredients):ingredients(c);
+ const c=saved===null?preparationRecipe(input):checkpointRecipe(saved);planPreparation(c,{availableBytes:globalThis.performance?.memory?performance.memory.jsHeapSizeLimit-performance.memory.usedJSHeapSize:Infinity});const all=saved?structuredClone(saved.ingredients):ingredients(c);
  validateIngredients(all,c);
  const w=new CANNON.World({gravity:new CANNON.Vec3(0,-9.81,0)});w.broadphase=new CANNON.SAPBroadphase(w);w.broadphase.useBoundingBoxes=true;w.solver.iterations=c.iterations;w.solver.tolerance=1e-9;w.allowSleep=true;
  w.defaultContactMaterial.friction=c.friction;w.defaultContactMaterial.restitution=.02;w.defaultContactMaterial.contactEquationStiffness=1e7;
@@ -143,11 +149,11 @@ function transform(p,row){const q=row.quaternion,v=cross(q.slice(0,3),p),vv=cros
 export function preparationSource(snapshot,{container=false}={}){
  if(snapshot?.schema!==PREPARATION_SCHEMA)throw Error('Explicit preparation snapshot required');
  if(!snapshot.recipe||!Array.isArray(snapshot.ingredients)||!Array.isArray(snapshot.grains))throw Error('Incomplete preparation snapshot inventory');if(!snapshot.grains.length)throw Error('No poured grains in material source');
- const c=preparationRecipe(snapshot.recipe);validateIngredients(snapshot.ingredients,c);validatePhysicalState(snapshot,snapshot.ingredients);
+ const c=checkpointRecipe(snapshot);validateIngredients(snapshot.ingredients,c);validatePhysicalState(snapshot,snapshot.ingredients);
  const triangles=[],all=snapshot.ingredients;
  const rows=snapshot.grains;
  for(const row of rows){const g=all[row.id],v=g.vertices.map(p=>transform(p,row));for(const [a,b,c]of g.faces)triangles.push({a:v[a],b:v[b],c:v[c],materialIndex:g.materialIndex,kind:'prepared-grain',identity:`grain-${g.id}`});}
- const half=snapshot.recipe.width/2;
+ const half=c.width/2;
  if(container){const x=snapshot.containerX,a=[x-half,0,-half],b=[x+half,0,-half],c=[x+half,0,half],d=[x-half,0,half];triangles.push({a,b:c,c:b,materialIndex:3,kind:'tray'},{a,b:d,c,materialIndex:3,kind:'tray'});}
- return {schema:'kaminos.prepared-granular-source.v1',config:{kind:'granular-preparation',tileSize:snapshot.recipe.width,snapshot:structuredClone(snapshot),container},triangles,materials:structuredClone(INGREDIENTS),referenceHeight:triangles.reduce((h,t)=>Math.max(h,t.a[1],t.b[1],t.c[1]),0)+.002,samplingPlaneHeight:0,boundary:'Actual bounded grain geometry; no continuous matrix, periodic tile or cohesive soil claim',unit:'metres'};
+ return {schema:'kaminos.prepared-granular-source.v1',config:{kind:'granular-preparation',tileSize:c.width,snapshot:structuredClone(snapshot),container},triangles,materials:structuredClone(INGREDIENTS),referenceHeight:triangles.reduce((h,t)=>Math.max(h,t.a[1],t.b[1],t.c[1]),0)+.002,samplingPlaneHeight:0,boundary:'Actual bounded grain geometry; no continuous matrix, periodic tile or cohesive soil claim',unit:'metres'};
 }

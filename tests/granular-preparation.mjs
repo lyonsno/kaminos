@@ -52,3 +52,8 @@ assert.equal(birth.grains.length,8);assert.ok(birth.lidHeight>inlet.read().top,'
 const offset=JSON.parse(JSON.stringify(s));offset.containerX=.003;
 const tray=preparationSource(offset,{container:true}).triangles.filter(t=>t.kind==='tray');
 assert.equal(Math.min(...tray.flatMap(t=>[t.a[0],t.b[0],t.c[0]])),offset.containerX-offset.recipe.width/2);
+for(const key of ['width','dt']){const missing=JSON.parse(JSON.stringify(s));delete missing.recipe[key];assert.throws(()=>createGranularPreparation(null,missing),/missing.*recipe/i,'saved '+key+' cannot default');assert.throws(()=>createMaterialTeacherSource({kind:'granular-preparation',snapshot:missing}),/missing.*recipe/i,'source '+key+' cannot default');}
+const interrupted=createGranularPreparation({count:1,grainDetail:0,width:.04,dt:.002});interrupted.start('pour',{seconds:.01});interrupted.advance(.002);
+const lostPhase=JSON.parse(JSON.stringify(interrupted.snapshot()));delete lostPhase.phase;
+assert.throws(()=>createGranularPreparation(null,lostPhase),/phase/i);assert.throws(()=>preparationSource(lostPhase),/phase/i);
+lostPhase.phase=null;assert.throws(()=>createGranularPreparation(null,lostPhase),/history/i);assert.throws(()=>preparationSource(lostPhase),/history/i);interrupted.dispose();
