@@ -1,11 +1,30 @@
 # Earth material workshop
 
 Open `?workspace=workbench&experiment=earth-material`. The left experiment panel
-is hidden for this workshop. **Earth** is anchored to the specimen; **Press** and
-**Stroke** are anchored to its forming sphere. Move the sphere with the ordinary
-scene gizmo, then press. Earth opens cohesion, friction and yield controls plus
-**Settle**. Surface and specimen-file actions are folded under that same control.
-Existing camera/transform keys remain unchanged; there are no new domain hotkeys.
+is hidden. **Earth** opens material/surface/file controls at the specimen;
+**Tool** selects the forming sphere through the shared editor. Move that sphere
+through the earth with the ordinary scene gizmo. Physics follows the movement
+and the sphere stays where you put it. **Live / Paused** beside the tool pauses
+physical input so the sphere can be repositioned freely. No new domain hotkeys.
+
+A persistent worker owns the same physical specimen during live and explicit
+advance. Each observed hand sample retains its duration and endpoints; solver
+substeps sweep the tool between them with contact velocity. Pending input is
+processed in order rather than discarded. The physics clock can lag the hand
+under load; this implementation does not promise real-time default-specimen
+throughput or a separate high-fidelity offline physics model. Pausing drains
+already accepted input. A short configurable contact/settling tail follows
+movement, then the physical clock rests until another intervention.
+
+A separate worker reconstructs a **coarse live surface at detail12** (or the
+chosen preview detail when lower). While input continues, completed coarse
+surfaces can follow the evolving physics without waiting for detailed meshing.
+After motion and its settling tail stop, the chosen preview detail rebuilds
+automatically. New motion cancels obsolete fine reconstruction; generation and
+physical-revision checks prevent old output replacing a newer specimen. Preview
+and capture detail change geometry sampling, not the retained physical state.
+The view and tool remain interactive while these jobs run. This is a first
+interaction implementation; the physical model remains exploratory.
 
 Detail and timing values are typed and committed with Enter, rather than dragged
 or applied on each keystroke. A rejected request restores the accepted value and
@@ -32,8 +51,8 @@ offscreen and identify that offscreen condition. Hidden objects keep hidden chip
 The first preparation model uses the already installed Cannon ES 0.20.0 CPU
 contact/rigid solver. Soil is represented by contacting mass-bearing spheres
 joined by cohesive distance constraints. Yielded bonds retain changes to their rest lengths in compression and extension;
-sufficiently stretched bonds break. The tool is lifted and a separate unforced
-release interval is simulated before the press result is presented. Grit has convex faceted geometry
+sufficiently stretched bonds break. The scripted `press()` agent operation remains as a controlled fixture; ordinary
+authoring uses native movement and does not return the sphere to a scripted pose. Grit has convex faceted geometry
 and full translating/rotating rigid dynamics. Gravity, friction and reciprocal
 contact act on both. This is an exploratory cohesive aggregate model, not a
 calibrated soil continuum or a retained Hill terrain fork. The tray has fixed
@@ -64,10 +83,15 @@ caches, so a loaded continuation is a cold-contact continuation rather than a
 bit-identical copy of the solver's internal warm state. These files are the
 workshop's continuation route; this experiment does not yet add an ordinary
 whole-scene Save/Load record domain. The current setup is also projected through
-Workbench experiment inputs after an operation.
+Workbench experiment inputs after an operation or completed fine reconstruction.
+Save retains the observed forming samples as well as the current physical
+snapshot. The samples describe hand motion; explicit material/advance changes
+still use the common recorder and the complete snapshot is the continuation
+authority. `snapshot()` drains captured input before returning. Worker failure
+is surfaced; pending input is retained rather than silently claimed applied.
 
 Agents use the same operations via `window.kaminosWorkbenchExperiments.invoke`:
-`advance({seconds})`, `press()`, `configure(settings)`, `freeze()`, `snapshot()`,
+`live(boolean)`, `advance({seconds})`, `press()`, `configure(settings)`, `freeze()`, `snapshot()`,
 `load(recipe)`, `source()` and `reset()`. `freeze()` returns `{source,authoring,
 surface}`. The `source` descriptor includes the complete frozen snapshot and
 includes a finite repeated neighborhood and can be placed in the existing fit

@@ -85,10 +85,10 @@ export class EarthSpecimen {
  static fromSnapshot(snapshot){return new EarthSpecimen({},snapshot);}
  advance(seconds,{tool=null}={}){
   if(this.disposed)throw Error('Earth specimen disposed');finite(seconds,'duration');
-  if(tool){vector(tool.position,3,'tool position');finite(tool.radius,'tool radius',Number.MIN_VALUE);}
+  if(tool){vector(tool.position,3,'tool position');finite(tool.radius,'tool radius',Number.MIN_VALUE);if(tool.velocity)vector(tool.velocity,3,'tool velocity');}
   if(seconds===0)return this.state();
   this.tool.collisionResponse=!!tool;
-  if(tool){this.tool.position.set(...tool.position);if(this.tool.shapes[0].radius!==tool.radius){this.tool.shapes[0].radius=tool.radius;this.tool.shapes[0].updateBoundingSphereRadius();this.tool.updateBoundingRadius();}this.tool.aabbNeedsUpdate=true;}
+  if(tool){this.tool.position.set(...tool.position);this.tool.velocity.set(...(tool.velocity??[0,0,0]));if(this.tool.shapes[0].radius!==tool.radius){this.tool.shapes[0].radius=tool.radius;this.tool.shapes[0].updateBoundingSphereRadius();this.tool.updateBoundingRadius();}this.tool.aabbNeedsUpdate=true;}
   const count=Math.ceil(seconds/this.config.dt),dt=seconds/count;
   for(let i=0;i<count;i++){
    this.world.step(dt);
@@ -104,7 +104,7 @@ export class EarthSpecimen {
    }
    this.time+=dt;this.steps++;
   }
-  this.tool.collisionResponse=false;
+  this.tool.collisionResponse=false;this.tool.velocity.set(0,0,0);
   return this.state();
  }
  setMaterial(values){
