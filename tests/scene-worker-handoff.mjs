@@ -6,6 +6,58 @@ import {createSceneFrameComposition} from '../scene-frame-composition.mjs';
 
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
+test('cooperative scope drains admitted frames before its handler applies a new scene',async t=>{
+  const started=deferred(),finishWork=deferred(),frameStarted=deferred(),finishFrame=deferred();let applied=false;
+  const {client}=await harness(t,async()=>({commands:{load:async(_,ctx)=>{
+    await ctx.withFrames(async()=>{started.resolve();await finishWork.promise;});
+    applied=true;ctx.advanceEpoch('scene');ctx.activate();return true;
+  }},requestFrame:async(_,ctx,draw)=>{frameStarted.resolve();await finishFrame.promise;return draw();},frame:()=>({drawn:true})}));
+  await client.initialize({}).completion;
+  const load=client.request('load');load.completion.catch(()=>{});await started.promise;
+  const frame=client.request('frame');frame.completion.catch(()=>{});await frameStarted.promise;
+  finishWork.resolve();await tick();await tick();const appliedBeforeFrame=applied;
+  finishFrame.resolve();const observed=await frame.completion;await load.completion;
+  assert.equal(appliedBeforeFrame,false);assert.equal(observed.output.drawn,true);assert.equal(applied,true);
+});
+test('pre-initialization commands fail promptly instead of leaving an unresolved request',async t=>{
+  const {client,host,port}=await harness(t,async()=>({commands:{}}));
+  const delivered=new Promise(resolve=>port.addEventListener('message',resolve,{once:true}));
+  const request=client.request('frame');request.completion.catch(()=>{});await delivered;
+  assert.equal(host.read().phase,'transport-failed');
+  await assert.rejects(request.completion,/must initialize/);
+  assert.equal(client.read().closed,true);
+});
+test('malformed response kinds and impossible request/control identities fail closed',async()=>{
+  const {createSceneWorkerClient,SCENE_WORKER_REPLY}=await import('../scene-worker-handoff.mjs');
+  for(const bad of [{kind:'bogus'},{kind:'result',requestId:'bad:99',ok:true},{kind:'progress'},{kind:'control-result',controlId:'bad:control:99'}]){
+    const {port1,port2}=new MessageChannel(),client=createSceneWorkerClient({port:port1,sessionId:'bad'});
+    const request=client.initialize({});request.completion.catch(()=>{});
+    try{
+      const delivered=new Promise(resolve=>port1.addEventListener('message',resolve,{once:true}));
+      port2.postMessage({schema:SCENE_WORKER_REPLY,sessionId:'bad',epoch:{scene:0,load:0,device:0},...bad});
+      await delivered;assert.equal(client.read().closed,true,JSON.stringify(bad));
+      await assert.rejects(request.completion,error=>error.gpuRouteHeld===true);
+    }finally{client.disconnect();port1.close();port2.close();}
+  }
+});
+test('a caught progress clone failure does not skip the next observable sequence',async t=>{
+  const {client}=await harness(t,async()=>({commands:{run:(_,ctx)=>{
+    assert.throws(()=>ctx.report({callback(){}}),/clone/i);ctx.report({valid:true});return true;
+  }}}));
+  await client.initialize({}).completion;const run=client.request('run');await run.completion;
+  assert.equal(run.progress[0].sequence,1);assert.deepEqual(run.progress[0].value,{valid:true});
+});
+test('invalid runtime primitives cannot poison retry, while canceled returned runtimes stay owned until retired',async t=>{
+  let first=true;
+  const a=await harness(t,async()=>{if(first){first=false;return 42;}return {commands:{}};});
+  await assert.rejects(a.client.initialize({}).completion,/returned no runtime/);await a.client.initialize({}).completion;
+  const started=deferred(),finish=deferred();let retirements=0;
+  const b=await harness(t,async()=>{started.resolve();await finish.promise;return {commands:{},retire:()=>retirements++};});
+  const init=b.client.initialize({});init.completion.catch(()=>{});await started.promise;init.cancel();await tick();await tick();finish.resolve();
+  await assert.rejects(init.completion,error=>error.name==='AbortError');
+  await assert.rejects(b.client.initialize({}).completion,/already initialized/);
+  await b.client.request('retire').completion;assert.equal(retirements,1);
+});
 test('queued authored edits do not freeze cooperative frames or pretend pending state was applied',async t=>{
   const started=deferred(),finish=deferred(),edits=[];let value=0,draws=0;
   const {client}=await harness(t,async()=>({commands:{
@@ -45,7 +97,7 @@ async function harness(t,createRuntime){
   const host=installSceneWorkerHost({port:port2,createRuntime});
   const client=createSceneWorkerClient({port:port1,sessionId:'scene-test'});
   t.after(()=>{client.disconnect();host.disconnect();port1.close();port2.close();});
-  return {host,client};
+  return {host,client,port:port2};
 }
 
 test('frame transaction rejects asynchronous work before drawing a fallback',()=>{
