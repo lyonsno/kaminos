@@ -36,6 +36,12 @@ returns this worker-local object:
 - `commands`: an own-property map of named `(payload, context)` handlers.
   Handlers may be asynchronous. The runtime composes scene handlers and the
   inference adapter here; operation names belong to those adapters.
+- `foregroundCommands`: an optional own-property map of synchronous authored edit
+  handlers, described below. Registration is explicit; ordinary async commands
+  retain their serialized semantics.
+- `requestMutation(operation, payload, context, apply)`: the foreground admission
+  hook for those handlers. `createSceneWorkerMutationBinding({appHost})` supplies
+  it through the same app requester/device/queue.
 - `frame(payload, context)`: the synchronous ordinary scene/flame transaction.
   Use the normal shared-scene route; this is not a requirement to call the
   specialized `encodeProductFrame` path.
@@ -105,8 +111,8 @@ mutations and observe the current applied scene/epoch, while authored operations
 keep their FIFO order. Pending edits remain unapplied until acknowledged. Camera
 and viewport input snapshots can travel in the frame payload and are applied by
 the runtime at its frame boundary; they should not wait in the authored command
-queue. This permits continued rendering/navigation, while safe authored editing
-during inference still needs a runtime mutation boundary. Already admitted
+queue. This permits continued rendering/navigation. Explicitly registered foreground
+edits use the mutation boundary below; other authored operations keep waiting. Already admitted
 frames and in-flight controls drain before the next
 ordered mutation or retirement, including on failure. Existing worker-local
 frame drivers also remain local; the page need not send an RPC per render pass.
@@ -221,7 +227,7 @@ capture and status publication inside the same local transaction.
 Worker assembly supplies these existing domain operations and keeps its GPU
 objects local. The extraction makes the actual draw callable without the page;
 it does not itself populate the full scene, relocate every domain service,
-or implement safe authored mutation during inference.
+or register the common factory's actual scene-edit handlers.
 
 ## Ordinary lighting resources
 
@@ -260,3 +266,77 @@ standalone reflection context and pre-build ordering are installed by the
 constructor. Page and worker owners do not duplicate those hooks. Requested
 fire-light and emissive-camera providers must return a non-null `outputNode`;
 incomplete providers fail before downstream bloom or selection composition.
+
+
+## Synchronous authored edits during model work
+
+The common worker factory registers the operations whose actual application is
+synchronous in `foregroundCommands`, and spreads the return of
+`createSceneWorkerMutationBinding({appHost})` into its runtime:
+
+```js
+import {createSceneWorkerMutationBinding} from './scene-worker-mutation-binding.mjs';
+return {
+  ...createSceneWorkerMutationBinding({appHost}),
+  commands: {loadScene, executeModel},
+  foregroundCommands: {
+    setObjectPosition(payload, context, service) {
+      context.assertCurrent();
+      const object = findAuthoredObject(payload.id);
+      object.position.fromArray(payload.position);
+      return {id: payload.id, position: object.position.toArray()};
+    },
+  },
+  frame, requestFrame, control, retire,
+};
+```
+
+The example names are factory-owned handlers, not preinstalled operations.
+Loading, parsing, texture decoding and other asynchronous preparation remain
+ordinary commands or prepare independently before a synchronous application
+step. Do not register scene/load/device replacement here. Handler names must
+not also occur in `commands`. Each handler receives the exact admitted Kit
+service as its third argument for existing worker-local GPU operations.
+
+During `context.withFrames()`, eligible edits share the serialized foreground
+transaction tail with frames. They can interleave with the long model command,
+in authored request order, but cannot overtake an earlier ordinary authored
+command, replacement or retirement. Frames may still pass that barrier and see
+the currently applied scene. Outside a cooperative scope these edits wait their
+ordinary queue turn and still use the same foreground admission. The model
+scope and subsequent replacement/retirement drain admitted edits as well as
+frames and controls.
+
+Edit contexts expose requestId, signal, assertCurrent, report, transfer and epoch.
+They exclude advanceEpoch, activate, lifecycle invalidation and withFrames.
+Pending cancellation or stale scene/load/device identity prevents application.
+Ordinary edits leave those replacement epochs unchanged. The model adapter must
+capture and own its input snapshot before opening the cooperative scope; later
+scene edits do not rewrite the admitted model inputs or provenance. This is
+confirmed for the current Klein image-input path; scene-conditioned models
+need their own resource/snapshot ownership analysis before opting in.
+
+The binding activates the existing app foreground owner, validates the exact
+service device/queue, applies once synchronously, and waits for the actual Kit
+receipt. Its output is `{mutationApplied: true, value, foregroundReceipt}`.
+The page keeps the edit pending until this result. GPU completion and display
+presentation retain the receipt's original authority. The app's normal
+foreground composition may draw the resulting scene in that same transaction.
+
+When present, binding failure metadata distinguishes `mutationApplied: false`
+(callback never entered),
+`null` (handler threw after entry, application unknown), and `true` (application
+returned but a later render/receipt step failed). An absent field certifies no application status. This is no rollback guarantee;
+the page must reconcile actual state after unknown or applied failures, not
+blindly retry an edit as if it never ran. Declared async handlers are rejected
+before invocation. A handler returning an unexpected thenable invalidates device
+identity, signals outstanding work and holds the route: an escaped async write
+cannot be certified safe by a failed synchronous receipt. This hold is not
+cleared by an ordinary activate command or a retirement success.
+
+`tests/scene-worker-foreground-edits.mjs` exercises the vendored Kit foreground
+service and Three Object3D mutation through native MessagePorts and an actual
+Node Worker. Recording queue/frame services establish boundary ordering and
+thread placement; they do not execute model kernels or establish full native
+coupled-scene editing/presentation. The common factory owns registration and
+consumer exercise of actual domain edits.
