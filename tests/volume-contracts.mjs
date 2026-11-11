@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import vm from 'node:vm';
-import {createSceneRenderer} from '../scene-render-bootstrap.mjs';
+import {createSceneRenderResources} from '../scene-render-resources.mjs';
 
 const root = new URL('..', import.meta.url).pathname;
 const index = readFileSync(join(root, 'index.html'), 'utf8');
@@ -1928,7 +1928,7 @@ assert.match(core, /kaminos-three-volume-shared-webgpu-device-v0/, 'shared devic
 assert.match(core, /single-explicit-device-three-and-volume-v0/, 'shared device contract names its single-device authority');
 assert.match(core, /maxStorageBuffersInFragmentStage/, 'shared device factory requests per-fragment-stage storage buffer limits for Three node materials');
 assert.match(index, /requestKaminosSharedWebGpuDevice/, 'index imports the shared device factory');
-const rendererStart=index.indexOf('  const sceneRenderBootstrap=await createSceneRenderer(');
+const rendererStart=index.indexOf('  const sceneRenderResources=createSceneRenderResources(');
 const rendererEnd=index.indexOf("  window.kaminosStartup?.phase('Building workspace');",rendererStart);
 assert.ok(rendererStart>0&&rendererEnd>rendererStart,'actual page renderer bootstrap is present');
 const sharedRendererDevice={queue:{}};
@@ -1937,7 +1937,7 @@ class RecordedRenderer{
   setSize(){} setPixelRatio(){} async init(){} dispose(){}
 }
 const recordedBootstrap=await vm.runInNewContext(`(async()=>{let renderer;${index.slice(rendererStart,rendererEnd)};return {renderer,sceneRenderBootstrap};})()`,{
-  createSceneRenderer,THREE:{WebGPURenderer:RecordedRenderer,PMREMGenerator:class{}},scene:{},camera:{},
+  createSceneRenderResources,THREE:{WebGPURenderer:RecordedRenderer,PMREMGenerator:class{}},scene:{},camera:{},
   sharedGpu:{device:sharedRendererDevice,queue:sharedRendererDevice.queue},samHostContext:null,
   readSceneViewport:()=>({width:100,height:100,pixelRatio:1}),sceneEnvironment:{read:()=>({exposure:1})},
   isFireLightFieldTimingRoute:()=>false,location:{search:''},URLSearchParams,vp:{appendChild(){}},window:{},

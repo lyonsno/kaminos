@@ -19,6 +19,7 @@ export function createSceneRenderResources({THREE,scene,camera,canvas,readViewpo
  async function buildRenderer(ctx,{sharedGpu,restore=null}={}){
   current(ctx);
   const options=readRendererOptions();
+  let constructed=false;
   try{
    const built=await createSceneRenderer({...options,THREE,scene,camera,
     sharedGpu:sharedGpu??readSharedGpu(),canvas:restore?.canvas??canvas,
@@ -31,19 +32,19 @@ export function createSceneRenderResources({THREE,scene,camera,canvas,readViewpo
      }
      onConstructed(value,{replacement:!!restore});
     }});
-   rendererRuntime=built;renderer=built.renderer;pmremGenerator=built.pmremGenerator;rendererReady=true;
-   current(ctx);return resources();
+   constructed=true;rendererRuntime=built;renderer=built.renderer;pmremGenerator=built.pmremGenerator;
+   current(ctx);rendererReady=true;return resources();
   }catch(error){
    // The bootstrap disposes its own failed constructor. Preserve a handle
    // only when its cleanup failed, or initialization completed before staleness.
-   if(!rendererReady&&!error.cleanupError)renderer=null;
+   if(!constructed&&!error.cleanupError)renderer=null;
    throw error;
   }
  }
  async function retireRenderer(){
+  rendererReady=false;rendererRuntime=null;
   if(pmremGenerator){await pmremGenerator.dispose();pmremGenerator=null;}
   if(renderer){await renderer.dispose();renderer=null;}
-  rendererReady=false;rendererRuntime=null;
  }
  async function retireLighting(){
   while(retained.length){

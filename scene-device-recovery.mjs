@@ -19,6 +19,7 @@ export function createDeviceRecovery({device,stop,rebuild,changed=()=>{},automat
  }
  function run(command){
   if(!automatic&&typeof command?.assertCurrent!=='function')throw Error('Explicit device recovery requires command assertCurrent');
+  if(!automatic&&task)throw Error('Device recovery already in progress');
   if(task||phase==='disposed')return task??Promise.resolve();
   task=Promise.resolve().then(async()=>{
    if(!automatic&&phase==='disposed')throw Error('Device recovery disposed before rebuild');

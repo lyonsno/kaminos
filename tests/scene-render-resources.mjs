@@ -73,3 +73,24 @@ test('staleness after construction retains actual allocated resources for owner 
  await assert.rejects(f.shell.initializeRenderer({assertCurrent(){if(++checks===3)throw Error('device epoch changed');}}),/device epoch changed/);
  assert(f.shell.renderer);assert(f.shell.pmremGenerator);await f.shell.retire();assert.equal(f.shell.renderer,null);
 });
+
+test('stale renderer stays retained for cleanup without becoming usable or replacing accepted settings',async()=>{
+ const f=fixture();await f.shell.initialize(context);f.shell.renderer.toneMapping=77;
+ let checks=0;
+ await assert.rejects(f.shell.replaceRenderer({device:f.devices[1]}, {assertCurrent(){if(++checks===4)throw Error('replacement epoch changed');}}),/replacement epoch changed/);
+ assert(f.shell.renderer);assert(f.shell.pmremGenerator);
+ assert.throws(()=>f.shell.resize(),/not initialized/);
+ f.shell.renderer.toneMapping=999;
+ const next=await f.shell.replaceRenderer({device:f.devices[2]},context);
+ assert.equal(next.renderer.toneMapping,77,'a rejected renderer cannot overwrite the accepted pre-loss settings');
+ await f.shell.retire();
+});
+test('failed renderer retirement revokes use immediately and retains accepted replacement settings',async()=>{
+ const f=fixture();await f.shell.initialize(context);f.shell.renderer.toneMapping=77;
+ f.failDispose(true);await assert.rejects(f.shell.replaceRenderer({device:f.devices[1]},context),/renderer cleanup denied/);
+ assert.throws(()=>f.shell.resize(),/not initialized/);
+ f.shell.renderer.toneMapping=999;f.failDispose(false);
+ const next=await f.shell.replaceRenderer({device:f.devices[2]},context);
+ assert.equal(next.renderer.toneMapping,77,'half-retired renderer settings cannot replace the retained accepted snapshot');
+ await f.shell.retire();
+});
