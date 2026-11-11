@@ -130,7 +130,18 @@ export function createSceneWorkerSceneResources(context){
      compile:()=>withViewportVisibilityAsync(workingScene.objects,visible,async()=>{await beautyLods.whenIdle();return compileSceneLighting(renderer(),preparePasses(),{visibility:()=>beautyLods.borrowFrame(camera,frameOptions())});}),
      liveCompile:({isCurrent})=>compileSceneLighting(renderer(),preparePasses(),{live:true,isCurrent,visibility:()=>{const restoreVisibility=borrowViewportVisibility(workingScene.objects,visible),restoreBeauty=beautyLods.borrowFrame(camera,frameOptions());return()=>{restoreBeauty();restoreVisibility();};}}),
      onStatus:value=>report(activeContext,{lightingPreparation:value})});
-    const owner=Object.freeze({...preparation,request(change){if(retiring||lightingPreparation!==owner||(presentationHeld&&!presentationRestored))throw Error('Ordinary scene presentation is held');return preparation.request(change);}});
+    function admitPreparation(cleanup=false){
+     if(lightingPreparation!==owner||(!cleanup&&(retiring||(presentationHeld&&!presentationRestored))))throw Error('Ordinary scene presentation is held');
+    }
+    // Forward work through one lifetime fence. In particular retry's original
+    // closure calls request internally, so spreading it would bypass admission.
+    const owner=Object.freeze({state:preparation.state,whenIdle:preparation.whenIdle,
+     request(change){admitPreparation();return preparation.request(change);},
+     retry(){admitPreparation();return preparation.retry();},
+     withRenderer(operation){admitPreparation();return preparation.withRenderer(()=>{admitPreparation();return operation();});},
+     deferDisposal(dispose){admitPreparation();return preparation.deferDisposal(dispose);},
+     setExternalHold(value){admitPreparation(!Boolean(value));return preparation.setExternalHold(value);},
+    });
     lightingPreparation=owner;
     selection=createSelectionFeedback(camera);selection.setStyle({width:editorDisplay.outlineWidth,opacity:editorDisplay.outlineOpacity});
     shading=createViewportShading({createWireMaterial:()=>{const material=new THREE.MeshBasicNodeMaterial({color:0x15181c,wireframe:true,transparent:true,opacity:.42,depthWrite:false,side:THREE.DoubleSide});wireMaterials.push(material);return material;}});

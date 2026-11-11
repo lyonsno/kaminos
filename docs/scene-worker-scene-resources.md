@@ -94,6 +94,11 @@ queue settlement and any additional `replacement.context.retire` service.
 The lighting preparation owner exposes the existing `request(change)`,
 `setExternalHold`, `state`, `whenIdle`, `withRenderer`, and retry operations;
 holds forward to the attached volume's `setSceneLightingRebuildPending`.
+Preparation work and state changes share the presentation/current-owner fence,
+including `retry` and renderer work that was queued before a stop. The current
+owner can release an existing external hold during cleanup; a superseded owner
+cannot change that hold. Read-only `state` and `whenIdle` remain available for
+inspection and cleanup.
 `domains.prepareFrame()` optionally synchronizes sources before ordinary depth;
 the ordinary owner updates its fire receiver once afterward.
 `createFireLightReceiver` is accepted as an alias for

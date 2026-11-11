@@ -325,3 +325,42 @@ test('retained beauty proxy roots register on the new surface-lighting owner and
  await f.shell.retire(f.ctx);await f.renderResources.retire();
  }finally{delete globalThis.self;}
 });
+
+
+function recordingCompiler(f){
+ Object.assign(f.renderer,{contextNode:THREE.TSL.context({}),getRenderTarget:()=>null,getMRT:()=>null,setRenderTarget(){},setMRT(){},
+  beginLightingPreparation(){return {node:{},commit(){},discard(){}};},async compileAsync(){f.events.push('fenced.compile');}});
+}
+for(const stage of ['held','superseded'])for(const operation of ['retry','withRenderer','deferDisposal','setExternalHold'])test(`${operation} refuses ${stage} preparation owners`,async()=>{
+ const f=fixture();await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},appHost:{},context:f.ctx});recordingCompiler(f);
+ const old=f.shell.ordinary.lightingPreparation;f.shell.stopRendererResources();
+ if(stage==='superseded'){await f.shell.releaseRendererPresentation(f.ctx);await f.shell.restoreRendererPresentation(f.ctx);assert.notEqual(f.shell.ordinary.lightingPreparation,old);}
+ let entered=0;
+ try{
+  await assert.rejects(async()=>{
+   if(operation==='retry')return old.retry();
+   if(operation==='withRenderer')return old.withRenderer(()=>{entered++;});
+   if(operation==='deferDisposal')return old.deferDisposal(()=>{entered++;});
+   return old.setExternalHold(true);
+  },/presentation is held/);
+  assert.equal(entered,0);assert.equal(f.events.filter(e=>e==='fenced.compile').length,0);
+  if(stage==='held')await old.setExternalHold(false); // root cleanup must be able to drop its existing hold
+  else await assert.rejects(async()=>old.setExternalHold(false),/presentation is held/);
+ }finally{await f.shell.retire(f.ctx);await f.renderResources.retire();}
+});
+
+test('queued renderer operation is fenced if its preparation owner stops before dispatch',async()=>{
+ const f=fixture();await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},appHost:{},context:f.ctx});
+ let entered=0;const pending=f.shell.ordinary.lightingPreparation.withRenderer(()=>{entered++;});f.shell.stopRendererResources();
+ try{await assert.rejects(pending,/presentation is held/);assert.equal(entered,0);}
+ finally{await f.shell.retire(f.ctx);await f.renderResources.retire();}
+});
+
+test('current restored preparation can retry before domain reattach while drawing stays held',async()=>{
+ const f=fixture();await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},appHost:{},context:f.ctx});recordingCompiler(f);
+ f.shell.stopRendererResources();await f.shell.releaseRendererPresentation(f.ctx);await f.shell.restoreRendererPresentation(f.ctx);
+ const owner=f.shell.ordinary.lightingPreparation;await owner.setExternalHold(true);await owner.retry();await owner.setExternalHold(false);
+ assert.equal(f.events.filter(e=>e==='fenced.compile').length,2);assert.equal(f.shell.readUi().surfaces.scene.active,false);
+ await f.shell.reattachVolume({volume:{},context:f.ctx});assert.equal(f.shell.readUi().surfaces.scene.active,true);
+ await f.shell.retire(f.ctx);await f.renderResources.retire();
+});
