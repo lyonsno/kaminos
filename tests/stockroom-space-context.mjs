@@ -26,11 +26,11 @@ test('the actual concrete field respects a native neighbor and changes when it m
  box.position.x=4;const b=collectSpaceNeighborhood(root,p,entries);assert.ok(compileSpace(p,b)(.8,1.9,0)<-.01,'moving ceiling must release its actual constraint');
 });
 for(const mode of ['object','group'])test(`unresolved construction withholds ${mode} repeated concrete and restoration refreshes it`,()=>{
- const {entries}=fixture(),p={...defaultSpace(),resolution:12,neighbors:['ceiling']},root=createSpace(p),repetition={...repetitionDefaults(),mode:'line',count:2,step:[6,0,0]};
+ const {entries}=fixture(),p={...defaultSpace(),resolution:16,neighbors:['ceiling']},root=createSpace(p),repetition={...repetitionDefaults(),mode:'line',count:2,step:[6,0,0]};
  const pose=o=>({position:o.position.toArray(),rotation:[o.rotation.x,o.rotation.y,o.rotation.z],scale:o.scale.toArray()}),entry={id:'place',object:root,type:'pbr',source:SPACE_SOURCE,space:p,repetition:mode==='object'?repetition:null};
  const groups=mode==='group'?[{id:'assembly',objectIds:['place'],transform:pose(root),repetition}]:[],controller=createSceneRepetitionController({objects:()=>[entry],groups:()=>groups,readPose:pose});
  const resolved=collectSpaceNeighborhood(root,p,entries);rebuildSpace(root,p,resolved);controller.sync();
- const source=()=>root.children.find(c=>c.userData.spaceSurface),copy=()=>root.children.find(isRepetitionCopy).children[0];assert.equal(source().visible,true);assert.equal(copy().visible,true);
- const previous=source().geometry;rebuildSpace(root,p,collectSpaceNeighborhood(root,p,[]));controller.sync();assert.equal(source().visible,false);assert.equal(copy().visible,false,'unresolved repeated concrete must not remain visible');
- rebuildSpace(root,p,resolved);controller.sync();assert.equal(source().visible,true);assert.equal(copy().visible,true);assert.notEqual(source().geometry,previous);assert.equal(copy().geometry,source().geometry);controller.clearAll();
+ const source=()=>root.children.find(c=>c.userData.spaceSurface),copy=()=>root.children.find(isRepetitionCopy).children[0];assert.equal(source().visible,true);assert.equal(copy().visible,true);assert.ok(source().count>0,'the visible fixture must contain rendered concrete');
+ const previous=source().geometry,version=previous.attributes.position.version;rebuildSpace(root,p,collectSpaceNeighborhood(root,p,[]));controller.sync();assert.equal(source().visible,false);assert.equal(copy().visible,false,'unresolved repeated concrete must not remain visible');
+ rebuildSpace(root,p,resolved);controller.sync();assert.equal(source().visible,true);assert.equal(copy().visible,true);assert.ok(source().geometry!==previous||source().geometry.attributes.position.version>version,'restoration must publish current vertex data');assert.equal(copy().geometry,source().geometry);controller.clearAll();
 });

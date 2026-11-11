@@ -53,6 +53,14 @@ stale or unwritten extractor tails.
 The grid bounds follow material-bearing claims, rather than clipping edits to a
 fixed world box. The default grid is 36 cubed; recipe resolution is explicit.
 
+Construction distances use an AABB hierarchy with conservative bounds on the
+existing box field, including nonuniform transforms and shear. This skips only
+boxes proved unable to change the current field value; it does not drop distant
+constraints or reduce resolution. Compact geometry buffers are reused when the
+extracted vertex count is unchanged, with picking indexes invalidated on writes.
+Pointer previews use the latest displacement once per animation frame. Release
+flushes its exact position before committing; Escape discards pending work.
+
 `vendor/MarchingCubes.js` is generated from the existing dependency using:
 
 ```sh

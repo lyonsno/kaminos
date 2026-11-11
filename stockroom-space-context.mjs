@@ -26,6 +26,28 @@ export function compileNeighborBoxes(boxes){return boxes.map(box=>{
   return (Math.hypot(Math.max(a,0),Math.max(b,0),Math.max(c,0))+Math.min(Math.max(a,b,c),0))*scale;
  };
 });}
+export function compileNeighborField(boxes,metrics=null){
+ const fields=compileNeighborBoxes(boxes),items=boxes.map((box,i)=>{
+  const matrix=new THREE.Matrix4().fromArray(box.matrix),bounds=new THREE.Box3(new THREE.Vector3(...box.min),new THREE.Vector3(...box.max)).applyMatrix4(matrix),e=matrix.elements;
+  // Frobenius norm bounds the transform's stretch, including shear. Thus
+  // world AABB distance times this factor is a lower bound on the box field.
+  const factor=Math.min(...[0,1,2].map(i=>Math.hypot(e[i*4],e[i*4+1],e[i*4+2])))/Math.hypot(e[0],e[1],e[2],e[4],e[5],e[6],e[8],e[9],e[10]);
+  return {bounds,factor,distance:fields[i]};
+ });
+ const build=items=>{
+  if(!items.length)return null;if(items.length===1)return items[0];
+  const bounds=new THREE.Box3();let factor=Infinity;for(const item of items){bounds.union(item.bounds);factor=Math.min(factor,item.factor);}
+  const size=bounds.getSize(new THREE.Vector3()),axis=size.x>=size.y&&size.x>=size.z?'x':size.y>=size.z?'y':'z';items.sort((a,b)=>a.bounds.min[axis]+a.bounds.max[axis]-b.bounds.min[axis]-b.bounds.max[axis]);const middle=items.length>>1;
+  return {bounds,factor,left:build(items.slice(0,middle)),right:build(items.slice(middle))};
+ };
+ const root=build(items),visit=(node,x,y,z,solid)=>{
+  if(!node)return solid;const a=node.bounds.min,b=node.bounds.max,gap=Math.max(a.x-x,x-b.x,a.y-y,y-b.y,a.z-z,z-b.z,0),slack=1e-12*(1+Math.abs(x)+Math.abs(y)+Math.abs(z)+Math.abs(solid));
+  if(gap>0&&-gap*node.factor+slack<=solid)return solid;
+  if(node.distance){if(metrics)metrics.boxTests++;return Math.max(solid,-node.distance(x,y,z));}
+  return visit(node.right,x,y,z,visit(node.left,x,y,z,solid));
+ };
+ return (x,y,z,solid)=>visit(root,x,y,z,solid);
+}
 export function nearestSpaceBoundary(context,point,{horizontal=false}={}){
  let nearest=null;
  for(const box of context.boxes){

@@ -1,7 +1,7 @@
 import * as THREE from './lib/three.core.js';
 import {MarchingCubes} from './vendor/MarchingCubes.js';
 import {checkedPose} from './scene-edit-session.mjs';
-import {compileNeighborBoxes} from './stockroom-space-context.mjs';
+import {compileNeighborField} from './stockroom-space-context.mjs';
 export const SPACE_SOURCE='kaminos:stockroom-space-v1';
 export const defaultSpace=()=>({schema:'kaminos.stockroom-space.v1',resolution:36,neighbors:[],claims:[{id:'passage',role:'empty',center:[0,1.05,0],radii:[1.25,.85,1.2],rotation:[0,0,0],rim:true,bandNormal:[0,0,1],bandHalfWidth:.44}]});
 const resources=new WeakMap();
@@ -30,7 +30,7 @@ function compiledClaim(c){
 }
 const smoothUnion=(a,b)=>{const h=Math.max(.18-Math.abs(a-b),0)/.18;return Math.min(a,b)-h*h*.045;};
 export function compileSpace(value,context={boxes:[]}){
- const p=checkedSpace(value),parts=p.claims.map(c=>({c,distance:compiledClaim(c)})),obstacles=compileNeighborBoxes(context.boxes);
+ const p=checkedSpace(value),parts=p.claims.map(c=>({c,distance:compiledClaim(c)})),obstacles=compileNeighborField(context.boxes);
  return (x,y,z)=>{
   let solid=1e6;
   for(const {c,distance}of parts){
@@ -40,7 +40,7 @@ export function compileSpace(value,context={boxes:[]}){
    else if(c.rim)solid=smoothUnion(solid,Math.max(distance(x,y,z,.3),Math.abs((x-c.center[0])*c.bandNormal[0]+(y-c.center[1])*c.bandNormal[1]+(z-c.center[2])*c.bandNormal[2])-c.bandHalfWidth));
   }
   for(const {c,distance}of parts)if(c.role==='empty')solid=Math.max(solid,-distance(x,y,z));
-  for(const distance of obstacles)solid=Math.max(solid,-distance(x,y,z));
+  solid=obstacles(x,y,z,solid);
   return Math.max(solid,-y);
  };
 }
@@ -126,9 +126,14 @@ export function rebuildSpace(root,value,context=null){
  }
  const {mesh,extractor}=resource,n=p.resolution;mesh.visible=!unresolved;extractor.normal_cache.fill(0);
  for(let z=0;z<n;z++)for(let y=0;y<n;y++)for(let x=0;x<n;x++)extractor.field[x+n*(y+n*z)]=-distance(bounds.min.x+size.x*x/n,bounds.min.y+size.y*y/n,bounds.min.z+size.z*z/n);
- extractor.update();const geometry=new THREE.BufferGeometry();
- geometry.setAttribute('position',new THREE.Float32BufferAttribute(extractor.positionArray.slice(0,extractor.count*3),3));geometry.setAttribute('normal',new THREE.Float32BufferAttribute(extractor.normalArray.slice(0,extractor.count*3),3));geometry.setDrawRange(0,extractor.count);geometry.computeBoundingBox();geometry.computeBoundingSphere();
- const old=mesh.geometry;mesh.geometry=geometry;old.dispose();mesh.count=extractor.count;mesh.position.copy(center);mesh.scale.copy(size).multiplyScalar(.5);root.userData.spaceRevision=(root.userData.spaceRevision??0)+1;
+ extractor.update();let geometry=mesh.geometry;
+ if(geometry.attributes.position?.count===extractor.count){
+  geometry.boundsTree=null;
+  for(const [name,array]of [['position',extractor.positionArray],['normal',extractor.normalArray]]){const attribute=geometry.attributes[name];attribute.array.set(array.subarray(0,extractor.count*3));attribute.needsUpdate=true;}
+ }else{
+  geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(extractor.positionArray.slice(0,extractor.count*3),3));geometry.setAttribute('normal',new THREE.Float32BufferAttribute(extractor.normalArray.slice(0,extractor.count*3),3));const old=mesh.geometry;mesh.geometry=geometry;old.dispose();
+ }
+ geometry.setDrawRange(0,extractor.count);geometry.computeBoundingBox();geometry.computeBoundingSphere();mesh.count=extractor.count;mesh.position.copy(center);mesh.scale.copy(size).multiplyScalar(.5);root.userData.spaceRevision=(root.userData.spaceRevision??0)+1;
  root.userData.stockroomSpace=p;root.name='Concrete place';root.updateMatrixWorld(true);return root;
 }
 export const createSpace=value=>rebuildSpace(new THREE.Group(),value??defaultSpace());

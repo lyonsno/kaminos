@@ -1,0 +1,6 @@
+// kaminos-test: node
+import test from 'node:test';import assert from 'node:assert/strict';import {createSpacePreviewQueue} from '../stockroom-space-preview.mjs';
+const fixture=()=>{const frames=new Map(),applied=[];let id=0;const queue=createSpacePreviewQueue({apply:x=>applied.push(x),requestFrame:fn=>{frames.set(++id,fn);return id;},cancelFrame:id=>frames.delete(id)});return {queue,frames,applied,tick(){const callbacks=[...frames.values()];frames.clear();callbacks.forEach(fn=>fn());}};};
+test('several pointer positions produce one latest-displacement preview per frame',()=>{const f=fixture();f.queue.set(.1);f.queue.set(.4);f.queue.set(-.2);assert.deepEqual(f.applied,[]);assert.equal(f.frames.size,1);f.tick();assert.deepEqual(f.applied,[-.2]);f.queue.set(.3);f.tick();assert.deepEqual(f.applied,[-.2,.3]);});
+test('release flushes the exact latest displacement and removes the later callback',()=>{const f=fixture();f.queue.set(.2);f.queue.set(.731);f.queue.flush();assert.deepEqual(f.applied,[.731]);assert.equal(f.frames.size,0);f.tick();assert.deepEqual(f.applied,[.731]);});
+test('cancel discards pending work without allowing it into the next gesture',()=>{const f=fixture();f.queue.set(.5);f.queue.cancel();f.tick();assert.deepEqual(f.applied,[]);f.queue.set(-.1);f.tick();assert.deepEqual(f.applied,[-.1]);});

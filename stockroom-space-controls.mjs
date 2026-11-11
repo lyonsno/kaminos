@@ -1,6 +1,7 @@
 import * as THREE from './lib/three.core.js';
 import {checkedSpace,rebuildSpace,pullSpace,spaceDirection,nextSpaceClaimId,transformSpaceClaim,compileSpace,closestSpaceClaim} from './stockroom-space.mjs';
 import {collectSpaceNeighborhood,nearestSpaceBoundary} from './stockroom-space-context.mjs';
+import {createSpacePreviewQueue} from './stockroom-space-preview.mjs';
 
 export function createSpaceEditing({document,viewport,canvas,camera,navigation,entries,selected,edits,ownerControls,components,installNumberDrag,nativeInteraction=()=>false,redraw,onError}){
  const seats=new Map(),targets=new Set();let gesture=null,hover=null,syncing=false,suppressClick=false;
@@ -52,22 +53,23 @@ export function createSpaceEditing({document,viewport,canvas,camera,navigation,e
    const plane=new THREE.Plane().setFromNormalAndCoplanarPoint(normal.normalize(),origin),start=view.intersectPlane(plane,new THREE.Vector3());if(!start)return;
    edits.begin(seat.target,locked.claim?'Shape region':'Claim region');
    gesture={seat,probe:locked,original,plane,start,inverse:seat.root.matrixWorld.clone().invert(),element:event.currentTarget,pointerId:event.pointerId,navigation:navigation.enabled,role:seat.role};
+   const g=gesture;g.preview=createSpacePreviewQueue({requestFrame:fn=>document.defaultView.requestAnimationFrame(fn),cancelFrame:id=>document.defaultView.cancelAnimationFrame(id),apply:delta=>{try{edits.preview(pullSpace(g.original,g.probe,delta,g.role));g.seat.error.textContent='';}catch(error){g.seat.error.textContent=error.message;}}});
    navigation.enabled=false;event.currentTarget.setPointerCapture(event.pointerId);seat.overlay.dataset.spaceDragging='true';
   }catch(error){onError(error);}
  }
  function move(event){
   const g=gesture;if(!g||g.pointerId!==event.pointerId)return;event.preventDefault();event.stopPropagation();const point=ray(event).ray.intersectPlane(g.plane,new THREE.Vector3());if(!point)return;
   const delta=point.applyMatrix4(g.inverse).sub(g.start.clone().applyMatrix4(g.inverse)).dot(new THREE.Vector3(...g.probe.axis));
-  try{edits.preview(pullSpace(g.original,g.probe,delta,g.role));g.seat.error.textContent='';}catch(error){g.seat.error.textContent=error.message;}
+  g.preview.set(delta);
  }
- function finish(cancel){
-  if(!gesture)return;const g=gesture;gesture=null;g.seat.overlay.dataset.spaceDragging='false';navigation.enabled=g.navigation;suppressClick=g.element===canvas;
+ function finish(cancel,event=null){
+  if(!gesture)return;const g=gesture;if(cancel)g.preview.cancel();else{if(event)move(event);g.preview.flush();}gesture=null;g.seat.overlay.dataset.spaceDragging='false';navigation.enabled=g.navigation;suppressClick=g.element===canvas;
   if(edits.state().active?.id===g.seat.target){if(cancel)edits.cancel();else edits.commit();}
   if(!cancel&&!g.probe.claim&&recipe(g.seat.id).claims.some(c=>c.id===g.probe.id)){g.seat.focus=g.probe.id;g.seat.list.value=g.probe.id;}
   if(g.element.hasPointerCapture(g.pointerId))g.element.releasePointerCapture(g.pointerId);hidePreview();sync();
  }
  function wireGesture(button,seat,probe){
-  button.addEventListener('pointerdown',e=>begin(e,seat,probe()));button.addEventListener('pointermove',move);button.addEventListener('pointerup',e=>{e.preventDefault();e.stopPropagation();finish(false);});
+  button.addEventListener('pointerdown',e=>begin(e,seat,probe()));button.addEventListener('pointermove',move);button.addEventListener('pointerup',e=>{e.preventDefault();e.stopPropagation();finish(false,e);});
   button.addEventListener('pointercancel',()=>finish(true));button.addEventListener('lostpointercapture',()=>finish(true));button.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();});
  }
  function pointerMove(event){
@@ -146,7 +148,7 @@ export function createSpaceEditing({document,viewport,canvas,camera,navigation,e
  // buttons and wheel/trackpad input remain with the native camera controls.
  canvas.addEventListener('pointerdown',event=>{suppressClick=false;if(event.button===0&&hover&&!hover.probe.claim&&isActive(hover.seat)&&!hover.seat.editMode&&!nativeInteraction()){begin(event,hover.seat,hover.probe);if(gesture)event.stopImmediatePropagation();}},true);
  canvas.addEventListener('pointermove',event=>{if(gesture?.element===canvas){move(event);event.stopImmediatePropagation();}},true);
- canvas.addEventListener('pointerup',event=>{if(gesture?.element===canvas){event.preventDefault();event.stopImmediatePropagation();finish(false);}},true);
+ canvas.addEventListener('pointerup',event=>{if(gesture?.element===canvas){event.preventDefault();event.stopImmediatePropagation();finish(false,event);}},true);
  canvas.addEventListener('pointercancel',()=>{if(gesture?.element===canvas)finish(true);});canvas.addEventListener('lostpointercapture',()=>{if(gesture?.element===canvas)finish(true);});
  canvas.addEventListener('click',event=>{if(suppressClick){suppressClick=false;event.preventDefault();event.stopImmediatePropagation();}},true);
  viewport.addEventListener('pointermove',pointerMove);viewport.addEventListener('pointerleave',leave);document.addEventListener('keydown',escape,true);document.defaultView.addEventListener('blur',blur);navigation.addEventListener('change',()=>{if(!gesture)hidePreview();updateHandles();});
