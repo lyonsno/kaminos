@@ -37,6 +37,12 @@ export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imag
    view.apply(input,context);
    return sceneResources.applyFrameInputs(input,context);
   }
+  function applyFlameControls(input,context){
+   context.assertCurrent();const next=structuredClone(input);
+   if(volume)volume.setControls(next);
+   appliedControls={...appliedControls,...next};
+   return {acceptedControls:structuredClone(appliedControls)};
+  }
   function current(){if(!frames)throw Error('scene worker runtime is not initialized');}
   return {
    get host(){return appHost;},get commands(){return commands;},get foregroundCommands(){return foregroundCommands;},
@@ -61,7 +67,7 @@ export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imag
 
     sceneResources=createSceneResources({...objects,THREE,renderer:renderResources.renderer,pmremGenerator:renderResources.pmremGenerator,
      renderResources,sharedGpu:shared,payload,lifecycle,viewport,
-     readFlameControls:()=>appliedControls,readAppHost:()=>appHost});
+     readFlameControls:()=>appliedControls,applyFlameControls,readAppHost:()=>appHost});
     if(typeof sceneResources?.retire!=='function'||typeof sceneResources?.initialize!=='function')throw Error('scene resource shell requires initialize and retire');
     await sceneResources.initialize(ctx);ctx.assertCurrent();
     if(!renderResources.lighting)throw Error('scene worker requires the actual initialized lighting graph');
@@ -81,11 +87,7 @@ export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imag
     await sceneResources.attachVolume({volume,appHost,context:ctx});ctx.assertCurrent();
     if(imageOptions)image=createKleinSceneWorkerAdapter({...imageOptions,context:()=>({sharedGpu:shared,prototype:volume,host:sceneFrames}),appHost:()=>appHost,kit:()=>kit});
     commands=register(sceneResources.commands,image?.commands);
-    foregroundCommands=register({'flame.controls':(input,context)=>{
-     context.assertCurrent();volume.setControls(input);
-     appliedControls={...appliedControls,...structuredClone(input)};
-     return {acceptedControls:structuredClone(appliedControls)};
-    }},sceneResources.foregroundCommands);
+    foregroundCommands=register({'flame.controls':applyFlameControls},sceneResources.foregroundCommands);
     for(const name of Object.keys(foregroundCommands))if(Object.hasOwn(commands,name))throw Error(`scene worker command collision: ${name}`);
     ctx.assertCurrent();
     ctx.report({ui:{surfaces:{volume:{...surfaceState}}}});

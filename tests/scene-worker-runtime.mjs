@@ -116,3 +116,18 @@ test('common factory applies initial and admitted camera snapshots to its actual
  assert.deepEqual(f.objects().camera.position.toArray(),[-2,4,7]);assert.deepEqual(f.objects().camera.projectionMatrix.toArray(),input.camera.projectionMatrix);
  assert.equal(f.calls.filter(row=>row==='render.resize').length,1);await runtime.retire(f.context);
 });
+
+test('saved initialization controls apply before volume allocation through the same live admitted control owner',async t=>{
+ const f=fixture();let inputs;const create=f.options.createSceneResources;
+ f.options.createSceneResources=value=>{inputs=value;return create(value);};
+ const initialize=f.sceneResources.initialize;
+ f.sceneResources.initialize=async function(ctx){
+  assert.equal(typeof inputs.applyFlameControls,'function','saved recipes must update accepted controls before allocating the volume');
+  inputs.applyFlameControls({resolution:32},ctx);assert.equal(inputs.readFlameControls().resolution,32);
+  assert.equal(f.volumeOptions(),undefined,'do not allocate a default field before applying saved dimensions');
+  await initialize.call(this,ctx);
+ };
+ const runtime=factory(f.options)({payload:f.payload,lifecycle:{}});t.after(()=>runtime.retire(f.context));await runtime.initialize(f.context);
+ assert.equal(f.volumeOptions().getControls().resolution,32);assert.equal(f.payload.flameControls.resolution,16);
+ runtime.foregroundCommands['flame.controls']({resolution:48},f.context);assert.equal(inputs.readFlameControls().resolution,48);
+});
