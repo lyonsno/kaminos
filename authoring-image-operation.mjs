@@ -232,7 +232,8 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
     },
     // Automation may retain its own result without selecting or preparing it in the editor.
     // Caller persistence has its own lifetime; it cannot hold the next GPU operation.
-    async run({prompt,seed,size=512,level='4-bit',aspect='square',model='flux2',reference=null,promptExpansion=null,deliver:persist=deliver}){
+    async run({prompt,seed,size=512,level='4-bit',aspect='square',model='flux2',reference=null,promptExpansion=null,deliver:persist=deliver,signal:commandSignal=null}){
+      commandSignal?.throwIfAborted();
       if(active)throw Error('Image generation is already running');
       if(pendingImage)throw Error('Save the generated image before generating another');
       if(typeof persist!=='function')throw TypeError('Image result delivery must be a function');
@@ -252,8 +253,15 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       const output=persist!==deliver?{id:runId,name:kleinImageName(text,seed,model),prompt:text,status:'generating',preview:null,pending:false,error:null}:null;
       if(output)state.outputs.push(output);
       set({request:{id:runId,prompt:text,model,seed,width,height},status:'loading',error:null,canStop:true,canDecode:false,preview:null,timing:{loadMs:0,generationMs:null},stage:null,percent:null,progress:loaded?.model===model?'Starting…':`Loading ${spec.name}…`});
+      const cancelCommand=()=>{
+        runAbort.abort(new DOMException(String(commandSignal.reason?.message??commandSignal.reason??'Image command canceled'),'AbortError'));
+        if(state.canStop)set({canStop:false,status:'stopping',progress:'Stopping… waiting for the current GPU work to settle.'});
+      };
+      commandSignal?.addEventListener('abort',cancelCommand,{once:true});
+      if(commandSignal?.aborted)cancelCommand();
       try{
         if(reference&&!reference.rgb){set({stage:'Reading reference image',progress:'Reading the selected reference image…'});reference=await prepareReference(reference,{signal:abort.signal,maxArea:model==='flux2'?1024*1024:4096*4096});}
+        abort.signal.throwIfAborted();
         if(!loaded||loaded.model!==model)loaded=await load(level,model);
         if(abort.signal.aborted)throw abort.signal.reason;
         if(loaded.level!==level){
@@ -322,6 +330,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         if(phase!=='persistence'&&abort.signal.aborted&&identity.name==='AbortError'){set({status:'stopped',error:null,stage:null,percent:null,progress:'Image generation stopped. Your scene is unchanged.'});return null;}
         set({status:'failed',error:`${phase}: ${identity.message}`,stage:null,percent:null});throw error;
       }finally{
+        commandSignal?.removeEventListener('abort',cancelCommand);
         try{await control?.close();}catch{/* the control reports its own close failure */}
         if(route){await route.drain();session.unregisterRoute(route.routeId);}
         if(frameRun)await frameRun.finish();
