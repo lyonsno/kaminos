@@ -71,11 +71,13 @@ test('native source preview is visible and allocates no path tracer until reques
  const THREE=await import('../lib/three.webgpu.js'),world=new THREE.Scene(),camera=new THREE.PerspectiveCamera(45,1,.01,100),gpu=device();
  gpu.addEventListener=()=>{};gpu.removeEventListener=()=>{};
  let view={position:[2,2,3],target:[0,0,0],fov:42};
- const session={async attach(object){world.add(object);return {id:object.name};},setView(v){view=v;},readView:()=>view,onFrame:()=>()=>{},redraw(){},async dispose(){}};
+ let admittedSource;
+ const session={async attach(object){if(object.name==='Frozen grass ribbons')admittedSource=object.material.map(m=>({colorWrite:m.colorWrite,depthWrite:m.depthWrite}));world.add(object);return {id:object.name};},setView(v){view=v;},readView:()=>view,onFrame:()=>()=>{},redraw(){},async dispose(){}};
  const host={scene:{async open(){return session;},rendering:()=>({renderer:{getDrawingBufferSize:v=>v.set(100,100),backend:{device:gpu}},scene:world,camera}),isVisible:()=>true,refreshPresentation(){}}};
  const instance=await experiment.create({host,inputs:{tracing:false,paused:true},record(){}});
  try{
   assert.equal(instance.read().configuration.tracing,false);assert.equal(gpu.buffers.length,0);
+  assert.ok(admittedSource.every(m=>m.colorWrite&&m.depthWrite),'native preview pipeline must be correct before scene admission starts compilation');
   const root=world.children.find(o=>o.name==='Frozen grass ribbons'),screen=world.children.find(o=>o.userData.kaminosSurfaceTeacherPresentation);
   assert.ok(root.material.every(m=>m.colorWrite&&m.depthWrite));assert.equal(screen.visible,false);
   await instance.operations.configure({tracing:true});assert.ok(gpu.buffers.length>0);assert.ok(root.material.every(m=>!m.colorWrite&&!m.depthWrite));
