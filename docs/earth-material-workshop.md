@@ -24,8 +24,9 @@ initial field can look overly smooth or bead-like; this implementation is the
 surface we will improve through authoring, not a claim of naturalistic earth.
 
 **Trace frozen specimen** prepares the capture mesh and opens the same frozen
-state in the existing surface path tracer, under the ordinary scene camera and
-lights. **Return to material workshop** restores the saved authoring specimen.
+state as a single bounded specimen in the existing surface path tracer, under
+the ordinary scene camera and lights. The saved training recipe separately retains
+its finite repeated query neighborhood. **Return to material workshop** restores the saved authoring specimen.
 This switch has one active experiment at a time. The physical forming tool is
 excluded from the frozen material response. Source capture supports native
 point/spot/directional lights and constant environment through the existing

@@ -35,3 +35,13 @@ test('a press returns the tool and advances a separate unforced release interval
  const {host,roots}=fakeHost();const app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8,pressSeconds:.03,releaseSeconds:.04}},record:()=>{}});
  const pose=roots[1].position.toArray();await app.operations.press();assert.deepEqual(roots[1].position.toArray(),pose);assert.ok(Math.abs(app.read().physics.time-.07)<1e-10,'displayed press result must include unforced release, not end at peak tool contact');await app.dispose();
 });
+test('tracing the authored specimen does not substitute the training neighborhood',async()=>{
+ const {host,doc}=fakeHost();let opened;const previous=globalThis.window;
+ globalThis.window={kaminosWorkbenchExperiments:{open:async(id,inputs)=>{opened={id,inputs};}}};
+ const app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8,captureResolution:10}},record:()=>{}});
+ try{const panel=doc.createElement('div');app.mount({root:panel,document:doc,invoke:async(k,v)=>app.operations[k](v)});
+  await panel.children.find(e=>e.textContent==='Trace frozen specimen').onclick();
+  assert.equal(opened.id,'earth-surface-teacher');assert.equal(opened.inputs.source.halo,0,'interactive transport must show the one authored specimen');
+  const frozen=await app.operations.freeze();assert.equal(frozen.source.halo,1,'training recipe retains its finite ray-query neighborhood');assert.deepEqual(opened.inputs.source.snapshot,frozen.source.snapshot,'both views derive from the same frozen physical state');
+ }finally{await app.dispose();if(previous===undefined)delete globalThis.window;else globalThis.window=previous;}
+});
