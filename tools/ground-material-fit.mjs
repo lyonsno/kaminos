@@ -6,6 +6,7 @@ import {execFileSync} from 'node:child_process';
 import {createGroundTeacherSource} from '../ground-teacher-source.mjs';
 import {createMaterialQueryPool} from '../material-query-pool.mjs';
 import {createGrassMaterialSource} from '../grass-material-source.mjs';
+import {createStoneTransitionSource} from '../stone-transition-source.mjs';
 import {SurfaceMaterialTeacher} from '../surface-material-teacher.mjs';
 import {createNeumipStudent,createNeumipTraining,neumipTrainingLayout,neumipTrainingBufferSizes} from '../neumip-training.mjs';
 import {writeNeumipModel,readNeumipModel} from '../neumip-model.mjs';
@@ -26,13 +27,14 @@ try{
  const options={resolution:64,steps:2000,batch:2048,queries:65536,heldout:2048,samples:8,heldoutSamples:32,bounces:3,seed:41,fresh:true,...config.fit};report.options=options;
  for(const [k,v]of Object.entries(options))if(k==='fresh'?typeof v!=='boolean':!Number.isSafeInteger(v)||v<1)throw Error(`Invalid fit option ${k}`);
  report.sourceRevision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();report.sourceStatus=execFileSync('git',['status','--porcelain'],{encoding:'utf8'});
- report.sourceFiles={};for(const name of ['ground-teacher-source.mjs','material-query-pool.mjs','grass-material-source.mjs','surface-teacher-source.mjs','surface-teacher-wgsl.mjs','surface-teacher.mjs','surface-material-teacher.mjs','neumip-training.mjs','neumip-model.mjs','tools/ground-material-fit.mjs']){const b=await fs.readFile(name);report.sourceFiles[name]=digest(b);await fs.writeFile(path.join(out,path.basename(name)),b);}
- const grass=config.sourceKind==='grass';if(config.sourceKind&&!['grass','ground'].includes(config.sourceKind))throw Error('Unknown material source kind');
+ report.sourceFiles={};for(const name of ['ground-teacher-source.mjs','material-query-pool.mjs','grass-material-source.mjs','stone-transition-source.mjs','masonry-source.mjs','surface-teacher-source.mjs','surface-teacher-wgsl.mjs','surface-teacher.mjs','surface-material-teacher.mjs','neumip-training.mjs','neumip-model.mjs','tools/ground-material-fit.mjs']){const b=await fs.readFile(name);report.sourceFiles[name]=digest(b);await fs.writeFile(path.join(out,path.basename(name)),b);}
+ const grass=config.sourceKind==='grass',stone=config.sourceKind==='stone-transition';if(config.sourceKind&&!['grass','ground','stone-transition'].includes(config.sourceKind))throw Error('Unknown material source kind');
  const grid=config.labels==='denoised-grid';if(config.labels&&!['denoised-grid','raw'].includes(config.labels))throw Error('Unknown label route');if(grid&&!options.fresh)throw Error('Denoised grids require fresh streaming');
  const gridWidth=config.grid?.width??32,gridHeight=config.grid?.height??64;
  if(grid&&(![gridWidth,gridHeight].every(v=>Number.isSafeInteger(v)&&v>0)||gridWidth*gridHeight!==options.batch||gridWidth>options.resolution||gridHeight>options.resolution||options.queries<options.batch))throw Error('Grid extent must be positive integers, equal batch, fit student resolution and rolling pool');
  report.receiver=config.receiver??report.receiver;report.claim=grass?`Preliminary fit of finite frozen grass ribbons, ${grid?'geometry-guided denoised':'raw box-footprint-averaged'} directional responses; no periodic or convergence claim`:report.claim;
- const source=grass?createGrassMaterialSource(config.source):createGroundTeacherSource(config.source);report.sourceKind=grass?'grass':'ground';report.ground={config:source.config,triangles:source.triangles.length,materials:source.materials,boundary:source.boundary,referenceHeight:source.referenceHeight,sha256:digest(JSON.stringify(source))};
+ if(stone)report.claim='First ordinary NeuMIP fit of authored stone relief joining flat centers over a continuous backing; no simulated mortar, hybrid handoff, curved coverage or speedup established';
+ const source=stone?createStoneTransitionSource(config.source):grass?createGrassMaterialSource(config.source):createGroundTeacherSource(config.source);report.sourceKind=stone?'stone-transition':grass?'grass':'ground';report.ground={config:source.config,triangles:source.triangles.length,materials:source.materials,boundary:source.boundary,referenceHeight:source.referenceHeight,sha256:digest(JSON.stringify(source))};
  await fs.writeFile(path.join(out,'config.json'),JSON.stringify(config,null,2));await fs.writeFile(path.join(out,'source.json'),JSON.stringify(source));
  let state=options.seed>>>0;const random=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return (state+.5)/4294967296;};
  const queries=n=>{const data=new Float32Array(n*8);for(let i=0;i<n;i++){const q=i*8;data[q]=random();data[q+1]=random();for(const d of [2,4]){const r=Math.sqrt(random()*.99),t=random()*Math.PI*2;data[q+d]=r*Math.cos(t);data[q+d+1]=r*Math.sin(t);}data[q+6]=random()<.6?0:random()*Math.log2(options.resolution/2);}return data;};
