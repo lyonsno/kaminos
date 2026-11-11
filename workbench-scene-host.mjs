@@ -63,7 +63,8 @@ export function createWorkbenchSceneHost({scene,camera,controls,loadAsset,regist
   try{
    controls.update();camera.position.fromArray(next.position);controls.target.fromArray(next.target);camera.up.fromArray(next.up);
    for(const name of ['fov','zoom','near','far'])camera[name]=next[name];
-   camera.updateProjectionMatrix();controls.update();camera.updateMatrixWorld(true);redraw();
+   // Match native navigation: the near plane defines the close-up distance.
+   controls.minDistance=camera.near*2;camera.updateProjectionMatrix();controls.update();camera.updateMatrixWorld(true);redraw();
   }finally{controls.enableDamping=damping;}
   return readView();
  };

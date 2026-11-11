@@ -89,7 +89,7 @@ export default {
       }catch(e){if(request===generation){pending=false;error=e.message;sync();}throw e;}
     }
     const clearComparison=()=>{comparisonVersion++;comparison?.dispose();comparison=null;checkpointId=null;comparisonPending=false;if(mode==='comparison')mode='partition';};
-    function frameRegion(){sourceMesh.updateWorldMatrix(true,false);const target=new Vector3().fromArray(recipe.origin).applyMatrix4(sourceMesh.matrixWorld),position=new Vector3().fromArray(worldPoint([3,-3,4.5],candidate.frame)).applyMatrix4(sourceMesh.matrixWorld),size=recipe.radius*sourceMesh.getWorldScale(new Vector3()).length();return session.setView({position:position.toArray(),target:target.toArray(),near:Math.max(size/10000,.00001)});}
+    function frameRegion(){sourceMesh.updateWorldMatrix(true,false);const scale=mode==='comparison'&&comparison?comparison.read().tileSize/(2*recipe.radius):1,target=new Vector3().fromArray(recipe.origin).applyMatrix4(sourceMesh.matrixWorld),position=new Vector3().fromArray(worldPoint([3*scale,-3*scale,4.5*scale],candidate.frame)).applyMatrix4(sourceMesh.matrixWorld),size=recipe.radius*scale*sourceMesh.getWorldScale(new Vector3()).length();return session.setView({position:position.toArray(),target:target.toArray(),near:Math.max(size/10000,.00001)});}
     function addComparisonLight(){
       const app=host.controls.document.defaultView;if(!app.kaminosSceneAuthoring?.addLight||!app.kaminosSetSceneObjectTransform)throw Error('Native scene light editing is unavailable');
       const prior=app.kaminosSelection.read(),f=candidate.frame,target=new Vector3().fromArray(recipe.origin);sourceMesh.updateWorldMatrix(true,false);

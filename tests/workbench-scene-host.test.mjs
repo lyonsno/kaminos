@@ -2,15 +2,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.core.js';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 const unavailable=()=>{throw Error('Shared scene host adapter is unavailable on baseline');};
 const {createWorkbenchFrameService=unavailable,createWorkbenchSceneHost=unavailable,disposeOwnedSceneTree=unavailable}=await import('../workbench-scene-host.mjs').catch(error=>{
  if(error.code==='ERR_MODULE_NOT_FOUND'&&error.url?.endsWith('/workbench-scene-host.mjs'))return {};
  throw error;
 });
-function harness(){
+function harness({realControls=false}={}){
  const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(45,1,.1,100);
  camera.position.set(0,1,5);
- const controls={target:new THREE.Vector3(),enableDamping:true,update(){camera.lookAt(this.target);}};
+ const controls=realControls?new OrbitControls(camera,null):{target:new THREE.Vector3(),enableDamping:true,update(){camera.lookAt(this.target);}};
  const rows=new Map(),loads=[],removed=[];let id=0;
  const register=(root,metadata)=>{const row={...metadata,id:'mesh-'+(++id),object:root};rows.set(row.id,row);return row;};
  const frameService=createWorkbenchFrameService({onError(){}});
@@ -59,4 +60,9 @@ test('owned tree cleanup preserves shared geometry, materials and textures',()=>
  for(const [resource,name]of [[geometry,'geometry'],[material,'material'],[texture,'texture']])resource.addEventListener('dispose',()=>events.push(name));
  disposeOwnedSceneTree(a,[b]);assert.deepEqual(events,[]);assert.equal(material.map,texture);
  disposeOwnedSceneTree(a,[]);assert.deepEqual(events.sort(),['geometry','material','texture']);
+});
+
+test('shared camera close-up survives actual OrbitControls distance clamping',()=>{
+ const h=harness({realControls:true}),session=h.host.open();h.controls.minDistance=.5;const next=session.setView({position:[0,0,.1],target:[0,0,0],near:.00001});
+ assert.ok(Math.abs(next.position[2]-.1)<1e-8,'Actual orbit controls must preserve a valid close-up requested with a smaller near plane');h.controls.update();assert.ok(Math.abs(session.readView().position[2]-.1)<1e-8,'Following frames must preserve the applied close-up');
 });
