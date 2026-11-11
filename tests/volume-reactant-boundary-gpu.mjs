@@ -1,7 +1,8 @@
 // kaminos-test: node
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {withKaminosGpu,evalWgslBatch,extractWgslFunction} from '../tools/shader-herder.mjs';
+import {readFileSync} from 'node:fs';
+import {withKaminosGpu,evalWgslBatch,extractWgslFunction,extractWgslBlock} from '../tools/shader-herder.mjs';
 import {REACTANT_COMBUSTION_WGSL} from '../volume-reactant-combustion.mjs';
 
 test('standalone ambient-air band intersects resident side and floor cells',async()=>{
@@ -16,6 +17,42 @@ test('standalone ambient-air band intersects resident side and floor cells',asyn
   assert.ok(Math.abs(result[0]-.79)<2e-6,'the fixed 0.14-wide boundary ramp occupies part of this cell');
   assert.equal(result[1],1,'interior material has no sponge');
   assert.equal(result[2],1,'zero wall coordinate has no sponge');
+ });
+});
+
+test('production velocity-only and empty-cell branches share the reactant boundary fade',async()=>{
+ const kernel=extractWgslFunction(readFileSync(new URL('../volume-core.js',import.meta.url),'utf8'),'cs');
+ const velocity=extractWgslBlock(kernel,'if (VELOCITY_ONLY)');
+ const empty=extractWgslBlock(extractWgslBlock(kernel,'if (neighborMass <= 1e-5)'),'if (!MATERIAL_ONLY)');
+ // Only unrelated force/transport inputs are fixed. The boundary calculations
+ // below execute verbatim from the two production early-return paths.
+ const preamble=extractWgslFunction(REACTANT_COMBUSTION_WGSL,'reactantMaterialWallFade')+`
+ const GRID=6u; const GRID_Y=12u; const VELOCITY_ONLY=true; const MATERIAL_ONLY=false;
+ const VELOCITY_UNIT_SCALE=1.0;
+ var<private> fluidSrc:array<vec4<f32>,4>;var<private> fluidDst:array<vec4<f32>,4>;
+ var<private> probePosition:vec3<f32>;
+ var<private> probeFlags:u32;
+ fn reactantLawOn()->bool{return (probeFlags&1u)==0u;}
+ fn joinedBoundary()->bool{return (probeFlags&2u)!=0u;}
+ fn openWorldBoundary()->bool{return (probeFlags&4u)!=0u;}
+ fn inflowApertureWeight(c:vec3<i32>)->f32{return 0.0;}
+ fn stepRate(x:f32)->f32{return x;}
+ fn calibrationCellGain()->f32{return 1.0;}
+ fn faceForcesOn()->bool{return true;}
+ fn boundVelocity(v:vec3<f32>)->vec3<f32>{return v;}
+ fn transportVelocityDamping()->f32{return 1.0;}
+ fn sceneClipCharacteristic(a:vec3<f32>,b:vec3<f32>)->vec3<f32>{return b;}
+ fn sampleFluidSlotInflow(p:vec3<f32>,slot:u32)->vec4<f32>{return vec4<f32>(1,1,1,0);}
+ fn macCormackSlot(c:vec3<i32>,i:u32,b:vec3<f32>,f:vec3<f32>,slot:u32)->vec4<f32>{return vec4<f32>(1,1,1,0);}
+ fn forceDeltaStore(c:vec3<i32>,v:vec3<f32>){}
+ fn velocityProbe(){let p=probePosition;let cellI=vec3<i32>(0);let reactantOn=reactantLawOn();let immersedSlabWeight=0.0;var vel=vec3<f32>(1);let base=0u;${velocity}}
+ fn emptyProbe()->vec3<f32>{let p=probePosition;let cellI=vec3<i32>(0);let cell=vec3<f32>(0);let backCell=cell;let advectVelocity=vec3<f32>(0);let backtraceScale=1.0;let idx=0u;let macCormack=false;var bypassVel=vec3<f32>(1);${empty}return bypassVel;}
+ `;
+ await withKaminosGpu(async ctx=>{
+  for(const [name,body] of [['velocity-only','velocityProbe();return fluidDst[0].xyz;'],['empty-cell','return emptyProbe();']]){
+   const values=await evalWgslBatch(ctx,{preamble,argTypes:['f32','f32','u32'],returnType:'vec3<f32>',body:'probePosition=vec3<f32>(arg0,arg1,0);probeFlags=arg2;'+body,inputs:[[5/6,.5,0],[0,-5/6,0],[0,17/6,0],[0,.5,0],[5/6,.5,1],[5/6,.5,2],[5/6,.5,4]]});
+   for(let i=0;i<values.length;i++)for(const component of values[i])assert.ok(Math.abs(component-(i<2?.9055:1))<2e-6,`${name} case ${i}: ${component}`);
+  }
  });
 });
 
