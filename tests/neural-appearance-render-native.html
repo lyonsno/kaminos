@@ -2,6 +2,7 @@
 <script type="importmap">{"imports":{"three/webgpu":"/lib/three.webgpu.js","three/tsl":"/lib/three.tsl.js"}}</script>
 <script type="module">
 import * as THREE from '../lib/three.webgpu.js';
+import {assertNativeRGB} from '../neural-appearance-trajectory.mjs';
 import {readNeuralAppearanceBundle} from '../neural-appearance-bundle.mjs';
 import {createNeuralAppearanceMaterial} from '../neural-appearance-material.mjs';
 try{
@@ -15,7 +16,7 @@ try{
  const target=new THREE.RenderTarget(64,64,{type:THREE.HalfFloatType,format:THREE.RGBAFormat});
  const results=[];
  for(const direction of [[0,0,1],[.98,0,.2]]){
-  light.position.fromArray(direction);light.updateMatrixWorld();renderer.setRenderTarget(target);await renderer.renderAsync(scene,camera);await renderer.backend.device.queue.onSubmittedWorkDone();const data=await renderer.readRenderTargetPixelsAsync(target,0,0,64,64);const actual=Array.from(data.slice((32*64+32)*4,(32*64+32)*4+3),THREE.DataUtils.fromHalfFloat);results.push({direction,actual,expected});
+  light.position.fromArray(direction);light.updateMatrixWorld();renderer.setRenderTarget(target);await renderer.renderAsync(scene,camera);await renderer.backend.device.queue.onSubmittedWorkDone();const data=await renderer.readRenderTargetPixelsAsync(target,0,0,64,64);const actual=Array.from(data.slice((32*64+32)*4,(32*64+32)*4+3),THREE.DataUtils.fromHalfFloat);assertNativeRGB(actual);results.push({direction,actual,expected});
   for(let c=0;c<3;c++)if(Math.abs(actual[c]-expected[c])>.001)throw Error('Native projected response mismatch '+JSON.stringify(results));
  }
  // Independent lights must add their projected responses.
@@ -23,6 +24,7 @@ try{
  const second=new THREE.DirectionalLight(0xffffff,1);second.position.set(0,0,1);scene.add(second,second.target);
  renderer.setRenderTarget(target);await renderer.renderAsync(scene,camera);await renderer.backend.device.queue.onSubmittedWorkDone();
  const combinedData=await renderer.readRenderTargetPixelsAsync(target,32,32,1,1),combined=Array.from(combinedData.slice(0,3),THREE.DataUtils.fromHalfFloat);
+ assertNativeRGB(combined);
  for(let c=0;c<3;c++)if(Math.abs(combined[c]-2*expected[c])>.001)throw Error('Second light erased first contribution '+JSON.stringify({combined,expected:expected.map(x=>2*x)}));
  scene.remove(second,second.target);
  // A rounded fract(-epsilon) must remain in the current channel slice.
@@ -38,6 +40,7 @@ try{
   renderer.setRenderTarget(target);await renderer.renderAsync(scene,camera);await renderer.backend.device.queue.onSubmittedWorkDone();
   const data=await renderer.readRenderTargetPixelsAsync(target,32,32,1,1);seamSamples.push({coords,actual:Array.from(data.slice(0,3),THREE.DataUtils.fromHalfFloat)});
  }
+ for(const sample of seamSamples)assertNativeRGB(sample.actual);
  for(let c=0;c<3;c++)if(Math.abs(seamSamples[0].actual[c]-seamSamples[1].actual[c])>.001)throw Error('Atlas channel slice bleed '+JSON.stringify(seamSamples));
  renderer.setRenderTarget(null);await renderer.renderAsync(scene,camera);
  const adapter=renderer.backend.device.adapterInfo;
