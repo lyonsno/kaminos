@@ -1,1 +1,3 @@
 *.hdr binary
+# Generated output retains embedded upstream shader template whitespace.
+scene-worker.entry.bundle.mjs -whitespace

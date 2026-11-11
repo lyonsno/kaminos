@@ -33,12 +33,17 @@ export function createSceneWorkerFireResources(input,{definitions,fetch:request=
  let rendering=checkedFireRendering(),documentData=null;
  const preparedDocuments=new WeakMap(),receiverOwners=new Set(),pendingHandles=new Set();
  const present=()=>Boolean(plan?.composition||plan?.hasVolumePrimitiveScene||url.searchParams.get('kaminos_volume_smoke')==='1');
- const route=()=>{const result=new URLSearchParams(url.search);for(const [key,value]of new URLSearchParams(url.hash.slice(1)))if(!result.has(key))result.set(key,value);for(const [key,value]of Object.entries(plan?.composition?.route??{}))if(!result.has(key))result.set(key,value);return result;};
- const loader=settingsLoader??createSceneWorkerFireSettingsLoader({definitions,fetch:request,mappingOptions:()=>({route:routeValues(readFlameControls()),params:url.searchParams,lightFieldParams:route()})});
+ const route=(target=plan)=>{const result=new URLSearchParams(url.search);for(const [key,value]of new URLSearchParams(url.hash.slice(1)))if(!result.has(key))result.set(key,value);for(const [key,value]of Object.entries(target?.composition?.route??{}))if(!result.has(key))result.set(key,value);return result;};
+ const loader=settingsLoader??createSceneWorkerFireSettingsLoader({definitions,fetch:request,mappingOptions:next=>({route:routeValues(readFlameControls()),params:url.searchParams,lightFieldParams:route(next)})});
  const check=ctx=>{ctx.assertCurrent();if(retiring)throw Error('Fire resources are retiring');};
  const records=()=>ordinary.workingScene.objects.filter(row=>row.type===FLAME_EMITTER_TYPE).map(row=>ordinary.authored.records.serialize(row));
  const waterFeature=createAuthoredWaterFeature({services:()=>({renderer:renderResources.renderer,scene,camera,pipeline:ordinary.lighting.renderPipeline,device:sharedGpu.device,
    readColliders:()=>ordinary.workingScene.objects,decorateOutput:node=>ordinary.decorateOutput(node)}),emitters:()=>[],visible:()=>ordinary.visible('water-field')});
+ function renderingFor(data,next){
+  const params=route(next),shadow=params.get('volume_light_field_hybrid')==='1'?readFireShadowSceneSettings(params):{};
+  return checkedFireRendering({...('directions'in shadow?{'rendering-angular-samples':shadow.directions}:{}),...('angularPattern'in shadow?{'rendering-angular-pattern':shadow.angularPattern}:{}),...data.postprocessing?.fireLighting});
+ }
+ function refreshOrdinaryLighting(){ordinary.appearance.applyStudio();ordinary.rebuildDisplay();}
  function sourceRecords(){const live=records();return live.length||documentData?live:plan?.flameSources??[];}
  function syncSources(){
   if(!volume||!plan?.composition)return;
@@ -67,13 +72,14 @@ export function createSceneWorkerFireResources(input,{definitions,fetch:request=
   if(wanted!==transport){volume.setSceneTransportConsumer(wanted?frame=>ordinary.frames.consumeTransport(frame):null);transport=wanted;}
  }
  async function releaseRadiance(){
+  lightingStatus=null;
   if(volume&&transport){volume.setSceneTransportConsumer(null);transport=false;}
   if(radiance){await radiance.dispose();radiance=null;}
   if(hdr){await hdr.dispose();hdr=null;}
  }
  async function mount(ctx){
   check(ctx);await releaseRadiance();check(ctx);
-  const params=route();if(!present()||params.get('volume_light_field')!=='1')return;
+  const params=route();if(!present()||params.get('volume_light_field')!=='1'){refreshOrdinaryLighting();return;}
   radiance=await mountRadiance({params,readResources:()=>({renderer:renderResources.renderer,scene,prototype:volume,device:sharedGpu.device,
    surfaceLighting:ordinary.surfaceLighting,shadowSettings:params.get('volume_light_field_hybrid')==='1'?readFireShadowSceneSettings(params):undefined,
    rebuild:{hold:value=>ordinary.lightingPreparation.setExternalHold(value),prepare:change=>ordinary.lightingPreparation.request(change)},
@@ -86,18 +92,22 @@ export function createSceneWorkerFireResources(input,{definitions,fetch:request=
    radiance.setSurfaceScattering(rendering['rendering-surface-scattering']);radiance.setSmokeMode(rendering['rendering-smoke-solver']);radiance.setSourceSoftness(rendering['rendering-source-softness']);
    radiance.setDirections(rendering['rendering-angular-samples']);radiance.setAngularPattern(rendering['rendering-angular-pattern']);
   }
+  if(params.get('volume_light_field_hybrid')==='1'&&params.has('volume_light_field_hybrid_caster_level')){
+   try{await radiance.setShadowCasterLevel(readFireShadowSceneSettings(params).shadowCasterLevel);}
+   catch(error){if(!radiance.debugState?.().casters?.error)throw error;}check(ctx);
+  }
   if(radiance.prepareShadowCasters){const t=plan?.flameDomainTranslation??[0,0,0],s=plan?.flameDomainScale??1,c=readFlameControls();
    await radiance.prepareShadowCasters({flameBox:{min:t.map(value=>value-s),max:[t[0]+s,t[1]+(2*(c.gridHeightRatio??2)-1)*s,t[2]+s]}});check(ctx);}
-  ordinary.rebuildDisplay();syncTransport();
+  refreshOrdinaryLighting();syncTransport();
  }
  function checkSources(next,values){
   const controls=values?.controls??readFlameControls(),sources=next.flameSources??[];
   if(sources.length>1&&(controls.emitterSourceLaw!=='immersed-source'||sources.some(record=>(record.emission?.settings?.['volume-emitter-source-law']?.rawValue??record.emission?.settings?.['volume-emitter-source-law']?.value??controls.emitterSourceLaw)!=='immersed-source')))throw Error('Multiple scene sources require the immersed source law');
   if(sources.length&&controls.emitterSourceLaw==='immersed-source')flameSourceInputs(sources,{controls,translation:next.flameDomainTranslation??[0,0,0],scale:next.flameDomainScale??1,worldSources:controls.worldSmoke==='on'});
  }
- async function prepareDocument(data,next,meta){check(meta.context);const values=await loader.prepare(next,meta.context);check(meta.context);checkSources(next,values);preparedDocuments.set(next,values);}
- function accept(data,next,values,ctx){
-  check(ctx);checkSources(next,values);plan=next;prepared=values;rendering=checkedFireRendering(data.postprocessing?.fireLighting);
+ async function prepareDocument(data,next,meta){check(meta.context);const values=await loader.prepare(next,meta.context);check(meta.context);checkSources(next,values);preparedDocuments.set(next,{values,rendering:renderingFor(data,next)});}
+ function accept(data,next,values,ctx,nextRendering=renderingFor(data,next)){
+  check(ctx);checkSources(next,values);plan=next;prepared=values;rendering=nextRendering;
   if(values)applyFlameControls(values.controls,ctx);
  }
  const shell={
@@ -108,9 +118,9 @@ export function createSceneWorkerFireResources(input,{definitions,fetch:request=
   async prepareVolume({volume:next,context}){check(context);volume=next;configure();},
   async attachVolume({volume:next,context}){check(context);volume=next;if(!payload.admission?.data)await mount(context);},
   prepareFrame(){syncSources();syncTransport();},
-  readFrameState(){syncTransport();const params=route();return {transportRequired:transport,radianceReady:!radiance||radiance.canRender(),fireLightFieldRoute:params.get('volume_light_field')==='1',distributed:params.get('volume_light_field_distributed')==='1',
+  readFrameState(){syncTransport();const params=route();return {transportRequired:transport,radianceReady:!radiance||radiance.canRender(),fireLightFieldRoute:present()&&params.get('volume_light_field')==='1',distributed:present()&&params.get('volume_light_field_distributed')==='1',
    simInputs:{flame:{active:Boolean(volume?.isActive()&&ordinary.visible('flame-field'))},water:{active:waterFeature.active},ash:{active:false,due:false}}};},
-  readDrawSettings(){return {waterVisible:ordinary.visible('water-field'),flameHDRActive:transport,customToneMapping:readFlameControls().toneMapping==='custom',matchFlameCamera:rendering['rendering-match-flame-camera']};},
+  readDrawSettings(){return {waterVisible:ordinary.visible('water-field'),flameHDRActive:transport,customToneMapping:readFlameControls().toneMapping==='custom',matchFlameCamera:present()&&rendering['rendering-match-flame-camera']};},
   readRouteParams:route,
   readDrawResources:()=>({waterFeature}),
   readUi:()=>({fireLighting:structuredClone(lightingStatus),surfaces:{volume:{visible:!transport}}}),
@@ -133,8 +143,8 @@ export function createSceneWorkerFireResources(input,{definitions,fetch:request=
     if(next.sceneCamera?.activeId)throw Error('Output-camera presentation is not mounted yet');
     if(next.fireDomain?.simulation.collision||next.composition?.route?.volume_collision==='kiln')throw Error('Fire geometry collision preparation is not mounted yet');
    },prepareDocument,
-   async beforeReplace(data,next,meta){check(meta.context);if(volume)await volume.setActive(false);await releaseRadiance();check(meta.context);
-    accept(data,next,preparedDocuments.get(next),meta.context);documentData=null;configured=null;sourceSignature=null;return {};},
+   async beforeReplace(data,next,meta){check(meta.context);const cached=preparedDocuments.get(next);if(!cached)throw Error('Scene fire settings were not prepared');if(volume)await volume.setActive(false);await releaseRadiance();check(meta.context);
+    accept(data,next,cached.values,meta.context,cached.rendering);documentData=null;configured=null;sourceSignature=null;return {};},
    async afterReplace(data,next,meta){check(meta.context);documentData=data;plan=next;configure();if(volume){await volume.setActive(present()&&ordinary.visible('flame-field'));check(meta.context);await mount(meta.context);}},
   },
   commands:{'fire.read'(_input,ctx){check(ctx);return {active:Boolean(volume?.isActive()),present:present(),source:prepared?.source?{presetId:prepared.source.presetId}:null,lighting:radiance?.debugState?.()??null};}},

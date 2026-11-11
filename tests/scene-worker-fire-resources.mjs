@@ -3,22 +3,25 @@ import test from 'node:test';import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.webgpu.js';
 import {buildSceneDocument,planSceneRestore} from '../scene-persistence-core.js';
 import {readFileSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
 import {applySceneObjectTransformState,sceneObjectTransformState,getMaterialStateForObject} from '../scene-object-state.mjs';
 import {createSceneRecordOperations} from '../scene-record-operations.mjs';
 import {createSceneObjectRecord} from '../scene-object-record.mjs';
 import {FLAME_EMITTER_SOURCE} from '../scene-flame-emitter.mjs';
 const path=new URL('../scene-worker-fire-resources.mjs',import.meta.url);
 const api=await import(path).catch(error=>{if(error.code==='ERR_MODULE_NOT_FOUND'&&error.url===path.href)return {};throw error;});
+const schema=JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json',import.meta.url)));
+const basin=JSON.parse(readFileSync(new URL('./fixtures/worker-fire-basin-1685273e.json',import.meta.url)));
 const observed=JSON.parse(readFileSync(new URL('./fixtures/fire-scene-816e82aa1.json',import.meta.url))).settings;
 const values=JSON.parse(readFileSync(new URL('./fixtures/volume-runtime-controls/page-b99.json',import.meta.url)))[0].expected;
 const pose={position:[.2,.3,.4],rotation:[0,0,0],scale:[.5,.5,.5]};
-function fixture(){
+function fixture({route={},realLoader=false}={}){
  assert.equal(typeof api.createSceneWorkerFireResources,'function','common worker needs actual fire/source/domain construction');
  const calls=[],scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(),objects=[],device={queue:{onSubmittedWorkDone:async()=>{}}};let controls={...values,emitterSourceLaw:'immersed-source',worldSmoke:'on'},active=false;
  const document=buildSceneDocument({objects:[{id:'source',type:'flame-emitter',source:FLAME_EMITTER_SOURCE,transform:pose}],fireSettings:observed,
-  composition:{schema:'kaminos.stationary-flame-composition.v1',flame:{presetId:'vsp-'+'a'.repeat(64),stationary:true},route:{volume_light_field:'1'},lightGainStops:0},flameDomainTranslation:[0,0,0]});
+  composition:{schema:'kaminos.stationary-flame-composition.v1',flame:{presetId:basin.presetId,stationary:true},route:{volume_light_field:'1',...route},lightGainStops:0},flameDomainTranslation:[0,0,0]});
  const prepared={controls,settings:observed,presentation:'on',clamps:[],source:{presetId:'vsp-'+'a'.repeat(64)}};
- const ordinary={scene,camera,workingScene:{objects},visible:()=>true,authored:{records:createSceneRecordOperations({readers:{transform:sceneObjectTransformState,materials:getMaterialStateForObject}})},frames:{consumeTransport(){},depth:()=>({device,camera,texture:{}})},
+ const ordinary={scene,camera,appearance:{applyStudio:()=>calls.push('studio')},workingScene:{objects},visible:()=>true,authored:{records:createSceneRecordOperations({readers:{transform:sceneObjectTransformState,materials:getMaterialStateForObject}})},frames:{consumeTransport(){},depth:()=>({device,camera,texture:{}})},
   registerSceneObject(object,metadata){const record=createSceneObjectRecord(object,metadata,{id:metadata.id});objects.push(record);return record;},lightingPreparation:{setExternalHold(){},request:async change=>change?.()},
   surfaceLighting:{},readSettings:()=>({gi:{mode:'combined',view:'scene'}}),bloom:{read:()=>({settings:{composeFlame:false}})},decorateOutput:node=>node,rebuildDisplay(){calls.push('display');}};
  const ctx={signal:new AbortController().signal,assertCurrent(){},report(){}};
@@ -28,7 +31,9 @@ function fixture(){
   setSceneTransportConsumer:value=>calls.push(['transport',value]),emissiveCameraState:()=>null};
  const input={THREE,scene,camera,sharedGpu:{device},renderResources:{renderer:{}},ordinary,payload:{location:{href:'http://localhost/?scene_worker=1'},admission:{data:document}},
   readFlameControls:()=>controls,applyFlameControls(next){calls.push(['accepted',next]);controls={...controls,...next};}};
- const resources=api.createSceneWorkerFireResources(input,{settingsLoader:{prepare:async()=>prepared},mountRadiance:async()=>({canRender:()=>true,dispose(){calls.push('radiance.dispose');},setGain(){},setSurfaceGain(){},setSurfaceScattering(){},setSmokeMode(){},setSourceSoftness(){},setDirections(){},setAngularPattern(){},prepareShadowCasters:async()=>calls.push('casters')})});
+ const options={settingsLoader:{prepare:async()=>prepared},mountRadiance:async mount=>{mount.readResources().onStatus({status:'mounted'});return ({canRender:()=>true,dispose(){calls.push('radiance.dispose');},setGain(){},setSurfaceGain(){},setSurfaceScattering(){},setSmokeMode(){},setSourceSoftness(){},setDirections(value){calls.push(['directions',value]);},setAngularPattern(value){calls.push(['pattern',value]);},setShadowCasterLevel:async value=>calls.push(['casterLevel',value]),prepareShadowCasters:async()=>calls.push('casters')});}};
+ if(realLoader){delete options.settingsLoader;options.definitions=JSON.parse(execFileSync('python3',[new URL('../tools/scene-worker-control-definitions.py',import.meta.url).pathname,'--page',new URL('../index.html',import.meta.url).pathname])).controls;options.fetch=async url=>({ok:true,json:async()=>url.includes('schema')?schema:basin});}
+ const resources=api.createSceneWorkerFireResources(input,options);
  return {resources,input,volume,ctx,calls,ordinary,document,plan:planSceneRestore(document),active:()=>active};
 }
 test('saved fire remains dormant until actual document roots and sources are installed',async()=>{
@@ -62,4 +67,31 @@ test('failed receiver construction retains the first actual placeholder allocati
   assert.throws(()=>f.resources.createFireLightReceiver(THREE.TSL.float(0),THREE.TSL.float(1),THREE.TSL.vec3(0,1,0)),/second placeholder refused/);
   await f.resources.retire(f.ctx);assert.equal(destroyed,1,'retirement must release the allocation made before constructor failure');
  }finally{if(old===undefined)delete globalThis.GPUTextureUsage;else globalThis.GPUTextureUsage=old;}
+});
+
+// The pinned receipt is observed from the actual layered server store; fetch
+// below is a local composition fixture, not a new HTTP conformance claim.
+test('actual default loader maps the candidate composition route at boot and replacement',async()=>{
+ const f=fixture({realLoader:true,route:{volume_light_field_grid:'8'}});await f.resources.initialize(f.ctx);
+ let applied=f.calls.findLast(row=>row[0]==='accepted')[1];assert.equal(applied.fireLightField,true);assert.equal(applied.fireLightFieldGrid,8);
+ const next=structuredClone(f.document);next.composition.route.volume_light_field='1';next.composition.route.volume_light_field_grid='12';const plan=planSceneRestore(next);
+ await f.resources.document.prepareDocument(next,plan,{context:f.ctx});await f.resources.document.beforeReplace(next,plan,{context:f.ctx});
+ applied=f.calls.findLast(row=>row[0]==='accepted')[1];assert.equal(applied.fireLightField,true);assert.equal(applied.fireLightFieldGrid,12);await f.resources.retire(f.ctx);
+});
+test('leaving a fire document rebuilds ordinary output and clears retired lighting status',async()=>{
+ const f=fixture();await f.resources.initialize(f.ctx);await f.resources.prepareVolume({volume:f.volume,context:f.ctx});
+ await f.resources.document.afterReplace(f.document,f.plan,{context:f.ctx});const before=f.calls.filter(row=>row==='display').length,studioBefore=f.calls.filter(row=>row==='studio').length;assert.equal(f.resources.readUi().fireLighting.status,'mounted');
+ const next={version:8,objects:[],groups:[]},plan=planSceneRestore(next,{allowEmpty:true});
+ await f.resources.document.prepareDocument(next,plan,{context:f.ctx});await f.resources.document.beforeReplace(next,plan,{context:f.ctx});await f.resources.document.afterReplace(next,plan,{context:f.ctx});
+ assert.equal(f.resources.readFrameState().fireLightFieldRoute,false);assert.ok(f.calls.filter(row=>row==='display').length>before,'ordinary output must be rebuilt after the fire route is removed');assert.equal(f.resources.readUi().fireLighting,null);assert.ok(f.calls.filter(row=>row==='studio').length>studioBefore);await f.resources.retire(f.ctx);
+});
+
+test('hybrid lighting preserves route angular sampling and selects caster geometry before preparation',async()=>{
+ const f=fixture({route:{volume_light_field_distributed:'1',volume_light_field_hybrid:'1',volume_light_field_hybrid_light_directions:'8',volume_light_field_hybrid_light_pattern:'blue',volume_light_field_hybrid_caster_level:'5k'}});
+ await f.resources.initialize(f.ctx);await f.resources.prepareVolume({volume:f.volume,context:f.ctx});await f.resources.document.afterReplace(f.document,f.plan,{context:f.ctx});
+ assert.deepEqual(f.calls.findLast(row=>row[0]==='directions'),['directions',8]);assert.deepEqual(f.calls.findLast(row=>row[0]==='pattern'),['pattern','blue']);assert.deepEqual(f.calls.find(row=>row[0]==='casterLevel'),['casterLevel','5k']);assert(f.calls.findIndex(row=>row[0]==='casterLevel')<f.calls.indexOf('casters'));await f.resources.retire(f.ctx);
+ const explicit=fixture({route:{volume_light_field_distributed:'1',volume_light_field_hybrid:'1',volume_light_field_hybrid_light_directions:'8',volume_light_field_hybrid_light_pattern:'blue'}});
+ explicit.document.postprocessing??={};explicit.document.postprocessing.fireLighting={'rendering-angular-samples':12,'rendering-angular-pattern':'spatial'};
+ await explicit.resources.initialize(explicit.ctx);await explicit.resources.prepareVolume({volume:explicit.volume,context:explicit.ctx});await explicit.resources.document.afterReplace(explicit.document,planSceneRestore(explicit.document),{context:explicit.ctx});
+ assert.deepEqual(explicit.calls.findLast(row=>row[0]==='directions'),['directions',12]);assert.deepEqual(explicit.calls.findLast(row=>row[0]==='pattern'),['pattern','spatial']);await explicit.resources.retire(explicit.ctx);
 });

@@ -51,3 +51,5 @@ Focused checks: `tests/scene-worker-fire-settings.mjs`,
 Three source roots and serialization, lifecycle/admission, and retained
 allocation using recording GPU services. They do not establish live fire pixels,
 whole-scene coverage, recovery or responsiveness.
+
+Document preparation maps the candidate composition route before the live plan changes, preserving explicit URL precedence. Hybrid angular route settings supply defaults only where the saved rendering recipe omits them; requested caster geometry is selected before caster preparation. Leaving a fire document clears retired lighting status and refreshes ordinary studio/output state. These are authored-state transitions; they do not establish a new live GPU light-grid resizing capability.
