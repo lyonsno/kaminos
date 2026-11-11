@@ -455,3 +455,62 @@ Settings are not reapplied on every RAF; a frame carrying `flameControls` is
 rejected with the named command to use. `createSceneResources` also receives
 `readFlameControls()` for current source/lighting guides. Neither applied store
 mutates the initialization invocation payload.
+
+
+## Existing page adapter (integration candidate)
+
+The existing index page selects this adapter only with `scene_worker=1`.
+Its default route is unchanged. The selected entry is
+`/scene-worker.entry.bundle.mjs`; the entry and actual resource graph remain
+owned by the common-runtime assembly. Selecting this URL before the bundle
+exists fails startup visibly, without invoking legacy page renderer, volume,
+SAM or authoring GPU initialization. Worker success also skips the old page's
+GPU/domain/Generate continuation. This is an integration cut; the complete
+editor and Workbench have not migrated.
+
+`mountSceneWorkerPage` in `scene-worker-page-bootstrap.mjs` mounts the existing
+scene/volume canvas IDs before transferring them, keeps a CPU perspective
+camera and existing navigation gestures, and delegates operations to
+`createSceneWorkerPage`. Boot payload contains `viewport`, full initial
+`flameControls`, exact plain `camera`, `admission: {data, plan}`, `preferences`,
+and `location: {href, search, hash}`. No page Scene or GPU host is created.
+The worker must actually apply saved input: initialization progress projects
+`ui.initialization.sceneApplied: true` when a saved document was supplied, and
+`preferencesApplied: true` when preferences were supplied. Generic
+`{initialized: true}` cannot establish either. Missing confirmation holds page
+frame requests and retains the worker for explicit retirement.
+
+Frames carry `{now, timeOrigin, viewport, camera}`. Camera includes perspective
+pose, target, projection parameters and the exact 16-element projection matrix.
+At most one frame request is outstanding; page input continues updating while
+it waits and the next request samples the current view. Authored commands use
+`page.request(name, payload)` without coalescing. Flame changes use actual
+`flame.controls` deltas, never whole-settings RAF replay. No new device
+activation authority lives on the page: invalidation holds frame requests;
+resuming them follows the worker owner's successful recovery command.
+
+Plain UI arrives under `output.ui` (also accepting existing Kit
+`output.result.ui`) or progress `{ui}`. Actual supplied
+`ui.surfaces.{scene,volume,telemetry}.{active,transparent}` booleans drive page
+mounting/CSS; omitted fields remain unreported. Root-owned `ui.bounds` and
+`ui.selectionBounds` with finite `min`/`max` arrays support framing. This adapter
+navigates around the current camera pivot. Mesh-surface picking, authored-camera
+overlays, scene registry editing, saved-scene application, Asset Add and
+Workbench command projection still need their real worker consumer integration.
+There are no fabricated page Three roots.
+
+The page exposes its adapter at `window.kaminosSceneWorker`. Its `image`
+controller uses actual `image.generate`, `image.read`, `image.retrySave`,
+operation cancellation for Stop, and targeted `decodeNow`. Models and
+persistence stay in the worker. Metadata-only previews remain separate from
+pixels. A later status-read failure cannot erase a confirmed saved image entry.
+Mounting the controller into existing Generate presentation remains consumer
+work; the old GPU-owning setup function is not invoked.
+
+Retirement cancels pending operations, awaits actual settlement, then requests
+runtime cleanup. The page terminates its worker only after successful cleanup;
+a failure preserves the same worker and mounted controls for retry. Disconnect
+removes transport ownership without certifying resource settlement. Node
+MessagePort and DOM-recording tests establish adapter behavior; actual
+OffscreenCanvas presentation and coupled GPU responsiveness require the
+assembled native route.

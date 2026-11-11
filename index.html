@@ -10989,6 +10989,7 @@ let samImageTools = null;
 let samImageToolsPromise = null;
 
 async function ensureSamImageTools() {
+  assertLegacyPageGpuOwner();
   if (samImageToolsPromise) return samImageToolsPromise;
   samImageToolsPromise = (async () => {
     await sceneInitialization;
@@ -11061,6 +11062,7 @@ function createFireLightFieldReceiverPass(baseOutputNode,sceneDepthNode,sceneNor
 }
 
 async function initScene() {
+  assertLegacyPageGpuOwner();
   window.kaminosStartup?.phase('Reading startup configuration');
   await initializeHybridSplatOverlayModuleUrl();
   const vp = document.getElementById('viewport');
@@ -20511,6 +20513,7 @@ async function mountSceneRadianceRoute(params) {
 }
 
 async function initKaminosVolumeRoute() {
+  assertLegacyPageGpuOwner();
   initKaminosVolumeRoute.boot ??= createFluidBoot(async () => {
   if (compositionSetupError) throw compositionSetupError;
   window.__kaminosVolumeControlStepsMadeContinuous = [];
@@ -28588,16 +28591,38 @@ initKaminosFingerJuiceHostRoute();
     }
     return {data, plan};
   });
+const sceneWorkerRequested = new URLSearchParams(location.search).get('scene_worker') === '1';
+let sceneWorkerPresentation = null;
+function assertLegacyPageGpuOwner() {
+  if (sceneWorkerRequested) throw Error('This action requires its scene worker command; page GPU construction is disabled on the worker route');
+}
+async function initSceneWorkerPage(admission) {
+  window.kaminosStartup?.phase('Starting scene worker');
+  await startupPreferencesLoaded;
+  const {mountSceneWorkerPage} = await import('./scene-worker-page-bootstrap.mjs');
+  sceneWorkerPresentation = mountSceneWorkerPage({document,window,THREE,
+    createControls:(camera,canvas)=>new OrbitControls(camera,canvas),
+    installNavigation:installSceneNavigation,frameBox,admission,preferences:startupPreferences,
+    readFlameControls:()=>readVolumeControls(),report:setInfo,
+    onProgress:event=>{const phase=event.value?.phase;if(typeof phase==='string')window.kaminosStartup?.phase(phase);},
+  });
+  window.kaminosSceneWorker = sceneWorkerPresentation;
+  return sceneWorkerPresentation.start();
+}
 let startupSceneAdmitted = false;
 const sceneInitialization = startupSceneAdmission.then(admission => {
   if (admission === startupSceneRedirect) return startupSceneRedirect;
   startupSceneAdmitted = true;
-  return initScene();
+  return sceneWorkerRequested ? initSceneWorkerPage(admission) : initScene();
 });
 settleStartupVeil(document, sceneInitialization).catch(() => {});
 sceneInitialization.then(async () => {
   if (!startupSceneAdmitted) {
     rejectWorkbenchViewerReady(new Error('Saved scene recovery is navigating'));
+    return;
+  }
+  if (sceneWorkerRequested) {
+    rejectWorkbenchViewerReady(new Error('Worker scene registry and Workbench commands are not connected yet'));
     return;
   }
   window.__kaminosDeferredGrInit?.();
@@ -28785,6 +28810,7 @@ sceneInitialization.then(async () => {
   startupSceneText = null;
   rejectWorkbenchViewerReady(err);
   console.error('initScene failed:', err);
+  if (sceneWorkerRequested) { setInfo(`Scene worker startup failed: ${err.message || err}`); return; }
   if (!startupSceneAdmitted) {
     sceneDocument.holdRestore();
     compositionStatus(`Restore failed: ${err.message || err}`, true);
@@ -28803,6 +28829,7 @@ sceneInitialization.then(async () => {
 });
 
 function setupAuthoringAssets(){
+  assertLegacyPageGpuOwner();
   let redraw=()=>{};
   // The frame owner models borrow frames from: the fire scene's volume prototype while it
   // renders, otherwise the ordinary scene itself, so Generate needs no fire scene. A fluid
