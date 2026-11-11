@@ -16,3 +16,19 @@ test('material queries repeat through actual grass with multibounce transport',a
  const source=createGrassMaterialSource({seed:31,blades:16,width:2,depth:2,height:.6,bladeWidth:.15,periodic:true}),t=new SurfaceMaterialTeacher(ctx.device,{...source,lights:[],environment:0,bounces:3});
  try{const config={tileSize:2,tileDepth:2,referenceHeight:.602,resolution:64,samples:16,seed:19},q=new Float32Array([.25,.5,.4,.2,-.3,.5,0,0]);const a=await t.evaluateMaterial(q,config);q[0]+=1;const b=await t.evaluateMaterial(q,config);assert.ok(a.every(v=>v>=0&&Number.isFinite(v)));assert.ok(a.some(v=>v>0));assert.ok(a.every((v,i)=>Math.abs(v-b[i])<1e-4));await assert.rejects(()=>t.evaluate([{origin:[0,.2,0],direction:[1,0,0]}]),/horizontal/);}finally{t.dispose();}
 });});
+
+test('periodic traversal remains monotone at a rounded translated cell boundary',async()=>{await withKaminosGpu(async ctx=>{
+ const width=8.313843876330612,triangles=ground.map(t=>({...t,...Object.fromEntries(['a','b','c'].map(k=>[k,[t[k][0]*width/2,t[k][1],t[k][2]*width/2]]))}));
+ const t=new SurfaceTeacher(ctx.device,{...base,triangles,periodic:{width,depth:width,minY:0,maxY:.35}});
+ try{const result=await t.evaluate([{origin:[12.470765113830566,.1,0],direction:[-.00001,-1,0]}]);assert.ok(result[0][0]>.4,'a near-vertical ray must reach repeated ground at a translated boundary');}finally{t.dispose();}
+});});
+
+test('surface RNG excludes float-rounded endpoints and sampled periodic rays exclude exact horizons',async()=>{await withKaminosGpu(async ctx=>{
+ const {evalWgslBatch,extractWgslFunction}=await import('../tools/shader-herder.mjs'),{SURFACE_TEACHER_COMMON_WGSL}=await import('../surface-teacher-wgsl.mjs');
+ const random=extractWgslFunction(SURFACE_TEACHER_COMMON_WGSL,'random');
+ const values=await evalWgslBatch(ctx,{preamble:random,argTypes:['u32'],returnType:'f32',inputs:[[634785765],[3932068202]],body:'var s=arg0;return random(&s);'});
+ assert.ok(values.every(v=>v>0&&v<1),`sample-domain endpoints: ${values}`);
+ const preamble='const PI=3.141592653589793;struct P{periodic:vec4<f32>}var<private> params:P;'+['random','tangentDirection','cosineSample'].map(n=>extractWgslFunction(SURFACE_TEACHER_COMMON_WGSL,n)).join('\n');
+ const d=await evalWgslBatch(ctx,{preamble,argTypes:['u32'],returnType:'vec3<f32>',inputs:[[634785765],[3932068202]],body:'params.periodic=vec4<f32>(2,2,0,1);var s=arg0;return cosineSample(vec3<f32>(1,0,0),&s);'});
+ assert.ok(d.every(v=>v[1]!==0&&v[0]>0&&Math.abs(Math.hypot(...v)-1)<1e-5));
+});});
