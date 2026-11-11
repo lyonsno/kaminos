@@ -83,8 +83,14 @@ context. Runtime adapters use their existing control methods and GPU admission.
 Ordered operations normally execute serially. A long operation can use
 `return context.withFrames(() => operation.run(...))` to admit frame requests
 through `requestFrame` while it waits. Draw/depth/source callbacks remain
-synchronous in the worker. Frames are not advanced past a queued authored
-mutation. Already admitted frames and in-flight controls drain before the next
+synchronous in the worker. During that scope frames may pass queued authored
+mutations and observe the current applied scene/epoch, while authored operations
+keep their FIFO order. Pending edits remain unapplied until acknowledged. Camera
+and viewport input snapshots can travel in the frame payload and are applied by
+the runtime at its frame boundary; they should not wait in the authored command
+queue. This permits continued rendering/navigation, while safe authored editing
+during inference still needs a runtime mutation boundary. Already admitted
+frames and in-flight controls drain before the next
 ordered mutation or retirement, including on failure. Existing worker-local
 frame drivers also remain local; the page need not send an RPC per render pass.
 
