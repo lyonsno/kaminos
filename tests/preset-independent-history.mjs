@@ -55,3 +55,19 @@ test('current saved targets cannot omit an authored ambient control',()=>{
  const receipt=validateVolumeSettingsPresetDocument(doc,doc.presetId,schema),target=buildVolumeSettingsPresetTarget(receipt,'http://kaminos.invalid');target.searchParams.delete('volume_ambient_boundary_width');
  assert.throws(()=>validateVolumeSettingsPresetTarget(receipt,target.searchParams),/route mismatch for volume_ambient_boundary_width/);
 });
+
+test('server-projected defaults keep an older target loadable without admitting authored omissions',()=>{
+ const old=historicalPreset(),migrated=validateVolumeSettingsPresetDocument(old,old.presetId,schema),doc={...old,preset:structuredClone(migrated.preset),controlCount:schema.controlCount};
+ const additions=schema.controls.filter(c=>c.additiveLineage==='ambient-boundary');
+ // Observed server API at5b7cde8cd projects the document before page validation,
+ // carrying these IDs in schemaProjection.defaultsApplied rather than re-running
+ // the client's retirement migration. The exact response/replay is retained in
+ // the ambient-boundary implementation account; this fixture tests local policy.
+ doc.schemaProjection={identity:'kaminos-volume-settings-schema-projection-v1',defaultsApplied:additions.map(c=>c.key)};
+ let receipt=validateVolumeSettingsPresetDocument(doc,doc.presetId,schema),target=buildVolumeSettingsPresetTarget(receipt,'http://kaminos.invalid');
+ assert.equal(receipt.retirementMigration.applied,false,'exercise the actual server-projected route');for(const c of additions)target.searchParams.delete(c.param);
+ assert.equal(validateVolumeSettingsPresetTarget(receipt,target.searchParams),true);
+ const inconsistent=structuredClone(doc);inconsistent.preset.domControls[additions[0].key].value='2';const route=new URL(inconsistent.preset.route);route.searchParams.set(additions[0].param,'2');inconsistent.preset.route=route.href;
+ receipt=validateVolumeSettingsPresetDocument(inconsistent,inconsistent.presetId,schema);assert.throws(()=>validateVolumeSettingsPresetTarget(receipt,target.searchParams),/route mismatch for volume_ambient_boundary_width/,'a projection tag cannot admit omission of a nondefault value');
+ const unknown=structuredClone(doc);unknown.schemaProjection.identity='unknown';receipt=validateVolumeSettingsPresetDocument(unknown,unknown.presetId,schema);assert.throws(()=>validateVolumeSettingsPresetTarget(receipt,target.searchParams),/route mismatch for volume_ambient_boundary_width/);
+});
