@@ -1,7 +1,20 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 169,
+  "controlCount": 170,
   "controls": [
+    {
+      "key": "volume-world-smoke-join",
+      "param": "volume_world_smoke_join",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "allowedValues": [
+        "prescribed-flow",
+        "projected-donor"
+      ],
+      "additiveDefault": "prescribed-flow",
+      "additiveLineage": "box-join",
+      "additiveSinceControlCount": 1
+    },
     {
       "key": "volume-fine-velocity",
       "param": "volume_fine_velocity",

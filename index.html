@@ -23336,7 +23336,7 @@ function flameSettingsStateProblems(state) {
       if(!source){problem(`Missing flame setting ${id}`);continue;}
       if(source.tagName==='SELECT') {
         const retired=id==='volume-emitter-aperture-pattern'&&VOLUME_RETIRED_APERTURE_PATTERNS.includes(String(value));
-        const gridNumber=GRID_TUNING_FIELDS.some(([,key])=>key===id)&&!['volume-world-smoke','volume-world-smoke-intermediate'].includes(id)&&Number.isFinite(Number(value));
+        const gridNumber=GRID_TUNING_FIELDS.some(([,key])=>key===id)&&!['volume-world-smoke','volume-world-smoke-intermediate','volume-world-smoke-join'].includes(id)&&Number.isFinite(Number(value));
         if(!retired&&!gridNumber&&![...source.options].some(option=>option.value===String(value)))problem(`Unsupported ${id}: ${value}`);}
       else if(source.type==='checkbox') {if(typeof value!=='boolean'&&!['0','1','true','false'].includes(String(value)))problem(`Invalid ${id}`);}
       else if(['range','number'].includes(source.type)) {
@@ -23422,7 +23422,7 @@ function checkFlameSettingsState(state) {
 function writeFlameSettingsState(state) {
   readAdaptiveMaterialControls(state.domControls);
   const gridPatch={};
-  for(const [key,id] of GRID_TUNING_FIELDS){const d=state.domControls[id];if(d)gridPatch[key]=['worldSmoke','worldSmokeIntermediate'].includes(key)?d.value:Number(d.rawValue??d.value);}
+  for(const [key,id] of GRID_TUNING_FIELDS){const d=state.domControls[id];if(d)gridPatch[key]=['worldSmoke','worldSmokeIntermediate','worldSmokeJoin'].includes(key)?d.value:Number(d.rawValue??d.value);}
   for(const [key,id] of [['pressureSolver','volume-pressure-solver'],['velocityStaggering','volume-velocity-staggering'],['emitterSourceLaw','volume-emitter-source-law']]){if(state.domControls[id])gridPatch[key]=state.domControls[id].value;}
   volumePrototype?.validateGridControls(gridPatch);
   supersedeVolumeRebuildHolds();
