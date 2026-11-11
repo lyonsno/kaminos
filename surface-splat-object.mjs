@@ -1,7 +1,7 @@
 import {Group,Mesh} from './lib/three.core.js';
 import {createDeferredSurfaceSplats,checkedSurfaceSplatOptics} from './deferred-surface-splats.mjs';
 export const SURFACE_SPLAT_EXTENSION='KAMINOS_surface_splats';
-export function isSurfaceSplatResolve(node){for(let p=node;p;p=p.parent)if(p.userData?.kaminosSurfaceSplatResolve)return true;return false;}
+export {isSurfaceSplatResolve} from './surface-splat-support.mjs';
 
 class SurfaceSplatObject extends Group{
  constructor(){super();this.isSurfaceSplatObject=true;this.splats=null;}
@@ -23,6 +23,7 @@ class SurfaceSplatObject extends Group{
  }
  copy(source,recursive=true){
   super.copy(source,false);this.mount(source.sourceProxy,source.payload,source.splats.read());
+  this.proxy.traverse(node=>{if(node.geometry)node.geometry=node.geometry.clone();});
   // Loader/editor shadow flags are applied to the mounted proxy, after the
   // detached template was read. Carry those effective flags into each copy.
   const originals=[];source.proxy.traverse(n=>{if(n.isMesh)originals.push(n);});let index=0;
@@ -46,6 +47,16 @@ export function createSurfaceSplatObject(proxy,payload,state){return new Surface
 // collision/picking shape. Only this plugin replaces its beauty rendering.
 export function surfaceSplatsGLTFPlugin(parser){return {
  name:SURFACE_SPLAT_EXTENSION,
+ afterRoot(gltf){
+  // Early hybrid exports used the beauty-LOD helper flag for visible, non-solid
+  // body siblings. At import these are authored geometry, not runtime helpers.
+  for(const scene of new Set(gltf.scenes??[gltf.scene]))scene.traverse(node=>{
+   if(!node.isSurfaceSplatObject)return;
+   for(const sibling of node.parent?.children??[])if(sibling!==node&&sibling.userData.kaminosBeautyLodProxy&&!sibling.userData.kaminosSurfaceSplatResolve){
+    delete sibling.userData.kaminosBeautyLodProxy;sibling.userData.kaminosNonSolidVisual=true;
+   }
+  });
+ },
  createNodeMesh(index){
   const node=parser.json.nodes[index],ext=node.extensions?.[SURFACE_SPLAT_EXTENSION];if(!ext)return null;
   if(ext.version!==1||!Number.isInteger(node.mesh)||!Number.isSafeInteger(ext.count)||ext.count<1||!Number.isFinite(ext.radius)||!(ext.radius>0))throw Error('Invalid surface splat GLB');

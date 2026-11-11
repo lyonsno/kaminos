@@ -42,6 +42,7 @@ function cloneBorrowed(node){
  if(node.isSurfaceSplatObject)return node.clone();
  if(node.isSkinnedMesh||node.isInstancedMesh||node.morphTargetInfluences?.length)throw Error('Repetition requires a static mesh');
  const copy=node.isMesh?new Mesh(node.geometry,node.material):new Group();
+ if(node.userData.kaminosNonSolidVisual)copy.userData.kaminosNonSolidVisual=true;
  copy.name=node.name;copy.position.copy(node.position);copy.quaternion.copy(node.quaternion);copy.scale.copy(node.scale);copy.matrix.copy(node.matrix);copy.matrixAutoUpdate=node.matrixAutoUpdate;copy.visible=node.visible;copy.layers.mask=node.layers.mask;copy.castShadow=node.castShadow;copy.receiveShadow=node.receiveShadow;copy.renderOrder=node.renderOrder;copy.frustumCulled=node.frustumCulled;
  for(const child of node.children)if(!isRepetitionCopy(child)&&!child.userData.kaminosBeautyLodProxy&&!child.userData.kaminosEditorHelper&&!child.userData.kaminosEditorOnly)copy.add(cloneBorrowed(child));
  return copy;
