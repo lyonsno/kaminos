@@ -41,7 +41,8 @@ authored settings and resulting pose.
 
 The current neighborhood is the existing planar rooted forest with body-local
 cylinders. A body's `bodyDynamics` properties are mass, center (body-local XY),
-and center-of-mass rotational inertia. Defaults are a1kg rod of the authored
+and center-of-mass rotational inertia. Gravity is expressed in that same local XY
+frame; rotating the assembly does not currently rotate world gravity into it. Defaults are a1kg rod of the authored
 link length, center at half length and inertia mL²/12. These are explicit mass
 approximations, not inferred mesh density or separate piston-body mass. Native
 mass editing scales an authored inertia with mass; no numeric center-position
@@ -75,8 +76,10 @@ small functional tests establish neither that cost nor operator feel.
 
 ## Existing spring-response model
 
-In the mechanism inspector, enable **Force-aware G**. The current constructed
-barrel/rod dimensions and authored stroke are captured once. Enter native
+Existing spring-model scenes and the `mechanics` API retain the earlier response.
+Enabling that API captures the current constructed barrel/rod dimensions and
+authored stroke once. The inspector's **Dynamic posing** button selects the new
+body model. Enter native
 component editing with Tab, select a moving joint, and use G. The hand target
 is compliant: the cyan tether shows the separation between the requested point
 and the actual joint. All body cylinders contribute to one coupled solve.
