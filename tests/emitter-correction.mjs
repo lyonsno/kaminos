@@ -7,6 +7,7 @@ import {immersedRadiusBounds,immersedControlsForFlamePose} from '../scene-flame-
 import {flameSourceInputs} from '../scene-fire-domain.mjs';
 import {visibleSceneIntersections} from '../scene-visible-picking.mjs';
 import {styleHelperLines} from '../scene-helper-lines.mjs';
+import {installPageSceneDraw} from './helpers/page-scene-draw.mjs';
 const pose={position:[0,-.5,0],rotation:[0,0,0],scale:[.2,.2,.2]};
 test('zero authored radius remains zero and stops supply; positive scaling has no upper cap',()=>{
  assert.deepEqual(immersedRadiusBounds(pose),{min:0,max:null});
@@ -53,10 +54,9 @@ test('continuous water runtime receives visible sources without deleting hidden 
  assert.deepEqual(Array.from(context.localLiquidEmitterState().emitters,x=>x.id),['b']);assert.equal(objects.length,2);
 });
 test('a hidden water field submits neither solver nor water rendering work while ordinary scene keeps drawing',()=>{
- const start=html.indexOf('      if (waterFeature.host) {',html.indexOf('  function renderSceneFrame()')),end=html.indexOf('    })));',start),arm=html.slice(start,end);
  let water=0,scene=0;const context={localLiquidHost:{render:()=>water++,state:()=>({clock:{paused:false,step:0,timeSeconds:0}})},isSceneItemVisible:()=>false,outputCaptureExtent:null,recordingFrameSink:null,ordinarySceneTransportFrame:null,
   authoredWaterControls:null,sharedWorkbench:null,console,localLiquidFailure:null,refreshLocalLiquidPerformance(){},setInfo(){},applySceneEmissiveCamera(){},renderPipeline:{render:()=>scene++},outlinedSceneOutput:{},outlinedCameraOutput:{},matchedCameraEffective:false};
- sceneContext(context);vm.runInContext(arm,context);assert.equal(water,0);assert.equal(scene,1);
+ sceneContext(context);installPageSceneDraw(context)();assert.equal(water,0);assert.equal(scene,1);
 });
 
 test('screen-space ring picking survives an emitter scaled through its parent',()=>{

@@ -174,3 +174,34 @@ real Node Worker fixture executes the production `scene-frame-composition.mjs`
 with a recording draw provider. This establishes the executable boundary and
 thread placement, not WebGPU rendering, model execution, browser compatibility
 or completion of the coupled-scene migration.
+
+
+## Ordinary draw body
+
+`createSceneDrawRuntime` in `scene-draw-runtime.mjs` returns the ordinary
+synchronous draw function. The page adopts this same function through a small
+adapter; the module has no DOM or window reads. Its constructor takes `THREE`,
+`readSettings()`, `readResources()`, worker-local `operations`, optional
+`onCameraStatus`/`onWaterFrame` status callbacks, `onWaterError(error, fallback)`,
+`afterDraw(shadingReceipt, startedAt)`, and optional `now()`.
+
+Settings supply held/custom-tone-mapping flags, GI mode/view, flame camera
+matching, asset-preparation/capture/water-visibility/HDR flags, and beauty-frame
+options. Resources supply the same renderer, render pipeline, water feature,
+lighting/beauty/exposure services, camera output nodes and transport/depth/color
+inputs. These are local resource bindings, not transferable message payloads.
+
+Operations provide `beforeDraw`, `readPhysicalCamera`, `applyCamera`,
+`syncProxies`, `planFrame`, `withBeautyFrame`, optional `refreshWaterStatus`,
+and `renderFlameHDR`. They preserve the actual ordinary source/shadow/camera,
+beauty/water/HDR and completion ordering. The beauty wrapper must execute
+synchronously; a Promise cannot certify frame completion. A capture-time water
+failure propagates. For ordinary viewing `onWaterError` owns the existing
+water retirement/status response and invokes the provided scene-render fallback.
+The default error handler throws. `afterDraw` owns frame count, proxy snapshots,
+capture and status publication inside the same local transaction.
+
+Worker assembly supplies these existing domain operations and keeps its GPU
+objects local. The extraction makes the actual draw callable without the page;
+it does not itself populate the full scene, relocate every domain service,
+or implement safe authored mutation during inference.
