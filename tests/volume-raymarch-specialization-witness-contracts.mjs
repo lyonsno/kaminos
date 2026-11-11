@@ -24,7 +24,7 @@ assert.ok(existsSync(witnessPath), 'dedicated full-versus-lean raymarch witness 
 const witness = readFileSync(witnessPath, 'utf8');
 assert.match(witness, /kaminos\.volume\.raymarch-specialization-witness\.v0/, 'report has a stable schema identity');
 assert.match(witness, /mkdtempSync\([\s\S]*kaminos-raymarch-specialization-profile-/, 'witness uses an isolated Chrome profile');
-assert.match(witness, /setSelectiveHeadLiveCapturePaused\(true\)/, 'witness freezes the live simulation before comparison');
+assert.match(witness, /setCapturePaused\(true\)/, 'witness freezes the live simulation before comparison');
 assert.match(witness, /document\.querySelector\('#basin'\)\?\.contentWindow[\s\S]*__kaminosSelectiveHeadLive\?\.debugState/, 'witness exercises the real nested selective-head loader and consumer contract');
 assert.match(witness, /lookFreeze:\s*1/, 'witness freezes shader time and frame animation as well as simulation state');
 assert.match(witness, /untimedFreezeWarmup[\s\S]*collectGpuTiming:\s*false[\s\S]*const before = prototype\.debugState\(\)/, 'witness initializes frozen render identity before sealing the comparison state');

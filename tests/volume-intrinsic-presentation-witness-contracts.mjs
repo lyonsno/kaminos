@@ -21,7 +21,7 @@ assert.match(witness, /__kaminosSelectiveHeadLive[\s\S]*contentWindow\?\.__kamin
 assert.match(witness, /backend\?\.startsWith\('WebGPU'\)/, 'witness admits the effective WebGPU adapter identity without hard-coding one label');
 assert.match(witness, /Object\.keys\(sourceReceipt\.preset\?\.domControls \|\| \{\}\)\.length/, 'witness counts authored controls rather than schema-owned route extras');
 assert.match(witness, /requestedRoute[\s\S]*effectiveRoute[\s\S]*prototypeIdentity[\s\S]*backend/, 'witness records requested and effective runtime route identity');
-assert.match(witness, /setSelectiveHeadLiveCapturePaused\(true\)/, 'witness pauses the live renderer before same-state switching');
+assert.match(witness, /setCapturePaused\(true\)/, 'witness pauses the live renderer before same-state switching');
 assert.match(witness, /sampleFrame\(\{[\s\S]*advanceSim:\s*false[\s\S]*includeRgba:\s*true/, 'witness samples pixels without simulation advance');
 assert.match(witness, /captureMode\('beauty'\)[\s\S]*captureMode\('intrinsic'\)[\s\S]*captureMode\('beauty'\)/, 'witness captures Beauty, Intrinsic, and restored Beauty in order');
 assert.match(

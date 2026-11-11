@@ -49,7 +49,7 @@ try{
   }
   assert.ok(Math.abs(gas+attachedFuel+residue-snapshot.initial.reduce((a,b)=>a+b,0))<.002,'Gas/attached/residue accounting');
   assert.ok(snapshot.particles.every(Number.isFinite)&&snapshot.material.every(Number.isFinite));assert.equal(new Set(ids).size,ids.length);
-  await page.evaluate(()=>window.__kaminosVolumePrototype.setSelectiveHeadLiveCapturePaused(false));await invoke('frame');
+  await page.evaluate(()=>window.__kaminosVolumePrototype.setCapturePaused(false));await invoke('frame');
   const frame=await page.evaluate(()=>window.kaminosSceneGIDebugState().sceneFrames);await guarded(waitSceneFrame(page,frame));
   await page.screenshot({path:path.join(out,name+'.png')});
   const row={name,attached,detached,gas,attachedFuel,residue,solidCells:collision.cells?.reduce((a,b)=>a+b,0),state};report.frames.push(row);await save();return row;

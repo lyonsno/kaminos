@@ -9,15 +9,6 @@ import {
   validateBasinPromotionPackage,
 } from './volume-basin-promotion-package.mjs';
 
-export {
-  FIRE_ACTOR_CONTROL_REBAKE_RECEIPT_SCHEMA,
-  FIRE_ACTOR_CONTROL_REBAKE_SCHEMA,
-  FIRE_ACTOR_REBAKE_CONTROL_IDS,
-  createFireActorControlRebakeAdapter,
-  createVolumeEngineStageBStateReader,
-  fireActorRebakeControlsFromVolumeControls,
-  validateFireActorControlRebakeReceipt,
-} from './volume-fire-actor-control-rebake-adapter.mjs';
 
 export const FIRE_ACTOR_MOUNT_SCHEMA = 'kaminos.fire-actor-mount.v1';
 export const FIRE_ACTOR_POLICY_SCHEMA = 'kaminos.fire-presentation-policy.v1';

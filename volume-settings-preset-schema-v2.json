@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 173,
+  "controlCount": 169,
   "controls": [
     {
       "key": "volume-fine-velocity",
@@ -876,30 +876,6 @@
       "param": "volume_render_scale",
       "tagName": "INPUT",
       "type": "range"
-    },
-    {
-      "key": "volume-residual-mode",
-      "param": "volume_residual_mode",
-      "tagName": "SELECT",
-      "type": "select-one"
-    },
-    {
-      "key": "volume-residual-strength",
-      "param": "volume_residual_strength",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
-      "key": "volume-residual-feature-debug",
-      "param": "volume_residual_feature_debug",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
-      "key": "volume-residual-model-url",
-      "param": "volume_residual_model_url",
-      "tagName": "INPUT",
-      "type": "text"
     },
     {
       "key": "volume-resolution",
@@ -2314,6 +2290,34 @@
       "param": "volume_adaptive_rays",
       "tagName": "INPUT",
       "type": "range",
+      "axis": "domControls"
+    },
+    {
+      "key": "volume-residual-mode",
+      "param": "volume_residual_mode",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "axis": "domControls"
+    },
+    {
+      "key": "volume-residual-strength",
+      "param": "volume_residual_strength",
+      "tagName": "INPUT",
+      "type": "range",
+      "axis": "domControls"
+    },
+    {
+      "key": "volume-residual-feature-debug",
+      "param": "volume_residual_feature_debug",
+      "tagName": "INPUT",
+      "type": "range",
+      "axis": "domControls"
+    },
+    {
+      "key": "volume-residual-model-url",
+      "param": "volume_residual_model_url",
+      "tagName": "INPUT",
+      "type": "text",
       "axis": "domControls"
     }
   ],

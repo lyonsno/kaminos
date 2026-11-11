@@ -620,7 +620,7 @@ ${needle}`);
     for(const [spacing,count]of [[0,12],[.04,12],[.08,12],[.16,12],[.08,10],[.08,8],[0,12]]){
       await page.selectOption('#rendering-receiver-spacing',String(spacing));await page.selectOption('#rendering-angular-samples',String(count));await settle(spacing,count);
       // Hold the source and its exact generation for raw field comparison.
-      await page.evaluate(()=>window.__kaminosVolumePrototype.setSelectiveHeadLiveCapturePaused(true));
+      await page.evaluate(()=>window.__kaminosVolumePrototype.setCapturePaused(true));
       const signal=await capture();assertScatteringView(signal,{spacing,count,albedo,enabled:true,trim:0,master:0});
       const hash=v=>createHash('sha256').update(floatEvidenceBytes(v)).digest('hex');
       const name=`receivers-${report.views.length}-${spacing}-${count}`,hashes={source:hash(signal.source.values),smoke:hash(signal.smoke),surface:hash(signal.surface)};
@@ -633,7 +633,7 @@ ${needle}`);
       for(const [key,values]of [['source',signal.source.values],['front',signal.surface],['back',signal.back],['smoke',signal.smoke]])await fs.writeFile(`${out}/${name}-${key}.f32`,floatEvidenceBytes(values));
       await page.screenshot({path:`${out}/${name}.png`});
       const view={name,spacing,count,hashes,lighting:signal.lighting,volume:signal.volume,dimensions:signal.dimensions};report.views.push(view);await save();
-      await page.evaluate(()=>window.__kaminosVolumePrototype.setSelectiveHeadLiveCapturePaused(false));
+      await page.evaluate(()=>window.__kaminosVolumePrototype.setCapturePaused(false));
       if(await page.evaluate(()=>!!window.__kaminosLightingDebug)){
         view.sceneProfile=await page.evaluate(()=>window.__kaminosLightingDebug.measure(20));await save();
         assert.notEqual(view.sceneProfile.status,'failed','scene GPU timing failed rather than returning fresh evidence');

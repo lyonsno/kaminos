@@ -8,7 +8,7 @@ const witness = readFileSync(join(root, 'volume-shared-transmittance-witness.mjs
 assert.match(witness, /kaminos\.volume\.shared-transmittance-witness\.v0/, 'focused witness owns a durable report identity');
 assert.match(witness, /settings_preset[\s\S]*FLAMEBOWL_PRESET_ID[\s\S]*settings_preset_authority[\s\S]*shared-volume-settings-preset-v2/, 'witness rejects substituted Flamebowl preset authority');
 assert.match(witness, /role=truthHigh[\s\S]*composition=raymarch-only-v0/, 'witness requires the exact raymarch-only route');
-assert.match(witness, /setSelectiveHeadLiveCapturePaused\(true\)[\s\S]*sameStateCaptureId[\s\S]*baseFrameCount[\s\S]*baseSimStepCount/, 'all captures bind to one frozen simulation state');
+assert.match(witness, /setCapturePaused\(true\)[\s\S]*sameStateCaptureId[\s\S]*baseFrameCount[\s\S]*baseSimStepCount/, 'all captures bind to one frozen simulation state');
 assert.match(
   witness,
   /ridge-emission-under-ridge-extinction[\s\S]*ridge-emission-under-total-flame-extinction[\s\S]*nonridge-emission-under-total-flame-extinction[\s\S]*complete-flame-under-total-extinction/,

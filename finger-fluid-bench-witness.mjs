@@ -2073,7 +2073,7 @@ async function main() {
             passReceipt: frame.selectiveHeadLivePassReceipt,
           };
         } finally {
-          prototype.setSelectiveHeadLiveCapturePaused(false);
+          prototype.setCapturePaused(false);
         }
       })()`);
       const preContactScreenshot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });

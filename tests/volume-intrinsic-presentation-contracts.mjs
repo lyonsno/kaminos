@@ -90,12 +90,12 @@ assert.match(core, /uniforms\[305\]\s*=\s*volumePresentationModeEffective === 'i
 assert.doesNotMatch(core, /temporalAccumulationForPresentation|encodeHistoryCopy/, 'Intrinsic and Beauty both render current state without a hidden history path');
 assert.match(
   core,
-  /finally \{[\s\S]*if \(!selectiveHeadLiveCapturePaused && state\.active\) raf = requestAnimationFrame\(render\)/,
+  /finally \{[\s\S]*if \(!capturePaused && state\.active\) raf = requestAnimationFrame\(render\)/,
   'the live render loop re-checks capture pause before scheduling its successor',
 );
 assert.doesNotMatch(
   functionSource(core, 'render'),
-  /if \(selectiveHeadLiveCapturePaused\)[\s\S]*raf = requestAnimationFrame\(render\)[\s\S]*try \{/,
+  /if \(capturePaused\)[\s\S]*raf = requestAnimationFrame\(render\)[\s\S]*try \{/,
   'the live render loop cannot pre-schedule a frame that escapes a concurrent pause request',
 );
 const sampleFrame = functionSource(core, 'sampleFrame');

@@ -189,7 +189,7 @@ try {
         changedPixelRatio: changedPixels / Math.max(1, a.length / 4),
       };
     };
-    prototype.setSelectiveHeadLiveCapturePaused(true);
+    prototype.setCapturePaused(true);
     prototype.setControls({
       lookFreeze: 1,
       fireRenderMode: 'stock',

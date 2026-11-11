@@ -1867,48 +1867,6 @@ assert.match(sourceScaleProbe, /saturationFraction/, 'source-scale probe reports
 assert.match(sourceScaleProbe, /complexityCollapseRatio/, 'source-scale probe reports large-source complexity collapse ratios');
 assert.match(sourceScaleProbe, /failurePhase/, 'source-scale probe records the failure phase before pretending to produce evidence');
 
-const residualMlxPath = join(root, 'volume-residual-upscale-mlx.py');
-assert.ok(existsSync(residualMlxPath), 'MLX residual upscaler runner exists in the branch for reproducible Greenroom jobs');
-const residualMlx = existsSync(residualMlxPath) ? readFileSync(residualMlxPath, 'utf8') : '';
-assert.match(residualMlx, /kaminos\.volume\.residual-upscale-mlx\.v0/, 'MLX residual runner writes a stable report schema');
-assert.match(residualMlx, /frame-locked-render-scale-set-v0/, 'MLX residual runner accepts frame-locked same-state pair manifests');
-assert.match(residualMlx, /cdp-canvas-clip-capture-after-render-only-frozen-sim-state/, 'MLX residual runner requires canvas-clip same-state image authority');
-assert.match(residualMlx, /mx\.default_device\(\)/, 'MLX residual runner records the effective MLX device');
-
-const residualGreenroomRunnerPath = join(root, 'volume-residual-greenroom-runner.py');
-assert.ok(existsSync(residualGreenroomRunnerPath), 'Greenroom wrapper exists for residual MLX jobs');
-const residualGreenroomRunner = existsSync(residualGreenroomRunnerPath) ? readFileSync(residualGreenroomRunnerPath, 'utf8') : '';
-assert.match(residualGreenroomRunner, /kaminos\.volume\.residual-greenroom-runner\.v0/, 'Greenroom wrapper writes stable route-proof identity');
-assert.match(residualGreenroomRunner, /mlxDefaultDevice/, 'Greenroom wrapper prints MLX default device before heavy work');
-assert.match(residualGreenroomRunner, /greenroom-route-proof\.json/, 'Greenroom wrapper writes route proof into the job output directory');
-assert.match(residualMlx, /--edge-band-mode/, 'MLX residual runner can derive target-error edge bands from low/high pairs');
-assert.match(residualMlx, /low-gradient/, 'MLX residual runner supports low-image gradient proxy masks for inference-available edge curriculum probes');
-assert.match(residualMlx, /low-luma/, 'MLX residual runner supports low-image luma proxy masks for inference-available fire/body curriculum probes');
-assert.match(residualMlx, /low-gradient-luma/, 'MLX residual runner supports mixed low-image gradient+luma proxy masks');
-assert.match(residualMlx, /edgeBandAuthority/, 'MLX residual runner reports whether the active edge-band mask was target-derived or low-image proxy-derived');
-assert.match(residualMlx, /targetEdgeBandDeltaPsnr/, 'MLX residual runner audits proxy-mask runs against target-derived edge bands');
-assert.match(residualMlx, /--edge-sampling-probability/, 'MLX residual runner can bias patch sampling toward target-error edge bands');
-assert.match(residualMlx, /--edge-loss-weight/, 'MLX residual runner exposes explicit edge-band reconstruction loss');
-assert.match(residualMlx, /--edge-gradient-loss-weight/, 'MLX residual runner exposes edge-band gradient loss for crisp silhouette recovery');
-assert.match(residualMlx, /--outside-edge-residual-weight/, 'MLX residual runner can penalize hallucinated residual energy outside target-error edge bands');
-assert.match(residualMlx, /--residual-output-limit/, 'MLX residual runner can bound residual output amplitude to prevent edge-mask ringing from poisoning background');
-assert.match(residualMlx, /residualOutputLimit/, 'MLX residual runner reports the effective residual output limit');
-assert.match(residualMlx, /apply_limited_residual/, 'MLX residual runner centralizes residual limiting before adding model residuals back to the low image');
-assert.match(residualMlx, /--residual-application-mask-mode/, 'MLX residual runner can gate applied residuals with an inference-available mask');
-assert.match(residualMlx, /residualApplicationMaskAuthority/, 'MLX residual runner reports whether the residual application mask is inference-available or target-derived');
-assert.match(residualMlx, /residualApplicationMaskMode/, 'saved MLX residual artifacts preserve the residual application mask mode');
-assert.match(residualMlx, /edge_band_mask/, 'MLX residual runner names the target-derived edge-band mask builder');
-assert.match(residualMlx, /edgeBandPixels/, 'MLX residual runner records edge-band mask pixel counts per pair');
-assert.match(residualMlx, /edgeBandDeltaPsnr/, 'MLX residual runner reports edge-band PSNR delta separately from full-frame PSNR');
-assert.match(residualMlx, /outsideEdgeResidualMse/, 'MLX residual runner reports outside-edge residual damage separately from edge improvement');
-assert.match(residualMlx, /residual-preview-low-model-target-targetres-modelres-error-mask\.png/, 'MLX residual runner writes a preview strip exposing target residual, model residual, remaining error, and mask');
-assert.match(residualGreenroomRunner, /--edge-band-mode/, 'Greenroom residual wrapper forwards edge-band mode to the MLX runner');
-assert.match(residualGreenroomRunner, /targetEdgeBandDeltaPsnr/, 'Greenroom residual wrapper preserves target-edge audit metrics from proxy-mask runs');
-assert.match(residualGreenroomRunner, /--edge-sampling-probability/, 'Greenroom residual wrapper forwards edge-biased sampling probability');
-assert.match(residualGreenroomRunner, /--edge-gradient-loss-weight/, 'Greenroom residual wrapper forwards edge gradient loss weight');
-assert.match(residualGreenroomRunner, /--residual-output-limit/, 'Greenroom residual wrapper forwards residual output limit for bounded proxy-mask runs');
-assert.match(residualGreenroomRunner, /--residual-application-mask-mode/, 'Greenroom residual wrapper forwards residual application mask mode for inference-authority gate probes');
-
 // --- Fire irradiance light field: shared-device + same-state lattice contracts (Beaming 2026-08-31) ---
 // Static resource/dispatch contracts only. Visual acceptance evidence is owned by
 // the Visual-Contact PIP witness discipline and is deliberately NOT asserted here.

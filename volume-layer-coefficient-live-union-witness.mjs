@@ -217,7 +217,7 @@ try {
     const setPose = basinWindow.kaminosSetCameraDebugPose || window.kaminosSetCameraDebugPose;
     if (typeof setPose !== 'function') throw new Error('camera-debug-pose-api-missing');
     const camera = setPose(${JSON.stringify(FRONT_LEFT_CAMERA)});
-    prototype.setSelectiveHeadLiveCapturePaused?.(true);
+    prototype.setCapturePaused?.(true);
     prototype.setRaymarchSmokePresentationMode?.('off');
     prototype.setVolumePresentationMode?.('beauty');
     await prototype.setActive(false);

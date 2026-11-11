@@ -23,7 +23,7 @@ for(const route of ['residual','splats','proxy'])test('leaving ordinary beauty f
   const encoder={finish:()=>({})},context=vm.createContext({
     pendingDomainRemap:null,encodeDomainRemap:noop,integralEvaluation:null,
     state,rayStepTelemetry,debugOpticalStepping:{mode:'numerical',tolerance:.001},controlsSnapshot:{lookFreeze:1,density:1,fire:1,rayStepTelemetry:true},
-    productFrameOwner:'prototype',selectiveHeadLiveCapturePaused:false,raf:0,controls:{update:noop},updateUniforms:()=>context.prepareRayStepCounters(),
+    productFrameOwner:'prototype',capturePaused:false,raf:0,controls:{update:noop},updateUniforms:()=>context.prepareRayStepCounters(),
     emissiveRaymarchAdmission:()=>({eligible:true}),debugRaymarchShaderSpecialization:'auto',rebuildFluidBindGroups:noop,
     performance:{now:()=>1},device:{createCommandEncoder:()=>encoder,queue:{submit:noop}},normalizeLookFreeze:()=>true,lookFreezeCanPin:()=>true,
     simulationPaused:true,liveCompleteFlameOpticalCoefficientsEnabled:false,prepareSharedSceneConsumers:e=>e,
@@ -67,7 +67,7 @@ test('held comparison never advances residual touch damping or simulation',async
   let ended=false,presented=0,stepped=false;
   controls.enabled=false;controls.enableDamping=false;
   const state={active:true,frameCount:20,simStepCount:7};
-  const context=vm.createContext({state,controls,productFrameOwner:'prototype',selectiveHeadLiveCapturePaused:false,raf:0,performance:{now:()=>1},
+  const context=vm.createContext({state,controls,productFrameOwner:'prototype',capturePaused:false,raf:0,performance:{now:()=>1},
     invalidateRaymarchReadouts:noop,integralEvaluation:{camera:signature(),source:'source',view:'temporal'},integralViewIdentity:signature,integralSceneIdentity:()=> 'source',
     integralReconstruction:{describe:()=>({evaluation:{active:true}}),encodeEvaluation:()=>{presented++;return {frames:20};}},integralCameraValues:new Float32Array(20),controlsSnapshot:{},
     endIntegralEvaluation:()=>{ended=true;},updateUniforms:()=>{stepped=true;throw Error('ordinary update must not run');},

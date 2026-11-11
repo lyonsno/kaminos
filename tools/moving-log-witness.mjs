@@ -36,7 +36,7 @@ try{
   const f=new Float32Array(Uint8Array.from(Buffer.from(raw.gas.fluidBase64,'base64')).buffer),r=new Float32Array(Uint8Array.from(Buffer.from(raw.gas.reactantBase64,'base64')).buffer);
   assert.equal(f.length,32**3*16);assert.ok(f.every(Number.isFinite)&&r.every(Number.isFinite));
   let heat=0,burn=0;for(let i=0;i<f.length;i+=16)heat+=f[i+5];for(let i=1;i<r.length;i+=2)burn+=r[i];
-  await page.evaluate(()=>window.__kaminosVolumePrototype.setSelectiveHeadLiveCapturePaused(false));
+  await page.evaluate(()=>window.__kaminosVolumePrototype.setCapturePaused(false));
   await invoke('frame');
   const before=await page.evaluate(()=>window.kaminosSceneGIDebugState().sceneFrames);await page.waitForFunction(before=>window.kaminosSceneGIDebugState().sceneFrames>before,before);
   const camera=await page.evaluate(()=>window.kaminosCameraViews.current());

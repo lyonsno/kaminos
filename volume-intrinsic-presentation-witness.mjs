@@ -235,7 +235,7 @@ try {
         sourcePresetAuthority: sourceReceipt.sourcePresetAuthority,
         controlCount: Object.keys(sourceReceipt.preset?.domControls || {}).length,
       } : null);
-      prototype.setSelectiveHeadLiveCapturePaused(true);
+      prototype.setCapturePaused(true);
       await new Promise(resolve => setTimeout(resolve, 100));
       const before = prototype.debugState();
       const fixedNow = performance.now();
