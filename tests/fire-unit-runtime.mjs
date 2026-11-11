@@ -60,3 +60,16 @@ test('retired six-direction diagnostics report retirement without allocating or 
   assert.equal((await owner.runtime.sampleEmissiveSeedCoefficients()).reason,'six-direction-lighting-retired');
  }finally{restore();}
 });
+
+test('manual Fine placement changes its native frame while World and emitter keep their poses',()=>{
+ const {owner,restore}=fixture();try{
+  const before=owner.capture(),world=owner.runtime.worldFrame();
+  assert.equal(typeof owner.finePose,'function','Fine must expose a native transform target');
+  owner.setFinePose({position:[.5,.25,0],rotation:[0,0,0],scale:[.75,.75,.75]});
+  assert.deepEqual(owner.finePose(),{position:[.5,.25,0],rotation:[0,0,0],scale:[.75,.75,.75]});
+  assert.deepEqual(owner.runtime.worldFrame(),world);assert.deepEqual(owner.capture().emitter,before.emitter);
+  assert.deepEqual(owner.runtime.debugState().ordinaryDomainTranslation,[.5,.25,0]);
+  assert.equal(owner.runtime.debugState().ordinaryDomainScale,.75);
+  assert.throws(()=>owner.setFinePose({position:[0,0,0],rotation:[0,.2,0],scale:[1,1,1]}),/aligned/);
+ }finally{restore();}
+});

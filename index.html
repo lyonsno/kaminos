@@ -27586,13 +27586,14 @@ function addSceneSpotLight() {
     light:{kind:'spot',enabled:true,color:'#ffffff',intensity:30,angle:30,penumbra:.3,aimDistance:3}});
   recordSceneObjectInsertion(id);setActiveSceneObject(id);return id;
 }
-function canDuplicateObject(entry){return !!entry&&['glb','light',CAMERA_TYPE,PROCEDURAL_MESH_TYPE,LOCAL_LIQUID_EMITTER_TYPE,FLAME_EMITTER_TYPE,ASH_SOURCE_TYPE].includes(entry.type);}
+function canDuplicateObject(entry){return !!entry&&['glb','light',CAMERA_TYPE,PROCEDURAL_MESH_TYPE,LOCAL_LIQUID_EMITTER_TYPE,FLAME_EMITTER_TYPE,ASH_SOURCE_TYPE,FIRE_UNIT_TYPE].includes(entry.type);}
 function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
   assertSceneConstructionAvailable();const entry=workingScene.objects.find(o=>o.id===id);
   if(!canDuplicateObject(entry))throw Error('This object does not support Duplicate');
   const copyId=makeSceneObjectId('mesh'),record={...serializeSceneObject(entry),id:copyId,label:`${sceneObjectDisplayLabel(entry)} copy`,groupId:null,createdAt:new Date().toISOString()};
   const target=ensureSceneObjectMembershipTarget(copyId);scenePlacementTools.edits.assertCanRecordApplied(target);
-  if(entry.type===FLAME_EMITTER_TYPE){requirePluralFlameSourceRuntime();ensureAuthoredFlameEmitter(record,{activate:!deferRecord});syncAuthoredFlameSources();}
+  if(entry.type===FIRE_UNIT_TYPE){const unit=mountAuthoredFireUnitShell(record,{activate:!deferRecord});void unit.initialize().catch(error=>setInfo('Flame duplicate: '+error.message));}
+  else if(entry.type===FLAME_EMITTER_TYPE){requirePluralFlameSourceRuntime();ensureAuthoredFlameEmitter(record,{activate:!deferRecord});syncAuthoredFlameSources();}
   else if(entry.type===LOCAL_LIQUID_EMITTER_TYPE){const {object}=createLocalLiquidEmitterObject(THREE,record,{sampling:waterFeature.setup?.waterSampling});scene.add(object);registerSceneObject(object,record,{activate:!deferRecord});syncLocalLiquidHostEmitters();}
   else if(entry.type===ASH_SOURCE_TYPE)mountAuthoredAshSource(record);
   else if(entry.type===PROCEDURAL_MESH_TYPE)mountProceduralMesh(record);
@@ -27875,7 +27876,7 @@ async function makeSceneRepetitionReal(id){
 }
 
 
-async function mountAuthoredFireUnit(raw,{activate=true,loadRequestId=null}={}) {
+function mountAuthoredFireUnitShell(raw,{activate=true,loadRequestId=null}={}) {
  const record=checkedFireUnitRecord(raw),arrival=workingScene.arrival();
  const owner=createFireUnitObject({THREE,record,camera,controls,viewport:document.getElementById('viewport'),sharedGpuContext:sharedGpu,
   onChange:()=>window._kaminosDirty?.(),
@@ -27893,11 +27894,13 @@ async function mountAuthoredFireUnit(raw,{activate=true,loadRequestId=null}={}) 
     listBasins:async()=>{const response=await fetch('/api/volume-settings-presets',{cache:'no-store'});if(!response.ok)throw Error('Basin library unavailable');const index=await response.json();validateVolumeSettingsPresetIndex(index);return index;},
     loadBasin:async id=>{const [artifactResponse,schemaResponse]=await Promise.all([fetch('/api/volume-settings-preset?id='+encodeURIComponent(id),{cache:'no-store'}),fetch('./volume-settings-preset-schema-v2.json')]);if(!artifactResponse.ok||!schemaResponse.ok)throw Error('Basin unavailable');const schema=await schemaResponse.json(),receipt=validateVolumeSettingsPresetDocument(await artifactResponse.json(),id,schema);return {...projectFireSettingsToSchema(flamePresetForLocalControls(receipt.preset,owner.capture().emitter.scale[0]/owner.root.scale.x),schema),source:{presetId:id,label:receipt.label}};},
     saveBasin:(snapshot,label)=>{const {source,...preset}=snapshot;for(const axis of ['domControls','rendererControls','presentationControls'])preset[axis]=structuredClone(snapshot[axis]);preset.route=buildVolumeAgentCaptureRoute(preset.domControls,preset.rendererControls,preset.presentationControls);preset.savedAt=new Date().toISOString();return saveVolumeSettingsPreset({preset:portableFlamePreset(preset,owner.capture().emitter.scale[0]/owner.root.scale.x),label});},onError:error=>setInfo(error.message)}),});
-  unit={owner,controls:panel};authoredFireUnits.set(record.id,unit);
-  await owner.initialize();syncVolumeViewerPlay();
-  if(!arrival.isCurrent()||(loadRequestId!==null&&!sceneLoadRequests.isCurrent(loadRequestId)))throw Error('Fire scene load superseded');
-  return owner.root;
- }catch(error){unit?.controls.dispose();if(authoredFireUnits.get(record.id)?.owner===owner)authoredFireUnits.delete(record.id);await owner.dispose();if(workingScene.find(record.id)?.object===owner.root)removeSceneObjectInternal(record.id,{recordHistory:false});throw error;}
+  unit={owner,controls:panel,async initialize(){await owner.initialize();syncVolumeViewerPlay();if(!arrival.isCurrent()||(loadRequestId!==null&&!sceneLoadRequests.isCurrent(loadRequestId)))throw Error('Fire scene load superseded');return owner.root;}};authoredFireUnits.set(record.id,unit);return unit;
+ }catch(error){unit?.controls.dispose();if(authoredFireUnits.get(record.id)?.owner===owner)authoredFireUnits.delete(record.id);void owner.dispose();if(workingScene.find(record.id)?.object===owner.root)removeSceneObjectInternal(record.id,{recordHistory:false});throw error;}
+}
+async function mountAuthoredFireUnit(raw,options={}) {
+ const unit=mountAuthoredFireUnitShell(raw,options);
+ try{return await unit.initialize();}
+ catch(error){unit.controls.dispose();if(authoredFireUnits.get(raw.id)===unit)authoredFireUnits.delete(raw.id);await unit.owner.dispose();if(workingScene.find(raw.id)?.object===unit.owner.root)removeSceneObjectInternal(raw.id,{recordHistory:false});throw error;}
 }
 function currentFireUnitTemplate(){const selected=authoredFireUnits.get(workingScene.activeObjectId)?.owner;if(selected?.root.parent)return selected;return [...authoredFireUnits.values()].map(u=>u.owner).findLast(owner=>owner.root.parent)??null;}
 async function addFireUnitFromBasin(id,{signal,...options}={}) {

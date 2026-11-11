@@ -11,7 +11,7 @@ export function checkedFireUnitPose(value){
  return p;
 }
 export function fireUnitFrame(pose){const p=checkedFireUnitPose(pose);return {translate:[...p.position],scale:p.scale[0]};}
-export function fireUnitFineFrame(pose,offset=[0,0,0]){const frame=fireUnitFrame(pose);return {...frame,translate:frame.translate.map((v,i)=>v+offset[i]*frame.scale)};}
+export function fireUnitFineFrame(pose,offset=[0,0,0],relativeScale=1){const frame=fireUnitFrame(pose);return {...frame,scale:frame.scale*relativeScale,translate:frame.translate.map((v,i)=>v+offset[i]*frame.scale)};}
 export function moveLinkedFireEmitter(source,before,after,linked){
  const s=checkedPose(source),a=checkedFireUnitPose(before),b=checkedFireUnitPose(after);
  if(!linked)return s;
@@ -28,6 +28,7 @@ export function checkedFireUnitRecord(raw){
  if(!f||typeof f.moveEmitterWithGrid!=='boolean')throw Error('Move emitter with grid must be boolean');
  if(f.emissionEnabled!==undefined&&typeof f.emissionEnabled!=='boolean')throw Error('Fire emission enabled must be boolean');
  if(f.fineOffset!==undefined&&(!Array.isArray(f.fineOffset)||f.fineOffset.length!==3||!f.fineOffset.every(Number.isFinite)))throw Error('Fine offset must have three finite coordinates');
+ if(f.fineScale!==undefined&&(!Number.isFinite(f.fineScale)||f.fineScale<=0))throw Error('Fine scale must be finite and positive');
  if(f.worldReferenceDims!==undefined)checkedWorldFrame({translate:[0,0,0],scale:1,referenceDims:f.worldReferenceDims});
  r.transform=checkedFireUnitPose(r.transform);
  r.fireUnit={...f,controls:checkedControls(f.controls),emitter:normalizeFlameEmitterPose(f.emitter)};

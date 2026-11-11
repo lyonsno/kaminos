@@ -97,7 +97,8 @@ export function sourceCoverageBounds(packed,{dims,frame,puffFactors=null,coverag
 }
 export class FineCoverageController {
  constructor(){this.lastCheck=-Infinity;this.lastFrame=null;this.policy=null;this.sources=null;this.history=new Map();this.manualHold=false;this.headroom=null;this.headroomPending=false;this.checks=0;this.moves=0;this.lastResult={status:'off',target:null};}
- release(){this.lastCheck=-Infinity;this.headroom=null;this.headroomPending=false;this.lastFrame=null;this.policy=null;this.sources=null;this.manualHold=false;this.history.clear();}
+ release(){this.manualHoldPending=false;this.lastCheck=-Infinity;this.headroom=null;this.headroomPending=false;this.lastFrame=null;this.policy=null;this.sources=null;this.manualHold=false;this.history.clear();}
+ hold(frame){this.manualHold=true;this.manualHoldPending=true;this.headroomPending=false;this.lastFrame={translate:[...frame.translate],scale:frame.scale};}
  due(options,now){const o=checkedFineCoverageOptions(options);return now-this.lastCheck>=o.interval;}
  update(input,options,now){
   if(!Number.isFinite(now))throw new Error('Coverage clock must be finite');
@@ -106,7 +107,8 @@ export class FineCoverageController {
   this.headroom=o.headroom;
   const changed=policy!==this.policy||signature!==this.sources;
   const external=this.lastFrame&&!sameFrame(input.frame,this.lastFrame);
-  if(external&&policy===this.policy){this.manualHold=true;this.headroomPending=false;}else if(changed)this.manualHold=false;
+  if(this.manualHoldPending){this.manualHoldPending=false;this.manualHold=true;this.headroomPending=false;}
+  else if(external&&policy===this.policy){this.manualHold=true;this.headroomPending=false;}else if(changed)this.manualHold=false;
   const sources=(input.sources??[]).map(b=>{const c=center(b),old=this.history.get(b.id);this.history.set(b.id,{c,time:now});
    const velocity=old&&now>old.time?c.map((x,a)=>(x-old.c[a])/(now-old.time)):[0,0,0];
    return {...b,motionMin:b.motionMin??velocity,motionMax:b.motionMax??velocity};});

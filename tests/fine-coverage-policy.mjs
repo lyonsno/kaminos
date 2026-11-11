@@ -5,6 +5,12 @@ import {chooseFineCoverage, FineCoverageController, checkedFineCoverageOptions, 
 const box=(id,c,w=.1,weight=1)=>({id,lo:c.map(x=>x-w),hi:c.map(x=>x+w),weight});
 const input=(sources,extra={})=>({frame:{translate:[0,0,0],scale:1},dims:[32,64,32],world:{lo:[-4,-4,-4],hi:[4,12,4]},sources,demand:[],...extra});
 const opts={mode:'sources',margin:.15,headroom:.75,lookahead:0,interval:.25,activityWeight:1,hysteresis:.05};
+test('explicit manual placement holds even before the first observation, then a source edit releases it',()=>{
+ const c=new FineCoverageController(),i=input([box('a',[2,0,0])]);
+ assert.equal(typeof c.hold,'function','manual native placement needs an explicit hold');c.hold(i.frame);
+ assert.equal(c.update(i,opts,0).status,'manual-hold');assert.equal(c.update(i,opts,.5).target,null);
+ assert.notEqual(c.update({...i,sources:[box('a',[3,0,0])]},opts,1).status,'manual-hold');
+});
 test('upward movement raises fixed-size coverage before the source meets the ceiling',()=>{
  const result=chooseFineCoverage(input([box('one',[0,2.5,0])]),opts);
  assert.ok(result.target,'coverage must move');assert.ok(result.target.translate[1]>1);

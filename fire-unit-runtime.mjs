@@ -19,11 +19,12 @@ export function createFireUnitObject({THREE,record,camera,controls,viewport,shar
  const emitter=new THREE.Mesh(new THREE.SphereGeometry(.1,12,8),new THREE.MeshBasicMaterial({color:0xffae48,wireframe:true,depthTest:false}));
  emitter.name='Fire emitter';emitter.renderOrder=1001;root.add(emitter);
  const proxy=new THREE.Object3D();proxy.name='Fire emitter';proxy.userData.kaminosEditorHelper=true;
+ const fineProxy=new THREE.Object3D();fineProxy.name='Fine box';fineProxy.userData.kaminosEditorHelper=true;
  let failed=null,lastPaused=null,authoringRevision=0,overlayMode='off',showHelpers=true;
  const coverage=new FineCoverageController();let coverageStatus={status:'off'};
  const coverageOptions=value=>value.settings?.domControls?.['volume-coverage-mode']?readFineCoverageControls(value.settings.domControls):checkedFineCoverageOptions({mode:'off'});
  let following=coverageOptions(data);
- const fineFrame=()=>fireUnitFineFrame(accepted,data.fineOffset);
+ const fineFrame=()=>fireUnitFineFrame(accepted,data.fineOffset,data.fineScale);
  const dimensions=()=>{const width=Number(data.controls.resolution);return [width,resolveGridHeight(data.controls,width).heightCells,width];};
  const runtime=createKaminosVolumePrototype({THREE,viewport,camera,controls:null,getControls:()=>({...data.controls,lookFreeze:0}),sharedGpuContext,getSceneDepth,
   transparentCanvas:true,canvasId:'kaminos-fire-unit-'+record.id,externalProductTransform:fineFrame(),
@@ -37,6 +38,7 @@ export function createFireUnitObject({THREE,record,camera,controls,viewport,shar
  function placeEmitter(){
   root.updateMatrixWorld(true);emitter.position.copy(root.worldToLocal(new THREE.Vector3(...data.emitter.position)));
   emitter.scale.setScalar(data.emitter.scale[0]/accepted.scale[0]);proxy.position.fromArray(data.emitter.position);proxy.rotation.set(...data.emitter.rotation);proxy.scale.fromArray(data.emitter.scale);
+  const frame=fineFrame();fineProxy.position.fromArray(frame.translate);fineProxy.scale.setScalar(frame.scale);
  }
  function supply(){
   const frame=fineFrame(),pose=flamePoseToDomain(data.emitter,frame.translate,frame.scale);
@@ -46,23 +48,26 @@ export function createFireUnitObject({THREE,record,camera,controls,viewport,shar
  }
  function updateBounds(){
   const width=Number(data.controls.resolution),height=resolveGridHeight(data.controls,width).heightCells;
-  const offset=data.fineOffset??[0,0,0];
-  fine.box.min.set(-1,-1,-1).add(new THREE.Vector3(...offset));fine.box.max.set(1,2*height/width-1,1).add(new THREE.Vector3(...offset));
+  const offset=data.fineOffset??[0,0,0],scale=data.fineScale??1;
+  fine.box.min.set(-1,-1,-1).multiplyScalar(scale).add(new THREE.Vector3(...offset));fine.box.max.set(1,2*height/width-1,1).multiplyScalar(scale).add(new THREE.Vector3(...offset));
   const world=data.controls.worldSmoke==='on'?resolveWorldRegions(data.controls,runtime.worldFrame()?.referenceDims??[width,height,width]).world:null;
   if(world){outer.box.min.fromArray(world.min);outer.box.max.fromArray(world.max);}else {outer.box.min.set(-1,-1,-1);outer.box.max.set(1,2*height/width-1,1);}
  }
 
- const owner={root,emitter,proxy,runtime,
+ const owner={root,emitter,proxy,fine,fineProxy,runtime,
   get authoringRevision(){return authoringRevision;},
   linkState:()=>({moveEmitterWithGrid:data.moveEmitterWithGrid,emissionEnabled:data.emissionEnabled!==false}),
   pose:()=>({position:root.position.toArray(),rotation:[root.rotation.x,root.rotation.y,root.rotation.z],scale:root.scale.toArray()}),
+  finePose(){const frame=fineFrame();return {position:[...frame.translate],rotation:[0,0,0],scale:[frame.scale,frame.scale,frame.scale]};},
+  setFinePose(value){const next=checkedFireUnitPose(value);owner.setData({...owner.capture(),fineOffset:next.position.map((v,i)=>(v-accepted.position[i])/accepted.scale[0]),fineScale:next.scale[0]/accepted.scale[0]});coverage.hold(fineFrame());},
+  pickComponent(event,{camera,canvas}){const rect=canvas.getBoundingClientRect(),raycaster=new THREE.Raycaster();raycaster.setFromCamera(new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,1-(event.clientY-rect.top)/rect.height*2),camera);root.updateMatrixWorld(true);if(raycaster.intersectObject(emitter).length)return 'emitter';const box=fine.box.clone().applyMatrix4(root.matrixWorld);return raycaster.ray.intersectsBox(box)?'fine':null;},
   setPose(value){const pose=checkedFireUnitPose(value);root.position.fromArray(pose.position);root.rotation.set(...pose.rotation);root.scale.fromArray(pose.scale);owner.syncPose();},
   capture(){owner.syncPose();const world=runtime.worldFrame();if(world)data.worldReferenceDims=world.referenceDims;return structuredClone(data);},
   read(){return {id:record.id,transform:structuredClone(accepted),fireUnit:owner.capture(),active,desired,present:root.parent!==null,error:failed,fineCoverage:{options:following,...coverage.read(),...coverageStatus},runtime:runtime.debugState()};},
   setData(value){const next=checkedFireUnitRecord({...record,transform:accepted,fireUnit:value}).fireUnit;
    if(next.controls.emitterSourceLaw!=='immersed-source')throw Error('Independent fire units require the immersed source law');
    runtime.validateGridControls(next.controls);
-   const before=data,beforeFollowing=following,changed=JSON.stringify(next.controls)!==JSON.stringify(before.controls),offsetChanged=JSON.stringify(next.fineOffset??[0,0,0])!==JSON.stringify(before.fineOffset??[0,0,0]);
+   const before=data,beforeFollowing=following,changed=JSON.stringify(next.controls)!==JSON.stringify(before.controls),offsetChanged=JSON.stringify(next.fineOffset??[0,0,0])!==JSON.stringify(before.fineOffset??[0,0,0])||(next.fineScale??1)!==(before.fineScale??1);
    const nextFollowing=coverageOptions(next);data=next;try{
     if(changed)runtime.setControls({...data.controls,lookFreeze:0});
     if(offsetChanged){const frame=fineFrame();runtime.relocateOrdinaryDomain(frame.translate,[],frame.scale);coverage.release();}
@@ -76,7 +81,7 @@ export function createFireUnitObject({THREE,record,camera,controls,viewport,shar
    catch(error){root.position.fromArray(accepted.position);root.rotation.set(...accepted.rotation);root.scale.fromArray(accepted.scale);throw error;}
    if(next.position.every((v,i)=>v===accepted.position[i])&&next.scale[0]===accepted.scale[0])return;
    const emitterNext=moveLinkedFireEmitter(data.emitter,accepted,next,data.moveEmitterWithGrid),frame=fireUnitFineFrame(next,data.fineOffset);
-   runtime.repositionOrdinaryUnit(frame.translate,frame.scale);accepted=next;data.emitter=emitterNext;coverage.release();supply();placeEmitter();
+   frame.scale*=data.fineScale??1;runtime.repositionOrdinaryUnit(frame.translate,frame.scale);accepted=next;data.emitter=emitterNext;coverage.release();supply();placeEmitter();
   },
   setWorldOverlay(mode){runtime.setWorldSmokeOverlay(mode);overlayMode=mode;fine.material.color.set(mode==='off'?0xe4ba73:0xff7e23);outer.visible=showHelpers||mode!=='off';onChange();},
   worldOverlay(){return {mode:overlayMode,summary:'Orange: Fine; blue: World. Contribution view shows false-color optical support. View-only; not saved with the scene.'};},
@@ -90,7 +95,7 @@ export function createFireUnitObject({THREE,record,camera,controls,viewport,shar
    if(!result.target)return;
    const before=data.fineOffset,previous=fineFrame(),target=result.target;
    data.fineOffset=target.translate.map((v,i)=>(v-accepted.position[i])/accepted.scale[0]);
-   try{runtime.relocateOrdinaryDomain(target.translate,[],target.scale);supply();updateBounds();}
+   try{runtime.relocateOrdinaryDomain(target.translate,[],target.scale);supply();placeEmitter();updateBounds();}
    catch(error){data.fineOffset=before;runtime.relocateOrdinaryDomain(previous.translate,[],previous.scale);supply();updateBounds();throw error;}
    coverage.accept(target,now);onChange();
   },
@@ -98,13 +103,13 @@ export function createFireUnitObject({THREE,record,camera,controls,viewport,shar
    activity=activity.catch(()=>{}).then(async()=>{if(disposed||desired===active)return;await runtime.setActive(desired);active=desired;});
    activity.catch(onError);return activity;
   },
-  async initialize(){supply();placeEmitter();await owner.setVisible(true);updateBounds();},
+  async initialize(){try{supply();placeEmitter();await owner.setVisible(true);updateBounds();}catch(error){failed=String(error.message??error);onError(error);throw error;}},
   sync({visible=true,helpers=true,paused=false,now=0,editing=false}={}){if(disposed)return;
    root.visible=visible;showHelpers=helpers;fine.visible=helpers||overlayMode!=='off';outer.visible=helpers||overlayMode!=='off';emitter.visible=helpers;
    if(paused!==lastPaused){runtime.setSimulationPaused(paused);lastPaused=paused;}if(visible!==desired)void owner.setVisible(visible);
    if(visible&&active)owner.updateFineCoverage(now,{editing});
   },
-  async dispose(){if(disposed)return;disposed=true;desired=false;await activity.catch(()=>{});await runtime.dispose();active=false;root.removeFromParent();proxy.removeFromParent();
+  async dispose(){if(disposed)return;disposed=true;desired=false;await activity.catch(()=>{});await runtime.dispose();active=false;root.removeFromParent();proxy.removeFromParent();fineProxy.removeFromParent();
    for(const h of [fine,outer,emitter]){h.geometry.dispose();h.material.dispose();}},
  };
  root.userData.fireUnitOwner=owner;placeEmitter();updateBounds();return owner;
