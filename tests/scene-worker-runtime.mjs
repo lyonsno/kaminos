@@ -148,3 +148,12 @@ test('scene without fire can keep its retained volume inactive at initialization
  await runtime.initialize(f.context);assert.deepEqual(f.calls.filter(row=>Array.isArray(row)&&row[0]==='volume.active'),[['volume.active',false]]);
  await runtime.retire(f.context);
 });
+
+test('current domain UI reaches serviced frame and edit receipts without reusing initializer progress',async()=>{
+ const f=fixture();let phase='initial';f.sceneResources.readUi=()=>({lighting:{phase},surfaces:{volume:{visible:false}}});
+ const runtime=factory(f.options)({payload:f.payload,lifecycle:{}});await runtime.initialize(f.context);phase='live';
+ const input={now:1},frame=await runtime.requestFrame(input,f.context,()=>runtime.frame(input,f.context));
+ assert.equal(frame.result.ui.lighting?.phase,'live');assert.equal(frame.result.ui.surfaces.volume.visible,false);assert.equal(frame.result.ui.surfaces.volume.active,true);
+ phase='edited';const edit=await runtime.requestMutation('scene.move',{},f.context,()=>runtime.foregroundCommands['scene.move']());
+ assert.equal(edit.ui.lighting?.phase,'edited');assert.equal(edit.ui.surfaces.volume.visible,false);await runtime.retire(f.context);
+});

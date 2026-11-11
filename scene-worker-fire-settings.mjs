@@ -1,6 +1,8 @@
 import {projectFireSettingsToSchema} from './scene-fire-domain.mjs';
 import {readAuthoredVolumeRuntimeControls} from './volume-runtime-control-values.mjs';
 import {validateVolumeSettingsPresetDocument} from './volume-settings-preset-contract.mjs';
+import {flamePresetForLocalControls} from './flame-authoring.mjs';
+import {flamePoseToDomain} from './scene-flame-emitter.mjs';
 import {DEFAULT_VOLUME_SCENE} from './volume-scene-ontology.mjs';
 import {GRID_TUNING_FIELDS} from './volume-grid-tuning.mjs';
 import {resolveWorldCalibration,resolveSimulationLevers,readWorldCalibrationControls} from './volume-world-calibration.mjs';
@@ -60,7 +62,7 @@ export function prepareSceneWorkerFireSettings(saved,{schema,definitions,mapping
 // document's fire records own every saved coefficient. Never replace those
 // records with the current basin or publish an applied-scene marker here.
 export function createSceneWorkerFireSettingsLoader({definitions,mappingOptions,fetch:request=globalThis.fetch}={}){
- let schemaPromise=null;
+ let schemaPromise=null;const receipts=new Map();
  const schema=()=>schemaPromise??=(async()=>{
   const response=await request('/volume-settings-preset-schema-v2.json',{cache:'no-store'});
   if(!response.ok)throw Error('Fire settings schema lookup failed');return response.json();
@@ -72,13 +74,23 @@ export function createSceneWorkerFireSettingsLoader({definitions,mappingOptions,
   let receipt=null;
   const presetId=plan.composition?.flame?.presetId;
   if(presetId){
-   const response=await request(`/api/volume-settings-preset?id=${encodeURIComponent(presetId)}`,{cache:'no-store',signal:context.signal});
-   const artifact=await response.json();context.assertCurrent();
-   if(!response.ok)throw Error(artifact.error||'Basin lookup failed');
-   receipt=validateVolumeSettingsPresetDocument(artifact,presetId,canonical);
+   let pending=receipts.get(presetId);
+   if(!pending){
+    pending=(async()=>{
+     const response=await request(`/api/volume-settings-preset?id=${encodeURIComponent(presetId)}`,{cache:'no-store',signal:context.signal});
+     const artifact=await response.json();
+     if(!response.ok)throw Error(artifact.error||'Basin lookup failed');
+     return validateVolumeSettingsPresetDocument(artifact,presetId,canonical);
+    })();
+    receipts.set(presetId,pending);
+    pending.catch(()=>{if(receipts.get(presetId)===pending)receipts.delete(presetId);});
+   }
+   receipt=await pending;context.assertCurrent();
    if(receipt.preset.domControls['emitter-assay-family']?.value==='cluster')throw Error('Cluster basins have no placeable flame source; use Workbench for that route');
   }
-  const saved=plan.fireSettings??receipt?.preset;if(!saved)throw Error('Saved fire composition has no basin or authored fire settings');
+  const primary=plan.flameSources?.find(record=>record.id==='flame-emitter')??plan.flameSources?.[0];
+  const localScale=primary?flamePoseToDomain(primary.transform,plan.flameDomainTranslation??[0,0,0],plan.flameDomainScale??1).scale[0]:1;
+  const saved=plan.fireSettings??(receipt?.preset?flamePresetForLocalControls(receipt.preset,localScale):null);if(!saved)throw Error('Saved fire composition has no basin or authored fire settings');
   const options=typeof mappingOptions==='function'?mappingOptions(plan):mappingOptions;
   const prepared=prepareSceneWorkerFireSettings(saved,{schema:canonical,definitions,mappingOptions:options,
    volumeSceneRequested:receipt?.serverProjection?.sceneMigration?.requested??DEFAULT_VOLUME_SCENE});

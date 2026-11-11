@@ -59,6 +59,7 @@ test('pinned basin is validated but cannot replace authoritative saved fire coef
  assert.notEqual(result.source.preset.domControls['volume-immersed-fuel'].value,.4567890123);
  await loader.prepare({composition:{flame:{presetId:source.presetId}},fireSettings:saved},ctx);
  assert.equal(calls.filter(url=>url.includes('schema')).length,1,'same runtime reuses its schema');
+ assert.equal(calls.filter(url=>url.includes('/api/volume-settings-preset?')).length,1,'initial preparation and actual document restore share the immutable pinned receipt');
  const wrong=api.createSceneWorkerFireSettingsLoader({...options,fetch:async url=>({ok:true,json:async()=>url.includes('schema')?schema:{...source,presetId:'vsp-'+'b'.repeat(64)}})});
  await assert.rejects(wrong.prepare({composition:{flame:{presetId:source.presetId}},fireSettings:saved},ctx),/requested\/effective identity/);
 });

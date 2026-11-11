@@ -43,6 +43,11 @@ export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imag
    appliedControls={...appliedControls,...next};
    return {acceptedControls:structuredClone(appliedControls)};
   }
+  function runtimeUi(extra={}){
+   const live=sceneResources?.readUi?.()??{};
+   return {...live,...extra,surfaces:{...live.surfaces,...extra.surfaces,
+    volume:{...live.surfaces?.volume,...extra.surfaces?.volume,...surfaceState}}};
+  }
   function current(){if(!frames)throw Error('scene worker runtime is not initialized');}
   return {
    get host(){return appHost;},get commands(){return commands;},get foregroundCommands(){return foregroundCommands;},
@@ -91,7 +96,7 @@ export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imag
     foregroundCommands=register({'flame.controls':applyFlameControls},sceneResources.foregroundCommands);
     for(const name of Object.keys(foregroundCommands))if(Object.hasOwn(commands,name))throw Error(`scene worker command collision: ${name}`);
     ctx.assertCurrent();
-    ctx.report({ui:{surfaces:{volume:{...surfaceState}}}});
+    ctx.report({ui:runtimeUi()});
    },
    frame(input,ctx){
     current();let local=input;
@@ -99,7 +104,7 @@ export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imag
      if(!Number.isFinite(input.now)||!Number.isFinite(input.timeOrigin))throw Error('frame clock requires finite now and timeOrigin');
      local={...input,now:input.now+input.timeOrigin-(services.timeOrigin??performance.timeOrigin)};
     }
-    return {...frames.frame(local,ctx),ui:{surfaces:{volume:{...surfaceState}}}};
+    const result=frames.frame(local,ctx);return {...result,ui:runtimeUi()};
    },
    async requestFrame(input,ctx,draw){
     current();const receipt=await frames.requestFrame(input,ctx,draw);
@@ -107,7 +112,7 @@ export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imag
    },
    async requestMutation(operation,input,ctx,apply){
     current();const receipt=await mutations.requestMutation(operation,input,ctx,apply);
-    return {...receipt,ui:{...receipt.value?.ui,surfaces:{...receipt.value?.ui?.surfaces,volume:{...surfaceState}}}};
+    return {...receipt,ui:runtimeUi(receipt.value?.ui)};
    },
    control(action,input,ctx){current();if(!image)throw Error('scene worker has no image operation');return image.control(action,input,ctx);},
    async retire(ctx){

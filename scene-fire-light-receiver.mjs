@@ -1,18 +1,23 @@
 // Actual ordinary fire irradiance receiving, including shadows and world probes.
 // All resources and live producer reads belong to the caller's GPU owner.
 export function createSceneFireLightReceiver({THREE,sharedGpu,renderer,scene,camera,sceneGiProxies,routeParams,readLightField,
-  createFireLightFieldShadow,createFireShadowCasters,renderFireShadowBatch},baseOutputNode,sceneDepthNode,sceneNormalNode){
+  createFireLightFieldShadow,createFireShadowCasters,renderFireShadowBatch,retain=()=>{}},baseOutputNode,sceneDepthNode,sceneNormalNode){
+  const owned=[];
+  const ownership={dispose(){while(owned.length){owned.at(-1)();owned.pop();}}};
+  // Retain before allocation so failed graph construction is still retryable.
+  retain(ownership);
+  const own=(value,release=value=>value.dispose())=>{owned.push(()=>release(value));return value;};
   const TSL=THREE.TSL;
   const {uniform,texture,vec2,vec3,vec4,viewportUV,getViewPosition,floor,float,mod,mix,step,Fn}=TSL;
   const FIRE_LIGHT_FIELD_PASS_IDENTITY = 'world-position-fire-light-field-receiver-pass-v0';
   const FIRE_LIGHT_FIELD_ATLAS_IDENTITY = 'gpu-fire-irradiance-lattice-atlas-v0';
   const FIRE_LIGHT_FIELD_MASK_AUTHORITY = 'scene-prepass-depth-world-position-normal-material-v0';
-  const blackAtlasTexture = sharedGpu.device.createTexture({
+  const blackAtlasTexture = own(sharedGpu.device.createTexture({
     label: 'kaminos fire light field black atlas placeholder',
     size: { width: 1, height: 1, depthOrArrayLayers: 1 },
     format: 'rgba16float',
     usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-  });
+  }),value=>value.destroy?.());
   const atlasExternalTexture = new THREE.ExternalTexture(blackAtlasTexture);
   atlasExternalTexture.image = { width: 1, height: 1, depth: 1 };
   atlasExternalTexture.format = THREE.RGBAFormat;
@@ -29,12 +34,12 @@ export function createSceneFireLightReceiver({THREE,sharedGpu,renderer,scene,cam
   const debugView = routeParams.get('volume_light_field_debug') || '';
   const fireLightFieldStrength = uniform(0.0);
   const farFieldStrength = uniform(baseFarStrength);
-  const blackMetaTexture = sharedGpu.device.createTexture({
+  const blackMetaTexture = own(sharedGpu.device.createTexture({
     label: 'kaminos fire light field black meta placeholder',
     size: { width: 4, height: 1, depthOrArrayLayers: 1 },
     format: 'rgba16float',
     usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-  });
+  }),value=>value.destroy?.());
   const metaExternalTexture = new THREE.ExternalTexture(blackMetaTexture);
   metaExternalTexture.image = { width: 4, height: 1, depth: 1 };
   metaExternalTexture.format = THREE.RGBAFormat;
@@ -166,10 +171,10 @@ export function createSceneFireLightReceiver({THREE,sharedGpu,renderer,scene,cam
   // scene camera's world matrix (w = 0 keeps it a pure rotation).
   const worldNormalNode = sceneCameraWorldMatrix.mul(vec4(normalSampleNode, 0.0)).xyz.normalize();
   const materialResponse = baseOutputNode.rgb.mul(0.65).add(vec3(0.35));
-  const fireShadow = createFireLightFieldShadow({renderer,scene,
+  const fireShadow = own(createFireLightFieldShadow({renderer,scene,
     sourceNode:fireCenterWorld,receiverNode:worldPositionNode,normalNode:worldNormalNode,
-    requested:routeParams.get('volume_light_field_shadows') === '1'});
-  const fireShadowCasters = createFireShadowCasters({scene, giProxies: sceneGiProxies, enabled: false});
+    requested:routeParams.get('volume_light_field_shadows') === '1'}));
+  const fireShadowCasters = own(createFireShadowCasters({scene, giProxies: sceneGiProxies, enabled: false}));
   const renderFireShadow = () => {
     const lf = passState.lightField;
     const flameBox = Array.isArray(lf?.worldMin) && Array.isArray(lf?.worldMax)
@@ -426,11 +431,6 @@ export function createSceneFireLightReceiver({THREE,sharedGpu,renderer,scene,cam
         sharedDeviceIdentity: sharedGpu?.identity ?? null,
       };
     },
-    dispose() {
-      fireShadowCasters.dispose();
-      fireShadow.dispose();
-      blackAtlasTexture.destroy?.();
-      blackMetaTexture.destroy?.();
-    },
+    dispose:ownership.dispose,
   };
 }
