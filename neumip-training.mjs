@@ -1,7 +1,8 @@
+import {createHandoffState,buildHandoffMath,STONE_HANDOFF_ARCHITECTURE} from './stone-handoff-model.mjs';
 // Browser/native WebGPU training for Kaminos's released NeuMIP web format.
 // Parameters remain float32; all levels are independent learned fields.
 const TARGET_STATE=Symbol('NeuMIP current target batch');
-export function createNeumipStudent({resolution=64,seed=1}={}) {
+export function createNeumipStudent({resolution=64,seed=1,handoff}={}) {
   if(!Number.isInteger(resolution)||resolution<2||!Number.isInteger(Math.log2(resolution)))throw Error('NeuMIP resolution must be a power of two >= 2');
   let state=seed>>>0;
   const random=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return (state+.5)/4294967296;};
@@ -15,7 +16,9 @@ export function createNeumipStudent({resolution=64,seed=1}={}) {
     const biases=new Float32Array(output);if(prefix==='main'&&k===3)biases[0]=.05;
     layers.push({name:`${prefix}.mpl${k}`,input,output,relu:k<3,weights:Float32Array.from({length:input*output},()=>normal()*scale),biases});
   }
-  return {offset,mips,layers,architecture:'kaminos-neumip-web-distillation-v1'};
+  const model={offset,mips,layers,architecture:'kaminos-neumip-web-distillation-v1'};
+  if(handoff){model.handoff=createHandoffState(handoff,resolution);model.architecture=STONE_HANDOFF_ARCHITECTURE;const head=layers.find(l=>l.name==='main.mpl3');head.weights.fill(0);head.biases.fill(0);}
+  return model;
 }
 
 export function neumipTrainingLayout(model) {
@@ -34,11 +37,11 @@ export function neumipTrainingLayout(model) {
     networks[prefix]={inputOffset,layers};
   }
   const weightCount=at;
-  const fields=[model.offset,...model.mips].map(t=>{const field={...t,offset:at};at+=t.data.length;return field;});
+  const fields=[model.offset,...model.mips,...(model.handoff?.cheap??[])].map(t=>{const field={...t,offset:at};at+=t.data.length;return field;});
   const values=new Float32Array(at);
   for(const net of Object.values(networks))for(const l of net.layers){values.set(l.weights,l.weightsOffset);values.set(l.biases,l.biasesOffset);}
   for(const f of fields)values.set(f.data,f.offset);
-  return {networks,fields,weightCount,count:at,actCount:act,deltaCount:delta,scratchStride:act+delta+4,values};
+  return {handoff:model.handoff,appearanceLevels:model.mips.length,cheapStartField:1+model.mips.length,networks,fields,weightCount,count:at,actCount:act,deltaCount:delta,scratchStride:act+delta+4,values};
 }
 
 // Exact storage requirements, shared by device admission and allocation.
@@ -59,7 +62,9 @@ export function restoreNeumipParameters(model,layout,values) {
 }
 
 export function buildNeumipTrainingWGSL(layout) {
-  const {networks,fields,weightCount,actCount,deltaCount,scratchStride}=layout;
+  const {networks,fields,weightCount,actCount,deltaCount,scratchStride,handoff,appearanceLevels,cheapStartField}=layout;
+  const paired=!!handoff,math=paired?buildHandoffMath(handoff,fields[0].width):null;
+  const cheapSample=paired?`let cheapLod=clamp(queries[q*8u+6u]+cfg.lodBias+${Math.log2(fields[cheapStartField].width/fields[0].width).toFixed(1)},0.0,${(fields.length-cheapStartField-1).toFixed(1)});let cheapLo=u32(floor(cheapLod))+${cheapStartField}u;let cheapHi=min(cheapLo+1u,${fields.length-1}u);let cheapT=fract(cheapLod);var cheapLog=vec3<f32>(0.0);for(var c=0u;c<3u;c++){cheapLog[c]=mix(sampleField(cheapLo,uv,c).x,sampleField(cheapHi,uv,c).x,cheapT);}let cheap=stoneFlatResponse(view,vec2<f32>(queries[q*8u+4u],queries[q*8u+5u]))*exp(cheapLog);let support=stoneHandoffWeight(uv,queries[q*8u+6u]+cfg.lodBias)*cfg.richEnabled;`:``;
   const off=networks.offset_network,main=networks.main;
   const o=off.layers[3].actOffset,m=main.layers[3].actOffset;
   const md=main.layers[3].deltaOffset;
@@ -85,7 +90,7 @@ export function buildNeumipTrainingWGSL(layout) {
       v=scratch[base+${actCount+l.deltaOffset}u+w-${l.biasesOffset}u];
     }`).join('\n');
   return `
-struct Config { count:u32,step:u32,lrWeights:f32,lrFields:f32,lodBias:f32,_pad:f32,_pad1:f32,_pad2:f32 }
+struct Config { count:u32,step:u32,lrWeights:f32,lrFields:f32,lodBias:f32,trainRich:f32,trainCheap:f32,richEnabled:f32 }
 @group(0) @binding(0) var<storage,read_write> p:array<f32>;
 @group(0) @binding(1) var<storage,read> queries:array<f32>;
 @group(0) @binding(2) var<storage,read_write> targets:array<f32>;
@@ -98,6 +103,7 @@ const WIDTH:array<u32,${fields.length}>=array<u32,${fields.length}>(${fields.map
 const HEIGHT:array<u32,${fields.length}>=array<u32,${fields.length}>(${fields.map(f=>f.height+'u').join(',')});
 const CHANNELS:array<u32,${fields.length}>=array<u32,${fields.length}>(${fields.map(f=>f.channels+'u').join(',')});
 const FIELD:array<u32,${fields.length}>=array<u32,${fields.length}>(${fields.map(f=>f.offset+'u').join(',')});
+${paired?math.weight+math.flat:""}
 var<private> a:array<f32,${actCount}>;
 var<private> d:array<f32,${deltaCount}>;
 var<private> di:array<f32,12>;
@@ -136,15 +142,16 @@ fn evaluate(q:u32)->vec3<f32>{
   a[${off.inputOffset+6}u]=view.x;a[${off.inputOffset+7}u]=view.y;offsetForward();
   let z=max(0.6,sqrt(max(0.0,1.0-dot(view,view))));
   let shifted=fract(uv)+a[${o}u]*view/z*0.05;
-  let lod=clamp(queries[q*8u+6u]+cfg.lodBias,0.0,${(fields.length-2).toFixed(1)});
+  let lod=clamp(queries[q*8u+6u]+cfg.lodBias,0.0,${(appearanceLevels-1).toFixed(1)});
   let low=u32(floor(lod))+1u;let high=min(low+1u,${fields.length-1}u);let t=fract(lod);
   a[${main.inputOffset}u]=queries[q*8u+4u];a[${main.inputOffset+1}u]=queries[q*8u+5u];
   a[${main.inputOffset+2}u]=view.x;a[${main.inputOffset+3}u]=view.y;
   for(var c=0u;c<8u;c++){a[${main.inputOffset+4}u+c]=mix(sampleField(low,shifted,c).x,sampleField(high,shifted,c).x,t);}
   mainForward();
-  let logRGB=vec3<f32>(a[${m}u]+1.13983*a[${m+2}u],a[${m}u]-0.39465*a[${m+1}u]-0.58060*a[${m+2}u],a[${m}u]+2.03211*a[${m+1}u]);
+  ${paired?`${cheapSample}return cheap+support*vec3<f32>(a[${m}u],a[${m+1}u],a[${m+2}u]);`:`  let logRGB=vec3<f32>(a[${m}u]+1.13983*a[${m+2}u],a[${m}u]-0.39465*a[${m+1}u]-0.58060*a[${m+2}u],a[${m}u]+2.03211*a[${m+1}u]);
   let shadow=0.1+1.0/(1.0+exp(-vec3<f32>(a[${m+3}u],a[${m+4}u],a[${m+5}u])));
-  return (exp(logRGB)-1.0)*shadow;
+  return (exp(logRGB)-1.0)*shadow;`}
+
 }
 @compute @workgroup_size(64) fn teacher(@builtin(global_invocation_id) id:vec3<u32>){
   let q=id.x;if(q>=cfg.count){return;}let rgb=evaluate(q);
@@ -160,18 +167,20 @@ fn evaluate(q:u32)->vec3<f32>{
   let error=rgb-teacherColor;
   scratch[base+${actCount+deltaCount}u]=dot(error,error)*0.5;
   for(var c=0u;c<3u;c++){scratch[base+${actCount+deltaCount+1}u+c]=rgb[c];}
-  let logRGB=vec3<f32>(a[${m}u]+1.13983*a[${m+2}u],a[${m}u]-0.39465*a[${m+1}u]-0.58060*a[${m+2}u],a[${m}u]+2.03211*a[${m+1}u]);
+  ${paired?`let uv=vec2<f32>(queries[q*8u],queries[q*8u+1u]);let view=vec2<f32>(queries[q*8u+2u],queries[q*8u+3u]);${cheapSample}
+  for(var c=0u;c<3u;c++){d[${md}u+c]=error[c]*support*cfg.trainRich;d[${md+3}u+c]=0.0;let g=error[c]*cheap[c]*cfg.trainCheap;scatterField(cheapLo,uv,c,g*(1.0-cheapT));scatterField(cheapHi,uv,c,g*cheapT);}`:`  let logRGB=vec3<f32>(a[${m}u]+1.13983*a[${m+2}u],a[${m}u]-0.39465*a[${m+1}u]-0.58060*a[${m+2}u],a[${m}u]+2.03211*a[${m+1}u]);
   let sigmoid=1.0/(1.0+exp(-vec3<f32>(a[${m+3}u],a[${m+4}u],a[${m+5}u])));
   let colorGrad=error*(0.1+sigmoid)*exp(logRGB);
   d[${md}u]=colorGrad.x+colorGrad.y+colorGrad.z;
   d[${md+1}u]=-0.39465*colorGrad.y+2.03211*colorGrad.z;
   d[${md+2}u]=1.13983*colorGrad.x-0.58060*colorGrad.y;
-  for(var c=0u;c<3u;c++){d[${md+3}u+c]=error[c]*(exp(logRGB[c])-1.0)*sigmoid[c]*(1.0-sigmoid[c]);}
+  for(var c=0u;c<3u;c++){d[${md+3}u+c]=error[c]*(exp(logRGB[c])-1.0)*sigmoid[c]*(1.0-sigmoid[c]);}`}
+
   mainBackward();
-  let uv=vec2<f32>(queries[q*8u],queries[q*8u+1u]);let view=vec2<f32>(queries[q*8u+2u],queries[q*8u+3u]);
+  ${paired?"":"let uv=vec2<f32>(queries[q*8u],queries[q*8u+1u]);let view=vec2<f32>(queries[q*8u+2u],queries[q*8u+3u]);"}
   let factor=view/max(0.6,sqrt(max(0.0,1.0-dot(view,view))))*0.05;
   let shifted=fract(uv)+a[${o}u]*factor;
-  let lod=clamp(queries[q*8u+6u]+cfg.lodBias,0.0,${(fields.length-2).toFixed(1)});
+  let lod=clamp(queries[q*8u+6u]+cfg.lodBias,0.0,${(appearanceLevels-1).toFixed(1)});
   let low=u32(floor(lod))+1u;let high=min(low+1u,${fields.length-1}u);let t=fract(lod);
   var depthGrad=0.0;
   for(var c=0u;c<8u;c++){
@@ -198,7 +207,7 @@ var<workgroup> sums:array<f32,64>;
   for(var b=0u;b<blocks;b++){sum+=partial[w*blocks+b];}atomicStore(&grad[w],bitcast<u32>(sum));
 }
 @compute @workgroup_size(64) fn adam(@builtin(global_invocation_id) id:vec3<u32>,@builtin(num_workgroups) groups:vec3<u32>){
-  let i=id.x+id.y*groups.x*64u;if(i>=${layout.count}u){return;}let g=bitcast<f32>(atomicLoad(&grad[i]))/f32(cfg.count);
+  let i=id.x+id.y*groups.x*64u;if(i>=${layout.count}u){return;}${paired?`if(i>=${fields[cheapStartField].offset}u){if(cfg.trainCheap<0.5){return;}}else{if(cfg.trainRich<0.5){return;}}`:``}let g=bitcast<f32>(atomicLoad(&grad[i]))/f32(cfg.count);
   let mv=moments[i];let next=vec2<f32>(0.9*mv.x+0.1*g,0.999*mv.y+0.001*g*g);moments[i]=next;
   let lr=select(cfg.lrFields,cfg.lrWeights,i<${weightCount}u);
   p[i]-=lr*(next.x/(1.0-pow(0.9,f32(cfg.step))))/(sqrt(next.y/(1.0-pow(0.999,f32(cfg.step))))+1e-8);
@@ -241,9 +250,9 @@ export async function createNeumipTraining(device,model,{batchSize=4096}={}) {
     if(currentTargets.encoder&&currentTargets.encoder!==encoder)throw Error('Pending teacher targets belong to a different encoder');
     return {count,queryBits,device};
   };
-  const configure=({lodBias=0,lrWeights=.001,lrFields=.01}={})=>{
+  const configure=({lodBias=0,lrWeights=.001,lrFields=.01,trainRich=true,trainCheap=true,richEnabled=true}={})=>{
     const data=new ArrayBuffer(32),view=new DataView(data);view.setUint32(0,count,true);view.setUint32(4,Math.max(1,step),true);
-    view.setFloat32(8,lrWeights,true);view.setFloat32(12,lrFields,true);view.setFloat32(16,lodBias,true);device.queue.writeBuffer(config,0,data);
+    view.setFloat32(8,lrWeights,true);view.setFloat32(12,lrFields,true);view.setFloat32(16,lodBias,true);view.setFloat32(20,trainRich?1:0,true);view.setFloat32(24,trainCheap?1:0,true);view.setFloat32(28,richEnabled?1:0,true);device.queue.writeBuffer(config,0,data);
   };
   const maxGroups=device.limits?.maxComputeWorkgroupsPerDimension??65535;
   const dispatch=(encoder,name,x,y=1)=>{if(x>maxGroups||y>maxGroups)throw Error(`NeuMIP ${name} dispatch ${x}x${y} exceeds device workgroup limit ${maxGroups}`);const pass=encoder.beginComputePass({label:`NeuMIP ${name}`});pass.setPipeline(pipelines[name]);pass.setBindGroup(0,group);pass.dispatchWorkgroups(x,y);pass.end();};
@@ -271,6 +280,7 @@ export async function createNeumipTraining(device,model,{batchSize=4096}={}) {
     readPredictions,
     async exportModel(){return restoreNeumipParameters(model,layout,await read(parameters,layout.count*4));},
     dispose(){buffers.forEach(b=>b.destroy());},
+    resetOptimizer(){const e=device.createCommandEncoder();e.clearBuffer(moments);device.queue.submit([e.finish()]);step=0;},
     get step(){return step;},
   };
   } catch(error) {buffers.forEach(b=>b.destroy());throw error;}

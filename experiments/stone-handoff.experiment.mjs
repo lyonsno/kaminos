@@ -1,3 +1,4 @@
+import {loadStoneHandoffModel} from '../stone-handoff-model.mjs';
 import * as THREE from '../lib/three.webgpu.js';
 import {uv,wgslFn} from '../lib/three.tsl.js';
 import {createStoneTransitionSource} from '../stone-transition-source.mjs';
@@ -22,8 +23,10 @@ export default {
   support.areaFraction=support.quads.reduce((sum,[a,b,c,d])=>sum+(c-a)*(d-b),0);
   const domain=source.captureDomain??source.config,frameScale=source.window?.uvScale??1;
   const framedView={position:[4.3*frameScale,3.4*frameScale,4.6*frameScale],target:[0,-.04,0],fov:42};
-  if(!['source','pbr','neural','overlap-control'].includes(mode))throw Error('Unknown stone view');
-  let model;if(inputs.modelURL)model=await loadNeumipModel(inputs.modelURL,{sha256:inputs.modelSHA});
+  if(!['source','pbr','neural','overlap-control','paired','cheap'].includes(mode))throw Error('Unknown stone view');
+  let model,pairedModel;if(inputs.modelURL)model=await loadNeumipModel(inputs.modelURL,{sha256:inputs.modelSHA});if(inputs.handoffURL)pairedModel=await loadStoneHandoffModel(inputs.handoffURL,{sha256:inputs.handoffSHA});
+  if(['paired','cheap'].includes(mode)&&!pairedModel)throw Error('Paired view requires a trained handoff artifact');
+  if(pairedModel&&(source.window||pairedModel.handoff.routing.width!==domain.width||pairedModel.handoff.routing.depth!==domain.depth||pairedModel.handoff.routing.inner!==Math.max(source.config.margin,source.config.bevel)||pairedModel.handoff.routing.collar!==collar))throw Error('Paired model routing does not match the displayed source domain');
   if(['neural','overlap-control'].includes(mode)&&!model)throw Error('This view requires an actual fitted model URL');
   const session=await host.scene.open(),root=new THREE.Group();root.name='Stone parallax handoff';
   const objects={},materials=[],geometries=[];
@@ -51,20 +54,21 @@ export default {
    rich.material.opacityNode=wgslFn(code)(uv());
    const layer=ownMesh('Neural support and overlap',geometry(support.quads,domain),rich.material);layer.renderOrder=1;overlap.add(layer);objects['overlap-control']=overlap;
   }
+  if(pairedModel){objects.paired=ownMesh('Trained cheap plus rich residual',plane(),createNeumipMaterial(pairedModel,{uvScale:1,gain:1}).material);objects.cheap=ownMesh('Trained cheap endpoint',plane(),createNeumipMaterial(pairedModel,{uvScale:1,gain:1,richEnabled:false}).material);}
   for(const o of Object.values(objects))root.add(o);
   const apply=()=>{for(const [key,o]of Object.entries(objects))o.visible=key===mode;session.redraw();};
   let asset,selector,status;
-  const read=()=>({schema:'kaminos.stone-handoff-comparison.v1',mode,source:source.config,window:source.window,captureDomain:domain,sourceSchema:source.schema,model:model?.source??null,modelInstalled:!!model,objectId:asset?.id,collar,neuralAreaFraction:support.areaFraction,
-   claim:mode==='overlap-control'?'Analytic output-fade control over an authored-source fit; no learned bridge or speedup established':mode==='neural'?'Ordinary NeuMIP fit of authored source':mode==='pbr'?'Native PBR plane, including the current scene renderer':'Explicit authored source in native raster lighting, not the traced teacher integral',view:session.readView()});
-  try{apply();asset=await session.attach(root,{owned:true,metadata:{label:root.name,source:inputs.modelURL??'procedural:stone-transition-v1',type:'experiment'}});session.setView(inputs.view??framedView);}
+  const read=()=>({schema:'kaminos.stone-handoff-comparison.v1',mode,source:source.config,window:source.window,captureDomain:domain,sourceSchema:source.schema,model:model?.source??null,modelInstalled:!!model,pairedModel:pairedModel?.source??null,pairedInstalled:!!pairedModel,objectId:asset?.id,collar,neuralAreaFraction:support.areaFraction,
+   claim:mode==='paired'?'Trained footprint-routed cheap response plus signed residual; no runtime speedup established':mode==='cheap'?'Trained mipmapped GGX response correction, with rich residual disabled':mode==='overlap-control'?'Analytic output-fade control over an authored-source fit; no learned bridge or speedup established':mode==='neural'?'Ordinary NeuMIP fit of authored source':mode==='pbr'?'Native PBR plane, including the current scene renderer':'Explicit authored source in native raster lighting, not the traced teacher integral',view:session.readView()});
+  try{apply();asset=await session.attach(root,{owned:true,metadata:{label:root.name,source:inputs.handoffURL??inputs.modelURL??'procedural:stone-transition-v1',type:'experiment'}});session.setView(inputs.view??framedView);}
   catch(e){if(!asset){for(const g of geometries)g.dispose();for(const m of materials)m.dispose();}await session.dispose();throw e;}
   return {read,operations:{
    setMode(value){if(!objects[value])throw Error('View unavailable: fitted model not installed or unknown view');mode=value;apply();updateInputs({...inputs,source:source.config,mode,collar});if(selector)selector.value=mode;if(status)status.textContent=read().claim;record({kind:'stone-handoff.mode',phase:'applied',effective:read()});return read();},
    frame(){return session.setView(framedView);},
   },mount({root:panel,document,invoke}){
    const label=document.createElement('label');label.textContent='Representation ';selector=document.createElement('select');
-   for(const [value,text]of [['source','Explicit source'],['pbr','PBR endpoint'],['neural','Full learned parallax'],['overlap-control','PBR overlap — output-fade control']]){const option=document.createElement('option');option.value=value;option.textContent=text;option.disabled=!objects[value];selector.append(option);}selector.value=mode;selector.onchange=()=>invoke('setMode',selector.value).catch(e=>status.textContent=e.message);label.append(selector);panel.append(label);
-   status=document.createElement('p');status.textContent=read().claim;panel.append(status);const modelState=document.createElement('p');modelState.textContent=model?'Model loaded. Gain1, UVscale1.':'Fit pending; neural views remain unavailable.';panel.append(modelState);
+   for(const [value,text]of [['source','Explicit source'],['pbr','PBR endpoint'],['neural','Full learned parallax'],['overlap-control','PBR overlap — output-fade control'],['paired','Trained PBR + residual'],['cheap','Trained cheap endpoint']]){const option=document.createElement('option');option.value=value;option.textContent=text;option.disabled=!objects[value];selector.append(option);}selector.value=mode;selector.onchange=()=>invoke('setMode',selector.value).catch(e=>status.textContent=e.message);label.append(selector);panel.append(label);
+   status=document.createElement('p');status.textContent=read().claim;panel.append(status);const modelState=document.createElement('p');modelState.textContent=pairedModel?'Paired fit loaded. Gain1, UVscale1.':model?'Ordinary fit loaded. Gain1, UVscale1.':'Fit pending; neural views remain unavailable.';panel.append(modelState);
   },async dispose(){await session.dispose();}};
  }
 };

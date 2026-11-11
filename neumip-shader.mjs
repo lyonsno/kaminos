@@ -17,7 +17,8 @@ function network(model,prefix,args,output) {
       const sum=parts.join('+');text+=`a${k+1}[${row}]=${l.relu?`max(0.0,${sum})`:sum};\n`;
     }
   }
-  if(prefix==='main')text+=`let rgb=vec3<f32>(a4[0]+1.13983*a4[2],a4[0]-0.39465*a4[1]-0.58060*a4[2],a4[0]+2.03211*a4[1]);
+  if(prefix==='main'&&model.handoff)text+='return vec3<f32>(a4[0],a4[1],a4[2]);\n}';
+  else if(prefix==='main')text+=`let rgb=vec3<f32>(a4[0]+1.13983*a4[2],a4[0]-0.39465*a4[1]-0.58060*a4[2],a4[0]+2.03211*a4[1]);
 return (exp(rgb)-vec3<f32>(1.0))*(vec3<f32>(0.1)+vec3<f32>(1.0)/(vec3<f32>(1.0)+exp(-vec3<f32>(a4[3],a4[4],a4[5]))));\n}`;
   else text+='return a4[0];\n}';
   return text;
@@ -33,7 +34,8 @@ fn nmBilinear(t:texture_2d<f32>,p:vec2<f32>,level:i32)->vec4<f32>{
  let a=((i%size)+size)%size;let b=(((i+vec2<i32>(1))%size)+size)%size;
  return mix(mix(textureLoad(t,a,level),textureLoad(t,vec2<i32>(b.x,a.y),level),w.x),mix(textureLoad(t,vec2<i32>(a.x,b.y),level),textureLoad(t,b,level),w.x),w.y);
 }`,features:`
-fn neumipFeatures(uv:vec2<f32>,view:vec3<f32>,lod:f32,off0:texture_2d<f32>,off1:texture_2d<f32>,map0:texture_2d<f32>,map1:texture_2d<f32>)->mat4x4<f32>{
+fn neumipFeatures(uv:vec2<f32>,view:vec3<f32>,lod:f32,${model.handoff?'support:f32,':''}off0:texture_2d<f32>,off1:texture_2d<f32>,map0:texture_2d<f32>,map1:texture_2d<f32>)->mat4x4<f32>{
+ ${model.handoff?'if(support<=0.0){return mat4x4<f32>(vec4<f32>(0.0),vec4<f32>(0.0),vec4<f32>(0.0),vec4<f32>(0.0));}':''}
  let depth=neumipOffset(nmBilinear(off0,uv,0),nmBilinear(off1,uv,0),view.xy);
  let denominator=max(sqrt(max(0.0,1.0-dot(view.xy,view.xy))),0.6);
  let shifted=fract(uv)+depth*view.xy/denominator*0.05;
