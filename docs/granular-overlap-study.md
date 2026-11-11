@@ -1,109 +1,103 @@
 # Overlapping local preparation study
 
-This experiment compares an entire granular layer with sequential local solves
-under the same prescribed compression stages. It uses the existing Cannon convex
-contact model so the changed object is the subdivision method. It does not
-select that solver as the final fine-earth backend, add cohesive matrix physics,
-or establish a refinement speedup.
+The first matrix tests whether local settling can create a coherent arrangement
+of fine grains around prescribed coarse stones. It compares a whole-layer solve
+with 2x2 and 2x4 horizontal regions, fixed/shifted boundaries, and overlaps of
+0.5/1 nominal fine-grain diameters: nine cases. It uses the existing Cannon
+convex contact model, not a selected final fine-earth constitutive model.
 
-The input is `experiments/granular-overlap.study.json`. Run a caller-owned copy:
+## Solve and commit
+
+Every case starts from the same unprepared, non-overlapping near-contact columns.
+Grain orientations and shapes are seeded. Exact rotated vertical bounds place
+successive grains above preceding grains, the floor and any parent whose footprint
+could intersect them; physical settling creates the resulting arrangement. Each
+parent's actual rotated top is placed `anchorExposureDiameters` above the floor,
+measured in nominal fine diameters. A circumradius is not a vertical height.
+
+Each pass assigns every fine grain to one half-open central core, using positions
+at the beginning of the pass. The extended overlap is a moving halo: all grains in
+that window are dynamic during its solve, while all remaining grains stay as
+frozen collision context. Only core rows are committed. Every canonical grain is
+advanced exactly once per pass; discarded halo predictions allow neighboring
+motion to affect the core without repeatedly advancing overlap grains. Core
+membership moves with the boundary schedule. Sequential jobs read the latest
+committed state; no internal walls or clipped grains are introduced.
+
+`commitPolicy: "all-active"` retains the earlier repeated-relaxation contender.
+It commits every active halo row and therefore advances overlap/junction grains
+more often. It is a separate numerical scheme, not equal-work or equivalent
+physical time. Both committed visits and dynamic evaluation visits are recorded.
+The default is the provisional core variant, not a final solver selection.
+
+Four shifted passes use `[0,0]`, `[.25,0]`, `[0,.25]`, `[-.25,-.25]` cell offsets.
+Outer specimen boundaries remain fixed. A 2x2 grid has one four-way junction;
+2x4 adds three junctions and shorter cells. These are horizontal partitions of a
+thin layer. All frozen neighbors remain in the first implementation: finite-halo
+collision truncation and its potential savings are still untested.
+
+## Specimen and physical limits
+
+The initial experiment uses 256 fine grains, fixed fine solid volume 2.65e-7 m3,
+a 24 mm square, nominal fine diameter about 1.51 mm, and two prescribed parent
+stones. The unshifted short eight-region cell spans about four fine diameters;
+the narrowest shifted edge cell spans about three. The largest overlap occupies
+about one quarter to one third of those widths. This is a small decomposition
+experiment, not the final fine-earth scale. Refining constituent count preserves
+fine volume rather than adding a deeper pile.
+
+Default `stages: 0` tests settling only. The preceding compression pilot requested
+a gap that could not contain 82 of its 256 rigid grains. Compression/distressing
+is consequently deferred; this first matrix does not test transfer under load.
+Optional positive stages retain the reference-derived common platen schedule.
+A candidate gap below any grain's inscribed-sphere diameter is rejected as
+geometrically impossible, rather than forcing interpenetration. Passing that
+necessary check alone does not guarantee that the bed can fit. Median-height
+compression of a shallow, varying-size layer is not a general pressure model.
+
+A small deterministic floor-contact diagnosis motivated `dt: 1/480`: the previous
+1/240 step left about 25.6 micrometers of single-grain floor penetration; halving
+it reduced that particular error to about 0.154 micrometers. This does not validate
+many-grain packing. Reported contacts, floor/lid penetration, residual motion and
+actual images remain evidence to inspect. No cohesive matrix, breakup, weathering,
+periodic tile, many-orders refinement or inertial-trajectory equivalence is supplied.
+Parent preparation time stays held while local numerical relaxation clocks advance.
+
+## Inputs, execution and retained state
 
 ```sh
 node tools/granular-overlap-study.mjs CONFIG_JSON OUTPUT_DIRECTORY EXPECTED_GIT_SHA
 ```
 
-Heavy physical runs and timing comparisons use GPU Greenroom. The command writes
-`manifest.json` before source/configuration admission and preserves a failed
-phase and error if execution fails. Its exact source, effective route, canonical
-initial state, immutable geometry hash, all case snapshots and every local
-state handoff are retained. Trajectories store lossless active-grain deltas: start
-from the common initial state, replace each listed grain ID, and apply the stated
-lid height. Unchanged neighbor rows need not be written repeatedly. Output paths are caller parameters. A completed run
-means the specified experiment executed; optical quality and method usefulness
-remain observations to make.
+`experiments/granular-overlap.reference.json` chooses the whole case only
+(`grids: []`). `experiments/granular-overlap.study.json` chooses the full matrix.
+Heavy physical runs and timing comparisons use GPU Greenroom. A reference must
+be inspected before the full matrix is interpreted as a comparison of useful
+packing. Output paths belong to the caller.
 
-## Compared cases
-
-One whole-specimen reference plus a matrix:
-
-| Regions | Boundary schedule | Active-window overlap |
-| --- | --- | --- |
-| 2 × 2 | Fixed / shifted | 0.5 / 1 nominal fine-grain diameters |
-| 2 × 4 | Fixed / shifted | 0.5 / 1 nominal fine-grain diameters |
-
-Four shifted passes place the interior boundaries at `[0,0]`, `[.25,0]`,
-`[0,.25]`, `[-.25,-.25]` cell offsets. The outer specimen boundary stays fixed.
-The 2 × 2 grid exercises a four-way junction; 2 × 4 adds junctions and shorter
-patches. These are horizontal decompositions of a thin layer, not eight volumetric
-subcubes. Region layout and overlap are independent input parameters.
-
-Each grid pass selects constituents using positions captured at its start.
-An active window includes whole grains by centre, never clipped geometry.
-All other constituents remain as frozen collision context; no internal box walls
-are introduced. The first implementation deliberately keeps all frozen neighbors,
-so it tests the decomposition before introducing finite-halo truncation. Jobs run
-sequentially against the latest committed state. Only active grain rows are
-committed; every identity and the complete geometry/mass inventory are preserved.
-Overlap means some grains are relaxed by more than one local job. Per-grain visit
-counts and active-particle substeps expose that extra work; cases are not claimed
-to have equal work simply because they have the same number of passes.
-
-The whole reference first supplies a loading schedule derived from the selected
-quantile of its prepared fine-grain top heights. Every patch case uses those same
-planes. This avoids using one high perched grain as the only contact target.
-The parent platen lowers in prescribed stages and is held during local relaxation. Parent preparation time stays at the shared initial state's time;
-local elapsed times are numerical relaxation clocks. This does not model ageing
-or claim an inertially equivalent full-resolution trajectory. The minimum platen
-height respects the prescribed parent stones; requested and effective strain are
-both recorded. Fine-scale velocities and poses pass between local jobs.
-
-## Specimen and refinement
-
-Two prescribed, mostly embedded coarse stones provide common geometry. Every
-case starts from the same unprepared seeded inventory and performs its own
-settling, using the whole window or the case's local windows. The local scheme
-therefore has to produce the packing around the stones itself. There is no
-shared globally prepared bed. Settling visits sum to the configured duration for
-one visit per pass; overlap adds explicit repeated work. A prepared snapshot is
-retained before each case's compression.
-
-The chosen initial matrix contains 256 fine grains in a 24 mm square. Their
-nominal diameter is about 1.5 mm: the shortest eight-region cell spans about four
-diameters, and its largest overlap spans about one quarter of a cell. This is a
-small decomposition experiment, not the final fine-earth scale. The fine volume
-is normalized to `fineSolidVolume`; increasing `fineCount` reduces constituent
-size while preserving the amount of fine material. Contact/render hull identity
-is retained.
-
-`experiments/granular-overlap.reference.json` selects only the whole reference
-with the same specimen and protocol (`grids: []`). Run this first to inspect
-loading, residual motion, physical plausibility and cost before spending on the
-full matrix. The runner reports the fraction of fine grain tops above the chosen
-platen and maximum pre-compression speed. Those are diagnostics, not a claim of
-convergence. The reference's quantile loading is geometrically chosen; energy or
-force-controlled compression is not supplied by this experiment.
-
-This is a granular filling analogue. It contains no cohesive fine matrix,
-aggregate fracture or weathering. Contact/render hull identity is retained.
-Metrics report mass, contact overlaps and penetration of the floor/platen;
-they are evidence to inspect, not an automatic aesthetic verdict.
+The manifest (`kaminos.granular-overlap-study.v2`) records actual source/dirty
+state, route, configuration, hashes and failed phase. It is written before
+source/configuration admission. Every prepared/final snapshot is retained.
+Trajectories are lossless committed-grain deltas: start from the complete initial
+state, replace the listed IDs and apply each lid height. Dynamic halo predictions
+are reproducible from the recorded input/window and canonical previous state;
+they are not committed material state. No output sampling or retention cap is
+introduced. Version 2 identifies the explicit commit policy and near-contact
+protocol; earlier experimental manifests require their original viewer revision.
+A completed run establishes execution, not visual quality or a speedup.
 
 ## Shared Workbench consumer
 
-Open `?workspace=workbench&experiment=granular-overlap&experiment_inputs=JSON`,
-where JSON contains an explicit `manifest` URL served by Kaminos. The result
-matrix changes the displayed snapshot in the same camera and source registration.
-Initial and whole-reference buttons provide the common baseline. Inspect integral
-is an in-place toggle borrowing the actual source object. Region bounds are an
-optional overlay, excluded from the optical source. Reload results admits only
-hashed, complete states; partial cases cannot masquerade as results. Artifact
-hash, geometry hash, inventory, extent, producer route and case identity are
-checked before replacing the displayed specimen. Prescribed anchor rows and the
-parent clock must match the hashed initial state; malformed configuration or case
-metadata fails explicitly. Enabled region bounds follow applicable case changes. A source/selection failure
-retains the previous displayed state and shows an error.
+Open `?workspace=workbench&experiment=granular-overlap&experiment_inputs=JSON`
+with an explicit served `manifest` URL. The matrix changes snapshots in the same
+camera and source registration. Inspect integral is an in-place SurfaceTeacher
+toggle; controls remain visible. Region bounds are an optional overlay excluded
+from the optical source, and follow applicable case changes.
 
-Agent operations use the same contribution: `reload`, `select({id})`, `render`,
-`regions`, `renderSettings` and `renderCapture`. Native scene transforms, camera
-and lighting remain the host's. This is a controlled comparison surface, not the
-finished material-authoring cabinet.
+Admission checks hashes, producer route, complete configuration, case descriptor,
+geometry/inventory/extent, prescribed parent rows and parent clock against the
+hashed initial state. Invalid input preserves the displayed specimen. Partial
+cases remain unavailable. Agent operations use the same contribution: `reload`,
+`select({id})`, `render`, `regions`, `renderSettings` and `renderCapture`. Camera,
+selection, transforms and lighting remain native. This is a controlled comparison
+surface, not the finished material-authoring cabinet.

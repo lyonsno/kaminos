@@ -6,7 +6,7 @@
   "coarseRadius": 0.0035,
   "settleSeconds": 0.8,
   "strain": 0.08,
-  "stages": 2,
+  "stages": 0,
   "passes": 4,
   "localSeconds": 0.025,
   "grids": [
@@ -23,6 +23,8 @@
     0.5,
     1
   ],
-  "anchorBurial": 0.9,
-  "platenQuantile": 0.5
+  "platenQuantile": 0.5,
+  "anchorExposureDiameters": 0.75,
+  "dt": 0.0020833333333333333,
+  "commitPolicy": "core"
 }

@@ -11,7 +11,7 @@ for(const x of [-.011,-.006,0,.006,.011])for(const z of [-.011,-.006,0,.006,.011
 assert.ok(windows.filter(w=>0>=w.bounds[0]&&0<=w.bounds[1]&&0>=w.bounds[2]&&0<=w.bounds[3]).length===4,'the overlap must exercise the four-way junction');
 assert.throws(()=>patchWindows({width:.024,grid:[2,2],offset:[1,0]}),/offset/i);
 const {makeStudyState,relaxPatch,runOverlapCase,studyConfiguration}=await import('../granular-overlap.mjs');
-const small=makeStudyState({fineCount:4,fineSolidVolume:1e-8,settleSeconds:.01,stages:1,passes:2,localSeconds:.005,grids:[[2,2]],overlapDiameters:[1]});
+const small=makeStudyState({fineCount:4,fineSolidVolume:1e-8,settleSeconds:.01,stages:1,platenQuantile:1,strain:.01,passes:2,localSeconds:.005,grids:[[2,2]],overlapDiameters:[1]});
 const finer=makeStudyState({...small.configuration,fineCount:8});
 const fineVolume=s=>s.state.ingredients.filter(g=>g.role==='fine').reduce((v,g)=>v+g.volume,0);
 assert.ok(Math.abs(fineVolume(small)-fineVolume(finer))<1e-20,'refinement must preserve the amount of fine material');
@@ -28,7 +28,7 @@ const digest=async bytes=>Buffer.from(await crypto.subtle.digest('SHA-256',bytes
 const artifact={path:'case.json',sha256:await digest(bytes)},caseId=result.state.overlapPreparation.case;
 const initialBytes=new TextEncoder().encode(JSON.stringify(before)),initialArtifact={path:'initial.json',sha256:await digest(initialBytes)};
 const definition=overlapCases(small.configuration).find(c=>c.id===caseId);
-const manifest={schema:'kaminos.granular-overlap-study.v1',effectiveRoute:'cannon-es-0.20.0-cpu/convex-grains/frozen-neighbor-patches',source:{commit:'observed-local-fixture',dirty:''},configuration:small.configuration,anchorIds:small.anchorIds,nominalDiameter:small.nominalDiameter,initial:initialArtifact,geometrySha256:await digest(new TextEncoder().encode(JSON.stringify(result.state.ingredients))),cases:[{...definition,status:'completed',snapshot:artifact}]};
+const manifest={schema:'kaminos.granular-overlap-study.v2',effectiveRoute:'cannon-es-0.20.0-cpu/convex-grains/frozen-neighbor-patches',source:{commit:'observed-local-fixture',dirty:''},configuration:small.configuration,anchorIds:small.anchorIds,nominalDiameter:small.nominalDiameter,initial:initialArtifact,geometrySha256:await digest(new TextEncoder().encode(JSON.stringify(result.state.ingredients))),cases:[{...definition,status:'completed',snapshot:artifact}]};
 assert.deepEqual(await loadStudyState(manifest,artifact,caseId,async file=>file==='initial.json'?initialBytes:bytes),result.state);
 await assert.rejects(loadStudyState({...manifest,effectiveRoute:'fallback'},artifact,caseId,async file=>file==='initial.json'?initialBytes:bytes),/route/i);
 await assert.rejects(loadStudyState({...manifest,cases:[{...manifest.cases[0],status:'running'}]},artifact,caseId,async file=>file==='initial.json'?initialBytes:bytes),/incomplete/i);
@@ -42,3 +42,4 @@ for(const mutation of [m=>delete m.configuration,m=>m.anchorIds={},m=>delete m.c
 
 for(const edit of [state=>state.grains[0].position[0]+=.0001,state=>state.time+=.01]){const bad=structuredClone(result.state);edit(bad);const badBytes=new TextEncoder().encode(JSON.stringify(bad)),badArtifact={path:'bad.json',sha256:await digest(badBytes)};await assert.rejects(loadStudyState({...manifest,cases:[{...definition,status:'completed',snapshot:badArtifact}]},badArtifact,caseId,async file=>file==='initial.json'?initialBytes:badBytes),/anchor|clock/i);}
 const defaultSpecimen=makeStudyState();assert.ok(defaultSpecimen.configuration.width/4/defaultSpecimen.nominalDiameter>=3.9,'eight-region cells need several constituents across');assert.ok(Math.max(...defaultSpecimen.configuration.overlapDiameters)*defaultSpecimen.nominalDiameter<defaultSpecimen.configuration.width/4,'overlap must not swallow the shortest cell in the chosen specimen');
+const drift=structuredClone(manifest);drift.configuration.passes++;await assert.rejects(loadStudyState(drift,artifact,caseId,async file=>file==='initial.json'?initialBytes:bytes),/configuration/i,'case metadata must identify the configuration that produced the state');
