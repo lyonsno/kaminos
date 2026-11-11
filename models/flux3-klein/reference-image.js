@@ -1,3 +1,5 @@
+import {createCooperativeYield} from '../../webgpu-inference-kit/src/inference-runtime.js';
+
 // The pinned diffusers Flux3ImageProcessor keeps each reference's own resolution,
 // scales only above 4096² pixels, then center-crops to the 16-pixel latent grid.
 // Browser resampling uses Canvas high quality; transparent inputs get a white
@@ -15,7 +17,23 @@ export function referenceRgb(rgba){
  for(let p=0;p<rgba.length/4;p++)for(let c=0;c<3;c++){const a=rgba[p*4+3]/255;out[p*3+c]=(rgba[p*4+c]*a+255*(1-a))/127.5-1;}
  return out;
 }
-export async function readReferenceImage(entry,{signal,maxArea}={}){
+export async function referenceRgbCooperative(rgba,{width,signal,targetDutyMs=12,now=()=>performance.now(),yieldToBrowser=globalThis.scheduler?.yield?.bind(globalThis.scheduler)||createCooperativeYield()}={}){
+ signal?.throwIfAborted();
+ if(!Number.isInteger(width)||width<=0||rgba.length%(width*4)!==0)throw Error('Reference pixels must contain complete RGBA rows');
+ if(!Number.isFinite(targetDutyMs)||targetDutyMs<=0)throw Error('Reference targetDutyMs must be finite and positive');
+ const out=new Float32Array(rgba.length/4*3),height=rgba.length/(width*4);let started=now();
+ for(let y=0;y<height;y++){
+  signal?.throwIfAborted();
+  for(let p=y*width;p<(y+1)*width;p++)for(let c=0;c<3;c++){const a=rgba[p*4+3]/255;out[p*3+c]=(rgba[p*4+c]*a+255*(1-a))/127.5-1;}
+  if(y+1<height&&now()-started>=targetDutyMs){
+   await yieldToBrowser({reason:'reference-rgb',metadata:{rows:y+1,height}});
+   signal?.throwIfAborted();started=now();
+  }
+ }
+ return out;
+}
+export async function readReferenceImage(entry,{signal,maxArea,targetDutyMs,now,yieldToBrowser}={}){
+ signal?.throwIfAborted();
  if(entry?.kind!=='image'||entry?.visibility?.status==='withheld')throw Error('Choose an available source image for reference conditioning');
  const source=entry.source||`/api/read?${new URLSearchParams({root:entry.root_id||entry.root,path:entry.path})}`;
  const response=await fetch(source,{signal});if(!response.ok)throw Error(`Reference image: ${response.status}`);
@@ -27,6 +45,7 @@ export async function readReferenceImage(entry,{signal,maxArea}={}){
   canvas=new OffscreenCanvas(width,height);const ctx=canvas.getContext('2d',{willReadFrequently:true});
   ctx.fillStyle='white';ctx.fillRect(0,0,width,height);ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
   ctx.drawImage(bitmap,-left,-top,resizedWidth,resizedHeight);signal?.throwIfAborted();
-  return {width,height,rgb:referenceRgb(ctx.getImageData(0,0,width,height).data),provenance:{source,name:entry.name,sha256,geometry,alphaBackground:'white',resize:'canvas-high-quality'}};
+  const rgb=await referenceRgbCooperative(ctx.getImageData(0,0,width,height).data,{width,signal,targetDutyMs,now,yieldToBrowser});
+  return {width,height,rgb,provenance:{source,name:entry.name,sha256,geometry,alphaBackground:'white',resize:'canvas-high-quality'}};
  }finally{bitmap.close();if(canvas){canvas.width=1;canvas.height=1;}}
 }
