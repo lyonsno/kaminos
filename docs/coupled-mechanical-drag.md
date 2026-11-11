@@ -19,6 +19,25 @@ recording. Live previews carry explicit write context through native history;
 restore writes remain separate from equal-valued previews.
 Play remains the authored-cycle comparison.
 
+**Balance this pose** explicitly captures gravity-balancing preloads and elastic
+references at the existing hinges. The same coupled implicit solve then includes
+preloaded torsion-spring and damping torques, so connected panels can sag under
+load, lag during a pull and return toward a balanced configuration. This adds
+physical elastic energy, without changing simulation speed or adding a body DOF.
+It is an authored hinge-spring approximation, rather than a hydraulic accumulator.
+
+The action uses the current body masses, gravity and composite hinge inertia to
+choose spring stiffness (default calibration period1.2s) and damping (ratio0.15).
+That period calibrates strength; coupling, gravity and fluid resistance determine
+the actual motion. Changing mass or achieved pose preserves the captured preload
+and reference, so extra mass can load and sag the counterbalance. **Balance this
+pose** explicitly recaptures them; **Remove counterbalance** restores the passive
+pressure-only model. Selected-body **Hinge spring** and **Spring damping** use
+ordinary number-drag controls. References are retained with the scene and native
+history. `read().mechanics` exposes gravity and counterbalance torque/deflection.
+The same operations are `balancePose({period,dampingRatio})`,
+`counterbalance({joint,stiffness,damping})` and `clearCounterbalance()`.
+
 **Hydraulic response** switches the coarse fluid layer on the same body model.
 Select a cylinder for Metered flow, Float cylinder or Close valve, with shared
 number-drag controls for conductance and bulk modulus. Select a moving body to
