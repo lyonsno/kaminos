@@ -37,3 +37,25 @@ export async function loadNeumipModel(url,{signal,sha256}={}) {
   if(sha256&&digest!==sha256)throw Error(`NeuMIP model digest mismatch: ${url}`);
   return {...readNeumipModel(bytes),source:{url:response.url,sha256:digest,bytes:bytes.byteLength}};
 }
+
+// The same author-format contract is used for newly fitted models. Reloading
+// validates the archive before a caller can publish it as a material asset.
+export function writeNeumipModel(model) {
+  const chunks=[];
+  const scalar=(size,write)=>{const a=new Uint8Array(size);write(new DataView(a.buffer));chunks.push(a);};
+  const i32=x=>scalar(4,v=>v.setInt32(0,x,true));
+  const count=n=>scalar(8,v=>v.setBigUint64(0,BigInt(n),true));
+  const text=s=>{const a=new TextEncoder().encode(s);count(a.length);chunks.push(a);};
+  const floats=a=>{count(a.length);scalar(a.length*4,v=>{for(let i=0;i<a.length;i++){
+    if(!Number.isFinite(a[i]))throw Error('NeuMIP contains a non-finite value');
+    v.setFloat32(i*4,a[i],true);
+  }});};
+  const texture=t=>{i32(t.height);i32(t.width);i32(t.channels);floats(t.data);};
+  chunks.push(new Uint8Array([1]));texture(model.offset);text(model.architecture);
+  count(model.mips.length);for(const t of model.mips)texture(t);
+  count(model.layers.length);for(const l of model.layers){text(l.name);i32(l.input);i32(l.output);
+    i32(l.biases.length?1:0);i32(l.relu?1:0);floats(l.weights);floats(l.biases);}
+  const result=new Uint8Array(chunks.reduce((n,a)=>n+a.length,0));let at=0;
+  for(const a of chunks){result.set(a,at);at+=a.length;}
+  readNeumipModel(result);return result;
+}

@@ -24,6 +24,7 @@ try{
  for(const name of ['trellis-training-source.mjs','trellis-surface-teacher.mjs','trellis-source-material.mjs','trellis-local-support.mjs','trellis-support-gpu.mjs','surface-teacher.mjs','surface-teacher-wgsl.mjs','surface-material-teacher.mjs','scene-light-visibility.mjs','poly-glb-io.mjs','lod-mesh-bake.mjs','neumip-training.mjs','neumip-model.mjs','tools/trellis-material-fit.mjs']){const b=await fs.readFile(new URL('../'+name,import.meta.url));report.code[name]=hash(b);const dest=path.join(out,'code',name);await fs.mkdir(path.dirname(dest),{recursive:true});await fs.writeFile(dest,b);}
  report.phase='imports';await publish();
  const {createTrellisTrainingSource}=await import('../trellis-training-source.mjs'),{createNeumipStudent,createNeumipTraining,neumipTrainingLayout,neumipTrainingBufferSizes}=await import('../neumip-training.mjs'),{writeNeumipModel,readNeumipModel}=await import('../neumip-model.mjs'),{withKaminosGpu,withGpuErrorScopes}=await import('./shader-herder.mjs');
+ if(typeof writeNeumipModel!=='function'||typeof readNeumipModel!=='function')throw Error('Trainer runtime-format reader and writer required before source capture');
  const student=createNeumipStudent(fit),capacity=Math.max(fit.batch,fit.heldout,64**2),sizes=neumipTrainingBufferSizes(neumipTrainingLayout(student),capacity),largest=Math.max(...Object.values(sizes));
  let rng=fit.seed>>>0;const random=()=>{rng=(Math.imul(rng,1664525)+1013904223)>>>0;return (rng+.5)/4294967296;};
  // Same near-hemisphere sampling convention as the existing ground fit. LOD0
@@ -41,7 +42,7 @@ try{
    report.heldout={queries:await raw('heldout-queries.f32',heldoutQueries),targets:await raw('heldout-labels.f32',labels)};if(!labels.some(v=>v>0))throw Error('Blank source labels cannot establish a material fit');
    learner=await createNeumipTraining(ctx.device,student,{batchSize:capacity});
    const checkpoint=async step=>{learner.setQueries(heldoutQueries);const {rgb}=await learner.evaluate();const model=await learner.exportModel(),archive=writeNeumipModel(model);readNeumipModel(archive);const filename=`panel-${fit.resolution}-step-${step}.model`;await fs.writeFile(path.join(out,filename),archive);const predictions=await raw(`heldout-${step}.f32`,rgb);report.checkpoints.push({step,mse:loss(rgb,labels),file:filename,bytes:archive.length,sha256:hash(archive),predictions});await publish();};
-   await checkpoint(0);report.phase='training';await publish();
+   report.phase='initial-checkpoint';await publish();await checkpoint(0);report.phase='training';await publish();
    for(let step=0;step<fit.steps;step++){
     const q=queries(fit.batch),target=await withGpuErrorScopes(ctx.device,'source fresh training labels',()=>source.teacher.evaluateMaterial(q,{...capture,seed:fit.seed+step+1}));
     await trainStream.write(Buffer.from(q.buffer));await labelStream.write(Buffer.from(target.buffer));
