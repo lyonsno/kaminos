@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
+import {FIRE_UNIT_TYPE} from '../fire-unit-record.mjs';
 import {createSceneMaterials} from '../scene-material-recipes.mjs';
 import {sceneMaterialPrograms} from '../scene-material-programs.mjs';
 import {ASH_SOURCE_TYPE} from '../ash/source-object.mjs';
@@ -273,7 +274,7 @@ test('duplicating a grouped light changes membership through the real scene owne
   workingScene.setGroups([{id:'pair',objectIds:['lamp']}]);
   Object.assign(context,{
     serializeSceneObject:entry=>({...entry,object:undefined}),
-    ASH_SOURCE_TYPE,LOCAL_LIQUID_EMITTER_TYPE:'local-liquid-emitter',FLAME_EMITTER_TYPE:'flame-emitter',CAMERA_TYPE:'camera',PROCEDURAL_MESH_TYPE:'procedural-mesh',RIM_LIGHT_ID:'@rim-light',
+    FIRE_UNIT_TYPE,ASH_SOURCE_TYPE,LOCAL_LIQUID_EMITTER_TYPE:'local-liquid-emitter',FLAME_EMITTER_TYPE:'flame-emitter',CAMERA_TYPE:'camera',PROCEDURAL_MESH_TYPE:'procedural-mesh',RIM_LIGHT_ID:'@rim-light',
     setActiveSceneObject:id=>workingScene.select([id],id),
     assertSceneConstructionAvailable(){},canDuplicateObject:()=>true,makeSceneObjectId:()=> 'copy',
     sceneObjectDisplayLabel:entry=>entry.label,sceneLightRuntimeRecipe:record=>record,

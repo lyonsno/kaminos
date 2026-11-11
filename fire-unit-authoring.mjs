@@ -71,7 +71,7 @@ export function mountFireUnitAuthoring({document,root,owner,edits,target,seedSet
    live:(key,value)=>{const id=GRID_TUNING_FIELDS.find(f=>f[0]===key)[1];setFireUnitControlValue(copy.getElementById(id),value);write('Tune pressure iterations');}},
  });
  const qualityRow=document.createElement('label');qualityRow.className='slider-row';qualityRow.append(document.createTextNode('Simulation boxes'));
- boxMode=document.createElement('select');boxMode.dataset.fireUnitBoxMode='';boxMode.setAttribute('aria-label','Simulation boxes');
+ boxMode=document.createElement('select');boxMode.className='select-input';boxMode.dataset.fireUnitBoxMode='';boxMode.setAttribute('aria-label','Simulation boxes');
  for(const [value,label]of [['double','Double · local Fine + outer'],['single','Single · outer becomes Fine']]){const option=document.createElement('option');option.value=value;option.textContent=label;boxMode.append(option);}
  const syncBoxMode=()=>{boxMode.value=owner.capture().controls.worldSmoke==='on'?'double':'single';};syncBoxMode();
  boxMode.onchange=()=>{try{const next=changeFireUnitBoxMode(owner.capture(),boxMode.value);project(next.settings??seedSettings);seedControls(copy,next.controls);write('Change Flame boxes',snapshot(next.settings??seedSettings),next);}catch(error){onError(error);syncBoxMode();}};

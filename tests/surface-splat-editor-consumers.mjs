@@ -1,5 +1,6 @@
 // kaminos-test: node
-import vm from 'node:vm';import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+import {FIRE_UNIT_TYPE} from '../fire-unit-record.mjs';import {readFileSync} from 'node:fs';
 import {createRepetitionView} from '../scene-repetition.mjs';
 import {exportCloneInWorld} from '../scene-export.mjs';
 import {surfaceSplatsGLTFPlugin} from '../surface-splat-object.mjs';
@@ -52,7 +53,7 @@ test('arrival worker payload excludes resolved screen quads and preserves physic
 // Execute the page's actual Duplicate entry point with only editor bookkeeping stubbed.
 function duplicate(object){
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8'),block=name=>{const start=html.indexOf('function '+name+'(');return html.slice(start,html.indexOf('\n}',start)+2);};
- const rows=[{id:'original',type:'glb',object}],context={THREE:T,originalBurnMaterial:m=>m,assertSceneConstructionAvailable(){},workingScene:{objects:rows},canDuplicateObject:()=>true,makeSceneObjectId:()=> 'copy',serializeSceneObject:()=>({type:'glb'}),sceneObjectDisplayLabel:()=> 'Object',ensureSceneObjectMembershipTarget:()=> 'copy',scenePlacementTools:{edits:{assertCanRecordApplied(){}}},FLAME_EMITTER_TYPE:'flame',LOCAL_LIQUID_EMITTER_TYPE:'water',ASH_SOURCE_TYPE:'ash',PROCEDURAL_MESH_TYPE:'procedural',CAMERA_TYPE:'camera',sceneMaterials:{withSource:(_o,fn)=>fn(),read:()=>({bindings:[]})},withoutRepetitionCopies:(_o,fn)=>fn(),cloneSceneObjectHierarchy:o=>o.clone(),scene:new T.Scene(),registerSceneObject:(o,r)=>rows.push({...r,object:o}),setActiveSceneObject(){},renderSceneObjectList(){},recordSceneObjectInsertion(){}};
+ const rows=[{id:'original',type:'glb',object}],context={FIRE_UNIT_TYPE,THREE:T,originalBurnMaterial:m=>m,assertSceneConstructionAvailable(){},workingScene:{objects:rows},canDuplicateObject:()=>true,makeSceneObjectId:()=> 'copy',serializeSceneObject:()=>({type:'glb'}),sceneObjectDisplayLabel:()=> 'Object',ensureSceneObjectMembershipTarget:()=> 'copy',scenePlacementTools:{edits:{assertCanRecordApplied(){}}},FLAME_EMITTER_TYPE:'flame',LOCAL_LIQUID_EMITTER_TYPE:'water',ASH_SOURCE_TYPE:'ash',PROCEDURAL_MESH_TYPE:'procedural',CAMERA_TYPE:'camera',sceneMaterials:{withSource:(_o,fn)=>fn(),read:()=>({bindings:[]})},withoutRepetitionCopies:(_o,fn)=>fn(),cloneSceneObjectHierarchy:o=>o.clone(),scene:new T.Scene(),registerSceneObject:(o,r)=>rows.push({...r,object:o}),setActiveSceneObject(){},renderSceneObjectList(){},recordSceneObjectInsertion(){}};
  vm.createContext(context);const start=html.indexOf('function cloneSceneMaterial(');vm.runInContext(html.slice(start,html.indexOf('\nasync function',start))+block('duplicateSceneObject'),context);context.duplicateSceneObject('original');return rows[1].object;
 }
 test('native Duplicate keeps drawn splat resources under their runtime owner and preserves PBR fields',()=>{
