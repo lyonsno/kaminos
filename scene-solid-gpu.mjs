@@ -15,7 +15,7 @@ export function createResidentSolidMeshes({upload,release}) {
         object.traverse(mesh=>{
           if(!mesh.isMesh)return;
           for(let p=mesh;p;p=p.parent)if(p.visible===false)return;
-          for(let p=mesh;p;p=p.parent)if(p.userData?.kaminosBeautyLodProxy||p.userData?.kaminosEditorOnly||p.userData?.kaminosEditorHelper)return;
+          for(let p=mesh;p;p=p.parent)if(p.userData?.kaminosBeautyLodProxy||p.userData?.kaminosNonSolidVisual||p.userData?.kaminosEditorOnly||p.userData?.kaminosEditorHelper)return;
           if(mesh.isSkinnedMesh||mesh.morphTargetInfluences?.some(v=>v!==0))throw Error('Deformed scene collider requires evaluated geometry');
           const geometry=mesh.geometry,position=geometry?.getAttribute('position'),index=geometry?.getIndex();
           if(!position||position.count<3)throw Error('scene solid requires position triangles');

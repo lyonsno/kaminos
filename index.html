@@ -27562,7 +27562,7 @@ function addProceduralMesh(kind,parameters={}) {
   try{recordSceneObjectInsertion(id);}catch(error){removeSceneObjectInternal(id,{recordHistory:false});throw error;}
   renderSceneObjectList();return id;
 }
-function cloneSceneMaterial(material){const copy=originalBurnMaterial(material).clone();for(const key of Object.keys(copy))if(copy[key]?.isTexture)copy[key]=copy[key].clone();return copy;}
+function cloneSceneMaterial(material){const source=originalBurnMaterial(material),copy=source.clone();if(source.isNodeMaterial&&source.isMeshStandardMaterial)(source.isMeshPhysicalMaterial?THREE.MeshPhysicalMaterial:THREE.MeshStandardMaterial).prototype.copy.call(copy,source);for(const key of Object.keys(copy))if(copy[key]?.isTexture)copy[key]=copy[key].clone();return copy;}
 async function addPromptLettering(prompt){
   assertSceneConstructionAvailable();
   const id=makeSceneObjectId('pbr'),target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
@@ -27605,7 +27605,7 @@ function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
   else if(entry.type===CAMERA_TYPE)mountAuthoredCamera(record);
   else if(entry.type==='light')mountSceneSpotLight(record);
   else {
-    const copy=sceneMaterials.withSource(entry.object,()=>withoutRepetitionCopies(entry.object,()=>cloneSceneObjectHierarchy(entry.object)));copy.traverse(child=>{if(child.geometry)child.geometry=child.geometry.clone();if(child.material)child.material=Array.isArray(child.material)?child.material.map(cloneSceneMaterial):cloneSceneMaterial(child.material);});
+    const copy=sceneMaterials.withSource(entry.object,()=>withoutRepetitionCopies(entry.object,()=>cloneSceneObjectHierarchy(entry.object)));copy.traverse(child=>{for(let owner=child;owner;owner=owner.parent)if(owner.isSurfaceSplatObject)return;if(child.geometry)child.geometry=child.geometry.clone();if(child.material)child.material=Array.isArray(child.material)?child.material.map(cloneSceneMaterial):cloneSceneMaterial(child.material);});
     const burnLabels=[];copy.traverse(child=>{if(child.userData.kaminosBurnIndicator)burnLabels.push(child);});for(const label of burnLabels){label.removeFromParent();disposeObjectTree(label);}
     scene.add(copy);registerSceneObject(copy,record,{activate:!deferRecord});
   }

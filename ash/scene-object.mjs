@@ -56,7 +56,7 @@ export function createAshCollisionRecords(root,readObjects,{getCellSize=()=>0.04
       const placementWorld=placements[p];
       rung.root.traverse(mesh=>{
        const part=index++;if(!mesh.isMesh)return;
-       for(let node=mesh;node&&node!==rung.root.parent;node=node.parent)if(!node.visible||node.userData?.kaminosEditorOnly||node.userData?.kaminosEditorHelper||node.userData?.kaminosBeautyLodProxy)return;
+       for(let node=mesh;node&&node!==rung.root.parent;node=node.parent)if(!node.visible||node.userData?.kaminosEditorOnly||node.userData?.kaminosEditorHelper||node.userData?.kaminosBeautyLodProxy||node.userData?.kaminosNonSolidVisual)return;
        if(mesh.isSkinnedMesh||mesh.isInstancedMesh||mesh.morphTargetInfluences?.some(x=>x!==0))throw Error(`Ash needs rigid triangles: ${entry.label||entry.id}`);
        let byPlacement=proxies.get(mesh);if(!byPlacement){byPlacement=new Map();proxies.set(mesh,byPlacement);}
        let proxy=byPlacement.get(p);if(!proxy){proxy=new Mesh(mesh.geometry,mesh.material);proxy.matrixAutoUpdate=false;byPlacement.set(p,proxy);}
@@ -70,7 +70,7 @@ export function createAshCollisionRecords(root,readObjects,{getCellSize=()=>0.04
      let index=0;
      entry.object.traverse(mesh=>{
       const part=index++;if(!mesh.isMesh)return;
-      for(let node=mesh;node;node=node.parent)if(!node.visible||node.userData?.kaminosEditorOnly||node.userData?.kaminosEditorHelper||node.userData?.kaminosBeautyLodProxy)return;
+      for(let node=mesh;node;node=node.parent)if(!node.visible||node.userData?.kaminosEditorOnly||node.userData?.kaminosEditorHelper||node.userData?.kaminosBeautyLodProxy||node.userData?.kaminosNonSolidVisual)return;
       if(mesh.isSkinnedMesh||mesh.isInstancedMesh||mesh.morphTargetInfluences?.some(x=>x!==0))throw Error(`Ash needs rigid triangles: ${entry.label||entry.id}`);
       let byPlacement=proxies.get(mesh);if(!byPlacement){byPlacement=new Map();proxies.set(mesh,byPlacement);}
       let proxy=byPlacement.get(0);if(!proxy){proxy=new Mesh(mesh.geometry,mesh.material);proxy.matrixAutoUpdate=false;byPlacement.set(0,proxy);}
@@ -98,7 +98,7 @@ function createLegacyAshCollisionRecords(root,readObjects,{resolveObstacle=null}
     let index=0;
     sourceObj.traverse(mesh=>{
      const part=index++;if(!mesh.isMesh)return;
-     for(let node=mesh;node;node=node.parent)if(!node.visible||node.userData?.kaminosBeautyLodProxy||node.userData?.kaminosEditorOnly||node.userData?.kaminosEditorHelper)return;
+     for(let node=mesh;node;node=node.parent)if(!node.visible||node.userData?.kaminosBeautyLodProxy||node.userData?.kaminosNonSolidVisual||node.userData?.kaminosEditorOnly||node.userData?.kaminosEditorHelper)return;
      if(mesh.isSkinnedMesh||mesh.isInstancedMesh||mesh.morphTargetInfluences?.some(x=>x!==0))throw Error(`Ash needs rigid triangles: ${entry.label||entry.id}`);
      let proxy=proxies.get(mesh);if(!proxy){proxy=new Mesh(mesh.geometry,mesh.material);proxy.matrixAutoUpdate=false;proxies.set(mesh,proxy);}
      proxy.geometry=mesh.geometry;proxy.material=mesh.material;proxy.name=mesh.name;

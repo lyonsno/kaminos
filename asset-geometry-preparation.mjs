@@ -1,3 +1,4 @@
+import {isSurfaceSplatResolve} from './surface-splat-support.mjs';
 import {Box3, BufferAttribute, BufferGeometry, InterleavedBuffer, InterleavedBufferAttribute, Mesh, Object3D, Sphere, Vector3} from './lib/three.core.js';
 import {computeAssetArrivalPlacement, chooseAppendAnchor, appendArrivalPivot, computeAssetArrivalFraming} from './asset-arrival.mjs';
 import {findRestingPlanes, chooseLevelingPlane, levelingWorldDelta} from './asset-resting-plane.mjs';
@@ -9,6 +10,7 @@ export function snapshotAssetGeometry(root,{triangles=true}={}) {
   const attribute=a=>a&&({array:a.isInterleavedBufferAttribute?a.data.array:a.array,itemSize:a.itemSize,normalized:a.normalized,
     ...(a.isInterleavedBufferAttribute?{stride:a.data.stride,offset:a.offset}:{}),count:a.count});
   const visit=node=>{
+    if(isSurfaceSplatResolve(node))return null;
     if(node.isSkinnedMesh||node.isInstancedMesh||node.isBatchedMesh||node.sceneGeometry||node.matrixWorldAutoUpdate===false||node.geometry&&!node.isMesh||node.geometry?.morphAttributes?.position?.length||node.geometry?.getAttribute('position')?.isFloat16BufferAttribute||node.geometry?.getAttribute('position')?.isGLBufferAttribute)unsupported=true;
     let geometry=null;
     if(node.isMesh&&node.geometry){
@@ -21,11 +23,11 @@ export function snapshotAssetGeometry(root,{triangles=true}={}) {
       }
       geometry=ids.get(g);
     }
-    return {geometry,position:node.position.toArray(),quaternion:node.quaternion.toArray(),scale:node.scale.toArray(),matrix:node.matrix.toArray(),matrixAutoUpdate:node.matrixAutoUpdate,children:node.children.map(visit)};
+    return {geometry,position:node.position.toArray(),quaternion:node.quaternion.toArray(),scale:node.scale.toArray(),matrix:node.matrix.toArray(),matrixAutoUpdate:node.matrixAutoUpdate,children:node.children.map(visit).filter(Boolean)};
   };
   root.updateWorldMatrix(true,true);
   const tree=visit(root);
-  return unsupported?null:{snapshot:{tree,geometries,parentWorld:root.parent?root.parent.matrixWorld.toArray():null},originals};
+  return unsupported||!tree?null:{snapshot:{tree,geometries,parentWorld:root.parent?root.parent.matrixWorld.toArray():null},originals};
 }
 
 export function restoreAssetGeometry({tree,geometries,parentWorld=null}) {
@@ -58,7 +60,7 @@ export function restoreAssetGeometry({tree,geometries,parentWorld=null}) {
 // Same Float32 world-coordinate and index order as sceneObjectWorldGeometry.
 export function assetWorldGeometry(object,{triangles:withTriangles=false}={}) {
   object.updateWorldMatrix(true,true);
-  const meshes=[];object.traverse(child=>{if(child.isMesh&&child.geometry.getAttribute('position'))meshes.push(child);});
+  const meshes=[];object.traverse(child=>{if(!isSurfaceSplatResolve(child)&&child.isMesh&&child.geometry.getAttribute('position'))meshes.push(child);});
   const total=meshes.reduce((sum,mesh)=>sum+mesh.geometry.getAttribute('position').count,0);
   const points=new Float32Array(total*3),triangles=withTriangles?[]:null,v=new Vector3();let base=0;
   for(const mesh of meshes){
@@ -142,6 +144,7 @@ export async function prepareAssetGeometryOffThread(root,options,{Worker:WorkerC
 export function captureAssetBoundsState(root){
  root.updateWorldMatrix(true,true);const state=[];let supported=true;
  root.traverse(node=>{
+  if(isSurfaceSplatResolve(node))return;
   const g=node.geometry,p=g?.getAttribute('position');
   if(node.isSkinnedMesh||node.isInstancedMesh||node.isBatchedMesh||node.sceneGeometry||node.matrixWorldAutoUpdate===false||g&&!node.isMesh||g?.morphAttributes?.position?.length||p?.isFloat16BufferAttribute||p?.isGLBufferAttribute)supported=false;
   state.push(node,g,p,p?.array,p?.data,p?.data?.array,p?.version,p?.data?.version,p?.count,p?.itemSize,p?.normalized,p?.offset,p?.data?.stride,p?.array?.byteLength,p?.data?.array?.byteLength,...node.matrixWorld.elements);
