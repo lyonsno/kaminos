@@ -443,7 +443,7 @@ calling the ordinary volume. Worker-local callers may omit `timeOrigin` when
 `now` already uses that clock. A frame may include the current positive
 `viewport` and plain `camera` snapshot. The factory updates its owned viewport
 store; the actual scene input consumer still applies renderer resize/camera.
-Frame output includes `surfaces.volume.{active,transparent}` for page mounting
+Frame output includes `ui.surfaces.volume.{active,transparent}` for page mounting
 and CSS projection. Those booleans describe requested surface state, not proof
 of browser presentation.
 
