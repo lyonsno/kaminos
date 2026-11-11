@@ -41,4 +41,5 @@ assert.throws(()=>checkedMechanism({...fixture(),mechanics:{enabled:true,handSti
 assert.throws(()=>createMechanicalSystem(fixture()).step(-1),/positive/i);
 assert.throws(()=>createMechanicalSystem(fixture()).step(1/120,{grab:{joint:0,target:[1,1]}}),/fixed|anchor/i);
 const impossible=fixture();impossible.pistons[0].mechanics.maxLength=10;assert.throws(()=>checkedMechanism(impossible),/hardware|stroke/i,'A declared stroke cannot exceed its physical barrel and rod');
+const onset=fixture();onset.pistons=onset.pistons.slice(0,1);Object.assign(onset.pistons[0].mechanics,{mode:'free',minLength:Math.SQRT2-1e-5,maxLength:1.8,restLength:Math.SQRT2});const contact=createMechanicalSystem(onset);contact.step(1/60,{grab:{joint:1,target:[.8,1]}});assert.ok(contact.read().actuators[0].stopCompression<1e-3,'A resting piston already beside its stop must resist acceleration into that stop in the first step');
 console.log('Coupled actuator response, independent equilibrium, spanning Jacobians, resistance, damping, drive, stops and immutable hardware');

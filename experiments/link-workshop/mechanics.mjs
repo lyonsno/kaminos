@@ -66,14 +66,25 @@ export function createMechanicalSystem(value,{fraction=0,velocities}={}){
   if(!Number.isFinite(dt)||dt<=0)throw Error('Positive finite mechanical step required');
   if(nextGrab){if(!Number.isInteger(nextGrab.joint)||!m.nodes[nextGrab.joint]||m.nodes[nextGrab.joint].parent===null)throw Error('A fixed anchor cannot be grabbed mechanically');if(nextGrab.target?.length!==2||!nextGrab.target.every(Number.isFinite))throw Error('Finite mechanical hand target required');for(const k of ['stiffness','damping'])if(nextGrab[k]!==undefined&&(!Number.isFinite(nextGrab[k])||nextGrab[k]<0))throw Error('Nonnegative mechanical hand response required');}
   if(targets!==undefined&&(targets.length!==m.pistons.length||!targets.every(Number.isFinite)))throw Error('One finite drive target per cylinder required');
-  const w=world(m,q),rows=[],rhs=Float64Array.from(v,(velocity,i)=>mass[i]*velocity),add=(row,k,d,error)=>{const weight=dt*d+dt*dt*k;if(weight){rows.push({...row,weight});addRow(rhs,row,-dt*k*error);}};
+  const w=world(m,q),rows=[],cylinders=[],activeStops=new Set(),rhs=Float64Array.from(v,(velocity,i)=>mass[i]*velocity),add=(row,k,d,error)=>{const weight=dt*d+dt*dt*k;if(weight){rows.push({...row,weight});addRow(rhs,row,-dt*k*error);}};
+  const addStop=(i,limit)=>{const {row,s}=cylinders[i];let inverse=0;for(const [id,j]of row.entries)inverse+=j*j/mass[id];const stopDamping=inverse?2*Math.sqrt(s.stopStiffness/inverse):0;add(row,s.stopStiffness,stopDamping,row.length-limit);activeStops.add(i);};
   for(const [i,p]of m.pistons.entries()){const row=differential(m,w,p,depth),s=p.mechanics,target=s.mode==='drive'?(targets?.[i]??s.targetLength??s.restLength):s.restLength;if(s.mode==='drive'&&(target<s.minLength||target>s.maxLength))throw Error('Drive target lies outside the fixed cylinder stroke');
+   cylinders.push({row,s});
    if(s.mode!=='free')add(row,s.stiffness,s.damping,row.length-target);
    const predicted=row.length+dt*rowDot(row,v),limit=Math.min(row.length,predicted)<s.minLength?s.minLength:Math.max(row.length,predicted)>s.maxLength?s.maxLength:null;
-   if(limit!==null){let inverse=0;for(const [id,j]of row.entries)inverse+=j*j/mass[id];const stopDamping=inverse?2*Math.sqrt(s.stopStiffness/inverse):0;add(row,s.stopStiffness,stopDamping,row.length-limit);}
+   if(limit!==null)addStop(i,limit);
   }
   if(nextGrab)for(const row of handRows(w,nextGrab).rows)add(row,nextGrab.stiffness??settings.handStiffness??1200,nextGrab.damping??settings.handDamping??35,row.error);
-  const solved=solveVelocity(mass,rows,rhs,v,settings.jointDamping??.5,dt,dofs),next=q.map((angle,i)=>m.nodes[i].parent===null?angle:angle+dt*solved.velocity[i]);if(!next.every(Number.isFinite))throw Error('Mechanical pose exceeds finite solver range');
+  let solved,next,iterations=0,stopPasses=0;
+  // Acceleration from the hand or another actuator can reach a stop even from
+  // rest. Activate contacts against the trial pose, then solve every row again
+  // together. The set only grows, so this terminates after at most one added
+  // contact per cylinder without imposing a separate iteration cap.
+  for(;;){solved=solveVelocity(mass,rows,rhs,v,settings.jointDamping??.5,dt,dofs);iterations+=solved.iterations;next=q.map((angle,i)=>m.nodes[i].parent===null?angle:angle+dt*solved.velocity[i]);if(!next.every(Number.isFinite))throw Error('Mechanical pose exceeds finite solver range');
+   const trial=world(m,next);let added=false;for(const [i,p]of m.pistons.entries()){if(activeStops.has(i))continue;const length=differential(m,trial,p,depth).length,s=p.mechanics,limit=length<s.minLength?s.minLength:length>s.maxLength?s.maxLength:null;if(limit!==null){addStop(i,limit);added=true;}}
+   if(!added)break;stopPasses++;
+  }
+  solved.iterations=iterations;solved.stopPasses=stopPasses;
   q=next;v=solved.velocity;last=solved;delete last.velocity;grab=nextGrab?structuredClone(nextGrab):null;time+=dt;return read();
  }
  return {step,read};
