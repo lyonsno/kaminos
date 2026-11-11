@@ -1,6 +1,7 @@
 import {MeshStandardMaterial,MeshPhysicalNodeMaterial,Color,TSL} from './lib/three.webgpu.js';
 import {materialDefinitions} from './scene-material-recipes.mjs';
 import {neumipProgram} from './neumip-program.mjs';
+import {neuralAppearanceProgram} from './neural-appearance-program.mjs';
 const {uniform,positionLocal,mx_noise_float,mix,smoothstep,bumpMap}=TSL;
 function surfaceProgram({base,parameters},preserve){
  if(preserve&&(!base.isMeshStandardMaterial||base.isNodeMaterial))throw Error('This source material has its own shader; choose an authored implementation explicitly');
@@ -21,4 +22,4 @@ function glazeProgram({base,parameters}){
  const update=p=>{clay.value.set(p.clay);glaze.value.set(p.glaze);coverage.value=p.coverage;scale.value=p.scale;relief.value=p.relief;roughness.value=p.roughness;};update(parameters);
  return {material,update,dispose:()=>material.dispose()};
 }
-export const sceneMaterialPrograms=materialDefinitions.map(definition=>definition.id==='neumip'?neumipProgram:({...definition,create:definition.id==='kiln-glaze'?glazeProgram:input=>surfaceProgram(input,definition.id==='asset-surface')}));
+export const sceneMaterialPrograms=materialDefinitions.map(definition=>definition.id==='neumip'?neumipProgram:definition.id==='neural-appearance'?neuralAppearanceProgram:({...definition,create:definition.id==='kiln-glaze'?glazeProgram:input=>surfaceProgram(input,definition.id==='asset-surface')}));

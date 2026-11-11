@@ -1,4 +1,5 @@
 import {neumipDefinition} from './neumip-settings.mjs';
+import {neuralAppearanceDefinition} from './neural-appearance-settings.mjs';
 // Authored identity and parameters are JSON. Programs and GPU resources stay code-owned.
 const copy=value=>structuredClone(value);
 // Keep authored program instances separate from the resident source appearance.
@@ -18,7 +19,7 @@ export const materialDefinitions=[
   {key:'coverage',label:'Glaze coverage',type:'number',min:0,max:1,step:.01,default:.7},
   {key:'scale',label:'Firing pattern scale',type:'number',min:.1,max:100,step:.1,default:5},
   {key:'relief',label:'Micro relief',type:'number',min:0,max:1,step:.01,default:.15},
-  {key:'roughness',label:'Glaze roughness',type:'number',min:0,max:1,step:.01,default:.2}]},neumipDefinition];
+  {key:'roughness',label:'Glaze roughness',type:'number',min:0,max:1,step:.01,default:.2}]},neumipDefinition,neuralAppearanceDefinition];
 export function checkMaterialParameters(definition,raw={}) {
  if(!raw||typeof raw!=='object'||Array.isArray(raw))throw Error('Material parameters must be an object');
  if(definition.check)return definition.check(copy(raw));
