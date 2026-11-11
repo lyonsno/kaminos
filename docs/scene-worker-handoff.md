@@ -353,3 +353,13 @@ rectangular atlas sampling, near/far illumination, shadows, probes and controls.
 Its owner calls `update()`, `renderShadows()` and `dispose()` at the same points
 in scene composition. Disposal releases the receiver's two black placeholders
 and shadow owners while borrowed producer textures remain producer-owned.
+
+`mountSceneRadianceResources` in `scene-radiance-resource-mount.mjs` selects the
+existing point, distributed, or hybrid module from the applied route and mounts
+it with worker-local scene/device resources. The normalized default flame route
+uses hybrid distributed smoke and surface lighting; the lattice receiver alone
+does not supply that default illumination. Source records, controls and guide
+are live local readers; hybrid receives the existing surface-lighting owner,
+shadow settings and lighting-preparation rebuild service. The page uses this
+same mount while retaining its UI, caster preparation and edit-history adapters.
+Worker assembly must supply those domain preparations and lifecycle too.

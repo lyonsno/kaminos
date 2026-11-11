@@ -2999,6 +2999,7 @@ import { parsePlyPointCloud, createSplatPointSubsetGeometry, replaceSplatPointGe
 import { createFireLightFieldShadow, renderFireShadowBatch } from './fire-light-field-shadow.mjs';
 import { createFireShadowCasters } from './fire-shadow-casters.mjs';
 import {createSceneFireLightReceiver} from './scene-fire-light-receiver.mjs';
+import {mountSceneRadianceResources} from './scene-radiance-resource-mount.mjs';
 import { PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS } from './volume-physics-appearance.mjs';
 import { applyVolumeControlDescriptions, volumeControlTooltip } from './volume-control-descriptions.mjs';
 applyVolumeControlDescriptions(document);
@@ -20583,9 +20584,12 @@ async function mountSceneRadianceRoute(params) {
     const distributed=params.get('volume_light_field_distributed')==='1';
     const hybrid=distributed&&params.get('volume_light_field_hybrid')==='1';
     if(distributed)renderingMode='shared';
-    const module=await import(hybrid ? './scene-hybrid-radiance.mjs' : distributed ? './scene-distributed-radiance.mjs' : './scene-radiance.mjs');
-      window.__kaminosSceneRadiance = distributed
-        ? module.mountDistributedSceneRadiance({renderer,scene,prototype:volumePrototype,device:sharedGpu.device,...(hybrid?{surfaceLighting:window.__kaminosSurfaceLighting,...readFireShadowSceneSettings(params),rebuild:{hold:value=>sceneLightingPreparation.setExternalHold(value),prepare:change=>window.kaminosCompileSceneLighting(change)},smokeRefinement:Number(params.get('volume_light_field_hybrid_smoke_refinement')??4)}:{}),getSourceRegions:(transform,domain)=>module.authoredSourceRegions(authoredFlameSourceRecords(),{transform,domain,controls:readVolumeControls()}),getSourceGuide:()=>({position:[...flameEmitterPose.position],radius:Number(document.getElementById('volume-input-radius').value),height:Number(document.getElementById('volume-plume-height').value),depth:Number(document.getElementById('volume-emitter-source-depth').value)}),onStatus:state=>{
+    window.__kaminosSceneRadiance=await mountSceneRadianceResources({params,renderer,scene,prototype:volumePrototype,device:sharedGpu.device,
+      surfaceLighting:window.__kaminosSurfaceLighting,shadowSettings:hybrid?readFireShadowSceneSettings(params):undefined,
+      rebuild:{hold:value=>sceneLightingPreparation.setExternalHold(value),prepare:change=>window.kaminosCompileSceneLighting(change)},
+      readSourceRecords:authoredFlameSourceRecords,readControls:readVolumeControls,
+      getSourceGuide:()=>({position:[...flameEmitterPose.position],radius:Number(document.getElementById('volume-input-radius').value),height:Number(document.getElementById('volume-plume-height').value),depth:Number(document.getElementById('volume-emitter-source-depth').value)}),
+      onStatus:state=>{
           window.kaminosFireLightingSettings?.syncStatus(state);
           const badge=document.getElementById('lighting-edit-status'),message=lightingEditStatus(state);
           if(badge.textContent!==message)badge.textContent=message;
@@ -20602,8 +20606,7 @@ async function mountSceneRadianceRoute(params) {
             if(receiverLabel){const r=state.receiverSampling;receiverLabel.textContent=hybrid?`${state.pointCount} live GPU point regions for surfaces. Distributed smoke retained. ${state.smokeShadowSteps?`Surface smoke attenuation: ${state.smokeShadowSteps} radial steps, ${state.smokeShadowResolution}px/face.`:'Surface smoke attenuation off.'} Opaque shadows at ${state.shadowResolution}px.`:r?`Requested spacing ${state.receiverSpacingRequested}; effective ${r.spacing}. ${r.receivers.toLocaleString()} light receivers / ${r.renderVertices.toLocaleString()} render vertices · ${r.stencilWidth}-sample reconstruction · ${state.visibilityBuilds} packed visibility builds. ${state.previewStale?'Stale preview; rebuild pending.':''}`:`Receiver layout ${state.status}; no verified current count.`;}
             if(label.textContent!==text)label.textContent=text;
           }
-        }})
-        : module.mountSceneRadiance({renderer,scene,prototype:volumePrototype});
+      }});
       if(hybrid&&params.has('volume_light_field_hybrid_caster_level')){
         try{await window.__kaminosSceneRadiance.setShadowCasterLevel(readFireShadowSceneSettings(params).shadowCasterLevel);}
         catch(error){

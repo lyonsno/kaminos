@@ -2,6 +2,7 @@
 import {createAuthoredFlameFeature} from '../authored-flame-feature.mjs';
 import {createSceneDisplayGraph,prepareSceneEmissionSource} from '../scene-display-graph.mjs';
 import {createSceneEmissiveCamera} from '../scene-emissive-camera.mjs';
+import {mountSceneRadianceResources} from '../scene-radiance-resource-mount.mjs';
 import { createSceneEdits } from '../scene-edit-session.mjs';
 import { createFireLightingHistory } from '../fire-lighting-history.mjs';
 import { createWorkingScene } from '../working-scene.mjs';
@@ -31,12 +32,13 @@ test('missing saved reduced caster keeps original lighting and recovery controls
   const document={getElementById(id){if(!elements.has(id))elements.set(id,{hidden:true,value:'1',replaceChildren(){},parentElement:{querySelector:()=>({})}});return elements.get(id);},querySelector:()=>({})};
   let mounted=false;
   const context={sceneFireLightingHistory:null,createFireLightingHistory,syncFireLightingControls(){},scenePlacementTools:{edits:createSceneEdits({read:()=>null,write(){}}),addHistoryScope(){}},URLSearchParams,window:{},document,renderer:{},scene:{},volumePrototype:{setSceneVolumeSourceEnabled(){}},sharedGpu:{device:{}},
-    isFireLightFieldRoute:()=>true,renderingMode:'',flameInspector:null,readFireShadowSceneSettings:()=>({shadowCasterLevel:'10k'}),
+    authoredFlameSourceRecords:()=>[],readVolumeControls:()=>({}),isFireLightFieldRoute:()=>true,renderingMode:'',flameInspector:null,readFireShadowSceneSettings:()=>({shadowCasterLevel:'10k'}),
     importedModule:{mountDistributedSceneRadiance(){return consumer;}},bindSceneLightEditInteraction:()=>()=>{},workbenchSceneFrames:{onFrame(){}},
     createFireShadowSettings:()=>({operations:{},sync(){},mount(){mounted=true;}}),organizeFireRenderingPanel(){},refreshRenderingControls(){}};
   const start=source.indexOf('let sceneRadianceRouteTask='),end=source.indexOf('async function initKaminosVolumeRoute()',start);
-  vm.createContext(context);vm.runInContext(source.slice(start,end).replace(/await import\([^;]+\);/,'importedModule;'),context);
-  await context.syncSceneRadianceRoute(new URLSearchParams('volume_light_field_shared_source=1&volume_light_field_distributed=1&volume_light_field_hybrid=1&volume_light_field_hybrid_caster_level=10k'));
+  context.mountSceneRadianceResources=value=>mountSceneRadianceResources({...value,loadModule:async()=>context.importedModule});
+  vm.createContext(context);vm.runInContext(source.slice(start,end),context);
+  await context.syncSceneRadianceRoute(new URLSearchParams('volume_light_field=1&volume_light_field_shared_source=1&volume_light_field_distributed=1&volume_light_field_hybrid=1&volume_light_field_hybrid_caster_level=10k'));
   assert.equal(context.window.__kaminosSceneRadiance,consumer);assert.equal(mounted,true);assert.equal(elements.get('rendering-fire-shadows').hidden,false);
   assert.equal(casters.debugState().requested,'10k');assert.equal(casters.debugState().level,'original');assert.match(casters.debugState().error,/HTTP 404/);
   await consumer.setShadowCasterLevel('original');assert.equal(casters.debugState().error,null);casters.dispose();
@@ -46,14 +48,15 @@ test('late Add Flame passes the mounted opaque surface cache to the hybrid consu
   const cache={},elements=new Map();let options;
   const document={getElementById(id){if(!elements.has(id))elements.set(id,{value:'1',parentElement:{querySelector:()=>({})}});return elements.get(id);},querySelector:()=>({})};
   const context={sceneFireLightingHistory:null,createFireLightingHistory,syncFireLightingControls(){},scenePlacementTools:{edits:createSceneEdits({read:()=>null,write(){}}),addHistoryScope(){}},URLSearchParams,window:{__kaminosSurfaceLighting:cache},document,renderer:{},scene:{},volumePrototype:{},sharedGpu:{device:{}},
-    isFireLightFieldRoute:()=>true,renderingMode:'',flameInspector:null,readFireShadowSceneSettings:()=>({}),
+    authoredFlameSourceRecords:()=>[],readVolumeControls:()=>({}),isFireLightFieldRoute:()=>true,renderingMode:'',flameInspector:null,readFireShadowSceneSettings:()=>({}),
     importedModule:{mountDistributedSceneRadiance(value){options=value;return {}; }},
     bindSceneLightEditInteraction:()=>()=>{},workbenchSceneFrames:{onFrame(){}},
     createFireShadowSettings:()=>({operations:{},sync(){},mount(){}}),organizeFireRenderingPanel(){},refreshRenderingControls(){}};
   const start=source.indexOf('async function mountSceneRadianceRoute('),end=source.indexOf('async function initKaminosVolumeRoute()',start);
-  const mount=source.slice(start,end).replace(/await import\([^;]+\);/,'importedModule;');
+  const mount=source.slice(start,end);
+  context.mountSceneRadianceResources=value=>mountSceneRadianceResources({...value,loadModule:async()=>context.importedModule});
   vm.createContext(context);vm.runInContext(mount,context);
-  await context.mountSceneRadianceRoute(new URLSearchParams('volume_light_field_distributed=1&volume_light_field_hybrid=1'));
+  await context.mountSceneRadianceRoute(new URLSearchParams('volume_light_field=1&volume_light_field_distributed=1&volume_light_field_hybrid=1'));
   assert.equal(options.surfaceLighting,cache,'ordinary emitter must retain current main opaque irradiance reuse');
 });
 
