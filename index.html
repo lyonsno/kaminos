@@ -28533,7 +28533,9 @@ initKaminosFingerJuiceHostRoute();
     sceneDocument.holdRestore();
     window.kaminosStartup?.phase('Checking saved scene');
     const plan = planSceneRestore(data);
-    if (plan.composition) {
+    // The worker must apply the pinned recipe from this admission plan.
+    // Preserve its execution owner instead of visiting the legacy wrapper.
+    if (plan.composition && !sceneWorkerRequested) {
       const preset = new URLSearchParams(location.search).get('settings_preset');
       if(preset!==plan.composition.flame.presetId){
         setInfo('Opening the saved flame recipe…');
