@@ -222,7 +222,7 @@ export class KleinPipeline {
   // decoder and tokenizer stay. The old weights are freed first so two transformers are never
   // resident together; if loading fails there is no transformer until a later swap succeeds.
   // onProgress(part, name, { loadedBytes, totalBytes }) as for load(); returns the load stats.
-  async loadTransformer(url, onProgress = () => {}) {
+  async loadTransformer(url, onProgress = () => {}, { runWarmup } = {}) {
     this.assertUsable();
     const manifest = await getJson(`${url}/manifest.json`, this.cacheWeights);
     const totalBytes = Object.values(manifest.bundles).reduce((sum, b) => sum + transferBytes(b), 0);
@@ -239,7 +239,7 @@ export class KleinPipeline {
     } catch (e) { next.destroy(); throw e; }
     this.transformer = next; this.ditManifest = manifest; this.urls.transformerUrl = url;
     this.residentBytes.transformer = bytes;
-    await this.precompile();
+    await this.precompile({ runWarmup });
     return stats;
   }
 
