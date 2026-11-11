@@ -33,8 +33,8 @@ test('one-axis Inspector input constrains that coordinate without requesting the
  const {c,edits,components}=await fixture(1);try{
   c.operations.construction();c.operations.selectConstruction({objectIds:['one']});const target=components.target(),start=target.read(),wanted=start.position[0]+.02;
   edits.begin(target.id,'Edit position.x');edits.preview({position:[wanted,...start.position.slice(1)],transformField:'position.x'});edits.commit();
-  const result=c.read().recipe,accepted=components.target().read();assert.ok(Math.abs(accepted.position[0]-wanted)<1e-7,'reachable X is achieved while Y is free to follow the hinge arc');
-  edits.begin(target.id,'Edit position.x');edits.preview({position:[wanted,...accepted.position.slice(1)],transformField:'position.x'});edits.commit();assert.deepEqual(c.read().recipe,result,'retyping the same coordinate after commit does not walk around the arc');
+  const result=c.read().recipe,accepted=components.target().read(),undoCount=edits.state().undoCount;assert.ok(Math.abs(accepted.position[0]-wanted)<1e-7,'reachable X is achieved while Y is free to follow the hinge arc');
+  edits.begin(target.id,'Edit position.x');edits.preview({position:[wanted,...accepted.position.slice(1)],transformField:'position.x'});edits.commit();assert.deepEqual(c.read().recipe,result,'retyping the same coordinate after commit does not walk around the arc');assert.equal(edits.state().undoCount,undoCount,'an unchanged accepted coordinate does not consume Undo');
  }finally{await c.dispose();}
 });
 test('a rotation Inspector field requests its Euler coordinate without freezing the other achieved coordinates',async()=>{
