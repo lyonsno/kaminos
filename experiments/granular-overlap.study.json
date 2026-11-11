@@ -1,0 +1,14 @@
+{
+  "seed": 41,
+  "fineCount": 48,
+  "fineSolidVolume": 0.0000007,
+  "width": 0.024,
+  "coarseRadius": 0.0035,
+  "settleSeconds": 0.35,
+  "strain": 0.08,
+  "stages": 2,
+  "passes": 4,
+  "localSeconds": 0.025,
+  "grids": [[2, 2], [2, 4]],
+  "overlapDiameters": [1, 2]
+}

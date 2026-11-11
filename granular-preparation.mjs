@@ -83,9 +83,11 @@ function checkpointRecipe(saved){
  if(!Object.hasOwn(saved,'phase')||(saved.phase!==null&&(!saved.phase||typeof saved.phase!=='object'||Array.isArray(saved.phase))))throw Error('Missing or invalid checkpoint phase');
  return preparationRecipe(saved.recipe);
 }
-export function createGranularPreparation(input={},saved=null){
+export function createGranularPreparation(input={},saved=null,{activeIds=null}={}){
  const c=saved===null?preparationRecipe(input):checkpointRecipe(saved);planPreparation(c,{availableBytes:globalThis.performance?.memory?performance.memory.jsHeapSizeLimit-performance.memory.usedJSHeapSize:Infinity});const all=saved?structuredClone(saved.ingredients):ingredients(c);
  validateIngredients(all,c);
+ if(activeIds!==null&&(!Array.isArray(activeIds)||new Set(activeIds).size!==activeIds.length||activeIds.some(id=>!Number.isSafeInteger(id)||id<0||id>=all.length)))throw Error('Invalid active grain identities');
+ const active=activeIds===null?null:new Set(activeIds);
  const w=new CANNON.World({gravity:new CANNON.Vec3(0,-9.81,0)});w.broadphase=new CANNON.SAPBroadphase(w);w.broadphase.useBoundingBoxes=true;w.solver.iterations=c.iterations;w.solver.tolerance=1e-9;w.allowSleep=true;
  w.defaultContactMaterial.friction=c.friction;w.defaultContactMaterial.restitution=.02;w.defaultContactMaterial.contactEquationStiffness=1e7;
  let time=saved?.time??0,lidHeight=saved?.lidHeight??c.width*2,containerX=saved?.containerX??0,phase=saved?.phase?structuredClone(saved.phase):null,history=structuredClone(saved?.history??[]),disposed=false;
@@ -97,7 +99,7 @@ export function createGranularPreparation(input={},saved=null){
  const lid=plane([containerX,lidHeight,0],[0,-1,0]);lid.collisionResponse=phase?.kind!=='pour';const grains=[];
  const add=(g,row)=>{
   const shape=preparationCollisionHull(g);
-  const b=new CANNON.Body({mass:g.mass,shape,linearDamping:.08,angularDamping:.12,allowSleep:true,sleepSpeedLimit:.002,sleepTimeLimit:.2});
+  const b=new CANNON.Body({mass:active&&!active.has(g.id)?0:g.mass,shape,linearDamping:.08,angularDamping:.12,allowSleep:true,sleepSpeedLimit:.002,sleepTimeLimit:.2});
   if(row){vector(row.position,3);vector(row.velocity,3);vector(row.angularVelocity,3);vector(row.quaternion,4);if(Math.abs(Math.hypot(...row.quaternion)-1)>1e-5)throw Error('Invalid grain orientation');b.position.set(...row.position);b.velocity.set(...row.velocity);b.angularVelocity.set(...row.angularVelocity);b.quaternion.set(...row.quaternion);}else{
    const rng=random(c.seed^Math.imul(g.id+1,0x9e3779b9));let y=c.width*1.1,x,z;
    // Rejection placement prevents interpenetrating births. Raising the inlet
@@ -105,6 +107,7 @@ export function createGranularPreparation(input={},saved=null){
    for(;;){let found=false;for(let n=0;n<32;n++){x=containerX+(rng()-.5)*(c.width-2.1*g.radius);z=(rng()-.5)*(c.width-2.1*g.radius);if(grains.every(p=>Math.hypot(p.body.position.x-x,p.body.position.y-y,p.body.position.z-z)>p.ingredient.radius+g.radius)){found=true;break;}}if(found)break;y+=2*g.radius;}
    lidHeight=Math.max(lidHeight,y+g.radius+c.radius);lid.position.y=lidHeight;b.position.set(x,y,z);b.quaternion.set(...g.quaternion);
   }
+  if(active&&!active.has(g.id)){b.velocity.set(0,0,0);b.angularVelocity.set(0,0,0);}
   w.addBody(b);grains.push({ingredient:g,body:b});
  };
  if(saved){if(!Array.isArray(saved.grains)||saved.grains.length>all.length)throw Error('Invalid deposited inventory');for(const [i,row]of saved.grains.entries()){if(row.id!==i)throw Error('Invalid deposited identity');add(all[i],row);}}
