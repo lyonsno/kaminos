@@ -32,7 +32,7 @@ test('factory retains a shell before any allocation and composes one admitted or
  const options=f.volumeOptions();assert.equal(options.sharedGpuContext.device,f.device);assert.equal(options.frameScheduleOwner,'host');assert.equal(options.productFrameOwner,'prototype');
  assert.deepEqual(options.getControls(),f.payload.flameControls);assert.equal(options.presentationSurface.canvas,f.payload.volumeCanvas);
  const payload={now:1};const receipt=await runtime.requestFrame(payload,f.context,()=>runtime.frame(payload,f.context));
- assert.equal(receipt.status,'completed');assert.equal(receipt.result.flameDrawn,true);assert.equal(receipt.result.sceneDrawn,true);assert.equal(receipt.result.surfaces.volume.active,true);
+ assert.equal(receipt.status,'completed');assert.equal(receipt.result.flameDrawn,true);assert.equal(receipt.result.sceneDrawn,true);assert.equal(receipt.result.ui?.surfaces?.volume?.active,true);
  assert.deepEqual(f.calls.filter(Array.isArray).at(-1),['input',payload]);
  const mutation=await runtime.requestMutation('scene.move',{},f.context,()=>runtime.foregroundCommands['scene.move']());
  assert.equal(mutation.mutationApplied,true);assert.equal(runtime.commands['scene.read']().registered,true);

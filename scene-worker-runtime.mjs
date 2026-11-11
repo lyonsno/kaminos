@@ -88,6 +88,7 @@ export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imag
     }},sceneResources.foregroundCommands);
     for(const name of Object.keys(foregroundCommands))if(Object.hasOwn(commands,name))throw Error(`scene worker command collision: ${name}`);
     ctx.assertCurrent();
+    ctx.report({ui:{surfaces:{volume:{...surfaceState}}}});
    },
    frame(input,ctx){
     current();let local=input;
@@ -95,7 +96,7 @@ export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imag
      if(!Number.isFinite(input.now)||!Number.isFinite(input.timeOrigin))throw Error('frame clock requires finite now and timeOrigin');
      local={...input,now:input.now+input.timeOrigin-(services.timeOrigin??performance.timeOrigin)};
     }
-    return {...frames.frame(local,ctx),surfaces:{volume:{...surfaceState}}};
+    return {...frames.frame(local,ctx),ui:{surfaces:{volume:{...surfaceState}}}};
    },
    requestFrame(input,ctx,draw){current();return frames.requestFrame(input,ctx,draw);},
    requestMutation(operation,input,ctx,apply){current();return mutations.requestMutation(operation,input,ctx,apply);},
