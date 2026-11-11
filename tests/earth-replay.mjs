@@ -26,3 +26,8 @@ test('applied replay preserves exact same-grid dynamics, material changes and pa
  let controller;controller=createEarthReplay({schema:EARTH_PROGRAM_SCHEMA,design,actions},quality,{onProgress:s=>{if(s.completed===1&&s.status==='running')controller.pause();}});
  await new Promise(r=>setTimeout(r,20));assert.equal(controller.read().status,'paused');assert.equal(controller.read().completed,1);controller.cancel();assert.equal((await controller.finished).status,'cancelled');assert.equal(controller.read().completed,1);
 });
+
+test('resampled cohesive links retain reference stress through cell cross-section scaling',()=>{
+ const base=new earth.EarthSpecimen({columns:6,layers:3,grains:0,clodCount:0}),design=earth.createEarthDesign(base.snapshot());base.dispose();const coarse=earth.EarthSpecimen.fromDesign(design,{columns:3,layers:2});
+ try{const horizontal=coarse.bonds.find(b=>b.a===0&&b.b===1),vertical=coarse.bonds.find(b=>b.a===0&&b.b===9);assert.ok(Math.abs(horizontal.forceScale-3)<1e-12,'horizontal force follows cell volume / link length');assert.ok(Math.abs(vertical.forceScale-4)<1e-12,'vertical force uses the retained bed depth');assert.equal(horizontal.constraint.equations[0].maxForce,design.reference.cohesion*3);coarse.setMaterial({cohesion:5});assert.equal(horizontal.constraint.equations[0].maxForce,15);}finally{coarse.dispose();}
+});

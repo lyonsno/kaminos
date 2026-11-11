@@ -35,7 +35,7 @@ export function checkedEarthSnapshot(s){
  const expectedBonds=[[1,0,0],[0,1,0],[0,0,1],[1,1,0],[-1,1,0],[0,1,1],[0,1,-1],[1,0,1],[-1,0,1]].reduce((n,[x,y,z])=>n+(c.columns-Math.abs(x))*(c.layers-y)*(c.columns-Math.abs(z)),0);
  if(s.bonds.length!==expectedBonds)throw Error('Incomplete bond inventory');
  const pairs=new Set();
- for(const b of s.bonds){const pair=`${Math.min(b.a,b.b)},${Math.max(b.a,b.b)}`;if(pairs.has(pair))throw Error('Duplicate bond');pairs.add(pair);integer(b.a,'bond index');integer(b.b,'bond index');if(b.a===b.b||b.a>=s.particles.length||b.b>=s.particles.length||typeof b.active!=='boolean')throw Error('Invalid bond endpoints');finite(b.rest,'bond length',Number.MIN_VALUE);finite(b.initial,'initial bond length',Number.MIN_VALUE);}
+ for(const b of s.bonds){const pair=`${Math.min(b.a,b.b)},${Math.max(b.a,b.b)}`;if(pairs.has(pair))throw Error('Duplicate bond');pairs.add(pair);integer(b.a,'bond index');integer(b.b,'bond index');if(b.a===b.b||b.a>=s.particles.length||b.b>=s.particles.length||typeof b.active!=='boolean')throw Error('Invalid bond endpoints');finite(b.rest,'bond length',Number.MIN_VALUE);finite(b.initial,'initial bond length',Number.MIN_VALUE);if(b.forceScale!==undefined)finite(b.forceScale,'bond force scale',Number.MIN_VALUE);}
  if(s.structure){
   if(s.structure.schema!==EARTH_STRUCTURE_SCHEMA||!Array.isArray(s.structure.clods)||s.structure.clods.length!==c.clodCount)throw Error('Invalid earth structure inventory');
   for(const [i,clod]of s.structure.clods.entries()){if(clod.id!==i+1||!Number.isSafeInteger(clod.seedParticle)||clod.seedParticle<0||clod.seedParticle>=s.particles.length)throw Error('Invalid clod identity');vector(clod.radii,3,'clod radii').forEach(r=>finite(r,'clod radius',Number.MIN_VALUE));}
@@ -79,7 +79,11 @@ function initialSnapshot(c,design=null){
  for(let y=0;y<c.layers;y++)for(let z=0;z<c.columns;z++)for(let x=0;x<c.columns;x++)for(const [dx,dy,dz]of offsets){
   if(x+dx<0||x+dx>=c.columns||y+dy>=c.layers||z+dz<0||z+dz>=c.columns)continue;
   const a=index(x,y,z),b=index(x+dx,y+dy,z+dz),rest=Math.hypot(...particles[a].position.map((v,k)=>v-particles[b].position[k]));
-  bonds.push({a,b,rest,initial:rest,active:true});
+  const referenceSpacing=design?c.width/design.reference.columns:spacing,referencePitch=design?design.bed.depth/design.reference.layers:spacing*.82,pitch=design?design.bed.depth/c.layers:spacing*.82;
+  // A reference-grid force is a stress over that grid's link cross-section.
+  // V/L preserves the corresponding force scale for anisotropic refinements.
+  const forceScale=design?(design.reference.columns**2*design.reference.layers/(c.columns**2*c.layers))*Math.hypot(dx*referenceSpacing,dy*referencePitch,dz*referenceSpacing)/Math.hypot(dx*spacing,dy*pitch,dz*spacing):1;
+  bonds.push({a,b,rest,initial:rest,active:true,...(design?{forceScale}:{})});
  }
  for(let i=0;i<(design?0:c.grains);i++){
   const r=spacing*(.29+rand()*.50),radii=[r*(.8+rand()*.5),r*(.55+rand()*.35),r*(.8+rand()*.5)];
@@ -110,7 +114,7 @@ export class EarthSpecimen {
   const make=(row,shape)=>{const b=new CANNON.Body({mass:row.mass,shape,linearDamping:.35,angularDamping:.4,allowSleep:false});b.position.set(...row.position);b.velocity.set(...row.velocity);b.angularVelocity.set(...row.angularVelocity);b.quaternion.set(...row.quaternion);w.addBody(b);return b;};
   this.particles=s.particles.map(row=>({...row,body:make(row,new CANNON.Sphere(row.radius))}));
   this.grit=s.grit.map(row=>({...row,body:make(row,new CANNON.ConvexPolyhedron({vertices:GRIT_VERTICES.map(p=>new CANNON.Vec3(...p.map((v,k)=>v*row.radii[k]))),faces:GRIT_FACES}))}));
-  this.bonds=s.bonds.map(row=>{const constraint=new CANNON.DistanceConstraint(this.particles[row.a].body,this.particles[row.b].body,row.rest,bondProfile(this.config,row.kind).force);constraint.collideConnected=true;if(row.active)w.addConstraint(constraint);return {...row,constraint};});
+  this.bonds=s.bonds.map(row=>{const constraint=new CANNON.DistanceConstraint(this.particles[row.a].body,this.particles[row.b].body,row.rest,bondProfile(this.config,row.kind).force*(row.forceScale??1));constraint.collideConnected=true;if(row.active)w.addConstraint(constraint);return {...row,constraint};});
   this.embeddings=(s.embeddings??[]).map(row=>{const constraint=new CANNON.DistanceConstraint(this.grit[row.grain].body,this.particles[row.particle].body,row.rest,this.config.cohesion*this.config.gritBinding);constraint.collideConnected=true;if(row.active)w.addConstraint(constraint);return {...row,constraint};});
   this.tool=new CANNON.Body({type:CANNON.Body.KINEMATIC,mass:0});this.tool.addShape(new CANNON.Sphere(.08));this.tool.collisionResponse=false;this.tool.position.y=10;w.addBody(this.tool);
  }
@@ -151,7 +155,7 @@ export class EarthSpecimen {
   if(!values||typeof values!=='object'||Array.isArray(values)||Object.keys(values).some(k=>!['cohesion','friction','plasticYield','plasticRate','breakStrain','clodStrength','interfaceStrength','gritBinding'].includes(k)))throw Error('Invalid material parameter');
   const next=configuration({...this.config,...values});
   this.config=next;this.world.defaultContactMaterial.friction=next.friction;
-  for(const b of this.bonds)for(const e of b.constraint.equations){const force=bondProfile(next,b.kind).force;e.minForce=-force;e.maxForce=force;}
+  for(const b of this.bonds)for(const e of b.constraint.equations){const force=bondProfile(next,b.kind).force*(b.forceScale??1);e.minForce=-force;e.maxForce=force;}
   for(const b of this.embeddings)for(const e of b.constraint.equations){e.minForce=-next.cohesion*next.gritBinding;e.maxForce=next.cohesion*next.gritBinding;}
   return this.state();
  }
