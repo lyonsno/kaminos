@@ -19,7 +19,7 @@ export function createCorrosionSource(retained,{width=2.4,showSubstrate=false,sn
  const point=(x,y,h)=>[(x/n-.5)*width,h*width,(y/n-.5)*width];
  const corners=(x,y,h)=>[[x,y],[x,y+1],[x+1,y+1],[x+1,y]].map(([u,v])=>point(u,v,h(u,v)));
  for(let y=0;y<n;y++)for(let x=0;x<n;x++){
-  const i=index(x,y),id=`${x}:${y}`;quad(...corners(x,y,steel),0,'steel:'+id);
+  const i=index(x,y),id=`${x}:${y}`;if(!s.rustIron[i])quad(...corners(x,y,steel),0,'steel:'+id);
   if(s.rustIron[i]>0)quad(...corners(x,y,oxide),s.rustIron[i]<.04?3:s.rustIron[i]<.2?2:1,'oxide:'+id);
   if(!s.opening[i]&&!showSubstrate){
    const top=corners(x,y,film),back=top.map(p=>[p[0],p[1]-c.filmThickness*width,p[2]]);
