@@ -6,7 +6,7 @@ export default {
   if(typeof inputs.run!=='string')throw Error('Choose a retained training trajectory URL');
   const response=await fetch(inputs.run);if(!response.ok)throw Error('Training trajectory HTTP '+response.status);
   let run=readAppearanceTrajectory(await response.json()),step=inputs.step??250,viewId=inputs.responseView??run.views[0].id,exposure=inputs.exposure??4,disposed=false,generation=0,pending=false,problem=null;
-  const session=await host.scene.open();if(inputs.view)session.setView(inputs.view);let panel,status,checkpointControl,viewControl,images,loss,drag;
+  const session=await host.scene.open();if(inputs.cameraView)session.setView(inputs.cameraView);let panel,status,checkpointControl,viewControl,images,loss,drag;
   const recipes=()=>host.scene.materials.read().recipes.filter(r=>r.implementation==='neural-appearance');
   if(!recipes().length){await session.dispose();throw Error('Open a scene with an assigned NVIDIA material first');}
   const checkpoint=()=>run.checkpoints.find(c=>c.step===step),view=()=>run.views.find(v=>v.id===viewId);
