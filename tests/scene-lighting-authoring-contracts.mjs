@@ -61,7 +61,7 @@ test('environment intensity permits zero through the real control and recipe pat
   const c=environmentContext();
   await c.loadEnvironment('studio');
   const recipe={...c.readEnvironmentRecipe(),intensity:0};
-  c.applyEnvironmentRecipe(recipe);
+  c.sceneEnvironment.patch(recipe);
   assert.equal(c.scene.environmentIntensity,0);
   assert.equal(Number(c.document.getElementById('env-intensity-slider').value),0);
   assert.equal(c.readEnvironmentRecipe().intensity,0);

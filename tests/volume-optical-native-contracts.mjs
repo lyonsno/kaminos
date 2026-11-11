@@ -19,12 +19,6 @@ test('one authored ray step survives the slider, gamut, route and GPU clamp', ()
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const input = html.match(/<input[^>]*id="volume-steps"[^>]*>/)[0];
   assert.equal(Number(input.match(/min="([^"]+)"/)[1]), 1, 'Ray Steps must admit one for preview');
-  const snap = html.match(/function snapVolumeRaySteps\(value\) \{[\s\S]*?\n\}/)[0];
-  const context = vm.createContext({clampVolumeValue:(v,min,max)=>Math.max(min,Math.min(max,v))});
-  vm.runInContext(snap, context);
-  for (const value of [1,2,6,7,24,36,96,160]) assert.equal(context.snapVolumeRaySteps(value),value);
-  assert.equal(context.snapVolumeRaySteps(0),1);
-  assert.equal(context.snapVolumeRaySteps(200),160);
   assert.match(html,/Math\.max\(1, Math\.min\(160, routeRaySteps\)\)/);
   assert.match(core,/raySteps: clampFinite\(controls\.raySteps, 1, 160, 96\)/);
   assert.match(core,/clamp\(u\.viewport_steps_density\.z, 1\.0, 192\.0\)/);

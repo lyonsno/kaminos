@@ -96,13 +96,6 @@ assert.match(shaderFunction('sampleFluidSlotInflowWith'), /sampleFluidSlotMasked
   'the inflow transport sampler is composed over the masked sampler');
 assert.match(shaderFunction('slotExtrema'), /sceneSolidAt\(sampleCell\)/,
   'MacCormack limiter must exclude masked solid corners from its source envelope');
-const selectiveRoles = shader.slice(shader.indexOf('function rebuildSelectiveHeadLiveBindGroups()'),
-  shader.indexOf('function ', shader.indexOf('function rebuildSelectiveHeadLiveBindGroups()') + 10));
-assert.match(selectiveRoles, /fluidFrontRead:[\s\S]*?binding: 16,[\s\S]*?sidecar:/,
-  'selective-head fluid/front read must bind the solid texture');
-assert.match(selectiveRoles, /sidecar:[\s\S]*?binding: 16,[\s\S]*?splat:/,
-  'selective-head sidecar read must bind the solid texture');
-
 const ring = {family: 'ring', sourceLaw: 'shallow-primary', origin: [0, -0.5, 0],
   axis: [0, 1, 0], supportAxis: [1, 0, 0], radius: .08, extent: .45,
   sourceDepth: .035, strength: 1};

@@ -165,10 +165,20 @@ export function createFireActorPolicy({ packageDocument, requested } = {}) {
   const validatedPackage = validateBasinPromotionPackage(packageDocument);
   const baseline = normalizePolicySelection(authoringPolicy(validatedPackage));
   const selection = normalizePolicySelection(requested);
+  const effective = structuredClone(selection);
+  effective.splats.enabled = false;
+  const retiredOptions = selection.splats.enabled ? [{
+    key: 'splats.enabled',
+    requested: true,
+    effective: false,
+    reason: 'flame-boundary-splat-renderer-retired',
+  }] : [];
   const identityBasis = {
     schema: FIRE_ACTOR_POLICY_SCHEMA,
     basinRevision: validatedPackage.revision,
     requested: selection,
+    effective,
+    rendererIdentity: 'native-3d-compute-fluid-raymarch-v0',
   };
   return {
     schema: FIRE_ACTOR_POLICY_SCHEMA,
@@ -176,7 +186,8 @@ export function createFireActorPolicy({ packageDocument, requested } = {}) {
     authority: 'consumer-selected-over-authoring-snapshot-v1',
     authoringBaseline: baseline,
     requested: selection,
-    effective: structuredClone(selection),
+    effective,
+    retiredOptions,
     runtimeEffectiveReceiptRequired: true,
     basinRevisionChanged: false,
   };
@@ -184,13 +195,17 @@ export function createFireActorPolicy({ packageDocument, requested } = {}) {
 
 function representationFromPackage(packageDocument) {
   return {
-    composition: requiredString(packageDocument.effectiveState.composition.effective, 'fire actor composition'),
-    rendererIdentity: requiredString(packageDocument.effectiveState.renderer.identity, 'fire actor renderer identity'),
+    composition: 'raymarch-only-v0',
+    rendererIdentity: 'native-3d-compute-fluid-raymarch-v0',
     backend: requiredString(packageDocument.effectiveState.backend.effective, 'fire actor backend'),
-    splatMode: controlValue(packageDocument, 'volume-boundary-splat-mode'),
-    splatRadius: controlValue(packageDocument, 'volume-boundary-splat-radius'),
-    splatSharpness: controlValue(packageDocument, 'volume-boundary-splat-sharpness'),
-    sourceSidecar: controlValue(packageDocument, 'volume-boundary-sidecar-source'),
+    authoring: {
+      composition: requiredString(packageDocument.effectiveState.composition.effective, 'fire actor authoring composition'),
+      rendererIdentity: requiredString(packageDocument.effectiveState.renderer.identity, 'fire actor authoring renderer identity'),
+      splatMode: controlValue(packageDocument, 'volume-boundary-splat-mode'),
+      splatRadius: controlValue(packageDocument, 'volume-boundary-splat-radius'),
+      splatSharpness: controlValue(packageDocument, 'volume-boundary-splat-sharpness'),
+      sourceSidecar: controlValue(packageDocument, 'volume-boundary-sidecar-source'),
+    },
   };
 }
 
@@ -250,7 +265,7 @@ function createFireActorMount({ basinMount, packageDocument, actorId, consumer, 
       },
       presentation: {
         raymarchSmoke: normalizedPolicy.requested.smoke.enabled ? 'on' : 'off',
-        boundarySplats: normalizedPolicy.requested.splats.enabled ? 'on' : 'off',
+        boundarySplats: normalizedPolicy.effective.splats.enabled ? 'on' : 'off',
         flameContinuity: normalizedPolicy.requested.scheduling.flameContinuity,
       },
       transform: {

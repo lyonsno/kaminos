@@ -8,7 +8,7 @@ import vm from 'node:vm';
 import * as THREE from '../lib/three.core.js';
 import {normalizeFlameEmitterPose,normalizeFlameDomainTranslation,normalizeFlameDomainScale,effectiveFlameDomainControls} from '../scene-flame-emitter.mjs';
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const grab=name=>{const start=html.indexOf(`function ${name}(`);assert.ok(start>=0,name);return (html.slice(start-6,start)==='async '?'async ':'')+html.slice(start,html.indexOf('\n}',start)+2);};
+const grab=name=>{const start=html.indexOf(`function ${name}(`);assert.ok(start>=0,name);const line=html.slice(start).split('\n')[0];return (html.slice(start-6,start)==='async '?'async ':'')+(line.endsWith('}')?line:html.slice(start,html.indexOf('\n}',start)+2));};
 function fixture(family='ring'){
  const c={isSceneItemVisible:()=>true,THREE,structuredClone,normalizeFlameEmitterPose,normalizeFlameDomainTranslation,normalizeFlameDomainScale,effectiveFlameDomainControls,readVolumeControls:()=>({resolution:64,gridHeightRatio:2}),
  scene:new THREE.Scene(),FLAME_EMITTER_TYPE:'flame-emitter',sceneObjects:[],sceneGroups:[],sceneCameras:null,scenePlacementTools:null,
@@ -17,10 +17,10 @@ function fixture(family='ring'){
  transformControls:null,document:{getElementById:()=>null},window:{__kaminosVolumeEmitterReceipt:{effective:{family}}},setInfo(){},volumePrimitivesInFlameDomain:()=>[],applyFlameEmitterPose(){throw Error('analytic source must not be invoked');},
  authoredFlamePresent:true,flameEmitterPose:{position:[0,-.76,0],rotation:[0,0,0],scale:[1,1,1]},flameEmitterInjectionSuspended:false,
  volumePrototype:{relocateOrdinaryDomain(){}},isFireLightFieldRoute:()=>true,disposeObjectTree(){},sceneSelectionMembers:()=>[],syncAuthoredFlameSources(){},pruneSceneGroups(){},pruneSceneSelection(){},renderSceneObjectList(){},updateTransformInspector(){},setSceneSelection(){},ensureGroupTarget(){},applySceneObjectTransformState(o,p){o.position.fromArray(p.position);o.scale.fromArray(p.scale);}};
- c.resolveSceneMembershipTopology=resolveSceneMembershipTopology;c.readSelectionMembership=()=>({objects:[],liveIds:[],groups:[]});sceneContext(c);vm.runInContext(['flameDomainTopY','acceptedFlameDomainPose','checkedFlameDomainPose','domainTransformForPose','refreshFlameDomainPreview','writeFlameDomainPreview','setFlameDomainTranslation','settleAuthoredFlameDomain','writeAuthoredFlameEmitterPose','primaryAuthoredFlameSource','ensureAuthoredFlameEmitter','writeSelectionMembershipUnchecked'].map(grab).join('\n'),c);return c;
+ c.resolveSceneMembershipTopology=resolveSceneMembershipTopology;c.readSelectionMembership=()=>({objects:[],liveIds:[],groups:[]});sceneContext(c);vm.runInContext(['flameDomainTopY','acceptedFlameDomainPose','checkedFlameDomainPose','domainTransformForPose','refreshFlameDomainPreview','writeFlameDomainPreview','setFlameDomainTranslation','settleAuthoredFlameDomain','writeAuthoredFlameEmitterPose','projectAuthoredFlameSourceControls','primaryAuthoredFlameSource','ensureAuthoredFlameEmitter','writeSelectionMembership'].map(grab).join('\n'),c);return c;
 }
 test('cluster membership replay and domain resize never invoke analytic placement',async()=>{
- const c=fixture('cluster');c.detachSelectionMember=()=>{};await composePageMembershipBatch(c,html);await c.writeSelectionMembershipUnchecked({objects:[],groups:[],selection:{ids:[],activeId:null},domain:[0,0,0]});
+ const c=fixture('cluster');c.detachSelectionMember=()=>{};await composePageMembershipBatch(c,html);await c.writeSelectionMembership({objects:[],groups:[],selection:{ids:[],activeId:null},domain:[0,0,0]});
  c.settleAuthoredFlameDomain({operation:'commit',after:{position:[1,2,0],rotation:[0,0,0],scale:[2,2,2]}});
  assert.equal(c.flameDomainScale,2);assert.equal(c.flameDomainFollowSource,false);
 });

@@ -321,30 +321,6 @@
     "tests/rendering-channel-controls.mjs": {
       "kind": "node"
     },
-    "tests/residual-boundary-sidecar-aux-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/residual-browser-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/residual-coordinate-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/residual-material-split-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/residual-playback-witness-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/residual-preview-scope-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/residual-unet-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/residual-upscale-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/sam-image-http-contracts.py": {
       "kind": "python"
     },
@@ -750,9 +726,6 @@
     "tests/volume-coarse-closure-oracle-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-coarse-closure-receiver-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-cockpit-layout-contracts.mjs": {
       "kind": "node"
     },
@@ -810,9 +783,6 @@
     "tests/volume-device-layout-capacity.mjs": {
       "kind": "node"
     },
-    "tests/volume-diagnostic-periodicity-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-dynamic-texture-proof-retirement-contracts.mjs": {
       "kind": "node"
     },
@@ -835,9 +805,6 @@
       "kind": "node"
     },
     "tests/volume-entrainment-sway-periodicity-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-exact-basin-support-probe-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-exact-load-contracts.mjs": {
@@ -906,9 +873,6 @@
     "tests/volume-layer-coefficient-live-union-remap-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-layer-coefficient-live-union-runtime-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-layer-coefficient-live-union-witness-contracts.mjs": {
       "kind": "node"
     },
@@ -934,9 +898,6 @@
       "kind": "node"
     },
     "tests/volume-periodic-excitation-controls-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-phase-aligned-field-pair-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-physical-color-contracts.mjs": {

@@ -33,7 +33,7 @@ function mounted() {
   });
   vm.runInContext(section('async function withAuthoringAction(', 'async function changeCompositionBasin('), context);
   vm.runInContext(section('async function saveToServer(', 'function sceneIsEmpty()'), context);
-  vm.runInContext(section('// Save: overwrite current scene file', 'function getMaterialState()'), context);
+  vm.runInContext(section('// Save: overwrite current scene file', 'function applyMaterialStateToObject('), context);
   vm.runInContext(section('window.captureComposition =', "document.getElementById('composition-capture').onclick"), context);
   return { context, run: code => vm.runInContext(code, context), status: () => status };
 }

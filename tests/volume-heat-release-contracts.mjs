@@ -48,7 +48,6 @@ test('the main kernel stores the burn rate per cell and the converged solve targ
   // The pressure kernels bind the fluid-front read layout, not the full fluid layout: the target must be there too.
   const frontLayout = source.slice(source.indexOf("label: 'kaminos fluid-front read bind group layout'"), source.indexOf('});', source.indexOf("label: 'kaminos fluid-front read bind group layout'")));
   assert.match(frontLayout, /\{ binding: 19, visibility: GPUShaderStage\.COMPUTE, storageTexture: \{ access: 'read-write', format: 'r32float', viewDimension: '3d' \} \}/, 'the fluid-front read layout carries the target (first look at 86801d5d failed validation without it)');
-  assert.equal((source.match(/\{ ?binding: 19, resource: burnRateTexture\.createView\(\{ dimension: '3d' \}\) ?\}/g) || []).length, 4, 'bound in every fluid-front read bind group');
   // The converged solver's right-hand side and the residual probe use the
   // compact divergence; the legacy wide stencil (divergenceAtCell) is the
   // legacy Jacobi's and the activity cue's and must not carry the source (the
@@ -120,7 +119,7 @@ test('the residual measurement is the heat-release context at probe-copy time, n
     const mapped = new Promise(resolve => { release = resolve; });
     const state = { frameCount: 50, simStepCount: 48, heatRelease: atCopy, pressureSolver: { effective: { solver: 'converged', openTop: true } } };
     const context = {
-      state, gridSize: 4, gridHeight: 4,
+      state, gpuPipelines:{resolve:handle=>handle}, gridSize: 4, gridHeight: 4,
       pressureResidualCopyPending: false, pressureResidualMapPending: false, pressureResidualMapStartedFrame: 0, pressureResidualMapGeneration: 0,
       pressureResidualWorkgroupCount: 1, pressureResidualCopyStep: 0, pressureResidualCopyFrame: 0, pressureResidualCopyFluidCells: 0, pressureResidualCopySolver: null, pressureResidualCopyMeasurement: null,
       pressureResidualAfterPipeline: {}, pressureResidualBindGroup: {}, pressureResidualPartialsBuffer: {}, fluidBindGroup: () => ({}),

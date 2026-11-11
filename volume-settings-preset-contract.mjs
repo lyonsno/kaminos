@@ -5,38 +5,6 @@ export const VOLUME_SETTINGS_PRESET_SCHEMA_IDENTITY = 'kaminos-volume-settings-p
 export const VOLUME_SETTINGS_PRESET_VISUAL_VIEWS = Object.freeze({
   'raymarch-only': Object.freeze({composition:'raymarch-only-v0'}),
 });
-const VOLUME_SETTINGS_PRESET_VIEW_BY_COMPOSITION = Object.freeze(Object.fromEntries(
-  Object.entries(VOLUME_SETTINGS_PRESET_VISUAL_VIEWS).map(([view, definition]) => [definition.composition, view]),
-));
-
-export function resolveVolumeSettingsPresetVisualView(selectedView, rendererState = null) {
-  const selected = String(selectedView || 'current');
-  if (selected !== 'current') {
-    if (!Object.hasOwn(VOLUME_SETTINGS_PRESET_VISUAL_VIEWS, selected)) {
-      throw new Error(`unsupported settings preset visual view: ${selected}`);
-    }
-    return selected;
-  }
-  if (rendererState?.status !== 'running') {
-    throw new Error('current renderer view is not running; select an explicit preset renderer view');
-  }
-  if (rendererState.compositionOverrideReason) {
-    throw new Error(`current renderer view is overridden: ${rendererState.compositionOverrideReason}; select an explicit preset renderer view`);
-  }
-  if (rendererState.requestedComposition !== rendererState.effectiveComposition) {
-    throw new Error(
-      `current renderer requested/effective composition substitution: ${rendererState.requestedComposition || 'missing'} -> ${rendererState.effectiveComposition || 'missing'}`,
-    );
-  }
-  const fallbackReason = rendererState.fallbackReason
-    || rendererState.compositionFallbackReason;
-  if (fallbackReason) throw new Error(`current renderer fallback: ${fallbackReason}`);
-  const view = VOLUME_SETTINGS_PRESET_VIEW_BY_COMPOSITION[rendererState.effectiveComposition];
-  if (!view) {
-    throw new Error(`current renderer composition is unavailable: ${rendererState.effectiveComposition || 'missing'}`);
-  }
-  return view;
-}
 function validateAppearanceDecompositionTarget(params, prefix = '') {
   for (const key of ['volume_appearance_decomposition', 'volume_appearance_selection']) {
     const values = params.getAll(key);

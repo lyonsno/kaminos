@@ -1368,7 +1368,7 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
         "presetUrl": preset_url,
         "presetViewUrls": {
             view: f"{preset_url}&view={view}"
-            for view in ("splat-only", "raymarch-only", "smoke-hybrid", "full-hybrid-diagnostic")
+            for view in ("raymarch-only",)
         },
     }
 

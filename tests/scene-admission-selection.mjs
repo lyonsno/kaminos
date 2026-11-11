@@ -35,7 +35,7 @@ function fixture(){
  groupProxy:()=>new THREE.Group(),selectionTransformProxy:()=>new THREE.Group(),
  });
  context.exitSplatCorrectionMode=()=>{calls.exit++;context.splatCorrectionMode.helper.removeFromParent();context.splatCorrectionMode=null;};
- for(const [a,b] of [['function setSceneSelection(','function readSceneSelection('],['function clearActiveSceneObjectSelection(','function sceneObjectRecordForDescendant('],['function registerSceneObject(','window.selectSceneField='],['async function addSceneObjectFromSource(','function assertSceneObjectsReloadable('],['function createPageSceneMembershipOperations(','const sceneMembership =']])install(context,a,b);
+ for(const [a,b] of [['function setSceneSelection(','function readSceneSelection('],['function clearActiveSceneObjectSelection(','function sceneObjectRecordForDescendant('],['function registerSceneObject(','window.selectSceneField='],['async function addSceneObjectFromSource(','function restoreLoadedSceneRecord('],['function createPageSceneMembershipOperations(','const sceneMembership =']])install(context,a,b);
  context.sceneMembership=context.createPageSceneMembershipOperations();
  const edits=createSceneEdits({read:()=>null,write(){}});context.sceneMembership.attachHistory(edits);
  const old=new THREE.Group();scene.add(old);workingScene.put({id:'selected',object:old,type:'glb',source:'/old.glb'});workingScene.select(['selected'],'selected');context.currentMesh=old;

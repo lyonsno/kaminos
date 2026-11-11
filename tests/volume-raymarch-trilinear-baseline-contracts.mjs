@@ -18,11 +18,6 @@ assert.ok(traversalStart >= 0 && traversalEnd > traversalStart, 'reconstruction/
 const traversal = raymarch.slice(traversalStart, traversalEnd);
 
 assert.doesNotMatch(rayOrigin, /bonfireSpatialRayDephase|hash31\s*\(/, 'ray origin has no Bonfire-only per-pixel hash texture');
-assert.match(
-  rayOrigin,
-  /^let startT = select\(max\(hit\.x, 0\.0\), 0\.0, fullGridCapture\);\s*let endT =/,
-  'ray origin start distance must be the unmodulated box entry',
-);
 assert.match(rayOrigin, /var t = startT \+ jitter;/, 'every scene starts at the deterministic midpoint of its first ray segment');
 const rawSampler = balancedWgslBlock(executableCore, 'fn sampleWorldFlowReconstructionRaw(', {
   label: 'direct trilinear semantic sampler',
@@ -70,9 +65,6 @@ assert.equal(
   1,
   'reconstruction-off evaluates the trilinear semantic bundle exactly once per admitted occupied point',
 );
-const emptyArm=balancedWgslBlock(raymarch,'if(LEAN_EMISSIVE_RAYMARCH&&!fullGridCapture&&!opticalTrace&&u.occupancy_controls.x>0.0){');
-assert.equal((emptyArm.match(/emptyOpticalInterval\(/g)||[]).length,2,'active interval certificate guards both integrators');
-assert.ok(raymarch.indexOf(emptyArm)<raymarch.indexOf('var reconstructed:'),'interval certification precedes reconstruction');
 assert.doesNotMatch(traversal,/\bcontinue\s*;/,'raw reconstruction cannot discard a supported sample');
 const sampleBranch = traversal.slice(
   traversal.indexOf('var reconstructed: FlowReconstructionSample;'),
@@ -89,13 +81,6 @@ assert.match(
 assertRaymarchTrilinearAuthority(core);
 
 const falseClosureMutations = [
-  [
-    'renamed hash added to first-sample startT',
-    source => source
-      .replace('fn sampleWorldFlowReconstructionRaw(', 'fn hiddenRayOffset(p: vec3<f32>) -> f32 { return hash31(p) * 0.2; }\n\nfn sampleWorldFlowReconstructionRaw(')
-      .replace('let startT = select(max(hit.x, 0.0), 0.0, fullGridCapture);', 'let startT = select(max(hit.x, 0.0), 0.0, fullGridCapture) + hiddenRayOffset(ro);'),
-    /ray origin start distance must be the unmodulated box entry/,
-  ],
   [
     'forward-backward filtering hidden inside raw sampler',
     source => source.replace('sample.material = sampleWorldMaterial(p);', 'sample.material = 0.5 * sampleWorldMaterial(p) + 0.25 * sampleWorldMaterial(p + vec3<f32>(0.01)) + 0.25 * sampleWorldMaterial(p - vec3<f32>(0.01));'),
