@@ -36,6 +36,9 @@ export default {
    const full=createNeumipMaterial(model,{uvScale:1,gain:1});objects.neural=ownMesh('Full ordinary NeuMIP',plane(),full.material);
    const overlap=new THREE.Group();overlap.name='Output-fade control, not learned bridge';overlap.add(ownMesh('Native PBR underlay',plane(),pbr()));
    const rich=createNeumipMaterial(model,{uvScale:1,gain:1});rich.material.transparent=true;rich.material.depthWrite=false;rich.material.forceSinglePass=true;
+   // Both layers describe the same carrier. Bias the overlay's raster depth so
+   // subdivided support cannot lose coplanar pixels to the PBR underlay.
+   rich.material.polygonOffset=true;rich.material.polygonOffsetFactor=-1;rich.material.polygonOffsetUnits=-1;
    const width=source.config.width,depth=source.config.depth,inner=Math.max(source.config.margin,source.config.bevel),outer=inner+collar;
    const code=`fn stoneHandoffWeight(p:vec2<f32>)->f32{let f=fract(p*2.0);let d=min(f,vec2<f32>(1.0)-f)*vec2<f32>(${width},${depth})*0.5;let distance=min(d.x,d.y);${collar===0?`return select(0.0,1.0,distance<${inner});`:`let t=clamp((${outer}-distance)/${collar},0.0,1.0);return t*t*(3.0-2.0*t);`}}`;
    rich.material.opacityNode=wgslFn(code)(uv());
