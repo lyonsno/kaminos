@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 import {SurfaceMaterialTeacher} from '../surface-material-teacher.mjs';
 import {readNeumipModel} from '../neumip-model.mjs';
 import {createNeumipTraining} from '../neumip-training.mjs';
-import {stoneTransitionRegion} from '../stone-transition-source.mjs';
+import {stoneWindowRegion} from '../stone-material-window.mjs';
 import {withKaminosGpu} from './shader-herder.mjs';
 
 const [fitDir,out]=process.argv.slice(2);if(!fitDir||!out)throw Error('Usage: node tools/stone-footprint-compare.mjs FIT_DIR OUTPUT_DIR');
@@ -26,7 +26,7 @@ try{
  report.fit={status:fit.status,phase:fit.phase,sourceRevision:fit.sourceRevision,sourceDigest:fit.ground.sha256,checkpoint};report.resolution=resolution;
  const size=128,samples=32,lods=[0,1.5,3,Math.log2(resolution/2)],collar=.04;
  report.configuration={size,samples,lods,collar,bounces:fit.options.bounces};
- const c=source.config,w=c.width,d=c.depth,plane=(2*c.halo+1),a=[-w*plane/2,0,-d*plane/2],b=[w*plane/2,0,-d*plane/2],e=[w*plane/2,0,d*plane/2],f=[-w*plane/2,0,d*plane/2];
+ const c=source.config,w=source.captureDomain?.width??c.width,d=source.captureDomain?.depth??c.depth,plane=(2*c.halo+1),a=[-w*plane/2,0,-d*plane/2],b=[w*plane/2,0,-d*plane/2],e=[w*plane/2,0,d*plane/2],f=[-w*plane/2,0,d*plane/2];
  const endpoint={triangles:[{a,b:e,c:b,materialIndex:0},{a,b:f,c:e,materialIndex:0}],materials:[source.materials[0]]};
  report.phase='evaluate';await publish();
  await withKaminosGpu(async ctx=>{
@@ -42,7 +42,7 @@ try{
     const mixed=new Float32Array(predicted.length),metrics={rich:{count:0,student:0,control:0},overlap:{count:0,student:0,control:0},cheap:{count:0,student:0,control:0}},half=2**lod/resolution/2;
     let cheapFootprintsTouchingRich=0;
     for(let i=0;i<size*size;i++){
-     const uv=[q[i*8],q[i*8+1]],region=stoneTransitionRegion(uv,c),inner=Math.max(c.margin,c.bevel),t=Math.max(0,Math.min(1,(inner+collar-region.distance)/collar)),weight=t*t*(3-2*t),kind=region.distance<=inner?'rich':region.distance<inner+collar?'overlap':'cheap';metrics[kind].count++;
+     const uv=[q[i*8],q[i*8+1]],region=stoneWindowRegion(uv,source),inner=Math.max(c.margin,c.bevel),t=Math.max(0,Math.min(1,(inner+collar-region.distance)/collar)),weight=t*t*(3-2*t),kind=region.distance<=inner?'rich':region.distance<inner+collar?'overlap':'cheap';metrics[kind].count++;
      if(kind==='cheap'&&region.distance-half*Math.max(w,d)<inner)cheapFootprintsTouchingRich++;
      for(let channel=0;channel<3;channel++){const j=i*3+channel;mixed[j]=flat[j]*(1-weight)+predicted[j]*weight;metrics[kind].student+=(predicted[j]-reference[j])**2/3;metrics[kind].control+=(mixed[j]-reference[j])**2/3;}
     }
