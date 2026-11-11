@@ -99,10 +99,10 @@ export default {
     }
     async function setCheckpoint(id){
       const entry=comparisonEntries.find(e=>e.id===id);if(!entry)throw Error('Unknown section checkpoint');
-      const token=++comparisonVersion;comparisonPending=true;comparisonError=null;sync();let next;
+      const previousRegion=JSON.stringify(recipe),token=++comparisonVersion;comparisonPending=true;comparisonError=null;sync();let next;
       try{next=await createTrellisPatchComparison({device,source,sourceMesh,entry,contextSourceUrl:sourceUrl,contextHash:sourceDigest});if(disposed||token!==comparisonVersion){next.dispose();return read();}
         await rebuild(entry.region);if(disposed||token!==comparisonVersion){next.dispose();return read();}
-        const requested=next.read().learnedAvailable?(comparison?.read().requested??inputs.comparison??'source'):'source';comparison?.dispose();comparison=next;comparison.setOutline(inputs.outline??true);checkpointId=id;comparison.set(requested,new Vector3().fromArray(session.readView().position));mode='comparison';applyVisibility();publish();record({kind:'trellis-support.checkpoint',phase:'applied',effective:read().comparison});return read();
+        const requested=next.read().learnedAvailable?(comparison?.read().requested??inputs.comparison??'source'):'source';comparison?.dispose();comparison=next;comparison.setOutline(inputs.outline??true);checkpointId=id;comparison.set(requested,new Vector3().fromArray(session.readView().position));mode='comparison';if(previousRegion!==JSON.stringify(recipe))frameRegion();applyVisibility();publish();record({kind:'trellis-support.checkpoint',phase:'applied',effective:read().comparison});return read();
       }catch(e){next?.dispose();if(token===comparisonVersion)comparisonError=e.message;throw e;}finally{if(token===comparisonVersion){comparisonPending=false;sync();}}
     }
     async function load(url){

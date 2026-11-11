@@ -1,6 +1,7 @@
 import {BufferGeometry,BufferAttribute,Mesh,Group,Vector3,MeshStandardMaterial,LineSegments,LineBasicMaterial} from './lib/three.core.js';
 import {MeshStandardNodeMaterial} from './lib/three.webgpu.js';
-import {attribute} from './lib/three.tsl.js';
+import {attribute,wgslFn,normalFlat,positionViewDirection,transformNormalToView} from './lib/three.tsl.js';
+import {TRELLIS_SOURCE_NORMAL_WGSL} from './trellis-source-normal.mjs';
 import {prepareSupportVolume,materializeFragments,supportFrame} from './trellis-local-support.mjs';
 import {clipSupportVolume} from './trellis-support-gpu.mjs';
 import {loadNeumipModel} from './neumip-model.mjs';
@@ -24,7 +25,7 @@ function rawPatch(source,candidate){
   for(const [channel,out]of [[4,roughness],[3,metalness]])out.push(v.b.reduce((sum,w,k)=>sum+w*source.materialRows[source.indices[t.sourceTriangle*3+k]*6+channel],0));
  }
  g.setAttribute('rawLinearColor',new BufferAttribute(Float32Array.from(colors),3));g.setAttribute('rawRoughness',new BufferAttribute(Float32Array.from(roughness),1));g.setAttribute('rawMetalness',new BufferAttribute(Float32Array.from(metalness),1));
- const material=new DirectSourceMaterial();material.colorNode=attribute('rawLinearColor','vec3');material.roughnessNode=attribute('rawRoughness','float').clamp(0,1);material.metalnessNode=attribute('rawMetalness','float').clamp(0,1);material.side=2;material.isMeshStandardNodeMaterial=false;
+ const material=new DirectSourceMaterial();const rawNormal=transformNormalToView(attribute('normal','vec3')).toVarying('v_trellisRawNormalView'),geometric=normalFlat.dot(positionViewDirection).lessThan(0).select(normalFlat.negate(),normalFlat);material.normalNode=wgslFn(TRELLIS_SOURCE_NORMAL_WGSL)(rawNormal,geometric,positionViewDirection);material.colorNode=attribute('rawLinearColor','vec3');material.roughnessNode=attribute('rawRoughness','float').clamp(0,1);material.metalnessNode=attribute('rawMetalness','float').clamp(0,1);material.side=2;material.isMeshStandardNodeMaterial=false;
  return new Mesh(g,material);
 }
 export function rawBundleSiblingUrl(manifest,name){

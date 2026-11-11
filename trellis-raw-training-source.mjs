@@ -1,3 +1,4 @@
+import {TRELLIS_SOURCE_NORMAL_WGSL} from './trellis-source-normal.mjs';
 // Teacher for the existing raw-field mesh consumer: exact raw topology, aligned
 // per-vertex PBR rows, sRGB conversion before interpolation, no UV/atlas bake.
 import {prepareSupportVolume,materializeFragments,worldPoint,supportFrame} from './trellis-local-support.mjs';
@@ -13,7 +14,7 @@ export function rawFieldSource(data,indices,meta){
  for(let i=0;i<meta.count;i++){positions.set(data.subarray(i*12,i*12+3),i*3);normals.set(data.subarray(i*12+3,i*12+6),i*3);materialRows.set(data.subarray(i*12+6,i*12+12),i*6);}
  return {positions,normals,indices,materialRows,provenance:meta};
 }
-export const RAW_FIELD_SURFACE_WGSL=/* wgsl */`
+export const RAW_FIELD_SURFACE_WGSL=TRELLIS_SOURCE_NORMAL_WGSL+/* wgsl */`
 struct RawTriangle {c0:vec4f,c1:vec4f,c2:vec4f,o0:vec4f,o1:vec4f,o2:vec4f,n0:vec4f,n1:vec4f,n2:vec4f}
 @group(1) @binding(0) var<storage,read> rawTriangles:array<RawTriangle>;
 fn sourceMaterial(hit:Hit)->Material{
@@ -26,8 +27,7 @@ fn sourceMaterial(hit:Hit)->Material{
 fn sourceVisible(id:u32,direction:vec3f)->bool{return true;}
 fn sourceNormal(hit:Hit,direction:vec3f)->vec3f{
  let a=rawTriangles[hit.id];let n=a.n0.xyz*(1.0-hit.uv.x-hit.uv.y)+a.n1.xyz*hit.uv.x+a.n2.xyz*hit.uv.y;
- if(dot(n,n)<1e-20){return hit.normal;}var result=normalize(n);if(dot(result,hit.normal)<0.0){result=-result;}
- if(dot(result,-direction)<=0.0){return hit.normal;}return result;
+ return trellisSourceNormal(n,hit.normal,-direction);
 }
 `;
 export function createRawFieldTeacherSurface(device){
