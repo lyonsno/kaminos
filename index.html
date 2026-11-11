@@ -27722,14 +27722,14 @@ async function initSceneWorkerPage(admission) {
   const {mountSceneWorkerPage} = await import('./scene-worker-page-bootstrap.mjs');
   sceneWorkerPresentation = mountSceneWorkerPage({document,window,THREE,
     createControls:(camera,canvas)=>new OrbitControls(camera,canvas),
-    installNavigation:installSceneNavigation,frameBox,admission,preferences:startupPreferences,
+    installNavigation:installSceneNavigation,frameBox,admission:{...admission,sceneFile:startupSceneFile??null},preferences:startupPreferences,
     readFlameControls:()=>readVolumeControls(),report:setInfo,
     onProgress:event=>{const phase=event.value?.phase;if(typeof phase==='string')window.kaminosStartup?.phase(phase);},
   });
   window.kaminosSceneWorker = sceneWorkerPresentation;
   await volumeCockpitLayoutReady;
   const workerEditor=sceneWorkerPresentation.editor;
-  authoringWorkspace=installAuthoringWorkspace({document,edits:workerEditor.edits,
+  authoringWorkspace=installAuthoringWorkspace({document,edits:workerEditor.edits,availableControlsOnly:true,
     initialMode:new URLSearchParams(location.hash.slice(1)).get('workspace')==='authoring'?'authoring':'workbench',
     openWorkbenchTab:tab=>setActiveTab(tab)});
   window.kaminosWorkspace=authoringWorkspace;

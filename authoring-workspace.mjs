@@ -19,7 +19,7 @@ export function createControlSlots(document, entries) {
   return { setActive, showAuthoring: () => setActive(true), showWorkbench: () => setActive(false) };
 }
 
-export function installAuthoringWorkspace({ document, initialMode = 'workbench', beforeSwitch = () => true, afterSwitch = () => {}, openWorkbenchTab, edits }) {
+export function installAuthoringWorkspace({ document, initialMode = 'workbench', beforeSwitch = () => true, afterSwitch = () => {}, openWorkbenchTab, edits, availableControlsOnly = false }) {
   const byId = id => document.getElementById(id);
   const header = document.createElement('header');
   header.id = 'authoring-header';
@@ -104,8 +104,13 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   const entries = [];
   // Document commands and the viewport toolbar serve both workspaces.
   const sharedDestinations = new Set(['authoring-document-actions', 'authoring-add-slot', 'authoring-gizmo-slot', 'authoring-navigation-slot', 'authoring-viewport-tools']);
-  const move = (node, destination) => entries.push({ node, destination: byId(destination),
-    workbenchDestination: sharedDestinations.has(destination) ? byId(destination) : null });
+  const move = (node, destination) => {
+    // Worker-owned features may not have mounted their property editors yet.
+    // Keep the normal page strict; project only existing controls when asked.
+    if (!node && availableControlsOnly) return;
+    entries.push({ node, destination: byId(destination),
+      workbenchDestination: sharedDestinations.has(destination) ? byId(destination) : null });
+  };
   move(byId('scene-object-list').closest('.panel'), 'authoring-tree');
   move(byId('assembly-edit-mode'), 'authoring-viewport-tools');
   move(byId('transform-inspector'), 'authoring-transform-slot');
