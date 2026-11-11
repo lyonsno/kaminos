@@ -15,7 +15,7 @@ const vector=(v,n)=>{if(!Array.isArray(v)||v.length!==n||!v.every(Number.isFinit
 const random=seed=>{let s=seed>>>0;return()=>{s=(Math.imul(s,1664525)+1013904223)>>>0;return(s+.5)/2**32;};};
 export function preparationRecipe(input={}){
  if(!input||typeof input!=='object'||Array.isArray(input))throw Error('Invalid mixture');
- const c={seed:41,count:256,grainDetail:1,width:.06,radius:.0027,spread:.45,angularity:.17,friction:.65,paleFraction:.22,darkFraction:.25,density:2600,pourRate:100,dt:1/240,iterations:16,...input};
+ const c={seed:41,count:64,grainDetail:1,width:.025,radius:.0027,spread:.45,angularity:.17,friction:.65,paleFraction:.22,darkFraction:.25,density:2600,pourRate:100,dt:1/240,iterations:16,...input};
  for(const k of ['seed','count','iterations','grainDetail'])if(!Number.isSafeInteger(c[k])||c[k]<(['seed','grainDetail'].includes(k)?0:1))throw Error(`Invalid ${k}`);
  for(const k of ['width','radius','density','pourRate','dt'])positive(c[k],k);
  for(const k of ['spread','angularity','friction','paleFraction','darkFraction'])positive(c[k],k,true);
@@ -56,6 +56,13 @@ function ingredients(c){
  }
  return result;
 }
+export function preparationCollisionHull(g){
+ const shape=new CANNON.ConvexPolyhedron({vertices:g.vertices.map(p=>new CANNON.Vec3(...p)),faces:g.faces}),edges=new Map();
+ // SAT uses directions, so the two orientations of one topological edge
+ // generate the same cross-product axes. Keep every edge, once; no hull change.
+ for(const face of g.faces)for(let j=0;j<face.length;j++){const a=face[j],b=face[(j+1)%face.length],key=[Math.min(a,b),Math.max(a,b)].join(':');if(!edges.has(key)){const edge=shape.vertices[a].vsub(shape.vertices[b]);edge.normalize();edges.set(key,edge);}}
+ shape.uniqueEdges=[...edges.values()];return shape;
+}
 export function createGranularPreparation(input={},saved=null){
  if(saved?.schema&&saved.schema!==PREPARATION_SCHEMA)throw Error('Invalid preparation checkpoint schema');
  const c=preparationRecipe(saved?.recipe??input);planPreparation(c,{availableBytes:globalThis.performance?.memory?performance.memory.jsHeapSizeLimit-performance.memory.usedJSHeapSize:Infinity});const all=saved?structuredClone(saved.ingredients):ingredients(c);
@@ -65,7 +72,7 @@ export function createGranularPreparation(input={},saved=null){
   g.vertices.forEach(p=>vector(p,3));vector(g.quaternion,4);positive(g.mass,'grain mass');positive(g.volume,'grain volume');positive(g.radius,'grain radius');
   if(!Number.isSafeInteger(g.materialIndex)||g.materialIndex<0||g.materialIndex>2||g.faces.some(f=>!Array.isArray(f)||f.length!==3||f.some(k=>!Number.isSafeInteger(k)||k<0||k>=g.vertices.length)))throw Error('Invalid grain faces or material');
  }
- const w=new CANNON.World({gravity:new CANNON.Vec3(0,-9.81,0)});w.broadphase=new CANNON.SAPBroadphase(w);w.solver.iterations=c.iterations;w.solver.tolerance=1e-9;w.allowSleep=true;
+ const w=new CANNON.World({gravity:new CANNON.Vec3(0,-9.81,0)});w.broadphase=new CANNON.SAPBroadphase(w);w.broadphase.useBoundingBoxes=true;w.solver.iterations=c.iterations;w.solver.tolerance=1e-9;w.allowSleep=true;
  w.defaultContactMaterial.friction=c.friction;w.defaultContactMaterial.restitution=.02;w.defaultContactMaterial.contactEquationStiffness=1e7;
  let time=saved?.time??0,lidHeight=saved?.lidHeight??c.width*2,containerX=saved?.containerX??0,phase=saved?.phase?structuredClone(saved.phase):null,history=structuredClone(saved?.history??[]),disposed=false;
  positive(time,'time',true);positive(lidHeight,'lid height');if(!Number.isFinite(containerX))throw Error('Invalid container position');
@@ -76,7 +83,7 @@ export function createGranularPreparation(input={},saved=null){
  for(const [axis,sign]of [[0,-1],[0,1],[2,-1],[2,1]]){const x=axis===0?sign*c.width/2:0;walls.push({body:plane([x+containerX,0,axis===2?sign*c.width/2:0],[axis===0?-sign:0,0,axis===2?-sign:0]),x});}
  const lid=plane([containerX,lidHeight,0],[0,-1,0]);const grains=[];
  const add=(g,row)=>{
-  const shape=new CANNON.ConvexPolyhedron({vertices:g.vertices.map(p=>new CANNON.Vec3(...p)),faces:g.faces});
+  const shape=preparationCollisionHull(g);
   const b=new CANNON.Body({mass:g.mass,shape,linearDamping:.08,angularDamping:.12,allowSleep:true,sleepSpeedLimit:.002,sleepTimeLimit:.2});
   if(row){vector(row.position,3);vector(row.velocity,3);vector(row.angularVelocity,3);vector(row.quaternion,4);if(Math.abs(Math.hypot(...row.quaternion)-1)>1e-5)throw Error('Invalid grain orientation');b.position.set(...row.position);b.velocity.set(...row.velocity);b.angularVelocity.set(...row.angularVelocity);b.quaternion.set(...row.quaternion);}else{
    const rng=random(c.seed^Math.imul(g.id+1,0x9e3779b9));let y=c.width*1.1,x,z;

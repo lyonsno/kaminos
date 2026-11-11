@@ -28,3 +28,11 @@ assert.equal(planPreparation({count:12},{availableBytes:1024**3}).count,12,'plan
 const {createMaterialTeacherSource}=await import('../material-teacher-source.mjs');
 assert.equal(createMaterialTeacherSource({kind:'granular-preparation',snapshot:s}).config.kind,'granular-preparation','the real fit source must consume the frozen preparation');
 assert.throws(()=>createMaterialTeacherSource({kind:'granular-preparation'}),/snapshot/i,'missing preparation cannot fall back to decorative ground');
+
+const {preparationCollisionHull}=await import('../granular-preparation.mjs');
+const hullCheck=preparationCollisionHull(s.ingredients[0]),undirected=new Set(s.ingredients[0].faces.flatMap(f=>f.map((a,i)=>[a,f[(i+1)%f.length]].sort((a,b)=>a-b).join(':'))));
+assert.equal(hullCheck.uniqueEdges.length,undirected.size,'SAT must not repeat both directions of the same physical edge');
+
+const CANNON=await import('../node_modules/cannon-es/dist/cannon-es.js');
+const g=s.ingredients[0],reference=new CANNON.ConvexPolyhedron({vertices:g.vertices.map(p=>new CANNON.Vec3(...p)),faces:g.faces}),candidate=preparationCollisionHull(g),origin=new CANNON.Vec3(),qa=new CANNON.Quaternion(),qb=new CANNON.Quaternion();qb.setFromEuler(.31,.73,.19);
+for(const xyz of [[0,0,0],[.001,.001,0],[.003,0,0],[.02,.01,.03],[-.002,.001,.002]]){const pos=new CANNON.Vec3(...xyz),a=new CANNON.Vec3(),b=new CANNON.Vec3(),hitA=reference.findSeparatingAxis(reference,origin,qa,pos,qb,a),hitB=candidate.findSeparatingAxis(candidate,origin,qa,pos,qb,b);assert.equal(hitB,hitA,'removing redundant edge orientation must preserve overlap');if(hitA)assert.ok(Math.abs(reference.testSepAxis(a,reference,origin,qa,pos,qb)-candidate.testSepAxis(b,candidate,origin,qa,pos,qb))<1e-10,'minimum penetration depth must agree');}
