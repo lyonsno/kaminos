@@ -10,7 +10,7 @@ import {flamePoseToDomain,immersedControlsForFlamePose} from './scene-flame-emit
 export function createFireUnitObject({THREE,record,camera,controls,viewport,sharedGpuContext,getSceneDepth,onChange=()=>{},onError=()=>{}}){
  record=checkedFireUnitRecord(record);
  let data=structuredClone(record.fireUnit),accepted=structuredClone(record.transform),disposed=false,active=false,desired=false,activity=Promise.resolve(),status=null;
- const root=new THREE.Group();root.name=record.label||'Fire simulation';
+ const root=new THREE.Group();root.name=record.label||'Flame';
  root.position.fromArray(accepted.position);root.scale.fromArray(accepted.scale);
  const fineDims=data.controls.gridHeightRatio??2;
  const fine=new THREE.Box3Helper(new THREE.Box3(new THREE.Vector3(-1,-1,-1),new THREE.Vector3(1,2*fineDims-1,1)),0xe4ba73);
@@ -31,7 +31,7 @@ export function createFireUnitObject({THREE,record,camera,controls,viewport,shar
   onStatus:value=>{status=value;if(value.error){failed=value.error;onError(Error(value.error));}}});
  runtime.setCoreEmitterSourceMode('analytic-only');
  runtime.setRaymarchSmokePresentationMode(data.settings?.presentationControls?.['raymarch-smoke-presentation']?.value??'on');
- const initialFrame=fineFrame();runtime.repositionOrdinaryUnit(initialFrame.translate,initialFrame.scale);
+ const initialFrame=fineFrame();if(data.fineManualHold)coverage.hold(initialFrame);runtime.repositionOrdinaryUnit(initialFrame.translate,initialFrame.scale);
  if(data.controls.worldSmoke==='on'||data.worldReferenceDims||data.fineOffset?.some(v=>v!==0))runtime.restoreWorldFrame({...fireUnitFrame(accepted),referenceDims:data.worldReferenceDims??dimensions()});
  const canvas=runtime.canvasElement();canvas.classList.add('kaminos-fire-unit-canvas');canvas.dataset.fireUnit=record.id;canvas.style.background='transparent';
  emitter.userData.kaminosEditorHelper=true;
@@ -51,7 +51,8 @@ export function createFireUnitObject({THREE,record,camera,controls,viewport,shar
   const offset=data.fineOffset??[0,0,0],scale=data.fineScale??1;
   fine.box.min.set(-1,-1,-1).multiplyScalar(scale).add(new THREE.Vector3(...offset));fine.box.max.set(1,2*height/width-1,1).multiplyScalar(scale).add(new THREE.Vector3(...offset));
   const world=data.controls.worldSmoke==='on'?resolveWorldRegions(data.controls,runtime.worldFrame()?.referenceDims??[width,height,width]).world:null;
-  if(world){outer.box.min.fromArray(world.min);outer.box.max.fromArray(world.max);}else {outer.box.min.set(-1,-1,-1);outer.box.max.set(1,2*height/width-1,1);}
+  if(world){outer.box.min.fromArray(world.min);outer.box.max.fromArray(world.max);}else outer.box.copy(fine.box);
+  outer.visible=!!world&&(showHelpers||overlayMode!=='off');
  }
 
  const owner={root,emitter,proxy,fine,fineProxy,runtime,
@@ -59,7 +60,7 @@ export function createFireUnitObject({THREE,record,camera,controls,viewport,shar
   linkState:()=>({moveEmitterWithGrid:data.moveEmitterWithGrid,emissionEnabled:data.emissionEnabled!==false}),
   pose:()=>({position:root.position.toArray(),rotation:[root.rotation.x,root.rotation.y,root.rotation.z],scale:root.scale.toArray()}),
   finePose(){const frame=fineFrame();return {position:[...frame.translate],rotation:[0,0,0],scale:[frame.scale,frame.scale,frame.scale]};},
-  setFinePose(value){const next=checkedFireUnitPose(value);owner.setData({...owner.capture(),fineOffset:next.position.map((v,i)=>(v-accepted.position[i])/accepted.scale[0]),fineScale:next.scale[0]/accepted.scale[0]});coverage.hold(fineFrame());},
+  setFinePose(value){const next=checkedFireUnitPose(value);owner.setData({...owner.capture(),fineOffset:next.position.map((v,i)=>(v-accepted.position[i])/accepted.scale[0]),fineScale:next.scale[0]/accepted.scale[0],fineManualHold:true});coverage.hold(fineFrame());},
   pickComponent(event,{camera,canvas}){const rect=canvas.getBoundingClientRect(),raycaster=new THREE.Raycaster();raycaster.setFromCamera(new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,1-(event.clientY-rect.top)/rect.height*2),camera);root.updateMatrixWorld(true);if(raycaster.intersectObject(emitter).length)return 'emitter';const box=fine.box.clone().applyMatrix4(root.matrixWorld);return raycaster.ray.intersectsBox(box)?'fine':null;},
   setPose(value){const pose=checkedFireUnitPose(value);root.position.fromArray(pose.position);root.rotation.set(...pose.rotation);root.scale.fromArray(pose.scale);owner.syncPose();},
   capture(){owner.syncPose();const world=runtime.worldFrame();if(world)data.worldReferenceDims=world.referenceDims;return structuredClone(data);},
@@ -71,11 +72,12 @@ export function createFireUnitObject({THREE,record,camera,controls,viewport,shar
    const nextFollowing=coverageOptions(next);data=next;try{
     if(changed)runtime.setControls({...data.controls,lookFreeze:0});
     if(offsetChanged){const frame=fineFrame();runtime.relocateOrdinaryDomain(frame.translate,[],frame.scale);coverage.release();}
+    if(next.fineManualHold&&(!before.fineManualHold||offsetChanged))coverage.hold(fineFrame());else if(before.fineManualHold&&!next.fineManualHold)coverage.release();
     runtime.setRaymarchSmokePresentationMode(data.settings?.presentationControls?.['raymarch-smoke-presentation']?.value??'on');
     if(changed||offsetChanged||data.emissionEnabled!==before.emissionEnabled)supply();following=nextFollowing;placeEmitter();updateBounds();authoringRevision++;
    }catch(error){data=before;following=beforeFollowing;if(changed)runtime.setControls({...before.controls,lookFreeze:0});if(offsetChanged){const frame=fineFrame();runtime.relocateOrdinaryDomain(frame.translate,[],frame.scale);}supply();placeEmitter();updateBounds();throw error;}},
   setEmitter(value){const next=checkedFireUnitRecord({...record,transform:accepted,fireUnit:{...data,emitter:value}}).fireUnit.emitter;
-   const before=data.emitter;data.emitter=next;try{supply();placeEmitter();}catch(error){data.emitter=before;placeEmitter();throw error;}},
+   const before=data.emitter;data.emitter=next;try{supply();placeEmitter();data.fineManualHold=false;coverage.release();}catch(error){data.emitter=before;placeEmitter();throw error;}},
   syncPose(){
    let next;try{next=checkedFireUnitPose({position:root.position.toArray(),rotation:[root.rotation.x,root.rotation.y,root.rotation.z],scale:root.scale.toArray()});}
    catch(error){root.position.fromArray(accepted.position);root.rotation.set(...accepted.rotation);root.scale.fromArray(accepted.scale);throw error;}
@@ -91,7 +93,7 @@ export function createFireUnitObject({THREE,record,camera,controls,viewport,shar
    if(!coverage.due(following,now))return;
    const input=runtime.fineCoverageInputs({activity:following.mode==='fire'});
    if(input.status!=='active'){coverageStatus={status:input.status};return;}
-   const result=coverage.update(input,following,now);coverageStatus={...result,demandStatus:input.demandStatus,demandRevision:input.demandRevision};
+   const result=coverage.update(input,following,now);if(result.status!=='manual-hold')data.fineManualHold=false;coverageStatus={...result,demandStatus:input.demandStatus,demandRevision:input.demandRevision};
    if(!result.target)return;
    const before=data.fineOffset,previous=fineFrame(),target=result.target;
    data.fineOffset=target.translate.map((v,i)=>(v-accepted.position[i])/accepted.scale[0]);
@@ -105,7 +107,7 @@ export function createFireUnitObject({THREE,record,camera,controls,viewport,shar
   },
   async initialize(){try{supply();placeEmitter();await owner.setVisible(true);updateBounds();}catch(error){failed=String(error.message??error);onError(error);throw error;}},
   sync({visible=true,helpers=true,paused=false,now=0,editing=false}={}){if(disposed)return;
-   root.visible=visible;showHelpers=helpers;fine.visible=helpers||overlayMode!=='off';outer.visible=helpers||overlayMode!=='off';emitter.visible=helpers;
+   root.visible=visible;showHelpers=helpers;fine.visible=helpers||overlayMode!=='off';outer.visible=data.controls.worldSmoke==='on'&&(helpers||overlayMode!=='off');emitter.visible=helpers;
    if(paused!==lastPaused){runtime.setSimulationPaused(paused);lastPaused=paused;}if(visible!==desired)void owner.setVisible(visible);
    if(visible&&active)owner.updateFineCoverage(now,{editing});
   },

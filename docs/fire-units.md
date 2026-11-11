@@ -6,15 +6,23 @@ an immersed-source basin. Each new object owns an independent native GPU
 simulation with its Fine grid and optional outer World grid, on the scene's
 shared GPU device and camera.
 
-Select the grid to move the pair as one unit. **Select emitter** or native
-component editing selects its source. **Move emitter with grid** is the same
+Select the Flame to move the whole unit. Press **Tab** to edit its components,
+starting with Fine. Click the emitter or anywhere inside Fine to select that
+component; Tab returns to the whole unit. Fine uses the ordinary gizmo and
+transform fields. Manual Fine placement holds until source or following settings
+change and is retained by Duplicate and scene save/reopen. **Move emitter with grid** is the same
 saved property in both contexts. When checked, moving or uniformly scaling
 the grid carries the source. When unchecked, the source keeps its world pose.
 The emitter can also be placed independently. The grids remain world aligned;
 unsupported rotation and nonuniform scale are refused.
 
-Select the grid for Material, Flow and Quality, or its emitter for source
-properties. Numeric fields use the ordinary drag/type controls and grouped Undo.
+Select the Flame or Fine for Material, Flow and Quality, or its emitter for
+source properties. **Quality → Simulation boxes** switches between double and
+single boxes. Single promotes the existing outer footprint to the Fine solver,
+using the configured Fine cell count over that larger region; double restores
+the previous local Fine layout. The emitter keeps its world pose, size and shape.
+Ordinary Duplicate creates another simulation with the same authored setup and
+fresh gas. Numeric fields use the ordinary drag/type controls and grouped Undo.
 The selected unit uses the existing flame, basin and grid editors. Those edits
 apply to that unit. The scene Play/Pause control operates all present units.
 Each unit has its own solver cost; this feature adds no automatic budget sharing.

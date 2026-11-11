@@ -162,3 +162,8 @@ test('World source supply remains a placement target after its overlap with Fine
  assert.equal(sources[0].weight,e.fullFlux);
  assert.ok(chooseFineCoverage(input(sources,{frame:{translate:[0,-.75,0],scale:1}}),opts).target.translate[1]>1);
 });
+
+test('source following honors headroom on its first observation and projects high headroom within full source coverage',()=>{
+ const c=new FineCoverageController(),i=input([box('a',[0,1,0])]);const first=c.update(i,{...opts,headroom:.75},0);assert.ok(first.target,'first observation must honor source-relative height even when source already fits');assert.equal(first.target.translate[1],1);
+ const high=new FineCoverageController(),j=input([box('b',[0,0,0])]);high.update(j,opts,0);const r=high.update(j,{...opts,headroom:.98},1);assert.ok(r.target,'high headroom must project to the closest full-coverage placement');assert.equal(r.sourceCoverage,1);assert.ok(r.target.translate[1]>.2&&r.target.translate[1]<=.3);
+});

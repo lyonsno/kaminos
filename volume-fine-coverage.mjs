@@ -49,7 +49,9 @@ export function chooseFineCoverage(input,options={}) {
  const current=score(frame.translate),currentHeadroom=headroomError(frame.translate),candidates=[frame.translate];
  const add=(c,headroom=false)=>{let t=c.map((x,a)=>x-offset[a]+(a===1&&headroom?(o.headroom-.5)*extent[a]:0));
   // Quantize within the World, never round a clamped placement back outside it.
-  t=t.map((x,a)=>{const origin=frame.translate[a],min=Math.ceil((lower[a]-origin)/pitch-1e-8),max=Math.floor((upper[a]-origin)/pitch+1e-8);return min<=max?origin+Math.max(min,Math.min(max,Math.round((x-origin)/pitch)))*pitch:Math.max(lower[a],Math.min(upper[a],x));});candidates.push(t);};
+  const floor=[...lower],ceiling=[...upper];
+  if(headroomRequested&&headroom&&sb.length){const lo=Math.max(...sb.map(b=>b.hi[1]))+frame.scale-extent[1]*(1-o.margin),hi=Math.min(...sb.map(b=>b.lo[1]))+frame.scale-extent[1]*o.margin;if(Math.max(floor[1],lo)<=Math.min(ceiling[1],hi)){floor[1]=Math.max(floor[1],lo);ceiling[1]=Math.min(ceiling[1],hi);}}
+  t=t.map((x,a)=>{const origin=frame.translate[a],min=Math.ceil((floor[a]-origin)/pitch-1e-8),max=Math.floor((ceiling[a]-origin)/pitch+1e-8);return min<=max?origin+Math.max(min,Math.min(max,Math.round((x-origin)/pitch)))*pitch:Math.max(floor[a],Math.min(ceiling[a],x));});candidates.push(t);};
  const centroid=bs=>{const total=bs.reduce((s,b)=>s+b.weight,0);return total?Array.from({length:3},(_,a)=>bs.reduce((s,b)=>s+center(b)[a]*b.weight,0)/total):null;};
  for(const b of sb)add(center(b),true);
  for(const [bs,headroom] of [[sb,true],[db,false],[all,false]]){const c=centroid(bs);if(c)add(c,headroom);}
@@ -103,7 +105,7 @@ export class FineCoverageController {
  update(input,options,now){
   if(!Number.isFinite(now))throw new Error('Coverage clock must be finite');
   const o=checkedFineCoverageOptions(options),policy=JSON.stringify(o),signature=JSON.stringify((input.sources??[]).map(b=>[b.id,b.authoredSupply,...b.lo,...b.hi].map(x=>typeof x==='number'?Math.round(x*1e7)/1e7:x)));
-  if(this.headroom!==null&&o.headroom!==this.headroom)this.headroomPending=true;
+  if(o.mode!=='off'&&(this.headroom===null||o.headroom!==this.headroom||signature!==this.sources))this.headroomPending=true;
   this.headroom=o.headroom;
   const changed=policy!==this.policy||signature!==this.sources;
   const external=this.lastFrame&&!sameFrame(input.frame,this.lastFrame);

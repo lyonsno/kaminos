@@ -1,3 +1,5 @@
+import {changeFireUnitBoxMode} from './fire-unit-record.mjs';
+import {fireControlOwner} from './scene-fire-domain.mjs';
 import {createFlameInspector} from './flame-authoring.mjs';
 import {GRID_TUNING_FIELDS} from './volume-grid-tuning.mjs';
 import {WORLD_CALIBRATION_FIELDS,SIMULATION_LEVER_FIELDS,captureWorldCalibration} from './volume-world-calibration.mjs';
@@ -41,10 +43,11 @@ export function mountFireUnitAuthoring({document,root,owner,edits,target,seedSet
  function snapshot(base=settings()){const value=structuredClone(base);for(const axis of ['domControls','rendererControls','presentationControls'])for(const d of Object.values(value[axis]??{})){
   const node=copy.getElementById(d.id);if(!node)continue;d.value=node.type==='checkbox'?node.checked:['range','number'].includes(node.type)?Number(node.value):node.value;if('rawValue'in d)d.rawValue=node.type==='checkbox'?node.checked:node.value;
  }return value;}
- let applying=false,inspector;
- function write(label='Tune fire simulation',nextSettings=snapshot()){
-  const next={...owner.capture(),settings:nextSettings,controls:compile(copy,nextSettings)};
-  applying=true;try{if(edits.state().active?.id===target)edits.preview(next);else edits.apply(target,next,label);}finally{applying=false;}inspector?.sync();
+ let applying=false,inspector,boxMode;
+ function write(label='Tune fire simulation',nextSettings=snapshot(),base=owner.capture()){
+  const current=owner.capture(),next={...base,settings:nextSettings,controls:compile(copy,nextSettings)};
+  if(Object.entries(nextSettings.domControls??{}).some(([id,d])=>(fireControlOwner(id)==='source'||id.startsWith('volume-coverage-'))&&String(d.rawValue??d.value)!==String(current.settings?.domControls?.[id]?.rawValue??current.settings?.domControls?.[id]?.value)))next.fineManualHold=false;
+  applying=true;try{if(edits.state().active?.id===target)edits.preview(next);else edits.apply(target,next,label);}finally{applying=false;}if(boxMode)boxMode.value=owner.capture().controls.worldSmoke==='on'?'double':'single';inspector?.sync();
  }
  function writeCalibration(patch,label='Tune simulation world scale'){for(const f of [...WORLD_CALIBRATION_FIELDS,...SIMULATION_LEVER_FIELDS])if(Object.hasOwn(patch,f.key))setFireUnitControlValue(copy.getElementById(f.id),patch[f.key]);write(label);}
  const byId=id=>{let node=root.querySelector(`[data-fire-control-id="${id}"]`)??root.querySelector(`[id="${id}"]`)??copy.getElementById(id);
@@ -64,11 +67,17 @@ export function mountFireUnitAuthoring({document,root,owner,edits,target,seedSet
   gridTuning:{idPrefix:prefix,isEnabled:()=>!root.closest('[hidden]'),read:()=>owner.capture().controls,validate:c=>owner.runtime.validateGridControls(c),
    calibration:{set:patch=>writeCalibration(patch),capture:()=>writeCalibration(captureWorldCalibration(owner.capture().controls,owner.root.scale.x),'Capture simulation world scale')},
    bindLiveField:(input,label='Tune pressure iterations')=>installSceneControlHistory({controls:[input],edits,id:target,label,onError}),
-   apply:patch=>{for(const [key,id]of GRID_TUNING_FIELDS)if(Object.hasOwn(patch,key))setFireUnitControlValue(copy.getElementById(id),patch[key]);write('Change simulation grids');},
+   apply:patch=>{const current=owner.capture();project(current.settings??seedSettings);seedControls(copy,current.controls);for(const [key,id]of GRID_TUNING_FIELDS)if(key!=='worldSmoke'&&Object.hasOwn(patch,key))setFireUnitControlValue(copy.getElementById(id),patch[key]);const stagedSettings=snapshot(),staged={...current,settings:stagedSettings,controls:compile(copy,stagedSettings)},base=Object.hasOwn(patch,'worldSmoke')?changeFireUnitBoxMode(staged,patch.worldSmoke==='on'?'double':'single'):staged;project(base.settings??seedSettings);seedControls(copy,base.controls);write('Change simulation grids',snapshot(base.settings??seedSettings),base);},
    live:(key,value)=>{const id=GRID_TUNING_FIELDS.find(f=>f[0]===key)[1];setFireUnitControlValue(copy.getElementById(id),value);write('Tune pressure iterations');}},
  });
+ const qualityRow=document.createElement('label');qualityRow.className='slider-row';qualityRow.append(document.createTextNode('Simulation boxes'));
+ boxMode=document.createElement('select');boxMode.dataset.fireUnitBoxMode='';boxMode.setAttribute('aria-label','Simulation boxes');
+ for(const [value,label]of [['double','Double · local Fine + outer'],['single','Single · outer becomes Fine']]){const option=document.createElement('option');option.value=value;option.textContent=label;boxMode.append(option);}
+ const syncBoxMode=()=>{boxMode.value=owner.capture().controls.worldSmoke==='on'?'double':'single';};syncBoxMode();
+ boxMode.onchange=()=>{try{const next=changeFireUnitBoxMode(owner.capture(),boxMode.value);project(next.settings??seedSettings);seedControls(copy,next.controls);write('Change Flame boxes',snapshot(next.settings??seedSettings),next);}catch(error){onError(error);syncBoxMode();}};
+ qualityRow.append(boxMode);simulationHost.querySelector('[role="tabpanel"][id$="-quality"]').prepend(qualityRow);
  const editing=installFireUnitFieldEditing({root,edits,target,onError});
  for(const node of root.querySelectorAll('[id]'))if(!node.id.startsWith(prefix)){node.dataset.fireControlId=node.id;node.id=prefix+node.id;}
  for(const node of root.querySelectorAll('[for],[aria-controls],[aria-labelledby]'))for(const name of ['for','aria-controls','aria-labelledby']){const value=node.getAttribute(name);if(value&&!value.startsWith(prefix))node.setAttribute(name,prefix+value);}
- return {close(){editing.close();inspector.closeGrid();},setSourceMode(value){sourceHost.hidden=!value;simulationHost.hidden=!!value;},sync(){if(applying)return;project(settings());seedControls(copy,owner.capture().controls);inspector.sync();},dispose(){editing.dispose();inspector.dispose?.();}};
+ return {close(){editing.close();inspector.closeGrid();},setSourceMode(value){sourceHost.hidden=!value;simulationHost.hidden=!!value;},sync(){if(applying)return;project(settings());seedControls(copy,owner.capture().controls);syncBoxMode();inspector.sync();},dispose(){editing.dispose();inspector.dispose?.();}};
 }

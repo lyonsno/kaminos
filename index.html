@@ -6858,7 +6858,7 @@ function updateTransformInspector() {
   empty.hidden = !!entry;
   fields.hidden = !entry;
   setTransformInspectorFieldsDisabled(!entry);
-  for(const input of document.querySelectorAll('[data-transform-field^="rotation."]'))input.disabled=!entry||workingScene.activeFieldId==='water-field'||entry.type===FIRE_UNIT_TYPE;
+  for(const input of document.querySelectorAll('[data-transform-field^="rotation."]'))input.disabled=!entry||workingScene.activeFieldId==='water-field'||(entry.type===FIRE_UNIT_TYPE||entry.type==='fire-unit-fine');
   updateSplatCorrectionPanel(entry);
   syncEditorHelperVisibility();syncSelectionInspector();
   if (!entry && workingScene.activeGroupId) {
@@ -27923,7 +27923,7 @@ async function addAuthoredFireUnit(options={}) {
  if(fresh&&templateData){delete templateData.fineOffset;delete templateData.worldReferenceDims;}
  const inheritedEmitter=moveLinkedFireEmitter(templateData?.emitter??flameEmitterPose,template?.pose()??{position:flameDomainTranslation,rotation:[0,0,0],scale:[flameDomainScale,flameDomainScale,flameDomainScale]},pose,true);
  const emitter=options.emitter?structuredClone(options.emitter):fresh?flamePoseFromImmersedControls(source,offset,inheritedEmitter,unitScale):inheritedEmitter;
- const record=checkedFireUnitRecord({id,type:FIRE_UNIT_TYPE,source:FIRE_UNIT_SOURCE,fileName:'Fire simulation',label:options.label??'Fire simulation '+(authoredFireUnits.size+1),createdAt:new Date().toISOString(),
+ const record=checkedFireUnitRecord({id,type:FIRE_UNIT_TYPE,source:FIRE_UNIT_SOURCE,fileName:'Flame',label:options.label??'Flame '+(authoredFireUnits.size+1),createdAt:new Date().toISOString(),
   transform:pose,fireUnit:{...templateData,controls:structuredClone(source),settings:options.settings??templateData?.settings??buildVolumeSettingsPreset(),emitter,moveEmitterWithGrid:templateData?.moveEmitterWithGrid??true}});
  const target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
  await mountAuthoredFireUnit(record);
