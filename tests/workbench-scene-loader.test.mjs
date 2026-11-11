@@ -1,5 +1,6 @@
 // kaminos-test: node
 import test from 'node:test';
+import {createSceneGlbLoader} from '../scene-glb-loader.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -14,7 +15,7 @@ function loader(){
  const loadStarted=new Promise(resolve=>{announceLoad=resolve;});
  const root={userData:{},traverse(fn){fn({isMesh:false});}};
  const clip={name:'Accepted motion'}, clips=[clip];
- const context={sceneLightingPreparation:null,URL,console,AbortController,loadingTelemetry:createLoadingTelemetryTracker(),readAssetBytes:async url=>new TextEncoder().encode(url).buffer,workbenchViewerReady:Promise.resolve(),workingScene:createWorkingScene(),glbFileName:'previous.glb',modelSourceUrl:null,
+ const context={createSceneGlbLoader,sceneLightingPreparation:null,URL,console,AbortController,loadingTelemetry:createLoadingTelemetryTracker(),readAssetBytes:async url=>new TextEncoder().encode(url).buffer,workbenchViewerReady:Promise.resolve(),workingScene:createWorkingScene(),glbFileName:'previous.glb',modelSourceUrl:null,
   shouldClearSceneForImport:options=>options.clear!==false,
   clearScene(){throw Error('Workbench append must preserve the existing scene');},
   resolveAssetArrivalMode:()=> 'append',applyAssetArrival:()=>({}),

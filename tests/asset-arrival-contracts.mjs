@@ -536,7 +536,7 @@ test('geometry-first arrival promotes camera placement and 500-face low-LOD prox
   // 4. showGLB mounts a single-asset low-LOD stand-in with early camera framing while the hero GLB downloads
   const showGlbStart = html.indexOf('async function showGLB(');
   const showGlbEnd = html.indexOf('window.kaminosWorkbenchLoadAsset =', showGlbStart);
-  const showGlbBody = html.slice(showGlbStart, showGlbEnd);
+  const showGlbBody = readFileSync(new URL('../scene-glb-loader.mjs',import.meta.url),'utf8');
   assert.match(showGlbBody, /mountSingleAssetLowLodStandIn\(/, 'showGLB must mount a 500-face low-LOD stand-in while the full hero GLB downloads');
   assert.match(showGlbBody, /releaseEarlyStandIn\?\.\(\)/, 'showGLB must release and dispose the early low-LOD stand-in when the hero GLB settles');
 });

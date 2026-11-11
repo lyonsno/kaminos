@@ -3000,6 +3000,7 @@ import { createFireLightFieldShadow, renderFireShadowBatch } from './fire-light-
 import { createFireShadowCasters } from './fire-shadow-casters.mjs';
 import {createSceneFireLightReceiver} from './scene-fire-light-receiver.mjs';
 import {mountSceneRadianceResources} from './scene-radiance-resource-mount.mjs';
+import {createSceneGlbLoader} from './scene-glb-loader.mjs';
 import { PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS } from './volume-physics-appearance.mjs';
 import { applyVolumeControlDescriptions, volumeControlTooltip } from './volume-control-descriptions.mjs';
 applyVolumeControlDescriptions(document);
@@ -13289,171 +13290,23 @@ window.kaminosLoadingStandIns = {
 };
 
 async function showGLB(file, options = {}) {
-  let loadToken = workingScene.generation;
-  const isBlob = typeof file !== 'string';
-  const url = isBlob ? file.name : file;
-  const assetMetadata = {...(options.metadata || {})};
-  const assetSource = assetMetadata.source ?? (isBlob ? file.name : file);
-  let resolvedUrlName = isBlob ? (file?.name || 'object.glb') : String(file);
-  if (!isBlob && resolvedUrlName.includes('path=')) {
-    try {
-      const pathParam = new URL(resolvedUrlName, window.location?.origin || 'http://127.0.0.1').searchParams.get('path');
-      if (pathParam) resolvedUrlName = pathParam;
-    } catch {}
-  }
-  const assetFileName = assetMetadata.fileName ?? file?.name ?? (isBlob ? 'object.glb' : resolvedUrlName.split('/').pop());
-  const telemetryLabel = assetMetadata.label || assetFileName;
-  if (file && file.name) glbFileName = file.name;
-  modelSourceUrl = isBlob ? file.name : file;
-  modelSourceType = 'glb';
-  const telemetryOp = options.telemetryOp || (typeof loadingTelemetry !== 'undefined'
-    ? loadingTelemetry.start('asset', { label: telemetryLabel, phase: 'reading-file' })
-    : null);
-  const readAbort = new AbortController();
-  const inputBytes = options.preparedAsset ? null : (options.inputBytes
-    ? Promise.resolve(options.inputBytes)
-    : readAssetBytes(file,{signal:readAbort.signal,progress:bytes=>{
-        if(loadToken===workingScene.generation&&options.isCurrent?.()!==false)loadingTelemetry?.progress('asset',{label:telemetryLabel,phase:'downloading',token:telemetryOp?.token,...bytes});
-      }}));
-  // Observe read failures immediately even if renderer preparation is still pending.
-  inputBytes?.catch(()=>{});
-  let cleared=false;
-  try {
-    await sceneLightingPreparation?.whenIdle();
-    if(loadToken!==workingScene.generation||options.isCurrent?.()===false)throw Error('stale async GLB load ignored');
-    cleared = shouldClearSceneForImport(options);
-    if(cleared&&!await clearScene()){readAbort.abort();loadingTelemetry?.cancel?.('asset',{token:telemetryOp?.token});return null;}
-    loadToken=workingScene.generation;
-  } catch(error) {
-    readAbort.abort();
-    if(loadToken!==workingScene.generation||options.isCurrent?.()===false)loadingTelemetry?.cancel?.('asset',{token:telemetryOp?.token});
-    else loadingTelemetry?.fail('asset',error,{token:telemetryOp?.token});
-    throw error;
-  }
-  const arrival = resolveAssetArrivalMode({arrival:options.arrival,normalize:options.normalize,cleared});
-  const loader = new GLTFLoader();
-  let heroSettled = false;
-  const releaseEarlyStandIn = typeof mountSingleAssetLowLodStandIn === 'function'
-    ? mountSingleAssetLowLodStandIn({
-        url,
-        isBlob,
-        arrival,
-        assetMetadata,
-        isCurrent: () => !heroSettled && loadToken === workingScene.generation && options.isCurrent?.() !== false && !(greenroomPreviewIsActive() && options.register !== false),
-      })
-    : null;
-	return new Promise((resolve, reject) => {
-    const onLoad=async gltf=>{
-      let preparedGeometry=null;
-      if(typeof prepareGLBGeometryArrival==='function'){
-        loadingTelemetry?.progress('asset',{label:telemetryLabel,phase:'preparing-geometry',token:telemetryOp?.token});
-        try{preparedGeometry=await prepareGLBGeometryArrival(gltf.scene,arrival,()=>loadToken===workingScene.generation&&options.isCurrent?.()!==false,{activate:options.activate!==false});}
-        catch(error){disposeObjectTree(gltf.scene);throw error;}
-      }
-      heroSettled = true;
-      const earlyStandIn = releaseEarlyStandIn?.() ?? null;
-
-      if (typeof loadingTelemetry !== 'undefined') {
-        loadingTelemetry.progress('asset', { label: telemetryLabel, phase: 'preparing-materials',token:telemetryOp?.token });
-      }
-	    glbSourceScene = gltf.scene;
-	    const model = gltf.scene;
-      const stalePreviewLoad = options.register === false
-        && options.previewGeneration !== undefined
-        && greenroomPreviewState?.previewGeneration !== options.previewGeneration;
-      if (loadToken !== workingScene.generation || stalePreviewLoad || options.isCurrent?.()===false || (greenroomPreviewIsActive() && options.register !== false)) {
-        if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.cancel?.('asset', { token: telemetryOp?.token });
-        disposeObjectTree(model);
-        reject(new Error('stale async GLB load ignored'));
-        return;
-      }
-      const envIntensity = typeof sceneEnvironment !== 'undefined' ? sceneEnvironment.read().intensity : 1;
-      const maxAniso = typeof renderer !== 'undefined' ? (renderer?.capabilities?.getMaxAnisotropy?.() || 16) : 16;
-      if (typeof prepareArrivedMeshMaterials === 'function') {
-        prepareArrivedMeshMaterials(model, {
-          maxAnisotropy: maxAniso,
-          materialTuning: false,
-          baseEnvMapIntensity: envIntensity,
-        });
-      }
-      const arrivalPlacement = applyAssetArrival(model, arrival, preparedGeometry);
-      model.traverse(child => {
-        if (child.isMesh) {
-          child.castShadow = true;
-          child.receiveShadow = true;
-          if (child.material && typeof prepareArrivedMeshMaterials !== 'function') {
-            for (const mat of [].concat(child.material)) {
-              if (mat) mat.envMapIntensity = envIntensity;
-            }
-          }
-        }
-      });
-      if (typeof prepareArrivedMeshMaterials === 'function') {
-        prepareArrivedMeshMaterials(model, {
-          maxAnisotropy: maxAniso,
-          materialTuning: typeof arrivalLightingState !== 'undefined' ? arrivalLightingState.materialTuningEnabled : false,
-          materialProfile: typeof arrivalLightingState !== 'undefined' ? arrivalLightingState.materialProfile : null,
-          baseEnvMapIntensity: envIntensity,
-        });
-      }
-      scene.add(model);
-      let registeredAsset = null;
-      if (options.register === false) {
-        const metadata = assetMetadata;
-        model.userData.kaminosSceneObject = {
-          source: assetSource,
-          type: metadata.type ?? 'glb',
-          fileName: assetFileName,
-          label: metadata.label ?? assetFileName,
-        };
-        currentMesh = model;
-        sceneNavigation?.prepare(model);
-        if (transformControls) {
-          attachViewportGizmo(model);
-          transformControls.visible = true;
-        }
-      } else {
-        registeredAsset = registerSceneObject(model, {
-          ...assetMetadata,
-          source: assetSource,
-          type: assetMetadata.type ?? 'glb',
-          fileName: assetFileName,
-        }, {activate:options.activate!==false});
-      }
-      if(options.activate!==false)document.getElementById('transform-bar').classList.add('visible');
-      if (arrival === 'fresh' && arrivalPlacement) {
-        if (earlyStandIn?.framed && earlyStandIn.cameraMovedSinceFrame && typeof syncArrivalLightingAndGI === 'function') {
-          syncArrivalLightingAndGI(model,preparedGeometry?.bounds);
-        } else {
-          frameAssetArrival(model, preparedGeometry);
-        }
-      }
-      if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.complete('asset',{token:telemetryOp?.token});
-      setInfo('GLB Inspector — orbit to inspect | use toolbar to fix orientation');
-      resolve(options.returnAsset ? {
-        id: registeredAsset?.id ?? null,
-        root: model,
-        clips: gltf.animations || [],
-        source: assetSource,
-        fileName: assetFileName,
-        arrival,
-      } : model);
-    };
-    const onError=err=>{
-      heroSettled = true;
-      releaseEarlyStandIn?.();
-
-      if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.fail('asset', err,{token:telemetryOp?.token});
-      setInfo('Failed to load GLB: ' + (err.message || 'unknown error'));
-      reject(err);
-    };
-    if(options.preparedAsset)Promise.resolve(options.preparedAsset).then(onLoad).catch(onError);
-    else inputBytes.then(bytes=>{
-      if(loadToken!==workingScene.generation||options.isCurrent?.()===false)throw Error('stale async GLB load ignored');
-      loadingTelemetry?.progress('asset',{label:telemetryLabel,phase:'decoding',token:telemetryOp?.token});
-      return loader.parseAsync(bytes,isBlob?'':url.slice(0,url.lastIndexOf('/')+1));
-    }).then(onLoad).catch(onError);
-  });
+  return createSceneGlbLoader({GLTFLoader,workingScene,readScene:()=>scene,readAssetBytes,sceneLightingPreparation,
+    shouldClearSceneForImport,clearScene:(...args)=>clearScene(...args),resolveAssetArrivalMode,loadingTelemetry,
+    origin:()=>window.location?.origin||'http://127.0.0.1',
+    sourceChanged(value){
+      if(Object.hasOwn(value,'file')){if(value.file?.name)glbFileName=value.file.name;modelSourceUrl=value.source;modelSourceType=value.type;}
+      if(Object.hasOwn(value,'scene'))glbSourceScene=value.scene;
+    },
+    mountSingleAssetLowLodStandIn:typeof mountSingleAssetLowLodStandIn==='function'?mountSingleAssetLowLodStandIn:undefined,greenroomPreviewIsActive,
+    prepareGLBGeometryArrival:typeof prepareGLBGeometryArrival==='function'?prepareGLBGeometryArrival:undefined,disposeObjectTree,
+    readPreviewGeneration:()=>greenroomPreviewState?.previewGeneration,
+    readEnvironmentIntensity:()=>typeof sceneEnvironment!=='undefined'?sceneEnvironment.read().intensity:1,
+    readMaxAnisotropy:()=>typeof renderer!=='undefined'?(renderer?.capabilities?.getMaxAnisotropy?.()||16):16,
+    prepareArrivedMeshMaterials:typeof prepareArrivedMeshMaterials==='function'?prepareArrivedMeshMaterials:undefined,applyAssetArrival,readArrivalLighting:()=>typeof arrivalLightingState!=='undefined'?arrivalLightingState:null,
+    previewLoaded(model){currentMesh=model;sceneNavigation?.prepare(model);if(transformControls){attachViewportGizmo(model);transformControls.visible=true;}},
+    registerSceneObject,onActivate:()=>document.getElementById('transform-bar').classList.add('visible'),
+    frameAssetArrival:(...args)=>frameAssetArrival(...args),syncArrivalLightingAndGI:typeof syncArrivalLightingAndGI==='function'?syncArrivalLightingAndGI:undefined,setInfo,
+  })(file,options);
 }
 
 

@@ -198,11 +198,11 @@ assert.match(index, /let greenroomPreviewGeneration\s*=\s*0/, 'Greenroom preview
 assert.match(index, /function nextGreenroomPreviewGeneration\([\s\S]*workingScene\.invalidateArrivals\(\)[\s\S]*greenroomPreviewGeneration \+= 1[\s\S]*return greenroomPreviewGeneration/, 'every Greenroom preview replacement invalidates older async preview loads');
 assert.match(index, /previewGeneration:[\s\S]*previewGeneration/, 'Greenroom preview state records the active preview generation');
 assert.match(index, /showGLB\(url,[\s\S]*previewGeneration/, 'Greenroom View passes its preview generation into the async GLB load');
-assert.match(index, /const stalePreviewLoad = options\.register === false[\s\S]*greenroomPreviewState\?\.previewGeneration !== options\.previewGeneration/, 'preview GLB loads reject stale completion into a newer active preview generation');
+assert.match(readFileSync(new URL('../scene-glb-loader.mjs',import.meta.url),'utf8'), /const stalePreviewLoad = options\.register === false[\s\S]*readPreviewGeneration\(\) !== options\.previewGeneration/, 'preview GLB loads reject stale completion into a newer active preview generation');
 assert.match(index, /catch \(error\) \{[\s\S]*greenroomPreviewState\?\.previewGeneration === previewGeneration[\s\S]*restoreAuthoredSceneFromPreview/, 'a stale superseded preview load must not restore over a newer active preview');
 assert.match(index, /workingScene\.invalidateArrivals\(\)/, 'scene replacement and preview transitions invalidate older async load completions');
 assert.match(index, /const loadToken = workingScene\.generation[\s\S]*stale async PBR preview load ignored/, 'PBR preview imports ignore stale async completions after preview or scene replacement');
-assert.match(index, /const loadToken = workingScene\.generation[\s\S]*stale async GLB load ignored/, 'GLB imports ignore stale async completions after preview or scene replacement');
+assert.match(readFileSync(new URL('../scene-glb-loader.mjs',import.meta.url),'utf8'), /let loadToken = workingScene\.generation[\s\S]*stale async GLB load ignored/, 'GLB imports ignore stale async completions after preview or scene replacement');
 assert.match(index, /id="greenroom-preview-controls"/, 'viewport exposes a prominent temporary Greenroom Preview control surface');
 assert.match(index, /data-greenroom-preview-action="import"/, 'Greenroom Preview exposes an explicit Import to Scene action');
 assert.match(index, /data-greenroom-preview-action="back"/, 'Greenroom Preview exposes an explicit Back to Scene action');
@@ -224,7 +224,7 @@ assert.match(index, /event\.stopPropagation\(\);[\s\S]*window\.removeSceneObject
 assert.match(index, /if \(event\.target !== button\) return;[\s\S]*event\.preventDefault\(\);[\s\S]*window\.selectSceneObject/, 'row keyboard selection must ignore events from child remove controls');
 assert.match(index, /id="append-import-toggle"/, 'Assets tab exposes an explicit append import toggle for authoring multi-object scenes');
 assert.match(index, /function shouldClearSceneForImport\(/, 'direct import paths share one append-aware clear/replace decision');
-assert.match(index, /async function showGLB\(file, options = \{\}\) \{[\s\S]*if \(shouldClearSceneForImport\(options\)\) clearScene\(\);/, 'GLB imports can append instead of replacing the scene');
+assert.match(readFileSync(new URL('../scene-glb-loader.mjs',import.meta.url),'utf8'), /cleared = shouldClearSceneForImport\(options\);[\s\S]*if\(cleared&&!await clearScene\(\)\)/, 'GLB imports can append instead of replacing the scene');
 assert.match(index, /async function showOBJ\(objFile, mtlFile, options = \{\}\) \{[\s\S]*if \(shouldClearSceneForImport\(options\)\) clearScene\(\);/, 'OBJ imports can append instead of replacing the scene');
 assert.match(index, /async function showPBRPreview\(options = \{\}\) \{[\s\S]*if \(shouldClearSceneForImport\(options\)\) clearScene\(\);/, 'PBR material previews can append instead of replacing the scene');
 assert.match(index, /async function showDepthSurface\(options = \{\}\) \{[\s\S]*if \(shouldClearSceneForImport\(options\)\) clearScene\(\);/, 'depth surface imports can append instead of replacing the scene');

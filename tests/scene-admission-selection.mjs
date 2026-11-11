@@ -2,6 +2,7 @@
 import {createLoadingTelemetryTracker} from '../asset-arrival.mjs';
 import {PROMPT_RELIEF_SOURCE} from '../inference-kiln-record.mjs';
 import test from 'node:test';
+import {createSceneGlbLoader} from '../scene-glb-loader.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -19,7 +20,7 @@ const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 function install(context,first,last){const a=html.indexOf(first),b=html.indexOf(last,a);assert.ok(a>=0&&b>a);vm.runInContext(html.slice(a,b),context);}
 function fixture(){
  const workingScene=createWorkingScene(),scene=new THREE.Scene(),calls={selection:0,exit:0,water:0};
- const context=sceneContext({writeObjectBurnable(){},THREE,structuredClone,workingScene,scene,createSceneMembershipOperations,createSceneObjectRecord,
+ const context=sceneContext({createSceneGlbLoader,writeObjectBurnable(){},THREE,structuredClone,workingScene,scene,createSceneMembershipOperations,createSceneObjectRecord,
  checkedSelection,changeSelection,createLocalLiquidEmitterObject,LOCAL_LIQUID_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_SOURCE,
  CAMERA_TYPE:'camera',PROCEDURAL_MESH_TYPE:'procedural-mesh',FLAME_EMITTER_TYPE:'flame',localLiquidSetup:null,
  sceneNavigation:{prepare(){}},applyGiProxySetting(){},createSceneGroupForObjects(){},

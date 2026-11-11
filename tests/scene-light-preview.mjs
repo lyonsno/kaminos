@@ -5,6 +5,7 @@ import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import {createSceneGlbLoader} from '../scene-glb-loader.mjs';
 import vm from 'node:vm';
 import {createLoadingTelemetryTracker} from '../asset-arrival.mjs';
 import * as THREE from '../lib/three.core.js';
@@ -139,7 +140,7 @@ test('clearing during preview releases the detached authored roots',async()=>{
  state.workingScene.put({id:'authored-mesh',type:'glb',source:'/authored.glb',object:root});let disposed=0;
  state.disposeObjectTree=object=>{if(object===root)disposed++;};
  await state.greenroomViewMesh('/preview.glb','preview.glb',{});
- Object.assign(state,{AbortController,loadingTelemetry:createLoadingTelemetryTracker(),readAssetBytes:async()=>new ArrayBuffer(12),authoringControlSessions:[],sceneControlHistory:null,scenePlacementTools:null,sceneCameras:null,
+ Object.assign(state,{createSceneGlbLoader,AbortController,loadingTelemetry:createLoadingTelemetryTracker(),readAssetBytes:async()=>new ArrayBuffer(12),authoringControlSessions:[],sceneControlHistory:null,scenePlacementTools:null,sceneCameras:null,
  groupProxies:new Map(),meshDataTargets:new Set(),flameSourceDataTargets:new Set(),colliderEditTargets:new Set(),burnableEditTargets:new Set(),giProxyEditTargets:new Set(),groupEditTargets:new Set(),proceduralMeshes:new Map(),sceneColliderCollection:{clear(){}},sceneGiProxies:{clear(){},release(){}},
  localLiquidDomainGuide:null,flameDomainGuide:null,localLiquidGeneration:0,localLiquidHost:null});
  state.sceneLoadRequests=state.workingScene.loads??{invalidate(){},isCurrent:()=>false};
@@ -180,7 +181,7 @@ test('an older Back cannot adopt the generation of a later replacing GLB import'
  const state=context();await state.greenroomViewMesh('/preview.glb','preview.glb',{});
  let active=true,release,started;const gate=new Promise(r=>release=r),retiring=new Promise(r=>started=r);
  state.volumePrototype={isActive:()=>active,setActive:async value=>{if(!value){started();await gate;}active=value;}};
- Object.assign(state,{AbortController,loadingTelemetry:createLoadingTelemetryTracker(),readAssetBytes:async()=>new ArrayBuffer(12),authoringControlSessions:[],sceneControlHistory:null,scenePlacementTools:null,sceneCameras:null,
+ Object.assign(state,{createSceneGlbLoader,AbortController,loadingTelemetry:createLoadingTelemetryTracker(),readAssetBytes:async()=>new ArrayBuffer(12),authoringControlSessions:[],sceneControlHistory:null,scenePlacementTools:null,sceneCameras:null,
  groupProxies:new Map(),meshDataTargets:new Set(),flameSourceDataTargets:new Set(),colliderEditTargets:new Set(),burnableEditTargets:new Set(),giProxyEditTargets:new Set(),groupEditTargets:new Set(),proceduralMeshes:new Map(),sceneColliderCollection:{clear(){}},
  localLiquidDomainGuide:null,flameDomainGuide:null,sceneNavigation:null,sceneGiProxies:{clear(){},release(){}},
  shouldClearSceneForImport:()=>true,resolveAssetArrivalMode:()=> 'preserve',applyAssetArrival:()=>false,

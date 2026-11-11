@@ -1,5 +1,6 @@
 // kaminos-test: node
 import test from 'node:test';
+import {createSceneGlbLoader} from '../scene-glb-loader.mjs';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
@@ -8,7 +9,7 @@ const begin=html.indexOf('async function showGLB('),end=html.indexOf('// Scene-s
 function fixture(){
  let release;const gate=new Promise(r=>release=r),events=[];let generation=1;
  const model={userData:{},traverse(){}};
- const ctx={URL,AbortController,window:{location:{origin:'http://localhost'}},workingScene:{get generation(){return generation;}},
+ const ctx={createSceneGlbLoader,URL,AbortController,window:{location:{origin:'http://localhost'}},workingScene:{get generation(){return generation;}},
   sceneLightingPreparation:{whenIdle(){events.push('lighting');return gate;}},shouldClearSceneForImport:()=>false,resolveAssetArrivalMode:()=>null,
   loadingTelemetry:{start(){events.push('feedback');return {token:1};},progress(){},complete(){events.push('complete');},cancel(){events.push('cancel');},fail(){events.push('failed');}},
   readAssetBytes:async(file)=>{events.push('bytes');return file.arrayBuffer();},
