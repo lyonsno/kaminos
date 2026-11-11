@@ -48,6 +48,11 @@ fn particleKernel(local:vec2<f32>,falloff:f32,softness:f32,normalization:f32)->f
  var edge=vec2<f32>(1);if(softness>0){edge=vec2<f32>(1)-smoothstep(vec2<f32>(2.5*(1.0-softness)),vec2<f32>(2.5),r);}
  return base*edge.x*edge.y*normalization;
 }
+fn particleFootprint(local:vec2<f32>,profile:vec3<f32>,mode:f32)->f32{
+ if(mode>.5){return particleKernel(local,profile.x,profile.y,profile.z);}
+ var edge=vec2<f32>(1);if(profile.y>0){edge=vec2<f32>(1)-smoothstep(vec2<f32>(2.5*(1.0-profile.y)),vec2<f32>(2.5),abs(local));}
+ return exp(-.5*dot(local,local))*edge.x*edge.y*profile.z;
+}
 `;
 
 // Integrate the declared finite 1D profile. Adaptive subdivision stops at a

@@ -1,0 +1,8 @@
+// kaminos-test: node
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {opticalParticleSettings} from '../volume-optical-particles.mjs';
+import {createParticleCaptureClock} from '../volume-particle-work.mjs';
+test('work gates and cadence settings round-trip independently without false numeric flags',()=>{const s=opticalParticleSettings({exchangeEnabled:false,groupingEnabled:false,acquisitionEnabled:false,updateEnabled:false,reactionEnabled:false,transportEnabled:false,birthsEnabled:false,hud:false,liveTimings:false,exchangeEvery:7,acquisitionEvery:3,exchangeHeat:20,exchangeSpecies:0,exchangeRate:100,maxFootprint:1});for(const k of ['exchangeEnabled','groupingEnabled','acquisitionEnabled','updateEnabled','reactionEnabled','transportEnabled','birthsEnabled','hud','liveTimings'])assert.equal(s[k],false);assert.equal(s.exchangeRate,100);assert.equal(s.exchangeHeat,20);});
+test('capture cadence follows simulation steps, preserves a pause and does not catch up disabled work',()=>{const c=createParticleCaptureClock(),q=(step,enabled=true,identity='a')=>c.due({enabled,step,interval:3,identity});assert.equal(q(0),true);c.mark(0,'a');assert.equal(q(0),false);assert.equal(q(2),false);assert.equal(q(3),true);c.mark(3,'a');assert.equal(q(100,false),false);assert.equal(q(100),true);c.mark(100,'a');assert.equal(q(100),false);assert.equal(q(100,true,'b'),true);assert.equal(q(1),true);});
+test('unusable work drafts fail before runtime values can be accepted',()=>{for(const patch of [{exchangeEvery:0},{acquisitionEvery:1.5},{maxFootprint:-1},{exchangeHeat:Infinity},{groupingEnabled:1},{largeSupportFade:2}])assert.throws(()=>opticalParticleSettings(patch));});

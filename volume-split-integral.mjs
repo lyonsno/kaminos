@@ -181,7 +181,7 @@ export function createSplitIntegral(device) {
  let arena=null,allocation=null,key=null,index=0,frames=0,lastStep=0,config=splitIntegralSettings(),state={requested:'off',effective:'off',bytes:0},sourceFields=null;
  function retire(owned){if(!owned)return;queueMicrotask(()=>{device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>owned.destroy());});}
  function disable(reason='off'){retire(arena);arena=null;allocation=null;key=null;frames=0;state={requested:config.mode,effective:'off',reason,bytes:0};return state;}
- function prepare(encoder,{width,height,settings,identity,step,viewProj,world,middle,backtrace,fineScale,staggered,sourcesOnly=false,acquisition=null}) {
+ function prepare(encoder,{width,height,settings,identity,step,viewProj,world,middle,backtrace,fineScale,staggered,sourcesOnly=false,acquisition=null,capture=true}) {
   config=splitIntegralSettings(settings);const fresh=config.mode==='split'?2:config.fresh;
   const cells=field=>field?field.plan.flowDims.reduce((a,b)=>a*b,1):0;
   const next=splitArenaLayout(width,height,cells(world),cells(middle),{sourcesOnly});
@@ -190,7 +190,7 @@ export function createSplitIntegral(device) {
   if(!arena||arena.size!==next.bytes){retire(arena);arena=device.createBuffer({label:'two local optical contributions per pixel',size:next.bytes,usage});reset=true;}
   allocation=next;sourceFields={world,middle,worldCells:cells(world),middleCells:cells(middle)};
   if(reset){encoder.clearBuffer(arena,0,next.historyBytes);frames=0;index=0;}else index=sourcesOnly?0:1-index;
-  encoder.clearBuffer(arena,index*next.bankBytes,next.bankBytes);
+  if(!sourcesOnly||capture)encoder.clearBuffer(arena,index*next.bankBytes,next.bankBytes);
   // Small current coarse-flow snapshots share this storage binding. No CPU
   // readback or extra material march is needed; existing flow buffers stay owned.
   if(world)encoder.copyBufferToBuffer(world.velocity,0,arena,next.worldOffset*16,cells(world)*16);
@@ -207,7 +207,7 @@ export function createSplitIntegral(device) {
   const group=device.createBindGroup({layout,entries:[{binding:0,resource:{buffer:uniform}},{binding:1,resource:{buffer:acquisitionUniform}}]});
   frames++;key=nextKey;lastStep=step;
   state={requested:config.mode,effective:sourcesOnly?'source-observations':config.mode==='transport'&&fresh===2?'full-refresh':config.mode,retainedSlots:2,freshEvaluations:fresh,frames,step,stepDelta,reset,
-   width,height,pixels:width*height,bytes:next.bytes,historyBytes:next.historyBytes,flowBytes:next.flowBytes,recordBytes:sourcesOnly?64:48,storageBindings:1,storageSlot:39,recordAllocation:sourcesOnly?'fresh-source-target-no-history':'dense-fire-render-target',settings:config,
+   width,height,pixels:width*height,bytes:next.bytes,historyBytes:next.historyBytes,flowBytes:next.flowBytes,recordBytes:sourcesOnly?64:48,storageBindings:1,storageSlot:39,capture:!sourcesOnly||capture,recordAllocation:sourcesOnly?'fresh-source-target-no-history':'dense-fire-render-target',settings:config,
    motion:'pull warped source anchors using current Fine/Middle/World velocity; camera changes reset',life:'independent exponential radiance/extinction lifetime in rendered draws',source:'local source coefficient including incident scattering, before prefix attenuation',intervals:fresh===2?'original equal-distance strata':'bounded source support; sorted nonoverlapping optical intervals',extraWork:'anchor reprojection and velocity queries plus coarse flow buffer copies; no additional material evaluation'};
   return {group,state,sourceFrame:sourcesOnly?{buffer:arena,uniform,width,height,pixels:width*height,step,stepDelta,backtrace,viewProj,world,middle}:null};
  }

@@ -29,7 +29,8 @@ fn followVelocity(p:vec3<f32>)->vec3<f32>{
  let dt=u.flow.z;let state=particleCompositionBurn(p.state,dt,u.chemistry,u.reaction).state;
  let damping=exp(-dt/u.motion.y);let residual=p.motion.xyz*damping+vec3<f32>(0,u.motion.x*state.y*u.motion.y*(1.0-damping),0);
  let jitter=vec3<f32>(followRandom(i,103u),followRandom(i,191u),followRandom(i,293u))*2.0-vec3<f32>(1);
- let point=p.anchor.xyz+followVelocity(p.anchor.xyz)*u.flow.y+residual*dt+jitter*u.policy.y*u.flow.x;
+ var velocity=vec3<f32>(0);if(u.flow.y!=0){velocity=followVelocity(p.anchor.xyz);}
+ let point=p.anchor.xyz+velocity*u.flow.y+residual*u.motion.z+jitter*u.policy.y*u.flow.x;
  if(any(point<vec3<f32>(-1))||any(point>vec3<f32>(u.dims.xyz)*u.flow.x-vec3<f32>(1))){return;}
  let clip=u.vp*vec4<f32>(point,1);if(clip.w<=1e-5||any(abs(clip.xy)>vec2<f32>(clip.w))){return;}
  proposals[at]=vec4<f32>(point,-1);
@@ -39,7 +40,7 @@ export function createParticleFollow(device){
  const pipeline=device.createComputePipeline({label:'actual carrier flow-following proposals',layout:'auto',compute:{module:device.createShaderModule({code:CODE}),entryPoint:'propose'}});
  return {encode(encoder,{particles,source,fine,grouping,dims,settings:s,model,stepDelta,reactionDelta,staggered=false,profileWrites=()=>({})}){
   const samples=source.samples??source.pixels;if(Math.ceil(samples/64)>device.limits.maxComputeWorkgroupsPerDimension)throw Error('Follow proposals exceed actual compute dispatch capacity');
-  const data=new ArrayBuffer(192),f=new Float32Array(data),u=new Uint32Array(data);f.set(source.viewProj);u.set([...dims,grouping.cellCount],16);u.set([samples,grouping.slots,source.width,source.step],20);f.set([2/dims[0],stepDelta*source.backtrace*s.flow,reactionDelta,Number(staggered)],24);f.set([s.followFraction,s.followJitter,0,0],28);f.set([s.followFuel,s.followHeat,s.followSmoke,1],32);f.set([s.burnTime,s.cooling,s.sootYield,s.smokeLife],36);f.set([model.oxidizerRequirement,s.heatRelease,...model.ignitionBand],40);f.set([s.rise,s.drag,0,0],44);
+  const data=new ArrayBuffer(192),f=new Float32Array(data),u=new Uint32Array(data);f.set(source.viewProj);u.set([...dims,grouping.cellCount],16);u.set([samples,grouping.slots,source.width,source.step],20);f.set([2/dims[0],(s.transportEnabled!==false&&s.updateEnabled!==false?stepDelta:0)*source.backtrace*s.flow,s.reactionEnabled!==false&&s.updateEnabled!==false?reactionDelta:0,Number(staggered)],24);f.set([s.followFraction,s.followJitter,0,0],28);f.set([s.followFuel,s.followHeat,s.followSmoke,1],32);f.set([s.burnTime,s.cooling,s.sootYield,s.smokeLife],36);f.set([model.oxidizerRequirement,s.heatRelease,...model.ignitionBand],40);f.set([s.rise,s.drag,s.transportEnabled!==false&&s.updateEnabled!==false?reactionDelta:0,0],44);
   const params=device.createBuffer({size:192,usage:GPUBufferUsage.UNIFORM,mappedAtCreation:true});new Float32Array(params.getMappedRange()).set(f);params.unmap();
   const p=encoder.beginComputePass({label:'flow-following material acquisition',...profileWrites('follow')});p.setPipeline(pipeline);p.setBindGroup(0,device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[particles,source.buffer,fine,grouping.offsets,grouping.ids,params].map((buffer,binding)=>({binding,resource:{buffer}}))}));p.dispatchWorkgroups(Math.ceil(samples/64));p.end();queueMicrotask(()=>device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>params.destroy()));
   return {effective:'gpu-retained-carrier-proposals',attemptFraction:s.followFraction,selection:'uniform live ID; activity-weighted acceptance; analytic coverage fallback',jitterCells:s.followJitter,step:source.step,stepDelta,reactionDelta,counts:'pending explicit source readback'};
