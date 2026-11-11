@@ -1,6 +1,6 @@
 # Independent fire simulation objects
 
-Use **Add → Fire simulation** in the ordinary Workbench. In a scene with an
+Use **Add → Flame** in the ordinary Workbench. In a scene with an
 existing flame, this starts from its current tuning. In a fresh scene, choose
 an immersed-source basin. Each new object owns an independent native GPU
 simulation with its Fine grid and optional outer World grid, on the scene's
@@ -13,6 +13,8 @@ the grid carries the source. When unchecked, the source keeps its world pose.
 The emitter can also be placed independently. The grids remain world aligned;
 unsupported rotation and nonuniform scale are refused.
 
+Select the grid for Material, Flow and Quality, or its emitter for source
+properties. Numeric fields use the ordinary drag/type controls and grouped Undo.
 The selected unit uses the existing flame, basin and grid editors. Those edits
 apply to that unit. The scene Play/Pause control operates all present units.
 Each unit has its own solver cost; this feature adds no automatic budget sharing.
