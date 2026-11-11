@@ -1,4 +1,5 @@
 import * as CANNON from './node_modules/cannon-es/dist/cannon-es.js';
+import {EARTH_STRUCTURE_SCHEMA,seedEarthStructure,bondKind,bondProfile} from './earth-structure.mjs';
 
 export const EARTH_SCHEMA='kaminos.earth-specimen.v1';
 export const EARTH_MATERIALS=[
@@ -6,6 +7,8 @@ export const EARTH_MATERIALS=[
  {name:'dark mineral grit',color:[.085,.071,.049],roughness:.69,metalness:0},
  {name:'warm mineral grit',color:[.31,.235,.14],roughness:.79,metalness:0},
  {name:'pale mineral grit',color:[.47,.40,.28],roughness:.84,metalness:0},
+ {name:'dry earthy aggregate',color:[.235,.13,.055],roughness:.97,metalness:0},
+ {name:'dense earthy aggregate',color:[.155,.080,.034],roughness:.91,metalness:0},
 ];
 const phi=(1+Math.sqrt(5))/2;
 export const GRIT_VERTICES=[[-1,phi,0],[1,phi,0],[-1,-phi,0],[1,-phi,0],[0,-1,phi],[0,1,phi],[0,-1,-phi],[0,1,-phi],[phi,0,-1],[phi,0,1],[-phi,0,-1],[-phi,0,1]].map(p=>p.map(x=>x/Math.hypot(1,phi)));
@@ -14,23 +17,32 @@ const finite=(x,label,min=0)=>{if(!Number.isFinite(x)||x<min)throw Error(`Invali
 const integer=(x,label,min=0)=>{if(!Number.isSafeInteger(x)||x<min)throw Error(`Invalid ${label}`);return x;};
 const vector=(a,n,label)=>{if(!Array.isArray(a)||a.length!==n||!a.every(Number.isFinite))throw Error(`Invalid ${label}`);return a;};
 function configuration(input={}){
- const c={seed:41,width:.42,columns:10,layers:4,grains:24,density:1450,cohesion:2.5,friction:.72,plasticYield:.075,plasticRate:8,breakStrain:.5,iterations:12,dt:1/180,...input};
+ const c={seed:41,width:.42,columns:10,layers:4,grains:24,density:1450,cohesion:2.5,friction:.72,plasticYield:.075,plasticRate:8,breakStrain:.5,iterations:12,dt:1/180,clodStrength:8,interfaceStrength:.22,gritBinding:1.2,...input};
+ c.clodCount=input.clodCount??Math.max(1,Math.round(c.columns*c.columns/12));integer(c.clodCount,'clod count');if(c.clodCount>c.columns*c.columns*(c.layers-Math.floor(c.layers/2)))throw Error('Clod count exceeds upper-bed support inventory');
  integer(c.seed,'seed');integer(c.columns,'columns',3);integer(c.layers,'layers',2);integer(c.grains,'grains');integer(c.iterations,'iterations',1);
  for(const key of ['width','density','dt'])finite(c[key],key,Number.MIN_VALUE);
- for(const key of ['cohesion','friction','plasticYield','plasticRate','breakStrain'])finite(c[key],key);
+ for(const key of ['cohesion','friction','plasticYield','plasticRate','breakStrain','clodStrength','interfaceStrength','gritBinding'])finite(c[key],key);
  return c;
 }
 export function checkedEarthSnapshot(s){
  if(s?.schema!==EARTH_SCHEMA)throw Error('Invalid earth snapshot schema');
- const c=configuration(s.config);finite(s.time,'time');integer(s.steps,'steps');
+ const c=configuration({...s.config,...(!s.structure?{clodCount:0}:{})});finite(s.time,'time');integer(s.steps,'steps');
  if(!Array.isArray(s.particles)||s.particles.length!==c.columns*c.columns*c.layers)throw Error('Invalid particle inventory');
  if(!Array.isArray(s.grit)||s.grit.length!==c.grains||!Array.isArray(s.bonds))throw Error('Invalid grit or bond inventory');
  for(const p of [...s.particles,...s.grit]){vector(p.position,3,'position');vector(p.velocity,3,'velocity');vector(p.quaternion,4,'quaternion');if(Math.abs(Math.hypot(...p.quaternion)-1)>1e-5)throw Error('Invalid quaternion norm');vector(p.angularVelocity,3,'angular velocity');finite(p.mass,'mass',Number.MIN_VALUE);if(p.radii)vector(p.radii,3,'radii').forEach(r=>finite(r,'radius',Number.MIN_VALUE));else finite(p.radius,'radius',Number.MIN_VALUE);}
- for(const g of s.grit)if(!Number.isSafeInteger(g.materialIndex)||g.materialIndex<1||g.materialIndex>=EARTH_MATERIALS.length)throw Error('Invalid grit material');
+ for(const g of s.grit)if(!Number.isSafeInteger(g.materialIndex)||g.materialIndex<1||g.materialIndex>3)throw Error('Invalid grit material');
  const expectedBonds=[[1,0,0],[0,1,0],[0,0,1],[1,1,0],[-1,1,0],[0,1,1],[0,1,-1],[1,0,1],[-1,0,1]].reduce((n,[x,y,z])=>n+(c.columns-Math.abs(x))*(c.layers-y)*(c.columns-Math.abs(z)),0);
  if(s.bonds.length!==expectedBonds)throw Error('Incomplete bond inventory');
  const pairs=new Set();
  for(const b of s.bonds){const pair=`${Math.min(b.a,b.b)},${Math.max(b.a,b.b)}`;if(pairs.has(pair))throw Error('Duplicate bond');pairs.add(pair);integer(b.a,'bond index');integer(b.b,'bond index');if(b.a===b.b||b.a>=s.particles.length||b.b>=s.particles.length||typeof b.active!=='boolean')throw Error('Invalid bond endpoints');finite(b.rest,'bond length',Number.MIN_VALUE);finite(b.initial,'initial bond length',Number.MIN_VALUE);}
+ if(s.structure){
+  if(s.structure.schema!==EARTH_STRUCTURE_SCHEMA||!Array.isArray(s.structure.clods)||s.structure.clods.length!==c.clodCount)throw Error('Invalid earth structure inventory');
+  for(const [i,clod]of s.structure.clods.entries()){if(clod.id!==i+1||!Number.isSafeInteger(clod.seedParticle)||clod.seedParticle<0||clod.seedParticle>=s.particles.length)throw Error('Invalid clod identity');vector(clod.radii,3,'clod radii').forEach(r=>finite(r,'clod radius',Number.MIN_VALUE));}
+  for(const p of s.particles){integer(p.clodId,'clod id');if(p.clodId>c.clodCount)throw Error('Unknown clod');vector(p.referencePosition,3,'material reference position');}
+  for(const b of s.bonds)if(b.kind!==bondKind(s.particles[b.a],s.particles[b.b]))throw Error('Bond kind differs from material ancestry');
+  if(!Array.isArray(s.embeddings)||s.embeddings.length!==s.grit.length*4)throw Error('Incomplete grit embedding inventory');
+  const counts=new Int32Array(s.grit.length),pairs=new Set();for(const e of s.embeddings){integer(e.grain,'grain index');integer(e.particle,'embedding particle');const key=`${e.grain}:${e.particle}`;if(e.grain>=s.grit.length||e.particle>=s.particles.length||pairs.has(key)||typeof e.active!=='boolean')throw Error('Invalid grit embedding');pairs.add(key);counts[e.grain]++;finite(e.rest,'embedding length',Number.MIN_VALUE);finite(e.initial,'initial embedding length',Number.MIN_VALUE);}if([...counts].some(n=>n!==4))throw Error('Each grain requires four retained embedding rows');
+ }else if(s.embeddings!==undefined||s.particles.some(p=>p.clodId!==undefined)||s.bonds.some(b=>b.kind!==undefined))throw Error('Structured earth requires its structure identity');
  return structuredClone({...s,config:c});
 }
 function initialSnapshot(c){
@@ -55,7 +67,7 @@ function initialSnapshot(c){
   const q=new CANNON.Quaternion();q.setFromEuler(rand(),rand()*6.28,rand());
   grit.push({...body([(rand()-.5)*(c.width-4*r),(c.layers-.1)*spacing*.82+rand()*spacing*.5,(rand()-.5)*(c.width-4*r)],2400*4*Math.PI/3*radii.reduce((a,b)=>a*b,1)),quaternion:q.toArray(),radii,materialIndex:1+i%3});
  }
- return {schema:EARTH_SCHEMA,config:c,time:0,steps:0,particles,grit,bonds};
+ return seedEarthStructure({schema:EARTH_SCHEMA,config:c,time:0,steps:0,particles,grit,bonds});
 }
 
 // CPU physical preparation for a small material specimen. Cannon supplies contact,
@@ -64,7 +76,7 @@ function initialSnapshot(c){
 export class EarthSpecimen {
  constructor(config={},snapshot=null){
   const s=snapshot?checkedEarthSnapshot(snapshot):initialSnapshot(configuration(config));
-  this.config=s.config;this.time=s.time;this.steps=s.steps;this.disposed=false;
+  this.config=s.config;this.structure=s.structure;this.time=s.time;this.steps=s.steps;this.disposed=false;
   const w=this.world=new CANNON.World({gravity:new CANNON.Vec3(0,-9.81,0)});
   w.allowSleep=false;w.solver.iterations=this.config.iterations;w.solver.tolerance=1e-7;
   w.broadphase=new CANNON.SAPBroadphase(w);
@@ -79,7 +91,8 @@ export class EarthSpecimen {
   const make=(row,shape)=>{const b=new CANNON.Body({mass:row.mass,shape,linearDamping:.35,angularDamping:.4,allowSleep:false});b.position.set(...row.position);b.velocity.set(...row.velocity);b.angularVelocity.set(...row.angularVelocity);b.quaternion.set(...row.quaternion);w.addBody(b);return b;};
   this.particles=s.particles.map(row=>({...row,body:make(row,new CANNON.Sphere(row.radius))}));
   this.grit=s.grit.map(row=>({...row,body:make(row,new CANNON.ConvexPolyhedron({vertices:GRIT_VERTICES.map(p=>new CANNON.Vec3(...p.map((v,k)=>v*row.radii[k]))),faces:GRIT_FACES}))}));
-  this.bonds=s.bonds.map(row=>{const constraint=new CANNON.DistanceConstraint(this.particles[row.a].body,this.particles[row.b].body,row.rest,this.config.cohesion);constraint.collideConnected=true;if(row.active)w.addConstraint(constraint);return {...row,constraint};});
+  this.bonds=s.bonds.map(row=>{const constraint=new CANNON.DistanceConstraint(this.particles[row.a].body,this.particles[row.b].body,row.rest,bondProfile(this.config,row.kind).force);constraint.collideConnected=true;if(row.active)w.addConstraint(constraint);return {...row,constraint};});
+  this.embeddings=(s.embeddings??[]).map(row=>{const constraint=new CANNON.DistanceConstraint(this.grit[row.grain].body,this.particles[row.particle].body,row.rest,this.config.cohesion*this.config.gritBinding);constraint.collideConnected=true;if(row.active)w.addConstraint(constraint);return {...row,constraint};});
   this.tool=new CANNON.Body({type:CANNON.Body.KINEMATIC,mass:0});this.tool.addShape(new CANNON.Sphere(.08));this.tool.collisionResponse=false;this.tool.position.y=10;w.addBody(this.tool);
  }
  static fromSnapshot(snapshot){return new EarthSpecimen({},snapshot);}
@@ -95,12 +108,16 @@ export class EarthSpecimen {
    for(const bond of this.bonds){
     if(!bond.active)continue;
     const d=this.particles[bond.a].body.position.distanceTo(this.particles[bond.b].body.position);
-    if(d>bond.initial*(1+this.config.breakStrain)){
+    const profile=bondProfile(this.config,bond.kind);
+    if(d>bond.initial*(1+profile.breakStrain)){
      this.world.removeConstraint(bond.constraint);bond.active=false;
-    }else if(Math.abs(d-bond.rest)>bond.rest*this.config.plasticYield){
+    }else if(Math.abs(d-bond.rest)>bond.rest*profile.yield){
      const lower=this.particles[bond.a].radius+this.particles[bond.b].radius;
      bond.rest=Math.max(lower,bond.rest+(d-bond.rest)*(1-Math.exp(-this.config.plasticRate*dt)));bond.constraint.distance=bond.rest;
     }
+   }
+   for(const embedding of this.embeddings)if(embedding.active&&this.grit[embedding.grain].body.position.distanceTo(this.particles[embedding.particle].body.position)>embedding.initial*(1+this.config.breakStrain)){
+    this.world.removeConstraint(embedding.constraint);embedding.active=false;
    }
    this.time+=dt;this.steps++;
   }
@@ -108,13 +125,14 @@ export class EarthSpecimen {
   return this.state();
  }
  setMaterial(values){
-  if(!values||typeof values!=='object'||Array.isArray(values)||Object.keys(values).some(k=>!['cohesion','friction','plasticYield','plasticRate','breakStrain'].includes(k)))throw Error('Invalid material parameter');
+  if(!values||typeof values!=='object'||Array.isArray(values)||Object.keys(values).some(k=>!['cohesion','friction','plasticYield','plasticRate','breakStrain','clodStrength','interfaceStrength','gritBinding'].includes(k)))throw Error('Invalid material parameter');
   const next=configuration({...this.config,...values});
   this.config=next;this.world.defaultContactMaterial.friction=next.friction;
-  for(const b of this.bonds)for(const e of b.constraint.equations){e.minForce=-next.cohesion;e.maxForce=next.cohesion;}
+  for(const b of this.bonds)for(const e of b.constraint.equations){const force=bondProfile(next,b.kind).force;e.minForce=-force;e.maxForce=force;}
+  for(const b of this.embeddings)for(const e of b.constraint.equations){e.minForce=-next.cohesion*next.gritBinding;e.maxForce=next.cohesion*next.gritBinding;}
   return this.state();
  }
- state(){const ys=this.particles.map(p=>p.body.position.y);return {schema:EARTH_SCHEMA,time:this.time,steps:this.steps,particles:this.particles.length,grains:this.grit.length,mass:this.particles.reduce((s,p)=>s+p.mass,0),top:Math.max(...ys),meanHeight:ys.reduce((s,y)=>s+y,0)/ys.length,activeBonds:this.bonds.filter(b=>b.active).length,brokenBonds:this.bonds.filter(b=>!b.active).length,plasticCompression:this.bonds.reduce((s,b)=>s+Math.max(0,b.initial-b.rest),0),backend:'cannon-es-0.20.0-cpu',boundary:'bounded tray; no periodic dynamics',material:'contacting spheres with yielding cohesive distance bonds; dynamic convex grit'};}
- snapshot(){const row=p=>{const {body,...rest}=p;return {...rest,position:body.position.toArray(),velocity:body.velocity.toArray(),quaternion:body.quaternion.toArray(),angularVelocity:body.angularVelocity.toArray()};};return {schema:EARTH_SCHEMA,config:{...this.config},time:this.time,steps:this.steps,particles:this.particles.map(row),grit:this.grit.map(row),bonds:this.bonds.map(({constraint,...r})=>({...r}))};}
+ state(){const ys=this.particles.map(p=>p.body.position.y);return {schema:EARTH_SCHEMA,time:this.time,steps:this.steps,particles:this.particles.length,grains:this.grit.length,mass:this.particles.reduce((s,p)=>s+p.mass,0),top:Math.max(...ys),meanHeight:ys.reduce((s,y)=>s+y,0)/ys.length,activeBonds:this.bonds.filter(b=>b.active).length,brokenBonds:this.bonds.filter(b=>!b.active).length,plasticCompression:this.bonds.reduce((s,b)=>s+Math.max(0,b.initial-b.rest),0),backend:'cannon-es-0.20.0-cpu',boundary:'bounded tray; no periodic dynamics',material:'contacting spheres with yielding cohesive distance bonds; dynamic convex grit',structure:{clods:this.structure?.clods.length??0,clodParticles:this.particles.filter(p=>p.clodId>0).length,matrixParticles:this.particles.filter(p=>!p.clodId).length,brokenInterfaces:this.bonds.filter(b=>b.kind==='interface'&&!b.active).length,brokenInteriors:this.bonds.filter(b=>b.kind==='clod'&&!b.active).length,embeddedGrains:new Set(this.embeddings.filter(b=>b.active).map(b=>b.grain)).size,brokenEmbeddings:this.embeddings.filter(b=>!b.active).length}};}
+ snapshot(){const row=p=>{const {body,...rest}=p;return {...rest,position:body.position.toArray(),velocity:body.velocity.toArray(),quaternion:body.quaternion.toArray(),angularVelocity:body.angularVelocity.toArray()};};return {schema:EARTH_SCHEMA,config:{...this.config},time:this.time,steps:this.steps,particles:this.particles.map(row),grit:this.grit.map(row),bonds:this.bonds.map(({constraint,...r})=>({...r})),...(this.structure?{structure:structuredClone(this.structure),embeddings:this.embeddings.map(({constraint,...r})=>({...r}))}:{})};}
  dispose(){if(this.disposed)return;this.disposed=true;for(const b of [...this.world.bodies])this.world.removeBody(b);for(const c of [...this.world.constraints])this.world.removeConstraint(c);}
 }

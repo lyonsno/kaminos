@@ -63,7 +63,7 @@ function simulatedWorker(){
  class Worker{
   static instances=[];static failSweep=false;
   constructor(url){this.physics=String(url).includes('earth-dynamics-worker');this.kernel=this.physics?createEarthDynamicsKernel():null;this.messages=[];Worker.instances.push(this);}
-  postMessage(data){this.messages.push(data);setTimeout(()=>{if(this.closed)return;try{if(this.physics&&data.kind==='sweep'&&Worker.failSweep){Worker.failSweep=false;throw Error('injected physics failure');}this.onmessage({data:this.physics?{id:data.id,result:this.kernel.apply(data)}:{id:data.id,source:createEarthTeacherSource(data)}});}catch(e){this.onmessage({data:{id:data.id,error:e.message}});}},10);}
+  postMessage(data){this.messages.push(data);queueMicrotask(()=>{if(this.closed)return;try{if(this.physics&&data.kind==='sweep'&&Worker.failSweep){Worker.failSweep=false;throw Error('injected physics failure');}this.onmessage({data:this.physics?{id:data.id,result:this.kernel.apply(data)}:{id:data.id,source:createEarthTeacherSource(data)}});}catch(e){this.onmessage({data:{id:data.id,error:e.message}});}});}
   terminate(){this.closed=true;this.kernel?.dispose();}
  }
  return Worker;

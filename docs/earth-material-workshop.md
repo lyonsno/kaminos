@@ -133,3 +133,40 @@ folded render settings live subtly in the viewport. Interactive render controls
 support scale0.02–1 and1–8 bounces; the shared integrator/capture API retains its
 own device-based limits. These preview allowances prevent accidental expensive
 live work and are not claims about offline integration capacity.
+
+
+## Clods within the matrix
+
+Fresh specimens seed coherent earthy aggregates through the upper bed while
+retaining a finer matrix and a matrix foundation. The default count scales with
+the support layout (eight clods on the default 10×10×4 bed). These are groups of
+coarse support samples, not simulated primary soil grains. The particle and grit
+counts remain unchanged.
+
+Within **Earth → Structure**, **Clod cohesion ×** strengthens the interior bonds,
+**Boundary cohesion ×** controls bonds between aggregates and their surrounding
+matrix, and **Grit binding ×** adjusts breakable grit-to-earth tethers. These
+multiply the base cohesion; material edits affect the current physical state.
+Clod interiors yield later than fines, and interfaces break at less extension.
+Four center-distance links per grit body transmit reciprocal translational
+forces; contact/friction still determines grit rotation. This is not a rigid
+weld or a calibrated aggregate-fracture law.
+
+**Clods for new specimen** is a typed draft used by **New specimen**. It creates
+a fresh bed; it does not silently restructure the one currently being worked.
+Zero supplies the homogeneous comparison. Counts above the upper-bed support
+inventory are rejected; very small aggregates have little internal physical
+resolution. Save/Load retains ancestry, reference positions, bond kind,
+plasticity, broken links and the complete grit embedding inventory. Pre-clod
+snapshots continue with their original homogeneous bonds and geometry rather
+than acquiring new clods on load.
+
+The implicit surface sums local support through intact bonds. Around damage it
+only blends samples connected within that query's support neighborhood, so a
+distant connection around a crack does not smooth that crack closed. Broken
+interior bonds also divide the clod's fragment identity. Earthy aggregate
+materials and source triangle metadata follow that physical ancestry; grit
+keeps its separate convex geometry. The live/resting/capture meshes all use the
+same field and frozen snapshot. Fine grain/pore finishing and calibrated
+volume-conserving surface reconstruction remain later material work; this slice
+adds aggregate organization, physical breakup and damage-dependent geometry.
