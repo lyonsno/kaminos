@@ -213,6 +213,10 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
     },
     timing,
     busy:()=>active,
+    async destroy(){
+      if(active)throw Error('Image generation is already running');
+      await releaseLoaded();
+    },
     retryOutput:saveOutput,
     async retryPersistence(){
       if(active)throw Error('Image generation is already running');
