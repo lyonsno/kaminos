@@ -55,7 +55,7 @@ export default {
   const work=async(action,reconstruct=true,{replace=false}={})=>{
    if(busy)throw Error('Earth is already being worked');busy=true;settling=0;clearTimeout(refineTimer);builder.cancel();liveBuilder.cancel();stopRequested=replace;failure=null;show();
    try{if(replace)await liveFlight;else await settleInput();if(disposed||(!replace&&stopRequested))throw Error('Stopped before the next operation');stopRequested=false;await action();if(disposed)throw Error('Earth workshop disposed');if(reconstruct)await rebuild();update();return read();}
-   catch(error){failure=error.message;show();throw error;}finally{busy=false;if(!disposed&&!stopRequested&&!physicsError&&(surfaceRevision!==revision||source?.reconstruction.resolution<config.previewResolution)){if(surfaceRevision<revision)coarse();scheduleRefinement();}show();}
+   catch(error){failure=error.message;show();throw error;}finally{busy=false;if(!disposed&&!stopRequested&&!physicsError&&samples.length)pump();if(!disposed&&!stopRequested&&!physicsError&&(surfaceRevision!==revision||source?.reconstruction.resolution<config.previewResolution)){if(surfaceRevision<revision)coarse();scheduleRefinement();}show();}
   };
   const yieldFrame=()=>new Promise(resolve=>setTimeout(resolve,0));
   const evolve=async(seconds,contact)=>{let remaining=seconds;while(remaining>1e-9){if(disposed)throw Error('Earth workshop disposed');if(stopRequested)throw Error('Stopped; last completed surface retained');const dt=Math.min(remaining,.025);await model.advance(dt,{tool:contact?.()??null});revision++;remaining-=dt;await yieldFrame();}};

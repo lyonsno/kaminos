@@ -100,3 +100,8 @@ test('background time is excluded when the live tool resumes',async()=>{
  const {host,roots,frame,doc}=fakeHost(),app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8}},record:()=>{}});
  try{doc.hidden=true;roots[1].position.x=.04;frame(60);doc.hidden=false;frame(60);assert.equal(app.read().physics.time,0);roots[1].position.x=.05;frame(1/60);await new Promise(r=>setTimeout(r,20));assert.ok(app.read().physics.time>0&&app.read().physics.time<.1,'resume must not turn the hidden interval into a long physical stroke');}finally{await app.dispose();}
 });
+test('a refused replacement resumes the retained healthy input queue',async()=>{
+ const Saved=globalThis.Worker,Worker=simulatedWorker();globalThis.Worker=Worker;
+ const {host,roots,frame}=fakeHost();let app;
+ try{app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8}},record:()=>{}});const invalid=await app.operations.snapshot();invalid.snapshot.schema='bad';for(let i=0;i<4;i++){roots[1].position.x+=.01;frame();}await assert.rejects(app.operations.load(invalid),/schema/);await new Promise(r=>setTimeout(r,80));assert.equal(app.read().live.pendingSamples,0,'a refused load must not strand healthy prior movement');assert.equal(app.read().live.inFlight,false);}finally{await app?.dispose();globalThis.Worker=Saved;}
+});
