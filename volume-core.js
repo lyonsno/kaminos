@@ -5882,7 +5882,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
         let expandedTopY = -1.0 + 2.0 * f32(GRID_Y) / f32(GRID);
         let verticalWall = select(max(-p.y, p.y - expandedTopY + 1.0), -p.y, reactantLawOn());
         let materialWall = max(max(abs(p.x), verticalWall), abs(p.z));
-        let materialWallFade = select(1.0 - smoothstep(0.86, 1.0, materialWall), 1.0, joinedBoundary() || openWorldBoundary());
+        var standaloneFade = 1.0 - smoothstep(0.86, 1.0, materialWall);
+        if (reactantLawOn()) { standaloneFade = reactantMaterialWallFade(materialWall, 2.0 / f32(GRID)); }
+        let materialWallFade = select(standaloneFade, 1.0, joinedBoundary() || openWorldBoundary());
         bypassVel = bypassVel * stepRate(mix(0.55, 1.0, materialWallFade));
         bypassVel.y = mix(max(bypassVel.y, -0.015 * calibrationCellGain()), bypassVel.y, select(0.0, 1.0, joinedBoundary() || openWorldBoundary()));
         bypassVel = select(boundVelocity(bypassVel), bypassVel, faceForcesOn());
@@ -6071,7 +6073,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     if (VELOCITY_ONLY) {
       let floorExempt = select(0.0, inflowApertureWeight(cellI), p.y < -0.8);
       let wall = max(max(abs(p.x), mix(-p.y, -1.0, floorExempt)), abs(p.z));
-      let fade = select(max(1.0 - smoothstep(0.86, 1.0, wall), clamp(immersedSlabWeight, 0.0, 1.0)), 1.0, joinedBoundary() || openWorldBoundary());
+      var standaloneFade = 1.0 - smoothstep(0.86, 1.0, wall);
+      if (reactantOn) { standaloneFade = reactantMaterialWallFade(wall, 2.0 / f32(GRID)); }
+      let fade = select(max(standaloneFade, clamp(immersedSlabWeight, 0.0, 1.0)), 1.0, joinedBoundary() || openWorldBoundary());
       vel *= stepRate(mix(0.55, 1.0, fade));
       vel.y = mix(max(vel.y, -0.015 * VELOCITY_UNIT_SCALE), vel.y, select(0.0, 1.0, joinedBoundary() || openWorldBoundary()));
       fluidDst[base] = vec4<f32>(select(boundVelocity(vel), vel, faceForcesOn()), 0.0);
