@@ -182,7 +182,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
     if(heldError)throw heldError;
     const previous=retiring??loaded;if(!previous)return;
     loaded=null;retiring=previous;
-    await previous.pipeline.destroy();
+    await previous.pipeline?.destroy();
     if(!previous.app){
       const handoff=context().handoff;if(handoff?.owner()==='klein')await handoff.release();
       await previous.foreground?.dispose?.();await previous.session.close?.();
@@ -236,19 +236,19 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
     const app=appHost?await appHost():null;
     const session=app?await app.session():await core.createWebGpuInferenceSession({sessionId:`kaminos-klein:${crypto.randomUUID()}`,device,adapterName:sharedGpu.adapter?.info?.description||'kaminos-shared-device',deviceOwnership:'borrowed'});
     const foreground=app?null:core.createWebGpuForegroundService({routeId:spec.routeId,device});
-    let pipeline,resource;
+    const resource={core,session,foreground,pipeline:null,base,app,level,model};
     try{
-    pipeline=await createPipeline(device,{textEncoderUrl:`${base}/te`,transformerUrl:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,vaeUrl:`${base}/vae`},model);
-    resource={core,session,foreground,pipeline,base,app,level,model};
+    const pipeline=resource.pipeline=await createPipeline(device,{textEncoderUrl:`${base}/te`,transformerUrl:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,vaeUrl:`${base}/vae`},model);
     await pipeline.load((part,name,{loadedBytes,totalBytes})=>{
       if(abort?.signal.aborted)return;
       set({stage:'Loading weights',percent:totalBytes?Math.min(100,loadedBytes/totalBytes*100):null,progress:`Loading ${spec.name} weights (${part})`});
     },app?{runWarmup:work=>runWarmup(resource,work)}:undefined);
     return resource;
     }catch(error){
-      if(error?.gpuRouteHeld){heldError=error;retiring=resource;throw error;}
-      await pipeline?.destroy();
-      if(!app){await foreground?.dispose?.();await session.close?.();}
+      retiring=resource;
+      if(error?.gpuRouteHeld){heldError=error;throw error;}
+      try{await releaseLoaded();}
+      catch(cleanup){throw Object.assign(new AggregateError([error,cleanup],'Klein load failed and cleanup remains held'),{gpuRouteHeld:true});}
       throw error;
     }
   }

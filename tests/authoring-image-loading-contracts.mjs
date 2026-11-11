@@ -13,7 +13,7 @@ class WarmupProducer extends KleinPipeline{
   super(device);this.preparing=preparing;this.retired=false;
   for(const name of ['textEncoder','transformer','vae'])this[name]={weightsResident:true,destroy(){}};
  }
- async load(_progress,options){this.preparing.resolve();await this.precompile(options);}
+ async load(_progress,options){this.preparing.resolve();await this.precompile(options);await this.afterLoad?.();}
  async loadTransformer(_url,_progress,options){await this.precompile(options);}
  async generateScheduled(){
   if(this.collecting)return;
@@ -23,7 +23,7 @@ class WarmupProducer extends KleinPipeline{
  }
  async destroy(){await super.destroy();this.retired=true;}
 }
-async function fixture(t,{settled=async()=>{},afterDispatch=null}={}){
+async function fixture(t,{settled=async()=>{},afterDispatch=null,afterLoad=null}={}){
  const preparing=deferred(),submissions=[],pipelines=[];
  let app;
  const device={features:new Set(['shader-f16']),lost:new Promise(()=>{}),createCommandEncoder:()=>({finish:()=>({})}),
@@ -31,7 +31,7 @@ async function fixture(t,{settled=async()=>{},afterDispatch=null}={}){
  app=createAppGpuHost({sharedGpu:{device},kit,host:{setForegroundServiceActive(){},runForegroundFrame:work=>work()},frameOwner:()=>({setForegroundOpportunityRequester(){}})});
  const session=await app.session();
  const operation=createKleinAuthoringImageGeneration({context:()=>({sharedGpu:{device}}),appHost:async()=>app,kit:async()=>kit,
-  weights:async()=>'/fixture-weights',createPipeline:()=>{const pipeline=new WarmupProducer(device,preparing);pipeline.afterDispatch=afterDispatch;pipelines.push(pipeline);return pipeline;},
+  weights:async()=>'/fixture-weights',createPipeline:()=>{const pipeline=new WarmupProducer(device,preparing);pipeline.afterDispatch=afterDispatch;pipeline.afterLoad=afterLoad;pipelines.push(pipeline);return pipeline;},
   encodePng:async()=>new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==','base64')],{type:'image/png'}),
   deliver:async file=>({name:file.name})});
  t.after(async()=>{if(!app.unsettledRuns().length){await operation.destroy();await app.foreground.dispose();session.close();}});
@@ -118,4 +118,16 @@ test('authoring retirement retries actual producer cleanup without closing the b
  failing=false;await h.operation.destroy();
  assert.equal(pipeline.transformer,null);assert.equal(pipeline.retired,true);
  assert.equal(h.session.snapshot().status,'active');assert.equal(await h.app.session(),h.session);
+});
+
+test('failed load and failed cleanup retain the partial producer for explicit retirement retry',async(t)=>{
+ let failing=false;
+ const h=await fixture(t,{afterLoad:()=>{failing=true;throw Error('partial load failed');},
+  settled:async()=>{if(failing)throw Error('cleanup queue unavailable');}});
+ await assert.rejects(h.operation.run(request));const pipeline=h.pipelines[0];
+ assert.ok(pipeline.transformer);assert.equal(pipeline.retired,false);
+ await assert.rejects(h.operation.destroy(),/cleanup queue unavailable/);
+ failing=false;await h.operation.destroy();
+ assert.equal(pipeline.transformer,null);assert.equal(pipeline.retired,true);
+ assert.equal(h.session.snapshot().status,'active');
 });
