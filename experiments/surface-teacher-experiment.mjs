@@ -3,7 +3,7 @@ import {SurfaceTeacher} from '../surface-teacher.mjs';
 import {prepareNavigationGeometry} from '../scene-navigation.mjs';
 
 function checkedConfiguration(value){
- if(!value||typeof value!=='object'||Array.isArray(value)||!Number.isFinite(value.scale)||value.scale<=0||!Number.isSafeInteger(value.bounces)||value.bounces<1||!Number.isFinite(value.environment)||value.environment<0||typeof value.reconstruction!=='boolean'||typeof value.paused!=='boolean')throw Error('Invalid teacher quality or transport setting');
+ if(!value||typeof value!=='object'||Array.isArray(value)||!Number.isFinite(value.scale)||value.scale<=0||!Number.isSafeInteger(value.bounces)||value.bounces<1||!Number.isFinite(value.environment)||value.environment<0||typeof value.reconstruction!=='boolean'||typeof value.paused!=='boolean'||typeof value.tracing!=='boolean')throw Error('Invalid teacher quality or transport setting');
  return value;
 }
 
@@ -11,13 +11,14 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
  id,title,
  async create({host,inputs={},record,updateInputs=()=>{}}){
   if(!inputs||typeof inputs!=='object'||Array.isArray(inputs))throw Error('Teacher inputs must be an object');
-  let configuration=checkedConfiguration({scale:inputs.scale??.5,bounces:inputs.bounces??3,environment:inputs.environment??.15,reconstruction:inputs.reconstruction??true,paused:inputs.paused??false});
+  let configuration=checkedConfiguration({scale:inputs.scale??.5,bounces:inputs.bounces??3,environment:inputs.environment??.15,reconstruction:inputs.reconstruction??true,paused:inputs.paused??false,tracing:inputs.tracing??true});
   let source=createSource(inputs.source),engine,texture,screenMaterial,screen,asset,stop;
   const session=await host.scene.open();let context;
   try{context=host.scene.rendering();const size=context.renderer.getDrawingBufferSize(new THREE.Vector2()),limit=context.renderer.backend.device.limits.maxTextureDimension2D;if(Math.round(size.x*configuration.scale)>limit||Math.round(size.y*configuration.scale)>limit)throw Error('Image scale exceeds active device capacity');}catch(error){await session.dispose();throw error;}
   const {renderer,scene,camera}=context;
   const sourceMaterials=(source.materials??defaultMaterials).map(m=>new THREE.MeshStandardMaterial({color:new THREE.Color(...m.color),roughness:m.roughness,metalness:m.metalness,side:THREE.DoubleSide,colorWrite:false,depthWrite:false}));
   const root=new THREE.Mesh(new THREE.BufferGeometry(),sourceMaterials);root.name=label;root.castShadow=false;root.receiveShadow=false;
+  const presentationMode=()=>{for(const material of sourceMaterials){if(material.colorWrite!==!configuration.tracing){material.colorWrite=!configuration.tracing;material.depthWrite=!configuration.tracing;material.needsUpdate=true;}}if(screen)screen.visible=configuration.tracing;};
   let sceneKey='',failure=null,capturing=false,disposed=false,status,pending=null,fieldDocument;
   const fields=[];
   const syncControls=()=>{for(const {input,group,key}of fields){if(fieldDocument.activeElement===input)continue;const value=group==='source'?source.config[key]:configuration[key];if(input.type==='checkbox')input.checked=value;else input.value=String(value);}};
@@ -52,7 +53,7 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
    engine.setTransport(configuration);
   };
   const read=()=>({schema:readSchema,sourceSchema:source.schema,objectId:asset?.id,source:source.config,configuration:{...configuration},effective:engine?.state()??null,view:session.readView(),cameraFrame:cameraFrame(),failure,capturing,display:'shared Kaminos scene and camera; native selection/gizmos',displaySourceVisible:!!root.parent&&host.scene.isVisible(asset?.id),presentationLighting:screenMaterial?.lights===false?'lighting bypassed':'unverified',navigationIndexReady:!!root.geometry.boundsTree,supportedLights:'native directional, inverse-square point and spot; constant environment',boundary,deviceOwnership:'borrowed'});
-  const showStatus=()=>{if(status)status.textContent=failure?`Stopped: ${failure}`:capturing?'Capturing raw reference…':`${configuration.paused?'Paused · ':''}${engine?.samples??0} samples · ${engine?.width??0} × ${engine?.height??0} · ${configuration.bounces} bounces`;};
+  const showStatus=()=>{if(status)status.textContent=failure?`Stopped: ${failure}`:capturing?'Capturing raw reference…':!configuration.tracing?'Native surface preview · path tracing off':`${configuration.paused?'Paused · ':''}${engine?.samples??0} samples · ${engine?.width??0} × ${engine?.height??0} · ${configuration.bounces} bounces`;};
   const render=({width,height,filter=configuration.reconstruction}={})=>{
    if(disposed)return;
    if(!camera.isPerspectiveCamera)throw Error('Grass teacher currently requires the shared perspective camera');
@@ -71,18 +72,19 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
    screenMaterial=new THREE.MeshBasicNodeMaterial({depthTest:false,depthWrite:false});screenMaterial.lights=false;screenMaterial.vertexNode=THREE.TSL.vec4(THREE.TSL.positionGeometry.xy,0,1);
    screen=new THREE.Mesh(new THREE.PlaneGeometry(2,2),screenMaterial);screen.name='Surface teacher presentation';screen.frustumCulled=false;screen.renderOrder=900;screen.raycast=()=>{};screen.userData.kaminosSurfaceTeacherPresentation=true;screen.userData.kaminosAODepthUnsupported=true;
    await session.attach(screen,{owned:true,presentation:true,metadata:{source:'surface-teacher-presentation'}});
+   presentationMode();
    session.setView(inputs.view??initialView);
    stop=session.onFrame(()=>{
-    if(!root.parent||!root.visible||!host.scene.isVisible(asset.id)||!camera.isPerspectiveCamera){screen.visible=false;return;}screen.visible=true;
+    if(!root.parent||!root.visible||!host.scene.isVisible(asset.id)||!camera.isPerspectiveCamera){screen.visible=false;return;}screen.visible=configuration.tracing;if(!configuration.tracing)return;
     if(configuration.paused||capturing||failure||document.hidden||pending)return;
     try{render();pending=engine.device.queue.onSubmittedWorkDone().catch(error=>{failure=error.message;showStatus();}).finally(()=>{pending=null;});}catch(error){failure=error.message;showStatus();}
    });
    const operations={
     frame(){return session.setView(initialView);},
-    async source(values){const next=createSource({...source.config,...values});await pending;source=next;replaceGeometry();syncScene();failure=null;syncControls();updateInputs({source:source.config,view:session.readView(),...configuration});session.redraw();record({kind:'surface-teacher.source',phase:'applied',effective:source.config});return read();},
+    async source(values){const next=createSource({...source.config,...values});await pending;source=next;replaceGeometry();if(configuration.tracing)syncScene();failure=null;syncControls();updateInputs({source:source.config,view:session.readView(),...configuration});session.redraw();record({kind:'surface-teacher.source',phase:'applied',effective:source.config});return read();},
     async configure(values){
      const next=checkedConfiguration({...configuration,...values}),size=renderer.getDrawingBufferSize(new THREE.Vector2());if(Math.round(size.x*next.scale)>renderer.backend.device.limits.maxTextureDimension2D||Math.round(size.y*next.scale)>renderer.backend.device.limits.maxTextureDimension2D)throw Error('Image scale exceeds active device capacity');
-     await pending;configuration=next;syncScene();failure=null;syncControls();updateInputs({source:source.config,view:session.readView(),...configuration});session.redraw();record({kind:'surface-teacher.configuration',phase:'applied',effective:{...configuration}});showStatus();return read();
+     await pending;configuration=next;presentationMode();if(configuration.tracing)syncScene();failure=null;syncControls();updateInputs({source:source.config,view:session.readView(),...configuration});session.redraw();record({kind:'surface-teacher.configuration',phase:'applied',effective:{...configuration}});showStatus();return read();
     },
     async capture({width,height,samples}={}){
      if(capturing)throw Error('A teacher capture is already active');if(![width,height,samples].every(v=>Number.isSafeInteger(v)&&v>0))throw Error('Explicit positive capture width, height and samples required');
@@ -105,7 +107,7 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
    return {read,operations,mount({root:panel,document,invoke}){fieldDocument=document;
     const controls=[...sourceControls,['Path bounces','configure','bounces',1],['Environment radiance','configure','environment',.02],['Resolution scale','configure','scale',.05]];
     const drags=[];for(const [label,op,key,step]of controls){const row=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');grip.textContent=label+' ';input.type='number';input.step=String(step);input.value=String((op==='source'?source.config:configuration)[key]);input.className='transform-input';input.setAttribute('aria-label',label);input.addEventListener('input',()=>{if(input.value.trim())invoke(op,{[key]:Number(input.value)}).catch(error=>{status.textContent=error.message;});});input.addEventListener('blur',syncControls);fields.push({input,group:op==='source'?'source':'configuration',key});row.append(grip,input);panel.append(row);drags.push(host.controls.installNumberDrag({input,grip,step}));}
-    for(const [label,key]of [['Reconstruction','reconstruction'],['Pause tracing','paused']]){const row=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.checked=configuration[key];input.onchange=()=>invoke('configure',{[key]:input.checked}).catch(error=>{status.textContent=error.message;syncControls();});fields.push({input,group:'configuration',key});row.append(input,label);panel.append(row);}
+    for(const [label,key]of [['Path-traced preview','tracing'],['Reconstruction','reconstruction'],['Pause tracing','paused']]){const row=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.checked=configuration[key];input.onchange=()=>invoke('configure',{[key]:input.checked}).catch(error=>{status.textContent=error.message;syncControls();});fields.push({input,group:'configuration',key});row.append(input,label);panel.append(row);}
     const frame=document.createElement('button');frame.textContent='Frame source';frame.onclick=()=>invoke('frame').catch(error=>{status.textContent=error.message;});status=document.createElement('p');status.setAttribute('role','status');
     const note=document.createElement('p');note.textContent='Frozen explicit geometry with real visibility and surface bounces. Orbit and use native selection and scene lights. Reconstruction off shows the raw accumulated estimate. '+boundary;
     panel.append(frame,status,note);showStatus();this.drags=drags;
