@@ -8,11 +8,12 @@ import {createNeumipMaterial} from '../neumip-material.mjs';
 function geometry(quads,config){
  const positions=[],uvs=[];
  for(const [a,b,c,d]of quads)for(const [u,v]of [[a,b],[a,d],[c,d],[a,b],[c,d],[c,b]]){positions.push((u-.5)*config.width,0,(v-.5)*config.depth);uvs.push(u,v);}
- const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));g.computeVertexNormals();g.computeTangents();return g;
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));g.setIndex(Array.from({length:positions.length/3},(_,i)=>i));g.computeVertexNormals();g.computeTangents();return g;
 }
 export default {
  id:'stone-handoff',title:'Stone PBR / neural handoff',
- async create({host,inputs={},record,updateInputs}){
+ async create({host,inputs={},record,updateInputs=()=>{}}){
+  if(!inputs||typeof inputs!=='object'||Array.isArray(inputs))throw Error('Stone comparison inputs must be an object');
   let mode=inputs.mode??'source',collar=inputs.collar??.04;
   const source=createStoneTransitionSource({...inputs.source,halo:0});
   const support=stoneHandoffQuads(source.config,{collar});
@@ -53,7 +54,7 @@ export default {
   },mount({root:panel,document,invoke}){
    const label=document.createElement('label');label.textContent='Representation ';selector=document.createElement('select');
    for(const [value,text]of [['source','Explicit source'],['pbr','PBR endpoint'],['neural','Full learned parallax'],['overlap-control','PBR overlap — output-fade control']]){const option=document.createElement('option');option.value=value;option.textContent=text;option.disabled=!objects[value];selector.append(option);}selector.value=mode;selector.onchange=()=>invoke('setMode',selector.value).catch(e=>status.textContent=e.message);label.append(selector);panel.append(label);
-   status=document.createElement('p');status.textContent=read().claim;panel.append(status);const modelState=document.createElement('p');modelState.textContent=model?'Actual fitted model loaded. Gain1, UVscale1.':'Fit pending; neural views remain unavailable.';panel.append(modelState);
+   status=document.createElement('p');status.textContent=read().claim;panel.append(status);const modelState=document.createElement('p');modelState.textContent=model?'Model loaded. Gain1, UVscale1.':'Fit pending; neural views remain unavailable.';panel.append(modelState);
   },async dispose(){await session.dispose();}};
  }
 };

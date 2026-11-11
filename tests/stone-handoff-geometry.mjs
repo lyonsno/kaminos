@@ -19,3 +19,14 @@ test('neural support covers joints and leaves centers to native PBR',()=>{
  }
  assert.equal(stoneHandoffQuads(stoneTransitionDefaults,{collar:2}).areaFraction,1);
 });
+test('actual carrier geometry supplies a finite tangent frame for the neural lookup',async()=>{
+ const experiment=(await import('../experiments/stone-handoff.experiment.mjs')).default;
+ let attached;const session={redraw(){},setView(){},attach:async root=>{attached=root;return {id:'fixture-registration'};},dispose:async()=>{}};
+ const instance=await experiment.create({host:{scene:{open:async()=>session}},inputs:{mode:'pbr',source:{cells:4}},record(){},updateInputs(){}});
+ try{
+  const g=attached.getObjectByName('Flat PBR endpoint').geometry;
+  assert.ok(g.getAttribute('tangent'),'carrier tangent attribute missing');
+  assert.ok([...g.getAttribute('tangent').array].every(Number.isFinite));
+  assert.equal(g.getAttribute('normal').getY(0),1);assert.equal(g.getAttribute('tangent').getW(0),-1);
+ }finally{await instance.dispose();}
+});
