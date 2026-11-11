@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
-import * as THREE from '../lib/three.webgpu.js';
+import {loadSceneAppearance} from './helpers/load-scene-appearance.mjs';
+const {THREE,createSceneAppearanceResources}=await loadSceneAppearance();
 
 const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const start=source.indexOf('  // Ground plane (subtle reflective floor)');
@@ -9,6 +10,9 @@ const end=source.indexOf('  // Fire-light geometry witness set:',start);
 function floor(distributed) {
   const context=vm.createContext({THREE,scene:new THREE.Scene(),groundPlane:null,
     fireLightFieldRouteParams:()=>new URLSearchParams(distributed?'volume_light_field_distributed=1':'')});
+  context.sceneAppearanceResources=createSceneAppearanceResources({THREE,readScene:()=>context.scene,
+    readRenderer:()=>null,readPMREM:()=>null,environmentState:{read:()=>({})},readEntries:()=>[],
+    readGround:()=>({distributed}),readStudio:()=>null,readLighting:()=>({})});
   vm.runInContext(source.slice(start,end),context);
   return context.groundPlane;
 }

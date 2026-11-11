@@ -27,7 +27,7 @@ for(const count of [8,12,96,null])run(count);
 assert.throws(()=>run(5),/unsupported requested/);
 const witness=readFileSync(new URL('../scratch/beaming-source-guide-witness.mjs',import.meta.url),'utf8');
 const selection=witness.match(/const canvas=page\.locator\([^;]+?rect=await canvas\.boundingBox\(\);/)[0];
-const hostId=html.match(/renderer\.domElement\.id = '([^']+)'/)[1],firstCanvas=html.match(/<canvas id="([^"]+)"/)[1];
+const hostId=html.match(/renderer\.domElement\.id\s*=\s*'([^']+)'/)[1],firstCanvas=html.match(/<canvas id="([^"]+)"/)[1];
 let selectedId;
 const page={locator(selector){selectedId=selector==='canvas'?firstCanvas:selector.replace(/^#/,'');const locator={first(){return locator;},async boundingBox(){return {x:0,y:0,width:100,height:100};}};return locator;}};
 await vm.runInNewContext(`(async()=>{${selection}})()`,{page});
