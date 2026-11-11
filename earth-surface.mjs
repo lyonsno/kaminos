@@ -19,8 +19,11 @@ export function createEarthField(input){
   for(const i of local)present[i]=0;local.length=0;
   const ix=Math.floor(x/h),iy=Math.floor(y/h),iz=Math.floor(z/h);let affected=false,total=0;
   for(let dz=-1;dz<=1;dz++)for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
-   for(const p of bins.get(key(ix+dx,iy+dy,iz+dz))??[]){const q=1-((x-p.position[0])**2+(y-p.position[1])**2+(z-p.position[2])**2)/(h*h);if(q>0){const i=p.index;local.push(i);present[i]=1;parent[i]=i;weights[i]=q*q*q;sums[i]=0;total+=weights[i];affected=affected||!!damaged[i];}}
+   for(const p of bins.get(key(ix+dx,iy+dy,iz+dz))??[]){const q=1-((x-p.position[0])**2+(y-p.position[1])**2+(z-p.position[2])**2)/(h*h);if(q>0){const i=p.index;local.push(i);present[i]=1;parent[i]=i;weights[i]=q*q*q*(p.clodId>0?2:1);sums[i]=0;total+=weights[i];affected=affected||!!damaged[i];}}
   }
+  // Aggregate support is fuller than the surrounding fine matrix. This retained
+  // ancestry changes intact relief as well as broken-fragment geometry; it does
+  // not move physical samples or reduce the continuous matrix foundation.
   let density=total;winner=-1;
   // Only local active paths may bridge damaged material. A distant connection
   // around a crack does not fill that crack back in at the query point.

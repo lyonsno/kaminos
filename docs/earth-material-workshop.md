@@ -161,7 +161,10 @@ plasticity, broken links and the complete grit embedding inventory. Pre-clod
 snapshots continue with their original homogeneous bonds and geometry rather
 than acquiring new clods on load.
 
-The implicit surface sums local support through intact bonds. Around damage it
+The implicit surface gives aggregate support fuller kernels than the fine matrix,
+so intact clod groups contribute relief before damage. This is a material
+reconstruction rule tied to retained ancestry, not additional simulated mass.
+It sums local support through intact bonds. Around damage it
 only blends samples connected within that query's support neighborhood, so a
 distant connection around a crack does not smooth that crack closed. Broken
 interior bonds also divide the clod's fragment identity. Earthy aggregate
