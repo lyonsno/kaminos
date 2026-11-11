@@ -4,13 +4,13 @@ const finite=(v,name,zero=false)=>{if(!Number.isFinite(v)||(zero?v<0:v<=0))throw
 const integer=(v,name)=>{if(!Number.isSafeInteger(v)||v<1)throw Error('Invalid '+name);return v;};
 const clone=value=>structuredClone(value);
 export function studyConfiguration(input={}){
- const c={seed:41,fineCount:48,fineSolidVolume:7e-7,width:.024,coarseRadius:.0035,settleSeconds:.35,strain:.08,stages:2,passes:4,localSeconds:.025,grids:[[2,2],[2,4]],overlapDiameters:[1,2],...input};
+ const c={seed:41,fineCount:256,fineSolidVolume:2.65e-7,width:.024,coarseRadius:.0035,anchorBurial:.9,settleSeconds:.8,platenQuantile:.5,strain:.08,stages:2,passes:4,localSeconds:.025,grids:[[2,2],[2,4]],overlapDiameters:[.5,1],...input};
  integer(c.fineCount,'fine count');integer(c.stages,'stages');integer(c.passes,'passes');if(!Number.isSafeInteger(c.seed)||c.seed<0)throw Error('Invalid seed');
  for(const k of ['fineSolidVolume','width','coarseRadius','settleSeconds','localSeconds'])finite(c[k],k);
- finite(c.strain,'strain',true);if(c.strain>=1)throw Error('Strain must be below one');overlapCases(c);return c;
+ finite(c.strain,'strain',true);if(c.strain>=1)throw Error('Strain must be below one');finite(c.anchorBurial,'anchor burial',true);if(c.anchorBurial>=1)throw Error('Anchor burial must be below one');finite(c.platenQuantile,'platen quantile');if(c.platenQuantile>1)throw Error('Platen quantile must be at most one');overlapCases(c);return c;
 }
-export function overlapCases({grids=[[2,2],[2,4]],overlapDiameters=[1,2]}={}){
- if(!Array.isArray(grids)||!grids.length||grids.some(g=>!Array.isArray(g)||g.length!==2||g.some(n=>!Number.isSafeInteger(n)||n<1)))throw Error('Invalid region grids');
+export function overlapCases({grids=[[2,2],[2,4]],overlapDiameters=[.5,1]}={}){
+ if(!Array.isArray(grids)||grids.some(g=>!Array.isArray(g)||g.length!==2||g.some(n=>!Number.isSafeInteger(n)||n<1)))throw Error('Invalid region grids');
  if(!Array.isArray(overlapDiameters)||!overlapDiameters.length||overlapDiameters.some(n=>!Number.isFinite(n)||n<0))throw Error('Invalid overlap widths');
  const cases=[{id:'whole',label:'Whole fine layer',grid:[1,1],schedule:'fixed',overlapDiameters:0}];
  for(const grid of grids)for(const overlap of overlapDiameters)for(const schedule of ['fixed','shifted'])cases.push({id:`${grid.join('x')}-${schedule}-${overlap}d`,label:`${grid.join('×')} · ${schedule} · ${overlap} grain overlap`,grid:[...grid],schedule,overlapDiameters:overlap});
@@ -32,7 +32,7 @@ export function makeStudyState(input={}){
  coarse=coarse.map((g,i)=>({...g,id:i,role:'parent-stone',materialIndex:2}));
  const ingredients=[...coarse,...fine],maxR=Math.max(...fine.map(g=>g.radius)),spacing=maxR*2.3,side=Math.floor(c.width/spacing);
  if(side<1)throw Error('Fine population cannot fit in the requested specimen width');
- const grains=coarse.map((g,i)=>({id:g.id,position:[(i?1:-1)*c.width*.22,-g.radius*.65,(i?-1:1)*c.width*.1],quaternion:[...g.quaternion],velocity:[0,0,0],angularVelocity:[0,0,0]}));
+ const grains=coarse.map((g,i)=>({id:g.id,position:[(i?1:-1)*c.width*.22,-g.radius*c.anchorBurial,(i?-1:1)*c.width*.1],quaternion:[...g.quaternion],velocity:[0,0,0],angularVelocity:[0,0,0]}));
  let rng=c.seed>>>0;const random=()=>((rng=(Math.imul(rng,1664525)+1013904223)>>>0)+.5)/2**32;
  for(let i=0;i<fine.length;i++){const g=fine[i],x=i%side,z=Math.floor(i/side)%side,y=Math.floor(i/(side*side));grains.push({id:g.id,position:[(x-(side-1)/2+(random()-.5)*.04)*spacing,c.coarseRadius*2+maxR*2+y*spacing,(z-(side-1)/2+(random()-.5)*.04)*spacing],quaternion:[...g.quaternion],velocity:[0,0,0],angularVelocity:[0,0,0]});}
  const state={schema:'kaminos.granular-preparation.v1',recipe:{...recipe,count:ingredients.length,radius:recipe.radius*factor},ingredients,grains,time:0,lidHeight:Math.max(...grains.map((g,i)=>g.position[1]+ingredients[i].radius))+maxR,containerX:0,phase:null,history:[]};
@@ -54,30 +54,46 @@ export function packingMetrics(snapshot,anchorIds=[]){
  return {grains:snapshot.grains.length,mass:snapshot.ingredients.reduce((s,g)=>s+g.mass,0),contacts,maxPenetration,maxFloorPenetration,maxLidPenetration};
 }
 const OFFSETS=[[0,0],[.25,0],[0,.25],[-.25,-.25]];
-export async function runOverlapCase(initial,{configuration,caseDefinition,fineIds,anchorIds,nominalDiameter,onStep=()=>{}}){
+export function specimenLoading(state,{fineIds,anchorIds,strain,platenQuantile}){
+ const source=preparationSource(state),tops=new Map(fineIds.map(id=>[id,-Infinity]));let anchorTop=-Infinity;
+ for(const t of source.triangles){const id=Number(t.identity?.replace('grain-','')),top=Math.max(t.a[1],t.b[1],t.c[1]);if(tops.has(id))tops.set(id,Math.max(tops.get(id),top));if(anchorIds.includes(id))anchorTop=Math.max(anchorTop,top);}
+ const fineTops=Array.from(tops.values()).sort((a,b)=>a-b),startTop=Math.max(...fineTops),quantileHeight=fineTops[Math.floor((fineTops.length-1)*platenQuantile)],requestedEnd=quantileHeight*(1-strain),effectiveEnd=Math.max(requestedEnd,anchorTop+1e-5);
+ return {startTop,requestedEnd,effectiveEnd,anchorTop,quantileHeight,fineTops,loadedFineCount:fineTops.filter(y=>y>effectiveEnd).length,loadedFineFraction:fineTops.filter(y=>y>effectiveEnd).length/fineTops.length,referenceMaximumSpeed:Math.max(...fineIds.map(id=>Math.hypot(...state.grains[id].velocity)))};
+}
+export async function runOverlapCase(initial,{configuration,caseDefinition,fineIds,anchorIds,nominalDiameter,loading=null,onStep=()=>{}}){
  const c=studyConfiguration(configuration);let state=clone(initial),work=0,visits=Array(state.grains.length).fill(0);const originalIngredients=JSON.stringify(initial.ingredients);
- const initialSource=preparationSource(initial),anchorTop=Math.max(...initialSource.triangles.filter(t=>anchorIds.some(id=>t.identity===`grain-${id}`)).flatMap(t=>[t.a[1],t.b[1],t.c[1]]));
- const startTop=initialSource.referenceHeight-.002,requestedEnd=startTop*(1-c.strain),effectiveEnd=Math.max(requestedEnd,anchorTop+1e-5);
- for(let stage=0;stage<c.stages;stage++){
-  const lidHeight=startTop+(effectiveEnd-startTop)*(stage+1)/c.stages;state.lidHeight=lidHeight;
-  for(let pass=0;pass<c.passes;pass++){
-   const offset=caseDefinition.schedule==='shifted'?OFFSETS[pass%OFFSETS.length]:[0,0],reference=clone(state),windows=patchWindows({width:c.width,grid:caseDefinition.grid,overlap:caseDefinition.overlapDiameters*nominalDiameter,offset});
-   const assignments=windows.map(window=>({window,activeIds:selectWindow(reference,window,fineIds)}));if(fineIds.some(id=>!assignments.some(a=>a.activeIds.includes(id))))throw Error('Patch layout left fine material unassigned');
-   for(const {window,activeIds}of assignments){if(!activeIds.length)continue;const next=relaxPatch(state,{activeIds,seconds:c.localSeconds,lidHeight});state=next.state;work+=next.activeParticleSteps;for(const id of activeIds)visits[id]++;
-    const step={stage,pass,window,offset,activeIds,localClock:next.localClock,activeParticleSteps:next.activeParticleSteps,parentStrain:1-lidHeight/startTop};await onStep(step,state);
-   }
+ async function pass(phase,stage,pass,seconds,lidHeight){
+  state.lidHeight=lidHeight;const offset=caseDefinition.schedule==='shifted'?OFFSETS[pass%OFFSETS.length]:[0,0],reference=clone(state),windows=patchWindows({width:c.width,grid:caseDefinition.grid,overlap:caseDefinition.overlapDiameters*nominalDiameter,offset});
+  const assignments=windows.map(window=>({window,activeIds:selectWindow(reference,window,fineIds)}));if(fineIds.some(id=>!assignments.some(a=>a.activeIds.includes(id))))throw Error('Patch layout left fine material unassigned');
+  for(const {window,activeIds}of assignments){if(!activeIds.length)continue;const next=relaxPatch(state,{activeIds,seconds,lidHeight});state=next.state;work+=next.activeParticleSteps;for(const id of activeIds)visits[id]++;
+   await onStep({phase,stage,pass,window,offset,activeIds,localClock:next.localClock,activeParticleSteps:next.activeParticleSteps},state);
   }
  }
+ // Every case starts from the identical unprepared inventory. The whole reference
+ // supplies the subsequent common loading planes, never a pre-packed initial bed.
+ const preparationPasses=Math.ceil(c.settleSeconds/c.localSeconds);for(let i=0;i<preparationPasses;i++)await pass('settle',-1,i,Math.min(c.localSeconds,c.settleSeconds-i*c.localSeconds),initial.lidHeight);
+ const prepared=clone(state);loading=loading??specimenLoading(prepared,{fineIds,anchorIds,strain:c.strain,platenQuantile:c.platenQuantile});
+ if(!(loading.startTop>loading.effectiveEnd))throw Error('Reference loading does not compress the fine layer');
+ for(let stage=0;stage<c.stages;stage++){const height=loading.startTop+(loading.effectiveEnd-loading.startTop)*(stage+1)/c.stages;for(let i=0;i<c.passes;i++)await pass('compress',stage,i,c.localSeconds,height);}
  if(JSON.stringify(state.ingredients)!==originalIngredients)throw Error('Patch solve changed ingredient identity or mass');for(const id of anchorIds)if(JSON.stringify(state.grains[id])!==JSON.stringify(initial.grains[id]))throw Error('Patch solve moved a prescribed parent stone');
- state.overlapPreparation={case:caseDefinition.id,configuration:c,parentClockHeldAt:initial.time,requestedStrain:c.strain,effectiveStrain:1-effectiveEnd/startTop,activeParticleSteps:work,visits};
- return {state,metrics:packingMetrics(state,anchorIds),activeParticleSteps:work,visits,requestedStrain:c.strain,effectiveStrain:1-effectiveEnd/startTop};
+ state.overlapPreparation={case:caseDefinition.id,configuration:c,parentClockHeldAt:initial.time,requestedStrain:c.strain,effectiveStrain:1-loading.effectiveEnd/loading.startTop,activeParticleSteps:work,visits,loading};
+ return {state,prepared,loading,metrics:packingMetrics(state,anchorIds),activeParticleSteps:work,visits,requestedStrain:c.strain,effectiveStrain:1-loading.effectiveEnd/loading.startTop};
 }
 export async function loadStudyState(manifest,record,caseId,readBytes){
- if(manifest?.schema!=='kaminos.granular-overlap-study.v1'||manifest.effectiveRoute!=='cannon-es-0.20.0-cpu/convex-grains/frozen-neighbor-patches'||!manifest.source?.commit||manifest.source.dirty)throw Error('Unverified overlap study source or route');
- if(!record?.path||typeof record.sha256!=='string'||(caseId!=='initial'&&!manifest.cases.some(c=>c.id===caseId&&c.status==='completed'&&c.snapshot?.sha256===record.sha256)))throw Error('Comparison result is missing or incomplete');
+ if(manifest?.schema!=='kaminos.granular-overlap-study.v1'||manifest.effectiveRoute!=='cannon-es-0.20.0-cpu/convex-grains/frozen-neighbor-patches'||typeof manifest.source?.commit!=='string'||!manifest.source.commit||![false,''].includes(manifest.source.dirty))throw Error('Unverified overlap study source or route');
+ if(!manifest.configuration||typeof manifest.configuration!=='object'||Object.keys(studyConfiguration()).some(key=>!Object.hasOwn(manifest.configuration,key)))throw Error('Incomplete overlap manifest configuration');const c=studyConfiguration(manifest.configuration);
+ if(!Array.isArray(manifest.anchorIds)||!manifest.anchorIds.length||new Set(manifest.anchorIds).size!==manifest.anchorIds.length||manifest.anchorIds.some(id=>!Number.isSafeInteger(id)||id<0)||!Array.isArray(manifest.cases))throw Error('Invalid overlap manifest anchor or case inventory');finite(manifest.nominalDiameter,'manifest nominal diameter');
+ const definition=overlapCases(c).find(entry=>entry.id===caseId),entry=manifest.cases.find(entry=>entry.id===caseId);
+ if(caseId!=='initial'&&(!definition||!entry||['grid','schedule','overlapDiameters'].some(key=>JSON.stringify(definition[key])!==JSON.stringify(entry[key]))))throw Error('Invalid overlap manifest case definition');
+ if(!record?.path||typeof record.sha256!=='string'||(caseId!=='initial'&&!(entry.status==='completed'&&entry.snapshot?.sha256===record.sha256)))throw Error('Comparison result is missing or incomplete');
  const bytes=await readBytes(record.path),hash=async value=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',value))).map(n=>n.toString(16).padStart(2,'0')).join('');
  if(await hash(bytes)!==record.sha256)throw Error('Comparison artifact hash mismatch');const state=JSON.parse(new TextDecoder().decode(bytes));if(state.phase!==null)throw Error('Comparison contains an incomplete physical stage');
  if(await hash(new TextEncoder().encode(JSON.stringify(state.ingredients)))!==manifest.geometrySha256)throw Error('Comparison changed the ingredient geometry');
- if(state.grains.length!==manifest.configuration.fineCount+manifest.anchorIds.length||state.recipe.width!==manifest.configuration.width)throw Error('Comparison material inventory or extent mismatch');
- if(caseId!=='initial'&&state.overlapPreparation?.case!==caseId)throw Error('Comparison case identity mismatch');preparationSource(state);return state;
+ if(state.grains.length!==c.fineCount+manifest.anchorIds.length||state.recipe.width!==c.width||manifest.anchorIds.some(id=>id>=state.grains.length)||Math.abs(manifest.nominalDiameter-2*state.recipe.radius)>1e-12)throw Error('Comparison material inventory, diameter or extent mismatch');
+ if(caseId!=='initial'){
+  if(state.overlapPreparation?.case!==caseId)throw Error('Comparison case identity mismatch');const initial=await loadStudyState(manifest,manifest.initial,'initial',readBytes);
+  if(state.time!==initial.time||state.overlapPreparation.parentClockHeldAt!==initial.time)throw Error('Comparison parent clock changed');
+  for(const id of manifest.anchorIds)if(JSON.stringify(state.grains[id])!==JSON.stringify(initial.grains[id]))throw Error('Comparison prescribed anchor moved');
+ }
+ preparationSource(state);return state;
 }

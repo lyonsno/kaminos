@@ -1,0 +1,19 @@
+{
+  "seed": 41,
+  "fineCount": 256,
+  "fineSolidVolume": 2.65e-07,
+  "width": 0.024,
+  "coarseRadius": 0.0035,
+  "settleSeconds": 0.8,
+  "strain": 0.08,
+  "stages": 2,
+  "passes": 4,
+  "localSeconds": 0.025,
+  "grids": [],
+  "overlapDiameters": [
+    0.5,
+    1
+  ],
+  "anchorBurial": 0.9,
+  "platenQuantile": 0.5
+}

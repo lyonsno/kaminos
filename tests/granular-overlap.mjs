@@ -26,13 +26,19 @@ const {loadStudyState}=await import('../granular-overlap.mjs');
 const bytes=new TextEncoder().encode(JSON.stringify(result.state));
 const digest=async bytes=>Buffer.from(await crypto.subtle.digest('SHA-256',bytes)).toString('hex');
 const artifact={path:'case.json',sha256:await digest(bytes)},caseId=result.state.overlapPreparation.case;
-const manifest={schema:'kaminos.granular-overlap-study.v1',effectiveRoute:'cannon-es-0.20.0-cpu/convex-grains/frozen-neighbor-patches',source:{commit:'observed-local-fixture',dirty:''},configuration:small.configuration,anchorIds:small.anchorIds,geometrySha256:await digest(new TextEncoder().encode(JSON.stringify(result.state.ingredients))),cases:[{id:caseId,status:'completed',snapshot:artifact}]};
-assert.deepEqual(await loadStudyState(manifest,artifact,caseId,async()=>bytes),result.state);
-await assert.rejects(loadStudyState({...manifest,effectiveRoute:'fallback'},artifact,caseId,async()=>bytes),/route/i);
-await assert.rejects(loadStudyState({...manifest,cases:[{...manifest.cases[0],status:'running'}]},artifact,caseId,async()=>bytes),/incomplete/i);
-await assert.rejects(loadStudyState(manifest,{...artifact,sha256:'wrong'},caseId,async()=>bytes),/incomplete|hash/i);
+const initialBytes=new TextEncoder().encode(JSON.stringify(before)),initialArtifact={path:'initial.json',sha256:await digest(initialBytes)};
+const definition=overlapCases(small.configuration).find(c=>c.id===caseId);
+const manifest={schema:'kaminos.granular-overlap-study.v1',effectiveRoute:'cannon-es-0.20.0-cpu/convex-grains/frozen-neighbor-patches',source:{commit:'observed-local-fixture',dirty:''},configuration:small.configuration,anchorIds:small.anchorIds,nominalDiameter:small.nominalDiameter,initial:initialArtifact,geometrySha256:await digest(new TextEncoder().encode(JSON.stringify(result.state.ingredients))),cases:[{...definition,status:'completed',snapshot:artifact}]};
+assert.deepEqual(await loadStudyState(manifest,artifact,caseId,async file=>file==='initial.json'?initialBytes:bytes),result.state);
+await assert.rejects(loadStudyState({...manifest,effectiveRoute:'fallback'},artifact,caseId,async file=>file==='initial.json'?initialBytes:bytes),/route/i);
+await assert.rejects(loadStudyState({...manifest,cases:[{...manifest.cases[0],status:'running'}]},artifact,caseId,async file=>file==='initial.json'?initialBytes:bytes),/incomplete/i);
+await assert.rejects(loadStudyState(manifest,{...artifact,sha256:'wrong'},caseId,async file=>file==='initial.json'?initialBytes:bytes),/incomplete|hash/i);
 const wrongCase=structuredClone(result.state);wrongCase.overlapPreparation.case='whole';const wrongBytes=new TextEncoder().encode(JSON.stringify(wrongCase)),wrongArtifact={path:'wrong.json',sha256:await digest(wrongBytes)};
-await assert.rejects(loadStudyState({...manifest,cases:[{id:caseId,status:'completed',snapshot:wrongArtifact}]},wrongArtifact,caseId,async()=>wrongBytes),/case identity/i);
+await assert.rejects(loadStudyState({...manifest,cases:[{...definition,status:'completed',snapshot:wrongArtifact}]},wrongArtifact,caseId,async()=>wrongBytes),/case identity/i);
 await assert.rejects(loadStudyState(manifest,artifact,caseId,async()=>new Uint8Array()),/hash/i);
 const changedGeometry=structuredClone(result.state);changedGeometry.ingredients[2].vertices[0][0]+=.00001;const changedBytes=new TextEncoder().encode(JSON.stringify(changedGeometry)),changedArtifact={path:'changed.json',sha256:await digest(changedBytes)};
-await assert.rejects(loadStudyState({...manifest,cases:[{id:caseId,status:'completed',snapshot:changedArtifact}]},changedArtifact,caseId,async()=>changedBytes),/geometry/i);
+await assert.rejects(loadStudyState({...manifest,cases:[{...definition,status:'completed',snapshot:changedArtifact}]},changedArtifact,caseId,async()=>changedBytes),/geometry/i);
+for(const mutation of [m=>delete m.configuration,m=>m.anchorIds={},m=>delete m.cases,m=>delete m.nominalDiameter]){const bad=structuredClone(manifest);mutation(bad);await assert.rejects(loadStudyState(bad,artifact,caseId,async file=>file==='initial.json'?initialBytes:bytes),e=>e instanceof Error&&!(e instanceof TypeError)&&/manifest|configuration|anchor|case|diameter/i.test(e.message),'malformed metadata must give an explicit admission error');}
+
+for(const edit of [state=>state.grains[0].position[0]+=.0001,state=>state.time+=.01]){const bad=structuredClone(result.state);edit(bad);const badBytes=new TextEncoder().encode(JSON.stringify(bad)),badArtifact={path:'bad.json',sha256:await digest(badBytes)};await assert.rejects(loadStudyState({...manifest,cases:[{...definition,status:'completed',snapshot:badArtifact}]},badArtifact,caseId,async file=>file==='initial.json'?initialBytes:badBytes),/anchor|clock/i);}
+const defaultSpecimen=makeStudyState();assert.ok(defaultSpecimen.configuration.width/4/defaultSpecimen.nominalDiameter>=3.9,'eight-region cells need several constituents across');assert.ok(Math.max(...defaultSpecimen.configuration.overlapDiameters)*defaultSpecimen.nominalDiameter<defaultSpecimen.configuration.width/4,'overlap must not swallow the shortest cell in the chosen specimen');
