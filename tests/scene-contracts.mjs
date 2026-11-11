@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
 const index = readFileSync(join(root, 'index.html'), 'utf8');
+const lighting = readFileSync(join(root, 'scene-lighting-graph.mjs'), 'utf8');
 const persistence = readFileSync(join(root, 'scene-persistence-core.js'), 'utf8');
 
 assert.match(index, /const workingScene = createWorkingScene\(\)/, 'the page consumes the shared working-scene owner');
@@ -264,11 +265,11 @@ assert.match(index, /from '\.\/lib\/addons\/tsl\/display\/GTAOComputeNode\.js'/,
 assert.match(index, /from '\.\/lib\/addons\/tsl\/display\/DenoiseNode\.js'/, 'AO recovery imports the managed DenoiseNode');
 assert.doesNotMatch(index, /from '\.\/ao-pipeline\.js'/, 'Kaminos main must not import the quarantined raw GTAOComputePipeline route');
 assert.doesNotMatch(index, /from '\.\/ao-composite\.js'/, 'Kaminos main must not import the quarantined raw AOCompositePass route');
-assert.match(index, /new THREE\.RenderPipeline\(renderer\)/, 'AO recovery uses Three RenderPipeline instead of raw command submission');
-assert.match(index, /aoPass\s*=\s*aoCompute\(depthTexNode,\s*normalTexNode,\s*camera\)/, 'AO recovery creates the managed GTAO compute pass');
-assert.match(index, /const aoResolved\s*=\s*convertToTexture\(aoPass\.getTextureNode\(\)\)/, 'AO recovery bridges the storage texture through TSL convertToTexture');
-assert.match(index, /const denoisePass\s*=\s*denoise\(aoResolved,\s*prePassDepth,\s*prePassNormal,\s*camera\)/, 'AO recovery denoises the managed AO output');
-assert.match(index, /scenePass\.contextNode\s*=\s*builtinAOContext\(aoOutput\)/, 'AO belongs in material indirect lighting');
+assert.match(lighting, /new THREE\.RenderPipeline\(renderer\)/, 'AO recovery uses Three RenderPipeline instead of raw command submission');
+assert.match(lighting, /aoPass\s*=\s*aoCompute\(depthTexNode,\s*normalTexNode,\s*camera\)/, 'AO recovery creates the managed GTAO compute pass');
+assert.match(lighting, /const aoResolved\s*=\s*convertToTexture\(aoPass\.getTextureNode\(\)\)/, 'AO recovery bridges the storage texture through TSL convertToTexture');
+assert.match(lighting, /const denoisePass\s*=\s*denoise\(aoResolved,\s*prePassDepth,\s*prePassNormal,\s*camera\)/, 'AO recovery denoises the managed AO output');
+assert.match(lighting, /scenePass\.contextNode\s*=\s*builtinAOContext\(aoOutput\)/, 'AO belongs in material indirect lighting');
 assert.doesNotMatch(index, /scenePass\.mul\(vec4\(vec3\(aoOutput\)/, 'AO must not multiply direct light or emission after shading');
 assert.match(index, /renderPipeline\.render\(\)/, 'render loop must render the managed pipeline rather than bypassing AO with renderer.render');
 assert.doesNotMatch(index, /device\.queue\.submit/, 'Kaminos main AO recovery must not submit raw WebGPU command buffers');

@@ -6,6 +6,7 @@ import {isReloadableSceneObjectRecord} from '../scene-persistence-core.js';
 import {LOCAL_LIQUID_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_SOURCE} from '../local-liquid-setup.mjs';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const lighting = readFileSync(new URL('../scene-lighting-graph.mjs', import.meta.url), 'utf8');
 const editTools = readFileSync(new URL('../scene-placement-tools.mjs', import.meta.url), 'utf8');
 const persistence = readFileSync(new URL('../scene-persistence-core.js', import.meta.url), 'utf8');
 
@@ -90,7 +91,7 @@ test('selection feedback hides untrustworthy offscreen pivots and names the reco
   assert.match(html, /#scene-edit-hud\[data-alert="true"\] \{[^}]*overflow-wrap:anywhere/);
   // Selection feedback stays out of the lit output: AO is applied as indirect-only
   // scene context and the output is that scene (or the fire light-field receiver over it).
-  assert.match(html, /scenePass\.contextNode = builtinAOContext\(aoOutput\)/);
+  assert.match(lighting, /scenePass\.contextNode = builtinAOContext\(aoOutput\)/);
   assert.match(html, /const baseSceneOutput = scenePass;[\s\S]*?renderPipeline\.outputNode = baseSceneOutput;/);
   assert.doesNotMatch(html, /createSelectionFeedback|selectionFeedback\.output/);
 });

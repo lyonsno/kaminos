@@ -4,17 +4,19 @@ import * as THREE from '../lib/three.webgpu.js';
 import {configureMaterialSideAODepth} from '../scene-ao-depth.mjs';
 const module=await import('../scene-lighting-graph.mjs').catch(error=>{if(error.code!=='ERR_MODULE_NOT_FOUND')throw error;return {};});
 const factory=()=>{assert.equal(typeof module.createSceneLightingGraph,'function','ordinary lighting resources must construct outside the page initializer');return module.createSceneLightingGraph;};
-function fixture(){
+function fixture({traceSetup=false}={}){
+ const setupCalls=[];
+ const localThree=traceSetup?{...THREE,TSL:{...THREE.TSL,pass:(...args)=>{const node=THREE.TSL.pass(...args);node.setup=()=>{setupCalls.push('scene');return 'scene-result';};return node;},convertToTexture:(...args)=>{const node=THREE.TSL.convertToTexture(...args);node.build=()=>setupCalls.push('denoise');return node;}}}:THREE;
  const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(40,2,.01,100),renderer={getDrawingBufferSize:v=>v.set(80,40)};
  const ao={radius:{value:0},scale:{value:0},thickness:{value:0},distanceFallOff:{value:0},updateBefore(){},setDepthPass(...args){this.depthPass=args;},getTextureNode:()=>THREE.TSL.texture(new THREE.Texture())};
- const calls=[],gi={owner:'injected real-domain factory',reflections:{settings:{enabled:false}}};
+ const calls=[],gi={owner:'injected real-domain factory',reflections:{settings:{enabled:false},lightingContext:{kind:'reflection-lighting'},result:{build(){setupCalls.push('reflection');}}}};
  const settings={radius:3,scale:2,thickness:.1,falloff:1};
- const result=factory()({THREE,scene,camera,renderer,aoSettings:settings,aoIntensityValue:.7,giOptions:{filterImplementation:'shared',surfaceReuse:true},
+ const result=factory()({THREE:localThree,scene,camera,renderer,aoSettings:settings,aoIntensityValue:.7,giOptions:{filterImplementation:'shared',surfaceReuse:true},
   aoCompute:(depth,normal,c)=>{calls.push({kind:'ao',depth,normal,camera:c});return ao;},
   configureMaterialSideAODepth:(...args)=>{calls.push({kind:'depth',args});return configureMaterialSideAODepth(...args);},
   denoise:(...args)=>{calls.push({kind:'denoise',args});return THREE.TSL.texture(new THREE.Texture());},
   createSceneGI:(...args)=>{calls.push({kind:'gi',args});return gi;}});
- return {result,ao,calls,scene,camera,renderer,gi};
+ return {result,ao,calls,scene,camera,renderer,gi,setupCalls};
 }
 test('actual vendored Three lighting graph constructs without DOM or GPU admission',()=>{
  assert.equal(typeof document,'undefined');assert.equal(typeof window,'undefined');const f=fixture(),r=f.result;
@@ -32,4 +34,30 @@ test('AO values, depth ownership and GI inputs retain the ordinary scene contrac
  assert.equal(scene,f.scene);assert.equal(camera,f.camera);assert.equal(intensity,r.aoIntensity);assert.equal(options.renderer,f.renderer);
  assert.equal(options.filterImplementation,'shared');assert.equal(options.surfaceReuse,true);
  assert.equal(f.calls[2].args[1],r.prePassDepth);assert.equal(f.calls[2].args[3],f.camera);
+});
+
+test('standalone reflection context follows settings through the shared graph owner',()=>{
+ const f=fixture(),r=f.result;
+ assert.equal(typeof r.syncReflections,'function','worker owner must retain the page reflection context hook');
+ assert.equal(r.scenePass.contextNode.getFlowContextData().sceneReflectionLighting,null);
+ const version=r.scenePass.version;f.gi.reflections.settings.enabled=true;r.syncReflections();
+ assert.equal(r.scenePass.contextNode.getFlowContextData().sceneReflectionLighting,f.gi.reflections.lightingContext);
+ assert.equal(r.scenePass.version,version+1);
+ f.gi.reflections.settings.enabled=false;r.syncReflections();
+ assert.equal(r.scenePass.contextNode.getFlowContextData().sceneReflectionLighting,null);
+});
+test('AO depth follows actual drawing buffer changes without page viewport state',()=>{
+ const f=fixture(),r=f.result;
+ assert.equal(typeof r.resizeDepth,'function','worker owner must resize its AO depth target');
+ assert.equal(r.resizeDepth(),false);
+ f.renderer.getDrawingBufferSize=v=>v.set(121,61);assert.equal(r.resizeDepth(),true);
+ assert.deepEqual([r.depthRT.width,r.depthRT.height],[61,31]);assert.equal(r.resizeDepth(),false);
+});
+
+test('standalone scene setup resolves enabled reflections before denoising and shading',()=>{
+ const f=fixture({traceSetup:true}),r=f.result;
+ f.gi.reflections.settings.enabled=true;assert.equal(r.scenePass.setup({}),'scene-result');
+ assert.deepEqual(f.setupCalls,['reflection','denoise','scene']);
+ f.setupCalls.length=0;f.gi.reflections.settings.enabled=false;r.scenePass.setup({});
+ assert.deepEqual(f.setupCalls,['denoise','scene']);
 });

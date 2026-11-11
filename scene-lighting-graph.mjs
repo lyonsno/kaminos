@@ -47,6 +47,7 @@ export function createSceneLightingGraph({THREE,scene,camera,renderer,aoSettings
   // Resolve screen-space visibility before the lit pass, not once per material.
   const setupScenePass = scenePass.setup;
   scenePass.setup = function(builder) {
+    if(sceneGI.reflections.settings.enabled)sceneGI.reflections.result.build(builder);
     denoiseResolved.build(builder);
     return setupScenePass.call(this, builder);
   };
@@ -58,6 +59,18 @@ export function createSceneLightingGraph({THREE,scene,camera,renderer,aoSettings
     float(1).add(aoIntensity.sub(1).max(0).mul(float(1).sub(aoVisibility))));
   scenePass.contextNode = builtinAOContext(aoOutput);
   const sceneGI = createSceneGI(scene,camera,aoIntensity,{...giOptions,renderer});
-  return {renderPipeline,prePass,prePassDepth,prePassNormal,scenePass,aoPass,aoResScale,depthRT,depthMaterial,
+  function syncReflections(){
+    scenePass.contextNode=THREE.TSL.context({...builtinAOContext(aoOutput).getFlowContextData(),
+      sceneReflectionLighting:sceneGI.reflections.settings.enabled?sceneGI.reflections.lightingContext:null});
+    scenePass.needsUpdate=true;
+  }
+  function resizeDepth(){
+    const size=renderer.getDrawingBufferSize(new THREE.Vector2());
+    const width=Math.round(size.x*aoResScale),height=Math.round(size.y*aoResScale);
+    if(depthRT.width===width&&depthRT.height===height)return false;
+    depthRT.setSize(width,height);return true;
+  }
+  syncReflections();
+  return {resizeDepth,syncReflections,renderPipeline,prePass,prePassDepth,prePassNormal,scenePass,aoPass,aoResScale,depthRT,depthMaterial,
     aoIntensity,aoOutput,sceneGI};
 }

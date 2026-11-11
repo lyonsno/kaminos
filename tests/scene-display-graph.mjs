@@ -39,3 +39,12 @@ test('requested fire receiving cannot silently become a plain scene graph',()=>{
  const f=fixture();f.resources.fireLightFieldRoute=true;f.resources.createFireLightFieldReceiverPass=()=>null;
  assert.throws(()=>api().createSceneDisplayGraph(f.resources));
 });
+
+test('requested lighting and camera providers reject absent or incomplete outputs',()=>{
+ for(const invalid of [null,{}, {outputNode:null},{outputNode:undefined}]){
+  const f=fixture();f.resources.fireLightFieldRoute=true;f.resources.createFireLightFieldReceiverPass=()=>invalid;
+  assert.throws(()=>api().createSceneDisplayGraph(f.resources),/fire light.field receiver.*output node/i);
+  const c=fixture();c.resources.distributed=true;c.resources.createSceneEmissiveCamera=()=>invalid;
+  assert.throws(()=>api().createSceneDisplayGraph(c.resources),/emissive camera.*output node/i);
+ }
+});

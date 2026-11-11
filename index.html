@@ -11701,15 +11701,13 @@ async function initScene() {
 
   const lightingWorkParams=new URLSearchParams(location.search);
   const {renderPipeline:lightingPipeline,scenePass:lightingScenePass,aoPass:lightingAO,aoIntensity:lightingIntensity,
-    prePass,prePassDepth,prePassNormal,aoResScale,depthRT,depthMaterial,aoOutput,sceneGI}=createSceneLightingGraph({
+    prePass,prePassDepth,prePassNormal,aoResScale,depthRT,depthMaterial,aoOutput,sceneGI,syncReflections,resizeDepth}=createSceneLightingGraph({
     THREE,scene,camera,renderer,aoSettings:sceneAO.read(),aoIntensityValue:effectiveAOIntensity(),
     giOptions:{reflections:{enabled:lightingWorkParams.get('scene_reflections')==='1'},filterImplementation:lightingWorkParams.get('lighting_filter')==='separate'?'separate':'shared',surfaceReuse:lightingWorkParams.get('lighting_surface_reuse')!=='0',sourceComparison:lightingWorkParams.get('experiment')==='gi-source-study'},
     aoCompute,denoise,configureMaterialSideAODepth,createSceneGI,
   });
   renderPipeline=lightingPipeline;scenePass=lightingScenePass;aoPass=lightingAO;aoIntensity=lightingIntensity;
   activeSceneGI = sceneGI;
-  const reflectionSceneSetup=scenePass.setup;
-  scenePass.setup=function(builder){if(sceneGI.reflections.settings.enabled)sceneGI.reflections.result.build(builder);return reflectionSceneSetup.call(this,builder);};
   if (typeof syncArrivalStudioLighting === 'function') syncArrivalStudioLighting();
   window.kaminosGISourceComparison=sceneGI.sourceComparison;
   window.__kaminosSurfaceLighting=sceneGI.surfaceLighting;
@@ -11782,7 +11780,7 @@ async function initScene() {
   const bloomHost=document.createElement('section');bloomHost.id='scene-bloom-controls';document.getElementById('rendering-fire-controls').before(bloomHost);
   const reflectionHost=document.createElement('section');reflectionHost.id='scene-reflection-controls';document.getElementById('scene-gi-refinement-status').after(reflectionHost);
   let reflectionControls=null;
-  const writeReflections=value=>{sceneGI.reflections.setSettings(value);scenePass.contextNode=THREE.TSL.context({...builtinAOContext(aoOutput).getFlowContextData(),sceneReflectionLighting:sceneGI.reflections.settings.enabled?sceneGI.reflections.lightingContext:null});scenePass.needsUpdate=true;rebuildSceneGIOutput();markDirty();};
+  const writeReflections=value=>{sceneGI.reflections.setSettings(value);syncReflections();rebuildSceneGIOutput();markDirty();};
   restoreSceneReflectionSettings=value=>{if(value)writeReflections(value);sceneGI.reflections.reset('scene-restored');reflectionControls?.sync();};
   window.kaminosSceneReflections={read:()=>{const state=sceneGI.reflections.state();return {...state,settings:{...sceneGI.reflections.settings},effective:state.effective&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene')};},set(value){if(reflectionControls)reflectionControls.set(value);else writeReflections(value);return this.read();},reset:reason=>sceneGI.reflections.reset(reason)};
   window.kaminosSceneBloom={read:()=>({...sceneBloom.read(),effective:sceneBloom.read().settings.enabled&&sceneBloom.read().settings.radius>0&&sceneBloom.read().settings.strength>0&&!waterFeature.host&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene'),flameComposition:{...sceneFlameHDR?.read(),effective:authoredFlameHDRActive&&sceneFlameHDR?.read().effective===true}}),set(settings){bloomControls.set(settings);return this.read();}};
@@ -11832,7 +11830,7 @@ async function initScene() {
   };
   sceneGI.setSettings(sceneGISettings);
   sceneGI.setEstimatorSettings(sceneGISettings.estimator);
-  scenePass.contextNode=THREE.TSL.context({...builtinAOContext(aoOutput).getFlowContextData(),sceneReflectionLighting:sceneGI.reflections.settings.enabled?sceneGI.reflections.lightingContext:null});
+  syncReflections();
   rebuildSceneGIOutput();
   getLocalLiquidDisplayPolicy=()=>({rawOutput:rawSceneOutput,cameraState:sceneEmissiveCamera&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene')?sceneEmissiveCamera.debugState():{effective:false}});
   window.kaminosRefreshSceneGIOutput=rebuildSceneGIOutput;
@@ -11944,12 +11942,7 @@ async function initScene() {
     }
     // The AO depth target follows the drawing buffer, which also changes with
     // the pixel ratio (viewport Preview), not only with the CSS size.
-    const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-    const depthWidth = Math.round(size.x * aoResScale), depthHeight = Math.round(size.y * aoResScale);
-    if (depthRT.width !== depthWidth || depthRT.height !== depthHeight) {
-      depthRT.setSize(depthWidth, depthHeight);
-      needsRender = true;
-    }
+    if(resizeDepth())needsRender=true;
   }
   window.addEventListener('resize', syncViewportRendererSize);
   const viewportResizeObserver = new ResizeObserver(syncViewportRendererSize);

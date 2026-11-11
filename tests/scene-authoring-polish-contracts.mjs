@@ -6,10 +6,11 @@ import { BURNER_DEFAULTS, normalizeBurner } from '../annular-burner.mjs';
 import { buildSceneDocument, planSceneRestore } from '../scene-persistence-core.js';
 
 const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const between = (start, end) => {
-  const a = source.indexOf(start), b = source.indexOf(end, a);
+const lightingSource = readFileSync(new URL('../scene-lighting-graph.mjs', import.meta.url), 'utf8');
+const between = (start, end, input=source) => {
+  const a = input.indexOf(start), b = input.indexOf(end, a);
   assert.ok(a >= 0 && b > a, `source boundary: ${start}`);
-  return source.slice(a, b);
+  return input.slice(a, b);
 };
 const tests = [];
 const test = (name, run) => tests.push([name, run]);
@@ -29,7 +30,7 @@ const float = v => new Scalar(v);
 const mix = (a, b, t) => float(a).mul(float(1).sub(t)).add(float(b).mul(t));
 
 test('AO intensity stays monotone and nonnegative without clipping intermediate visibility', () => {
-  const expression = between(source.includes('  const aoVisibility =') ? '  const aoVisibility =' : '  const aoOutput =', source.includes('  scenePass.contextNode =') ? '  scenePass.contextNode =' : '  const baseSceneOutput');
+  const expression = between('  const aoVisibility =', '  scenePass.contextNode =', lightingSource);
   for (const visibility of [0, 0.01, 0.2, 0.5, 0.8, 1]) {
     let previous = 1;
     for (const strength of [0, 0.25, 0.7, 1, 1.5, 2, 3]) {

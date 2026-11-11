@@ -252,3 +252,11 @@ It receives the existing scene/depth/normal/emission nodes and domain factories;
 no second renderer, cache or presentation loop is created. A requested
 fire-receiving path must provide its actual pass rather than silently produce
 an unlit scene graph.
+
+The lighting graph also owns `syncReflections()` and `resizeDepth()`. Call the
+former after updating `sceneGI.reflections` settings and the latter after renderer
+size or pixel-ratio changes (it returns whether the AO target changed). Initial
+standalone reflection context and pre-build ordering are installed by the
+constructor. Page and worker owners do not duplicate those hooks. Requested
+fire-light and emissive-camera providers must return a non-null `outputNode`;
+incomplete providers fail before downstream bloom or selection composition.
