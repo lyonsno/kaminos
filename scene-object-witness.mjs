@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
+import {runMasonryWorkshopWitness} from './masonry-workshop-witness.mjs';
 import {runWaterSourceWitness,runWaterCadenceWitness} from './authored-water-source-witness.mjs';
 import {assertAuthoredWaterPopulation} from './authored-water-evidence.mjs';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -7642,7 +7643,10 @@ try {
   if(['authored-mls','authored-water-preview','authored-water-drop','authored-water-objects'].includes(scenario)&&expectedServerRoot)lastEvidence.serving=await verifyAuthoringServer({origin:new URL(effectiveHref).origin,repoRoot:expectedServerRoot});
   else assertExpectedServerRoot(effectiveServerRoots);
 
-  if (scenario === 'authored-water-preview') {
+  if (scenario === 'masonry-workshop') {
+    phase='masonry-source-consumer';
+    lastEvidence.masonry=await runMasonryWorkshopWitness({evaluate,ws,capture:capturePngScreenshot,out,onEvidence:value=>{lastEvidence.masonry=value;}});
+  } else if (scenario === 'authored-water-preview') {
     await runAuthoredWaterPreviewScenario(ws);
   } else if (scenario === 'startup-empty') {
     await runStartupEmptyScenario(ws);
