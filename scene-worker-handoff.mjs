@@ -9,6 +9,11 @@ function copyEpoch(value){
   return Object.fromEntries(parts.map(key=>[key,value[key]]));
 }
 const equalEpoch=(a,b)=>parts.every(key=>a[key]===b[key]);
+function issuedSequence(id,prefix,issued){
+  const suffix=typeof id==='string'&&id.startsWith(prefix)?id.slice(prefix.length):'';
+  const sequence=Number(suffix);
+  if(!suffix||!Number.isSafeInteger(sequence)||sequence<1||String(sequence)!==suffix||sequence>issued)throw Error('Unknown scene worker response identity');
+}
 const namedError=(name,message,fields={})=>Object.assign(Error(message),{name,...fields});
 const abortError=reason=>namedError('AbortError',String(reason?.message??reason??'Scene operation canceled'));
 function errorRecord(error){return {name:String(error?.name??'Error'),message:String(error?.message??error),gpuRouteHeld:error?.gpuRouteHeld===true};}
@@ -43,7 +48,9 @@ export function createSceneWorkerClient({port,sessionId=globalThis.crypto.random
       if(!data||data.schema!==SCENE_WORKER_REPLY||data.sessionId!==sessionId)throw Error('Invalid scene worker response identity');
       if(data.kind==='epoch'){adopt(data.epoch);return;}
       if(data.kind==='fault')throw Error(data.error?.message??'Scene worker protocol failed');
+      if(!['control-result','progress','result'].includes(data.kind))throw Error('Invalid scene worker response kind');
       if(data.kind==='control-result'){
+        issuedSequence(data.controlId,`${sessionId}:control:`,controlSerial);
         const control=pendingControls.get(data.controlId);
         if(!control)return;
         adopt(data.epoch);
@@ -54,6 +61,7 @@ export function createSceneWorkerClient({port,sessionId=globalThis.crypto.random
         else control.reject(namedError(data.error.name??'Error',data.error.message,{gpuRouteHeld:data.error.gpuRouteHeld===true}));
         return;
       }
+      issuedSequence(data.requestId,`${sessionId}:`,serial);
       const entry=pending.get(data.requestId);
       if(!entry)return; // A duplicate cannot modify current state or a new request.
       adopt(data.epoch);
@@ -147,13 +155,17 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
         if(typeof run!=='function'||entry.framesAllowed)throw Error('Invalid cooperative frame scope');
         if(typeof runtime?.requestFrame!=='function')throw Error('Cooperative frame admission adapter required');
         entry.framesAllowed=true;admitFrames();
-        const scope=Promise.resolve().then(run).finally(()=>{entry.framesAllowed=false;});
+        const scope=Promise.resolve().then(run).finally(async()=>{
+          entry.framesAllowed=false;
+          await Promise.allSettled([...foregroundFrames].map(frame=>frame.settlement));
+          await Promise.allSettled([...controls]);
+        });
         (entry.frameScopes??=[]).push(scope);
         scope.catch(()=>{}); // The command boundary observes failures, even if its adapter forgets to await.
         return scope;
       },
       transfer(values){assertCurrent();if(!Array.isArray(values))throw Error('Result transfer list must be an array');entry.transfer=values;},
-      report(value,{transfer=[]}={}){assertCurrent();send({kind:'progress',requestId:entry.data.requestId,sequence:++entry.progress,value},transfer);},
+      report(value,{transfer=[]}={}){assertCurrent();send({kind:'progress',requestId:entry.data.requestId,sequence:entry.progress+1,value},transfer);entry.progress++;},
     });
   }
   function requireSettled(){
@@ -169,8 +181,11 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
     if(operation==='initialize'){
       if(runtime)throw Error('Scene worker already initialized');
       phase='starting';
-      runtime=await createRuntime({payload,context:ctx,lifecycle});
-      if(!runtime||typeof runtime!=='object')throw Error('Scene worker factory returned no runtime');
+      const candidate=await createRuntime({payload,context:ctx,lifecycle});
+      if(!candidate||typeof candidate!=='object')throw Error('Scene worker factory returned no runtime');
+      // A returned runtime owns resources even if cancellation arrived during
+      // construction. Retain it for explicit retirement rather than leak it.
+      runtime=candidate;
       ctx.assertCurrent();phase='active';output={initialized:true};
     }else if(operation==='retire'){
       if(!runtime)throw Error('Scene worker not initialized');
@@ -198,7 +213,11 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
       }else{
         if(!Object.hasOwn(runtime.commands??{},operation)||typeof runtime.commands[operation]!=='function')throw Error(`Unknown scene worker operation: ${operation}`);
         try{output=await runtime.commands[operation](payload,ctx);}
-        finally{await Promise.all(entry.frameScopes??[]);}
+        finally{
+          const scopes=await Promise.allSettled(entry.frameScopes??[]);
+          const failed=scopes.find(scope=>scope.status==='rejected');
+          if(failed)throw failed.reason;
+        }
       }
     }
     ctx.assertCurrent();
@@ -281,7 +300,11 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
       const entry={data,controller:new AbortController(),progress:0,transfer:[]};entries.set(data.requestId,entry);queue.push(entry);
       admitFrames();
       pump().catch(cause=>{lastError=errorRecord(cause);phase='transport-failed';});
-    }catch(cause){lastError=errorRecord(cause);if(sessionId)send({kind:'fault',error:lastError});}
+    }catch(cause){
+      lastError=errorRecord(cause);phase='transport-failed';
+      const replySession=sessionId??(data?.schema===SCENE_WORKER_REQUEST&&typeof data.sessionId==='string'&&data.sessionId?data.sessionId:null);
+      if(replySession)send({kind:'fault',sessionId:replySession,error:lastError});
+    }
   }
   port.addEventListener('message',message);port.start?.();
   return Object.freeze({invalidate:part=>advance(part),lifecycle,
