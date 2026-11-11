@@ -339,14 +339,14 @@ test('an invalid caller result destination fails before model work',async()=>{
  assert.equal(h.loads(),0);assert.equal(h.service.busy(),false);
 });
 
-test('with the app GPU host, klein borrows its session and runs as a klein route on the one app service',async()=>{
+test('with the app GPU host, klein borrows its session without page prototype or handoff dependencies',async()=>{
  const log=[],prototype=prototypeDouble(),host={setForegroundServiceActive(){},runForegroundFrame:run=>run()};
  const handoff=createForegroundHandoff({prototype,host,waitFrame:tick});
  const device={features:new Set(['shader-f16']),queue:{submit(){}}};
  const session={registerRoute:async({routeId})=>({routeId,runtime:{},enqueue:({jobId,execute})=>({completion:(async()=>({status:'succeeded',output:await execute({jobId})}))()}),drain:async()=>log.push('drain')}),unregisterRoute:()=>{}};
  const appHost={session:async()=>{log.push('host-session');return session;},beginRun:async(runId,{routeId})=>{log.push(`begin:${routeId}`);return {foregroundOpportunities:{},withForeground:fn=>fn(),finish:async()=>log.push('finish')};}};
  const service=createKleinAuthoringImageGeneration({
-  context:()=>({sharedGpu:{device,queue:device.queue},prototype,host,handoff}),appHost:async()=>appHost,
+  context:()=>({sharedGpu:{device,queue:device.queue}}),appHost:async()=>appHost,
   kit:async()=>({createWebGpuInferenceSession:async()=>{throw Error('no private session with an app host');},createWebGpuForegroundService:()=>{throw Error('no private foreground service with an app host');},createWebGpuInferenceControl:()=>({close:async()=>{}})}),
   weights:async()=>'/klein-weights',
   createPipeline:()=>({load:async()=>{},generate:async r=>({rgba:new Uint8ClampedArray(r.width*r.height*4),width:r.width,height:r.height,timings:{}})}),
