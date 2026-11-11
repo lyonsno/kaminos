@@ -91,5 +91,6 @@ console.log('ordered worker recovery waits for fresh commands, fences stale cont
  const recovery=createDeviceRecovery({device:first,automatic:false,stop:()=>{},rebuild:()=>gate.promise});
  first.destroy();await tick();const task=recovery.recover({assertCurrent(){}});await tick();
  assert.throws(()=>recovery.recover(),/command.*assertCurrent/,'an in-flight rebuild cannot bypass command admission');
+ assert.throws(()=>recovery.recover({assertCurrent(){}}),/already in progress/,'a second command cannot inherit the first command result');
  gate.resolve();await task;recovery.dispose();
 }
