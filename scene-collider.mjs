@@ -42,14 +42,14 @@ const digestHex=async bytes=>Array.from(new Uint8Array(await crypto.subtle.diges
 
 function eligibleMesh(mesh) {
   if(!mesh.isMesh)return false;
-  for(let node=mesh;node;node=node.parent)if(!node.visible || node.userData?.kaminosBeautyLodProxy || node.userData?.kaminosEditorHelper || node.userData?.kaminosEditorOnly)return false;
+  for(let node=mesh;node;node=node.parent)if(!node.visible || node.userData?.kaminosBeautyLodProxy || node.userData?.kaminosNonSolidVisual || node.userData?.kaminosEditorHelper || node.userData?.kaminosEditorOnly)return false;
   return true;
 }
 
 function intrinsicHeroMesh(mesh,root) {
   if(!mesh.isMesh)return false;
   for(let node=mesh;node;node=node.parent){
-    if(node.userData?.kaminosBeautyLodProxy || node.userData?.kaminosEditorHelper || node.userData?.kaminosEditorOnly)return false;
+    if(node.userData?.kaminosBeautyLodProxy || node.userData?.kaminosNonSolidVisual || node.userData?.kaminosEditorHelper || node.userData?.kaminosEditorOnly)return false;
     if(node!==root && node.userData?.kaminosRepetitionCopy)return false;
   }
   return true;

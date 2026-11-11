@@ -223,7 +223,7 @@ export function createAshSceneSolids({device,layout:p,collision,headers,collisio
    const restoreBeauty=object.userData?.kaminosBeautyLodRestore?.()??null;
    try{
     object.updateWorldMatrix(true,true);object.traverse(mesh=>{
-     if(!mesh.isMesh)return;for(let n=mesh;n;n=n.parent)if(!n.visible||n.userData?.kaminosEditorHelper||n.userData?.kaminosEditorOnly||n.userData?.kaminosBeautyLodProxy)return;
+     if(!mesh.isMesh)return;for(let n=mesh;n;n=n.parent)if(!n.visible||n.userData?.kaminosEditorHelper||n.userData?.kaminosEditorOnly||n.userData?.kaminosBeautyLodProxy||n.userData?.kaminosNonSolidVisual)return;
      meshes.set(mesh.uuid,{mesh,id,objectKey});
     });
    }finally{restoreBeauty?.();}
