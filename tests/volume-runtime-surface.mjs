@@ -16,10 +16,12 @@ test('complete production runtime constructs and disposes without page globals o
  const transparency=[];let disposed=0;
  const presentationSurface=createOffscreenVolumeSurface({canvas,readViewport:()=>({width:32,height:32}),onTransparent:value=>transparency.push(value),onDispose:()=>disposed++});
  const runtime=createKaminosVolumePrototype({THREE,camera:new THREE.PerspectiveCamera(),getControls:()=>({resolution:16}),presentationSurface,
-   transparentCanvas:true,frameScheduler:{requestAnimationFrame(){throw Error('unexpected frame admission');},cancelAnimationFrame(){}}});
+   transparentCanvas:true,frameScheduleOwner:'host',frameScheduler:{requestAnimationFrame(){throw Error('unexpected frame admission');},cancelAnimationFrame(){}}});
  assert.equal(runtime.canvasElement(),canvas);assert.equal(runtime.isActive(),false);
  assert.deepEqual(transparency,[true]);runtime.setSceneCompositionPresentation(false);assert.deepEqual(transparency,[true,false]);
  assert.equal(runtime.debugState().active,false);
+ assert.equal(runtime.debugState().frameScheduleOwner,'host');assert.equal(runtime.renderSharedFrame().reason,'inactive');
+ assert.throws(()=>createKaminosVolumePrototype({frameScheduleOwner:'unknown'}),/unsupported-volume-frame-schedule-owner/);
  await runtime.dispose();assert.equal(disposed,1);
 });
 
@@ -65,6 +67,8 @@ test('injected scheduler preserves its owning context and cancellation handle',(
  const c={PROTOTYPE_IDENTITY:'v',ROUTE_IDENTITY:'r'};vm.createContext(c);vm.runInContext(body,c);
  const runtime=c.createKaminosVolumePrototype({presentationSurface:{canvas:{},setTransparent(){}},frameScheduler:scheduler});
  const callback=()=>{};assert.equal(runtime.requestAnimationFrame(callback),73);runtime.cancelAnimationFrame(73);assert.deepEqual(calls,[callback,73]);
+ const host=c.createKaminosVolumePrototype({presentationSurface:{canvas:{},setTransparent(){}},frameScheduler:scheduler,frameScheduleOwner:'host'});
+ assert.equal(host.requestAnimationFrame(callback),0,'the scene host owns frame cadence');assert.deepEqual(calls,[callback,73]);
 });
 
 test('production resize uses host viewport and capture extent without page globals',()=>{

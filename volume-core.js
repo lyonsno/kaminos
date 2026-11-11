@@ -11247,6 +11247,7 @@ export function createKaminosVolumePrototype({
   onStatus,
   presentationSurface = null,
   frameScheduler = globalThis,
+  frameScheduleOwner = 'runtime',
   rayStepTelemetryDisplay = null,
   sharedGpuContext = null,
   getSceneDepth = null,
@@ -11264,6 +11265,7 @@ export function createKaminosVolumePrototype({
   if (productFrameOwner !== 'prototype' && productFrameOwner !== 'caller') {
     throw new Error(`unsupported-product-frame-owner:${productFrameOwner}`);
   }
+  if(!['runtime','host'].includes(frameScheduleOwner))throw Error('unsupported-volume-frame-schedule-owner');
   if (productFrameOwner === 'caller' && (!externalDevice || !externalColorFormat)) {
     throw new Error('caller-product-frame-requires-external-device-and-color-format');
   }
@@ -11299,7 +11301,7 @@ export function createKaminosVolumePrototype({
   });
   const canvas = surface.canvas;
   surface.setTransparent(Boolean(transparentCanvas));
-  const requestAnimationFrame = callback => frameScheduler.requestAnimationFrame(callback);
+  const requestAnimationFrame = callback => frameScheduleOwner==='host'?0:frameScheduler.requestAnimationFrame(callback);
   const cancelAnimationFrame = handle => frameScheduler.cancelAnimationFrame(handle);
   const productTransform = {
     translate: Array.isArray(externalProductTransform?.translate)
@@ -11360,6 +11362,7 @@ export function createKaminosVolumePrototype({
     effectiveRoute: ROUTE_IDENTITY,
     sceneCollision: { requested: false, effective: 'off', sourceId: null, reason: null, grid: null, solidCellCount: 0 },
     productFrameOwner,
+    frameScheduleOwner,
     productFrameIdentity: productFrameOwner === 'caller'
       ? 'product-frame-smoke-raymarch-under-splats-v0'
       : null,
@@ -22072,6 +22075,7 @@ export function createKaminosVolumePrototype({
   function setForegroundOpportunityRequester(requester) {
     if(deviceRetired&&requester)throw Error('Volume GPU device retired');
     if (requester !== null && typeof requester !== 'function') throw new Error('foreground requester must be a function or null');
+    if(requester&&frameScheduleOwner==='host')throw Error('host-scheduled-volume-uses-renderSharedFrame');
     if (foregroundPending) throw new Error('foreground frame is still pending');
     if (productFrameOwner === 'caller') throw new Error('ordinary foreground service requires the prototype-owned renderer');
     if (requester && (boundarySplatRequested() || browserResidualCanApply())) throw new Error('ordinary foreground service requires the ordinary raymarch route');
@@ -22424,6 +22428,7 @@ export function createKaminosVolumePrototype({
   }
 
   function pumpLookLabFrozenFrame() {
+    if(frameScheduleOwner==='host')return;
     if (!state.active || !device) return;
     if (!(normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state))) return;
     cancelAnimationFrame(raf);
@@ -29178,6 +29183,17 @@ export function createKaminosVolumePrototype({
       deviceRetired=true;activitySequence++;state.active=false;
       foregroundRequester=null;cancelAnimationFrame(raf);raf=0;
       surface.setActive(false);
+    },
+    renderSharedFrame({now=performance.now(),service}={}) {
+      if(frameScheduleOwner!=='host'||productFrameOwner!=='prototype')throw Error('shared-frame-requires-host-scheduled-ordinary-volume');
+      const reason=deviceRetired?'device-retired':!state.active?'inactive':sceneLightingRebuildPending?'lighting-rebuild':stillPresentationHeld?'still-presentation':selectiveHeadLiveCapturePaused?'capture-paused':null;
+      if(reason)return {status:'held',reason,frameCount:state.frameCount,simStepCount:state.simStepCount};
+      if(!device||!gpuInitialized)throw Error('shared-frame-gpu-not-initialized');
+      if(foregroundRequester||foregroundPending)throw Error('shared-frame-conflicts-with-private-foreground-owner');
+      if(service?.device!==device||service?.queue!==device.queue||typeof service?.submit!=='function')throw Error('shared-frame-device-queue-mismatch');
+      if(service.signal?.aborted)throw service.signal.reason??Error('shared-frame-aborted');
+      if(!Number.isFinite(now))throw Error('shared-frame-time-must-be-finite');
+      return renderOrdinaryFrame(now,service);
     },
     setForegroundOpportunityRequester,
     foregroundGpuContext() {
