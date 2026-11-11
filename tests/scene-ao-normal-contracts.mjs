@@ -5,7 +5,7 @@ import vm from 'node:vm';
 // Execute the actual pre-pass expression. Native kiln evidence separately
 // exercises Three's shader build, raster winding and GTAO integration.
 const source = readFileSync(new URL('../scene-lighting-graph.mjs', import.meta.url), 'utf8');
-const start = source.indexOf('  const prePass = pass(scene, camera);');
+const start = source.indexOf('  const prePass = keep(pass(scene, camera));');
 const end = source.indexOf('  const prePassNormal =', start);
 assert.ok(start >= 0 && end > start);
 class Vector {
@@ -20,7 +20,7 @@ function normalOutput(normal, view) {
   let output;
   const prePass = { setMRT(value) { output = value.output; } };
   vm.runInNewContext(source.slice(start, end), {
-    scene: {}, camera: {}, pass: () => prePass, mrt: value => value,
+    scene: {}, camera: {}, pass: () => prePass, keep: value => value, mrt: value => value,
     packNormalToRGB: value => value,
     normalView: new Vector(normal), positionViewDirection: new Vector(view),
   });
