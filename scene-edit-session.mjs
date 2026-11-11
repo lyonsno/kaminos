@@ -72,12 +72,12 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
     return state();
   }
 
-  function preview(patch) {
+  function preview(patch, context = {}) {
     admit();
     assertAvailable();
     if (!active) throw new Error('No scene edit is active');
     const pose = check(active.id, { ...get(active.id), ...patch });
-    put(active.id, pose, { operation: 'preview' });
+    put(active.id, pose, { ...context, operation: 'preview' });
     notify();
     return clone(pose);
   }

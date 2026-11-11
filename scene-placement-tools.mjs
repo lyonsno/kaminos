@@ -184,7 +184,7 @@ export function installScenePlacementTools({
       const rotation=current.frame==='local'?current.frameRotation:[0,0,0];
       base={...base,rotation:[...rotation],frame:{position:[...base.position],rotation:[...rotation],scale:[...base.scale]},preferences:{...base.preferences,orientation:current.frame}};
     }
-    edits.preview({...base,...transformPose(base, { ...current, amount, delta: delta.toArray(), viewAxis: forward.toArray(), snap })});
+    edits.preview({...base,...transformPose(base, { ...current, amount, delta: delta.toArray(), viewAxis: forward.toArray(), snap })},{transform:current.operation});
     current.amount = amount;
     draw();
   }
