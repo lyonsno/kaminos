@@ -1,0 +1,94 @@
+import {createSceneRenderObjects,createSceneRenderer} from './scene-render-bootstrap.mjs';
+import {createOffscreenVolumeSurface} from './volume-runtime-surface.mjs';
+import {createAppGpuHost} from './app-gpu-host.mjs';
+import {createVolumeWorkerFrameBinding} from './volume-worker-frame-binding.mjs';
+import {createSceneWorkerMutationBinding} from './scene-worker-mutation-binding.mjs';
+import {createKleinSceneWorkerAdapter} from './authoring-image-worker-adapter.mjs';
+import {sharedDeviceHostRequirements} from './authoring-image-operation.mjs';
+
+const reserved=new Set(['initialize','retire','frame']);
+function register(...maps){
+ const commands=Object.create(null);
+ for(const map of maps)for(const [name,handler] of Object.entries(map??{})){
+  if(reserved.has(name)||Object.hasOwn(commands,name))throw Error(`scene worker command collision or reserved operation: ${name}`);
+  if(typeof handler!=='function')throw Error(`scene worker command is not callable: ${name}`);
+  commands[name]=handler;
+ }
+ return commands;
+}
+
+// This factory and its domain constructor live inside the Worker. Only plain
+// initialization data and transferred canvases cross the message boundary.
+// createSceneResources returns its cleanup-capable shell before allocating;
+// its initialize/attachVolume methods construct the actual local domain graph.
+// There is deliberately no basic-renderer or alternate-device fallback.
+export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imageOptions=null,samRequirements=null,services={}}={}){
+ if(!THREE||typeof createSceneResources!=='function')throw Error('scene worker needs its Three namespace and actual scene resource constructor');
+ return ({payload,lifecycle})=>{
+  let shared=null,renderer=null,pmrem=null,sceneResources=null,volume=null,appHost=null,frames=null,mutations=null,image=null;
+  let commands=null,foregroundCommands=null,started=false,queueSettled=false,appRetired=false;
+  const viewport=()=>payload.viewport;
+  function current(){if(!frames)throw Error('scene worker runtime is not initialized');}
+  return {
+   get host(){return appHost;},get commands(){return commands;},get foregroundCommands(){return foregroundCommands;},
+   async initialize(ctx){
+    if(started)throw Error('scene worker runtime initialization already attempted');started=true;ctx.assertCurrent();
+    const api=services.requestDevice&&services.createVolume?null:await import('./volume-core.js');
+    const kit=services.kit??await import('./webgpu-inference-kit/src/core.js');ctx.assertCurrent();
+    shared=await (services.requestDevice??api.requestKaminosSharedWebGpuDevice)({hostRequirements:sharedDeviceHostRequirements({sam:samRequirements})});
+    ctx.assertCurrent();
+    if(!shared?.device||shared.queue&&shared.queue!==shared.device.queue)throw Error('scene worker acquisition did not return one shared device and queue');
+    const objects=(services.createRenderObjects??createSceneRenderObjects)({THREE,viewport});
+    try{
+     const built=await (services.createRenderer??createSceneRenderer)({THREE,...objects,sharedGpu:shared,canvas:payload.sceneCanvas,viewport,
+      exposure:payload.exposure??1,onConstructed:value=>{renderer=value;}});
+     renderer=built.renderer;pmrem=built.pmremGenerator;
+    }catch(error){
+     // The bootstrap already disposes its early renderer on a clean failure.
+     // If that disposal failed, keep the onConstructed handle for retry.
+     if(!error.cleanupError)renderer=null;
+     throw error;
+    }
+    ctx.assertCurrent();
+    sceneResources=createSceneResources({...objects,THREE,renderer,pmremGenerator:pmrem,sharedGpu:shared,payload,lifecycle,viewport,readAppHost:()=>appHost});
+    if(typeof sceneResources?.retire!=='function'||typeof sceneResources?.initialize!=='function')throw Error('scene resource shell requires initialize and retire');
+    await sceneResources.initialize(ctx);ctx.assertCurrent();
+    const sceneFrames=sceneResources.frames;
+    if(typeof sceneFrames?.runForegroundFrame!=='function'||typeof sceneFrames?.setForegroundServiceActive!=='function')throw Error('scene worker requires the actual ordinary scene frame runtime');
+    appHost=createAppGpuHost({sharedGpu:shared,host:sceneFrames,kit,frameOwner:()=>frames});
+    volume=(services.createVolume??api.createKaminosVolumePrototype)({...sceneResources.volumeOptions,
+     THREE,camera:objects.camera,getControls:()=>payload.flameControls,
+     presentationSurface:createOffscreenVolumeSurface({canvas:payload.volumeCanvas,readViewport:viewport}),
+     sharedGpuContext:shared,frameScheduleOwner:'host',productFrameOwner:'prototype'});
+    await volume.setActive(true);ctx.assertCurrent();
+    frames=createVolumeWorkerFrameBinding({appHost,volume,applyFrameInputs:(input,context)=>sceneResources.applyFrameInputs(input,context)});
+    mutations=createSceneWorkerMutationBinding({appHost});
+    if(typeof sceneResources.attachVolume!=='function')throw Error('scene worker requires actual scene/flame source and transport attachment');
+    await sceneResources.attachVolume({volume,appHost,context:ctx});ctx.assertCurrent();
+    if(imageOptions)image=createKleinSceneWorkerAdapter({...imageOptions,context:()=>({sharedGpu:shared,prototype:volume,host:sceneFrames}),appHost:()=>appHost,kit:()=>kit});
+    commands=register(sceneResources.commands,image?.commands);foregroundCommands=register(sceneResources.foregroundCommands);
+    for(const name of Object.keys(foregroundCommands))if(Object.hasOwn(commands,name))throw Error(`scene worker command collision: ${name}`);
+    ctx.assertCurrent();
+   },
+   frame(input,ctx){current();return frames.frame(input,ctx);},
+   requestFrame(input,ctx,draw){current();return frames.requestFrame(input,ctx,draw);},
+   requestMutation(operation,input,ctx,apply){current();return mutations.requestMutation(operation,input,ctx,apply);},
+   control(action,input,ctx){current();if(!image)throw Error('scene worker has no image operation');return image.control(action,input,ctx);},
+   async retire(ctx){
+    if(appHost?.unsettledRuns().length)throw Object.assign(Error('scene worker still has unsettled inference runs'),{gpuRouteHeld:true});
+    // Clear handles only after their cleanup succeeds. A failure leaves this
+    // same retained shell available to explicit retirement retry.
+    if(image){await image.retire();image=null;}
+    if(appHost&&!appRetired){await appHost.retire();appRetired=true;}
+    if(shared&&!queueSettled){await shared.device.queue.onSubmittedWorkDone();queueSettled=true;}
+    if(sceneResources){await sceneResources.retire(ctx);sceneResources=null;}
+    if(volume){await volume.dispose();volume=null;}
+    if(pmrem){await pmrem.dispose();pmrem=null;}
+    if(renderer){await renderer.dispose();renderer=null;}
+    if(shared){shared.device.destroy();shared=null;}
+    appHost=null;frames=null;mutations=null;commands=null;foregroundCommands=null;
+    return {retired:true};
+   },
+  };
+ };
+}
