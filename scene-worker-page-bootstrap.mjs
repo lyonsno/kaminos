@@ -69,10 +69,12 @@ export function mountSceneWorkerPage({document,window,THREE,createControls,insta
      for(const key of ['fov','near','far'])camera[key]=restored[key];camera.updateProjectionMatrix();controls.update();}
     finally{controls.enableDamping=damping;}
    }
+   if(value.environmentLoading){const state=value.environmentLoading,label=document.getElementById('env-loading');if(label){label.style.display=state.quality==='full'?'none':'block';label.textContent=state.pending?`${state.name??'Environment'} · lighting loading…`:`${state.name??'Environment'} · ${state.quality==='preview'?'preview lighting':'neutral fallback'} · full map unavailable`;}}
    ui=next;if(Object.keys(value).some(key=>['objects','selection','groups','history','document'].includes(key)))editor?.render(ui);
   },
   onPhase(value){
    for(const canvas of Object.values(canvases))canvas.dataset.sceneWorkerState=value;
+   if(value==='active')report('Scene loaded');
    if(['held','retiring','retired','closed'].includes(value)){ui=null;editor?.render(null);report(`Worker scene ${value}; previous scene metadata is unavailable`);}
   },
   onProgress,onError:error=>report(`Worker scene: ${error.message}`)});
@@ -81,7 +83,7 @@ export function mountSceneWorkerPage({document,window,THREE,createControls,insta
  function detach(){if(closed)return;closed=true;editor?.dispose();navigation.dispose();controls.dispose();navigationInput.removeEventListener('change',navigationChanged);}
  const pagehide=()=>{page.holdFrames('Page leaving; resource retirement requested');void page.retire().then(detach,error=>report(`Worker cleanup held: ${error.message}`));};
  window.addEventListener('pagehide',pagehide,{once:true});
- return Object.freeze({page,image,editor,camera,controls,navigation,canvases,
+ return Object.freeze({page,image,editor,frameSelected:()=>boundsFrame(ui?.selectionBounds),camera,controls,navigation,canvases,
   start:()=>page.start(),
   async retire(){const result=await page.retire();detach();window.removeEventListener('pagehide',pagehide);for(const canvas of Object.values(canvases))canvas.remove();return result;},
   read:()=>({worker:page.read(),ui,navigation:navigation.state()}),

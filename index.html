@@ -27727,6 +27727,17 @@ async function initSceneWorkerPage(admission) {
     onProgress:event=>{const phase=event.value?.phase;if(typeof phase==='string')window.kaminosStartup?.phase(phase);},
   });
   window.kaminosSceneWorker = sceneWorkerPresentation;
+  await volumeCockpitLayoutReady;
+  const workerEditor=sceneWorkerPresentation.editor;
+  authoringWorkspace=installAuthoringWorkspace({document,edits:workerEditor.edits,
+    initialMode:new URLSearchParams(location.hash.slice(1)).get('workspace')==='authoring'?'authoring':'workbench',
+    openWorkbenchTab:tab=>setActiveTab(tab)});
+  window.kaminosWorkspace=authoringWorkspace;
+  authoringWorkspace.setWorkbenchInspector(true);
+  window.kaminosFrameSelected=sceneWorkerPresentation.frameSelected;
+  window.selectSceneField=id=>workerEditor.select([id]).catch(error=>setInfo(error.message));
+  // Await the actual worker owners before these existing controls can edit.
+  for(const selector of ['#authoring-box','#authoring-duplicate','#authoring-delete','#authoring-group-selection','#authoring-presets button','#authoring-gizmo-slot button','#selection-orientation','#selection-pivot','#viewport-studio-look-select','#authoring-viewport-settings input','#authoring-object-tools button','#authoring-transform-slot button','#scene-add-menu button','#composition-capture','button[onclick="exportGLB()"]'])for(const control of document.querySelectorAll(selector)){control.disabled=true;control.title='Unavailable in this preview';}
   return sceneWorkerPresentation.start();
 }
 let startupSceneAdmitted = false;
