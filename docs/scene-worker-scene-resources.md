@@ -158,7 +158,9 @@ and final activation. The ordinary shell supplies these presentation operations:
   `domains.reattachVolume(input)` and a restored presentation. That domain hook
   joins the newly prepared volume and may compile its lighting. Only successful
   current completion releases the ordinary drawing hold. It never calls startup
-  `attachVolume` or replays `payload.admission.data`.
+  `attachVolume` or replays `payload.admission.data`. Its returned `ui` contains
+  current bounds, selection and authored object records for the recovery reply;
+  these reflect unsaved edits retained by the worker.
 
 The root orders stop, volume/model/frame quiescence and domain presentation
 release before ordinary presentation release and renderer replacement. It then

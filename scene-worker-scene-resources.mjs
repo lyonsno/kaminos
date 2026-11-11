@@ -258,12 +258,12 @@ export function createSceneWorkerSceneResources(context){
   },
   async releaseVolume(input){
    current(input.context);if(!presentationHeld)throw Error('Stop presentation before releasing its volume');
-   const result=await required(domains.releaseVolume,'domains.releaseVolume')(input);current(input.context);return result;
+   const result=await required(domains.releaseVolume,'domains.releaseVolume').call(domains,input);current(input.context);return result;
   },
   async reattachVolume(input){
    current(input.context);if(!presentationHeld||!presentationRestored)throw Error('Restore presentation before reattaching its volume');
-   await required(domains.reattachVolume,'domains.reattachVolume')(input);current(input.context);
-   attached=true;presentationHeld=false;appearance.environment.releaseFull();return {attached:true};
+   await required(domains.reattachVolume,'domains.reattachVolume').call(domains,input);current(input.context);
+   const ui=projection();current(input.context);attached=true;presentationHeld=false;appearance.environment.releaseFull();return {attached:true,ui};
   },
   async prepareVolume(input){current(input.context);volume=input.volume;await domains.prepareVolume(input);current(input.context);},
   async attachVolume(input){

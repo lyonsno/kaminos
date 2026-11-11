@@ -240,7 +240,8 @@ test('presentation replacement preserves unsaved authored identity and reattache
  assert.equal(ordinary.appearance,appearance);assert.notEqual(f.scene.environment,oldMap);assert.equal(replacement.toneMappingExposure,settingsBefore.environment.exposure);
  assert.deepEqual(ordinary.readSettings(),settingsBefore);assert.deepEqual(ordinary.bloom.read().settings,bloomBefore);
  assert.equal(f.shell.readUi().surfaces.scene.active,false,'restoring presentation alone cannot claim domain attachment');
- await f.shell.prepareVolume({volume:{},context:f.ctx});await f.shell.reattachVolume({volume:{},appHost:{},context:f.ctx});
+ await f.shell.prepareVolume({volume:{},context:f.ctx});const recovered=await f.shell.reattachVolume({volume:{},appHost:{},context:f.ctx});
+ assert.deepEqual(recovered.ui.selection.ids,['mesh']);assert.deepEqual(recovered.ui.objects.find(e=>e.id==='mesh').transform.position,[9,8,7]);assert(recovered.ui.bounds);
  assert.deepEqual(object.position.toArray(),[9,8,7]);assert.deepEqual(ordinary.workingScene.selection.ids,['mesh']);assert.equal(authoredDisposals,0);
  assert.equal(f.events.filter(e=>e==='document.prepare').length,1,'recovery cannot reapply the initial saved document');
  assert.equal(f.ctx.reports.filter(r=>r.ui?.initialization?.sceneApplied).length,1,'recovery is not a second startup');
