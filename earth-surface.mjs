@@ -61,6 +61,6 @@ export function createEarthTeacherSource({snapshot,resolution=40,halo=0}={}){
  let projected=0,heightMoment=0;for(const t of central)if(t.materialIndex===0){const n=cross(sub(t.b,t.a),sub(t.c,t.a));if(n[1]>0){projected+=n[1];heightMoment+=n[1]*(t.a[1]+t.b[1]+t.c[1])/3;}}
  const samplingPlaneHeight=projected?heightMoment/projected:0;
  for(let z=-halo;z<=halo;z++)for(let x=-halo;x<=halo;x++)if(x||z)for(const t of central){const shift=p=>[p[0]+width*x,p[1],p[2]+width*z];triangles.push({...t,a:shift(t.a),b:shift(t.b),c:shift(t.c),identity:`${t.identity}@${x},${z}`});}
- return {schema:'kaminos.earth-teacher.v1',config:{kind:'earth-specimen',tileSize:width,resolution,halo,snapshot:field.snapshot},samplingPlaneHeight,materials:structuredClone(EARTH_MATERIALS),triangles,referenceHeight:Math.max(...central.flatMap(t=>[t.a[1],t.b[1],t.c[1]]))+.002,
+ return {schema:'kaminos.earth-teacher.v1',config:{kind:'earth-specimen',tileSize:width,resolution,halo,snapshot:field.snapshot},samplingPlaneHeight,materials:structuredClone(EARTH_MATERIALS),triangles,referenceHeight:central.reduce((height,t)=>Math.max(height,t.a[1],t.b[1],t.c[1]),-Infinity)+.002,
   boundary:'Bounded formed specimen; finite repeated halo when requested. Seamless periodic material is not established.',reconstruction:{kind:'compact particle density isosurface, marching tetrahedra',resolution,matrixTriangles:central.filter(t=>t.materialIndex===0).length},unit:'metres'};
 }

@@ -1,10 +1,25 @@
 # Earth material workshop
 
-Open `?workspace=workbench&experiment=earth-material` to work a small bounded
-specimen of cohesive earth and explicit mineral grit. Move the translucent
-spherical forming tool using ordinary scene selection and the transform gizmo,
-then choose **Press at tool**. Press depth and duration are editable. **Advance
-earth** lets gravity and contacts evolve the specimen without the tool.
+Open `?workspace=workbench&experiment=earth-material`. The left experiment panel
+is hidden for this workshop. **Earth** is anchored to the specimen; **Press** and
+**Stroke** are anchored to its forming sphere. Move the sphere with the ordinary
+scene gizmo, then press. Earth opens cohesion, friction and yield controls plus
+**Settle**. Surface and specimen-file actions are folded under that same control.
+Existing camera/transform keys remain unchanged; there are no new domain hotkeys.
+
+Detail and timing values are typed and committed with Enter, rather than dragged
+or applied on each keystroke. A rejected request restores the accepted value and
+shows its error in the viewport. Interactive timing controls support 0.01–1 second
+per operation; the underlying physical preparation API still accepts longer work.
+This is an interactive control allowance, not a measured solver capacity ceiling.
+
+Surface rebuilding runs in a disposable worker after checking a conservative
+worst-case mesh-buffer bound against the active device's `maxBufferSize` and an
+estimated transient-memory bound against available JS heap when exposed by the
+browser. It never silently reduces detail. **Stop** cancels reconstruction and
+retains the last completed surface; it also stops a forming operation at its next
+physical chunk. The retained physical state may have advanced beyond that last
+surface after a stopped stroke; the next successful action rebuilds it.
 
 The first preparation model uses the already installed Cannon ES 0.20.0 CPU
 contact/rigid solver. Soil is represented by contacting mass-bearing spheres
@@ -17,16 +32,16 @@ calibrated soil continuum or a retained Hill terrain fork. The tray has fixed
 sides and a base. No periodic dynamics or seamless material is claimed.
 
 A compact particle-density field supplies the implicit matrix. A coarse marching
-tetrahedra mesh previews that field; **Prepare capture mesh** extracts it at the
+tetrahedra mesh previews that field; rendering or exporting a teacher extracts it at the
 capture detail setting. Changing extraction detail leaves physical state intact.
 Explicit grit keeps its actual convex geometry in both reconstructions. The
 initial field can look overly smooth or bead-like; this implementation is the
 surface we will improve through authoring, not a claim of naturalistic earth.
 
-**Trace frozen specimen** prepares the capture mesh and opens the same frozen
+**Render frozen surface** prepares the capture mesh and opens the same frozen
 state as a single bounded specimen in the existing surface path tracer, under
 the ordinary scene camera and lights. The saved training recipe separately retains
-its finite repeated query neighborhood. **Return to material workshop** restores the saved authoring specimen.
+its finite repeated query neighborhood. **Back to earth** restores the saved authoring specimen.
 This switch has one active experiment at a time. The physical forming tool is
 excluded from the frozen material response. Source capture supports native
 point/spot/directional lights and constant environment through the existing
@@ -67,3 +82,16 @@ Capture recipes add one repeated neighbor ring to reduce bounded-edge misses.
 This remains a finite-neighborhood approximation with visible authored seams,
 not an infinite periodic transport solution. Inspect the source before investing
 in a fit, particularly at grazing directions.
+
+The source-height scan is iterative. Dense triangle output no longer expands
+three heights per triangle into function arguments, which previously raised
+`RangeError: Maximum call stack size exceeded` independently of GPU capacity.
+The regression retains 60,000 explicit grit faces without this argument overflow.
+The exact operator-reported resolution threshold remains to be exercised through
+Greenroom; the crash is not treated as proof of a physical resolution ceiling.
+
+The transport view also has no left-panel controls: **Back to earth**, pause, and
+folded render settings live subtly in the viewport. Interactive render controls
+support scale0.02–1 and1–8 bounces; the shared integrator/capture API retains its
+own device-based limits. These preview allowances prevent accidental expensive
+live work and are not claims about offline integration capacity.

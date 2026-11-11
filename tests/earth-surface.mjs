@@ -18,3 +18,6 @@ assert.throws(()=>createEarthTeacherSource({snapshot,resolution:12,halo:-1}),/ha
 const repeat=createEarthTeacherSource({snapshot,resolution:12,halo:1});
 assert.equal(repeat.triangles.length,source.triangles.length*9,'finite halo repeats the complete source');
 console.log('implicit matrix, complete mesh/grit, frozen identity, invalid input and halo checks pass');
+
+const dense=structuredClone(snapshot);dense.config.grains=3000;dense.grit=Array.from({length:3000},()=>structuredClone(snapshot.grit[0]));
+const denseSource=createEarthTeacherSource({snapshot:dense,resolution:2});assert.equal(denseSource.triangles.filter(t=>t.kind==="grit").length,60000);assert.ok(Number.isFinite(denseSource.referenceHeight));
