@@ -234,10 +234,12 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
     task.finally(()=>controls.delete(task)).catch(()=>{});
   }
   function admitFrames(){
-    // Only the active command explicitly opens a foreground window. A queued
-    // authored mutation stays ahead of later frames; no request is discarded.
-    while(active?.framesAllowed&&queue[0]?.data.operation==='frame'){
-      const entry=queue.shift();foregroundFrames.add(entry);
+    // A frame observes the applied scene while authored mutations wait their
+    // ordered turn. Pending edits cannot stop navigation/rendering for the
+    // duration of inference. Only the explicit cooperative scope permits this.
+    for(let index=0;active?.framesAllowed&&index<queue.length;){
+      if(queue[index].data.operation!=='frame'){index++;continue;}
+      const [entry]=queue.splice(index,1);foregroundFrames.add(entry);
       entry.settlement=frameTail.then(()=>settle(entry)).finally(()=>foregroundFrames.delete(entry));
       frameTail=entry.settlement.catch(cause=>{lastError=errorRecord(cause);phase='transport-failed';});
     }

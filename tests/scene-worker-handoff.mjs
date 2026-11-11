@@ -6,6 +6,24 @@ import {createSceneFrameComposition} from '../scene-frame-composition.mjs';
 
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
+test('queued authored edits do not freeze cooperative frames or pretend pending state was applied',async t=>{
+  const started=deferred(),finish=deferred(),edits=[];let value=0,draws=0;
+  const {client}=await harness(t,async()=>({commands:{
+    model:(_,ctx)=>ctx.withFrames(async()=>{started.resolve();await finish.promise;}),
+    edit:next=>{edits.push(next);value=next;return value;},
+  },requestFrame:(_,ctx,draw)=>draw(),frame:payload=>{draws++;return {value,camera:payload.camera};}}));
+  await client.initialize({}).completion;
+  const model=client.request('model');await started.promise;
+  const first=client.request('edit',1),second=client.request('edit',2),frame=client.request('frame',{camera:[1,2,3]});
+  await tick();await tick();await tick();const during={draws,edits:[...edits]};
+  finish.resolve();await model.completion;await first.completion;await second.completion;
+  const observed=await frame.completion;
+  assert.equal(during.draws,1,'a queued authored edit must not block current applied scene frames');
+  assert.deepEqual(during.edits,[],'inference retains its admitted inputs until a safe mutation boundary');
+  assert.deepEqual(observed.output,{value:0,camera:[1,2,3]});
+  assert.deepEqual(observed.epoch,{scene:0,load:0,device:0});
+  assert.deepEqual(edits,[1,2]);
+});
 test('an unawaited cooperative scope still holds command completion and retirement',async t=>{
   const started=deferred(),finish=deferred();let retired=false,completed=false;
   const {client}=await harness(t,async()=>({
