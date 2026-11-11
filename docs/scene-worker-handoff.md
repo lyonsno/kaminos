@@ -28,9 +28,17 @@ visibility ownership. GPU devices, queues, textures, sessions and callbacks
 remain inside the worker.
 
 The worker entry calls `installSceneWorkerHost({port: self, createRuntime})`.
-`createRuntime({payload, context, lifecycle})` may await initialization and
-returns this worker-local object:
+`createRuntime({payload, context, lifecycle})` returns a worker-local runtime.
+For fallible GPU construction, return a cleanup-capable shell first and put
+allocation/awaited setup in its optional `initialize(context)` method. The facade
+retains the shell before calling that method. Legacy factories may still await
+construction before return, with the pre-return cleanup responsibility below.
+The runtime supports:
 
+- `initialize(context)`: optional asynchronous setup after shell retention. It
+  requires a callable `retire` method before setup begins. Return normally on
+  success and throw on failure; its return value is not a separate readiness
+  certificate. Capture the original initialization payload in the factory closure.
 - `host`: the existing injected application GPU host, including `session()`,
   `beginRun()` and `unsettledRuns()`, when inference participates.
 - `commands`: an own-property map of named `(payload, context)` handlers.
@@ -56,8 +64,29 @@ returns this worker-local object:
   Preserve borrowed-resource and actual GPU settlement semantics.
 
 Factory failure cleanup before returning a runtime remains the factory's
-responsibility. A returned runtime remains owned by the worker until explicit
-retirement; protocol errors and cancellation do not imply destruction.
+responsibility. Use the shell form whenever allocation followed by an awaited
+failure could also leave cleanup incomplete. Record each allocated handle in the
+shell's closure before awaiting its initialization; clear a handle only after its
+cleanup succeeds, so retirement can retry the failed steps. A `createSceneRenderer`
+caller can retain its early renderer through `onConstructed` if construction's
+own cleanup fails. Do not put those fallible allocations before shell return.
+
+A returned shell remains owned until explicit successful retirement. The facade
+awaits `initialize(context)` and checks cancellation/epochs before publishing
+`{initialized: true}`. A failed or canceled setup returns an error with
+`gpuRouteHeld: true` while retaining the shell. It rejects ordinary commands,
+frames, edits, controls and cooperative frame scopes until setup has succeeded.
+Another initialize request cannot overwrite a retained shell. `read()` exposes
+`runtimeRetained` separately from `initialized`, along with phase/error; retaining
+cleanup ownership does not certify initialization or presentation.
+
+`retire(context)` also works on a partial shell. Failed retirement keeps it owned
+and held for another retirement attempt; successful retirement clears it and
+advances device identity before a new factory may run. The `host`, `commands`
+and `foregroundCommands` properties may be getters over nullable worker-local
+resources: the facade retains the object itself and reads current properties,
+without snapshotting them. Keep initialize/retire callable from shell return.
+Protocol errors and cancellation alone do not imply destruction.
 
 ## Operations, progress and controls
 

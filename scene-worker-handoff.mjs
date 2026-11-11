@@ -125,6 +125,7 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
   if(typeof createRuntime!=='function')throw Error('Scene worker runtime factory required');
   let sessionId=null,epoch=initialEpoch(),runtime=null,phase='uninitialized',active=null,pumping=false,disconnected=false,lastError=null;
   let lifetime=new AbortController();
+  let initialized=false,requiresRetirement=false;
   const queue=[],entries=new Map(),foregroundTasks=new Set(),controls=new Set();
   let mutationHeld=false;
   let lastSequence=0,lastControlSequence=0,frameTail=Promise.resolve(),controlTail=Promise.resolve();
@@ -153,6 +154,7 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
       activate(){assertCurrent();phase='active';},
       withFrames(run){
         assertCurrent();
+        if(!initialized)throw Error('Scene worker not initialized');
         if(typeof run!=='function'||entry.framesAllowed)throw Error('Invalid cooperative frame scope');
         if(typeof runtime?.requestFrame!=='function')throw Error('Cooperative frame admission adapter required');
         entry.framesAllowed=true;admitFrames();
@@ -182,22 +184,30 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
     const ctx=context(entry);ctx.assertCurrent();let output;
     if(mutationHeld)throw namedError('GpuRouteHeldError','Asynchronous mutation escaped its foreground transaction',{gpuRouteHeld:true});
     if(operation==='initialize'){
-      if(runtime)throw Error('Scene worker already initialized');
+      if(runtime)throw Error('Scene worker already initialized or retained for retirement');
       phase='starting';
       const candidate=await createRuntime({payload,context:ctx,lifecycle});
       if(!candidate||typeof candidate!=='object')throw Error('Scene worker factory returned no runtime');
       // A returned runtime owns resources even if cancellation arrived during
       // construction. Retain it for explicit retirement rather than leak it.
-      runtime=candidate;
-      ctx.assertCurrent();phase='active';output={initialized:true};
+      runtime=candidate;requiresRetirement=candidate.initialize!==undefined;
+      ctx.assertCurrent();
+      if(requiresRetirement){
+        if(typeof runtime.initialize!=='function')throw Error('Scene worker initialize hook must be a function');
+        if(typeof runtime.retire!=='function')throw Error('Two-stage scene worker initialization requires retirement');
+        await runtime.initialize(ctx);
+      }
+      ctx.assertCurrent();initialized=true;phase='active';output={initialized:true};
     }else if(operation==='retire'){
       if(!runtime)throw Error('Scene worker not initialized');
-      requireSettled();phase='retiring';
+      requireSettled();
+      if(requiresRetirement&&typeof runtime.retire!=='function')throw Error('Two-stage scene worker requires retirement');
+      phase='retiring';
       output=await runtime.retire?.(ctx);
-      ctx.assertCurrent();requireSettled();runtime=null;
+      ctx.assertCurrent();requireSettled();runtime=null;initialized=false;requiresRetirement=false;
       advance('device',entry);phase='retired';
     }else{
-      if(!runtime)throw Error('Scene worker not initialized');
+      if(!runtime||!initialized)throw Error('Scene worker not initialized');
       if(operation==='frame'){
         if(phase!=='active')throw Error('Scene worker frame is not active after invalidation');
         if(typeof runtime.frame!=='function')throw Error('Scene worker runtime has no frame transaction');
@@ -255,7 +265,7 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
     try{await execute(entry);}
     catch(cause){
       lastError=errorRecord(cause);
-      if(entry.data.operation==='retire')lastError.gpuRouteHeld=true;
+      if(entry.data.operation==='retire'||entry.data.operation==='initialize'&&runtime)lastError.gpuRouteHeld=true;
       if(phase==='starting')phase='failed';
       send({kind:'result',requestId:entry.data.requestId,ok:false,error:lastError});
     }finally{entries.delete(entry.data.requestId);}
@@ -268,6 +278,7 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
     const task=controlTail.then(async()=>{
       try{
         if(!entry||entry!==active||!entries.has(data.requestId))throw Error('Scene worker control target is not active');
+        if(!initialized)throw Error('Scene worker not initialized');
         if(typeof runtime?.control!=='function')throw Error('Scene worker runtime does not support controls');
         const ctx=context(entry);ctx.assertCurrent();
         const {signal,assertCurrent,report,epoch:readEpoch}=ctx;
@@ -340,7 +351,7 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
   }
   port.addEventListener('message',message);port.start?.();
   return Object.freeze({invalidate:part=>advance(part),lifecycle,
-    read:()=>({sessionId,epoch:{...epoch},phase,active:active?.data.requestId??null,pending:queue.map(entry=>entry.data.requestId),foregroundFrames:[...foregroundTasks].filter(entry=>entry.data.operation==='frame').map(entry=>entry.data.requestId),foregroundMutations:[...foregroundTasks].filter(entry=>entry.data.operation!=='frame').map(entry=>entry.data.requestId),pendingControls:controls.size,error:lastError}),
+    read:()=>({sessionId,epoch:{...epoch},phase,runtimeRetained:runtime!==null,initialized,active:active?.data.requestId??null,pending:queue.map(entry=>entry.data.requestId),foregroundFrames:[...foregroundTasks].filter(entry=>entry.data.operation==='frame').map(entry=>entry.data.requestId),foregroundMutations:[...foregroundTasks].filter(entry=>entry.data.operation!=='frame').map(entry=>entry.data.requestId),pendingControls:controls.size,error:lastError}),
     disconnect(){
       if(disconnected)return;
       disconnected=true;port.removeEventListener('message',message);
