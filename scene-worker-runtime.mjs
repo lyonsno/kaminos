@@ -55,6 +55,7 @@ export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imag
     await sceneResources.initialize(ctx);ctx.assertCurrent();
     const sceneFrames=sceneResources.frames;
     if(typeof sceneFrames?.runForegroundFrame!=='function'||typeof sceneFrames?.setForegroundServiceActive!=='function')throw Error('scene worker requires the actual ordinary scene frame runtime');
+    if(typeof sceneResources.applyFrameInputs!=='function')throw Error('scene worker requires the actual frame input consumer');
     appHost=createAppGpuHost({sharedGpu:shared,host:sceneFrames,kit,frameOwner:()=>frames});
     volume=(services.createVolume??api.createKaminosVolumePrototype)({...sceneResources.volumeOptions,
      THREE,camera:objects.camera,getControls:()=>payload.flameControls,

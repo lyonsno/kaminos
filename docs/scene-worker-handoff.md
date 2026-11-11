@@ -392,3 +392,47 @@ are live local readers; hybrid receives the existing surface-lighting owner,
 shadow settings and lighting-preparation rebuild service. The page uses this
 same mount while retaining its UI, caster preparation and edit-history adapters.
 Worker assembly must supply those domain preparations and lifecycle too.
+
+## Retained common runtime composition
+
+`scene-worker-runtime.mjs` exports `createSceneWorkerRuntimeFactory` for the
+worker entry's `createRuntime` option. Pass the worker's vendored `THREE`, its
+local `createSceneResources` constructor, and optional `imageOptions` (the
+existing Klein adapter's weights, persistence, and model configuration). An
+explicit `imageOptions: null` leaves image operations unregistered. This is the
+initial composition boundary; the complete page/domain loader migration and
+native coupled scene remain separate consumer work.
+
+The factory returns a retained shell before any asynchronous GPU allocation.
+Its `initialize(context)` acquires the one device with the composed scene/model
+requirements, uses `createSceneRenderer` on the transferred scene canvas,
+constructs the ordinary host-scheduled volume on the transferred volume canvas,
+and binds frames/edits/model operations through the same `createAppGpuHost`.
+No GPU handles or local callbacks are sent across the port. Initialization
+payload supplies `viewport`, `sceneCanvas`, `volumeCanvas`, `flameControls`, and
+optional `exposure`. The scene constructor receives those local resources and
+returns its cleanup-capable shell before fallible domain allocation:
+
+- `initialize(context)` constructs actual scene/domain resources after retention.
+- `frames` is the actual ordinary scene frame runtime, including foreground
+  activation and synchronous `runForegroundFrame`.
+- `volumeOptions` supplies actual depth/collision/transport settings; the factory
+  fixes Three/camera/shared device/surface/ordinary ownership and host scheduling.
+- `applyFrameInputs(input, context)` applies accepted camera/viewport inputs
+  synchronously at the serviced frame boundary.
+- `attachVolume({volume, appHost, context})` joins actual scene source/transport
+  and lighting, including post-mount caster preparation and epoch checks.
+- `commands`, `foregroundCommands`, and `retire(context)` retain the existing
+  domain operations and cleanup. Reserved or conflicting operation names fail
+  initialization; there is no substitute basic-scene fallback.
+
+The constructor is worker-local, not part of the message format. Its resource
+shell retains partially allocated graph/domain handles until cleanup succeeds.
+The factory likewise retires model resources before the app host, waits queue
+settlement, then retires scene resources, volume, PMREM, renderer, and its owned
+device. Failed steps remain reachable for explicit retry. `appHost.retire()`
+closes only a session that was already created, keeps a failed close for retry,
+and refuses unsettled or starting model admission. After host retirement begins,
+new session/frame/run requests are refused. Device-loss reconstruction must use
+the agreed fresh ordinary recovery command; this initial factory does not yet
+implement replacement resource wiring or preserve causal simulation history.

@@ -77,3 +77,8 @@ test('the composed model adapter keeps ordinary frame and edit admission live on
  finish();assert.equal((await model.completion).output.entry.source,'/saved/image.png');
  await client.request('retire').completion;assert.ok(f.calls.indexOf('model.dispose')<f.calls.indexOf('session.close'));
 });
+
+test('initialization cannot publish a scene without its frame-input consumer',async()=>{
+ const f=fixture();delete f.sceneResources.applyFrameInputs;const runtime=factory(f.options)({payload:f.payload,lifecycle:{}});
+ await assert.rejects(runtime.initialize(f.context),/frame input/);await runtime.retire(f.context);
+});
