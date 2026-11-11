@@ -14,6 +14,7 @@ import vm from 'node:vm';
 import {checkedAssembly,assemblySelection} from '../../scene-assembly.mjs';
 import {createSceneAOState} from '../../scene-ao-state.mjs';
 import {createSceneRecordOperations} from '../../scene-record-operations.mjs';
+import {registerAuthoredSceneObject,restoreAuthoredSceneRecord} from '../../scene-authored-runtime.mjs';
 import {createSceneDocumentSession} from '../../scene-document-session.mjs';
 import {createSceneLoadRequests} from '../../scene-load-generation.mjs';
 import {planSceneRestore} from '../../scene-persistence-core.js';
@@ -39,6 +40,8 @@ const interactionFunctions=['currentBeautyFrameOptions','interactiveSceneRoots',
 // while exercising extracted page consumers. Ownership/integration tests use
 // createWorkingScene itself; this double is not evidence for its invariants.
 export function sceneContext(context, options) {
+  context.registerAuthoredSceneObject??=registerAuthoredSceneObject;
+  context.restoreAuthoredSceneRecord??=restoreAuthoredSceneRecord;
   context.sceneMaterials??=createSceneMaterials({entries:()=>context.workingScene?.objects??[],definitions:sceneMaterialPrograms});
   context.restoreSceneReflectionSettings??=()=>{};
   context.ashMembershipEntry??=ashMembershipEntry;

@@ -3043,7 +3043,7 @@ import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTE
 import { DEFAULT_WATER_EMITTER, createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
 import {createAuthoredWaterFeature} from './authored-water-feature.mjs';
 import { createWorkingScene } from './working-scene.mjs';
-import {createSceneObjectRecord} from './scene-object-record.mjs';
+import {registerAuthoredSceneObject,restoreAuthoredSceneRecord} from './scene-authored-runtime.mjs';
 import {createSceneRecordOperations} from './scene-record-operations.mjs';
 import {createSceneDocumentSession} from './scene-document-session.mjs';
 import {createSceneMembershipOperations, membershipEditTargetId as sceneMembershipTargetId} from './scene-membership-operations.mjs';
@@ -7542,15 +7542,8 @@ function registerWorkbenchSceneObject(object, metadata) {
 }
 
 function registerSceneObject(object, metadata = {}, {activate = true} = {}) {
-  const id = String(metadata.id || makeSceneObjectId(metadata.type || 'object'));
-  const sceneTransform = metadata.type === 'splat'
-    ? cloneTransformState(metadata.sceneTransform || metadata.transform || sceneObjectTransformState(object))
-    : null;
-  const record = createSceneObjectRecord(object, metadata, {id, sceneTransform});
-  const admitted = sceneMembership.admit(record, {activate,
-    group:metadata.groupLabel?{label:metadata.groupLabel,source:metadata.groupSource??metadata.source,select:false}:null});
-  sceneDocument.authoringChanged();
-  return admitted;
+  return registerAuthoredSceneObject(object,metadata,{createId:kind=>makeSceneObjectId(kind),copyTransform:value=>cloneTransformState(value),
+    readTransform:root=>sceneObjectTransformState(root),membership:()=>sceneMembership,changed:()=>sceneDocument.authoringChanged()},{activate});
 }
 
 window.selectSceneField=function(id,options={}) {
@@ -26356,14 +26349,9 @@ function assertSceneObjectsReloadable(records) {
 }
 
 function restoreLoadedSceneRecord(entry,record){
-  if(record.transform){
-    if(entry.type==='splat'){setSceneObjectSceneTransform(entry,record.sceneTransform||record.transform);applySplatCorrectionToRecord(entry);}
-    else if(entry.type===FLAME_EMITTER_TYPE)applyAuthoredScenePose(entry.id,record.transform);
-    else applySceneObjectTransformState(entry.object,record.transform);
-  }
-  applyMaterialStateToObject(entry.object,record.materials);
-  if (typeof removeSceneLowLodStandIn === 'function') removeSceneLowLodStandIn(record.id);
-  if(record.groupId)setSceneObjectGroupId(entry,record.groupId);
+  return restoreAuthoredSceneRecord(entry,record,{transform:(...args)=>applySceneObjectTransformState(...args),splatPose:(...args)=>setSceneObjectSceneTransform(...args),
+    splatCorrection:value=>applySplatCorrectionToRecord(value),flamePose:(...args)=>applyAuthoredScenePose(...args),materials:(...args)=>applyMaterialStateToObject(...args),
+    removeStandIn:typeof removeSceneLowLodStandIn==='function'?removeSceneLowLodStandIn:null,group:(...args)=>setSceneObjectGroupId(...args)});
 }
 async function loadSceneObjects(records, activeId, groups = [], activeGroupId = null, liquidSetup = null, loadRequestId = null,startupLodHint=null,materialLibrary=null) {
   return sceneLifecycle.replace(records,{activeId,groups,activeGroupId,setup:{materialLibrary,water:liquidSetup,flame:{composition:activeSceneComposition,sourcePresent:authoredFlamePresent},startupLodHint,startupGroups:groups},loadRequestId});

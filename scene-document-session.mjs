@@ -50,7 +50,7 @@ export function createSceneDocumentSession({
     } catch (error) { result = failure(error); status(`Save failed: ${result.error}`); }
     return options.result ? result : result.ok;
   }
-  async function restore(file, {sceneFile = null, mounted = false, emptySettings = false} = {}) {
+  async function restore(file, {sceneFile = null, mounted = false, emptySettings = false, applyContext} = {}) {
     // Concurrent reads inherit the last viable admission, not an older read's
     // transient block. Once application has begun, that admission is gone.
     const previous = restoring
@@ -86,7 +86,7 @@ export function createSceneDocumentSession({
         return {ok:true, navigating:true, filename:sceneFile};
       }
       phase = 'applying';
-      const applied = await apply(data, plan, {requestId:id, sceneFile});
+      const applied = await apply(data, plan, {requestId:id, sceneFile,...(applyContext===undefined?{}:{context:applyContext})});
       if (!current(id)) return {ok:false, stale:true};
       if (applied === false) throw Error('Scene restoration did not complete');
       restoring = null; phase = 'idle'; blocked = false; bind(sceneFile);
