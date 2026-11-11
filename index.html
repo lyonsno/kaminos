@@ -2163,6 +2163,9 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-reaction-law-val">reactant-v0</span>
     </div>
 <span class="slider-help">Fuel and oxygen burn together where the gas is hot enough; that burn determines fuel and oxygen loss, heat, soot production and expansion.</span>
+    <input type="hidden" id="volume-ambient-boundary-width" data-volume-settings-param="volume_ambient_boundary_width" value="">
+    <input type="hidden" id="volume-ambient-exchange-time" data-volume-settings-param="volume_ambient_exchange_time" value="0.6213349345596119">
+    <input type="hidden" id="volume-boundary-velocity-damping" data-volume-settings-param="volume_boundary_velocity_damping" value="1">
     <div class="slider-row">
       <span class="slider-label">Mixing time</span>
       <input type="range" id="volume-reactant-mixing-time" data-volume-settings-param="volume_reactant_mixing_time" min="0.01" max="30" step="any" value="3">
@@ -19984,6 +19987,9 @@ function readVolumeControls({quality=viewportDisplay.quality,document=globalThis
     ...Object.fromEntries([...WORLD_CALIBRATION_FIELDS,...SIMULATION_LEVER_FIELDS].map(f=>[f.key,f.type==='select-one'?document.getElementById(f.id).value:Number(document.getElementById(f.id).value)])),
     heatReleaseExpansion: parseFloat(document.getElementById('volume-heat-release-expansion').value),
     reactionLaw: 'reactant-v0',
+    ambientBoundaryWidth: document.getElementById('volume-ambient-boundary-width').value.trim()===''?null:Number(document.getElementById('volume-ambient-boundary-width').value),
+    ambientBoundaryExchangeTime: Number(document.getElementById('volume-ambient-exchange-time').value),
+    ambientBoundaryVelocityDamping: Number(document.getElementById('volume-boundary-velocity-damping').value),
     reactantMixingTime: parseFloat(document.getElementById('volume-reactant-mixing-time').value),
     reactantCoolingTime: parseFloat(document.getElementById('volume-reactant-cooling-time').value),
     reactantSootYield: parseFloat(document.getElementById('volume-reactant-soot-yield').value),
@@ -21111,7 +21117,7 @@ async function initKaminosVolumeRoute() {
   // select shows the family shape the map falls back to, and the request is
   // kept beside it so the controls snapshot still sends it to the resolver and
   // the receipt names the fallback. Authoring a new pattern clears it.
-  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-reaction-law', 'volume-reactant-mixing-time', 'volume-reactant-cooling-time', 'volume-reactant-soot-yield', 'volume-appearance-model', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-grid-height-ratio', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
+  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-reaction-law', 'volume-ambient-boundary-width', 'volume-ambient-exchange-time', 'volume-boundary-velocity-damping', 'volume-reactant-mixing-time', 'volume-reactant-cooling-time', 'volume-reactant-soot-yield', 'volume-appearance-model', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-grid-height-ratio', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
   for (const id of VOLUME_ROUTE_RESTORED_CONTROL_IDS) {
     const param = document.getElementById(id)?.dataset.volumeSettingsParam;
     if (!param || !params.has(param)) continue;
@@ -21654,6 +21660,9 @@ async function initKaminosVolumeRoute() {
     'volume-emitter-puff-period',
     'volume-heat-release-expansion',
     'volume-reaction-law',
+    'volume-ambient-boundary-width',
+    'volume-ambient-exchange-time',
+    'volume-boundary-velocity-damping',
     'volume-reactant-mixing-time',
     'volume-reactant-cooling-time',
     'volume-reactant-soot-yield',

@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 165,
+  "controlCount": 168,
   "controls": [
     {
       "key": "volume-world-smoke-join",
@@ -1287,6 +1287,33 @@
         "off",
         "on"
       ]
+    },
+    {
+      "key": "volume-ambient-boundary-width",
+      "param": "volume_ambient_boundary_width",
+      "tagName": "INPUT",
+      "type": "hidden",
+      "additiveDefault": "",
+      "additiveLineage": "ambient-boundary",
+      "additiveSinceControlCount": 1
+    },
+    {
+      "key": "volume-ambient-exchange-time",
+      "param": "volume_ambient_exchange_time",
+      "tagName": "INPUT",
+      "type": "hidden",
+      "additiveDefault": 0.6213349345596119,
+      "additiveLineage": "ambient-boundary",
+      "additiveSinceControlCount": 2
+    },
+    {
+      "key": "volume-boundary-velocity-damping",
+      "param": "volume_boundary_velocity_damping",
+      "tagName": "INPUT",
+      "type": "hidden",
+      "additiveDefault": 1,
+      "additiveLineage": "ambient-boundary",
+      "additiveSinceControlCount": 3
     }
   ],
   "retiredControls": [

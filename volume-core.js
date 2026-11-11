@@ -1,6 +1,7 @@
 import {createGPUImmersedCollection} from './volume-immersed-source-gpu.mjs';
 import {createGPUImmersedWorldSources} from './volume-immersed-world-source-gpu.mjs';
 import {createDeferredPipelines} from './deferred-pipelines.mjs';
+import {ambientBoundarySettings,resolveAmbientBoundary,ambientBoundaryControlPatch,AMBIENT_BOUNDARY_KEYS} from './volume-ambient-boundary.mjs';
 import {createOpticalParticles,opticalParticleSettings,particleReactionFromSimulation} from './volume-optical-particles.mjs';
 import {createSplitIntegral,splitIntegralSettings,SPLIT_OPTICAL_OFF_WGSL,splitOpticalShader} from './volume-split-integral.mjs';
 import {EMPTY_SPACE_WGSL} from './volume-empty-space.mjs';
@@ -1381,7 +1382,8 @@ export const DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET = OPEN_WORLD_UNIFORM_OFFSET +
 export const SHARED_ASH_UNIFORM_OFFSET = DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET + 8;
 export const WORLD_CALIBRATION_UNIFORM_OFFSET = SHARED_ASH_UNIFORM_OFFSET + 4;
 export const EMPTY_SPACE_UNIFORM_OFFSET = WORLD_CALIBRATION_UNIFORM_OFFSET + 8;
-export const VOLUME_UNIFORM_FLOATS = EMPTY_SPACE_UNIFORM_OFFSET + 4;
+export const AMBIENT_BOUNDARY_UNIFORM_OFFSET = EMPTY_SPACE_UNIFORM_OFFSET + 4;
+export const VOLUME_UNIFORM_FLOATS = AMBIENT_BOUNDARY_UNIFORM_OFFSET + 4;
 // The widest a transport sample reaches outside the box: the 8-cell backtrace
 // bound plus the trilinear stencil and a margin.
 export const JOINED_GHOST_MARGIN_CELLS = 10;
@@ -3052,6 +3054,7 @@ struct Uniforms {
   world_calibration: vec4<f32>,
   calibration_pose: vec4<f32>,
   empty_space_controls: vec4<f32>,
+  ambient_boundary: vec4<f32>,
 };
 
 struct ExternalEmitter {
@@ -5883,9 +5886,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
         let verticalWall = select(max(-p.y, p.y - expandedTopY + 1.0), -p.y, reactantLawOn());
         let materialWall = max(max(abs(p.x), verticalWall), abs(p.z));
         var standaloneFade = 1.0 - smoothstep(0.86, 1.0, materialWall);
-        if (reactantLawOn()) { standaloneFade = reactantMaterialWallFade(materialWall, 2.0 / f32(GRID)); }
+        if (reactantLawOn()) { standaloneFade = ambientMaterialWallFade(materialWall, 2.0 / f32(GRID), u.ambient_boundary.x); }
         let materialWallFade = select(standaloneFade, 1.0, joinedBoundary() || openWorldBoundary());
-        bypassVel = bypassVel * stepRate(mix(0.55, 1.0, materialWallFade));
+        bypassVel = bypassVel * stepRate(ambientRateSurvival(0.55, materialWallFade, select(1.0, u.ambient_boundary.z, reactantLawOn())));
         bypassVel.y = mix(max(bypassVel.y, -0.015 * calibrationCellGain()), bypassVel.y, select(0.0, 1.0, joinedBoundary() || openWorldBoundary()));
         bypassVel = select(boundVelocity(bypassVel), bypassVel, faceForcesOn());
       }
@@ -6074,9 +6077,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       let floorExempt = select(0.0, inflowApertureWeight(cellI), p.y < -0.8);
       let wall = max(max(abs(p.x), mix(-p.y, -1.0, floorExempt)), abs(p.z));
       var standaloneFade = 1.0 - smoothstep(0.86, 1.0, wall);
-      if (reactantOn) { standaloneFade = reactantMaterialWallFade(wall, 2.0 / f32(GRID)); }
+      if (reactantOn) { standaloneFade = ambientMaterialWallFade(wall, 2.0 / f32(GRID), u.ambient_boundary.x); }
       let fade = select(max(standaloneFade, clamp(immersedSlabWeight, 0.0, 1.0)), 1.0, joinedBoundary() || openWorldBoundary());
-      vel *= stepRate(mix(0.55, 1.0, fade));
+      vel *= stepRate(ambientRateSurvival(0.55, fade, select(1.0, u.ambient_boundary.z, reactantOn)));
       vel.y = mix(max(vel.y, -0.015 * VELOCITY_UNIT_SCALE), vel.y, select(0.0, 1.0, joinedBoundary() || openWorldBoundary()));
       fluidDst[base] = vec4<f32>(select(boundVelocity(vel), vel, faceForcesOn()), 0.0);
       fluidDst[base + 1u] = vec4<f32>(fluidSrc[base + 1u].xyz, 0.0);
@@ -6122,18 +6125,18 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // Joined boundary: the exterior owns every boundary, so the material sponge
   // (and the oxidizer's relaxation toward ambient) is off too.
   var standaloneMaterialFade = 1.0 - smoothstep(0.86, 1.0, materialWall);
-  if (reactantOn) { standaloneMaterialFade = reactantMaterialWallFade(materialWall, 2.0 / f32(GRID)); }
+  if (reactantOn) { standaloneMaterialFade = ambientMaterialWallFade(materialWall, 2.0 / f32(GRID), u.ambient_boundary.x); }
   let materialWallFade = select(max(standaloneMaterialFade, clamp(immersedSlabWeight, 0.0, 1.0)), 1.0, joinedBoundary() || openWorldBoundary());
   let materialHeatTopFade = select(heatTopFade, 1.0, reactantOn);
   let materialSmokeTopFade = select(smokeTopFade, 1.0, reactantOn);
   let worldSmokeOnlyFlameEnvelope = select(1.0, fineFlameContainmentEnvelope(p, expandedTopY), worldSmokeOnlyOn() && (joinedBoundary() || openWorldBoundary()));
-  smoke = smoke * stepRate(mix(0.42, 1.0, materialWallFade) * mix(0.72, 1.0, materialSmokeTopFade));
-  heat = min(heat * stepRate(mix(0.30, 1.0, materialWallFade) * mix(0.16, 1.0, materialHeatTopFade)), mix(0.28, 2.4, worldSmokeOnlyFlameEnvelope));
-  fuel = fuel * stepRate(mix(0.20, 1.0, materialWallFade) * mix(0.58, 1.0, materialHeatTopFade)) * worldSmokeOnlyFlameEnvelope;
+  smoke = smoke * stepRate(ambientRateSurvival(0.42, materialWallFade, select(1.0, u.ambient_boundary.y, reactantOn)) * mix(0.72, 1.0, materialSmokeTopFade));
+  heat = min(heat * stepRate(ambientRateSurvival(0.30, materialWallFade, select(1.0, u.ambient_boundary.y, reactantOn)) * mix(0.16, 1.0, materialHeatTopFade)), mix(0.28, 2.4, worldSmokeOnlyFlameEnvelope));
+  fuel = fuel * stepRate(ambientRateSurvival(0.20, materialWallFade, select(1.0, u.ambient_boundary.y, reactantOn)) * mix(0.58, 1.0, materialHeatTopFade)) * worldSmokeOnlyFlameEnvelope;
   reactantFreshBurnRate = reactantFreshBurnRate * worldSmokeOnlyFlameEnvelope;
   // Reactant law: the side and floor sponge regions are ambient air, so the
   // oxidizer relaxes toward ambient at the fuel's sponge rate there.
-  oxidizer = u.reactant_combustion_c.z - (u.reactant_combustion_c.z - oxidizer) * stepRate(mix(0.20, 1.0, materialWallFade) * mix(0.58, 1.0, materialHeatTopFade));
+  oxidizer = u.reactant_combustion_c.z - (u.reactant_combustion_c.z - oxidizer) * stepRate(ambientRateSurvival(0.20, materialWallFade, select(1.0, u.ambient_boundary.y, reactantOn)) * mix(0.58, 1.0, materialHeatTopFade));
   // Retired activity sponge.
 
   interfaceShred = interfaceShred * stepRate(mix(0.18, 1.0, wallFade));
@@ -6198,7 +6201,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // increment law's line, so it takes the rate law directly.
   // Reactant law: the open top passes the flow as well as the material, or the
   // material decelerates and piles up under a braked ceiling.
-  vel = vel * stepRate(mix(0.55, 1.0, materialWallFade));
+  vel = vel * stepRate(ambientRateSurvival(0.55, materialWallFade, select(1.0, u.ambient_boundary.z, reactantLawOn())));
   vel.y = mix(max(vel.y, -0.015 * calibrationCellGain()), vel.y, select(0.0, 1.0, joinedBoundary() || openWorldBoundary()));
   // Slot 0's fourth lane is reserved (the old stored density; now derivedDensityFromSlots where read).
   fluidDst[base] = vec4<f32>(select(select(boundVelocity(vel), vel, faceForcesOn()),prev.xyz,MATERIAL_ONLY), 0.0);
@@ -11757,6 +11760,8 @@ export function createKaminosVolumePrototype({
     // the authored law the dropped carriers feed the reaction itself, so
     // rebuilding them changes the dynamics (measured: 2.6x brighter at step 320).
     state.reactantCombustion = reactantCombustionConfig;
+    state.ambientBoundary=resolveAmbientBoundary(controlsSnapshot,{scale:productTransform.scale,translate:productTransform.translate,dims:[gridSize,gridHeight,gridSize],reactant:reactantCombustionConfig.effective.admitted,joined:state.joinedBoundary?.admitted,open:uniforms[OPEN_WORLD_UNIFORM_OFFSET]>.5});
+    uniforms.set(state.ambientBoundary.uniforms,AMBIENT_BOUNDARY_UNIFORM_OFFSET);
     state.residentGasSource={registered:!!gpuThermalConsumer?.gasSource,identity:gpuThermalConsumer?.gasSource?.identity??null,admitted:residentGasAdmitted&&reactantCombustionConfig.effective.admitted,reason:!gpuThermalConsumer?.gasSource?'unregistered':!residentGasAdmitted?'requires-converged-open-top-pressure':reactantCombustionConfig.effective.reason};
     // Joined boundary and transport ghosts (the ghosts wait for the reactant
     // law's oxidizer ghost).
@@ -17660,6 +17665,7 @@ export function createKaminosVolumePrototype({
       return plan;
     },
     setControls(next) {
+      resolveAmbientBoundary({...controlsSnapshot,...next},{scale:productTransform.scale});
       integralReconstructionSettings({...controlsSnapshot,...next});
       rayHistorySettings({influence:Object.hasOwn(next,'historyInfluence')?next.historyInfluence:controlsSnapshot.historyInfluence,window:Object.hasOwn(next,'historyWindow')?next.historyWindow:controlsSnapshot.historyWindow});
       if(Object.hasOwn(next,'occupancyThreshold'))emptySpaceThreshold(next.occupancyThreshold);
@@ -17674,7 +17680,7 @@ export function createKaminosVolumePrototype({
       this.validateGridControls(next);
       if(Object.hasOwn(next,'adaptiveMaterial')&&next.adaptiveMaterial!==null)validateAllocation(next.adaptiveMaterial);
       // Reference-only ray budgets change the ordinary integral, not particle material.
-      if(integralChanges.length)invalidateIntegralReconstruction('render-or-simulation-settings-changed',{source:true,particleSource:integralChanges.some(key=>!['raySteps','runtimeQualityReceipt','integralReconstruction','reconstructionFresh','reactantMixingTime','reactantCoolingTime','reactantSootYield','reactantModelOverrides',...(particleSettings.acquisitionMode?['renderScale']:[])].includes(key))});
+      if(integralChanges.length)invalidateIntegralReconstruction('render-or-simulation-settings-changed',{source:true,particleSource:integralChanges.some(key=>!['raySteps','runtimeQualityReceipt','integralReconstruction','reconstructionFresh','reactantMixingTime','reactantCoolingTime','reactantSootYield','reactantModelOverrides','ambientBoundaryWidth','ambientBoundaryExchangeTime','ambientBoundaryVelocityDamping',...(particleSettings.acquisitionMode?['renderScale']:[])].includes(key))});
       if(Object.hasOwn(next,'adaptiveMaterial')) {
         const requested=next.adaptiveMaterial===null?null:validateAllocation(next.adaptiveMaterial);
         if(JSON.stringify(requested)!==JSON.stringify(adaptiveMaterialOptions))this.configureAdaptiveMaterial(requested);
@@ -18440,6 +18446,13 @@ export function createKaminosVolumePrototype({
     opticalParticleViewport(){return canvas;},
     opticalParticleSettings(){return {...particleSettings};},
     opticalParticleState(){return {...state.opticalParticles,timings:particleTimings?.read()??{ok:false,reason:"No passive frame sampled"},budgets:particleSettings.enabled?particleBudget():null,sourceRenderScale:controlsSnapshot.renderScale,sourceRaySteps:controlsSnapshot.raySteps,simulationReaction:particleReactionFromSimulation(state.reactantCombustion),reactionLaw:state.reactantCombustion?.effective?.law??null};},
+    ambientBoundaryState(){return resolveAmbientBoundary(controlsSnapshot,{scale:productTransform.scale,translate:productTransform.translate,dims:[gridSize,gridHeight,gridSize],reactant:state.reactantCombustion?.effective?.admitted,joined:state.joinedBoundary?.admitted,open:uniforms[OPEN_WORLD_UNIFORM_OFFSET]>.5});},
+    setAmbientBoundary(patch){
+      for(const key of Object.keys(patch))if(!AMBIENT_BOUNDARY_KEYS.includes(key))throw Error('Unknown ambient boundary control '+key);
+      const next=ambientBoundarySettings({...this.ambientBoundaryState().settings,...patch});
+      resolveAmbientBoundary(ambientBoundaryControlPatch(next),{scale:productTransform.scale});
+      this.setControls(ambientBoundaryControlPatch(next));updateUniforms(performance.now());return this.ambientBoundaryState();
+    },
     setParticleSimulationReaction(patch){
       const keys=['burnTime','cooling','heatRelease','sootYield','smokeLife'];for(const [key,value] of Object.entries(patch))if(!keys.includes(key)||!Number.isFinite(value)||value<0||((key==='burnTime'||key==='cooling'||key==='smokeLife')&&value<=0))throw Error('Invalid shared simulation reaction '+key);
       const next={};if('burnTime' in patch)next.reactantMixingTime=patch.burnTime;if('cooling' in patch)next.reactantCoolingTime=patch.cooling;
