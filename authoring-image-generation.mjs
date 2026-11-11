@@ -50,7 +50,7 @@ export async function runWithKilnHandoff({service,input,handoff,owner,blocked=()
   const refusal=blocked();if(refusal)throw Error(refusal);
   const state=service.read();
   if(state.status==='unavailable')throw Error(state.error||'Generation is unavailable');
-  if(['input','loading','running','stopping','saving'].includes(state.status))throw Error('Generation is already running');
+  if(['input','loading','queued','running','stopping','saving'].includes(state.status))throw Error('Generation is already running');
   if(state.pending)throw Error('Save the retained generated output before another run');
   if(!input?.source)throw Error('Choose a source image');
   if(handoff?.has(owner))await handoff.activate(owner);else await handoff?.release();
@@ -60,6 +60,11 @@ export async function runWithKilnHandoff({service,input,handoff,owner,blocked=()
 export function imageGenerationTimeLabel(timing,status){
   if(!timing)return '';
   const seconds=ms=>`${(Math.max(0,ms)/1000).toFixed(1)} s`;
+  const load=timing.loadMs>=1000?` · model load ${seconds(timing.loadMs)}`:'';
+  if(timing.generationMs===null&&timing.queuedMs!==null&&timing.queuedMs!==undefined){
+    const label=status==='stopped'?'Stopped before generation · queue wait':status==='failed'?'Generation not started · queue wait':'Waiting for shared GPU ·';
+    return `${label} ${seconds(timing.queuedMs)}${load}`;
+  }
   if(timing.generationMs===null)return `Loading model · ${seconds(timing.loadMs)}`;
   const label=['running','stopping'].includes(status)?'Generating':status==='stopped'?'Stopped after':status==='failed'?'Generation elapsed':'Generated in';
   return `${label} ${seconds(timing.generationMs)}${timing.loadMs>=1000?` · model load ${seconds(timing.loadMs)}`:''}`;
@@ -122,7 +127,7 @@ export function installKleinImageGeneration({document,controller,assets,meshBusy
   }
   function render(){
     callerOutputs.render();
-    const state=controller.read(),active=['loading','running','stopping','saving'].includes(state.status)||!!promptExpansion?.busy();
+    const state=controller.read(),active=['loading','queued','running','stopping','saving'].includes(state.status)||!!promptExpansion?.busy();
     timingStatus=state.status;renderTime();
     byId('asset-image-model').disabled=active||!!state.pending;
     const selected=reference(),referenceControl=byId('asset-use-reference');

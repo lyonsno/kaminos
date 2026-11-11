@@ -16,12 +16,12 @@ test('a worker executes preparation and repeated generation using only its injec
     const {parentPort,isMainThread}=require('node:worker_threads');
     (async()=>{
       const {createKleinAuthoringImageGeneration,readPngProvenance}=await import(${JSON.stringify(new URL('../authoring-image-operation.mjs',import.meta.url).href)});
-      const log=[],device={features:new Set(['shader-f16']),queue:{}},png=Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==','base64'));
+      const log=[],device={features:new Set(['shader-f16']),queue:{onSubmittedWorkDone:async()=>{}}},png=Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==','base64'));
       let loads=0,prepared=0;
-      const session={registerRoute:async({routeId})=>({routeId,runtime:{},
+      const session={registerRoute:async({routeId})=>({routeId,runtime:{runInvocation:async(_options,work)=>work({})},
         enqueue:({execute})=>({completion:Promise.resolve().then(()=>execute({})).then(output=>({status:'succeeded',output}))}),
         drain:async()=>log.push('drain')}),unregisterRoute:()=>log.push('unregister')};
-      const app={session:()=>session,beginRun:async()=>({foregroundOpportunities:{},withForeground:async(_phase,work)=>work(),finish:async()=>log.push('finish')})};
+      const app={queue:device.queue,session:()=>session,beginRun:async()=>({foregroundOpportunities:{},withForeground:async(_phase,work)=>work(),finish:async()=>log.push('finish')})};
       const saved=[];
       const service=createKleinAuthoringImageGeneration({
         context:()=>({sharedGpu:{device}}),appHost:()=>app,weights:async()=>'/weights',
@@ -48,7 +48,7 @@ test('a worker executes preparation and repeated generation using only its injec
   }finally{await worker.terminate();}
   assert.equal(result.isMainThread,false);
   assert.equal(result.loads,1);assert.equal(result.prepared,1);
-  assert.deepEqual(result.log,['reference','load','generate','close','drain','unregister','finish','generate','close','drain','unregister','finish']);
+  assert.deepEqual(result.log,['reference','load','generate','close','unregister','finish','drain','unregister','generate','close','unregister','finish','drain','unregister']);
   assert.deepEqual(result.saved.map(p=>[p.seed,p.width,p.height]),[[1,256,256],[2,256,256]]);
   assert.equal(result.saved[0].reference.source,'/reference.png');
   assert.equal(result.state.status,'complete');assert.equal(result.state.results.length,2);
