@@ -104,3 +104,12 @@ assert.equal(find('grid-tuning-apply',document.body).disabled,true,'reopen refus
 find('grid-tuning-apply',document.body).onclick();assert.equal(hiddenApplications,1,'stale draft cannot overwrite applied dimensions');
 find('grid-tuning-reset',document.body).onclick();assert.equal(hiddenField('fineVelocity').value,'25','discard loads current applied dimensions');
 console.log('PASS closed-editor idle work, fresh reopen, retained draft and external iteration/dimension reconciliation');
+
+// The box join uses the same per-unit grid settings path as dimensions. Its
+// string value must survive the editor rather than being coerced to NaN.
+const join=hiddenField('worldSmokeJoin');
+assert.ok(join,'World exposes a box-join comparison control');
+join.value='projected-donor';event(join,'change');
+find('grid-tuning-apply',document.body).onclick();
+assert.equal(hiddenCurrent.worldSmokeJoin,'projected-donor');
+assert.throws(()=>gridTuningPlan({...hiddenCurrent,worldSmokeJoin:'unknown'}),/box join/i);

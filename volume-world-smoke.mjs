@@ -26,12 +26,15 @@ export function worldSmokeMapping(plan,anchor,fine){
 // before f32 world-position reconstruction: e.g. the aligned y=3 outlet can
 // otherwise reconstruct as 3.000000238 and lose its incoming momentum.
 function momentumBounds(plan,mapping,fineDims){
+  return receiverFaceBounds(plan,[-1,-1,-1].map((q,i)=>mapping[i]+q*mapping[3]),[1,2*fineDims[1]/fineDims[0]-1,1].map((q,i)=>mapping[i]+q*mapping[3]));
+}
+function receiverFaceBounds(plan,lo,hi){
   const snap=n=>{const r=Math.round(n);return Math.abs(n-r)<=8*Number.EPSILON*Math.max(1,Math.abs(n))?r:n;};
-  const bound=(q,i)=>snap(2*(mapping[i]+q*mapping[3]-plan.min[i])/plan.flowPitch);
+  const bound=(q,i)=>snap(2*(q-plan.min[i])/plan.flowPitch);
   // Clip to the receiver lattice before storing exact small integers as f32.
   const clip=(n,i)=>Math.max(0,Math.min(2*plan.flowDims[i]+1,n));
-  return {lo:[-1,-1,-1].map((q,i)=>clip(Math.ceil(bound(q,i)),i)),
-    hi:[1,2*fineDims[1]/fineDims[0]-1,1].map((q,i)=>Math.max(-1,Math.min(2*plan.flowDims[i],Math.floor(bound(q,i)))))};
+  return {lo:lo.map((q,i)=>clip(Math.ceil(bound(q,i)),i)),
+    hi:hi.map((q,i)=>Math.max(-1,Math.min(2*plan.flowDims[i],Math.floor(bound(q,i)))))};
 }
 // A dense padded velocity envelope, not a sparse shell. All gas is borrowed
 // from the existing world material field. Coordinates use the world anchor.
@@ -94,7 +97,7 @@ struct Params {
  reactant_combustion_c:vec4<f32>, reactant_combustion_d:vec4<f32>, emissive_physics:vec4<f32>,
  materialLo:vec4<f32>, bridgeLo:vec4<f32>, bridgeDims:vec4<f32>,
  pressureGrid:vec4<f32>, pressureControl:vec4<f32>, bridgeMaterial:vec4<f32>, wind:vec4<f32>,
- momentumLo:vec4<f32>, momentumHi:vec4<f32>, priorFineLo:vec4<f32>, priorFineHi:vec4<f32>
+ momentumLo:vec4<f32>, momentumHi:vec4<f32>, priorFineLo:vec4<f32>, priorFineHi:vec4<f32>, prescribedLo:vec4<f32>, prescribedHi:vec4<f32>
 }
 struct Gas { a:vec4<f32>, b:vec4<f32> } // soot,heat,fuel,oxygen; fresh burn, soot-weighted heat moments 1..3
 @group(0) @binding(0) var<uniform> u:Params;
@@ -176,6 +179,32 @@ fn momentumDonor(c:vec3<i32>,a:u32)->bool{
  let face=2*c+vec3<i32>(1)+axis(a);
  return all(face>=vec3<i32>(u.momentumLo.xyz))&&all(face<=vec3<i32>(u.momentumHi.xyz));
 }
+fn prescribedJoin()->bool{return u.momentumLo.w>.5;}
+fn prescribedFace(c:vec3<i32>,a:u32)->bool{
+ let face=2*c+vec3<i32>(1)+axis(a);
+ return all(face>=vec3<i32>(u.prescribedLo.xyz))&&all(face<=vec3<i32>(u.prescribedHi.xyz));
+}
+// Fine supplies velocity, so the pressure correction has homogeneous Neumann
+// data there. Keep the supplied flux in the RHS; remove its pressure coupling.
+// At independent pressure resolution this is an area-weighted coarse operator,
+// with the existing interpolated gradient reconstruction on the flow lattice.
+fn pressureMobility(c:vec3<i32>,a:u32)->f32{
+ if(!prescribedJoin()){return 1.0;}
+ if(u.pressureControl.y==1.0){return select(1.0,0.0,prescribedFace(c,a));}
+ let pitch=u.pressureGrid.w;
+ let p=u.lo.xyz+(vec3<f32>(c)+.5+vec3<f32>(axis(a))*.5)*pitch;
+ let lo=select(fineLo(),u.bridgeLo.xyz,u.bridgeDims.w>.5);
+ let hi=select(fineHi(),u.bridgeLo.xyz+u.bridgeDims.xyz*u.bridgeLo.w,u.bridgeDims.w>.5);
+ if(p[a]<lo[a]||p[a]>hi[a]){return 1.0;}
+ let overlap=clamp((min(p+vec3<f32>(pitch*.5),hi)-max(p-vec3<f32>(pitch*.5),lo))/pitch,vec3<f32>(0),vec3<f32>(1));
+ var covered=1.0;for(var k=0u;k<3u;k++){if(k!=a){covered*=overlap[k];}}
+ return 1.0-covered;
+}
+fn prescribedInterior(c:vec3<i32>)->bool{
+ if(!prescribedJoin()){return false;}
+ for(var a=0u;a<3u;a++){if(!prescribedFace(c,a)||!prescribedFace(c-axis(a),a)){return false;}}
+ return true;
+}
 // u.lo.w is the collar width in coarse flow cells. Only outward donor momentum
 // is continued; no radial force is invented. The usual whole-world pressure
 // projection follows, so this is not an independent shell pressure solve.
@@ -251,6 +280,9 @@ fn velocity(p:vec3<f32>)->vec3<f32>{
  let edge=min(p-u.bridgeLo.xyz,hi-p);
  let weight=smoothstep(0.0,2.0*u.bridgeLo.w,min(edge.x,min(edge.y,edge.z)));
  if(weight<=0.0){return own;}
+ return mix(own,bridgeVelocity(p),weight);
+}
+fn bridgeVelocity(p:vec3<f32>)->vec3<f32>{
  var value=vec3<f32>(0);
  for(var a=0u;a<3u;a++){
    var offset=vec3<f32>(.5);offset[a]=1.0;
@@ -261,7 +293,7 @@ fn velocity(p:vec3<f32>)->vec3<f32>{
      value[a]+=textureLoad(bridge,c,0)[a]*w.x*w.y*w.z;
    }}}
  }
- return mix(own,value,weight);
+ return value;
 }
 fn gasCell(c:vec3<i32>)->Gas{
  if(!inside(c,u.material.xyz)){return Gas(vec4<f32>(0,0,0,u.reactant_combustion_c.z),vec4<f32>(0));}
@@ -315,6 +347,7 @@ fn clipped(p:vec3<f32>,q:vec3<f32>)->vec3<f32>{
  let height=smoothstep(u.wind.w-.32,u.wind.w+.52,finePoint(p).y);
  v[a]+=u.wind[a]*coupling*height*u.time.x;
  if(momentumDonor(c,a)){var o=vec3<f32>(.5);if(u.near.w>.5){o[a]=1;}v[a]=fineSlot(p,0u,o)[a]*2.0/u.near.x*u.mapping.w;}
+ else if(prescribedJoin()&&u.bridgeDims.w>.5&&prescribedFace(c,a)){v[a]=bridgeVelocity(p)[a];}
  else{v[a]=sourceMomentum(c,a,collarVelocity(p,v[a],a));}
  if(blocked(c)||blocked(c+axis(a))){v[a]=0;}
  }vout[idx(c,u.flow.xyz)]=vec4<f32>(v,0);
@@ -328,13 +361,13 @@ fn divergence(c:vec3<i32>)->f32{var d=0.0;for(var a=0u;a<3u;a++){d+=face(c,a)-fa
  if(ratio==floor(ratio)){
   let r=i32(ratio);
   for(var z=0;z<r;z++){for(var y=0;y<r;y++){for(var x=0;x<r;x++){
-   let q=c*r+vec3<i32>(x,y,z);if(blocked(q)){solid=1.0;}else{rhs+=divergence(q)-sourceDivergence(q);}
+   let q=c*r+vec3<i32>(x,y,z);if(blocked(q)){solid=1.0;}else if(!prescribedInterior(q)){rhs+=divergence(q)-sourceDivergence(q);}
   }}}rhs/=ratio*ratio*ratio;
  }else{
   let src=vec3<u32>(u.flow.xyz);let dst=vec3<u32>(u.pressureGrid.xyz);let lo=transferLo(gid,src,dst);let hi=transferHi(gid,src,dst);let begin=transferBegin(gid,src,dst);let end=transferEnd(gid,src,dst);
   for(var z=begin.z;z<end.z;z++){for(var y=begin.y;y<end.y;y++){for(var x=begin.x;x<end.x;x++){
    let q=vec3<i32>(x,y,z);let o=transferOverlap(q,lo,hi);let w=o.x*o.y*o.z/(ratio*ratio*ratio);if(w<=0.0){continue;}
-   if(blocked(q)){solid=1.0;}else{rhs+=(divergence(q)-sourceDivergence(q))*w;}
+   if(blocked(q)){solid=1.0;}else if(!prescribedInterior(q)){rhs+=(divergence(q)-sourceDivergence(q))*w;}
   }}}
  }
  pressureRhs[idx(c,u.pressureGrid.xyz)]=vec2<f32>(rhs,solid);
@@ -348,7 +381,7 @@ fn pressureAt(c:vec3<i32>)->f32{
  return pin[idx(c,u.pressureGrid.xyz)];
 }
 fn pressureGradient(c:vec3<i32>,a:u32)->f32{
- if(pressureBlocked(c)||pressureBlocked(c+axis(a))){return 0.0;}
+ if(pressureBlocked(c)||pressureBlocked(c+axis(a))||pressureMobility(c,a)==0.0){return 0.0;}
  return (pressureAt(c+axis(a))-pressureAt(c))/u.pressureGrid.w;
 }
 fn finePressureGradient(c:vec3<i32>,a:u32)->f32{
@@ -369,12 +402,14 @@ fn finePressureGradient(c:vec3<i32>,a:u32)->f32{
 @compute @workgroup_size(4,4,4) fn pressure(@builtin(global_invocation_id) gid:vec3<u32>){
  let c=vec3<i32>(gid);if(!inside(c,u.pressureGrid.xyz)){return;}let i=idx(c,u.pressureGrid.xyz);if(pressureBlocked(c)){pout[i]=0;return;}
  var sum=0.0;var count=0.0;
- for(var a=0u;a<3u;a++){for(var s=-1;s<=1;s+=2){let n=c+axis(a)*s;if(pressureBlocked(n)){continue;}count+=1;sum+=pressureAt(n);}}
- pout[i]=(sum-pressureRhs[i].x*u.pressureGrid.w*u.pressureGrid.w)/max(count,1.0);
+ for(var a=0u;a<3u;a++){for(var s=-1;s<=1;s+=2){let n=c+axis(a)*s;if(pressureBlocked(n)){continue;}let f=select(n,c,s>0);let w=pressureMobility(f,a);count+=w;sum+=w*pressureAt(n);}}
+ // Fully prescribed cells are source state, not unknown exterior pressure.
+ var value=0.0;if(count>0.0){value=(sum-pressureRhs[i].x*u.pressureGrid.w*u.pressureGrid.w)/count;}
+ pout[i]=value;
 }
 @compute @workgroup_size(4,4,4) fn project(@builtin(global_invocation_id) gid:vec3<u32>){
  let c=vec3<i32>(gid);if(!inside(c,u.flow.xyz)){return;}let i=idx(c,u.flow.xyz);var v=vin[i].xyz;
- for(var a=0u;a<3u;a++){let n=c+axis(a);v[a]-=finePressureGradient(c,a);if(blocked(c)||blocked(n)){v[a]=0;}}
+ for(var a=0u;a<3u;a++){let n=c+axis(a);if(!prescribedJoin()||!prescribedFace(c,a)){v[a]-=finePressureGradient(c,a);}if(blocked(c)||blocked(n)){v[a]=0;}}
  vout[i]=vec4<f32>(v,0);
  if(u.materialLo.w>.5){textureStore(exportedFlow,c,vec4<f32>(v,0));}
 }
@@ -454,7 +489,7 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture,borrowMaterial
   const gasTexture=device.createTexture({label:'world smoke gas export',size:exportFields?plan.materialDims:[1,1,1],dimension:'3d',format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.STORAGE_BINDING});
   const bridgeFallback=device.createTexture({label:'disabled intermediate velocity',size:[1,1,1],dimension:'3d',format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING});
   const fallback=solidTexture?null:device.createTexture({label:'world smoke empty solids',size:plan.flowDims,dimension:'3d',format:'r32uint',usage:GPUTextureUsage.TEXTURE_BINDING});
-  const uniform=device.createBuffer({label:'world smoke uniforms',size:352,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+  const uniform=device.createBuffer({label:'world smoke uniforms',size:384,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
   let cached=worldSmokePipelines.get(device);
   if(!cached){
     const module=device.createShaderModule({label:'world smoke separate flow and material',code:WORLD_SMOKE_WGSL});
@@ -472,7 +507,7 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture,borrowMaterial
   const adaptiveViews=new WeakMap();
   const adaptiveView=texture=>{if(!adaptiveViews.has(texture))adaptiveViews.set(texture,texture.createView());return adaptiveViews.get(texture);};
   let v=0,m=0,p=0,steps=0;const groups=new Map();let lastFine,lastReaction,lastSolid,lastBridge,lastBridgeGas,lastBridgeOptical;
-  const values=new Float32Array(88);let priorFineBounds=Array(8).fill(0);
+  const values=new Float32Array(96);let priorFineBounds=Array(8).fill(0);
   return {optical,flowTexture,gasTexture,exportFields,plan,anchor,
     renderResources(){const hierarchy=adaptive?.renderResources();return {plan,steps,gas:hierarchy?.gas??materials[m],hierarchy};},
     remapResources(){return {plan,anchor,gas:materials[m],velocity:flows[v]};},
@@ -495,11 +530,12 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture,borrowMaterial
       return {...m,boxes:m.boxes.map(b=>({...b,lo:b.lo.map((x,a)=>x*anchor.scale+anchor.translate[a]),hi:b.hi.map((x,a)=>x*anchor.scale+anchor.translate[a]),motionMin:b.motionMin.map(x=>x*anchor.scale),motionMax:b.motionMax.map(x=>x*anchor.scale)}))};
     },
     adaptiveMaterialSnapshot(){return adaptive?.snapshot()??null;},
-    encode(encoder,{fineBuffer,reactionTexture,fineDims,fineVelocityMode='collocated',transform,time,reactant,physics,iterations=16,buoyancy=.002,transitionCells=0,solids=solidTexture??fallback,collisionSource=null,timing=null,intermediate=null,materialIndex=0,wind={},calibration={},sources={parcels:[],supports:[],count:0},worldSmokeOnly=false}){
+    encode(encoder,{fineBuffer,reactionTexture,fineDims,fineVelocityMode='collocated',transform,time,reactant,physics,iterations=16,buoyancy=.002,transitionCells=0,solids=solidTexture??fallback,collisionSource=null,timing=null,intermediate=null,materialIndex=0,wind={},calibration={},sources={parcels:[],supports:[],count:0},worldSmokeOnly=false,join='prescribed-flow'}){
       if(flowOnly)m=materialIndex;
       if(!Number.isInteger(iterations)||iterations<0)throw Error('Invalid world pressure iterations');
       if(!Number.isFinite(transitionCells)||transitionCells<0)throw Error('Invalid world transition collar');
       if(!['collocated','staggered'].includes(fineVelocityMode))throw Error('Unknown fine velocity convention');
+      if(!['prescribed-flow','projected-donor'].includes(join))throw Error('Unknown Fine/World box join');
       const sourceKey=sources.gpu?null:JSON.stringify([sources,!!adaptive]);
       if(sources.gpu||sourceKey!==lastSourceKey){
         const f=sources.gpu?sourceFlow.encodeResident(encoder,{buffer:sources.gpu.parcels,count:sources.gpu.parcelCount,maxParcels:sources.gpu.maxParcels,counts:sources.gpu.counts}):sourceFlow.encode(encoder,sources.parcels);
@@ -520,8 +556,10 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture,borrowMaterial
       values.set(intermediate?.exportFields?[...intermediate.plan.materialDims,intermediate.plan.materialPitch]:[1,1,1,0],64);
       values.set(worldWindAcceleration({...wind,fineWidth:fineDims[0],scale:mapping.fineToField[3],calibration}),68);
       const momentum=momentumBounds(plan,mapping.fineToField,fineDims);
-      values.set([...momentum.lo,0,...momentum.hi,0],72);
+      values.set([...momentum.lo,join==='prescribed-flow'?1:0,...momentum.hi,0],72);
       values.set(priorFineBounds,80);
+      const prescribed=intermediate?receiverFaceBounds(plan,intermediate.plan.min,intermediate.plan.max):momentum;
+      values.set([...prescribed.lo,0,...prescribed.hi,0],88);
       device.queue.writeBuffer(uniform,0,values);
       const bridge=intermediate?.flowTexture??bridgeFallback;
       const bridgeGas=intermediate?.exportFields?intermediate.gasTexture:bridgeFallback,bridgeOptical=intermediate?.exportFields?intermediate.optical:bridgeFallback;
@@ -539,7 +577,7 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture,borrowMaterial
         }else run('transportMaterial',plan.materialDims);
         m=1-m;
       }steps++;
-      return {identity:'world-smoke-one-way-v0',sources:sourceReceipt,adaptiveMaterial:adaptive?.read()??null,steps,flowDims:plan.flowDims,materialDims:plan.materialDims,pressureDims:plan.pressureDims,pressurePitch:plan.pressurePitch,pressureCells:plan.pressureCells,anchor,pressureIterations:iterations,transitionCells,transitionLaw:transitionCells?'outward-momentum-collar-before-projection':'none',fineVelocityMode,momentumHandoff:'physical-component-faces',fineFeedback:false,materialLaw:worldSmokeOnly?'smoke-only-extinction':(reactant?.effective?.admitted?'reactant-v0':'passive-authored'),windLaw:'resolved-gust-soot-heat-coupled',thermalRepresentation:worldSmokeOnly?'smoke-only':'soot-heat-moments-two-node-v1',handoff:'volume-partitioned-fine-and-exterior-history',fineToField:[...mapping.fineToField],materialBytes:flowOnly?0:plan.materialCells*64*2,collision:solids===fallback?'empty-fallback':'coarse-resident-mask',collisionSource:solids===fallback?null:collisionSource,collisionVerification:solids===fallback?'empty-by-construction':'submitted-unverified',worldAnchored:true};
+      return {identity:'world-smoke-one-way-v0',join,prescribedSource:intermediate?'intermediate':'fine',pressureBoundary:join==='prescribed-flow'?'upstream-prescribed-flux-homogeneous-neumann':'whole-world-projected-donor',pressureOperator:plan.pressurePitch===plan.flowPitch?'flow-lattice':'area-weighted-coarse-with-interpolated-gradient',sources:sourceReceipt,adaptiveMaterial:adaptive?.read()??null,steps,flowDims:plan.flowDims,materialDims:plan.materialDims,pressureDims:plan.pressureDims,pressurePitch:plan.pressurePitch,pressureCells:plan.pressureCells,anchor,pressureIterations:iterations,transitionCells,transitionLaw:transitionCells?'outward-momentum-collar-before-projection':'none',fineVelocityMode,momentumHandoff:'physical-component-faces',fineFeedback:false,materialLaw:worldSmokeOnly?'smoke-only-extinction':(reactant?.effective?.admitted?'reactant-v0':'passive-authored'),windLaw:'resolved-gust-soot-heat-coupled',thermalRepresentation:worldSmokeOnly?'smoke-only':'soot-heat-moments-two-node-v1',handoff:'volume-partitioned-fine-and-exterior-history',fineToField:[...mapping.fineToField],materialBytes:flowOnly?0:plan.materialCells*64*2,collision:solids===fallback?'empty-fallback':'coarse-resident-mask',collisionSource:solids===fallback?null:collisionSource,collisionVerification:solids===fallback?'empty-by-construction':'submitted-unverified',worldAnchored:true};
     },
     destroy(){seed?.destroy();sourceFlow.destroy();sourceMaterial.destroy();adaptive?.destroy();for(const x of [...flows,...(flowOnly?[]:materials),...pressures,pressureRhs,uniform,...(flowOnly?[]:[optical]),fallback,flowTexture,bridgeFallback,gasTexture])x?.destroy();groups.clear();}
   };

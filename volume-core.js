@@ -11263,7 +11263,7 @@ export function createKaminosVolumePrototype({
     let sources={parcels:[],supports:[],count:0};
     if(immersedCollectionPrepared){immersedWorldSourcesGPU??=createGPUImmersedWorldSources(device);immersedWorldSourcesGPU.update(immersedCollectionPrepared,{grid:gridSize,gridHeight});sources=immersedWorldSourcesGPU.encode(encoder,{mapping:worldSmokeMapping(plan,worldSmoke.anchor,productTransform),collection:immersedCollectionGPU,step:state.simStepCount});}
     const simLevers=resolveSimulationLevers(controlsSnapshot);
-    const input={sources,fineBuffer:fluidBuffers[currentFluid],reactionTexture:reactantTextures[currentFluid],fineDims:[gridSize,gridHeight,gridSize],fineVelocityMode:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode,transform:productTransform,time,reactant:state.reactantCombustion,physics,calibration:controlsSnapshot,wind:{strength:uniforms[53],angle:uniforms[54],height:uniforms[55],speed:time.dynamicsSpeed},worldSmokeOnly:simLevers.worldSmokeOnly};
+    const input={sources,join:controlsSnapshot.worldSmokeJoin??'prescribed-flow',fineBuffer:fluidBuffers[currentFluid],reactionTexture:reactantTextures[currentFluid],fineDims:[gridSize,gridHeight,gridSize],fineVelocityMode:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode,transform:productTransform,time,reactant:state.reactantCombustion,physics,calibration:controlsSnapshot,wind:{strength:uniforms[53],angle:uniforms[54],height:uniforms[55],speed:time.dynamicsSpeed},worldSmokeOnly:simLevers.worldSmokeOnly};
     let intermediateState={effective:'off'};
     if(intermediateFlow){
       let middleSolids;

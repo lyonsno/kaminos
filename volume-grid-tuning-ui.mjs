@@ -43,21 +43,21 @@ export function createGridTuningInspector({document,host,read,validate,apply,liv
   width.title=WORLD_CALIBRATION_FIELDS[1].description+' Drag to adjust; click to type.';
  }
  const fields=new Map(),summaries=new Map();let baseline=null,draft=null,dirty=false,applying=false,selected='Fine',layer='material',lastPreview='',physicalReach=0;
- const pick=c=>Object.fromEntries(GRID_TUNING_FIELDS.map(([key])=>[key,c[key]]));
+ const pick=c=>Object.fromEntries(GRID_TUNING_FIELDS.map(([key])=>[key,c[key]??(key==='worldSmokeJoin'?'prescribed-flow':undefined)]));
  const signature=c=>JSON.stringify(pick(c));
  function field(key,label){
-  const id=GRID_TUNING_FIELDS.find(f=>f[0]===key)?.[1];const input=element(['worldSmoke','worldSmokeIntermediate'].includes(key)?'select':'input','transform-input');input.id=`grid-draft-${key}`;input.setAttribute('aria-label',label);
+  const id=GRID_TUNING_FIELDS.find(f=>f[0]===key)?.[1];const input=element(['worldSmoke','worldSmokeIntermediate','worldSmokeJoin'].includes(key)?'select':'input','transform-input');input.id=`grid-draft-${key}`;input.setAttribute('aria-label',label);
   if(input.tagName==='SELECT')for(const option of document.getElementById(id)?.options||[]){const clone=option.cloneNode(true);clone.title=key==='worldSmokeIntermediate'?INTERMEDIATE_GRID_MODE_DESCRIPTIONS[clone.value]:clone.textContent;clone.textContent=({off:'Off',on:key==='worldSmoke'?'On':'Flow bridge',fields:'Own fields'})[clone.value]??clone.textContent;input.append(clone);}
   else {input.type='number';input.step=['intermediateExtent','worldSmokeExtent','worldSmokeTransition','gridHeightRatio'].includes(key)?'any':'1';input.min=['fineVelocity','finePressure','worldSmokePressure','worldSmokeTransition'].includes(key)||key.endsWith('Iterations')?'0':key==='resolution'?'4':key==='gridHeightRatio'?'1':key.endsWith('Extent')?'1.000000001':'2';}
   if(key.endsWith('Iterations')){const source=document.getElementById(id);if(source?.min!==undefined&&source.min!=='')input.min=source.min;if(source?.max!==undefined&&source.max!=='')input.max=source.max;}
-  input.title=key==='worldSmokeIntermediate'?volumeControlTooltip(id):['fineVelocity','finePressure','worldSmokePressure'].includes(key)?'Cells across the region; 0 follows the parent grid. Ratios need not be integers.':key.endsWith('Iterations')?'Pressure correction sweeps per simulation step.':'Cells across the region; independent of the other resolutions.';
+  input.title=key==='worldSmokeJoin'?'Preserve Fine velocity through the surrounding pressure solve, or compare the previous projected donor.':key==='worldSmokeIntermediate'?volumeControlTooltip(id):['fineVelocity','finePressure','worldSmokePressure'].includes(key)?'Cells across the region; 0 follows the parent grid. Ratios need not be integers.':key.endsWith('Iterations')?'Pressure correction sweeps per simulation step.':'Cells across the region; independent of the other resolutions.';
   input.addEventListener(input.tagName==='SELECT'?'change':'input',()=>{
    const value=Number(input.value);
    if(key.endsWith('Iterations')&&live&&input.value!==''&&Number.isSafeInteger(value)&&value>=Number(input.min||0)&&(input.max===undefined||input.max===''||value<=Number(input.max))){
     applying=true;try{live(key,value);baseline[key]=value;draft[key]=value;dirty=signature(draft)!==signature(baseline);}catch(e){input.value=String(read()[key]);status.textContent=e.message;return;}finally{applying=false;}refresh();return;
    }
    const previous={...read(),...draft};
-   draft[key]=input.value===''?NaN:['worldSmoke','worldSmokeIntermediate'].includes(key)?input.value:Number(input.value);
+   draft[key]=input.value===''?NaN:['worldSmoke','worldSmokeIntermediate','worldSmokeJoin'].includes(key)?input.value:Number(input.value);
    if(['worldSmokeFlow','worldSmokeExtent'].includes(key)&&Number.isFinite(draft[key])&&draft[key]>0){const next={...previous,...draft};draft.worldSmokeTransition=physicalReach*Number(next.worldSmokeFlow)/Number(next.worldSmokeExtent);}
    dirty=true;refresh();
   });fields.set(key,input);return input;
@@ -78,6 +78,7 @@ export function createGridTuningInspector({document,host,read,validate,apply,liv
  const collar=element('label','grid-editor-shape');const reach=element('input','transform-input');reach.id='grid-draft-collarReach';reach.type='number';reach.min='0';reach.step='any';reach.setAttribute('aria-label','World momentum collar reach / Fine width');
  const collarReadout=element('span','flame-scope');collar.append(element('span',null,'World momentum reach / Fine width'),reach,collarReadout);panel.append(collar);
  reach.addEventListener('input',()=>{const c={...read(),...draft};physicalReach=reach.value===''?NaN:Number(reach.value);draft.worldSmokeTransition=physicalReach*Number(c.worldSmokeFlow)/Number(c.worldSmokeExtent);dirty=true;refresh();});
+ const joinRow=element('label','grid-editor-shape');joinRow.append(element('span',null,'Fine / surrounding box join'),field('worldSmokeJoin','Box join'));panel.append(joinRow);
  const fit=element('button','btn');fit.type='button';fit.id='grid-tuning-fit';panel.append(fit);
  const previewControls=element('div','grid-editor-preview-controls');previewControls.append(element('span',null,'Front view · select a region above'));
  const mode=element('select','transform-input');mode.setAttribute('aria-label','Preview lattice');for(const value of ['material','velocity','pressure']){const o=element('option',null,value[0].toUpperCase()+value.slice(1));o.value=value;mode.append(o);}mode.value=layer;mode.addEventListener('change',()=>{layer=mode.value;lastPreview='';refresh();});previewControls.append(mode);panel.append(previewControls);
