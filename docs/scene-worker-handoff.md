@@ -126,6 +126,46 @@ Frame drawn, GPU submitted/settled and presented authority comes from the
 underlying runtime's plain output, not that transport label. Save/capture and
 lease release must consume the appropriate actual runtime receipts.
 
+## Ordinary renderer and frame construction
+
+The page and worker share `scene-render-bootstrap.mjs` and
+`scene-frame-runtime.mjs`; the page adopts these same functions in `initScene`.
+The modules have no DOM reads. Mounting, status text and input measurement stay
+with the caller. They extract existing construction/depth/cadence semantics;
+they do not yet move all of the page's domain draw callbacks into a Worker.
+
+```js
+const viewport = () => ({width: 640, height: 480, pixelRatio: 1});
+const {scene, camera} = createSceneRenderObjects({THREE, viewport});
+const {renderer, pmremGenerator} = await createSceneRenderer({
+  THREE, scene, camera, sharedGpu, canvas: sceneCanvas, viewport, exposure: 1,
+});
+const frames = createSceneFrameRuntime({
+  readInputs, draw, frameCount, prepare, readDepth,
+  readSharedDevice: () => sharedGpu.device, readCamera: () => camera,
+  coordinator, readSimInputs,
+});
+```
+
+Viewport values must be positive finite applied measurements. Renderer size
+writes default to `updateStyle: false` for OffscreenCanvas; the page opts into
+CSS writes and uses `onConstructed(renderer)` to mount its canvas before async
+initialization. Worker construction requires the exact injected shared device
+and queue. The page retains its existing explicit independent-device fallback
+through `allowIndependentDevice: true`. The returned renderer and PMREM remain
+caller-owned; failure cleans up a constructed renderer, and supplied devices
+remain borrowed under Three's existing disposal contract.
+
+The frame runtime exposes `composition`, `planFrame(nowMs)`,
+`depth({enabled, held})`, `consumeTransport(frame)`, `render`, `renderOrdinary`,
+`runForegroundFrame` and `setForegroundServiceActive`. `prepare` runs before a
+depth draw, and `readDepth` runs only after that draw succeeds. The depth result
+contains the actual worker-local `{device, camera, texture}`; it is not a wire
+payload. `consumeTransport` retains the synchronous transport scope around
+`frame.renderHost()`. `readSimInputs(nowMs)` supplies existing flame, water and
+ash inputs to the existing coordinator; per-scene-frame/close-timestamp plan
+reuse is preserved. No numerical duty or simulation-clock policy changes here.
+
 ## Evidence
 
 `tests/scene-worker-handoff.mjs` exercises native MessagePort cloning/transfers,

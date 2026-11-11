@@ -3552,7 +3552,8 @@ import {installGenerateLayout} from './authoring-generate-layout.mjs';
 import {createImageIterationHistory,installImageIterationHistory} from './authoring-image-history.mjs';
 import {installBrowseLayout} from './authoring-browse-layout.mjs';
 import {createAppFrameSource} from './app-frame-source.mjs';
-import {createSceneFrameComposition} from './scene-frame-composition.mjs';
+import {createSceneFrameRuntime} from './scene-frame-runtime.mjs';
+import {createSceneRenderObjects,createSceneRenderer} from './scene-render-bootstrap.mjs';
 import {createAppGpuHost} from './app-gpu-host.mjs';
 import {fireAtBoot,createFluidBoot} from './fire-boot.mjs';
 import {prepareAssetGeometryOffThread,snapshotAssetGeometry,prepareAssetBoundsOffThread,createAssetBoundsCache,captureAssetBoundsState,assetBoundsStateMatches} from './asset-geometry-preparation.mjs';
@@ -11476,10 +11477,8 @@ async function initScene() {
   window.kaminosStartup?.phase('Reading startup configuration');
   await initializeHybridSplatOverlayModuleUrl();
   const vp = document.getElementById('viewport');
-  scene = new THREE.Scene();
-
-  camera = new THREE.PerspectiveCamera(40, vp.clientWidth / vp.clientHeight, 0.01, 100);
-  camera.position.set(0, 0.6, 3);
+  const readSceneViewport=()=>({width:vp.clientWidth,height:vp.clientHeight,pixelRatio:Math.min(window.devicePixelRatio,2)});
+  ({scene,camera}=createSceneRenderObjects({THREE,viewport:readSceneViewport}));
   cameraProjectionBase=camera.updateProjectionMatrix.bind(camera);
   camera.updateProjectionMatrix=()=>{if(outputCaptureExtent||recordingExtent){const extent=outputCaptureExtent??recordingExtent;camera.aspect=extent.width/extent.height;cameraProjectionBase();return;}const state=sceneCameras?.state();if(state?.mode!=='camera')camera.aspect=document.getElementById('viewport').clientWidth/document.getElementById('viewport').clientHeight;if(state?.mode==='camera'){camera.aspect=sceneCameras.read().settings.aspect[0]/sceneCameras.read().settings.aspect[1];}cameraProjectionBase();if(state?.mode==='camera'){const vp=document.getElementById('viewport'),frame=state.frame;const clip=new THREE.Matrix4().set(frame.width/vp.clientWidth,0,0,2*(frame.x+frame.width/2)/vp.clientWidth-1,0,frame.height/vp.clientHeight,0,1-2*(frame.y+frame.height/2)/vp.clientHeight,0,0,1,0,0,0,0,1);camera.projectionMatrix.premultiply(clip);camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();}};
 
@@ -11563,21 +11562,12 @@ async function initScene() {
       adapterName: adapter.info?.description || adapter.info?.device || adapter.info?.vendor || 'unknown-webgpu-adapter', deviceOwnership: 'borrowed' });
     samHostContext = { adapter, device, inferenceSession };
   }
-  renderer = sharedGpu?.device
-    ? new THREE.WebGPURenderer({ antialias: true, device: sharedGpu.device, trackTimestamp: isFireLightFieldTimingRoute() || new URLSearchParams(location.search).get('ash_timing')==='1' })
-    : new THREE.WebGPURenderer({ antialias: true, ...(samHostContext ? { device: samHostContext.device } : {}) });
-  renderer.domElement.id = 'kaminos-host-renderer-canvas';
-  renderer.setSize(vp.clientWidth, vp.clientHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.toneMapping = THREE.AgXToneMapping;
-  renderer.toneMappingExposure = sceneEnvironment.read().exposure;
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  vp.appendChild(renderer.domElement);
-
-  window.kaminosStartup?.phase('Initializing renderer');
-  await renderer.init();
+  const sceneRenderBootstrap=await createSceneRenderer({THREE,scene,camera,
+    sharedGpu:sharedGpu??(samHostContext?{device:samHostContext.device,queue:samHostContext.device.queue}:null),
+    viewport:readSceneViewport,exposure:sceneEnvironment.read().exposure,updateStyle:true,allowIndependentDevice:true,
+    trackTimestamp:!!sharedGpu?.device&&(isFireLightFieldTimingRoute()||new URLSearchParams(location.search).get('ash_timing')==='1'),
+    onConstructed:next=>{renderer=next;renderer.domElement.id='kaminos-host-renderer-canvas';vp.appendChild(renderer.domElement);window.kaminosStartup?.phase('Initializing renderer');},
+  });
   window.kaminosStartup?.phase('Building workspace');
   console.log('WebGPU renderer initialized, backend:', renderer.backend?.constructor?.name || 'unknown');
   window.kaminosStartup?.phase('Building lighting & GI pipeline');
@@ -11602,7 +11592,7 @@ async function initScene() {
   controls.maxDistance = Infinity;
   controls.target.set(0, 0, 0);
 
-  pmremGenerator = new THREE.PMREMGenerator(renderer);
+  pmremGenerator = sceneRenderBootstrap.pmremGenerator;
 
   // Ground plane (subtle reflective floor)
   // Distributed irradiance is interpolated per vertex. The old radius-length
@@ -12362,9 +12352,7 @@ async function initScene() {
 
   let transportPrototype = null;
   let transportCanvasVisibility = '';
-  const consumeSceneTransportFrame=frame=>{
-    return frameComposition.withTransport(frame,()=>frame.renderHost());
-  };
+  const consumeSceneTransportFrame=frame=>sceneFrameRuntime.consumeTransport(frame);
   function syncAuthoredWaterFlameTransport() {
     syncWaterProxy();
     const prototype=volumePrototype;
@@ -12398,20 +12386,20 @@ async function initScene() {
     projection:camera.isPerspectiveCamera?'perspective':'orthographic',transportProjectionSupported:camera.isPerspectiveCamera===true,
     lastFrame:waterFeature.host?.state().lastFrame??null,source:volumePrototype?.debugState().sceneTransport??null,
     refraction:'existing-screen-space-scene-query',displayTransform:'one-final-scene-camera'});
-  const frameComposition=createSceneFrameComposition({
+  const sceneFrameRuntime=createSceneFrameRuntime({
     readInputs:()=>({lightingHeld:deviceRecoveryHeld()||sceneLightingPreparation?.state().held||(typeof sceneDocument!=='undefined'&&sceneDocument?.state().phase==='applying'),
       exclusiveInspection:exclusiveInspectionRender,manualInspection:manualInspectionRender,
       transportRequired:authoredWaterFlameTransportActive||authoredFlameHDRActive,
       radianceReady:!window.__kaminosSceneRadiance||window.__kaminosSceneRadiance.canRender()}),
     draw:drawSceneFrame,frameCount:()=>sceneFrameCount,
     prepare:()=>{syncViewportRendererSize();camera.updateMatrixWorld();fireLightFieldPass?.update();},
+    readDepth:()=>renderer.backend.get(activeSceneDepth.value).texture,
+    readSharedDevice:()=>sharedGpu?.device,readCamera:()=>camera,
+    coordinator:simFrameCoordinator,readSimInputs:readSimFrameInputs,
   });
+  const frameComposition=sceneFrameRuntime.composition;
   let sceneFrameCount = 0;
-  let lastPlannedSceneFrame = -1;
-  function ensureSimFramePlan(frameNowMs = performance.now()) {
-    const existing = simFrameCoordinator.read().lastPlan;
-    if (existing && (lastPlannedSceneFrame === sceneFrameCount || Math.abs(frameNowMs - existing.nowMs) < 1)) return existing;
-    lastPlannedSceneFrame = sceneFrameCount;
+  function readSimFrameInputs(frameNowMs) {
     const waterState = waterFeature.host?.state?.();
     let ashActive = false, ashDue = false;
     for (const entry of workingScene.objects) {
@@ -12419,25 +12407,14 @@ async function initScene() {
       const active = isSceneItemVisible(entry.id) && entry.object.parent !== null && sceneViewerPaused !== true;
       if (active) { ashActive = true; if (ash.due?.(frameNowMs, { active }) ?? true) ashDue = true; }
     }
-    return simFrameCoordinator.planFrame({
-      nowMs: frameNowMs,
+    return {
       flame: { active: Boolean(volumePrototype?.isActive?.() && isSceneItemVisible('flame-field') && sceneViewerPaused !== true) },
       water: { active: Boolean(waterFeature.active && isSceneItemVisible('water-field')), pending: Boolean(waterState?.solver?.pending), backlogSeconds: waterState?.clock?.backlogSeconds },
       ash: { active: ashActive, due: ashDue },
-    });
+    };
   }
-  ordinarySceneDepthProvider = () => {
-    if (deviceRecoveryHeld() || !ordinaryDepthEnabled) return null;
-    if (!sharedGpu?.device) throw new Error('ordinary-scene-depth-shared-device-unavailable');
-    // Own a current prepass before the ordinary volume frame encodes. Both
-    // consumers share camera/device; the volume may render at lower resolution.
-    syncViewportRendererSize();
-    camera.updateMatrixWorld();
-    fireLightFieldPass?.update();
-    if (!frameComposition.renderDepth()) return null;
-    const texture = renderer.backend.get(activeSceneDepth.value).texture;
-    return {device:sharedGpu.device, camera, texture};
-  };
+  const ensureSimFramePlan=frameNowMs=>sceneFrameRuntime.planFrame(frameNowMs);
+  ordinarySceneDepthProvider=()=>sceneFrameRuntime.depth({held:deviceRecoveryHeld(),enabled:ordinaryDepthEnabled});
   window.kaminosOrdinaryDepthSetEnabled = enabled => {
     ordinaryDepthEnabled = Boolean(enabled); markDirty(); return ordinaryDepthEnabled;
   };
