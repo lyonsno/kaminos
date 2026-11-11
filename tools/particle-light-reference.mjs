@@ -21,3 +21,21 @@ export function referenceLightAt(c,solids,dims,at,reverse=false){
  }
  return result;
 }
+
+// Offline reconstruction at an exact world-Z plane in an axis-aligned field.
+// Advance from the nearest upstream native center/edge; never divide by a
+// nearly-zero transmission to undo an optically thick half slab.
+export function sampleLightPlane({coefficients:c,positive,negative,solids,dims,origin,extent,depth,reverse=false,direction=[0,0,1]}){
+ const [nx,ny,nz]=dims,n=nx*ny*nz;
+ if(direction.some((v,i)=>v!==[0,0,1][i])||!Number.isFinite(depth)||depth<origin[2]||depth>origin[2]+extent[2]||c.length!==n*4||positive.length!==n*4||negative.length!==n*4||solids.length!==n)throw Error('Invalid registered physical light plane');
+ const z=(depth-origin[2])/extent[2]*nz,k=Math.min(nz-1,Math.floor(z)),fraction=z-k,out=new Float64Array(nx*ny*4),field=reverse?negative:positive;
+ const advance=(L,index,f)=>{const tau=c[index*4+3]*f,T=Math.exp(-tau),phi=tau>0?-Math.expm1(-tau)/tau:1;return [L[0]*T+c[index*4]*f*phi,L[1]*T+c[index*4+1]*f*phi,L[2]*T+c[index*4+2]*f*phi,L[3]*T];};
+ for(let y=0;y<ny;y++)for(let x=0;x<nx;x++){
+  const index=z=>x+nx*(y+ny*z),i=index(k),at=4*(x+nx*y);if(solids[i])continue;
+  let L;
+  if((!reverse&&fraction>=.5)||(reverse&&fraction<=.5))L=advance(Array.from(field.slice(4*i,4*i+4)),i,Math.abs(fraction-.5));
+  else{const neighbor=k+(reverse?1:-1);L=[0,0,0,1];if(neighbor>=0&&neighbor<nz){const j=index(neighbor);L=solids[j]?[0,0,0,0]:advance(Array.from(field.slice(4*j,4*j+4)),j,.5);}L=advance(L,i,reverse?1-fraction:fraction);}
+  out.set(L,at);
+ }
+ return out;
+}

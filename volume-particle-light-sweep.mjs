@@ -77,7 +77,13 @@ export const PARTICLE_LIGHT_SWEEP_WGSL=/* wgsl */`${PARAMS}
 @group(0) @binding(2) var<storage,read_write> positive:array<vec4<f32>>;
 @group(0) @binding(3) var<storage,read_write> negative:array<vec4<f32>>;
 @group(0) @binding(4) var<uniform> p:Params;
-fn halfEmission(c:vec4<f32>)->vec3<f32>{let tau=c.w*.5;let factor=select(1.0,(1.0-exp(-tau))/max(tau,1e-20),tau>1e-5);return c.xyz*.5*factor;}
+fn halfEmission(c:vec4<f32>)->vec3<f32>{
+ let tau=c.w*.5;
+ // Avoid subtracting nearly equal f32 values in optically thin fine slabs.
+ var factor=1.0-tau*.5+tau*tau/6.0-tau*tau*tau/24.0;
+ if(tau>.01){factor=(1.0-exp(-tau))/tau;}
+ return c.xyz*.5*factor;
+}
 @compute @workgroup_size(8,8) fn sweep(@builtin(global_invocation_id) gid:vec3<u32>){
  if(any(gid.xy>=p.dims.xy)){return;}
  var forward=vec3<f32>(0);var backward=vec3<f32>(0);var tf=1.0;var tb=1.0;
