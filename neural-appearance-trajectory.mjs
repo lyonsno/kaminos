@@ -1,11 +1,11 @@
 const hashPattern=/^[a-f0-9]{64}$/;
 const source=value=>{if(!value||typeof value.url!=='string'||! /^(\/api\/|https?:\/\/)/.test(value.url)||!hashPattern.test(value.sha256??''))throw Error('Retained trajectory source URL and digest required');return structuredClone(value);};
 export function readAppearanceTrajectory(raw){
- if(raw?.schema!=='kaminos.neural-appearance.trajectory.v1'||raw.status!=='complete'||raw.response!=='projected-bsdf')throw Error('Complete projected-response trajectory required');
+ if(raw?.schema!=='kaminos.neural-appearance.trajectory.v1'||!['complete','checkpoints-only'].includes(raw.status)||raw.response!=='projected-bsdf')throw Error('Complete projected-response trajectory required');
  if(!Number.isSafeInteger(raw.width)||!Number.isSafeInteger(raw.height)||raw.width<1||raw.height<1)throw Error('Valid response slice dimensions required');
  if(!Array.isArray(raw.views)||!raw.views.length||!Array.isArray(raw.checkpoints)||!raw.checkpoints.length)throw Error('Retained views and checkpoints required');
- const ids=new Set();for(const v of raw.views){if(typeof v.id!=='string'||ids.has(v.id))throw Error('Unique response view identity required');ids.add(v.id);source(v.reference);for(const d of [v.view,v.light])if(!Array.isArray(d)||d.length!==3||!d.every(Number.isFinite)||Math.abs(Math.hypot(...d)-1)>1e-5)throw Error('Unit response view/light directions required');}
- let previous=-1;for(const c of raw.checkpoints){if(!Number.isSafeInteger(c.step)||c.step<=previous||!Number.isFinite(c.heldoutLogL1)||c.heldoutLogL1<0)throw Error('Ordered checkpoints and finite heldout errors required');previous=c.step;source(c.source);for(const id of ids)source(c.slices?.[id]);}
+ const ids=new Set();for(const v of raw.views){if(typeof v.id!=='string'||ids.has(v.id))throw Error('Unique response view identity required');ids.add(v.id);if(raw.status==='complete')source(v.reference);for(const d of [v.view,v.light])if(!Array.isArray(d)||d.length!==3||!d.every(Number.isFinite)||Math.abs(Math.hypot(...d)-1)>1e-5)throw Error('Unit response view/light directions required');}
+ let previous=-1;for(const c of raw.checkpoints){if(!Number.isSafeInteger(c.step)||c.step<=previous||!Number.isFinite(c.heldoutLogL1)||c.heldoutLogL1<0)throw Error('Ordered checkpoints and finite heldout errors required');previous=c.step;source(c.source);if(raw.status==='complete')for(const id of ids)source(c.slices?.[id]);}
  return structuredClone(raw);
 }
 export async function loadResponseSlice(entry,width,height,{fetcher=fetch}={}){

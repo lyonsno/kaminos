@@ -158,3 +158,22 @@ before selecting broad material coverage or a GI integration architecture.
 
 Code adapted from NVIDIA's Apache-2.0 source; the retained
 [license](licenses/neuralappearance-license.txt) applies to that adaptation.
+
+## Inspect a retained fitting trajectory
+
+The **NVIDIA training trajectory** Workbench experiment accepts `experiment_inputs`
+with a `run` URL pointing to a `kaminos.neural-appearance.trajectory.v1` manifest
+and an optional `slices` URL for a completed reference capture. Open it on an
+ordinary saved scene with NVIDIA materials. Selecting a retained step changes
+those material recipes under the same native camera and lights. It lists every
+saved checkpoint and its held-out response error, without equating lower loss
+with visual convergence.
+
+A `checkpoints-only` manifest explicitly exposes saved models while matched
+source slices are pending. Complete manifests contain exact float32 projected
+response slices and SHA256 for every declared view and checkpoint. Source and
+prediction use identical display exposure; absolute error is separately labelled.
+Response view changes affect that controlled comparison independently of the
+ordinary 3D camera. `tools/neural-appearance-slices.mjs CONFIG OUTPUT` produces
+these arrays through Greenroom from the retained source, teacher and checkpoint
+identities. It does not retrain.

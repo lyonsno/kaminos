@@ -1,0 +1,14 @@
+<!doctype html><meta charset="utf-8"><title>Trained appearance live camera diagnosis</title><link rel="icon" href="data:,"><script type="importmap">{"imports":{"three/webgpu":"/lib/three.webgpu.js","three/tsl":"/lib/three.tsl.js"}}</script><script type="module">
+import * as THREE from '../lib/three.webgpu.js';import {loadNeuralAppearanceBundle} from '../neural-appearance-bundle.mjs';import {createNeuralAppearanceMaterial} from '../neural-appearance-material.mjs';
+let renderer,runtime,target,geometry;
+try{
+ const source={url:'/api/read?root=image-inbox&path=nvidia-appearance-models%2Fartful-painted-steel-first-1111%2Fmodel.model',sha256:'3f94e474593a93293915e029b6414664786e026c76d28339bd0b7a58f9282ef5'};
+ const bundle=await loadNeuralAppearanceBundle(source.url,source);runtime=createNeuralAppearanceMaterial(bundle);renderer=new THREE.WebGPURenderer({antialias:false});await renderer.init();renderer.setSize(64,64);renderer.toneMapping=THREE.NoToneMapping;document.body.append(renderer.domElement);
+ const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(40,1,.1,20);geometry=new THREE.PlaneGeometry(8,8);geometry.computeTangents();const uv=geometry.getAttribute('uv');for(let i=0;i<uv.count;i++)uv.setXY(i,.15,.15);
+ scene.add(new THREE.Mesh(geometry,runtime.material));const light=new THREE.DirectionalLight(0xffffff,1),L=[.4,.15,Math.sqrt(1-.4**2-.15**2)];light.position.fromArray(L);scene.add(light,light.target);target=new THREE.RenderTarget(64,64,{type:THREE.HalfFloatType,format:THREE.RGBAFormat});
+ const results=[];for(const V of [[0,0,1],[-.4,-.15,L[2]],[-.95,0,Math.sqrt(1-.95**2)]]){camera.position.fromArray(V).multiplyScalar(3);camera.lookAt(0,0,0);camera.updateMatrixWorld();renderer.setRenderTarget(target);await renderer.renderAsync(scene,camera);await renderer.backend.device.queue.onSubmittedWorkDone();const data=await renderer.readRenderTargetPixelsAsync(target,32,32,1,1);results.push({view:V,actual:Array.from(data.slice(0,3),THREE.DataUtils.fromHalfFloat)});}
+ const range=Math.max(...results.map(x=>x.actual[2]))-Math.min(...results.map(x=>x.actual[2]));if(range<.003)throw Error('Native camera change failed to change the trained response: '+JSON.stringify(results));
+ renderer.setRenderTarget(null);await renderer.renderAsync(scene,camera);const a=renderer.backend.device.adapterInfo;window.neuralAppearanceResult={status:'passed',source,UV:[.15,.15],light:L,results,range,identity:{backend:'WebGPU',adapter:{vendor:a.vendor,architecture:a.architecture,device:a.device},scope:'Real trained material, fixed UV/light, actual native camera movement'}};
+}catch(e){window.neuralAppearanceResult={status:'failed',error:e.stack};console.error(e);}
+window.neuralAppearanceDispose=async()=>{await renderer?.dispose();runtime?.dispose();geometry?.dispose();target?.dispose();};
+</script>

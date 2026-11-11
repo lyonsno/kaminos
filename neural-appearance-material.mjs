@@ -1,6 +1,6 @@
 import {MeshStandardNodeMaterial,DataTexture,RGBAFormat,FloatType,NearestFilter,NoColorSpace,DoubleSide,TSL} from './lib/three.webgpu.js';
 import {buildNeuralAppearanceWGSL} from './neural-appearance.mjs';
-const {wgsl,wgslFn,texture,uv,uniform,positionViewDirection,TBNViewMatrix,dFdx,dFdy,vec2,If}=TSL;
+const {wgsl,wgslFn,texture,uv,uniform,positionViewDirection,TBNViewMatrix,dFdx,dFdy,vec2,vec3,If}=TSL;
 
 export function createNeuralAppearanceMaterial(bundle,{uvScale=1,gain=1}={}){
  const model=bundle.decoder,blocks=Math.ceil(model.numLatents/4),width=Math.max(...bundle.levels.map(l=>l.width));
@@ -30,7 +30,12 @@ export function createNeuralAppearanceMaterial(bundle,{uvScale=1,gain=1}={}){
   customProgramCacheKey(){return `${super.customProgramCacheKey()}:nvidia-appearance:${this.uuid}`;}
   setupLightingModel(builder){
    const lighting=super.setupLightingModel(builder),prepared=prepare(texture(atlas),coords,lod).toVar('neuralAppearancePrepared');
-   const start=lighting.start.bind(lighting);lighting.start=b=>{prepared.append();start(b);};
+   const start=lighting.start.bind(lighting);lighting.start=b=>{
+    // Build the accumulator outside conditional per-light branches. Otherwise
+    // TSL's lazy initialization can reset it inside every contributing light.
+    b.context.reflectedLight.directDiffuse.assign(vec3(0));
+    prepared.append();start(b);
+   };
    lighting.direct=({lightDirection,lightColor,reflectedLight})=>{
     const incoming=lightDirection.mul(TBNViewMatrix).normalize();
     If(incoming.z.greaterThan(0).and(view.z.greaterThan(0)),()=>{
