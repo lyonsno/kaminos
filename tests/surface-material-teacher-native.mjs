@@ -32,3 +32,11 @@ test('footprint averages actual geometry and keeps zero, missing and mixed surfa
   }finally{teacher.dispose();}
  });
 });
+
+test('failed coherent capture retains its entire query batch and grid recipe',async()=>{
+ await withKaminosGpu(async({device})=>{
+  const triangles=plane.map(t=>({...t,...Object.fromEntries(['a','b','c'].map(k=>[k,[t[k][0]/4,0,t[k][2]/4]]))})),teacher=new SurfaceMaterialTeacher(device,{triangles,materials,periodic:{width:2,depth:2,minY:0,maxY:1},environment:0,bounces:1});
+  const recipe={width:2,height:2,tileWidth:2,tileDepth:2,referenceHeight:.5,resolution:64,samples:2,view:[Math.fround(.99999994),Math.fround(.0003)],light:[0,0],seed:43};
+  try{await assert.rejects(()=>teacher.evaluateMaterialGrid(recipe),e=>{assert.ok(e.capture);assert.equal(e.capture.width,2);assert.equal(e.capture.seed,43);assert.equal(e.queries.length,32);assert.deepEqual(e.capture.view,recipe.view);return true;});}finally{teacher.dispose();}
+ });
+});

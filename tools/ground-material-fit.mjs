@@ -29,6 +29,7 @@ try{
  report.phase='source-preflight';report.sourceRevision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();report.sourceStatus=execFileSync('git',['status','--porcelain'],{encoding:'utf8'});
  if(config.sourceRevision!==undefined&&(config.sourceRevision!==report.sourceRevision||report.sourceStatus))throw Error('Requested clean source revision is not effective');
  report.sourceFiles={};for(const name of ['ground-teacher-source.mjs','material-query-pool.mjs','grass-material-source.mjs','surface-teacher-source.mjs','periodic-surface-source.mjs','surface-teacher-wgsl.mjs','surface-teacher.mjs','surface-material-teacher.mjs','neumip-training.mjs','neumip-model.mjs','tools/ground-material-fit.mjs']){const b=await fs.readFile(name);report.sourceFiles[name]=digest(b);await fs.writeFile(path.join(out,path.basename(name)),b);}
+ report.phase='configuration';
  const grass=config.sourceKind==='grass';if(config.sourceKind&&!['grass','ground'].includes(config.sourceKind))throw Error('Unknown material source kind');
  const grid=config.labels==='denoised-grid';if(config.labels&&!['denoised-grid','raw'].includes(config.labels))throw Error('Unknown label route');if(grid&&!options.fresh)throw Error('Denoised grids require fresh streaming');
  const gridWidth=config.grid?.width??32,gridHeight=config.grid?.height??64;
@@ -112,5 +113,5 @@ try{
  },{requiredLimits,onEvidence:e=>report.evidence=e});
  report.phase='source-postflight';if(execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim()!==report.sourceRevision||execFileSync('git',['status','--porcelain'],{encoding:'utf8'})!==report.sourceStatus)throw Error('Source changed during capture or fitting');
  report.status='passed';report.phase='complete';
-}catch(error){report.status='failed';report.error=error.stack;if(error.capture)report.failedCapture={...error.capture,queries:await raw('failed-capture-queries.f32',error.queries)};process.exitCode=1;}
+}catch(error){report.status='failed';report.error=error.stack;if(error.capture)report.failedCapture={...error.capture,queries:await raw('failed-capture-queries.f32',error.queries),...(error.linearPixels?{raw:await raw('failed-capture-rgba.f32',error.linearPixels)}:{})};process.exitCode=1;}
 finally{await publish();console.log(JSON.stringify({status:report.status,phase:report.phase,elapsedMs:report.elapsedMs,error:report.error}));}

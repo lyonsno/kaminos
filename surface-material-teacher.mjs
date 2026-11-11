@@ -66,7 +66,7 @@ export class SurfaceMaterialTeacher extends SurfaceTeacher{
    this.accumulation=this.raw;const raw=await this.readLinear();this.accumulation=output;const filtered=await this.readLinear();
    const rgb=rgba=>{const result=new Float32Array(width*height*3);for(let i=0;i<width*height;i++)result.set(rgba.subarray(i*4,i*4+3),i*3);if(!result.every(v=>Number.isFinite(v)&&v>=0))throw Error('Non-finite material grid response');return result;};
    return {queries,raw:rgb(raw),filtered:rgb(filtered)};
-  }finally{for(const b of [input,config]){b.destroy();this.resources.splice(this.resources.indexOf(b),1);}}
+  }catch(error){error.capture={width,height,tileWidth,tileDepth,referenceHeight,resolution,samples,view,light,lod,seed,uvOrigin,uvScale,pixelIndex:error.pixelIndex};error.queries=queries;throw error;}finally{for(const b of [input,config]){b.destroy();this.resources.splice(this.resources.indexOf(b),1);}}
  }
  async evaluateMaterial(queries,{tileSize,tileDepth=tileSize,referenceHeight,resolution,samples,seed=0}={}){
   if(this.disposed)throw Error('surface teacher is disposed');

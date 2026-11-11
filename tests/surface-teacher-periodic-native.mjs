@@ -32,3 +32,9 @@ test('surface RNG excludes float-rounded endpoints and sampled periodic rays exc
  const d=await evalWgslBatch(ctx,{preamble,argTypes:['u32'],returnType:'vec3<f32>',inputs:[[634785765],[3932068202]],body:'params.periodic=vec4<f32>(2,2,0,1);var s=arg0;return cosineSample(vec3<f32>(1,0,0),&s);'});
  assert.ok(d.every(v=>v[1]!==0&&v[0]>0&&Math.abs(Math.hypot(...v)-1)<1e-5));
 });});
+
+test('a clipped blade surface remains visible on both sides of the periodic seam',async()=>{await withKaminosGpu(async ctx=>{
+ const {periodicSurfaceTriangles}=await import('../periodic-surface-source.mjs');const card=[{a:[.8,.5,-.4],b:[1.2,.5,.4],c:[1.2,.5,-.4],materialIndex:1},{a:[.8,.5,-.4],b:[.8,.5,.4],c:[1.2,.5,.4],materialIndex:1}];
+ const t=new SurfaceTeacher(ctx.device,{...base,triangles:periodicSurfaceTriangles([...ground,...card],2,2),materials:[...base.materials,{color:[.9,.05,.02],roughness:1,metalness:0}]});
+ try{const rays=[.999,1,1.001,-1.001,-1,-.999].map(x=>({origin:[x,.8,0],direction:[0,-1,0]})),a=await t.evaluate(rays);assert.ok(a.every(v=>v[0]>.8&&v[1]<.1));for(const v of a)for(let c=0;c<3;c++)assert.ok(Math.abs(v[c]-a[0][c])<1e-6);}finally{t.dispose();}
+});});

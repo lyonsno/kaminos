@@ -32,5 +32,5 @@ export function createGrassTeacherSource(options={}) {
  }
  const surface=config.periodic?periodicSurfaceTriangles(triangles,w,d):triangles;
  const maxY=triangles.reduce((m,t)=>Math.max(m,t.a[1],t.b[1],t.c[1]),0);
- return {schema:'kaminos.frozen-grass-source.v1',config,triangles:surface,blades,...(config.periodic?{periodic:{width:w,depth:d,minY:0,maxY}}:{})};
+ return {schema:'kaminos.frozen-grass-source.v1',config,triangles:surface,blades,boundary:config.periodic?'Periodic source cell and full repeated ray transport.':'Finite grass patch and finite ray transport.',...(config.periodic?{periodic:{width:w,depth:d,minY:0,maxY}}:{})};
 }
