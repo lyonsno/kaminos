@@ -321,7 +321,7 @@ export function installScenePlacementTools({
     // focused sidebar controls still retain their own keyboard input.
     const neutralPageFocus = document.activeElement === document.body;
     const viewportScoped = hover || viewport.contains(document.activeElement);
-    const historyScopedUndo = historyScopeArmed && (event.ctrlKey || event.metaKey) && key === 'z';
+    const historyScopedUndo = (historyScopeArmed || inHistoryScope(event.target)) && (event.ctrlKey || event.metaKey) && key === 'z';
     if (!(viewportScoped || neutralPageFocus || historyScopedUndo) || !allowed() || busy()) return;
     if ((event.ctrlKey || event.metaKey) && key === 'z') {
       steal(event);

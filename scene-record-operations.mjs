@@ -18,6 +18,9 @@ export function createSceneRecordOperations({domains=sceneRecordDomains,readers=
   }
   const domainFor=record=>sources.get(JSON.stringify([record?.type??'glb',record?.source]))??types.get(record?.type??'glb');
   const properties=record=>({...structuredClone(domainFor(record)?.fields(record)??{}),...(record.burnable!=null?{burnable:checkedBurnable(record)}:{})});
+  // Internal scene entries may retain a domain's immutable geometry; callers
+  // extracting properties still receive independent mutable values.
+  const retainedProperties=record=>{const fields=properties(record),domain=domainFor(record);return domain?.retainFields?domain.retainFields(fields):fields;};
   const installed=[...types.values(),...sources.values()];
   function describe(object,metadata) {
     const owners=installed.filter(domain=>domain.recognize?.(object));
@@ -44,7 +47,7 @@ export function createSceneRecordOperations({domains=sceneRecordDomains,readers=
       ...(record.burnable!=null?{burnable:checkedBurnable(record)}:{}),
       ...(record.repetition?{repetition:checkedRepetition(record.repetition)}:{}),
       ...(record.arrivalLeveling&&typeof record.arrivalLeveling==='object'?{arrivalLeveling:copy(record.arrivalLeveling)}:{}),
-      ...properties(record),
+      ...retainedProperties(record),
     };
   }
 
@@ -83,7 +86,7 @@ export function createSceneRecordOperations({domains=sceneRecordDomains,readers=
     if(!reloadable(record)||typeof domain?.load!=='function')throw Error(`Scene object "${record.fileName||record.id}" must be re-dropped; source "${record.source}" is not reloadable`);
     return domain.load(record,loaders,options);
   }
-  return Object.freeze({normalize,properties,describe,serialize,reloadable,assertReloadable,load});
+  return Object.freeze({normalize,properties,retainedProperties,describe,serialize,reloadable,assertReloadable,load});
 }
 
 export const defaultSceneRecordOperations=createSceneRecordOperations();

@@ -30,7 +30,7 @@ export function createSceneObjectRecord(object, metadata, {id, sceneTransform = 
     burnable:checkedBurnable(metadata),
     giProxy:giProxySettingFor({type:metadata.type,giProxy:metadata.giProxy}),
     ...(metadata.repetition?{repetition:checkedRepetition(metadata.repetition)}:{}),
-    ...sceneRecords.properties(metadata),
+    ...sceneRecords.retainedProperties(metadata),
   };
   object.userData.kaminosSceneObject = {
     id: record.id,
@@ -51,7 +51,7 @@ export function createSceneObjectRecord(object, metadata, {id, sceneTransform = 
     renderHandoffSchema: record.renderHandoffSchema,
     sceneTransform: record.sceneTransform,
     localLiquidEmitter: record.localLiquidEmitter,
-    ...sceneRecords.properties(record),
+    ...sceneRecords.retainedProperties(record),
   };
   return record;
 }
