@@ -21445,7 +21445,8 @@ export function createKaminosVolumePrototype({
       &&!nonRidgeOpticalCaptureSession&&!nonRidgeSourceBasisCaptureSession&&productFrameOwner==='prototype'
       &&!sceneTransportConsumer&&!(controlsSnapshot.gridOverlay>0)&&!(controlsSnapshot.flowDebug>0)
       &&volumePresentationModeEffective==='beauty';
-    const particleCaptureRequested=particleSettings.enabled&&reconstructionSupported&&!options.particleReference;
+    const particleChemistry=particleReactionFromSimulation(state.reactantCombustion);
+    const particleCaptureRequested=particleSettings.enabled&&!!particleChemistry&&reconstructionSupported&&!options.particleReference;
     // Particle births own their one-evaluation capture; loading an authored
     // basin must not silently switch it to that basin's ordinary marcher.
     const referenceConfig=options.particleReference&&debugOpticalStepping.value>=4
@@ -21462,7 +21463,7 @@ export function createKaminosVolumePrototype({
     const colorTargets=reconstruct?[{format:'rgba32float'},{format:'r32float'}]:[{format:targetPipeline===readbackPipeline?'rgba8unorm':format}];
     const splitBufferBefore=splitIntegral.buffer;
     const focusedAcquisition=particleCaptureRequested&&particleSettings.acquisitionMode===1;
-    const effectiveSplitSettings=options.particleReference?splitIntegralSettings({mode:'off'}):particleSettings.enabled?splitIntegralSettings({mode:'transport',fresh:1,exploration:1,motion:0,depthSupport:particleSettings.depthSupport,fineAcquisition:focusedAcquisition?0:particleSettings.fineAcquisition}):splitSettings;
+    const effectiveSplitSettings=options.particleReference?splitIntegralSettings({mode:'off'}):particleCaptureRequested?splitIntegralSettings({mode:'transport',fresh:1,exploration:1,motion:0,depthSupport:particleSettings.depthSupport,fineAcquisition:focusedAcquisition?0:particleSettings.fineAcquisition}):splitSettings;
     const splitActive=effectiveSplitSettings.mode!=='off'&&reconstructionSupported&&optical.value===4&&device.limits.maxStorageBuffersPerShaderStage>=10;
     let splitGroup=null,particleSourceFrame=null,acquisitionPlan=null;
     if(splitActive){
@@ -21484,10 +21485,10 @@ export function createKaminosVolumePrototype({
       const prepared=splitIntegral.prepare(encoder,{width:batch.width,height:batch.height,settings:effectiveSplitSettings,identity,step:state.simStepCount,
         viewProj,world,middle,acquisition,
         backtrace:resolveTimeStepConfig(controlsSnapshot).effective.backtraceScale,fineScale:2/gridSize,
-        staggered:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode==='staggered',sourcesOnly:particleSettings.enabled});
+        staggered:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode==='staggered',sourcesOnly:particleCaptureRequested});
       splitGroup=prepared.group;state.splitIntegral=prepared.state;particleSourceFrame=prepared.sourceFrame;
       if(particleSourceFrame){Object.assign(particleSourceFrame,{samples:batch.samples,outputWidth:state.width,outputHeight:state.height,displayWidth:state.displayWidth,displayHeight:state.displayHeight,reactionStepScale:resolveTimeStepConfig(controlsSnapshot).effective.dtScale});
-        if(focusedAcquisition)opticalParticles.prepareAcquisition(encoder,{source:particleSourceFrame,fine:fluidBuffers[currentFluid],dims:[gridSize,gridHeight,gridSize],settings:{...particleSettings,...particleReactionFromSimulation(state.reactantCombustion)},model:state.reactantCombustion.effective.model,staggered:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode==='staggered',profileWrites:particleProfileWrites??(()=>({})),identity:JSON.stringify([worldSmokeKey,intermediateKey,productTransform,state.particleSourceGeneration])});
+        if(focusedAcquisition)opticalParticles?.prepareAcquisition(encoder,{source:particleSourceFrame,fine:fluidBuffers[currentFluid],dims:[gridSize,gridHeight,gridSize],settings:{...particleSettings,...particleReactionFromSimulation(state.reactantCombustion)},model:state.reactantCombustion.effective.model,staggered:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode==='staggered',profileWrites:particleProfileWrites??(()=>({})),identity:JSON.stringify([worldSmokeKey,intermediateKey,productTransform,state.particleSourceGeneration])});
       }
     }else if(!options.particleReference){state.splitIntegral=splitIntegral.disable(effectiveSplitSettings.mode==='off'?'off':device.limits.maxStorageBuffersPerShaderStage<10?'requires-10-fragment-storage-buffers':'requires-Fixed-evaluations-ordinary-joined-emissive-beauty');state.splitIntegral.requested=effectiveSplitSettings.mode;}
     if(splitBufferBefore!==splitIntegral.buffer)rebuildFluidBindGroups();
@@ -21670,7 +21671,7 @@ export function createKaminosVolumePrototype({
       state.opticalParticles.reference=referenceReceipt;state.opticalParticles.sourceColorOutput=!particleSourceOnly;
       state.opticalParticles.acquisition=acquisitionPlan;
       state.opticalParticles.work={freshEvaluationBudget:particleSourceFrame.samples,acquisitionPixels:particleSourceFrame.pixels,updateSlots:state.opticalParticles.slots,birthCapacityPerFrame:Math.min(particleSourceFrame.samples,state.opticalParticles.slots),overflow:'at most one birth per retained slot per frame; remaining observations stay in the source batch',drawInstances:particleSettings.showParticles?state.opticalParticles.slots:0,particlePixels:state.opticalParticles.targetSize.reduce((a,b)=>a*b,1),outside:'shared lighting, material preparation and simulation are separate work'};
-    }else if(!options.particleReference){state.opticalParticles={requested:particleSettings.enabled,effective:'off',reason:particleSettings.enabled?'requires-one-fresh-Fixed-evaluations-ordinary-joined-beauty':'disabled'};}
+    }else if(!options.particleReference){state.opticalParticles={requested:particleSettings.enabled,effective:particleSettings.enabled&&!particleChemistry?'unavailable':'off',reason:particleSettings.enabled?(!particleChemistry?'Carried composition requires the active Reactant law and its oxidizer field':'requires-one-fresh-Fixed-evaluations-ordinary-joined-beauty'):'disabled'};}
     if(reconstruct) {
       const cameraValues=new Float32Array([...emissiveWhiteMatrix[0],0,...emissiveWhiteMatrix[1],0,...emissiveWhiteMatrix[2],0,
         0,uniforms[373],uniforms[374],0,0,0,uniforms[46],0]);

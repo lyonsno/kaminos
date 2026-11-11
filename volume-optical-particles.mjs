@@ -4,7 +4,7 @@ import {particleDepthLayout,createParticleDepthField,PARTICLE_DEPTH_RENDER_WGSL}
 import {createParticleGridExtinction,validateParticleGridExtinction,PARTICLE_EXTINCTION_QUERY_WGSL} from './volume-particle-extinction.mjs';
 import {INTEGRAL_PRESENT_WGSL} from './volume-integral-reconstruction.mjs';
 import {PARTICLE_STATE_DEFAULTS,PARTICLE_STATE_WGSL,PARTICLE_KERNEL_WGSL,validateParticleStateSettings,particleKernelNormalization} from './volume-particle-state.mjs';
-import {createParticleExchange} from './volume-particle-exchange.mjs';
+import {createParticleExchange,particleExchangePlan} from './volume-particle-exchange.mjs';
 import {createParticleFollow} from './volume-particle-follow.mjs';
 import {THERMAL_LUT,THERMAL_LUT_COUNT} from './volume-physical-color.mjs';
 import {REACTION_RGB} from './volume-emissive-transport.mjs';
@@ -336,6 +336,7 @@ export function createOpticalParticles(device,{transparent=false,indexedQuads=tr
   if(slots*96>Math.min(device.limits.maxBufferSize,device.limits.maxStorageBufferBindingSize))throw Error(`Particle population requires ${slots*96} bytes; exceeds effective device binding capacity`);
   if(Math.ceil(slots/64)>device.limits.maxComputeWorkgroupsPerDimension)throw Error('Particle population exceeds effective device compute dispatch capacity');
   if(s.acquisitionMode&&Math.ceil((source.samples??pixels)/64)>device.limits.maxComputeWorkgroupsPerDimension)throw Error('Fresh particle observations exceed effective device compute dispatch capacity');
+  particleExchangePlan(device.limits,{slots,dims,pitch:2/dims[0],cellSize:s.exchangeCellSize});
   const nextKey=JSON.stringify([slots,s.acquisitionMode,s.capacity?null:[columns,rows],identity]);
   const resetNeeded=key!==nextKey||lastStep===null||step<lastStep;const dt=resetNeeded?0:step-lastStep;
   if(!particles||particles.size!==slots*96){retire(particles?[particles]:[]);particles=device.createBuffer({label:'shared world optical material carriers',size:slots*96,usage:storage});}

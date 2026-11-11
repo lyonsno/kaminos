@@ -25,6 +25,11 @@ test('production carrier retains actual reactants and advances a state-dependent
   const held=await draw(1,{exchangeStrength:1,exchangeTime:.01,lifeHeat:.1});assert.deepEqual(held.records,live.records,'presentation changes cannot advance material or survival');
  }));
 });
+test('invalid exchange grouping preserves a current population before any encoding mutation',async()=>{
+ await withKaminosGpu(async({device:d})=>fixture(d,async({seed,draw,owner})=>{
+  seed([1,.8,.2,3]);const before=await draw(0);await assert.rejects(draw(1,{exchangeCellSize:1e-8}),/Particle exchange/);const after=await owner.sample();assert.deepEqual(after.state,before.state,'preflight cannot advance frame or replace effective settings');assert.deepEqual(after.records,before.records,'invalid grouping cannot clear or update material');const continued=await draw(1);assert.equal(continued.state.stepDelta,1,'rejected grouping cannot consume the next simulation delta');assert.ok(continued.records[20]<before.records[20]);
+ }));
+});
 test('actual particle pixels expose carried material diagnostics while holding the same medium',async()=>{
  await withKaminosGpu(async({device:d})=>fixture(d,async({seed,draw,pixels})=>{
   seed([1,.8,.2,3]);const before=await draw(0),normal=await pixels();await draw(0,{debugView:1});const fuel=await pixels();assert.notDeepEqual(fuel,normal,'fuel view changes actual rendered pixels');await draw(0,{debugView:3});assert.notDeepEqual(await pixels(),fuel,'oxygen view has a different material color');const after=await draw(0,{debugView:0});assert.deepEqual(after.records,before.records,'diagnostic views do not edit material');assert.deepEqual(await pixels(),normal,'normal view restores the exact image');
