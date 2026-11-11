@@ -2,12 +2,13 @@
 // The caller supplies the existing domain factories and one Three namespace;
 // no document, input element, route parser or second renderer lives here.
 export function createSceneLightingGraph({THREE,scene,camera,renderer,aoSettings,aoIntensityValue,giOptions={},
-  aoCompute,denoise,configureMaterialSideAODepth,createSceneGI}){
+  aoCompute,denoise,configureMaterialSideAODepth,createSceneGI,retain=()=>{}}){
+  const keep=value=>{retain(value);return value;};
   const {pass,mrt,normalView,positionViewDirection,packNormalToRGB,sample,unpackRGBToNormal,
     positionView,vec4,texture,convertToTexture,uniform,mix,float,screenUV,builtinAOContext}=THREE.TSL;
-  const renderPipeline = new THREE.RenderPipeline(renderer);
+  const renderPipeline = keep(new THREE.RenderPipeline(renderer));
 
-  const prePass = pass(scene, camera);
+  const prePass = keep(pass(scene, camera));
   prePass.name = 'Pre-Pass';
   prePass.transparent = false;
   // GTAO integrates the visible hemisphere. With inconsistent authored winding,
@@ -20,30 +21,30 @@ export function createSceneLightingGraph({THREE,scene,camera,renderer,aoSettings
   const normalTexture = prePass.getTexture('output');
   normalTexture.type = THREE.UnsignedByteType;
 
-  const scenePass = pass(scene, camera);
+  const scenePass = keep(pass(scene, camera));
 
   const aoResScale = 0.5;
   const drawSize = renderer.getDrawingBufferSize(new THREE.Vector2());
-  let depthRT = new THREE.RenderTarget(
+  let depthRT = keep(new THREE.RenderTarget(
     Math.round(drawSize.x * aoResScale),
     Math.round(drawSize.y * aoResScale),
     { type: THREE.FloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter }
-  );
-  const depthMaterial = new THREE.NodeMaterial();
+  ));
+  const depthMaterial = keep(new THREE.NodeMaterial());
   depthMaterial.name = 'LinearDepthToColor';
   depthMaterial.blending = THREE.NoBlending;
   depthMaterial.colorNode = vec4(positionView.z.negate(), 0, 0, 1);
 
   const depthTexNode = texture(depthRT.texture);
   const normalTexNode = texture(normalTexture);
-  const aoPass = aoCompute(depthTexNode, normalTexNode, camera);
+  const aoPass = keep(aoCompute(depthTexNode, normalTexNode, camera));
   const acceptedAO=aoSettings;
   for(const [field,key] of [['radius','radius'],['scale','scale'],['thickness','thickness'],['falloff','distanceFallOff']])aoPass[key].value=acceptedAO[field];
   configureMaterialSideAODepth(aoPass, { scene, camera, depthRT, depthMaterial }, THREE.RendererUtils);
 
-  const aoResolved = convertToTexture(aoPass.getTextureNode());
-  const denoisePass = denoise(aoResolved, prePassDepth, prePassNormal, camera);
-  const denoiseResolved = convertToTexture(denoisePass);
+  const aoResolved = keep(convertToTexture(aoPass.getTextureNode()));
+  const denoisePass = keep(denoise(aoResolved, prePassDepth, prePassNormal, camera));
+  const denoiseResolved = keep(convertToTexture(denoisePass));
   // Resolve screen-space visibility before the lit pass, not once per material.
   const setupScenePass = scenePass.setup;
   scenePass.setup = function(builder) {
@@ -58,7 +59,12 @@ export function createSceneLightingGraph({THREE,scene,camera,renderer,aoSettings
   const aoOutput = mix(float(1.0), aoVisibility, aoIntensity.min(1)).div(
     float(1).add(aoIntensity.sub(1).max(0).mul(float(1).sub(aoVisibility))));
   scenePass.contextNode = builtinAOContext(aoOutput);
-  const sceneGI = createSceneGI(scene,camera,aoIntensity,{...giOptions,renderer});
+  const sceneGI = keep(createSceneGI(scene,camera,aoIntensity,{...giOptions,renderer}));
+  function setRenderer(next){
+    if(typeof next?.getDrawingBufferSize!=='function')throw Error('Lighting graph requires its current renderer');
+    renderer=next;renderPipeline.renderer=next;renderPipeline.needsUpdate=true;
+    sceneGI.reflections?.setRenderer?.(next);
+  }
   function syncReflections(){
     scenePass.contextNode=THREE.TSL.context({...builtinAOContext(aoOutput).getFlowContextData(),
       sceneReflectionLighting:sceneGI.reflections.settings.enabled?sceneGI.reflections.lightingContext:null});
@@ -71,6 +77,6 @@ export function createSceneLightingGraph({THREE,scene,camera,renderer,aoSettings
     depthRT.setSize(width,height);return true;
   }
   syncReflections();
-  return {resizeDepth,syncReflections,renderPipeline,prePass,prePassDepth,prePassNormal,scenePass,aoPass,aoResScale,depthRT,depthMaterial,
+  return {setRenderer,resizeDepth,syncReflections,renderPipeline,prePass,prePassDepth,prePassNormal,scenePass,aoPass,aoResScale,depthRT,depthMaterial,
     aoIntensity,aoOutput,sceneGI};
 }

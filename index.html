@@ -2990,6 +2990,7 @@ import { settleStartupVeil } from './startup-veil.mjs';
 import {createSceneLoadingGeometry} from './scene-loading-geometry.mjs';
 import { createEnvironmentLoader } from './scene-environment-loader.mjs';
 import {createDeviceRecovery} from './scene-device-recovery.mjs';
+import {createSceneRecoveryResourceCallbacks} from './scene-recovery-resources.mjs';
 window.kaminosStartup?.phase('Preparing application');
 // Adopt the <head> guard's early runtime-config request (startup-veil-guard.js).
 loadStartupRuntimeConfig().catch(() => {});
@@ -3556,10 +3557,10 @@ import {createImageIterationHistory,installImageIterationHistory} from './author
 import {installBrowseLayout} from './authoring-browse-layout.mjs';
 import {createAppFrameSource} from './app-frame-source.mjs';
 import {createSceneFrameRuntime} from './scene-frame-runtime.mjs';
-import {createSceneLightingGraph} from './scene-lighting-graph.mjs';
+import {createSceneRenderResources} from './scene-render-resources.mjs';
 import {createSceneDisplayGraph,prepareSceneEmissionSource} from './scene-display-graph.mjs';
 import {createSceneDrawRuntime} from './scene-draw-runtime.mjs';
-import {createSceneRenderObjects,createSceneRenderer} from './scene-render-bootstrap.mjs';
+import {createSceneRenderObjects} from './scene-render-bootstrap.mjs';
 import {createAppGpuHost} from './app-gpu-host.mjs';
 import {fireAtBoot,createFluidBoot} from './fire-boot.mjs';
 import {prepareAssetGeometryOffThread,snapshotAssetGeometry,prepareAssetBoundsOffThread,createAssetBoundsCache,captureAssetBoundsState,assetBoundsStateMatches} from './asset-geometry-preparation.mjs';
@@ -11149,12 +11150,19 @@ async function initScene() {
       adapterName: adapter.info?.description || adapter.info?.device || adapter.info?.vendor || 'unknown-webgpu-adapter', deviceOwnership: 'borrowed' });
     samHostContext = { adapter, device, inferenceSession };
   }
-  const sceneRenderBootstrap=await createSceneRenderer({THREE,scene,camera,
-    sharedGpu:sharedGpu??(samHostContext?{device:samHostContext.device,queue:samHostContext.device.queue}:null),
-    viewport:readSceneViewport,exposure:sceneEnvironment.read().exposure,updateStyle:true,allowIndependentDevice:true,
-    trackTimestamp:!!sharedGpu?.device&&(isFireLightFieldTimingRoute()||new URLSearchParams(location.search).get('ash_timing')==='1'),
-    onConstructed:next=>{renderer=next;renderer.domElement.id = 'kaminos-host-renderer-canvas';vp.appendChild(renderer.domElement);window.kaminosStartup?.phase('Initializing renderer');},
+  const sceneRenderResources=createSceneRenderResources({THREE,scene,camera,readViewport:readSceneViewport,
+    readSharedGpu:()=>sharedGpu??(samHostContext?{device:samHostContext.device,queue:samHostContext.device.queue}:null),
+    readRendererOptions:()=>({exposure:sceneEnvironment.read().exposure,updateStyle:true,allowIndependentDevice:true,
+      trackTimestamp:!!sharedGpu?.device&&(isFireLightFieldTimingRoute()||new URLSearchParams(location.search).get('ash_timing')==='1')}),
+    readLightingOptions:()=>{
+      const params=new URLSearchParams(location.search);
+      return {aoSettings:sceneAO.read(),aoIntensityValue:effectiveAOIntensity(),
+        giOptions:{reflections:{enabled:params.get('scene_reflections')==='1'},filterImplementation:params.get('lighting_filter')==='separate'?'separate':'shared',surfaceReuse:params.get('lighting_surface_reuse')!=='0',sourceComparison:params.get('experiment')==='gi-source-study'},
+        aoCompute,denoise,configureMaterialSideAODepth,createSceneGI};
+    },
+    onConstructed(next,{replacement}){renderer=next;if(!replacement){renderer.domElement.id='kaminos-host-renderer-canvas';vp.appendChild(renderer.domElement);window.kaminosStartup?.phase('Initializing renderer');}},
   });
+  const sceneRenderBootstrap=await sceneRenderResources.initializeRenderer({assertCurrent(){}});
   window.kaminosStartup?.phase('Building workspace');
   console.log('WebGPU renderer initialized, backend:', renderer.backend?.constructor?.name || 'unknown');
   window.kaminosStartup?.phase('Building lighting & GI pipeline');
@@ -11283,13 +11291,8 @@ async function initScene() {
   // --- GTAO Compute AO via Three TSL/RenderPipeline ---
   postProcessing = null;
 
-  const lightingWorkParams=new URLSearchParams(location.search);
   const {renderPipeline:lightingPipeline,scenePass:lightingScenePass,aoPass:lightingAO,aoIntensity:lightingIntensity,
-    prePass,prePassDepth,prePassNormal,aoResScale,depthRT,depthMaterial,aoOutput,sceneGI,syncReflections,resizeDepth}=createSceneLightingGraph({
-    THREE,scene,camera,renderer,aoSettings:sceneAO.read(),aoIntensityValue:effectiveAOIntensity(),
-    giOptions:{reflections:{enabled:lightingWorkParams.get('scene_reflections')==='1'},filterImplementation:lightingWorkParams.get('lighting_filter')==='separate'?'separate':'shared',surfaceReuse:lightingWorkParams.get('lighting_surface_reuse')!=='0',sourceComparison:lightingWorkParams.get('experiment')==='gi-source-study'},
-    aoCompute,denoise,configureMaterialSideAODepth,createSceneGI,
-  });
+    prePass,prePassDepth,prePassNormal,aoResScale,depthRT,depthMaterial,aoOutput,sceneGI,syncReflections,resizeDepth}=sceneRenderResources.initializeLighting({assertCurrent(){}});
   renderPipeline=lightingPipeline;scenePass=lightingScenePass;aoPass=lightingAO;aoIntensity=lightingIntensity;
   activeSceneGI = sceneGI;
   if (typeof syncArrivalStudioLighting === 'function') syncArrivalStudioLighting();
@@ -12078,93 +12081,71 @@ async function initScene() {
   recoveryRetry.textContent='Retry GPU recovery';recoveryRetry.onclick=()=>deviceRecovery.retry();
   recoveryNotice.append(recoveryText,recoveryRetry);document.body.append(recoveryNotice);
   let recoverySimulation=null;
-  deviceRecovery=createDeviceRecovery({device:renderer.backend.device,
-    stop(){
-      recoverySimulation??={flame:!!volumePrototype,active:!!volumePrototype?.isActive(),paused:!!volumePrototype?.debugState().simulationPaused,
-        water:waterFeature.recoveryRequested,waterPaused:waterFeature.paused,
-        flamePresent:flameFeature.present||!!activeSceneComposition,
-        flameRoute:Object.fromEntries([...fireLightFieldRouteParams(),...Object.entries(fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()))])};
-      environmentLoader.invalidateResources();
-      transportPrototype?.setSceneTransportConsumer(null);transportPrototype=null;
-      authoredWaterFlameTransportActive=false;authoredFlameHDRActive=false;
-      frameComposition.setForegroundServiceActive(false);
-      waterFeature.restart(waterFeature.setup);
-      // Stop future simulation submission immediately; recreation happens below.
-      volumePrototype?.retireLostDevice();
-      return volumePrototype?.setActive(false);
+  const recoveryResources=createSceneRecoveryResourceCallbacks({
+    state:{scene,sceneGI,renderPipeline,environmentLoader,frameComposition,waterFeature,giOutputGraphs,
+      get renderer(){return renderer;},set renderer(value){renderer=value;},
+      get sharedGpu(){return sharedGpu;},set sharedGpu(value){sharedGpu=value;},
+      get transportPrototype(){return transportPrototype;},set transportPrototype(value){transportPrototype=value;},
+      get authoredWaterFlameTransportActive(){return authoredWaterFlameTransportActive;},set authoredWaterFlameTransportActive(value){authoredWaterFlameTransportActive=value;},
+      get authoredFlameHDRActive(){return authoredFlameHDRActive;},set authoredFlameHDRActive(value){authoredFlameHDRActive=value;},
+      get volumePrototype(){return volumePrototype;},set volumePrototype(value){volumePrototype=value;},
+      get collisionVoxelMesh(){return collisionVoxelMesh;},set collisionVoxelMesh(value){collisionVoxelMesh=value;},
+      get collisionVoxelRevision(){return collisionVoxelRevision;},set collisionVoxelRevision(value){collisionVoxelRevision=value;},
+      get volumeBridge(){return volumeBridge;},set volumeBridge(value){volumeBridge=value;},
+      get fireLightFieldPass(){return fireLightFieldPass;},set fireLightFieldPass(value){fireLightFieldPass=value;},
+      get sceneFlameHDR(){return sceneFlameHDR;},set sceneFlameHDR(value){sceneFlameHDR=value;},
+      get sceneBloom(){return sceneBloom;},
+      get neutralEnvironmentMap(){return neutralEnvironmentMap;},set neutralEnvironmentMap(value){neutralEnvironmentMap=value;},
+      get pmremGenerator(){return pmremGenerator;},set pmremGenerator(value){pmremGenerator=value;},
     },
-    async rebuild({watch,assertCurrent}){
-      if(authoredAsh.size||workingScene.objects.some(entry=>entry.burnable?.enabled))throw Error('This scene contains burning state. Automatic recovery excludes burning; your authored scene is retained.');
-      if(compositionModule||fingerFluidPyroCompositionRequested()||samImageToolsPromise)throw Error('This custom GPU composition does not yet support device recovery. Your authored scene is retained.');
+    readInputs:()=>({flame:!!volumePrototype,active:!!volumePrototype?.isActive(),paused:!!volumePrototype?.debugState().simulationPaused,
+      water:waterFeature.recoveryRequested,waterPaused:waterFeature.paused,
+      flamePresent:flameFeature.present||!!activeSceneComposition,
+      flameRoute:Object.fromEntries([...fireLightFieldRouteParams(),...Object.entries(fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()))]),
+      unsupportedReason:authoredAsh.size||workingScene.objects.some(entry=>entry.burnable?.enabled)
+        ?'This scene contains burning state. Automatic recovery excludes burning; your authored scene is retained.'
+        :compositionModule||fingerFluidPyroCompositionRequested()||samImageToolsPromise
+          ?'This custom GPU composition does not yet support device recovery. Your authored scene is retained.':null,
+    }),
+    async waitForResources({assertCurrent}){
       await sceneLightingPreparation?.whenIdle().catch(()=>{});assertCurrent();
       await sceneRadianceRouteTask.catch(()=>{});assertCurrent();
-      await releaseSceneRadianceRoute();assertCurrent();
-      await samHostContext?.inferenceSession.close();samHostContext=null;assertCurrent();
-      waterFeature.restart(waterFeature.setup);
-      if(collisionVoxelMesh){scene.remove(collisionVoxelMesh);collisionVoxelMesh.userData.disposeGpuSolid?.();collisionVoxelMesh.geometry.dispose();collisionVoxelMesh.material.dispose();collisionVoxelMesh=null;}
-      collisionVoxelRevision=undefined;
-      volumeBridge?.dispose?.();volumeBridge=null;
-      await volumePrototype?.dispose();volumePrototype=null;assertCurrent();
-      for(const graph of giOutputGraphs.values())graph.fireLightFieldPass?.dispose();
-      giOutputGraphs.clear();fireLightFieldPass=null;
-      sceneFlameHDR?.dispose();sceneFlameHDR=null;sceneBloom.dispose();
-      neutralEnvironmentMap?.dispose();neutralEnvironmentMap=null;
-      scene.environment=null;scene.background=null;pmremGenerator.dispose();
-      const old=renderer,canvas=old.domElement,size=old.getSize(new THREE.Vector2());
-      const pixelRatio=old.getPixelRatio(),toneMapping=old.toneMapping,exposure=old.toneMappingExposure;
-      old.dispose();
+    },
+    releaseRadiance:()=>releaseSceneRadianceRoute(),
+    async retireModel(){await samHostContext?.inferenceSession.close();samHostContext=null;},
+    async acquireDevice(){
       const next=await requestKaminosSharedWebGpuDevice({bufferRequirements:combinedRequirements,
         hostRequirements:sharedDeviceHostRequirements({sam:samHostConfig?.mounted?samHostDeviceRequirements:null})});
-      try{assertCurrent();}catch(error){next.device.destroy();throw error;}
-      const detachCandidate=watch(next.device);
-      let replacement;
-      try{
-      replacement=new THREE.WebGPURenderer({canvas,device:next.device,antialias:true,trackTimestamp:isFireLightFieldTimingRoute()||new URLSearchParams(location.search).get('ash_timing')==='1'});
-      replacement.setPixelRatio(pixelRatio);replacement.setSize(size.x,size.y);
-      replacement.toneMapping=toneMapping;replacement.toneMappingExposure=exposure;
-      replacement.shadowMap.enabled=old.shadowMap.enabled;replacement.shadowMap.type=old.shadowMap.type;
-      replacement.outputColorSpace=old.outputColorSpace;
-      await replacement.init();assertCurrent();
-      renderer=replacement;sharedGpu=next;sharedGpuFailureReason=null;compositionHost.device=next.device;
-      sceneGI.reflections.setRenderer(renderer);
-      renderPipeline.renderer=renderer;renderPipeline.needsUpdate=true;
-      pmremGenerator=new THREE.PMREMGenerator(renderer);
-      // Render-target contents are gone, even though their CPU descriptors survived.
-      sceneGI.resetHistory('device-replaced');
-      if(recoverySimulation.flame){
-        createPageVolumePrototype();
-        volumePrototype.setSceneCompositionPresentation(Boolean(activeSceneComposition));
-        volumePrototype.relocateOrdinaryDomain(flameDomainTranslation,volumePrimitivesInFlameDomain(),flameDomainScale);
-        volumePrototype.setVolumePrimitives(volumePrimitivesInFlameDomain());
-        applyFlameEmitterPose?.(flameEmitterPose);syncAuthoredFlameSources();
-        volumePrototype.setSimulationPaused(recoverySimulation.paused);
-        volumeBridge=createVolumeMainRendererBridge();
-        window.__kaminosVolumeBridge=window.__kaminosVolumeMainRendererBridge=volumeBridge;
-        await syncSceneRadianceRoute(new URLSearchParams(recoverySimulation.flamePresent?recoverySimulation.flameRoute:{}));assertCurrent();
-      }
-      rebuildSceneGIOutput();
-      // Neutral is rebuilt synchronously; HDR loads use the new generator after resume.
-      applyEnvMap(neutralEnvironmentMap=createProceduralEnv(),readEnvironmentRecipe().intensity);
-      if(recoverySimulation.water){
-        const mounted=await waterFeature.recover(recoverySimulation.waterPaused);assertCurrent();
-        if(!mounted)throw Error(waterFeature.failure||'Water could not restart');
-      }
-      if(recoverySimulation.active){await flameFeature.setActive(true,{isCurrent:()=>{assertCurrent();return true;}});assertCurrent();}
-      }catch(error){
-        detachCandidate();
-        waterFeature.restart(waterFeature.setup);
-        volumePrototype?.retireLostDevice();
-        try{await volumePrototype?.setActive(false);}finally{replacement?.dispose();next.device.destroy();}
-        throw error;
-      }
+      sharedGpu=next;return next;
     },
+    replaceRenderer:(next,context)=>sceneRenderResources.replaceRenderer(next,context),
+    releaseRenderer:()=>sceneRenderResources.retireRenderer(),
+    discardDevice:next=>next.device.destroy(),
+    adoptRenderer({sharedGpu:next}){sharedGpuFailureReason=null;compositionHost.device=next.device;},
+    async restoreFlame(saved,{assertCurrent}){
+      createPageVolumePrototype();
+      volumePrototype.setSceneCompositionPresentation(Boolean(activeSceneComposition));
+      volumePrototype.relocateOrdinaryDomain(flameDomainTranslation,volumePrimitivesInFlameDomain(),flameDomainScale);
+      volumePrototype.setVolumePrimitives(volumePrimitivesInFlameDomain());
+      applyFlameEmitterPose?.(flameEmitterPose);syncAuthoredFlameSources();
+      volumePrototype.setSimulationPaused(saved.paused);
+      volumeBridge=createVolumeMainRendererBridge();
+      window.__kaminosVolumeBridge=window.__kaminosVolumeMainRendererBridge=volumeBridge;
+      await syncSceneRadianceRoute(new URLSearchParams(saved.flamePresent?saved.flameRoute:{}));assertCurrent();
+    },
+    rebuildOutput:()=>rebuildSceneGIOutput(),
+    restoreEnvironment:()=>applyEnvMap(neutralEnvironmentMap=createProceduralEnv(),readEnvironmentRecipe().intensity),
+    activateFlame:(saved,{assertCurrent})=>flameFeature.setActive(true,{isCurrent:()=>{assertCurrent();return true;}}),
+  });
+  deviceRecovery=createDeviceRecovery({device:renderer.backend.device,
+    stop(){const result=recoveryResources.stop();recoverySimulation=recoveryResources.readSnapshot();return result;},
+    rebuild:recoveryResources.rebuild,
     changed(state){
       recoveryNotice.hidden=state.phase==='active';recoveryRetry.hidden=state.phase!=='failed';
       recoveryText.textContent=state.phase==='failed'?`GPU recovery stopped: ${state.error} `:'Recovering graphics — your scene and edits are retained. ';
       if(state.phase==='active'){
-        recoverySimulation=null;
+        recoveryResources.clearSnapshot();recoverySimulation=null;
         environmentLoader.select(sceneEnvironment.read().name??'studio');
-
         markDirty();
       }
     },

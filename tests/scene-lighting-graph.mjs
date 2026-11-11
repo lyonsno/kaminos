@@ -4,15 +4,15 @@ import * as THREE from '../lib/three.webgpu.js';
 import {configureMaterialSideAODepth} from '../scene-ao-depth.mjs';
 const module=await import('../scene-lighting-graph.mjs').catch(error=>{if(error.code!=='ERR_MODULE_NOT_FOUND')throw error;return {};});
 const factory=()=>{assert.equal(typeof module.createSceneLightingGraph,'function','ordinary lighting resources must construct outside the page initializer');return module.createSceneLightingGraph;};
-function fixture({traceSetup=false}={}){
+function fixture({traceSetup=false,failAO=false,retained=[]}={}){
  const setupCalls=[];
  const localThree=traceSetup?{...THREE,TSL:{...THREE.TSL,pass:(...args)=>{const node=THREE.TSL.pass(...args);node.setup=()=>{setupCalls.push('scene');return 'scene-result';};return node;},convertToTexture:(...args)=>{const node=THREE.TSL.convertToTexture(...args);node.build=()=>setupCalls.push('denoise');return node;}}}:THREE;
  const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(40,2,.01,100),renderer={getDrawingBufferSize:v=>v.set(80,40)};
  const ao={radius:{value:0},scale:{value:0},thickness:{value:0},distanceFallOff:{value:0},updateBefore(){},setDepthPass(...args){this.depthPass=args;},getTextureNode:()=>THREE.TSL.texture(new THREE.Texture())};
  const calls=[],gi={owner:'injected real-domain factory',reflections:{settings:{enabled:false},lightingContext:{kind:'reflection-lighting'},result:{build(){setupCalls.push('reflection');}}}};
  const settings={radius:3,scale:2,thickness:.1,falloff:1};
- const result=factory()({THREE:localThree,scene,camera,renderer,aoSettings:settings,aoIntensityValue:.7,giOptions:{filterImplementation:'shared',surfaceReuse:true},
-  aoCompute:(depth,normal,c)=>{calls.push({kind:'ao',depth,normal,camera:c});return ao;},
+ const result=factory()({THREE:localThree,scene,camera,renderer,aoSettings:settings,aoIntensityValue:.7,giOptions:{filterImplementation:'shared',surfaceReuse:true},retain:value=>retained.push(value),
+  aoCompute:(depth,normal,c)=>{calls.push({kind:'ao',depth,normal,camera:c});if(failAO)throw Error('AO allocation refused');return ao;},
   configureMaterialSideAODepth:(...args)=>{calls.push({kind:'depth',args});return configureMaterialSideAODepth(...args);},
   denoise:(...args)=>{calls.push({kind:'denoise',args});return THREE.TSL.texture(new THREE.Texture());},
   createSceneGI:(...args)=>{calls.push({kind:'gi',args});return gi;}});
@@ -60,4 +60,16 @@ test('standalone scene setup resolves enabled reflections before denoising and s
  assert.deepEqual(f.setupCalls,['reflection','denoise','scene']);
  f.setupCalls.length=0;f.gi.reflections.settings.enabled=false;r.scenePass.setup({});
  assert.deepEqual(f.setupCalls,['denoise','scene']);
+});
+test('partial lighting construction leaves owned targets reachable for retirement',()=>{
+ const retained=[];assert.throws(()=>fixture({failAO:true,retained}),/AO allocation refused/);
+ assert.ok(retained.some(resource=>resource.isRenderTarget),'allocated depth target must be retained before a later factory fails');
+ assert.ok(retained.some(resource=>resource.isNodeMaterial),'allocated depth material must be retained before a later factory fails');
+});
+test('replacement renderer becomes the live depth-resize and pipeline owner',()=>{
+ const f=fixture(),r=f.result,next={getDrawingBufferSize:value=>value.set(200,120)};
+ f.gi.reflections.setRenderer=value=>{f.gi.renderer=value;};
+ r.setRenderer(next);
+ assert.equal(r.renderPipeline.renderer,next);assert.equal(f.gi.renderer,next);
+ assert.equal(r.resizeDepth(),true);assert.deepEqual([r.depthRT.width,r.depthRT.height],[100,60]);
 });
