@@ -75,7 +75,7 @@ export function createFireUnitObject({THREE,record,camera,controls,viewport,shar
     if(next.fineManualHold&&(!before.fineManualHold||offsetChanged))coverage.hold(fineFrame());else if(before.fineManualHold&&!next.fineManualHold)coverage.release();
     runtime.setRaymarchSmokePresentationMode(data.settings?.presentationControls?.['raymarch-smoke-presentation']?.value??'on');
     if(changed||offsetChanged||data.emissionEnabled!==before.emissionEnabled)supply();following=nextFollowing;placeEmitter();updateBounds();authoringRevision++;
-   }catch(error){data=before;following=beforeFollowing;if(changed)runtime.setControls({...before.controls,lookFreeze:0});if(offsetChanged){const frame=fineFrame();runtime.relocateOrdinaryDomain(frame.translate,[],frame.scale);}supply();placeEmitter();updateBounds();throw error;}},
+   }catch(error){data=before;following=beforeFollowing;if(changed)runtime.setControls({...before.controls,lookFreeze:0});if(offsetChanged){const frame=fineFrame();runtime.relocateOrdinaryDomain(frame.translate,[],frame.scale);}coverage.release();if(before.fineManualHold)coverage.hold(fineFrame());supply();placeEmitter();updateBounds();throw error;}},
   setEmitter(value){const next=checkedFireUnitRecord({...record,transform:accepted,fireUnit:{...data,emitter:value}}).fireUnit.emitter;
    const before=data.emitter;data.emitter=next;try{supply();placeEmitter();data.fineManualHold=false;coverage.release();}catch(error){data.emitter=before;placeEmitter();throw error;}},
   syncPose(){
@@ -83,7 +83,7 @@ export function createFireUnitObject({THREE,record,camera,controls,viewport,shar
    catch(error){root.position.fromArray(accepted.position);root.rotation.set(...accepted.rotation);root.scale.fromArray(accepted.scale);throw error;}
    if(next.position.every((v,i)=>v===accepted.position[i])&&next.scale[0]===accepted.scale[0])return;
    const emitterNext=moveLinkedFireEmitter(data.emitter,accepted,next,data.moveEmitterWithGrid),frame=fireUnitFineFrame(next,data.fineOffset);
-   frame.scale*=data.fineScale??1;runtime.repositionOrdinaryUnit(frame.translate,frame.scale);accepted=next;data.emitter=emitterNext;coverage.release();supply();placeEmitter();
+   frame.scale*=data.fineScale??1;runtime.repositionOrdinaryUnit(frame.translate,frame.scale);accepted=next;data.emitter=emitterNext;coverage.release();if(data.fineManualHold)coverage.hold(fineFrame());supply();placeEmitter();
   },
   setWorldOverlay(mode){runtime.setWorldSmokeOverlay(mode);overlayMode=mode;fine.material.color.set(mode==='off'?0xe4ba73:0xff7e23);outer.visible=showHelpers||mode!=='off';onChange();},
   worldOverlay(){return {mode:overlayMode,summary:'Orange: Fine; blue: World. Contribution view shows false-color optical support. View-only; not saved with the scene.'};},

@@ -73,3 +73,20 @@ test('manual Fine placement changes its native frame while World and emitter kee
   assert.throws(()=>owner.setFinePose({position:[0,0,0],rotation:[0,.2,0],scale:[1,1,1]}),/aligned/);
  }finally{restore();}
 });
+
+test('whole-unit movement preserves a manually placed Fine hold against source following',()=>{
+ const domControls=Object.fromEntries(FINE_COVERAGE_FIELDS.map(f=>[f.id,{value:f.key==='mode'?'sources':f.value}]));const {owner,restore}=fixture({settings:{domControls}});try{
+  owner.setFinePose({position:[.5,.25,0],rotation:[0,0,0],scale:[.75,.75,.75]});owner.setPose({...pose(),position:[2,0,0]});const before=owner.finePose();
+  owner.runtime.fineCoverageInputs=()=>({status:'active',frame:{translate:before.position,scale:before.scale[0]},dims:[16,16,16],world:{lo:[-1,-3,-3],hi:[5,3,3]},sources:[{id:'source',lo:[1.9,-.86,-.1],hi:[2.1,-.66,.1],weight:1}],demand:[]});
+  owner.updateFineCoverage(1);assert.equal(owner.read().fineCoverage.status,'manual-hold');assert.deepEqual(owner.finePose(),before);assert.equal(owner.capture().fineManualHold,true);
+ }finally{restore();}
+});
+
+test('a rejected manual Fine move restores automatic following instead of leaving a hidden hold',()=>{
+ const domControls=Object.fromEntries(FINE_COVERAGE_FIELDS.map(f=>[f.id,{value:f.key==='mode'?'sources':f.value}]));const {owner,restore}=fixture({settings:{domControls}});try{
+  const original=owner.runtime.setImmersedSources;let refuse=true;owner.runtime.setImmersedSources=(...args)=>{if(refuse){refuse=false;throw Error('refused supply');}return original(...args);};
+  assert.throws(()=>owner.setFinePose({...pose(),position:[.5,0,0]}),/refused supply/);const before=owner.finePose();
+  owner.runtime.fineCoverageInputs=()=>({status:'active',frame:{translate:before.position,scale:1},dims:[16,16,16],world:{lo:[-3,-3,-3],hi:[3,3,3]},sources:[{id:'source',lo:[2,-.8,-.1],hi:[2.2,-.6,.1],weight:1}],demand:[]});
+  owner.updateFineCoverage(1);assert.notEqual(owner.read().fineCoverage.status,'manual-hold');assert.notEqual(owner.capture().fineManualHold,true);
+ }finally{restore();}
+});
