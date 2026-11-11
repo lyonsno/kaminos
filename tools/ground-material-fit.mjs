@@ -17,6 +17,7 @@ const report={schema:'kaminos.ground-material-fit.v1',status:'running',phase:'co
  claim:'Independent authored ground microgeometry, explicit diffuse/GGX multibounce directional transport, box-filtered labels; preliminary fit, not converged or simulated soil',
  receiver:'neurips-unix-eunuch-neumip-turnip-tender'};
 const publish=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));await publish();
+const sourcePeriodicity=source=>source?.periodic?'periodic geometry and full path transport':'finite source, no periodic claim';
 const digest=x=>createHash('sha256').update(x).digest('hex');
 const raw=async(name,data)=>{const bytes=Buffer.from(data.buffer,data.byteOffset,data.byteLength);await fs.writeFile(path.join(out,name),bytes);return {file:name,sha256:digest(bytes),bytes:bytes.length};};
 const loss=(a,b)=>a.reduce((s,x,i)=>s+.5*(x-b[i])**2,0)/(a.length/3);
@@ -25,14 +26,15 @@ try{
  const config=JSON.parse(await fs.readFile(configPath,'utf8'));
  const options={resolution:64,steps:2000,batch:2048,queries:65536,heldout:2048,samples:8,heldoutSamples:32,bounces:3,seed:41,fresh:true,...config.fit};report.options=options;
  for(const [k,v]of Object.entries(options))if(k==='fresh'?typeof v!=='boolean':!Number.isSafeInteger(v)||v<1)throw Error(`Invalid fit option ${k}`);
- report.sourceRevision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();report.sourceStatus=execFileSync('git',['status','--porcelain'],{encoding:'utf8'});
- report.sourceFiles={};for(const name of ['ground-teacher-source.mjs','material-query-pool.mjs','grass-material-source.mjs','surface-teacher-source.mjs','surface-teacher-wgsl.mjs','surface-teacher.mjs','surface-material-teacher.mjs','neumip-training.mjs','neumip-model.mjs','tools/ground-material-fit.mjs']){const b=await fs.readFile(name);report.sourceFiles[name]=digest(b);await fs.writeFile(path.join(out,path.basename(name)),b);}
+ report.phase='source-preflight';report.sourceRevision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();report.sourceStatus=execFileSync('git',['status','--porcelain'],{encoding:'utf8'});
+ if(config.sourceRevision!==undefined&&(config.sourceRevision!==report.sourceRevision||report.sourceStatus))throw Error('Requested clean source revision is not effective');
+ report.sourceFiles={};for(const name of ['ground-teacher-source.mjs','material-query-pool.mjs','grass-material-source.mjs','surface-teacher-source.mjs','periodic-surface-source.mjs','surface-teacher-wgsl.mjs','surface-teacher.mjs','surface-material-teacher.mjs','neumip-training.mjs','neumip-model.mjs','tools/ground-material-fit.mjs']){const b=await fs.readFile(name);report.sourceFiles[name]=digest(b);await fs.writeFile(path.join(out,path.basename(name)),b);}
  const grass=config.sourceKind==='grass';if(config.sourceKind&&!['grass','ground'].includes(config.sourceKind))throw Error('Unknown material source kind');
  const grid=config.labels==='denoised-grid';if(config.labels&&!['denoised-grid','raw'].includes(config.labels))throw Error('Unknown label route');if(grid&&!options.fresh)throw Error('Denoised grids require fresh streaming');
  const gridWidth=config.grid?.width??32,gridHeight=config.grid?.height??64;
  if(grid&&(![gridWidth,gridHeight].every(v=>Number.isSafeInteger(v)&&v>0)||gridWidth*gridHeight!==options.batch||gridWidth>options.resolution||gridHeight>options.resolution||options.queries<options.batch))throw Error('Grid extent must be positive integers, equal batch, fit student resolution and rolling pool');
- report.receiver=config.receiver??report.receiver;report.claim=grass?`Preliminary fit of finite frozen grass ribbons, ${grid?'geometry-guided denoised':'raw box-footprint-averaged'} directional responses; no periodic or convergence claim`:report.claim;
- const source=grass?createGrassMaterialSource(config.source):createGroundTeacherSource(config.source);report.sourceKind=grass?'grass':'ground';report.ground={config:source.config,triangles:source.triangles.length,materials:source.materials,boundary:source.boundary,referenceHeight:source.referenceHeight,sha256:digest(JSON.stringify(source))};
+ report.receiver=config.receiver??report.receiver;report.claim=grass?`Preliminary fit of frozen grass ribbons, ${grid?'geometry-guided denoised':'raw box-footprint-averaged'} directional responses; ${sourcePeriodicity(config.source)}; no convergence claim`:report.claim;
+ const source=grass?createGrassMaterialSource(config.source):createGroundTeacherSource(config.source);report.sourceKind=grass?'grass':'ground';report.ground={config:source.config,triangles:source.triangles.length,materials:source.materials,boundary:source.boundary,periodic:source.periodic??null,referenceHeight:source.referenceHeight,sha256:digest(JSON.stringify(source))};
  await fs.writeFile(path.join(out,'config.json'),JSON.stringify(config,null,2));await fs.writeFile(path.join(out,'source.json'),JSON.stringify(source));
  let state=options.seed>>>0;const random=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return (state+.5)/4294967296;};
  const queries=n=>{const data=new Float32Array(n*8);for(let i=0;i<n;i++){const q=i*8;data[q]=random();data[q+1]=random();for(const d of [2,4]){const r=Math.sqrt(random()*.99),t=random()*Math.PI*2;data[q+d]=r*Math.cos(t);data[q+d+1]=r*Math.sin(t);}data[q+6]=random()<.6?0:random()*Math.log2(options.resolution/2);}return data;};
@@ -49,6 +51,14 @@ try{
    const labels=grid?null:await withGpuErrorScopes(ctx.device,'ground-label-capture',()=>teacher.evaluateMaterial(trainingQueries,capture));
    const heldoutLabels=await teacher.evaluateMaterial(heldoutQueries,{...capture,samples:options.heldoutSamples,seed:options.seed+1});
    report.captureMs=performance.now()-start;report.dataset={queries:trainingQueries?await raw('training-queries.f32',trainingQueries):null,labels:labels?await raw('training-labels.f32',labels):null,heldoutQueries:await raw('heldout-queries.f32',heldoutQueries),heldoutLabels:await raw('heldout-labels.f32',heldoutLabels),filter:'square box in normalized UV, world reference-plane extent (2^LOD/resolution)*[tileWidth,tileDepth]',response:'linear outgoing radiance under unit directional irradiance divided by macro light cosine; live material multiplies it back'};
+   // These reference images were already part of the final comparison. Keep
+   // them before fitting so an ordinary source check precedes training spend.
+   report.phase='source-preview';report.images=[];const imageQueries=[];
+   for(const [name,view,light]of [['front',[0,0],[.5,.3]],['oblique',[.75,.2],[-.5,.5]]]){
+    const size=128,q=new Float32Array(size*size*8);for(let y=0;y<size;y++)for(let x=0;x<size;x++)q.set([(x+.5)/size,(y+.5)/size,...view,...light,0,0],(y*size+x)*8);
+    const reference=await teacher.evaluateMaterial(q,{...capture,samples:32,seed:options.seed+2});
+    report.images.push({name,width:size,height:size,view,light,lod:0,reference:await raw(`${name}-source.f32`,reference)});imageQueries.push(q);await publish();
+   }
    learner=await createNeumipTraining(ctx.device,student,{batchSize:Math.max(options.batch,options.heldout,128**2)});
    const checkpoint=async step=>{
     learner.setQueries(heldoutQueries);const {rgb}=await learner.evaluate();
@@ -92,16 +102,15 @@ try{
    report.fitMs=performance.now()-fitStart;
    // Matched 128px material-domain images: same UV, footprint, directions and
    // gain; these diagnose fitting, not projective camera or silhouette behavior.
-   report.phase='comparison';await publish();const size=128,images=[];
-   for(const [name,view,light]of [['front',[0,0],[.5,.3]],['oblique',[.75,.2],[-.5,.5]]]){
-    const q=new Float32Array(size*size*8);for(let y=0;y<size;y++)for(let x=0;x<size;x++)q.set([(x+.5)/size,(y+.5)/size,...view,...light,0,0],(y*size+x)*8);
-    const reference=await teacher.evaluateMaterial(q,{...capture,samples:32,seed:options.seed+2});learner.setQueries(q);const predicted=(await learner.evaluate()).rgb;
-    images.push({name,width:size,height:size,view,light,lod:0,reference:await raw(`${name}-source.f32`,reference),student:await raw(`${name}-student.f32`,predicted)});
+   report.phase='comparison';await publish();
+   for(const [i,image]of report.images.entries()){
+    learner.setQueries(imageQueries[i]);const predicted=(await learner.evaluate()).rgb;image.student=await raw(`${image.name}-student.f32`,predicted);await publish();
    }
-   report.images=images;report.elapsedMs=performance.now()-start;
+   report.elapsedMs=performance.now()-start;
    if(!(report.checkpoints.at(-1).loss<report.checkpoints[0].loss))throw Error('Held-out response did not improve');
   }finally{learner?.dispose();teacher?.dispose();}
  },{requiredLimits,onEvidence:e=>report.evidence=e});
+ report.phase='source-postflight';if(execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim()!==report.sourceRevision||execFileSync('git',['status','--porcelain'],{encoding:'utf8'})!==report.sourceStatus)throw Error('Source changed during capture or fitting');
  report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=error.stack;process.exitCode=1;}
 finally{await publish();console.log(JSON.stringify({status:report.status,phase:report.phase,elapsedMs:report.elapsedMs,error:report.error}));}

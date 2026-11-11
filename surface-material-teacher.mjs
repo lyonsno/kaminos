@@ -64,7 +64,7 @@ export class SurfaceMaterialTeacher extends SurfaceTeacher{
    for(let step=0;step<3;step++){const target=this.filtered[step%2];dispatch(this.pipelines.filter,[output,this.points[0],this.normals[0],target,this.filterParams[step]]);output=target;}
    this.device.queue.submit([encoder.finish()]);
    this.accumulation=this.raw;const raw=await this.readLinear();this.accumulation=output;const filtered=await this.readLinear();
-   const rgb=rgba=>{const result=new Float32Array(width*height*3);for(let i=0;i<width*height;i++)result.set(rgba.subarray(i*4,i*4+3),i*3);if(!result.every(Number.isFinite))throw Error('Non-finite material grid response');return result;};
+   const rgb=rgba=>{const result=new Float32Array(width*height*3);for(let i=0;i<width*height;i++)result.set(rgba.subarray(i*4,i*4+3),i*3);if(!result.every(v=>Number.isFinite(v)&&v>=0))throw Error('Non-finite material grid response');return result;};
    return {queries,raw:rgb(raw),filtered:rgb(filtered)};
   }finally{for(const b of [input,config]){b.destroy();this.resources.splice(this.resources.indexOf(b),1);}}
  }
@@ -82,7 +82,7 @@ export class SurfaceMaterialTeacher extends SurfaceTeacher{
    const config=this.buffer('material footprint',new Float32Array([tileSize,referenceHeight,resolution,samples,tileDepth,0,0,0]),GPUBufferUsage.UNIFORM);resources.push(config);
    read=this.device.createBuffer({size:count*12,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});
    this.writeParams({frame:seed});const encoder=this.device.createCommandEncoder(),pass=encoder.beginComputePass();pass.setPipeline(this.materialPipeline);pass.setBindGroup(0,this.group(this.materialPipeline,[...this.common(),input,output,config]));pass.dispatchWorkgroups(Math.ceil(count/64));pass.end();encoder.copyBufferToBuffer(output,0,read,0,count*12);this.device.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);
-   const rgb=new Float32Array(read.getMappedRange().slice(0));if(!rgb.every(Number.isFinite))throw Error('Non-finite material response');return rgb;
+   const rgb=new Float32Array(read.getMappedRange().slice(0));if(!rgb.every(v=>Number.isFinite(v)&&v>=0))throw Error('Non-finite material response');return rgb;
   }finally{read?.destroy();for(const b of resources){b.destroy();this.resources.splice(this.resources.indexOf(b),1);}}
  }
 }

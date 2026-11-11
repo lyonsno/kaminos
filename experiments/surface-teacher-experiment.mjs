@@ -45,16 +45,17 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
   const syncScene=()=>{
    const lights=nativeLights();root.updateWorldMatrix(true,false);
    const materials=sourceMaterials.map(m=>({color:m.color.toArray(),roughness:m.roughness,metalness:m.metalness}));
-   const next=JSON.stringify([root.matrixWorld.elements,materials,lights,root.visible]);
+   if(source.periodic&&!root.matrixWorld.equals(new THREE.Matrix4()))throw Error('Periodic teacher preview requires the source at its authored pose');
+   const next=JSON.stringify([root.matrixWorld.elements,materials,lights,root.visible,source.periodic??null]);
    if(next!==sceneKey){
     const v=p=>new THREE.Vector3(...p).applyMatrix4(root.matrixWorld).toArray();
     const triangles=source.triangles.map(t=>({...t,a:v(t.a),b:v(t.b),c:v(t.c)}));
     if(!root.visible||!host.scene.isVisible(asset.id))throw Error('Teacher source is hidden; restore its visibility to capture');
-    if(engine)engine.setScene({triangles,materials,lights});else engine=new SurfaceTeacher(renderer.backend.device,{triangles,materials,lights,...configuration});sceneKey=next;
+    if(engine)engine.setScene({triangles,materials,lights,periodic:source.periodic});else engine=new SurfaceTeacher(renderer.backend.device,{triangles,materials,lights,periodic:source.periodic,...configuration});sceneKey=next;
    }
    engine.setTransport(configuration);
   };
-  const teacherScene=()=>{if(!sceneKey)return null;const [matrixWorld,materials,lights,visible]=JSON.parse(sceneKey);return {matrixWorld,materials,lights,visible};};
+  const teacherScene=()=>{if(!sceneKey)return null;const [matrixWorld,materials,lights,visible,periodic]=JSON.parse(sceneKey);return {matrixWorld,materials,lights,visible,periodic};};
   const read=()=>({schema:readSchema,sourceSchema:source.schema,objectId:asset?.id,source:source.config,sourceTriangles:source.triangles.length,teacherScene:teacherScene(),...(describeSource?{sourceSummary:describeSource(source.config)}:{}),configuration:{...configuration},effective:engine?.state()??null,view:session.readView(),cameraFrame:cameraFrame(),failure,capturing,display:'shared Kaminos scene and camera; native selection/gizmos',displaySourceVisible:!!root.parent&&host.scene.isVisible(asset?.id),presentationLighting:screenMaterial?.lights===false?'lighting bypassed':'unverified',navigationIndexReady:!!root.geometry.boundsTree,supportedLights:'native directional, inverse-square point and spot; constant environment',boundary,deviceOwnership:'borrowed'});
   const showStatus=()=>{if(status)status.textContent=failure?`Stopped: ${failure}`:capturing?'Capturing raw reference…':!configuration.tracing?'Native surface preview · path tracing off':`${configuration.paused?'Paused · ':''}${engine?.samples??0} samples · ${engine?.width??0} × ${engine?.height??0} · ${configuration.bounces} bounces`;};
   const render=({width,height,filter=configuration.reconstruction}={})=>{

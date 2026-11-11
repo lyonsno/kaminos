@@ -6,7 +6,7 @@ struct Node {lo:vec4<f32>,hi:vec4<f32>,range:vec4<u32>}
 struct Triangle {a:vec4<f32>,e1:vec4<f32>,e2:vec4<f32>}
 struct Material {color:vec4<f32>,optics:vec4<f32>}
 struct Light {positionType:vec4<f32>,color:vec4<f32>,directionCone:vec4<f32>,innerCone:vec4<f32>}
-struct Params {inverseVP:mat4x4<f32>,previousVP:mat4x4<f32>,camera:vec4<f32>,extent:vec4<u32>,knobs:vec4<f32>}
+struct Params {inverseVP:mat4x4<f32>,previousVP:mat4x4<f32>,camera:vec4<f32>,extent:vec4<u32>,knobs:vec4<f32>,periodic:vec4<f32>}
 struct Hit {t:f32,id:u32,normal:vec3<f32>,uv:vec2<f32>}
 @group(0) @binding(0) var<storage,read> nodes:array<Node>;
 @group(0) @binding(1) var<storage,read> triangles:array<Triangle>;
@@ -29,7 +29,7 @@ fn rayTriangle(origin:vec3<f32>,direction:vec3<f32>,a:vec3<f32>,e1:vec3<f32>,e2:
  if(u<0.0||v<0.0||u+v>1.0||t<=0.00001){return vec3<f32>(-1.0);}
  return vec3<f32>(t,u,v);
 }
-fn trace(origin:vec3<f32>,direction:vec3<f32>,limit:f32)->Hit{
+fn traceFinite(origin:vec3<f32>,direction:vec3<f32>,limit:f32)->Hit{
  var hit=Hit(limit,0xffffffffu,vec3<f32>(0.0),vec2<f32>(0.0));var node=0u;
  loop{if(node>=arrayLength(&nodes)){break;}let item=nodes[node];
   if(!rayBox(origin,direction,item.lo.xyz,item.hi.xyz,hit.t)){node=item.range.x;continue;}
@@ -40,6 +40,42 @@ fn trace(origin:vec3<f32>,direction:vec3<f32>,limit:f32)->Hit{
   node++;
  }
  return hit;
+}
+// A repeated canonical cell, traversed until the ray leaves its vertical
+// support. No fixed neighbor halo or cell-count cutoff changes the integral.
+var<private> periodicFailure:bool=false;
+fn trace(origin:vec3<f32>,direction:vec3<f32>,limit:f32)->Hit{
+ if(params.periodic.x<=0.0){return traceFinite(origin,direction,limit);}
+ let extent=params.periodic.xy;let lo=params.periodic.z;let hi=params.periodic.w;
+ let miss=Hit(limit,0xffffffffu,vec3<f32>(0.0),vec2<f32>(0.0));
+ var enter=0.0;var exit=limit;
+ if(direction.y==0.0){
+  if(origin.y<lo||origin.y>hi){return miss;}
+  // The infinite exactly-horizontal corridor is a singular unsupported query,
+  // not an invented clear ray or a hidden finite halo. Propagate refusal.
+  if(limit>=1e19){periodicFailure=true;return miss;}
+ }else{
+  let a=(lo-origin.y)/direction.y;let b=(hi-origin.y)/direction.y;
+  enter=max(0.0,min(a,b)-.00002);exit=min(limit,max(a,b)+.00002);
+  if(exit<enter){return miss;}
+ }
+ let start=origin+direction*(enter+.00001);
+ var cell=floor((start.xz+extent*.5)/extent);var travel=enter;
+ loop{
+  let p=origin+direction*travel-vec3<f32>(cell.x*extent.x,0.0,cell.y*extent.y);
+  var crossing=vec2<f32>(1e30);
+  if(direction.x!=0.0){crossing.x=travel+(select(-.5,.5,direction.x>0.0)*extent.x-p.x)/direction.x;}
+  if(direction.z!=0.0){crossing.y=travel+(select(-.5,.5,direction.z>0.0)*extent.y-p.z)/direction.z;}
+  let end=min(exit,min(crossing.x,crossing.y));
+  let hit=traceFinite(p,direction,max(0.0,end-travel)+.000001);
+  if(hit.id!=0xffffffffu){return Hit(hit.t+travel,hit.id,hit.normal,hit.uv);}
+  if(end>=exit){return miss;}
+  let old=cell;
+  if(crossing.x<=end){cell.x+=select(-1.0,1.0,direction.x>0.0);}
+  if(crossing.y<=end){cell.y+=select(-1.0,1.0,direction.z>0.0);}
+  if(all(cell==old)||end<travel||any(abs(cell)>vec2<f32>(16777215.0))){periodicFailure=true;return miss;}
+  travel=end;
+ }
 }
 fn tangentDirection(n:vec3<f32>,local:vec3<f32>)->vec3<f32>{
  let helper=select(vec3<f32>(0.0,1.0,0.0),vec3<f32>(1.0,0.0,0.0),abs(n.y)>.99);let x=normalize(cross(helper,n));return normalize(x*local.x+cross(n,x)*local.y+n*local.z);
@@ -64,7 +100,7 @@ fn bsdfSample(n:vec3<f32>,v:vec3<f32>,m:Material,s:ptr<function,u32>)->vec3<f32>
 }
 fn powerWeight(a:f32,b:f32)->f32{return a*a/max(a*a+b*b,1e-20);}
 fn pathTraceIncident(origin:vec3<f32>,direction:vec3<f32>,state:ptr<function,u32>,incident:vec3<f32>,materialQuery:bool)->vec3<f32>{
- var o=origin;var d=direction;var throughput=vec3<f32>(1.0);var radiance=vec3<f32>(0.0);var previousPdf=0.0;var previousNormal=vec3<f32>(0.0);
+ periodicFailure=false;var o=origin;var d=direction;var throughput=vec3<f32>(1.0);var radiance=vec3<f32>(0.0);var previousPdf=0.0;var previousNormal=vec3<f32>(0.0);
  for(var bounce=0u;bounce<params.extent.w;bounce++){
   let hit=trace(o,d,1e20);
   if(hit.id==0xffffffffu){var weight=1.0;if(bounce>0u){weight=powerWeight(previousPdf,max(dot(previousNormal,d),0.0)/PI);}radiance+=throughput*params.knobs.z*weight;break;}
@@ -86,6 +122,7 @@ fn pathTraceIncident(origin:vec3<f32>,direction:vec3<f32>,state:ptr<function,u32
   throughput*=bsdf(n,v,next,m)*max(dot(n,next),0.0)/pdf;previousPdf=pdf;previousNormal=n;o=offset;d=next;
   if(bounce>=2u){let survive=clamp(max(throughput.x,max(throughput.y,throughput.z)),.05,.95);if(random(state)>survive){break;}throughput/=survive;}
  }
+ if(periodicFailure){return vec3<f32>(-1.0);}
  return radiance;
 }
 fn pathTrace(origin:vec3<f32>,direction:vec3<f32>,state:ptr<function,u32>)->vec3<f32>{return pathTraceIncident(origin,direction,state,vec3<f32>(0.0,1.0,0.0),false);}

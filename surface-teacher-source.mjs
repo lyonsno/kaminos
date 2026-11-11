@@ -1,7 +1,9 @@
+import {periodicSurfaceTriangles} from './periodic-surface-source.mjs';
 // Frozen explicit surfaces. Random numbers describe the source once; camera
 // motion never changes strand identity or geometry.
 export function createGrassTeacherSource(options={}) {
- const config={seed:31,blades:72,height:.8,width:2.4,depth:1.8,bladeWidth:.045,bend:.45,segments:7,...options};
+ const config={periodic:false,seed:31,blades:72,height:.8,width:2.4,depth:1.8,bladeWidth:.045,bend:.45,segments:7,...options};
+ if(typeof config.periodic!=='boolean')throw Error('periodic must be a boolean');
  for(const key of ['height','width','depth','bladeWidth'])if(!Number.isFinite(config[key])||config[key]<=0)throw Error(`${key} must be positive and finite`);
  if(!Number.isSafeInteger(config.seed)||!Number.isSafeInteger(config.blades)||config.blades<1||!Number.isSafeInteger(config.segments)||config.segments<2||!Number.isFinite(config.bend))throw Error('finite seed/bend and positive integer blade/segment counts required');
  let state=config.seed>>>0;
@@ -13,8 +15,8 @@ export function createGrassTeacherSource(options={}) {
  triangle([-w/2,0,-d/2],[-w/2,0,d/2],[w/2,0,d/2],0,'ground:1');
  const columns=Math.ceil(Math.sqrt(config.blades*w/d)),rows=Math.ceil(config.blades/columns);
  for(let i=0;i<config.blades;i++){
-  const x=((i%columns+.2+.6*random())/columns-.5)*w*.9;
-  const z=((Math.floor(i/columns)+.2+.6*random())/rows-.5)*d*.9;
+  const x=((i%columns+.2+.6*random())/columns-.5)*w*(config.periodic?1:.9);
+  const z=((Math.floor(i/columns)+.2+.6*random())/rows-.5)*d*(config.periodic?1:.9);
   const angle=random()*Math.PI*2,lean=(random()-.5)*2*config.bend,height=config.height*(.65+.35*random());
   const width=config.bladeWidth*(.75+.5*random()),centres=[],widths=[],left=[],right=[];
   for(let j=0;j<=config.segments;j++){
@@ -28,5 +30,7 @@ export function createGrassTeacherSource(options={}) {
   }
   blades.push({id:i,centres,widths});
  }
- return {schema:'kaminos.frozen-grass-source.v1',config,triangles,blades};
+ const surface=config.periodic?periodicSurfaceTriangles(triangles,w,d):triangles;
+ const maxY=triangles.reduce((m,t)=>Math.max(m,t.a[1],t.b[1],t.c[1]),0);
+ return {schema:'kaminos.frozen-grass-source.v1',config,triangles:surface,blades,...(config.periodic?{periodic:{width:w,depth:d,minY:0,maxY}}:{})};
 }
