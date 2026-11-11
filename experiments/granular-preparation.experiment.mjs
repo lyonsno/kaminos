@@ -5,7 +5,7 @@ import {surfaceTeacherExperiment} from './surface-teacher-experiment.mjs';
 import {mountEarthRenderControls} from './earth-workshop-controls.mjs';
 
 export default {id:'granular-preparation',title:'Granular earth preparation',async create({host,inputs={},record,updateInputs=()=>{}}){
- const session=await host.scene.open(),root=new THREE.Group();root.name='Granular preparation chamber';
+ const session=await host.scene.open(),root=new THREE.Group();root.name='Granular preparation chamber';root.scale.setScalar(inputs.displayScale??10);
  let task,asset,ui,context,preview,transition=false,disposed=false,error=null,recipe=preparationRecipe(inputs.snapshot?.recipe??inputs.recipe??{});
  const materials=INGREDIENTS.map(m=>new THREE.MeshStandardMaterial({color:new THREE.Color(...m.color),roughness:m.roughness,metalness:m.metalness}));
  const lid=new THREE.Mesh(new THREE.BoxGeometry(recipe.width*1.03,recipe.width*.025,recipe.width*1.03),new THREE.MeshStandardMaterial({color:0x798580,roughness:.3,metalness:.45}));lid.name='Compression platen';
@@ -14,8 +14,8 @@ export default {id:'granular-preparation',title:'Granular earth preparation',asy
  const wall=new THREE.Mesh(new THREE.BoxGeometry(recipe.width,recipe.width*.75,recipe.width),windowMaterial);wall.position.y=recipe.width*.375;wall.name='Chamber window';
  root.add(floor,wall,lid);let grains=[];
  const pose=()=>({position:root.position.toArray(),quaternion:root.quaternion.toArray(),scale:root.scale.toArray()});
- const read=()=>({schema:'kaminos.granular-workshop.v1',...task.read(),objectId:asset?.id,recipe:{...recipe},render:preview?.read()??null,transition,error});
- const persist=()=>updateInputs({recipe,view:session.readView()});
+ const read=()=>({schema:'kaminos.granular-workshop.v1',...task.read(),objectId:asset?.id,recipe:{...recipe},displayScale:root.scale.x,render:preview?.read()??null,transition,error});
+ const persist=()=>updateInputs({recipe,displayScale:root.scale.x,view:session.readView()});
  const refresh=()=>{
   if(disposed||!task)return;const snap=task.snapshot(),source=preparationSource(snap);for(const m of grains){root.remove(m);m.geometry.dispose();}grains=[];
   for(let index=0;index<3;index++){const ts=source.triangles.filter(t=>t.materialIndex===index);if(!ts.length)continue;const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(ts.flatMap(t=>[...t.a,...t.b,...t.c]),3));geometry.computeVertexNormals();const mesh=new THREE.Mesh(geometry,materials[index]);mesh.name=INGREDIENTS[index].name;mesh.castShadow=true;mesh.receiveShadow=true;root.add(mesh);grains.push(mesh);}
@@ -24,8 +24,9 @@ export default {id:'granular-preparation',title:'Granular earth preparation',asy
  const mount=()=>{if(!context)return;ui=mountControls({document:context.document,host,session,root,read,invoke:context.invoke});};
  const back=async()=>{if(transition)throw Error('Wait for render transition');if(!preview)return read();transition=true;try{await preview.dispose();preview=null;ui?.dispose();root.visible=true;mount();refresh();return read();}finally{transition=false;}};
  const run=async(kind,options)=>{if(preview||transition)throw Error('Return from the integral before preparing');error=null;try{const result=await task.run(kind,options);record({kind:'granular.preparation',phase:result.phase?'paused':'applied',effective:{operation:kind,options,snapshot:task.snapshot()}});persist();return read();}catch(e){error=e.message;ui?.refresh();throw e;}};
+ const frameSample=()=>{const s=task.read(),view=session.readView(),target=root.localToWorld(new THREE.Vector3(0,s.top*.5,0)),direction=new THREE.Vector3(...view.position).sub(new THREE.Vector3(...view.target)).normalize(),distance=Math.max(.55,s.recipe.width*Math.max(...root.scale.toArray())*1.65);session.setView({...view,position:target.clone().addScaledVector(direction,distance).toArray(),target:target.toArray()});};
  const operations={
-  read,run:({kind,options}={})=>run(kind,options),pause(){task.pause();return read();},
+  read,frame(){frameSample();return read();},run:({kind,options}={})=>run(kind,options),pause(){task.pause();return read();},
   async prepare(){for(const [kind,options]of [['pour',{}],['settle',{seconds:.8}],['compress',{seconds:.8,strain:.25}],['unload',{seconds:.4}],['settle',{seconds:.3}]]){await run(kind,options);if(task.read().phase)return read();}return read();},
   async mixture(values){if(task.read().running||preview||transition)throw Error('Pause and return to the preparation scene first');const next=preparationRecipe({...recipe,...values});if(next.width!==recipe.width)throw Error('Reopen the preparation scene to change chamber width');recipe=next;persist();ui?.refresh();return read();},
   async newMixture(){if(task.read().running||preview||transition)throw Error('Pause and return to the preparation scene first');planPreparation(recipe,{availableBytes:performance.memory?performance.memory.jsHeapSizeLimit-performance.memory.usedJSHeapSize:Infinity});transition=true;let next;try{next=await createPreparationTask({recipe,onChange:refresh});if(disposed){next.dispose();throw Error('Preparation disposed');}task.dispose();task=next;refresh();persist();return read();}finally{transition=false;}},
@@ -33,13 +34,13 @@ export default {id:'granular-preparation',title:'Granular earth preparation',asy
   async load(snapshot){if(task.read().running||preview||transition)throw Error('Pause and return before loading');if(snapshot.recipe?.width!==recipe.width)throw Error('Reopen a matching chamber width to load');const next=await createPreparationTask({snapshot,onChange:refresh});task.dispose();task=next;recipe=preparationRecipe(snapshot.recipe);refresh();persist();return read();},
   freeze(){if(!task.read().deposited)throw Error('Pour ingredients before freezing');if(task.read().running)throw Error('Pause preparation before freezing');return preparationSource(task.snapshot());},
   async render(values={}){if(task.read().running||preview||transition)throw Error('Pause preparation before inspecting');if(!task.read().deposited)throw Error('Pour ingredients before rendering');transition=true;
-   try{const snapshot=task.snapshot(),definition=surfaceTeacherExperiment({id:'granular-integral',title:'Prepared grain integral',createSource:config=>preparationSource(config.snapshot,{container:true}),label:'Prepared granular source',sourceURL:'kaminos:granular-preparation',boundary:'Actual convex grain surfaces and tray; bounded packing, no cohesive matrix or weathering.',initialView:session.readView(),sourceControls:[]});
-    preview=await definition.create({host,record,inputs:{source:{snapshot},view:session.readView(),pose:pose(),scale:.25,bounces:3,environment:.18,...values},updateInputs:()=>{}});root.visible=false;ui?.dispose();ui=mountEarthRenderControls({document:context.document,host,sessionRead:preview.read,invoke:(name,value)=>context.invoke(name==='configure'?'renderSettings':name==='capture'?'renderCapture':name,value),back:()=>context.invoke('back')});return preview.read();
+   try{frameSample();const snapshot=task.snapshot(),definition=surfaceTeacherExperiment({id:'granular-integral',title:'Prepared grain integral',createSource:config=>preparationSource(config.snapshot,{container:true}),label:'Prepared granular source',sourceURL:'kaminos:granular-preparation',boundary:'Actual convex grain surfaces and tray; bounded packing, no cohesive matrix or weathering.',initialView:session.readView(),sourceControls:[]});
+    preview=await definition.create({host,record,inputs:{source:{snapshot},view:session.readView(),pose:pose(),scale:.35,bounces:3,environment:.18,...values},updateInputs:()=>{}});root.visible=false;ui?.dispose();ui=mountEarthRenderControls({document:context.document,host,sessionRead:preview.read,invoke:(name,value)=>context.invoke(name==='configure'?'renderSettings':name==='capture'?'renderCapture':name,value),back:()=>context.invoke('back')});return preview.read();
    }finally{transition=false;}
   },back,
   renderSettings:values=>preview.operations.configure(values),renderCapture:values=>preview.operations.capture(values),
  };
- try{task=await createPreparationTask({recipe,snapshot:inputs.snapshot,onChange:refresh});asset=await session.attach(root,{owned:true,metadata:{label:root.name,source:'kaminos:granular-preparation',type:'experiment'}});session.setView(inputs.view??{position:[.11,.105,.13],target:[0,.025,0],fov:38});refresh();
+ try{task=await createPreparationTask({recipe,snapshot:inputs.snapshot,onChange:refresh});asset=await session.attach(root,{owned:true,metadata:{label:root.name,source:'kaminos:granular-preparation',type:'experiment'}});session.setView(inputs.view??{position:[.9,.8,1.05],target:[0,.22,0],fov:38});refresh();
   return {read,operations,mount(c){context=c;mount();},async dispose(){disposed=true;task.pause();task.dispose();await preview?.dispose();ui?.dispose();for(const mesh of grains)mesh.geometry.dispose();floor.geometry.dispose();wall.geometry.dispose();lid.geometry.dispose();lid.material.dispose();windowMaterial.dispose();materials.forEach(m=>m.dispose());await session.dispose();}};
  }catch(e){task?.dispose();await session.dispose();throw e;}
 }};
