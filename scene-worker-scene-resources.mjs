@@ -13,6 +13,9 @@ import {createSceneDrawRuntime} from './scene-draw-runtime.mjs';
 import {createSimFrameCoordinator} from './mls-juice-contract.mjs';
 import {createWorkingScene} from './working-scene.mjs';
 import {createAuthoredSceneRuntime,restoreAuthoredSceneRecord} from './scene-authored-runtime.mjs';
+import {createSceneWorkerAuthoring} from './scene-worker-authoring.mjs';
+import {buildSceneDocument} from './scene-persistence-core.js';
+import {savedSceneLocation} from './scene-authoring.mjs';
 import {createSceneDocumentApplication} from './scene-document-application.mjs';
 import {createSceneGltfLoaderClass} from './scene-gltf-loader.mjs';
 import {createSceneGlbLoader} from './scene-glb-loader.mjs';
@@ -47,7 +50,7 @@ export function createSceneWorkerSceneResources(context){
  const workingScene=createWorkingScene(),ao=createSceneAOState(),environment=createSceneEnvironmentState({presets:SCENE_HDR_PRESETS});
  let appearance=null,authored=null,document=null,domains=null,frames=null,display=null,sceneBloom=null,selection=null,materials=null,beautyLods=null,giProxies=null;
  let started=false,retiring=false,attached=false,frameCount=0,draw=null,output=null,shading=null,domainRetired=false,rootsRetired=false;
- let lightingPreparation=null,volume=null,lightingHeld=false,documentHolds=0;
+ let lightingPreparation=null,volume=null,lightingHeld=false,documentHolds=0,authoring=null,documentTemplate=null;
  let gi=resolveSceneGIControlState(),reflections=resolveReflectionSettings(),bloomSettings=checkedSceneBloom({enabled:paramsFor(payload).get('scene_bloom')==='1',composeFlame:paramsFor(payload).get('scene_bloom')==='1'}),ground={},editorDisplay=checkedViewportDisplay(),startup=null;
  let arrival={sceneKind:'static-asset',lookId:DEFAULT_STUDIO_LOOK_ID,studioLightsEnabled:true,materialTuningEnabled:false,bounds:null,materialProfile:inspectArrivalMaterialProfile([]),plan:null};
  const graphs=new Map(),wireMaterials=[],pendingRoots=new Set(),stops=[];
@@ -128,7 +131,7 @@ export function createSceneWorkerSceneResources(context){
    surfaces:{...contributed.surfaces,scene:{active:attached,...contributed.surfaces?.scene}},
   };},
   get lightingOptions(){return appearance?.lightingOptions;},get frames(){return frames;},
-  get initialVolumeActive(){return domains?.initialVolumeActive;},get volumeOptions(){return domains?.volumeOptions;},get commands(){return commandMap;},get foregroundCommands(){return domains?.foregroundCommands;},
+  get initialVolumeActive(){return domains?.initialVolumeActive;},get volumeOptions(){return domains?.volumeOptions;},get commands(){return commandMap;},get foregroundCommands(){return mergeCommands(authoring?.commands,domains?.foregroundCommands);},
   async initialize(ctx){
    current(ctx);if(started)throw Error('Ordinary scene initialization already attempted');started=true;activeContext=ctx;
    try{
@@ -167,9 +170,10 @@ export function createSceneWorkerSceneResources(context){
      }});
     document=createSceneDocumentApplication({runtime:authored,assertSupported:assertOrdinarySupport,
      async prepareDocument(data,plan,meta){await materials.prepare(plan.materialLibrary??{recipes:[],bindings:[]});await domains.document.prepareDocument(data,plan,meta);},
-     async beforeReplace(data,plan,meta){applySettings(data,meta.context);return domains.document.beforeReplace(data,plan,meta);},
-     async afterReplace(data,plan,meta){materials.write(plan.materialLibrary??{recipes:[],bindings:[]});await giProxies.whenIdle();await domains.document.afterReplace(data,plan,meta);appearance.applyEnvironment();},
-     documentServices:{readAddress:()=>{const url=new URL(payload.location?.href??payload.location);return {href:url.href,origin:url.origin,search:url.search,hash:url.hash};},...domains.documentServices}});
+     async beforeReplace(data,plan,meta){authoring?.clear();applySettings(data,meta.context);return domains.document.beforeReplace(data,plan,meta);},
+     async afterReplace(data,plan,meta){materials.write(plan.materialLibrary??{recipes:[],bindings:[]});await giProxies.whenIdle();await domains.document.afterReplace(data,plan,meta);appearance.applyEnvironment();documentTemplate=structuredClone(data);},
+     documentServices:{post:services.postSceneDocument??(body=>fetch('/api/save-scene',{method:'POST',headers:{'Content-Type':'application/json'},body})),restoreUrl:(_data,filename,address)=>savedSceneLocation(address.href,filename),readAddress:()=>{const url=new URL(payload.location?.href??payload.location);return {href:url.href,origin:url.origin,search:url.search,hash:url.hash};},...domains.documentServices}});
+    authoring=createSceneWorkerAuthoring({THREE,ordinary,fields:()=>domains.authoring?.fields?.()??[],checkTransform:(row,pose)=>{if(!domains.authoring?.checkTransform)throw Error('Transform owner is not mounted: '+row.type);domains.authoring.checkTransform(row,pose);},changed:()=>document.session.authoringChanged()});
     await domains.initialize(ctx);current(ctx);
     if(startup.startupDefaults.defaults){assertOrdinarySupport(startup.startupDefaults.defaults,{});applySettings(startup.startupDefaults.defaults,ctx);await domains.applyPreferences?.(startup,ctx);}
     replanAppearance();await appearance.initialize(ctx);current(ctx);
@@ -199,7 +203,10 @@ export function createSceneWorkerSceneResources(context){
       withBeautyFrame:(options,run)=>withViewportVisibility(workingScene.objects,visible,()=>beautyLods.withFrame(camera,options,()=>shading.renderWith(workingScene.objects.map(e=>e.object),editorDisplay.shading,run)))},
      onCameraStatus:value=>report(frameContext,{cameraStatus:value}),onWaterFrame:value=>domains.onWaterFrame?.(value),onWaterError:(error,fallback)=>required(domains.onWaterError,'water failure handling')(error,fallback),
      afterDraw:(receipt,now)=>{frameCount++;domains.afterDraw?.(receipt,now);}});
-    commandMap=mergeCommands({...document.commands,async 'scene.applyDocument'(input,context){
+    commandMap=mergeCommands({...document.commands,
+     'scene.captureDocument'(input,ctx){current(ctx);return {document:captureDocument(input)};},
+     async 'scene.save'(input={},ctx){current(ctx);const data=captureDocument(input);const result=await document.session.save(data,input.saveAs?null:document.session.state().filename,{result:true,saveAsName:input.name??null,overwrite:input.overwrite===true});current(ctx);return {...result,ui:{document:document.session.state()}};},
+     async 'scene.applyDocument'(input,context){
      current(context);documentHolds++;const previousContext=activeContext;activeContext=context;
      try{await syncVolumeHold();current(context);const result=await document.commands['scene.applyDocument'](input,context);current(context);
       return {...result,ui:{...projection(),...(input.document?.camera?{camera:checkedCameraView({...input.document.camera,position:camera.position.toArray(),up:camera.up.toArray(),fov:camera.fov,near:camera.near,far:camera.far})}:{})}};}
@@ -238,6 +245,17 @@ export function createSceneWorkerSceneResources(context){
  };
  let frameContext=null,commandMap=null;
  function syncVolumeHold(){if(volume&&typeof volume.setSceneLightingRebuildPending==='function')return volume.setSceneLightingRebuildPending(lightingHeld||documentHolds>0);if(lightingHeld||documentHolds)return sharedGpu.device.queue.onSubmittedWorkDone();}
- function projection(){return {bounds:ordinary.readBounds(),selection:structuredClone(workingScene.selection),objects:authored?.snapshot().objects??[]};}
+ function projection(){return {...authoring.projection(),document:document.session.state()};}
+ function captureDocument(input={}){
+  if(document.session.state().blocked)throw Error('Scene save blocked until a scene loads successfully');
+  const snapshot=authored.snapshot(),state=settings(),domain=domains.authoring?.capture?.()??{};
+  const view=checkedCameraView(input.camera);
+  const captured=buildSceneDocument({...domain,objects:snapshot.objects,groups:snapshot.groups,materialLibrary:materials.document(),
+   activeObjectId:workingScene.activeObjectId,activeGroupId:workingScene.activeGroupId,activeFieldId:workingScene.activeFieldId,selectionIds:[...snapshot.selection.ids],
+   provenance:documentTemplate?.provenance??null,camera:view,cameraViews:documentTemplate?.cameraViews,sceneCamera:documentTemplate?.sceneCamera,viewport:documentTemplate?.viewport,
+   environment:{...state.environment,ground:state.ground},editorDisplay:state.editorDisplay,
+   postprocessing:{...documentTemplate?.postprocessing,ao:state.ao,sceneGI:state.gi,reflections:state.reflections,bloom:{...sceneBloom.read().settings},...domain.postprocessing}});
+  return {...structuredClone(documentTemplate??{}),...captured};
+ }
  return shell;
 }

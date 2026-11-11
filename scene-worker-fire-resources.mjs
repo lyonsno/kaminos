@@ -162,7 +162,21 @@ export function createSceneWorkerFireResources(input,{definitions,fetch:request=
     accept(data,next,cached.values,meta.context,cached.rendering);waterFeature.clear();waterFeature.setup=structuredClone(cached.waterSetup);waterPreview=false;documentData=null;configured=null;sourceSignature=null;return {};},
    async afterReplace(data,next,meta){check(meta.context);documentData=data;plan=next;configure();if(volume){await volume.setActive(present()&&ordinary.visible('flame-field'));check(meta.context);await mount(meta.context);}if(waterFeature.setup){await waterFeature.restore();check(meta.context);}},
   },
-  commands:{'water.read'(_input,ctx){check(ctx);return readWater();},'fire.read'(_input,ctx){check(ctx);return {active:Boolean(volume?.isActive()),present:present(),source:prepared?.source?{presetId:prepared.source.presetId}:null,lighting:radiance?.debugState?.()??null};}},
+  authoring:{
+   fields:()=>[...(present()?[{id:'flame-field',label:'Fire & smoke'}]:[]),...(waterFeature.setup?[{id:'water-field',label:'Water simulation'}]:[])],
+   checkTransform(row,pose){
+    if(row.type===FLAME_EMITTER_TYPE){checkedFireSourceRecord({...ordinary.authored.records.serialize(row),transform:pose});return;}
+    if(row.type===LOCAL_LIQUID_EMITTER_TYPE){normalizeLocalLiquidEmitter(row.localLiquidEmitter,pose);return;}
+    throw Error('Transform owner is not mounted: '+row.type);
+   },
+   capture(){
+    if(prepared&&Object.entries(prepared.controls).some(([key,value])=>JSON.stringify(readFlameControls()[key])!==JSON.stringify(value)))throw Error('Fire controls changed outside the saved settings owner; saving would lose those changes');
+    return {composition:plan?.composition??null,fireSettings:prepared?.settings??null,volumePrimitives:plan?.volumePrimitives,
+     flameDomainTranslation:plan?.flameDomainTranslation,flameDomainScale:plan?.flameDomainScale??1,flameDomainFollowSource:plan?.flameDomainFollowSource??true,
+     flameWorldFrame:volume?.worldFrame?.()??plan?.flameWorldFrame??null,localLiquid:waterFeature.setup,postprocessing:{fireLighting:structuredClone(rendering)}};
+   },
+  },
+  commands:{'water.read'(_input,ctx){check(ctx);return readWater();},'fire.read'(_input,ctx){check(ctx);return {active:Boolean(volume?.isActive()),present:present(),source:prepared?.source?{presetId:prepared.source.presetId}:null,lighting:structuredClone(lightingStatus)};}},
   async retire(ctx){ctx.assertCurrent();retiring=true;if(volume)await volume.setActive(false);await releaseRadiance();for(const owner of receiverOwners){await owner.dispose();receiverOwners.delete(owner);}for(const object of pendingHandles){object.removeFromParent();object.traverse(node=>{node.geometry?.dispose();for(const material of [].concat(node.material??[]))material.dispose();});pendingHandles.delete(object);}waterFeature.clear();volume=null;},
  };
  return shell;

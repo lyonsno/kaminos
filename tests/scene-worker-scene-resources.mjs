@@ -14,7 +14,7 @@ const context=()=>{const signal=new AbortController().signal;return {signal,asse
 const source='demos/material-recipes/two-finishes.glb',bytes=readFileSync(new URL('../'+source,import.meta.url));
 const saved=(id='mesh')=>({version:8,objects:[{id,type:'glb',source,transform:{position:[1,2,3],rotation:[0,.4,0],scale:[2,1,1]},materials:{side:THREE.DoubleSide,transparent:true,opacity:.6}}],groups:[],activeObjectId:id,selectionIds:[id],
  environment:{name:'neutral',exposure:2,intensity:.7,showBackground:true,ground:{height:-2,color:'#123456'}},postprocessing:{sceneGI:{gain:3,radius:7}}});
-function fixture({document=null,failInit=false,failRetire=false,domainOverrides={}}={}){
+function fixture({document=null,failInit=false,failRetire=false,domainOverrides={},postSceneDocument}={}){
  assert.equal(typeof api.createSceneWorkerSceneResources,'function','actual ordinary scene constructor is required');
  const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(50,2,.1,200),events=[],targets=[];
  const renderer={toneMappingExposure:1,capabilities:{getMaxAnisotropy:()=>8},isWebGPURenderer:true,hasFeature:()=>false,getDrawingBufferSize:v=>v.set(64,32),library:{fromMaterial:material=>material},backend:{get:()=>({texture:'actual-recorded-depth'})}};
@@ -29,7 +29,7 @@ function fixture({document=null,failInit=false,failRetire=false,domainOverrides=
   applyFrameInputs(input){inputs.push(input);},...domainOverrides};
  const payload={viewport:{width:64,height:32,pixelRatio:1},flameControls:{},preferences:null,location:{href:'http://localhost/?scene_worker=1'},admission:document?{data:document,plan:{}}:null};
  const shell=api.createSceneWorkerSceneResources({THREE,scene,camera,renderer,pmremGenerator,renderResources,sharedGpu:{device,queue:device.queue},payload,viewport:()=>payload.viewport,lifecycle:{},readFlameControls:()=>({}),applyFlameControls(){},readAppHost:()=>null,
-  createDomains(value){events.push('domain.shell');ordinary=value.ordinary;return domain;},services:{loadHDR:async()=>new THREE.Texture(),readAssetBytes:async()=>bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength)}});
+  createDomains(value){events.push('domain.shell');ordinary=value.ordinary;return domain;},services:{...(postSceneDocument?{postSceneDocument}:{}),loadHDR:async()=>new THREE.Texture(),readAssetBytes:async()=>bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength)}});
  return {shell,scene,camera,events,targets,ctx,domain,renderer,renderResources,payload,device,ordinary:()=>ordinary,inputs};
 }
 test('retained shell builds actual appearance, SSGI, display and ordinary frames without a page owner',async()=>{
@@ -206,4 +206,46 @@ test('legacy document camera omissions preserve the ordinary page lens and defau
  const document=saved();document.camera={position:[4,5,6],target:[0,0,0]};const result=await f.shell.commands['scene.applyDocument']({document},f.ctx);
  assert.deepEqual(result.ui.camera,{...document.camera,up:[0,1,0],fov:50,near:.1,far:200});await f.shell.retire(f.ctx);
  }finally{delete globalThis.self;}
+});
+
+test('actual worker editor selects, changes and undoes the live GLB without reloading its root',async()=>{
+ globalThis.self=globalThis;const f=fixture({document:saved()});try{
+ await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},context:f.ctx});
+ assert.equal(typeof f.shell.foregroundCommands?.['scene.select'],'function','worker scene selection must reach the actual registry');
+ const original=f.shell.ordinary.workingScene.find('mesh').object;
+ const selected=f.shell.foregroundCommands['scene.select']({ids:['mesh'],activeId:'mesh'},f.ctx);assert.deepEqual(selected.ui.selection.ids,['mesh']);assert(selected.ui.selectionBounds);
+ const pose={position:[-2,1,0],rotation:[0,.2,0],scale:[1,2,1]};
+ const moved=f.shell.foregroundCommands['scene.transform']({id:'mesh',transform:pose},f.ctx);
+ assert.equal(f.shell.ordinary.workingScene.find('mesh').object,original);assert.deepEqual(original.position.toArray(),pose.position);assert.deepEqual(moved.ui.objects[0].transform,pose);assert.equal(moved.ui.history.undoCount,1);
+ assert.throws(()=>f.shell.foregroundCommands['scene.transform']({id:'mesh',transform:{...pose,scale:[1,NaN,1]}},f.ctx),/finite/);assert.deepEqual(original.scale.toArray(),pose.scale);
+ f.shell.foregroundCommands['scene.undo'](null,f.ctx);assert.deepEqual(original.position.toArray(),[1,2,3]);
+ f.shell.foregroundCommands['scene.redo'](null,f.ctx);assert.deepEqual(original.position.toArray(),pose.position);
+ assert.throws(()=>f.shell.foregroundCommands['scene.select']({ids:['absent']},f.ctx),/absent/);assert.deepEqual(f.shell.ordinary.workingScene.selection.ids,['mesh']);
+ await f.shell.commands['scene.applyDocument']({document:saved('replacement')},f.ctx);assert.equal(f.shell.foregroundCommands['scene.undo'](null,f.ctx).ui.history.undoCount,0,'replacement cannot replay old-root edits');
+ }finally{await f.shell.retire(f.ctx);delete globalThis.self;}
+});
+test('worker capture uses edited roots, current selection, actual appearance and the caller camera',async()=>{
+ globalThis.self=globalThis;const f=fixture({document:saved()});try{
+ await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},context:f.ctx});
+ assert.equal(typeof f.shell.commands['scene.captureDocument'],'function','worker must capture canonical authored state');
+ const object=f.shell.ordinary.workingScene.find('mesh').object;object.position.set(5,6,7);f.shell.ordinary.workingScene.select([],null);
+ const camera={position:[3,4,5],target:[0,1,0],up:[0,1,0],near:.02,far:80,fov:43};
+ const result=await f.shell.commands['scene.captureDocument']({camera},f.ctx);
+ assert.deepEqual(result.document.objects[0].transform.position,[5,6,7]);assert.deepEqual(result.document.selectionIds,[]);assert.deepEqual(result.document.camera,camera);
+ assert.equal(result.document.environment.ground.height,-2);assert.equal(result.document.postprocessing.sceneGI.gain,3);
+ await f.shell.commands['scene.applyDocument']({document:result.document},f.ctx);assert.deepEqual(f.shell.ordinary.workingScene.find('mesh').object.position.toArray(),[5,6,7]);assert.deepEqual(f.shell.ordinary.workingScene.selection.ids,[]);
+ }finally{await f.shell.retire(f.ctx);delete globalThis.self;}
+});
+
+ test('actual worker Save transports current canonical bytes and binds only the returned scene name',async()=>{
+ globalThis.self=globalThis;const bodies=[];const f=fixture({document:saved(),postSceneDocument:async body=>{bodies.push(JSON.parse(body));return {ok:true,status:200,json:async()=>({saved:'worker-edited.kaminos.json'})};}});
+ try{await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},context:f.ctx});
+ f.shell.foregroundCommands['scene.transformComponent']({id:'mesh',field:'position.x',value:9},f.ctx);
+ f.shell.foregroundCommands['scene.transformComponent']({id:'mesh',field:'position.y',value:8},f.ctx);
+ const camera={position:[3,4,5],target:[0,1,0],up:[0,1,0],near:.02,far:80,fov:43};
+ const result=await f.shell.commands['scene.save']({camera,saveAs:true,name:'worker-edited'},f.ctx);
+ assert.equal(result.ok,true);assert.equal(bodies[0]._saveAsName,'worker-edited');assert.deepEqual(bodies[0].objects[0].transform.position,[9,8,3]);
+ assert.equal(result.ui.document.filename,'worker-edited.kaminos.json');assert.match(result.url,/scene_worker=1/);assert.equal(new URLSearchParams(new URL(result.url).hash.slice(1)).get('scene'),'worker-edited.kaminos.json');
+ assert.deepEqual(result.document.objects[0].transform.position,[9,8,3]);await f.shell.commands['scene.applyDocument']({document:result.document,sceneFile:result.filename},f.ctx);assert.deepEqual(f.shell.ordinary.workingScene.find('mesh').object.position.toArray(),[9,8,3]);
+ }finally{await f.shell.retire(f.ctx);delete globalThis.self;}
 });

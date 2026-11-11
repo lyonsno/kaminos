@@ -85,7 +85,7 @@ export function createSceneWorkerPage({entryUrl='/scene-worker.entry.bundle.mjs'
  function track(handle,kind){
   const completion=handle.completion.then(result=>{
    epochChanged();
-   try{project(result.output?.ui??result.output?.result?.ui,{kind,requestId:handle.requestId,epoch:result.epoch});}
+   try{project(result.output?.ui??result.output?.value?.ui??result.output?.result?.ui,{kind,requestId:handle.requestId,epoch:result.epoch});}
    catch(error){error.workerResult=result;fail(error);throw error;}
    return result;
   }).finally(()=>pending.delete(handle.requestId));

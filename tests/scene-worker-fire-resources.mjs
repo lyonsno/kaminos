@@ -33,7 +33,7 @@ function fixture({route={},realLoader=false}={}){
   setSceneTransportConsumer:value=>calls.push(['transport',value]),emissiveCameraState:()=>null};
  const input={THREE,scene,camera,sharedGpu:{device},renderResources:{renderer:{}},ordinary,payload:{location:{href:'http://localhost/?scene_worker=1'},admission:{data:document}},
   readFlameControls:()=>controls,applyFlameControls(next){calls.push(['accepted',next]);controls={...controls,...next};}};
- const options={settingsLoader:{prepare:async()=>prepared},mountRadiance:async mount=>{calls.push(['mount-device',mount.readResources().device]);mount.readResources().onStatus({status:'mounted'});return ({canRender:()=>true,dispose(){calls.push('radiance.dispose');},setGain(){},setSurfaceGain(){},setSurfaceScattering(){},setSmokeMode(){},setSourceSoftness(){},setDirections(value){calls.push(['directions',value]);},setAngularPattern(value){calls.push(['pattern',value]);},setShadowCasterLevel:async value=>calls.push(['casterLevel',value]),prepareShadowCasters:async()=>calls.push('casters')});}};
+ const options={settingsLoader:{prepare:async()=>prepared},mountRadiance:async mount=>{calls.push(['mount-device',mount.readResources().device]);mount.readResources().onStatus({status:'mounted'});return ({debugState(){throw Error('Resource-bearing debug is worker-local');},canRender:()=>true,dispose(){calls.push('radiance.dispose');},setGain(){},setSurfaceGain(){},setSurfaceScattering(){},setSmokeMode(){},setSourceSoftness(){},setDirections(value){calls.push(['directions',value]);},setAngularPattern(value){calls.push(['pattern',value]);},setShadowCasterLevel:async value=>calls.push(['casterLevel',value]),prepareShadowCasters:async()=>calls.push('casters')});}};
  if(realLoader){delete options.settingsLoader;options.definitions=JSON.parse(execFileSync('python3',[new URL('../tools/scene-worker-control-definitions.py',import.meta.url).pathname,'--page',new URL('../index.html',import.meta.url).pathname])).controls;options.fetch=async url=>({ok:true,json:async()=>url.includes('schema')?schema:basin});}
  const resources=api.createSceneWorkerFireResources(input,options);
  return {resources,input,volume,ctx,calls,ordinary,document,plan:planSceneRestore(document),active:()=>active};
@@ -152,4 +152,21 @@ test('reattachment prepares a replacement volume from the current authored plan 
  assert.equal(typeof f.resources.reattachVolume,'function');await f.resources.reattachVolume({volume,context:f.ctx});
  assert.deepEqual(restored.find(row=>row[0]==='domain')[1],[2,0,0]);assert.equal(restored.filter(row=>row[0]==='world').length,1);assert.equal(restored.filter(row=>row[0]==='primitives').length,1);assert.equal(restored.find(row=>row[0]==='sources')[1][0].id,'source');
  assert.equal(f.calls.slice(before).some(row=>row[0]==='accepted'),false);assert.equal(f.ordinary.workingScene.objects.length,1);assert(f.calls.slice(before).some(row=>row[0]==='mount-device'));await f.resources.retire(f.ctx);
+});
+
+ test('fire read returns the already plain lighting status without exporting resource-bearing debug',async()=>{
+ const f=fixture();try{await f.resources.initialize(f.ctx);await f.resources.prepareVolume({volume:f.volume,context:f.ctx});await f.resources.document.afterReplace(f.document,f.plan,{context:f.ctx});
+ const result=f.resources.commands['fire.read'](null,f.ctx);assert.deepEqual(result.lighting,{status:'mounted'});assert.deepEqual(structuredClone(result),result);
+ }finally{await f.resources.retire(f.ctx);}
+});
+
+ test('live source edits and captured fire settings preserve the current canonical fire owners',async()=>{
+ const f=fixture();try{await f.resources.initialize(f.ctx);await f.resources.prepareVolume({volume:f.volume,context:f.ctx});const record=f.plan.flameSources[0],root=await f.resources.loaders.flame(record,{context:f.ctx});await f.resources.document.afterReplace(f.document,f.plan,{context:f.ctx});
+ const pose={position:[1,.5,0],rotation:[0,0,0],scale:[.5,.5,.5]};f.resources.authoring.checkTransform(f.ordinary.workingScene.objects[0],pose);applySceneObjectTransformState(root,pose);f.resources.prepareFrame();
+ assert.equal(f.calls.findLast(row=>row[0]==='sources')[1][0].controls.immersedCentreX,1);
+ const values=f.resources.authoring.capture(),objects=f.ordinary.workingScene.objects.map(f.ordinary.authored.records.serialize);
+ const captured=buildSceneDocument({...values,objects}),plan=planSceneRestore(captured);
+ assert.deepEqual(plan.flameSources[0].transform,pose);assert.deepEqual(plan.fireSettings.domControls,observed.domControls);assert.deepEqual(values.flameDomainTranslation,[0,0,0]);
+ f.input.applyFlameControls({density:987});assert.throws(()=>f.resources.authoring.capture(),/saving would lose/);
+ }finally{await f.resources.retire(f.ctx);}
 });

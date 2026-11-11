@@ -27352,6 +27352,7 @@ function applyMaterialState(state) {
 }
 
 async function loadSceneFile(file, options = {}) {
+  if(sceneWorkerRequested){try{return await window.kaminosSceneWorker.editor.load(file,options);}catch(error){setInfo('Scene load failed: '+error.message);return {ok:false,error:error.message};}}
   if (authoringBusy || vantageCaptureHeld) {
     setInfo('Wait for the current capture or save');
     return;
@@ -27648,7 +27649,7 @@ window.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   if ((e.metaKey || e.ctrlKey) && e.key === 's') {
     e.preventDefault();
-    if (sceneIsEmpty()) return;
+    if (!sceneWorkerRequested&&sceneIsEmpty()) return;
     if (e.shiftKey) saveSceneAs({ promptName: true });
     else saveScene();
   }

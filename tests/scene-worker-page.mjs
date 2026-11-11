@@ -112,3 +112,9 @@ test('transport visibility hides stale canvas pixels without changing simulation
  const before=structuredClone(volume.style);
  assert.throws(()=>applySceneWorkerSurfaces({volume},{volume:{transparent:false,visible:'false'}}),/boolean/);assert.deepEqual(volume.style,before);
 });
+
+test('a serviced foreground edit projects its nested canonical UI to the actual page',async t=>{
+ const ui={selection:{ids:['mesh'],activeId:'mesh'},objects:[{id:'mesh'}],history:{undoCount:1}};
+ const f=await fixture(t,{commandsOverride:{edit:()=>({mutationApplied:true,value:{ui}})}});await f.page.start();
+ await f.page.request('edit').completion;assert.deepEqual(f.page.read().ui.selection,ui.selection);assert.deepEqual(f.surfaces.at(-1).ui,ui);await f.page.retire();
+});

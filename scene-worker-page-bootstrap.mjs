@@ -1,4 +1,5 @@
 import {createSceneWorkerPage,captureSceneWorkerCamera,applySceneWorkerSurfaces,mergeSceneWorkerUi} from './scene-worker-page.mjs';
+import {mountSceneWorkerEditor} from './scene-worker-editor-page.mjs';
 import {createSceneWorkerImageController} from './scene-worker-image-controller.mjs';
 import {checkedCameraView} from './scene-camera-views.mjs';
 import {resolveSceneWorkerStartupInput} from './scene-worker-startup-input.mjs';
@@ -16,7 +17,7 @@ export function mountSceneWorkerPage({document,window,THREE,createControls,insta
  admission,preferences,readFlameControls,entryUrl='/scene-worker.entry.bundle.mjs',createWorker,
  report=()=>{},onProgress=()=>{},createPage=createSceneWorkerPage}={}){
  const viewport=document.getElementById('viewport');
- const canvases={};let controls,navigation;
+ const canvases={};let controls,navigation,editor;
  try {
  for(const id of ['kaminos-host-renderer-canvas','kaminos-volume-canvas'])if(document.getElementById(id))throw Error(`Worker page canvas already mounted: ${id}`);
  for(const [name,id] of [['scene','kaminos-host-renderer-canvas'],['volume','kaminos-volume-canvas']]){
@@ -68,21 +69,22 @@ export function mountSceneWorkerPage({document,window,THREE,createControls,insta
      for(const key of ['fov','near','far'])camera[key]=restored[key];camera.updateProjectionMatrix();controls.update();}
     finally{controls.enableDamping=damping;}
    }
-   ui=next;
+   ui=next;if(Object.keys(value).some(key=>['objects','selection','groups','history','document'].includes(key)))editor?.render(ui);
   },
   onPhase(value){
    for(const canvas of Object.values(canvases))canvas.dataset.sceneWorkerState=value;
-   if(['held','retiring','retired','closed'].includes(value)){ui=null;report(`Worker scene ${value}; previous scene metadata is unavailable`);}
+   if(['held','retiring','retired','closed'].includes(value)){ui=null;editor?.render(null);report(`Worker scene ${value}; previous scene metadata is unavailable`);}
   },
   onProgress,onError:error=>report(`Worker scene: ${error.message}`)});
+ if(document.getElementById('scene-object-list'))editor=mountSceneWorkerEditor({document,window,page,readCamera:()=>captureSceneWorkerCamera(camera,controls.target),readUi:()=>ui,report});
  const image=createSceneWorkerImageController({page});
- function detach(){if(closed)return;closed=true;navigation.dispose();controls.dispose();navigationInput.removeEventListener('change',navigationChanged);}
+ function detach(){if(closed)return;closed=true;editor?.dispose();navigation.dispose();controls.dispose();navigationInput.removeEventListener('change',navigationChanged);}
  const pagehide=()=>{page.holdFrames('Page leaving; resource retirement requested');void page.retire().then(detach,error=>report(`Worker cleanup held: ${error.message}`));};
  window.addEventListener('pagehide',pagehide,{once:true});
- return Object.freeze({page,image,camera,controls,navigation,canvases,
+ return Object.freeze({page,image,editor,camera,controls,navigation,canvases,
   start:()=>page.start(),
   async retire(){const result=await page.retire();detach();window.removeEventListener('pagehide',pagehide);for(const canvas of Object.values(canvases))canvas.remove();return result;},
   read:()=>({worker:page.read(),ui,navigation:navigation.state()}),
  });
- }catch(error){navigation?.dispose();controls?.dispose();for(const canvas of Object.values(canvases))canvas.remove();throw error;}
+ }catch(error){editor?.dispose();navigation?.dispose();controls?.dispose();for(const canvas of Object.values(canvases))canvas.remove();throw error;}
 }
