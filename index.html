@@ -12132,6 +12132,7 @@ async function initScene() {
     viewReference:id=>{const state=sceneCameras?.state();return state?.mode==='camera'&&id===state.activeId?{point:controls.target.toArray(),screen:[state.frame.x+state.frame.width/2,state.frame.y+state.frame.height/2]}:null;},
     transformSettings:()=>transformPreferences,
     coordinateFrame:id=>sceneComponents?.resolve(id)?.coordinateFrame?.()??null,
+    fieldIntent:(id,field)=>sceneComponents?.resolve(id)?.fieldIntent?.(field)??{},
     localOrientation:()=>sceneComponents?.ownsTransforms()?sceneComponents.target()?.localOrientation??[0,0,0]:workingScene.activeFieldId?[0,0,0]:workingScene.selection.activeId?selectionRootState(workingScene.selection.activeId).rotation:[0,0,0],
     read: id => {
       const component=sceneComponents?.resolve(id);if(component)return component.read();

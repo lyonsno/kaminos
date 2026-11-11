@@ -24,7 +24,7 @@ export function getPivotViewState(camera, point, width, height) {
 export function installScenePlacementTools({
   viewport, historyScope = null, camera, controls, gizmo, selected, read, write, object, refresh,
   allowed = () => true, busy = () => false, viewHeld = () => null, frameSelected = () => {},
-  coordinateFrame = () => null, viewReference = () => null, overlaysVisible = () => true,
+  fieldIntent = () => ({}), coordinateFrame = () => null, viewReference = () => null, overlaysVisible = () => true,
   settled = () => {}, captureContext = () => null, historyScopes = [], prepare=()=>{}, transformSettings=()=>({orientation:'world'}),localOrientation=()=>read(selected())?.rotation||[0,0,0],
 }) {
   const hud = document.createElement('div');
@@ -351,7 +351,7 @@ export function installScenePlacementTools({
     const index = { x: 0, y: 1, z: 2 }[axis], factor = group === 'rotation' ? Math.PI / 180 : 1;
     if (!field) { if (!begin(selected(), `Edit ${input.dataset.transformField}`)) { input.value = String(current[group][index] / factor); return; } field = { input }; }
     current[group][index] = input.valueAsNumber * factor;
-    try { edits.preview(current); } catch (error) { finish(false); input.value = String(pose()[group][index] / factor); hud.textContent = error.message; }
+    try { edits.preview({...current,...fieldIntent(selected(),input.dataset.transformField)}); } catch (error) { finish(false); input.value = String(pose()[group][index] / factor); hud.textContent = error.message; }
   }
   for (const input of document.querySelectorAll('[data-transform-field]')) {
     input.step = 'any';
