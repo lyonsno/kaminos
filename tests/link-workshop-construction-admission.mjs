@@ -12,7 +12,7 @@ async function fixture(count=3){
  const m={...emptyMechanism(),mounts:[],attachments:[]};for(let i=0;i<count;i++){const objectId=entries[i+1].id;m.mounts.push({id:'s'+i,owner:{objectId},position:[-.36,0,1.02],rotation:[0,-Math.PI/2,0]},{id:'t'+i,owner:{objectId:entries[i].id},position:i?[.8,0,1.02]:[0,0,0],rotation:[0,-Math.PI/2,0]});m.attachments.push({objectId,sourceMount:'s'+i,targetMount:'t'+i,offset:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},hinge:[[.6,-1,.4][i],[.5,-.7,.2][i]],hardware:{family:'clevis',size:.15,mounting:'part-frames'}});}
  root.userData.linkMechanism=m;let selected='mechanism';const edits=createSceneEdits({read(){throw Error('ordinary read');},write(){}}),components=createSceneComponentEdit({selected:()=>selected,cancel:()=>edits.cancel(),refresh(){}});
  const host={scene:{objects:()=>entries,select:id=>selected=id,open:async()=>({attach:async()=>({id:'mechanism',root}),redraw(){},readView(){return {};},dispose:async()=>{}})},controls:{components,document:{defaultView:{kaminosSceneEdits:edits}}}};
- const c=await createMechanismController({host,inputs:{root,mode:'A'}});return {c,edits,components,entries};
+ const c=await createMechanismController({host,inputs:{root,mode:'A'}});return {c,edits,components,entries,root};
 }
 test('moving an anchored selection refuses the conflicting request without displacing its goal or body',async()=>{
  const {c,edits,components,entries}=await fixture();try{
@@ -42,5 +42,18 @@ test('a rotation Inspector field requests its Euler coordinate without freezing 
   entries[0].object.rotation.set(.35,.4,0);const tilted=c.read().recipe;tilted.attachments[0].offset.rotation=[.2,.15,.3];c.operations.restore(tilted);c.operations.construction();c.operations.selectConstruction({objectIds:['one']});const target=components.target(),start=target.read(),wanted=start.rotation[0]+.01;
   edits.begin(target.id,'Edit rotation.x');edits.preview({rotation:[wanted,...start.rotation.slice(1)],transformField:'rotation.x'});edits.commit();const once=c.read().recipe,achieved=components.target().read();assert.ok(Math.abs(achieved.rotation[0]-wanted)<1e-7,JSON.stringify({wanted,achieved:achieved.rotation,request:c.read().construction.requested}));
   edits.begin(target.id,'Edit rotation.x');edits.preview({rotation:[wanted,...achieved.rotation.slice(1)],transformField:'rotation.x'});edits.commit();assert.deepEqual(c.read().recipe,once,'repeating a committed Euler coordinate does not walk through other coordinates');
+ }finally{await c.dispose();}
+});
+test('choosing a connection after part selection changes the native target without losing construction anchors',async()=>{
+ const {c,components}=await fixture();try{
+  c.operations.anchorConstruction({objectIds:['door']});const goals=structuredClone(c.read().recipe.construction.anchors);c.operations.selectConstruction({objectIds:['one']});c.operations.selectConnection({objectId:'two'});assert.equal(c.read().construction.active,false,'connection selection leaves the part-picking tool');c.operations.editConnection({objectId:'two'});assert.equal(c.read().editingConnection,'two');assert.equal(components.target().type,'connection-seating');assert.deepEqual(c.read().recipe.construction.anchors,goals);
+ }finally{await c.dispose();}
+});
+
+test('visible hinge hardware can be picked while construction part selection is active',async()=>{
+ const {c,components,root}=await fixture();try{
+  c.operations.anchorConstruction({objectIds:['door']});c.operations.selectConstruction({objectIds:[]});root.updateWorldMatrix(true,true);let hardware;root.traverse(o=>{if(hardware||!o.isMesh||o.userData.connection!=='two')return;let p=o;while(p){if(p.userData.hingePart?.id==='pin'){hardware=o;break;}p=p.parent;}});assert.ok(hardware,'the real analytical hinge supplies a physical pick target');
+  const a=hardware.geometry.attributes.position,index=hardware.geometry.index,p=new T.Vector3();for(let i=0;i<3;i++)p.add(new T.Vector3().fromBufferAttribute(a,index?index.getX(i):i));p.multiplyScalar(1/3).applyMatrix4(hardware.matrixWorld);
+  const camera=new T.PerspectiveCamera(45,1.25,.01,100);camera.position.copy(p).add(new T.Vector3(0,0,5));camera.lookAt(p);camera.updateMatrixWorld(true);const canvas={getBoundingClientRect:()=>({left:0,top:0,width:1000,height:800})};components.pick({clientX:500,clientY:400},{camera,canvas});assert.equal(c.read().selectedConnection,'two');assert.equal(c.read().construction.active,false);assert.equal(components.target().type,'connection-seating');
  }finally{await c.dispose();}
 });
