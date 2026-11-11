@@ -66,7 +66,7 @@ test('native Duplicate keeps drawn splat resources under their runtime owner and
  }finally{other.dispose();splat.dispose();}
 });
 test('legacy hybrid visual bodies survive repetition/export and remain excluded from solids',()=>{
- const splat=fixture(),body=new T.Mesh(new T.BoxGeometry(),new T.MeshStandardMaterial()),root=new T.Group().add(body,splat);body.name='Visible hybrid body';body.userData.kaminosBeautyLodProxy=true;
+ const splat=fixture(),body=new T.Mesh(new T.BoxGeometry(),new T.MeshStandardMaterial()),root=new T.Group().add(body,new T.Group().add(splat));body.name='Visible hybrid body';body.userData.kaminosBeautyLodProxy=true;
  const view=createRepetitionView();
  try{
   surfaceSplatsGLTFPlugin({}).afterRoot?.({scene:root});
