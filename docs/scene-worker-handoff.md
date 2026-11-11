@@ -222,3 +222,22 @@ Worker assembly supplies these existing domain operations and keeps its GPU
 objects local. The extraction makes the actual draw callable without the page;
 it does not itself populate the full scene, relocate every domain service,
 or implement safe authored mutation during inference.
+
+## Ordinary lighting resources
+
+`createSceneLightingGraph` in `scene-lighting-graph.mjs` constructs the existing
+ordinary prepass, normal/depth AO inputs, denoised AO context and GI resource
+graph using the supplied scene, camera, renderer and `THREE.TSL` namespace. The
+page uses this same constructor. Inputs include accepted AO settings and
+intensity, plain GI options, and the existing AO/depth/denoise/GI factories.
+The returned render pipeline, passes, depth target/material, AO values and GI
+owner stay local to the scene owner. No DOM element or route parser is needed
+inside the constructor. Callers retain resource lifetime and shared-device
+ownership; constructing the graph does not draw or certify native GPU execution.
+
+Worker assembly must resolve bare Three imports in its domain modules to the
+same vendored Three build. The page import map supplies that identity on the
+page; importing a wrapper under Node can instead resolve the installed package.
+This constructor uses the supplied `THREE.TSL` directly. Bloom/output graph
+selection, authored loading and actual frame admission remain their respective
+scene-owner operations.
