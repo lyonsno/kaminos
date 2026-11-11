@@ -31,7 +31,7 @@ try{
  const grid=config.labels==='denoised-grid';if(config.labels&&!['denoised-grid','raw'].includes(config.labels))throw Error('Unknown label route');if(grid&&!options.fresh)throw Error('Denoised grids require fresh streaming');
  const gridWidth=config.grid?.width??32,gridHeight=config.grid?.height??64;
  if(grid&&(![gridWidth,gridHeight].every(v=>Number.isSafeInteger(v)&&v>0)||gridWidth*gridHeight!==options.batch||gridWidth>options.resolution||gridHeight>options.resolution||options.queries<options.batch))throw Error('Grid extent must be positive integers, equal batch, fit student resolution and rolling pool');
- report.receiver=config.receiver??report.receiver;report.claim=grass?'Preliminary fit of finite frozen grass ribbons, geometry-guided denoised directional responses; no periodic or convergence claim':report.claim;
+ report.receiver=config.receiver??report.receiver;report.claim=grass?`Preliminary fit of finite frozen grass ribbons, ${grid?'geometry-guided denoised':'raw box-footprint-averaged'} directional responses; no periodic or convergence claim`:report.claim;
  const source=grass?createGrassMaterialSource(config.source):createGroundTeacherSource(config.source);report.sourceKind=grass?'grass':'ground';report.ground={config:source.config,triangles:source.triangles.length,materials:source.materials,boundary:source.boundary,referenceHeight:source.referenceHeight,sha256:digest(JSON.stringify(source))};
  await fs.writeFile(path.join(out,'config.json'),JSON.stringify(config,null,2));await fs.writeFile(path.join(out,'source.json'),JSON.stringify(source));
  let state=options.seed>>>0;const random=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return (state+.5)/4294967296;};

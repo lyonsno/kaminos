@@ -28,3 +28,12 @@ test('bad source or label route fails before GPU launch and preserves a failure 
  }
  }finally{await fs.rm(root,{recursive:true,force:true});}
 });
+
+test('grass raw-route description does not claim denoised labels',async()=>{
+ const root=await fs.mkdtemp(path.join(os.tmpdir(),'grass-raw-description-'));
+ try{
+ const file=path.join(root,'config.json'),out=path.join(root,'out');await fs.writeFile(file,JSON.stringify({sourceKind:'grass',labels:'raw',source:{height:0}}));
+ await assert.rejects(run(process.execPath,['tools/ground-material-fit.mjs',file,out],{cwd:process.cwd(),env:{...process.env,GREENROOM_JOB_ID:'negative-config-fixture'}}));
+ const report=JSON.parse(await fs.readFile(path.join(out,'report.json'),'utf8'));assert.equal(report.phase,'configuration');assert.equal(report.adapter,undefined);assert.match(report.claim,/raw box/);assert.doesNotMatch(report.claim,/denoised/);
+ }finally{await fs.rm(root,{recursive:true,force:true});}
+});
