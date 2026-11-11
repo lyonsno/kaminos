@@ -41,9 +41,9 @@ try{
    entry.trainQueries=await raw(tag+'-train-queries.f32',q);entry.trainLabels=await raw(tag+'-train-labels.f32',labels);entry.testQueries=await raw(tag+'-test-queries.f32',test);entry.testLabels=await raw(tag+'-test-labels.f32',testLabels);
    report.phase='fit';await publish();const model=fitFilteredSurface({width:config.grid,height:config.grid,angles:train,labels});
    model.footprint=footprint;model.source=report.source;model.sourceRevision=report.sourceRevision;
-   // The .moments artifact carries JSON bytes through the server's binary
+   // The .model artifact carries JSON bytes through the server's binary
    // read route. /api/read reformats .json, so its wire hash differs from disk.
-   const serial={...model,coefficients:Array.from(model.coefficients),mean:Array.from(model.mean)},bytes=Buffer.from(JSON.stringify(serial)),file=tag+'.moments';await fs.writeFile(path.join(out,file),bytes);entry.model={file,sha256:sha(bytes),bytes:bytes.length};
+   const serial={...model,coefficients:Array.from(model.coefficients),mean:Array.from(model.mean)},bytes=Buffer.from(JSON.stringify(serial)),file=tag+'.model';await fs.writeFile(path.join(out,file),bytes);entry.model={file,sha256:sha(bytes),bytes:bytes.length};
    const predicted=new Float32Array(testLabels.length),meanPredicted=new Float32Array(testLabels.length);
    // Compare held-out directions and quarter-cell shifted spatial locations.
    for(let i=0;i<test.length/8;i++){
