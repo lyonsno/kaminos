@@ -57,31 +57,38 @@ function ingredients(c){
  return result;
 }
 export function preparationCollisionHull(g){
- const shape=new CANNON.ConvexPolyhedron({vertices:g.vertices.map(p=>new CANNON.Vec3(...p)),faces:g.faces}),edges=new Map();
+ const shape=new CANNON.ConvexPolyhedron({vertices:g.vertices.map(p=>new CANNON.Vec3(...p)),faces:g.faces.map(f=>[...f])}),edges=new Map();
  // SAT uses directions, so the two orientations of one topological edge
  // generate the same cross-product axes. Keep every edge, once; no hull change.
  for(const face of g.faces)for(let j=0;j<face.length;j++){const a=face[j],b=face[(j+1)%face.length],key=[Math.min(a,b),Math.max(a,b)].join(':');if(!edges.has(key)){const edge=shape.vertices[a].vsub(shape.vertices[b]);edge.normalize();edges.set(key,edge);}}
  shape.uniqueEdges=[...edges.values()];return shape;
 }
-export function createGranularPreparation(input={},saved=null){
- if(saved?.schema&&saved.schema!==PREPARATION_SCHEMA)throw Error('Invalid preparation checkpoint schema');
- const c=preparationRecipe(saved?.recipe??input);planPreparation(c,{availableBytes:globalThis.performance?.memory?performance.memory.jsHeapSizeLimit-performance.memory.usedJSHeapSize:Infinity});const all=saved?structuredClone(saved.ingredients):ingredients(c);
- if(all.length!==c.count)throw Error('Incomplete ingredient inventory');
+function validateIngredients(all,c){
+ if(!Array.isArray(all)||all.length!==c.count)throw Error('Incomplete ingredient inventory');
  for(const [i,g]of all.entries()){
-  if(g.id!==i||!Array.isArray(g.vertices)||g.vertices.length<4||!Array.isArray(g.faces)||g.faces.length<4)throw Error('Invalid ingredient geometry');
-  g.vertices.forEach(p=>vector(p,3));vector(g.quaternion,4);positive(g.mass,'grain mass');positive(g.volume,'grain volume');positive(g.radius,'grain radius');
+  if(!g||g.id!==i||!Array.isArray(g.vertices)||g.vertices.length<4||!Array.isArray(g.faces)||g.faces.length<4)throw Error('Invalid ingredient geometry');
+  g.vertices.forEach(p=>vector(p,3));vector(g.quaternion,4);positive(g.mass,'grain mass');positive(g.volume,'grain volume');positive(g.radius,'grain radius');if(Math.abs(Math.hypot(...g.quaternion)-1)>1e-5||g.vertices.some(p=>Math.hypot(...p)>g.radius+1e-12))throw Error('Invalid ingredient bound or orientation');if(2.1*g.radius>=c.width)throw Error('Generated grain does not fit inside container');
   if(!Number.isSafeInteger(g.materialIndex)||g.materialIndex<0||g.materialIndex>2||g.faces.some(f=>!Array.isArray(f)||f.length!==3||f.some(k=>!Number.isSafeInteger(k)||k<0||k>=g.vertices.length)))throw Error('Invalid grain faces or material');
  }
+}
+function validatePhysicalState({time,lidHeight,containerX,phase,history,grains},all){
+ positive(time,'time',true);positive(lidHeight,'lid height');if(!Number.isFinite(containerX))throw Error('Invalid container position');
+ if(!Array.isArray(history))throw Error('Invalid preparation history');if(phase){if(!history.length||history.at(-1)?.kind!==phase.kind||history.at(-1)?.completed!==undefined)throw Error('Invalid active preparation history');if(!['pour','settle','shake','compress','unload'].includes(phase.kind))throw Error('Invalid saved phase');positive(phase.seconds,'phase duration');positive(phase.elapsed,'phase elapsed',true);if(phase.elapsed>=phase.seconds||!Number.isFinite(phase.from)||!Number.isFinite(phase.target)||!Number.isFinite(phase.amplitude)||!Number.isFinite(phase.frequency)||!Number.isSafeInteger(phase.initialCount)||phase.initialCount<0||phase.initialCount>all.length)throw Error('Invalid saved phase');}
+ if(!Array.isArray(grains)||grains.length>all.length)throw Error('Invalid deposited inventory');for(const [i,row]of grains.entries()){if(!row||row.id!==i)throw Error('Invalid deposited identity');vector(row.position,3);vector(row.velocity,3);vector(row.angularVelocity,3);vector(row.quaternion,4);if(Math.abs(Math.hypot(...row.quaternion)-1)>1e-5)throw Error('Invalid grain orientation');}
+}
+export function createGranularPreparation(input={},saved=null){
+ if(saved!==null&&saved.schema!==PREPARATION_SCHEMA)throw Error('Invalid preparation checkpoint schema');
+ const c=preparationRecipe(saved?.recipe??input);planPreparation(c,{availableBytes:globalThis.performance?.memory?performance.memory.jsHeapSizeLimit-performance.memory.usedJSHeapSize:Infinity});const all=saved?structuredClone(saved.ingredients):ingredients(c);
+ validateIngredients(all,c);
  const w=new CANNON.World({gravity:new CANNON.Vec3(0,-9.81,0)});w.broadphase=new CANNON.SAPBroadphase(w);w.broadphase.useBoundingBoxes=true;w.solver.iterations=c.iterations;w.solver.tolerance=1e-9;w.allowSleep=true;
  w.defaultContactMaterial.friction=c.friction;w.defaultContactMaterial.restitution=.02;w.defaultContactMaterial.contactEquationStiffness=1e7;
  let time=saved?.time??0,lidHeight=saved?.lidHeight??c.width*2,containerX=saved?.containerX??0,phase=saved?.phase?structuredClone(saved.phase):null,history=structuredClone(saved?.history??[]),disposed=false;
- positive(time,'time',true);positive(lidHeight,'lid height');if(!Number.isFinite(containerX))throw Error('Invalid container position');
- if(!Array.isArray(history))throw Error('Invalid preparation history');if(phase){if(!['pour','settle','shake','compress','unload'].includes(phase.kind))throw Error('Invalid saved phase');positive(phase.seconds,'phase duration');positive(phase.elapsed,'phase elapsed',true);if(phase.elapsed>=phase.seconds||!Number.isFinite(phase.from)||!Number.isFinite(phase.target)||!Number.isFinite(phase.amplitude)||!Number.isFinite(phase.frequency)||!Number.isSafeInteger(phase.initialCount)||phase.initialCount<0||phase.initialCount>all.length)throw Error('Invalid saved phase');}
+ validatePhysicalState(saved??{time,lidHeight,containerX,phase,history,grains:[]},all);
  const walls=[];
  function plane(position,normal){const b=new CANNON.Body({type:CANNON.Body.KINEMATIC,mass:0,shape:new CANNON.Plane()});b.position.set(...position);b.quaternion.setFromVectors(new CANNON.Vec3(0,0,1),new CANNON.Vec3(...normal));w.addBody(b);return b;}
  walls.push({body:plane([containerX,0,0],[0,1,0]),x:0});
  for(const [axis,sign]of [[0,-1],[0,1],[2,-1],[2,1]]){const x=axis===0?sign*c.width/2:0;walls.push({body:plane([x+containerX,0,axis===2?sign*c.width/2:0],[axis===0?-sign:0,0,axis===2?-sign:0]),x});}
- const lid=plane([containerX,lidHeight,0],[0,-1,0]);const grains=[];
+ const lid=plane([containerX,lidHeight,0],[0,-1,0]);lid.collisionResponse=phase?.kind!=='pour';const grains=[];
  const add=(g,row)=>{
   const shape=preparationCollisionHull(g);
   const b=new CANNON.Body({mass:g.mass,shape,linearDamping:.08,angularDamping:.12,allowSleep:true,sleepSpeedLimit:.002,sleepTimeLimit:.2});
@@ -90,7 +97,7 @@ export function createGranularPreparation(input={},saved=null){
    // Rejection placement prevents interpenetrating births. Raising the inlet
    // when occupied keeps all grains; nothing is discarded or downsampled.
    for(;;){let found=false;for(let n=0;n<32;n++){x=containerX+(rng()-.5)*(c.width-2.1*g.radius);z=(rng()-.5)*(c.width-2.1*g.radius);if(grains.every(p=>Math.hypot(p.body.position.x-x,p.body.position.y-y,p.body.position.z-z)>p.ingredient.radius+g.radius)){found=true;break;}}if(found)break;y+=2*g.radius;}
-   b.position.set(x,y,z);b.quaternion.set(...g.quaternion);
+   lidHeight=Math.max(lidHeight,y+g.radius+c.radius);lid.position.y=lidHeight;b.position.set(x,y,z);b.quaternion.set(...g.quaternion);
   }
   w.addBody(b);grains.push({ingredient:g,body:b});
  };
@@ -102,14 +109,14 @@ export function createGranularPreparation(input={},saved=null){
  function start(kind,options={}){
   if(disposed)throw Error('Preparation disposed');if(phase)throw Error('Preparation already running');
   if(!['pour','settle','shake','compress','unload'].includes(kind))throw Error('Unknown preparation operation');
+  if(kind==='pour'&&grains.length===all.length)throw Error('All ingredients have been poured');
   const seconds=options.seconds??(kind==='pour'?(all.length-grains.length)/c.pourRate:kind==='settle'?.8:kind==='unload'?.4:1);positive(seconds,'duration');
   const strain=options.strain??.25,amplitude=options.amplitude??c.width*.025,frequency=options.frequency??9;
   if(kind==='compress'&&(!Number.isFinite(strain)||strain<=0||strain>=1))throw Error('Compression strain must be between zero and one');
   if(kind==='shake'){positive(amplitude,'shake amplitude',true);positive(frequency,'shake frequency');}
-  if(kind==='pour'&&grains.length===all.length)throw Error('All ingredients have been poured');
   if(kind!=='pour'&&!grains.length)throw Error('Pour the mixture first');
   const target=kind==='compress'?Math.max(c.radius,top()*(1-strain)):kind==='unload'?Math.max(c.width*1.5,top()+c.width*.3):lidHeight;
-  phase={kind,elapsed:0,seconds,from:lidHeight,target,strain,amplitude,frequency,initialCount:grains.length};
+  lid.collisionResponse=kind!=='pour';phase={kind,elapsed:0,seconds,from:lidHeight,target,strain,amplitude,frequency,initialCount:grains.length};
   for(const g of grains)g.body.wakeUp();history.push({kind,options:{seconds,strain,amplitude,frequency},started:time});return read();
  }
  function advance(seconds){
@@ -126,7 +133,7 @@ export function createGranularPreparation(input={},saved=null){
    for(const wall of walls){wall.body.position.x=wall.x+containerX;wall.body.velocity.x=(nextX-containerX)/step;wall.body.aabbNeedsUpdate=true;}
    lid.position.set(containerX,lidHeight,0);lid.velocity.set((nextX-containerX)/step,(nextLid-lidHeight)/step,0);lid.aabbNeedsUpdate=true;
    w.step(step);containerX=nextX;lidHeight=nextLid;time+=step;phase.elapsed=next;
-   if(next>=phase.seconds-1e-12){history.at(-1).completed=time;phase=null;containerX=0;for(const wall of walls){wall.body.position.x=wall.x;wall.body.velocity.set(0,0,0);}lid.position.set(0,lidHeight,0);lid.velocity.set(0,0,0);}
+   if(next>=phase.seconds-1e-12){history.at(-1).completed=time;phase=null;lid.collisionResponse=true;containerX=0;for(const wall of walls){wall.body.position.x=wall.x;wall.body.velocity.set(0,0,0);}lid.position.set(0,lidHeight,0);lid.velocity.set(0,0,0);}
   }
   return read();
  }
@@ -135,10 +142,12 @@ export function createGranularPreparation(input={},saved=null){
 function transform(p,row){const q=row.quaternion,v=cross(q.slice(0,3),p),vv=cross(q.slice(0,3),v);return p.map((x,k)=>x+2*q[3]*v[k]+2*vv[k]+row.position[k]);}
 export function preparationSource(snapshot,{container=false}={}){
  if(snapshot?.schema!==PREPARATION_SCHEMA)throw Error('Explicit preparation snapshot required');
+ if(!snapshot.recipe||!Array.isArray(snapshot.ingredients)||!Array.isArray(snapshot.grains))throw Error('Incomplete preparation snapshot inventory');if(!snapshot.grains.length)throw Error('No poured grains in material source');
+ const c=preparationRecipe(snapshot.recipe);validateIngredients(snapshot.ingredients,c);validatePhysicalState(snapshot,snapshot.ingredients);
  const triangles=[],all=snapshot.ingredients;
  const rows=snapshot.grains;
  for(const row of rows){const g=all[row.id],v=g.vertices.map(p=>transform(p,row));for(const [a,b,c]of g.faces)triangles.push({a:v[a],b:v[b],c:v[c],materialIndex:g.materialIndex,kind:'prepared-grain',identity:`grain-${g.id}`});}
  const half=snapshot.recipe.width/2;
- if(container){const a=[-half,0,-half],b=[half,0,-half],c=[half,0,half],d=[-half,0,half];triangles.push({a,b:c,c:b,materialIndex:3,kind:'tray'},{a,b:d,c,materialIndex:3,kind:'tray'});}
+ if(container){const x=snapshot.containerX,a=[x-half,0,-half],b=[x+half,0,-half],c=[x+half,0,half],d=[x-half,0,half];triangles.push({a,b:c,c:b,materialIndex:3,kind:'tray'},{a,b:d,c,materialIndex:3,kind:'tray'});}
  return {schema:'kaminos.prepared-granular-source.v1',config:{kind:'granular-preparation',tileSize:snapshot.recipe.width,snapshot:structuredClone(snapshot),container},triangles,materials:structuredClone(INGREDIENTS),referenceHeight:triangles.reduce((h,t)=>Math.max(h,t.a[1],t.b[1],t.c[1]),0)+.002,samplingPlaneHeight:0,boundary:'Actual bounded grain geometry; no continuous matrix, periodic tile or cohesive soil claim',unit:'metres'};
 }

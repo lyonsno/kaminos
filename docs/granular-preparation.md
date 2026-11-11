@@ -26,8 +26,8 @@ Dense contact work can still be expensive; the worker keeps host frames separate
 **Pour → press → unload** performs the preparation sequence. The expanded
 preparation controls expose individual operations, including shaking. **Pause**
 retains the last completed worker chunk. **Continue** completes the current
-operation; after pausing the automatic sequence, later operations can be invoked
-individually. It does not silently restart an interrupted whole sequence.
+operation. After pausing the automatic sequence, finish the paused operation
+with Continue before invoking later operations individually. It does not silently restart an interrupted whole sequence.
 Save/Load preserve the exact grain hulls, poses, velocities, mixture, physical
 clock, lid/container state, preparation phase and history. A reload reconstructs
 contact caches rather than promising bit-exact warm-solver continuation.

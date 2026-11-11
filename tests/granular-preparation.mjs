@@ -36,3 +36,19 @@ assert.equal(hullCheck.uniqueEdges.length,undirected.size,'SAT must not repeat b
 const CANNON=await import('../node_modules/cannon-es/dist/cannon-es.js');
 const g=s.ingredients[0],reference=new CANNON.ConvexPolyhedron({vertices:g.vertices.map(p=>new CANNON.Vec3(...p)),faces:g.faces}),candidate=preparationCollisionHull(g),origin=new CANNON.Vec3(),qa=new CANNON.Quaternion(),qb=new CANNON.Quaternion();qb.setFromEuler(.31,.73,.19);
 for(const xyz of [[0,0,0],[.001,.001,0],[.003,0,0],[.02,.01,.03],[-.002,.001,.002]]){const pos=new CANNON.Vec3(...xyz),a=new CANNON.Vec3(),b=new CANNON.Vec3(),hitA=reference.findSeparatingAxis(reference,origin,qa,pos,qb,a),hitB=candidate.findSeparatingAxis(candidate,origin,qa,pos,qb,b);assert.equal(hitB,hitA,'removing redundant edge orientation must preserve overlap');if(hitA)assert.ok(Math.abs(reference.testSepAxis(a,reference,origin,qa,pos,qb)-candidate.testSepAxis(b,candidate,origin,qa,pos,qb))<1e-10,'minimum penetration depth must agree');}
+const coldJSON=createGranularPreparation(null,JSON.parse(JSON.stringify(s)));assert.deepEqual(coldJSON.snapshot(),s,'JSON checkpoints must not lose solver scratch attached to ingredient faces');coldJSON.dispose();
+assert.throws(()=>createGranularPreparation({},{}),/schema/i);assert.throws(()=>preparationSource({schema:'kaminos.granular-preparation.v1'}),/snapshot|inventory/i);
+const empty=createGranularPreparation({count:1});assert.throws(()=>createMaterialTeacherSource({kind:'granular-preparation',snapshot:empty.snapshot()}),/poured|empty/i);empty.dispose();
+
+const malformed=JSON.parse(JSON.stringify(s));delete malformed.grains;
+assert.throws(()=>createGranularPreparation(null,malformed),/inventory/i,'loading cannot fabricate an empty inventory');
+const pausedBad=JSON.parse(JSON.stringify(s));pausedBad.phase={kind:'pour',seconds:1,elapsed:0};pausedBad.history=[];
+assert.throws(()=>createGranularPreparation(null,pausedBad),/history/i);
+const oversized=JSON.parse(JSON.stringify(s));oversized.ingredients[0].radius=oversized.recipe.width;
+assert.throws(()=>createGranularPreparation(null,oversized),/fit/i);
+const inlet=createGranularPreparation({count:8,grainDetail:0,width:.015,radius:.002,spread:.1,pourRate:8000});
+inlet.start('pour');inlet.advance(.001);const birth=inlet.snapshot();
+assert.equal(birth.grains.length,8);assert.ok(birth.lidHeight>inlet.read().top,'raised inlet must retain lid clearance');inlet.dispose();
+const offset=JSON.parse(JSON.stringify(s));offset.containerX=.003;
+const tray=preparationSource(offset,{container:true}).triangles.filter(t=>t.kind==='tray');
+assert.equal(Math.min(...tray.flatMap(t=>[t.a[0],t.b[0],t.c[0]])),offset.containerX-offset.recipe.width/2);
