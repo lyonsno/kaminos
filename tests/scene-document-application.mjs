@@ -3,10 +3,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {MessageChannel} from 'node:worker_threads';
-import * as THREE from 'three';
-import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import * as THREE from '../lib/three.core.js';
+import {registerHooks} from 'node:module';
+import {sceneObjectTransformState,applySceneObjectTransformState,getMaterialStateForObject,applyMaterialStateToObject} from '../scene-object-state.mjs';
 import {createSceneGlbLoader} from '../scene-glb-loader.mjs';
 import {createSceneWorkerClient,installSceneWorkerHost} from '../scene-worker-handoff.mjs';
+// Match the ordinary page's actual namespace and addon resolution.
+registerHooks({resolve(specifier,context,next){
+ const local={'three':'../lib/three.webgpu.js','three/webgpu':'../lib/three.webgpu.js','three/tsl':'../lib/three.tsl.js'}[specifier];
+ return local?{url:new URL(local,import.meta.url).href,shortCircuit:true}:next(specifier,context);
+}});
+const {createSceneGltfLoaderClass}=await import('../scene-gltf-loader.mjs');
+const renderer={isWebGPURenderer:true,hasFeature:()=>false};
+const GLTFLoader=createSceneGltfLoaderClass({THREE,readRenderer:()=>renderer});
 // The production parser expects the browser/worker alias even for embedded GLB geometry.
 const previousSelf=globalThis.self;
 test.before(()=>{globalThis.self=globalThis;});
@@ -23,17 +32,17 @@ const document=(id='asset')=>({version:8,objects:[{id,type:'glb',source,label:id
 function fixture({read=null,prepare=null,after=null,support=null,documentSupport=null}={}){
  assert.equal(typeof authored.createAuthoredSceneRuntime,'function','actual authored registry composition is required');
  assert.equal(typeof application.createSceneDocumentApplication,'function','actual document command must apply assets, not just initialize a shell');
- const scene=new THREE.Scene(),disposed=[],reads=[],events=[];
- const restore=(entry,record)=>{
-  entry.object.position.fromArray(record.transform.position);entry.object.rotation.set(...record.transform.rotation);entry.object.scale.fromArray(record.transform.scale);
-  entry.object.traverse(node=>{for(const mat of [].concat(node.material??[]))Object.assign(mat,record.materials??{});});
- };
- const runtime=authored.createAuthoredSceneRuntime({scene,readers:{transform:root=>({position:root.position.toArray(),rotation:[root.rotation.x,root.rotation.y,root.rotation.z],scale:root.scale.toArray()}),materials:root=>{let value=null;root.traverse(n=>{if(n.material)value={opacity:n.material.opacity,side:n.material.side,transparent:n.material.transparent};});return value;}},
+ const scene=new THREE.Scene(),disposed=[],reads=[],events=[],materialVersions=new WeakMap();
+ const restore=(entry,record)=>authored.restoreAuthoredSceneRecord(entry,record,{transform:applySceneObjectTransformState,materials:applyMaterialStateToObject});
+ const runtime=authored.createAuthoredSceneRuntime({scene,readers:{transform:sceneObjectTransformState,materials:getMaterialStateForObject},
   roots:{restore,dispose:root=>{disposed.push(root);root.traverse(n=>{n.geometry?.dispose();for(const m of [].concat(n.material??[]))m.dispose();});}},
   assertRecordSupported:support??(record=>{if(record.type!=='glb')throw Error('No mounted source for '+record.type);}),
   replacement:{context:{retire:async()=>events.push('retire')}},
   createLoaders:({workingScene,registerSceneObject})=>{
-   const show=createSceneGlbLoader({GLTFLoader,workingScene,readScene:()=>scene,registerSceneObject,
+   const show=createSceneGlbLoader({GLTFLoader,workingScene,readScene:()=>scene,registerSceneObject:(root,...args)=>{
+    root.traverse(n=>{for(const material of [].concat(n.material??[]))materialVersions.set(material,material.version);});
+    return registerSceneObject(root,...args);
+   },
     readAssetBytes:async url=>{reads.push(url);await read?.(url);return bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength);},
     shouldClearSceneForImport:()=>false,resolveAssetArrivalMode:()=>null,
     disposeObjectTree:root=>disposed.push(root),applyAssetArrival:()=>null});
@@ -46,7 +55,7 @@ function fixture({read=null,prepare=null,after=null,support=null,documentSupport
   afterReplace:async(...args)=>{events.push('after');await after?.(...args);},
   documentServices:{filename:'previous.kaminos.json',readAddress:()=>({origin:'http://fixture'}),post:async()=>{throw Error('Unexpected save');},restoreUrl:()=>'/scene'},
  });
- return {runtime,app,scene,disposed,reads,events};
+ return {runtime,app,scene,disposed,reads,events,materialVersions};
 }
 const context=signal=>({signal:signal??new AbortController().signal,assertCurrent(){this.signal.throwIfAborted();}});
 const apply=(h,data,ctx=context(),sceneFile='saved.kaminos.json')=>h.app.commands['scene.applyDocument']({document:data,sceneFile},ctx);
@@ -62,7 +71,7 @@ test('real facade applies saved GLB through actual parser, registry and lifecycl
  const entry=h.runtime.workingScene.find('asset');assert.ok(entry.object.isObject3D);assert.equal(entry.object.parent,h.scene);
  assert.deepEqual(entry.object.position.toArray(),pose.position);assert.equal(entry.object.rotation.y,.4);
  const meshes=[];entry.object.traverse(n=>{if(n.isMesh)meshes.push(n);});assert.ok(meshes.length>0);
- for(const mesh of meshes){assert.equal(mesh.material.opacity,.6);assert.equal(mesh.material.side,THREE.DoubleSide);}
+ for(const mesh of meshes){assert.equal(mesh.material.opacity,.6);assert.equal(mesh.material.side,THREE.DoubleSide);assert.ok(mesh.material.version>h.materialVersions.get(mesh.material),'restored material controls must invalidate the actual render material');}
  assert.deepEqual(h.runtime.workingScene.selection.ids,['asset','@group:assembly']);assert.equal(h.runtime.workingScene.activeGroupId,'assembly');
  const state=(await client.request('scene.read').completion).output;
  assert.deepEqual(state.objects.map(r=>r.id),['asset']);assert.equal(state.objects[0].object,undefined);assert.equal(state.objects[0].source,source);

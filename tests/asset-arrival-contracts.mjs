@@ -17,6 +17,8 @@ import {
 } from '../asset-arrival.mjs';
 import { orbitCamera } from '../scene-navigation.mjs';
 import { checkedSceneLightRecord } from '../scene-spot-light.mjs';
+import {restoreAuthoredSceneRecord} from '../scene-authored-runtime.mjs';
+import {applySceneObjectTransformState,applyMaterialStateToObject} from '../scene-object-state.mjs';
 
 const close = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < 1e-9, `${message}: ${actual} != ${expected}`);
 
@@ -527,11 +529,21 @@ test('geometry-first arrival promotes camera placement and 500-face low-LOD prox
   // 3. restoreLoadedSceneRecord swaps out each object's low-LOD stand-in as its hero mesh mounts
   const restoreRecStart = html.indexOf('function restoreLoadedSceneRecord(');
   const restoreRecEnd = html.indexOf('async function loadSceneObjects(', restoreRecStart);
-  assert.match(
-    html.slice(restoreRecStart, restoreRecEnd),
-    /removeSceneLowLodStandIn\(record\.id\)/,
-    'restoreLoadedSceneRecord must remove the object low-LOD stand-in once the hero mesh transform is applied',
-  );
+  assert.ok(restoreRecStart>=0&&restoreRecEnd>restoreRecStart,'production restoration consumer exists');
+  const hero=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshStandardMaterial());
+  const record={id:'hero',type:'glb',transform:{position:[2,3,4],rotation:[0,.5,0],scale:[2,1,1]},materials:{opacity:.6,transparent:true},groupId:'saved-group'};
+  const entry={id:record.id,type:record.type,object:hero},calls=[];
+  const context=vm.createContext({restoreAuthoredSceneRecord,applySceneObjectTransformState,applyMaterialStateToObject,
+    removeSceneLowLodStandIn(id){
+      assert.equal(id,record.id);assert.deepEqual(hero.position.toArray(),record.transform.position);
+      assert.equal(hero.rotation.y,.5);assert.deepEqual(hero.scale.toArray(),record.transform.scale);
+      assert.equal(hero.material.opacity,.6);assert.ok(hero.material.version>0);
+      calls.push('remove');
+    },setSceneObjectGroupId(value,id){assert.equal(value,entry);assert.equal(id,record.groupId);calls.push('group');}});
+  vm.runInContext(html.slice(restoreRecStart,restoreRecEnd),context);
+  context.restoreLoadedSceneRecord(entry,record);
+  assert.deepEqual(calls,['remove','group'],'hero state must be restored before its stand-in is removed and group applied');
+  hero.geometry.dispose();hero.material.dispose();
 
   // 4. showGLB mounts a single-asset low-LOD stand-in with early camera framing while the hero GLB downloads
   const showGlbStart = html.indexOf('async function showGLB(');
