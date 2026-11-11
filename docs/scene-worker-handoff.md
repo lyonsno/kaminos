@@ -340,3 +340,16 @@ Node Worker. Recording queue/frame services establish boundary ordering and
 thread placement; they do not execute model kernels or establish full native
 coupled-scene editing/presentation. The common factory owns registration and
 consumer exercise of actual domain edits.
+
+## Fire irradiance receiving resources
+
+`createSceneFireLightReceiver` in `scene-fire-light-receiver.mjs` is the page's
+actual receiver graph, parameterized by its local Three namespace, shared GPU,
+renderer, scene, camera, GI proxies, parsed route values and existing shadow
+factories. `readLightField()` reads the current local volume producer on every
+update, including after producer replacement. No GPU object crosses a message
+port. The receiver retains device/field identity checks, world reconstruction,
+rectangular atlas sampling, near/far illumination, shadows, probes and controls.
+Its owner calls `update()`, `renderShadows()` and `dispose()` at the same points
+in scene composition. Disposal releases the receiver's two black placeholders
+and shadow owners while borrowed producer textures remain producer-owned.

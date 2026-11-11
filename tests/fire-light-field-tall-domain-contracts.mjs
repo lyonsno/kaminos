@@ -2,11 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
-const page = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const receiver = readFileSync(new URL('../scene-fire-light-receiver.mjs', import.meta.url), 'utf8');
 const producer = core.slice(core.indexOf('// Fire irradiance light field:'), core.indexOf('fn csTransportPredict'));
 const resources = core.slice(core.indexOf('function ensureFireIrradianceResources'), core.indexOf('function encodeFireIrradianceLightField'));
 const field = core.slice(core.indexOf('function fireIrradianceLightField()'));
-const receiver = page.slice(page.indexOf('function createFireLightFieldReceiverPass'), page.indexOf('function createFireLightFieldReceiverPass') + 16000);
 
 assert.match(producer, /IRRADIANCE_GRID_Y/);
 assert.match(producer, /gid\.y\s*>=\s*IRRADIANCE_GRID_Y/);

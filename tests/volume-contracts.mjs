@@ -9,6 +9,7 @@ import {createSceneRenderer} from '../scene-render-bootstrap.mjs';
 
 const root = new URL('..', import.meta.url).pathname;
 const index = readFileSync(join(root, 'index.html'), 'utf8');
+const receiver = readFileSync(join(root, 'scene-fire-light-receiver.mjs'), 'utf8');
 const volumeWitness = readFileSync(join(root, 'volume-witness.mjs'), 'utf8');
 const serve = readFileSync(join(root, 'serve.py'), 'utf8');
 const reactionFrontAtlasWitnessPath = join(root, 'volume-reaction-front-atlas-witness.mjs');
@@ -1972,14 +1973,14 @@ assert.match(core, /'irradiance-resolve'/, 'GPU profile names the resolve stage'
 
 // Receiver evaluation in the Three/TSL post-forward composition.
 assert.match(index, /volume_light_field/, 'URL route gates the fire light field receiver pass');
-assert.match(index, /world-position-fire-light-field-receiver-pass-v0/, 'receiver pass carries stable world-position identity');
+assert.match(receiver, /world-position-fire-light-field-receiver-pass-v0/, 'receiver pass carries stable world-position identity');
 assert.match(index, /createFireLightFieldReceiverPass/, 'receiver pass has a dedicated constructor in the scene composition');
-assert.match(index, /getViewPosition/, 'receiver pass reconstructs receiver position from scene depth');
-assert.match(index, /lightField\.device === sharedGpu\.device/, 'receiver pass rejects atlas textures from a mismatched GPUDevice');
+assert.match(receiver, /getViewPosition/, 'receiver pass reconstructs receiver position from scene depth');
+assert.match(receiver, /lightField\.device === sharedGpu\.device/, 'receiver pass rejects atlas textures from a mismatched GPUDevice');
 assert.match(index, /kaminosFireLightFieldDebugState/, 'fire light field exposes a window debug state surface');
-assert.match(index, /fireLightFieldStrength/, 'receiver pass has an explicit strength/mute uniform rather than an unconditional contribution');
-assert.match(index, /sceneProjectionMatrixInverse/, 'receiver pass binds the scene camera projection inverse explicitly; the output-pass TSL camera nodes resolve to the fullscreen quad camera and must not be used for unprojection');
-assert.match(index, /sceneCameraWorldMatrix\.value\.copy\(camera\.matrixWorld\)/, 'receiver pass refreshes scene-camera matrices every frame');
+assert.match(receiver, /fireLightFieldStrength/, 'receiver pass has an explicit strength/mute uniform rather than an unconditional contribution');
+assert.match(receiver, /sceneProjectionMatrixInverse/, 'receiver pass binds the scene camera projection inverse explicitly; the output-pass TSL camera nodes resolve to the fullscreen quad camera and must not be used for unprojection');
+assert.match(receiver, /sceneCameraWorldMatrix\.value\.copy\(camera\.matrixWorld\)/, 'receiver pass refreshes scene-camera matrices every frame');
 assert.match(core, /uniforms\[316\] = effectiveSelectiveHeadRaymarchFireSuppression\(\)/, 'the smoke-only partition uniform passes through the effective suppression gate, not the raw composition request');
 assert.match(core, /boundarySplatFallbackRaymarchFireSuppression\(/, 'an unavailable splat layer falls back to raymarch fire authority instead of stripping fire from the frame');
 
@@ -2004,13 +2005,13 @@ assert.match(core, /leanStockRenderPipelineConstants = \{ \.\.\.renderPipelineCo
 // world-space scene normal. The earlier camera-facing stand-in lit surfaces
 // by screen orientation, producing proximity glow with no above/below
 // response to the fire's actual position.
-assert.match(index, /latticeGradient = vec3\(/, 'receiver recovers incident direction from the lattice luminance gradient');
-assert.match(index, /worldNormalNode = sceneCameraWorldMatrix\.mul\(vec4\(normalSampleNode, 0\.0\)\)/, 'receiver rotates the prepass view-space normal into world space for shading');
-assert.match(index, /normalNode\.dot\(lightDirection\)/, 'receiver shades with N.L against the recovered fire direction');
-assert.match(index, /fireLightAt\(worldPositionNode, worldNormalNode\)/, 'receiver pixels shade through the shared fire light function with world position and world normal');
-assert.match(index, /fireShadow\.visibilityAt\(point, normal\)/, 'world-point light probes use the same fire shadow cube as receiver pixels');
-assert.match(index, /fireLightAt\(point, normal\)\.signal/, 'world-point light probes use the same fire light function as receiver pixels');
-assert.doesNotMatch(index, /facingResponse = normalSampleNode\.z\.abs\(\)/, 'the camera-facing shading stand-in must not return');
+assert.match(receiver, /latticeGradient = vec3\(/, 'receiver recovers incident direction from the lattice luminance gradient');
+assert.match(receiver, /worldNormalNode = sceneCameraWorldMatrix\.mul\(vec4\(normalSampleNode, 0\.0\)\)/, 'receiver rotates the prepass view-space normal into world space for shading');
+assert.match(receiver, /normalNode\.dot\(lightDirection\)/, 'receiver shades with N.L against the recovered fire direction');
+assert.match(receiver, /fireLightAt\(worldPositionNode, worldNormalNode\)/, 'receiver pixels shade through the shared fire light function with world position and world normal');
+assert.match(receiver, /fireShadow\.visibilityAt\(point, normal\)/, 'world-point light probes use the same fire shadow cube as receiver pixels');
+assert.match(receiver, /fireLightAt\(point, normal\)\.signal/, 'world-point light probes use the same fire light function as receiver pixels');
+assert.doesNotMatch(receiver, /facingResponse = normalSampleNode\.z\.abs\(\)/, 'the camera-facing shading stand-in must not return');
 
 // Far-field radiance: the diffusion lattice carries light only ~4 cells from
 // the flame, so side geometry beyond the shell went dark (the flashlight-up
@@ -2019,15 +2020,15 @@ assert.doesNotMatch(index, /facingResponse = normalSampleNode\.z\.abs\(\)/, 'the
 assert.match(core, /fn csIrradianceAnalytic/, 'producer reduces the lattice to far-field meta each frame');
 assert.match(core, /fire-irradiance-far-field-meta-v0/, 'far-field meta carries a stable identity');
 assert.match(core, /metaTexture: irradianceMetaTexture/, 'light field export hands consumers the far-field meta texture');
-assert.match(index, /farVector = fireCenterWorld\.sub\(positionNode\)/, 'receiver builds the radial vector from the reduced fire center');
-assert.match(index, /farDistanceSq\.mul\(2\.5\)\.add\(0\.25\)/, 'far term falls off with squared distance, softened at the flame core');
-assert.match(index, /nearSignal\.add\(farSignal\)/, 'near-field and far-field compose additively before masking');
+assert.match(receiver, /farVector = fireCenterWorld\.sub\(positionNode\)/, 'receiver builds the radial vector from the reduced fire center');
+assert.match(receiver, /farDistanceSq\.mul\(2\.5\)\.add\(0\.25\)/, 'far term falls off with squared distance, softened at the flame core');
+assert.match(receiver, /nearSignal\.add\(farSignal\)/, 'near-field and far-field compose additively before masking');
 
 // Operator light controls live in the Assets tab: a test-geometry toggle and
 // a photographic stops gain (2^stops) on the receiver strength.
 assert.match(index, /id="fire-light-test-scene-toggle"/, 'Assets tab exposes the fire-light test geometry toggle');
 assert.match(index, /id="fire-light-gain-stops"/, 'Assets tab exposes the light gain slider in stops');
-assert.match(index, /baseStrength \* Math\.pow\(2, passState\.gainStops \|\| 0\)/, 'receiver strength applies the stops gain as a power of two');
+assert.match(receiver, /baseStrength \* Math\.pow\(2, passState\.gainStops \|\| 0\)/, 'receiver strength applies the stops gain as a power of two');
 
 // Light-field route params ride the URL hash on basin/settings-preset routes,
 // mirroring the composition-module seam: those routes reject unexpected

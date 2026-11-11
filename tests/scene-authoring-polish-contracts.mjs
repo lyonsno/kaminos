@@ -7,6 +7,7 @@ import { buildSceneDocument, planSceneRestore } from '../scene-persistence-core.
 
 const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const lightingSource = readFileSync(new URL('../scene-lighting-graph.mjs', import.meta.url), 'utf8');
+const receiverSource = readFileSync(new URL('../scene-fire-light-receiver.mjs', import.meta.url), 'utf8');
 const between = (start, end, input=source) => {
   const a = input.indexOf(start), b = input.indexOf(end, a);
   assert.ok(a >= 0 && b > a, `source boundary: ${start}`);
@@ -88,9 +89,9 @@ test('unavailable light field releases both external texture bindings', () => {
   const context = vm.createContext({ passState: { adoptionKey: 'old', farFieldIdentity: 'old' },
     atlasTextureNode: { value: dead }, metaTextureNode: { value: dead },
     atlasExternalTexture: { placeholder: 'atlas' }, metaExternalTexture: { placeholder: 'meta' },
-    fireLightFieldStrength: { value: 1 },
+    fireLightFieldStrength: { value: 1 },fireShadowCasters:{setEnabled(){}},
   });
-  vm.runInContext(`${between('  const bindBlackAtlas =', '\n  return {\n    outputNode,')}\nbindBlackAtlas('unavailable');`, context);
+  vm.runInContext(`${between('  const bindBlackAtlas =', '\n  // World-point probes:', receiverSource)}\nbindBlackAtlas('unavailable');`, context);
   assert.equal(context.atlasTextureNode.value, context.atlasExternalTexture);
   assert.equal(context.metaTextureNode.value, context.metaExternalTexture, 'destroyed metadata must not survive in the render binding');
   assert.equal(context.fireLightFieldStrength.value, 0);

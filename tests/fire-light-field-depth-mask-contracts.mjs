@@ -3,7 +3,7 @@ import {readFileSync} from 'node:fs';
 
 // Exercise the actual receiver-mask expression with scalar TSL step/sub
 // semantics. Depths below are native WebGPU zero-to-one, not linear distance.
-const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+const source=readFileSync(new URL('../scene-fire-light-receiver.mjs',import.meta.url),'utf8');
 const expression=source.match(/const backgroundMask = (.*);/)[1];
 const scalar=value=>({valueOf:()=>value,sub:other=>scalar(value-Number(other))});
 const mask=depth=>Number(new Function('float','step','depthSampleNode',`return ${expression}`)(scalar,(edge,x)=>scalar(Number(x)>=Number(edge)?1:0),scalar(depth)));
