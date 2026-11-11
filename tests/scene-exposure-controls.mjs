@@ -1,6 +1,7 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import * as camera from '../scene-emissive-camera.mjs';
+import {installPageSceneDraw} from './helpers/page-scene-draw.mjs';
 assert.equal(typeof camera.bindSceneExposureControls,'function','scene exposure must edit the canonical flame EV while matched');
 class Control extends EventTarget {
   constructor(value){super();this.value=String(value);this.min='.2';this.max='4';this.step='.1';this.checked=false;this.ownerDocument={defaultView:{Event}};}
@@ -40,13 +41,10 @@ exposure.value='1.75';exposure.dispatchEvent(new Event('input'));exposure.dispat
 console.log('PASS exposure coupling, canonical flame events, independent restoration and history state');
 
 // The adjacent inactive explanation follows scene -> GI inspection -> scene.
-const {readFileSync}=await import('node:fs');const {runInNewContext}=await import('node:vm');
-const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const start=html.indexOf('    if(sceneEmissiveCamera && (sceneGISettings.mode');
-const end=html.indexOf('    syncWaterProxy();',start);assert(start>=0&&end>start);
 const status={hidden:true,textContent:''},settings={mode:'combined',view:'scene'};
 const scope={waterFeature:{host:null},sceneEmissiveCamera:{update:()=>({effective:false,reason:'inactive-material'})},sceneGISettings:settings,
- document:{getElementById:id=>id==='rendering-match-flame-camera'?{checked:true}:status},window:{},
- renderPipeline:{},outlinedSceneOutput:{},outlinedCameraOutput:{},applySceneEmissiveCamera(){}};
-runInNewContext('let sceneCameraStatusText="";function draw(){'+html.slice(start,end)+'}draw();sceneGISettings.view="ao";draw();sceneGISettings.view="scene";draw();',scope);
+ document:{getElementById:id=>id==='volume-tone-mapping'?{value:'agx'}:id==='rendering-match-flame-camera'?{checked:true}:status},window:{},
+ renderPipeline:{render(){}},outlinedSceneOutput:{},outlinedCameraOutput:{},applySceneEmissiveCamera(){}};
+const draw=installPageSceneDraw(scope);
+draw();settings.view='ao';draw();settings.view='scene';draw();
 assert.match(status.textContent,/inactive-material/);assert.equal(status.hidden,false);

@@ -1,15 +1,8 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
-import {runInNewContext} from 'node:vm';
+import {installPageSceneDraw} from './helpers/page-scene-draw.mjs';
 import {applySceneEmissiveCamera} from '../scene-emissive-camera.mjs';
 import {withViewportVisibility} from '../scene-visibility.mjs';
-const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const frame=source.indexOf('  function renderSceneFrame()');
-const start=source.indexOf('    fireLightFieldPass?.renderShadows();',frame);
-const end=source.indexOf('    // Copy the surface records',start);
-assert.ok(start>frame&&end>start);
-const production=source.slice(start,end);
 for(const matching of [true,false])for(const mountTransform of [true,false])for(const hasCameraSetter of [true,false]) {
   const raw={},matched={},draws=[];
   const pipeline={outputNode:matched,outputColorTransform:mountTransform,
@@ -17,17 +10,17 @@ for(const matching of [true,false])for(const mountTransform of [true,false])for(
   const host={setSceneCamera(){},render(){throw Error('GPU frame failed');},
     dispose(){pipeline.outputColorTransform=mountTransform;}};
   if(!hasCameraSetter)delete host.setSceneCamera;
-  const fields={'rendering-match-flame-camera':{checked:matching},'rendering-camera-status':{textContent:''}};
-  runInNewContext(production,{
+  const fields={'volume-tone-mapping':{value:'agx'},'rendering-match-flame-camera':{checked:matching},'rendering-camera-status':{textContent:''}};
+  installPageSceneDraw({
     sceneAssetPreparationActive:false,
     sceneBeautyLods:{setPreparation(){},withFrame:(_camera,_options,draw)=>draw()},camera:{},renderer:{domElement:{height:640}},polyEdit:null,sceneComponents:null,outputCaptureExtent:null,recordingFrameSink:null,fireLightFieldPass:null,sceneExposureControls:null,authoredWaterControls:null,sharedWorkbench:null,sceneGISettings:{mode:'gtao',view:'scene'},
     document:{getElementById:id=>fields[id]},window:{__kaminosVolumePrototype:{emissiveCameraState:()=>({})}},
     sceneEmissiveCamera:{update:()=>({effective:matching,toneMapping:'agx',whiteBalanceKelvin:6500,exposureEV:0})},
     applySceneEmissiveCamera,renderPipeline:pipeline,outlinedSceneOutput:raw,outlinedCameraOutput:matched,
-    waterFeature:{host,render:options=>host.render(options),fail(error){host.dispose();this.host=null;this.failure=error.message;}},ordinarySceneTransportFrame:null,localLiquidFailure:null,sceneCameraStatusText:'',console:{error(){}},
+    waterFeature:{host,render:options=>host.render(options),fail(error){host.dispose();this.host=null;this.failure=error.message;}},ordinarySceneTransportFrame:null,localLiquidFailure:null,console:{error(){}},
     syncWaterProxy(){},syncFireProxy(){},renderWithViewportShading:draw=>draw(),refreshLocalLiquidPerformance(){},setInfo(){},
     withViewportVisibility,viewportVisibilityObjects:()=>[],isSceneItemVisible:()=>true,
-  });
+  })();
   assert.equal(draws.length,1);
   assert.equal(draws[0].node,matching?matched:raw,'the first failure fallback must restore the selected camera graph');
   assert.equal(draws[0].transform,!matching,'the first fallback applies exactly the selected display transform');
