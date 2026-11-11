@@ -62,7 +62,7 @@ try {
   await guard(page.waitForFunction(()=>window.__kaminosVolumePrototype?.debugState().active||window.__kaminosVolumePrototype?.debugState().error));
   assert.equal(await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().error),null);
   // Arm the internal exact-step hold before asynchronous scene settling can pass it.
-  await page.evaluate(()=>{window.opticalTraceHold=window.__kaminosVolumePrototype.pauseSelectiveHeadLiveAtSimStep(151);});
+  await page.evaluate(()=>{window.opticalTraceHold=window.__kaminosVolumePrototype.pauseCaptureAtSimStep(151);});
   await guard(page.waitForFunction(()=>window.kaminosSceneAuthoring?.read().objects.length>=3||/load failed/i.test(document.getElementById('info-bar')?.textContent||'')));
   report.loadedObjects=await page.evaluate(()=>window.kaminosSceneAuthoring.read().objects.map(({id,type,source})=>({id,type,source})));
   const savedObjects=getSceneObjectRecords(scene);

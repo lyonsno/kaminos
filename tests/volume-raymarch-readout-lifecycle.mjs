@@ -35,7 +35,7 @@ for(const route of ['residual','splats','proxy'])test('leaving ordinary beauty f
     ensureFrameTexture:noop,ensureBrowserResidualFeatureTexture:noop,frameTexture:{createView:()=>({})},browserResidualFeatureTexture:{createView:()=>({})},
     encodeBrowserResidualSourcePass:noop,encodeBrowserResidualPass:()=>true,sceneTransportConsumer:null,canvasPresentationSuppressed:route==='proxy',
     appearanceDecompositionActive:()=>false,encodeBoundarySplatTelemetry:noop,boundarySplatTelemetryCopyPending:false,pressureResidualCopyPending:false,
-    selectiveHeadLiveExactPause:null,recordVolumeFrameTiming:noop,requestAnimationFrame:()=>1,render:noop,cancelAnimationFrame:noop,
+    exactCapturePause:null,recordVolumeFrameTiming:noop,requestAnimationFrame:()=>1,render:noop,cancelAnimationFrame:noop,
     canvas:{classList:{remove:noop}},emitStatus:noop,
   });
   vm.runInContext(invalidate+'\n'+prepare+'\n'+frame+'\nrenderOrdinaryFrame(1);',context);
@@ -72,7 +72,7 @@ test('held comparison never advances residual touch damping or simulation',async
     integralReconstruction:{describe:()=>({evaluation:{active:true}}),encodeEvaluation:()=>{presented++;return {frames:20};}},integralCameraValues:new Float32Array(20),controlsSnapshot:{},
     endIntegralEvaluation:()=>{ended=true;},updateUniforms:()=>{stepped=true;throw Error('ordinary update must not run');},
     device:{createCommandEncoder:()=>({finish:noop}),queue:{submit:noop}},context:{getCurrentTexture:()=>({createView:noop})},format:'rgba8unorm',
-    selectiveHeadLiveExactPause:null,canvas:{classList:{remove:noop}},cancelAnimationFrame:noop,emitStatus:noop,requestAnimationFrame:()=>1,render:noop,
+    exactCapturePause:null,canvas:{classList:{remove:noop}},cancelAnimationFrame:noop,emitStatus:noop,requestAnimationFrame:()=>1,render:noop,
   });
   try {
     vm.runInContext(frame+'\nrenderOrdinaryFrame(1);renderOrdinaryFrame(2);',context);

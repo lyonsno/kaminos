@@ -34,3 +34,26 @@ test('grid rebuild reuses selected pipelines and retains independent specializat
  f.context.transparentCanvas=false;await f.initialize();const opaque=f.submit(f.context.pipeline);assert.notEqual(opaque,render);assert.equal(opaque.descriptor.fragment.constants.TRANSPARENT_CANVAS,0);assert.equal(f.submit(f.context.computePipeline),first);
  f.context.transparentCanvas=true;await f.initialize();assert.equal(f.submit(f.context.pipeline),render);
 });
+
+test('unused single-scattering field allocates bindable storage without compiling; first encode compiles once per device and module',async()=>{
+ const {createEmissiveLightField}=await import('../volume-emissive-transport.mjs');
+ globalThis.GPUBufferUsage ??= {STORAGE:1,COPY_SRC:2,COPY_DST:4};
+ const created=[],buffer={destroy(){}},texture={createView:()=>({})};
+ const device={createBuffer:()=>({...buffer}),createComputePipeline:d=>{created.push(d);return {getBindGroupLayout:i=>({entry:d.compute.entryPoint,i})};},createBindGroup:d=>d};
+ const module={},uniform={},fluids=[buffer,buffer],fronts=[buffer,buffer],textures=[texture,texture];
+ const make=()=>createEmissiveLightField(device,module,uniform,fluids,fronts,()=>textures);
+ const pass={setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};const encoder={beginComputePass:()=>pass};
+ const field=make();assert.ok(field.incident);assert.equal(created.length,0,'unused field compiled scattering pipelines');
+ field.encode(encoder,0);assert.equal(created.length,3);field.destroy();
+ const replacement=make();replacement.encode(encoder,1);assert.equal(created.length,3,'field replacement recompiled scattering pipelines');replacement.destroy();
+});
+
+test('derived optical renderer survives grid edits and distinguishes canvas transparency',async()=>{
+ const {createDeferredPipelines}=await import('../deferred-pipelines.mjs');
+ const a=source.indexOf('    const opticalKey ='),b=source.indexOf('    if (multisampled)',a);assert.ok(a>=0&&b>a);
+ const device={createPipelineLayout:d=>d,createRenderPipeline:d=>({descriptor:d})};
+ const context={optical:{mode:'experimental'},rayStepTelemetry:{active:false},reconstruct:false,splitActive:false,particleSourceOnly:false,multisampled:false,scenePointBindGroup:null,distributedGroup:null,targetPipeline:{},readbackPipeline:{},gridSize:8,gridHeight:12,opticalSteppingPipelines:new Map(),gpuPipelines:createDeferredPipelines(device),device,bindGroupLayout:{},productRaymarchDepthBindGroupLayout:{},nativeShader:{},entryPoint:'fs',opticalConstants:{},colorTargets:[{format:'rgba8unorm'}],transparentCanvas:true,drawPipeline:null};
+ const select=()=>new Function(...Object.keys(context),source.slice(a,b)+';return drawPipeline;')(...Object.values(context));
+ const first=select();context.gridSize=16;context.gridHeight=24;assert.equal(select(),first,'grid-only edit recompiled the selected derived renderer');
+ context.transparentCanvas=false;assert.notEqual(select(),first,'transparency edit reused the wrong specialization');
+});

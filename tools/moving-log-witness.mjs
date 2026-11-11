@@ -29,7 +29,7 @@ try{
   gi:{steps:window.kaminosSceneGIDebugState().steps,slices:window.kaminosSceneGIDebugState().slices}}));
  const read=()=>page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
  const invoke=async(name,input)=>{report.inputs.push({name,input});return page.evaluate(({name,input})=>window.kaminosWorkbenchExperiments.invoke(name,input),{name,input});};
- const advance=async target=>{report.inputs.push({advanceTo:target});const receipt=await page.evaluate(target=>window.__kaminosVolumePrototype.pauseSelectiveHeadLiveAtSimStep(target),target);assert.equal(receipt.ok,true,JSON.stringify(receipt));assert.equal(receipt.effectiveSimStepCount,target);await invoke('pause');return receipt;};
+ const advance=async target=>{report.inputs.push({advanceTo:target});const receipt=await page.evaluate(target=>window.__kaminosVolumePrototype.pauseCaptureAtSimStep(target),target);assert.equal(receipt.ok,true,JSON.stringify(receipt));assert.equal(receipt.effectiveSimStepCount,target);await invoke('pause');return receipt;};
  async function sample(name){
   const raw=await page.evaluate(async()=>({state:await window.kaminosWorkbenchExperiments.read(),gas:await window.__kaminosVolumePrototype.sampleReactantFields(),runtime:window.__kaminosVolumePrototype.debugState(),gi:window.kaminosSceneGIDebugState()}));
   await fs.writeFile(path.join(out,name+'-raw.json'),JSON.stringify(raw));assert.equal(raw.gas.ok,true);assert.match(raw.runtime.backend,/WebGPU/);assert.equal(raw.runtime.simGrid,32);assert.equal(raw.runtime.gridHeight.heightCells,32);assert.equal(raw.gi.steps,4);assert.equal(raw.gi.slices,3);

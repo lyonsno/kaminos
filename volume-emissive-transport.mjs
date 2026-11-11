@@ -68,14 +68,15 @@ export function emissiveCoefficientStats(values) {
   return { cells, finiteCells, nonzeroCells, extinctionMax, extinctionMean, emissionMax, extinctionStdDev };
 }
 
+const emissiveLightPipelines = new WeakMap();
+
 export function createEmissiveLightField(device, module, uniformBuffer, fluidBuffers, frontBuffers, getReactantTextures) {
   const cells = EMISSIVE_LIGHT_GRID ** 3;
   const allocate = (label, count) => device.createBuffer({ label, size: count*16, usage: GPUBufferUsage.STORAGE });
   const coefficients = device.createBuffer({ label: 'emissive material coefficients', size: cells*16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
   const directions = allocate('six-direction incident radiance', cells*6);
   const incident = allocate('single-scattering mean incident radiance', cells);
-  const pipeline = name => device.createComputePipeline({ label: name, layout: 'auto', compute: { module, entryPoint: name } });
-  const seed = pipeline('seedEmissiveLight'), sweep = pipeline('sweepEmissiveLight'), resolve = pipeline('resolveEmissiveLight');
+  let seed, sweep, resolve;
   const group = (pipe, index, buffers) => device.createBindGroup({
     layout: pipe.getBindGroupLayout(index),
     entries: buffers.map(([binding, buffer]) => ({ binding, resource: { buffer } })),
@@ -97,15 +98,29 @@ export function createEmissiveLightField(device, module, uniformBuffer, fluidBuf
       ],
     }));
   };
-  let seedInputs = buildSeedInputs();
-  const seedOutput = group(seed,3,[[1,coefficients]]);
-  const sweepInput = group(sweep,0,[[0,uniformBuffer],[13,coefficients]]);
-  const sweepOutput = group(sweep,3,[[2,directions]]);
-  const resolveInput = group(resolve,0,[[14,directions]]);
-  const resolveOutput = group(resolve,3,[[3,incident]]);
+  let seedInputs, seedOutput, sweepInput, sweepOutput, resolveInput, resolveOutput;
+  function initialize() {
+    if (seedInputs) return;
+    let byModule = emissiveLightPipelines.get(device);
+    if (!byModule) { byModule = new WeakMap(); emissiveLightPipelines.set(device, byModule); }
+    let cached = byModule.get(module);
+    if (!cached) {
+      const pipeline = name => device.createComputePipeline({label:name,layout:'auto',compute:{module,entryPoint:name}});
+      cached = {seed:pipeline('seedEmissiveLight'),sweep:pipeline('sweepEmissiveLight'),resolve:pipeline('resolveEmissiveLight')};
+      byModule.set(module, cached);
+    }
+    ({seed,sweep,resolve} = cached);
+    seedOutput = group(seed,3,[[1,coefficients]]);
+    sweepInput = group(sweep,0,[[0,uniformBuffer],[13,coefficients]]);
+    sweepOutput = group(sweep,3,[[2,directions]]);
+    resolveInput = group(resolve,0,[[14,directions]]);
+    resolveOutput = group(resolve,3,[[3,incident]]);
+    seedInputs = buildSeedInputs();
+  }
   return {
     incident,
     encode(encoder, sourceIndex, timestampWrites) {
+      initialize();
       if (getReactantTextures() !== boundTextures) seedInputs = buildSeedInputs();
       const pass = encoder.beginComputePass({ label: 'same-state emissive single-scattering field', ...(timestampWrites ? { timestampWrites } : {}) });
       pass.setPipeline(seed); pass.setBindGroup(0,seedInputs[sourceIndex]); pass.setBindGroup(3,seedOutput);

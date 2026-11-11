@@ -2926,16 +2926,16 @@ import {createSceneMembershipBatch} from './scene-membership-batch.mjs';
 import {createSceneLifecycle} from './scene-lifecycle.mjs';
 import { createSceneObjectPublicationGuard, publishSceneObjectIfCurrent } from './scene-object-publication.mjs';
 import {createReconstructionControlLock,syncReconstructionFilterAvailability} from './volume-reconstruction-pause.mjs';
-import { requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig } from './volume-core.js';
+import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig, emitterCompilerControls } from './volume-core.js';
 import { pressureResolutionPlan } from './volume-pressure-resolution.mjs';
 import { fineGridPlan } from './volume-fine-grid.mjs';
 import { resolveGridHeight } from './volume-grid-shape.mjs';
-
+import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
 import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE,
   defaultFlameEmitterPose, normalizeFlameEmitterPose, createFlameEmitterHandle,
   updateFlameEmitterSupportOutline, flameDomainTranslationForAcceptedPose,
   flamePoseInDomain, flamePoseToDomain, normalizeFlameDomainTranslation, normalizeFlameDomainScale,
-  immersedControlsForFlamePose, immersedRadiusBounds, immersedRadiusClamp,effectiveFlameDomainControls } from './scene-flame-emitter.mjs';
+  flamePoseFromImmersedControls, immersedControlsForFlamePose, immersedRadiusBounds, immersedRadiusClamp,effectiveFlameDomainControls } from './scene-flame-emitter.mjs';
 let flameEmitterPose = defaultFlameEmitterPose(), applyFlameEmitterPose = null;
 let flameEmitterInjectionSuspended = false;
 let authoredFlamePresent = true;
@@ -2969,8 +2969,12 @@ let flameDomainScale = 1, flameDomainFollowSource = true;
 let fineCoverageController=new FineCoverageController(),fineCoverageStatus={status:'off'};
 let flameDomainDraft = null, flameDomainProxy = null;
 import {
+  VOLUME_EMITTER_INLET_PROFILES,
+  VOLUME_EMITTER_SOURCE_LAWS,
   resolveVolumeEmitterInletVelocity,
 } from './volume-emitter-basis.mjs';
+import { installFireActorLiveParitySurface } from './fire-actor-live-parity-browser.mjs';
+import { FIRE_ACTOR_LIVE_PARITY_IDENTITY } from './fire-actor-live-parity-contract.mjs';
 
 import { DEFAULT_VOLUME_SCENE, normalizeVolumeScene, volumeSceneReceipt } from './volume-scene-ontology.mjs';
 import {
@@ -3395,7 +3399,7 @@ import {createImageIterationHistory,installImageIterationHistory} from './author
 import {installBrowseLayout} from './authoring-browse-layout.mjs';
 import {createAppFrameSource} from './app-frame-source.mjs';
 import {createAppGpuHost} from './app-gpu-host.mjs';
-import {fireAtBoot} from './fire-boot.mjs';
+import {fireAtBoot,createFluidBoot} from './fire-boot.mjs';
 import {createAuthoringPromptExpansion,installAuthoringPromptExpansion,authoringPromptWeightRoot} from './authoring-prompt-expansion.mjs';
 import {createKleinAuthoringImageGeneration,installKleinImageGeneration,createForegroundHandoff,runWithKilnHandoff,sharedDeviceHostRequirements,authoringImageWeightRoot,readPngProvenance} from './authoring-image-generation.mjs';
 import {createImagePreparation} from './authoring-image-preparation.mjs';
@@ -5138,6 +5142,12 @@ function setVolumePrimitivesState(state) {
   volumePrototype?.setVolumePrimitives?.(volumePrimitivesInFlameDomain());
   window.__kaminosVolumePrimitives = getVolumePrimitiveState();
   window._kaminosDirty?.();
+}
+
+function seedVolumePrimitiveFixture(name) {
+  const fixture = createVolumePrimitiveFixture(name);
+  if (!fixture) return;
+  setVolumePrimitivesState({ schema: VOLUME_PRIMITIVE_SCHEMA, primitives: [fixture] });
 }
 
 function makeSceneObjectId(prefix = 'object') {
@@ -15455,6 +15465,13 @@ function initKaminosFingerJuiceTabRoute() {
   updateFingerJuiceTabReadout();
 }
 
+const VOLUME_RAY_BUDGET_PRESETS = {
+  draft: { raySteps: 48, adaptiveRays: 0.80, fire: 1.65, radiance: 1.80, absorption: 1.10 },
+  live: { raySteps: 72, adaptiveRays: 0.65, fire: 1.50, radiance: 1.70, absorption: 0.95 },
+  rich: { raySteps: 96, adaptiveRays: 0.45, fire: 1.40, radiance: 1.65, absorption: 0.85 },
+  hero: { raySteps: 144, adaptiveRays: 0.30, fire: 1.35, radiance: 1.60, absorption: 0.80 },
+};
+
 const CANONICAL_VOLUME_HIDDEN_CONTROLS = new Set([
   'volume-microdetail',
   'volume-interface-shred',
@@ -15474,6 +15491,10 @@ const NON_CANONICAL_VOLUME_HIDDEN_CONTROLS = new Set([
   'volume-canonical-centerline',
   'volume-canonical-body-balance',
 ]);
+
+const PYRO_LOOK_FIELDS = [
+  'pyroCarrierView',
+];
 
 const VOLUME_SCENE_PRESETS = {
   flame: {
@@ -15504,8 +15525,871 @@ const VOLUME_SCENE_PRESETS = {
   },
 };
 
+const TALL_PLUME_OPERATOR_PRESETS = {
+  operator_fire_0622: {
+    label: 'operator fire 0622',
+    volumeScene: 'tall_plume',
+    density: 3.05,
+    fire: 0.10,
+    radiance: 2.90,
+    absorption: 2.00,
+    glow: 2.50,
+    smoke: 2.80,
+    curl: 2.30,
+    microdetail: 0.00,
+    interfaceShred: 1.55,
+    fireLicks: 3.25,
+    projection: 0.25,
+    speed: 5.00,
+    raySteps: 160,
+    adaptiveRays: 0.00,
+    occupancySkip: 0.00,
+    fireScale: 0.42,
+    detailScale: 1.00,
+    plumeHeight: 0.70,
+    windStrength: 0.00,
+    windAngle: 180,
+    windHeight: -0.80,
+    renderScale: 0.95,
+  },
+  operator_memory_fire_0701: {
+    label: 'operator memory fire 0701',
+    volumeScene: 'tall_plume',
+    density: 5.20,
+    fire: 0.00,
+    radiance: 3.00,
+    absorption: 2.00,
+    glow: 2.50,
+    smoke: 2.80,
+    curl: 2.70,
+    microdetail: 2.50,
+    interfaceShred: 5.00,
+    fireLicks: 1.70,
+    projection: 1.50,
+    speed: 5.00,
+    raySteps: 160,
+    adaptiveRays: 0.00,
+    occupancySkip: 0.00,
+    fireScale: 0.35,
+    detailScale: 0.50,
+    plumeHeight: 1.20,
+    windStrength: 0.80,
+    windAngle: 0,
+    windHeight: -0.35,
+    renderScale: 0.35,
+    inputRadius: 0.12,
+    flowRate: 0.35,
+    resolution: 128,
+    pressureMode: 'global-p3',
+    pressureTierLowerMax: 0.64,
+    pressureTierHeroMin: 0.18,
+    pressureTierHeroMax: 0.53,
+  },
+  pyro_contrast_warm_cap_small_flame_0702: {
+    label: 'pyro contrast warm cap small flame 0702',
+    volumeScene: 'tall_plume',
+    density: 6.00,
+    fire: 3.50,
+    radiance: 2.30,
+    absorption: 0.30,
+    glow: 2.05,
+    smoke: 2.15,
+    curl: 3.70,
+    microdetail: 2.50,
+    interfaceShred: 5.00,
+    fireLicks: 5.00,
+    projection: 1.50,
+    speed: 0.75,
+    raySteps: 160,
+    adaptiveRays: 0.00,
+    occupancySkip: 0.00,
+    fireScale: 1.17,
+    detailScale: 2.55,
+    plumeHeight: 1.75,
+    windStrength: 1.50,
+    windAngle: 0,
+    windHeight: -0.55,
+    renderScale: 0.70,
+    inputRadius: 0.08,
+    flowRate: 0.25,
+    resolution: 160,
+    pyroDynamicDetail: 1,
+    pyroMaterialGain: 1.50,
+    pyroInterfaceFocus: 0.00,
+    pyroEdgeBite: 1.00,
+    pyroBiteBorder: 0.60,
+    pyroBiteTeeth: 0.90,
+    pyroBiteWake: 1.00,
+    pyroBiteHeat: 0.70,
+    pyroBiteChroma: 0.60,
+    pyroSmokeFold: 1.00,
+    pyroFoldBorder: 0.85,
+    pyroFoldWake: 1.00,
+    pyroRadiance: 0.65,
+    pyroRadianceGate: 0.62,
+    pyroRadianceSpill: 0.30,
+    pyroRadianceWarmth: 0.45,
+    pyroRadianceHue: 0.50,
+    pyroRadianceChroma: 0.55,
+    pyroDiagnosticPaint: 0.00,
+    pyroCarrierView: 'normal',
+    pyroOverdrive: 8.00,
+    pressureMode: 'spatial-tiers',
+    pressureTierOverlay: 0.00,
+    pressureTierLowerMax: 0.74,
+    pressureTierHeroMin: 0.00,
+    pressureTierHeroMax: 0.55,
+  },
+  pyro_material_bonfire_family_0702: {
+    label: 'pyro material bonfire family 0702',
+    volumeScene: 'tall_plume',
+    density: 6.00,
+    fire: 0.00,
+    radiance: 3.00,
+    absorption: 1.05,
+    glow: 0.50,
+    smoke: 2.15,
+    curl: 4.00,
+    microdetail: 2.50,
+    interfaceShred: 5.00,
+    fireLicks: 5.00,
+    projection: 1.50,
+    speed: 3.70,
+    raySteps: 160,
+    adaptiveRays: 0.05,
+    occupancySkip: 0.05,
+    fireScale: 0.65,
+    detailScale: 0.45,
+    plumeHeight: 1.30,
+    windStrength: 1.50,
+    windAngle: -65,
+    windHeight: -0.80,
+    renderScale: 1.00,
+    inputRadius: 0.13,
+    flowRate: 0.30,
+    resolution: 96,
+    pyroDynamicDetail: 1,
+    pyroMaterialGain: 0.65,
+    pyroInterfaceFocus: 0.00,
+    pyroEdgeBite: 0.55,
+    pyroBiteBorder: 1.00,
+    pyroBiteTeeth: 0.35,
+    pyroBiteWake: 0.35,
+    pyroBiteHeight: 0.60,
+    pyroBiteFireLock: 1.00,
+    pyroBiteCore: 0.15,
+    pyroBiteCoreCut: 0.90,
+    pyroBiteRim: 1.00,
+    pyroBiteRimCut: 1.00,
+    pyroBiteAfter: 1.00,
+    pyroBiteAfterCut: 0.00,
+    pyroFireMode: 'pyro-owned',
+    pyroFlamePaint: 0.00,
+    pyroStockMix: 1.00,
+    pyroFlameLuma: 3.00,
+    pyroFlameCoreColor: '#ff4d00',
+    pyroFlameEdgeColor: '#ff4d00',
+    pyroBiteHeat: 1.00,
+    pyroBiteChroma: 0.65,
+    pyroBiteLuma: 3.00,
+    pyroBiteEmberColor: '#ff6600',
+    pyroBiteHotColor: '#ff4000',
+    pyroSmokeFold: 0.05,
+    pyroFoldBorder: 0.00,
+    pyroFoldWake: 0.00,
+    pyroWakeLift: 0.00,
+    pyroWakeWarmth: 0.00,
+    pyroWakeLuma: 3.00,
+    pyroWakeShadowColor: '#384c50',
+    pyroWakeEmberColor: '#b06a2a',
+    pyroRadiance: 4.30,
+    pyroRadianceGate: 0.45,
+    pyroRadianceSpill: 0.00,
+    pyroRadianceWarmth: 1.00,
+    pyroRadianceHue: 1.00,
+    pyroRadianceChroma: 0.15,
+    pyroRadianceLuma: 2.50,
+    pyroRadianceCoolColor: '#ff6b6b',
+    pyroRadianceWarmColor: '#ff0000',
+    pyroRadianceSource: 'fire',
+    pyroRadianceHeight: 1.00,
+    pyroRadianceBorder: 0.70,
+    pyroRadianceTeeth: 0.55,
+    pyroRadianceRise: 1.00,
+    pyroRadianceFireLock: 0.00,
+    pyroDiagnosticPaint: 0.00,
+    pyroCarrierView: 'normal',
+    pyroOverdrive: 8.00,
+    pressureMode: 'global-p3',
+    pressureTierOverlay: 0.00,
+    pressureTierLowerMax: 0.50,
+    pressureTierHeroMin: 0.05,
+    pressureTierHeroMax: 0.22,
+    canonicalSpread: 1.00,
+    canonicalCenterline: 1.00,
+    canonicalBodyBalance: 0.00,
+  },
+  pyro_flow_small_bonfire_gamut_0707: {
+    label: 'pyro flow small bonfire gamut 0707',
+    volumeScene: 'tall_plume',
+    density: 6.00,
+    fire: 0.00,
+    radiance: 3.00,
+    absorption: 2.00,
+    glow: 2.50,
+    smoke: 0.10,
+    curl: 1.15,
+    microdetail: 2.50,
+    interfaceShred: 4.50,
+    fireLicks: 5.00,
+    projection: 1.50,
+    speed: 3.95,
+    raySteps: 160,
+    adaptiveRays: 0.00,
+    occupancySkip: 0.20,
+    fireScale: 0.35,
+    detailScale: 0.45,
+    plumeHeight: 1.00,
+    windStrength: 0.00,
+    windAngle: -65,
+    windHeight: 0.20,
+    renderScale: 0.55,
+    inputRadius: 0.19,
+    flowRate: 0.85,
+    resolution: 160,
+    pyroDynamicDetail: 1,
+    pyroMaterialGain: 0.20,
+    pyroInterfaceFocus: 0.00,
+    pyroEdgeBite: 0.00,
+    pyroBiteBorder: 0.00,
+    pyroBiteTeeth: 0.00,
+    pyroBiteWake: 0.00,
+    pyroBiteHeight: 0.00,
+    pyroBiteFireLock: 1.00,
+    pyroBiteCore: 0.00,
+    pyroBiteCoreCut: 1.00,
+    pyroBiteRim: 0.00,
+    pyroBiteRimCut: 1.00,
+    pyroBiteAfter: 0.00,
+    pyroBiteAfterCut: 1.00,
+    pyroFireMode: 'pyro-owned',
+    pyroFlamePaint: 0.00,
+    pyroStockMix: 1.00,
+    pyroFlameLuma: 0.95,
+    pyroFlameCoreColor: '#ffae00',
+    pyroFlameEdgeColor: '#ff4d00',
+    pyroBiteHeat: 0.00,
+    pyroBiteChroma: 0.00,
+    pyroBiteLuma: 0.00,
+    pyroBiteEmberColor: '#ff6600',
+    pyroBiteHotColor: '#ff4000',
+    pyroSmokeFold: 0.00,
+    pyroFoldBorder: 0.00,
+    pyroFoldWake: 0.00,
+    pyroWakeLift: 0.00,
+    pyroWakeWarmth: 0.00,
+    pyroWakeLuma: 0.00,
+    pyroWakeShadowColor: '#384c50',
+    pyroWakeEmberColor: '#b06a2a',
+    pyroFlowBite: 3.00,
+    pyroFlowBorder: 1.00,
+    pyroFlowTeeth: 0.00,
+    pyroFlowRise: 1.00,
+    pyroFlowFireLock: 1.00,
+    pyroFlowLuma: 3.00,
+    pyroFlowRadiance: 4.00,
+    pyroFlowSpikes: 1.00,
+    pyroFlowCoolColor: '#ff6400',
+    pyroFlowHotColor: '#ff320f',
+    pyroRadiance: 0.00,
+    pyroRadianceGate: 0.15,
+    pyroRadianceSpill: 0.00,
+    pyroRadianceWarmth: 0.00,
+    pyroRadianceHue: 0.00,
+    pyroRadianceChroma: 1.00,
+    pyroRadianceLuma: 3.00,
+    pyroRadianceCoolColor: '#eb0000',
+    pyroRadianceWarmColor: '#ffcd75',
+    pyroRadianceSource: 'fire',
+    pyroRadianceHeight: 0.00,
+    pyroRadianceBorder: 0.00,
+    pyroRadianceTeeth: 0.00,
+    pyroRadianceRise: 0.00,
+    pyroRadianceFireLock: 1.00,
+    pyroDiagnosticPaint: 0.00,
+    pyroCarrierView: 'normal',
+    pyroOverdrive: 8.00,
+    pressureMode: 'global-p3',
+    pressureTierOverlay: 0.00,
+    pressureTierLowerMax: 0.50,
+    pressureTierHeroMin: 0.05,
+    pressureTierHeroMax: 0.22,
+    canonicalSpread: 1.00,
+    canonicalCenterline: 1.00,
+    canonicalBodyBalance: 0.00,
+  },
+  boundary_fire_bonfire_a_la_ruffles_0709: {
+    label: 'boundary fire Bonfire_a_la_ruffles 0709',
+    volumeScene: 'tall_plume',
+    pyroCompareMode: 'live',
+    reactionLiveView: 'boundary_fire',
+    boundarySidecarSource: 'baked',
+    boundarySidecarView: 'off',
+    reactionBoundaryGradient: 0.65,
+    reactionBoundarySupportThermal: 0.98,
+    reactionBoundarySupportReaction: 1.80,
+    reactionBoundarySupportFront: 1.08,
+    reactionBoundarySupportInterface: 0.24,
+    reactionBoundaryCut: 0.00,
+    reactionBoundarySoftness: 0.29,
+    reactionBoundaryCoreReject: 1.00,
+    reactionBoundaryTopology: 2.50,
+    reactionBoundaryCurl: 2.00,
+    reactionBoundaryDivergence: 1.00,
+    reactionBoundaryContrast: 1.00,
+    reactionBoundaryGamma: 2.45,
+    reactionBoundaryOpacity: 3.00,
+    boundarySidecarBlur: 1.00,
+    boundarySidecarWidth: 2.00,
+    boundarySidecarRidge: 2.00,
+    reactionBoundaryFireRidge: 1.28,
+    reactionBoundaryFireRidgeCut: 0.10,
+    reactionBoundaryFireTip: 2.00,
+    reactionBoundaryFireErosion: 0.37,
+    reactionBoundaryFireCleanBlue: 0.64,
+    reactionBoundaryFireSoot: 0.64,
+    reactionBoundaryFireYellow: 0.40,
+    reactionBoundaryFireWarmth: 0.40,
+    reactionBoundaryFireLuma: 5.00,
+    reactionHeatMin: 0.00,
+    reactionHeatMax: 0.42,
+    reactionFuelMin: 0.0015,
+    reactionFuelMax: 0.071,
+    reactionFlameMin: 0.030,
+    reactionFlameMax: 0.120,
+    reactionFrontMin: 0.0015,
+    reactionFrontMax: 0.080,
+    reactionGradientMin: 0.018,
+    reactionGradientMax: 0.180,
+    reactionCoreMin: 0.18,
+    reactionCoreMax: 0.95,
+    reactionCoreReject: 0.82,
+    reactionTopologyGain: 0.44,
+    reactionStretchErode: 0.00,
+    reactionDivergenceMin: 0.004,
+    reactionDivergenceMax: 0.070,
+    reactionDivergenceGain: 0.00,
+    reactionCurlWarp: 0.00,
+    reactionShellGamma: 1.55,
+    reactionShellContrast: 1.00,
+    density: 6.00,
+    fire: 3.50,
+    radiance: 0.00,
+    absorption: 0.30,
+    glow: 0.00,
+    smoke: 2.80,
+    curl: 3.15,
+    microdetail: 1.15,
+    interfaceShred: 5.00,
+    fireLicks: 5.00,
+    projection: 1.50,
+    speed: 1.80,
+    fireScale: 0.35,
+    detailScale: 1.00,
+    plumeHeight: 1.30,
+    windStrength: 1.50,
+    windAngle: -65,
+    windHeight: -0.80,
+    inputRadius: 0.08,
+    flowRate: 0.40,
+    raySteps: 132,
+    adaptiveRays: 1.00,
+    occupancySkip: 1.00,
+    renderScale: 0.65,
+    resolution: 128,
+    fireRenderMode: 'shell',
+    shellInspectMode: 'shell',
+    shellAmount: 0.00,
+    shellWidth: 0.05,
+    shellThermal: 0.85,
+    shellReaction: 1.10,
+    shellFront: 1.25,
+    shellEdge: 0.85,
+    shellCoreSuppress: 0.55,
+    shellBite: 0.80,
+    shellCurl: 0.25,
+    shellHeat: 1.65,
+    shellDivergence: 0.00,
+    shellLuma: 1.35,
+    shellExposure: 1.15,
+    shellSoftClip: 0.20,
+    shellSmoke: 2.00,
+    pyroDynamicDetail: 1,
+    pyroMaterialGain: 0.20,
+    pyroInterfaceFocus: 0.00,
+    pyroEdgeBite: 0.00,
+    pyroBiteBorder: 0.00,
+    pyroBiteTeeth: 0.00,
+    pyroBiteWake: 0.00,
+    pyroBiteHeight: 0.00,
+    pyroBiteFireLock: 1.00,
+    pyroBiteCore: 0.00,
+    pyroBiteCoreCut: 1.00,
+    pyroBiteRim: 0.00,
+    pyroBiteRimCut: 1.00,
+    pyroBiteAfter: 0.00,
+    pyroBiteAfterCut: 1.00,
+    pyroFireMode: 'pyro-owned',
+    pyroFlamePaint: 0.00,
+    pyroStockMix: 1.00,
+    pyroFlameLuma: 0.95,
+    pyroFlameCoreColor: '#ffae00',
+    pyroFlameEdgeColor: '#ff4d00',
+    pyroBiteHeat: 0.00,
+    pyroBiteChroma: 0.00,
+    pyroBiteLuma: 0.00,
+    pyroBiteEmberColor: '#ff6600',
+    pyroBiteHotColor: '#ff4000',
+    pyroSmokeFold: 0.00,
+    pyroFoldBorder: 0.00,
+    pyroFoldWake: 0.00,
+    pyroWakeLift: 0.00,
+    pyroWakeWarmth: 0.00,
+    pyroWakeLuma: 0.00,
+    pyroWakeShadowColor: '#384c50',
+    pyroWakeEmberColor: '#b06a2a',
+    pyroRadiance: 0.00,
+    pyroRadianceGate: 0.15,
+    pyroRadianceSpill: 0.00,
+    pyroRadianceWarmth: 0.00,
+    pyroRadianceHue: 0.00,
+    pyroRadianceChroma: 1.00,
+    pyroRadianceLuma: 3.00,
+    pyroRadianceCoolColor: '#eb0000',
+    pyroRadianceWarmColor: '#ffcd75',
+    pyroRadianceSource: 'fire',
+    pyroRadianceHeight: 0.00,
+    pyroRadianceBorder: 0.00,
+    pyroRadianceTeeth: 0.00,
+    pyroRadianceRise: 0.00,
+    pyroRadianceFireLock: 1.00,
+    pyroFlowBite: 3.00,
+    pyroFlowBorder: 1.00,
+    pyroFlowTeeth: 0.00,
+    pyroFlowRise: 1.00,
+    pyroFlowFireLock: 1.00,
+    pyroFlowLuma: 3.00,
+    pyroFlowRadiance: 4.00,
+    pyroFlowSpikes: 1.00,
+    pyroFlowCoolColor: '#ff6400',
+    pyroFlowHotColor: '#ff320f',
+    pyroDiagnosticPaint: 0.00,
+    pyroCarrierView: 'normal',
+    pyroOverdrive: 8.00,
+    pressureMode: 'global-p3',
+    pressureTierOverlay: 0.00,
+    pressureTierLowerMax: 0.61,
+    pressureTierHeroMin: 0.00,
+    pressureTierHeroMax: 0.34,
+    canonicalSpread: 1.00,
+    canonicalCenterline: 1.00,
+    canonicalBodyBalance: 0.00,
+  },
+  exploding_jellow_fireball_motherfucker_0706: {
+    label: 'Exploding fireball 0706',
+    volumeScene: 'tall_plume',
+    density: 6.00,
+    fire: 0.00,
+    radiance: 3.00,
+    absorption: 1.05,
+    glow: 0.50,
+    smoke: 2.15,
+    curl: 4.00,
+    microdetail: 2.50,
+    interfaceShred: 5.00,
+    fireLicks: 5.00,
+    projection: 1.50,
+    speed: 3.70,
+    raySteps: 160,
+    adaptiveRays: 0.05,
+    occupancySkip: 0.05,
+    fireScale: 0.65,
+    detailScale: 0.45,
+    plumeHeight: 1.30,
+    windStrength: 1.50,
+    windAngle: -65,
+    windHeight: -0.80,
+    renderScale: 1.00,
+    inputRadius: 0.13,
+    flowRate: 0.30,
+    resolution: 96,
+    pyroDynamicDetail: 1,
+    pyroMaterialGain: 1.50,
+    pyroInterfaceFocus: 0.00,
+    pyroEdgeBite: 0.55,
+    pyroBiteBorder: 1.00,
+    pyroBiteTeeth: 0.35,
+    pyroBiteWake: 0.35,
+    pyroBiteHeight: 0.60,
+    pyroBiteFireLock: 1.00,
+    pyroBiteCore: 0.15,
+    pyroBiteCoreCut: 0.90,
+    pyroBiteRim: 1.00,
+    pyroBiteRimCut: 1.00,
+    pyroBiteAfter: 1.00,
+    pyroBiteAfterCut: 0.00,
+    pyroFireMode: 'pyro-owned',
+    pyroFlamePaint: 0.00,
+    pyroStockMix: 1.00,
+    pyroFlameLuma: 3.00,
+    pyroFlameCoreColor: '#ff4d00',
+    pyroFlameEdgeColor: '#ff4d00',
+    pyroBiteHeat: 1.00,
+    pyroBiteChroma: 0.65,
+    pyroBiteLuma: 3.00,
+    pyroBiteEmberColor: '#ff6600',
+    pyroBiteHotColor: '#ff4000',
+    pyroSmokeFold: 0.05,
+    pyroFoldBorder: 0.00,
+    pyroFoldWake: 0.00,
+    pyroWakeLift: 0.00,
+    pyroWakeWarmth: 0.00,
+    pyroWakeLuma: 3.00,
+    pyroWakeShadowColor: '#384c50',
+    pyroWakeEmberColor: '#b06a2a',
+    pyroRadiance: 4.30,
+    pyroRadianceGate: 0.45,
+    pyroRadianceSpill: 0.00,
+    pyroRadianceWarmth: 1.00,
+    pyroRadianceHue: 1.00,
+    pyroRadianceChroma: 0.15,
+    pyroRadianceLuma: 2.50,
+    pyroRadianceCoolColor: '#ff6b6b',
+    pyroRadianceWarmColor: '#ff0000',
+    pyroRadianceSource: 'fire',
+    pyroRadianceHeight: 1.00,
+    pyroRadianceBorder: 0.70,
+    pyroRadianceTeeth: 0.55,
+    pyroRadianceRise: 1.00,
+    pyroRadianceFireLock: 0.00,
+    pyroDiagnosticPaint: 0.00,
+    pyroCarrierView: 'normal',
+    pyroOverdrive: 8.00,
+    pressureMode: 'global-p3',
+    pressureTierOverlay: 0.00,
+    pressureTierLowerMax: 0.50,
+    pressureTierHeroMin: 0.05,
+    pressureTierHeroMax: 0.22,
+    canonicalSpread: 1.00,
+    canonicalCenterline: 1.00,
+    canonicalBodyBalance: 0.00,
+  },
+  rgb_upscale_basin_0711: {
+    label: 'rgb upscale basin 0711',
+    sourceCaptureIdentity: 'kaminos-rgb-upscale-basin-live-capture-v1',
+    sourceCaptureHash: 'c4d3f040',
+    sourceCapturedAt: '2026-07-11T18:05:39.977Z',
+    sourceCaptureSha256: 'cc5cf502cf3720c8b9d31555f66770d3febb48e279d1c2f12cc194c3b21790d1',
+    sourceRawCaptureFixture: 'fixtures/volume/rgb-upscale-basin-0711-c4d3f040.capture.json',
+    sourceCanvasFixture: 'fixtures/volume/rgb-upscale-basin-0711-c4d3f040.png',
+    sourceCanvasCaveat: 'blank-webgpu-drawing-buffer-capture',
+    sourceReplayWitnessFixture: 'fixtures/volume/rgb-upscale-basin-0711-c4d3f040.replay-witness.png',
+    sourceTrainingTarget: 'visual-rgb-upscaling',
+    volumeScene: 'tall_plume',
+    density: 6,
+    fire: 0,
+    radiance: 0,
+    absorption: 0.75,
+    glow: 0,
+    smoke: 2.8,
+    curl: 4,
+    microdetail: 1.7,
+    interfaceShred: 3.2,
+    fireLicks: 2.15,
+    projection: 1.5,
+    speed: 4.4,
+    raySteps: 88,
+    adaptiveRays: 1,
+    occupancySkip: 1,
+    fireScale: 0.95,
+    detailScale: 0.45,
+    plumeHeight: 0.9,
+    windStrength: 0.4,
+    windAngle: -65,
+    windHeight: -0.8,
+    renderScale: 0.3,
+    inputRadius: 0.7,
+    flowRate: 0.5,
+    reactionLiveView: 'boundary_fire',
+    reactionLiveViewIdentity: 'reaction-live-view-shader-inspect-v0',
+    boundarySidecarSource: 'baked',
+    boundarySidecarView: 'off',
+    reactionBoundaryGradient: 2.85,
+    reactionBoundarySupportThermal: 1.76,
+    reactionBoundarySupportReaction: 2,
+    reactionBoundarySupportFront: 1.92,
+    reactionBoundarySupportInterface: 0,
+    reactionBoundaryCut: 0.55,
+    reactionBoundarySoftness: 0.45,
+    reactionBoundaryCoreReject: 0.92,
+    reactionBoundaryTopology: 2.5,
+    reactionBoundaryCurl: 1.12,
+    reactionBoundaryDivergence: 1,
+    reactionBoundaryContrast: 0.8,
+    reactionBoundaryGamma: 2,
+    reactionBoundaryOpacity: 1.85,
+    reactionBoundaryFireRidge: 2,
+    reactionBoundaryFireRidgeCut: 0.365,
+    reactionBoundaryFireTip: 1.16,
+    reactionBoundaryFireErosion: 0.2,
+    reactionBoundaryFireCleanBlue: 0.7,
+    reactionBoundaryFireSoot: 1.46,
+    reactionBoundaryFireYellow: 0.3,
+    reactionBoundaryFireWarmth: 0.34,
+    reactionBoundaryFireLuma: 5,
+    boundarySidecarBlur: 1,
+    boundarySidecarWidth: 2,
+    boundarySidecarRidge: 0.3,
+    fireRenderMode: 'inspect',
+    shellInspectMode: 'boundary_fire',
+    shellAmount: 0,
+    shellWidth: 0.05,
+    shellThermal: 0.85,
+    shellReaction: 1.1,
+    shellFront: 1.25,
+    shellEdge: 0.85,
+    shellCoreSuppress: 0.55,
+    shellBite: 0.8,
+    shellCurl: 0.25,
+    shellHeat: 1.65,
+    shellDivergence: 0,
+    shellLuma: 1.35,
+    shellExposure: 1.15,
+    shellSoftClip: 0.2,
+    shellSmoke: 2,
+    resolution: 128,
+    gridOverlay: 0,
+    flowDebug: 0,
+    oracleActivityCue: 1,
+    oracleActivityDisplay: 0,
+    oracleActivityCurlNoise: 0.4,
+    oracleActivityVorticity: 3,
+    oracleActivityMaterial: 0,
+    lookFreeze: 0,
+    reactionHeatMin: 0,
+    reactionHeatMax: 0.42,
+    reactionFuelMin: 0,
+    reactionFuelMax: 0.071,
+    reactionFlameMin: 0.03,
+    reactionFlameMax: 0.12,
+    reactionFrontMin: 0,
+    reactionFrontMax: 0.08,
+    reactionGradientMin: 0.02,
+    reactionGradientMax: 0.18,
+    reactionCoreMin: 0.18,
+    reactionCoreMax: 0.95,
+    reactionCoreReject: 0.82,
+    reactionTopologyGain: 0,
+    reactionStretchErode: 0,
+    reactionDivergenceMin: 0,
+    reactionDivergenceMax: 0.07,
+    reactionDivergenceGain: 0,
+    reactionCurlWarp: 0,
+    reactionShellGamma: 1.45,
+    reactionShellContrast: 3.1,
+    pyroCompareMode: 'base',
+    pyroDynamicDetail: 0,
+    pyroMaterialGain: 0,
+    pyroInterfaceFocus: 0,
+    pyroEdgeBite: 0,
+    pyroBiteBorder: 0,
+    pyroBiteTeeth: 0,
+    pyroBiteWake: 0,
+    pyroBiteHeight: 0,
+    pyroBiteFireLock: 1,
+    pyroBiteCore: 0,
+    pyroBiteCoreCut: 1,
+    pyroBiteRim: 0,
+    pyroBiteRimCut: 1,
+    pyroBiteAfter: 0,
+    pyroBiteAfterCut: 1,
+    pyroFireMode: 'stock',
+    pyroFlamePaint: 0,
+    pyroStockMix: 1,
+    pyroFlameLuma: 1,
+    pyroFlameCoreColor: '#ffae00',
+    pyroFlameEdgeColor: '#ff4d00',
+    pyroBiteHeat: 0,
+    pyroBiteChroma: 0,
+    pyroBiteLuma: 1,
+    pyroBiteEmberColor: '#ff6600',
+    pyroBiteHotColor: '#ff4000',
+    pyroSmokeFold: 0,
+    pyroFoldBorder: 0,
+    pyroFoldWake: 0,
+    pyroWakeLift: 0,
+    pyroWakeWarmth: 0,
+    pyroWakeLuma: 1,
+    pyroWakeShadowColor: '#384c50',
+    pyroWakeEmberColor: '#b06a2a',
+    pyroRadiance: 0,
+    pyroRadianceGate: 1,
+    pyroRadianceSpill: 0,
+    pyroRadianceWarmth: 0,
+    pyroRadianceHue: 0.5,
+    pyroRadianceChroma: 0,
+    pyroRadianceLuma: 1,
+    pyroRadianceCoolColor: '#eb0000',
+    pyroRadianceWarmColor: '#ffcd75',
+    pyroRadianceSource: 'fire',
+    pyroRadianceHeight: 0,
+    pyroRadianceBorder: 0,
+    pyroRadianceTeeth: 0,
+    pyroRadianceRise: 0,
+    pyroRadianceFireLock: 1,
+    pyroFlowBite: 0,
+    pyroFlowBorder: 0,
+    pyroFlowTeeth: 0,
+    pyroFlowRise: 0,
+    pyroFlowFireLock: 1,
+    pyroFlowLuma: 1,
+    pyroFlowRadiance: 0,
+    pyroFlowSpikes: 0,
+    pyroFlowCoolColor: '#ff6400',
+    pyroFlowHotColor: '#ff320f',
+    pyroDiagnosticPaint: 0,
+    pyroCarrierView: 'normal',
+    pyroOverdrive: 1,
+    pressureMode: 'global-p3',
+    pressureEffectiveLabel: 'Full P3',
+    pressureTierOverlay: 0,
+    pressureTierLowerMax: 0.61,
+    pressureTierHeroMin: 0,
+    pressureTierHeroMax: 0.34,
+    activityPressureP4Enabled: true,
+    activityPressureMaxTier: 4,
+    activityPressureDispatchStrategy: 'coarse-brick-activity-pressure-mask-v0',
+    activityPressureShadowOverhead: false,
+    gpuTiming: true,
+    activityVorticityGate: 0,
+    activityDetailGate: 0,
+    canonicalSpread: 1,
+    canonicalCenterline: 1,
+    canonicalBodyBalance: 0,
+    canonicalMacroPreset: '',
+    canonicalSourceMode: 'current',
+    canonicalSourceModeValue: 0,
+    canonicalRenderMode: 'default',
+    canonicalRenderModeValue: 0,
+    canonicalMotionMode: 'animated',
+    canonicalMotionRetirementIdentity: 'retired-analytic-canonical-motion-v0',
+    canonicalContentMode: 'smoke',
+    canonicalContentModeValue: 0,
+    canonicalSourceY: -0.74,
+    canonicalSourceInjection: 1,
+    canonicalBuoyancy: 1,
+    reactionFuelScale: 1,
+    lifecycleEffect: 'none',
+    lifecycleT: 0,
+    quenchVapor: 0,
+    runtimeQualityRequested: 'live_high',
+    gpuPressure: 0,
+    runtimeQualityReason: 'route-default',
+    pressureIterations: 3,
+    pressureStrategy: 'global',
+    simProfile: false,
+    rayBudgetPreset: '',
+    bonfireRecenter: 1,
+    bonfireLateralDamping: 1,
+    bonfireShear: 1,
+    bonfireDetailForces: 1,
+    bonfireDepinch: 1,
+    bonfireProjection: 1,
+    bonfireTemporal: 1,
+    bonfireInstabilityProbe: 0,
+    runtimeQualityEffective: 'live_high',
+    legacyPyroBackedOff: true,
+  },
+};
+
 // Bare kaminos_volume_smoke routes boot into this committed basin export
 // (grid 64, cheap ray budget). The ruffles tall preset stays available by name.
+const DEFAULT_VOLUME_SMOKE_BASIN_URL = './artifacts/default-basin/cheap-blast-furnace.json';
+
+const CANONICAL_VOLUME_MACRO_PRESETS = {
+  macro_foothold_0621: {
+    label: 'macro foothold 0621',
+    volumeScene: 'canonical_plume',
+    density: 0.45,
+    fire: 0.00,
+    radiance: 0.00,
+    absorption: 2.00,
+    glow: 0.00,
+    smoke: 2.80,
+    curl: 1.00,
+    microdetail: 0.00,
+    interfaceShred: 0.00,
+    fireLicks: 0.00,
+    projection: 1.05,
+    speed: 0.30,
+    raySteps: 148,
+    adaptiveRays: 0.05,
+    occupancySkip: 0.25,
+    fireScale: 0.86,
+    detailScale: 0.75,
+    plumeHeight: 1.45,
+    windStrength: 0.00,
+    windAngle: 0,
+    windHeight: 0.15,
+    renderScale: 0.65,
+    inputRadius: 0.08,
+    flowRate: 1.90,
+    resolution: 128,
+    gridOverlay: 0.00,
+    flowDebug: 0.00,
+    canonicalSpread: 0.00,
+    canonicalCenterline: 0.50,
+    canonicalBodyBalance: 1.50,
+  },
+  honest_smoke_0622: {
+    label: 'honest smoke 0622',
+    volumeScene: 'canonical_plume',
+    sourceMode: 'buoyant_bottom',
+    renderMode: 'smoke_only',
+    motionMode: 'frozen',
+    contentMode: 'smoke',
+    density: 0.45,
+    fire: 0.00,
+    radiance: 0.00,
+    absorption: 2.00,
+    glow: 0.00,
+    smoke: 2.80,
+    curl: 1.00,
+    microdetail: 0.00,
+    interfaceShred: 0.00,
+    fireLicks: 0.00,
+    projection: 1.05,
+    speed: 0.30,
+    raySteps: 148,
+    adaptiveRays: 0.05,
+    occupancySkip: 0.25,
+    fireScale: 0.86,
+    detailScale: 0.75,
+    plumeHeight: 1.45,
+    windStrength: 0.00,
+    windAngle: 0,
+    windHeight: 0.15,
+    renderScale: 0.65,
+    inputRadius: 0.08,
+    flowRate: 1.90,
+    resolution: 128,
+    gridOverlay: 0.00,
+    flowDebug: 0.00,
+    canonicalSpread: 0.00,
+    canonicalCenterline: 0.50,
+    canonicalBodyBalance: 1.50,
+  },
+};
 
 const CANONICAL_VOLUME_SOURCE_MODE_VALUES = {
   current: 0,
@@ -15517,7 +16401,10 @@ const CANONICAL_VOLUME_RENDER_MODE_VALUES = {
   default: 0,
   smoke_only: 1,
 };
-
+const CANONICAL_VOLUME_LEGACY_MOTION_REQUEST_VALUES = {
+  animated: 0,
+  frozen: 1,
+};
 const CANONICAL_ANALYTIC_MOTION_RETIREMENT_IDENTITY = 'retired-analytic-canonical-motion-v0';
 const CANONICAL_VOLUME_CONTENT_MODE_VALUES = {
   smoke: 0,
@@ -15529,6 +16416,18 @@ function normalizeCanonicalVolumeSourceMode(value) {
   return Object.hasOwn(CANONICAL_VOLUME_SOURCE_MODE_VALUES, value) ? value : 'current';
 }
 
+function normalizeCanonicalRenderMode(value) {
+  return Object.hasOwn(CANONICAL_VOLUME_RENDER_MODE_VALUES, value) ? value : 'default';
+}
+
+function normalizeCanonicalMotionMode(value) {
+  return Object.hasOwn(CANONICAL_VOLUME_LEGACY_MOTION_REQUEST_VALUES, value) ? value : 'animated';
+}
+
+function normalizeCanonicalContentMode(value) {
+  return Object.hasOwn(CANONICAL_VOLUME_CONTENT_MODE_VALUES, value) ? value : 'smoke';
+}
+
 function canonicalVolumeSourceDefaults(mode) {
   const normalized = normalizeCanonicalVolumeSourceMode(mode);
   if (normalized === 'passive_bottom') return { sourceY: -0.82, injection: 0.00, buoyancy: 0.00 };
@@ -15536,6 +16435,11 @@ function canonicalVolumeSourceDefaults(mode) {
   if (normalized === 'buoyant_bottom') return { sourceY: -0.82, injection: 0.00, buoyancy: 1.00 };
   return { sourceY: -0.74, injection: 1.00, buoyancy: 1.00 };
 }
+
+const DEFAULT_VOLUME_CAMERA_FRAME = {
+  position: [1.18, 0.28, 2.05],
+  target: [0, 0.02, 0],
+};
 
 let activeVolumeRayBudgetPreset = '';
 let routedVolumeRayBudgetPreset = '';
@@ -15550,7 +16454,7 @@ let routedCanonicalBuoyancy = canonicalVolumeSourceDefaults('current').buoyancy;
 let routedVolumeReactionFuelScale = 1;
 let routedVolumePressureIterations = undefined;
 let routedVolumePressureStrategy = 'global';
-
+let routedVolumePressureMode = 'auto';
 let routedVolumeSimProfile = false;
 let routedVolumeLifecycleEffect = 'none';
 let routedVolumeLifecycleT = 0;
@@ -15572,6 +16476,11 @@ let routedBonfireAblationControls = { ...DEFAULT_BONFIRE_ABLATION_CONTROLS };
 
 function clampVolumeValue(value, min, max) {
   return Math.max(min, Math.min(max, Number(value)));
+}
+
+function normalizeVolumeLifecycleEffect(value) {
+  const normalized = String(value || 'none').toLowerCase();
+  return ['none', 'snuff'].includes(normalized) ? normalized : 'none';
 }
 
 function normalizeVolumeRuntimeQuality(value) {
@@ -15674,6 +16583,23 @@ function applyVolumeRuntimeQualityLadder(controls) {
   return next;
 }
 
+function normalizeBonfireAblationControls(partial = {}) {
+  const normalized = {};
+  for (const [key, defaultValue] of Object.entries(DEFAULT_BONFIRE_ABLATION_CONTROLS)) {
+    const max = key === 'bonfireInstabilityProbe' ? 1 : 1.5;
+    const value = Number(partial[key]);
+    normalized[key] = Number.isFinite(value) ? clampVolumeValue(value, 0, max) : defaultValue;
+  }
+  return normalized;
+}
+
+function routeBonfireAblationControl(params, routeName, controlName) {
+  const value = Number(params.get(routeName));
+  return params.has(routeName) && Number.isFinite(value)
+    ? value
+    : DEFAULT_BONFIRE_ABLATION_CONTROLS[controlName];
+}
+
 function normalizeVolumePressureTierControls(values = {}) {
   const lowerMax = clampVolumeValue(values.lowerMax ?? values.pressureTierLowerMax ?? 0.50, 0.10, 0.98);
   const rawHeroMax = clampVolumeValue(values.heroMax ?? values.pressureTierHeroMax ?? 0.22, 0.02, Math.min(0.98, lowerMax));
@@ -15695,6 +16621,16 @@ function normalizeVolumePressureMode(value) {
 
 function defaultVolumePressureIterationsForScene(scene) {
   return 2;
+}
+
+function volumePressureModeFromRoute(strategy, iterations) {
+  if (String(strategy || '').toLowerCase() === 'spatial_tiers') return 'spatial-tiers';
+  const count = Number(iterations);
+  if (!Number.isFinite(count)) return 'auto';
+  if (count <= 1) return 'global-p1';
+  if (count === 3) return 'global-p3';
+  if (count > 3) return 'routed-global';
+  return 'global-p2';
 }
 
 function volumePressureConfigForMode(mode, scene) {
@@ -15759,6 +16695,11 @@ function setVolumeRenderScaleControlValue(value) {
   const label=document.getElementById('volume-render-scale-val');if(label)label.textContent=`${(effective*100).toFixed(1)}%`;
 }
 
+function adoptVolumeRenderScaleSliderValue() {
+  const control = document.getElementById('volume-render-scale');
+  if (control) setVolumeRenderScaleControlValue(control.value);
+}
+
 // Aperture patterns a basin may request that the select no longer offers; the
 // request is kept beside the shape fallback (see the route loader).
 const VOLUME_RETIRED_APERTURE_PATTERNS = ['concentric', 'spiral'];
@@ -15811,6 +16752,10 @@ function normalizeVolumeHexColor(value, fallback = '#ffffff') {
   if (/^#[0-9a-f]{6}$/i.test(raw)) return raw.toLowerCase();
   if (/^[0-9a-f]{6}$/i.test(raw)) return `#${raw.toLowerCase()}`;
   return fallback;
+}
+
+function setVolumeColorControlValue(id, value, fallback) {
+  setVolumeControlValue(id, normalizeVolumeHexColor(value, fallback));
 }
 
 // Set a saved value on a range input. The renderer clamps each control to its
@@ -15915,6 +16860,19 @@ function moveVolumePyroLegacyControlsBelowRadiance() {
   }
 }
 
+function hideVolumeLegacyPyroSurfaceForTopologyBranch() {
+  const legacyIds = new Set([
+    ...PYRO_LOOK_FIELDS.map(volumeSceneControlId),
+  ]);
+  for (const id of legacyIds) {
+    for (const node of volumeControlCluster(id)) node.style.display = 'none';
+  }
+  for (const id of ['volume-basin-warm-cap', 'volume-basin-bonfire-family']) {
+    const element = document.getElementById(id);
+    if (element) element.style.display = 'none';
+  }
+}
+
 function volumeSceneControlId(key) {
   const explicit = {
     volumeScene: 'volume-scene',
@@ -15924,11 +16882,86 @@ function volumeSceneControlId(key) {
   return `volume-${key.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)}`;
 }
 
+function applyVolumeScenePreset(scene, options = {}) {
+  supersedeVolumeRebuildHolds();
+  const normalizedScene = DEFAULT_VOLUME_SCENE;
+  const preset = VOLUME_SCENE_PRESETS[normalizedScene];
+  setVolumeControlValue('volume-scene', scene);
+  for (const [key, value] of Object.entries(preset)) {
+    if (key === 'label') continue;
+    setVolumeControlValue(volumeSceneControlId(key), typeof value === 'number' ? value.toFixed(2) : value);
+  }
+  if (!options.keepBudgetPreset) {
+    activeVolumeRayBudgetPreset = '';
+    routedVolumeRayBudgetPreset = '';
+  }
+  activeCanonicalVolumeMacroPreset = '';
+  return normalizedScene;
+}
+
 // Applies the committed default basin with its exact saved values (unlike the
 // in-code operator presets, which round numbers). Controls added to the page
 // after the export receive their schema defaults, as named presets do.
 // The semantic flame basin (fire-boot.mjs) is applied the same way as the default
 // smoke basin, on routes that ask for fire without a named recipe.
+function applySemanticFlameBasin(routeParams, basin) { return applyDefaultVolumeSmokeBasin(routeParams, basin); }
+async function applyDefaultVolumeSmokeBasin(routeParams, url = DEFAULT_VOLUME_SMOKE_BASIN_URL) {
+  const response = await fetch(url, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`default volume basin unavailable: ${response.status}`);
+  const artifact = await response.json();
+  const savedPreset = artifact?.preset;
+  if (artifact?.identity !== 'kaminos-volume-settings-preset-artifact-v2'
+    || !/^vsp-[0-9a-f]{64}$/.test(String(artifact?.presetId || ''))
+    || artifact.contentHash !== `sha256:${artifact.presetId.slice(4)}`
+    || !savedPreset?.domControls) {
+    throw new Error('default volume basin artifact identity is invalid');
+  }
+  const schemaResponse = await fetch('/volume-settings-preset-schema-v2.json', { cache: 'no-store' });
+  if (!schemaResponse.ok) throw new Error(`default volume basin schema unavailable: ${schemaResponse.status}`);
+  const schema = await schemaResponse.json();
+  const preset = migrateRetiredVolumeSettingsPresetDocument(artifact, schema).document.preset;
+  // A basin is its route: parameters the page reads with hard fallbacks (such
+  // as emitter family) take the basin's value unless the URL sets them.
+  const basinParams = new Set(['domControls', 'rendererControls', 'presentationControls']
+    .flatMap(axis => Object.values(preset[axis] || {}).map(descriptor => descriptor?.param).filter(Boolean)));
+  for (const [key, value] of new URL(preset.route, 'http://basin.invalid').searchParams) {
+    if (basinParams.has(key) && !routeParams.has(key)) routeParams.set(key, value);
+  }
+  applyVolumeScenePreset(preset.domControls['volume-scene']?.value || 'tall_plume', { keepBudgetPreset: true });
+  const missing = [];
+  let applied = 0;
+  for (const controls of [preset.domControls, preset.rendererControls || {}]) {
+    for (const [id, descriptor] of Object.entries(controls)) {
+      if (id === 'volume-scene') continue;
+      if (id !== 'volume-render-scale' && !document.getElementById(id)) {
+        missing.push(id);
+        continue;
+      }
+      setVolumeControlValue(id, Object.hasOwn(descriptor, 'rawValue') ? descriptor.rawValue : descriptor.value);
+      applied += 1;
+    }
+  }
+  activeCanonicalVolumeMacroPreset = '';
+  const receipt = { presetId: artifact.presetId, label: artifact.initialLabel || null, source: url, applied, missing };
+  window.__kaminosDefaultVolumeSmokeBasin = receipt;
+  return receipt;
+}
+
+function applyTallPlumeOperatorPreset(name, options = {}) {
+  const preset = TALL_PLUME_OPERATOR_PRESETS[name];
+  if (!preset) return false;
+  applyVolumeScenePreset(preset.volumeScene || 'tall_plume', { keepBudgetPreset: true });
+  for (const [key, value] of Object.entries(preset)) {
+    if (key === 'label' || key === 'volumeScene') continue;
+    setVolumeControlValue(volumeSceneControlId(key), formatVolumePresetControlValue(key, value));
+  }
+  if (!options.keepBudgetPreset) {
+    activeVolumeRayBudgetPreset = '';
+    routedVolumeRayBudgetPreset = '';
+  }
+  activeCanonicalVolumeMacroPreset = '';
+  return true;
+}
 
 const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'physicalKelvinPerHeat', id: 'volume-physical-kelvin-per-heat', param: 'volume_physical_kelvin_per_heat', min: 100, max: 6000, continuous: true, decimals: 0 },
@@ -15991,6 +17024,10 @@ function normalizeBoundarySidecarSource(value) {
 function normalizeBoundarySidecarView(value) {
   const mode = String(value || 'off').toLowerCase().replace(/-/g, '_');
   return BOUNDARY_SIDECAR_VIEW_VALUES.has(mode) ? mode : 'off';
+}
+
+function clampVolumeControlValue(value, field) {
+  return Math.max(field.min, Math.min(field.max, value));
 }
 
 const VOLUME_BASIN_ROUTE_FIELDS = [
@@ -16385,6 +17422,19 @@ function recordFlameSettingsProblems() {
 // Read the controls back once the route has set them all, so a basin whose
 // values the page could not hold (clamped ranges, missing options, route
 // fallbacks) says so instead of passing for the saved one.
+function recordVolumeSettingsPresetApplied() {
+  activeVolumeSettingsPresetApplied = Object.freeze([]);
+  if (activeVolumeSettingsPresetReceipt) {
+    try {
+      activeVolumeSettingsPresetApplied = volumeSettingsPresetAppliedDifferences(flamePresetForLocalControls(activeVolumeSettingsPresetReceipt.preset,flamePoseToDomain(flameEmitterPose,flameDomainTranslation,flameDomainScale).scale[0]), buildVolumeSettingsPreset());
+    } catch (error) {
+      console.error('Volume settings preset readback failed:', error);
+    }
+    showVolumeSettingsPresetStatus();
+  }
+  window.__kaminosVolumeSettingsPresetApplied = activeVolumeSettingsPresetApplied;
+  return activeVolumeSettingsPresetApplied;
+}
 
 async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
   const select = document.getElementById('settings-preset-select');
@@ -17239,8 +18289,33 @@ function syncReactionFrontExtractorLabels(controlsSnapshot) {
   }
 }
 
+function applyCanonicalVolumeMacroPreset(name) {
+  const preset = CANONICAL_VOLUME_MACRO_PRESETS[name];
+  if (!preset) return false;
+  applyVolumeScenePreset(preset.volumeScene || 'canonical_plume', { keepBudgetPreset: true });
+  for (const [key, value] of Object.entries(preset)) {
+    if (key === 'label' || key === 'volumeScene' || key === 'sourceMode' || key === 'renderMode' || key === 'motionMode' || key === 'contentMode') continue;
+    setVolumeControlValue(volumeSceneControlId(key), formatVolumePresetControlValue(key, value));
+  }
+  routedCanonicalSourceMode = normalizeCanonicalVolumeSourceMode(preset.sourceMode || routedCanonicalSourceMode);
+  routedCanonicalRenderMode = normalizeCanonicalRenderMode(preset.renderMode || routedCanonicalRenderMode);
+  routedCanonicalMotionMode = normalizeCanonicalMotionMode(preset.motionMode || routedCanonicalMotionMode);
+  routedCanonicalContentMode = normalizeCanonicalContentMode(preset.contentMode || routedCanonicalContentMode);
+  activeCanonicalVolumeMacroPreset = name;
+  return true;
+}
+
 function syncRayBudgetPresetButtons(){document.querySelectorAll('[data-volume-budget-preset]').forEach(btn=>btn.classList.toggle('active',btn.dataset.volumeBudgetPreset===activeVolumeRayBudgetPreset));}
 function syncRayBudgetGamutFromControls(){syncRayBudgetPresetButtons();}
+
+function applyRayBudgetPreset(name, options = {}) {
+  const preset = VOLUME_RAY_BUDGET_PRESETS[name];
+  if (!preset) return false;
+  setVolumeControlValue('volume-steps', preset.raySteps);
+  activeVolumeRayBudgetPreset = name;
+  routedVolumeRayBudgetPreset = options.route ? name : '';
+  return true;
+}
 
 window.showImagePlane = showImagePlane;
 
@@ -17306,6 +18381,16 @@ function backOffVolumeLegacyPyroControls(controls) {
     ...VOLUME_LEGACY_PYRO_BACKOFF,
     legacyPyroBackedOff: true,
   };
+}
+
+function linkedVolumeEmitterInletVelocity() {
+  return resolveVolumeEmitterInletVelocity({
+    momentumLinked: true,
+    sourceStrength: parseFloat(document.getElementById('volume-flow-rate').value),
+    velocitySpeed: 0.22,
+    transportSpeed: parseFloat(document.getElementById('volume-speed').value),
+    inletVelocity: parseFloat(document.getElementById('volume-emitter-inlet-velocity').value),
+  }).linkedInletVelocity;
 }
 
 function readVolumeControls({quality=viewportDisplay.quality,document=globalThis.document,routeParams=null}={}) {
@@ -17713,7 +18798,7 @@ function volumeGridHeightRatioLabel(ratio) {
 // and every sync reads the value the sim already uses (review GH-R3-02). Enter
 // or leaving the field applies; Escape restores the applied value; a complete
 // restore supersedes the pending edit (review GH-R4-01).
-
+const VOLUME_REBUILD_CONTROL_IDS = ['volume-grid-height-ratio'];
 const volumeRebuildApplied = new Map();
 const volumeRebuildPending = new Map();
 function volumeRebuildControlValue(id) {
@@ -17722,7 +18807,12 @@ function volumeRebuildControlValue(id) {
   volumeRebuildApplied.set(id, value);
   return value;
 }
-
+function holdVolumeRebuildControl(id) {
+  if (!volumeRebuildPending.has(id)) volumeRebuildPending.set(id, volumeRebuildApplied.has(id) ? volumeRebuildApplied.get(id) : document.getElementById(id).value);
+}
+function releaseVolumeRebuildControl(id) {
+  volumeRebuildPending.delete(id);
+}
 function publishVolumeGridPreview(preview) {
   window.__kaminosVolumeGridPreview = preview;
   window.dispatchEvent(new CustomEvent('kaminos-volume-grid-preview', { detail: preview }));
@@ -18327,9 +19417,108 @@ function refreshVolumeReadout() {
 }
 window.__kaminosRefreshVolumeReadout = refreshVolumeReadout;
 
+function frameVolumeCamera() {
+  if (vantageCaptureHeld) { setInfo('The agent sub is taking a picture'); return; }
+  const frame = DEFAULT_VOLUME_CAMERA_FRAME;
+  camera.position.set(...frame.position);
+  controls.target.set(...frame.target);
+  controls.update();
+  window._kaminosDirty?.();
+}
+
+function createVolumeMainRendererBridge() {
+  const sourceTexture = new THREE.CanvasTexture(volumePrototype.canvasElement());
+  sourceTexture.colorSpace = THREE.SRGBColorSpace;
+  sourceTexture.generateMipmaps = false;
+  sourceTexture.minFilter = THREE.LinearFilter;
+  sourceTexture.magFilter = THREE.LinearFilter;
+
+  const material = new THREE.MeshBasicMaterial({
+    map: sourceTexture,
+    transparent: true,
+    opacity: 1,
+    depthTest: false,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    toneMapped: false,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
+  mesh.name = 'volume-main-renderer-bridge-v0';
+  mesh.renderOrder = 9000;
+  mesh.visible = false;
+  mesh.userData.kaminosVolumeBridge = {
+    identity: 'volume-main-renderer-bridge-v0',
+    source: 'native-webgpu-volume-canvas',
+    composition: 'three-canvas-texture-additive-plane',
+  };
+  scene.add(mesh);
+
+  const direction = new THREE.Vector3();
+  return {
+    identity: 'volume-main-renderer-bridge-v0',
+    mesh,
+    texture: sourceTexture,
+    update() {
+      const state = volumePrototype.debugState();
+      const active = !!state.active;
+      mesh.visible = active;
+      if (!active) return false;
+      sourceTexture.needsUpdate = true;
+      const distance = Math.max(0.2, (camera.near || 0.1) * 2.5);
+      camera.getWorldDirection(direction);
+      mesh.position.copy(camera.position).addScaledVector(direction, distance);
+      mesh.quaternion.copy(camera.quaternion);
+      const height = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) * 0.5) * distance;
+      mesh.scale.set(height * camera.aspect, height, 1);
+      return true;
+    },
+    debugState() {
+      return {
+        identity: 'volume-main-renderer-bridge-v0',
+        visible: mesh.visible,
+        textureSource: volumePrototype?.canvasElement?.()?.id || null,
+        meshName: mesh.name,
+        renderOrder: mesh.renderOrder,
+        composition: mesh.userData.kaminosVolumeBridge.composition,
+      };
+    },
+    dispose() {
+      scene.remove(mesh);
+      sourceTexture.dispose();
+      material.dispose();
+      mesh.geometry.dispose();
+    },
+  };
+}
+
 let activeVolumeSettingsPresetReceipt = null;
 // Controls whose value after loading differs from the saved basin.
 let activeVolumeSettingsPresetApplied = Object.freeze([]);
+
+async function admitVolumeSettingsPresetRoute(params) {
+  const requestedPresetId = params.get('settings_preset');
+  const requestedAuthority = params.get('settings_preset_authority');
+  if (!requestedPresetId && !requestedAuthority) return null;
+  if (!requestedPresetId || requestedAuthority !== 'shared-volume-settings-preset-v2') {
+    throw new Error('settings preset route identity or authority is incomplete');
+  }
+  const [artifactResponse, schemaResponse] = await Promise.all([
+    fetch(`/api/volume-settings-preset?id=${encodeURIComponent(requestedPresetId)}`, { cache: 'no-store' }),
+    fetch('/volume-settings-preset-schema-v2.json', { cache: 'no-store' }),
+  ]);
+  const [artifact, schema] = await Promise.all([artifactResponse.json(), schemaResponse.json()]);
+  if (!artifactResponse.ok) throw new Error(artifact.error || `settings preset lookup failed: ${artifactResponse.status}`);
+  if (!schemaResponse.ok) throw new Error(`settings preset schema lookup failed: ${schemaResponse.status}`);
+  const receipt = validateVolumeSettingsPresetDocument(artifact, requestedPresetId, schema);
+  validateVolumeSettingsPresetTarget(receipt, params);
+  adaptiveMaterialSettingsAuthored=hasAuthoredAdaptiveMaterial(receipt);
+  activeVolumeSettingsPresetReceipt = receipt;
+  window.__kaminosVolumeSettingsPresetReceipt = receipt;
+  document.getElementById('settings-preset-label').value = receipt.label || receipt.presetId;
+  showVolumeSettingsPresetStatus();
+  return receipt;
+}
 
 function reportKaminosVolumeRouteInitFailure(error) {
   const params = new URLSearchParams(window.location.search);
@@ -18453,7 +19642,1061 @@ async function mountSceneRadianceRoute(params) {
 }
 
 async function initKaminosVolumeRoute() {
+  initKaminosVolumeRoute.boot ??= createFluidBoot(async () => {
+  if (compositionSetupError) throw compositionSetupError;
+  window.__kaminosVolumeControlStepsMadeContinuous = [];
+  const params = new URLSearchParams(window.location.search);
+  // Bare smoke routes boot into the committed default basin. Settings-preset
+  // routes carry their own complete basin and must not inherit this one.
+  const shouldApplyDefaultVolumeSmokeTallPreset =
+    params.get('kaminos_volume_smoke') === '1' &&
+    !params.has('settings_preset') &&
+    (!params.get('volume_scene') || ['flame', 'tall_plume'].includes(params.get('volume_scene'))) &&
+    !params.get('volume_tall_preset') &&
+    !params.get('volume_canonical_preset');
+  if (shouldApplyDefaultVolumeSmokeTallPreset) await applyDefaultVolumeSmokeBasin(params);
+  // Fire asked for without a named recipe: the semantic flame basin (fire-boot.mjs).
+  else { const semantic = fireAtBoot(params).basin; if (semantic) await applySemanticFlameBasin(params, semantic); }
+  await admitVolumeSettingsPresetRoute(params);
+  if(!params.has('settings_preset')&&params.has('volume_adaptive_material'))adaptiveMaterialSettingsAuthored=true;
+  routedBonfireAblationControls = normalizeBonfireAblationControls({
+    bonfireRecenter: routeBonfireAblationControl(params, 'volume_bonfire_recenter', 'bonfireRecenter'),
+    bonfireLateralDamping: routeBonfireAblationControl(params, 'volume_bonfire_lateral_damping', 'bonfireLateralDamping'),
+    bonfireShear: routeBonfireAblationControl(params, 'volume_bonfire_shear', 'bonfireShear'),
+    bonfireDetailForces: routeBonfireAblationControl(params, 'volume_bonfire_detail_forces', 'bonfireDetailForces'),
+    bonfireDepinch: routeBonfireAblationControl(params, 'volume_bonfire_depinch', 'bonfireDepinch'),
+    bonfireProjection: routeBonfireAblationControl(params, 'volume_bonfire_projection', 'bonfireProjection'),
+    bonfireTemporal: routeBonfireAblationControl(params, 'volume_bonfire_temporal', 'bonfireTemporal'),
+    bonfireInstabilityProbe: routeBonfireAblationControl(params, 'volume_bonfire_instability_probe', 'bonfireInstabilityProbe'),
+  });
+  const routeVolumeScene = params.get('volume_scene');
+  const routeTallPlumeOperatorPreset = params.get('volume_tall_preset');
+  const routeCanonicalMacroPreset = params.get('volume_canonical_preset');
+  if (routeVolumeScene && !shouldApplyDefaultVolumeSmokeTallPreset) {
+    applyVolumeScenePreset(routeVolumeScene, { keepBudgetPreset: true });
+  }
+  if (routeTallPlumeOperatorPreset) {
+    applyTallPlumeOperatorPreset(routeTallPlumeOperatorPreset, { keepBudgetPreset: true });
+  }
+  if (routeCanonicalMacroPreset) {
+    applyCanonicalVolumeMacroPreset(routeCanonicalMacroPreset);
+  }
+  routedCanonicalSourceMode = normalizeCanonicalVolumeSourceMode(params.get('volume_canonical_source_mode') || routedCanonicalSourceMode || 'current');
+  routedCanonicalRenderMode = normalizeCanonicalRenderMode(params.get('volume_canonical_render_mode') || routedCanonicalRenderMode || 'default');
+  routedCanonicalMotionMode = normalizeCanonicalMotionMode(params.get('volume_canonical_motion_mode') || routedCanonicalMotionMode || 'animated');
+  routedCanonicalContentMode = normalizeCanonicalContentMode(params.get('volume_canonical_content') || routedCanonicalContentMode || 'smoke');
+  const canonicalSourceDefaults = canonicalVolumeSourceDefaults(routedCanonicalSourceMode);
+  routedCanonicalSourceY = canonicalSourceDefaults.sourceY;
+  routedCanonicalInjection = canonicalSourceDefaults.injection;
+  routedCanonicalBuoyancy = canonicalSourceDefaults.buoyancy;
+  const routeCanonicalSourceY = Number(params.get('volume_canonical_source_y'));
+  if (params.has('volume_canonical_source_y') && Number.isFinite(routeCanonicalSourceY)) {
+    routedCanonicalSourceY = Math.max(-0.92, Math.min(-0.20, routeCanonicalSourceY));
+  }
+  const routeCanonicalInjection = Number(params.get('volume_canonical_injection'));
+  if (params.has('volume_canonical_injection') && Number.isFinite(routeCanonicalInjection)) {
+    routedCanonicalInjection = Math.max(0, Math.min(1.5, routeCanonicalInjection));
+  }
+  const routeCanonicalBuoyancy = Number(params.get('volume_canonical_buoyancy'));
+  if (params.has('volume_canonical_buoyancy') && Number.isFinite(routeCanonicalBuoyancy)) {
+    routedCanonicalBuoyancy = Math.max(0, Math.min(1.5, routeCanonicalBuoyancy));
+  }
+  const routeReactionFuelScale = Number(params.get('volume_reaction_fuel'));
+  if (params.has('volume_reaction_fuel') && Number.isFinite(routeReactionFuelScale)) {
+    routedVolumeReactionFuelScale = Math.max(0, Math.min(1.5, routeReactionFuelScale));
+  }
+  routedVolumeLifecycleEffect = normalizeVolumeLifecycleEffect(params.get('volume_lifecycle_effect') || routedVolumeLifecycleEffect);
+  const routeLifecycleT = Number(params.get('volume_lifecycle_t'));
+  if (params.has('volume_lifecycle_t') && Number.isFinite(routeLifecycleT)) {
+    routedVolumeLifecycleT = Math.max(0, Math.min(1, routeLifecycleT));
+  }
+  const routeQuenchVapor = Number(params.get('volume_quench_vapor'));
+  if (params.has('volume_quench_vapor') && Number.isFinite(routeQuenchVapor)) {
+    routedVolumeQuenchVapor = Math.max(0, Math.min(2, routeQuenchVapor));
+  }
+  routedVolumeRuntimeQuality = normalizeVolumeRuntimeQuality(params.get('volume_runtime_quality') || routedVolumeRuntimeQuality);
+  const routeGpuPressure = Number(params.get('volume_gpu_pressure'));
+  if (params.has('volume_gpu_pressure') && Number.isFinite(routeGpuPressure)) {
+    routedVolumeGpuPressure = clampVolumeValue(routeGpuPressure, 0, 1);
+  }
+  if (params.has('volume_quality_reason')) {
+    routedVolumeQualityReason = normalizeVolumeQualityReason(params.get('volume_quality_reason'));
+  }
+  const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
+  if (Number.isSafeInteger(routeResolution)&&routeResolution>=4) {
+    setVolumeControlValue('volume-resolution',routeResolution);
+  }
+  const routePressureIterations = Number(params.get('volume_pressure_iterations'));
+  const routePressureMode = normalizeVolumePressureMode(params.get('volume_pressure_mode'));
+  const hasExplicitPressureRoute =
+    params.has('volume_pressure_mode') ||
+    params.has('volume_pressure_iterations') ||
+    params.has('volume_pressure_strategy');
+  if (params.has('volume_pressure_iterations') && Number.isFinite(routePressureIterations)) {
+    routedVolumePressureIterations = Math.max(0, Math.min(12, Math.round(routePressureIterations)));
+  }
+  const routePressureStrategy = (params.get('volume_pressure_strategy') || '').toLowerCase();
+  if (routePressureStrategy === 'spatial_tiers' || routePressureStrategy === 'global') {
+    routedVolumePressureStrategy = routePressureStrategy;
+  }
+  if (params.has('volume_pressure_mode')) {
+    routedVolumePressureMode = routePressureMode;
+    setVolumeControlValue('volume-pressure-mode', routedVolumePressureMode);
+  } else if (hasExplicitPressureRoute) {
+    routedVolumePressureMode = volumePressureModeFromRoute(routedVolumePressureStrategy, routedVolumePressureIterations);
+    setVolumeControlValue('volume-pressure-mode', routedVolumePressureMode);
+  }
+  const routeSimProfile = (params.get('volume_sim_profile') || '').toLowerCase();
+  routedVolumeSimProfile = routeSimProfile === '1' || routeSimProfile === 'true' || routeSimProfile === 'yes' || routeSimProfile === 'on';
+  const routeGrid = Number(params.get('volume_grid'));
+  if (Number.isFinite(routeGrid)) {
+    document.getElementById('volume-grid-overlay').value = String(Math.max(0, Math.min(1, routeGrid)));
+  }
+  const routeInputRadius = Number(params.get('volume_input_radius'));
+  if (params.has('volume_input_radius') && Number.isFinite(routeInputRadius)) {
+    document.getElementById('volume-input-radius').value = String(Math.max(0.08, Math.min(0.7, routeInputRadius)));
+  }
+  const routeFlowRate = Number(params.get('volume_flow_rate'));
+  if (params.has('volume_flow_rate') && Number.isFinite(routeFlowRate)) {
+    document.getElementById('volume-flow-rate').value = String(Math.max(0, Math.min(2.5, routeFlowRate)));
+  }
+  const routeEmitterSourceDepth = Number(params.get('volume_emitter_source_depth'));
+  if (params.has('volume_emitter_source_depth') && Number.isFinite(routeEmitterSourceDepth)) {
+    document.getElementById('volume-emitter-source-depth').value = String(Math.max(0.006, Math.min(0.24, routeEmitterSourceDepth)));
+  }
+  const routeEmitterInletVelocity = Number(params.get('volume_emitter_inlet_velocity'));
+  if (params.has('volume_emitter_inlet_velocity') && Number.isFinite(routeEmitterInletVelocity)) {
+    document.getElementById('volume-emitter-inlet-velocity').value = String(Math.max(0, Math.min(1, routeEmitterInletVelocity)));
+  }
+  const routeEmitterShearWidth = Number(params.get('volume_emitter_shear_width_cells'));
+  if (params.has('volume_emitter_shear_width_cells') && Number.isFinite(routeEmitterShearWidth)) {
+    document.getElementById('volume-emitter-shear-width').value = String(Math.max(0.5, Math.min(8, routeEmitterShearWidth)));
+  }
+  const routeEmitterEdgeEntrainment = Number(params.get('volume_emitter_edge_entrainment'));
+  if (params.has('volume_emitter_edge_entrainment') && Number.isFinite(routeEmitterEdgeEntrainment)) {
+    document.getElementById('volume-emitter-edge-entrainment').value = String(Math.max(0, Math.min(2, routeEmitterEdgeEntrainment)));
+  }
+  if (params.has('volume_emitter_momentum_linked')) {
+    setVolumeControlValue('volume-emitter-momentum-linked', params.get('volume_emitter_momentum_linked'));
+  }
+  if (params.has('volume_fixed_source_dephase')) {
+    setVolumeControlValue('volume-fixed-source-dephase', params.get('volume_fixed_source_dephase'));
+  }
+  // A saved basin is its route. The inflow-boundary emitter controls (fuel
+  // fraction, inlet temperature, aperture pattern / count / ratio / seed,
+  // swirl, line weight, jet jitter, inlet turbulence and scale, puffing and
+  // period) and the wind model controls had no route read here, so a cold load
+  // of a saved basin fell back to the page defaults for all of them (witnessed
+  // at e05f6323). Each takes its route value through the shared setter.
+  // A retired aperture pattern (spiral, concentric) has no option in the select:
+  // assigning it would clear the selection and lose the saved request. The
+  // select shows the family shape the map falls back to, and the request is
+  // kept beside it so the controls snapshot still sends it to the resolver and
+  // the receipt names the fallback. Authoring a new pattern clears it.
+  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-reaction-law', 'volume-reactant-mixing-time', 'volume-reactant-cooling-time', 'volume-reactant-soot-yield', 'volume-appearance-model', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-grid-height-ratio', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
+  for (const id of VOLUME_ROUTE_RESTORED_CONTROL_IDS) {
+    const param = document.getElementById(id)?.dataset.volumeSettingsParam;
+    if (!param || !params.has(param)) continue;
+    const value = params.get(param);
+    const patternSelect = document.getElementById('volume-emitter-aperture-pattern');
+    if (id === 'volume-emitter-aperture-pattern' && VOLUME_RETIRED_APERTURE_PATTERNS.includes(value)) {
+      patternSelect.value = 'shape';
+      patternSelect.dataset.volumeRetiredPatternRequest = value;
+      continue;
+    }
+    setVolumeControlValue(id, value);
+  }
+  const routeFireRenderMode = (params.get('volume_fire_render_mode') || '').toLowerCase().replace(/-/g, '_');
+  const routeShellInspectMode = (params.get('volume_shell_inspect_mode') ?? params.get('volume_shell_inspect') ?? '').toLowerCase().replace(/-/g, '_');
+  // An empty saved mode is what the renderer draws as shell (mode 0); the
+  // select offers no empty option, so load it as shell.
+  for (const [param, id, min, max] of [
+  ]) {
+    const routed = Number(params.get(param));
+    if (params.has(param) && Number.isFinite(routed)) {
+      applyVolumeRangeSavedValue(document.getElementById(id), routed);
+    }
+  }
+  const routeDensity = Number(params.get('volume_density'));
+  if (params.has('volume_density') && Number.isFinite(routeDensity)) {
+    document.getElementById('volume-density').value = String(Math.max(0.35, Math.min(12, routeDensity)));
+  }
+  const routeProjection = Number(params.get('volume_projection'));
+  if (params.has('volume_projection') && Number.isFinite(routeProjection)) {
+    document.getElementById('volume-projection').value = String(Math.max(0, Math.min(1.5, routeProjection)));
+  }
+  const routeSpeed = Number(params.get('volume_speed'));
+  if (params.has('volume_speed') && Number.isFinite(routeSpeed)) {
+    document.getElementById('volume-speed').value = String(Math.max(0.1, Math.min(5, routeSpeed)));
+  }
+  const routeMicrodetail = Number(params.get('volume_microdetail'));
+  if (params.has('volume_microdetail') && Number.isFinite(routeMicrodetail)) {
+    document.getElementById('volume-microdetail').value = String(Math.max(0, Math.min(2.5, routeMicrodetail)));
+  }
+  const routeCurl = Number(params.get('volume_curl'));
+  if (params.has('volume_curl') && Number.isFinite(routeCurl)) {
+    document.getElementById('volume-curl').value = String(Math.max(0, Math.min(5, routeCurl)));
+  }
+  const routeInterfaceShred = Number(params.get('volume_interface_shred'));
+  if (params.has('volume_interface_shred') && Number.isFinite(routeInterfaceShred)) {
+    document.getElementById('volume-interface-shred').value = String(Math.max(0, Math.min(10, routeInterfaceShred)));
+  }
+  const routeFireLicks = Number(params.get('volume_fire_licks'));
+  if (params.has('volume_fire_licks') && Number.isFinite(routeFireLicks)) {
+    document.getElementById('volume-fire-licks').value = String(Math.max(0, Math.min(10, routeFireLicks)));
+  }
+  const routeRadiance = Number(params.get('volume_radiance'));
+  const routeGlow = Number(params.get('volume_glow'));
+  const routeFlowDebug = Number(params.get('volume_flow_debug'));
+  if (params.has('volume_flow_debug') && Number.isFinite(routeFlowDebug)) {
+    document.getElementById('volume-flow-debug').value = String(Math.max(0, Math.min(1, routeFlowDebug)));
+  }
+  const routeOracleActivityCue = Number(params.get('volume_oracle_activity_cue'));
+  if (params.has('volume_oracle_activity_cue') && Number.isFinite(routeOracleActivityCue)) {
+    document.getElementById('volume-oracle-activity-cue').value = String(Math.max(0, Math.min(1, Math.round(routeOracleActivityCue))));
+  }
+  const routeOracleActivityDisplay = Number(params.get('volume_oracle_activity_display'));
+  if (params.has('volume_oracle_activity_display') && Number.isFinite(routeOracleActivityDisplay)) {
+    document.getElementById('volume-oracle-activity-display').value = String(Math.max(0, Math.min(1, routeOracleActivityDisplay)));
+  }
+  const routeOracleActivityCurlNoise = Number(params.get('volume_oracle_activity_curl_noise'));
+  if (params.has('volume_oracle_activity_curl_noise') && Number.isFinite(routeOracleActivityCurlNoise)) {
+    document.getElementById('volume-oracle-activity-curl-noise').value = String(Math.max(0, Math.min(3, routeOracleActivityCurlNoise)));
+  }
+  const routeOracleActivityVorticity = Number(params.get('volume_oracle_activity_vorticity'));
+  if (params.has('volume_oracle_activity_vorticity') && Number.isFinite(routeOracleActivityVorticity)) {
+    document.getElementById('volume-oracle-activity-vorticity').value = String(Math.max(0, Math.min(3, routeOracleActivityVorticity)));
+  }
+  const routeOracleActivityMaterial = Number(params.get('volume_oracle_activity_material'));
+  if (params.has('volume_oracle_activity_material') && Number.isFinite(routeOracleActivityMaterial)) {
+    document.getElementById('volume-oracle-activity-material').value = String(Math.max(0, Math.min(3, routeOracleActivityMaterial)));
+  }
+  const routePyroDynamicDetail = Number(params.get('volume_pyro_detail'));
+  const routePyroMaterialGain = Number(params.get('volume_pyro_material_gain'));
+  const routePyroInterfaceFocus = Number(params.get('volume_pyro_interface_focus'));
+  const routePyroEdgeBite = Number(params.get('volume_pyro_edge_bite'));
+  const routePyroBiteBorder = Number(params.get('volume_pyro_bite_border'));
+  const routePyroBiteTeeth = Number(params.get('volume_pyro_bite_teeth'));
+  const routePyroBiteWake = Number(params.get('volume_pyro_bite_wake'));
+  const routePyroBiteHeight = Number(params.get('volume_pyro_bite_height'));
+  const routePyroBiteFireLock = Number(params.get('volume_pyro_bite_fire_lock'));
+  const routePyroBiteCore = Number(params.get('volume_pyro_bite_core'));
+  const routePyroBiteCoreCut = Number(params.get('volume_pyro_bite_core_cut'));
+  const routePyroBiteRim = Number(params.get('volume_pyro_bite_rim'));
+  const routePyroBiteRimCut = Number(params.get('volume_pyro_bite_rim_cut'));
+  const routePyroBiteAfter = Number(params.get('volume_pyro_bite_after'));
+  const routePyroBiteAfterCut = Number(params.get('volume_pyro_bite_after_cut'));
+  const routePyroFireMode = params.get('volume_pyro_fire_mode');
+  const routePyroFlamePaint = Number(params.get('volume_pyro_flame_paint'));
+  const routePyroStockMix = Number(params.get('volume_pyro_stock_mix'));
+  const routePyroFlameLuma = Number(params.get('volume_pyro_flame_luma'));
+  const routePyroFlameCoreColor = params.get('volume_pyro_flame_core_color');
+  if (routePyroFlameCoreColor) setVolumeColorControlValue(routePyroFlameCoreColor, '#fff4b8');
+  const routePyroFlameEdgeColor = params.get('volume_pyro_flame_edge_color');
+  if (routePyroFlameEdgeColor) setVolumeColorControlValue(routePyroFlameEdgeColor, '#ff8a24');
+  const routePyroBiteHeat = Number(params.get('volume_pyro_bite_heat'));
+  const routePyroBiteChroma = Number(params.get('volume_pyro_bite_chroma'));
+  const routePyroBiteLuma = Number(params.get('volume_pyro_bite_luma'));
+  const routePyroBiteEmberColor = params.get('volume_pyro_bite_ember_color');
+  if (routePyroBiteEmberColor) setVolumeColorControlValue(routePyroBiteEmberColor, '#e65a1a');
+  const routePyroBiteHotColor = params.get('volume_pyro_bite_hot_color');
+  if (routePyroBiteHotColor) setVolumeColorControlValue(routePyroBiteHotColor, '#fff4b8');
+  const routePyroSmokeFold = Number(params.get('volume_pyro_smoke_fold'));
+  const routePyroFoldBorder = Number(params.get('volume_pyro_fold_border'));
+  const routePyroFoldWake = Number(params.get('volume_pyro_fold_wake'));
+  const routePyroWakeLift = Number(params.get('volume_pyro_wake_lift'));
+  const routePyroWakeWarmth = Number(params.get('volume_pyro_wake_warmth'));
+  const routePyroWakeLuma = Number(params.get('volume_pyro_wake_luma'));
+  const routePyroWakeShadowColor = params.get('volume_pyro_wake_shadow_color');
+  if (routePyroWakeShadowColor) setVolumeColorControlValue(routePyroWakeShadowColor, '#384c50');
+  const routePyroWakeEmberColor = params.get('volume_pyro_wake_ember_color');
+  if (routePyroWakeEmberColor) setVolumeColorControlValue(routePyroWakeEmberColor, '#b06a2a');
+  const routePyroRadiance = Number(params.get('volume_pyro_radiance'));
+  const routePyroRadianceGate = Number(params.get('volume_pyro_radiance_gate'));
+  const routePyroRadianceSpill = Number(params.get('volume_pyro_radiance_spill'));
+  const routePyroRadianceWarmth = Number(params.get('volume_pyro_radiance_warmth'));
+  const routePyroRadianceHue = Number(params.get('volume_pyro_radiance_hue'));
+  const routePyroRadianceChroma = Number(params.get('volume_pyro_radiance_chroma'));
+  const routePyroRadianceLuma = Number(params.get('volume_pyro_radiance_luma'));
+  const routePyroRadianceCoolColor = params.get('volume_pyro_radiance_cool_color');
+  if (routePyroRadianceCoolColor) setVolumeColorControlValue(routePyroRadianceCoolColor, '#7aa8b8');
+  const routePyroRadianceWarmColor = params.get('volume_pyro_radiance_warm_color');
+  if (routePyroRadianceWarmColor) setVolumeColorControlValue(routePyroRadianceWarmColor, '#d18438');
+  const routePyroRadianceSource = params.get('volume_pyro_radiance_source');
+  const routePyroRadianceHeight = Number(params.get('volume_pyro_radiance_height'));
+  const routePyroRadianceBorder = Number(params.get('volume_pyro_radiance_border'));
+  const routePyroRadianceTeeth = Number(params.get('volume_pyro_radiance_teeth'));
+  const routePyroRadianceRise = Number(params.get('volume_pyro_radiance_rise'));
+  const routePyroRadianceFireLock = Number(params.get('volume_pyro_radiance_fire_lock'));
+  const routePyroFlowBite = Number(params.get('volume_pyro_flow_bite'));
+  const routePyroFlowBorder = Number(params.get('volume_pyro_flow_border'));
+  const routePyroFlowTeeth = Number(params.get('volume_pyro_flow_teeth'));
+  const routePyroFlowRise = Number(params.get('volume_pyro_flow_rise'));
+  const routePyroFlowFireLock = Number(params.get('volume_pyro_flow_fire_lock'));
+  const routePyroFlowLuma = Number(params.get('volume_pyro_flow_luma'));
+  const routePyroFlowRadiance = Number(params.get('volume_pyro_flow_radiance'));
+  const routePyroFlowSpikes = Number(params.get('volume_pyro_flow_spikes'));
+  const routePyroFlowCoolColor = normalizeVolumeHexColor(params.get('volume_pyro_flow_cool_color'), '');
+  const routePyroFlowHotColor = normalizeVolumeHexColor(params.get('volume_pyro_flow_hot_color'), '');
+  const routePyroDiagnosticPaint = Number(params.get('volume_pyro_diagnostic_paint'));
+  const routePyroDebugTint = Number(params.get('volume_pyro_debug_tint'));
+  const routePyroOverdrive = Number(params.get('volume_pyro_overdrive'));
+  const routedPressureTierControls = normalizeVolumePressureTierControls({
+    overlay: params.has('volume_pressure_tier_overlay') ? Number(params.get('volume_pressure_tier_overlay')) : document.getElementById('volume-pressure-tier-overlay').value,
+    lowerMax: params.has('volume_pressure_tier_lower_max') ? Number(params.get('volume_pressure_tier_lower_max')) : document.getElementById('volume-pressure-tier-lower-max').value,
+    heroMin: params.has('volume_pressure_tier_hero_min') ? Number(params.get('volume_pressure_tier_hero_min')) : document.getElementById('volume-pressure-tier-hero-min').value,
+    heroMax: params.has('volume_pressure_tier_hero_max') ? Number(params.get('volume_pressure_tier_hero_max')) : document.getElementById('volume-pressure-tier-hero-max').value,
+  });
+  setVolumeControlValue('volume-pressure-tier-overlay', routedPressureTierControls.overlay.toFixed(2));
+  setVolumeControlValue('volume-pressure-tier-lower-max', routedPressureTierControls.lowerMax.toFixed(2));
+  setVolumeControlValue('volume-pressure-tier-hero-min', routedPressureTierControls.heroMin.toFixed(2));
+  setVolumeControlValue('volume-pressure-tier-hero-max', routedPressureTierControls.heroMax.toFixed(2));
+  const routeCanonicalSpread = Number(params.get('volume_canonical_spread'));
+  if (params.has('volume_canonical_spread') && Number.isFinite(routeCanonicalSpread)) {
+    document.getElementById('volume-canonical-spread').value = String(Math.max(0, Math.min(1.6, routeCanonicalSpread)));
+  }
+  const routeCanonicalCenterline = Number(params.get('volume_canonical_centerline'));
+  if (params.has('volume_canonical_centerline') && Number.isFinite(routeCanonicalCenterline)) {
+    document.getElementById('volume-canonical-centerline').value = String(Math.max(0, Math.min(1.8, routeCanonicalCenterline)));
+  }
+  const routeCanonicalBodyBalance = Number(params.get('volume_canonical_body_balance'));
+  if (params.has('volume_canonical_body_balance') && Number.isFinite(routeCanonicalBodyBalance)) {
+    document.getElementById('volume-canonical-body-balance').value = String(Math.max(0, Math.min(1.5, routeCanonicalBodyBalance)));
+  }
+  const routeRayBudgetPreset = params.get('volume_ray_budget_preset');
+  if (routeRayBudgetPreset) {
+    applyRayBudgetPreset(routeRayBudgetPreset, { route: true });
+  }
+  const routeRaySteps = Number(params.get('volume_steps'));
+  if(params.has('volume_raymarch_mode'))params.set('volume_raymarch_mode',opticalSteppingConfig({mode:params.get('volume_raymarch_mode')}).mode);
+  if (params.has('volume_steps') && Number.isFinite(routeRaySteps)) {
+    document.getElementById('volume-steps').value = String(Math.max(1, Math.min(160, routeRaySteps)));
+    activeVolumeRayBudgetPreset = '';
+    routedVolumeRayBudgetPreset = '';
+  }
+  const routeOccupancySkip = Number(params.get('volume_occupancy_skip'));
+  if (params.has('volume_occupancy_skip') && Number.isFinite(routeOccupancySkip)) {
+    document.getElementById('volume-occupancy-skip').value = String(Math.max(0, Math.min(1, routeOccupancySkip)));
+  }
+  const routeFireScale = Number(params.get('volume_fire_scale'));
+  if (params.has('volume_fire_scale') && Number.isFinite(routeFireScale)) {
+    document.getElementById('volume-fire-scale').value = String(Math.max(0.35, Math.min(1.3, routeFireScale)));
+  }
+  const routePlumeHeight = Number(params.get('volume_plume_height'));
+  if (params.has('volume_plume_height') && Number.isFinite(routePlumeHeight)) {
+    document.getElementById('volume-plume-height').value = String(Math.max(0.7, Math.min(2.2, routePlumeHeight)));
+  }
+  const routeWindStrength = Number(params.get('volume_wind_strength'));
+  if (params.has('volume_wind_strength') && Number.isFinite(routeWindStrength)) {
+    document.getElementById('volume-wind-strength').value = String(Math.max(0, Math.min(1.5, routeWindStrength)));
+  }
+  const routeWindAngle = Number(params.get('volume_wind_angle'));
+  if (params.has('volume_wind_angle') && Number.isFinite(routeWindAngle)) {
+    document.getElementById('volume-wind-angle').value = String(Math.max(-180, Math.min(180, routeWindAngle)));
+  }
+  const routeWindHeight = Number(params.get('volume_wind_height'));
+  if (params.has('volume_wind_height') && Number.isFinite(routeWindHeight)) {
+    document.getElementById('volume-wind-height').value = String(Math.max(-0.8, Math.min(0.8, routeWindHeight)));
+  }
+  const routeRenderScale = Number(params.get('volume_render_scale'));
+  if (params.has('volume_render_scale') && Number.isFinite(routeRenderScale)) {
+    setVolumeRenderScaleControlValue(routeRenderScale);
+  }
 
+  if (params.has('volume_residual_model_url')) {
+
+  }
+
+  if (params.has('volume_residual_strength') && Number.isFinite(null)) {
+
+  }
+
+  if (params.has('volume_residual_feature_debug') && Number.isFinite(null)) {
+
+  }
+  const routeLookFreeze = Number(params.get('volume_look_freeze'));
+  if (params.has('volume_look_freeze') && Number.isFinite(routeLookFreeze)) {
+    document.getElementById('volume-look-freeze').value = String(Math.max(0, Math.min(1, Math.round(routeLookFreeze))));
+  }
+  const routeVolumeExposure = Number(params.get('volume_exposure'));
+  const routeBoundaryFireCleanColor = params.get('volume_reaction_boundary_fire_clean_color');
+  if (routeBoundaryFireCleanColor) {
+    setVolumeColorControlValue(routeBoundaryFireCleanColor, '#4a86ff');
+  }
+  const routeBoundaryFireSootColor = params.get('volume_reaction_boundary_fire_soot_color');
+  if (routeBoundaryFireSootColor) {
+    setVolumeColorControlValue(routeBoundaryFireSootColor, '#ffc460');
+  }
+  if (params.has('volume_reaction_live_view')) {
+    document.getElementById('volume-reaction-live-view').value = normalizeReactionFrontLiveView(params.get('volume_reaction_live_view'));
+  }
+  if (params.has('volume_boundary_sidecar_source')) {
+    document.getElementById('volume-boundary-sidecar-source').value = normalizeBoundarySidecarSource(params.get('volume_boundary_sidecar_source'));
+  }
+  if (params.has('volume_boundary_sidecar_view')) {
+    document.getElementById('volume-boundary-sidecar-view').value = normalizeBoundarySidecarView(params.get('volume_boundary_sidecar_view'));
+  }
+  if (params.has('volume_tone_mapping')) {
+    const mode = params.get('volume_tone_mapping');
+    if (!['agx', 'custom'].includes(mode)) throw new Error(`unsupported volume_tone_mapping route: ${mode}`);
+    document.getElementById('volume-tone-mapping').value = mode;
+  }
+  for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
+    const routeValue = Number(params.get(field.param));
+    if (!params.has(field.param) || !Number.isFinite(routeValue)) continue;
+    const el = document.getElementById(field.id);
+    if (el?.type === 'range') applyVolumeRangeSavedValue(el, routeValue);
+    else if (el) el.value = clampVolumeControlValue(routeValue, field).toFixed(field.decimals);
+  }
+  const routePyroCompare = params.get('volume_pyro_compare');
+  const routeExternalEmitters = params.get('volume_external_emitters') || '';
+  const requestedEmitterFamily = params.get('volume_emitter_family') || 'cluster';
+  const requestedEmitterSourceLaw = params.get('volume_emitter_source_law') || 'legacy-volume';
+  const requestedEmitterInletProfile = params.get('volume_emitter_inlet_profile') || 'plug';
+  if (!VOLUME_RUNTIME_EMITTER_FAMILIES.includes(requestedEmitterFamily)) {
+    throw new Error(`unsupported volume_emitter_family route: ${requestedEmitterFamily}`);
+  }
+  if (!VOLUME_EMITTER_SOURCE_LAWS.includes(requestedEmitterSourceLaw)) {
+    throw new Error(`unsupported volume_emitter_source_law route: ${requestedEmitterSourceLaw}`);
+  }
+  if (!VOLUME_EMITTER_INLET_PROFILES.includes(requestedEmitterInletProfile)) {
+    throw new Error(`unsupported volume_emitter_inlet_profile route: ${requestedEmitterInletProfile}`);
+  }
+  if (routeExternalEmitters && requestedEmitterFamily !== 'cluster') {
+    throw new Error(`volume emitter source conflict: volume_external_emitters=${routeExternalEmitters} cannot compose with volume_emitter_family=${requestedEmitterFamily}`);
+  }
+  document.getElementById('emitter-assay-family').value = requestedEmitterFamily;
+  document.getElementById('volume-emitter-source-law').value = requestedEmitterSourceLaw;
+  document.getElementById('volume-emitter-inlet-profile').value = requestedEmitterInletProfile;
+  if (params.has('volume_artistic_swirl')) {
+    setVolumeControlValue('volume-artistic-swirl', params.get('volume_artistic_swirl'));
+  }
+  if (params.has('volume_phased_sway')) {
+    setVolumeControlValue('volume-phased-sway', params.get('volume_phased_sway'));
+  }
+  for (const [id, param] of [
+    ['volume-raymarch-mode', 'volume_raymarch_mode'],
+    ['volume-optical-tolerance', 'volume_optical_tolerance'],
+    ['volume-history-influence', 'volume_history_influence'],
+    ['volume-history-window', 'volume_history_window'],
+    ['volume-reconstruction-fresh', 'volume_reconstruction_fresh'],
+    ['volume-integral-reconstruction', 'volume_integral_reconstruction'],
+    ['volume-reconstruction-spatial', 'volume_reconstruction_spatial'],
+    ['volume-reconstruction-radius', 'volume_reconstruction_radius'],
+    ['volume-reconstruction-window', 'volume_reconstruction_window'],
+    ['volume-reconstruction-response', 'volume_reconstruction_response'],
+    ['volume-reconstruction-edge', 'volume_reconstruction_edge'],
+    ['volume-reconstruction-edges', 'volume_reconstruction_edges'],
+    ['volume-reconstruction-image-edge', 'volume_reconstruction_image_edge'],
+
+    ['volume-ray-step-telemetry', 'volume_ray_step_telemetry'],
+    ['volume-ray-noise-animated', 'volume_ray_noise_animated'],
+    ['volume-quadrature-jitter', 'volume_quadrature_jitter'],
+    ['volume-display-reconstruction', 'volume_display_reconstruction'],
+    ['volume-display-grid-scale', 'volume_display_grid_scale'],
+    ['volume-display-alignment', 'volume_display_alignment'],
+    ['volume-emission-interpolation', 'volume_emission_interpolation'],
+    ['volume-smoke-interpolation', 'volume_smoke_interpolation'],
+    ['volume-emission-smoothing', 'volume_emission_smoothing'],
+    ['volume-smoke-smoothing', 'volume_smoke_smoothing'],
+    ['volume-flame-priority', 'volume_flame_priority'],
+    ['volume-swirl-jostle', 'volume_swirl_jostle'],
+    ['volume-pressure-solver', 'volume_pressure_solver'],
+    ['volume-pressure-resolution', 'volume_pressure_resolution'],
+    ['volume-world-smoke', 'volume_world_smoke'], ['volume-world-smoke-flow', 'volume_world_smoke_flow'], ['volume-world-smoke-material', 'volume_world_smoke_material'], ['volume-world-smoke-extent', 'volume_world_smoke_extent'], ['volume-world-smoke-transition', 'volume_world_smoke_transition'],
+    ['volume-world-smoke-intermediate', 'volume_world_smoke_intermediate'],
+    ...REGION_CONTROL_FIELDS.map(field=>[field.id,field.param]),
+    ...ADAPTIVE_MATERIAL_FIELDS.map(field=>[field.id,field.param]),
+    ...FINE_COVERAGE_FIELDS.map(field=>[field.id,field.param]),
+    ...WORLD_CALIBRATION_FIELDS.map(field=>[field.id,field.param]),
+    ...SIMULATION_LEVER_FIELDS.map(field=>[field.id,field.param]),
+    ['volume-pressure-solver-iterations', 'volume_pressure_solver_iterations'],
+    ['volume-advection-scheme', 'volume_advection_scheme'],
+    ['volume-confinement', 'volume_confinement'],
+    ['volume-time-step', 'volume_time_step'],
+    ['volume-fine-breakup-localization', 'volume_fine_breakup_localization'],
+    ['volume-common-gas-transport', 'volume_common_gas_transport'],
+  ]) {
+    if (params.has(param)) setVolumeControlValue(id, params.get(param));
+  }
+  updateVolumeControlLabels();
+  flameInspector?.sync(true);
+  volumePrototype = createKaminosVolumePrototype({
+    THREE,
+    viewport: document.getElementById('viewport'),
+    camera,
+    controls,
+    getControls: readVolumeControls,
+    onStatus: status => {
+      document.getElementById('volume-backend').textContent = status.backend || status.phase || 'unknown';
+      const p = status.pressureResolution;
+      if (p) document.getElementById('volume-pressure-resolution-val').textContent = p.dispatched
+        ? `${p.pressureDims.join('×')} pressure · ${p.materialDims.join('×')} material (live)`
+        : `original${p.reason ? ` (${p.reason})` : ''}`;
+      flameInspector?.sync();
+      if (status.error) setInfo(`Volume renderer: ${status.error}`);
+    },
+    transparentCanvas: fingerFluidPyroCompositionRequested() || isFireLightFieldRoute() || isAuthoredKilnCollisionRoute(),
+    // The finger-fluid liquid-contact route adopts the fluid solver's device
+    // through its descriptor; seating the host device here would refuse it.
+    sharedGpuContext: fingerFluidPyroCompositionRequested() ? null : sharedGpu,
+    getPresentationSize: () => outputCaptureExtent??recordingExtent,
+    onPresentedFrame: frame=>{if(recordingFrameSink&&isSceneItemVisible('flame-field'))recordingFrameSink({fire:frame});},
+    getSceneDepth: () => ordinarySceneDepthProvider?.() ?? null,
+    // The kiln is an explicit authored-solid experiment. Its exact registered
+    // mesh and world transform, not its bounding box or camera depth, feed the
+    // volume solver when the scene route requests volume_collision=kiln.
+    getSceneCollision: () => {
+      if (!isAuthoredKilnCollisionRoute()) {sceneColliderCollection.clear();return null;}
+      return sceneColliderCollection.update(workingScene.objects);
+    },
+  });
+  if (isFireLightFieldRoute() || isAuthoredKilnCollisionRoute()) {
+    // Composition routes need the live Three scene visible under the flame:
+    // alpha-composite the native volume canvas and depth-clip volume behind
+    // authored surfaces instead of painting an opaque near-black overlay.
+    const volumeCanvasElement = volumePrototype.canvasElement?.();
+    if (volumeCanvasElement) volumeCanvasElement.style.background = 'transparent';
+  }
+  window.__kaminosVolumePrototype = volumePrototype;
+  volumePrototype.setRayStepTelemetryCanvas(document.getElementById('volume-ray-step-display'));
+  if (fireLightFieldRouteParams().get('volume_light_field_optical_preview') === '1') {
+    import('./volume-optical-native.mjs').then(({installOpticalSteppingPreview}) => {
+      installOpticalSteppingPreview(volumePrototype, document);
+    });
+  }
+  await syncSceneRadianceRoute();
+  // Optional composition-module seam: a URL HASH entry
+  // #composition_module_url=<module> (hash, not query — settings routes are
+  // contract-validated and reject unexpected query parameters) loads an ES
+  // module before GPU acquisition and mounts after the volume exists via
+  // mountComposition({ prototype, params, sharedGpu, host }). Absent: no-op. Used to compose
+  // long-running inference (e.g. MoGe) into the live app route.
+  {
+    if (compositionModule) {
+      window.__kaminosCompositionSetup.phase = 'mount';
+      Promise.resolve().then(() => compositionModule.mountComposition({ prototype: volumePrototype, params: new URLSearchParams(window.location.search), sharedGpu, host: compositionHost }))
+        .then(() => { window.__kaminosCompositionSetup.status = 'mounted'; })
+        .catch(error => {
+          Object.assign(window.__kaminosCompositionSetup, {status: 'failed', error: String(error?.message || error)});
+          console.error('composition module failed:', error);
+          setInfo(`Composition module: ${error.message}`);
+        });
+    }
+  }
+  let volumeEmitterRuntimeFrame = 0;
+  function applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot, pose = flameEmitterPose, { sourceEnabled = controlsSnapshot.emitterSourceLaw==='immersed-source'?flamePoseInDomain(pose,flameDomainTranslation,flameDomainScale,effectiveFlameDomainControls(controlsSnapshot,volumePrototype)):!flameEmitterInjectionSuspended } = {}) {
+    if(controlsSnapshot.emitterSourceLaw==='immersed-source')sourceEnabled=sourceEnabled&&flamePoseInDomain(pose,flameDomainTranslation,flameDomainScale,effectiveFlameDomainControls(controlsSnapshot,volumePrototype));
+    const family = document.getElementById('emitter-assay-family').value;
+    if(workingScene.objects.filter(entry=>entry.type===FLAME_EMITTER_TYPE).length>1&&(family==='cluster'||controlsSnapshot.emitterSourceLaw!=='immersed-source'))throw Error('Multiple scene sources require the immersed source law');
+    if (routeExternalEmitters && family !== 'cluster') {
+      throw new Error(`volume emitter source conflict: volume_external_emitters=${routeExternalEmitters} cannot compose with volume_emitter_family=${family}`);
+    }
+    const timestampMs = performance.now();
+    const frameId = `cockpit-${family}-${volumePrototype.debugState().frameCount}-${volumeEmitterRuntimeFrame += 1}`;
+    const externalRequest = routeExternalEmitters === 'synthetic_hand_trails'
+      ? {
+          mode: 'synthetic_hand_trails',
+          frameId,
+          timestampMs,
+          coordinateSpace: 'volume-local',
+          emitters: volumePrototype.syntheticHandTrailEmitters(timestampMs),
+        }
+      : null;
+    const receipt = applyVolumeEmitterFamilyRuntime({
+      prototype: volumePrototype,
+      family,
+      controls: emitterCompilerControls(controlsSnapshot),
+      timestampMs,
+      frameId,
+      externalRequest,
+      ...(family !== 'cluster' ? { emitterPose: flamePoseToDomain(pose, flameDomainTranslation, flameDomainScale) } : {}),
+      ...(family !== 'cluster' ? { sourceEnabled: authoredFlamePresent && primaryAuthoredFlameSource()?.emissionEnabled!==false && isSceneItemVisible(primaryAuthoredFlameSource()?.id) && sourceEnabled } : {}),
+    });
+    window.__kaminosVolumeEmitterReceipt = receipt;
+    if (family !== 'cluster') {
+      if(controlsSnapshot.emitterSourceLaw==='immersed-source')flameEmitterInjectionSuspended=authoredFlamePresent&&!sourceEnabled;
+      receipt.requested.worldEmitterPose = structuredClone(pose);
+      receipt.effective.worldEmitterPose = structuredClone(pose);
+      receipt.effective.domainTranslation = [...flameDomainTranslation];
+      receipt.effective.domainScale = flameDomainScale;
+      if (controlsSnapshot.emitterSourceLaw === 'immersed-source') {
+        // Keep the Workbench representation of centre/aim in agreement with
+        // the authored object. Radius remains source data; S scales the object.
+        const mapped=receipt.requested.immersedControls;
+        for(const [suffix,key] of [['centre-x','immersedCentreX'],['centre-y','immersedCentreY'],['centre-z','immersedCentreZ'],['yaw','immersedYaw'],['pitch','immersedPitch']]) {
+          const control=document.getElementById(`volume-immersed-${suffix}`);
+          control.step='any';
+          if (control.value !== String(mapped[key])) setVolumeControlValue(control.id,mapped[key]);
+          const label=document.getElementById(`volume-immersed-${suffix}-val`);
+          const text=Number(mapped[key]).toFixed(2);
+          if (label.textContent !== text) label.textContent=text;
+        }
+      }
+    }
+    const primary=primaryAuthoredFlameSource();
+    if(primary&&family!=='cluster'){
+      primary.emission={domainId:FIRE_DOMAIN_ID,settings:Object.fromEntries(Object.entries(readVolumeSettingsValues().domControls).filter(([id])=>fireControlOwner(id)==='source'))};
+      primary.object.userData.kaminosSceneObject.emission=primary.emission;
+    }
+    renderVolumeEmitterReceipt(receipt);
+    if (receipt.effective.worldEmitterPose) flameEmitterPose = structuredClone(receipt.effective.worldEmitterPose);
+    ensureAuthoredFlameEmitter();
+    syncAuthoredFlameSources();
+    return receipt;
+  }
+  applyFlameEmitterPose = (pose, options) => applyVolumeEmitterFamilyRuntimeToCockpit(readVolumeControls(), pose, options);
+  if (params.get('promoted_fire_parity') === '1') {
+    volumePrototype.setCapturePaused(true);
+  }
+  const readFireActorParityCamera = () => ({
+    type: camera.type,
+    fov: camera.fov,
+    near: camera.near,
+    far: camera.far,
+    position: camera.position.toArray(),
+    target: controls.target.toArray(),
+    up: camera.up.toArray(),
+  });
+  const applyFireActorParityCamera = async spec => {
+    camera.fov = Number(spec.fov);
+    camera.near = Number(spec.near);
+    camera.far = Number(spec.far);
+    camera.position.fromArray(spec.position);
+    camera.up.fromArray(spec.up);
+    controls.target.fromArray(spec.target);
+    camera.updateProjectionMatrix();
+    controls.update();
+    window._kaminosDirty?.();
+    return readFireActorParityCamera();
+  };
+  let fireActorParityPackageVerification = null;
+  let fireActorParityEngineVerification = null;
+  const verifyFireActorParityEngine = async () => {
+    if (fireActorParityEngineVerification) return fireActorParityEngineVerification;
+    fireActorParityEngineVerification = (async () => {
+      const response = await fetch('./volume-core.js', { cache: 'no-store' });
+      if (!response.ok) throw new Error(`cockpit live parity engine fetch failed: ${response.status}`);
+      const bytes = await response.arrayBuffer();
+      const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), byte => (
+        byte.toString(16).padStart(2, '0')
+      )).join('');
+      if (digest !== FIRE_ACTOR_LIVE_PARITY_IDENTITY.engineSha256) {
+        throw new Error(`cockpit live parity engine identity mismatch:${digest}`);
+      }
+      return {
+        sourceCommit: FIRE_ACTOR_LIVE_PARITY_IDENTITY.engineSourceCommit,
+        sha256: digest,
+      };
+    })();
+    return fireActorParityEngineVerification;
+  };
+  const verifyFireActorParityPackage = async () => {
+    if (fireActorParityPackageVerification) return fireActorParityPackageVerification;
+    fireActorParityPackageVerification = (async () => {
+      const packageUrl = './artifacts/basin-promotions/big-raymarch-hero-flamebowl-cotangent-covariance/revisions/basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95/package.json';
+      const response = await fetch(packageUrl, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`cockpit live parity package fetch failed: ${response.status}`);
+      const text = await response.text();
+      const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))), byte => (
+        byte.toString(16).padStart(2, '0')
+      )).join('');
+      const packageDocument = JSON.parse(text);
+      if (packageDocument.schema !== 'kaminos.volume.basin-promotion-package.v1'
+        || packageDocument.revision !== FIRE_ACTOR_LIVE_PARITY_IDENTITY.basinRevision
+        || digest !== FIRE_ACTOR_LIVE_PARITY_IDENTITY.packageSha256) {
+        throw new Error('cockpit live parity package identity mismatch');
+      }
+      const preset = packageDocument.settingsPreset?.artifact?.preset;
+      const basinControls = Object.values(preset?.domControls || {});
+      const rendererControls = Object.values(preset?.rendererControls || {});
+      const substitutions = [...basinControls, ...rendererControls].flatMap(control => {
+        const element = document.getElementById(control.id);
+        if (!element) return [{ id: control.id, requested: control.value, effective: null }];
+        const requested = Object.hasOwn(control, 'rawValue') ? control.rawValue : control.value;
+        const effective = readVolumeDomControlValue(element);
+        const equal = typeof requested === 'number' && typeof effective === 'number'
+          ? Math.abs(requested - effective) <= 0.000001
+          : String(requested) === String(effective);
+        return equal ? [] : [{ id: control.id, requested, effective }];
+      });
+      if (basinControls.length !== 186 || rendererControls.length !== 5 || substitutions.length) {
+        throw new Error(`cockpit live parity control mismatch: ${JSON.stringify(substitutions.slice(0, 8))}`);
+      }
+      return {
+        schema: 'kaminos.fire-actor-live-parity-package-verification.v1',
+        status: 'verified',
+        packageUrl,
+        packageSha256: digest,
+        revision: packageDocument.revision,
+        controls: { basin: basinControls.length, renderer: rendererControls.length },
+      };
+    })();
+    return fireActorParityPackageVerification;
+  };
+  window.kaminosFireActorParity = installFireActorLiveParitySurface({
+    surface: 'cockpit',
+    prepareSurface: async () => {
+      document.getElementById('sidebar').hidden = true;
+      document.getElementById('volume-authored-mix-panel').hidden = true;
+      await new Promise(resolveFrame => requestAnimationFrame(() => requestAnimationFrame(resolveFrame)));
+      window.dispatchEvent(new Event('resize'));
+    },
+    ensureEngine: async () => {
+      await Promise.all([verifyFireActorParityPackage(), verifyFireActorParityEngine()]);
+      while (!volumePrototype.debugState().active) {
+        const error = volumePrototype.debugState().error;
+        if (error) throw new Error(`cockpit route-owned activation failed: ${error}`);
+        await new Promise(resolveFrame => requestAnimationFrame(resolveFrame));
+      }
+      return volumePrototype;
+    },
+    readEngine: () => volumePrototype,
+    readEngineIdentity: verifyFireActorParityEngine,
+    applyCamera: applyFireActorParityCamera,
+    readCamera: readFireActorParityCamera,
+    readFallbackReason: (debug, presentation) => {
+      if (debug.error) return debug.error;
+
+      if (null !== presentation.composition) {
+        return `composition-mismatch:${null}`;
+      }
+      if (debug.raymarchSmokePresentationModeFallbackReason) return debug.raymarchSmokePresentationModeFallbackReason;
+      if (debug.raymarchSmokePresentationModeEffective !== presentation.smoke) {
+        return `smoke-presentation-mismatch:${debug.raymarchSmokePresentationModeEffective}`;
+      }
+      if (presentation.splats === 'on' && null) return null;
+      return null;
+    },
+  });
+  const requestedVolumePresentation = params.get('volume_presentation') || 'beauty';
+  window.__kaminosVolumePresentationReceipt = volumePrototype.setVolumePresentationMode?.(requestedVolumePresentation) || null;
+  syncVolumePresentationControls(window.__kaminosVolumePresentationReceipt);
+  const requestedRaymarchSmokePresentation = params.get('volume_raymarch_smoke') || 'on';
+  window.__kaminosRaymarchSmokePresentationReceipt = volumePrototype.setRaymarchSmokePresentationMode?.(requestedRaymarchSmokePresentation) || null;
+  syncRaymarchSmokePresentationControls(window.__kaminosRaymarchSmokePresentationReceipt);
+  const requestedAppearanceDecomposition = params.get('volume_appearance_decomposition') || 'off';
+  window.__kaminosAppearanceDecompositionReceipt = volumePrototype.setAppearanceDecompositionMode?.(requestedAppearanceDecomposition) || null;
+  volumeBridge?.dispose?.();
+  volumeBridge = createVolumeMainRendererBridge();
+  window.__kaminosVolumeBridge = volumeBridge;
+  window.__kaminosVolumeMainRendererBridge = volumeBridge;
+  volumePrototype.setVolumePrimitives(volumePrimitivesInFlameDomain());
+  if (params.has('volume_primitive_fixture')) {
+    seedVolumePrimitiveFixture(params.get('volume_primitive_fixture'));
+  }
+
+  if (readVolumeControls().emitterSourceLaw === 'immersed-source') {
+    flameEmitterPose=flamePoseFromImmersedControls(readVolumeControls(),flameDomainTranslation,flameEmitterPose,flameDomainScale);
+  }
+  applyVolumeEmitterFamilyRuntimeToCockpit(readVolumeControls());
+  void activateFingerFluidPyroComposition().catch(error => {
+    fingerFluidPyroCompositionState = {
+      ...fingerFluidPyroCompositionState,
+      effectiveRoute: 'failed',
+      error: error?.message || String(error),
+    };
+    console.error('Finger fluid / Pyro composition activation failed:', error);
+  });
+
+  const rayBudgetPresetOwnedControls = new Set([
+    'volume-steps',
+  ]);
+  const emitterMorphologyControls = new Set([
+    'emitter-assay-family',
+    'volume-emitter-source-law',
+    'volume-emitter-source-depth',
+    'volume-emitter-inlet-profile',
+    'volume-emitter-momentum-linked',
+    'volume-emitter-inlet-velocity',
+    'volume-emitter-shear-width',
+    'volume-emitter-edge-entrainment',
+    'volume-emitter-fuel-fraction',
+    'volume-emitter-inlet-temperature',
+    'volume-input-radius',
+    'volume-flow-rate',
+    'volume-speed',
+    // The emitter compiler reads the time-step dynamics Speed, which the mode
+    // and the admitting transport controls decide; a stale descriptor across
+    // a mode switch would carry the wrong Speed into the packed increments.
+    'volume-time-step',
+    'volume-advection-scheme',
+    'volume-common-gas-transport',
+  ]);
+  const syncControls = event => {
+    if (event?.target?.id === 'volume-render-scale' && event.isTrusted === true) adoptVolumeRenderScaleSliderValue();
+    if (event?.target?.id === 'volume-emitter-momentum-linked'
+      && event.target.checked === false) {
+      document.getElementById('volume-emitter-inlet-velocity').value = String(linkedVolumeEmitterInletVelocity());
+    }
+    if (event?.target?.id === 'volume-scene') {
+      applyVolumeScenePreset(event.target.value);
+    } else if (event?.target?.id) {
+      activeCanonicalVolumeMacroPreset = '';
+    }
+    if (rayBudgetPresetOwnedControls.has(event?.target?.id)) {
+      activeVolumeRayBudgetPreset = '';
+      routedVolumeRayBudgetPreset = '';
+    }
+    updateVolumeControlLabels();
+    const controlsSnapshot = readVolumeControls();
+    const selectedEmitterFamily = document.getElementById('emitter-assay-family').value;
+    if (controlsSnapshot.emitterSourceLaw === 'immersed-source') {
+      if (/^volume-immersed-(centre-[xyz]|yaw|pitch)$/.test(event?.target?.id||'')) {
+        flameEmitterPose=flamePoseFromImmersedControls(controlsSnapshot,flameDomainTranslation,flameEmitterPose,flameDomainScale);
+      }
+      applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot);
+    } else if (emitterMorphologyControls.has(event?.target?.id)) {
+      applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot);
+    } else if (event?.target?.id === 'volume-scene' && selectedEmitterFamily !== 'cluster') {
+      applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot);
+    } else {
+      volumePrototype.setControls(controlsSnapshot);
+    }
+    if(ADAPTIVE_MATERIAL_FIELDS.some(field=>field.id===event?.target?.id))adaptiveMaterialSettingsAuthored=true;
+    refreshVolumeReadout();
+    window.dispatchEvent(new Event('kaminos-flame-controls-changed'));
+  };
+  await volumeCockpitLayoutReady;
+  hideVolumeLegacyPyroSurfaceForTopologyBranch();
+  // Authoring a pattern clears a retired request kept from a saved route.
+  document.getElementById('volume-emitter-aperture-pattern').addEventListener('change', () => { delete document.getElementById('volume-emitter-aperture-pattern').dataset.volumeRetiredPatternRequest; });
+  for (const id of [
+    'volume-emitter-source-law',
+    'volume-tone-mapping',
+    'volume-raymarch-mode',
+    'volume-optical-tolerance',
+    'volume-history-influence',
+    'volume-history-window',
+    'volume-reconstruction-fresh',
+    'volume-integral-reconstruction',
+    'volume-reconstruction-spatial',
+    'volume-reconstruction-radius',
+    'volume-reconstruction-window',
+    'volume-reconstruction-response',
+    'volume-reconstruction-edge',
+    'volume-reconstruction-edges',
+    'volume-reconstruction-image-edge',
+
+    'volume-ray-step-telemetry',
+    'volume-ray-start-noise',
+    'volume-ray-noise-animated',
+    'volume-quadrature-jitter',
+    'volume-display-reconstruction',
+    'volume-display-grid-scale',
+    'volume-display-alignment',
+    'volume-emission-interpolation',
+    'volume-smoke-interpolation',
+    'volume-emission-smoothing',
+    'volume-smoke-smoothing',
+    'volume-flame-priority',
+    'volume-emitter-source-depth',
+    'volume-emitter-inlet-profile',
+    'volume-emitter-momentum-linked',
+    'volume-emitter-inlet-velocity',
+    'volume-emitter-shear-width',
+    'volume-emitter-edge-entrainment',
+    'volume-emitter-fuel-fraction',
+    'volume-emitter-inlet-temperature',
+    'volume-emitter-aperture-pattern',
+    'volume-emitter-aperture-count',
+    'volume-emitter-aperture-ratio',
+    'volume-emitter-aperture-seed',
+    'volume-emitter-swirl',
+    'volume-emitter-line-weight',
+    'volume-emitter-jet-jitter',
+    'volume-emitter-inlet-turbulence',
+    'volume-emitter-inlet-turbulence-scale',
+    'volume-emitter-puff',
+    'volume-emitter-puff-period',
+    'volume-heat-release-expansion',
+    'volume-reaction-law',
+    'volume-reactant-mixing-time',
+    'volume-reactant-cooling-time',
+    'volume-reactant-soot-yield',
+    'volume-appearance-model',
+    'volume-velocity-staggering',
+    'volume-immersed-centre-x',
+    'volume-immersed-centre-y',
+    'volume-immersed-centre-z',
+    'volume-immersed-yaw',
+    'volume-immersed-pitch',
+    'volume-immersed-radius',
+    'volume-immersed-thickness',
+    'volume-immersed-speed',
+    'volume-immersed-fuel',
+    'volume-immersed-temperature',
+    'volume-immersed-momentum-gain',
+    'volume-immersed-cap-fraction',
+    'volume-immersed-back-wall',
+    'volume-wind-model',
+    'volume-wind-gust',
+    'volume-wind-gust-period',
+    'volume-wind-gust-veer',
+    'volume-fixed-source-dephase',
+    'volume-pressure-solver',
+    'volume-pressure-resolution',
+    'volume-world-smoke', 'volume-world-smoke-flow', 'volume-world-smoke-material', 'volume-world-smoke-extent', 'volume-world-smoke-transition',
+    'volume-world-smoke-intermediate',
+    ...REGION_CONTROL_FIELDS.map(field=>field.id),
+    ...ADAPTIVE_MATERIAL_FIELDS.map(field=>field.id),
+    ...FINE_COVERAGE_FIELDS.map(field=>field.id),
+    ...WORLD_CALIBRATION_FIELDS.map(field=>field.id),
+    ...SIMULATION_LEVER_FIELDS.map(field=>field.id),
+    'volume-pressure-solver-iterations',
+    'volume-advection-scheme',
+    'volume-confinement',
+    'volume-time-step',
+    'volume-common-gas-transport',
+  ]) {
+    document.getElementById(id).addEventListener('input', syncControls);
+    document.getElementById(id).addEventListener('change', syncControls);
+  }
+  // Rebuild controls (see VOLUME_REBUILD_CONTROL_IDS): previewed while
+  // edited, applied on confirm.
+  function updateVolumeRebuildControlLabel(id) {
+    if (id !== 'volume-grid-height-ratio') return;
+    const label = volumeGridHeightRatioLabel(parseFloat(document.getElementById(id).value) || 2);
+    const preview = window.__kaminosVolumeGridPreview;
+    document.getElementById('volume-grid-height-ratio-val').textContent = volumeRebuildPending.has(id) && preview
+      ? `${label} → ${preview.heightCells} cells · Enter to apply`
+      : label;
+  }
+  for (const id of VOLUME_REBUILD_CONTROL_IDS) {
+    const control = document.getElementById(id);
+    const preview = () => {
+      holdVolumeRebuildControl(id);
+      publishVolumeGridPreview(volumePrototype?.previewGridShape?.({ gridHeightRatio: parseFloat(control.value) || 2 }) ?? null);
+      updateVolumeRebuildControlLabel(id);
+      refreshFlameDomainGuideBox();
+    };
+    const confirm = () => {
+      if (!volumeRebuildPending.has(id)) return;
+      releaseVolumeRebuildControl(id);
+      publishVolumeGridPreview(null);
+      syncControls();
+      refreshFlameDomainGuideBox();
+    };
+    const revert = () => {
+      if (!volumeRebuildPending.has(id)) return;
+      control.value = volumeRebuildPending.get(id);
+      releaseVolumeRebuildControl(id);
+      publishVolumeGridPreview(null);
+      updateVolumeRebuildControlLabel(id);
+      refreshFlameDomainGuideBox();
+      window.dispatchEvent(new Event('kaminos-flame-controls-changed'));
+    };
+    control.addEventListener('input', preview);
+    control.addEventListener('change', preview);
+    control.addEventListener('keydown', event => { if (event.key === 'Enter') confirm(); else if (event.key === 'Escape') revert(); });
+    control.addEventListener('blur', confirm);
+  }
+
+  for (const id of ['volume-scene', 'volume-resolution', 'emitter-assay-family', 'volume-artistic-swirl', 'volume-phased-sway', 'volume-swirl-jostle', 'volume-fine-breakup-localization', 'volume-density', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-history-influence', 'volume-history-window', 'volume-reconstruction-fresh', 'volume-integral-reconstruction', 'volume-reconstruction-spatial', 'volume-reconstruction-radius', 'volume-reconstruction-window', 'volume-reconstruction-response', 'volume-reconstruction-edge', 'volume-reconstruction-edges', 'volume-reconstruction-image-edge', 'volume-occupancy-skip', 'volume-occupancy-threshold', 'volume-fire-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-fire-lock', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+    document.getElementById(id)?.addEventListener('input', syncControls);
+    document.getElementById(id)?.addEventListener('change', syncControls);
+  }
+  document.getElementById('volume-reaction-live-view')?.addEventListener('input', syncControls);
+  document.getElementById('volume-reaction-live-view')?.addEventListener('change', syncControls);
+  document.getElementById('volume-boundary-sidecar-source')?.addEventListener('input', syncControls);
+  document.getElementById('volume-boundary-sidecar-source')?.addEventListener('change', syncControls);
+  document.getElementById('volume-boundary-sidecar-view')?.addEventListener('input', syncControls);
+  document.getElementById('volume-boundary-sidecar-view')?.addEventListener('change', syncControls);
+
+  for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
+    document.getElementById(field.id)?.addEventListener('input', syncControls);
+    document.getElementById(field.id)?.addEventListener('change', syncControls);
+  }
+  const applyBudgetControls = () => {
+    updateVolumeControlLabels();
+    applyVolumeEmitterFamilyRuntimeToCockpit(readVolumeControls());
+    refreshVolumeReadout();
+  };
+  document.querySelectorAll('[data-volume-budget-preset]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      applyRayBudgetPreset(btn.dataset.volumeBudgetPreset);
+      applyBudgetControls();
+    });
+  });
+  document.getElementById('volume-reaction-atlas-capture')?.addEventListener('click', () => void captureVolumeReactionAtlas());
+  document.getElementById('volume-basin-warm-cap')?.addEventListener('click', () => {
+    applyTallPlumeOperatorPreset('pyro_contrast_warm_cap_small_flame_0702');
+    updateVolumeControlLabels();
+    applyVolumeEmitterFamilyRuntimeToCockpit(readVolumeControls());
+    refreshVolumeReadout();
+  });
+  document.getElementById('volume-basin-bonfire-family')?.addEventListener('click', () => {
+    applyTallPlumeOperatorPreset('pyro_material_bonfire_family_0702');
+    updateVolumeControlLabels();
+    applyVolumeEmitterFamilyRuntimeToCockpit(readVolumeControls());
+    refreshVolumeReadout();
+  });
+  document.getElementById('volume-toggle').addEventListener('click', async () => {
+    if (volumePrototype.debugState().active) {
+      await flameFeature.setActive(false);
+      setInfo('Volume renderer disabled');
+    } else {
+      await flameFeature.setActive(true);
+      setInfo('Volume renderer — native WebGPU compute fluid raymarch');
+    }
+    window.dispatchEvent(new Event('kaminos-flame-controls-changed'));
+    refreshVolumeReadout();
+  });
+  document.getElementById('volume-fit-camera').addEventListener('click', frameVolumeCamera);
+
+  let syntheticEmitterTimer = 0;
+  const refreshSyntheticExternalEmitters = () => {
+    if (routeExternalEmitters !== 'synthetic_hand_trails' || !volumePrototype) return;
+    const timestampMs = performance.now();
+    const frameId = `cockpit-cluster-${volumePrototype.debugState().frameCount}-${volumeEmitterRuntimeFrame += 1}`;
+    const externalRequest = {
+      mode: 'synthetic_hand_trails',
+      frameId,
+      timestampMs,
+      coordinateSpace: 'volume-local',
+      emitters: volumePrototype.syntheticHandTrailEmitters(timestampMs),
+    };
+    const carrierReceipt = volumePrototype.setExternalEmitters(externalRequest);
+    const previousReceipt = window.__kaminosVolumeEmitterReceipt;
+    if (previousReceipt) {
+      window.__kaminosVolumeEmitterReceipt = {
+        ...previousReceipt,
+        effective: {
+          ...previousReceipt.effective,
+          sourceCount: carrierReceipt.count,
+          sourceMode: carrierReceipt.mode,
+          coordinateSpace: carrierReceipt.coordinateSpace,
+          externalEmitterCount: carrierReceipt.count,
+          externalEmitterMode: carrierReceipt.mode,
+        },
+        sourceReceipt: carrierReceipt,
+        carrierReceipt,
+      };
+    }
+    refreshVolumeReadout();
+  };
+
+  if (params.get('kaminos_volume_smoke') === '1') {
+    setActiveTab('volume', { reveal: false });
+    if (camera && controls) frameVolumeCamera();
+    try {
+      await flameFeature.setActive(true);
+      refreshSyntheticExternalEmitters();
+      if (routeExternalEmitters === 'synthetic_hand_trails') {
+        syntheticEmitterTimer = window.setInterval(refreshSyntheticExternalEmitters, 100);
+      }
+      setInfo('Volume renderer — native WebGPU compute fluid raymarch');
+    } catch (err) {
+      console.error('Volume route activation failed:', err);
+      setInfo(`Volume route controls loaded; renderer failed: ${err?.message || err}`);
+    }
+  }
+
+  syncControls();
+  recordVolumeSettingsPresetApplied();
+  recordFlameSettingsProblems();
+  setInterval(refreshVolumeReadout, 500);
+  });
   return initKaminosVolumeRoute.boot.ensure(window.__kaminosFireBoot?.boot ? window.__kaminosFireBoot.reason : 'add flame');
 }
 

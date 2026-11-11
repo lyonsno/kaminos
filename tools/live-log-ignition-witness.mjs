@@ -70,7 +70,7 @@ try{
     const row={name,stats,state:raw.state,source:raw.source,chemistry:raw.chemistry.effective};report.frames.push(row);await save();return row;
   }
   const advance=async target=>{
-    await page.evaluate(target=>window.__kaminosVolumePrototype.pauseSelectiveHeadLiveAtSimStep(target),target);
+    await page.evaluate(target=>window.__kaminosVolumePrototype.pauseCaptureAtSimStep(target),target);
     await invoke('pause');
   };
   report.phase='cold';await save();assert.equal((await read()).paused,true);assert.equal((await read()).fields[0].steps,0);

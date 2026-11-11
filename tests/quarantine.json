@@ -6,30 +6,6 @@
     "date": "2026-10-12"
   },
   "entries": {
-    "tests/boundary-splat-feature-capture-contracts.mjs": {
-      "class": "regression",
-      "owner": "operlocutor",
-      "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-07-18 a8f53c6f Add full-support sparse instance consumer; the owner decides whether the source or the test is wrong; the first-bad commit came from pyro-control-path-parity-auditor-0717, a closed lane, so this needs a domain owner",
-      "signature": "AssertionError [ERR_ASSERTION]: witness readback uses the exact accepted instance count without a hidden row cap",
-      "testLastChanged": "2026-07-12 c9817cd5"
-    },
-    "tests/boundary-splat-renderer-contracts.mjs": {
-      "class": "regression",
-      "owner": "sexy",
-      "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-09-23 dfc13f7a Expand smoke volume upward; the owner decides whether the source or the test is wrong; owner is the lane prefix of the first-bad commit's branch",
-      "signature": "AssertionError [ERR_ASSERTION]: capacity growth is bounded by physical grid cells and otherwise rounds up to avoid repeated reallocations",
-      "testLastChanged": "2026-09-15 bef9d69f"
-    },
-    "tests/boundary-splat-support-covariance-composition-contracts.mjs": {
-      "class": "regression",
-      "owner": "operlocutor",
-      "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-07-18 62ea1154 Adjudicate Stage B optical recurrence; the owner decides whether the source or the test is wrong; the first-bad commit came from pyro-cadence-hellmouth-resurrection-0718, a closed lane, so this needs a domain owner",
-      "signature": "AssertionError [ERR_ASSERTION]: tuned heat, reaction, front, and interface support must remain upstream of baked sidecar structure",
-      "testLastChanged": "2026-07-17 db060b42"
-    },
     "tests/finger-fluid-analytic-carrier-optics-contracts.mjs": {
       "class": "regression",
       "owner": "operlocutor",

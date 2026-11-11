@@ -64,7 +64,7 @@ try{
   };
   await sample('cold');await page.screenshot({path:path.join(out,'cold.png')});
   report.phase='shared-step';await save();
-  const advance=async count=>guard(page.evaluate(async count=>{const r=window.__kaminosVolumePrototype,target=r.debugState().simStepCount+count;r.setSimulationPaused(false);r.setCapturePaused(false);const result=await r.pauseSelectiveHeadLiveAtSimStep(target);r.setSimulationPaused(true);r.setCapturePaused(false);return result;},count));
+  const advance=async count=>guard(page.evaluate(async count=>{const r=window.__kaminosVolumePrototype,target=r.debugState().simStepCount+count;r.setSimulationPaused(false);r.setCapturePaused(false);const result=await r.pauseCaptureAtSimStep(target);r.setSimulationPaused(true);r.setCapturePaused(false);return result;},count));
   assert.equal((await advance(120)).ok,true);const hot=await sample('hot');assert.ok(hot.every(row=>row.state.state.fields[0].steps>=120));
   await page.screenshot({path:path.join(out,'hot.png')});
   report.phase='disable-one';await save();

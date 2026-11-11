@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import {FLAME_PROPERTY_GROUPS} from '../flame-authoring.mjs';
-import {resolveBoundarySplatExecutionPlan} from '../volume-core.js';
+import {resolveBoundaryFieldExecutionPlan} from '../volume-core.js';
 import {OPTICAL_STEPPING_WGSL} from '../volume-optical-native.mjs';
 import {RAY_START_WGSL} from '../volume-ray-start.mjs';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
@@ -21,18 +21,18 @@ test('noise stays available on every marcher; priority leaves both controls unmo
  const ids=['volume-adaptive-rays','volume-occupancy-skip','volume-ray-start-noise','volume-optical-tolerance','volume-flame-priority','volume-quadrature-jitter'];
  for(const mode of ['current','fixed','numerical']){
   const nodes=Object.fromEntries(ids.map(id=>[id,{disabled:false}]));
-  vm.runInNewContext(lines.join('\n'),{c:{raymarchMode:mode},document:{getElementById:id=>nodes[id]}});
+  vm.runInNewContext(lines.join('\n'),{c:{raymarchMode:mode},document:{getElementById:id=>nodes[id]??= {disabled:false}}});
   assert.equal(nodes['volume-ray-start-noise'].disabled,false,mode+' must allow blue noise');
   assert.equal(nodes['volume-flame-priority'].disabled,mode!=='numerical');
  }
 });
 test('priority requests fresh sidecar coverage even when appearance uses live support',()=>{
- const base={boundarySplatMode:'off',boundarySidecarSource:'live',renderComposition:'raymarch'};
- assert.equal(resolveBoundarySplatExecutionPlan({...base,flamePriority:0}).sidecarDispatch,false);
- const guided=resolveBoundarySplatExecutionPlan({...base,flamePriority:1,raymarchMode:'numerical'});
- assert.equal(guided.sidecarDispatch,true);
- assert.equal(guided.sidecarConsumer,'flame-guidance');
- for(const raymarchMode of ['current','fixed'])assert.equal(resolveBoundarySplatExecutionPlan({...base,flamePriority:1,raymarchMode}).sidecarDispatch,false);
+ const base={boundarySidecarSource:'live'};
+ assert.equal(resolveBoundaryFieldExecutionPlan({...base,flamePriority:0}).required,false);
+ const guided=resolveBoundaryFieldExecutionPlan({...base,flamePriority:1,raymarchMode:'numerical'});
+ assert.equal(guided.required,true);
+ assert.equal(guided.consumer,'flame-guidance');
+ for(const raymarchMode of ['current','fixed'])assert.equal(resolveBoundaryFieldExecutionPlan({...base,flamePriority:1,raymarchMode}).required,false);
 });
 test('phasing retains the optical entry and constraining cannot discard retained probes',()=>{
  assert.match(OPTICAL_STEPPING_WGSL,/fn opticalStepInitPhased\(/);

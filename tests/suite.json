@@ -135,9 +135,6 @@
     "tests/finger-juice-host-contracts.mjs": {
       "kind": "node"
     },
-    "tests/fire-actor-live-parity-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/fire-light-field-depth-mask-contracts.mjs": {
       "kind": "node"
     },
@@ -707,9 +704,6 @@
     "tests/visual-work.mjs": {
       "kind": "node"
     },
-    "tests/volume-appearance-decomposition-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-arm-capture-checks-contracts.mjs": {
       "kind": "browser",
       "reason": "connects to a browser debugging socket"
@@ -816,9 +810,6 @@
     "tests/volume-dead-render-clock-retirement-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-dense-cue-splat-bridge-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-detail-force-isolation.mjs": {
       "kind": "node"
     },
@@ -826,9 +817,6 @@
       "kind": "node"
     },
     "tests/volume-diagnostic-periodicity-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-disabled-splat-diagnostic-consumer-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-dynamic-texture-proof-retirement-contracts.mjs": {
@@ -855,10 +843,6 @@
     "tests/volume-entrainment-sway-periodicity-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-exact-basin-full-grid-export-contracts.mjs": {
-      "kind": "browser",
-      "reason": "spawns an exporter that can launch Chrome"
-    },
     "tests/volume-exact-basin-support-probe-contracts.mjs": {
       "kind": "node"
     },
@@ -868,9 +852,6 @@
     "tests/volume-external-emitter-flicker-periodicity-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-fire-actor-control-rebake-adapter-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-fire-actor-mount-contracts.mjs": {
       "kind": "node"
     },
@@ -878,9 +859,6 @@
       "kind": "node"
     },
     "tests/volume-flame-settings-problems-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-flow-kernel-descriptor-socket-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-flow-reconstruction-kernel-contracts.mjs": {
@@ -998,19 +976,10 @@
     "tests/volume-pressure-tier-witness-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-product-fire-adapter-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-production-raymarch-retirement-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-raymarch-periodicity-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-raymarch-specialization-negative-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-raymarch-specialization-witness-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-raymarch-trilinear-baseline-contracts.mjs": {
@@ -1026,12 +995,6 @@
       "kind": "node"
     },
     "tests/volume-scene-solid-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-selective-head-motion-producer-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-selective-head-motion-witness-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-settings-index-ui-contracts.mjs": {
@@ -1068,12 +1031,6 @@
       "kind": "python"
     },
     "tests/volume-shallow-emitter-flux-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-shared-transmittance-optical-layer-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-shared-transmittance-witness-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-slab-inlet-dynamics-contracts.mjs": {

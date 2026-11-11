@@ -48,20 +48,8 @@ const admitted = new Map([
     // once per pattern on the CPU; nothing here animates a uniform.
     { class: 'inflow aperture static coverage geometry', line: /Math\.(?:cos|sin)\((?:angle\) \* circle|direction\)|\(q\[0\] \* Math\.cos\(direction\))/, calls: 5 },
   ]],
-  ['selective-head-live-runtime.mjs', [
-    { class: 'frozen-model static Fourier coordinate representation', line: /standardize\((?:sin|cos)\(phase\), featureIndex\)/, calls: 2 },
-  ]],
   ['volume-exact-basin-support-probe.py', [
     { class: 'offline model-probe static Fourier coordinate representation', line: /fourier\.extend\(\[np\.sin\(phase\), np\.cos\(phase\)\]\)/, calls: 2 },
-  ]],
-  ['volume-residual-upscale-mlx.py', [
-    { class: 'offline trainer static Fourier x/y coordinate representation', line: /np\.(?:sin|cos)\((?:xx|yy) \* frequency\)/, calls: 4 },
-  ]],
-  ['volume-stage-b-analytical-rebake.mjs', [
-    { class: 'camera perspective projection geometry', line: /Math\.tan\((?:\(40 \* Math\.PI \/ 180\) \* 0\.5|20 \* Math\.PI \/ 180)\)/, calls: 2 },
-  ]],
-  ['volume-raymarch-filament-orbit-witness.mjs', [
-    { class: 'diagnostic camera orbit geometry', line: /originalCamera\.target\[[02]\] \+ d[xyz] \* Math\.(?:cos|sin)\(angle\) [+-] d[xyz] \* Math\.(?:sin|cos)\(angle\)/, calls: 4 },
   ]],
   ['volume-intrinsic-presentation-witness.mjs', [
     { class: 'diagnostic camera holdout geometry', line: /cameraOriginalPose\.target\[[02]\] \+ d[xyz] \* Math\.(?:cos|sin)\(orbitAngle\) [+-] d[xyz] \* Math\.(?:sin|cos)\(orbitAngle\)/, calls: 4 },
@@ -105,13 +93,9 @@ function assertPeriodicAuthorshipInventory(entries) {
   assert.deepEqual(
     [...new Set(observedClasses)].sort(),
     [
-      'camera perspective projection geometry',
       'diagnostic camera holdout geometry',
-      'diagnostic camera orbit geometry',
-      'frozen-model static Fourier coordinate representation',
       'inflow aperture static coverage geometry',
       'offline model-probe static Fourier coordinate representation',
-      'offline trainer static Fourier x/y coordinate representation',
       'operator-authored source aim to direction',
       'operator-authored wind angle to direction',
     ].sort(),
