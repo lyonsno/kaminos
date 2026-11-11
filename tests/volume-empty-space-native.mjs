@@ -10,22 +10,22 @@ var<private> u:UniformFixture;var<private> fixtureMode:u32;var<private> fluidSrc
 struct WorldFixture{loPitch:vec4<f32>,hiEnabled:vec4<f32>,atlas:vec4<f32>}
 var<private> worldRender:WorldFixture;
 @group(1) @binding(0) var reactantSrc:texture_3d<f32>;
-fn index3(c:vec3<u32>)->u32{return select(0u,1u,fixtureMode==3u&&c.x==3u);}
+fn index3(c:vec3<u32>)->u32{return select(0u,1u,(fixtureMode==3u&&c.x==3u)||(fixtureMode==15u&&c.x==4u&&c.y==4u));}
 fn reactantLawOn()->bool{return fixtureMode==4u;}
 fn displayReconstructionActive()->bool{return fixtureMode==7u;}
 fn worldResidentLeafBoundsAtGrid(q:vec3<f32>,n:ptr<function,vec4<f32>>)->vec4<f32>{
- *n=vec4<f32>(floor(q/4.0)*4.0,1);return vec4<f32>(0,0,select(0.0,1.0,fixtureMode==14u&&q.x>=4.0),select(1.0,0.0,fixtureMode==12u));
+ *n=vec4<f32>(floor(q/4.0)*4.0,1);return vec4<f32>(0,0,select(0.0,1.0,(fixtureMode==14u&&q.x>=4.0)||(fixtureMode==16u&&q.x<4.0&&q.y<4.0)),select(1.0,0.0,fixtureMode==12u));
 }
 ${extractWgslFunction(core,'worldToCell')}
 ${extractWgslFunction(core,'clampCell')}
 `;
-const cases=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14],expected=[1,1,0,0,0,0,0,0,0,1,0,0,0,1,0];
+const cases=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16],expected=[1,1,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0];
 const body=`fixtureMode=id.x;u.occupancy_controls=vec4<f32>(select(1.0,0.0,fixtureMode==8u),0,0,0);u.emissive_physics=vec4<f32>(select(1.0,0.0,fixtureMode==5u),0,0,0);u.reconstruction_kernel_controls=vec4<f32>(select(0.0,1.0,fixtureMode==6u),0,0,0);
  fluidSrc[0]=vec4<f32>(3,0,0,0);fluidSrc[1]=vec4<f32>(select(0.0,1.0,fixtureMode==2u),5,0,0);fluidSrc[5]=vec4<f32>(1,5,0,0);
  worldRender.loPitch=vec4<f32>(-1,-1,-1,.25);worldRender.hiEnabled=vec4<f32>(1,2,1,1);worldRender.atlas=vec4<f32>(1,8,12,8);
- let negative=fixtureMode==9u;let ro=select(vec3<f32>(-.9375,-.4,0),vec3<f32>(.5,-.4,0),negative);let rd=vec3<f32>(select(1.0,-1.0,negative),0,0);
- let length=select(.01,1.5,fixtureMode==1u||fixtureMode==3u||negative||fixtureMode>=12u);let sampleT=select(0.0,length+.01,fixtureMode==10u);
- let world=fixtureMode>=11u;let near=select(vec2<f32>(-1,2),vec2<f32>(10,11),fixtureMode>=12u);
+ let negative=fixtureMode==9u;var ro=select(vec3<f32>(-.9375,-.4,0),vec3<f32>(.5,-.4,0),negative);var rd=vec3<f32>(select(1.0,-1.0,negative),0,0);if(fixtureMode==15u){ro=vec3<f32>(.37499988,.375,0);rd=vec3<f32>(1,-1,0);}if(fixtureMode==16u){ro=vec3<f32>(-0.000000059604644775390625,0,0);rd=vec3<f32>(1,-1,0);}
+ let length=select(select(.01,1.5,fixtureMode==1u||fixtureMode==3u||negative||fixtureMode>=12u),.01,fixtureMode>=15u);let sampleT=select(0.0,length+.01,fixtureMode==10u);
+ let world=fixtureMode>=11u&&fixtureMode!=15u;let near=select(vec2<f32>(-1,2),vec2<f32>(10,11),fixtureMode>=12u&&fixtureMode!=15u);
  output[id.x]=select(0u,1u,emptyOpticalInterval(ro,rd,0.0,length,sampleT,world,near,vec2<f32>(0)));`;
 async function execute(ctx,source){
  const code=fixture+source+`\n@group(0) @binding(0) var<storage,read_write> output:array<u32>;\n@compute @workgroup_size(1) fn check(@builtin(global_invocation_id) id:vec3<u32>){${body}}`;

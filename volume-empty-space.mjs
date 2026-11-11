@@ -36,8 +36,14 @@ fn emptyWorldInterval(ro:vec3<f32>,rd:vec3<f32>,a:f32,b:f32)->bool{
   var stop=min(b,emptyWorldLeafEnd(ro,rd,node));
   if(stop<=cursor){
    // Check both face owners; shifting the lookup one ULP does not advance
-   // the ray or leave an unchecked interval between its certificates.
+   // the ray. Only a stalled face may change owners: nudging an unrelated
+   // axis can cross a nearby face and omit the intervening diagonal leaf.
+   let lo=worldRender.loPitch.xyz+node.xyz*worldRender.loPitch.w;
+   let hi=min(worldRender.hiEnabled.xyz,lo+vec3<f32>(4.0*node.w*worldRender.loPitch.w));
    for(var axis=0u;axis<3u;axis++){
+    if(rd[axis]==0.0){continue;}
+    let face=select(lo[axis],hi[axis],rd[axis]>0.0);
+    if(!((face-ro[axis])/rd[axis]<=cursor)){continue;}
     if(rd[axis]>0.0&&q[axis]>=0.0){q[axis]=bitcast<f32>(bitcast<u32>(q[axis])+1u);}
     if(rd[axis]<0.0&&q[axis]>0.0){q[axis]=bitcast<f32>(bitcast<u32>(q[axis])-1u);}
    }
@@ -89,7 +95,15 @@ fn emptyFineInterval(ro:vec3<f32>,rd:vec3<f32>,a:f32,b:f32)->bool{
   var c=vec3<i32>(floor(q));if(!emptyFineFootprint(c)){return false;}
   var stop=emptyFineCellEnd(ro,rd,cursor,q,c,b);
   if(stop<=cursor){
+   // Preserve orthogonal coordinates until their own exit. In particular,
+   // a negative face tie must not round a nearby positive face forward.
+   let origin=worldToCell(ro)-vec3<f32>(0.5);let slope=rd*(0.5*f32(GRID));
+   let raw=worldToCell(ro+rd*cursor)-vec3<f32>(0.5);
    for(var axis=0u;axis<3u;axis++){
+    if(slope[axis]==0.0){continue;}
+    if((slope[axis]<0.0&&raw[axis]<=0.0)||(slope[axis]>0.0&&raw[axis]>=upper[axis])){continue;}
+    let face=f32(c[axis])+select(0.0,1.0,slope[axis]>0.0);
+    if(!((face-origin[axis])/slope[axis]<=cursor)){continue;}
     if(rd[axis]>0.0&&q[axis]>=0.0){q[axis]=bitcast<f32>(bitcast<u32>(q[axis])+1u);}
     if(rd[axis]<0.0&&q[axis]>0.0){q[axis]=bitcast<f32>(bitcast<u32>(q[axis])-1u);}
    }
