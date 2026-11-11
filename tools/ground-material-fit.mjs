@@ -4,6 +4,7 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {createGroundTeacherSource} from '../ground-teacher-source.mjs';
+import {createGrassMaterialSource} from '../grass-material-source.mjs';
 import {SurfaceMaterialTeacher} from '../surface-material-teacher.mjs';
 import {createNeumipStudent,createNeumipTraining,neumipTrainingLayout,neumipTrainingBufferSizes} from '../neumip-training.mjs';
 import {writeNeumipModel,readNeumipModel} from '../neumip-model.mjs';
@@ -24,12 +25,15 @@ try{
  const options={resolution:64,steps:2000,batch:2048,queries:65536,heldout:2048,samples:8,heldoutSamples:32,bounces:3,seed:41,fresh:true,...config.fit};report.options=options;
  for(const [k,v]of Object.entries(options))if(k==='fresh'?typeof v!=='boolean':!Number.isSafeInteger(v)||v<1)throw Error(`Invalid fit option ${k}`);
  report.sourceRevision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();report.sourceStatus=execFileSync('git',['status','--porcelain'],{encoding:'utf8'});
- report.sourceFiles={};for(const name of ['ground-teacher-source.mjs','surface-teacher-wgsl.mjs','surface-teacher.mjs','surface-material-teacher.mjs','neumip-training.mjs','neumip-model.mjs','tools/ground-material-fit.mjs']){const b=await fs.readFile(name);report.sourceFiles[name]=digest(b);await fs.writeFile(path.join(out,path.basename(name)),b);}
- const source=createGroundTeacherSource(config.source);report.ground={config:source.config,triangles:source.triangles.length,materials:source.materials,boundary:source.boundary,referenceHeight:source.referenceHeight,sha256:digest(JSON.stringify(source))};
+ report.sourceFiles={};for(const name of ['ground-teacher-source.mjs','grass-material-source.mjs','surface-teacher-source.mjs','surface-teacher-wgsl.mjs','surface-teacher.mjs','surface-material-teacher.mjs','neumip-training.mjs','neumip-model.mjs','tools/ground-material-fit.mjs']){const b=await fs.readFile(name);report.sourceFiles[name]=digest(b);await fs.writeFile(path.join(out,path.basename(name)),b);}
+ const grass=config.sourceKind==='grass';if(config.sourceKind&&!['grass','ground'].includes(config.sourceKind))throw Error('Unknown material source kind');
+ const grid=config.labels==='denoised-grid';if(config.labels&&!['denoised-grid','raw'].includes(config.labels))throw Error('Unknown label route');if(grid&&!options.fresh)throw Error('Denoised grids require fresh streaming');
+ report.receiver=config.receiver??report.receiver;report.claim=grass?'Preliminary fit of finite frozen grass ribbons, geometry-guided denoised directional responses; no periodic or convergence claim':report.claim;
+ const source=grass?createGrassMaterialSource(config.source):createGroundTeacherSource(config.source);report.sourceKind=grass?'grass':'ground';report.ground={config:source.config,triangles:source.triangles.length,materials:source.materials,boundary:source.boundary,referenceHeight:source.referenceHeight,sha256:digest(JSON.stringify(source))};
  await fs.writeFile(path.join(out,'config.json'),JSON.stringify(config,null,2));await fs.writeFile(path.join(out,'source.json'),JSON.stringify(source));
  let state=options.seed>>>0;const random=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return (state+.5)/4294967296;};
  const queries=n=>{const data=new Float32Array(n*8);for(let i=0;i<n;i++){const q=i*8;data[q]=random();data[q+1]=random();for(const d of [2,4]){const r=Math.sqrt(random()*.99),t=random()*Math.PI*2;data[q+d]=r*Math.cos(t);data[q+d+1]=r*Math.sin(t);}data[q+6]=random()<.6?0:random()*Math.log2(options.resolution/2);}return data;};
- const trainingQueries=queries(options.queries),heldoutQueries=queries(options.heldout),student=createNeumipStudent({resolution:options.resolution,seed:options.seed});
+ const trainingQueries=grid?null:queries(options.queries),heldoutQueries=queries(options.heldout),student=createNeumipStudent({resolution:options.resolution,seed:options.seed});
  const buffers=neumipTrainingBufferSizes(neumipTrainingLayout(student),Math.max(options.batch,options.heldout,128**2));
  const largest=Math.max(...Object.values(buffers),options.queries*32,source.triangles.length*48);
  const requiredLimits={maxStorageBufferBindingSize:Math.max(128*1024**2,largest),maxBufferSize:Math.max(256*1024**2,largest)};
@@ -38,27 +42,34 @@ try{
   report.adapter=ctx.adapterInfo;let teacher,learner;const start=performance.now();
   try{
    teacher=new SurfaceMaterialTeacher(ctx.device,{...source,lights:[],environment:0,bounces:options.bounces});
-   const capture={tileSize:source.config.tileSize,referenceHeight:source.referenceHeight,resolution:options.resolution,samples:options.samples,seed:options.seed};
-   const labels=await withGpuErrorScopes(ctx.device,'ground-label-capture',()=>teacher.evaluateMaterial(trainingQueries,capture));
+   const capture={tileSize:source.config.width??source.config.tileSize,tileDepth:source.config.depth??source.config.tileSize,referenceHeight:source.referenceHeight,resolution:options.resolution,samples:options.samples,seed:options.seed};
+   const labels=grid?null:await withGpuErrorScopes(ctx.device,'ground-label-capture',()=>teacher.evaluateMaterial(trainingQueries,capture));
    const heldoutLabels=await teacher.evaluateMaterial(heldoutQueries,{...capture,samples:options.heldoutSamples,seed:options.seed+1});
-   report.captureMs=performance.now()-start;report.dataset={queries:await raw('training-queries.f32',trainingQueries),labels:await raw('training-labels.f32',labels),heldoutQueries:await raw('heldout-queries.f32',heldoutQueries),heldoutLabels:await raw('heldout-labels.f32',heldoutLabels),filter:'square box, width 2^LOD/resolution in material reference plane',response:'linear outgoing radiance under unit directional irradiance divided by macro light cosine; live material multiplies it back'};
+   report.captureMs=performance.now()-start;report.dataset={queries:trainingQueries?await raw('training-queries.f32',trainingQueries):null,labels:labels?await raw('training-labels.f32',labels):null,heldoutQueries:await raw('heldout-queries.f32',heldoutQueries),heldoutLabels:await raw('heldout-labels.f32',heldoutLabels),filter:'square box, width 2^LOD/resolution in material reference plane',response:'linear outgoing radiance under unit directional irradiance divided by macro light cosine; live material multiplies it back'};
    learner=await createNeumipTraining(ctx.device,student,{batchSize:Math.max(options.batch,options.heldout,128**2)});
    const checkpoint=async step=>{
     learner.setQueries(heldoutQueries);const {rgb}=await learner.evaluate();
-    const model=await learner.exportModel(),bytes=writeNeumipModel(model),name=`ground-${options.resolution}-step-${step}.model`;
+    const model=await learner.exportModel(),bytes=writeNeumipModel(model),name=`${grass?'grass':'ground'}-${options.resolution}-step-${step}.model`;
     // Round-trip the actual runtime artifact, not only training-resident state.
     readNeumipModel(bytes);await fs.writeFile(path.join(out,name),bytes);await raw(`heldout-${step}.f32`,rgb);
     const record={step,loss:loss(rgb,heldoutLabels),elapsedMs:performance.now()-start,file:name,sha256:digest(bytes),bytes:bytes.length};report.checkpoints.push(record);console.log(JSON.stringify(record));await publish();
    };
    report.phase='fit';await checkpoint(0);
    const fitStart=performance.now();let batch=new Float32Array(options.batch*8),targets=new Float32Array(options.batch*3);
-   let queryStream,labelStream;const queryHash=createHash('sha256'),labelHash=createHash('sha256');
+   let queryStream,labelStream,rawLabelStream,gridRecipes;const queryHash=createHash('sha256'),labelHash=createHash('sha256');
    try{
    if(options.fresh){queryStream=await fs.open(path.join(out,'fresh-training-queries.f32'),'w');labelStream=await fs.open(path.join(out,'fresh-training-labels.f32'),'w');report.dataset.trainingMode='Fresh independently traced query batch per optimizer update; every query and label retained';}
    else report.dataset.trainingMode='Resampled finite captured label set';
+   if(grid){rawLabelStream=await fs.open(path.join(out,'fresh-training-raw-labels.f32'),'w');gridRecipes=await fs.open(path.join(out,'grid-recipes.jsonl'),'w');report.dataset.trainingMode='Fresh coherent spatial window per update; view/light/LOD held constant within window; geometry-guided atrous labels';report.dataset.filter='Three geometry-guided atrous passes, strides 1/2/4; linear response, no tone mapping, no temporal history';report.dataset.heldoutFilter=`Independent raw ${options.heldoutSamples}-spp queries, explicitly measures filtered-label bias as well as fit`;}
    for(let step=1;step<=options.steps;step++){
     if(options.fresh){
-     batch=queries(options.batch);targets=await teacher.evaluateMaterial(batch,{...capture,seed:options.seed+step+3});
+     if(grid){
+      const width=config.grid?.width??32,height=config.grid?.height??64;if(width*height!==options.batch||width>options.resolution||height>options.resolution)throw Error('Grid extent must equal batch and fit student spatial resolution');
+      const direction=queries(1),uvScale=[width/options.resolution,height/options.resolution];
+      const recipe={width,height,uvScale,uvOrigin:[random()*(1-uvScale[0]),random()*(1-uvScale[1])],tileWidth:source.config.width??source.config.tileSize,tileDepth:source.config.depth??source.config.tileSize,referenceHeight:source.referenceHeight,resolution:options.resolution,samples:options.samples,seed:options.seed+step+3,view:Array.from(direction.subarray(2,4)),light:Array.from(direction.subarray(4,6)),lod:direction[6]};
+      const captured=await teacher.evaluateMaterialGrid(recipe);batch=captured.queries;targets=captured.filtered;
+      await rawLabelStream.writeFile(Buffer.from(captured.raw.buffer));await gridRecipes.writeFile(JSON.stringify({step,...recipe})+'\n');
+     }else{batch=queries(options.batch);targets=await teacher.evaluateMaterial(batch,{...capture,seed:options.seed+step+3});}
      const qb=Buffer.from(batch.buffer,batch.byteOffset,batch.byteLength),tb=Buffer.from(targets.buffer,targets.byteOffset,targets.byteLength);
      await queryStream.writeFile(qb);await labelStream.writeFile(tb);queryHash.update(qb);labelHash.update(tb);report.lastCapturedStep=step;
     }else for(let i=0;i<options.batch;i++){const index=Math.floor(random()*options.queries);batch.set(trainingQueries.subarray(index*8,index*8+8),i*8);targets.set(labels.subarray(index*3,index*3+3),i*3);}
@@ -68,7 +79,8 @@ try{
     await new Promise(resolve=>setTimeout(resolve,16));
     if(step%250===0||step===options.steps)await checkpoint(step);
    }
-   }finally{await queryStream?.close();await labelStream?.close();}
+   }finally{await queryStream?.close();await labelStream?.close();await rawLabelStream?.close();await gridRecipes?.close();}
+   if(grid)report.dataset.rawLabels={file:'fresh-training-raw-labels.f32',bytes:options.steps*options.batch*12,recipes:'grid-recipes.jsonl'};
    if(options.fresh)report.dataset.fresh={queries:{file:'fresh-training-queries.f32',bytes:options.steps*options.batch*32,sha256:queryHash.digest('hex')},labels:{file:'fresh-training-labels.f32',bytes:options.steps*options.batch*12,sha256:labelHash.digest('hex')}};
    report.fitMs=performance.now()-fitStart;
    // Matched 128px material-domain images: same UV, footprint, directions and
