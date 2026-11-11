@@ -16,8 +16,8 @@ const vector=(a,n,label)=>{if(!Array.isArray(a)||a.length!==n||!a.every(Number.i
 function configuration(input={}){
  const c={seed:41,width:.42,columns:10,layers:4,grains:24,density:1450,cohesion:2.5,friction:.72,plasticYield:.075,plasticRate:8,breakStrain:.5,iterations:12,dt:1/180,...input};
  integer(c.seed,'seed');integer(c.columns,'columns',3);integer(c.layers,'layers',2);integer(c.grains,'grains');integer(c.iterations,'iterations',1);
- for(const key of ['width','density','cohesion','dt'])finite(c[key],key,Number.MIN_VALUE);
- for(const key of ['friction','plasticYield','plasticRate','breakStrain'])finite(c[key],key);
+ for(const key of ['width','density','dt'])finite(c[key],key,Number.MIN_VALUE);
+ for(const key of ['cohesion','friction','plasticYield','plasticRate','breakStrain'])finite(c[key],key);
  return c;
 }
 export function checkedEarthSnapshot(s){
@@ -105,6 +105,13 @@ export class EarthSpecimen {
    this.time+=dt;this.steps++;
   }
   this.tool.collisionResponse=false;
+  return this.state();
+ }
+ setMaterial(values){
+  if(!values||typeof values!=='object'||Array.isArray(values)||Object.keys(values).some(k=>!['cohesion','friction','plasticYield','plasticRate','breakStrain'].includes(k)))throw Error('Invalid material parameter');
+  const next=configuration({...this.config,...values});
+  this.config=next;this.world.defaultContactMaterial.friction=next.friction;
+  for(const b of this.bonds)for(const e of b.constraint.equations){e.minForce=-next.cohesion;e.maxForce=next.cohesion;}
   return this.state();
  }
  state(){const ys=this.particles.map(p=>p.body.position.y);return {schema:EARTH_SCHEMA,time:this.time,steps:this.steps,particles:this.particles.length,grains:this.grit.length,mass:this.particles.reduce((s,p)=>s+p.mass,0),top:Math.max(...ys),meanHeight:ys.reduce((s,y)=>s+y,0)/ys.length,activeBonds:this.bonds.filter(b=>b.active).length,brokenBonds:this.bonds.filter(b=>!b.active).length,plasticCompression:this.bonds.reduce((s,b)=>s+Math.max(0,b.initial-b.rest),0),backend:'cannon-es-0.20.0-cpu',boundary:'bounded tray; no periodic dynamics',material:'contacting spheres with yielding cohesive distance bonds; dynamic convex grit'};}

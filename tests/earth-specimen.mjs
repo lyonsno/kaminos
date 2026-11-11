@@ -26,3 +26,5 @@ const worked=pressed.snapshot();
 assert.ok(worked.particles.some((p,i)=>Math.abs(p.position[0]-unpressed.particles[i].position[0])+Math.abs(p.position[2]-unpressed.particles[i].position[2])>.0001),'contact with forming tool must displace material');
 assert.ok(worked.bonds.some(b=>b.rest<b.initial-.000001)||worked.bonds.some(b=>!b.active),'tool work must leave a yielded or broken bond state');
 console.log('earth specimen physical state, contact, mass, yield and continuation checks pass');
+
+const tuned=new EarthSpecimen({columns:3,layers:2,grains:0});tuned.setMaterial({friction:.2,cohesion:4});assert.equal(tuned.config.friction,.2,'material edits must change accepted physical parameters');assert.equal(tuned.world.defaultContactMaterial.friction,.2);assert.ok(tuned.bonds.every(b=>b.constraint.equations[0].maxForce===4));assert.throws(()=>tuned.setMaterial({columns:9}),/material parameter/);

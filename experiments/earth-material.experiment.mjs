@@ -24,7 +24,7 @@ export default {
   const read=()=>({schema:'kaminos.earth-authoring.v1',objectId:asset?.id,toolId:toolAsset?.id,physics:model.state(),settings:{...config},busy,failure,surface:source?{resolution:source.reconstruction.resolution,triangles:source.triangles.length,matrixTriangles:source.reconstruction.matrixTriangles,boundary:source.boundary}:null,view:session.readView(),pose:pose(root),tool:pose(tool),snapshotContinuation:'cold contact reconstruction; retained physical values, not solver contact caches'});
   const recipe=()=>({snapshot:model.snapshot(),settings:{...config},pose:pose(root),tool:pose(tool),view:session.readView()});
   const show=()=>{if(status){const s=model.state();status.textContent=failure?`Stopped: ${failure}`:`${busy?'Working · ':''}${s.particles} soil samples · ${s.grains} grains · ${s.time.toFixed(3)} s · ${s.brokenBonds} broken bonds · ${source?.triangles.length??0} surface triangles`;}};
-  const sync=()=>{for(const {input,key}of fields)if(input.ownerDocument.activeElement!==input)input.value=String(config[key]);show();};
+  const sync=()=>{for(const {input,key,material}of fields)if(input.ownerDocument.activeElement!==input)input.value=String(material?model.config[key]:config[key]);show();};
   const update=()=>{updateInputs(recipe());show();};
   const rebuild=(resolution=config.previewResolution)=>{
    const next=createEarthTeacherSource({snapshot:model.snapshot(),resolution,halo:0});
@@ -52,6 +52,7 @@ export default {
     frame,
     snapshot:()=>recipe(),
     async configure(patch){const next=settings({...config,...patch});if(busy)throw Error('Wait for forming to finish');if(next.previewResolution!==config.previewResolution)rebuild(next.previewResolution);config=next;sync();update();return read();},
+    material(values){if(busy)throw Error('Wait for forming to finish');model.setMaterial(values);update();record({kind:'earth.material',phase:'applied',effective:model.config});return read();},
     async advance({seconds=config.advanceSeconds}={}){if(!Number.isFinite(seconds)||seconds<=0)throw Error('Invalid advance duration');return work(async()=>{await evolve(seconds);record({kind:'earth.advance',phase:'applied',effective:{seconds,state:model.state()}});});},
     async press(){
      const query=toolQuery(),start=tool.position.clone(),localUp=new THREE.Vector3(0,1,0).applyQuaternion(root.getWorldQuaternion(new THREE.Quaternion()));
@@ -72,6 +73,7 @@ export default {
     const note=document.createElement('p');note.textContent='Move the forming tool with the normal scene gizmo, then press. Advance lets the bed settle. The fine earth and grit share physical contact. This first specimen has bounded sides.';panel.append(note);
     const fail=e=>{failure=e.message;sync();};
     const row=(label,key,step)=>{const el=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');grip.textContent=label+' ';input.type='number';input.className='transform-input';input.step=String(step);input.value=String(config[key]);input.setAttribute('aria-label',label);input.onchange=()=>invoke('configure',{[key]:Number(input.value)}).catch(fail);el.append(grip,input);panel.append(el);fields.push({input,key,drag:host.controls.installNumberDrag({input,grip,step})});};
+    for(const [label,key,step]of [['Cohesion (N)','cohesion',.2],['Friction','friction',.05],['Compaction yield strain','plasticYield',.01]]){const el=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');grip.textContent=label+' ';input.type='number';input.className='transform-input';input.value=String(model.config[key]);input.setAttribute('aria-label',label);input.onchange=()=>invoke('material',{[key]:Number(input.value)}).then(()=>input.value=String(model.config[key])).catch(e=>{input.value=String(model.config[key]);fail(e);});el.append(grip,input);panel.append(el);fields.push({input,key,material:true,drag:host.controls.installNumberDrag({input,grip,step})});}
     row('Press depth (m)','pressDepth',.005);row('Press duration (s)','pressSeconds',.05);row('Advance duration (s)','advanceSeconds',.025);row('Preview detail','previewResolution',2);row('Capture detail','captureResolution',4);
     const button=(label,action)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=()=>Promise.resolve().then(action).catch(fail);panel.append(b);return b;};
     button('Press at tool',()=>invoke('press'));button('Advance earth',()=>invoke('advance'));button('Frame specimen',()=>invoke('frame'));button('Prepare capture mesh',()=>invoke('freeze'));
