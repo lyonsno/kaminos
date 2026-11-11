@@ -72,9 +72,9 @@ test('the composed model adapter keeps ordinary frame and edit admission live on
  await client.initialize({viewport:f.payload.viewport,flameControls:f.payload.flameControls}).completion;
  const model=client.request('image.generate',{prompt:'lantern',seed:1,size:256});model.completion.catch(()=>{});
  await started;assert.equal(runtime.host.device,f.device);assert.equal(runtime.host.unsettledRuns().length,1);
- const frame=await client.request('frame',{now:2}).completion;assert.equal(frame.output.result.flameDrawn,true);
+ const frame=await client.request('frame',{now:2}).completion;assert.equal(frame.output.result.flameDrawn,true);assert.equal(frame.output.ui?.surfaces?.volume?.active,true);
  const edit=await client.request('scene.move',{}).completion;assert.equal(edit.output.mutationApplied,true);
- const controls=await client.request('flame.controls',{resolution:32}).completion;assert.equal(controls.output.mutationApplied,true);assert.equal(controls.output.value.acceptedControls.resolution,32);
+ const controls=await client.request('flame.controls',{resolution:32}).completion;assert.equal(controls.output.mutationApplied,true);assert.equal(controls.output.value.acceptedControls.resolution,32);assert.equal(controls.output.ui?.surfaces?.volume?.active,true);
  finish();assert.equal((await model.completion).output.entry.source,'/saved/image.png');
  await client.request('retire').completion;assert.ok(f.calls.indexOf('model.dispose')<f.calls.indexOf('session.close'));
 });

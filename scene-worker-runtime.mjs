@@ -98,8 +98,14 @@ export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imag
     }
     return {...frames.frame(local,ctx),ui:{surfaces:{volume:{...surfaceState}}}};
    },
-   requestFrame(input,ctx,draw){current();return frames.requestFrame(input,ctx,draw);},
-   requestMutation(operation,input,ctx,apply){current();return mutations.requestMutation(operation,input,ctx,apply);},
+   async requestFrame(input,ctx,draw){
+    current();const receipt=await frames.requestFrame(input,ctx,draw);
+    return {...receipt,ui:receipt.result.ui};
+   },
+   async requestMutation(operation,input,ctx,apply){
+    current();const receipt=await mutations.requestMutation(operation,input,ctx,apply);
+    return {...receipt,ui:{...receipt.value?.ui,surfaces:{...receipt.value?.ui?.surfaces,volume:{...surfaceState}}}};
+   },
    control(action,input,ctx){current();if(!image)throw Error('scene worker has no image operation');return image.control(action,input,ctx);},
    async retire(ctx){
     if(appHost?.unsettledRuns().length)throw Object.assign(Error('scene worker still has unsettled inference runs'),{gpuRouteHeld:true});
