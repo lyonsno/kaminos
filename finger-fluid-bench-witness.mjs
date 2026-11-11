@@ -1919,8 +1919,7 @@ async function main() {
           && candidate?.sourceTrajectoryProgress === 0
           && volume?.active === true
           && Number(volume?.simStepCount || 0) >= Number(candidate?.preContactCaptureMinSimSteps || Infinity)
-          && volume?.selectiveHeadLivePassReceipt?.raymarchApplied === true
-          && volume?.selectiveHeadLivePassReceipt?.splatApplied === true
+          && volume?.volumePresentationReceipt?.application?.raymarchApplied === true
         ) {
           preContactCheckpoint = candidate;
           break;
@@ -1952,24 +1951,10 @@ async function main() {
       }
       preContactSourceLastContactTick = preContactWitness.consumerWitness.sourceLastContactTick || 0;
       const preContactVolume = preContactWitness?.volume;
-      if (preContactVolume?.boundarySplatMode !== 'learned') {
-        throw new Error(`learned boundary-splat route was not effective: ${preContactVolume?.boundarySplatMode}`);
-      }
-      if (preContactVolume?.boundarySplatRendererIdentity !== 'live-boundary-sidecar-learned-attribute-splats-v0') {
-        throw new Error(`wrong boundary-splat renderer identity: ${preContactVolume?.boundarySplatRendererIdentity}`);
-      }
-      if (preContactVolume?.selectiveHeadLiveEffectiveRole !== 'truthHigh') {
-        throw new Error(`current live-field render authority was not effective: ${preContactVolume?.selectiveHeadLiveEffectiveRole}`);
-      }
-      if (preContactVolume?.selectiveHeadLiveCompositionEffective !== 'smoke-raymarch-under-splats-v0') {
-        throw new Error(`live renderer composition was not effective: ${preContactVolume?.selectiveHeadLiveCompositionEffective}`);
-      }
-      if (
-        preContactVolume?.selectiveHeadLivePassReceipt?.raymarchApplied !== true
-        || preContactVolume?.selectiveHeadLivePassReceipt?.splatApplied !== true
-        || preContactVolume?.selectiveHeadLivePassReceipt?.fallbackReason
-      ) {
-        throw new Error(`live renderer pass receipt is not authoritative: ${JSON.stringify(preContactVolume?.selectiveHeadLivePassReceipt)}`);
+      if (preContactVolume?.volumePresentationReceipt?.application?.compositionEffective !== 'raymarch-only-v0'
+        || preContactVolume?.volumePresentationReceipt?.application?.raymarchApplied !== true
+        || preContactVolume?.volumePresentationReceipt?.application?.fallbackReason) {
+        throw new Error('ordinary Pyro presentation did not apply: ' + JSON.stringify(preContactVolume?.volumePresentationReceipt));
       }
       preContactVolumeSample = await evaluate(ws, `(async () => {
         if (typeof window.kaminosFingerFluidPyroVolumeSample !== 'function') throw new Error('missing explicit Pyro volume sample hook');
@@ -2001,31 +1986,45 @@ async function main() {
       })()`);
       preContactComposedSample = await evaluate(ws, `(window.__kaminosCaptureComposedFireSample = async (presentToCanvas = false) => {
         const prototype = window.__kaminosVolumePrototype;
-        if (typeof prototype?.captureSelectiveHeadLiveFrame !== 'function') {
+        if (typeof prototype?.sampleFrame !== 'function') {
           throw new Error('missing composed-frame Pyro witness hook');
         }
-        const frame = await prototype.captureSelectiveHeadLiveFrame({
+        const frame = await prototype.sampleFrame({
           advanceSim: false,
+          includeRgba: true,
           presentToCanvas,
-          frameIndex: 0,
         });
         try {
           if (frame?.ok !== true) {
             throw new Error('composed-frame Pyro capture failed: ' + (frame?.reason || 'unknown failure'));
           }
+          if (frame.effectiveRoute !== 'native-3d-compute-fluid-raymarch-v0'
+            || !/webgpu/i.test(frame.backend || '') || frame.simAdvanced !== false
+            || frame.volumePresentationReceipt?.application?.raymarchApplied !== true
+            || frame.volumePresentationReceipt?.application?.compositionEffective !== 'raymarch-only-v0'
+            || frame.volumePresentationReceipt?.application?.fallbackReason) {
+            throw new Error('held Pyro frame route or presentation mismatch');
+          }
+          const image = frame.image;
+          if (!Number.isSafeInteger(frame.width) || frame.width <= 0
+            || !Number.isSafeInteger(frame.height) || frame.height <= 0
+            || image?.width !== frame.width || image?.height !== frame.height
+            || !Array.isArray(image?.rgba) || image.rgba.length !== frame.width * frame.height * 4) {
+            throw new Error('held Pyro frame has missing or partial pixels');
+          }
           if (presentToCanvas) {
             return {
               ok: true,
-              imageAuthority: frame.imageAuthority,
+              imageAuthority: 'held-current-volume-readback-v0',
               width: frame.width,
               height: frame.height,
               simStepCount: frame.simStepCount,
               composedFireClassifier: 'presented-from-same-paused-field-after-authoritative-readback-v0',
               composedFireBounds: null,
-              passReceipt: frame.selectiveHeadLivePassReceipt,
+              passReceipt: frame.volumePresentationReceipt.application,
             };
           }
-          if (!Array.isArray(frame?.rgba)) {
+          if (!Array.isArray(frame.image?.rgba)) {
             throw new Error('composed-frame Pyro readback failed: missing rgba');
           }
           let minX = frame.width;
@@ -2038,10 +2037,10 @@ async function main() {
           for (let y = 0; y < frame.height; y += 1) {
             for (let x = 0; x < frame.width; x += 1) {
               const offset = (y * frame.width + x) * 4;
-              const r = frame.rgba[offset] / 255;
-              const g = frame.rgba[offset + 1] / 255;
-              const b = frame.rgba[offset + 2] / 255;
-              const a = frame.rgba[offset + 3] / 255;
+              const r = frame.image.rgba[offset] / 255;
+              const g = frame.image.rgba[offset + 1] / 255;
+              const b = frame.image.rgba[offset + 2] / 255;
+              const a = frame.image.rgba[offset + 3] / 255;
               const luma = r * 0.2126 + g * 0.7152 + b * 0.0722;
               const chroma = Math.max(r, g, b) - Math.min(r, g, b);
               const luminousFire = a > 0.04 && luma > 0.46 && (Math.max(r, b) > 0.62 || chroma > 0.18);
@@ -2064,13 +2063,13 @@ async function main() {
           } : { minX: 0, minY: 0, maxX: -1, maxY: -1, pixelCount: 0, width: 0, height: 0, centerX: null, centerY: null };
           return {
             ok: true,
-            imageAuthority: frame.imageAuthority,
+            imageAuthority: 'held-current-volume-readback-v0',
             width: frame.width,
             height: frame.height,
             simStepCount: frame.simStepCount,
-            composedFireClassifier: 'luminous-composed-smoke-plus-learned-splat-fire-v0',
+            composedFireClassifier: 'luminous-current-raymarch-fire-v0',
             composedFireBounds,
-            passReceipt: frame.selectiveHeadLivePassReceipt,
+            passReceipt: frame.volumePresentationReceipt.application,
           };
         } finally {
           prototype.setCapturePaused(false);

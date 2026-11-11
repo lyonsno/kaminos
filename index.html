@@ -2973,8 +2973,6 @@ import {
   VOLUME_EMITTER_SOURCE_LAWS,
   resolveVolumeEmitterInletVelocity,
 } from './volume-emitter-basis.mjs';
-import { installFireActorLiveParitySurface } from './fire-actor-live-parity-browser.mjs';
-import { FIRE_ACTOR_LIVE_PARITY_IDENTITY } from './fire-actor-live-parity-contract.mjs';
 
 import { DEFAULT_VOLUME_SCENE, normalizeVolumeScene, volumeSceneReceipt } from './volume-scene-ontology.mjs';
 import {
@@ -14009,8 +14007,7 @@ async function activateFingerFluidPyroComposition() {
     effectiveRoute: 'same-device-liquid-contact-pyro-near-field-v0',
     requestedVolumeScene: 'tall_plume',
     effectiveVolumeScene: volumePrototype.debugState().volumeScene,
-    requestedLiveFieldRole: 'truthHigh',
-    requestedRenderComposition: 'smoke-raymarch-under-splats-v0',
+    requestedRenderComposition: 'raymarch-only-v0',
     camera: fingerFluidCompositionCameraState(),
     preContactCaptureMinSimSteps: FINGER_FLUID_PYRO_PRE_CONTACT_CAPTURE_MIN_SIM_STEPS,
     contactPhase: 'physical-contact-awaiting-overlap',
@@ -17593,7 +17590,6 @@ function buildVolumeBasinPromotionEffectiveState() {
     presentation: {
       volumePresentation: rendererState?.volumePresentationReceipt?.effectiveMode || debug.volumePresentationReceipt?.effectiveMode || debug.volumePresentationModeEffective || 'beauty',
       raymarchSmoke: rendererState?.raymarchSmokePresentationReceipt?.effectiveMode || debug.raymarchSmokePresentationReceipt?.effectiveMode || debug.raymarchSmokePresentationModeEffective || 'on',
-      appearanceDecomposition: rendererState?.appearanceDecompositionReceipt?.effectiveMode || debug.appearanceDecompositionReceipt?.effectiveMode || debug.appearanceDecompositionModeEffective || 'off',
     },
     source: {
       requestedSource: rendererState?.sourceSettingsPresetRequestedId || null || debug.requestedSource || null,
@@ -18121,30 +18117,19 @@ for (const [id, command] of [
 syncVolumeBasinDriveCommands();
 
 function currentVolumeSettingsPresetRendererState() {
-  try {
-    const wrapper = window.parent !== window
-      ? null
-      : null;
-    if (wrapper?.debugState) return wrapper.debugState();
-  } catch {}
   const ordinaryState = window.__kaminosVolumePrototype?.debugState?.();
   if (!ordinaryState) return null;
-  const effectiveAppearanceAssay = ordinaryState.appearanceDecompositionReceipt?.effectiveMode
-    || ordinaryState.appearanceDecompositionModeEffective
-    || 'off';
   const effectivePresentation = ordinaryState.volumePresentationReceipt?.effectiveMode
     || ordinaryState.volumePresentationModeEffective
     || 'beauty';
   return {
     source: 'ordinary-live-prototype',
     status: ordinaryState.active && !ordinaryState.error ? 'running' : 'unavailable',
-    compositionOverrideReason: effectiveAppearanceAssay !== 'off'
-      ? 'appearance-assay-overrides-beauty-composition'
-      : effectivePresentation === 'intrinsic'
+    compositionOverrideReason: effectivePresentation === 'intrinsic'
         ? 'intrinsic-overrides-beauty-composition'
         : null,
-    fallbackReason: ordinaryState.error || null || null,
-    compositionFallbackReason: (null)};
+    fallbackReason: ordinaryState.error || null,
+    compositionFallbackReason: null};
 }
 
 function selectedVolumeSettingsPresetView() {
@@ -20007,13 +19992,6 @@ async function initKaminosVolumeRoute() {
 
   }
 
-  if (params.has('volume_residual_strength') && Number.isFinite(null)) {
-
-  }
-
-  if (params.has('volume_residual_feature_debug') && Number.isFinite(null)) {
-
-  }
   const routeLookFreeze = Number(params.get('volume_look_freeze'));
   if (params.has('volume_look_freeze') && Number.isFinite(routeLookFreeze)) {
     document.getElementById('volume-look-freeze').value = String(Math.max(0, Math.min(1, Math.round(routeLookFreeze))));
@@ -20246,137 +20224,12 @@ async function initKaminosVolumeRoute() {
     return receipt;
   }
   applyFlameEmitterPose = (pose, options) => applyVolumeEmitterFamilyRuntimeToCockpit(readVolumeControls(), pose, options);
-  if (params.get('promoted_fire_parity') === '1') {
-    volumePrototype.setCapturePaused(true);
-  }
-  const readFireActorParityCamera = () => ({
-    type: camera.type,
-    fov: camera.fov,
-    near: camera.near,
-    far: camera.far,
-    position: camera.position.toArray(),
-    target: controls.target.toArray(),
-    up: camera.up.toArray(),
-  });
-  const applyFireActorParityCamera = async spec => {
-    camera.fov = Number(spec.fov);
-    camera.near = Number(spec.near);
-    camera.far = Number(spec.far);
-    camera.position.fromArray(spec.position);
-    camera.up.fromArray(spec.up);
-    controls.target.fromArray(spec.target);
-    camera.updateProjectionMatrix();
-    controls.update();
-    window._kaminosDirty?.();
-    return readFireActorParityCamera();
-  };
-  let fireActorParityPackageVerification = null;
-  let fireActorParityEngineVerification = null;
-  const verifyFireActorParityEngine = async () => {
-    if (fireActorParityEngineVerification) return fireActorParityEngineVerification;
-    fireActorParityEngineVerification = (async () => {
-      const response = await fetch('./volume-core.js', { cache: 'no-store' });
-      if (!response.ok) throw new Error(`cockpit live parity engine fetch failed: ${response.status}`);
-      const bytes = await response.arrayBuffer();
-      const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), byte => (
-        byte.toString(16).padStart(2, '0')
-      )).join('');
-      if (digest !== FIRE_ACTOR_LIVE_PARITY_IDENTITY.engineSha256) {
-        throw new Error(`cockpit live parity engine identity mismatch:${digest}`);
-      }
-      return {
-        sourceCommit: FIRE_ACTOR_LIVE_PARITY_IDENTITY.engineSourceCommit,
-        sha256: digest,
-      };
-    })();
-    return fireActorParityEngineVerification;
-  };
-  const verifyFireActorParityPackage = async () => {
-    if (fireActorParityPackageVerification) return fireActorParityPackageVerification;
-    fireActorParityPackageVerification = (async () => {
-      const packageUrl = './artifacts/basin-promotions/big-raymarch-hero-flamebowl-cotangent-covariance/revisions/basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95/package.json';
-      const response = await fetch(packageUrl, { cache: 'no-store' });
-      if (!response.ok) throw new Error(`cockpit live parity package fetch failed: ${response.status}`);
-      const text = await response.text();
-      const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))), byte => (
-        byte.toString(16).padStart(2, '0')
-      )).join('');
-      const packageDocument = JSON.parse(text);
-      if (packageDocument.schema !== 'kaminos.volume.basin-promotion-package.v1'
-        || packageDocument.revision !== FIRE_ACTOR_LIVE_PARITY_IDENTITY.basinRevision
-        || digest !== FIRE_ACTOR_LIVE_PARITY_IDENTITY.packageSha256) {
-        throw new Error('cockpit live parity package identity mismatch');
-      }
-      const preset = packageDocument.settingsPreset?.artifact?.preset;
-      const basinControls = Object.values(preset?.domControls || {});
-      const rendererControls = Object.values(preset?.rendererControls || {});
-      const substitutions = [...basinControls, ...rendererControls].flatMap(control => {
-        const element = document.getElementById(control.id);
-        if (!element) return [{ id: control.id, requested: control.value, effective: null }];
-        const requested = Object.hasOwn(control, 'rawValue') ? control.rawValue : control.value;
-        const effective = readVolumeDomControlValue(element);
-        const equal = typeof requested === 'number' && typeof effective === 'number'
-          ? Math.abs(requested - effective) <= 0.000001
-          : String(requested) === String(effective);
-        return equal ? [] : [{ id: control.id, requested, effective }];
-      });
-      if (basinControls.length !== 186 || rendererControls.length !== 5 || substitutions.length) {
-        throw new Error(`cockpit live parity control mismatch: ${JSON.stringify(substitutions.slice(0, 8))}`);
-      }
-      return {
-        schema: 'kaminos.fire-actor-live-parity-package-verification.v1',
-        status: 'verified',
-        packageUrl,
-        packageSha256: digest,
-        revision: packageDocument.revision,
-        controls: { basin: basinControls.length, renderer: rendererControls.length },
-      };
-    })();
-    return fireActorParityPackageVerification;
-  };
-  window.kaminosFireActorParity = installFireActorLiveParitySurface({
-    surface: 'cockpit',
-    prepareSurface: async () => {
-      document.getElementById('sidebar').hidden = true;
-      document.getElementById('volume-authored-mix-panel').hidden = true;
-      await new Promise(resolveFrame => requestAnimationFrame(() => requestAnimationFrame(resolveFrame)));
-      window.dispatchEvent(new Event('resize'));
-    },
-    ensureEngine: async () => {
-      await Promise.all([verifyFireActorParityPackage(), verifyFireActorParityEngine()]);
-      while (!volumePrototype.debugState().active) {
-        const error = volumePrototype.debugState().error;
-        if (error) throw new Error(`cockpit route-owned activation failed: ${error}`);
-        await new Promise(resolveFrame => requestAnimationFrame(resolveFrame));
-      }
-      return volumePrototype;
-    },
-    readEngine: () => volumePrototype,
-    readEngineIdentity: verifyFireActorParityEngine,
-    applyCamera: applyFireActorParityCamera,
-    readCamera: readFireActorParityCamera,
-    readFallbackReason: (debug, presentation) => {
-      if (debug.error) return debug.error;
-
-      if (null !== presentation.composition) {
-        return `composition-mismatch:${null}`;
-      }
-      if (debug.raymarchSmokePresentationModeFallbackReason) return debug.raymarchSmokePresentationModeFallbackReason;
-      if (debug.raymarchSmokePresentationModeEffective !== presentation.smoke) {
-        return `smoke-presentation-mismatch:${debug.raymarchSmokePresentationModeEffective}`;
-      }
-      if (presentation.splats === 'on' && null) return null;
-      return null;
-    },
-  });
   const requestedVolumePresentation = params.get('volume_presentation') || 'beauty';
   window.__kaminosVolumePresentationReceipt = volumePrototype.setVolumePresentationMode?.(requestedVolumePresentation) || null;
   syncVolumePresentationControls(window.__kaminosVolumePresentationReceipt);
   const requestedRaymarchSmokePresentation = params.get('volume_raymarch_smoke') || 'on';
   window.__kaminosRaymarchSmokePresentationReceipt = volumePrototype.setRaymarchSmokePresentationMode?.(requestedRaymarchSmokePresentation) || null;
   syncRaymarchSmokePresentationControls(window.__kaminosRaymarchSmokePresentationReceipt);
-  const requestedAppearanceDecomposition = params.get('volume_appearance_decomposition') || 'off';
-  window.__kaminosAppearanceDecompositionReceipt = volumePrototype.setAppearanceDecompositionMode?.(requestedAppearanceDecomposition) || null;
   volumeBridge?.dispose?.();
   volumeBridge = createVolumeMainRendererBridge();
   window.__kaminosVolumeBridge = volumeBridge;

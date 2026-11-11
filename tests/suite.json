@@ -741,9 +741,6 @@
     "tests/volume-bonfire-source-periodicity-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-boundary-raster-transition-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-bounded-emitter-injection-contracts.mjs": {
       "kind": "node"
     },
@@ -754,9 +751,6 @@
       "kind": "node"
     },
     "tests/volume-coarse-closure-receiver-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-cockpit-authority-toggle-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-cockpit-layout-contracts.mjs": {
@@ -903,9 +897,6 @@
     "tests/volume-intrinsic-presentation-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-intrinsic-presentation-witness-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-kiln-composition-bridge.mjs": {
       "kind": "node"
     },
@@ -931,9 +922,6 @@
       "kind": "node"
     },
     "tests/volume-occupancy-ridge-preservation-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-operator-drive-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-ordinary-scene-depth-contracts.mjs": {
@@ -965,9 +953,6 @@
       "kind": "node"
     },
     "tests/volume-physical-highlight-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-positive-flame-partition-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-pressure-solver-contracts.mjs": {

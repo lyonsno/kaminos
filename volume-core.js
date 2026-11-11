@@ -293,16 +293,6 @@ function normalizeRaymarchSmokePresentationMode(value) {
   };
 }
 
-function normalizeAppearanceDecompositionMode(value) {
-  const requestedRaw = String(value ?? 'off').trim().toLowerCase();
-  const requested = Object.hasOwn(null, requestedRaw) ? requestedRaw : 'off';
-  return {
-    requestedRaw,
-    requested,
-    fallbackReason: requestedRaw === requested ? null : `unsupported-appearance-decomposition-mode:${requestedRaw}`,
-  };
-}
-
 function intrinsicPresentationOverrides(controls = {}) {
   return {
     ...controls,
@@ -11778,167 +11768,6 @@ export function createKaminosVolumePrototype({
     };
   }
 
-  function cloneOpticalLayerMask(mask) {
-    return mask ? { ridge: Boolean(mask.ridge) } : null;
-  }
-
-  function appearanceTransportRuntimeContext(captureContext = null) {
-    return {
-      sourceState: {
-        frameCount: state.frameCount,
-        simStepCount: state.simStepCount,
-        sameStateCaptureId: captureContext?.sameStateCaptureId || null,
-        baseFrameCount: captureContext?.baseFrameCount ?? state.frameCount,
-        baseSimStepCount: captureContext?.baseSimStepCount ?? state.simStepCount,
-        sampleNowMs: captureContext?.sampleNow ?? null,
-      },
-      camera: {
-        signature: cameraSignature(),
-        position: [camera.position.x, camera.position.y, camera.position.z],
-        quaternion: [camera.quaternion.x, camera.quaternion.y, camera.quaternion.z, camera.quaternion.w],
-        projectionMatrix: Array.from(camera.projectionMatrix.elements),
-        viewProjectionMatrix: Array.from(viewProj.elements),
-      },
-      route: {
-        requested: state.requestedRoute,
-        effective: state.effectiveRoute,
-        locationHref: String(globalThis.location?.href || ''),
-      },
-      backend: state.backend || null,
-      quality: {
-        raySteps: controlsSnapshot.raySteps,
-        adaptiveRays: controlsSnapshot.adaptiveRays,
-        renderScale: normalizeRenderScale(controlsSnapshot.renderScale),
-      },
-      postprocess: {
-        sumDomain: 'pre-tone-map-linear-radiance',
-        toneMap: 'shared-contribution-sum-then-global-exponential-v0',
-        displayTransfer: 'global-exposure-vignette-gamma-temporal-resolve-v0',
-        independentlyToneMappedAddition: false,
-      },
-    };
-  }
-
-  function setAppearanceDecompositionMode(value) {
-    const request = normalizeAppearanceDecompositionMode(value);
-    if(request.requested!==null){assertIntegralSourceEditable('appearance presentation');invalidateIntegralReconstruction('appearance-presentation-changed',{source:true});}
-
-    const requestedDefinition = (null);
-    const effectiveDefinition = undefined;
-    const targetIdentity = effectiveDefinition.targetIdentity;
-    const receipt = {
-      identity: 'appearance-decomposition-receipt-v0',
-      targetIdentity,
-      coefficientBoundary: 'per-sample-pre-tone-map-emission-extinction-v0',
-      structuralAIdentity: INTRINSIC_PRESENTATION_TARGET_IDENTITY,
-      broadCarrierIdentity: 'signed-control-minus-structural-a-local-coefficients-v0',
-      completeFlameIdentity: 'smoke-off-complete-flame-local-emission-extinction-v0',
-      positivePartitionIdentity: 'nonnegative-ridge-owned-plus-non-ridge-complete-flame-v0',
-      ridgeOwnershipIdentity: 'state-derived-direct-flame-candidate-support-allocation-v0',
-      opticalTransportIdentity: effectiveDefinition.emissionMask
-        ? 'separate-authored-optical-layers-one-shared-total-transmittance-v0'
-        : null,
-      requestedEmissionMask: cloneOpticalLayerMask(requestedDefinition?.emissionMask),
-      effectiveEmissionMask: cloneOpticalLayerMask(effectiveDefinition.emissionMask),
-      requestedExtinctionMask: cloneOpticalLayerMask(requestedDefinition?.extinctionMask),
-      effectiveExtinctionMask: cloneOpticalLayerMask(effectiveDefinition.extinctionMask),
-      contributionChannels: effectiveDefinition.emissionMask
-        ? {
-            ridge: 'sharedRidgeContribution',
-            complete: 'sharedRidgeContribution+sharedNonRidgeContribution',
-          }
-        : null,
-      numericPrecision: effectiveDefinition.emissionMask
-        ? 'wgsl-f32-same-invocation-componentwise-v0'
-        : null,
-      postprocess: {
-        sumDomain: 'pre-tone-map-linear-radiance',
-        toneMap: 'shared-contribution-sum-then-global-exponential-v0',
-        independentlyToneMappedAddition: false,
-      },
-      coefficientSigns: {
-        completeFlame: 'nonnegative',
-        ridgeOwned: 'nonnegative',
-        signedClosureComparator: 'signed',
-      },
-      opticalRecurrence: 'front-to-back-emission-with-exponential-transmittance-v0',
-      simulationAdvanced: false,
-      simulationReset: false,
-      cameraMutated: false,
-      controlsMutated: false,
-      requestedPasses: {
-        splatsApplied: false,
-        residualApplied: false,
-        featureCaptureApplied: false,
-        smokeApplied: false,
-      },
-      passes: {
-        splatsApplied: false,
-        residualApplied: false,
-        featureCaptureApplied: false,
-        smokeApplied: false,
-      },
-      application: null,
-      couplingTerms: [
-        'b-emission-transported-through-a-plus-b-transmittance',
-        'b-extinction-modulates-downstream-a-and-b-emission',
-        'signed-b-coefficients-are-not-an-independent-positive-radiance-field',
-        'shared-ridge-and-nonridge-contributions-sum-before-tone-map',
-      ],
-    };
-
-    return {
-      ...receipt,
-      requestedPasses: { ...receipt.requestedPasses },
-      passes: { ...receipt.passes },
-      coefficientSigns: { ...receipt.coefficientSigns },
-      requestedEmissionMask: cloneOpticalLayerMask(receipt.requestedEmissionMask),
-      effectiveEmissionMask: cloneOpticalLayerMask(receipt.effectiveEmissionMask),
-      requestedExtinctionMask: cloneOpticalLayerMask(receipt.requestedExtinctionMask),
-      effectiveExtinctionMask: cloneOpticalLayerMask(receipt.effectiveExtinctionMask),
-      contributionChannels: receipt.contributionChannels ? { ...receipt.contributionChannels } : null,
-      postprocess: { ...receipt.postprocess },
-      couplingTerms: [...receipt.couplingTerms],
-    };
-  }
-
-  function recordAppearanceDecompositionApplication({
-    raymarchEncoded = false,
-    raymarchApplied = false,
-    splatsEncoded = false,
-    splatsApplied = false,
-    residualEncoded = false,
-    residualApplied = false,
-    featureCaptureEncoded = false,
-    featureCaptureApplied = false,
-    fallbackReason = null,
-    captureContext = null,
-  } = {}) {
-    const transportContext = appearanceTransportRuntimeContext(captureContext);
-    return null;
-    const application = {
-      identity: 'appearance-decomposition-applied-pass-receipt-v0',
-      raymarchEncoded: Boolean(raymarchEncoded),
-      raymarchApplied: Boolean(raymarchApplied),
-      splatsEncoded: Boolean(splatsEncoded),
-      splatsApplied: Boolean(splatsApplied),
-      residualEncoded: Boolean(residualEncoded),
-      residualApplied: Boolean(residualApplied),
-      featureCaptureEncoded: Boolean(featureCaptureEncoded),
-      featureCaptureApplied: Boolean(featureCaptureApplied),
-      smokeApplied: false,
-      fallbackReason: fallbackReason || null,
-      sourceState: transportContext.sourceState,
-      camera: transportContext.camera,
-      route: transportContext.route,
-      backend: transportContext.backend,
-      quality: transportContext.quality,
-      postprocess: transportContext.postprocess,
-    };
-
-    return application;
-  }
-
   function raymarchSmokePresentationEffectiveMode() {
     return volumePresentationModeEffective === 'intrinsic' || false
       ? 'off'
@@ -12030,9 +11859,9 @@ export function createKaminosVolumePrototype({
           }
         : {
             raymarch: BEAUTY_PRESENTATION_TARGET_IDENTITY,
-            splats: 'authored-control',
-            residual: 'authored-control',
-            featureCapture: 'authored-control',
+            splats: 'off',
+            residual: 'off',
+            featureCapture: 'off',
             smoke: raymarchSmokePresentationEffectiveMode() === 'off' ? 'suppressed' : 'authored-control',
           },
     };
@@ -12089,18 +11918,6 @@ export function createKaminosVolumePrototype({
       ...state.volumePresentationReceipt,
       application,
     };
-    recordAppearanceDecompositionApplication({
-      raymarchEncoded,
-      raymarchApplied,
-      splatsEncoded,
-      splatsApplied,
-      residualEncoded,
-      residualApplied,
-      featureCaptureEncoded,
-      featureCaptureApplied,
-      fallbackReason,
-      captureContext,
-    });
     return application;
   }
 
@@ -18418,7 +18235,6 @@ export function createKaminosVolumePrototype({
     },
     setVolumePresentationMode,
     setRaymarchSmokePresentationMode,
-    setAppearanceDecompositionMode,
     setDebugRaymarchShaderSpecialization(mode = 'auto') {
       const requested = String(mode || 'auto').toLowerCase();
       if (!['auto', 'force-full'].includes(requested)) {

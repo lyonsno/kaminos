@@ -85,10 +85,10 @@ test('presentation and domain changes invalidate image history before another dr
   }finally{p.dispose();}
 });
 
-test('direct smoke and diagnostic presentation changes retire old integral sources',()=>{
+test('direct smoke presentation changes retire old integral sources',()=>{
   const p=prototype({integralReconstruction:'combined'});
   try {
-    for(const [method,mode] of [['setRaymarchSmokePresentationMode','off'],['setAppearanceDecompositionMode','structural-a'],['setBoundarySplatPresentationMode','matched-presentation-v0']]) {
+    for(const [method,mode] of [['setRaymarchSmokePresentationMode','off']]) {
       const before=p.debugState().integralSourceGeneration;
       p[method](mode);assert.ok(p.debugState().integralSourceGeneration>before,method+' must retire old source');
       const after=p.debugState().integralSourceGeneration;p[method](mode);assert.equal(p.debugState().integralSourceGeneration,after,'same effective presentation keeps its source');

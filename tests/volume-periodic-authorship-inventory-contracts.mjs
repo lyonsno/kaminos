@@ -51,9 +51,6 @@ const admitted = new Map([
   ['volume-exact-basin-support-probe.py', [
     { class: 'offline model-probe static Fourier coordinate representation', line: /fourier\.extend\(\[np\.sin\(phase\), np\.cos\(phase\)\]\)/, calls: 2 },
   ]],
-  ['volume-intrinsic-presentation-witness.mjs', [
-    { class: 'diagnostic camera holdout geometry', line: /cameraOriginalPose\.target\[[02]\] \+ d[xyz] \* Math\.(?:cos|sin)\(orbitAngle\) [+-] d[xyz] \* Math\.(?:sin|cos)\(orbitAngle\)/, calls: 4 },
-  ]],
 ]);
 
 function assertPeriodicAuthorshipInventory(entries) {
