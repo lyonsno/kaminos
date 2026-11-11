@@ -9,7 +9,7 @@ export function createGrassTeacherSource(options={}) {
  const tufts=config.tufts;
  if(tufts!==undefined){
   const pair=p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite);
-  if(!tufts||!Array.isArray(tufts.centres)||!tufts.centres.length||!tufts.centres.every(pair)||!Number.isFinite(tufts.radius)||tufts.radius<=0||!['uniform','radial'].includes(tufts.grading)||!Number.isFinite(tufts.rimFraction)||tufts.rimFraction<=0||tufts.rimFraction>1||!Array.isArray(tufts.cuts)||!tufts.cuts.every(c=>pair(c.min)&&pair(c.max)&&c.min.every((v,i)=>v<c.max[i])&&Number.isFinite(c.height)&&c.height>0))throw Error('Invalid tuft centres, radius, grading, rimFraction or cut patches');
+  if(!tufts||!Array.isArray(tufts.centres)||!tufts.centres.length||!tufts.centres.every(pair)||!Number.isFinite(tufts.radius)||tufts.radius<=0||!['uniform','radial'].includes(tufts.grading)||!Number.isFinite(tufts.rimFraction)||tufts.rimFraction<=0||tufts.rimFraction>1||!Array.isArray(tufts.cuts)||!tufts.cuts.every(c=>c&&pair(c.min)&&pair(c.max)&&c.min.every((v,i)=>v<c.max[i])&&Number.isFinite(c.height)&&c.height>0))throw Error('Invalid tuft centres, radius, grading, rimFraction or cut patches');
  }
  let state=config.seed>>>0;
  const random=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return state/4294967296;};
@@ -17,6 +17,7 @@ export function createGrassTeacherSource(options={}) {
  let cutHeight=Infinity;
  const triangle=(a,b,c,materialIndex,identity)=>{
   if(materialIndex===0||[a,b,c].every(p=>p[1]<=cutHeight)){triangles.push({a,b,c,materialIndex,identity});return;}
+  if([a,b,c].every(p=>p[1]>=cutHeight))return;
   // Clip in the already-built stalk's space: a cut preserves its lower shape.
   const polygon=[];
   for(const [p,q]of [[a,b],[b,c],[c,a]]){
@@ -24,7 +25,11 @@ export function createGrassTeacherSource(options={}) {
    if(inside)polygon.push(p);
    if(inside!==nextInside){const t=(cutHeight-p[1])/(q[1]-p[1]);polygon.push([p[0]+t*(q[0]-p[0]),cutHeight,p[2]+t*(q[2]-p[2])]);}
   }
-  for(let j=1;j+1<polygon.length;j++)triangles.push({a:polygon[0],b:polygon[j],c:polygon[j+1],materialIndex,identity:`${identity}:cut:${j-1}`});
+  for(let j=1;j+1<polygon.length;j++){
+   const A=polygon[0],B=polygon[j],C=polygon[j+1],u=B.map((v,i)=>v-A[i]),v=C.map((v,i)=>v-A[i]);
+   if(Math.hypot(u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0])===0)continue;
+   triangles.push({a:A,b:B,c:C,materialIndex,identity:`${identity}:cut:${j-1}`});
+  }
  };
  const {width:w,depth:d}=config;
  triangle([-w/2,0,-d/2],[w/2,0,d/2],[w/2,0,-d/2],0,'ground:0');
@@ -51,7 +56,8 @@ export function createGrassTeacherSource(options={}) {
   if(height>cutHeight){
    const firstAbove=centres.findIndex(p=>p[1]>cutHeight),a=centres[firstAbove-1],b=centres[firstAbove],t=(cutHeight-a[1])/(b[1]-a[1]);
    const tip=[a[0]+t*(b[0]-a[0]),cutHeight,a[2]+t*(b[2]-a[2])],tipWidth=widths[firstAbove-1]+t*(widths[firstAbove]-widths[firstAbove-1]);
-   centres.splice(firstAbove,centres.length-firstAbove,tip);widths.splice(firstAbove,widths.length-firstAbove,tipWidth);
+   if(a[1]===cutHeight){centres.splice(firstAbove);widths.splice(firstAbove);}
+   else {centres.splice(firstAbove,centres.length-firstAbove,tip);widths.splice(firstAbove,widths.length-firstAbove,tipWidth);}
   }
   blades.push({id:i,centres,widths});
  }

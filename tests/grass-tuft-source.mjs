@@ -29,3 +29,16 @@ test('hard cut selection has an abrupt boundary and keeps unselected stalks unch
 test('malformed tuft controls refuse before rendering',()=>{
  for(const bad of [{centres:[]},{radius:0},{grading:'unknown'},{rimFraction:-1},{cuts:[{min:[0,0],max:[1,1],height:0}]}])assert.throws(()=>create({...recipe,tufts:{...tufts,...bad}}),/tuft/i);
 });
+
+test('cutting exactly at a stalk segment leaves valid visibility geometry and one tip',async()=>{
+ const {buildTriangleVisibility}=await import('../scene-light-visibility.mjs');
+ const full=create(recipe),height=full.blades[0].centres[2][1];
+ for(const periodic of [false,true]){
+  const cut=create({...recipe,periodic,tufts:{...tufts,cuts:[{min:[-4,-4],max:[4,4],height}]}});
+  assert.doesNotThrow(()=>buildTriangleVisibility(cut.triangles));
+  for(const blade of cut.blades)for(let j=1;j<blade.centres.length;j++)assert.notDeepEqual(blade.centres[j],blade.centres[j-1]);
+ }
+});
+test('a null cut patch refuses with the source configuration error',()=>{
+ assert.throws(()=>create({...recipe,tufts:{...tufts,cuts:[null]}}),/Invalid tuft/);
+});
