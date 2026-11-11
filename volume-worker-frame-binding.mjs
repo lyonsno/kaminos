@@ -2,10 +2,15 @@
 // the existing app host admits each synchronous transaction and renders the
 // ordinary scene when the flame is inactive or has no scene consumer attached.
 let owners=0;
-export function createVolumeWorkerFrameBinding({appHost,volume,applyFrameInputs=()=>{}}){
- const device=appHost?.device,queue=appHost?.queue,context=volume?.foregroundGpuContext?.();
- if(!device||queue!==device.queue||context?.device!==device||context?.queue!==queue)throw Error('worker flame binding requires the app shared device and queue');
- if(context.renderer!=='ordinary-volume'||context.productFrameOwner!=='prototype')throw Error('worker flame binding requires the ordinary volume renderer');
+export function createVolumeWorkerFrameBinding({appHost,volume,applyFrameInputs=()=>{},allowDormant=false}){
+ const device=appHost?.device,queue=appHost?.queue;
+ function checkVolume(){
+  const context=volume?.foregroundGpuContext?.();
+  const dormant=allowDormant&&context?.active===false&&context.device===null&&context.queue==null;
+  if(!device||queue!==device.queue||!dormant&&(context?.device!==device||context?.queue!==queue))throw Error('worker flame binding requires the app shared device and queue');
+  if(context.renderer!=='ordinary-volume'||context.productFrameOwner!=='prototype')throw Error('worker flame binding requires the ordinary volume renderer');
+ }
+ checkVolume();
  if(typeof appHost.requester!=='function'||typeof appHost.activateFrames!=='function'||typeof volume.renderSharedFrame!=='function'||typeof applyFrameInputs!=='function')throw Error('worker flame binding requires frame and input callbacks');
  const owner=++owners;let sequence=0,service=null,pending=0,requester=appHost.requester;
  function frame(payload,ctx){
@@ -16,6 +21,7 @@ export function createVolumeWorkerFrameBinding({appHost,volume,applyFrameInputs=
    Promise.resolve(applied).catch(()=>{});
    throw Error('worker frame inputs must apply synchronously');
   }
+  checkVolume();
   return volume.renderSharedFrame({now:payload.now,service});
  }
  async function requestFrame(payload,ctx,draw){

@@ -80,8 +80,9 @@ export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imag
      presentationSurface:createOffscreenVolumeSurface({canvas:payload.volumeCanvas,readViewport:viewport,
       onActive:value=>{surfaceState.active=Boolean(value);},onTransparent:value=>{surfaceState.transparent=Boolean(value);}}),
      sharedGpuContext:shared,frameScheduleOwner:'host',productFrameOwner:'prototype'});
-    await volume.setActive(true);ctx.assertCurrent();
-    frames=createVolumeWorkerFrameBinding({appHost,volume,applyFrameInputs});
+    if(sceneResources.prepareVolume){await sceneResources.prepareVolume({volume,context:ctx});ctx.assertCurrent();}
+    await volume.setActive(sceneResources.initialVolumeActive??true);ctx.assertCurrent();
+    frames=createVolumeWorkerFrameBinding({appHost,volume,applyFrameInputs,allowDormant:sceneResources.initialVolumeActive===false});
     mutations=createSceneWorkerMutationBinding({appHost});
     if(typeof sceneResources.attachVolume!=='function')throw Error('scene worker requires actual scene/flame source and transport attachment');
     await sceneResources.attachVolume({volume,appHost,context:ctx});ctx.assertCurrent();
