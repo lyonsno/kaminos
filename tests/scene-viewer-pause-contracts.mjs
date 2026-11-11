@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const start=source.includes('function sceneViewerPlaybackState(')?source.indexOf('function sceneViewerPlaybackState('):source.indexOf('function syncVolumeViewerPlay('),end=source.indexOf('function refreshVolumeReadout()',start);
+const start=source.includes('function sceneViewerPlaybackState(')?source.indexOf('function sceneViewerPlaybackState('):source.indexOf('function syncVolumeViewerPlay('),end=source.indexOf('function releaseReconstructionEvaluationCamera()',start);
 assert.ok(start>=0&&end>start);
 for(const fire of [true,false])for(const water of [true,false]) {
  const listeners={},pauseGlyph={style:{}},playGlyph={style:{}};

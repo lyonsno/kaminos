@@ -1,3 +1,5 @@
+// kaminos-test: node
+import {rayHistorySettings} from '../volume-history-allocation.mjs';
 import {WORLD_CALIBRATION_FIELDS,SIMULATION_LEVER_FIELDS,readWorldCalibrationControls as readCalibration,resolveWorldCalibration,resolveSimulationLevers} from '../volume-world-calibration.mjs';
 const readWorldCalibrationControls=controls=>readCalibration({...Object.fromEntries([...WORLD_CALIBRATION_FIELDS,...SIMULATION_LEVER_FIELDS].map(f=>[f.id,{value:f.value}])),...controls});
 import {GRID_TUNING_FIELDS} from '../volume-grid-tuning.mjs';
@@ -9,7 +11,7 @@ import { volumeSceneReceipt } from '../volume-scene-ontology.mjs';
 const vm = {
   ...nodeVm,
   runInNewContext: (code, context) => nodeVm.runInNewContext(code, {
-    readWorldCalibrationControls,resolveWorldCalibration,resolveSimulationLevers,volumeSceneReceipt, document: { getElementById: () => null }, ...context,
+    readWorldCalibrationControls,resolveWorldCalibration,resolveSimulationLevers,volumeSceneReceipt,rayHistorySettings, document: { getElementById: () => null }, ...context,
   }),
 };
 
@@ -41,7 +43,7 @@ const state = (dom, smoke = 'on') => ({
   presentationControls: { 'raymarch-smoke-presentation': { value: smoke } },
 });
 let current = state({ 'volume-reaction-live-view': 'shell', 'volume-emitter-aperture-pattern': 'shape', 'volume-density': 1, 'volume-render-scale': 1 });
-const context = vm.createContext({readWorldCalibrationControls,resolveWorldCalibration,resolveSimulationLevers,GRID_TUNING_FIELDS,readAdaptiveMaterialControls,
+const context = vm.createContext({rayHistorySettings,readWorldCalibrationControls,resolveWorldCalibration,resolveSimulationLevers,GRID_TUNING_FIELDS,readAdaptiveMaterialControls,
   document: { getElementById: id => controls[id] || null },
   flameSettingsState: () => current,
   VOLUME_RETIRED_APERTURE_PATTERNS: ['concentric', 'spiral'],

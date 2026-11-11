@@ -25,7 +25,8 @@ test('uniform block: joined boundary after the reactant block, off by default', 
   assert.equal(core.DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET, core.OPEN_WORLD_UNIFORM_OFFSET + 4);
   assert.equal(core.SHARED_ASH_UNIFORM_OFFSET, core.DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET + 8);
   assert.equal(core.WORLD_CALIBRATION_UNIFORM_OFFSET, core.SHARED_ASH_UNIFORM_OFFSET + 4);
-  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.WORLD_CALIBRATION_UNIFORM_OFFSET + 8);
+  assert.equal(core.EMPTY_SPACE_UNIFORM_OFFSET, core.WORLD_CALIBRATION_UNIFORM_OFFSET + 8);
+  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.EMPTY_SPACE_UNIFORM_OFFSET + 4);
   assert.match(shader, /fn joinedBoundary\(\) -> bool \{\n  return u\.joined_boundary\.x > 0\.5;\n\}/);
   const m = core.JOINED_GHOST_MARGIN_CELLS;
   assert.deepEqual(core.joinedBoundaryUniformValues(null), [0, 0, 0, m, 0, 0, 0, 0, 0, 0, 0, 0]);

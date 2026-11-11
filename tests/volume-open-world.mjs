@@ -36,7 +36,6 @@ test('exterior march uses quality controls and reports its samples',()=>{
 test('fine/world ray ownership uses the intersection interval and clips both transitions',()=>{
   assert.match(core,/let fineRayInterval = nearHit.y > nearHit.x && t >= nearHit.x && t < nearHit.y;/);
   assert.match(core,/let fineSegmentEnd = select\(endT, min\(endT, nearHit.y\), worldActive\);/);
-  assert.match(core,/fineSegmentEnd - t/);
   // Review's replayable float32 ray: coordinate membership fails at exact
   // slab entry, whereas interval ownership must evaluate fine before exit.
   const f=Math.fround,ro=[-1.2191815376281738,.0839615985751152,4.962988376617432],

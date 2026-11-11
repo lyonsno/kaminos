@@ -54,7 +54,7 @@ for (const inactiveReason of ['intrinsic-presentation', 'caller-owned-presentati
 // Exercise the actual readout's receipt-to-DOM integration without starting a
 // GPU. These are UI fixtures, not evidence that a native renderer was executed.
 const nodes = new Map([...knownIds].map(id => [id, { id, value: `preserved:${id}`, dataset: {}, disabled: false }]));
-for(const id of ['volume-raymarch-status','volume-ray-step-status'])nodes.set(id,{id,textContent:''});
+for(const id of ['volume-raymarch-status','volume-ray-step-status','volume-reconstruction-pause','volume-reconstruction-status','volume-ray-step-stats'])nodes.set(id,{id,textContent:'',setAttribute(){}});
 const rows = ['volume-physical-thermal'].map(id => ({
   dataset: {}, style: {}, querySelectorAll: () => [Object.assign(nodes.get(id), { closest: () => null })],
 }));
@@ -71,8 +71,8 @@ const savedValues = [...nodes.values()].map(input => input.value);
 for (const inactiveReason of ['intrinsic-presentation', 'caller-owned-presentation']) {
   for (const effective of ['emissive-transport-v2', 'legacy', 'emissive-transport-v2']) {
     vm.runInNewContext(`(function(){${hook}})()`, {
-      volumePrototype: { debugState: () => ({ physicalColor: { requested: 'emissive-transport-v2', effective, inactiveReason } }) },
-      flameInspector:null,syncKilnCollisionControl(){},readVolumeControls: () => emissive, document: doc,
+      volumePrototype: { debugState: () => ({ controls:emissive,physicalColor: { requested: 'emissive-transport-v2', effective, inactiveReason } }) },
+      reconstructionEvaluationHeld:null,flameInspector:null,syncReconstructionFilterAvailability(){},syncIntegralGuideControls(){},syncKilnCollisionControl(){},readVolumeControls: () => emissive, document: doc,
       syncVolumeCockpitModeAvailability: layout.syncVolumeCockpitModeAvailability,
     });
     assert.equal(rows[0].dataset.volumeModeHidden, String(effective === 'legacy'));

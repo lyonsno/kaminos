@@ -2350,7 +2350,9 @@
         "fixed",
         "budgeted",
         "joins",
-        "history"
+        "history",
+        "current",
+        "fixed-dense"
       ],
       "additiveDefault": "numerical"
     },

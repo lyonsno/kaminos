@@ -181,7 +181,8 @@ test('the inflow resolver admits only a converged open-top solve and packs the a
   assert.equal(core.DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET, core.OPEN_WORLD_UNIFORM_OFFSET + 4);
   assert.equal(core.SHARED_ASH_UNIFORM_OFFSET, core.DISPLAY_RECONSTRUCTION_UNIFORM_OFFSET + 8);
   assert.equal(core.WORLD_CALIBRATION_UNIFORM_OFFSET, core.SHARED_ASH_UNIFORM_OFFSET + 4);
-  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.WORLD_CALIBRATION_UNIFORM_OFFSET + 8);
+  assert.equal(core.EMPTY_SPACE_UNIFORM_OFFSET, core.WORLD_CALIBRATION_UNIFORM_OFFSET + 8);
+  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.EMPTY_SPACE_UNIFORM_OFFSET + 4);
   assert.equal(core.VOLUME_UNIFORM_FLOATS % 4, 0, 'vec4 aligned');
 });
 

@@ -3371,7 +3371,6 @@ class GLTFLoader extends ThreeGLTFLoader { constructor(manager) { super(manager)
 configureSurfelRendering({ viewportHeight: () => { try { return renderer?.domElement?.height || 0; } catch { return 0; } } });
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 
-import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { SceneTransformControls as TransformControls } from './scene-transform-gizmo.mjs';
 import {clone as cloneSceneObjectHierarchy} from 'three/addons/utils/SkeletonUtils.js';
 import {checkedBurnable,checkedBurnAppearance} from './scene-burning-settings.mjs';
@@ -19718,6 +19717,7 @@ function readVolumeControls({quality=viewportDisplay.quality,document=globalThis
     raySteps: parseFloat(document.getElementById('volume-steps').value),
     adaptiveRays: 0,
     occupancySkip: parseFloat(document.getElementById('volume-occupancy-skip').value),
+    occupancyThreshold: Number(document.getElementById('volume-occupancy-threshold').value),
     fireScale: 1,
     detailScale: 1.75, // retired 2026-10-21: the single Flame simulator fixes the detail frequency
     plumeHeight: parseFloat(document.getElementById('volume-plume-height').value),

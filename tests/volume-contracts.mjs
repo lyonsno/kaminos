@@ -1,5 +1,5 @@
-import {resolveBoundaryFieldExecutionPlan} from '../volume-core.js';
 // kaminos-test: node
+import {resolveBoundaryFieldExecutionPlan} from '../volume-core.js';
 import {assertCalibratedFireNumerics} from './helpers/calibrated-fire-native.mjs';
 import {balancedWgslBlock} from './helpers/wgsl-guard-ownership.mjs';
 import assert from 'node:assert/strict';

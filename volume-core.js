@@ -8358,6 +8358,8 @@ export function createKaminosVolumePrototype({
   let device = null;
   let rayStartNoiseTexture = null;
   let gpuInitialized = false;
+  let gpuInitialization = null;
+  let fluidPipelineShader = null;
   let configuredSharedGpuContext = sharedGpuContext;
   let context = null;
 
@@ -10293,6 +10295,24 @@ export function createKaminosVolumePrototype({
     }
     const renderPipelineConstants = { TRANSPARENT_CANVAS: transparentCanvas ? 1 : 0, LEAN_STOCK_RAYMARCH: false, LEAN_EMISSIVE_RAYMARCH: false };
 
+    // Grid edits retain the module and its cached pipelines. A fresh GPU
+    // initialization (including retry after a partial failure) replaces it.
+    if (fluidPipelineShader !== shader) {
+      ordinaryDepthPipelines.clear();
+      opticalSteppingPipelines.clear();
+      scenePointPipelines.clear();
+      distributedPipelines.clear();
+      simulationVariants.clear();
+      separatedPressureProjectPipeline = null;
+      irradianceLatticeBindGroupLayout = null;
+      irradiancePipelineLayout = null;
+      irradianceSeedPipeline = null;
+      irradiancePropagatePipeline = null;
+      irradianceResolvePipeline = null;
+      irradianceAnalyticPipeline = null;
+      emissionExtentPipeline = null;
+      fluidPipelineShader = shader;
+    }
     const leanStockRenderPipelineConstants = { ...renderPipelineConstants, LEAN_STOCK_RAYMARCH: true };
     const leanEmissiveRenderPipelineConstants = { ...renderPipelineConstants, LEAN_EMISSIVE_RAYMARCH: true };
     const computePipelineConstants = {};
@@ -10581,6 +10601,13 @@ export function createKaminosVolumePrototype({
 
   async function ensureGpu() {
     if (gpuInitialized) return;
+    if (gpuInitialization) return gpuInitialization;
+    gpuInitialization = initializeGpu();
+    try { await gpuInitialization; }
+    finally { gpuInitialization = null; }
+  }
+
+  async function initializeGpu() {
     state.gpuInitStage = 'adapter';
     if (!navigator.gpu) {
       throw new Error('WebGPU unavailable');
@@ -18174,7 +18201,7 @@ export function createKaminosVolumePrototype({
         }
         try {
           await ensureGpu();
-
+          if(activity!==activitySequence||deviceRetired)return;
           state.active = true;
           state.error = null;
           canvas.classList.add('active');

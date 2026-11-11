@@ -14,7 +14,12 @@ test('Quality exposes the marcher, continuous tolerance and optional GPU telemet
 test('marcher settings persist as additive renderer controls, preserving the numerical default',()=>{
   const schema=JSON.parse(fs.readFileSync(new URL('../volume-settings-preset-schema-v2.json',import.meta.url)));
   const controls=new Map(schema.rendererControls.map(control=>[control.key,control]));
-  assert.deepEqual(controls.get('volume-raymarch-mode')?.allowedValues,['numerical','fixed','budgeted','joins','history']);
+  const allowed=controls.get('volume-raymarch-mode').allowedValues;
+  for(const mode of ['numerical','fixed','budgeted','joins','history'])assert.ok(allowed.includes(mode),mode);
+  for(const [saved,effective] of [['current','numerical'],['fixed-dense','fixed']]){
+    assert.ok(allowed.includes(saved),'stored legacy request remains readable');
+    assert.equal(opticalSteppingConfig({mode:saved}).mode,effective);
+  }
   assert.equal(controls.get('volume-raymarch-mode').additiveDefault,'numerical');
   assert.equal(controls.get('volume-optical-tolerance')?.additiveDefault,0.001);
   assert.equal(controls.get('volume-ray-step-telemetry')?.additiveDefault,false);

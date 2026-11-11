@@ -17,7 +17,8 @@ function fixture(){
  for(const m of block.matchAll(/\b(?:layout|module):\s*(\w+)/g))context[m[1]]={name:m[1]};
  for(const m of block.matchAll(/\b[A-Z][A-Z_]+\b/g))if(!(m[0] in context))context[m[0]]=m[0];
  for(const m of block.matchAll(/^\s*(\w+)\s*=(?!=)/gm))context[m[1]]=null;
- for(const name of ['ordinaryDepthPipelines','opticalSteppingPipelines','scenePointPipelines','distributedPipelines'])context[name]=new Map();
+ context.fluidPipelineShader=null;
+ for(const name of ['ordinaryDepthPipelines','opticalSteppingPipelines','scenePointPipelines','distributedPipelines','simulationVariants'])context[name]=new Map();
  return {created,context,async initialize(){
   if(!context.gpuPipelines){try{const {createDeferredPipelines}=await import('../deferred-pipelines.mjs');context.gpuPipelines=createDeferredPipelines(device);}catch(e){if(e.code!=='ERR_MODULE_NOT_FOUND')throw e;}}
   vm.runInNewContext(`{${block}}`,context);
@@ -43,4 +44,32 @@ test('derived optical renderer survives grid edits and distinguishes canvas tran
  const select=()=>new Function(...Object.keys(context),source.slice(a,b)+';return drawPipeline;')(...Object.values(context));
  const first=select();context.gridSize=16;context.gridHeight=24;assert.equal(select(),first,'grid-only edit recompiled the selected derived renderer');
  context.transparentCanvas=false;assert.notEqual(select(),first,'transparency edit reused the wrong specialization');
+});
+
+// Run the production initialization admission separately from GPU factories.
+// Before coalescing existed, the same prefix invoked the controlled factory
+// twice. The heavy body is substituted only at its first status publication.
+const gpuStart=source.indexOf('  async function ensureGpu() {');
+let admission=source.slice(gpuStart,source.indexOf('\n  }',gpuStart)+4);
+const heavy=admission.indexOf("    state.gpuInitStage = 'adapter';");
+if(heavy>=0)admission=admission.slice(0,heavy)+'    return initializeGpu();\n  }';
+test('overlapping GPU activation shares initialization, and a failed attempt permits retry',async()=>{
+ let calls=0,release,reject;
+ const context={gpuInitialized:false,gpuInitialization:null,initializeGpu(){calls++;return new Promise((yes,no)=>{release=yes;reject=no;});}};
+ vm.createContext(context);vm.runInContext(admission,context);
+ const first=context.ensureGpu(),second=context.ensureGpu();
+ assert.equal(calls,1,'overlapping activation acquired GPU resources twice');
+ release();await Promise.all([first,second]);
+ const failed=context.ensureGpu();assert.equal(calls,2);reject(Error('acquisition failed'));await assert.rejects(failed,/acquisition failed/);
+ const retry=context.ensureGpu();assert.equal(calls,3);release();await retry;
+ context.gpuInitialized=true;await context.ensureGpu();assert.equal(calls,3,'initialized viewer must retain its device');
+});
+test('a fresh shader/device invalidates derived closure caches while grid rebuilds retain them',async()=>{
+ const f=fixture();f.context.shader={};await f.initialize();
+ const maps=['ordinaryDepthPipelines','opticalSteppingPipelines','scenePointPipelines','distributedPipelines','simulationVariants'];
+ for(const key of maps)f.context[key].set('old',{});
+ await f.initialize();for(const key of maps)assert.equal(f.context[key].size,1,'compatible grid rebuild lost '+key);
+ f.context.shader={};f.context.device={...f.context.device};
+ const {createDeferredPipelines}=await import('../deferred-pipelines.mjs');f.context.gpuPipelines=createDeferredPipelines(f.context.device);
+ await f.initialize();for(const key of maps)assert.equal(f.context[key].size,0,'fresh GPU initialization retained stale '+key);
 });
