@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import * as T from '../lib/three.core.js';
 import {createMechanismController} from '../experiments/link-workshop.experiment.mjs';
+import {createWorkbenchFrameService} from '../workbench-scene-host.mjs';
 import {createSceneEdits} from '../scene-edit-session.mjs';
 import {createBodyDynamics} from '../experiments/link-workshop/body-dynamics.mjs';
 import {createSettlingMonitor} from '../experiments/link-workshop/settling.mjs';
@@ -31,6 +32,10 @@ try{
  const next=carry();runtime.operations.releasePull();advance(3);const interrupted=runtime.read().recipe;edits.undo();advance(30);assert.deepEqual(runtime.read().recipe,next.before,'Undo during settling stops its writer before restoration');edits.redo();assert.deepEqual(runtime.read().recipe,interrupted);
  carry();runtime.operations.releasePull();advance(3);runtime.operations.select({joint:2});const selected=runtime.read().recipe;advance(30);assert.deepEqual(runtime.read().recipe,selected,'Selecting another component interrupts the tail at its achieved pose');
  carry();runtime.operations.releasePull();advance(3);const target=adapter.target(),at=target.read(),newPoint=runtime.read().points[1];edits.begin(target.id);edits.preview({...at,position:[newPoint[0]-.01,newPoint[1]+.01,0]},{transform:'translate'});advance(1);assert.equal(runtime.read().mechanics.phase,'held','A native re-grab starts its own solve immediately, without inheriting the retired tail');assert.ok(runtime.read().mechanics.time<.02);edits.cancel();
+ const playGesture=carry();runtime.operations.releasePull();advance(3);const beforePlay=runtime.read().recipe,frameErrors=[],clock=createWorkbenchFrameService({onError:error=>frameErrors.push(error.message)});
+ const stopFrame=clock.onFrame(({deltaSeconds})=>{runtime.advance(deltaSeconds);runtime.tick();});clock.tick(0);runtime.operations.play();const fractionBefore=runtime.read().fraction;clock.tick(1000/120);clock.tick(2000/120);
+ assert.deepEqual(frameErrors,[],'Play during a settling tail must not throw and retire the shared mechanism subscription');assert.equal(clock.state().activeSubscriptions,1);assert.equal(runtime.read().playing,true);assert.notEqual(runtime.read().fraction,fractionBefore,'Authored playback continues through the production frame service');assert.equal(runtime.read().mechanics.phase,'idle');assert.deepEqual(runtime.read().recipe,beforePlay,'Entering Play stops the tail at its achieved pose');
+ runtime.operations.pause();edits.undo();assert.deepEqual(runtime.read().recipe,playGesture.before);edits.redo();assert.deepEqual(runtime.read().recipe,beforePlay,'Redo retains the achieved pre-play pose');stopFrame();
  carry();runtime.operations.releasePull({cancel:true});assert.equal(runtime.read().mechanics.phase,'idle');assert.equal(edits.state().active,null);
  runtime.operations.dynamics({settleAfterRelease:false});carry();runtime.operations.releasePull();const frozen=runtime.read().recipe;advance(30);assert.deepEqual(runtime.read().recipe,frozen,'The prior freeze-on-release behavior remains selectable');
  const monitor=createSettlingMonitor(),state={activeJoints:[1],pointVelocities:[[0,0],[0,0]],angularVelocities:[0,0],converged:true};
