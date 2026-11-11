@@ -3,12 +3,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {withKaminosGpu,evalWgslBatch,extractWgslFunction,extractWgslBlock} from '../tools/shader-herder.mjs';
+import {AMBIENT_BOUNDARY_WGSL} from '../volume-ambient-boundary.mjs';
 import {REACTANT_COMBUSTION_WGSL} from '../volume-reactant-combustion.mjs';
 
 test('standalone ambient-air band intersects resident side and floor cells',async()=>{
  await withKaminosGpu(async ctx=>{
   const result=await evalWgslBatch(ctx,{
-   preamble:extractWgslFunction(REACTANT_COMBUSTION_WGSL,'reactantMaterialWallFade'),
+   preamble:AMBIENT_BOUNDARY_WGSL+extractWgslFunction(REACTANT_COMBUSTION_WGSL,'reactantMaterialWallFade'),
    argTypes:['f32','f32'],returnType:'f32',
    body:'return reactantMaterialWallFade(arg0,arg1);',
    inputs:[[5/6,1/3],[.5,1/3],[0,1/3]],
@@ -26,7 +27,8 @@ test('production velocity-only and empty-cell branches share the reactant bounda
  const empty=extractWgslBlock(extractWgslBlock(kernel,'if (neighborMass <= 1e-5)'),'if (!MATERIAL_ONLY)');
  // Only unrelated force/transport inputs are fixed. The boundary calculations
  // below execute verbatim from the two production early-return paths.
- const preamble=extractWgslFunction(REACTANT_COMBUSTION_WGSL,'reactantMaterialWallFade')+`
+ const preamble=AMBIENT_BOUNDARY_WGSL+extractWgslFunction(REACTANT_COMBUSTION_WGSL,'reactantMaterialWallFade')+`
+ struct BoundaryUniform {ambient_boundary:vec4<f32>};var<private> u:BoundaryUniform;
  const GRID=6u; const GRID_Y=12u; const VELOCITY_ONLY=true; const MATERIAL_ONLY=false;
  const VELOCITY_UNIT_SCALE=1.0;
  var<private> fluidSrc:array<vec4<f32>,4>;var<private> fluidDst:array<vec4<f32>,4>;
@@ -50,7 +52,7 @@ test('production velocity-only and empty-cell branches share the reactant bounda
  `;
  await withKaminosGpu(async ctx=>{
   for(const [name,body] of [['velocity-only','velocityProbe();return fluidDst[0].xyz;'],['empty-cell','return emptyProbe();']]){
-   const values=await evalWgslBatch(ctx,{preamble,argTypes:['f32','f32','u32'],returnType:'vec3<f32>',body:'probePosition=vec3<f32>(arg0,arg1,0);probeFlags=arg2;'+body,inputs:[[5/6,.5,0],[0,-5/6,0],[0,17/6,0],[0,.5,0],[5/6,.5,1],[5/6,.5,2],[5/6,.5,4]]});
+   const values=await evalWgslBatch(ctx,{preamble,argTypes:['f32','f32','u32'],returnType:'vec3<f32>',body:'u.ambient_boundary=vec4<f32>(.14,1,1,0);probePosition=vec3<f32>(arg0,arg1,0);probeFlags=arg2;'+body,inputs:[[5/6,.5,0],[0,-5/6,0],[0,17/6,0],[0,.5,0],[5/6,.5,1],[5/6,.5,2],[5/6,.5,4]]});
    for(let i=0;i<values.length;i++)for(const component of values[i])assert.ok(Math.abs(component-(i<2?.9055:1))<2e-6,`${name} case ${i}: ${component}`);
   }
  });
@@ -69,7 +71,7 @@ test('ambient boundary fade integrates the same fixed ramp across cell widths',a
   return 1-integral/width;
  };
  await withKaminosGpu(async ctx=>{
-  const result=await evalWgslBatch(ctx,{preamble:extractWgslFunction(REACTANT_COMBUSTION_WGSL,'reactantMaterialWallFade'),argTypes:['f32','f32'],returnType:'f32',body:'return reactantMaterialWallFade(arg0,arg1);',inputs});
+  const result=await evalWgslBatch(ctx,{preamble:AMBIENT_BOUNDARY_WGSL+extractWgslFunction(REACTANT_COMBUSTION_WGSL,'reactantMaterialWallFade'),argTypes:['f32','f32'],returnType:'f32',body:'return reactantMaterialWallFade(arg0,arg1);',inputs});
   for(let i=0;i<inputs.length;i++){
    assert.ok(Number.isFinite(result[i])&&result[i]>=0&&result[i]<=1);
    assert.ok(Math.abs(result[i]-expected(inputs[i]))<1e-5,JSON.stringify({input:inputs[i],actual:result[i],expected:expected(inputs[i])}));
